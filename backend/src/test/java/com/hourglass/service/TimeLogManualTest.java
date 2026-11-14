@@ -193,7 +193,7 @@ class TimeLogManualTest {
     @Test
     void deleteRecordRefreshesCompletionSnapshotOfCompletedTask() {
         Task done = task();
-        done.setCompletedAt(LocalDate.of(2026, 11, 5));
+        done.setCompletedAt(LocalDate.of(2026, 11, 5).atStartOfDay());
         when(taskMapper.selectById(TASK)).thenReturn(done);
         when(timeLogMapper.selectById(99L)).thenReturn(manualLog(99L, ME, "timer"));
 
@@ -214,7 +214,7 @@ class TimeLogManualTest {
     @Test
     void addManualRefreshesCompletionSnapshotOfCompletedTask() {
         Task done = task();
-        done.setCompletedAt(LocalDate.of(2026, 11, 5));
+        done.setCompletedAt(LocalDate.of(2026, 11, 5).atStartOfDay());
         when(taskMapper.selectById(TASK)).thenReturn(done);
 
         service.addManual(ME, WS, TASK, null, LocalDate.of(2026, 11, 6), 240, "修正");

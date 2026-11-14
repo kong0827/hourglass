@@ -26,12 +26,27 @@ public interface TestCaseRunMapper {
 
     int countByCase(@Param("workspaceId") String workspaceId, @Param("caseId") String caseId);
 
+    /** 项目执行流水聚合事实行：dim=executor/environment/round，按维度+结果计数，轮次按用例内执行序号分桶 */
+    List<java.util.Map<String, Object>> selectRunStats(@Param("workspaceId") String workspaceId,
+                                                       @Param("reqId") String reqId);
+
+    /** 执行统计下钻：某桶（dim+key）内的执行流水明细，轮次口径与 selectRunStats 一致 */
+    List<com.hourglass.dto.CaseRunDrillRow> selectRunsByDimension(@Param("workspaceId") String workspaceId,
+                                                                  @Param("reqId") String reqId,
+                                                                  @Param("dim") String dim,
+                                                                  @Param("key") String key,
+                                                                  @Param("limit") int limit);
+
     /** 最近失败转出缺陷时回填该轮流水（仅当该轮为 failed 时由服务层判断） */
     int updateBugTask(@Param("id") String id, @Param("bugTaskId") String bugTaskId);
 
     /** 缺陷反查用例：项目内执行流水记录过的 bug_task_id → 用例（同一缺陷同一用例去重） */
     List<com.hourglass.dto.CaseBugLink> selectBugCaseLinks(@Param("workspaceId") String workspaceId,
                                                            @Param("reqId") String reqId);
+
+    /** 缺陷详情反查来源用例：跨项目按 bug_task_id 聚合 */
+    List<com.hourglass.dto.CaseBugLink> selectByBugTask(@Param("workspaceId") String workspaceId,
+                                                        @Param("bugTaskId") String bugTaskId);
 
     /** 缺陷任务被彻底删除时解除引用 */
     int clearBugTaskRefs(@Param("workspaceId") String workspaceId,

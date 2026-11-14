@@ -89,6 +89,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <div class="rf wi-card rf-edit" data-fact-edit="owner" role="button" tabindex="0" title="点击修改负责人">
                 <span class="rf-k">负责人</span>
                 <b class="rf-v rf-v-lg" id="rfOwner">—</b>
+                <span class="rf-sub rf-owner-sub" id="rfOwnerSub" hidden></span>
               </div>
               <div class="rf wi-card rf-edit" data-fact-edit="pri" role="button" tabindex="0" title="点击修改优先级">
                 <span class="rf-k">优先级</span>
@@ -115,10 +116,15 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 </div>
                 <span class="rf-sub rf-prog-note" id="rfProgNote"></span>
               </div>
-              <div class="rf rf-edit wi-delivery-cell wi-hours-cell" id="rfHoursWrap" data-fact-edit="estimate" role="button" tabindex="0" title="点击修改预估工时">
-                <span class="rf-k">实际工时</span>
-                <b class="rf-v rf-v-lg" id="rfHours">—</b>
+              <div class="rf wi-delivery-cell wi-hours-cell" id="rfHoursWrap">
+                <div class="wi-hours-main rf-edit" data-fact-edit="estimate" role="button" tabindex="0" title="点击修改预估工时">
+                  <span class="rf-k">实际工时</span>
+                  <b class="rf-v rf-v-lg" id="rfHours">—</b>
+                </div>
                 <span class="rf-sub" id="rfHoursNote"></span>
+                <button class="wi-hours-add" type="button" id="rfHoursAdd" title="补记一条实际工时（忘开表、加班等）" aria-label="补记实际工时">
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.2v11.6M4.2 10h11.6"/></svg>
+                </button>
               </div>
             </div>
 
@@ -136,6 +142,9 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <div class="rf rf-edit rf-jump rf-meta" data-fact-jump="version" role="button" tabindex="0" title="点击编辑计划版本">
                 <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 3.4v13.2"/><path d="M5.2 4.4h9.4l-2 3.2 2 3.2H5.2z"/></svg></span>计划版本</span><b class="rf-v" id="rfVersion">—</b>
               </div>
+              <div class="rf rf-edit rf-jump rf-meta" data-meta="docs" data-fact-goto="doc" role="button" tabindex="0" title="查看关联文档">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h6l4 4v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-12a1 1 0 0 1 1-1Z"/><path d="M11 3.5v4h4"/></svg></span>文档</span><b class="rf-v" id="rfDoc">—</b>
+              </div>
               <div class="rf rf-edit rf-jump rf-meta" data-fact-goto="attach" role="button" tabindex="0" title="查看附件">
                 <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 6.4 7.2 11.8a2.2 2.2 0 0 0 3.1 3.1l5.4-5.4a3.8 3.8 0 0 0-5.4-5.4L4.8 9.6a5.4 5.4 0 0 0 7.6 7.6l3.4-3.4"/></svg></span>附件</span><b class="rf-v" id="rfAttach">—</b>
               </div>
@@ -149,29 +158,29 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <section class="read-card test-card" id="readTestCard" hidden>
             <div class="read-card-head">
               <h3>测试 <span class="test-phase" id="readTestPhase">—</span></h3>
-              <button class="link-btn" type="button" id="readTestReassign" hidden>改派</button>
+              <div class="test-head-actions">
+                <button class="link-btn tf-hist-toggle" type="button" id="readTestHistBtn" hidden aria-expanded="false" aria-controls="readTestHistory">
+                  历史 <span id="readTestHistCnt">0</span> 轮
+                  <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l5 5-5 5"/></svg>
+                </button>
+                <button class="link-btn" type="button" id="readTestReassign" hidden>改派</button>
+              </div>
             </div>
-            <div class="test-grid">
-              <div class="test-cell is-who">
-                <div class="test-k">测试负责人</div>
-                <div class="test-v" id="readTestOwner">—</div>
-                <div class="test-sub" id="readTestOwnerSub"></div>
+            <div class="tf-bar">
+              <div class="tf-who" id="readTestWhoCell">
+                <span class="tf-who-av" id="readTestWhoAv"></span>
+                <div class="tf-who-t"><b id="readTestOwner">—</b><span id="readTestOwnerSub"></span></div>
               </div>
-              <div class="test-cell">
-                <div class="test-k">提测时间</div>
-                <div class="test-v" id="readTestRequested">—</div>
-                <div class="test-sub" id="readTestRequestedSub"></div>
-              </div>
-              <div class="test-cell">
-                <div class="test-k">开始测试</div>
-                <div class="test-v" id="readTestStart">—</div>
-                <div class="test-sub" id="readTestStartSub"></div>
-              </div>
-              <div class="test-cell">
-                <div class="test-k">结束测试</div>
-                <div class="test-v" id="readTestEnd">—</div>
-                <div class="test-sub" id="readTestEndSub"></div>
-              </div>
+              <ol class="tf-steps">
+                <li id="readTestStepReq"><i aria-hidden="true"></i><div><span class="tf-k">提测</span><b class="tf-v" id="readTestRequested">—</b></div></li>
+                <li id="readTestStepStart"><i aria-hidden="true"></i><div><span class="tf-k">开始</span><b class="tf-v" id="readTestStart">—</b></div></li>
+                <li id="readTestStepEnd"><i aria-hidden="true"></i><div><span class="tf-k">结束</span><b class="tf-v" id="readTestEnd">—</b></div></li>
+              </ol>
+              <div class="tf-sum"><b id="readTestDur">—</b><span id="readTestDurSub"></span></div>
+            </div>
+            <div class="tf-history" id="readTestHistory" hidden>
+              <ol class="tf-rounds" id="readTestRounds"></ol>
+              <p class="tf-hist-note">历史来自操作记录；更早的测试流转可能缺失。</p>
             </div>
             <div class="test-note" id="readTestNote" hidden></div>
             <div class="test-acts" id="readTestActs" hidden>
@@ -415,6 +424,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <h3>依赖关系</h3>
               <span class="dep-count" id="depCount" hidden></span>
               <span class="foot-note" id="depScopeNote">影响甘特连线，不自动改日期</span>
+              <button class="btn sm dep-inline-close" type="button" id="btnDepInlineClose" hidden>收起</button>
             </div>
             <div class="dep-body">
               <div class="dep-alert" id="depAlert" hidden>
@@ -601,7 +611,9 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
             </div>
             <div class="drawer-sect-body">
+              <p class="sub-hint" id="subHint" hidden></p>
               <div class="sub-list" id="subList"></div>
+              <p class="sub-live" id="subLive" aria-live="polite"></p>
               <input id="iSubNew" class="input" type="text" maxlength="60" placeholder="添加一项，回车确认" autocomplete="off" style="margin-top:8px" />
             </div>
           </div>
@@ -615,9 +627,9 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             <div class="drawer-sect-body">
               <div class="attach-list" id="attachList"></div>
               <div class="row row-gap" style="margin-top:8px">
-                <button class="btn sm" type="button" id="btnAttach">上传文件（≤10MB）</button>
-                <span class="foot-note">jpg/png/gif/webp/pdf/txt/md/zip/xlsx/xls/doc/docx/ppt/pptx</span>
-                <input type="file" id="iAttachFile" hidden />
+                <button class="btn sm" type="button" id="btnAttach">上传文件（可多选 / 拖入）</button>
+                <span class="foot-note">jpg/png/gif/webp/pdf/txt/md/zip/xlsx/xls/doc/docx/ppt/pptx · 单个 ≤10MB</span>
+                <input type="file" id="iAttachFile" hidden multiple />
               </div>
             </div>
           </div>

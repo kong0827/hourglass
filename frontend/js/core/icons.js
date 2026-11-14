@@ -83,6 +83,8 @@
     move: function (s) { return svg(s, '<path d="M10 3.4v13.2M3.4 10h13.2"/><path d="M10 3.4 7.8 5.6M10 3.4l2.2 2.2M10 16.6l-2.2-2.2M10 16.6l2.2-2.2M3.4 10l2.2-2.2M3.4 10l2.2 2.2M16.6 10l-2.2-2.2M16.6 10l-2.2 2.2"/>'); },
     grip: function (s) { return fillSvg(s, '<circle cx="7.2" cy="4.6" r="1.15"/><circle cx="12.8" cy="4.6" r="1.15"/><circle cx="7.2" cy="10" r="1.15"/><circle cx="12.8" cy="10" r="1.15"/><circle cx="7.2" cy="15.4" r="1.15"/><circle cx="12.8" cy="15.4" r="1.15"/>'); },
     folder: function (s) { return svg(s, '<path d="M3.2 6A2 2 0 0 1 5.2 4h3.2l1.8 2.2h5.6a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H5.2a2 2 0 0 1-2-2Z"/>'); },
+    /* 地球：空间级文档分组头标记（不挂项目，照分类树原型） */
+    globe: function (s) { return svg(s, '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2.4 2.6 2.4 11.4 0 14-2.4-2.6-2.4-11.4 0-14Z"/>'); },
 
     /* ---- 状态 ---- */
     bell: function (s) { return svg(s, '<path d="M10 2.6a5.2 5.2 0 0 0-5.2 5.2c0 3.6-1.4 4.8-1.4 4.8h13.2s-1.4-1.2-1.4-4.8A5.2 5.2 0 0 0 10 2.6Z"/><path d="M8.2 15.4a1.9 1.9 0 0 0 3.6 0"/>'); },
@@ -91,6 +93,7 @@
     helpCircle: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.6"/><path d="M7.9 7.4a2.2 2.2 0 0 1 4.2.9c0 1.4-2.1 1.6-2.1 2.9"/><path d="M10 14.2h.01"/>'); },
     checkCircle: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.6"/><path d="M6.6 10.3 8.9 12.6l4.5-5"/>'); },
     infoCircle: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.6"/><path d="M10 13.8V9.4"/><path d="M10 6.6h.01"/>'); },
+    ban: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.2"/><path d="M4.9 15.1 15.1 4.9"/>'); },
     clock: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.2"/><path d="M10 5.8V10l3 1.8"/>'); },
     recur: function (s) { return svg(s, '<path d="M4.2 8.4A5.8 5.8 0 0 1 15.6 8"/><path d="M15.6 3.8V8h-4.2"/><path d="M15.8 11.6A5.8 5.8 0 0 1 4.4 12"/><path d="M4.4 16.2V12h4.2"/>'); },
     undo: function (s) { return svg(s, '<path d="M7.2 6H12a4.4 4.4 0 1 1 0 8.8H6.4"/><path d="M9.6 3.2 6.4 6l3.2 2.8"/>'); },

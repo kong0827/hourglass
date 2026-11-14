@@ -2,7 +2,8 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
-import com.hourglass.entity.TaskLog;
+import com.hourglass.dto.ActivityFeed;
+import com.hourglass.dto.ActivityQuery;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.ActivityService;
 import com.hourglass.service.WorkspaceService;
@@ -10,9 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
-/** 空间级活动流（O-9）：让删除列/模块/项目、移出成员、清空数据这类破坏性操作可追溯 */
+/** 空间级活动流（O-9）：工作项、需求、项目、文档、分支、版本与配置变更的统一时间线 */
 @RestController
 public class ActivityController {
 
@@ -25,13 +24,26 @@ public class ActivityController {
     }
 
     @GetMapping("/api/activity")
-    public ApiResult<com.hourglass.dto.PageResult<TaskLog>> activity(
+    public ApiResult<ActivityFeed> activity(
             @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String actor,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) String q,
             @RequestParam(required = false) Integer offset,
             @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(activityService.activity(ws.getId(), userId,
+        ActivityQuery query = new ActivityQuery();
+        query.setType(type);
+        query.setAction(action);
+        query.setActorId(actor);
+        query.setFromDate(from);
+        query.setToDate(to);
+        query.setKeyword(q);
+        return ApiResult.ok(activityService.feed(ws.getId(), userId, query,
                 offset == null ? 0 : offset, limit == null ? 50 : limit));
     }
 }

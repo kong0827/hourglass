@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.AiSharedSettingMapper">
+
+  <select id="select" resultType="AiSharedSetting">
+    SELECT id, scope, scope_id, provider, base_url, model, api_key,
+           enabled, allow_personal, updated_by, updated_at
+    FROM ai_shared_setting
+    WHERE scope = #{scope} AND scope_id = #{scopeId}
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO ai_shared_setting
+      (scope, scope_id, provider, base_url, model, api_key, enabled, allow_personal, updated_by, updated_at)
+    VALUES
+      (#{scope}, #{scopeId}, #{provider}, #{baseUrl}, #{model}, #{apiKey},
+       #{enabled}, #{allowPersonal}, #{updatedBy}, NOW())
+    ON DUPLICATE KEY UPDATE
+      provider = VALUES(provider), base_url = VALUES(base_url), model = VALUES(model),
+      api_key = VALUES(api_key), enabled = VALUES(enabled),
+      allow_personal = VALUES(allow_personal), updated_by = VALUES(updated_by),
+      updated_at = VALUES(updated_at)
+  </insert>
+</mapper>

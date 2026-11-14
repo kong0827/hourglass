@@ -9,7 +9,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { dueState, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadCategories } from "../core/app.js";
-import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
 import { companyChipHTML } from "../lib/company.js";
 import { DEFAULT_ROLE_TITLES, loadMemberLabelOptions, effectiveMemberRole, memberRoleTitles, labelFilterOption, labelFilterText } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
@@ -485,7 +485,7 @@ function milestoneStats(list){
 function milestoneRowHTML(m){
   return '<tr data-ms-open="' + esc(m.id) + '" tabindex="0" title="打开里程碑详情">'
     + '<td class="ms-name"><b>' + esc(m.name) + '</b>' + milestoneKeyMilestoneTag(m) + '</td>'
-    + '<td>' + esc(milestoneKindName(m.kind)) + (m.versionName ? '<span class="ms-sub">' + esc(m.versionName) + '</span>' : '') + '</td>'
+    + '<td>' + esc(milestoneKindName(m.kind)) + (m.versionName ? '<span class="ms-sub">' + assocLinkHTML("version", m.versionId, m.versionName, { req:m.reqId }) + '</span>' : '') + '</td>'
     + '<td class="num">' + esc(fmtDate(m.targetDate)) + '</td>'
     + '<td>' + esc(m.ownerName || "未指派") + '</td>'
     + '<td>' + milestoneStatusTag(m) + '</td>'
@@ -914,9 +914,11 @@ function renderProject(){
     + '<section class="manager-panel"><div class="manager-panel-head"><b>近 8 周新增 / 完成</b><span>按周汇总</span></div>' + weeklyChart(cache.weekly || []) + '</section></div>'
     + deliveryPanel(p)
     + '<section class="manager-panel project-milestones" id="projectMilestones">' + milestonePanelInner() + '</section>';
-  var epicsPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>史诗汇总</b><span>点击史诗查看子项</span></div>'
+  var epicsPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>史诗汇总</b><span>点名称打开史诗 · 点子项数看下级</span></div>'
     + (epics.length ? epics.map(function(ep){
-      return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">史诗</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
+      return '<div class="manager-epic"><span><i class="tag tag-plum">史诗</i>' + assocLinkHTML("task", ep.id, ep.title, {cls:"manager-epic-name"}) + '</span>'
+        + '<span class="progress"><i style="width:' + ep.progressPct + '%"></i></span>'
+        + '<button class="manager-epic-sub" type="button" data-epic="' + esc(ep.id) + '" title="查看该史诗的子项">' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</button></div>';
     }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
   var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
     + memberLabelFilters(cache.members || [], memberFilter, "project-member")

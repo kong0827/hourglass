@@ -113,7 +113,7 @@ public class ReviewService {
         for (Task t : completed) {
             if (t.getDueDate() != null) {
                 withDue++;
-                if (!t.getCompletedAt().isAfter(t.getDueDate())) {
+                if (!t.getCompletedAt().toLocalDate().isAfter(t.getDueDate())) {
                     onTime++;
                 }
             }
@@ -321,11 +321,11 @@ public class ReviewService {
 
     /** 未指定周时：从本周往前找最近一个有完成记录的周，都没有则返回上周 */
     private int autoOffset(String workspaceId, String viewerId, String reqId, LocalDate monday) {
-        LocalDate latest = taskMapper.selectLatestCompletedAt(workspaceId, viewerId, reqId);
+        java.time.LocalDateTime latest = taskMapper.selectLatestCompletedAt(workspaceId, viewerId, reqId);
         if (latest == null) {
             return -1;
         }
-        LocalDate weekStart = latest.minusDays(latest.getDayOfWeek().getValue() - 1);
+        LocalDate weekStart = latest.toLocalDate().minusDays(latest.getDayOfWeek().getValue() - 1);
         int offset = (int) ChronoUnit.WEEKS.between(monday, weekStart);
         return Math.max(-12, Math.min(0, offset));
     }

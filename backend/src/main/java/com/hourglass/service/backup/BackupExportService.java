@@ -81,8 +81,9 @@ public class BackupExportService {
     private final com.hourglass.mapper.VersionCommitmentMapper commitmentMapper;
     private final VersionTaskMapper versionTaskMapper;
     private final DemandMapper demandMapper;
+    private final com.hourglass.mapper.DocTemplateMapper docTemplateMapper;
 
-    public BackupExportService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper, BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper, TaskCommentMapper commentMapper, TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper, com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper, RequirementDocCommentMapper docCommentMapper, RequirementDocMapper requirementDocMapper, DevBranchMapper devBranchMapper, TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper, ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper, DemandMapper demandMapper, com.hourglass.mapper.VersionCommitmentMapper commitmentMapper) {
+    public BackupExportService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper, BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper, TaskCommentMapper commentMapper, TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper, com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper, RequirementDocCommentMapper docCommentMapper, RequirementDocMapper requirementDocMapper, DevBranchMapper devBranchMapper, TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper, ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper, DemandMapper demandMapper, com.hourglass.mapper.VersionCommitmentMapper commitmentMapper, com.hourglass.mapper.DocTemplateMapper docTemplateMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -103,6 +104,7 @@ public class BackupExportService {
         this.versionTaskMapper = versionTaskMapper;
         this.demandMapper = demandMapper;
         this.commitmentMapper = commitmentMapper;
+        this.docTemplateMapper = docTemplateMapper;
     }
 
     public BackupData export(String workspaceId) {
@@ -472,9 +474,29 @@ public class BackupExportService {
             b.setContent(c.getContent());
             b.setQuoteText(c.getQuoteText());
             b.setCreatedAt(ts(c.getCreatedAt()));
+            b.setParentId(c.getParentId());
+            b.setResolvedAt(ts(c.getResolvedAt()));
+            b.setResolvedBy(c.getResolvedBy());
+            b.setMentions(c.getMentions());
+            b.setTaskId(c.getTaskId());
             docComments.add(b);
         }
         data.setDocComments(docComments);
+
+        List<BackupData.BackupDocTemplate> docTemplates = new ArrayList<BackupData.BackupDocTemplate>();
+        for (com.hourglass.entity.DocTemplate t : docTemplateMapper.selectByWorkspace(workspaceId)) {
+            BackupData.BackupDocTemplate b = new BackupData.BackupDocTemplate();
+            b.setId(t.getId());
+            b.setName(t.getName());
+            b.setDocType(t.getDocType());
+            b.setFormat(t.getFormat());
+            b.setContent(t.getContent());
+            b.setCreatedBy(t.getCreatedBy());
+            b.setCreatedAt(ts(t.getCreatedAt()));
+            b.setUpdatedAt(ts(t.getUpdatedAt()));
+            docTemplates.add(b);
+        }
+        data.setDocTemplates(docTemplates);
         return data;
     }
 
@@ -515,7 +537,7 @@ public class BackupExportService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("ID,标题,描述,优先级,模块,标签,负责人,看板列,截止日期,所属项目,进度%,进度备注,完成日期,创建时间,"
+        sb.append("ID,标题,描述,优先级,模块,标签,负责人,看板列,截止日期,所属项目,进度%,进度备注,完成时间,创建时间,"
                 + "是否阻塞,卡点原因,累计工时(分钟),提醒时间,规划版本\r\n");
         for (Task t : tasks) {
             List<String> tags = tagMap.get(t.getId());
@@ -532,7 +554,7 @@ public class BackupExportService {
               .append(csv(t.getReqId() == null ? "" : reqNames.getOrDefault(t.getReqId(), ""))).append(',')
               .append(t.getProgress() == null ? 0 : t.getProgress()).append(',')
               .append(csv(t.getNote())).append(',')
-              .append(csv(t.getCompletedAt() == null ? "" : t.getCompletedAt().toString())).append(',')
+              .append(csv(t.getCompletedAt() == null ? "" : t.getCompletedAt().format(TS))).append(',')
               .append(csv(t.getCreatedAt() == null ? "" : t.getCreatedAt().format(TS))).append(',')
               .append(Boolean.TRUE.equals(t.getBlocked()) ? "是" : "").append(',')
               .append(csv(t.getBlockedReason())).append(',')

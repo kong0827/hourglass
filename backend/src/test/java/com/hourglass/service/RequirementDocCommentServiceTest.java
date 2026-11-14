@@ -9,6 +9,7 @@ import com.hourglass.entity.RequirementDocComment;
 import com.hourglass.mapper.RequirementDocCommentMapper;
 import com.hourglass.mapper.RequirementDocMapper;
 import com.hourglass.mapper.UserMapper;
+import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -28,6 +29,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class RequirementDocCommentServiceTest {
@@ -41,24 +43,29 @@ class RequirementDocCommentServiceTest {
     private final RequirementDocCommentMapper commentMapper = mock(RequirementDocCommentMapper.class);
     private final RequirementDocMapper docMapper = mock(RequirementDocMapper.class);
     private final UserMapper userMapper = mock(UserMapper.class);
+    private final WorkspaceMemberMapper memberMapper = mock(WorkspaceMemberMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final WorkActivityService workActivityService = mock(WorkActivityService.class);
     private final AuditService auditService = mock(AuditService.class);
+    private final NotificationEventService notificationEvents = mock(NotificationEventService.class);
+    private final TaskCommandService taskCommandService = mock(TaskCommandService.class);
     private final RequirementDocCommentService service = new RequirementDocCommentService(
-            commentMapper, docMapper, userMapper, access, workActivityService, auditService);
+            commentMapper, docMapper, userMapper, memberMapper, access, workActivityService, auditService,
+            notificationEvents, taskCommandService);
 
     @Test
     void listReturnsCommentsForVisibleDoc() {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
         RequirementDocComment c = comment(USER, "hello");
-        when(commentMapper.countByDoc(WS, DOC)).thenReturn(1);
-        when(commentMapper.selectByDoc(WS, DOC, 0, 100)).thenReturn(Collections.singletonList(c));
+        when(commentMapper.countTopByDoc(WS, DOC, false)).thenReturn(1);
+        when(commentMapper.selectTopByDoc(WS, DOC, false, 0, 100)).thenReturn(Collections.singletonList(c));
+        when(commentMapper.selectRepliesByParents(eq(WS), eq(DOC), any())).thenReturn(Collections.emptyList());
         when(userMapper.selectByIds(Collections.singletonList(USER)))
                 .thenReturn(Collections.singletonList(user(USER, "张三")));
         when(access.canWrite(WS, USER, REQ)).thenReturn(true);
 
-        com.hourglass.dto.PageResult<ReqDocCommentView> page = service.list(WS, USER, DOC, 0, 100);
+        com.hourglass.dto.PageResult<ReqDocCommentView> page = service.list(WS, USER, DOC, false, 0, 100);
 
         assertEquals(1, page.getTotal());
         assertEquals(1, page.getItems().size());
@@ -84,6 +91,7 @@ class RequirementDocCommentServiceTest {
         when(access.roleOf(WS, USER)).thenReturn(ProjectAccessService.ROLE_MEMBER);
         when(userMapper.selectById(USER)).thenReturn(user(USER, "李四"));
         when(access.canWrite(WS, USER, REQ)).thenReturn(true);
+        when(memberMapper.selectByWorkspace(WS)).thenReturn(Collections.emptyList());
 
         ReqDocCommentRequest req = new ReqDocCommentRequest();
         req.setContent(" looks good ");
@@ -96,6 +104,7 @@ class RequirementDocCommentServiceTest {
         assertEquals("looks good", saved.getContent());
         assertEquals("quote", saved.getQuoteText());
         assertEquals(USER, saved.getUserId());
+        verifyNoInteractions(notificationEvents);
     }
 
     @Test
@@ -151,15 +160,16 @@ class RequirementDocCommentServiceTest {
     void deletableFlagRequiresCurrentWritePermission() {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
-        when(commentMapper.countByDoc(WS, DOC)).thenReturn(2);
-        when(commentMapper.selectByDoc(WS, DOC, 0, 100)).thenReturn(Arrays.asList(
+        when(commentMapper.countTopByDoc(WS, DOC, false)).thenReturn(2);
+        when(commentMapper.selectTopByDoc(WS, DOC, false, 0, 100)).thenReturn(Arrays.asList(
                 comment(USER, "own"),
                 comment(OTHER, "other")));
+        when(commentMapper.selectRepliesByParents(eq(WS), eq(DOC), any())).thenReturn(Collections.emptyList());
         when(userMapper.selectByIds(Arrays.asList(USER, OTHER)))
                 .thenReturn(Arrays.asList(user(USER, "Me"), user(OTHER, "Other")));
         when(access.canWrite(WS, USER, REQ)).thenReturn(false);
 
-        com.hourglass.dto.PageResult<ReqDocCommentView> page = service.list(WS, USER, DOC, 0, 100);
+        com.hourglass.dto.PageResult<ReqDocCommentView> page = service.list(WS, USER, DOC, false, 0, 100);
         List<ReqDocCommentView> views = page.getItems();
 
         assertFalse(views.get(0).isDeletable(), "作者被降权后也不可删");

@@ -1086,7 +1086,7 @@
   <sql id="doneScope">
     <if test="scopeAll == false">
       AND (t.completed_at IS NULL
-           OR (t.completed_at &gt;= #{weekStart} AND t.completed_at &lt;= #{weekEnd}))
+           OR (DATE(t.completed_at) &gt;= #{weekStart} AND DATE(t.completed_at) &lt;= #{weekEnd}))
     </if>
   </sql>
 
@@ -1098,7 +1098,7 @@
   -->
   <sql id="doneScopeAlways">
       AND (t.completed_at IS NULL
-           OR (t.completed_at &gt;= #{weekStart} AND t.completed_at &lt;= #{weekEnd}))
+           OR (DATE(t.completed_at) &gt;= #{weekStart} AND DATE(t.completed_at) &lt;= #{weekEnd}))
   </sql>
 
   <select id="countDoneAll" resultType="int">
@@ -1224,10 +1224,10 @@
            COALESCE(SUM(CASE WHEN t.priority IN ('P0','P1') THEN 1 ELSE 0 END), 0) AS high,
            COALESCE(SUM(CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END), 0) AS no_due,
            COALESCE(SUM(CASE WHEN t.completed_at IS NOT NULL AND t.due_date IS NOT NULL
-                              AND t.completed_at &gt; t.due_date THEN 1 ELSE 0 END), 0) AS late_completed,
+                              AND DATE(t.completed_at) &gt; t.due_date THEN 1 ELSE 0 END), 0) AS late_completed,
            COALESCE(SUM(CASE WHEN t.completed_at IS NOT NULL AND t.due_date IS NOT NULL THEN 1 ELSE 0 END), 0) AS with_due,
            COALESCE(SUM(CASE WHEN t.completed_at IS NOT NULL AND t.due_date IS NOT NULL
-                              AND t.completed_at &lt;= t.due_date THEN 1 ELSE 0 END), 0) AS on_time,
+                              AND DATE(t.completed_at) &lt;= t.due_date THEN 1 ELSE 0 END), 0) AS on_time,
            COALESCE(SUM(t.estimate_minutes), 0) AS estimate_minutes,
            AVG(CASE WHEN t.completed_at IS NOT NULL THEN DATEDIFF(t.completed_at, DATE(t.created_at))
                     ELSE DATEDIFF(#{q.today}, DATE(t.created_at)) END) AS avg_age_days,
@@ -1282,7 +1282,7 @@
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
       AND t.due_date IS NOT NULL
       AND t.due_date &gt;= #{first}
-      AND (t.due_date &lt;= #{last} OR t.start_date &lt;= #{last} OR t.completed_at &lt;= #{last})
+      AND (t.due_date &lt;= #{last} OR t.start_date &lt;= #{last} OR DATE(t.completed_at) &lt;= #{last})
     <include refid="visibleProject"/>
     ORDER BY t.board_column, t.sort_order, t.id
   </select>
@@ -1417,7 +1417,7 @@
     LIMIT #{limit} OFFSET #{offset}
   </select>
 
-  <select id="selectLatestCompletedAt" resultType="java.time.LocalDate">
+  <select id="selectLatestCompletedAt" resultType="java.time.LocalDateTime">
     SELECT MAX(t.completed_at) FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
     <include refid="visibleProject"/>

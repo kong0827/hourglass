@@ -21,8 +21,9 @@ public interface TestPlanCaseMapper {
 
     int countByPlan(@Param("planId") String planId);
 
-    /** 发布检查：计划内全部用例的结果与必测标记 */
-    List<com.hourglass.dto.ReleaseCheckCase> selectEvidenceCases(@Param("planId") String planId);
+    /** 发布检查：按版本汇总其测试计划内的用例（同一用例多计划出现时由服务层取最差结果） */
+    List<com.hourglass.dto.ReleaseCheckCase> selectEvidenceCasesByVersion(@Param("workspaceId") String workspaceId,
+                                                                         @Param("versionId") String versionId);
 
     TestPlanCase selectByPlanAndCase(@Param("planId") String planId, @Param("caseId") String caseId);
 

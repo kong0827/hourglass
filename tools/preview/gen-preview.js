@@ -106,7 +106,11 @@ for (const m of modules) visit(m);
    因此：被 import 引用的共享模块与低频视图各自包一层 IIFE，导出放进 __NS[路径]，
    依赖方从 __NS 解构取用；其余模块保持平铺（导出仍以原标识符对外可见）。 */
 const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "settings", "profile",
-  "phase", "demands", "portfolio", "project", "workload", "risks", "report", "testcases", "messages"];
+  "phase", "version", "demands", "portfolio", "project", "workload", "risks", "report", "testcases", "messages",
+  /* 这些也是 router 里的懒加载视图，必须各自包一层作用域：delivery 顶层有 function $(sel,root)
+     （querySelector 版），平铺会覆盖 core/dom 的 $(id)（getElementById 版），整包按 id 取元素全变 null；
+     investment 顶层的 state / cache 也会与别的平铺模块重名。真实 ESM 各文件独立作用域，没有这个问题。 */
+  "delivery", "investment", "workcolumn", "tree", "chain"];
 const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js"; })
   .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js",
     /* view-loader 的 const cache 与 transitions.js 的 var cache 同名：
@@ -114,7 +118,10 @@ const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js
     "core/view-loader.js",
     /* fullscreen 的 init/enter/exit 与 search-palette 的 init 同名：平铺会让后者覆盖前者，
        预览稿里全屏按钮就成了死按钮（真实 ESM 各文件独立作用域，没有这个问题） */
-    "core/fullscreen.js"]));
+    "core/fullscreen.js",
+    /* assistant 顶层 var boot=null / history=[] / open 等：作为 main 的依赖先于 main 求值，
+       会把 main.js 的 function boot 覆盖成 null，DOMContentLoaded 监听拿到 null，整站不启动 */
+    "core/assistant.js"]));
 
 /** 收集模块的导出表：外部名 → 本地标识符（export { open as openSearchPalette }） */
 function collectExports(code) {

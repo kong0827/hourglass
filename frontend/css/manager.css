@@ -79,7 +79,10 @@
 .manager-epic{width:100%;display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(120px,1fr) 150px;align-items:center;gap:14px;padding:10px 4px;border-top:1px solid var(--border);font-size:12.5px;text-align:left;}
 .manager-epic:hover{background:var(--surface-hover);}
 .manager-epic>span:first-child{display:flex;align-items:center;gap:8px;min-width:0;}
-.manager-epic>b{font-size:12px;color:var(--text-2);text-align:right;}
+.manager-epic-name{min-width:0;}
+.manager-epic-sub{font-size:12px;color:var(--text-2);text-align:right;cursor:pointer;}
+.manager-epic-sub:hover{color:var(--primary-fg);text-decoration:underline;}
+.manager-epic-sub:focus-visible{outline:none;box-shadow:var(--ring-focus);border-radius:var(--r-xs);}
 .manager-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
 .manager-tbl th{height:36px;padding:0 10px;background:var(--surface-sunken);border-bottom:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-align:left;white-space:nowrap;}
 .manager-tbl td{padding:12px 10px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle;}
@@ -229,7 +232,7 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 @media(max-width:1279px){.manager-drill-tbl .drill-cost{display:none;}}
 .manager-overload-note b{color:var(--warning-fg)}.manager-overload-note span{color:var(--text-2);}
 @media(max-width:1279px){.manager-kpis{grid-template-columns:1fr 1fr}.manager-two-col,.manager-chart-grid{grid-template-columns:1fr}.manager-risk-grid{grid-template-columns:1fr}.manager-project-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:760px){.manager-kpis,.manager-project-grid{grid-template-columns:1fr}.manager-epic{grid-template-columns:1fr}.manager-epic>b{text-align:left}.manager-toolbar{align-items:flex-start}.manager-chart{height:180px}}
+@media(max-width:760px){.manager-kpis,.manager-project-grid{grid-template-columns:1fr}.manager-epic{grid-template-columns:1fr}.manager-epic-sub{text-align:left}.manager-toolbar{align-items:flex-start}.manager-chart{height:180px}}
 
 /* 项目驾驶舱首屏：目标 + 负责人/计划 + 风险信号 */
 .project-brief{display:flex;gap:24px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;}

@@ -8,6 +8,8 @@ import com.hourglass.dto.AiAuditResponse;
 import com.hourglass.dto.AiCaseApplyRequest;
 import com.hourglass.dto.AiConfigRequest;
 import com.hourglass.dto.AiConfigView;
+import com.hourglass.dto.AiInvestmentSummaryRequest;
+import com.hourglass.dto.AiInvestmentSummaryResponse;
 import com.hourglass.dto.AiReviewRequest;
 import com.hourglass.dto.AiReviewResponse;
 import com.hourglass.dto.AiSplitResponse;
@@ -15,6 +17,7 @@ import com.hourglass.dto.AiTestCaseRequest;
 import com.hourglass.dto.AiTestCaseResponse;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.AiConfigService;
+import com.hourglass.service.AiInvestmentService;
 import com.hourglass.service.AiReqDocService;
 import com.hourglass.service.AiReviewService;
 import com.hourglass.service.AiTestCaseService;
@@ -33,8 +36,8 @@ import java.util.Map;
 /**
  * AI 辅助需求。
  *
- * <p>额度按账号走：每个调用都用 {@code CurrentUser.id()} 对应的配置，
- * 同一个共享空间里两个人的 AI 调用互不影响、互不记账。
+ * <p>额度来源由 {@link AiConfigService} 统一解析：团队 AI → 空间 AI（预留）→ 个人 Key。
+ * 同一个共享空间里，成员默认共用团队额度；选择「我的 API Key」的成员走自己的额度。
  *
  * <p>注意：拆需求/体检是**长请求**（模型生成通常 20-60 秒），
  * nginx 的 proxy_read_timeout 必须大于这个值，否则前端会拿到 504。
@@ -46,33 +49,42 @@ public class AiController {
     private final AiReqDocService reqDocService;
     private final AiReviewService reviewService;
     private final AiTestCaseService testCaseService;
+    private final AiInvestmentService investmentService;
     private final WorkspaceService workspaceService;
 
     public AiController(AiConfigService configService, AiReqDocService reqDocService,
                         AiReviewService reviewService, AiTestCaseService testCaseService,
-                        WorkspaceService workspaceService) {
+                        AiInvestmentService investmentService, WorkspaceService workspaceService) {
         this.configService = configService;
         this.reqDocService = reqDocService;
         this.reviewService = reviewService;
         this.testCaseService = testCaseService;
+        this.investmentService = investmentService;
         this.workspaceService = workspaceService;
     }
 
-    /** 我的 AI 配置（key 只回掩码） */
+    /** 我的 AI 配置（key 只回掩码；带 workspace 用于解析团队 / 空间共享来源） */
     @GetMapping("/api/ai/config")
-    public ApiResult<AiConfigView> getConfig() {
-        return ApiResult.ok(configService.view(CurrentUser.id()));
+    public ApiResult<AiConfigView> getConfig(@RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(configService.view(userId, ws.getId()));
     }
 
     @PutMapping("/api/ai/config")
-    public ApiResult<AiConfigView> saveConfig(@Valid @RequestBody AiConfigRequest req) {
-        return ApiResult.ok(configService.save(CurrentUser.id(), req));
+    public ApiResult<AiConfigView> saveConfig(@Valid @RequestBody AiConfigRequest req,
+                                              @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(configService.save(userId, req, ws.getId()));
     }
 
-    /** 用已保存的配置发一次极小请求，验证 key / 地址 / 模型名都对 */
+    /** 用实际来源发一次极小请求，验证 key / 地址 / 模型名都对 */
     @PostMapping("/api/ai/config/test")
-    public ApiResult<Map<String, Object>> testConfig() {
-        return ApiResult.ok(configService.test(CurrentUser.id()));
+    public ApiResult<Map<String, Object>> testConfig(@RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(configService.test(userId, ws.getId()));
     }
 
     /** 把需求拆成任务草稿（不落库） */
@@ -135,5 +147,18 @@ public class AiController {
         Workspace ws = workspaceService.resolve(userId, workspace);
         AiReviewRequest body = req == null ? new AiReviewRequest() : req;
         return ApiResult.ok(reviewService.polish(userId, ws.getId(), body.getWeekOffset(), body.getReqId(), body.getNote()));
+    }
+
+    /**
+     * 把投入结构报表当前周期与筛选下的事实写成一份团队工作总结。
+     * 只读、不落库：数字服务端算好，模型只引用，输出回给当前页面供导出。
+     */
+    @PostMapping("/api/ai/investment/summary")
+    public ApiResult<AiInvestmentSummaryResponse> investmentSummary(
+            @RequestBody(required = false) AiInvestmentSummaryRequest req,
+            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(investmentService.summarize(userId, ws.getId(), req));
     }
 }

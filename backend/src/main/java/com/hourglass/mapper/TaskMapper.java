@@ -385,7 +385,7 @@ public interface TaskMapper {
             @Param("offset") int offset, @Param("limit") int limit);
 
     /** 最近一个完成日（周回顾 autoOffset 用；没有完成记录时为 null） */
-    LocalDate selectLatestCompletedAt(@Param("workspaceId") String workspaceId,
+    LocalDateTime selectLatestCompletedAt(@Param("workspaceId") String workspaceId,
                                       @Param("viewerId") String viewerId,
                                       @Param("reqId") String reqId);
 

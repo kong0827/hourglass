@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ActivityFeedMapper">
+
+  <!--
+    项目可见性，与 ProjectAccessService.canView 同口径：
+    - 显式 none 不可见；
+    - assigned 成员没有授权记录时默认不可见；
+    - 项目为空（未归类工作项 / 空间级分支）不受项目级限制。
+    viewerId 为空表示 owner/admin/viewer，全量可见。
+  -->
+  <sql id="visibleProject">
+    <if test="viewerId != null">
+      AND (
+        ${pid} IS NULL
+        OR (
+          NOT EXISTS (SELECT 1 FROM project_member pmn
+                      WHERE pmn.workspace_id = #{workspaceId}
+                        AND pmn.project_id = ${pid}
+                        AND pmn.user_id = #{viewerId}
+                        AND pmn.access = 'none')
+          AND (
+            COALESCE((SELECT wm.project_access_mode FROM workspace_member wm
+                      WHERE wm.workspace_id = #{workspaceId}
+                        AND wm.user_id = #{viewerId}), 'all') != 'assigned'
+            OR EXISTS (SELECT 1 FROM project_member pma
+                       WHERE pma.workspace_id = #{workspaceId}
+                         AND pma.project_id = ${pid}
+                         AND pma.user_id = #{viewerId}
+                         AND pma.access IN ('write', 'read'))
+          )
+        )
+      )
+    </if>
+  </sql>
+
+  <!-- 五个来源统一成同一列集；配置哨兵事件单独成 config 类型，只有 includeConfig 时才出现。 -->
+  <sql id="feedUnion">
+    SELECT 'task' AS entity_type, CONCAT('task:', l.id) AS id, l.id AS sort_id, l.created_at AS at,
+           l.task_id AS entity_id, t.title AS entity_title,
+           t.req_id AS project_id, r.name AS project_name,
+           l.action AS action, l.detail AS detail, l.actor_id AS actor_id, u.display_name AS actor_name
+      FROM task_log l
+      LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+      LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = l.workspace_id
+      LEFT JOIN app_user u ON u.id = l.actor_id
+     WHERE l.workspace_id = #{workspaceId}
+       AND l.task_id != 'CFG'
+       <include refid="visibleProject"><property name="pid" value="t.req_id"/></include>
+
+    UNION ALL
+
+    SELECT 'project' AS entity_type, CONCAT('project:', a.id) AS id, a.id AS sort_id, a.created_at AS at,
+           a.entity_id AS entity_id, r.name AS entity_title,
+           r.id AS project_id, r.name AS project_name,
+           a.action AS action, a.detail AS detail, a.actor_id AS actor_id, a.actor_name AS actor_name
+      FROM work_activity a
+      INNER JOIN requirement r ON r.id = a.entity_id AND r.workspace_id = a.workspace_id
+     WHERE a.workspace_id = #{workspaceId}
+       AND a.entity_type = 'project'
+       <include refid="visibleProject"><property name="pid" value="r.id"/></include>
+
+    UNION ALL
+
+    SELECT 'doc' AS entity_type, CONCAT('doc:', a.id) AS id, a.id AS sort_id, a.created_at AS at,
+           a.entity_id AS entity_id, d.title AS entity_title,
+           d.req_id AS project_id, r.name AS project_name,
+           a.action AS action, a.detail AS detail, a.actor_id AS actor_id, a.actor_name AS actor_name
+      FROM work_activity a
+      INNER JOIN requirement_doc d ON d.id = a.entity_id AND d.workspace_id = a.workspace_id
+      LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = a.workspace_id
+     WHERE a.workspace_id = #{workspaceId}
+       AND a.entity_type = 'requirement_doc'
+       <include refid="visibleProject"><property name="pid" value="d.req_id"/></include>
+       <if test="!seeAllDrafts">
+         AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
+       </if>
+
+    UNION ALL
+
+    SELECT 'demand' AS entity_type, CONCAT('demand:', dl.id) AS id, dl.id AS sort_id, dl.created_at AS at,
+           dl.demand_id AS entity_id, d.title AS entity_title,
+           d.req_id AS project_id, r.name AS project_name,
+           dl.action AS action, dl.note AS detail, dl.operator AS actor_id, u.display_name AS actor_name
+      FROM demand_log dl
+      INNER JOIN demand d ON d.id = dl.demand_id AND d.workspace_id = dl.workspace_id
+      LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = dl.workspace_id
+      LEFT JOIN app_user u ON u.id = dl.operator
+     WHERE dl.workspace_id = #{workspaceId}
+       <include refid="visibleProject"><property name="pid" value="d.req_id"/></include>
+
+    UNION ALL
+
+    SELECT 'branch' AS entity_type, CONCAT('branch:', bl.id) AS id, 0 AS sort_id, bl.created_at AS at,
+           bl.branch_id AS entity_id, b.name AS entity_title,
+           b.req_id AS project_id, r.name AS project_name,
+           bl.action AS action, bl.detail AS detail, bl.actor_user_id AS actor_id, bl.actor_name AS actor_name
+      FROM dev_branch_log bl
+      INNER JOIN dev_branch b ON b.id = bl.branch_id AND b.workspace_id = bl.workspace_id
+      LEFT JOIN requirement r ON r.id = b.req_id AND r.workspace_id = bl.workspace_id
+     WHERE bl.workspace_id = #{workspaceId}
+       <include refid="visibleProject"><property name="pid" value="b.req_id"/></include>
+
+    UNION ALL
+
+    SELECT 'version' AS entity_type, CONCAT('version:', vl.id) AS id, vl.id AS sort_id, vl.created_at AS at,
+           vl.version_id AS entity_id, v.name AS entity_title,
+           v.req_id AS project_id, r.name AS project_name,
+           vl.action AS action, vl.reason AS detail, vl.actor_id AS actor_id, u.display_name AS actor_name
+      FROM version_log vl
+      INNER JOIN project_version v ON v.id = vl.version_id AND v.workspace_id = vl.workspace_id
+      LEFT JOIN requirement r ON r.id = v.req_id AND r.workspace_id = vl.workspace_id
+      LEFT JOIN app_user u ON u.id = vl.actor_id
+     WHERE vl.workspace_id = #{workspaceId}
+       <include refid="visibleProject"><property name="pid" value="v.req_id"/></include>
+
+    <if test="includeConfig">
+      UNION ALL
+      SELECT 'config' AS entity_type, CONCAT('config:', l.id) AS id, l.id AS sort_id, l.created_at AS at,
+             l.task_id AS entity_id, NULL AS entity_title,
+             NULL AS project_id, NULL AS project_name,
+             l.action AS action, l.detail AS detail, l.actor_id AS actor_id, u.display_name AS actor_name
+        FROM task_log l
+        LEFT JOIN app_user u ON u.id = l.actor_id
+       WHERE l.workspace_id = #{workspaceId}
+         AND l.task_id = 'CFG'
+    </if>
+  </sql>
+
+  <!-- 组合筛选：动作 / 操作人 / 日期区间 / 关键词。作用在 union 外层，口径统一。 -->
+  <sql id="feedFilters">
+    <if test="actionFilter != null">AND x.action = #{actionFilter}</if>
+    <if test="actorFilter != null">AND x.actor_id = #{actorFilter}</if>
+    <if test="fromDate != null">AND DATE(x.at) &gt;= #{fromDate}</if>
+    <if test="toDate != null">AND DATE(x.at) &lt;= #{toDate}</if>
+    <if test="keyword != null">
+      AND (x.detail LIKE CONCAT('%', #{keyword}, '%')
+        OR x.entity_title LIKE CONCAT('%', #{keyword}, '%')
+        OR x.project_name LIKE CONCAT('%', #{keyword}, '%')
+        OR x.actor_name LIKE CONCAT('%', #{keyword}, '%'))
+    </if>
+  </sql>
+
+  <select id="selectFeed" resultType="com.hourglass.dto.ActivityFeedItem">
+    SELECT x.entity_type, x.id, x.at, x.entity_id, x.entity_title, x.project_id, x.project_name,
+           x.action, x.detail, x.actor_name
+      FROM (<include refid="feedUnion"/>) x
+      <where>
+        <if test="type != null">AND x.entity_type = #{type}</if>
+        <include refid="feedFilters"/>
+      </where>
+     ORDER BY x.at DESC, x.sort_id DESC, x.id DESC
+     LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByType" resultType="com.hourglass.dto.ActivityTypeCount">
+    SELECT x.entity_type AS type, COUNT(*) AS total
+      FROM (<include refid="feedUnion"/>) x
+      <where>
+        <include refid="feedFilters"/>
+      </where>
+     GROUP BY x.entity_type
+  </select>
+</mapper>

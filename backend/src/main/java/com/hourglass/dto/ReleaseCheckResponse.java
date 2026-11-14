@@ -7,9 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 发布前测试检查：按项目策略把必测用例与需求/工作项覆盖折算成阻断与提醒。
+ * 发布检查：按项目策略把必测用例与需求/工作项覆盖折算成阻断与提醒。
  *
- * <p>检查是只读推导：不修改用例、计划或任务。确认发布时同一口径的结论会冻结进
+ * <p>检查是只读推导：不修改用例、计划或任务（动态分组会按规则自愈成员引用）。确认发布时同一口径的结论会冻结进
  * version_release.plan_snapshot.testEvidence，历史记录不随之后的结果变化。
  */
 @Data
@@ -50,6 +50,12 @@ public class ReleaseCheckResponse {
     private List<ReleaseCheckCase> requiredUnexecuted = new ArrayList<ReleaseCheckCase>();
     /** 计划内需求范围（由计划用例主需求派生） */
     private List<String> demandTitles = new ArrayList<String>();
+
+    /**
+     * 团队共享用例分组的结果分布（id / name / kind / total / passed / failed / blocked / skipped / untested）。
+     * 个人与指定成员分组不进证据，否则同一版本两个人算出的数字会不一致；只呈现，不参与阻断判定。
+     */
+    private List<java.util.Map<String, Object>> caseSets = new ArrayList<java.util.Map<String, Object>>();
 
     private LocalDateTime checkedAt;
 }

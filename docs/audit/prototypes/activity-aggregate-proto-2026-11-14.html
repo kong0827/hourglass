@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>空间活动聚合视图 · 原型 · 2026-11-14</title>
+<link rel="stylesheet" href="proto.css" />
+<style>
+  .proto-banner{display:flex;align-items:center;gap:10px;background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:var(--r-md);padding:9px 13px;color:var(--primary-fg);font-size:12.5px;margin-bottom:16px}
+  .proto-banner b{font-weight:650}
+  .variant-head{display:flex;align-items:baseline;gap:10px;margin:24px 0 8px;flex-wrap:wrap}
+  .variant-head h2{font-size:15.5px;margin:0;font-weight:650}
+  .vbadge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:var(--text);color:#fff;font-size:11px;font-weight:600;letter-spacing:.3px}
+  .vbadge.alt{background:#5B3FD1}
+  .variant-head .meta{margin-left:auto}
+  .set-layout{display:block}
+  .act-panel{padding:18px 20px 14px}
+  .act-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border:1px solid var(--border-strong);border-radius:var(--r-pill);background:#fff;color:var(--text-2);font-size:12px;cursor:pointer;white-space:nowrap}
+  .chip b{font-weight:600;color:var(--text-3);font-size:11px;font-variant-numeric:tabular-nums}
+  .chip.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600}
+  .chip.on b{color:var(--primary-fg)}
+  .chip.lock{border-style:dashed}
+  .lock-ico{width:11px;height:11px;flex:none;opacity:.7}
+  .chip .dot-t{width:7px;height:7px;border-radius:50%;flex:none}
+  .act-day{margin-top:16px}
+  .act-day:first-of-type{margin-top:10px}
+  .act-day h4{display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--text-3);font-weight:600;margin:0 0 4px;letter-spacing:.3px}
+  .act-day h4:after{content:"";flex:1;height:1px;background:var(--border)}
+  .act-day h4 b{font-weight:400;color:#98A2B3}
+  .act-row{display:flex;align-items:flex-start;gap:9px;padding:9px 2px;border-bottom:1px solid #F2F4F7}
+  .act-row:last-child{border-bottom:0}
+  .act-time{flex:0 0 42px;font-size:11.5px;color:#98A2B3;font-variant-numeric:tabular-nums;padding-top:2px}
+  .ent{flex:none;margin-top:1px;font-size:10.5px;line-height:18px;height:20px;padding:0 7px;border-radius:6px;border:1px solid;white-space:nowrap;font-weight:600}
+  .ent.task{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+  .ent.demand{background:#F4F3FF;border-color:#D9D6FE;color:#5B3FD1}
+  .ent.project{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg)}
+  .ent.doc{background:#FFFAEB;border-color:var(--warning-border);color:var(--warning-fg)}
+  .ent.branch{background:#F2F4F7;border-color:var(--border-strong);color:var(--text-2)}
+  .ent.version{background:#EEF4FF;border-color:#C7D7FE;color:#3538CD}
+  .ent.config{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg)}
+  .act-main{flex:1;min-width:0;font-size:12.8px;line-height:1.55;color:var(--text)}
+  .act-main .obj{color:var(--text-2)}
+  .act-main .sub{display:block;color:var(--text-3);font-size:11.5px;margin-top:2px}
+  .act-act{flex:0 0 auto;margin-top:1px}
+  .act-who{flex:0 0 auto;display:flex;align-items:center;gap:6px;justify-content:flex-end;min-width:86px;font-size:11.5px;color:var(--text-3);padding-top:2px}
+  .ava{width:20px;height:20px;border-radius:50%;background:var(--surface-sunken);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none}
+  .ava.b{background:#E0EAFF;color:#1D4ED8}.ava.g{background:#E6F6E4;color:#23A11D}.ava.p{background:#F1E8FF;color:#7F3BF5}.ava.o{background:#FFF1E0;color:#B54708}
+  .pill.act{background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);font-weight:500}
+  .pill.priv{background:var(--danger-soft);border:1px solid var(--danger-border);color:var(--danger-fg);font-size:10px}
+  .act-more{display:flex;align-items:center;justify-content:center;gap:10px;padding:15px 0 2px;border-top:1px solid var(--border);margin-top:8px}
+  .act-foot{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:10px}
+  .lock-note{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3)}
+  .filterbar{border:1px solid var(--border);background:#FBFCFE;border-radius:var(--r-md);padding:11px 13px;margin-top:12px;display:flex;flex-direction:column;gap:9px}
+  .fb-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .fb-label{flex:0 0 50px;font-size:11.5px;color:var(--text-3)}
+  .act-search{height:30px;border:1px solid var(--border-strong);border-radius:8px;background:#fff;padding:0 10px;font-size:12px;width:210px;color:var(--text-2);font-family:var(--font)}
+  .act-search::placeholder{color:#98A2B3}
+  .act-summary{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--text-3)}
+  .tagx{display:inline-flex;align-items:center;gap:6px;height:23px;padding:0 8px;border-radius:6px;background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:11px}
+  .tagx i{font-style:normal;cursor:pointer;opacity:.6}
+  .empty-hint{padding:24px;text-align:center;color:var(--text-3);font-size:12.5px}
+  .phone{width:390px;margin:0 auto;background:var(--bg-app);border:1px solid var(--border-strong);border-radius:26px;box-shadow:var(--shadow-md);overflow:hidden}
+  .phone-top{background:#fff;border-bottom:1px solid var(--border);padding:12px 14px 9px}
+  .phone-top .p-row{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:650}
+  .phone-top .p-sub{font-size:11px;color:var(--text-3);margin-top:3px}
+  .phone-chips{display:flex;gap:6px;overflow-x:auto;padding:9px 14px;background:#fff;border-bottom:1px solid var(--border)}
+  .phone-chips .chip{height:25px;font-size:11px;padding:0 9px;flex:none}
+  .phone-list{background:#fff;padding:2px 14px 12px}
+  .p-row2{display:flex;gap:8px;padding:9px 0;border-bottom:1px solid #F2F4F7}
+  .p-row2:last-child{border-bottom:0}
+  .p-line{flex:1;min-width:0;font-size:12.5px;line-height:1.5}
+  .p-line .mt{display:block;font-size:11px;color:var(--text-3);margin-top:2px}
+  .p-side{flex:none;text-align:right;font-size:11px;color:#98A2B3}
+  .note-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .note-card{border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;background:#fff}
+  .note-card h4{font-size:12.5px;margin:0 0 7px;color:var(--text)}
+  .note-card ul{margin:0;padding-left:16px;color:var(--text-2);font-size:12px;line-height:1.75}
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+  .compare .old,.compare .new{border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.65;border:1px solid}
+  .compare .old{background:#F9FAFB;border-color:var(--border);color:var(--text-3)}
+  .compare .new{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg)}
+  .compare b{display:block;font-size:10.5px;margin-bottom:3px;letter-spacing:.3px}
+  @media (max-width:900px){.note-grid,.compare{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><span class="mark">沙</span>沙漏</div>
+  <div class="ws-pick">空间 <b>支付业务部</b> ▾</div>
+  <div class="spacer"></div>
+  <div class="top-ic">⌕</div>
+  <div class="top-ic">ⓘ</div>
+  <div class="avatar">孔</div>
+</div>
+
+<div class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>设置</h1>
+      <div class="sub">支付业务部 · 空间配置、成员权限、数据与审计</div>
+    </div>
+    <span class="meta">原型 · 2026-11-14 · 未实施</span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">空间</div>
+    <div class="tab">成员与权限</div>
+    <div class="tab">工作流</div>
+    <div class="tab">通知与集成</div>
+    <div class="tab on">数据与审计</div>
+  </div>
+
+  <div class="proto-banner"><b>方案 B · 空间活动聚合视图</b><span>把现在只看工作项的活动页，扩成「项目 / 需求 / 文档 / 分支 / 版本 / 工作项 / 配置」的统一时间线；本页只做原型，未改代码。</span></div>
+
+  <!-- ================= 方案 A ================= -->
+  <div class="variant-head">
+    <span class="vbadge">方案 A</span>
+    <h2>基础聚合：实体标签 + 日期分组 + 加载更多</h2>
+    <span class="meta">改动最小 · 推荐先落这一版</span>
+  </div>
+
+  <div class="panel act-panel">
+    <div class="panel-head">
+      <h3>活动</h3>
+      <span class="meta">共 321 条 · 已加载 14 条</span>
+    </div>
+    <p class="hint" style="margin-bottom:8px">空间内的项目、需求、文档、分支、版本、工作项与配置变更，按时间倒序合并展示，每次加载 50 条。其他事件按项目可见性过滤。</p>
+
+    <div class="act-toolbar">
+      <button class="chip on" type="button">全部 <b>321</b></button>
+      <button class="chip" type="button"><span class="dot-t" style="background:#2563EB"></span>工作项 <b>214</b></button>
+      <button class="chip" type="button"><span class="dot-t" style="background:#5B3FD1"></span>需求 <b>38</b></button>
+      <button class="chip" type="button"><span class="dot-t" style="background:#12B76A"></span>项目 <b>22</b></button>
+      <button class="chip" type="button"><span class="dot-t" style="background:#F79009"></span>文档 <b>19</b></button>
+      <button class="chip" type="button"><span class="dot-t" style="background:#667085"></span>分支 <b>12</b></button>
+      <button class="chip" type="button"><span class="dot-t" style="background:#3538CD"></span>版本 <b>7</b></button>
+      <button class="chip lock" type="button"><span class="dot-t" style="background:#F04438"></span>配置 <b>9</b><svg class="lock-ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.2" y="8.6" width="11.6" height="7.2" rx="1.6"/><path d="M7 8.6V6.4a3 3 0 0 1 6 0v2.2"/></svg></button>
+    </div>
+
+    <div class="act-day">
+      <h4>今天 · 11-14 <b>7 条</b></h4>
+
+      <div class="act-row">
+        <div class="act-time">15:42</div>
+        <span class="ent task">工作项</span>
+        <div class="act-main">把 <span class="obj">「支付网关灰度切换」</span> 从 待联调 移到 已完成<span class="sub">支付网关 v2.3 灰度</span></div>
+        <span class="pill act act-act">移动</span>
+        <div class="act-who"><span class="ava b">孔</span>孔祥金</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">15:31</div>
+        <span class="ent config">配置</span>
+        <div class="act-main">删除看板列「验收中」<span class="sub">该列下 6 个工作项已移到「已完成」</span></div>
+        <span class="pill priv act-act">仅主/管理员</span>
+        <div class="act-who"><span class="ava b">孔</span>孔祥金</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">14:58</div>
+        <span class="ent version">版本</span>
+        <div class="act-main">创建版本 <span class="obj">v2.4 双十一稳定性</span><span class="sub">目标 11-24 · 关联 9 个工作项</span></div>
+        <span class="pill act act-act">新建</span>
+        <div class="act-who"><span class="ava p">赵</span>赵磊</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">14:20</div>
+        <span class="ent doc">文档</span>
+        <div class="act-main">更新了正文 <span class="obj">「支付网关接口规范」</span><span class="sub">支付网关 · 第 4 版</span></div>
+        <span class="pill act act-act">修改</span>
+        <div class="act-who"><span class="ava o">李</span>李婷</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">13:05</div>
+        <span class="ent demand">需求</span>
+        <div class="act-main">排期 <span class="obj">「支付失败重试优化」</span><span class="sub">计划 11-20 上线 · 通过评审 3 天后</span></div>
+        <span class="pill act act-act">排期</span>
+        <div class="act-who"><span class="ava g">陈</span>陈晓</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">11:12</div>
+        <span class="ent branch">分支</span>
+        <div class="act-main">提测 <span class="obj">feat/refund-v2</span><span class="sub">开发中 → 测试中</span></div>
+        <span class="pill act act-act">状态流转</span>
+        <div class="act-who"><span class="ava g">王</span>王磊</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">10:46</div>
+        <span class="ent project">项目</span>
+        <div class="act-main">新增模块 <span class="obj">「对账中心」</span><span class="sub">清结算平台 · 模块排序第 4</span></div>
+        <span class="pill act act-act">配置</span>
+        <div class="act-who"><span class="ava b">孔</span>孔祥金</div>
+      </div>
+    </div>
+
+    <div class="act-day">
+      <h4>昨天 · 11-13 <b>7 条</b></h4>
+
+      <div class="act-row">
+        <div class="act-time">18:20</div>
+        <span class="ent task">工作项</span>
+        <div class="act-main">新建 <span class="obj">「退款对账补偿」</span><span class="sub">分派给 陈晓 · 预计 6 小时</span></div>
+        <span class="pill act act-act">新建</span>
+        <div class="act-who"><span class="ava g">陈</span>陈晓</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">17:02</div>
+        <span class="ent config">配置</span>
+        <div class="act-main">状态流转矩阵：已完成 → 待联调 改为禁止<span class="sub">保存矩阵（3 处变更）</span></div>
+        <span class="pill priv act-act">仅主/管理员</span>
+        <div class="act-who"><span class="ava b">孔</span>孔祥金</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">16:40</div>
+        <span class="ent version">版本</span>
+        <div class="act-main">调整版本范围 <span class="obj">v2.4 双十一稳定性</span><span class="sub">+3 个工作项，移出 1 个</span></div>
+        <span class="pill act act-act">修改</span>
+        <div class="act-who"><span class="ava p">赵</span>赵磊</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">15:11</div>
+        <span class="ent demand">需求</span>
+        <div class="act-main">评审通过 <span class="obj">「商户分账二期」</span><span class="sub">评审意见：拆分对账口径</span></div>
+        <span class="pill act act-act">通过</span>
+        <div class="act-who"><span class="ava g">王</span>王磊</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">14:05</div>
+        <span class="ent doc">文档</span>
+        <div class="act-main">创建了文档 <span class="obj">「退款流程说明」</span><span class="sub">清结算平台 · 草稿</span></div>
+        <span class="pill act act-act">新建</span>
+        <div class="act-who"><span class="ava o">李</span>李婷</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">11:30</div>
+        <span class="ent branch">分支</span>
+        <div class="act-main">新建分支 <span class="obj">feature/split-bill</span><span class="sub">负责人 王磊 · 关联商户分账二期</span></div>
+        <span class="pill act act-act">新建</span>
+        <div class="act-who"><span class="ava g">王</span>王磊</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">09:48</div>
+        <span class="ent task">工作项</span>
+        <div class="act-main">被管理员催办 <span class="obj">「退款对账补偿」</span><span class="sub">已阻塞 3 天 · 催办人 孔祥金</span></div>
+        <span class="pill act act-act">催办</span>
+        <div class="act-who"><span class="ava g">陈</span>陈晓</div>
+      </div>
+    </div>
+
+    <div class="act-more">
+      <button class="btn" type="button">加载更多</button>
+      <span class="foot-note">剩余 307 条 · 每次 50 条</span>
+    </div>
+    <div class="act-foot">
+      <span class="lock-note"><svg class="lock-ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.2" y="8.6" width="11.6" height="7.2" rx="1.6"/><path d="M7 8.6V6.4a3 3 0 0 1 6 0v2.2"/></svg> 配置事件只对空间主与管理员展示；普通成员看不到这一组。</span>
+      <span class="foot-note">时间倒序按触发时间，不按实体更新时间</span>
+    </div>
+  </div>
+
+  <!-- ================= 方案 B ================= -->
+  <div class="variant-head">
+    <span class="vbadge alt">方案 B</span>
+    <h2>筛选增强：类型 + 动作 + 操作人 + 时间范围 + 关键词</h2>
+    <span class="meta">事件多之后再上</span>
+  </div>
+
+  <div class="panel act-panel">
+    <div class="panel-head">
+      <h3>活动</h3>
+      <span class="meta">筛选后 5 条 · 共 321 条</span>
+    </div>
+    <p class="hint" style="margin-bottom:8px">空间内的项目、需求、文档、分支、版本、工作项与配置变更，按时间倒序合并展示。可用类型、动作、操作人、时间范围与关键词组合筛选。</p>
+
+    <div class="filterbar">
+      <div class="fb-row">
+        <span class="fb-label">类型</span>
+        <button class="chip" type="button">全部</button>
+        <button class="chip on" type="button">工作项</button>
+        <button class="chip" type="button">需求</button>
+        <button class="chip" type="button">项目</button>
+        <button class="chip" type="button">文档</button>
+        <button class="chip" type="button">分支</button>
+        <button class="chip" type="button">版本</button>
+        <button class="chip lock" type="button">配置<svg class="lock-ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.2" y="8.6" width="11.6" height="7.2" rx="1.6"/><path d="M7 8.6V6.4a3 3 0 0 1 6 0v2.2"/></svg></button>
+      </div>
+      <div class="fb-row">
+        <span class="fb-label">动作</span>
+        <button class="chip" type="button">全部</button>
+        <button class="chip" type="button">新建</button>
+        <button class="chip" type="button">修改</button>
+        <button class="chip on" type="button">状态流转</button>
+        <button class="chip" type="button">删除</button>
+        <button class="chip" type="button">催办</button>
+      </div>
+      <div class="fb-row">
+        <span class="fb-label">范围</span>
+        <select class="sel" style="min-width:104px"><option>近 7 天</option><option>近 30 天</option><option>全部时间</option></select>
+        <select class="sel" style="min-width:118px"><option>全部操作人</option><option>孔祥金</option><option>陈晓</option><option>王磊</option></select>
+        <input class="act-search" placeholder="搜索对象标题或详情" value="支付" />
+        <button class="btn sm" type="button">重置</button>
+      </div>
+    </div>
+
+    <div class="act-summary">
+      <span>当前筛选</span>
+      <span class="tagx">工作项 <i>×</i></span>
+      <span class="tagx">状态流转 <i>×</i></span>
+      <span class="tagx">近 7 天 <i>×</i></span>
+      <span class="tagx">支付 <i>×</i></span>
+      <span class="foot-note" style="margin-left:4px">5 / 321 条</span>
+    </div>
+
+    <div class="act-day">
+      <h4>今天 · 11-14 <b>3 条</b></h4>
+
+      <div class="act-row">
+        <div class="act-time">15:42</div>
+        <span class="ent task">工作项</span>
+        <div class="act-main">把 <span class="obj">「支付网关灰度切换」</span> 从 待联调 移到 已完成<span class="sub">支付网关 v2.3 灰度</span></div>
+        <span class="pill act act-act">移动</span>
+        <div class="act-who"><span class="ava b">孔</span>孔祥金</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">12:16</div>
+        <span class="ent task">工作项</span>
+        <div class="act-main">把 <span class="obj">「支付回调重签」</span> 从 待办 移到 进行中<span class="sub">风控平台 · 预计 4 小时</span></div>
+        <span class="pill act act-act">移动</span>
+        <div class="act-who"><span class="ava g">陈</span>陈晓</div>
+      </div>
+
+      <div class="act-row">
+        <div class="act-time">10:03</div>
+        <span class="ent task">工作项</span>
+        <div class="act-main">把 <span class="obj">「支付路由降级」</span> 从 进行中 移到 待联调<span class="sub">支付网关 · 联调环境已就绪</span></div>
+        <span class="pill act act-act">移动</span>
+        <div class="act-who"><span class="ava g">王</span>王磊</div>
+      </div>
+
+      <div class="act-day">
+        <h4>11-11 <b>2 条</b></h4>
+        <div class="act-row">
+          <div class="act-time">17:28</div>
+          <span class="ent task">工作项</span>
+          <div class="act-main">把 <span class="obj">「支付对账夜间任务」</span> 从 待联调 移到 已完成<span class="sub">清结算平台</span></div>
+          <span class="pill act act-act">移动</span>
+          <div class="act-who"><span class="ava p">赵</span>赵磊</div>
+        </div>
+        <div class="act-row">
+          <div class="act-time">09:41</div>
+          <span class="ent task">工作项</span>
+          <div class="act-main">把 <span class="obj">「支付失败重试」</span> 从 进行中 移到 待联调<span class="sub">支付网关</span></div>
+          <span class="pill act act-act">移动</span>
+          <div class="act-who"><span class="ava g">陈</span>陈晓</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="act-more">
+      <button class="btn" type="button">加载更多</button>
+      <span class="foot-note">筛选结果内继续分页</span>
+    </div>
+    <div class="act-foot">
+      <span class="lock-note"><svg class="lock-ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.2" y="8.6" width="11.6" height="7.2" rx="1.6"/><path d="M7 8.6V6.4a3 3 0 0 1 6 0v2.2"/></svg> 配置事件只对空间主与管理员展示；普通成员看不到这一组。</span>
+      <span class="foot-note">筛选变化重新从第 1 页取</span>
+    </div>
+  </div>
+
+  <!-- ================= 移动端 ================= -->
+  <div class="variant-head">
+    <span class="vbadge">移动端</span>
+    <h2>390px：类型横向滚动 + 紧凑行</h2>
+  </div>
+
+  <div class="phone">
+    <div class="phone-top">
+      <div class="p-row">活动</div>
+      <div class="p-sub">支付业务部 · 共 321 条</div>
+    </div>
+    <div class="phone-chips">
+      <button class="chip on" type="button">全部</button>
+      <button class="chip" type="button">工作项</button>
+      <button class="chip" type="button">需求</button>
+      <button class="chip" type="button">项目</button>
+      <button class="chip" type="button">文档</button>
+      <button class="chip" type="button">分支</button>
+      <button class="chip" type="button">版本</button>
+    </div>
+    <div class="phone-list">
+      <div class="p-row2">
+        <span class="ent task">工作项</span>
+        <div class="p-line">「支付网关灰度切换」待联调 → 已完成<span class="mt">孔祥金 · 移动 · 今天 15:42</span></div>
+      </div>
+      <div class="p-row2">
+        <span class="ent version">版本</span>
+        <div class="p-line">创建版本 v2.4 双十一稳定性<span class="mt">赵磊 · 新建 · 今天 14:58</span></div>
+      </div>
+      <div class="p-row2">
+        <span class="ent doc">文档</span>
+        <div class="p-line">更新了正文「支付网关接口规范」<span class="mt">李婷 · 修改 · 今天 14:20</span></div>
+      </div>
+      <div class="p-row2">
+        <span class="ent demand">需求</span>
+        <div class="p-line">排期「支付失败重试优化」<span class="mt">陈晓 · 排期 · 今天 13:05</span></div>
+      </div>
+      <div class="p-row2">
+        <span class="ent branch">分支</span>
+        <div class="p-line">提测 feat/refund-v2<span class="mt">王磊 · 状态流转 · 今天 11:12</span></div>
+      </div>
+      <div class="p-row2">
+        <span class="ent project">项目</span>
+        <div class="p-line">新增模块「对账中心」<span class="mt">孔祥金 · 配置 · 今天 10:46</span></div>
+      </div>
+      <div class="p-row2">
+        <span class="ent task">工作项</span>
+        <div class="p-line">被管理员催办「退款对账补偿」<span class="mt">陈晓 · 催办 · 昨天 09:48</span></div>
+      </div>
+      <div style="padding:12px 0 0;text-align:center"><button class="btn sm" type="button">加载更多</button></div>
+    </div>
+  </div>
+
+  <!-- ================= 说明 ================= -->
+  <div class="variant-head"><span class="vbadge">说明</span><h2>数据来源、可见性与文案改动</h2></div>
+
+  <div class="note-grid">
+    <div class="note-card">
+      <h4>数据来源（5 张表合并）</h4>
+      <ul>
+        <li><b>task_log</b> — 工作项增删改移、版本范围、催办；<code>CFG</code> 哨兵为配置事件</li>
+        <li><b>work_activity</b> — 项目 <code>project</code>、需求文档 <code>requirement_doc</code></li>
+        <li><b>demand_log</b> — 需求评审、排期、调期、取消、重开</li>
+        <li><b>dev_branch_log</b> — 分支新建与状态流转</li>
+        <li><b>version_log</b> — 版本创建、开始、关闭、取消、范围调整</li>
+      </ul>
+      <p class="foot-note" style="margin:8px 0 0">后端统一 DTO：<code>id / at / entityType / entityId / entityTitle / action / actionLabel / detail / actorName / projectId</code>，按 <code>at DESC, id DESC</code> 分页。</p>
+    </div>
+    <div class="note-card">
+      <h4>可见性规则</h4>
+      <ul>
+        <li>工作项事件沿用现有 <code>project_member.access = none</code> 过滤</li>
+        <li>项目、文档、需求、分支、版本按所属项目可见性过滤；无权限项目的名称也不出现</li>
+        <li>文档草稿仍按「已发布或本人负责」收敛（与文档动态流一致）</li>
+        <li><code>CFG</code> 配置事件仅空间主 / 管理员可见，普通成员连计数都不显示</li>
+        <li>删除实体后其历史事件随实体清理，聚合视图不残留</li>
+      </ul>
+    </div>
+    <div class="note-card">
+      <h4>活动页文案</h4>
+      <div class="compare">
+        <div class="old"><b>现在</b>空间内的工作项操作与配置变更记录（按时间倒序，每次加载 100 条）。删除列/模块/项目这类破坏性操作也会出现在这里。</div>
+        <div class="new"><b>改为</b>空间内的项目、需求、文档、分支、版本、工作项与配置变更，按时间倒序合并展示，每次加载 50 条。配置变更仅空间主与管理员可见。</div>
+      </div>
+    </div>
+    <div class="note-card">
+      <h4>待确认</h4>
+      <ul>
+        <li>先做方案 A 还是直接上方案 B 的完整筛选</li>
+        <li>普通成员是否需要看到项目/版本事件（本原型：按可见性展示）</li>
+        <li>每页条数用 50 还是沿用 100；「加载更多」是否需要「跳到某天」</li>
+        <li>活动入口是否仍留在「设置 → 数据与审计」，或提升为顶栏「动态」</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.act-toolbar .chip, .filterbar .chip').forEach(function(el){
+    el.addEventListener('click', function(){
+      if(el.classList.contains('lock')) return;
+      var group = el.parentElement;
+      group.querySelectorAll('.chip').forEach(function(x){ x.classList.remove('on'); });
+      el.classList.add('on');
+    });
+  });
+</script>
+</body>
+</html>

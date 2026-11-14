@@ -71,7 +71,7 @@ public class AiReqDocService {
     // ==================== 拆分成任务草稿 ====================
 
     public AiSplitResponse split(String userId, String workspaceId, String docId, Integer maxTasks) {
-        AiConfig cfg = configService.resolve(userId);
+        AiConfig cfg = configService.resolve(userId, workspaceId);
         RequirementDoc doc = docService.getVisible(workspaceId, userId, docId);
         String text = docText(doc);
         if (text.trim().isEmpty()) {
@@ -166,7 +166,7 @@ public class AiReqDocService {
     // ==================== 完成度体检 ====================
 
     public AiAuditResponse audit(String userId, String workspaceId, String docId) {
-        AiConfig cfg = configService.resolve(userId);
+        AiConfig cfg = configService.resolve(userId, workspaceId);
         RequirementDoc doc = docService.getVisible(workspaceId, userId, docId);
         String text = docText(doc);
         if (text.trim().isEmpty()) {

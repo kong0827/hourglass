@@ -16,7 +16,7 @@ import { guard, serverDecision } from "../core/transitions.js";
 import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
-import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, PRIORITIES, avatarHTML, colMeta, colName, dayDiff, elapsedText, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, taskDescText, typeBadgeHTML, weekdayCN } from "../lib/format.js";
+import { taskPublicationHTML, assocLinkHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, PRIORITIES, avatarHTML, colMeta, colName, dayDiff, elapsedText, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, localDatetime, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, taskDescText, typeBadgeHTML, weekdayCN } from "../lib/format.js";
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
@@ -419,10 +419,9 @@ function cardHTML(t, idx){
     }
   }
   if(t.branchId){
-    /* 分支标签只做展示（点击跳转交给「分支」页，避免卡片上三个标签抢点击） */
+    /* 分支标签可点跳转分支详情；捕获阶段全局委托先于卡片「开抽屉」命中，不会误开抽屉 */
     var brName = branchNameById(t.branchId);
-    if(brName) tagsHTML += '<span class="tag tag-branch" title="所属分支：' + esc(brName) + '">' +
-      icon("branch", 11) + esc(brName) + '</span>';
+    if(brName) tagsHTML += assocLinkHTML("branch", t.branchId, brName, {cls:"tag tag-branch", html:icon("branch", 11) + esc(brName), title:"打开分支：" + brName});
   }
   if(t.tags && t.tags.length){
     t.tags.slice(0, 2).forEach(function(tg){ tagsHTML += tagChip(tg); });
@@ -1185,7 +1184,7 @@ function optimisticMove(id, toCol, beforeId){
   if(!cdTo) return;
   var wasDone = t.boardColumn === "done";
   t.boardColumn = toCol;
-  if(toCol === "done" && !wasDone) t.completedAt = rt.TODAY_ISO;
+  if(toCol === "done" && !wasDone) t.completedAt = localDatetime();
   else if(toCol !== "done") t.completedAt = null;
   var pos = cdTo.items.length;
   if(beforeId){

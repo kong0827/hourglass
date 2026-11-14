@@ -11,4 +11,11 @@ public class CaseBugLink {
     private String caseId;
 
     private String caseTitle;
+
+    /** 用例所属项目，前端跳转 openCaseInProject 用 */
+    private String reqId;
+
+    private Integer caseNo;
+
+    private String latestStatus;
 }

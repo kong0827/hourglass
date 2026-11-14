@@ -69,6 +69,16 @@
     LIMIT #{limit}
   </select>
 
+  <select id="selectByTarget" resultType="AuditLog">
+    SELECT <include refid="cols"/>
+    FROM audit_log
+    WHERE workspace_id = #{workspaceId}
+      AND target_type = #{targetType}
+      AND target_id = #{targetId}
+    ORDER BY id DESC
+    LIMIT #{limit}
+  </select>
+
   <select id="selectOldest" resultType="java.time.LocalDateTime">
     SELECT MIN(created_at) FROM audit_log
     <where>

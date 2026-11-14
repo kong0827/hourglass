@@ -80,6 +80,7 @@ class BackupImportBatchTest {
     private VersionTaskMapper versionTaskMapper;
     private DemandMapper demandMapper;
     private com.hourglass.mapper.TestCaseMapper caseMapper;
+    private com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
     private NumberSeqService numberSeq;
     private PlatformTransactionManager transactionManager;
     private BackupService service;
@@ -121,6 +122,7 @@ class BackupImportBatchTest {
         versionTaskMapper = mock(VersionTaskMapper.class);
         demandMapper = mock(DemandMapper.class);
         caseMapper = mock(com.hourglass.mapper.TestCaseMapper.class);
+        caseTaskMapper = mock(com.hourglass.mapper.TestCaseTaskMapper.class);
         numberSeq = mock(NumberSeqService.class);
         workActivityMapper = mock(com.hourglass.mapper.WorkActivityMapper.class);
         service = new BackupService(taskMapper, reqMapper, subtaskMapper, tagMapper,
@@ -128,7 +130,7 @@ class BackupImportBatchTest {
                 mock(TaskCommentMapper.class),
                 caseMapper,
                 mock(com.hourglass.mapper.TestCaseRunMapper.class),
-                mock(com.hourglass.mapper.TestCaseTaskMapper.class),
+                caseTaskMapper,
                 mock(com.hourglass.mapper.RequirementDocCommentMapper.class),
                 mock(AppNotificationMapper.class), docMapper, branchMapper,
                 mock(TaskDependencyMapper.class), mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
@@ -153,9 +155,11 @@ class BackupImportBatchTest {
                         mock(com.hourglass.mapper.VersionCommitmentMapper.class),
                         mock(com.hourglass.mapper.ProjectMilestoneMapper.class),
                         mock(com.hourglass.mapper.DeliveryNoteMapper.class), scopeLock,
-                        mock(com.hourglass.mapper.NumberSeqMapper.class)),
+                        mock(com.hourglass.mapper.NumberSeqMapper.class),
+                        mock(com.hourglass.mapper.CaseSetMapper.class)),
                 mock(ActivityService.class),
-                workActivityMapper, transactionManager, scopeLock, numberSeq);
+                workActivityMapper, transactionManager, scopeLock, numberSeq,
+                mock(com.hourglass.mapper.DocTemplateMapper.class));
     }
 
     @ParameterizedTest
@@ -261,6 +265,40 @@ class BackupImportBatchTest {
         verify(transactionManager, never()).getTransaction(any(TransactionDefinition.class));
         verify(versionTaskMapper, never()).insertBatch(anyString(), anyString(), anyList());
         verify(taskMapper, never()).insertBatch(anyList());
+    }
+
+    @Test
+    void caseTaskLinksReportCreatedAndSkippedCounts() {
+        BackupData data = backup(1);
+        BackupData.BackupReq project = new BackupData.BackupReq();
+        project.setId("R1");
+        project.setName("项目");
+        data.setReqs(Collections.singletonList(project));
+        BackupData.BackupTestCase testCase = new BackupData.BackupTestCase();
+        testCase.setId("CASE1");
+        testCase.setReqId("R1");
+        testCase.setTitle("用例");
+        data.setTestCases(Collections.singletonList(testCase));
+        /* 一条有效关联 + 工作项不存在 + 用例不存在：界面提示的创建 / 跳过数量要能对上 */
+        data.setCaseTasks(Arrays.asList(link("CASE1", "K1"), link("CASE1", "K404"), link("C404", "K1")));
+
+        BackupData.ImportResult result = service.importData("U1", "W1", data);
+
+        assertEquals(1, result.getTasks());
+        assertEquals(1, result.getTestCases());
+        assertEquals(1, result.getCaseTaskLinks());
+        assertEquals(2, result.getSkippedCaseTaskLinks());
+        ArgumentCaptor<com.hourglass.entity.TestCaseTask> links =
+                ArgumentCaptor.forClass(com.hourglass.entity.TestCaseTask.class);
+        verify(caseTaskMapper).insert(links.capture());
+        assertEquals("K1", links.getValue().getTaskId());
+    }
+
+    private BackupData.BackupCaseTask link(String caseId, String taskId) {
+        BackupData.BackupCaseTask link = new BackupData.BackupCaseTask();
+        link.setCaseId(caseId);
+        link.setTaskId(taskId);
+        return link;
     }
 
     private BackupData backup(int taskCount) {
@@ -687,7 +725,7 @@ class BackupImportBatchTest {
         task.setBoardColumn("done");
         task.setStartDate(LocalDate.of(2026, 11, 1));
         task.setDueDate(LocalDate.of(2026, 11, 5));
-        task.setCompletedAt(LocalDate.of(2026, 11, 5));
+        task.setCompletedAt(LocalDate.of(2026, 11, 5).atStartOfDay());
         task.setPublishedAt(LocalDate.of(2026, 11, 9));
         task.setPublishSource("version_release");
         task.setPublishedReleaseId("VR-old");

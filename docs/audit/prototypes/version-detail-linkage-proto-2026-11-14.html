@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="zh-CN" data-layout="desktop">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>版本详情 · 关联项联动与下钻原型（2026-11-14）</title>
+<!-- 复用真实前端样式：页头 / 页签 / 面板 / 表格 / 联动条与产品代码同一份 CSS，逐像素一致 -->
+<link rel="stylesheet" href="../../../frontend/css/tokens.css" />
+<link rel="stylesheet" href="../../../frontend/css/base.css" />
+<link rel="stylesheet" href="../../../frontend/css/layout.css" />
+<link rel="stylesheet" href="../../../frontend/css/components.css" />
+<link rel="stylesheet" href="../../../frontend/css/views.css" />
+<link rel="stylesheet" href="../../../frontend/css/version.css" />
+<link rel="stylesheet" href="../../../frontend/css/workcolumn.css" />
+<link rel="stylesheet" href="../../../frontend/css/delivery.css" />
+<link rel="stylesheet" href="../../../frontend/css/mobile.css" />
+<style>
+/* ===== 原型舞台（仅原型用，不属于产品代码） ===== */
+html,body{height:100%;}
+body{margin:0;overflow:hidden;background:var(--bg);}
+.proto-shell{position:fixed;inset:0;display:flex;background:var(--bg);}
+.pb-side{width:236px;flex:0 0 auto;background:var(--surface);border-right:1px solid var(--border);padding:14px 12px;overflow:auto;}
+.pb-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;padding:2px 6px 12px;}
+.pb-logo .mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(150deg,var(--primary),var(--plum));color:#fff;display:grid;place-items:center;font-size:11px;}
+.pb-ws{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;}
+.pb-ws .av{width:24px;height:24px;border-radius:7px;background:var(--surface-sunken);display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--text-2);}
+.pb-ws .nm{font-size:12.5px;font-weight:600;}
+.pb-ws .mt{font-size:10.5px;color:var(--text-3);}
+.pb-nav{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--text-2);}
+.pb-nav .grp{font-size:10.5px;color:var(--text-3);padding:12px 6px 4px;}
+.pb-nav .it{padding:7px 8px;border-radius:7px;display:flex;align-items:center;gap:8px;}
+.pb-nav .it.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;box-shadow:inset 2px 0 0 var(--primary);}
+.pb-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.proto-appbar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px var(--content-pad);background:var(--surface);border-bottom:1px solid var(--border);}
+.proto-appbar .ttl{font-size:15px;font-weight:650;line-height:1.25;}
+.proto-appbar .crumb{font-size:11px;color:var(--text-3);}
+.proto-appbar .sp{flex:1 1 auto;}
+.proto-search{display:flex;align-items:center;gap:6px;width:230px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-sunken);color:var(--text-3);font-size:12px;}
+#view-version{flex:1 1 auto;min-height:0;height:auto;}
+[data-layout="mobile"] .pb-side{display:none;}
+[data-layout="mobile"] .proto-search{display:none;}
+[data-layout="mobile"] .proto-appbar{padding:8px 12px;}
+
+/* ?flat=1：把固定舞台摊平成整页文档流，用于出整页长截图（不影响交互原型本身） */
+body.flat{overflow:visible;height:auto;}
+body.flat .proto-shell{position:static;display:block;}
+body.flat .pb-side{display:none;}
+body.flat #view-version{overflow:visible;}
+body.flat .vd-head{position:static;}
+/* 长截图里说明卡改走文档流附在末尾，免得浮层盖住指标格 */
+body.flat .annot-box{position:static;width:auto;max-height:none;margin:0 var(--content-pad) 24px;box-shadow:none;}
+/* ① 标在分布行左端，别压住行尾的漏斗按钮 */
+body.annot .vd-dist-row > .annot-point{left:-9px;right:auto;top:-7px;}
+
+/* ===== 原型控制条 / 标注（截图时 ?shot=1 隐藏） ===== */
+.proto-bar{position:fixed;left:16px;top:14px;z-index:400;width:392px;background:rgba(255,255,255,.97);border:1px solid var(--border);border-radius:12px;padding:9px 10px;box-shadow:var(--shadow-lg);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.proto-bar .name{width:100%;font-size:12px;font-weight:650;}
+.proto-bar .name span{font-weight:400;color:var(--text-3);margin-left:5px;}
+.proto-bar .lbl{font-size:10.5px;color:var(--text-3);margin-right:-2px;}
+.pseg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);}
+.pseg button{height:26px;padding:0 8px;border:0;border-right:1px solid var(--border);background:var(--surface);color:var(--text-3);font-size:11.5px;cursor:pointer;}
+.pseg button:last-child{border-right:0;}
+.pseg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.pbtn{height:26px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-2);font-size:11.5px;cursor:pointer;}
+.pbtn.on{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);font-weight:600;}
+.proto-url{width:100%;font-size:10.5px;color:var(--text-3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;line-height:1.5;border-top:1px dashed var(--border);padding-top:6px;}
+.proto-url b{color:var(--primary-fg);font-weight:600;}
+body.shot .proto-bar,body.shot .annot-box{display:none;}
+.annot-box{position:fixed;left:16px;top:150px;z-index:390;width:372px;max-height:calc(100vh - 176px);overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow-lg);display:none;}
+body.annot .annot-box{display:block;}
+.annot-box h3{font-size:13px;font-weight:700;margin:0 0 2px;}
+.annot-box .sub{font-size:11.5px;color:var(--text-3);line-height:1.6;margin-bottom:9px;}
+.annot-box ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;}
+.annot-box li{display:flex;gap:8px;font-size:11.5px;line-height:1.6;color:var(--text-2);}
+.annot-box li b{color:var(--text);font-weight:600;}
+.annot-box .n{flex:none;width:17px;height:17px;border-radius:50%;background:var(--warning);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;margin-top:1px;}
+.annot-point{display:none;position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:var(--warning);color:#fff;font-size:10.5px;font-weight:700;align-items:center;justify-content:center;z-index:8;box-shadow:0 0 0 2px var(--surface);font-style:normal;}
+body.annot .annot-point{display:flex;}
+.annot-host{position:relative;}
+
+/* ===== 实体详情浮层（原型示意，真实产品复用工作项抽屉 / 需求详情 / 分支抽屉） ===== */
+#detailLayer{z-index:300;}
+#detailLayer .sheet{width:min(720px,calc(100vw - 32px));max-height:calc(100vh - 64px);display:flex;flex-direction:column;}
+#detailLayer .drawer-body{overflow:auto;padding:14px 18px 18px;}
+.dt-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px;}
+.dt-note{font-size:12px;color:var(--text-2);line-height:1.7;}
+.dt-rel{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.proto-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:500;max-width:min(560px,calc(100vw - 32px));padding:9px 14px;border-radius:10px;background:var(--text);color:var(--surface);font-size:12px;line-height:1.5;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:opacity .18s ease;}
+.proto-toast.on{opacity:1;}
+</style>
+</head>
+<body>
+<div class="proto-shell">
+  <aside class="pb-side" aria-hidden="true">
+    <div class="pb-logo"><span class="mark">漏</span>沙漏</div>
+    <div class="pb-ws"><span class="av">移</span><span><span class="nm">移动端团队</span><br><span class="mt">共享 · 9 人 · 空间主</span></span></div>
+    <nav class="pb-nav">
+      <div class="grp">我的</div><div class="it">我的工作</div><div class="it">周回顾</div>
+      <div class="grp">规划</div><div class="it">需求池</div><div class="it">项目</div><div class="it on">版本</div>
+      <div class="grp">交付</div><div class="it">工作项</div><div class="it">文档</div><div class="it">测试</div><div class="it">分支</div>
+      <div class="grp">洞察</div><div class="it">报表</div><div class="it">成员负载</div><div class="it">逾期与阻塞</div>
+    </nav>
+  </aside>
+  <div class="pb-main">
+    <div class="proto-appbar">
+      <div><div class="ttl">版本详情</div><div class="crumb">版本 / 详情</div></div>
+      <span class="sp"></span>
+      <div class="proto-search">搜索工作项…</div>
+      <button class="btn sm primary" type="button">+ 新建</button>
+    </div>
+    <main id="view-version" class="view on"></main>
+  </div>
+</div>
+
+<div class="proto-bar">
+  <div class="name">版本详情 · 关联项联动与下钻<span>2026-11-14</span></div>
+  <span class="lbl">场景</span>
+  <div class="pseg" id="segScene">
+    <button type="button" data-s="init">初始</button>
+    <button type="button" data-s="cat">模块</button>
+    <button type="button" data-s="branch">分支</button>
+    <button type="button" data-s="demand">需求</button>
+    <button type="button" data-s="stage">阶段</button>
+    <button type="button" data-s="combo">组合</button>
+  </div>
+  <span class="lbl">布局</span>
+  <div class="pseg" id="segLayout">
+    <button type="button" data-l="desktop">桌面</button>
+    <button type="button" data-l="mobile">手机</button>
+  </div>
+  <button class="pbtn" type="button" id="btnAnnot">标注</button>
+  <button class="pbtn" type="button" id="btnReset">重置</button>
+  <div class="proto-url" id="urlOut"></div>
+</div>
+
+<div class="annot-box">
+  <h3>一个关联项，两条路</h3>
+  <p class="sub">点<b>名字</b>开它的详情（离开本页语境）；点<b>漏斗</b>把本页明细联动到它（留在本页收窄）。两者共用同一份筛选状态与同一串 hash，分享出去能还原同一份明细。</p>
+  <ol>
+    <li><span class="n">1</span><span><b>工时分布</b>：行名与行尾漏斗都下钻。模块 / 负责人 / 阶段三个维度共用一条路径，下钻后按实际工时降序，行数恒等于该行的「N 项」。</span></li>
+    <li><span class="n">2</span><span><b>分支进度</b>：chip 主体开分支抽屉，右侧漏斗只看本版本里挂这条分支的工作项——分支页看全量，这里只看本版本。</span></li>
+    <li><span class="n">3</span><span><b>已排需求</b>：新增「本版本工作项」列。行名开需求详情，漏斗把明细收窄到该需求；没挂工作项时如实写「未挂工作项」，不给一个点了没反应的 0。</span></li>
+    <li><span class="n">4</span><span><b>工作项行内</b>：标题下挂需求 / 分支 chip，直接开对应实体详情；行本身的点击仍然是开工作项，两者不抢。</span></li>
+    <li><span class="n">5</span><span><b>联动条</b>：常驻在筛选行下方，写清当前跟着谁走。每条可单独摘掉，也可一次清除全部；分支 / 需求的名字在条上仍是详情入口。</span></li>
+    <li><span class="n">6</span><span><b>发布快照</b>：工作项 / 需求编号 / 版本名都是实体入口，由全局委托统一接线——工作项与需求点开当时那一版事实对应的实体，版本名跳转到该版本的详情页。</span></li>
+  </ol>
+</div>
+
+<div class="modal-layer" id="detailLayer" role="dialog" aria-modal="true" aria-labelledby="dtTitle">
+  <div class="sheet">
+    <div class="drawer-head">
+      <span class="head-icon" id="dtIcon" aria-hidden="true"></span>
+      <div class="head-txt">
+        <div class="head-title-line"><h2 id="dtTitle">详情</h2><span class="tag" id="dtTag"></span></div>
+        <div class="head-sub" id="dtSub"></div>
+      </div>
+      <div class="head-tools"><button class="icon-btn sm" type="button" id="dtClose" aria-label="关闭"></button></div>
+    </div>
+    <div class="drawer-body" id="dtBody"></div>
+  </div>
+</div>
+<div class="proto-toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ==================== 图标：与 core/icons.js 同一份路径 ==================== */
+var PATHS = {
+  search:'<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>',
+  tag:'<path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/>',
+  branch:'<circle cx="5.6" cy="4.4" r="1.9"/><circle cx="5.6" cy="15.6" r="1.9"/><circle cx="14.4" cy="6.6" r="1.9"/><path d="M5.6 6.3v7.4"/><path d="M14.4 8.5c0 3.4-2.2 5.4-5.2 5.4H5.6"/>',
+  demand:'<path d="M3.4 4.2h13.2v8.4l-3.2 3.2H3.4Z"/><path d="M13.4 15.8v-3.2h3.2"/><path d="M6.6 8h6.8M6.6 11.2h4.4"/>',
+  clock:'<circle cx="10" cy="10" r="7.2"/><path d="M10 5.8V10l3 1.8"/>',
+  close:'<path d="M3 3l14 14M17 3 3 17"/>',
+  link:'<path d="M8.6 11.4a3.2 3.2 0 0 0 4.5 0l1.3-1.3a3.2 3.2 0 0 0-4.5-4.5l-.6.6"/><path d="M11.4 8.6a3.2 3.2 0 0 0-4.5 0l-1.3 1.3a3.2 3.2 0 0 0 4.5 4.5l.6-.6"/>',
+  filter:'<path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/>',
+  chevronRight:'<path d="M7.6 4.6 13 10l-5.4 5.4"/>',
+  left:'<path d="M12.4 4.6 7 10l5.4 5.4"/>',
+  refresh:'<path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/>',
+  edit:'<path d="M13.6 3.2l3.2 3.2L7 16.2l-4.2.8.8-4.2Z"/><path d="M12.2 4.6l3.2 3.2"/>',
+  projects:'<path d="M3.2 6A2 2 0 0 1 5.2 4h3.2l1.8 2.2h5.6a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H5.2a2 2 0 0 1-2-2Z"/>',
+  task:'<rect x="3.4" y="3.4" width="13.2" height="13.2" rx="2.6"/><path d="M6.8 10.2l2.2 2.2 4.2-4.6"/>'
+};
+function icon(n, s){
+  s = s || 16;
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="'
+    + (s <= 16 ? 1.5 : 1.6) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    + (PATHS[n] || "") + '</svg>';
+}
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+
+/* ==================== 种子数据：与本地演示库同一版本 ==================== */
+var VERSION = { id:"Voc6wln", name:"App 首页 v3.2", status:"active", reqName:"App 首页改版", start:"2026-11-02", due:"2026-12-04" };
+var SIBLINGS = [["Voc6wln","App 首页 v3.2","开发中"],["Vac3e45","App 首页 v3.1","已发布"],["Vfbu5dv","App 首页 v3.0","已发布"]];
+var CATS = [
+  { id:"c-perf", name:"性能", color:"#8b6fb5" },
+  { id:"c-mod", name:"模块配置", color:"#c08a3e" },
+  { id:"c-feed", name:"首页信息流", color:"#8a8578" },
+  { id:"c-search", name:"搜索", color:"#5b83ad" }
+];
+var BRANCHES = [
+  { id:"b-core", name:"feature/home-v3.2-core", status:"dev", label:"开发中", tone:"tag-info", count:3 },
+  { id:"b-ui", name:"feature/home-v3.2-ui", status:"merging", label:"合并中", tone:"tag-warning", count:4 },
+  { id:"b-rel", name:"release/home-v3.1", status:"released", label:"已发布", tone:"tag-success", count:7 }
+];
+var DEMANDS = [
+  { id:"d-001", no:"DM-001", title:"首页信息流个性化", status:"plan", label:"已排期", tone:"tag-info", owner:"李娜", due:"2026-11-28", cases:12, pass:9 },
+  { id:"d-006", no:"DM-006", title:"新人引导改版", status:"pass", label:"已通过", tone:"tag-plum", owner:"陈昊", due:"2026-12-02", cases:8, pass:8 },
+  { id:"d-009", no:"DM-009", title:"搜索联想词治理", status:"plan", label:"已排期", tone:"tag-info", owner:"孙琪", due:"2026-11-25", cases:6, pass:2 }
+];
+/* minutes 一律用分钟存，渲染时再折算，口径与产品一致 */
+var TASKS = [
+  { id:"t01", title:"机型兼容性测试", type:"test", owner:"李娜", col:"待测试", colTone:"tag-warning", due:"2026-11-11", over:true, est:720, act:420, dev:420, test:0, cat:"c-perf", br:"b-core", dm:"" },
+  { id:"t02", title:"首页性能压测", type:"test", owner:"陈昊", col:"待测试", colTone:"tag-warning", due:"2026-11-13", over:true, est:60, act:360, dev:360, test:0, cat:"c-perf", br:"b-core", dm:"" },
+  { id:"t03", title:"首屏缓存策略", type:"task", owner:"李娜", col:"待处理", colTone:"tag-info", due:"2026-12-03", over:false, est:0, act:0, dev:0, test:0, cat:"c-perf", br:"b-core", dm:"" },
+  { id:"t04", title:"启动阶段埋点补齐", type:"task", owner:"王芳", col:"进行中", colTone:"tag-info", due:"2026-11-20", over:false, est:480, act:600, dev:600, test:0, cat:"c-perf", br:"b-ui", dm:"d-006" },
+  { id:"t05", title:"图片懒加载兜底", type:"bug", owner:"赵磊", col:"进行中", colTone:"tag-info", due:"2026-11-18", over:false, est:240, act:750, dev:750, test:0, cat:"c-perf", br:"b-ui", dm:"" },
+  { id:"t06", title:"模块顺序可配置", type:"story", owner:"孙琪", col:"进行中", colTone:"tag-info", due:"2026-11-22", over:false, est:600, act:540, dev:540, test:0, cat:"c-mod", br:"b-ui", dm:"d-001" },
+  { id:"t07", title:"模块配置下发协议", type:"task", owner:"周敏", col:"待测试", colTone:"tag-warning", due:"2026-11-19", over:false, est:420, act:480, dev:300, test:180, cat:"c-mod", br:"b-rel", dm:"d-001" },
+  { id:"t08", title:"配置回滚开关", type:"task", owner:"周敏", col:"已完成", colTone:"tag-success", due:"2026-11-08", over:false, est:180, act:150, dev:150, test:0, cat:"c-mod", br:"b-rel", dm:"", done:true, doneAt:"2026-11-09" },
+  { id:"t09", title:"模块空态文案", type:"task", owner:"吴俊", col:"待处理", colTone:"tag-info", due:"2026-11-26", over:false, est:120, act:0, dev:0, test:0, cat:"c-mod", br:"", dm:"" },
+  { id:"t10", title:"灰度配置校验", type:"test", owner:"李娜", col:"已完成", colTone:"tag-success", due:"2026-11-07", over:false, est:180, act:300, dev:120, test:180, cat:"c-mod", br:"b-rel", dm:"", done:true, doneAt:"2026-11-07" },
+  { id:"t11", title:"信息流个性化排序", type:"story", owner:"陈昊", col:"进行中", colTone:"tag-info", due:"2026-11-24", over:false, est:600, act:420, dev:420, test:0, cat:"c-feed", br:"b-ui", dm:"d-001" },
+  { id:"t12", title:"冷启动兴趣标签", type:"task", owner:"张威", col:"待处理", colTone:"tag-info", due:"2026-11-29", over:false, est:360, act:0, dev:0, test:0, cat:"c-feed", br:"", dm:"d-001" },
+  { id:"t13", title:"信息流去重规则", type:"bug", owner:"张威", col:"待测试", colTone:"tag-warning", due:"2026-11-16", over:true, est:180, act:240, dev:120, test:120, cat:"c-feed", br:"b-rel", dm:"d-001" },
+  { id:"t14", title:"曝光埋点校准", type:"task", owner:"王芳", col:"已完成", colTone:"tag-success", due:"2026-11-06", over:false, est:120, act:180, dev:60, test:120, cat:"c-feed", br:"b-rel", dm:"d-006", done:true, doneAt:"2026-11-05" },
+  { id:"t15", title:"搜索联想词错乱", type:"bug", owner:"孙琪", col:"进行中", colTone:"tag-info", due:"2026-11-17", over:false, est:240, act:360, dev:360, test:0, cat:"c-search", br:"b-rel", dm:"d-009" },
+  { id:"t16", title:"搜索联想词埋点", type:"task", owner:"吴俊", col:"待处理", colTone:"tag-info", due:"2026-11-27", over:false, est:180, act:180, dev:180, test:0, cat:"c-search", br:"", dm:"d-009" },
+  { id:"t17", title:"首页启动速度优化", type:"story", owner:"赵磊", col:"已完成", colTone:"tag-success", due:"2026-10-28", over:false, est:240, act:240, dev:120, test:120, cat:"c-search", br:"b-rel", dm:"d-006", done:true, doneAt:"2026-10-28", pre:true }
+];
+/* 发布记录按版本归档：v3.2 的发布页只会出现 v3.2 自己的记录，时间落在版本窗口（11-02 → 12-04）内、
+   且晚于所引用工作项的完成日。预发回归 → 生产灰度 → 正式发布（计划待发布）是一条递进的真实发布链。 */
+var RECORDS = [
+  { id:"r1", result:"success", env:"生产", op:"灰度发布", at:"2026-11-12 21:40", ver:"App 首页 v3.2", no:"REL-2026-0142",
+    items:[{ t:"t17", dm:"d-006" },{ t:"t14", dm:"d-006" },{ t:"t10", dm:"" }] },
+  { id:"r2", result:"success", env:"预发", op:"回归验证", at:"2026-11-10 15:12", ver:"App 首页 v3.2", no:"REL-2026-0139",
+    items:[{ t:"t08", dm:"" },{ t:"t13", dm:"d-001" }] }
+];
+var LOGS = [
+  { at:"2026-11-14 09:26", act:"记录实际发布", who:"李娜", note:"预发回归通过，补记 REL-2026-0139" },
+  { at:"2026-11-02 10:05", act:"开始开发", who:"孔祥金", note:"冻结承诺基线：17 项 / 预估 76h" },
+  { at:"2026-11-01 18:40", act:"编辑版本", who:"孔祥金", note:"目标日 2026-12-04，范围加入搜索联想词治理" }
+];
+var TYPE_LABEL = { story:["需求","tag-primary"], task:["任务","tag-info"], bug:["缺陷","tag-danger"], test:["测试","tag-plum"] };
+var NONE = "__none__";
+var TABS = [["overview","概览"],["scope","工作项"],["demands","需求"],["releases","发布"],["log","操作记录"]];
+var ROLL_DIMS = [["module","模块"],["owner","负责人"],["stage","阶段"]];
+var LINK_META = {
+  cat:{ field:"cat", icon:"tag", label:"模块" },
+  branch:{ field:"branch", icon:"branch", label:"分支" },
+  demand:{ field:"demand", icon:"demand", label:"需求" },
+  stage:{ field:"stage", icon:"clock", label:"阶段" }
+};
+var LINK_LABEL = { cat:"模块", branch:"分支", demand:"需求", stage:"阶段", owner:"负责人" };
+
+/* ==================== 状态 ==================== */
+function blankFilters(){ return { q:"", status:"", owner:"", type:"", sort:"default", cat:"", branch:"", demand:"", stage:"" }; }
+var st = { tab:"overview", rollDim:"module", filters:blankFilters() };
+
+function catName(id){ var h = CATS.filter(function(c){ return c.id === id; })[0]; return h ? h.name : "未指定模块"; }
+function catColor(id){ var h = CATS.filter(function(c){ return c.id === id; })[0]; return (h && h.color) || "var(--palette-8)"; }
+function branchHit(id){ return BRANCHES.filter(function(b){ return b.id === id; })[0] || null; }
+function branchName(id){ var h = branchHit(id); return h ? h.name : "分支"; }
+function demandHit(id){ return DEMANDS.filter(function(d){ return d.id === id; })[0] || null; }
+function demandLabel(id){ var d = demandHit(id); return d ? d.no + " " + d.title : "关联需求"; }
+function taskHit(id){ return TASKS.filter(function(t){ return t.id === id; })[0] || null; }
+function hours(m){
+  m = Number(m) || 0;
+  if(!m) return "—";
+  var h = Math.floor(m / 60), r = m % 60;
+  return r ? h + "h" + r + "m" : h + "h";
+}
+function num(n){ return String(Number(n) || 0); }
+function isDone(t){ return !!t.done; }
+function devOf(t){ return t.dev; }
+function testOf(t){ return t.test; }
+function actOf(t){ return t.act; }
+
+/* ==================== 统计口径（与产品一致） ==================== */
+function stats(){
+  var total = TASKS.length;
+  var done = TASKS.filter(isDone).length;
+  var over = TASKS.filter(function(t){ return t.over && !isDone(t); }).length;
+  var notStarted = TASKS.filter(function(t){ return t.col === "待处理"; }).length;
+  var work = TASKS.reduce(function(a, t){ return a + actOf(t); }, 0);
+  var test = TASKS.reduce(function(a, t){ return a + testOf(t); }, 0);
+  var est = TASKS.reduce(function(a, t){ return a + t.est; }, 0);
+  var remain = TASKS.filter(function(t){ return !isDone(t); }).reduce(function(a, t){ return a + t.est; }, 0);
+  /* 偏差只看已完成项的实际 / 预估；准时率只看有截止日的已完成项，分母为 0 时给 null 而不是 0% */
+  var doneEst = 0, doneAct = 0, withDue = 0, onTime = 0;
+  TASKS.filter(isDone).forEach(function(t){
+    doneEst += t.est; doneAct += actOf(t);
+    if(t.due){ withDue++; if(t.doneAt && t.doneAt <= t.due) onTime++; }
+  });
+  return { total:total, done:done, doing:total - done, over:over, notStarted:notStarted,
+    inProgress:total - done - notStarted, work:work, dev:work - test, test:test, est:est, remain:remain,
+    deviationPct:doneEst ? Math.round((doneAct - doneEst) * 100 / doneEst) : null,
+    onTimePct:withDue ? Math.round(onTime * 100 / withDue) : null };
+}
+function pctText(v){ return v === null ? "—" : (v > 0 ? "+" : "") + v + "%"; }
+function devTone(v){
+  if(v === null) return "";
+  var a = Math.abs(v);
+  return a <= 15 ? "ok" : (a <= 40 ? "warn-text" : "bad-text");
+}
+
+/* ==================== 通用片段 ==================== */
+function panel(title, meta, inner, annot){
+  return '<section class="panel vd-panel' + (annot ? " annot-host" : "") + '"><div class="panel-head"><h3>' + esc(title) + '</h3>'
+    + (meta ? '<span class="meta-right">' + meta + '</span>' : "") + '</div>' + inner
+    + (annot ? '<i class="annot-point">' + annot + '</i>' : "") + '</section>';
+}
+function tableWrap(head, body){
+  return '<div class="vd-tbl-wrap"><table class="phase-tbl"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+}
+function typeBadge(t){
+  var m = TYPE_LABEL[t] || TYPE_LABEL.task;
+  return '<span class="tag ' + m[1] + '">' + esc(m[0]) + '</span>';
+}
+function linkBtn(kind, value, label){
+  return '<button class="vd-funnel" type="button" data-link="' + esc(kind + ":" + value) + '"'
+    + ' title="把本页工作项联动到该' + esc(LINK_LABEL[kind]) + '：' + esc(label) + '"'
+    + ' aria-label="按' + esc(label) + '联动筛选工作项">' + icon("filter", 12) + '</button>';
+}
+function entityChip(kind, id, label){
+  if(!id) return "";
+  var m = LINK_META[kind];
+  return '<button class="vd-rel" type="button" data-open="' + esc(kind + ":" + id) + '"'
+    + ' title="打开' + esc(m.label) + '详情：' + esc(label) + '">' + icon(m.icon, 11) + '<span>' + esc(label) + '</span></button>';
+}
+
+/* ==================== 页头 ==================== */
+function headHTML(){
+  var counts = { scope:TASKS.length, demands:DEMANDS.length, releases:RECORDS.length, log:LOGS.length };
+  return '<header class="vd-head">'
+    + '<div class="vd-head-top">'
+    + '<button class="vd-back" type="button" data-act="back">' + icon("left", 13) + ' 版本</button>'
+    + '<h1 class="vd-title">' + esc(VERSION.name) + '</h1>'
+    + '<span class="tag tag-primary">开发中</span>'
+    + '<span class="sp"></span>'
+    + '<label class="vd-switch"><span>版本</span><select class="mini-select" aria-label="切换到同项目其他版本">'
+    + SIBLINGS.map(function(v){ return '<option' + (v[0] === VERSION.id ? " selected" : "") + '>' + esc(v[1] + "（" + v[2] + "）") + '</option>'; }).join("")
+    + '</select></label>'
+    + '<button class="icon-btn sm" type="button" data-act="refresh" aria-label="刷新版本详情">' + icon("refresh", 15) + '</button>'
+    + '</div>'
+    + '<div class="vd-sub">'
+    + '<button class="vd-proj" type="button" data-act="project">' + icon("projects", 12) + esc(VERSION.reqName) + '</button>'
+    + '<span class="vd-dot">·</span><span>' + esc(VERSION.start + " → " + VERSION.due) + '</span>'
+    + '</div>'
+    + '<div class="vd-acts">'
+    + '<button class="btn sm" type="button" data-act="edit">' + icon("edit", 13) + ' 编辑版本</button>'
+    + '<button class="btn sm" type="button" data-act="tasks">管理范围</button>'
+    + '<button class="btn sm primary" type="button" data-act="actual">记录实际发布</button>'
+    + '<button class="btn sm ghost" type="button" data-act="plan">计划与历史</button>'
+    + '<button class="btn sm ghost" type="button" data-act="delivery">交付说明</button>'
+    + '</div>'
+    + '<nav class="vd-tabs" aria-label="版本详情分区">' + TABS.map(function(t){
+      var on = t[0] === st.tab, n = counts[t[0]];
+      return '<button class="vd-tab' + (on ? " on" : "") + '" type="button" data-tab="' + t[0] + '"'
+        + (on ? ' aria-current="page"' : "") + '>' + esc(t[1]) + (n == null ? "" : '<b>' + n + '</b>') + '</button>';
+    }).join("") + '</nav></header>';
+}
+
+/* ==================== 概览 ==================== */
+function cell(value, label, tone, drill){
+  var style = tone ? ' class="vd-' + tone + '"' : "";
+  if(drill){
+    return '<button type="button" class="pcell drillable" data-drill="' + esc(drill) + '" title="在工作项页查看该口径明细">'
+      + '<b' + style + '>' + value + '</b><span>' + esc(label) + '</span></button>';
+  }
+  return '<div class="pcell"><b' + style + '>' + value + '</b><span>' + esc(label) + '</span></div>';
+}
+function progressPanel(){
+  var s = stats();
+  var pct = s.total ? Math.round(s.done * 100 / s.total) : 0;
+  var seg = [
+    { label:"已完成", n:s.done, color:"var(--success)" },
+    { label:"进行中", n:s.inProgress, color:"var(--primary)" },
+    { label:"未开始", n:s.notStarted, color:"var(--border-strong)" }
+  ];
+  var bar = seg.filter(function(g){ return g.n > 0; }).map(function(g){
+    return '<i style="width:' + (g.n * 100 / s.total) + '%;background:' + g.color + '"></i>';
+  }).join("");
+  var aria = seg.map(function(g){ return g.label + " " + g.n + " 项"; }).join("，");
+  var legend = seg.map(function(g){
+    return '<span class="vd-lg"><i style="background:' + g.color + '"></i>' + esc(g.label) + ' <b>' + g.n + '</b></span>';
+  }).join("");
+  if(s.over){
+    legend += '<button class="vd-lg vd-lg-btn" type="button" data-drill="over" title="只看逾期工作项">'
+      + '<i style="background:var(--danger)"></i>已逾期 <b>' + s.over + '</b></button>';
+  }
+  /* 百分比是完成率，色条是范围构成：两者口径不同，各自标注 */
+  return panel("范围进度", '<span>' + s.done + " / " + s.total + ' 项已完成</span>',
+    '<div class="vd-progress">'
+    + '<span class="vd-pct"><b>' + pct + '%</b><small>完成率</small></span>'
+    + '<span class="vd-bar-wrap"><small class="vd-bar-cap">范围构成</small>'
+    + '<span class="vd-bar" role="img" aria-label="' + esc("范围构成：" + aria) + '">' + bar + '</span></span>'
+    + '</div><div class="vd-legend">' + legend + '</div>');
+}
+function commitmentPanel(){
+  var s = stats();
+  var cells = [
+    ["冻结范围", s.total + " 项", "预估 " + hours(s.est)],
+    ["基线完成", Math.round(s.done * 100 / s.total) + "%", s.done + " 项已完成"],
+    ["启动后新增", "0 项", "无新增预估"],
+    ["基线移出", "0 项", "无移出预估"]
+  ];
+  return panel("承诺基线", "", '<div class="vd-cmp">' + cells.map(function(c){
+    return '<div class="vd-cmp-cell"><span>' + esc(c[0]) + '</span><b>' + esc(c[1]) + '</b><small>' + esc(c[2]) + '</small></div>';
+  }).join("") + '</div>'
+    + '<p class="foot-note">基线只快照一次（' + esc(VERSION.start) + ' 冻结）；预估变更不回写基线，新增 / 移出按当前绑定与基线的差集计算。</p>');
+}
+function rollupRows(){
+  if(st.rollDim === "stage"){
+    var dev = TASKS.filter(function(t){ return devOf(t) > 0; });
+    var test = TASKS.filter(function(t){ return testOf(t) > 0; });
+    return [
+      { key:"dev", kind:"stage", name:"开发", note:"预估 + 测试窗口外计时", color:"var(--info)", items:dev.length,
+        minutes:dev.reduce(function(a, t){ return a + devOf(t); }, 0) },
+      { key:"test", kind:"stage", name:"测试", note:"测试窗口内计时", color:"var(--plum)", items:test.length,
+        minutes:test.reduce(function(a, t){ return a + testOf(t); }, 0) }
+    ];
+  }
+  var groups = {}, order = [];
+  TASKS.forEach(function(t){
+    var key = st.rollDim === "module" ? (t.cat || "") : (t.owner || "").trim();
+    if(!groups[key]){
+      groups[key] = { key:key || NONE, kind:st.rollDim === "module" ? "cat" : "owner",
+        name:st.rollDim === "module" ? catName(key) : (key || "未指派"),
+        color:st.rollDim === "module" ? catColor(key) : "var(--primary)", items:0, minutes:0 };
+      order.push(key);
+    }
+    groups[key].items++;
+    groups[key].minutes += actOf(t);
+  });
+  return order.map(function(k){ return groups[k]; }).sort(function(a, b){ return b.minutes - a.minutes; });
+}
+function rollupPanel(){
+  var rows = rollupRows();
+  var s = stats();
+  var max = rows.reduce(function(a, r){ return Math.max(a, r.minutes); }, 0);
+  var seg = '<div class="seg mini" role="group" aria-label="工时分组维度">' + ROLL_DIMS.map(function(d){
+    return '<button type="button" data-roll="' + d[0] + '" aria-pressed="' + (st.rollDim === d[0]) + '"'
+      + (st.rollDim === d[0] ? ' class="on"' : "") + '>' + esc(d[1]) + '</button>';
+  }).join("") + '</div>';
+  var body = '<div class="vd-dist">' + rows.map(function(r, i){
+    var pct = max ? Math.round(r.minutes * 100 / max) : 0;
+    var share = s.work ? Math.round(r.minutes * 100 / s.work) : 0;
+    return '<div class="vd-dist-row' + (i === 0 ? " annot-host" : "") + '"><span class="vd-dist-name">'
+      + '<i style="background:' + esc(r.color) + '"></i>'
+      + '<button class="vd-dist-open" type="button" data-link="' + esc(r.kind + ":" + r.key) + '"'
+      + ' title="看该' + esc(LINK_LABEL[r.kind]) + '下的工作项明细">'
+      + '<span>' + esc(r.name) + '</span>' + icon("chevronRight", 11) + '</button>'
+      + (r.note ? '<small>' + esc(r.note) + '</small>' : "") + '</span>'
+      + '<span class="vd-dist-bar" title="' + esc(r.name + " " + hours(r.minutes) + "，占合计 " + share + "%") + '">'
+      + '<i style="width:' + pct + '%;background:' + esc(r.color) + '"></i></span>'
+      + '<b>' + hours(r.minutes) + '</b><small class="vd-dist-share">' + share + '% · ' + r.items + ' 项</small>'
+      + linkBtn(r.kind, r.key, r.name)
+      + (i === 0 ? '<i class="annot-point">1</i>' : "") + '</div>';
+  }).join("") + '</div>';
+  /* 条形按最大项归一便于横向比长短，右侧百分比是占合计：两个分母不同，脚注说清楚 */
+  return panel("工时分布", seg, body + '<p class="foot-note">合计 ' + hours(s.work)
+    + '（开发 ' + hours(s.dev) + ' / 测试 ' + hours(s.test) + '） · 条形按最大项归一，百分比为占合计</p>');
+}
+function branchPanel(){
+  var chips = BRANCHES.map(function(b){
+    return '<span class="vd-branch-wrap">'
+      + '<button class="vd-branch" type="button" data-open="branch:' + esc(b.id) + '" title="打开分支详情">'
+      + icon("branch", 12) + '<span>' + esc(b.name) + '</span>'
+      + '<span class="tag ' + b.tone + '">' + esc(b.label) + '</span><b>' + b.count + ' 项</b></button>'
+      + linkBtn("branch", b.id, b.name) + '</span>';
+  }).join("");
+  return panel("分支进度", '<span>由工作项所挂分支推导 · 点名字看分支，点漏斗看本版本里挂它的工作项</span>',
+    '<div class="vd-branches">' + chips + '</div>', 2);
+}
+function deliveryPanel(){
+  return panel("实际交付事实", "", '<p class="hint">还没有正式生产发布记录。当前都是规划统计，完成不等于实际发布。</p>'
+    + '<div class="vd-inline-acts">'
+    + '<button class="btn sm" type="button" data-tab="releases">看发布记录</button>'
+    + '<button class="btn sm ghost" type="button" data-act="plan">当前规划说明</button>'
+    + '<button class="btn sm ghost" type="button" data-act="delivery">交付说明</button></div>');
+}
+function lifecyclePanel(){
+  return panel("版本生命周期", '<span>当前 开发中</span>',
+    '<p class="hint">开始开发会冻结承诺基线；关闭 / 取消后不再接受编辑与新发布，历史保留。</p>'
+    + '<div class="vd-inline-acts">'
+    + '<button class="btn sm ghost" type="button" data-act="close">关闭版本</button>'
+    + '<button class="btn sm ghost danger" type="button" data-act="cancel">取消版本</button>'
+    + '<button class="btn sm ghost danger" type="button" data-act="delete">删除版本</button></div>');
+}
+function overviewHTML(){
+  var s = stats();
+  var kpis = '<div class="pgrid vd-kpis">'
+    + cell(s.total, "版本工作项", "", "all")
+    + cell(s.done, "已完成", "ok", "done")
+    + cell(s.doing, "未完成", "", "open")
+    + cell(hours(s.work), "已投入工时", "", "logged")
+    + cell(hours(s.est), "预估工时", "", "")
+    + cell(hours(s.remain), "剩余预估", "", "")
+    + cell(pctText(s.deviationPct), "整体偏差", devTone(s.deviationPct), "deviation")
+    + cell(s.onTimePct === null ? "—" : s.onTimePct + "%", "准时完成率", "", "ontime")
+    + cell(DEMANDS.length, "已排需求", "", "")
+    + '</div>'
+    + '<p class="foot-note vd-caliber">范围 = 该版本绑定的工作项。偏差 =（实际 − 预估）÷ 预估，±15% 内视为准确；完成不等于实际发布。</p>';
+  return kpis + progressPanel() + commitmentPanel() + rollupPanel() + branchPanel() + deliveryPanel() + lifecyclePanel();
+}
+
+/* ==================== 工作项页 ==================== */
+function owners(){
+  var seen = {}, out = [];
+  TASKS.forEach(function(t){ var o = (t.owner || "").trim(); if(o && !seen[o]){ seen[o] = 1; out.push(o); } });
+  return out.sort(function(a, b){ return a.localeCompare(b, "zh-CN"); });
+}
+function selectHTML(attr, pairs, chosen, label){
+  return '<select class="mini-select" data-filter="' + attr + '" aria-label="' + esc(label) + '">'
+    + pairs.map(function(p){ return '<option value="' + esc(p[0]) + '"' + (p[0] === chosen ? " selected" : "") + '>' + esc(p[1]) + '</option>'; }).join("")
+    + '</select>';
+}
+function linkedBarHTML(){
+  var f = st.filters;
+  var chips = Object.keys(LINK_META).filter(function(k){ return !!f[LINK_META[k].field]; }).map(function(k){
+    var m = LINK_META[k], val = f[m.field];
+    var name = k === "cat" ? catName(val === NONE ? "" : val)
+      : k === "branch" ? branchName(val)
+      : k === "demand" ? demandLabel(val)
+      : (val === "test" ? "测试计时" : "开发计时");
+    var open = (k === "branch" || k === "demand")
+      ? '<button class="vd-link-v" type="button" data-open="' + esc(k + ":" + val) + '" title="打开该' + esc(m.label) + '详情">' + esc(name) + '</button>'
+      : '<span class="vd-link-v">' + esc(name) + '</span>';
+    return '<span class="vd-link-chip">' + icon(m.icon, 12) + '<span class="vd-link-k">' + esc(m.label) + '</span>' + open
+      + '<button class="vd-link-x" type="button" data-unlink="' + k + '" aria-label="取消' + esc(m.label) + '联动" title="取消这条联动">'
+      + icon("close", 11) + '</button></span>';
+  });
+  if(!chips.length) return "";
+  return '<div class="vd-linked annot-host"><span class="vd-linked-lead">' + icon("link", 12) + '联动</span>'
+    + chips.join("") + '<span class="sp"></span>'
+    + '<button class="btn sm ghost" type="button" data-act="reset">清除全部筛选</button>'
+    + '<i class="annot-point">5</i></div>';
+}
+function filteredTasks(){
+  var f = st.filters, q = f.q.trim().toLowerCase();
+  var rows = TASKS.filter(function(t){
+    if(f.status === "done" && !isDone(t)) return false;
+    if(f.status === "open" && isDone(t)) return false;
+    if(f.status === "over" && !(t.over && !isDone(t))) return false;
+    if(f.owner && (f.owner === NONE ? (t.owner || "").trim() !== "" : (t.owner || "").trim() !== f.owner)) return false;
+    if(f.type && t.type !== f.type) return false;
+    if(f.cat && (f.cat === NONE ? !!t.cat : t.cat !== f.cat)) return false;
+    if(f.branch && t.br !== f.branch) return false;
+    if(f.demand && t.dm !== f.demand) return false;
+    if(f.stage === "dev" && devOf(t) <= 0) return false;
+    if(f.stage === "test" && testOf(t) <= 0) return false;
+    if(q && t.title.toLowerCase().indexOf(q) === -1 && (t.owner || "").toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+  if(f.sort === "actual") rows.sort(function(a, b){ return actOf(b) - actOf(a); });
+  else if(f.sort === "estimate") rows.sort(function(a, b){ return b.est - a.est; });
+  else if(f.sort === "title") rows.sort(function(a, b){ return a.title.localeCompare(b.title, "zh-CN"); });
+  else if(f.sort === "due") rows.sort(function(a, b){ return a.due.localeCompare(b.due); });
+  else rows.sort(function(a, b){
+    var ra = (a.over && !isDone(a)) ? 0 : (isDone(a) ? 2 : 1), rb = (b.over && !isDone(b)) ? 0 : (isDone(b) ? 2 : 1);
+    return ra - rb || actOf(b) - actOf(a);
+  });
+  return rows;
+}
+function scopeHTML(){
+  var f = st.filters;
+  var ownerPairs = [["","全部负责人"],[NONE,"未指派"]].concat(owners().map(function(o){ return [o, o]; }));
+  var catPairs = [["","全部模块"],[NONE,"未指定模块"]].concat(CATS.map(function(c){ return [c.id, c.name]; }));
+  var filters = '<div class="vd-filters">'
+    + '<label class="vd-search">' + icon("search", 13)
+    + '<input type="search" data-filter="q" value="' + esc(f.q) + '" placeholder="搜索标题或负责人" aria-label="搜索版本工作项"></label>'
+    + selectHTML("status", [["","全部状态"],["open","未完成"],["done","已完成"],["over","已逾期"]], f.status, "按状态筛选")
+    + selectHTML("cat", catPairs, f.cat, "按模块筛选")
+    + selectHTML("owner", ownerPairs, f.owner, "按负责人筛选")
+    + selectHTML("type", [["","全部类型"],["story","需求"],["task","任务"],["bug","缺陷"],["test","测试"]], f.type, "按类型筛选")
+    + selectHTML("sort", [["default","风险优先"],["actual","实际工时"],["estimate","预估工时"],["due","截止日期"],["title","标题"]], f.sort, "排序方式")
+    + '<span class="sp"></span>'
+    + '<button class="btn sm ghost" type="button" data-act="reset">清空筛选</button>'
+    + '<button class="btn sm" type="button" data-act="board" title="在看板中按此版本筛选">在看板中查看</button>'
+    + '</div>' + linkedBarHTML();
+  var rows = filteredTasks();
+  var est = rows.reduce(function(a, t){ return a + t.est; }, 0);
+  var act = rows.reduce(function(a, t){ return a + actOf(t); }, 0);
+  var body = rows.map(function(t, i){
+    return '<tr data-open="task:' + esc(t.id) + '" tabindex="0" title="打开工作项详情"' + (i === 0 ? ' class="annot-host"' : "") + '>'
+      + '<td class="vd-tt vd-tt-stack"><span class="vd-tt-line"><span class="vd-tname">' + esc(t.title) + '</span>'
+      + (t.pre ? '<span class="tag ghost vd-pre" title="首版上线前未绑版本，统计上折算进本版本">上线前归入</span>' : "")
+      + '</span>'
+      + (t.dm || t.br ? '<span class="vd-rels">' + entityChip("demand", t.dm, demandLabel(t.dm))
+        + entityChip("branch", t.br, branchName(t.br)) + '</span>' : "")
+      + (i === 0 ? '<i class="annot-point">4</i>' : "")
+      + '</td>'
+      + '<td>' + typeBadge(t.type) + '</td>'
+      + '<td>' + esc(t.owner || "—") + '</td>'
+      + '<td>' + (isDone(t) ? '<span class="tag tag-success">已完成</span>'
+        : '<span class="tag ' + t.colTone + '">' + esc(t.col) + '</span>') + '</td>'
+      + '<td class="num">' + esc(t.due) + (t.over && !isDone(t) ? ' <span class="vd-over">逾期</span>' : "") + '</td>'
+      + '<td class="num">' + hours(t.est) + '</td>'
+      + '<td class="num">' + hours(actOf(t)) + '</td>'
+      + '<td class="num">' + hours(devOf(t)) + '</td>'
+      + '<td class="num">' + hours(testOf(t)) + '</td></tr>';
+  }).join("") || '<tr><td colspan="9" class="foot-note tbl-empty">当前筛选下没有工作项。摘掉联动条上的条件，或点「清空筛选」回到全量。</td></tr>';
+  return filters + panel("版本工作项", '<span>' + rows.length + " / " + TASKS.length + " 项 · 预估 " + hours(est) + " · 实际 " + hours(act) + '</span>',
+    tableWrap('<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th class="num">截止</th>'
+      + '<th class="num">预估</th><th class="num">实际</th><th class="num">开发</th><th class="num">测试</th>', body)
+    + '<p class="foot-note">点击行打开工作项详情抽屉；标题下的 chip 打开需求 / 分支详情；开发 / 测试按测试窗口拆分计时。</p>');
+}
+
+/* ==================== 需求页 ==================== */
+function demandsHTML(){
+  var body = DEMANDS.map(function(d){
+    var linked = TASKS.filter(function(t){ return t.dm === d.id; }).length;
+    return '<tr data-open="demand:' + esc(d.id) + '" tabindex="0" title="打开需求详情">'
+      + '<td class="vd-tt"><span class="vd-no">' + esc(d.no) + '</span><span class="vd-tname">' + esc(d.title) + '</span></td>'
+      + '<td><span class="tag ' + d.tone + '">' + esc(d.label) + '</span></td>'
+      + '<td>' + esc(d.owner) + '</td>'
+      + '<td class="num">' + esc(d.due) + '</td>'
+      + '<td class="num">' + d.pass + " / " + d.cases + '</td>'
+      + '<td class="num vd-rel-cell">' + (linked
+        ? '<span>' + linked + ' 项</span>' + linkBtn("demand", d.id, d.title)
+        : '<span class="vd-muted" title="本版本的工作项还没有挂到这条需求">未挂工作项</span>') + '</td></tr>';
+  }).join("");
+  return panel("已排需求", '<span>目标版本指向本版本且未评审拒绝</span>',
+    tableWrap('<th>需求</th><th>状态</th><th>负责人</th><th class="num">期望日</th><th class="num">用例通过</th><th class="num">本版本工作项</th>', body)
+    + '<p class="foot-note">点击行打开需求详情；点漏斗把「工作项」页联动到该需求，只看本版本里挂它的那几项。</p>', 3);
+}
+
+/* ==================== 发布页 ==================== */
+function releasesHTML(){
+  var recs = RECORDS.map(function(r, ri){
+    var rows = r.items.map(function(it){
+      var t = taskHit(it.t), d = it.dm ? demandHit(it.dm) : null;
+      return '<tr><td><button type="button" class="snap-link" data-open="task:' + esc(it.t) + '" title="打开工作项详情">'
+        + esc(t ? t.title : it.t) + '</button></td>'
+        + '<td>' + (d ? '<button type="button" class="snap-link" data-open="demand:' + esc(d.id) + '" title="打开需求详情">'
+          + esc(d.no) + '<br>' + esc(d.title) + '</button>' : "—") + '</td>'
+        + '<td>' + esc(t ? t.owner : "—") + '</td>'
+        /* 版本名在快照行里是可跳转的实体引用（与产品 assocLinkHTML("version") 一致）；summary 里保持纯文本 */
+        + '<td><button type="button" class="assoc-link" data-open="version:' + esc(VERSION.id) + '" title="跳转到该版本详情">' + esc(r.ver) + '</button></td>'
+        + '<td>' + esc(r.at) + '</td><td>已发布</td></tr>';
+    }).join("");
+    return '<details class="release-record"' + (ri === 0 ? " open" : "") + '><summary>'
+      + '<span class="tag tag-success">成功</span> ' + esc(r.env + " · " + r.op + " · " + r.at + " · " + r.ver) + '</summary>'
+      + '<p class="hint">记录 ' + esc(r.no) + ' · 快照不可变，改不了当时那一版事实</p>'
+      + '<div class="tbl-wrap' + (ri === 0 ? " annot-host" : "") + '"><table class="phase-tbl"><thead><tr>'
+      + '<th>工作项快照</th><th>需求快照</th><th>负责人快照</th><th>实际记录版本</th><th>完成时间</th><th>处理结果</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>'
+      + (ri === 0 ? '<i class="annot-point">6</i>' : "") + '</div></details>';
+  }).join("");
+  return panel("发布计划", '<span>1 个计划 · 目标 ' + esc(VERSION.due) + '</span>',
+    tableWrap('<th>计划</th><th>状态</th><th class="num">计划时间</th><th class="num">覆盖工作项</th><th>负责人</th>',
+      '<tr data-act="plan" tabindex="0"><td class="vd-tt"><span class="vd-tname">v3.2 正式发布</span></td>'
+      + '<td><span class="tag tag-info">待发布</span></td><td class="num">2026-12-04 20:00</td>'
+      + '<td class="num">17 项</td><td>李娜</td></tr>')
+    + '<p class="foot-note">点击行打开「计划与历史」发布工作区。</p>')
+    + panel("实际发布记录", '<span>' + RECORDS.length + ' 条不可变快照</span>', '<div class="vd-records">' + recs + '</div>');
+}
+
+/* ==================== 操作记录页 ==================== */
+function logHTML(){
+  return panel("版本操作记录", '<span>写操作留痕，谁在什么时候改了什么</span>',
+    '<ul class="vd-log">' + LOGS.map(function(l){
+      return '<li class="vd-log-item"><span class="vd-log-time">' + esc(l.at) + '</span>'
+        + '<span class="vd-log-body"><b>' + esc(l.act) + '</b><span class="vd-log-actor">' + esc(l.who) + '</span>'
+        + '<span class="vd-log-reason">' + esc(l.note) + '</span></span></li>';
+    }).join("") + '</ul>');
+}
+
+/* ==================== 渲染 ==================== */
+var root = document.getElementById("view-version");
+function render(){
+  var body = st.tab === "overview" ? overviewHTML()
+    : st.tab === "scope" ? scopeHTML()
+    : st.tab === "demands" ? demandsHTML()
+    : st.tab === "releases" ? releasesHTML() : logHTML();
+  root.innerHTML = headHTML() + '<div class="vd-body">' + body + '</div>';
+  document.getElementById("urlOut").innerHTML = "分享链接 <b>" + esc(routeHash()) + "</b>";
+}
+function routeHash(){
+  var f = st.filters, parts = [];
+  if(f.q) parts.push("q=" + encodeURIComponent(f.q));
+  if(f.status) parts.push("st=" + f.status);
+  if(f.owner) parts.push("ow=" + encodeURIComponent(f.owner));
+  if(f.type) parts.push("ty=" + f.type);
+  if(f.cat) parts.push("cat=" + encodeURIComponent(f.cat));
+  if(f.branch) parts.push("br=" + encodeURIComponent(f.branch));
+  if(f.demand) parts.push("dm=" + encodeURIComponent(f.demand));
+  if(f.stage) parts.push("sg=" + f.stage);
+  if(f.sort !== "default") parts.push("sort=" + f.sort);
+  var h = "#/version?id=" + VERSION.id + "&reqId=Rph94sl";
+  if(st.tab !== "overview") h += "&tab=" + st.tab;
+  /* 筛选只在工作项页有意义：换页签不把它带进 URL */
+  if(st.tab === "scope" && parts.length) h += "&" + parts.join("&");
+  return h;
+}
+
+/* ==================== 下钻与联动 ==================== */
+function drill(kind){
+  var f = blankFilters(), ci = kind.indexOf(":");
+  if(ci > 0){
+    var k = kind.substring(0, ci), v = kind.substring(ci + 1);
+    if(LINK_LABEL[k] === undefined) return;
+    f[k] = v;
+    f.sort = "actual";
+  }
+  else if(kind === "done") f.status = "done";
+  else if(kind === "open") f.status = "open";
+  else if(kind === "over") f.status = "over";
+  else if(kind === "logged") f.sort = "actual";
+  else if(kind === "deviation"){ f.status = "done"; f.sort = "estimate"; }
+  else if(kind === "ontime"){ f.status = "done"; f.sort = "due"; }
+  st.filters = f;
+  st.tab = "scope";
+  render();
+  root.scrollTop = 0;
+}
+
+/* ==================== 实体详情浮层 ==================== */
+var layer = document.getElementById("detailLayer");
+function fact(k, v){ return '<div class="vd-cmp-cell"><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>'; }
+function openDetail(ref){
+  var ci = ref.indexOf(":"), kind = ref.substring(0, ci), id = ref.substring(ci + 1);
+  var title = "", sub = "", tag = "", tone = "tag-info", ic = "task", body = "";
+  if(kind === "task"){
+    var t = taskHit(id);
+    if(!t) return;
+    title = t.title; ic = "task"; tag = isDone(t) ? "已完成" : t.col; tone = isDone(t) ? "tag-success" : t.colTone;
+    sub = TYPE_LABEL[t.type][0] + " · " + t.owner + " · 截止 " + t.due;
+    body = '<div class="dt-facts">' + fact("预估", hours(t.est)) + fact("实际", hours(actOf(t)))
+      + fact("开发计时", hours(devOf(t))) + fact("测试计时", hours(testOf(t))) + '</div>'
+      + '<p class="dt-note">真实产品在这里打开完整的工作项详情抽屉：描述、子任务、依赖、计时、附件与活动记录。'
+      + '本原型只示意「从版本详情点进来的是同一个实体」。</p>'
+      + '<div class="dt-rel">' + entityChip("demand", t.dm, demandLabel(t.dm)) + entityChip("branch", t.br, branchName(t.br))
+      + (t.cat ? '<span class="vd-rel" style="cursor:default">' + icon("tag", 11) + '<span>' + esc(catName(t.cat)) + '</span></span>' : "")
+      + '</div>';
+  }else if(kind === "demand"){
+    var d = demandHit(id);
+    if(!d) return;
+    title = d.title; ic = "demand"; tag = d.label; tone = d.tone;
+    sub = d.no + " · " + d.owner + " · 期望 " + d.due;
+    var linked = TASKS.filter(function(t){ return t.dm === d.id; });
+    body = '<div class="dt-facts">' + fact("用例通过", d.pass + " / " + d.cases) + fact("本版本工作项", linked.length + " 项")
+      + fact("已完成", linked.filter(isDone).length + " 项") + fact("实际投入", hours(linked.reduce(function(a, t){ return a + actOf(t); }, 0))) + '</div>'
+      + '<p class="dt-note">真实产品在这里打开需求详情：概览 / 交付 / 关联 / 记录四个页签，交付阶段由工作项、用例与真实发布派生。</p>'
+      + '<div class="dt-rel">' + linked.map(function(t){ return entityChip("branch", t.br, branchName(t.br)); }).filter(Boolean).join("")
+      + '</div>';
+  }else if(kind === "branch"){
+    var b = branchHit(id);
+    if(!b) return;
+    title = b.name; ic = "branch"; tag = b.label; tone = b.tone;
+    var bt = TASKS.filter(function(t){ return t.br === b.id; });
+    sub = "由 " + bt.length + " 个本版本工作项推导";
+    body = '<div class="dt-facts">' + fact("本版本工作项", bt.length + " 项")
+      + fact("已完成", bt.filter(isDone).length + " 项")
+      + fact("实际投入", hours(bt.reduce(function(a, t){ return a + actOf(t); }, 0)))
+      + fact("状态", b.label) + '</div>'
+      + '<p class="dt-note">真实产品在这里打开分支抽屉：状态时间线、关联工作项与流转记录。'
+      + '分支页看的是这条分支的全量工作项，版本详情里的漏斗只看本版本这一份。</p>';
+  }else if(kind === "version"){
+    /* 真实产品点版本名是路由跳转到该版本的详情页，不是开浮层。本原型只建模 v3.2 这一个版本，
+       点它等于回到当前页，用提示如实说明，避免叠一层假详情。 */
+    toast(id === VERSION.id
+      ? "真实产品在这里跳转到「" + VERSION.name + "」的详情页；本原型只建模这一个版本，点它等于回到当前页。"
+      : "真实产品在这里跳转到该版本的详情页；本原型只建模 " + VERSION.name + "，未含其它版本。");
+    return;
+  }else{ return; }
+  document.getElementById("dtTitle").textContent = title;
+  document.getElementById("dtSub").textContent = sub;
+  document.getElementById("dtIcon").innerHTML = icon(ic, 17);
+  var tagEl = document.getElementById("dtTag");
+  tagEl.className = "tag " + tone;
+  tagEl.textContent = tag;
+  document.getElementById("dtBody").innerHTML = body;
+  layer.classList.add("open");
+  document.getElementById("dtClose").focus();
+}
+function closeDetail(){ layer.classList.remove("open"); }
+document.getElementById("dtClose").innerHTML = icon("close", 15);
+document.getElementById("dtClose").addEventListener("click", closeDetail);
+layer.addEventListener("click", function(e){ if(e.target === layer) closeDetail(); });
+document.addEventListener("keydown", function(e){ if(e.key === "Escape") closeDetail(); });
+
+/* ==================== 提示 ==================== */
+var toastEl = document.getElementById("toast"), toastTimer = null;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ toastEl.classList.remove("on"); }, 2600);
+}
+
+/* ==================== 事件 ==================== */
+root.addEventListener("click", function(e){
+  /* 顺序与产品 wire() 一致：行内控件先判，整行的 data-open 最后兜底。
+     否则需求行里的漏斗会被 tr[data-open] 抢先接走，变成开详情而不是联动。 */
+  var link = e.target.closest("[data-link]");
+  if(link){ drill(link.getAttribute("data-link")); return; }
+  var unlink = e.target.closest("[data-unlink]");
+  if(unlink){
+    var m = LINK_META[unlink.getAttribute("data-unlink")];
+    if(m){ st.filters[m.field] = ""; render(); }
+    return;
+  }
+  var d = e.target.closest("[data-drill]");
+  if(d){ drill(d.getAttribute("data-drill")); return; }
+  var tab = e.target.closest("[data-tab]");
+  if(tab){ st.tab = tab.getAttribute("data-tab"); render(); root.scrollTop = 0; return; }
+  var roll = e.target.closest("[data-roll]");
+  if(roll){ st.rollDim = roll.getAttribute("data-roll"); render(); return; }
+  var act = e.target.closest("[data-act]");
+  if(act){ handleAct(act.getAttribute("data-act")); return; }
+  var open = e.target.closest("[data-open]");
+  if(open){ openDetail(open.getAttribute("data-open")); return; }
+});
+function handleAct(a){
+  if(a === "reset"){ st.filters = blankFilters(); render(); return; }
+  if(a === "board"){
+    var f = st.filters, left = [];
+    if(f.branch) left.push("分支");
+    if(f.demand) left.push("需求");
+    if(f.stage) left.push("阶段");
+    if(f.status) left.push("状态");
+    toast("已按版本筛选看板：" + VERSION.name + (left.length ? "；看板没有" + left.join(" / ") + "筛选，未带过去" : ""));
+    return;
+  }
+  var NAMES = { back:"返回版本列表", refresh:"刷新版本详情", project:"打开项目驾驶舱", edit:"编辑版本",
+    tasks:"管理范围", actual:"记录实际发布", plan:"计划与历史", delivery:"交付说明",
+    close:"关闭版本", cancel:"取消版本", "delete":"删除版本" };
+  toast("真实产品在这里「" + (NAMES[a] || a) + "」——写操作统一复用版本页弹窗，不在详情页重写一份校验与留痕。");
+}
+root.addEventListener("change", function(e){
+  var f = e.target.closest("[data-filter]");
+  if(f){ st.filters[f.getAttribute("data-filter")] = f.value; render(); }
+});
+root.addEventListener("input", function(e){
+  if(e.target.getAttribute("data-filter") !== "q") return;
+  st.filters.q = e.target.value;
+  var caret = e.target.selectionStart;
+  render();
+  var el = root.querySelector('[data-filter="q"]');
+  if(el){ el.focus(); try{ el.setSelectionRange(caret, caret); }catch(err){ /* search 类型部分浏览器不支持 */ } }
+});
+root.addEventListener("keydown", function(e){
+  if(e.key !== "Enter" && e.key !== " ") return;
+  var row = e.target.closest("tr[data-open]");
+  if(row && row === e.target){ e.preventDefault(); openDetail(row.getAttribute("data-open")); }
+});
+
+/* ==================== 控制条 ==================== */
+var SCENES = {
+  init:function(){ st.tab = "overview"; st.rollDim = "module"; st.filters = blankFilters(); },
+  cat:function(){ st.tab = "overview"; st.rollDim = "module"; st.filters = blankFilters(); drill("cat:c-perf"); },
+  branch:function(){ st.tab = "overview"; st.rollDim = "module"; st.filters = blankFilters(); drill("branch:b-core"); },
+  demand:function(){ st.tab = "demands"; st.filters = blankFilters(); },
+  stage:function(){ st.tab = "overview"; st.rollDim = "stage"; st.filters = blankFilters(); drill("stage:test"); },
+  combo:function(){ st.tab = "overview"; st.rollDim = "module"; st.filters = blankFilters(); drill("demand:d-001"); st.filters.stage = "dev"; render(); }
+};
+function setScene(s){
+  document.querySelectorAll("#segScene button").forEach(function(b){ b.classList.toggle("on", b.dataset.s === s); });
+  (SCENES[s] || SCENES.init)();
+  render();
+  root.scrollTop = 0;
+}
+function setLayout(l){
+  document.documentElement.setAttribute("data-layout", l);
+  document.querySelectorAll("#segLayout button").forEach(function(b){ b.classList.toggle("on", b.dataset.l === l); });
+}
+document.getElementById("segScene").addEventListener("click", function(e){ var b = e.target.closest("button"); if(b) setScene(b.dataset.s); });
+document.getElementById("segLayout").addEventListener("click", function(e){ var b = e.target.closest("button"); if(b) setLayout(b.dataset.l); });
+document.getElementById("btnAnnot").addEventListener("click", function(){
+  document.body.classList.toggle("annot");
+  this.classList.toggle("on", document.body.classList.contains("annot"));
+});
+document.getElementById("btnReset").addEventListener("click", function(){ setScene("init"); });
+
+var qs = new URLSearchParams(location.search);
+if(qs.get("shot") === "1") document.body.classList.add("shot");
+if(qs.get("flat") === "1") document.body.classList.add("flat");
+setLayout(qs.get("layout") || "desktop");
+setScene(qs.get("s") || "init");
+if(qs.get("annot") === "1"){ document.body.classList.add("annot"); document.getElementById("btnAnnot").classList.add("on"); }
+})();
+</script>
+</body>
+</html>

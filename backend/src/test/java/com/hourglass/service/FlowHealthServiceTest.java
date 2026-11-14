@@ -49,7 +49,7 @@ class FlowHealthServiceTest {
         t.setPriority(prio);
         t.setBoardColumn(column);
         t.setCreatedAt(created);
-        t.setCompletedAt(completed);
+        t.setCompletedAt(completed == null ? null : completed.atStartOfDay());
         return t;
     }
 

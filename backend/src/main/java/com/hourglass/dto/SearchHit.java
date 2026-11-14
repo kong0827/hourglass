@@ -20,5 +20,7 @@ public class SearchHit {
     private String extra;
     /** 用例编号，仅 type=case 时有值；由服务层并入 extra 展示 */
     private Integer caseNo;
+    /** 搜索命中摘要：围绕关键词截取的正文片段，仅 type=doc 时有值 */
+    private String snippet;
     private LocalDateTime updatedAt;
 }

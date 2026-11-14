@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 投入结构增强原型（自定义时间段 + 圈人 + AI 总结 + 导出报告）</title>
+</head>
+<body>
+<style>
+/* ===== 设计令牌：与 frontend/css/tokens.css 一致 ===== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --surface-active:#E9ECF1; --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085; --text-inverse:#FFFFFF; --scrim:rgba(16,24,40,.32);
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  --avatar-1:#1D4ED8; --avatar-2:#067647; --avatar-3:#B54708; --avatar-4:#B42318;
+  --avatar-5:#5B3FD1; --avatar-6:#0E6E63; --avatar-7:#A31A6B; --avatar-8:#475467;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);font-size:14px;line-height:1.55}
+button{font-family:inherit;font-size:13px;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:13px;color:var(--text)}
+svg{display:block}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ===== 通用组件 ===== */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r-sm);
+  border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);font-weight:500;
+  transition:background .12s,border-color .12s,color .12s;white-space:nowrap}
+.btn:hover{background:var(--surface-hover)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-hover)}
+.btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible,select:focus-visible{outline:none;box-shadow:var(--ring-focus)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:var(--r-pill);font-size:11.5px;font-weight:500}
+.badge.warn{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+.badge.ok{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.badge.info{background:var(--info-soft);color:var(--info-fg);border:1px solid var(--info-border)}
+.badge.plum{background:var(--plum-soft);color:var(--plum-fg);border:1px solid var(--plum-border)}
+.badge.gray{background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border)}
+.avatar{width:28px;height:28px;border-radius:50%;color:#fff;display:inline-flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:600;flex:none}
+.avatar.sm{width:22px;height:22px;font-size:10.5px}
+.mini-select{height:28px;padding:0 8px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px}
+.mini-tag{display:inline-flex;align-items:center;padding:0 7px;height:18px;border-radius:var(--r-pill);font-size:11px;font-weight:500;
+  background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border)}
+.mini-tag.ok{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border)}
+.mini-tag.info{background:var(--info-soft);color:var(--info-fg);border-color:var(--info-border)}
+.mini-tag.warn{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border)}
+.mini-tag.plum{background:var(--plum-soft);color:var(--plum-fg);border-color:var(--plum-border)}
+
+/* ===== 原型说明条 ===== */
+.proto-bar{background:var(--primary-soft);border-bottom:1px solid var(--primary-border);padding:10px 20px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.proto-bar .pb-title{font-weight:700;font-size:13px;color:var(--primary-fg);display:flex;align-items:center;gap:8px}
+.proto-bar .pb-note{font-size:11.5px;color:var(--text-3)}
+.scenarios{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.sc-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r-pill);
+  border:1px solid var(--primary-border);background:var(--surface);color:var(--primary-fg);font-size:12px;font-weight:500;transition:all .12s}
+.sc-chip:hover{background:var(--primary-soft);border-color:var(--primary)}
+.sc-chip .n{width:16px;height:16px;border-radius:50%;background:var(--primary);color:#fff;font-size:10px;
+  display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.sc-chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.sc-chip.active .n{background:rgba(255,255,255,.25)}
+.proto-hint{padding:6px 20px;background:var(--surface);border-bottom:1px solid var(--border);
+  font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:8px;min-height:32px}
+.proto-hint .dot{width:6px;height:6px;border-radius:50%;background:var(--primary);flex:none}
+
+/* ===== 应用框架 ===== */
+.app{display:flex;flex-direction:column;height:calc(100vh - 96px);min-height:600px}
+.topbar{height:56px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;
+  gap:12px;padding:0 16px;flex:none}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
+.logo .lg{width:26px;height:26px;border-radius:7px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px}
+.crumb{color:var(--text-3);font-size:12.5px;display:flex;align-items:center;gap:6px}
+.crumb b{color:var(--text-2);font-weight:500}
+.topbar .sp{flex:1}
+.ws-chip{display:flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--r-pill);font-size:12.5px;color:var(--text-2)}
+.main{flex:1;display:flex;min-height:0}
+.sidenav{width:196px;flex:none;background:var(--surface);border-right:1px solid var(--border);padding:12px 10px;overflow:auto}
+.nav-group{font-size:11px;font-weight:600;color:var(--text-3);padding:8px 10px 4px;letter-spacing:.04em}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-sm);font-size:13px;color:var(--text-2);margin-bottom:1px}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+.nav-item .nd{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.55;flex:none}
+.content{flex:1;min-width:0;overflow:auto;padding:18px 22px 40px}
+
+/* ===== 投入结构页（与 investment.css 对齐） ===== */
+.manager-toolbar{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+.manager-toolbar>div:first-child{display:flex;flex-direction:column;gap:2px}
+.manager-toolbar b{font-size:16px}
+.manager-toolbar span{font-size:12px;color:var(--text-3)}
+.manager-actions{margin-left:auto;display:flex;align-items:center;gap:8px;position:relative}
+.inv-controls{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin:2px 0 14px}
+.inv-seg{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;flex:0 0 auto}
+.inv-seg button{height:26px;padding:0 11px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-2);white-space:nowrap}
+.inv-seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs)}
+.inv-field{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);font-weight:500}
+.inv-date{height:28px;padding:0 8px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;color:var(--text)}
+.inv-period-note{font-size:12px;color:var(--text-3);display:inline-flex;align-items:center;gap:5px}
+.inv-mark{width:16px;height:16px;border-radius:50%;border:1px solid var(--border-strong);color:var(--text-3);
+  font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;background:var(--surface);flex:none}
+.inv-mark.warn{border-color:var(--warning-border);color:var(--warning-fg);background:var(--warning-soft)}
+.inv-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:14px;box-shadow:var(--shadow-xs)}
+.inv-card-head{display:flex;align-items:flex-start;gap:12px;padding:14px 16px 0}
+.inv-card-head h2{font-size:14px;display:flex;align-items:center;gap:6px}
+.inv-card-head p{font-size:12px;color:var(--text-3);margin-top:2px}
+.inv-head-ctl{margin-left:auto;display:flex;align-items:center;gap:8px;flex:none}
+.inv-card-body{padding:12px 16px 16px}
+.inv-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.inv-kpi{min-width:0;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+.inv-kpi.hl{border-color:var(--primary-border);background:var(--primary-soft)}
+.inv-kl{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px;font-weight:500}
+.inv-kv{font-size:22px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+.inv-kv small{font-size:12px;font-weight:500;color:var(--text-3);margin-left:3px}
+.inv-kd{font-size:11.5px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inv-compose{margin-top:12px;padding:12px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken)}
+.inv-compose-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.inv-ct{font-size:12.5px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:6px}
+.inv-cs{font-size:12px;color:var(--text-3)}
+.inv-stack{display:flex;height:12px;border-radius:7px;overflow:hidden;background:var(--surface)}
+.inv-stack i{display:block;height:100%}
+.inv-stack i+i{border-left:2px solid var(--surface-sunken)}
+.inv-stack .dev{background:var(--primary)}
+.inv-stack .test{background:var(--warning)}
+.inv-compose-legend{display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-2)}
+.inv-compose-legend i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px}
+.inv-compose-legend .dev{background:var(--primary)}
+.inv-compose-legend .test{background:var(--warning)}
+.inv-compose-note{font-size:11.5px;color:var(--text-3);margin-top:6px}
+.inv-trend{display:flex;gap:18px;align-items:flex-end;height:150px;padding:6px 4px 0}
+.inv-col{flex:1;max-width:110px;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%}
+.inv-v{font-size:12px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums}
+.inv-bar{display:flex;align-items:flex-end;width:100%;max-width:64px;border-radius:6px 6px 0 0;overflow:hidden;flex:1}
+.inv-bar i{display:block;width:100%;min-height:2px;border-radius:6px 6px 0 0;background:var(--primary)}
+.inv-bar.partial i{background:repeating-linear-gradient(135deg,var(--primary) 0 6px,var(--primary-border) 6px 12px)}
+.inv-lb{font-size:12px;color:var(--text-2);font-weight:500}
+.inv-cap{font-size:11px;color:var(--text-3)}
+.inv-trend-foot{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);margin-top:10px}
+.inv-table{width:100%;border-collapse:collapse;font-size:13px}
+.inv-table th{font-size:11.5px;color:var(--text-3);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.inv-table th.num,.inv-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.inv-table td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.inv-table tr:last-child td{border-bottom:none}
+.inv-table tr.total td{background:var(--surface-sunken);font-weight:600}
+.inv-name{display:flex;align-items:center;gap:9px}
+.inv-name b{font-size:13px}
+.inv-meta{font-size:11.5px;color:var(--text-3);margin-top:1px}
+.inv-share{display:flex;align-items:center;gap:8px;min-width:130px}
+.inv-share .bar{flex:1;height:7px;border-radius:4px;background:var(--surface-sunken);overflow:hidden}
+.inv-share .bar i{display:block;height:100%;background:var(--primary);border-radius:4px}
+.inv-share .pct{font-size:12px;color:var(--text-2);width:38px;text-align:right;font-variant-numeric:tabular-nums}
+.inv-foot{font-size:11.5px;color:var(--text-3);margin-top:10px;display:flex;gap:14px;flex-wrap:wrap}
+
+/* ===== 成员多选筛选器 ===== */
+.member-picker{position:relative}
+.mp-trigger{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border-strong);
+  border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;color:var(--text-2);font-weight:500}
+.mp-trigger .cnt{background:var(--primary);color:#fff;border-radius:var(--r-pill);font-size:10.5px;font-weight:700;padding:0 6px;height:16px;display:inline-flex;align-items:center}
+.mp-pop{position:absolute;top:34px;left:0;z-index:60;width:300px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-md);box-shadow:var(--shadow-lg);padding:8px}
+.mp-search{width:100%;height:30px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--r-sm);margin-bottom:6px;font-size:12.5px}
+.mp-list{max-height:230px;overflow:auto}
+.mp-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r-sm);cursor:pointer}
+.mp-item:hover{background:var(--surface-hover)}
+.mp-item input{width:15px;height:15px;accent-color:var(--primary);flex:none}
+.mp-item .who{display:flex;flex-direction:column;min-width:0}
+.mp-item .who b{font-size:12.5px;font-weight:500}
+.mp-item .who span{font-size:11px;color:var(--text-3)}
+.mp-foot{display:flex;align-items:center;gap:8px;padding:8px 4px 2px;border-top:1px solid var(--border);margin-top:6px}
+.mp-foot .hint{font-size:11.5px;color:var(--text-3)}
+.mp-chips{display:inline-flex;gap:5px;flex-wrap:wrap}
+.mp-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:var(--r-pill);
+  background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:11.5px;font-weight:500}
+.mp-chip button{color:inherit;font-size:12px;line-height:1;padding:0}
+
+/* ===== 导出菜单 ===== */
+.export-menu{position:absolute;top:36px;right:0;z-index:60;width:230px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-md);box-shadow:var(--shadow-lg);padding:6px}
+.export-menu .mi{display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;padding:8px 10px;border-radius:var(--r-sm)}
+.export-menu .mi:hover{background:var(--surface-hover)}
+.export-menu .mi b{font-size:12.5px;font-weight:600;color:var(--text)}
+.export-menu .mi span{font-size:11px;color:var(--text-3)}
+.export-menu .sep{height:1px;background:var(--border);margin:5px 4px}
+
+/* ===== AI 总结抽屉 ===== */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:80}
+.ai-drawer{position:fixed;top:0;right:0;bottom:0;width:460px;max-width:92vw;background:var(--surface);z-index:90;
+  box-shadow:var(--shadow-xl);display:flex;flex-direction:column}
+.ai-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.ai-head .ai-ic{width:30px;height:30px;border-radius:9px;background:var(--plum-soft);border:1px solid var(--plum-border);
+  color:var(--plum-fg);display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+.ai-head b{font-size:14px}
+.ai-head p{font-size:11.5px;color:var(--text-3)}
+.ai-head .x{margin-left:auto;width:28px;height:28px;border-radius:var(--r-sm);color:var(--text-3);font-size:15px}
+.ai-head .x:hover{background:var(--surface-hover)}
+.ai-body{flex:1;overflow:auto;padding:16px 18px}
+.ai-foot{border-top:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ai-usage{font-size:11.5px;color:var(--text-3);width:100%}
+.ai-progress{padding:26px 8px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.ai-spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--plum-border);border-top-color:var(--plum);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-progress b{font-size:13.5px}
+.ai-progress .wait{font-size:12px;color:var(--text-3)}
+.ai-steps{display:flex;flex-direction:column;gap:7px;margin-top:4px;width:100%;max-width:300px;text-align:left}
+.ai-step{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
+.ai-step .st{width:17px;height:17px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.ai-step.done .st{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.ai-step.doing .st{background:var(--plum-soft);color:var(--plum-fg);border:1px solid var(--plum-border)}
+.ai-step.todo .st{background:var(--surface-sunken);color:var(--text-3);border:1px solid var(--border)}
+.ai-note{font-size:11.5px;color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:8px 10px;margin-bottom:12px}
+.ai-md{font-size:13px;line-height:1.7}
+.ai-md h2{font-size:13.5px;margin:16px 0 6px;padding-bottom:5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px}
+.ai-md h2:first-child{margin-top:0}
+.ai-md h2 .hh{font-size:11px;font-weight:500;color:var(--text-3)}
+.ai-md ul{list-style:none}
+.ai-md li{position:relative;padding-left:14px;margin-bottom:5px;color:var(--text-2)}
+.ai-md li::before{content:"";position:absolute;left:2px;top:9px;width:5px;height:5px;border-radius:50%;background:var(--border-strong)}
+.ai-md b{color:var(--text)}
+.ai-src{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+
+/* ===== 报告预览 ===== */
+.modal-wrap{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;padding:24px}
+.report-modal{width:820px;max-width:96vw;max-height:92vh;background:var(--surface);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden}
+.rm-head{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.rm-head b{font-size:14px}
+.rm-head p{font-size:11.5px;color:var(--text-3)}
+.rm-head .acts{margin-left:auto;display:flex;gap:8px;align-items:center}
+.rm-body{flex:1;overflow:auto;background:var(--surface-sunken);padding:20px}
+.report-doc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);max-width:720px;margin:0 auto;
+  padding:34px 40px;box-shadow:var(--shadow-xs)}
+.rp-title{font-size:19px;font-weight:700;text-align:center}
+.rp-sub{text-align:center;font-size:12px;color:var(--text-3);margin-top:6px}
+.rp-meta{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);margin-top:10px;
+  padding-bottom:16px;border-bottom:2px solid var(--text)}
+.rp-sec{font-size:14px;font-weight:700;margin:20px 0 8px;display:flex;align-items:center;gap:8px}
+.rp-sec .no{width:20px;height:20px;border-radius:6px;background:var(--text);color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center}
+.rp-table{width:100%;border-collapse:collapse;font-size:12px}
+.rp-table th{background:var(--surface-sunken);font-size:11px;color:var(--text-2);font-weight:600;text-align:left;padding:6px 8px;border:1px solid var(--border)}
+.rp-table th.num,.rp-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.rp-table td{padding:6px 8px;border:1px solid var(--border)}
+.rp-table tr.total td{background:var(--surface-sunken);font-weight:600}
+.rp-md{font-size:12.5px;line-height:1.7;color:var(--text-2)}
+.rp-md h3{font-size:12.5px;color:var(--text);margin:12px 0 4px}
+.rp-md ul{list-style:none}
+.rp-md li{position:relative;padding-left:13px;margin-bottom:3px}
+.rp-md li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:4px;border-radius:50%;background:var(--border-strong)}
+.rp-foot{margin-top:22px;padding-top:12px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);line-height:1.7}
+.rp-ai-tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--plum-fg);background:var(--plum-soft);
+  border:1px solid var(--plum-border);border-radius:var(--r-pill);padding:0 7px;height:17px;font-weight:500}
+
+/* ===== 边界态 ===== */
+.edge-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.edge-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--shadow-xs)}
+.edge-card h3{font-size:13px;margin-bottom:4px;display:flex;align-items:center;gap:7px}
+.edge-card>p{font-size:11.5px;color:var(--text-3);margin-bottom:12px}
+.alert{display:flex;gap:9px;padding:10px 12px;border-radius:var(--r-md);font-size:12.5px;line-height:1.6;border:1px solid}
+.alert .ai{flex:none;font-size:14px;line-height:1.4}
+.alert.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+.alert.info{background:var(--info-soft);border-color:var(--info-border);color:var(--info-fg)}
+.alert.plum{background:var(--plum-soft);border-color:var(--plum-border);color:var(--plum-fg)}
+.alert a{color:inherit;font-weight:600;text-decoration:underline}
+.alert .sub{display:block;font-size:11.5px;opacity:.85;margin-top:2px}
+</style>
+
+<!-- ===== 原型说明条 ===== -->
+<div class="proto-bar">
+  <span class="pb-title">投入结构增强 · 交互原型</span>
+  <span class="pb-note">2026-11-14 · 自定义时间段 + 圈选成员 + AI 工作总结 + 导出报告 · 数据为演示</span>
+  <div class="scenarios">
+    <button class="sc-chip active" data-scene="1"><span class="n">1</span>自定义时间段 + 圈人</button>
+    <button class="sc-chip" data-scene="2"><span class="n">2</span>AI 生成中</button>
+    <button class="sc-chip" data-scene="3"><span class="n">3</span>AI 总结完成</button>
+    <button class="sc-chip" data-scene="4"><span class="n">4</span>导出报告预览</button>
+    <button class="sc-chip" data-scene="5"><span class="n">5</span>边界与提示</button>
+  </div>
+</div>
+<div class="proto-hint"><span class="dot"></span><span id="sceneHint">周期切到「自定义」出现起止日期；新增「成员」多选筛选，圈定的人贯穿总览、趋势、维度表与下钻；「AI 总结」「导出报告」作用于当前筛选范围。</span></div>
+
+<div class="app">
+  <!-- 顶栏 -->
+  <div class="topbar">
+    <div class="logo"><span class="lg">漏</span>沙漏</div>
+    <div class="crumb">报表 <span>/</span> <b>投入结构</b></div>
+    <div class="sp"></div>
+    <div class="ws-chip"><span class="avatar sm" style="background:var(--avatar-6)">研</span>研发协作空间</div>
+    <span class="avatar sm" style="background:var(--avatar-1)">孔</span>
+  </div>
+  <div class="main">
+    <!-- 侧导航 -->
+    <div class="sidenav">
+      <div class="nav-group">工作</div>
+      <div class="nav-item"><span class="nd"></span>工作项看板</div>
+      <div class="nav-item"><span class="nd"></span>我的任务</div>
+      <div class="nav-group">交付</div>
+      <div class="nav-item"><span class="nd"></span>需求池</div>
+      <div class="nav-item"><span class="nd"></span>版本与发布</div>
+      <div class="nav-group">报表</div>
+      <div class="nav-item"><span class="nd"></span>驾驶舱</div>
+      <div class="nav-item"><span class="nd"></span>项目透视</div>
+      <div class="nav-item"><span class="nd"></span>完成记录</div>
+      <div class="nav-item"><span class="nd"></span>成员负载</div>
+      <div class="nav-item on"><span class="nd"></span>投入结构</div>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="content" id="content">
+
+      <!-- ===== 场景 1 / 2 / 3：投入结构主页 ===== -->
+      <div id="pageMain">
+        <div class="manager-toolbar">
+          <div><b>投入结构</b><span>按年度 / 季度 / 自定义区间盘点人力、工时与资源分布</span></div>
+          <div class="manager-actions">
+            <button class="btn sm primary" id="btnAi">✦ AI 总结</button>
+            <button class="btn sm" id="btnExport">导出报告 ▾</button>
+            <button class="btn sm">导出 CSV</button>
+            <div class="export-menu" id="exportMenu" hidden>
+              <button class="mi"><b>Markdown（.md）</b><span>纯文本，适合贴进文档 / 知识库</span></button>
+              <button class="mi"><b>Word（.doc）</b><span>表格排版，可直接编辑另存 .docx</span></button>
+              <button class="mi"><b>PDF（打印）</b><span>A4 排版，打印对话框另存为 PDF</span></button>
+              <div class="sep"></div>
+              <button class="mi"><b>仅数据 CSV</b><span>不含 AI 总结的原始统计表</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="inv-controls">
+          <span class="inv-seg" role="group" aria-label="周期类型">
+            <button>季度</button><button>年度</button><button class="on" aria-pressed="true">自定义</button>
+          </span>
+          <label class="inv-field">从<input type="date" class="inv-date" value="2026-10-01"></label>
+          <label class="inv-field">至<input type="date" class="inv-date" value="2026-11-14"></label>
+          <div class="member-picker">
+            <button class="mp-trigger" id="mpTrigger">成员<span class="cnt">3</span>▾</button>
+            <div class="mp-pop" id="mpPop" hidden>
+              <input class="mp-search" placeholder="搜索成员…">
+              <div class="mp-list">
+                <label class="mp-item"><input type="checkbox" checked><span class="avatar sm" style="background:var(--avatar-1)">张</span><span class="who"><b>张伟</b><span>本公司 · 后端</span></span></label>
+                <label class="mp-item"><input type="checkbox" checked><span class="avatar sm" style="background:var(--avatar-2)">李</span><span class="who"><b>李娜</b><span>本公司 · 前端</span></span></label>
+                <label class="mp-item"><input type="checkbox" checked><span class="avatar sm" style="background:var(--avatar-3)">王</span><span class="who"><b>王强</b><span>外包 · 测试</span></span></label>
+                <label class="mp-item"><input type="checkbox"><span class="avatar sm" style="background:var(--avatar-5)">赵</span><span class="who"><b>赵敏</b><span>本公司 · 产品</span></span></label>
+                <label class="mp-item"><input type="checkbox"><span class="avatar sm" style="background:var(--avatar-7)">陈</span><span class="who"><b>陈杰</b><span>本公司 · 后端</span></span></label>
+              </div>
+              <div class="mp-foot"><span class="hint">不选 = 全部成员</span><button class="btn sm soft" style="margin-left:auto">确定</button></div>
+            </div>
+          </div>
+          <span class="mp-chips">
+            <span class="mp-chip">张伟<button>×</button></span>
+            <span class="mp-chip">李娜<button>×</button></span>
+            <span class="mp-chip">王强<button>×</button></span>
+          </span>
+          <label class="inv-field">项目<select class="mini-select"><option>全部项目</option></select></label>
+          <label class="inv-field">公司<select class="mini-select"><option>全部公司</option></select></label>
+          <label class="inv-field">角色<select class="mini-select"><option>全部角色</option></select></label>
+          <button class="btn sm soft">清除筛选</button>
+          <span class="inv-period-note">2026-10-01 — 2026-11-14 · 45 天 · 截至 11-14<button class="inv-mark warn">!</button></span>
+        </div>
+
+        <!-- 投入总览 -->
+        <section class="inv-card">
+          <div class="inv-card-head">
+            <div><h2>投入总览 <button class="inv-mark">?</button></h2>
+            <p>项目：全部项目 · 公司：全部公司 · 角色：全部角色 · 成员：张伟、李娜、王强 · 2026-10-01 — 2026-11-14</p></div>
+            <div class="inv-head-ctl"><span class="mini-tag info">口径 计时发生日</span></div>
+          </div>
+          <div class="inv-card-body">
+            <div class="inv-kpis">
+              <div class="inv-kpi hl"><span class="inv-kl">去重人力<button class="inv-mark">?</button></span><div class="inv-kv">3<small>人</small></div><div class="inv-kd">共 3 人 · 3 个项目</div></div>
+              <div class="inv-kpi"><span class="inv-kl">实际工时<button class="inv-mark">?</button></span><div class="inv-kv">426.5<small>h</small></div><div class="inv-kd">开发 282h · 测试 144.5h</div></div>
+              <div class="inv-kpi"><span class="inv-kl">开发<button class="inv-mark">?</button></span><div class="inv-kv">282<small>h</small></div><div class="inv-kd">测试窗口外的部分</div></div>
+              <div class="inv-kpi"><span class="inv-kl">测试<button class="inv-mark">?</button></span><div class="inv-kv">144.5<small>h</small></div><div class="inv-kd">测试窗口内的计时</div></div>
+              <div class="inv-kpi"><span class="inv-kl">预估工时<button class="inv-mark">?</button><button class="inv-mark warn">!</button></span><div class="inv-kv">430<small>h</small></div><div class="inv-kd">按计划开始日整条归入</div></div>
+              <div class="inv-kpi"><span class="inv-kl">投入人天<button class="inv-mark">?</button></span><div class="inv-kv">53.3<small>人天</small></div><div class="inv-kd">实际 ÷ 8 小时</div></div>
+            </div>
+            <div class="inv-compose">
+              <div class="inv-compose-top"><span class="inv-ct">开发 / 测试构成 <button class="inv-mark">?</button></span><span class="inv-cs">282h / 426.5h</span></div>
+              <div class="inv-stack"><i class="dev" style="width:66%"></i><i class="test" style="width:34%"></i></div>
+              <div class="inv-compose-legend"><span><i class="dev"></i>开发 282h（66%）</span><span><i class="test"></i>测试 144.5h（34%）</span></div>
+              <div class="inv-compose-note">测试 = 计时日期落在工作项「提测 → 测试结束」窗口内的分钟；其余计入开发。测试窗口只保留最近一轮。</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 投入趋势 -->
+        <section class="inv-card">
+          <div class="inv-card-head">
+            <div><h2>投入趋势 <button class="inv-mark">?</button></h2><p>按计时发生月份分桶；自定义区间跨几个月就铺几个月。</p></div>
+            <div class="inv-head-ctl"><span class="mini-tag">2026-10-01 — 2026-11-14</span></div>
+          </div>
+          <div class="inv-card-body">
+            <div class="inv-trend">
+              <div class="inv-col"><span class="inv-v">288h</span><div class="inv-bar"><i style="height:100%"></i></div><span class="inv-lb">10 月</span><span class="inv-cap">完整月</span></div>
+              <div class="inv-col"><span class="inv-v">138.5h</span><div class="inv-bar partial"><i style="height:48%"></i></div><span class="inv-lb">11 月</span><span class="inv-cap">截至今日</span></div>
+            </div>
+            <div class="inv-trend-foot"><span>空槽表示该月没有计时和预估记录</span><span>当月为截至 2026-11-14 的部分数据</span><span>悬停柱子可看开发 / 测试 / 预估</span></div>
+          </div>
+        </section>
+
+        <!-- 按维度拆分 -->
+        <section class="inv-card">
+          <div class="inv-card-head">
+            <div><h2>按维度拆分 <button class="inv-mark">?</button></h2><p>四种维度共用同一批计时与预估；点行下钻到工作项。已圈选 3 名成员，其余成员不进入统计。</p></div>
+            <div class="inv-head-ctl">
+              <span class="inv-seg"><button>项目</button><button class="on">成员</button><button>公司</button><button>角色</button></span>
+              <span class="inv-seg"><button class="on">按实际</button><button>按预估</button></span>
+            </div>
+          </div>
+          <div class="inv-card-body">
+            <table class="inv-table">
+              <thead><tr><th>成员</th><th class="num">实际工时</th><th class="num">开发</th><th class="num">测试</th><th class="num">预估工时</th><th class="num">投入人天</th><th>占比（按实际）</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><div class="inv-name"><span class="avatar" style="background:var(--avatar-1)">张</span><div><b>张伟</b><div class="inv-meta">本公司 · 后端 · 参与 3 个项目 · 18 个工作项</div></div></div></td>
+                  <td class="num"><b>156.5h</b></td><td class="num">132h</td><td class="num">24.5h</td><td class="num">160h</td><td class="num">19.6</td>
+                  <td><div class="inv-share"><div class="bar"><i style="width:36.7%"></i></div><span class="pct">36.7%</span></div></td>
+                </tr>
+                <tr>
+                  <td><div class="inv-name"><span class="avatar" style="background:var(--avatar-2)">李</span><div><b>李娜</b><div class="inv-meta">本公司 · 前端 · 参与 2 个项目 · 15 个工作项</div></div></div></td>
+                  <td class="num"><b>142h</b></td><td class="num">130h</td><td class="num">12h</td><td class="num">150h</td><td class="num">17.8</td>
+                  <td><div class="inv-share"><div class="bar"><i style="width:33.3%"></i></div><span class="pct">33.3%</span></div></td>
+                </tr>
+                <tr>
+                  <td><div class="inv-name"><span class="avatar" style="background:var(--avatar-3)">王</span><div><b>王强</b><div class="inv-meta">外包 · 测试 · 参与 3 个项目 · 22 个工作项</div></div></div></td>
+                  <td class="num"><b>128h</b></td><td class="num">20h</td><td class="num">108h</td><td class="num">120h</td><td class="num">16.0</td>
+                  <td><div class="inv-share"><div class="bar"><i style="width:30%"></i></div><span class="pct">30.0%</span></div></td>
+                </tr>
+                <tr class="total">
+                  <td>合计 · 3 人</td><td class="num">426.5h</td><td class="num">282h</td><td class="num">144.5h</td><td class="num">430h</td><td class="num">53.3</td><td></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="inv-foot"><span>实际按计时人归属，预估按负责人归属</span><span>点行下钻：该成员在本区间的工作项与工时</span><span>预估与实际不可直接相减</span></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ===== 场景 5：边界与提示 ===== -->
+      <div id="pageEdge" hidden>
+        <div class="manager-toolbar">
+          <div><b>边界与提示</b><span>AI 总结的三种降级 / 提示态，均不阻塞报表本身</span></div>
+        </div>
+        <div class="edge-grid">
+          <div class="edge-card">
+            <h3><span class="mini-tag warn">未配置 AI</span></h3>
+            <p>沿用账号级 AI 配置；没配置时按钮可点，给出引导而不是报错。</p>
+            <div class="alert warn"><span class="ai">⚠</span><div>你还没配置 AI，无法生成工作总结。<span class="sub">报表与 CSV / Word / PDF 导出不受影响，可先用。</span><a href="javascript:void(0)">去「个人设置 → AI 设置」配置 →</a></div></div>
+          </div>
+          <div class="edge-card">
+            <h3><span class="mini-tag info">无记录</span></h3>
+            <p>与 AI 周报同口径：没有素材就不调模型，不烧 token 写空话。</p>
+            <div class="alert info"><span class="ai">ℹ</span><div>所选区间与成员范围内没有任何计时或预估记录，没有素材可总结。<span class="sub">试试放宽时间段或取消成员圈选。</span></div></div>
+          </div>
+          <div class="edge-card">
+            <h3><span class="mini-tag plum">素材截断</span></h3>
+            <p>每人最多列 20 个工作项进提示词；超出部分在报告里如实注明。</p>
+            <div class="alert plum"><span class="ai">✦</span><div>王强有 22 个工作项，总结按工时取前 20 项撰写。<span class="sub">报告附录列出全部 22 项；统计数字不受截断影响。</span></div></div>
+          </div>
+        </div>
+        <div class="inv-card" style="margin-top:14px">
+          <div class="inv-card-head"><div><h2>数据外发说明</h2><p>与 AI 助手同口径：总结走当前用户自己配置的模型与额度。</p></div></div>
+          <div class="inv-card-body">
+            <div class="alert info"><span class="ai">ℹ</span><div>生成总结时，会把你圈选成员的姓名、工作项标题、项目名与工时统计发送到你配置的模型服务；不发送描述正文、附件、邮箱手机号。<span class="sub">首次使用在 AI 面板顶部展示一次；私有化部署可配 Ollama，数据不出内网。</span></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===== 场景 2：AI 生成中 ===== -->
+<div class="scrim" id="scrim2" hidden></div>
+<div class="ai-drawer" id="drawer2" hidden>
+  <div class="ai-head">
+    <span class="ai-ic">✦</span>
+    <div><b>AI 工作总结</b><p>2026-10-01 — 2026-11-14 · 张伟、李娜、王强</p></div>
+    <button class="x">×</button>
+  </div>
+  <div class="ai-body">
+    <div class="ai-progress">
+      <div class="ai-spinner"></div>
+      <b>正在生成工作总结</b>
+      <span class="wait">已等待 12 秒 · 长区间多人素材较多，通常需要 20–60 秒</span>
+      <div class="ai-steps">
+        <div class="ai-step done"><span class="st">✓</span>汇总 3 名成员 · 55 个工作项 · 426.5h 计时</div>
+        <div class="ai-step done"><span class="st">✓</span>按人整理素材（每人最多 20 项，王强截断 2 项）</div>
+        <div class="ai-step doing"><span class="st">…</span>模型撰写中（deepseek-chat）</div>
+        <div class="ai-step todo"><span class="st">3</span>校验数字与事实一致性</div>
+      </div>
+    </div>
+  </div>
+  <div class="ai-foot">
+    <button class="btn sm">取消</button>
+    <span class="ai-usage">数字由系统统计，AI 只负责撰写；取消不产生费用。</span>
+  </div>
+</div>
+
+<!-- ===== 场景 3：AI 总结完成 ===== -->
+<div class="scrim" id="scrim3" hidden></div>
+<div class="ai-drawer" id="drawer3" hidden>
+  <div class="ai-head">
+    <span class="ai-ic">✦</span>
+    <div><b>AI 工作总结</b><p>2026-10-01 — 2026-11-14 · 张伟、李娜、王强</p></div>
+    <button class="x">×</button>
+  </div>
+  <div class="ai-body">
+    <div class="ai-note">数字由系统统计、AI 只负责撰写；内容仅供参考，发出前请过目。素材：3 名成员 · 55 个工作项（王强按工时取前 20 项）。</div>
+    <div class="ai-src">
+      <span class="mini-tag ok">实际 426.5h</span><span class="mini-tag">开发 282h</span><span class="mini-tag warn">测试 144.5h</span><span class="mini-tag info">53.3 人天</span>
+    </div>
+    <div class="ai-md">
+      <h2>团队概览</h2>
+      <ul>
+        <li>10-01 至 11-14 三人合计投入 <b>426.5 小时（53.3 人天）</b>：开发 282 小时、测试 144.5 小时。</li>
+        <li>投入集中在<b>支付网关</b>与<b>会员中心</b>；基础平台以重构和组件建设为主。</li>
+      </ul>
+      <h2>张伟 · 后端 <span class="hh">156.5h · 占 36.7%</span></h2>
+      <ul>
+        <li>完成<b>对账导出功能</b>（32h）与<b>权限校验中间件重构</b>（28h），支付网关进入联调（24h）。</li>
+        <li>处理消息队列积压（18h），并承担日常运维值班（16h）。</li>
+      </ul>
+      <h2>李娜 · 前端 <span class="hh">142h · 占 33.3%</span></h2>
+      <ul>
+        <li>完成<b>登录页改版</b>（26h）与<b>报表图表组件封装</b>（22h）。</li>
+        <li>移动端适配进行中（20h），设计走查修复已完成（14h）。</li>
+      </ul>
+      <h2>王强 · 测试 <span class="hh">128h · 占 30.0%</span></h2>
+      <ul>
+        <li>完成<b>支付网关回归测试</b>（40h），会员中心用例执行进行中（32h）。</li>
+        <li>测试工时占其投入 <b>84%</b>，另维护自动化用例（18h）。</li>
+      </ul>
+      <h2>风险与提示</h2>
+      <ul>
+        <li>会员中心仍在测试中，王强测试占比高，后续回归排期需预留。</li>
+        <li>张伟运维值班分走 16 小时开发工时，排期时注意。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="ai-foot">
+    <button class="btn sm">重新生成</button>
+    <button class="btn sm primary" id="btnExportFromAi">导出报告 ▾</button>
+    <span class="ai-usage">模型 deepseek-chat · 输入 3,214 / 输出 628 tokens · 用时 34 秒</span>
+  </div>
+</div>
+
+<!-- ===== 场景 4：导出报告预览 ===== -->
+<div class="scrim" id="scrim4" hidden></div>
+<div class="modal-wrap" id="modal4" hidden>
+  <div class="report-modal">
+    <div class="rm-head">
+      <div><b>导出报告</b><p>报告 = 统计表格 + AI 总结 + 工作项明细；三种载体同一份内容</p></div>
+      <div class="acts">
+        <button class="btn sm">Markdown</button>
+        <button class="btn sm">Word</button>
+        <button class="btn sm primary">PDF</button>
+        <button class="btn sm" id="rmClose">×</button>
+      </div>
+    </div>
+    <div class="rm-body">
+      <div class="report-doc">
+        <div class="rp-title">团队投入报告</div>
+        <div class="rp-sub">2026-10-01 — 2026-11-14 · 研发协作空间</div>
+        <div class="rp-meta"><span>范围：张伟、李娜、王强（3 人）</span><span>项目：全部项目</span><span>生成：2026-11-14 15:20 · 孔祥金</span></div>
+
+        <div class="rp-sec"><span class="no">1</span>投入统计</div>
+        <table class="rp-table">
+          <thead><tr><th>成员</th><th>角色</th><th class="num">实际</th><th class="num">开发</th><th class="num">测试</th><th class="num">预估</th><th class="num">人天</th><th class="num">工作项</th></tr></thead>
+          <tbody>
+            <tr><td>张伟</td><td>后端 · 本公司</td><td class="num">156.5h</td><td class="num">132h</td><td class="num">24.5h</td><td class="num">160h</td><td class="num">19.6</td><td class="num">18</td></tr>
+            <tr><td>李娜</td><td>前端 · 本公司</td><td class="num">142h</td><td class="num">130h</td><td class="num">12h</td><td class="num">150h</td><td class="num">17.8</td><td class="num">15</td></tr>
+            <tr><td>王强</td><td>测试 · 外包</td><td class="num">128h</td><td class="num">20h</td><td class="num">108h</td><td class="num">120h</td><td class="num">16.0</td><td class="num">22</td></tr>
+            <tr class="total"><td>合计</td><td>3 人</td><td class="num">426.5h</td><td class="num">282h</td><td class="num">144.5h</td><td class="num">430h</td><td class="num">53.3</td><td class="num">55</td></tr>
+          </tbody>
+        </table>
+
+        <div class="rp-sec"><span class="no">2</span>工作总结 <span class="rp-ai-tag">✦ AI 生成 · 仅供参考</span></div>
+        <div class="rp-md">
+          <h3>团队概览</h3>
+          <ul><li>10-01 至 11-14 三人合计投入 426.5 小时（53.3 人天）：开发 282 小时、测试 144.5 小时。</li><li>投入集中在支付网关与会员中心；基础平台以重构和组件建设为主。</li></ul>
+          <h3>张伟 · 后端（156.5h）</h3>
+          <ul><li>完成对账导出功能（32h）与权限校验中间件重构（28h），支付网关进入联调（24h）。</li><li>处理消息队列积压（18h），并承担日常运维值班（16h）。</li></ul>
+          <h3>李娜 · 前端（142h）</h3>
+          <ul><li>完成登录页改版（26h）与报表图表组件封装（22h）。</li><li>移动端适配进行中（20h），设计走查修复已完成（14h）。</li></ul>
+          <h3>王强 · 测试（128h）</h3>
+          <ul><li>完成支付网关回归测试（40h），会员中心用例执行进行中（32h）。</li><li>测试工时占其投入 84%，另维护自动化用例（18h）。</li></ul>
+          <h3>风险与提示</h3>
+          <ul><li>会员中心仍在测试中，王强测试占比高，后续回归排期需预留。</li><li>张伟运维值班分走 16 小时开发工时，排期时注意。</li></ul>
+        </div>
+
+        <div class="rp-sec"><span class="no">3</span>工作项明细（附录）</div>
+        <table class="rp-table">
+          <thead><tr><th>成员</th><th>工作项</th><th>项目</th><th>状态</th><th class="num">实际工时</th></tr></thead>
+          <tbody>
+            <tr><td>张伟</td><td>对账导出功能开发</td><td>支付网关</td><td>已完成</td><td class="num">32h</td></tr>
+            <tr><td>张伟</td><td>权限校验中间件重构</td><td>基础平台</td><td>已完成</td><td class="num">28h</td></tr>
+            <tr><td>张伟</td><td>订单接口联调支持</td><td>支付网关</td><td>进行中</td><td class="num">24h</td></tr>
+            <tr><td>李娜</td><td>登录页改版</td><td>会员中心</td><td>已完成</td><td class="num">26h</td></tr>
+            <tr><td>李娜</td><td>报表图表组件封装</td><td>基础平台</td><td>已完成</td><td class="num">22h</td></tr>
+            <tr><td>王强</td><td>支付网关回归测试</td><td>支付网关</td><td>已完成</td><td class="num">40h</td></tr>
+            <tr><td>王强</td><td>会员中心用例执行</td><td>会员中心</td><td>测试中</td><td class="num">32h</td></tr>
+            <tr><td colspan="5" style="color:var(--text-3);font-size:11px">…附录按成员列出全部 55 个工作项（此处为节选）；王强另有 2 项未进入 AI 素材，仍完整列于附录。</td></tr>
+          </tbody>
+        </table>
+
+        <div class="rp-foot">
+          口径：实际工时按计时发生日归期，按计时人归属；测试 = 最近一轮「提测 → 测试结束」窗口内的计时；预估按计划开始日整条归入、按负责人归属，与实际不可直接相减。人天 = 实际 ÷ 8 小时。<br>
+          本报告由沙漏生成 · 统计数字来自系统计时记录；「工作总结」一节由 AI 撰写，仅供参考。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var HINTS = {
+  1:"周期切到「自定义」出现起止日期；新增「成员」多选筛选，圈定的人贯穿总览、趋势、维度表与下钻；「AI 总结」「导出报告」作用于当前筛选范围。点「成员」可打开选择弹层，点「导出报告」看载体菜单。",
+  2:"点「AI 总结」后的生成态：沿用 ai-progress 的等待语言（已等待 N 秒、可取消）；步骤条展示服务端正在做什么。非流式，通常 20–60 秒。",
+  3:"生成完成：Markdown 渲染（marked + DOMPurify），按人分节；顶部注明素材与截断，底部显示模型与 token 用量。可直接「导出报告」。",
+  4:"报告 = 报告头 + ① 投入统计 + ② AI 工作总结 + ③ 工作项明细附录 + 口径页脚。Markdown / Word / PDF 三种载体同一份内容，均有现成导出先例。",
+  5:"三种边界态：未配置 AI（引导去设置，报表不受影响）、无记录（不调模型）、素材截断（每人最多 20 项，报告注明）；另附数据外发说明。"
+};
+function switchScene(n){
+  document.querySelectorAll(".sc-chip").forEach(function(c){ c.classList.toggle("active", c.dataset.scene === String(n)); });
+  document.getElementById("sceneHint").textContent = HINTS[n];
+  document.getElementById("pageMain").hidden = (n === 5);
+  document.getElementById("pageEdge").hidden = (n !== 5);
+  document.getElementById("scrim2").hidden = (n !== 2);
+  document.getElementById("drawer2").hidden = (n !== 2);
+  document.getElementById("scrim3").hidden = (n !== 3);
+  document.getElementById("drawer3").hidden = (n !== 3);
+  document.getElementById("scrim4").hidden = (n !== 4);
+  document.getElementById("modal4").hidden = (n !== 4);
+  document.getElementById("mpPop").hidden = true;
+  document.getElementById("exportMenu").hidden = true;
+  document.getElementById("content").scrollTop = 0;
+}
+document.querySelectorAll(".sc-chip").forEach(function(c){
+  c.addEventListener("click", function(){ switchScene(Number(c.dataset.scene)); });
+});
+document.getElementById("btnAi").addEventListener("click", function(){ switchScene(2); });
+document.getElementById("btnExport").addEventListener("click", function(e){
+  e.stopPropagation();
+  var m = document.getElementById("exportMenu"); m.hidden = !m.hidden;
+});
+document.getElementById("btnExportFromAi").addEventListener("click", function(){ switchScene(4); });
+document.getElementById("rmClose").addEventListener("click", function(){ switchScene(3); });
+document.getElementById("mpTrigger").addEventListener("click", function(e){
+  e.stopPropagation();
+  var p = document.getElementById("mpPop"); p.hidden = !p.hidden;
+});
+document.addEventListener("click", function(e){
+  if(!e.target.closest(".member-picker")) document.getElementById("mpPop").hidden = true;
+  if(!e.target.closest(".manager-actions")) document.getElementById("exportMenu").hidden = true;
+});
+document.querySelectorAll(".ai-head .x").forEach(function(x){
+  x.addEventListener("click", function(){ switchScene(1); });
+});
+var q = new URLSearchParams(location.search).get("scene");
+if(q && HINTS[q]) switchScene(Number(q));
+</script>
+</body>
+</html>

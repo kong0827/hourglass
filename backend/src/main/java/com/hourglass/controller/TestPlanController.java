@@ -2,6 +2,7 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.EntityTimelineItem;
 import com.hourglass.dto.PageResult;
 import com.hourglass.dto.PlanBatchRequest;
 import com.hourglass.dto.TestPlanSaveRequest;
@@ -55,6 +56,15 @@ public class TestPlanController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(planService.detail(ws.getId(), userId, id));
+    }
+
+    /** 变更记录（最近在前）：计划本体、状态、圈选、必测与批量执行同一条线 */
+    @GetMapping("/api/test-plans/{id}/timeline")
+    public ApiResult<List<EntityTimelineItem>> timeline(@PathVariable String id,
+                                                        @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(planService.timeline(ws.getId(), userId, id));
     }
 
     @GetMapping("/api/test-plans/{id}/cases")
@@ -113,6 +123,17 @@ public class TestPlanController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(planService.addCases(userId, ws.getId(), id, req));
+    }
+
+    /** 按当前筛选圈选入计划（含未加载的行）：dryRun 只回报命中/重复/将新增条数 */
+    @PostMapping("/api/test-plans/{id}/cases/by-filter")
+    public ApiResult<java.util.Map<String, Object>> addCasesByFilter(
+            @PathVariable String id,
+            @Valid @RequestBody com.hourglass.dto.PlanFilterRequest req,
+            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(planService.addCasesByFilter(userId, ws.getId(), id, req));
     }
 
     @DeleteMapping("/api/test-plans/{id}/cases/{caseId}")

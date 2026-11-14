@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>测试域实体时间线 · 原型 · 2026-11-14</title>
+<link rel="stylesheet" href="proto.css" />
+<style>
+  .proto-banner{display:flex;align-items:center;gap:10px;background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:var(--r-md);padding:9px 13px;color:var(--primary-fg);font-size:12.5px;margin-bottom:16px}
+  .proto-banner b{font-weight:650}
+  .variant-head{display:flex;align-items:baseline;gap:10px;margin:26px 0 10px;flex-wrap:wrap}
+  .variant-head h2{font-size:15.5px;margin:0;font-weight:650}
+  .variant-head .meta{margin-left:auto}
+  .vbadge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:var(--text);color:#fff;font-size:11px;font-weight:600;letter-spacing:.3px}
+
+  /* 与 views.css 的 .timeline / .tl-item 同口径 */
+  .timeline{border-left:2px solid var(--border);margin-left:5px;padding:2px 0 0 22px;display:flex;flex-direction:column;max-height:260px;overflow-y:auto;margin-top:10px}
+  .tl-item{position:relative;padding-bottom:12px}
+  .tl-item:last-child{padding-bottom:0}
+  .tl-item::before{content:"";position:absolute;left:-22px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--surface);border:2px solid var(--primary)}
+  .tl-time{display:block;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;margin-bottom:1px}
+  .tl-detail{font-size:13px;color:var(--text-2);line-height:19px}
+  .tl-detail b{font-weight:600;color:var(--text)}
+  .tl-empty{font-size:12.5px;color:var(--text-3);padding:4px 0}
+
+  /* 新增：实体变更记录折叠块 */
+  .entity-log{margin-top:16px;border-top:1px solid var(--border);padding-top:10px}
+  .entity-log summary{cursor:pointer;font-size:13px;font-weight:650;color:var(--text-2);list-style:none;display:flex;align-items:center;gap:8px;padding:2px 0}
+  .entity-log summary::-webkit-details-marker{display:none}
+  .entity-log summary .caret{color:var(--text-3);font-size:11px;transition:transform .18s ease}
+  .entity-log[open] summary .caret{transform:rotate(90deg)}
+  .entity-log summary .cnt{font-size:11.5px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .entity-log .foot-note{margin:8px 0 0}
+
+  .case-dialog{width:620px;max-width:100%;background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:18px 20px 20px}
+  .case-dialog .panel-head{margin-bottom:14px}
+  .fld{margin-bottom:12px}
+  .fld label{display:block;font-size:12px;color:var(--text-3);margin-bottom:5px}
+  .fld .val{border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;padding:7px 10px;font-size:13px;color:var(--text)}
+  .fld .val.muted{color:var(--text-3)}
+  .case-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:var(--surface-sunken);color:var(--text-2);font-size:11.5px;font-weight:500}
+
+  .plan-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .plan-head .title{font-size:16px;font-weight:650}
+  .plan-scope{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 12px}
+  .plan-scope-label{font-size:11.5px;color:var(--text-3)}
+  .scope-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:5px 9px;font-size:11.5px;color:var(--text-2)}
+  .scope-chip b{font-weight:600;color:var(--text)}
+  .scope-chip .cnt{color:var(--text-3)}
+  .plan-stats{display:flex;gap:18px;flex-wrap:wrap;border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;background:#FCFCFD}
+  .stat{font-size:11px;color:var(--text-3);display:flex;flex-direction:column;gap:2px}
+  .stat b{font-size:14px;color:var(--text);font-weight:650;font-variant-numeric:tabular-nums}
+  .case-row{display:flex;align-items:flex-start;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border)}
+  .case-row:last-child{border-bottom:0}
+  .case-row .no{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;min-width:34px}
+  .case-row .main{flex:1;min-width:0}
+  .case-row .name{font-size:13px;font-weight:600}
+  .case-row .sub{font-size:11.5px;color:var(--text-3);margin-top:2px}
+  .badge-ok{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border);font-size:11px;font-weight:600}
+  .badge-warn{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);font-size:11px;font-weight:600}
+  @media (max-width:720px){
+    .wrap{padding:22px 16px 40px}
+    .proto-banner{display:block;line-height:1.7}
+    .proto-banner b{display:inline;margin-right:6px}
+    .variant-head .meta{flex-basis:100%;margin-left:0}
+    .case-dialog,.case-dialog[style]{width:auto}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>测试域实体时间线 · 原型</h1>
+      <div class="sub">用例与测试计划的「谁在什么时候改了什么」不再只存在于管理端审计页；沿用例编辑框与计划详情就地可查。</div>
+    </div>
+  </div>
+
+  <div class="proto-banner"><b>复用口径</b>：读取 `audit_log` 中 target_type + target_id 指向该实体的行，标签与时间线样式与任务时间线一致；只对项目可见成员开放，不新增写入口。默认折叠，展开时拉取。</div>
+
+  <div class="variant-head"><span class="vbadge">A</span><h2>用例编辑对话框：底部「变更记录」</h2><span class="meta">编辑既有用例时出现；新建用例不显示</span></div>
+  <div class="case-dialog">
+    <div class="panel-head"><h3>编辑用例</h3><span class="meta">TC-012</span></div>
+    <div class="case-meta"><span class="tag">P1</span><span class="tag">实名认证</span><span class="tag">需求：实名认证改造</span></div>
+    <div class="fld"><label>用例标题</label><div class="val">四要素不一致时拒绝开户并提示失败原因</div></div>
+    <div class="fld"><label>前置条件</label><div class="val muted">已有测试账户 demo，四要素中姓名与证件号不匹配</div></div>
+    <div class="fld"><label>执行步骤</label><div class="val muted">1. 提交四要素 → 2. 断言返回码与提示文案</div></div>
+
+    <details class="entity-log" open>
+      <summary><span class="caret">▶</span>变更记录 <span class="cnt">4</span></summary>
+      <div class="timeline">
+        <div class="tl-item"><span class="tl-time">2026-11-14 16:22</span><span class="tl-detail"><b>周敏</b> · 编辑测试用例：优先级 P2 → P1，所属项目由「账户中心」改为「开户链路」（编号重取）</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-14 15:08</span><span class="tl-detail"><b>张伟</b> · 编辑测试用例：前置条件与测试数据修改</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-13 11:40</span><span class="tl-detail"><b>张伟</b> · 编辑测试用例：补充主需求「实名认证改造」</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-13 10:02</span><span class="tl-detail"><b>张伟</b> · 新建测试用例「012 四要素不一致时拒绝开户并提示失败原因」</span></div>
+      </div>
+      <p class="foot-note">执行结果与失败证据在「执行历史」中查看；此处只记配置变更。审计保留期默认 90 天。</p>
+    </details>
+  </div>
+
+  <div class="variant-head"><span class="vbadge">B</span><h2>测试计划详情：底部「变更记录」</h2><span class="meta">计划本体、圈选、必测与批量执行同一条线</span></div>
+  <div class="panel">
+    <div class="plan-head">
+      <button class="btn sm">← 返回</button>
+      <span class="title">开户链路回归 · 11 月第二轮</span>
+      <span class="badge-warn">执行中</span>
+      <span class="meta">版本：开户链路 v1.2 · 计划 2026-11-15 → 2026-11-18 · 张伟 创建</span>
+    </div>
+    <div class="plan-scope">
+      <span class="plan-scope-label">需求范围</span>
+      <span class="scope-chip"><b>实名认证改造</b><span class="cnt">9 条用例 · 4 项工作项</span></span>
+      <span class="scope-chip"><b>开户资料校验</b><span class="cnt">5 条用例 · 需求级</span></span>
+    </div>
+    <div class="plan-stats">
+      <span class="stat"><b>14</b>圈选</span><span class="stat"><b>3</b>未执行</span><span class="stat"><b>9</b>通过</span>
+      <span class="stat"><b>1</b>失败</span><span class="stat"><b>1</b>阻塞</span><span class="stat"><b>86%</b>进度</span>
+      <span class="stat"><b>87.5%</b>通过率</span><span class="stat"><b>1</b>转缺陷</span>
+    </div>
+    <div class="case-row"><span class="no">TC-012</span><span class="badge-ok">通过</span><div class="main"><div class="name">四要素不一致时拒绝开户并提示失败原因</div><div class="sub">需求：实名认证改造 · 开户链路 · P1 · 周敏 2026-11-14 16:40</div></div></div>
+    <div class="case-row"><span class="no">TC-013</span><span class="badge-warn">失败</span><div class="main"><div class="name">重复提交同一身份证号只创建一条开户申请</div><div class="sub">需求：开户资料校验 · 需求级 · P0 · 张伟 2026-11-14 16:31</div></div></div>
+
+    <details class="entity-log" open>
+      <summary><span class="caret">▶</span>变更记录 <span class="cnt">7</span></summary>
+      <div class="timeline">
+        <div class="tl-item"><span class="tl-time">2026-11-14 16:41</span><span class="tl-detail"><b>周敏</b> · 测试计划「开户链路回归 · 11 月第二轮」批量记录 3 条执行结果：通过</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-14 15:52</span><span class="tl-detail"><b>张伟</b> · 测试计划「开户链路回归 · 11 月第二轮」用例「重复提交同一身份证号只创建一条开户申请」标记为必测</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-14 15:20</span><span class="tl-detail"><b>张伟</b> · 从测试计划「开户链路回归 · 11 月第二轮」移出用例「短信验证码 60 秒内可重发」</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-14 14:58</span><span class="tl-detail"><b>张伟</b> · 向测试计划「开户链路回归 · 11 月第二轮」加入 5 条用例</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-14 14:50</span><span class="tl-detail"><b>张伟</b> · 测试计划「开户链路回归 · 11 月第二轮」状态：draft → running</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-14 14:44</span><span class="tl-detail"><b>张伟</b> · 编辑测试计划「开户链路回归」→「开户链路回归 · 11 月第二轮」</span></div>
+        <div class="tl-item"><span class="tl-time">2026-11-14 14:40</span><span class="tl-detail"><b>张伟</b> · 新建测试计划「开户链路回归 · 11 月第二轮」（草稿）</span></div>
+      </div>
+      <p class="foot-note">状态流转、圈选、必测与批量执行都在这里；单条用例的执行证据仍在用例的「执行历史」中。</p>
+    </details>
+  </div>
+
+  <div class="variant-head"><span class="vbadge">C</span><h2>空态与只读</h2><span class="meta">无记录不占位；只读成员同样可看</span></div>
+  <div class="case-dialog" style="width:520px">
+    <details class="entity-log" open>
+      <summary><span class="caret">▶</span>变更记录 <span class="cnt">0</span></summary>
+      <p class="tl-empty">暂无变更记录；新建、编辑与圈选都会记录在这里。</p>
+    </details>
+  </div>
+</div>
+</body>
+</html>

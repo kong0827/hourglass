@@ -15,6 +15,8 @@ public class AiUsage {
     private boolean jsonMode;
     /** 请求了 JSON 模式但模型不支持、已降级为纯文本解析 */
     private boolean jsonFallback;
+    /** 本次消耗的是团队额度还是个人额度 */
+    private String sourceLabel;
 
     public static AiUsage of(AiClient.Reply r) {
         AiUsage u = new AiUsage();
@@ -24,6 +26,7 @@ public class AiUsage {
         u.totalTokens = r.promptTokens + r.completionTokens;
         u.jsonMode = r.jsonModeUsed;
         u.jsonFallback = r.jsonFallback;
+        u.sourceLabel = r.sourceLabel;
         return u;
     }
 }

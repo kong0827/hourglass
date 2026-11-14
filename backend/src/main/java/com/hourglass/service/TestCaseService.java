@@ -10,6 +10,8 @@ import com.hourglass.dto.CaseQuery;
 import com.hourglass.dto.CaseRunRequest;
 import com.hourglass.dto.CaseRunView;
 import com.hourglass.dto.CaseStatsView;
+import com.hourglass.dto.CaseRunStatsView;
+import com.hourglass.dto.EntityTimelineItem;
 import com.hourglass.dto.TaskSaveRequest;
 import com.hourglass.dto.TestCasePage;
 import com.hourglass.dto.TestCaseSaveRequest;
@@ -20,6 +22,7 @@ import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TestCase;
 import com.hourglass.entity.TestCaseRun;
+import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.AttachmentMapper;
@@ -27,6 +30,7 @@ import com.hourglass.mapper.TestCaseMapper;
 import com.hourglass.mapper.TestCaseRunMapper;
 import com.hourglass.mapper.TestCaseTaskMapper;
 import com.hourglass.mapper.TaskMapper;
+import com.hourglass.mapper.WorkspaceMemberMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -49,6 +53,20 @@ public class TestCaseService {
     private static final Logger log = LoggerFactory.getLogger(TestCaseService.class);
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /** 每页上限：列表仍用「加载更多」，页宽只影响一次取多少行 */
+    private static final int MAX_PAGE_SIZE = 200;
+    /** 按筛选批量动作的单事务上限，超出明确报错而不是静默截断 */
+    private static final int MAX_BATCH = 2000;
+    private static final int MAX_EXCLUDE = 500;
+    /** 空值类筛选哨兵：未归类 / 未设置 / 未指派 */
+    private static final String NONE = "__none";
+    /** 动态分组：成员由规则派生，读取时自愈刷新 */
+    private static final String KIND_DYNAMIC = "dynamic";
+    private static final java.util.Set<String> SORTS = new java.util.HashSet<String>(
+            java.util.Arrays.asList("created", "updated", "executed", "no", "pri", "module", "status"));
+    private static final java.util.Set<String> GROUP_DIMS = new java.util.HashSet<String>(
+            java.util.Arrays.asList("module", "priority", "status", "owner", "demand", "set"));
+
     private final TestCaseMapper caseMapper;
     private final TestCaseRunMapper runMapper;
     private final TaskCommandService taskCommandService;
@@ -67,6 +85,12 @@ public class TestCaseService {
     /** 用例 ↔ 工作项多对多：验证链路的核心关联 */
     private final TestCaseTaskMapper caseTaskMapper;
     private final TaskMapper taskMapper;
+    /** 代录执行人校验：必须是当前空间成员 */
+    private final WorkspaceMemberMapper memberMapper;
+    /** 模块目录（单归属归类）：用例保存与批量移动都要校验节点 */
+    private final TestModuleService moduleService;
+    /** 用例集成员引用：用例 / 项目删除时一并摘除，只依赖 mapper 避免与 CaseSetService 循环 */
+    private final com.hourglass.mapper.CaseSetMapper setMapper;
 
     public TestCaseService(TestCaseMapper caseMapper, TestCaseRunMapper runMapper,
                            TaskCommandService taskCommandService, ProjectAccessService projectAccess,
@@ -76,7 +100,10 @@ public class TestCaseService {
                            com.hourglass.mapper.TestPlanMapper planMapper,
                            com.hourglass.mapper.TestPlanCaseMapper planCaseMapper,
                            AuditService auditService, NumberSeqService numberSeq,
-                           TestCaseTaskMapper caseTaskMapper, TaskMapper taskMapper) {
+                           TestCaseTaskMapper caseTaskMapper, TaskMapper taskMapper,
+                           WorkspaceMemberMapper memberMapper,
+                           TestModuleService moduleService,
+                           com.hourglass.mapper.CaseSetMapper setMapper) {
         this.caseMapper = caseMapper;
         this.runMapper = runMapper;
         this.taskCommandService = taskCommandService;
@@ -92,6 +119,9 @@ public class TestCaseService {
         this.numberSeq = numberSeq;
         this.caseTaskMapper = caseTaskMapper;
         this.taskMapper = taskMapper;
+        this.memberMapper = memberMapper;
+        this.moduleService = moduleService;
+        this.setMapper = setMapper;
     }
 
     /* ---------- 查询 ---------- */
@@ -108,18 +138,11 @@ public class TestCaseService {
         return rows;
     }
 
-    /** 分页列表：筛选/分页在 SQL，筛选下拉候选值单独查（不受筛选影响） */
+    /** 分页列表：筛选/排序/分页在 SQL，筛选下拉候选值单独查（不受筛选影响） */
     public TestCasePage page(String workspaceId, String userId, CaseQuery query) {
-        String rid = ensureProject(workspaceId, query.getReqId());
-        projectAccess.assertView(workspaceId, userId, rid);
-        query.setWorkspaceId(workspaceId);
-        query.setReqId(rid);
-        query.setQ(Texts.trimToNull(query.getQ()));
-        query.setModule(Texts.trimToNull(query.getModule()));
-        query.setPri(Texts.trimToNull(query.getPri()));
-        query.setOwner(Texts.trimToNull(query.getOwner()));
+        String rid = normalizeQuery(workspaceId, userId, query);
         query.setOffset(Math.max(0, query.getOffset()));
-        query.setLimit(Math.max(1, Math.min(100, query.getLimit())));
+        query.setLimit(Math.max(1, Math.min(MAX_PAGE_SIZE, query.getLimit())));
 
         int total = caseMapper.countByQuery(query);
         List<TestCaseView> rows = total <= query.getOffset()
@@ -149,6 +172,8 @@ public class TestCaseService {
         page.setModuleCounts(facetCounts(caseMapper.countFacetsByModule(workspaceId, rid)));
         page.setPriorityCounts(facetCounts(caseMapper.countFacetsByPriority(workspaceId, rid)));
         page.setOwnerCounts(facetCounts(caseMapper.countFacetsByOwner(workspaceId, rid)));
+        page.setModuleNodes(moduleService.tree(workspaceId, userId, rid));
+        page.setModuleIdCounts(facetCounts(caseMapper.countFacetsByModuleId(workspaceId, rid)));
         Map<String, Integer> statusCounts = new LinkedHashMap<String, Integer>();
         int executed = 0;
         for (Map<String, Object> row : caseMapper.countGroupByStatus(workspaceId, rid)) {
@@ -162,6 +187,264 @@ public class TestCaseService {
         statusCounts.put("__all", all);
         page.setStatusCounts(statusCounts);
         return page;
+    }
+
+    /**
+     * 查询条件归一：项目与权限校验、空串归 null、排序白名单、目录子树展开。
+     * 排序值只用于在 XML 里选列，不拼进 SQL。
+     */
+    private String normalizeQuery(String workspaceId, String userId, CaseQuery query) {
+        String rid = ensureProject(workspaceId, query.getReqId());
+        projectAccess.assertView(workspaceId, userId, rid);
+        query.setWorkspaceId(workspaceId);
+        query.setReqId(rid);
+        query.setViewerId(userId);
+        query.setQ(Texts.trimToNull(query.getQ()));
+        query.setModule(Texts.trimToNull(query.getModule()));
+        query.setPri(Texts.trimToNull(query.getPri()));
+        query.setOwner(Texts.trimToNull(query.getOwner()));
+        query.setDemandId(Texts.trimToNull(query.getDemandId()));
+        query.setSetId(Texts.trimToNull(query.getSetId()));
+        /* 分组筛选也要过可见性：别人的个人 / 指定成员分组不能靠猜 ID 反查成员 */
+        if (query.getSetId() != null && !NONE.equals(query.getSetId())) {
+            com.hourglass.entity.CaseSet set = setMapper.selectById(query.getSetId());
+            if (set == null || !workspaceId.equals(set.getWorkspaceId()) || !rid.equals(set.getReqId())
+                    || !CaseSetService.canSee(set, userId, membersOf(set))) {
+                throw AppException.notFound("分组不存在：" + query.getSetId());
+            }
+            refreshDynamicSet(workspaceId, set);
+        }
+        query.setModuleId(Texts.trimToNull(query.getModuleId()));
+        query.setModuleIds(null);
+        if (query.getModuleId() != null && !NONE.equals(query.getModuleId())) {
+            query.setModuleIds(moduleService.scopeIds(workspaceId, rid, query.getModuleId(), query.isModuleSub()));
+        }
+        String sort = Texts.trimToNull(query.getSort());
+        query.setSort(SORTS.contains(sort) ? sort : "created");
+        query.setSortDir("asc".equals(query.getSortDir()) ? "asc" : "desc");
+        if (query.getExcludeIds() != null && query.getExcludeIds().size() > MAX_EXCLUDE) {
+            throw AppException.badRequest("取消勾选的行最多 " + MAX_EXCLUDE + " 条，请改用明确勾选");
+        }
+        return rid;
+    }
+
+    /**
+     * 分组段头：当前筛选范围内按维度聚合条数与结果分布。
+     * 模块 / 优先级 / 执行结果 / 自定义分组补齐零用例的段，便于发现覆盖缺口。
+     */
+    public List<com.hourglass.dto.CaseGroupCount> groups(String workspaceId, String userId, CaseQuery query) {
+        String rid = normalizeQuery(workspaceId, userId, query);
+        String dim = Texts.trimToNull(query.getGroupBy());
+        if (dim == null || !GROUP_DIMS.contains(dim)) {
+            throw AppException.badRequest("请选择分组维度");
+        }
+        query.setGroupBy(dim);
+        if ("set".equals(dim)) {
+            refreshDynamicSets(workspaceId, rid);
+        }
+        List<Map<String, Object>> rows = "set".equals(dim)
+                ? caseMapper.countGroupsBySet(query)
+                : caseMapper.countGroupsByQuery(query);
+        Map<String, com.hourglass.dto.CaseGroupCount> byKey =
+                new LinkedHashMap<String, com.hourglass.dto.CaseGroupCount>();
+        for (Map<String, Object> row : rows) {
+            com.hourglass.dto.CaseGroupCount g = new com.hourglass.dto.CaseGroupCount();
+            g.setKey(String.valueOf(row.get("k")));
+            g.setTotal(intOf(row.get("cnt")));
+            g.setPassed(intOf(row.get("passed")));
+            g.setFailed(intOf(row.get("failed")));
+            g.setBlocked(intOf(row.get("blocked")));
+            g.setSkipped(intOf(row.get("skipped")));
+            g.setUntested(intOf(row.get("untested")));
+            byKey.put(g.getKey(), g);
+        }
+        List<com.hourglass.dto.CaseGroupCount> out = new ArrayList<com.hourglass.dto.CaseGroupCount>();
+        if ("module".equals(dim)) {
+            Map<String, String> paths = modulePaths(workspaceId, userId, rid);
+            for (Map.Entry<String, String> e : paths.entrySet()) {
+                out.add(segment(byKey, e.getKey(), e.getValue()));
+            }
+            out.add(segment(byKey, NONE, "未归类"));
+        } else if ("priority".equals(dim)) {
+            for (String p : new String[]{"P0", "P1", "P2", "P3"}) {
+                out.add(segment(byKey, p, p + " 优先级"));
+            }
+            out.add(segment(byKey, NONE, "未设置优先级"));
+        } else if ("status".equals(dim)) {
+            out.add(segment(byKey, CaseMeta.STATUS_FAILED, "失败"));
+            out.add(segment(byKey, CaseMeta.STATUS_BLOCKED, "阻塞"));
+            out.add(segment(byKey, CaseMeta.STATUS_PASSED, "通过"));
+            out.add(segment(byKey, CaseMeta.STATUS_SKIPPED, "跳过"));
+            out.add(segment(byKey, "__untested", "未执行"));
+        } else if ("demand".equals(dim)) {
+            for (Demand d : demandMapper.selectByReq(workspaceId, rid)) {
+                String no = com.hourglass.common.Nos.demand(d.getDemandNo());
+                out.add(segment(byKey, d.getId(), (no == null || no.isEmpty() ? "" : no + " · ") + d.getTitle()));
+            }
+            out.add(segment(byKey, NONE, "未关联需求"));
+        } else if ("set".equals(dim)) {
+            for (com.hourglass.dto.CaseSetView s : setMapper.selectVisibleWithCounts(workspaceId, rid, userId)) {
+                out.add(segment(byKey, s.getId(), s.getName()));
+            }
+        } else {
+            List<String> keys = new ArrayList<String>(byKey.keySet());
+            java.util.Collections.sort(keys);
+            for (String key : keys) {
+                out.add(segment(byKey, key, NONE.equals(key) ? "未指派" : key));
+            }
+            if (!byKey.containsKey(NONE)) {
+                out.add(segment(byKey, NONE, "未指派"));
+            }
+        }
+        return out;
+    }
+
+    private static com.hourglass.dto.CaseGroupCount segment(
+            Map<String, com.hourglass.dto.CaseGroupCount> byKey, String key, String label) {
+        com.hourglass.dto.CaseGroupCount g = byKey.get(key);
+        if (g == null) {
+            g = new com.hourglass.dto.CaseGroupCount();
+            g.setKey(key);
+        }
+        g.setLabel(label);
+        return g;
+    }
+
+    /** 目录节点的全路径名（父 / 子），按 DFS 顺序 */
+    private Map<String, String> modulePaths(String workspaceId, String userId, String reqId) {
+        List<com.hourglass.dto.CaseModuleNode> nodes = moduleService.tree(workspaceId, userId, reqId);
+        Map<String, String> paths = new LinkedHashMap<String, String>();
+        for (com.hourglass.dto.CaseModuleNode n : nodes) {
+            String parent = n.getParentId() == null || n.getParentId().isEmpty() ? null : paths.get(n.getParentId());
+            paths.put(n.getId(), parent == null ? n.getName() : parent + " / " + n.getName());
+        }
+        return paths;
+    }
+
+    private static int intOf(Object value) {
+        return value instanceof Number ? ((Number) value).intValue() : 0;
+    }
+
+    /* ---------- 动态分组：成员由规则派生，读取前自愈刷新 ---------- */
+
+    /** 刷新项目下全部动态分组：分组列表 / 分组段头 / 证据聚合前调用 */
+    @Transactional
+    public void refreshDynamicSets(String workspaceId, String reqId) {
+        for (com.hourglass.entity.CaseSet s : setMapper.selectDynamicByReq(workspaceId, reqId)) {
+            refreshOne(workspaceId, s);
+        }
+    }
+
+    /** 刷新单个动态分组；手工分组直接返回 */
+    @Transactional
+    public void refreshDynamicSet(String workspaceId, com.hourglass.entity.CaseSet set) {
+        if (set != null && KIND_DYNAMIC.equals(set.getKind())) {
+            refreshOne(workspaceId, set);
+        }
+    }
+
+    /** 规则当前命中数：保存动态分组前校验规模上限 */
+    public int countRuleHits(String workspaceId, String reqId, String viewerId, String ruleJson, String name) {
+        return caseMapper.countByQuery(ruleQuery(workspaceId, reqId, viewerId, ruleJson, name));
+    }
+
+    /**
+     * 把规则命中结果物化进 case_set_item：既让分组计数、__none 筛选、圈选入计划
+     * 沿用同一条成员口径，也避免每次读取都重跑规则查询。只在差集上写库。
+     */
+    private void refreshOne(String workspaceId, com.hourglass.entity.CaseSet set) {
+        String viewer = ruleViewer(set);
+        List<String> want = caseMapper.selectIdsByQuery(
+                ruleQuery(workspaceId, set.getReqId(), viewer, set.getRuleJson(), set.getName()));
+        java.util.Set<String> stale = new java.util.HashSet<String>(setMapper.selectCaseIds(set.getId()));
+        List<String> add = new ArrayList<String>();
+        for (String id : want) {
+            if (!stale.remove(id)) {
+                add.add(id);
+            }
+        }
+        for (List<String> chunk : chunks(add)) {
+            setMapper.insertItems(workspaceId, set.getId(), chunk, viewer);
+        }
+        for (List<String> chunk : chunks(new ArrayList<String>(stale))) {
+            setMapper.deleteItems(set.getId(), chunk);
+        }
+    }
+
+    /** 规则按创建人视角求值：个人分组的可见性不随查看者变化 */
+    private static String ruleViewer(com.hourglass.entity.CaseSet set) {
+        String owner = Texts.trimToNull(set.getOwnerUserId());
+        return owner != null ? owner : set.getCreatedByUserId();
+    }
+
+    /** 只有「指定成员可见」的分组才需要查名单 */
+    private List<String> membersOf(com.hourglass.entity.CaseSet set) {
+        return CaseSetService.VIS_MEMBERS.equals(set.getVisibility())
+                ? setMapper.selectMemberIds(set.getId()) : java.util.Collections.<String>emptyList();
+    }
+
+    /** 规则 JSON → 查询条件：只认白名单字段，未知字段被忽略而不是拼进 SQL */
+    private CaseQuery ruleQuery(String workspaceId, String reqId, String viewerId, String ruleJson, String name) {
+        com.hourglass.dto.CaseSetSaveRequest.Rule rule;
+        try {
+            String json = Texts.trimToNull(ruleJson);
+            rule = JSON.readValue(json == null ? "{}" : json, com.hourglass.dto.CaseSetSaveRequest.Rule.class);
+        } catch (Exception e) {
+            throw AppException.badRequest("动态分组「" + name + "」的规则无法解析，请重新编辑规则");
+        }
+        CaseQuery q = new CaseQuery();
+        q.setWorkspaceId(workspaceId);
+        q.setReqId(reqId);
+        q.setViewerId(viewerId);
+        q.setStatus(rule.getStatus());
+        q.setPri(rule.getPri());
+        q.setDemandId(rule.getDemandId());
+        q.setOwner(rule.getOwner());
+        q.setBugOnly(rule.isBugOnly());
+        q.setRegression(rule.isRegression());
+        q.setQ(rule.getQ());
+        q.setSearchWide(rule.isSearchWide());
+        q.setModuleId(rule.getModuleId());
+        if (q.getModuleId() != null && !NONE.equals(q.getModuleId())) {
+            q.setModuleIds(moduleService.scopeIds(workspaceId, reqId, q.getModuleId(), rule.isModuleSub()));
+        }
+        return q;
+    }
+
+    private static List<List<String>> chunks(List<String> ids) {
+        List<List<String>> out = new ArrayList<List<String>>();
+        for (int i = 0; i < ids.size(); i += 500) {
+            out.add(ids.subList(i, Math.min(ids.size(), i + 500)));
+        }
+        return out;
+    }
+
+    /**
+     * 批量动作的作用范围：明确勾选（≤200 条）或「全选筛选结果」（含未加载行，≤2000 条）。
+     * 上限是单事务保护，超出时明确报错让用户缩小范围，不静默截断。
+     */
+    public List<String> selectionIds(String userId, String workspaceId, com.hourglass.dto.CaseSelection selection) {
+        if (selection == null) {
+            throw AppException.badRequest("请先勾选用例");
+        }
+        if (!selection.isAllFiltered()) {
+            return distinctIds(selection.getIds());
+        }
+        CaseQuery filter = selection.getFilter();
+        if (filter == null) {
+            throw AppException.badRequest("按筛选全选时必须带上筛选条件");
+        }
+        filter.setExcludeIds(selection.getExcludeIds());
+        normalizeQuery(workspaceId, userId, filter);
+        int total = caseMapper.countByQuery(filter);
+        if (total == 0) {
+            throw AppException.badRequest("当前筛选没有命中用例");
+        }
+        if (total > MAX_BATCH) {
+            throw AppException.badRequest("按筛选一次最多处理 " + MAX_BATCH + " 条用例，当前命中 "
+                    + total + " 条，请先缩小筛选范围");
+        }
+        return caseMapper.selectIdsByQuery(filter);
     }
 
     /** 需求—用例—缺陷覆盖矩阵：需求池需求逐行，未关联需求的用例单独补一行。 */
@@ -256,6 +539,107 @@ public class TestCaseService {
         return s;
     }
 
+    /** 执行流水聚合：按执行人 / 环境 / 轮次的结果分布与通过率（口径同概览，跳过不计入分母） */
+    public CaseRunStatsView runStats(String workspaceId, String userId, String reqId) {
+        String rid = ensureProject(workspaceId, reqId);
+        projectAccess.assertView(workspaceId, userId, rid);
+        CaseRunStatsView view = new CaseRunStatsView();
+        Map<String, Map<String, CaseRunStatsView.Bucket>> dims = new LinkedHashMap<String, Map<String, CaseRunStatsView.Bucket>>();
+        dims.put("executor", new LinkedHashMap<String, CaseRunStatsView.Bucket>());
+        dims.put("environment", new LinkedHashMap<String, CaseRunStatsView.Bucket>());
+        dims.put("round", new LinkedHashMap<String, CaseRunStatsView.Bucket>());
+        int totalRuns = 0;
+        for (Map<String, Object> row : runMapper.selectRunStats(workspaceId, rid)) {
+            String dim = String.valueOf(row.get("dim"));
+            Map<String, CaseRunStatsView.Bucket> buckets = dims.get(dim);
+            if (buckets == null) {
+                continue;
+            }
+            String key = String.valueOf(row.get("k"));
+            if (key == null || "null".equals(key) || key.isEmpty()) {
+                key = "__none";
+            }
+            String label = row.get("label") == null ? "" : String.valueOf(row.get("label"));
+            String status = String.valueOf(row.get("status"));
+            int cnt = ((Number) row.get("cnt")).intValue();
+            CaseRunStatsView.Bucket b = buckets.get(key);
+            if (b == null) {
+                b = new CaseRunStatsView.Bucket();
+                b.setKey(key);
+                b.setLabel(bucketLabel(dim, key, label));
+                buckets.put(key, b);
+            }
+            b.setTotal(b.getTotal() + cnt);
+            if (CaseMeta.STATUS_PASSED.equals(status)) {
+                b.setPassed(b.getPassed() + cnt);
+            } else if (CaseMeta.STATUS_FAILED.equals(status)) {
+                b.setFailed(b.getFailed() + cnt);
+            } else if (CaseMeta.STATUS_BLOCKED.equals(status)) {
+                b.setBlocked(b.getBlocked() + cnt);
+            } else if (CaseMeta.STATUS_SKIPPED.equals(status)) {
+                b.setSkipped(b.getSkipped() + cnt);
+            }
+            if ("executor".equals(dim)) {
+                totalRuns += cnt;
+            }
+        }
+        view.setTotalRuns(totalRuns);
+        view.setByExecutor(finishBuckets(dims.get("executor"), false));
+        view.setByEnvironment(finishBuckets(dims.get("environment"), false));
+        view.setByRound(finishBuckets(dims.get("round"), true));
+        return view;
+    }
+
+    /** 维度桶展示名：空键与轮次做人类可读化 */
+    private String bucketLabel(String dim, String key, String rawLabel) {
+        if ("round".equals(dim)) {
+            if ("1".equals(key)) {
+                return "首次执行";
+            }
+            if ("2".equals(key)) {
+                return "第 2 轮";
+            }
+            return "第 3 轮及以上";
+        }
+        if ("__none".equals(key)) {
+            return "environment".equals(dim) ? "未记录环境" : "未记录执行人";
+        }
+        return (rawLabel == null || rawLabel.trim().isEmpty())
+            ? ("environment".equals(dim) ? "未记录环境" : "未记录执行人")
+            : rawLabel.trim();
+    }
+
+    /** 收尾：算通过率（跳过不计入分母），按总量降序；轮次按序号升序 */
+    private List<CaseRunStatsView.Bucket> finishBuckets(Map<String, CaseRunStatsView.Bucket> buckets, final boolean ascByKey) {
+        List<CaseRunStatsView.Bucket> list = new ArrayList<CaseRunStatsView.Bucket>(buckets.values());
+        for (CaseRunStatsView.Bucket b : list) {
+            int denom = b.getPassed() + b.getFailed() + b.getBlocked();
+            b.setPassRate(denom == 0 ? 0d : Math.round((double) b.getPassed() / denom * 1000d) / 10d);
+        }
+        java.util.Collections.sort(list, new java.util.Comparator<CaseRunStatsView.Bucket>() {
+            @Override
+            public int compare(CaseRunStatsView.Bucket a, CaseRunStatsView.Bucket c) {
+                if (ascByKey) {
+                    return a.getKey().compareTo(c.getKey());
+                }
+                return Integer.compare(c.getTotal(), a.getTotal());
+            }
+        });
+        return list;
+    }
+
+    /** 执行统计下钻：取某桶（dim=executor/environment/round）内执行流水明细，轮次口径同聚合 */
+    public List<com.hourglass.dto.CaseRunDrillRow> runDrill(String workspaceId, String userId, String reqId,
+                                                            String dim, String key) {
+        String rid = ensureProject(workspaceId, reqId);
+        projectAccess.assertView(workspaceId, userId, rid);
+        if (!"executor".equals(dim) && !"environment".equals(dim) && !"round".equals(dim)) {
+            throw AppException.badRequest("不支持的统计维度：" + dim);
+        }
+        String k = (key == null || "__none".equals(key)) ? "" : key;
+        return runMapper.selectRunsByDimension(workspaceId, rid, dim, k, 1000);
+    }
+
     /** 缺陷反查用例：执行流水记录过的 bug → 用例，缺陷 tab 展示来源用例 */
     public List<com.hourglass.dto.CaseBugLink> linkedBugs(String workspaceId, String userId, String reqId) {
         String rid = ensureProject(workspaceId, reqId);
@@ -269,6 +653,13 @@ public class TestCaseService {
             throw AppException.notFound("用例不存在：" + id);
         }
         return c;
+    }
+
+    /** 变更记录（最近在前）：来自 audit_log 中该用例自身的行，执行结果另见 runs */
+    public List<EntityTimelineItem> timeline(String workspaceId, String userId, String caseId) {
+        TestCase c = get(workspaceId, caseId);
+        projectAccess.assertView(workspaceId, userId, c.getReqId());
+        return auditService.timeline(workspaceId, "test_case", caseId, 100);
     }
 
     /** 执行历史（最近在前）：每轮带失败证据附件，供详情与测试报告追溯 */
@@ -305,6 +696,7 @@ public class TestCaseService {
             v.setId(r.getId());
             v.setStatus(r.getStatus());
             v.setNote(r.getNote());
+            v.setEnvironment(r.getEnvironment());
             v.setBugTaskId(r.getBugTaskId());
             v.setExecutedBy(r.getExecutedBy());
             v.setCreatedAt(r.getCreatedAt());
@@ -339,6 +731,8 @@ public class TestCaseService {
         TestCase c = new TestCase();
         c.setId(Ids.gen("C"));
         c.setWorkspaceId(workspaceId);
+        c.setCreatedBy(CurrentUser.get().getDisplayName());
+        c.setCreatedByUserId(userId);
         apply(c, reqId, req);
         insertWithNo(c);
         syncTaskLinks(userId, c, req.getTaskIds());
@@ -389,6 +783,11 @@ public class TestCaseService {
         String oldReqId = c.getReqId();
         String oldTitle = c.getTitle();
         String oldDemandId = c.getDemandId();
+        String oldModule = c.getModule();
+        String oldPriority = c.getPriority();
+        String oldPrecondition = c.getPrecondition();
+        String oldTestData = c.getTestData();
+        String oldSteps = c.getSteps();
         if (moved) {
             /* 计划只圈选本项目用例：改项目会让原项目计划里留下跨项目行（已完成计划是快照，不受限） */
             List<String> open = planCaseMapper.selectOpenPlanNamesByCase(workspaceId, id);
@@ -421,9 +820,29 @@ public class TestCaseService {
         if (demandChanged) {
             what.append(oldDemandId == null ? "，补充主需求" : (c.getDemandId() == null ? "，解除主需求" : "，更换主需求"));
         }
+        if (!java.util.Objects.equals(oldModule, c.getModule())) {
+            what.append("，模块由「").append(textOrDash(oldModule)).append("」改为「")
+                    .append(textOrDash(c.getModule())).append("」");
+        }
+        if (!java.util.Objects.equals(oldPriority, c.getPriority())) {
+            what.append("，优先级 ").append(textOrDash(oldPriority)).append(" → ").append(textOrDash(c.getPriority()));
+        }
+        if (!java.util.Objects.equals(oldPrecondition, c.getPrecondition())) {
+            what.append("，修改前置条件");
+        }
+        if (!java.util.Objects.equals(oldTestData, c.getTestData())) {
+            what.append("，修改测试数据");
+        }
+        if (!java.util.Objects.equals(oldSteps, c.getSteps())) {
+            what.append("，修改执行步骤");
+        }
         auditService.recordCurrent(workspaceId, "test_case_update", "test_case", id, c.getTitle(), true,
                 what.toString(), null);
         return caseMapper.selectById(id);
+    }
+
+    private static String textOrDash(String value) {
+        return value == null || value.isEmpty() ? "未设置" : value;
     }
 
     private String caseNoText(TestCase c) {
@@ -528,6 +947,7 @@ public class TestCaseService {
         /* 用例被删后测试计划里的圈选行也成孤儿，一并摘除 */
         planCaseMapper.deleteByCase(id);
         caseTaskMapper.deleteByCase(id);
+        setMapper.deleteItemsByCase(id);
         caseMapper.delete(workspaceId, id);
         attachmentService.deleteOrphanCaseRunAttachments(workspaceId);
         auditService.recordCurrent(workspaceId, "test_case_delete", "test_case", id, c.getTitle(), true,
@@ -536,10 +956,15 @@ public class TestCaseService {
 
     /* ---------- 批量维护（列表多选） ---------- */
 
-    /** 批量改模块 / 优先级：跨项目勾选时逐个校验写权限，已删除的行跳过并回报 */
+    /** 批量改模块 / 优先级：范围支持勾选或全选筛选结果，跨项目逐项目校验写权限并解析目录节点 */
     @Transactional
     public Map<String, Object> batchUpdate(String userId, String workspaceId, com.hourglass.dto.TestCaseBatchRequest req) {
-        List<String> ids = distinctIds(req.getIds());
+        com.hourglass.dto.CaseSelection selection = new com.hourglass.dto.CaseSelection();
+        selection.setIds(req.getIds());
+        selection.setAllFiltered(req.isAllFiltered());
+        selection.setFilter(req.getFilter());
+        selection.setExcludeIds(req.getExcludeIds());
+        List<String> ids = selectionIds(userId, workspaceId, selection);
         String moduleAction = Texts.trimToNull(req.getModuleAction());
         String priorityAction = Texts.trimToNull(req.getPriorityAction());
         boolean moduleClear = "clear".equals(moduleAction);
@@ -549,13 +974,14 @@ public class TestCaseService {
         if (!moduleSet && !moduleClear && !prioritySet && !priorityClear) {
             throw AppException.badRequest("没有要修改的内容");
         }
-        String module = null;
+        String moduleText = null;
+        String moduleNodeId = null;
         if (moduleSet) {
-            module = Texts.trimToNull(req.getModule());
-            if (module == null) {
-                throw AppException.badRequest("请填写功能模块，或勾选「清空模块」");
+            moduleText = Texts.cut(Texts.trimToNull(req.getModule()), 50);
+            moduleNodeId = Texts.trimToNull(req.getModuleId());
+            if (moduleText == null && moduleNodeId == null) {
+                throw AppException.badRequest("请选择目录节点或填写功能模块，或勾选「清空模块」");
             }
-            module = Texts.cut(module, 50);
         }
         String priority = null;
         if (prioritySet) {
@@ -564,25 +990,28 @@ public class TestCaseService {
                 throw AppException.badRequest("优先级只允许 P0/P1/P2/P3");
             }
         }
-        List<String> allowed = new ArrayList<String>();
-        int skipped = 0;
-        for (String id : ids) {
-            TestCase c = caseMapper.selectById(id);
-            if (c == null || !workspaceId.equals(c.getWorkspaceId())) {
-                skipped++;
-                continue;
-            }
-            projectAccess.assertWrite(workspaceId, userId, c.getReqId());
-            allowed.add(id);
-        }
-        if (allowed.isEmpty()) {
+        List<TestCase> cases = loadWritable(userId, workspaceId, ids);
+        if (cases.isEmpty()) {
             throw AppException.badRequest("勾选的用例已不存在或无权修改");
         }
-        int updated = caseMapper.batchUpdate(workspaceId, allowed,
-                moduleSet || moduleClear, module, prioritySet || priorityClear, priority);
+        int updated = 0;
+        String moduleLabel = null;
+        for (Map.Entry<String, List<String>> e : idsByReq(cases).entrySet()) {
+            String module = null;
+            String moduleId = null;
+            if (moduleSet) {
+                com.hourglass.entity.TestModule node =
+                        moduleService.resolveForCase(workspaceId, e.getKey(), moduleNodeId, moduleText);
+                moduleId = node == null ? null : node.getId();
+                module = node == null ? null : node.getName();
+                moduleLabel = module;
+            }
+            updated += caseMapper.batchUpdate(workspaceId, e.getValue(), moduleSet || moduleClear,
+                    module, moduleId, prioritySet || priorityClear, priority);
+        }
         StringBuilder what = new StringBuilder();
         if (moduleSet) {
-            what.append("模块=「").append(module).append("」");
+            what.append("模块=「").append(moduleLabel).append("」");
         }
         if (moduleClear) {
             what.append(what.length() > 0 ? "、" : "").append("清空模块");
@@ -597,33 +1026,175 @@ public class TestCaseService {
                 "批量更新 " + updated + " 条用例：" + what, null);
         Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
         out.put("updated", updated);
-        out.put("skipped", skipped);
+        out.put("skipped", ids.size() - cases.size());
         return out;
     }
 
-    /** 批量删除：逐条走单例删除链路（流水、计划圈选、证据一并清理并逐条留痕） */
+    /** 批量删除：逐条走单例删除链路（流水、计划圈选、分组成员、证据一并清理并逐条留痕） */
     @Transactional
-    public Map<String, Object> batchDelete(String userId, String workspaceId, List<String> rawIds) {
-        List<String> ids = distinctIds(rawIds);
-        int deleted = 0;
-        int skipped = 0;
-        for (String id : ids) {
-            TestCase c = caseMapper.selectById(id);
-            if (c == null || !workspaceId.equals(c.getWorkspaceId())) {
-                skipped++;
-                continue;
-            }
-            projectAccess.assertWrite(workspaceId, userId, c.getReqId());
-            delete(userId, workspaceId, id);
-            deleted++;
-        }
-        if (deleted == 0) {
+    public Map<String, Object> batchDelete(String userId, String workspaceId, com.hourglass.dto.TestCaseBatchRequest req) {
+        com.hourglass.dto.CaseSelection selection = new com.hourglass.dto.CaseSelection();
+        selection.setIds(req.getIds());
+        selection.setAllFiltered(req.isAllFiltered());
+        selection.setFilter(req.getFilter());
+        selection.setExcludeIds(req.getExcludeIds());
+        List<String> ids = selectionIds(userId, workspaceId, selection);
+        List<TestCase> cases = loadWritable(userId, workspaceId, ids);
+        if (cases.isEmpty()) {
             throw AppException.badRequest("勾选的用例已不存在或无权删除");
         }
+        for (TestCase c : cases) {
+            delete(userId, workspaceId, c.getId());
+        }
         Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
-        out.put("deleted", deleted);
-        out.put("skipped", skipped);
+        out.put("deleted", cases.size());
+        out.put("skipped", ids.size() - cases.size());
         return out;
+    }
+
+    /**
+     * 拖拽归类：目录是单归属，移动即从原节点移出，编号与执行历史不变。
+     * 返回每条用例移动前的节点，供「撤销」一次性回放。
+     */
+    @Transactional
+    public Map<String, Object> moveModule(String userId, String workspaceId, com.hourglass.dto.CaseMoveRequest req) {
+        List<String> ids = selectionIds(userId, workspaceId, req.getSelection());
+        List<TestCase> cases = loadWritable(userId, workspaceId, ids);
+        if (cases.isEmpty()) {
+            throw AppException.badRequest("勾选的用例已不存在或无权修改");
+        }
+        String targetId = Texts.trimToNull(req.getModuleId());
+        Map<String, String> nameByReq = new LinkedHashMap<String, String>();
+        for (String pid : idsByReq(cases).keySet()) {
+            nameByReq.put(pid, targetId == null ? null
+                    : moduleService.requireNode(workspaceId, pid, targetId).getName());
+        }
+        List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
+        Map<String, Map<String, List<String>>> changed = new LinkedHashMap<String, Map<String, List<String>>>();
+        for (TestCase c : cases) {
+            String prev = Texts.trimToNull(c.getModuleId());
+            if (targetId == null ? prev == null : targetId.equals(prev)) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("id", c.getId());
+            item.put("moduleId", prev);
+            items.add(item);
+            String nodeKey = targetId == null ? "" : targetId;
+            Map<String, List<String>> byNode = changed.get(c.getReqId());
+            if (byNode == null) {
+                byNode = new LinkedHashMap<String, List<String>>();
+                changed.put(c.getReqId(), byNode);
+            }
+            List<String> bucket = byNode.get(nodeKey);
+            if (bucket == null) {
+                bucket = new ArrayList<String>();
+                byNode.put(nodeKey, bucket);
+            }
+            bucket.add(c.getId());
+        }
+        int moved = 0;
+        for (Map.Entry<String, Map<String, List<String>>> e : changed.entrySet()) {
+            String name = nameByReq.get(e.getKey());
+            for (Map.Entry<String, List<String>> n : e.getValue().entrySet()) {
+                moved += caseMapper.updateModuleBatch(workspaceId, n.getValue(),
+                        n.getKey().isEmpty() ? null : n.getKey(), name);
+            }
+        }
+        String label = targetId == null ? "未归类" : joinNames(nameByReq.values());
+        auditService.recordCurrent(workspaceId, "test_case_move_module", "project", null, null, true,
+                "移动 " + moved + " 条用例到目录「" + label + "」，编号与执行历史不变", null);
+        Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
+        out.put("moved", moved);
+        out.put("skipped", ids.size() - cases.size());
+        out.put("items", items);
+        return out;
+    }
+
+    /** 撤销归类：按移动前的归属一次事务恢复，避免逐组回放中途失败留下半截状态 */
+    @Transactional
+    public Map<String, Object> restoreModule(String userId, String workspaceId, com.hourglass.dto.CaseRestoreRequest req) {
+        Map<String, String> prevById = new LinkedHashMap<String, String>();
+        for (com.hourglass.dto.CaseRestoreRequest.Item item : req.getItems()) {
+            String id = item == null ? null : Texts.trimToNull(item.getId());
+            if (id != null) {
+                prevById.put(id, Texts.trimToNull(item.getModuleId()));
+            }
+        }
+        if (prevById.isEmpty()) {
+            throw AppException.badRequest("没有可撤销的用例");
+        }
+        List<TestCase> cases = loadWritable(userId, workspaceId, new ArrayList<String>(prevById.keySet()));
+        if (cases.isEmpty()) {
+            throw AppException.badRequest("要撤销的用例已不存在或无权修改");
+        }
+        Map<String, Map<String, List<String>>> groups = new LinkedHashMap<String, Map<String, List<String>>>();
+        for (TestCase c : cases) {
+            String nodeKey = prevById.get(c.getId()) == null ? "" : prevById.get(c.getId());
+            Map<String, List<String>> byNode = groups.get(c.getReqId());
+            if (byNode == null) {
+                byNode = new LinkedHashMap<String, List<String>>();
+                groups.put(c.getReqId(), byNode);
+            }
+            List<String> bucket = byNode.get(nodeKey);
+            if (bucket == null) {
+                bucket = new ArrayList<String>();
+                byNode.put(nodeKey, bucket);
+            }
+            bucket.add(c.getId());
+        }
+        int restored = 0;
+        for (Map.Entry<String, Map<String, List<String>>> e : groups.entrySet()) {
+            for (Map.Entry<String, List<String>> n : e.getValue().entrySet()) {
+                String name = n.getKey().isEmpty() ? null
+                        : moduleService.requireNode(workspaceId, e.getKey(), n.getKey()).getName();
+                restored += caseMapper.updateModuleBatch(workspaceId, n.getValue(),
+                        n.getKey().isEmpty() ? null : n.getKey(), name);
+            }
+        }
+        auditService.recordCurrent(workspaceId, "test_case_move_undo", "project", null, null, true,
+                "撤销归类：恢复 " + restored + " 条用例的原目录归属", null);
+        Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
+        out.put("restored", restored);
+        out.put("skipped", prevById.size() - cases.size());
+        return out;
+    }
+
+    /** 批量动作前一次性取回本体：跨项目逐项目校验写权限，已删除 / 不在本空间的行由调用方按差值回报 */
+    private List<TestCase> loadWritable(String userId, String workspaceId, List<String> ids) {
+        List<TestCase> out = new ArrayList<TestCase>();
+        for (int i = 0; i < ids.size(); i += 500) {
+            List<String> chunk = ids.subList(i, Math.min(ids.size(), i + 500));
+            for (TestCase c : caseMapper.selectByIds(workspaceId, chunk)) {
+                projectAccess.assertWrite(workspaceId, userId, c.getReqId());
+                out.add(c);
+            }
+        }
+        return out;
+    }
+
+    private static Map<String, List<String>> idsByReq(List<TestCase> cases) {
+        Map<String, List<String>> out = new LinkedHashMap<String, List<String>>();
+        for (TestCase c : cases) {
+            List<String> bucket = out.get(c.getReqId());
+            if (bucket == null) {
+                bucket = new ArrayList<String>();
+                out.put(c.getReqId(), bucket);
+            }
+            bucket.add(c.getId());
+        }
+        return out;
+    }
+
+    private static String joinNames(java.util.Collection<String> names) {
+        StringBuilder sb = new StringBuilder();
+        for (String n : names) {
+            if (n == null || sb.indexOf(n) >= 0) {
+                continue;
+            }
+            sb.append(sb.length() > 0 ? " / " : "").append(n);
+        }
+        return sb.toString();
     }
 
     private static List<String> distinctIds(List<String> raw) {
@@ -655,7 +1226,24 @@ public class TestCaseService {
     public TestCaseRun run(String userId, String workspaceId, String id, CaseRunRequest req, String planId) {
         TestCase c = get(workspaceId, id);
         projectAccess.assertWrite(workspaceId, userId, c.getReqId());
-        String displayName = CurrentUser.get().getDisplayName();
+        String executorId = userId;
+        String executorName = CurrentUser.get().getDisplayName();
+        String proxy = Texts.trimToNull(req.getExecutedByUserId());
+        if (proxy != null && !proxy.equals(userId)) {
+            /* 代录：执行人必须是当前空间成员，避免流水挂到不存在的人头上 */
+            WorkspaceMember m = null;
+            for (WorkspaceMember row : memberMapper.selectByWorkspace(workspaceId)) {
+                if (proxy.equals(row.getUserId())) {
+                    m = row;
+                    break;
+                }
+            }
+            if (m == null) {
+                throw AppException.badRequest("执行人不是当前空间成员");
+            }
+            executorId = m.getUserId();
+            executorName = m.getDisplayName() != null ? m.getDisplayName() : m.getUsername();
+        }
         String note = Texts.trimToNull(req.getNote());
         TestCaseRun run = new TestCaseRun();
         run.setId(Ids.gen("R"));
@@ -663,11 +1251,12 @@ public class TestCaseService {
         run.setWorkspaceId(workspaceId);
         run.setStatus(req.getStatus());
         run.setNote(note);
+        run.setEnvironment(Texts.trimToNull(req.getEnvironment()));
         run.setPlanId(Texts.trimToNull(planId));
-        run.setExecutedBy(displayName);
-        run.setExecutedByUserId(userId);
+        run.setExecutedBy(executorName);
+        run.setExecutedByUserId(executorId);
         runMapper.insert(run);
-        caseMapper.updateLatest(workspaceId, id, req.getStatus(), note, displayName, userId);
+        caseMapper.updateLatest(workspaceId, id, req.getStatus(), note, executorName, executorId);
         return runMapper.selectById(run.getId());
     }
 
@@ -682,6 +1271,8 @@ public class TestCaseService {
         if (!CaseMeta.STATUS_FAILED.equals(c.getLatestStatus())) {
             throw AppException.badRequest("只有执行失败的用例才能转缺陷");
         }
+        TestCaseRun latest = runMapper.selectLatestByCase(id);
+        boolean failedRun = latest != null && CaseMeta.STATUS_FAILED.equals(latest.getStatus());
         TaskSaveRequest tReq = new TaskSaveRequest();
         /* 任务标题/描述上限（60/2000）比用例口径窄：自动转出时截断，完整信息留在用例本体 */
         tReq.setTitle(Texts.cut(c.getTitle(), 60));
@@ -691,14 +1282,33 @@ public class TestCaseService {
         tReq.setReqId(c.getReqId());
         /* 用例关联了需求时，缺陷任务沿用该关联，保持追溯链一致 */
         tReq.setDemandId(c.getDemandId());
-        tReq.setDescription(Texts.cut(buildDefectDescription(c), 2000));
+        tReq.setDescription(Texts.cut(buildDefectDescription(c, failedRun ? latest : null,
+                Texts.trimToNull(req.getNote())), 2000));
         Task task = taskCommandService.create(userId, workspaceId, tReq);
         caseMapper.updateLatestBug(workspaceId, id, task.getId());
-        TestCaseRun latest = runMapper.selectLatestByCase(id);
-        if (latest != null && CaseMeta.STATUS_FAILED.equals(latest.getStatus())) {
+        if (failedRun) {
             runMapper.updateBugTask(latest.getId(), task.getId());
         }
+        int copied = 0;
+        if (failedRun && (req.getCarryEvidence() == null || req.getCarryEvidence())) {
+            copied = attachmentService.copyRunEvidenceToTask(userId, workspaceId, latest.getId(), task.getId());
+        }
+        auditService.recordCurrent(workspaceId, "test_case_defect", "test_case", c.getId(), c.getTitle(), true,
+                "用例「" + caseNoText(c) + " " + c.getTitle() + "」转出缺陷「" + task.getTitle() + "」"
+                        + (copied > 0 ? "，携带 " + copied + " 份失败证据" : ""), null);
         return task;
+    }
+
+    /** 缺陷详情反查来源用例：跨项目聚合，只返回当前用户可见项目的用例 */
+    public List<com.hourglass.dto.CaseBugLink> byBugTask(String workspaceId, String userId, String bugTaskId) {
+        List<com.hourglass.dto.CaseBugLink> links = runMapper.selectByBugTask(workspaceId, bugTaskId);
+        List<com.hourglass.dto.CaseBugLink> out = new ArrayList<com.hourglass.dto.CaseBugLink>();
+        for (com.hourglass.dto.CaseBugLink l : links) {
+            if (l.getReqId() != null && projectAccess.canView(workspaceId, userId, l.getReqId())) {
+                out.add(l);
+            }
+        }
+        return out;
     }
 
     /** 项目内用例总数（删除影响预览用，不做权限校验：调用方已 assert） */
@@ -720,6 +1330,10 @@ public class TestCaseService {
         planCaseMapper.deleteByReq(workspaceId, reqId);
         planMapper.deleteByReq(workspaceId, reqId);
         moduleMapper.deleteByReq(workspaceId, reqId);
+        /* 自定义分组同样强归属项目：先摘成员引用与可见名单再删分组本体 */
+        setMapper.deleteMembersByReq(workspaceId, reqId);
+        setMapper.deleteItemsByReq(workspaceId, reqId);
+        setMapper.deleteByReq(workspaceId, reqId);
         return count;
     }
 
@@ -742,7 +1356,39 @@ public class TestCaseService {
     public byte[] exportCsv(String workspaceId, String userId, String reqId) {
         String rid = ensureProject(workspaceId, reqId);
         projectAccess.assertView(workspaceId, userId, rid);
-        List<TestCaseView> rows = caseMapper.selectViewByReq(workspaceId, rid);
+        return csvOf(caseMapper.selectViewByReq(workspaceId, rid));
+    }
+
+    /** 按当前筛选导出（含未加载的行）：条数上限与批量动作一致，超出明确报错而不是截断 */
+    public byte[] exportCsvByFilter(String workspaceId, String userId, CaseQuery query) {
+        normalizeQuery(workspaceId, userId, query);
+        int total = caseMapper.countByQuery(query);
+        if (total > MAX_BATCH) {
+            throw AppException.badRequest("一次最多导出 " + MAX_BATCH + " 条用例，当前命中 "
+                    + total + " 条，请先缩小筛选范围");
+        }
+        query.setOffset(0);
+        query.setLimit(Math.max(1, total));
+        return csvOf(total == 0 ? new ArrayList<TestCaseView>() : caseMapper.selectViewByQuery(query));
+    }
+
+    /** 导出所选：只导出当前用户可见项目的用例 */
+    public byte[] exportCsvByIds(String workspaceId, String userId, List<String> rawIds) {
+        List<String> ids = distinctIds(rawIds);
+        if (ids.isEmpty()) {
+            throw AppException.badRequest("请先勾选要导出的用例");
+        }
+        List<TestCaseView> rows = new ArrayList<TestCaseView>();
+        for (int i = 0; i < ids.size(); i += 500) {
+            rows.addAll(caseMapper.selectViewByIds(workspaceId, ids.subList(i, Math.min(ids.size(), i + 500))));
+        }
+        for (TestCaseView v : rows) {
+            projectAccess.assertView(workspaceId, userId, v.getReqId());
+        }
+        return csvOf(rows);
+    }
+
+    private byte[] csvOf(List<TestCaseView> rows) {
         List<String> lines = new ArrayList<String>();
         lines.add(CSV_HEADER);
         for (TestCaseView v : rows) {
@@ -1049,7 +1695,11 @@ public class TestCaseService {
         c.setTitle(Texts.cut(req.getTitle().trim(), 100));
         c.setPrecondition(Texts.trimToNull(req.getPrecondition()));
         c.setTestData(Texts.trimToNull(req.getTestData()));
-        c.setModule(Texts.trimToNull(req.getModule()));
+        /* 归属以目录节点为准；只给文本时按名称找节点，找不到补建顶级节点 */
+        com.hourglass.entity.TestModule node =
+                moduleService.resolveForCase(c.getWorkspaceId(), reqId, req.getModuleId(), req.getModule());
+        c.setModuleId(node == null ? null : node.getId());
+        c.setModule(node == null ? null : node.getName());
         c.setPriority(Texts.trimToNull(req.getPriority()));
         c.setSteps(serializeSteps(req.getSteps()));
     }
@@ -1137,9 +1787,31 @@ public class TestCaseService {
         return String.format("TC-%03d", caseNo);
     }
 
-    private String buildDefectDescription(TestCase c) {
+    private String buildDefectDescription(TestCase c, TestCaseRun latest, String extraNote) {
         StringBuilder sb = new StringBuilder();
         sb.append("测试用例 ").append(caseNoLabel(c.getCaseNo())).append("「").append(c.getTitle()).append("」执行失败，自动转出。\n");
+        if (latest != null) {
+            StringBuilder meta = new StringBuilder();
+            if (latest.getExecutedBy() != null) {
+                meta.append("执行人：").append(latest.getExecutedBy());
+            }
+            if (latest.getCreatedAt() != null) {
+                if (meta.length() > 0) {
+                    meta.append(" · ");
+                }
+                meta.append("执行时间：").append(latest.getCreatedAt()
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+            }
+            if (latest.getEnvironment() != null) {
+                if (meta.length() > 0) {
+                    meta.append(" · ");
+                }
+                meta.append("执行环境：").append(latest.getEnvironment());
+            }
+            if (meta.length() > 0) {
+                sb.append(meta).append("\n");
+            }
+        }
         if (c.getPrecondition() != null) {
             sb.append("\n前置条件：\n").append(c.getPrecondition()).append("\n");
         }
@@ -1160,6 +1832,9 @@ public class TestCaseService {
         }
         if (c.getLatestNote() != null) {
             sb.append("\n失败备注：").append(c.getLatestNote()).append("\n");
+        }
+        if (extraNote != null) {
+            sb.append("\n转缺陷补充：").append(extraNote).append("\n");
         }
         return sb.toString();
     }

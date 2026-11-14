@@ -10,6 +10,7 @@ import { activeView, showView } from "../core/router.js";
 import { rt } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { DD } from "../lib/delivery-doc.js";
+import { assocLinkHTML } from "../lib/format.js";
 import { printDeliveryPaper, registerDeliveryPrintSource, triggerDownload } from "../lib/download.js";
 import { openTaskById } from "../core/task-actions.js";
 
@@ -89,7 +90,7 @@ function paintPicker() {
           r.latestReleaseDate ? "最近生产发布 " + DD.dateText(r.latestReleaseDate) : "无生产发布记录"].join(" · ");
         return '<div class="dl-row body" style="grid-template-columns:96px minmax(0,1fr) 120px">'
           + "<span>" + (released ? '<span class="dl-badge ok">有发布记录</span>' : '<span class="dl-badge warn">未确认发布</span>') + "</span>"
-          + '<span class="tt"><b>' + esc(r.versionName) + "</b><span>" + esc(sub) + "</span></span>"
+          + '<span class="tt"><b>' + assocLinkHTML("version", r.versionId, r.versionName, { req:reqId }) + "</b><span>" + esc(sub) + "</span></span>"
           + '<span><button class="btn sm primary" type="button" data-dl-open="' + esc(r.versionId) + '">'
           + icon("note", 13) + "生成说明</button></span></div>";
       }).join("") + "</div></div>";
@@ -136,7 +137,7 @@ function renderAll() {
   host.innerHTML = '<div class="dl-head"><div>'
     + '<div class="dl-title-row"><h1>一页式交付说明</h1>'
     + '<span class="dl-chip pri">' + esc(DD.toneName(o.tone)) + "</span>"
-    + '<span class="dl-chip">' + esc(data.projectName || "未归属项目") + " · " + esc(data.versionName || "") + "</span>"
+    + '<span class="dl-chip">' + esc(data.projectName || "未归属项目") + " · " + assocLinkHTML("version", data.versionId, data.versionName || "", { req:data.projectId, plain:"" }) + "</span>"
     + (isLocked ? '<span class="dl-chip plum">' + icon("lock", 11) + "快照 " + esc(data.docNo || "") + "</span>" : "")
     + "</div>"
     + '<p class="dl-sub">数字全部来自系统记录、只读且可点回原始记录；文字由系统草拟，逐段确认后导出。'
@@ -719,7 +720,6 @@ function onClick(e) {
   if (act === "snapshots") { openSnapshots(); return; }
   if (act === "share") { openShare(); return; }
   if (act === "goto") { gotoView(btn.dataset.dlView, btn.dataset.dlRef); return; }
-  if (act === "evidence") { gotoView(btn.dataset.dlView, btn.dataset.dlRef); return; }
 }
 function startEditOne(field) {
   if (!data || DD.locked(data) || !data.canEdit) return;
@@ -767,8 +767,12 @@ function gotoView(name, refId) {
     }
     if (name === "testcases" || name === "defects") {
       return m.loadView("testcases").then(function (mod) {
-        mod.setTcProject(pid);
-        mod.setTcMode(name === "defects" ? "defects" : "plans");
+        if (name === "testcases" && refId) {
+          mod.openPlanInProject(pid, refId);
+        } else {
+          mod.setTcProject(pid);
+          mod.setTcMode(name === "defects" ? "defects" : "plans");
+        }
         showView("testcases");
       });
     }

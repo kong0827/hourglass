@@ -31,12 +31,18 @@ public class TaskCompletionRecord {
     private String reqDocTitle;
     private String owner;
     private String ownerUserId;
+    /** 测试侧证据：任务彻底删除后快照是唯一留存，缺这几列「谁测的/测了多久」会一起消失 */
+    private String testOwnerUserId;
+    private String testOwner;
+    private LocalDateTime testRequestedAt;
+    private LocalDateTime testStartedAt;
+    private LocalDateTime testFinishedAt;
     private String category;
     private String priority;
     /** 任务开始日期 */
     private LocalDate startDate;
-    /** 完成日期 */
-    private LocalDate completedAt;
+    /** 完成时间（分钟级） */
+    private LocalDateTime completedAt;
     /** 首次计时开始时间 */
     private LocalDateTime firstStartedAt;
     /** 最后一次计时结束时间 */

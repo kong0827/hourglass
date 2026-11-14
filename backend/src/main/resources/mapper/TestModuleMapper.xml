@@ -8,10 +8,44 @@
     ORDER BY sort_order, name
   </select>
 
+  <select id="selectByReq" resultType="com.hourglass.entity.TestModule">
+    SELECT * FROM test_module
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    ORDER BY sort_order, name, id
+  </select>
+
+  <select id="selectById" resultType="com.hourglass.entity.TestModule">
+    SELECT * FROM test_module WHERE id = #{id}
+  </select>
+
+  <select id="selectByName" resultType="com.hourglass.entity.TestModule">
+    SELECT * FROM test_module
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND name = #{name}
+    ORDER BY sort_order, id
+    LIMIT 1
+  </select>
+
   <insert id="insert">
-    INSERT INTO test_module (id, workspace_id, req_id, name, sort_order)
-    VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{sortOrder})
+    INSERT INTO test_module (id, workspace_id, req_id, parent_id, name, sort_order)
+    VALUES (#{id}, #{workspaceId}, #{reqId}, COALESCE(#{parentId}, ''), #{name}, COALESCE(#{sortOrder}, 0))
   </insert>
+
+  <update id="update">
+    UPDATE test_module
+    SET parent_id = COALESCE(#{parentId}, ''),
+        name = #{name},
+        sort_order = COALESCE(#{sortOrder}, 0)
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <delete id="delete">
+    DELETE FROM test_module WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="countChildren" resultType="int">
+    SELECT COUNT(*) FROM test_module
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND parent_id = #{parentId}
+  </select>
 
   <delete id="deleteByReq">
     DELETE FROM test_module WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}

@@ -12,7 +12,7 @@ import { progressOf, rt } from "../core/state.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { avatarHTML, colMeta, colName, fmtShortMD, parseDate, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, colMeta, colName, fmtShortMD, parseDate, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 import { isDoneTask } from "./list.js";
 
 var chainBody = $("chainBody"), chainMeta = $("chainMeta"),
@@ -140,11 +140,14 @@ function statusTagHTML(t){
   var c = colMeta(t.boardColumn), color = c ? c.color : "var(--text-3)";
   return '<span class="tag tag-cat" style="--tag-c:' + esc(color) + '">' + esc(colName(t.boardColumn)) + '</span>';
 }
-function nodeInnerHTML(t, showType){
+function nodeInnerHTML(t, showType, linkTitle){
   var due = t.dueDate ? esc(fmtShortMD(parseDate(t.dueDate))) : "";
   var p = progressOf(t);
+  var titleHTML = linkTitle
+    ? assocLinkHTML("task", t.id, t.title, {cls:"ch-node-title"})
+    : '<span class="ch-node-title" title="' + esc(t.title) + '">' + esc(t.title) + '</span>';
   return (showType ? (typeBadgeHTML(t.itemType) || '<span class="mini-tag">' + esc(typeName(t.itemType)) + '</span>') + severityBadgeHTML(t.severity) : "") +
-    '<span class="ch-node-title" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
+    titleHTML +
     statusTagHTML(t) +
     (p > 0 || t.boardColumn === "doing"
       ? '<span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span>'
@@ -153,7 +156,11 @@ function nodeInnerHTML(t, showType){
     (t.owner ? avatarHTML(t.owner) : "");
 }
 function nodeHTML(t){
-  return '<div class="ch-node" role="button" tabindex="0" data-chain-center="' + esc(t.id) + '">' + nodeInnerHTML(t, true) + '</div>';
+  /* 节点内含可聚焦的标题按钮，外层用 group 而非 button，避免 button 嵌套交互元素；
+     仍保留 tabindex+keydown（回车/空格以此为中心），aria-label 说明该键盘动作。 */
+  return '<div class="ch-node" role="group" tabindex="0" data-chain-center="' + esc(t.id) + '"' +
+    ' aria-label="工作项「' + esc(t.title) + '」，回车以此为中心重绘"' +
+    ' title="点击名称打开详情；点击卡片其他区域以此工作项为中心">' + nodeInnerHTML(t, true, true) + '</div>';
 }
 function missingNodeHTML(id){
   return '<div class="ch-node is-missing" aria-disabled="true"><span class="ch-node-title muted">未知工作项（' + esc(String(id).slice(0, 8)) + '…）</span>' +
@@ -311,6 +318,7 @@ chainBody.addEventListener("click", function(e){
 });
 chainBody.addEventListener("keydown", function(e){
   if(e.key !== "Enter" && e.key !== " ") return;
+  if(e.target.closest("button,a,input,select,textarea")) return;
   var el = e.target.closest("[data-chain-center],[data-chain-open]");
   if(!el) return;
   e.preventDefault();

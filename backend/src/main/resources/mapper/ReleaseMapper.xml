@@ -44,6 +44,20 @@
       AND t.req_id = pv.req_id AND t.deleted_at IS NULL
     ORDER BY t.id FOR UPDATE
   </select>
+  <!-- 发布检查只读版本范围：不加锁，避免检查请求占住发布事务 -->
+  <select id="selectScopeTaskIds" resultType="string">
+    SELECT t.id
+    FROM task t
+    INNER JOIN version_task vt ON vt.workspace_id = t.workspace_id AND vt.task_id = t.id
+    INNER JOIN project_version pv ON pv.workspace_id = vt.workspace_id AND pv.id = vt.version_id
+    WHERE vt.workspace_id = #{workspaceId} AND vt.version_id = #{versionId}
+      AND t.req_id = pv.req_id AND t.deleted_at IS NULL
+    ORDER BY t.id
+  </select>
+  <select id="selectDemandIdsByVersion" resultType="string">
+    SELECT id FROM demand
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND version_id = #{versionId}
+  </select>
   <select id="selectScopeForVersions" resultType="Task" useCache="false" flushCache="true">
     SELECT DISTINCT t.*, t.is_blocked AS blocked,
       (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
@@ -183,6 +197,16 @@
          INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id
          INNER JOIN requirement r2 ON r2.workspace_id = v2.workspace_id AND r2.id = v2.req_id
         WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionNames,
+      (SELECT GROUP_CONCAT(v2.id ORDER BY r2.name, v2.name, v2.id SEPARATOR ',')
+         FROM version_release_plan_version x2
+         INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id
+         INNER JOIN requirement r2 ON r2.workspace_id = v2.workspace_id AND r2.id = v2.req_id
+        WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionIds,
+      (SELECT GROUP_CONCAT(v2.req_id ORDER BY r2.name, v2.name, v2.id SEPARATOR ',')
+         FROM version_release_plan_version x2
+         INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id
+         INNER JOIN requirement r2 ON r2.workspace_id = v2.workspace_id AND r2.id = v2.req_id
+        WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionReqIds,
       (SELECT GROUP_CONCAT(DISTINCT r2.name ORDER BY r2.name SEPARATOR ' / ')
          FROM version_release_plan_version x2
          INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id

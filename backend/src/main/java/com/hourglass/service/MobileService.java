@@ -369,8 +369,8 @@ public class MobileService {
         int done = 0;
         for (Task task : tasks) {
             boolean completedInRange = task.getCompletedAt() != null
-                    && !task.getCompletedAt().isBefore(from)
-                    && !task.getCompletedAt().isAfter(to);
+                    && !task.getCompletedAt().toLocalDate().isBefore(from)
+                    && !task.getCompletedAt().toLocalDate().isAfter(to);
             boolean dueInRange = task.getDueDate() != null
                     && !task.getDueDate().isBefore(from)
                     && !task.getDueDate().isAfter(to);

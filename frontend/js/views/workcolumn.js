@@ -11,7 +11,7 @@ import { ownerOptions } from "../core/task-drawer.js";
 import { isMobile } from "../core/layout.js";
 import { listDensitySegHTML } from "../core/list-density.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { COLUMNS, avatarHTML, colName, dayDiff, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, typeBadgeHTML, typeName } from "../lib/format.js";
+import { COLUMNS, assocLinkHTML, avatarHTML, colName, dayDiff, dayKey, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 
 var PAGE_SIZE = 100;
 var DONE_COL = "done";
@@ -801,7 +801,7 @@ function groupedRows(rows, mode){
 
 function laneStats(d, rows){
   if(d.done){
-    var late = rows.filter(function(t){ return t.completedAt && t.dueDate && t.completedAt > t.dueDate; }).length;
+    var late = rows.filter(function(t){ return t.completedAt && t.dueDate && dayKey(t.completedAt) > dayKey(t.dueDate); }).length;
     return late
       ? '<span class="tag tag-warning">' + late + ' 项逾期完成</span>'
       : '<span class="tag tag-success">按截止完成</span>';
@@ -833,7 +833,7 @@ function cardHTML(t, done){
   var module = catName(t);
   var tags = typeBadgeHTML(t.itemType);
   if(t.blocked) tags += '<span class="tag tag-warning" title="' + esc(t.blockedReason || "被阻塞") + '">被阻塞</span>';
-  if(done && t.completedAt && t.dueDate && t.completedAt > t.dueDate) tags += '<span class="tag tag-warning">逾期完成</span>';
+  if(done && t.completedAt && t.dueDate && dayKey(t.completedAt) > dayKey(t.dueDate)) tags += '<span class="tag tag-warning">逾期完成</span>';
   if(!done && s.kind === "over") tags += '<span class="tag tag-danger">' + esc(dueText(t)) + '</span>';
   if(t.tags && t.tags.length) tags += tagChip(t.tags[0]);
   var foot = done
@@ -846,7 +846,7 @@ function cardHTML(t, done){
   return '<article class="card wc-card" data-wc-task="' + esc(t.id) + '" tabindex="0" role="listitem" aria-label="' + esc(t.title) + '">' +
     '<div class="card-head"><span class="pri-mark">' + priTagHTML(t.priority, null, false) + '</span>' +
       '<h3 class="card-title">' + esc(t.title) + '</h3></div>' +
-    '<div class="card-meta"><span>' + esc(project) + (module ? " · " + esc(module) : "") + '</span>' +
+    '<div class="card-meta"><span>' + assocLinkHTML("project", t.reqId, project) + (module ? " · " + esc(module) : "") + '</span>' +
       '<span class="wc-who" title="负责人：' + esc(t.owner || "未分配") + '">' + avatarHTML(t.owner || "未分配") +
       '<span>' + esc(t.owner || "未分配") + '</span></span></div>' +
     '<div class="card-tags">' + tags + '</div>' +
@@ -904,12 +904,15 @@ function wcRowHTML(t, done, mode, cols){
     }).join("") +
     '</div>';
 }
-function wcSubtitle(t, mode){
+function wcSubHTML(t, mode){
   var parts = [];
-  if(mode !== "project") parts.push(t.reqName || reqNameById(t.reqId) || "未归类项目");
+  if(mode !== "project"){
+    var pn = t.reqName || reqNameById(t.reqId) || "";
+    if(pn) parts.push(assocLinkHTML("project", t.reqId, pn));
+  }
   if(mode !== "category"){
     var module = catName(t);
-    if(module) parts.push(module);
+    if(module) parts.push(esc(module));
   }
   return parts.join(" · ");
 }
@@ -917,9 +920,9 @@ function wcCell(t, key, done, mode){
   /* 无值就留白，不用「—」占位 */
   var none = "";
   if(key === "title"){
-    var sub = wcSubtitle(t, mode);
+    var sub = wcSubHTML(t, mode);
     return '<span class="wcl-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
-      (sub ? '<span class="wcl-sub" title="' + esc(sub) + '">' + esc(sub) + '</span>' : '');
+      (sub ? '<span class="wcl-sub">' + sub + '</span>' : '');
   }
   if(key === "type") return typeBadgeHTML(t.itemType) || '<span class="mini-tag mute">' + esc(typeName(t.itemType)) + '</span>';
   if(key === "priority") return priTagHTML(t.priority || "P2");
@@ -940,7 +943,7 @@ function wcCell(t, key, done, mode){
   if(key === "risk"){
     if(t.blocked) return '<span class="tag tag-warning" title="' + esc(t.blockedReason || "被阻塞") + '">被阻塞</span>';
     /* 未完成的逾期已在「截止」列标红，风险列不再重复一次 */
-    if(done && t.completedAt && t.dueDate && t.completedAt > t.dueDate) return '<span class="tag tag-warning">逾期完成</span>';
+    if(done && t.completedAt && t.dueDate && dayKey(t.completedAt) > dayKey(t.dueDate)) return '<span class="tag tag-warning">逾期完成</span>';
     return none;
   }
   if(key === "tag") return t.tags && t.tags.length ? tagChip(t.tags[0]) : none;
@@ -1306,6 +1309,8 @@ if(bodyEl){
       return;
     }
     if(e.key !== "Enter" && e.key !== " ") return;
+    /* 行内跳转按钮靠原生回车/空格激活，不能再被行级「开抽屉」截胡 */
+    if(e.target.closest("button,a,input,select,textarea")) return;
     var card = e.target.closest("[data-wc-task]");
     if(card){ e.preventDefault(); openTaskById(card.dataset.wcTask); }
   });

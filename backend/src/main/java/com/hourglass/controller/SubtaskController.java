@@ -2,6 +2,7 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.SubtaskReorderRequest;
 import com.hourglass.dto.SubtaskRequest;
 import com.hourglass.entity.Subtask;
 import com.hourglass.entity.Workspace;
@@ -48,6 +49,14 @@ public class SubtaskController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(subtaskService.create(userId, ws.getId(), taskId, req));
+    }
+
+    @PostMapping("/api/tasks/{taskId}/subtasks/reorder")
+    public ApiResult<List<Subtask>> reorder(@PathVariable String taskId, @RequestBody SubtaskReorderRequest req,
+                                            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(subtaskService.reorder(userId, ws.getId(), taskId, req));
     }
 
     @PutMapping("/api/subtasks/{id}")

@@ -257,6 +257,8 @@ public class DeliveryNoteResponse {
         private Double coveragePct;
         private Integer defectCount;
         private Boolean missing;
+        /** 团队共享用例分组的结果分布；个人 / 指定成员分组不进证据链 */
+        private List<java.util.Map<String, Object>> caseSets = new ArrayList<java.util.Map<String, Object>>();
     }
 
     @Data
@@ -293,7 +295,7 @@ public class DeliveryNoteResponse {
         private String regressionName;
         private String environment;
         private String targetVersionName;
-        private LocalDate completedAt;
+        private LocalDateTime completedAt;
         /** 阻塞验收：未关闭且严重度为 blocker/critical */
         private Boolean blocksAcceptance;
         private String note;

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.DocCategoryMapper">
+
+  <select id="selectByScope" resultType="com.hourglass.entity.DocCategory">
+    SELECT * FROM doc_category
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    ORDER BY sort_order, name, id
+  </select>
+
+  <select id="selectByWorkspace" resultType="com.hourglass.entity.DocCategory">
+    SELECT * FROM doc_category
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY req_id, sort_order, name, id
+  </select>
+
+  <select id="selectById" resultType="com.hourglass.entity.DocCategory">
+    SELECT * FROM doc_category WHERE id = #{id}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO doc_category (id, workspace_id, req_id, parent_id, name, sort_order)
+    VALUES (#{id}, #{workspaceId}, COALESCE(#{reqId}, ''), COALESCE(#{parentId}, ''), #{name}, COALESCE(#{sortOrder}, 0))
+  </insert>
+
+  <update id="update">
+    UPDATE doc_category
+    SET parent_id = COALESCE(#{parentId}, ''),
+        name = #{name},
+        sort_order = COALESCE(#{sortOrder}, 0)
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <delete id="delete">
+    DELETE FROM doc_category WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="countChildren" resultType="int">
+    SELECT COUNT(*) FROM doc_category
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND parent_id = #{parentId}
+  </select>
+
+  <select id="countDocs" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc
+    WHERE workspace_id = #{workspaceId} AND category_id = #{categoryId}
+  </select>
+
+  <delete id="deleteByReq">
+    DELETE FROM doc_category WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM doc_category WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

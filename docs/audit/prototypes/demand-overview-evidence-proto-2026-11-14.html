@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN" data-layout="desktop">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>需求概览 · 验收标准与依据材料可见性原型（2026-11-14）</title>
+<!-- 复用真实前端样式，保证与已认可的三层卡片语言逐像素一致 -->
+<link rel="stylesheet" href="../../../frontend/css/tokens.css" />
+<link rel="stylesheet" href="../../../frontend/css/base.css" />
+<link rel="stylesheet" href="../../../frontend/css/layout.css" />
+<link rel="stylesheet" href="../../../frontend/css/components.css" />
+<link rel="stylesheet" href="../../../frontend/css/views.css" />
+<link rel="stylesheet" href="../../../frontend/css/workcolumn.css" />
+<link rel="stylesheet" href="../../../frontend/css/gantt.css" />
+<link rel="stylesheet" href="../../../frontend/css/manager.css" />
+<link rel="stylesheet" href="../../../frontend/css/smart-table.css" />
+<link rel="stylesheet" href="../../../frontend/css/auth.css" />
+<link rel="stylesheet" href="../../../frontend/css/mobile.css" />
+<link rel="stylesheet" href="../../../frontend/css/assistant.css" />
+<link rel="stylesheet" href="../../../frontend/css/delivery.css" />
+<style>
+/* ===== 原型舞台（仅原型用，不属于产品代码） ===== */
+html,body{height:100%;}
+body{margin:0;overflow:hidden;background:var(--bg);}
+.proto-board{position:fixed;inset:0;z-index:0;display:flex;background:var(--bg);}
+.pb-side{width:236px;flex:0 0 auto;background:var(--surface);border-right:1px solid var(--border);padding:14px 12px;}
+.pb-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;padding:2px 6px 14px;}
+.pb-logo .mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(150deg,var(--primary),var(--plum));color:#fff;display:grid;place-items:center;font-size:11px;}
+.pb-nav{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--text-2);}
+.pb-nav .grp{font-size:10.5px;color:var(--text-3);padding:12px 6px 4px;}
+.pb-nav .it{padding:7px 8px;border-radius:7px;}
+.pb-nav .it.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.pb-main{flex:1;min-width:0;padding:16px 24px;}
+.pb-title{font-size:16px;font-weight:650;}
+.pb-sub{font-size:11.5px;color:var(--text-3);margin-top:2px;}
+.pb-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;}
+.pb-col{background:var(--surface-sunken);border-radius:10px;padding:10px;min-height:420px;}
+.pb-col h4{font-size:12px;color:var(--text-2);margin:0 0 8px;font-weight:650;}
+.pb-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;margin-bottom:8px;}
+.pb-card .t{font-size:12px;font-weight:600;color:var(--text-2);line-height:1.45;}
+.pb-card .m{font-size:10.5px;color:var(--text-3);margin-top:6px;}
+.proto-scrim{position:fixed;inset:0;z-index:100;background:rgba(16,24,40,.34);}
+/* 抽屉层抬到 scrim 之上 */
+.modal-layer.demand-detail{z-index:200;}
+
+/* ===== 原型控制条 / 标注（截图时 ?shot=1 隐藏） ===== */
+.proto-bar{position:fixed;left:16px;top:14px;z-index:400;width:372px;background:rgba(255,255,255,.97);border:1px solid var(--border);border-radius:12px;padding:8px 9px;box-shadow:var(--shadow-lg);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.proto-bar .name{width:100%;font-size:12px;font-weight:650;}
+.proto-bar .name span{font-weight:400;color:var(--text-3);margin-left:5px;}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);}
+.seg button{height:26px;padding:0 9px;border:0;border-right:1px solid var(--border);background:var(--surface);color:var(--text-3);font-size:11.5px;cursor:pointer;}
+.seg button:last-child{border-right:0;}
+.seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.pbtn{height:26px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-2);font-size:11.5px;cursor:pointer;}
+.pbtn.on{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);font-weight:600;}
+body.shot .proto-bar,body.shot .annot-box{display:none;}
+.annot-box{position:fixed;left:16px;top:104px;z-index:390;width:352px;max-height:calc(100vh - 128px);overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow-lg);display:none;}
+body.annot .annot-box{display:block;}
+.annot-box h3{font-size:13px;font-weight:700;margin:0 0 2px;}
+.annot-box .sub{font-size:11.5px;color:var(--text-3);line-height:1.6;margin-bottom:9px;}
+.annot-box ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;}
+.annot-box li{display:flex;gap:8px;font-size:11.5px;line-height:1.6;color:var(--text-2);}
+.annot-box li b{color:var(--text);font-weight:600;}
+.annot-box .n{flex:none;width:17px;height:17px;border-radius:50%;background:var(--warning);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;margin-top:1px;}
+.annot-point{display:none;position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:var(--warning);color:#fff;font-size:10.5px;font-weight:700;align-items:center;justify-content:center;z-index:8;box-shadow:0 0 0 2px var(--surface);font-style:normal;}
+body.annot .annot-point{display:flex;}
+
+/* ===== 方案A：属性条追加「文档 / 附件」跳转 chip ===== */
+.demand-meta-card [data-meta="docs"] .rf-k{background:var(--info-soft);color:var(--info-fg);}
+.demand-meta-card [data-meta="atts"] .rf-k{background:var(--surface-sunken);color:var(--text-2);}
+.rf-meta .rf-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 5px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-2);font-size:10px;font-weight:700;margin-left:2px;}
+.rf-meta.rf-jump{cursor:pointer;}
+
+/* ===== 方案B：验收标准卡下挂「依据材料」紧凑条 ===== */
+.dem-src-strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:11px;padding-top:10px;border-top:1px dashed var(--border);}
+.dem-src-strip .lbl{flex:0 0 auto;font-size:11px;font-weight:650;color:var(--text-3);display:inline-flex;align-items:center;gap:4px;}
+.dem-src-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:11.5px;color:var(--text-2);cursor:pointer;max-width:230px;min-width:0;}
+.dem-src-chip:hover{border-color:var(--border-strong);background:var(--surface-hover);color:var(--text);}
+.dem-src-chip .ico{flex:0 0 auto;display:inline-flex;color:var(--text-3);}
+.dem-src-chip .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dem-src-chip .ext{flex:0 0 auto;font-size:9px;font-weight:700;letter-spacing:.02em;color:var(--text-3);background:var(--surface-sunken);border-radius:4px;padding:1px 4px;}
+.dem-src-chip.doc .ext{background:var(--info-soft);color:var(--info-fg);}
+.dem-src-more{margin-left:auto;}
+/* 描述折叠：保证验收标准留在首屏 */
+.read-desc.clamped{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.desc-expand{margin-top:4px;}
+[data-layout="mobile"] .dem-src-chip{max-width:100%;}
+[data-layout="mobile"] .dem-src-more{margin-left:0;width:100%;}
+/* 移动头部对齐真实应用：隐藏编号、按钮收为图标，保证标题可见 */
+[data-layout="mobile"] .drawer-no{display:none;}
+[data-layout="mobile"] .head-tools .bt-l{display:none;}
+[data-layout="mobile"] .head-tools .btn{padding:0 8px;}
+</style>
+</head>
+<body>
+<!-- 背景：被抽屉压住的需求池看板（示意） -->
+<div class="proto-board" aria-hidden="true">
+  <div class="pb-side">
+    <div class="pb-logo"><span class="mark">漏</span>沙漏</div>
+    <div class="pb-nav">
+      <div class="grp">我的</div><div class="it">我的工作</div><div class="it">周回顾</div>
+      <div class="grp">规划</div><div class="it on">需求池</div><div class="it">项目</div><div class="it">版本</div>
+      <div class="grp">交付</div><div class="it">工作项</div><div class="it">文档</div><div class="it">测试</div><div class="it">分支</div>
+    </div>
+  </div>
+  <div class="pb-main">
+    <div class="pb-title">需求池</div>
+    <div class="pb-sub">支付业务部 · 需求池 · 四态看板与主状态工作页</div>
+    <div class="pb-cols">
+      <div class="pb-col"><h4>待评审</h4><div class="pb-card"><div class="t">支付超时自动关单</div><div class="m">期望 11-23 · WSJF 3.4</div></div><div class="pb-card"><div class="t">对账差异自动核销</div><div class="m">期望 11-30</div></div></div>
+      <div class="pb-col"><h4>已通过</h4><div class="pb-card"><div class="t">退款原路返回优化</div><div class="m">期望 12-02</div></div></div>
+      <div class="pb-col"><h4>已排期</h4><div class="pb-card"><div class="t">银联扫码支付接入</div><div class="m">v2.4 · 推进中</div></div></div>
+      <div class="pb-col"><h4>已关闭</h4><div class="pb-card"><div class="t">旧版账单导出</div><div class="m">评审不通过</div></div></div>
+    </div>
+  </div>
+</div>
+<div class="proto-scrim" aria-hidden="true"></div>
+
+<!-- 需求详情抽屉：概览页 -->
+<div class="modal-layer demand-detail open" id="layer">
+  <div class="sheet demand-sheet">
+    <div class="drawer-head demand-head">
+      <span class="head-icon t-demand" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h12M4 10h12M4 15.5h7"/></svg>
+      </span>
+      <div class="head-txt">
+        <div class="head-title-line">
+          <h2 id="demandDetailTitle" class="demand-title-edit">支付超时自动关单</h2>
+          <button class="ds-status" type="button"><i style="background:#F79009"></i><span>待评审</span>
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
+          </button>
+          <button class="drawer-no" type="button">REQ-2026-0142</button>
+        </div>
+        <div class="head-sub">支付业务部 · 需求池 · 期望交付 2026-11-23 · 提交于 10-05 10:25</div>
+      </div>
+      <div class="head-tools">
+        <button class="btn sm" type="button"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l.8-3.2L13.6 4a1.6 1.6 0 0 1 2.3 0l.1.1a1.6 1.6 0 0 1 0 2.3L7.2 15.2Z"/></svg><span class="bt-l"> 编辑</span></button>
+        <button class="btn sm" type="button"><span aria-hidden="true">⋯</span><span class="bt-l"> 更多</span></button>
+        <button class="icon-btn sm" type="button" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
+      </div>
+    </div>
+
+    <div class="drawer-tabs demand-tabs" role="tablist">
+      <button class="drawer-tab" type="button" role="tab" aria-selected="true">概览</button>
+      <button class="drawer-tab" type="button" role="tab" aria-selected="false">交付 <span class="tab-cnt">0/1</span></button>
+      <button class="drawer-tab" type="button" role="tab" aria-selected="false">关联</button>
+      <button class="drawer-tab" type="button" role="tab" aria-selected="false">记录 <span class="tab-cnt">7</span></button>
+    </div>
+
+    <div class="drawer-body demand-body">
+      <div class="drawer-pane" data-dem-pane="overview">
+        <!-- 三层事实卡 -->
+        <div class="read-facts wi-facts demand-facts" id="demandFacts" aria-label="需求概览">
+          <div class="wi-row wi-row-main">
+            <div class="rf wi-card rf-edit"><span class="rf-k">优先级</span>
+              <b class="rf-v rf-v-lg"><span class="rf-dot" style="background:#F79009"></span>P2 · 中</b></div>
+            <div class="rf wi-card"><span class="rf-k">目标版本</span>
+              <b class="rf-v rf-v-lg">待规划</b><span class="rf-sub">尚未进入版本计划</span></div>
+            <div class="rf wi-card rf-date rf-edit"><span class="rf-k">期望交付</span>
+              <b class="rf-v rf-v-lg">2026-11-23</b><span class="rf-sub">10 天后交付</span></div>
+          </div>
+          <div class="wi-card wi-delivery demand-band">
+            <div class="rf wi-delivery-cell dem-band-cell"><span class="rf-k">关联工作项</span>
+              <span class="rf-sub">1 个未完成</span>
+              <div class="rf-v dem-band-figure"><b class="rf-stat-num">0</b><span class="dem-band-unit">/ 1 完成</span>
+                <span class="rf-prog dem-band-bar"><i style="width:0%"></i></span></div></div>
+            <div class="rf wi-delivery-cell dem-band-cell"><span class="rf-k">测试用例</span>
+              <span class="rf-sub">尚未关联用例</span>
+              <div class="rf-v dem-band-figure"><b class="rf-stat-num">0</b><span class="dem-band-unit">/ 0 通过</span>
+                <span class="rf-prog dem-band-bar"><i style="width:0%"></i></span></div></div>
+            <div class="rf wi-delivery-cell dem-band-cell"><span class="rf-k">生产发布</span>
+              <span class="rf-sub">以发布记录为准</span>
+              <div class="rf-v dem-band-figure"><span class="dem-band-state"><i></i>未发布</span></div></div>
+          </div>
+          <div class="wi-card wi-meta-card demand-meta-card" id="metaCard">
+            <div class="rf rf-meta" data-meta="type"><span class="rf-k"><span class="rf-meta-ico"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg></span>需求类型</span><b class="rf-v">新功能</b></div>
+            <div class="rf rf-meta rf-edit" data-meta="module"><span class="rf-k"><span class="rf-meta-ico"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.2" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="3.2" y="11" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="11" width="5.8" height="5.8" rx="1.3"/></svg></span>模块</span><b class="rf-v">对账</b></div>
+            <div class="rf rf-meta rf-edit" data-meta="source"><span class="rf-k"><span class="rf-meta-ico"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 11.2 5 4.6h10l1.6 6.6v4.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M3.6 11.4h3.6l.9 1.7h3.8l.9-1.7h3.6"/></svg></span>来源</span><b class="rf-v">线上问题复盘</b></div>
+            <span id="metaExtra" style="display:contents"></span>
+          </div>
+        </div>
+
+        <p class="foot-note">需求调期、撤排与关闭不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>
+
+        <section class="read-card">
+          <div class="read-card-head"><h3>需求描述</h3><span class="foot-note">点击正文修改</span></div>
+          <div class="read-desc demand-copy is-editable" id="descView">支付网关 当前 对账 模块在使用中反馈： 支付超时自动关单 影响日常操作效率。期望在不改变现有入口的前提下补齐能力，并兼容历史数据与既有权限模型。超时阈值需可按渠道配置，关单前须保留可追溯的审计记录，且不影响已发起的对账批次。</div>
+          <button class="link-btn desc-expand" id="descExpand" type="button" hidden>展开全文</button>
+        </section>
+
+        <section class="read-card" id="acceptCard" style="position:relative">
+          <div class="read-card-head"><h3>验收标准</h3><span class="foot-note">完成的前提 · 点击修改</span></div>
+          <div class="read-desc demand-copy is-editable">1. 支付超时自动关单 主流程可用，异常分支有明确提示；
+2. 关键操作有审计记录，权限符合空间与项目可见范围；
+3. 对账 模块回归通过，线上灰度 24 小时无 P0/P1 故障。</div>
+          <div id="srcStripSlot"></div>
+          <div class="wsjf-break"><span>WSJF</span><span>业务 5</span><span>紧迫 7</span><span>风险 5</span><span>工作量 5</span><b>WSJF 3.4</b><span class="muted">四项都填才计分</span></div>
+        </section>
+
+        <section class="read-card">
+          <div class="read-card-head"><h3>交付进度</h3><span class="read-cnt">0 / 1 完成</span>
+            <button class="btn sm soft" type="button">＋ 拆分为工作项</button>
+            <button class="link-btn" type="button">查看交付证据</button></div>
+          <ul class="read-activity demand-overview-tasks">
+            <li><span class="ra-time">进行中</span><span class="ra-txt">银联二维码扫码支付 <span class="ra-owner">赵磊</span></span></li>
+          </ul>
+        </section>
+
+        <section class="read-card">
+          <div class="read-card-head"><h3>最近记录</h3><button class="link-btn" type="button">查看全部</button></div>
+          <ul class="read-activity dem-logs">
+            <li><span class="ra-time">10-08 10:40</span><span class="ra-txt"><b>create</b> 赵磊 · 所属项目：未设置 → 统一支付网关；优先级：未设置 → P2；状态：未设置 → 待评审</span></li>
+            <li><span class="ra-time">11-13 21:13</span><span class="ra-txt"><b>update</b> 平台管理员 · 补充验收标准与 WSJF 评分</span></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 原型控制条 -->
+<div class="proto-bar">
+  <div class="name">需求概览 · 依据材料可见性<span>2026-11-14 原型</span></div>
+  <div class="seg" id="segVariant">
+    <button data-v="current" class="on">当前</button>
+    <button data-v="a">方案A 属性条入口</button>
+    <button data-v="b">方案B 验收卡依据条</button>
+  </div>
+  <div class="seg" id="segLayout">
+    <button data-l="desktop" class="on">1440</button>
+    <button data-l="mobile">390</button>
+  </div>
+  <button class="pbtn" id="btnAnnot">标注</button>
+</div>
+
+<div class="annot-box">
+  <h3>设计说明</h3>
+  <div class="sub">验收标准保留在概览（完成的定义，证据链锚点）。本原型只解决「附件/文档可发现性」与「验收标准首屏可见」，不挪页签。</div>
+  <ol>
+    <li><span class="n">1</span><span><b>方案A</b>：属性条追加「文档 N / 附件 N」跳转 chip，点击进关联页。零新增高度，与工作项属性条的「附件」对齐。</span></li>
+    <li><span class="n">2</span><span><b>方案B</b>：验收标准卡下挂「依据材料」紧凑条，直接列 PRD/关键附件，接通「描述→验收→原始规格」阅读路径；验收标准空时也不断头。</span></li>
+    <li><span class="n">3</span><span><b>方案B</b> 同时把描述折叠到 3 行（可展开），保证验收标准留在首屏，不被长描述挤下折叠线。</span></li>
+    <li><span class="n">4</span><span>完整附件/文档管理仍在「关联」页签，概览只做入口与摘要，不重复造管理器。</span></li>
+  </ol>
+</div>
+
+<script>
+(function(){
+  var qs = new URLSearchParams(location.search);
+  var body = document.body;
+  if(qs.get("shot") === "1") body.classList.add("shot");
+
+  var metaExtra = document.getElementById("metaExtra");
+  var srcSlot = document.getElementById("srcStripSlot");
+  var descView = document.getElementById("descView");
+  var descExpand = document.getElementById("descExpand");
+  var acceptCard = document.getElementById("acceptCard");
+
+  var ICO_DOC = '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h6l4 4v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-12a1 1 0 0 1 1-1Z"/><path d="M11 3.5v4h4"/></svg>';
+  var ICO_ATT = '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 9.5l-5 5a3 3 0 0 1-4.2-4.2l6-6a2 2 0 0 1 2.8 2.8l-6 6"/></svg>';
+
+  function metaChips(){
+    return '<div class="rf rf-meta rf-jump" data-meta="docs" role="button" tabindex="0" title="查看关联文档">'
+      + '<span class="rf-k"><span class="rf-meta-ico">' + ICO_DOC + '</span>文档</span>'
+      + '<b class="rf-v">2 篇</b></div>'
+      + '<div class="rf rf-meta rf-jump" data-meta="atts" role="button" tabindex="0" title="查看附件">'
+      + '<span class="rf-k"><span class="rf-meta-ico">' + ICO_ATT + '</span>附件</span>'
+      + '<b class="rf-v">3 个</b></div>';
+  }
+  function srcStrip(){
+    return '<div class="dem-src-strip" style="position:relative">'
+      + '<span class="lbl">' + ICO_DOC + '依据材料</span>'
+      + '<button class="dem-src-chip doc" type="button"><span class="ico">' + ICO_DOC + '</span><span class="nm">支付超时关单 PRD</span><span class="ext">DOCX</span></button>'
+      + '<button class="dem-src-chip doc" type="button"><span class="ico">' + ICO_DOC + '</span><span class="nm">对账模块交互稿</span><span class="ext">PDF</span></button>'
+      + '<button class="dem-src-chip" type="button"><span class="ico">' + ICO_ATT + '</span><span class="nm">超时关单-时序图</span><span class="ext">PNG</span></button>'
+      + '<button class="link-btn dem-src-more" type="button">查看全部 5 →</button>'
+      + '<i class="annot-point">2</i>'
+      + '</div>';
+  }
+
+  function setVariant(v){
+    document.querySelectorAll("#segVariant button").forEach(function(b){ b.classList.toggle("on", b.dataset.v === v); });
+    metaExtra.innerHTML = (v === "a") ? metaChips() : "";
+    srcSlot.innerHTML = (v === "b") ? srcStrip() : "";
+    var clamp = (v === "b");
+    descView.classList.toggle("clamped", clamp);
+    descExpand.hidden = !clamp;
+    /* 标注点 */
+    acceptCard.querySelectorAll(".annot-point").forEach(function(n){ n.remove(); });
+    var mc = document.getElementById("metaCard");
+    mc.querySelectorAll(".annot-point").forEach(function(n){ n.remove(); });
+    if(v === "a"){ var p = document.createElement("i"); p.className = "annot-point"; p.textContent = "1"; mc.style.position = "relative"; mc.appendChild(p); }
+    if(v === "b"){ var p2 = document.createElement("i"); p2.className = "annot-point"; p2.textContent = "3"; p2.style.top = "-8px"; p2.style.right = "-8px"; descView.parentElement.style.position = "relative"; descView.parentElement.appendChild(p2); }
+  }
+  function setLayout(l){
+    document.documentElement.setAttribute("data-layout", l);
+    document.querySelectorAll("#segLayout button").forEach(function(b){ b.classList.toggle("on", b.dataset.l === l); });
+  }
+  document.getElementById("segVariant").addEventListener("click", function(e){ var b = e.target.closest("button"); if(b) setVariant(b.dataset.v); });
+  document.getElementById("segLayout").addEventListener("click", function(e){ var b = e.target.closest("button"); if(b) setLayout(b.dataset.l); });
+  document.getElementById("btnAnnot").addEventListener("click", function(){ body.classList.toggle("annot"); this.classList.toggle("on", body.classList.contains("annot")); });
+  descExpand.addEventListener("click", function(){ descView.classList.remove("clamped"); descExpand.hidden = true; });
+
+  setVariant(qs.get("v") || "current");
+  setLayout(qs.get("layout") || "desktop");
+  if(qs.get("annot") === "1"){ body.classList.add("annot"); document.getElementById("btnAnnot").classList.add("on"); }
+})();
+</script>
+</body>
+</html>

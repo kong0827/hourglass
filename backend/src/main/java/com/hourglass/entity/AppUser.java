@@ -40,6 +40,8 @@ public class AppUser {
     private String aiApiKey;
     /** 是否启用个人 AI（关闭时不发任何外部请求） */
     private Boolean aiEnabled;
+    /** AI 来源偏好：NULL/auto=团队优先，personal=只用个人 Key */
+    private String aiPrefer;
     private String lastWorkspaceId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

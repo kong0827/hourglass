@@ -59,13 +59,18 @@ class TestCaseServiceTest {
     private final com.hourglass.mapper.TestCaseTaskMapper caseTasks = mock(com.hourglass.mapper.TestCaseTaskMapper.class);
     private final com.hourglass.mapper.TaskMapper tasks = mock(com.hourglass.mapper.TaskMapper.class);
     private final com.hourglass.mapper.DemandMapper demands = mock(com.hourglass.mapper.DemandMapper.class);
+    private final com.hourglass.mapper.WorkspaceMemberMapper members = mock(com.hourglass.mapper.WorkspaceMemberMapper.class);
+    private final com.hourglass.mapper.TestModuleMapper modules = mock(com.hourglass.mapper.TestModuleMapper.class);
     private final TestCaseService service =
             new TestCaseService(cases, runs, taskCommand, access, reqs,
-                    demands, mock(com.hourglass.mapper.TestModuleMapper.class),
+                    demands, modules,
                     mock(com.hourglass.mapper.AttachmentMapper.class), attachments,
                     mock(com.hourglass.mapper.TestPlanMapper.class),
                     planCases, auditService, mock(NumberSeqService.class),
-                    caseTasks, tasks);
+                    caseTasks, tasks, members,
+                    new TestModuleService(modules, cases, access, auditService,
+                            mock(com.hourglass.mapper.CaseSetMapper.class)),
+                    mock(com.hourglass.mapper.CaseSetMapper.class));
 
     @BeforeEach
     void setUp() {
@@ -318,6 +323,52 @@ class TestCaseServiceTest {
         verify(cases).updateLatest(WS, "C1", "failed", "密码框报错", "我", USER);
     }
 
+    @Test
+    void createRecordsCreatorDistinctFromExecutor() {
+        when(cases.selectById(anyString())).thenReturn(existing("C1", null));
+        service.create(USER, WS, saveRequest("登录用例"));
+        ArgumentCaptor<TestCase> captor = ArgumentCaptor.forClass(TestCase.class);
+        verify(cases).insert(captor.capture());
+        assertEquals("我", captor.getValue().getCreatedBy());
+        assertEquals(USER, captor.getValue().getCreatedByUserId());
+    }
+
+    @Test
+    void runRecordsEnvironmentAndProxyExecutor() {
+        when(cases.selectById("C1")).thenReturn(existing("C1", null));
+        com.hourglass.entity.WorkspaceMember m = new com.hourglass.entity.WorkspaceMember();
+        m.setUserId("U2");
+        m.setDisplayName("张三");
+        when(members.selectByWorkspace(WS)).thenReturn(Collections.singletonList(m));
+        CaseRunRequest req = new CaseRunRequest();
+        req.setStatus("failed");
+        req.setEnvironment("  Chrome 120 / Win11  ");
+        req.setExecutedByUserId("U2");
+
+        service.run(USER, WS, "C1", req);
+
+        ArgumentCaptor<TestCaseRun> captor = ArgumentCaptor.forClass(TestCaseRun.class);
+        verify(runs).insert(captor.capture());
+        TestCaseRun run = captor.getValue();
+        assertEquals("Chrome 120 / Win11", run.getEnvironment());
+        assertEquals("张三", run.getExecutedBy());
+        assertEquals("U2", run.getExecutedByUserId());
+        verify(cases).updateLatest(WS, "C1", "failed", null, "张三", "U2");
+    }
+
+    @Test
+    void runRejectsExecutorOutsideWorkspace() {
+        when(cases.selectById("C1")).thenReturn(existing("C1", null));
+        when(members.selectByWorkspace(WS)).thenReturn(Collections.<com.hourglass.entity.WorkspaceMember>emptyList());
+        CaseRunRequest req = new CaseRunRequest();
+        req.setStatus("passed");
+        req.setExecutedByUserId("U9");
+        AppException error = assertThrows(AppException.class, () -> service.run(USER, WS, "C1", req));
+        assertEquals(400, error.getCode());
+        assertTrue(error.getMessage().contains("空间成员"));
+        verify(runs, never()).insert(any(TestCaseRun.class));
+    }
+
     /* ---------- 失败转缺陷 ---------- */
 
     @Test
@@ -415,6 +466,80 @@ class TestCaseServiceTest {
         assertTrue(tReq.getDescription().length() <= 2000);
     }
 
+    @Test
+    void fileDefectCarriesEvidenceAndAppendsNoteByDefault() {
+        TestCase c = existing("C1", "failed");
+        when(cases.selectById("C1")).thenReturn(c);
+        Task task = new Task();
+        task.setId("T1");
+        task.setTitle("登录用例");
+        when(taskCommand.create(eq(USER), eq(WS), any())).thenReturn(task);
+        TestCaseRun latest = new TestCaseRun();
+        latest.setId("R1");
+        latest.setStatus("failed");
+        latest.setExecutedBy("张三");
+        latest.setEnvironment("Chrome 120");
+        latest.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 14, 10, 30));
+        when(runs.selectLatestByCase("C1")).thenReturn(latest);
+        when(attachments.copyRunEvidenceToTask(USER, WS, "R1", "T1")).thenReturn(2);
+
+        CaseDefectRequest req = new CaseDefectRequest();
+        req.setSeverity("critical");
+        req.setNote("  刷新后可复现  ");
+        service.fileDefect(USER, WS, "C1", req);
+
+        ArgumentCaptor<com.hourglass.dto.TaskSaveRequest> captor =
+                ArgumentCaptor.forClass(com.hourglass.dto.TaskSaveRequest.class);
+        verify(taskCommand).create(eq(USER), eq(WS), captor.capture());
+        String desc = captor.getValue().getDescription();
+        assertTrue(desc.contains("执行人：张三"));
+        assertTrue(desc.contains("执行时间：2026-11-14 10:30"));
+        assertTrue(desc.contains("执行环境：Chrome 120"));
+        assertTrue(desc.contains("转缺陷补充：刷新后可复现"));
+        verify(attachments).copyRunEvidenceToTask(USER, WS, "R1", "T1");
+        ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+        verify(auditService).recordCurrent(eq(WS), eq("test_case_defect"), eq("test_case"), eq("C1"),
+                any(), eq(true), detail.capture(), isNull());
+        assertTrue(detail.getValue().contains("携带 2 份失败证据"));
+    }
+
+    @Test
+    void fileDefectSkipsEvidenceWhenCarryDisabled() {
+        when(cases.selectById("C1")).thenReturn(existing("C1", "failed"));
+        Task task = new Task();
+        task.setId("T1");
+        when(taskCommand.create(eq(USER), eq(WS), any())).thenReturn(task);
+        TestCaseRun latest = new TestCaseRun();
+        latest.setId("R1");
+        latest.setStatus("failed");
+        when(runs.selectLatestByCase("C1")).thenReturn(latest);
+
+        CaseDefectRequest req = new CaseDefectRequest();
+        req.setSeverity("minor");
+        req.setCarryEvidence(false);
+        service.fileDefect(USER, WS, "C1", req);
+
+        verify(attachments, never()).copyRunEvidenceToTask(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void byBugTaskFiltersProjectsInvisibleToViewer() {
+        com.hourglass.dto.CaseBugLink visible = new com.hourglass.dto.CaseBugLink();
+        visible.setCaseId("C1");
+        visible.setReqId(REQ);
+        com.hourglass.dto.CaseBugLink hidden = new com.hourglass.dto.CaseBugLink();
+        hidden.setCaseId("C2");
+        hidden.setReqId("R2");
+        when(runs.selectByBugTask(WS, "T1")).thenReturn(Arrays.asList(visible, hidden));
+        when(access.canView(WS, USER, REQ)).thenReturn(true);
+        when(access.canView(WS, USER, "R2")).thenReturn(false);
+
+        List<com.hourglass.dto.CaseBugLink> out = service.byBugTask(WS, USER, "T1");
+
+        assertEquals(1, out.size());
+        assertEquals("C1", out.get(0).getCaseId());
+    }
+
     private static String repeat(String unit, int times) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < times; i++) {
@@ -449,5 +574,59 @@ class TestCaseServiceTest {
         assertEquals(0, service.deleteByReq(WS, REQ));
         verify(runs, never()).deleteByReq(anyString(), anyString());
         verify(cases, never()).deleteByReq(anyString(), anyString());
+    }
+
+    /* ---------- 变更记录 ---------- */
+
+    @Test
+    void updateAuditDetailNamesChangedFields() {
+        TestCase c = existing("C1", null);
+        c.setModule("登录");
+        c.setPriority("P2");
+        c.setPrecondition("旧条件");
+        c.setTestData("旧数据");
+        c.setSteps("[]");
+        when(cases.selectById("C1")).thenReturn(c);
+
+        TestCaseSaveRequest req = saveRequest("登录用例");
+        req.setModule("认证");
+        req.setPriority("P1");
+        req.setPrecondition("新条件");
+        req.setTestData("旧数据");
+        req.setSteps(Collections.singletonList(step("打开登录页", "页面正常显示")));
+        service.update(USER, WS, "C1", req);
+
+        ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+        verify(auditService).recordCurrent(eq(WS), eq("test_case_update"), eq("test_case"), eq("C1"),
+                any(), eq(true), detail.capture(), isNull());
+        String text = detail.getValue();
+        assertTrue(text.contains("模块由「登录」改为「认证」"));
+        assertTrue(text.contains("优先级 P2 → P1"));
+        assertTrue(text.contains("修改前置条件"));
+        assertTrue(text.contains("修改执行步骤"));
+        assertTrue(!text.contains("修改测试数据"), "测试数据未变不应写入差异：" + text);
+    }
+
+    @Test
+    void timelineChecksProjectVisibilityBeforeReadingAudit() {
+        when(cases.selectById("C1")).thenReturn(existing("C1", "passed"));
+        List<com.hourglass.dto.EntityTimelineItem> rows = new ArrayList<>();
+        when(auditService.timeline(WS, "test_case", "C1", 100)).thenReturn(rows);
+
+        assertTrue(service.timeline(WS, USER, "C1").isEmpty());
+        verify(access).assertView(WS, USER, REQ);
+        verify(auditService).timeline(WS, "test_case", "C1", 100);
+    }
+
+    @Test
+    void timelineRejectsCaseOutsideWorkspace() {
+        TestCase other = existing("C1", "passed");
+        other.setWorkspaceId("W2");
+        when(cases.selectById("C1")).thenReturn(other);
+
+        AppException ex = assertThrows(AppException.class, () -> service.timeline(WS, USER, "C1"));
+        assertTrue(ex.getMessage().contains("用例不存在"));
+        verify(access, never()).assertView(anyString(), anyString(), anyString());
+        verify(auditService, never()).timeline(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyInt());
     }
 }

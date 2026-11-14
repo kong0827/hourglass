@@ -423,7 +423,7 @@ class VersionPhaseServiceTest {
         assertEquals("捕获项目", task.getReqName());
         assertEquals(Collections.singletonList("V1"), task.getVersionIds());
         assertEquals(Collections.singletonList("捕获版本"), task.getVersionNames());
-        assertEquals(FIRST_RELEASE.minusDays(2), task.getCompletedAt());
+        assertEquals(FIRST_RELEASE.minusDays(2).atStartOfDay(), task.getCompletedAt());
         assertEquals(record.getPublishedOn(), task.getPublishedAt());
         assertNull(task.getPreLaunchFold());
         assertEquals(1, before.getDemands().size(), "只取已发布条目的关联需求并去重");
@@ -636,7 +636,7 @@ class VersionPhaseServiceTest {
         item.setTargetVersionId("V-target");
         item.setTargetVersionName("捕获需求目标版本");
         item.setBoardColumn(Consts.COL_DONE);
-        item.setCompletedAt(FIRST_RELEASE.minusDays(2));
+        item.setCompletedAt(FIRST_RELEASE.minusDays(2).atStartOfDay());
         item.setDisposition(disposition);
         item.setWorkMinutes(workMinutes);
         item.setEstimateMinutes(estimateMinutes);
@@ -690,7 +690,7 @@ class VersionPhaseServiceTest {
         t.setReqId(REQ);
         t.setTitle(id);
         t.setBoardColumn(Consts.COL_DONE);
-        t.setCompletedAt(completedAt);
+        t.setCompletedAt(completedAt == null ? null : completedAt.atStartOfDay());
         t.setDueDate(dueDate);
         t.setTotalMinutes(totalMinutes);
         t.setEstimateMinutes(estimateMinutes);

@@ -88,6 +88,35 @@ public class ManagerController {
         return ApiResult.ok(managerService.risks(ctx.getWsId(), ctx.getUserId()));
     }
 
+    @GetMapping("/investment")
+    public ApiResult<Map<String, Object>> investment(@RequestParam(required = false) String from,
+                                                     @RequestParam(required = false) String to,
+                                                     @RequestParam(required = false) String reqId,
+                                                     @RequestParam(required = false) String roleTitle,
+                                                     @RequestParam(required = false) String companyName,
+                                                     @RequestParam(required = false) List<String> memberUserIds,
+                                                     @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(managerService.investment(ctx.getWsId(), ctx.getUserId(),
+                from, to, reqId, roleTitle, companyName, memberUserIds));
+    }
+
+    @GetMapping("/investment/tasks")
+    public ApiResult<PageResult<Map<String, Object>>> investmentTasks(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) String reqId,
+            @RequestParam(required = false) String roleTitle,
+            @RequestParam(required = false) String companyName,
+            @RequestParam(required = false) String dimension,
+            @RequestParam(required = false) String key,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) List<String> memberUserIds,
+            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(managerService.investmentTasks(ctx.getWsId(), ctx.getUserId(),
+                from, to, reqId, roleTitle, companyName, dimension, key, offset, limit, memberUserIds));
+    }
+
     @PostMapping("/nudges")
     public ApiResult<Map<String, Object>> nudges(@RequestBody NudgeRequest request,
                                                  @CurrentWorkspace WorkspaceCtx ctx) {

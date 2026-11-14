@@ -12,6 +12,7 @@ import com.hourglass.mapper.TimeLogMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -78,11 +79,17 @@ public class TaskCompletionService {
         }
         r.setOwner(t.getOwner());
         r.setOwnerUserId(t.getOwnerUserId());
+        r.setTestOwnerUserId(t.getTestOwnerUserId());
+        r.setTestOwner(t.getTestOwner());
+        r.setTestRequestedAt(t.getTestRequestedAt());
+        r.setTestStartedAt(t.getTestStartedAt());
+        r.setTestFinishedAt(t.getTestFinishedAt());
         /* 快照存完成当时的模块名：解析不到（异常数据）就留空，展示层显示「—」 */
         r.setCategory(categoryName(t.getWorkspaceId(), t.getCategoryId()));
         r.setPriority(t.getPriority());
         r.setStartDate(t.getStartDate());
-        r.setCompletedAt(t.getCompletedAt() == null ? LocalDate.now() : t.getCompletedAt());
+        r.setCompletedAt(t.getCompletedAt() == null
+                ? LocalDateTime.now().withSecond(0).withNano(0) : t.getCompletedAt());
 
         Integer total = timeLogMapper.sumByTaskId(t.getWorkspaceId(), t.getId());
         r.setTotalMinutes(total == null ? 0 : total);

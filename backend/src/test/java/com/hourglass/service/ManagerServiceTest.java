@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
+import com.hourglass.dto.PageResult;
 import com.hourglass.entity.Category;
 import com.hourglass.entity.ProjectMemberRole;
 import com.hourglass.entity.Requirement;
@@ -116,7 +117,7 @@ class ManagerServiceTest {
         Task ended = openTask("T4", "R1", "accept", 60);
         ended.setProcessingRule("ended");
         Task done = openTask("T5", "R1", Consts.COL_DONE, 60);
-        done.setCompletedAt(TODAY);
+        done.setCompletedAt(TODAY.atStartOfDay());
 
         ManagerService service = service(Arrays.asList(backlog, testing, waiting, ended, done),
                 Collections.singletonList(req), Collections.<TimeAgg>emptyList(),
@@ -242,7 +243,7 @@ class ManagerServiceTest {
         for (int days = 1; days <= 20; days++) {
             Task task = openTask("T" + days, "R1", Consts.COL_DONE, 0);
             task.setStartDate(start);
-            task.setCompletedAt(start.plusDays(days));
+            task.setCompletedAt(start.plusDays(days).atStartOfDay());
             tasks.add(task);
         }
         ManagerService service = service(tasks, Arrays.asList(requirement("R1", "项目一")),
@@ -264,9 +265,9 @@ class ManagerServiceTest {
     @Test
     void burndownSubtractsOnlyActualWorkCompletedByEachDate() {
         Task first = openTask("T1", "R1", Consts.COL_DONE, 300);
-        first.setCompletedAt(TODAY.minusDays(1));
+        first.setCompletedAt(TODAY.minusDays(1).atStartOfDay());
         Task second = openTask("T2", "R1", Consts.COL_DONE, 200);
-        second.setCompletedAt(TODAY);
+        second.setCompletedAt(TODAY.atStartOfDay());
         ManagerService service = service(Arrays.asList(first, second),
                 Arrays.asList(requirement("R1", "项目一")),
                 Arrays.asList(actual("T1", 120), actual("T2", 80)),
@@ -395,12 +396,12 @@ class ManagerServiceTest {
         Task closedBug = openTask("T2", "R1", Consts.COL_DONE, 100);
         closedBug.setItemType("bug");
         closedBug.setCreatedAt(LocalDate.of(2026, 10, 6).atStartOfDay());
-        closedBug.setCompletedAt(TODAY.minusDays(1));
+        closedBug.setCompletedAt(TODAY.minusDays(1).atStartOfDay());
 
         Task oldClosedBug = openTask("T3", "R1", Consts.COL_DONE, 100);
         oldClosedBug.setItemType("bug");
         oldClosedBug.setCreatedAt(LocalDate.of(2026, 10, 21).atStartOfDay());
-        oldClosedBug.setCompletedAt(LocalDate.of(2026, 10, 22));
+        oldClosedBug.setCompletedAt(LocalDate.of(2026, 10, 22).atStartOfDay());
 
         Task story = openTask("T4", "R1", Consts.COL_BACKLOG, 100);
         story.setItemType("story");
@@ -465,7 +466,7 @@ class ManagerServiceTest {
         Task done = openTask("T1", "R1", Consts.COL_DONE, 60);
         done.setCategoryId("G1");
         done.setTotalMinutes(120);
-        done.setCompletedAt(TODAY);
+        done.setCompletedAt(TODAY.atStartOfDay());
         Task doing = openTask("T2", "R1", Consts.COL_DOING, 60);
         doing.setCategoryId("G1");
         doing.setTotalMinutes(30);
@@ -732,7 +733,7 @@ class ManagerServiceTest {
         done.setItemType("bug");
         done.setBoardColumn(Consts.COL_DONE);
         done.setStartDate(TODAY.minusDays(3));
-        done.setCompletedAt(TODAY.minusDays(1));
+        done.setCompletedAt(TODAY.minusDays(1).atStartOfDay());
         Task excluded = ownedTask("T3", "R1", "U2", 900);
         excluded.setItemType("bug");
         ManagerService service = service(Arrays.asList(open, done, excluded), Collections.singletonList(requirement("R1", "一")),
@@ -863,6 +864,277 @@ class ManagerServiceTest {
         assertEquals(0, castMap(service.reports(WORKSPACE, null, VIEWER, "__unset__", null).get("burndown")).get("totalEstimateMinutes"));
     }
 
+    @Test
+    void investmentAttributesActualByLogDateAndEstimateByPlannedStart() {
+        Requirement req = requirement("R1", "项目一");
+        Task current = ownedTask("T1", "R1", "U1", 600);
+        current.setStartDate(LocalDate.of(2026, 10, 2));
+        Task earlier = ownedTask("T2", "R1", "U2", 480);
+        earlier.setStartDate(LocalDate.of(2026, 8, 20));
+        TimeLog unended = timeLog("U1", "T1", LocalDateTime.of(2026, 10, 7, 9, 0), 500);
+        unended.setEndedAt(null);
+
+        ManagerService service = service(Arrays.asList(current, earlier), Collections.singletonList(req),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 5, 9, 0), 120),
+                        timeLog("U2", "T1", LocalDateTime.of(2026, 11, 2, 9, 0), 60),
+                        timeLog("U2", "T2", LocalDateTime.of(2026, 10, 10, 9, 0), 300),
+                        timeLog("U2", "T2", LocalDateTime.of(2026, 9, 10, 9, 0), 999),
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 8, 9, 0), 0),
+                        unended),
+                Arrays.asList(workspaceMember("U1", "Alice", "A", "开发"),
+                        workspaceMember("U2", "Bob", "A", "开发")));
+
+        Map<String, Object> q4 = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null);
+        Map<String, Object> totals = castMap(q4.get("totals"));
+        assertEquals(2, totals.get("users"), "0 分钟与未结束计时不计入人力");
+        assertEquals(1, totals.get("projects"));
+        assertEquals(2, totals.get("tasks"));
+        assertEquals(600, totals.get("estimateMinutes"), "跨期工作项的预估整条落在计划开始日所属周期");
+        assertEquals(480, totals.get("actualMinutes"), "实际按计时开始日归属，9 月计时不进 Q4");
+
+        List<Map<String, Object>> months = castList(q4.get("months"));
+        assertEquals(3, months.size(), "区间内空月份也要返回，前端补空槽");
+        assertEquals("2026-10", months.get(0).get("key"));
+        assertEquals(420, months.get(0).get("actualMinutes"));
+        assertEquals(600, months.get(0).get("estimateMinutes"));
+        assertEquals(60, months.get(1).get("actualMinutes"));
+        assertEquals(0, months.get(2).get("actualMinutes"));
+
+        Map<String, Object> year = service.investment(WORKSPACE, VIEWER,
+                "2026-01-01", "2026-12-31", null, null, null);
+        assertEquals(1080, castMap(year.get("totals")).get("estimateMinutes"));
+        assertEquals(1479, castMap(year.get("totals")).get("actualMinutes"));
+    }
+
+    @Test
+    void investmentDoesNotCountUnassignedEstimateAsHeadcount() {
+        Task owned = ownedTask("T1", "R1", "U1", 120);
+        owned.setStartDate(LocalDate.of(2026, 11, 3));
+        Task unassigned = openTask("T2", "R1", Consts.COL_DOING, 300);
+        unassigned.setStartDate(LocalDate.of(2026, 11, 4));
+        ManagerService service = service(Arrays.asList(owned, unassigned),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(),
+                Collections.singletonList(timeLog("U1", "T1", LocalDateTime.of(2026, 11, 5, 9, 0), 60)),
+                Collections.singletonList(workspaceMember("U1", "Alice", "A", "开发")));
+
+        Map<String, Object> result = service.investment(WORKSPACE, VIEWER,
+                "2026-11-01", "2026-11-30", null, null, null);
+        Map<String, Object> totals = castMap(result.get("totals"));
+        assertEquals(420, totals.get("estimateMinutes"));
+        assertEquals(1, totals.get("users"), "未指派的预估计入工时，但不能算作一个成员");
+        List<Map<String, Object>> members = castList(castMap(result.get("rows")).get("member"));
+        assertEquals(2, members.size());
+        assertEquals(0, member(members, "x:unassigned").get("users"));
+    }
+
+    @Test
+    void investmentSplitsDevelopmentAndTestInsideTestWindow() {
+        Task task = ownedTask("T1", "R1", "U1", 600);
+        task.setStartDate(LocalDate.of(2026, 10, 2));
+        task.setTestStartedAt(LocalDateTime.of(2026, 10, 10, 9, 0));
+        task.setTestFinishedAt(LocalDateTime.of(2026, 10, 12, 18, 0));
+        ManagerService service = service(Collections.singletonList(task),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 9, 9, 0), 60),
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 10, 9, 0), 30),
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 12, 17, 0), 40),
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 13, 9, 0), 50)),
+                Collections.singletonList(workspaceMember("U1", "Alice", "A", "开发")));
+
+        Map<String, Object> data = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null);
+        Map<String, Object> totals = castMap(data.get("totals"));
+        assertEquals(180, totals.get("actualMinutes"));
+        assertEquals(70, totals.get("testMinutes"), "测试窗口首尾日期都算测试");
+        assertEquals(110, totals.get("devMinutes"));
+        Map<String, Object> project = castList(castMap(data.get("rows")).get("project")).get(0);
+        assertEquals(180, project.get("actualMinutes"));
+        assertEquals(110, project.get("devMinutes"));
+        assertEquals(70, project.get("testMinutes"));
+    }
+
+    @Test
+    void investmentFiltersActualByLogActorAndEstimateByOwner() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", "A", "开发");
+        WorkspaceMember bob = workspaceMember("U2", "Bob", "B", "测试");
+        Task first = ownedTask("T1", "R1", "U1", 600);
+        first.setStartDate(LocalDate.of(2026, 10, 2));
+        Task second = ownedTask("T2", "R1", "U2", 300);
+        second.setStartDate(LocalDate.of(2026, 10, 3));
+        when(roleMapper.selectByProject(WORKSPACE, "R1")).thenReturn(Arrays.asList(
+                role("R1", "U1", "开发"), role("R1", "U2", "测试")));
+        ManagerService service = service(Arrays.asList(first, second),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 5, 9, 0), 120),
+                        timeLog("U2", "T1", LocalDateTime.of(2026, 10, 6, 9, 0), 60),
+                        timeLog("U2", "T2", LocalDateTime.of(2026, 10, 7, 9, 0), 40)),
+                Arrays.asList(alice, bob));
+
+        Map<String, Object> filtered = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, "B");
+        Map<String, Object> totals = castMap(filtered.get("totals"));
+        assertEquals(100, totals.get("actualMinutes"), "实际按计时人所在公司筛选，不按任务负责人");
+        assertEquals(300, totals.get("estimateMinutes"), "预估按负责人所在公司筛选");
+        assertEquals(1, totals.get("users"));
+        Map<String, Object> memberRow = castMap(castList(castMap(filtered.get("rows")).get("member")).get(0));
+        assertEquals("u:U2", memberRow.get("key"));
+        assertEquals(100, memberRow.get("actualMinutes"));
+        assertEquals(300, memberRow.get("estimateMinutes"));
+        assertEquals(Arrays.asList("A", "B"),
+                castMap(filtered.get("filterOptions")).get("companyNames"), "候选公司保留未选中的 A");
+
+        Map<String, Object> byRole = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, "测试", null);
+        assertEquals(100, castMap(byRole.get("totals")).get("actualMinutes"));
+        assertEquals(300, castMap(byRole.get("totals")).get("estimateMinutes"));
+    }
+
+    @Test
+    void investmentGroupsRolesByPrimaryButMatchesSecondary() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", "A", "运维");
+        WorkspaceMember bob = workspaceMember("U2", "Bob", "A", "测试");
+        Task task = ownedTask("T1", "R1", "U1", 300);
+        task.setStartDate(LocalDate.of(2026, 10, 2));
+        when(roleMapper.selectByProject(WORKSPACE, "R1")).thenReturn(Collections.singletonList(
+                role("R1", "U1", "后端", "测试负责人")));
+        ManagerService service = service(Collections.singletonList(task),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 5, 9, 0), 100),
+                        timeLog("U2", "T1", LocalDateTime.of(2026, 10, 6, 9, 0), 50)),
+                Arrays.asList(alice, bob));
+
+        Map<String, Object> data = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null);
+        List<Map<String, Object>> roles = castList(castMap(data.get("rows")).get("role"));
+        assertEquals("后端", roles.get(0).get("name"));
+        assertEquals(100, roles.get(0).get("actualMinutes"));
+        assertEquals(300, roles.get(0).get("estimateMinutes"));
+        assertEquals("测试", roles.get(1).get("name"));
+        assertEquals(50, roles.get(1).get("actualMinutes"));
+
+        Map<String, Object> bySecondary = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, "测试负责人", null);
+        assertEquals(100, castMap(bySecondary.get("totals")).get("actualMinutes"), "兼岗筛选能命中，但归组仍按主岗");
+        List<Map<String, Object>> filteredRoles = castList(castMap(bySecondary.get("rows")).get("role"));
+        assertEquals(1, filteredRoles.size());
+        assertEquals("后端", filteredRoles.get(0).get("name"));
+    }
+
+    @Test
+    void investmentDrillUsesSameScopeAndValidatesRange() {
+        Task task = ownedTask("T1", "R1", "U1", 600);
+        task.setStartDate(LocalDate.of(2026, 10, 2));
+        Task other = ownedTask("T2", "R1", "U2", 300);
+        other.setStartDate(LocalDate.of(2026, 10, 3));
+        when(roleMapper.selectByProject(WORKSPACE, "R1")).thenReturn(Arrays.asList(
+                role("R1", "U1", "开发"), role("R1", "U2", "测试")));
+        ManagerService service = service(Arrays.asList(task, other),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 5, 9, 0), 120),
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 6, 9, 0), 60),
+                        timeLog("U2", "T1", LocalDateTime.of(2026, 10, 7, 9, 0), 30)),
+                Arrays.asList(workspaceMember("U1", "Alice", "A", "开发"),
+                        workspaceMember("U2", "Bob", "A", "测试")));
+
+        PageResult<Map<String, Object>> projectDrill = service.investmentTasks(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null, "project", "R1", null, null);
+        assertEquals(2, projectDrill.getTotal(), "项目下钻同时包含本期有计时和有预估的工作项");
+        Map<String, Object> taskRow = null;
+        for (Map<String, Object> row : projectDrill.getItems()) {
+            if ("T1".equals(row.get("id"))) {
+                taskRow = row;
+            }
+        }
+        assertEquals("T1", taskRow.get("id"));
+        assertEquals(210, taskRow.get("totalMinutes"));
+        assertEquals(600, taskRow.get("estimateMinutes"));
+
+        PageResult<Map<String, Object>> memberDrill = service.investmentTasks(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null, "member", "u:U1", 0, 10);
+        assertEquals(1, memberDrill.getTotal());
+        assertEquals(180, memberDrill.getItems().get(0).get("totalMinutes"), "成员下钻只算该成员自己的计时");
+
+        assertEquals(400, assertThrows(AppException.class, () -> service.investment(WORKSPACE, VIEWER,
+                "2026-12-31", "2026-10-01", null, null, null)).getCode());
+        assertEquals(400, assertThrows(AppException.class, () -> service.investment(WORKSPACE, VIEWER,
+                null, "2026-12-31", null, null, null)).getCode());
+        assertEquals(400, assertThrows(AppException.class, () -> service.investment(WORKSPACE, VIEWER,
+                "2024-01-01", "2026-12-31", null, null, null)).getCode());
+        assertEquals(400, assertThrows(AppException.class, () -> service.investmentTasks(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null, "week", "R1", null, null)).getCode());
+        assertEquals(400, assertThrows(AppException.class, () -> service.investmentTasks(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null, "project", " ", null, null)).getCode());
+    }
+
+    @Test
+    void investmentMemberFilterNarrowsToSelectedAccounts() {
+        Task first = ownedTask("T1", "R1", "U1", 600);
+        first.setStartDate(LocalDate.of(2026, 10, 2));
+        Task second = ownedTask("T2", "R1", "U2", 300);
+        second.setStartDate(LocalDate.of(2026, 10, 3));
+        ManagerService service = service(Arrays.asList(first, second),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 5, 9, 0), 120),
+                        timeLog("U2", "T2", LocalDateTime.of(2026, 10, 6, 9, 0), 60)),
+                Arrays.asList(workspaceMember("U1", "Alice", "A", "开发"),
+                        workspaceMember("U2", "Bob", "B", "测试")));
+
+        Map<String, Object> onlyU1 = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null, Collections.singletonList("U1"));
+        Map<String, Object> totals = castMap(onlyU1.get("totals"));
+        assertEquals(120, totals.get("actualMinutes"), "圈人后只保留选中成员的计时");
+        assertEquals(600, totals.get("estimateMinutes"), "预估同样按选中负责人过滤");
+        assertEquals(1, totals.get("users"));
+        List<Map<String, Object>> members = castList(castMap(onlyU1.get("rows")).get("member"));
+        assertEquals(1, members.size());
+        assertEquals("u:U1", members.get(0).get("key"));
+        List<Map<String, Object>> memberOptions = castList(castMap(onlyU1.get("filterOptions")).get("members"));
+        assertEquals(2, memberOptions.size(), "成员候选保留未选中的人，方便继续加选");
+
+        Map<String, Object> all = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null, Collections.<String>emptyList());
+        assertEquals(180, castMap(all.get("totals")).get("actualMinutes"), "空圈选等于全部成员");
+    }
+
+    @Test
+    void investmentMemberBreakdownRanksMembersAndCapsItems() {
+        Task big = ownedTask("T1", "R1", "U1", 600);
+        big.setStartDate(LocalDate.of(2026, 10, 2));
+        Task small = ownedTask("T2", "R1", "U1", 100);
+        small.setStartDate(LocalDate.of(2026, 10, 3));
+        Task other = ownedTask("T3", "R1", "U2", 200);
+        other.setStartDate(LocalDate.of(2026, 10, 4));
+        ManagerService service = service(Arrays.asList(big, small, other),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 5, 9, 0), 300),
+                        timeLog("U1", "T2", LocalDateTime.of(2026, 10, 6, 9, 0), 60),
+                        timeLog("U2", "T3", LocalDateTime.of(2026, 10, 7, 9, 0), 120)),
+                Arrays.asList(workspaceMember("U1", "Alice", "A", "开发"),
+                        workspaceMember("U2", "Bob", "A", "测试")));
+
+        Map<String, Object> data = service.investmentMemberBreakdown(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null, null, 1);
+        assertEquals(480, castMap(data.get("totals")).get("actualMinutes"));
+        List<Map<String, Object>> members = castList(data.get("members"));
+        assertEquals(2, members.size());
+        Map<String, Object> top = members.get(0);
+        assertEquals("u:U1", top.get("key"), "按实际工时降序排列");
+        assertEquals(360, top.get("actualMinutes"));
+        assertEquals(75L, top.get("sharePct"), "占比按实际工时计算");
+        assertEquals(1, castList(top.get("items")).size(), "每人工作项按上限截断");
+        assertEquals(Boolean.TRUE, top.get("itemTruncated"));
+        assertEquals("T1", castList(top.get("items")).get(0).get("id"), "截断时优先保留工时高的工作项");
+    }
+
     private WorkspaceMember workspaceMember(String id, String name, String company, String job) {
         WorkspaceMember member = new WorkspaceMember();
         member.setUserId(id);
@@ -960,6 +1232,7 @@ class ManagerServiceTest {
         log.setUserId(userId);
         log.setTaskId(taskId);
         log.setStartedAt(startedAt);
+        log.setEndedAt(startedAt.plusMinutes(minutes));
         log.setMinutes(minutes);
         return log;
     }

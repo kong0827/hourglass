@@ -11,7 +11,7 @@ import { openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from ".
 import { openTaskDrawer, resetFormBaseline, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { addDays, fmtMD, iso, pad2, parseDate, priColor, rgbaOf, weekdayCN } from "../lib/format.js";
+import { addDays, dayKey, fmtMD, iso, pad2, parseDate, priColor, rgbaOf, weekdayCN } from "../lib/format.js";
 import { cardHTML, loadBoard } from "./board.js";
 import { loadView } from "../core/view-loader.js";
 import { openReqDocAndJump } from "./requirements.js";
@@ -108,7 +108,7 @@ function calFindTask(id){
 function calRangeOf(t){
   if(!t || !t.dueDate) return null;
   var end = t.dueDate;
-  if(t.boardColumn === "done" && t.completedAt && t.completedAt < end) end = t.completedAt;
+  if(t.boardColumn === "done" && t.completedAt && dayKey(t.completedAt) < end) end = dayKey(t.completedAt);
   var begin = (t.startDate && t.startDate <= end) ? t.startDate : end;
   return {begin: begin, end: end};
 }

@@ -1,0 +1,112 @@
+[
+  {
+    "name": "app boots logged-in (no login redirect)",
+    "ok": true,
+    "detail": "{\"href\":\"http://localhost:8082/hourglass/#/mine\",\"hash\":\"#/mine\",\"hasLogin\":false}"
+  },
+  {
+    "name": "workspace context loaded (brand shows 支付业务部)",
+    "ok": true,
+    "detail": "\"支付业务部/工作项/看板视图：按列流转；同组可切到列表、层级、影响链、日历与甘特\""
+  },
+  {
+    "name": "owner fact trigger present",
+    "ok": true,
+    "detail": "\"负责人 平平台管理员 星河科技 · 未设角色\""
+  },
+  {
+    "name": "owner picker opens",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "owner picker groups by company",
+    "ok": true,
+    "detail": "[\"测途质量1 人\",\"星河科技5 人\",\"云帆软件1 人\"]"
+  },
+  {
+    "name": "owner picker shows role text",
+    "ok": true,
+    "detail": "[\"王芳:测试负责人\",\"平台管理员:未设岗位\",\"孙琪:运维负责人\",\"张伟:项目经理\",\"李娜:后端开发\",\"赵磊:产品经理\"]"
+  },
+  {
+    "name": "owner picker has clear (未分配)",
+    "ok": true,
+    "detail": "未分配"
+  },
+  {
+    "name": "owner picker marks current",
+    "ok": true,
+    "detail": "[\"平台管理员\"]"
+  },
+  {
+    "name": "owner picker renders 兼岗 chips",
+    "ok": true,
+    "detail": "兼岗 chips=4"
+  },
+  {
+    "name": "search by company filters results",
+    "ok": true,
+    "detail": "{\"count\":\"负责人匹配 1 人\",\"groups\":[\"测途质量1 人\"],\"optN\":1}"
+  },
+  {
+    "name": "clear-search restores full list",
+    "ok": true,
+    "detail": "restored=7"
+  },
+  {
+    "name": "ArrowDown moves focus to an option",
+    "ok": true,
+    "detail": "pp-clear"
+  },
+  {
+    "name": "owner pick saves correct ownerUserId",
+    "ok": true,
+    "detail": "{\"picked\":\"Umw9zcfa4w31fmsi0\",\"save\":\"/hourglass/api/tasks/Ksxyz0btsl17egy6fspm4?workspace=Smw9zcftmwwnrwuon\",\"ownerId\":\"Umw9zcfa4w31fmsi0\"}"
+  },
+  {
+    "name": "owner card updates after pick",
+    "ok": true,
+    "detail": "\"负责人 王王芳 测途质量 · 测试负责人 / 质量分析\""
+  },
+  {
+    "name": "test reassign picker opens",
+    "ok": true,
+    "detail": "{\"title\":\"测试负责人\",\"count\":\"测试负责人7 位可指派 · 3 家公司\",\"groups\":3,\"clear\":\"待领取（不指定）\"}"
+  },
+  {
+    "name": "test picker clear label 待领取",
+    "ok": true,
+    "detail": "待领取（不指定）"
+  },
+  {
+    "name": "Escape closes picker (drawer stays)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "mobile picker is bottom sheet",
+    "ok": true,
+    "detail": "{\"asSheet\":true,\"scrim\":true,\"left\":12,\"right\":12,\"bottom\":12,\"width\":366,\"overflow\":true}"
+  },
+  {
+    "name": "mobile sheet anchored to bottom edges",
+    "ok": true,
+    "detail": "{\"asSheet\":true,\"scrim\":true,\"left\":12,\"right\":12,\"bottom\":12,\"width\":366,\"overflow\":true}"
+  },
+  {
+    "name": "mobile no horizontal overflow",
+    "ok": true,
+    "detail": "{\"asSheet\":true,\"scrim\":true,\"left\":12,\"right\":12,\"bottom\":12,\"width\":366,\"overflow\":true}"
+  },
+  {
+    "name": "dark mode picker still rendered",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no runtime/console errors (detail entries)",
+    "ok": true,
+    "detail": ""
+  }
+]

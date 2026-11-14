@@ -98,7 +98,7 @@ class TaskQueryServiceReleasePermissionTest {
         assertFalse(result.getCanPublish());
         assertFalse(result.getCanUnpublish());
 
-        task.setCompletedAt(COMPLETED);
+        task.setCompletedAt(COMPLETED.atStartOfDay());
         task.setBoardColumn(Consts.COL_DOING);
         assertFalse(service(permissions).forDeepLink(USER, "T1").getCanPublish());
     }
@@ -250,7 +250,7 @@ class TaskQueryServiceReleasePermissionTest {
         task.setReqId(REQ);
         task.setOwnerUserId(USER);
         task.setBoardColumn(Consts.COL_DONE);
-        task.setCompletedAt(COMPLETED);
+        task.setCompletedAt(COMPLETED.atStartOfDay());
         return task;
     }
 }

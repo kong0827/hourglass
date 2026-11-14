@@ -4,6 +4,7 @@ import com.hourglass.entity.Task;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -70,6 +71,6 @@ public class TaskWorkpageResponse {
         private long estimateMinutes;
         private long loggedMinutes;
         private Double avgAgeDays;
-        private LocalDate lastCompletedAt;
+        private LocalDateTime lastCompletedAt;
     }
 }

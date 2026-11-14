@@ -22,6 +22,11 @@ public interface ReleaseMapper {
     Task selectTaskForUpdate(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
     List<Task> selectScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<Task> selectScopeForVersions(@Param("workspaceId") String workspaceId, @Param("versionIds") List<String> versionIds);
+    /** 版本范围的工作项 ID（不加锁，发布检查只读用） */
+    List<String> selectScopeTaskIds(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+    /** 目标版本为本版本的需求 ID（用于发布检查的需求级覆盖分母） */
+    List<String> selectDemandIdsByVersion(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+                                          @Param("versionId") String versionId);
     List<PlanVersionRow> selectPlanVersions(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
     List<ReleasePlanOptionRow> selectPlanVersionOptions(@Param("workspaceId") String workspaceId);
     int insertPlanVersion(@Param("workspaceId") String workspaceId, @Param("planId") String planId,

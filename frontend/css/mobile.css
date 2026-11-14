@@ -83,6 +83,7 @@
 [data-layout="mobile"] .tb-right{flex:0 0 auto;justify-content:flex-end;gap:6px;min-width:0;}
 /* 顶栏不再放当前视图搜索框：改由按钮打开全局搜索，视图内关键词在筛选面板里 */
 [data-layout="mobile"] .topbar .global-search{display:none !important;}
+[data-layout="mobile"] .gs-open{display:none !important;}
 .mob-search-btn{display:none !important;}
 [data-layout="mobile"] .mob-search-btn{display:grid !important;}
 [data-layout="mobile"] .timer-pill{max-width:132px;}
@@ -213,7 +214,6 @@ body.mob-sheet-open{overflow:hidden;}
   width:100%;height:40px;font-size:16px;padding-right:38px;
 }
 [data-layout="mobile"] .mob-sheet .global-search input:focus{width:100%;}
-[data-layout="mobile"] .mob-sheet .global-search .gs-kbd{display:none;}
 [data-layout="mobile"] .mob-sheet .filterbar{
   display:flex !important;flex-direction:column;align-items:stretch;gap:14px;
   height:auto;min-height:0;padding:12px;overflow:visible;
@@ -821,7 +821,7 @@ body.mob-sheet-open{overflow:hidden;}
 /* 项目范围脱离操作组：手机首屏仍可见，并排在第一行最前 */
 [data-layout="mobile"] .toolbar-right > #tcReq{order:0;flex:1 1 130px;min-width:110px;max-width:none;}
 [data-layout="mobile"] .tc-filterbar{display:none;}
-[data-layout="mobile"] .tc-filterbar.is-open{  display:flex;flex:1 1 100%;order:2;flex-direction:column;align-items:stretch;gap:8px;
+[data-layout="mobile"] .tc-filterbar.is-open{display:flex;flex:0 0 auto;width:100%;flex-direction:column;align-items:stretch;gap:8px;
   padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);
 }
 [data-layout="mobile"] .tc-filterbar.is-open .views-menu-wrap,
@@ -830,8 +830,11 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-filterbar.is-open .tc-fbar-end{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;margin-left:0;}
 [data-layout="mobile"] .tc-filterbar.is-open .tc-search,
 [data-layout="mobile"] .tc-filterbar.is-open .mini-select{width:100%;max-width:none;height:38px;font-size:16px;}
-[data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg{width:100%;}
-[data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg button{flex:1 1 0;min-width:0;padding:0 2px;font-size:11.5px;}
+/* 统计 chips 条：手机上换行铺满、隐藏口径提示，点按区域加大 */
+[data-layout="mobile"] #tcStats{gap:6px;padding:8px 10px;}
+[data-layout="mobile"] #tcStats .tc-stat-total{flex:1 1 100%;margin-right:0;}
+[data-layout="mobile"] #tcStats .tc-stat{flex:1 1 auto;justify-content:center;height:30px;}
+[data-layout="mobile"] #tcStats .tc-stat-hint{display:none;}
 /* 缺陷 tab 的筛选项直接平铺：没有「筛选」开关，默认全部可见；搜索与重置同行，四个下拉两行 */
 [data-layout="mobile"] .tc-defbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 8px;padding:0;}
 [data-layout="mobile"] .tc-defbar .tc-search{flex:1 1 100%;width:100%;min-width:0;height:34px;font-size:16px;}
@@ -887,11 +890,41 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-row{flex-wrap:wrap;gap:8px;padding:12px;}
 [data-layout="mobile"] .tc-row .mini-tag{margin-top:0;}
 [data-layout="mobile"] .tc-acts{width:100%;justify-content:flex-start;}
-[data-layout="mobile"] .tc-step-row{display:grid;grid-template-columns:22px 1fr 28px;row-gap:6px;}
+[data-layout="mobile"] .tc-step-row{display:grid;grid-template-columns:22px 1fr auto;row-gap:6px;}
 [data-layout="mobile"] .tc-step-row .tc-step-no{grid-column:1;grid-row:1;}
-[data-layout="mobile"] .tc-step-row > button{grid-column:3;grid-row:1;}
+[data-layout="mobile"] .tc-step-row .tc-step-acts{grid-column:3;grid-row:1;padding-top:0;}
 [data-layout="mobile"] .tc-step-row input,[data-layout="mobile"] .tc-step-row textarea{grid-column:1/-1;width:100%;flex:none;}
 [data-layout="mobile"] .tc-acts .tc-secondary{opacity:1;}
+
+/* 归类面板叠到列表上方：不吸顶、内部滚动，避免把首屏用例挤出视口 */
+[data-layout="mobile"] .tc-cases-wrap{flex-direction:column;gap:8px;}
+[data-layout="mobile"] .tc-side{position:static;flex:0 0 auto;width:100%;min-height:0;max-height:none;}
+[data-layout="mobile"] .tc-side-body{max-height:36vh;}
+[data-layout="mobile"] .tc-side-tabs button{height:36px;font-size:13px;}
+[data-layout="mobile"] .tc-dir-search{height:34px;}
+[data-layout="mobile"] .tc-dir-search input{font-size:16px;}
+[data-layout="mobile"] .tc-dir-pick{height:34px;font-size:13px;}
+[data-layout="mobile"] .tc-dir-toggle{height:32px;}
+[data-layout="mobile"] .tc-set-pick{padding:8px 6px;}
+[data-layout="mobile"] .tc-set-name{font-size:13px;}
+/* 触屏没有 hover，目录/分组的维护按钮常显 */
+[data-layout="mobile"] .tc-dir-acts,[data-layout="mobile"] .tc-set-acts{opacity:1;}
+[data-layout="mobile"] .tc-dir-acts .icon-btn.sm,[data-layout="mobile"] .tc-set-acts .icon-btn.sm{width:30px;height:30px;}
+[data-layout="mobile"] .tc-querybar{gap:6px;}
+[data-layout="mobile"] .tc-querybar .btn{height:34px;}
+[data-layout="mobile"] .tc-ctl{flex:1 1 calc(50% - 3px);min-width:0;}
+[data-layout="mobile"] .tc-ctl .mini-select{flex:1 1 auto;width:auto;min-width:0;height:34px;font-size:16px;}
+[data-layout="mobile"] .tc-query-grow{display:none;}
+[data-layout="mobile"] #tcSelFiltered{flex:1 1 100%;justify-content:center;}
+[data-layout="mobile"] .tc-bulk-acts{margin-left:0;flex:1 1 100%;}
+[data-layout="mobile"] .tc-seg-head{gap:6px;padding:8px;}
+[data-layout="mobile"] .tc-seg-name{flex:1 1 auto;max-width:100%;}
+[data-layout="mobile"] .tc-seg-bar{flex:1 1 60px;}
+[data-layout="mobile"] .tc-seg-body{padding:8px;}
+/* 触屏没有 HTML5 拖拽：只讲拖拽语义的提示条与段头提示隐藏，归属语义由面板脚注交代 */
+[data-layout="mobile"] .tc-drop-banner,[data-layout="mobile"] .tc-seg-hint{display:none;}
+[data-layout="mobile"] .pbf-preview{max-height:32vh;}
+[data-layout="mobile"] .set-pick-list{max-height:40vh;}
 
 /* 暗色下手机卡片/底栏统一用语义令牌，禁止写死 hex */
 html[data-theme="dark"] [data-layout="mobile"] .team-hero{box-shadow:none;}

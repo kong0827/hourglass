@@ -64,7 +64,7 @@ function boot(){
   var startView = viewFromHash();
   /* 工作页深链带 query：空 hash 才落默认视图，带参数时保留原 hash */
   var startHash = String(window.location.hash || "");
-  var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands")
+  var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands" || startView === "version")
     && startHash.indexOf("#/" + startView + "?") === 0;
   if(!keepHash){
     try{ history.replaceState(null, "", "#/" + startView); }

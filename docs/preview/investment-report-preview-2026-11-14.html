@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 报表投入结构原型（年度 / 季度）</title>
+<style>
+
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,Menlo,monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --sidebar-w:220px; --topbar-h:60px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:var(--font-sans);font-size:13px;color:var(--text);background:var(--bg-app);-webkit-font-smoothing:antialiased;}
+button,input,select{font:inherit;color:inherit;}
+button{border:0;background:none;cursor:pointer;}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+.app{display:flex;min-height:100vh;}
+.sidebar{width:var(--sidebar-w);flex:0 0 auto;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);position:sticky;top:0;height:100vh;}
+.side-brand{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;}
+.brand-mark{width:32px;height:32px;border-radius:var(--r-sm);background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;}
+.side-brand-name{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.side-ws{padding:0 12px 10px;}
+.ws-switch{display:flex;align-items:center;gap:9px;width:100%;height:44px;padding:0 9px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);}
+.ws-avatar{width:24px;height:24px;font-size:11px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-weight:700;}
+.ws-n{font-size:13px;font-weight:600;display:block;text-align:left;}
+.ws-kind{font-size:11px;color:var(--text-3);display:block;text-align:left;}
+.side-nav{flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column;gap:1px;padding:0 12px 12px;}
+.nav-sec{padding:12px 10px 4px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-3);}
+.nav-item{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--r-sm);color:var(--text-2);font-size:13px;font-weight:550;width:100%;text-align:left;}
+.nav-item:hover{background:var(--surface-hover);color:var(--text);}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650;}
+.side-foot{border-top:1px solid var(--border);padding:10px 12px;}
+.side-user{display:flex;align-items:center;gap:9px;padding:8px 6px;border-radius:var(--r-sm);}
+.avatar{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--primary);}
+.side-user-n{font-size:12.5px;font-weight:600;line-height:1.25;display:block;}
+.side-user-r{font-size:11px;color:var(--text-3);display:block;}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;}
+.topbar{height:var(--topbar-h);display:flex;align-items:center;gap:14px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border);}
+.tb-title{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.tb-sub{font-size:12px;color:var(--text-3);margin-top:1px;}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.proto-pill{font-size:11px;font-weight:650;padding:3px 9px;border-radius:var(--r-pill);background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
+.icon-btn{width:32px;height:32px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2);border:1px solid transparent;}
+.icon-btn:hover{background:var(--surface-hover);border-color:var(--border);}
+.content{flex:1 1 auto;padding:18px 24px 40px;display:flex;flex-direction:column;gap:14px;min-width:0;}
+.proto-banner{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px dashed var(--primary-border);border-radius:var(--r-md);background:var(--primary-soft);color:var(--primary-fg);font-size:12px;line-height:1.6;}
+.proto-banner b{font-weight:700;}
+.proto-banner .btn{margin-left:auto;background:var(--surface);}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;}
+.page-head h1{font-size:20px;font-weight:700;letter-spacing:-.02em;}
+.page-head p{font-size:12.5px;color:var(--text-3);line-height:1.65;margin-top:5px;max-width:820px;}
+.view-tabs{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;flex:0 0 auto;flex-wrap:wrap;}
+.view-tabs button{height:28px;padding:0 13px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--text-2);}
+.view-tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+.btn{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.btn:hover{background:var(--surface-hover);color:var(--text);border-color:var(--border-strong);}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-fg);border-color:var(--primary-fg);color:#fff;}
+.mini-select{height:30px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:0 8px;font-size:12px;color:var(--text-2);}
+.mini-select:disabled{opacity:.55;background:var(--surface-sunken);}
+.segctl{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;}
+.segctl button{height:26px;padding:0 10px;border-radius:6px;font-size:11.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.segctl button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.card-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:12px 16px;}
+.card-head h2{font-size:14px;font-weight:700;}
+.card-head p{font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.6;}
+.card-head .ctl{margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.card-body{padding:0 16px 16px;}
+.toolbar{display:flex;align-items:center;gap:12px;padding:10px 16px;flex-wrap:wrap;}
+.toolbar-meta{font-size:12px;color:var(--text-3);}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.chip{height:28px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:550;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+.chip b{font-weight:650;color:var(--text);}
+.muted{color:var(--text-3);font-weight:500;}
+
+/* ===== 投入结构 ===== */
+.kpi-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;}
+.kpi{border:1px solid var(--border);border-radius:var(--r-md);padding:11px 13px;background:var(--surface);min-width:0;}
+.kpi .kl{font-size:11.5px;font-weight:600;color:var(--text-3);display:flex;align-items:center;gap:5px;}
+.kpi .kv{font-size:21px;font-weight:680;letter-spacing:-.02em;line-height:1.25;margin-top:4px;font-variant-numeric:tabular-nums;}
+.kpi .kv small{font-size:11.5px;font-weight:600;color:var(--text-3);margin-left:2px;}
+.kpi .kd{font-size:11px;color:var(--text-3);margin-top:3px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kpi.hl{background:var(--primary-soft);border-color:var(--primary-border);}
+.kpi.hl .kl,.kpi.hl .kd{color:var(--primary-fg);}
+.kpi.hl .kv{color:var(--primary-fg);}
+.compose{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
+.compose-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap;}
+.compose-top .ct{font-size:12px;font-weight:650;color:var(--text-2);}
+.compose-top .cs{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.bar-stack{display:flex;height:12px;border-radius:7px;overflow:hidden;background:var(--surface-sunken);}
+.bar-stack i{display:block;height:100%;}
+.bar-stack i+i{border-left:2px solid var(--surface);}
+.bar-stack .dev{background:var(--primary);}
+.bar-stack .test{background:var(--warning);}
+.compose-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:8px;font-size:11.5px;color:var(--text-2);}
+.compose-legend span{display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums;}
+.compose-legend i{width:8px;height:8px;border-radius:2px;}
+.compose-note{font-size:11px;color:var(--text-3);margin-top:7px;line-height:1.6;}
+
+.trend-wrap{display:flex;flex-direction:column;gap:10px;}
+.trend{display:flex;align-items:stretch;gap:22px;height:158px;padding:12px 6px 0;border-bottom:1px solid var(--border-strong);}
+.trend .col{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;min-width:0;position:relative;}
+.trend .v{font-size:11px;font-weight:650;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.trend .bar{width:100%;max-width:64px;height:calc(100% - 26px);display:flex;align-items:flex-end;background:linear-gradient(to top,var(--surface-sunken),var(--surface-sunken));border-radius:6px 6px 0 0;overflow:hidden;}
+.trend .bar i{display:block;width:100%;background:var(--primary);border-radius:6px 6px 0 0;min-height:2px;}
+.trend .bar.partial i{background:repeating-linear-gradient(135deg,var(--primary) 0 6px,var(--primary-border) 6px 12px);}
+.trend .bar.empty{background:transparent;border-bottom:1px dashed var(--border-strong);border-radius:0;}
+.trend .lb{font-size:11px;color:var(--text-3);white-space:nowrap;margin-top:-2px;}
+.trend .cap{font-size:9.5px;color:var(--text-3);white-space:nowrap;}
+.trend-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-3);line-height:1.6;}
+.trend-foot b{color:var(--text-2);font-weight:650;}
+
+.tbl-wrap{border:1px solid var(--border);border-radius:var(--r-md);overflow:auto;}
+table.pv{width:100%;border-collapse:collapse;min-width:720px;}
+.pv th{font-size:11px;font-weight:650;color:var(--text-3);text-align:left;padding:8px 12px;background:var(--surface-sunken);border-bottom:1px solid var(--border);white-space:nowrap;}
+.pv th.num,.pv td.num{text-align:right;}
+.pv td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:12.5px;vertical-align:middle;white-space:nowrap;}
+.pv td.num{font-variant-numeric:tabular-nums;}
+.pv tbody tr:last-child td{border-bottom:0;}
+.pv tr.total td{background:var(--surface-sunken);font-weight:650;}
+.pv tbody tr.row{cursor:pointer;}
+.pv tbody tr.row:hover td,.pv tbody tr.row:focus-visible td{background:var(--surface-hover);}
+.pv tbody tr.row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.pv .nm{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.pv .nm b{font-size:12.5px;font-weight:650;color:var(--text);display:inline-flex;align-items:center;gap:7px;}
+.pv .nm b i{width:7px;height:7px;border-radius:2px;flex:0 0 auto;}
+.pv .nm small{font-size:10.5px;color:var(--text-3);font-weight:500;}
+.pv .sbar{display:flex;align-items:center;gap:8px;justify-content:flex-end;}
+.pv .sbar .t{min-width:40px;text-align:right;color:var(--text-2);font-variant-numeric:tabular-nums;}
+.pv .sbar .p{width:78px;height:6px;border-radius:3px;background:var(--surface-sunken);overflow:hidden;flex:0 0 auto;border:1px solid var(--border);}
+.pv .sbar .p i{display:block;height:100%;background:var(--primary);}
+.pv .split{display:inline-flex;align-items:center;gap:6px;}
+.pv .split .sb{width:56px;height:6px;border-radius:3px;background:var(--surface-sunken);overflow:hidden;display:flex;border:1px solid var(--border);}
+.pv .split .sb i{display:block;height:100%;}
+.pv .split .sb .d{background:var(--primary);}
+.pv .split .sb .t{background:var(--warning);}
+.pv .split .n{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;min-width:62px;text-align:right;}
+.pv .click-hint{font-size:10.5px;color:var(--text-3);}
+.pv-foot{font-size:11px;color:var(--text-3);line-height:1.7;margin-top:10px;}
+.pv-foot b{color:var(--text-2);font-weight:650;}
+
+.notes-card{padding:14px 16px;}
+.notes-card h2{font-size:14.5px;font-weight:700;margin-bottom:6px;}
+.notes-card>p{font-size:12px;color:var(--text-3);line-height:1.65;margin-bottom:12px;}
+.notes-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px 22px;}
+.notes-grid h3{font-size:12.5px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.notes-grid ul{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.notes-grid li{font-size:11.5px;color:var(--text-2);line-height:1.6;display:flex;gap:6px;align-items:flex-start;}
+.notes-grid li b{font-weight:650;color:var(--text);}
+.tag{flex:0 0 auto;font-size:10px;font-weight:650;padding:1px 6px;border-radius:4px;margin-top:1px;}
+.tag.ok{background:var(--success-soft);color:var(--success-fg);}
+.tag.warn{background:var(--warning-soft);color:var(--warning-fg);}
+.tag.info{background:var(--info-soft);color:var(--info-fg);}
+.tag.mute{background:var(--surface-sunken);color:var(--text-3);}
+.confirm-line{margin-top:14px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-3);line-height:1.7;}
+.confirm-line b{color:var(--text-2);font-weight:650;}
+
+/* ===== 下钻弹框 ===== */
+.modal{position:fixed;inset:0;background:rgba(16,24,40,.48);display:none;align-items:center;justify-content:center;padding:4vh 4vw;z-index:100;}
+.modal.on{display:flex;}
+.sheet{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-xl);width:min(1000px,100%);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+.sheet-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;}
+.sheet-head h2{font-size:15px;font-weight:700;letter-spacing:-.01em;}
+.sheet-head .sub{font-size:11.5px;color:var(--text-3);margin-top:4px;line-height:1.6;}
+.sheet-head .close{margin-left:auto;width:30px;height:30px;border-radius:var(--r-sm);border:1px solid var(--border);display:grid;place-items:center;color:var(--text-2);flex:0 0 auto;}
+.sheet-head .close:hover{background:var(--surface-hover);}
+.sheet-body{padding:12px 18px 18px;overflow:auto;}
+.sheet .tbl-wrap{max-height:none;}
+.sheet-foot{padding:10px 18px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);line-height:1.65;}
+.sheet-foot b{color:var(--text-2);font-weight:650;}
+
+@media (max-width:1280px){
+  .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+@media (max-width:900px){
+  .sidebar{display:none;}
+  .content{padding:14px;}
+  .page-head{flex-direction:column;}
+  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .notes-grid{grid-template-columns:1fr;}
+  .trend{gap:10px;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-brand">
+      <span class="brand-mark">沙</span>
+      <span class="side-brand-name">沙漏</span>
+    </div>
+    <div class="side-ws">
+      <button class="ws-switch" type="button"><span class="ws-avatar">东</span><span><span class="ws-n">东证自研</span><span class="ws-kind">研发空间 · 18 人</span></span></button>
+    </div>
+    <nav class="side-nav">
+      <div class="nav-sec">我的</div>
+      <button class="nav-item" type="button">我的工作</button>
+      <button class="nav-item" type="button">周回顾</button>
+      <div class="nav-sec">规划</div>
+      <button class="nav-item" type="button">需求池</button>
+      <button class="nav-item" type="button">项目</button>
+      <button class="nav-item" type="button">版本</button>
+      <div class="nav-sec">交付</div>
+      <button class="nav-item" type="button">工作项</button>
+      <button class="nav-item" type="button">文档</button>
+      <button class="nav-item" type="button">测试</button>
+      <button class="nav-item" type="button">分支</button>
+      <div class="nav-sec">洞察</div>
+      <button class="nav-item on" type="button">报表</button>
+      <button class="nav-item" type="button">成员负载</button>
+      <button class="nav-item" type="button">逾期与阻塞</button>
+    </nav>
+    <div class="side-foot">
+      <div class="side-user">
+        <span class="avatar">孔</span>
+        <span><span class="side-user-n">孔祥金</span><span class="side-user-r">空间管理员</span></span>
+      </div>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="tb-title">报表</div>
+        <div class="tb-sub">东证自研 · 洞察</div>
+      </div>
+      <div class="tb-right">
+        <span class="proto-pill">原型 · 未实施</span>
+        <button class="icon-btn" type="button" title="帮助">?</button>
+      </div>
+    </header>
+    <main class="content">
+      <div class="proto-banner">
+        <div><b>报表 · 投入结构（第 4 个页签）</b>　按年度 / 季度看人力、工时与资源分布；只读聚合，不新增录入项。数字取自 2026-11-14 本地演示库（计时记录覆盖 8–11 月）。</div>
+        <button class="btn sm" type="button" onclick="document.getElementById('notes').scrollIntoView({behavior:'smooth'})">口径与落点</button>
+      </div>
+
+      <section class="page-head">
+        <div>
+          <h1>报表</h1>
+          <p>管理者视角的投入盘点：选定年度或季度，先看总量与开发 / 测试拆分，再按项目、成员、公司、角色看人力与工时落在哪里，点行可下钻到工作项。</p>
+        </div>
+        <div class="view-tabs" role="group" aria-label="报表页签">
+          <button type="button">趋势与分布</button>
+          <button type="button">完成记录</button>
+          <button type="button">流程体检</button>
+          <button type="button" class="on">投入结构</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="toolbar">
+          <span class="segctl" id="periodMode" role="group" aria-label="周期类型">
+            <button type="button" class="on" data-pmode="quarter" aria-pressed="true">季度</button>
+            <button type="button" data-pmode="year" aria-pressed="false">年度</button>
+          </span>
+          <label class="toolbar-meta" style="display:inline-flex;align-items:center;gap:6px">
+            年份
+            <select id="yearSel" class="mini-select" aria-label="选择年份">
+              <option value="2026" selected>2026</option>
+            </select>
+          </label>
+          <label class="toolbar-meta" id="quarterWrap" style="display:inline-flex;align-items:center;gap:6px">
+            季度
+            <select id="quarterSel" class="mini-select" aria-label="选择季度">
+              <option value="q1" disabled>Q1（无计时）</option>
+              <option value="q2" disabled>Q2（无计时）</option>
+              <option value="q3">Q3（7–9 月）</option>
+              <option value="q4" selected>Q4（10–12 月）</option>
+            </select>
+          </label>
+          <span class="chip">范围 <b>全部项目</b></span>
+          <span class="chip">公司 <b>全部</b></span>
+          <span class="chip">职能 <b>全部</b></span>
+          <span class="toolbar-right">
+            <span class="toolbar-meta" id="periodNote">Q4 进行中 · 截至 2026-11-14</span>
+            <button class="btn sm" type="button" title="原型不提供导出">导出 CSV</button>
+          </span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>投入总览</h2>
+            <p id="scopeLine">全部项目 · 计时发生日归属 · 未结束计时不计</p>
+          </div>
+          <div class="ctl">
+            <span class="chip">口径 <b>计时发生日</b></span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="kpi-grid" id="kpis"></div>
+          <div class="compose">
+            <div class="compose-top">
+              <span class="ct">开发 / 测试构成</span>
+              <span class="cs" id="composeSum">—</span>
+            </div>
+            <div class="bar-stack" id="composeBar" role="img" aria-label="开发与测试工时构成"></div>
+            <div class="compose-legend" id="composeLegend"></div>
+            <div class="compose-note">测试 = 计时日期落在工作项测试窗口（提测 → 测试结束）内的分钟；其余计入开发。测试窗口只保留最近一轮，重开前的早期轮次会落回开发。</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>投入趋势</h2>
+            <p>按计时发生月份分桶；用于看季度之间的抬升或回落，不改变上方口径。</p>
+          </div>
+          <div class="ctl"><span class="toolbar-meta" id="trendRange">2026-08 ~ 2026-11</span></div>
+        </div>
+        <div class="card-body">
+          <div class="trend-wrap">
+            <div class="trend" id="trend"></div>
+            <div class="trend-foot" id="trendFoot">
+              <span><b>11 月</b>为截至 11-14 的部分数据，不足整月</span>
+              <span>8 月前没有计时记录，不补 0 值柱</span>
+              <span>趋势只展示有记录的月份</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>按维度拆分</h2>
+            <p id="dimDesc">四种维度共用同一批计时记录，切换只换分组，不换口径；点行下钻到工作项。</p>
+          </div>
+          <div class="ctl">
+            <span class="segctl" id="dimCtl" role="group" aria-label="拆分维度">
+              <button type="button" class="on" data-dim="project" aria-pressed="true">项目</button>
+              <button type="button" data-dim="member" aria-pressed="false">成员</button>
+              <button type="button" data-dim="company" aria-pressed="false">公司</button>
+              <button type="button" data-dim="role" aria-pressed="false">角色</button>
+            </span>
+            <span class="segctl" id="metricCtl" role="group" aria-label="占比指标">
+              <button type="button" class="on" data-metric="act" aria-pressed="true">按实际</button>
+              <button type="button" data-metric="est" aria-pressed="false">按预估</button>
+            </span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="tbl-wrap">
+            <table class="pv" id="pivot"></table>
+          </div>
+          <div class="pv-foot">
+            <b>实际</b>按计时开始日归入周期，开发 + 测试 = 实际；<b>预估</b>没有时间轴，按工作项计划开始日整条归入，所以预估与实际不可直接相减。
+            <b>版本</b>不进入本页维度：一个工作项可绑多个版本，跨版本会重复计数。
+          </div>
+        </div>
+      </section>
+
+      <section class="card notes-card" id="notes">
+        <h2>这一页的口径与实施落点</h2>
+        <p>不新增表、不新增录入项，沿用现有计时、工作项与成员配置；先做空间级只读聚合，项目驾驶舱后续可复用同一接口加一张本项目趋势卡。</p>
+        <div class="notes-grid">
+          <div>
+            <h3><span class="tag info">口径</span>周期归属</h3>
+            <ul>
+              <li><b>实际</b>：按 time_log.started_at 的日期归入年 / 季；跨零点的计时整条落在开始日。</li>
+              <li><b>预估</b>：按工作项计划开始日（无则创建日）整条归入，不按天拆分。</li>
+              <li><b>不补零</b>：没有计时记录的月份 / 季度不生成柱子，避免把“没记录”误读成“没投入”。</li>
+            </ul>
+          </div>
+          <div>
+            <h3><span class="tag ok">资源</span>维度来源</h3>
+            <ul>
+              <li><b>成员</b>：计时人 user_id，去重得到人力数；只计分钟 &gt; 0 的记录，离职或不在当前名册的计时人保留。</li>
+              <li><b>公司 / 职能</b>：空间成员上的公司标签；同一人跨项目仍是同一公司口径。</li>
+              <li><b>角色</b>：项目成员角色（项目经理 / 后端 / 前端 / 产品），按项目归属，不按人硬编码。</li>
+            </ul>
+          </div>
+          <div>
+            <h3><span class="tag warn">边界</span>不与谁相加</h3>
+            <ul>
+              <li><b>版本</b>：工作项可多绑版本，版本维度会重复计数，因此只做版本页单版本汇总，不进入年度投入。</li>
+              <li><b>未结束计时</b>：ended_at 为空不计，避免把进行中的计时算成已发生工时。</li>
+              <li><b>预估偏差</b>：周期归属不同，本页不展示“预估 − 实际”的偏差结论。</li>
+            </ul>
+          </div>
+          <div>
+            <h3><span class="tag mute">落点</span>实现方式</h3>
+            <ul>
+              <li><b>接口</b>：GET /api/manager/investment?from=&amp;to=&amp;groupBy=project|member|company|role，复用现有快照加载与开发 / 测试拆分。</li>
+              <li><b>前端</b>：报表页新增「投入结构」页签，周期选择器 + KPI + 维度表 + 下钻，复用管理组明细表。</li>
+              <li><b>改动量</b>：一个只读接口 + 一个页签；无 SQL 迁移、无数据回填。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="confirm-line">
+          <b>实施前确认：</b>默认周期放「本季度」还是「本年度」；默认维度放「项目」还是「成员」；「预估」列保留还是隐藏（口径不可比）；年度是否需要与上期对比；公司 / 职能筛选先沿用报表现有筛选还是本页单独给。
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="modal" id="drill" role="dialog" aria-modal="true" aria-labelledby="drillTitle">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div>
+        <h2 id="drillTitle">—</h2>
+        <div class="sub" id="drillSub">—</div>
+      </div>
+      <button class="close" type="button" id="drillClose" aria-label="关闭">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="tbl-wrap">
+        <table class="pv" id="drillTbl"></table>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <b>下钻口径：</b>只列本期有计时记录的工作项，行内可在正式版直接打开工作项抽屉；这是只读明细，不在这里改工时。原型仅展示前 6 条。
+    </div>
+  </div>
+</div>
+
+<script>
+var H = 60;
+function fmtH(min){
+  var h = Math.round((min || 0) / 6) / 10; // 保留 1 位小数
+  return (Math.round(h * 10) / 10) + "h";
+}
+function pct(a, b){ return b ? Math.round(a * 100 / b) : 0; }
+/* 最大余数法分配占比，保证各行相加正好 100% */
+function shareList(rows, metric){
+  var bases = rows.map(function(r){ return Math.max(0, r[metric] || 0); });
+  var total = bases.reduce(function(a, b){ return a + b; }, 0);
+  if(!total) return bases.map(function(){ return 0; });
+  var raw = bases.map(function(v){ return v * 100 / total; });
+  var out = raw.map(Math.floor);
+  var rem = 100 - out.reduce(function(a, b){ return a + b; }, 0);
+  var order = raw.map(function(v, i){ return { i:i, f:v - Math.floor(v) }; })
+    .sort(function(a, b){ return b.f - a.f; });
+  for(var k = 0; k < rem; k++) out[order[k % order.length].i]++;
+  return out;
+}
+
+/* 数字取本地演示库（2026-11-14）：Q4 与全年，项目 / 成员 / 公司 / 角色四个维度 */
+var DATA = {
+  quarter: {
+    key:"q4",
+    label:"2026 年 Q4",
+    note:"Q4 进行中 · 截至 2026-11-14",
+    total:{ users:5, projects:11, tasks:178, est:49140, act:86310, test:8280 },
+    rows:{
+      project:[
+        { name:"统一身份认证（SSO）", meta:"17 个工作项 · 3 人", est:6060, act:9660, test:720 },
+        { name:"风控规则引擎", meta:"17 个工作项 · 5 人", est:6540, act:8640, test:1230 },
+        { name:"消息推送与触达", meta:"17 个工作项 · 4 人", est:4920, act:8520, test:1170 },
+        { name:"统一支付网关", meta:"16 个工作项 · 5 人", est:4980, act:7950, test:1080 },
+        { name:"会员与积分体系", meta:"15 个工作项 · 3 人", est:4680, act:7830, test:300 },
+        { name:"数据指标平台", meta:"20 个工作项 · 3 人", est:1080, act:7830, test:1290 },
+        { name:"配置中心与灰度发布", meta:"16 个工作项 · 4 人", est:4680, act:7800, test:1020 },
+        { name:"清结算与对账平台", meta:"15 个工作项 · 3 人", est:4080, act:7410, test:180 },
+        { name:"商家结算中心", meta:"15 个工作项 · 3 人", est:3480, act:7290, test:420 },
+        { name:"App 首页改版", meta:"16 个工作项 · 3 人", est:5460, act:6720, test:540 },
+        { name:"订单履约中台", meta:"14 个工作项 · 3 人", est:3180, act:6660, test:330 }
+      ],
+      member:[
+        { name:"李娜", meta:"后端开发 · 参与 11 个项目", est:23580, act:39420, test:3720 },
+        { name:"陈昊", meta:"前端开发 · 参与 11 个项目", est:12720, act:26040, test:1950 },
+        { name:"赵磊", meta:"项目经理 / 测试负责人 · 参与 9 个项目", est:7620, act:13500, test:2250 },
+        { name:"张伟", meta:"产品经理 · 参与 5 个项目", est:4800, act:5640, test:360 },
+        { name:"孙琪", meta:"运营 · 参与 1 个项目", est:420, act:1710, test:0 },
+      ],
+      company:[
+        { name:"星河科技", meta:"5 人 · 内部研发", est:36420, act:60270, test:6330 },
+        { name:"云帆软件", meta:"1 人 · 外部合作", est:12720, act:26040, test:1950 }
+      ],
+      role:[
+        { name:"后端开发", meta:"1 人", est:23580, act:39420, test:3720 },
+        { name:"前端开发", meta:"1 人", est:12720, act:26040, test:1950 },
+        { name:"项目经理", meta:"3 人", est:8700, act:14430, test:1950 },
+        { name:"产品经理", meta:"1 人", est:6420, act:6420, test:660 }
+      ]
+    }
+  },
+  year: {
+    key:"y2026",
+    label:"2026 年",
+    note:"2026 年累计 · 截至 2026-11-14",
+    total:{ users:5, projects:11, tasks:221, est:67680, act:105780, test:16230 },
+    rows:{
+      project:[
+        { name:"统一身份认证（SSO）", meta:"21 个工作项 · 3 人", est:7200, act:11010, test:1080 },
+        { name:"风控规则引擎", meta:"20 个工作项 · 5 人", est:7200, act:10680, test:2130 },
+        { name:"统一支付网关", meta:"20 个工作项 · 5 人", est:7140, act:10320, test:2700 },
+        { name:"商家结算中心", meta:"20 个工作项 · 4 人", est:6060, act:10020, test:1200 },
+        { name:"清结算与对账平台", meta:"20 个工作项 · 4 人", est:5460, act:9930, test:660 },
+        { name:"会员与积分体系", meta:"20 个工作项 · 3 人", est:5820, act:9840, test:780 },
+        { name:"订单履约中台", meta:"20 个工作项 · 3 人", est:5880, act:9510, test:2430 },
+        { name:"配置中心与灰度发布", meta:"20 个工作项 · 4 人", est:6120, act:9270, test:1230 },
+        { name:"消息推送与触达", meta:"21 个工作项 · 4 人", est:5580, act:9090, test:1380 },
+        { name:"App 首页改版", meta:"20 个工作项 · 3 人", est:6180, act:8130, test:1350 },
+        { name:"数据指标平台", meta:"21 个工作项 · 3 人", est:5040, act:7980, test:1290 }
+      ],
+      member:[
+        { name:"李娜", meta:"后端开发 · 参与 11 个项目", est:31680, act:46170, test:5880 },
+        { name:"陈昊", meta:"前端开发 · 参与 11 个项目", est:17340, act:32550, test:4530 },
+        { name:"赵磊", meta:"项目经理 / 测试负责人 · 参与 10 个项目", est:12540, act:18030, test:4890 },
+        { name:"张伟", meta:"产品经理 · 参与 5 个项目", est:5100, act:6600, test:780 },
+        { name:"孙琪", meta:"运营 · 参与 2 个项目", est:1020, act:2430, test:150 },
+      ],
+      company:[
+        { name:"星河科技", meta:"5 人 · 内部研发", est:50340, act:73230, test:11700 },
+        { name:"云帆软件", meta:"1 人 · 外部合作", est:17340, act:32550, test:4530 }
+      ],
+      role:[
+        { name:"后端开发", meta:"1 人", est:31680, act:46170, test:5880 },
+        { name:"前端开发", meta:"1 人", est:17340, act:32550, test:4530 },
+        { name:"项目经理", meta:"3 人", est:12300, act:18300, test:3780 },
+        { name:"产品经理", meta:"1 人", est:8760, act:8760, test:2040 }
+      ]
+    }
+  }
+};
+var MONTHS = [
+  { m:"8 月", v:1890, cap:"8 月前无记录" },
+  { m:"9 月", v:17580, cap:"Q3 末" },
+  { m:"10 月", v:20910, cap:"Q4" },
+  { m:"11 月", v:65400, cap:"截至 11-14", partial:true }
+];
+var YEAR_MONTHS = [
+  { m:"1 月", v:null, cap:"无记录" }, { m:"2 月", v:null, cap:"无记录" },
+  { m:"3 月", v:null, cap:"无记录" }, { m:"4 月", v:null, cap:"无记录" },
+  { m:"5 月", v:null, cap:"无记录" }, { m:"6 月", v:null, cap:"无记录" },
+  { m:"7 月", v:null, cap:"无记录" },
+  { m:"8 月", v:1890, cap:"" }, { m:"9 月", v:17580, cap:"Q3" },
+  { m:"10 月", v:20910, cap:"Q4" }, { m:"11 月", v:65400, cap:"截至 11-14", partial:true },
+  { m:"12 月", v:null, cap:"未开始" }
+];
+var state = { period:"quarter", dim:"project", metric:"act" };
+
+function dataset(){ return DATA[state.period]; }
+
+function renderKpis(){
+  var d = dataset(), t = d.total, dev = t.act - t.test;
+  var days = Math.round(t.act / 480 * 10) / 10;
+  var cells = [
+    { k:"去重人力", v:t.users, u:"人", d:"本期有工时的成员", hl:true },
+    { k:"实际工时", v:fmtH(t.act), u:"", d:"开发 " + fmtH(dev) + " · 测试 " + fmtH(t.test) },
+    { k:"开发", v:fmtH(dev), u:"", d:"测试窗口外计时" },
+    { k:"测试", v:fmtH(t.test), u:"", d:"测试窗口内计时" },
+    { k:"预估工时", v:fmtH(t.est), u:"", d:"按计划开始日归入" },
+    { k:"投入人天", v:days, u:"人天", d:"按 8h / 人日折算" }
+  ];
+  document.getElementById("kpis").innerHTML = cells.map(function(c){
+    return '<div class="kpi' + (c.hl ? " hl" : "") + '">'
+      + '<span class="kl">' + c.k + '</span>'
+      + '<div class="kv">' + c.v + (c.u ? '<small>' + c.u + '</small>' : '') + '</div>'
+      + '<div class="kd">' + c.d + '</div></div>';
+  }).join("");
+  document.getElementById("scopeLine").textContent =
+    "全部项目 · " + t.projects + " 个项目 · " + t.tasks + " 个计时工作项 · 计时发生日归属";
+  document.getElementById("periodNote").textContent = d.note;
+}
+
+function renderCompose(){
+  var t = dataset().total, dev = t.act - t.test;
+  var dp = pct(dev, t.act), tp = 100 - dp;
+  document.getElementById("composeSum").textContent = d3(dev) + " / " + d3(t.act);
+  document.getElementById("composeBar").innerHTML =
+    '<i class="dev" style="width:' + dp + '%"></i><i class="test" style="width:' + tp + '%"></i>';
+  document.getElementById("composeBar").setAttribute("aria-label", "开发 " + dp + "%，测试 " + tp + "%");
+  document.getElementById("composeLegend").innerHTML =
+    '<span><i class="dev" style="background:var(--primary)"></i>开发 ' + fmtH(dev) + '（' + dp + '%）</span>'
+    + '<span><i class="test" style="background:var(--warning)"></i>测试 ' + fmtH(t.test) + '（' + tp + '%）</span>';
+}
+function d3(m){ return fmtH(m); }
+
+function renderTrend(){
+  var list = state.period === "year" ? YEAR_MONTHS : MONTHS;
+  var max = Math.max.apply(null, list.map(function(x){ return x.v || 0; }));
+  document.getElementById("trend").innerHTML = list.map(function(x){
+    var empty = x.v === null || x.v === undefined;
+    var h = empty ? 0 : Math.max(2, Math.round(x.v * 100 / max));
+    return '<div class="col">'
+      + '<span class="v">' + (empty ? "—" : fmtH(x.v)) + '</span>'
+      + '<div class="bar' + (x.partial ? " partial" : "") + (empty ? " empty" : "") + '" style="height:' + h + '%">' + (empty ? "" : "<i></i>") + '</div>'
+      + '<span class="lb">' + x.m + '</span>'
+      + '<span class="cap">' + x.cap + '</span>'
+      + '</div>';
+  }).join("");
+  document.getElementById("trendFoot").innerHTML = state.period === "year"
+    ? '<span><b>11 月</b>为截至 11-14 的部分数据，不足整月</span><span>1–7 月与 12 月没有计时记录，用空槽标记，不补 0 值柱</span>'
+    : '<span><b>11 月</b>为截至 11-14 的部分数据，不足整月</span><span>8 月前没有计时记录，不补 0 值柱</span><span>趋势只展示有记录的月份</span>';
+}
+
+var DIM_LABEL = { project:"项目", member:"成员", company:"公司", role:"角色" };
+function renderTable(){
+  var d = dataset(), rows = d.rows[state.dim].slice();
+  var metric = state.metric === "act" ? "act" : "est";
+  rows.sort(function(a, b){ return (b[metric] || 0) - (a[metric] || 0); });
+  var totalAct = rows.reduce(function(a, r){ return a + r.act; }, 0);
+  var totalEst = rows.reduce(function(a, r){ return a + r.est; }, 0);
+  var totalTest = rows.reduce(function(a, r){ return a + r.test; }, 0);
+  var shares = shareList(rows, metric);
+  var head = '<thead><tr><th>' + DIM_LABEL[state.dim] + '</th>'
+    + '<th class="num">预估</th><th class="num">实际</th>'
+    + '<th class="num">开发 / 测试</th>'
+    + '<th class="num">' + (state.metric === "act" ? "实际占比" : "预估占比") + '</th></tr></thead>';
+  var body = rows.map(function(r, i){
+    var dev = r.act - r.test;
+    var share = shares[i], dp = pct(dev, r.act || 1), tp = 100 - dp;
+    var splitTitle = "开发 " + fmtH(dev) + " · 测试 " + fmtH(r.test);
+    return '<tr class="row" tabindex="0" data-idx="' + i + '" title="下钻查看该分组的工作项">'
+      + '<td><span class="nm"><b>' + r.name + '</b><small>' + r.meta + '</small></span></td>'
+      + '<td class="num">' + fmtH(r.est) + '</td>'
+      + '<td class="num">' + fmtH(r.act) + '</td>'
+      + '<td class="num" title="' + splitTitle + '"><span class="split"><span class="sb" role="img" aria-label="' + splitTitle + '"><i class="d" style="width:' + dp + '%"></i><i class="t" style="width:' + tp + '%"></i></span><span class="n">测试 ' + fmtH(r.test) + '</span></span></td>'
+      + '<td class="num"><span class="sbar"><span class="p"><i style="width:' + share + '%"></i></span><span class="t">' + share + '%</span></span></td>'
+      + '</tr>';
+  }).join("");
+  var total = '<tr class="total"><td><b>合计</b> <span class="muted">' + (state.dim === "project" ? "全部项目" : "全部" + DIM_LABEL[state.dim]) + '</span></td>'
+    + '<td class="num">' + fmtH(totalEst) + '</td><td class="num">' + fmtH(totalAct) + '</td>'
+    + '<td class="num">开发 ' + fmtH(totalAct - totalTest) + ' / 测试 ' + fmtH(totalTest) + '</td>'
+    + '<td class="num">100%</td></tr>';
+  document.getElementById("pivot").innerHTML = head + '<tbody>' + body + total + '</tbody>';
+  document.getElementById("dimDesc").textContent =
+    "四种维度共用同一批计时记录，切换只换分组，不换口径；行按当前指标降序，" + (state.dim === "project" ? "点项目行" : "点行") + "下钻到工作项。";
+  document.querySelectorAll("#pivot tr.row").forEach(function(tr){
+    tr.addEventListener("click", function(){ openDrill(rows[Number(tr.dataset.idx)]); });
+    tr.addEventListener("keydown", function(e){
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openDrill(rows[Number(tr.dataset.idx)]); }
+    });
+  });
+}
+
+var DRILL_POOL = [
+  { t:"退款接口超时重试与幂等校验", type:"任务", owner:"李娜", st:"已完成", est:480, act:600, test:60 },
+  { t:"统一登录页改版与错误提示", type:"用户故事", owner:"张伟", st:"已完成", est:360, act:420, test:0 },
+  { t:"渠道回调签名校验升级", type:"任务", owner:"陈昊", st:"进行中", est:240, act:300, test:0 },
+  { t:"结算批次对账差异导出", type:"用户故事", owner:"赵磊", st:"进行中", est:300, act:180, test:60 },
+  { t:"灰度分组与回滚预案", type:"任务", owner:"陈昊", st:"已完成", est:180, act:240, test:0 },
+  { t:"消息触达频控规则", type:"用户故事", owner:"孙琪", st:"已完成", est:240, act:150, test:30 }
+];
+function openDrill(row){
+  if(!row) return;
+  var d = dataset();
+  document.getElementById("drillTitle").textContent =
+    d.label + " · " + DIM_LABEL[state.dim] + " · " + row.name;
+  document.getElementById("drillSub").textContent =
+    row.meta + " · 实际 " + fmtH(row.act) + "（开发 " + fmtH(row.act - row.test) + " · 测试 " + fmtH(row.test) + "）· 预估 " + fmtH(row.est);
+  var head = '<thead><tr><th>工作项</th><th>类型</th><th>负责人</th><th>状态</th>'
+    + '<th class="num">预估</th><th class="num">实际</th><th class="num">开发</th><th class="num">测试</th></tr></thead>';
+  var body = DRILL_POOL.map(function(x){
+    return '<tr><td><span class="nm"><b>' + x.t + '</b><small>演示明细 · 点击可在正式版打开工作项抽屉</small></span></td>'
+      + '<td>' + x.type + '</td><td>' + x.owner + '</td><td>' + x.st + '</td>'
+      + '<td class="num">' + fmtH(x.est) + '</td><td class="num">' + fmtH(x.act) + '</td>'
+      + '<td class="num">' + fmtH(x.act - x.test) + '</td><td class="num">' + fmtH(x.test) + '</td></tr>';
+  }).join("");
+  document.getElementById("drillTbl").innerHTML = head + '<tbody>' + body + '</tbody>';
+  document.getElementById("drill").classList.add("on");
+  document.getElementById("drillClose").focus();
+}
+function closeDrill(){ document.getElementById("drill").classList.remove("on"); }
+
+function renderAll(){
+  renderKpis(); renderCompose(); renderTrend(); renderTable();
+  document.querySelectorAll("#periodMode button").forEach(function(b){
+    var on = b.dataset.pmode === state.period;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  document.querySelectorAll("#dimCtl button").forEach(function(b){
+    var on = b.dataset.dim === state.dim;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  document.querySelectorAll("#metricCtl button").forEach(function(b){
+    var on = b.dataset.metric === state.metric;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  document.getElementById("yearSel").disabled = state.period !== "year";
+  document.getElementById("quarterWrap").style.display = state.period === "quarter" ? "inline-flex" : "none";
+  document.getElementById("trendRange").textContent = state.period === "year"
+    ? "2026-08 ~ 2026-11 · 仅有记录的月份"
+    : "2026-08 ~ 2026-11 · 含 Q3 末对比";
+}
+
+document.querySelectorAll("#periodMode button").forEach(function(b){
+  b.addEventListener("click", function(){ state.period = b.dataset.pmode; renderAll(); });
+});
+document.querySelectorAll("#dimCtl button").forEach(function(b){
+  b.addEventListener("click", function(){ state.dim = b.dataset.dim; renderAll(); });
+});
+document.querySelectorAll("#metricCtl button").forEach(function(b){
+  b.addEventListener("click", function(){ state.metric = b.dataset.metric; renderAll(); });
+});
+document.getElementById("quarterSel").addEventListener("change", function(e){
+  if(e.target.value === "q3"){
+    /* Q3 数据没有单独建模，原型切回 Q4 并提示 */
+    e.target.value = "q4";
+    document.getElementById("periodNote").textContent = "原型仅演示 Q4 与全年；Q3 数据可在实施后按同一接口取";
+  } else {
+    renderAll();
+  }
+});
+document.getElementById("drillClose").addEventListener("click", closeDrill);
+document.getElementById("drill").addEventListener("click", function(e){ if(e.target.id === "drill") closeDrill(); });
+document.addEventListener("keydown", function(e){ if(e.key === "Escape") closeDrill(); });
+
+/* 截图 / 演示参数：?period=year 打开年度，?drill=1 打开首个分组的明细 */
+var q = new URLSearchParams(location.search);
+if(q.get("period") === "year") state.period = "year";
+renderAll();
+if(q.get("drill") === "1") openDrill(dataset().rows[state.dim][0]);
+</script>
+</body>
+</html>

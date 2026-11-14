@@ -11,7 +11,7 @@ import javax.validation.constraints.Size;
 @Data
 public class ReqDocSaveRequest {
 
-    @NotBlank(message = "请选择所属项目")
+    /** 所属项目 ID；空 = 空间级文档（不归属任何项目）。关联可选，但所选范围必须有写权限 */
     @Size(max = 32, message = "所属项目不合法")
     private String reqId;
 
@@ -23,7 +23,11 @@ public class ReqDocSaveRequest {
     @Pattern(regexp = DocumentType.SAVE_PATTERN, message = "文档分类不合法")
     private String docType;
 
-    /** 父文档 ID（可选，同项目内层级） */
+    /** 所属分类 ID（doc_category.id，可选）；给了分类则归属范围由分类带出，须与 reqId 一致 */
+    @Size(max = 32, message = "所属分类不合法")
+    private String categoryId;
+
+    /** 父文档 ID（可选，同范围内层级） */
     @Size(max = 32, message = "上级文档不合法")
     private String parentId;
 

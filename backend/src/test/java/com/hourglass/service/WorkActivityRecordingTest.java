@@ -57,6 +57,7 @@ class WorkActivityRecordingTest {
     private DemandMapper demandMapper;
     private WorkActivityService workActivityService;
     private DeletionTraceService deletionTrace;
+    private ProjectAccessService projectAccess;
     private RequirementService requirementService;
     private RequirementDocService docService;
 
@@ -75,12 +76,13 @@ class WorkActivityRecordingTest {
         docService = new RequirementDocService(docMapper, mock(RequirementDocHistoryMapper.class),
                 mock(com.hourglass.mapper.RequirementDocCommentMapper.class),
                 reqMapper, userMapper, taskMapper,
-                workActivityService, demandMapper, mock(ProjectAccessService.class),
+                workActivityService, demandMapper, projectAccess = mock(ProjectAccessService.class),
                 mock(NotificationEventService.class),
                 mock(com.hourglass.mapper.ReqDocShareMapper.class),
                 mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class),
                 deletionTrace);
         org.springframework.test.util.ReflectionTestUtils.setField(docService, "taskQueries", mock(TaskQueryService.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(docService, "attachmentService", mock(AttachmentService.class));
         requirementService = new RequirementService(reqMapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
                 mock(ActivityService.class), workActivityService, docService,
                 mock(ProjectVersionService.class), mock(ProjectMilestoneService.class),
@@ -175,6 +177,8 @@ class WorkActivityRecordingTest {
         when(reqMapper.selectById("R2")).thenReturn(project("R2", WS, "新项目", null, "active"));
         when(taskMapper.selectIdsByReqDocExceptReqForCascade(WS, "D1", "R2"))
                 .thenReturn(Arrays.asList("K9"));
+        /* 新口径：非负责人改文档需空间管理员；这里验证字段变更留痕 */
+        when(projectAccess.canManage(WS, USER)).thenReturn(true);
 
         ReqDocSaveRequest request = new ReqDocSaveRequest();
         request.setReqId("R2");
@@ -197,7 +201,7 @@ class WorkActivityRecordingTest {
         }
         verify(docMapper).clearTaskRefExceptReq(WS, "D1", "R2");
         verify(deletionTrace).logTaskCascade(WS, USER, Arrays.asList("K9"),
-                "需求文档「新标题」已更换项目，自动解除关联");
+                "需求文档「新标题」已更换归属范围，自动解除关联");
     }
 
     @Test

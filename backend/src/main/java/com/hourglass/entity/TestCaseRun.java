@@ -14,6 +14,8 @@ public class TestCaseRun {
     /** passed / failed / blocked */
     private String status;
     private String note;
+    /** 执行环境（浏览器/版本/设备），转缺陷时预填 */
+    private String environment;
     /** 由本次失败转出的缺陷任务 ID */
     private String bugTaskId;
     /** 所属测试计划 ID（计划内批量执行时写入；空=单用例执行） */

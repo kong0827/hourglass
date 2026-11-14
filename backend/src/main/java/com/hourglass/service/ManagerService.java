@@ -59,6 +59,8 @@ public class ManagerService {
     private static final int WEEK_DAYS = 7;
     /** 手机端团队视图的区间上限：再长就退化成「全部历史」，快照与七日格表格都吃不消 */
     private static final int MAX_RANGE_DAYS = 92;
+    /** 投入结构允许按年查看：两年多足够覆盖「本年度 + 上年对比」的深链，避免全量历史拖垮聚合 */
+    private static final int MAX_INVESTMENT_DAYS = 800;
     private static final int STAGNANT_DAYS = 7;
     private static final int RED_OVERDUE_PERCENT = 10;
     private static final int PERCENT = 100;
@@ -68,9 +70,12 @@ public class ManagerService {
     private static final Logger log = LoggerFactory.getLogger(ManagerService.class);
     private static final int DRILL_MAX_LIMIT = 100;
     private static final String UNASSIGNED_KEY = "unassigned";
+    private static final String UNASSIGNED_MEMBER_KEY = "x:unassigned";
     private static final String UNASSIGNED_NAME = "未指派";
     private static final String UNCATEGORIZED_NAME = "未归类";
     private static final String UNSET_FILTER = "__unset__";
+    private static final String UNSET_COMPANY_NAME = "未设公司";
+    private static final String UNSET_ROLE_NAME = "未设角色";
 
     private final TaskMapper taskMapper;
     private final RequirementMapper requirementMapper;
@@ -346,7 +351,7 @@ public class ManagerService {
                     continue;
                 }
                 LocalDate created = date(task.getCreatedAt());
-                LocalDate completed = task.getCompletedAt();
+                LocalDate completed = date(task.getCompletedAt());
                 if ("opened".equals(expected) && created != null
                         && !created.isBefore(start) && !created.isAfter(end)) {
                     matched.add(task);
@@ -367,7 +372,7 @@ public class ManagerService {
             LocalDate point = requiredDate(date, "date");
             for (Task task : tasks) {
                 if (isDone(task) && task.getCompletedAt() != null
-                        && !task.getCompletedAt().isAfter(point)) {
+                        && !date(task.getCompletedAt()).isAfter(point)) {
                     matched.add(task);
                 }
             }
@@ -383,6 +388,591 @@ public class ManagerService {
                 : matched.subList(safeOffset, Math.min(total, safeOffset + safeLimit));
         return PageResult.of(taskMaps(pageTasks, requirementNames(requirements)),
                 total, safeOffset, safeLimit);
+    }
+
+    /**
+     * 投入结构（年度 / 季度）。
+     *
+     * <p>实际工时按 {@code time_log.started_at} 的日期归属周期，预估工时按工作项的
+     * 计划开始日（空则创建日）整条归属；开发 / 测试沿用「计时日期落在测试窗口内」的拆分。
+     * 周期边界只决定「算哪一段」，跨期工作项不会被摊分到多个周期。</p>
+     */
+    public Map<String, Object> investment(String workspaceId, String userId,
+                                          String fromValue, String toValue,
+                                          String reqId, String roleTitle, String companyName) {
+        return investment(workspaceId, userId, fromValue, toValue, reqId, roleTitle, companyName, null);
+    }
+
+    public Map<String, Object> investment(String workspaceId, String userId,
+                                          String fromValue, String toValue,
+                                          String reqId, String roleTitle, String companyName,
+                                          List<String> memberUserIds) {
+        InvestmentContext context = investmentContext(workspaceId, userId, fromValue, toValue,
+                reqId, roleTitle, companyName, memberUserIds);
+        Map<String, InvestBucket> projects = new LinkedHashMap<String, InvestBucket>();
+        Map<String, InvestBucket> members = new LinkedHashMap<String, InvestBucket>();
+        Map<String, InvestBucket> companies = new LinkedHashMap<String, InvestBucket>();
+        Map<String, InvestBucket> roles = new LinkedHashMap<String, InvestBucket>();
+        Map<String, InvestBucket> months = new LinkedHashMap<String, InvestBucket>();
+        InvestBucket totals = new InvestBucket("total", "合计");
+
+        LocalDate cursor = context.from.withDayOfMonth(1);
+        LocalDate lastMonth = context.to.withDayOfMonth(1);
+        while (!cursor.isAfter(lastMonth)) {
+            months.put(monthKey(cursor), new InvestBucket(monthKey(cursor), monthLabel(cursor)));
+            cursor = cursor.plusMonths(1);
+        }
+
+        for (InvestmentItem item : context.items) {
+            String projectKey = investmentProjectKey(item);
+            String projectName = investmentProjectName(item, context.reqNames);
+            bucket(projects, projectKey, projectName).add(item);
+            bucket(members, item.memberKey, item.memberName).add(item);
+            bucket(companies, item.companyKey, item.companyName).add(item);
+            bucket(roles, item.roleKey, item.roleName).add(item);
+            bucket(months, monthKey(item.date), monthLabel(item.date)).add(item);
+            totals.add(item);
+        }
+
+        Map<String, Object> rows = new LinkedHashMap<String, Object>();
+        rows.put("project", investmentRows(projects, false));
+        rows.put("member", investmentRows(members, true));
+        rows.put("company", investmentRows(companies, false));
+        rows.put("role", investmentRows(roles, false));
+
+        Map<String, Object> range = new LinkedHashMap<String, Object>();
+        range.put("from", context.from.toString());
+        range.put("to", context.to.toString());
+        range.put("days", ChronoUnit.DAYS.between(context.from, context.to) + 1);
+
+        Map<String, Object> scope = new LinkedHashMap<String, Object>();
+        scope.put("reqId", context.filter.reqId);
+        scope.put("roleTitle", context.filter.roleUnset ? UNSET_FILTER
+                : labelFilterOption(context.filter.roleTitle));
+        scope.put("companyName", context.filter.companyUnset ? UNSET_FILTER
+                : labelFilterOption(context.filter.companyName));
+
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("range", range);
+        result.put("scope", scope);
+        result.put("totals", totals.toMap());
+        List<Map<String, Object>> monthRows = new ArrayList<Map<String, Object>>();
+        for (InvestBucket month : months.values()) {
+            monthRows.add(month.toMap());
+        }
+        result.put("months", monthRows);
+        result.put("rows", rows);
+        result.put("filterOptions", context.options);
+        return result;
+    }
+
+    /** 投入结构下钻：按同一周期与筛选，把某个分组内的计时 / 预估聚到工作项上。 */
+    public PageResult<Map<String, Object>> investmentTasks(String workspaceId, String userId,
+                                                           String fromValue, String toValue,
+                                                           String reqId, String roleTitle, String companyName,
+                                                           String dimension, String key,
+                                                           Integer offset, Integer limit) {
+        return investmentTasks(workspaceId, userId, fromValue, toValue, reqId, roleTitle, companyName,
+                dimension, key, offset, limit, null);
+    }
+
+    public PageResult<Map<String, Object>> investmentTasks(String workspaceId, String userId,
+                                                           String fromValue, String toValue,
+                                                           String reqId, String roleTitle, String companyName,
+                                                           String dimension, String key,
+                                                           Integer offset, Integer limit,
+                                                           List<String> memberUserIds) {
+        String dim = trimmed(dimension);
+        if (!"project".equals(dim) && !"member".equals(dim)
+                && !"company".equals(dim) && !"role".equals(dim)) {
+            throw AppException.badRequest("不支持的投入分析维度");
+        }
+        String target = trimmed(key);
+        if (target == null) {
+            throw AppException.badRequest("缺少下钻分组");
+        }
+        InvestmentContext context = investmentContext(workspaceId, userId, fromValue, toValue,
+                reqId, roleTitle, companyName, memberUserIds);
+        Map<String, InvestmentTaskRow> grouped = new LinkedHashMap<String, InvestmentTaskRow>();
+        for (InvestmentItem item : context.items) {
+            if (!investmentItemInGroup(item, dim, target)) {
+                continue;
+            }
+            String taskId = item.task.getId();
+            if (taskId == null) {
+                continue;
+            }
+            InvestmentTaskRow row = grouped.get(taskId);
+            if (row == null) {
+                row = new InvestmentTaskRow(item.task);
+                grouped.put(taskId, row);
+            }
+            if (item.actual) {
+                row.actualMinutes += item.minutes;
+                if (item.test) {
+                    row.testMinutes += item.minutes;
+                }
+            } else {
+                row.estimateMinutes += item.estimateMinutes;
+            }
+        }
+        List<InvestmentTaskRow> rows = new ArrayList<InvestmentTaskRow>(grouped.values());
+        Collections.sort(rows, new Comparator<InvestmentTaskRow>() {
+            @Override
+            public int compare(InvestmentTaskRow left, InvestmentTaskRow right) {
+                int actual = Integer.compare(right.actualMinutes, left.actualMinutes);
+                if (actual != 0) {
+                    return actual;
+                }
+                int estimate = Integer.compare(right.estimateMinutes, left.estimateMinutes);
+                if (estimate != 0) {
+                    return estimate;
+                }
+                return compareNullable(left.task.getTitle(), right.task.getTitle());
+            }
+        });
+
+        int safeOffset = Math.max(0, offset == null ? 0 : offset);
+        int safeLimit = limit == null || limit <= 0 ? DRILL_MAX_LIMIT : Math.min(limit, DRILL_MAX_LIMIT);
+        int total = rows.size();
+        List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
+        if (safeOffset < total) {
+            for (InvestmentTaskRow row : rows.subList(safeOffset, Math.min(total, safeOffset + safeLimit))) {
+                Map<String, Object> item = taskMap(row.task, context.reqNames);
+                item.put("estimateMinutes", row.estimateMinutes);
+                item.put("totalMinutes", row.actualMinutes);
+                item.put("devMinutes", Math.max(0, row.actualMinutes - row.testMinutes));
+                item.put("testMinutes", row.testMinutes);
+                items.add(item);
+            }
+        }
+        return PageResult.of(items, total, safeOffset, safeLimit);
+    }
+
+    /**
+     * 投入总结事实：一次聚合同时产出合计、按成员排序的分组与每人 Top 工作项，
+     * 供 AI 总结与报告附录复用，避免逐人重复加载快照。数字全部服务端算好，模型只引用。
+     */
+    public Map<String, Object> investmentMemberBreakdown(String workspaceId, String userId,
+                                                         String fromValue, String toValue,
+                                                         String reqId, String roleTitle, String companyName,
+                                                         List<String> memberUserIds, int maxItemsPerMember) {
+        InvestmentContext context = investmentContext(workspaceId, userId, fromValue, toValue,
+                reqId, roleTitle, companyName, memberUserIds);
+        Map<String, InvestBucket> members = new LinkedHashMap<String, InvestBucket>();
+        Map<String, Map<String, InvestmentTaskRow>> memberTasks =
+                new LinkedHashMap<String, Map<String, InvestmentTaskRow>>();
+        InvestBucket totals = new InvestBucket("total", "合计");
+        for (InvestmentItem item : context.items) {
+            bucket(members, item.memberKey, item.memberName).add(item);
+            totals.add(item);
+            if (item.task.getId() == null) {
+                continue;
+            }
+            Map<String, InvestmentTaskRow> rows = memberTasks.get(item.memberKey);
+            if (rows == null) {
+                rows = new LinkedHashMap<String, InvestmentTaskRow>();
+                memberTasks.put(item.memberKey, rows);
+            }
+            InvestmentTaskRow row = rows.get(item.task.getId());
+            if (row == null) {
+                row = new InvestmentTaskRow(item.task);
+                rows.put(item.task.getId(), row);
+            }
+            if (item.actual) {
+                row.actualMinutes += item.minutes;
+                if (item.test) {
+                    row.testMinutes += item.minutes;
+                }
+            } else {
+                row.estimateMinutes += item.estimateMinutes;
+            }
+        }
+
+        List<InvestBucket> ordered = new ArrayList<InvestBucket>(members.values());
+        Collections.sort(ordered, new Comparator<InvestBucket>() {
+            @Override
+            public int compare(InvestBucket left, InvestBucket right) {
+                int actual = Integer.compare(right.actualMinutes, left.actualMinutes);
+                if (actual != 0) {
+                    return actual;
+                }
+                int estimate = Integer.compare(right.estimateMinutes, left.estimateMinutes);
+                if (estimate != 0) {
+                    return estimate;
+                }
+                return compareNullable(left.name, right.name);
+            }
+        });
+
+        int cap = Math.max(1, maxItemsPerMember);
+        List<Map<String, Object>> memberRows = new ArrayList<Map<String, Object>>();
+        for (InvestBucket bucket : ordered) {
+            Map<String, Object> row = bucket.toMap();
+            row.put("companyName", joinedLabels(bucket.companyNames, "多个公司"));
+            row.put("roleTitle", joinedLabels(bucket.roleNames, "多个角色"));
+            row.put("sharePct", totals.actualMinutes > 0
+                    ? Math.round(bucket.actualMinutes * 100.0 / totals.actualMinutes) : 0);
+            Map<String, InvestmentTaskRow> grouped = memberTasks.get(bucket.key);
+            List<InvestmentTaskRow> taskRows = grouped == null
+                    ? new ArrayList<InvestmentTaskRow>()
+                    : new ArrayList<InvestmentTaskRow>(grouped.values());
+            Collections.sort(taskRows, new Comparator<InvestmentTaskRow>() {
+                @Override
+                public int compare(InvestmentTaskRow left, InvestmentTaskRow right) {
+                    int actual = Integer.compare(right.actualMinutes, left.actualMinutes);
+                    if (actual != 0) {
+                        return actual;
+                    }
+                    return compareNullable(left.task.getTitle(), right.task.getTitle());
+                }
+            });
+            List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
+            for (int i = 0; i < taskRows.size() && i < cap; i++) {
+                InvestmentTaskRow taskRow = taskRows.get(i);
+                Map<String, Object> item = taskMap(taskRow.task, context.reqNames);
+                item.put("estimateMinutes", taskRow.estimateMinutes);
+                item.put("totalMinutes", taskRow.actualMinutes);
+                item.put("devMinutes", Math.max(0, taskRow.actualMinutes - taskRow.testMinutes));
+                item.put("testMinutes", taskRow.testMinutes);
+                items.add(item);
+            }
+            row.put("items", items);
+            row.put("itemTruncated", taskRows.size() > cap);
+            memberRows.add(row);
+        }
+
+        Map<String, Object> range = new LinkedHashMap<String, Object>();
+        range.put("from", context.from.toString());
+        range.put("to", context.to.toString());
+        range.put("days", ChronoUnit.DAYS.between(context.from, context.to) + 1);
+
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("range", range);
+        result.put("totals", totals.toMap());
+        result.put("members", memberRows);
+        return result;
+    }
+
+    private InvestmentContext investmentContext(String workspaceId, String userId,
+                                                String fromValue, String toValue,
+                                                String reqId, String roleTitle, String companyName,
+                                                List<String> memberUserIds) {
+        LocalDate from = requiredDate(fromValue, "from");
+        LocalDate to = requiredDate(toValue, "to");
+        if (from.isAfter(to)) {
+            throw AppException.badRequest("开始日期不能晚于结束日期");
+        }
+        if (ChronoUnit.DAYS.between(from, to) + 1 > MAX_INVESTMENT_DAYS) {
+            throw AppException.badRequest("投入报表区间最多 " + MAX_INVESTMENT_DAYS + " 天");
+        }
+        DisplayFilter filter = displayFilter(reqId, roleTitle, companyName);
+        filter.memberKeys = investmentMemberKeys(memberUserIds);
+        Snapshot snapshot = load(workspaceId, from, to.plusDays(1), userId);
+        List<Requirement> requirements = scopedRequirements(snapshot, filter.reqId);
+        RoleContext roles = roleContext(workspaceId, requirements, snapshot.members);
+        Map<String, String> reqNames = requirementNames(requirements);
+        Map<String, Task> tasksById = new HashMap<String, Task>();
+        for (Task task : snapshot.tasks) {
+            if (task.getId() != null) {
+                tasksById.put(task.getId(), task);
+            }
+        }
+
+        InvestmentContext context = new InvestmentContext();
+        context.from = from;
+        context.to = to;
+        context.filter = filter;
+        context.reqNames = reqNames;
+        context.items = new ArrayList<InvestmentItem>();
+        Set<String> companies = new LinkedHashSet<String>();
+        Set<String> titles = new LinkedHashSet<String>();
+        Map<String, Map<String, Object>> memberOptions = new LinkedHashMap<String, Map<String, Object>>();
+
+        for (TimeLog log : snapshot.logs) {
+            if (log == null || log.getTaskId() == null || log.getStartedAt() == null) {
+                continue;
+            }
+            if (log.getEndedAt() == null || minutes(log.getMinutes()) <= 0) {
+                continue;
+            }
+            LocalDate logDate = log.getStartedAt().toLocalDate();
+            if (logDate.isBefore(from) || logDate.isAfter(to)) {
+                continue;
+            }
+            Task task = tasksById.get(log.getTaskId());
+            if (task == null) {
+                continue;
+            }
+            if (filter.reqId != null && !filter.reqId.equals(task.getReqId())) {
+                continue;
+            }
+            String actorId = trimmed(log.getUserId());
+            if (actorId == null) {
+                continue;
+            }
+            MemberLabels labels = memberLabels(roles, task.getReqId(), actorId);
+            InvestmentItem item = investmentActualItem(task, actorId, log, labels, snapshot.members);
+            collectInvestmentOptions(item, companies, titles);
+            collectInvestmentMember(item, memberOptions, snapshot.members);
+            if (investmentMatches(item, filter)) {
+                context.items.add(item);
+            }
+        }
+
+        for (Task task : snapshot.tasks) {
+            if (filter.reqId != null && !filter.reqId.equals(task.getReqId())) {
+                continue;
+            }
+            LocalDate planned = task.getStartDate() != null ? task.getStartDate() : date(task.getCreatedAt());
+            if (planned == null || planned.isBefore(from) || planned.isAfter(to)) {
+                continue;
+            }
+            int estimate = minutes(task.getEstimateMinutes());
+            if (estimate <= 0) {
+                continue;
+            }
+            String ownerId = taskOwnerId(task, roles);
+            MemberLabels labels = memberLabels(roles, task.getReqId(), ownerId);
+            InvestmentItem item = investmentEstimateItem(task, ownerId, planned, estimate, labels,
+                    snapshot.members);
+            collectInvestmentOptions(item, companies, titles);
+            collectInvestmentMember(item, memberOptions, snapshot.members);
+            if (investmentMatches(item, filter)) {
+                context.items.add(item);
+            }
+        }
+
+        Map<String, Object> options = new LinkedHashMap<String, Object>();
+        options.put("companyNames", sorted(companies));
+        options.put("roleTitles", sorted(titles));
+        options.put("members", sortedMemberOptions(memberOptions));
+        context.options = options;
+        return context;
+    }
+
+    /** 圈人筛选只认账号成员（memberKey 形如 u:userId）；纯文本负责人 / 未指派不参与勾选。 */
+    private Set<String> investmentMemberKeys(List<String> memberUserIds) {
+        if (memberUserIds == null || memberUserIds.isEmpty()) {
+            return null;
+        }
+        Set<String> keys = new LinkedHashSet<String>();
+        for (String id : memberUserIds) {
+            String trimmed = trimmed(id);
+            if (trimmed != null) {
+                keys.add("u:" + trimmed);
+            }
+        }
+        return keys.isEmpty() ? null : keys;
+    }
+
+    private void collectInvestmentMember(InvestmentItem item, Map<String, Map<String, Object>> memberOptions,
+                                         List<WorkspaceMember> members) {
+        if (item.memberKey == null || !item.memberKey.startsWith("u:")) {
+            return;
+        }
+        String userId = item.memberKey.substring(2);
+        if (memberOptions.containsKey(userId)) {
+            return;
+        }
+        Map<String, Object> option = new LinkedHashMap<String, Object>();
+        option.put("userId", userId);
+        option.put("name", item.memberName);
+        option.put("companyName", item.companyName);
+        String jobTitle = null;
+        for (WorkspaceMember member : members) {
+            if (member != null && userId.equals(member.getUserId())) {
+                jobTitle = member.getJobTitle();
+                break;
+            }
+        }
+        option.put("jobTitle", jobTitle);
+        memberOptions.put(userId, option);
+    }
+
+    private List<Map<String, Object>> sortedMemberOptions(Map<String, Map<String, Object>> memberOptions) {
+        List<Map<String, Object>> list = new ArrayList<Map<String, Object>>(memberOptions.values());
+        Collections.sort(list, new Comparator<Map<String, Object>>() {
+            @Override
+            public int compare(Map<String, Object> left, Map<String, Object> right) {
+                return compareNullable((String) left.get("name"), (String) right.get("name"));
+            }
+        });
+        return list;
+    }
+
+    private InvestmentItem investmentActualItem(Task task, String actorId, TimeLog log,
+                                                MemberLabels labels, List<WorkspaceMember> members) {
+        InvestmentItem item = new InvestmentItem();
+        item.task = task;
+        item.actual = true;
+        item.date = log.getStartedAt().toLocalDate();
+        item.minutes = minutes(log.getMinutes());
+        item.test = isTestLog(log, task);
+        item.memberKey = "u:" + actorId;
+        item.memberName = memberDisplayName(members, actorId);
+        item.companyName = labels.companyName;
+        item.roleName = labels.effectiveRoleTitle;
+        item.roleFilterTitles = roleTitles(labels);
+        item.companyKey = item.companyName == null ? UNASSIGNED_KEY : item.companyName;
+        item.roleKey = item.roleName == null ? UNASSIGNED_KEY : item.roleName;
+        return item;
+    }
+
+    private InvestmentItem investmentEstimateItem(Task task, String ownerId, LocalDate planned,
+                                                  int estimate, MemberLabels labels,
+                                                  List<WorkspaceMember> members) {
+        InvestmentItem item = new InvestmentItem();
+        item.task = task;
+        item.actual = false;
+        item.date = planned;
+        item.estimateMinutes = estimate;
+        item.memberKey = ownerId != null ? "u:" + ownerId
+                : (hasText(task.getOwner()) ? "n:" + task.getOwner().trim() : UNASSIGNED_MEMBER_KEY);
+        item.memberName = ownerId != null ? memberDisplayName(members, ownerId)
+                : (hasText(task.getOwner()) ? task.getOwner().trim() : UNASSIGNED_NAME);
+        item.companyName = labels.companyName;
+        item.roleName = labels.effectiveRoleTitle;
+        item.roleFilterTitles = roleTitles(labels);
+        item.companyKey = item.companyName == null ? UNASSIGNED_KEY : item.companyName;
+        item.roleKey = item.roleName == null ? UNASSIGNED_KEY : item.roleName;
+        return item;
+    }
+
+    private void collectInvestmentOptions(InvestmentItem item, Set<String> companies, Set<String> titles) {
+        companies.add(item.companyName == null ? UNSET_FILTER : labelFilterOption(item.companyName));
+        if (item.roleFilterTitles.isEmpty()) {
+            titles.add(UNSET_FILTER);
+        } else {
+            for (String title : item.roleFilterTitles) {
+                titles.add(labelFilterOption(title));
+            }
+        }
+    }
+
+    /**
+     * 投入筛选按「谁投入」匹配：实际看计时人，预估看负责人；
+     * 与交付图表按工作项负责人过滤不同，否则会漏掉跨项目支援的计时。
+     */
+    private boolean investmentMatches(InvestmentItem item, DisplayFilter filter) {
+        if (filter.memberKeys != null && !filter.memberKeys.isEmpty()
+                && !filter.memberKeys.contains(item.memberKey)) {
+            return false;
+        }
+        if (filter.roleTitle != null) {
+            if (filter.roleUnset) {
+                if (!item.roleFilterTitles.isEmpty()) {
+                    return false;
+                }
+            } else if (!item.roleFilterTitles.contains(filter.roleTitle)) {
+                return false;
+            }
+        }
+        if (filter.companyName != null) {
+            if (filter.companyUnset) {
+                if (item.companyName != null) {
+                    return false;
+                }
+            } else if (!filter.companyName.equals(item.companyName)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isTestLog(TimeLog log, Task task) {
+        if (log.getStartedAt() == null || task.getTestStartedAt() == null || task.getTestFinishedAt() == null) {
+            return false;
+        }
+        LocalDate day = log.getStartedAt().toLocalDate();
+        LocalDate testFrom = task.getTestStartedAt().toLocalDate();
+        LocalDate testTo = task.getTestFinishedAt().toLocalDate();
+        return !day.isBefore(testFrom) && !day.isAfter(testTo);
+    }
+
+    private InvestBucket bucket(Map<String, InvestBucket> buckets, String key, String name) {
+        InvestBucket bucket = buckets.get(key);
+        if (bucket == null) {
+            bucket = new InvestBucket(key, name);
+            buckets.put(key, bucket);
+        }
+        return bucket;
+    }
+
+    private List<Map<String, Object>> investmentRows(Map<String, InvestBucket> buckets, boolean memberRows) {
+        List<InvestBucket> ordered = new ArrayList<InvestBucket>(buckets.values());
+        Collections.sort(ordered, new Comparator<InvestBucket>() {
+            @Override
+            public int compare(InvestBucket left, InvestBucket right) {
+                int actual = Integer.compare(right.actualMinutes, left.actualMinutes);
+                if (actual != 0) {
+                    return actual;
+                }
+                int estimate = Integer.compare(right.estimateMinutes, left.estimateMinutes);
+                if (estimate != 0) {
+                    return estimate;
+                }
+                return compareNullable(left.name, right.name);
+            }
+        });
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        for (InvestBucket bucket : ordered) {
+            Map<String, Object> row = bucket.toMap();
+            if (memberRows) {
+                row.put("companyName", joinedLabels(bucket.companyNames, "多个公司"));
+                row.put("roleTitle", joinedLabels(bucket.roleNames, "多个角色"));
+            }
+            result.add(row);
+        }
+        return result;
+    }
+
+    private String joinedLabels(Set<String> values, String overflowLabel) {
+        if (values.isEmpty()) {
+            return null;
+        }
+        List<String> list = sorted(values);
+        if (list.size() == 1) {
+            return list.get(0);
+        }
+        if (list.size() == 2) {
+            return list.get(0) + " / " + list.get(1);
+        }
+        return list.get(0) + " 等 " + list.size() + " 个";
+    }
+
+    private String investmentProjectKey(InvestmentItem item) {
+        return item.task.getReqId() == null ? UNASSIGNED_KEY : item.task.getReqId();
+    }
+
+    private String investmentProjectName(InvestmentItem item, Map<String, String> reqNames) {
+        if (item.task.getReqId() == null) {
+            return UNCATEGORIZED_NAME;
+        }
+        String name = reqNames.get(item.task.getReqId());
+        return name == null ? UNCATEGORIZED_NAME : name;
+    }
+
+    private boolean investmentItemInGroup(InvestmentItem item, String dimension, String key) {
+        if ("project".equals(dimension)) {
+            return key.equals(investmentProjectKey(item));
+        }
+        if ("member".equals(dimension)) {
+            return key.equals(item.memberKey);
+        }
+        if ("company".equals(dimension)) {
+            return key.equals(item.companyKey);
+        }
+        return key.equals(item.roleKey);
+    }
+
+    private String monthKey(LocalDate date) {
+        return date.getYear() + "-" + (date.getMonthValue() < 10 ? "0" : "")
+                + date.getMonthValue();
+    }
+
+    private String monthLabel(LocalDate date) {
+        return date.getMonthValue() + "月";
     }
 
     public Map<String, Object> workload(String workspaceId, String userId) {
@@ -942,7 +1532,7 @@ public class ManagerService {
             LocalDate date = first.plusDays(index);
             int completedActual = 0;
             for (Task task : tasks) {
-                if (isDone(task) && task.getCompletedAt() != null && !task.getCompletedAt().isAfter(date)) {
+                if (isDone(task) && task.getCompletedAt() != null && !date(task.getCompletedAt()).isAfter(date)) {
                     completedActual += actual(task);
                 }
             }
@@ -1030,7 +1620,7 @@ public class ManagerService {
         if (created != null && created.isAfter(weekEnd)) {
             return null;
         }
-        if (isDone(task) && (task.getCompletedAt() == null || !task.getCompletedAt().isAfter(weekEnd))) {
+        if (isDone(task) && (task.getCompletedAt() == null || !date(task.getCompletedAt()).isAfter(weekEnd))) {
             return "done";
         }
         /* 完成日晚于该周的任务沿用原口径计待处理；其余只有当前列状态，按处理规则归类 */
@@ -1060,7 +1650,7 @@ public class ManagerService {
                     continue;
                 }
                 LocalDate created = date(task.getCreatedAt());
-                LocalDate completed = task.getCompletedAt();
+                LocalDate completed = date(task.getCompletedAt());
                 if (created != null && !created.isBefore(start) && !created.isAfter(end)) {
                     opened++;
                 }
@@ -1144,7 +1734,7 @@ public class ManagerService {
         if (start == null) {
             return null;
         }
-        long days = ChronoUnit.DAYS.between(start, task.getCompletedAt());
+        long days = ChronoUnit.DAYS.between(start, date(task.getCompletedAt()));
         return days < 0 ? null : Long.valueOf(days);
     }
 
@@ -1165,8 +1755,8 @@ public class ManagerService {
         Collections.sort(tasks, new Comparator<Task>() {
             @Override
             public int compare(Task a, Task b) {
-                LocalDate left = a.getCompletedAt();
-                LocalDate right = b.getCompletedAt();
+                LocalDateTime left = a.getCompletedAt();
+                LocalDateTime right = b.getCompletedAt();
                 if (left == null && right == null) {
                     return 0;
                 }
@@ -1234,7 +1824,7 @@ public class ManagerService {
                     created++;
                 }
                 if (isDone(task) && task.getCompletedAt() != null
-                        && !task.getCompletedAt().isBefore(start) && task.getCompletedAt().isBefore(before)) {
+                        && !date(task.getCompletedAt()).isBefore(start) && date(task.getCompletedAt()).isBefore(before)) {
                     completed++;
                 }
             }
@@ -1644,7 +2234,7 @@ public class ManagerService {
         List<Task> result = new ArrayList<Task>();
         for (Task task : tasks) {
             if (isDone(task) && task.getCompletedAt() != null
-                    && !task.getCompletedAt().isBefore(from) && task.getCompletedAt().isBefore(before)) {
+                    && !date(task.getCompletedAt()).isBefore(from) && date(task.getCompletedAt()).isBefore(before)) {
                 result.add(task);
             }
         }
@@ -1655,8 +2245,8 @@ public class ManagerService {
         LocalDate latest = null;
         for (Task task : tasks) {
             if (isDone(task) && task.getCompletedAt() != null
-                    && (latest == null || task.getCompletedAt().isAfter(latest))) {
-                latest = task.getCompletedAt();
+                    && (latest == null || date(task.getCompletedAt()).isAfter(latest))) {
+                latest = date(task.getCompletedAt());
             }
         }
         return latest;
@@ -2110,9 +2700,106 @@ public class ManagerService {
         private String versionId;
         private boolean roleUnset;
         private boolean companyUnset;
+        /** 圈人筛选：null 表示不限；非空时只保留 memberKey 命中的投入 */
+        private Set<String> memberKeys;
 
         private boolean hasMemberFilter() {
-            return roleTitle != null || companyName != null;
+            return roleTitle != null || companyName != null
+                    || (memberKeys != null && !memberKeys.isEmpty());
+        }
+    }
+
+    private static class InvestmentContext {
+        private LocalDate from;
+        private LocalDate to;
+        private DisplayFilter filter;
+        private Map<String, String> reqNames;
+        private List<InvestmentItem> items;
+        private Map<String, Object> options;
+    }
+
+    /** 一条实际计时或一条预估：实际按计时人 / 计时日，预估按负责人 / 计划开始日。 */
+    private static class InvestmentItem {
+        private Task task;
+        private boolean actual;
+        private LocalDate date;
+        private int minutes;
+        private int estimateMinutes;
+        private boolean test;
+        private String memberKey;
+        private String memberName;
+        private String companyKey;
+        private String companyName;
+        private String roleKey;
+        private String roleName;
+        private Set<String> roleFilterTitles;
+    }
+
+    private static class InvestBucket {
+        private final String key;
+        private final String name;
+        private final Set<String> memberKeys = new LinkedHashSet<String>();
+        private final Set<String> projectIds = new LinkedHashSet<String>();
+        private final Set<String> taskIds = new LinkedHashSet<String>();
+        private final Set<String> companyNames = new LinkedHashSet<String>();
+        private final Set<String> roleNames = new LinkedHashSet<String>();
+        private int estimateMinutes;
+        private int actualMinutes;
+        private int testMinutes;
+
+        private InvestBucket(String key, String name) {
+            this.key = key;
+            this.name = name;
+        }
+
+        private void add(InvestmentItem item) {
+            if (item.task.getId() != null) {
+                taskIds.add(item.task.getId());
+            }
+            projectIds.add(item.task.getReqId());
+            /* 未指派的预估仍计入工时，但不是一个"人"，不能抬高去重人力 */
+            if (!UNASSIGNED_MEMBER_KEY.equals(item.memberKey)) {
+                memberKeys.add(item.memberKey);
+            }
+            if (item.companyName != null) {
+                companyNames.add(item.companyName);
+            }
+            if (item.roleName != null) {
+                roleNames.add(item.roleName);
+            }
+            if (item.actual) {
+                actualMinutes += item.minutes;
+                if (item.test) {
+                    testMinutes += item.minutes;
+                }
+            } else {
+                estimateMinutes += item.estimateMinutes;
+            }
+        }
+
+        private Map<String, Object> toMap() {
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("key", key);
+            item.put("name", name);
+            item.put("users", memberKeys.size());
+            item.put("projects", projectIds.size());
+            item.put("tasks", taskIds.size());
+            item.put("estimateMinutes", estimateMinutes);
+            item.put("actualMinutes", actualMinutes);
+            item.put("devMinutes", Math.max(0, actualMinutes - testMinutes));
+            item.put("testMinutes", testMinutes);
+            return item;
+        }
+    }
+
+    private static class InvestmentTaskRow {
+        private final Task task;
+        private int estimateMinutes;
+        private int actualMinutes;
+        private int testMinutes;
+
+        private InvestmentTaskRow(Task task) {
+            this.task = task;
         }
     }
 

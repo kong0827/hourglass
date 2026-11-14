@@ -132,8 +132,8 @@ public class TaskWorkflowService {
         return n - p > 1 ? p + (n - p) / 2 : -1;
     }
 
-    /** 测试时间统一落到分钟：避免同一分钟内的重复流转产生秒级噪声 */
-    private static LocalDateTime testNow() {
+    /** 流转时间统一落到分钟：避免同一分钟内的重复流转产生秒级噪声 */
+    private static LocalDateTime minuteNow() {
         return LocalDateTime.now().withSecond(0).withNano(0);
     }
 
@@ -146,7 +146,7 @@ public class TaskWorkflowService {
         if (task == null || from == null || to == null || from.equals(to)) {
             return;
         }
-        LocalDateTime now = testNow();
+        LocalDateTime now = minuteNow();
         boolean newRound = task.getTestFinishedAt() != null;
         /* 从「测试中」退回待测队列不是重新提测：保留原提测时间，等待时长才不会被清零 */
         if (Consts.COL_TEST.equals(to) && !Consts.COL_TESTING.equals(from)) {
@@ -260,7 +260,7 @@ public class TaskWorkflowService {
             boolean autoClaim = req.getAutoClaim() == null || req.getAutoClaim();
             autoClaimedTest = applyTestTransition(task, from, to, workspaceId, userId, autoClaim);
             if (Consts.COL_DONE.equals(to)) {
-                task.setCompletedAt(LocalDate.now());
+                task.setCompletedAt(minuteNow());
                 /* 拖到已完成：把这个任务上所有人的计时都停掉（口径：每天 8 小时、跳过周末） */
                 timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已完成");
                 /* 接力：「进行中」不该出现"这一列谁都没在计时"的空档 —— 自动接上同列的下一个任务。
@@ -371,7 +371,7 @@ public class TaskWorkflowService {
         if (!claimTestOwner(task, workspaceId, userId)) {
             throw new AppException(409, "该工作项已有测试负责人，请刷新后重试");
         }
-        LocalDateTime now = testNow();
+        LocalDateTime now = minuteNow();
         if (task.getTestStartedAt() == null) {
             task.setTestStartedAt(now);
         }
@@ -658,12 +658,14 @@ public class TaskWorkflowService {
             return null;
         }
 
+        int subIdx = 0;
         for (Subtask s : subtaskMapper.selectByTaskId(workspaceId, doneTask.getId())) {
             Subtask ns = new Subtask();
             ns.setTaskId(nt.getId());
             ns.setWorkspaceId(workspaceId);
             ns.setTitle(s.getTitle());
             ns.setDone(Boolean.FALSE);
+            ns.setSortOrder(subIdx++);
             subtaskMapper.insert(ns);
         }
         support.saveTags(workspaceId, nt.getId(), support.tagNames(workspaceId, doneTask.getId()));

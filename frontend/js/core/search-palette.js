@@ -90,6 +90,21 @@ function scopeMessage(){
     : "只在当前空间内搜索；切换空间后在对应空间内查找";
 }
 
+/* 先分段转义再包 mark：关键词含 & < > 等字符时也不会破坏转义或注入标签 */
+function snippetHTML(snippet, q){
+  var kw = String(q || "").trim();
+  if(!kw) return esc(snippet);
+  var lower = snippet.toLowerCase(), needle = kw.toLowerCase();
+  var out = "", i = 0;
+  for(;;){
+    var idx = lower.indexOf(needle, i);
+    if(idx < 0){ out += esc(snippet.slice(i)); break; }
+    out += esc(snippet.slice(i, idx)) + "<mark>" + esc(snippet.slice(idx, idx + kw.length)) + "</mark>";
+    i = idx + kw.length;
+  }
+  return out;
+}
+
 function idleHTML(){
   var html = "";
   if(recent.length){
@@ -135,7 +150,9 @@ function render(){
       + ' aria-selected="' + (i === active ? "true" : "false") + '" data-hit="' + i + '">'
       + '<span class="palette-ic">' + m.icon + '</span>'
       + '<span class="palette-body"><span class="palette-title">' + esc(h.title || "未命名") + '</span>'
-      + '<span class="palette-meta">' + esc(metaText(h)) + '</span></span>'
+      + '<span class="palette-meta">' + esc(metaText(h)) + '</span>'
+      + (h.type === "doc" && h.snippet ? '<span class="palette-snippet">' + snippetHTML(h.snippet, inputEl ? inputEl.value : "") + '</span>' : '')
+      + '</span>'
       + '</button>';
   });
   resultsEl.innerHTML = html;

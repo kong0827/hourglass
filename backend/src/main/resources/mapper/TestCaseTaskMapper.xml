@@ -97,8 +97,8 @@
     ORDER BY t.item_no IS NULL, t.item_no, t.created_at, t.id
   </select>
 
-  <select id="selectCoverageByProject" resultType="com.hourglass.dto.TaskCoverageRow">
-    <!-- 项目级工作项覆盖：发布检查统计“已被用例验证的工作项 / 全部工作项” -->
+  <select id="selectCoverageByTasks" resultType="com.hourglass.dto.TaskCoverageRow">
+    <!-- 发布检查的本次范围口径：工作项集合由版本范围（或计划任务）给出 -->
     SELECT t.id AS task_id, t.demand_id, t.title AS task_title, t.item_no, t.item_type, t.board_column,
            COUNT(c.id) AS case_total,
            COALESCE(SUM(CASE WHEN c.latest_status = 'passed' THEN 1 ELSE 0 END), 0) AS passed,
@@ -111,8 +111,9 @@
     LEFT JOIN test_case c
       ON c.id = ct.case_id AND c.workspace_id = t.workspace_id
     WHERE t.workspace_id = #{workspaceId}
-      AND t.req_id = #{reqId}
       AND t.deleted_at IS NULL
+      AND t.id IN
+      <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
     GROUP BY t.id, t.demand_id, t.title, t.item_no, t.item_type, t.board_column, t.created_at
     ORDER BY t.item_no IS NULL, t.item_no, t.created_at, t.id
   </select>

@@ -193,17 +193,20 @@ try{
   await waitFor(`document.querySelectorAll("#tcList .tc-row").length > 0 || !!document.querySelector("#tcList .empty-state")`, "用例列表");
   const reqPos = await evaluate(`(() => {
     const req = document.getElementById("tcReq");
+    const bar = document.getElementById("tcFilterBar");
+    const strip = document.getElementById("tcStats");
     return {
       parent: req.parentElement.className,
-      next: (req.nextElementSibling || {}).id,
-      display: getComputedStyle(req).display,
+      barParent: bar.parentElement.className,
       order: [...req.parentElement.children].findIndex(x => x.id === "tcReq"),
-      filterIndex: [...req.parentElement.children].findIndex(x => x.id === "tcFilterBar")
+      stripBeforeBar: !!(strip.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING),
+      display: getComputedStyle(req).display
     };
   })()`);
   assert(reqPos.parent.indexOf("toolbar-right") !== -1, "项目范围控件位于工具栏右侧（" + reqPos.parent + "）");
-  assert(reqPos.next === "tcFilterBar", "项目范围紧邻筛选区之前，成为筛选第一位（next=" + reqPos.next + "）");
-  assert(reqPos.order === 1 && reqPos.filterIndex === 2, "DOM 顺序：说明图标 → 项目 → 筛选区（" + reqPos.order + "/" + reqPos.filterIndex + "）");
+  assert(reqPos.barParent.indexOf("tc-page") !== -1, "筛选条独立成行，不再挤在工具栏右侧（" + reqPos.barParent + "）");
+  assert(reqPos.stripBeforeBar, "统计 chips 条在筛选条之前：点计数即筛选");
+  assert(reqPos.order === 1, "DOM 顺序：说明图标 → 项目（" + reqPos.order + "）");
   await shot("audit-batch2-cases-1440.png");
 
   /* 全局「清空筛选」保留项目范围 */
@@ -223,7 +226,7 @@ try{
   const caseClear = await evaluate(`(() => ({
     req: document.getElementById("tcReq").value,
     q: document.getElementById("tcSearch").value,
-    status: document.querySelector('#tcStatusSeg [aria-pressed="true"]').dataset.tcStatus,
+    status: document.querySelector('#tcStats [aria-pressed="true"]').dataset.tcStatus,
     badge: document.getElementById("tcFilterCount").hidden
   }))()`);
   assert(caseClear.req === "__all__" && caseClear.q === "" && caseClear.status === "all",

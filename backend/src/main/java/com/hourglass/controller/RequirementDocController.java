@@ -56,12 +56,14 @@ public class RequirementDocController {
     @GetMapping("/api/req-docs")
     public ApiResult<PageResult<ReqDocView>> list(@RequestParam(required = false) String workspace,
                                                   @RequestParam(required = false) String reqId,
+                                                  @RequestParam(required = false) String categoryId,
+                                                  @RequestParam(required = false, defaultValue = "false") boolean spaceOnly,
                                                   @RequestParam(required = false) String keyword,
                                                   @RequestParam(required = false) Integer offset,
                                                   @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(docService.page(ws.getId(), userId, reqId, keyword,
+        return ApiResult.ok(docService.page(ws.getId(), userId, reqId, categoryId, spaceOnly, keyword,
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 

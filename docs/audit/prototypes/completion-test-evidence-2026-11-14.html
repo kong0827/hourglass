@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>完成记录 · 测试证据呈现原型（2026-11-14）</title>
+<style>
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success-soft:#ECFDF3; --success-fg:#067647; --success-border:#A6F4C5;
+  --warning-soft:#FFFAEB; --warning-fg:#B54708; --warning-border:#FEDF89;
+  --p0:#F04438; --p1:#F79009; --p2:#2E90FA; --p3:#667085;
+  --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-app);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1340px;margin:0 auto;padding:26px 30px 60px}
+.page-head h1{font-size:21px;margin:0;letter-spacing:.2px}
+.page-head .sub{color:var(--text-3);font-size:12.5px;margin-top:7px;line-height:1.7}
+.callout{display:flex;gap:9px;background:var(--primary-soft);border:1px solid var(--primary-border);border-left:3px solid var(--primary);
+  border-radius:var(--r-sm);padding:10px 13px;color:var(--primary-fg);font-size:12.5px;line-height:1.7;margin:16px 0 20px}
+.callout b{font-weight:650}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px 18px;margin-bottom:18px;box-shadow:var(--shadow-xs)}
+.panel-head{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.panel-head h3{font-size:15px;margin:0;font-weight:650}
+.panel-head .meta{font-size:12px;color:var(--text-3)}
+.badge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:11px;font-weight:650;
+  background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border)}
+.badge.rec{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border)}
+.hint{font-size:12.5px;line-height:1.7;color:var(--text-3);margin:9px 0 12px}
+.hint b{color:var(--text-2);font-weight:600}
+.trade{display:flex;gap:18px;margin-top:12px;font-size:12px;line-height:1.75;color:var(--text-2)}
+.trade div{flex:1;background:var(--surface-sunken);border-radius:var(--r-sm);padding:9px 11px}
+.trade .t{font-weight:650;color:var(--text);display:block;margin-bottom:3px;font-size:12px}
+.trade ul{margin:0;padding-left:16px}
+
+/* 真实页面：page-toolbar + stat-grid + panel */
+.page-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.toolbar-title{font-size:15px;font-weight:650}
+.toolbar-right{display:flex;align-items:center;gap:8px}
+.toolbar-meta{font-size:12.5px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.icon-btn{width:26px;height:26px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-3);
+  display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--border-strong);
+  background:var(--surface);color:var(--text-2);font-size:12px;font-family:var(--font)}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.stat{background:var(--surface-sunken);border-radius:var(--r-md);padding:10px 12px}
+.stat .k{font-size:11.5px;color:var(--text-3)}
+.stat .v{font-size:19px;font-weight:650;margin-top:3px;letter-spacing:.2px}
+.stat .s{font-size:11.5px;color:var(--text-3);margin-top:2px}
+.set-hint{font-size:12px;color:var(--text-3);line-height:1.7;margin:8px 0 0}
+.set-hint b{color:var(--text-2);font-weight:600}
+
+/* 真实 .comp-table 样式（views.css 6.10） */
+.comp-scroll{overflow-x:auto;margin-top:6px;border:1px solid var(--border);border-radius:var(--r-sm)}
+.comp-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+.comp-table th,.comp-table td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle}
+.comp-table th{font-size:11.5px;font-weight:650;color:var(--text-3);white-space:nowrap;background:var(--surface-sunken)}
+.comp-table tbody tr:last-child td{border-bottom:none}
+.comp-table td.nowrap,.comp-table span.nowrap{white-space:nowrap;color:var(--text-2);font-variant-numeric:tabular-nums}
+.comp-table span.nowrap{display:block;font-size:11.5px}
+.comp-t{display:block;font-weight:500;color:var(--text)}
+.comp-d{display:block;margin-top:2px;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comp-dim{color:var(--text-3)}
+.comp-sub{display:block;margin-top:2px;font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.comp-sub b{font-weight:600;color:var(--text-2)}
+.link-cell{display:inline-block;max-width:100%;padding:0;border:none;background:none;font-size:13px;color:var(--text);
+  text-decoration:underline;text-underline-offset:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;font-family:var(--font)}
+.tag{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;font-weight:600;
+  background:var(--surface-sunken);color:var(--text-2);max-width:100%;white-space:nowrap}
+.tag .dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.pdot{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--text-2)}
+.pdot i{width:6px;height:6px;border-radius:50%;background:var(--p-c,currentColor);flex:0 0 auto}
+.pdot.P0{--p-c:var(--p0)} .pdot.P1{--p-c:var(--p1)} .pdot.P2{--p-c:var(--p2)} .pdot.P3{--p-c:var(--p3)}
+.pill-wait{display:inline-flex;align-items:center;height:19px;padding:0 7px;border-radius:var(--r-pill);font-size:11px;font-weight:650;
+  background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);white-space:nowrap}
+.new-col{background:#FCFDFF}
+th.new-col{color:var(--primary-fg)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:11.5px;color:var(--text-3);align-items:center}
+.legend span.k{display:inline-flex;align-items:center;gap:6px}
+.note{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow-xs)}
+.note h3{font-size:15px;margin:0 0 10px;font-weight:650}
+.note table{width:100%;border-collapse:collapse;font-size:12.5px}
+.note th,.note td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;line-height:1.7}
+.note th{font-size:11.5px;color:var(--text-3);background:var(--surface-sunken);font-weight:650;white-space:nowrap}
+.note tr:last-child td{border-bottom:none}
+.note code{font-family:"SFMono-Regular",Consolas,Menlo,monospace;font-size:11.5px;background:var(--surface-sunken);padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <h1>完成记录 · 测试证据怎么呈现</h1>
+    <div class="sub">
+      位置：数据分析 → 工作项清单 → 完成记录（月度快照）<br>
+      数据：真实快照 5 条（空间 Smw9zcftmwwnrwuon，2026-11），含 2 条完整测试证据、1 条提测未领取、2 条历史无测试数据
+    </div>
+  </div>
+
+  <div class="callout">
+    <div><b>现状：</b>完成快照已存下 5 个测试字段（<code>test_owner</code> / <code>test_requested_at</code> / <code>test_started_at</code> / <code>test_finished_at</code> + 负责人 ID），接口已返回，但页面还看不到 —— 完成记录只证明「做完了」，不证明「谁测的、测了多久」。下面三个方案只改呈现，不改数据。</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h3>方案 A · 不加列，在现有列下补子行</h3>
+      <span class="meta"><span class="badge">9 列 · 960px</span></span>
+    </div>
+    <p class="hint">「负责人」下补一行 <b>测试 王芳</b>；「结束时间」下补一行 <b>测试 11-10 → 11-14 15:53</b>。表格宽度、横向滚动、列宽全部不变。</p>
+    <div id="protoA"></div>
+    <div class="trade">
+      <div><span class="t">好处</span><ul><li>窄屏 / 笔记本不用横向滚动</li><li>开发改动最小，导出同步加 4 列即可</li></ul></div>
+      <div><span class="t">代价</span><ul><li>一列承载两种语义，扫读时要分辨主行/子行</li><li>测试窗口被压在 8% 宽列里，只能显示到「日」，分钟要看 tooltip</li></ul></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h3>方案 B · 新增「测试负责人」+「测试窗口」两列</h3>
+      <span class="meta"><span class="badge rec">推荐</span> <span class="badge">11 列 · 1240px</span></span>
+    </div>
+    <p class="hint">测试证据独立成列：<b>谁测的</b>一列、<b>什么时候测的</b>一列（开始 → 结束，子行给提测时间与历时）。语义最清楚，和「开始时间 / 结束时间」成对的既有风格一致。</p>
+    <div id="protoB"></div>
+    <div class="trade">
+      <div><span class="t">好处</span><ul><li>一眼对齐「开发窗口 vs 测试窗口」，能看出测试是否被压缩</li><li>列独立，后续要排序/筛选/统计不用拆子行</li></ul></div>
+      <div><span class="t">代价</span><ul><li>表格最小宽度 880 → 1240px，1366 屏会出现横向滚动</li><li>其余列宽需要重排（工作项 27% → 16%）</li></ul></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h3>方案 C · 只加一列「测试」（负责人 + 窗口两行）</h3>
+      <span class="meta"><span class="badge">10 列 · 1120px</span></span>
+    </div>
+    <p class="hint">折中：新增一列，第一行是测试负责人，第二行是测试窗口。比 A 清楚，比 B 省 120px。</p>
+    <div id="protoC"></div>
+    <div class="trade">
+      <div><span class="t">好处</span><ul><li>测试证据有独立列头，不与开发信息混排</li><li>宽度只增 240px，多数笔记本仍可一屏放下</li></ul></div>
+      <div><span class="t">代价</span><ul><li>窗口与负责人挤在一列：开始只到「日」，分钟与历时进 tooltip</li><li>提测未领取这类状态要在同一格里换行表达</li></ul></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <h3>三个方案共用的口径（需要你确认的部分）</h3>
+    <table>
+      <tr><th style="width:150px">情况</th><th>页面显示</th><th style="width:300px">说明</th></tr>
+      <tr><td>完整测试证据</td><td>王芳 · <code>11-10 00:00 → 11-14 15:53</code></td><td>开始/结束取测试开始与测试结束，不是工作项完成时间</td></tr>
+      <tr><td>提测但没人领取</td><td><span class="pill-wait">待领取</span> · 提测 11-10 10:00</td><td>真实数据里存在（报表导出中文乱码）：提测后直接被拖到已完成，测试从未开始 —— 如实显示，不补造</td></tr>
+      <tr><td>历史数据无测试字段</td><td><span class="comp-dim">—</span></td><td>本次改造前完成的快照没有测试信息，留空而不是写「未测试」</td></tr>
+      <tr><td>历史值只有日期</td><td><code>2026-11-14 00:00</code></td><td>老数据完成时间存的是当天 00:00，按原值显示，不假装精确</td></tr>
+      <tr><td>提测=开始=结束</td><td>历时 <code>0m</code></td><td>自动认领后立即完成的真实情况（风控引擎 v1.2 交付），不隐藏</td></tr>
+      <tr><td>列宽（三方案都要）</td><td colspan="2">「结束时间」列加宽：分钟级文本 <code>2026-11-14 15:53</code> 有 16 字符，原 8% 列宽放不下会压到「总耗时」。这是分钟级改造的连带修改，与方案选择无关。</td></tr>
+      <tr><td>CSV 导出</td><td colspan="2">在现有 11 列后追加：测试负责人、提测时间、测试开始、测试结束（三方案一致）</td></tr>
+      <tr><td>统计卡（可选）</td><td colspan="2">是否把第 4 张卡「参与成员」换成「已测试 N 项 / 待领取 N 项」？默认<b>不动</b>，避免影响既有月度口径</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+var ROWS = [
+  {title:"风控引擎 v1.2 交付", desc:"风控规则引擎 v1.2 版本的交付史诗，覆盖本周期全部需求、缺陷修复与发布准备。", req:"风控规则引擎", doc:"风控引擎 v1.2 技术方案", owner:"张伟", cat:"决策流", pri:"P0", start:"2026-11-02", done:"2026-11-14 15:53", min:660,
+   tester:"平台管理员", reqAt:"2026-11-14 15:53", tStart:"2026-11-14 15:53", tEnd:"2026-11-14 15:53", dur:"0m"},
+  {title:"对账文件 SFTP 拉取", desc:"范围：跨境结算 模块的 v3.2 交付内容；涉及接口、数据与前端交互。", req:"清结算与对账平台", doc:"清结算 v3.2 技术方案", owner:"李娜", cat:"跨境结算", pri:"P0", start:"2026-11-03", done:"2026-11-14 15:53", min:720,
+   tester:"王芳", reqAt:"2026-11-09 00:00", tStart:"2026-11-10 00:00", tEnd:"2026-11-14 15:53", dur:"4天15小时53分"},
+  {title:"报表导出中文乱码", desc:"影响：日终对账 相关用户可感知，已按 v3.2 缺陷流程处理。", req:"清结算与对账平台", doc:"清结算 v3.2 需求说明", owner:"陈昊", cat:"日终对账", pri:"P3", start:"2026-11-07", done:"2026-11-14 15:52", min:510,
+   tester:null, reqAt:"2026-11-10 10:00", tStart:null, tEnd:null, dur:null},
+  {title:"支持微信支付 v3 退款接口", desc:"背景：当前 支付下单 模块在真实业务中已有明确诉求，本次补齐能力。", req:"统一支付网关", doc:"支付网关 v2.2 需求说明", owner:"赵磊", cat:"支付下单", pri:"P2", start:"2026-10-29", done:"2026-11-14 00:00", min:960,
+   tester:null, reqAt:null, tStart:null, tEnd:null, dur:null},
+  {title:"支付链路全链路压测", desc:"范围：渠道网关 模块的 v2.2 交付内容；涉及接口、数据与前端交互。", req:"统一支付网关", doc:"支付网关 v2.2 技术方案", owner:"李娜", cat:"渠道网关", pri:"P2", start:"2026-10-27", done:"2026-11-14 00:00", min:660,
+   tester:null, reqAt:null, tStart:null, tEnd:null, dur:null}
+];
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function shortMin(m){ if(!m) return "—"; if(m<60) return m+"m"; var h=Math.floor(m/60), r=m%60; return h+"h"+(r?r+"m":""); }
+function md(s){ return s ? s.substring(5) : ""; }
+function pri(p){ return '<span class="pdot '+p+'"><i></i>'+p+'</span>'; }
+function cat(c){ return '<span class="tag"><i class="dot"></i>'+esc(c)+'</span>'; }
+function titleCell(r){ return '<span class="comp-t">'+esc(r.title)+'</span><span class="comp-d">'+esc(r.desc)+'</span>'; }
+function docCell(r){ return '<button type="button" class="link-cell">'+esc(r.doc)+'</button>'; }
+/* 测试窗口：开始 → 结束（分钟）；只有日期老值原样显示 */
+function win(r){ return r.tStart ? (md(r.tStart)+" → "+md(r.tEnd)) : ""; }
+function testerCell(r){
+  if(r.tester) return esc(r.tester);
+  if(r.reqAt) return '<span class="pill-wait">待领取</span>';
+  return '<span class="comp-dim">—</span>';
+}
+function windowCell(r, withDur){
+  if(r.tStart){
+    return '<span class="nowrap">'+esc(win(r))+'</span>' +
+      '<span class="comp-sub">提测 '+esc(md(r.reqAt))+(withDur && r.dur ? ' · 历时 '+esc(r.dur) : '')+'</span>';
+  }
+  if(r.reqAt) return '<span class="comp-dim">未开始</span><span class="comp-sub">提测 '+esc(md(r.reqAt))+'</span>';
+  return '<span class="comp-dim">—</span>';
+}
+function toolbar(){
+  return '<div class="page-toolbar"><span class="toolbar-title">工作项清单</span><span class="toolbar-right">' +
+    '<span class="icon-btn">‹</span><span class="toolbar-meta">2026-11</span><span class="icon-btn">›</span>' +
+    '<button class="btn" type="button">导出 CSV</button></span></div>';
+}
+function stats(){
+  return '<div class="stat-grid">' +
+    '<div class="stat"><div class="k">完成工作项</div><div class="v">5 项</div></div>' +
+    '<div class="stat"><div class="k">总耗时</div><div class="v">58h30m</div></div>' +
+    '<div class="stat"><div class="k">平均每项</div><div class="v">11h42m</div></div>' +
+    '<div class="stat"><div class="k">参与成员</div><div class="v">4 人</div><div class="s">最多：李娜 2 项</div></div>' +
+    '</div>';
+}
+function panel(inner, count){
+  return '<div class="panel" style="margin:0;border:0;padding:0;box-shadow:none">' +
+    '<div class="panel-head"><h3 style="font-size:14px">完成记录</h3><span class="meta">共 '+count+' 条</span></div>' +
+    '<p class="set-hint">工作项移入「已完成」时自动归档：项目名、负责人存的是<b>当时</b>的快照，之后改名或删除都不影响这里。</p>' +
+    inner + '</div>';
+}
+function table(ns, widths, minw, head, body){
+  var cols = widths.map(function(w,i){ return '.'+ns+'-t'+i+'{width:'+w+'%}'; }).join("");
+  return '<style>'+cols+'</style><div class="comp-scroll"><table class="comp-table" style="min-width:'+minw+'px">' +
+    '<thead><tr>'+head.map(function(h,i){ return '<th class="'+ns+'-t'+i+(h.indexOf("测试")===0?' new-col':'')+'">'+h+'</th>'; }).join("")+'</tr></thead>' +
+    '<tbody>'+body+'</tbody></table></div>';
+}
+function baseCells(ns, r, extra){
+  function td(i, cls, html){ return '<td class="'+ns+'-t'+i+(cls?' '+cls:'')+'">'+html+'</td>'; }
+  return td(0,"",titleCell(r)) +
+    td(1,"",esc(r.req)) +
+    td(2,"",docCell(r)) +
+    td(3,"",esc(r.owner)+(extra.ownerSub||"")) +
+    td(4,"",cat(r.cat)) +
+    td(5,"",pri(r.pri)) +
+    td(6,"nowrap",esc(r.start)) +
+    td(7,"nowrap",esc(r.done)+(extra.doneSub||"")) +
+    td(8,"nowrap","<b>"+shortMin(r.min)+"</b>");
+}
+/* A：零新列，子行补充 */
+(function(){
+  var body = ROWS.map(function(r){
+    var ownerSub = r.tester ? '<span class="comp-sub">测试 <b>'+esc(r.tester)+'</b></span>'
+      : (r.reqAt ? '<span class="comp-sub"><span class="pill-wait">待领取</span></span>' : '');
+    var doneSub = r.tStart ? '<span class="comp-sub" title="测试 '+esc(r.tStart)+' → '+esc(r.tEnd)+'（提测 '+esc(r.reqAt)+'）">测试 '+esc(md(r.tStart).substring(0,5))+'→'+esc(md(r.tEnd).substring(0,5))+'</span>'
+      : (r.reqAt ? '<span class="comp-sub">提测 '+esc(md(r.reqAt).substring(0,5))+'</span>' : '');
+    return "<tr>"+baseCells("a",r,{ownerSub:ownerSub,doneSub:doneSub})+"</tr>";
+  }).join("");
+  document.getElementById("protoA").innerHTML = toolbar()+stats()+panel(
+    table("a",[24,10,13,8,8,6,8,14,9],960,
+      ["工作项","项目","文档","负责人","模块","优先级","开始时间","结束时间","总耗时"], body), ROWS.length);
+})();
+/* B：两列 */
+(function(){
+  var body = ROWS.map(function(r){
+    return "<tr>"+baseCells("b",r,{})+
+      '<td class="b-t9 new-col">'+testerCell(r)+'</td>'+
+      '<td class="b-t10 new-col">'+windowCell(r,true)+'</td></tr>';
+  }).join("");
+  document.getElementById("protoB").innerHTML = toolbar()+stats()+panel(
+    table("b",[16,8,9,6,7,6,7,12,6,7,16],1240,
+      ["工作项","项目","文档","负责人","模块","优先级","开始时间","结束时间","总耗时","测试负责人","测试窗口"], body), ROWS.length);
+})();
+/* C：一列 */
+(function(){
+  var body = ROWS.map(function(r){
+    var cell = r.tester
+      ? '<span>'+esc(r.tester)+'</span><span class="comp-sub" title="测试 '+esc(r.tStart)+' → '+esc(r.tEnd)+' · 提测 '+esc(r.reqAt)+' · 历时 '+esc(r.dur||"—")+'">'+esc(md(r.tStart).substring(0,5))+' → '+esc(md(r.tEnd))+'</span>'
+      : (r.reqAt ? '<span class="pill-wait">待领取</span><span class="comp-sub">提测 '+esc(md(r.reqAt))+'</span>' : '<span class="comp-dim">—</span>');
+    return "<tr>"+baseCells("c",r,{})+'<td class="c-t9 new-col">'+cell+'</td></tr>';
+  }).join("");
+  document.getElementById("protoC").innerHTML = toolbar()+stats()+panel(
+    table("c",[21,9,10,7,8,6,7,12,6,14],1120,
+      ["工作项","项目","文档","负责人","模块","优先级","开始时间","结束时间","总耗时","测试"], body), ROWS.length);
+})();
+</script>
+</body>
+</html>

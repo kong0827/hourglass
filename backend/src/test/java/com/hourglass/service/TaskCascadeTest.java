@@ -126,7 +126,7 @@ class TaskCascadeTest {
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class),
                 mock(com.hourglass.mapper.VersionCommitmentMapper.class),
                 mock(com.hourglass.mapper.ProjectMilestoneMapper.class), deliveryNoteMapper, scopeLock,
-                numberSeqMapper);
+                numberSeqMapper, mock(com.hourglass.mapper.CaseSetMapper.class));
     }
 
     private List<Task> tasks(String... workspaceAndIds) {
@@ -427,7 +427,8 @@ class TaskCascadeTest {
                 "attachment", "time_log", "task_dependency", "task_baseline", "version_task",
                 "project_milestone_task", "test_case_task"),
                 TaskCascade.TASK_CHILD_TABLES);
-        assertEquals(Arrays.asList("task_completion_record", "version_release_item", "version_release_plan_task"),
+        assertEquals(Arrays.asList("task_completion_record", "version_release_item", "version_release_plan_task",
+                        "req_doc_comment"),
                 TaskCascade.PRESERVED_TASK_REF_TABLES);
         assertEquals(Arrays.asList("version_release", "version_release_item", "version_release_plan", "version_release_plan_version", "version_release_plan_task", "version_log"),
                 TaskCascade.PRESERVED_WORKSPACE_DELIVERY_TABLES);

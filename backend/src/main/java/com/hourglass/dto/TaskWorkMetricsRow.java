@@ -3,6 +3,7 @@ package com.hourglass.dto;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /** 列状态工作页的聚合行：一次扫描按条件求和，不把明细拉到内存 */
 @Data
@@ -20,5 +21,5 @@ public class TaskWorkMetricsRow {
     private long estimateMinutes;
     /** 未完成列取「创建到今天」，已完成列取「创建到完成」 */
     private Double avgAgeDays;
-    private LocalDate lastCompletedAt;
+    private LocalDateTime lastCompletedAt;
 }

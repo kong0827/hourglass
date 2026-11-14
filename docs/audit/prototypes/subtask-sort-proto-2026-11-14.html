@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>子任务（检查项）排序原型 · 2026-11-14</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --surface:#ffffff; --hover:#f3f4f6; --border:#e5e7eb;
+    --text-1:#111827; --text-2:#374151; --text-3:#6b7280;
+    --accent:#2563eb; --accent-soft:#eff6ff; --danger:#dc2626; --danger-soft:#fef2f2;
+    --ok:#16a34a; --r-xs:6px; --r-sm:8px; --r-md:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text-1);font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:16px;}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 auto 16px;max-width:760px;}
+  .bar h1{font-size:15px;font-weight:600;margin-right:auto;}
+  .bar .note{width:100%;font-size:12px;color:var(--text-3);}
+  button{font:inherit;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 12px;color:var(--text-2);}
+  button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  button.warn-on{background:#b45309;border-color:#b45309;color:#fff;}
+  .wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;}
+  .card>header{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;}
+  .card>header h2{font-size:14px;font-weight:600;}
+  .cnt{font-size:12px;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;}
+  .hint{margin-left:auto;font-size:12px;color:var(--text-3);text-align:right;}
+  .sub-list{display:flex;flex-direction:column;gap:4px;}
+  .sub-item{display:flex;align-items:center;gap:8px;min-height:32px;padding:4px 6px;border-radius:var(--r-xs);background:var(--surface);}
+  .sub-item:hover{background:var(--hover);}
+  .sub-item.dragging{opacity:.85;background:var(--accent-soft);box-shadow:0 6px 18px rgba(17,24,39,.18);outline:1px dashed var(--accent);position:relative;z-index:2;}
+  .sub-item.drop-before{box-shadow:0 -2px 0 0 var(--accent);}
+  .sub-item.drop-after{box-shadow:0 2px 0 0 var(--accent);}
+  .sub-grip{width:22px;height:22px;flex:0 0 auto;display:grid;place-items:center;border:0;background:transparent;color:var(--text-3);border-radius:var(--r-xs);cursor:grab;touch-action:none;padding:0;}
+  .sub-grip:hover{background:var(--hover);color:var(--text-2);}
+  .sub-grip:focus-visible{outline:2px solid var(--accent);outline-offset:1px;color:var(--accent);}
+  .sub-grip:active{cursor:grabbing;}
+  .cbx{width:15px;height:15px;accent-color:var(--accent);flex:0 0 auto;}
+  .sub-txt{flex:1 1 auto;min-width:0;font-size:13.5px;line-height:20px;word-break:break-word;}
+  .sub-item.done .sub-txt{color:var(--text-3);text-decoration:line-through;}
+  .sub-del{width:22px;height:22px;border:0;background:transparent;border-radius:var(--r-xs);display:grid;place-items:center;color:var(--text-3);flex:0 0 auto;padding:0;}
+  .sub-del:hover{background:var(--danger-soft);color:var(--danger);}
+  .live{margin-top:8px;font-size:12px;color:var(--ok);min-height:18px;}
+  .addrow{margin-top:8px;}
+  .addrow input{width:100%;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text-1);}
+  .addrow input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent);}
+  .read-list{display:flex;flex-direction:column;gap:2px;}
+  .read-row{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text-2);padding:2px 0;}
+  .read-row .box{width:14px;height:14px;border:1px solid var(--border);border-radius:4px;flex:0 0 auto;display:grid;place-items:center;font-size:10px;color:#fff;}
+  .read-row.done .box{background:var(--ok);border-color:var(--ok);}
+  .read-row.done span{color:var(--text-3);text-decoration:line-through;}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;font-size:13px;border-radius:var(--r-sm);padding:8px 14px;display:none;max-width:90vw;}
+  #toast.bad{background:var(--danger);}
+  #toast.show{display:block;}
+  body.ro .sub-grip, body.ro .sub-del, body.ro .addrow{display:none;}
+  @media (max-width:480px){
+    body{padding:10px;}
+    .card{padding:12px;}
+    .hint{display:none;}
+    .sub-grip{width:26px;height:26px;}
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>检查项排序原型</h1>
+  <button id="roToggle" type="button">只读项目</button>
+  <button id="failToggle" type="button">模拟排序失败</button>
+  <button id="resetBtn" type="button">重置</button>
+  <p class="note">拖左侧把手即时重排（乐观更新，失败还原）；把手聚焦后 ↑/↓ 也可移动；顺序立即落库，刷新不丢。读态概览清单同序。</p>
+</div>
+<main class="wrap">
+  <section class="card">
+    <header><h2>检查项</h2><span class="cnt" id="cnt">2/4</span><span class="hint" id="hint">拖把手或聚焦后按 ↑/↓ 调整顺序</span></header>
+    <div class="sub-list" id="list"></div>
+    <p class="live" id="live" aria-live="polite"></p>
+    <div class="addrow"><input id="newSub" placeholder="添加检查项，回车保存（排在末尾）" aria-label="添加检查项"></div>
+  </section>
+  <section class="card">
+    <header><h2>概览 · 检查项（读态同步）</h2><span class="hint">与编辑态同序，勾选状态一致</span></header>
+    <div class="read-list" id="readList"></div>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+<script>
+(function(){
+  var INIT = [
+    { id:"s1", t:"与财务确认结算口径", done:true },
+    { id:"s2", t:"补导出字段与单元测试", done:true },
+    { id:"s3", t:"回归旧版导入模板", done:false },
+    { id:"s4", t:"同步更新帮助文档截图", done:false }
+  ];
+  var items = INIT.map(function(x){ return Object.assign({}, x); });
+  var ro = false, fail = false, snapshot = null, busy = false;
+  var list = document.getElementById("list"), readList = document.getElementById("readList");
+  var cnt = document.getElementById("cnt"), live = document.getElementById("live"), hint = document.getElementById("hint");
+  var toastEl = document.getElementById("toast"), toastTimer = null;
+
+  function toast(msg, bad){
+    toastEl.textContent = msg;
+    toastEl.className = "show" + (bad ? " bad" : "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.className = ""; }, 2600);
+  }
+  function gripSVG(){
+    return '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><g fill="currentColor"><circle cx="4" cy="2.5" r="1.1"/><circle cx="8" cy="2.5" r="1.1"/><circle cx="4" cy="6" r="1.1"/><circle cx="8" cy="6" r="1.1"/><circle cx="4" cy="9.5" r="1.1"/><circle cx="8" cy="9.5" r="1.1"/></g></svg>';
+  }
+  function render(focusId){
+    var doneN = items.filter(function(s){ return s.done; }).length;
+    cnt.textContent = items.length ? doneN + "/" + items.length : "";
+    hint.textContent = ro ? "只读项目：可查看清单，不能排序" : "拖把手或聚焦后按 ↑/↓ 调整顺序";
+    list.innerHTML = items.map(function(s, i){
+      return '<div class="sub-item' + (s.done ? " done" : "") + '" data-sub="' + s.id + '">' +
+        (ro ? "" : '<button type="button" class="sub-grip" data-grip="' + s.id + '" aria-label="调整顺序：' + s.t + '，第 ' + (i+1) + ' 项，共 ' + items.length + ' 项；上下方向键移动">' + gripSVG() + '</button>') +
+        '<input type="checkbox" class="cbx" data-toggle="' + s.id + '"' + (s.done ? " checked" : "") + (ro ? " disabled" : "") + ' aria-label="' + s.t + '">' +
+        '<span class="sub-txt">' + s.t + '</span>' +
+        (ro ? "" : '<button type="button" class="sub-del" data-del="' + s.id + '" aria-label="删除检查项">×</button>') +
+      '</div>';
+    }).join("");
+    readList.innerHTML = items.map(function(s){
+      return '<div class="read-row' + (s.done ? " done" : "") + '"><span class="box">' + (s.done ? "✓" : "") + '</span><span>' + s.t + '</span></div>';
+    }).join("");
+    if(focusId){
+      var g = list.querySelector('[data-grip="' + focusId + '"]');
+      if(g) g.focus({ preventScroll:true });
+    }
+  }
+  function domOrder(){
+    return Array.prototype.slice.call(list.querySelectorAll(".sub-item")).map(function(el){ return el.dataset.sub; });
+  }
+  function byId(id){ return items.filter(function(s){ return s.id === id; })[0]; }
+  function commit(order, focusId, announce){
+    if(busy) return;
+    busy = true;
+    setTimeout(function(){
+      busy = false;
+      if(fail){
+        items = snapshot.map(function(id){ return byId(id); });
+        snapshot = null;
+        render(focusId);
+        live.textContent = "";
+        toast("排序失败，已还原为原顺序：网络异常", true);
+        return;
+      }
+      items = order.map(function(id){ return byId(id); });
+      snapshot = null;
+      render(focusId);
+      live.textContent = announce || "顺序已保存，刷新后仍保持";
+    }, 120);
+  }
+  /* ---- pointer 拖拽 ---- */
+  var drag = null;
+  list.addEventListener("pointerdown", function(e){
+    var g = e.target.closest("[data-grip]");
+    if(!g || ro || e.button !== 0) return;
+    e.preventDefault();
+    var row = g.closest(".sub-item");
+    snapshot = domOrder();
+    drag = { id:g.dataset.grip, row:row, y:e.clientY };
+    row.classList.add("dragging");
+    g.setPointerCapture(e.pointerId);
+  });
+  list.addEventListener("pointermove", function(e){
+    if(!drag) return;
+    var rows = Array.prototype.slice.call(list.querySelectorAll(".sub-item:not(.dragging)"));
+    rows.forEach(function(r){ r.classList.remove("drop-before", "drop-after"); });
+    var target = null, before = false;
+    for(var i = 0; i < rows.length; i++){
+      var r = rows[i], box = r.getBoundingClientRect();
+      if(e.clientY < box.top + box.height / 2){ target = r; before = true; break; }
+    }
+    if(target){
+      target.classList.add(before ? "drop-before" : "drop-after");
+      list.insertBefore(drag.row, target);
+    }else if(rows.length){
+      rows[rows.length - 1].classList.add("drop-after");
+      list.appendChild(drag.row);
+    }
+  });
+  function endDrag(e){
+    if(!drag) return;
+    var row = drag.row, id = drag.id;
+    row.classList.remove("dragging");
+    Array.prototype.slice.call(list.querySelectorAll(".sub-item")).forEach(function(r){ r.classList.remove("drop-before", "drop-after"); });
+    drag = null;
+    var order = domOrder();
+    var idx = order.indexOf(id);
+    commit(order, id, "已把「" + byId(id).t + "」移到第 " + (idx+1) + " 项，共 " + order.length + " 项");
+  }
+  list.addEventListener("pointerup", endDrag);
+  list.addEventListener("pointercancel", endDrag);
+  /* ---- 键盘 ---- */
+  list.addEventListener("keydown", function(e){
+    var g = e.target.closest("[data-grip]");
+    if(!g || ro || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault();
+    var id = g.dataset.grip;
+    var idx = items.findIndex(function(s){ return s.id === id; });
+    var to = e.key === "ArrowUp" ? idx - 1 : idx + 1;
+    if(to < 0 || to >= items.length) return;
+    if(!snapshot) snapshot = domOrder();
+    var moved = items.splice(idx, 1)[0];
+    items.splice(to, 0, moved);
+    render(id);
+    commit(items.map(function(s){ return s.id; }), id, "已把「" + moved.t + "」移到第 " + (to+1) + " 项，共 " + items.length + " 项");
+  });
+  /* ---- 勾选 / 删除 / 新增 ---- */
+  list.addEventListener("change", function(e){
+    var cb = e.target.closest("[data-toggle]");
+    if(!cb || ro) return;
+    byId(cb.dataset.toggle).done = cb.checked;
+    render();
+  });
+  list.addEventListener("click", function(e){
+    var del = e.target.closest("[data-del]");
+    if(!del || ro) return;
+    items = items.filter(function(s){ return s.id !== del.dataset.del; });
+    render();
+  });
+  document.getElementById("newSub").addEventListener("keydown", function(e){
+    if(e.key !== "Enter" || ro) return;
+    var v = this.value.trim();
+    if(!v) return;
+    this.value = "";
+    items.push({ id:"s" + Date.now(), t:v, done:false });
+    render();
+    live.textContent = "已追加到末尾";
+  });
+  /* ----  toolbar ---- */
+  document.getElementById("roToggle").addEventListener("click", function(){
+    ro = !ro;
+    document.body.classList.toggle("ro", ro);
+    this.classList.toggle("on", ro);
+    render();
+  });
+  document.getElementById("failToggle").addEventListener("click", function(){
+    fail = !fail;
+    this.classList.toggle("warn-on", fail);
+  });
+  document.getElementById("resetBtn").addEventListener("click", function(){
+    items = INIT.map(function(x){ return Object.assign({}, x); });
+    ro = false; fail = false; snapshot = null;
+    document.body.classList.remove("ro");
+    document.getElementById("roToggle").classList.remove("on");
+    document.getElementById("failToggle").classList.remove("warn-on");
+    live.textContent = "";
+    render();
+  });
+  render();
+  window.PROTO = {
+    get order(){ return items.map(function(s){ return s.id; }); },
+    get titles(){ return items.map(function(s){ return s.t; }); },
+    get ro(){ return ro; },
+    get fail(){ return fail; }
+  };
+})();
+</script>
+</body>
+</html>

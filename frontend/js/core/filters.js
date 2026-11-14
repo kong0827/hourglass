@@ -88,6 +88,14 @@ function updateBrand(){
       + '<span class="sep">/</span><span>驾驶舱</span>';
     return;
   }
+  /* 版本详情：面包屑只表示位置，版本名由页面标题承载 */
+  if(activeView === "version"){
+    brandSub.classList.add("breadcrumb");
+    brandSub.title = "版本 / 详情";
+    brandSub.innerHTML = '<button type="button" class="crumb-link" data-crumb-view="phase" title="返回版本列表">版本</button>'
+      + '<span class="sep">/</span><span>详情</span>';
+    return;
+  }
   var parts = [];
   if(wsName) parts.push(wsName);
   parts.push(viewMeta.title || activeView);

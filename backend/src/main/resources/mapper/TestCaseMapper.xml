@@ -4,13 +4,13 @@
 
   <insert id="insert">
     INSERT INTO test_case
-      (id, workspace_id, req_id, demand_id, case_no, title, precondition, test_data, module, priority, steps,
+      (id, workspace_id, req_id, demand_id, case_no, title, precondition, test_data, module, module_id, priority, steps,
        latest_status, latest_note, latest_by, latest_by_user_id, latest_at, latest_bug_task_id,
-       created_at, updated_at)
+       created_by, created_by_user_id, created_at, updated_at)
     VALUES
-      (#{id}, #{workspaceId}, #{reqId}, #{demandId}, #{caseNo}, #{title}, #{precondition}, #{testData}, #{module}, #{priority}, #{steps},
+      (#{id}, #{workspaceId}, #{reqId}, #{demandId}, #{caseNo}, #{title}, #{precondition}, #{testData}, #{module}, #{moduleId}, #{priority}, #{steps},
        #{latestStatus}, #{latestNote}, #{latestBy}, #{latestByUserId}, #{latestAt}, #{latestBugTaskId},
-       COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+       #{createdBy}, #{createdByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
 
@@ -23,6 +23,7 @@
         precondition = #{precondition},
         test_data = #{testData},
         module = #{module},
+        module_id = #{moduleId},
         priority = #{priority},
         steps = #{steps}
     WHERE id = #{id} AND workspace_id = #{workspaceId}
@@ -31,9 +32,18 @@
   <update id="batchUpdate">
     UPDATE test_case
     <set>
-      <if test="moduleSet"> module = #{module}, </if>
+      <if test="moduleSet"> module = #{module}, module_id = #{moduleId}, </if>
       <if test="prioritySet"> priority = #{priority}, </if>
     </set>
+    WHERE workspace_id = #{workspaceId}
+      AND id IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </update>
+
+  <!-- 批量归类：单归属，只改目录节点与展示快照，编号 / 执行流水 / 证据都不动 -->
+  <update id="updateModuleBatch">
+    UPDATE test_case
+    SET module_id = #{moduleId}, module = #{module}
     WHERE workspace_id = #{workspaceId}
       AND id IN
       <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -76,11 +86,12 @@
 
   <select id="selectViewByReq" resultType="com.hourglass.dto.TestCaseView">
     SELECT c.id, c.req_id, c.demand_id, d.title AS demand_title, c.case_no,
-           c.title, c.precondition, c.test_data, c.module, c.priority, c.steps AS steps_json,
+           c.title, c.precondition, c.test_data, c.module, c.module_id, c.priority, c.steps AS steps_json,
            c.latest_status, c.latest_note, c.latest_by, c.latest_at,
            c.latest_bug_task_id, t.title AS latest_bug_task_title,
+           (CASE WHEN t.id IS NOT NULL AND t.deleted_at IS NULL AND t.board_column = 'done' THEN 1 ELSE 0 END) AS latest_bug_resolved,
            <include refid="evidenceCount"/> AS latest_evidence_count,
-           c.created_at, c.updated_at
+           c.created_by, c.created_at, c.updated_at
     FROM test_case c
     LEFT JOIN demand d ON d.id = c.demand_id
     LEFT JOIN task t ON t.id = c.latest_bug_task_id
@@ -114,6 +125,14 @@
       <when test="q.status == '__untested'"> AND c.latest_status IS NULL </when>
       <when test="q.status != null"> AND c.latest_status = #{q.status} </when>
     </choose>
+    <!-- 目录范围：服务层已把节点 + 子树展开成 moduleIds；__none = 未归类 -->
+    <choose>
+      <when test="q.moduleId == '__none'"> AND c.module_id IS NULL </when>
+      <when test="q.moduleIds != null and q.moduleIds.size() > 0">
+        AND c.module_id IN
+        <foreach collection="q.moduleIds" item="mid" open="(" separator="," close=")">#{mid}</foreach>
+      </when>
+    </choose>
     <choose>
       <when test="q.module == '__none'"> AND (c.module IS NULL OR c.module = '') </when>
       <when test="q.module != null"> AND c.module = #{q.module} </when>
@@ -130,17 +149,53 @@
         <otherwise> AND c.latest_by = #{q.owner} </otherwise>
       </choose>
     </if>
+    <choose>
+      <when test="q.demandId == '__none'"> AND c.demand_id IS NULL </when>
+      <when test="q.demandId != null"> AND c.demand_id = #{q.demandId} </when>
+    </choose>
+    <choose>
+      <when test="q.setId == '__none'">
+        AND NOT EXISTS (SELECT 1 FROM case_set_item si
+                        JOIN case_set s ON s.id = si.set_id AND s.workspace_id = si.workspace_id
+                        WHERE si.case_id = c.id
+                          AND (s.visibility = 'team' OR s.owner_user_id = #{q.viewerId}
+                               OR EXISTS (SELECT 1 FROM case_set_member sm
+                                          WHERE sm.set_id = s.id AND sm.user_id = #{q.viewerId})))
+      </when>
+      <when test="q.setId != null">
+        AND EXISTS (SELECT 1 FROM case_set_item si
+                    WHERE si.case_id = c.id AND si.set_id = #{q.setId})
+      </when>
+    </choose>
     <if test="q.bugOnly"> AND <include refid="openBugExists"/> </if>
+    <!-- 回归集谓词：最近失败 / 阻塞，或关联缺陷仍未关闭；动态分组规则用 -->
+    <if test="q.regression">
+      AND (c.latest_status IN ('failed', 'blocked') OR <include refid="openBugExists"/>)
+    </if>
     <if test="q.q != null">
-      AND (c.title LIKE CONCAT('%', #{q.q}, '%')
-           OR c.precondition LIKE CONCAT('%', #{q.q}, '%')
-           OR c.test_data LIKE CONCAT('%', #{q.q}, '%')
-           OR c.module LIKE CONCAT('%', #{q.q}, '%')
-           OR c.latest_note LIKE CONCAT('%', #{q.q}, '%')
-           OR c.steps LIKE CONCAT('%', #{q.q}, '%')
-           OR d.title LIKE CONCAT('%', #{q.q}, '%')
-           OR t.title LIKE CONCAT('%', #{q.q}, '%')
-           <if test="q.caseNo != null"> OR c.case_no = #{q.caseNo} </if>)
+      <!-- 默认只搜标题 / 编号 / 模块，避开 steps mediumtext 的全表 LIKE；勾选后才走大字段 -->
+      <choose>
+        <when test="q.searchWide">
+          AND (c.title LIKE CONCAT('%', #{q.q}, '%')
+               OR c.precondition LIKE CONCAT('%', #{q.q}, '%')
+               OR c.test_data LIKE CONCAT('%', #{q.q}, '%')
+               OR c.module LIKE CONCAT('%', #{q.q}, '%')
+               OR c.latest_note LIKE CONCAT('%', #{q.q}, '%')
+               OR c.steps LIKE CONCAT('%', #{q.q}, '%')
+               OR d.title LIKE CONCAT('%', #{q.q}, '%')
+               OR t.title LIKE CONCAT('%', #{q.q}, '%')
+               <if test="q.caseNo != null"> OR c.case_no = #{q.caseNo} </if>)
+        </when>
+        <otherwise>
+          AND (c.title LIKE CONCAT('%', #{q.q}, '%')
+               OR c.module LIKE CONCAT('%', #{q.q}, '%')
+               <if test="q.caseNo != null"> OR c.case_no = #{q.caseNo} </if>)
+        </otherwise>
+      </choose>
+    </if>
+    <if test="q.excludeIds != null and q.excludeIds.size() > 0">
+      AND c.id NOT IN
+      <foreach collection="q.excludeIds" item="eid" open="(" separator="," close=")">#{eid}</foreach>
     </if>
   </sql>
 
@@ -150,6 +205,54 @@
     LEFT JOIN task t ON t.id = c.latest_bug_task_id
   </sql>
 
+  <!-- 按目录顺序排序时才 join 目录：递归拼出「逐级零填充 sort_order」的路径，层级不限；
+       d < 64 只防脏数据成环，不是业务上限。父节点丢失的孤儿节点按根节点参与排序。 -->
+  <sql id="sortJoins">
+    <if test="q.sort == 'module'">
+      LEFT JOIN (
+        WITH RECURSIVE mo AS (
+          SELECT n.id AS id, CAST(LPAD(COALESCE(n.sort_order, 0), 6, '0') AS CHAR(512)) AS p, 1 AS d
+            FROM test_module n
+           WHERE n.workspace_id = #{q.workspaceId} AND n.req_id = #{q.reqId}
+             AND (COALESCE(n.parent_id, '') = ''
+                  OR NOT EXISTS (SELECT 1 FROM test_module p0
+                                  WHERE p0.id = n.parent_id
+                                    AND p0.workspace_id = n.workspace_id
+                                    AND p0.req_id = n.req_id))
+          UNION ALL
+          SELECT n.id, CONCAT(mo.p, '/', LPAD(COALESCE(n.sort_order, 0), 6, '0')), mo.d + 1
+            FROM test_module n JOIN mo ON n.parent_id = mo.id
+           WHERE mo.d &lt; 64
+             AND n.workspace_id = #{q.workspaceId} AND n.req_id = #{q.reqId}
+        )
+        SELECT id, p FROM mo
+      ) mo ON mo.id = c.module_id
+    </if>
+  </sql>
+
+  <!-- 排序字段白名单：值不拼进 SQL，只在这里选列；空值类统一排在末尾（升序口径） -->
+  <sql id="pageOrder">
+    <choose>
+      <when test="q.sort == 'no'"> ORDER BY c.case_no </when>
+      <when test="q.sort == 'pri'"> ORDER BY FIELD(COALESCE(c.priority, '__none'), 'P0','P1','P2','P3','__none') </when>
+      <when test="q.sort == 'executed'"> ORDER BY c.latest_at </when>
+      <when test="q.sort == 'updated'"> ORDER BY c.updated_at </when>
+      <when test="q.sort == 'status'">
+        ORDER BY FIELD(COALESCE(c.latest_status, '__untested'), 'failed','blocked','passed','skipped','__untested')
+      </when>
+      <when test="q.sort == 'module'">
+        <!-- 目录 DFS：逐级比较路径，父节点自身的用例排在子目录之前；未挂目录的用例排在末尾 -->
+        ORDER BY COALESCE(mo.p, '999999')
+      </when>
+      <otherwise> ORDER BY c.created_at </otherwise>
+    </choose>
+    <choose>
+      <when test="q.sortDir == 'asc'"> ASC </when>
+      <otherwise> DESC </otherwise>
+    </choose>
+    , c.id DESC
+  </sql>
+
   <select id="countByQuery" resultType="int">
     SELECT COUNT(*) <include refid="pageJoins"/>
     <include refid="pageWhere"/>
@@ -157,15 +260,104 @@
 
   <select id="selectViewByQuery" resultType="com.hourglass.dto.TestCaseView">
     SELECT c.id, c.req_id, c.demand_id, d.title AS demand_title, c.case_no,
-           c.title, c.precondition, c.test_data, c.module, c.priority, c.steps AS steps_json,
+           c.title, c.precondition, c.test_data, c.module, c.module_id, c.priority, c.steps AS steps_json,
            c.latest_status, c.latest_note, c.latest_by, c.latest_at,
            c.latest_bug_task_id, t.title AS latest_bug_task_title,
+           (CASE WHEN t.id IS NOT NULL AND t.deleted_at IS NULL AND t.board_column = 'done' THEN 1 ELSE 0 END) AS latest_bug_resolved,
            <include refid="evidenceCount"/> AS latest_evidence_count,
-           c.created_at, c.updated_at
+           c.created_by, c.created_at, c.updated_at
+    <include refid="pageJoins"/>
+    <include refid="sortJoins"/>
+    <include refid="pageWhere"/>
+    <include refid="pageOrder"/>
+    LIMIT #{q.limit} OFFSET #{q.offset}
+  </select>
+
+  <!-- 按筛选取全部命中 ID（批量动作 / 按筛选导出 / 圈选入计划 / 动态分组刷新）：条数上限由服务层把关 -->
+  <select id="selectIdsByQuery" resultType="string">
+    SELECT c.id
     <include refid="pageJoins"/>
     <include refid="pageWhere"/>
     ORDER BY c.created_at DESC, c.id DESC
-    LIMIT #{q.limit} OFFSET #{q.offset}
+  </select>
+
+  <select id="selectByIds" resultType="com.hourglass.entity.TestCase">
+    SELECT * FROM test_case
+    WHERE workspace_id = #{workspaceId}
+      AND id IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
+  <!-- 导出所选：与列表行同口径（含步骤 JSON 与缺陷标题） -->
+  <select id="selectViewByIds" resultType="com.hourglass.dto.TestCaseView">
+    SELECT c.id, c.req_id, c.demand_id, d.title AS demand_title, c.case_no,
+           c.title, c.precondition, c.test_data, c.module, c.module_id, c.priority, c.steps AS steps_json,
+           c.latest_status, c.latest_note, c.latest_by, c.latest_at,
+           c.latest_bug_task_id, t.title AS latest_bug_task_title,
+           (CASE WHEN t.id IS NOT NULL AND t.deleted_at IS NULL AND t.board_column = 'done' THEN 1 ELSE 0 END) AS latest_bug_resolved,
+           c.created_by, c.created_at, c.updated_at
+    <include refid="pageJoins"/>
+    WHERE c.workspace_id = #{workspaceId}
+      AND c.id IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    ORDER BY c.created_at DESC, c.id DESC
+  </select>
+
+  <!-- 分组段头计数：当前筛选范围内按维度聚合，含结果分布 -->
+  <sql id="groupKey">
+    <choose>
+      <when test="q.groupBy == 'module'"> COALESCE(c.module_id, '__none') </when>
+      <when test="q.groupBy == 'priority'"> COALESCE(c.priority, '__none') </when>
+      <when test="q.groupBy == 'status'"> COALESCE(c.latest_status, '__untested') </when>
+      <when test="q.groupBy == 'owner'">
+        CASE WHEN c.latest_by IS NULL OR c.latest_by = '' THEN '__none' ELSE c.latest_by END
+      </when>
+      <when test="q.groupBy == 'demand'"> COALESCE(c.demand_id, '__none') </when>
+      <otherwise> COALESCE(c.module_id, '__none') </otherwise>
+    </choose>
+  </sql>
+
+  <sql id="groupSums">
+    COUNT(*) AS cnt,
+    COALESCE(SUM(CASE WHEN c.latest_status = 'passed' THEN 1 ELSE 0 END), 0) AS passed,
+    COALESCE(SUM(CASE WHEN c.latest_status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
+    COALESCE(SUM(CASE WHEN c.latest_status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
+    COALESCE(SUM(CASE WHEN c.latest_status = 'skipped' THEN 1 ELSE 0 END), 0) AS skipped,
+    COALESCE(SUM(CASE WHEN c.latest_status IS NULL THEN 1 ELSE 0 END), 0) AS untested
+  </sql>
+
+  <select id="countGroupsByQuery" resultType="java.util.HashMap">
+    SELECT <include refid="groupKey"/> AS k, <include refid="groupSums"/>
+    <include refid="pageJoins"/>
+    <include refid="pageWhere"/>
+    GROUP BY k
+  </select>
+
+  <!-- 自定义分组是多归属：一条用例可进多个分组，段间计数可重叠，不能相加当总数 -->
+  <select id="countGroupsBySet" resultType="java.util.HashMap">
+    SELECT s.id AS k, <include refid="groupSums"/>
+    FROM test_case c
+    JOIN case_set_item si ON si.case_id = c.id AND si.workspace_id = c.workspace_id
+    JOIN case_set s ON s.id = si.set_id AND s.workspace_id = c.workspace_id
+    LEFT JOIN demand d ON d.id = c.demand_id
+    LEFT JOIN task t ON t.id = c.latest_bug_task_id
+    <include refid="pageWhere"/>
+      AND (s.visibility = 'team' OR s.owner_user_id = #{q.viewerId}
+           OR EXISTS (SELECT 1 FROM case_set_member sm
+                      WHERE sm.set_id = s.id AND sm.user_id = #{q.viewerId}))
+    GROUP BY s.id
+  </select>
+
+  <select id="countFacetsByModuleId" resultType="java.util.HashMap">
+    SELECT COALESCE(module_id, '__none') AS k, COUNT(*) AS cnt
+    FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    GROUP BY module_id
+  </select>
+
+  <select id="countByModuleId" resultType="int">
+    SELECT COUNT(*) FROM test_case
+    WHERE workspace_id = #{workspaceId} AND module_id = #{moduleId}
   </select>
 
   <select id="selectModules" resultType="string">

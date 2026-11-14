@@ -12,6 +12,7 @@ public class Subtask {
     private String workspaceId;
     private String title;
     private Boolean done;
+    private Integer sortOrder;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

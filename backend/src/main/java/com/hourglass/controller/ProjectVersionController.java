@@ -119,6 +119,12 @@ public class ProjectVersionController {
         return ApiResult.ok(versionService.create(ctx.getUserId(), ctx.getWsId(), req));
     }
 
+    /** 单版本详情：活动流/通知按版本 ID 直达（列表页之外的读入口）。 */
+    @GetMapping("/api/versions/{id}")
+    public ApiResult<ProjectVersion> detail(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(versionService.detail(ctx.getWsId(), id, ctx.getUserId()));
+    }
+
     @PutMapping("/api/versions/{id}")
     public ApiResult<ProjectVersion> update(@PathVariable String id,
                                             @Valid @RequestBody ProjectVersionSaveRequest req,

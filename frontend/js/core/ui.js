@@ -344,8 +344,45 @@ import { icon } from "./icons.js";
        表现为"点了按钮没反应"；有弹窗时抬到最上层弹窗之上 */
     var raised = anyModalOpen();
     if (raised) el.style.zIndex = String(Math.max(260, topModalZ() + 1));
+    /* opt-in 移动端底部浮层：opts.sheet 为真且窄屏时，浮层贴底 + 遮罩，盖住所在弹窗 */
+    var sheetScrim = null;
+    function sheetActive() { return opts.sheet && window.matchMedia("(max-width:700px)").matches; }
+
+    /* 遮罩上的这一下点击只负责收起浮层：不吞掉，紧接着的 click 会再关掉抽屉/弹窗，
+       变成「关浮层 → 整个抽屉也没了」 */
+    function swallowNextClick() {
+      function stop(ev) { ev.stopPropagation(); ev.preventDefault(); }
+      document.addEventListener("click", stop, true);
+      setTimeout(function () { document.removeEventListener("click", stop, true); }, 0);
+    }
+    function backdropOf(t) {
+      return !!(t && t.classList && (t.classList.contains("drawer-scrim") || t.classList.contains("modal-layer")));
+    }
 
     function place() {
+      if (sheetActive()) {
+        if (!sheetScrim) {
+          sheetScrim = document.createElement("div");
+          sheetScrim.className = "pop-scrim";
+          document.body.appendChild(sheetScrim);
+          sheetScrim.addEventListener("pointerdown", function () {
+            close(true);
+            /* 遮罩被移除后 click 可能落到下层控件上，同样只让它收起浮层 */
+            swallowNextClick();
+          });
+        }
+        var sz = Math.max(260, topModalZ() + 1);
+        sheetScrim.style.zIndex = String(sz);
+        el.style.zIndex = String(sz + 1);
+        el.classList.add("as-sheet");
+        el.style.left = "12px"; el.style.right = "12px";
+        el.style.top = "auto"; el.style.bottom = "12px"; el.style.width = "auto";
+        el.style.visibility = "";
+        return;
+      }
+      if (sheetScrim) { sheetScrim.remove(); sheetScrim = null; }
+      el.classList.remove("as-sheet");
+      if (opts.width) el.style.width = opts.width + "px";
       var r = anchor.getBoundingClientRect();
       var w = el.offsetWidth, h = el.offsetHeight;
       var left = (opts.align === "left") ? r.left : r.right - w;
@@ -364,7 +401,9 @@ import { icon } from "./icons.js";
 
     function onDown(e) {
       if (el.contains(e.target) || anchor.contains(e.target)) return;
+      var onBackdrop = backdropOf(e.target);
       close();
+      if (onBackdrop) swallowNextClick();
     }
     function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); close(true); } }
     function onScroll() { if (el.__popOpen) place(); }
@@ -377,8 +416,10 @@ import { icon } from "./icons.js";
       if (bindTimer !== null) { clearTimeout(bindTimer); bindTimer = null; }
       el.hidden = true;
       anchor.setAttribute("aria-expanded", "false");
-      el.style.left = el.style.top = el.style.width = "";
-      if (raised) el.style.zIndex = "";
+      el.style.left = el.style.top = el.style.width = el.style.right = el.style.bottom = "";
+      if (raised || sheetScrim) el.style.zIndex = "";
+      if (sheetScrim) { sheetScrim.remove(); sheetScrim = null; }
+      el.classList.remove("as-sheet");
       document.removeEventListener("pointerdown", onDown, true);
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("scroll", onScroll, true);
@@ -579,6 +620,7 @@ import { icon } from "./icons.js";
     anyModalOpen: anyModalOpen,
     anyDialogOpen: anyDialogOpen,
     topModalZ: topModalZ,
+    topOverlayZ: topOverlayZ,
     openPop: openPop,
     closeAllPops: closeAllPops,
     popOpen: popOpen,

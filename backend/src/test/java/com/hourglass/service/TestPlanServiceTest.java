@@ -227,6 +227,68 @@ class TestPlanServiceTest {
         verify(plans).deleteById(WS, PLAN);
     }
 
+    @Test
+    void updateAuditDetailNamesDateVersionAndNoteChanges() {
+        TestPlan p = plan("running");
+        p.setVersionId("VOLD");
+        p.setPlannedStart(java.time.LocalDate.of(2026, 11, 1));
+        p.setPlannedEnd(java.time.LocalDate.of(2026, 11, 10));
+        p.setNote("旧备注");
+        when(plans.selectById(PLAN)).thenReturn(p);
+        com.hourglass.entity.ProjectVersion oldV = new com.hourglass.entity.ProjectVersion();
+        oldV.setId("VOLD");
+        oldV.setName("v1.1");
+        oldV.setWorkspaceId(WS);
+        oldV.setReqId(REQ);
+        com.hourglass.entity.ProjectVersion newV = new com.hourglass.entity.ProjectVersion();
+        newV.setId("VNEW");
+        newV.setName("v1.2");
+        newV.setWorkspaceId(WS);
+        newV.setReqId(REQ);
+        when(versions.selectById("VOLD")).thenReturn(oldV);
+        when(versions.selectById("VNEW")).thenReturn(newV);
+
+        TestPlanSaveRequest save = new TestPlanSaveRequest();
+        save.setReqId(REQ);
+        save.setName("v1.2 回归");
+        save.setVersionId("VNEW");
+        save.setPlannedStart(java.time.LocalDate.of(2026, 11, 3));
+        save.setPlannedEnd(java.time.LocalDate.of(2026, 11, 12));
+        save.setNote("新备注");
+        service.update(USER, WS, PLAN, save);
+
+        org.mockito.ArgumentCaptor<String> detail = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(auditService).recordCurrent(eq(WS), eq("test_plan_update"), eq("test_plan"), eq(PLAN),
+                any(), eq(true), detail.capture(), isNull());
+        String text = detail.getValue();
+        assertTrueContains(text, "关联版本由「v1.1」改为「v1.2」");
+        assertTrueContains(text, "计划时间 2026-11-01 → 2026-11-10 改为 2026-11-03 → 2026-11-12");
+        assertTrueContains(text, "修改备注");
+    }
+
+    @Test
+    void timelineChecksProjectVisibilityBeforeReadingAudit() {
+        when(plans.selectById(PLAN)).thenReturn(plan("running"));
+        List<com.hourglass.dto.EntityTimelineItem> rows = new ArrayList<>();
+        when(auditService.timeline(WS, "test_plan", PLAN, 100)).thenReturn(rows);
+
+        assertEquals(rows, service.timeline(WS, USER, PLAN));
+        verify(access).assertView(WS, USER, REQ);
+        verify(auditService).timeline(WS, "test_plan", PLAN, 100);
+    }
+
+    @Test
+    void timelineRejectsPlanOutsideWorkspace() {
+        TestPlan other = plan("running");
+        other.setWorkspaceId("W2");
+        when(plans.selectById(PLAN)).thenReturn(other);
+
+        assertThrows(AppException.class, () -> service.timeline(WS, USER, PLAN));
+        verify(access, never()).assertView(any(String.class), any(String.class), any(String.class));
+        verify(auditService, never()).timeline(any(String.class), any(String.class), any(String.class),
+                org.mockito.ArgumentMatchers.anyInt());
+    }
+
     private static void assertTrueContains(String actual, String part) {
         org.junit.jupiter.api.Assertions.assertTrue(actual != null && actual.contains(part),
                 "报错信息应包含「" + part + "」，实际：" + actual);

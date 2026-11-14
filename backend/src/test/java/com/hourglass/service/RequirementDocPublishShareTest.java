@@ -178,15 +178,17 @@ class RequirementDocPublishShareTest {
     }
 
     @Test
-    void publishByProjectWriterAllowed() {
-        RequirementDoc d = doc(false);
-        stubVisible(d, OTHER, "admin");
-        when(access.canWrite(WS, OTHER, "R1")).thenReturn(true);
+    void publishByNonOwnerProjectWriterForbidden() {
+        /* 已发布文档对成员可见，才能落到创建人门控（草稿会先被可见性挡成 404） */
+        RequirementDoc d = doc(true);
+        stubVisible(d, OTHER, "member");
         when(docs.selectById(DOC_ID)).thenReturn(d);
 
-        service.publish(OTHER, WS, DOC_ID, true);
-
-        verify(docs).updatePublished(anyString(), any(LocalDateTime.class));
+        /* 发布/撤回属创建人保护（A 轻量档）：非负责人的项目可写者也不能发布，与改删同口径 */
+        AppException ex = assertThrows(AppException.class, () -> service.publish(OTHER, WS, DOC_ID, false));
+        assertEquals(403, ex.getCode());
+        assertEquals("仅文档负责人或空间管理员可编辑 / 删除", ex.getMessage());
+        verify(docs, never()).updatePublished(anyString(), any());
     }
 
     /* ---------------- 分享链接 ---------------- */

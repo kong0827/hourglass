@@ -179,22 +179,33 @@ public class AiAssistantService {
 
     public AiAssistantBootstrapView bootstrap(String userId, String workspaceId, String workspaceName) {
         requireMember(userId, workspaceId);
-        AiConfigView cfg = configService.view(userId);
+        AiConfigView cfg = configService.view(userId, workspaceId);
         List<ProjectRef> projects = loadProjects(workspaceId, userId);
 
         AiAssistantBootstrapView v = new AiAssistantBootstrapView();
         v.setAiReady(isReady(cfg));
         v.setAiStatus(cfg.getStatus());
+        v.setAiSource(cfg.getSource());
+        v.setAiSourceName(cfg.getSourceName());
         v.setRole(projectAccess.roleOf(workspaceId, userId));
         v.setCanCreate(hasWritable(projects));
         v.setProjects(writableOptions(projects));
         v.setSuggestions(suggestions(v.isCanCreate()));
-        v.setPrivacyNotice("消息会发送到你配置的模型服务。助手只发送当前空间内你有权看到的项目名称，不会发送需求/任务正文、文档正文或成员联系方式；请勿输入密码等敏感信息。");
+        String who = "team".equals(cfg.getSource()) || "workspace".equals(cfg.getSource())
+                ? cfg.getSourceName() + "所用的模型服务" : "你配置的模型服务";
+        v.setPrivacyNotice("消息会发送到" + who + "。助手只发送当前空间内你有权看到的项目名称，"
+                + "不会发送需求/任务正文、文档正文或成员联系方式；请勿输入密码等敏感信息。");
         return v;
     }
 
     private static boolean isReady(AiConfigView cfg) {
-        if (!cfg.isEnabled() || cfg.isKeyBroken()) {
+        if (!cfg.isEnabled()) {
+            return false;
+        }
+        if ("team".equals(cfg.getSource()) || "workspace".equals(cfg.getSource())) {
+            return true;
+        }
+        if (!"personal".equals(cfg.getSource()) || cfg.isKeyBroken()) {
             return false;
         }
         boolean hasKey = cfg.isHasKey() || "ollama".equals(cfg.getProvider());
@@ -245,7 +256,7 @@ public class AiAssistantService {
             return res;
         }
 
-        AiConfig cfg = configService.resolve(userId);
+        AiConfig cfg = configService.resolve(userId, workspaceId);
         AiClient.Reply reply = client.chat(cfg, systemPrompt(), userPrompt(workspaceName, req, projects, contextProject), true);
         JsonNode root = parse(reply.content);
         AiUsage usage = AiUsage.of(reply);

@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN" data-layout="desktop">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>纯文本版本引用 → 跳转入口 · 对照原型（2026-11-14）</title>
+<!-- 复用真实前端样式：被对照的七个界面与产品代码同一份 CSS，逐像素一致 -->
+<link rel="stylesheet" href="../../../frontend/css/tokens.css" />
+<link rel="stylesheet" href="../../../frontend/css/base.css" />
+<link rel="stylesheet" href="../../../frontend/css/layout.css" />
+<link rel="stylesheet" href="../../../frontend/css/components.css" />
+<link rel="stylesheet" href="../../../frontend/css/views.css" />
+<link rel="stylesheet" href="../../../frontend/css/version.css" />
+<link rel="stylesheet" href="../../../frontend/css/workcolumn.css" />
+<link rel="stylesheet" href="../../../frontend/css/delivery.css" />
+<link rel="stylesheet" href="../../../frontend/css/manager.css" />
+<link rel="stylesheet" href="../../../frontend/css/mobile.css" />
+<style>
+/* ===== 原型舞台（仅原型用，不属于产品代码） ===== */
+html,body{min-height:100%;}
+html.shot{min-height:0;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);}
+.pl-bar{position:sticky;top:0;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+  padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);box-shadow:var(--shadow-xs);}
+.pl-bar .grp{display:flex;align-items:center;gap:6px;}
+.pl-bar .lbl{font-size:11px;color:var(--text-3);font-weight:650;letter-spacing:.02em;}
+.pl-bar select{height:30px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+  color:var(--text);font-size:12.5px;padding:0 8px;max-width:220px;}
+.pl-seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;background:var(--surface-sunken);}
+.pl-seg button{border:0;background:transparent;color:var(--text-2);font-size:12px;padding:6px 12px;cursor:pointer;}
+.pl-seg button.on{background:var(--primary);color:#fff;font-weight:650;}
+.pl-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer;user-select:none;}
+.pl-toggle input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer;}
+.pl-shell{display:flex;gap:16px;padding:16px;align-items:flex-start;max-width:1560px;margin:0 auto;}
+.pl-stage{flex:1 1 auto;min-width:0;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-xs);padding:18px;overflow:auto;max-height:calc(100vh - 96px);}
+.pl-side{flex:0 0 330px;position:sticky;top:76px;max-height:calc(100vh - 96px);overflow:auto;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);padding:14px 16px;}
+.pl-side h3{font-size:13px;font-weight:700;margin:0 0 4px;}
+.pl-side .sub{font-size:11.5px;color:var(--text-3);line-height:1.6;margin:0 0 10px;}
+.pl-side h4{font-size:11.5px;font-weight:700;margin:14px 0 6px;display:flex;align-items:center;gap:6px;}
+.pl-side h4 .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+.pl-side ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+.pl-side li{font-size:11.5px;line-height:1.55;color:var(--text-2);}
+.pl-side li code{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);background:var(--surface-sunken);
+  border:1px solid var(--border);border-radius:4px;padding:0 4px;white-space:nowrap;}
+.pl-side li b{color:var(--text);font-weight:600;}
+/* 舞台内被对照界面的容器 */
+.pl-surface-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 4px;}
+.pl-surface-head h2{font-size:15px;font-weight:700;margin:0;}
+.pl-surface-head .where{font-size:11px;color:var(--text-3);font-family:var(--font-mono);}
+.pl-surface-note{font-size:12px;color:var(--text-2);line-height:1.65;margin:0 0 14px;}
+.pl-mode-tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:650;border-radius:var(--r-pill);padding:2px 10px;}
+.pl-mode-tag.before{background:var(--surface-sunken);color:var(--text-3);border:1px dashed var(--border-strong);}
+.pl-mode-tag.after{background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border);}
+/* 现状纯文本：明确不可点 */
+.pl-inert{cursor:default;}
+/* 提案改动处的高亮（diff 开关） */
+body.diff .pl-changed{outline:2px solid var(--primary-border);outline-offset:2px;border-radius:var(--r-xs);
+  background:var(--primary-soft);}
+body.diff .pl-changed.release-chip,body.diff .pl-changed.tag{background:var(--primary-soft);}
+/* 跳转落地过渡 */
+.pl-fade{animation:plFade .22s ease;}
+@keyframes plFade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+/* 标注 */
+.annot-box{position:fixed;left:16px;bottom:16px;z-index:70;width:380px;max-height:46vh;overflow:auto;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow-lg);display:none;}
+body.annot .annot-box{display:block;}
+.annot-box h3{font-size:13px;font-weight:700;margin:0 0 2px;}
+.annot-box .sub{font-size:11.5px;color:var(--text-3);line-height:1.6;margin-bottom:9px;}
+.annot-box ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;}
+.annot-box li{display:flex;gap:8px;font-size:11.5px;line-height:1.6;color:var(--text-2);}
+.annot-box li b{color:var(--text);font-weight:600;}
+.annot-box .n{flex:none;width:17px;height:17px;border-radius:50%;background:var(--warning);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;margin-top:1px;}
+.annot-point{display:none;position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:var(--warning);
+  color:#fff;font-size:10.5px;font-weight:700;align-items:center;justify-content:center;z-index:8;box-shadow:0 0 0 2px var(--surface);font-style:normal;}
+body.annot .annot-point{display:flex;}
+.pl-host{position:relative;}
+/* 提示 */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(8px);z-index:90;max-width:min(560px,90vw);
+  background:var(--text);color:var(--bg);font-size:12.5px;line-height:1.6;padding:9px 16px;border-radius:var(--r-pill);
+  box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+/* 舞台与侧栏滚动条用本项目令牌色，而非浏览器默认 */
+.pl-stage::-webkit-scrollbar,.pl-side::-webkit-scrollbar,.annot-box::-webkit-scrollbar,.tbl-wrap::-webkit-scrollbar{width:10px;height:10px;}
+.pl-stage::-webkit-scrollbar-track,.pl-side::-webkit-scrollbar-track,.annot-box::-webkit-scrollbar-track,.tbl-wrap::-webkit-scrollbar-track{background:var(--surface-sunken);border-radius:8px;}
+.pl-stage::-webkit-scrollbar-thumb,.pl-side::-webkit-scrollbar-thumb,.annot-box::-webkit-scrollbar-thumb,.tbl-wrap::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px;border:2px solid var(--surface-sunken);}
+.pl-stage::-webkit-scrollbar-thumb:hover,.pl-side::-webkit-scrollbar-thumb:hover,.annot-box::-webkit-scrollbar-thumb:hover,.tbl-wrap::-webkit-scrollbar-thumb:hover{background:var(--primary-border);}
+.pl-stage,.pl-side,.annot-box,.tbl-wrap{scrollbar-width:thin;scrollbar-color:var(--border-strong) var(--surface-sunken);}
+/* 手机布局 */
+html[data-layout="mobile"] .pl-shell{flex-direction:column;padding:10px;}
+html[data-layout="mobile"] .pl-side{position:static;flex:1 1 auto;width:100%;max-height:none;}
+html[data-layout="mobile"] .pl-stage{max-height:none;width:100%;}
+html[data-layout="mobile"] .pl-bar{gap:6px;padding:8px 10px;}
+html[data-layout="mobile"] .pl-bar select{max-width:150px;}
+body.shot .pl-bar,body.shot .annot-box{display:none;}
+body.shot.annot .annot-box{display:block;position:static;left:auto;right:auto;bottom:auto;width:auto;max-width:none;max-height:none;margin:0 16px 16px;}
+body.shot{min-height:0;height:auto;}
+body.shot .pl-shell{padding:0;max-width:none;}
+body.shot .pl-stage{border:0;border-radius:0;box-shadow:none;max-height:none;}
+body.shot .pl-side{display:none;}
+/* 窄屏：页面本身不横滚，宽表在容器内用本项目令牌色滚动条横滚 */
+html[data-layout="mobile"] body{overflow-x:hidden;}
+html[data-layout="mobile"] .pl-shell,html[data-layout="mobile"] .pl-bar{max-width:100%;}
+html[data-layout="mobile"] .pl-stage{min-width:0;overflow-x:auto;}
+html[data-layout="mobile"] .tbl-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+html[data-layout="mobile"] .annot-box{left:8px;right:8px;width:auto;max-width:none;}
+/* 落地页只有 4 个指标：覆写产品 9 列网格，桌面 4 列、手机 2×2，避免挤在左侧 */
+.pl-stage .vd-kpis{grid-template-columns:repeat(4,minmax(0,1fr));}
+html[data-layout="mobile"] .pl-stage .vd-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+</style>
+</head>
+<body>
+<div class="pl-bar">
+  <div class="grp"><span class="lbl">界面</span>
+    <select id="selSurface" aria-label="选择被对照的界面"></select>
+  </div>
+  <div class="grp"><span class="lbl">对照</span>
+    <span class="pl-seg" id="segMode">
+      <button type="button" data-m="before">纯文本 · 现状</button>
+      <button type="button" data-m="after" class="on">跳转入口 · 提案</button>
+    </span>
+  </div>
+  <label class="pl-toggle"><input type="checkbox" id="chkDiff" checked />高亮改动处</label>
+  <label class="pl-toggle"><input type="checkbox" id="chkAnnot" />标注</label>
+  <label class="pl-toggle"><input type="checkbox" id="chkSide" checked />边界清单</label>
+  <div class="grp"><span class="lbl">布局</span>
+    <span class="pl-seg" id="segLayout">
+      <button type="button" data-l="desktop" class="on">桌面</button>
+      <button type="button" data-l="mobile">手机</button>
+    </span>
+  </div>
+  <div class="grp"><button class="btn sm" type="button" id="btnReset">重置</button></div>
+</div>
+
+<div class="pl-shell">
+  <main class="pl-stage" id="stage" aria-live="polite"></main>
+  <aside class="pl-side" id="side"></aside>
+</div>
+
+<div class="annot-box" id="annotBox"></div>
+<div id="toast" role="status"></div>
+
+<script>
+/* ================= 工具 ================= */
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+  return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]; }); }
+var $ = function(s){ return document.querySelector(s); };
+
+/* ================= 种子数据（与产品演示口径一致） ================= */
+var VERSIONS = {
+  Voc6wln:{ id:"Voc6wln", name:"App 首页 v3.2", status:"active",  statusName:"开发中", req:"Rph94sl", reqName:"App 首页改版", start:"2026-11-02", due:"2026-12-04", tasks:17, done:4, hours:1930 },
+  Vac3e45:{ id:"Vac3e45", name:"App 首页 v3.1", status:"released",statusName:"已发布", req:"Rph94sl", reqName:"App 首页改版", start:"2026-09-14", due:"2026-10-30", tasks:4,  done:4, hours:1500 },
+  Vfbu5dv:{ id:"Vfbu5dv", name:"App 首页 v3.0", status:"released",statusName:"已发布", req:"Rph94sl", reqName:"App 首页改版", start:"2026-08-01", due:"2026-09-10", tasks:6,  done:6, hours:2200 },
+  Vpcw313:{ id:"Vpcw313", name:"清结算 v2.4",   status:"active",  statusName:"开发中", req:"R4ohfd",  reqName:"清结算",       start:"2026-10-20", due:"2026-12-10", tasks:11, done:3, hours:860 },
+  Vj7w80c:{ id:"Vj7w80c", name:"支付网关 v1.8", status:"planned", statusName:"待规划", req:"R4wejtf", reqName:"支付网关",     start:"2026-11-25", due:"2027-01-15", tasks:8,  done:0, hours:0 }
+};
+function V(id){ return VERSIONS[id]; }
+
+/* 状态：当前界面 / 对照模式 / 跳转落地 */
+var st = { surface:"schedule", mode:"after", jump:null };
+
+/* ================= 版本引用渲染：现状纯文本 vs 提案跳转入口 =================
+   与产品 lib/format.js assocLinkHTML 同一套 class 与 data 约定：
+   after → <button class="assoc-link" data-jump-version data-jump-req>；before → 纯文本。 */
+function vref(id, label, opts){
+  var o = opts || {};
+  var text = esc(label == null ? (V(id) ? V(id).name : id) : label);
+  if(st.mode === "before"){
+    var cls = o.plainClass || "pl-inert";
+    return '<span class="' + cls + '" data-inert-version="' + esc(id) + '" title="现状：纯文本，不可点">' + text + '</span>';
+  }
+  var extra = o.cls ? " " + o.cls : "";
+  return '<button type="button" class="assoc-link pl-changed' + extra + '" data-jump-version="' + esc(id) +
+    '" data-jump-req="' + esc(V(id) ? V(id).req : "") + '" title="跳转到「' + text + '」的版本详情页">' + text + '</button>';
+}
+/* 日程的多版本 chips：现状是 GROUP_CONCAT 名称串切的纯文本 pill；提案逐枚变跳转 pill */
+function versionChips(ids, max){
+  var shown = ids.slice(0, max), rest = ids.length - shown.length;
+  var html = shown.map(function(id){
+    if(st.mode === "before") return '<span class="release-chip pl-inert" data-inert-version="' + esc(id) + '" title="' + esc(V(id).name) + '">' + esc(V(id).name) + '</span>';
+    return '<button type="button" class="release-chip assoc-link pl-changed" data-jump-version="' + esc(id) + '" data-jump-req="' + esc(V(id).req) + '" title="跳转到「' + esc(V(id).name) + '」的版本详情页">' + esc(V(id).name) + '</button>';
+  }).join("");
+  if(rest > 0) html += '<span class="release-chip is-more" title="' + esc(ids.slice(max).map(function(i){ return V(i).name; }).join("、")) + '">+' + rest + '</span>';
+  return '<span class="release-chips">' + html + '</span>';
+}
+function projectChips(names){
+  return '<span class="release-chips">' + names.map(function(n){ return '<span class="release-chip">' + esc(n) + '</span>'; }).join("") + '</span>';
+}
+function statusTag(v){
+  var tone = v.status === "released" ? "tag-success" : v.status === "active" ? "tag-info" : "tag-neutral";
+  return '<span class="tag ' + tone + '">' + esc(v.statusName) + '</span>';
+}
+function annot(n){ return st.mode === "after" ? '<i class="annot-point">' + n + '</i>' : ""; }
+
+/* ================= 七个被对照界面 ================= */
+var SURFACES = [
+  { id:"schedule", name:"跨项目发布日程 · 版本列", where:"views/phase.js:487,492 + nameChips:443",
+    note:"日程行的整行点击打开「发布计划工作区」；版本列现在是 GROUP_CONCAT 名称串切出的纯文本 pill，点版本名没有反应。提案把每枚版本 pill 变成跳转入口，与整行打开计划互不抢点击。",
+    render: renderSchedule },
+  { id:"dlpicker", name:"交付说明选择器 · 版本名", where:"views/delivery.js:92",
+    note:"选择器行只有右侧「生成说明」按钮可点；版本名是纯文本 <b>。提案让版本名本身可跳转到版本详情，「生成说明」仍走交付说明，两个动作分开。",
+    render: renderDlPicker },
+  { id:"dlhead", name:"交付说明页头 · 项目·版本 chip", where:"views/delivery.js:139",
+    note:"页头 chip 把「项目 · 版本」拼成一段纯文本。提案保留项目为纯文本（项目另有驾驶舱入口），只把版本部分变成跳转入口。",
+    render: renderDlHead },
+  { id:"board", name:"需求看板卡片 · 版本 tag", where:"views/demands.js:817",
+    note:"看板卡片的版本是一枚 ghost tag 纯文本；整卡点击打开需求详情。提案把版本 tag 变成可点 tag（assoc-link.tag），点它跳版本、点卡片其余部分仍开需求。",
+    render: renderBoard },
+  { id:"demlist", name:"需求列表 · 目标版本列", where:"views/demands.js:1118",
+    note:"列表「目标版本」列是纯文本。提案复用工作项列表同一套 taskVersionLinksHTML 口径，把目标版本变成跳转入口。",
+    render: renderDemList },
+  { id:"evidence", name:"需求交付证据表 · 工作项版本", where:"views/demands.js:2984,2994",
+    note:"证据表每行副标题里的计划版本是 taskVersionsText 纯文本；整行点击打开工作项详情。提案把副标题版本换成 taskVersionLinksHTML 跳转入口。",
+    render: renderEvidence },
+  { id:"msrow", name:"驾驶舱里程碑表 · 版本 sub", where:"views/project.js:488",
+    note:"里程碑详情弹层的「达成方式 · 版本」上一批已变跳转入口，但驾驶舱里程碑表格行的版本 sub 仍是纯文本。提案补齐这一处，保持同一实体同一入口。",
+    render: renderMsRow }
+];
+function surface(){ return SURFACES.filter(function(s){ return s.id === st.surface; })[0]; }
+
+function head(s){
+  return '<div class="pl-surface-head"><h2>' + esc(s.name) + '</h2>'
+    + '<span class="where">' + esc(s.where) + '</span>'
+    + '<span class="pl-mode-tag ' + st.mode + '">' + (st.mode === "before" ? "现状 · 纯文本不可点" : "提案 · 版本名可跳转") + '</span></div>'
+    + '<p class="pl-surface-note">' + esc(s.note) + '</p>';
+}
+
+/* --- 1 日程 --- */
+function renderSchedule(){
+  var rows = [
+    { at:"2026-12-04 20:00", projects:["App 首页改版"], vers:["Voc6wln"], env:"生产 · 全量", status:"就绪", tone:"tag-info", owner:"李娜", n:17 },
+    { at:"2026-11-20 18:00", projects:["App 首页改版","清结算"], vers:["Vac3e45","Vpcw313","Vj7w80c"], env:"预发 · 部分", status:"草稿", tone:"tag-neutral", owner:"孔祥金", n:9 },
+    { at:"2026-11-12 21:40", projects:["App 首页改版"], vers:["Vac3e45"], env:"生产 · 全量", status:"已完成", tone:"tag-success", owner:"李娜", n:4 }
+  ];
+  var body = rows.map(function(r, i){
+    return '<tr data-schedule-open="plan' + i + '" title="打开该计划的发布计划与发布记录">'
+      + '<td>' + esc(r.at) + '</td>'
+      + '<td>' + projectChips(r.projects) + '</td>'
+      + '<td class="pl-host">' + versionChips(r.vers, 2) + (i === 1 ? annot(1) : "") + '</td>'
+      + '<td>' + esc(r.env) + '</td>'
+      + '<td><span class="tag ' + r.tone + '">' + esc(r.status) + '</span></td>'
+      + '<td>' + esc(r.owner) + '</td>'
+      + '<td class="num">' + r.n + '</td></tr>';
+  }).join("");
+  return head(surface()) + '<div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
+    + '<th>计划时间</th><th>项目</th><th>版本</th><th>环境 · 覆盖</th><th>状态</th><th>负责人</th><th class="num">工作项</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+    + '<p class="foot-note">多版本计划（第二行 +1）现状只有名称串、没有逐版本 id；提案需后端返回与名称对齐的 versionIds 才能逐枚接线。</p>';
+}
+/* --- 2 交付选择器 --- */
+function renderDlPicker(){
+  var groups = [
+    { name:"App 首页改版", list:["Voc6wln","Vac3e45"] },
+    { name:"清结算", list:["Vpcw313"] }
+  ];
+  var body = groups.map(function(g){
+    return '<div class="dl-modgroup"><div class="dl-modgroup-head"><span class="dl-mod">' + esc(g.name)
+      + '</span><span class="cnt">' + g.list.length + ' 个版本</span></div><div class="dl-rows">'
+      + g.list.map(function(id, i){
+        var v = V(id);
+        var released = v.status === "released";
+        var sub = [v.id, "目标 " + v.due, released ? "最近生产发布 2026-10-31" : "无生产发布记录"].join(" · ");
+        return '<div class="dl-row body" style="grid-template-columns:96px minmax(0,1fr) 120px">'
+          + '<span>' + (released ? '<span class="dl-badge ok">有发布记录</span>' : '<span class="dl-badge warn">未确认发布</span>') + '</span>'
+          + '<span class="tt pl-host"><b>' + vref(id, v.name) + '</b><span>' + esc(sub) + '</span>' + (i === 0 && g.name === "App 首页改版" ? annot(2) : "") + '</span>'
+          + '<span><button class="btn sm primary" type="button" data-dl-open="' + esc(id) + '">生成说明</button></span></div>';
+      }).join("") + '</div></div>';
+  }).join("");
+  return head(surface()) + body;
+}
+/* --- 3 交付页头 --- */
+function renderDlHead(){
+  var v = V("Vac3e45");
+  return head(surface())
+    + '<div class="dl-head"><div><div class="dl-title-row"><h1>一页式交付说明</h1>'
+    + '<span class="dl-chip pri">正式</span>'
+    + '<span class="dl-chip pl-host">' + esc(v.reqName) + ' · ' + vref(v.id, v.name) + annot(3) + '</span>'
+    + '<span class="dl-chip plum">快照 DL-2026-0142</span></div>'
+    + '<p class="dl-sub">数字全部来自系统记录、只读且可点回原始记录；文字由系统草拟，逐段确认后导出。</p></div></div>'
+    + '<div class="pgrid vd-kpis" style="margin-top:14px">'
+    + '<div class="pcell"><span>范围工作项</span><b>4</b></div>'
+    + '<div class="pcell"><span>已完成</span><b>4</b></div>'
+    + '<div class="pcell"><span>生产发布</span><b>1 次</b></div>'
+    + '<div class="pcell"><span>准时完成率</span><b>100%</b></div></div>';
+}
+/* --- 4 需求看板 --- */
+function renderBoard(){
+  var cards = [
+    { no:"DM-001", title:"首页信息流个性化", status:"已排期", tone:"tag-info", ver:"Voc6wln", owner:"李娜" },
+    { no:"DM-006", title:"新人引导改版", status:"已通过", tone:"tag-plum", ver:"Vac3e45", owner:"陈昊" },
+    { no:"DM-009", title:"搜索联想词治理", status:"已排期", tone:"tag-info", ver:"Voc6wln", owner:"孙琪" },
+    { no:"DM-012", title:"清结算对账自动化", status:"待评审", tone:"tag-neutral", ver:"Vpcw313", owner:"周敏" }
+  ];
+  var body = cards.map(function(c, i){
+    return '<div class="bkl-card" data-dem-card="' + esc(c.no) + '" title="打开需求详情">'
+      + '<div class="bkl-top"><span class="bkl-no">' + esc(c.no) + '</span><span class="tag ' + c.tone + '">' + esc(c.status) + '</span></div>'
+      + '<div class="bkl-title">' + esc(c.title) + '</div>'
+      + '<div class="bkl-tags pl-host">' + vref(c.ver, V(c.ver).name, { cls:"tag ghost", plainClass:"tag ghost pl-inert" }) + (i === 0 ? annot(4) : "")
+      + '<span class="tag ghost">' + esc(c.owner) + '</span></div></div>';
+  }).join("");
+  return head(surface()) + '<div class="bkl-col" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">' + body + '</div>';
+}
+/* --- 5 需求列表 --- */
+function renderDemList(){
+  var rows = [
+    { no:"DM-001", title:"首页信息流个性化", status:"已排期", tone:"tag-info", ver:"Voc6wln", due:"2026-11-28" },
+    { no:"DM-006", title:"新人引导改版", status:"已通过", tone:"tag-plum", ver:"Vac3e45", due:"2026-12-02" },
+    { no:"DM-009", title:"搜索联想词治理", status:"已排期", tone:"tag-info", ver:"Voc6wln", due:"2026-11-25" }
+  ];
+  var body = rows.map(function(r, i){
+    return '<tr data-dem-card="' + esc(r.no) + '" title="打开需求详情">'
+      + '<td class="t-title-cell"><div class="t-title">' + esc(r.no) + ' ' + esc(r.title) + '</div></td>'
+      + '<td><span class="tag ' + r.tone + '">' + esc(r.status) + '</span></td>'
+      + '<td class="pl-host">' + vref(r.ver, V(r.ver).name) + (i === 0 ? annot(5) : "") + '</td>'
+      + '<td class="num">' + esc(r.due) + '</td></tr>';
+  }).join("");
+  return head(surface()) + '<div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
+    + '<th>需求</th><th>状态</th><th>目标版本</th><th class="num">期望交付</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+}
+/* --- 6 交付证据表 --- */
+function renderEvidence(){
+  var rows = [
+    { title:"首页启动速度优化", sub:"4h · ", vers:["Vac3e45"], type:"需求", owner:"赵磊", done:true, cov:"8 条" },
+    { title:"曝光埋点校准", sub:"3h · ", vers:["Vac3e45"], type:"任务", owner:"王芳", done:true, cov:"4 条" },
+    { title:"灰度配置校验", sub:"5h · ", vers:["Voc6wln","Vac3e45"], type:"测试", owner:"李娜", done:true, cov:"6 条" }
+  ];
+  var body = rows.map(function(r, i){
+    var verHtml = st.mode === "before"
+      ? '<span class="pl-inert" data-inert-version="' + esc(r.vers[0]) + '">' + esc(r.vers.map(function(id){ return V(id).name; }).join("、")) + '</span>'
+      : r.vers.map(function(id){ return vref(id, V(id).name); }).join("、");
+    return '<tr data-open-task="t' + i + '" title="打开工作项详情">'
+      + '<td class="t-title-cell"><div class="t-title">' + esc(r.title) + '</div>'
+      + '<div class="t-sub pl-host">' + esc(r.sub) + verHtml + (i === 2 ? annot(6) : "") + '</div></td>'
+      + '<td>' + esc(r.type) + '</td><td>' + esc(r.owner) + '</td>'
+      + '<td>' + (r.done ? '<span class="tag tag-success">已完成</span>' : '<span class="tag tag-info">进行中</span>') + '</td>'
+      + '<td><span class="tag tag-success">' + esc(r.cov) + '</span></td></tr>';
+  }).join("");
+  return head(surface()) + '<div class="tbl-wrap"><table class="phase-tbl dem-evidence-tbl"><thead><tr>'
+    + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th>验证用例</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+}
+/* --- 7 驾驶舱里程碑表 --- */
+function renderMsRow(){
+  var rows = [
+    { name:"「App 首页 v3.1」生产发布", kind:"版本发布后", ver:"Vac3e45", due:"2026-10-31", owner:"赵磊", status:"已达成", tone:"tag-success" },
+    { name:"「App 首页 v3.2」灰度验证", kind:"版本发布后", ver:"Voc6wln", due:"2026-11-20", owner:"李娜", status:"待达成", tone:"tag-info" },
+    { name:"客户验收签字", kind:"人工确认", ver:null, due:"2026-12-04", owner:"孔祥金", status:"待达成", tone:"tag-info" }
+  ];
+  var body = rows.map(function(r, i){
+    return '<tr data-ms-open="m' + i + '" title="打开里程碑详情">'
+      + '<td class="ms-name"><b>' + esc(r.name) + '</b></td>'
+      + '<td class="pl-host">' + esc(r.kind) + (r.ver ? '<span class="ms-sub">' + vref(r.ver, V(r.ver).name) + '</span>' : '') + (i === 0 ? annot(7) : "") + '</td>'
+      + '<td class="num">' + esc(r.due) + '</td><td>' + esc(r.owner) + '</td>'
+      + '<td><span class="tag ' + r.tone + '">' + esc(r.status) + '</span></td></tr>';
+  }).join("");
+  return head(surface()) + '<div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
+    + '<th>里程碑</th><th>达成方式</th><th class="num">目标日</th><th>负责人</th><th>状态</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+}
+
+/* ================= 跳转落地：版本详情（示意） ================= */
+function renderJump(id){
+  var v = V(id);
+  return '<div class="pl-fade">'
+    + '<div class="vd-head"><div class="vd-head-left">'
+    + '<button class="btn sm ghost" type="button" data-pl-back>‹ 返回对照</button>'
+    + '<h1 class="vd-title">' + esc(v.name) + '</h1>' + statusTag(v) + '</div>'
+    + '<div class="vd-head-right"><span class="vd-muted">' + esc(v.reqName) + ' · ' + esc(v.start) + ' → ' + esc(v.due) + '</span></div></div>'
+    + '<p class="pl-surface-note">这是版本名跳转的落地页（原型示意，真实产品为 <code>#/version?id=' + esc(v.id) + '&amp;reqId=' + esc(v.req) + '</code>）。'
+    + '从七个界面任一处点版本名，都落到同一个版本详情，而不是各自重写一份。</p>'
+    + '<div class="pgrid vd-kpis">'
+    + '<div class="pcell"><span>版本工作项</span><b>' + v.tasks + '</b></div>'
+    + '<div class="pcell"><span>已完成</span><b>' + v.done + '</b></div>'
+    + '<div class="pcell"><span>已投入工时</span><b>' + Math.round(v.hours / 60) + 'h</b></div>'
+    + '<div class="pcell"><span>完成率</span><b>' + (v.tasks ? Math.round(v.done / v.tasks * 100) : 0) + '%</b></div></div>'
+    + '<section class="vd-panel"><div class="panel-head"><h3>实际发布记录</h3><span>' + (v.status === "released" ? "1 条不可变快照" : "暂无") + '</span></div>'
+    + (v.status === "released"
+      ? '<details class="release-record" open><summary><span class="tag tag-success">成功</span> 生产 · 灰度发布 · 2026-11-12 21:40 · ' + esc(v.name) + '</summary>'
+        + '<p class="hint">记录 REL-2026-0142 · 快照不可变</p></details>'
+      : '<p class="foot-note">该版本还没有生产发布记录。</p>')
+    + '</section></div>';
+}
+
+/* ================= 边界清单 ================= */
+function renderSide(){
+  return '<h3>统一口径与边界</h3>'
+    + '<p class="sub">同一个版本实体，在所有交互界面用同一个跳转入口（assocLinkHTML("version")；点击经全局委托落到 #/version 详情页）。导出文档、下拉选项、历史日志等保持纯文本。</p>'
+    + '<h4><span class="dot" style="background:var(--primary)"></span>本提案统一（7 处）</h4><ul>'
+    + SURFACES.map(function(s){ return '<li><b>' + esc(s.name.split(" · ")[0]) + '</b> ' + esc(s.name.split(" · ")[1] || "") + '<br><code>' + esc(s.where) + '</code></li>'; }).join("")
+    + '</ul>'
+    + '<h4><span class="dot" style="background:var(--success-fg)"></span>已是跳转入口（保持一致）</h4><ul>'
+    + '<li><b>工作项列表</b> 计划版本列 <code>views/list.js:424</code></li>'
+    + '<li><b>工作项详情</b> 计划版本 <code>core/task-drawer.js:321</code></li>'
+    + '<li><b>全部版本表</b> 版本名 <code>views/phase.js:391</code></li>'
+    + '<li><b>发布快照</b> 实际记录版本 <code>lib/format.js:273</code></li>'
+    + '<li><b>里程碑详情</b> 达成方式 <code>lib/milestone-ui.js:64</code></li>'
+    + '<li><b>测试计划详情</b> 版本 <code>views/testcases.js:3771</code></li>'
+    + '</ul>'
+    + '<h4><span class="dot" style="background:var(--text-3)"></span>合理纯文本（不改）</h4><ul>'
+    + '<li><b>导出 / 打印 / CSV</b> 交付说明、快照导出 <code>lib/delivery-doc.js</code></li>'
+    + '<li><b>下拉选项 / 筛选</b> 目标版本 select <code>views/demands.js:975</code></li>'
+    + '<li><b>toast / 确认文案</b> 调整目标版本 <code>views/demands.js:1413</code></li>'
+    + '<li><b>历史活动日志</b> 版本变更 before→after <code>core/task-drawer.js:1974</code></li>'
+    + '<li><b>编辑 affordance</b> 需求详情目标版本（点击是改值）<code>views/demands.js:3720</code></li>'
+    + '<li><b>分组 / 结构节点</b> 树按版本分组 label <code>views/tree.js:51</code></li>'
+    + '<li><b>当前页自身标题</b> 版本详情 h1 <code>views/version.js:411</code></li>'
+    + '</ul>';
+}
+function renderAnnot(){
+  var items = {
+    schedule:"日程版本 pill 变跳转入口；整行仍打开发布计划，两者不抢点击。多版本需后端补与名称对齐的 versionIds。",
+    dlpicker:"选择器版本名变跳转入口；「生成说明」按钮仍走交付说明，动作分离。",
+    dlhead:"页头 chip 只把版本部分变跳转入口，项目保持纯文本。",
+    board:"看板版本 tag 变可点 tag；点卡片其余部分仍开需求详情。",
+    demlist:"列表目标版本列复用工作项列表同一套跳转口径。",
+    evidence:"证据表副标题版本换 taskVersionLinksHTML；整行仍开工作项详情。",
+    msrow:"驾驶舱里程碑表版本 sub 补齐跳转，与里程碑详情弹层同一入口。"
+  };
+  var s = surface();
+  $("#annotBox").innerHTML = '<h3>标注 · ' + esc(s.name) + '</h3>'
+    + '<p class="sub">切到「纯文本 · 现状」可对照改动前；开启「高亮改动处」看提案动了哪一格。</p>'
+    + '<ol><li><span class="n">1</span><span>' + esc(items[s.id]) + '</span></li>'
+    + '<li><span class="n">2</span><span>点击任一版本名跳转到上方示意详情页，返回按钮回到对照；现状模式点版本名只提示「不可点」。</span></li></ol>';
+}
+
+/* ================= 渲染与事件 ================= */
+function render(){
+  var stage = $("#stage");
+  stage.innerHTML = st.jump ? renderJump(st.jump) : surface().render();
+  $("#side").innerHTML = renderSide();
+  renderAnnot();
+  document.body.classList.toggle("diff", $("#chkDiff").checked);
+  document.body.classList.toggle("annot", $("#chkAnnot").checked);
+  $("#side").style.display = $("#chkSide").checked ? "" : "none";
+  document.documentElement.dataset.layout = $("#segLayout button.on").dataset.l;
+  $("#selSurface").value = st.surface;
+  Array.prototype.forEach.call($("#segMode").children, function(b){ b.classList.toggle("on", b.dataset.m === st.mode); });
+}
+var toastTimer = null;
+function toast(msg){
+  var t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove("on"); }, 2600);
+}
+$("#selSurface").innerHTML = SURFACES.map(function(s){ return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join("");
+$("#selSurface").addEventListener("change", function(){ st.surface = this.value; st.jump = null; render(); });
+$("#segMode").addEventListener("click", function(e){
+  var b = e.target.closest("button[data-m]"); if(!b) return;
+  st.mode = b.dataset.m; st.jump = null; render();
+});
+$("#segLayout").addEventListener("click", function(e){
+  var b = e.target.closest("button[data-l]"); if(!b) return;
+  Array.prototype.forEach.call($("#segLayout").children, function(x){ x.classList.toggle("on", x === b); });
+  render();
+});
+$("#chkDiff").addEventListener("change", render);
+$("#chkAnnot").addEventListener("change", render);
+$("#chkSide").addEventListener("change", render);
+$("#btnReset").addEventListener("click", function(){
+  st = { surface:"schedule", mode:"after", jump:null };
+  $("#chkDiff").checked = true; $("#chkAnnot").checked = false; $("#chkSide").checked = true;
+  Array.prototype.forEach.call($("#segLayout").children, function(x){ x.classList.toggle("on", x.dataset.l === "desktop"); });
+  render();
+});
+$("#stage").addEventListener("click", function(e){
+  var back = e.target.closest("[data-pl-back]");
+  if(back){ st.jump = null; render(); return; }
+  var jump = e.target.closest("[data-jump-version]");
+  if(jump){ e.preventDefault(); e.stopPropagation(); st.jump = jump.getAttribute("data-jump-version"); render(); $("#stage").scrollTop = 0; return; }
+  var inert = e.target.closest("[data-inert-version]");
+  if(inert){ e.stopPropagation(); toast("现状：版本名「" + (V(inert.getAttribute("data-inert-version")) || {}).name + "」是纯文本，点它没有反应；提案把它变成跳转入口。"); return; }
+  var row = e.target.closest("[data-schedule-open],[data-dem-card],[data-open-task],[data-ms-open],[data-dl-open]");
+  if(row){ toast("原型示意：整行 / 按钮的原有动作保持不变（打开计划 / 需求 / 工作项 / 里程碑 / 生成说明）。"); }
+});
+/* URL 参数：?shot=1 隐藏控制条与侧栏；?s=界面；?m=before|after；?layout=mobile */
+(function(){
+  var q = new URLSearchParams(location.search);
+  if(q.get("shot") === "1"){ document.body.classList.add("shot"); document.documentElement.classList.add("shot"); }
+  if(q.get("s") && SURFACES.some(function(s){ return s.id === q.get("s"); })) st.surface = q.get("s");
+  if(q.get("m") === "before" || q.get("m") === "after") st.mode = q.get("m");
+  if(q.get("layout") === "mobile") Array.prototype.forEach.call($("#segLayout").children, function(x){ x.classList.toggle("on", x.dataset.l === "mobile"); });
+  if(q.get("annot") === "1") $("#chkAnnot").checked = true;
+  render();
+})();
+</script>
+</body>
+</html>

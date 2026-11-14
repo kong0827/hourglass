@@ -8,7 +8,7 @@ import { activeView, showView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
-import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, fmtMD, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
+import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, dayKey, fmtMD, fmtMinute, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
 import { loadReqs, pending } from "./board.js";
 import { openLogTable, openTaskTable } from "./manager-shared.js";
 import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
@@ -137,7 +137,7 @@ function buildSummary(d){
   }
   if(n){
     var items = list.slice(0, 12).map(function(t){
-      var late = t.completedAt && t.dueDate && t.completedAt > t.dueDate;
+      var late = t.completedAt && t.dueDate && dayKey(t.completedAt) > dayKey(t.dueDate);
       var dt = t.completedAt ? (fmtMD(parseDate(t.completedAt)) + " " + weekdayCN(parseDate(t.completedAt))) : "";
       return "· " + esc(t.title) + "（" + esc(catNameById(t.categoryId)) + " · " + esc(t.owner) +
         (dt ? " · " + dt : "") + (late ? " · <span class='up'>延期</span>" : "") + "）";
@@ -311,7 +311,7 @@ function reviewCatLabel(t){
   return catNameById(t.categoryId) || t.categoryId || "未指定模块";
 }
 function reviewLate(t){
-  return !!(t.completedAt && t.dueDate && t.completedAt > t.dueDate);
+  return !!(t.completedAt && t.dueDate && dayKey(t.completedAt) > dayKey(t.dueDate));
 }
 function openReviewTasks(title, tasks, note){
   var d = state.reviewData || {};
@@ -497,7 +497,7 @@ function renderReview(d){
     /* completedAt 可能为空（历史数据 / 异常恢复）：那就显示「完成时间未记录」，不能让渲染崩掉 */
     var doneAt = t.completedAt ? parseDate(t.completedAt) : null;
     var due = t.dueDate ? parseDate(t.dueDate) : null;
-    var late = !!(doneAt && due && t.completedAt > t.dueDate);
+    var late = !!(doneAt && due && dayKey(t.completedAt) > dayKey(t.dueDate));
     var n = late ? dayDiff(doneAt, due) : 0;
     var badge = late ? ("延期 " + n + " 天") : ((doneAt && due) ? "按期" : "—");
     var badgeKind = late ? "warning" : ((doneAt && due) ? "success" : "ghost");
@@ -564,7 +564,7 @@ function copyReviewPlain(){
     + "\n\n本周完成（" + doneTasks.length + " 项）：\n"
     + (doneTasks.length ? doneTasks.map(function(t){
         return "· [" + t.priority + "][" + catNameById(t.categoryId) + "] " + t.title + " — " + t.owner
-          + (t.completedAt ? "（" + t.completedAt + "）" : "（完成时间未记录）");
+          + (t.completedAt ? "（" + fmtMinute(t.completedAt) + "）" : "（完成时间未记录）");
       }).join("\n") : "（本周没有完成的工作项）");
   copyToClipboard(text, "已复制本周总结", "复制失败，请手动选择文本");
 }

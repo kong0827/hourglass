@@ -61,9 +61,10 @@ public class TaskCascade {
             "project_milestone_task",
             "test_case_task"));
 
-    /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失） */
+    /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失；
+        req_doc_comment 保留评论正文，只解除「转为工作项」引用） */
     public static final List<String> PRESERVED_TASK_REF_TABLES = Collections.unmodifiableList(Arrays.asList(
-            "task_completion_record", "version_release_item", "version_release_plan_task"));
+            "task_completion_record", "version_release_item", "version_release_plan_task", "req_doc_comment"));
 
     /** 空间清空/覆盖导入不能删除或遗留的交付数据；存在任意行即拒绝重建。 */
     public static final List<String> PRESERVED_WORKSPACE_DELIVERY_TABLES = Collections.unmodifiableList(Arrays.asList(
@@ -155,6 +156,8 @@ public class TaskCascade {
     private final DeliveryScopeLock scopeLock;
     /** 编号序列随空间一起清；导入覆盖不清（序列只增不减），避免下一次取号回收已发出的编号 */
     private final com.hourglass.mapper.NumberSeqMapper numberSeqMapper;
+    /** 自定义分组是引用关系：用例清空后成员行必须摘掉，整空间删除时分组本体一起清 */
+    private final com.hourglass.mapper.CaseSetMapper caseSetMapper;
 
     public TaskCascade(TaskMapper taskMapper, TaskLogMapper logMapper,
                        TaskCommentMapper commentMapper, TaskWatchMapper watchMapper,
@@ -177,10 +180,12 @@ public class TaskCascade {
                        com.hourglass.mapper.ProjectMilestoneMapper milestoneMapper,
                        com.hourglass.mapper.DeliveryNoteMapper deliveryNoteMapper,
                        DeliveryScopeLock scopeLock,
-                       com.hourglass.mapper.NumberSeqMapper numberSeqMapper) {
+                       com.hourglass.mapper.NumberSeqMapper numberSeqMapper,
+                       com.hourglass.mapper.CaseSetMapper caseSetMapper) {
         this.deliveryNoteMapper = deliveryNoteMapper;
         this.scopeLock = scopeLock;
         this.numberSeqMapper = numberSeqMapper;
+        this.caseSetMapper = caseSetMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.commentMapper = commentMapper;
@@ -354,6 +359,8 @@ public class TaskCascade {
         testCaseRunMapper.clearBugTaskRefs(workspaceId, taskIds);
         /* 工作项被物理删除：验证它的用例保留，只解除关联，覆盖口径回到需求级 */
         caseTaskMapper.deleteByTaskIds(workspaceId, taskIds);
+        /* 文档评论转出的工作项被彻底删除：评论保留，解除转项引用，避免回链指向不存在的任务 */
+        docCommentMapper.clearTaskRefsByTaskIds(workspaceId, taskIds);
     }
 
     /**
@@ -380,6 +387,8 @@ public class TaskCascade {
         if (clearTestCases) {
             testCaseRunMapper.deleteByWorkspace(workspaceId);
             testCaseMapper.deleteByWorkspace(workspaceId);
+            /* 用例没了，分组成员引用必须一起摘掉；分组本体与计划/目录同口径，只在整空间删除时清 */
+            caseSetMapper.deleteItemsByWorkspace(workspaceId);
         }
         reqMapper.deleteAllByWorkspace(workspaceId);
         /* 版本绑定跟着任务走；版本/需求池条目强归属项目，但备份导入会重建同名项目，
@@ -411,6 +420,9 @@ public class TaskCascade {
         testCaseMapper.deletePlanCasesByWorkspace(workspaceId);
         testCaseMapper.deletePlansByWorkspace(workspaceId);
         testCaseMapper.deleteModulesByWorkspace(workspaceId);
+        caseSetMapper.deleteMembersByWorkspace(workspaceId);
+        caseSetMapper.deleteItemsByWorkspace(workspaceId);
+        caseSetMapper.deleteByWorkspace(workspaceId);
         purgeWorkspaceTaskData(workspaceId, true, true);
         requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
         docCommentMapper.deleteByWorkspace(workspaceId);

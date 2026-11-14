@@ -148,7 +148,7 @@ class AiAssistantServiceTest {
     @Test
     void bootstrapOnlyReturnsWritableVisibleProjects() {
         member(USER);
-        when(configService.view(USER)).thenReturn(readyView());
+        when(configService.view(USER, WS)).thenReturn(readyView());
         when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(
                 project("P1", "可写项目"), project("P2", "只读项目"), project("P3", "隐藏项目")));
         allow("P1", true, true);
@@ -170,7 +170,7 @@ class AiAssistantServiceTest {
     @Test
     void viewerGetsNoWritableProjects() {
         when(projectAccess.roleOf(WS, USER)).thenReturn(ProjectAccessService.ROLE_VIEWER);
-        when(configService.view(USER)).thenReturn(readyView());
+        when(configService.view(USER, WS)).thenReturn(readyView());
         when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目")));
         allow("P1", true, false);
 
@@ -193,7 +193,7 @@ class AiAssistantServiceTest {
         assertNull(res.getUsage());
         assertTrue(res.getLinks().stream().anyMatch(l -> "#/board?new=1".equals(l.getHref())));
         verifyNoInteractions(client);
-        verify(configService, never()).resolve(anyString());
+        verify(configService, never()).resolve(anyString(), anyString());
     }
 
     @Test
@@ -206,7 +206,7 @@ class AiAssistantServiceTest {
         allow("P4", true, true);
         allow("P2", true, false);
         allow("P3", false, false);
-        when(configService.resolve(USER)).thenReturn(config());
+        when(configService.resolve(USER, WS)).thenReturn(config());
         when(client.chat(any(AiConfig.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(reply("{\"intent\":\"create_task\",\"answer\":\"整理好了\","
                         + "\"links\":[{\"href\":\"#/board\"},{\"href\":\"javascript:alert(1)\"}],"
@@ -237,7 +237,7 @@ class AiAssistantServiceTest {
         member(USER);
         when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
         allow("P1", true, true);
-        when(configService.resolve(USER)).thenReturn(config());
+        when(configService.resolve(USER, WS)).thenReturn(config());
         when(client.chat(any(AiConfig.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(reply("{\"intent\":\"create_task\",\"answer\":\"整理好了\","
                         + "\"draft\":{\"title\":\"登录页改版上线\",\"description\":\"完成改版并上线\","
@@ -633,7 +633,7 @@ class AiAssistantServiceTest {
         assertNull(chat.getDraft());
         assertTrue(chat.getAnswer().contains("没有可写的项目"));
         verifyNoInteractions(client);
-        verify(configService, never()).resolve(anyString());
+        verify(configService, never()).resolve(anyString(), anyString());
     }
 
     @Test
@@ -774,7 +774,7 @@ class AiAssistantServiceTest {
     }
 
     private void modelSays(String json) {
-        when(configService.resolve(USER)).thenReturn(config());
+        when(configService.resolve(USER, WS)).thenReturn(config());
         when(client.chat(any(AiConfig.class), anyString(), anyString(), anyBoolean())).thenReturn(reply(json));
     }
 
@@ -823,7 +823,7 @@ class AiAssistantServiceTest {
     private String createDraft() {
         when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
         allow("P1", true, true);
-        when(configService.resolve(USER)).thenReturn(config());
+        when(configService.resolve(USER, WS)).thenReturn(config());
         when(client.chat(any(AiConfig.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(reply("{\"intent\":\"create_task\",\"answer\":\"整理好了\","
                         + "\"draft\":{\"title\":\"登录页改版上线\",\"itemType\":\"task\",\"reqId\":\"P1\"}}"));
@@ -869,6 +869,9 @@ class AiAssistantServiceTest {
         v.setHasKey(true);
         v.setEnabled(true);
         v.setStatus("已就绪");
+        v.setSource("personal");
+        v.setSourceName("我的 API Key");
+        v.setAllowPersonal(true);
         return v;
     }
 

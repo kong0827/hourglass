@@ -16,4 +16,11 @@ public class CaseDefectRequest {
 
     @Size(max = 120, message = "发现环境最多 120 字")
     private String environment;
+
+    /** 转缺陷补充说明：追加到缺陷描述 */
+    @Size(max = 500, message = "补充说明最多 500 字")
+    private String note;
+
+    /** 是否把最近一轮失败证据复制到缺陷附件；空视为 true */
+    private Boolean carryEvidence;
 }

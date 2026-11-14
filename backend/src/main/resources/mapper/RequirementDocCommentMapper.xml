@@ -2,24 +2,49 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.hourglass.mapper.RequirementDocCommentMapper">
 
+  <sql id="cols">
+    id, workspace_id, doc_id, user_id, content, quote_text, parent_id, resolved_at, resolved_by,
+    mentions, task_id, created_at, updated_at
+  </sql>
+
   <insert id="insert">
-    INSERT INTO req_doc_comment (id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at)
-    VALUES (#{id}, #{workspaceId}, #{docId}, #{userId}, #{content}, #{quoteText},
+    INSERT INTO req_doc_comment (id, workspace_id, doc_id, user_id, content, quote_text, parent_id,
+                                 resolved_at, resolved_by, mentions, task_id, created_at, updated_at)
+    VALUES (#{id}, #{workspaceId}, #{docId}, #{userId}, #{content}, #{quoteText}, #{parentId},
+            #{resolvedAt}, #{resolvedBy}, #{mentions}, #{taskId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
   <select id="selectById" resultType="com.hourglass.entity.RequirementDocComment">
-    SELECT id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at
-    FROM req_doc_comment
-    WHERE id = #{id}
+    SELECT <include refid="cols"/> FROM req_doc_comment WHERE id = #{id}
   </select>
 
   <select id="selectByDoc" resultType="com.hourglass.entity.RequirementDocComment">
-    SELECT id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at
+    SELECT <include refid="cols"/>
     FROM req_doc_comment
     WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
     ORDER BY created_at ASC, id ASC
     LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="selectTopByDoc" resultType="com.hourglass.entity.RequirementDocComment">
+    SELECT <include refid="cols"/>
+    FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId} AND parent_id IS NULL
+    <if test="unresolvedOnly">
+      AND resolved_at IS NULL
+    </if>
+    ORDER BY created_at ASC, id ASC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="selectRepliesByParents" resultType="com.hourglass.entity.RequirementDocComment">
+    SELECT <include refid="cols"/>
+    FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+      AND parent_id IN
+      <foreach collection="parentIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+    ORDER BY created_at ASC, id ASC
   </select>
 
   <select id="countByDoc" resultType="int">
@@ -27,16 +52,52 @@
     WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
   </select>
 
+  <select id="countTopByDoc" resultType="int">
+    SELECT COUNT(*) FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId} AND parent_id IS NULL
+    <if test="unresolvedOnly">
+      AND resolved_at IS NULL
+    </if>
+  </select>
+
+  <select id="countUnresolvedByDoc" resultType="int">
+    SELECT COUNT(*) FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+      AND parent_id IS NULL AND resolved_at IS NULL
+  </select>
+
   <select id="selectByWorkspace" resultType="com.hourglass.entity.RequirementDocComment">
-    SELECT id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at
+    SELECT <include refid="cols"/>
     FROM req_doc_comment
     WHERE workspace_id = #{workspaceId}
     ORDER BY created_at ASC
   </select>
 
+  <update id="updateResolve">
+    UPDATE req_doc_comment
+    SET resolved_at = #{resolvedAt}, resolved_by = #{resolvedBy}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <update id="updateTaskId">
+    UPDATE req_doc_comment SET task_id = #{taskId}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <update id="clearTaskRefsByTaskIds">
+    UPDATE req_doc_comment SET task_id = NULL
+    WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </update>
+
   <delete id="delete">
     DELETE FROM req_doc_comment
     WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <delete id="deleteByParent">
+    DELETE FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId} AND parent_id = #{parentId}
   </delete>
 
   <delete id="deleteByDoc">

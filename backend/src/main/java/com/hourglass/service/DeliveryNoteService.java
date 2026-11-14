@@ -93,6 +93,8 @@ public class DeliveryNoteService {
     private final DeliveryNoteMapper noteMapper;
     private final ProjectAccessService projectAccess;
     private final ObjectMapper json;
+    /** 团队共享用例分组：与测试报告同源的质量证据，个人 / 指定成员分组不进 */
+    private final CaseSetService caseSetService;
 
     public DeliveryNoteService(ProjectVersionMapper versionMapper, RequirementMapper reqMapper,
                                TaskMapper taskMapper, VersionTaskMapper versionTaskMapper,
@@ -101,7 +103,7 @@ public class DeliveryNoteService {
                                TimeLogMapper timeLogMapper, CategoryMapper categoryMapper,
                                UserMapper userMapper, WorkspaceMapper workspaceMapper,
                                DeliveryNoteMapper noteMapper, ProjectAccessService projectAccess,
-                               ObjectMapper json) {
+                               ObjectMapper json, CaseSetService caseSetService) {
         this.versionMapper = versionMapper;
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
@@ -117,6 +119,7 @@ public class DeliveryNoteService {
         this.noteMapper = noteMapper;
         this.projectAccess = projectAccess;
         this.json = json;
+        this.caseSetService = caseSetService;
     }
 
     /* ==================== 聚合 ==================== */
@@ -675,6 +678,7 @@ public class DeliveryNoteService {
         q.setPassRatePct(rateBase <= 0 ? null : Math.round(passed * 1000f / rateBase) / 10d);
         q.setCoveragePct(cases == 0 ? null : Math.round(executed * 1000f / cases) / 10d);
         q.setMissing(plans.isEmpty() || cases == 0);
+        q.setCaseSets(caseSetService.teamSetEvidence(workspaceId, reqId));
         if (!plans.isEmpty()) {
             TestPlanView first = plans.get(0);
             q.setPlanId(first.getId());
@@ -1046,6 +1050,10 @@ public class DeliveryNoteService {
                 : q.getPlanName() + " · " + q.getCaseCount() + " 条用例 · 通过 " + q.getPassedCount()
                 + " / 已执行 " + q.getExecutedCount(), "test",
                 Boolean.TRUE.equals(q.getMissing()) ? "warn" : "plum", 1, false, q.getMissing(), "testcases", q.getPlanId()));
+        if (!q.getCaseSets().isEmpty()) {
+            list.add(evidenceRow("用例分组", caseSetSummary(q.getCaseSets()), "test", "plum",
+                    1, false, false, "testcases", null));
+        }
         if (!r.getDemands().isEmpty()) {
             List<String> ids = new ArrayList<String>();
             for (DeliveryNoteResponse.DemandRow row : r.getDemands()) {
@@ -1097,9 +1105,16 @@ public class DeliveryNoteService {
                     .append(number(ev.get("requiredUntested")));
         }
         if (ev.get("caseTotal") != null) {
-            meta.append(" · 计划用例 ").append(number(ev.get("caseTotal"))).append(" 条：通过 ")
+            meta.append(" · 测试计划用例 ").append(number(ev.get("caseTotal"))).append(" 条：通过 ")
                     .append(number(ev.get("casePassed"))).append(" / 已执行 ")
                     .append(number(ev.get("caseExecuted")));
+        }
+        if (ev.get("caseSets") instanceof List) {
+            List<Map<String, Object>> sets = new ArrayList<Map<String, Object>>();
+            for (Object item : (List<?>) ev.get("caseSets")) {
+                if (item instanceof Map) sets.add((Map<String, Object>) item);
+            }
+            if (!sets.isEmpty()) meta.append(" · ").append(caseSetSummary(sets));
         }
         if (ev.get("blockers") instanceof List && !((List<?>) ev.get("blockers")).isEmpty()) {
             List<String> blockers = new ArrayList<String>();
@@ -1107,12 +1122,33 @@ public class DeliveryNoteService {
             meta.append(" · 阻断：").append(String.join("；", blockers));
         }
         String refId = text(ev.get("planId"));
-        list.add(evidenceRow("发布测试检查", meta.toString(), "test", "block".equals(verdict) ? "warn" : "ok",
+        list.add(evidenceRow("发布检查", meta.toString(), "test", "block".equals(verdict) ? "warn" : "ok",
                 1, false, false, "testcases", Texts.trimToNull(refId)));
     }
 
     private static String policyName(String policy) {
         return "strict".equals(policy) ? "严格" : "loose".equals(policy) ? "宽松" : "标准";
+    }
+
+    /** 团队分组证据摘要：分组数（含动态）+ 成员用例的结果分布，不复制用例全文 */
+    private static String caseSetSummary(List<Map<String, Object>> sets) {
+        int total = 0, passed = 0, failed = 0, blocked = 0, skipped = 0, untested = 0, dynamic = 0;
+        for (Map<String, Object> s : sets) {
+            total += number(s.get("total"));
+            passed += number(s.get("passed"));
+            failed += number(s.get("failed"));
+            blocked += number(s.get("blocked"));
+            skipped += number(s.get("skipped"));
+            untested += number(s.get("untested"));
+            if ("dynamic".equals(text(s.get("kind")))) dynamic++;
+        }
+        StringBuilder meta = new StringBuilder();
+        meta.append(sets.size()).append(" 个团队共享分组");
+        if (dynamic > 0) meta.append("（含 ").append(dynamic).append(" 个动态）");
+        meta.append(" · ").append(total).append(" 条用例：通过 ").append(passed)
+                .append("，失败 ").append(failed).append("，阻塞 ").append(blocked)
+                .append("，跳过 ").append(skipped).append("，未执行 ").append(untested);
+        return meta.toString();
     }
 
     private static String text(Object value) {

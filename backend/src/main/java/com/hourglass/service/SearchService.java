@@ -98,7 +98,11 @@ public class SearchService {
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         /* 文档草稿的可见口径与文档列表一致：仅作者本人与空间 owner/admin 能搜到 */
         boolean seeAllDrafts = ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId));
-        hits.addAll(docMapper.searchVisible(workspaceId, viewerId, userId, seeAllDrafts, q, per));
+        List<SearchHit> docHits = docMapper.searchVisible(workspaceId, viewerId, userId, seeAllDrafts, q, per);
+        for (SearchHit h : docHits) {
+            h.setSnippet(snippetAround(h.getSnippet(), q));
+        }
+        hits.addAll(docHits);
 
         DemandQuery dq = new DemandQuery();
         dq.setQ(q);
@@ -164,5 +168,24 @@ public class SearchService {
 
     private static boolean contains(String value, String lowerNeedle) {
         return value != null && value.toLowerCase().contains(lowerNeedle);
+    }
+
+    /** 围绕关键词截取摘要窗口（前后各 30 字符），超出部分用省略号标记 */
+    private static String snippetAround(String brief, String q) {
+        if (brief == null || brief.isEmpty()) {
+            return null;
+        }
+        String lower = brief.toLowerCase();
+        int idx = lower.indexOf(q.toLowerCase());
+        if (idx < 0) {
+            return brief.length() <= 80 ? brief : brief.substring(0, 80) + "…";
+        }
+        int start = Math.max(0, idx - 30);
+        int end = Math.min(brief.length(), idx + q.length() + 30);
+        StringBuilder sb = new StringBuilder();
+        if (start > 0) sb.append("…");
+        sb.append(brief, start, end);
+        if (end < brief.length()) sb.append("…");
+        return sb.toString();
     }
 }

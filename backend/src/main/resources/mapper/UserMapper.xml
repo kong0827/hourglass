@@ -5,7 +5,7 @@
   <sql id="cols">
     id, username, password_hash, display_name, email, role, disabled, session_version,
     work_start_hour, work_end_hour, work_max_hours,
-    ai_provider, ai_base_url, ai_model, ai_api_key, ai_enabled,
+    ai_provider, ai_base_url, ai_model, ai_api_key, ai_enabled, ai_prefer,
     last_workspace_id, created_at, updated_at
   </sql>
 
@@ -138,6 +138,7 @@
         ai_base_url = #{baseUrl},
         ai_model    = #{model},
         ai_enabled  = #{enabled},
+        ai_prefer   = #{prefer},
         ai_api_key  = #{apiKey},
         updated_at  = NOW()
     WHERE id = #{id}

@@ -262,7 +262,7 @@ public class FlowHealthService {
         int completed = 0;
         int firstPass = 0;
         for (FlowTaskRow t : tasks) {
-            if (t.getCompletedAt() == null || t.getCompletedAt().isBefore(sinceDay)) {
+            if (t.getCompletedAt() == null || t.getCompletedAt().toLocalDate().isBefore(sinceDay)) {
                 continue;
             }
             completed++;

@@ -19,6 +19,9 @@ public class PlanBatchRequest {
     @Pattern(regexp = "^(passed|failed|blocked|skipped)$", message = "执行结果不合法")
     private String status;
 
+    /** 加入计划时是否标记「发布必测」；null = 不标记。批量执行时忽略 */
+    private Boolean required;
+
     @Size(max = 500, message = "备注最多 500 字")
     private String note;
 }

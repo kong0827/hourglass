@@ -7,6 +7,7 @@ import com.hourglass.dto.CaseQuery;
 import com.hourglass.dto.CaseRunRequest;
 import com.hourglass.dto.CaseRunView;
 import com.hourglass.dto.CaseStatsView;
+import com.hourglass.dto.EntityTimelineItem;
 import com.hourglass.dto.TestCasePage;
 import com.hourglass.dto.TestCaseBatchRequest;
 import com.hourglass.dto.TestCaseSaveRequest;
@@ -20,6 +21,7 @@ import com.hourglass.service.TestCaseService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -46,31 +48,25 @@ public class TestCaseController {
         this.workspaceService = workspaceService;
     }
 
-    /** 项目用例分页列表（筛选/排序/分页在服务端，含最近执行结果与转出缺陷标题） */
+    /**
+     * 项目用例分页列表：筛选 / 排序 / 分页都在服务端，含最近执行结果与转出缺陷标题。
+     * 查询参数按 CaseQuery 字段名绑定（bugOnly / searchWide / moduleId / moduleSub / demandId / setId / sort / sortDir）。
+     */
     @GetMapping("/api/test-cases")
-    public ApiResult<TestCasePage> list(@RequestParam String reqId,
-                                        @RequestParam(required = false) String workspace,
-                                        @RequestParam(required = false) String status,
-                                        @RequestParam(required = false) String module,
-                                        @RequestParam(required = false) String pri,
-                                        @RequestParam(required = false) String owner,
-                                        @RequestParam(required = false) Boolean bug,
-                                        @RequestParam(required = false) String q,
-                                        @RequestParam(required = false) Integer offset,
-                                        @RequestParam(required = false) Integer limit) {
+    public ApiResult<TestCasePage> list(@ModelAttribute CaseQuery query,
+                                        @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        CaseQuery query = new CaseQuery();
-        query.setReqId(reqId);
-        query.setStatus(status);
-        query.setModule(module);
-        query.setPri(pri);
-        query.setOwner(owner);
-        query.setBugOnly(Boolean.TRUE.equals(bug));
-        query.setQ(q);
-        query.setOffset(offset == null ? 0 : offset);
-        query.setLimit(limit == null ? 100 : limit);
         return ApiResult.ok(caseService.page(ws.getId(), userId, query));
+    }
+
+    /** 分组段头：当前筛选范围内按维度聚合条数与结果分布（零用例的段也返回，便于发现覆盖缺口） */
+    @GetMapping("/api/test-cases/groups")
+    public ApiResult<List<com.hourglass.dto.CaseGroupCount>> groups(@ModelAttribute CaseQuery query,
+                                                                    @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.groups(ws.getId(), userId, query));
     }
 
     /** 项目用例执行概览（总数/通过/失败/阻塞/未执行） */
@@ -80,6 +76,26 @@ public class TestCaseController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(caseService.stats(ws.getId(), userId, reqId));
+    }
+
+    /** 执行流水聚合：按执行人 / 环境 / 轮次的结果分布与通过率 */
+    @GetMapping("/api/test-cases/run-stats")
+    public ApiResult<com.hourglass.dto.CaseRunStatsView> runStats(@RequestParam String reqId,
+                                                                 @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.runStats(ws.getId(), userId, reqId));
+    }
+
+    /** 执行统计下钻：某桶（执行人 / 环境 / 轮次）内的执行流水明细 */
+    @GetMapping("/api/test-cases/run-stats/drill")
+    public ApiResult<List<com.hourglass.dto.CaseRunDrillRow>> runStatsDrill(@RequestParam String reqId,
+                                                                           @RequestParam String dim,
+                                                                           @RequestParam String key,
+                                                                           @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.runDrill(ws.getId(), userId, reqId, dim, key));
     }
 
     /** 需求—用例—缺陷覆盖矩阵 */
@@ -120,6 +136,15 @@ public class TestCaseController {
         return ApiResult.ok(caseService.linkedBugs(ws.getId(), userId, reqId));
     }
 
+    /** 缺陷详情：反查来源用例（跨项目，只返回可见项目的用例） */
+    @GetMapping("/api/test-cases/by-bug/{taskId}")
+    public ApiResult<List<com.hourglass.dto.CaseBugLink>> byBugTask(@PathVariable String taskId,
+                                                                   @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.byBugTask(ws.getId(), userId, taskId));
+    }
+
     @PostMapping("/api/test-cases")
     public ApiResult<TestCase> create(@Valid @RequestBody TestCaseSaveRequest req,
                                       @RequestParam(required = false) String workspace) {
@@ -146,7 +171,7 @@ public class TestCaseController {
         return ApiResult.ok(null);
     }
 
-    /** 批量设置模块 / 优先级（列表多选） */
+    /** 批量设置目录归属 / 优先级：范围支持勾选或「全选筛选结果」 */
     @PutMapping("/api/test-cases/batch")
     public ApiResult<java.util.Map<String, Object>> batchUpdate(@Valid @RequestBody TestCaseBatchRequest req,
                                                                 @RequestParam(required = false) String workspace) {
@@ -155,13 +180,31 @@ public class TestCaseController {
         return ApiResult.ok(caseService.batchUpdate(userId, ws.getId(), req));
     }
 
-    /** 批量删除（执行流水、计划圈选与证据一并清理） */
+    /** 批量删除（执行流水、计划圈选、分组成员与证据一并清理） */
     @PostMapping("/api/test-cases/batch-delete")
     public ApiResult<java.util.Map<String, Object>> batchDelete(@Valid @RequestBody TestCaseBatchRequest req,
                                                                 @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(caseService.batchDelete(userId, ws.getId(), req.getIds()));
+        return ApiResult.ok(caseService.batchDelete(userId, ws.getId(), req));
+    }
+
+    /** 拖拽归类：目录单归属，移动即从原节点移出；返回移动前归属供撤销 */
+    @PostMapping("/api/test-cases/move-module")
+    public ApiResult<java.util.Map<String, Object>> moveModule(@Valid @RequestBody com.hourglass.dto.CaseMoveRequest req,
+                                                               @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.moveModule(userId, ws.getId(), req));
+    }
+
+    /** 撤销归类：一次事务恢复到移动前的目录归属 */
+    @PostMapping("/api/test-cases/restore-module")
+    public ApiResult<java.util.Map<String, Object>> restoreModule(@Valid @RequestBody com.hourglass.dto.CaseRestoreRequest req,
+                                                                  @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.restoreModule(userId, ws.getId(), req));
     }
 
     /** 记录一次执行结果（passed / failed / blocked） */
@@ -185,6 +228,15 @@ public class TestCaseController {
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(caseService.runs(ws.getId(), userId, id,
                 offset == null ? 0 : offset, limit == null ? 30 : limit));
+    }
+
+    /** 变更记录（最近在前）：新建/编辑/删除等留痕，执行结果另见 runs */
+    @GetMapping("/api/test-cases/{id}/timeline")
+    public ApiResult<List<EntityTimelineItem>> timeline(@PathVariable String id,
+                                                        @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.timeline(ws.getId(), userId, id));
     }
 
     /** 上传失败证据（截图/日志/录屏文件），挂在本轮执行记录下 */
@@ -216,13 +268,21 @@ public class TestCaseController {
         return csvResponse(caseService.templateCsv(), "test-case-template.csv");
     }
 
-    /** 导出项目全部用例 */
+    /** 导出：scope=all（项目全部，默认）/ filter（当前筛选，含未加载行）/ ids（勾选的行） */
     @GetMapping("/api/test-cases/export.csv")
-    public org.springframework.http.ResponseEntity<byte[]> exportCsv(@RequestParam String reqId,
-                                                                     @RequestParam(required = false) String workspace) {
+    public org.springframework.http.ResponseEntity<byte[]> exportCsv(@ModelAttribute CaseQuery query,
+                                                                     @RequestParam(required = false) String workspace,
+                                                                     @RequestParam(required = false) String scope,
+                                                                     @RequestParam(required = false) List<String> ids) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return csvResponse(caseService.exportCsv(ws.getId(), userId, reqId), "test-cases.csv");
+        if ("ids".equals(scope)) {
+            return csvResponse(caseService.exportCsvByIds(ws.getId(), userId, ids), "test-cases-selected.csv");
+        }
+        if ("filter".equals(scope)) {
+            return csvResponse(caseService.exportCsvByFilter(ws.getId(), userId, query), "test-cases-filtered.csv");
+        }
+        return csvResponse(caseService.exportCsv(ws.getId(), userId, query.getReqId()), "test-cases.csv");
     }
 
     /** 导入用例（整份 CSV 文本），逐行创建，单行失败不影响其余行 */

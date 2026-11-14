@@ -23,6 +23,7 @@ var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
     btnCancelReqEdit = $("btnCancelReqEdit"), reqFormTitle = $("reqFormTitle"),
     rTemplate = $("rTemplate"), rTemplateHint = $("rTemplateHint"), fReqTemplate = $("fReqTemplate"),
     projCatCfg = $("projCatCfg"), projCatList = $("projCatList"),
+    projReleasePolicy = $("projReleasePolicy"), rReleasePolicy = $("rReleasePolicy"),
     projCatNewName = $("projCatNewName"), projCatNewColor = $("projCatNewColor");
 var showArchived = false;
 var PROJECT_SORT_DEFAULT_DIR = {
@@ -32,6 +33,22 @@ var PROJECT_SORT_DEFAULT_DIR = {
 };
 var PROJECT_STATUS_ORDER = { active:0, done:1, hold:2 };
 var projectSort = { key:"", dir:"asc" };
+var policySeq = 0;
+function loadReleasePolicy(reqId){
+  if(!projReleasePolicy || !rReleasePolicy) return;
+  var seq = ++policySeq;
+  projReleasePolicy.hidden = false;
+  rReleasePolicy.disabled = true;
+  API.get("/api/projects/" + encodeURIComponent(reqId) + "/release-policy").then(function(policy){
+    if(seq !== policySeq || rt.editingReqId !== reqId) return;
+    rReleasePolicy.value = policy || "standard";
+    rReleasePolicy.dataset.saved = rReleasePolicy.value;
+    rReleasePolicy.disabled = false;
+  }).catch(function(){
+    if(seq !== policySeq) return;
+    projReleasePolicy.hidden = true;
+  });
+}
 function visibleReqs(){
   return rt.reqList.filter(function(r){ return showArchived || !r.archivedAt; });
 }
@@ -293,6 +310,8 @@ function resetReqForm(){
   btnCancelReqEdit.hidden = true;
   syncTemplateField();
   if($("dlgProject")) UI.closeModal($("dlgProject"));
+  if(projReleasePolicy) projReleasePolicy.hidden = true;
+  policySeq++;
   renderReqList();
 }
 /* 共享空间里成员 / 只读成员看到空列表，多半是还没被分配项目，而不是空间里真的没有项目 */
@@ -787,6 +806,12 @@ function openProjectDialog(id){
   /* 模块按项目配置：新建时项目尚不存在（首建后后端预置「其他」），仅编辑态展示 */
   if(projCatCfg) projCatCfg.hidden = !id;
   if(id) loadProjCats(id);
+  /* 发布检查策略只看项目负责人/管理员；新建时没有可写对象 */
+  if(id && canManageProject(id)) loadReleasePolicy(id);
+  else {
+    policySeq++;
+    if(projReleasePolicy) projReleasePolicy.hidden = true;
+  }
   projectFormBaseline = projectFormSnapshot();
   UI.openModal($("dlgProject"), "input");
   setTimeout(function(){ try{ rName.focus(); }catch(e){ /* noop */ } }, 40);
@@ -836,6 +861,22 @@ window.addEventListener("ds:before-route", function(e){
   });
 });
 if(rTemplate) rTemplate.addEventListener("change", syncTemplateHint);
+if(rReleasePolicy) rReleasePolicy.addEventListener("change", function(){
+  var reqId = rt.editingReqId;
+  if(!reqId || !canManageProject(reqId)) return;
+  var next = rReleasePolicy.value, prev = rReleasePolicy.dataset.saved || "standard";
+  var seq = ++policySeq;
+  rReleasePolicy.disabled = true;
+  API.put("/api/projects/" + encodeURIComponent(reqId) + "/release-policy?policy=" + encodeURIComponent(next), null).then(function(saved){
+    if(seq !== policySeq || rt.editingReqId !== reqId) return;
+    rReleasePolicy.value = saved; rReleasePolicy.dataset.saved = saved; rReleasePolicy.disabled = false;
+    toast("发布检查策略已改为「" + ({strict:"严格", loose:"宽松"}[saved] || "标准") + "」，下次检查立即生效", "fs");
+  }).catch(function(ex){
+    if(seq !== policySeq || rt.editingReqId !== reqId) return;
+    rReleasePolicy.value = prev; rReleasePolicy.disabled = false;
+    toast(ex.message || "策略保存失败", "bad");
+  });
+});
 segReqStatus.addEventListener("click", function(e){
   var b = e.target.closest("[data-rst]"); if(!b) return;
   rt.formReqStatus = b.dataset.rst; syncReqStatusSeg();

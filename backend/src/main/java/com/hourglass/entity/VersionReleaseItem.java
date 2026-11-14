@@ -2,6 +2,7 @@ package com.hourglass.entity;
 
 import lombok.Data;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 public class VersionReleaseItem {
@@ -22,7 +23,7 @@ public class VersionReleaseItem {
     private String targetVersionId;
     private String targetVersionName;
     private String boardColumn;
-    private LocalDate completedAt;
+    private LocalDateTime completedAt;
     private String disposition;
     private String reason;
     private String contentSummary;

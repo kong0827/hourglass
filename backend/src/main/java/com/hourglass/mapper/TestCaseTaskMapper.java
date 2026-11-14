@@ -54,9 +54,9 @@ public interface TestCaseTaskMapper {
     List<TaskCoverageRow> selectCoverageByDemand(@Param("workspaceId") String workspaceId,
                                                  @Param("demandId") String demandId);
 
-    /** 发布检查：项目内全部工作项（含未覆盖）的验证用例分布 */
-    List<TaskCoverageRow> selectCoverageByProject(@Param("workspaceId") String workspaceId,
-                                                  @Param("reqId") String reqId);
+    /** 发布检查：仅统计本次发布范围内的工作项（含未覆盖） */
+    List<TaskCoverageRow> selectCoverageByTasks(@Param("workspaceId") String workspaceId,
+                                                @Param("taskIds") List<String> taskIds);
 
     /** 用例是否与给定工作项已关联（保存时校验，避免重复插入） */
     List<String> selectTaskIdsByCase(@Param("caseId") String caseId);

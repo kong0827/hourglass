@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.DocTemplateMapper">
+
+  <sql id="cols">
+    id, workspace_id, name, doc_type, format, content, created_by, created_at, updated_at
+  </sql>
+
+  <insert id="insert">
+    INSERT INTO doc_template (id, workspace_id, name, doc_type, format, content, created_by, created_at, updated_at)
+    VALUES (#{id}, #{workspaceId}, #{name}, #{docType}, #{format}, #{content}, #{createdBy},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <select id="selectById" resultType="com.hourglass.entity.DocTemplate">
+    SELECT <include refid="cols"/> FROM doc_template WHERE id = #{id}
+  </select>
+
+  <select id="selectByName" resultType="com.hourglass.entity.DocTemplate">
+    SELECT <include refid="cols"/> FROM doc_template
+    WHERE workspace_id = #{workspaceId} AND name = #{name}
+  </select>
+
+  <select id="selectByWorkspace" resultType="com.hourglass.entity.DocTemplate">
+    SELECT <include refid="cols"/> FROM doc_template
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at ASC, id ASC
+  </select>
+
+  <delete id="delete">
+    DELETE FROM doc_template WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM doc_template WHERE workspace_id = #{workspaceId}
+  </delete>
+
+</mapper>

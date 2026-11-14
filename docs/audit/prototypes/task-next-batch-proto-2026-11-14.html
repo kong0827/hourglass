@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>下一批原型 · 测试历史 / 读数带平衡 / 版本就地编辑</title>
+<link rel="stylesheet" href="../../../frontend/css/tokens.css" />
+<link rel="stylesheet" href="../../../frontend/css/base.css" />
+<link rel="stylesheet" href="../../../frontend/css/components.css" />
+<style>
+  body{background:var(--canvas,#f4f5f7);padding:24px;font-family:var(--font-sans);}
+  .proto{max-width:1040px;margin:0 auto 28px;}
+  .proto-h{display:flex;align-items:baseline;gap:10px;margin:0 0 4px;}
+  .proto-h h1{font-size:16px;font-weight:650;margin:0;}
+  .proto-h span{font-size:12px;color:var(--text-3);}
+  .proto-lead{font-size:12.5px;line-height:1.6;color:var(--text-2);margin:0 0 14px;}
+  .proto-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;margin:0 0 14px;}
+  .proto-cap{font-size:12px;color:var(--text-3);margin:10px 0 0;}
+  .proto-sub{font-size:12.5px;font-weight:600;margin:0 0 8px;}
+
+  /* ---------- A 测试历史 ---------- */
+  .tf-publication{background:var(--surface);}
+  .test-head-actions{margin-left:auto;display:flex;align-items:center;gap:10px;}
+  .tf-hist-toggle{display:inline-flex;align-items:center;gap:5px;color:var(--text-3);}
+  .tf-hist-toggle svg{transition:transform var(--dur-fast) var(--ease-out);}
+  .tf-hist-toggle.is-open svg{transform:rotate(90deg);}
+  .tf-history{margin-top:7px;padding-top:8px;border-top:1px dashed var(--border);}
+  .tf-rounds{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+  .tf-round{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 10px;border:1px solid var(--border);
+    border-radius:var(--r-sm);background:var(--surface-sunken);font-size:12px;color:var(--text-2);min-width:0;}
+  .tf-round.is-current{background:var(--surface);border-color:var(--plum-border);}
+  .tf-round-no{order:1;flex:0 0 auto;font-size:11px;font-weight:650;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .tf-round-flow{order:2;flex:1 1 240px;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap;color:var(--text-2);}
+  .tf-round-flow b{font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;}
+  .tf-round-flow i{font-style:normal;color:var(--text-3);}
+  .tf-round-owner{color:var(--text-2);}
+  .tf-round-out{order:3;flex:0 0 auto;font-size:10.5px;font-weight:600;line-height:17px;padding:0 6px;border-radius:var(--r-pill);
+    background:var(--surface);border:1px solid var(--border);color:var(--text-2);}
+  .tf-round-out.ok{background:var(--success-soft);border-color:transparent;color:var(--success-fg);}
+  .tf-round-out.bad{background:var(--danger-soft);border-color:transparent;color:var(--danger-fg);}
+  .tf-round-out.wait{background:var(--warning-soft);border-color:transparent;color:var(--warning-fg);}
+  .tf-round-span{order:4;flex:0 0 auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .tf-round-reason{order:5;flex:1 1 100%;font-size:11px;color:var(--danger-fg);padding-left:0;margin-top:-1px;}
+  .tf-hist-note{margin:8px 0 0;font-size:11px;color:var(--text-3);}
+
+  /* ---------- B 读数带平衡 ---------- */
+  .v-b1 .read-card.test-card{border-color:color-mix(in srgb,var(--plum) 16%,var(--border));
+    background:color-mix(in srgb,var(--plum) 3%,var(--surface));}
+  .v-b1 .tf-bar{border-color:color-mix(in srgb,var(--plum) 12%,var(--border));background:var(--surface);}
+  .v-b1 .read-card-head h3{font-weight:600;}
+  .v-lab{display:flex;align-items:center;gap:8px;margin:12px 0 6px;font-size:12px;color:var(--text-3);}
+  .v-lab b{color:var(--text);font-weight:600;}
+
+  /* ---------- C 关联就地编辑 ---------- */
+  .read-evidence dd.ev-vers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;overflow:visible;white-space:normal;}
+  .read-evidence dd.ev-vers .assoc-edit{margin-left:2px;}
+  .picker-demo{position:relative;width:344px;margin-top:10px;}
+  .picker-demo .menu.search-picker{position:static;box-shadow:var(--shadow-md);border:1px solid var(--border);
+    border-radius:var(--r-md);background:var(--surface);}
+  .search-picker-option .pp-box{width:15px;height:15px;flex:0 0 auto;border:1.5px solid var(--border-strong);
+    border-radius:4px;display:inline-grid;place-content:center;background:var(--surface);}
+  .search-picker-option.selected .pp-box{background:var(--primary);border-color:var(--primary);}
+  .search-picker-option.selected .pp-box::before{content:"";width:8px;height:4px;border:2px solid #fff;
+    border-top:0;border-right:0;transform:rotate(-45deg);margin-top:-1px;}
+  .pp-foot-btn{display:flex;gap:8px;padding:8px 10px;border-top:1px solid var(--border);}
+  .pp-foot-btn .btn{margin-left:auto;}
+  @media (max-width:620px){
+    body{padding:12px;}
+    .tf-round{flex-wrap:wrap;gap:6px 8px;}
+    .tf-round-flow{flex:1 1 calc(100% - 62px);}
+    .tf-round-reason{padding-left:0;}
+    .picker-demo{width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= A ================= -->
+<section class="proto" id="protoA">
+  <div class="proto-h"><h1>A · 测试历史轮次</h1><span>数据来自任务操作日志（move 的 from/to 列），零新表</span></div>
+  <p class="proto-lead">默认收起，只在卡片头部显示「历史 N 轮」；展开后在流程条下方按轮列出：提测 → 开始 → 结论（通过/退回/进行中），附操作人和退回原因。少于两轮不显示，避免与当前流程条重复。</p>
+
+  <div class="proto-card">
+    <p class="proto-sub">A1 · 收起（默认）</p>
+    <section class="read-card test-card">
+      <div class="read-card-head">
+        <h3>测试 <span class="test-phase">测试中</span></h3>
+        <div class="test-head-actions">
+          <button class="link-btn tf-hist-toggle" type="button">历史 2 轮 <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg></button>
+          <button class="link-btn" type="button">改派</button>
+        </div>
+      </div>
+      <div class="tf-bar">
+        <div class="tf-who"><span class="tf-who-av"><span class="avatar" style="background:#2f7d6d">王</span></span>
+          <div class="tf-who-t"><b>王芳</b><span>本轮进行中</span></div></div>
+        <ol class="tf-steps">
+          <li><i aria-hidden="true"></i><div><span class="tf-k">提测</span><b class="tf-v">11-08</b></div></li>
+          <li><i aria-hidden="true"></i><div><span class="tf-k">开始</span><b class="tf-v">11-08</b></div></li>
+          <li class="todo"><i aria-hidden="true"></i><div><span class="tf-k">结束</span><b class="tf-v">—</b></div></li>
+        </ol>
+        <div class="tf-sum"><b>已测 6 天</b><span>开始 → 现在</span></div>
+      </div>
+      <div class="test-acts">
+        <span class="test-hint">测试通过 → 记录结束时间并流转到「已完成」；退回 → 必填原因，通知开发负责人。</span>
+        <button class="btn sm danger" type="button">退回…</button>
+        <button class="btn sm primary" type="button">通过并完成</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="proto-card">
+    <p class="proto-sub">A2 · 展开（两轮，第二轮被退回后重测）</p>
+    <section class="read-card test-card">
+      <div class="read-card-head">
+        <h3>测试 <span class="test-phase">测试中</span></h3>
+        <div class="test-head-actions">
+          <button class="link-btn tf-hist-toggle is-open" type="button">历史 2 轮 <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg></button>
+          <button class="link-btn" type="button">改派</button>
+        </div>
+      </div>
+      <div class="tf-bar">
+        <div class="tf-who"><span class="tf-who-av"><span class="avatar" style="background:#2f7d6d">王</span></span>
+          <div class="tf-who-t"><b>王芳</b><span>本轮进行中</span></div></div>
+        <ol class="tf-steps">
+          <li><i aria-hidden="true"></i><div><span class="tf-k">提测</span><b class="tf-v">11-08</b></div></li>
+          <li><i aria-hidden="true"></i><div><span class="tf-k">开始</span><b class="tf-v">11-08</b></div></li>
+          <li class="todo"><i aria-hidden="true"></i><div><span class="tf-k">结束</span><b class="tf-v">—</b></div></li>
+        </ol>
+        <div class="tf-sum"><b>已测 6 天</b><span>开始 → 现在</span></div>
+      </div>
+      <div class="tf-history">
+        <ol class="tf-rounds">
+          <li class="tf-round is-current">
+            <span class="tf-round-no">第 2 轮</span>
+            <span class="tf-round-flow"><b>提测 11-08</b><i>→</i><b>开始 11-08</b><i>·</i><span class="tf-round-owner">王芳</span></span>
+            <span class="tf-round-out wait">进行中</span>
+            <span class="tf-round-span">已测 6 天</span>
+          </li>
+          <li class="tf-round">
+            <span class="tf-round-no">第 1 轮</span>
+            <span class="tf-round-flow"><b>提测 10-28</b><i>→</i><b>开始 10-29</b><i>·</i><span class="tf-round-owner">李娜</span></span>
+            <span class="tf-round-out bad">退回</span>
+            <span class="tf-round-span">历时 1 天</span>
+            <span class="tf-round-reason">原因：登录态失效未覆盖，补充用例后重测</span>
+          </li>
+        </ol>
+        <p class="tf-hist-note">历史来自操作记录；更早的测试流转可能缺失。</p>
+      </div>
+      <div class="test-acts">
+        <span class="test-hint">测试通过 → 记录结束时间并流转到「已完成」；退回 → 必填原因，通知开发负责人。</span>
+        <button class="btn sm danger" type="button">退回…</button>
+        <button class="btn sm primary" type="button">通过并完成</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="proto-card" style="max-width:420px;">
+    <p class="proto-sub">A3 · 移动端展开（390）</p>
+    <section class="read-card test-card">
+      <div class="read-card-head">
+        <h3>测试 <span class="test-phase wait">待领取</span></h3>
+        <div class="test-head-actions">
+          <button class="link-btn tf-hist-toggle is-open" type="button">历史 3 轮 <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg></button>
+        </div>
+      </div>
+      <div class="tf-bar">
+        <div class="tf-who is-empty"><span class="tf-who-av"><span class="avatar" style="background:#d9d9e3;color:#6b6b70">?</span></span>
+          <div class="tf-who-t"><b>未指派</b><span>点「开始测试」或改派</span></div></div>
+        <ol class="tf-steps">
+          <li><i aria-hidden="true"></i><div><span class="tf-k">提测</span><b class="tf-v">11-12</b></div></li>
+          <li class="todo"><i aria-hidden="true"></i><div><span class="tf-k">开始</span><b class="tf-v">—</b></div></li>
+          <li class="todo"><i aria-hidden="true"></i><div><span class="tf-k">结束</span><b class="tf-v">—</b></div></li>
+        </ol>
+        <div class="tf-sum"><b>已等待 2 天</b><span>提测 → 现在</span></div>
+      </div>
+      <div class="tf-history">
+        <ol class="tf-rounds">
+          <li class="tf-round is-current">
+            <span class="tf-round-no">第 3 轮</span>
+            <span class="tf-round-flow"><b>提测 11-12</b><i>·</i><span>待领取</span></span>
+            <span class="tf-round-out wait">待领取</span>
+            <span class="tf-round-span">已等待 2 天</span>
+          </li>
+          <li class="tf-round">
+            <span class="tf-round-no">第 2 轮</span>
+            <span class="tf-round-flow"><b>提测 11-05</b><i>→</i><b>开始 11-05</b><i>·</i><span>王芳</span></span>
+            <span class="tf-round-out bad">退回</span>
+            <span class="tf-round-span">历时 2 天</span>
+            <span class="tf-round-reason">原因：对账差额提示文案与需求不一致</span>
+          </li>
+          <li class="tf-round">
+            <span class="tf-round-no">第 1 轮</span>
+            <span class="tf-round-flow"><b>提测 10-28</b><i>→</i><b>开始 10-29</b><i>·</i><span>李娜</span></span>
+            <span class="tf-round-out bad">退回</span>
+            <span class="tf-round-span">历时 1 天</span>
+            <span class="tf-round-reason">原因：登录态失效未覆盖</span>
+          </li>
+        </ol>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= B ================= -->
+<section class="proto" id="protoB">
+  <div class="proto-h"><h1>B · 读数带权重平衡</h1><span>交付带（进度/工时）与测试卡不再互相抢</span></div>
+  <p class="proto-lead">两条都是「带」，但现在是两种强调：交付带淡蓝底 + 大数字，测试卡紫色渐变 + 紫边 + 内嵌描边条。B1 把测试卡降成与交付带同一强度的淡底/同色边框，去掉渐变，内部流程条用白底反衬；语义色（紫）只留在状态 pill 与节点上。</p>
+
+  <div class="proto-card v-b1">
+    <p class="proto-sub">B1 · 同构带（推荐）</p>
+    <div class="wi-facts read-only" style="display:flex;flex-direction:column;gap:10px;">
+      <div class="wi-card wi-delivery">
+        <div class="rf wi-delivery-cell wi-prog-cell">
+          <span class="rf-k">进度</span>
+          <span class="rf-prog-note rf-sub">按检查项 2/2 派生 · 点去勾选</span>
+          <div class="rf-v" id="rfProgStatic"><b class="rf-stat-num">100%</b><span class="rf-prog"><i style="width:100%"></i></span></div>
+          <span class="rf-sub rf-prog-note"></span>
+        </div>
+        <div class="rf wi-delivery-cell wi-hours-cell">
+          <div class="wi-hours-main"><span class="rf-k">实际工时</span><b class="rf-v rf-v-lg">11h</b></div>
+          <span class="rf-sub" style="color:var(--danger-fg)">超预估 9h</span>
+          <button class="wi-hours-add" type="button" aria-label="补记实际工时"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.2v11.6M4.2 10h11.6"/></svg></button>
+        </div>
+      </div>
+
+      <section class="read-card test-card">
+        <div class="read-card-head">
+          <h3>测试 <span class="test-phase">测试中</span></h3>
+          <div class="test-head-actions">
+            <button class="link-btn tf-hist-toggle" type="button">历史 2 轮 <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg></button>
+            <button class="link-btn" type="button">改派</button>
+          </div>
+        </div>
+        <div class="tf-bar">
+          <div class="tf-who"><span class="tf-who-av"><span class="avatar" style="background:#2f7d6d">王</span></span>
+            <div class="tf-who-t"><b>王芳</b><span>本轮进行中</span></div></div>
+          <ol class="tf-steps">
+            <li><i aria-hidden="true"></i><div><span class="tf-k">提测</span><b class="tf-v">11-07</b></div></li>
+            <li><i aria-hidden="true"></i><div><span class="tf-k">开始</span><b class="tf-v">11-08</b></div></li>
+            <li class="todo"><i aria-hidden="true"></i><div><span class="tf-k">结束</span><b class="tf-v">—</b></div></li>
+          </ol>
+          <div class="tf-sum"><b>已测 6 天</b><span>开始 → 现在</span></div>
+        </div>
+        <div class="test-acts">
+          <span class="test-hint">测试通过 → 记录结束时间并流转到「已完成」；退回 → 必填原因，通知开发负责人。</span>
+          <button class="btn sm danger" type="button">退回…</button>
+          <button class="btn sm primary" type="button">通过并完成</button>
+        </div>
+      </section>
+    </div>
+    <p class="proto-cap">对比点：测试卡底 3% 紫、边框 16% 紫（与交付带 16% 蓝同强度）；内部流程条回到白底，层级靠底色差而不是双层描边。</p>
+  </div>
+
+  <div class="proto-card">
+    <p class="proto-sub">现状 · 供对照</p>
+    <section class="read-card test-card">
+      <div class="read-card-head">
+        <h3>测试 <span class="test-phase">测试中</span></h3>
+        <button class="link-btn" type="button" style="margin-left:auto;">改派</button>
+      </div>
+      <div class="tf-bar">
+        <div class="tf-who"><span class="tf-who-av"><span class="avatar" style="background:#2f7d6d">王</span></span>
+          <div class="tf-who-t"><b>王芳</b><span>本轮进行中</span></div></div>
+        <ol class="tf-steps">
+          <li><i aria-hidden="true"></i><div><span class="tf-k">提测</span><b class="tf-v">11-07</b></div></li>
+          <li><i aria-hidden="true"></i><div><span class="tf-k">开始</span><b class="tf-v">11-08</b></div></li>
+          <li class="todo"><i aria-hidden="true"></i><div><span class="tf-k">结束</span><b class="tf-v">—</b></div></li>
+        </ol>
+        <div class="tf-sum"><b>已测 6 天</b><span>开始 → 现在</span></div>
+      </div>
+    </section>
+    <p class="proto-cap">现状：渐变底 + 紫边 + 白底描边条，三层边界叠在一起，视觉上比交付带重一档。</p>
+  </div>
+</section>
+
+<!-- ================= C ================= -->
+<section class="proto" id="protoC">
+  <div class="proto-h"><h1>C · 关联行就地编辑补齐</h1><span>计划版本补铅笔；需求行已具备</span></div>
+  <p class="proto-lead">版本是多选，浮层用复选而不是单选：勾选即改本地态，点「保存」写回；若版本确实变化，沿用现有「版本调整理由」必填提示，保存后回到读态同一位置。</p>
+
+  <div class="proto-card">
+    <p class="proto-sub">C1 · 关联摘要行（计划版本 + 需求都可用铅笔）</p>
+    <dl class="read-evidence" style="max-width:640px;">
+      <dt>所属项目</dt><dd>统一支付网关</dd>
+      <dt>模块</dt><dd>未指定</dd>
+      <dt>负责人</dt><dd>平台管理员</dd>
+      <dt>计划版本</dt>
+      <dd class="ev-vers">
+        <button type="button" class="ev-link">支付网关 v2.2</button>
+        <button type="button" class="assoc-edit" aria-label="就地编辑计划版本" title="就地编辑计划版本（值仍可点击跳转）" style="opacity:1;">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.6l3.6 3.6M4 16l1-4 9.4-9.4a1.6 1.6 0 0 1 2.3 0l1.7 1.7a1.6 1.6 0 0 1 0 2.3L9 16.2z"/></svg>
+        </button>
+      </dd>
+      <dt>关联需求</dt>
+      <dd class="ev-assoc">
+        <button type="button" class="ev-link">对账结果邮件通知</button>
+        <button type="button" class="assoc-edit" aria-label="就地编辑关联需求" style="opacity:1;">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.6l3.6 3.6M4 16l1-4 9.4-9.4a1.6 1.6 0 0 1 2.3 0l1.7 1.7a1.6 1.6 0 0 1 0 2.3L9 16.2z"/></svg>
+        </button>
+      </dd>
+      <dt>所属分支</dt>
+      <dd class="ev-assoc">
+        <button type="button" class="ev-link">feature/reconcile-mail</button>
+        <button type="button" class="assoc-edit" aria-label="就地编辑所属分支" style="opacity:1;">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.6l3.6 3.6M4 16l1-4 9.4-9.4a1.6 1.6 0 0 1 2.3 0l1.7 1.7a1.6 1.6 0 0 1 0 2.3L9 16.2z"/></svg>
+        </button>
+      </dd>
+    </dl>
+  </div>
+
+  <div class="proto-card">
+    <p class="proto-sub">C2 · 版本多选浮层</p>
+    <div class="picker-demo">
+      <div class="menu search-picker assoc-picker" role="dialog" aria-label="计划版本">
+        <div class="search-picker-head">
+          <div class="search-picker-search">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="5.4"/><path d="M13.2 13.2 17 17"/></svg>
+            <input type="text" placeholder="搜索版本…" />
+          </div>
+          <div class="search-picker-tools"><span class="pp-count">候选来自当前项目 · 已选 1 项</span></div>
+        </div>
+        <div class="search-picker-results" role="listbox" aria-label="计划版本">
+          <button class="search-picker-option selected" type="button" role="option" aria-selected="true">
+            <span class="pp-box" aria-hidden="true"></span>
+            <span class="search-picker-option-main"><span class="search-picker-option-title">支付网关 v2.2</span></span>
+            <span class="pp-check">进行中</span>
+          </button>
+          <button class="search-picker-option" type="button" role="option" aria-selected="false">
+            <span class="pp-box" aria-hidden="true"></span>
+            <span class="search-picker-option-main"><span class="search-picker-option-title">支付网关 v2.3</span></span>
+            <span class="pp-check">规划中</span>
+          </button>
+          <button class="search-picker-option" type="button" role="option" aria-selected="false">
+            <span class="pp-box" aria-hidden="true"></span>
+            <span class="search-picker-option-main"><span class="search-picker-option-title">对账三期</span></span>
+            <span class="pp-check">规划中</span>
+          </button>
+        </div>
+        <div class="pp-foot-btn">
+          <button class="btn sm" type="button">取消</button>
+          <button class="btn sm primary" type="button">保存</button>
+        </div>
+        <div class="search-picker-foot">全部取消即「待规划」；改动需填写版本调整理由。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

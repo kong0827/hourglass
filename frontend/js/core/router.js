@@ -51,6 +51,7 @@ var VIEWS = {
   gantt:    { title:"工作项", sub:"甘特视图：按开始/截止日期排布；拖动条改期", enter:lazyEnter("gantt", "enterGanttView") },
   projects: { title:"项目", sub:"项目列表与全局健康度；点项目名进入项目驾驶舱", enter:lazyEnter("projects", "enterProjectsView") },
   phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；发布日程跨项目汇总计划；全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
+  version:  { title:"版本详情", sub:"单版本详情页：范围、投入、需求、发布事实与操作记录", enter:lazyEnter("version", "enterVersionView") },
   delivery: { title:"交付说明", sub:"一页式交付说明：承诺范围、实际发布、回归结果与遗留问题聚合成一份可对外提交的文档", enter:lazyEnter("delivery", "enterDeliveryView") },
   demands:  { title:"需求池",   sub:"四态看板与主状态工作页：待评审 → 已通过 → 已排期；已关闭保留原因与恢复去向", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
@@ -63,6 +64,7 @@ var VIEWS = {
   workload: { title:"成员负载", sub:"跨项目剩余工时容量与本周计时", enter:lazyEnter("workload", "enterWorkloadView") },
   risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞工作项与站内催办", enter:lazyEnter("risks", "enterRisksView") },
   report: { title:"报表", sub:"交付图表：燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
+  investment: { title:"报表", sub:"投入结构：按年度 / 季度盘点人力、工时与资源分布", enter:lazyEnter("investment", "enterInvestmentView") },
   messages: { title:"消息", sub:"站内通知与截止提醒；与右上角通知中心同一数据", enter:lazyEnter("messages", "enterMessagesView") },
   settings: { title:"设置",     sub:"空间、成员与权限、工作流、通知与集成、数据与审计", enter:enterSettingsLazy },
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:lazyEnter("profile", "enterProfileView") }
@@ -70,10 +72,10 @@ var VIEWS = {
 /* 视图 → 侧栏一级入口。多个视图共用一个入口时，靠页内子导航切换 */
 var NAV_OF = {
   mine:"mine", review:"review",
-  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", delivery:"phase",
+  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", version:"phase", delivery:"phase",
   board:"workitems", list:"workitems", tree:"workitems", chain:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems",
   requirements:"requirements", testcases:"testcases", branches:"branches",
-  analysis:"insight", report:"insight",
+  analysis:"insight", report:"insight", investment:"insight",
   workload:"workload", risks:"risks"
 };
 /* 点击一级入口落到的默认视图；workitems / insight 记住上次用过的视图 */
@@ -108,7 +110,8 @@ var SUBNAV = {
     { view:"analysis", tab:"stats", label:"趋势与分布", title:"新增与完成趋势、工时分布" },
     { view:"analysis", tab:"completions", label:"完成记录", title:"按周期查看已完成工作项" },
     { view:"analysis", tab:"flow", label:"流程体检", title:"一次通过率、需求开工延迟与估时准确度" },
-    { view:"report", label:"交付图表", title:"燃尽、速度、累积流与交付周期" }
+    { view:"report", label:"交付图表", title:"燃尽、速度、累积流与交付周期" },
+    { view:"investment", label:"投入结构", title:"按年度 / 季度看人力、工时与资源分布" }
   ]
 };
 /* 详情页归属的父级子导航项：驾驶舱从项目列表进入，用父项标出所在分区 */
@@ -125,7 +128,7 @@ var TAB_OF = {
   mine: "mine", review: "mine",
   board: "board", list: "board", calendar: "board", gantt: "board", branches: "board", workcolumn: "board",
   projects: "projects", requirements: "projects", demands: "projects", testcases: "projects",
-  portfolio: "projects", project: "projects", phase: "projects", delivery: "projects",
+  portfolio: "projects", project: "projects", phase: "projects", version: "projects", delivery: "projects",
   messages: "messages",
   settings: "me", profile: "me"
 };
@@ -255,6 +258,13 @@ function updateSubnavState(name){
     else if(parent) b.setAttribute("aria-current","location");
     else b.removeAttribute("aria-current");
   });
+  /* 页签多到需要横向滚动时（窄屏 5 个入口），把当前页签滚进可见区 */
+  var current = el.querySelector(".subnav-item.on");
+  if(current && el.scrollWidth > el.clientWidth){
+    var cr = current.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if(cr.left < er.left) el.scrollLeft += cr.left - er.left - 8;
+    else if(cr.right > er.right) el.scrollLeft += cr.right - er.right + 8;
+  }
 }
 var subNavEl = $("subNav");
 if(subNavEl) subNavEl.addEventListener("click", function(e){
@@ -273,6 +283,10 @@ if(subNavEl) subNavEl.addEventListener("click", function(e){
   }
   showView(view);
 });
+/* 窄屏旋转 / 窗口变窄后页签可能溢出，重新把当前页签带进可见区 */
+window.addEventListener("resize", function(){
+  if(activeView) updateSubnavState(activeView);
+});
 
 function viewFromHash(){
   var raw = String(window.location.hash || "").replace(/^#\/?/, "");
@@ -288,8 +302,8 @@ function syncViewHash(name){
   if(suppressHashSync) return;
   var h = "#/" + name;
   if(window.location.hash === h) return;
-  /* 分支、工作项列与需求主状态工作页深链：保留查询参数，避免 showView 抹掉下钻位置 */
-  if((name === "branches" || name === "workcolumn" || name === "demands")
+  /* 分支、工作项列、需求主状态工作页与版本详情深链：保留查询参数，避免 showView 抹掉下钻位置 */
+  if((name === "branches" || name === "workcolumn" || name === "demands" || name === "version")
       && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }
@@ -319,6 +333,10 @@ window.addEventListener("popstate", function(){
     /* 同一视图内只改了 ?col=&range=：把 hash 变化交给工作页自己处理 */
     var wcMod = viewModule("workcolumn");
     if(wcMod && wcMod.refreshFromHash) wcMod.refreshFromHash();
+  }else if(n === "version"){
+    /* 同一版本内换页签 / 改筛选，或后退到另一个版本：都交给详情页对齐 */
+    var vdMod = viewModule("version");
+    if(vdMod && vdMod.refreshFromHash) vdMod.refreshFromHash();
   }else if(n === "demands"){
     enterDemandRoute();
   }
@@ -349,6 +367,7 @@ function refreshActiveView(opts){
   else if(activeView === "workload") loadView("workload").then(function(m){ m.loadWorkload({silent:true}); });
   else if(activeView === "risks") loadView("risks").then(function(m){ m.loadRisks({silent:true}); });
   else if(activeView === "report") loadView("report").then(function(m){ m.loadReport({silent:true}); });
+  else if(activeView === "investment") loadView("investment").then(function(m){ m.loadInvestment({silent:true}); });
   else if(activeView === "messages") loadView("messages").then(function(m){ m.enterMessagesView(); });
   else if(activeView === "settings"){
     loadView("settings").then(function(m){

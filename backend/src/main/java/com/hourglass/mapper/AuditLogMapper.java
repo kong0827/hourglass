@@ -39,6 +39,12 @@ public interface AuditLogMapper {
                                    @Param("to") LocalDateTime to,
                                    @Param("limit") int limit);
 
+    /** 单实体变更记录（用例/计划详情就地追溯），最近在前 */
+    List<AuditLog> selectByTarget(@Param("workspaceId") String workspaceId,
+                                  @Param("targetType") String targetType,
+                                  @Param("targetId") String targetId,
+                                  @Param("limit") int limit);
+
     LocalDateTime selectOldest(@Param("workspaceId") String workspaceId);
 
     int deleteBefore(@Param("cutoff") LocalDateTime cutoff);

@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 团队共享 AI 设置原型 · 2026-11-14</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  [hidden]{display:none!important}
+  body{background:var(--bg-app);min-height:100vh}
+  .proto-bar{max-width:1220px;margin:0 auto;padding:18px 30px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .proto-kicker{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;letter-spacing:.05em;color:var(--primary-fg);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:999px;padding:4px 10px}
+  .proto-kicker i{width:6px;height:6px;border-radius:50%;background:var(--primary);display:inline-block}
+  .proto-bar .switch{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden;background:#fff}
+  .proto-bar .switch button{appearance:none;border:0;border-right:1px solid var(--border);background:#fff;font:inherit;font-size:12.5px;color:var(--text-2);height:32px;padding:0 13px;cursor:pointer}
+  .proto-bar .switch button:last-child{border-right:0}
+  .proto-bar .switch button.on{background:var(--primary);color:#fff;font-weight:600}
+  .proto-note{font-size:11.5px;color:var(--text-3);margin-left:auto}
+
+  .set-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:16px 0 18px;overflow:hidden}
+  .set-tabs span{padding:9px 12px 11px;font-size:13px;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+  .set-tabs span.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:600}
+
+  .panel-head .meta-right{font-size:12px;color:var(--text-3)}
+  .set-hint{font-size:12.5px;line-height:1.7;color:var(--text-3);margin:8px 0 16px}
+  .set-hint b{color:var(--text-2);font-weight:600}
+  .set-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field.wide{grid-column:1 / -1}
+  .field label{font-size:12px;color:var(--text-2);font-weight:600}
+  .field input,.field select{height:34px;border:1px solid var(--border-strong);border-radius:8px;background:#fff;padding:0 10px;font:inherit;font-size:12.5px;color:var(--text);width:100%}
+  .field input:disabled,.field select:disabled{background:var(--surface-sunken);color:var(--text-3)}
+  .field .hint{font-size:11.5px;color:var(--text-3);margin:0;line-height:1.55}
+  .ai-switch{display:inline-flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text-2);margin:2px 0 14px}
+  .ai-switch input{width:34px;height:20px;appearance:none;background:var(--border-strong);border-radius:999px;position:relative;cursor:pointer;flex:none;transition:background .15s}
+  .ai-switch input:checked{background:var(--primary)}
+  .ai-switch input:after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(16,24,40,.2)}
+  .ai-switch input:checked:after{left:16px}
+  .set-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+  .set-actions .foot-note{margin-left:auto}
+  .status-pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:999px;padding:3px 9px;white-space:nowrap}
+  .status-pill.ok{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+  .status-pill.off{background:var(--surface-sunken);color:var(--text-3);border:1px solid var(--border)}
+  .status-pill.warn{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+  .status-pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+
+  .source-list{display:flex;flex-direction:column;gap:10px;margin:4px 0 6px}
+  .source-card{display:flex;align-items:flex-start;gap:11px;border:1px solid var(--border);border-radius:10px;padding:13px 14px;background:#fff;cursor:pointer}
+  .source-card.on{border-color:var(--primary-border);background:var(--primary-soft);box-shadow:inset 0 0 0 1px var(--primary-border)}
+  .source-card.disabled{opacity:.62;cursor:not-allowed}
+  .source-card > input[type=radio]{margin:2px 0 0;accent-color:var(--primary);width:15px;height:15px;flex:none}
+  .source-title{font-size:13px;font-weight:650;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .source-sub{font-size:12px;color:var(--text-3);line-height:1.6;margin-top:3px}
+  .source-sub b{color:var(--text-2);font-weight:600}
+  .mini-tag{font-size:10.5px;font-weight:700;color:var(--primary-fg);background:#fff;border:1px solid var(--primary-border);border-radius:999px;padding:1px 7px}
+  .mini-tag.gray{color:var(--text-3);border-color:var(--border);background:var(--surface-sunken)}
+  .inline-form{border-top:1px dashed var(--border);margin-top:11px;padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+  .inline-form .wide{grid-column:1 / -1}
+  .notice{display:flex;gap:9px;background:var(--warning-soft);border:1px solid var(--warning-border);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--warning-fg);line-height:1.6;margin:0 0 15px}
+  .notice .ico{width:17px;height:17px;border-radius:50%;background:var(--warning);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;margin-top:1px}
+  .info-line{display:flex;gap:8px;align-items:flex-start;background:#F8FAFC;border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:11.5px;color:var(--text-3);line-height:1.6;margin-top:14px}
+  .divider{height:1px;background:var(--border);margin:16px 0}
+  .assist-row{display:flex;align-items:center;gap:11px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff;margin-bottom:16px}
+  .assist-ic{width:32px;height:32px;border-radius:9px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-size:14px;font-weight:700;flex:none}
+  .assist-txt{flex:1;min-width:0}
+  .assist-title{font-size:12.5px;font-weight:650}
+  .assist-sub{font-size:11.5px;color:var(--text-3);margin-top:2px;line-height:1.55}
+  .assist-row .ai-switch{margin:0}
+  .sw-big{width:38px;height:22px}
+  .member-note{font-size:11.5px;color:var(--text-3);margin-top:10px}
+  .approve-note{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--success-fg);background:var(--success-soft);border:1px solid var(--success-border);border-radius:8px;padding:8px 11px;margin:12px 0 0}
+  .approve-note b{font-weight:650}
+  .kv{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);margin-top:12px}
+  .kv b{color:var(--text-2);font-weight:600}
+  .p1{position:relative}
+  .p1-tag{position:absolute;right:16px;top:-10px;background:var(--warning-soft);border:1px solid var(--warning-border);color:var(--warning-fg);font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 8px}
+  @media (max-width:760px){
+    .wrap{padding:18px 14px 40px}
+    .set-grid,.inline-form{grid-template-columns:1fr}
+    .set-tabs{overflow-x:auto}
+    .proto-bar{padding:14px 14px 0}
+    .proto-note{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="proto-bar">
+  <span class="proto-kicker"><i></i>方案原型 · 非线上截图</span>
+  <div class="switch" role="group" aria-label="切换视角">
+    <button type="button" data-v="admin" class="on">平台管理员 · 团队 AI 服务</button>
+    <button type="button" data-v="member">成员 · 个人 AI 设置</button>
+    <button type="button" data-v="space">空间主 · 空间覆盖（P1）</button>
+  </div>
+  <span class="proto-note">团队共享 AI 设置 · 2026-11-14</span>
+</div>
+
+<div class="wrap">
+  <div class="page-head">
+    <div>
+      <h1 id="pageTitle">设置</h1>
+      <div class="sub" id="pageSub">通知与集成 · 团队 AI 服务</div>
+    </div>
+  </div>
+
+  <div class="set-tabs" id="setTabs">
+    <span>空间</span><span>成员与权限</span><span>工作流</span><span class="on">通知与集成</span><span>数据与审计</span><span>平台</span>
+  </div>
+
+  <!-- ================= 平台管理员视角 ================= -->
+  <section id="view-admin">
+    <div class="panel">
+      <div class="panel-head">
+        <h3>团队 AI 服务</h3>
+        <span class="status-pill ok"><i></i>已启用 · 全平台</span>
+      </div>
+      <p class="set-hint">为全平台成员提供统一的模型与额度。成员不必再自己申请 Key；调用费用由组织承担。<b>只有平台管理员能查看和修改这里的 Key。</b></p>
+
+      <label class="ai-switch"><input type="checkbox" checked /><span>启用团队 AI（关闭后按个人 Key 解析；未配置的成员将无法使用）</span></label>
+
+      <div class="set-grid">
+        <div class="field">
+          <label for="adProvider">厂商</label>
+          <select id="adProvider">
+            <option selected>DeepSeek</option>
+            <option>通义千问（阿里云）</option>
+            <option>月之暗面 Kimi</option>
+            <option>智谱 GLM</option>
+            <option>OpenAI</option>
+            <option>自定义 / 中转</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="adModel">模型</label>
+          <input id="adModel" value="deepseek-chat" />
+        </div>
+        <div class="field wide">
+          <label for="adBase">接口地址</label>
+          <input id="adBase" value="https://api.deepseek.com/v1" />
+          <span class="hint">只接受公网 HTTPS 地址；内网与云元数据地址会被拒绝。走中转或代理时改这里。</span>
+        </div>
+        <div class="field wide">
+          <label for="adKey">API Key</label>
+          <input id="adKey" type="password" placeholder="已保存 sk-••••••••a8f2（留空表示不修改）" />
+          <span class="hint">加密后存库，接口只返回掩码；部署密钥变更导致无法解密时，状态会提示重新填写。</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <label class="ai-switch"><input type="checkbox" checked /><span>允许成员改用个人 API Key</span></label>
+      <p class="set-hint" style="margin-top:-6px">关闭后，成员只能使用团队额度；已保存的个人 Key 保留但不再使用，重新打开即可恢复。</p>
+
+      <div class="set-actions">
+        <button class="btn primary" type="button">保存</button>
+        <button class="btn" type="button">测试连接</button>
+        <button class="btn" type="button">清除 Key</button>
+        <span class="foot-note">最近更新：11-14 10:20 · 孔祥金</span>
+      </div>
+
+      <div class="kv">
+        <span>生效范围：<b>全平台</b></span>
+        <span>并发：<b>全局最多 2 个生成任务</b></span>
+        <span>用量台账：<b>P1 提供</b></span>
+      </div>
+
+      <div class="info-line">
+        <span>i</span>
+        <span>启用后，AI 请求内容会发送到所选模型厂商。请先确认数据合规与出站策略；关闭团队 AI 不会删除已保存的 Key。</span>
+      </div>
+    </div>
+
+    <div class="panel" style="opacity:.72">
+      <div class="panel-head"><h3>SMTP 邮件服务</h3><span class="meta-right">仅平台管理员</span></div>
+      <p class="set-hint" style="margin-bottom:0">用于发送个人事件邮件。密码加密保存，留空表示不修改。</p>
+    </div>
+  </section>
+
+  <!-- ================= 成员视角 ================= -->
+  <section id="view-member" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>AI 设置</h3>
+        <span class="status-pill ok"><i></i>团队 AI 已就绪</span>
+      </div>
+      <p class="set-hint">用于 AI 助手、文档拆成工作项、完成度检查、生成测试用例和 AI 周报。团队已开通统一额度，你不再需要自己申请 Key。</p>
+
+      <div class="assist-row">
+        <span class="assist-ic">AI</span>
+        <div class="assist-txt">
+          <div class="assist-title">显示 AI 助手</div>
+          <div class="assist-sub">在右下角显示悬浮助手：问答找入口、查我的待办，或用一句话建工作项、提需求、推进状态。</div>
+        </div>
+        <label class="ai-switch"><input type="checkbox" checked /><span class="foot-note"></span></label>
+      </div>
+
+      <div style="font-size:12px;font-weight:650;color:var(--text-2);margin-bottom:8px">使用来源</div>
+      <div class="source-list">
+        <div class="source-card on">
+          <input type="radio" name="src" value="shared" checked />
+          <div>
+            <div class="source-title">团队 AI <span class="mini-tag">推荐</span></div>
+            <div class="source-sub"><b>DeepSeek · deepseek-chat</b>　由平台管理员提供，费用由团队承担。<br />如遇额度不足或 Key 失效，请联系平台管理员。</div>
+          </div>
+        </div>
+
+        <div class="source-card">
+          <input type="radio" name="src" value="personal" />
+          <div style="flex:1;min-width:0">
+            <div class="source-title">我的 API Key <span class="mini-tag gray">已保存 sk-••••a8f2</span></div>
+            <div class="source-sub">改用个人 Key 后，调用费用从你自己的额度扣除；团队 AI 仍然可用，随时可以切回。</div>
+            <div class="inline-form" hidden>
+              <div class="field"><label>厂商</label><select><option>DeepSeek</option><option>自定义 / 中转</option></select></div>
+              <div class="field"><label>模型</label><input value="deepseek-chat" /></div>
+              <div class="field wide"><label>接口地址</label><input value="https://api.deepseek.com/v1" /></div>
+              <div class="field wide"><label>API Key</label><input type="password" placeholder="留空表示不修改" /></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <label class="ai-switch" style="margin-top:12px"><input type="checkbox" checked /><span>启用 AI（关掉后不会发出任何请求）</span></label>
+
+      <div class="set-actions">
+        <button class="btn primary" type="button">保存</button>
+        <button class="btn" type="button">测试当前来源</button>
+        <span class="foot-note" id="srcFoot">当前实际使用：团队 AI</span>
+      </div>
+
+      <div class="approve-note"><b>已就绪</b><span>不需要填写 Key，保持「团队 AI」即可直接使用。</span></div>
+    </div>
+  </section>
+
+  <!-- ================= 空间覆盖 P1 ================= -->
+  <section id="view-space" hidden>
+    <div class="panel p1">
+      <span class="p1-tag">P1 · 暂不实施</span>
+      <div class="panel-head">
+        <h3>本空间 AI</h3>
+        <span class="status-pill off"><i></i>跟随平台</span>
+      </div>
+      <p class="set-hint">默认沿用平台提供的团队 AI。部门有独立预算或需要隔离模型时，可以让本空间使用自己的 Key；只影响本空间成员，不改变平台配置。</p>
+
+      <div class="source-list">
+        <div class="source-card on">
+          <input type="radio" name="sp" value="platform" checked />
+          <div>
+            <div class="source-title">跟随平台</div>
+            <div class="source-sub">使用平台管理员配置的 <b>DeepSeek · deepseek-chat</b>；平台关闭或更换后，本空间随之变化。</div>
+          </div>
+        </div>
+        <div class="source-card">
+          <input type="radio" name="sp" value="space" />
+          <div style="flex:1;min-width:0">
+            <div class="source-title">使用本空间自己的 Key</div>
+            <div class="source-sub">优先于平台配置；空间成员默认使用它，仍可自愿切回个人 Key。</div>
+            <div class="inline-form" hidden>
+              <div class="field"><label>厂商</label><select><option>DeepSeek</option><option>自定义 / 中转</option></select></div>
+              <div class="field"><label>模型</label><input value="deepseek-chat" /></div>
+              <div class="field wide"><label>接口地址</label><input value="https://api.deepseek.com/v1" /></div>
+              <div class="field wide"><label>API Key</label><input type="password" placeholder="留空表示不修改" /></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-actions">
+        <button class="btn primary" type="button">保存</button>
+        <button class="btn" type="button">测试连接</button>
+        <span class="foot-note">仅空间主 / 管理员可配置</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var titles = {
+    admin:["设置","通知与集成 · 团队 AI 服务"],
+    member:["个人设置","AI 设置 · 使用来源"],
+    space:["设置","通知与集成 · 本空间 AI"]
+  };
+  var tabs = {
+    admin:["空间","成员与权限","工作流","通知与集成","数据与审计","平台"],
+    member:["个人资料","通知","AI 设置","安全"],
+    space:["空间","成员与权限","工作流","通知与集成","数据与审计","平台"]
+  };
+  function syncSource(){
+    document.querySelectorAll("#view-member .source-card, #view-space .source-card").forEach(function(card){
+      var radio = card.querySelector("input[type=radio]");
+      var form = card.querySelector(".inline-form");
+      if(!radio) return;
+      card.classList.toggle("on", radio.checked);
+      if(form) form.hidden = !radio.checked;
+    });
+  }
+  document.querySelectorAll("#view-member input[type=radio], #view-space input[type=radio]").forEach(function(r){
+    r.addEventListener("change", syncSource);
+  });
+  syncSource();
+  function show(v){
+    if(!titles[v]) v = "admin";
+    ["admin","member","space"].forEach(function(k){
+      var el = document.getElementById("view-" + k);
+      if(el) el.hidden = k !== v;
+    });
+    document.getElementById("pageTitle").textContent = titles[v][0];
+    document.getElementById("pageSub").textContent = titles[v][1];
+    var box = document.getElementById("setTabs");
+    box.innerHTML = tabs[v].map(function(t){
+      var on = (v === "member" ? t === "AI 设置" : t === "通知与集成");
+      return '<span' + (on ? ' class="on"' : '') + '>' + t + '</span>';
+    }).join("");
+    document.querySelectorAll(".proto-bar [data-v]").forEach(function(b){
+      b.classList.toggle("on", b.dataset.v === v);
+    });
+  }
+  document.querySelectorAll(".proto-bar [data-v]").forEach(function(b){
+    b.addEventListener("click", function(){ show(b.dataset.v); });
+  });
+  var q = new URLSearchParams(location.search);
+  show(q.get("v") || "admin");
+})();
+</script>
+</body>
+</html>

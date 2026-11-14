@@ -33,6 +33,10 @@ public class TestCaseSaveRequest {
     @Size(max = 50, message = "功能模块最多 50 字")
     private String module;
 
+    /** 目录节点（单归属）：给了就以节点为准，module 文本只作为旧客户端 / CSV 的兜底 */
+    @Size(max = 32, message = "目录节点不合法")
+    private String moduleId;
+
     @Pattern(regexp = "P0|P1|P2|P3", message = "优先级不合法")
     private String priority;
 

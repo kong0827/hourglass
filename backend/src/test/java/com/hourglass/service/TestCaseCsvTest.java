@@ -44,18 +44,23 @@ class TestCaseCsvTest {
     private final com.hourglass.mapper.RequirementMapper reqs =
             mock(com.hourglass.mapper.RequirementMapper.class);
     private final AuditService auditService = mock(AuditService.class);
+    private final com.hourglass.mapper.TestModuleMapper modules = mock(com.hourglass.mapper.TestModuleMapper.class);
     private final TestCaseService service = new TestCaseService(cases,
             mock(TestCaseRunMapper.class), mock(TaskCommandService.class),
             mock(ProjectAccessService.class), reqs,
             mock(com.hourglass.mapper.DemandMapper.class),
-            mock(com.hourglass.mapper.TestModuleMapper.class),
+            modules,
             mock(com.hourglass.mapper.AttachmentMapper.class),
             mock(AttachmentService.class),
             mock(com.hourglass.mapper.TestPlanMapper.class),
             mock(com.hourglass.mapper.TestPlanCaseMapper.class),
             auditService, mock(NumberSeqService.class),
             mock(com.hourglass.mapper.TestCaseTaskMapper.class),
-            mock(com.hourglass.mapper.TaskMapper.class));
+            mock(com.hourglass.mapper.TaskMapper.class),
+            mock(com.hourglass.mapper.WorkspaceMemberMapper.class),
+            new TestModuleService(modules, cases, mock(ProjectAccessService.class), auditService,
+                    mock(com.hourglass.mapper.CaseSetMapper.class)),
+            mock(com.hourglass.mapper.CaseSetMapper.class));
 
     @BeforeEach
     void setUp() {

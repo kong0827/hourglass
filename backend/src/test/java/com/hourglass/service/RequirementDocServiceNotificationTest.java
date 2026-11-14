@@ -30,14 +30,20 @@ class RequirementDocServiceNotificationTest {
     private final UserMapper users = mock(UserMapper.class);
     private final WorkActivityService activities = mock(WorkActivityService.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
+    private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementDocService service = new RequirementDocService(docs,
             mock(RequirementDocHistoryMapper.class), mock(com.hourglass.mapper.RequirementDocCommentMapper.class),
             reqs, users,
             mock(TaskMapper.class), activities, mock(DemandMapper.class),
-            mock(ProjectAccessService.class), events,
+            access, events,
             mock(com.hourglass.mapper.ReqDocShareMapper.class),
             mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class),
             mock(DeletionTraceService.class));
+
+    {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "attachmentService",
+                mock(AttachmentService.class));
+    }
 
     @Test
     void updateByOtherUserKeepsOwnerAndNotifies() {
@@ -45,6 +51,8 @@ class RequirementDocServiceNotificationTest {
         when(docs.selectById("D1")).thenReturn(d);
         when(reqs.selectById("R1")).thenReturn(project());
         when(docs.update(any(RequirementDoc.class), any())).thenReturn(1);
+        /* 非负责人编辑需空间管理员：管理员改动仍保留原负责人并通知他 */
+        when(access.canManage(WS, "U1")).thenReturn(true);
 
         service.update("U1", WS, "D1", request("<p>new</p>"));
 
@@ -57,6 +65,7 @@ class RequirementDocServiceNotificationTest {
     void updateRejectsUnknownStatus() {
         when(docs.selectById("D1")).thenReturn(doc());
         when(reqs.selectById("R1")).thenReturn(project());
+        when(access.canManage(WS, "U1")).thenReturn(true);
         ReqDocSaveRequest req = request("<p>new</p>");
         /* published 是发布可见性，不是流转状态；历史误写会让列表状态全部落到「草稿」 */
         req.setStatus("published");
@@ -81,6 +90,7 @@ class RequirementDocServiceNotificationTest {
     @Test
     void deleteByOtherUserNotifiesOwner() {
         when(docs.selectById("D1")).thenReturn(doc());
+        when(access.canManage(WS, "U1")).thenReturn(true);
 
         service.delete("U1", WS, "D1");
 

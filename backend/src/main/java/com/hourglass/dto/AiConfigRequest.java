@@ -32,4 +32,8 @@ public class AiConfigRequest {
     private Boolean clearKey;
 
     private Boolean enabled;
+
+    /** 来源偏好：auto / personal；空表示不改 */
+    @Size(max = 16, message = "来源偏好不合法")
+    private String prefer;
 }

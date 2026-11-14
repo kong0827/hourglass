@@ -468,15 +468,15 @@ try{
   await sleep(1000);
   const caseOrder = await evaluate(`(() => {
     const bar = document.getElementById("tcFilterBar");
-    const ids = ["tcStatusSeg","tcOwner","tcPri","tcModule","tcSearch"];
+    const ids = ["tcOwner","tcPri","tcModule","tcSearch"];
     return ids.map(id => [...bar.querySelectorAll("*")].findIndex(x => x.id === id));
   })()`);
   assert(caseOrder.slice(0, 4).every((v, i) => v >= 0 && (i === 0 || v > caseOrder[i - 1])),
-    "用例筛选顺序：状态 → 执行人 → 优先级 → 模块 → 搜索");
+    "用例筛选顺序：执行人 → 优先级 → 模块 → 搜索（执行结果已并入统计 chips 条）");
 
   const caseFacets = await evaluate(`(() => {
     const grab = id => [...document.getElementById(id).options].slice(1).map(o => o.textContent.trim());
-    const chips = [...document.querySelectorAll("#tcStatusSeg [data-tc-status]")].map(b => b.textContent.trim());
+    const chips = [...document.querySelectorAll("#tcStats [data-tc-status]")].map(b => b.textContent.trim());
     const owner = [...document.getElementById("tcOwner").options].map(o => o.textContent.trim());
     return {
       pri: grab("tcPri"), mod: grab("tcModule"), owner,
@@ -519,7 +519,7 @@ try{
   const coverHidden = `(() => {
     const hid = id => { const el = document.getElementById(id); return !el || getComputedStyle(el).display === "none" || el.hidden; };
     return {
-      search: hid("tcSearch"), chips: hid("tcStatusSeg"), owner: hid("tcOwner"),
+      search: hid("tcSearch"), chips: hid("tcStats"), owner: hid("tcOwner"),
       module: hid("tcModule"), clear: hid("tcClearFilter"),
       req: getComputedStyle(document.getElementById("tcReq")).display
     };
@@ -544,7 +544,7 @@ try{
   const planBar = await evaluate(`(() => ({
     bar: !document.getElementById("tcPlanBar").hidden,
     caseSearch: getComputedStyle(document.getElementById("tcSearch")).display,
-    caseChips: getComputedStyle(document.getElementById("tcStatusSeg")).display,
+    caseChips: getComputedStyle(document.getElementById("tcStats")).display,
     search: !!document.getElementById("tcPlanSearch")
   }))()`);
   assert(planBar.bar && planBar.search, "测试计划保留自有搜索与状态筛选");

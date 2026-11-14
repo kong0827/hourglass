@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import com.hourglass.common.AppException;
 import com.hourglass.common.Texts;
+import com.hourglass.dto.SubtaskReorderRequest;
 import com.hourglass.dto.SubtaskRequest;
 import com.hourglass.entity.Subtask;
 import com.hourglass.entity.Task;
@@ -53,6 +54,7 @@ public class SubtaskService {
         s.setWorkspaceId(workspaceId);
         s.setTitle(Texts.cut(title, 60));
         s.setDone(Boolean.FALSE);
+        s.setSortOrder(subtaskMapper.selectMaxSortOrder(workspaceId, taskId) + 1);
         subtaskMapper.insert(s);
         log(userId, workspaceId, taskId, "添加子任务「" + s.getTitle() + "」");
         return subtaskMapper.selectById(s.getId());
@@ -90,6 +92,43 @@ public class SubtaskService {
         projectAccess.assertWrite(workspaceId, userId, parent.getReqId());
         subtaskMapper.deleteById(id);
         log(userId, workspaceId, s.getTaskId(), "删除子任务「" + s.getTitle() + "」");
+    }
+
+    @Transactional
+    public List<Subtask> reorder(String userId, String workspaceId, String taskId, SubtaskReorderRequest req) {
+        Task parent = ensureTask(workspaceId, taskId);
+        projectAccess.assertWrite(workspaceId, userId, parent.getReqId());
+        List<Subtask> current = subtaskMapper.selectByTaskId(workspaceId, taskId);
+        List<Long> ids = req == null ? null : req.getIds();
+        java.util.Map<Long, Subtask> byId = new java.util.HashMap<Long, Subtask>();
+        for (Subtask s : current) {
+            byId.put(s.getId(), s);
+        }
+        /* 只接受当前清单的全排列：漏项/多项/跨任务 id 都拒绝，避免把别的任务的检查项编号进来 */
+        if (ids == null || ids.size() != current.size() || new java.util.HashSet<Long>(ids).size() != ids.size()) {
+            throw AppException.badRequest("排序清单与当前检查项不一致，请刷新后重试");
+        }
+        for (Long id : ids) {
+            if (!byId.containsKey(id)) {
+                throw AppException.badRequest("排序清单与当前检查项不一致，请刷新后重试");
+            }
+        }
+        /* 顺序没变（含空清单）：不写库也不留痕，免得点一下把手就多一条动态 */
+        boolean changed = false;
+        for (int i = 0; i < ids.size(); i++) {
+            if (!ids.get(i).equals(current.get(i).getId())) {
+                changed = true;
+                break;
+            }
+        }
+        if (!changed) {
+            return current;
+        }
+        for (int i = 0; i < ids.size(); i++) {
+            subtaskMapper.updateSortOrder(workspaceId, ids.get(i), i);
+        }
+        log(userId, workspaceId, taskId, "调整检查项顺序");
+        return subtaskMapper.selectByTaskId(workspaceId, taskId);
     }
 
     private Task ensureTask(String workspaceId, String taskId) {

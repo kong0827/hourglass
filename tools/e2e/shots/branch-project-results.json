@@ -1,0 +1,32 @@
+[
+  {
+    "n": "in-task 新建分支 entry present",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "branch dialog prefilled with task project",
+    "ok": true,
+    "d": "brReq=R4wejtfugwrudffx8x4x9"
+  },
+  {
+    "n": "branch picker (project ctx) groups by company",
+    "ok": true,
+    "d": "[\"测途质量1 人\",\"星河科技5 人\",\"云帆软件1 人\"]"
+  },
+  {
+    "n": "branch picker (project ctx) shows REAL primary roles",
+    "ok": true,
+    "d": "[\"王芳:测试负责人\",\"孙琪:运维负责人\",\"张伟:项目经理\",\"李娜:后端开发\",\"赵磊:产品经理\",\"陈昊:前端开发\"]"
+  },
+  {
+    "n": "branch picker (project ctx) shows 兼岗 chips",
+    "ok": true,
+    "d": "兼岗=4 [\"王芳→兼 质量分析\",\"李娜→兼 代码评审\",\"赵磊→兼 需求评审\",\"陈昊→兼 交互走查\"]"
+  },
+  {
+    "n": "no runtime/console errors (in-task branch)",
+    "ok": true,
+    "d": ""
+  }
+]

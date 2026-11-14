@@ -22,6 +22,8 @@ public class TestCase {
     private String testData;
     /** 功能模块：自由填写，列表筛选用 */
     private String module;
+    /** 所属目录节点 ID（test_module.id）；module 文本是它的展示快照 */
+    private String moduleId;
     /** 优先级档位：P0/P1/P2/P3，空 = 未设置 */
     private String priority;
     /** 执行步骤 JSON：[{"action":"操作","expected":"预期结果"}] */
@@ -34,6 +36,9 @@ public class TestCase {
     private LocalDateTime latestAt;
     /** 最近失败转出的缺陷任务 ID */
     private String latestBugTaskId;
+    /** 创建人显示名：创建时写入，不随执行变化 */
+    private String createdBy;
+    private String createdByUserId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

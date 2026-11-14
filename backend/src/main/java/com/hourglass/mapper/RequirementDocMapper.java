@@ -14,6 +14,8 @@ public interface RequirementDocMapper {
     /** 空间下的需求列表（带项目名、关联任务数、正文片段）；keyword 非空时按标题/正文模糊匹配 */
     List<ReqDocView> selectViewByWorkspace(@Param("workspaceId") String workspaceId,
                                            @Param("reqId") String reqId,
+                                           @Param("categoryId") String categoryId,
+                                           @Param("spaceOnly") boolean spaceOnly,
                                            @Param("keyword") String keyword,
                                            @Param("viewerId") String viewerId,
                                            @Param("userId") String userId,
@@ -21,6 +23,7 @@ public interface RequirementDocMapper {
                                            @Param("offset") int offset, @Param("limit") int limit);
 
     int countVisible(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+                     @Param("categoryId") String categoryId, @Param("spaceOnly") boolean spaceOnly,
                      @Param("keyword") String keyword,
                      @Param("viewerId") String viewerId, @Param("userId") String userId,
                      @Param("seeAllDrafts") boolean seeAllDrafts);
@@ -28,7 +31,7 @@ public interface RequirementDocMapper {
     RequirementDoc selectById(@Param("id") String id);
 
     /**
-     * 全局搜索：标题/正文 LIKE（不走全文索引，短词也能稳定命中）。
+     * 全局搜索：与列表共用 keywordWhere 谓词（≥2 字走全文索引，单字 LIKE 兜底，覆盖标题/摘要/正文）。
      * 草稿可见口径与列表一致：仅作者本人与空间 owner/admin 能命中，
      * seeAllDrafts 为 true 时（特权角色）不做该过滤。
      */
@@ -36,7 +39,7 @@ public interface RequirementDocMapper {
                                                     @Param("viewerId") String viewerId,
                                                     @Param("userId") String userId,
                                                     @Param("seeAllDrafts") boolean seeAllDrafts,
-                                                    @Param("q") String q,
+                                                    @Param("keyword") String keyword,
                                                     @Param("limit") int limit);
 
     /** 账号删除后清理文档负责人引用 */

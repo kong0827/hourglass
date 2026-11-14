@@ -21,6 +21,8 @@ public class TestCaseView {
     private String precondition;
     private String testData;
     private String module;
+    /** 所属目录节点 ID；module 是节点名快照，路径由前端按目录树拼 */
+    private String moduleId;
     private String priority;
     private List<Map<String, String>> steps;
     private String latestStatus;
@@ -29,10 +31,14 @@ public class TestCaseView {
     private LocalDateTime latestAt;
     private String latestBugTaskId;
     private String latestBugTaskTitle;
+    /** 关联缺陷已修复关闭（未删除且 board_column=done）：最新执行仍失败时前端提示「待复测」 */
+    private Boolean latestBugResolved;
     /** 验证的工作项（多对多）；空数组表示只到需求级覆盖 */
     private List<CaseTaskLink> tasks;
     /** 最近一轮执行挂载的证据附件数（失败截图等） */
     private Integer latestEvidenceCount;
+    /** 创建人显示名：与最近执行人区分 */
+    private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

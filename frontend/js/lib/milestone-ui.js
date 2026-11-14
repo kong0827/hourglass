@@ -2,7 +2,7 @@
 import { API } from "../core/api.js";
 import { icon } from "../core/icons.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { fmtMD, fmtTs, addDays, iso } from "./format.js";
+import { assocLinkHTML, fmtMD, fmtTs, addDays, iso } from "./format.js";
 
 var KIND_NAMES = { version: "版本发布后", tasks: "工作项完成后", manual: "人工确认" };
 var STATUS_META = {
@@ -61,7 +61,7 @@ function layerEl(title, desc, html){
 function detailHTML(m, canWrite){
   var tag = milestoneStatusTag(m);
   var rows = [
-    ["达成方式", esc(milestoneKindName(m.kind)) + (m.versionName ? " · " + esc(m.versionName) : "")],
+    ["达成方式", esc(milestoneKindName(m.kind)) + (m.versionName ? " · " + assocLinkHTML("version", m.versionId, m.versionName, { req:m.reqId }) : "")],
     ["目标日期", m.targetDate ? esc(m.targetDate) : "未设置"],
     ["负责人", esc(m.ownerName || "未指派")],
     ["证据", esc(milestoneEvidence(m))]

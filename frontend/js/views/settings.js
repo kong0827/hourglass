@@ -4,8 +4,10 @@ import { API } from "../core/api.js";
 import { invalidateRules, loadRules } from "../core/transitions.js";
 import { loadCategories, loadWorkspaces } from "../core/app.js";
 import { attachCombo } from "../core/combo.js";
-import { $, actCount, actList, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
+import { $, actCount, actExportBtn, actExportMenu, actFilterBadge, actFilterBtn, actFilterPop, actList, actTypes, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
 import { navTelemetryCsv } from "../core/nav-telemetry.js";
+import { routeNotificationLink } from "../core/notifications.js";
+import { openTaskById } from "../core/task-actions.js";
 import { saveViewState } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { loadPriorities } from "../core/priorities.js";
@@ -15,7 +17,7 @@ import { bindRetry } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
 import { companyChipHTML, companyEditChipHTML } from "../lib/company.js";
 import { loadMemberLabelOptions, DEFAULT_ROLE_TITLES } from "../lib/member-labels.js";
-import { BACKUP_NAME, CAT_DEFAULT_COLOR, avatarHTML, dayDiff, fmtShortMD, fmtTs, priTagHTML, startOfDay } from "../lib/format.js";
+import { BACKUP_NAME, CAT_DEFAULT_COLOR, avatarHTML, dayDiff, fmtShortMD, fmtTs, pad2, priTagHTML, startOfDay } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { ganttState, syncGanttUndoUI } from "./gantt.js";
 import { loadReqDocs } from "./requirements.js";
@@ -195,7 +197,7 @@ function openRoleGuide(){
     roleGuideRow(["我的工作、周回顾", "可见", "可见", "可见", "可见"]),
     roleGuideRow(["需求池、项目（含全局健康度）、版本、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["工作项（看板/列表/日历/甘特）、测试、分支", "可见", "可见", "可见（不可见项目的工作项不出现）", "可见"]),
-    roleGuideRow(["报表（趋势与分布/完成记录/流程体检/交付图表）", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["报表（趋势与分布/完成记录/流程体检/交付图表/投入结构）", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["成员负载、逾期与阻塞", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["设置、个人设置", "可见", "可见", "可见（编辑项受角色限制）", "可见（只读）"])
   ].join("");
@@ -204,7 +206,7 @@ function openRoleGuide(){
     roleGuideRow(["空间 / 成员与权限 / 工作流 / 通知与集成 / 数据与审计", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见"]),
     roleGuideRow(["项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["平台（账号管理 / 系统信息 / 审计日志）", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"]),
-    roleGuideRow(["通知与集成 → SMTP 邮件配置", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"])
+    roleGuideRow(["通知与集成 → SMTP 邮件配置 / 团队 AI", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"])
   ].join("");
 
   var layer = document.createElement("div");
@@ -232,7 +234,7 @@ function openRoleGuide(){
         '</section>' +
         '<section class="perm-sect"><h4>设置内入口差异</h4>' +
           roleGuideTable(["入口", "空间主", "管理员", "成员", "查看者"], settingsRows) +
-          '<p class="perm-note">「平台管理员」是账号级身份，与空间角色无关：它额外可见「设置 → 平台 → 账号管理」和「通知与集成 → SMTP 邮件配置」，但不会自动获得任何空间的角色。以上为界面展示口径，最终以后端校验为准。</p>' +
+          '<p class="perm-note">「平台管理员」是账号级身份，与空间角色无关：它额外可见「设置 → 平台 → 账号管理」和「通知与集成 → SMTP 邮件配置 / 团队 AI」，但不会自动获得任何空间的角色。以上为界面展示口径，最终以后端校验为准。</p>' +
         '</section>' +
       '</div>' +
     '</div>';
@@ -343,14 +345,15 @@ function setSettingsTab(tab){
   });
   /* 项目可见范围与成员同属权限域，但只对管理者可见 */
   if($("set-access")) $("set-access").hidden = !(tab === "members" && isManager && !isPersonal);
-  /* SMTP 配置在「通知与集成」页里，仅平台管理员可见 */
+  /* SMTP 与团队 AI 配置在「通知与集成」页里，仅平台管理员可见 */
   if($("set-mail")) $("set-mail").hidden = tab !== "integration" || !isAdmin;
+  if($("set-team-ai")) $("set-team-ai").hidden = tab !== "integration" || !isAdmin;
   if(tab === "data") loadTrash({silent:true});
   if(tab === "workflow") loadWsCatProjects();
   /* 切换页签时清掉成员搜索残留：避免上一次选中的账号在下一次打开时仍留在输入框里 */
   if(prevTab !== tab && (prevTab === "members" || tab === "members")) resetMemberPicker();
   if(tab === "members" && isManager && !isPersonal) loadProjectAccess();
-  if(tab === "integration" && isAdmin) loadMailSettings();
+  if(tab === "integration" && isAdmin){ loadMailSettings(); loadTeamAiSettings(); }
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
 }
 function initSetTabs(){
@@ -1711,69 +1714,537 @@ if($("wsWebhook")) $("wsWebhook").addEventListener("input", function(){ validate
 if($("wsNotifyToken")) $("wsNotifyToken").addEventListener("input", function(){
   if(this.value.trim() && $("wsNotifyClearToken")) $("wsNotifyClearToken").checked = false;
 });
-var ACT_LABEL = {create:"新建", update:"修改", move:"移动", delete:"删除", restore:"恢复", config:"配置", nudge:"催办"};
-var actState = {items:[], total:0, hasMore:false, loading:false};
+var ACT_LABEL = {
+  create:"新建", update:"修改", move:"移动", delete:"删除", restore:"恢复", config:"配置", nudge:"催办",
+  archive:"归档", first_release:"首次发布", share:"分享", release_policy_update:"发布检查策略",
+  /* work_activity 的项目 / 文档事件与 task_log 共用 create/update */
+  /* demand_log */
+  priority:"优先级", expect:"期望时间", version:"关联版本", status:"状态流转",
+  pass:"通过", rej:"驳回", plan:"排期", replan:"调期", unpass:"取消通过", unplan:"取消排期",
+  cancel:"取消", reopen:"重开",
+  /* version_log */
+  version_create:"新建", version_update:"修改", version_start:"开始", version_close:"关闭",
+  version_cancel:"取消", version_scope:"范围调整", release_plan:"发布计划",
+  release_success:"发布成功", release_failed:"发布失败", release_rollback:"回滚", release:"发布"
+};
+var ACT_TYPES = [
+  {id:"", label:"全部"},
+  {id:"task", label:"工作项", dot:"#2563EB"},
+  {id:"demand", label:"需求", dot:"#5B3FD1"},
+  {id:"project", label:"项目", dot:"#12B76A"},
+  {id:"doc", label:"文档", dot:"#F79009"},
+  {id:"branch", label:"分支", dot:"#667085"},
+  {id:"version", label:"版本", dot:"#3538CD"},
+  {id:"config", label:"配置", dot:"#F04438", lock:true}
+];
+var ACT_ENTITY = {task:"工作项", demand:"需求", project:"项目", doc:"文档", branch:"分支", version:"版本", config:"配置"};
+/* 各来源真实写过的动作名（与后端 log 调用一一对应），筛选下拉只给这些值 */
+var ACT_ACTIONS = {
+  task:["create","update","move","delete","restore","nudge","release"],
+  demand:["create","update","priority","expect","version","status","move","pass","rej","plan","replan","unpass","unplan","cancel","restore","reopen"],
+  project:["create","update","archive","first_release","release_policy_update"],
+  doc:["create","update","restore","share"],
+  branch:["create","update","status"],
+  version:["version_create","version_update","version_start","version_close","version_cancel","version_scope","release_plan","release_success","release_failed","release_rollback","release"],
+  config:["config"]
+};
+var ACT_RANGES = [
+  {id:"", label:"全部时间"},
+  {id:"today", label:"今天"},
+  {id:"7d", label:"近 7 天"},
+  {id:"30d", label:"近 30 天"}
+];
+var ACT_PAGE = 50;
+var ACT_LOCK_SVG = '<svg class="lock-ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="4.2" y="8.6" width="11.6" height="7.2" rx="1.6"/><path d="M7 8.6V6.4a3 3 0 0 1 6 0v2.2"/></svg>';
+var actState = {
+  items:[], total:0, counts:{}, type:"", loading:false, req:0,
+  filters:{action:"", actor:"", range:"", q:""}, members:null, membersWs:""
+};
+function actDate(a){
+  var d = new Date(a && (a.at || a.createdAt));
+  return isNaN(d.getTime()) ? null : d;
+}
+function actDayKey(d){
+  return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate());
+}
+function actDayLabel(d){
+  if(!d) return "时间未知";
+  var md = pad2(d.getMonth()+1) + "-" + pad2(d.getDate());
+  var diff = dayDiff(startOfDay(d), startOfDay(new Date()));
+  if(diff === 0) return "今天 · " + md;
+  if(diff === -1) return "昨天 · " + md;
+  if(d.getFullYear() !== new Date().getFullYear()) return d.getFullYear() + " · " + md;
+  return md;
+}
+function actRangeDates(range){
+  if(!range) return null;
+  var today = new Date();
+  var days = range === "today" ? 1 : (range === "7d" ? 7 : 30);
+  return {
+    from: actDayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1))),
+    to: actDayKey(today)
+  };
+}
+function actFilterParams(){
+  var f = actState.filters || {};
+  var params = {};
+  if(f.action) params.action = f.action;
+  if(f.actor) params.actor = f.actor;
+  if(f.q) params.q = f.q;
+  var range = actRangeDates(f.range);
+  if(range){ params.from = range.from; params.to = range.to; }
+  return params;
+}
+function actActiveFilterCount(){
+  var f = actState.filters || {};
+  var n = 0;
+  if(f.action) n += 1;
+  if(f.actor) n += 1;
+  if(f.range) n += 1;
+  if(f.q) n += 1;
+  return n;
+}
+function renderActFilterBadge(){
+  if(!actFilterBadge) return;
+  var n = actActiveFilterCount();
+  actFilterBadge.hidden = n === 0;
+  actFilterBadge.textContent = String(n);
+  if(actFilterBtn) actFilterBtn.setAttribute("aria-label", n ? ("筛选，已启用 " + n + " 项") : "筛选");
+}
 function loadActivity(opts){
   if(!actList) return;
   opts = opts || {};
-  var append = !!opts.more && actState.items.length > 0;
+  var wsId = rt.currentWs && rt.currentWs.id;
+  var wsChanged = !!(actState.ws && actState.ws !== wsId);
+  var type = opts.type === undefined
+    ? (wsChanged ? "" : actState.type)
+    : String(opts.type || "");
+  actState.ws = wsId;
+  if(wsChanged){
+    actState.filters = {action:"", actor:"", range:"", q:""};
+    actState.members = null;
+    actState.membersWs = "";
+    renderActFilterBadge();
+  }
+  var append = opts.more === true && type === actState.type && actState.items.length > 0;
   if(append && actState.loading) return;
   if(!append){
+    actState.type = type;
     actState.items = [];
     actState.total = 0;
-    actState.hasMore = false;
+    actState.loading = true;
     actList.innerHTML = UI.skeletonRows(4);
+    renderActTypes();
+  } else {
+    actState.loading = true;
+    var moreBtn = actList.querySelector("[data-act-more]");
+    if(moreBtn){ moreBtn.disabled = true; moreBtn.textContent = "加载中…"; }
   }
-  actState.loading = true;
-  API.get("/api/activity", {offset: actState.items.length, limit: 100}).then(function(page){
+  var req = ++actState.req;
+  var params = {offset: append ? actState.items.length : 0, limit: ACT_PAGE};
+  if(type) params.type = type;
+  var extra = actFilterParams();
+  for(var key in extra){ if(Object.prototype.hasOwnProperty.call(extra, key)) params[key] = extra[key]; }
+  API.get("/api/activity", params).then(function(page){
+    if(req !== actState.req) return;
     actState.loading = false;
     var rows = (page && page.items) || [];
     actState.items = append ? actState.items.concat(rows) : rows;
     actState.total = Math.max((page && page.total) || 0, actState.items.length);
-    actState.hasMore = !!(page && page.hasMore) && rows.length > 0;
-    renderActivity(actState.items);
+    actState.counts = (page && page.counts) || {};
+    renderActTypes();
+    renderActivity();
   }).catch(function(ex){
+    if(req !== actState.req) return;
     actState.loading = false;
-    if(append){ toast(ex.message || "加载更多失败", "bad"); return; }
+    if(append){ toast(ex.message || "加载更多失败", "bad"); renderActivity(); return; }
     actList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "该接口需要后端支持") + '</div>';
+    if(actTypes) actTypes.innerHTML = "";
   });
 }
-function renderActivity(list){
-  if(actCount) actCount.textContent = list.length ? ("已加载 " + list.length + " / 共 " + actState.total + " 条") : "";
+function renderActTypes(){
+  if(!actTypes) return;
+  var counts = actState.counts || {};
+  var hasConfig = counts.config !== undefined;
+  actTypes.innerHTML = ACT_TYPES.filter(function(t){
+    return t.id !== "config" || hasConfig || actState.type === "config";
+  }).map(function(t){
+    var on = actState.type === t.id;
+    var n = t.id ? (counts[t.id] || 0) : (counts.all || 0);
+    return '<button class="act-type-chip' + (on ? " on" : "") + (t.lock ? " lock" : "") + '" type="button"' +
+      ' data-act-type="' + esc(t.id) + '" aria-pressed="' + on + '">' +
+      (t.dot ? '<i class="dot" style="background:' + t.dot + '"></i>' : "") +
+      esc(t.label) + ' <b>' + n + '</b>' +
+      (t.lock ? ACT_LOCK_SVG : "") +
+    '</button>';
+  }).join("");
+}
+function actRowHTML(a){
+  var d = actDate(a);
+  var type = a.entityType || "task";
+  var title = a.entityTitle || "";
+  var detail = String(a.detail || "").trim();
+  var actLabel = ACT_LABEL[a.action] || a.action || "";
+  var main;
+  if(detail){
+    main = esc(detail);
+    if(title && detail.indexOf(title) < 0) main += ' <span class="obj">「' + esc(title) + '」</span>';
+  }else if(title){
+    main = '<span class="obj">「' + esc(title) + '」</span>';
+  }else{
+    main = esc(actLabel || "—");
+  }
+  var sub = type === "project" ? "" : (a.projectName || "");
+  var actor = a.actorName || "";
+  var pill = type === "config"
+    ? '<span class="tag tag-danger">仅主/管理员</span>'
+    : (actLabel ? '<span class="tag ' + (a.action === "delete" ? "tag-danger" : (a.action === "create" || a.action === "version_create" ? "tag-success" : "ghost")) + '">' + esc(actLabel) + '</span>' : "");
+  var openable = type !== "config" && !!a.entityId;
+  var attrs = openable
+    ? ' data-act-open="' + esc(type) + '" data-act-id="' + esc(a.entityId) + '" role="button" tabindex="0"' +
+      ' aria-label="打开' + esc(ACT_ENTITY[type] || type) + (title ? "「" + esc(title) + "」" : "") + '"'
+    : "";
+  return '<div class="act-row' + (openable ? " act-row-link" : "") + '"' + attrs + '>' +
+    '<span class="act-time">' + (d ? pad2(d.getHours()) + ":" + pad2(d.getMinutes()) : "") + '</span>' +
+    '<span class="act-ent act-ent-' + esc(type) + '">' + esc(ACT_ENTITY[type] || type) + '</span>' +
+    '<div class="act-main">' + main + (sub ? '<span class="sub">' + esc(sub) + '</span>' : "") + '</div>' +
+    (pill ? '<span class="act-act">' + pill + '</span>' : "") +
+    '<span class="act-who">' + (actor ? avatarHTML(actor, "sm") + esc(actor) : "") + '</span>' +
+  '</div>';
+}
+function renderActivity(){
+  var list = actState.items;
+  if(actCount){
+    actCount.textContent = list.length
+      ? ("共 " + actState.total + " 条 · 已加载 " + list.length + " 条")
+      : "";
+  }
   if(!list.length){
-    actList.innerHTML = UI.colEmpty("还没有操作记录");
+    var cur = ACT_TYPES.filter(function(t){ return t.id === actState.type; })[0];
+    actList.innerHTML = UI.colEmpty(actState.type ? ("还没有" + (cur ? cur.label : "") + "记录") : "还没有操作记录");
     return;
   }
-  actList.innerHTML = list.map(function(a){
-    return '<div class="act-item">' +
-      '<span class="ai-time">' + esc(fmtTs(a.createdAt)) + '</span>' +
-      '<span class="ai-main"><b>' + esc(a.actorName || "系统") + '</b> ' +
-        esc(a.detail || ACT_LABEL[a.action] || a.action) +
-        (a.taskTitle && a.action !== "update" ? ('　·　' + esc(a.taskTitle)) : '') + '</span>' +
-      '<span class="ai-act"><span class="tag ' + (a.action === "delete" ? "tag-danger" : (a.action === "create" ? "tag-success" : "tag-ghost")) + '">' +
-        esc(ACT_LABEL[a.action] || a.action) + '</span></span>' +
-    '</div>';
-  }).join("") + (actState.hasMore
-    ? '<div class="act-more"><button class="btn sm block" type="button" data-act-more>加载更多</button></div>'
-    : "");
+  var groups = [], seen = {};
+  list.forEach(function(a){
+    var d = actDate(a);
+    var key = d ? actDayKey(d) : "unknown";
+    if(!seen[key]){ seen[key] = {date:d, rows:[]}; groups.push(seen[key]); }
+    seen[key].rows.push(a);
+  });
+  var html = groups.map(function(g){
+    return '<div class="act-day"><h4><span>' + esc(actDayLabel(g.date)) + '</span><b>' + g.rows.length + ' 条</b></h4>' +
+      g.rows.map(actRowHTML).join("") + '</div>';
+  }).join("");
+  if(list.length < actState.total){
+    html += '<div class="act-more"><button class="btn sm" type="button" data-act-more>加载更多</button>' +
+      '<span class="foot-note">剩余 ' + (actState.total - list.length) + ' 条 · 每次 ' + ACT_PAGE + ' 条</span></div>';
+  }
+  actList.innerHTML = html;
+}
+if(actTypes) actTypes.addEventListener("click", function(e){
+  var chip = e.target.closest("[data-act-type]");
+  if(!chip || chip.classList.contains("lock") || actState.loading) return;
+  var type = chip.getAttribute("data-act-type") || "";
+  if(type === actState.type) return;
+  /* 动作名按实体类型定义，换类型时清掉，避免留下查不到任何记录的条件 */
+  actState.filters.action = "";
+  renderActFilterBadge();
+  loadActivity({type:type});
+});
+function openActEntity(type, id){
+  if(!id || type === "config") return;
+  if(type === "task"){ openTaskById(id); return; }
+  var ok = routeNotificationLink(type, id);
+  if(!ok) toast("暂不支持从活动记录打开该类型", "warn");
 }
 if(actList) actList.addEventListener("click", function(e){
-  if(e.target.closest("[data-act-more]")) loadActivity({more:true});
+  if(e.target.closest("[data-act-more]")){ loadActivity({more:true}); return; }
+  var row = e.target.closest("[data-act-open]");
+  if(row) openActEntity(row.getAttribute("data-act-open"), row.getAttribute("data-act-id"));
 });
+if(actList) actList.addEventListener("keydown", function(e){
+  if(e.key !== "Enter" && e.key !== " ") return;
+  var row = e.target.closest("[data-act-open]");
+  if(!row) return;
+  e.preventDefault();
+  openActEntity(row.getAttribute("data-act-open"), row.getAttribute("data-act-id"));
+});
+/* 导出：按当前类型筛选取全部记录，Markdown / Word / PDF 三种载体 */
+var ACT_EXPORT_MAX = 5000;
+var ACT_EXPORT_FORMATS = [
+  {id:"md", label:"Markdown（.md）"},
+  {id:"doc", label:"Word（.doc）"},
+  {id:"pdf", label:"PDF（打印后另存）"}
+];
+var actExportBusy = false;
+function actScopeLabel(type){
+  var t = ACT_TYPES.filter(function(x){ return x.id === type; })[0];
+  return t ? t.label : "全部";
+}
+function actExportMenuHTML(){
+  return '<div class="menu-sec">导出当前筛选 · ' + esc(actScopeLabel(actState.type)) + '</div>' +
+    ACT_EXPORT_FORMATS.map(function(f){
+      return '<button class="menu-item" type="button" role="menuitem" data-act-export="' + f.id + '">' + esc(f.label) + '</button>';
+    }).join("");
+}
+function fetchAllActivity(type){
+  var all = [], pages = 0;
+  function step(){
+    var params = {offset: all.length, limit: 100};
+    if(type) params.type = type;
+    var extra = actFilterParams();
+    for(var key in extra){ if(Object.prototype.hasOwnProperty.call(extra, key)) params[key] = extra[key]; }
+    return API.get("/api/activity", params).then(function(page){
+      var rows = (page && page.items) || [];
+      all = all.concat(rows);
+      pages += 1;
+      if(page && page.hasMore && rows.length && all.length < ACT_EXPORT_MAX && pages < 60) return step();
+      return {items: all.slice(0, ACT_EXPORT_MAX), truncated: !!(page && page.hasMore) && all.length >= ACT_EXPORT_MAX};
+    });
+  }
+  return step();
+}
+function actExportRows(items){
+  return items.map(function(a){
+    var d = actDate(a);
+    var type = a.entityType || "task";
+    var title = a.entityTitle || "";
+    var detail = String(a.detail || "").replace(/\s+/g, " ").trim();
+    var text = detail;
+    if(detail && title && detail.indexOf(title) < 0) text += "「" + title + "」";
+    else if(!detail && title) text = "「" + title + "」";
+    return {
+      at: d,
+      date: d ? d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) : "",
+      time: d ? pad2(d.getHours()) + ":" + pad2(d.getMinutes()) : "",
+      entity: ACT_ENTITY[type] || type,
+      action: ACT_LABEL[a.action] || a.action || "",
+      text: text || "—",
+      project: type === "project" ? "" : (a.projectName || ""),
+      actor: a.actorName || ""
+    };
+  });
+}
+function actExportMeta(rows, truncated){
+  var now = new Date();
+  return [
+    ["空间", rt.currentWs ? (rt.currentWs.name || "") : ""],
+    ["范围", actScopeLabel(actState.type)],
+    ["条数", rows.length + (truncated ? "（超过 " + ACT_EXPORT_MAX + " 条上限，已截断）" : "")],
+    ["导出时间", now.getFullYear() + "-" + pad2(now.getMonth() + 1) + "-" + pad2(now.getDate()) + " " + pad2(now.getHours()) + ":" + pad2(now.getMinutes())]
+  ];
+}
+function actExportFileName(ext){
+  var ws = (rt.currentWs && rt.currentWs.name) || "空间";
+  return "活动记录-" + ws + "-" + actScopeLabel(actState.type) + "-" + rt.TODAY_ISO + "." + ext;
+}
+function actExportMarkdown(rows, truncated){
+  var out = ["# 空间活动记录", ""];
+  actExportMeta(rows, truncated).forEach(function(kv){ out.push("- " + kv[0] + "：" + kv[1]); });
+  out.push("- 说明：按时间倒序；仅包含当前账号有权限查看的记录。", "");
+  var day = null;
+  rows.forEach(function(r){
+    if(r.date !== day){
+      day = r.date;
+      if(out.length > 1 && out[out.length - 1] !== "") out.push("");
+      out.push("## " + (day || "时间未知"), "");
+    }
+    var tail = [r.project, r.actor].filter(Boolean).join(" · ");
+    out.push("- **" + (r.time || "--:--") + "** · " + r.entity + (r.action ? " · " + r.action : "") + " · " + r.text + (tail ? "（" + tail + "）" : ""));
+  });
+  return out.join("\n") + "\n";
+}
+function actExportTableHTML(rows){
+  var head = '<tr><th>时间</th><th>实体</th><th>动作</th><th>内容</th><th>项目</th><th>操作人</th></tr>';
+  var body = "", day = null;
+  rows.forEach(function(r){
+    if(r.date !== day){
+      day = r.date;
+      body += '<tr class="act-exp-day"><td colspan="6">' + esc(day || "时间未知") + '</td></tr>';
+    }
+    body += '<tr><td>' + esc(r.time) + '</td><td>' + esc(r.entity) + '</td><td>' + esc(r.action) + '</td>'
+      + '<td>' + esc(r.text) + '</td><td>' + esc(r.project) + '</td><td>' + esc(r.actor) + '</td></tr>';
+  });
+  return '<table>' + head + body + '</table>';
+}
+function actExportHeadHTML(rows, truncated){
+  var meta = actExportMeta(rows, truncated).map(function(kv){
+    return '<span class="act-exp-kv">' + esc(kv[0]) + ' ' + esc(kv[1]) + '</span>';
+  }).join("");
+  return '<h3>空间活动记录 · ' + esc(rt.currentWs ? (rt.currentWs.name || "") : "") + '</h3><p class="act-exp-meta">' + meta + '</p>' +
+    '<p class="act-exp-meta">按时间倒序；仅包含当前账号有权限查看的记录。</p>';
+}
+var ACT_EXPORT_CSS = 'body{font:10.5pt/1.5 "PingFang SC","Microsoft YaHei",sans-serif;color:#101828;padding:0;}'
+  + 'h3{font-size:16pt;margin:0 0 4pt;}'
+  + '.act-exp-meta{margin:0 0 4pt;color:#475467;font-size:9pt;}'
+  + '.act-exp-kv{margin-right:14pt;white-space:nowrap;}'
+  + 'table{border-collapse:collapse;width:100%;margin:8pt 0;font-size:9pt;}'
+  + 'th,td{border:1px solid #D0D5DD;padding:4pt 5pt;vertical-align:top;text-align:left;}'
+  + 'th{background:#F2F4F7;font-weight:600;}'
+  + '.act-exp-day td{background:#F9FAFB;font-weight:600;}'
+  + '@page{size:A4;margin:1.6cm 1.4cm;}';
+function exportActivity(format){
+  if(actExportBusy){ toast("正在整理活动记录，请稍候", "warn"); return; }
+  actExportBusy = true;
+  toast("正在整理活动记录…", "fs");
+  fetchAllActivity(actState.type).then(function(res){
+    var rows = actExportRows(res.items);
+    if(!rows.length){ toast("当前筛选没有可导出的记录", "warn"); actExportBusy = false; return; }
+    if(format === "md"){
+      triggerDownload(actExportFileName("md"), actExportMarkdown(rows, res.truncated), "text/markdown;charset=utf-8");
+      toast("已导出 Markdown · " + rows.length + " 条", "fs");
+    }else{
+      var html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>空间活动记录 · '
+        + esc(rt.currentWs ? rt.currentWs.name : "") + '</title><style>' + ACT_EXPORT_CSS + '</style></head><body>'
+        + actExportHeadHTML(rows, res.truncated) + actExportTableHTML(rows) + '</body></html>';
+      if(format === "doc"){
+        triggerDownload(actExportFileName("doc"), "\ufeff" + html, "application/msword;charset=utf-8");
+        toast("已导出 Word · " + rows.length + " 条", "fs");
+      }else{
+        var frame = document.createElement("iframe");
+        frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+        document.body.appendChild(frame);
+        var doc = frame.contentDocument || frame.contentWindow.document;
+        doc.open(); doc.write(html); doc.close();
+        setTimeout(function(){
+          try{ frame.contentWindow.focus(); frame.contentWindow.print(); }catch(e){ /* 打印被拦截时保持静默 */ }
+          setTimeout(function(){ frame.remove(); }, 1500);
+        }, 120);
+        toast("已打开打印窗口 · 目标打印机选「另存为 PDF」即可", "fs");
+      }
+    }
+    if(res.truncated) toast("记录超过 " + ACT_EXPORT_MAX + " 条，已导出最近 " + rows.length + " 条", "warn");
+    actExportBusy = false;
+  }).catch(function(ex){
+    actExportBusy = false;
+    toast("导出失败：" + (ex.message || "请稍后再试"), "bad");
+  });
+}
+if(actExportBtn && actExportMenu){
+  actExportBtn.addEventListener("click", function(){
+    if(UI.popOpen(actExportMenu)){ UI.closeAllPops(); return; }
+    actExportMenu.innerHTML = actExportMenuHTML();
+    UI.openPop(actExportMenu, actExportBtn, {width:220});
+  });
+  actExportMenu.addEventListener("click", function(e){
+    var item = e.target.closest("[data-act-export]");
+    if(!item) return;
+    UI.closeAllPops();
+    exportActivity(item.getAttribute("data-act-export"));
+  });
+}
+/* ---------- 活动组合筛选：动作 / 操作人 / 时间范围 / 关键词 ---------- */
+function actActionOptions(type){
+  var ids = ACT_ACTIONS[type] || [];
+  if(!type){
+    ids = [];
+    Object.keys(ACT_ACTIONS).forEach(function(k){
+      ACT_ACTIONS[k].forEach(function(a){ if(ids.indexOf(a) < 0) ids.push(a); });
+    });
+  }
+  return ids.map(function(a){
+    return {id:a, label:ACT_LABEL[a] || a};
+  });
+}
+function actFilterHTML(){
+  var f = actState.filters || {};
+  var actions = actActionOptions(actState.type).map(function(a){
+    return '<option value="' + esc(a.id) + '"' + (f.action === a.id ? " selected" : "") + '>' + esc(a.label) + '</option>';
+  }).join("");
+  var members = (actState.members || []).map(function(m){
+    return '<option value="' + esc(m.userId) + '"' + (f.actor === m.userId ? " selected" : "") + '>' + esc(m.displayName || m.username || m.userId) + '</option>';
+  }).join("");
+  var ranges = ACT_RANGES.map(function(r){
+    return '<option value="' + esc(r.id) + '"' + (f.range === r.id ? " selected" : "") + '>' + esc(r.label) + '</option>';
+  }).join("");
+  return '<div class="menu-title">筛选活动</div>'
+    + '<div class="menu-field"><select class="select" id="actFilterAction" style="width:100%" aria-label="动作">'
+    + '<option value="">全部动作</option>' + actions + '</select></div>'
+    + '<div class="menu-field"><select class="select" id="actFilterActor" style="width:100%" aria-label="操作人">'
+    + '<option value="">全部成员</option>' + members + '</select></div>'
+    + '<div class="menu-field"><select class="select" id="actFilterRange" style="width:100%" aria-label="时间范围">'
+    + ranges + '</select></div>'
+    + '<div class="menu-field"><input class="input" id="actFilterQ" type="search" maxlength="50"'
+    + ' placeholder="标题、详情、项目或操作人" value="' + esc(f.q || "") + '" aria-label="关键词"></div>'
+    + '<div class="menu-foot"><button class="btn sm ghost" type="button" data-act-filter-reset>重置</button>'
+    + '<button class="btn sm primary" type="button" data-act-filter-apply>应用</button></div>';
+}
+function openActFilters(){
+  actFilterPop.innerHTML = actFilterHTML();
+  UI.openPop(actFilterPop, actFilterBtn, {width:260, align:"right"});
+  var wsId = rt.currentWs && rt.currentWs.id;
+  if(actState.members && actState.membersWs === wsId) return;
+  API.get("/api/workspaces/" + encodeURIComponent(wsId) + "/members").then(function(list){
+    if(!rt.currentWs || rt.currentWs.id !== wsId || !UI.popOpen(actFilterPop)) return;
+    actState.members = list || [];
+    actState.membersWs = wsId;
+    /* 成员异步到达会重绘面板，先暂存用户已选的值 */
+    function current(id){ var el = document.getElementById(id); return el ? el.value : ""; }
+    var keep = {action: current("actFilterAction"), actor: current("actFilterActor"),
+      range: current("actFilterRange"), q: current("actFilterQ")};
+    actFilterPop.innerHTML = actFilterHTML();
+    ["actFilterAction", "actFilterActor", "actFilterRange"].forEach(function(id){
+      var el = document.getElementById(id);
+      var key = id === "actFilterAction" ? "action" : (id === "actFilterActor" ? "actor" : "range");
+      if(el) el.value = keep[key];
+    });
+    var nextQ = document.getElementById("actFilterQ");
+    if(nextQ) nextQ.value = keep.q;
+  }).catch(function(){ /* 成员列表拿不到时保留「全部成员」 */ });
+}
+function applyActFilters(){
+  var action = document.getElementById("actFilterAction");
+  var actor = document.getElementById("actFilterActor");
+  var range = document.getElementById("actFilterRange");
+  var keyword = document.getElementById("actFilterQ");
+  actState.filters = {
+    action: action ? action.value : "",
+    actor: actor ? actor.value : "",
+    range: range ? range.value : "",
+    q: keyword ? keyword.value.trim() : ""
+  };
+  renderActFilterBadge();
+  UI.closeAllPops();
+  loadActivity({reset:true});
+}
+if(actFilterBtn && actFilterPop){
+  actFilterBtn.addEventListener("click", function(){
+    if(UI.popOpen(actFilterPop)){ UI.closeAllPops(); return; }
+    openActFilters();
+  });
+  actFilterPop.addEventListener("click", function(e){
+    if(e.target.closest("[data-act-filter-apply]")){ applyActFilters(); return; }
+    if(e.target.closest("[data-act-filter-reset]")){
+      actState.filters = {action:"", actor:"", range:"", q:""};
+      renderActFilterBadge();
+      UI.closeAllPops();
+      loadActivity({reset:true});
+    }
+  });
+  actFilterPop.addEventListener("keydown", function(e){
+    if(e.key === "Enter" && e.target && e.target.id === "actFilterQ"){ e.preventDefault(); applyActFilters(); }
+  });
+}
 /* ---------- 系统信息 + 审计日志（B6，平台管理员） ---------- */
 var AUDIT_LABEL = {
   login:"登录成功", login_fail:"登录失败", logout:"退出登录",
   role_change:"权限变更", export:"数据导出", import:"备份恢复", clear:"清空数据",
   member_add:"添加成员", member_remove:"移除成员", member_company:"标注成员公司",
   project_role:"标注项目角色", workspace_delete:"删除空间",
-  project_delete:"删除项目", user_create:"新建账号", user_update:"修改账号",
+  project_delete:"删除项目", project_release_policy:"修改发布检查策略", user_create:"新建账号", user_update:"修改账号",
   user_delete:"删除账号", password_reset:"重置密码", user_disable:"禁用账号", user_enable:"启用账号",
   invite_create:"生成邀请链接", invite_revoke:"撤销邀请链接",
   password_change:"修改密码", profile_update:"修改个人资料", work_hours_update:"修改计时设置",
-  mail_settings_update:"修改邮件服务器", ai_config_update:"修改 AI 配置", ai_assistant_exec:"AI 助手执行",
+  mail_settings_update:"修改邮件服务器", ai_config_update:"修改 AI 配置",
+  ai_shared_config_update:"修改团队 AI 配置", ai_assistant_exec:"AI 助手执行",
   gantt_share_create:"生成甘特分享", gantt_share_revoke:"撤销甘特分享", manager_nudge:"管理催办",
   test_case_delete:"删除测试用例", test_case_import:"导入测试用例",
   test_case_create:"新建测试用例", test_case_update:"编辑测试用例",
+  test_case_batch_update:"批量设置用例",
+  test_case_move_module:"用例移动目录", test_case_move_undo:"撤销用例移动",
+  test_module_create:"新建用例目录", test_module_update:"编辑用例目录", test_module_delete:"删除用例目录",
+  case_set_create:"新建用例分组", case_set_update:"编辑用例分组", case_set_delete:"删除用例分组",
+  case_set_members_add:"分组加入用例", case_set_members_remove:"分组移出用例",
   test_plan_create:"新建测试计划", test_plan_update:"编辑测试计划",
   test_plan_cases_add:"计划加入用例", test_plan_cases_remove:"计划移出用例",
   test_plan_required:"计划必测标记", test_plan_run:"计划批量执行",
@@ -1784,8 +2255,9 @@ var AUDIT_LABEL = {
 };
 var AUDIT_TARGET = {
   auth:"登录", user:"账号", workspace:"空间", member:"成员", project:"项目", data:"数据",
-  invite:"邀请", mail_settings:"邮件配置", gantt_share:"甘特分享",
+  invite:"邀请", mail_settings:"邮件配置", ai_shared_setting:"团队 AI", gantt_share:"甘特分享",
   test_case:"测试用例", test_plan:"测试计划", comment:"评论",
+  test_module:"用例目录", case_set:"用例分组",
   task:"工作项", demand:"需求", requirement_doc:"需求文档", branch:"分支", project_version:"版本"
 };
 var auditState = { page:1, size:50, total:0, pages:1, loading:false };
@@ -2292,6 +2764,8 @@ $("fileImport").addEventListener("change", function(e){
           (res.demands ? " / " + res.demands + " 条需求池" : "") +
           (res.testCases ? " / " + res.testCases + " 条用例" : "") +
           (res.docComments ? " / " + res.docComments + " 条文档评论" : "") +
+          (res.caseTaskLinks ? " / " + res.caseTaskLinks + " 条用例关联" : "") +
+          (res.skippedCaseTaskLinks ? "（跳过 " + res.skippedCaseTaskLinks + " 条未匹配关联）" : "") +
           (res.comments ? " / " + res.comments + " 条评论" : ""), "fs");
         ganttState.undo = [];
         syncGanttUndoUI();
@@ -2805,6 +3279,148 @@ if($("mailTest")) $("mailTest").addEventListener("click", function(){
     if($("mailResult")) $("mailResult").textContent = "测试失败：" + (ex.message || "未知错误");
     toast(ex.message || "测试失败", "bad");
   });
+});
+
+/* ===== 团队 AI（平台管理员） ===== */
+var teamAiCfg = null;
+function findTeamAiPreset(id){
+  var list = (teamAiCfg && teamAiCfg.presets) || [];
+  for(var i = 0; i < list.length; i++){ if(list[i].id === id) return list[i]; }
+  return null;
+}
+function renderTeamAiSettings(d){
+  if(!$("teamAiProvider")) return;
+  teamAiCfg = d;
+  var sel = $("teamAiProvider");
+  if(!sel.options.length){
+    sel.innerHTML = ((d.presets || []).map(function(p){
+      return '<option value="' + p.id + '">' + esc(p.name) + '</option>';
+    })).join("");
+  }
+  sel.value = d.provider || "deepseek";
+  $("teamAiModel").value = d.model || "";
+  $("teamAiBase").value = d.baseUrl || "";
+  $("teamAiEnabled").checked = !!d.enabled;
+  $("teamAiAllowPersonal").checked = d.allowPersonal !== false;
+  $("teamAiKey").value = "";
+  $("teamAiKey").placeholder = d.hasKey
+    ? "已保存 " + (d.apiKeyMasked || "****") + "（留空表示不修改）"
+    : "粘贴团队 API Key";
+  if($("teamAiKeyState")){
+    $("teamAiKeyState").textContent = d.keyBroken
+      ? "已保存的 Key 无法解密（部署密钥变更过），请重新填一次"
+      : (d.hasKey ? "已保存 " + (d.apiKeyMasked || "") + "，留空则保持不变" : "还没有配置 Key");
+  }
+  if($("teamAiState")){
+    var aiReady = d.enabled && (d.hasKey || d.provider === "ollama");
+    $("teamAiState").textContent = d.status || "";
+    $("teamAiState").className = "meta-right"
+      + (d.keyBroken ? " bad" : (aiReady ? "" : " muted"));
+  }
+  if($("teamAiUpdated")){
+    $("teamAiUpdated").textContent = d.updatedBy
+      ? "上次修改：" + d.updatedBy + (d.updatedAt ? " · " + d.updatedAt : "")
+      : "";
+  }
+  var p = findTeamAiPreset(sel.value);
+  if(p && $("teamAiKeyHint")) $("teamAiKeyHint").textContent = p.keyHint || "";
+}
+function loadTeamAiSettings(){
+  if(!$("teamAiProvider")) return;
+  API.get("/api/admin/ai-settings").then(renderTeamAiSettings).catch(function(ex){
+    if($("teamAiResult")){
+      $("teamAiResult").hidden = false;
+      $("teamAiResult").textContent = "团队 AI 配置加载失败：" + (ex.message || "未知错误");
+    }
+  });
+}
+function teamAiSettingsBody(clearKey){
+  return {
+    provider: $("teamAiProvider").value,
+    baseUrl: $("teamAiBase").value.trim(),
+    model: $("teamAiModel").value.trim(),
+    apiKey: $("teamAiKey").value,
+    clearKey: !!clearKey,
+    enabled: $("teamAiEnabled").checked,
+    allowPersonal: $("teamAiAllowPersonal").checked
+  };
+}
+function saveTeamAiSettings(clearKey){
+  return API.put("/api/admin/ai-settings", teamAiSettingsBody(clearKey)).then(function(d){
+    renderTeamAiSettings(d);
+    return d;
+  });
+}
+/* 影响全员的变更先确认：关团队 AI、关个人 Key、换服务商 / 地址 / 模型 */
+function teamAiSaveImpact(){
+  var c = teamAiCfg;
+  if(!c) return "";
+  var body = teamAiSettingsBody(false);
+  var wasEnabled = !!c.enabled;
+  var wasAllow = c.allowPersonal !== false;
+  if(wasEnabled && !body.enabled){
+    return "关闭团队 AI 后，来源为「自动」的成员会改用各自的个人 Key；没有个人 Key 的成员将无法使用 AI。确定关闭？";
+  }
+  if(wasAllow && !body.allowPersonal){
+    return body.enabled
+      ? "关闭后成员不能再改用个人 API Key；已保存的个人 Key 会保留，但不再参与解析。确定关闭？"
+      : "团队 AI 当前未启用，此时关闭个人 Key 会让所有成员都无法使用 AI。确定继续？";
+  }
+  if(c.provider && body.enabled && (body.provider !== (c.provider || "")
+      || body.baseUrl !== (c.baseUrl || "") || body.model !== (c.model || ""))){
+    return "更换服务商 / 接口地址 / 模型会立即影响全员的下一次 AI 调用。确定保存？";
+  }
+  return "";
+}
+if($("teamAiProvider")){
+  $("teamAiProvider").addEventListener("change", function(){
+    var p = findTeamAiPreset(this.value);
+    if(!p) return;
+    if(this.value !== "custom"){
+      if(p.baseUrl) $("teamAiBase").value = p.baseUrl;
+      if(p.model) $("teamAiModel").value = p.model;
+    }
+    if($("teamAiKeyHint")) $("teamAiKeyHint").textContent = p.keyHint || "";
+  });
+}
+if($("teamAiSave")) $("teamAiSave").addEventListener("click", function(){
+  var impact = teamAiSaveImpact();
+  if(impact && !window.confirm(impact)) return;
+  var btn = this;
+  btn.disabled = true;
+  saveTeamAiSettings(false).then(function(d){
+    btn.disabled = false;
+    toast("团队 AI 配置已保存", "fs");
+    if($("teamAiResult")){ $("teamAiResult").hidden = false; $("teamAiResult").textContent = d.status || ""; }
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "保存失败", "bad");
+  });
+});
+if($("teamAiTest")) $("teamAiTest").addEventListener("click", function(){
+  var btn = this;
+  btn.disabled = true;
+  if($("teamAiResult")){ $("teamAiResult").hidden = false; $("teamAiResult").textContent = "正在测试连接…"; }
+  API.post("/api/admin/ai-settings/test", teamAiSettingsBody(false)).then(function(r){
+    btn.disabled = false;
+    if($("teamAiResult")){
+      $("teamAiResult").textContent = "连通正常：模型 " + (r.model || "—")
+        + "，往返 " + Math.round((r.latencyMs || 0) / 100) / 10 + " 秒，返回「"
+        + String(r.reply || "").slice(0, 20) + "」，本次 " + (r.tokens || 0) + " tokens（记得点保存生效）";
+    }
+    toast("团队 AI 连接正常", "fs");
+  }).catch(function(ex){
+    btn.disabled = false;
+    if($("teamAiResult")) $("teamAiResult").textContent = "连接失败：" + (ex.message || "未知错误");
+    toast(ex.message || "连接失败", "bad");
+  });
+});
+if($("teamAiClearKey")) $("teamAiClearKey").addEventListener("click", function(){
+  if(!window.confirm("清除团队 API Key？清除后团队 AI 不可用，直到重新填写。")) return;
+  saveTeamAiSettings(true).then(function(){
+    toast("已清除团队 API Key", "fs");
+    if($("teamAiResult")){ $("teamAiResult").hidden = false; $("teamAiResult").textContent = "已清除，可以填入新的 Key"; }
+  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
 });
 
 export { enterSettingsView, loadTrash, loadUsers, openHelp, refreshPlatformTab, setPlatformTab, setSettingsTab, settingsTab };

@@ -562,7 +562,7 @@ public class VersionPhaseService {
     /** 任务归组日：完成日优先，未完成按开始日，再退截止日（与阶段归组同口径） */
     private LocalDate groupDay(Task t) {
         if (t.getCompletedAt() != null) {
-            return t.getCompletedAt();
+            return t.getCompletedAt().toLocalDate();
         }
         if (t.getStartDate() != null) {
             return t.getStartDate();
@@ -676,7 +676,7 @@ public class VersionPhaseService {
                 }
                 if (t.getDueDate() != null) {
                     withDue++;
-                    if (t.getCompletedAt() != null && !t.getCompletedAt().isAfter(t.getDueDate())) {
+                    if (t.getCompletedAt() != null && !t.getCompletedAt().toLocalDate().isAfter(t.getDueDate())) {
                         onTime++;
                     }
                 }
@@ -799,7 +799,7 @@ public class VersionPhaseService {
             }
             if (t.getDueDate() != null) {
                 withDue++;
-                if (t.getCompletedAt() != null && !t.getCompletedAt().isAfter(t.getDueDate())) {
+                if (t.getCompletedAt() != null && !t.getCompletedAt().toLocalDate().isAfter(t.getDueDate())) {
                     onTime++;
                 }
             }

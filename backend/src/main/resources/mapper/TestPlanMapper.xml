@@ -53,6 +53,15 @@
     SELECT COUNT(*) FROM test_plan WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
   </select>
 
+  <select id="countByVersion" resultType="int">
+    SELECT COUNT(*) FROM test_plan WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+  </select>
+
+  <select id="countActiveByVersion" resultType="int">
+    SELECT COUNT(*) FROM test_plan
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} AND status &lt;&gt; 'draft'
+  </select>
+
   <select id="selectViewById" resultType="com.hourglass.dto.TestPlanView">
     SELECT p.*, v.name AS version_name, <include refid="agg"/>
     FROM test_plan p

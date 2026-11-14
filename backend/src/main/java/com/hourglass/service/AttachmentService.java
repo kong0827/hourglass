@@ -5,12 +5,14 @@ import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.entity.Attachment;
 import com.hourglass.entity.Demand;
+import com.hourglass.entity.RequirementDoc;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskLog;
 import com.hourglass.entity.TestCase;
 import com.hourglass.entity.TestCaseRun;
 import com.hourglass.mapper.AttachmentMapper;
 import com.hourglass.mapper.DemandMapper;
+import com.hourglass.mapper.RequirementDocMapper;
 import com.hourglass.mapper.TaskLogMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TestCaseMapper;
@@ -43,11 +45,12 @@ public class AttachmentService {
             Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip", "xlsx",
                     "doc", "docx", "xls", "ppt", "pptx"));
 
-    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 / 用例执行记录（失败证据）/ 任务评论 */
+    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 / 用例执行记录（失败证据）/ 任务评论 / 需求文档 */
     public static final String KIND_TASK = "task";
     public static final String KIND_DEMAND = "demand";
     public static final String KIND_CASE_RUN = "case_run";
     public static final String KIND_COMMENT = "comment";
+    public static final String KIND_DOC = "doc";
 
     private final AttachmentMapper attachmentMapper;
     private final TaskMapper taskMapper;
@@ -56,6 +59,7 @@ public class AttachmentService {
     private final TestCaseMapper caseMapper;
     private final TestCaseRunMapper caseRunMapper;
     private final com.hourglass.mapper.TaskCommentMapper commentMapper;
+    private final RequirementDocMapper docMapper;
     private final ProjectAccessService projectAccess;
 
     @Value("${app.attach.dir:./data/attachments}")
@@ -65,6 +69,7 @@ public class AttachmentService {
                              TaskLogMapper logMapper, DemandMapper demandMapper,
                              TestCaseMapper caseMapper, TestCaseRunMapper caseRunMapper,
                              com.hourglass.mapper.TaskCommentMapper commentMapper,
+                             RequirementDocMapper docMapper,
                              ProjectAccessService projectAccess) {
         this.attachmentMapper = attachmentMapper;
         this.taskMapper = taskMapper;
@@ -73,6 +78,7 @@ public class AttachmentService {
         this.caseMapper = caseMapper;
         this.caseRunMapper = caseRunMapper;
         this.commentMapper = commentMapper;
+        this.docMapper = docMapper;
         this.projectAccess = projectAccess;
     }
 
@@ -86,7 +92,7 @@ public class AttachmentService {
 
     public com.hourglass.dto.PageResult<Attachment> list(
             String workspaceId, String userId, String targetId, String kind, int offset, int limit) {
-        projectAccess.assertView(workspaceId, userId, ensureTarget(workspaceId, targetId, kind));
+        projectAccess.assertView(workspaceId, userId, ensureTarget(workspaceId, userId, targetId, kind));
         int safeOffset = Math.max(0, offset);
         int safeLimit = Math.max(1, Math.min(100, limit));
         int total = attachmentMapper.countByTarget(workspaceId, targetId, kind);
@@ -125,6 +131,13 @@ public class AttachmentService {
                 throw AppException.notFound("附件所属评论或任务不存在");
             }
             projectId = t.getReqId();
+        } else if (KIND_DOC.equals(a.getTargetKind())) {
+            RequirementDoc doc = docMapper.selectById(a.getTargetId());
+            if (doc == null || !workspaceId.equals(doc.getWorkspaceId())) {
+                throw AppException.notFound("附件所属文档不存在或已删除");
+            }
+            assertDocDraftVisible(workspaceId, userId, doc);
+            projectId = doc.getReqId();
         } else {
             Task t = taskMapper.selectById(a.getTargetId());
             if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
@@ -153,7 +166,7 @@ public class AttachmentService {
 
     @Transactional
     public Attachment upload(String userId, String workspaceId, String targetId, String kind, MultipartFile file) {
-        projectAccess.assertWrite(workspaceId, userId, ensureTarget(workspaceId, targetId, kind));
+        projectAccess.assertWrite(workspaceId, userId, ensureTarget(workspaceId, userId, targetId, kind));
         if (file == null || file.isEmpty()) {
             throw AppException.badRequest("请选择文件");
         }
@@ -203,9 +216,74 @@ public class AttachmentService {
         return attachmentMapper.selectById(id);
     }
 
+    /**
+     * 用例转缺陷时把失败证据复制给缺陷任务：物理复制磁盘文件而不是共享 storedName，
+     * 删除任一侧附件都不会影响另一侧。源文件缺失时跳过、不伪造；返回实际复制份数。
+     */
+    @Transactional
+    public int copyRunEvidenceToTask(String userId, String workspaceId, String runId, String taskId) {
+        List<Attachment> sources = attachmentMapper.selectByTarget(workspaceId, runId, KIND_CASE_RUN);
+        if (sources.isEmpty()) {
+            return 0;
+        }
+        int copied = 0;
+        for (Attachment src : sources) {
+            File from = fileOf(src);
+            if (!from.exists()) {
+                log.warn("证据文件缺失，跳过复制：{}", src.getStoredName());
+                continue;
+            }
+            String ext = extOf(src.getStoredName());
+            if (ext == null) {
+                ext = extOf(src.getFilename());
+            }
+            if (ext == null) {
+                continue;
+            }
+            String id = Ids.gen("A");
+            String storedName = id + "." + ext;
+            File finalFile = new File(dir(), storedName).getAbsoluteFile();
+            File temp = new File(dir(), storedName + ".tmp-" + System.nanoTime());
+            try {
+                Files.copy(from.toPath(), temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                temp.delete();
+                log.warn("证据文件复制失败：{}", src.getStoredName(), e);
+                throw new AppException(500, "证据文件复制失败");
+            }
+            Attachment a = new Attachment();
+            a.setId(id);
+            a.setTargetId(taskId);
+            a.setTargetKind(KIND_TASK);
+            a.setWorkspaceId(workspaceId);
+            a.setFilename(src.getFilename());
+            a.setContentType(src.getContentType());
+            a.setSize(src.getSize());
+            a.setStoredName(storedName);
+            try {
+                attachmentMapper.insert(a);
+                replaceFileAfterCommit(temp, finalFile);
+                copied++;
+            } catch (RuntimeException e) {
+                temp.delete();
+                throw e;
+            }
+        }
+        if (copied > 0) {
+            logAction(userId, workspaceId, taskId, KIND_TASK, "从用例执行携带 " + copied + " 份失败证据");
+        }
+        return copied;
+    }
+
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
         Attachment a = get(workspaceId, id);
+        if (KIND_DOC.equals(a.getTargetKind())) {
+            RequirementDoc doc = docMapper.selectById(a.getTargetId());
+            if (doc != null && workspaceId.equals(doc.getWorkspaceId())) {
+                assertDocDraftVisible(workspaceId, userId, doc);
+            }
+        }
         if (targetExists(workspaceId, a.getTargetId(), a.getTargetKind())) {
             projectAccess.assertWrite(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
         } else if (userId != null && !ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId))) {
@@ -352,7 +430,7 @@ public class AttachmentService {
     }
 
     /** 附件目标存在性校验，返回其所属项目 id 供可见性判断 */
-    private String ensureTarget(String workspaceId, String targetId, String kind) {
+    private String ensureTarget(String workspaceId, String userId, String targetId, String kind) {
         if (KIND_DEMAND.equals(kind)) {
             Demand d = demandMapper.selectById(targetId);
             if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
@@ -377,11 +455,27 @@ public class AttachmentService {
             }
             return t.getReqId();
         }
+        if (KIND_DOC.equals(kind)) {
+            RequirementDoc doc = docMapper.selectById(targetId);
+            if (doc == null || !workspaceId.equals(doc.getWorkspaceId())) {
+                throw AppException.notFound("文档不存在：" + targetId);
+            }
+            assertDocDraftVisible(workspaceId, userId, doc);
+            return doc.getReqId();
+        }
         Task t = taskMapper.selectById(targetId);
         if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() != null) {
             throw AppException.notFound("任务不存在：" + targetId);
         }
         return t.getReqId();
+    }
+
+    /** 草稿文档的附件与正文同口径：仅作者与空间 owner/admin 可见，避免绕过文档列表直取附件 */
+    private void assertDocDraftVisible(String workspaceId, String userId, RequirementDoc doc) {
+        if (!RequirementDocService.canSeeDraft(doc.getOwnerUserId(), doc.getPublishedAt(), userId,
+                projectAccess.roleOf(workspaceId, userId))) {
+            throw AppException.notFound("文档不存在：" + doc.getId());
+        }
     }
 
     /** 评论 → 所属任务；评论或任务不存在/不同空间返回 null */
@@ -415,6 +509,10 @@ public class AttachmentService {
         if (KIND_COMMENT.equals(kind)) {
             return taskOfComment(workspaceId, targetId) != null;
         }
+        if (KIND_DOC.equals(kind)) {
+            RequirementDoc doc = docMapper.selectById(targetId);
+            return doc != null && workspaceId.equals(doc.getWorkspaceId());
+        }
         Task t = taskMapper.selectById(targetId);
         return t != null && workspaceId.equals(t.getWorkspaceId());
     }
@@ -432,6 +530,10 @@ public class AttachmentService {
         if (KIND_COMMENT.equals(kind)) {
             Task ct = taskOfComment(workspaceId, targetId);
             return ct == null ? null : ct.getReqId();
+        }
+        if (KIND_DOC.equals(kind)) {
+            RequirementDoc doc = docMapper.selectById(targetId);
+            return doc == null || !workspaceId.equals(doc.getWorkspaceId()) ? null : doc.getReqId();
         }
         Task t = taskMapper.selectById(targetId);
         return t == null || !workspaceId.equals(t.getWorkspaceId()) ? null : t.getReqId();
@@ -475,13 +577,13 @@ public class AttachmentService {
         return d;
     }
 
-    /** 任务附件写 task_log，需求附件写 demand_log；执行证据已由用例流水承载，不再重复记日志 */
+    /** 任务附件写 task_log，需求附件写 demand_log；执行证据/文档附件由各自流水承载，不再重复记日志 */
     private void logAction(String userId, String workspaceId, String targetId, String kind, String detail) {
         if (KIND_DEMAND.equals(kind)) {
             demandMapper.insertLog(workspaceId, targetId, "update", detail, userId);
             return;
         }
-        if (KIND_CASE_RUN.equals(kind)) {
+        if (KIND_CASE_RUN.equals(kind) || KIND_DOC.equals(kind)) {
             return;
         }
         String taskId = targetId;

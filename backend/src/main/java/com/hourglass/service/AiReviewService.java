@@ -53,7 +53,7 @@ public class AiReviewService {
     }
 
     public AiReviewResponse polish(String userId, String workspaceId, Integer weekOffset, String reqId, String note) {
-        AiConfig cfg = configService.resolve(userId);
+        AiConfig cfg = configService.resolve(userId, workspaceId);
         int off = weekOffset == null ? 0 : Math.max(-52, Math.min(0, weekOffset));
         ReviewResponse d = reviewService.review(workspaceId, userId, reqId, off);
 
@@ -160,11 +160,11 @@ public class AiReviewService {
                 sb.append(i + 1).append(". ").append(t.getTitle())
                         .append("（").append(moduleName(catNames, t.getCategoryId())).append(" · ").append(nz(t.getOwner()));
                 if (t.getCompletedAt() != null) {
-                    sb.append(" · ").append(fmt(t.getCompletedAt().toString()));
+                    sb.append(" · ").append(fmt(t.getCompletedAt().toLocalDate().toString()));
                 }
                 /* 延期只在"有截止日期且真的晚了"时写出，模型看到才会放进风险那节 */
                 if (t.getCompletedAt() != null && t.getDueDate() != null
-                        && t.getCompletedAt().isAfter(t.getDueDate())) {
+                        && t.getCompletedAt().toLocalDate().isAfter(t.getDueDate())) {
                     sb.append(" · 延期完成");
                 }
                 sb.append("）\n");

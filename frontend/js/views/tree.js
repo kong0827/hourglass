@@ -13,6 +13,7 @@ import { activeView } from "../core/router.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { filterOn, progressOf, reqNameById, catNameById, rt, state } from "../core/state.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
+import { openStatusMenu } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { COLUMNS, PRIORITIES, colMeta, colName, fmtShortMD, parseDate, priName, taskVersionsText } from "../lib/format.js";
@@ -459,6 +460,8 @@ treeBody.addEventListener("click", function(e){
     renderTreeItems();
     return;
   }
+  var statusBtn = e.target.closest("[data-row-status]");
+  if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
   var row = e.target.closest("[data-tree-id]");
   if(!row) return;
   var t = rt.listCache[row.dataset.treeId];

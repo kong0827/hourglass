@@ -12,6 +12,8 @@ public class ReqDocView {
     private String reqId;
     /** 父文档 ID（空 = 根文档） */
     private String parentId;
+    /** 所属分类 ID（doc_category.id；空 = 未分类） */
+    private String categoryId;
     /** 所属项目名 */
     private String reqName;
     private String title;

@@ -129,14 +129,14 @@ class ProjectMilestoneServiceTest {
         MilestoneTaskLink second = link("M1", "T2");
         when(milestones.selectTaskLinksByReq(WS, REQ)).thenReturn(Arrays.asList(first, second));
         Task done = task("T1", Consts.COL_DONE);
-        done.setCompletedAt(LocalDate.of(2026, 11, 5));
+        done.setCompletedAt(LocalDate.of(2026, 11, 5).atStartOfDay());
         Task doing = task("T2", Consts.COL_DOING);
         when(tasks.selectByReq(WS, REQ)).thenReturn(Arrays.asList(done, doing));
 
         assertEquals("pending", service.list(WS, REQ, USER).get(0).getStatus());
 
         doing.setBoardColumn(Consts.COL_DONE);
-        doing.setCompletedAt(LocalDate.of(2026, 11, 6));
+        doing.setCompletedAt(LocalDate.of(2026, 11, 6).atStartOfDay());
         MilestoneView achieved = service.list(WS, REQ, USER).get(0);
 
         assertEquals("achieved", achieved.getStatus());

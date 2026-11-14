@@ -13,6 +13,7 @@ public class CaseRunView {
     private String id;
     private String status;
     private String note;
+    private String environment;
     private String bugTaskId;
     private String executedBy;
     private LocalDateTime createdAt;

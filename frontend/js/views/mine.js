@@ -15,7 +15,7 @@ import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, avatarHTML, colMeta, colName, duePresetDate, elapsedText, fmtFull, fmtMinutesShort, fmtShortMD, fmtTs, iso, parseDate, priColor, priName, priTagHTML, syncColumns, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, assocLinkHTML, avatarHTML, colMeta, colName, duePresetDate, elapsedText, fmtFull, fmtMinutesShort, fmtShortMD, fmtTs, iso, parseDate, priColor, priName, priTagHTML, syncColumns, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
 import { loadBoard } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 import { openTaskTable } from "./manager-shared.js";
@@ -399,7 +399,7 @@ function mineTaskCell(t, cols){
   (cols || []).forEach(function(c){ colSet[c.k] = true; });
   var sub = [];
   if(!mineDimUsed("project") && !colSet.project && t.reqName){
-    sub.push('<span class="mine-proj-chip" title="项目：' + esc(t.reqName) + '">' + esc(t.reqName) + '</span>');
+    sub.push(assocLinkHTML("project", t.reqId, t.reqName, {cls:"mine-proj-chip", title:"打开项目：" + t.reqName}));
   }
   if(!mineDimUsed("workspace") && t.workspaceName){
     sub.push('<span class="mine-sub-ws" title="空间：' + esc(t.workspaceName) + '">' + esc(t.workspaceName) + '</span>');
@@ -515,7 +515,7 @@ function mineRowCells(t, dueCls, p, cols){
     }
     if(c.k === "work") return '<span class="cell">' + esc(fmtMinutesShort(t.totalMinutes)) + '</span>';
     if(c.k === "project"){
-      return '<span class="cell" title="' + esc(t.reqName || "未关联项目") + '">' + esc(t.reqName || "—") + '</span>';
+      return '<span class="cell">' + assocLinkHTML("project", t.reqId, t.reqName, {plain:"—"}) + '</span>';
     }
     if(c.k === "updatedAt"){
       var rel = mineRelText(t.updatedAt);

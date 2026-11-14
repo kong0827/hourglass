@@ -635,8 +635,8 @@ public class TaskQueryService {
             }
             /* 提前完成：实际结束日收敛到完成日 —— 已完成的任务不该在之后的日期里继续占格 */
             if (Consts.COL_DONE.equals(t.getBoardColumn()) && t.getCompletedAt() != null
-                    && t.getCompletedAt().isBefore(end)) {
-                end = t.getCompletedAt();
+                    && t.getCompletedAt().toLocalDate().isBefore(end)) {
+                end = t.getCompletedAt().toLocalDate();
             }
             LocalDate begin = t.getStartDate();
             if (begin == null || begin.isAfter(end)) {

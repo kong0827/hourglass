@@ -10,10 +10,12 @@ public class RequirementDoc {
 
     private String id;
     private String workspaceId;
-    /** 所属项目 ID（requirement.id） */
+    /** 所属项目 ID（requirement.id）；NULL = 空间级文档（不归属任何项目） */
     private String reqId;
-    /** 父文档 ID（同项目内层级，空 = 根文档） */
+    /** 父文档 ID（同范围层级，空 = 根文档） */
     private String parentId;
+    /** 所属分类 ID（doc_category.id）；NULL = 未分类。分类是父子层级之上的归类层 */
+    private String categoryId;
     private String title;
     /** 分类代码，见 DocumentType */
     private String docType;

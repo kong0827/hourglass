@@ -1,5 +1,7 @@
 package com.hourglass.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.hourglass.common.DayOrDateTimeDeserializer;
 import lombok.Data;
 
 import javax.validation.constraints.Max;
@@ -148,8 +150,9 @@ public class TaskSaveRequest {
     @Size(max = 8, message = "标签最多 8 个")
     private List<String> tags;
 
-    /** 选填：仅新增（撤销删除恢复）时可指定原完成日期 */
-    private LocalDate completedAt;
+    /** 选填：仅新增（撤销删除恢复）时可指定原完成时间；分钟级，纯日期按当天 00:00 */
+    @JsonDeserialize(using = DayOrDateTimeDeserializer.class)
+    private LocalDateTime completedAt;
 
     /** 选填：撤销删除恢复时一并重建的子任务 */
     private List<SubtaskItem> subtasks;

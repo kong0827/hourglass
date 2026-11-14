@@ -115,6 +115,7 @@ public class BackupService {
     private final BackupExportService exportService;
     private final DeliveryScopeLock scopeLock;
     private final NumberSeqService numberSeq;
+    private final com.hourglass.mapper.DocTemplateMapper docTemplateMapper;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -140,9 +141,11 @@ public class BackupService {
                          ActivityService activityService,
                          com.hourglass.mapper.WorkActivityMapper workActivityMapper,
                          PlatformTransactionManager transactionManager, DeliveryScopeLock scopeLock,
-                         NumberSeqService numberSeq) {
+                         NumberSeqService numberSeq,
+                         com.hourglass.mapper.DocTemplateMapper docTemplateMapper) {
         this.scopeLock = scopeLock;
         this.numberSeq = numberSeq;
+        this.docTemplateMapper = docTemplateMapper;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -174,7 +177,8 @@ public class BackupService {
         this.exportService = new BackupExportService(taskMapper, reqMapper, subtaskMapper, tagMapper,
                 timeLogMapper, boardColumnMapper, categoryMapper, commentMapper, testCaseMapper,
                 testCaseRunMapper, caseTaskMapper, docCommentMapper, requirementDocMapper, devBranchMapper,
-                dependencyMapper, baselineMapper, versionMapper, versionTaskMapper, demandMapper, commitmentMapper);
+                dependencyMapper, baselineMapper, versionMapper, versionTaskMapper, demandMapper, commitmentMapper,
+                docTemplateMapper);
         this.txTemplate = new TransactionTemplate(transactionManager);
         /* 覆盖导入必须整体成功或整体回滚：外层事务包住所有阶段，批次只做语句切分 */
         this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
@@ -208,10 +212,12 @@ public class BackupService {
                 clearWorkspaceTaskData(workspaceId, data);
                 importReferenceData(data, st);
                 importDocComments(data, st);
+                importDocTemplates(data, st);
                 return null;
             });
             // 阶段 2：任务与子表，按批执行语句，但同属外层事务
             importTaskBatches(data, st);
+            remapDocCommentTaskIds(st);
             // 阶段 3：依赖/基线/循环关联/评论/测试用例
             importLinks(data, st);
             importTestCases(data, st);
@@ -230,11 +236,14 @@ public class BackupService {
             result.setDemands(st.demandCount);
             result.setTestCases(st.testCaseCount);
             result.setDocComments(st.docCommentCount);
+            result.setCaseTaskLinks(st.caseTaskLinkCount);
+            result.setSkippedCaseTaskLinks(st.skippedCaseTaskLinkCount);
             activityService.logConfig(workspaceId, userId, "导入覆盖备份（任务 " + st.taskCount
                     + " / 项目 " + st.reqCount + " / 评论 " + st.commentCount
                     + " / 需求 " + st.reqDocCount + " / 分支 " + st.branchCount
                     + " / 版本 " + st.versionCount + " / 需求池 " + st.demandCount
-                    + " / 用例 " + st.testCaseCount + " / 文档评论 " + st.docCommentCount + "）");
+                    + " / 用例 " + st.testCaseCount + " / 文档评论 " + st.docCommentCount
+                    + " / 用例关联 " + st.caseTaskLinkCount + "（跳过 " + st.skippedCaseTaskLinkCount + "））");
             return result;
         });
     }
@@ -776,7 +785,7 @@ public class BackupService {
                     t.setDueDate(milestoneDay);
                 }
             }
-            t.setCompletedAt(parseDate(b.getCompletedAt()));
+            t.setCompletedAt(parseDateTime(b.getCompletedAt()));
             t.setTestOwnerUserId(Texts.trimToNull(b.getTestOwnerUserId()));
             t.setTestOwner(Texts.trimToNull(b.getTestOwner()));
             t.setTestRequestedAt(parseDateTime(b.getTestRequestedAt()));
@@ -1265,31 +1274,32 @@ public class BackupService {
         for (Map.Entry<String, Integer> entry : maxCaseNo.entrySet()) {
             numberSeq.raiseCase(st.workspaceId, entry.getKey(), entry.getValue());
         }
-        if (data.getTestCaseRuns() == null) {
-            return;
-        }
-        for (BackupData.BackupTestCaseRun b : data.getTestCaseRuns()) {
-            if (b == null) {
-                continue;
+        /* 执行记录与用例关联是两份独立数据：旧备份可能没有 testCaseRuns，
+           但仍有 caseTasks；不能用前者的缺失提前返回，否则关联会被静默丢弃。 */
+        if (data.getTestCaseRuns() != null) {
+            for (BackupData.BackupTestCaseRun b : data.getTestCaseRuns()) {
+                if (b == null) {
+                    continue;
+                }
+                String status = Texts.trimToNull(b.getStatus());
+                String originalCaseId = Texts.trimToNull(b.getCaseId());
+                String caseId = originalCaseId == null ? null : caseIdMap.get(originalCaseId);
+                if (caseId == null || !CaseMeta.isRunStatus(status)) {
+                    continue;
+                }
+                TestCaseRun run = new TestCaseRun();
+                run.setId(Ids.gen("R"));
+                run.setCaseId(caseId);
+                run.setWorkspaceId(st.workspaceId);
+                run.setStatus(status);
+                run.setNote(Texts.cut(Texts.trimToNull(b.getNote()), 500));
+                run.setBugTaskId(mappedTaskId(st, b.getBugTaskId()));
+                run.setExecutedBy(Texts.cut(Texts.trimToNull(b.getExecutedBy()), 32));
+                String executedBy = Texts.trimToNull(b.getExecutedByUserId());
+                run.setExecutedByUserId(executedBy != null && st.memberIds.contains(executedBy) ? executedBy : null);
+                run.setCreatedAt(parseTs(b.getCreatedAt()));
+                testCaseRunMapper.insert(run);
             }
-            String status = Texts.trimToNull(b.getStatus());
-            String originalCaseId = Texts.trimToNull(b.getCaseId());
-            String caseId = originalCaseId == null ? null : caseIdMap.get(originalCaseId);
-            if (caseId == null || !CaseMeta.isRunStatus(status)) {
-                continue;
-            }
-            TestCaseRun run = new TestCaseRun();
-            run.setId(Ids.gen("R"));
-            run.setCaseId(caseId);
-            run.setWorkspaceId(st.workspaceId);
-            run.setStatus(status);
-            run.setNote(Texts.cut(Texts.trimToNull(b.getNote()), 500));
-            run.setBugTaskId(mappedTaskId(st, b.getBugTaskId()));
-            run.setExecutedBy(Texts.cut(Texts.trimToNull(b.getExecutedBy()), 32));
-            String executedBy = Texts.trimToNull(b.getExecutedByUserId());
-            run.setExecutedByUserId(executedBy != null && st.memberIds.contains(executedBy) ? executedBy : null);
-            run.setCreatedAt(parseTs(b.getCreatedAt()));
-            testCaseRunMapper.insert(run);
         }
         if (data.getCaseTasks() == null) {
             return;
@@ -1302,6 +1312,7 @@ public class BackupService {
             String caseId = originalCaseId == null ? null : caseIdMap.get(originalCaseId);
             String taskId = mappedTaskId(st, b.getTaskId());
             if (caseId == null || taskId == null) {
+                st.skippedCaseTaskLinkCount++;
                 continue;
             }
             com.hourglass.entity.TestCaseTask link = new com.hourglass.entity.TestCaseTask();
@@ -1313,6 +1324,7 @@ public class BackupService {
             link.setCreatedBy(createdBy != null && st.memberIds.contains(createdBy) ? createdBy : null);
             link.setCreatedAt(parseTs(b.getCreatedAt()));
             caseTaskMapper.insert(link);
+            st.caseTaskLinkCount++;
         }
     }
 
@@ -1325,37 +1337,105 @@ public class BackupService {
         return st.taskIds.contains(mapped) ? mapped : null;
     }
 
-    /** 阶段 1c：需求文档评论（文档 ID 可能因跨空间冲突被重映射） */
+    /** 阶段 1c：需求文档评论（文档 ID 可能因跨空间冲突被重映射）。
+     *  评论 ID 一律重新生成：先落顶层评论建立旧→新映射，再落回复并重映射 parent_id；
+     *  转工作项回链此时任务尚未导入，先记 [评论ID, 备份任务ID]，任务落库后统一补。 */
     private void importDocComments(BackupData data, ImportState st) {
         if (data.getDocComments() == null || data.getReqDocs() == null) {
             return;
         }
+        Map<String, String> commentIdMap = new HashMap<String, String>();
+        List<BackupData.BackupDocComment> replies = new ArrayList<BackupData.BackupDocComment>();
         for (BackupData.BackupDocComment b : data.getDocComments()) {
             if (b == null) {
                 continue;
             }
-            String content = Texts.trimToNull(b.getContent());
-            String originalDocId = Texts.trimToNull(b.getDocId());
-            if (content == null || originalDocId == null) {
+            if (Texts.trimToNull(b.getParentId()) != null) {
+                replies.add(b);
                 continue;
             }
-            String docId = st.reqDocIdMap.containsKey(originalDocId)
-                    ? st.reqDocIdMap.get(originalDocId) : originalDocId;
-            RequirementDoc doc = requirementDocMapper.selectById(docId);
-            if (doc == null || !st.workspaceId.equals(doc.getWorkspaceId())) {
+            String newId = insertDocComment(b, null, st);
+            if (newId != null && Texts.trimToNull(b.getId()) != null) {
+                commentIdMap.put(b.getId().trim(), newId);
+            }
+        }
+        for (BackupData.BackupDocComment b : replies) {
+            String originalParent = b.getParentId().trim();
+            String parentId = commentIdMap.get(originalParent);
+            if (parentId == null) {
+                /* 父评论不在备份里（可能已被删除）：回复降级为顶层，不丢内容 */
+                parentId = null;
+            }
+            insertDocComment(b, parentId, st);
+        }
+    }
+
+    /** 落一条文档评论，返回新 ID；正文/文档无效时返回 null。taskId 延后重映射，不在此处写入。 */
+    private String insertDocComment(BackupData.BackupDocComment b, String parentId, ImportState st) {
+        String content = Texts.trimToNull(b.getContent());
+        String originalDocId = Texts.trimToNull(b.getDocId());
+        if (content == null || originalDocId == null) {
+            return null;
+        }
+        String docId = st.reqDocIdMap.containsKey(originalDocId)
+                ? st.reqDocIdMap.get(originalDocId) : originalDocId;
+        RequirementDoc doc = requirementDocMapper.selectById(docId);
+        if (doc == null || !st.workspaceId.equals(doc.getWorkspaceId())) {
+            return null;
+        }
+        RequirementDocComment c = new RequirementDocComment();
+        c.setId(Ids.gen("DC"));
+        c.setWorkspaceId(st.workspaceId);
+        c.setDocId(docId);
+        String author = Texts.trimToNull(b.getUserId());
+        c.setUserId(author == null ? st.userId : author);
+        c.setContent(content);
+        c.setQuoteText(Texts.cut(Texts.trimToNull(b.getQuoteText()), 500));
+        c.setCreatedAt(parseTs(b.getCreatedAt()));
+        c.setParentId(parentId);
+        c.setResolvedAt(parseTs(b.getResolvedAt()));
+        c.setResolvedBy(Texts.trimToNull(b.getResolvedBy()));
+        c.setMentions(Texts.trimToNull(b.getMentions()));
+        docCommentMapper.insert(c);
+        st.docCommentCount++;
+        String originalTaskId = Texts.trimToNull(b.getTaskId());
+        if (originalTaskId != null) {
+            st.docCommentTaskLinks.add(new String[]{c.getId(), originalTaskId});
+        }
+        return c.getId();
+    }
+
+    /** 阶段 2 之后：把评论转工作项回链按任务 ID 映射补上；任务不在备份里的回链丢弃 */
+    private void remapDocCommentTaskIds(ImportState st) {
+        for (String[] link : st.docCommentTaskLinks) {
+            String taskId = st.taskIdMap.containsKey(link[1]) ? st.taskIdMap.get(link[1]) : link[1];
+            if (st.taskIds.contains(taskId)) {
+                docCommentMapper.updateTaskId(st.workspaceId, link[0], taskId);
+            }
+        }
+    }
+
+    /** 阶段 1d：文档模板（旧备份没有该字段时保留现有模板） */
+    private void importDocTemplates(BackupData data, ImportState st) {
+        if (data.getDocTemplates() == null) {
+            return;
+        }
+        docTemplateMapper.deleteByWorkspace(st.workspaceId);
+        for (BackupData.BackupDocTemplate b : data.getDocTemplates()) {
+            if (b == null || Texts.trimToNull(b.getName()) == null) {
                 continue;
             }
-            RequirementDocComment c = new RequirementDocComment();
-            c.setId(Ids.gen("DC"));
-            c.setWorkspaceId(st.workspaceId);
-            c.setDocId(docId);
-            String author = Texts.trimToNull(b.getUserId());
-            c.setUserId(author == null ? st.userId : author);
-            c.setContent(content);
-            c.setQuoteText(Texts.cut(Texts.trimToNull(b.getQuoteText()), 500));
-            c.setCreatedAt(parseTs(b.getCreatedAt()));
-            docCommentMapper.insert(c);
-            st.docCommentCount++;
+            com.hourglass.entity.DocTemplate t = new com.hourglass.entity.DocTemplate();
+            t.setId(Ids.gen("DT"));
+            t.setWorkspaceId(st.workspaceId);
+            t.setName(Texts.cut(b.getName().trim(), 20));
+            t.setDocType(Texts.trimToNull(b.getDocType()));
+            t.setFormat(Texts.trimToNull(b.getFormat()) == null ? "markdown" : b.getFormat().trim());
+            t.setContent(b.getContent());
+            t.setCreatedBy(Texts.trimToNull(b.getCreatedBy()) == null ? st.userId : b.getCreatedBy().trim());
+            t.setCreatedAt(parseTs(b.getCreatedAt()));
+            t.setUpdatedAt(parseTs(b.getUpdatedAt()));
+            docTemplateMapper.insert(t);
         }
     }
 
@@ -1457,6 +1537,8 @@ public class BackupService {
         final Set<String> taskIds = new HashSet<String>();
         final Set<String> seenTaskIds = new HashSet<String>();
         final Map<String, String> taskIdMap = new HashMap<String, String>();
+        /** v15：文档评论转工作项回链 [新评论ID, 备份任务ID]，任务落库后统一重映射 */
+        final List<String[]> docCommentTaskLinks = new ArrayList<String[]>();
         final Map<String, String> branchIdMap = new HashMap<String, String>();
         final Map<String, String> reqDocIdMap = new HashMap<String, String>();
         /** v8：备份版本 id → 落库版本 id，以及版本所属项目 */
@@ -1481,6 +1563,8 @@ public class BackupService {
         int commentCount;
         int testCaseCount;
         int docCommentCount;
+        int caseTaskLinkCount;
+        int skippedCaseTaskLinkCount;
 
         ImportState(String userId, String workspaceId) {
             this.userId = userId;

@@ -1,7 +1,7 @@
 /* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」）。
    SHELL 用相对路径，资源挂在任意上下文路径下都能正常工作。 */
-var CACHE_NAME = "hourglass-shell-v204";
+var CACHE_NAME = "hourglass-shell-v234";
 var SHELL = [
   "./",
   "index.html",
@@ -15,8 +15,10 @@ var SHELL = [
   "css/components.css",
   "css/views.css",
   "css/workcolumn.css",
+  "css/version.css",
   "css/gantt.css",
   "css/manager.css",
+  "css/investment.css",
   "css/smart-table.css",
   "css/mobile.css",
   "css/assistant.css",
@@ -28,10 +30,12 @@ var SHELL = [
   "js/core/activity-ui.js",
   "js/core/app.js",
   "js/core/att-preview.js",
+  "js/core/attach-kit.js",
   "js/core/assistant.js",
   "js/core/combo.js",
   "js/core/date-picker.js",
   "js/core/dom.js",
+  "js/core/env-dict.js",
   "js/core/select-picker.js",
   "js/core/filters-ui.js",
   "js/core/filters.js",
@@ -70,6 +74,7 @@ var SHELL = [
   "js/lib/format.js",
   "js/lib/company.js",
   "js/lib/member-labels.js",
+  "js/lib/people-picker.js",
   "js/lib/milestone-ui.js",
   "js/lib/gantt-shared.js",
   "js/lib/text-diff.js",
@@ -93,12 +98,14 @@ var SHELL = [
   "js/views/project.js",
   "js/views/projects.js",
   "js/views/report.js",
+  "js/views/investment.js",
   "js/views/requirements.js",
   "js/views/review.js",
   "js/views/risks.js",
   "js/views/settings.js",
   "js/views/testcases.js",
   "js/views/tree.js",
+  "js/views/version.js",
   "js/views/workload.js",
   "js/views/workcolumn.js",
   "manifest.webmanifest",

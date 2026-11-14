@@ -12,7 +12,7 @@ public class TaskLog {
     private String workspaceId;
     /** 操作人用户ID（历史数据可空） */
     private String actorId;
-    /** create/update/move/delete/restore/version_change/demand_change/config（配置类 task_id=CFG） */
+    /** create/update/move/delete/restore/version_change/demand_change/release（随版本发布）/config（配置类 task_id=CFG） */
     private String action;
     private String detail;
     /** 不截断的结构化变更证据，对应 change_data JSON。 */

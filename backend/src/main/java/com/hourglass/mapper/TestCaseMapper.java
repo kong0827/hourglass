@@ -24,6 +24,28 @@ public interface TestCaseMapper {
 
     int countByQuery(@Param("q") com.hourglass.dto.CaseQuery query);
 
+    /** 按筛选取全部命中 ID（批量动作 / 按筛选导出 / 圈选入计划 / 动态分组刷新），条数上限由服务层把关 */
+    List<String> selectIdsByQuery(@Param("q") com.hourglass.dto.CaseQuery query);
+
+    /** 批量动作前一次性取回用例本体（权限校验与撤销用的原归属） */
+    List<TestCase> selectByIds(@Param("workspaceId") String workspaceId, @Param("ids") List<String> ids);
+
+    /** 导出所选：与列表行同口径 */
+    List<TestCaseView> selectViewByIds(@Param("workspaceId") String workspaceId, @Param("ids") List<String> ids);
+
+    /** 分组段头计数（当前筛选范围内）：k + cnt + 各执行结果数 */
+    List<Map<String, Object>> countGroupsByQuery(@Param("q") com.hourglass.dto.CaseQuery query);
+
+    /** 自定义分组段头计数：多归属，段间可重叠 */
+    List<Map<String, Object>> countGroupsBySet(@Param("q") com.hourglass.dto.CaseQuery query);
+
+    /** 目录节点候选计数（不受当前筛选影响） */
+    List<Map<String, Object>> countFacetsByModuleId(@Param("workspaceId") String workspaceId,
+                                                    @Param("reqId") String reqId);
+
+    /** 目录节点删除前检查：仍直接挂载的用例数 */
+    int countByModuleId(@Param("workspaceId") String workspaceId, @Param("moduleId") String moduleId);
+
     /** 筛选下拉候选值（不受当前筛选影响） */
     List<String> selectModules(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
@@ -54,7 +76,14 @@ public interface TestCaseMapper {
     int batchUpdate(@Param("workspaceId") String workspaceId,
                     @Param("ids") List<String> ids,
                     @Param("moduleSet") boolean moduleSet, @Param("module") String module,
+                    @Param("moduleId") String moduleId,
                     @Param("prioritySet") boolean prioritySet, @Param("priority") String priority);
+
+    /** 批量归类到目录节点（单归属）：只改 module_id 与展示快照 */
+    int updateModuleBatch(@Param("workspaceId") String workspaceId,
+                          @Param("ids") List<String> ids,
+                          @Param("moduleId") String moduleId,
+                          @Param("module") String module);
 
     int updateLatest(@Param("workspaceId") String workspaceId, @Param("id") String id,
                      @Param("status") String status, @Param("note") String note,

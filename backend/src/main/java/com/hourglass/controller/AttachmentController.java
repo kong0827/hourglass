@@ -143,6 +143,51 @@ public class AttachmentController {
         return ApiResult.ok(attachmentService.upload(userId, ws.getId(), demandId, AttachmentService.KIND_DEMAND, file));
     }
 
+    /* ---------------- 需求文档附件 ---------------- */
+
+    @GetMapping("/api/req-docs/{docId}/attachments")
+    public ApiResult<com.hourglass.dto.PageResult<Attachment>> listDoc(
+            @PathVariable String docId,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(attachmentService.list(ws.getId(), userId, docId, AttachmentService.KIND_DOC,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    @PostMapping("/api/req-docs/{docId}/attachments")
+    public ApiResult<Attachment> uploadDoc(@PathVariable String docId, @RequestParam("file") MultipartFile file,
+                                           @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(attachmentService.upload(userId, ws.getId(), docId, AttachmentService.KIND_DOC, file));
+    }
+
+    /** 文档正文内图片上传：与文档附件共用 KIND_DOC 存储，返回编辑器友好的 URL 对象 */
+    @PostMapping("/api/req-docs/{docId}/content-images")
+    public ApiResult<Map<String, Object>> uploadDocContentImage(
+            @PathVariable String docId, @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
+        String ext = original.lastIndexOf('.') >= 0
+                ? original.substring(original.lastIndexOf('.') + 1).toLowerCase()
+                : "";
+        if (!"jpg".equals(ext) && !"jpeg".equals(ext) && !"png".equals(ext)
+                && !"gif".equals(ext) && !"webp".equals(ext)) {
+            throw AppException.badRequest("正文图片只支持 jpg/png/gif/webp");
+        }
+        Attachment a = attachmentService.upload(userId, ws.getId(), docId, AttachmentService.KIND_DOC, file);
+        Map<String, Object> map = new HashMap<String, Object>();
+        map.put("id", a.getId());
+        map.put("url", "/api/attachments/" + a.getId() + "/download");
+        map.put("filename", a.getFilename());
+        return ApiResult.ok(map);
+    }
+
     @GetMapping("/api/attachments/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable String id,
                                              @RequestParam(required = false) String workspace) {

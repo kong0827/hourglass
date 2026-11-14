@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Git 联动 · AI 解读层原型</title>
+<style>
+:root{
+  --primary:#3370ff;--primary-soft:rgba(51,112,255,.08);--primary-border:rgba(51,112,255,.3);
+  --success:#389e0d;--success-soft:rgba(56,158,13,.09);
+  --warning:#d48806;--warning-soft:rgba(212,136,6,.1);
+  --danger:#cf1322;--danger-soft:rgba(207,19,34,.08);
+  --info:#1668dc;--info-soft:rgba(22,104,220,.08);
+  --ai:#7b3ff2;--ai-soft:rgba(123,63,242,.08);--ai-border:rgba(123,63,242,.26);
+  --text:#1f2329;--text-2:#4e5969;--text-3:#86909c;
+  --border:#e5e6eb;--border-strong:#d0d3d9;
+  --surface:#fff;--sunken:#f5f6f8;--bg:#f2f3f5;
+  --shadow:0 6px 20px rgba(15,23,42,.08);
+  --r-lg:12px;--r-md:10px;--r-sm:6px;
+}
+body[data-theme="dark"]{
+  --primary:#5b8dff;--primary-soft:rgba(91,141,255,.14);--primary-border:rgba(91,141,255,.42);
+  --success:#6abf4b;--success-soft:rgba(106,191,75,.14);
+  --warning:#e0a33a;--warning-soft:rgba(224,163,58,.14);
+  --danger:#f06b6b;--danger-soft:rgba(240,107,107,.13);
+  --info:#5b9bff;--info-soft:rgba(91,155,255,.14);
+  --ai:#a685ff;--ai-soft:rgba(166,133,255,.14);--ai-border:rgba(166,133,255,.4);
+  --text:#e6e8eb;--text-2:#a9b0bb;--text-3:#7d8694;
+  --border:#2b3037;--border-strong:#3a4048;
+  --surface:#1b1e23;--sunken:#15181c;--bg:#101317;
+  --shadow:0 8px 26px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.app{min-height:100%}
+
+/* ---------- 顶部 ---------- */
+.app-head{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px 0}
+.head-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:8px;min-width:0}
+.brand h1{margin:0;font-size:16px;font-weight:680;letter-spacing:.2px}
+.brand span{font-size:12px;color:var(--text-3)}
+.tabs{display:flex;gap:2px;background:var(--sunken);border:1px solid var(--border);border-radius:8px;padding:2px;flex-wrap:wrap}
+.tab{height:26px;padding:0 12px;border:0;background:transparent;border-radius:6px;font-size:12.5px;color:var(--text-2)}
+.tab.on{background:var(--surface);color:var(--text);font-weight:650;box-shadow:0 1px 3px rgba(15,23,42,.1)}
+.tools{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.icon-btn{width:32px;height:32px;border:1px solid var(--border);background:var(--surface);border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+.icon-btn:hover{border-color:var(--border-strong)}
+.hint{margin:10px 0;padding:9px 12px;border:1px solid var(--border);background:var(--sunken);border-radius:8px;font-size:12px;color:var(--text-2);line-height:1.6}
+.hint b{color:var(--text);font-weight:650}
+.hint.ai{border-color:var(--ai-border);background:var(--ai-soft)}
+.hint.ai b{color:var(--ai)}
+
+/* ---------- 通用 ---------- */
+main#main{padding:12px 20px 34px;max-width:1280px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;margin-bottom:14px}
+.card h2{margin:0 0 12px;font-size:14px;font-weight:680;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2 .h2-note{font-size:11.5px;font-weight:400;color:var(--text-3);margin-left:auto}
+.card h3{margin:14px 0 8px;font-size:12px;font-weight:650;color:var(--text-3);letter-spacing:.3px;text-transform:none}
+.card h3:first-child{margin-top:0}
+.tag{font-size:11px;line-height:17px;padding:0 6px;border-radius:5px;border:1px solid var(--border);color:var(--text-2);background:var(--sunken);white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+.tag.warn{color:var(--warning);background:var(--warning-soft);border-color:rgba(212,136,6,.24)}
+.tag.ok{color:var(--success);background:var(--success-soft);border-color:rgba(56,158,13,.24)}
+.tag.bad{color:var(--danger);background:var(--danger-soft);border-color:rgba(207,19,34,.22)}
+.tag.info{color:var(--info);background:var(--info-soft);border-color:rgba(22,104,220,.22)}
+.tag.ai{color:var(--ai);background:var(--ai-soft);border-color:var(--ai-border)}
+.tag.ghost{color:var(--text-3);border-style:dashed}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.muted{color:var(--text-3)}
+.btn{height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);font-size:12.5px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--border-strong)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.ai{background:var(--ai);border-color:var(--ai);color:#fff}
+.btn.sm{height:26px;font-size:12px;padding:0 10px}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.foot-note{font-size:11.5px;color:var(--text-3);line-height:1.6;margin:10px 0 0}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.kv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 20px}
+.kv-grid .k{font-size:11.5px;color:var(--text-3);margin-bottom:2px}
+.kv-grid .v{font-size:12.5px;word-break:break-word}
+.kv-grid .v.mono{font-size:12px}
+
+/* 仓库头 */
+.repo-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.repo-head .rname{font-size:13.5px;font-weight:650}
+.repo-url{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--text-2);background:var(--sunken);border:1px solid var(--border);border-radius:6px;padding:3px 8px}
+.health{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--success)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex:0 0 auto}
+
+/* AI 解读块 */
+.ai-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.ai-head .ai-title{font-size:13.5px;font-weight:680}
+.ai-meta{font-size:11.5px;color:var(--text-3);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ai-meta .sep{color:var(--border-strong)}
+.ai-summary{font-size:12.5px;line-height:1.75;color:var(--text-2);background:var(--sunken);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.ai-summary b{color:var(--text)}
+.stale{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border:1px solid rgba(212,136,6,.32);background:var(--warning-soft);border-radius:8px;font-size:12px;color:var(--text-2);line-height:1.6;margin:10px 0}
+.stale b{color:var(--warning)}
+.stale .acts{margin:0 0 0 auto}
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:12px}
+.mod{border:1px solid var(--border);border-radius:10px;padding:11px 12px;background:var(--surface)}
+.mod .mt{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;margin-bottom:4px}
+.mod .md{font-size:12px;color:var(--text-2);line-height:1.65}
+.mod .ml{margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.chip{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;line-height:18px;padding:0 6px;border-radius:5px;border:1px solid var(--border);background:var(--sunken);color:var(--text-2);white-space:nowrap}
+.chip.ev{color:var(--ai);border-color:var(--ai-border);background:var(--ai-soft);cursor:help}
+.cost{font-size:11.5px;color:var(--text-3);margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.cost .sep{color:var(--border-strong)}
+.gen-state{display:flex;align-items:center;gap:10px;padding:16px;border:1px dashed var(--border-strong);border-radius:10px;color:var(--text-3);font-size:12.5px}
+.gen-state .spin{width:16px;height:16px;border:2px solid var(--ai-border);border-top-color:var(--ai);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 工作项相关代码 */
+.wi-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.wi-title{font-size:15px;font-weight:680;margin:0}
+.wi-sub{font-size:11.5px;color:var(--text-3);display:flex;gap:8px;flex-wrap:wrap;margin-top:3px}
+.linkage{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 12px;border:1px solid var(--info-soft);background:var(--info-soft);border-radius:8px;font-size:12px;color:var(--text-2);margin-bottom:12px}
+.linkage b{color:var(--info)}
+.commit-list{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.commit-list li{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface)}
+.commit-list li:last-child{border-bottom:0}
+.commit-list .sha{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--info);background:var(--info-soft);border:1px solid rgba(22,104,220,.2);border-radius:5px;padding:0 6px;line-height:18px;flex:0 0 auto}
+.commit-list .cm{font-size:12.5px;font-weight:600;line-height:1.5;min-width:0;flex:1 1 auto;word-break:break-word}
+.commit-list .ca{font-size:11.5px;color:var(--text-3);white-space:nowrap;flex:0 0 auto}
+.insight{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.insight li{font-size:12.5px;line-height:1.7;color:var(--text-2);padding:10px 12px;border:1px solid var(--border);border-left:3px solid var(--ai);border-radius:8px;background:var(--surface)}
+.insight li b{color:var(--text)}
+.insight .evs{margin-top:6px;display:flex;gap:5px;flex-wrap:wrap}
+.impact{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.impact .cell{flex:1 1 180px;border:1px solid var(--border);border-radius:8px;padding:9px 11px;background:var(--sunken)}
+.impact .cell .k{font-size:11px;color:var(--text-3)}
+.impact .cell .v{font-size:12.5px;font-weight:600;margin-top:2px}
+.manual-ok{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 12px;border:1px solid var(--success-soft);background:var(--success-soft);border-radius:8px;font-size:12px;color:var(--text-2);margin-top:12px}
+
+/* 版本回执 */
+.receipt{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.receipt .rc{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.receipt .rc .k{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px}
+.receipt .rc .v{font-size:13px;font-weight:650;margin-top:3px;word-break:break-all}
+.receipt .rc .s{font-size:11px;color:var(--text-3);margin-top:2px}
+.drift{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid rgba(212,136,6,.34);background:var(--warning-soft);border-radius:8px;font-size:12px;line-height:1.65;color:var(--text-2);margin-top:12px}
+.drift b{color:var(--warning)}
+.drift .acts{margin:0 0 0 auto}
+table.mini{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;margin-top:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+table.mini th{text-align:left;font-size:11px;color:var(--text-3);font-weight:600;padding:7px 10px;background:var(--sunken);border-bottom:1px solid var(--border);white-space:nowrap}
+table.mini td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+table.mini tr:last-child td{border-bottom:0}
+.draft{background:var(--sunken);border:1px solid var(--border);border-radius:8px;padding:11px 13px;font-size:12.5px;line-height:1.8;color:var(--text-2)}
+.draft b{color:var(--text)}
+
+/* 规则页 */
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:4px 0 2px}
+.flow .node{flex:1 1 150px;border:1px solid var(--border);border-radius:9px;background:var(--sunken);padding:10px 12px;font-size:12px;line-height:1.55}
+.flow .node b{display:block;font-size:12.5px;margin-bottom:2px}
+.flow .node small{color:var(--text-3);font-size:11px}
+.flow .arrow{flex:0 0 28px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:14px}
+.radio-card{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--surface)}
+.radio-card.on{border-color:var(--ai-border);background:var(--ai-soft)}
+.radio-card input{margin-top:3px;accent-color:var(--ai);flex:0 0 auto}
+.radio-card .rc-t{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.radio-card .rc-d{font-size:11.5px;color:var(--text-3);margin-top:2px;line-height:1.6}
+.deny{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:4px}
+.deny div{font-size:12px;color:var(--text-2);padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);display:flex;gap:7px;align-items:flex-start;line-height:1.55}
+.deny .x{color:var(--danger);font-weight:700;flex:0 0 auto}
+.costbars{display:grid;gap:8px;margin-top:6px}
+.costbars .cb{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-2)}
+.costbars .cb .nm{width:120px;flex:0 0 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.costbars .cb .bar{flex:1 1 auto;height:8px;border-radius:5px;background:var(--sunken);overflow:hidden}
+.costbars .cb .bar i{display:block;height:100%;background:var(--ai);border-radius:5px}
+.costbars .cb .num{width:64px;text-align:right;flex:0 0 auto;color:var(--text-3)}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,12px);background:#1f2329;color:#fff;font-size:12.5px;padding:9px 16px;border-radius:8px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;z-index:60;max-width:90vw}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:900px){
+  .app-head{padding:10px 12px 0}
+  main#main{padding:10px 12px 26px}
+  .brand span{display:none}
+  .card{padding:13px 13px}
+  .head-row{gap:10px}
+  .tabs{order:3;width:100%}
+  .tab{flex:1 1 auto}
+  .flow .arrow{flex:0 0 100%;height:18px}
+  .costbars .cb .nm{width:80px}
+}
+</style>
+</head>
+<body data-theme="light">
+<div class="app">
+  <header class="app-head">
+    <div class="head-row">
+      <div class="brand">
+        <h1 id="pageTitle">Git 联动 · AI 解读</h1>
+        <span>原型演示数据 · 2026-11-14</span>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="入口切换">
+        <button class="tab on" data-view="repo" role="tab" aria-selected="true">项目仓库</button>
+        <button class="tab" data-view="item" role="tab" aria-selected="false">工作项「相关代码」</button>
+        <button class="tab" data-view="version" role="tab" aria-selected="false">版本与发布回执</button>
+        <button class="tab" data-view="rules" role="tab" aria-selected="false">规则与边界</button>
+      </nav>
+      <div class="tools">
+        <button class="icon-btn" id="themeBtn" type="button" title="切换主题" aria-label="切换主题">☾</button>
+      </div>
+    </div>
+  </header>
+  <main id="main"></main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+  var params = new URLSearchParams(location.search);
+  var state = {
+    view: (location.hash || "#repo").slice(1),
+    theme: params.get("theme") === "dark" ? "dark" : "light",
+    gen: params.get("gen") || "done"
+  };
+  if (["repo","item","version","rules"].indexOf(state.view) < 0) state.view = "repo";
+  document.body.setAttribute("data-theme", state.theme);
+  document.getElementById("themeBtn").textContent = state.theme === "dark" ? "☀" : "☾";
+
+  var main = document.getElementById("main");
+  var toastEl = document.getElementById("toast");
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  }); }
+  function toast(msg, ms){
+    toastEl.textContent = msg;
+    toastEl.classList.add("on");
+    clearTimeout(toastEl._t);
+    toastEl._t = setTimeout(function(){ toastEl.classList.remove("on"); }, ms || 2200);
+  }
+  function ev(path){ return '<span class="chip ev" title="依据文件">'+esc(path)+'</span>'; }
+
+  var REPO = {
+    project: "聚合支付网关",
+    url: "https://gitlab.内网/pay/gateway",
+    gitlabId: "128",
+    target: "main",
+    head: {sha:"a3f9e21", ago:"2026-11-14 21:02", beyond:7},
+    base: {sha:"9f3c1ab", at:"2026-11-14 10:20"},
+    model: "qwen-max",
+    tokens: "38.2k",
+    seconds: 52,
+    files: 216,
+    lines: "1.2 万行",
+    summary: "这套服务是<b>聚合支付网关</b>：接收各支付渠道的异步回调并保证最终一致，处理批量退款与重试，生成对账文件，维护商户费率阶梯与结算单。对外暴露 <b>/api/pay</b>、<b>/api/refund</b>、<b>/api/settle</b> 三组接口；数据以 MySQL 为主，Redis 承担幂等键与限频。",
+    modules: [
+      {name:"支付回调与重试", desc:"接收渠道异步回调、验签、幂等落库；失败按规则延迟重试，并补偿回调查询。",
+       ev:["PayCallbackController.java:42","CallbackRetryJob.java:88"], deps:"MySQL · Redis · 渠道网关", week:6},
+      {name:"退款与对账", desc:"批量退款受理、失败重试、对账文件生成与下载；金额与币种按渠道规则校验。",
+       ev:["RefundBatchService.java:61","ReconFileGenerator.java:120"], deps:"渠道退款 API · 对象存储", week:4},
+      {name:"商户费率与结算", desc:"按交易量阶梯计算费率，生成结算单；费率变更留痕并从次日生效。",
+       ev:["MerchantFeeService.java:33","SettleController.java:27"], deps:"MySQL · 消息队列", week:2},
+      {name:"频控与黑名单", desc:"对回调与查询接口做频率限制，命中黑名单直接拒绝并记录审计。",
+       ev:["RateLimitFilter.java:19"], deps:"Redis", week:1}
+    ]
+  };
+
+  function viewRepo(){
+    var over = REPO.head.beyond;
+    var stale = over > 0
+      ? '<div class="stale" role="status"><span>⚠</span><div><b>解读已过期：</b>本次解读基于 <span class="mono">'+esc(REPO.base.sha)+'</span>（'+esc(REPO.base.at)+'），之后 <span class="mono">'+esc(REPO.target)+'</span> 已前进 <b>'+over+' 个提交</b>（最新 <span class="mono">'+esc(REPO.head.sha)+'</span>）。结论可能已不准确，建议重新生成。</div><div class="acts"><button class="btn sm" id="regen" type="button">重新生成</button></div></div>'
+      : "";
+    var body = state.gen === "running"
+      ? '<div class="gen-state"><span class="spin" aria-hidden="true"></span><div>正在读取 <span class="mono">'+esc(REPO.target)+'</span> 的代码并生成解读：已解析 216 个文件，约需 50 秒。生成期间不影响其他操作。</div></div>'
+      : '<div class="ai-summary">'+REPO.summary+'</div>'
+        + stale
+        + '<h3>模块职责 <span class="muted" style="font-weight:400">（按目录与调用关系归并，不是人工维护的文档）</span></h3>'
+        + '<div class="mod-grid">'+REPO.modules.map(function(m){
+            return '<div class="mod"><div class="mt">'+esc(m.name)+'<span class="tag ghost">近 7 天 '+m.week+' 次提交</span></div>'
+              + '<div class="md">'+esc(m.desc)+'</div>'
+              + '<div class="ml"><span class="muted" style="font-size:11px">依据</span>'+m.ev.map(ev).join("")+'</div>'
+              + '<div class="ml"><span class="muted" style="font-size:11px">依赖</span><span class="chip">'+esc(m.deps)+'</span></div></div>';
+          }).join("")+'</div>'
+        + '<div class="cost"><span>本次生成：'+esc(REPO.tokens)+' tokens</span><span class="sep">·</span><span>'+REPO.seconds+' 秒</span><span class="sep">·</span><span>模型 '+esc(REPO.model)+'</span><span class="sep">·</span><span>按需触发，不随同步自动执行</span></div>'
+        + '<div class="acts"><button class="btn sm" type="button" data-act="evidence">查看依据文件</button><button class="btn sm" type="button" data-act="draft">复制为交付说明草稿</button><button class="btn sm ghost" type="button" data-act="feedback">这条解读不准确</button></div>'
+        + '<p class="foot-note">AI 结论是<b>对代码的推断</b>，不是运行事实。所有结论绑定到生成时的 commit；代码前进后标记过期，不自动重算。只读取仓库，不回写、不评审代码质量。</p>';
+
+    return ''
+      + '<div class="hint"><b>三处入口之一：项目仓库。</b>远程事实（分支、提交、合并）来自同步；AI 只负责把代码归纳成人能读的业务描述，并把每条结论钉到文件与行号。</div>'
+      + '<section class="card">'
+      +   '<h2>已绑定仓库 <span class="tag ok">同步正常</span><span class="h2-note">一个项目一期只允许绑定一个仓库</span></h2>'
+      +   '<div class="repo-head"><span class="rname">'+esc(REPO.project)+'</span><span class="repo-url">'+esc(REPO.url)+'</span>'
+      +     '<span class="health"><span class="dot"></span>上次同步 2026-11-14 21:05</span></div>'
+      +   '<div class="kv-grid" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">'
+      +     '<div><div class="k">GitLab 项目 ID</div><div class="v mono">'+esc(REPO.gitlabId)+'</div></div>'
+      +     '<div><div class="k">目标分支</div><div class="v">'+esc(REPO.target)+'（合并判定基准）</div></div>'
+      +     '<div><div class="k">访问令牌</div><div class="v">glpat-••••••7f2a（只读，仅服务端使用）</div></div>'
+      +     '<div><div class="k">同步频率</div><div class="v">每 10 分钟 + 手动同步</div></div>'
+      +   '</div>'
+      + '</section>'
+      + '<section class="card">'
+      +   '<h2><span class="tag ai">AI 推断</span>仓库解读'
+      +     '<span class="h2-note">基于 '+esc(REPO.target)+' · <span class="mono">'+esc(REPO.base.sha)+'</span> · 2026-11-14 10:20 生成</span></h2>'
+      +   body
+      + '</section>';
+  }
+
+  var ITEM = {
+    key: "PAY-215", title: "退款批量重试",
+    project: "聚合支付网关", owner: "叶琳", status: "待测试",
+    branch: "feature/refund-batch-retry", branchOwner: "叶琳", ahead: 2,
+    commits: [
+      {sha:"5be0d21", msg:"补充重试上限配置", by:"叶琳", at:"2026-11-12 18:02"},
+      {sha:"aa71c93", msg:"退款失败按渠道错误码分级重试", by:"叶琳", at:"2026-11-13 06:30"}
+    ],
+    insights: [
+      {t:"退款失败不再一律重试 3 次，而是按渠道错误码分级：超时、系统繁忙等可重试错误按指数退避最多 5 次；余额不足、订单关闭等不可重试错误直接置失败，并记录渠道原始错误码。", ev:["RefundBatchService.java:74-118"]},
+      {t:"新增 RetryPolicy 读取 refund.retry 配置：默认上限 5 次、退避 2^n 秒，可在 application.yml 覆盖，不需要改代码。", ev:["RetryPolicy.java:12-38","application.yml:41"]},
+      {t:"对外接口 /api/refund/batch 的入参不变，失败响应新增 errorCode 字段；本次没有数据库变更。", ev:["RefundController.java:31"]}
+    ],
+    impact: [
+      {k:"改动文件", v:"3 个"},
+      {k:"代码行", v:"+135 / −12"},
+      {k:"对外接口", v:"1 个（行为不变，新增字段）"},
+      {k:"数据库变更", v:"无"}
+    ]
+  };
+
+  function viewItem(){
+    return ''
+      + '<div class="hint"><b>三处入口之二：工作项「相关代码」。</b>分支通过命名约定或 MR 关联到工作项；AI 只归纳这次改动做了什么，是否完成由人确认。</div>'
+      + '<section class="card">'
+      +   '<div class="wi-head"><div style="flex:1 1 320px">'
+      +     '<h2 class="wi-title" style="margin:0">'+esc(ITEM.title)+'</h2>'
+      +     '<div class="wi-sub"><span class="mono">'+esc(ITEM.key)+'</span><span>'+esc(ITEM.project)+'</span><span>负责人 '+esc(ITEM.owner)+'</span><span class="tag info">'+esc(ITEM.status)+'</span></div>'
+      +   '</div><div class="tag ai" style="align-self:center">AI 推断 · 待人工确认</div></div>'
+      +   '<div class="linkage"><span>关联方式</span><b>分支命名匹配</b><span class="muted">规则：feature/<span class="mono">PAY-215-*</span> 或 <span class="mono">feature/*</span> + 工作项标签</span>'
+      +     '<span class="chip">'+esc(ITEM.branch)+'</span><span class="muted">领先 main '+ITEM.ahead+' 个提交 · 负责人 '+esc(ITEM.branchOwner)+'</span>'
+      +     '<button class="btn sm" type="button" data-act="gitlab" style="margin-left:auto">在 GitLab 打开</button></div>'
+      +   '<h3>提交</h3>'
+      +   '<ul class="commit-list">'+ITEM.commits.map(function(c){
+            return '<li><span class="sha">'+esc(c.sha)+'</span><span class="cm">'+esc(c.msg)+'</span><span class="ca">'+esc(c.by)+' · '+esc(c.at)+'</span></li>';
+          }).join("")+'</ul>'
+      +   '<h3>这次改动做了什么 <span class="tag ai">AI 归纳</span></h3>'
+      +   '<ul class="insight">'+ITEM.insights.map(function(x){
+            return '<li>'+esc(x.t)+'<div class="evs">'+x.ev.map(ev).join("")+'</div></li>';
+          }).join("")+'</ul>'
+      +   '<h3>影响面</h3>'
+      +   '<div class="impact">'+ITEM.impact.map(function(i){
+            return '<div class="cell"><div class="k">'+esc(i.k)+'</div><div class="v">'+esc(i.v)+'</div></div>';
+          }).join("")+'</div>'
+      +   '<div class="manual-ok"><span>✓</span><div>以上为 AI 对 diff 的归纳，<b>不判定需求是否完成</b>。确认与工作项相关后，才会计入版本与发布回执。</div>'
+      +     '<div class="acts" style="margin:0 0 0 auto"><button class="btn sm primary" type="button" data-act="confirm">确认关联</button><button class="btn sm ghost" type="button" data-act="unlink">不是这个工作项</button></div></div>'
+      +   '<p class="foot-note">只读取代码与提交；AI 不修改任务状态、不写回仓库、不生成代码评审结论。未匹配到分支的工作项显示“无自动关联”，可手动搜索分支。</p>'
+      + '</section>';
+  }
+
+  var VER = {
+    name: "V1.3.0", project: "聚合支付网关",
+    range: "9f3c1ab..a3f9e21", commits: 12, items: 5,
+    deploy: {tag:"v1.3.0", sha:"a3f9e21", env:"生产", at:"2026-11-14 21:10", by:"孔祥金"},
+    ahead: 7,
+    changes: [
+      {t:"退款失败按渠道错误码分级重试，运营可在退款详情看到 errorCode。", ev:["PAY-215","PAY-221"]},
+      {t:"对账文件增加多币种金额列，下载文件名带结算日期。", ev:["PAY-208"]},
+      {t:"回调验签失败不再静默丢弃，改为进入补偿队列并告警。", ev:["PAY-219"]}
+    ]
+  };
+
+  function viewVersion(){
+    return ''
+      + '<div class="hint"><b>三处入口之三：版本与发布回执。</b>“生产在跑哪份代码”由发布时登记的 commit/tag 决定，AI 只把这段代码归纳成对外可见变化，供交付说明使用。</div>'
+      + '<section class="card">'
+      +   '<h2>'+esc(VER.name)+' <span class="tag ok">已发布</span><span class="h2-note">'+esc(VER.project)+' · 5 个工作项 · 12 个提交</span></h2>'
+      +   '<h3>发布回执</h3>'
+      +   '<div class="receipt">'
+      +     '<div class="rc"><div class="k">生产 commit</div><div class="v mono">'+esc(VER.deploy.sha)+'</div><div class="s">'+esc(VER.deploy.env)+'环境 · 2026-11-14 21:10 部署</div></div>'
+      +     '<div class="rc"><div class="k">Tag</div><div class="v mono">'+esc(VER.deploy.tag)+'</div><div class="s">来源：GitLab tag + 人工确认</div></div>'
+      +     '<div class="rc"><div class="k">版本范围</div><div class="v mono">'+esc(VER.range)+'</div><div class="s">12 个提交 · 5 个工作项</div></div>'
+      +     '<div class="rc"><div class="k">登记人</div><div class="v">'+esc(VER.deploy.by)+'</div><div class="s">登记时间 2026-11-14 21:12</div></div>'
+      +   '</div>'
+      +   '<div class="drift"><span>⚠</span><div><b>分支已前进：</b><span class="mono">'+esc(REPO.target)+'</span> 比发布 commit 多 <b>'+VER.ahead+' 个提交</b>，其中 3 个未进入本版本。生产不会被自动回滚；如确认这些提交不属于本版本，请在下一步确认范围并说明偏离。</div>'
+      +     '<div class="acts"><button class="btn sm" type="button" data-act="diff">查看提交对比</button></div></div>'
+      +   '<h3>本版本对外可见变化 <span class="tag ai">AI 归纳 · 待确认</span></h3>'
+      +   '<ul class="insight">'+VER.changes.map(function(c){
+            return '<li>'+esc(c.t)+'<div class="evs">'+c.ev.map(function(k){ return '<span class="chip">'+esc(k)+'</span>'; }).join("")+'</div></li>';
+          }).join("")+'</ul>'
+      +   '<div class="acts"><button class="btn ai" type="button" data-act="draft">生成交付说明草稿</button><button class="btn" type="button" data-act="evidence">查看依据提交</button><button class="btn ghost" type="button" data-act="export">导出回执 JSON</button></div>'
+      +   '<h3>本版本提交</h3>'
+      +   '<table class="mini"><thead><tr><th style="width:90px">提交</th><th>说明</th><th style="width:70px">作者</th><th style="width:120px">时间</th><th style="width:120px">关联工作项</th></tr></thead><tbody>'
+      +   [["a3f9e21","退款失败按渠道错误码分级重试","叶琳","11-13 06:30","PAY-215"],
+         ["c18b7d2","对账文件多币种金额列","钱伟","11-12 15:22","PAY-208"],
+         ["e47f20a","回调验签失败进补偿队列","陈立明","11-12 09:10","PAY-219"],
+         ["b233890","结算单导出补全币种","高敏","11-11 17:45","PAY-224"]].map(function(r){
+            return '<tr><td class="mono">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td class="muted">'+r[3]+'</td><td><span class="chip">'+r[4]+'</span></td></tr>';
+          }).join("")+'</tbody></table>'
+      +   '<p class="foot-note">回执是<b>登记事实</b>，不是 AI 推断：commit/tag 由发布时填写或流水线回调写入，AI 不能判断“是否已部署”。交付说明草稿只引用回执中的事实，AI 归纳部分标注“待确认”。</p>'
+      + '</section>';
+  }
+
+  function viewRules(){
+    return ''
+      + '<div class="hint"><b>规则与边界。</b>AI 层默认关闭外发：源码是否出内网、用哪个模型、多久生成一次、花多少 token，都要显式选择并可见。</div>'
+      + '<section class="card">'
+      +   '<h2>数据流向</h2>'
+      +   '<div class="flow">'
+      +     '<div class="node"><b>GitLab（只读）</b><small>分支 / 提交 / MR；只读令牌</small></div>'
+      +     '<div class="arrow">→</div>'
+      +     '<div class="node"><b>沙漏服务端</b><small>拉取、切片、去重；不落代码全文</small></div>'
+      +     '<div class="arrow">→</div>'
+      +     '<div class="node"><b>AI 模型</b><small>默认私有部署；可选自带 Key</small></div>'
+      +     '<div class="arrow">→</div>'
+      +     '<div class="node"><b>结论落库</b><small>绑定 commit SHA + 模型 + 生成时间</small></div>'
+      +   '</div>'
+      +   '<p class="foot-note">只发送归纳所需的文件片段，不整仓上传；发送前可配置白名单目录与排除规则。日志不记录代码正文。</p>'
+      + '</section>'
+      + '<section class="card">'
+      +   '<h2>模型来源 <span class="tag warn">需空间主确认</span></h2>'
+      +   '<label class="radio-card on"><input type="radio" name="model" checked><div><div class="rc-t">私有部署模型 <span class="tag ok">默认</span></div><div class="rc-d">代码不出内网；需具备 OpenAI 兼容接口。生成速度取决于自建算力。</div></div></label>'
+      +   '<label class="radio-card"><input type="radio" name="model"><div><div class="rc-t">客户自带 Key</div><div class="rc-d">使用客户自己的账号额度；Key 加密存储、仅服务端使用。代码会发送到所选服务商。</div></div></label>'
+      +   '<label class="radio-card"><input type="radio" name="model"><div><div class="rc-t">公网模型 <span class="tag bad">需显式开启</span></div><div class="rc-d">效果通常更好，但源码会离开内网。开启前需空间主二次确认，并记录审计。</div></div></label>'
+      + '</section>'
+      + '<section class="card">'
+      +   '<h2>触发与过期</h2>'
+      +   '<div class="kv-grid">'
+      +     '<div><div class="k">生成方式</div><div class="v">按需生成（默认）</div></div>'
+      +     '<div><div class="k">自动生成</div><div class="v">可配置每日 02:00 一次</div></div>'
+      +     '<div><div class="k">过期判定</div><div class="v">目标分支 HEAD 变化即标记过期</div></div>'
+      +     '<div><div class="k">重算策略</div><div class="v">过期后不自动重算，由人触发</div></div>'
+      +   '</div>'
+      +   '<p class="foot-note">不随 10 分钟分支同步自动跑：一次解读的成本远高于一次同步，且代码在两次提交之间通常没有实质变化。</p>'
+      + '</section>'
+      + '<section class="card">'
+      +   '<h2>本月消耗 <span class="h2-note">按项目统计 · 可设置月度上限</span></h2>'
+      +   '<div class="costbars">'
+      +     '<div class="cb"><span class="nm">聚合支付网关</span><span class="bar"><i style="width:78%"></i></span><span class="num">0.94M</span></div>'
+      +     '<div class="cb"><span class="nm">商户对账平台</span><span class="bar"><i style="width:26%"></i></span><span class="num">0.31M</span></div>'
+      +     '<div class="cb"><span class="nm">风控引擎</span><span class="bar"><i style="width:9%"></i></span><span class="num">0.11M</span></div>'
+      +   '</div>'
+      +   '<p class="foot-note">合计 1.36M tokens / 52 次生成。达到上限后停止自动生成，手动生成需空间主确认。</p>'
+      + '</section>'
+      + '<section class="card">'
+      +   '<h2>明确不做</h2>'
+      +   '<div class="deny">'
+      +     '<div><span class="x">✕</span>不写回仓库：不创建分支、不提交、不评论 MR</div>'
+      +     '<div><span class="x">✕</span>不评审代码质量、不输出“可以合并”结论</div>'
+      +     '<div><span class="x">✕</span>不自动改任务或版本状态，不判定交付完成</div>'
+      +     '<div><span class="x">✕</span>不推断部署事实，生产版本以回执为准</div>'
+      +     '<div><span class="x">✕</span>不把代码发给未在设置中授权的第三方</div>'
+      +     '<div><span class="x">✕</span>不整仓上传，只发送归纳所需的文件片段</div>'
+      +   '</div>'
+      + '</section>';
+  }
+
+  function render(){
+    main.innerHTML = state.view === "repo" ? viewRepo()
+      : state.view === "item" ? viewItem()
+      : state.view === "version" ? viewVersion()
+      : viewRules();
+    var tabs = document.querySelectorAll(".tab");
+    Array.prototype.forEach.call(tabs, function(t){
+      var on = t.getAttribute("data-view") === state.view;
+      t.classList.toggle("on", on);
+      t.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    bind();
+  }
+
+  function bind(){
+    var regen = document.getElementById("regen");
+    if (regen) regen.addEventListener("click", function(){
+      state.gen = "running"; render();
+      setTimeout(function(){ state.gen = "done"; render(); toast("已重新生成，解读绑定到 " + REPO.head.sha); }, 1600);
+    });
+    Array.prototype.forEach.call(main.querySelectorAll("[data-act]"), function(b){
+      b.addEventListener("click", function(){
+        var a = b.getAttribute("data-act");
+        if (a === "confirm") toast("已确认关联（人工记录，不影响任务状态）");
+        else if (a === "draft") toast("已生成草稿，内容标注“AI 归纳 · 待确认”");
+        else if (a === "evidence") toast("打开依据文件列表（演示）");
+        else if (a === "gitlab") toast("打开 GitLab 分支页（演示）");
+        else if (a === "diff") toast("打开 9f3c1ab..a3f9e21 对比（演示）");
+        else if (a === "export") toast("导出回执 JSON（演示）");
+        else if (a === "feedback") toast("已记录反馈，用于校正下一次生成");
+        else toast("演示操作");
+      });
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t){
+    t.addEventListener("click", function(){
+      state.view = t.getAttribute("data-view");
+      history.replaceState(null, "", "#" + state.view);
+      render();
+    });
+  });
+  document.getElementById("themeBtn").addEventListener("click", function(){
+    state.theme = state.theme === "dark" ? "light" : "dark";
+    document.body.setAttribute("data-theme", state.theme);
+    this.textContent = state.theme === "dark" ? "☀" : "☾";
+  });
+  window.addEventListener("hashchange", function(){
+    var v = (location.hash || "#repo").slice(1);
+    if (["repo","item","version","rules"].indexOf(v) >= 0) { state.view = v; render(); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

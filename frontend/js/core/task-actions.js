@@ -9,6 +9,7 @@ import { state, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { deleteTask, openTaskDrawer } from "./task-drawer.js";
 import { openDateAt } from "./date-picker.js";
 import { guard, loadRules, ruleFor, serverDecision } from "./transitions.js";
+import { viewModule } from "./view-loader.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
 import { CAT_DEFAULT_COLOR, COLUMNS, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMinutesShort, parseDate } from "../lib/format.js";
 import { loadBoard, loadReqs, render } from "../views/board.js";
@@ -295,6 +296,8 @@ function moveTaskToColumn(t, to){
     refreshListIfOpen();
     refreshCalendarIfOpen();
     refreshGanttIfOpen();
+    var treeMod = viewModule("tree");
+    if(treeMod && treeMod.refreshTreeIfOpen) treeMod.refreshTreeIfOpen();
     /* 缺陷的回归状态随列流转，测试页 / 我的工作需要跟着重取 */
     window.dispatchEvent(new CustomEvent("ds:task-saved", { detail:{ id:t.id, created:false } }));
     return true;
@@ -452,5 +455,51 @@ function openCardMenu(anchor, taskId){
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
 }
+
+/* 发布快照里的只读实体引用（工作项 / 需求）：全局委托一次，version/phase/抽屉等宿主无需各接一遍。
+   用 data-snap-* 专用属性，避免与各视图既有的 data-open-task 委托重复触发；按钮原生支持回车/空格。 */
+document.addEventListener("click", function(e){
+  var el = e.target.closest ? e.target.closest("[data-snap-task],[data-snap-demand]") : null;
+  if(!el) return;
+  var taskId = el.getAttribute("data-snap-task");
+  if(taskId){ openTaskById(taskId); return; }
+  var demandId = el.getAttribute("data-snap-demand");
+  if(demandId){ import("../views/demands.js").then(function(m){ m.openDemandDetailById(demandId); }).catch(function(){}); }
+});
+
+/* 高频视图关联纯文本的统一接线：data-jump-* 专用属性 + 捕获阶段全局委托。
+   捕获阶段先于各视图「行点击开抽屉/下钻」的冒泡委托命中，stopPropagation 防止误开抽屉或误下钻；
+   跳转全部复用现成 open* 助手（懒加载模块，避免循环依赖与首屏负担）。按钮原生支持回车/空格。 */
+function assocJump(el){
+  var project = el.getAttribute("data-jump-project");
+  if(project){ rt.managerProjectId = project; showView("project"); return true; }
+  var version = el.getAttribute("data-jump-version");
+  if(version){
+    var vreq = el.getAttribute("data-jump-req") || "";
+    import("../views/version.js").then(function(m){ m.openVersionDetail(vreq, version); }).catch(function(){});
+    return true;
+  }
+  var branch = el.getAttribute("data-jump-branch");
+  if(branch){ import("../views/branches.js").then(function(m){ m.openBranchById(branch); }).catch(function(){}); return true; }
+  var demand = el.getAttribute("data-jump-demand");
+  if(demand){ import("../views/demands.js").then(function(m){ m.openDemandDetailById(demand); }).catch(function(){}); return true; }
+  var kase = el.getAttribute("data-jump-case");
+  if(kase){
+    var creq = el.getAttribute("data-jump-req") || "";
+    import("../views/testcases.js").then(function(m){ m.openCaseInProject(creq, kase); }).catch(function(){});
+    return true;
+  }
+  var doc = el.getAttribute("data-jump-doc");
+  if(doc){ import("../views/requirements.js").then(function(m){ m.openReqDocAndJump(doc); }).catch(function(){}); return true; }
+  var task = el.getAttribute("data-jump-task");
+  if(task){ openTaskById(task); return true; }
+  return false;
+}
+document.addEventListener("click", function(e){
+  var el = e.target.closest ? e.target.closest("[data-jump-project],[data-jump-version],[data-jump-branch],[data-jump-demand],[data-jump-case],[data-jump-doc],[data-jump-task]") : null;
+  if(!el || !assocJump(el)) return;
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
 
 export { handleDeepLink, hashParam, loadRunningTimer, moveTaskToColumn, openCardMenu, openDuePopover, openStatusMenu, openTaskById, taskLink, toggleTaskDone, toggleTaskTimer };

@@ -391,7 +391,13 @@
       apiKeyMasked: "sk-****a1b2",
       enabled: true,
       keyBroken: false,
-      status: "已就绪：调用会走你自己的额度",
+      status: "已就绪：调用走团队额度",
+      prefer: "auto",
+      source: "team",
+      sourceName: "团队 AI",
+      allowPersonal: true,
+      team: { available: true, scope: "platform", provider: "deepseek", model: "deepseek-chat",
+              status: "由平台管理员提供，费用由团队承担" },
       presets: [
         { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat", keyHint: "platform.deepseek.com 创建 API Key" },
         { id: "qwen", name: "通义千问（阿里云）", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyHint: "阿里云百炼控制台创建 API Key" },
@@ -403,7 +409,18 @@
         { id: "custom", name: "自定义 / 中转", baseUrl: "", model: "", keyHint: "任何 OpenAI 兼容服务：填 /v1 基址和模型名" }
       ]
     },
-    "/api/ai/config/test": { ok: true, latencyMs: 860, model: "deepseek-chat", reply: "正常", tokens: 42 },
+    "/api/ai/config/test": { ok: true, latencyMs: 860, model: "deepseek-chat", reply: "正常", tokens: 42, source: "team", sourceLabel: "团队 AI" },
+    "/api/admin/ai-settings": {
+      enabled: true, provider: "deepseek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat",
+      hasKey: true, apiKeyMasked: "sk-****9f3c", keyBroken: false, allowPersonal: true,
+      status: "已就绪：全员调用走团队额度", updatedBy: "平台管理员", updatedAt: ts(-2, 15, 30),
+      presets: [
+        { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat", keyHint: "platform.deepseek.com 创建 API Key" },
+        { id: "qwen", name: "通义千问（阿里云）", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyHint: "阿里云百炼控制台创建 API Key" },
+        { id: "custom", name: "自定义 / 中转", baseUrl: "", model: "", keyHint: "任何 OpenAI 兼容服务：填 /v1 基址和模型名" }
+      ]
+    },
+    "/api/admin/ai-settings/test": { ok: true, latencyMs: 920, model: "deepseek-chat", reply: "正常", tokens: 40, source: "team" },
     /* 回顾页「AI 周报」：预览稿里给一段不用后端也能看的示例输出 */
     "/api/ai/review/polish": {
       weekOffset: 0, label: "本周", weekStart: shift(-6), weekEnd: shift(0),
@@ -553,13 +570,17 @@
       for (var bi = 0; bi < branches.length; bi++) if (branches[bi].id === brId) return branches[bi];
       return branches[0];
     }
-    if (clean === "/api/req-docs") {      return reqDocs.map(function (d) {
+    if (clean === "/api/req-docs") {
+      /* 生产接口分页返回 {items,total,hasMore}，前端统一走 getAllPages（读 page.items）；
+         这里必须给出同样的形状，否则列表/阅读树都拿不到数据 */
+      var docRows = reqDocs.map(function (d) {
         return { id: d.id, reqId: d.reqId, reqName: d.reqName, title: d.title, status: d.status,
                  owner: d.owner, excerpt: d.excerpt, taskCount: d.taskCount, doneCount: d.doneCount,
-                 createdAt: d.createdAt, updatedAt: d.updatedAt,
+                 createdAt: d.createdAt, updatedAt: d.updatedAt, sortOrder: d.sortOrder || 0,
                  format: d.format || "html", docType: d.docType || "other",
                  parentId: d.parentId || null, publishedAt: d.publishedAt || null };
       });
+      return { items: docRows, total: docRows.length, hasMore: false };
     }
     /* 动态流要在单 id 正则之前判断，否则 "activities" 会被当成文档 id */
     if (clean === "/api/req-docs/activities") { return docActivities; }
@@ -713,6 +734,28 @@
     };
   }
 
+  /* 发布检查：预览稿没有真实测试数据，用一份与演示数据同口径的结论，
+     让「发布检查」「策略保存」在预览里也是完整可点的流程，而不是 undefined */
+  function mockReleaseCheck(url) {
+    var pm = /[?&]planId=([^&]+)/.exec(url);
+    var planId = pm ? decodeURIComponent(pm[1]) : null;
+    var failedCase = { caseId: "C1", caseNo: 3, title: "启动性能", demandTitle: "首页加载优化",
+                       result: "failed", required: true };
+    var check = {
+      versionId: "V1", planId: planId, planRevision: planId ? 4 : null,
+      policy: routes["/api/preview/release-policy"] || "standard", verdict: "block",
+      blockers: ["发布必测用例失败或阻塞 1 条"],
+      reminders: [],
+      caseTotal: 4, caseExecuted: 4, casePassed: 2, caseFailed: 1, caseBlocked: 1, caseSkipped: 0, caseUntested: 0,
+      requiredTotal: 1, requiredPassed: 0, requiredFailed: 1, requiredUntested: 0,
+      demandsTotal: 3, demandsCovered: 1, workItemsTotal: 17, workItemsCovered: 3,
+      requiredFailures: [failedCase], requiredUnexecuted: [], demandTitles: ["首页加载优化"],
+      checkedAt: ts(0, 10, 0)
+    };
+    if (!planId) check.reminders.push("未关联发布计划：按本版本全部测试计划核对发布必测用例，覆盖分母为版本范围");
+    return check;
+  }
+
   window.fetch = function (url, opts) {
     var method = (opts && opts.method) || "GET";
     var u = String(url), clean = u.split("?")[0];
@@ -729,6 +772,26 @@
     } else if (clean === "/api/tasks/list") {
       /* 列表/甘特/未排期共用：按查询参数筛选，并保持 {items,total} 结构 */
       data = mockTaskList(u);
+    } else if (/^\/api\/projects\/[A-Za-z0-9_-]+\/release-policy$/.test(clean)) {
+      /* 策略即时保存：写回内存，重新打开项目也保持刚才的选择 */
+      if (method === "PUT") {
+        var policyM = /[?&]policy=([^&]+)/.exec(u);
+        routes["/api/preview/release-policy"] = policyM ? decodeURIComponent(policyM[1]) : "standard";
+      }
+      data = routes["/api/preview/release-policy"] || "standard";
+    } else if (/^\/api\/versions\/[A-Za-z0-9_-]+\/release-check$/.test(clean)) {
+      data = mockReleaseCheck(u);
+    } else if (method === "POST" && /^\/api\/versions\/[A-Za-z0-9_-]+\/release-preview$/.test(clean)) {
+      var previewCheck = mockReleaseCheck("");
+      data = {
+        versionId: "V1", planId: reqBody && reqBody.planId, planRevision: reqBody && reqBody.planId ? 4 : null,
+        occurredAt: reqBody && reqBody.occurredAt, publishedOn: shift(0),
+        environment: reqBody && reqBody.environment, targetKeys: (reqBody && reqBody.targetKeys) || [],
+        coverage: reqBody && reqBody.coverage, actualTaskIds: (reqBody && reqBody.actualTaskIds) || [],
+        plannedTaskIds: (reqBody && reqBody.actualTaskIds) || [], candidates: [], excluded: [], warnings: [],
+        requiresDeviationReason: false, testCheck: previewCheck, canPublish: true,
+        scopeToken: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      };
     } else if (method === "PUT" && /^\/api\/tasks\/[A-Za-z0-9_-]+$/.test(clean)) {
       /* 预览稿里把改期写回内存数组，拖动/撤销/排期才能看到真实回流 */
       var putId = clean.split("/").pop(), hit = null;
@@ -760,6 +823,25 @@
         pDoc.updatedAt = ts(0, pNow.getHours(), pNow.getMinutes());
       }
       data = pDoc || {};
+    } else if (method === "PUT" && /^\/api\/req-docs\/[A-Za-z0-9_-]+\/title$/.test(clean)) {
+      /* 行内重命名：标题写回内存，左树/列表/阅读器标题同步 */
+      var tId = clean.split("/")[3], tDoc = null;
+      for (var tli = 0; tli < reqDocs.length; tli++) if (reqDocs[tli].id === tId) { tDoc = reqDocs[tli]; break; }
+      if (tDoc && reqBody && reqBody.title) {
+        tDoc.title = reqBody.title;
+        tDoc.updatedAt = ts(0, new Date().getHours(), new Date().getMinutes());
+      }
+      data = tDoc || {};
+    } else if (method === "POST" && clean === "/api/req-docs/reorder") {
+      /* 阅读树拖拽排序/移动：sortOrder 与 parentId 写回内存，重绘后顺序不回跳 */
+      var rItems = (reqBody && reqBody.items) || [];
+      for (var ri = 0; ri < rItems.length; ri++) {
+        for (var rj = 0; rj < reqDocs.length; rj++) if (reqDocs[rj].id === rItems[ri].id) {
+          if (rItems[ri].sortOrder !== undefined) reqDocs[rj].sortOrder = rItems[ri].sortOrder;
+          reqDocs[rj].parentId = rItems[ri].parentId || null;
+        }
+      }
+      data = { ok: true };
     } else if (method === "PUT" && /^\/api\/req-docs\/[A-Za-z0-9_-]+$/.test(clean)) {
       /* 编辑器保存：把标题/正文/状态写回内存，重新打开还能看到刚保存的内容 */
       var eId = clean.split("/").pop(), eDoc = null;
@@ -869,6 +951,43 @@
           + "## 下周计划\n- 推进权限中间件提测\n";
         data.source = { completed: 2, progress: 2, pendingDone: 0, truncated: false, chars: 980, withNote: !!reqBody.note };
       }
+    } else if (method === "PUT" && clean === "/api/admin/ai-settings") {
+      /* 管理员保存写回内存：切换总开关 / 个人 Key 限制后再打开仍保持刚才的选择 */
+      var adminAi = routes["/api/admin/ai-settings"];
+      var ab = reqBody || {};
+      if (ab.provider) adminAi.provider = ab.provider;
+      if (typeof ab.baseUrl === "string") adminAi.baseUrl = ab.baseUrl;
+      if (typeof ab.model === "string") adminAi.model = ab.model;
+      if (typeof ab.enabled === "boolean") adminAi.enabled = ab.enabled;
+      if (typeof ab.allowPersonal === "boolean") adminAi.allowPersonal = ab.allowPersonal;
+      if (ab.clearKey) { adminAi.hasKey = false; adminAi.apiKeyMasked = ""; }
+      else if (ab.apiKey) { adminAi.hasKey = true; adminAi.apiKeyMasked = "sk-****" + String(ab.apiKey).slice(-4); }
+      adminAi.keyBroken = false;
+      adminAi.status = !adminAi.enabled ? "团队 AI 未启用"
+        : (adminAi.hasKey && adminAi.model ? "已就绪：全员调用走团队额度" : "已保存，但还缺 Key 或模型");
+      adminAi.updatedBy = "平台管理员";
+      adminAi.updatedAt = ts(0, 12, 0);
+      var meAi = routes["/api/ai/config"];
+      meAi.allowPersonal = adminAi.allowPersonal;
+      meAi.team = { available: !!(adminAi.enabled && adminAi.hasKey && adminAi.model),
+                    scope: "platform", provider: adminAi.provider, model: adminAi.model,
+                    status: adminAi.enabled ? "由平台管理员提供，费用由团队承担" : "平台尚未启用团队 AI" };
+      data = adminAi;
+    } else if (method === "PUT" && clean === "/api/ai/config") {
+      /* 成员切换来源写回内存：保存后状态与来源标签跟着变 */
+      var me = routes["/api/ai/config"];
+      var mb = reqBody || {};
+      if (mb.prefer) me.prefer = mb.prefer;
+      if (typeof mb.enabled === "boolean") me.enabled = mb.enabled;
+      if (typeof mb.apiKey === "string" && mb.apiKey) {
+        me.hasKey = true;
+        me.apiKeyMasked = "sk-****" + mb.apiKey.slice(-4);
+      }
+      var teamOn = me.prefer !== "personal" && me.team.available;
+      me.source = teamOn ? "team" : "personal";
+      me.sourceName = teamOn ? "团队 AI" : "我的 API Key";
+      me.status = !me.enabled ? "AI 已关闭" : (teamOn ? "已就绪：调用走团队额度" : "已就绪：调用走我的额度");
+      data = me;
     } else {
       /* 非 GET 也要走 pick：AI 的拆分/体检都是 POST，返回空对象会让界面直接报错 */
       var picked = pick(clean);

@@ -28,6 +28,12 @@ public interface SubtaskMapper {
 
     int update(Subtask subtask);
 
+    /** 重排：只动排序序号 */
+    int updateSortOrder(@Param("workspaceId") String workspaceId, @Param("id") Long id, @Param("sortOrder") int sortOrder);
+
+    /** 新建检查项追加末尾用；空清单返回 -1 */
+    int selectMaxSortOrder(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
     int deleteById(Long id);
 
     int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);

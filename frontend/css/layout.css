@@ -201,10 +201,23 @@ body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 .timer-pill .tp-stop:hover{background:var(--success);color:var(--text-inverse);}
 @media (max-width:1279px){.timer-pill{max-width:200px;}.timer-pill .tp-name{max-width:90px;}}
 
+/* 顶栏统一搜索入口：打开全局搜索组件（⌘K），与看板筛选框职责分离 */
+.gs-open{
+  display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;flex:0 0 auto;
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface-sunken);color:var(--text-2);font-size:13px;font-weight:500;
+  transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out),
+             border-color var(--dur-fast) var(--ease-out);
+}
+.gs-open:hover{background:var(--surface-hover);color:var(--text);}
+.gs-open > svg{color:var(--text-3);}
+.gs-open .gs-kbd{display:inline-flex;gap:2px;pointer-events:none;}
+.gs-open:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+
 .global-search{position:relative;display:flex;align-items:center;flex:0 0 auto;}
 .global-search > svg{position:absolute;left:10px;color:var(--text-3);pointer-events:none;}
 .global-search input{
-  width:240px;height:34px;padding:0 54px 0 32px;
+  width:240px;height:34px;padding:0 32px 0 32px;
   background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);
   font-size:13.5px;color:var(--text);
   transition:width var(--dur-base) var(--ease-out),background var(--dur-fast) var(--ease-out),
@@ -215,10 +228,6 @@ body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 /* Chrome/Edge 自动填充时触发动画，供脚本识别并清理（见 filters-ui.js） */
 @keyframes ds-autofill-start{from{opacity:1;}to{opacity:1;}}
 input[type="search"]:-webkit-autofill{animation:ds-autofill-start 1ms 1;}
-.global-search .gs-kbd{
-  position:absolute;right:8px;display:inline-flex;gap:2px;pointer-events:none;
-}
-.global-search input:focus + .gs-kbd{opacity:0;}
 .gs-kbd kbd{
   min-width:18px;height:18px;padding:0 4px;border-radius:var(--r-xs);
   border:1px solid var(--border-strong);background:var(--surface);
@@ -231,7 +240,6 @@ input[type="search"]:-webkit-autofill{animation:ds-autofill-start 1ms 1;}
 }
 .global-search .gs-clear:hover{background:var(--surface-active);color:var(--text);}
 .global-search.has .gs-clear{display:grid;}
-.global-search.has .gs-kbd{display:none;}
 
 /* 提醒铃铛 */
 .bell{position:relative;width:34px;height:34px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2);flex:0 0 auto;}
@@ -489,6 +497,8 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 .palette-body{min-width:0;display:flex;flex-direction:column;gap:1px;}
 .palette-title{font-size:13.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .palette-meta{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.palette-snippet{font-size:11.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.palette-snippet mark{background:var(--warning-soft);color:var(--warning-fg);border-radius:3px;padding:0 2px;font-weight:600;}
 .palette-empty{padding:28px 12px;text-align:center;color:var(--text-3);font-size:13px;}
 .palette-recent-head{
   display:flex;align-items:center;justify-content:space-between;

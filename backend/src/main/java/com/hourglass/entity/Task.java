@@ -38,7 +38,7 @@ public class Task {
     /** 预估耗时（分钟，空=没估过）。和 totalMinutes（实际投入）相除就是估时偏差 */
     private Integer estimateMinutes;
     private String note;
-    private LocalDate completedAt;
+    private LocalDateTime completedAt;
     /** 测试负责人账号ID；为空表示「待领取」，与开发负责人相互独立 */
     private String testOwnerUserId;
     /** 测试负责人显示名快照；账号ID是权威绑定 */

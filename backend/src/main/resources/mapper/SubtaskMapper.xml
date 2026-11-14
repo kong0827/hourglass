@@ -3,18 +3,18 @@
 <mapper namespace="com.hourglass.mapper.SubtaskMapper">
 
   <sql id="cols">
-    id, task_id, workspace_id, title, done, created_at, updated_at
+    id, task_id, workspace_id, title, done, sort_order, created_at, updated_at
   </sql>
 
   <select id="selectByTaskId" resultType="Subtask">
     SELECT <include refid="cols"/> FROM subtask
-    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} ORDER BY id
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} ORDER BY sort_order, id
   </select>
 
   <select id="selectPageByTaskId" resultType="Subtask">
     SELECT <include refid="cols"/> FROM subtask
     WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
-    ORDER BY id
+    ORDER BY sort_order, id
     LIMIT #{limit} OFFSET #{offset}
   </select>
 
@@ -23,23 +23,29 @@
   </select>
 
   <select id="selectAll" resultType="Subtask">
-    SELECT <include refid="cols"/> FROM subtask WHERE workspace_id = #{workspaceId} ORDER BY task_id, id
+    SELECT <include refid="cols"/> FROM subtask WHERE workspace_id = #{workspaceId} ORDER BY task_id, sort_order, id
   </select>
 
   <select id="selectById" resultType="Subtask">
     SELECT <include refid="cols"/> FROM subtask WHERE id = #{id}
   </select>
 
+  <select id="selectMaxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM subtask
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </select>
+
   <insert id="insert">
-    INSERT INTO subtask (task_id, workspace_id, title, done)
-    VALUES (#{taskId}, #{workspaceId}, #{title}, #{done})
+    INSERT INTO subtask (task_id, workspace_id, title, done, sort_order)
+    VALUES (#{taskId}, #{workspaceId}, #{title}, #{done}, #{sortOrder})
   </insert>
 
+  <!-- 备份导入：按批多值写入；旧备份没有排序字段，落 0 后靠插入序（id）保持备份内顺序 -->
   <insert id="insertBatch">
-    INSERT INTO subtask (task_id, workspace_id, title, done)
+    INSERT INTO subtask (task_id, workspace_id, title, done, sort_order)
     VALUES
     <foreach collection="list" item="s" separator=",">
-      (#{s.taskId}, #{s.workspaceId}, #{s.title}, #{s.done})
+      (#{s.taskId}, #{s.workspaceId}, #{s.title}, #{s.done}, COALESCE(#{s.sortOrder}, 0))
     </foreach>
   </insert>
 
@@ -49,6 +55,11 @@
       done = #{done},
       updated_at = NOW()
     WHERE id = #{id}
+  </update>
+
+  <update id="updateSortOrder">
+    UPDATE subtask SET sort_order = #{sortOrder}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
   </update>
 
   <delete id="deleteById">
@@ -75,7 +86,7 @@
     FROM subtask
     WHERE workspace_id = #{workspaceId}
       AND task_id IN
-      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
     GROUP BY task_id
   </select>
 </mapper>

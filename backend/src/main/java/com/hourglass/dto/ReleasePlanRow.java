@@ -18,6 +18,9 @@ public class ReleasePlanRow {
     private String projectName;
     /** 计划包含的全部版本/项目（多版本计划用 / 连接）；first version 字段仍保留用于打开入口。 */
     private String versionNames;
+    /** 与 versionNames 同序（ORDER BY r2.name, v2.name, v2.id）的逗号串，供前端逐枚接线跳转；旧客户端忽略。 */
+    private String versionIds;
+    private String versionReqIds;
     private String projectNames;
     private Integer versionCount;
     private LocalDateTime plannedAt;

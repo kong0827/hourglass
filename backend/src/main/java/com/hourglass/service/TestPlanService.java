@@ -6,6 +6,7 @@ import com.hourglass.common.CurrentUser;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.CaseRunRequest;
+import com.hourglass.dto.EntityTimelineItem;
 import com.hourglass.dto.PlanBatchRequest;
 import com.hourglass.dto.TestPlanCaseView;
 import com.hourglass.dto.TestPlanSaveRequest;
@@ -89,6 +90,13 @@ public class TestPlanService {
         return out;
     }
 
+    /** 变更记录（最近在前）：新建/编辑/状态、圈选、必测与批量执行都来自该计划自身的审计行 */
+    public List<EntityTimelineItem> timeline(String workspaceId, String userId, String id) {
+        TestPlan plan = requirePlan(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, plan.getReqId());
+        return auditService.timeline(workspaceId, "test_plan", id, 100);
+    }
+
     public com.hourglass.dto.PageResult<TestPlanCaseView> cases(
             String workspaceId, String userId, String id, int offset, int limit) {
         TestPlan plan = requirePlan(workspaceId, id);
@@ -164,6 +172,10 @@ public class TestPlanService {
         }
         checkDates(req);
         String oldName = p.getName();
+        String oldVersionId = p.getVersionId();
+        java.time.LocalDate oldStart = p.getPlannedStart();
+        java.time.LocalDate oldEnd = p.getPlannedEnd();
+        String oldNote = p.getNote();
         p.setName(Texts.cut(req.getName().trim(), 100));
         String keepVersion = Texts.trimToNull(req.getVersionId());
         if (keepVersion != null && keepVersion.equals(p.getVersionId()) && versionMapper.selectById(keepVersion) == null) {
@@ -175,12 +187,36 @@ public class TestPlanService {
         p.setPlannedEnd(req.getPlannedEnd());
         p.setNote(Texts.trimToNull(req.getNote()));
         planMapper.update(p);
-        String planDetail = java.util.Objects.equals(oldName, p.getName())
+        StringBuilder planDetail = new StringBuilder(java.util.Objects.equals(oldName, p.getName())
                 ? "编辑测试计划「" + p.getName() + "」"
-                : "编辑测试计划「" + oldName + "」→「" + p.getName() + "」";
+                : "编辑测试计划「" + oldName + "」→「" + p.getName() + "」");
+        if (!java.util.Objects.equals(oldVersionId, p.getVersionId())) {
+            planDetail.append("，关联版本由「").append(versionName(oldVersionId)).append("」改为「")
+                    .append(versionName(p.getVersionId())).append("」");
+        }
+        if (!java.util.Objects.equals(oldStart, p.getPlannedStart())
+                || !java.util.Objects.equals(oldEnd, p.getPlannedEnd())) {
+            planDetail.append("，计划时间 ").append(dateText(oldStart)).append(" → ").append(dateText(oldEnd))
+                    .append(" 改为 ").append(dateText(p.getPlannedStart())).append(" → ").append(dateText(p.getPlannedEnd()));
+        }
+        if (!java.util.Objects.equals(oldNote, p.getNote())) {
+            planDetail.append("，修改备注");
+        }
         auditService.recordCurrent(workspaceId, "test_plan_update", "test_plan", id, p.getName(), true,
-                planDetail, null);
+                planDetail.toString(), null);
         return planMapper.selectViewById(id);
+    }
+
+    private String versionName(String versionId) {
+        if (versionId == null || versionId.isEmpty()) {
+            return "未关联";
+        }
+        com.hourglass.entity.ProjectVersion v = versionMapper.selectById(versionId);
+        return v == null ? versionId : v.getName();
+    }
+
+    private static String dateText(java.time.LocalDate date) {
+        return date == null ? "未设置" : date.toString();
     }
 
     /** 关联版本必须属于本空间、本项目；空值表示不关联 */
@@ -238,6 +274,7 @@ public class TestPlanService {
         projectAccess.assertWrite(workspaceId, userId, p.getReqId());
         assertEditable(p);
         Set<String> exists = new HashSet<String>(planCaseMapper.selectCaseIds(planId));
+        boolean required = Boolean.TRUE.equals(req.getRequired());
         int added = 0;
         for (String caseId : req.getCaseIds()) {
             if (caseId == null || exists.contains(caseId)) {
@@ -251,15 +288,70 @@ public class TestPlanService {
             row.setId(Ids.gen("PC"));
             row.setPlanId(planId);
             row.setCaseId(caseId);
+            row.setRequired(required);
             planCaseMapper.insert(row);
             exists.add(caseId);
             added++;
         }
         if (added > 0) {
             auditService.recordCurrent(workspaceId, "test_plan_cases_add", "test_plan", planId, p.getName(), true,
-                    "向测试计划「" + p.getName() + "」加入 " + added + " 条用例", null);
+                    "向测试计划「" + p.getName() + "」加入 " + added + " 条用例"
+                            + (required ? "，标记为发布必测" : ""), null);
         }
         return added;
+    }
+
+    /**
+     * 按筛选圈选入计划：筛选条件即范围（含未加载的行），已在计划内的跳过。
+     * dryRun 只回报命中 / 重复 / 将新增条数，供确认弹窗展示，不写入。
+     */
+    @Transactional
+    public Map<String, Object> addCasesByFilter(String userId, String workspaceId, String planId,
+                                                com.hourglass.dto.PlanFilterRequest req) {
+        TestPlan p = requirePlan(workspaceId, planId);
+        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        assertEditable(p);
+        if (req.getFilter() == null) {
+            throw AppException.badRequest("按筛选加入时必须带上筛选条件");
+        }
+        /* 计划强归属项目：范围锁定在计划所属项目，避免把别的项目用例圈进来 */
+        req.getFilter().setReqId(p.getReqId());
+        com.hourglass.dto.CaseSelection selection = new com.hourglass.dto.CaseSelection();
+        selection.setAllFiltered(true);
+        selection.setFilter(req.getFilter());
+        selection.setExcludeIds(req.getExcludeIds());
+        List<String> matched = caseService.selectionIds(userId, workspaceId, selection);
+        Set<String> exists = new HashSet<String>(planCaseMapper.selectCaseIds(planId));
+        List<String> fresh = new ArrayList<String>();
+        for (String caseId : matched) {
+            if (!exists.contains(caseId)) {
+                fresh.add(caseId);
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("matched", matched.size());
+        out.put("already", matched.size() - fresh.size());
+        out.put("added", fresh.size());
+        out.put("dryRun", req.isDryRun());
+        if (req.isDryRun()) {
+            return out;
+        }
+        boolean required = Boolean.TRUE.equals(req.getRequired());
+        for (String caseId : fresh) {
+            TestPlanCase row = new TestPlanCase();
+            row.setId(Ids.gen("PC"));
+            row.setPlanId(planId);
+            row.setCaseId(caseId);
+            row.setRequired(required);
+            planCaseMapper.insert(row);
+        }
+        if (!fresh.isEmpty()) {
+            auditService.recordCurrent(workspaceId, "test_plan_cases_add", "test_plan", planId, p.getName(), true,
+                    "按筛选向测试计划「" + p.getName() + "」加入 " + fresh.size() + " 条用例（命中 "
+                            + matched.size() + " 条，跳过 " + (matched.size() - fresh.size()) + " 条重复）"
+                            + (required ? "，标记为发布必测" : ""), null);
+        }
+        return out;
     }
 
     @Transactional

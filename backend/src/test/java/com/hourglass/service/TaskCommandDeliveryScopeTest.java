@@ -258,7 +258,7 @@ class TaskCommandDeliveryScopeTest {
     void editOmittedOrNullVersionReturnsBindingAndCurrentPublicationFlags(
             boolean explicitNull, boolean permitted, boolean published) {
         old.setBoardColumn("done");
-        old.setCompletedAt(LocalDate.of(2026, 11, 8));
+        old.setCompletedAt(LocalDate.of(2026, 11, 8).atStartOfDay());
         old.setDemandId("D1");
         if (published) productionHistory("K1");
         version("V1", "released", "R1");
@@ -294,7 +294,7 @@ class TaskCommandDeliveryScopeTest {
     @CsvSource({"backlog,false", "backlog,true", "done,false"})
     void editAlwaysClearsPublicationActionsRegardlessOfExecutionState(String column, boolean completed) {
         old.setBoardColumn(column);
-        if (completed) old.setCompletedAt(LocalDate.of(2026, 11, 8));
+        if (completed) old.setCompletedAt(LocalDate.of(2026, 11, 8).atStartOfDay());
         Task saved = savedUpdateResponse();
         saved.setCanPublish(true);
         saved.setCanUnpublish(true);
@@ -312,7 +312,7 @@ class TaskCommandDeliveryScopeTest {
     @CsvSource({"false,false", "true,false", "false,true", "true,true"})
     void ownerReassignmentKeepsFormalProjectionButNeverEnablesPublicationActions(boolean published, boolean assignedToActor) {
         old.setBoardColumn("done");
-        old.setCompletedAt(LocalDate.of(2026, 11, 8));
+        old.setCompletedAt(LocalDate.of(2026, 11, 8).atStartOfDay());
         if (published) productionHistory("K1");
         old.setDemandId("D1");
         old.setOwnerUserId(assignedToActor ? "U2" : "U1");
@@ -338,7 +338,7 @@ class TaskCommandDeliveryScopeTest {
     @Test
     void projectChangeWithoutFormalHistoryStillReturnsDisabledPublicationActions() {
         old.setBoardColumn("done");
-        old.setCompletedAt(LocalDate.of(2026, 11, 8));
+        old.setCompletedAt(LocalDate.of(2026, 11, 8).atStartOfDay());
         old.setCanPublish(true);
         Requirement nextProject = new Requirement();
         nextProject.setId("R2");

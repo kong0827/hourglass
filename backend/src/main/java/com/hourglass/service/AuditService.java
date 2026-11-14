@@ -3,6 +3,7 @@ package com.hourglass.service;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.common.LoginUser;
 import com.hourglass.common.Texts;
+import com.hourglass.dto.EntityTimelineItem;
 import com.hourglass.entity.AuditLog;
 import com.hourglass.mapper.AuditLogMapper;
 import org.slf4j.Logger;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -119,6 +121,25 @@ public class AuditService {
         data.put("retentionDays", retainDays);
         data.put("oldestAt", mapper.selectOldest(workspaceId));
         return data;
+    }
+
+    /** 单实体变更记录：只返回该实体自身的审计行，调用方必须先做项目可见性校验 */
+    public List<EntityTimelineItem> timeline(String workspaceId, String targetType, String targetId, int limit) {
+        int size = Math.max(1, Math.min(200, limit));
+        List<AuditLog> rows = mapper.selectByTarget(workspaceId, targetType, targetId, size);
+        List<EntityTimelineItem> out = new ArrayList<EntityTimelineItem>();
+        for (AuditLog a : rows) {
+            EntityTimelineItem item = new EntityTimelineItem();
+            item.setId(a.getId());
+            item.setAction(a.getAction());
+            item.setActionLabel(actionLabel(a.getAction()));
+            item.setActorName(a.getActorName());
+            item.setDetail(a.getDetail());
+            item.setResult(a.getResult());
+            item.setCreatedAt(a.getCreatedAt());
+            out.add(item);
+        }
+        return out;
     }
 
     public byte[] exportCsv(String workspaceId, String q, String action, String result,
@@ -231,16 +252,38 @@ public class AuditService {
             case "work_hours_update": return "修改计时设置";
             case "mail_settings_update": return "修改邮件服务器";
             case "ai_config_update": return "修改 AI 配置";
+            case "ai_shared_config_update": return "修改团队 AI 配置";
             case "ai_assistant_exec": return "AI 助手执行";
             case "gantt_share_create": return "生成甘特分享";
             case "gantt_share_revoke": return "撤销甘特分享";
+            case "test_case_create": return "新建测试用例";
+            case "test_case_update": return "编辑测试用例";
+            case "test_case_batch_update": return "批量设置用例";
             case "test_case_delete": return "删除测试用例";
             case "test_case_import": return "导入测试用例";
+            case "test_case_defect": return "用例转出缺陷";
+            case "test_case_move_module": return "用例移动目录";
+            case "test_case_move_undo": return "撤销用例移动";
+            case "test_module_create": return "新建用例目录";
+            case "test_module_update": return "编辑用例目录";
+            case "test_module_delete": return "删除用例目录";
+            case "case_set_create": return "新建用例分组";
+            case "case_set_update": return "编辑用例分组";
+            case "case_set_delete": return "删除用例分组";
+            case "case_set_members_add": return "分组加入用例";
+            case "case_set_members_remove": return "分组移出用例";
+            case "test_plan_create": return "新建测试计划";
+            case "test_plan_update": return "编辑测试计划";
+            case "test_plan_cases_add": return "计划加入用例";
+            case "test_plan_cases_remove": return "计划移出用例";
+            case "test_plan_required": return "计划必测标记";
+            case "test_plan_run": return "计划批量执行";
             case "test_plan_delete": return "删除测试计划";
             case "test_plan_status": return "测试计划状态变更";
             case "comment_delete": return "删除评论";
             case "workspace_delete": return "删除空间";
             case "project_delete": return "删除项目";
+            case "project_release_policy": return "修改发布检查策略";
             case "task_purge": return "彻底删除任务";
             case "demand_delete": return "删除需求";
             case "requirement_doc_delete": return "删除需求文档";

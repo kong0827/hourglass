@@ -68,4 +68,19 @@ class AiClientTest {
         assertTrue(message.contains("API Key 无效"), message);
         assertFalse(AiClient.quotaExhausted("{\"error\":{\"message\":\"Invalid API key\"}}"));
     }
+
+    /** 团队 Key 出问题时提示找管理员，不能把成员引去个人设置改自己的 Key */
+    @Test
+    void sharedKeyErrorsPointToAdmin() {
+        String auth = AiClient.errorMessage(403, "{\"error\":{\"message\":\"Invalid API key\"}}", "团队 AI");
+        assertTrue(auth.startsWith("团队 AI"), auth);
+        assertTrue(auth.contains("平台管理员"), auth);
+        assertFalse(auth.contains("个人设置"), auth);
+
+        String quota = AiClient.errorMessage(403,
+                "{\"error\":{\"type\":\"insufficient_quota\",\"message\":\"quota exhausted\"}}", "团队 AI");
+        assertTrue(quota.contains("团队 AI 的账户额度不足"), quota);
+        assertTrue(quota.contains("平台管理员"), quota);
+        assertFalse(quota.contains("个人设置"), quota);
+    }
 }

@@ -508,7 +508,7 @@ public class ProjectMilestoneService {
             mt.setId(task.getId());
             mt.setTitle(task.getTitle());
             mt.setBoardColumn(task.getBoardColumn());
-            mt.setCompletedAt(task.getCompletedAt() == null ? null : task.getCompletedAt().atStartOfDay());
+            mt.setCompletedAt(task.getCompletedAt());
             view.getTasks().add(mt);
         }
         int done = 0;
@@ -536,8 +536,8 @@ public class ProjectMilestoneService {
                 for (Task task : tasks) {
                     if (task.getCompletedAt() != null
                             && (achievedAt == null
-                            || task.getCompletedAt().atStartOfDay().isAfter(achievedAt))) {
-                        achievedAt = task.getCompletedAt().atStartOfDay();
+                            || task.getCompletedAt().isAfter(achievedAt))) {
+                        achievedAt = task.getCompletedAt();
                     }
                 }
             }

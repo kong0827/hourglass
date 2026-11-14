@@ -228,7 +228,9 @@ function renderHead(){
   if(!boot) return;
   var parts = [];
   if(ROLE_LABEL[boot.role]) parts.push(ROLE_LABEL[boot.role]);
-  parts.push(boot.aiReady ? "模型已就绪" : "未配置模型");
+  parts.push(boot.aiReady
+    ? (boot.aiSourceName ? boot.aiSourceName + " 已就绪" : "模型已就绪")
+    : "未配置模型");
   if(!boot.canCreate) parts.push("无可写项目");
   els.sub.textContent = parts.join(" · ");
   els.sub.title = boot.aiStatus || "";

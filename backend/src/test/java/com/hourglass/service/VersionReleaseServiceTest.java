@@ -34,10 +34,15 @@ class VersionReleaseServiceTest {
     private final TestPlanCaseMapper planCases = mock(TestPlanCaseMapper.class);
     private final TestCaseTaskMapper caseTasks = mock(TestCaseTaskMapper.class);
     private final TestCaseMapper cases = mock(TestCaseMapper.class);
+    private final TestPlanMapper testPlans = mock(TestPlanMapper.class);
+    private final AuditService audits = mock(AuditService.class);
+    private final WorkActivityService workActivities = mock(WorkActivityService.class);
+    private final TaskLogMapper taskLogs = mock(TaskLogMapper.class);
     private final VersionReleaseService service = new VersionReleaseService(mapper, versions, reqMapper,
             mock(DemandMapper.class), users, versionTasks, members, locks, permissions, access,
             mock(TaskPublicationService.class), notifications, json, tx, numberSeq,
-            planCases, caseTasks, cases);
+            planCases, caseTasks, cases, testPlans, audits, workActivities, taskLogs,
+            mock(CaseSetService.class));
     private final Map<String, VersionReleasePlan> plans = new HashMap<String, VersionReleasePlan>();
     private final Map<String, VersionRelease> records = new HashMap<String, VersionRelease>();
     private final Map<String, List<VersionReleaseItem>> items = new HashMap<String, List<VersionReleaseItem>>();
@@ -82,6 +87,7 @@ class VersionReleaseServiceTest {
         when(mapper.selectTaskForUpdate(eq("W"), anyString())).thenAnswer(i -> scope.stream().filter(t -> t.getId().equals(i.getArgument(1))).findFirst().orElse(null));
         when(mapper.selectPlanForUpdate(eq("W"), anyString())).thenAnswer(i -> plans.get(i.getArgument(1)));
         when(mapper.selectPlans(eq("W"), anyString())).thenAnswer(i -> new ArrayList<VersionReleasePlan>(plans.values()));
+        when(mapper.selectPlannedTaskIds(eq("W"), anyString())).thenAnswer(i -> new ArrayList<String>(plans.get(i.getArgument(1)).getPlannedTaskIds()));
         when(mapper.selectPlannedTaskIdsForUpdate(eq("W"), anyString())).thenAnswer(i -> new ArrayList<String>(plans.get(i.getArgument(1)).getPlannedTaskIds()));
         when(mapper.insertPlan(any())).thenAnswer(i -> { VersionReleasePlan p = i.getArgument(0); plans.put(p.getId(), p); return 1; });
         when(mapper.updatePlan(any())).thenAnswer(i -> { VersionReleasePlan p = i.getArgument(0); p.setRevision(p.getRevision() + 1); plans.put(p.getId(), p); return 1; });
@@ -121,6 +127,31 @@ class VersionReleaseServiceTest {
     }
     @AfterEach void teardown() { TransactionSynchronizationManager.clear(); }
 
+    @Test void successWritesReleaseNodeIntoEachPublishedTaskTimelineAndReplayDoesNotDuplicate() {
+        ReleaseConfirmRequest r = request(plan("production"), "release-node");
+        VersionRelease saved = confirm(r);
+        org.mockito.ArgumentCaptor<TaskLog> captor = org.mockito.ArgumentCaptor.forClass(TaskLog.class);
+        verify(taskLogs, times(2)).insert(captor.capture());
+        List<TaskLog> logs = captor.getAllValues();
+        assertEquals(Arrays.asList("T1", "T2"), logs.stream().map(TaskLog::getTaskId).collect(java.util.stream.Collectors.toList()));
+        for (TaskLog entry : logs) {
+            assertEquals("W", entry.getWorkspaceId());
+            assertEquals("U", entry.getActorId());
+            assertEquals("release", entry.getAction());
+            assertTrue(entry.getDetail().contains("随版本「1.0」发布到生产"), entry.getDetail());
+            assertTrue(entry.getDetail().contains("执行人 Executor"), entry.getDetail());
+            assertTrue(entry.getChangeData().contains(saved.getId()), entry.getChangeData());
+            assertTrue(entry.getChangeData().contains("\"versionName\":\"1.0\""), entry.getChangeData());
+        }
+        assertSame(saved, service.confirm("U", "W", "V", r));
+        verify(taskLogs, times(2)).insert(any(TaskLog.class));
+    }
+    @Test void failedReleaseRecordWritesNoTaskTimelineNode() {
+        ReleaseConfirmRequest r = request(plan("production"), "release-node-failed");
+        r.setResult("failed"); r.setFailureReason("build failed");
+        confirm(r);
+        verifyNoInteractions(taskLogs);
+    }
     @Test void subsetIsExplicitAndOmittedPlanTaskGetsImmutableSnapshot() {
         ReleaseConfirmRequest r = request(plan("production"), "one"); r.setActualTaskIds(Collections.singletonList("T1")); r.setDeviationReason("Only first batch deployed");
         VersionRelease saved = confirm(r);
@@ -333,6 +364,22 @@ class VersionReleaseServiceTest {
         assertEquals(ZoneOffset.UTC, r.getOccurredAt().getOffset());
         r.setActualTaskIds(java.util.stream.IntStream.range(0, 501).mapToObj(i -> "T" + i).collect(java.util.stream.Collectors.toList()));
         code(400, () -> service.preview("U", "W", "V", r));
+    }
+
+    @Test void completionDayIsComparedWithActualDayInServerZone() {
+        /* 本地凌晨完成、UTC 还停在前一天：两个日期必须先换算到同一时区，否则误报完成日晚于实际时间 */
+        LocalDateTime completedLocal = LocalDate.now().minusDays(2).atTime(0, 30);
+        for (Task t : scope) t.setCompletedAt(completedLocal);
+        ReleaseConfirmRequest r = request(null, "zone-day");
+        r.setOccurredAt(completedLocal.atZone(ZoneId.systemDefault()).toOffsetDateTime().withOffsetSameInstant(ZoneOffset.UTC));
+        assertTrue(service.preview("U", "W", "V", r).getWarnings().stream().noneMatch(w -> w.contains("完成日晚于实际时间")));
+    }
+
+    @Test void completionDayAfterActualDayStillWarns() {
+        ReleaseConfirmRequest r = request(null, "late-day");
+        LocalDate actualLocalDay = TIME.atZoneSameInstant(ZoneId.systemDefault()).toLocalDate();
+        for (Task t : scope) t.setCompletedAt(actualLocalDay.plusDays(1).atTime(10, 0));
+        assertTrue(service.preview("U", "W", "V", r).getWarnings().stream().anyMatch(w -> w.contains("完成日晚于实际时间")));
     }
 
     @Test void replayDoesNotRequireExecutorToRemainAvailableAndLocksMembersInStableOrder() {
@@ -548,7 +595,9 @@ class VersionReleaseServiceTest {
 
     @Test void releaseCheckBlocksFailedRequiredCaseUnderStandardPolicy() {
         VersionReleasePlan p = plan("production");
-        when(planCases.selectEvidenceCases(p.getId())).thenReturn(Arrays.asList(
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(1);
+        when(planCases.selectEvidenceCasesByVersion("W", "V")).thenReturn(Arrays.asList(
                 requiredCase("C1", "passed", true), requiredCase("C2", "failed", true), requiredCase("C3", null, false)));
         ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", p.getId());
         assertEquals("standard", c.getPolicy());
@@ -561,7 +610,9 @@ class VersionReleaseServiceTest {
     @Test void loosePolicyDowngradesRequiredFailureToReminder() {
         VersionReleasePlan p = plan("production");
         Requirement project = reqMapper.selectById("P"); project.setReleaseCheckPolicy("loose");
-        when(planCases.selectEvidenceCases(p.getId())).thenReturn(Collections.singletonList(requiredCase("C1", "failed", true)));
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(1);
+        when(planCases.selectEvidenceCasesByVersion("W", "V")).thenReturn(Collections.singletonList(requiredCase("C1", "failed", true)));
         ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", p.getId());
         assertEquals("warn", c.getVerdict()); assertTrue(c.getBlockers().isEmpty());
         assertTrue(c.getReminders().stream().anyMatch(x -> x.contains("发布必测用例失败")));
@@ -573,7 +624,9 @@ class VersionReleaseServiceTest {
     @Test void confirmRequiresRiskReasonWhenCheckBlockedAndFreezesEvidence() {
         VersionReleasePlan p = plan("production");
         Requirement project = reqMapper.selectById("P"); project.setReleaseCheckPolicy("strict");
-        when(planCases.selectEvidenceCases(p.getId())).thenReturn(Collections.singletonList(requiredCase("C1", null, true)));
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(1);
+        when(planCases.selectEvidenceCasesByVersion("W", "V")).thenReturn(Collections.singletonList(requiredCase("C1", null, true)));
         ReleaseConfirmRequest r = request(p, "evidence-block");
         ReleasePreviewResponse pv = service.preview("U", "W", "V", r);
         assertNotNull(pv.getTestCheck()); assertFalse(pv.isCanPublish());
@@ -587,6 +640,126 @@ class VersionReleaseServiceTest {
         assertEquals("strict", ev.get("policy"));
         assertEquals(1, ((Number) ev.get("requiredUntested")).intValue());
         assertEquals(1, ((List<?>) ev.get("requiredCases")).size());
+    }
+
+    @Test void releaseCheckWithoutPlanStillEvaluatesVersionRequiredCases() {
+        /* 紧急发布没有发布计划时，也要核对本版本测试计划里的必测用例，不能只冻结覆盖事实 */
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(1);
+        when(planCases.selectEvidenceCasesByVersion("W", "V")).thenReturn(Arrays.asList(
+                requiredCase("C1", "passed", true), requiredCase("C2", "failed", true)));
+        ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", null);
+        assertNull(c.getPlanId());
+        assertEquals("block", c.getVerdict());
+        assertEquals(2, c.getCaseTotal());
+        assertEquals(1, c.getRequiredFailed());
+        assertTrue(c.getReminders().stream().anyMatch(x -> x.contains("未关联发布计划")));
+        /* 冻结证据标明证据范围与未关联计划，历史回读不会把 requiredTotal=0 误读成「没有必测」 */
+        VersionRelease record = confirm(request(null, "emergency-check"));
+        Map<String, Object> ev = frozenEvidence(record);
+        assertEquals("version", ev.get("evidenceScope"));
+        assertEquals(Boolean.FALSE, ev.get("planLinked"));
+        assertEquals(1, ((Number) ev.get("requiredFailed")).intValue());
+        assertEquals("block", ev.get("verdict"));
+    }
+
+    @Test void draftPlansDoNotContributeEvidence() {
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(0);
+        ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", null);
+        assertEquals("warn", c.getVerdict());
+        assertEquals(0, c.getCaseTotal());
+        assertTrue(c.getReminders().stream().anyMatch(x -> x.contains("还是草稿")));
+    }
+
+    @Test void rejectedAndCanceledDemandsLeaveCoverageDenominator() {
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(1);
+        when(planCases.selectEvidenceCasesByVersion("W", "V")).thenReturn(Collections.<ReleaseCheckCase>emptyList());
+        when(mapper.selectDemandIdsByVersion("W", "P", "V")).thenReturn(Arrays.asList("D1", "D2", "D3", "D4", "D5"));
+        com.hourglass.dto.CaseCoverageRow plan = coverage("D1", "plan", 1);
+        com.hourglass.dto.CaseCoverageRow rejected = coverage("D2", "rej", 0);
+        com.hourglass.dto.CaseCoverageRow canceled = coverage("D3", "canceled", 0);
+        com.hourglass.dto.CaseCoverageRow passed = coverage("D4", "pass", 0);
+        /* 当前版本的拒绝 / 取消写入 status=closed + close_reason，不能只看历史 rej / canceled */
+        com.hourglass.dto.CaseCoverageRow closed = coverage("D5", "closed", 0);
+        when(cases.selectCoverageByDemand("W", "P")).thenReturn(Arrays.asList(plan, rejected, canceled, passed, closed));
+        ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", null);
+        assertEquals(2, c.getDemandsTotal());
+        assertEquals(1, c.getDemandsCovered());
+        assertTrue(c.getReminders().stream().noneMatch(x -> x.contains("0/5")));
+    }
+
+    private static com.hourglass.dto.CaseCoverageRow coverage(String demandId, String status, int caseTotal) {
+        com.hourglass.dto.CaseCoverageRow row = new com.hourglass.dto.CaseCoverageRow();
+        row.setDemandId(demandId); row.setDemandStatus(status); row.setCaseTotal(caseTotal);
+        return row;
+    }
+
+    @Test void evidenceMergesWorstResultAcrossPlansAndKeepsRequiredUnion() {
+        /* 同一用例出现在多个计划时按最差结果计数，必测标记取并集 */
+        when(testPlans.countByVersion("W", "V")).thenReturn(2);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(2);
+        when(planCases.selectEvidenceCasesByVersion("W", "V")).thenReturn(Arrays.asList(
+                requiredCase("C1", "passed", false), requiredCase("C1", "failed", true),
+                requiredCase("C2", "blocked", false), requiredCase("C2", "passed", true)));
+        ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", null);
+        assertEquals(2, c.getCaseTotal());
+        assertEquals(1, c.getCaseFailed());
+        assertEquals(1, c.getCaseBlocked());
+        assertEquals(2, c.getRequiredFailed());
+        assertEquals(0, c.getRequiredPassed());
+        assertEquals("block", c.getVerdict());
+    }
+
+    @Test void coverageScopeIsVersionTasksIntersectedWithPlanTasks() {
+        /* 覆盖分母只算计划任务 ∩ 版本范围，计划外的版本工作项不拉低比例 */
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(1);
+        when(planCases.selectEvidenceCasesByVersion("W", "V")).thenReturn(
+                Collections.singletonList(requiredCase("C1", "passed", true)));
+        when(mapper.selectScopeTaskIds("W", "V")).thenReturn(Arrays.asList("T1", "T2"));
+        when(mapper.selectDemandIdsByVersion("W", "P", "V")).thenReturn(Arrays.asList("D1", "D2"));
+        com.hourglass.dto.TaskCoverageRow coveredTask = new com.hourglass.dto.TaskCoverageRow();
+        coveredTask.setTaskId("T1"); coveredTask.setDemandId("D1"); coveredTask.setCaseTotal(2);
+        when(caseTasks.selectCoverageByTasks(eq("W"), anyList())).thenReturn(Collections.singletonList(coveredTask));
+        when(cases.selectCoverageByDemand("W", "P")).thenReturn(Arrays.asList(
+                coverage("D1", "plan", 2), coverage("D2", "plan", 0)));
+        VersionReleasePlan p = plan("production");
+        p.setPlannedTaskIds(Collections.singletonList("T1"));
+        ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", p.getId());
+        assertEquals(1, c.getWorkItemsTotal());
+        assertEquals(1, c.getWorkItemsCovered());
+        assertEquals(2, c.getDemandsTotal());
+        assertEquals(1, c.getDemandsCovered());
+        verify(caseTasks).selectCoverageByTasks(eq("W"), eq(Collections.singletonList("T1")));
+    }
+
+    @Test void planWithNoVersionTaskExplainsZeroWorkItemScope() {
+        /* 计划里的工作项都不属于本版本时，不再静默显示 0/0，而是说明按需求级核对 */
+        when(testPlans.countByVersion("W", "V")).thenReturn(1);
+        when(testPlans.countActiveByVersion("W", "V")).thenReturn(1);
+        when(mapper.selectScopeTaskIds("W", "V")).thenReturn(Arrays.asList("T1", "T2"));
+        VersionReleasePlan p = plan("production");
+        p.setPlannedTaskIds(Collections.singletonList("T9"));
+        ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", p.getId());
+        assertEquals(0, c.getWorkItemsTotal());
+        assertTrue(c.getReminders().stream().anyMatch(x -> x.contains("都不在本版本范围内")));
+        verify(caseTasks, never()).selectCoverageByTasks(any(), anyList());
+    }
+
+    @Test void releasePolicyChangeIsAuditedAndVisibleInProjectActivity() {
+        when(reqMapper.updateReleasePolicy("W", "P", "strict")).thenReturn(1);
+        service.saveReleasePolicy("U", "W", "P", "strict");
+        verify(audits).recordCurrent(eq("W"), eq("project_release_policy"), eq("project"), eq("P"),
+                eq("Project"), eq(true), eq("发布检查策略：标准 → 严格"), isNull());
+        verify(workActivities).recordCurrent("W", WorkActivityService.PROJECT, "P", "release_policy_update",
+                "发布检查策略：标准 → 严格");
+        /* 值没变时不重复留痕 */
+        Requirement project = reqMapper.selectById("P"); project.setReleaseCheckPolicy("strict");
+        service.saveReleasePolicy("U", "W", "P", "strict");
+        verify(audits, times(1)).recordCurrent(any(), any(), any(), any(), any(), anyBoolean(), any(), any());
+        verify(workActivities, times(1)).recordCurrent(any(), any(), any(), any(), any());
     }
 
     @Test void releasePolicyIsValidatedAndSavedPerProject() {
@@ -628,7 +801,7 @@ class VersionReleaseServiceTest {
         TaskVersionBinding row = new TaskVersionBinding(); row.setTaskId(taskId); row.setVersionId(versionId); row.setVersionName(versionName); return row;
     }
     private Task task(String id) {
-        Task t = new Task(); t.setId(id); t.setTitle(id); t.setItemType("task"); t.setWorkspaceId("W"); t.setReqId("P"); t.setOwnerUserId("O"); t.setBoardColumn("done"); t.setCompletedAt(TIME.toLocalDate()); return t;
+        Task t = new Task(); t.setId(id); t.setTitle(id); t.setItemType("task"); t.setWorkspaceId("W"); t.setReqId("P"); t.setOwnerUserId("O"); t.setBoardColumn("done"); t.setCompletedAt(TIME.toLocalDateTime()); return t;
     }
     private void code(int expected, org.junit.jupiter.api.function.Executable action) { assertEquals(expected, assertThrows(AppException.class, action).getCode()); }
 }

@@ -106,6 +106,29 @@ class ProjectVersionServiceTest {
         when(releases.selectRecordsByProjectForUpdate(anyString(), anyString())).thenReturn(Collections.emptyList());
     }
 
+    @Test
+    void detailReturnsVersionAfterProjectVisibilityCheck() {
+        ProjectVersion version = version("V1", "R1");
+        when(versions.selectById("V1")).thenReturn(version);
+
+        ProjectVersion found = service.detail(WS, "V1", USER);
+
+        assertSame(version, found);
+        verify(access).assertView(WS, USER, "R1");
+    }
+
+    @Test
+    void detailRejectsVersionOutsideWorkspace() {
+        ProjectVersion other = version("V1", "R1");
+        other.setWorkspaceId("W2");
+        when(versions.selectById("V1")).thenReturn(other);
+
+        AppException ex = assertThrows(AppException.class, () -> service.detail(WS, "V1", USER));
+
+        assertTrue(ex.getMessage().contains("版本不存在"));
+        verify(access, never()).assertView(anyString(), anyString(), anyString());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"planned", "active"})
     void deleteUnreferencedVersionChecksCurrentScopeWithoutErasingPlanHistory(String status) {

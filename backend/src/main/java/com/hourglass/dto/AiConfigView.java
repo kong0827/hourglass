@@ -25,4 +25,14 @@ public class AiConfigView {
     private List<AiProviders.Preset> presets;
     /** 一句话说明当前能不能用 */
     private String status;
+    /** 来源偏好：auto / personal */
+    private String prefer;
+    /** 解析后的实际来源：team / workspace / personal / none */
+    private String source;
+    /** 实际来源展示名：团队 AI / 本空间 AI / 我的 API Key / 未配置 */
+    private String sourceName;
+    /** 平台是否允许成员改用个人 Key */
+    private boolean allowPersonal;
+    /** 共享 AI 的只读信息（团队成员看不到 Key 与掩码） */
+    private AiTeamView team;
 }

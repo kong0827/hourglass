@@ -1330,7 +1330,9 @@ function openGanttDepMenu(depId, anchorEl){
   UI.closeAllPops();
   var type = dep.depType || "FS";
   ganttDepMenu.innerHTML = '<div class="menu-title">依赖：' +
-      esc(fromT ? fromT.title : dep.fromTaskId) + ' → ' + esc(toT ? toT.title : dep.toTaskId) + '</div>' +
+      '<button type="button" class="snap-link" data-gantt-dep-open="' + esc(dep.fromTaskId) + '" title="打开前置工作项详情">' + esc(fromT ? fromT.title : dep.fromTaskId) + '</button>' +
+      ' → ' +
+      '<button type="button" class="snap-link" data-gantt-dep-open="' + esc(dep.toTaskId) + '" title="打开后置工作项详情">' + esc(toT ? toT.title : dep.toTaskId) + '</button>' + '</div>' +
     '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">类型</div>' +
       '<div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
         ["FS","SS","FF","SF"].map(function(t){
@@ -2857,6 +2859,8 @@ if(ganttLoadCloseEl){
 }
 if(ganttDepMenu){
   ganttDepMenu.addEventListener("click", function(e){
+    var depOpen = e.target.closest("[data-gantt-dep-open]");
+    if(depOpen){ UI.closeAllPops(); openTaskById(depOpen.getAttribute("data-gantt-dep-open")); return; }
     var typeBtn = e.target.closest("[data-gantt-dep-type]");
     if(typeBtn){
       ganttDepMenu.__depType = typeBtn.getAttribute("data-gantt-dep-type");

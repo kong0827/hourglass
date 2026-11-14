@@ -10,7 +10,7 @@ import { loadReqs } from "./board.js";
 import { companyChipHTML } from "../lib/company.js";
 import { memberRoleTitles, labelFilterText } from "../lib/member-labels.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, taskStatusName } from "./manager-shared.js";
 
 var cache = null, seq = 0, mode = "week", loading = false, filterWorkspace = "", activeMemberSheet = null;
@@ -141,7 +141,7 @@ function memberTasksHTML(m, layer){
   var rows = tasks.map(function(t){
     return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
       + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
-      + '<td>' + esc(t.reqName || "未归类") + '</td>'
+      + '<td>' + assocLinkHTML("project", t.reqId, t.reqName, {plain:"未归类"}) + '</td>'
       + '<td>' + esc(taskStatusName(t)) + '</td>'
       + '<td class="num">' + esc(fmtDate(t.dueDate)) + '</td>'
       + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'

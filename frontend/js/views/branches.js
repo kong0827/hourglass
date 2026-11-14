@@ -7,9 +7,11 @@ import { activeView } from "../core/router.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
 import { canEditReq, roleReadOnly, rt, state } from "../core/state.js";
 import { hashParam, openTaskById } from "../core/task-actions.js";
-import { ownerOptions } from "../core/task-drawer.js";
+import { ownerOptions, ownerPickerOptions, ownerRosterState, ensureProjectRoles, currentProjectId, syncAssocRead } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { avatarHTML, fmtTs, priColor, priName } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, fmtTs, priColor, priName } from "../lib/format.js";
+import { openPeoplePicker, peopleFieldHTML } from "../lib/people-picker.js";
+import { loadProjectMembers } from "../lib/member-labels.js";
 import { loadReqs, render } from "./board.js";
 
 var BRANCH_STATUS = [
@@ -46,6 +48,7 @@ var branchOptionCache = {};      /* projectId → 下拉选项 */
 var brDrawerId = null;
 var brEditingId = null;
 var brDialogTask = null;      /* 从工作项抽屉就地新建时记录上下文，创建成功后自动挂接 */
+var brOwnerPickerRef = null;  /* 分支对话框负责人浮层引用，花名册就绪后原地刷新 */
 var dragBranch = null;        /* 拖动中的分支卡片 { id, status } */
 var branchSelectProject = ""; /* 工作项抽屉里「所属分支」当前的项目过滤（后台刷新时不能丢） */
 var reqsPending = null;       /* 项目列表加载中，避免多个下拉各自重复请求 */
@@ -576,18 +579,18 @@ function branchVersionChips(b){
   return '<div class="br-vers">' + b.versions.map(function(v){
     var cls = v.status === "released" ? "tag-success" : (v.status === "active" ? "tag-info" : "ghost");
     var tip = "影响版本：" + (v.reqName ? (v.reqName + " / ") : "") + v.name;
-    return '<span class="tag ' + cls + '" title="' + esc(tip) + '">' + esc(v.name) + '</span>';
+    return assocLinkHTML("version", v.versionId, v.name, {req:v.reqId, cls:"tag " + cls, title:tip});
   }).join("") + '</div>';
 }
 function branchProjectChips(b){
   if(b.reqId){
     var name = projectNameById(b.reqId) || b.reqId;
-    return '<div class="br-projs"><span class="tag" title="所属项目：' + esc(name) + '">' + esc(name) + '</span></div>';
+    return '<div class="br-projs">' + assocLinkHTML("project", b.reqId, name, {cls:"tag", title:"打开项目：" + name}) + '</div>';
   }
   if(!b.projects || !b.projects.length) return "";
   return '<div class="br-projs">' + b.projects.map(function(p){
-    var tip = "归属项目：" + (p.projectName || p.projectId || "未知");
-    return '<span class="tag" title="' + esc(tip) + '">' + esc(p.projectName || p.projectId || "未知") + '</span>';
+    var label = p.projectName || p.projectId || "未知";
+    return assocLinkHTML("project", p.projectId, label, {cls:"tag", title:"打开项目：" + label});
   }).join("") + '</div>';
 }
 function branchCardHTML(b){
@@ -750,6 +753,70 @@ function taskOwnerSelection(){
   if(!name) return null;
   return { name: name, userId: opt.value && opt.value !== "__text__" ? opt.value : "" };
 }
+/* 分支负责人浮层：与任务抽屉同一份候选（公司分组 + 主岗位 / 兼岗）。
+   隐藏值 brOwner=账号 id、brOwnerName=姓名；历史非成员姓名无 id，提交时 ownerUserId=null。 */
+function branchOwnerMatched(ownerOpts, curId, curName){
+  var m = null;
+  if(curId) m = ownerOpts.filter(function(o){ return o.id === curId; })[0] || null;
+  if(!m && curName) m = ownerOpts.filter(function(o){ return o.name === curName; })[0] || null;
+  return m;
+}
+function setBranchOwnerField(curId, curName){
+  var btn = $("brOwnerBtn"), idEl = $("brOwner"), nameEl = $("brOwnerName");
+  if(!btn || !idEl || !nameEl) return;
+  var st = ownerRosterState();
+  var m = branchOwnerMatched(ownerPickerOptions(), curId, curName);
+  var opt;
+  if(m){ opt = { id:m.id, name:m.name, company:m.company, role:m.role, secondary:m.secondary }; }
+  else if(curId){ opt = { id:curId, name:curName || curId, subText:st.pending ? "候选加载中…" : (st.error ? "候选加载失败" : "已不在本项目候选范围") }; }
+  else if(curName){ opt = { id:"", name:curName, textOnly:true }; }
+  else { opt = null; }
+  idEl.value = opt ? (opt.id || "") : "";
+  nameEl.value = opt ? (opt.name || "") : "";
+  btn.innerHTML = peopleFieldHTML(opt, "未指派");
+  btn.classList.toggle("is-empty", !opt);
+  btn.setAttribute("aria-label", opt ? ("负责人：" + opt.name + "，点击修改") : "负责人：未指派，点击选择成员");
+}
+function buildBranchOwnerCfg(anchor){
+  var st = ownerRosterState();
+  var curId = ($("brOwner") || {}).value || "", curName = ($("brOwnerName") || {}).value || "";
+  var ownerOpts = ownerPickerOptions();
+  var m = branchOwnerMatched(ownerOpts, curId, curName);
+  return {
+    anchor:anchor, title:"负责人",
+    options:st.pending || st.error ? [] : ownerOpts,
+    currentId:m ? m.id : "", currentName:curName,
+    unavailable:(curId && !m) ? { id:curId, name:curName } : null,
+    allowClear:true, clearLabel:"未指派",
+    loading:st.pending, error:st.error ? (st.error.message || "网络异常") : "",
+    onRetry:function(){ ensureProjectRoles(currentProjectId(), true); hookBranchOwnerRoster(); },
+    onPick:function(o){ setBranchOwnerField(o ? o.id : "", o ? o.name : ""); }
+  };
+}
+function refreshBranchOwnerPicker(){
+  if(brOwnerPickerRef && UI.popOpen(brOwnerPickerRef.el)){
+    var cfg = buildBranchOwnerCfg(brOwnerPickerRef.anchor);
+    brOwnerPickerRef.refresh({ options:cfg.options, currentId:cfg.currentId, currentName:cfg.currentName, unavailable:cfg.unavailable, loading:cfg.loading, error:cfg.error });
+  }
+}
+function refreshBranchOwnerField(){
+  var d = $("dlgBranch");
+  if(d && d.classList.contains("open")) setBranchOwnerField(($("brOwner") || {}).value || "", ($("brOwnerName") || {}).value || "");
+}
+/* 花名册异步就绪后，把字段与浮层从「加载中」刷新为真实公司·岗位；复用同一份加载 Promise，不重复请求。 */
+function hookBranchOwnerRoster(){
+  if(!ownerRosterState().pending) return;
+  ensureProjectRoles(currentProjectId());
+  var ws = rt.currentWs, pid = currentProjectId();
+  if(ws && pid) loadProjectMembers(ws.id, pid).then(onBranchRosterSettled, onBranchRosterSettled);
+}
+function onBranchRosterSettled(){ refreshBranchOwnerField(); refreshBranchOwnerPicker(); }
+function openBranchOwnerPicker(anchor){
+  var cfg = buildBranchOwnerCfg(anchor);
+  brOwnerPickerRef = openPeoplePicker(cfg);
+  if(brOwnerPickerRef) brOwnerPickerRef.anchor = anchor;
+  if(cfg.loading) hookBranchOwnerRoster();
+}
 /** 工作项抽屉里就地新建：按当前项目预填，创建后自动挂到当前工作项 */
 function openBranchDialogForTask(projectId){
   brDialogTask = { projectId: projectId || "" };
@@ -776,29 +843,16 @@ function openBranchDialogWith(id, b, options){
   fillBranchStatusOptions($("brStatus"), b ? b.status : "dev");
   fillBranchReqOptions($("brReq"), b ? (b.reqId || "") : (fromTask ? taskProjectId : ""));
 
-  /* 负责人：沿用任务抽屉的口径（成员列表 + 账号绑定）。
+  /* 负责人：沿用任务抽屉的口径（成员列表 + 账号绑定），改用带公司·岗位的人员浮层。
      从任务里就地新建时默认跟任务负责人走，避免把分支指派给「当前操作人」；
      任务没有负责人时再回落到当前用户。 */
-  var sel = $("brOwner");
-  if(sel){
-    var ownerOpts = ownerOptions();
-    var taskOwner = fromTask ? taskOwnerSelection() : null;
-    var curName = b ? (b.owner || "")
-      : (taskOwner ? taskOwner.name : (rt.currentUser ? (rt.currentUser.displayName || "") : ""));
-    var curId = b ? (b.ownerUserId || "")
-      : (taskOwner ? (taskOwner.userId || "") : (rt.currentUser ? rt.currentUser.id : ""));
-    var html = "", matched = false;
-    ownerOpts.forEach(function(o){
-      var on = (curId && o.id === curId) || (!curId && curName && o.name === curName);
-      if(on) matched = true;
-      html += '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (on ? " selected" : "") + '>' +
-        esc(o.name) + '</option>';
-    });
-    if(curName && !matched){
-      html += '<option value="__text__" data-name="' + esc(curName) + '" selected>○ ' + esc(curName) + '（非成员）</option>';
-    }
-    sel.innerHTML = html;
-  }
+  var taskOwner = fromTask ? taskOwnerSelection() : null;
+  var curName = b ? (b.owner || "")
+    : (taskOwner ? taskOwner.name : (rt.currentUser ? (rt.currentUser.displayName || "") : ""));
+  var curId = b ? (b.ownerUserId || "")
+    : (taskOwner ? (taskOwner.userId || "") : (rt.currentUser ? rt.currentUser.id : ""));
+  setBranchOwnerField(curId, curName);
+  hookBranchOwnerRoster();
 
   $("dlgBranch").__uiOnClose = function(){ brEditingId = null; brDialogTask = null; };
   UI.openModal($("dlgBranch"));
@@ -850,16 +904,16 @@ function submitBranchDialog(){
     try{ $("brName").focus(); }catch(e){}
     return;
   }
-  var sel = $("brOwner");
-  var picked = sel && sel.options[sel.selectedIndex];
+  var ownerId = ($("brOwner") || {}).value || "";
+  var ownerName = ($("brOwnerName") || {}).value || "";
   var payload = {
     name: name,
     targetBranch: ($("brTarget").value || "").trim() || null,
     /* 空串 = 明确改成空间级公共分支；null 会被后端当成「不改」 */
     reqId: ($("brReq") || {}).value || "",
     note: ($("brNote").value || "").trim() || null,
-    owner: picked ? (picked.dataset.name || picked.textContent || null) : null,
-    ownerUserId: picked && picked.value !== "__text__" ? picked.value : null
+    owner: ownerName || null,
+    ownerUserId: ownerId || null
   };
   if(!brEditingId) payload.status = ($("brStatus") || {}).value || "dev";
 
@@ -911,14 +965,18 @@ function openBranchDrawer(id){
     brDrawerId = b.id;
     brDrawerData = b;
     renderBranchDrawer(b);
-    $("branchDrawer").classList.add("on");
+    var d = $("branchDrawer");
+    /* 从工作项抽屉里点「所属分支」打开时要压在上面；否则抽屉被抬到 200 时会被它盖住 */
+    var taskOn = $("taskDrawer") && $("taskDrawer").classList.contains("on");
+    if(d) d.style.zIndex = taskOn ? String(UI.topOverlayZ() + 1) : "";
+    if(d) d.classList.add("on");
     loadBranchLogs(b.id);
     loadBranchTasks(b.id);
   }).catch(function(ex){ toast(ex.message || "分支加载失败", "bad"); });
 }
 function closeBranchDrawer(){
   var d = $("branchDrawer");
-  if(d) d.classList.remove("on");
+  if(d){ d.classList.remove("on"); d.style.zIndex = ""; }
   brDrawerId = null;
   brDrawerData = null;
 }
@@ -1044,7 +1102,7 @@ function fillBranchSelect(sel, cur, rows){
     if(!items.length) return;
     html += '<optgroup label="' + esc(s.name) + '">';
     items.forEach(function(b){
-      html += '<option value="' + esc(b.id) + '">' + esc(b.name) +
+      html += '<option value="' + esc(b.id) + '" data-status="' + esc(b.archivedAt ? "arch" : s.id) + '" data-target="' + esc(b.targetBranch || "") + '">' + esc(b.name) +
         (b.targetBranch ? " → " + esc(b.targetBranch) : "") + '</option>';
     });
     html += '</optgroup>';
@@ -1064,6 +1122,7 @@ function fillBranchSelect(sel, cur, rows){
   if(newBtn) newBtn.hidden = !!rt.drawerReadOnly;
   var hint = $("iBranchHint");
   if(hint) hint.textContent = branchFieldHint(rows);
+  syncAssocRead();
 }
 function populateBranchSelect(keep, projectId){
   var sel = $("iBranch");
@@ -1406,6 +1465,10 @@ function clearGroupOver(){
     });
     box.addEventListener("keydown", function(e){
       if(e.key !== "Enter" && e.key !== " ") return;
+      /* 卡片内的原生按钮（状态菜单、版本/项目跳转 chip）自己处理回车，避免误开抽屉 */
+      if(e.target.closest("button,a,input,select,textarea")) return;
+      var head = e.target.closest(".br-group-head");
+      if(head){ e.preventDefault(); head.click(); return; }
       var card = e.target.closest("[data-branch]");
       if(card){ e.preventDefault(); openBranchDrawer(card.dataset.branch); }
     });
@@ -1595,6 +1658,7 @@ function clearGroupOver(){
   updateBranchGroupToggle();
   if($("dlgBranchCancel")) $("dlgBranchCancel").addEventListener("click", closeBranchDialog);
   if($("dlgBranchOk")) $("dlgBranchOk").addEventListener("click", submitBranchDialog);
+  if($("brOwnerBtn")) $("brOwnerBtn").addEventListener("click", function(){ openBranchOwnerPicker($("brOwnerBtn")); });
   if($("brName")){
     $("brName").addEventListener("keydown", function(e){
       if(e.key === "Enter"){ e.preventDefault(); submitBranchDialog(); }
@@ -1616,9 +1680,14 @@ function clearGroupOver(){
   document.addEventListener("keydown", function(e){
     if(e.key !== "Escape" || e.__dsEscHandled) return;
     if($("dlgBranch") && $("dlgBranch").classList.contains("open")){ closeBranchDialog(); return; }
-    /* 上面还叠着任务抽屉或弹窗时交给上层逐层关闭，别连带收起分支抽屉 */
-    if(UI.anyModalOpen()) return;
-    if($("branchDrawer") && $("branchDrawer").classList.contains("on")){ closeBranchDrawer(); }
+    var bd = $("branchDrawer");
+    if(!bd || !bd.classList.contains("on")) return;
+    /* 有弹窗、或任务抽屉压在本层之上时交给上层逐层关闭，别连带收起分支抽屉 */
+    if(UI.anyDialogOpen()) return;
+    var td = $("taskDrawer");
+    if(td && td.classList.contains("on") &&
+       (parseInt(td.style.zIndex, 10) || 0) >= (parseInt(bd.style.zIndex, 10) || 0)) return;
+    closeBranchDrawer();
   });
 })();
 

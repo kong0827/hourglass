@@ -1,0 +1,97 @@
+[
+  {
+    "name": "branch dialog trigger found",
+    "ok": true,
+    "detail": "new"
+  },
+  {
+    "name": "branch owner field rendered",
+    "ok": true,
+    "detail": "\"张张伟星河科技 · 未设岗位\""
+  },
+  {
+    "name": "branch owner picker opens",
+    "ok": true,
+    "detail": "{\"title\":\"负责人\",\"count\":\"负责人8 位可指派 · 3 家公司\"}"
+  },
+  {
+    "name": "branch picker groups by company",
+    "ok": true,
+    "detail": "[\"测途质量1 人\",\"星河科技6 人\",\"云帆软件1 人\"]"
+  },
+  {
+    "name": "branch picker renders role column (no project ⇒ 空间默认未设岗位)",
+    "ok": true,
+    "detail": "roles=[\"未设岗位\",\"未设岗位\",\"未设岗位\",\"未设岗位\"]"
+  },
+  {
+    "name": "branch picker clear 未指派",
+    "ok": true,
+    "detail": "未指派"
+  },
+  {
+    "name": "branch pick sets hidden owner id+name",
+    "ok": true,
+    "detail": "{\"picked\":{\"id\":\"Umw9zcfa4w31fmsi0\",\"name\":\"王芳\"},\"after\":{\"owner\":\"Umw9zcfa4w31fmsi0\",\"name\":\"王芳\",\"btn\":\"王王芳测途质量 · 未设岗位\"}}"
+  },
+  {
+    "name": "branch picker mobile bottom sheet",
+    "ok": true,
+    "detail": "{\"asSheet\":true,\"scrim\":true,\"overflow\":true,\"bottom\":12}"
+  },
+  {
+    "name": "release: project selectable in phase view",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "release plan owner field rendered",
+    "ok": true,
+    "detail": "\"孙孙琪星河科技 · 未设岗位\""
+  },
+  {
+    "name": "release plan owner picker opens",
+    "ok": true,
+    "detail": "{\"title\":\"计划负责人\",\"count\":\"计划负责人9 位可指派 · 4 家公司\",\"groups\":[\"测途质量1 人\",\"星河科技6 人\",\"远见咨询1 人\",\"云帆软件1 人\"]}"
+  },
+  {
+    "name": "release plan picker clear 未指派",
+    "ok": true,
+    "detail": "未指派"
+  },
+  {
+    "name": "release plan picker renders role column (空间默认职能；本演示 jobTitle 为空⇒未设岗位)",
+    "ok": true,
+    "detail": "roles=[\"未设岗位\",\"未设岗位\",\"未设岗位\",\"未设岗位\"] 兼=0"
+  },
+  {
+    "name": "release plan pick sets hidden value + dispatches change",
+    "ok": true,
+    "detail": "{\"picked\":{\"id\":\"Umw9zcfa4w31fmsi0\",\"name\":\"王芳\"},\"after\":{\"val\":\"Umw9zcfa4w31fmsi0\",\"changes\":1,\"btn\":\"王王芳测途质量 · 未设岗位\"}}"
+  },
+  {
+    "name": "release executor picker opens",
+    "ok": true,
+    "detail": "{\"title\":\"实际执行人\",\"count\":\"实际执行人9 位可指派 · 4 家公司\"}"
+  },
+  {
+    "name": "release executor picker has NO clear (must be member)",
+    "ok": true,
+    "detail": "clear=null"
+  },
+  {
+    "name": "release executor pick sets hidden value + change",
+    "ok": true,
+    "detail": "{\"picked\":{\"id\":\"Umw9zcfa4w31fmsi0\",\"name\":\"王芳\"},\"after\":{\"val\":\"Umw9zcfa4w31fmsi0\",\"changes\":1}}"
+  },
+  {
+    "name": "release picker mobile bottom sheet",
+    "ok": true,
+    "detail": "{\"asSheet\":true,\"scrim\":true,\"overflow\":true}"
+  },
+  {
+    "name": "no runtime/console errors (branch+release)",
+    "ok": true,
+    "detail": ""
+  }
+]

@@ -63,7 +63,7 @@ public class AiTestCaseService {
     }
 
     public AiTestCaseResponse generate(String userId, String workspaceId, AiTestCaseRequest req) {
-        AiConfig cfg = configService.resolve(userId);
+        AiConfig cfg = configService.resolve(userId, workspaceId);
         Source source = resolveSource(userId, workspaceId, req);
         if (source.text.trim().isEmpty()) {
             throw AppException.badRequest("来源内容还是空的，先补充需求描述再生成");

@@ -43,6 +43,8 @@ public class BackupData {
     private List<BackupCaseTask> caseTasks;
     /** 需求文档评论（v10；旧备份没有该字段时保留现有评论） */
     private List<BackupDocComment> docComments;
+    /** 文档模板（v15；旧备份没有该字段时保留现有模板） */
+    private List<BackupDocTemplate> docTemplates;
     /** 模块字典（v11 起纳入；任务/需求按 ID 关联，导入时补齐缺失模块。旧备份没有该字段时，
         模块 ID 找不到的条目回落到空间第一个模块） */
     private List<BackupCategory> categories;
@@ -165,7 +167,7 @@ public class BackupData {
         private String createdAt;
         /** 首版上线日（v8 起；阶段统计的归组锚点） */
         private String firstReleasedAt;
-        /** 发布前测试检查策略（v14 起；旧备份缺省按 standard） */
+        /** 发布检查策略（v14 起；旧备份缺省按 standard） */
         private String releaseCheckPolicy;
     }
 
@@ -297,6 +299,24 @@ public class BackupData {
         private String content;
         private String quoteText;
         private String createdAt;
+        /** v15：回复/解决/@/转工作项 */
+        private String parentId;
+        private String resolvedAt;
+        private String resolvedBy;
+        private String mentions;
+        private String taskId;
+    }
+
+    @Data
+    public static class BackupDocTemplate {
+        private String id;
+        private String name;
+        private String docType;
+        private String format;
+        private String content;
+        private String createdBy;
+        private String createdAt;
+        private String updatedAt;
     }
 
     @Data
@@ -366,5 +386,9 @@ public class BackupData {
         private int testCases;
         /** v10：重建的文档评论数 */
         private int docComments;
+        /** v14：重建的用例↔工作项关联数 */
+        private int caseTaskLinks;
+        /** v14：因用例或工作项未映射而跳过的关联数（导入不中断，但要在结果里如实报告） */
+        private int skippedCaseTaskLinks;
     }
 }

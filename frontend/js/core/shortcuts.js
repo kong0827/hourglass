@@ -21,6 +21,10 @@ initSearchPalette();
 var mobSearchBtn = $("btnMobSearch");
 if(mobSearchBtn) mobSearchBtn.addEventListener("click", openSearchPalette);
 
+/* 桌面顶栏「搜索 ⌘K」按钮：与 ⌘K 同一入口，看板筛选框不再承担全局搜索 */
+var globalSearchBtn = $("btnGlobalSearch");
+if(globalSearchBtn) globalSearchBtn.addEventListener("click", openSearchPalette);
+
 var gPending = 0;
 function inEditable(el){
   if(!el) return false;
@@ -90,6 +94,11 @@ document.addEventListener("keydown", function(e){
     if(taskDrawer.classList.contains("on")){
       var drawerZ = parseInt(taskDrawer.style.zIndex, 10) || 0;
       if(UI.anyDialogOpen() && UI.topModalZ() > drawerZ){ if(UI.closeTopModal()){ e.__dsEscHandled = true; return; } }
+      /* 另一层抽屉（如分支详情）压在工作项抽屉之上时，交给它自己的 Esc 先收起 */
+      var above = Array.prototype.some.call(
+        document.querySelectorAll(".drawer-layer.on:not(#taskDrawer)"),
+        function(d){ return (parseInt(d.style.zIndex, 10) || 0) > drawerZ; });
+      if(above) return;
       e.__dsEscHandled = true;
       tryCloseTaskDrawer();
       return;

@@ -24,8 +24,10 @@
 <link rel="stylesheet" href="css/components.css" />
 <link rel="stylesheet" href="css/views.css" />
 <link rel="stylesheet" href="css/workcolumn.css" />
+<link rel="stylesheet" href="css/version.css" />
 <link rel="stylesheet" href="css/gantt.css" />
 <link rel="stylesheet" href="css/manager.css" />
+<link rel="stylesheet" href="css/investment.css" />
 <link rel="stylesheet" href="css/smart-table.css" />
 <link rel="stylesheet" href="css/auth.css" />
 <link rel="stylesheet" href="css/mobile.css" />
@@ -125,7 +127,7 @@
       </button>
 
       <span class="nav-sec">洞察</span>
-      <button class="nav-item" type="button" data-view="insight" title="报表：趋势与分布、完成记录、流程体检与交付图表">
+      <button class="nav-item" type="button" data-view="insight" title="报表：趋势与分布、完成记录、流程体检、交付图表与投入结构">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 15.6 7.4 9l3.4 3 5.6-8.4"/><path d="M2.6 17.4h14.8"/><circle cx="9.6" cy="12.6" r="1.1"/><circle cx="17" cy="4.2" r="1.1"/></svg>
         <span class="nl">报表</span>
       </button>
@@ -187,7 +189,15 @@
           <span class="tp-stop" id="timerPillStop" title="停止计时">停止</span>
         </button>
 
-        <label class="global-search" id="searchWrap" title="按标题 / 描述 / 备注等工作项字段筛选；Ctrl/⌘ + K 打开全站搜索">
+        <button class="gs-open" id="btnGlobalSearch" type="button" title="全局搜索：项目、分支、工作项、文档、需求、用例（Ctrl/⌘ + K）" aria-label="全局搜索">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+            <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
+          </svg>
+          <span>搜索</span>
+          <span class="gs-kbd" aria-hidden="true"><kbd id="kbdMod">Ctrl</kbd><kbd>K</kbd></span>
+        </button>
+
+        <label class="global-search" id="searchWrap" title="按标题 / 描述 / 备注等工作项字段筛选当前看板">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
             <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
           </svg>
@@ -195,7 +205,6 @@
           <button class="gs-clear" id="searchClear" type="button" aria-label="清空搜索">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
           </button>
-          <span class="gs-kbd" aria-hidden="true"><kbd id="kbdMod">Ctrl</kbd><kbd>K</kbd></span>
         </label>
 
         <button class="icon-btn mob-search-btn" id="btnMobSearch" type="button" aria-label="全局搜索" title="全局搜索：项目、工作项、文档、需求、用例">
@@ -786,6 +795,15 @@
                     <button type="button" data-rst="hold">已搁置</button>
                   </div>
                 </div>
+                <div class="field span2" id="projReleasePolicy" hidden>
+                  <label for="rReleasePolicy">发布检查策略</label>
+                  <select id="rReleasePolicy" aria-label="发布检查策略">
+                    <option value="standard">标准（默认）</option>
+                    <option value="strict">严格</option>
+                    <option value="loose">宽松</option>
+                  </select>
+                  <p class="foot-note">发布时按此判断测试证据：标准＝发布必测失败 / 阻塞才阻断，必测未执行只提醒；严格＝必测未执行、任意用例失败或未执行都阻断；宽松＝只提醒，不阻断。修改后立即生效；已确认的发布记录保留当时的策略和结论。</p>
+                </div>
                 <div class="field span2" id="projCatCfg" hidden>
                   <label>模块 <small class="tc-optional">按项目配置</small></label>
                   <div class="cfg-list" id="projCatList"></div>
@@ -867,6 +885,11 @@
             </div>
           </div>
         </div></div></div>
+      </section>
+
+      <!-- ===== 版本详情子页（从版本卡 / 全部版本 / 发布日程 / 驾驶舱穿透） ===== -->
+      <section class="view" id="view-version" aria-label="版本详情">
+        <div id="versionBody"></div>
       </section>
 
       <!-- ===== 交付：一页式交付说明（从版本卡 / 发布记录下钻） ===== -->
@@ -1049,9 +1072,9 @@
               <button class="rpf-clear" type="button" id="reqDocProjFilterClear" aria-label="清除项目筛选" title="清除项目筛选">&times;</button>
             </span>
             <span class="reqdoc-modes" role="tablist" aria-label="文档展示方式">
-              <button class="rm-btn" type="button" role="tab" data-rdmode="tree" aria-selected="true">列表</button>
+              <button class="rm-btn" type="button" role="tab" data-rdmode="read" aria-selected="true">阅读</button>
+              <button class="rm-btn" type="button" role="tab" data-rdmode="tree" aria-selected="false">列表</button>
               <button class="rm-btn" type="button" role="tab" data-rdmode="kanban" aria-selected="false">看板</button>
-              <button class="rm-btn" type="button" role="tab" data-rdmode="read" aria-selected="false">阅读</button>
               <button class="rm-btn" type="button" role="tab" data-rdmode="feed" aria-selected="false">动态</button>
             </span>
             <span class="toolbar-right">
@@ -1071,16 +1094,16 @@
             </span>
           </div>
           <div class="reqdoc-load-error" id="reqDocLoadError" role="alert" hidden></div>
-          <div class="reqdoc-tree" id="reqDocTree"></div>
+          <div class="reqdoc-tree" id="reqDocTree" hidden></div>
           <!-- 看板：按状态分列，拖拽卡片流转状态 -->
           <div class="reqdoc-kanban" id="reqDocKanban" hidden></div>
           <!-- 阅读：左树右文，树上选文档右侧直接读 -->
-          <div class="reqdoc-split" id="reqDocSplit" hidden>
+          <div class="reqdoc-split" id="reqDocSplit">
             <div class="reqdoc-split-tree" id="reqDocSplitTree"></div>
             <div class="reqdoc-reader" id="reqDocReader">
               <div class="rrd-empty">
                 <div class="rrd-empty-title">从左侧选择文档阅读</div>
-                <div class="rrd-empty-text">有编辑权限时，可拖动文档左侧的手柄调整顺序</div>
+                <div class="rrd-empty-text">有编辑权限时，悬停文档行可拖动行尾手柄调整顺序</div>
               </div>
             </div>
           </div>
@@ -1096,9 +1119,13 @@
             </button>
             <span class="reqdoc-crumb" id="reqDocCrumb"></span>
             <span class="reqdoc-fmt" id="reqDocFormat" hidden></span>
-            <label class="reqdoc-parent" title="文档分类">
+            <label class="reqdoc-parent" title="文档分类（决定归属项目 / 空间级与树中位置）">
               <span>分类</span>
-              <select id="reqDocType" aria-label="文档分类"></select>
+              <select id="reqDocCategory" aria-label="文档分类"></select>
+            </label>
+            <label class="reqdoc-parent" title="文档类型">
+              <span>类型</span>
+              <select id="reqDocType" aria-label="文档类型"></select>
             </label>
             <label class="reqdoc-parent" title="上级文档">
               <span>上级</span>
@@ -1142,6 +1169,7 @@
                     <span data-icon="download"></span>导出文件
                   </button>
                   <button class="menu-item" type="button" id="reqDocCopy"><span data-icon="copy"></span>复制正文</button>
+                  <button class="menu-item" type="button" id="reqDocPrint"><span data-icon="print"></span>打印 / 导出 PDF</button>
                   <div class="menu-sep"></div>
                   <button class="menu-item danger" type="button" id="reqDocDelete">删除文档</button>
                 </div>
@@ -1182,31 +1210,50 @@
               <nav class="reqdoc-toc-body" id="reqDocTocBody"></nav>
             </aside>
           </div>
-          <section class="reqdoc-tasks" aria-labelledby="reqDocDemandsTitle">
+          <section class="reqdoc-tasks" data-sec="demands" aria-labelledby="reqDocDemandsTitle">
             <div class="reqdoc-tasks-head">
-              <h3 id="reqDocDemandsTitle">关联需求 <span id="reqDocDemandCount"></span></h3>
+              <h3 id="reqDocDemandsTitle"><button class="reqdoc-sec-fold" type="button" aria-expanded="true" aria-controls="reqDocDemandList"><span class="sec-caret" data-icon="caretDown"></span>关联需求 <span id="reqDocDemandCount"></span></button></h3>
               <span class="reqdoc-tasks-hint" id="reqDocDemandHint">在需求池的需求详情里关联本文档</span>
             </div>
             <div class="reqdoc-task-list reqdoc-demand-list" id="reqDocDemandList"></div>
           </section>
-          <section class="reqdoc-tasks" aria-labelledby="reqDocTasksTitle">
+          <section class="reqdoc-tasks" data-sec="tasks" aria-labelledby="reqDocTasksTitle">
             <div class="reqdoc-tasks-head">
-              <h3 id="reqDocTasksTitle">关联工作项 <span id="reqDocTaskCount"></span></h3>
+              <h3 id="reqDocTasksTitle"><button class="reqdoc-sec-fold" type="button" aria-expanded="true" aria-controls="reqDocTaskList"><span class="sec-caret" data-icon="caretDown"></span>关联工作项 <span id="reqDocTaskCount"></span></button></h3>
               <button class="btn sm ghost" type="button" id="reqDocAddTask"><span data-icon="plus"></span>&nbsp;新建关联工作项</button>
             </div>
             <div class="reqdoc-task-list" id="reqDocTaskList"></div>
+          </section>
+          <section class="reqdoc-tasks" id="reqDocAttachPanel" data-sec="attach" aria-labelledby="reqDocAttachTitle">
+            <div class="reqdoc-tasks-head">
+              <h3 id="reqDocAttachTitle"><button class="reqdoc-sec-fold" type="button" aria-expanded="true" aria-controls="reqDocAttachList"><span class="sec-caret" data-icon="caretDown"></span>附件 <span id="reqDocAttachCount"></span></button></h3>
+              <button class="btn sm ghost" type="button" id="reqDocAttachUpload"><span data-icon="plus"></span>&nbsp;上传附件</button>
+            </div>
+            <div class="reqdoc-task-list" id="reqDocAttachList"></div>
+            <div class="att-kit compact" id="reqDocAttachKit" style="margin-top:8px">
+              <div class="att-drop" tabindex="0" role="button" aria-label="选择或拖入文件" id="reqDocAttachDrop">
+                <span class="att-drop-ico" data-icon="upload"></span>
+                <span class="att-drop-text"><b>点击选择</b>，或将文件拖到这里，也可粘贴截图</span>
+                <input type="file" id="reqDocAttachFile" class="att-drop-input" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx,.doc,.docx,.xls,.ppt,.pptx" tabindex="-1" aria-hidden="true">
+              </div>
+            </div>
           </section>
           <details class="reqdoc-activity" id="reqDocActivityPanel">
             <summary>活动轨迹</summary>
             <div class="activity-list" id="reqDocActivityList"></div>
           </details>
-          <section class="reqdoc-comments" id="reqDocCommentsPanel" aria-labelledby="reqDocCommentsTitle">
+          <section class="reqdoc-comments" id="reqDocCommentsPanel" data-sec="comments" aria-labelledby="reqDocCommentsTitle">
             <div class="reqdoc-tasks-head">
-              <h3 id="reqDocCommentsTitle">文档评论 <span id="reqDocCommentsCount"></span></h3>
-              <span class="reqdoc-tasks-hint">针对文档整体或正文片段发表意见</span>
+              <h3 id="reqDocCommentsTitle"><button class="reqdoc-sec-fold" type="button" aria-expanded="true" aria-controls="reqDocCommentList"><span class="sec-caret" data-icon="caretDown"></span>文档评论 <span id="reqDocCommentsCount"></span></button></h3>
+              <label class="reqdoc-unresolved-toggle"><input type="checkbox" id="reqDocUnresolvedOnly"> 只看未解决</label>
             </div>
             <div class="reqdoc-comment-list" id="reqDocCommentList"></div>
             <div class="reqdoc-comment-form" id="reqDocCommentForm">
+              <div class="reqdoc-comment-quotechip" id="reqDocCommentReplyChip" hidden>
+                <span>回复</span>
+                <span class="qc-text" id="reqDocCommentReplyText"></span>
+                <button class="qc-x" type="button" id="reqDocCommentReplyClear" title="取消回复" aria-label="取消回复">×</button>
+              </div>
               <div class="reqdoc-comment-quotechip" id="reqDocCommentQuoteChip" hidden>
                 <span data-icon="quote"></span>
                 <span class="qc-text" id="reqDocCommentQuoteText"></span>
@@ -1225,19 +1272,30 @@
         <div class="modal-layer" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle">
           <div class="sheet reqdoc-dlg">
             <h3 class="reqdoc-dlg-title" id="dlgNewReqDocTitle">新建文档</h3>
-            <p class="reqdoc-dlg-msg">选择项目和分类；可以从空白开始写，也可以直接上传已有文件，确认后进入编辑页。</p>
+            <p class="reqdoc-dlg-msg">先选分类（可选）；分类会带出归属项目。不选分类时可直接关联有权限的项目，或留空间级（如开发手册）。确认后进入编辑页。</p>
             <div class="reqdoc-dlg-form">
+              <label class="reqdoc-dlg-field">
+                <span>分类</span>
+                <select id="newReqDocCategory"></select>
+              </label>
               <label class="reqdoc-dlg-field">
                 <span>所属项目</span>
                 <select id="newReqDocProject"></select>
+                <small id="newReqDocProjHint" style="color:var(--text-3);display:block;margin-top:4px;">未选分类：可关联有权限的项目，或留空间级（关联可选）</small>
               </label>
               <label class="reqdoc-dlg-field">
                 <span>文档名称</span>
                 <input id="newReqDocTitle" type="text" maxlength="100" placeholder="例如：权限校验技术方案">
               </label>
               <label class="reqdoc-dlg-field">
-                <span>文档分类</span>
+                <span>类型</span>
                 <select id="newReqDocType"></select>
+              </label>
+              <label class="reqdoc-dlg-field" id="newReqDocTemplateField">
+                <span>使用模板</span>
+                <select id="newReqDocTemplate">
+                  <option value="">空白文档</option>
+                </select>
               </label>
               <div class="reqdoc-dlg-field">
                 <span>新建方式</span>
@@ -1431,32 +1489,13 @@
             <span class="toolbar-right">
               <button type="button" class="label-help" id="tcHelp" aria-label="查看用例、计划、矩阵与报告的关系说明" title="测试模块使用说明"></button>
               <select id="tcReq" class="mini-select" aria-label="选择项目范围"></select>
-              <span class="tc-filterbar" id="tcFilterBar">
-                <div class="chips" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
-                  <button class="chip" type="button" data-tc-status="all" aria-pressed="true">全部</button>
-                  <button class="chip" type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
-                  <button class="chip" type="button" data-tc-status="passed" aria-pressed="false">通过</button>
-                  <button class="chip" type="button" data-tc-status="failed" aria-pressed="false">失败</button>
-                  <button class="chip" type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
-                  <button class="chip" type="button" data-tc-status="skipped" aria-pressed="false" title="本次不执行 / 不适用">跳过</button>
-                </div>
-                <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
-                <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
-                <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
-                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" title="在所选项目内搜索用例 / 前置 / 测试数据 / 步骤" aria-label="在所选项目内搜索测试用例" />
-                <span class="tc-fbar-end">
-                  <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false" title="只看关联缺陷仍未完成（未删除、未进入完成列）的用例">未关闭缺陷</button>
-                  <button class="btn sm soft" type="button" id="tcClearFilter" hidden><span data-icon="close"></span>&nbsp;清空筛选</button>
-                  <span class="views-menu-wrap">
-                    <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
-                    <div class="menu popover" id="tcViewsMenu" hidden></div>
-                  </span>
-                </span>
-              </span>
               <span class="tc-actionbar">
                 <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选<span class="n" id="tcFilterCount" hidden>0</span></button>
                 <button class="btn sm ghost ai-action" type="button" id="btnCaseAi" title="用 AI 从需求文档或需求池条目生成测试用例草稿，勾选确认后才会创建"><span data-icon="ai"></span>&nbsp;AI 生成用例</button>
-                <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含编号、测试数据与步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
+                <span class="views-menu-wrap">
+                  <button class="btn sm ghost" type="button" id="btnCaseCsvOut" aria-haspopup="true" aria-expanded="false" title="导出 CSV：当前筛选结果 / 勾选的行 / 项目全部，或下载导入模板"><span data-icon="download"></span>&nbsp;导出 CSV</button>
+                  <div class="menu popover" id="tcExportMenu" hidden></div>
+                </span>
                 <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
                 <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入：按表头识别列，兼容「用例名称 / 需求对应 / 测试步骤 / 期望结果」；Excel 请先另存为 CSV"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
                 <button class="btn sm ghost" type="button" id="btnPlanNew" hidden><span data-icon="plus"></span>&nbsp;新建计划</button>
@@ -1465,6 +1504,23 @@
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
                 </button>
                 <button class="btn sm primary" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新建用例</button>
+              </span>
+            </span>
+          </div>
+          <div class="tc-stats" id="tcStats" role="group" aria-label="执行结果统计与筛选"></div>
+          <div class="tc-filterbar" id="tcFilterBar">
+            <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
+            <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
+            <select id="tcModule" class="mini-select" aria-label="按模块目录筛选用例"></select>
+            <button class="btn sm ghost" type="button" id="tcModuleSub" aria-pressed="false" hidden title="包含所选目录的子目录用例">含子目录</button>
+            <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" title="在所选项目内搜索用例 / 前置 / 测试数据 / 步骤" aria-label="在所选项目内搜索测试用例" />
+            <button class="btn sm ghost" type="button" id="tcSearchWide" aria-pressed="false" title="默认只搜标题、编号、模块；开启后才搜前置、测试数据与步骤（大字段，较慢）">含步骤与前置</button>
+            <span class="tc-fbar-end">
+              <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false" title="只看关联缺陷仍未完成（未删除、未进入完成列）的用例">未关闭缺陷</button>
+              <button class="btn sm soft" type="button" id="tcClearFilter" hidden><span data-icon="close"></span>&nbsp;清空筛选</button>
+              <span class="views-menu-wrap">
+                <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
+                <div class="menu popover" id="tcViewsMenu" hidden></div>
               </span>
             </span>
           </div>
@@ -1507,15 +1563,26 @@
             </select>
             <button class="btn sm soft" type="button" id="tcPlanClearFilter" hidden title="清空计划搜索与状态筛选"><span data-icon="close"></span>&nbsp;清空筛选</button>
           </div>
-          <div class="tc-stats" id="tcStats"></div>
-          <div class="tc-bulkbar" id="tcBulkBar" hidden>
-            <label class="tc-bulk-all"><input type="checkbox" id="tcBulkAll" /> 全选已加载</label>
-            <span class="tc-bulk-count" id="tcBulkCount"></span>
-            <span class="tc-bulk-acts">
-              <button class="btn sm soft" type="button" id="btnTcBatchEdit">批量设置</button>
-              <button class="btn sm ghost danger" type="button" id="btnTcBatchDel">删除</button>
-              <button class="btn sm ghost" type="button" id="btnTcBatchClear">取消选择</button>
-            </span>
+          <div class="tc-querybar" id="tcQueryBar" hidden>
+            <button class="btn sm ghost" type="button" id="tcPanelBtn" aria-expanded="false" aria-controls="tcSidePanel" title="打开模块目录与自定义分组：把用例拖到目录节点＝移动归属，拖到分组＝加入分组"><span data-icon="folder"></span>&nbsp;目录 / 分组</button>
+            <label class="tc-ctl"><span>排序</span>
+              <select id="tcSort" class="mini-select" aria-label="排序字段"></select>
+            </label>
+            <button class="btn sm ghost" type="button" id="tcSortDir" title="切换升序 / 降序">降序</button>
+            <label class="tc-ctl"><span>分组</span>
+              <select id="tcGroupBy" class="mini-select" aria-label="分组维度"></select>
+            </label>
+            <label class="tc-ctl"><span>每页</span>
+              <select id="tcPageSize" class="mini-select" aria-label="每页条数">
+                <option value="50">50 条</option>
+                <option value="100" selected>100 条</option>
+                <option value="200">200 条</option>
+              </select>
+            </label>
+            <span class="tc-query-grow"></span>
+            <button class="btn sm ghost" type="button" id="tcGrpCollapseAll" hidden>全部折叠</button>
+            <button class="btn sm ghost" type="button" id="tcGrpExpandAll" hidden>全部展开</button>
+            <button class="btn sm soft" type="button" id="tcSelFiltered" title="选中当前筛选命中的全部用例（含未加载的行），一次最多 2000 条">全选筛选结果</button>
           </div>
           <div class="tc-defects" id="tcDefects" hidden>
             <div class="tc-def-stats" id="tcDefStats"></div>
@@ -1530,7 +1597,36 @@
           <div class="tc-coverage" id="tcCoverage" hidden></div>
           <div class="tc-report" id="tcReport" hidden></div>
           <div class="tc-plans" id="tcPlans" hidden></div>
-          <div class="tc-list" id="tcList"></div>
+          <div class="tc-cases-wrap" id="tcCasesWrap">
+            <aside class="tc-side" id="tcSidePanel" hidden aria-label="模块目录与自定义分组">
+              <div class="tc-side-tabs" role="tablist" aria-label="归类方式">
+                <button type="button" role="tab" id="tcSideTabDir" data-tc-side="dir" aria-selected="true" aria-controls="tcSideBody">模块目录</button>
+                <button type="button" role="tab" id="tcSideTabSet" data-tc-side="set" aria-selected="false" aria-controls="tcSideBody">自定义分组</button>
+              </div>
+              <div class="tc-side-body" id="tcSideBody" role="tabpanel" aria-labelledby="tcSideTabDir"></div>
+              <div class="tc-side-foot" id="tcSideFoot"></div>
+            </aside>
+            <div class="tc-cases-main">
+              <div class="tc-drop-banner" id="tcDropBanner" hidden></div>
+              <div class="tc-setd" id="tcSetDetail" hidden></div>
+              <div class="tc-bulkbar" id="tcBulkBar" hidden>
+                <label class="tc-bulk-all"><input type="checkbox" id="tcBulkAll" /> <span id="tcBulkAllLabel">全选已加载</span></label>
+                <span class="tc-bulk-count" id="tcBulkCount"></span>
+                <span class="tc-bulk-hint" id="tcBulkHint"></span>
+                <span class="tc-bulk-acts">
+                  <button class="btn sm soft" type="button" id="btnTcBatchEdit">改模块</button>
+                  <button class="btn sm soft" type="button" id="btnTcBatchPri">改优先级</button>
+                  <button class="btn sm ghost" type="button" id="btnTcBatchSet">加入分组</button>
+                  <button class="btn sm ghost" type="button" id="btnTcBatchUnset" hidden>移出分组</button>
+                  <button class="btn sm primary" type="button" id="btnTcBatchPlan">加入测试计划</button>
+                  <button class="btn sm ghost" type="button" id="btnTcBatchExport">导出所选</button>
+                  <button class="btn sm ghost danger" type="button" id="btnTcBatchDel">删除</button>
+                  <button class="btn sm ghost" type="button" id="btnTcBatchClear">取消选择</button>
+                </span>
+              </div>
+              <div class="tc-list" id="tcList"></div>
+            </div>
+          </div>
         </div>
 
         <!-- 新建 / 编辑用例 -->
@@ -1565,9 +1661,8 @@
               </div>
               <div class="row row-gap">
                 <div class="field" style="flex:1 1 55%">
-                  <label for="cModule">功能模块 <small class="tc-optional">选填 · 列表筛选用</small></label>
-                  <input id="cModule" type="text" maxlength="50" list="tcModuleList" placeholder="如：登录 / 订单 / 支付" autocomplete="off" />
-                  <datalist id="tcModuleList"></datalist>
+                  <label for="cModule">模块目录 <small class="tc-optional">选填 · 单归属，决定覆盖矩阵口径</small></label>
+                  <select id="cModule" aria-label="选择模块目录节点"></select>
                 </div>
                 <div class="field" style="flex:1 1 30%">
                   <label for="cPri">优先级 <small class="tc-optional">选填</small></label>
@@ -1587,6 +1682,10 @@
                 <div class="tc-steps" id="tcSteps"></div>
                 <button class="btn sm ghost" type="button" id="btnCaseAddStep" title="步骤输入中按 Ctrl+Enter 可在下方快捷插入新行"><span data-icon="plus"></span>&nbsp;添加步骤</button>
               </div>
+              <details class="entity-log" id="caseTimeline" hidden>
+                <summary><span class="caret" aria-hidden="true">▶</span>变更记录 <span class="cnt" id="caseTimelineCount"></span></summary>
+                <div class="timeline" id="caseTimelineList"></div>
+              </details>
               <p class="foot-note" id="caseReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
               <div class="row row-gap" id="caseSaveRow">
                 <button class="btn primary" type="button" id="btnSaveCase">保存</button>
@@ -1602,9 +1701,9 @@
             <div class="stack">
               <p class="foot-note" id="caseBatchSub"></p>
               <div class="field">
-                <label for="bModule">功能模块 <small class="tc-optional">留空则保持原值</small></label>
-                <input id="bModule" type="text" maxlength="50" list="tcModuleList" placeholder="如：登录 / 订单 / 支付" autocomplete="off" />
-                <label class="b-check"><input type="checkbox" id="bModuleClear" /> 清空所选用例的模块</label>
+                <label for="bModule">模块目录 <small class="tc-optional">默认保持原值</small></label>
+                <select id="bModule" aria-label="批量设置模块目录"></select>
+                <p class="foot-note">目录是单归属：设为新节点即从原节点移出，编号与执行历史不变。</p>
               </div>
               <div class="field">
                 <label for="bPri">优先级 <small class="tc-optional">选择后统一覆盖</small></label>
@@ -1624,31 +1723,145 @@
           </div>
         </div></div></div>
 
-        <!-- 记录执行结果 -->
-        <div class="modal-layer" id="dlgCaseRun" role="dialog" aria-modal="true" aria-labelledby="runFormTitle"><div class="sheet xs"><div class="sheet-body">
+        <!-- 新建 / 编辑自定义分组（用例集，多归属） -->
+        <div class="modal-layer" id="dlgCaseSet" role="dialog" aria-modal="true" aria-labelledby="caseSetTitle"><div class="sheet md"><div class="sheet-body">
           <div class="panel">
-            <div class="panel-head"><h3 id="runFormTitle">记录执行结果</h3><button class="icon-btn sm" type="button" id="dlgCaseRunX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="panel-head"><h3 id="caseSetTitle">新建分组</h3><button class="icon-btn sm" type="button" id="dlgCaseSetX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
+              <div class="field" id="fSetName">
+                <label for="csName">分组名称 <span class="req">*</span></label>
+                <input id="csName" type="text" maxlength="60" placeholder="如：v2.2 回归集 / 冒烟 / 兼容性" autocomplete="off" />
+                <span class="err">请填写分组名称</span>
+              </div>
               <div class="field">
-                <label>执行结果 <span class="req">*</span></label>
-                <div class="seg" id="segCaseRun">
-                  <button type="button" data-run-status="passed" aria-pressed="true">通过</button>
-                  <button type="button" data-run-status="failed" aria-pressed="false">失败</button>
-                  <button type="button" data-run-status="blocked" aria-pressed="false">阻塞</button>
-                  <button type="button" data-run-status="skipped" aria-pressed="false" title="本次不执行 / 不适用，不计入通过率">跳过</button>
+                <label for="csNote">用途说明 <small class="tc-optional">选填</small></label>
+                <textarea id="csNote" maxlength="200" placeholder="这批用例服务于哪次测试目的"></textarea>
+              </div>
+              <div class="field">
+                <label id="csVisLabel">可见范围</label>
+                <div class="cs-vis" id="csVis" role="radiogroup" aria-labelledby="csVisLabel">
+                  <label class="cs-vis-item"><input type="radio" name="csVis" value="team" checked /><span><b>团队共享</b><small>项目成员可见可用，可圈选进测试计划，进交付说明与发布证据。推荐。</small></span></label>
+                  <label class="cs-vis-item"><input type="radio" name="csVis" value="members" /><span><b>指定成员可见</b><small>创建人 + 名单内成员可见（最多 50 人），不进证据链；适合跨团队联调。</small></span></label>
+                  <label class="cs-vis-item"><input type="radio" name="csVis" value="personal" /><span><b>仅自己可见</b><small>只用于个人整理，不进证据链；要写进交付说明需先转为团队共享。</small></span></label>
+                </div>
+                <div class="cs-who" id="csWhoWrap" hidden></div>
+                <p class="foot-note cs-warn" id="csNarrowWarn" hidden><span data-icon="alert"></span>&nbsp;收窄团队共享分组的可见范围需由创建人操作，避免其他成员突然看不到。</p>
+              </div>
+              <div class="field">
+                <label id="csKindLabel">分组类型</label>
+                <div class="cs-vis" id="csKind" role="radiogroup" aria-labelledby="csKindLabel">
+                  <label class="cs-vis-item"><input type="radio" name="csKind" value="manual" checked /><span><b>手工挑选</b><small>拖入或按筛选加入，成员固定；适合冒烟集、本轮必测。</small></span></label>
+                  <label class="cs-vis-item"><input type="radio" name="csKind" value="dynamic" /><span><b>动态收录（保存的筛选）</b><small>命中条件的新用例自动进入，不再命中自动移出；适合回归集。</small></span></label>
+                </div>
+                <p class="foot-note" id="csKindHint" hidden></p>
+              </div>
+              <div id="csRuleWrap" hidden></div>
+              <div id="csInitWrap">
+                <label class="b-check" id="csInitLine"><input type="checkbox" id="csInit" /> 创建后按当前筛选加入 <b id="csInitN">0</b> 条用例</label>
+                <p class="foot-note" id="csInitHint"></p>
+              </div>
+              <p class="foot-note">分组是引用不是复制：一条用例可进多个分组，删除分组不删用例。</p>
+              <p class="foot-note cs-shield"><span data-icon="shield"></span><span>只有<b>团队共享</b>分组进交付说明与发布证据；证据只呈现结果分布，不改变发布阻断判定。</span></p>
+              <div class="row row-gap">
+                <button class="btn primary" type="button" id="btnSaveCaseSet">保存分组</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 批量加入分组：选一个目标分组 -->
+        <div class="modal-layer" id="dlgSetPick" role="dialog" aria-modal="true" aria-labelledby="setPickTitle"><div class="sheet xs"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="setPickTitle">加入分组</h3><button class="icon-btn sm" type="button" id="dlgSetPickX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <p class="foot-note" id="setPickSub"></p>
+              <div class="set-pick-list" id="setPickList"></div>
+              <div class="row row-gap">
+                <button class="btn" type="button" id="btnSetPickNew">新建分组</button>
+                <button class="btn primary" type="button" id="btnSetPickOk" disabled>加入所选分组</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 按筛选圈选入计划：筛选条件即范围，含未加载的行 -->
+        <div class="modal-layer" id="dlgPlanByFilter" role="dialog" aria-modal="true" aria-labelledby="planByFilterTitle"><div class="sheet md"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="planByFilterTitle">按筛选加入测试计划</h3><button class="icon-btn sm" type="button" id="dlgPlanByFilterX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <p class="foot-note">筛选条件即范围：一次把全部匹配用例加入计划，自动跳过已在计划中的用例，不受手工勾选 200 条上限约束（单次事务上限 2000 条）。</p>
+              <div class="pbf-grid">
+                <div class="pbf-left">
+                  <div class="pbf-tags" id="pbfTags"></div>
+                  <div class="tc-list pbf-preview" id="pbfPreview"></div>
+                  <p class="foot-note" id="pbfPreviewFoot"></p>
+                </div>
+                <div class="pbf-right">
+                  <div class="pbf-sum" id="pbfSum"></div>
+                  <div class="field">
+                    <label for="pbfPlan">目标计划</label>
+                    <select id="pbfPlan" aria-label="选择目标测试计划"></select>
+                    <p class="foot-note">计划归属单个项目，这里只列当前项目可编辑的计划。</p>
+                  </div>
+                  <div class="field" id="pbfNewWrap" hidden>
+                    <label for="pbfNewName">新计划名称 <span class="req">*</span></label>
+                    <input id="pbfNewName" type="text" maxlength="60" placeholder="如：v2.2 上线前回归" autocomplete="off" />
+                  </div>
+                  <label class="b-check pbf-required"><input type="checkbox" id="pbfRequired" /> 加入后标记「发布必测」</label>
+                  <p class="foot-note">发布检查据此判断必测用例是否执行通过；整批统一标记。</p>
+                  <div class="pbf-dyn" id="pbfDynWrap" hidden>
+                    <label class="b-check"><input type="checkbox" id="pbfDynamic" /> 同时保存为动态分组（按当前筛选自动收录）</label>
+                    <div class="field" id="pbfDynNameWrap" hidden>
+                      <label for="pbfDynName">动态分组名称 <span class="req">*</span></label>
+                      <input id="pbfDynName" type="text" maxlength="60" placeholder="如：v2.2 动态回归" autocomplete="off" />
+                    </div>
+                    <p class="foot-note" id="pbfDynHint"></p>
+                  </div>
+                  <button class="btn primary pbf-add" type="button" id="btnPbfAdd">加入用例</button>
+                  <p class="foot-note">加入是引用，不复制用例；执行结果写在计划内并追加执行流水。</p>
                 </div>
               </div>
-              <div class="field">
-                <label for="runNote">备注</label>
-                <textarea id="runNote" maxlength="500" placeholder="选填：失败原因、阻塞点…"></textarea>
-              </div>
-              <div class="field">
-                <label for="runFiles">失败证据 <small class="tc-optional">选填 · 截图 / 日志 / 附件，单个 ≤10MB</small></label>
-                <input id="runFiles" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" />
-                <p class="foot-note">记录成功后自动上传到本轮执行记录，测试报告与执行历史可追溯。</p>
-              </div>
-              <div class="row row-gap">
-                <button class="btn primary" type="button" id="btnDoRun">记录</button>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 记录执行结果：左侧用例上下文，右侧结果表单 -->
+        <div class="modal-layer" id="dlgCaseRun" role="dialog" aria-modal="true" aria-labelledby="runFormTitle"><div class="sheet md"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="runFormTitle">记录执行结果</h3><button class="icon-btn sm" type="button" id="dlgCaseRunX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="run-grid">
+              <aside class="run-context" id="runContext" aria-label="用例上下文"></aside>
+              <div class="run-form">
+                <div class="field">
+                  <label>执行结果 <span class="req">*</span></label>
+                  <div class="seg" id="segCaseRun">
+                    <button type="button" data-run-status="passed" aria-pressed="true">通过</button>
+                    <button type="button" data-run-status="failed" aria-pressed="false">失败</button>
+                    <button type="button" data-run-status="blocked" aria-pressed="false">阻塞</button>
+                    <button type="button" data-run-status="skipped" aria-pressed="false" title="本次不执行 / 不适用，不计入通过率">跳过</button>
+                  </div>
+                </div>
+                <div class="run-form-row">
+                  <div class="field">
+                    <label for="runExecutor">执行人</label>
+                    <select id="runExecutor" title="默认当前登录人；可代录其他成员"></select>
+                  </div>
+                  <div class="field">
+                    <label for="runEnvironment">执行环境</label>
+                    <input id="runEnvironment" type="text" maxlength="120" placeholder="浏览器 / 版本 / 设备…" autocomplete="off" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="runNote">备注</label>
+                  <textarea id="runNote" maxlength="500" placeholder="选填：失败原因、阻塞点…"></textarea>
+                </div>
+                <div class="field">
+                  <label>失败证据 <small class="tc-optional">选填 · 记录成功后自动上传</small></label>
+                  <div id="runKitMount"></div>
+                </div>
+                <div class="row row-gap">
+                  <button class="btn primary" type="button" id="btnDoRun">记录</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1667,7 +1880,7 @@
         </div></div></div>
 
         <!-- 执行失败转出缺陷 -->
-        <div class="modal-layer" id="dlgCaseDefect" role="dialog" aria-modal="true" aria-labelledby="defectFormTitle"><div class="sheet xs"><div class="sheet-body">
+        <div class="modal-layer" id="dlgCaseDefect" role="dialog" aria-modal="true" aria-labelledby="defectFormTitle"><div class="sheet sm"><div class="sheet-body">
           <div class="panel">
             <div class="panel-head"><h3 id="defectFormTitle">转出缺陷</h3><button class="icon-btn sm" type="button" id="dlgCaseDefectX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
@@ -1686,6 +1899,14 @@
               <div class="field">
                 <label for="defectEnvironment">发现环境</label>
                 <input id="defectEnvironment" type="text" maxlength="120" placeholder="选填：浏览器 / 版本 / 设备…" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="defectNote">补充说明</label>
+                <textarea id="defectNote" maxlength="500" placeholder="选填：复现频率、影响范围、临时绕过方式…会追加到缺陷描述"></textarea>
+              </div>
+              <div class="field" id="defectEvidenceField">
+                <label class="check-line" for="defectCarry"><input type="checkbox" id="defectCarry" checked /> 携带最近一轮失败证据到缺陷附件 <small class="tc-optional" id="defectEvCount"></small></label>
+                <div class="att-chips" id="defectEvidenceList"></div>
               </div>
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnDoDefect">新建缺陷</button>
@@ -2084,7 +2305,7 @@
               <h3>完成记录</h3>
               <span class="meta-right" id="compCount"></span>
             </div>
-            <p class="set-hint">工作项移入「已完成」时自动归档：项目名、负责人存的是<b>当时</b>的快照，之后改名或删除都不影响这里。</p>
+            <p class="set-hint">工作项移入「已完成」时自动归档：项目名、负责人、测试负责人与提测/测试时间存的是<b>当时</b>的快照，之后改名或删除都不影响这里。</p>
             <div id="compWrap"></div>
           </div>
         </div>
@@ -2172,6 +2393,11 @@
       <!-- ===== 洞察：交付图表（报表页的子导航） ===== -->
       <section class="view" id="view-report" aria-label="交付图表">
         <div class="view-page wide manager-page" id="reportBody"></div>
+      </section>
+
+      <!-- ===== 洞察：投入结构（报表页的子导航） ===== -->
+      <section class="view" id="view-investment" aria-label="投入结构">
+        <div class="view-page wide manager-page" id="investmentBody"></div>
       </section>
 
       <!-- ===== 消息：通知中心完整页（移动端「消息」tab 的落地页） ===== -->
@@ -2283,6 +2509,43 @@
                 <button class="btn primary" type="button" id="mailTest">保存并发送测试邮件</button>
               </div>
               <p class="me-preview" id="mailResult" hidden></p>
+            </div>
+
+            <div class="panel" data-set-pane="integration" id="set-team-ai" hidden>
+              <div class="panel-head">
+                <h3>团队 AI 服务</h3>
+                <span class="meta-right" id="teamAiState">—</span>
+              </div>
+              <p class="set-hint">平台统一提供的 AI 额度。启用后，成员默认使用这里的厂商与模型，不需要每个人再填 Key；API Key 加密保存，留空表示不修改。</p>
+              <label class="ai-switch"><input type="checkbox" id="teamAiEnabled" /><span>启用团队 AI（关闭后成员按个人 Key 解析；未配置的成员将无法使用）</span></label>
+              <div class="set-grid">
+                <div class="field">
+                  <label for="teamAiProvider">厂商</label>
+                  <select id="teamAiProvider"></select>
+                </div>
+                <div class="field">
+                  <label for="teamAiModel">模型</label>
+                  <input id="teamAiModel" type="text" autocomplete="off" placeholder="例如 deepseek-chat" />
+                </div>
+                <div class="field ai-field-wide">
+                  <label for="teamAiBase">接口地址</label>
+                  <input id="teamAiBase" type="text" autocomplete="off" placeholder="https://api.deepseek.com/v1" />
+                  <span class="hint" id="teamAiKeyHint">选厂商后会自动填好，走中转/代理时改这里即可。</span>
+                </div>
+                <div class="field ai-field-wide">
+                  <label for="teamAiKey">API Key</label>
+                  <input id="teamAiKey" type="password" autocomplete="new-password" placeholder="粘贴团队 API Key" />
+                  <span class="hint" id="teamAiKeyState">还没有配置</span>
+                </div>
+              </div>
+              <label class="ai-switch"><input type="checkbox" id="teamAiAllowPersonal" checked /><span>允许成员改用个人 API Key</span></label>
+              <div class="set-actions">
+                <button class="btn ghost" type="button" id="teamAiClearKey">清除 Key</button>
+                <button class="btn" type="button" id="teamAiSave">保存</button>
+                <button class="btn primary" type="button" id="teamAiTest">测试连接</button>
+                <span class="foot-note" id="teamAiUpdated"></span>
+              </div>
+              <p class="me-preview" id="teamAiResult" hidden></p>
             </div>
 
             <div class="panel" data-set-pane="members" id="set-members" hidden>
@@ -2460,8 +2723,13 @@
               <div class="panel-head">
                 <h3>活动</h3>
                 <span class="meta-right" id="actCount"></span>
+                <button class="btn sm" type="button" id="actFilterBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="actFilterPop">筛选<span class="act-filter-badge" id="actFilterBadge" hidden></span></button>
+                <div class="menu act-filter-pop" id="actFilterPop" role="dialog" aria-label="筛选活动记录" hidden></div>
+                <button class="btn sm" type="button" id="actExportBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="actExportMenu">导出</button>
+                <div class="menu" id="actExportMenu" role="menu" aria-label="导出活动记录" hidden></div>
               </div>
-              <p class="set-hint">空间内的工作项操作与配置变更记录（按时间倒序，每次加载 100 条）。删除列/模块/项目这类破坏性操作也会出现在这里。</p>
+              <p class="set-hint">空间内的项目、需求、文档、分支、版本、工作项与配置变更，按时间倒序合并展示，每次加载 50 条。删除列/模块/项目这类破坏性操作也会出现在这里；配置变更仅空间主与管理员可见。导出按当前类型筛选取全部记录（最多 5000 条），支持 Markdown、Word 与 PDF。</p>
+              <div class="act-types" id="actTypes" role="group" aria-label="活动类型筛选"></div>
               <div class="act-list" id="actList"></div>
             </div>
 
@@ -2507,6 +2775,7 @@
                   <option value="project_role">标注项目角色</option>
                   <option value="workspace_delete">删除空间</option>
                   <option value="project_delete">删除项目</option>
+                  <option value="project_release_policy">修改发布检查策略</option>
                   <option value="user_create">新建账号</option>
                   <option value="user_update">修改账号</option>
                   <option value="user_delete">删除账号</option>
@@ -2528,6 +2797,17 @@
                   <option value="test_case_import">导入测试用例</option>
                   <option value="test_case_create">新建测试用例</option>
                   <option value="test_case_update">编辑测试用例</option>
+                  <option value="test_case_batch_update">批量设置用例</option>
+                  <option value="test_case_move_module">用例移动目录</option>
+                  <option value="test_case_move_undo">撤销用例移动</option>
+                  <option value="test_module_create">新建用例目录</option>
+                  <option value="test_module_update">编辑用例目录</option>
+                  <option value="test_module_delete">删除用例目录</option>
+                  <option value="case_set_create">新建用例分组</option>
+                  <option value="case_set_update">编辑用例分组</option>
+                  <option value="case_set_delete">删除用例分组</option>
+                  <option value="case_set_members_add">分组加入用例</option>
+                  <option value="case_set_members_remove">分组移出用例</option>
                   <option value="test_plan_create">新建测试计划</option>
                   <option value="test_plan_update">编辑测试计划</option>
                   <option value="test_plan_cases_add">计划加入用例</option>
@@ -2706,7 +2986,7 @@
                 <h3>AI 设置</h3>
                 <span class="meta-right" id="meAiState">—</span>
               </div>
-              <p class="set-hint">用于 AI 助手、文档拆成工作项、完成度检查、生成测试用例和 AI 周报。额度走你自己填的 Key，加密后只存在你的账号下 —— 共享空间里的其他人看不到，也不会用到你的额度。</p>
+              <p class="set-hint">用于 AI 助手、文档拆成工作项、完成度检查、生成测试用例和 AI 周报。管理员开通团队 AI 后，打开开关即可使用；也可以继续用自己的 API Key，费用从个人额度扣除。</p>
               <div class="ai-assist-row">
                 <span class="ai-assist-ic" id="meAiAssistantIc" aria-hidden="true"></span>
                 <div class="ai-assist-txt">
@@ -2717,24 +2997,45 @@
                   <input type="checkbox" id="meAiAssistant" role="switch" aria-label="显示 AI 助手" />
                 </label>
               </div>
-              <div class="set-grid">
-                <div class="field">
-                  <label for="meAiProvider">厂商</label>
-                  <select id="meAiProvider"></select>
+              <fieldset class="ai-source">
+                <legend>使用来源</legend>
+                <div class="ai-source-list">
+                  <label class="ai-source-card" id="meAiTeamCard">
+                    <input type="radio" name="meAiSource" value="team" id="meAiSourceTeam" />
+                    <span class="ai-source-body">
+                      <span class="ai-source-title">团队 AI <span class="ai-source-tag" id="meAiTeamTag" hidden>当前来源</span></span>
+                      <span class="ai-source-sub" id="meAiTeamSub">平台尚未开通团队 AI</span>
+                    </span>
+                  </label>
+                  <label class="ai-source-card" id="meAiPersonalCard">
+                    <input type="radio" name="meAiSource" value="personal" id="meAiSourcePersonal" />
+                    <span class="ai-source-body">
+                      <span class="ai-source-title">我的 API Key <span class="ai-source-tag" id="meAiPersonalTag" hidden>当前来源</span></span>
+                      <span class="ai-source-sub" id="meAiPersonalSub">改用个人 Key 后，费用从你自己的额度扣除，随时可以切回团队 AI。</span>
+                    </span>
+                  </label>
                 </div>
-                <div class="field">
-                  <label for="meAiModel">模型</label>
-                  <input id="meAiModel" type="text" autocomplete="off" placeholder="例如 deepseek-chat" />
-                </div>
-                <div class="field ai-field-wide">
-                  <label for="meAiBase">接口地址</label>
-                  <input id="meAiBase" type="text" autocomplete="off" placeholder="https://api.deepseek.com/v1" />
-                  <span class="hint" id="meAiKeyHint">选厂商后会自动填好，走中转/代理时改这里即可。</span>
-                </div>
-                <div class="field ai-field-wide">
-                  <label for="meAiKey">API Key</label>
-                  <input id="meAiKey" type="password" autocomplete="new-password" placeholder="粘贴你的 API Key" />
-                  <span class="hint" id="meAiKeyState">还没有配置</span>
+              </fieldset>
+              <div class="ai-personal-form" id="meAiPersonalForm">
+                <div class="set-grid">
+                  <div class="field">
+                    <label for="meAiProvider">厂商</label>
+                    <select id="meAiProvider"></select>
+                  </div>
+                  <div class="field">
+                    <label for="meAiModel">模型</label>
+                    <input id="meAiModel" type="text" autocomplete="off" placeholder="例如 deepseek-chat" />
+                  </div>
+                  <div class="field ai-field-wide">
+                    <label for="meAiBase">接口地址</label>
+                    <input id="meAiBase" type="text" autocomplete="off" placeholder="https://api.deepseek.com/v1" />
+                    <span class="hint" id="meAiKeyHint">选厂商后会自动填好，走中转/代理时改这里即可。</span>
+                  </div>
+                  <div class="field ai-field-wide">
+                    <label for="meAiKey">API Key</label>
+                    <input id="meAiKey" type="password" autocomplete="new-password" placeholder="粘贴你的 API Key" />
+                    <span class="hint" id="meAiKeyState">还没有配置</span>
+                  </div>
                 </div>
               </div>
               <label class="ai-switch">
@@ -2744,7 +3045,8 @@
               <div class="set-actions">
                 <button class="btn ghost" type="button" id="meAiClear">清除 Key</button>
                 <button class="btn" type="button" id="meAiSave">保存</button>
-                <button class="btn primary" type="button" id="meAiTest">保存并测试连接</button>
+                <button class="btn primary" type="button" id="meAiTest">保存并测试当前来源</button>
+                <span class="foot-note" id="meAiSourceNote"></span>
               </div>
               <p class="me-preview" id="meAiResult" hidden></p>
             </div>
@@ -2801,10 +3103,12 @@
         <select id="brReq"><option value="">空间级公共分支</option></select>
       </label>
       <div class="br-dlg-2col">
-        <label class="reqdoc-dlg-field">
+        <div class="reqdoc-dlg-field">
           <span>负责人</span>
-          <select id="brOwner"></select>
-        </label>
+          <button type="button" class="people-field" id="brOwnerBtn" aria-haspopup="dialog" aria-expanded="false"></button>
+          <input type="hidden" id="brOwner" value="" />
+          <input type="hidden" id="brOwnerName" value="" />
+        </div>
         <label class="reqdoc-dlg-field" id="brStatusField">
           <span>初始状态</span>
           <select id="brStatus"></select>

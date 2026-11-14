@@ -10,7 +10,7 @@
 mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 ```
 
-基线包含当前全部 66 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑、交付说明、编号序列与用例—工作项追溯）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
+基线包含当前全部 72 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑、交付说明、编号序列、用例—工作项追溯、用例目录层级 / 自定义分组（动态收录与指定成员可见）、文档分类树与空间级文档、子任务排序与团队共享 AI 配置）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
 
 ## 2. 已有库升级
 
@@ -47,6 +47,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 `88_case_task_traceability.sql` 新增 `test_case_task`（用例验证的工作项，多对多）并给 `test_plan_case` 增 `required`（发布必测）。用例仍只有一个主需求 `test_case.demand_id`，关联工作项必须属于该主需求；历史用例不回填关联，没有工作项链时按「需求级覆盖」展示。脚本幂等、不构造历史证据。
 
 `89_release_test_check.sql` 给 `requirement` 增 `release_check_policy`（strict/standard/loose，默认 standard）。发布前检查按该策略区分阻断与提醒；只读取用例与计划结果，不改变任务状态，确认发布时把结论冻结进 `version_release.plan_snapshot.testEvidence`。
+
+`92_case_creator_run_env.sql` 给 `test_case` 增 `created_by` / `created_by_user_id`（创建时写入、不随执行变化，区分「谁写的用例」与「谁执行的」），给 `test_case_run` 增 `environment`（执行环境，转缺陷时预填）。只增结构、幂等可重复执行；历史用例与执行记录不回填创建人/环境，旧数据没有可靠记录时不伪造。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。
 

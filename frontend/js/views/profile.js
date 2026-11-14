@@ -297,12 +297,70 @@ function renderAiConfig(d){
       ? "已保存的 Key 无法解密（部署密钥变更过），请重新填一次"
       : (d.hasKey ? "已保存 " + (d.apiKeyMasked || "") + "，留空则保持不变" : "还没有配置 Key");
   }
+
+  var allowPersonal = d.allowPersonal !== false;
+  var team = d.team || {};
+  var teamReady = !!team.available;
+  var teamRadio = $("meAiSourceTeam"), personalRadio = $("meAiSourcePersonal");
+  if(teamRadio){
+    teamRadio.disabled = !teamReady;
+    $("meAiTeamCard").className = "ai-source-card" + (teamReady ? "" : " disabled");
+    if($("meAiTeamSub")){
+      $("meAiTeamSub").textContent = teamReady
+        ? (team.provider || "") + " · " + (team.model || "") + "；" + (team.status || "费用由团队承担")
+        : (team.status || "平台尚未开通团队 AI");
+    }
+  }
+  if(personalRadio){
+    personalRadio.disabled = !allowPersonal;
+    $("meAiPersonalCard").className = "ai-source-card" + (allowPersonal ? "" : " disabled");
+    if($("meAiPersonalSub")){
+      $("meAiPersonalSub").textContent = !allowPersonal
+        ? "平台管理员已关闭个人 API Key：已保存的 Key 会保留，但不再使用"
+        : d.keyBroken
+        ? "已保存的 Key 无法解密，请重新填写"
+        : d.hasKey
+        ? "已保存 " + (d.apiKeyMasked || "****") + "，费用从你自己的额度扣除"
+        : "还没有填写 Key，选择后请在下方补全";
+    }
+  }
+
+  /* 单选框记的是"偏好"而不是解析结果：auto 时团队优先，团队不可用才回落到个人 */
+  var pickPersonal = allowPersonal && (d.prefer === "personal" || !teamReady);
+  if(!allowPersonal) pickPersonal = false;
+  if(personalRadio) personalRadio.checked = pickPersonal;
+  if(teamRadio) teamRadio.checked = !pickPersonal;
+
+  var source = d.source || "none";
+  if($("meAiTeamTag")){
+    $("meAiTeamTag").hidden = source !== "team" && source !== "workspace";
+    $("meAiTeamTag").textContent = source === "workspace" ? "当前 · 本空间" : "当前来源";
+  }
+  if($("meAiPersonalTag")) $("meAiPersonalTag").hidden = source !== "personal";
+  if($("meAiSourceNote")){
+    $("meAiSourceNote").textContent = source === "none"
+      ? "当前没有可用的 AI 来源"
+      : "当前实际使用：" + (d.sourceName || source) + "；切换来源后点保存生效";
+  }
   if($("meAiState")){
     $("meAiState").textContent = d.status || "";
-    $("meAiState").className = "meta-right" + (d.enabled && d.hasKey ? "" : " muted");
+    $("meAiState").className = "meta-right" + (source !== "none" && d.enabled ? "" : " muted");
   }
+  syncAiSourceUi();
   var p = findAiPreset(sel.value);
   if(p && $("meAiKeyHint")) $("meAiKeyHint").textContent = p.keyHint || "";
+}
+function personalSourceSelected(){
+  var el = $("meAiSourcePersonal");
+  return !!(el && el.checked);
+}
+function syncAiSourceUi(){
+  var personal = personalSourceSelected();
+  var teamEl = $("meAiSourceTeam");
+  var teamOn = !personal && !!teamEl && !teamEl.disabled;
+  if($("meAiTeamCard")) $("meAiTeamCard").classList.toggle("on", teamOn);
+  if($("meAiPersonalCard")) $("meAiPersonalCard").classList.toggle("on", personal);
+  if($("meAiPersonalForm")) $("meAiPersonalForm").hidden = !personal;
 }
 function aiFormBody(clearKey){
   var key = $("meAiKey") ? $("meAiKey").value.trim() : "";
@@ -312,7 +370,8 @@ function aiFormBody(clearKey){
     model: $("meAiModel").value.trim(),
     apiKey: key,
     clearKey: !!clearKey,
-    enabled: $("meAiEnabled").checked
+    enabled: $("meAiEnabled").checked,
+    prefer: personalSourceSelected() ? "personal" : "auto"
   };
 }
 function saveAiConfig(clearKey){
@@ -322,6 +381,10 @@ function saveAiConfig(clearKey){
     return d;
   });
 }
+["meAiSourceTeam", "meAiSourcePersonal"].forEach(function(id){
+  var el = $(id);
+  if(el) el.addEventListener("change", syncAiSourceUi);
+});
 if($("meAiProvider")){
   $("meAiProvider").addEventListener("change", function(){
     var p = findAiPreset(this.value);
@@ -376,7 +439,8 @@ if($("meAiTest")){
       btn.disabled = false;
       var sec = ((Date.now() - t0) / 1000).toFixed(1);
       if($("meAiResult")){
-        $("meAiResult").textContent = "连通正常：模型 " + (r.model || "—")
+        var via = r.sourceLabel ? "（" + r.sourceLabel + "）" : "";
+        $("meAiResult").textContent = "连通正常" + via + "：模型 " + (r.model || "—")
           + "，往返 " + sec + " 秒，返回「" + String(r.reply || "").slice(0, 20) + "」，本次 " + (r.tokens || 0) + " tokens";
       }
       toast("AI 连接正常", "fs");

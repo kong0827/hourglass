@@ -79,7 +79,8 @@ class DeliveryNoteServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
     private final DeliveryNoteService service = new DeliveryNoteService(versions, reqs, tasks, versionTasks,
-            demands, releases, commitments, testPlans, timeLogs, categories, users, workspaces, notes, access, json);
+            demands, releases, commitments, testPlans, timeLogs, categories, users, workspaces, notes, access, json,
+            mock(CaseSetService.class));
 
     private ProjectVersion version;
 

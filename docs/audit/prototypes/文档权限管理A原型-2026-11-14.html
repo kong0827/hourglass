@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 文档权限管理 A 轻量档 原型</title>
+<style>
+/* ===== 设计令牌：与 frontend/css/tokens.css 一致 ===== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --surface-active:#E9ECF1; --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);font-size:14px;line-height:1.55}
+button{font-family:inherit;font-size:13px;cursor:pointer;border:none;background:none;color:inherit}
+svg{display:block}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px}
+
+/* ===== 原型说明条 ===== */
+.proto-bar{background:var(--primary-soft);border-bottom:1px solid var(--primary-border);padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pb-title{font-weight:700;font-size:13px;color:var(--primary-fg);display:flex;align-items:center;gap:8px}
+.pb-note{font-size:11.5px;color:var(--text-3)}
+.scenarios{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.sc-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r-pill);border:1px solid var(--primary-border);background:var(--surface);color:var(--primary-fg);font-size:12px;font-weight:500;transition:all .12s}
+.sc-chip:hover{background:var(--primary-soft);border-color:var(--primary)}
+.sc-chip .n{width:16px;height:16px;border-radius:50%;background:var(--primary);color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.sc-chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.sc-chip.active .n{background:rgba(255,255,255,.25)}
+
+/* ===== 规则横幅（before / after） ===== */
+.rule{margin:14px 20px 0;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
+.rule-head{padding:9px 14px;font-size:12.5px;font-weight:700;color:var(--text-2);background:var(--surface-sunken);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.rule-body{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.rule-col{padding:11px 14px;font-size:12.5px;color:var(--text-2)}
+.rule-col+.rule-col{border-left:1px solid var(--border)}
+.rule-col .tag{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:var(--r-pill);margin-bottom:6px}
+.rule-col.before .tag{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+.rule-col.after .tag{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.rule-col b{color:var(--text)}
+.rule-col ul{margin:4px 0 0 16px}
+.rule-col li{margin:2px 0}
+.rule-foot{padding:8px 14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-3);background:var(--surface)}
+
+/* ===== 应用框架 ===== */
+.app{display:flex;height:calc(100vh - 232px);min-height:480px;margin:14px 20px 20px;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface)}
+.tree{width:268px;flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface)}
+.tree-head{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.tree-head .t{font-size:12.5px;font-weight:700;color:var(--text-2)}
+.tree-head .new{margin-left:auto}
+.tree-body{flex:1;overflow-y:auto;padding:8px}
+.tree-tip{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);line-height:1.5}
+
+.rs-proj{margin-bottom:4px}
+.rs-proj-head{display:flex;align-items:center;gap:7px;width:100%;padding:7px 9px;border-radius:var(--r-xs);text-align:left}
+.rs-proj-head:hover{background:var(--surface-hover)}
+.rs-proj-head .rp-caret{display:inline-flex;color:var(--text-3);flex:none}
+.rs-proj-head.space .rp-caret{color:var(--primary-fg)}
+.rs-proj-head .rp-name{font-size:13px;font-weight:650;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs-proj-head.space .rp-name{color:var(--primary-fg)}
+.rp-tag{flex:none;padding:0 5px;border-radius:4px;background:var(--primary-soft);font-size:10px;line-height:15px;font-weight:650;color:var(--primary-fg)}
+.rp-tag.ro{background:var(--warning-soft);color:var(--warning-fg)}
+.rp-count{flex:none;font-size:11px;color:var(--text-3)}
+.rs-proj-body{padding-left:6px}
+
+.rs-cat,.rs-node{display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px;border-radius:var(--r-xs);text-align:left;position:relative}
+.rs-cat:hover,.rs-node:hover{background:var(--surface-hover)}
+.rs-node.active{background:var(--primary-soft)}
+.rs-caret{display:inline-flex;color:var(--text-3);flex:none;width:14px}
+.rs-folder{display:inline-flex;color:var(--text-3);flex:none}
+.rs-title{font-size:12.5px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs-node.active .rs-title{color:var(--primary-fg);font-weight:600}
+.rs-fmt-html{flex:none;font-size:9.5px;font-weight:700;color:var(--warning-fg);background:var(--warning-soft);border:1px solid var(--warning-border);border-radius:4px;padding:0 4px;line-height:14px}
+.rr-published{flex:none;font-size:9.5px;font-weight:600;color:var(--success-fg);background:var(--success-soft);border:1px solid var(--success-border);border-radius:4px;padding:0 4px;line-height:14px}
+.rr-draft{flex:none;font-size:9.5px;font-weight:600;color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border);border-radius:4px;padding:0 4px;line-height:14px}
+.rs-kids{flex:none;font-size:11px;color:var(--text-3)}
+.rs-acts{display:none;align-items:center;gap:2px;flex:none}
+.rs-node:hover .rs-acts,.rs-cat:hover .rs-acts{display:inline-flex}
+.rs-act{display:grid;place-items:center;width:20px;height:20px;border-radius:5px;color:var(--text-3)}
+.rs-act:hover{background:var(--surface-active);color:var(--text-2)}
+.rs-act.danger:hover{background:var(--danger-soft);color:var(--danger-fg)}
+.rd-depth1{padding-left:22px}.rd-depth2{padding-left:38px}
+.lock-note{font-size:10px;color:var(--text-3);display:inline-flex;align-items:center;gap:3px;flex:none}
+
+/* ===== 阅读区 ===== */
+.reader{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-app)}
+.reader-head{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:flex-start;gap:12px}
+.rh-main{flex:1;min-width:0}
+.rh-crumb{font-size:11.5px;color:var(--text-3);display:flex;align-items:center;gap:5px;margin-bottom:5px;flex-wrap:wrap}
+.rh-crumb b{color:var(--text-2);font-weight:600}
+.rh-title{font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px}
+.rh-meta{font-size:11.5px;color:var(--text-3);margin-top:5px}
+.rh-actions{display:flex;align-items:center;gap:8px;flex:none}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);font-weight:500;transition:all .12s;white-space:nowrap}
+.btn:hover{background:var(--surface-hover)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-hover)}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:disabled:hover{background:var(--surface)}
+.btn.primary:disabled:hover{background:var(--primary)}
+.reader-body{flex:1;overflow-y:auto;padding:18px}
+.doc-content{max-width:720px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:22px 26px}
+.doc-content h2{font-size:16px;margin:0 0 10px}
+.doc-content p{font-size:13.5px;color:var(--text-2);margin:8px 0}
+.doc-content ul{margin:8px 0 8px 20px;font-size:13.5px;color:var(--text-2)}
+.readonly-banner{max-width:720px;margin:0 0 14px;display:flex;align-items:center;gap:9px;padding:9px 14px;border-radius:var(--r-md);background:var(--warning-soft);border:1px solid var(--warning-border);color:var(--warning-fg);font-size:12.5px}
+.readonly-banner svg{flex:none}
+
+/* ===== 权限说明面板（右栏，只读） ===== */
+.perm{width:322px;flex:none;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column}
+.perm-head{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.perm-head .t{font-size:12.5px;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:7px}
+.perm-head .ro-badge{margin-left:auto;font-size:10px;font-weight:600;color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-pill);padding:1px 8px}
+.perm-body{flex:1;overflow-y:auto;padding:6px 0}
+.perm-sec{border-bottom:1px solid var(--border)}
+.perm-sec:last-child{border-bottom:none}
+.perm-sec-head{display:flex;align-items:center;gap:7px;width:100%;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;color:var(--text-2)}
+.perm-sec-head:hover{background:var(--surface-hover)}
+.perm-sec-head .caret{display:inline-flex;color:var(--text-3);transition:transform .12s var(--ease-out)}
+.perm-sec.collapsed .caret{transform:rotate(-90deg)}
+.perm-sec.collapsed .perm-sec-body{display:none}
+.perm-sec-body{padding:2px 14px 12px}
+.perm-row{display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:12.5px}
+.perm-row .k{color:var(--text-3);flex:none;width:74px}
+.perm-row .v{color:var(--text-2);flex:1;min-width:0}
+.perm-row .v b{color:var(--text);font-weight:600}
+.perm-mine{margin:2px 0 8px;padding:9px 11px;border-radius:var(--r-sm);font-size:12.5px;display:flex;align-items:center;gap:8px}
+.perm-mine.edit{background:var(--success-soft);border:1px solid var(--success-border);color:var(--success-fg)}
+.perm-mine.read{background:var(--warning-soft);border:1px solid var(--warning-border);color:var(--warning-fg)}
+.perm-mine svg{flex:none}
+.perm-mine b{font-weight:700}
+.perm-people{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pers{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2);background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-pill);padding:2px 9px 2px 3px}
+.avatar{width:20px;height:20px;border-radius:50%;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex:none}
+.perm-share{margin-top:6px}
+.perm-share .btn{width:100%;justify-content:center}
+.perm-note{font-size:11.5px;color:var(--text-3);margin-top:7px;line-height:1.5}
+.perm-cat{margin:10px 14px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);padding:10px 12px;background:var(--surface-sunken)}
+.perm-cat .ct{font-size:12px;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.perm-cat .cr{font-size:12px;color:var(--text-2);padding:2px 0}
+.perm-cat .cr b{color:var(--text)}
+
+/* ===== 右键菜单 ===== */
+.ctx{position:fixed;z-index:50;min-width:186px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-lg);padding:5px;display:none}
+.ctx.open{display:block}
+.ctx-head{font-size:11px;color:var(--text-3);padding:5px 9px;border-bottom:1px solid var(--border);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctx button{display:flex;align-items:center;gap:9px;width:100%;padding:7px 9px;border-radius:var(--r-xs);font-size:12.5px;color:var(--text-2);text-align:left}
+.ctx button:hover{background:var(--surface-hover)}
+.ctx button.danger{color:var(--danger-fg)}
+.ctx button.danger:hover{background:var(--danger-soft)}
+.ctx button .ic{display:inline-flex;color:var(--text-3)}
+.ctx button.danger .ic{color:var(--danger-fg)}
+.ctx .sep{height:1px;background:var(--border);margin:4px 0}
+.ctx-note{font-size:11px;color:var(--text-3);padding:6px 9px;line-height:1.45}
+
+/* ===== toast ===== */
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:var(--text);color:#fff;font-size:12.5px;padding:9px 16px;border-radius:var(--r-sm);box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:all .18s var(--ease-out);z-index:80;display:flex;align-items:center;gap:8px;max-width:80vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.warn{background:var(--warning-fg)}
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <span class="pb-title">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.6 16.4 5v5c0 4-2.7 6.6-6.4 7.6C6.3 16.6 3.6 14 3.6 10V5Z"/><path d="M7.6 10.2 9.3 12l3.2-3.6"/></svg>
+    文档权限管理 · A 轻量档（创建人保护 + 权限说明）
+  </span>
+  <span class="pb-note">只读说明面板，不做逐人授权 · 空间分类维持管理员-only · 切换身份看只读态变化</span>
+  <div class="scenarios" id="scenarios">
+    <button class="sc-chip active" data-sc="owner"><span class="n">1</span>我是张三·负责人</button>
+    <button class="sc-chip" data-sc="member"><span class="n">2</span>我是李四·普通成员</button>
+    <button class="sc-chip" data-sc="admin"><span class="n">3</span>我是空间管理员</button>
+    <button class="sc-chip" data-sc="draft"><span class="n">4</span>他人草稿·不可见</button>
+  </div>
+</div>
+
+<div class="rule">
+  <div class="rule-head">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M10 6v5M10 14h.01"/><circle cx="10" cy="10" r="7.4"/></svg>
+    规则：把草稿已有的「负责人 + 管理员」保护，扩展到已发布文档
+  </div>
+  <div class="rule-body">
+    <div class="rule-col before">
+      <span class="tag">现状</span>
+      <ul>
+        <li><b>草稿</b>：仅负责人 + 空间管理员可见可改（已有）。</li>
+        <li><b>已发布</b>：任何项目 / 空间可写者都能改、删、重命名、撤回发布——<b>不看创建人</b>。</li>
+        <li>风险：李四（普通成员）能直接删掉张三建的共享《开发手册》。</li>
+      </ul>
+    </div>
+    <div class="rule-col after">
+      <span class="tag">A 新增</span>
+      <ul>
+        <li><b>已发布</b>的 编辑 / 删除 / 重命名 / 发布撤回 → 仅 <b>负责人(ownerUserId) + 空间管理员</b>。</li>
+        <li>负责人可改派；改派后新负责人获得权限。无负责人(空) → 回退「项目可写者」，不锁死。</li>
+        <li><b>排序拖动 / 新建子文档</b> 仍按项目可写（组织 / 新增，不改父文档内容）。</li>
+        <li>分类维护不变；新增只读「权限说明」面板。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="rule-foot">口径与测试用例域一致（测试分类也是项目派生权限）；A 不引入新授权表，复用现成 ownerUserId 字段，零迁移。</div>
+</div>
+
+<div class="app">
+  <!-- 左：文档树 -->
+  <div class="tree">
+    <div class="tree-head">
+      <span class="t">文档</span>
+      <button class="btn sm primary new" id="topNew">+ 新建文档</button>
+    </div>
+    <div class="tree-body" id="treeBody"></div>
+    <div class="tree-tip" id="treeTip">右击文档行看菜单：普通成员对他人已发布文档无「重命名 / 删除」。</div>
+  </div>
+
+  <!-- 中：阅读区 -->
+  <div class="reader">
+    <div class="reader-head">
+      <div class="rh-main">
+        <div class="rh-crumb"><span>空间文档</span><span>›</span><span>开发手册</span><span>›</span><b id="rhCrumbDoc">前端规范</b></div>
+        <div class="rh-title"><span id="rhTitle">前端规范</span><span class="rr-published" id="rhPub">已发布</span></div>
+        <div class="rh-meta" id="rhMeta">Markdown · 负责人 张三 · 空间级文档（不挂项目）</div>
+      </div>
+      <div class="rh-actions">
+        <button class="btn sm" id="btnShare">分享</button>
+        <button class="btn sm primary" id="btnEdit">编辑</button>
+      </div>
+    </div>
+    <div class="reader-body">
+      <div class="readonly-banner" id="roBanner" hidden>
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.6" y="8.6" width="10.8" height="8" rx="1.6"/><path d="M7 8.6V6.4a3 3 0 0 1 6 0v2.2"/></svg>
+        <span id="roText">你对这篇文档只读：仅负责人张三或空间管理员可编辑 / 删除。</span>
+      </div>
+      <div class="doc-content">
+        <h2>前端规范</h2>
+        <p>本手册约定团队前端代码风格、目录结构与组件复用口径，全员可读。发布后由负责人维护，避免共享手册被误改误删。</p>
+        <ul><li>命名：组件 PascalCase，工具函数 camelCase。</li><li>样式：统一走设计令牌，不写死色值。</li><li>提交：小步提交，信息说清「为什么」。</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右：权限说明面板（只读） -->
+  <div class="perm">
+    <div class="perm-head">
+      <span class="t">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.6 16.4 5v5c0 4-2.7 6.6-6.4 7.6C6.3 16.6 3.6 14 3.6 10V5Z"/></svg>
+        权限说明
+      </span>
+      <span class="ro-badge">只读 · 派生自角色</span>
+    </div>
+    <div class="perm-body">
+      <div class="perm-sec" data-sec="doc">
+        <button class="perm-sec-head" type="button"><span class="caret"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg></span>当前文档 · 前端规范</button>
+        <div class="perm-sec-body">
+          <div class="perm-mine edit" id="permMine"></div>
+          <div class="perm-row"><span class="k">归属</span><span class="v">空间级文档（不挂项目）</span></div>
+          <div class="perm-row"><span class="k">可见范围</span><span class="v" id="permVisible">已发布 → <b>空间成员</b>可见</span></div>
+          <div class="perm-row"><span class="k">可编辑 / 删除</span><span class="v"><span class="perm-people"><span class="pers"><span class="avatar" style="background:#1D4ED8">张</span>张三（负责人）</span><span class="pers"><span class="avatar" style="background:#475467">管</span>空间管理员</span></span></span></div>
+          <div class="perm-row"><span class="k">可排序 / 建子文档</span><span class="v">空间内<b>非只读成员</b>（组织 / 新增，不改本文）</span></div>
+          <div class="perm-share" id="permShare"></div>
+          <div class="perm-note" id="permNote"></div>
+        </div>
+      </div>
+      <div class="perm-sec" data-sec="cat">
+        <button class="perm-sec-head" type="button"><span class="caret"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg></span>所属分类 · 开发手册</button>
+        <div class="perm-sec-body">
+          <div class="perm-cat">
+            <div class="ct"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.4A1.8 1.8 0 0 1 4.8 3.6h3.4l1.6 1.8h5.4A1.8 1.8 0 0 1 17 7.2v7.4a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 14.6Z"/></svg>空间级分类</div>
+            <div class="cr">可维护：<b>仅空间主 / 管理员</b>（新建子分类 / 重命名 / 删除）</div>
+            <div class="cr">我的权限：<b id="catMine">只读</b></div>
+            <div class="cr" style="color:var(--text-3);font-size:11.5px;margin-top:4px">成员仍可在该分类下新建空间级文档；分类结构由管理员把控。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ctx" id="ctx"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var IC={
+    globe:'<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2.4 2.6 2.4 11.4 0 14-2.4-2.6-2.4-11.4 0-14Z"/></svg>',
+    caret:'<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg>',
+    folder:'<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.4A1.8 1.8 0 0 1 4.8 3.6h3.4l1.6 1.8h5.4A1.8 1.8 0 0 1 17 7.2v7.4a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 14.6Z"/></svg>',
+    edit:'<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12.4 4.6 3 3L7 16H4v-3Z"/><path d="m11 6 3 3"/></svg>',
+    trash:'<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 6.2h10.8M8 6.2V4.6h4v1.6M6.2 6.2l.7 9.2h6.2l.7-9.2"/></svg>',
+    grip:'<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01"/></svg>',
+    note:'<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.6h7l3 3v9.8H5Z"/><path d="M12 3.6v3h3M7.4 10h5.2M7.4 12.6h3.4"/></svg>',
+    lock:'<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.6" y="8.6" width="10.8" height="8" rx="1.6"/><path d="M7 8.6V6.4a3 3 0 0 1 6 0v2.2"/></svg>',
+    share:'<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="10" r="2.2"/><circle cx="14.4" cy="5.6" r="2.2"/><circle cx="14.4" cy="14.4" r="2.2"/><path d="m8 9 4.4-2.4M8 11l4.4 2.4"/></svg>',
+    check:'<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10.4 8.4 14 15 6.6"/></svg>'
+  };
+  /* 当前身份场景：owner=张三负责人 / member=李四普通成员 / admin=空间管理员 / draft=他人草稿不可见 */
+  var sc="owner";
+  var SC={
+    owner:{me:"张三",role:"负责人",canEditDoc:true,canManageCat:false,mine:"edit",mineText:"你可编辑 / 删除（你是负责人）",catMine:"只读",note:"你是本文负责人：可编辑、删除、重命名、撤回发布，也可改派负责人。"},
+    member:{me:"李四",role:"普通成员",canEditDoc:false,canManageCat:false,mine:"read",mineText:"你只读（普通成员，非负责人）",catMine:"只读",note:"你可阅读、排序、在本文下新建子文档；但不能改 / 删本文——仅负责人张三或空间管理员可以。"},
+    admin:{me:"管理员",role:"空间管理员",canEditDoc:true,canManageCat:true,mine:"edit",mineText:"你可编辑 / 删除（你是空间管理员）",catMine:"可维护",note:"空间管理员豁免创建人保护：可编辑 / 删除任何文档，并维护空间级分类。"},
+    draft:{me:"李四",role:"普通成员",canEditDoc:false,canManageCat:false,mine:"read",mineText:"草稿对普通成员不可见",catMine:"只读",note:"他人草稿仅负责人 + 管理员可见（现有口径，不变）：列表里根本不出现，无需额外保护。"}
+  };
+  var treeBody=document.getElementById("treeBody");
+  var ctx=document.getElementById("ctx");
+
+  function rowActs(canEdit,canReorder){
+    var h='<span class="rs-acts">';
+    if(canReorder) h+='<span class="rs-act" title="拖动调整顺序（项目可写即可）">'+IC.grip+'</span>';
+    if(canEdit) h+='<span class="rs-act" title="重命名">'+IC.edit+'</span><span class="rs-act danger" title="删除">'+IC.trash+'</span>';
+    else h+='<span class="lock-note" title="仅负责人或管理员可改删">'+IC.lock+'</span>';
+    return h+'</span>';
+  }
+  function renderTree(){
+    var s=SC[sc];
+    var isDraftScene=(sc==="draft");
+    /* 空间文档分组 */
+    var h='<div class="rs-proj"><button class="rs-proj-head space" type="button"><span class="rp-caret">'+IC.globe+'</span><span class="rp-name">空间文档</span><span class="rp-tag">不挂项目</span><span class="rp-count">'+(isDraftScene?2:3)+'</span></button><div class="rs-proj-body">';
+    /* 开发手册 分类 */
+    h+='<button class="rs-cat rd-depth1" type="button"><span class="rs-caret">'+IC.caret+'</span><span class="rs-folder">'+IC.folder+'</span><span class="rs-title">开发手册</span><span class="rs-kids">2</span>'+(s.canManageCat?'<span class="rs-acts"><span class="rs-act" title="重命名分类">'+IC.edit+'</span></span>':'')+'</button>';
+    /* 前端规范（选中） */
+    if(!isDraftScene){
+      h+='<button class="rs-node rd-depth2 active" type="button" id="selRow"><span class="rs-caret"></span><span class="rs-title">前端规范</span><span class="rr-published">已发布</span>'+rowActs(s.canEditDoc,true)+'</button>';
+      h+='<button class="rs-node rd-depth2" type="button"><span class="rs-caret"></span><span class="rs-title">后端规范</span><span class="rr-published">已发布</span>'+rowActs(s.canEditDoc,true)+'</button>';
+    }else{
+      h+='<button class="rs-node rd-depth2" type="button"><span class="rs-caret"></span><span class="rs-title">后端规范</span><span class="rr-published">已发布</span>'+rowActs(false,true)+'</button>';
+    }
+    h+='</div></div>';
+    /* 项目分组对照 */
+    h+='<div class="rs-proj"><button class="rs-proj-head" type="button"><span class="rp-caret">'+IC.caret+'</span><span class="rp-name">统一支付网关</span><span class="rp-count">1</span></button><div class="rs-proj-body">';
+    h+='<button class="rs-node rd-depth1" type="button"><span class="rs-caret"></span><span class="rs-title">v2.2 需求说明</span><span class="rr-published">已发布</span>'+rowActs(s.canEditDoc,true)+'</button>';
+    h+='</div></div>';
+    treeBody.innerHTML=h;
+    var sel=document.getElementById("selRow");
+    if(sel) sel.addEventListener("contextmenu",function(e){ e.preventDefault(); openCtx(e.clientX,e.clientY); });
+  }
+
+  function renderReader(){
+    var s=SC[sc];
+    var isDraftScene=(sc==="draft");
+    document.getElementById("rhTitle").textContent=isDraftScene?"后端规范":"前端规范";
+    document.getElementById("rhCrumbDoc").textContent=isDraftScene?"后端规范":"前端规范";
+    document.getElementById("rhMeta").textContent="Markdown · 负责人 张三 · 空间级文档（不挂项目）";
+    var edit=document.getElementById("btnEdit");
+    edit.disabled=!s.canEditDoc;
+    edit.title=s.canEditDoc?"编辑文档":"仅文档负责人或空间管理员可编辑";
+    var ro=document.getElementById("roBanner");
+    if(isDraftScene){ ro.hidden=false; document.getElementById("roText").textContent="这是他人草稿的演示：普通成员列表里看不到它（仅负责人 + 管理员可见）。此处仅为说明，实际不会展示。"; }
+    else if(!s.canEditDoc){ ro.hidden=false; document.getElementById("roText").textContent="你对这篇文档只读：仅负责人张三或空间管理员可编辑 / 删除。你仍可阅读、排序、新建子文档。"; }
+    else ro.hidden=true;
+    edit.onclick=function(){ if(!s.canEditDoc) toast("仅文档负责人或空间管理员可编辑","warn"); else toast("原型演示：进入编辑"); };
+    document.getElementById("btnShare").onclick=function(){ if(!s.canEditDoc) toast("仅项目 / 空间可写者可管理分享链接","warn"); else toast("原型演示：管理只读分享链接"); };
+  }
+
+  function renderPerm(){
+    var s=SC[sc];
+    var mine=document.getElementById("permMine");
+    mine.className="perm-mine "+s.mine;
+    mine.innerHTML=(s.mine==="edit"?IC.check:IC.lock)+"<span><b>"+s.me+"</b> · "+s.mineText+"</span>";
+    document.getElementById("permVisible").innerHTML=(sc==="draft")?"草稿 → 仅 <b>负责人 + 管理员</b> 可见":"已发布 → <b>空间成员</b>可见";
+    document.getElementById("catMine").textContent=s.catMine;
+    document.getElementById("permNote").textContent=s.note;
+    var share=document.getElementById("permShare");
+    if(s.canEditDoc) share.innerHTML='<button class="btn sm" type="button" id="permShareBtn">'+IC.share+'管理只读分享链接</button><div class="perm-note">已发布文档可生成限时公开只读链接（现有能力）；仅项目 / 空间可写者可管理。</div>';
+    else share.innerHTML='<div class="perm-note">对外分享：已发布文档可由<b>项目 / 空间可写者</b>生成限时公开只读链接；你当前只读，不能管理链接。</div>';
+    var sb=document.getElementById("permShareBtn");
+    if(sb) sb.onclick=function(){ toast("原型演示：管理只读分享链接"); };
+  }
+
+  function openCtx(x,y){
+    var s=SC[sc];
+    var h='<div class="ctx-head">文档：前端规范</div>';
+    h+='<button type="button" data-act="subdoc"><span class="ic">'+IC.note+'</span>新建子文档</button>';
+    if(s.canEditDoc){
+      h+='<div class="sep"></div><button type="button" data-act="rename"><span class="ic">'+IC.edit+'</span>重命名</button><button type="button" data-act="del" class="danger"><span class="ic">'+IC.trash+'</span>删除</button>';
+    }else{
+      h+='<div class="ctx-note">仅负责人张三或空间管理员可重命名 / 删除。你可新建子文档（不改父文档）。</div>';
+    }
+    ctx.innerHTML=h; ctx.classList.add("open");
+    var w=ctx.offsetWidth,hh=ctx.offsetHeight,vw=window.innerWidth,vh=window.innerHeight;
+    ctx.style.left=Math.max(8,Math.min(x,vw-w-8))+"px";
+    ctx.style.top=Math.max(8,Math.min(y,vh-hh-8))+"px";
+  }
+  function closeCtx(){ ctx.classList.remove("open"); }
+  ctx.addEventListener("click",function(e){
+    var b=e.target.closest("[data-act]"); if(!b) return;
+    var a=b.getAttribute("data-act"); closeCtx();
+    if(a==="subdoc") toast("原型演示：新建子文档（项目 / 空间可写即可）");
+    else if(a==="rename") toast("原型演示：重命名");
+    else if(a==="del") toast("原型演示：删除（仅负责人 / 管理员）");
+  });
+  document.addEventListener("click",function(e){ if(!e.target.closest(".ctx")) closeCtx(); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeCtx(); });
+
+  var toastEl=document.getElementById("toast"),toastT=null;
+  function toast(msg,kind){
+    toastEl.className="toast show"+(kind==="warn"?" warn":"");
+    toastEl.innerHTML=(kind==="warn"?IC.lock:IC.check)+"<span>"+msg+"</span>";
+    clearTimeout(toastT); toastT=setTimeout(function(){ toastEl.classList.remove("show"); },2200);
+  }
+
+  /* 分区折叠 */
+  Array.prototype.forEach.call(document.querySelectorAll(".perm-sec-head"),function(btn){
+    btn.addEventListener("click",function(){ btn.closest(".perm-sec").classList.toggle("collapsed"); });
+  });
+  /* 场景切换 */
+  document.getElementById("scenarios").addEventListener("click",function(e){
+    var c=e.target.closest("[data-sc]"); if(!c) return;
+    sc=c.getAttribute("data-sc");
+    Array.prototype.forEach.call(document.querySelectorAll(".sc-chip"),function(x){ x.classList.toggle("active",x===c); });
+    renderTree(); renderReader(); renderPerm();
+  });
+  document.getElementById("topNew").onclick=function(){ toast("原型演示：新建文档（先选分类，项目由分类带出）"); };
+
+  /* 支持 #owner/#member/#admin/#draft 预选身份，便于逐场景截图 */
+  var h=(location.hash||"").replace("#","");
+  if(SC[h]){ sc=h; Array.prototype.forEach.call(document.querySelectorAll(".sc-chip"),function(x){ x.classList.toggle("active",x.getAttribute("data-sc")===h); }); }
+  renderTree(); renderReader(); renderPerm();
+})();
+</script>
+</body>
+</html>

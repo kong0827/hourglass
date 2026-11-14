@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="zh-CN" data-layout="desktop">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>工作项概览 · 补记小图标 + 测试阶段候选样式原型（2026-11-14）</title>
+<!-- 复用真实前端样式（与 index.html 同序） -->
+<link rel="stylesheet" href="../../../frontend/css/tokens.css" />
+<link rel="stylesheet" href="../../../frontend/css/base.css" />
+<link rel="stylesheet" href="../../../frontend/css/layout.css" />
+<link rel="stylesheet" href="../../../frontend/css/components.css" />
+<link rel="stylesheet" href="../../../frontend/css/views.css" />
+<link rel="stylesheet" href="../../../frontend/css/workcolumn.css" />
+<link rel="stylesheet" href="../../../frontend/css/version.css" />
+<link rel="stylesheet" href="../../../frontend/css/gantt.css" />
+<link rel="stylesheet" href="../../../frontend/css/manager.css" />
+<link rel="stylesheet" href="../../../frontend/css/investment.css" />
+<link rel="stylesheet" href="../../../frontend/css/smart-table.css" />
+<link rel="stylesheet" href="../../../frontend/css/auth.css" />
+<link rel="stylesheet" href="../../../frontend/css/mobile.css" />
+<link rel="stylesheet" href="../../../frontend/css/assistant.css" />
+<link rel="stylesheet" href="../../../frontend/css/delivery.css" />
+<style>
+/* ===== 原型舞台 ===== */
+html,body{height:100%;}
+body{margin:0;overflow:hidden;background:var(--bg);}
+.proto-board{position:fixed;inset:0;z-index:0;display:flex;background:var(--bg);}
+.pb-side{width:236px;flex:0 0 auto;background:var(--surface);border-right:1px solid var(--border);padding:14px 12px;}
+.pb-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;padding:2px 6px 14px;}
+.pb-logo .mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(150deg,var(--primary),var(--plum));color:#fff;display:grid;place-items:center;font-size:11px;}
+.pb-nav{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--text-2);}
+.pb-nav .grp{font-size:10.5px;color:var(--text-3);padding:12px 6px 4px;}
+.pb-nav .it{padding:7px 8px;border-radius:7px;}
+.pb-nav .it.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.pb-main{flex:1;min-width:0;padding:16px 24px;}
+.pb-title{font-size:16px;font-weight:650;}
+.pb-sub{font-size:11.5px;color:var(--text-3);margin-top:2px;}
+.pb-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;}
+.pb-col{background:var(--surface-sunken);border-radius:10px;padding:10px;min-height:420px;}
+.pb-col h4{font-size:12px;color:var(--text-2);margin:0 0 8px;font-weight:650;}
+.pb-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;margin-bottom:8px;}
+.pb-card .t{font-size:12px;font-weight:600;color:var(--text-2);line-height:1.45;}
+.pb-card .m{font-size:10.5px;color:var(--text-3);margin-top:6px;}
+.proto-foot{position:fixed;left:0;right:0;bottom:0;height:var(--app-foot-h);z-index:1;background:var(--surface);border-top:1px solid var(--border);}
+.drawer-layer{z-index:200;}
+
+/* ===== 补记小图标按钮（候选实施样式，实施后并入 components.css） ===== */
+.wi-hours-cell:hover{background:transparent;}
+.wi-hours-main{grid-area:1/1/3/2;display:grid;grid-template-rows:auto auto;row-gap:4px;min-width:0;border-radius:var(--r-xs);}
+.wi-hours-main > .rf-k{grid-area:1/1;}
+.wi-hours-main > .rf-v-lg{grid-area:2/1;font-size:16px;}
+.wi-hours-main:hover{background:color-mix(in srgb,var(--primary) 6%,transparent);}
+.wi-hours-main:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.wi-hours-add{grid-area:2/2;justify-self:end;align-self:center;display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border:1px solid transparent;border-radius:var(--r-xs);background:transparent;color:var(--text-3);
+  cursor:pointer;opacity:0;transition:opacity var(--dur-fast) ease-out,background var(--dur-fast) ease-out,color var(--dur-fast) ease-out;}
+.wi-hours-cell:hover .wi-hours-add,.wi-hours-cell:focus-within .wi-hours-add,.wi-hours-add:focus-visible{opacity:1;}
+.wi-hours-add:hover{background:var(--primary-soft);color:var(--primary-fg);}
+.wi-hours-add:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+@media (hover:none){.wi-hours-add{opacity:1;}}
+body.plus .wi-hours-add{opacity:1;}
+
+/* ===== 测试阶段候选 A：流程条（提测 → 开始 → 结束 三节点时间线） ===== */
+.tf-bar{display:flex;align-items:center;gap:18px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.tf-who{display:flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;}
+.tf-who .avatar{width:24px;height:24px;font-size:11px;border-radius:6px;flex:0 0 auto;}
+.tf-who-t{display:flex;flex-direction:column;min-width:0;}
+.tf-who-t b{font-size:13px;font-weight:600;color:var(--text);}
+.tf-who-t span{font-size:11px;color:var(--text-3);}
+.tf-steps{display:flex;flex:1 1 auto;min-width:0;margin:0;padding:0;list-style:none;}
+.tf-steps li{position:relative;flex:1 1 0;display:flex;align-items:flex-start;gap:8px;padding-right:14px;min-width:0;}
+.tf-steps li:last-child{padding-right:0;flex:0 0 auto;}
+.tf-steps li i{flex:0 0 auto;width:10px;height:10px;border-radius:50%;margin-top:3px;background:var(--plum);}
+.tf-steps li:not(:last-child)::after{content:"";position:absolute;top:7px;left:18px;right:6px;height:2px;border-radius:1px;background:color-mix(in srgb,var(--plum) 35%,var(--border));}
+.tf-steps li.todo i{background:var(--surface);border:1.5px dashed var(--text-3);}
+.tf-steps li.todo:not(:last-child)::after{background:repeating-linear-gradient(90deg,var(--border) 0 4px,transparent 4px 8px);}
+.tf-steps li.ok-end i{background:var(--success);}
+.tf-steps li.ok-end:not(:last-child)::after{background:color-mix(in srgb,var(--success) 35%,var(--border));}
+.tf-steps li > div{display:flex;flex-direction:column;min-width:0;}
+.tf-k{font-size:11px;color:var(--text-3);}
+.tf-v{font-size:13px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;}
+.tf-steps li.todo .tf-v{color:var(--text-3);font-weight:500;}
+.tf-sum{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;padding-left:14px;border-left:1px solid var(--border);}
+.tf-sum b{font-size:13px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+.tf-sum span{font-size:11px;color:var(--text-3);}
+.tf-who.is-empty .tf-who-t b{color:var(--danger-fg);}
+
+/* ===== 测试阶段候选 B：结论行（判定领衔的一句话） ===== */
+.tl-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.tl-verdict{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:var(--r-pill);font-size:12px;font-weight:650;background:var(--plum-soft);color:var(--plum-fg);}
+.tl-verdict.ok{background:var(--success-soft);color:var(--success-fg);}
+.tl-verdict.bad{background:var(--danger-soft);color:var(--danger-fg);}
+.tl-verdict.wait{background:var(--warning-soft);color:var(--warning-fg);}
+.tl-line .avatar{width:20px;height:20px;font-size:10px;border-radius:5px;flex:0 0 auto;}
+.tl-who{font-size:13px;font-weight:600;color:var(--text);}
+.tl-flow{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);font-variant-numeric:tabular-nums;min-width:0;}
+.tl-flow i{font-style:normal;color:var(--text-3);}
+.tl-flow .todo{color:var(--text-3);}
+.tl-dur{margin-left:auto;font-size:12px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;}
+.tl-sub{width:100%;font-size:11px;color:var(--text-3);margin-top:-2px;}
+
+/* ===== 测试阶段候选 C：状态块 + 无边框清单 ===== */
+.ts-split{display:flex;gap:14px;align-items:stretch;}
+.ts-status{flex:0 0 168px;display:flex;flex-direction:column;gap:5px;padding:10px 12px;border-radius:var(--r-md);background:var(--plum-soft);}
+.ts-status.ok{background:var(--success-soft);}
+.ts-status.bad{background:var(--danger-soft);}
+.ts-status.wait{background:var(--warning-soft);}
+.ts-phase{font-size:15px;font-weight:700;color:var(--plum-fg);}
+.ts-status.ok .ts-phase{color:var(--success-fg);}
+.ts-status.bad .ts-phase{color:var(--danger-fg);}
+.ts-status.wait .ts-phase{color:var(--warning-fg);}
+.ts-who{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--text);}
+.ts-who .avatar{width:18px;height:18px;font-size:9px;border-radius:5px;flex:0 0 auto;}
+.ts-sub{font-size:11px;color:var(--text-3);}
+.ts-list{flex:1 1 auto;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;margin:0;align-content:center;padding:4px 2px;}
+.ts-list > div{min-width:0;}
+.ts-list dt{font-size:11px;color:var(--text-3);}
+.ts-list dd{margin:3px 0 0;font-size:13px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;}
+.ts-list dd.todo{color:var(--text-3);font-weight:500;}
+.ts-list .ts-sub{margin-top:1px;}
+
+/* 判定 pill 随状态着色（候选共用；现状 variant 保持产品 plum） */
+.test-phase.ok{background:var(--success-soft);color:var(--success-fg);}
+.test-phase.bad{background:var(--danger-soft);color:var(--danger-fg);}
+.test-phase.wait{background:var(--warning-soft);color:var(--warning-fg);}
+
+@media (max-width:620px){
+  .tf-bar{flex-direction:column;align-items:stretch;gap:12px;}
+  .tf-steps{flex-direction:column;gap:0;}
+  .tf-steps li{padding:0 0 12px;}
+  .tf-steps li:last-child{padding-bottom:0;}
+  .tf-steps li:not(:last-child)::after{left:4px;right:auto;top:16px;bottom:2px;width:2px;height:auto;}
+  .tf-sum{align-items:flex-start;padding-left:0;border-left:0;border-top:1px dashed var(--border);padding-top:8px;flex-direction:row;gap:8px;align-items:baseline;}
+  .tl-dur{margin-left:0;}
+  .ts-split{flex-direction:column;}
+  .ts-status{flex:0 0 auto;flex-direction:row;align-items:center;gap:10px;}
+  .ts-list{grid-template-columns:1fr;}
+}
+
+/* ===== 原型控制条 ===== */
+.proto-bar{position:fixed;left:16px;top:14px;z-index:400;width:400px;background:rgba(255,255,255,.97);border:1px solid var(--border);border-radius:12px;padding:8px 9px;box-shadow:var(--shadow-lg);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.proto-bar .name{width:100%;font-size:12px;font-weight:650;}
+.proto-bar .name span{font-weight:400;color:var(--text-3);margin-left:5px;}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);}
+.seg button{height:26px;padding:0 9px;border:0;border-right:1px solid var(--border);background:var(--surface);color:var(--text-3);font-size:11.5px;cursor:pointer;}
+.seg button:last-child{border-right:0;}
+.seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.pbtn{height:26px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-2);font-size:11.5px;cursor:pointer;}
+.pbtn.on{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);font-weight:600;}
+body.shot .proto-bar{display:none;}
+[data-layout="mobile"] .drawer-no{display:none;}
+[data-layout="mobile"] .head-tools .bt-l{display:none;}
+[data-layout="mobile"] .head-tools .btn{padding:0 8px;}
+</style>
+</head>
+<body>
+<div class="proto-board" aria-hidden="true">
+  <div class="pb-side">
+    <div class="pb-logo"><span class="mark">漏</span>沙漏</div>
+    <div class="pb-nav">
+      <div class="grp">我的</div><div class="it">我的工作</div><div class="it">周回顾</div>
+      <div class="grp">规划</div><div class="it">需求池</div><div class="it">项目</div><div class="it">版本</div>
+      <div class="grp">交付</div><div class="it on">工作项</div><div class="it">文档</div><div class="it">测试</div><div class="it">分支</div>
+    </div>
+  </div>
+  <div class="pb-main">
+    <div class="pb-title">工作项</div>
+    <div class="pb-sub">风控规则引擎 · 四态看板与主状态工作页</div>
+    <div class="pb-cols">
+      <div class="pb-col"><h4>待办</h4><div class="pb-card"><div class="t">名单库灰度名单接入</div><div class="m">期望 09-20 · P2</div></div></div>
+      <div class="pb-col"><h4>进行中</h4><div class="pb-card"><div class="t">规则命中日志落库</div><div class="m">张伟 · 60%</div></div></div>
+      <div class="pb-col"><h4>待测试</h4><div class="pb-card"><div class="t">名单库批量导入</div><div class="m">待领取</div></div></div>
+      <div class="pb-col"><h4>已完成</h4><div class="pb-card"><div class="t">名单库同步风控规则</div><div class="m">已通过 · v1.0</div></div></div>
+    </div>
+  </div>
+</div>
+<div class="proto-foot" aria-hidden="true"></div>
+
+<div class="drawer-layer on" id="taskDrawer" role="dialog" aria-modal="true" aria-labelledby="taskDrawerTitle">
+  <div class="drawer-scrim" id="taskScrim"></div>
+  <form class="drawer read-mode" id="taskForm" novalidate tabindex="-1">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <div class="drawer-head">
+      <span class="head-icon t-task" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.4" y="3.8" width="11.2" height="12.8" rx="2"/><path d="M7.6 3.8V2.6h4.8v1.2M7.4 8.2h5.2M7.4 11.2h3.6"/></svg>
+      </span>
+      <div class="head-txt">
+        <div class="head-title-line">
+          <h2 id="taskDrawerTitle" class="task-title-edit" title="点击编辑标题">名单库同步风控规则</h2>
+          <button class="ds-status" type="button" aria-haspopup="menu" title="切换工作项状态">
+            <i style="background:#12B76A"></i><span>已完成</span>
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
+          </button>
+          <button class="drawer-no" type="button" title="点击复制编号">TASK-2026-0318</button>
+        </div>
+        <div class="head-sub">风控规则引擎 · 名单库 · 计划 9-11 → 9-15 · 更新于 09-15 18:20</div>
+      </div>
+      <div class="head-tools">
+        <button class="btn sm" type="button" title="编辑工作项字段">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.6l3.6 3.6M4 16l1-4 9.4-9.4a1.6 1.6 0 0 1 2.3 0l1.7 1.7a1.6 1.6 0 0 1 0 2.3L9 16.2z"/></svg>
+          <span class="bt-l">编辑</span>
+        </button>
+        <div class="head-more-wrap">
+          <button class="icon-btn sm" type="button" aria-label="更多操作">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="4.6" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.4" cy="10" r="1.1" fill="currentColor" stroke="none"/></svg>
+          </button>
+        </div>
+        <button class="icon-btn" type="button" aria-label="关闭">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="drawer-tabs" role="tablist">
+      <button class="drawer-tab" type="button" role="tab" aria-selected="true">概览</button>
+      <button class="drawer-tab" type="button" role="tab" aria-selected="false">执行 <span class="tab-cnt">5</span></button>
+      <button class="drawer-tab" type="button" role="tab" aria-selected="false">关联</button>
+      <button class="drawer-tab" type="button" role="tab" aria-selected="false">动态 <span class="tab-cnt">7</span></button>
+    </div>
+
+    <div class="drawer-body">
+      <div class="drawer-pane" data-drawer-pane="overview">
+        <div class="read-overview">
+          <div class="read-facts wi-facts" id="readFacts" aria-label="工作项概览">
+            <div class="wi-row wi-row-main">
+              <div class="rf wi-card rf-edit" role="button" tabindex="0" title="点击修改负责人">
+                <span class="rf-k">负责人</span>
+                <b class="rf-v rf-v-lg"><span class="avatar avatar-c4 sm" aria-hidden="true">张</span><span class="rf-owner-name">张伟</span></b>
+                <span class="rf-sub"><span class="rf-dot" style="background:#12B76A"></span>星河科技 · 项目经理</span>
+              </div>
+              <div class="rf wi-card rf-edit" role="button" tabindex="0" title="点击修改优先级">
+                <span class="rf-k">优先级</span>
+                <b class="rf-v rf-v-lg"><span class="rf-dot" style="background:#2E90FA"></span>P2 · 中</b>
+              </div>
+              <div class="rf wi-card rf-edit rf-date" role="button" tabindex="0" title="点击修改计划时间">
+                <span class="rf-k">计划时间</span>
+                <b class="rf-v rf-v-lg">9-11<span class="rf-date-sep">→</span>9-15</b>
+                <span class="rf-sub">共 5 天 · 已完成</span>
+              </div>
+            </div>
+
+            <div class="wi-card wi-delivery">
+              <div class="rf wi-delivery-cell wi-prog-cell">
+                <span class="rf-k">进度</span>
+                <div class="rf-v">
+                  <b class="rf-stat-num">100%</b>
+                  <span class="rf-prog"><i style="width:100%"></i></span>
+                </div>
+                <span class="rf-sub rf-prog-note">已完成</span>
+              </div>
+              <!-- 补记小图标：格子主体仍是「改预估」，右下角独立「+」补记 -->
+              <div class="rf wi-delivery-cell wi-hours-cell overdue" id="rfHoursWrap">
+                <div class="wi-hours-main rf-edit" data-fact-edit="estimate" role="button" tabindex="0" title="点击修改预估工时">
+                  <span class="rf-k">实际工时</span>
+                  <b class="rf-v rf-v-lg" id="rfHours">11h <span class="rf-hours-est">/ 预估 3h</span></b>
+                </div>
+                <span class="rf-sub" id="rfHoursNote"><span class="rf-chip">超预估 8h</span></span>
+                <button class="wi-hours-add" type="button" id="rfHoursAdd" title="补记一条实际工时（忘开表、加班等）" aria-label="补记实际工时">
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.2v11.6M4.2 10h11.6"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="wi-card wi-meta-card">
+              <div class="rf rf-edit rf-meta" role="button" tabindex="0" title="点击切换所属项目">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 6A2 2 0 0 1 5.2 4h3.2l1.8 2.2h5.6a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H5.2a2 2 0 0 1-2-2Z"/></svg></span>项目</span><b class="rf-v">风控规则引擎</b>
+              </div>
+              <div class="rf rf-edit rf-meta" role="button" tabindex="0" title="点击修改工作项类型">
+                <span class="rf-k"><span class="rf-meta-ico rf-type-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.6h10v12.8l-5-3-5 3z"/></svg></span>类型</span><b class="rf-v">用户故事</b>
+              </div>
+              <div class="rf rf-edit rf-meta" role="button" tabindex="0" title="点击修改模块">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="3.4" width="5.6" height="5.6" rx="1.4"/><rect x="11" y="3.4" width="5.6" height="5.6" rx="1.4"/><rect x="3.4" y="11" width="5.6" height="5.6" rx="1.4"/><rect x="11" y="11" width="5.6" height="5.6" rx="1.4"/></svg></span>模块</span><b class="rf-v">名单库</b>
+              </div>
+              <div class="rf rf-edit rf-jump rf-meta" role="button" tabindex="0" title="点击编辑计划版本">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 3.4v13.2"/><path d="M5.2 4.4h9.4l-2 3.2 2 3.2H5.2z"/></svg></span>计划版本</span><b class="rf-v">风控引擎 v1.0</b>
+              </div>
+              <div class="rf rf-edit rf-jump rf-meta" data-meta="docs" role="button" tabindex="0" title="查看关联文档">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.6h6l4 4v8.8a1.6 1.6 0 0 1-1.6 1.6H6a1.6 1.6 0 0 1-1.6-1.6V5.2A1.6 1.6 0 0 1 6 3.6Z"/><path d="M12 3.6v4h4"/></svg></span>文档</span><b class="rf-v">1 篇</b>
+              </div>
+              <div class="rf rf-edit rf-jump rf-meta" role="button" tabindex="0" title="查看附件">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 6.4 7.2 11.8a2.2 2.2 0 0 0 3.1 3.1l5.4-5.4a3.8 3.8 0 0 0-5.4-5.4L4.8 9.6a5.4 5.4 0 0 0 7.6 7.6l3.4-3.4"/></svg></span>附件</span><b class="rf-v"><span class="rf-empty">暂无</span></b>
+              </div>
+              <div class="rf rf-edit rf-meta" role="button" tabindex="0" title="点击修改标签">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg></span>标签</span><b class="rf-v rf-tags"><span class="rf-empty">+ 添加标签</span></b>
+              </div>
+            </div>
+          </div>
+
+          <!-- 测试阶段：四种候选由控制条切换 -->
+          <section class="read-card test-card" id="readTestCard">
+            <div class="read-card-head">
+              <h3>测试 <span class="test-phase" id="readTestPhase">已通过</span></h3>
+              <button class="link-btn" type="button" id="readTestReassign" hidden>改派</button>
+            </div>
+            <div id="testBody"></div>
+            <div class="test-note" id="readTestNote" hidden></div>
+            <div class="test-acts" id="readTestActs" hidden>
+              <span class="test-hint" id="readTestHint"></span>
+              <button class="btn sm" type="button" id="readTestClaim">开始测试</button>
+              <button class="btn sm danger" type="button" id="readTestReject">退回…</button>
+              <button class="btn sm primary" type="button" id="readTestPass">通过并完成</button>
+            </div>
+          </section>
+
+          <section class="read-card">
+            <div class="read-card-head"><h3>描述</h3><span class="foot-note">点击正文修改 · 失焦保存</span></div>
+            <div class="read-desc task-copy" tabindex="0" role="button">名单库变更同步到风控规则引擎，保证灰度名单与正式名单口径一致。</div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="proto-bar">
+  <div class="name">补记小图标 + 测试阶段候选<span>2026-11-14 · 数据同线上截图</span></div>
+  <div class="seg" id="segVar">
+    <button data-v="grid" class="on">现状</button>
+    <button data-v="flow">A 流程条</button>
+    <button data-v="line">B 结论行</button>
+    <button data-v="split">C 状态块</button>
+  </div>
+  <div class="seg" id="segState">
+    <button data-s="passed" class="on">已通过</button>
+    <button data-s="testing">测试中</button>
+    <button data-s="unassigned">待领取</button>
+  </div>
+  <button class="pbtn" id="btnPlus">常显 +</button>
+</div>
+
+<script>
+(function(){
+  var qs = new URLSearchParams(location.search);
+  var layout = qs.get("layout") === "mobile" ? "mobile" : "desktop";
+  document.documentElement.setAttribute("data-layout", layout);
+  document.body.setAttribute("data-layout", layout);
+  if(qs.get("shot") === "1") document.body.classList.add("shot");
+  /* _headless 不模拟 hover:none，移动布局下强制常显「+」以等价触屏表现 */
+  if(qs.get("plus") === "1" || layout === "mobile") document.body.classList.add("plus");
+
+  var AV = '<span class="avatar avatar-c5 sm" aria-hidden="true">王</span>';
+  var D = {
+    passed:     { phase:"已通过", cls:"ok",   who:"王芳", whoSub:"本轮已结束", req:"09-13", reqFull:"09-13 00:00", reqSub:"", start:"09-14", startFull:"09-14 00:00", startSub:"", end:"09-15", endFull:"09-15 00:00", endSub:"", dur:"历时 1 天", durSub:"开始 → 结束" },
+    testing:    { phase:"测试中", cls:"",     who:"王芳", whoSub:"本轮进行中", req:"09-13", reqFull:"09-13 00:00", reqSub:"", start:"09-14", startFull:"09-14 00:00", startSub:"已测 1 天", end:"", endFull:"", endSub:"通过或退回时自动记录", dur:"已测 1 天", durSub:"开始 → 现在" },
+    unassigned: { phase:"待领取", cls:"wait", who:"",     whoSub:"点「开始测试」或改派", req:"09-13", reqFull:"09-13 00:00", reqSub:"已等待 2 天", start:"", startFull:"", startSub:"进入「测试中」自动记录", end:"", endFull:"", endSub:"通过或退回时自动记录", dur:"已等待 2 天", durSub:"提测 → 现在" }
+  };
+  var variant = qs.get("v") || "grid";
+  var state = qs.get("st") || "passed";
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+  function whoHTML(d, avSize){
+    return d.who ? AV + '<span class="test-name">' + esc(d.who) + '</span>' : '<span class="test-empty">未指派</span>';
+  }
+  function gridHTML(d){
+    return '<div class="test-grid">'
+      + '<div class="test-cell is-who"><div class="test-k">测试负责人</div><div class="test-v">' + whoHTML(d) + '</div><div class="test-sub">' + esc(d.whoSub) + '</div></div>'
+      + '<div class="test-cell"><div class="test-k">提测时间</div><div class="test-v">' + (d.reqFull || "—") + '</div><div class="test-sub">' + esc(d.reqSub) + '</div></div>'
+      + '<div class="test-cell"><div class="test-k">开始测试</div><div class="test-v">' + (d.startFull || "—") + '</div><div class="test-sub">' + esc(d.startSub) + '</div></div>'
+      + '<div class="test-cell"><div class="test-k">结束测试</div><div class="test-v">' + (d.endFull || "—") + '</div><div class="test-sub">' + esc(d.endSub) + '</div></div>'
+      + '</div>';
+  }
+  function flowHTML(d){
+    var endCls = d.end ? (state === "passed" ? "ok-end" : "") : "todo";
+    return '<div class="tf-bar">'
+      + '<div class="tf-who' + (d.who ? "" : " is-empty") + '">' + (d.who ? AV : '<span class="avatar avatar-c5 sm" aria-hidden="true">?</span>')
+      + '<div class="tf-who-t"><b>' + (d.who ? esc(d.who) : "未指派") + '</b><span>' + esc(d.whoSub) + '</span></div></div>'
+      + '<ol class="tf-steps">'
+      + '<li><i></i><div><span class="tf-k">提测</span><b class="tf-v" title="' + d.reqFull + '">' + d.req + '</b></div></li>'
+      + '<li class="' + (d.start ? "" : "todo") + '"><i></i><div><span class="tf-k">开始</span><b class="tf-v" title="' + d.startFull + '">' + (d.start || "—") + '</b></div></li>'
+      + '<li class="' + endCls + '"><i></i><div><span class="tf-k">结束</span><b class="tf-v" title="' + d.endFull + '">' + (d.end || "—") + '</b></div></li>'
+      + '</ol>'
+      + '<div class="tf-sum"><b>' + esc(d.dur) + '</b><span>' + esc(d.durSub) + '</span></div>'
+      + '</div>';
+  }
+  function lineHTML(d){
+    return '<div class="tl-line">'
+      + '<span class="tl-verdict ' + d.cls + '">' + esc(d.phase) + '</span>'
+      + (d.who ? AV + '<b class="tl-who">' + esc(d.who) + '</b>' : '<b class="tl-who test-empty">未指派</b>')
+      + '<span class="tl-flow"><span title="' + d.reqFull + '">' + d.req + ' 提测</span><i>→</i>'
+      + (d.start ? '<span title="' + d.startFull + '">' + d.start + ' 开始</span>' : '<span class="todo">未开始</span>') + '<i>→</i>'
+      + (d.end ? '<span title="' + d.endFull + '">' + d.end + ' 结束</span>' : '<span class="todo">未结束</span>') + '</span>'
+      + '<span class="tl-dur">' + esc(d.dur) + '</span>'
+      + (d.whoSub ? '<span class="tl-sub">' + esc(d.whoSub) + (d.startSub ? " · " + esc(d.startSub) : "") + (d.reqSub ? " · " + esc(d.reqSub) : "") + '</span>' : "")
+      + '</div>';
+  }
+  function splitHTML(d){
+    return '<div class="ts-split">'
+      + '<div class="ts-status ' + d.cls + '"><b class="ts-phase">' + esc(d.phase) + '</b>'
+      + '<div class="ts-who">' + whoHTML(d) + '</div><span class="ts-sub">' + esc(d.whoSub) + '</span></div>'
+      + '<dl class="ts-list">'
+      + '<div><dt>提测时间</dt><dd>' + (d.reqFull || "—") + '</dd>' + (d.reqSub ? '<div class="ts-sub">' + esc(d.reqSub) + '</div>' : "") + '</div>'
+      + '<div><dt>开始测试</dt><dd class="' + (d.start ? "" : "todo") + '">' + (d.startFull || "—") + '</dd>' + (d.startSub ? '<div class="ts-sub">' + esc(d.startSub) + '</div>' : "") + '</div>'
+      + '<div><dt>结束测试</dt><dd class="' + (d.end ? "" : "todo") + '">' + (d.endFull || "—") + '</dd>' + (d.endSub ? '<div class="ts-sub">' + esc(d.endSub) + '</div>' : "") + '</div>'
+      + '</dl></div>';
+  }
+  function render(){
+    var d = D[state];
+    var pill = document.getElementById("readTestPhase");
+    pill.textContent = d.phase;
+    pill.className = "test-phase" + (variant === "grid" ? "" : " " + d.cls);
+    document.getElementById("testBody").innerHTML =
+      variant === "flow" ? flowHTML(d) : variant === "line" ? lineHTML(d) : variant === "split" ? splitHTML(d) : gridHTML(d);
+    var note = document.getElementById("readTestNote");
+    note.hidden = state !== "unassigned";
+    note.textContent = "尚未指派测试负责人。可以直接通过，但卡片会持续提示「未指派测试」；建议先认领或改派。";
+    var acts = document.getElementById("readTestActs");
+    acts.hidden = state === "passed";
+    document.getElementById("readTestClaim").hidden = state === "testing";
+    document.getElementById("readTestClaim").textContent = state === "unassigned" ? "开始测试并认领" : "开始测试";
+    document.getElementById("readTestReject").hidden = state !== "testing";
+    document.getElementById("readTestPass").hidden = state !== "testing";
+    document.getElementById("readTestHint").textContent = state === "testing"
+      ? "测试通过 → 记录结束时间并流转到「已完成」；退回 → 必填原因，通知开发负责人。"
+      : "开始测试 → 记录开始时间并认领为测试负责人；也可以先改派给其他人。";
+    document.getElementById("readTestReassign").hidden = state === "passed";
+    document.querySelectorAll("#segVar button").forEach(function(b){ b.classList.toggle("on", b.dataset.v === variant); });
+    document.querySelectorAll("#segState button").forEach(function(b){ b.classList.toggle("on", b.dataset.s === state); });
+  }
+  document.getElementById("segVar").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return; variant = b.dataset.v; render();
+  });
+  document.getElementById("segState").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return; state = b.dataset.s; render();
+  });
+  document.getElementById("btnPlus").addEventListener("click", function(){
+    document.body.classList.toggle("plus"); this.classList.toggle("on", document.body.classList.contains("plus"));
+  });
+  if(qs.get("plus") === "1") document.getElementById("btnPlus").classList.add("on");
+  render();
+})();
+</script>
+</body>
+</html>

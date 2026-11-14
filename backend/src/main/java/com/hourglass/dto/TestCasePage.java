@@ -23,4 +23,8 @@ public class TestCasePage {
     private Map<String, Integer> priorityCounts = new LinkedHashMap<String, Integer>();
     private Map<String, Integer> ownerCounts = new LinkedHashMap<String, Integer>();
     private Map<String, Integer> statusCounts = new LinkedHashMap<String, Integer>();
+    /** 模块目录树（DFS 顺序，带层级与计数）：筛选下拉与拖拽归类共用 */
+    private List<CaseModuleNode> moduleNodes = new ArrayList<CaseModuleNode>();
+    /** 目录节点候选计数（不受当前筛选影响），键为节点 ID，未归类为 __none */
+    private Map<String, Integer> moduleIdCounts = new LinkedHashMap<String, Integer>();
 }

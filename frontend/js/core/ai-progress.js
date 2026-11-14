@@ -169,7 +169,10 @@ export var AIProgress = { run: run, cancel: cancel };
 /* 配置类错误统一补一句去哪配：模型/Key 缺失是最常见的失败原因 */
 export function aiErrorText(msg) {
   var m = String(msg || "AI 调用失败");
-  if (m.indexOf("个人设置") < 0 &&
+  /* 团队 / 空间共享 AI 出问题时该找管理员，不能把成员引去个人设置 */
+  var adminSide = m.indexOf("团队 AI") >= 0 || m.indexOf("平台管理员") >= 0
+    || m.indexOf("本空间") >= 0;
+  if (!adminSide && m.indexOf("个人设置") < 0 &&
       (m.indexOf("AI 设置") >= 0 || m.indexOf("API Key") >= 0 || m.indexOf("AI 开关") >= 0
        || m.indexOf("AI 配置") >= 0)) {
     m += "（到「个人设置 → AI 设置」里配一下）";
@@ -189,5 +192,6 @@ export function aiUsageText(u) {
   if (!u) return "";
   return "本次 " + (u.totalTokens || 0) + " tokens（输入 " + (u.promptTokens || 0)
     + " / 输出 " + (u.completionTokens || 0) + "）· 模型 " + (u.model || "—")
+    + " · " + (u.sourceLabel || "我的额度")
     + (u.jsonFallback ? " · 该模型不支持 JSON 模式，已降级解析" : "");
 }

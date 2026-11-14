@@ -583,9 +583,23 @@ import { icon } from "../core/icons.js";
       + '<div class="dl-def"><span class="grow">失败 / 阻塞（均不计入通过）</span><b>' + (nz(q.failedCount) + nz(q.blockedCount)) + "</b></div>"
       + '<div class="dl-def"><span class="grow">跳过（本次不适用，出分母）</span><b>' + nz(q.skippedCount) + "</b></div>"
       + '<div class="dl-def total"><span class="grow">圈选 / 已执行</span><b>' + nz(q.caseCount) + " / " + nz(q.executedCount) + "</b></div>"
-      + "</div></div></div>" + gap() + narr(d, "issue", view);
+      + "</div></div></div>" + setEvidenceBlock(q) + gap() + narr(d, "issue", view);
     return sec("quality", n, "质量与验证",
       (q.planName || "测试计划") + " · " + nz(q.caseCount) + " 条用例" + (nz(q.planCount) > 1 ? " · " + nz(q.planCount) + " 个计划" : ""), body);
+  }
+
+  /* 团队共享分组进证据：只列结果分布，不复制用例全文，也不改变阻断判定 */
+  function setEvidenceBlock(q) {
+    var sets = arr(q.caseSets);
+    if (!sets.length) return "";
+    var cell = function (v) { return "<td>" + nz(v) + "</td>"; };
+    return gap() + '<div class="dl-qbox"><h4>团队共享分组 · 结果分布</h4>'
+      + '<table class="dl-set-tbl"><thead><tr><th>分组</th><th>类型</th><th>条数</th><th>通过</th><th>失败</th><th>阻塞</th><th>跳过</th><th>未执行</th></tr></thead><tbody>'
+      + sets.map(function (s) {
+        return "<tr><td>" + esc(s.name || s.id || "—") + "</td><td>" + (s.kind === "dynamic" ? "动态收录" : "手工挑选") + "</td>"
+          + cell(s.total) + cell(s.passed) + cell(s.failed) + cell(s.blocked) + cell(s.skipped) + cell(s.untested) + "</tr>";
+      }).join("") + "</tbody></table>"
+      + '<p class="dl-set-note">分组是引用不是复制：一条用例可进多个分组，条数不能相加当总数。只有团队共享分组进证据，指定成员 / 仅自己可见的分组不写入；分布只作呈现，不改变发布阻断判定。</p></div>';
   }
 
   function secDefects(d, n) {
@@ -690,7 +704,7 @@ import { icon } from "../core/icons.js";
       if (o.evidence >= 2) boxes.push(kvMono("制品 SHA256", rel.artifactDigest));
     }
     if (txt(rel.relatedReleaseId)) boxes.push(kv("关联正式事件", noText("REL", rel.relatedReleaseNo, rel.relatedReleaseId)));
-    if (txt(rel.deviationReason)) boxes.push(kv("偏差 / 紧急事实理由", rel.deviationReason, "wide"));
+    if (txt(rel.deviationReason)) boxes.push(kv("未按计划发布的原因", rel.deviationReason, "wide"));
     if (txt(rel.failureReason)) boxes.push(kv("失败原因", rel.failureReason, "wide"));
     if (txt(rel.notes)) boxes.push(kv("发布说明", rel.notes, "wide"));
     return sec("release", n, "发布与运行信息",
@@ -850,7 +864,7 @@ import { icon } from "../core/icons.js";
         + '<span class="em">' + esc(e.meta) + "</span></div>"
         + (e.missing ? badge("warn", "缺失")
           : view.readonly ? ""
-          : '<button class="btn sm ghost" type="button" data-dl-act="evidence" data-dl-view="' + esc(e.view || "")
+          : '<button class="btn sm ghost" type="button" data-dl-act="goto" data-dl-view="' + esc(e.view || "")
             + '" data-dl-ref="' + esc(e.refId || "") + '" aria-label="打开' + esc(e.name) + '原始记录">' + icon("extlink", 13) + "</button>")
         + "</div>";
     }).join("") + "</div>"
@@ -1130,6 +1144,15 @@ import { icon } from "../core/icons.js";
     }
     heading("quality", "质量与验证");
     text("issue");
+    if (arr(q.caseSets).length) {
+      L.push("");
+      L.push("团队共享分组 · 结果分布（分组间成员可重叠，条数不能相加当总数；只作呈现，不改变发布阻断判定）");
+      arr(q.caseSets).forEach(function (s) {
+        L.push("- " + (s.name || s.id || "—") + "（" + (s.kind === "dynamic" ? "动态收录" : "手工挑选") + "）　"
+          + nz(s.total) + " 条：通过 " + nz(s.passed) + " / 失败 " + nz(s.failed) + " / 阻塞 " + nz(s.blocked)
+          + " / 跳过 " + nz(s.skipped) + " / 未执行 " + nz(s.untested));
+      });
+    }
     if (idx.defects) {
       heading("defects", "缺陷与已知问题");
       if (def.missing) L.push("无关联缺陷记录；清单为空不代表没有质量问题。");
@@ -1170,7 +1193,7 @@ import { icon } from "../core/icons.js";
         }
         L.push("- 发布尝试：共 " + nz(rel.attemptCount) + " 次 · 成功 " + nz(rel.successCount) + " · 回滚 " + nz(rel.rollbackCount));
         if (o.tone !== "customer") L.push("- 实际执行人：" + (rel.executorName || "未记录"));
-        if (txt(rel.deviationReason)) L.push("- 偏差 / 紧急理由：" + rel.deviationReason);
+        if (txt(rel.deviationReason)) L.push("- 未按计划发布的原因：" + rel.deviationReason);
         if (txt(rel.failureReason)) L.push("- 失败原因：" + rel.failureReason);
         if (txt(rel.notes)) L.push("- 说明：" + rel.notes);
       }

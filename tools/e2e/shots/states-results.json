@@ -1,0 +1,92 @@
+[
+  {
+    "n": "loading: picker opens",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "loading: skeleton + note shown",
+    "ok": true,
+    "d": "{\"loading\":true,\"skel\":4,\"count\":\"负责人正在确认本项目可指派成员…\"}"
+  },
+  {
+    "n": "loading: auto-refreshes to real candidates in place",
+    "ok": true,
+    "d": "{\"opts\":7,\"count\":\"负责人7 位可指派 · 3 家公司\"}"
+  },
+  {
+    "n": "error: picker opens",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "error: message + retry button shown",
+    "ok": true,
+    "d": "{\"error\":true,\"retry\":true,\"err\":\"候选加载失败：模拟花名册网络故障重试\"}"
+  },
+  {
+    "n": "error: no candidate list while failed",
+    "ok": true,
+    "d": "opts=0"
+  },
+  {
+    "n": "error: retry recovers in place (no reopen needed)",
+    "ok": true,
+    "d": "{\"opts\":7,\"count\":\"负责人7 位可指派 · 3 家公司\"}"
+  },
+  {
+    "n": "retained: owner card flags unavailable",
+    "ok": true,
+    "d": "\"负责人 王王芳（当前不可选）\""
+  },
+  {
+    "n": "retained: picker opens",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "retained: current owner row present + disabled",
+    "ok": true,
+    "d": "{\"retained\":true,\"disabled\":true}"
+  },
+  {
+    "n": "retained: explanatory note shown",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "retained: other candidates still selectable",
+    "ok": true,
+    "d": "opts=7"
+  },
+  {
+    "n": "retained: clicking retained row is a no-op",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "retained: reassigning to a valid member closes picker",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "done-column: found a done task with test history",
+    "ok": true,
+    "d": "Kbockqklh33ez9xdd5ynh"
+  },
+  {
+    "n": "done-column: test card visible but cell not clickable",
+    "ok": true,
+    "d": "{\"cardVisible\":true,\"clickable\":false,\"role\":null,\"tabIndex\":-1,\"reassignHidden\":true}"
+  },
+  {
+    "n": "done-column: clicking cell does NOT open picker (fix)",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "states suite completed",
+    "ok": true,
+    "d": "17/17"
+  }
+]

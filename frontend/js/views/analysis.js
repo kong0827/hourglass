@@ -7,7 +7,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
-import { axisTicks, fmtMinutesShort, pad2, priColor, priName, priTagHTML, taskDescText } from "../lib/format.js";
+import { assocLinkHTML, axisTicks, fmtMinute, fmtMinutesShort, pad2, priColor, priName, priTagHTML, taskDescText } from "../lib/format.js";
 import { ganttCsvCell } from "./gantt.js";
 import { openLogTable, openTaskTable } from "./manager-shared.js";
 import { openReqDocAndJump, reqDocList, reqDocNameById } from "./requirements.js";
@@ -111,28 +111,30 @@ function renderCompletions(rows, month){
     $("compWrap").innerHTML = UI.colEmpty(month + " 还没有完成记录。把工作项拖进「已完成」列就会自动归档到这里。");
     return;
   }
-  /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成日期），
-     计时的首次/最后时间属于内部数据，不展示 */
+  /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成时间），
+     计时的首次/最后时间属于内部数据，不展示；测试证据独立两列，与开发窗口对照 */
   var head = "<tr><th>工作项</th><th>项目</th><th>文档</th><th>负责人</th><th>模块</th>" +
-    "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th></tr>";
+    "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th><th>测试负责人</th><th>测试窗口</th></tr>";
   var body = rows.map(function(r){
     return "<tr>" +
       "<td>" + (r.taskId
         ? '<button class="comp-t comp-link" type="button" data-open-task="' + esc(r.taskId) + '" title="打开工作项详情">' + esc(r.title) + "</button>"
         : '<span class="comp-t">' + esc(r.title) + "</span>") +
         (r.description ? '<span class="comp-d">' + esc(taskDescText(r.description, 120)) + "</span>" : "") + "</td>" +
-      "<td>" + (r.reqName ? esc(r.reqName) : '<span class="comp-dim">—</span>') + "</td>" +
+      "<td>" + assocLinkHTML("project", r.reqId, r.reqName, {plain:'<span class="comp-dim">—</span>'}) + "</td>" +
       "<td>" + compDocCell(r) + "</td>" +
       "<td>" + esc(r.owner || "—") + "</td>" +
       "<td>" + (r.category ? catTagByName(r.category) : '<span class="comp-dim">—</span>') + "</td>" +
       '<td>' + priTagHTML(r.priority) + '</td>' +
       '<td class="nowrap" title="工作项开始日期">' + esc(r.startDate || "—") + "</td>" +
-      '<td class="nowrap" title="工作项完成日期">' + esc(r.completedAt || "—") + "</td>" +
+      '<td class="nowrap" title="工作项完成时间">' + esc(fmtMinute(r.completedAt) || "—") + "</td>" +
       '<td class="nowrap"><b>' + (fmtMinutesShort(r.totalMinutes) || "—") + "</b></td>" +
+      "<td>" + compTestOwnerCell(r) + "</td>" +
+      "<td>" + compTestWindowCell(r) + "</td>" +
     "</tr>";
   }).join("");
   if(compHasMore){
-    body += '<tr><td colspan="9" class="comp-more-cell">' +
+    body += '<tr><td colspan="11" class="comp-more-cell">' +
       '<button class="btn sm block" type="button" data-comp-more' + (compLoading ? " disabled" : "") + '>' +
       (compLoading ? "加载中…" : "加载更多（已加载 " + rows.length + " / 共 " + n + " 项）") +
       '</button></td></tr>';
@@ -151,6 +153,37 @@ function compDocCell(r){
   }
   return '<span class="comp-dim" title="该文档已被删除">' + esc(r.reqDocTitle) + '</span>';
 }
+/* 测试证据是完成当时的快照：提测后没人领取就直接完成的，如实显示「待领取」，不补造测试人 */
+function compTestOwnerCell(r){
+  if(r.testOwner) return esc(r.testOwner);
+  if(r.testRequestedAt) return '<span class="tag tag-warning">待领取</span>';
+  return '<span class="comp-dim">—</span>';
+}
+function compTestWindowCell(r){
+  if(r.testStartedAt){
+    var span = testSpanText(r.testStartedAt, r.testFinishedAt);
+    var end = r.testFinishedAt ? shortMinute(r.testFinishedAt) : "未结束";
+    return '<span class="comp-win" title="测试 ' + esc(fmtMinute(r.testStartedAt)) + " → " + esc(r.testFinishedAt ? fmtMinute(r.testFinishedAt) : "未结束") + '">' +
+      esc(shortMinute(r.testStartedAt)) + " → " + esc(end) + "</span>" +
+      '<span class="comp-sub">提测 ' + esc(shortMinute(r.testRequestedAt)) + (span ? " · 历时 " + esc(span) : "") + "</span>";
+  }
+  if(r.testRequestedAt){
+    return '<span class="comp-dim">未开始</span><span class="comp-sub">提测 ' + esc(shortMinute(r.testRequestedAt)) + "</span>";
+  }
+  return '<span class="comp-dim">—</span>';
+}
+/* 列宽只放得下「月-日 时:分」，完整年份与提测/历时在子行和 tooltip 里 */
+function shortMinute(s){
+  var full = fmtMinute(s);
+  return full ? full.substring(5) : "—";
+}
+function testSpanText(a, b){
+  if(!a || !b) return "";
+  var m = Math.round((new Date(b) - new Date(a)) / 60000);
+  if(isNaN(m) || m < 0) return "";
+  var d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), rest = m % 60;
+  return (d ? d + "天" : "") + (h ? h + "小时" : "") + (rest ? rest + "分" : "") || "0m";
+}
 function exportCompCSV(){
   var month = currentCompMonth();
   /* 列表只加载了前几页，导出按同样口径把所有分页取齐后再写文件 */
@@ -158,10 +191,12 @@ function exportCompCSV(){
     var rows = all || [];
     if(!rows.length){ toast("这个月还没有完成记录", "warn"); return; }
     var lines = [["工作项名称","详情","归属项目","关联文档","负责人","模块","优先级",
-      "开始时间","结束时间","总耗时(分钟)","总耗时"]];
+      "开始时间","结束时间","总耗时(分钟)","总耗时","测试负责人","提测时间","测试开始","测试结束"]];
     rows.forEach(function(r){
       lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,
-        r.startDate, r.completedAt, r.totalMinutes || 0, fmtMinutesShort(r.totalMinutes)]);
+        r.startDate, fmtMinute(r.completedAt), r.totalMinutes || 0, fmtMinutesShort(r.totalMinutes),
+        r.testOwner || (r.testRequestedAt ? "待领取" : ""), fmtMinute(r.testRequestedAt),
+        fmtMinute(r.testStartedAt), fmtMinute(r.testFinishedAt)]);
     });
     var csv = "\uFEFF" + lines.map(function(cols){
       return cols.map(ganttCsvCell).join(",");

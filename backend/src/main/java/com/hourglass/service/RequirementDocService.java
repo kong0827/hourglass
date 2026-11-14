@@ -104,6 +104,11 @@ public class RequirementDocService {
     private final DeletionTraceService deletionTrace;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskQueryService taskQueries;
+    @org.springframework.beans.factory.annotation.Autowired
+    private AttachmentService attachmentService;
+    /** 分类校验：仅在文档显式带 categoryId 时 consulted，单测手动构造时为 null 不影响无分类路径 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DocCategoryService docCategories;
 
     public RequirementDocService(RequirementDocMapper docMapper, RequirementDocHistoryMapper historyMapper,
                                  RequirementDocCommentMapper commentMapper,
@@ -148,10 +153,17 @@ public class RequirementDocService {
 
     public com.hourglass.dto.PageResult<ReqDocView> page(String workspaceId, String userId, String keyword,
                                                           int offset, int limit) {
-        return page(workspaceId, userId, null, keyword, offset, limit);
+        return page(workspaceId, userId, null, null, false, keyword, offset, limit);
     }
 
     public com.hourglass.dto.PageResult<ReqDocView> page(String workspaceId, String userId, String reqId,
+                                                          String keyword, int offset, int limit) {
+        return page(workspaceId, userId, reqId, null, false, keyword, offset, limit);
+    }
+
+    /** categoryId 非空按分类过滤；spaceOnly=true 只取空间级文档（req_id IS NULL）。两者与 reqId 互斥使用。 */
+    public com.hourglass.dto.PageResult<ReqDocView> page(String workspaceId, String userId, String reqId,
+                                                          String categoryId, boolean spaceOnly,
                                                           String keyword, int offset, int limit) {
         int safeOffset = Math.max(0, offset);
         int safeLimit = Math.max(1, Math.min(100, limit));
@@ -159,10 +171,10 @@ public class RequirementDocService {
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         String role = projectAccess.roleOf(workspaceId, userId);
         boolean seeAllDrafts = ProjectAccessService.isPrivileged(role);
-        int total = docMapper.countVisible(workspaceId, reqId, pattern, viewerId, userId, seeAllDrafts);
+        int total = docMapper.countVisible(workspaceId, reqId, categoryId, spaceOnly, pattern, viewerId, userId, seeAllDrafts);
         List<ReqDocView> rows = total <= safeOffset ? new java.util.ArrayList<ReqDocView>()
-                : docMapper.selectViewByWorkspace(workspaceId, reqId, pattern, viewerId, userId, seeAllDrafts,
-                        safeOffset, safeLimit);
+                : docMapper.selectViewByWorkspace(workspaceId, reqId, categoryId, spaceOnly, pattern, viewerId, userId,
+                        seeAllDrafts, safeOffset, safeLimit);
         for (ReqDocView v : rows) {
             v.setExcerpt(excerptOf(v.getContentBrief()));
             v.setContentBrief(null);
@@ -204,6 +216,24 @@ public class RequirementDocService {
         return d;
     }
 
+    /**
+     * 创建人保护（A 轻量档）：把草稿已有的「负责人 + 管理员」口径扩展到已发布文档的改删 / 发布撤回 / 恢复历史。
+     * 先走项目/空间可写门控；再要求负责人本人或空间 owner/admin。
+     * 空负责人（历史自由文本）回退项目可写，不锁死；userId=null 为系统级联（项目删除等），跳过。
+     * 排序/新建子文档/分享链接不走此门控（组织/新增/分发，不改父文档内容或可见状态）。
+     */
+    private void assertDocMutate(String workspaceId, String userId, RequirementDoc d) {
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        if (userId == null) {
+            return;
+        }
+        String owner = Texts.trimToNull(d.getOwnerUserId());
+        if (owner == null || owner.equals(userId) || projectAccess.canManage(workspaceId, userId)) {
+            return;
+        }
+        throw new AppException(403, "仅文档负责人或空间管理员可编辑 / 删除");
+    }
+
     public List<Task> tasks(String workspaceId, String id) {
         get(workspaceId, id);
         List<Task> tasks = taskMapper.selectByReqDoc(workspaceId, id);
@@ -239,7 +269,7 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc update(String userId, String workspaceId, String id, ReqDocSaveRequest req) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        assertDocMutate(workspaceId, userId, d);
         /* 乐观锁：打开文档时的 updatedAt 原样带回，与库内当前版本不一致说明他人先保存过 */
         java.time.LocalDateTime oldUpdatedAt = parseUpdatedAt(req.getUpdatedAt());
         String oldReqId = d.getReqId();
@@ -278,16 +308,22 @@ public class RequirementDocService {
             workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
                     "所属项目：" + projectDisplay(oldReqId) + " → " + projectDisplay(reqId));
         }
-        /* 需求换项目后，仍挂在旧项目下的任务会指向别的项目的文档：解掉这些关联 */
-        if (oldReqId != null && !oldReqId.equals(reqId)) {
-            java.util.List<String> affectedTaskIds =
-                    taskMapper.selectIdsByReqDocExceptReqForCascade(workspaceId, d.getId(), reqId);
-            docMapper.clearTaskRefExceptReq(workspaceId, d.getId(), reqId);
+        /* 文档换归属范围（项目↔项目、项目↔空间级）后，仍挂在旧范围下的任务会指向别处的文档：解掉这些关联 */
+        if (!java.util.Objects.equals(oldReqId, reqId)) {
+            java.util.List<String> affectedTaskIds;
+            if (reqId == null) {
+                /* 转为空间级：不再属于任何项目，全部任务引用都解绑（clearTaskRefExceptReq 对 null 项目会漏掉项目内任务） */
+                affectedTaskIds = taskMapper.selectIdsByReqDocForCascade(workspaceId, d.getId());
+                docMapper.clearTaskRef(workspaceId, d.getId());
+            } else {
+                affectedTaskIds = taskMapper.selectIdsByReqDocExceptReqForCascade(workspaceId, d.getId(), reqId);
+                docMapper.clearTaskRefExceptReq(workspaceId, d.getId(), reqId);
+            }
             deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
-                    "需求文档「" + d.getTitle() + "」已更换项目，自动解除关联");
-            /* 旧项目的需求关联同样失效（关联要求同项目），避免需求详情里看到别的项目的文档 */
+                    "需求文档「" + d.getTitle() + "」已更换归属范围，自动解除关联");
+            /* 旧范围的需求关联同样失效（关联要求同项目），避免需求详情里看到别处的文档 */
             docMapper.deleteDemandLinksByDoc(workspaceId, d.getId());
-            /* 子文档留在旧项目，提升到本文档原来的父级，避免跨项目形成断掉的子树 */
+            /* 子文档留在旧范围，提升到本文档原来的父级，避免跨范围形成断掉的子树 */
             docMapper.reparentChildren(workspaceId, d.getId(), oldParentId);
         }
         boolean changed = !Objects.equals(oldTitle, d.getTitle())
@@ -411,7 +447,7 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc changeStatus(String userId, String workspaceId, String id, String status) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        assertDocMutate(workspaceId, userId, d);
         if (!"draft".equals(status) && !"active".equals(status) && !"done".equals(status)) {
             throw AppException.badRequest("文档状态不合法");
         }
@@ -428,7 +464,7 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc rename(String userId, String workspaceId, String id, String title) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        assertDocMutate(workspaceId, userId, d);
         String newTitle = Texts.cut(Texts.trimToNull(title), 100);
         if (newTitle == null) {
             throw AppException.badRequest("文档标题不能为空");
@@ -454,7 +490,7 @@ public class RequirementDocService {
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        assertDocMutate(workspaceId, userId, d);
         deletionTrace.recordDelete(workspaceId, userId, "requirement_doc_delete", "requirement_doc", id,
                 d.getTitle(), "删除需求文档「" + d.getTitle() + "」（"
                         + (d.getReqId() == null ? "未归属项目" : "项目 " + d.getReqId())
@@ -469,6 +505,7 @@ public class RequirementDocService {
         commentMapper.deleteByDoc(workspaceId, id);
         historyMapper.deleteByDoc(workspaceId, id);
         shareMapper.deleteByDoc(workspaceId, id);
+        attachmentService.deleteByTarget(workspaceId, id, AttachmentService.KIND_DOC);
         docMapper.delete(d.getId());
         workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
         notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已被删除",
@@ -487,6 +524,7 @@ public class RequirementDocService {
             docMapper.clearTaskRef(workspaceId, docId);
             docMapper.deleteDemandLinksByDoc(workspaceId, docId);
             shareMapper.deleteByDoc(workspaceId, docId);
+            attachmentService.deleteByTarget(workspaceId, docId, AttachmentService.KIND_DOC);
             workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId);
         }
         return docMapper.deleteByReq(workspaceId, reqId);
@@ -521,7 +559,8 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc restore(String userId, String workspaceId, String docId, String historyId) {
         RequirementDoc d = getVisible(workspaceId, userId, docId);
-        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        /* 恢复历史版本会覆盖正文（等价 update），同走创建人保护，避免绕过 update 门控 */
+        assertDocMutate(workspaceId, userId, d);
         RequirementDocHistory h = historyMapper.selectById(historyId);
         if (h == null || !docId.equals(h.getDocId()) || !workspaceId.equals(h.getWorkspaceId())) {
             throw AppException.notFound("历史版本不存在：" + historyId);
@@ -541,13 +580,14 @@ public class RequirementDocService {
 
     /**
      * 发布（published=true）或收回发布（false）。
-     * 权限：当前项目可写者（含空间 owner/admin）；作者身份不绕过只读限制。
-     * 发布不触碰正文与历史，只改 published_at。
+     * 权限：创建人保护（A 轻量档）——负责人本人或空间 owner/admin；空负责人回退项目可写。
+     * 与前端对非负责人隐藏发布入口、原型「发布撤回」口径一致。
+     * 发布不触碰正文与历史，只改 published_at；收回发布同时吊销分享链接。
      */
     @Transactional
     public RequirementDoc publish(String userId, String workspaceId, String id, boolean published) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        assertDocMutate(workspaceId, userId, d);
         if (published == (d.getPublishedAt() != null)) {
             return d;
         }
@@ -566,7 +606,7 @@ public class RequirementDocService {
 
     private static final int SHARE_DAYS = 30;
 
-    /** 生成/重置分享链接：仅已发布文档可分享；权限同发布 */
+    /** 生成/重置分享链接：仅已发布文档可分享；权限=项目/空间可写者（分发已发布内容，不走创建人门控，与发布/改删区分） */
     @Transactional
     public ReqDocShare createShare(String userId, String workspaceId, String docId) {
         RequirementDoc d = getVisible(workspaceId, userId, docId);
@@ -869,6 +909,7 @@ public class RequirementDocService {
         }
         d.setDocType(docType.getCode());
         d.setReqId(reqId);
+        d.setCategoryId(resolveCategory(d, reqId, req.getCategoryId()));
         d.setParentId(validateParent(d, reqId, req.getParentId()));
         d.setTitle(Texts.cut(Texts.trimToNull(req.getTitle()), 100));
         String format = Texts.trimToNull(req.getFormat());
@@ -906,7 +947,38 @@ public class RequirementDocService {
         }
     }
 
-    /** 父文档必须存在、同项目，且不能形成环 */
+    /**
+     * 分类解析：省略（null）时编辑沿用原分类、新建为未分类；显式空串清空；
+     * 给了分类则校验存在、同空间，且归属范围与文档 reqId 一致（空间级分类→reqId 须为 null）。
+     * 写权限由调用方按最终 reqId 走 assertWrite，前端过滤只是 UX，服务端在此兜底归属一致性。
+     */
+    private String resolveCategory(RequirementDoc d, String reqId, String rawCategoryId) {
+        if (rawCategoryId == null) {
+            String existing = d.getCategoryId();
+            if (existing == null || docCategories == null) {
+                return existing;
+            }
+            /* 沿用原分类，但归属范围已变（换项目 / 转空间级）时原分类失效，自动清空避免悬空归类 */
+            com.hourglass.entity.DocCategory cat = docCategories.findForDoc(d.getWorkspaceId(), existing);
+            String catScope = Texts.trimToNull(cat.getReqId());
+            return java.util.Objects.equals(catScope, reqId) ? existing : null;
+        }
+        String cid = Texts.trimToNull(rawCategoryId);
+        if (cid == null) {
+            return null;
+        }
+        if (docCategories == null) {
+            throw AppException.badRequest("分类服务不可用");
+        }
+        com.hourglass.entity.DocCategory cat = docCategories.findForDoc(d.getWorkspaceId(), cid);
+        String catScope = Texts.trimToNull(cat.getReqId());
+        if (!java.util.Objects.equals(catScope, reqId)) {
+            throw AppException.badRequest("文档归属项目须与所选分类一致（空间级分类不能挂到项目下，反之亦然）");
+        }
+        return cat.getId();
+    }
+
+    /** 父文档必须存在、同范围（同项目或同为空间级），且不能形成环 */
     private String validateParent(RequirementDoc d, String reqId, String rawParentId) {
         String parentId = Texts.trimToNull(rawParentId);
         if (parentId == null) {
@@ -919,8 +991,8 @@ public class RequirementDocService {
         if (parent == null || !d.getWorkspaceId().equals(parent.getWorkspaceId())) {
             throw AppException.badRequest("上级文档不存在：" + parentId);
         }
-        if (!reqId.equals(parent.getReqId())) {
-            throw AppException.badRequest("上级文档必须属于同一项目");
+        if (!java.util.Objects.equals(reqId, parent.getReqId())) {
+            throw AppException.badRequest("上级文档必须属于同一项目或同为空间级");
         }
         String cursor = parent.getParentId();
         int guard = 0;
@@ -961,10 +1033,11 @@ public class RequirementDocService {
         return sanitize(content);
     }
 
+    /** 归属项目解析：空 = 空间级文档（返回 null，写权限走 assertWrite 对 null 项目的「非查看者」口径）；非空须是本空间项目。 */
     private String ensureProject(String workspaceId, String reqId) {
         String rid = Texts.trimToNull(reqId);
         if (rid == null) {
-            throw AppException.badRequest("请选择所属项目");
+            return null;
         }
         Requirement r = reqMapper.selectById(rid);
         if (r == null || !workspaceId.equals(r.getWorkspaceId())) {

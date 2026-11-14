@@ -15,7 +15,7 @@ import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskD
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { taskVersionsText, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
+import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -420,8 +420,8 @@ function taskCell(t, key, hasTypeCol){
     if(p <= 0 && t.boardColumn !== "doing") return '<span class="cell">—</span>';
     return '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span></span>';
   }
-  if(key === "project") return '<span class="cell" title="' + esc(t.reqId ? reqNameById(t.reqId) : "") + '">' + (t.reqId ? esc(reqNameById(t.reqId)) : "—") + '</span>';
-  if(key === "version") return '<span class="cell" title="' + esc('计划版本：' + (taskVersionsText(t) || '待规划') + '；不代表实际交付。调整版本请在详情填写理由。') + '">' + esc(taskVersionsText(t) || "待规划") + '</span>';
+  if(key === "project") return '<span class="cell">' + assocLinkHTML("project", t.reqId, reqNameById(t.reqId)) + '</span>';
+  if(key === "version") return '<span class="cell" title="' + esc('计划版本：' + (taskVersionsText(t) || '待规划') + '；不代表实际交付。调整版本请在详情填写理由。') + '">' + taskVersionLinksHTML(t, t.reqId) + '</span>';
   if(key === "category") return '<span class="cell">' + (catTag(t.categoryId) || "—") + '</span>';
   if(key === "startDate") return '<span class="cell">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
   if(key === "tags") return '<span class="cell lr-tags">' + ((t.tags || []).map(tagChip).join("") || "—") + '</span>';
@@ -698,7 +698,7 @@ function mobileListCardHTML(t){
     '</div>' +
     '<h3 class="mtc-title">' + esc(t.title) + '</h3>' + taskPublicationHTML(t) +
     '<div class="mtc-meta">' +
-      '<span class="mtc-path">' + esc(projectName || "未关联项目") + '</span>' +
+      '<span class="mtc-path">' + assocLinkHTML("project", t.reqId, projectName, {plain:"未关联项目"}) + '</span>' +
       (t.dueDate ? '<span class="mtc-due" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + '</span>' : '<span class="mtc-due">未设截止</span>') +
       (f ? '<span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : '') +
     '</div>' +

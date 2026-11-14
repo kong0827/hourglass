@@ -69,7 +69,8 @@ public interface UserMapper {
     /** 只改 AI 配置（apiKey 传 null 表示保持原值，由 Service 决定） */
     int updateAiConfig(@Param("id") String id, @Param("provider") String provider,
                        @Param("baseUrl") String baseUrl, @Param("model") String model,
-                       @Param("apiKey") String apiKey, @Param("enabled") boolean enabled);
+                       @Param("apiKey") String apiKey, @Param("enabled") boolean enabled,
+                       @Param("prefer") String prefer);
 
     int deleteById(String id);
 }

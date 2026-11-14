@@ -147,7 +147,8 @@ public class TaskCommandService {
         t.setRemindSent(Boolean.FALSE);
         t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + SORT_STEP);
         if (Consts.COL_DONE.equals(t.getBoardColumn())) {
-            t.setCompletedAt(req.getCompletedAt() != null ? req.getCompletedAt() : LocalDate.now());
+            t.setCompletedAt(req.getCompletedAt() != null
+                    ? req.getCompletedAt() : LocalDateTime.now().withSecond(0).withNano(0));
         }
         if (Consts.COL_TEST.equals(t.getBoardColumn())) {
             t.setTestRequestedAt(LocalDateTime.now().withSecond(0).withNano(0));
@@ -182,6 +183,7 @@ public class TaskCommandService {
                 s.setWorkspaceId(workspaceId);
                 s.setTitle(Texts.cut(subTitle, 60));
                 s.setDone(item.getDone() != null && item.getDone());
+                s.setSortOrder(subCount);
                 subtaskMapper.insert(s);
                 subCount++;
             }
@@ -295,7 +297,7 @@ public class TaskCommandService {
         if (columnChanged) {
             t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + SORT_STEP);
             if (Consts.COL_DONE.equals(t.getBoardColumn())) {
-                t.setCompletedAt(LocalDate.now());
+                t.setCompletedAt(LocalDateTime.now().withSecond(0).withNano(0));
             } else {
                 t.setCompletedAt(null);
             }

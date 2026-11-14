@@ -15,6 +15,6 @@ public class FlowTaskRow {
     private String priority;
     private String boardColumn;
     private LocalDateTime createdAt;
-    private LocalDate completedAt;
+    private LocalDateTime completedAt;
     private String reqDocId;
 }

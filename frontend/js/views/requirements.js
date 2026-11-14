@@ -3,15 +3,16 @@
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
+import { attachmentChipHTML, openAttachment, downloadUrl, bindFileDrop, uploadAttachment, validateFiles, reportRejected } from "../core/attach-kit.js";
 import { activeView, showView } from "../core/router.js";
-import { canEditReq, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
+import { canEditDoc, canEditReq, currentRole, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
-import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
+import { openTaskDrawer, syncAssocRead, syncAssocViewBtns } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
 import * as activityUI from "../core/activity-ui.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
-import { DOC_TYPES, PRIORITIES, colName, docTypeName, fmtTs, pad2, priName, taskDescText, typeBadgeHTML } from "../lib/format.js";
+import { DOC_TYPES, PRIORITIES, assocLinkHTML, colName, docTypeName, fmtTs, pad2, priName, taskDescText, typeBadgeHTML } from "../lib/format.js";
 import * as textDiff from "../lib/text-diff.js";
 import { loadReqs, render } from "./board.js";
 import { openDemandDetailById } from "./demands.js";
@@ -29,30 +30,47 @@ var reqDocSuppressChange = false;
 var reqEditor = null;
 var reqCollapsed = {};
 var reqDocCollapsedDocs = {};
+/* 文档分类树（独立分类表 doc_category）：扁平缓存 + 分类折叠态 + 最近一次构建的分组模型（右键菜单按 id 查节点用） */
+var docCategories = null;
+var docCategoriesLoaded = false;
+var reqDocCollapsedCats = {};
+var reqDocGroupsCache = [];
 var editingDocId = null;
 var reqDocOpenSeq = 0;
 var mdMode = "split";
 var mdLibPromise = null;
 var mdRenderTimer = null;
-var editingMeta = { title: "", reqId: "", status: "draft", format: "markdown", docType: "other", parentId: "", publishedAt: null, ownerUserId: "" };
+var editingMeta = { title: "", reqId: "", status: "draft", format: "markdown", docType: "other", parentId: "", categoryId: "", publishedAt: null, ownerUserId: "" };
 var reqDocReadOnly = false;
+/* A 创建人保护：项目可写但非负责人/管理员 → 正文只读，但分享/评论仍按项目可写保留 */
+var reqDocOwnerLocked = false;
+var docTemplatesCache = null;
 /** 只读文档：隐藏保存/删除/新建工作项/AI/导入/历史恢复，正文与元数据不可编辑 */
 function applyReqDocReadOnly(on){
+  /* 分享按项目可写：创建人锁定（非负责人但项目可写）时仍保留分享入口，与后端 createShare 同口径 */
+  var hideShare = on && !reqDocOwnerLocked;
   ["reqDocSave", "reqDocDelete", "reqDocAddTask", "reqDocAiSplit", "reqDocAiAudit", "reqDocImport", "reqDocHistory", "reqDocPublish", "reqDocShare"].forEach(function(id){
     var b = $(id);
-    if(b) b.style.display = on ? "none" : "";
+    if(b) b.style.display = (id === "reqDocShare" ? hideShare : on) ? "none" : "";
   });
   ["reqDocType", "reqDocParent"].forEach(function(id){
     var el = $(id);
     if(el) el.disabled = on;
   });
+  /* 分类下拉：只读时禁用；可写时也要看该范围有没有分类（无分类仍禁用，避免空下拉误导） */
+  var catSel = $("reqDocCategory");
+  if(catSel){
+    var catScope = editingMeta.reqId || "";
+    var hasCats = (docCategories || []).some(function(c){ return (c.reqId || "") === catScope; });
+    catSel.disabled = on || !hasCats;
+  }
   var md = $("reqDocMdCanvas");
   if(md) md.readOnly = on;
   if(reqEditor){
     if(on) reqEditor.disable(); else reqEditor.enable();
   }
   var saved = $("reqDocSaved");
-  if(on && saved) saved.textContent = "只读 · 你对该项目只有查看权限";
+  if(on && saved) saved.textContent = reqDocOwnerLocked ? "只读 · 仅文档负责人或空间管理员可编辑" : "只读 · 你对该项目只有查看权限";
 }
 function fillDocTypeSelect(id, selected){
   var sel = $(id);
@@ -74,6 +92,7 @@ function reqDocStatusLabel(s){
   return "未设置";
 }
 function reqDocProjectName(reqId){
+  if(!reqId) return "空间文档";
   for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === reqId) return rt.reqList[i].name;
   for(var j = 0; j < reqDocList.length; j++) if(reqDocList[j].reqId === reqId && reqDocList[j].reqName) return reqDocList[j].reqName;
   return "未归属项目";
@@ -154,6 +173,7 @@ function ensureEditor(){
       /* 程序化回填可能晚于抑制窗口触发 onChange：与基线一致就不算用户修改 */
       if(reqEditorBaseline != null && reqEditor.getContents(true) === reqEditorBaseline) return;
       markReqDocDirty();
+      scheduleDraftSave();
       scheduleTocRebuild();
     };
     return reqEditor;
@@ -190,6 +210,7 @@ var reqDocSearchList = null;
 var reqDocsError = null;
 function fetchReqDocs(kw, refreshFull){
   var seq = ++reqDocFetchSeq;
+  if(!docCategoriesLoaded) loadDocCategories();
   var main = API.getAllPages("/api/req-docs", kw ? { keyword: kw } : null);
   /* 搜索结果是子集，写操作后只刷新它会让全量列表（下拉、卡片文档名）停在旧数据；
      force 刷新时顺带取一份全量，打字搜索仍然只发一个请求 */
@@ -221,6 +242,7 @@ function loadReqDocs(force){
 }
 function enterRequirementsView(){
   fillReqDocProjectSelect();
+  loadDocCategories(true);
   loadReqs().then(function(){
     fillReqDocProjectSelect();
     /* 项目列表到位后重算「新建文档」按钮可见性（树可能先于 reqs 渲染过） */
@@ -314,107 +336,210 @@ function reqDocRowHTML(r, depth, hasChild, collapsed){
   if(r.createdAt) meta.push(esc(fmtTs(r.createdAt)));
   if(r.status && r.status !== "draft") meta.push("状态：" + reqDocStatusLabel(r.status));
   if(r.taskCount) meta.push(r.doneCount + "/" + r.taskCount + " 工作项");
-  var fmt = r.format === "markdown"
-    ? '<span class="rr-fmt md">MD</span>'
-    : '<span class="rr-fmt">HTML</span>';
+  /* 标题优先：MD 为默认格式不标注，仅 HTML 例外才标；拖拽/重命名收进行尾悬停浮层，不再常驻占位 */
+  var fmtTail = r.format === "markdown" ? '' : '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
   var caret = hasChild
     ? '<span class="rr-caret' + (collapsed ? " collapsed" : "") + '" data-toggle-doc="' + esc(r.id) + '" title="展开/收起子文档">' + icon("down", 13) + '</span>'
     : '<span class="rr-caret"></span>';
-  var drag = canEditReq(r.reqId)
-    ? '<span class="rr-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 13) + '</span>'
-    : '';
-  var rename = canEditReq(r.reqId)
-    ? '<span class="rr-rename" role="button" title="重命名" aria-label="重命名">' + icon("edit", 12) + '</span>'
+  /* A 创建人保护：拖动（组织顺序）项目可写即可；重命名/删除仅负责人或空间管理员，非负责人换锁形提示 */
+  var acts = canEditReq(r.reqId)
+    ? '<span class="rr-acts">' +
+        '<span class="rr-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 13) + '</span>' +
+        (canEditDoc(r)
+          ? '<span class="rr-rename" role="button" title="重命名" aria-label="重命名">' + icon("edit", 12) + '</span>'
+          : '<span class="rr-lock" title="仅文档负责人或空间管理员可编辑 / 删除">' + icon("lock", 12) + '</span>') +
+      '</span>'
     : '';
   return '<button class="reqdoc-row rd-depth' + Math.min(depth, 4) + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-reqdoc="' + esc(r.id) + '"' +
     ' data-rr-reqid="' + esc(r.reqId || "") + '"' +
     ' data-rr-depth="' + depth + '">' +
-    caret + drag + rename +
+    caret +
     '<span class="rr-main">' +
-      '<span class="rr-title">' + fmt + esc(r.title) + (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published">已发布</span>') + '</span>' +
+      '<span class="rr-title">' + esc(r.title) + fmtTail + (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published">已发布</span>') + '</span>' +
       '<span class="rr-meta">' + meta.join(" · ") + '</span>' +
       (r.excerpt ? '<span class="rr-excerpt">' + esc(r.excerpt) + '</span>' : '') +
     '</span>' +
+    acts +
     '<span class="rr-go">' + icon("chevronRight", 14) + '</span>' +
   '</button>';
 }
-function renderReqDocNodes(nodes, children, depth, seen){
-  seen = seen || {};
-  return nodes.slice().sort(reqDocSort).map(function(r){
-    if(seen[r.id]) return "";
-    seen[r.id] = true;
-    var kids = children[r.id] || [];
-    var collapsed = !!reqDocCollapsedDocs[r.id];
-    return reqDocRowHTML(r, depth, kids.length > 0, collapsed) +
-      (kids.length && !collapsed ? renderReqDocNodes(kids, children, depth + 1, seen) : "");
-  }).join("");
+/* ---------- 文档分类树：分组（项目 / 空间）→ 分类（不限层级）→ 文档（保留 parentId 嵌套） ---------- */
+
+function docCatSort(a, b){
+  var sa = a.sortOrder || 0, sb = b.sortOrder || 0;
+  if(sa !== sb) return sa - sb;
+  return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN");
 }
-function reqDocGroupByProject(rows){
-  var groups = [], index = {};
-  rows.forEach(function(r){
-    var key = r.reqId || "__none";
-    if(!index[key]){
-      index[key] = { key: key, reqId: r.reqId, name: r.reqName || "未归属项目", items: [] };
-      groups.push(index[key]);
-    }
-    index[key].items.push(r);
+/* 分类一次取回（扁平 DFS，带 reqId 范围与 parentId），前端按范围分组并重建父子关系 */
+function loadDocCategories(force){
+  if(docCategoriesLoaded && !force) return Promise.resolve(docCategories || []);
+  return API.get("/api/doc-categories").then(function(list){
+    docCategories = list || [];
+    docCategoriesLoaded = true;
+    if(activeView === "requirements") renderReqDocMode();
+    return docCategories;
+  }).catch(function(){
+    /* 分类加载失败不阻塞文档树：按「无分类」渲染，文档仍落在分组根 */
+    docCategories = docCategories || [];
+    docCategoriesLoaded = true;
+    return docCategories;
   });
-  /* 按「项目」里的顺序排，未在列表中的排最后 */
-  var order = {};
-  rt.reqList.forEach(function(r, i){ order[r.id] = i; });
-  groups.sort(function(a, b){
-    var oa = order[a.reqId] == null ? 9999 : order[a.reqId];
-    var ob = order[b.reqId] == null ? 9999 : order[b.reqId];
-    return oa - ob;
-  });
+}
+function docCatById(id){
+  if(!id || !docCategories) return null;
+  for(var i = 0; i < docCategories.length; i++) if(docCategories[i].id === id) return docCategories[i];
+  return null;
+}
+/* 构建分组模型：每组带权限标记与嵌套节点（cat / doc），docCount 为子树文档总数（含嵌套子文档） */
+function reqDocBuildTree(rows, search){
+  var cats = docCategories || [];
+  var groups = [], gIndex = {};
+  function ensureGroup(reqId, name, kind){
+    var key = reqId || "";
+    if(gIndex[key]) return gIndex[key];
+    var role = currentRole();
+    var g = {
+      key: key, reqId: reqId || null, name: name, kind: kind, nodes: [], items: [], docCount: 0,
+      writable: reqId ? canEditReq(reqId) : !roleReadOnly(),
+      manageCat: reqId ? canEditReq(reqId) : (role === "owner" || role === "admin")
+    };
+    gIndex[key] = g; groups.push(g); return g;
+  }
+  var scopeHas = {};
+  rows.forEach(function(r){ var k = r.reqId || ""; (scopeHas[k] = scopeHas[k] || {}).docs = true; });
+  cats.forEach(function(c){ var k = c.reqId || ""; (scopeHas[k] = scopeHas[k] || {}).cats = true; });
+  if(reqDocReqFilter){
+    ensureGroup(reqDocReqFilter, reqDocFilterName(reqDocReqFilter), "proj");
+  }else{
+    var order = {};
+    rt.reqList.forEach(function(r, i){ order[r.id] = i; });
+    Object.keys(scopeHas).filter(function(k){ return k !== ""; }).sort(function(a, b){
+      var oa = order[a] == null ? 9999 : order[a], ob = order[b] == null ? 9999 : order[b];
+      return oa - ob;
+    }).forEach(function(k){ ensureGroup(k, reqDocProjectName(k), "proj"); });
+    /* 空间文档分组常驻（即使暂无文档），便于就地新建空间级分类 / 文档；搜索态只在有命中时出现 */
+    if(!search || scopeHas[""]) ensureGroup(null, "空间文档", "space");
+  }
   groups.forEach(function(g){
-    var byId = {}, children = {};
-    g.items.forEach(function(r){ byId[r.id] = r; });
-    g.items.forEach(function(r){
-      if(r.parentId && byId[r.parentId] && r.parentId !== r.id){
-        (children[r.parentId] = children[r.parentId] || []).push(r);
-      }
+    var scope = g.reqId || "";
+    var gCats = cats.filter(function(c){ return (c.reqId || "") === scope; });
+    var gDocs = rows.filter(function(r){ return (r.reqId || "") === scope; });
+    g.items = gDocs;
+    var catIds = {}; gCats.forEach(function(c){ catIds[c.id] = true; });
+    var catKids = {};
+    gCats.forEach(function(c){
+      var pid = c.parentId || "";
+      if(pid && catIds[pid]) (catKids[pid] = catKids[pid] || []).push(c);
     });
-    g.children = children;
-    g.roots = g.items.filter(function(r){ return !(r.parentId && byId[r.parentId] && r.parentId !== r.id); });
+    var catRoots = gCats.filter(function(c){ var pid = c.parentId || ""; return !pid || !catIds[pid]; });
+    /* 文档按 categoryId 归桶；分类不在可见范围时落到分组根桶 */
+    var bucket = {};
+    gDocs.forEach(function(r){
+      var cid = r.categoryId && catIds[r.categoryId] ? r.categoryId : "";
+      (bucket[cid] = bucket[cid] || []).push(r);
+    });
+    function docNodes(list, baseDepth){
+      var byId = {}; list.forEach(function(d){ byId[d.id] = d; });
+      var kids = {};
+      list.forEach(function(d){
+        if(d.parentId && byId[d.parentId] && d.parentId !== d.id) (kids[d.parentId] = kids[d.parentId] || []).push(d);
+      });
+      var roots = list.filter(function(d){ return !(d.parentId && byId[d.parentId] && d.parentId !== d.id); });
+      function build(d, depth){
+        var ch = (kids[d.id] || []).slice().sort(reqDocSort).map(function(k){ return build(k, depth + 1); });
+        return { kind: "doc", id: d.id, doc: d, depth: depth, children: ch,
+          docCount: 1 + ch.reduce(function(s, n){ return s + n.docCount; }, 0) };
+      }
+      return roots.slice().sort(reqDocSort).map(function(d){ return build(d, baseDepth); });
+    }
+    function catNode(c, depth){
+      var subCats = (catKids[c.id] || []).slice().sort(docCatSort).map(function(k){ return catNode(k, depth + 1); });
+      var subDocs = docNodes(bucket[c.id] || [], depth + 1);
+      var children = subCats.concat(subDocs);
+      return { kind: "cat", id: c.id, cat: c, name: c.name, depth: depth, children: children,
+        docCount: children.reduce(function(s, n){ return s + n.docCount; }, 0) };
+    }
+    g.nodes = catRoots.slice().sort(docCatSort).map(function(c){ return catNode(c, 0); })
+      .concat(docNodes(bucket[""] || [], 0));
+    g.docCount = g.nodes.reduce(function(s, n){ return s + n.docCount; }, 0);
   });
   return groups;
+}
+/* 遍历模型：分类行 + 文档行共用一套折叠逻辑，两种视图仅行 HTML 不同 */
+function reqDocWalkNodes(nodes, g, catHTML, docHTML){
+  return nodes.map(function(n){
+    if(n.kind === "cat"){
+      var col = !!reqDocCollapsedCats[n.id];
+      return catHTML(n, g, col) + (col ? "" : reqDocWalkNodes(n.children, g, catHTML, docHTML));
+    }
+    var colD = !!reqDocCollapsedDocs[n.id];
+    return docHTML(n.doc, n.depth, n.children.length > 0, colD) +
+      (n.children.length && !colD ? reqDocWalkNodes(n.children, g, catHTML, docHTML) : "");
+  }).join("");
+}
+function reqDocGroupTagsHTML(g){
+  return (g.kind === "space" ? '<span class="rp-tag">不挂项目</span>' : "") +
+    (g.writable ? "" : '<span class="rp-tag ro">只读</span>');
+}
+function reqDocEmptyBodyHTML(g){
+  return '<div class="reqdoc-cat-empty">' + ((g.writable || g.manageCat) ? "右击分组头可新建分类或文档" : "该范围暂无文档") + '</div>';
+}
+/* 列表视图分类行 */
+function reqDocCatRowHTML(n, g, collapsed){
+  var hasKids = n.children.length > 0;
+  var caret = hasKids
+    ? '<span class="rr-caret' + (collapsed ? " collapsed" : "") + '" data-cat-toggle="' + esc(n.id) + '" title="展开/收起分类">' + icon("down", 13) + '</span>'
+    : '<span class="rr-caret"></span>';
+  var acts = g.manageCat
+    ? '<span class="rr-acts"><span class="rr-rename" role="button" data-cat-rename="' + esc(n.id) + '" title="重命名分类" aria-label="重命名分类">' + icon("edit", 12) + '</span></span>'
+    : '';
+  return '<button class="reqdoc-cat rd-depth' + Math.min(n.depth, 4) + '" type="button" data-cat="' + esc(n.id) + '"' +
+    ' data-cat-reqid="' + esc(g.reqId || "") + '" data-cat-depth="' + n.depth + '">' +
+    caret +
+    '<span class="rc-folder">' + icon("folder", 15) + '</span>' +
+    '<span class="rc-name">' + esc(n.name) + '</span>' +
+    '<span class="rc-count" title="子树文档数">' + n.docCount + '</span>' +
+    acts +
+  '</button>';
 }
 function renderReqDocTree(){
   var box = $("reqDocTree");
   if(!box) return;
-  /* 没有可写项目就不显示「新建文档」；项目列表未加载时不判定（加载完成后会重渲染修正） */
+  /* 新建入口：非查看者（可写空间级文档）或有可写项目时显示。
+     查看者对所有项目恒为只读，无需等项目列表加载即可判定隐藏，避免 reqsLoaded 仅由看板置位时误显。 */
   var nb = $("reqDocNew");
-  if(nb) nb.style.display = (!rt.reqsLoaded || rt.reqList.some(function(r){ return canEditReq(r.id); })) ? "" : "none";
+  if(nb) nb.style.display = (!roleReadOnly() || rt.reqList.some(function(r){ return canEditReq(r.id); })) ? "" : "none";
   if(!reqDocsLoaded){
     box.innerHTML = UI.skeletonRows(4);
     return;
   }
-  if(!reqDocList.length){
+  var kw = (($("reqDocSearch") || {}).value || "").trim().toLowerCase();
+  var rows = reqDocVisibleRows();   // 关键字过滤由服务端完成，结果单独缓存
+  if(kw && !rows.length){
+    box.innerHTML = '<div class="reqdoc-empty2">没有找到匹配的文档</div>';
+    return;
+  }
+  var groups = reqDocBuildTree(rows, !!kw);
+  reqDocGroupsCache = groups;
+  if(!groups.length){
     box.innerHTML = reqDocEmptyHTML();
     return;
   }
-  var kw = (($("reqDocSearch") || {}).value || "").trim().toLowerCase();
-  var rows = reqDocVisibleRows();   // 关键字过滤由服务端完成，结果单独缓存
-  if(!rows.length){
-    box.innerHTML = kw
-      ? '<div class="reqdoc-empty2">没有找到匹配的文档</div>'
-      : '<div class="reqdoc-empty2">还没有文档。点右上角「新建文档」，先选项目再填文档名称。</div>';
-    return;
-  }
-
-  box.innerHTML = reqDocGroupByProject(rows).map(function(g){
+  box.innerHTML = groups.map(function(g){
     var collapsed = !!reqCollapsed[g.key];
-    /* 搜索时平铺展示命中项，不做层级缩进 */
+    /* 搜索时平铺展示命中项，不做分类层级缩进 */
     var body = kw
       ? g.items.slice().sort(reqDocSort).map(function(r){ return reqDocRowHTML(r, 0, false, false); }).join("")
-      : renderReqDocNodes(g.roots, g.children, 0);
+      : reqDocWalkNodes(g.nodes, g, reqDocCatRowHTML, reqDocRowHTML);
+    if(!body) body = reqDocEmptyBodyHTML(g);
     return '<div class="reqdoc-proj' + (collapsed ? " collapsed" : "") + '">' +
       '<button class="reqdoc-proj-head" type="button" data-toggle-proj="' + esc(g.key) + '"' +
+        ' data-proj-reqid="' + esc(g.reqId || "") + '" data-proj-kind="' + g.kind + '"' +
         ' aria-expanded="' + (collapsed ? "false" : "true") + '">' +
-        '<span class="rp-caret">' + icon("down", 14) + '</span>' +
+        '<span class="rp-caret">' + (g.kind === "space" ? icon("globe", 14) : icon("down", 14)) + '</span>' +
         '<span class="rp-name">' + esc(g.name) + '</span>' +
-        '<span class="rp-count">' + g.items.length + '</span>' +
+        reqDocGroupTagsHTML(g) +
+        '<span class="rp-count">' + g.docCount + '</span>' +
       '</button>' +
       '<div class="reqdoc-proj-body">' + body + '</div>' +
     '</div>';
@@ -424,10 +549,291 @@ function toggleReqProj(key){
   reqCollapsed[key] = !reqCollapsed[key];
   renderReqDocTree();
 }
+function toggleReqDocCat(id){
+  reqDocCollapsedCats[id] = !reqDocCollapsedCats[id];
+  if(reqDocMode === "read") renderReqDocSplit(); else renderReqDocTree();
+}
 
-/* ---------- 列表 / 看板 / 阅读 / 最近动态：同一份数据的四种展示 ---------- */
+/* ---------- 分类就地维护：右键菜单 + 行内新建/重命名 + 删除（非空拒绝） ---------- */
 
-var RD_MODES = ["tree", "kanban", "read", "feed"];
+var reqDocCtxEl = null;
+var reqDocCtxTarget = null;
+function reqDocCtxMenu(){
+  if(reqDocCtxEl) return reqDocCtxEl;
+  var el = document.createElement("div");
+  el.className = "reqdoc-ctx";
+  el.id = "reqDocCtxMenu";
+  el.setAttribute("role", "menu");
+  el.setAttribute("aria-label", "文档分类树右键菜单");
+  document.body.appendChild(el);
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-ctx-act]");
+    if(!b || !reqDocCtxTarget) return;
+    var act = b.dataset.ctxAct, t = reqDocCtxTarget;
+    closeReqDocCtx();
+    runReqDocCtxAct(act, t);
+  });
+  reqDocCtxEl = el;
+  return el;
+}
+function closeReqDocCtx(){
+  if(reqDocCtxEl) reqDocCtxEl.classList.remove("open");
+  reqDocCtxTarget = null;
+}
+function reqDocFindGroup(key){
+  for(var i = 0; i < reqDocGroupsCache.length; i++) if(reqDocGroupsCache[i].key === (key || "")) return reqDocGroupsCache[i];
+  return null;
+}
+function reqDocEachNode(fn){
+  reqDocGroupsCache.forEach(function(g){
+    (function walk(nodes){ nodes.forEach(function(n){ fn(n, g); walk(n.children); }); })(g.nodes);
+  });
+}
+function reqDocFindNode(id){
+  var hit = null;
+  reqDocEachNode(function(n, g){ if(!hit && n.id === id) hit = { node: n, group: g }; });
+  return hit;
+}
+function reqDocCatManageable(scope){
+  var role = currentRole();
+  return scope ? canEditReq(scope) : (role === "owner" || role === "admin");
+}
+function openReqDocCtx(x, y, target){
+  var el = reqDocCtxMenu();
+  var g, node = null, head = "", kindLabel = "";
+  if(target.type === "group"){
+    g = reqDocFindGroup(target.key);
+    if(!g){ closeReqDocCtx(); return; }
+    head = g.name; kindLabel = g.kind === "space" ? "空间：" : "项目：";
+  }else{
+    var hit = reqDocFindNode(target.id);
+    if(!hit){ closeReqDocCtx(); return; }
+    node = hit.node; g = hit.group;
+    head = node.kind === "cat" ? node.name : (node.doc.title || "");
+    kindLabel = node.kind === "cat" ? "分类：" : "文档：";
+  }
+  reqDocCtxTarget = target;
+  var mc = g.manageCat, wd = g.writable;
+  var items = '<div class="ctx-head">' + esc(kindLabel + head) + '</div>';
+  var any = false;
+  var isContainer = target.type === "group" || (node && node.kind === "cat");
+  if(isContainer){
+    if(mc){ items += '<button type="button" data-ctx-act="cat"><span class="ic">' + icon("folder", 14) + '</span>' + (target.type === "group" ? "新建一级分类" : "新建子分类") + '</button>'; any = true; }
+    if(wd){ items += '<button type="button" data-ctx-act="doc"><span class="ic">' + icon("note", 14) + '</span>新建文档</button>'; any = true; }
+    if(target.type !== "group" && mc){ items += '<div class="sep"></div><button type="button" data-ctx-act="rename"><span class="ic">' + icon("edit", 14) + '</span>重命名</button><button type="button" data-ctx-act="del" class="danger"><span class="ic">' + icon("trash", 14) + '</span>删除</button>'; }
+  }else if(wd){
+    /* A 创建人保护：新建子文档（组织/新增）项目可写即可；重命名/删除仅负责人或空间管理员 */
+    items += '<button type="button" data-ctx-act="subdoc"><span class="ic">' + icon("note", 14) + '</span>新建子文档</button>'; any = true;
+    if(canEditDoc(node.doc)){
+      items += '<div class="sep"></div><button type="button" data-ctx-act="rename"><span class="ic">' + icon("edit", 14) + '</span>重命名</button><button type="button" data-ctx-act="del" class="danger"><span class="ic">' + icon("trash", 14) + '</span>删除</button>';
+    }else{
+      items += '<div class="ctx-note">仅文档负责人或空间管理员可重命名 / 删除；你可新建子文档。</div>';
+    }
+  }
+  if(!any) items += '<div class="ctx-note">' + (roleReadOnly() ? "你对该范围只有查看权限。" : (g.kind === "space" ? "空间级分类仅空间主/管理员可维护；你仍可新建空间级文档。" : "你对该项目只读，仅可查看与阅读。")) + '</div>';
+  else if(!mc && g.kind === "space") items += '<div class="ctx-note">空间级分类仅空间主/管理员可维护；你仍可新建空间级文档。</div>';
+  el.innerHTML = items;
+  el.classList.add("open");
+  var w = el.offsetWidth, h = el.offsetHeight, vw = window.innerWidth || 1200, vh = window.innerHeight || 800;
+  el.style.left = Math.max(8, Math.min(x, vw - w - 8)) + "px";
+  el.style.top = Math.max(8, Math.min(y, vh - h - 8)) + "px";
+}
+function runReqDocCtxAct(act, t){
+  if(t.type === "group"){
+    var g = reqDocFindGroup(t.key);
+    if(!g) return;
+    var headSel = reqDocMode === "read" ? '#reqDocSplitTree [data-rs-proj="' + g.key + '"]' : '#reqDocTree [data-toggle-proj="' + g.key + '"]';
+    var head = document.querySelector(headSel);
+    var body = head ? head.parentNode.querySelector(reqDocMode === "read" ? ".rs-proj-body" : ".reqdoc-proj-body") : null;
+    if(act === "cat") beginCreateDocCat(g.reqId || "", "", 0, body || head, "prepend");
+    else if(act === "doc") openNewReqDocDialog(g.reqId || undefined, {});
+    return;
+  }
+  var hit = reqDocFindNode(t.id);
+  if(!hit) return;
+  var n = hit.node, g2 = hit.group;
+  if(n.kind === "cat"){
+    var catSel = reqDocMode === "read" ? '#reqDocSplitTree [data-rs-cat="' + n.id + '"]' : '#reqDocTree [data-cat="' + n.id + '"]';
+    var catEl = document.querySelector(catSel);
+    if(act === "cat") beginCreateDocCat(g2.reqId || "", n.id, n.depth + 1, catEl, "after");
+    else if(act === "doc") openNewReqDocDialog(g2.reqId || undefined, { categoryId: n.id });
+    else if(act === "rename") beginRenameDocCat(n.id);
+    else if(act === "del") deleteDocCat(n.id);
+  }else{
+    var d = n.doc;
+    if(act === "subdoc") openNewReqDocDialog(d.reqId || undefined, { categoryId: d.categoryId || "", parentId: d.id });
+    else if(act === "rename") renameDocFromCtx(d.id);
+    else if(act === "del") deleteDocFromCtx(d.id);
+  }
+}
+/* 行内名称输入：新建分类用临时输入框（不落服务端占位），回车提交 / Esc 取消 */
+function reqDocCatNameInput(opts){
+  if(!opts.anchorEl) return;
+  var input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 50;
+  input.className = opts.inputClass;
+  input.value = opts.value || "";
+  input.placeholder = opts.placeholder || "分类名称";
+  input.setAttribute("aria-label", "分类名称");
+  if(opts.place === "prepend") opts.anchorEl.insertBefore(input, opts.anchorEl.firstChild);
+  else opts.anchorEl.parentNode.insertBefore(input, opts.anchorEl.nextSibling);
+  input.focus();
+  input.select();
+  var done = false;
+  function finish(commit){
+    if(done) return;
+    done = true;
+    var name = (input.value || "").trim();
+    if(input.parentNode) input.parentNode.removeChild(input);
+    if(commit && name) opts.onCommit(name);
+  }
+  input.addEventListener("keydown", function(e){
+    if(e.isComposing || e.keyCode === 229) return;
+    if(e.key === "Enter"){ e.preventDefault(); finish(true); }
+    else if(e.key === "Escape"){ e.preventDefault(); finish(false); }
+  });
+  input.addEventListener("blur", function(){ finish(true); });
+}
+function beginCreateDocCat(scopeReqId, parentId, depth, anchorEl, place){
+  if(!reqDocCatManageable(scopeReqId)){
+    toast(scopeReqId ? "你对该项目只有查看权限，无法维护分类" : "空间级分类仅空间主或管理员可维护", "warn");
+    return;
+  }
+  reqDocCatNameInput({
+    anchorEl: anchorEl, place: place, depth: depth, value: "",
+    placeholder: "分类名称，回车创建 / Esc 取消",
+    inputClass: (reqDocMode === "read" ? "rs-rename-input" : "rr-rename-input") + " rd-depth" + Math.min(depth, 4),
+    onCommit: function(name){
+      API.post("/api/doc-categories", { reqId: scopeReqId || "", name: name, parentId: parentId || "" }).then(function(){
+        toast("已创建分类「" + name + "」", "fs");
+        if(parentId) delete reqDocCollapsedCats[parentId];
+        return loadDocCategories(true);
+      }).catch(function(ex){ toast(ex.message || "创建分类失败", "bad"); });
+    }
+  });
+}
+function beginRenameDocCat(id){
+  var c = docCatById(id);
+  if(!c) return;
+  if(!reqDocCatManageable(c.reqId || "")){
+    toast((c.reqId || "") ? "你对该项目只有查看权限" : "空间级分类仅空间主或管理员可维护", "warn");
+    return;
+  }
+  var read = reqDocMode === "read";
+  var btn = document.querySelector(read ? '#reqDocSplitTree [data-rs-cat="' + id + '"]' : '#reqDocTree [data-cat="' + id + '"]');
+  if(!btn || btn.dataset.catRenaming) return;
+  var depth = parseInt(read ? btn.dataset.rsDepth : btn.dataset.catDepth, 10) || 0;
+  btn.dataset.catRenaming = "1";
+  btn.style.display = "none";
+  var input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 50;
+  input.value = c.name || "";
+  input.className = (read ? "rs-rename-input" : "rr-rename-input") + " rd-depth" + Math.min(depth, 4);
+  input.setAttribute("aria-label", "分类名称");
+  btn.parentNode.insertBefore(input, btn.nextSibling);
+  input.focus();
+  input.select();
+  var done = false;
+  function finish(save){
+    if(done) return;
+    done = true;
+    var name = (input.value || "").trim();
+    delete btn.dataset.catRenaming;
+    btn.style.display = "";
+    if(input.parentNode) input.parentNode.removeChild(input);
+    if(!save || !name || name === c.name) return;
+    API.put("/api/doc-categories/" + encodeURIComponent(id), { name: name }).then(function(){
+      toast("已重命名为「" + name + "」", "fs");
+      return loadDocCategories(true);
+    }).catch(function(ex){ toast(ex.message || "重命名失败", "bad"); });
+  }
+  input.addEventListener("keydown", function(e){
+    if(e.isComposing || e.keyCode === 229) return;
+    if(e.key === "Enter"){ e.preventDefault(); finish(true); }
+    else if(e.key === "Escape"){ e.preventDefault(); finish(false); }
+  });
+  input.addEventListener("blur", function(){ finish(true); });
+}
+function deleteDocCat(id){
+  var c = docCatById(id);
+  if(!c) return;
+  if(!reqDocCatManageable(c.reqId || "")){
+    toast((c.reqId || "") ? "你对该项目只有查看权限" : "空间级分类仅空间主或管理员可维护", "warn");
+    return;
+  }
+  var hit = reqDocFindNode(id), subCats = 0, subDocs = 0;
+  if(hit){
+    (function count(n){ n.children.forEach(function(k){ if(k.kind === "cat"){ subCats++; count(k); } else { subDocs++; count(k); } }); })(hit.node);
+  }
+  /* 服务端按全部文档计数兜底；这里先用可见模型给出可操作提示 */
+  if(subCats || subDocs){
+    toast("分类「" + c.name + "」下还有 " + subCats + " 个子分类、" + subDocs + " 篇文档，请先移出或删除后再删分类", "warn");
+    return;
+  }
+  UI.showConfirm({
+    title: "删除分类", okText: "删除分类",
+    msg: "删除空分类「<b>" + esc(c.name) + "</b>」？分类下没有文档，不影响文档数据。"
+  }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/doc-categories/" + encodeURIComponent(id)).then(function(){
+      toast("分类「" + c.name + "」已删除", "fs");
+      delete reqDocCollapsedCats[id];
+      return loadDocCategories(true);
+    }).catch(function(ex){ toast(ex.message || "删除分类失败", "bad"); });
+  });
+}
+function renameDocFromCtx(id){
+  var d = reqDocById(id);
+  if(!d) return;
+  if(!canEditReq(d.reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(!canEditDoc(d)){ toast("仅文档负责人或空间管理员可编辑 / 删除", "warn"); return; }
+  if(reqDocMode === "read"){
+    var node = document.querySelector('#reqDocSplitTree [data-rs-doc="' + id + '"]');
+    if(node) reqDocBeginRename(id, { titleEl: node.querySelector(".rs-title"), hideEl: node,
+      inputClass: "rs-rename-input" + (node.dataset.rsDepth ? " rd-depth" + Math.min(parseInt(node.dataset.rsDepth, 10) || 0, 4) : "") });
+  }else{
+    var row = document.querySelector('#reqDocTree [data-reqdoc="' + id + '"]');
+    if(row) reqDocBeginRename(id, { titleEl: row.querySelector(".rr-title"), hideEl: row,
+      inputClass: "rr-rename-input" + (row.dataset.rrDepth ? " rd-depth" + Math.min(parseInt(row.dataset.rrDepth, 10) || 0, 4) : "") });
+  }
+}
+function deleteDocFromCtx(id){
+  var d = reqDocById(id);
+  if(!d) return;
+  if(!canEditReq(d.reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(!canEditDoc(d)){ toast("仅文档负责人或空间管理员可编辑 / 删除", "warn"); return; }
+  UI.showConfirm({
+    title: "删除文档", okText: "删除文档",
+    msg: "子文档会上移一级，关联到它的工作项与需求池条目会自动解除关联（工作项与需求本身不会被删除）。确定删除「" + esc(d.title) + "」？"
+  }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/req-docs/" + encodeURIComponent(id)).then(function(){
+      toast("文档已删除");
+      if(editingDocId === id) closeReqDocEditor();
+      if(splitDocId === id) splitDocId = null;
+      loadReqDocs(true);
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
+function reqDocTreeContextMenu(e){
+  var head = e.target.closest("[data-toggle-proj],[data-rs-proj]");
+  if(head){
+    e.preventDefault();
+    var key = head.dataset.toggleProj != null ? head.dataset.toggleProj : head.dataset.rsProj;
+    openReqDocCtx(e.clientX, e.clientY, { type: "group", key: key });
+    return;
+  }
+  var cat = e.target.closest("[data-cat],[data-rs-cat]");
+  if(cat){ e.preventDefault(); openReqDocCtx(e.clientX, e.clientY, { type: "cat", id: cat.dataset.cat || cat.dataset.rsCat }); return; }
+  var doc = e.target.closest("[data-reqdoc],[data-rs-doc]");
+  if(doc){ e.preventDefault(); openReqDocCtx(e.clientX, e.clientY, { type: "doc", id: doc.dataset.reqdoc || doc.dataset.rsDoc }); return; }
+}
+
+/* ---------- 阅读 / 列表 / 看板 / 最近动态：同一份数据的四种展示（阅读为默认首个 tab） ---------- */
+
+var RD_MODES = ["read", "tree", "kanban", "feed"];
 var RD_STATUS = [
   { id: "draft", name: "草稿" },
   { id: "active", name: "进行中" },
@@ -440,6 +846,8 @@ var splitDocSeq = 0;
 var rrdCommentsDocId = null;
 var rrdComments = [];
 var rrdCommentsOpen = false;
+/* 阅读侧栏当前 tab：comments（评论）/ perm（权限说明，只读） */
+var rrdActiveTab = "comments";
 var rrdCanComment = false;
 var rrdQuote = null;
 var rrdSelText = "";
@@ -452,11 +860,11 @@ var draggingReqDocId = null;
 function reqDocModePref(){
   try{
     var v = localStorage.getItem("ds.reqDocMode");
-    return RD_MODES.indexOf(v) >= 0 ? v : "tree";
-  }catch(e){ return "tree"; }
+    return RD_MODES.indexOf(v) >= 0 ? v : "read";
+  }catch(e){ return "read"; }
 }
 function setReqDocMode(mode){
-  reqDocMode = RD_MODES.indexOf(mode) >= 0 ? mode : "tree";
+  reqDocMode = RD_MODES.indexOf(mode) >= 0 ? mode : "read";
   try{ localStorage.setItem("ds.reqDocMode", reqDocMode); }catch(e){ /* 隐私模式忽略 */ }
   var btns = document.querySelectorAll("#reqDocListPage [data-rdmode]");
   for(var i = 0; i < btns.length; i++){
@@ -534,7 +942,7 @@ function rdViewParams(){
   return { scope: "doc", q: reqDocKeyword || "", reqId: reqDocReqFilter || "", mode: reqDocMode };
 }
 function rdViewMeaningful(p){
-  return !!(p.q || p.reqId || (p.mode && p.mode !== "tree"));
+  return !!(p.q || p.reqId || (p.mode && p.mode !== "read"));
 }
 function applyRdView(v){
   var p;
@@ -550,7 +958,7 @@ function applyRdView(v){
   if($("reqDocSearch")) $("reqDocSearch").value = reqDocKeyword;
   reqDocReqFilter = p.reqId || null;
   syncReqDocFilterUI();
-  setReqDocMode(p.mode || "tree");
+  setReqDocMode(p.mode || "read");
   loadReqDocs(true).then(function(){ renderReqDocMode(); });
   toast("已应用视图「" + v.name + "」", "fs");
 }
@@ -601,9 +1009,8 @@ function renderRdViewsMenu(){
 
 function reqDocKanbanCard(d){
   var editable = canEditReq(d.reqId);
-  var fmt = d.format === "markdown"
-    ? '<span class="rr-fmt md">MD</span>'
-    : '<span class="rr-fmt">HTML</span>';
+  /* 标题优先：MD 为默认格式不标注，仅 HTML 例外标移到标题之后 */
+  var fmtTail = d.format === "markdown" ? '' : '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
   var meta = [esc(reqDocProjectName(d.reqId)), esc(d.owner || "—") + " 创建"];
   if(d.updatedAt) meta.push("更新 " + esc(fmtTs(d.updatedAt)));
   var tasks = d.taskCount
@@ -620,7 +1027,7 @@ function reqDocKanbanCard(d){
     : '<span class="rk-status-label st ' + st + '"><i></i>' + reqDocStatusLabel(d.status) + '</span>';
   var pub = d.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published">已发布</span>';
   return '<div class="rk-card" data-rkdoc="' + esc(d.id) + '"' + (editable ? ' draggable="true"' : '') + '>' +
-    '<div class="rk-head">' + fmt + '<span class="rk-title">' + esc(d.title) + pub + '</span></div>' +
+    '<div class="rk-head"><span class="rk-title">' + esc(d.title) + pub + '</span>' + fmtTail + '</div>' +
     '<div class="rk-meta">' + meta.join(" · ") + '</div>' +
     '<div class="rk-foot">' + statusCtl + tasks + '</div>' +
   '</div>';
@@ -762,31 +1169,43 @@ function reqDocSplitNodeHTML(r, depth, hasChild, collapsed){
   var caret = hasChild
     ? '<span class="rs-caret' + (collapsed ? " collapsed" : "") + '" data-rs-toggle="' + esc(r.id) + '" title="展开/收起子文档">' + icon("down", 12) + '</span>'
     : '<span class="rs-caret"></span>';
-  var fmt = r.format === "markdown"
-    ? '<span class="rr-fmt md">MD</span>'
-    : '<span class="rr-fmt">HTML</span>';
   var pub = r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published" title="已发布，项目成员可见">已发布</span>';
-  var drag = canEditReq(r.reqId)
-    ? '<span class="rs-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 12) + '</span>'
-    : '';
-  var rename = canEditReq(r.reqId)
-    ? '<span class="rs-rename" role="button" title="重命名" aria-label="重命名">' + icon("edit", 11) + '</span>'
+  /* 标题优先：MD 为默认格式不标注，仅 HTML 例外才标；拖拽/重命名收进行尾悬停浮层，不再常驻占位 */
+  var fmtTail = r.format === "markdown" ? '' : '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
+  /* A 创建人保护：拖动项目可写即可；重命名仅负责人或空间管理员，非负责人换锁形提示 */
+  var acts = canEditReq(r.reqId)
+    ? '<span class="rs-acts">' +
+        '<span class="rs-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 12) + '</span>' +
+        (canEditDoc(r)
+          ? '<span class="rs-rename" role="button" title="重命名" aria-label="重命名">' + icon("edit", 11) + '</span>'
+          : '<span class="rs-lock" title="仅文档负责人或空间管理员可编辑 / 删除">' + icon("lock", 11) + '</span>') +
+      '</span>'
     : '';
   return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-rs-doc="' + esc(r.id) + '"' +
     ' data-rs-reqid="' + esc(r.reqId || "") + '"' +
     ' data-rs-depth="' + depth + '">' +
-    caret + fmt + drag + rename +
+    caret +
     '<span class="rs-title">' + esc(r.title) + '</span>' +
-    pub +
+    fmtTail + pub + acts +
   '</button>';
 }
-function renderReqDocSplitNodes(nodes, children, depth){
-  return nodes.slice().sort(reqDocSort).map(function(r){
-    var kids = children[r.id] || [];
-    var collapsed = !!reqDocCollapsedDocs[r.id];
-    return reqDocSplitNodeHTML(r, depth, kids.length > 0, collapsed) +
-      (kids.length && !collapsed ? renderReqDocSplitNodes(kids, children, depth + 1) : "");
-  }).join("");
+/* 阅读视图分类行 */
+function reqDocCatSplitHTML(n, g, collapsed){
+  var hasKids = n.children.length > 0;
+  var caret = hasKids
+    ? '<span class="rs-caret' + (collapsed ? " collapsed" : "") + '" data-rs-cat-toggle="' + esc(n.id) + '" title="展开/收起分类">' + icon("down", 12) + '</span>'
+    : '<span class="rs-caret"></span>';
+  var acts = g.manageCat
+    ? '<span class="rs-acts"><span class="rs-rename" role="button" data-cat-rename="' + esc(n.id) + '" title="重命名分类" aria-label="重命名分类">' + icon("edit", 11) + '</span></span>'
+    : '';
+  return '<button class="rs-cat rd-depth' + Math.min(n.depth, 4) + '" type="button" data-rs-cat="' + esc(n.id) + '"' +
+    ' data-rs-cat-reqid="' + esc(g.reqId || "") + '" data-rs-depth="' + n.depth + '">' +
+    caret +
+    '<span class="rs-folder">' + icon("folder", 14) + '</span>' +
+    '<span class="rs-title">' + esc(n.name) + '</span>' +
+    '<span class="rs-kids" title="子树文档数">' + n.docCount + '</span>' +
+    acts +
+  '</button>';
 }
 function renderReqDocSplit(){
   var box = $("reqDocSplitTree");
@@ -795,30 +1214,39 @@ function renderReqDocSplit(){
   /* 选中的文档已被删除：回到占位提示 */
   if(splitDocId && !reqDocById(splitDocId)){
     splitDocId = null;
-    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title">从左侧选择文档阅读</div><div class="rrd-empty-text">有编辑权限时，可拖动文档左侧的手柄调整顺序</div></div>';
+    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title">从左侧选择文档阅读</div><div class="rrd-empty-text">右击分组头或分类可就地新建分类与文档；空间文档不挂项目</div></div>';
   }
   if(!reqDocsLoaded){
     box.innerHTML = UI.skeletonRows(4);
     return;
   }
+  var kw = (($("reqDocSearch") || {}).value || "").trim().toLowerCase();
   var rows = reqDocVisibleRows();
-  if(!rows.length){
+  if(kw && !rows.length){
+    box.innerHTML = '<div class="reqdoc-empty2">没有找到匹配的文档</div>';
+    return;
+  }
+  var groups = reqDocBuildTree(rows, !!kw);
+  reqDocGroupsCache = groups;
+  if(!groups.length){
     box.innerHTML = reqDocEmptyHTML();
     return;
   }
-  var kw = (($("reqDocSearch") || {}).value || "").trim().toLowerCase();
-  box.innerHTML = reqDocGroupByProject(rows).map(function(g){
+  box.innerHTML = groups.map(function(g){
     var collapsed = !!reqCollapsed[g.key];
-    /* 搜索时平铺展示命中项，不做层级缩进 */
+    /* 搜索时平铺展示命中项，不做分类层级缩进 */
     var body = kw
       ? g.items.slice().sort(reqDocSort).map(function(r){ return reqDocSplitNodeHTML(r, 0, false, false); }).join("")
-      : renderReqDocSplitNodes(g.roots, g.children, 0);
+      : reqDocWalkNodes(g.nodes, g, reqDocCatSplitHTML, reqDocSplitNodeHTML);
+    if(!body) body = reqDocEmptyBodyHTML(g);
     return '<div class="rs-proj' + (collapsed ? " collapsed" : "") + '">' +
-      '<button class="rs-proj-head" type="button" data-rs-proj="' + esc(g.key) + '"' +
+      '<button class="rs-proj-head' + (g.kind === "space" ? " space" : "") + '" type="button" data-rs-proj="' + esc(g.key) + '"' +
+        ' data-proj-reqid="' + esc(g.reqId || "") + '" data-proj-kind="' + g.kind + '"' +
         ' aria-expanded="' + (collapsed ? "false" : "true") + '">' +
-        '<span class="rp-caret">' + icon("down", 12) + '</span>' +
+        '<span class="rp-caret">' + (g.kind === "space" ? icon("globe", 13) : icon("down", 12)) + '</span>' +
         '<span class="rp-name">' + esc(g.name) + '</span>' +
-        '<span class="rp-count">' + g.items.length + '</span>' +
+        reqDocGroupTagsHTML(g) +
+        '<span class="rp-count">' + g.docCount + '</span>' +
       '</button>' +
       '<div class="rs-proj-body">' + body + '</div>' +
     '</div>';
@@ -856,9 +1284,12 @@ function renderReqDocReader(doc){
   if(doc.updatedAt) meta.push("更新于 " + esc(fmtTs(doc.updatedAt)));
   if(doc.taskCount) meta.push(doc.doneCount + "/" + doc.taskCount + " 工作项");
   var canWrite = !roleReadOnly() && canEditReq(doc.reqId);
+  /* A 创建人保护：改删/重命名/恢复历史仅负责人或空间管理员；评论仍按项目可写（canWrite） */
+  var canMut = canEditDoc(doc);
   rrdCommentsDocId = doc.id;
   rrdComments = [];
   rrdCommentsOpen = false;
+  rrdActiveTab = "comments";
   rrdCanComment = canWrite;
   rrdFlashCommentId = null;
   setRrdQuote(null);
@@ -873,34 +1304,42 @@ function renderReqDocReader(doc){
         '<span class="rrd-acts">' +
           docZoomControlHTML() +
           '<button class="btn sm ghost" type="button" data-rrd-wide aria-pressed="false" title="宽屏阅读：收起左侧文档树">' + icon("expand", 13) + ' 宽屏</button>' +
-          (canWrite ? '<button class="btn sm ghost" type="button" data-rrd-rename="' + esc(doc.id) + '" title="重命名文档">' + icon("edit", 13) + ' 重命名</button>' : '') +
+          (canMut ? '<button class="btn sm ghost" type="button" data-rrd-rename="' + esc(doc.id) + '" title="重命名文档">' + icon("edit", 13) + ' 重命名</button>' : '') +
           '<button class="btn sm ghost" type="button" data-rrd-comments="' + esc(doc.id) + '" title="查看评论；选中正文可划线评论">' + icon("comment", 13) + ' 评论</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canWrite ? "1" : "0") + '" title="查看历史版本">' + icon("clock", 13) + ' 历史版本</button>' +
+          '<button class="btn sm ghost" type="button" data-rrd-perm="' + esc(doc.id) + '" title="查看这篇文档的权限说明（只读）">' + icon("shield", 13) + ' 权限说明</button>' +
+          '<button class="btn sm ghost" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canMut ? "1" : "0") + '" title="查看历史版本">' + icon("clock", 13) + ' 历史版本</button>' +
           '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="导出文档">' + icon("download", 13) + ' 导出</button>' +
-          '<button class="btn sm" type="button" data-rrd-edit="' + esc(doc.id) + '">' + icon("edit", 13) + ' 编辑文档</button>' +
+          '<button class="btn sm" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canMut ? '' : ' disabled title="仅文档负责人或空间管理员可编辑"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
         '</span>' +
       '</div>' +
       '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
     '</div>' +
     '<div class="rrd-body markdown-body" id="reqDocReaderBody"></div>' +
     '</div>' +
-    '<aside class="rrd-comments" id="rrdComments" hidden aria-label="文档评论">' +
-      '<div class="rrdc-head"><span id="rrdCommentsTitle">评论</span>' +
-        '<button class="icon-btn sm" type="button" id="rrdCommentsX" aria-label="关闭评论"><span data-icon="close"></span></button>' +
-      '</div>' +
-      '<div class="reqdoc-comment-list rrdc-list" id="rrdCommentList"></div>' +
-      '<div class="reqdoc-comment-form rrdc-form" id="rrdCommentForm">' +
-        '<div class="reqdoc-comment-quotechip" id="rrdQuoteChip" hidden>' +
-          '<span data-icon="quote"></span>' +
-          '<span class="qc-text" id="rrdQuoteText"></span>' +
-          '<button class="qc-x" type="button" id="rrdQuoteClear" title="移除引用" aria-label="移除引用">×</button>' +
+    '<aside class="rrd-comments" id="rrdComments" hidden aria-label="文档侧栏">' +
+      '<div class="rrdc-head rrdc-tabhead">' +
+        '<div class="rrdc-tabbar" role="tablist" aria-label="侧栏切换">' +
+          '<button class="rrdc-tab active" type="button" role="tab" aria-selected="true" data-rrd-tab="comments"><span id="rrdCommentsTitle">评论</span></button>' +
+          '<button class="rrdc-tab" type="button" role="tab" aria-selected="false" data-rrd-tab="perm">' + icon("shield", 13) + ' 权限说明</button>' +
         '</div>' +
-        '<textarea id="rrdCommentInput" rows="2" placeholder="写下你的评论…"></textarea>' +
-        '<div class="reqdoc-comment-actions">' +
-          '<span class="rrdc-hint">选中正文可划线评论</span>' +
-          '<button class="btn sm primary" type="button" id="rrdCommentSend">发表评论</button>' +
+        '<button class="icon-btn sm" type="button" id="rrdCommentsX" aria-label="关闭侧栏"><span data-icon="close"></span></button>' +
+      '</div>' +
+      '<div class="rrdc-pane" id="rrdPaneComments">' +
+        '<div class="reqdoc-comment-list rrdc-list" id="rrdCommentList"></div>' +
+        '<div class="reqdoc-comment-form rrdc-form" id="rrdCommentForm">' +
+          '<div class="reqdoc-comment-quotechip" id="rrdQuoteChip" hidden>' +
+            '<span data-icon="quote"></span>' +
+            '<span class="qc-text" id="rrdQuoteText"></span>' +
+            '<button class="qc-x" type="button" id="rrdQuoteClear" title="移除引用" aria-label="移除引用">×</button>' +
+          '</div>' +
+          '<textarea id="rrdCommentInput" rows="2" placeholder="写下你的评论…"></textarea>' +
+          '<div class="reqdoc-comment-actions">' +
+            '<span class="rrdc-hint">选中正文可划线评论</span>' +
+            '<button class="btn sm primary" type="button" id="rrdCommentSend">发表评论</button>' +
+          '</div>' +
         '</div>' +
       '</div>' +
+      '<div class="rrdc-pane rrdc-perm" id="rrdPanePerm" hidden></div>' +
     '</aside>';
   syncDocZoomUI();
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
@@ -930,7 +1369,7 @@ function renderReqDocCrumb(el, docId){
   if(!el) return;
   var d = reqDocById(docId);
   if(!d){ el.innerHTML = ""; return; }
-  var parts = ['<span class="rrd-crumb-proj">' + esc(reqDocProjectName(d.reqId)) + '</span>'];
+  var parts = [assocLinkHTML("project", d.reqId, reqDocProjectName(d.reqId), {cls:"rrd-crumb-proj", plain:'<span class="rrd-crumb-proj">' + esc(reqDocProjectName(d.reqId)) + '</span>'})];
   var guard = 0, cur = d;
   while(cur && cur.parentId && guard++ < 20){
     var p = reqDocById(cur.parentId);
@@ -948,7 +1387,9 @@ function reqDocBeginRename(id, opts){
   var titleEl = opts.titleEl, hideEl = opts.hideEl || null;
   if(!titleEl) return;
   var d = reqDocById(id);
-  if(!d || !canEditReq(d.reqId)) return;
+  if(!d) return;
+  if(!canEditReq(d.reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(!canEditDoc(d)){ toast("仅文档负责人或空间管理员可编辑 / 删除", "warn"); return; }
   var host = hideEl || titleEl;
   if(host.dataset.rrRenaming) return;
   var old = d.title || "";
@@ -1027,14 +1468,103 @@ function setRrdQuote(text){
   if(chip) chip.hidden = !rrdQuote;
   if(txt) txt.textContent = rrdQuote || "";
 }
-function toggleRrdComments(open){
+function toggleRrdComments(open, tab){
   var panel = $("rrdComments");
   var box = $("reqDocReader");
   if(!panel || !box) return;
   rrdCommentsOpen = open == null ? !rrdCommentsOpen : !!open;
   panel.hidden = !rrdCommentsOpen;
   box.classList.toggle("with-comments", rrdCommentsOpen);
-  if(rrdCommentsOpen) loadRrdComments();
+  if(rrdCommentsOpen) setRrdTab(tab || rrdActiveTab || "comments");
+}
+/* 侧栏 tab 切换：评论 / 权限说明（只读）。打开侧栏时按入口定位 tab */
+function setRrdTab(tab){
+  rrdActiveTab = tab === "perm" ? "perm" : "comments";
+  var pc = $("rrdPaneComments"), pp = $("rrdPanePerm");
+  if(pc) pc.hidden = rrdActiveTab !== "comments";
+  if(pp) pp.hidden = rrdActiveTab !== "perm";
+  var tabs = document.querySelectorAll("#rrdComments [data-rrd-tab]");
+  for(var i = 0; i < tabs.length; i++){
+    var on = tabs[i].getAttribute("data-rrd-tab") === rrdActiveTab;
+    tabs[i].classList.toggle("active", on);
+    tabs[i].setAttribute("aria-selected", on ? "true" : "false");
+  }
+  if(rrdActiveTab === "comments") loadRrdComments();
+  else renderRrdPerm();
+}
+/* 工具栏入口：再次点击当前 tab 则收起；否则展开并切到该 tab */
+function openRrdSide(tab){
+  if(rrdCommentsOpen && rrdActiveTab === tab){ toggleRrdComments(false); return; }
+  toggleRrdComments(true, tab);
+}
+/* 权限说明（只读）：把后端派生权限口径讲清楚，不做任何授权操作。
+   改删 = 负责人本人 / 空间主·管理员 / 无负责人回退项目可写；排序·建子文档 = 项目可写；分享 = 项目可写。 */
+function renderRrdPerm(){
+  var pane = $("rrdPanePerm");
+  if(!pane) return;
+  var doc = reqDocById(rrdCommentsDocId);
+  if(!doc){ pane.innerHTML = '<div class="perm-empty">文档尚未加载</div>'; return; }
+  var role = currentRole();
+  var privileged = role === "owner" || role === "admin";
+  var me = rt.currentUser && rt.currentUser.id;
+  var myName = (rt.currentUser && (rt.currentUser.displayName || rt.currentUser.username)) || "我";
+  var owner = doc.ownerUserId;
+  var ownerName = doc.owner || "—";
+  var isOwner = !!(owner && me && String(owner) === String(me));
+  var projWrite = canEditReq(doc.reqId);
+  var canMut = canEditDoc(doc);
+  var published = doc.publishedAt != null;
+  var mineKind = canMut ? "edit" : "read";
+  var mineText = canMut
+    ? (privileged ? "你可编辑 / 删除（你是空间管理员）"
+      : isOwner ? "你可编辑 / 删除（你是负责人）"
+      : "你可编辑 / 删除（文档无负责人，按项目可写）")
+    : (projWrite ? "你只读：仅负责人 " + ownerName + " 或空间管理员可编辑 / 删除"
+      : "你只读：你对该项目只有查看权限");
+  var mineIcon = canMut ? icon("check", 14) : icon("lock", 14);
+  var belong = doc.reqId ? "项目 · <b>" + esc(reqDocProjectName(doc.reqId)) + "</b>" : "空间级文档（不挂项目）";
+  var visible = published ? "已发布 → <b>项目 / 空间成员</b>可见" : "草稿 → 仅 <b>负责人 + 管理员</b> 可见";
+  var editors = owner
+    ? '<span class="perm-people"><span class="pers">' + icon("user", 12) + esc(ownerName) + '（负责人）</span><span class="pers">' + icon("shield", 12) + '空间管理员</span></span>'
+    : "项目 / 空间可写者（文档无负责人）";
+  var reorder = "项目 / 空间内<b>非只读成员</b>（组织 / 新增，不改本文）";
+  var shareNote = projWrite
+    ? "对外分享：已发布文档可生成限时公开只读链接；你具备写权限，可在编辑页「分享」管理。"
+    : "对外分享：已发布文档可由项目 / 空间可写者生成限时公开只读链接；你当前只读，不能管理链接。";
+  var note = privileged ? "空间管理员豁免创建人保护：可编辑 / 删除任何文档，并维护空间级分类。"
+    : isOwner ? "你是本文负责人：可编辑、删除、重命名、撤回发布，也可改派负责人。"
+    : (!owner && canMut) ? "文档未设负责人：按项目 / 空间写权限放行，具备写权限者可编辑 / 删除。"
+    : projWrite ? "创建人保护：非负责人不可改删他人文档；你仍可阅读、排序、新建子文档、评论。"
+    : "你对该项目只读：仅可查看与阅读。";
+  var catHtml = "";
+  var cat = docCatById(doc.categoryId);
+  if(cat){
+    var catScope = cat.reqId || "";
+    var catSpace = !catScope;
+    var catManage = reqDocCatManageable(catScope);
+    catHtml =
+      '<div class="perm-sec" data-sec="cat">' +
+        '<button class="perm-sec-head" type="button"><span class="caret">' + icon("down", 12) + '</span>所属分类 · ' + esc(cat.name) + '</button>' +
+        '<div class="perm-sec-body"><div class="perm-cat">' +
+          '<div class="cr">归属：<b>' + (catSpace ? "空间级分类" : "项目分类 · " + esc(reqDocProjectName(catScope))) + '</b></div>' +
+          '<div class="cr">可维护：<b>' + (catSpace ? "仅空间主 / 管理员" : "项目可写者") + '</b>（新建子分类 / 重命名 / 删除）</div>' +
+          '<div class="cr">我的权限：<b>' + (catManage ? "可维护" : "只读") + '</b></div>' +
+        '</div></div>' +
+      '</div>';
+  }
+  pane.innerHTML =
+    '<div class="perm-sec" data-sec="doc">' +
+      '<button class="perm-sec-head" type="button"><span class="caret">' + icon("down", 12) + '</span>当前文档 · ' + esc(doc.title) + '</button>' +
+      '<div class="perm-sec-body">' +
+        '<div class="perm-mine ' + mineKind + '">' + mineIcon + '<span><b>' + esc(myName) + '</b> · ' + esc(mineText) + '</span></div>' +
+        '<div class="perm-row"><span class="k">归属</span><span class="v">' + belong + '</span></div>' +
+        '<div class="perm-row"><span class="k">可见范围</span><span class="v">' + visible + '</span></div>' +
+        '<div class="perm-row"><span class="k">可编辑 / 删除</span><span class="v">' + editors + '</span></div>' +
+        '<div class="perm-row"><span class="k">可排序 / 建子文档</span><span class="v">' + reorder + '</span></div>' +
+        '<div class="perm-share"><div class="perm-note">' + shareNote + '</div></div>' +
+        '<div class="perm-note">' + esc(note) + '</div>' +
+      '</div>' +
+    '</div>' + catHtml;
 }
 function loadRrdComments(){
   var list = $("rrdCommentList");
@@ -1599,8 +2129,9 @@ function renderReqDocFeed(){
 }
 function reqDocParentCandidates(reqId, excludeId){
   var banned = excludeId ? reqDocDescendants(excludeId) : {};
+  var scope = reqId || "";
   return reqDocList.filter(function(d){
-    return d.reqId === reqId && d.id !== excludeId && !banned[d.id];
+    return (d.reqId || "") === scope && d.id !== excludeId && !banned[d.id];
   }).sort(reqDocSort);
 }
 function parentOptionsHTML(list, emptyLabel){
@@ -1608,15 +2139,95 @@ function parentOptionsHTML(list, emptyLabel){
     return '<option value="' + esc(d.id) + '">' + esc(d.title) + '</option>';
   }).join("");
 }
+/* 分类子树 id 集合（含自身）：新建文档选分类后，上级文档只列该分类子树内的文档 */
+function reqDocCatSubtreeIds(cid){
+  var out = {}; out[cid] = true;
+  var cats = docCategories || [], changed = true;
+  while(changed){
+    changed = false;
+    cats.forEach(function(c){ if(!out[c.id] && out[c.parentId || ""]){ out[c.id] = true; changed = true; } });
+  }
+  return out;
+}
+/* 分类下拉：仅列可写范围（项目按写权限、空间级按非查看者），树形缩进，分组头禁用 */
+function fillNewReqDocCategories(selected){
+  var sel = $("newReqDocCategory");
+  if(!sel) return;
+  var cats = docCategories || [];
+  var opts = '<option value="">无分类（直接关联项目 / 空间级）</option>';
+  var scopes = [];
+  rt.reqList.forEach(function(r){ if(canEditReq(r.id)) scopes.push({ reqId: r.id, name: r.name, kind: "proj" }); });
+  if(!roleReadOnly()) scopes.push({ reqId: "", name: "空间文档", kind: "space" });
+  scopes.forEach(function(sc){
+    var list = cats.filter(function(c){ return (c.reqId || "") === sc.reqId; });
+    if(!list.length) return;
+    opts += '<option value="" disabled>── ' + esc(sc.name) + (sc.kind === "space" ? "（空间级）" : "") + ' ──</option>';
+    var byId = {}; list.forEach(function(c){ byId[c.id] = c; });
+    var kids = {}; list.forEach(function(c){ var pid = c.parentId || ""; if(pid && byId[pid]) (kids[pid] = kids[pid] || []).push(c); });
+    var roots = list.filter(function(c){ var pid = c.parentId || ""; return !pid || !byId[pid]; });
+    (function walk(nodes, depth){
+      nodes.slice().sort(docCatSort).forEach(function(c){
+        opts += '<option value="' + esc(c.id) + '"' + (c.id === selected ? " selected" : "") + '>' + "　".repeat(Math.min(depth, 6) + 1) + esc(c.name) + '</option>';
+        walk(kids[c.id] || [], depth + 1);
+      });
+    })(roots, 0);
+  });
+  sel.innerHTML = opts;
+  sel.value = selected || "";
+  if(sel.value !== (selected || "")) sel.value = "";
+}
+/* 项目下拉：可写项目 + 空间级（关联可选）；查看者无可写范围 */
+function fillNewReqDocProjectOptions(selected){
+  var proj = $("newReqDocProject");
+  if(!proj) return;
+  var prev = proj.value;
+  var writable = rt.reqList.filter(function(r){ return canEditReq(r.id); });
+  var opts = "";
+  if(!roleReadOnly()) opts += '<option value="">空间级（不挂项目）</option>';
+  opts += writable.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; }).join("");
+  if(!opts) opts = '<option value="">（没有可写范围，无法新建文档）</option>';
+  proj.innerHTML = opts;
+  var cur = selected === undefined ? prev : selected;
+  proj.value = cur || "";
+  if(proj.value !== (cur || "")) proj.value = proj.options.length ? proj.options[0].value : "";
+}
+/* 选中分类后项目由分类带出并禁用；未选分类时项目可选（关联非必选） */
+function syncNewReqDocProjFromCat(){
+  var proj = $("newReqDocProject");
+  if(!proj) return;
+  var cid = $("newReqDocCategory") ? $("newReqDocCategory").value : "";
+  var hint = $("newReqDocProjHint");
+  if(cid){
+    var c = docCatById(cid);
+    var scope = c ? (c.reqId || "") : "";
+    proj.innerHTML = scope
+      ? '<option value="' + esc(scope) + '">' + esc(reqDocProjectName(scope)) + '</option>'
+      : '<option value="">空间级（不挂项目）</option>';
+    proj.value = scope;
+    proj.disabled = true;
+    if(hint) hint.textContent = "由分类带出：" + (scope ? reqDocProjectName(scope) : "空间级（不挂项目）");
+  }else{
+    proj.disabled = false;
+    fillNewReqDocProjectOptions();
+    if(hint) hint.textContent = "未选分类：可关联有权限的项目，或留空间级（关联可选）";
+  }
+}
 function fillNewReqDocParents(selected){
   var sel = $("newReqDocParent");
   if(!sel) return;
-  var reqId = $("newReqDocProject") ? $("newReqDocProject").value : "";
+  var cid = $("newReqDocCategory") ? $("newReqDocCategory").value : "";
+  var proj = $("newReqDocProject") ? $("newReqDocProject").value : "";
   var cur = selected === undefined ? sel.value : selected;
-  sel.innerHTML = reqId
-    ? parentOptionsHTML(reqDocParentCandidates(reqId, null), "无（作为顶层文档）")
-    : '<option value="">无（作为顶层文档）</option>';
-  sel.disabled = !reqId;
+  var list;
+  if(cid){
+    var sub = reqDocCatSubtreeIds(cid);
+    list = reqDocList.filter(function(d){ return d.categoryId && sub[d.categoryId]; }).sort(reqDocSort);
+    sel.innerHTML = parentOptionsHTML(list, "无（分类根）");
+  }else{
+    list = reqDocParentCandidates(proj || null, null);
+    sel.innerHTML = parentOptionsHTML(list, proj ? "无（作为顶层文档）" : "无（空间级顶层）");
+  }
+  sel.disabled = !list.length;
   sel.value = cur || "";
   if(sel.value !== (cur || "")) sel.value = "";
 }
@@ -1629,23 +2240,68 @@ function fillDocParentSelect(doc){
   sel.value = doc.parentId || "";
   if(sel.value !== (doc.parentId || "")) sel.value = "";
 }
-function openNewReqDocDialog(reqId){
+/* 编辑页分类下拉：仅列文档所在范围的分类（只读时禁用），可改归类或清空 */
+function fillReqDocCategorySelect(doc){
+  var sel = $("reqDocCategory");
+  if(!sel) return;
+  var scope = doc.reqId || "";
+  var cats = (docCategories || []).filter(function(c){ return (c.reqId || "") === scope; });
+  var byId = {}; cats.forEach(function(c){ byId[c.id] = c; });
+  var kids = {}; cats.forEach(function(c){ var pid = c.parentId || ""; if(pid && byId[pid]) (kids[pid] = kids[pid] || []).push(c); });
+  var roots = cats.filter(function(c){ var pid = c.parentId || ""; return !pid || !byId[pid]; });
+  var opts = '<option value="">无分类</option>';
+  (function walk(nodes, depth){
+    nodes.slice().sort(docCatSort).forEach(function(c){
+      opts += '<option value="' + esc(c.id) + '">' + "　".repeat(Math.min(depth, 6)) + esc(c.name) + '</option>';
+      walk(kids[c.id] || [], depth + 1);
+    });
+  })(roots, 0);
+  sel.innerHTML = opts;
+  sel.value = doc.categoryId || "";
+  if(sel.value !== (doc.categoryId || "")) sel.value = "";
+  sel.disabled = reqDocReadOnly || !cats.length;
+}
+function openNewReqDocDialog(reqId, opts){
   var sel = $("newReqDocProject");
   if(!sel) return;
+  opts = opts || {};
   var writable = rt.reqList.filter(function(r){ return canEditReq(r.id); });
-  sel.innerHTML = writable.length
-    ? writable.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; }).join("")
-    : '<option value="">（没有可写项目，无法新建文档）</option>';
-  if(reqId && canEditReq(reqId)) sel.value = reqId;
+  var defProj = (reqId && canEditReq(reqId)) ? reqId : (writable.length ? writable[0].id : "");
+  fillNewReqDocProjectOptions(defProj);
   if($("newReqDocTitle")) $("newReqDocTitle").value = "";
   if($("newReqDocFormat")) $("newReqDocFormat").value = "markdown";
   if($("newReqDocFile")) $("newReqDocFile").value = "";
   setNewReqDocSource("blank");
   fillDocTypeSelect("newReqDocType", "requirement");
-  fillNewReqDocParents("");
+  fillDocTemplateSelect();
+  /* 分类优先：先填分类，再由分类带出项目（无分类时项目可选、关联非必选），最后按范围填上级文档 */
+  var preCat = opts.categoryId || "";
+  fillNewReqDocCategories(preCat);
+  syncNewReqDocProjFromCat();
+  fillNewReqDocParents(opts.parentId || "");
+  if(!docCategoriesLoaded){
+    loadDocCategories().then(function(){
+      fillNewReqDocCategories(preCat);
+      syncNewReqDocProjFromCat();
+      fillNewReqDocParents(opts.parentId || "");
+    });
+  }
   setNewReqDocBusy(null);
   UI.openModal($("dlgNewReqDoc"));
   setTimeout(function(){ if($("newReqDocTitle")) $("newReqDocTitle").focus(); }, 40);
+}
+function fillDocTemplateSelect(){
+  var sel = $("newReqDocTemplate");
+  if(!sel) return;
+  sel.innerHTML = '<option value="">空白文档</option>';
+  var fill = function(list){
+    docTemplatesCache = list;
+    sel.innerHTML = '<option value="">空白文档</option>' + list.map(function(t){
+      return '<option value="' + esc(t.id) + '">' + esc(t.name) + (t.builtin ? '（内置）' : '') + '</option>';
+    }).join("");
+  };
+  if(docTemplatesCache){ fill(docTemplatesCache); return; }
+  API.get("/api/doc-templates").then(function(list){ fill(list || []); }).catch(function(){ /* 模板加载失败不阻塞新建 */ });
 }
 function setNewReqDocSource(src){
   var source = src === "file" ? "file" : "blank";
@@ -1654,6 +2310,7 @@ function setNewReqDocSource(src){
     btns[i].setAttribute("aria-pressed", btns[i].dataset.docsrc === source ? "true" : "false");
   }
   showEl($("newReqDocFormatField"), source === "blank");
+  showEl($("newReqDocTemplateField"), source === "blank");
   showEl($("newReqDocFileField"), source === "file");
 }
 /* 按扩展名判断导入形态：word / markdown / html */
@@ -1750,10 +2407,16 @@ function recoverFailedNewDocImport(doc, file, ex){
 function submitNewReqDoc(){
   var ok = $("dlgNewReqDocOk");
   if(ok && ok.disabled) return;
-  var reqId = $("newReqDocProject").value;
+  var categoryId = $("newReqDocCategory") ? $("newReqDocCategory").value : "";
+  var reqId = $("newReqDocProject").value;   // 空 = 空间级（关联可选）
   var title = ($("newReqDocTitle").value || "").trim();
-  if(!reqId){ toast("还没有可写项目，请先到「项目」里建一个", "warn"); return; }
-  if(!canEditReq(reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(reqId && !canEditReq(reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(!reqId && roleReadOnly()){ toast("你是只读成员，无法新建文档", "warn"); return; }
+  if(categoryId){
+    var cat = docCatById(categoryId);
+    if(!cat){ toast("所选分类不存在，请刷新后重试", "warn"); return; }
+    if((cat.reqId || "") !== (reqId || "")){ toast("文档归属项目须与所选分类一致", "warn"); return; }
+  }
   var source = document.querySelector('#newReqDocSource [data-docsrc][aria-pressed="true"]');
   var isFile = !!(source && source.dataset.docsrc === "file");
   var file = isFile && $("newReqDocFile") ? $("newReqDocFile").files[0] : null;
@@ -1767,11 +2430,18 @@ function submitNewReqDoc(){
   if(kind === "word" || kind === "html") format = "html";
   if(kind === "markdown") format = "markdown";
   var parentId = $("newReqDocParent") ? $("newReqDocParent").value : "";
+  var tplContent = "";
+  if(!isFile && $("newReqDocTemplate") && $("newReqDocTemplate").value && docTemplatesCache){
+    var tplId = $("newReqDocTemplate").value;
+    var tpl = docTemplatesCache.filter(function(t){ return t.id === tplId; })[0];
+    if(tpl){ tplContent = tpl.content || ""; format = tpl.format || format; }
+  }
   var createdDoc = null;
   setNewReqDocBusy("新建文档…");
   API.post("/api/req-docs", {
-    reqId: reqId, title: title, content: "", status: "draft",
-    format: format, docType: $("newReqDocType").value, parentId: parentId || null
+    reqId: reqId || null, title: title, content: tplContent, status: "draft",
+    format: format, docType: $("newReqDocType").value, parentId: parentId || null,
+    categoryId: categoryId || ""
   })
     .then(function(doc){
       createdDoc = doc;
@@ -1858,6 +2528,7 @@ function openReqDocEditor(id){
       format: doc.format === "markdown" ? "markdown" : "html",
       docType: doc.docType || "other",
       parentId: doc.parentId || "",
+      categoryId: doc.categoryId || "",
       publishedAt: doc.publishedAt || null,
       ownerUserId: doc.ownerUserId || "",
       updatedAt: doc.updatedAt || ""
@@ -1866,8 +2537,9 @@ function openReqDocEditor(id){
     if($("reqDocListPage")) $("reqDocListPage").hidden = true;
     if($("reqDocEditPage")) $("reqDocEditPage").hidden = false;
     reqDocReadOnly = !canEditReq(doc.reqId);
+    reqDocOwnerLocked = !reqDocReadOnly && !canEditDoc(doc);
     fillReqDocEditor(doc);
-    applyReqDocReadOnly(reqDocReadOnly);
+    applyReqDocReadOnly(reqDocReadOnly || reqDocOwnerLocked);
     refreshReqDocPublishBtn();
     setTocVisible(tocVisiblePref());
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
@@ -1876,7 +2548,10 @@ function openReqDocEditor(id){
     loadReqDocDemands(doc.id);
     setReqDocCommentQuote(null);
     reqDocLatestSel = null;
+    setReqDocReplyTo(null);
     loadReqDocComments(doc.id);
+    loadReqDocAttachments(doc.id);
+    if(!reqDocReadOnly && !reqDocOwnerLocked) setTimeout(function(){ checkDraftRecovery(doc.id); }, 500);
     /* 打开时停在顶部：目录高亮与滚动位置对齐 */
     try{ window.scrollTo(0, 0); }catch(e){ /* 忽略 */ }
     setTimeout(refreshTocActive, 60);
@@ -2186,6 +2861,7 @@ function fillReqDocEditor(doc){
     format: doc.format === "markdown" ? "markdown" : "html",
     docType: doc.docType || "other",
     parentId: doc.parentId || "",
+    categoryId: doc.categoryId || "",
     /* 发布状态与作者必须随正文一起回填：否则打开/保存已发布文档后按钮误显示「发布」、分享提示「尚未发布」 */
     publishedAt: doc.publishedAt || null,
     ownerUserId: doc.ownerUserId || "",
@@ -2195,6 +2871,7 @@ function fillReqDocEditor(doc){
   setDocFormatUI(editingMeta.format);
   fillDocTypeSelect("reqDocType", editingMeta.docType);
   fillDocParentSelect(doc);
+  fillReqDocCategorySelect(doc);
   if(isMarkdownDoc()){
     reqEditorBaseline = null;
     fillMarkdownEditor(doc);
@@ -2211,7 +2888,7 @@ function fillReqDocEditor(doc){
       setReqEditorContents(doc.content);
       updateReqDocCount();
       rebuildToc();
-      applyReqDocReadOnly(reqDocReadOnly);
+      applyReqDocReadOnly(reqDocReadOnly || reqDocOwnerLocked);
     }).catch(function(ex){
       setReqDocHydrating(false);
       toast(ex.message || "编辑器加载失败", "bad");
@@ -2222,7 +2899,7 @@ function fillReqDocEditor(doc){
   /* 正文换人了：目录要跟着换（重建前先清掉旧的高亮） */
   tocActive = null;
   rebuildToc();
-  applyReqDocReadOnly(reqDocReadOnly);
+  applyReqDocReadOnly(reqDocReadOnly || reqDocOwnerLocked);
 }
 function fillReqDocProjectSelect(selected){
   var sel = $("reqDocProject");
@@ -2240,6 +2917,7 @@ function markReqDocDirty(){
   if(reqDocDirty) return;
   reqDocDirty = true;
   if($("reqDocSaved")) $("reqDocSaved").textContent = "有未保存的修改";
+  scheduleDraftSave();
 }
 function reqDocPlainText(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
@@ -2281,6 +2959,7 @@ var tocBuildTimer = null;
 
 var reqDocCommentQuote = null;
 var reqDocLatestSel = null;
+var reqDocReplyTo = null;
 /* 点击按钮会收走选区，所以先把正文内的最近一次选区存下来再取用 */
 function rememberReqDocSelection(){
   var sel = window.getSelection();
@@ -2312,29 +2991,61 @@ function loadReqDocComments(docId){
   if(!list) return;
   list.innerHTML = '<div class="reqdoc-comment-empty">加载中…</div>';
   if(form) form.style.display = roleReadOnly() ? "none" : "";
-  API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/comments").then(function(rows){
+  var unresolvedOnly = $("reqDocUnresolvedOnly") && $("reqDocUnresolvedOnly").checked;
+  var params = unresolvedOnly ? { unresolved: true } : {};
+  API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/comments", params).then(function(rows){
     if(editingDocId !== docId) return;
     rows = rows || [];
     if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
     if(!rows.length){
-      list.innerHTML = '<div class="reqdoc-comment-empty">还没有评论</div>';
+      list.innerHTML = '<div class="reqdoc-comment-empty">' + (unresolvedOnly ? '没有未解决的评论' : '还没有评论') + '</div>';
       return;
     }
-    list.innerHTML = rows.map(function(c){
-      return '<div class="reqdoc-comment-item" data-comment-id="' + esc(c.id) + '">'
-        + '<div class="reqdoc-comment-head">'
-        +   '<span class="reqdoc-comment-user">' + esc(c.userName || "—") + '</span>'
-        +   '<span class="reqdoc-comment-time">' + esc(fmtTs(c.createdAt) || "—") + '</span>'
-        + '</div>'
-        + (c.quoteText ? '<div class="reqdoc-comment-quote">' + esc(c.quoteText) + '</div>' : '')
-        + '<div class="reqdoc-comment-body">' + esc(c.content) + '</div>'
-        + (c.deletable ? '<div class="reqdoc-comment-actions-r"><button class="btn sm danger" type="button" data-del-comment="1">删除</button></div>' : '')
-        + '</div>';
-    }).join("");
+    list.innerHTML = rows.map(function(c){ return renderCommentThread(c); }).join("");
   }).catch(function(ex){
     if(editingDocId !== docId) return;
     list.innerHTML = '<div class="reqdoc-comment-empty">' + esc(ex.message || "评论加载失败") + '</div>';
   });
+}
+function renderCommentThread(c){
+  var html = renderCommentItem(c, false);
+  if(c.replies && c.replies.length){
+    html += '<div class="reqdoc-comment-replies">';
+    c.replies.forEach(function(r){ html += renderCommentItem(r, true); });
+    html += '</div>';
+  }
+  return html;
+}
+function renderCommentItem(c, isReply){
+  var resolvedBadge = c.resolved ? '<span class="reqdoc-resolved-badge">已解决</span>' : '';
+  var taskLink = c.taskId ? '<a class="reqdoc-comment-tasklink" href="#" data-comment-task="' + esc(c.taskId) + '">已转工作项</a>' : '';
+  var actions = '';
+  if(!roleReadOnly()){
+    actions = '<div class="reqdoc-comment-actions-r">';
+    if(!isReply) actions += '<button class="btn sm soft" type="button" data-reply-comment="' + esc(c.id) + '" data-reply-user="' + esc(c.userName || "") + '">回复</button>';
+    if(!isReply) actions += '<button class="btn sm soft" type="button" data-resolve-comment="' + esc(c.id) + '" data-resolved="' + (c.resolved ? "1" : "0") + '">' + (c.resolved ? '重新打开' : '解决') + '</button>';
+    if(!c.taskId) actions += '<button class="btn sm soft" type="button" data-totask-comment="' + esc(c.id) + '">转工作项</button>';
+    if(c.deletable) actions += '<button class="btn sm danger" type="button" data-del-comment="1">删除</button>';
+    actions += '</div>';
+  }
+  return '<div class="reqdoc-comment-item' + (isReply ? ' is-reply' : '') + (c.resolved ? ' is-resolved' : '') + '" data-comment-id="' + esc(c.id) + '">'
+    + '<div class="reqdoc-comment-head">'
+    +   '<span class="reqdoc-comment-user">' + esc(c.userName || "—") + '</span>'
+    +   resolvedBadge + taskLink
+    +   '<span class="reqdoc-comment-time">' + esc(fmtTs(c.createdAt) || "—") + '</span>'
+    + '</div>'
+    + (c.quoteText ? '<div class="reqdoc-comment-quote">' + esc(c.quoteText) + '</div>' : '')
+    + '<div class="reqdoc-comment-body">' + esc(c.content) + '</div>'
+    + actions
+    + '</div>';
+}
+function setReqDocReplyTo(commentId, userName){
+  reqDocReplyTo = commentId || null;
+  var chip = $("reqDocCommentReplyChip");
+  var txt = $("reqDocCommentReplyText");
+  if(chip) chip.hidden = !reqDocReplyTo;
+  if(txt) txt.textContent = userName || "";
+  if(reqDocReplyTo && $("reqDocCommentInput")) $("reqDocCommentInput").focus();
 }
 function submitReqDocComment(){
   if(!editingDocId || roleReadOnly()){ toast("查看者不能发表评论", "warn"); return; }
@@ -2342,17 +3053,48 @@ function submitReqDocComment(){
   var content = (ta && ta.value || "").trim();
   if(!content){ toast("评论内容不能为空", "warn"); if(ta) ta.focus(); return; }
   var btn = $("reqDocCommentSend");
-  /* Ctrl/⌘+Enter 不经过按钮：在途时直接忽略，避免同一条评论发两次 */
   if(btn && btn.disabled) return;
   if(btn) btn.disabled = true;
   var body = { content: content };
   if(reqDocCommentQuote) body.quoteText = reqDocCommentQuote;
+  if(reqDocReplyTo) body.parentId = reqDocReplyTo;
+  var mentionIds = parseMentionIds(content);
+  if(mentionIds.length) body.mentionUserIds = mentionIds;
   API.post("/api/req-docs/" + encodeURIComponent(editingDocId) + "/comments", body).then(function(){
     if(ta) ta.value = "";
     setReqDocCommentQuote(null);
+    setReqDocReplyTo(null);
     loadReqDocComments(editingDocId);
   }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
   .then(function(){ if(btn) btn.disabled = false; });
+}
+function parseMentionIds(text){
+  var members = rt.wsMembersCache || [];
+  var ids = [];
+  members.forEach(function(m){
+    var name = m.displayName || m.username || "";
+    if(name && text.indexOf("@" + name) >= 0 && ids.indexOf(m.userId) < 0) ids.push(m.userId);
+  });
+  return ids;
+}
+function resolveReqDocComment(commentId, resolved){
+  if(!editingDocId) return;
+  API.put("/api/req-docs/" + encodeURIComponent(editingDocId) + "/comments/" + encodeURIComponent(commentId) + "/resolve",
+    { resolved: !resolved }).then(function(){
+    loadReqDocComments(editingDocId);
+    toast(resolved ? "已重新打开" : "已标记为解决", "fs");
+  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+}
+function commentToTask(commentId){
+  if(!editingDocId) return;
+  UI.showConfirm({ title: "转为工作项", msg: "将这条评论转为待办工作项？", okText: "转为工作项" }).then(function(ok){
+    if(!ok) return;
+    API.post("/api/req-docs/" + encodeURIComponent(editingDocId) + "/comments/" + encodeURIComponent(commentId) + "/to-task")
+      .then(function(task){
+        loadReqDocComments(editingDocId);
+        toast("已创建工作项「" + (task.title || "") + "」", "fs");
+      }).catch(function(ex){ toast(ex.message || "转工作项失败", "bad"); });
+  });
 }
 function deleteReqDocComment(commentId){
   if(!editingDocId || !commentId) return;
@@ -2362,6 +3104,129 @@ function deleteReqDocComment(commentId){
       loadReqDocComments(editingDocId);
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
+}
+
+/* ---------- 文档附件 ---------- */
+
+function loadReqDocAttachments(docId){
+  var list = $("reqDocAttachList");
+  var count = $("reqDocAttachCount");
+  var uploadBtn = $("reqDocAttachUpload");
+  var kit = $("reqDocAttachKit");
+  if(!list) return;
+  if(uploadBtn) uploadBtn.style.display = roleReadOnly() ? "none" : "";
+  if(kit) kit.style.display = roleReadOnly() ? "none" : "";
+  list.innerHTML = '<div class="tl-empty">加载中…</div>';
+  API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/attachments").then(function(rows){
+    if(editingDocId !== docId) return;
+    rows = rows || [];
+    list.__attList = rows;
+    if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
+    if(!rows.length){ list.innerHTML = '<div class="tl-empty">暂无附件</div>'; return; }
+    list.innerHTML = '<div class="att-chips">' + rows.map(function(a){
+      return attachmentChipHTML(a, { removable: !roleReadOnly() });
+    }).join("") + '</div>';
+  }).catch(function(){ if(editingDocId === docId) list.innerHTML = '<div class="tl-empty">附件加载失败</div>'; });
+}
+function uploadReqDocAttachments(files){
+  if(!editingDocId || roleReadOnly() || !files || !files.length) return;
+  var list = $("reqDocAttachList");
+  var current = list && list.__attList ? list.__attList.length : 0;
+  var res = validateFiles(files, current);
+  reportRejected(res.rejected);
+  if(!res.ok.length) return;
+  var path = "/api/req-docs/" + encodeURIComponent(editingDocId) + "/attachments";
+  var done = 0, failed = 0;
+  var chain = Promise.resolve();
+  res.ok.forEach(function(f){
+    chain = chain.then(function(){
+      return uploadAttachment(path, f).then(function(){ done++; }, function(){ failed++; });
+    });
+  });
+  chain.then(function(){
+    loadReqDocAttachments(editingDocId);
+    if(failed) toast("上传完成：" + done + " 成功，" + failed + " 失败", "warn");
+    else toast(done > 1 ? "已上传 " + done + " 个附件" : "附件上传成功", "fs");
+  });
+}
+function deleteReqDocAttachment(attachId){
+  if(!editingDocId) return;
+  UI.showConfirm({ title: "删除附件", msg: "确定删除这个附件？文件将不可恢复。", okText: "删除", danger: true }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/attachments/" + encodeURIComponent(attachId)).then(function(){
+      loadReqDocAttachments(editingDocId);
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
+
+/* ---------- 打印 / 导出 PDF ---------- */
+
+function printReqDoc(){
+  if(!editingDocId) return;
+  var bodyHtml;
+  if(isMarkdownDoc()){
+    var preview = $("reqDocMdPreview");
+    bodyHtml = preview ? preview.innerHTML : "";
+  }else{
+    bodyHtml = reqEditor ? reqEditor.getContents() : "";
+  }
+  if(!bodyHtml || !bodyHtml.trim()){ toast("正文为空，没有可打印的内容", "warn"); return; }
+  var title = editingMeta.title || "文档";
+  var win = window.open("", "_blank");
+  if(!win){ toast("浏览器阻止了弹出窗口，请允许后重试", "warn"); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
+    + '<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;font-size:14px;color:#222;}'
+    + 'h1{font-size:22px;border-bottom:1px solid #ddd;padding-bottom:8px;}img{max-width:100%;}table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 8px;}'
+    + '@media print{body{margin:0;max-width:none;}}</style></head><body>'
+    + '<h1>' + esc(title) + '</h1>' + bodyHtml + '</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); }, 300);
+}
+
+/* ---------- 草稿自动保存与恢复 ---------- */
+
+var reqDocDraftTimer = null;
+function draftKey(docId){ return "hg.docDraft:" + docId; }
+function scheduleDraftSave(){
+  if(reqDocDraftTimer) clearTimeout(reqDocDraftTimer);
+  reqDocDraftTimer = setTimeout(function(){
+    if(!editingDocId || reqDocReadOnly || !reqDocDirty) return;
+    try{
+      var content = getEditorContent();
+      if(content) localStorage.setItem(draftKey(editingDocId), JSON.stringify({ content: content, ts: Date.now(), format: editingMeta.format }));
+    }catch(e){ /* 存储满时静默忽略 */ }
+  }, 3000);
+}
+function checkDraftRecovery(docId){
+  try{
+    var raw = localStorage.getItem(draftKey(docId));
+    if(!raw) return;
+    var draft = JSON.parse(raw);
+    if(!draft || !draft.content || Date.now() - draft.ts > 7 * 86400000){ localStorage.removeItem(draftKey(docId)); return; }
+    var ago = Math.round((Date.now() - draft.ts) / 60000);
+    var label = ago < 60 ? ago + " 分钟前" : Math.round(ago / 60) + " 小时前";
+    UI.showConfirm({ title: "恢复未保存的草稿", msg: "检测到 " + label + " 的自动保存草稿，是否恢复？（放弃则删除草稿）", okText: "恢复草稿", cancelText: "放弃" }).then(function(ok){
+      if(ok){
+        setEditorContent(draft.content, draft.format || editingMeta.format);
+        markReqDocDirty();
+        toast("已恢复草稿，记得保存", "fs");
+      }
+      localStorage.removeItem(draftKey(docId));
+    });
+  }catch(e){ /* 解析失败忽略 */ }
+}
+function clearDraftOnSave(docId){
+  try{ localStorage.removeItem(draftKey(docId)); }catch(e){ /* 忽略 */ }
+}
+function getEditorContent(){
+  if(editingMeta.format === "html" && reqEditor) return reqEditor.getContents();
+  var ta = $("reqDocMdCanvas");
+  return ta ? ta.value : "";
+}
+function setEditorContent(content, format){
+  if(format === "html" && reqEditor){ reqEditor.setContents(content); return; }
+  var ta = $("reqDocMdCanvas");
+  if(ta){ ta.value = content; renderMarkdownPreview(); }
 }
 
 /* ---------- 历史版本：列表、阅读、对比、恢复 ---------- */
@@ -2445,7 +3310,7 @@ function openReqDocHistory(docId, opts){
   if(!layer) return;
   reqDocHistoryDocId = docId;
   reqDocHistoryFromReader = !!opts.fromReader;
-  reqDocHistoryCanRestore = opts.canRestore != null ? !!opts.canRestore : !reqDocReadOnly;
+  reqDocHistoryCanRestore = opts.canRestore != null ? !!opts.canRestore : !(reqDocReadOnly || reqDocOwnerLocked);
   var seq = ++reqDocHistorySeq;
   reqDocHistoryHistoriesReset();
   reqDocHistoryView = window.innerWidth < 900 ? "unified" : "split";
@@ -3088,8 +3953,8 @@ function saveReqDoc(){
   if(reqDocSaving) return reqDocSavePromise || Promise.resolve(null);
   var title = (editingMeta.title || "").trim();
   var reqId = editingMeta.reqId;
-  if(!title || !reqId){
-    toast("这份文档缺少标题或项目，请回到列表重新创建", "warn");
+  if(!title){
+    toast("这份文档缺少标题，请回到列表重新创建", "warn");
     return Promise.resolve(null);
   }
   var md = isMarkdownDoc();
@@ -3098,15 +3963,17 @@ function saveReqDoc(){
     return Promise.resolve(null);
   }
   var parentId = $("reqDocParent") ? $("reqDocParent").value : "";
+  var categoryId = $("reqDocCategory") ? $("reqDocCategory").value : (editingMeta.categoryId || "");
   var content = currentReqDocContent();
   var body = {
-    reqId: reqId,
+    reqId: reqId || null,
     title: title,
     content: content,
     status: editingMeta.status || "draft",
     format: md ? "markdown" : "html",
     docType: $("reqDocType").value,
     parentId: parentId || null,
+    categoryId: categoryId || "",
     updatedAt: editingMeta.updatedAt || null
   };
   var id = editingDocId;
@@ -3122,11 +3989,15 @@ function saveReqDoc(){
     editingDocId = doc.id;
     state.reqDocId = doc.id;
     editingMeta.updatedAt = doc.updatedAt || editingMeta.updatedAt;
+    /* 分类/归属可能随保存变化：即便用户还在输入（不走 fillReqDocEditor），元数据也要对齐服务器返回值 */
+    editingMeta.categoryId = doc.categoryId || "";
+    editingMeta.reqId = doc.reqId || "";
     /* 保存请求发出后用户继续输入：保留当前正文，只把基线推进到刚保存的版本 */
     if(currentReqDocContent() !== content){
       if($("reqDocSaved")) $("reqDocSaved").textContent = "已保存，仍有未保存的修改";
     }else{
       reqDocDirty = false;
+      clearDraftOnSave(doc.id);
       fillReqDocEditor(doc);
     }
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
@@ -3448,6 +4319,7 @@ function populateReqDocSelect(keep){
           : "无需先选项目，可搜索全部可见文档"));
   }
   syncAssocViewBtns();
+  syncAssocRead();
 }
 (function wireRequirementView(){
   /* 正文缩放：阅读页头与编辑页工具栏各一处控件，统一事件委托（阅读页会重绘） */
@@ -3472,11 +4344,30 @@ function populateReqDocSelect(keep){
   if($("reqDocEditPage")) $("reqDocEditPage").addEventListener("wheel", docWheelHandler, { passive: false });
   applyDocZoom();
 
+  /* 分类树右键菜单：点菜单外 / Esc / 滚动 时关闭（菜单项点击由菜单自身委托处理，先于此处） */
+  document.addEventListener("click", function(e){
+    if(reqDocCtxEl && reqDocCtxEl.classList.contains("open") && !e.target.closest(".reqdoc-ctx")) closeReqDocCtx();
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && reqDocCtxEl && reqDocCtxEl.classList.contains("open")) closeReqDocCtx();
+  });
+  window.addEventListener("scroll", function(){
+    if(reqDocCtxEl && reqDocCtxEl.classList.contains("open")) closeReqDocCtx();
+  }, true);
+
   var tree = $("reqDocTree");
   if(tree){
     tree.addEventListener("click", function(e){
       var t = e.target.closest("[data-toggle-proj]");
       if(t){ toggleReqProj(t.dataset.toggleProj); return; }
+      /* 分类行：折叠 / 重命名 / 点行折叠。必须先于 .rr-rename 文档判断，
+         因为分类重命名按钮也带 .rr-rename 类，否则会被文档重命名分支吞掉 */
+      var cToggle = e.target.closest("[data-cat-toggle]");
+      if(cToggle){ e.preventDefault(); toggleReqDocCat(cToggle.dataset.catToggle); return; }
+      var cRename = e.target.closest("[data-cat-rename]");
+      if(cRename){ e.preventDefault(); e.stopPropagation(); beginRenameDocCat(cRename.dataset.catRename); return; }
+      var cRow = e.target.closest("[data-cat]");
+      if(cRow){ toggleReqDocCat(cRow.dataset.cat); return; }
       var tc = e.target.closest("[data-toggle-doc]");
       if(tc){
         e.preventDefault();
@@ -3502,6 +4393,7 @@ function populateReqDocSelect(keep){
       if(row){ openReqDocEditor(row.dataset.reqdoc); }
     });
     initReqDocTreeDrag();
+    tree.addEventListener("contextmenu", reqDocTreeContextMenu);
   }
   /* 列表 / 看板 / 阅读 / 动态：展示方式切换 */
   var rdModeBtns = document.querySelectorAll("#reqDocListPage [data-rdmode]");
@@ -3596,6 +4488,13 @@ function populateReqDocSelect(keep){
         renderReqDocSplit();
         return;
       }
+      /* 分类行：折叠 / 重命名 / 点行折叠，先于 .rs-rename 文档判断（分类重命名也带 .rs-rename 类） */
+      var scToggle = e.target.closest("[data-rs-cat-toggle]");
+      if(scToggle){ e.preventDefault(); toggleReqDocCat(scToggle.dataset.rsCatToggle); return; }
+      var scRename = e.target.closest("[data-cat-rename]");
+      if(scRename){ e.preventDefault(); e.stopPropagation(); beginRenameDocCat(scRename.dataset.catRename); return; }
+      var scRow = e.target.closest("[data-rs-cat]");
+      if(scRow){ toggleReqDocCat(scRow.dataset.rsCat); return; }
       var caret = e.target.closest("[data-rs-toggle]");
       if(caret){
         reqDocCollapsedDocs[caret.dataset.rsToggle] = !reqDocCollapsedDocs[caret.dataset.rsToggle];
@@ -3619,6 +4518,7 @@ function populateReqDocSelect(keep){
       if(node) loadReqDocSplitDoc(node.dataset.rsDoc);
     });
     initReqDocSplitDrag();
+    st.addEventListener("contextmenu", reqDocTreeContextMenu);
   }
   var rd = $("reqDocReader");
   if(rd){
@@ -3627,6 +4527,8 @@ function populateReqDocSelect(keep){
       if(crumb){ loadReqDocSplitDoc(crumb.dataset.rrdCrumb); return; }
       var rn = e.target.closest("[data-rrd-rename]");
       if(rn){
+        var rnd = reqDocById(rn.dataset.rrdRename);
+        if(rnd && !canEditDoc(rnd)){ toast("仅文档负责人或空间管理员可编辑 / 删除", "warn"); return; }
         reqDocBeginRename(rn.dataset.rrdRename, {
           titleEl: document.querySelector("#reqDocReader .rrd-title-text"),
           inputClass: "rrd-rename-input"
@@ -3634,7 +4536,11 @@ function populateReqDocSelect(keep){
         return;
       }
       var b = e.target.closest("[data-rrd-edit]");
-      if(b){ openReqDocEditor(b.dataset.rrdEdit); return; }
+      if(b){
+        var edd = reqDocById(b.dataset.rrdEdit);
+        if(edd && !canEditDoc(edd)){ toast("仅文档负责人或空间管理员可编辑 / 删除", "warn"); return; }
+        openReqDocEditor(b.dataset.rrdEdit); return;
+      }
       var hb = e.target.closest("[data-rrd-history]");
       if(hb){
         openReqDocHistory(hb.dataset.rrdHistory, { fromReader: true, canRestore: hb.dataset.canRestore === "1" });
@@ -3643,7 +4549,13 @@ function populateReqDocSelect(keep){
       var ex = e.target.closest("[data-rrd-export]");
       if(ex){ exportReqDocFromReader(ex.dataset.rrdExport); return; }
       var cb = e.target.closest("[data-rrd-comments]");
-      if(cb){ toggleRrdComments(); return; }
+      if(cb){ openRrdSide("comments"); return; }
+      var pb = e.target.closest("[data-rrd-perm]");
+      if(pb){ openRrdSide("perm"); return; }
+      var tb = e.target.closest("[data-rrd-tab]");
+      if(tb){ setRrdTab(tb.getAttribute("data-rrd-tab")); return; }
+      var sh = e.target.closest(".perm-sec-head");
+      if(sh){ var sec = sh.closest(".perm-sec"); if(sec) sec.classList.toggle("collapsed"); return; }
       if(e.target.closest("[data-rrd-wide]")){ toggleDocWide(); return; }
       if(e.target.closest("#rrdCommentsX")){ toggleRrdComments(false); return; }
       if(e.target.closest("#rrdCommentSend")){ submitRrdComment(); return; }
@@ -3653,7 +4565,7 @@ function populateReqDocSelect(keep){
       var mk = e.target.closest("mark.rrd-hl");
       if(mk){
         rrdFlashCommentId = mk.dataset.rrdHlComment;
-        toggleRrdComments(true);
+        toggleRrdComments(true, "comments");
       }
     });
     /* 划选正文后弹出「划线评论」气泡；延迟到 mouseup 之后等选区稳定 */
@@ -3692,6 +4604,11 @@ function populateReqDocSelect(keep){
     submitNewReqDoc();
   });
   if($("newReqDocProject")) $("newReqDocProject").addEventListener("change", function(){ fillNewReqDocParents(""); });
+  if($("newReqDocCategory")) $("newReqDocCategory").addEventListener("change", function(){
+    /* 分类优先：选分类后带出归属项目（锁定），再按范围重填上级文档候选 */
+    syncNewReqDocProjFromCat();
+    fillNewReqDocParents("");
+  });
   var srcBtns = document.querySelectorAll("#newReqDocSource [data-docsrc]");
   for(var si = 0; si < srcBtns.length; si++){
     (function(btn){
@@ -3847,6 +4764,8 @@ function populateReqDocSelect(keep){
   if($("reqDocCommentSend")) $("reqDocCommentSend").addEventListener("click", submitReqDocComment);
   if($("reqDocCommentQuoteBtn")) $("reqDocCommentQuoteBtn").addEventListener("click", quoteReqDocSelection);
   if($("reqDocCommentQuoteClear")) $("reqDocCommentQuoteClear").addEventListener("click", function(){ setReqDocCommentQuote(null); });
+  if($("reqDocCommentReplyClear")) $("reqDocCommentReplyClear").addEventListener("click", function(){ setReqDocReplyTo(null); });
+  if($("reqDocUnresolvedOnly")) $("reqDocUnresolvedOnly").addEventListener("change", function(){ if(editingDocId) loadReqDocComments(editingDocId); });
   document.addEventListener("mouseup", rememberReqDocSelection);
   document.addEventListener("keyup", rememberReqDocSelection);
   if($("reqDocCommentInput")){
@@ -3860,16 +4779,50 @@ function populateReqDocSelect(keep){
       if(btn){
         var item = btn.closest("[data-comment-id]");
         if(item) deleteReqDocComment(item.dataset.commentId);
+        return;
       }
+      var replyBtn = e.target.closest("[data-reply-comment]");
+      if(replyBtn){ setReqDocReplyTo(replyBtn.dataset.replyComment, replyBtn.dataset.replyUser); return; }
+      var resolveBtn = e.target.closest("[data-resolve-comment]");
+      if(resolveBtn){ resolveReqDocComment(resolveBtn.dataset.resolveComment, resolveBtn.dataset.resolved === "1"); return; }
+      var toTaskBtn = e.target.closest("[data-totask-comment]");
+      if(toTaskBtn){ commentToTask(toTaskBtn.dataset.totaskComment); return; }
+      var taskLink = e.target.closest("[data-comment-task]");
+      if(taskLink){ e.preventDefault(); openTaskById(taskLink.dataset.commentTask); return; }
     });
   }
   if($("reqDocSave")) $("reqDocSave").addEventListener("click", saveReqDoc);
   if($("reqDocDelete")) $("reqDocDelete").addEventListener("click", deleteReqDoc);
+  if($("reqDocPrint")) $("reqDocPrint").addEventListener("click", printReqDoc);
+  if($("reqDocAttachUpload")) $("reqDocAttachUpload").addEventListener("click", function(){ if($("reqDocAttachFile")) $("reqDocAttachFile").click(); });
+  if($("reqDocAttachFile")) $("reqDocAttachFile").addEventListener("change", function(){ uploadReqDocAttachments(this.files); this.value = ""; });
+  if($("reqDocAttachList")) $("reqDocAttachList").addEventListener("click", function(e){
+    var del = e.target.closest("[data-att-del]");
+    if(del){ deleteReqDocAttachment(del.dataset.attDel); return; }
+    var dl = e.target.closest("[data-att-download]");
+    if(dl){ window.open(downloadUrl(dl.dataset.attDownload), "_blank", "noopener"); return; }
+    var op = e.target.closest("[data-att-open]");
+    if(op){
+      e.preventDefault();
+      var rows = this.__attList || [];
+      var att = rows.filter(function(a){ return a.id === op.dataset.attOpen; })[0];
+      if(att) openAttachment(att);
+    }
+  });
+  var rdDrop = $("reqDocAttachDrop");
+  if(rdDrop){
+    rdDrop.addEventListener("click", function(){ if(roleReadOnly()) return; var fi = $("reqDocAttachFile"); if(fi) fi.click(); });
+    rdDrop.addEventListener("keydown", function(e){
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); if(!roleReadOnly()){ var fi = $("reqDocAttachFile"); if(fi) fi.click(); } }
+    });
+    bindFileDrop(rdDrop, uploadReqDocAttachments, { paste: true, pasteTarget: $("reqDocAttachPanel") });
+  }
   if($("reqDocImport")) $("reqDocImport").addEventListener("click", importReqDoc);
   if($("reqDocExport")) $("reqDocExport").addEventListener("click", exportReqDoc);
   if($("reqDocImportFile")) $("reqDocImportFile").addEventListener("change", onReqDocImportFile);
   if($("reqDocParent")) $("reqDocParent").addEventListener("change", function(){ markReqDocDirty(); });
   $("reqDocType").addEventListener("change", markReqDocDirty);
+  if($("reqDocCategory")) $("reqDocCategory").addEventListener("change", markReqDocDirty);
   if($("reqDocMdSeg")){
     $("reqDocMdSeg").addEventListener("click", function(e){
       var b = e.target.closest("[data-md-mode]");
@@ -3879,6 +4832,7 @@ function populateReqDocSelect(keep){
   if($("reqDocMdCanvas")){
     $("reqDocMdCanvas").addEventListener("input", function(){
       markReqDocDirty();
+      scheduleDraftSave();
       scheduleMdPreview();
     });
   }
@@ -3906,6 +4860,36 @@ function populateReqDocSelect(keep){
   }
   /* 折叠按钮：收起大纲；再打开点工具条上的「大纲」按钮 */
   if($("reqDocTocFold")) $("reqDocTocFold").addEventListener("click", function(){ setTocVisible(false); });
+
+  /* 信息分区折叠：关联需求 / 关联工作项 / 附件 / 文档评论，状态本地记忆 */
+  (function(){
+    var KEY = "ds.reqDocSecFold";
+    function readState(){
+      try{
+        var s = JSON.parse(localStorage.getItem(KEY) || "{}");
+        return s && typeof s === "object" ? s : {};
+      }catch(e){ return {}; }
+    }
+    function apply(section, folded){
+      section.classList.toggle("folded", folded);
+      var btn = section.querySelector(".reqdoc-sec-fold");
+      if(btn) btn.setAttribute("aria-expanded", String(!folded));
+    }
+    var state = readState();
+    document.querySelectorAll("#reqDocEditPage section[data-sec]").forEach(function(section){
+      var key = section.getAttribute("data-sec");
+      apply(section, state[key] === true);
+      var btn = section.querySelector(".reqdoc-sec-fold");
+      if(!btn) return;
+      btn.addEventListener("click", function(){
+        var folded = !section.classList.contains("folded");
+        apply(section, folded);
+        var s = readState();
+        s[key] = folded;
+        try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){ /* 存不下就不记 */ }
+      });
+    });
+  })();
   if($("reqDocTocBody")){
     $("reqDocTocBody").addEventListener("click", function(e){
       var f = e.target.closest("[data-toc-fold]");

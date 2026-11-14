@@ -72,6 +72,8 @@ public class AiClient {
         public boolean jsonModeUsed;
         /** 请求了 JSON 模式但上游不支持、已去掉 response_format 重试 */
         public boolean jsonFallback;
+        /** 本次消耗的是团队额度还是个人额度 */
+        public String sourceLabel;
     }
 
     /**
@@ -80,7 +82,9 @@ public class AiClient {
      */
     public Reply chat(AiConfig cfg, String systemPrompt, String userPrompt, boolean wantJson) {
         if (!cfg.usable()) {
-            throw AppException.badRequest("AI 配置不完整：请先在「个人设置 → AI 设置」里填好模型和 API Key");
+            throw AppException.badRequest(cfg.shared()
+                    ? cfg.getSourceLabel() + " 配置不完整：请联系平台管理员"
+                    : "AI 配置不完整：请先在「个人设置 → AI 设置」里填好模型和 API Key");
         }
         String url = endpoint(cfg.getBaseUrl());
         try {
@@ -90,7 +94,7 @@ public class AiClient {
         }
 
         if (!AI_SLOTS.tryAcquire()) {
-            throw new AppException(429, "AI 正忙（同时最多 2 个生成任务），请稍后再试");
+            throw new AppException(429, "AI 正忙（全平台同时最多 2 个生成任务，团队共用），请稍后再试");
         }
         try {
             return call(cfg, url, systemPrompt, userPrompt, wantJson);
@@ -124,7 +128,8 @@ public class AiClient {
                 return r;
             }
             throw new AppException(502, errorMessage(e.getRawStatusCode(),
-                    e.getResponseBodyAsString(StandardCharsets.UTF_8)), e);
+                    e.getResponseBodyAsString(StandardCharsets.UTF_8),
+                    cfg.shared() ? cfg.getSourceLabel() : null), e);
         } catch (ResourceAccessException e) {
             log.warn("AI 上游连接失败：model={} error={}", cfg.getModel(), e.getClass().getSimpleName());
             throw new AppException(504, DEFAULT_TIMEOUT_MSG + "，请检查网络或换更快的模型", e);
@@ -169,6 +174,7 @@ public class AiClient {
             r.promptTokens = root.path("usage").path("prompt_tokens").asInt(0);
             r.completionTokens = root.path("usage").path("completion_tokens").asInt(0);
             r.jsonModeUsed = json;
+            r.sourceLabel = cfg.usageLabel();
             if (content == null || content.trim().isEmpty()) {
                 String why = choice.path("finish_reason").asText("");
                 throw new AppException(502, "length".equals(why)
@@ -204,23 +210,42 @@ public class AiClient {
 
     /** 把上游错误翻译成用户能自己动手解决的话 */
     static String errorMessage(int code, String body) {
+        return errorMessage(code, body, null);
+    }
+
+    /**
+     * @param sharedLabel 共享来源的展示名（团队 AI / 本空间 AI）；个人配置传 null。
+     *                    共享 Key 出问题时提示找管理员，而不是让成员去个人设置改自己的 Key。
+     */
+    static String errorMessage(int code, String body, String sharedLabel) {
         String detail = upstreamMessage(body);
+        boolean shared = sharedLabel != null && !sharedLabel.isEmpty();
         if (quotaExhausted(body)) {
-            return "厂商账户额度不足（" + code + "）：请到厂商控制台充值或关闭「仅使用免费额度」模式，"
+            return shared
+                    ? sharedLabel + " 的账户额度不足（" + code + "）：请联系平台管理员充值或更换 Key" + suffix(detail)
+                    : "厂商账户额度不足（" + code + "）：请到厂商控制台充值或关闭「仅使用免费额度」模式，"
                     + "也可以换一个有额度的模型/账号" + suffix(detail);
         }
         switch (code) {
             case 401:
             case 403:
-                return "API Key 无效或没有权限（" + code + "）：请到「个人设置 → AI 设置」检查 Key" + suffix(detail);
+                return shared
+                        ? sharedLabel + " 的 API Key 无效或没有权限（" + code + "）：请联系平台管理员检查配置"
+                        + suffix(detail)
+                        : "API Key 无效或没有权限（" + code + "）：请到「个人设置 → AI 设置」检查 Key" + suffix(detail);
             case 404:
-                return "接口地址不存在（404）：baseUrl 或模型名不对" + suffix(detail);
+                return (shared ? sharedLabel + "：" : "") + "接口地址不存在（404）：baseUrl 或模型名不对"
+                        + suffix(detail);
             case 429:
-                return "请求过于频繁（429）：稍后再试，或检查厂商账户的并发与额度限制" + suffix(detail);
+                return shared
+                        ? sharedLabel + " 请求过于频繁（429）：请稍后再试；如持续出现请联系平台管理员"
+                        + suffix(detail)
+                        : "请求过于频繁（429）：稍后再试，或检查厂商账户的并发与额度限制" + suffix(detail);
             case 400:
-                return "请求被拒绝（400）：多半是模型名不支持或该模型不支持 JSON 输出" + suffix(detail);
+                return (shared ? sharedLabel + "：" : "")
+                        + "请求被拒绝（400）：多半是模型名不支持或该模型不支持 JSON 输出" + suffix(detail);
             default:
-                return "AI 服务返回错误（" + code + "）" + suffix(detail);
+                return (shared ? sharedLabel + " " : "") + "AI 服务返回错误（" + code + "）" + suffix(detail);
         }
     }
 

@@ -116,6 +116,8 @@ function startPresetDate(v){
 function iso(d){ return GS.iso(d); }
 function pad2(n){ return GS.pad2(n); }
 function parseDate(s){ return GS.parseDate(s); }
+/* 完成时间已是分钟级 datetime：与「日期」字段比较前收敛到日，否则当天完成会被判成逾期 */
+function dayKey(s){ return s ? String(s).substring(0, 10) : ""; }
 function dayDiff(a, b){ return GS.dayDiff(a, b); }
 function fmtMD(d){ return GS.fmtMonthDay(d); }
 function fmtShortMD(d){ return GS.fmtShortMonthDay(d); }
@@ -128,17 +130,20 @@ function fmtTs(s){
   return pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());
 }
 /* 测试等待/已测时长：粗粒度到分钟/小时/天，宁可模糊也不给出假精确 */
-function elapsedText(from){
-  if(!from) return "";
-  var d = new Date(from);
-  if(isNaN(d.getTime())) return "";
-  var mins = Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000));
+function spanText(from, to){
+  if(!from || !to) return "";
+  var a = new Date(from), b = new Date(to);
+  if(isNaN(a.getTime()) || isNaN(b.getTime())) return "";
+  var mins = Math.max(0, Math.floor((b.getTime() - a.getTime()) / 60000));
   if(mins < 1) return "刚刚";
   if(mins < 60) return mins + " 分钟";
   var hours = Math.floor(mins / 60);
   if(hours < 24) return hours + " 小时";
   var days = Math.floor(hours / 24);
   return days >= 7 ? Math.floor(days / 7) + " 周" : days + " 天";
+}
+function elapsedText(from){
+  return from ? spanText(from, new Date()) : "";
 }
 /* Task 的版本关系只接受数组；null 保存语义由调用方保留。 */
 function normalizedIds(ids){
@@ -150,6 +155,26 @@ function taskVersionsText(task){
   return (names.length ? names : taskVersionIds(task)).join("、");
 }
 function sameIds(a, b){ return JSON.stringify(normalizedIds(a).sort()) === JSON.stringify(normalizedIds(b).sort()); }
+/* 关联纯文本 → 可点跳转按钮：只产出 markup（保持本模块无 DOM、无请求）。
+   跳转由 core/task-actions 的捕获阶段全局委托接现成 open* 助手完成，先于行级「开抽屉」委托命中。
+   空 id 回落纯文本，避免渲染死链；按钮原生支持回车/空格。 */
+var ASSOC_JUMP_NAME = { project:"项目", version:"版本", branch:"分支", demand:"需求", task:"工作项", case:"用例", doc:"文档" };
+function assocLinkHTML(kind, id, label, opts){
+  var o = opts || {};
+  var text = esc(label == null ? "" : String(label));
+  if(!id) return o.plain != null ? o.plain : (text || "—");
+  var attrs = ' data-jump-' + kind + '="' + esc(id) + '"';
+  if(o.req) attrs += ' data-jump-req="' + esc(o.req) + '"';
+  var title = o.title || ("打开" + (ASSOC_JUMP_NAME[kind] || "详情") + "：" + (label || id));
+  return '<button type="button" class="assoc-link' + (o.cls ? " " + o.cls : "") + '"' + attrs +
+    ' title="' + esc(title) + '" aria-label="' + esc(title) + '">' + (o.html != null ? o.html : text) + '</button>';
+}
+function taskVersionLinksHTML(task, reqId){
+  var ids = taskVersionIds(task);
+  if(!ids.length) return "待规划";
+  var names = Array.isArray((task || {}).versionNames) ? task.versionNames : [];
+  return ids.map(function(id, i){ return assocLinkHTML("version", id, names[i] || id, {req:reqId}); }).join("、");
+}
 function selectedVersionIds(select){
   if(!select) return [];
   var retained = [];
@@ -162,6 +187,15 @@ function fmtReleaseTime(s){
   var d = new Date(s);
   if(isNaN(d.getTime())) return String(s);
   return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate()) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+}
+/* 分钟级时间戳：yyyy-MM-dd HH:mm；只有日期的历史值原样显示，不补一个假的 00:00 */
+function fmtMinute(s){
+  if(!s) return "";
+  var str = String(s);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  var d = new Date(str);
+  if(isNaN(d.getTime())) return str;
+  return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate()) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
 }
 function localDatetime(s){
   var d = s ? new Date(s) : new Date();
@@ -209,27 +243,54 @@ function releaseEvidenceHTML(record){
   var verdict = ev.verdict === "block" ? ["有阻断项", "tag-danger"] : ev.verdict === "warn" ? ["有提醒", "tag-warning"] : ["通过", "tag-success"];
   var lines = [];
   if(ev.requiredTotal != null) lines.push("发布必测 " + (ev.requiredTotal || 0) + " 条：通过 " + (ev.requiredPassed || 0) + "，失败 / 阻塞 " + (ev.requiredFailed || 0) + "，未执行 / 跳过 " + (ev.requiredUntested || 0));
-  if(ev.caseTotal != null) lines.push("计划用例 " + (ev.caseTotal || 0) + " 条：已执行 " + (ev.caseExecuted || 0) + "，通过 " + (ev.casePassed || 0) + "，失败 " + (ev.caseFailed || 0) + "，阻塞 " + (ev.caseBlocked || 0) + "，跳过 " + (ev.caseSkipped || 0) + "，未执行 " + (ev.caseUntested || 0));
-  if(ev.demandsTotal != null || ev.workItemsTotal != null) lines.push("需求级覆盖 " + (ev.demandsCovered || 0) + "/" + (ev.demandsTotal || 0) + " · 工作项级覆盖 " + (ev.workItemsCovered || 0) + "/" + (ev.workItemsTotal || 0));
+  if(ev.caseTotal != null) lines.push("测试计划用例 " + (ev.caseTotal || 0) + " 条：已执行 " + (ev.caseExecuted || 0) + "，通过 " + (ev.casePassed || 0) + "，失败 " + (ev.caseFailed || 0) + "，阻塞 " + (ev.caseBlocked || 0) + "，跳过 " + (ev.caseSkipped || 0) + "，未执行 " + (ev.caseUntested || 0));
+  if(ev.demandsTotal != null || ev.workItemsTotal != null){
+    var coverage = (!ev.demandsTotal && !ev.workItemsTotal)
+      ? "本版本范围：当时还没有纳入版本的需求或工作项"
+      : "本版本范围：需求级覆盖 " + (ev.demandsCovered || 0) + "/" + (ev.demandsTotal || 0) + " · 工作项级覆盖 " + (ev.workItemsCovered || 0) + "/" + (ev.workItemsTotal || 0);
+    if(ev.planLinked === false) coverage += "（未关联发布计划，按本版本全部测试计划核对）";
+    lines.push(coverage);
+  }
   var cases = Array.isArray(ev.requiredCases) ? ev.requiredCases : [];
-  return '<div class="release-evidence"><p class="release-text"><b>发布检查（冻结证据）</b> <span class="tag ' + verdict[1] + '">' + verdict[0] + '</span> 策略：' + esc(policy) + ' · 检查于 ' + esc(fmtReleaseTime(ev.checkedAt)) + '</p>'
+  var sets = Array.isArray(ev.caseSets) ? ev.caseSets : [];
+  var setCell = function(v){ return esc(String(v == null ? 0 : v)); };
+  return '<div class="release-evidence"><p class="release-text"><b>发布检查（已冻结）</b> <span class="tag ' + verdict[1] + '">' + verdict[0] + '</span> 策略：' + esc(policy) + ' · 检查于 ' + esc(fmtReleaseTime(ev.checkedAt)) + '</p>'
     + (lines.length ? '<p class="hint">' + lines.map(esc).join('<br>') + '</p>' : "")
     + (Array.isArray(ev.blockers) && ev.blockers.length ? '<p class="release-error">阻断：' + ev.blockers.map(esc).join("；") + '</p>' : "")
     + (Array.isArray(ev.reminders) && ev.reminders.length ? '<p class="hint">提醒：' + ev.reminders.map(esc).join("；") + '</p>' : "")
     + (cases.length ? '<div class="tbl-wrap"><table class="phase-tbl"><thead><tr><th>未通过的发布必测用例</th><th>需求</th><th>结果</th></tr></thead><tbody>'
       + cases.map(function(c){ return '<tr><td>' + esc(c.caseNo || c.caseId || "") + '<br>' + esc(c.title || "—") + '</td><td>' + esc(c.demandTitle || "—") + '</td><td>' + esc(c.result === "untested" ? "未执行" : c.result === "blocked" ? "阻塞" : c.result === "failed" ? "失败" : c.result || "—") + '</td></tr>'; }).join("")
       + '</tbody></table></div>' : "")
+    + (sets.length ? '<p class="release-text">团队共享分组 ' + sets.length + ' 个（已冻结）· 只呈现结果分布，不改变当时的阻断判定</p>'
+      + '<div class="tbl-wrap"><table class="phase-tbl"><thead><tr><th>分组</th><th>类型</th><th>条数</th><th>通过</th><th>失败</th><th>阻塞</th><th>跳过</th><th>未执行</th></tr></thead><tbody>'
+      + sets.map(function(s){
+        return '<tr><td>' + esc(s.name || s.id || "—") + '</td><td>' + esc(s.kind === "dynamic" ? "动态收录" : "手工挑选") + '</td>'
+          + '<td>' + setCell(s.total) + '</td><td>' + setCell(s.passed) + '</td><td>' + setCell(s.failed) + '</td>'
+          + '<td>' + setCell(s.blocked) + '</td><td>' + setCell(s.skipped) + '</td><td>' + setCell(s.untested) + '</td></tr>';
+      }).join("")
+      + '</tbody></table></div>'
+      + '<p class="hint">分组间成员可重叠，条数不能相加当总数；指定成员 / 仅自己可见的分组不进证据。</p>' : "")
     + '</div>';
 }
 function releaseSnapshotHTML(record, taskId){
   var items = (record.items || []).filter(function(item){ return !taskId || item.taskId === taskId; });
   var rows = items.map(function(item){
-    return '<tr><td>' + esc(itemNoText(item.taskItemNo) || item.taskId || "") + '<br>' + esc(item.title || "—") + '</td><td>' + esc(demandNoText(item.demandNo) || item.demandId || "") + '<br>' + esc(item.demandTitle || "—") + '</td><td>' + esc(item.ownerName || item.ownerUserId || "—") + '</td><td>' + esc(record.versionName || record.versionId || "—") + '</td><td>' + esc(fmtReleaseTime(item.completedAt)) + '</td><td>' + esc(item.disposition || "—") + '</td></tr>';
+    var taskCell = esc(itemNoText(item.taskItemNo) || item.taskId || "") + '<br>' + esc(item.title || "—");
+    if(!taskId && item.taskId){
+      taskCell = '<button type="button" class="snap-link" data-snap-task="' + esc(item.taskId) + '" title="打开工作项详情">' + taskCell + '</button>';
+    }
+    var demandCell = esc(demandNoText(item.demandNo) || item.demandId || "") + '<br>' + esc(item.demandTitle || "—");
+    if(item.demandId){
+      demandCell = '<button type="button" class="snap-link" data-snap-demand="' + esc(item.demandId) + '" title="打开需求详情">' + demandCell + '</button>';
+    }
+    /* 版本名在快照行里是可跳转的实体引用；summary 里保持纯文本，那是整条记录的展开开关 */
+    var versionCell = assocLinkHTML("version", record.versionId, record.versionName || record.versionId, { req:record.reqId, plain:"—" });
+    return '<tr><td>' + taskCell + '</td><td>' + demandCell + '</td><td>' + esc(item.ownerName || item.ownerUserId || "—") + '</td><td>' + versionCell + '</td><td>' + esc(fmtReleaseTime(item.completedAt)) + '</td><td>' + esc(item.disposition || "—") + '</td></tr>';
   }).join("");
   return '<details class="release-record"><summary><span class="tag ' + (record.result === "success" ? "tag-success" : "tag-neutral") + '">' + esc(record.result === "success" ? "成功" : record.result === "failed" ? "失败" : record.result || "未记录结果") + '</span> ' + esc(releaseEnvironmentName(record.environment)) + ' · ' + esc(releaseOperationName(record.operation)) + ' · ' + esc(fmtReleaseTime(record.occurredAt)) + ' · ' + esc(record.versionName || record.versionId || "") + '</summary>'
     + '<p class="hint">记录 ' + esc(releaseNoText(record.releaseNo) || ("#" + record.id)) + ' · 计划时间 ' + esc(fmtReleaseTime(releasePlanTime(record))) + ' · 记录时间 ' + esc(fmtReleaseTime(record.recordedAt)) + '</p>'
     + '<p class="release-text">目标：' + esc(normalizedIds(record.targetKeys).join("、") || "未记录") + ' · 覆盖：' + esc(record.coverage || "unknown") + '<br>制品：' + esc(record.artifactRef || "未记录") + '<br>SHA256：' + esc(record.artifactDigest || "未记录") + '<br>记录人：' + esc(record.recordedByName || record.recordedByUserId || record.releasedByName || record.releasedBy || "未记录") + ' · 实际执行人：' + esc(record.executorName || record.executorUserId || "未记录") + '<br>关联事件：' + esc(releaseNoText(record.relatedReleaseNo) || record.relatedReleaseId || "—") + '</p>'
-    + (record.notes ? '<p class="release-text">说明：' + esc(record.notes) + '</p>' : "") + (record.deviationReason ? '<p class="release-text">偏差理由：' + esc(record.deviationReason) + '</p>' : "") + (record.failureReason ? '<p class="release-error">失败原因：' + esc(record.failureReason) + '</p>' : "")
+    + (record.notes ? '<p class="release-text">说明：' + esc(record.notes) + '</p>' : "") + (record.deviationReason ? '<p class="release-text">未按计划发布的原因：' + esc(record.deviationReason) + '</p>' : "") + (record.failureReason ? '<p class="release-error">失败原因：' + esc(record.failureReason) + '</p>' : "")
     + releaseEvidenceHTML(record)
     + (!taskId ? '<button class="btn sm" type="button" data-release-export="' + esc(record.id) + '">导出快照 CSV</button> '
       + '<button class="btn sm" type="button" data-release-delivery="' + esc(record.id) + '" data-release-delivery-version="' + esc(record.versionId || "") + '" title="以这条发布记录为依据生成一页式交付说明">交付说明</button>' : "")
@@ -414,4 +475,4 @@ function taskDescText(desc, maxLen){
   return text;
 }
 
-export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, duePresetDate, elapsedText, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };
+export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, assocLinkHTML, taskVersionLinksHTML, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, dayKey, duePresetDate, elapsedText, spanText, fmtElapsed, fmtFull, fmtMD, fmtMinute, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };

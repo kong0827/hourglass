@@ -76,6 +76,13 @@ public class ProjectVersionService {
         return list(workspaceId, reqId, null);
     }
 
+    /** 单个版本详情：活动流/通知按版本 ID 直达时使用，项目可见性同列表页。 */
+    public ProjectVersion detail(String workspaceId, String id, String userId) {
+        ProjectVersion version = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, version.getReqId());
+        return version;
+    }
+
     public List<ProjectVersion> list(String workspaceId, String reqId, String userId) {
         requireProject(workspaceId, reqId);
         projectAccess.assertView(workspaceId, userId, reqId);

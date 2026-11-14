@@ -16,4 +16,10 @@ public class CaseRunRequest {
 
     @Size(max = 500, message = "备注最多 500 字")
     private String note;
+
+    @Size(max = 120, message = "执行环境最多 120 字")
+    private String environment;
+
+    /** 代录执行人（app_user.id）；空 = 当前登录人 */
+    private String executedByUserId;
 }

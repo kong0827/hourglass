@@ -24,7 +24,7 @@ public class ReleasePreviewResponse {
     private List<Task> candidates = new ArrayList<Task>();
     private List<ExcludedTask> excluded = new ArrayList<ExcludedTask>();
     private List<String> warnings = new ArrayList<String>();
-    /** 发布前测试检查（只读）：阻断项会让 canPublish=false，除非填写偏离理由 */
+    /** 发布检查（只读）：阻断项会让 canPublish=false，除非填写未按计划发布的原因 */
     private ReleaseCheckResponse testCheck;
 
     @Data

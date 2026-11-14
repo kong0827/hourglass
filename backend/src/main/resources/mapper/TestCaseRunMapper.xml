@@ -4,10 +4,10 @@
 
   <insert id="insert">
     INSERT INTO test_case_run
-      (id, case_id, workspace_id, status, note, bug_task_id, plan_id,
+      (id, case_id, workspace_id, status, note, environment, bug_task_id, plan_id,
        executed_by, executed_by_user_id, created_at)
     VALUES
-      (#{id}, #{caseId}, #{workspaceId}, #{status}, #{note}, #{bugTaskId}, #{planId},
+      (#{id}, #{caseId}, #{workspaceId}, #{status}, #{note}, #{environment}, #{bugTaskId}, #{planId},
        #{executedBy}, #{executedByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -18,13 +18,26 @@
   </select>
 
   <select id="selectBugCaseLinks" resultType="com.hourglass.dto.CaseBugLink">
-    SELECT r.bug_task_id AS bugTaskId, c.id AS caseId, c.title AS caseTitle
+    SELECT r.bug_task_id AS bugTaskId, c.id AS caseId, c.title AS caseTitle,
+           c.req_id AS reqId, c.case_no AS caseNo, c.latest_status AS latestStatus
     FROM test_case_run r
     JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
     WHERE r.workspace_id = #{workspaceId}
       AND c.req_id = #{reqId}
       AND r.bug_task_id IS NOT NULL
-    GROUP BY r.bug_task_id, c.id, c.title
+    GROUP BY r.bug_task_id, c.id, c.title, c.req_id, c.case_no, c.latest_status
+    ORDER BY MAX(r.created_at) DESC, MAX(r.id) DESC
+  </select>
+
+  <!-- 缺陷详情反查来源用例：不限项目，按用例聚合取最近一次关联 -->
+  <select id="selectByBugTask" resultType="com.hourglass.dto.CaseBugLink">
+    SELECT r.bug_task_id AS bugTaskId, c.id AS caseId, c.title AS caseTitle,
+           c.req_id AS reqId, c.case_no AS caseNo, c.latest_status AS latestStatus
+    FROM test_case_run r
+    JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId}
+      AND r.bug_task_id = #{bugTaskId}
+    GROUP BY r.bug_task_id, c.id, c.title, c.req_id, c.case_no, c.latest_status
     ORDER BY MAX(r.created_at) DESC, MAX(r.id) DESC
   </select>
 
@@ -80,5 +93,54 @@
   <delete id="deleteByWorkspace">
     DELETE FROM test_case_run WHERE workspace_id = #{workspaceId}
   </delete>
+
+  <!-- 执行流水聚合：每条流水展开为执行人/环境/轮次三个维度事实行，再按维度+结果计数。
+       轮次 = 用例内按执行时间排序的序号（1 首次、2 第二轮、3+ 回归），与执行弹框轮次口径一致。 -->
+  <select id="selectRunStats" resultType="java.util.HashMap">
+    WITH ranked AS (
+      SELECT r.status AS status, r.executed_by AS executed_by,
+             r.executed_by_user_id AS executed_by_user_id, r.environment AS environment,
+             ROW_NUMBER() OVER (PARTITION BY r.case_id ORDER BY r.created_at, r.id) AS rn
+      FROM test_case_run r
+      JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+      WHERE r.workspace_id = #{workspaceId} AND c.req_id = #{reqId}
+    ),
+    facts AS (
+      SELECT 'executor' AS dim, COALESCE(executed_by_user_id, '') AS k, executed_by AS label, status FROM ranked
+      UNION ALL
+      SELECT 'environment', COALESCE(environment, ''), COALESCE(environment, ''), status FROM ranked
+      UNION ALL
+      SELECT 'round', CASE WHEN rn = 1 THEN '1' WHEN rn = 2 THEN '2' ELSE '3+' END,
+                      CASE WHEN rn = 1 THEN '1' WHEN rn = 2 THEN '2' ELSE '3+' END, status FROM ranked
+    )
+    SELECT dim, k, MAX(label) AS label, status, COUNT(*) AS cnt
+    FROM facts
+    GROUP BY dim, k, status
+  </select>
+
+  <!-- 执行统计下钻：复用 ranked 的轮次序号，按 dim+key 取该桶内流水明细。
+       executor 键=executed_by_user_id（空串=未记录），environment 键=环境文本，round 键=1/2/3+。 -->
+  <select id="selectRunsByDimension" resultType="com.hourglass.dto.CaseRunDrillRow">
+    WITH ranked AS (
+      SELECT r.id AS id, r.case_id AS caseId, r.status AS status, r.note AS note,
+             r.executed_by AS executedBy, r.executed_by_user_id AS executedByUserId,
+             r.environment AS environment, r.bug_task_id AS bugTaskId, r.created_at AS createdAt,
+             c.title AS caseTitle, c.case_no AS caseNo, bt.title AS bugTaskTitle,
+             ROW_NUMBER() OVER (PARTITION BY r.case_id ORDER BY r.created_at, r.id) AS rn
+      FROM test_case_run r
+      JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+      LEFT JOIN task bt ON bt.id = r.bug_task_id AND bt.workspace_id = r.workspace_id
+      WHERE r.workspace_id = #{workspaceId} AND c.req_id = #{reqId}
+    )
+    SELECT id, caseId, caseTitle, caseNo, status, note, executedBy, environment,
+           bugTaskId, bugTaskTitle, createdAt, rn AS round,
+           CASE WHEN rn = 1 THEN '1' WHEN rn = 2 THEN '2' ELSE '3+' END AS roundKey
+    FROM ranked
+    WHERE (#{dim} = 'executor' AND COALESCE(executedByUserId, '') = #{key})
+       OR (#{dim} = 'environment' AND COALESCE(environment, '') = #{key})
+       OR (#{dim} = 'round' AND (CASE WHEN rn = 1 THEN '1' WHEN rn = 2 THEN '2' ELSE '3+' END) = #{key})
+    ORDER BY createdAt DESC, id DESC
+    LIMIT #{limit}
+  </select>
 
 </mapper>

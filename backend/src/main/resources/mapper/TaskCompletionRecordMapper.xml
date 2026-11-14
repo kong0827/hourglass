@@ -6,11 +6,13 @@
   <insert id="upsert">
     INSERT INTO task_completion_record
       (workspace_id, task_id, title, description, req_id, req_name, req_doc_id, req_doc_title,
-       owner, owner_user_id, category, priority, start_date, completed_at,
+       owner, owner_user_id, test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
+       category, priority, start_date, completed_at,
        first_started_at, last_ended_at, total_minutes)
     VALUES
       (#{workspaceId}, #{taskId}, #{title}, #{description}, #{reqId}, #{reqName}, #{reqDocId}, #{reqDocTitle},
-       #{owner}, #{ownerUserId}, #{category}, #{priority}, #{startDate}, #{completedAt},
+       #{owner}, #{ownerUserId}, #{testOwnerUserId}, #{testOwner}, #{testRequestedAt}, #{testStartedAt}, #{testFinishedAt},
+       #{category}, #{priority}, #{startDate}, #{completedAt},
        #{firstStartedAt}, #{lastEndedAt}, #{totalMinutes})
     ON DUPLICATE KEY UPDATE
       title            = VALUES(title),
@@ -21,6 +23,11 @@
       req_doc_title    = VALUES(req_doc_title),
       owner            = VALUES(owner),
       owner_user_id    = VALUES(owner_user_id),
+      test_owner_user_id = VALUES(test_owner_user_id),
+      test_owner       = VALUES(test_owner),
+      test_requested_at = VALUES(test_requested_at),
+      test_started_at  = VALUES(test_started_at),
+      test_finished_at = VALUES(test_finished_at),
       category         = VALUES(category),
       priority         = VALUES(priority),
       start_date       = VALUES(start_date),
@@ -99,7 +106,9 @@
 
   <select id="selectPageByRange" resultType="TaskCompletionRecord">
     SELECT r.id, r.workspace_id, r.task_id, r.title, r.description, r.req_id, r.req_name,
-           r.req_doc_id, r.req_doc_title, r.owner, r.owner_user_id, r.category, r.priority,
+           r.req_doc_id, r.req_doc_title, r.owner, r.owner_user_id,
+           r.test_owner_user_id, r.test_owner, r.test_requested_at, r.test_started_at, r.test_finished_at,
+           r.category, r.priority,
            r.start_date, r.completed_at, r.first_started_at, r.last_ended_at, r.total_minutes, r.created_at
     FROM task_completion_record r
     WHERE r.workspace_id = #{workspaceId}
