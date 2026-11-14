@@ -14,7 +14,7 @@ const BASE = (process.env.E2E_BASE || "http://127.0.0.1:8081/hourglass").replace
 const USER = process.env.E2E_USER || "admin";
 const PASS = process.env.E2E_PASS || "123456";
 const WS = process.env.E2E_WS || "Smw9zctt2grh4x4j1";
-const RICH = process.env.E2E_RICH_VERSION || "Vg5mgyub7okfmewmrq1bj";
+const RICH = process.env.E2E_RICH_VERSION || "Vt6s11v3u8x2wiaaqigey";
 const SHOTS = process.env.E2E_SHOTS || "/tmp/item-no-e2e";
 
 function findChrome(){

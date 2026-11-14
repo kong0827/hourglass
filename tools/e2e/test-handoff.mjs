@@ -153,7 +153,15 @@ try{
     throw new Error("登录未完成，页面提示：" + errMsg);
   }
   await waitFor(`import("./js/core/state.js").then(({rt}) => !!rt.currentUser && !!rt.currentWs && rt.reqsLoaded)`, "应用初始化", 25000);
-  pass("登录 " + USER);
+  /* 样本取自固定空间；登录后可能停在上次访问的空间，先显式切过去再重载渲染。 */
+  await evaluate(`(async () => {
+    const { API } = await import(${JSON.stringify(API_MODULE)});
+    await API.post("/api/workspaces/${WS}/select", {});
+    return true;
+  })()`);
+  await reloadApp();
+  await waitFor(`import("./js/core/state.js").then(({rt}) => rt.currentWs && rt.currentWs.id === ${JSON.stringify(WS)} && rt.reqsLoaded)`, "切换空间", 25000);
+  pass("登录 " + USER + " 并切到空间 " + WS);
 
   /* ---------------- 准备：挑一个「进行中 + 未认领测试」的样本 ---------------- */
   if(!TASK_ID){
@@ -184,6 +192,14 @@ try{
 
   /* ---------------- 看板：待测试卡片显示待领取与等待时长 ---------------- */
   await openView("workitems");
+  /* 看板每列默认只取前 20 张卡；样本刚被移动，先按标题搜索，避免它落在首页之外。 */
+  await evaluate(`(() => {
+    const i = document.getElementById("searchInput");
+    if(!i) return false;
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(i), "value").set.call(i, ${JSON.stringify(before.title)});
+    i.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  })()`);
   await waitFor(`!!document.querySelector('.card[data-id="${TASK_ID}"]')`, "看板卡片");
   const strip = await evaluate(`(() => {
     const card = document.querySelector('.card[data-id="${TASK_ID}"]');
@@ -254,6 +270,13 @@ try{
   assert(filterApplied.hasTask, "待领取筛选下样本仍可见");
   await evaluate(`document.querySelector('[data-dim-open="testOwners"]').click()`);
   await evaluate(`document.querySelector('#fbDimMenu [data-testowner="__none"]').click()`);
+  await evaluate(`(() => {
+    const i = document.getElementById("searchInput");
+    if(!i) return false;
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(i), "value").set.call(i, "");
+    i.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  })()`);
   await sleep(500);
 
   /* ---------------- 我的工作认领：待领取 → 测试中 ---------------- */
@@ -283,6 +306,14 @@ try{
 
   /* ---------------- 抽屉：测试卡读数 + 通过并完成 ---------------- */
   await openView("workitems");
+  /* 看板每列默认只取前 20 张卡；样本刚被移动，先按标题搜索，避免它落在首页之外。 */
+  await evaluate(`(() => {
+    const i = document.getElementById("searchInput");
+    if(!i) return false;
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(i), "value").set.call(i, ${JSON.stringify(before.title)});
+    i.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  })()`);
   await waitFor(`!!document.querySelector('.card[data-id="${TASK_ID}"]')`, "看板卡片");
   await evaluate(`document.querySelector('.card[data-id="${TASK_ID}"]').click()`);
   await waitFor(`document.getElementById("taskDrawer").classList.contains("on")`, "抽屉打开");
