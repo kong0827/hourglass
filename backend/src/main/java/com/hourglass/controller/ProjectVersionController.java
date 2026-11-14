@@ -19,6 +19,7 @@ import com.hourglass.entity.VersionReleasePlan;
 import com.hourglass.entity.VersionRelease;
 import com.hourglass.service.VersionReleaseService;
 import java.util.Map;
+import com.hourglass.dto.VersionEndRequest;
 import com.hourglass.dto.VersionOverviewResponse;
 import com.hourglass.dto.VersionStatsResponse;
 import com.hourglass.entity.ProjectVersion;
@@ -185,6 +186,22 @@ public class ProjectVersionController {
     @PostMapping("/api/versions/{id}/start")
     public ApiResult<ProjectVersion> start(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(versionService.start(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
+    /** 关闭版本：本轮交付结束但未发布，保留历史与统计口径。 */
+    @PostMapping("/api/versions/{id}/close")
+    public ApiResult<ProjectVersion> close(@PathVariable String id,
+                                           @Valid @RequestBody VersionEndRequest request,
+                                           @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(versionService.end(ctx.getUserId(), ctx.getWsId(), id, "closed", request.getReason()));
+    }
+
+    /** 取消版本：本轮作废，历史保留但排除在交付统计与发布范围外。 */
+    @PostMapping("/api/versions/{id}/cancel")
+    public ApiResult<ProjectVersion> cancel(@PathVariable String id,
+                                            @Valid @RequestBody VersionEndRequest request,
+                                            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(versionService.end(ctx.getUserId(), ctx.getWsId(), id, "canceled", request.getReason()));
     }
 
     @RequireRole

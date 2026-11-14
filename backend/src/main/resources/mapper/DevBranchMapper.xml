@@ -87,8 +87,21 @@
     <if test="q.status != null and q.status != ''">
       AND b.status = #{q.status}
     </if>
-    <if test="q.ownerUserId != null and q.ownerUserId != ''">
-      AND b.owner_user_id = #{q.ownerUserId}
+    <choose>
+      <when test='q.ownerUserId == "__none__"'>
+        AND (b.owner_user_id IS NULL OR b.owner_user_id = '')
+        AND (b.owner IS NULL OR b.owner = '')
+      </when>
+      <when test="q.ownerUserId != null and q.ownerUserId != ''">
+        AND b.owner_user_id = #{q.ownerUserId}
+      </when>
+    </choose>
+    <if test="q.versionId != null and q.versionId != ''">
+      AND EXISTS (SELECT 1 FROM task tv
+                   JOIN version_task vtv ON vtv.task_id = tv.id AND vtv.workspace_id = tv.workspace_id
+                   WHERE tv.branch_id = b.id AND tv.deleted_at IS NULL
+                     AND vtv.version_id = #{q.versionId}
+                     <include refid="searchTaskVisible"><property name="alias" value="tv"/></include>)
     </if>
     <if test="q.q != null and q.q != ''">
       AND (b.name LIKE CONCAT('%', #{q.q}, '%')
@@ -202,6 +215,22 @@
                         AND pm.access = 'none')
     </if>
     GROUP BY t.branch_id, pv.id, pv.name, pv.status, pv.req_id, r.name
+    ORDER BY r.name, pv.name
+  </select>
+
+  <!-- 版本筛选候选：当前项目/可见范围内，分支通过任务命中的影响版本及分支数 -->
+  <select id="selectVersionFacets" resultType="com.hourglass.dto.BranchVersionTag">
+    SELECT pv.id AS versionId, pv.name AS name, pv.status AS status,
+           pv.req_id AS reqId, r.name AS reqName,
+           COUNT(DISTINCT b.id) AS count
+    FROM dev_branch b
+    INNER JOIN task t ON t.branch_id = b.id AND t.workspace_id = b.workspace_id AND t.deleted_at IS NULL
+    INNER JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+    INNER JOIN project_version pv ON pv.id = vt.version_id AND pv.workspace_id = t.workspace_id
+    LEFT JOIN requirement r ON r.id = pv.req_id AND r.workspace_id = pv.workspace_id
+    WHERE <include refid="pageWhere"/>
+      <include refid="searchTaskVisible"><property name="alias" value="t"/></include>
+    GROUP BY pv.id, pv.name, pv.status, pv.req_id, r.name
     ORDER BY r.name, pv.name
   </select>
 

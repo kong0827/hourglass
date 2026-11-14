@@ -17,7 +17,7 @@ function harness(){
     this.selectedIndex=this.options.findIndex(o=>o.selected); if(this.selectedIndex<0)this.selectedIndex=this.options.findIndex(o=>!o.disabled);
   }};
   const rt={currentWs:{id:'W1',type:'shared'},currentUser:{id:'U1',displayName:'我'},wsMembersCache:[{userId:'U1',displayName:'我',role:'owner',jobTitle:'项目经理'},{userId:'U2',displayName:'陈昊',role:'member',companyName:'乙方',jobTitle:'后端开发'},{userId:'U3',displayName:'无权限',role:'member'},{userId:'U4',displayName:'查看者',role:'viewer'}],listCache:{},drawerReadOnly:false};
-  const context=vm.createContext({console,Promise,rt,iOwner:owner,iReq:{value:'P1'},$:()=>hint,document:{createElement:()=>({setAttribute(){},addEventListener(){}})},esc:v=>String(v),window:{addEventListener(name,fn){(listeners[name]||=[]).push(fn);}},API:{get(url){const d=deferred();calls.push({url,...d});return d.promise;}}});
+  const context=vm.createContext({console,Promise,rt,iOwner:owner,iReq:{value:'P1'},$:id=>id==='ownerRosterHint'?hint:null,document:{createElement:()=>({setAttribute(){},addEventListener(){}})},esc:v=>String(v),window:{addEventListener(name,fn){(listeners[name]||=[]).push(fn);}},API:{get(url){const d=deferred();calls.push({url,...d});return d.promise;}}});
   vm.runInContext(read('frontend/js/lib/company.js').replace(/^import .*;\n/gm,'').replace(/export /g,''),context);
   vm.runInContext(read('frontend/js/lib/member-labels.js').replace(/^import .*;\n/gm,'').replace(/export /g,''),context);
   vm.runInContext(section(read('frontend/js/core/task-drawer.js'),'/* 项目候选以服务端花名册为准','function syncFormSegs('),context);

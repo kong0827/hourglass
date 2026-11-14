@@ -505,6 +505,45 @@ class ManagerServiceTest {
     }
 
     @Test
+    void projectSplitsActualMinutesIntoDevAndTestPerModuleAndTask() {
+        Requirement req = requirement("R1", "项目一");
+        Category sales = category("G1", "客户与会员");
+        Task done = openTask("T1", "R1", Consts.COL_DONE, 120);
+        done.setCategoryId("G1");
+        Task unassigned = openTask("T2", "R1", Consts.COL_DOING, 60);
+        unassigned.setCategoryId("");
+        TimeAgg withTest = actual("T1", 300);
+        withTest.setTestMinutes(120);
+        /* 脏数据：测试分钟大于累计时只截到累计，开发不为负 */
+        TimeAgg overTest = actual("T2", 60);
+        overTest.setTestMinutes(90);
+
+        ManagerService service = service(Arrays.asList(done, unassigned), Collections.singletonList(req),
+                Arrays.asList(withTest, overTest), Collections.<TimeLog>emptyList(),
+                Collections.<WorkspaceMember>emptyList());
+        when(categoryService.list(WORKSPACE, "R1")).thenReturn(Collections.singletonList(sales));
+        Map<String, Object> result = service.project(WORKSPACE, "R1", VIEWER);
+
+        Map<String, Object> metrics = castMap(result.get("metrics"));
+        assertEquals(360, metrics.get("actualMinutes"));
+        assertEquals(180, metrics.get("devMinutes"));
+        assertEquals(180, metrics.get("testMinutes"));
+        assertEquals((Integer) metrics.get("actualMinutes"),
+                (Integer) metrics.get("devMinutes") + (Integer) metrics.get("testMinutes"), "开发 + 测试 = 累计实际");
+
+        Map<String, Object> moduleRow = castList(result.get("modules")).get(0);
+        assertEquals(180, moduleRow.get("devMinutes"));
+        assertEquals(120, moduleRow.get("testMinutes"));
+        Map<String, Object> unassignedRow = castMap(result.get("unassigned"));
+        assertEquals(0, unassignedRow.get("devMinutes"));
+        assertEquals(60, unassignedRow.get("testMinutes"));
+
+        Map<String, Object> taskRow = castList(result.get("tasks")).stream()
+                .filter(row -> "T1".equals(row.get("id"))).findFirst().orElseThrow(AssertionError::new);
+        assertEquals(120, taskRow.get("testMinutes"));
+    }
+
+    @Test
     void projectLabelsInheritWorkspaceJobAndAllowProjectOverrideAndSecondaryRoles() {
         WorkspaceMember alice = workspaceMember("U1", "Alice", " 公司A ", " 开发 ");
         Task byId = ownedTask("T1", "R1", "U1", 100);
@@ -560,6 +599,34 @@ class ManagerServiceTest {
         assertEquals(1, castList(workload.get("members")).size());
         assertEquals("开发", member(castList(workload.get("members")), "U1").get("effectiveRoleTitle"));
         assertEquals(options, workload.get("filterOptions"));
+    }
+
+    @Test
+    void reportsFilterByVersionAndKeepDrilldownScopeAligned() {
+        Task first = openTask("T1", "R1", "custom", 100);
+        first.setVersionIds(Arrays.asList("V1"));
+        first.setVersionNames(Arrays.asList("V1.1"));
+        Task second = openTask("T2", "R1", "custom", 200);
+        second.setVersionIds(Arrays.asList("V2"));
+        second.setVersionNames(Arrays.asList("V1.2"));
+        Task unbound = openTask("T3", "R1", "custom", 400);
+
+        ManagerService service = service(Arrays.asList(first, second, unbound),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(),
+                Collections.<WorkspaceMember>emptyList());
+
+        Map<String, Object> scoped = service.reports(WORKSPACE, "R1", VIEWER, null, null, "V1");
+        assertEquals(100, castMap(scoped.get("burndown")).get("totalEstimateMinutes"));
+        assertEquals("V1", castMap(scoped.get("scope")).get("versionId"));
+        List<Map<String, Object>> versions = castList(castMap(scoped.get("filterOptions")).get("versions"));
+        assertEquals(2, versions.size(), "版本候选只列实际绑定的计划版本");
+        assertEquals("V1", versions.get(0).get("id"));
+        assertEquals("V1.1", versions.get(0).get("name"));
+
+        Map<String, Object> all = service.reports(WORKSPACE, "R1", VIEWER);
+        assertEquals(700, castMap(all.get("burndown")).get("totalEstimateMinutes"));
+        assertNull(castMap(all.get("scope")).get("versionId"));
     }
 
     @Test
@@ -822,6 +889,7 @@ class ManagerServiceTest {
         when(taskMapper.selectAll(WORKSPACE)).thenReturn(tasks);
         when(requirementMapper.selectAll(WORKSPACE)).thenReturn(requirements);
         when(timeLogMapper.sumByTaskByWorkspace(WORKSPACE)).thenReturn(actual);
+        when(timeLogMapper.sumStageByTaskByWorkspace(WORKSPACE)).thenReturn(actual);
         when(timeLogMapper.selectByWorkspaceBetween(eq(WORKSPACE), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(logs);
         when(memberMapper.selectByWorkspace(WORKSPACE)).thenReturn(members);

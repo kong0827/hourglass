@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ProjectMilestoneMapper">
+
+  <sql id="cols">
+    id, workspace_id, req_id, name, kind, version_id, target_date, owner_user_id,
+    is_key AS keyMilestone, note, achieved_at, achieved_note, confirmed_by_user_id,
+    canceled_at, cancel_reason, revision, created_at, updated_at
+  </sql>
+
+  <select id="selectByReq" resultType="ProjectMilestone">
+    SELECT <include refid="cols"/> FROM project_milestone
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    ORDER BY (canceled_at IS NOT NULL), target_date, created_at, id
+  </select>
+
+  <select id="selectById" resultType="ProjectMilestone">
+    SELECT <include refid="cols"/> FROM project_milestone
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </select>
+
+  <select id="selectByIdForUpdate" resultType="ProjectMilestone">
+    SELECT <include refid="cols"/> FROM project_milestone
+    WHERE workspace_id = #{workspaceId} AND id = #{id} FOR UPDATE
+  </select>
+
+  <select id="countByVersion" resultType="int">
+    SELECT COUNT(*) FROM project_milestone
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO project_milestone
+      (id, workspace_id, req_id, name, kind, version_id, target_date, owner_user_id,
+       is_key, note, achieved_at, achieved_note, confirmed_by_user_id, revision, created_at, updated_at)
+    VALUES
+      (#{id}, #{workspaceId}, #{reqId}, #{name}, #{kind}, #{versionId}, #{targetDate}, #{ownerUserId},
+       #{keyMilestone}, #{note}, #{achievedAt}, #{achievedNote}, #{confirmedByUserId}, 0,
+       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  </insert>
+
+  <update id="updateMeta">
+    UPDATE project_milestone SET
+      name = #{name},
+      owner_user_id = #{ownerUserId},
+      is_key = #{keyMilestone},
+      note = #{note},
+      revision = revision + 1,
+      updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision}
+      AND canceled_at IS NULL
+  </update>
+
+  <update id="reschedule">
+    UPDATE project_milestone SET
+      target_date = #{targetDate},
+      revision = revision + 1,
+      updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision}
+      AND canceled_at IS NULL
+  </update>
+
+  <update id="cancel">
+    UPDATE project_milestone SET
+      canceled_at = NOW(),
+      cancel_reason = #{reason},
+      revision = revision + 1,
+      updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision}
+      AND canceled_at IS NULL
+  </update>
+
+  <update id="achieveManual">
+    UPDATE project_milestone SET
+      achieved_at = NOW(),
+      achieved_note = #{note},
+      confirmed_by_user_id = #{userId},
+      revision = revision + 1,
+      updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision}
+      AND canceled_at IS NULL AND achieved_at IS NULL
+  </update>
+
+  <update id="revokeManual">
+    UPDATE project_milestone SET
+      achieved_at = NULL,
+      achieved_note = NULL,
+      confirmed_by_user_id = NULL,
+      revision = revision + 1,
+      updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision}
+      AND canceled_at IS NULL AND achieved_at IS NOT NULL
+  </update>
+
+  <select id="selectTaskLinksByReq" resultType="com.hourglass.dto.MilestoneTaskLink">
+    SELECT mt.milestone_id, mt.task_id
+    FROM project_milestone_task mt
+    INNER JOIN project_milestone m
+      ON m.workspace_id = mt.workspace_id AND m.id = mt.milestone_id
+    WHERE mt.workspace_id = #{workspaceId} AND m.req_id = #{reqId}
+    ORDER BY mt.milestone_id, mt.task_id
+  </select>
+
+  <insert id="insertTasks">
+    INSERT INTO project_milestone_task (workspace_id, milestone_id, task_id)
+    VALUES
+    <foreach collection="taskIds" item="taskId" separator=",">
+      (#{workspaceId}, #{milestoneId}, #{taskId})
+    </foreach>
+  </insert>
+
+  <delete id="deleteTasks">
+    DELETE FROM project_milestone_task WHERE workspace_id = #{workspaceId} AND milestone_id = #{milestoneId}
+  </delete>
+
+  <select id="verifyTasks" resultType="int">
+    SELECT COUNT(DISTINCT id) FROM task
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND deleted_at IS NULL
+      AND id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">
+      #{taskId}
+    </foreach>
+  </select>
+
+  <insert id="insertLog">
+    INSERT INTO project_milestone_log (workspace_id, milestone_id, action, detail, operator_user_id, created_at)
+    VALUES (#{workspaceId}, #{milestoneId}, #{action}, #{detail}, #{operatorUserId}, NOW())
+  </insert>
+
+  <select id="selectLogs" resultType="map">
+    SELECT action, detail, operator_user_id AS operatorUserId, created_at AS createdAt
+    FROM project_milestone_log
+    WHERE workspace_id = #{workspaceId} AND milestone_id = #{milestoneId}
+    ORDER BY id DESC
+    LIMIT 50
+  </select>
+
+  <delete id="deleteByReq">
+    DELETE FROM project_milestone WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM project_milestone WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteTaskLinksByTaskIds">
+    DELETE FROM project_milestone_task
+    WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">
+      #{taskId}
+    </foreach>
+  </delete>
+
+  <delete id="deleteTaskLinksByReq">
+    DELETE mt FROM project_milestone_task mt
+    INNER JOIN project_milestone m ON m.workspace_id = mt.workspace_id AND m.id = mt.milestone_id
+    WHERE mt.workspace_id = #{workspaceId} AND m.req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteTaskLinksByWorkspace">
+    DELETE FROM project_milestone_task WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteLogsByReq">
+    DELETE l FROM project_milestone_log l
+    INNER JOIN project_milestone m ON m.workspace_id = l.workspace_id AND m.id = l.milestone_id
+    WHERE l.workspace_id = #{workspaceId} AND m.req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteLogsByWorkspace">
+    DELETE FROM project_milestone_log WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

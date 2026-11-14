@@ -32,6 +32,16 @@ public interface TestCaseMapper {
 
     List<String> selectOwners(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 筛选项计数（不受当前筛选影响）：模块 / 优先级 / 执行人 */
+    List<Map<String, Object>> countFacetsByModule(@Param("workspaceId") String workspaceId,
+                                                  @Param("reqId") String reqId);
+
+    List<Map<String, Object>> countFacetsByPriority(@Param("workspaceId") String workspaceId,
+                                                    @Param("reqId") String reqId);
+
+    List<Map<String, Object>> countFacetsByOwner(@Param("workspaceId") String workspaceId,
+                                                 @Param("reqId") String reqId);
+
     /** 项目用例概览：latest_status 计数（未执行不在此列，由调用方按总数反推） */
     List<Map<String, Object>> countGroupByStatus(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 

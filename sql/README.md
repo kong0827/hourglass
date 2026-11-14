@@ -10,7 +10,7 @@
 mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 ```
 
-基线包含当前全部 57 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项与需求人工交付判定）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
+基线包含当前全部 64 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑与交付说明）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
 
 ## 2. 已有库升级
 
@@ -28,7 +28,21 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `68_member_company_project_role.sql` 为 `workspace_member` 增 `company_name`，并创建 `project_member_role`（主键 `workspace_id + project_id + user_id`）。脚本幂等、只增结构、不回填历史；公司为空间级自由文本，项目角色为成员×项目的唯一主角色，两者仅展示，不参与鉴权。成员移出空间/项目、项目或空间删除时同事务清理角色行。
 
+`78_version_end_state.sql` 为 `project_version` 增加 `ended_at` / `end_reason`，支持版本「关闭 / 取消」终态：关闭表示本轮交付结束但未发布，取消表示本轮作废；两者都必须记录原因，历史与工作项关联保留。取消版本不计入「已发布 / 进行中 / 计划中」节奏统计，关闭与取消版本都不能再加入发布计划或新增工作项。
+
+`79_version_commitment.sql` 增加承诺基线：`project_version` 增 `commitment_at`（进入开发中时只写一次），新建 `version_commitment_task` 保存当时绑定的工作项、标题与预估。基线不随后续增删或改预估回写；版本统计只按当前绑定与基线做差集，旧版本没有快照时展示为空。表随项目/空间删除或任务数据整体清空一并清理。
+
+`80_project_milestone.sql` 把里程碑从工作项布尔标记升级为项目级对象：新建 `project_milestone`（名称、达成方式 `version` / `tasks` / `manual`、目标日期、负责人、关键标记、版本或工作项条件、达成与取消信息、`revision`）、`project_milestone_task`（工作项条件引用）与 `project_milestone_log`（创建 / 改期 / 取消 / 达成 / 撤销日志）。脚本把存量 `task.is_milestone=1` 的工作项一次性映射为「人工确认」型迁移里程碑，但**不删除** `task.is_milestone` 列：旧客户端与旧甘特仍读取该标记。里程碑不进入工作项计数、预估与燃尽；表随项目 / 空间删除或任务数据整体清空一并清理。
+
+`81_delivery_note.sql` 新增一页式交付说明三张表：`delivery_note`（人工层与生成控制）、`delivery_note_snapshot`（导出瞬间的不可变聚合与正式编号）、`delivery_note_share`（快照级只读令牌）。数字实时来自版本、发布、测试与工时记录，脚本不回填、不构造历史交付证据；快照冻结后不再随业务数据变化，撤销分享只影响令牌，不修改快照本身。
+
+`77_task_test_owner.sql` 增量补齐测试负责人：`task` 增加 `test_owner_user_id` / `test_owner`（测试负责人账号与显示名快照）和 `test_requested_at`（提测时间），并把 `test_started_at` / `test_finished_at` 从 DATE 提升为 DATETIME，新增 `(workspace_id, test_owner_user_id, board_column)` 索引。旧 DATE 值按当天 00:00 保留，不回填、不推断历史时刻；脚本只增结构，可重复执行。负责人仍表示开发责任人，测试负责人由流转与抽屉维护。
+
 `64_task_test_flow.sql` 增量补齐测试流程：`task` 增加 `test_started_at` / `test_finished_at`，并为每个空间补「待测试」「测试中」两个内置列。新列插在「进行中」之后，同位置的自定义列按原相对顺序顺延；不回填历史测试时间，旧数据没有可靠记录时不伪造时间。执行时须带 `--default-character-set=utf8mb4`，否则列名中文会写成乱码。
+
+`82_work_item_release_no.sql` 针对交付说明与发布快照里直接露出 32 位随机 ID、无法口头或跨系统引用的问题：`task` 增 `item_no`（展示 `WI-001`）、`version_release` 增 `release_no`（展示 `REL-001`），均为项目内顺序号，与 74 号用例编号同构。`task.req_id` 可空，另加生成列 `no_scope` 把「无项目」归到空串，唯一键才对无项目工作项生效；编号列可空，未取号行不参与唯一约束，脚本可先于后端上线执行。回填按创建时间（发布记录按实际发生时间）排序、只补空值，软删除行一并占号；换项目重新取号，改类型不换号。
+
+`83_release_item_no.sql` 针对发布快照读取时 join 当前工作项、换项目后旧记录显示成新编号的问题：`version_release_item` 增 `task_item_no`，与 `title` / `owner_name` 一样在记录当时定格。存量快照按当前 `task.item_no` 回填（能拿到的最接近事实的编号），任务已彻底删除时留空、前端回退显示原 ID；脚本只增结构，可重复执行。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。
 

@@ -1,6 +1,8 @@
 /* 只读分享页：独立渲染，不依赖主程序，也不发任何写请求（ES Module 入口） */
 import { GS } from "./lib/gantt-shared.js";
 import { API } from "./core/api.js";
+import { DD } from "./lib/delivery-doc.js";
+import { printDeliveryPaper, registerDeliveryPrintSource } from "./lib/download.js";
 
   var LABEL_W = 260, ROW_H = 50, GROUP_H = 0, HEAD_H = 54;
   var state = {
@@ -225,6 +227,7 @@ import { API } from "./core/api.js";
       return;
     }
     if (kind === "doc") { bootDoc(token); return; }
+    if (kind === "delivery") { bootDelivery(token); return; }
     fetch(API.base + "/api/share/gantt?token=" + encodeURIComponent(token), { credentials: "omit" })
       .then(function (r) { return r.text(); })
       .then(function (txt) { return JSON.parse(txt); })
@@ -310,6 +313,114 @@ import { API } from "./core/api.js";
       body.innerHTML = '<div class="share-error">' + esc(ex.message || "正文渲染失败") + '</div>';
     });
   }
+
+  /* 交付说明分享：kind=delivery。只渲染冻结快照，没有任何写入口；
+     数字仍可点开看口径与来源记录，但不给跳原始记录的入口——接收人没有账号。 */
+  var dlNote = null, dlShare = null, dlLayer = null;
+  function bootDelivery(token) {
+    fetch(API.base + "/api/share/delivery?token=" + encodeURIComponent(token), { credentials: "omit" })
+      .then(function (r) { return r.text(); })
+      .then(function (txt) { return JSON.parse(txt); })
+      .then(function (j) {
+        if (!j || j.code !== 0) throw new Error((j && j.message) || "链接无效或已过期");
+        renderDelivery(j.data);
+      })
+      .catch(function (ex) {
+        showShareError({
+          detail: ex.message || "网络异常",
+          hint: "链接可能已过期或被分享者停止分享；可稍后重试，或向分享者重新获取链接。",
+          retry: true
+        });
+      });
+  }
+  function renderDelivery(d) {
+    dlShare = d;
+    dlNote = d.note || {};
+    /* 接收人直接 Ctrl+P 也要印出同一份纸张；甘特分享页 dlNote 为空，不接管打印 */
+    registerDeliveryPrintSource(function () {
+      return dlNote ? DD.sheetMarkup(dlNote, { readonly: true, clean: true, a4: true }) : null;
+    });
+    $("view-gantt").classList.remove("on");
+    $("view-delivery-share").classList.add("on");
+    var title = (dlNote.projectName || "交付说明") + " · " + (dlNote.versionName || "");
+    document.title = title + " · 只读分享";
+    var sub = [d.workspaceName, DD.toneName(dlNote.options && dlNote.options.tone), d.docNo,
+      "生成于 " + DD.timeText(d.createdAt), "有效至 " + DD.timeText(d.expiresAt)].filter(Boolean).join(" · ");
+    $("deliveryShareBody").innerHTML =
+      '<div class="dl-share-top"><span class="dl-mark">' + DD.mark + "</span>"
+      + '<div><div class="st-t">' + esc(title) + '</div><div class="st-s">' + esc(sub) + "</div></div>"
+      + '<span class="grow"></span>'
+      + '<button class="btn sm" type="button" id="dlShareSources">数字口径</button>'
+      + (d.allowDownload ? '<button class="btn sm primary" type="button" id="dlSharePdf">下载 PDF</button>' : "")
+      + "</div>"
+      + DD.sheetMarkup(dlNote, { readonly: true, clean: true })
+      + '<div class="dl-share-foot">这是一份不可变快照：分享者导出时的内容已冻结，之后系统里的变化不会改动本页。'
+      + "数字全部来自系统记录，点任意数字可看它的统计口径与原始记录；标注「未记录 / 未验证」的部分表示系统内确实没有记录，未做推断。<br>"
+      + "<b>" + esc(d.docNo || "未编号") + "</b>"
+      + (d.contentHash ? " · 内容校验值 " + esc(String(d.contentHash).slice(0, 16)) : "")
+      + " · 只读链接，不含内部备注"
+      + (d.allowDownload ? " · 可在浏览器打印对话框里选「存为 PDF」" : " · 分享者未开放下载")
+      + "</div>";
+    $("dlShareSources").addEventListener("click", function () { openDeliverySources(); });
+    var pdf = $("dlSharePdf");
+    if (pdf) pdf.addEventListener("click", function () {
+      printDeliveryPaper(DD.sheetMarkup(dlNote, { readonly: true, clean: true, a4: true }));
+    });
+    $("deliveryShareBody").addEventListener("click", function (e) {
+      var m = e.target.closest('[data-dl-act="source"]');
+      if (m) openDeliverySource(m.dataset.dlSrc);
+    });
+  }
+  function deliveryLayer(title, desc, body) {
+    closeDeliveryLayer();
+    dlLayer = document.createElement("div");
+    dlLayer.className = "modal-layer open";
+    dlLayer.setAttribute("role", "dialog");
+    dlLayer.setAttribute("aria-modal", "true");
+    dlLayer.innerHTML = '<div class="sheet md">'
+      + '<div class="sheet-head"><div style="flex:1 1 auto;min-width:0"><h2>' + esc(title) + "</h2>"
+      + '<div class="desc">' + esc(desc) + "</div></div>"
+      + '<button class="btn sm" type="button" data-dl-share-close>关闭</button></div>'
+      + '<div class="sheet-body">' + body + "</div></div>";
+    document.body.appendChild(dlLayer);
+    document.body.style.overflow = "hidden";
+    dlLayer.addEventListener("click", function (e) {
+      if (e.target === dlLayer || e.target.closest("[data-dl-share-close]")) closeDeliveryLayer();
+    });
+    var btn = dlLayer.querySelector("[data-dl-share-close]");
+    if (btn) btn.focus();
+  }
+  function closeDeliveryLayer() {
+    if (!dlLayer) return;
+    if (dlLayer.parentNode) dlLayer.parentNode.removeChild(dlLayer);
+    dlLayer = null;
+    document.body.style.overflow = "";
+  }
+  function sourceRecords(rows) {
+    if (!rows.length) return '<div class="dl-missing">该数字没有可列出的明细记录。</div>';
+    return rows.map(function (x) {
+      return '<div class="dl-srcrec"><span class="si">' + esc(x.id) + '</span><div class="sc"><b>'
+        + esc(x.m) + "</b><span>" + esc(x.s) + "</span></div></div>";
+    }).join("");
+  }
+  function openDeliverySource(key) {
+    if (!dlNote) return;
+    var s = DD.sourceInfo(dlNote, key);
+    deliveryLayer(s.title, "数字只读。下面是它的统计口径与原始记录。",
+      '<div class="dl-caliber">' + esc(s.caliber) + "</div>" + sourceRecords(s.rows));
+  }
+  function openDeliverySources() {
+    if (!dlNote) return;
+    var rows = DD.sourcesOverview(dlNote).map(function (x) {
+      return { id: "·", m: x.name + " ← " + x.from, s: x.table };
+    });
+    deliveryLayer("数据来源总览", (dlShare.docNo || "") + " · 全部为只读聚合，接收人看不到内部备注",
+      '<div class="dl-caliber">生成过程只读：一次取回版本、发布、测试、工时与变更记录后冻结成快照，本页不再实时计算。</div>'
+      + sourceRecords(rows));
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && dlLayer) closeDeliveryLayer();
+  });
 
   $("shareScale").addEventListener("change", function () {
     state.scale = this.value === "week" || this.value === "month" ? this.value : "day";

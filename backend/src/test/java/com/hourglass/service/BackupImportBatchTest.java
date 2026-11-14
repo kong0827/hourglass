@@ -47,7 +47,9 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -125,8 +127,8 @@ class BackupImportBatchTest {
                 mock(com.hourglass.mapper.RequirementDocCommentMapper.class),
                 mock(AppNotificationMapper.class), docMapper, branchMapper,
                 mock(TaskDependencyMapper.class), mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
-                versionMapper, versionTaskMapper, demandMapper,
-                mock(TaskCompletionService.class),
+                versionMapper, versionTaskMapper, mock(com.hourglass.mapper.VersionCommitmentMapper.class),
+                demandMapper, mock(TaskCompletionService.class),
                 new TaskCascade(taskMapper, mock(TaskLogMapper.class), mock(TaskCommentMapper.class),
                         mock(com.hourglass.mapper.TaskWatchMapper.class),
                         mock(AppNotificationMapper.class), subtaskMapper, tagMapper, timeLogMapper,
@@ -141,7 +143,10 @@ class BackupImportBatchTest {
                         mock(com.hourglass.mapper.ReqDocShareMapper.class),
                         mock(com.hourglass.mapper.TestCaseMapper.class),
                         mock(com.hourglass.mapper.TestCaseRunMapper.class),
-                        mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class), scopeLock),
+                        mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class),
+                        mock(com.hourglass.mapper.VersionCommitmentMapper.class),
+                        mock(com.hourglass.mapper.ProjectMilestoneMapper.class),
+                        mock(com.hourglass.mapper.DeliveryNoteMapper.class), scopeLock),
                 mock(ActivityService.class),
                 workActivityMapper, transactionManager, scopeLock);
     }
@@ -393,6 +398,45 @@ class BackupImportBatchTest {
         // 外层导入事务 + 阶段 1 + 两个任务批；mock 事务管理器不识别 REQUIRED 加入，
         // 真实 DataSourceTransactionManager 下这些 execute 共用同一个提交。
         verify(transactionManager, times(4)).commit(any(TransactionStatus.class));
+    }
+
+    @Test
+    void importedTasksTakeFreshNumbersInEachProjectBucket() {
+        BackupData data = backup(0);
+        BackupData.BackupReq p1 = new BackupData.BackupReq();
+        p1.setId("R1");
+        p1.setName("项目一");
+        BackupData.BackupReq p2 = new BackupData.BackupReq();
+        p2.setId("R2");
+        p2.setName("项目二");
+        data.setReqs(Arrays.asList(p1, p2));
+        List<BackupData.BackupTask> rows = new ArrayList<BackupData.BackupTask>();
+        String[][] pairs = {{"K1", "R1"}, {"K2", "R2"}, {"K3", "R1"}};
+        for (String[] pair : pairs) {
+            BackupData.BackupTask t = new BackupData.BackupTask();
+            t.setId(pair[0]);
+            t.setTitle("任务" + pair[0]);
+            t.setReqId(pair[1]);
+            t.setVersionIds(Collections.emptyList());
+            rows.add(t);
+        }
+        data.setTasks(rows);
+        /* 编号不在备份里：目标项目已用到 3 号 / 8 号，导入接着往下取 */
+        when(taskMapper.selectNextItemNo("W1", "R1")).thenReturn(4);
+        when(taskMapper.selectNextItemNo("W1", "R2")).thenReturn(9);
+
+        service.importData("U1", "W1", data);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Task>> imported = ArgumentCaptor.forClass(List.class);
+        verify(taskMapper).insertBatch(imported.capture());
+        Map<String, Integer> byId = new HashMap<String, Integer>();
+        for (Task t : imported.getValue()) {
+            byId.put(t.getId(), t.getItemNo());
+        }
+        assertEquals(Integer.valueOf(4), byId.get("K1"));
+        assertEquals(Integer.valueOf(9), byId.get("K2"));
+        assertEquals(Integer.valueOf(5), byId.get("K3"));
     }
 
     @Test

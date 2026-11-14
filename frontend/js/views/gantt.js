@@ -6,7 +6,6 @@ import { applyView, clearFilters, deleteView, markHumanSearchInput, promptSaveVi
 import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
-import { groupDimsFor } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
@@ -16,6 +15,7 @@ import { registerViewParams } from "../core/view-params.js";
 import { bindRetry } from "../core/utils.js";
 import { COLUMNS, PRIORITIES, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, typeName } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
+import { milestoneEvidence, milestoneStatusMeta, openMilestoneDetail } from "../lib/milestone-ui.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 import { refreshListIfOpen } from "./list.js";
@@ -23,7 +23,7 @@ import { refreshListIfOpen } from "./list.js";
 var ganttScroll = $("ganttScroll"), ganttMeta = $("ganttMeta"),
     ganttShowDoneEl = $("ganttShowDone"), ganttZoomEl = $("ganttZoom"),
     ganttDensityEl = $("ganttDensity"),
-    ganttGroupEl = $("ganttGroup"), ganttRangeModeEl = $("ganttRangeMode"),
+    ganttGroupEl = $("ganttGroup"), ganttGroup2El = $("ganttGroup2"), ganttRangeModeEl = $("ganttRangeMode"),
     ganttRangeLabelEl = $("ganttRangeLabel"), ganttPrevMonthEl = $("ganttPrevMonth"),
     ganttNextMonthEl = $("ganttNextMonth"), ganttFilterBtn = $("ganttFilterBtn"),
     ganttFilterMenu = $("ganttFilterMenu"), ganttFilterCountEl = $("ganttFilterCount"),
@@ -71,6 +71,7 @@ var ganttState = {
   showLoad: false,
   paging: { total: 0, loaded: 0, hasMore: false, loading: false, nextOffset: 0 },
   layout: [], layoutH: 0, win: { start: -1, end: -1 }, winGeom: {},
+  milestones: [], milestoneReqId: "",
   depsLoaded: false,      // false=服务端没返回 deps 字段，渲染时回落 blockedByTaskId
   printAll: false, pendingTop: null,
   loadData: null, loadDoneKey: "", loadKey: "", loadSeq: 0, loadLoading: false,
@@ -193,6 +194,16 @@ function enterGanttView(){
     if(activeView === "gantt" && !ganttState.drag && !ganttState.unplannedDrag && ganttState.tasks.length) renderGantt();
   }).catch(function(){ /* 项目名只是展示增强，失败不影响甘特图 */ });
 }
+function syncGanttGroup2Options(){
+  if(!ganttGroup2El) return;
+  /* 一级选「不分组」时二级不可用；两级不能选同一维度 */
+  if(ganttState.groupBy === "none" || ganttState.groupBy2 === ganttState.groupBy) ganttState.groupBy2 = "none";
+  ganttGroup2El.querySelectorAll("option").forEach(function(o){
+    o.disabled = o.value !== "none" && o.value === ganttState.groupBy;
+  });
+  ganttGroup2El.value = ganttState.groupBy2;
+  ganttGroup2El.disabled = ganttState.groupBy === "none";
+}
 function syncGanttControls(){
   if(ganttShowDoneEl) ganttShowDoneEl.checked = ganttState.showDone;
   if(ganttScaleEl) ganttScaleEl.value = ganttState.scale;
@@ -202,6 +213,7 @@ function syncGanttControls(){
   }
   if(ganttDensityEl) ganttDensityEl.value = ganttState.density;
   if(ganttGroupEl) ganttGroupEl.value = ganttState.groupBy;
+  syncGanttGroup2Options();
   if(ganttRangeModeEl){
     ganttRangeModeEl.querySelectorAll("[data-gantt-range]").forEach(function(b){
       b.setAttribute("aria-pressed", b.getAttribute("data-gantt-range") === ganttState.rangeMode ? "true" : "false");
@@ -244,6 +256,7 @@ function loadGantt(opts){
   } : null;
   if(!silent) ganttState.silentBackup = null;
   var seq = ++ganttState.seq;
+  loadGanttMilestones(state.reqs && state.reqs.length === 1 ? state.reqs[0] : "");
   ganttState.tasks = [];
   ganttState.byId = {};
   ganttState.deps = [];
@@ -450,7 +463,7 @@ function ganttGroupFieldValue(t, field){
     var rn = reqNameById(t.reqId);
     return { v: t.reqId, name: (rn && rn !== "无") ? rn : "未关联项目" };
   }
-  if(field === "owner") return t.owner ? { v: t.owner, name: t.owner } : { v: "__none", name: "未分配" };
+  if(field === "owner") return t.owner ? { v: t.owner, name: t.owner } : { v: "__none", name: "未指派" };
   if(field === "status"){
     var st = ganttStatusOf(t);
     var nm = st.key === "done" ? "已完成" : st.key === "ended" ? "执行结束" : st.key === "blocked" ? "阻塞" : st.key === "overdue" ? "逾期" : "进行中";
@@ -1515,6 +1528,51 @@ function loadMoreGanttUnplanned(){
     renderGanttUnplanned(ganttState.undated || [], false);
   });
 }
+/* 里程碑独立成轨：只在甘特筛选到单个项目时加载，不占工作项计数、预估与燃尽 */
+function loadGanttMilestones(reqId){
+  ganttState.milestoneReqId = reqId || "";
+  ganttState.milestones = [];
+  if(!reqId) return;
+  var seq = ganttState.seq;
+  API.get("/api/milestones", { reqId:reqId }).then(function(rows){
+    if(seq !== ganttState.seq || ganttState.milestoneReqId !== reqId) return;
+    ganttState.milestones = rows || [];
+    if(ganttScroll && ganttScroll.querySelector(".gantt-grid")) renderGantt();
+  }).catch(function(){ /* 里程碑轨道失败不阻断甘特主体 */ });
+}
+window.addEventListener("ds:milestones-changed", function(e){
+  if(document.body.dataset.view !== "gantt" || !ganttState.milestoneReqId) return;
+  var reqId = e && e.detail && e.detail.reqId;
+  if(reqId && reqId !== ganttState.milestoneReqId) return;
+  loadGanttMilestones(ganttState.milestoneReqId);
+});
+function ganttMilestoneTrackHTML(range, dayW, totalW){
+  if(!ganttState.milestoneReqId) return "";
+  var nodes = [], visible = 0;
+  (ganttState.milestones || []).forEach(function(m){
+    if(!m.targetDate || m.status === "canceled") return;
+    var d = parseDate(m.targetDate);
+    if(!d) return;
+    visible++;
+    if(d < range.start || d > range.end) return;
+    var left = dayDiff(d, range.start) * dayW + dayW / 2;
+    var meta = milestoneStatusMeta(m.status);
+    var title = m.name + " · " + meta.label + " · 目标 " + m.targetDate + " · " + milestoneEvidence(m);
+    nodes.push('<button class="gantt-ms-node is-' + esc(m.status) + '" type="button" data-gantt-ms="' + esc(m.id) + '"'
+      + ' style="left:' + left + 'px" title="' + esc(title) + '" aria-label="' + esc(title) + '"><i></i></button>');
+  });
+  if(!visible && !(ganttState.milestones || []).length) return "";
+  return '<div class="gantt-ms-track"><div class="gantt-ms-label"><span>里程碑</span><b>' + visible + '</b></div>'
+    + '<div class="gantt-ms-axis" style="width:' + totalW + 'px">' + nodes.join("") + '</div></div>';
+}
+function openGanttMilestone(id){
+  var hit = (ganttState.milestones || []).filter(function(m){ return m.id === id; })[0];
+  if(!hit) return;
+  openMilestoneDetail(hit, {
+    canWrite: !ganttReadOnly(),
+    onChanged: function(){ loadGanttMilestones(ganttState.milestoneReqId); }
+  });
+}
 function renderGantt(){
   if(!ganttScroll) return;
   var prevLeft = ganttScroll.scrollLeft, prevTop = ganttScroll.scrollTop;
@@ -1609,6 +1667,7 @@ function renderGantt(){
       '<div class="gantt-corner">工作项 <span class="gantt-corner-meta">' + inRange.length + '</span><span class="gantt-resizer" aria-label="拖动调整列宽" role="separator"></span></div>' +
       '<div class="gantt-axis" style="width:' + totalW + 'px">' + GS.headHTML(range, dayW, ganttState.scale, rt.TODAY_ISO) + '</div>' +
     '</div>' +
+    ganttMilestoneTrackHTML(range, dayW, totalW) +
     '<div class="gantt-body"></div>' +
     (todayIn
       ? '<div class="gantt-today-col" style="left:calc(var(--gantt-label-w) + ' + (todayOff * dayW) + 'px);width:' + dayW + 'px"></div>' +
@@ -1741,7 +1800,7 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
     UI.emptyState({ icon: "calendar", title: title, text: text, actionLabel: action }) + '</div>';
   var btn = ganttScroll.querySelector(".empty-state .btn");
   if(btn) btn.addEventListener("click", function(){
-    if(actionKind === "clear") clearFilters();
+    if(actionKind === "clear") clearFilters({keepReqs:true});
     else if(actionKind === "new") openTaskDrawer("backlog");
     else showView("list");
   });
@@ -1919,7 +1978,7 @@ function renderGanttFilterMenu(){
     ganttFilterSection("完成情况", completionHTML) +
     ganttFilterSection("其他", blockedHTML) +
     '<div class="menu-foot">' +
-      '<button class="btn sm" type="button" data-gantt-filter-reset>重置</button>' +
+      '<button class="btn sm" type="button" data-gantt-filter-reset>清空筛选</button>' +
       '<button class="btn sm ghost" type="button" data-gantt-filter-save>保存视图</button>' +
     '</div>';
   ganttFilterMenu.innerHTML = html;
@@ -1955,13 +2014,9 @@ function renderGanttViewsMenu(){
     }).join("");
   }
   html += '<div class="menu-foot"><button class="btn sm" type="button" data-gantt-view-save>保存当前为视图</button></div>';
-  html += '<div class="menu-sep"></div><div class="menu-title">排序</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
+  html += '<div class="menu-title">排序</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
     [["start", "开始"], ["due", "截止"], ["priority", "优先级"], ["owner", "负责人"], ["progress", "进度"]].map(function(o){
       return ganttFilterChip("data-gantt-sort", o[0], o[1], ganttState.sortBy === o[0]);
-    }).join("") + '</div></div>';
-  html += '<div class="menu-title">第二级分组</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
-    groupDimsFor(GANTT_VIEW_GROUPS).map(function(d){
-      return ganttFilterChip("data-gantt-group2", d[0], d[1], ganttState.groupBy2 === d[0]);
     }).join("") + '</div></div>';
   html += '<div class="menu-title">左列字段</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
     [["project", "项目"], ["owner", "负责人"], ["dates", "日期"], ["work", "工时"], ["subtask", "子任务"], ["tags", "标签"], ["comments", "评论"]].map(function(o){
@@ -1999,8 +2054,8 @@ function applyGanttViewParams(p){
   if(GANTT_VIEW_GROUPS.indexOf(p.ganttGroup2) !== -1 && ganttState.groupBy2 !== p.ganttGroup2){
     ganttState.groupBy2 = p.ganttGroup2; changed = true;
   }
-  /* 一级不分组时二级分组没有意义，与手动切换下拉框保持一致 */
-  if(ganttState.groupBy === "none") ganttState.groupBy2 = "none";
+  /* 一级不分组或两级同维度时二级没有意义，与手动切换下拉框保持一致 */
+  if(ganttState.groupBy === "none" || ganttState.groupBy2 === ganttState.groupBy) ganttState.groupBy2 = "none";
   if(Array.isArray(p.ganttCols)){
     for(var ck in GANTT_DEFAULT_COLS) ganttState.cols[ck] = p.ganttCols.indexOf(ck) !== -1;
     changed = true;
@@ -2533,6 +2588,8 @@ function onGanttUnplannedKey(e){
 }
 if(ganttScroll){
   ganttScroll.addEventListener("click", function(e){
+    var msNode = e.target.closest("[data-gantt-ms]");
+    if(msNode){ openGanttMilestone(msNode.dataset.ganttMs); return; }
     var grp = e.target.closest("[data-gantt-group-toggle]");
     if(grp){ ganttToggleGroup(grp.dataset.ganttGroupToggle); return; }
     var dep = e.target.closest("[data-gantt-dep]");
@@ -2555,6 +2612,8 @@ if(ganttScroll){
   });
   ganttScroll.addEventListener("keydown", function(e){
     if(e.key !== "Enter" && e.key !== " ") return;
+    var msNode = e.target.closest ? e.target.closest("[data-gantt-ms]") : null;
+    if(msNode){ e.preventDefault(); openGanttMilestone(msNode.dataset.ganttMs); return; }
     var bar = e.target.closest ? e.target.closest("[data-gantt-bar]") : null;
     if(!bar) return;
     e.preventDefault();
@@ -2562,7 +2621,7 @@ if(ganttScroll){
   });
   /* 双击时间轴空白：按点击那天新建任务（预填起止，不直接落库） */
   ganttScroll.addEventListener("dblclick", function(e){
-    if(e.target.closest("[data-gantt-bar],[data-gantt-handle],[data-gantt-open],.gantt-group-head,.gantt-unplanned-row,.gantt-dep")) return;
+    if(e.target.closest("[data-gantt-bar],[data-gantt-handle],[data-gantt-open],[data-gantt-ms],.gantt-group-head,.gantt-unplanned-row,.gantt-dep")) return;
     var date = ganttDayAtClientX(e.clientX, e.clientY, true);
     if(!date) return;
     e.preventDefault();
@@ -2625,6 +2684,18 @@ if(ganttGroupEl){
     ganttState.groupBy = GANTT_VIEW_GROUPS.indexOf(v) !== -1 ? v : "none";
     /* 一级选「不分组」= 彻底平铺：二级分组也一起清掉，避免下拉显示不分组却仍在分组 */
     if(ganttState.groupBy === "none") ganttState.groupBy2 = "none";
+    syncGanttGroup2Options();
+    saveGanttPrefs();
+    renderGantt();
+    renderGanttViewsMenu();
+  });
+}
+if(ganttGroup2El){
+  ganttGroup2El.addEventListener("change", function(){
+    var v = this.value;
+    ganttState.groupBy2 = GANTT_VIEW_GROUPS.indexOf(v) !== -1 ? v : "none";
+    if(ganttState.groupBy === "none" || ganttState.groupBy2 === ganttState.groupBy) ganttState.groupBy2 = "none";
+    if(ganttGroup2El) ganttGroup2El.value = ganttState.groupBy2;
     saveGanttPrefs();
     renderGantt();
     renderGanttViewsMenu();
@@ -2658,7 +2729,7 @@ if(ganttFilterBtn){
 if(ganttFilterMenu){
   ganttFilterMenu.addEventListener("click", function(e){
     var reset = e.target.closest("[data-gantt-filter-reset]");
-    if(reset){ clearFilters(); renderGanttFilterMenu(); return; }
+    if(reset){ clearFilters({keepReqs:true}); renderGanttFilterMenu(); return; }
     var save = e.target.closest("[data-gantt-filter-save]");
     if(save){ UI.closeAllPops(); promptSaveView(); return; }
     var o = e.target.closest("[data-gantt-owner]");
@@ -2756,7 +2827,7 @@ if(ganttExportMenu){
     if(e.target.closest("[data-gantt-print]")){ UI.closeAllPops(); window.print(); }
   });
 }
-if(ganttClearFilterEl) ganttClearFilterEl.addEventListener("click", function(){ clearFilters(); });
+if(ganttClearFilterEl) ganttClearFilterEl.addEventListener("click", function(){ clearFilters({keepReqs:true}); });
 if($("ganttToday")) $("ganttToday").addEventListener("click", ganttGoToday);
 if($("ganttRefresh")) $("ganttRefresh").addEventListener("click", function(){ loadGantt(); });
 if(ganttAnalysisBtn){

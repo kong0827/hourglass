@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>更多筛选 · 呈现方式方案对比（2026-11-13）</title>
+<link rel="stylesheet" href="../../../frontend/css/tokens.css" />
+<link rel="stylesheet" href="../../../frontend/css/base.css" />
+<link rel="stylesheet" href="../../../frontend/css/components.css" />
+<style>
+  html,body{height:auto;overflow:auto;background:var(--bg-app);}
+  body{display:block;}
+  .page{width:1440px;margin:0 auto;padding:28px 40px 60px;}
+  .page-head{display:flex;align-items:baseline;gap:14px;margin-bottom:18px;}
+  .page-head h1{font-size:20px;font-weight:650;}
+  .page-head .meta{font-size:12.5px;color:var(--text-3);}
+  .stage{display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:hidden;}
+  .stage.on{display:block;}
+  .stage-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface);}
+  .stage-head .tag{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--primary-fg);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:var(--r-pill);padding:2px 9px;}
+  .stage-head .tag.muted{color:var(--text-3);background:var(--surface-sunken);border-color:var(--border);}
+  .stage-head h2{font-size:15px;font-weight:650;}
+  .stage-head .why{margin-left:auto;font-size:12.5px;color:var(--text-3);}
+  .canvas{position:relative;height:660px;background:var(--bg-app);overflow:hidden;padding:26px 32px;}
+  /* 顶部：模拟页头 + 筛选栏 */
+  .chrome{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow-xs);}
+  .chrome-head{display:flex;align-items:center;gap:10px;height:44px;padding:0 14px;border-bottom:1px solid var(--border);}
+  .chrome-head .logo{width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#2563EB,#7A5AF8);}
+  .chrome-head .t{font-size:13px;font-weight:650;}
+  .chrome-head .nav{display:flex;gap:16px;margin-left:26px;font-size:12.5px;color:var(--text-3);}
+  .chrome-head .nav b{color:var(--text);font-weight:600;}
+  .chrome-head .right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);}
+  .chrome-head .avatar{width:22px;height:22px;border-radius:50%;background:#D9D6FE;color:#4C1D95;display:grid;place-items:center;font-size:11px;font-weight:700;}
+  .filterbar.demo{display:flex;position:relative;height:48px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--border);gap:10px;}
+  .filterbar.demo .fb-main{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;}
+  .filterbar.demo .fb-right{display:flex;align-items:center;gap:6px;margin-left:auto;}
+  .filterbar.demo .group-label{font-size:12px;color:var(--text-3);}
+  .filterbar.demo .chip{height:26px;font-size:12.5px;padding:0 9px;}
+  .filterbar.demo .btn.sm{height:26px;font-size:12px;}
+  .board-bg{height:520px;padding:18px 16px;display:flex;gap:14px;background:linear-gradient(#F7F8FA,#F2F4F7);}
+  .board-col{flex:1 1 0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;display:flex;flex-direction:column;gap:8px;}
+  .board-col .c-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;color:var(--text-2);}
+  .board-col .c-head .dot{width:7px;height:7px;border-radius:50%;background:var(--border-strong);}
+  .card-sk{height:54px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:8px;display:flex;flex-direction:column;gap:6px;}
+  .card-sk i{display:block;height:6px;border-radius:3px;background:var(--surface-active);}
+  .card-sk i.w1{width:70%;} .card-sk i.w2{width:44%;background:var(--surface-sunken);}
+  /* 弹层定位 */
+  .pop-anchor{position:absolute;z-index:40;}
+  .pop-current,.pop-a,.pop-b,.pop-c{left:470px;top:124px;}
+  /* ---------- 现状 ---------- */
+  .menu.demo{position:relative;left:0;top:0;max-height:420px;width:344px;padding:4px 4px 0;overflow-y:auto;}
+  .menu.demo .fgroup-demo{display:flex;flex-wrap:wrap;gap:6px;}
+  .menu.demo .chip{height:26px;font-size:12.5px;padding:0 9px;}
+  .menu.demo .chip .n{font-size:11px;}
+  .section{padding:4px 6px 8px;}
+  .section .glabel{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-3);margin-bottom:6px;text-transform:uppercase;}
+  .scroll-fade{position:absolute;left:0;right:0;bottom:0;height:46px;background:linear-gradient(transparent,var(--surface));pointer-events:none;border-radius:0 0 var(--r-lg) var(--r-lg);}
+  /* ---------- 方案 A：两级 ---------- */
+  .fp{width:576px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;}
+  .fp-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);}
+  .fp-head .search{position:relative;flex:1 1 auto;}
+  .fp-head .search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-3);}
+  .fp-head input{width:100%;height:32px;padding:0 10px 0 30px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:13px;color:var(--text);}
+  .fp-head input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+  .fp-head kbd{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:1px 5px;background:var(--surface-sunken);}
+  .fp-body{display:flex;min-height:0;height:330px;}
+  .fp-dims{width:190px;flex:0 0 190px;border-right:1px solid var(--border);padding:6px;overflow-y:auto;background:var(--surface-sunken);}
+  .fp-dims .dim{display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 9px;border-radius:var(--r-xs);font-size:13px;color:var(--text-2);text-align:left;}
+  .fp-dims .dim:hover{background:var(--surface-active);color:var(--text);}
+  .fp-dims .dim.on{background:var(--surface);color:var(--text);font-weight:650;box-shadow:var(--shadow-xs);}
+  .fp-dims .dim .ic{width:14px;height:14px;color:var(--text-3);flex:0 0 auto;}
+  .fp-dims .dim .cnt{margin-left:auto;font-size:11px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .fp-dims .dim .cnt.has{background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);border-radius:var(--r-pill);padding:0 6px;line-height:16px;}
+  .fp-vals{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:10px 12px;overflow:hidden;}
+  .fp-vals-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .fp-vals-head .vt{font-size:13px;font-weight:650;}
+  .fp-vals-head .vhint{font-size:11.5px;color:var(--text-3);font-weight:400;}
+  .fp-vals-head .clear{margin-left:auto;font-size:12px;color:var(--text-3);}
+  .fp-vals-head .clear:hover{color:var(--primary-fg);}
+  .fp-val-search{width:100%;height:30px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;margin-bottom:6px;}
+  .fp-val-search:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+  .fp-opts{flex:1 1 auto;overflow-y:auto;padding-right:4px;}
+  .fp-opt{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:0 8px;border-radius:var(--r-xs);font-size:13px;color:var(--text);text-align:left;}
+  .fp-opt:hover{background:var(--surface-hover);}
+  .fp-opt .box{width:15px;height:15px;border:1.5px solid var(--border-strong);border-radius:4px;display:grid;place-items:center;flex:0 0 auto;color:#fff;font-size:10px;}
+  .fp-opt.on .box{background:var(--primary);border-color:var(--primary);}
+  .fp-opt .n{margin-left:auto;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .fp-opt .av{width:20px;height:20px;border-radius:50%;background:var(--surface-active);color:var(--text-2);display:grid;place-items:center;font-size:10px;font-weight:700;flex:0 0 auto;}
+  .fp-foot{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--border);}
+  .fp-foot .foot-note{font-size:11.5px;color:var(--text-3);margin-right:auto;}
+  .fp-foot .btn.sm{height:26px;font-size:12px;}
+  /* ---------- 方案 B：条件行 ---------- */
+  .cond-panel{width:536px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);overflow:hidden;}
+  .cond-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);}
+  .cond-head b{font-size:13px;}
+  .cond-head .cnt{margin-left:6px;font-size:11px;color:var(--text-3);}
+  .cond-head .right{margin-left:auto;font-size:12px;color:var(--text-3);}
+  .cond-list{padding:8px 10px 4px;display:flex;flex-direction:column;gap:6px;}
+  .cond-row{display:flex;align-items:center;gap:6px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 6px;}
+  .cond-row .seg{height:26px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);font-size:12.5px;display:flex;align-items:center;gap:6px;color:var(--text);}
+  .cond-row .seg.prop{font-weight:600;min-width:74px;}
+  .cond-row .seg.op{color:var(--text-2);min-width:52px;justify-content:center;}
+  .cond-row .seg.val{flex:1 1 auto;min-width:0;gap:8px;}
+  .cond-row .seg.val .n{margin-left:auto;font-size:11px;color:var(--text-3);}
+  .cond-row .x{width:24px;height:24px;display:grid;place-items:center;border-radius:var(--r-xs);color:var(--text-3);}
+  .cond-row .x:hover{background:var(--danger-soft);color:var(--danger-fg);}
+  .cond-add{display:flex;align-items:center;gap:6px;height:32px;padding:0 8px;color:var(--primary-fg);font-size:12.5px;font-weight:600;border-radius:var(--r-xs);}
+  .cond-add:hover{background:var(--primary-soft);}
+  .cond-tip{padding:4px 12px 10px;font-size:11.5px;color:var(--text-3);line-height:17px;}
+  .cond-foot{display:flex;gap:8px;padding:8px 12px;border-top:1px solid var(--border);}
+  .cond-foot .btn.sm{height:26px;font-size:12px;}
+  .cond-line{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);padding:2px 4px;}
+  /* ---------- 方案 C：可搜索单列 ---------- */
+  .flat{width:400px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;}
+  .flat-head{padding:10px 12px;border-bottom:1px solid var(--border);}
+  .flat-search{position:relative;}
+  .flat-search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-3);}
+  .flat-search input{width:100%;height:32px;padding:0 10px 0 30px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px;}
+  .flat-search input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+  .flat-body{max-height:346px;overflow-y:auto;padding:6px 8px;}
+  .flat-sec{padding:4px 4px 2px;}
+  .flat-sec .rowh{display:flex;align-items:center;gap:6px;height:34px;padding:0 6px;border-radius:var(--r-xs);}
+  .flat-sec .rowh:hover{background:var(--surface-hover);}
+  .flat-sec .rowh .nm{font-size:13px;font-weight:600;}
+  .flat-sec .rowh .sel{font-size:11.5px;color:var(--text-3);margin-left:auto;display:flex;align-items:center;gap:6px;}
+  .flat-sec .rowh .sel b{color:var(--primary-fg);font-weight:600;}
+  .flat-sec .rowh .chev{color:var(--text-3);transition:transform .15s;}
+  .flat-sec.open .rowh .chev{transform:rotate(180deg);}
+  .flat-sec .body{display:none;flex-wrap:wrap;gap:6px;padding:4px 6px 10px;}
+  .flat-sec.open .body{display:flex;}
+  .flat-sec .body .chip{height:26px;font-size:12.5px;padding:0 9px;}
+  .flat-sec.collapsed .rowh .sel{color:var(--text-2);}
+  .flat-sel{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 6px;border-bottom:1px dashed var(--border);margin-bottom:4px;}
+  .flat-sel .lbl{font-size:11.5px;color:var(--text-3);font-weight:600;margin-right:2px;}
+  .flat-sel .chip{height:24px;font-size:12px;}
+  .flat-foot{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--border);}
+  .flat-foot .btn.sm{height:26px;font-size:12px;}
+  .flat-foot .foot-note{font-size:11.5px;color:var(--text-3);margin-left:auto;}
+  /* 说明 */
+  .note{display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface);font-size:12.5px;color:var(--text-2);line-height:19px;}
+  .note .ico{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-size:11px;font-weight:700;margin-top:1px;}
+  .note b{font-weight:650;color:var(--text);}
+  .note .adv{color:var(--success-fg);font-weight:600;}
+  .note .lim{color:var(--warning-fg);font-weight:600;}
+  .badge-note{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-3);}
+  .legend{display:flex;gap:18px;margin-top:14px;font-size:12px;color:var(--text-3);}
+  .legend span{display:flex;align-items:center;gap:6px;}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-head">
+    <h1>「更多筛选」呈现方式 · 方案对比</h1>
+    <span class="meta">2026-11-13 · 沙漏 / 工作项筛选 · 样张数据仅用于比较信息密度</span>
+  </div>
+
+  <!-- ================= 现状 ================= -->
+  <section class="stage on" data-variant="current">
+    <div class="stage-head">
+      <span class="tag muted">现状</span>
+      <h2>单列平铺：10 个分组一次性堆在 344px 的弹层里</h2>
+      <span class="why">高度上限 420px，找「项目 / 标签」要滚 2 屏</span>
+    </div>
+    <div class="canvas">
+      <div class="chrome">
+        <div class="chrome-head">
+          <span class="logo"></span><span class="t">沙漏</span>
+          <span class="nav"><span>工作项</span><span>项目</span><span>报吿</span><span>知识库</span></span>
+          <span class="right">产品空间 <span class="avatar">孔</span></span>
+        </div>
+        <div class="filterbar demo">
+          <div class="fb-main">
+            <div class="fgroup"><span class="group-label">截止期</span>
+              <span class="chips">
+                <button class="chip alert-over"><i class="cdot"></i>已逾期 <span class="n">3</span></button>
+                <button class="chip alert-today"><i class="cdot"></i>今天到期 <span class="n">5</span></button>
+                <button class="chip alert-soon"><i class="cdot"></i>3 天内 <span class="n">8</span></button>
+                <button class="chip alert-focus"><i class="cdot"></i>今日聚焦</button>
+              </span>
+            </div>
+            <button class="chip" aria-pressed="true" style="border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg)">更多筛选 <span class="n">3</span></button>
+            <span class="chips">
+              <button class="chip" aria-pressed="true">状态 2 项 ×</button>
+              <button class="chip" aria-pressed="true">负责人：孔祥金 ×</button>
+              <button class="chip" aria-pressed="true">优先级 2 项 ×</button>
+            </span>
+          </div>
+          <div class="fb-right">
+            <button class="btn sm">存为视图</button>
+            <button class="btn sm soft">清空筛选</button>
+          </div>
+        </div>
+        <div class="board-bg">
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#94A3B8"></i>待处理 <span style="color:var(--text-3);font-weight:400">18</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#2563EB"></i>进行中 <span style="color:var(--text-3);font-weight:400">12</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#F79009"></i>待评审 <span style="color:var(--text-3);font-weight:400">6</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#12B76A"></i>已完成 <span style="color:var(--text-3);font-weight:400">43</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+        </div>
+      </div>
+
+      <div class="pop-anchor pop-current">
+        <div class="menu demo">
+          <div class="menu-title">筛选</div>
+          <div class="section"><div class="glabel">状态</div><div class="fgroup-demo">
+            <button class="chip" aria-pressed="true">待处理 <span class="n">18</span></button>
+            <button class="chip" aria-pressed="true">进行中 <span class="n">12</span></button>
+            <button class="chip">待评审 <span class="n">6</span></button>
+            <button class="chip">已完成 <span class="n">43</span></button>
+            <button class="chip">已关闭 <span class="n">9</span></button>
+            <button class="chip">已阻塞 <span class="n">4</span></button>
+          </div></div>
+          <div class="section"><div class="glabel">负责人</div><div class="fgroup-demo">
+            <button class="chip" aria-pressed="true">孔祥金 <span class="n">23</span></button>
+            <button class="chip">李明 <span class="n">14</span></button>
+            <button class="chip">王芳 <span class="n">11</span></button>
+            <button class="chip">陈晨 <span class="n">8</span></button>
+            <button class="chip">赵磊 <span class="n">5</span></button>
+            <button class="chip">周敏 <span class="n">3</span></button>
+            <button class="chip">吴晗 <span class="n">2</span></button>
+            <button class="chip">孙悦 <span class="n">1</span></button>
+          </div></div>
+          <div class="section"><div class="glabel">优先级</div><div class="fgroup-demo">
+            <button class="chip" aria-pressed="true"><i class="cdot" style="background:#F04438"></i>P0 紧急 <span class="n">4</span></button>
+            <button class="chip" aria-pressed="true"><i class="cdot" style="background:#F79009"></i>P1 高 <span class="n">12</span></button>
+            <button class="chip"><i class="cdot" style="background:#2E90FA"></i>P2 中 <span class="n">21</span></button>
+            <button class="chip"><i class="cdot" style="background:#667085"></i>P3 低 <span class="n">9</span></button>
+          </div></div>
+          <div class="section"><div class="glabel">类型</div><div class="fgroup-demo">
+            <button class="chip">任务 <span class="n">28</span></button>
+            <button class="chip">需求 <span class="n">15</span></button>
+            <button class="chip">缺陷 <span class="n">9</span></button>
+            <button class="chip">史诗 <span class="n">3</span></button>
+          </div></div>
+          <div class="section"><div class="glabel">版本</div>
+            <input class="mf-version-search" style="width:100%" placeholder="搜索版本名…（共 12 个）" />
+            <div class="mf-version-scroll" style="max-height:150px">
+              <button class="chip" aria-pressed="true">v2.4.0（进行中） <span class="n">18</span></button>
+              <button class="chip">v2.3.0 <span class="n">32</span></button>
+              <button class="chip">v2.2.1 <span class="n">7</span></button>
+              <button class="chip">v1.9.2 <span class="n">11</span></button>
+              <button class="chip">待规划 <span class="n">5</span></button>
+            </div>
+          </div>
+          <div class="section"><div class="glabel">模块</div><div class="fgroup-demo">
+            <button class="chip">筛选与视图 <span class="n">8</span></button>
+            <button class="chip">工作项 <span class="n">12</span></button>
+            <button class="chip">发布计划 <span class="n">6</span></button>
+          </div></div>
+          <div class="scroll-fade"></div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <span class="ico">!</span>
+      <div>10 个分组、约 40 个可选值全部平铺；按每屏 420px 计算，<b>「标签 / 项目 / 完成情况」在第 2–3 屏</b>。每次筛选都要先滚动定位，再横向找值，维度越多越慢。</div>
+    </div>
+  </section>
+
+  <!-- ================= 方案 A ================= -->
+  <section class="stage" data-variant="a">
+    <div class="stage-head">
+      <span class="tag">推荐</span>
+      <h2>两级筛选器：先选维度，再看取值</h2>
+      <span class="why">参考 Linear / ClickUp / 飞书多维表格；一屏放下全部维度</span>
+    </div>
+    <div class="canvas">
+      <div class="chrome">
+        <div class="chrome-head">
+          <span class="logo"></span><span class="t">沙漏</span>
+          <span class="nav"><span>工作项</span><span>项目</span><span>报吿</span><span>知识库</span></span>
+          <span class="right">产品空间 <span class="avatar">孔</span></span>
+        </div>
+        <div class="filterbar demo">
+          <div class="fb-main">
+            <div class="fgroup"><span class="group-label">截止期</span>
+              <span class="chips">
+                <button class="chip alert-over"><i class="cdot"></i>已逾期 <span class="n">3</span></button>
+                <button class="chip alert-today"><i class="cdot"></i>今天到期 <span class="n">5</span></button>
+                <button class="chip alert-soon"><i class="cdot"></i>3 天内 <span class="n">8</span></button>
+              </span>
+            </div>
+            <button class="chip" aria-pressed="true" style="border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg)">添加筛选 <span class="n">3</span></button>
+            <span class="chips">
+              <button class="chip" aria-pressed="true">状态 2 项 ▾</button>
+              <button class="chip" aria-pressed="true">负责人：孔祥金 ▾</button>
+              <button class="chip" aria-pressed="true">P0 · P1 ▾</button>
+            </span>
+          </div>
+          <div class="fb-right">
+            <button class="btn sm">存为视图</button>
+            <button class="btn sm soft">清空</button>
+          </div>
+        </div>
+        <div class="board-bg">
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#94A3B8"></i>待处理 <span style="color:var(--text-3);font-weight:400">18</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#2563EB"></i>进行中 <span style="color:var(--text-3);font-weight:400">12</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#F79009"></i>待评审 <span style="color:var(--text-3);font-weight:400">6</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#12B76A"></i>已完成 <span style="color:var(--text-3);font-weight:400">43</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+        </div>
+      </div>
+
+      <div class="pop-anchor pop-a">
+        <div class="fp">
+          <div class="fp-head">
+            <div class="search">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="9" r="5.6"/><path d="M13.2 13.2 17 17"/></svg>
+              <input placeholder="搜索字段或取值，如「P0」「v2.4」" />
+            </div>
+            <kbd>F</kbd>
+          </div>
+          <div class="fp-body">
+            <nav class="fp-dims">
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 5.5h14M6 10h8M8.5 14.5h3"/></svg>状态<span class="cnt has">2</span></button>
+              <button class="dim on"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="7" r="3"/><path d="M4.5 16.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/></svg>负责人<span class="cnt has">1</span></button>
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 3.5v13M5 8.5 10 3.5l5 5"/></svg>优先级<span class="cnt has">2</span></button>
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="3.5" width="13" height="13" rx="2"/><path d="M7 8h6M7 12h4"/></svg>类型</button>
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4v10.5a2 2 0 0 0 2 2h10"/><path d="M4 4h7v5H4z"/></svg>版本<span class="cnt">1</span></button>
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 5.5h5l2 2h6v8h-13z"/></svg>模块</button>
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 10.5 9 4.9h5.6v5.6L9 16.1z"/><circle cx="12" cy="7.5" r="1"/></svg>标签</button>
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="4.5" width="13" height="11" rx="2"/><path d="M3.5 8.5h13"/></svg>项目</button>
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="m7 10 2 2 4-4"/></svg>完成情况</button>
+              <button class="dim"><svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>其他</button>
+            </nav>
+            <div class="fp-vals">
+              <div class="fp-vals-head">
+                <span class="vt">负责人</span><span class="vhint">多选 · 8 人</span>
+                <button class="clear">清空</button>
+              </div>
+              <input class="fp-val-search" placeholder="搜索负责人" />
+              <div class="fp-opts">
+                <button class="fp-opt on"><span class="box">✓</span><span class="av">孔</span>孔祥金<span class="n">23</span></button>
+                <button class="fp-opt"><span class="box"></span><span class="av">李</span>李明<span class="n">14</span></button>
+                <button class="fp-opt"><span class="box"></span><span class="av">王</span>王芳<span class="n">11</span></button>
+                <button class="fp-opt"><span class="box"></span><span class="av">陈</span>陈晨<span class="n">8</span></button>
+                <button class="fp-opt"><span class="box"></span><span class="av">赵</span>赵磊<span class="n">5</span></button>
+                <button class="fp-opt"><span class="box"></span><span class="av">周</span>周敏<span class="n">3</span></button>
+                <button class="fp-opt"><span class="box"></span><span class="av">吴</span>吴晗<span class="n">2</span></button>
+                <button class="fp-opt"><span class="box"></span><span class="av">孙</span>孙悦<span class="n">1</span></button>
+              </div>
+            </div>
+          </div>
+          <div class="fp-foot">
+            <span class="foot-note">只列出当前结果中出现过的负责人 · 选中即生效</span>
+            <button class="btn sm">重置筛选</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <span class="ico">✓</span>
+      <div>左栏 10 个维度一屏可见、带已选数量，右栏只渲染当前维度的取值并可就地搜索。<span class="adv">滚动从 2–3 屏降为 0；已选 chip 可点回该维度继续改</span>，筛选栏也能直接显示「P0 · P1」这样的真实条件，而不是「2 项」。</div>
+    </div>
+  </section>
+
+  <!-- ================= 方案 B ================= -->
+  <section class="stage" data-variant="b">
+    <div class="stage-head">
+      <span class="tag muted">备选</span>
+      <h2>条件行：字段 / 运算符 / 值逐行表达</h2>
+      <span class="why">参考 Notion、Airtable、Height；适合复杂组合与保存视图</span>
+    </div>
+    <div class="canvas">
+      <div class="chrome">
+        <div class="chrome-head">
+          <span class="logo"></span><span class="t">沙漏</span>
+          <span class="nav"><span>工作项</span><span>项目</span><span>报吿</span><span>知识库</span></span>
+          <span class="right">产品空间 <span class="avatar">孔</span></span>
+        </div>
+        <div class="filterbar demo">
+          <div class="fb-main">
+            <span class="chips">
+              <button class="chip" aria-pressed="true">负责人 是 孔祥金 ×</button>
+              <button class="chip" aria-pressed="true">状态 是 待处理、进行中 ×</button>
+              <button class="chip" aria-pressed="true">优先级 是 P0、P1 ×</button>
+            </span>
+          </div>
+          <div class="fb-right"><button class="btn sm">存为视图</button><button class="btn sm soft">清空</button></div>
+        </div>
+        <div class="board-bg">
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#94A3B8"></i>待处理 <span style="color:var(--text-3);font-weight:400">18</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#2563EB"></i>进行中 <span style="color:var(--text-3);font-weight:400">12</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#F79009"></i>待评审 <span style="color:var(--text-3);font-weight:400">6</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#12B76A"></i>已完成 <span style="color:var(--text-3);font-weight:400">43</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+        </div>
+      </div>
+
+      <div class="pop-anchor pop-b">
+        <div class="cond-panel">
+          <div class="cond-head"><b>筛选条件</b><span class="cnt">3 条</span><span class="right">全部满足（且）</span></div>
+          <div class="cond-list">
+            <div class="cond-row">
+              <span class="seg prop">负责人 ▾</span>
+              <span class="seg op">是 ▾</span>
+              <span class="seg val"><span class="av" style="width:18px;height:18px;border-radius:50%;background:var(--surface-active);display:grid;place-items:center;font-size:10px;font-weight:700">孔</span>孔祥金<span class="n">23</span></span>
+              <button class="x">×</button>
+            </div>
+            <div class="cond-row">
+              <span class="seg prop">状态 ▾</span>
+              <span class="seg op">是 ▾</span>
+              <span class="seg val">待处理、进行中<span class="n">30</span></span>
+              <button class="x">×</button>
+            </div>
+            <div class="cond-row">
+              <span class="seg prop">优先级 ▾</span>
+              <span class="seg op">是 ▾</span>
+              <span class="seg val">P0 紧急、P1 高<span class="n">16</span></span>
+              <button class="x">×</button>
+            </div>
+            <button class="cond-add">＋ 添加筛选条件</button>
+          </div>
+          <div class="cond-tip">条件之间默认「且」；要表达「或」时，把同一字段的多个值放进同一行即可。</div>
+          <div class="cond-foot"><button class="btn sm">重置</button><button class="btn sm soft">存为视图</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <span class="ico">!</span>
+      <div>表达力最强，也最适合「保存视图」心智；但每次新增条件要依次选字段、运算符、值，<span class="lim">对当前「勾几个值快速看」的场景偏重</span>，且会改变用户已经熟悉的单选/多选模型。</div>
+    </div>
+  </section>
+
+  <!-- ================= 方案 C ================= -->
+  <section class="stage" data-variant="c">
+    <div class="stage-head">
+      <span class="tag muted">最小改动</span>
+      <h2>单列保留，加搜索 + 已选置顶 + 折叠</h2>
+      <span class="why">不改交互模型，只压缩滚动距离</span>
+    </div>
+    <div class="canvas">
+      <div class="chrome">
+        <div class="chrome-head">
+          <span class="logo"></span><span class="t">沙漏</span>
+          <span class="nav"><span>工作项</span><span>项目</span><span>报吿</span><span>知识库</span></span>
+          <span class="right">产品空间 <span class="avatar">孔</span></span>
+        </div>
+        <div class="filterbar demo">
+          <div class="fb-main">
+            <div class="fgroup"><span class="group-label">截止期</span>
+              <span class="chips">
+                <button class="chip alert-over"><i class="cdot"></i>已逾期 <span class="n">3</span></button>
+                <button class="chip alert-today"><i class="cdot"></i>今天到期 <span class="n">5</span></button>
+                <button class="chip alert-soon"><i class="cdot"></i>3 天内 <span class="n">8</span></button>
+              </span>
+            </div>
+            <button class="chip" aria-pressed="true" style="border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg)">更多筛选 <span class="n">3</span></button>
+            <span class="chips">
+              <button class="chip" aria-pressed="true">状态 2 项 ×</button>
+              <button class="chip" aria-pressed="true">负责人：孔祥金 ×</button>
+            </span>
+          </div>
+          <div class="fb-right"><button class="btn sm">存为视图</button><button class="btn sm soft">清空</button></div>
+        </div>
+        <div class="board-bg">
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#94A3B8"></i>待处理 <span style="color:var(--text-3);font-weight:400">18</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#2563EB"></i>进行中 <span style="color:var(--text-3);font-weight:400">12</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#F79009"></i>待评审 <span style="color:var(--text-3);font-weight:400">6</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+          <div class="board-col"><div class="c-head"><i class="dot" style="background:#12B76A"></i>已完成 <span style="color:var(--text-3);font-weight:400">43</span></div><div class="card-sk"><i class="w1"></i><i class="w2"></i></div></div>
+        </div>
+      </div>
+
+      <div class="pop-anchor pop-c">
+        <div class="flat">
+          <div class="flat-head">
+            <div class="flat-search">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="9" r="5.6"/><path d="M13.2 13.2 17 17"/></svg>
+              <input placeholder="搜索筛选条件或值…" />
+            </div>
+          </div>
+          <div class="flat-body">
+            <div class="flat-sel">
+              <span class="lbl">已选 3</span>
+              <button class="chip" aria-pressed="true">待处理 ×</button>
+              <button class="chip" aria-pressed="true">进行中 ×</button>
+              <button class="chip" aria-pressed="true">孔祥金 ×</button>
+            </div>
+            <div class="flat-sec open">
+              <div class="rowh"><span class="nm">状态</span><span class="sel"><b>2 项</b><svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 8 5 5 5-5"/></svg></span></div>
+              <div class="body">
+                <button class="chip" aria-pressed="true">待处理 <span class="n">18</span></button>
+                <button class="chip" aria-pressed="true">进行中 <span class="n">12</span></button>
+                <button class="chip">待评审 <span class="n">6</span></button>
+                <button class="chip">已完成 <span class="n">43</span></button>
+              </div>
+            </div>
+            <div class="flat-sec">
+              <div class="rowh"><span class="nm">负责人</span><span class="sel">孔祥金<svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 8 5 5 5-5"/></svg></span></div>
+            </div>
+            <div class="flat-sec">
+              <div class="rowh"><span class="nm">优先级</span><span class="sel">P0 · P1<svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 8 5 5 5-5"/></svg></span></div>
+            </div>
+            <div class="flat-sec">
+              <div class="rowh"><span class="nm">类型</span><span class="sel" style="color:var(--text-3)">全部<svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 8 5 5 5-5"/></svg></span></div>
+            </div>
+            <div class="flat-sec">
+              <div class="rowh"><span class="nm">版本</span><span class="sel">v2.4.0<svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 8 5 5 5-5"/></svg></span></div>
+            </div>
+            <div class="flat-sec">
+              <div class="rowh"><span class="nm">模块</span><span class="sel" style="color:var(--text-3)">全部<svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 8 5 5 5-5"/></svg></span></div>
+            </div>
+            <div class="flat-sec">
+              <div class="rowh"><span class="nm">标签</span><span class="sel" style="color:var(--text-3)">全部<svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 8 5 5 5-5"/></svg></span></div>
+            </div>
+            <div class="flat-sec">
+              <div class="rowh"><span class="nm">项目</span><span class="sel" style="color:var(--text-3)">全部<svg class="chev" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 8 5 5 5-5"/></svg></span></div>
+            </div>
+          </div>
+          <div class="flat-foot"><button class="btn sm">重置筛选</button><span class="foot-note">选中即生效</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <span class="ico">✓</span>
+      <div>保留原来的 chip 交互，只加三件事：顶部搜索、已选值置顶、未选维度折叠成 34px 一行，并默认收起空维度。<span class="adv">滚动距离预计减少 60%</span>，但维度多时仍需逐行点开，长远看不如两级稳定。</div>
+    </div>
+  </section>
+
+  <div class="legend">
+    <span><b style="color:var(--text-2)">样张说明</b>：同一组数据（10 个维度 / 约 40 个取值）在四种呈现下的信息密度；数值为演示数据。</span>
+  </div>
+</div>
+<script>
+  var v = new URLSearchParams(location.search).get("v") || "current";
+  document.querySelectorAll(".stage").forEach(function(s){ s.classList.toggle("on", s.dataset.variant === v); });
+  /* 折叠交互（仅样张） */
+  document.querySelectorAll(".flat-sec .rowh").forEach(function(h){
+    h.addEventListener("click", function(){ h.parentElement.classList.toggle("open"); });
+  });
+  document.querySelectorAll(".fp-dims .dim").forEach(function(d){
+    d.addEventListener("click", function(){
+      document.querySelectorAll(".fp-dims .dim").forEach(function(x){ x.classList.remove("on"); });
+      d.classList.add("on");
+    });
+  });
+</script>
+</body>
+</html>

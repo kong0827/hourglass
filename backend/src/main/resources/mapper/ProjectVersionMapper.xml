@@ -3,13 +3,14 @@
 <mapper namespace="com.hourglass.mapper.ProjectVersionMapper">
 
   <sql id="cols">
-    id, workspace_id, req_id, name, description, status, start_date, target_date, released_at, revision, created_at, updated_at
+    id, workspace_id, req_id, name, description, status, start_date, target_date, released_at,
+    ended_at, end_reason, commitment_at, revision, created_at, updated_at
   </sql>
 
   <select id="selectByReq" resultType="ProjectVersion">
     SELECT <include refid="cols"/> FROM project_version
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
-    ORDER BY FIELD(status, 'active', 'planned', 'released'), created_at DESC, id
+    ORDER BY FIELD(status, 'active', 'planned', 'released', 'closed', 'canceled'), created_at DESC, id
   </select>
 
   <select id="selectById" resultType="ProjectVersion">
@@ -73,9 +74,10 @@
 
   <insert id="insert">
     INSERT INTO project_version (id, workspace_id, req_id, name, description, status, start_date, target_date,
-                                 released_at, created_at, updated_at)
+                                 released_at, ended_at, end_reason, commitment_at, created_at, updated_at)
     VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{description}, #{status}, #{startDate}, #{targetDate},
-            #{releasedAt}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+            #{releasedAt}, #{endedAt}, #{endReason}, #{commitmentAt}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
+            COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
   <update id="update">
@@ -88,6 +90,23 @@
       revision = revision + 1,
       updated_at = NOW()
     WHERE id = #{id} AND workspace_id = #{workspaceId} AND revision = #{revision}
+  </update>
+
+  <!-- 终态封闭：关闭/取消必须带原因，并以 revision 做并发保护；状态一旦写入不再由普通编辑改回 -->
+  <update id="endVersion">
+    UPDATE project_version SET
+      status = #{status},
+      ended_at = NOW(),
+      end_reason = #{reason},
+      revision = revision + 1,
+      updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId} AND revision = #{revision}
+  </update>
+
+  <!-- 承诺基线只写一次：先到者生效，后续开始/编辑不会覆盖已冻结的快照 -->
+  <update id="markCommitment">
+    UPDATE project_version SET commitment_at = NOW(), updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND commitment_at IS NULL
   </update>
 
   <!-- 任务侧调整版本成员：推进版本 revision，让版本侧打开中的成员表单按并发冲突处理，不再整表覆盖 -->

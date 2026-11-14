@@ -19,10 +19,13 @@ BASELINE = os.path.join(ROOT, "sql", "baseline", "01_schema_full.sql")
 COPY_PAIRS = [
     ("管理员指南.md", "管理员指南.md"),
     ("项目介绍.md", "项目介绍.md"),
+    ("项目起源.md", "项目起源.md"),
     ("常见问题.md", "常见问题.md"),
     ("快速上手指南.md", "快速上手指南.md"),
     ("产品说明.md", "产品说明.md"),
+    # 帮助中心加载的是 user-guide.md；frontend/用户使用手册.md 是另一份被相对链接引用的副本。
     ("用户使用手册.md", "user-guide.md"),
+    ("用户使用手册.md", "用户使用手册.md"),
 ]
 
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
@@ -100,6 +103,11 @@ def check_table_count(issues):
         ("README.en.md", r"(\d+) tables"),
         ("docs/管理员指南.md", r"全库 (\d+) 张表"),
         ("frontend/管理员指南.md", r"全库 (\d+) 张表"),
+        ("sql/README.md", r"基线包含当前全部 (\d+) 张表"),
+        ("docs/接口契约.md", r"完整基线包含 (\d+) 张表"),
+        ("docs/接口契约.md", r"完整基线同步为 (\d+) 张表"),
+        ("docs/项目介绍.md", r"全库 (\d+) 表"),
+        ("frontend/项目介绍.md", r"全库 (\d+) 表"),
     ]
     for rel, pattern in checks:
         path = os.path.join(ROOT, rel)
@@ -123,7 +131,7 @@ def main():
         for item in issues:
             print(" - " + item)
         return 1
-    print("OK：文档副本同步、本地链接有效、表数量口径一致")
+    print("OK：文档副本同步（含三份手册）、本地链接有效、表数量口径一致")
     return 0
 
 

@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 版本与模块阶段投入原型</title>
+<style>
+
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --st-review:#667085; --st-plan:#0B8AD9; --st-design:#6941C6; --st-dev:#2563EB;
+  --st-test:#B54708; --st-complete:#067647; --st-release:#0E7C70;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,Menlo,monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --sidebar-w:220px; --topbar-h:60px; --label-w:360px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:var(--font-sans);font-size:13px;color:var(--text);background:var(--bg-app);-webkit-font-smoothing:antialiased;}
+button,input,select{font:inherit;color:inherit;}
+button{border:0;background:none;cursor:pointer;}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+.app{display:flex;min-height:100vh;}
+.sidebar{width:var(--sidebar-w);flex:0 0 auto;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);position:sticky;top:0;height:100vh;}
+.side-brand{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;}
+.brand-mark{width:32px;height:32px;border-radius:var(--r-sm);background:var(--primary);display:grid;place-items:center;color:#fff;}
+.side-brand-name{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.side-ws{padding:0 12px 10px;}
+.ws-switch{display:flex;align-items:center;gap:9px;width:100%;height:44px;padding:0 9px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);}
+.ws-avatar{width:24px;height:24px;font-size:11px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-weight:700;}
+.ws-n{font-size:13px;font-weight:600;display:block;text-align:left;}
+.ws-kind{font-size:11px;color:var(--text-3);display:block;text-align:left;}
+.side-nav{flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column;gap:1px;padding:0 12px 12px;}
+.nav-sec{padding:12px 10px 4px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-3);}
+.nav-item{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--r-sm);color:var(--text-2);font-size:13px;font-weight:550;width:100%;text-align:left;}
+.nav-item:hover{background:var(--surface-hover);color:var(--text);}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650;}
+.side-foot{border-top:1px solid var(--border);padding:10px 12px;}
+.side-user{display:flex;align-items:center;gap:9px;padding:8px 6px;border-radius:var(--r-sm);}
+.avatar{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--primary);}
+.side-user-n{font-size:12.5px;font-weight:600;line-height:1.25;}
+.side-user-r{font-size:11px;color:var(--text-3);}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;}
+.topbar{height:var(--topbar-h);display:flex;align-items:center;gap:14px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border);}
+.tb-title{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.tb-sub{font-size:12px;color:var(--text-3);margin-top:1px;}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.proto-pill{font-size:11px;font-weight:650;padding:3px 9px;border-radius:var(--r-pill);background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
+.icon-btn{width:32px;height:32px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2);border:1px solid transparent;}
+.icon-btn:hover{background:var(--surface-hover);border-color:var(--border);}
+.content{flex:1 1 auto;padding:18px 24px 40px;display:flex;flex-direction:column;gap:14px;min-width:0;}
+.proto-banner{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px dashed var(--primary-border);border-radius:var(--r-md);background:var(--primary-soft);color:var(--primary-fg);font-size:12px;line-height:1.6;}
+.proto-banner b{font-weight:700;}
+.proto-banner .btn{margin-left:auto;background:var(--surface);}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;}
+.page-head h1{font-size:20px;font-weight:700;letter-spacing:-.02em;}
+.page-head p{font-size:12.5px;color:var(--text-3);line-height:1.65;margin-top:5px;max-width:860px;}
+.view-tabs{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;flex:0 0 auto;}
+.view-tabs button{height:28px;padding:0 13px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--text-2);}
+.view-tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+.btn{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.btn:hover{background:var(--surface-hover);color:var(--text);border-color:var(--border-strong);}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-fg);border-color:var(--primary-fg);color:#fff;}
+.btn.new{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.toolbar{display:flex;align-items:center;gap:12px;padding:10px 14px;flex-wrap:wrap;}
+.toolbar-meta{font-size:12px;color:var(--text-3);}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.mini-select{height:30px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:0 8px;font-size:12px;color:var(--text-2);}
+.toolbar .label-help{width:26px;height:26px;border-radius:50%;border:1px solid var(--border);color:var(--text-3);font-size:12px;display:grid;place-items:center;}
+.smart-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap;}
+.smart-tabs{display:inline-flex;gap:2px;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);}
+.smart-tabs button{height:26px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-2);}
+.smart-tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.search{height:30px;width:210px;border:1px solid var(--border);border-radius:var(--r-sm);padding:0 9px;font-size:12px;background:var(--surface);}
+.search::placeholder{color:var(--text-3);}
+.chip{height:28px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:550;white-space:nowrap;}
+.control{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);white-space:nowrap;}
+.control select{height:28px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:0 7px;font-size:12px;color:var(--text);}
+.spacer{margin-left:auto;}
+.gantt-tools{display:flex;align-items:center;gap:12px;padding:9px 14px;flex-wrap:wrap;}
+.gantt-tools .group{display:flex;align-items:center;gap:6px;}
+.gantt-tools .group>span{font-size:11.5px;font-weight:650;color:var(--text-2);}
+.legend{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:11.5px;color:var(--text-2);align-items:center;}
+.lg{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.sw{width:9px;height:9px;border-radius:3px;}
+.sw-gap{width:14px;height:0;border-top:1.5px dashed var(--border-strong);}
+.sw-expect{width:0;height:11px;border-left:1.5px dashed var(--danger);}
+.gantt-hint{font-size:11px;color:var(--text-3);margin-left:auto;display:flex;align-items:center;gap:6px;}
+.gantt-card{padding:10px 12px 12px;overflow:hidden;}
+.gantt-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.gantt-scroll{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.gantt-axis{display:flex;height:50px;background:var(--surface-sunken);border-bottom:1px solid var(--border);position:relative;z-index:2;}
+.axis-corner{width:var(--label-w);flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 14px;font-size:11.5px;font-weight:650;color:var(--text-2);border-right:1px solid var(--border);background:var(--surface);}
+.axis-corner span{font-size:10.5px;font-weight:600;color:var(--text-3);}
+.axis-track{position:relative;flex:0 0 auto;height:50px;}
+.axis-month{position:absolute;top:7px;font-size:11px;font-weight:700;color:var(--text-2);white-space:nowrap;}
+.axis-week{position:absolute;top:27px;font-size:9.5px;color:var(--text-3);white-space:nowrap;transform:translateX(-50%);}
+.axis-today{position:absolute;top:7px;transform:translateX(-50%);background:var(--danger);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:var(--r-pill);white-space:nowrap;z-index:3;}
+.gantt-body{position:relative;}
+.g-group{display:flex;align-items:center;height:30px;background:var(--surface-sunken);border-bottom:1px solid var(--border);padding:0 12px;gap:7px;font-size:11.5px;}
+.g-group .caret{color:var(--text-3);font-size:10px;width:10px;}
+.g-group .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+.g-group b{font-weight:650;color:var(--text);}
+.g-group .cnt{font-size:10.5px;color:var(--text-3);}
+.g-group .sum{margin-left:auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.g-row{display:flex;border-bottom:1px solid var(--border);}
+.g-row:last-child{border-bottom:none;}
+.g-row:hover .g-label{background:var(--surface-hover);}
+.g-label{width:var(--label-w);flex:0 0 auto;padding:8px 12px 8px 14px;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;}
+.g-line1{display:flex;align-items:center;gap:6px;min-width:0;}
+.pri{width:6px;height:6px;border-radius:50%;flex:0 0 auto;}
+.pri-P0{background:var(--danger);} .pri-P1{background:var(--warning);} .pri-P2{background:var(--info);} .pri-P3{background:var(--text-3);}
+.g-title{font-size:12.5px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;min-width:0;}
+.stage-pill{font-size:9.5px;font-weight:650;padding:1px 6px;border-radius:var(--r-pill);white-space:nowrap;border:1px solid transparent;flex:0 0 auto;}
+.stage-pill.st-review{background:var(--surface-sunken);color:var(--st-review);border-color:var(--border);}
+.stage-pill.st-plan{background:var(--info-soft);color:var(--info-fg);border-color:var(--info-border);}
+.stage-pill.st-design{background:var(--plum-soft);color:var(--plum-fg);border-color:var(--plum-border);}
+.stage-pill.st-dev{background:var(--primary-soft);color:var(--primary-fg);border-color:var(--primary-border);}
+.stage-pill.st-test{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
+.stage-pill.st-complete,.stage-pill.st-release{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border);}
+.g-meta{font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.g-hours{display:flex;align-items:center;gap:5px;min-width:0;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;}
+.hchip{font-size:9.5px;font-weight:650;padding:1px 5px;border-radius:4px;flex:0 0 auto;}
+.hchip.est{background:var(--surface-sunken);color:var(--text-2);}
+.hchip.act{background:var(--primary-soft);color:var(--primary-fg);}
+.hchip.zero{background:var(--surface-sunken);color:var(--text-3);font-weight:550;}
+.hsplit{font-size:9.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;}
+.g-track{position:relative;flex:0 0 auto;background-image:linear-gradient(to right,var(--border) 0 1px,transparent 1px 100%);background-repeat:repeat-x;background-position:0 0;}
+.g-track::after{content:"";position:absolute;inset:0;background-image:linear-gradient(to right,color-mix(in srgb,var(--border) 55%,transparent) 0 1px,transparent 1px 100%);background-size:var(--week-w) 100%;pointer-events:none;opacity:.55;}
+.seg{position:absolute;z-index:3;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center;gap:5px;overflow:hidden;padding:0 6px;white-space:nowrap;font-size:9.5px;font-weight:650;color:var(--stage-color);background:color-mix(in srgb,var(--stage-color) 16%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--stage-color) 38%,transparent);cursor:default;}
+.seg:hover{box-shadow:inset 0 0 0 1px var(--stage-color),var(--shadow-sm);}
+.seg .h{font-weight:600;color:color-mix(in srgb,var(--stage-color) 82%,var(--text-2));font-variant-numeric:tabular-nums;}
+.seg.open::after{content:"";position:absolute;top:0;bottom:0;right:0;width:3px;background:repeating-linear-gradient(to bottom,var(--stage-color) 0 3px,transparent 3px 6px);opacity:.7;}
+.seg.point{width:10px;height:10px;padding:0;border-radius:2px;transform:rotate(45deg);box-shadow:0 0 0 2px var(--surface);background:var(--stage-color);}
+.seg.point .seg-label{display:none;}
+.seg.point:hover{filter:brightness(1.08);}
+.gap{position:absolute;z-index:2;height:0;border-top:1.5px dashed var(--border-strong);pointer-events:none;}
+.gap span{position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-size:9px;color:var(--text-3);background:var(--surface);padding:0 3px;white-space:nowrap;}
+.expect{position:absolute;top:4px;bottom:4px;width:0;border-left:1.5px dashed var(--danger);opacity:.8;z-index:4;pointer-events:none;}
+.expect::before{content:"";position:absolute;top:-2px;left:-3px;width:6px;height:6px;border-radius:50%;background:var(--danger);}
+.today-line{position:absolute;top:0;bottom:0;border-left:1.5px dashed var(--danger);opacity:.5;pointer-events:none;z-index:1;}
+.gantt-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text-3);line-height:1.6;}
+.gantt-foot b{color:var(--text-2);font-weight:650;}
+.stats-card{padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px;}
+.stats-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+.stats-head h2{font-size:14.5px;font-weight:700;letter-spacing:-.01em;}
+.stats-head .scope{font-size:11.5px;color:var(--text-3);margin-top:3px;}
+.stats-controls{margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.segctl{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;}
+.segctl button{height:26px;padding:0 10px;border-radius:6px;font-size:11.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.segctl button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.stat-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.stat-kpi{background:var(--surface-sunken);border-radius:var(--r-sm);padding:10px 12px;min-width:0;}
+.stat-kpi span{display:block;font-size:10.5px;color:var(--text-3);}
+.stat-kpi b{display:block;font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.35;font-variant-numeric:tabular-nums;}
+.stat-kpi b small{font-size:11px;font-weight:600;color:var(--text-2);margin-left:2px;}
+.stat-kpi em{display:block;font-style:normal;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mix{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.mix-label{font-size:11px;color:var(--text-3);white-space:nowrap;}
+.mix-bar{flex:1 1 320px;height:10px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;display:flex;min-width:220px;}
+.mix-bar i{display:block;height:100%;}
+.mix-legend{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text-2);flex-wrap:wrap;}
+.mix-legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.mix-legend i{width:8px;height:8px;border-radius:2px;}
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r-md);}
+table.stats{width:100%;border-collapse:collapse;font-size:12px;min-width:720px;}
+table.stats th{background:var(--surface-sunken);text-align:left;font-size:10.5px;font-weight:700;color:var(--text-3);padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+table.stats th.num,table.stats td.num{text-align:right;font-variant-numeric:tabular-nums;}
+table.stats th .dot{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:5px;vertical-align:1px;}
+table.stats td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text-2);white-space:nowrap;}
+table.stats tbody tr:hover td{background:var(--surface-hover);}
+table.stats tbody tr:last-child td{border-bottom:none;}
+table.stats tr.total td{background:var(--surface-sunken);font-weight:700;color:var(--text);border-top:1px solid var(--border-strong);}
+table.stats td.dim{font-weight:650;color:var(--text);max-width:260px;overflow:hidden;text-overflow:ellipsis;}
+table.stats td.dim small{display:block;font-size:10.5px;font-weight:500;color:var(--text-3);margin-top:2px;}
+.muted{color:var(--text-3);font-weight:500;}
+.cellbar{display:block;height:3px;border-radius:2px;background:var(--surface-active);margin-top:4px;overflow:hidden;}
+.cellbar i{display:block;height:100%;background:var(--primary);border-radius:2px;}
+.stats-note{font-size:11px;color:var(--text-3);line-height:1.7;padding:0 2px;}
+.stats-note b{color:var(--text-2);font-weight:650;}
+.notes-card{padding:14px 16px 16px;}
+.notes-card h2{font-size:14.5px;font-weight:700;margin-bottom:4px;}
+.notes-card>p{font-size:11.5px;color:var(--text-3);line-height:1.7;margin-bottom:12px;}
+.notes-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+.notes-grid h3{font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.notes-grid ul{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.notes-grid li{font-size:11px;line-height:1.65;color:var(--text-3);}
+.notes-grid li b{color:var(--text-2);font-weight:650;}
+.tag{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:var(--r-pill);margin-right:4px;vertical-align:1px;}
+.tag.ok{background:var(--success-soft);color:var(--success-fg);}
+.tag.warn{background:var(--warning-soft);color:var(--warning-fg);}
+.tag.info{background:var(--primary-soft);color:var(--primary-fg);}
+.tag.mute{background:var(--surface-sunken);color:var(--text-3);}
+.tip{position:fixed;z-index:90;max-width:300px;padding:8px 10px;border-radius:8px;background:#101828;color:#fff;font-size:11px;line-height:1.55;box-shadow:var(--shadow-lg);pointer-events:none;opacity:0;transform:translateY(3px);transition:opacity .1s ease,transform .1s ease;}
+.tip.on{opacity:1;transform:none;}
+.tip b{font-size:11.5px;font-weight:650;display:block;margin-bottom:1px;}
+.tip span{color:rgba(255,255,255,.75);}
+.tip em{display:block;margin-top:3px;font-style:normal;color:rgba(255,255,255,.55);}
+.tip .warn{color:#FEC84B;}
+@media (max-width:1200px){
+  .notes-grid{grid-template-columns:repeat(2,1fr);}
+  .stat-kpis{grid-template-columns:repeat(2,1fr);}
+  :root{--label-w:330px;}
+}
+@media (max-width:900px){
+  .sidebar{display:none;}
+  .content{padding:14px;}
+  .page-head{flex-direction:column;}
+  .notes-grid{grid-template-columns:1fr;}
+  .stats-controls{margin-left:0;}
+  :root{--label-w:280px;}
+}
+
+/* ===== 本页新增 ===== */
+.sec{display:none;flex-direction:column;gap:14px;}
+.sec.on{display:flex;}
+.ver-card{padding:14px 16px;display:flex;flex-direction:column;gap:12px;}
+.ver-card + .ver-card{margin-top:0;}
+.ver-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ver-name{font-size:13px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border);}
+.ver-status{font-size:11px;font-weight:650;padding:2px 8px;border-radius:var(--r-pill);border:1px solid transparent;}
+.ver-status.doing{background:var(--info-soft);color:var(--info-fg);border-color:var(--info-border);}
+.ver-status.done{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border);}
+.ver-status.plan{background:var(--surface-sunken);color:var(--text-2);border-color:var(--border);}
+.ver-sub{font-size:11.5px;color:var(--text-3);}
+.ver-metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;}
+.vm{background:var(--surface-sunken);border-radius:var(--r-sm);padding:9px 11px;min-width:0;}
+.vm b{display:block;font-size:16px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.3;}
+.vm span{display:block;font-size:10.5px;color:var(--text-3);margin-top:2px;}
+.vm b i{font-style:normal;font-size:11px;font-weight:600;color:var(--text-3);margin-left:4px;}
+.vbar-wrap{display:flex;flex-direction:column;gap:6px;}
+.vbar-top{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--text-3);}
+.vbar-top b{color:var(--text-2);font-weight:650;}
+.vbar{display:flex;height:10px;border-radius:var(--r-pill);overflow:hidden;background:var(--surface-sunken);}
+.vbar i{display:block;height:100%;}
+.vbar-legend{display:flex;align-items:center;gap:14px;font-size:11px;color:var(--text-2);flex-wrap:wrap;}
+.vbar-legend span{display:inline-flex;align-items:center;gap:5px;}
+.vbar-legend i{width:8px;height:8px;border-radius:2px;}
+.vbar-legend .muted-note{color:var(--text-3);}
+.ver-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ver-acts .meta-right{margin-left:auto;font-size:11px;color:var(--text-3);}
+.stage-box{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
+.stage-box[hidden]{display:none;}
+table.stage-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.stage-tbl th{text-align:left;font-size:10.5px;font-weight:650;color:var(--text-3);padding:7px 10px;background:var(--surface-sunken);border-bottom:1px solid var(--border);white-space:nowrap;}
+.stage-tbl th.num,.stage-tbl td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.stage-tbl td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.stage-tbl tr:last-child td{border-bottom:none;}
+.stage-tbl td.st-name{font-weight:650;}
+.stage-tbl td.st-name i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;}
+.src{font-size:10px;font-weight:650;padding:1px 6px;border-radius:var(--r-pill);white-space:nowrap;}
+.src.wk{background:var(--primary-soft);color:var(--primary-fg);}
+.src.dm{background:var(--plum-soft);color:var(--plum-fg);}
+.src.case{background:var(--warning-soft);color:var(--warning-fg);}
+.src.rel{background:var(--success-soft);color:var(--success-fg);}
+.src.none{background:var(--surface-sunken);color:var(--text-3);}
+.stage-tbl td .muted{color:var(--text-3);}
+.shared{display:flex;height:4px;border-radius:2px;overflow:hidden;background:var(--surface-sunken);}
+.shared i{display:block;height:100%;}
+.mod-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.mod-tbl th{text-align:left;font-size:10.5px;font-weight:650;color:var(--text-3);padding:8px 12px;background:var(--surface-sunken);border-bottom:1px solid var(--border);white-space:nowrap;}
+.mod-tbl th.num,.mod-tbl td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.mod-tbl td{padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.mod-tbl tr.mod-row{cursor:pointer;}
+.mod-tbl tr.mod-row:hover td{background:var(--surface-hover);}
+.mod-tbl tr.mod-row td:first-child{font-weight:600;}
+.mod-tbl .caret{display:inline-block;width:12px;color:var(--text-3);font-size:10px;}
+.mod-tbl .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:7px;vertical-align:1px;}
+.mod-tbl tr.mod-total td{background:var(--surface-sunken);font-weight:650;}
+.mod-tbl tr.subrow td{background:color-mix(in srgb,var(--surface-sunken) 55%,var(--surface));border-bottom:1px dashed var(--border);font-size:11.5px;}
+.mod-tbl tr.subrow td:first-child{padding-left:38px;font-weight:550;color:var(--text-2);}
+.mod-tbl tr.subrow.last td{border-bottom:1px solid var(--border);}
+.mod-tbl .subnote td{color:var(--text-3);font-size:11px;padding-left:38px;white-space:normal;line-height:1.6;}
+.progress{display:inline-block;width:64px;height:5px;border-radius:3px;background:var(--border);vertical-align:middle;margin-right:6px;overflow:hidden;}
+.progress i{display:block;height:100%;background:var(--primary);}
+.progress.bad i{background:var(--danger);}
+.mtx{width:100%;border-collapse:collapse;font-size:11.5px;}
+.mtx th{text-align:left;font-size:10.5px;color:var(--text-3);font-weight:650;padding:6px 8px;border-bottom:1px solid var(--border);}
+.mtx td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.55;}
+.mtx tr:last-child td{border-bottom:none;}
+.mtx td:first-child{font-weight:650;white-space:nowrap;color:var(--text);}
+.caliber{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3);}
+.legendline{display:flex;align-items:center;gap:14px;font-size:11px;color:var(--text-3);flex-wrap:wrap;}
+.legendline span{display:inline-flex;align-items:center;gap:5px;}
+.legendline i{width:8px;height:8px;border-radius:2px;}
+.note-line{font-size:11px;color:var(--text-3);line-height:1.65;}
+.notes-card{padding:14px 16px;}
+.notes-card h2{font-size:14.5px;font-weight:700;margin-bottom:6px;}
+.notes-card>p{font-size:12px;color:var(--text-3);line-height:1.65;margin-bottom:12px;}
+.notes-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px 22px;}
+.notes-grid h3{font-size:12.5px;font-weight:700;margin-bottom:7px;}
+.notes-grid ul{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.notes-grid li{font-size:11.5px;color:var(--text-2);line-height:1.6;display:flex;gap:6px;align-items:flex-start;}
+.notes-grid li b{font-weight:650;color:var(--text);}
+.tag{flex:0 0 auto;font-size:10px;font-weight:650;padding:1px 6px;border-radius:4px;margin-top:1px;}
+.tag.ok{background:var(--success-soft);color:var(--success-fg);}
+.tag.warn{background:var(--warning-soft);color:var(--warning-fg);}
+.tag.info{background:var(--info-soft);color:var(--info-fg);}
+.tag.mute{background:var(--surface-sunken);color:var(--text-3);}
+.card-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:12px 16px;}
+.card-head h2{font-size:14px;font-weight:700;}
+.card-head p{font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.6;}
+.card-head .ctl{margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.ver-list{display:flex;flex-direction:column;gap:12px;padding:0 16px 16px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-brand">
+      <span class="brand-mark">沙</span>
+      <span class="side-brand-name">沙漏</span>
+    </div>
+    <div class="side-ws">
+      <button class="ws-switch" type="button"><span class="ws-avatar">东</span><span><span class="ws-n">东证自研</span><span class="ws-kind">研发空间 · 18 人</span></span></button>
+    </div>
+    <nav class="side-nav">
+      <div class="nav-sec">我的</div>
+      <button class="nav-item" type="button">我的工作</button>
+      <button class="nav-item" type="button">周回顾</button>
+      <div class="nav-sec">规划</div>
+      <button class="nav-item" type="button">需求池</button>
+      <button class="nav-item on" type="button">版本</button>
+      <div class="nav-sec">执行</div>
+      <button class="nav-item" type="button">看板</button>
+      <button class="nav-item" type="button">甘特图</button>
+      <button class="nav-item" type="button">日历</button>
+      <div class="nav-sec">交付</div>
+      <button class="nav-item" type="button">测试用例</button>
+      <button class="nav-item" type="button">发布计划</button>
+      <button class="nav-item" type="button">报表</button>
+    </nav>
+    <div class="side-foot">
+      <div class="side-user">
+        <span class="avatar">孔</span>
+        <span><span class="side-user-n">孔祥金</span><span class="side-user-r">空间管理员</span></span>
+      </div>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="tb-title">版本</div>
+        <div class="tb-sub">东证自研 · 规划</div>
+      </div>
+      <div class="tb-right">
+        <span class="proto-pill">原型 · 未实施</span>
+        <button class="icon-btn" type="button" title="帮助">?</button>
+      </div>
+    </header>
+    <main class="content">
+      <div class="proto-banner">
+        <div><b>版本 / 模块 · 阶段投入</b>　按阶段看预估与实际耗时；<b>不需要起止时间</b>，分钟按阶段归属直接相加，起止时间只影响“测试窗口归属”和可选的“停留天数”。下面的数字为演示数据。</div>
+        <button class="btn sm" type="button" onclick="document.getElementById('notes').scrollIntoView({behavior:'smooth'})">口径与数据来源</button>
+      </div>
+
+      <section class="page-head">
+        <div>
+          <h1>版本</h1>
+          <p>版本页现有统计按「工作项 → 版本绑定」汇总；项目模块面板按「工作项 → 模块」汇总。当前原型给这两处补上同源的阶段拆分，并明确哪些阶段有真实工时、哪些只有计数。</p>
+        </div>
+        <div class="view-tabs" role="group" aria-label="原型范围">
+          <button type="button" class="on" data-sec="ver">版本 · 阶段投入</button>
+          <button type="button" data-sec="mod">项目模块 · 阶段投入</button>
+        </div>
+      </section>
+
+      <!-- ===== 版本 ===== -->
+      <section class="sec on" id="secVer">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>版本阶段投入</h2>
+              <p>主指标沿用版本卡现有口径（工作项版本绑定）；阶段表逐行标注数据来源，需求口径只用于「进入 / 停留」两列。</p>
+            </div>
+            <div class="ctl">
+              <select class="mini-select" aria-label="选择项目"><option>交易终端</option><option>风控中台</option><option>运营后台</option></select>
+              <select class="mini-select" aria-label="版本范围"><option>全部版本</option><option>进行中</option><option>已发布</option></select>
+              <span class="caliber">阶段口径</span>
+              <span class="segctl" id="metricCtl">
+                <button type="button" class="on" data-metric="window">开发 / 测试二分</button>
+                <button type="button" data-metric="date">按日期落段（v2）</button>
+              </span>
+            </div>
+          </div>
+          <div class="ver-list" id="verList"></div>
+        </div>
+        <p class="note-line" style="padding:0 4px">
+          版本卡里的「已投入 / 预估 / 剩余」来自工作项；「已排需求」来自目标版本指向该版本的需求。两者不是同一批对象，阶段表用「口径」列区分，避免把需求阶段的工作项工时和需求条数混算。
+        </p>
+      </section>
+
+      <!-- ===== 模块 ===== -->
+      <section class="sec" id="secMod">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>项目下的模块阶段投入</h2>
+              <p>模块面板本来就是工作项口径（task.category_id）。展开某一行，看该模块的开发 / 测试工时；已完成与未开始用条数表达。</p>
+            </div>
+            <div class="ctl">
+              <select class="mini-select" aria-label="选择项目"><option>交易终端</option><option>风控中台</option><option>运营后台</option></select>
+              <span class="caliber">版本范围</span>
+              <select class="mini-select" aria-label="版本范围"><option>V2.5（开发中）</option><option>全部版本</option></select>
+            </div>
+          </div>
+          <div style="padding:0 16px 16px">
+            <div class="tbl-wrap" style="border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+              <table class="mod-tbl" id="modTable"></table>
+            </div>
+            <p class="note-line" style="margin-top:10px">
+              展开行只放到「开发 / 测试 / 完成 / 未开始」四段：工作项没有评审、设计、发布的时间字段，模块维度也拿不到需求时间轴，硬拆会编造数据。<br>
+              模块合计 + 未指定 = 项目合计，与现有模块面板同一套口径；阶段拆分只是在同一批工作项上多两个求和。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 分析 ===== -->
+      <section class="card notes-card" id="notes">
+        <h2>为什么没有起止时间也能算</h2>
+        <p>阶段耗时是「分钟的和」，不是区间长度：每条计时记录只归一个阶段，相加即可，不需要阶段首尾日期。起止时间只在两处有用：判断一条计时是否落在测试窗口内，以及算出可选的平均停留天数。</p>
+        <div class="notes-grid">
+          <div>
+            <h3>阶段 × 现成数据</h3>
+            <table class="mtx">
+              <thead><tr><th>阶段</th><th>现成数据</th><th>无起止时间能显示</th></tr></thead>
+              <tbody>
+                <tr><td>评审 / 排期 / 设计</td><td>需求时间轴（需要日期）</td><td>进入需求数；有记录时给平均停留天数；<b>没有工时</b></td></tr>
+                <tr><td>开发</td><td>工作项预估、全部普通计时</td><td>预估工时、实际工时、占比</td></tr>
+                <tr><td>测试</td><td>测试窗口内的计时、用例执行</td><td>实际工时、用例通过与待测数</td></tr>
+                <tr><td>完成 / 发布</td><td>工作项完成、生产发布记录</td><td>完成条数 / 比例、是否已发布；<b>没有工时</b></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3>三个口径别混用</h3>
+            <ul>
+              <li><span class="tag warn">口径</span><b>版本页</b>现有统计是工作项按 task.version_ids 绑定；需求的目标版本是 demand.version_id，换版本后两者会分叉。</li>
+              <li><span class="tag warn">口径</span><b>模块面板</b>按 task.category_id 归集；需求池的模块是 demand.category_id，同名模块也未必同批对象。</li>
+              <li><span class="tag info">建议</span>卡片主指标不动，阶段表用「口径」标签逐行写清来源；需求口径只补「进入 / 停留」两列。</li>
+              <li><span class="tag info">建议</span>「按日期落段」放进 v2 开关：需要需求阶段区间齐备，未落入任何区间的计时要单独列「未归类」。</li>
+            </ul>
+          </div>
+          <div>
+            <h3>工时归集规则（与已确认口径一致）</h3>
+            <ul>
+              <li><span class="tag ok">开发</span>工作项 estimate_minutes 全部计入开发；time_log 中不在测试窗口内的分钟计入开发。</li>
+              <li><span class="tag ok">测试</span>task.test_started_at / test_finished_at 窗口内的 time_log 计入测试；窗口只保留最近一轮。</li>
+              <li><span class="tag warn">边界</span>重开测试会覆盖窗口，早期轮次计时落回开发；需要更准就走 v2 的按日期落段。</li>
+              <li><span class="tag mute">不造数</span>评审 / 排期 / 设计 / 完成 / 发布没有计时来源，阶段表显示「—」，不给推算值。</li>
+            </ul>
+          </div>
+          <div>
+            <h3>实施落点</h3>
+            <ul>
+              <li><span class="tag ok">复用</span>做一个 StageEffort 归集器：输入工作项集合 + 计时记录 → 开发 / 测试分钟，门禁与权限沿用现有查询。</li>
+              <li><span class="tag ok">版本</span>/api/phase/stats 的每个版本行加 devMinutes / testMinutes，同一次快照内求和，不新增查询轮次。</li>
+              <li><span class="tag ok">模块</span>/api/manager/projects/{id} 的模块行加 devMinutes / testMinutes；合计 + 未指定仍等于项目合计。</li>
+              <li><span class="tag info">可选</span>版本卡上的阶段条只需 2 段（开发 / 测试）；7 行明细放展开区，默认收起，避免卡片过高。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="card notes-card">
+        <h2>实施前确认</h2>
+        <div class="notes-grid">
+          <div>
+            <ul>
+              <li><span class="tag warn">范围</span>版本卡的阶段表是否要「需求口径」的进入 / 停留两列？需要按目标版本 join 需求时间轴，多一次聚合。</li>
+              <li><span class="tag warn">交互</span>模块行展开阶段，默认收起还是默认展开？默认收起更接近现有模块面板，展开才看到工时构成。</li>
+            </ul>
+          </div>
+          <div>
+            <ul>
+              <li><span class="tag info">口径</span>「按日期落段」是否进 v1？更准，但要处理并行阶段优先级和「未归类」桶。</li>
+              <li><span class="tag info">字段</span>若评审 / 设计也要预估值，需要新增阶段预估字段或子表（v2），否则这些阶段只有条数。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+var STAGE = {
+  review:{name:"评审",color:"var(--st-review)"},
+  plan:{name:"排期",color:"var(--st-plan)"},
+  design:{name:"设计",color:"var(--st-design)"},
+  dev:{name:"开发",color:"var(--st-dev)"},
+  test:{name:"测试",color:"var(--st-test)"},
+  complete:{name:"完成",color:"var(--st-complete)"},
+  release:{name:"发布",color:"var(--st-release)"}
+};
+
+/* 演示数据：分钟为单位；demands / tasks 为条数，span 为平均停留天数（自然日） */
+var VERSIONS = [
+  {
+    id:"v25", name:"V2.5", status:"doing", sub:"09/08 → 12/05 · 开发中",
+    demandCount:8, taskCount:21, doneCount:12,
+    est:18720, dev:9720, test:2760, remaining:6240,
+    stageRows:{
+      review:{demands:8, span:12, cover:7, src:"dm"},
+      plan:{demands:6, span:3, cover:6, src:"dm"},
+      design:{demands:5, span:9, cover:5, src:"dm"},
+      dev:{tasks:21, est:18720, act:9720, src:"wk"},
+      test:{tasks:9, act:2760, cases:"18/26 通过", src:"case"},
+      complete:{demands:"4/8", tasks:"12/21", src:"wk"},
+      release:{note:"未发布", src:"rel"}
+    },
+    byDate:{review:360, plan:240, design:1080, dev:8400, test:1920, unclassified:480}
+  },
+  {
+    id:"v24", name:"V2.4", status:"done", sub:"08/04 → 09/01 · 已发布",
+    demandCount:7, taskCount:18, doneCount:18,
+    est:16080, dev:11340, test:3120, remaining:0,
+    stageRows:{
+      review:{demands:7, span:10, cover:7, src:"dm"},
+      plan:{demands:7, span:2, cover:7, src:"dm"},
+      design:{demands:4, span:8, cover:4, src:"dm"},
+      dev:{tasks:18, est:16080, act:11340, src:"wk"},
+      test:{tasks:8, act:3120, cases:"24/24 通过", src:"case"},
+      complete:{demands:"7/7", tasks:"18/18", src:"wk"},
+      release:{note:"09/01 生产发布", src:"rel"}
+    },
+    byDate:{review:240, plan:120, design:840, dev:10440, test:2760, unclassified:60}
+  },
+  {
+    id:"v18", name:"V1.8", status:"doing", sub:"风控中台 · 10/13 → 12/20 · 开发中",
+    demandCount:5, taskCount:14, doneCount:6,
+    est:11760, dev:5760, test:1500, remaining:5400,
+    stageRows:{
+      review:{demands:5, span:14, cover:4, src:"dm"},
+      plan:{demands:4, span:4, cover:4, src:"dm"},
+      design:{demands:4, span:11, cover:3, src:"dm"},
+      dev:{tasks:14, est:11760, act:5760, src:"wk"},
+      test:{tasks:4, act:1500, cases:"6/14 通过", src:"case"},
+      complete:{demands:"1/5", tasks:"6/14", src:"wk"},
+      release:{note:"未发布", src:"rel"}
+    },
+    byDate:{review:180, plan:120, design:600, dev:5100, test:900, unclassified:360}
+  }
+];
+
+var MODULES = [
+  {name:"行情", color:"#2563EB", progress:62, tasks:7, done:5, est:6240, dev:3360, test:900, overdue:1},
+  {name:"委托", color:"#0B8AD9", progress:55, tasks:6, done:3, est:5760, dev:2940, test:840, overdue:0},
+  {name:"自选", color:"#12B76A", progress:80, tasks:4, done:3, est:3360, dev:1860, test:480, overdue:0},
+  {name:"风控接入", color:"#7A5AF8", progress:40, tasks:2, done:1, est:1920, dev:1020, test:240, overdue:0},
+  {name:"未指定", color:"#98A2B3", progress:30, tasks:2, done:0, est:1440, dev:540, test:300, overdue:0, unassigned:true}
+];
+
+var state = { metric:"window", expanded:{ v25:true, v24:false, v18:false }, modOpen:{ "行情":true } };
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
+function fmtH(min){
+  var m = Number(min)||0;
+  if(!m) return "—";
+  var h = Math.round(m/6)/10;
+  return h.toFixed(m % 60 === 0 ? 0 : 1) + "h";
+}
+function sum(arr,fn){ return arr.reduce(function(s,x){ return s + (Number(fn(x))||0); },0); }
+function pct(part,total){ return total ? Math.round(part/total*100) : 0; }
+function devText(act, est){
+  if(!est) return "—";
+  var d = Math.round((act - est) / est * 100);
+  return (d > 0 ? "+" : "") + d + "%";
+}
+
+function dateTotal(v){
+  if(!v.byDate) return 0;
+  return ["review","plan","design","dev","test","unclassified"].reduce(function(s,k){ return s + (v.byDate[k]||0); },0);
+}
+function stageRowHTML(v,key){
+  var s = v.stageRows[key], st = STAGE[key];
+  var enter = "", est = "—", act = "—", share = "—", span = "—", srcTag = "";
+  if(key === "review" || key === "plan" || key === "design"){
+    enter = s.demands + " 条需求";
+    span = s.span + " 天 <span class=\"muted\">(" + s.cover + "/" + s.demands + ")</span>";
+    srcTag = '<span class="src dm">需求时间轴</span>';
+  }else if(key === "dev"){
+    enter = s.tasks + " 个工作项";
+    est = fmtH(s.est);
+    act = fmtH(s.act);
+    share = pct(s.act, v.dev + v.test) + "%";
+    srcTag = '<span class="src wk">工作项预估 / 计时</span>';
+  }else if(key === "test"){
+    enter = s.tasks + " 个工作项";
+    act = fmtH(s.act);
+    share = pct(s.act, v.dev + v.test) + "%";
+    srcTag = '<span class="src case">测试窗口 / 用例</span>';
+  }else if(key === "complete"){
+    enter = s.demands + " 条 · " + s.tasks + " 项";
+    srcTag = '<span class="src wk">完成记录</span>';
+  }else{
+    enter = s.note;
+    srcTag = '<span class="src rel">发布记录</span>';
+  }
+  var detail = "";
+  if(key === "test" && s.cases) detail = ' <span class="muted">· ' + esc(s.cases) + '</span>';
+
+  if(state.metric === "date" && v.byDate){
+    var mv = v.byDate[key];
+    if(mv !== undefined && (key === "review" || key === "plan" || key === "design" || key === "dev" || key === "test")){
+      act = fmtH(mv);
+      share = pct(mv, dateTotal(v)) + "%";
+      srcTag = '<span class="src">按日期落段</span>';
+    }
+  }
+
+  return '<tr><td class="st-name"><i style="background:' + st.color + '"></i>' + st.name + '</td>'
+    + '<td>' + srcTag + '</td>'
+    + '<td>' + enter + detail + '</td>'
+    + '<td class="num">' + (est === "—" ? '<span class="muted">—</span>' : est) + '</td>'
+    + '<td class="num">' + (act === "—" ? '<span class="muted">—</span>' : act) + '</td>'
+    + '<td class="num">' + (share === "—" ? '<span class="muted">—</span>' : share) + '</td>'
+    + '<td>' + (span === "—" ? '<span class="muted">—</span>' : span) + '</td></tr>';
+}
+
+function stageTableHTML(v){
+  var rows = ["review","plan","design","dev","test","complete","release"].map(function(k){ return stageRowHTML(v,k); }).join("");
+  var extra = "";
+  if(state.metric === "date" && v.byDate && v.byDate.unclassified){
+    extra = '<tr><td class="st-name"><i style="background:var(--text-3)"></i>未归类</td>'
+      + '<td><span class="src none">无阶段区间</span></td>'
+      + '<td class="muted">计时日期不在任何阶段区间内</td>'
+      + '<td class="num muted">—</td>'
+      + '<td class="num">' + fmtH(v.byDate.unclassified) + '</td>'
+      + '<td class="num">' + pct(v.byDate.unclassified, dateTotal(v)) + '%</td>'
+      + '<td class="muted">—</td></tr>';
+  }
+  return '<div class="stage-box"' + (state.expanded[v.id] ? '' : ' hidden') + '>'
+    + '<table class="stage-tbl"><thead><tr><th>阶段</th><th>口径</th><th>进入</th><th class="num">预估</th><th class="num">实际</th><th class="num">实际占比</th><th>平均停留</th></tr></thead>'
+    + '<tbody>' + rows + extra + '</tbody></table></div>';
+}
+
+function versionCardHTML(v){
+  var total = v.dev + v.test;
+  var share = total ? v.dev/total*100 : 0;
+  var statusTag = v.status === "doing"
+    ? '<span class="ver-status doing">开发中</span>'
+    : '<span class="ver-status done">已发布</span>';
+  var sub = v.sub.indexOf("·") >= 0 ? v.sub : v.sub;
+  var p = pct(v.dev + v.test, v.est);
+  var open = !!state.expanded[v.id];
+
+  return '<div class="ver-card" style="border:1px solid var(--border)">'
+    + '<div class="ver-head"><span class="ver-name">' + esc(v.name) + '</span>' + statusTag
+      + '<span class="ver-sub">' + esc(sub) + '</span></div>'
+    + '<div class="ver-metrics">'
+      + '<div class="vm"><b>' + fmtH(v.dev + v.test) + '</b><span>已投入工时</span></div>'
+      + '<div class="vm"><b>' + fmtH(v.est) + '</b><span>预估工时</span></div>'
+      + '<div class="vm"><b>' + v.doneCount + ' / ' + v.taskCount + '</b><span>已完成工作项</span></div>'
+      + '<div class="vm"><b>' + v.demandCount + ' 条</b><span>目标版本需求</span></div>'
+      + '<div class="vm"><b>' + (v.remaining ? fmtH(v.remaining) : '—') + '</b><span>剩余预估</span></div>'
+      + '<div class="vm"><b>' + devText(total, v.est) + '</b><span>偏差（实际−预估）</span></div>'
+    + '</div>'
+    + '<div class="vbar-wrap">'
+      + '<div class="vbar-top"><b>实际工时构成</b><span>开发 ' + fmtH(v.dev) + ' · 测试 ' + fmtH(v.test) + '</span><span class="muted-note">评审 / 排期 / 设计 / 完成 / 发布没有计时来源</span></div>'
+      + '<div class="vbar"><i style="width:' + share + '%;background:' + STAGE.dev.color + '"></i><i style="width:' + (100 - share) + '%;background:' + STAGE.test.color + '"></i></div>'
+      + '<div class="vbar-legend"><span><i style="background:' + STAGE.dev.color + '"></i>开发 ' + fmtH(v.dev) + '（' + pct(v.dev,total) + '%）</span>'
+      + '<span><i style="background:' + STAGE.test.color + '"></i>测试 ' + fmtH(v.test) + '（' + pct(v.test,total) + '%）</span></div>'
+    + '</div>'
+    + '<div class="ver-acts"><button class="btn sm" type="button" data-expand="' + v.id + '">' + (open ? '收起阶段明细' : '展开阶段明细（7 行）') + '</button>'
+      + '<span class="meta-right">' + (state.metric === "date" ? "按日期落段：起止时间齐备时才能把评审 / 设计计时拆出来" : "开发 / 测试二分：不依赖起止时间，任何版本都能算") + '</span></div>'
+    + stageTableHTML(v)
+  + '</div>';
+}
+
+function renderVersions(){ $("verList").innerHTML = VERSIONS.map(versionCardHTML).join(""); }
+
+function moduleRowHTML(m, idx){
+  var open = !!state.modOpen[m.name];
+  var total = m.dev + m.test;
+  var bad = m.progress < 50;
+  var rows = '<tr class="mod-row" data-mod="' + esc(m.name) + '">'
+    + '<td><span class="caret">' + (open ? '▾' : '▸') + '</span><i class="dot" style="background:' + m.color + '"></i>' + esc(m.name) + '</td>'
+    + '<td><span class="progress' + (bad ? ' bad' : '') + '"><i style="width:' + m.progress + '%"></i></span>' + m.progress + '%</td>'
+    + '<td class="num">' + m.done + ' / ' + m.tasks + '</td>'
+    + '<td class="num">' + fmtH(m.est) + '</td>'
+    + '<td class="num">' + fmtH(total) + '</td>'
+    + '<td class="num">' + fmtH(m.dev) + ' / ' + fmtH(m.test) + '</td>'
+    + '<td>' + (m.overdue ? '<span class="tag warn">逾期 ' + m.overdue + '</span>' : (m.tasks && m.done === m.tasks ? '<span class="tag ok">已完成</span>' : '—')) + '</td>'
+  + '</tr>';
+  if(open){
+    rows += '<tr class="subrow"><td>开发</td><td class="muted">—</td><td class="num">' + m.tasks + ' 项</td><td class="num">' + fmtH(m.est) + '</td><td class="num">' + fmtH(m.dev) + '</td><td colspan="2">工作项预估 + 普通计时（不在测试窗口内的部分）</td></tr>'
+      + '<tr class="subrow"><td>测试</td><td class="muted">—</td><td class="num">' + Math.max(1, Math.round(m.tasks*0.4)) + ' 项</td><td class="num muted">—</td><td class="num">' + fmtH(m.test) + '</td><td colspan="2">测试窗口内的计时；工作项预估没有阶段字段</td></tr>'
+      + '<tr class="subrow"><td>完成</td><td class="muted">—</td><td class="num">' + m.done + ' / ' + m.tasks + '</td><td class="num muted">—</td><td class="num muted">—</td><td colspan="2">按工作项完成状态计数，不产生工时</td></tr>'
+      + '<tr class="subrow last"><td>未开始</td><td class="muted">—</td><td class="num">' + (m.tasks - m.done) + ' 项</td><td class="num">' + fmtH(Math.max(0, m.est - Math.round(m.est * m.progress/100))) + '</td><td class="num muted">—</td><td colspan="2">未完成工作项的预估，可视为剩余</td></tr>'
+      + '<tr class="subnote"><td colspan="7">评审 / 排期 / 设计 / 发布：工作项没有这些阶段的时间字段，模块维度也拿不到需求时间轴，因此不拆。</td></tr>';
+  }
+  return rows;
+}
+
+function renderModules(){
+  var head = '<thead><tr><th>模块</th><th>进度</th><th class="num">完成 / 工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">开发 / 测试</th><th>风险</th></tr></thead>';
+  var body = MODULES.map(moduleRowHTML).join("");
+  var tasks = sum(MODULES,function(m){ return m.tasks; });
+  var done = sum(MODULES,function(m){ return m.done; });
+  var est = sum(MODULES,function(m){ return m.est; });
+  var dev = sum(MODULES,function(m){ return m.dev; });
+  var test = sum(MODULES,function(m){ return m.test; });
+  var pctDone = tasks ? Math.round(sum(MODULES,function(m){ return m.progress * m.tasks; }) / tasks) : 0;
+  body += '<tr class="mod-total"><td>合计</td><td>' + pctDone + '%</td><td class="num">' + done + ' / ' + tasks + '</td><td class="num">' + fmtH(est) + '</td><td class="num">' + fmtH(dev + test) + '</td><td class="num">' + fmtH(dev) + ' / ' + fmtH(test) + '</td><td>—</td></tr>';
+  $("modTable").innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function render(){ renderVersions(); renderModules(); }
+
+document.addEventListener("click", function(e){
+  var tab = e.target.closest("[data-sec]");
+  if(tab){
+    var key = tab.getAttribute("data-sec");
+    document.querySelectorAll("[data-sec]").forEach(function(b){ b.classList.toggle("on", b === tab); });
+    $("secVer").classList.toggle("on", key === "ver");
+    $("secMod").classList.toggle("on", key === "mod");
+    return;
+  }
+  var metric = e.target.closest("[data-metric]");
+  if(metric){
+    state.metric = metric.getAttribute("data-metric");
+    document.querySelectorAll("[data-metric]").forEach(function(b){ b.classList.toggle("on", b === metric); });
+    renderVersions();
+    return;
+  }
+  var exp = e.target.closest("[data-expand]");
+  if(exp){
+    var id = exp.getAttribute("data-expand");
+    state.expanded[id] = !state.expanded[id];
+    renderVersions();
+    return;
+  }
+  var mod = e.target.closest("[data-mod]");
+  if(mod){
+    var name = mod.getAttribute("data-mod");
+    state.modOpen[name] = !state.modOpen[name];
+    renderModules();
+  }
+});
+
+(function initFromQuery(){
+  var q = new URLSearchParams(location.search);
+  var sec = q.get("sec"), metric = q.get("metric");
+  if(sec === "mod"){
+    document.querySelectorAll("[data-sec]").forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-sec") === "mod"); });
+    $("secVer").classList.remove("on");
+    $("secMod").classList.add("on");
+  }
+  if(metric === "date"){
+    state.metric = "date";
+    document.querySelectorAll("[data-metric]").forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-metric") === "date"); });
+  }
+})();
+render();
+</script>
+</body>
+</html>

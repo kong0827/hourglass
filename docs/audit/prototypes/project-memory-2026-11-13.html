@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 项目记忆原型 · 2026-11-13</title>
+<style>
+:root{
+  --bg-app:#F4F6F9; --surface:#FFFFFF; --surface-2:#F7F8FA; --surface-3:#F0F2F5;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --border-soft:#EEF0F3;
+  --text:#1F2329; --text-2:#4E5969; --text-3:#86909C;
+  --primary:#3370FF; --primary-soft:#EEF4FF; --primary-border:#C9DAFF; --primary-fg:#245BDB;
+  --ok:#389E0D; --ok-soft:#F0F9EB; --ok-border:#C9E7B8; --ok-text:#237804;
+  --warn:#D48806; --warn-soft:#FFF8E6; --warn-border:#F2D48A; --warn-text:#AD6800;
+  --danger:#CF1322; --danger-soft:#FFF1F0; --danger-border:#F3B7B7; --danger-text:#A8071A;
+  --chip-bg:#F7F8FA; --row-hover:#FAFBFC; --progress-bg:#EEF0F3;
+  --topbar-bg:rgba(255,255,255,.88); --seg-bg:#F0F2F5;
+  --shadow:0 1px 2px rgba(31,35,41,.04),0 8px 24px rgba(31,35,41,.06);
+  --shadow-lg:0 18px 48px rgba(31,35,41,.14);
+  --r-sm:7px; --r-md:10px; --r-lg:14px; --r-pill:999px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+html[data-theme="dark"]{
+  --bg-app:#0F1115; --surface:#181B21; --surface-2:#20242C; --surface-3:#262B34;
+  --border:#2C323C; --border-strong:#3A414D; --border-soft:#242A33;
+  --text:#E8EAED; --text-2:#A8AFBA; --text-3:#7C8491;
+  --primary:#6B9BFF; --primary-soft:#1D2A44; --primary-border:#2D4470; --primary-fg:#9DBBFF;
+  --ok:#5BBF6A; --ok-soft:#16281A; --ok-border:#24512B; --ok-text:#8FD48F;
+  --warn:#E0A43A; --warn-soft:#2A2112; --warn-border:#5A4419; --warn-text:#F0C36A;
+  --danger:#FF6B6B; --danger-soft:#2C1717; --danger-border:#5A2727; --danger-text:#FF9B9B;
+  --chip-bg:#20242C; --row-hover:#1D222A; --progress-bg:#2C323C;
+  --topbar-bg:rgba(15,17,21,.86); --seg-bg:#20242C;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.2);
+  --shadow-lg:0 24px 64px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg-app);color:var(--text);font-family:var(--font);font-size:13px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit}
+button{cursor:pointer}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--primary-soft);color:var(--primary-fg)}
+
+/* 原型说明条 */
+.proto-bar{max-width:1440px;margin:18px auto 10px;padding:0 22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--text-3)}
+.proto-kicker{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:var(--r-pill);background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-weight:700;font-size:10.5px;letter-spacing:.04em}
+.proto-kicker i{width:6px;height:6px;border-radius:50%;background:var(--primary);display:inline-block}
+.proto-bar b{color:var(--text);font-size:12.5px;font-weight:650}
+.proto-bar .sep{color:var(--border-strong)}
+.proto-tip{display:inline-flex;align-items:center;gap:5px;height:23px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);color:var(--text-3);font-size:11px}
+.proto-tip i{width:5px;height:5px;border-radius:50%;background:var(--warn);display:inline-block}
+.proto-bar .spacer{flex:1}
+.proto-bar .btn{height:26px;font-size:11.5px;padding:0 9px}
+
+/* 应用外壳 */
+.app{max-width:1440px;margin:0 auto 30px;display:grid;grid-template-columns:232px minmax(0,1fr);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);min-height:900px}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:14px 12px 12px;display:flex;flex-direction:column;gap:4px;min-height:900px}
+.brand{display:flex;align-items:center;gap:9px;padding:2px 8px 12px;font-weight:750;font-size:15px;letter-spacing:.01em}
+.brand .mark{width:28px;height:28px;border-radius:9px;background:linear-gradient(150deg,#3370FF,#7A5AF8);display:grid;place-items:center;color:#fff;flex:none}
+.brand small{display:block;font-size:10px;color:var(--text-3);font-weight:500;letter-spacing:.08em;text-transform:uppercase;margin-top:1px}
+.ws-pick{display:flex;align-items:center;gap:8px;margin:0 2px 8px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);font-size:11.5px;color:var(--text-2)}
+.ws-pick b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-weight:600}
+.ws-pick .wsdot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+.nav-lab{font-size:10px;color:var(--text-3);padding:8px 10px 3px;letter-spacing:.08em}
+.nav-item{display:flex;align-items:center;gap:8px;width:100%;height:31px;padding:0 10px;border:0;background:transparent;border-radius:7px;color:var(--text-2);font-size:12.5px;text-align:left;transition:background .15s,color .15s}
+.nav-item:hover{background:var(--surface-2);color:var(--text)}
+.nav-item .ic{width:15px;height:15px;flex:none;opacity:.58}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.nav-item.on .ic{opacity:1}
+.nav-item .badge{margin-left:auto;font-size:9.5px;font-weight:700;color:var(--primary-fg);background:var(--surface);border:1px solid var(--primary-border);border-radius:var(--r-pill);padding:0 5px;line-height:16px}
+.side-foot{margin-top:auto;border-top:1px solid var(--border);padding:10px 4px 0;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-3)}
+.side-foot .avatar{width:26px;height:26px;font-size:10.5px}
+.side-foot b{display:block;color:var(--text-2);font-size:11.5px;font-weight:600}
+
+.workspace{min-width:0;display:flex;flex-direction:column;background:var(--bg-app)}
+.topbar{height:54px;flex:none;display:flex;align-items:center;gap:10px;padding:0 20px;background:var(--topbar-bg);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
+.crumb{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:var(--text-3);white-space:nowrap;overflow-x:auto}
+.crumb b{color:var(--text);font-weight:650}
+.crumb .sep{color:var(--border-strong)}
+.topbar .grow{flex:1}
+.topbar .btn{height:28px;font-size:11.5px;padding:0 9px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;border:1px solid var(--primary-border)}
+
+/* 通用 */
+.content{padding:22px 28px 70px;max-width:1240px;width:100%;margin:0 auto}
+.page-head{display:flex;align-items:flex-start;gap:18px;justify-content:space-between;margin-bottom:15px}
+.page-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.page-head h1{font-size:23px;line-height:1.25;margin:0;letter-spacing:-.01em}
+.page-sub{font-size:12.5px;line-height:1.7;color:var(--text-3);margin:7px 0 0;max-width:720px}
+.auto-stats{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--text-3)}
+.auto-stats span{display:inline-flex;align-items:center;gap:5px}
+.page-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;padding-top:2px}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;background:var(--text-3)}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.danger{background:var(--danger)} .dot.primary{background:var(--primary)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0 11px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);color:var(--text-2);font-size:12.5px;line-height:1;white-space:nowrap;transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
+.btn:hover{background:var(--surface-2);color:var(--text)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:650;box-shadow:0 2px 6px rgba(51,112,255,.18)}
+.btn.primary:hover{filter:brightness(1.04);background:var(--primary)}
+.btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600}
+.btn.soft:hover{background:var(--primary-soft);border-color:var(--primary)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--text-3)}
+.btn.ghost:hover{background:var(--surface-2);color:var(--text-2)}
+.btn.sm{height:27px;padding:0 9px;font-size:11.5px}
+.btn:disabled{opacity:.42;cursor:not-allowed;box-shadow:none;filter:none}
+.btn:disabled:hover{background:var(--surface);color:var(--text-2)}
+.chip{display:inline-flex;align-items:center;gap:4px;height:21px;padding:0 7px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--chip-bg);color:var(--text-3);font-size:10.5px;font-weight:600;white-space:nowrap}
+.chip.ok{background:var(--ok-soft);border-color:var(--ok-border);color:var(--ok-text)}
+.chip.warn{background:var(--warn-soft);border-color:var(--warn-border);color:var(--warn-text)}
+.chip.danger{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-text)}
+.chip.primary{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+
+/* 覆盖指标 */
+.coverage-strip{display:grid;grid-template-columns:1.15fr 1fr 1fr 1.1fr;gap:10px;margin-bottom:14px}
+.cov-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 13px;box-shadow:var(--shadow)}
+.cov-card .k{font-size:10.5px;color:var(--text-3);letter-spacing:.02em}
+.cov-card .v{display:flex;align-items:baseline;gap:6px;margin-top:4px;font-size:20px;font-weight:750;letter-spacing:-.02em}
+.cov-card .v small{font-size:11px;font-weight:500;color:var(--text-3);letter-spacing:0}
+.cov-card .sub{font-size:10.5px;color:var(--text-3);margin-top:2px}
+.cov-card.ok .v{color:var(--ok-text)} .cov-card.warn .v{color:var(--warn-text)} .cov-card.primary .v{color:var(--primary-fg)}
+.cov-card .bar{height:5px;border-radius:var(--r-pill);background:var(--progress-bg);overflow:hidden;margin-top:8px}
+.cov-card .bar i{display:block;height:100%;border-radius:var(--r-pill);background:var(--ok)}
+.cov-card.warn .bar i{background:var(--warn)}
+.cov-card.primary .bar i{background:var(--primary)}
+
+/* 主栅格 */
+.mem-grid{display:grid;grid-template-columns:minmax(0,1fr) 304px;gap:16px;align-items:start}
+
+/* 页签 */
+.tabs{display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--border);margin-bottom:12px;overflow-x:auto}
+.tab{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--text-3);font-size:13px;white-space:nowrap;margin-bottom:-1px}
+.tab:hover{color:var(--text-2)}
+.tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650}
+.tab .count{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:var(--r-pill);background:var(--surface-3);color:var(--text-3);font-size:10px;font-weight:700}
+.tab.on .count{background:var(--primary-soft);color:var(--primary-fg)}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:16px 17px}
+.panel + .panel{margin-top:12px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.panel-head h3{font-size:14px;font-weight:700;margin:0}
+.panel-head .hint{font-size:11px;color:var(--text-3);font-weight:400}
+.panel-lead{font-size:12px;line-height:1.7;color:var(--text-3);margin:5px 0 12px}
+.panel-lead b{color:var(--text-2);font-weight:600}
+
+/* 相似项 */
+.query-box{display:flex;align-items:center;gap:8px;padding:9px;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface);box-shadow:0 1px 2px rgba(31,35,41,.03)}
+.query-box .qic{width:26px;height:26px;border-radius:7px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;flex:none}
+.query-box input{flex:1;min-width:0;height:30px;border:0;background:transparent;color:var(--text);font-size:13px;outline:none}
+.query-box input::placeholder{color:var(--text-3)}
+.ctx-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px;font-size:11px;color:var(--text-3)}
+.ctx-row .ctx{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface-2);color:var(--text-2);font-size:10.5px}
+.ctx-row .ctx b{font-weight:600;color:var(--text)}
+.result-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:14px 0 8px;font-size:11.5px;color:var(--text-3)}
+.result-head b{color:var(--text);font-weight:650}
+.sim-list{display:grid;gap:10px}
+.sim-card{border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:13px 14px;transition:border-color .15s,box-shadow .15s}
+.sim-card:hover{border-color:var(--primary-border);box-shadow:0 4px 14px rgba(51,112,255,.07)}
+.sim-card.adopted{border-color:var(--ok-border);background:linear-gradient(0deg,rgba(56,158,13,.025),rgba(56,158,13,.025))}
+.sim-card.ignored{opacity:.55}
+.sim-top{display:flex;align-items:flex-start;gap:10px;justify-content:space-between}
+.sim-title{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.sim-title b{font-size:13.5px;font-weight:700;line-height:1.4}
+.sim-score{display:inline-flex;align-items:center;gap:4px;height:21px;padding:0 7px;border-radius:var(--r-pill);background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:10.5px;font-weight:700;white-space:nowrap}
+.sim-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:4px;font-size:11px;color:var(--text-3)}
+.sim-meta .sep{color:var(--border-strong)}
+.sim-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}
+.sim-stat{border:1px solid var(--border-soft);border-radius:7px;background:var(--surface-2);padding:7px 8px}
+.sim-stat span{display:block;font-size:10px;color:var(--text-3)}
+.sim-stat b{display:block;font-size:13px;font-weight:700;margin-top:2px;line-height:1.3}
+.sim-stat b.warn{color:var(--warn-text)}
+.sim-why{display:flex;align-items:flex-start;gap:8px;margin-top:9px;padding:8px 9px;border:1px solid var(--primary-border);border-left:3px solid var(--primary);border-radius:6px;background:var(--primary-soft);font-size:11.5px;line-height:1.65;color:var(--text-2)}
+.sim-why .tag{flex:none;font-size:10px;font-weight:750;color:var(--primary-fg);letter-spacing:.02em;padding-top:1px}
+.sim-card .lesson{margin-top:7px;font-size:11.5px;line-height:1.65;color:var(--text-2)}
+.sim-card .lesson b{color:var(--text);font-weight:650}
+.sim-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px dashed var(--border)}
+.sim-foot .spacer{flex:1}
+.sim-foot .btn{height:26px;font-size:11px;padding:0 8px}
+.cite{display:inline-flex;align-items:center;justify-content:center;height:16px;min-width:16px;padding:0 4px;margin:0 1px;border:1px solid var(--primary-border);border-radius:4px;background:var(--primary-soft);color:var(--primary-fg);font-size:9.5px;font-weight:700;line-height:1;vertical-align:1px}
+.cite:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+.more-note{margin-top:9px;font-size:10.5px;line-height:1.65;color:var(--text-3)}
+
+/* 问答 */
+.ask-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.ask-chip{display:inline-flex;align-items:center;gap:5px;height:27px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);color:var(--text-2);font-size:11px}
+.ask-chip:hover{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg)}
+.ask-chip.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+.qa-stream{display:grid;gap:12px}
+.q-row{display:flex;justify-content:flex-end}
+.q-bubble{max-width:78%;padding:9px 12px;border-radius:12px 12px 3px 12px;background:var(--primary);color:#fff;font-size:12.5px;line-height:1.6;box-shadow:0 2px 8px rgba(51,112,255,.16)}
+.a-card{border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:13px 14px;box-shadow:var(--shadow)}
+.a-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+.a-head .who{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:var(--primary-fg)}
+.a-head .who .mark{width:16px;height:16px;border-radius:5px;background:linear-gradient(150deg,#3370FF,#7A5AF8);display:grid;place-items:center;color:#fff}
+.a-head .spacer{flex:1}
+.a-text{font-size:13px;line-height:1.85;color:var(--text)}
+.a-text p{margin:0 0 8px}
+.a-text p:last-child{margin-bottom:0}
+.a-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:10px 0}
+.a-fact{border:1px solid var(--border-soft);border-radius:7px;background:var(--surface-2);padding:7px 8px}
+.a-fact span{display:block;font-size:10px;color:var(--text-3)}
+.a-fact b{display:block;font-size:12px;font-weight:700;margin-top:2px;line-height:1.4}
+.a-miss{margin:9px 0;padding:9px 10px;border:1px solid var(--warn-border);border-left:3px solid var(--warn);border-radius:7px;background:var(--warn-soft);font-size:11.5px;line-height:1.7;color:var(--warn-text)}
+.a-miss b{font-weight:700}
+.a-miss .btn{height:26px;font-size:11px;padding:0 8px;margin-top:7px;background:var(--surface);border-color:var(--warn-border);color:var(--warn-text)}
+.a-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:9px;margin-top:9px;border-top:1px dashed var(--border);font-size:10.5px;color:var(--text-3)}
+.a-foot .spacer{flex:1}
+.a-foot .btn{height:25px;font-size:10.5px;padding:0 8px}
+.a-foot .btn.okb{color:var(--ok-text);border-color:var(--ok-border);background:var(--ok-soft)}
+.ask-row{display:flex;align-items:center;gap:8px;margin-top:12px}
+.ask-row input{flex:1;min-width:0;height:34px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--text);font-size:12.5px;padding:0 10px;outline:none}
+.ask-row input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.ask-row input::placeholder{color:var(--text-3)}
+.ask-row .btn{height:34px}
+.typing{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);padding:6px 2px}
+.spinner{width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 简报 */
+.brief-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.brief-title{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.brief-title h3{font-size:15px;margin:0;font-weight:700}
+.metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin:10px 0 4px}
+.metric{border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:8px 9px}
+.metric span{display:block;font-size:10px;color:var(--text-3)}
+.metric b{display:block;font-size:16px;font-weight:750;letter-spacing:-.01em;margin-top:2px;line-height:1.3}
+.metric.ok b{color:var(--ok-text)} .metric.warn b{color:var(--warn-text)} .metric.primary b{color:var(--primary-fg)}
+.brief-section{padding:13px 0;border-bottom:1px solid var(--border-soft)}
+.brief-section:last-child{border-bottom:0;padding-bottom:2px}
+.brief-section h4{font-size:12.5px;font-weight:700;margin:0 0 6px;display:flex;align-items:center;gap:6px}
+.brief-section p{font-size:12.5px;line-height:1.8;margin:0;color:var(--text-2)}
+.brief-section p b{color:var(--text);font-weight:650}
+.brief-list{display:grid;gap:5px;margin-top:7px}
+.brief-item{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:8px;align-items:start;padding:6px 8px;border:1px solid var(--border-soft);border-radius:6px;background:var(--surface-2);font-size:11.5px;line-height:1.55}
+.brief-item .date{color:var(--text-3);font-variant-numeric:tabular-nums}
+.brief-item b{font-weight:650;color:var(--text-2)}
+.brief-item .impact{color:var(--text-3);font-size:10.5px;white-space:nowrap}
+.draft{margin-top:7px;padding:9px 11px;border:1px solid var(--warn-border);border-radius:8px;background:var(--warn-soft)}
+.draft-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;font-size:10.5px;color:var(--warn-text);font-weight:650}
+.draft-text{font-size:12px;line-height:1.75;color:var(--text-2)}
+.draft-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px}
+.draft-actions .btn{height:25px;font-size:10.5px;padding:0 8px}
+.draft textarea{width:100%;min-height:58px;border:1px solid var(--warn-border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;line-height:1.7;padding:6px 8px;resize:vertical;outline:none}
+.gap-box{margin-top:9px;padding:9px 10px;border:1px solid var(--warn-border);border-radius:8px;background:var(--warn-soft);font-size:11.5px;line-height:1.65;color:var(--warn-text)}
+.gap-box b{font-weight:700}
+.gap-box .btn{height:25px;font-size:10.5px;padding:0 8px;margin-top:6px;background:var(--surface);border-color:var(--warn-border);color:var(--warn-text)}
+
+/* 右栏 */
+.rail{display:grid;gap:12px;position:sticky;top:70px}
+.rail-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow);padding:13px 14px}
+.rail-card h4{font-size:12px;margin:0 0 9px;font-weight:700;display:flex;align-items:center;gap:6px}
+.rail-card h4 .ic{width:14px;height:14px;flex:none;opacity:.62}
+.rail-card h4 .tag{margin-left:auto}
+.kv{display:grid;grid-template-columns:64px minmax(0,1fr);gap:7px 8px;font-size:11px;line-height:1.5}
+.kv .k{color:var(--text-3)}
+.kv .v{color:var(--text-2);word-break:break-word}
+.kv .v b{color:var(--text);font-weight:650}
+.bar-list{display:grid;gap:8px}
+.bar-item{font-size:10.5px;color:var(--text-3)}
+.bar-item .lab{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px}
+.bar-item .lab b{color:var(--text-2);font-weight:650}
+.bar-track{height:6px;border-radius:var(--r-pill);background:var(--progress-bg);overflow:hidden}
+.bar-fill{display:block;height:100%;border-radius:var(--r-pill);background:var(--ok)}
+.bar-fill.warn{background:var(--warn)}
+.bar-fill.danger{background:var(--danger)}
+.rail-note{font-size:10.5px;line-height:1.65;color:var(--text-3);margin-top:9px;padding-top:8px;border-top:1px dashed var(--border)}
+.rail-note b{color:var(--text-2);font-weight:600}
+.feed-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;text-align:center}
+.feed-grid div{padding:7px 4px;border:1px solid var(--border-soft);border-radius:7px;background:var(--surface-2)}
+.feed-grid b{display:block;font-size:16px;font-weight:750;line-height:1.2}
+.feed-grid span{display:block;font-size:9.5px;color:var(--text-3);margin-top:2px}
+.timeline{display:grid;gap:8px}
+.tl-item{display:grid;grid-template-columns:8px minmax(0,1fr);gap:7px;font-size:10.5px;line-height:1.55;color:var(--text-3)}
+.tl-dot{width:6px;height:6px;border-radius:50%;background:var(--primary);margin-top:4px}
+.tl-item b{display:block;font-size:11px;color:var(--text-2);font-weight:650}
+.rail-card .btn{height:26px;font-size:10.5px;padding:0 8px;margin-top:9px;width:100%}
+
+/* 阻断态 */
+.gate{text-align:center;padding:28px 22px 24px;border:1px dashed var(--border-strong);border-radius:12px;background:var(--surface)}
+.gate .gicon{width:42px;height:42px;border-radius:12px;background:var(--warn-soft);border:1px solid var(--warn-border);color:var(--warn-text);display:grid;place-items:center;margin:0 auto 10px;font-size:18px;font-weight:800}
+.gate h3{font-size:14px;margin:0 0 5px}
+.gate p{font-size:11.5px;line-height:1.7;color:var(--text-3);max-width:460px;margin:0 auto}
+.gate .gaps{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:13px auto 0;max-width:520px;text-align:left}
+.gate .gap{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);font-size:11px;color:var(--text-2)}
+.gate .gap b{color:var(--warn-text);font-weight:650}
+.gate .gactions{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap;margin-top:13px}
+
+/* 抽屉 */
+.drawer-root{display:none}
+.drawer-root.open{display:block}
+.drawer-backdrop{position:fixed;inset:0;background:rgba(15,17,21,.38);z-index:90;backdrop-filter:blur(1.5px)}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(468px,94vw);background:var(--surface);border-left:1px solid var(--border);z-index:91;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;transform:translateX(18px);animation:slidein .2s ease-out forwards}
+@keyframes slidein{to{transform:translateX(0)}}
+.drawer-head{padding:14px 17px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;justify-content:space-between}
+.drawer-head h3{font-size:15px;margin:0;line-height:1.4;font-weight:700}
+.drawer-head .sub{font-size:11px;color:var(--text-3);margin-top:4px}
+.drawer-head .x{width:28px;height:28px;border:0;background:transparent;border-radius:6px;color:var(--text-3);font-size:18px;line-height:1;flex:none}
+.drawer-head .x:hover{background:var(--surface-2);color:var(--text)}
+.drawer-body{flex:1;overflow:auto;padding:15px 17px 22px}
+.drawer-foot{padding:11px 17px;border-top:1px solid var(--border);background:var(--surface-2);display:flex;align-items:center;gap:7px;justify-content:flex-end;flex-wrap:wrap}
+.d-sec{margin-bottom:15px}
+.d-sec h5{font-size:10.5px;color:var(--text-3);font-weight:700;letter-spacing:.05em;margin:0 0 7px;text-transform:uppercase}
+.d-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.d-stat{padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2)}
+.d-stat span{display:block;font-size:9.5px;color:var(--text-3)}
+.d-stat b{display:block;font-size:13px;font-weight:750;margin-top:2px}
+.d-stat b.warn{color:var(--warn-text)}
+.d-text{font-size:12px;line-height:1.75;color:var(--text-2)}
+.d-text b{color:var(--text);font-weight:650}
+.d-card{padding:9px 10px;border:1px solid var(--border-soft);border-radius:7px;background:var(--surface-2);font-size:11.5px;line-height:1.7;color:var(--text-2)}
+.d-card.learn{border-color:var(--primary-border);background:var(--primary-soft);color:var(--text-2)}
+.d-links{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.d-link{display:inline-flex;align-items:center;gap:4px;height:23px;padding:0 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:10.5px;color:var(--text-2)}
+.d-link:hover{border-color:var(--primary-border);color:var(--primary-fg)}
+.d-fields{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.d-field{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;padding:7px 9px;border-bottom:1px solid var(--border-soft);font-size:11px;line-height:1.55}
+.d-field:last-child{border-bottom:0}
+.d-field .k{color:var(--text-3)}
+.d-field .v{color:var(--text-2)}
+.d-field .v code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;background:var(--surface-3);padding:1px 4px;border-radius:4px;color:var(--text-2)}
+.d-note{font-size:10.5px;line-height:1.65;color:var(--text-3);margin-top:8px}
+.d-source{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;border:1px solid var(--border-soft);border-radius:6px;margin-bottom:5px;font-size:11px;color:var(--text-2)}
+.d-source span{font-size:10px;color:var(--text-3)}
+.d-source .btn{height:24px;font-size:10px;padding:0 7px}
+
+/* 弹层 */
+.modal-root{display:none}
+.modal-root.open{display:block}
+.modal-backdrop{position:fixed;inset:0;background:rgba(15,17,21,.42);z-index:100;backdrop-filter:blur(2px)}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:101;width:min(520px,calc(100vw - 30px));max-height:84vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:14.5px;margin:0;font-weight:700}
+.modal-head .x{width:26px;height:26px;border:0;background:transparent;border-radius:6px;color:var(--text-3);font-size:17px;line-height:1}
+.modal-head .x:hover{background:var(--surface-2);color:var(--text)}
+.modal-body{padding:14px 18px;font-size:12px;line-height:1.65;color:var(--text-2)}
+.modal-foot{display:flex;align-items:center;justify-content:flex-end;gap:7px;padding:11px 18px;border-top:1px solid var(--border);background:var(--surface-2);border-radius:0 0 12px 12px}
+.modal-lead{margin:0 0 11px;color:var(--text-3);font-size:11.5px}
+.radio-row{display:flex;align-items:flex-start;gap:8px;padding:8px 9px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;background:var(--surface);cursor:pointer;font-size:11.5px}
+.radio-row:hover{background:var(--surface-2)}
+.radio-row input{margin:2px 0 0;accent-color:var(--primary)}
+.radio-row b{display:block;font-weight:650;color:var(--text)}
+.radio-row span{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px}
+.modal textarea{width:100%;min-height:64px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px;line-height:1.65;padding:7px 9px;resize:vertical;outline:none;margin-top:8px}
+.modal textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.modal-note{margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:10.5px;line-height:1.65;color:var(--text-3)}
+.source-table{width:100%;border-collapse:collapse;font-size:11.5px}
+.source-table td{padding:7px 8px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+.source-table tr:last-child td{border-bottom:0}
+.source-table td:first-child{width:88px;color:var(--text-3)}
+.source-table td b{font-weight:650;color:var(--text)}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,12px);z-index:200;max-width:min(520px,calc(100vw - 28px));padding:9px 14px;border-radius:8px;background:#1F2329;color:#fff;font-size:12px;line-height:1.5;text-align:center;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;box-shadow:0 8px 24px rgba(0,0,0,.22)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+html[data-theme="dark"] .toast{background:#E8EAED;color:#14161A}
+
+/* 响应式 */
+@media (max-width:1180px){
+  .app{grid-template-columns:1fr;margin-left:12px;margin-right:12px}
+  .sidebar{display:none}
+  .mem-grid{grid-template-columns:1fr}
+  .rail{position:static;grid-row:2;grid-template-columns:1fr 1fr;display:grid}
+  .content{padding:18px 20px 60px}
+}
+@media (max-width:760px){
+  .proto-bar{margin-top:10px;padding:0 12px}
+  .proto-bar .proto-tip{display:none}
+  .app{margin-left:0;margin-right:0;border-radius:0;border-left:0;border-right:0}
+  .topbar{padding:0 13px}
+  .topbar #themeBtn{display:none}
+  .topbar .btn{height:26px;padding:0 8px;font-size:11px}
+  .crumb{font-size:11px}
+  .content{padding:14px 12px 54px}
+  .page-head{flex-direction:column;gap:10px}
+  .page-actions{width:100%;justify-content:flex-start}
+  .page-actions .btn{flex:1;min-width:110px}
+  .coverage-strip{grid-template-columns:1fr 1fr}
+  .rail{grid-template-columns:1fr}
+  .sim-stats{grid-template-columns:1fr 1fr}
+  .a-facts{grid-template-columns:1fr 1fr}
+  .metric-grid{grid-template-columns:1fr 1fr 1fr}
+  .brief-item{grid-template-columns:46px minmax(0,1fr)}
+  .brief-item .impact{grid-column:2;white-space:normal}
+  .gate .gaps{grid-template-columns:1fr}
+  .q-bubble{max-width:92%}
+  .panel{padding:13px 12px}
+  .d-stats{grid-template-columns:1fr 1fr}
+  .drawer{width:100vw}
+}
+</style>
+</head>
+<body>
+<div class="proto-bar">
+  <span class="proto-kicker"><i></i>交互原型 · 2026-11-13</span>
+  <b>项目记忆</b>
+  <span class="sep">·</span>
+  <span>版本感知的检索与复盘，每条结论带引用</span>
+  <span class="proto-tip"><i></i>点引用看原记录</span>
+  <span class="proto-tip"><i></i>切到“数据不足”看阻断态</span>
+  <span class="proto-tip"><i></i>点“这条不对”看纠错闭环</span>
+  <span class="spacer"></span>
+  <button class="btn" data-action="toggle-mode" id="modeBtn">数据不足预览</button>
+  <button class="btn" data-action="toggle-theme" id="themeBtnTop">深色</button>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="mark">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10M7 21h10M8.2 3c0 4 3.1 5.2 3.8 5.9.7-.7 3.8-1.9 3.8-5.9M8.2 21c0-4 3.1-5.2 3.8-5.9.7.7 3.8 1.9 3.8 5.9"/></svg>
+      </span>
+      <span>沙漏<small>Hourglass</small></span>
+    </div>
+    <div class="ws-pick"><span class="wsdot"></span><b>东证自研团队</b><span>▾</span></div>
+    <div class="nav-lab">我的</div>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('check-square')}<span>我的工作</span></button>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('calendar')}<span>周回顾</span></button>
+    <div class="nav-lab">规划</div>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('inbox')}<span>需求池</span></button>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('folder')}<span>项目</span></button>
+    <button class="nav-item on" data-action="toast" data-msg="当前在版本的项目记忆页">${icon('tag')}<span>版本</span><span class="badge">记忆</span></button>
+    <div class="nav-lab">交付</div>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('columns')}<span>工作项</span></button>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('file')}<span>文档</span></button>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('check-circle')}<span>测试</span></button>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('branch')}<span>分支</span></button>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('file-text')}<span>交付说明</span></button>
+    <div class="nav-lab">洞察</div>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('bar-chart')}<span>报表</span></button>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('users')}<span>成员负载</span></button>
+    <button class="nav-item" data-action="toast" data-msg="原型仅演示项目记忆">${icon('alert')}<span>逾期与阻塞</span></button>
+    <div class="side-foot">
+      <div class="avatar">林</div>
+      <div><b>林舟</b>项目负责人</div>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <nav class="crumb">
+        <span>项目</span><span class="sep">/</span><b>星河设备巡检平台</b><span class="sep">/</span><span>版本</span><span class="sep">/</span><span>V2.3 现场验收版</span><span class="sep">/</span><b>项目记忆</b>
+      </nav>
+      <span class="grow"></span>
+      <button class="btn" data-action="toast" data-msg="原型中返回版本页仅作示意">返回版本</button>
+      <button class="btn" data-action="toggle-theme" id="themeBtn">深色</button>
+      <div class="avatar">林</div>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<div class="drawer-root" id="drawerRoot"></div>
+<div class="modal-root" id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= 数据 ================= */
+const DATA = {
+  space:'东证自研团队',
+  project:'星河设备巡检平台',
+  customer:'华东水务集团',
+  version:'V2.3 现场验收版',
+  versions:'V1.8 — V2.3（6 个）',
+  owner:'林舟',
+  coverage: {
+    normal: {
+      overall:92, tone:'ok', label:'可用',
+      records:42, cards:36, decisions:'3 / 12',
+      metrics:[
+        {name:'工作项关联版本', v:92, target:90},
+        {name:'需求关联文档', v:64, target:50},
+        {name:'工时已对账', v:88, target:80},
+        {name:'版本关联发布', v:90, target:80}
+      ]
+    },
+    sparse: {
+      overall:38, tone:'warn', label:'数据不足',
+      records:9, cards:4, decisions:'0 / 3',
+      metrics:[
+        {name:'工作项关联版本', v:38, target:90},
+        {name:'需求关联文档', v:22, target:50},
+        {name:'工时已对账', v:51, target:80},
+        {name:'版本关联发布', v:41, target:80}
+      ]
+    }
+  },
+  similar: [
+    {
+      id:'sim-1', title:'设备台账导入模板校验', version:'V2.3', module:'设备台账', status:'延至 V2.4',
+      score:'高 0.86', scoreTone:'primary',
+      est:'24h', actual:'34h', variance:'+42%', defects:'3（P1 1）', rework:'1 次',
+      why:'同模块 + 同类型 + 描述相似；上次同样卡在“现场接口字段未确认”。',
+      lesson:'先确认接口字段清单，再做模板校验；否则容易返工，并把整项顺延一个版本。',
+      cites:['D-035','DEC-011'],
+      updated:'2026-11-05'
+    },
+    {
+      id:'sim-2', title:'设备台账 Excel 批量导入', version:'V2.1', module:'设备台账', status:'已发布',
+      score:'中高 0.74', scoreTone:'primary',
+      est:'40h', actual:'52h', variance:'+30%', defects:'5（P1 2）', rework:'2 次',
+      why:'同模块 + 同属导入类；失败行回执方案可以直接复用。',
+      lesson:'分批导入 + 失败行回执，比整批回滚更容易在现场收尾；文档 DOC-092 可复用。',
+      cites:['DOC-092','TR-2026-0821'],
+      updated:'2026-08-21'
+    },
+    {
+      id:'sim-3', title:'站点与设备字典批量维护', version:'V1.9', module:'基础设置', status:'已发布',
+      score:'中 0.61', scoreTone:'muted',
+      est:'16h', actual:'18h', variance:'+12.5%', defects:'0', rework:'0 次',
+      why:'同属主数据维护场景，规模更小；字段校验清单可参考。',
+      lesson:'先做字段白名单与只读预览，现场确认成本最低；本次无返工。',
+      cites:['D-014'],
+      updated:'2026-06-18'
+    }
+  ],
+  qa: {
+    delay: {
+      q:'V2.3 为什么延期？',
+      a:'V2.3 没有整体延期：版本结束日仍为 2026-11-12，生产发布于当天成功。[1] 发生的是 1 项范围移出：设备台账导入模板校验（D-035）因现场接口字段未确认，11-05 移出并顺延至 V2.4。[2][3]',
+      facts:[{k:'计划结束',v:'11-12'},{k:'实际发布',v:'11-12'},{k:'范围移出',v:'1 项'},{k:'范围新增',v:'1 项'}],
+      cites:[
+        {n:1,key:'rel'},{n:2,key:'change-1105'},{n:3,key:'dec-011'}
+      ],
+      records:12
+    },
+    scope: {
+      q:'哪些需求是后加的？',
+      a:'V2.3 有 1 项范围新增：告警去重与合并（D-031），10-24 由客户提出，纳入本版并增加约 12h 投入；版本结束日未变。[1][2] 另有 1 项移出（D-035），不计入新增。[3]',
+      facts:[{k:'新增范围',v:'1 项'},{k:'新增投入',v:'约 12h'},{k:'结束日',v:'未变'},{k:'移出范围',v:'1 项'}],
+      cites:[
+        {n:1,key:'change-1024'},{n:2,key:'d-031'},{n:3,key:'change-1105'}
+      ],
+      records:9
+    },
+    deferred: {
+      q:'设备台账导入为什么延到 V2.4？',
+      a:'直接原因：现场接口字段未确认，模板校验规则无法定稿。[1] 11-05 由林舟移出版本，客户接口人周工确认，顺延至 V2.4。[2] 历史同类导入工作也出现过字段确认晚导致返工。[3]',
+      facts:[{k:'移出时间',v:'11-05'},{k:'确认人',v:'客户接口人'},{k:'目标版本',v:'V2.4'},{k:'历史返工',v:'1 次'}],
+      cites:[
+        {n:1,key:'d-035'},{n:2,key:'dec-011'},{n:3,key:'sim-2'}
+      ],
+      records:11
+    },
+    test: {
+      q:'V2.3 的测试覆盖到哪？',
+      a:'V2.3 回归计划 120 条用例，已执行 118 条（98.3%），通过 112、失败 4、阻塞 2，通过率 94.9%。[1] 覆盖模块：设备台账、巡检路线、移动巡检、告警中心、报表。[2] 未执行 2 条均属 App 签字确认，随 V2.4 发布。[3]',
+      facts:[{k:'计划用例',v:'120'},{k:'已执行',v:'118'},{k:'通过率',v:'94.9%'},{k:'未执行',v:'2'}],
+      cites:[
+        {n:1,key:'tr-1112'},{n:2,key:'test-plan'},{n:3,key:'note-app'}
+      ],
+      records:8
+    },
+    missing: {
+      q:'客户当时为什么接受这个方案？',
+      a:'记录中没有找到决策依据。当前只有变更确认人（客户接口人周工）和时间，没有会议纪要或决策理由。[1] 不建议根据现有记录推断客户动机。',
+      facts:[],
+      cites:[{n:1,key:'change-1105'}],
+      records:3,
+      missing:{title:'缺 1 条决策记录',desc:'“为什么接受”属于决策理由，不是变更事实。补一条决策记录后，下一次就能回答。',action:'补一条决策记录'}
+    }
+  },
+  brief: {
+    metrics:[
+      {k:'承诺',v:'18 项',cls:''},
+      {k:'已发布',v:'16 项',cls:'ok'},
+      {k:'延后',v:'2 项',cls:'warn'},
+      {k:'回归通过',v:'94.9%',cls:''},
+      {k:'投入',v:'286h',cls:'primary'},
+      {k:'未关闭缺陷',v:'6',cls:'warn'}
+    ],
+    changes:[
+      {date:'10-24',title:'客户新增“告警去重与合并”',impact:'+12h · 结束日不变'},
+      {date:'11-05',title:'设备台账导入模板校验移出本版',impact:'顺延 V2.4 · 客户已确认'},
+      {date:'11-08',title:'移动端签字确认拆为 Web / App 两批',impact:'Web 已发 · App 随 V2.4'}
+    ],
+    lesson:'导入类需求的字段确认应前置到版本启动前。本次因接口字段晚确认，造成 1 次返工，并把整项顺延一个版本。',
+    next:'V2.4 将 D-035 与 App 签字确认纳入首批范围；预留 3 天现场联调缓冲，避免再次挤压验收窗口。'
+  },
+  cards: {
+    'sim-1': {
+      title:'设备台账导入模板校验', type:'需求', id:'D-035', version:'V2.3',
+      owner:'林舟', updated:'2026-11-05 16:20', status:'延至 V2.4',
+      est:'24h', actual:'34h', variance:'+42%', defects:'3（P1 1）', rework:'1',
+      content:'按设备台账模板导入设备主数据；校验必填字段、编码规则与重复项，失败行回执。验收标准：1000 行导入 ≤ 60s，失败行可定位到列。',
+      decision:'11-05 因现场接口字段未确认，模板校验规则无法定稿；林舟移出版本，客户接口人周工确认，顺延至 V2.4。',
+      lesson:'先确认接口字段清单，再做模板校验；否则容易返工，并把整项顺延一个版本。',
+      relations:['DOC-118 导入模板校验规则 v2','TR-2026-1105 回归报告','DEC-011 顺延决策','V2.4 版本范围'],
+      fields:[
+        ['身份','需求 D-035 · 项目 星河设备巡检平台 · 版本 V2.3'],
+        ['时间','创建 10-08 · 承诺 11-05 · 移出 11-05 · 更新 11-05'],
+        ['状态','计划中 → 延至 V2.4 · 未发布'],
+        ['内容','需求描述 / 验收标准 / 变更原因（见上）'],
+        ['量化','预估 24h · 实际 34h · 缺陷 3 · 返工 1'],
+        ['关系','文档 DOC-118 · 测试 TR-2026-1105 · 决策 DEC-011'],
+        ['权限','空间成员可见 · 客户不可见内部工时'],
+        ['溯源','demand#D-035 · 快照 11-05 16:20 · 规则+模型']
+      ],
+      sources:[
+        {name:'需求 D-035',meta:'demand · 已读取 · 11-05 16:20'},
+        {name:'文档 DOC-118',meta:'requirement_doc · 已读取 · 11-04 10:12'},
+        {name:'工时日志',meta:'time_log · 34h · 已对账'},
+        {name:'决策 DEC-011',meta:'decision · 人工补录 · 11-05'}
+      ]
+    },
+    'sim-2': {
+      title:'设备台账 Excel 批量导入', type:'需求', id:'D-019', version:'V2.1',
+      owner:'陈默', updated:'2026-08-21 18:10', status:'已发布',
+      est:'40h', actual:'52h', variance:'+30%', defects:'5（P1 2）', rework:'2',
+      content:'支持 Excel 批量导入设备台账，含模板下载、字段映射、失败行回执。验收标准：5000 行导入成功率 ≥ 99%，失败行可导出。',
+      decision:'首发采用整批事务回滚，现场大文件导入失败后无法定位；08-14 改为分批 + 失败行回执，增加 2 次返工。',
+      lesson:'分批导入 + 失败行回执，比整批回滚更容易在现场收尾；文档 DOC-092 可复用。',
+      relations:['DOC-092 失败行处理方案','TR-2026-0821 回归报告','V2.1 发布记录'],
+      fields:[
+        ['身份','需求 D-019 · 项目 星河设备巡检平台 · 版本 V2.1'],
+        ['时间','创建 07-02 · 承诺 08-15 · 发布 08-21 · 更新 08-21'],
+        ['状态','已发布 · 已验收'],
+        ['内容','Excel 导入 / 字段映射 / 失败行回执'],
+        ['量化','预估 40h · 实际 52h · 缺陷 5 · 返工 2'],
+        ['关系','文档 DOC-092 · 测试 TR-2026-0821 · 发布 REL-2026-0821'],
+        ['权限','空间成员可见'],
+        ['溯源','demand#D-019 · 快照 08-21 18:10 · 规则+模型']
+      ],
+      sources:[
+        {name:'需求 D-019',meta:'demand · 已读取 · 08-21 18:10'},
+        {name:'文档 DOC-092',meta:'requirement_doc · 已读取 · 08-14 09:30'},
+        {name:'工时日志',meta:'time_log · 52h · 已对账'},
+        {name:'发布记录',meta:'version_release · REL-2026-0821'}
+      ]
+    },
+    'sim-3': {
+      title:'站点与设备字典批量维护', type:'需求', id:'D-014', version:'V1.9',
+      owner:'许宁', updated:'2026-06-18 17:40', status:'已发布',
+      est:'16h', actual:'18h', variance:'+12.5%', defects:'0', rework:'0',
+      content:'站点与设备字典支持批量新增/停用，提供只读预览与字段白名单。验收标准：变更前预览影响行数，误操作可回滚。',
+      decision:'采用“白名单 + 只读预览”而非自由编辑，现场确认成本最低；未出现返工。',
+      lesson:'先做字段白名单与只读预览，现场确认成本最低；本次无返工。',
+      relations:['D-014 需求','V1.9 发布记录'],
+      fields:[
+        ['身份','需求 D-014 · 项目 星河设备巡检平台 · 版本 V1.9'],
+        ['时间','创建 05-20 · 承诺 06-12 · 发布 06-18 · 更新 06-18'],
+        ['状态','已发布 · 已验收'],
+        ['内容','字典批量维护 / 只读预览 / 字段白名单'],
+        ['量化','预估 16h · 实际 18h · 缺陷 0 · 返工 0'],
+        ['关系','发布 REL-2026-0618'],
+        ['权限','空间成员可见'],
+        ['溯源','demand#D-014 · 快照 06-18 17:40 · 规则+模型']
+      ],
+      sources:[
+        {name:'需求 D-014',meta:'demand · 已读取 · 06-18 17:40'},
+        {name:'工时日志',meta:'time_log · 18h · 已对账'},
+        {name:'发布记录',meta:'version_release · REL-2026-0618'}
+      ]
+    }
+  },
+  sources: {
+    'rel':{title:'发布记录 REL-2026-1112-01',rows:[['记录类型','生产发布'],['版本','V2.3 现场验收版'],['时间','2026-11-12 18:40'],['结果','成功 · production · sh-prod-01'],['说明','16 项发布内容；无回滚']]},
+    'change-1105':{title:'版本变更 · 11-05 范围移出',rows:[['记录类型','版本范围变更'],['对象','D-035 设备台账导入模板校验'],['变化','V2.3 → V2.4'],['原因','现场接口字段未确认'],['确认人','客户接口人 周工']]},
+    'change-1024':{title:'版本变更 · 10-24 范围新增',rows:[['记录类型','版本范围变更'],['对象','D-031 告警去重与合并'],['变化','新增至 V2.3'],['影响','约 +12h · 结束日不变'],['来源','客户现场提出']]},
+    'dec-011':{title:'决策记录 DEC-011',rows:[['记录类型','决策记录（人工补录）'],['结论','D-035 顺延至 V2.4'],['理由','接口字段未确认，无法定稿模板校验'],['确认人','林舟 / 客户接口人 周工'],['时间','2026-11-05 16:20']]},
+    'd-035':{title:'需求 D-035',rows:[['记录类型','需求'],['标题','设备台账导入模板校验'],['版本','V2.3 → V2.4'],['状态','延后'],['负责人','林舟']]},
+    'd-031':{title:'需求 D-031',rows:[['记录类型','需求'],['标题','告警去重与合并'],['版本','V2.3'],['来源','客户现场提出'],['时间','2026-10-24']]},
+    'tr-1112':{title:'测试报告 TR-2026-1112',rows:[['记录类型','测试报告'],['计划','V2.3 回归'],['用例','120 条'],['结果','通过 112 · 失败 4 · 阻塞 2'],['通过率','94.9%']]},
+    'test-plan':{title:'测试计划 V2.3 回归',rows:[['记录类型','测试计划'],['覆盖模块','设备台账 / 巡检路线 / 移动巡检 / 告警中心 / 报表'],['用例','120 条'],['执行','118 条'],['状态','已完成']]},
+    'note-app':{title:'测试备注 · App 签字确认',rows:[['记录类型','测试执行备注'],['未执行','2 条'],['原因','App 端随 V2.4 发布'],['负责人','周遥'],['时间','2026-11-12']]},
+    'doc-118':{title:'文档 DOC-118',rows:[['记录类型','方案文档'],['标题','导入模板校验规则 v2'],['版本','V2.3'],['状态','已归档'],['关联','D-035']]},
+    'doc-092':{title:'文档 DOC-092',rows:[['记录类型','方案文档'],['标题','导入失败行处理方案'],['版本','V2.1'],['状态','已归档'],['关联','D-019']]},
+    'tr-0821':{title:'测试报告 TR-2026-0821',rows:[['记录类型','测试报告'],['计划','V2.1 回归'],['结果','失败 3 · 阻塞 1'],['缺陷','5 个（P1 2）'],['状态','已关闭']]},
+    'd-014':{title:'需求 D-014',rows:[['记录类型','需求'],['标题','站点与设备字典批量维护'],['版本','V1.9'],['状态','已发布'],['负责人','许宁']]},
+    'sim-2':{title:'历史相似项 · V2.1 Excel 导入',rows:[['记录类型','需求（历史）'],['标题','设备台账 Excel 批量导入'],['版本','V2.1'],['实际工时','52h'],['返工','2 次']]}
+  }
+};
+
+/* ================= 状态 ================= */
+const state = {
+  tab:'similar',
+  mode:'normal',
+  query:'设备台账批量导入 + 字段校验',
+  askId:'delay',
+  asking:false,
+  adopted:{},
+  ignored:{},
+  corrected:{},
+  drawer:null,
+  drawerType:null,
+  modal:null,
+  briefPending:{lesson:true,next:true},
+  briefText:{lesson:DATA.brief.lesson,next:DATA.brief.next},
+  briefEdit:null,
+  briefArchived:false,
+  theme:(function(){try{return localStorage.getItem('hg-memory-theme')||'light'}catch(e){return 'light'}})()
+};
+
+/* ================= 工具 ================= */
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ICONS = {
+  'check-square':'<path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/>',
+  'calendar':'<path d="M4 6h16v14H4z"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+  'inbox':'<path d="M4 4h16v16H4z"/><path d="M4 13h5l2 3h2l2-3h5"/>',
+  'folder':'<path d="M3 6h6l2 2h10v11H3z"/>',
+  'tag':'<path d="M4 4h8l8 8-8 8-8-8z"/><path d="M8 8h.01"/>',
+  'columns':'<path d="M4 4h16v16H4z"/><path d="M9 4v16M15 4v16"/>',
+  'file':'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/>',
+  'check-circle':'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+  'branch':'<path d="M6 4v12"/><circle cx="6" cy="19" r="1.6"/><circle cx="18" cy="7" r="1.6"/><circle cx="6" cy="7" r="1.6"/><path d="M6 8.6c0 4 4 4 8 4 2 0 4 1 4 4"/>',
+  'file-text':'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6M9 16h6"/>',
+  'bar-chart':'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  'users':'<circle cx="9" cy="8" r="3.2"/><path d="M2.5 21c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><path d="M16.5 5.2a3 3 0 1 0 0 5.6M18 15c2.5 0 4 1.6 4 4"/>',
+  'alert':'<path d="M12 3l9 18H3z"/><path d="M12 9v5M12 17h.01"/>',
+  'search':'<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/>',
+  'sparkle':'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>'
+};
+function icon(name){
+  return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[name]||'')+'</svg>';
+}
+function cov(){ return DATA.coverage[state.mode]; }
+function isSparse(){ return state.mode === 'sparse'; }
+function pendingBrief(){
+  let n = 0;
+  if (state.briefPending.lesson) n++;
+  if (state.briefPending.next) n++;
+  return n;
+}
+function citeMap(item){
+  const m = {};
+  (item.cites||[]).forEach((c,i) => { m[i+1] = c; });
+  return m;
+}
+function renderCites(text, cites){
+  const map = {};
+  (cites||[]).forEach((c,i) => { map[i+1] = c.key; });
+  return esc(text).replace(/\[(\d+)\]/g, function(all, n){
+    const key = map[n];
+    if (!key) return all;
+    return '<button class="cite" data-action="open-source" data-source="'+key+'" title="查看原记录">'+n+'</button>';
+  });
+}
+function citeNames(item){
+  return (item.cites||[]).map(c => '<button class="cite" data-action="open-source" data-source="'+c+'" title="查看原记录">'+c+'</button>').join(' ');
+}
+
+/* ================= 渲染 ================= */
+function render(){
+  const y = window.scrollY;
+  $('#content').innerHTML = pageHead() + coverageStrip() +
+    '<div class="mem-grid"><div class="mem-main">' + tabs() + tabContent() + '</div>' + rail() + '</div>' +
+    '<div class="page-foot" style="text-align:center;font-size:10.5px;color:var(--text-3);margin-top:14px">原型演示 · 数据均为虚构 · 记忆只引用记录，不修改事实</div>';
+  window.scrollTo(0, y);
+  renderDrawer();
+  renderModal();
+}
+
+function pageHead(){
+  const c = cov();
+  const modeChip = isSparse()
+    ? '<span class="chip danger">数据不足 · 记忆暂停</span>'
+    : '<span class="chip ok"><i class="dot ok"></i>记忆可用</span>';
+  return '<div class="page-head">' +
+    '<div>' +
+      '<div class="page-title-row"><h1>项目记忆</h1>' + modeChip +
+        '<span class="chip primary">版本感知</span><span class="chip">仅本空间</span></div>' +
+      '<p class="page-sub">' + (isSparse()
+        ? '当前项目只有 9 条可用记录。为了不输出猜测，相似项推荐、版本问答与简报结论已暂停；先补齐数据。'
+        : '从 6 个历史版本、42 条记录里找依据：以前怎么做的、为什么改、哪里返工。每条结论都能点回原始记录；没有依据时直接说“记录里没有”。') + '</p>' +
+      '<div class="auto-stats">' +
+        '<span><i class="dot primary"></i>基于 ' + c.records + ' 条记录</span>' +
+        '<span><i class="dot ok"></i>' + c.cards + ' 张记忆卡</span>' +
+        '<span><i class="dot ' + (isSparse()?'warn':'') + '"></i>决策记录 ' + c.decisions + '</span>' +
+        '<span>检索范围：V1.8 — V2.3</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="page-actions">' +
+      '<button class="btn" data-action="open-coverage">数据完整度 ' + c.overall + '%</button>' +
+      '<button class="btn ghost" data-action="rebuild">重建记忆</button>' +
+      '<button class="btn" data-action="toast" data-msg="原型中记忆设置仅作示意">记忆设置</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function coverageStrip(){
+  const c = cov();
+  const cards = [
+    {k:'数据完整度',v:c.overall+'%',sub:isSparse()?'低于 70% 门槛':'4 项指标全部达标',tone:c.tone,bar:c.overall},
+    {k:'可检索记录',v:String(c.records),sub:isSparse()?'不足以形成推荐':'覆盖 6 个版本',tone:'primary',bar:Math.min(100,c.records/42*100)},
+    {k:'记忆卡',v:String(c.cards),sub:isSparse()?'仅关键对象':'需求/版本/决策/缺陷',tone:'',bar:Math.min(100,c.cards/36*100)},
+    {k:'决策记录',v:c.decisions,sub:'范围为什么变',tone:'warn',bar:c.decisions.indexOf('3')===0?25:0}
+  ];
+  return '<div class="coverage-strip">' + cards.map(function(x){
+    return '<div class="cov-card ' + x.tone + '">' +
+      '<div class="k">' + x.k + '</div>' +
+      '<div class="v">' + x.v + '</div>' +
+      '<div class="sub">' + x.sub + '</div>' +
+      '<div class="bar"><i style="width:' + x.bar + '%"></i></div>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function tabs(){
+  return '<div class="tabs">' +
+    '<button class="tab ' + (state.tab==='similar'?'on':'') + '" data-action="tab" data-tab="similar">相似项<span class="count">' + (isSparse()?0:3) + '</span></button>' +
+    '<button class="tab ' + (state.tab==='ask'?'on':'') + '" data-action="tab" data-tab="ask">版本问答</button>' +
+    '<button class="tab ' + (state.tab==='brief'?'on':'') + '" data-action="tab" data-tab="brief">版本简报' + (pendingBrief()>0 && !isSparse() ? '<span class="count">'+pendingBrief()+'</span>' : '') + '</button>' +
+  '</div>';
+}
+
+function tabContent(){
+  if (isSparse()) return gatePanel();
+  if (state.tab === 'similar') return similarPanel();
+  if (state.tab === 'ask') return askPanel();
+  return briefPanel();
+}
+
+function gatePanel(){
+  const gaps = [
+    {name:'工作项关联版本',v:'38% / 70%'},
+    {name:'需求关联文档',v:'22% / 50%'},
+    {name:'工时已对账',v:'51% / 80%'},
+    {name:'版本关联发布',v:'41% / 80%'}
+  ];
+  return '<div class="panel">' +
+    '<div class="panel-head"><h3>' + (state.tab==='similar'?'相似项推荐':state.tab==='ask'?'版本问答':'版本简报') + '</h3><span class="hint">数据不足时自动暂停</span></div>' +
+    '<div class="gate">' +
+      '<div class="gicon">!</div>' +
+      '<h3>暂不生成' + (state.tab==='similar'?'相似项推荐':state.tab==='ask'?'版本问答':'简报结论') + '</h3>' +
+      '<p>当前项目只有 9 条可用记录。基于这些记录做检索，得到的会是“看起来相关、实际没依据”的答案；产品选择直接说“记录不足”。</p>' +
+      '<div class="gaps">' + gaps.map(function(g){
+        return '<div class="gap"><span>' + g.name + '</span><b>' + g.v + '</b></div>';
+      }).join('') + '</div>' +
+      '<div class="gactions">' +
+        '<button class="btn primary" data-action="toast" data-msg="原型中会跳到数据补齐向导">去补齐数据</button>' +
+        '<button class="btn" data-action="open-coverage">查看门槛说明</button>' +
+      '</div>' +
+    '</div>' +
+    '<p class="more-note">门槛来自 §5.11：版本覆盖率、工作项关联率、文档关联率、工时对账率达标后，才启动记忆层验证。这里没有“降级硬答”的选项。</p>' +
+  '</div>';
+}
+
+/* ---------- 相似项 ---------- */
+function similarPanel(){
+  return '<div class="panel">' +
+    '<div class="panel-head"><h3>这次要做的事，以前做过吗？</h3><span class="hint">只在本空间内检索 · 不含其他客户</span></div>' +
+    '<p class="panel-lead">描述你要做的事，系统从历史版本里找<strong>同模块、同类型、描述相近</strong>的项，并给出当时的工时、缺陷和返工。</p>' +
+    '<div class="query-box">' +
+      '<span class="qic">' + icon('search') + '</span>' +
+      '<input id="similarQuery" value="' + esc(state.query) + '" placeholder="例如：设备台账批量导入 + 字段校验">' +
+      '<button class="btn primary" data-action="search">查找相似项</button>' +
+    '</div>' +
+    '<div class="ctx-row"><span>检索条件</span>' +
+      '<span class="ctx">模块 <b>设备台账</b></span>' +
+      '<span class="ctx">类型 <b>需求</b></span>' +
+      '<span class="ctx">版本范围 <b>V1.8 — V2.3</b></span>' +
+      '<span class="ctx">排除 <b>已删除</b></span>' +
+    '</div>' +
+    '<div class="result-head"><span><b>3 条</b>达到相似阈值（≥ 0.60）</span><span>按相似度排序 · 结果只读</span></div>' +
+    '<div class="sim-list">' + DATA.similar.map(simCard).join('') + '</div>' +
+    '<p class="more-note">相似度 = 同模块 / 同类型 / 文本相近 / 关联对象，综合排序；不是“猜你喜欢”。低于阈值的记录不展示，避免把不相关的东西硬塞给你。</p>' +
+  '</div>';
+}
+
+function simCard(item){
+  const adopted = !!state.adopted[item.id];
+  const ignored = !!state.ignored[item.id];
+  const cites = citeNames(item);
+  return '<div class="sim-card ' + (adopted?'adopted':'') + ' ' + (ignored?'ignored':'') + '">' +
+    '<div class="sim-top">' +
+      '<div>' +
+        '<div class="sim-title"><b>' + esc(item.title) + '</b><span class="sim-score">' + esc(item.score) + '</span>' + (adopted?'<span class="chip ok">已采纳</span>':'') + '</div>' +
+        '<div class="sim-meta"><span>' + item.version + '</span><span class="sep">·</span><span>' + item.module + '</span><span class="sep">·</span><span>' + item.status + '</span><span class="sep">·</span><span>更新于 ' + item.updated + '</span></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="sim-stats">' +
+      '<div class="sim-stat"><span>预估</span><b>' + item.est + '</b></div>' +
+      '<div class="sim-stat"><span>实际</span><b>' + item.actual + '</b></div>' +
+      '<div class="sim-stat"><span>偏差</span><b class="warn">' + item.variance + '</b></div>' +
+      '<div class="sim-stat"><span>缺陷 / 返工</span><b>' + item.defects + ' / ' + item.rework + '</b></div>' +
+    '</div>' +
+    '<div class="sim-why"><span class="tag">为什么推荐</span><span>' + esc(item.why) + ' ' + cites + '</span></div>' +
+    '<div class="lesson"><b>可复用经验：</b>' + esc(item.lesson) + '</div>' +
+    '<div class="sim-foot">' +
+      '<button class="btn sm" data-action="open-card" data-card="' + item.id + '">查看记忆卡</button>' +
+      '<button class="btn sm ' + (adopted?'soft':'primary') + '" data-action="adopt" data-id="' + item.id + '" ' + (adopted||ignored?'disabled':'') + '>' + (adopted?'已采纳到需求':'采纳到需求') + '</button>' +
+      '<span class="spacer"></span>' +
+      '<button class="btn sm ghost" data-action="ignore" data-id="' + item.id + '" ' + (adopted||ignored?'disabled':'') + '>' + (ignored?'已忽略':'忽略') + '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ---------- 问答 ---------- */
+function askPanel(){
+  const item = DATA.qa[state.askId] || DATA.qa.delay;
+  return '<div class="panel">' +
+    '<div class="panel-head"><h3>问这个版本</h3><span class="hint">答案只引用记录 · 不推断动机</span></div>' +
+    '<p class="panel-lead">问“为什么、哪些、到哪一步”；答案会列出用到的记录。记录不足时会直接说没有，不编。</p>' +
+    '<div class="ask-chips">' + askChips() + '</div>' +
+    '<div class="qa-stream">' +
+      '<div class="q-row"><div class="q-bubble">' + esc(item.q) + '</div></div>' +
+      (state.asking ? '<div class="a-card"><div class="typing"><span class="spinner"></span>正在检索版本、变更、测试与发布记录…</div></div>' : answerCard(item)) +
+    '</div>' +
+    '<div class="ask-row">' +
+      '<input id="askInput" placeholder="继续问，例如：这个版本测试覆盖到哪？">' +
+      '<button class="btn primary" data-action="ask-send">发送</button>' +
+    '</div>' +
+    '<p class="more-note">检索前按空间/项目/角色过滤；客户不可见的工时与内部备注不会进入答案。</p>' +
+  '</div>';
+}
+
+function askChips(){
+  const list = [
+    ['delay','V2.3 为什么延期？'],
+    ['scope','哪些需求是后加的？'],
+    ['deferred','导入为什么延到 V2.4？'],
+    ['test','测试覆盖到哪？'],
+    ['missing','客户为什么接受这个方案？']
+  ];
+  return list.map(function(x){
+    return '<button class="ask-chip ' + (state.askId===x[0]?'on':'') + '" data-action="ask" data-ask="' + x[0] + '">' + x[1] + '</button>';
+  }).join('');
+}
+
+function answerCard(item){
+  const corrected = !!state.corrected[state.askId];
+  return '<div class="a-card">' +
+    '<div class="a-head">' +
+      '<span class="who"><span class="mark">' + icon('sparkle') + '</span>项目记忆</span>' +
+      '<span class="chip">基于 ' + item.records + ' 条记录</span>' +
+      '<span class="spacer"></span>' +
+      '<span class="chip ok">仅引用记录</span>' +
+    '</div>' +
+    (item.facts.length ? '<div class="a-facts">' + item.facts.map(function(f){
+      return '<div class="a-fact"><span>' + f.k + '</span><b>' + f.v + '</b></div>';
+    }).join('') + '</div>' : '') +
+    '<div class="a-text"><p>' + renderCites(item.a, item.cites) + '</p></div>' +
+    (item.missing ? '<div class="a-miss"><b>' + item.missing.title + '。</b>' + item.missing.desc + '<br><button class="btn" data-action="toast" data-msg="原型中会打开决策记录补录表单">' + item.missing.action + '</button></div>' : '') +
+    '<div class="a-foot">' +
+      (corrected ? '<span class="chip warn">已提交纠错 · 相关记忆卡将重建</span>' : '<span>生成于 18:20 · 引用会随记录更新重新校验</span>') +
+      '<span class="spacer"></span>' +
+      '<button class="btn" data-action="fb" data-msg="已记为有用，同类推荐会加权">有用</button>' +
+      '<button class="btn" data-action="fb" data-msg="已记为没用，同类推荐会降权">没用</button>' +
+      '<button class="btn" data-action="open-correct">这条不对</button>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ---------- 简报 ---------- */
+function briefPanel(){
+  const pending = pendingBrief();
+  const archived = state.briefArchived;
+  return '<div class="panel">' +
+    '<div class="brief-top">' +
+      '<div>' +
+        '<div class="brief-title"><h3>V2.3 版本简报</h3>' +
+          (archived ? '<span class="chip ok">已归档 · V2.4 可参考</span>' : pending ? '<span class="chip warn">' + pending + ' 处结论待确认</span>' : '<span class="chip ok">结论已确认</span>') +
+        '</div>' +
+        '<p class="panel-lead" style="margin-bottom:0">事实数字来自记录，只读；结论是系统草稿，需要你确认后才归档。</p>' +
+      '</div>' +
+      '<div class="page-actions" style="padding-top:0">' +
+        '<button class="btn soft" data-action="toast" data-msg="原型中会带着这份简报去生成交付说明">生成交付说明草稿</button>' +
+        '<button class="btn primary" data-action="archive-brief" ' + (pending>0||archived?'disabled':'') + '>' + (archived?'已归档':'确认并归档') + '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="metric-grid">' + DATA.brief.metrics.map(function(m){
+      return '<div class="metric ' + m.cls + '"><b>' + m.v + '</b><span>' + m.k + '</span></div>';
+    }).join('') + '</div>' +
+    '<div class="brief-section">' +
+      '<h4>交付结果 <span class="chip">事实</span></h4>' +
+      '<p>V2.3 承诺 18 项，实际生产发布 16 项，2 项顺延至 V2.4；回归通过率 94.9%，累计投入 286h，未关闭缺陷 6 个（P1 2）。[1][2]</p>' +
+      '<p style="margin-top:5px;font-size:10.5px;color:var(--text-3)">引用：' + citeNames({cites:['rel','tr-1112']}) + '</p>' +
+    '</div>' +
+    '<div class="brief-section">' +
+      '<h4>范围变化 <span class="chip">事实</span></h4>' +
+      '<p>本版有 1 项新增、1 项移出、1 项拆分；结束日未变。[3][4]</p>' +
+      '<div class="brief-list">' + DATA.brief.changes.map(function(c){
+        return '<div class="brief-item"><span class="date">' + c.date + '</span><span><b>' + c.title + '</b></span><span class="impact">' + c.impact + '</span></div>';
+      }).join('') + '</div>' +
+      '<p style="margin-top:5px;font-size:10.5px;color:var(--text-3)">引用：' + citeNames({cites:['change-1024','change-1105']}) + '</p>' +
+    '</div>' +
+    '<div class="brief-section">' +
+      '<h4>质量与返工 <span class="chip">事实</span></h4>' +
+      '<p>回归执行 118/120，通过 112、失败 4、阻塞 2；未执行 2 条随 App 签字确认延至 V2.4。设备台账导入因字段确认晚返工 1 次，实际工时比预估多 10h（+42%）。[5][6]</p>' +
+      '<p style="margin-top:5px;font-size:10.5px;color:var(--text-3)">引用：' + citeNames({cites:['tr-1112','note-app','sim-1']}) + '</p>' +
+    '</div>' +
+    draftSection('lesson','可复用经验','来自同类项对比',state.briefText.lesson) +
+    draftSection('next','下版建议','需要你确认后再进入 V2.4 规划',state.briefText.next) +
+    '<div class="brief-section">' +
+      '<h4>记忆缺口 <span class="chip warn">1 项</span></h4>' +
+      '<div class="gap-box"><b>决策记录 3/12。</b>“客户为什么接受顺延”只有确认人和时间，没有决策理由；下一次遇到同类变更时无法解释。<br><button class="btn" data-action="toast" data-msg="原型中会打开决策记录补录表单">补一条决策记录</button></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function draftSection(key,title,hint,text){
+  const pending = state.briefPending[key];
+  const editing = state.briefEdit === key;
+  return '<div class="brief-section">' +
+    '<h4>' + title + ' <span class="chip ' + (pending?'warn':'ok') + '">' + (pending?'系统草稿 · 待确认':'已确认') + '</span></h4>' +
+    (editing
+      ? '<textarea id="draft-' + key + '">' + esc(text) + '</textarea>' +
+        '<div class="draft-actions"><button class="btn primary" data-action="save-draft" data-key="' + key + '">保存</button><button class="btn" data-action="cancel-draft">取消</button></div>'
+      : '<div class="draft">' +
+          '<div class="draft-head">' + (pending?'系统草稿 · 结论待确认':'已确认结论') + '<span style="font-weight:400">' + hint + '</span></div>' +
+          '<div class="draft-text">' + esc(text) + '</div>' +
+          '<div class="draft-actions">' +
+            (pending ? '<button class="btn primary" data-action="confirm-draft" data-key="' + key + '">确认</button>' : '<span class="chip ok">已确认</span>') +
+            '<button class="btn" data-action="edit-draft" data-key="' + key + '" ' + (state.briefArchived?'disabled':'') + '>改写</button>' +
+          '</div>' +
+        '</div>') +
+  '</div>';
+}
+
+/* ---------- 右栏 ---------- */
+function rail(){
+  const c = cov();
+  return '<aside class="rail">' +
+    '<div class="rail-card">' +
+      '<h4>' + icon('search') + '检索范围</h4>' +
+      '<div class="kv">' +
+        '<span class="k">空间</span><span class="v"><b>' + DATA.space + '</b></span>' +
+        '<span class="k">项目</span><span class="v">' + DATA.project + '</span>' +
+        '<span class="k">版本</span><span class="v">' + DATA.versions + '</span>' +
+        '<span class="k">记录</span><span class="v">' + c.records + ' 条 · ' + c.cards + ' 张卡</span>' +
+        '<span class="k">权限</span><span class="v">仅本空间成员；客户不可见内部工时</span>' +
+      '</div>' +
+      '<div class="rail-note"><b>不做跨空间检索</b>，不把其他项目/客户的数据混进来。</div>' +
+    '</div>' +
+    '<div class="rail-card">' +
+      '<h4>' + icon('bar-chart') + '数据完整度</h4>' +
+      '<div class="bar-list">' + c.metrics.map(function(m){
+        const tone = m.v >= m.target ? '' : (m.v >= m.target*0.7 ? 'warn' : 'danger');
+        return '<div class="bar-item"><div class="lab"><span>' + m.name + '</span><b>' + m.v + '%</b></div>' +
+          '<div class="bar-track"><i class="bar-fill ' + tone + '" style="width:' + m.v + '%"></i></div></div>';
+      }).join('') + '</div>' +
+      '<div class="rail-note">' + (isSparse()
+        ? '<b>0/4 达标。</b>低于门槛时，推荐与问答自动暂停；先补关联与对账。'
+        : '<b>4/4 达标。</b>但决策记录只有 3/12；“为什么改”仍经常答不出来。') + '</div>' +
+      '<button class="btn" data-action="open-coverage">查看缺口</button>' +
+    '</div>' +
+    '<div class="rail-card">' +
+      '<h4>' + icon('sparkle') + '本周反馈</h4>' +
+      '<div class="feed-grid">' +
+        '<div><b>' + (isSparse()?0:12) + '</b><span>推荐</span></div>' +
+        '<div><b>' + (isSparse()?0:6) + '</b><span>采纳</span></div>' +
+        '<div><b>' + (isSparse()?0:1) + '</b><span>纠错</span></div>' +
+      '</div>' +
+      '<div class="rail-note">纠错会失效并重建相关记忆卡；<b>采纳/忽略</b>会调整同类推荐权重。</div>' +
+    '</div>' +
+    '<div class="rail-card">' +
+      '<h4>' + icon('file-text') + '最近沉淀</h4>' +
+      '<div class="timeline">' +
+        '<div class="tl-item"><span class="tl-dot"></span><span><b>D-035 延后原因</b>11-05 · 决策 DEC-011</span></div>' +
+        '<div class="tl-item"><span class="tl-dot"></span><span><b>告警去重新增</b>10-24 · 版本变更</span></div>' +
+        '<div class="tl-item"><span class="tl-dot"></span><span><b>V2.3 回归结果</b>11-12 · 测试报告</span></div>' +
+      '</div>' +
+      '<div class="rail-note">记忆不是事实来源；所有卡片都能点回原始记录。</div>' +
+    '</div>' +
+  '</aside>';
+}
+
+/* ---------- 抽屉 ---------- */
+function renderDrawer(){
+  const root = $('#drawerRoot');
+  if (!state.drawer){ root.classList.remove('open'); root.innerHTML=''; return; }
+  let body = '', head = '', foot = '';
+  if (state.drawerType === 'card'){
+    const card = DATA.cards[state.drawer];
+    head = '<div><h3>' + esc(card.title) + '</h3><div class="sub">记忆卡 · ' + card.type + ' ' + card.id + ' · ' + card.version + '</div></div>' +
+      '<button class="x" data-action="close-drawer" aria-label="关闭">×</button>';
+    body =
+      '<div class="d-sec"><h5>事实</h5>' +
+        '<div class="d-stats">' +
+          '<div class="d-stat"><span>预估</span><b>' + card.est + '</b></div>' +
+          '<div class="d-stat"><span>实际</span><b>' + card.actual + '</b></div>' +
+          '<div class="d-stat"><span>偏差</span><b class="warn">' + card.variance + '</b></div>' +
+          '<div class="d-stat"><span>缺陷 / 返工</span><b>' + card.defects + ' / ' + card.rework + '</b></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="d-sec"><h5>需求内容</h5><div class="d-text">' + esc(card.content) + '</div></div>' +
+      '<div class="d-sec"><h5>变更与决策</h5><div class="d-text">' + esc(card.decision) + '</div></div>' +
+      '<div class="d-sec"><h5>可复用经验</h5><div class="d-card learn">' + esc(card.lesson) + '</div></div>' +
+      '<div class="d-sec"><h5>关联记录</h5><div class="d-links">' + card.relations.map(function(r){
+        return '<span class="d-link">' + esc(r) + '</span>';
+      }).join('') + '</div></div>' +
+      '<div class="d-sec"><h5>记忆卡字段（按业务对象，不按段落切块）</h5><div class="d-fields">' + card.fields.map(function(f){
+        return '<div class="d-field"><span class="k">' + f[0] + '</span><span class="v">' + esc(f[1]) + '</span></div>';
+      }).join('') + '</div></div>' +
+      '<div class="d-sec"><h5>来源</h5>' + card.sources.map(function(s){
+        return '<div class="d-source"><div><b style="font-weight:650;color:var(--text)">' + esc(s.name) + '</b><br><span>' + esc(s.meta) + '</span></div><button class="btn" data-action="toast" data-msg="原型中会打开原始记录">查看</button></div>';
+      }).join('') + '<div class="d-note">记忆卡由记录派生，可重建、可作废；删除或更正源记录后，相关卡片会失效。</div></div>';
+    foot = '<button class="btn" data-action="open-correct">这条不对</button><button class="btn primary" data-action="toast" data-msg="原型中会关闭抽屉并跳回原记录">打开原记录</button>';
+  } else {
+    const c = cov();
+    head = '<div><h3>数据完整度 ' + c.overall + '%</h3><div class="sub">' + (isSparse()?'数据不足，记忆暂停':'可用，但有决策缺口') + '</div></div>' +
+      '<button class="x" data-action="close-drawer" aria-label="关闭">×</button>';
+    body =
+      '<div class="d-sec"><h5>四项门槛</h5><div class="bar-list">' + c.metrics.map(function(m){
+        const tone = m.v >= m.target ? '' : (m.v >= m.target*0.7 ? 'warn' : 'danger');
+        return '<div class="bar-item"><div class="lab"><span>' + m.name + '（目标 ' + m.target + '%）</span><b>' + m.v + '%</b></div>' +
+          '<div class="bar-track"><i class="bar-fill ' + tone + '" style="width:' + m.v + '%"></i></div></div>';
+      }).join('') + '</div></div>' +
+      '<div class="d-sec"><h5>记录概况</h5><div class="d-fields">' +
+        '<div class="d-field"><span class="k">可检索记录</span><span class="v">' + c.records + ' 条</span></div>' +
+        '<div class="d-field"><span class="k">记忆卡</span><span class="v">' + c.cards + ' 张</span></div>' +
+        '<div class="d-field"><span class="k">决策记录</span><span class="v">' + c.decisions + '（范围/方案为什么变）</span></div>' +
+        '<div class="d-field"><span class="k">检索范围</span><span class="v">V1.8 — V2.3 · 仅本空间</span></div>' +
+      '</div></div>' +
+      '<div class="d-sec"><h5>缺口清单</h5>' +
+        (isSparse()
+          ? '<div class="d-card" style="border-color:var(--warn-border);background:var(--warn-soft);color:var(--warn-text)">工作项未关联版本 17 条；需求无文档 9 条；工时未对账 14h；1 个版本无发布记录。<br><br><button class="btn" data-action="toast" data-msg="原型中会跳到数据补齐向导">去补齐</button></div>'
+          : '<div class="d-card" style="border-color:var(--warn-border);background:var(--warn-soft);color:var(--warn-text)">决策记录缺 9 条：多为“范围为什么变/方案为什么选它”，只有确认人和时间，没有理由。<br><br><button class="btn" data-action="toast" data-msg="原型中会打开决策记录补录">补决策记录</button></div>') +
+      '</div>' +
+      '<div class="d-sec"><h5>为什么设门槛</h5><div class="d-text">数据不厚时，检索会“看起来相关、实际没依据”。产品宁可说“记录不足”，也不输出猜测；门槛未达标时，推荐与问答自动隐藏。</div></div>';
+    foot = '<button class="btn" data-action="toast" data-msg="已重新检查：4 项指标无变化">重新检查</button><button class="btn primary" data-action="toast" data-msg="原型中会跳到数据补齐向导">去补齐</button>';
+  }
+  root.innerHTML = '<div class="drawer-backdrop" data-action="close-drawer"></div>' +
+    '<div class="drawer" role="dialog" aria-modal="true">' +
+      '<div class="drawer-head">' + head + '</div>' +
+      '<div class="drawer-body">' + body + '</div>' +
+      '<div class="drawer-foot">' + foot + '</div>' +
+    '</div>';
+  root.classList.add('open');
+}
+
+/* ---------- 弹层 ---------- */
+function renderModal(){
+  const root = $('#modalRoot');
+  if (!state.modal){ root.classList.remove('open'); root.innerHTML=''; return; }
+  let body = '', foot = '', title = '';
+  if (state.modal === 'correct'){
+    title = '这条记忆哪里不对？';
+    body = '<p class="modal-lead">纠错只影响记忆卡与后续推荐，不会修改原始记录。</p>' +
+      '<label class="radio-row"><input type="radio" name="reason" value="fact" checked><div><b>事实不对</b><span>数字、状态、版本或时间与记录不符</span></div></label>' +
+      '<label class="radio-row"><input type="radio" name="reason" value="stale"><div><b>引用过期</b><span>记录已更新，但引用还是旧版本</span></div></label>' +
+      '<label class="radio-row"><input type="radio" name="reason" value="irrelevant"><div><b>不相关</b><span>这条不该出现在这次推荐/回答里</span></div></label>' +
+      '<label class="radio-row"><input type="radio" name="reason" value="permission"><div><b>不该被看到</b><span>涉及其他项目/客户或内部字段</span></div></label>' +
+      '<label class="radio-row"><input type="radio" name="reason" value="other"><div><b>其他</b><span>在下面说明</span></div></label>' +
+      '<textarea placeholder="可选：补充一句哪里不对（会作为纠错信号）"></textarea>' +
+      '<div class="modal-note">提交后：相关记忆卡失效并重建；如果是权限问题，功能会立即停止返回该类内容。</div>';
+    foot = '<button class="btn" data-action="close-modal">取消</button><button class="btn primary" data-action="submit-correct">提交纠错</button>';
+  } else {
+    const s = DATA.sources[state.modal];
+    title = '原记录';
+    body = '<p class="modal-lead">答案引用的记录如下；只读，修改请回到对应模块。</p>' +
+      '<table class="source-table">' + s.rows.map(function(r){
+        return '<tr><td>' + r[0] + '</td><td><b>' + r[1] + '</b></td></tr>';
+      }).join('') + '</table>' +
+      '<div class="modal-note">记录更新后，引用会重新校验；如果原记录被删除，相关记忆卡将失效。</div>';
+    foot = '<button class="btn" data-action="close-modal">关闭</button><button class="btn primary" data-action="toast" data-msg="原型中会跳转到对应记录">打开记录</button>';
+  }
+  root.innerHTML = '<div class="modal-backdrop" data-action="close-modal"></div>' +
+    '<div class="modal" role="dialog" aria-modal="true">' +
+      '<div class="modal-head"><h3>' + title + '</h3><button class="x" data-action="close-modal" aria-label="关闭">×</button></div>' +
+      '<div class="modal-body">' + body + '</div>' +
+      '<div class="modal-foot">' + foot + '</div>' +
+    '</div>';
+  root.classList.add('open');
+}
+
+/* ================= 交互 ================= */
+let toastTimer = null;
+function toast(msg){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 2400);
+}
+function closeDrawer(){ state.drawer = null; state.drawerType = null; renderDrawer(); }
+function openDrawer(type, id){ state.drawerType = type; state.drawer = id || true; renderDrawer(); }
+function closeModal(){ state.modal = null; renderModal(); }
+function openModal(type){ state.modal = type; renderModal(); }
+
+function toggleTheme(){
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  state.theme = next;
+  try { localStorage.setItem('hg-memory-theme', next); } catch(e) {}
+  $('#themeBtnTop').textContent = next === 'light' ? '深色' : '浅色';
+  $('#themeBtn').textContent = next === 'light' ? '深色' : '浅色';
+}
+
+function setMode(mode){
+  state.mode = mode;
+  $('#modeBtn').textContent = mode === 'normal' ? '数据不足预览' : '恢复正常预览';
+  render();
+}
+
+document.addEventListener('click', function(e){
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const a = t.dataset.action;
+  if (a === 'toast'){ toast(t.dataset.msg || '原型演示'); }
+  else if (a === 'toggle-theme'){ toggleTheme(); }
+  else if (a === 'toggle-mode'){ setMode(isSparse() ? 'normal' : 'sparse'); }
+  else if (a === 'tab'){ state.tab = t.dataset.tab; render(); }
+  else if (a === 'search'){
+    if (isSparse()){ toast('数据不足，暂不生成推荐'); return; }
+    const input = $('#similarQuery');
+    state.query = input ? input.value.trim() : state.query;
+    toast(state.query ? '找到 3 条相似项，按相似度排序' : '先描述你要做的事');
+  }
+  else if (a === 'open-card'){ openDrawer('card', t.dataset.card); }
+  else if (a === 'close-drawer'){ closeDrawer(); }
+  else if (a === 'adopt'){
+    if (isSparse()){ toast('数据不足，暂不生成推荐'); return; }
+    state.adopted[t.dataset.id] = true;
+    render();
+    toast('已采纳到需求；同类推荐会优先展示可复用方案');
+  }
+  else if (a === 'ignore'){
+    state.ignored[t.dataset.id] = true;
+    render();
+    toast('已忽略；同类推荐会降权');
+  }
+  else if (a === 'ask'){
+    state.askId = t.dataset.ask;
+    state.asking = true;
+    render();
+    setTimeout(function(){
+      state.asking = false;
+      render();
+    }, 650);
+  }
+  else if (a === 'ask-send'){
+    const input = $('#askInput');
+    const q = input ? input.value.trim() : '';
+    if (!q){ toast('先输入一个问题'); return; }
+    let id = 'missing';
+    if (q.indexOf('延期') >= 0 || q.indexOf('为什么延') >= 0) id = 'delay';
+    else if (q.indexOf('后加') >= 0 || q.indexOf('范围') >= 0) id = 'scope';
+    else if (q.indexOf('测试') >= 0 || q.indexOf('覆盖') >= 0) id = 'test';
+    else if (q.indexOf('导入') >= 0) id = 'deferred';
+    state.askId = id;
+    state.asking = true;
+    render();
+    setTimeout(function(){ state.asking = false; render(); }, 650);
+  }
+  else if (a === 'fb'){ toast(t.dataset.msg || '已记录反馈'); }
+  else if (a === 'open-correct'){ openModal('correct'); }
+  else if (a === 'open-source'){ openModal(t.dataset.source); }
+  else if (a === 'close-modal'){ closeModal(); }
+  else if (a === 'submit-correct'){
+    state.corrected[state.askId] = true;
+    closeModal();
+    render();
+    toast('已提交纠错；相关记忆卡将失效并重建，原始记录不受影响');
+  }
+  else if (a === 'confirm-draft'){
+    state.briefPending[t.dataset.key] = false;
+    render();
+    toast('结论已确认；' + (pendingBrief() ? '还剩 ' + pendingBrief() + ' 处' : '可以归档了'));
+  }
+  else if (a === 'edit-draft'){ state.briefEdit = t.dataset.key; render(); }
+  else if (a === 'cancel-draft'){ state.briefEdit = null; render(); }
+  else if (a === 'save-draft'){
+    const key = t.dataset.key;
+    const el = $('#draft-' + key);
+    if (el) state.briefText[key] = el.value.trim();
+    state.briefEdit = null;
+    render();
+    toast('已保存草稿；仍需确认');
+  }
+  else if (a === 'archive-brief'){
+    if (pendingBrief() > 0){ toast('还有 ' + pendingBrief() + ' 处结论待确认'); return; }
+    state.briefArchived = true;
+    render();
+    toast('简报已归档；V2.4 规划时可作为参考');
+  }
+  else if (a === 'rebuild'){
+    if (isSparse()){
+      toast('记录不足，重建也只有 4 张卡；先补齐数据');
+      return;
+    }
+    toast('正在基于 42 条记录重建 36 张记忆卡…');
+    setTimeout(function(){ toast('重建完成；决策记录缺口仍然存在'); }, 800);
+  }
+  else if (a === 'open-coverage'){ openDrawer('coverage'); }
+});
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape'){
+    if (state.modal) closeModal();
+    else if (state.drawer) closeDrawer();
+  }
+  if (e.key === 'Enter' && e.target && e.target.id === 'similarQuery'){
+    e.preventDefault();
+    const btn = document.querySelector('[data-action="search"]');
+    if (btn) btn.click();
+  }
+});
+
+/* 初始化 */
+(function(){
+  const h = (location.hash || '').replace(/^#/, '');
+  if (!h) return;
+  h.split(',').forEach(function(part){
+    if (part === 'sparse') state.mode = 'sparse';
+    else if (part === 'ask' || part === 'brief' || part === 'similar') state.tab = part;
+    else if (part === 'card'){ state.drawer = 'sim-1'; state.drawerType = 'card'; }
+    else if (part === 'coverage'){ state.drawer = 'coverage'; state.drawerType = 'coverage'; }
+    else if (part === 'correct'){ state.tab = 'ask'; state.modal = 'correct'; }
+  });
+})();
+document.documentElement.dataset.theme = state.theme;
+$('#themeBtnTop').textContent = state.theme === 'dark' ? '浅色' : '深色';
+$('#themeBtn').textContent = state.theme === 'dark' ? '浅色' : '深色';
+document.querySelectorAll('.nav-item').forEach(function(el){
+  el.innerHTML = el.innerHTML.replace(/\$\{icon\('([a-z-]+)'\)\}/g, function(_, name){ return icon(name); });
+});
+render();
+</script>
+</body>
+</html>

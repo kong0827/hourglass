@@ -10,10 +10,11 @@ import { showView } from "../core/router.js";
 import { canEditReq, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, COLUMNS, colName, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso } from "../lib/format.js";
+import { normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, COLUMNS, colName, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 import { branchMetaById, branchNameById, loadBranches, openBranchById, requestBranchStatus } from "./branches.js";
 import { openDemandDetailById } from "./demands.js";
+import { openMilestoneDetail } from "../lib/milestone-ui.js";
 
 /* datetime-local 按分钟记录：秒级差异既不可读，也会让未改动的计划被误判为有草稿 */
 function localMinute(s){ var text = localDatetime(s); return text ? text.slice(0, 16) : text; }
@@ -131,6 +132,13 @@ window.addEventListener("ds:reqs-loaded", function(){
   else if(viewMode === "schedule") loadSchedule();
   else loadPhaseData();
 });
+/* 里程碑在项目驾驶舱里改过：版本卡上的达成/证据要跟着刷新 */
+window.addEventListener("ds:milestones-changed", function(e){
+  if(document.body.dataset.view !== "phase") return;
+  var reqId = e && e.detail && e.detail.reqId;
+  if(reqId && reqId !== rt.phaseReqId) return;
+  if(viewMode === "phase" || viewMode === "version") reloadView();
+});
 function invalidateVersionCache(reqId){
   delete versionOptionsCache[reqId];
   delete taskOptionsCache[reqId];
@@ -151,15 +159,26 @@ function loadPhaseData(){
   if(phaseMeta) phaseMeta.textContent = reqNameById(rt.phaseReqId);
   phaseBody.innerHTML = UI.skeletonRows(4);
   var reqId = rt.phaseReqId;
+  if(rollupUi.reqId !== reqId){
+    rollupUi.reqId = reqId;
+    rollupUi.verId = "";
+    rollupUi.demands = null;
+    rollupUi.demandsReqId = "";
+  }
   var current = ++loadSeq;
   return Promise.all([
     API.get("/api/phase/stats", { reqId: reqId }),
     API.get("/api/versions/stats", { reqId: reqId }),
     API.get("/api/versions", { reqId: reqId }),
-    API.get("/api/versions/task-options", { reqId: reqId })
+    API.get("/api/versions/task-options", { reqId: reqId }),
+    /* 里程碑只读展示：失败不影响版本页主体 */
+    API.get("/api/milestones", { reqId: reqId }).catch(function(){ return []; }),
+    /* 版本工时汇总的模块维度：模块名与颜色，失败只影响模块分组标题 */
+    API.get("/api/categories", { project: reqId }).catch(function(){ return []; })
   ]).then(function(rs){
     if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions") return;
-    cache = { phase: rs[0], vstats: rs[1], versions: rs[2], tasks: rs[3] };
+    cache = { phase: rs[0], vstats: rs[1], versions: rs[2], tasks: rs[3], milestones: rs[4] || [] };
+    rollupUi.cats = rs[5] || [];
     cacheReqId = reqId;
     versionOptionsCache[reqId] = rs[2];
     taskOptionsCache[reqId] = rs[3];
@@ -222,7 +241,7 @@ function pctPlain(v){
   return (v === null || v === undefined) ? "—" : (v + "%");
 }
 function versionStatusName(st){
-  return { released:"已发布", active:"进行中", planned:"计划中" }[st] || (st || "—");
+  return { released:"已发布", active:"进行中", planned:"计划中", closed:"已关闭", canceled:"已取消" }[st] || (st || "—");
 }
 function versionStatusTag(st){
   var cls = st === "released" ? "tag-success" : (st === "active" ? "tag-info" : "tag-neutral");
@@ -295,7 +314,7 @@ function loadAllVersions(){
     if(current !== allVersionsSeq || viewMode !== "allversions") return;
     allVersionsCache = rows || [];
     var alive = {};
-    allVersionsCache.forEach(function(r){ alive[r.versionId] = true; });
+    allVersionsCache.forEach(function(r){ alive[r.versionId] = versionEnded({ status: r.versionStatus }) ? null : true; });
     allVersionsSel = allVersionsSel.filter(function(id){ return alive[id]; });
     renderAllVersions();
   }).catch(function(ex){
@@ -364,11 +383,13 @@ function renderAllVersions(){
           + '<span class="allv-gmeta">' + count + ' 个版本 · ' + (r.canManage ? '可创建计划' : '只读 · 无发布权限') + '</span></td></tr>';
       }
       var on = allVersionsSel.indexOf(r.versionId) !== -1;
+      var ended = versionEnded({ status: r.versionStatus });
       body += '<tr' + (on ? ' class="is-selected"' : '') + '>'
         + '<td class="allv-checkcol"><label class="allv-pick"><input type="checkbox" data-allv-pick="' + esc(r.versionId) + '"'
-          + (on ? ' checked' : '') + (r.canManage ? '' : ' disabled') + ' aria-label="选择 ' + esc(r.versionName) + '"></label></td>'
+          + (on ? ' checked' : '') + (r.canManage && !ended ? '' : ' disabled') + ' aria-label="选择 ' + esc(r.versionName) + '"></label></td>'
         + '<td><div class="allv-vname">' + esc(r.versionName) + '</div><div class="allv-vsub">'
-          + (r.versionStatus === "released" ? '已发布 · 内容只读' : '工作项 ' + (r.taskCount == null ? "—" : r.taskCount) + ' 项') + '</div></td>'
+          + (ended ? esc(versionStatusName(r.versionStatus)) + ' · 历史保留，不参与发布计划'
+            : (r.versionStatus === "released" ? '已发布 · 内容只读' : '工作项 ' + (r.taskCount == null ? "—" : r.taskCount) + ' 项')) + '</div></td>'
         + '<td>' + versionStatusTag(r.versionStatus) + '</td>'
         + '<td>' + (r.targetDate ? esc(String(r.targetDate).substring(0, 10)) : '<span class="mute">未设置</span>') + '</td>'
         + '<td class="num">' + (r.taskCount == null ? "—" : r.taskCount) + '</td>'
@@ -380,7 +401,7 @@ function renderAllVersions(){
   phaseBody.innerHTML = '<div class="panel allv-panel">'
     + '<div class="phase-tbl-tools allv-tools">'
     + '<label class="phase-filter">项目' + allVersionsSelect("project", [["", "全部项目"]].concat(projectIds.map(function(id){ return [id, projectNames[id]]; })), allVersionsFilters.project, "按项目筛选") + '</label>'
-    + '<label class="phase-filter">状态' + allVersionsSelect("status", [["", "全部状态"], ["active", "进行中"], ["planned", "计划中"], ["released", "已发布"]], allVersionsFilters.status, "按状态筛选") + '</label>'
+    + '<label class="phase-filter">状态' + allVersionsSelect("status", [["", "全部状态"], ["active", "进行中"], ["planned", "计划中"], ["released", "已发布"], ["closed", "已关闭"], ["canceled", "已取消"]], allVersionsFilters.status, "按状态筛选") + '</label>'
     + '<input class="phase-filter-input" type="search" data-allv-kw value="' + esc(allVersionsFilters.q) + '" placeholder="搜索版本或项目" aria-label="搜索版本或项目">'
     + '<span class="phase-tbl-count">' + filtered.length + ' 个版本 · ' + manageCount + ' 个可管理项目</span>'
     + '</div>'
@@ -393,8 +414,9 @@ function renderAllVersions(){
 }
 function createPlanFromAllVersions(){
   var map = allVersionRowMap();
-  var picked = allVersionsSel.map(function(id){ return map[id]; }).filter(function(r){ return r && r.canManage; });
-  if(!picked.length){ toast("先勾选至少一个可管理的版本", "warn"); return; }
+  var picked = allVersionsSel.map(function(id){ return map[id]; })
+    .filter(function(r){ return r && r.canManage && !versionEnded({ status: r.versionStatus }); });
+  if(!picked.length){ toast("先勾选至少一个可管理且未关闭/取消的版本", "warn"); return; }
   var anchor = picked[0];
   var known = { id: anchor.versionId, reqId: anchor.reqId, name: anchor.versionName, status: anchor.versionStatus,
     targetDate: anchor.targetDate, canManageReleasePlan: true, canPublish: false };
@@ -955,7 +977,7 @@ function taskTable(mode){
       + filterSelect("data-tbl-type", "类型", typeOpts, "全部类型")
       + '<label class="phase-filter"><span>关键字</span><input type="search" class="phase-filter-input" data-tbl-kw placeholder="搜索工作项标题" aria-label="搜索工作项标题"></label>'
       + '<span class="phase-tbl-count" data-tbl-count></span>'
-      + '<button class="btn sm" type="button" data-tbl-reset disabled>重置筛选</button>'
+      + '<button class="btn sm" type="button" data-tbl-reset disabled>清空筛选</button>'
       + '</div>'
     : "";
   var emptyRow = cache.tasks.length
@@ -1045,6 +1067,10 @@ function cycleWindow(v){
 
 function versionDeliverySummary(v){
   /* 摘要与「查看实际记录」拆开：摘要可截断，入口不会被截断吃掉 */
+  if(versionEnded(v)){
+    return '<p class="foot-note ver-delivery-note">' + (v.status === "closed" ? '版本已关闭' : '版本已取消')
+      + '，不再产生发布事实；工作项关联与历史保留。</p>';
+  }
   if(v.releaseEvidenceKind === "release_snapshot"){
     return '<div class="ver-delivery"><p class="foot-note">成功事件快照：发布处理 ' + v.publishedTaskCount + ' 项次（含测试 / 重部署）· 其他处理 ' + v.excludedTaskCount
       + ' 项次。生产曾交付 ' + (v.uniqueProductionTaskCount || 0) + ' 项 · 当前生效 ' + (v.effectiveProductionTaskCount || 0) + ' 项，不等于待交付数量。</p>'
@@ -1056,14 +1082,40 @@ function versionDeliverySummary(v){
 function versionContentLocked(v){
   return !!v && (v.contentLocked === true || v.status === "released");
 }
+function versionEnded(v){ return !!v && (v.status === "closed" || v.status === "canceled"); }
+/* 终态版本与正式发布一样不再接受编辑、新工作项与新发布 */
+function versionReadOnly(v){ return versionContentLocked(v) || versionEnded(v); }
+/* 版本卡只读展示该版本的里程碑：达成与发布证据同卡可见，操作在项目驾驶舱 */
+function versionMilestoneHTML(v){
+  var m = (cache.milestones || []).filter(function(x){
+    return x.kind === "version" && x.versionId === v.id && x.status !== "canceled";
+  })[0];
+  if(!m) return "";
+  var status = { achieved:"已达成", achieved_rolled_back:"已达成 · 已回滚", overdue:"已延期", pending:"未达成" }[m.status] || m.status;
+  var parts = ["里程碑 " + status];
+  if(m.achievedAt){
+    parts.push(dateShort(m.achievedAt) + " 达成");
+    if(m.releaseAt) parts.push("生产发布 " + dateShort(m.releaseAt));
+  }else if(m.targetDate){
+    parts.push("目标 " + dateShort(m.targetDate));
+  }
+  parts.push("生产成功 " + (m.releaseCount || 0) + " 次");
+  return '<button class="link-cell ver-milestone" type="button" data-ms-jump="' + esc(m.id) + '">' + esc(parts.join(" · ")) + '</button>';
+}
 function versionCardHTML(v){
   var st = v.status;
   var stTag = st === "released" ? '<span class="tag tag-success">已发布</span>'
-    : (st === "active" ? '<span class="tag tag-info">开发中</span>' : '<span class="tag ghost">待规划</span>');
+    : (st === "active" ? '<span class="tag tag-info">开发中</span>'
+    : (st === "closed" ? '<span class="tag tag-neutral">已关闭</span>'
+    : (st === "canceled" ? '<span class="tag tag-neutral">已取消</span>' : '<span class="tag ghost">待规划</span>')));
   var cls = st === "released" ? "ver-rel" : (st === "active" ? "ver-doing" : "ver-plan");
   var sub;
   var win = cycleWindow(v);
-  if(st === "released"){
+  if(versionEnded(v)){
+    sub = (win ? win + " · " : "") + (st === "closed" ? "已关闭" : "已取消")
+      + (v.endedAt ? " · " + dateShort(v.endedAt) : "") + (v.endReason ? " · " + v.endReason : "");
+  }
+  else if(st === "released"){
     sub = (v.preLaunchCount > 0)
       ? dateShort(v.releasedAt) + " · 首版（上线前投入自动归入）"
       : (win ? win + " · " : "") + dateShort(v.releasedAt) + " 发布" + (!win && v.targetDate ? (" · 目标就绪日 " + dateShort(v.targetDate)) : "");
@@ -1071,7 +1123,16 @@ function versionCardHTML(v){
   else if(st === "active") sub = win + " · 开发中" + (!win && v.targetDate ? (" · 目标就绪日 " + dateShort(v.targetDate)) : "");
   else sub = (win ? win + " · 待规划" : "待规划") + (!win && v.targetDate ? (" · 目标就绪日 " + dateShort(v.targetDate)) : "") + (v.scheduledDemandCount ? (" · 需求池已排 " + v.scheduledDemandCount + " 项") : "");
   var cells;
-  if(st === "released"){
+  if(versionEnded(v)){
+    cells = [
+      [v.taskCount || 0, "工作项", ""],
+      [v.doneCount, "已完成", ""],
+      [fmtMinutesShort(v.workMinutes), "累计投入工时", ""],
+      [fmtMinutesShort(v.estimateMinutes), "预估工时", ""],
+      [devText(v.deviationPct), "整体偏差", devColor(v.deviationPct)],
+      [fmtPct(v.onTimePct), "准时完成率", ""]
+    ];
+  }else if(st === "released"){
     cells = [
       [fmtMinutesShort(v.workMinutes), "当前投入工时", ""],
       [v.doneCount, "当前完成工作项", ""],
@@ -1102,17 +1163,21 @@ function versionCardHTML(v){
   var permissions = (cache.versions || []).find(function(item){ return item.id === v.id; }) || v;
   acts += '<button class="btn sm" type="button" data-ver-detail="' + esc(v.id) + '" title="查看计划与发布历史">计划与历史</button>';
   acts += '<button class="btn sm ghost" type="button" data-ver-note="' + esc(v.id) + '">' + (st === "released" ? '发布说明' : '当前规划说明') + '</button>';
+  acts += '<button class="btn sm ghost" type="button" data-ver-delivery="' + esc(v.id) + '" title="把承诺范围、实际发布、回归结果与遗留问题聚合成一份可对外提交的说明">交付说明</button>';
   if(permissions.canPublish === true) acts += '<button class="btn sm primary" type="button" data-ver-release="' + esc(v.id) + '">记录实际发布</button>';
   var contentLocked = versionContentLocked(permissions) || versionContentLocked(v);
+  var ended = versionEnded(permissions) || versionEnded(v);
   if(contentLocked) acts += '<span class="tag tag-neutral">正式发布后内容只读</span>';
-  if(!contentLocked && writable){
+  if(!contentLocked && !ended && writable){
     if(st === "planned"){
       acts += '<button class="btn sm" type="button" data-ver-start="' + esc(v.id) + '">开始开发</button>';
     }
     acts += '<button class="btn sm ghost" type="button" data-ver-tasks="' + esc(v.id) + '">管理工作项</button>';
     acts += '<button class="btn sm ghost" type="button" data-ver-edit="' + esc(v.id) + '">编辑</button>';
+    acts += '<button class="btn sm ghost" type="button" data-ver-close="' + esc(v.id) + '">关闭</button>';
+    acts += '<button class="btn sm ghost danger" type="button" data-ver-cancel="' + esc(v.id) + '">取消</button>';
   }
-  if(isOwner() && !contentLocked){
+  if(isOwner() && !contentLocked && !ended){
     acts += '<button class="btn sm ghost danger" type="button" data-ver-del="' + esc(v.id) + '">删除</button>';
   }
   acts += '</div>';
@@ -1126,7 +1191,18 @@ function versionCardHTML(v){
     + '<span class="phase-card-sub">' + esc(sub) + '</span></div>'
     + branchChipsHTML(v.branches)
     + descHTML
-    + metricCells(cells, { scope: "version", val: v.id }) + versionDeliverySummary(v) + acts + '</div>';
+    + metricCells(cells, { scope: "version", val: v.id }) + commitmentHTML(v) + versionMilestoneHTML(v) + versionDeliverySummary(v) + acts + '</div>';
+}
+/* 承诺基线只在开始开发时快照一次：这里只读展示，新增/移出都是与当时的差集 */
+function commitmentHTML(v){
+  var c = v && v.commitment;
+  if(!c) return "";
+  var parts = ["承诺基线 " + (c.taskCount || 0) + " 项 · 预估 " + fmtMinutesShort(c.estimateMinutes)];
+  if(c.donePct !== null && c.donePct !== undefined) parts.push("基线完成 " + c.donePct + "%");
+  if(c.addedCount) parts.push("新增 " + c.addedCount + " 项" + (c.addedEstimateMinutes ? "（" + fmtMinutesShort(c.addedEstimateMinutes) + "）" : ""));
+  if(c.removedCount) parts.push("移出 " + c.removedCount + " 项" + (c.removedEstimateMinutes ? "（" + fmtMinutesShort(c.removedEstimateMinutes) + "）" : ""));
+  if(c.capturedAt) parts.push(dateShort(c.capturedAt) + " 冻结");
+  return '<p class="foot-note ver-commitment">' + esc(parts.join(" · ")) + '</p>';
 }
 /* 说明默认截断两行；只有真的溢出时才露出「展开说明」，已展开时固定显示「收起说明」 */
 function syncVersionDescToggles(){
@@ -1139,6 +1215,318 @@ function syncVersionDescToggles(){
     btn.textContent = open ? "收起说明" : "展开说明";
   });
 }
+/* ---------- 版本阶段工时汇总（向上抽象一层的只读聚合） ---------- */
+
+var rollupUi = { reqId:"", verId:"", dim:"stage", metric:"act", cats:[], demands:null, demandsReqId:"", demandLoading:false };
+
+function rollupH(m){
+  var n = Number(m) || 0;
+  return n > 0 ? fmtMinutesShort(n) : "—";
+}
+function rollupPct(part, total){
+  if(!total) return "—";
+  return Math.round((Number(part) || 0) * 100 / total) + "%";
+}
+function rollupActual(t){ return Math.max(0, Number(t.totalMinutes) || 0); }
+function rollupTest(t){ return Math.min(rollupActual(t), Math.max(0, Number(t.testMinutes) || 0)); }
+function rollupDev(t){ return Math.max(0, rollupActual(t) - rollupTest(t)); }
+function rollupEst(t){ return Math.max(0, Number(t.estimateMinutes) || 0); }
+
+/* 版本范围与版本卡、指标格下钻同一口径：绑定的工作项 + 首版上线前未绑版本的折算 */
+function rollupVersionTasks(versionId){
+  var firstRel = cache.phase ? cache.phase.firstReleasedAt : null;
+  var preId = preLaunchVersionId();
+  return (cache.tasks || []).filter(function(t){
+    var tv = taskVersionIds(t);
+    if(tv.length) return tv.indexOf(versionId) !== -1;
+    if(versionId !== preId) return false;
+    var d = t.completedAt || t.startDate || t.dueDate || "";
+    return !!(d && String(d) <= String(firstRel));
+  });
+}
+function rollupSummary(tasks){
+  var s = { items:tasks.length, est:0, act:0, dev:0, test:0, done:0 };
+  tasks.forEach(function(t){
+    s.est += rollupEst(t);
+    s.act += rollupActual(t);
+    s.dev += rollupDev(t);
+    s.test += rollupTest(t);
+    if(t.boardColumn === "done") s.done++;
+  });
+  return s;
+}
+function rollupCatName(id){
+  if(!id) return "未指定";
+  var hit = (rollupUi.cats || []).filter(function(c){ return c.id === id; })[0];
+  return hit ? hit.name : "未指定";
+}
+function rollupDemandName(id){
+  if(!id) return "未关联需求";
+  var hit = (rollupUi.demands || []).filter(function(d){ return d.id === id; })[0];
+  return hit ? hit.title : "未关联需求";
+}
+/* 分组行：结构统一，阶段行只有开发/测试带工时，完成/未开始只计条目 */
+function rollupRows(tasks, dim){
+  if(dim === "stage"){
+    var dev = tasks.filter(function(t){ return rollupDev(t) > 0; });
+    var test = tasks.filter(function(t){ return rollupTest(t) > 0; });
+    var done = tasks.filter(function(t){ return t.boardColumn === "done"; });
+    var idle = tasks.filter(function(t){ return t.boardColumn !== "done" && rollupActual(t) === 0; });
+    return [
+      { key:"dev", name:"开发", note:"预估 + 测试窗口外计时", color:"var(--info)", items:dev.length,
+        est:rollupSummary(tasks).est, act:dev.reduce(function(a, t){ return a + rollupDev(t); }, 0), dev:null, test:null },
+      { key:"test", name:"测试", note:"测试窗口内计时", color:"var(--plum)", items:test.length,
+        est:0, act:test.reduce(function(a, t){ return a + rollupTest(t); }, 0), dev:null, test:null },
+      { key:"done", name:"完成", note:"看板已完成，只计条目", color:"var(--success)", items:done.length, est:null, act:null },
+      { key:"idle", name:"未开始", note:"未完成且还没有已记工时", color:"var(--text-3)", items:idle.length, est:null, act:null }
+    ];
+  }
+  var groups = {}, order = [];
+  tasks.forEach(function(t){
+    var key = dim === "module" ? (t.categoryId || "") : (dim === "owner" ? (t.owner || "").trim() : (t.demandId || ""));
+    if(!groups[key]){
+      groups[key] = { key:key, name: dim === "module" ? rollupCatName(key) : (dim === "owner" ? (key || "未指派") : rollupDemandName(key)), tasks:[] };
+      order.push(key);
+    }
+    groups[key].tasks.push(t);
+  });
+  var rows = order.map(function(key){
+    var g = groups[key], s = rollupSummary(g.tasks);
+    return { key:key, name:g.name, note:"", color:"", items:s.items, est:s.est, act:s.act, dev:s.dev, test:s.test };
+  });
+  rows.sort(function(a, b){
+    if(!a.key !== !b.key) return a.key ? -1 : 1;
+    return b.act - a.act;
+  });
+  return rows;
+}
+function rollupVersionSelectHTML(){
+  var versions = cache.versions || [];
+  return '<select class="mini-select" data-rollup-ver aria-label="汇总版本">'
+    + versions.map(function(v){
+      return '<option value="' + esc(v.id) + '"' + (v.id === rollupUi.verId ? " selected" : "") + '>' + esc(v.name) + '</option>';
+    }).join("")
+    + '<option value="__all"' + (rollupUi.verId === "__all" ? " selected" : "") + '>全部版本（跨版本对比）</option>'
+    + '</select>';
+}
+function rollupCurrentVersion(){
+  var versions = cache.versions || [];
+  var hit = versions.filter(function(v){ return v.id === rollupUi.verId; })[0];
+  if(hit) return hit;
+  hit = versions.filter(function(v){ return v.status === "active"; })[0] || versions[0] || null;
+  rollupUi.verId = hit ? hit.id : "";
+  return hit;
+}
+function rollupKpisHTML(s){
+  var cells = [
+    [s.items, "工作项", "已完成 " + s.done],
+    [rollupH(s.est), "预估工时", "全部计入开发行"],
+    [rollupH(s.act), "实际工时", s.act ? "开发 + 测试" : "尚未计时"],
+    [rollupH(s.dev), "开发", "测试窗口外计时"],
+    [rollupH(s.test), "测试", "测试窗口内计时"],
+    [s.done + " / " + s.items, "已完成", "只计条目"]
+  ];
+  return '<div class="pgrid roll-kpis">' + cells.map(function(c){
+    return '<div class="pcell"><b>' + esc(String(c[0])) + '</b><span>' + esc(c[1]) + ' · ' + esc(c[2]) + '</span></div>';
+  }).join("") + '</div>';
+}
+function rollupSplitHTML(s){
+  if(!s.act) return '<p class="foot-note roll-split-empty">还没有已结束的计时，开发 / 测试拆分要等第一条计时产生。</p>';
+  var dw = Math.round(s.dev * 100 / s.act), tw = 100 - dw;
+  return '<div class="roll-split" role="img" aria-label="实际工时中开发 ' + dw + '%，测试 ' + tw + '%">'
+    + '<i class="dev" style="width:' + dw + '%"></i><i class="test" style="width:' + tw + '%"></i></div>'
+    + '<div class="roll-split-legend"><span><i class="dev"></i>开发 ' + rollupH(s.dev) + '（' + dw + '%）</span>'
+    + '<span><i class="test"></i>测试 ' + rollupH(s.test) + '（' + tw + '%）</span></div>';
+}
+function rollupDeltaHTML(act, est){
+  if(est === null || est === undefined || !est) return '<td class="num muted">—</td>';
+  var d = Math.round((act - est) * 100 / est);
+  return '<td class="num">' + (d > 0 ? "+" : "") + d + '%</td>';
+}
+function rollupPivotHTML(tasks, s){
+  var dim = rollupUi.dim, rows = rollupRows(tasks, dim);
+  var actual = rollupUi.metric === "act", denom = actual ? s.act : s.est;
+  var stage = dim === "stage";
+  var head = '<thead><tr><th>' + (stage ? "阶段" : dim === "module" ? "模块" : dim === "owner" ? "负责人" : "需求") + '</th>'
+    + (stage ? '<th>数据来源</th>' : '')
+    + '<th class="num">条目</th><th class="num">预估</th><th class="num">实际</th>'
+    + (stage ? '' : '<th class="num">开发</th><th class="num">测试</th>')
+    + '<th class="num">' + (actual ? "实际占比" : "预估占比") + '</th>'
+    + (stage ? '' : '<th class="num">偏差</th>') + '</tr></thead>';
+  var body = rows.map(function(r){
+    var hours = r.act !== null && r.act !== undefined;
+    var share = hours ? rollupPct(actual ? r.act : r.est, denom) : "—";
+    return '<tr class="roll-row" tabindex="0" data-rollup-group="' + esc(dim) + '" data-rollup-key="' + esc(r.key) + '" title="下钻该分组的工作项">'
+      + '<td><span class="roll-name">' + (stage ? '<i class="roll-dot" style="background:' + r.color + '"></i>' : '') + esc(r.name) + '</span></td>'
+      + (stage ? '<td class="muted">' + esc(r.note) + '</td>' : '')
+      + '<td class="num">' + r.items + '</td>'
+      + '<td class="num">' + (r.est === null || r.est === undefined ? "—" : rollupH(r.est)) + '</td>'
+      + '<td class="num">' + (hours ? rollupH(r.act) : "—") + '</td>'
+      + (stage ? '' : '<td class="num">' + (hours ? rollupH(r.dev) : "—") + '</td><td class="num">' + (hours ? rollupH(r.test) : "—") + '</td>')
+      + '<td class="num">' + share + '</td>'
+      + (stage ? '' : rollupDeltaHTML(r.act || 0, r.est))
+      + '</tr>';
+  }).join("");
+  var total = '<tr class="roll-total"><td colspan="' + (stage ? 2 : 1) + '"><b>合计</b></td>'
+    + '<td class="num">' + s.items + '</td><td class="num">' + rollupH(s.est) + '</td><td class="num">' + rollupH(s.act) + '</td>'
+    + (stage ? '' : '<td class="num">' + rollupH(s.dev) + '</td><td class="num">' + rollupH(s.test) + '</td>')
+    + '<td class="num">100%</td>' + (stage ? '' : rollupDeltaHTML(s.act, s.est)) + '</tr>';
+  return head + '<tbody>' + body + total + '</tbody>';
+}
+function rollupAllVersionsHTML(){
+  var versions = cache.vstats.versions || [];
+  var body = versions.map(function(v){
+    return '<tr class="roll-row" tabindex="0" data-rollup-group="version" data-rollup-ver="' + esc(v.id) + '" title="下钻该版本的工作项">'
+      + '<td>' + esc(v.name) + '</td><td>' + versionStatusTag(v.status) + '</td>'
+      + '<td class="num">' + (v.doneCount || 0) + ' / ' + (v.taskCount || 0) + '</td>'
+      + '<td class="num">' + rollupH(v.estimateMinutes) + '</td><td class="num">' + rollupH(v.workMinutes) + '</td>'
+      + '<td class="num">' + rollupH(v.devMinutes) + '</td><td class="num">' + rollupH(v.testMinutes) + '</td>'
+      + rollupDeltaHTML(v.workMinutes || 0, v.estimateMinutes) + '</tr>';
+  }).join("");
+  var u = cache.vstats.unbound || {};
+  if(Number(u.taskCount)){
+    body += '<tr class="roll-row" tabindex="0" data-rollup-group="version" data-rollup-ver="" title="下钻未绑定版本的工作项">'
+      + '<td><span class="tag ghost">待规划</span></td><td class="muted">未绑定版本</td>'
+      + '<td class="num">' + (u.doneCount || 0) + ' / ' + u.taskCount + '</td>'
+      + '<td class="num">' + rollupH(u.estimateMinutes) + '</td><td class="num">' + rollupH(u.workMinutes) + '</td>'
+      + '<td class="num">' + rollupH(u.devMinutes) + '</td><td class="num">' + rollupH(u.testMinutes) + '</td>'
+      + '<td class="num muted">—</td></tr>';
+  }
+  var notes = '<p class="foot-note roll-foot">版本之间只比较总量与拆分，不做逐项对齐；一个工作项绑定多个版本时会在多个版本里各计一次，跨版本合计不等于项目合计。</p>';
+  return '<div class="tbl-wrap"><table class="phase-tbl roll-tbl"><thead><tr>'
+    + '<th>版本</th><th>状态</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际</th>'
+    + '<th class="num">开发</th><th class="num">测试</th><th class="num">偏差</th>'
+    + '</tr></thead><tbody>' + (body || '<tr><td colspan="8" class="tbl-empty foot-note">还没有版本</td></tr>') + '</tbody></table></div>' + notes;
+}
+function rollupPanelHTML(){
+  var versions = cache.versions || [];
+  if(!versions.length) return "";
+  var all = rollupUi.verId === "__all";
+  var v = all ? null : rollupCurrentVersion();
+  if(!v && !all) return "";
+  var dims = [["stage", "阶段"], ["module", "模块"], ["owner", "负责人"], ["demand", "需求"]];
+  var ctl = '<div class="ver-rollup-ctl">' + rollupVersionSelectHTML()
+    + (all ? '' : '<span class="seg mini" role="group" aria-label="汇总维度">' + dims.map(function(d){
+        return '<button type="button" data-rollup-dim="' + d[0] + '" aria-pressed="' + (rollupUi.dim === d[0]) + '">' + d[1] + '</button>';
+      }).join("") + '</span>'
+      + '<span class="seg mini" role="group" aria-label="占比指标">'
+      + '<button type="button" data-rollup-metric="act" aria-pressed="' + (rollupUi.metric === "act") + '">按实际</button>'
+      + '<button type="button" data-rollup-metric="est" aria-pressed="' + (rollupUi.metric === "est") + '">按预估</button></span>')
+    + '</div>';
+  var head = '<div class="ver-rollup-head"><div class="ver-rollup-title"><b>阶段工时汇总</b>'
+    + '<span>' + (all ? "跨版本对比：同一批工作项按版本归组，看实际与预估是否在收敛" : "向上抽象一层：这个版本一共投了多少、预计多少、开发与测试各占多少") + '</span></div>'
+    + ctl + '</div>';
+  var notes = '<details class="manager-caliber ver-rollup-caliber"><summary>口径</summary><div>'
+    + '阶段不是新数据，只是同一批工作项的另一种分组：预估全部计入开发；实际工时里，测试窗口（提测 → 测试结束）内的计时计入测试，其余计入开发，所以开发 + 测试始终等于版本累计实际工时。'
+    + '评审 / 排期属于需求池阶段、不产生工作项工时，这里不重复统计；发布以版本卡的发布证据为准。'
+    + '阶段表里的完成 / 未开始只计条目，不与工时相加。点任意行下钻到工作项，再点行打开详情。</div></details>';
+  var body;
+  if(all){
+    body = rollupAllVersionsHTML();
+  }else{
+    var tasks = rollupVersionTasks(v.id);
+    var s = rollupSummary(tasks);
+    var table = '<div class="tbl-wrap"><table class="phase-tbl roll-tbl">' + rollupPivotHTML(tasks, s) + '</table></div>';
+    var foot = '<p class="foot-note roll-foot">' + esc(v.name) + ' · ' + tasks.length + ' 个工作项 · 预估 ' + rollupH(s.est)
+      + ' · 实际 ' + rollupH(s.act) + ' = 开发 ' + rollupH(s.dev) + ' + 测试 ' + rollupH(s.test) + '</p>';
+    body = rollupKpisHTML(s) + rollupSplitHTML(s) + table + foot;
+  }
+  return '<section class="ver-rollup" data-rollup>' + head + notes + body + '</section>';
+}
+function paintRollup(){
+  if(!phaseBody || viewMode !== "version") return;
+  var old = phaseBody.querySelector("[data-rollup]");
+  if(!old) return;
+  var wrap = document.createElement("div");
+  wrap.innerHTML = rollupPanelHTML();
+  var next = wrap.firstChild;
+  if(next) old.parentNode.replaceChild(next, old);
+}
+function ensureRollupDemands(done){
+  var reqId = rt.phaseReqId;
+  if(rollupUi.demands && rollupUi.demandsReqId === reqId){ done(); return; }
+  if(rollupUi.demandLoading) return;
+  rollupUi.demandLoading = true;
+  API.getAllPages("/api/demands", { reqId: reqId }).then(function(rows){
+    rollupUi.demandLoading = false;
+    rollupUi.demands = rows || [];
+    rollupUi.demandsReqId = reqId;
+    if(rt.phaseReqId === reqId) done();
+  }).catch(function(ex){
+    rollupUi.demandLoading = false;
+    toast(ex.message || "需求加载失败", "bad");
+    done();
+  });
+}
+/* 下钻：先按分组圈定工作项，弹窗里保留开发 / 测试拆分，行内可继续打开详情 */
+function rollupRowTasks(group, key, versionId){
+  if(group === "version"){
+    return { tasks: drillRows("version", versionId, ""), name: versionId ? ((cache.versions.filter(function(v){ return v.id === versionId; })[0] || {}).name || "版本") : "待规划" };
+  }
+  var tasks = rollupVersionTasks(versionId || rollupUi.verId);
+  var name;
+  if(group === "stage"){
+    name = { dev:"开发", test:"测试", done:"完成", idle:"未开始" }[key] || "阶段";
+    tasks = tasks.filter(function(t){
+      if(key === "dev") return rollupDev(t) > 0;
+      if(key === "test") return rollupTest(t) > 0;
+      if(key === "done") return t.boardColumn === "done";
+      return t.boardColumn !== "done" && rollupActual(t) === 0;
+    });
+  }else if(group === "module"){
+    name = rollupCatName(key);
+    tasks = tasks.filter(function(t){ return (t.categoryId || "") === key; });
+  }else if(group === "owner"){
+    name = key || "未指派";
+    tasks = tasks.filter(function(t){ return (t.owner || "").trim() === key; });
+  }else{
+    name = key ? rollupDemandName(key) : "未关联需求";
+    tasks = tasks.filter(function(t){ return (t.demandId || "") === key; });
+  }
+  return { tasks: tasks, name: name };
+}
+function openRollupDrill(group, key, versionId){
+  var scope = rollupRowTasks(group, key || "", versionId || "");
+  var tasks = scope.tasks.slice().sort(function(a, b){ return rollupActual(b) - rollupActual(a); });
+  var s = rollupSummary(tasks);
+  var versionName = versionId ? ((cache.versions.filter(function(v){ return v.id === versionId; })[0] || {}).name || "") : ((rollupCurrentVersion() || {}).name || "");
+  /* 版本分组下 scope.name 就是版本名，再拼一次版本名会重复 */
+  var drillTitle = group === "version"
+    ? reqNameById(rt.phaseReqId) + " · " + scope.name
+    : reqNameById(rt.phaseReqId) + " · " + versionName + " · " + scope.name;
+  var body = tasks.map(function(t){
+    return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
+      + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(t.title) + '</td>'
+      + '<td>' + esc(typeName(t.itemType)) + '</td>'
+      + '<td>' + esc(t.owner || "—") + '</td>'
+      + '<td>' + (t.boardColumn === "done" ? '<span class="tag tag-success">已完成</span>' : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
+      + '<td class="num">' + (rollupEst(t) ? fmtMinutesShort(rollupEst(t)) : "—") + '</td>'
+      + '<td class="num">' + (rollupActual(t) ? fmtMinutesShort(rollupActual(t)) : "—") + '</td>'
+      + '<td class="num">' + (rollupDev(t) ? fmtMinutesShort(rollupDev(t)) : "—") + '</td>'
+      + '<td class="num">' + (rollupTest(t) ? fmtMinutesShort(rollupTest(t)) : "—") + '</td></tr>';
+  }).join("") || '<tr><td colspan="8" class="foot-note tbl-empty">该分组下暂无工作项</td></tr>';
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.innerHTML = '<div class="sheet wide"><div class="sheet-head"><div style="flex:1;min-width:0">'
+    + '<h2>' + esc(drillTitle) + '</h2>'
+    + '<div class="desc">共 ' + tasks.length + ' 项 · 预估 ' + rollupH(s.est) + ' · 实际 ' + rollupH(s.act)
+    + '（开发 ' + rollupH(s.dev) + ' / 测试 ' + rollupH(s.test) + '）· 点击工作项行打开详情</div></div>'
+    + '<button class="icon-btn sm" type="button" data-drill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + '<div class="sheet-body"><div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
+    + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th class="num">预估</th><th class="num">实际</th><th class="num">开发</th><th class="num">测试</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div></div></div>';
+  document.body.appendChild(layer);
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-drill-x]")){ UI.closeModal(layer); return; }
+    var t = e.target.closest("[data-open-task]");
+    if(t){ openTaskById(t.dataset.openTask); }
+  });
+  UI.openModal(layer);
+}
+
 function renderVersionMode(){
   var p = cache.phase;
   if(phaseMeta){
@@ -1147,7 +1535,7 @@ function renderVersionMode(){
   var cards = cache.vstats.versions.map(versionCardHTML).join("");
   var u = cache.vstats.unbound;
   var unboundTasks = cache.tasks.filter(function(t){ return !taskVersionIds(t).length; });
-  var writableVer = cache.versions.some(function(v){ return !versionContentLocked(v); });
+  var writableVer = cache.versions.some(function(v){ return !versionReadOnly(v); });
   var unboundAssign = (canWritePhase() && unboundTasks.length && writableVer)
     ? '<div class="phase-acts"><button class="btn sm" type="button" data-unbound-assign>分配工作项到版本</button></div>'
     : "";
@@ -1171,7 +1559,7 @@ function renderVersionMode(){
     });
     return;
   }
-  phaseBody.innerHTML = '<div class="ver-grid">' + cards + unboundCard + '</div>' + caliber + taskTable("version");
+  phaseBody.innerHTML = rollupPanelHTML() + '<div class="ver-grid">' + cards + unboundCard + '</div>' + caliber + taskTable("version");
   syncVersionDescToggles();
   applyPhaseTblFilters();
 }
@@ -1210,6 +1598,7 @@ function openVersionDialog(id, fresh){
   var v = id ? findVersion(id) : null;
   if(id && !v){ editingVerId = null; toast("版本已不可见，请刷新", "warn"); return; }
   if(v && versionContentLocked(v)){ editingVerId = null; toast("已有成功正式发布，版本内容只读", "warn"); return; }
+  if(v && versionEnded(v)){ editingVerId = null; toast("已关闭或已取消的版本不能编辑", "warn"); return; }
   editingVerRevision = v ? v.revision : null;
   editingVerStatus = v ? v.status : null;
   $("dlgVersion").__uiOnClose = function(){ versionDialogSeq++; versionDialogContext = null; editingVerId = null; };
@@ -1236,6 +1625,7 @@ function saveVersion(){
   var savedId = editingVerId, seq = versionDialogSeq;
   var editing = savedId ? findVersion(savedId) : null;
   if(editing && versionContentLocked(editing)){ toast("已有成功正式发布，版本内容只读", "warn"); return; }
+  if(editing && versionEnded(editing)){ toast("已关闭或已取消的版本不能编辑", "warn"); return; }
   var body = {
     reqId: rt.phaseReqId,
     name: name,
@@ -1282,8 +1672,8 @@ function openProjectReleasePlan(){
   else ready = loadPhaseData() || Promise.resolve();
   ready.then(function(){
     if(document.body.dataset.view !== "phase" || viewMode !== "version") return;
-    var versions = (cache && cache.versions) || [];
-    if(!versions.length){ toast("该项目还没有版本，先新建版本再制定发布计划", "warn"); return; }
+    var versions = ((cache && cache.versions) || []).filter(function(v){ return !versionEnded(v); });
+    if(!versions.length){ toast("该项目没有可制定发布计划的版本（已关闭或已取消的版本不参与）", "warn"); return; }
     if(versions.length === 1){ openReleaseDetail(versions[0].id, "plan"); return; }
     chooseReleaseVersion(versions);
   }).catch(function(){});
@@ -1329,14 +1719,22 @@ function releaseDialog(v, title, onClose){
   }};
 }
 function releaseRecordHTML(record){ return releaseSnapshotHTML(record); }
+/* 交付说明是低频视图：按需拉模块再落路由，不把纸张渲染器拉进版本页首屏 */
+function openDeliveryNote(versionId, releaseId){
+  if(!versionId){ toast("这条记录没有归属版本，无法生成说明", "warn"); return; }
+  import("../core/view-loader.js").then(function(m){
+    return m.loadView("delivery").then(function(mod){ mod.openDeliveryNote(versionId, releaseId); });
+  }).catch(function(ex){ toast(ex.message || "打开交付说明失败", "bad"); });
+}
 function exportReleaseRecordCSV(record){
-  var lines = [["发布记录ID", record.id], ["项目ID", record.reqId], ["项目", record.projectName], ["版本ID", record.versionId], ["版本", record.versionName], ["计划ID", record.planId], ["计划修订", record.planRevision], ["计划时间（不可变快照）", releasePlanTime(record)], ["实际时间UTC", record.occurredAt], ["记录时间UTC", record.recordedAt],
-    ["环境", record.environment], ["操作", record.operation], ["结果", record.result], ["目标键", JSON.stringify(record.targetKeys || [])], ["覆盖", record.coverage], ["制品引用", record.artifactRef], ["SHA256", record.artifactDigest], ["关联发布ID", record.relatedReleaseId],
+  /* ID 列保留原值供对账 join，编号列给人读；两者并存而不是互相替换 */
+  var lines = [["发布记录编号", releaseNoText(record.releaseNo)], ["发布记录ID", record.id], ["项目ID", record.reqId], ["项目", record.projectName], ["版本ID", record.versionId], ["版本", record.versionName], ["计划ID", record.planId], ["计划修订", record.planRevision], ["计划时间（不可变快照）", releasePlanTime(record)], ["实际时间UTC", record.occurredAt], ["记录时间UTC", record.recordedAt],
+    ["环境", record.environment], ["操作", record.operation], ["结果", record.result], ["目标键", JSON.stringify(record.targetKeys || [])], ["覆盖", record.coverage], ["制品引用", record.artifactRef], ["SHA256", record.artifactDigest], ["关联发布编号", releaseNoText(record.relatedReleaseNo)], ["关联发布ID", record.relatedReleaseId],
     ["记录人ID", record.recordedByUserId || record.releasedBy], ["记录人", record.recordedByName || record.releasedByName], ["实际执行人ID", record.executorUserId], ["实际执行人", record.executorName], ["幂等键", record.idempotencyKey], ["偏差理由", record.deviationReason], ["说明", record.notes], ["失败原因", record.failureReason],
-    [], ["工作项ID", "标题快照", "负责人ID", "负责人", "需求ID", "需求标题", "实际记录版本ID", "实际记录版本", "需求目标版本ID", "需求目标版本", "工作状态快照", "完成日期", "处理结果", "实际分钟", "预估分钟"]];
-  (record.items || []).forEach(function(item){ lines.push([item.taskId, item.title, item.ownerUserId, item.ownerName, item.demandId, item.demandTitle, record.versionId, record.versionName, item.targetVersionId, item.targetVersionName, item.boardColumn, item.completedAt, item.disposition, item.workMinutes, item.estimateMinutes]); });
+    [], ["工作项编号", "工作项ID", "标题快照", "负责人ID", "负责人", "需求ID", "需求标题", "实际记录版本ID", "实际记录版本", "需求目标版本ID", "需求目标版本", "工作状态快照", "完成日期", "处理结果", "实际分钟", "预估分钟"]];
+  (record.items || []).forEach(function(item){ lines.push([itemNoText(item.taskItemNo), item.taskId, item.title, item.ownerUserId, item.ownerName, item.demandId, item.demandTitle, record.versionId, record.versionName, item.targetVersionId, item.targetVersionName, item.boardColumn, item.completedAt, item.disposition, item.workMinutes, item.estimateMinutes]); });
   var url = URL.createObjectURL(new Blob(["\uFEFF" + lines.map(function(row){ return row.map(csvCell).join(","); }).join("\r\n")], {type:"text/csv;charset=utf-8"}));
-  var a = document.createElement("a"); a.href = url; a.download = "发布快照-" + (record.versionName || "版本") + "-" + record.id + ".csv";
+  var a = document.createElement("a"); a.href = url; a.download = "发布快照-" + (record.versionName || "版本") + "-" + (releaseNoText(record.releaseNo) || record.id) + ".csv";
   document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 function publishVersion(id){ openReleaseDetail(id, "actual"); }
@@ -1926,7 +2324,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
       if(list.length){
         var record = list.find(function(r){ return identical(r, old.body); });
         if(!record){ recoveryMessage = "旧键已有记录但无法验证上下文一致；请求保留，禁止新建或重试，请核对历史。"; return true; }
-        recoveredRecord = record; recoveryMessage = "已找回同一次正式记录 #" + record.id + "（" + record.result + "），不会创建重复事件。";
+        recoveredRecord = record; recoveryMessage = "已找回同一次正式记录 " + (releaseNoText(record.releaseNo) || "#" + record.id) + "（" + record.result + "），不会创建重复事件。";
         if(persist(null, old.body.idempotencyKey) && current()){ invalidateVersionCache(reqId); reloadFilteredViews(); }
         return true;
       }
@@ -2015,7 +2413,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
         + '<details class="release-advanced" data-release-advanced' + (advancedOpen ? ' open' : '') + '><summary>高级与异常字段 <span class="mute" data-release-advanced-summary></span></summary><div class="form-grid">'
         + field("实际覆盖", '<select data-release-coverage' + actualDisabled + '>' + options(coverage, a.coverage) + '</select>', "本次实际覆盖范围；与计划覆盖不同需填写偏差理由。")
         + field("操作", '<select data-release-operation' + actualDisabled + '>' + options([["deploy", "部署"], ["redeploy", "重部署 / 失败重试"], ["rollback", "回滚"]], a.operation) + '</select>', "部署 / 重部署 / 回滚；回滚必须引用成功事件，范围须为子集。")
-        + field("关联正式事件", '<select data-release-relatedReleaseId' + actualDisabled + '>' + options([["", "请选择（回滚必填）"]].concat(references.map(function(r){ return [r.id, "#" + r.id + " · " + r.result + " · " + releaseOperationName(r.operation) + " · " + fmtReleaseTime(r.occurredAt)]; })), a.relatedReleaseId) + '</select>', "回滚必填；只能引用同环境的成功正式事件，选项随环境与操作过滤。") + '</div>'
+        + field("关联正式事件", '<select data-release-relatedReleaseId' + actualDisabled + '>' + options([["", "请选择（回滚必填）"]].concat(references.map(function(r){ return [r.id, (releaseNoText(r.releaseNo) || "#" + r.id) + " · " + r.result + " · " + releaseOperationName(r.operation) + " · " + fmtReleaseTime(r.occurredAt)]; })), a.relatedReleaseId) + '</select>', "回滚必填；只能引用同环境的成功正式事件，选项随环境与操作过滤。") + '</div>'
         + field("偏差 / 紧急 / 未完成事实理由", '<textarea data-release-deviationReason maxlength="1000" placeholder="说明与计划的差异、未完成项或紧急发布原因"' + actualDisabled + '>' + esc(a.deviationReason) + '</textarea>', "无计划、环境 / 覆盖 / 范围 / 时间与计划不一致或包含未完成项时必须说明；只记录事实，不改写工作项状态。")
         + field("实际说明", '<textarea data-release-notes maxlength="2000"' + actualDisabled + '>' + esc(a.notes) + '</textarea>')
         + field("失败原因（失败时必填）", '<textarea data-release-failureReason maxlength="1000" placeholder="记录失败时必填，说明失败环节与现象"' + actualDisabled + '>' + esc(a.failureReason) + '</textarea>', "实际结果为失败时必须填写失败环节与现象。", a.result === "failed") + '</details>'
@@ -2130,7 +2528,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
     var sent = pending, body = sent.body;
     setBusy(true); error("", "actual");
     API.post(base + "/release", body).then(function(record){
-      recoveredRecord = record; recoveryMessage = "已记录正式事件 #" + record.id + "（" + record.result + "）。";
+      recoveredRecord = record; recoveryMessage = "已记录正式事件 " + (releaseNoText(record.releaseNo) || "#" + record.id) + "（" + record.result + "）。";
       persist(null, body.idempotencyKey); retryAllowed = false;
       if(!current()) return;
       setBusy(false); invalidatePreview(); invalidateVersionCache(reqId); notifyDeliveryChanged(reqId); reloadFilteredViews();
@@ -2147,7 +2545,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
     var a = actualDraft;
     var refs = records.filter(function(r){ return r.environment === a.environment && r.operation !== "rollback" && (a.operation === "rollback" ? r.result === "success" : r.result === "failed" || r.result === "success"); });
     var select = layer.querySelector('[data-release-relatedReleaseId]');
-    if(select) select.innerHTML = options([["", "请选择（回滚必填）"]].concat(refs.map(function(r){ return [r.id, "#" + r.id + " · " + r.result + " · " + releaseOperationName(r.operation) + " · " + fmtReleaseTime(r.occurredAt)]; })), a.relatedReleaseId);
+    if(select) select.innerHTML = options([["", "请选择（回滚必填）"]].concat(refs.map(function(r){ return [r.id, (releaseNoText(r.releaseNo) || "#" + r.id) + " · " + r.result + " · " + releaseOperationName(r.operation) + " · " + fmtReleaseTime(r.occurredAt)]; })), a.relatedReleaseId);
     var planSelect = layer.querySelector('[data-release-planId]');
     if(planSelect) planSelect.innerHTML = actualPlanOptions(a);
     var summary = layer.querySelector('[data-release-plan-summary]');
@@ -2221,6 +2619,8 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
   layer.addEventListener("click", function(e){
     var exp = e.target.closest('[data-release-export]');
     if(exp){ var r = records.concat(recoveredRecord ? [recoveredRecord] : []).find(function(r){ return String(r.id) === exp.dataset.releaseExport; }); if(r) exportReleaseRecordCSV(r); return; }
+    var dnote = e.target.closest('[data-release-delivery]');
+    if(dnote){ openDeliveryNote(dnote.dataset.releaseDeliveryVersion, dnote.dataset.releaseDelivery); return; }
     var syncOpen = e.target.closest('[data-plan-sync-open]');
     if(syncOpen){
       /* 跳去分支抽屉要先关掉工作区：有未保存的计划修改时先确认，避免草稿被静默丢弃 */
@@ -2288,7 +2688,8 @@ function startVersion(id){
   if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   UI.showConfirm({
     title:"开始开发",
-    msg:"将「" + esc(v.name) + "」转为开发中？" + (v.startDate ? "" : "该版本尚无开始日期，将自动记为今天。"),
+    msg:"将「" + esc(v.name) + "」转为开发中？开始开发会把当前工作项与预估冻结为承诺基线，之后新增或移出会单独标注。"
+      + (v.startDate ? "" : "该版本尚无开始日期，将自动记为今天。"),
     okText:"开始开发", danger:false
   }).then(function(ok){
     if(!ok) return;
@@ -2299,13 +2700,45 @@ function startVersion(id){
     }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
   });
 }
+/* 关闭 / 取消都要求原因；关闭是「本轮结束但未发布」，取消是「本轮作废」，都在版本历史中留痕 */
+function endVersion(id, status){
+  var v = findVersion(id);
+  if(!v) return;
+  if(!canWritePhase()){ denyPhaseReadOnly(); return; }
+  var closing = status === "closed";
+  var endReason = "";
+  UI.showPrompt({
+    title: closing ? "关闭版本" : "取消版本",
+    desc: closing
+      ? "关闭表示本轮交付结束但未发布；版本与工作项关联保留，不再接受新工作项和发布记录。"
+      : "取消表示本轮版本作废；历史保留，但不参与交付统计与发布计划。",
+    label: "原因（必填）", required: true, multiline: true, maxLength: 500,
+    okText: closing ? "关闭版本" : "取消版本"
+  }).then(function(reason){
+    if(reason == null) return;
+    endReason = reason;
+    if(closing) return submit();
+    return UI.showConfirm({
+      title: "确认取消版本",
+      msg: "取消「" + esc(v.name) + "」后不能恢复，也不再计入交付统计。",
+      okText: "确认取消"
+    }).then(function(ok){ if(ok) return submit(); });
+  });
+  function submit(){
+    API.post("/api/versions/" + encodeURIComponent(id) + "/" + (closing ? "close" : "cancel"), { reason: endReason }).then(function(){
+      toast((closing ? "已关闭「" : "已取消「") + v.name + "」", "fs");
+      notifyDeliveryChanged(v.reqId || rt.phaseReqId);
+      reloadView();
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  }
+}
 function deleteVersion(id){
   var v = findVersion(id);
   if(!v) return;
   if(!isOwner()){ toast("仅空间主可删除版本", "warn"); return; }
   UI.showConfirm({
     title:"删除版本",
-    msg:"删除「" + esc(v.name) + "」？已发布或已有发布尝试记录的版本不能删除；仍有工作项绑定（含回收站）或需求目标引用（含已取消）也会拒绝删除。请先填写原因解除 / 调整工作项版本，撤排 / 调整需求目标；已取消需求需有因恢复以清目标。删除不会自动解绑。",
+    msg:"删除「" + esc(v.name) + "」？已发布或已有发布尝试记录的版本不能删除；仍有工作项绑定（含回收站）、需求目标引用（含已取消）或关联里程碑也会拒绝删除。请先填写原因解除 / 调整工作项版本，撤排 / 调整需求目标；已取消需求需有因恢复以清目标。删除不会自动解绑。",
     okText:"删除版本"
   }).then(function(ok){
     if(!ok) return;
@@ -2338,6 +2771,7 @@ function openVersionTasks(id, fresh){
   var v = findVersion(id);
   if(!v) return;
   if(!canWritePhase()){ denyPhaseReadOnly(); return; }
+  if(versionEnded(v)){ toast("已关闭或已取消的版本不能调整工作项", "warn"); return; }
   if(!fresh){
     var seq = ++versionBindingSeq, reqId = rt.phaseReqId, wsId = (rt.currentWs || {}).id, userId = (rt.currentUser || {}).id, route = document.body.dataset.view;
     Promise.all([API.get("/api/versions", {reqId:reqId}), API.get("/api/versions/task-options", {reqId:reqId})]).then(function(rs){
@@ -2644,6 +3078,7 @@ function showReleaseNote(id){
     if(e.target.closest('[data-note-retry]')){ load(); return; }
     if(e.target.closest('[data-note-export]') && note) exportReleaseNoteCSV(note);
     if(e.target.closest('[data-release-export]') && snapshot) exportReleaseRecordCSV(snapshot);
+    if(e.target.closest('[data-release-delivery]')){ openDeliveryNote(id, snapshot ? snapshot.id : ""); return; }
     var task = e.target.closest('[data-note-task]');
     if(task){ openTaskById(task.dataset.noteTask); return; }
     var demand = e.target.closest('[data-note-demand]');
@@ -2705,16 +3140,17 @@ function ensureVersionOptions(keep, taskId){
   }) : Promise.resolve([])]).then(function(results){
     if(!stillCurrent()) return;
     var vs = results[0], ids = normalizedIds(results[1]);
-    if(!taskId) ids = ids.filter(function(id){ return vs.some(function(v){ return v.id === id && !versionContentLocked(v); }); });
-    sel.innerHTML = vs.filter(function(v){ return !versionContentLocked(v) || ids.indexOf(v.id) !== -1; }).map(function(v){
-      return '<option value="' + esc(v.id) + '"' + (ids.indexOf(v.id) !== -1 ? ' selected' : '') + (versionContentLocked(v) ? ' disabled' : '') + '>' + esc(v.name) + (versionContentLocked(v) ? '（正式发布后内容只读，保留关联）' : '') + '</option>';
+    if(!taskId) ids = ids.filter(function(id){ return vs.some(function(v){ return v.id === id && !versionReadOnly(v); }); });
+    sel.innerHTML = vs.filter(function(v){ return !versionReadOnly(v) || ids.indexOf(v.id) !== -1; }).map(function(v){
+      var lockText = versionEnded(v) ? '（已关闭/已取消，保留关联）' : '（正式发布后内容只读，保留关联）';
+      return '<option value="' + esc(v.id) + '"' + (ids.indexOf(v.id) !== -1 ? ' selected' : '') + (versionReadOnly(v) ? ' disabled' : '') + '>' + esc(v.name) + (versionReadOnly(v) ? lockText : '') + '</option>';
     }).join('');
     ids.forEach(function(id){
       if(!vs.some(function(v){ return v.id === id; })){
         var retained = document.createElement("option"); retained.value = id; retained.textContent = id + "（不可见，保留关联）"; retained.disabled = true; retained.selected = true; sel.appendChild(retained);
       }
     });
-    sel.dataset.retainedIds = JSON.stringify(ids.filter(function(id){ var v = vs.find(function(v){ return v.id === id; }); return !v || versionContentLocked(v); }));
+    sel.dataset.retainedIds = JSON.stringify(ids.filter(function(id){ var v = vs.find(function(v){ return v.id === id; }); return !v || versionReadOnly(v); }));
     if(taskId && taskCacheExtra[taskId] && !Array.isArray(taskCacheExtra[taskId].versionIds)) taskCacheExtra[taskId].versionIds = ids.slice();
     sel.disabled = !!rt.drawerReadOnly; sel.setAttribute("data-ready", "1");
   }).catch(function(){
@@ -2836,6 +3272,18 @@ if(btnSaveVer) btnSaveVer.addEventListener("click", saveVersion);
 if(vName) vName.addEventListener("input", function(){ fVerName.classList.remove("invalid"); });
 if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(e.target.closest("[data-schedule-refresh]")){ loadSchedule(); return; }
+  var rollDim = e.target.closest("[data-rollup-dim]");
+  if(rollDim){
+    var dim = rollDim.dataset.rollupDim;
+    rollupUi.dim = dim;
+    if(dim === "demand" && !(rollupUi.demands && rollupUi.demandsReqId === rt.phaseReqId)) ensureRollupDemands(paintRollup);
+    else paintRollup();
+    return;
+  }
+  var rollMetric = e.target.closest("[data-rollup-metric]");
+  if(rollMetric){ rollupUi.metric = rollMetric.dataset.rollupMetric; paintRollup(); return; }
+  var rollRow = e.target.closest("[data-rollup-group]");
+  if(rollRow){ openRollupDrill(rollRow.dataset.rollupGroup, rollRow.dataset.rollupKey || "", rollRow.dataset.rollupVer || ""); return; }
   if(e.target.closest("[data-allv-clear]")){ allVersionsSel = []; renderAllVersions(); return; }
   if(e.target.closest("[data-allv-plan]")){ createPlanFromAllVersions(); return; }
   var sch = e.target.closest("[data-schedule-open]");
@@ -2895,6 +3343,10 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(rel){ publishVersion(rel.dataset.verRelease); return; }
   var st = e.target.closest("[data-ver-start]");
   if(st){ startVersion(st.dataset.verStart); return; }
+  var closeVer = e.target.closest("[data-ver-close]");
+  if(closeVer){ endVersion(closeVer.dataset.verClose, "closed"); return; }
+  var cancelVer = e.target.closest("[data-ver-cancel]");
+  if(cancelVer){ endVersion(cancelVer.dataset.verCancel, "canceled"); return; }
   var manageTasks = e.target.closest("[data-ver-tasks]");
   if(manageTasks){ openVersionTasks(manageTasks.dataset.verTasks); return; }
   var ed = e.target.closest("[data-ver-edit]");
@@ -2903,6 +3355,8 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(dl){ deleteVersion(dl.dataset.verDel); return; }
   var nt = e.target.closest("[data-ver-note]");
   if(nt){ showReleaseNote(nt.dataset.verNote); return; }
+  var dnote = e.target.closest("[data-ver-delivery]");
+  if(dnote){ openDeliveryNote(dnote.dataset.verDelivery, ""); return; }
   var dt = e.target.closest("[data-ver-desc-toggle]");
   if(dt){
     var descP = dt.parentNode.querySelector("[data-ver-desc]");
@@ -2912,8 +3366,23 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   }
   var ua = e.target.closest("[data-unbound-assign]");
   if(ua){ openUnboundTasks(); return; }
+  var msJump = e.target.closest("[data-ms-jump]");
+  if(msJump){
+    var ms = (cache.milestones || []).filter(function(x){ return x.id === msJump.dataset.msJump; })[0];
+    if(ms) openMilestoneDetail(ms, {
+      canWrite: canWritePhase(),
+      onChanged: function(){ reloadView(); }
+    });
+    return;
+  }
 });
 if(phaseBody) phaseBody.addEventListener("change", function(e){
+  var rv = e.target.closest("[data-rollup-ver]");
+  if(rv){
+    rollupUi.verId = rv.value;
+    paintRollup();
+    return;
+  }
   var sf = e.target.closest("[data-schedule-filter]");
   if(sf){
     scheduleFilters[sf.dataset.scheduleFilter] = sf.value;
@@ -2937,6 +3406,11 @@ if(phaseBody) phaseBody.addEventListener("change", function(e){
     return;
   }
   if(e.target.closest("[data-tbl-status],[data-tbl-owner],[data-tbl-type]")) applyPhaseTblFilters();
+});
+if(phaseBody) phaseBody.addEventListener("keydown", function(e){
+  if(e.key !== "Enter" && e.key !== " ") return;
+  var row = e.target.closest ? e.target.closest("tr[data-rollup-group]") : null;
+  if(row && row === e.target){ e.preventDefault(); row.click(); }
 });
 if(phaseBody) phaseBody.addEventListener("input", function(e){
   if(e.target.closest("[data-allv-kw]")){

@@ -46,8 +46,10 @@ public class ManagerController {
     public ApiResult<Map<String, Object>> reports(@RequestParam(required = false) String reqId,
                                                   @RequestParam(required = false) String roleTitle,
                                                   @RequestParam(required = false) String companyName,
+                                                  @RequestParam(required = false) String versionId,
                                                   @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(managerService.reports(ctx.getWsId(), reqId, ctx.getUserId(), roleTitle, companyName));
+        return ApiResult.ok(managerService.reports(ctx.getWsId(), reqId, ctx.getUserId(),
+                roleTitle, companyName, versionId));
     }
 
     @GetMapping("/reports/tasks")
@@ -60,11 +62,13 @@ public class ManagerController {
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String bucket,
             @RequestParam(required = false) String date,
+            @RequestParam(required = false) String versionId,
             @RequestParam(required = false) Integer offset,
             @RequestParam(required = false) Integer limit,
             @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(managerService.reportTasks(ctx.getWsId(), ctx.getUserId(),
-                reqId, roleTitle, companyName, chart, weekStart, state, bucket, date, offset, limit));
+                reqId, roleTitle, companyName, chart, weekStart, state, bucket, date,
+                versionId, offset, limit));
     }
 
     public ApiResult<Map<String, Object>> workload(WorkspaceCtx ctx) {

@@ -5,12 +5,16 @@
   <!-- 任务明细表 + 任务抽屉版本回填共用：带日期/类型/预估/实际工时 -->
   <select id="selectOptionsByReq" resultType="Task">
     SELECT t.id, t.workspace_id, t.req_id, t.demand_id, t.title, t.board_column, t.progress,
-           t.completed_at,
+           t.completed_at, t.category_id,
            t.due_date, t.start_date, t.updated_at,
            t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id,
            t.branch_id AS branchId,
            (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
-             WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
+             WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes,
+           (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
+             WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL
+               AND t.test_started_at IS NOT NULL AND t.test_finished_at IS NOT NULL
+               AND DATE(tl.started_at) BETWEEN DATE(t.test_started_at) AND DATE(t.test_finished_at)) AS test_minutes
     FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId} AND t.deleted_at IS NULL
     ORDER BY (t.board_column = 'done'), t.board_column, t.sort_order, t.id
@@ -19,15 +23,28 @@
   <!-- M1 版本阶段统计：项目全部任务 + 绑定版本 + 分支 + 累计实际工时，一次取回由服务层归组 -->
   <select id="selectStatsByReq" resultType="Task">
     SELECT t.id, t.workspace_id, t.req_id, t.demand_id, t.title, t.board_column, t.progress,
-           t.completed_at,
+           t.completed_at, t.category_id,
            t.due_date, t.start_date, t.updated_at,
            t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id,
            t.branch_id AS branchId,
            (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
-             WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
+             WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes,
+           (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
+             WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL
+               AND t.test_started_at IS NOT NULL AND t.test_finished_at IS NOT NULL
+               AND DATE(tl.started_at) BETWEEN DATE(t.test_started_at) AND DATE(t.test_finished_at)) AS test_minutes
     FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId} AND t.deleted_at IS NULL
     ORDER BY (t.board_column = 'done'), t.completed_at, t.id
+  </select>
+
+  <!-- 承诺基线来源：版本当前绑定的全部工作项及此刻预估，删除中的任务不计入 -->
+  <select id="selectCommitmentTasks" resultType="Task">
+    SELECT t.id, t.title, t.estimate_minutes
+    FROM version_task vt
+    INNER JOIN task t ON t.workspace_id = vt.workspace_id AND t.id = vt.task_id
+    WHERE vt.workspace_id = #{workspaceId} AND vt.version_id = #{versionId} AND t.deleted_at IS NULL
+    ORDER BY t.id
   </select>
 
   <select id="selectReleaseRecordsByReq" resultMap="com.hourglass.mapper.ReleaseMapper.recordWithItems">

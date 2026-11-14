@@ -22,9 +22,11 @@
   </select>
 
   <select id="selectMember" resultType="WorkspaceMember">
-    SELECT workspace_id, user_id, role, project_access_mode, company_name, job_title, created_at
-    FROM workspace_member
-    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+    SELECT m.workspace_id, m.user_id, m.role, m.project_access_mode, m.company_name, m.job_title, m.created_at,
+           u.display_name, u.username
+    FROM workspace_member m
+    LEFT JOIN app_user u ON u.id = m.user_id
+    WHERE m.workspace_id = #{workspaceId} AND m.user_id = #{userId}
   </select>
 
   <select id="countOwners" resultType="int">

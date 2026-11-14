@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>沙漏 · 需求到发布的交付循环</title>
+</head>
+<body style="margin:0;background:#FFFFFF;">
+<div id="hoursglass-delivery-loop-7c3e">
+<style>
+  #hoursglass-delivery-loop-7c3e{
+    --amber:#F79009; --amber-fg:#B54708; --amber-soft:#FFFAEB;
+    --text:#101828; --text-2:#475467; --text-3:#667085;
+    --border:#E4E7EC;
+    background:#FFFFFF; padding:24px 24px 12px; width:max-content;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    box-sizing:border-box;
+  }
+  #hoursglass-delivery-loop-7c3e *{box-sizing:border-box;margin:0;}
+  #hoursglass-delivery-loop-7c3e svg{display:block;width:1200px;max-width:100%;height:auto;}
+  #hoursglass-delivery-loop-7c3e text{font-family:inherit;}
+</style>
+
+<svg viewBox="0 0 1200 700" role="img" aria-label="沙漏交付循环：需求池经评审排期进入执行，发布计划预览确认后形成发布记录，版本逐版循环，用户反馈与缺陷回流需求池">
+  <defs>
+    <marker id="dl-arrow" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1.4 L8.6 5 L1 8.6" fill="none" stroke="#F79009" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="dl-arrow-sm" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M1 1.4 L8.6 5 L1 8.6" fill="none" stroke="#F79009" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <symbol id="dl-doc" viewBox="0 0 96 122">
+      <path d="M12 4 H60 L88 32 V110 Q88 118 80 118 H12 Q4 118 4 110 V12 Q4 4 12 4 Z"
+            fill="#FFFFFF" stroke="#F79009" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M60 4 V32 H88" fill="none" stroke="#F79009" stroke-width="2.2" stroke-linejoin="round"/>
+      <g stroke="#F79009" stroke-width="2.2" stroke-linecap="round">
+        <line x1="22" y1="58" x2="70" y2="58"/>
+        <line x1="22" y1="74" x2="70" y2="74"/>
+        <line x1="22" y1="90" x2="70" y2="90"/>
+        <line x1="22" y1="106" x2="56" y2="106"/>
+      </g>
+    </symbol>
+  </defs>
+
+  <!-- 标题 -->
+  <text x="34" y="46" font-size="24" font-weight="700" fill="#101828">沙漏 · 需求到发布的交付循环</text>
+  <text x="34" y="76" font-size="13" fill="#667085">需求池 → 排期 → 执行 → 发布；版本逐版循环，用户反馈与缺陷回流到需求池</text>
+
+  <!-- 顶部版本循环 -->
+  <path d="M798.7 206.9 A84 84 0 1 0 741.3 206.9" fill="none" stroke="#F79009" stroke-width="2.2"
+        stroke-linecap="round" marker-end="url(#dl-arrow)"/>
+  <text x="770" y="124" text-anchor="middle" font-size="18" font-weight="700" fill="#B54708">版本 1–N</text>
+  <text x="770" y="147" text-anchor="middle" font-size="11.5" fill="#667085">V1 → V1.1 hotfix → V2</text>
+
+  <!-- 主链路箭头 -->
+  <g stroke="#F79009" stroke-width="2" fill="none">
+    <line x1="60"  y1="240" x2="152" y2="240" marker-end="url(#dl-arrow)"/>
+    <line x1="268" y1="240" x2="445" y2="240" marker-end="url(#dl-arrow)"/>
+    <line x1="516" y1="240" x2="725" y2="240" marker-end="url(#dl-arrow)"/>
+    <line x1="795" y1="240" x2="994" y2="240" marker-end="url(#dl-arrow)"/>
+  </g>
+  <g font-size="12.5" fill="#B54708" text-anchor="middle">
+    <text x="106" y="207">提出需求</text>
+    <text x="356" y="207">评审通过</text>
+    <text x="620" y="207">拆解工作项</text>
+    <text x="895" y="207">发布计划 · 预览确认</text>
+  </g>
+
+  <!-- 主链路节点 -->
+  <g font-size="21" font-weight="700" fill="#B54708" text-anchor="middle">
+    <text x="210"  y="248">需求池</text>
+    <text x="490"  y="248">排期</text>
+    <text x="770"  y="248">执行</text>
+    <text x="1040" y="248">发布</text>
+  </g>
+
+  <!-- 待办清单卡片 -->
+  <use href="#dl-doc" x="162" y="370" width="96" height="122"/>
+  <text x="210" y="520" text-anchor="middle" font-size="14.5" font-weight="600" fill="#B54708">需求池待评审需求</text>
+  <text x="210" y="541" text-anchor="middle" font-size="11.5" fill="#667085">收集 · 去重 · WSJF 打分</text>
+
+  <use href="#dl-doc" x="722" y="370" width="96" height="122"/>
+  <text x="770" y="520" text-anchor="middle" font-size="14.5" font-weight="600" fill="#B54708">目标版本待执行需求</text>
+  <text x="770" y="541" text-anchor="middle" font-size="11.5" fill="#667085">已排期 · 拆成工作项</text>
+
+  <!-- 需求流转 -->
+  <path d="M262 432 Q492 352 716 408" fill="none" stroke="#F79009" stroke-width="2"
+        stroke-linecap="round" marker-end="url(#dl-arrow)"/>
+  <text x="492" y="356" text-anchor="middle" font-size="12.5" fill="#B54708">评审通过 · 排期到版本</text>
+
+  <!-- 执行期跟踪 -->
+  <g fill="#475467" font-size="12.5">
+    <circle cx="858" cy="395" r="3" fill="#F79009"/>
+    <text x="870" y="399">进度 · 工时跟踪</text>
+    <circle cx="858" cy="421" r="3" fill="#F79009"/>
+    <text x="870" y="425">缺陷 · 用例跟踪</text>
+  </g>
+
+  <!-- 回流闭环 -->
+  <path d="M1040 258 V560 Q1040 612 986 612 H164 Q110 612 110 560 V258"
+        fill="none" stroke="#F79009" stroke-width="2" stroke-linecap="round"
+        marker-end="url(#dl-arrow)"/>
+  <rect x="452" y="599" width="246" height="26" rx="13" fill="#FFFFFF"/>
+  <text x="575" y="617" text-anchor="middle" font-size="12.5" fill="#B54708">用户反馈 · 周回顾后回到需求池</text>
+
+  <!-- 口径说明 -->
+  <text x="600" y="668" text-anchor="middle" font-size="11.5" fill="#667085">
+    完成 ≠ 发布：发布徽标只读，仅由成功的生产发布记录推导；test / staging、失败、回滚与部分成功均不计
+  </text>
+  <text x="600" y="688" text-anchor="middle" font-size="11.5" fill="#98A2B3">
+    成功事实形成后版本内容冻结；新增内容另建版本，发布不锁任务完成、回退与计时
+  </text>
+</svg>
+</div>
+</body>
+</html>

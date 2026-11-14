@@ -8,7 +8,7 @@ import { attachCombo } from "../core/combo.js";
 import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, rt, state } from "../core/state.js";
+import { canEditReq, catNameById, rt, state } from "../core/state.js";
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
@@ -26,6 +26,7 @@ var caseSel = {};          /* 批量维护：勾选的用例 id → true，加�
 var caseBatchSaving = false;
 var caseModules = [];     /* 筛选下拉候选（服务端 facets） */
 var caseOwners = [];
+var caseFacetCounts = { module:{}, owner:{}, priority:{}, status:{} };
 var CASE_PAGE = 100;
 var caseSearchTimer = null;
 var caseReqId = null;
@@ -85,9 +86,12 @@ var defectVersions = [];
 var defectSeq = 0;
 var defectShown = DEFECT_PAGE;
 var defSeverity = "all";
+var defPriority = "all";
 var defStatus = "open";
 var defOwner = "all";
 var defVersion = "all";
+var defCat = "all";
+var defTag = "all";
 var defSearch = "";
 var defSearchTimer = null;
 var defReqId = "";              /* "" = 全部项目；否则只看一个项目 */
@@ -230,6 +234,10 @@ function loadCases(){
     caseHasMore = !!page.hasMore;
     caseModules = page.modules || [];
     caseOwners = page.owners || [];
+    caseFacetCounts = {
+      module: page.moduleCounts || {}, owner: page.ownerCounts || {},
+      priority: page.priorityCounts || {}, status: page.statusCounts || {}
+    };
     stats = rs[1] || { total: 0, passed: 0, failed: 0, blocked: 0, skipped: 0, untested: 0 };
     render();
     return true;
@@ -252,6 +260,7 @@ function loadCasesAll(seq){
     caseHasMore = false;
     caseModules = [];
     caseOwners = [];
+    caseFacetCounts = { module:{}, owner:{}, priority:{}, status:{} };
     syncFilterOptions();
     $("tcStats").innerHTML = "";
     $("tcMeta").textContent = "全部项目";
@@ -296,14 +305,25 @@ function loadCasesAll(seq){
     return false;
   });
 }
+function mergeFacetCounts(target, source){
+  Object.keys(source || {}).forEach(function(k){
+    target[k] = (target[k] || 0) + (Number(source[k]) || 0);
+  });
+}
 function mergeCaseFacets(pages){
   var mods = {}, owners = {};
+  var counts = { module:{}, owner:{}, priority:{}, status:{} };
   pages.forEach(function(p){
     (p.modules || []).forEach(function(m){ mods[m] = 1; });
     (p.owners || []).forEach(function(o){ owners[o] = 1; });
+    mergeFacetCounts(counts.module, p.moduleCounts);
+    mergeFacetCounts(counts.owner, p.ownerCounts);
+    mergeFacetCounts(counts.priority, p.priorityCounts);
+    mergeFacetCounts(counts.status, p.statusCounts);
   });
   caseModules = Object.keys(mods);
   caseOwners = Object.keys(owners).sort(function(a, b){ return a.localeCompare(b, "zh-Hans-CN"); });
+  caseFacetCounts = counts;
 }
 /* 滚动加载下一页：沿用当前筛选条件，按已加载条数作为 offset；
    全部项目下按项目分组各自翻页 */
@@ -403,61 +423,205 @@ function defectOwnerList(){
   list.sort(function(a, b){ return a.localeCompare(b, "zh-Hans-CN"); });
   return list;
 }
+function defectCatName(id){
+  if(!id) return "未指定模块";
+  return catNameById(id) || "已删除模块";
+}
+function defectMatches(t, skip){
+  var st = defectStatus(t);
+  if(skip !== "status"){
+    if(defStatus === "open"){ if(st === "closed") return false; }
+    else if(defStatus !== "all" && st !== defStatus) return false;
+  }
+  if(skip !== "severity" && defSeverity !== "all" && t.severity !== defSeverity) return false;
+  if(skip !== "priority"){
+    if(defPriority === "__none"){ if(t.priority) return false; }
+    else if(defPriority !== "all" && t.priority !== defPriority) return false;
+  }
+  if(skip !== "owner"){
+    if(defOwner === "__none"){ if(t.owner) return false; }
+    else if(defOwner !== "all" && t.owner !== defOwner) return false;
+  }
+  if(skip !== "version"){
+    if(defVersion === "__none"){ if(t.foundVersionId) return false; }
+    else if(defVersion !== "all" && t.foundVersionId !== defVersion) return false;
+  }
+  if(skip !== "cat"){
+    if(defCat === "__none"){ if(t.categoryId) return false; }
+    else if(defCat !== "all" && t.categoryId !== defCat) return false;
+  }
+  if(skip !== "tag"){
+    if(defTag === "__none"){ if((t.tags || []).length) return false; }
+    else if(defTag !== "all" && (t.tags || []).indexOf(defTag) === -1) return false;
+  }
+  var q = defSearch.trim().toLowerCase();
+  if(skip !== "q" && q){
+    var hay = [t.id, t.title, t.owner, t.environment, defectCatName(t.categoryId)]
+      .concat(t.tags || [])
+      .concat(defectLinkedCases(t).map(function(l){ return l.caseId + " " + l.caseTitle; }))
+      .join(" ").toLowerCase();
+    if(hay.indexOf(q) === -1) return false;
+  }
+  return true;
+}
+function defectFacet(skip){
+  return defects.filter(function(t){ return defectMatches(t, skip); });
+}
+function facetOpt(value, label, count, current){
+  if(!count && value !== current && value !== "all") return "";
+  return '<option value="' + esc(value) + '">' + esc(label) + "（" + count + "）</option>";
+}
 function syncDefectFilters(){
   syncDefectProjectSel();
-  var owners = defectOwnerList();
+  var ownerCounts = {}, ownerList = [];
+  defectFacet("owner").forEach(function(t){
+    var name = t.owner || "__none";
+    if(ownerCounts[name] === undefined){ ownerCounts[name] = 0; if(name !== "__none") ownerList.push(name); }
+    ownerCounts[name]++;
+  });
+  ownerList.sort(function(a, b){ return a.localeCompare(b, "zh-Hans-CN"); });
+  /* 已选值即使在当前组合下为 0 也要保留：补进候选并显示（0），避免应用视图后条件被静默清掉 */
+  if(defOwner !== "all" && defOwner !== "__none" && ownerList.indexOf(defOwner) === -1
+    && defects.some(function(t){ return t.owner === defOwner; })){
+    ownerList.push(defOwner);
+    ownerCounts[defOwner] = 0;
+    ownerList.sort(function(a, b){ return a.localeCompare(b, "zh-Hans-CN"); });
+  }
+  var validOwner = defOwner === "all" || defOwner === "__none"
+    || defects.some(function(t){ return t.owner === defOwner; });
+  if(!validOwner) defOwner = "all";
   var ownerSel = $("tcDefOwner");
   if(ownerSel){
-    var validOwner = defOwner === "all" || defOwner === "__none" || owners.indexOf(defOwner) !== -1;
-    if(!validOwner) defOwner = "all";
-    ownerSel.innerHTML = '<option value="all">负责人：全部</option>'
-      + owners.map(function(o){ return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join("")
-      + '<option value="__none">未指派</option>';
+    ownerSel.innerHTML = facetOpt("all", "负责人：全部", defectFacet("owner").length, defOwner)
+      + ownerList.map(function(o){ return facetOpt(o, o, ownerCounts[o] || 0, defOwner); }).join("")
+      + facetOpt("__none", "未指派", ownerCounts.__none || 0, defOwner);
     ownerSel.value = defOwner;
   }
+  var verCounts = {};
+  defectFacet("version").forEach(function(t){
+    var key = t.foundVersionId || "__none";
+    verCounts[key] = (verCounts[key] || 0) + 1;
+  });
+  var validVer = defVersion === "all" || defVersion === "__none"
+    || defectVersions.some(function(v){ return v.id === defVersion; });
+  if(!validVer) defVersion = "all";
   var verSel = $("tcDefVersion");
   if(verSel){
-    var validVer = defVersion === "all" || defVersion === "__none"
-      || defectVersions.some(function(v){ return v.id === defVersion; });
-    if(!validVer) defVersion = "all";
-    verSel.innerHTML = '<option value="all">发现版本：全部</option>'
+    verSel.innerHTML = facetOpt("all", "发现版本：全部", defectFacet("version").length, defVersion)
       + defectVersions.map(function(v){
         var label = (!defReqId && v.projectName ? v.projectName + " · " : "") + (v.name || v.id);
-        return '<option value="' + esc(v.id) + '">' + esc(label) + '</option>';
+        return facetOpt(v.id, label, verCounts[v.id] || 0, defVersion);
       }).join("")
-      + '<option value="__none">未填</option>';
+      + facetOpt("__none", "未填写", verCounts.__none || 0, defVersion);
     verSel.value = defVersion;
   }
+  var priCounts = {};
+  defectFacet("priority").forEach(function(t){
+    var key = t.priority || "__none";
+    priCounts[key] = (priCounts[key] || 0) + 1;
+  });
+  if(defPriority !== "all" && defPriority !== "__none" && PRIORITIES.indexOf(defPriority) === -1) defPriority = "all";
+  var priSel = $("tcDefPriority");
+  if(priSel){
+    priSel.innerHTML = facetOpt("all", "优先级：全部", defectFacet("priority").length, defPriority)
+      + PRIORITIES.map(function(p){ return facetOpt(p, p + " · " + priName(p), priCounts[p] || 0, defPriority); }).join("")
+      + facetOpt("__none", "未设置", priCounts.__none || 0, defPriority);
+    priSel.value = defPriority;
+  }
+  var sevCounts = {};
+  defectFacet("severity").forEach(function(t){
+    var key = t.severity || "__none";
+    sevCounts[key] = (sevCounts[key] || 0) + 1;
+  });
   var sevSel = $("tcDefSeverity");
-  if(sevSel) sevSel.value = defSeverity;
+  if(sevSel){
+    var sevAll = defectFacet("severity").length;
+    var sevOpts = [["all", "严重度：全部", sevAll], ["blocker", "阻断", sevCounts.blocker || 0],
+      ["critical", "严重", sevCounts.critical || 0], ["major", "一般", sevCounts.major || 0],
+      ["minor", "轻微", sevCounts.minor || 0], ["__none", "未设置", sevCounts.__none || 0]];
+    sevSel.innerHTML = sevOpts.map(function(o){ return facetOpt(o[0], o[1], o[2], defSeverity); }).join("");
+    sevSel.value = defSeverity;
+  }
+  var stCounts = { open: 0, all: 0, todo: 0, fixing: 0, verify: 0, closed: 0 };
+  defectFacet("status").forEach(function(t){
+    var st = defectStatus(t);
+    stCounts.all++;
+    if(st !== "closed") stCounts.open++;
+    stCounts[st] = (stCounts[st] || 0) + 1;
+  });
   var stSel = $("tcDefStatus");
-  if(stSel) stSel.value = defStatus;
+  if(stSel){
+    var stOpts = [["open", "状态：未关闭"], ["all", "全部状态"], ["todo", "待修复"], ["fixing", "修复中"], ["verify", "待回归"], ["closed", "已关闭"]];
+    stSel.innerHTML = stOpts.map(function(o){
+      return facetOpt(o[0], o[1], stCounts[o[0]] || 0, defStatus);
+    }).join("");
+    stSel.value = defStatus;
+  }
+  var catCounts = {};
+  defectFacet("cat").forEach(function(t){
+    var key = t.categoryId || "__none";
+    catCounts[key] = (catCounts[key] || 0) + 1;
+  });
+  var catSel = $("tcDefCat");
+  if(catSel){
+    var catKeys = Object.keys(catCounts).filter(function(k){ return k !== "__none"; });
+    if(defCat !== "all" && defCat !== "__none" && catKeys.indexOf(defCat) === -1
+      && defects.some(function(t){ return t.categoryId === defCat; })){
+      catKeys.push(defCat);
+      catCounts[defCat] = 0;
+    }
+    catKeys.sort(function(a, b){ return defectCatName(a).localeCompare(defectCatName(b), "zh-Hans-CN"); });
+    catSel.innerHTML = facetOpt("all", "模块：全部", defectFacet("cat").length, defCat)
+      + catKeys.map(function(k){ return facetOpt(k, defectCatName(k), catCounts[k] || 0, defCat); }).join("")
+      + facetOpt("__none", "未指定模块", catCounts.__none || 0, defCat);
+    catSel.value = ["all", "__none"].indexOf(defCat) !== -1 || catKeys.indexOf(defCat) !== -1 ? defCat : "all";
+    if(catSel.value !== defCat) defCat = "all";
+  }
+  var tagCounts = {}, tagList = [];
+  defectFacet("tag").forEach(function(t){
+    var tags = t.tags || [];
+    if(!tags.length){ tagCounts.__none = (tagCounts.__none || 0) + 1; return; }
+    tags.forEach(function(tag){
+      if(tagCounts[tag] === undefined){ tagCounts[tag] = 0; tagList.push(tag); }
+      tagCounts[tag]++;
+    });
+  });
+  tagList.sort(function(a, b){ return a.localeCompare(b, "zh-Hans-CN"); });
+  if(defTag !== "all" && defTag !== "__none" && tagList.indexOf(defTag) === -1
+    && defects.some(function(t){ return (t.tags || []).indexOf(defTag) !== -1; })){
+    tagList.push(defTag);
+    tagCounts[defTag] = 0;
+    tagList.sort(function(a, b){ return a.localeCompare(b, "zh-Hans-CN"); });
+  }
+  var tagSel = $("tcDefTag");
+  if(tagSel){
+    tagSel.innerHTML = facetOpt("all", "标签：全部", defectFacet("tag").length, defTag)
+      + tagList.map(function(tag){ return facetOpt(tag, tag, tagCounts[tag] || 0, defTag); }).join("")
+      + facetOpt("__none", "无标签", tagCounts.__none || 0, defTag);
+    tagSel.value = ["all", "__none"].indexOf(defTag) !== -1 || tagList.indexOf(defTag) !== -1 ? defTag : "all";
+    if(tagSel.value !== defTag) defTag = "all";
+  }
+  /* 搜索范围跟随项目口径：缺陷默认汇总全部项目 */
+  var defSearchEl = $("tcDefSearch");
+  if(defSearchEl){
+    defSearchEl.placeholder = defReqId ? "搜索本项目缺陷…" : "搜索全部项目缺陷…";
+    defSearchEl.title = defReqId
+      ? "在所选项目内搜索缺陷 / 编号 / 用例 / 模块 / 标签"
+      : "在全部项目中搜索缺陷 / 编号 / 用例 / 模块 / 标签";
+    defSearchEl.setAttribute("aria-label", defReqId ? "在所选项目内搜索缺陷" : "在全部项目中搜索缺陷");
+  }
   /* 「未关闭」是缺陷页默认口径，算中性；其余偏离默认才高亮 */
   UI.markFiltered($("tcDefReq"), !defReqId);
   UI.markFiltered($("tcDefSeverity"), defSeverity === "all");
+  UI.markFiltered($("tcDefPriority"), defPriority === "all");
   UI.markFiltered($("tcDefStatus"), defStatus === "open");
   UI.markFiltered($("tcDefOwner"), defOwner === "all");
   UI.markFiltered($("tcDefVersion"), defVersion === "all");
+  UI.markFiltered($("tcDefCat"), defCat === "all");
+  UI.markFiltered($("tcDefTag"), defTag === "all");
 }
 function filteredDefects(){
-  var q = defSearch.trim().toLowerCase();
-  var list = defects.filter(function(t){
-    var st = defectStatus(t);
-    if(defStatus === "open"){ if(st === "closed") return false; }
-    else if(defStatus !== "all" && st !== defStatus) return false;
-    if(defSeverity !== "all" && t.severity !== defSeverity) return false;
-    if(defOwner === "__none"){ if(t.owner) return false; }
-    else if(defOwner !== "all" && t.owner !== defOwner) return false;
-    if(defVersion === "__none"){ if(t.foundVersionId) return false; }
-    else if(defVersion !== "all" && t.foundVersionId !== defVersion) return false;
-    if(q){
-      var hay = [t.id, t.title, t.owner, t.environment]
-        .concat(defectLinkedCases(t).map(function(l){ return l.caseId + " " + l.caseTitle; }))
-        .join(" ").toLowerCase();
-      if(hay.indexOf(q) === -1) return false;
-    }
-    return true;
-  });
+  var list = defects.filter(function(t){ return defectMatches(t, null); });
   return list.sort(function(a, b){
     var ra = SEVERITY_RANK[a.severity];
     var rb = SEVERITY_RANK[b.severity];
@@ -582,13 +746,13 @@ function renderDefects(){
   statsEl.innerHTML = defects.length ? defectStatsHTML() : "";
   var list = filteredDefects();
   if(!list.length){
-    var anyFilter = defStatus !== "open" || defSeverity !== "all" || defOwner !== "all"
-      || defVersion !== "all" || !!defSearch;
+    var anyFilter = defStatus !== "open" || defSeverity !== "all" || defPriority !== "all"
+      || defOwner !== "all" || defVersion !== "all" || defCat !== "all" || defTag !== "all" || !!defSearch;
     rowsEl.innerHTML = UI.emptyState({
       icon: anyFilter ? "filterOff" : "check",
       title: defSearch ? "没有匹配的缺陷" : (anyFilter ? "没有符合条件的缺陷"
         : (defReqId ? "当前项目还没有缺陷" : "这些项目还没有缺陷")),
-      text: defSearch ? "换个关键词或清空搜索试试" : (anyFilter ? "试试切换状态为「全部」，或清空严重度、负责人条件。" : "执行失败转缺陷，或用右上角「新建缺陷」录入。")
+      text: defSearch ? "换个关键词，或点「恢复默认」再试。" : (anyFilter ? "换个筛选条件，或点「恢复默认」再试。" : "执行失败转缺陷，或用右上角「新建缺陷」录入。")
     });
     footEl.textContent = "共 0 条";
     return;
@@ -604,6 +768,9 @@ function renderDefects(){
   if(defStatus === "open") meta += " · 默认不含已关闭";
   else if(defStatus === "all") meta += " · 含已关闭";
   else meta += " · " + (DEFECT_STATUSES[defStatus] ? DEFECT_STATUSES[defStatus].label : "");
+  if(defPriority !== "all") meta += " · 优先级 " + (defPriority === "__none" ? "未设置" : priName(defPriority));
+  if(defCat !== "all") meta += " · 模块 " + (defCat === "__none" ? "未指定模块" : defectCatName(defCat));
+  if(defTag !== "all") meta += " · 标签 " + (defTag === "__none" ? "无标签" : defTag);
   footEl.textContent = meta;
 }
 function defectVersionsFor(scopeIds){
@@ -720,14 +887,99 @@ function resetDefectFilters(){
   defReqId = "";
   defStatus = "open";
   defSeverity = "all";
+  defPriority = "all";
   defOwner = "all";
   defVersion = "all";
+  defCat = "all";
+  defTag = "all";
   defSearch = "";
   defectShown = DEFECT_PAGE;
   var q = $("tcDefSearch");
   if(q) q.value = "";
   if(scopeChanged) loadDefects(); else renderDefects();
-  toast("已恢复默认：全部项目 · 未关闭 · 全部严重度", "fs");
+  toast("已恢复默认：全部项目 · 未关闭，其他筛选条件已清空", "fs");
+}
+
+/* ---------- 缺陷保存视图（scope=defect：项目 / 状态 / 严重度 / 优先级 / 负责人 / 发现版本 / 搜索） ---------- */
+
+var defViewsMenuEl = $("tcDefViewsMenu");
+function defectViewParams(){
+  return {
+    scope: "defect", reqId: defReqId || "", severity: defSeverity, priority: defPriority,
+    status: defStatus, owner: defOwner, version: defVersion,
+    cat: defCat, tag: defTag, q: defSearch || ""
+  };
+}
+function defectViewMeaningful(p){
+  return !!(p.reqId || p.severity !== "all" || p.priority !== "all" || p.status !== "open"
+    || p.owner !== "all" || p.version !== "all" || p.cat !== "all" || p.tag !== "all" || p.q);
+}
+function applyDefectView(v){
+  var p;
+  try{ p = JSON.parse(v.params || "{}"); }
+  catch(e){ toast("视图参数损坏，无法应用", "bad"); return; }
+  if(!p || p.scope !== "defect"){
+    toast("视图参数不合法，无法应用（可删除后重新保存）", "bad");
+    return;
+  }
+  defReqId = p.reqId && rt.reqList.some(function(r){ return r.id === p.reqId; }) ? p.reqId : "";
+  defSeverity = typeof p.severity === "string" && p.severity ? p.severity : "all";
+  defPriority = typeof p.priority === "string" && p.priority ? p.priority : "all";
+  defStatus = typeof p.status === "string" && p.status ? p.status : "open";
+  defOwner = typeof p.owner === "string" && p.owner ? p.owner : "all";
+  defVersion = typeof p.version === "string" && p.version ? p.version : "all";
+  defCat = typeof p.cat === "string" && p.cat ? p.cat : "all";
+  defTag = typeof p.tag === "string" && p.tag ? p.tag : "all";
+  defSearch = typeof p.q === "string" ? p.q.toLowerCase() : "";
+  var q = $("tcDefSearch");
+  if(q) q.value = defSearch;
+  defectShown = DEFECT_PAGE;
+  syncDefectFilters();
+  syncTcDomain();
+  loadDefects();
+  toast("已应用视图「" + v.name + "」", "fs");
+}
+function saveDefectView(){
+  var p = defectViewParams();
+  if(!defectViewMeaningful(p)){ toast("先选择项目或设置筛选条件，再保存视图", "warn"); return; }
+  UI.showPrompt({
+    title: "保存缺陷视图",
+    desc: "保存当前项目范围、状态与筛选条件；同名保存将覆盖原视图",
+    label: "视图名称（≤20 字）", maxLength: 20, okText: "保存"
+  }).then(function(name){
+    if(!name) return;
+    var overwrite = savedViewsFor("defect").some(function(v){ return v.name === name; });
+    API.post("/api/views", { name: name, params: JSON.stringify(p) }).then(function(){
+      toast((overwrite ? "已覆盖视图「" : "已保存视图「") + name + "」", "fs");
+      loadViews().then(renderDefectViewsMenu);
+    }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
+  });
+}
+function deleteDefectView(id){
+  UI.showConfirm({ title: "删除视图", msg: "确定删除该缺陷视图？不影响缺陷数据。", okText: "删除视图" }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/views/" + encodeURIComponent(id)).then(function(){
+      toast("视图已删除", "fs");
+      loadViews().then(renderDefectViewsMenu);
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
+function renderDefectViewsMenu(){
+  if(!defViewsMenuEl) return;
+  var views = savedViewsFor("defect");
+  var html = '<div class="menu-title">缺陷视图</div>';
+  if(!views.length){
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的缺陷视图；选定项目或筛选条件后保存。</p></div>';
+  }else{
+    html += views.map(function(v){
+      return '<div class="menu-row">' +
+        '<button class="menu-item" type="button" data-tc-def-view="' + esc(v.id) + '" title="应用视图：' + esc(v.name) + '">' + esc(v.name) + '</button>' +
+        '<button class="icon-btn sm" type="button" data-tc-def-view-del="' + esc(v.id) + '" aria-label="删除视图" title="删除视图">' + icon("close", 12) + '</button>' +
+      '</div>';
+    }).join("");
+  }
+  html += '<div class="menu-foot"><button class="btn sm" type="button" data-tc-def-view-save>保存当前为视图</button></div>';
+  defViewsMenuEl.innerHTML = html;
 }
 function openDefectDrawer(id){
   if(!id) return;
@@ -1321,7 +1573,7 @@ function render(){
       $("tcList").innerHTML = UI.emptyState({
         icon: anyFilter ? "filterOff" : "checklist",
         title: searchText ? "没有匹配的用例" : (anyFilter ? "没有符合条件的用例" : "全部项目下还没有测试用例"),
-        text: searchText ? "换个关键词或清空搜索试试" : (anyFilter ? "换个筛选条件试试"
+        text: searchText ? "换个关键词，或点「清空筛选」再试。" : (anyFilter ? "换个筛选条件，或点「清空筛选」再试。"
           : (caseCreateTargets().length
             ? "点右上角「新建用例」，选择目标项目后录入第一条。"
             : "当前没有可写的项目；获得写权限后即可新建用例。"))
@@ -1342,7 +1594,7 @@ function render(){
     $("tcList").innerHTML = UI.emptyState({
       icon: anyFilter ? "filterOff" : "checklist",
       title: searchText ? "没有匹配的用例" : (anyFilter ? "没有符合条件的用例" : "还没有测试用例"),
-      text: searchText ? "换个关键词或清空搜索试试" : (anyFilter ? "换个筛选条件试试" : "点右上角「新建用例」录入第一条，执行后按结果统计。")
+      text: searchText ? "换个关键词，或点「清空筛选」再试。" : (anyFilter ? "换个筛选条件，或点「清空筛选」再试。" : "点右上角「新建用例」录入第一条，执行后按结果统计。")
     });
     return;
   }
@@ -1382,19 +1634,40 @@ function caseGroupHTML(g){
   return '<section class="tc-group" data-tc-group="' + esc(g.reqId) + '">' + head
     + '<div class="tc-group-rows">' + body + '</div>' + more + '</section>';
 }
-function fillFilterSelect(id, allLabel, values, noneLabel, state){
+function fillFilterSelect(id, allLabel, values, noneLabel, state, labelFn, counts){
   var sel = $(id);
-  var html = '<option value="all">' + allLabel + '</option>';
+  var hasCounts = !!counts && Object.keys(counts).length > 0;
+  var n = function(key){ return (counts && counts[key] != null) ? "（" + counts[key] + "）" : ""; };
+  var total = 0;
+  if(hasCounts){
+    Object.keys(counts).forEach(function(k){ total += Number(counts[k]) || 0; });
+  }
+  /* 与工作项 / 缺陷一致：零结果选项隐藏，当前已选中的保留，避免筛选项误导为空 */
+  if(hasCounts){
+    values = values.filter(function(v){ return (counts[v] || 0) > 0 || v === state(); });
+  }
+  var html = '<option value="all">' + allLabel + (hasCounts ? "（" + total + "）" : "") + '</option>';
   values.forEach(function(v){
-    html += '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+    html += '<option value="' + esc(v) + '">' + esc(labelFn ? labelFn(v) : v) + n(v) + '</option>';
   });
-  if(noneLabel){
-    html += '<option value="__none">' + noneLabel + '</option>';
+  if(noneLabel && (!hasCounts || (counts.__none || 0) > 0 || state() === "__none")){
+    html += '<option value="__none">' + noneLabel + n("__none") + '</option>';
   }
   sel.innerHTML = html;
-  var valid = state() === "all" || state() === "__none" || values.indexOf(state()) !== -1;
+  var valid = state() === "all" || (state() === "__none" && noneLabel)
+    || values.indexOf(state()) !== -1;
   if(!valid) state("all");
   sel.value = state();
+}
+function caseFilterCount(){
+  var n = 0;
+  if(statusFilter !== "all") n++;
+  if(!caseScopeAll && modFilter !== "all") n++;
+  if(priFilter !== "all") n++;
+  if(ownerFilter !== "all") n++;
+  if(bugOnly) n++;
+  if(searchText) n++;
+  return n;
 }
 function syncFilterOptions(){
   /* 候选值来自服务端 facets，不受当前筛选与已加载条数影响 */
@@ -1403,18 +1676,39 @@ function syncFilterOptions(){
   /* 模块只在项目内有意：全部项目下不提供模块筛选，避免跨项目同名模块被误读为同一范围 */
   var modSel = $("tcModule");
   if(modSel) modSel.hidden = caseScopeAll;
-  fillFilterSelect("tcModule", "模块：全部", modules, "未填模块", function(v){
+  fillFilterSelect("tcModule", "模块：全部", modules, "未指定模块", function(v){
     if(v === undefined) return modFilter;
     modFilter = v;
-  });
-  fillFilterSelect("tcOwner", "执行人：全部", owners, null, function(v){
+  }, null, caseFacetCounts.module);
+  fillFilterSelect("tcOwner", "执行人：全部", owners, "未指定执行人", function(v){
     if(v === undefined) return ownerFilter;
     ownerFilter = v;
-  });
+  }, null, caseFacetCounts.owner);
   fillFilterSelect("tcPri", "优先级：全部", PRIORITIES, "未设置", function(v){
     if(v === undefined) return priFilter;
     priFilter = v;
+  }, function(p){
+    return p + " · " + priName(p);
+  }, caseFacetCounts.priority);
+  var statusLabels = { all:"全部", untested:"未执行", passed:"通过", failed:"失败", blocked:"阻塞", skipped:"跳过" };
+  var statusCounts = caseFacetCounts.status || {};
+  document.querySelectorAll("#tcStatusSeg [data-tc-status]").forEach(function(b){
+    var key = b.dataset.tcStatus;
+    var count = key === "all" ? statusCounts.__all : (key === "untested" ? statusCounts.__untested : statusCounts[key]);
+    if(count == null) count = 0;
+    var label = statusLabels[key] || b.textContent.trim();
+    b.textContent = label + " " + count;
+    b.title = label + " · " + count + " 条";
   });
+  /* 搜索范围跟随项目口径，避免切到「全部项目」后仍提示「本项目」 */
+  var caseSearchEl = $("tcSearch");
+  if(caseSearchEl){
+    caseSearchEl.placeholder = caseScopeAll ? "搜索全部项目用例…" : "搜索本项目用例…";
+    caseSearchEl.title = caseScopeAll
+      ? "在全部项目中搜索用例 / 前置 / 测试数据 / 步骤"
+      : "在所选项目内搜索用例 / 前置 / 测试数据 / 步骤";
+    caseSearchEl.setAttribute("aria-label", caseScopeAll ? "在全部项目中搜索测试用例" : "在所选项目内搜索测试用例");
+  }
   $("tcModuleList").innerHTML = modules.map(function(m){
     return '<option value="' + esc(m) + '"></option>';
   }).join("");
@@ -1425,10 +1719,13 @@ function syncFilterOptions(){
     if(el) UI.markFiltered(el, el.value === "all");
   });
   var clearBtn = $("tcClearFilter");
-  if(clearBtn){
-    clearBtn.hidden = tcMode !== "cases" || !(statusFilter !== "all"
-      || (!caseScopeAll && modFilter !== "all") || priFilter !== "all"
-      || ownerFilter !== "all" || bugOnly || !!searchText);
+  if(clearBtn) clearBtn.hidden = tcMode !== "cases" || !caseFilterCount();
+  /* 手机上筛选面板默认收起：按钮上带条件数，收起时也知道有几项在生效 */
+  var filterCount = $("tcFilterCount");
+  if(filterCount){
+    var n = caseFilterCount();
+    filterCount.hidden = !n;
+    filterCount.textContent = n;
   }
 }
 function renderStats(){
@@ -1442,9 +1739,10 @@ function renderStats(){
     [s.skipped, "跳过", "mute"]
   ];
   $("tcStats").innerHTML = items.map(function(it){
-    /* 0 值统一中性：数字为 0 时不借用通过 / 失败的颜色 */
-    var cls = (Number(it[0]) || 0) === 0 ? "mute" : it[2];
-    return '<span class="tc-stat ' + cls + '"><b>' + it[0] + '</b>' + it[1] + '</span>';
+    /* 0 值统一中性：数字为 0 时不借用通过 / 失败的颜色；老接口缺字段按 0 显示 */
+    var n = Number(it[0]) || 0;
+    var cls = n === 0 ? "mute" : it[2];
+    return '<span class="tc-stat ' + cls + '"><b>' + n + '</b>' + it[1] + '</span>';
   }).join("");
 }
 
@@ -1602,6 +1900,7 @@ function syncModeUI(){
   /* 缺陷页用自己的项目范围；隐藏公共项目下拉，避免同页两个项目控件 */
   var reqSel = $("tcReq");
   if(reqSel) reqSel.style.display = def ? "none" : "";
+  syncPlanBar();
   if(tcMode !== "cases" && filterBar && filterBar.classList.contains("is-open")){
     filterBar.classList.remove("is-open");
     if(filterBtn) filterBtn.setAttribute("aria-expanded", "false");
@@ -2665,6 +2964,9 @@ var planDialogSeq = 0;
 var planPickCases = [];
 var pickingPlan = false;
 var planGroupErrors = {};     /* 全部项目下记录拉取失败的项目，渲染时逐项目提示 */
+var planSearch = "";          /* 计划搜索：名称 / 版本 / 备注 / 项目名 */
+var planStatus = "all";       /* 计划状态：all / draft / running / done */
+var planSearchTimer = null;
 
 var PLAN_STATUS = { draft: ["草稿", "mute"], running: ["执行中", "warn"], done: ["已完成", "ok"] };
 function planBadgeHTML(s){
@@ -2676,6 +2978,58 @@ function planNextStatus(s){
 }
 function planNextLabel(s){
   return s === "draft" ? "开始执行" : (s === "running" ? "标记完成" : "重新打开");
+}
+function planHasFilter(){ return !!(planSearch || planStatus !== "all"); }
+function filteredPlans(){
+  var q = planSearch.trim().toLowerCase();
+  return plans.filter(function(p){
+    if(planStatus !== "all" && p.status !== planStatus) return false;
+    if(q){
+      var hay = [p.name, p.versionName, p.note, reqNameOf(p.reqId)].join(" ").toLowerCase();
+      if(hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+}
+function syncPlanBar(){
+  var bar = $("tcPlanBar");
+  if(!bar) return;
+  bar.hidden = tcMode !== "plans" || !!planDetail;
+  var s = $("tcPlanSearch");
+  if(s){
+    s.placeholder = caseScopeAll ? "搜索全部项目计划…" : "搜索本项目计划…";
+    s.title = caseScopeAll ? "在全部项目中搜索计划名称 / 版本" : "在所选项目内搜索计划名称 / 版本";
+    s.setAttribute("aria-label", caseScopeAll ? "在全部项目中搜索测试计划" : "在所选项目内搜索测试计划");
+  }
+  var st = $("tcPlanStatus");
+  if(st){
+    st.value = planStatus;
+    UI.markFiltered(st, planStatus === "all");
+  }
+  var clr = $("tcPlanClearFilter");
+  if(clr) clr.hidden = !planHasFilter();
+}
+function clearPlanFilters(){
+  if(planSearchTimer){ clearTimeout(planSearchTimer); planSearchTimer = null; }
+  var had = planHasFilter();
+  planSearch = "";
+  planStatus = "all";
+  var s = $("tcPlanSearch");
+  if(s) s.value = "";
+  syncPlanBar();
+  renderPlans();
+  if(had) toast("已清空计划筛选", "fs");
+}
+function planFilterEmptyHTML(){
+  return UI.emptyState({
+    icon: "search", title: "没有匹配的测试计划",
+    text: "调整搜索关键词或状态筛选，也可以清空筛选后再看。",
+    actionLabel: "清空计划筛选"
+  });
+}
+function wirePlanFilterEmpty(){
+  var btn = $("tcPlans").querySelector(".empty-state .btn");
+  if(btn) btn.addEventListener("click", clearPlanFilters);
 }
 
 function loadPlans(){
@@ -2800,22 +3154,27 @@ function planRowHTML(p){
 function renderPlans(){
   var box = $("tcPlans");
   if(!box) return;
+  syncPlanBar();
   if(planDetail){ renderPlanDetail(); return; }
+  var list = filteredPlans();
   if(caseScopeAll){
     var projects = caseScopeVisibleProjects();
-    if(!plans.length && !Object.keys(planGroupErrors).length){
-      box.innerHTML = UI.emptyState({
-        icon: "checklist", title: "全部项目下还没有测试计划",
-        text: caseScopeVisibleProjects().some(function(p){ return canEditReq(p.id); })
-          ? "点右上角「新建计划」，选择目标项目后创建；计划按项目收纳，全部项目只做汇总浏览。"
-          : "当前没有可写的项目；获得写权限后即可新建计划。"
-      });
+    if(!list.length && !Object.keys(planGroupErrors).length){
+      box.innerHTML = planHasFilter()
+        ? planFilterEmptyHTML()
+        : UI.emptyState({
+          icon: "checklist", title: "全部项目下还没有测试计划",
+          text: caseScopeVisibleProjects().some(function(p){ return canEditReq(p.id); })
+            ? "点右上角「新建计划」，选择目标项目后创建；计划按项目收纳，全部项目只做汇总浏览。"
+            : "当前没有可写的项目；获得写权限后即可新建计划。"
+        });
+      if(planHasFilter()) wirePlanFilterEmpty();
       return;
     }
     box.innerHTML = projects.filter(function(p){
-      return planGroupErrors[p.id] || plans.some(function(x){ return x.reqId === p.id; });
+      return planGroupErrors[p.id] || list.some(function(x){ return x.reqId === p.id; });
     }).map(function(p){
-      var rows = plans.filter(function(x){ return x.reqId === p.id; });
+      var rows = list.filter(function(x){ return x.reqId === p.id; });
       var body;
       if(planGroupErrors[p.id]) body = '<p class="tc-group-empty">该项目计划加载失败；可切到单个项目重试。</p>';
       else if(!rows.length) body = '<p class="tc-group-empty">还没有测试计划</p>';
@@ -2828,21 +3187,24 @@ function renderPlans(){
     }).join("");
     return;
   }
-  if(!plans.length){
-    box.innerHTML = UI.emptyState({
+  if(!list.length){
+    box.innerHTML = planHasFilter() ? planFilterEmptyHTML() : UI.emptyState({
       icon: "checklist", title: "还没有测试计划",
       text: isWritable()
         ? "点右上角「新建计划」：圈选一批用例，批量记录结果，完成即留痕。"
         : "测试计划按项目收纳；你在该项目只有查看权限。"
     });
+    if(planHasFilter()) wirePlanFilterEmpty();
     return;
   }
-  box.innerHTML = plans.map(planRowHTML).join("");
+  box.innerHTML = list.map(planRowHTML).join("");
 }
 
 function openPlanDetail(id){
   var seq = ++planDetailSeq;
   planSel = {};
+  var bar = $("tcPlanBar");
+  if(bar) bar.hidden = true;
   $("tcPlans").innerHTML = UI.skeletonRows(4);
   Promise.all([
     API.get("/api/test-plans/" + encodeURIComponent(id)),
@@ -3365,6 +3727,7 @@ $("tcStatusSeg").addEventListener("click", function(e){
 });
 if($("tcClearFilter")){
   $("tcClearFilter").addEventListener("click", function(){
+    var had = caseFilterCount();
     if(caseSearchTimer){ clearTimeout(caseSearchTimer); caseSearchTimer = null; }
     searchText = "";
     statusFilter = "all";
@@ -3375,6 +3738,7 @@ if($("tcClearFilter")){
     if($("tcSearch")) $("tcSearch").value = "";
     syncFilterOptions();
     loadCases();
+    if(had) toast(caseScopeAll ? "已清空用例筛选" : "已清空用例筛选，保留当前项目", "fs");
   });
 }
 /* 缺陷 tab：筛选在前端派生（状态由列与回归结果计算），数据仍走任务列表 */
@@ -3397,17 +3761,44 @@ $("tcDefSearch").addEventListener("input", function(){
     renderDefects();
   }, 300);
 });
-["tcDefSeverity", "tcDefStatus", "tcDefOwner", "tcDefVersion"].forEach(function(id){
+["tcDefSeverity", "tcDefPriority", "tcDefStatus", "tcDefOwner", "tcDefVersion", "tcDefCat", "tcDefTag"].forEach(function(id){
   $(id).addEventListener("change", function(){
     defSeverity = $("tcDefSeverity").value;
+    defPriority = $("tcDefPriority").value;
     defStatus = $("tcDefStatus").value;
     defOwner = $("tcDefOwner").value;
     defVersion = $("tcDefVersion").value;
+    defCat = $("tcDefCat").value;
+    defTag = $("tcDefTag").value;
     defectShown = DEFECT_PAGE;
     renderDefects();
   });
 });
 $("tcDefReset").addEventListener("click", resetDefectFilters);
+if($("tcDefViewsBtn") && defViewsMenuEl){
+  $("tcDefViewsBtn").addEventListener("click", function(){
+    if(UI.popOpen(defViewsMenuEl)){ UI.closeAllPops(); return; }
+    renderDefectViewsMenu();
+    UI.openPop(defViewsMenuEl, $("tcDefViewsBtn"), { align: "right", width: 260 });
+    loadViews().then(renderDefectViewsMenu);
+  });
+  defViewsMenuEl.addEventListener("click", function(e){
+    var ap = e.target.closest("[data-tc-def-view]");
+    if(ap){
+      for(var i = 0; i < rt.savedViews.length; i++){
+        if(String(rt.savedViews[i].id) === String(ap.dataset.tcDefView)){
+          applyDefectView(rt.savedViews[i]);
+          UI.closeAllPops();
+          return;
+        }
+      }
+      return;
+    }
+    var dl = e.target.closest("[data-tc-def-view-del]");
+    if(dl){ deleteDefectView(dl.dataset.tcDefViewDel); return; }
+    if(e.target.closest("[data-tc-def-view-save]")){ UI.closeAllPops(); saveDefectView(); }
+  });
+}
 /* 全部项目范围下写操作必须先落到一个具体项目，不能让缺陷静默建到第一个项目 */
 function openDefectCreate(){
   var targets = defectCreateTargets();
@@ -3488,7 +3879,7 @@ if(tcViewsBtn && tcViewsMenuEl){
   tcViewsBtn.addEventListener("click", function(){
     if(UI.popOpen(tcViewsMenuEl)){ UI.closeAllPops(); return; }
     renderTcViewsMenu();
-    UI.openPop(tcViewsMenuEl, tcViewsBtn, { align: "left", width: 260 });
+    UI.openPop(tcViewsMenuEl, tcViewsBtn, { align: "right", width: 260 });
     loadViews().then(renderTcViewsMenu);
   });
   tcViewsMenuEl.addEventListener("click", function(e){
@@ -3546,6 +3937,27 @@ $("tcCsvFile").addEventListener("change", function(){
 
 /* 测试计划：列表 → 详情 → 批量执行 */
 $("btnPlanNew").addEventListener("click", openPlanCreate);
+if($("tcPlanSearch")){
+  $("tcPlanSearch").addEventListener("input", function(){
+    var value = this.value.trim().toLowerCase();
+    if(value === planSearch) return;
+    planSearch = value;
+    syncPlanBar();
+    if(planSearchTimer) clearTimeout(planSearchTimer);
+    planSearchTimer = setTimeout(function(){
+      planSearchTimer = null;
+      renderPlans();
+    }, 300);
+  });
+}
+if($("tcPlanStatus")){
+  $("tcPlanStatus").addEventListener("change", function(){
+    planStatus = this.value;
+    syncPlanBar();
+    renderPlans();
+  });
+}
+if($("tcPlanClearFilter")) $("tcPlanClearFilter").addEventListener("click", clearPlanFilters);
 $("tcPlans").addEventListener("click", function(e){
   var b;
   if((b = e.target.closest("[data-plan-back]"))){

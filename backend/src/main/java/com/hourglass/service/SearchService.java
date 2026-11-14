@@ -1,5 +1,6 @@
 package com.hourglass.service;
 
+import com.hourglass.common.Nos;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.BoardQuery;
 import com.hourglass.dto.DemandPage;
@@ -89,7 +90,7 @@ public class SearchService {
             h.setReqId(t.getReqId());
             h.setReqName(projectNames.get(t.getReqId()));
             h.setStatus(t.getBoardColumn());
-            h.setExtra(t.getOwner());
+            h.setExtra(taskExtra(t));
             h.setUpdatedAt(t.getUpdatedAt());
             hits.add(h);
         }
@@ -127,6 +128,16 @@ public class SearchService {
             }
         });
         return hits;
+    }
+
+    /** 按编号搜到时要能看出命中理由：编号排在负责人前；未取号保持原样 */
+    private static String taskExtra(Task t) {
+        String no = Nos.workItem(t.getItemNo());
+        if (no.isEmpty()) {
+            return t.getOwner();
+        }
+        String owner = Texts.trimToNull(t.getOwner());
+        return owner == null ? no : no + " · " + owner;
     }
 
     private static int typeOrder(String type) {

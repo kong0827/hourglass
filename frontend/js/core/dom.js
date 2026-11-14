@@ -27,7 +27,7 @@ var chipsOwner = $("chipsOwner"), chipsPri = $("chipsPri"), chipsType = $("chips
 var filterActions = $("filterActions"), selectedSummary = $("selectedSummary");
 var moreFilterMenu = $("moreFilterMenu"), moreFilterCount = $("moreFilterCount");
 var dimMenu = $("fbDimMenu"), dimGroup = $("fgDims");
-var viewBox = $("viewBox");
+var viewBox = $("viewsMenu");
 var reqListEl = $("reqList");
 var reqExpanded = {};
 var iRemindTarget = $("iRemindTarget"), iBlocked = $("iBlocked"), iBlockedReason = $("iBlockedReason");

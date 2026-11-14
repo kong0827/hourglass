@@ -11,6 +11,8 @@ import java.time.LocalDate;
 public class TaskFacetRow {
 
     private String owner;
+    /** 测试负责人显示名快照；front-end 用它做筛选候选 */
+    private String testOwner;
     private String priority;
     private String categoryId;
     private String reqId;

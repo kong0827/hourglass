@@ -42,6 +42,10 @@ public interface DevBranchMapper {
             @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
             @Param("branchIds") List<String> branchIds);
 
+    /** 版本筛选候选：当前项目/可见范围内分支命中的影响版本及分支数 */
+    List<com.hourglass.dto.BranchVersionTag> selectVersionFacets(
+            @Param("q") com.hourglass.dto.BranchQuery q);
+
     /**
      * 分支「归属项目」标签：task.branch_id × task.req_id 推导（无独立绑定）。
      * viewerId 非空时按项目可见性过滤（与 selectVisibleByWorkspace 同口径）。

@@ -4,20 +4,27 @@
 export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） ==================== -->
 <div class="drawer-layer" id="taskDrawer" role="dialog" aria-modal="true" aria-labelledby="taskDrawerTitle">
   <div class="drawer-scrim" id="taskScrim"></div>
-  <form class="drawer" id="taskForm" novalidate>
+  <form class="drawer" id="taskForm" novalidate tabindex="-1">
     <div class="sheet-grab" aria-hidden="true"></div>
     <div class="drawer-head">
       <span class="head-icon t-task" id="taskDrawerIcon" aria-hidden="true">
         <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.4" y="3.8" width="11.2" height="12.8" rx="2"/><path d="M7.6 3.8V2.6h4.8v1.2M7.4 8.2h5.2M7.4 11.2h3.6"/></svg>
       </span>
       <div class="head-txt">
-        <h2 id="taskDrawerTitle">新建工作项</h2>
+        <div class="head-title-line">
+          <h2 id="taskDrawerTitle" title="点击编辑标题">新建工作项</h2>
+          <button class="ds-status" type="button" id="drawerStatusPill" hidden aria-haspopup="menu" title="切换工作项状态">
+            <i id="drawerStatusDot"></i><span id="drawerStatusName">—</span>
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
+          </button>
+          <button class="drawer-no" type="button" id="drawerItemNo" hidden title="点击复制编号"></button>
+        </div>
         <div class="head-sub" id="taskDrawerSub"></div>
       </div>
       <div class="head-tools">
-        <button class="btn sm" type="button" id="btnTaskNew" hidden title="按当前工作项所属项目新建工作项">
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
-          新建工作项
+        <button class="btn sm" type="button" id="btnDrawerEdit" hidden title="编辑工作项字段">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.6l3.6 3.6M4 16l1-4 9.4-9.4a1.6 1.6 0 0 1 2.3 0l1.7 1.7a1.6 1.6 0 0 1 0 2.3L9 16.2z"/></svg>
+          编辑
         </button>
         <button class="btn sm" type="button" id="btnTaskWatch" hidden aria-pressed="false">
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg>
@@ -40,6 +47,10 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.6h9.2L16.4 6.8v9.6H3.6z"/><path d="M7 3.6v4.2h5.4V3.6M7 16.4v-3.6h6v3.6"/></svg>
               保存并继续
             </button>
+            <button class="menu-item" type="button" id="btnTaskNew" hidden title="按当前工作项所属项目新建工作项">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
+              按当前项目新建工作项
+            </button>
             <div class="menu-sep"></div>
             <button class="menu-item danger" type="button" data-task-more="trash" id="taskMoreTrash">
               <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/></svg>
@@ -53,13 +64,162 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
       </div>
     </div>
 
+    <!-- 阅读优先：详情按「概览 / 执行 / 关联 / 动态」分区，避免长表单一次铺满 -->
+    <div class="drawer-tabs" id="drawerTabs" role="tablist" hidden>
+      <button class="drawer-tab" type="button" role="tab" data-drawer-tab="overview" aria-selected="true">概览</button>
+      <button class="drawer-tab" type="button" role="tab" data-drawer-tab="exec" aria-selected="false">执行 <span class="tab-cnt" id="tabExecCount"></span></button>
+      <button class="drawer-tab" type="button" role="tab" data-drawer-tab="rel" aria-selected="false">关联</button>
+      <button class="drawer-tab" type="button" role="tab" data-drawer-tab="activity" aria-selected="false">动态 <span class="tab-cnt" id="tabActivityCount"></span></button>
+    </div>
+
     <div class="drawer-notice" id="drawerNotice" hidden>
       <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M10 6.2v4.2"/><path d="M10 13.6h.01"/><circle cx="10" cy="10" r="7.6"/></svg>
       <span id="drawerNoticeText"></span>
       <button type="button" id="drawerNoticeReload">点击刷新</button>
     </div>
 
-    <div class="drawer-body">
+    <div class="drawer-body" id="drawerBody">
+      <!-- ==================== 概览 ==================== -->
+      <div class="drawer-pane" data-drawer-pane="overview">
+        <!-- 阅读态概览：一屏看全状态与进度 -->
+        <div class="read-overview" id="drawerReadOverview" hidden>
+          <div class="read-facts wi-facts" id="readFacts" aria-label="工作项概览">
+            <!-- 第一层：谁做、多急、何时交，决定要不要马上处理 -->
+            <div class="wi-row wi-row-main">
+              <div class="rf wi-card rf-edit" data-fact-edit="owner" role="button" tabindex="0" title="点击修改负责人">
+                <span class="rf-k">负责人</span>
+                <b class="rf-v rf-v-lg" id="rfOwner">—</b>
+              </div>
+              <div class="rf wi-card rf-edit" data-fact-edit="pri" role="button" tabindex="0" title="点击修改优先级">
+                <span class="rf-k">优先级</span>
+                <b class="rf-v rf-v-lg" id="rfPri">—</b>
+              </div>
+              <div class="rf wi-card rf-edit rf-date" id="rfDateWrap" data-fact-edit="dateRange" role="button" tabindex="0" title="点击修改计划时间">
+                <span class="rf-k">计划时间</span>
+                <b class="rf-v rf-v-lg" id="rfDateRange">—</b>
+                <span class="rf-sub" id="rfDateNote"></span>
+              </div>
+            </div>
+
+            <!-- 第二层：做到哪了。进度与工时同处一条读数带，横向铺开，不再各占一张大卡 -->
+            <div class="wi-card wi-delivery">
+              <div class="rf wi-delivery-cell wi-prog-cell" id="rfProgWrap">
+                <span class="rf-k">进度</span>
+                <div class="rf-v" id="rfProgManual">
+                  <b class="rf-stat-num" id="rfProg">0%</b>
+                  <input id="rfProgRange" type="range" min="0" max="100" step="5" value="0" aria-label="拖动调整进度" />
+                </div>
+                <div class="rf-v" id="rfProgStatic" hidden>
+                  <b class="rf-stat-num" id="rfProgText">0%</b>
+                  <span class="rf-prog"><i id="rfProgBar"></i></span>
+                </div>
+                <span class="rf-sub rf-prog-note" id="rfProgNote"></span>
+              </div>
+              <div class="rf rf-edit wi-delivery-cell wi-hours-cell" id="rfHoursWrap" data-fact-edit="estimate" role="button" tabindex="0" title="点击修改预估工时">
+                <span class="rf-k">实际工时</span>
+                <b class="rf-v rf-v-lg" id="rfHours">—</b>
+                <span class="rf-sub" id="rfHoursNote"></span>
+              </div>
+            </div>
+
+            <!-- 第三层：归属与证据，安静的一行，图标定性、列对齐 -->
+            <div class="wi-card wi-meta-card">
+              <div class="rf rf-edit rf-meta" data-fact-edit="project" role="button" tabindex="0" title="点击切换所属项目">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 6A2 2 0 0 1 5.2 4h3.2l1.8 2.2h5.6a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H5.2a2 2 0 0 1-2-2Z"/></svg></span>项目</span><b class="rf-v" id="rfProject">—</b>
+              </div>
+              <div class="rf rf-edit rf-meta" data-fact-edit="type" role="button" tabindex="0" title="点击修改工作项类型">
+                <span class="rf-k"><span class="rf-meta-ico rf-type-ico" id="rfTypeIco" aria-hidden="true"></span>类型</span><b class="rf-v" id="rfType">—</b>
+              </div>
+              <div class="rf rf-edit rf-meta" data-fact-edit="category" role="button" tabindex="0" title="点击修改模块">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="3.4" width="5.6" height="5.6" rx="1.4"/><rect x="11" y="3.4" width="5.6" height="5.6" rx="1.4"/><rect x="3.4" y="11" width="5.6" height="5.6" rx="1.4"/><rect x="11" y="11" width="5.6" height="5.6" rx="1.4"/></svg></span>模块</span><b class="rf-v" id="rfCategory">—</b>
+              </div>
+              <div class="rf rf-edit rf-jump rf-meta" data-fact-jump="version" role="button" tabindex="0" title="点击编辑计划版本">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 3.4v13.2"/><path d="M5.2 4.4h9.4l-2 3.2 2 3.2H5.2z"/></svg></span>计划版本</span><b class="rf-v" id="rfVersion">—</b>
+              </div>
+              <div class="rf rf-edit rf-jump rf-meta" data-fact-goto="attach" role="button" tabindex="0" title="查看附件">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 6.4 7.2 11.8a2.2 2.2 0 0 0 3.1 3.1l5.4-5.4a3.8 3.8 0 0 0-5.4-5.4L4.8 9.6a5.4 5.4 0 0 0 7.6 7.6l3.4-3.4"/></svg></span>附件</span><b class="rf-v" id="rfAttach">—</b>
+              </div>
+              <div class="rf rf-edit rf-meta" data-fact-edit="tags" role="button" tabindex="0" title="点击修改标签">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg></span>标签</span><b class="rf-v rf-tags" id="rfTags">—</b>
+              </div>
+            </div>
+          </div>
+
+          <!-- 测试交接：提测时间 / 测试负责人 / 测试时间窗；未指派时显式提示 -->
+          <section class="read-card test-card" id="readTestCard" hidden>
+            <div class="read-card-head">
+              <h3>测试 <span class="test-phase" id="readTestPhase">—</span></h3>
+              <button class="link-btn" type="button" id="readTestReassign" hidden>改派</button>
+            </div>
+            <div class="test-grid">
+              <div class="test-cell is-who">
+                <div class="test-k">测试负责人</div>
+                <div class="test-v" id="readTestOwner">—</div>
+                <div class="test-sub" id="readTestOwnerSub"></div>
+              </div>
+              <div class="test-cell">
+                <div class="test-k">提测时间</div>
+                <div class="test-v" id="readTestRequested">—</div>
+                <div class="test-sub" id="readTestRequestedSub"></div>
+              </div>
+              <div class="test-cell">
+                <div class="test-k">开始测试</div>
+                <div class="test-v" id="readTestStart">—</div>
+                <div class="test-sub" id="readTestStartSub"></div>
+              </div>
+              <div class="test-cell">
+                <div class="test-k">结束测试</div>
+                <div class="test-v" id="readTestEnd">—</div>
+                <div class="test-sub" id="readTestEndSub"></div>
+              </div>
+            </div>
+            <div class="test-note" id="readTestNote" hidden></div>
+            <div class="test-acts" id="readTestActs" hidden>
+              <span class="test-hint" id="readTestHint"></span>
+              <button class="btn sm" type="button" id="readTestClaim">开始测试</button>
+              <button class="btn sm danger" type="button" id="readTestReject">退回…</button>
+              <button class="btn sm primary" type="button" id="readTestPass">通过并完成</button>
+            </div>
+          </section>
+
+          <section class="read-card">
+            <div class="read-card-head">
+              <h3>描述</h3>
+              <span class="foot-note" id="readDescHint">点击正文修改 · 失焦保存</span>
+            </div>
+            <div class="read-desc task-copy" id="readDesc" tabindex="0" role="button" aria-label="工作项描述，点击修改" title="点击修改描述；失焦或 Ctrl/⌘ + Enter 保存，Esc 取消"></div>
+          </section>
+
+          <div class="read-cols">
+            <section class="read-card" id="readChecklistCard">
+              <div class="read-card-head">
+                <h3>检查清单</h3>
+                <span class="read-cnt" id="readSubMeta"></span>
+                <button class="link-btn" type="button" data-drawer-goto="exec">管理</button>
+              </div>
+              <div class="read-progress"><i id="readSubBar"></i></div>
+              <ul class="read-check" id="readChecklist"></ul>
+            </section>
+            <section class="read-card">
+              <div class="read-card-head">
+                <h3>交付证据</h3>
+                <span class="foot-note">计划 ≠ 已发布</span>
+              </div>
+              <dl class="read-evidence" id="readEvidence"></dl>
+            </section>
+          </div>
+
+          <section class="read-card">
+            <div class="read-card-head">
+              <h3>最近动态</h3>
+              <button class="link-btn" type="button" data-drawer-goto="activity">查看全部</button>
+            </div>
+            <ul class="read-activity" id="readActivity"></ul>
+          </section>
+        </div>
+
+        <!-- 编辑态：保留完整字段，低频项折叠 -->
+        <div class="drawer-edit-overview" id="drawerEditOverview">
       <!-- 标题：最高优先级字段 -->
       <div class="title-wrap" id="fTitle">
         <div class="title-row">
@@ -103,32 +263,6 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         <div class="pri-group" id="segPri" role="group" aria-label="优先级"></div>
       </div>
 
-      <!-- 编辑态速览：关键信息前置，避免在长表单里来回找 -->
-      <div class="drawer-facts" id="drawerFacts" hidden aria-label="工作项概览">
-        <button class="fact fact-status" type="button" id="factStatus" title="切换工作项状态">
-          <span class="fact-k">状态</span>
-          <span class="fact-v"><i class="fact-dot" id="factStatusDot"></i><b id="factStatusName"></b>
-            <span class="fact-caret"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-          </span>
-        </button>
-        <div class="fact">
-          <span class="fact-k">进度</span>
-          <span class="fact-v"><span class="fact-bar"><i id="factProgBar"></i></span><b id="factProg">0%</b></span>
-        </div>
-        <div class="fact">
-          <span class="fact-k">实际 / 预估</span>
-          <span class="fact-v"><b id="factActual"></b><span class="fact-sub" id="factEstimate"></span></span>
-        </div>
-        <div class="fact fact-due" id="factDueWrap">
-          <span class="fact-k">截止</span>
-          <span class="fact-v"><b id="factDue"></b><span class="fact-sub" id="factDueNote"></span></span>
-        </div>
-        <div class="fact" id="factTestWrap" hidden>
-          <span class="fact-k">测试</span>
-          <span class="fact-v"><b id="factTest"></b></span>
-        </div>
-      </div>
-
       <!-- 归属与分配：高亮信息条 -->
       <div class="ctx" aria-label="归属与分配">
         <div class="ctx-item">
@@ -138,6 +272,10 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         <div class="ctx-item">
           <label class="ctx-label" for="iOwner">负责人</label>
           <select id="iOwner"></select>
+        </div>
+        <div class="ctx-item">
+          <label class="ctx-label" for="iTestOwner">测试负责人</label>
+          <select id="iTestOwner" title="待测试 / 测试中由测试负责人承接；留空表示待领取"></select>
         </div>
         <div class="ctx-item" id="ctxColItem">
           <label class="ctx-label" for="iCol" id="ctxColLabel">新建到</label>
@@ -251,9 +389,13 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               </div>
             </div>
 
-            <!-- 测试窗口：进入测试中后自动记录 -->
+            <!-- 测试窗口：提测 / 开始 / 结束三个时点自动记录 -->
             <div class="drawer-edit-block" id="fTestWindow" hidden>
-              <div class="form-grid" style="margin-top:12px">
+              <div class="form-grid test-window-grid" style="margin-top:12px">
+                <div class="field">
+                  <div class="field-label">提测时间</div>
+                  <div class="est-actual" id="iTestRequested">—</div>
+                </div>
                 <div class="field">
                   <div class="field-label">开始测试</div>
                   <div class="est-actual" id="iTestStart">—</div>
@@ -263,7 +405,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <div class="est-actual" id="iTestEnd">—</div>
                 </div>
               </div>
-              <span class="hint">进入「测试中」自动记录开始测试；测试通过或退回时记录结束测试</span>
+              <span class="hint">进入「待测试」记录提测时间；进入「测试中」记录开始测试；测试通过或退回时记录结束测试</span>
             </div>
           </section>
 
@@ -319,7 +461,51 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 </div>
                 <input class="input dep-search" id="iDepSearch" type="text" maxlength="60" autocomplete="off" placeholder="搜索工作项标题或所属项目…" aria-label="搜索要添加为依赖的工作项" />
                 <div class="dep-picker-list" id="depPickerList" aria-live="polite"></div>
-                <div class="dep-picker-foot">只列出你有权限查看的工作项；只读项目不可选。</div>
+                <div class="dep-create" id="depCreate">
+                  <button class="dep-create-trigger" type="button" id="btnDepCreate">
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
+                    <span id="depCreateTriggerText">新建工作项并关联</span>
+                  </button>
+                  <div class="dep-create-form" id="depCreateForm" hidden>
+                    <div class="dep-field dep-field-wide">
+                      <label class="dep-field-k" for="depNewTitle">标题 <span class="req">*</span></label>
+                      <input class="input" id="depNewTitle" type="text" maxlength="60" autocomplete="off" placeholder="例如：补充对账异常告警" />
+                    </div>
+                    <div class="dep-create-grid">
+                      <div class="dep-field">
+                        <label class="dep-field-k" for="depNewType">类型</label>
+                        <select class="input" id="depNewType">
+                          <option value="task">任务</option>
+                          <option value="story">故事</option>
+                          <option value="bug">缺陷</option>
+                        </select>
+                      </div>
+                      <div class="dep-field" id="depNewSeverityField" hidden>
+                        <label class="dep-field-k" for="depNewSeverity">严重度 <span class="req">*</span></label>
+                        <select class="input" id="depNewSeverity">
+                          <option value="blocker">阻断</option>
+                          <option value="critical">严重</option>
+                          <option value="major" selected>一般</option>
+                          <option value="minor">轻微</option>
+                        </select>
+                      </div>
+                      <div class="dep-field">
+                        <label class="dep-field-k" for="depNewOwner">负责人</label>
+                        <select class="input" id="depNewOwner"></select>
+                      </div>
+                      <div class="dep-field">
+                        <label class="dep-field-k" for="depNewDue">截止</label>
+                        <input class="input" id="depNewDue" type="date" />
+                      </div>
+                    </div>
+                    <div class="dep-create-foot">
+                      <span class="dep-create-hint" id="depCreateHint" aria-live="polite"></span>
+                      <button class="btn sm" type="button" id="btnDepCreateCancel">取消</button>
+                      <button class="btn sm primary" type="button" id="btnDepCreateOk">创建并关联</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="dep-picker-foot">只列出你有权限查看的工作项；只读项目不可选。找不到就先新建一个，建好立即建立依赖。</div>
               </div>
 
               <div class="dep-foot" id="depFoot"></div>
@@ -480,7 +666,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             </div>
           </section>
 
-          <section class="drawer-card">
+          <section class="drawer-card" id="assocEditBox">
             <div class="drawer-card-head"><h3>关联</h3><span class="foot-note">关联需求或文档会同步项目</span></div>
             <div class="field">
               <div class="field-label">
@@ -584,12 +770,36 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           </div>
         </aside>
       </div>
+        </div>
+      </div>
+
+      <!-- 执行 / 关联 / 动态由脚本把既有区块搬入，保证控件与事件绑定不变 -->
+      <div class="drawer-pane" data-drawer-pane="exec" hidden id="paneExec"></div>
+      <div class="drawer-pane" data-drawer-pane="rel" hidden id="paneRel">
+        <div class="stack">
+          <!-- 阅读态：归属与关联摘要 -->
+          <section class="read-card" id="readAssocCard">
+            <div class="read-card-head">
+              <h3>计划与归属</h3>
+              <span class="foot-note">关联需求或文档会同步项目</span>
+            </div>
+            <dl class="read-evidence" id="readAssoc"></dl>
+          </section>
+        </div>
+      </div>
+      <div class="drawer-pane" data-drawer-pane="activity" hidden id="paneActivity"></div>
     </div>
 
     <div class="drawer-foot">
-      <button class="icon-btn" type="button" id="btnDrawerStatus" aria-label="切换工作项状态" title="切换工作项状态">
-        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/></svg>
+      <button class="ds-status foot-status" type="button" id="btnFootStatus" hidden aria-haspopup="menu" title="切换工作项状态">
+        <i id="footStatusDot"></i><span id="footStatusName">—</span>
+        <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
       </button>
+      <button class="btn sm" type="button" id="btnFootWatch" hidden aria-pressed="false">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg>
+        <span id="footWatchLabel">关注</span>
+      </button>
+      <span class="foot-sp" aria-hidden="true"></span>
       <span class="hint" id="taskFormHint">保存后可拖动卡片调整状态与顺序</span>
       <button class="btn danger" type="button" id="btnDeleteTask" hidden>删除</button>
       <button class="btn" type="button" id="btnCancelTask">取消</button>

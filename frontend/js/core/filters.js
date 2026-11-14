@@ -13,6 +13,7 @@ function esc(s){
 var FILTER_KEYS = [
   { k: "q", kind: "text" },
   { k: "owners", kind: "list", s: "owners" },
+  { k: "testOwners", kind: "list", s: "testOwners" },
   { k: "pris", kind: "list", s: "pris" },
   { k: "cats", kind: "list", s: "cats" },
   { k: "reqs", kind: "list", s: "reqs" },
@@ -110,4 +111,22 @@ if(brandSub) brandSub.addEventListener("click", function(e){
   window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:b.dataset.crumbView } }));
 });
 
-export { boardParams, currentFilterParams, filterParams, setFilterValue, toggleFilterValue, updateBrand };
+/* 列状态工作页从看板进入时沿用通用筛选语境：
+   状态列与完成情况属于目标页自身维度，不随筛选带过去（否则会和被点的列冲突）。 */
+var WORKPAGE_SCOPE_KEYS = ["q", "owners", "testOwners", "pris", "cats", "reqs", "tags", "types", "versions",
+  "due", "noDue", "blocked", "focus", "dueFrom", "dueTo", "startFrom", "startTo"];
+function workpageScopeQuery(){
+  var parts = [];
+  WORKPAGE_SCOPE_KEYS.forEach(function(k){
+    var v = state[k];
+    if(Array.isArray(v)){
+      if(v.length) parts.push(k + "=" + encodeURIComponent(v.join(",")));
+      return;
+    }
+    if(v === true) parts.push(k + "=1");
+    else if(typeof v === "string" && v) parts.push(k + "=" + encodeURIComponent(v));
+  });
+  return parts.join("&");
+}
+
+export { boardParams, currentFilterParams, filterParams, setFilterValue, toggleFilterValue, updateBrand, workpageScopeQuery };

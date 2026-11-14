@@ -56,6 +56,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -100,6 +101,7 @@ public class BackupService {
     private final GanttShareMapper ganttShareMapper;
     private final ProjectVersionMapper versionMapper;
     private final VersionTaskMapper versionTaskMapper;
+    private final com.hourglass.mapper.VersionCommitmentMapper commitmentMapper;
     private final DemandMapper demandMapper;
     private final TaskCompletionService completionService;
     /** 覆盖导入前清空任务类数据的清单统一收口在 TaskCascade */
@@ -128,6 +130,7 @@ public class BackupService {
                          GanttShareMapper ganttShareMapper,
                          ProjectVersionMapper versionMapper,
                          VersionTaskMapper versionTaskMapper,
+                         com.hourglass.mapper.VersionCommitmentMapper commitmentMapper,
                          DemandMapper demandMapper,
                          TaskCompletionService completionService,
                          TaskCascade cascade,
@@ -156,6 +159,7 @@ public class BackupService {
         this.ganttShareMapper = ganttShareMapper;
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
+        this.commitmentMapper = commitmentMapper;
         this.demandMapper = demandMapper;
         this.completionService = completionService;
         this.cascade = cascade;
@@ -164,7 +168,7 @@ public class BackupService {
         this.exportService = new BackupExportService(taskMapper, reqMapper, subtaskMapper, tagMapper,
                 timeLogMapper, boardColumnMapper, categoryMapper, commentMapper, testCaseMapper,
                 testCaseRunMapper, docCommentMapper, requirementDocMapper, devBranchMapper,
-                dependencyMapper, baselineMapper, versionMapper, versionTaskMapper, demandMapper);
+                dependencyMapper, baselineMapper, versionMapper, versionTaskMapper, demandMapper, commitmentMapper);
         this.txTemplate = new TransactionTemplate(transactionManager);
         /* 覆盖导入必须整体成功或整体回滚：外层事务包住所有阶段，批次只做语句切分 */
         this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
@@ -335,10 +339,14 @@ public class BackupService {
                     continue; // 备份内同名版本：跳过，避免撞唯一键中断整次导入
                 }
                 version.setDescription(Texts.cut(Texts.trimToNull(bv.getDesc()), 500));
-                version.setStatus(oneOf(bv.getStatus(), new String[]{"planned", "active", "released"}, "planned"));
+                version.setStatus(oneOf(bv.getStatus(),
+                        new String[]{"planned", "active", "released", "closed", "canceled"}, "planned"));
                 version.setStartDate(parseDate(bv.getStartDate()));
                 version.setTargetDate(parseDate(bv.getTargetDate()));
                 version.setReleasedAt(parseTs(bv.getReleasedAt()));
+                version.setEndedAt(parseTs(bv.getEndedAt()));
+                version.setEndReason(Texts.cut(Texts.trimToNull(bv.getEndReason()), 500));
+                version.setCommitmentAt(parseTs(bv.getCommitmentAt()));
                 version.setCreatedAt(parseTs(bv.getCreatedAt()));
                 version.setUpdatedAt(parseTs(bv.getUpdatedAt()));
                 versionMapper.insert(version);
@@ -750,8 +758,11 @@ public class BackupService {
                 }
             }
             t.setCompletedAt(parseDate(b.getCompletedAt()));
-            t.setTestStartedAt(parseDate(b.getTestStartedAt()));
-            t.setTestFinishedAt(parseDate(b.getTestFinishedAt()));
+            t.setTestOwnerUserId(Texts.trimToNull(b.getTestOwnerUserId()));
+            t.setTestOwner(Texts.trimToNull(b.getTestOwner()));
+            t.setTestRequestedAt(parseDateTime(b.getTestRequestedAt()));
+            t.setTestStartedAt(parseDateTime(b.getTestStartedAt()));
+            t.setTestFinishedAt(parseDateTime(b.getTestFinishedAt()));
             t.setCreatedAt(parseTs(b.getCreatedAt()));
             String reqId = Texts.trimToNull(b.getReqId());
             if (reqId != null) {
@@ -948,11 +959,32 @@ public class BackupService {
         }
 
         if (!tasks.isEmpty()) {
+            assignItemNos(workspaceId, tasks);
             taskMapper.insertBatch(tasks);
         }
         insertInBatches(subtasks, subtaskMapper::insertBatch);
         insertInBatches(tagLinks, rows -> tagMapper.insertTaskTags(workspaceId, rows));
         insertInBatches(timeLogs, timeLogMapper::insertCompletedBatch);
+    }
+
+    /**
+     * 编号不在备份里：按目标项目内当前最大号顺延，避免与既有工作项撞号（与用例导入同一口径）。
+     * 批量写入一次落库，故在内存里按项目分组续号；排序与 sql/82 回填一致（created_at, id）。
+     */
+    private void assignItemNos(String workspaceId, List<Task> tasks) {
+        List<Task> ordered = new ArrayList<Task>(tasks);
+        ordered.sort(Comparator.comparing(Task::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(Task::getId));
+        Map<String, Integer> next = new HashMap<String, Integer>();
+        for (Task t : ordered) {
+            String scope = t.getReqId() == null ? "" : t.getReqId();
+            Integer no = next.get(scope);
+            if (no == null) {
+                no = taskMapper.selectNextItemNo(workspaceId, t.getReqId());
+            }
+            t.setItemNo(no);
+            next.put(scope, no + 1);
+        }
     }
 
     /** 阶段 3a：依赖 / 基线 / 循环派生关联 */
@@ -1065,6 +1097,40 @@ public class BackupService {
         for (Map.Entry<String, List<String>> entry : tasksByVersion.entrySet()) {
             eachChunk(entry.getValue(), batch ->
                     versionTaskMapper.insertBatch(workspaceId, entry.getKey(), batch));
+        }
+
+        /* 承诺基线是历史快照：任务 ID 按本次导入映射回指，找不到的任务直接跳过（不伪造基线） */
+        if (data.getVersions() != null) {
+            for (BackupData.BackupVersion bv : data.getVersions()) {
+                if (bv == null || bv.getCommitment() == null || bv.getCommitment().isEmpty()) {
+                    continue;
+                }
+                String mappedVersion = st.versionIdMap.get(Texts.trimToNull(bv.getId()));
+                if (mappedVersion == null) {
+                    continue;
+                }
+                List<com.hourglass.entity.VersionCommitmentTask> rows =
+                        new ArrayList<com.hourglass.entity.VersionCommitmentTask>();
+                Set<String> seen = new HashSet<String>();
+                for (BackupData.BackupCommitment bc : bv.getCommitment()) {
+                    if (bc == null) {
+                        continue;
+                    }
+                    String mappedTask = taskIdMap.get(Texts.trimToNull(bc.getTaskId()));
+                    if (mappedTask == null || !seen.add(mappedTask)) {
+                        continue;
+                    }
+                    com.hourglass.entity.VersionCommitmentTask row =
+                            new com.hourglass.entity.VersionCommitmentTask();
+                    row.setWorkspaceId(workspaceId);
+                    row.setVersionId(mappedVersion);
+                    row.setTaskId(mappedTask);
+                    row.setTaskTitle(Texts.cut(Texts.trimToNull(bc.getTaskTitle()), 120));
+                    row.setEstimateMinutes(bc.getEstimateMinutes());
+                    rows.add(row);
+                }
+                eachChunk(rows, batch -> commitmentMapper.insertBatch(workspaceId, mappedVersion, batch));
+            }
         }
 
         // 恢复循环派生关联：等到全部任务落库后，按 ID 映射校验目标存在性再写回（旧备份无此字段则跳过）
@@ -1555,6 +1621,20 @@ public class BackupService {
             if (start != null && end != null && start.isAfter(end)) throw AppException.badRequest("版本开始日期不能晚于目标日期");
             if ("released".equals(version.getStatus()) || Texts.trimToNull(version.getReleasedAt()) != null)
                 throw AppException.badRequest("JSON 不迁移已发布版本内容或正式事实，请使用数据库备份；版本：" + version.getId());
+            String status = Texts.trimToNull(version.getStatus());
+            if (status != null && !java.util.Arrays.asList("planned", "active", "closed", "canceled").contains(status))
+                throw AppException.badRequest("版本状态不合法：" + version.getId());
+            if (("closed".equals(status) || "canceled".equals(status))
+                    && Texts.trimToNull(version.getEndReason()) == null)
+                throw AppException.badRequest("关闭或取消的版本必须提供原因：" + version.getId());
+            String endedAt = Texts.trimToNull(version.getEndedAt());
+            if (endedAt != null) {
+                try {
+                    java.time.LocalDateTime.parse(endedAt);
+                } catch (RuntimeException ex) {
+                    throw AppException.badRequest("备份时间格式不合法：" + endedAt);
+                }
+            }
         }
         Map<String, BackupData.BackupDemand> demands = new HashMap<String, BackupData.BackupDemand>();
         for (BackupData.BackupDemand demand : data.getDemands()) {
@@ -1649,6 +1729,20 @@ public class BackupService {
             return LocalDateTime.parse(text);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /** 测试时间兼容旧备份的纯日期：按当天 00:00 还原，不补造具体时刻。 */
+    private LocalDateTime parseDateTime(String value) {
+        String text = Texts.trimToNull(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(text);
+        } catch (Exception ignored) {
+            LocalDate day = parseDate(text);
+            return day == null ? null : day.atStartOfDay();
         }
     }
 

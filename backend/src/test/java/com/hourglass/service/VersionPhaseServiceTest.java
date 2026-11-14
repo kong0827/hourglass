@@ -61,11 +61,13 @@ class VersionPhaseServiceTest {
     private final DevBranchMapper branches = mock(DevBranchMapper.class);
     private final ReleasePermissionService permissions = mock(ReleasePermissionService.class);
     private final ReleaseMapper releases = mock(ReleaseMapper.class);
+    private final com.hourglass.mapper.VersionCommitmentMapper commitments =
+            mock(com.hourglass.mapper.VersionCommitmentMapper.class);
     private final TaskPublicationService publications = new TaskPublicationService(mock(com.hourglass.mapper.TaskMapper.class),
             releases, mock(com.hourglass.mapper.TaskLogMapper.class), mock(DeliveryScopeLock.class), permissions,
             new com.fasterxml.jackson.databind.ObjectMapper());
     private final VersionPhaseService service = new VersionPhaseService(versions, versionTasks, reqs,
-            demands, timeLogs, users, access, branches, permissions, releases);
+            demands, timeLogs, users, access, branches, permissions, releases, commitments);
     private final java.util.Map<String, java.util.List<String>> taskBindings = new java.util.HashMap<String, java.util.List<String>>();
     private final java.util.List<VersionRelease> publicationRecords = new java.util.ArrayList<VersionRelease>();
 
@@ -199,6 +201,87 @@ class VersionPhaseServiceTest {
         assertEquals(0, changed.getTaskCount());
         assertEquals(stat.getPublishedTaskCount(), changed.getPublishedTaskCount());
         assertEquals(stat.getExcludedTaskCount(), changed.getExcludedTaskCount());
+    }
+
+    @Test
+    void versionStatsSplitsWorkMinutesIntoDevAndTestWithoutGoingNegative() {
+        when(reqs.selectById(REQ)).thenReturn(requirement(REQ, null));
+        when(versions.selectByReq(WS, REQ)).thenReturn(Collections.singletonList(
+                version("V1", "V1.0", "active", null)));
+        Task withTest = completed("T1", LocalDate.of(2026, 5, 20), null, 300, 240, "task");
+        withTest.setTestMinutes(120);
+        Task open = open("T2", LocalDate.of(2026, 5, 2), 100, 60);
+        /* 脏数据：测试分钟超过累计时截到累计，开发不为负 */
+        open.setTestMinutes(140);
+        bind(withTest, "V1");
+        bind(open, "V1");
+        when(versionTasks.selectStatsByReq(WS, REQ)).thenReturn(Arrays.asList(withTest, open));
+
+        VersionStatsResponse.VersionStat stat = service.versionStats(WS, REQ, "U9").getVersions().get(0);
+
+        assertEquals(400, stat.getWorkMinutes());
+        assertEquals(220, stat.getTestMinutes());
+        assertEquals(180, stat.getDevMinutes());
+        assertEquals(stat.getWorkMinutes(), stat.getDevMinutes() + stat.getTestMinutes());
+    }
+
+    @Test
+    void unboundBucketSplitsOnlyCompletedWorkSoDevPlusTestMatchesWork() {
+        when(reqs.selectById(REQ)).thenReturn(requirement(REQ, null));
+        when(versions.selectByReq(WS, REQ)).thenReturn(Collections.<ProjectVersion>emptyList());
+        Task done = completed("T1", LocalDate.of(2026, 5, 20), null, 200, 150, "task");
+        done.setTestMinutes(120);
+        Task doing = open("T2", LocalDate.of(2026, 5, 2), 100, 60);
+        doing.setTestMinutes(80);
+        when(versionTasks.selectStatsByReq(WS, REQ)).thenReturn(Arrays.asList(done, doing));
+
+        VersionStatsResponse.Bucket bucket = service.versionStats(WS, REQ, "U9").getUnbound();
+
+        assertEquals(200, bucket.getWorkMinutes());
+        assertEquals(120, bucket.getTestMinutes(), "待规划桶的工时只算已完成，测试拆分沿用同一口径");
+        assertEquals(80, bucket.getDevMinutes());
+        assertEquals(bucket.getWorkMinutes(), bucket.getDevMinutes() + bucket.getTestMinutes());
+    }
+
+    @Test
+    void versionStatsComparesCurrentBindingsAgainstCommitmentBaseline() {
+        when(reqs.selectById(REQ)).thenReturn(requirement(REQ, null));
+        ProjectVersion active = version("V1", "V1.0", "active", null);
+        active.setCommitmentAt(LocalDateTime.of(2026, 5, 1, 9, 0));
+        when(versions.selectByReq(WS, REQ)).thenReturn(Collections.singletonList(active));
+        Task kept = completed("T1", LocalDate.of(2026, 5, 20), null, 100, 120, "task");
+        bind(kept, "V1");
+        Task added = open("T2", LocalDate.of(2026, 5, 2), 0, 90);
+        bind(added, "V1");
+        when(versionTasks.selectStatsByReq(WS, REQ)).thenReturn(Arrays.asList(kept, added));
+        when(commitments.selectByReq(WS, REQ)).thenReturn(Arrays.asList(
+                commitment("V1", "T1", 120),
+                commitment("V1", "T3", 60)));
+
+        VersionStatsResponse.VersionStat stat = service.versionStats(WS, REQ, "U9").getVersions().get(0);
+
+        VersionStatsResponse.Commitment c = stat.getCommitment();
+        assertEquals(LocalDateTime.of(2026, 5, 1, 9, 0), c.getCapturedAt());
+        assertEquals(2, c.getTaskCount(), "基线只记录启动时的工作项");
+        assertEquals(180, c.getEstimateMinutes());
+        assertEquals(1, c.getDoneCount());
+        assertEquals(50, c.getDonePct());
+        assertEquals(1, c.getAddedCount());
+        assertEquals(90, c.getAddedEstimateMinutes());
+        assertEquals(1, c.getRemovedCount());
+        assertEquals(60, c.getRemovedEstimateMinutes());
+    }
+
+    @Test
+    void versionStatsLeavesCommitmentNullForLegacyVersionsWithoutSnapshot() {
+        when(reqs.selectById(REQ)).thenReturn(requirement(REQ, null));
+        when(versions.selectByReq(WS, REQ)).thenReturn(Collections.singletonList(
+                version("V1", "V1.0", "active", null)));
+        when(versionTasks.selectStatsByReq(WS, REQ)).thenReturn(Collections.<Task>emptyList());
+
+        VersionStatsResponse.VersionStat stat = service.versionStats(WS, REQ, "U9").getVersions().get(0);
+
+        assertNull(stat.getCommitment());
     }
 
     @Test
@@ -453,7 +536,7 @@ class VersionPhaseServiceTest {
         when(access.canWrite(WS, "U9", REQ)).thenReturn(true);
         ReleasePermissionService actualPermissions = new ReleasePermissionService(members, reqs, access);
         VersionPhaseService actual = new VersionPhaseService(versions, versionTasks, reqs,
-                demands, timeLogs, users, access, branches, actualPermissions, releases);
+                demands, timeLogs, users, access, branches, actualPermissions, releases, commitments);
         org.springframework.test.util.ReflectionTestUtils.setField(actual, "publications", publications);
 
         VersionStatsResponse initial = actual.versionStats(WS, REQ, "U9");
@@ -578,6 +661,16 @@ class VersionPhaseServiceTest {
         v.setStatus(status);
         v.setReleasedAt(releasedAt);
         return v;
+    }
+
+    private com.hourglass.entity.VersionCommitmentTask commitment(String versionId, String taskId, Integer minutes) {
+        com.hourglass.entity.VersionCommitmentTask row = new com.hourglass.entity.VersionCommitmentTask();
+        row.setWorkspaceId(WS);
+        row.setVersionId(versionId);
+        row.setTaskId(taskId);
+        row.setTaskTitle(taskId);
+        row.setEstimateMinutes(minutes);
+        return row;
     }
 
     private DevBranch brief(String id, String name, String status) {

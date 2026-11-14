@@ -214,6 +214,7 @@ public class UserService implements UserDetailsService {
             return;
         }
         taskMapper.renameOwner(userId, oldName, newName);
+        taskMapper.renameTestOwner(userId, oldName, newName);
     }
 
     @Transactional

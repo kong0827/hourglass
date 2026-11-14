@@ -9,6 +9,8 @@ public class VersionReleaseItem {
     private String workspaceId;
     private String releaseId;
     private String taskId;
+    /** 快照时的工作项编号（sql/83）：工作项换项目会重新取号，历史证据不跟着变 */
+    private Integer taskItemNo;
     private String title;
     private String itemType;
     private String ownerUserId;

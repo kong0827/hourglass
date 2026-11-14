@@ -13,6 +13,7 @@ import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
 import { companyChipHTML } from "../lib/company.js";
 import { DEFAULT_ROLE_TITLES, loadMemberLabelOptions, effectiveMemberRole, memberRoleTitles, labelFilterOption, labelFilterText } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
+import { milestoneEvidence, milestoneKindName, milestoneStatusTag, openMilestoneDetail } from "../lib/milestone-ui.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } from "./manager-shared.js";
 
 var VIEW_KEY = "project-view";
@@ -90,6 +91,8 @@ function loadProject(opts){
     moduleUi = { adding:false, deleting:"" };
     memberFilter = { companyName:"", roleTitle:"" };
     rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
+    milestoneState = { reqId:"", loading:false, error:"", data:null };
+    milestoneSeq++;
   }
   projectWorkspaceId = wsId;
   var current = ++seq;
@@ -454,6 +457,251 @@ function deliveryPanel(p){
     + card("versions", "版本", valueOf("versions"), footOf("versions", "加载中", "加载失败") || "首版 / 迭代")
     + '</div></section>';
 }
+/* ---------- 项目里程碑：状态由版本发布证据 / 工作项状态 / 人工确认推导 ---------- */
+var milestoneState = { reqId:"", loading:false, error:"", data:null };
+var milestoneSeq = 0;
+function milestoneKeyMilestoneTag(m){
+  return m.keyMilestone ? '<span class="tag tag-primary">关键</span>' : "";
+}
+function notifyMilestonesChanged(reqId){
+  window.dispatchEvent(new CustomEvent("ds:milestones-changed", { detail:{ reqId:reqId } }));
+}
+function milestoneStats(list){
+  var live = list.filter(function(m){ return m.status !== "canceled"; });
+  var achieved = live.filter(function(m){ return m.status === "achieved" || m.status === "achieved_rolled_back"; }).length;
+  var overdue = live.filter(function(m){ return m.status === "overdue"; }).length;
+  var pending = live.length - achieved - overdue;
+  var next = live.filter(function(m){ return (m.status === "pending" || m.status === "overdue") && m.targetDate; })
+    .sort(function(a, b){ return String(a.targetDate).localeCompare(String(b.targetDate)); })[0];
+  var nextText = "—";
+  if(next){
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var days = Math.ceil((new Date(next.targetDate + "T00:00:00") - today) / 86400000);
+    nextText = days < 0 ? "逾期 " + Math.abs(days) + " 天" : (days === 0 ? "今天" : days + " 天");
+  }
+  return { achieved:achieved, pending:pending, overdue:overdue, next:nextText, nextName:next ? next.name : "" };
+}
+function milestoneRowHTML(m){
+  return '<tr data-ms-open="' + esc(m.id) + '" tabindex="0" title="打开里程碑详情">'
+    + '<td class="ms-name"><b>' + esc(m.name) + '</b>' + milestoneKeyMilestoneTag(m) + '</td>'
+    + '<td>' + esc(milestoneKindName(m.kind)) + (m.versionName ? '<span class="ms-sub">' + esc(m.versionName) + '</span>' : '') + '</td>'
+    + '<td class="num">' + esc(fmtDate(m.targetDate)) + '</td>'
+    + '<td>' + esc(m.ownerName || "未指派") + '</td>'
+    + '<td>' + milestoneStatusTag(m) + '</td>'
+    + '<td class="ms-evidence">' + esc(milestoneEvidence(m)) + '</td></tr>';
+}
+function milestonePanelInner(){
+  var head = '<div class="manager-panel-head"><b>里程碑</b><span>状态按证据推导，不可手改</span>'
+    + (cache && cache.canWriteProject ? '<button class="btn sm" type="button" data-ms-create>新建里程碑</button>' : "") + '</div>';
+  if(milestoneState.loading && !milestoneState.data){
+    return head + '<div class="manager-empty-cell">加载中…</div>';
+  }
+  if(milestoneState.error){
+    return head + '<div class="manager-empty-cell">' + esc(milestoneState.error) + '</div>'
+      + '<div class="phase-acts"><button class="btn sm ghost" type="button" data-ms-retry>重试</button></div>';
+  }
+  var list = milestoneState.data || [];
+  if(!list.length){
+    return head + '<div class="manager-empty-cell">还没有里程碑。里程碑只标记结果，不占工作项计数、预估与燃尽。</div>';
+  }
+  var stats = milestoneStats(list);
+  return head
+    + '<div class="ms-stats">'
+    + '<div><b>' + stats.achieved + '</b><span>已达成</span></div>'
+    + '<div><b>' + stats.pending + '</b><span>未达成</span></div>'
+    + '<div><b class="' + (stats.overdue ? "ms-danger" : "") + '">' + stats.overdue + '</b><span>已延期</span></div>'
+    + '<div><b>' + esc(stats.next) + '</b><span>距下个节点' + (stats.nextName ? " · " + esc(stats.nextName) : "") + '</span></div>'
+    + '</div>'
+    + '<div class="tbl-wrap"><table class="manager-tbl ms-tbl"><thead><tr><th>里程碑</th><th>达成方式</th><th class="num">目标日期</th>'
+    + '<th>负责人</th><th>状态</th><th>证据</th></tr></thead><tbody>'
+    + list.map(milestoneRowHTML).join("") + '</tbody></table></div>';
+}
+function paintMilestones(){
+  var box = $("projectMilestones");
+  if(!box) return;
+  box.innerHTML = milestonePanelInner();
+}
+function loadMilestones(reqId, force){
+  if(!reqId) return;
+  if(milestoneState.reqId !== reqId){
+    milestoneState = { reqId:reqId, loading:true, error:"", data:null };
+  }else if(force){
+    milestoneState.loading = true;
+    milestoneState.error = "";
+    milestoneState.data = null;
+  }else if(milestoneState.data){
+    paintMilestones();
+    return;
+  }else{
+    milestoneState.loading = true;
+  }
+  paintMilestones();
+  var current = ++milestoneSeq;
+  API.get("/api/milestones", { reqId:reqId }).then(function(rows){
+    if(current !== milestoneSeq || milestoneState.reqId !== reqId || rt.managerProjectId !== reqId) return;
+    milestoneState.loading = false;
+    milestoneState.data = rows || [];
+    paintMilestones();
+  }).catch(function(ex){
+    if(current !== milestoneSeq || milestoneState.reqId !== reqId) return;
+    milestoneState.loading = false;
+    milestoneState.error = ex.message || "里程碑加载失败";
+    paintMilestones();
+  });
+}
+function openMilestoneDetailById(id){
+  var hit = (milestoneState.data || []).filter(function(m){ return m.id === id; })[0];
+  if(!hit) return;
+  var reqId = hit.reqId || milestoneState.reqId;
+  openMilestoneDetail(hit, {
+    canWrite: !!(cache && cache.canWriteProject),
+    onChanged: function(changedReqId){
+      loadMilestones(changedReqId || reqId, true);
+      notifyMilestonesChanged(changedReqId || reqId);
+    }
+  });
+}
+function defaultMilestoneDate(offsetDays){
+  var d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+function openMilestoneCreate(){
+  var reqId = rt.managerProjectId;
+  if(!reqId) return;
+  if(!(cache && cache.canWriteProject)){ toast("没有该项目的写权限，不能新建里程碑", "warn"); return; }
+  var tasks = (cache.tasks || []).filter(function(t){ return t.itemType !== "epic"; });
+  var members = cache.members || [];
+  var ownerDefault = cache.project.ownerUserId || "";
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.setAttribute("aria-label", "新建里程碑");
+  layer.innerHTML = '<div class="sheet sm"><div class="sheet-head"><div style="flex:1;min-width:0"><h2>新建里程碑</h2>'
+    + '<p class="desc">一条里程碑只表达一条达成条件；发布型只认 production 成功记录。</p></div>'
+    + '<button class="icon-btn sm" type="button" data-ms-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + '<div class="sheet-body"><div class="ms-form">'
+    + '<label>达成方式<select class="mini-select" data-ms-kind>'
+    + '<option value="version">版本发布后</option><option value="tasks">工作项全部完成</option><option value="manual">人工确认</option>'
+    + '</select></label>'
+    + '<label>名称<input class="inp" data-ms-name maxlength="120" placeholder="留空自动生成"></label>'
+    + '<label>目标日期<input class="inp" type="date" data-ms-date value="' + esc(defaultMilestoneDate(14)) + '"></label>'
+    + '<label>负责人<select class="mini-select" data-ms-owner>'
+    + members.map(function(m){ return '<option value="' + esc(m.key) + '"' + (m.key === ownerDefault ? " selected" : "") + '>' + esc(m.name) + '</option>'; }).join("")
+    + (members.length ? "" : '<option value="">项目负责人</option>') + '</select></label>'
+    + '<div data-ms-cond="version"><label>关联版本<select class="mini-select" data-ms-version><option value="">加载中…</option></select></label></div>'
+    + '<div data-ms-cond="tasks" hidden><label>关联工作项</label>'
+    + '<div class="ms-task-list">' + (tasks.length
+      ? tasks.map(function(t){
+        var done = t.boardColumn === "done";
+        return '<label class="ms-task-opt"><input type="checkbox" value="' + esc(t.id) + '" data-ms-task>'
+          + '<span>' + esc(t.title) + '</span>' + (done ? '<small>已完成</small>' : '') + '</label>';
+      }).join("")
+      : '<p class="foot-note">该项目还没有可关联的工作项。</p>') + '</div>'
+    + '<p class="foot-note" data-ms-task-hint>关联工作项全部完成才算达成。</p></div>'
+    + '<label class="ms-check"><input type="checkbox" data-ms-key checked>关键里程碑（用于概览提示，不影响判定）</label>'
+    + '<label>说明（可选）<textarea class="inp" data-ms-note maxlength="500" rows="2"></textarea></label>'
+    + '<div class="phase-acts"><button class="btn sm primary" type="button" data-ms-save>新建里程碑</button>'
+    + '<button class="btn sm ghost" type="button" data-ms-close>取消</button></div>'
+    + '</div></div></div>';
+  document.body.appendChild(layer);
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  UI.openModal(layer, "[data-ms-kind]");
+
+  var kindEl = layer.querySelector("[data-ms-kind]");
+  var dateEl = layer.querySelector("[data-ms-date]");
+  var versionEl = layer.querySelector("[data-ms-version]");
+  var saveBtn = layer.querySelector("[data-ms-save]");
+  var versions = [];
+  function selectedTasks(){
+    return Array.prototype.slice.call(layer.querySelectorAll("[data-ms-task]")).filter(function(x){ return x.checked; });
+  }
+  function versionOf(id){
+    return versions.filter(function(v){ return v.id === id; })[0] || null;
+  }
+  function latestTaskDue(){
+    var best = "";
+    selectedTasks().forEach(function(x){
+      var t = tasks.filter(function(item){ return item.id === x.value; })[0];
+      if(t && t.dueDate && String(t.dueDate) > best) best = String(t.dueDate);
+    });
+    return best;
+  }
+  function syncRule(){
+    var kind = kindEl.value;
+    layer.querySelectorAll("[data-ms-cond]").forEach(function(box){ box.hidden = box.getAttribute("data-ms-cond") !== kind; });
+    layer.querySelector("[data-ms-name]").placeholder = kind === "version" ? "留空使用「版本名 发布」"
+      : (kind === "tasks" ? "留空使用「关联工作项全部完成」" : "留空使用「项目里程碑」");
+    var blocked = kind === "tasks" && !selectedTasks().length;
+    saveBtn.disabled = blocked || (kind === "version" && !versions.length);
+    var hint = layer.querySelector("[data-ms-task-hint]");
+    if(hint) hint.textContent = blocked ? "至少选择 1 个工作项才能创建。" : "关联工作项全部完成才算达成；重开会回到未达成。";
+    if(kind === "version"){
+      var v = versionOf(versionEl.value);
+      if(v && v.targetDate && !dateEl.dataset.touched) dateEl.value = v.targetDate;
+    }else if(kind === "tasks"){
+      var due = latestTaskDue();
+      if(due && !dateEl.dataset.touched) dateEl.value = due;
+    }
+  }
+  API.get("/api/versions", { reqId:reqId }).then(function(rows){
+    /* 已关闭 / 已取消的版本不会再有 production 成功证据，不能作为发布型里程碑条件 */
+    versions = (rows || []).filter(function(v){ return v.status !== "closed" && v.status !== "canceled"; });
+    versionEl.innerHTML = versions.length
+      ? versions.map(function(v){
+        return '<option value="' + esc(v.id) + '">' + esc(v.name)
+          + '（' + esc({planned:"待规划",active:"开发中",released:"已发布"}[v.status] || v.status) + '）</option>';
+      }).join("")
+      : '<option value="">暂无可用版本，请先创建版本</option>';
+    syncRule();
+  }).catch(function(ex){
+    versionEl.innerHTML = '<option value="">版本加载失败</option>';
+    toast(ex.message || "版本加载失败", "bad");
+    syncRule();
+  });
+
+  kindEl.addEventListener("change", syncRule);
+  dateEl.addEventListener("change", function(){ dateEl.dataset.touched = "1"; });
+  versionEl.addEventListener("change", function(){ dateEl.dataset.touched = ""; syncRule(); });
+  layer.addEventListener("change", function(e){
+    if(e.target.matches("[data-ms-task]")){
+      dateEl.dataset.touched = "";
+      syncRule();
+    }
+  });
+  layer.addEventListener("click", function(e){
+    if(e.target === layer || e.target.closest("[data-ms-close]")){ UI.closeModal(layer); return; }
+    if(!e.target.closest("[data-ms-save]")) return;
+    var kind = kindEl.value;
+    var taskIds = selectedTasks().map(function(x){ return x.value; });
+    if(kind === "tasks" && !taskIds.length){ toast("至少选择 1 个工作项", "warn"); return; }
+    if(kind === "version" && !versionEl.value){ toast("请选择关联版本", "warn"); return; }
+    var body = {
+      reqId: reqId,
+      kind: kind,
+      name: layer.querySelector("[data-ms-name]").value.trim() || null,
+      targetDate: dateEl.value || null,
+      ownerUserId: layer.querySelector("[data-ms-owner]").value || null,
+      keyMilestone: layer.querySelector("[data-ms-key]").checked,
+      note: layer.querySelector("[data-ms-note]").value.trim() || null,
+      versionId: kind === "version" ? versionEl.value : null,
+      taskIds: kind === "tasks" ? taskIds : null
+    };
+    saveBtn.disabled = true;
+    API.post("/api/milestones", body).then(function(){ 
+      UI.closeModal(layer);
+      toast("已创建里程碑", "fs");
+      loadMilestones(reqId, true);
+      notifyMilestonesChanged(reqId);
+    }).catch(function(ex){
+      saveBtn.disabled = false;
+      toast(ex.message || "创建里程碑失败", "bad");
+    });
+  });
+  syncRule();
+}
 function moduleDeviation(value){
   return value === null || value === undefined ? "—" : ((value > 0 ? "+" : "") + value + "%");
 }
@@ -478,6 +726,8 @@ function moduleMetricCells(row){
     + '<td class="num" data-label="工作项">' + (Number(row.done) || 0) + ' / ' + (Number(row.total) || 0) + '</td>'
     + '<td class="num" data-label="预估">' + fmtHours(row.estimateMinutes) + '</td>'
     + '<td class="num" data-label="实际工时">' + fmtHours(row.actualMinutes) + '</td>'
+    + '<td class="num" data-label="开发">' + fmtHours(row.devMinutes) + '</td>'
+    + '<td class="num" data-label="测试">' + fmtHours(row.testMinutes) + '</td>'
     + '<td class="num" data-label="剩余">' + fmtHours(row.remainingMinutes) + '</td>'
     + '<td class="num" data-label="偏差">' + moduleDeviation(row.deviationPct) + '</td>';
 }
@@ -504,7 +754,7 @@ function moduleRowHTML(row, canManage, moduleCount){
     + '<td class="project-module-name"><i class="project-module-dot" style="background:' + esc(row.color || "#8a8578") + '"></i><span>' + esc(row.name) + '</span></td>'
     + moduleMetricCells(row)
     + '<td data-label="风险">' + moduleRisk(row) + '</td>' + ops + '</tr>'
-    + (moduleUi.deleting === row.id ? moduleDeleteRow(row, canManage ? 9 : 8) : "");
+    + (moduleUi.deleting === row.id ? moduleDeleteRow(row, canManage ? 11 : 10) : "");
 }
 function moduleEmptyRow(colspan, canManage){
   return '<tr><td colspan="' + colspan + '" class="manager-empty-cell">该项目还没有模块'
@@ -524,6 +774,8 @@ function moduleTotalRow(m, c, total, canManage){
     + '<td class="num" data-label="工作项">' + (c.done || 0) + ' / ' + total + '</td>'
     + '<td class="num" data-label="预估">' + fmtHours(m.estimateMinutes) + '</td>'
     + '<td class="num" data-label="实际工时">' + fmtHours(m.actualMinutes) + '</td>'
+    + '<td class="num" data-label="开发">' + fmtHours(m.devMinutes) + '</td>'
+    + '<td class="num" data-label="测试">' + fmtHours(m.testMinutes) + '</td>'
     + '<td class="num" data-label="剩余">' + fmtHours(m.remainingMinutes) + '</td>'
     + '<td class="num" data-label="偏差" title="项目整体偏差见上方工时偏差卡片">—</td>'
     + '<td data-label="风险">' + moduleRisk({ overdue:c.overdue, blocked:c.blocked, done:c.done, total:total }) + '</td>'
@@ -533,7 +785,7 @@ function modulePanel(p, m, c){
   var modules = cache.modules || [];
   var unassigned = cache.unassigned || {};
   var canManage = !!cache.canManageModules;
-  var colspan = canManage ? 9 : 8;
+  var colspan = canManage ? 11 : 10;
   var total = (cache.tasks || []).length;
   var body = modules.map(function(row){ return moduleRowHTML(row, canManage, modules.length); }).join("");
   if(!modules.length) body = moduleEmptyRow(colspan, canManage);
@@ -553,13 +805,13 @@ function modulePanel(p, m, c){
     + modules.length + ' 个模块 · ' + total + ' 个工作项</span></div>'
     + '<div class="project-modules-tools">'
     + '<details class="manager-caliber project-modules-caliber"><summary>口径</summary><div>'
-    + '模块指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；偏差只取已完成且填了预估的工作项。'
+    + '模块指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；开发 / 测试按测试窗口（提测 → 测试结束）内的计时拆分，开发 + 测试 = 实际工时；偏差只取已完成且填了预估的工作项。'
     + 'Σ模块 + 未指定 = 项目合计；项目整体进度仍按全部工作项计算，不是模块百分比的平均。</div></details>'
     + (canManage ? '<button class="btn sm primary" type="button" data-module-add>+ 添加模块</button>' : '')
     + '</div></div>'
     + '<p class="project-modules-note">像项目一样看每个模块的进度、预估与实际；删除模块时，其下工作项与需求迁到目标模块。</p>'
     + '<div class="tbl-wrap"><table class="manager-tbl project-modules-tbl"><thead><tr>'
-    + '<th>模块</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
+    + '<th>模块</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">开发</th><th class="num">测试</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
     + (canManage ? '<th class="num" aria-label="操作"></th>' : '') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
     + '<p class="project-modules-foot-note"><span class="project-modules-foot-main"><i class="project-modules-foot-info" aria-hidden="true">' + icon("infoCircle", 13) + '</i>'
     + '<span>未指定为没有模块归属的工作项，单独统计；模块合计 + 未指定 = 项目合计。项目整体进度仍按全部工作项计算，不是模块百分比的平均。</span></span>'
@@ -651,7 +903,7 @@ function renderProject(){
     + '<div class="manager-kpis">'
     + metric("计划周期", '<span class="manager-date-value">' + fmtDate(m.startDate) + ' → ' + fmtDate(m.dueDate) + '</span>', total + " 个工作项", "all")
     + metric("预估工时合计", fmtHours(m.estimateMinutes), "剩余 " + fmtHours(m.remainingMinutes), "estimate")
-    + metric("实际投入", fmtHours(m.actualMinutes), "含进行中工作项", "actual")
+    + metric("实际投入", fmtHours(m.actualMinutes), "开发 " + fmtHours(m.devMinutes) + " · 测试 " + fmtHours(m.testMinutes), "actual")
     + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance") + '</div>'
     + modulePanel(p, m, c)
     + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>工作项分布</b><span>' + total + ' 个工作项</span></div>'
@@ -660,7 +912,8 @@ function renderProject(){
     + distRow("已完成", done, total, "done", "success") + distRow("逾期", c.overdue || 0, total, "overdue", "danger")
     + distRow("被阻塞", c.blocked || 0, total, "blocked", "warning") + '</section>'
     + '<section class="manager-panel"><div class="manager-panel-head"><b>近 8 周新增 / 完成</b><span>按周汇总</span></div>' + weeklyChart(cache.weekly || []) + '</section></div>'
-    + deliveryPanel(p);
+    + deliveryPanel(p)
+    + '<section class="manager-panel project-milestones" id="projectMilestones">' + milestonePanelInner() + '</section>';
   var epicsPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>史诗汇总</b><span>点击史诗查看子项</span></div>'
     + (epics.length ? epics.map(function(ep){
       return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">史诗</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
@@ -673,6 +926,7 @@ function renderProject(){
   /* 四个分区改为顺序分组：分组标题即原先的页内 Tab，导航只保留侧栏 + 二级导航两层 */
   $("projectBody").innerHTML = toolbar + overview + epicsPanel + membersPanel + rosterPanel();
   loadProjectDelivery(p);
+  loadMilestones(p.reqId || p.id);
   var moduleInput = document.querySelector("[data-module-new-name]");
   if(moduleUi.adding && moduleInput) moduleInput.focus();
   loadRoster(p.reqId || p.id);
@@ -996,7 +1250,7 @@ function onClick(e){
   if(moduleRow){
     var moduleId = moduleRow.dataset.moduleOpen;
     var moduleHit = moduleId === "__none" ? null : (cache.modules || []).filter(function(x){ return x.id === moduleId; })[0];
-    openTaskTable((cache.project.name || "项目") + " · " + (moduleHit ? moduleHit.name : "未指定"), moduleTasksOf(moduleId));
+    openTaskTable((cache.project.name || "项目") + " · " + (moduleHit ? moduleHit.name : "未指定"), moduleTasksOf(moduleId), null, null, { split:true });
     return;
   }
   var pvMode = e.target.closest("[data-pv-mode]");
@@ -1047,6 +1301,10 @@ function onClick(e){
     var task = e.target.closest("[data-open-task]");
     if(task){ openTaskById(task.dataset.openTask); return; }
   }
+  if(e.target.closest("[data-ms-create]")){ openMilestoneCreate(); return; }
+  if(e.target.closest("[data-ms-retry]")){ loadMilestones(milestoneState.reqId || rt.managerProjectId, true); return; }
+  var msRow = e.target.closest("[data-ms-open]");
+  if(msRow){ openMilestoneDetailById(msRow.dataset.msOpen); return; }
   var metricBtn = e.target.closest("[data-project-metric]");
   if(metricBtn){
     var kind = metricBtn.dataset.projectMetric;
@@ -1103,7 +1361,9 @@ function onKeydown(e){
   var memberRow = e.target.closest ? e.target.closest("tr[data-member-key]") : null;
   if(memberRow && memberRow === e.target){ e.preventDefault(); memberRow.click(); return; }
   var moduleRow = e.target.closest ? e.target.closest("tr[data-module-open]") : null;
-  if(moduleRow && moduleRow === e.target){ e.preventDefault(); moduleRow.click(); }
+  if(moduleRow && moduleRow === e.target){ e.preventDefault(); moduleRow.click(); return; }
+  var msRow = e.target.closest ? e.target.closest("tr[data-ms-open]") : null;
+  if(msRow && msRow === e.target){ e.preventDefault(); openMilestoneDetailById(msRow.dataset.msOpen); }
 }
 if($("projectBody")){
   $("projectBody").addEventListener("click", onClick);

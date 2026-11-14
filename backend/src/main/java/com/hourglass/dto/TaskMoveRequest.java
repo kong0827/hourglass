@@ -29,6 +29,12 @@ public class TaskMoveRequest {
      */
     private Boolean autoResume;
 
+    /**
+     * 移入「测试中」且没有测试负责人时，是否自动认领给操作者。
+     * 不传 = 自动（拖拽/开始测试）；批量移动传 false，避免整批待测都记到操作者名下。
+     */
+    private Boolean autoClaim;
+
     /** 流转规则要求「需填原因」时必填；允许的流转传了也会写进移动日志 */
     private String reason;
 

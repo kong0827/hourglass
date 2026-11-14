@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>测试交接与测试负责人 · 原型（2026-11-13）</title>
+<style>
+:root{
+  --bg:#F7F8FA; --surface:#FFFFFF; --sunken:#F2F4F7; --hover:#F7F9FC;
+  --line:#E4E7EC; --line-soft:#EEF0F3; --line-strong:#D0D5DD;
+  --text:#101828; --text2:#475467; --text3:#667085; --faint:#98A2B3;
+  --blue:#2563EB; --blue-soft:#EFF4FF; --blue-border:#BFD3FE; --blue-fg:#1D4ED8;
+  --green:#12B76A; --green-soft:#ECFDF3; --green-border:#A6F4C5; --green-fg:#067647;
+  --orange:#F79009; --orange-soft:#FFFAEB; --orange-border:#FEDF89; --orange-fg:#B54708;
+  --red:#F04438; --red-soft:#FEF3F2; --red-border:#FDA29B; --red-fg:#B42318;
+  --purple:#7A5AF8; --purple-soft:#F4F3FF; --purple-border:#D9D6FE; --purple-fg:#5B3FD1;
+  --r-sm:8px; --r-md:10px; --r-lg:12px; --pill:999px;
+  --shadow:0 12px 32px -8px rgba(16,24,40,.16),0 4px 8px -4px rgba(16,24,40,.08);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:var(--font);color:var(--text);background:var(--bg);font-size:13px;-webkit-font-smoothing:antialiased}
+button{font-family:var(--font)}
+h1,h2,h3,h4,p{margin:0}
+a{color:inherit}
+.scene{display:none}
+.scene.on{display:block}
+
+/* ================= 顶栏 ================= */
+.topbar{height:58px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 24px;position:relative;z-index:3}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+.brand .mark{width:25px;height:25px;border-radius:8px;background:linear-gradient(150deg,#2563EB,#7A5AF8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+.crumb{color:var(--text3);font-size:12px}
+.crumb b{color:var(--text2);font-weight:600}
+.top-sp{flex:1}
+.top-ic{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px;background:#fff}
+.avatar{width:24px;height:24px;border-radius:50%;background:#E0EAFF;color:#1D4ED8;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none}
+.avatar.g{background:#E7F7EF;color:#067647}
+.avatar.o{background:#FFF1E4;color:#B54708}
+.avatar.p{background:#F1EEFF;color:#5B3FD1}
+.avatar.r{background:#FEECEB;color:#B42318}
+
+/* ================= 看板 ================= */
+.view-head{padding:16px 24px 0;display:flex;align-items:flex-end;gap:12px}
+.view-head h1{font-size:19px;font-weight:700;letter-spacing:.1px}
+.view-sub{font-size:12px;color:var(--text3);margin-left:2px}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;background:#fff}
+.seg span{padding:6px 11px;font-size:12px;color:var(--text3);border-right:1px solid var(--line)}
+.seg span:last-child{border-right:0}
+.seg span.on{background:var(--blue-soft);color:var(--blue-fg);font-weight:600}
+.filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 24px 0}
+.chip{height:27px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--text2);font-size:11.5px;display:inline-flex;align-items:center;gap:5px}
+.chip b{font-weight:600}
+.chip.on{background:var(--blue-soft);border-color:var(--blue-border);color:var(--blue-fg)}
+.chip.test{background:var(--purple-soft);border-color:var(--purple-border);color:var(--purple-fg);font-weight:600}
+.chip .x{color:var(--faint);font-size:13px;line-height:1}
+.f-sp{flex:1}
+.btn{height:29px;padding:0 11px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--text2);font-size:12px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.btn.soft{background:var(--sunken);border-color:transparent}
+.btn.sm{height:25px;padding:0 8px;font-size:11px;border-radius:7px}
+.btn.link{border:0;background:none;padding:0;height:auto;color:var(--blue-fg);font-size:11.5px}
+.btn.warn{background:var(--warning-soft, #FFFAEB);border-color:var(--orange-border);color:var(--orange-fg);font-weight:600}
+.board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:14px 24px 28px;align-items:start}
+.lane{background:var(--sunken);border-radius:10px;padding:8px;min-height:648px;position:relative}
+.lane.hl{box-shadow:inset 0 0 0 1.5px var(--purple-border)}
+.lane-head{display:flex;align-items:center;gap:7px;padding:4px 4px 10px;min-height:26px}
+.lane-name{font-size:12.5px;font-weight:650;color:var(--text2)}
+.lane-count{min-width:18px;height:18px;padding:0 6px;border-radius:9px;background:#fff;color:var(--text3);font-size:10.5px;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.lane-stat{font-size:10.5px;color:var(--faint);margin-left:auto;white-space:nowrap}
+.lane-stat.warn{color:var(--orange-fg);font-weight:600}
+.lane-stat.purple{color:var(--purple-fg)}
+.lane-batch{display:flex;align-items:center;gap:6px;margin:0 2px 8px;padding:6px 8px;border:1px dashed var(--line-strong);border-radius:7px;background:#fff;font-size:11px;color:var(--text3)}
+.lane-batch b{color:var(--text2);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.card{background:#fff;border:1px solid var(--line);border-radius:9px;padding:10px 11px;margin-bottom:8px;box-shadow:0 1px 2px rgba(16,24,40,.03)}
+.card.pick{border-color:var(--purple-border);box-shadow:0 0 0 2px rgba(122,90,248,.10)}
+.card-top{display:flex;align-items:flex-start;gap:7px}
+.pri{flex:none;margin-top:1px;font-size:9.5px;font-weight:800;color:var(--red-fg);background:var(--red-soft);border:1px solid var(--red-border);border-radius:5px;padding:1px 4px;line-height:13px}
+.pri.p2{color:var(--orange-fg);background:var(--orange-soft);border-color:var(--orange-border)}
+.card-title{font-size:12.5px;font-weight:600;line-height:1.45;color:var(--text2)}
+.card-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;font-size:10.5px;color:var(--faint)}
+.who{display:inline-flex;align-items:center;gap:5px;color:var(--text3)}
+.who .avatar{width:18px;height:18px;font-size:9px}
+.tags{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px}
+.tag{height:18px;padding:0 5px;border-radius:5px;font-size:10px;display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line);background:#fff;color:var(--text3);white-space:nowrap}
+.tag.bug{background:var(--red-soft);border-color:var(--red-border);color:var(--red-fg);font-weight:600}
+.tag.mod{background:var(--sunken);border-color:transparent}
+.tag.t{background:var(--purple-soft);border-color:var(--purple-border);color:var(--purple-fg)}
+.card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:10.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.card-foot .due{color:var(--text3)}
+.card-foot .over{color:var(--red-fg);font-weight:600}
+
+/* 本次新增：卡片测试条 */
+.tstrip{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:10.5px;min-height:20px}
+.tstrip .lbl{color:var(--faint);flex:none}
+.tstrip .tester{display:inline-flex;align-items:center;gap:4px;color:var(--text2);font-weight:600}
+.tstrip .tester .avatar{width:17px;height:17px;font-size:8.5px}
+.tstrip .mini-tag{height:18px;padding:0 5px;border-radius:5px;font-size:10px;display:inline-flex;align-items:center;gap:3px;border:1px solid var(--purple-border);background:var(--purple-soft);color:var(--purple-fg);font-weight:600;white-space:nowrap}
+.tstrip .wait{height:18px;padding:0 5px;border-radius:5px;font-size:10px;display:inline-flex;align-items:center;gap:3px;border:1px solid var(--orange-border);background:var(--orange-soft);color:var(--orange-fg);font-weight:600;white-space:nowrap}
+.tstrip .wait.hot{border-color:#FDA29B;background:var(--red-soft);color:var(--red-fg)}
+.tstrip .claim{margin-left:auto;color:var(--blue-fg);font-size:10.5px;font-weight:600;white-space:nowrap}
+.tstrip .since{color:var(--faint);margin-left:auto;white-space:nowrap}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#101828;color:#fff;font-size:12px;border-radius:999px;padding:9px 14px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;z-index:30;white-space:nowrap}
+.toast b{font-weight:650}
+.toast .undo{color:#93C5FD;font-weight:600;border-left:1px solid rgba(255,255,255,.18);padding-left:10px}
+
+/* ================= 抽屉 ================= */
+.scene-drawer{position:relative;height:100vh;overflow:hidden;background:#EEF0F3}
+.dim-board{position:absolute;inset:0;opacity:.55;filter:saturate(.7)}
+.dim-board .board{grid-template-columns:repeat(5,minmax(0,1fr))}
+.dim-board .card{pointer-events:none}
+.scrim{position:absolute;inset:0;background:rgba(16,24,40,.22);z-index:2}
+.drawer{position:absolute;right:0;top:0;bottom:0;width:1000px;background:#fff;border-left:1px solid var(--line);box-shadow:-18px 0 44px -12px rgba(16,24,40,.22);z-index:4;display:flex;flex-direction:column}
+.d-head{padding:14px 20px 0;border-bottom:1px solid var(--line);background:#fff;flex:none}
+.d-top{display:flex;align-items:flex-start;gap:10px}
+.type-chip{width:30px;height:30px;border-radius:8px;background:var(--blue-soft);color:var(--blue-fg);display:flex;align-items:center;justify-content:center;flex:none;margin-top:2px}
+.type-chip.bug{background:var(--red-soft);color:var(--red-fg)}
+.d-title-wrap{flex:1;min-width:0}
+.d-title-line{display:flex;align-items:center;gap:8px}
+.d-title{font-size:16px;font-weight:650;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.d-meta{display:flex;align-items:center;gap:7px;margin-top:5px;font-size:11.5px;color:var(--text3)}
+.d-meta .sep{color:var(--line-strong)}
+.d-meta b{color:var(--text2);font-weight:600}
+.d-acts{display:flex;align-items:center;gap:6px;flex:none}
+.icon-btn{width:29px;height:29px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text3);display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+.status-pill{height:24px;padding:0 9px;border:1px solid var(--purple-border);border-radius:999px;background:var(--purple-soft);color:var(--purple-fg);font-size:11.5px;font-weight:650;display:inline-flex;align-items:center;gap:6px;flex:none}
+.status-pill i{width:7px;height:7px;border-radius:50%;background:var(--purple)}
+.status-pill.orange{background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg)}
+.status-pill.orange i{background:var(--orange)}
+.d-tabs{display:flex;gap:2px;margin-top:12px}
+.d-tab{height:36px;padding:0 11px;border:0;border-bottom:2px solid transparent;background:none;color:var(--text3);font-size:12.5px;display:inline-flex;align-items:center;gap:5px}
+.d-tab.on{color:var(--blue-fg);border-bottom-color:var(--blue);font-weight:650}
+.d-tab .cnt{min-width:16px;height:16px;padding:0 5px;border-radius:999px;background:var(--sunken);color:var(--text3);font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+.d-body{padding:15px 20px 20px;overflow:hidden;flex:1}
+.ov{display:flex;flex-direction:column;gap:12px}
+.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.fact{border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 11px;min-width:0}
+.fact .k{font-size:10.5px;font-weight:650;color:var(--text3);letter-spacing:.02em}
+.fact .v{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fact .v .avatar{width:19px;height:19px;font-size:9px;border-radius:6px}
+.fact .s{font-size:10.5px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.read-card{border:1px solid var(--line);border-radius:12px;background:#fff;padding:13px 15px;box-shadow:0 1px 2px rgba(16,24,40,.03)}
+.read-card-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;min-height:20px}
+.read-card-head h3{font-size:13px;font-weight:650}
+.read-card-head .foot{margin-left:auto;font-size:11px;color:var(--text3)}
+.read-card-head .link{margin-left:auto;border:0;background:none;padding:0;color:var(--blue-fg);font-size:11.5px;font-weight:600}
+
+/* 本次新增：测试卡 */
+.test-card{border-color:var(--purple-border);background:linear-gradient(180deg,color-mix(in srgb,var(--purple) 4%,#fff),#fff 78%);position:relative}
+.test-card .read-card-head h3{display:flex;align-items:center;gap:7px}
+.tc-round{height:19px;padding:0 7px;border-radius:6px;background:var(--purple-soft);border:1px solid var(--purple-border);color:var(--purple-fg);font-size:10.5px;font-weight:650;display:inline-flex;align-items:center}
+.tc-grid{display:grid;grid-template-columns:1.15fr 1fr 1fr 1fr;gap:10px}
+.tc-cell{min-width:0;padding:8px 10px;border:1px solid var(--line-soft);border-radius:9px;background:rgba(255,255,255,.72)}
+.tc-cell.hl{border-color:var(--purple-border);background:#fff}
+.tc-k{font-size:10.5px;color:var(--text3);font-weight:600}
+.tc-v{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:650;margin-top:3px;white-space:nowrap}
+.tc-v .avatar{width:20px;height:20px;font-size:9px;border-radius:6px}
+.tc-v.muted{color:var(--faint);font-weight:500}
+.tc-sub{font-size:10.5px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-sub.warn{color:var(--orange-fg);font-weight:600}
+.tc-sub.ok{color:var(--green-fg);font-weight:600}
+.tc-bar{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft)}
+.tc-bar .hint{font-size:11px;color:var(--text3);line-height:1.5}
+.tc-bar .acts{margin-left:auto;display:flex;gap:7px;flex:none}
+.btn.danger{background:#fff;border-color:var(--red-border);color:var(--red-fg);font-weight:600}
+.btn.purple{background:var(--purple);border-color:var(--purple);color:#fff;font-weight:600}
+.rounds{display:flex;flex-direction:column;gap:0;margin-top:10px;border:1px solid var(--line-soft);border-radius:9px;overflow:hidden}
+.round-row{display:grid;grid-template-columns:58px 1fr 96px 118px 78px;gap:8px;align-items:center;padding:7px 10px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--line-soft);background:#fff}
+.round-row:last-child{border-bottom:0}
+.round-row.head{background:#FBFCFE;color:var(--text3);font-size:10.5px;font-weight:600}
+.round-row .rn{font-weight:650;color:var(--text)}
+.round-row .who2{display:inline-flex;align-items:center;gap:5px}
+.round-row .who2 .avatar{width:17px;height:17px;font-size:8.5px}
+.res{height:18px;padding:0 6px;border-radius:5px;font-size:10px;font-weight:650;display:inline-flex;align-items:center;border:1px solid var(--line);color:var(--text3);background:#fff;white-space:nowrap}
+.res.pass{background:var(--green-soft);border-color:var(--green-border);color:var(--green-fg)}
+.res.fail{background:var(--red-soft);border-color:var(--red-border);color:var(--red-fg)}
+.res.open{background:var(--purple-soft);border-color:var(--purple-border);color:var(--purple-fg)}
+.tc-note{display:flex;align-items:flex-start;gap:7px;margin-top:9px;padding:8px 10px;border-radius:8px;background:var(--orange-soft);border:1px solid var(--orange-border);color:var(--orange-fg);font-size:11px;line-height:1.55}
+.tc-note .ico{width:15px;height:15px;border-radius:50%;background:var(--orange);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none;margin-top:1px}
+.read-cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:12px}
+.desc{font-size:12.5px;line-height:1.7;color:var(--text2)}
+.desc p{margin:0 0 6px}
+.evidence{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px 12px;font-size:12px;margin:0}
+.evidence dt{color:var(--text3);white-space:nowrap}
+.evidence dd{margin:0;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.activity{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.activity li{display:flex;gap:8px;font-size:11.5px;line-height:17px;color:var(--text2)}
+.activity .t{flex:none;color:var(--text3);font-size:10.5px;font-variant-numeric:tabular-nums;padding-top:1px}
+
+/* ================= 我的工作 ================= */
+.page{max-width:1240px;margin:0 auto;padding:22px 24px 40px}
+.page-head{display:flex;align-items:flex-end;gap:12px;margin-bottom:14px}
+.page-head h1{font-size:20px;font-weight:700}
+.page-head .sub{font-size:12px;color:var(--text3);padding-bottom:2px}
+.mine-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.mtab{height:38px;padding:0 11px;border:0;border-bottom:2px solid transparent;background:none;color:var(--text3);font-size:12.5px;display:inline-flex;align-items:center;gap:6px}
+.mtab.on{color:var(--blue-fg);border-bottom-color:var(--blue);font-weight:650}
+.mtab .cnt{min-width:17px;height:16px;padding:0 5px;border-radius:999px;background:var(--sunken);color:var(--text3);font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+.mtab.on .cnt{background:var(--purple-soft);color:var(--purple-fg)}
+.mine-legend{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:11.5px;color:var(--text3)}
+.mine-legend .chip{height:24px}
+.mine-list{border:1px solid var(--line);border-radius:11px;background:#fff;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.03)}
+.row.head{background:#FBFCFE;color:var(--text3);font-size:10.5px;font-weight:600;padding:8px 14px;border-bottom:1px solid var(--line)}
+.row.head span:last-child{text-align:right}
+.group-head{display:flex;align-items:center;gap:8px;padding:9px 14px;background:#FBFCFE;border-bottom:1px solid var(--line-soft);font-size:11.5px;color:var(--text3)}
+.group-head b{color:var(--text2);font-weight:650;font-size:12px}
+.group-head .cnt{min-width:17px;height:16px;padding:0 5px;border-radius:999px;background:var(--sunken);color:var(--text3);font-size:10px;display:inline-flex;align-items:center;justify-content:center}
+.group-head .stat{margin-left:auto;color:var(--orange-fg);font-weight:600}
+.row{display:grid;grid-template-columns:22px minmax(0,1fr) 92px 128px 92px 105px 110px;gap:10px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line-soft);background:#fff}
+.row:last-child{border-bottom:0}
+.row:hover{background:#FCFDFE}
+.cbx{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:4px;background:#fff}
+.row-main{min-width:0}
+.row-title{font-size:12.5px;font-weight:600;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-sub{font-size:10.5px;color:var(--faint);margin-top:3px;display:flex;gap:6px;align-items:center}
+.row-sub .tag{height:16px;font-size:9.5px}
+.row-cell{font-size:11px;color:var(--text3);white-space:nowrap;font-variant-numeric:tabular-nums}
+.row-cell .strong{color:var(--text2);font-weight:600}
+.row-cell.warn{color:var(--orange-fg);font-weight:600}
+.row-cell .who{font-size:11px}
+.row-cell .who .avatar{width:17px;height:17px;font-size:8.5px}
+.row-act{display:flex;justify-content:flex-end;gap:6px}
+.empty-hint{padding:9px 14px;font-size:11px;color:var(--faint);background:#fff;border-top:1px dashed var(--line)}
+
+/* ================= 原型控制条 ================= */
+.proto-bar{position:fixed;left:16px;top:12px;z-index:50;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:11px;padding:6px 7px;box-shadow:var(--shadow)}
+.proto-bar .name{font-size:11.5px;font-weight:650;padding:0 3px;white-space:nowrap;color:var(--text2)}
+.pb-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.pb-seg button{height:25px;padding:0 9px;border:0;border-right:1px solid var(--line);background:#fff;color:var(--text3);font-size:11px;cursor:pointer}
+.pb-seg button:last-child{border-right:0}
+.pb-seg button.on{background:var(--blue-soft);color:var(--blue-fg);font-weight:600}
+.pb-btn{height:25px;padding:0 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--text2);font-size:11px;cursor:pointer}
+.pb-btn.on{background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg);font-weight:600}
+.shot .proto-bar{display:none}
+.shot .toast{display:flex}
+body:not(.show-toast) .toast{display:none}
+</style>
+</head>
+<body>
+
+<div class="proto-bar" id="protoBar">
+  <span class="name">测试交接原型</span>
+  <div class="pb-seg" id="sceneSeg">
+    <button data-scene="board" class="on">看板</button>
+    <button data-scene="drawer">抽屉</button>
+    <button data-scene="mine">我的工作</button>
+  </div>
+  <button class="pb-btn" id="variantBtn">未认领变体</button>
+</div>
+
+<!-- ================= 场景一：看板 ================= -->
+<section class="scene on" id="scene-board">
+  <div class="topbar">
+    <div class="brand"><span class="mark">沙</span>沙漏</div>
+    <div class="crumb">业务研发空间 / <b>支付平台</b></div>
+    <div class="top-sp"></div>
+    <div class="top-ic">⌕</div>
+    <div class="top-ic">?</div>
+    <span class="avatar p">孔</span>
+  </div>
+
+  <div class="view-head">
+    <h1>工作项看板</h1>
+    <span class="view-sub">支付平台 · 迭代 2026-11-2</span>
+    <div style="flex:1"></div>
+    <div class="seg"><span class="on">看板</span><span>列表</span><span>日历</span><span>甘特</span></div>
+    <button class="btn primary">+ 新建工作项</button>
+  </div>
+
+  <div class="filters">
+    <span class="chip">项目：全部</span>
+    <span class="chip">负责人：全部</span>
+    <span class="chip test">测试负责人：我 <span class="x">×</span></span>
+    <span class="chip">优先级：全部</span>
+    <span class="chip">类型：全部</span>
+    <div class="f-sp"></div>
+    <span class="chip on">仅看我的</span>
+  </div>
+
+  <div class="board" id="boardLanes">
+    <!-- 待处理 -->
+    <div class="lane">
+      <div class="lane-head"><span class="dot" style="background:#98A2B3"></span><span class="lane-name">待处理</span><span class="lane-count">4</span></div>
+      <article class="card">
+        <div class="card-top"><span class="pri p2">P2</span><div class="card-title">统一支付网关错误码映射</div></div>
+        <div class="card-meta"><span>支付平台 · 网关</span><span class="who"><span class="avatar o">陈</span>陈昊</span></div>
+        <div class="tags"><span class="tag mod">后端</span></div>
+        <div class="card-foot"><span class="due">截止 11-22</span><span>累计 2h</span></div>
+      </article>
+      <article class="card">
+        <div class="card-top"><span class="pri p2">P2</span><div class="card-title">对账文件失败重试策略</div></div>
+        <div class="card-meta"><span>支付平台 · 对账</span><span class="who"><span class="avatar g">张</span>张涛</span></div>
+        <div class="card-foot"><span class="due">截止 11-25</span><span>累计 —</span></div>
+      </article>
+    </div>
+
+    <!-- 进行中 -->
+    <div class="lane">
+      <div class="lane-head"><span class="dot" style="background:#2563EB"></span><span class="lane-name">进行中</span><span class="lane-count">3</span><span class="lane-stat">2 项计时中</span></div>
+      <article class="card">
+        <div class="card-top"><span class="pri">P0</span><div class="card-title">回调签名校验改造</div></div>
+        <div class="card-meta"><span>支付平台 · 回调</span><span class="who"><span class="avatar o">陈</span>陈昊</span></div>
+        <div class="tags"><span class="tag mod">后端</span><span class="tag">计时中</span></div>
+        <div class="card-foot"><span class="due over">逾期 1 天</span><span>累计 9h</span></div>
+      </article>
+      <article class="card">
+        <div class="card-top"><span class="pri p2">P1</span><div class="card-title">退款单详情页信息补全</div></div>
+        <div class="card-meta"><span>支付平台 · 退款</span><span class="who"><span class="avatar g">周</span>周然</span></div>
+        <div class="card-foot"><span class="due">截止 11-18</span><span>累计 4.5h</span></div>
+      </article>
+    </div>
+
+    <!-- 待测试 -->
+    <div class="lane hl">
+      <div class="lane-head">
+        <span class="dot" style="background:#8b6fb5"></span><span class="lane-name">待测试</span><span class="lane-count">3</span>
+        <span class="lane-stat warn">最久等待 3 天</span>
+      </div>
+      <div class="lane-batch"><b>1 项未指派测试</b><span style="margin-left:auto" class="btn link">批量指派</span></div>
+
+      <article class="card pick">
+        <div class="card-top"><span class="pri">P0</span><div class="card-title">订单导出支持异步任务</div></div>
+        <div class="card-meta"><span>支付平台 · 订单</span><span class="who"><span class="avatar g">张</span>张涛</span></div>
+        <div class="tags"><span class="tag mod">后端</span><span class="tag">提测</span></div>
+        <div class="tstrip">
+          <span class="wait hot">待领取 · 已等待 3 天</span>
+          <span class="claim">指派测试</span>
+        </div>
+        <div class="card-foot"><span class="due">截止 11-20</span><span>累计 12h</span></div>
+      </article>
+
+      <article class="card">
+        <div class="card-top"><span class="pri p2">P1</span><div class="card-title">付款回调幂等修复</div></div>
+        <div class="card-meta"><span>支付平台 · 回调</span><span class="who"><span class="avatar o">陈</span>陈昊</span></div>
+        <div class="tags"><span class="tag bug">缺陷</span><span class="tag">回归</span><span class="tag t">待回归</span></div>
+        <div class="tstrip">
+          <span class="lbl">测试</span>
+          <span class="tester"><span class="avatar p">林</span>林悦</span>
+          <span class="mini-tag">等待验证</span>
+          <span class="since">提测 2 小时前</span>
+        </div>
+        <div class="card-foot"><span class="due">截止 11-19</span><span>累计 5h</span></div>
+      </article>
+
+      <article class="card">
+        <div class="card-top"><span class="pri p2">P2</span><div class="card-title">权限矩阵前端联调</div></div>
+        <div class="card-meta"><span>支付平台 · 权限</span><span class="who"><span class="avatar g">周</span>周然</span></div>
+        <div class="tags"><span class="tag mod">前端</span></div>
+        <div class="tstrip">
+          <span class="wait">待领取 · 已等待 4 小时</span>
+          <span class="claim">领取</span>
+        </div>
+        <div class="card-foot"><span class="due">截止 11-21</span><span>累计 3h</span></div>
+      </article>
+    </div>
+
+    <!-- 测试中 -->
+    <div class="lane">
+      <div class="lane-head">
+        <span class="dot" style="background:#b06f9a"></span><span class="lane-name">测试中</span><span class="lane-count">2</span>
+        <span class="lane-stat purple">1 项今日开始</span>
+      </div>
+
+      <article class="card">
+        <div class="card-top"><span class="pri">P1</span><div class="card-title">重构权限校验中间件</div></div>
+        <div class="card-meta"><span>支付平台 · 权限</span><span class="who"><span class="avatar g">张</span>张涛</span></div>
+        <div class="tags"><span class="tag mod">后端</span></div>
+        <div class="tstrip">
+          <span class="lbl">测试</span>
+          <span class="tester"><span class="avatar p">林</span>林悦</span>
+          <span class="mini-tag">已测 1 天</span>
+          <span class="since">11-13 14:05</span>
+        </div>
+        <div class="card-foot"><span class="due">截止 11-18</span><span>累计 8h</span></div>
+      </article>
+
+      <article class="card">
+        <div class="card-top"><span class="pri p2">P2</span><div class="card-title">发票抬头校验规则</div></div>
+        <div class="card-meta"><span>支付平台 · 发票</span><span class="who"><span class="avatar r">王</span>王敏</span></div>
+        <div class="tags"><span class="tag mod">后端</span></div>
+        <div class="tstrip">
+          <span class="lbl">测试</span>
+          <span class="tester"><span class="avatar r">王</span>王敏</span>
+          <span class="mini-tag">已测 4 小时</span>
+          <span class="since">11-14 09:10</span>
+        </div>
+        <div class="card-foot"><span class="due">截止 11-20</span><span>累计 2h</span></div>
+      </article>
+    </div>
+
+    <!-- 已完成 -->
+    <div class="lane">
+      <div class="lane-head"><span class="dot" style="background:#5f7a4a"></span><span class="lane-name">已完成</span><span class="lane-count">6</span><span class="lane-stat">本周 4 项</span></div>
+      <article class="card">
+        <div class="card-top"><span class="pri p2">P2</span><div class="card-title">商户进件资料校验</div></div>
+        <div class="card-meta"><span>支付平台 · 商户</span><span class="who"><span class="avatar g">张</span>张涛</span></div>
+        <div class="tstrip">
+          <span class="lbl">测试</span>
+          <span class="tester"><span class="avatar p">林</span>林悦</span>
+          <span class="mini-tag" style="background:var(--green-soft);border-color:var(--green-border);color:var(--green-fg)">一次通过</span>
+          <span class="since">11-12 完成</span>
+        </div>
+        <div class="card-foot"><span>完成 11-12</span><span>周期 3 天</span></div>
+      </article>
+    </div>
+  </div>
+
+  <div class="toast" id="claimToast">
+    <span>已认领测试负责人：<b>林悦</b></span>
+    <span class="undo">改派</span>
+  </div>
+</section>
+
+<!-- ================= 场景二：工作项抽屉 ================= -->
+<section class="scene" id="scene-drawer">
+  <div class="scene-drawer" id="drawerScene">
+    <div class="dim-board">
+      <div class="topbar" style="opacity:.8">
+        <div class="brand"><span class="mark">沙</span>沙漏</div>
+        <div class="crumb">业务研发空间 / <b>支付平台</b></div>
+      </div>
+      <div class="view-head"><h1>工作项看板</h1><span class="view-sub">支付平台 · 迭代 2026-11-2</span></div>
+      <div class="board">
+        <div class="lane"><div class="lane-head"><span class="lane-name">待测试</span></div><div class="card"><div class="card-title">订单导出支持异步任务</div></div><div class="card"><div class="card-title">付款回调幂等修复</div></div></div>
+        <div class="lane"><div class="lane-head"><span class="lane-name">测试中</span></div><div class="card"><div class="card-title">重构权限校验中间件</div></div></div>
+        <div class="lane"><div class="lane-head"><span class="lane-name">已完成</span></div><div class="card"><div class="card-title">商户进件资料校验</div></div></div>
+      </div>
+    </div>
+    <div class="scrim"></div>
+
+    <aside class="drawer" aria-label="工作项详情">
+      <div class="d-head">
+        <div class="d-top">
+          <div class="type-chip" id="dTypeChip">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.4" y="3.8" width="11.2" height="12.8" rx="2"/><path d="M7.6 3.8V2.6h4.8v1.2M7.4 8.2h5.2M7.4 11.2h3.6"/></svg>
+          </div>
+          <div class="d-title-wrap">
+            <div class="d-title-line">
+              <div class="d-title" id="dTitle">重构权限校验中间件</div>
+              <span class="status-pill" id="dStatus"><i></i>测试中</span>
+            </div>
+            <div class="d-meta">
+              <span>支付平台 · 权限</span><span class="sep">|</span>
+              <span>负责人 <b>张涛</b></span><span class="sep">|</span>
+              <span>截止 11-18</span><span class="sep">|</span>
+              <span>P1</span>
+            </div>
+          </div>
+          <div class="d-acts">
+            <span class="icon-btn">⋯</span>
+            <span class="icon-btn">×</span>
+          </div>
+        </div>
+        <div class="d-tabs">
+          <button class="d-tab on">概览</button>
+          <button class="d-tab">执行 <span class="cnt">4</span></button>
+          <button class="d-tab">关联 <span class="cnt">3</span></button>
+          <button class="d-tab">动态 <span class="cnt">12</span></button>
+        </div>
+      </div>
+
+      <div class="d-body">
+        <div class="ov">
+          <div class="facts">
+            <div class="fact"><div class="k">负责人</div><div class="v" id="fOwner"><span class="avatar g">张</span>张涛</div><div class="s">开发责任人不变</div></div>
+            <div class="fact"><div class="k">提测时间</div><div class="v" id="fRequested">11-13 10:20</div><div class="s" id="fRequestedSub">等待 3 小时 45 分</div></div>
+            <div class="fact"><div class="k">测试耗时</div><div class="v" id="fDuration">1 天 2 小时</div><div class="s" id="fDurationSub">第 1 轮 · 进行中</div></div>
+            <div class="fact"><div class="k">缺陷回归</div><div class="v" id="fRegression">—</div><div class="s">仅缺陷工作项自动流转</div></div>
+          </div>
+
+          <section class="read-card test-card" id="testCard">
+            <div class="read-card-head">
+              <h3>测试 <span class="tc-round" id="tcRound">第 1 轮 · 测试中</span></h3>
+              <button class="link" id="tcReassign">改派</button>
+            </div>
+
+            <div class="tc-grid">
+              <div class="tc-cell hl">
+                <div class="tc-k">测试负责人</div>
+                <div class="tc-v" id="tcOwner"><span class="avatar p">林</span>林悦</div>
+                <div class="tc-sub" id="tcOwnerSub">11-13 14:05 认领</div>
+              </div>
+              <div class="tc-cell">
+                <div class="tc-k">开始测试</div>
+                <div class="tc-v" id="tcStart">11-13 14:05</div>
+                <div class="tc-sub" id="tcStartSub">距今 1 天 2 小时</div>
+              </div>
+              <div class="tc-cell">
+                <div class="tc-k">结束测试</div>
+                <div class="tc-v muted" id="tcEnd">—</div>
+                <div class="tc-sub" id="tcEndSub">通过或退回时自动记录</div>
+              </div>
+              <div class="tc-cell">
+                <div class="tc-k">本轮结果</div>
+                <div class="tc-v" id="tcResult">进行中</div>
+                <div class="tc-sub" id="tcResultSub">离开「测试中」时落结果</div>
+              </div>
+            </div>
+
+            <div class="tc-bar" id="tcBar">
+              <div class="hint" id="tcHint">测试通过 → 记录结束时间并流转到「已完成」；退回 → 必填原因，通知开发负责人。</div>
+              <div class="acts">
+                <button class="btn sm danger" id="btnReject">退回…</button>
+                <button class="btn sm purple" id="btnPass">通过并完成</button>
+              </div>
+            </div>
+
+            <div class="rounds" id="roundsBox">
+              <div class="round-row head"><span>轮次</span><span>测试负责人</span><span>开始</span><span>结束</span><span>结果</span></div>
+              <div class="round-row">
+                <span class="rn">第 1 轮</span>
+                <span class="who2"><span class="avatar p">林</span>林悦</span>
+                <span>11-13 14:05</span>
+                <span style="color:var(--faint)">进行中</span>
+                <span><span class="res open">测试中</span></span>
+              </div>
+            </div>
+
+            <div class="tc-note" id="tcNote" style="display:none">
+              <span class="ico">!</span>
+              <span>尚未指派测试负责人。可以直接通过，但卡片会持续提示「未指派测试」；建议先认领或改派。</span>
+            </div>
+          </section>
+
+          <div class="read-cols">
+            <section class="read-card">
+              <div class="read-card-head"><h3>内容</h3><span class="foot">3 个子任务 · 2 个附件</span></div>
+              <div class="desc" id="contentText">
+                <p>把权限校验从各业务 Controller 收口到中间件，按「资源 + 动作」统一判定；保留旧注解兼容期一个迭代。</p>
+              </div>
+            </section>
+            <section class="read-card">
+              <div class="read-card-head"><h3>交付证据</h3><span class="foot">计划 ≠ 已发布</span></div>
+              <dl class="evidence" id="evidenceList">
+                <dt>关联分支</dt><dd>feature/auth-mw</dd>
+                <dt>计划版本</dt><dd>v2.14.0</dd>
+                <dt>发布状态</dt><dd>未发布</dd>
+                <dt>测试用例</dt><dd>12 条 · 已执行 9</dd>
+              </dl>
+            </section>
+          </div>
+
+          <section class="read-card" style="padding-bottom:11px">
+            <div class="read-card-head"><h3>最近动态</h3><button class="link">查看全部</button></div>
+            <ul class="activity">
+              <li><span class="t">11-13 14:05</span><span>林悦 将工作项从「待测试」移动到「测试中」，认领为测试负责人</span></li>
+              <li><span class="t">11-13 10:20</span><span>张涛 将工作项从「进行中」移动到「待测试」</span></li>
+              <li><span class="t">11-12 18:40</span><span>张涛 完成「权限点枚举收敛」子任务</span></li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= 场景三：我的工作 ================= -->
+<section class="scene" id="scene-mine">
+  <div class="topbar">
+    <div class="brand"><span class="mark">沙</span>沙漏</div>
+    <div class="crumb">业务研发空间 / <b>支付平台</b></div>
+    <div class="top-sp"></div>
+    <div class="top-ic">⌕</div>
+    <div class="top-ic">?</div>
+    <span class="avatar p">林</span>
+  </div>
+
+  <div class="page">
+    <div class="page-head">
+      <h1>我的工作</h1>
+      <span class="sub">跨空间汇总 · 当前按「林悦」的身份查看</span>
+    </div>
+
+    <div class="mine-tabs">
+      <button class="mtab">待办 <span class="cnt">12</span></button>
+      <button class="mtab on">待我测试 <span class="cnt">4</span></button>
+      <button class="mtab">待验收 <span class="cnt">2</span></button>
+      <button class="mtab">待合并 <span class="cnt">1</span></button>
+      <button class="mtab">已关注 <span class="cnt">5</span></button>
+    </div>
+
+    <div class="mine-legend">
+      <span>「待领取」= 我所在项目内、尚未指派的测试队列；「测试中」= 测试负责人是我。开发负责人不重复出现</span>
+      <div style="flex:1"></div>
+      <span class="chip">按等待时长排序</span>
+      <span class="chip">全部项目</span>
+    </div>
+
+    <div class="mine-list">
+      <div class="row head"><span></span><span>工作项</span><span>状态</span><span>提测时间</span><span>等待 / 已测</span><span>开发负责人</span><span>操作</span></div>
+      <div class="group-head">
+        <span class="dot" style="background:#8b6fb5"></span>
+        <b>待领取 · 项目内</b><span class="cnt">2</span>
+        <span class="stat">最久已等待 3 天</span>
+      </div>
+
+      <div class="row">
+        <span class="cbx"></span>
+        <div class="row-main">
+          <div class="row-title">订单导出支持异步任务</div>
+          <div class="row-sub"><span>支付平台</span><span>·</span><span>订单</span><span class="tag">后端</span><span class="tag" style="background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg)">P0</span></div>
+        </div>
+        <div class="row-cell"><span class="res" style="background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg)">待领取</span></div>
+        <div class="row-cell">11-13 10:20</div>
+        <div class="row-cell warn">已等待 3 天</div>
+        <div class="row-cell"><span class="who"><span class="avatar g">张</span>张涛</span></div>
+        <div class="row-act"><button class="btn sm primary">开始测试</button></div>
+      </div>
+
+      <div class="row">
+        <span class="cbx"></span>
+        <div class="row-main">
+          <div class="row-title">权限矩阵前端联调</div>
+          <div class="row-sub"><span>支付平台</span><span>·</span><span>权限</span><span class="tag">前端</span><span class="tag" style="background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg)">P2</span></div>
+        </div>
+        <div class="row-cell"><span class="res" style="background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg)">待领取</span></div>
+        <div class="row-cell">11-13 09:40</div>
+        <div class="row-cell">已等待 4 小时</div>
+        <div class="row-cell"><span class="who"><span class="avatar g">周</span>周然</span></div>
+        <div class="row-act"><button class="btn sm primary">开始测试</button></div>
+      </div>
+
+      <div class="group-head" style="border-top:1px solid var(--line-soft)">
+        <span class="dot" style="background:#b06f9a"></span>
+        <b>测试中 · 我认领</b><span class="cnt">2</span>
+        <span class="stat" style="color:var(--purple-fg)">1 项超过 1 天</span>
+      </div>
+
+      <div class="row">
+        <span class="cbx"></span>
+        <div class="row-main">
+          <div class="row-title">重构权限校验中间件</div>
+          <div class="row-sub"><span>支付平台</span><span>·</span><span>权限</span><span class="tag">后端</span><span class="tag" style="background:var(--purple-soft);border-color:var(--purple-border);color:var(--purple-fg)">第 1 轮</span></div>
+        </div>
+        <div class="row-cell"><span class="res open">测试中</span></div>
+        <div class="row-cell">11-13 14:05</div>
+        <div class="row-cell">已测 1 天</div>
+        <div class="row-cell"><span class="who"><span class="avatar g">张</span>张涛</span></div>
+        <div class="row-act">
+          <button class="btn sm">退回</button>
+          <button class="btn sm purple">通过</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="cbx"></span>
+        <div class="row-main">
+          <div class="row-title">付款回调幂等修复</div>
+          <div class="row-sub"><span>支付平台</span><span>·</span><span>回调</span><span class="tag bug">缺陷</span><span class="tag" style="background:var(--purple-soft);border-color:var(--purple-border);color:var(--purple-fg)">回归</span></div>
+        </div>
+        <div class="row-cell"><span class="res open">待回归</span></div>
+        <div class="row-cell">11-14 10:05</div>
+        <div class="row-cell">已测 2 小时</div>
+        <div class="row-cell"><span class="who"><span class="avatar o">陈</span>陈昊</span></div>
+        <div class="row-act">
+          <button class="btn sm">退回</button>
+          <button class="btn sm purple">通过</button>
+        </div>
+      </div>
+
+      <div class="empty-hint">已完成的历史测试记录在「动态」里，不占用待我测试列表</div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var scene = params.get("scene") || "board";
+  var variant = params.get("variant") || "testing";
+  if(params.get("shot") === "1") document.body.classList.add("shot");
+  if(params.get("toast") === "1") document.body.classList.add("show-toast");
+
+  function setScene(name){
+    document.querySelectorAll(".scene").forEach(function(s){ s.classList.remove("on"); });
+    var el = document.getElementById("scene-" + name);
+    if(el) el.classList.add("on");
+    document.querySelectorAll("#sceneSeg button").forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-scene") === name);
+    });
+    document.getElementById("variantBtn").style.visibility = name === "drawer" ? "visible" : "hidden";
+  }
+  document.querySelectorAll("#sceneSeg button").forEach(function(b){
+    b.addEventListener("click", function(){
+      scene = b.getAttribute("data-scene");
+      setScene(scene);
+      if(scene === "drawer") applyVariant(variant);
+    });
+  });
+
+  function setText(id, html){
+    var el = document.getElementById(id);
+    if(el) el.innerHTML = html;
+  }
+  function applyVariant(v){
+    variant = v;
+    var isBug = v === "bug";
+    var unclaimed = v === "unclaimed";
+    var btn = document.getElementById("variantBtn");
+    btn.textContent = isBug ? "缺陷回归变体" : (unclaimed ? "未认领变体" : "测试中变体");
+    btn.classList.toggle("on", isBug || unclaimed);
+
+    document.getElementById("dTypeChip").classList.toggle("bug", isBug);
+    setText("dTitle", isBug ? "付款回调幂等修复" : (unclaimed ? "权限矩阵前端联调" : "重构权限校验中间件"));
+    setText("dStatus", isBug ? '<i></i>待测试 · 回归' : (unclaimed ? '<i></i>待测试 · 待领取' : '<i></i>测试中'));
+    document.querySelector("#dStatus").classList.toggle("orange", isBug || unclaimed);
+    document.querySelector(".d-meta").innerHTML = isBug
+      ? '<span>支付平台 · 回调</span><span class="sep">|</span><span>负责人 <b>陈昊</b></span><span class="sep">|</span><span>截止 11-19</span><span class="sep">|</span><span>P1 · 严重</span>'
+      : unclaimed
+        ? '<span>支付平台 · 权限</span><span class="sep">|</span><span>负责人 <b>周然</b></span><span class="sep">|</span><span>截止 11-21</span><span class="sep">|</span><span>P2</span>'
+        : '<span>支付平台 · 权限</span><span class="sep">|</span><span>负责人 <b>张涛</b></span><span class="sep">|</span><span>截止 11-18</span><span class="sep">|</span><span>P1</span>';
+
+    setText("fOwner", isBug
+      ? '<span class="avatar o">陈</span>陈昊'
+      : unclaimed
+        ? '<span class="avatar g">周</span>周然'
+        : '<span class="avatar g">张</span>张涛');
+    setText("fRequested", isBug ? "11-14 09:45" : (unclaimed ? "11-14 09:40" : "11-13 10:20"));
+    setText("fRequestedSub", isBug ? "等待 20 分" : (unclaimed ? "已等待 4 小时" : "等待 3 小时 45 分"));
+    setText("fDuration", unclaimed ? "—" : (isBug ? "1 小时 20 分" : "1 天 2 小时"));
+    setText("fDurationSub", unclaimed ? "尚未开始" : (isBug ? "第 2 轮 · 待回归" : "第 1 轮 · 进行中"));
+    setText("fRegression", isBug ? '<span style="color:var(--orange-fg)">待回归</span>' : "—");
+
+    setText("tcRound", unclaimed ? "第 1 轮 · 待领取" : (isBug ? "第 2 轮 · 待回归" : "第 1 轮 · 测试中"));
+    setText("tcOwner", unclaimed
+      ? '<span style="color:var(--orange-fg)">未指派</span>'
+      : (isBug ? '<span class="avatar r">王</span>王敏' : '<span class="avatar p">林</span>林悦'));
+    setText("tcOwnerSub", unclaimed
+      ? "拖入「测试中」或点「开始测试」即认领"
+      : (isBug ? "第 2 轮 · 上轮林悦" : "11-13 14:05 认领"));
+    setText("tcStart", unclaimed ? "—" : (isBug ? "11-14 10:05" : "11-13 14:05"));
+    setText("tcStart", unclaimed ? "—" : (isBug ? "11-14 10:05" : "11-13 14:05"));
+    setText("tcStartSub", unclaimed ? "尚未开始" : (isBug ? "距今 1 小时 20 分" : "距今 1 天 2 小时"));
+    setText("tcEnd", "—");
+    setText("tcEndSub", "通过或退回时自动记录");
+    setText("tcResult", unclaimed ? '<span style="color:var(--faint)">未开始</span>' : (isBug ? '<span style="color:var(--orange-fg)">待回归</span>' : "进行中"));
+    setText("tcResultSub", unclaimed ? "离开「测试中」时落结果" : "离开「测试中」时落结果");
+    setText("tcHint", unclaimed
+      ? "开始测试 → 记录开始时间并认领为测试负责人；也可以先改派给其他人。"
+      : "测试通过 → 记录结束时间并流转到「已完成」；退回 → 必填原因，通知开发负责人。");
+
+    var bar = document.getElementById("tcBar");
+    bar.querySelector(".acts").innerHTML = unclaimed
+      ? '<button class="btn sm">改派…</button><button class="btn sm primary">开始测试并认领</button>'
+      : '<button class="btn sm danger">退回…</button><button class="btn sm purple">' + (isBug ? "回归通过" : "通过并完成") + '</button>';
+
+    var note = document.getElementById("tcNote");
+    note.style.display = unclaimed ? "flex" : "none";
+
+    var rounds = document.getElementById("roundsBox");
+    if(unclaimed){
+      rounds.innerHTML = '<div class="round-row head"><span>轮次</span><span>测试负责人</span><span>开始</span><span>结束</span><span>结果</span></div>'
+        + '<div class="round-row"><span class="rn">第 1 轮</span><span style="color:var(--faint)">未指派</span><span style="color:var(--faint)">—</span><span style="color:var(--faint)">—</span><span><span class="res">待领取</span></span></div>';
+    }else if(isBug){
+      rounds.innerHTML = '<div class="round-row head"><span>轮次</span><span>测试负责人</span><span>开始</span><span>结束</span><span>结果</span></div>'
+        + '<div class="round-row"><span class="rn">第 2 轮</span><span class="who2"><span class="avatar r">王</span>王敏</span><span>11-14 10:05</span><span style="color:var(--faint)">进行中</span><span><span class="res open">待回归</span></span></div>'
+        + '<div class="round-row"><span class="rn">第 1 轮</span><span class="who2"><span class="avatar p">林</span>林悦</span><span>11-11 15:20</span><span>11-11 16:40</span><span><span class="res fail">已退回</span></span></div>'
+        + '<div class="round-row" style="grid-template-columns:58px 1fr;color:var(--text3)"><span style="font-weight:600">退回原因</span><span>重复回调仍生成两笔流水，需补唯一索引后重新提测</span></div>';
+    }else{
+      rounds.innerHTML = '<div class="round-row head"><span>轮次</span><span>测试负责人</span><span>开始</span><span>结束</span><span>结果</span></div>'
+        + '<div class="round-row"><span class="rn">第 1 轮</span><span class="who2"><span class="avatar p">林</span>林悦</span><span>11-13 14:05</span><span style="color:var(--faint)">进行中</span><span><span class="res open">测试中</span></span></div>';
+    }
+
+    setText("contentText", isBug
+      ? "<p>修复重复回调导致重复入账：在回调流水表增加业务唯一键，重复请求直接返回上一次结果。</p>"
+      : unclaimed
+        ? "<p>按角色渲染列与操作按钮，联调权限矩阵接口；覆盖管理员、项目负责人、普通成员三种视角。</p>"
+        : "<p>把权限校验从各业务 Controller 收口到中间件，按「资源 + 动作」统一判定；保留旧注解兼容期一个迭代。</p>");
+
+    var ev = isBug
+      ? [["关联分支","hotfix/pay-cb"],["发现版本","v2.13.2"],["计划版本","v2.13.3"],["发布状态","未发布"],["测试用例","6 条 · 已执行 0"]]
+      : unclaimed
+        ? [["关联分支","feature/perm-matrix"],["计划版本","v2.14.0"],["发布状态","未发布"],["测试用例","8 条 · 已执行 0"]]
+        : [["关联分支","feature/auth-mw"],["计划版本","v2.14.0"],["发布状态","未发布"],["测试用例","12 条 · 已执行 9"]];
+    document.getElementById("evidenceList").innerHTML = ev.map(function(r){
+      return "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>";
+    }).join("");
+
+    var activity = document.querySelectorAll(".activity li");
+    if(activity.length >= 3){
+      if(isBug){
+        activity[0].innerHTML = '<span class="t">11-14 09:45</span><span>陈昊 将工作项从「进行中」移动到「待测试」，回归状态：待回归</span>';
+        activity[1].innerHTML = '<span class="t">11-11 16:40</span><span>林悦 退回：重复回调仍生成两笔流水（必填原因）</span>';
+        activity[2].innerHTML = '<span class="t">11-11 15:20</span><span>林悦 认领测试负责人，开始第 1 轮回归</span>';
+      }else if(unclaimed){
+        activity[0].innerHTML = '<span class="t">11-14 09:40</span><span>周然 将工作项从「进行中」移动到「待测试」</span>';
+        activity[1].innerHTML = '<span class="t">11-14 09:10</span><span>周然 完成「按角色渲染列」子任务</span>';
+        activity[2].innerHTML = '<span class="t">11-13 18:20</span><span>周然 开始计时</span>';
+      }else{
+        activity[0].innerHTML = '<span class="t">11-13 14:05</span><span>林悦 将工作项从「待测试」移动到「测试中」，认领为测试负责人</span>';
+        activity[1].innerHTML = '<span class="t">11-13 10:20</span><span>张涛 将工作项从「进行中」移动到「待测试」</span>';
+        activity[2].innerHTML = '<span class="t">11-12 18:40</span><span>张涛 完成「权限点枚举收敛」子任务</span>';
+      }
+    }
+  }
+
+  document.getElementById("variantBtn").addEventListener("click", function(){
+    var order = ["testing", "unclaimed", "bug"];
+    var next = order[(order.indexOf(variant) + 1) % order.length];
+    applyVariant(next);
+  });
+
+  setScene(scene);
+  if(scene === "drawer") applyVariant(variant);
+})();
+</script>
+</body>
+</html>

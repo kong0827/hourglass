@@ -277,24 +277,32 @@ input[type="search"]:-webkit-autofill{animation:ds-autofill-start 1ms 1;}
 }
 body[data-view="board"] .filterbar,
 body[data-view="list"] .filterbar,
+body[data-view="tree"] .filterbar,
 body[data-view="mine"] .filterbar,
 body[data-view="calendar"] .filterbar{display:flex;}
-.fb-main{display:flex;align-items:center;gap:12px;min-width:0;flex:1 1 auto;overflow:visible;flex-wrap:nowrap;}
+/* 左侧入口固定、已选条件单独成区：条件变多时只滚动已选区，
+   不再把「截止期 / 项目 / 状态 / 负责人 / 优先级」自动滚出视野。 */
+.fb-main{display:flex;align-items:center;gap:12px;min-width:0;flex:0 1 auto;overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;scrollbar-width:none;}
+.fb-main::-webkit-scrollbar{display:none;}
 .fb-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto;flex-wrap:nowrap;}
 .filterbar .chip{white-space:nowrap;}
 .fb-actions{display:flex;align-items:center;gap:6px;padding-left:12px;border-left:1px solid var(--border);}
 .fgroup{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto;}
 .fgroup .group-label{white-space:nowrap;}
-/* 已选条件固定一行：超出时横向滚动，避免挤压状态 chip 或换行成第二行 */
-.fb-active{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}
+/* 已选条件固定一行：超出时只滚动本区，左右入口保持可见 */
+.fb-active{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding-left:12px;border-left:1px solid var(--border);}
+.fb-active:empty{display:none;}
+.fb-active[hidden]{display:none;}
 .fb-active::-webkit-scrollbar{display:none;}
 .fb-section-label{color:var(--text-3);font-size:11.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;}
 /* 列表视图：Smart Bar 已承载「视图」概念，筛选栏不再重复显示保存视图入口；
    我的工作是跨空间个人待办，工作项列表的视图带列表布局（预置/分组/排序），在这里只能部分生效 */
 body[data-view="list"] #viewGroup,
-body[data-view="list"] #btnSaveView,
-body[data-view="mine"] #viewGroup,
-body[data-view="mine"] #btnSaveView{display:none;}
+body[data-view="mine"] #viewGroup{display:none;}
+#viewGroup{position:relative;}
+#viewsMenu{left:auto;right:0;top:calc(100% + 6px);min-width:220px;max-width:300px;max-height:360px;overflow:auto;}
+#viewsMenu .menu-row .menu-item{flex:1 1 auto;min-width:0;}
+#viewsMenu .menu-row .dim-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .chips{display:inline-flex;align-items:center;gap:6px;}
 .chips:empty{display:none;}
 
@@ -403,7 +411,9 @@ body.side-rail .side-foot{flex-direction:column;height:auto;padding:8px 0;gap:6p
 @media (max-width:639px){
   .filterbar{flex-wrap:wrap;height:auto;min-height:var(--filterbar-h);row-gap:6px;padding-block:8px;overflow:visible;}
   .fb-main{flex:1 1 auto;}
-  .fb-active{flex:1 1 auto;overflow:visible;flex-wrap:wrap;}
+  .fb-active{flex:1 1 auto;overflow:visible;flex-wrap:wrap;border-left:0;padding-left:0;}
+  /* 手机面板里全屏没有意义：收起后也占不满，反而多出一行孤立图标 */
+  #mobFilterSheet [data-view-fullscreen]{display:none;}
 }
 /* <1280 提示条 */
 .narrow-hint{

@@ -14,11 +14,17 @@ public class ProjectVersion {
     private String reqId;
     private String name;
     private String description;
-    /** planned/active/released */
+    /** planned/active/released/closed/canceled */
     private String status;
     private LocalDate startDate;
     private LocalDate targetDate;
     private LocalDateTime releasedAt;
+    /** 关闭或取消的时间 */
+    private LocalDateTime endedAt;
+    /** 关闭或取消原因 */
+    private String endReason;
+    /** 开始开发时的承诺基线快照时间；历史版本可能为空 */
+    private LocalDateTime commitmentAt;
     private Long revision = 0L;
     private Boolean canManageReleasePlan;
     private Boolean canPublish;

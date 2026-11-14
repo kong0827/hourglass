@@ -7,14 +7,24 @@ import { companyChipHTML, companyNameOf } from "../lib/company.js";
 import { loadProjectMembers, peekProjectMembers, memberRoleTitles } from "../lib/member-labels.js";
 import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { canEditReq, canEditTask, canManageProject, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, canManageProject, catNameById, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
-import { isHtml, normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, releaseSnapshotHTML, fmtReleaseTime, COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, docTypeName, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate, versionPhaseInfoHTML, weekdayCN } from "../lib/format.js";
+import { isHtml, normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, releaseSnapshotHTML, fmtReleaseTime, itemNoText, COLUMNS, CAT_DEFAULT_COLOR, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, docTypeName, duePresetDate, elapsedText, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate, versionPhaseInfoHTML, weekdayCN } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { loadBoard, loadReqs } from "../views/board.js";
 import { loadView, viewModule } from "./view-loader.js";
+/* 树形视图懒加载：已加载才刷新，避免为一次刷新拉取整个模块 */
+function refreshTreeIfOpen(){
+  var m = viewModule("tree");
+  if(m && m.refreshTreeIfOpen) m.refreshTreeIfOpen();
+}
+/* 影响链视图懒加载：同上 */
+function refreshChainIfOpen(){
+  var m = viewModule("chain");
+  if(m && m.refreshChainIfOpen) m.refreshChainIfOpen();
+}
 import { refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
 import { refreshListIfOpen } from "../views/list.js";
 
@@ -25,8 +35,307 @@ function syncDrawerDirty(){
   if(drawerEl) drawerEl.classList.toggle("dirty", dirty);
   if(taskFormHint){
     taskFormHint.classList.toggle("dirty", dirty);
-    taskFormHint.textContent = dirty ? "有未保存的改动" : "";
+    taskFormHint.textContent = dirty ? "有未保存的改动"
+      : (rt.drawerReadOnly ? "你对该项目只有查看权限，可查看但不能修改"
+        : (drawerMode === "read" ? "点标题、描述或概览事实即可改，失焦自动保存；完整字段用「编辑」" : "保存后可拖动卡片调整状态与顺序"));
   }
+}
+
+/* ==================== 详情子页：读态 / 四页签 ====================
+   既有区块整体搬入「执行 / 关联 / 动态」，保留原 id 与事件绑定：
+   计时开始/停止、补记工时、检查项、附件、依赖、评论都不重写。 */
+var drawerMode = "edit", drawerTab = "overview", timelineCache = [];
+var drawerTabsEl = $("drawerTabs"), drawerBodyEl = $("drawerBody"),
+    drawerStatusPill = $("drawerStatusPill"), btnDrawerEdit = $("btnDrawerEdit"),
+    btnFootStatus = $("btnFootStatus"), btnFootWatch = $("btnFootWatch");
+function drawerColMeta(id){
+  var m = colMeta(id);
+  if(m) return m;
+  var list = rt.colDefsCache || [];
+  for(var i = 0; i < list.length; i++) if(list[i].id === id) return list[i];
+  return { id: id, name: id || "未设置", color: "#98A2B3" };
+}
+function relocateDrawerSections(){
+  var exec = $("paneExec"), rel = $("paneRel"), act = $("paneActivity"), edit = $("drawerEditOverview");
+  if(!exec || !rel || !act || !edit) return;
+  function stackOf(box){
+    var s = box.querySelector(".stack");
+    if(!s){ s = document.createElement("div"); s.className = "stack"; box.appendChild(s); }
+    return s;
+  }
+  var execBox = stackOf(exec), relBox = rel.querySelector(".stack") || rel, actBox = stackOf(act);
+  [$("fSubtasks"), $("fWork"), $("fAttach"), $("fDeps")].forEach(function(el){ if(el) execBox.appendChild(el); });
+  [$("drawerSource"), $("assocEditBox"), $("taskPublication")].forEach(function(el){ if(el) relBox.appendChild(el); });
+  [$("fComments"), $("fTimeline")].forEach(function(el){ if(el) actBox.appendChild(el); });
+  var note = $("afterCreateNote");
+  if(note) edit.appendChild(note);
+  var layout = taskDrawer.querySelector(".task-detail-layout");
+  if(layout) layout.classList.add("single");
+  var aside = taskDrawer.querySelector(".task-detail-side");
+  if(aside && !aside.children.length) aside.remove();
+}
+relocateDrawerSections();
+function expandDrawerSects(root){
+  if(!root) return;
+  root.querySelectorAll(".drawer-sect").forEach(function(s){
+    s.classList.remove("collapsed");
+    var head = s.querySelector(".drawer-sect-head");
+    if(head) head.setAttribute("aria-expanded", "true");
+  });
+}
+function setDrawerTab(name){
+  if(["overview", "exec", "rel", "activity"].indexOf(name) < 0) name = "overview";
+  drawerTab = name;
+  taskDrawer.querySelectorAll("[data-drawer-tab]").forEach(function(b){
+    b.setAttribute("aria-selected", b.dataset.drawerTab === name ? "true" : "false");
+  });
+  taskDrawer.querySelectorAll("[data-drawer-pane]").forEach(function(p){
+    p.hidden = p.dataset.drawerPane !== name;
+  });
+  if(name === "exec") expandDrawerSects($("paneExec"));
+  if(name === "activity") expandDrawerSects($("paneActivity"));
+  if(name === "overview") renderReadView();
+  if(drawerBodyEl) drawerBodyEl.scrollTop = 0;
+}
+function setDrawerMode(mode){
+  if(mode === "read" && !rt.editingId) mode = "edit";
+  drawerMode = mode;
+  var isRead = mode === "read";
+  var root = taskDrawer.querySelector(".drawer");
+  if(root) root.classList.toggle("read-mode", isRead);
+  var readBox = $("drawerReadOverview"), editBox = $("drawerEditOverview");
+  if(readBox) readBox.hidden = !isRead;
+  if(editBox) editBox.hidden = isRead;
+  /* 关联页：读态看摘要，编辑态才展开表单；发布事实两种模式都可看 */
+  var readAssoc = $("readAssocCard"), assocBox = $("assocEditBox");
+  if(readAssoc) readAssoc.hidden = !isRead;
+  if(assocBox) assocBox.hidden = isRead;
+  if(drawerTabsEl) drawerTabsEl.hidden = !rt.editingId;
+  if(btnDrawerEdit) btnDrawerEdit.hidden = !isRead || rt.drawerReadOnly;
+  if(btnTaskNew) btnTaskNew.hidden = !rt.editingId || rt.drawerReadOnly;
+  if(taskDrawerTitle) taskDrawerTitle.title = isRead ? "点击编辑工作项" : "";
+  if(btnSaveTask) btnSaveTask.hidden = isRead || rt.drawerReadOnly;
+  if(btnSaveTaskContinue) btnSaveTaskContinue.hidden = isRead || rt.drawerReadOnly || !rt.editingId;
+  if(btnDeleteTask) btnDeleteTask.hidden = rt.drawerReadOnly || !rt.editingId;
+  var cancelBtn = $("btnCancelTask");
+  if(cancelBtn) cancelBtn.textContent = isRead ? "关闭" : "取消";
+  if(taskFormHint && !rt.formDirty){
+    taskFormHint.textContent = rt.drawerReadOnly
+      ? "你对该项目只有查看权限，可查看但不能修改"
+      : (isRead ? "点标题、描述或概览事实即可改，失焦自动保存；完整字段用「编辑」" : "保存后可拖动卡片调整状态与顺序");
+  }
+  taskForm.classList.toggle("is-create", !rt.editingId);
+  setDrawerTab("overview");
+  syncInlineTextAffordance();
+}
+function enterDrawerEdit(opts){
+  if(!rt.editingId) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  setDrawerMode("edit");
+  setTimeout(function(){
+    if(opts && opts.focus === "desc"){
+      try{ iDesc.scrollIntoView({ block: "center" }); }catch(e){ /* noop */ }
+      /* SunEditor 实例的 focus() 在隐藏容器里不生效，直接聚焦可编辑区 */
+      ensureTaskDescEditor().then(function(){
+        /* SunEditor 会把编辑器插到容器旁边（容器自身 display:none），从父级找可编辑区 */
+        var el = iDesc && iDesc.parentElement ? iDesc.parentElement.querySelector(".sun-editor-editable") : null;
+        if(el){ try{ el.focus(); }catch(e){} }
+      }).catch(function(){ /* noop */ });
+    }else{
+      try{ iTitle.focus(); iTitle.select(); }catch(e){ /* noop */ }
+    }
+  }, 50);
+}
+function readTask(){
+  return (rt.editingId && (taskCacheExtra[rt.editingId] || taskById(rt.editingId))) || {};
+}
+function selText(id){
+  var el = $(id);
+  if(!el || !el.value || el.selectedIndex < 0) return "";
+  return (el.options[el.selectedIndex].textContent || "").trim();
+}
+/* 负责人下拉的选项带「姓名 · 角色 · 公司」，只读区只展示姓名 */
+function ownerNameNow(){
+  var name = selText("iOwner");
+  if(!name) return "";
+  return name.split(" · ")[0].trim();
+}
+function versionNamesNow(){
+  var sel = $("iVersion"), names = [];
+  if(sel && sel.getAttribute("data-ready")){
+    var ids = selectedVersionIds(sel);
+    for(var i = 0; i < sel.options.length; i++){
+      if(ids.indexOf(sel.options[i].value) >= 0) names.push(sel.options[i].textContent);
+    }
+  }
+  if(names.length) return names.join("、");
+  return taskVersionsText(readTask()) || "";
+}
+function demandNameNow(){
+  var opt = demandOption();
+  return opt ? (opt.textContent || "").replace(/（[^）]*）\s*$/, "").trim() : "";
+}
+function renderReadDesc(){
+  var box = $("readDesc");
+  if(!box || box.isContentEditable) return;
+  var html = readTask().description || "";
+  box.innerHTML = html ? (isHtml(html) ? descHtmlForEditor(html) : plainTextToHtml(html)) : "";
+}
+function renderReadChecklist(){
+  var list = rt.subtasksCache || [], done = 0;
+  list.forEach(function(s){ if(s.done) done++; });
+  var meta = $("readSubMeta"), bar = $("readSubBar"), ul = $("readChecklist");
+  if(meta) meta.textContent = list.length ? done + "/" + list.length : "";
+  if(bar) bar.style.width = (list.length ? Math.round(done / list.length * 100) : 0) + "%";
+  if(!ul) return;
+  if(!list.length){
+    ul.innerHTML = '<li class="read-empty">还没有检查项，去「执行」里添加</li>';
+    return;
+  }
+  ul.innerHTML = list.slice(0, 6).map(function(s){
+    return '<li class="' + (s.done ? "done" : "") + '">' +
+      '<input type="checkbox" class="read-tick" data-read-sub-toggle="' + s.id + '"' + (s.done ? " checked" : "") +
+        (rt.drawerReadOnly ? " disabled" : "") + ' aria-label="勾选检查项：' + esc(s.title) + '">' +
+      '<span>' + esc(s.title) + '</span></li>';
+  }).join("") + (list.length > 6
+    ? '<li class="read-empty">还有 ' + (list.length - 6) + ' 项，去「管理」查看</li>' : "");
+}
+function renderReadEvidence(){
+  var dl = $("readEvidence");
+  if(!dl) return;
+  var t = readTask();
+  var pub = t.publishedAt ? ("已发布 · " + fmtReleaseTime(t.publishedAt))
+    : (t.everPublished ? "有发布记录" : "未发布");
+  dl.innerHTML = [
+    ["计划版本", versionNamesNow() || "待规划"],
+    ["关联需求", demandNameNow() || "未关联"],
+    ["生产发布", pub],
+    ["关联文档", assocText("iReqDoc") || "未设置"]
+  ].map(function(row){
+    return '<dt>' + esc(row[0]) + '</dt><dd title="' + esc(row[1]) + '">' + esc(row[1]) + '</dd>';
+  }).join("");
+}
+/* ==================== 读态测试卡：谁测、何时提测、测了多久 ==================== */
+function testPhaseOf(t, col){
+  if(col === "testing") return t.testOwnerUserId ? "测试中" : "待领取";
+  if(col === "test") return t.testOwnerUserId ? "待测试" : "待领取";
+  if(t.testFinishedAt) return col === "done" ? "已通过" : "已退回";
+  return "";
+}
+function renderReadTestCard(){
+  var card = $("readTestCard");
+  if(!card) return;
+  var t = readTask();
+  var col = (iCol && iCol.value) || t.boardColumn || "";
+  var requested = t.testRequestedAt || "", start = t.testStartedAt || "", end = t.testFinishedAt || "";
+  var tester = t.testOwner || t.testOwnerUserId || "";
+  var visible = col === "test" || col === "testing" || !!(requested || start || end || t.testOwnerUserId);
+  card.hidden = !visible;
+  if(!visible) return;
+  var editable = !!rt.editingId && !rt.drawerReadOnly;
+  if($("readTestPhase")) $("readTestPhase").textContent = testPhaseOf(t, col) || "—";
+  var ownerEl = $("readTestOwner");
+  if(ownerEl){
+    ownerEl.className = "test-v" + (tester ? "" : " is-empty");
+    ownerEl.innerHTML = tester
+      ? avatarHTML(tester, "sm") + '<span class="test-name">' + esc(tester) + '</span>'
+      : '<span class="test-empty">未指派</span>';
+  }
+  if($("readTestOwnerSub")) $("readTestOwnerSub").textContent = tester
+    ? (col === "testing" ? "本轮进行中" : (end ? "本轮已结束" : "等待开始测试"))
+    : (col === "test" || col === "testing" ? "点「开始测试」或改派给其他人" : "尚未指派");
+  if($("readTestRequested")) $("readTestRequested").textContent = requested ? fmtTs(requested) : "—";
+  if($("readTestRequestedSub")) $("readTestRequestedSub").textContent = requested
+    ? (start || end ? "" : (col === "test" ? "已等待 " + elapsedText(requested) : ""))
+    : "";
+  if($("readTestStart")) $("readTestStart").textContent = start ? fmtTs(start) : "—";
+  if($("readTestStartSub")) $("readTestStartSub").textContent = start
+    ? (end ? "" : "已测 " + elapsedText(start))
+    : "进入「测试中」自动记录";
+  if($("readTestEnd")) $("readTestEnd").textContent = end ? fmtTs(end) : "—";
+  if($("readTestEndSub")) $("readTestEndSub").textContent = end ? "" : "通过或退回时自动记录";
+  if($("readTestReassign")) $("readTestReassign").hidden = !editable || (col !== "test" && col !== "testing");
+  var note = $("readTestNote");
+  if(note){
+    note.hidden = !((col === "test" || col === "testing") && !t.testOwnerUserId);
+    note.textContent = "尚未指派测试负责人。可以直接通过，但卡片会持续提示「未指派测试」；建议先认领或改派。";
+  }
+  var acts = $("readTestActs");
+  if(acts) acts.hidden = !(editable && (col === "test" || col === "testing"));
+  var claimable = col === "test" || (col === "testing" && !t.testOwnerUserId);
+  if($("readTestClaim")){
+    $("readTestClaim").hidden = !claimable;
+    $("readTestClaim").textContent = col === "test"
+      ? (t.testOwnerUserId ? "开始测试" : "开始测试并认领")
+      : "认领测试";
+  }
+  if($("readTestReject")) $("readTestReject").hidden = col !== "testing";
+  if($("readTestPass")) $("readTestPass").hidden = col !== "testing";
+  if($("readTestHint")) $("readTestHint").textContent = col === "test"
+    ? "开始测试 → 记录开始时间并认领为测试负责人；也可以先改派给其他人。"
+    : (t.testOwnerUserId
+      ? "测试通过 → 记录结束时间并流转到「已完成」；退回 → 必填原因，通知开发负责人。"
+      : "认领测试 → 记录开始时间；也可以先改派给其他人。");
+}
+function renderReadAssoc(){
+  var dl = $("readAssoc");
+  if(!dl) return;
+  var t = readTask();
+  dl.innerHTML = [
+    ["所属项目", reqNameById(t.reqId || (iReq && iReq.value)) || "未归属项目"],
+    ["模块", catNameById(t.categoryId || rt.formCat) || "未指定"],
+    ["负责人", ownerNameNow() || "未分配"],
+    ["计划版本", versionNamesNow() || "待规划"],
+    ["关联需求", demandNameNow() || "未关联"],
+    ["所属史诗", assocText("iEpic") || "未设置"],
+    ["所属分支", assocText("iBranch") || "未设置"],
+    ["关联文档", assocText("iReqDoc") || "未设置"]
+  ].map(function(row){
+    return '<dt>' + esc(row[0]) + '</dt><dd title="' + esc(row[1]) + '">' + esc(row[1]) + '</dd>';
+  }).join("");
+}
+function activityEntries(){
+  var out = [];
+  (commentsCache || []).forEach(function(c){
+    out.push({ at: c.createdAt, who: c.authorName || "成员", kind: "评论", text: c.content || "" });
+  });
+  (timelineCache || []).forEach(function(l){
+    out.push({ at: l.createdAt, who: l.actorName || "系统", kind: "操作", text: l.detail || l.action || "" });
+  });
+  out.sort(function(a, b){ return String(b.at || "").localeCompare(String(a.at || "")); });
+  return out;
+}
+function renderReadActivity(){
+  var ul = $("readActivity");
+  if(!ul) return;
+  var list = activityEntries().slice(0, 2);
+  ul.innerHTML = list.length ? list.map(function(it){
+    return '<li><span class="ra-time">' + esc(fmtTs(it.at) || "—") + '</span>' +
+      '<span class="ra-txt"><b>' + esc(it.who) + '</b> · ' + esc(it.kind) + '：' +
+      esc(String(it.text).slice(0, 90)) + '</span></li>';
+  }).join("") : '<li class="read-empty">暂无动态</li>';
+}
+function syncDrawerCounts(){
+  var list = rt.subtasksCache || [], done = 0;
+  list.forEach(function(s){ if(s.done) done++; });
+  var ec = $("tabExecCount");
+  if(ec) ec.textContent = list.length ? done + "/" + list.length : "";
+  var ac = $("tabActivityCount");
+  if(ac){
+    var n = (commentsCache || []).length + (timelineCache || []).length;
+    ac.textContent = n ? String(n) : "";
+  }
+}
+function renderReadView(){
+  if(drawerMode !== "read" || !rt.editingId) return;
+  syncDrawerFacts();
+  renderReadTestCard();
+  renderReadDesc();
+  renderReadChecklist();
+  renderReadEvidence();
+  renderReadAssoc();
+  renderReadActivity();
+  syncDrawerCounts();
 }
 /* 任务描述富文本编辑器（SunEditor） */
 var taskDescEditor = null, taskDescEditorPromise = null, pendingTaskDesc = null, pendingDescReadOnly = null,
@@ -175,13 +484,13 @@ function formSnapshot(){
     desc: getTaskDescContent(),
     start: iStart.value || "",
     due: iDue.value || "",
-    milestone: !!($("iMilestone") || {}).checked,
     estimate: (function(){ var h = iEstimate ? Number(iEstimate.value) : 0; return h > 0 ? Math.round(h * 60) : 0; })(),
     pri: rt.formPri || "",
     cat: rt.formCat || "",
     col: (iCol && iCol.value) || "",
     req: (iReq && iReq.value) || "",
     owner: (function(){ var o = ownerPick(); return (o.userId || "") + "\u0001" + (o.name || ""); })(),
+    testOwner: (function(){ var s = $("iTestOwner"); return s && !s.disabled ? (s.value || "") : ""; })(),
     type: (iItemType && iItemType.value) || "task",
     severity: (iSeverity && iSeverity.value) || "",
     environment: (iEnvironment && iEnvironment.value || "").trim(),
@@ -324,6 +633,8 @@ if(typeof window !== "undefined" && window.MutationObserver){
     }
   });
 })();
+/* 就地单字段保存的状态：飞行中标记、排队标记、保存前的页签与滚动位置 */
+var factSaving = false, factSaveQueued = false, factSaveView = null;
 function setSaveLoading(loading){
   if(loading){
     if(!btnSaveTask.dataset.saveText) btnSaveTask.dataset.saveText = btnSaveTask.textContent.trim();
@@ -341,6 +652,12 @@ function setSaveLoading(loading){
     if(btnSaveTaskContinue){
       btnSaveTaskContinue.disabled = false;
       btnSaveTaskContinue.classList.remove("loading");
+    }
+    factSaving = false;
+    /* 保存期间又点了一个就地字段：排队的那次在这里补发，避免两次整单提交互相覆盖 */
+    if(factSaveQueued){
+      factSaveQueued = false;
+      setTimeout(factSave, 0);
     }
   }
 }
@@ -701,7 +1018,15 @@ function syncDrawerHead(){
     iconEl.innerHTML = TYPE_ICONS[type] || TYPE_ICONS.task;
   }
   if(!rt.editingId && taskDrawerTitle) taskDrawerTitle.textContent = "新建" + meta.name;
+  else if(rt.editingId && taskDrawerTitle && !taskDrawerTitle.isContentEditable) taskDrawerTitle.textContent = (iTitle && iTitle.value) || "工作项详情";
   if(iTitle) iTitle.placeholder = meta.placeholder;
+  /* 编号胶囊：项目内序号，改类型不换号；新建尚未取号时不显示 */
+  var noChip = $("drawerItemNo");
+  if(noChip){
+    var noLabel = itemNoText(readTask().itemNo);
+    noChip.hidden = !noLabel;
+    noChip.textContent = noLabel;
+  }
   var reqSel = $("iReq"), colSel = $("iCol");
   var reqName = (reqSel && reqSel.value && reqSel.selectedIndex >= 0) ? reqSel.options[reqSel.selectedIndex].textContent : "";
   var colName = (colSel && colSel.selectedIndex >= 0) ? colSel.options[colSel.selectedIndex].textContent : "";
@@ -709,7 +1034,16 @@ function syncDrawerHead(){
   if(sub){
     var parts = [];
     if(reqName) parts.push(reqName);
-    if(colName) parts.push((rt.editingId ? "所在" : "新建到") + "「" + colName + "」");
+    if(rt.editingId){
+      /* 读态头部按原型：项目 · 版本 · 截止 · 负责人；列名由状态胶囊承担，不再重复 */
+      var vn = versionNamesNow();
+      if(vn) parts.push(vn);
+      if(iDue && iDue.value) parts.push("截止 " + fmtFactDate(iDue.value));
+      var ownName = ownerNameNow();
+      if(ownName) parts.push(ownName);
+    }else if(colName){
+      parts.push("新建到「" + colName + "」");
+    }
     sub.textContent = parts.join(" · ");
   }
   var colLabel = $("ctxColLabel");
@@ -766,52 +1100,178 @@ function fmtFactDate(iso){
   if(!d || isNaN(d.getTime())) return iso || "未设置";
   return (d.getMonth() + 1) + "-" + pad2(d.getDate());
 }
-/* 首屏速览：状态、进度、投入、截止、测试窗口都从当前表单实时取值 */
-function syncDrawerFacts(){
-  var box = $("drawerFacts");
-  if(!box) return;
-  box.hidden = !rt.editingId;
-  if(!rt.editingId) return;
-  var col = (iCol && iCol.value) || "backlog";
-  var meta = colMeta(col) || { name: col, color: "#98A2B3" };
-  if($("factStatusName")) $("factStatusName").textContent = meta.name || col;
-  if($("factStatusDot")) $("factStatusDot").style.background = meta.color || "#98A2B3";
-  var prog = Math.max(0, Math.min(100, Number(iProg && iProg.value) || 0));
-  if($("factProg")) $("factProg").textContent = prog + "%";
-  if($("factProgBar")) $("factProgBar").style.width = prog + "%";
-  var act = Number(rt.formActualMinutes) || 0, est = Number(rt.formEstimateMinutes) || 0;
-  if($("factActual")) $("factActual").textContent = act ? fmtMinutesShort(act) : "未记录";
-  if($("factEstimate")) $("factEstimate").textContent = est ? "/ " + fmtMinutesShort(est) : "";
-  var due = $("factDue"), dueWrap = $("factDueWrap"), dueNote = $("factDueNote");
-  if(due && dueWrap){
-    var dd = iDue && iDue.value ? parseDate(iDue.value) : null;
-    dueWrap.classList.remove("overdue");
-    if(!dd || isNaN(dd.getTime())){
-      due.textContent = "未设置";
-      if(dueNote) dueNote.textContent = "";
-    }else{
-      due.textContent = fmtFactDate(iDue.value);
-      var task = taskCacheExtra[rt.editingId] || {};
-      var rule = colRuleOf(col, task);
-      var diff = dayDiff(dd, rt.TODAY);
-      var rel = "";
-      if(rule === "done") rel = "已完成";
-      else if(rule === "ended") rel = "已结束";
-      else if(diff === 0) rel = "今天";
-      else if(diff === 1) rel = "明天";
-      else if(diff > 1) rel = diff + " 天后";
-      else{
-        rel = "逾期 " + Math.abs(diff) + " 天";
-        dueWrap.classList.add("overdue");
-      }
-      if(dueNote) dueNote.textContent = rel ? "· " + rel : "";
+/* 开始与截止合并成一段「计划时间」，避免两个同义卡片各占一格 */
+function syncDateRangeFact(col){
+  var wrap = $("rfDateWrap"), val = $("rfDateRange"), note = $("rfDateNote");
+  if(!wrap || !val) return;
+  wrap.classList.remove("overdue");
+  var s = iStart && iStart.value ? parseDate(iStart.value) : null;
+  var d = iDue && iDue.value ? parseDate(iDue.value) : null;
+  if(s && isNaN(s.getTime())) s = null;
+  if(d && isNaN(d.getTime())) d = null;
+  if(!s && !d){
+    val.textContent = "未设置";
+    if(note) note.textContent = "点此设置";
+    return;
+  }
+  if(s && !d){
+    val.innerHTML = esc(fmtFactDate(iStart.value)) + '<span class="rf-date-sep">起</span>';
+    if(note) note.textContent = "未设截止";
+    return;
+  }
+  var rule = colRuleOf(col, taskCacheExtra[rt.editingId] || {});
+  var rel = "";
+  if(rule === "done") rel = "已完成";
+  else if(rule === "ended") rel = "已结束";
+  else{
+    var diff = dayDiff(d, rt.TODAY);
+    if(diff === 0) rel = "今天到期";
+    else if(diff === 1) rel = "明天到期";
+    else if(diff > 1) rel = diff + " 天后到期";
+    else{
+      rel = "逾期 " + Math.abs(diff) + " 天";
+      wrap.classList.add("overdue");
     }
   }
-  var current = taskCacheExtra[rt.editingId] || {};
-  var ts = current.testStartedAt || "", te = current.testFinishedAt || "";
-  var testWrap = $("factTestWrap");
-  if(testWrap) testWrap.hidden = !(ts || te);
-  if($("factTest")) $("factTest").textContent = ts ? fmtFactDate(ts) + " → " + (te ? fmtFactDate(te) : "进行中") : "未设置";
+  if(!s){
+    val.innerHTML = '<span class="rf-date-sep">截止</span>' + esc(fmtFactDate(iDue.value));
+    if(note) note.textContent = rel;
+    return;
+  }
+  val.innerHTML = esc(fmtFactDate(iStart.value)) + '<span class="rf-date-sep">→</span>' + esc(fmtFactDate(iDue.value));
+  if(note){
+    var span = dayDiff(d, s) + 1;
+    note.textContent = (span > 0 ? "共 " + span + " 天" : "") + (rel ? (span > 0 ? " · " : "") + rel : "");
+  }
+}
+/* 状态胶囊 + 概览事实：都从当前表单实时取值，状态只有一个入口 */
+function syncDrawerFacts(){
+  var col = (iCol && iCol.value) || "backlog";
+  var meta = drawerColMeta(col);
+  if(drawerStatusPill) drawerStatusPill.hidden = !rt.editingId;
+  if($("drawerStatusName")) $("drawerStatusName").textContent = meta.name || col;
+  if($("drawerStatusDot")) $("drawerStatusDot").style.background = meta.color || "#98A2B3";
+  if(btnFootStatus) btnFootStatus.hidden = !rt.editingId;
+  if($("footStatusName")) $("footStatusName").textContent = meta.name || col;
+  if($("footStatusDot")) $("footStatusDot").style.background = meta.color || "#98A2B3";
+  if(!rt.editingId) return;
+  var taskNow = taskCacheExtra[rt.editingId] || {};
+  var projectName = reqNameById((iReq && iReq.value) || taskNow.reqId || "");
+  /* 跨空间/搜索命中的任务可能不在当前 reqList，回退任务自带的 reqName */
+  if((!projectName || projectName === "无") && taskNow.reqName) projectName = taskNow.reqName;
+  projectName = projectName || "未归属";
+  if($("rfProject")){
+    $("rfProject").textContent = projectName;
+    $("rfProject").title = projectName;
+  }
+  var typeNow = (iItemType && iItemType.value) || "task";
+  if($("rfTypeIco")){
+    $("rfTypeIco").className = "rf-meta-ico rf-type-ico t-" + typeNow;
+    $("rfTypeIco").innerHTML = TYPE_ICONS[typeNow] || TYPE_ICONS.task;
+  }
+  if($("rfType")){
+    $("rfType").textContent = (TYPE_META[typeNow] || TYPE_META.task).name;
+  }
+  if($("rfCategory")){
+    var catName = catNameById(rt.formCat) || "";
+    $("rfCategory").innerHTML = catName ? esc(catName) : '<span class="rf-empty">未指定</span>';
+    $("rfCategory").title = catName || "点击指定模块";
+  }
+  var versionText = versionNamesNow();
+  if($("rfVersion")){
+    $("rfVersion").innerHTML = versionText ? esc(versionText) : '<span class="rf-empty">待规划</span>';
+    $("rfVersion").title = versionText || "点击加入计划版本";
+  }
+  syncDateRangeFact(col);
+  syncProgFact(col);
+  if($("rfTags")){
+    var tags = rt.tagsCache || [];
+    $("rfTags").innerHTML = tags.length
+      ? tags.slice(0, 3).map(function(tg){ return '<span class="tag tag-ghost">' + esc(tg) + '</span>'; }).join("") +
+        (tags.length > 3 ? '<span class="rf-sub">+' + (tags.length - 3) + '</span>' : "")
+      : '<span class="rf-add">' + icon("plus", 11) + "添加标签</span>";
+    $("rfTags").title = tags.length ? tags.join("、") : "点击添加标签";
+  }
+  if($("rfAttach")){
+    var attN = (lastAttList || []).length;
+    $("rfAttach").innerHTML = attN ? attN + " 个" : '<span class="rf-empty">暂无</span>';
+  }
+  if($("rfOwner")){
+    var ownerName = ownerNameNow();
+    $("rfOwner").innerHTML = ownerName
+      ? avatarHTML(ownerName, "sm") + '<span class="rf-owner-name">' + esc(ownerName) + '</span>'
+      : '<span class="rf-empty">未分配</span>';
+    $("rfOwner").title = ownerName || "点击分配负责人";
+  }
+  if($("rfPri")){
+    var priNow = rt.formPri || "P2";
+    $("rfPri").innerHTML = '<span class="rf-dot" style="background:' + esc(priColor(priNow)) + '"></span>' +
+      esc(priNow + " · " + priName(priNow));
+    $("rfPri").title = "优先级 " + priNow + " · " + priName(priNow);
+  }
+  var act = Number(rt.formActualMinutes) || 0;
+  /* 预估以表单当前值为准：就地改预估后不必等整单回填 rt.formEstimateMinutes */
+  var est = iEstimate ? Math.max(0, Math.round((Number(iEstimate.value) || 0) * 60)) : (Number(rt.formEstimateMinutes) || 0);
+  if($("rfHours")){
+    $("rfHours").innerHTML = (act ? esc(fmtMinutesShort(act)) : "未记录") +
+      (est ? ' <span class="rf-hours-est">/ 预估 ' + esc(fmtMinutesShort(est)) + '</span>' : "");
+  }
+  if($("rfHoursNote")){
+    var hoursNote = "";
+    if(est && act > est) hoursNote = "超预估 " + fmtMinutesShort(act - est);
+    else if(est && act) hoursNote = "剩余 " + fmtMinutesShort(est - act);
+    $("rfHoursNote").innerHTML = hoursNote && act > est ? '<span class="rf-chip">' + esc(hoursNote) + '</span>' : esc(hoursNote);
+    if($("rfHoursWrap")) $("rfHoursWrap").classList.toggle("overdue", !!hoursNote && act > est);
+  }
+}
+/* 测试窗口：提测 / 开始 / 结束三个时点只读展示；有测试经历的任务换列后仍可回看 */
+function syncTestWindow(task){
+  var box = $("fTestWindow");
+  if(!box) return;
+  var requested = task ? (task.testRequestedAt || "") : "";
+  var start = task ? (task.testStartedAt || "") : "";
+  var end = task ? (task.testFinishedAt || "") : "";
+  var inTest = !!task && (task.boardColumn === "test" || task.boardColumn === "testing");
+  box.hidden = !rt.editingId || !(inTest || requested || start || end);
+  if($("iTestRequested")) $("iTestRequested").textContent = requested ? fmtTs(requested) : "—";
+  if($("iTestStart")) $("iTestStart").textContent = start ? fmtTs(start) : "—";
+  if($("iTestEnd")) $("iTestEnd").textContent = end ? fmtTs(end) : "—";
+}
+/* 进度控件按来源切换：可手改时给滑块，检查项/已完成时给派生读数并指向勾选入口 */
+function syncProgFact(col){
+  var cell = $("rfProgWrap"), manual = $("rfProgManual"), stat = $("rfProgStatic");
+  var range = $("rfProgRange"), pct = $("rfProg"), note = $("rfProgNote");
+  if(!cell || !manual || !stat) return;
+  var done = col === "done";
+  var derived = !done && origSubtaskTotal > 0;
+  var prog = Math.max(0, Math.min(100, Number(iProg && iProg.value) || 0));
+  manual.hidden = done || derived;
+  stat.hidden = !(done || derived);
+  if(done || derived){
+    var shown = done ? 100 : Math.round(origSubtaskDone / origSubtaskTotal * 100);
+    if($("rfProgText")) $("rfProgText").textContent = shown + "%";
+    if($("rfProgBar")) $("rfProgBar").style.width = shown + "%";
+    if(note) note.textContent = done ? "已完成"
+      : "按检查项 " + origSubtaskDone + "/" + origSubtaskTotal + " 派生" + (rt.drawerReadOnly ? "" : " · 点击去勾选");
+    cell.setAttribute("role", "button");
+    cell.tabIndex = rt.drawerReadOnly ? -1 : 0;
+    cell.setAttribute("data-fact-goto", "checklist");
+    cell.classList.add("rf-goto");
+    cell.title = done ? "已完成工作项进度固定为 100%" : "进度按检查项派生，点击去勾选";
+    return;
+  }
+  if(range){
+    range.value = prog;
+    range.disabled = !!rt.drawerReadOnly;
+    range.style.setProperty("--fill", prog + "%");
+  }
+  if(pct) pct.textContent = prog + "%";
+  if(note) note.textContent = rt.drawerReadOnly ? "只读" : "拖动调整";
+  cell.removeAttribute("role");
+  cell.removeAttribute("data-fact-goto");
+  cell.removeAttribute("tabindex");
+  cell.classList.remove("rf-goto");
+  cell.title = rt.drawerReadOnly ? "只读" : "拖动滑块调整进度";
 }
 function demandOption(){
   var sel = $("iDemand");
@@ -824,7 +1284,7 @@ function syncDrawerSource(){
   if(!box) return;
   var opt = demandOption();
   syncDemandTarget();
-  if(!opt){ box.hidden = true; return; }
+  if(!opt){ box.hidden = true; renderReadView(); return; }
   box.hidden = false;
   var title = $("drawerSourceTitle"), meta = $("drawerSourceMeta");
   if(title) title.textContent = (opt.textContent || "").replace(/（[^）]*）\s*$/, "");
@@ -832,6 +1292,7 @@ function syncDrawerSource(){
   var project = (reqSel && reqSel.value && reqSel.selectedIndex >= 0) ? reqSel.options[reqSel.selectedIndex].textContent : "";
   if(meta) meta.textContent = (project ? project + " · " : "") + "关联需求";
   syncAutoProject();
+  renderReadView();
 }
 /* 折叠的次要关联：只报「设了哪几类」，不把具体长文本塞进首屏 */
 function assocText(id){
@@ -920,6 +1381,7 @@ function syncTaskPublication(task){
   $("taskPublicationInfo").textContent = "正式发布记录派生的只读事实；已完成不等于生产生效，执行状态可独立修改。"
     + (task.publishedAt ? " 最近生产发布：" + fmtReleaseTime(task.publishedAt) + "。" : "")
     + (Array.isArray(task.publicationTargets) && task.publicationTargets.length ? " 目标：" + task.publicationTargets.map(function(t){ return typeof t === "string" ? t : (t.targetKey || t.key || "") + "（" + (t.state || t.publicationState || "unknown") + "）"; }).join("、") : "");
+  renderReadView();
 }
 function loadTaskReleaseRecords(task){
   var box = $("taskReleaseRecords");
@@ -1024,9 +1486,12 @@ function openDrawer(){
   taskDrawer.classList.add("on");
 }
 function closeDrawer(){
+  if(inlineText) finishTaskTextEdit(inlineText.el, inlineText.field, false);
   taskDrawer.classList.remove("on", "nested");
   taskDrawer.style.zIndex = "";
   rt.formDirty = false;
+  factSaveView = null;
+  factSaveQueued = false;
 }
 /**
  * 只读项目：整张表单（含评论/检查清单/附件）不可写，保存与删除入口收起。
@@ -1042,14 +1507,15 @@ function applyDrawerReadOnly(readOnly){
     if(readOnly){ f.disabled = true; continue; }
     if(f.id === "iVersion" && !f.getAttribute("data-ready")){ f.disabled = true; continue; }
     if(f.id === "iOwner"){ refreshOwnerSelect(); continue; }
+    if(f.id === "iTestOwner"){ refreshTestOwnerSelect(); continue; }
     if(f.id === "iProg"){ syncProgByCol(); continue; }
     if(f.id === "iBlockedReason"){ f.disabled = !(iBlocked && iBlocked.checked); continue; }
     f.disabled = false;
   }
   var chipBtns = taskForm.querySelectorAll("#typeGroup [data-type], #sevGrid [data-sev]");
   for(var c = 0; c < chipBtns.length; c++) chipBtns[c].disabled = !!readOnly;
-  var factStatus = $("factStatus");
-  if(factStatus) factStatus.disabled = !!readOnly;
+  if(drawerStatusPill) drawerStatusPill.disabled = !!readOnly;
+  if(btnFootStatus) btnFootStatus.disabled = !!readOnly;
   if(reqDocPickerBtn) reqDocPickerBtn.disabled = !!readOnly;
   /* 就地新建分支属于写操作：只读项目里连同入口一起收起，提示也不能再引导去点它 */
   var branchNewBtn = $("iBranchNew");
@@ -1060,6 +1526,24 @@ function applyDrawerReadOnly(readOnly){
     : "找不到合适的分支？点「新建分支」就地创建，建好自动选中，保存后生效。";
   if(btnAttach) btnAttach.hidden = !!readOnly;
   if(btnSaveTask) btnSaveTask.hidden = !!readOnly;
+  /* 只读项目：概览事实降级为纯文本，不再提示可点编辑 */
+  var factsEl = $("readFacts");
+  if(factsEl){
+    factsEl.classList.toggle("read-only", !!readOnly);
+    factsEl.querySelectorAll("[data-fact-edit],[data-fact-jump]").forEach(function(el){
+      el.setAttribute("aria-disabled", readOnly ? "true" : "false");
+      el.tabIndex = readOnly ? -1 : 0;
+    });
+  }
+  var descEl = $("readDesc");
+  if(descEl){
+    descEl.classList.toggle("read-only", !!readOnly);
+    descEl.tabIndex = readOnly ? -1 : 0;
+    descEl.setAttribute("aria-disabled", readOnly ? "true" : "false");
+    if(readOnly && descEl.isContentEditable) finishTaskTextEdit(descEl, "desc", false);
+  }
+  if(readOnly && taskDrawerTitle && taskDrawerTitle.isContentEditable) finishTaskTextEdit(taskDrawerTitle, "title", false);
+  syncInlineTextAffordance();
   /* 新建任务保存后仍走“保存并关闭”：留在新建态再保存会重复创建 */
   if(btnSaveTaskContinue) btnSaveTaskContinue.hidden = !!readOnly || !rt.editingId;
   var moreSaveContinue = $("taskMoreSaveContinue");
@@ -1199,11 +1683,11 @@ function ensureProjectRoles(projectId, force){
   request.then(function(){
     if(projectRoleLoading[key] !== request) return;
     delete projectRoleLoading[key];
-    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId) refreshOwnerSelect();
+    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId){ refreshOwnerSelect(); refreshTestOwnerSelect(); refreshDepCreateOwners(); }
   }).catch(function(ex){
     if(projectRoleLoading[key] !== request) return;
     delete projectRoleLoading[key]; projectRoleErrors[key] = ex;
-    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId) refreshOwnerSelect();
+    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId){ refreshOwnerSelect(); refreshTestOwnerSelect(); refreshDepCreateOwners(); }
   });
 }
 ["ds:project-roles-changed", "ds:member-company-changed", "ds:member-job-title-changed", "ds:member-label-options-changed", "ds:member-roster-changed"].forEach(function(eventName){
@@ -1214,6 +1698,8 @@ function ensureProjectRoles(projectId, force){
     delete projectRoleErrors[ownerRosterKey()];
     ensureProjectRoles(currentProjectId(), true);
     refreshOwnerSelect();
+    refreshTestOwnerSelect();
+    refreshDepCreateOwners();
   });
 });
 function ownerOptions(projectId){
@@ -1301,6 +1787,48 @@ function ownerPick(){
   if(!sel || sel.value === "__none__") return {name:null, userId:null};
   return { name:sel.dataset.name || sel.textContent || null, userId:sel.value === "__text__" ? null : sel.value };
 }
+/* 测试负责人：与开发负责人共用可指派候选，额外允许「待领取」。
+   花名册未就绪时禁用并保留原值，避免保存时把已有测试负责人误清空。 */
+function populateTestOwnerSelect(currentName, currentUserId){
+  var sel = $("iTestOwner");
+  if(!sel) return;
+  var ws = rt.currentWs, pid = currentProjectId(), key = ownerRosterKey();
+  var needsRoster = !!(ws && ws.type === "shared" && pid);
+  var error = needsRoster && projectRoleErrors[key];
+  var pending = needsRoster && !peekProjectMembers(ws.id, pid) && !error;
+  var opts = ownerOptions();
+  var curName = currentName == null ? "" : String(currentName), curId = currentUserId == null ? "" : String(currentUserId);
+  var uniqueName = curName && opts.filter(function(o){ return o.name === curName; }).length === 1;
+  var matched = false, html = '<option value="" data-name="">待领取（不指定）</option>';
+  opts.forEach(function(o){
+    var on = (curId && o.id === curId) || (!curId && uniqueName && o.name === curName);
+    if(on) matched = true;
+    html += ownerOptionHTML(o, on);
+  });
+  if(curId && !matched){
+    html += '<option value="' + esc(curId) + '" data-name="' + esc(curName) + '" data-unavailable="1" disabled selected>' +
+      esc(curName || curId) + (pending ? "（加载中）" : "（当前不可选）") + '</option>';
+  }
+  sel.innerHTML = html;
+  sel.disabled = !!pending || !!error || !!rt.drawerReadOnly;
+  if(pending) ensureProjectRoles(pid);
+}
+function refreshTestOwnerSelect(){
+  var sel = $("iTestOwner");
+  if(!sel) return;
+  var opt = sel.options[sel.selectedIndex];
+  var name = opt ? (opt.dataset.name !== undefined ? opt.dataset.name : opt.textContent) : "";
+  populateTestOwnerSelect(name || "", (opt && opt.value) || "");
+}
+function refreshDepCreateOwners(){
+  var f = $("depCreateForm");
+  if(f && !f.hidden) populateDepOwners();
+}
+function testOwnerPick(){
+  var sel = $("iTestOwner");
+  if(!sel) return null;
+  return sel.value || "";
+}
 function syncFormSegs(){
   segPri.querySelectorAll("[data-fpri]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.fpri === rt.formPri);
@@ -1324,8 +1852,11 @@ function renderTagChips(){
 }
 function syncProgVal(){ progVal.textContent = (Number(iProg.value) || 0) + "%"; syncDrawerFacts(); }
 function renderTimeline(logs){
+  timelineCache = logs || [];
+  syncDrawerCounts();
+  renderReadView();
   if(!timelineBox) return;
-  if(!logs || !logs.length){
+  if(!timelineCache.length){
     timelineBox.innerHTML = '<div class="tl-empty">暂无操作记录</div>';
     return;
   }
@@ -1397,14 +1928,22 @@ function renderActualEstimate(actualMinutes, estimateMinutes){
 /* 关注人：抽屉头部的开关只负责本任务，状态由后端按（任务, 当前用户）返回 */
 var watchTaskId = null;
 function renderWatchButton(res){
-  if(!btnTaskWatch) return;
+  if(!btnTaskWatch && !btnFootWatch) return;
   var watching = !!(res && res.watching);
-  btnTaskWatch.hidden = !watchTaskId;
-  btnTaskWatch.setAttribute("aria-pressed", watching ? "true" : "false");
+  if(btnTaskWatch){
+    btnTaskWatch.hidden = !watchTaskId;
+    btnTaskWatch.setAttribute("aria-pressed", watching ? "true" : "false");
+    btnTaskWatch.title = watching
+      ? "已关注：新评论、移入回收站或恢复时会通知你（点击取消）"
+      : "关注后，该工作项的新评论、移入回收站或恢复会通知你";
+  }
   if(taskWatchLabel) taskWatchLabel.textContent = watching ? "已关注" : "关注";
-  btnTaskWatch.title = watching
-    ? "已关注：新评论、移入回收站或恢复时会通知你（点击取消）"
-    : "关注后，该工作项的新评论、移入回收站或恢复会通知你";
+  if(btnFootWatch){
+    btnFootWatch.hidden = !watchTaskId;
+    btnFootWatch.setAttribute("aria-pressed", watching ? "true" : "false");
+    btnFootWatch.title = btnTaskWatch ? btnTaskWatch.title : "";
+  }
+  if($("footWatchLabel")) $("footWatchLabel").textContent = watching ? "已关注" : "关注";
 }
 function loadWatchStatus(taskId){
   watchTaskId = taskId || null;
@@ -1414,7 +1953,10 @@ function loadWatchStatus(taskId){
     if(watchTaskId === taskId) renderWatchButton(res);
   }).catch(function(){
     /* 读不到状态时隐藏开关，避免展示错误的关注态 */
-    if(watchTaskId === taskId && btnTaskWatch) btnTaskWatch.hidden = true;
+    if(watchTaskId === taskId){
+      if(btnTaskWatch) btnTaskWatch.hidden = true;
+      if(btnFootWatch) btnFootWatch.hidden = true;
+    }
   });
 }
 function openTaskDrawer(colId, task, defaults){
@@ -1477,7 +2019,6 @@ function openTaskDrawer(colId, task, defaults){
     setTaskDescContent(task.description || "");
     iStart.value = task.startDate || "";
     iDue.value = task.dueDate || "";
-    if($("iMilestone")) $("iMilestone").checked = !!task.isMilestone;
     syncDateBounds();
     /* 预估耗时：库里存分钟，表单用小时（0.5 步进） */
     if(iEstimate) iEstimate.value = task.estimateMinutes ? (task.estimateMinutes / 60) : "";
@@ -1521,16 +2062,11 @@ function openTaskDrawer(colId, task, defaults){
     rt.tagsCache = (task.tags || []).slice(0, 8);
     renderTagChips();
     populateOwnerSelect(task.owner || "", task.ownerUserId || "");
+    populateTestOwnerSelect(task.testOwner || "", task.testOwnerUserId || "");
     fWork.hidden = false; fAttach.hidden = false; fSubtasks.hidden = false; fTimeline.hidden = false;
     if(fComments) fComments.hidden = false;
     if($("fProgress")) $("fProgress").hidden = false;
-    var testWindow = $("fTestWindow");
-    if(testWindow){
-      var testStart = task.testStartedAt || "", testEnd = task.testFinishedAt || "";
-      testWindow.hidden = !(testStart || testEnd);
-      if($("iTestStart")) $("iTestStart").textContent = testStart || "—";
-      if($("iTestEnd")) $("iTestEnd").textContent = testEnd || "—";
-    }
+    syncTestWindow(task);
     if($("fRegression")) $("fRegression").hidden = false;
     if($("afterCreateNote")) $("afterCreateNote").hidden = true;
     /* 只有确实用了低频设置时才展开，避免编辑态默认撑长表单 */
@@ -1552,7 +2088,6 @@ function openTaskDrawer(colId, task, defaults){
     /* 甘特图双击空白处新建时预填起止日期；普通入口保持为空 */
     iStart.value = (defaults && defaults.startDate) || "";
     iDue.value = (defaults && defaults.dueDate) || "";
-    if($("iMilestone")) $("iMilestone").checked = !!(defaults && defaults.isMilestone);
     syncDateBounds();
     if(iEstimate) iEstimate.value = "";
     renderActualEstimate(0, null);
@@ -1596,12 +2131,11 @@ function openTaskDrawer(colId, task, defaults){
     rt.tagsCache = [];
     renderTagChips();
     populateOwnerSelect(rt.currentUser ? (rt.currentUser.displayName || "") : "", rt.currentUser ? rt.currentUser.id : "");
+    populateTestOwnerSelect("", "");
     fWork.hidden = true; fAttach.hidden = true; fSubtasks.hidden = true; fTimeline.hidden = true;
     if(fComments) fComments.hidden = true;
     if($("fProgress")) $("fProgress").hidden = true;
-    if($("fTestWindow")) $("fTestWindow").hidden = true;
-    if($("iTestStart")) $("iTestStart").textContent = "—";
-    if($("iTestEnd")) $("iTestEnd").textContent = "—";
+    syncTestWindow(null);
     if($("fRegression")) $("fRegression").hidden = true;
     if($("afterCreateNote")) $("afterCreateNote").hidden = false;
     var drawerMoreNew = $("drawerMore");
@@ -1632,13 +2166,20 @@ function openTaskDrawer(colId, task, defaults){
   syncTaskPublication(task);
   syncDrawerFacts();
   syncAssocMore();
-  /* 手机端新建走半屏抽屉，编辑走全屏；桌面端样式不区分 */
-  taskForm.classList.toggle("is-create", !task);
   resetFormBaseline();
+  /* 已有工作项打开先读、再编辑；新建直接进编辑态，页签收起 */
+  setDrawerMode(task ? "read" : "edit");
   openDrawer();
   loadTaskReleaseRecords(task);
   UI.wireTooltips(taskDrawer);
-  setTimeout(function(){ try{ iTitle.focus(); iTitle.select(); }catch(e){ /* noop */ } }, 60);
+  setTimeout(function(){
+    if(drawerMode === "read"){
+      try{ taskForm.focus({ preventScroll: true }); }catch(e){ /* noop */ }
+      if(drawerBodyEl) drawerBodyEl.scrollTop = 0;
+    }else{
+      try{ iTitle.focus(); iTitle.select(); }catch(e){ /* noop */ }
+    }
+  }, 60);
 }
 /* ==================== 依赖关系（与甘特图共用 task_dependency） ==================== */
 var DEP_TYPES = [
@@ -1663,8 +2204,7 @@ function depCurrentRef(){
     reqId: (iReq && iReq.value) || "",
     boardColumn: (iCol && iCol.value) || "",
     startDate: (iStart && iStart.value) || "",
-    dueDate: (iDue && iDue.value) || "",
-    milestone: !!($("iMilestone") && $("iMilestone").checked)
+    dueDate: (iDue && iDue.value) || ""
   };
 }
 function depDateRange(ref){
@@ -1786,6 +2326,7 @@ function syncDepControls(){
     el.disabled = ro || el.getAttribute("data-dep-locked") === "1";
   });
   if(ro) closeDepPicker();
+  syncDepCreateTrigger();
 }
 function renderDeps(){
   var root = $("fDeps");
@@ -1865,6 +2406,118 @@ function closeDepPicker(){
   if(s) s.value = "";
   var list = $("depPickerList");
   if(list) list.innerHTML = "";
+  resetDepCreate();
+}
+/* ===== 依赖选择器内「新建并关联」=====
+   搜不到就就地建一个，省掉「关抽屉→新建→回来再关联」的往返。
+   新工作项继承当前工作项的项目，落在待规划列，建好立刻连依赖。 */
+var depCreateBusy = false;
+function setDepCreateBusy(on){
+  depCreateBusy = !!on;
+  var ok = $("btnDepCreateOk"), cancel = $("btnDepCreateCancel");
+  if(ok){ ok.disabled = !!on; ok.textContent = on ? "创建中…" : "创建并关联"; }
+  if(cancel) cancel.disabled = !!on;
+}
+function syncDepCreateTrigger(){
+  var box = $("depCreate");
+  if(box) box.hidden = !!rt.drawerReadOnly || !depState.mode;
+  var txt = $("depCreateTriggerText");
+  if(!txt) return;
+  var s = $("iDepSearch");
+  var q = ((s && s.value) || "").trim().slice(0, 60);
+  txt.textContent = q ? ("新建「" + q + "」并关联") : "新建工作项并关联";
+}
+function syncDepCreateHint(message, bad){
+  var h = $("depCreateHint");
+  if(!h) return;
+  h.classList.toggle("bad", !!bad);
+  if(message){ h.textContent = message; return; }
+  var pid = currentReqId();
+  var where = pid ? (reqNameById(pid) || "当前项目") : "未归属项目";
+  var col = colMeta("backlog");
+  h.textContent = "将创建在「" + where + "」· " + ((col && col.name) || "待规划");
+}
+function populateDepOwners(){
+  var sel = $("depNewOwner");
+  if(!sel) return;
+  var pid = currentReqId();
+  var first = sel.getAttribute("data-init") !== "1";
+  var keep = first ? ((rt.currentUser && rt.currentUser.id) || "") : sel.value;
+  var opts = ownerOptions(pid);
+  var html = '<option value="">不指派</option>';
+  opts.forEach(function(o){ html += ownerOptionHTML(o, o.id === keep); });
+  sel.innerHTML = html;
+  sel.value = opts.some(function(o){ return o.id === keep; }) ? keep : "";
+  sel.setAttribute("data-init", "1");
+}
+function resetDepCreate(){
+  var f = $("depCreateForm");
+  if(f) f.hidden = true;
+  var t = $("depNewTitle"); if(t) t.value = "";
+  var ty = $("depNewType"); if(ty) ty.value = "task";
+  var sv = $("depNewSeverity"); if(sv) sv.value = "major";
+  var sf = $("depNewSeverityField"); if(sf) sf.hidden = true;
+  var d = $("depNewDue"); if(d) d.value = "";
+  var sel = $("depNewOwner"); if(sel) sel.removeAttribute("data-init");
+  setDepCreateBusy(false);
+  syncDepCreateHint("");
+  syncDepCreateTrigger();
+}
+function openDepCreateForm(){
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  var f = $("depCreateForm");
+  if(!f) return;
+  var s = $("iDepSearch"), t = $("depNewTitle");
+  if(t) t.value = ((s && s.value) || "").trim().slice(0, 60);
+  f.hidden = false;
+  populateDepOwners();
+  ensureProjectRoles(currentReqId());
+  syncDepCreateHint("");
+  if(t){ t.focus(); t.select(); }
+}
+function submitDepCreate(){
+  if(depCreateBusy || !depState.mode) return;
+  var t = $("depNewTitle");
+  var title = ((t && t.value) || "").trim();
+  if(!title){ syncDepCreateHint("请先填写标题", true); if(t) t.focus(); return; }
+  var mode = depState.mode;
+  var type = ($("depNewType") && $("depNewType").value) || "task";
+  var osel = $("depNewOwner");
+  var oopt = osel && osel.options[osel.selectedIndex];
+  var body = {
+    title: title,
+    reqId: currentReqId() || null,
+    boardColumn: "backlog",
+    itemType: type,
+    priority: "P2",
+    progress: 0
+  };
+  if(type === "bug") body.severity = ($("depNewSeverity") && $("depNewSeverity").value) || "major";
+  if(osel && osel.value){
+    body.ownerUserId = osel.value;
+    body.owner = (oopt && oopt.dataset.name) || "";
+  }
+  var due = ($("depNewDue") && $("depNewDue").value) || "";
+  if(due) body.dueDate = due;
+  setDepCreateBusy(true);
+  syncDepCreateHint("");
+  API.post("/api/tasks", body).then(function(nt){
+    setDepCreateBusy(false);
+    resetDepCreate();
+    closeDepPicker();
+    addDependency(nt, mode, true);
+    toast("已创建「" + (nt.title || title) + "」并关联为" + (mode === "pred" ? "前置任务" : "后置任务") +
+      (rt.editingId ? "" : "（保存本工作项后生效）"), "fs");
+    loadBoard({silent:true});
+    loadReqs();
+    refreshListIfOpen();
+    refreshTreeIfOpen();
+    refreshChainIfOpen();
+    refreshGanttIfOpen();
+  }).catch(function(ex){
+    setDepCreateBusy(false);
+    syncDepCreateHint((ex && ex.message) || "创建失败，请稍后重试", true);
+  });
 }
 function openDepPicker(mode){
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
@@ -1879,6 +2532,7 @@ function openDepPicker(mode){
   if(s){ s.value = ""; s.focus(); }
   var list = $("depPickerList");
   if(list) list.innerHTML = '<div class="dep-picker-empty">加载中…</div>';
+  resetDepCreate();
   searchDepTasks("");
 }
 function searchDepTasks(q){
@@ -1927,7 +2581,7 @@ function renderDepPicker(errorText){
     '</button>';
   }).join("");
 }
-function addDependency(other, mode){
+function addDependency(other, mode, silent){
   if(!other || !mode) return;
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var currentId = rt.editingId;
@@ -1942,14 +2596,14 @@ function addDependency(other, mode){
     renderDeps();
     rt.formDirty = true;
     syncDrawerDirty();
-    toast("已添加「" + other.title + "」，保存工作项后建立依赖");
+    if(!silent) toast("已添加「" + other.title + "」，保存工作项后建立依赖");
     return;
   }
   var body = mode === "pred"
     ? { fromTaskId:other.id, toTaskId:currentId, depType:"FS", lagDays:0 }
     : { fromTaskId:currentId, toTaskId:other.id, depType:"FS", lagDays:0 };
   API.post("/api/gantt/deps", body).then(function(){
-    toast("已添加依赖「" + other.title + "」");
+    if(!silent) toast("已添加依赖「" + other.title + "」");
     loadTaskDeps(currentId);
     refreshGanttIfOpen();
   }).catch(function(ex){
@@ -2035,6 +2689,7 @@ function flushPendingDependencies(taskId){
   if(search){
     search.addEventListener("input", function(){
       var q = this.value.trim();
+      syncDepCreateTrigger();
       if(depState.searchTimer) clearTimeout(depState.searchTimer);
       depState.searchTimer = setTimeout(function(){ searchDepTasks(q); }, 180);
     });
@@ -2043,6 +2698,31 @@ function flushPendingDependencies(taskId){
       e.preventDefault();
       var first = root.querySelector(".dep-opt:not(:disabled)");
       if(first) first.click();
+      else if(this.value.trim()) openDepCreateForm();
+    });
+  }
+  var depCreateBtn = $("btnDepCreate");
+  if(depCreateBtn) depCreateBtn.addEventListener("click", openDepCreateForm);
+  var depCreateCancel = $("btnDepCreateCancel");
+  if(depCreateCancel) depCreateCancel.addEventListener("click", function(){
+    resetDepCreate();
+    var s = $("iDepSearch");
+    if(s) s.focus();
+  });
+  var depCreateOk = $("btnDepCreateOk");
+  if(depCreateOk) depCreateOk.addEventListener("click", submitDepCreate);
+  var depNewType = $("depNewType");
+  if(depNewType) depNewType.addEventListener("change", function(){
+    var f = $("depNewSeverityField");
+    if(f) f.hidden = this.value !== "bug";
+  });
+  var depNewTitle = $("depNewTitle");
+  if(depNewTitle){
+    depNewTitle.addEventListener("input", function(){ syncDepCreateHint(""); });
+    depNewTitle.addEventListener("keydown", function(e){
+      if(e.key !== "Enter") return;
+      e.preventDefault();
+      submitDepCreate();
     });
   }
   root.addEventListener("click", function(e){
@@ -2189,7 +2869,8 @@ window.addEventListener("ds:before-route", function(e){
 });
 function tryCloseTaskDrawer(){
   if(!taskDrawer.classList.contains("on")) return;
-  if(rt.formDirty){
+  /* 失焦刚触发就地保存时 formDirty 仍为 true，但内容已在提交途中，不该再拦一次「放弃改动」 */
+  if(rt.formDirty && !factSaving){
     UI.showConfirm({
       title:"放弃未保存的改动？",
       msg:"当前表单、评论草稿或待上传附件有未保存的内容，关闭后将会丢失。",
@@ -2325,6 +3006,7 @@ taskForm.addEventListener("input", function(e){
   if(e.target === iTitle){
     fTitle.classList.remove("invalid");
     syncTitleCount();
+    syncDrawerHead();
   }
 });
 taskForm.addEventListener("change", function(e){
@@ -2398,6 +3080,8 @@ if(iReq) iReq.addEventListener("change", function(){
   syncDrawerSource();
   /* 负责人选项里的「本项目角色」跟项目走：换项目后重新取花名册 */
   refreshOwnerSelect();
+  refreshTestOwnerSelect();
+  refreshDepCreateOwners();
 });
 var iDemand = $("iDemand");
 if(iDemand) iDemand.addEventListener("change", function(){
@@ -2425,6 +3109,8 @@ if(iDemand) iDemand.addEventListener("change", function(){
     ensureBranch(($("iBranch") || {}).value, wantReq);
     ensureCatForProject(wantReq);
     refreshOwnerSelect();
+    refreshTestOwnerSelect();
+    refreshDepCreateOwners();
     ensureReqDoc("");
     ensureDemand(iDemand.value);
   }
@@ -2513,6 +3199,8 @@ function loadComments(taskId){
 function renderComments(list){
   commentsCache = list || [];
   if(commentCount) commentCount.textContent = commentsCache.length ? (commentsCache.length + " 条") : "";
+  syncDrawerCounts();
+  renderReadView();
   if(!commentsCache.length){
     commentList.innerHTML = '<div class="sub-empty">还没有评论。这里是讨论区，与下方「操作时间线」分开：时间线记系统做了什么，评论记人说了什么。</div>';
     return;
@@ -3015,28 +3703,39 @@ $("btnTaskMore").addEventListener("click", function(){
   if(UI.popOpen($("taskMoreMenu"))){ UI.closeAllPops(); return; }
   UI.openPop($("taskMoreMenu"), $("btnTaskMore"), {align:"left"});
 });
-if(btnTaskWatch) btnTaskWatch.addEventListener("click", function(){
+function toggleTaskWatch(btn){
   var taskId = watchTaskId;
-  if(!taskId || btnTaskWatch.disabled) return;
-  var watching = btnTaskWatch.getAttribute("aria-pressed") === "true";
-  btnTaskWatch.disabled = true;
+  if(!taskId || (btn && btn.disabled)) return;
+  var watching = btnTaskWatch
+    ? btnTaskWatch.getAttribute("aria-pressed") === "true"
+    : (btn && btn.getAttribute("aria-pressed") === "true");
+  if(btn) btn.disabled = true;
+  if(btnTaskWatch) btnTaskWatch.disabled = true;
+  if(btnFootWatch) btnFootWatch.disabled = true;
   var req = watching
     ? API.del("/api/tasks/" + encodeURIComponent(taskId) + "/watch")
     : API.post("/api/tasks/" + encodeURIComponent(taskId) + "/watch");
   req.then(function(res){
-    btnTaskWatch.disabled = false;
+    if(btn) btn.disabled = false;
+    if(btnTaskWatch) btnTaskWatch.disabled = false;
+    if(btnFootWatch) btnFootWatch.disabled = false;
     if(watchTaskId !== taskId) return;
     renderWatchButton(res);
     toast(watching ? "已取消关注" : "已关注：该工作项的评论与回收站操作会通知你");
   }, function(e){
-    btnTaskWatch.disabled = false;
+    if(btn) btn.disabled = false;
+    if(btnTaskWatch) btnTaskWatch.disabled = false;
+    if(btnFootWatch) btnFootWatch.disabled = false;
     if(!e || !e.silent) toast((e && e.message) || "操作失败", "bad");
   });
-});
+}
+if(btnTaskWatch) btnTaskWatch.addEventListener("click", function(){ toggleTaskWatch(btnTaskWatch); });
+if(btnFootWatch) btnFootWatch.addEventListener("click", function(){ toggleTaskWatch(btnFootWatch); });
 /* 任务详情内新建任务：沿用当前任务的项目/版本/史诗，抽屉切换为新建模式 */
 if(btnTaskNew) btnTaskNew.addEventListener("click", function(){
   if(!rt.editingId) return;
   if(rt.formDirty){ toast("当前工作项有未保存的改动，请先保存再新建", "warn"); return; }
+  UI.closeAllPops();
   var t = taskCacheExtra[rt.editingId] || {};
   var vSel = $("iVersion"), eSel = $("iEpic");
   openTaskDrawer(t.boardColumn || "backlog", null, {
@@ -3044,6 +3743,10 @@ if(btnTaskNew) btnTaskNew.addEventListener("click", function(){
     versionIds: selectedVersionIds(vSel).filter(function(id){ return Array.from(vSel.options).some(function(o){ return o.value === id && !o.disabled; }); }),
     epicId: (eSel && eSel.value) || ""
   });
+});
+$("drawerItemNo").addEventListener("click", function(){
+  var label = itemNoText(readTask().itemNo);
+  if(label) copyToClipboard(label, "编号 " + label + " 已复制到剪贴板");
 });
 $("taskMoreMenu").addEventListener("click", function(e){
   var b = e.target.closest("[data-task-more]");
@@ -3115,10 +3818,15 @@ taskForm.addEventListener("submit", function(e){
     categoryId: rt.formCat || "",
     owner: owner.name,
     ownerUserId: owner.userId,
+    /* null=不调整（候选未就绪），空串=清空回待领取，id=指定测试负责人 */
+    testOwnerUserId: (function(){
+      var sel = $("iTestOwner");
+      if(!sel || sel.disabled) return null;
+      return sel.value || "";
+    })(),
     boardColumn: iCol.value || "backlog",
     startDate: iStart.value || null,
     dueDate: iDue.value || null,
-    isMilestone: !!(($("iMilestone") || {}).checked),
     reqId: iReq.value || null,
     /* 文档候选未加载完就保存（如 Ctrl+Enter）：保留原关联，不把加载失败误当成解除关联 */
     reqDocId: (docSel && docSel.getAttribute("data-ready")) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
@@ -3240,6 +3948,8 @@ taskForm.addEventListener("submit", function(e){
   function onSaved(nt){
     if(seq === rt.taskFormSeq){ // 只有当前抽屉可修改 loading 和表单；旧成功响应仍刷新视图缓存
       setSaveLoading(false);
+      var backView = factSaveView;
+      factSaveView = null;
       rememberReqId(nt && nt.reqId);
       if(saveAndContinue && wasEdit && rt.editingId === editId){
         /* 连续编辑：留在抽屉里；同步缓存与标题，后续保存不会带着旧值 */
@@ -3255,6 +3965,12 @@ taskForm.addEventListener("submit", function(e){
           syncTaskPublication(taskCacheExtra[editId]);
           rt.formDirty = false;
           resetFormBaseline();
+          /* 就地改字段：回到读态但停在原页签、原滚动位置，不把用户弹回概览顶部 */
+          setDrawerMode("read");
+          if(backView){
+            if(backView.tab && backView.tab !== "overview") setDrawerTab(backView.tab);
+            if(drawerBodyEl) drawerBodyEl.scrollTop = backView.scroll;
+          }
         }
         var stayHint = $("taskFormHint");
         if(stayHint && !rt.drawerReadOnly && !changedDuringSave) stayHint.textContent = "已保存 · 可继续编辑";
@@ -3294,6 +4010,8 @@ taskForm.addEventListener("submit", function(e){
     loadReqs();
     refreshCalendarIfOpen();
     refreshListIfOpen();
+    refreshTreeIfOpen();
+    refreshChainIfOpen();
     refreshGanttIfOpen();
     refreshAssociationViews();
     /* 测试页缺陷 tab 依赖工作项保存后的列与回归状态，通知其重新拉取 */
@@ -3366,8 +4084,179 @@ taskForm.addEventListener("submit", function(e){
   });
 });
 $("btnCloseTask").addEventListener("click", tryCloseTaskDrawer);
-$("btnCancelTask").addEventListener("click", tryCloseTaskDrawer);
+$("btnCancelTask").addEventListener("click", function(){
+  /* 已有工作项的编辑态：没有改动就回到读态，而不是关掉整个详情 */
+  if(rt.editingId && drawerMode === "edit" && !rt.formDirty){ setDrawerMode("read"); return; }
+  tryCloseTaskDrawer();
+});
 $("taskScrim").addEventListener("click", tryCloseTaskDrawer);
+if(btnDrawerEdit) btnDrawerEdit.addEventListener("click", function(){ enterDrawerEdit(); });
+/* ==================== 读态正文点开即改：标题 / 描述 ====================
+   点正文就地编辑，失焦或 Ctrl/⌘ + Enter 保存、Esc 还原；保存走「保存并继续」整单提交，
+   抽屉不关闭、页签与滚动位置保留。只读项目与新建态不给就地入口。 */
+var inlineText = null;
+function taskInlineWritable(){
+  return drawerMode === "read" && !!rt.editingId && !rt.drawerReadOnly;
+}
+function caretToEnd(el){
+  try{
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }catch(e){ /* noop */ }
+}
+function restoreTaskTextAttrs(el, field){
+  el.removeAttribute("contenteditable");
+  el.removeAttribute("aria-multiline");
+  el.classList.remove("inline-edit-field");
+  if(field === "title"){
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", "工作项标题，点击修改");
+    el.title = "点击修改标题";
+  }else{
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", "工作项描述，点击修改");
+    el.title = "点击修改描述；失焦或 Ctrl/⌘ + Enter 保存，Esc 取消";
+  }
+}
+function startTaskTextEdit(el, field){
+  if(!el) return;
+  if(!taskInlineWritable()){
+    if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+    if(rt.editingId) enterDrawerEdit(field === "desc" ? { focus: "desc" } : undefined);
+    return;
+  }
+  if(inlineText && inlineText.el !== el) finishTaskTextEdit(inlineText.el, inlineText.field, true);
+  if(el.isContentEditable) return;
+  inlineText = { el: el, field: field, before: field === "title" ? (iTitle.value || "") : el.innerHTML };
+  if(field === "title") el.textContent = iTitle.value || "";
+  el.setAttribute("contenteditable", "true");
+  el.setAttribute("role", "textbox");
+  el.setAttribute("aria-multiline", field === "desc" ? "true" : "false");
+  el.setAttribute("aria-label", field === "title" ? "工作项标题" : "工作项描述");
+  el.removeAttribute("title");
+  el.classList.add("inline-edit-field");
+  try{ el.focus(); }catch(e){ /* noop */ }
+  caretToEnd(el);
+}
+function descHtmlBlank(html){
+  var probe = document.createElement("div");
+  probe.innerHTML = html || "";
+  if(probe.querySelector("img,hr,table,li")) return false;
+  return !String(probe.textContent || "").replace(/\u00a0/g, " ").trim();
+}
+function finishTaskTextEdit(el, field, save){
+  if(!el || !el.isContentEditable) return;
+  var before = inlineText && inlineText.el === el ? inlineText.before : null;
+  var val;
+  if(field === "title"){
+    val = String(el.innerText || "").replace(/\u00a0/g, " ").replace(/[\r\n]+/g, " ").trim();
+    if(save && !val){ toast("工作项标题不能为空", "warn"); try{ el.focus(); }catch(e){} return; }
+    if(save && val.length > 60){ toast("工作项标题不能超过 60 字", "warn"); try{ el.focus(); }catch(e){} return; }
+  }else{
+    val = descHtmlForSave(el.innerHTML || "");
+    if(descHtmlBlank(val)) val = "";
+  }
+  restoreTaskTextAttrs(el, field);
+  inlineText = null;
+  var changed = field === "title" ? val !== (iTitle.value || "") : el.innerHTML !== before;
+  if(!save || !changed){
+    if(field === "title") el.textContent = (iTitle.value || "") || "工作项详情";
+    else renderReadDesc();
+    rt.formDirty = formFieldsDirty();
+    syncDrawerDirty();
+    return;
+  }
+  if(field === "title"){
+    iTitle.value = val;
+    syncTitleCount();
+    el.textContent = val;
+  }else{
+    setTaskDescContent(val);
+  }
+  factSave();
+}
+function syncInlineTextAffordance(){
+  var canEdit = taskInlineWritable();
+  if(taskDrawerTitle){
+    taskDrawerTitle.classList.toggle("task-title-edit", canEdit);
+    if(canEdit){
+      taskDrawerTitle.tabIndex = 0;
+      taskDrawerTitle.setAttribute("role", "button");
+      taskDrawerTitle.title = "点击修改标题";
+    }else if(!taskDrawerTitle.isContentEditable){
+      taskDrawerTitle.removeAttribute("tabindex");
+      taskDrawerTitle.removeAttribute("role");
+      taskDrawerTitle.removeAttribute("title");
+    }
+  }
+  var box = $("readDesc"), hint = $("readDescHint");
+  if(box){
+    box.classList.toggle("is-editable", canEdit);
+    if(!box.isContentEditable){
+      box.tabIndex = canEdit ? 0 : -1;
+      box.setAttribute("aria-disabled", canEdit ? "false" : "true");
+    }
+  }
+  if(hint) hint.hidden = !canEdit;
+}
+if(taskDrawerTitle){
+  taskDrawerTitle.addEventListener("click", function(){
+    if(taskDrawerTitle.isContentEditable) return;
+    startTaskTextEdit(taskDrawerTitle, "title");
+  });
+  taskDrawerTitle.addEventListener("keydown", function(e){
+    if(taskDrawerTitle.isContentEditable) return;
+    if(e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    startTaskTextEdit(taskDrawerTitle, "title");
+  });
+}
+var readDescBox = $("readDesc");
+if(readDescBox){
+  readDescBox.addEventListener("click", function(e){
+    if(readDescBox.isContentEditable) return;
+    if(e.target.closest("a")) return;
+    startTaskTextEdit(readDescBox, "desc");
+  });
+  readDescBox.addEventListener("keydown", function(e){
+    if(readDescBox.isContentEditable) return;
+    if(e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    startTaskTextEdit(readDescBox, "desc");
+  });
+}
+taskDrawer.addEventListener("focusout", function(e){
+  if(!inlineText || e.target !== inlineText.el) return;
+  finishTaskTextEdit(inlineText.el, inlineText.field, true);
+});
+taskDrawer.addEventListener("keydown", function(e){
+  if(!inlineText) return;
+  var el = inlineText.el, field = inlineText.field;
+  if(e.target !== el) return;
+  if(e.key === "Escape"){
+    e.preventDefault();
+    e.stopPropagation();
+    finishTaskTextEdit(el, field, false);
+    return;
+  }
+  if(e.key === "Enter" && (field === "title" || e.metaKey || e.ctrlKey)){
+    e.preventDefault();
+    e.stopPropagation();
+    finishTaskTextEdit(el, field, true);
+  }
+}, true);
+if(drawerTabsEl) drawerTabsEl.addEventListener("click", function(e){
+  var b = e.target.closest("[data-drawer-tab]");
+  if(b) setDrawerTab(b.dataset.drawerTab);
+});
+taskDrawer.addEventListener("click", function(e){
+  var go = e.target.closest("[data-drawer-goto]");
+  if(go) setDrawerTab(go.dataset.drawerGoto);
+});
 $("btnDeleteTask").addEventListener("click", function(){
   if(!rt.editingId) return;
   var id = rt.editingId;
@@ -3405,6 +4294,8 @@ function deleteTask(id){
       loadReqs();
       refreshCalendarIfOpen();
       refreshListIfOpen();
+      refreshTreeIfOpen();
+      refreshChainIfOpen();
       refreshGanttIfOpen();
       refreshAssociationViews();
       toastAction("已移入回收站「" + t.title + "」", "撤销", function(){
@@ -3433,6 +4324,8 @@ function renderSubtasks(list){
   origSubtaskDone = doneN;
   if(subCount) subCount.textContent = rt.subtasksCache.length ? (doneN + "/" + rt.subtasksCache.length) : "";
   syncProgByCol();
+  syncDrawerCounts();
+  renderReadView();
   if(!rt.subtasksCache.length){
     subList.innerHTML = '<div class="sub-empty">暂无检查项，输入后回车即可添加</div>';
     return;
@@ -3494,6 +4387,31 @@ subList.addEventListener("click", function(e){
     refreshGanttIfOpen();
   }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
 });
+/* 概览检查项也能直接勾：有检查项时进度由完成比派生，勾完进度当场重算 */
+var readChecklistEl = $("readChecklist");
+if(readChecklistEl){
+  readChecklistEl.addEventListener("change", function(e){
+    var cb = e.target.closest("[data-read-sub-toggle]");
+    if(!cb || !rt.editingId) return;
+    if(rt.drawerReadOnly){
+      cb.checked = !cb.checked;
+      toast("你对该项目只有查看权限", "warn");
+      return;
+    }
+    var id = rt.editingId;
+    cb.disabled = true;
+    API.put("/api/subtasks/" + encodeURIComponent(cb.dataset.readSubToggle), {done: cb.checked}).then(function(){
+      if(rt.editingId === id) loadSubtasks(id);
+      loadBoard({silent:true});
+      refreshListIfOpen();
+      refreshGanttIfOpen();
+    }).catch(function(ex){
+      cb.disabled = false;
+      cb.checked = !cb.checked;
+      toast(ex.message || "更新失败", "bad");
+    });
+  });
+}
 iSubNew.addEventListener("keydown", function(e){
   if(e.key !== "Enter") return;
   if(e.isComposing || e.keyCode === 229) return;
@@ -3542,6 +4460,7 @@ var lastAttList = [];
 function renderAttachments(list){
   lastAttList = list || [];
   if(attachCount) attachCount.textContent = lastAttList.length ? lastAttList.length + " 个" : "";
+  syncDrawerFacts();
   if(!lastAttList.length){
     attachList.innerHTML = '<div class="attach-empty">暂无附件（图片、PDF、Office、txt、md、zip，单个 ≤10MB）</div>';
     return;
@@ -3668,6 +4587,7 @@ function renderWork(d){
   workVal.classList.toggle("running", running);
   /* 补记、作废后「实际投入」要跟着工时汇总变，不能只刷新工时区块那一处 */
   renderActualEstimate(d.totalMinutes, rt.formEstimateMinutes);
+  renderReadView();
 }
 function fetchTimer(taskId, seq){
   API.get("/api/tasks/" + encodeURIComponent(taskId) + "/timer").then(function(d){
@@ -3882,23 +4802,118 @@ if(workLogList){
   });
 }
 
-/* 里程碑只占一天：勾选后把另一端补齐；已勾选时改任一端，另一端跟随（抽屉预加载，不依赖甘特） */
-if($("iMilestone")){
-  $("iMilestone").addEventListener("change", function(){
-    if(!this.checked) return;
-    if(iStart.value) iDue.value = iStart.value;
-    else if(iDue.value) iStart.value = iDue.value;
-    syncDateBounds();
-  });
-  iStart.addEventListener("change", function(){
-    if($("iMilestone").checked && iStart.value){ iDue.value = iStart.value; syncDateBounds(); }
-  });
-  iDue.addEventListener("change", function(){
-    if($("iMilestone").checked && iDue.value){ iStart.value = iDue.value; syncDateBounds(); }
+/* 状态只有一个入口：头部胶囊。读态下改列立即生效，和看板拖拽走同一套流转规则。
+   presetReason：调用方已收集过原因（测试退回），不再二次弹窗。 */
+function moveDrawerTask(toCol, presetReason){
+  var id = rt.editingId;
+  if(!id || !toCol) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  var t = taskById(id) || taskCacheExtra[id] || {};
+  var from = t.boardColumn || (iCol && iCol.value);
+  if(from === toCol) return;
+  var items = [{ from: from, title: t.title || (iTitle && iTitle.value) || "" }];
+  var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
+  var retried = false;
+  function done(res){
+    var nt = res && res.task;
+    if(taskCacheExtra[id]){
+      if(nt) Object.assign(taskCacheExtra[id], nt);
+      taskCacheExtra[id].boardColumn = (res && res.to) || toCol;
+    }
+    iCol.value = (res && res.to) || toCol;
+    startedDone = iCol.value === "done";
+    if(rt.editingId === id){
+      syncProgByCol();
+      syncHeadAfterMove();
+      syncTestWindow(taskCacheExtra[id]);
+      renderReadView();
+      syncDueNote();
+      loadWorkStatus(id);
+    }
+    var msg = "「" + (t.title || "工作项") + "」已移到「" + drawerColMeta(iCol.value).name + "」";
+    if(nt && nt.testOwner && toCol === "testing") msg += " · 测试负责人 " + nt.testOwner;
+    if(res && res.autoTimerStarted) msg += " · 已开始计时";
+    if(res && res.autoTimerTask) msg += " · 已接着开始「" + res.autoTimerTask + "」的计时";
+    toast(msg, "fs");
+    loadRunningTimer();
+    loadBoard({ animate: true, movedId: id });
+    loadReqs();
+    refreshListIfOpen();
+    refreshGanttIfOpen();
+    refreshCalendarIfOpen();
+    refreshTreeIfOpen();
+    refreshChainIfOpen();
+    refreshAssociationViews();
+    /* 我的工作列表不随看板自动刷新：抽屉里的移列/认领要显式通知它 */
+    window.dispatchEvent(new CustomEvent("ds:refresh-mine"));
+  }
+  function send(dec){
+    var body = { column: toCol };
+    if(dec && dec.reason) body.reason = dec.reason;
+    if(dec && dec.force) body.force = true;
+    return API.post("/api/tasks/" + encodeURIComponent(id) + "/move", body).then(done);
+  }
+  function fail(ex){
+    if(retried){ toast(ex.message || "移动失败", "bad"); return; }
+    retried = true;
+    serverDecision(wsId, items, toCol, ex).then(function(retry){
+      if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "移动失败", "bad"); return; }
+      send(retry).catch(function(e){ toast(e.message || "移动失败", "bad"); });
+    });
+  }
+  guard(wsId, items, toCol, { reason: presetReason || null }).then(function(pass){
+    if(!pass) return;
+    send(pass).catch(fail);
   });
 }
-
-/* 状态切换入口：底部状态键与首屏「状态」速览共用同一份列菜单 */
+/* 测试中尚未认领（批量移入等）时一键承接：补测试负责人与开始时间 */
+function claimDrawerTest(){
+  var id = rt.editingId;
+  if(!id) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  var t = taskCacheExtra[id] || taskById(id) || {};
+  if((iCol && iCol.value) === "test"){ moveDrawerTask("testing"); return; }
+  API.post("/api/tasks/" + encodeURIComponent(id) + "/test-claim", {}).then(function(res){
+    var nt = res && res.task;
+    if(nt && taskCacheExtra[id]) Object.assign(taskCacheExtra[id], nt);
+    if(nt){
+      populateTestOwnerSelect(nt.testOwner || "", nt.testOwnerUserId || "");
+      syncTestWindow(nt);
+    }
+    renderReadView();
+    toast("已认领测试负责人：" + ((nt && nt.testOwner) || t.testOwner || "我") + "，开始测试", "fs");
+    loadBoard({animate:true, movedId:id});
+    loadReqs();
+    refreshListIfOpen();
+    refreshGanttIfOpen();
+    refreshCalendarIfOpen();
+    refreshTreeIfOpen();
+    refreshChainIfOpen();
+    refreshAssociationViews();
+    window.dispatchEvent(new CustomEvent("ds:refresh-mine"));
+  }).catch(function(ex){
+    toast("认领失败：" + (ex.message || "网络异常"), "bad");
+  });
+}
+/* 测试退回：必填原因，写进移动日志并通知开发负责人 */
+function rejectDrawerTest(){
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  UI.showPrompt({
+    title:"退回「测试中」→「进行中」",
+    desc:"退回代表本轮测试结束并记录结束时间；原因会写入活动记录并通知开发负责人。",
+    label:"退回原因",
+    placeholder:"例如：关键用例未通过 / 缺少自测记录",
+    maxLength:120,
+    required:true,
+    okText:"确认退回"
+  }).then(function(reason){
+    if(reason) moveDrawerTask("doing", reason);
+  });
+}
+function syncHeadAfterMove(){
+  syncDrawerHead();
+  syncDrawerFacts();
+}
 function openDrawerColMenu(anchor){
   if(!iCol || denyReadOnly()) return;
   var el = document.createElement("div");
@@ -3912,15 +4927,346 @@ function openDrawerColMenu(anchor){
   el.addEventListener("click", function(e){
     var b = e.target.closest("[data-drawer-col]");
     if(!b) return;
-    iCol.value = b.dataset.drawerCol;
-    iCol.dispatchEvent(new Event("change", { bubbles: true }));
+    var to = b.dataset.drawerCol;
     UI.closeAllPops();
+    /* 读态与编辑态都即时生效：底部不再有第二个状态入口 */
+    moveDrawerTask(to);
   });
   UI.openPop(el, anchor, { align: "left", onClose: function(){ el.remove(); } });
 }
-var btnDrawerStatus = document.getElementById("btnDrawerStatus");
-if(btnDrawerStatus) btnDrawerStatus.addEventListener("click", function(){ openDrawerColMenu(btnDrawerStatus); });
-var factStatusBtn = $("factStatus");
-if(factStatusBtn) factStatusBtn.addEventListener("click", function(){ openDrawerColMenu(factStatusBtn); });
+if(drawerStatusPill) drawerStatusPill.addEventListener("click", function(){ openDrawerColMenu(drawerStatusPill); });
+if(btnFootStatus) btnFootStatus.addEventListener("click", function(){ openDrawerColMenu(btnFootStatus); });
+/* 读态测试卡：认领 / 退回 / 通过，均按当前流转规则走 move */
+var readTestClaimBtn = $("readTestClaim"), readTestRejectBtn = $("readTestReject"),
+    readTestPassBtn = $("readTestPass"), readTestReassignBtn = $("readTestReassign");
+if(readTestClaimBtn) readTestClaimBtn.addEventListener("click", claimDrawerTest);
+if(readTestRejectBtn) readTestRejectBtn.addEventListener("click", rejectDrawerTest);
+if(readTestPassBtn) readTestPassBtn.addEventListener("click", function(){ moveDrawerTask("done"); });
+if(readTestReassignBtn) readTestReassignBtn.addEventListener("click", function(){
+  enterDrawerEdit();
+  setTimeout(function(){ var sel = $("iTestOwner"); if(sel && !sel.disabled){ try{ sel.focus(); }catch(e){} } }, 60);
+});
+
+/* ==================== 概览事实条：就地编辑（单字段保存） ====================
+   读态点事实 → 选值/填值 → 复用「保存并继续」提交整单后留在读态。
+   只读项目/只读角色不开放任何就地入口。 */
+function factSave(){
+  if(!rt.editingId || rt.drawerReadOnly || !btnSaveTaskContinue) return;
+  /* 上一次就地保存还在飞：排队而不是再提交一次，否则 requestSubmit 会带上被禁用的提交按钮 */
+  if(btnSaveTaskContinue.disabled){ factSaveQueued = true; return; }
+  if(progFactTimer){ clearTimeout(progFactTimer); progFactTimer = 0; }
+  rt.formDirty = true;
+  factSaving = true;
+  factSaveView = { tab: drawerTab, scroll: drawerBodyEl ? drawerBodyEl.scrollTop : 0 };
+  syncDrawerFacts();
+  /* 提交按钮在阅读态是 hidden，但仍属于表单；requestSubmit 会带入它的 id */
+  taskForm.requestSubmit(btnSaveTaskContinue);
+}
+/* 概览进度滑块：拖动只改本地值，松手后合并提交，避免一次拖动打出一串 PUT */
+var progFactTimer = 0;
+function scheduleProgFactSave(){
+  clearTimeout(progFactTimer);
+  progFactTimer = setTimeout(function(){
+    progFactTimer = 0;
+    if(!rt.editingId || rt.drawerReadOnly) return;
+    factSave();
+  }, 300);
+}
+var rfProgRange = $("rfProgRange");
+if(rfProgRange){
+  rfProgRange.addEventListener("input", function(){
+    if(rt.drawerReadOnly){ rfProgRange.value = iProg.value; return; }
+    iProg.value = rfProgRange.value;
+    syncProgVal();
+  });
+  rfProgRange.addEventListener("change", function(){ scheduleProgFactSave(); });
+}
+function openFactPop(el, anchor){
+  UI.closeAllPops();
+  UI.openPop(el, anchor, { align: "left", onClose: function(){ el.remove(); } });
+}
+function factMenu(title, items){
+  var el = document.createElement("div");
+  el.className = "menu";
+  el.innerHTML = '<div class="menu-title">' + esc(title) + '</div>' + items;
+  return el;
+}
+function openOwnerFact(anchor){
+  var opts = [], seen = Object.create(null);
+  Array.prototype.forEach.call(iOwner.options, function(o){
+    if(o.value === "__text__" || o.disabled) return;
+    var name = (o.dataset.name !== undefined ? o.dataset.name : o.textContent).split(" · ")[0].trim();
+    if(o.value && !name) return;
+    var key = o.value || "__none__";
+    if(seen[key]) return;
+    seen[key] = true;
+    opts.push('<button class="menu-item" type="button" data-fact-owner="' + esc(o.value) + '">' +
+      esc(name || "未分配") + (o.selected ? '<span class="k">当前</span>' : '') + '</button>');
+  });
+  opts.unshift('<button class="menu-item" type="button" data-fact-owner="">未分配' +
+    (!iOwner.value || iOwner.value === "__none__" ? '<span class="k">当前</span>' : '') + '</button>');
+  var el = factMenu("负责人", opts.join(""));
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-fact-owner]");
+    if(!b) return;
+    UI.closeAllPops();
+    if((iOwner.value || "") === (b.dataset.factOwner || "")) return;
+    iOwner.value = b.dataset.factOwner;
+    factSave();
+  });
+  openFactPop(el, anchor);
+}
+function openPriFact(anchor){
+  var el = factMenu("优先级", PRIORITIES.map(function(p){
+    return '<button class="menu-item" type="button" data-fact-pri="' + p + '">' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:' + esc(priColor(p)) + '"></span>' +
+      p + ' · ' + esc(priName(p)) + (rt.formPri === p ? '<span class="k">当前</span>' : '') + '</button>';
+  }).join(""));
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-fact-pri]");
+    if(!b) return;
+    UI.closeAllPops();
+    if(rt.formPri === b.dataset.factPri) return;
+    rt.formPri = b.dataset.factPri;
+    syncFormSegs();
+    factSave();
+  });
+  openFactPop(el, anchor);
+}
+function openTypeFact(anchor){
+  var el = factMenu("类型", ["task","story","bug","epic"].map(function(v){
+    var m = TYPE_META[v];
+    return '<button class="menu-item" type="button" data-fact-type="' + v + '">' + esc(m.name) +
+      ((iItemType && iItemType.value || "task") === v ? '<span class="k">当前</span>' : '') + '</button>';
+  }).join(""));
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-fact-type]");
+    if(!b) return;
+    UI.closeAllPops();
+    var v = b.dataset.factType;
+    if(!iItemType || iItemType.value === v) return;
+    iItemType.value = v;
+    syncTypeButtons();
+    syncDefectFields();
+    if(v === "bug" && !(iSeverity && iSeverity.value)){
+      toast("缺陷必须选择严重度，已打开编辑", "warn");
+      enterDrawerEdit();
+      setTimeout(function(){ try{ $("fSeverity").scrollIntoView({ block: "center" }); }catch(err){} }, 80);
+      return;
+    }
+    factSave();
+  });
+  openFactPop(el, anchor);
+}
+function openCategoryFact(anchor){
+  var reqId = currentReqId();
+  var cats = projCats(reqId);
+  if(!reqId){ toast("先选择所属项目，再指定模块", "warn"); return; }
+  if(!cats.length){
+    toast(canManageProject(reqId) ? "该项目还没有模块，可在项目设置里添加" : "该项目还没有模块，请联系项目负责人添加", "warn");
+    return;
+  }
+  var items = '<button class="menu-item" type="button" data-fact-cat="">' +
+    '未指定' + (!rt.formCat ? '<span class="k">当前</span>' : '') + '</button>' +
+    cats.map(function(c){
+      return '<button class="menu-item" type="button" data-fact-cat="' + esc(c.id) + '">' +
+        '<span style="width:8px;height:8px;border-radius:2px;background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"></span>' +
+        esc(c.name) + (rt.formCat === c.id ? '<span class="k">当前</span>' : '') + '</button>';
+    }).join("");
+  var el = factMenu("模块", items);
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-fact-cat]");
+    if(!b) return;
+    UI.closeAllPops();
+    var v = b.dataset.factCat || "";
+    if(v === (rt.formCat || "")) return;
+    rt.formCat = v;
+    syncCatSeg();
+    factSave();
+  });
+  openFactPop(el, anchor);
+}
+function openProjectFact(anchor){
+  var el = factMenu("所属项目", Array.prototype.map.call(iReq.options, function(o){
+    return '<button class="menu-item" type="button" data-fact-req="' + esc(o.value) + '">' +
+      esc(o.textContent || "未归属") + (iReq.value === o.value ? '<span class="k">当前</span>' : '') + '</button>';
+  }).join(""));
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-fact-req]");
+    if(!b) return;
+    var next = b.dataset.factReq || "";
+    UI.closeAllPops();
+    if(next === (iReq.value || "")) return;
+    if(next && !canEditReq(next)){ toast("你对该项目没有写权限", "warn"); return; }
+    var hasDemand = !!($("iDemand") && $("iDemand").value);
+    UI.showConfirm({
+      title: "切换所属项目？",
+      msg: hasDemand
+        ? "切换后会解除当前需求关联，并按新项目重载模块、计划版本与负责人候选。"
+        : "切换后会按新项目重载模块、计划版本与负责人候选。",
+      okText: "切换项目"
+    }).then(function(ok){
+      if(!ok || !rt.editingId) return;
+      iReq.value = next;
+      iReq.dispatchEvent(new Event("change", { bubbles: true }));
+      var tries = 0;
+      (function waitVersionReady(){
+        if(!rt.editingId || rt.drawerReadOnly) return;
+        var vs = $("iVersion");
+        if(vs && vs.getAttribute("data-ready")){ factSave(); return; }
+        if(++tries > 80){ toast("项目已切换，但计划版本加载失败；请重试或点「编辑」保存", "warn"); return; }
+        setTimeout(waitVersionReady, 100);
+      })();
+    });
+  });
+  openFactPop(el, anchor);
+}
+function openDateRangeFact(anchor){
+  var el = document.createElement("div");
+  el.className = "menu";
+  el.style.width = "260px";
+  el.innerHTML = '<div class="menu-title">计划时间</div>' +
+    '<div class="menu-field"><label class="menu-label" for="factStartInput">开始</label>' +
+      '<input class="input" id="factStartInput" type="date" data-fact-start value="' + esc(iStart.value || "") + '"></div>' +
+    '<div class="menu-field"><label class="menu-label" for="factDueInput">截止</label>' +
+      '<input class="input" id="factDueInput" type="date" data-fact-due value="' + esc(iDue.value || "") + '"></div>' +
+    '<div class="hint" style="padding:0 6px 8px">开始可留空；截止不能早于开始。</div>' +
+    '<div class="menu-foot"><button class="btn sm" type="button" data-fact-date-clear>清空</button>' +
+    '<button class="btn sm primary" type="button" data-fact-date-ok>保存</button></div>';
+  var sIn = el.querySelector("[data-fact-start]"), dIn = el.querySelector("[data-fact-due]");
+  function commit(sv, dv){
+    if(sv && dv && sv > dv){ toast("开始日期不能晚于截止日期", "bad"); return; }
+    if((iStart.value || "") === sv && (iDue.value || "") === dv){ UI.closeAllPops(); return; }
+    iStart.value = sv;
+    iDue.value = dv;
+    syncDateBounds();
+    UI.closeAllPops();
+    factSave();
+  }
+  el.querySelector("[data-fact-date-ok]").addEventListener("click", function(){ commit(sIn.value || "", dIn.value || ""); });
+  el.querySelector("[data-fact-date-clear]").addEventListener("click", function(){ commit("", ""); });
+  [sIn, dIn].forEach(function(inp){
+    inp.addEventListener("keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); commit(sIn.value || "", dIn.value || ""); }
+    });
+  });
+  openFactPop(el, anchor);
+  setTimeout(function(){ try{ sIn.focus(); }catch(e){} }, 30);
+}
+function openEstimateFact(anchor){
+  var el = document.createElement("div");
+  el.className = "menu";
+  el.style.width = "236px";
+  el.innerHTML = '<div class="menu-title">预估工时</div>' +
+    '<div class="menu-field"><div class="est-wrap"><input class="input" id="factEstInput" type="number" min="0" max="168" step="0.5" ' +
+      'value="' + esc(iEstimate && iEstimate.value ? iEstimate.value : "") + '" aria-label="预估工时（小时）">' +
+      '<span class="est-unit">小时</span></div>' +
+      '<div class="hint" style="margin-top:6px">留空或 0 表示不预估</div></div>' +
+    '<div class="menu-foot"><button class="btn sm" type="button" data-fact-est-clear>清空</button>' +
+    '<button class="btn sm primary" type="button" data-fact-est-ok>保存</button></div>';
+  var input = el.querySelector("#factEstInput");
+  function commit(v){
+    var h = Number(v);
+    if(!isFinite(h) || h < 0) h = 0;
+    if(h > 168) h = 168;
+    var curH = Math.max(0, Number(iEstimate && iEstimate.value) || 0);
+    if(Math.abs(curH - h) < 0.001){ UI.closeAllPops(); return; }
+    if(iEstimate) iEstimate.value = h ? h : "";
+    UI.closeAllPops();
+    factSave();
+  }
+  el.querySelector("[data-fact-est-ok]").addEventListener("click", function(){ commit(input.value); });
+  el.querySelector("[data-fact-est-clear]").addEventListener("click", function(){ commit(0); });
+  input.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); commit(input.value); }
+  });
+  openFactPop(el, anchor);
+  setTimeout(function(){ try{ input.focus(); input.select(); }catch(e){} }, 30);
+}
+function openTagsFact(){
+  UI.showPrompt({
+    title: "编辑标签",
+    desc: "用逗号分隔，最多 8 个，每个不超过 16 字；留空即清除。",
+    value: (rt.tagsCache || []).join(","),
+    placeholder: "例如：支付、P0、线上问题",
+    maxLength: 160,
+    required: false,
+    okText: "保存标签"
+  }).then(function(v){
+    if(v === null || !rt.editingId) return;
+    var out = [], seen = Object.create(null);
+    String(v).split(/[,，、\s]+/).forEach(function(tg){
+      tg = tg.trim().slice(0, 16);
+      if(!tg || seen[tg] || out.length >= 8) return;
+      seen[tg] = true;
+      out.push(tg);
+    });
+    if(out.join("\u0001") === (rt.tagsCache || []).join("\u0001")) return;
+    rt.tagsCache = out;
+    renderTagChips();
+    factSave();
+  });
+}
+function openFactEditor(kind, anchor){
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(!rt.editingId) return;
+  if(kind === "owner") openOwnerFact(anchor);
+  else if(kind === "pri") openPriFact(anchor);
+  else if(kind === "type") openTypeFact(anchor);
+  else if(kind === "category") openCategoryFact(anchor);
+  else if(kind === "project") openProjectFact(anchor);
+  else if(kind === "dateRange") openDateRangeFact(anchor);
+  else if(kind === "estimate") openEstimateFact(anchor);
+  else if(kind === "tags") openTagsFact();
+}
+var readFactsBox = $("readFacts");
+if(readFactsBox){
+  readFactsBox.addEventListener("click", function(e){
+    var goto = e.target.closest("[data-fact-goto]");
+    if(goto && rt.editingId){
+      if(goto.dataset.factGoto === "checklist"){
+        var card = $("readChecklistCard");
+        if(card){ try{ card.scrollIntoView({ behavior:"smooth", block:"center" }); }catch(err){ try{ card.scrollIntoView(); }catch(e){} } }
+        return;
+      }
+      setDrawerTab("exec");
+      setTimeout(function(){ try{ fAttach.scrollIntoView({ block: "start" }); }catch(err){} }, 60);
+      return;
+    }
+    var jump = e.target.closest("[data-fact-jump]");
+    if(jump && rt.editingId){
+      enterDrawerEdit();
+      /* 计划版本在「关联」页签里编辑：直接切过去，少一次找入口 */
+      if(jump.dataset.factJump === "version") setDrawerTab("rel");
+      setTimeout(function(){
+        var target = jump.dataset.factJump === "version" ? $("iVersion") : null;
+        if(!target) return;
+        try{ target.scrollIntoView({ block: "center" }); }catch(err){}
+        /* 版本候选在换项目后异步重载，disabled 期间 focus 不生效，就绪后再聚焦 */
+        var tries = 0;
+        (function focusReady(){
+          if(!target.isConnected || rt.drawerReadOnly) return;
+          if(target.disabled && ++tries < 30){ setTimeout(focusReady, 100); return; }
+          try{ target.focus({ preventScroll: true }); }catch(err){}
+        })();
+      }, 90);
+      return;
+    }
+    var fact = e.target.closest("[data-fact-edit]");
+    if(!fact) return;
+    openFactEditor(fact.dataset.factEdit, fact);
+  });
+  readFactsBox.addEventListener("keydown", function(e){
+    if(e.key !== "Enter" && e.key !== " ") return;
+    var goto = e.target.closest("[data-fact-goto]");
+    if(goto){ e.preventDefault(); goto.click(); return; }
+    var jump = e.target.closest("[data-fact-jump]");
+    if(jump){ e.preventDefault(); jump.click(); return; }
+    var fact = e.target.closest("[data-fact-edit]");
+    if(!fact) return;
+    e.preventDefault();
+    openFactEditor(fact.dataset.factEdit, fact);
+  });
+}
 
 export { buildFormControls, deleteTask, openTaskDrawer, ownerOptions, populateReqSelect, refreshOwnerSelect, renderTagChips, resetFormBaseline, showDrawerNotice, syncAssocViewBtns, syncCatSeg, syncDateBounds, syncFormSegs, syncProgVal, tryCloseTaskDrawer };

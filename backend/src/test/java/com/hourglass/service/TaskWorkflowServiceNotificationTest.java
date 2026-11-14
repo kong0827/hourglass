@@ -27,7 +27,8 @@ class TaskWorkflowServiceNotificationTest {
     private final TaskWorkflowService service = new TaskWorkflowService(tasks, mock(TaskLogMapper.class),
             mock(SubtaskMapper.class), support, mock(TimeLogService.class),
             mock(TaskCompletionService.class), mock(TaskAuditLogger.class), events, watchers,
-            mock(ProjectAccessService.class), transitions, mock(WorkspaceService.class), scopeLock);
+            mock(ProjectAccessService.class), transitions, mock(WorkspaceService.class),
+            mock(com.hourglass.mapper.WorkspaceMemberMapper.class), scopeLock);
 
     @org.junit.jupiter.api.BeforeEach
     void setupResponse() {

@@ -15,6 +15,9 @@ public interface VersionTaskMapper {
     List<com.hourglass.entity.VersionRelease> selectReleaseRecordsByReq(@Param("workspaceId") String workspaceId,
                                                                         @Param("reqId") String reqId);
     List<Task> selectStatsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 承诺基线快照来源：版本当前绑定的工作项与预估 */
+    List<Task> selectCommitmentTasks(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<String> selectVersionIdsByTask(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
     List<TaskVersionBinding> selectVersionRowsByTaskIds(@Param("workspaceId") String workspaceId,
                                                        @Param("taskIds") List<String> taskIds);

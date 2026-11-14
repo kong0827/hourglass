@@ -14,6 +14,8 @@ public class BoardQuery {
 
     private String q;
     private List<String> owners = new ArrayList<String>();
+    /** 测试负责人显示名快照，__none 表示待领取 */
+    private List<String> testOwners = new ArrayList<String>();
     private List<String> pris = new ArrayList<String>();
     private List<String> cats = new ArrayList<String>();
     /** 需求ID列表，__none 表示未归类 */
@@ -92,6 +94,14 @@ public class BoardQuery {
             query.openLimit = Math.max(1, Math.min(100, openLimit));
         }
         return query;
+    }
+
+    /**
+     * 搜索词里的工作项编号（WI-001 / wi1 / 纯数字）。
+     * 从 q 现算而不另存字段：全局搜索直接 setQ，不走 from()，两处口径才不会分叉。
+     */
+    public Integer getItemNo() {
+        return com.hourglass.common.Nos.parseWorkItem(q);
     }
 
     /** 起止填反时按同一维度对调，避免用户得到空结果却看不出原因 */

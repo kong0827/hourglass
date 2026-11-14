@@ -25,11 +25,13 @@ public class VersionStatsResponse {
         private String id;
         private String name;
         private String description;
-        /** planned/active/released */
+        /** planned/active/released/closed/canceled */
         private String status;
         private LocalDate startDate;
         private LocalDate targetDate;
         private LocalDateTime releasedAt;
+        private LocalDateTime endedAt;
+        private String endReason;
         private Long revision;
         /** 当前用户是否可管理发布计划 */
         private Boolean canManageReleasePlan;
@@ -52,6 +54,10 @@ public class VersionStatsResponse {
         private Integer doingCount;
         /** 累计实际工时（分钟） */
         private Integer workMinutes;
+        /** 开发工时（分钟）：累计实际工时扣掉测试窗口内计时 */
+        private Integer devMinutes;
+        /** 测试工时（分钟）：测试窗口内已结束计时 */
+        private Integer testMinutes;
         /** 绑定任务预估合计（分钟） */
         private Integer estimateMinutes;
         /** 整体偏差百分比：(实际−预估)÷预估；无预估数据时为 null */
@@ -70,6 +76,29 @@ public class VersionStatsResponse {
         private Integer preLaunchCount;
         /** 分支进度：该版本下任务所挂分支（含上线前自动归入的任务），按分支状态 dev→released 排序 */
         private List<BranchStat> branches = new ArrayList<BranchStat>();
+        /** 承诺基线：开发启动时冻结的范围与预估；旧版本未快照时为 null */
+        private Commitment commitment;
+    }
+
+    /**
+     * 承诺基线对比：基线只记录启动时的工作项与预估，
+     * 新增/移出按当前绑定与基线的差集计算，预估变化不回写基线。
+     */
+    @Data
+    public static class Commitment {
+        private LocalDateTime capturedAt;
+        private Integer taskCount;
+        private Integer estimateMinutes;
+        /** 基线中当前已完成（done）的任务数 */
+        private Integer doneCount;
+        /** 基线完成率：doneCount ÷ taskCount；基线为空时为 null */
+        private Integer donePct;
+        /** 启动后新绑定的工作项 */
+        private Integer addedCount;
+        private Integer addedEstimateMinutes;
+        /** 基线中已解除绑定的工作项 */
+        private Integer removedCount;
+        private Integer removedEstimateMinutes;
     }
 
     @Data
@@ -78,6 +107,9 @@ public class VersionStatsResponse {
         private Integer doneCount;
         private Integer doingCount;
         private Integer workMinutes;
+        /** 开发 / 测试拆分：测试为测试窗口内计时，其余计入开发 */
+        private Integer devMinutes;
+        private Integer testMinutes;
         private Integer estimateMinutes;
         private Integer remainingMinutes;
         /** 分支进度：该桶任务所挂分支（待规划桶同样带，口径与版本卡一致） */

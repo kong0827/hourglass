@@ -16,7 +16,7 @@
   </resultMap>
   <sql id="itemColumns">
     i.id AS item_id, i.workspace_id AS item_workspace_id, i.release_id AS item_release_id,
-    i.task_id AS item_task_id, i.title AS item_title, i.item_type AS item_item_type,
+    i.task_id AS item_task_id, i.task_item_no AS item_task_item_no, i.title AS item_title, i.item_type AS item_item_type,
     i.owner_user_id AS item_owner_user_id, i.owner_name AS item_owner_name,
     i.demand_id AS item_demand_id, i.demand_title AS item_demand_title,
     i.target_version_id AS item_target_version_id, i.target_version_name AS item_target_version_name,
@@ -76,6 +76,7 @@
     FROM project_version v
     INNER JOIN requirement r ON r.workspace_id = v.workspace_id AND r.id = v.req_id
     WHERE v.workspace_id = #{workspaceId} AND r.archived_at IS NULL
+      AND v.status NOT IN ('closed', 'canceled')
     ORDER BY r.name, COALESCE(v.target_date, DATE(v.released_at), DATE(v.created_at)) DESC, v.created_at DESC, v.id DESC
   </select>
   <insert id="insertPlanVersion">
@@ -273,12 +274,12 @@
   </select>
   <insert id="insertRecord">
     INSERT INTO version_release
-      (id, workspace_id, req_id, version_id, plan_id, plan_revision, result, published_on, recorded_at,
+      (id, workspace_id, req_id, release_no, version_id, plan_id, plan_revision, result, published_on, recorded_at,
        released_by, released_by_name, version_name, project_name, notes, failure_reason,
        published_count, excluded_count, idempotency_key, request_hash, plan_snapshot,
        occurred_at, environment, target_keys, coverage, artifact_ref, artifact_digest, operation, related_release_id,
        executor_user_id, executor_name, deviation_reason)
-    VALUES (#{id}, #{workspaceId}, #{reqId}, #{versionId}, #{planId}, #{planRevision}, #{result}, #{publishedOn},
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{releaseNo}, #{versionId}, #{planId}, #{planRevision}, #{result}, #{publishedOn},
       #{recordedAt}, #{releasedBy}, #{releasedByName}, #{versionName}, #{projectName}, #{notes}, #{failureReason},
       #{publishedCount}, #{excludedCount}, #{idempotencyKey}, #{requestHash}, #{planSnapshot},
       #{occurredAt}, #{environment}, #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler},
@@ -286,9 +287,9 @@
   </insert>
   <insert id="insertItem" useGeneratedKeys="true" keyProperty="id">
     INSERT INTO version_release_item
-      (workspace_id, release_id, task_id, title, item_type, owner_user_id, owner_name, demand_id, demand_title,
+      (workspace_id, release_id, task_id, task_item_no, title, item_type, owner_user_id, owner_name, demand_id, demand_title,
        target_version_id, target_version_name, board_column, completed_at, disposition, work_minutes, estimate_minutes, reason, content_summary)
-    VALUES (#{workspaceId}, #{releaseId}, #{taskId}, #{title}, #{itemType}, #{ownerUserId}, #{ownerName}, #{demandId},
+    VALUES (#{workspaceId}, #{releaseId}, #{taskId}, #{taskItemNo}, #{title}, #{itemType}, #{ownerUserId}, #{ownerName}, #{demandId},
       #{demandTitle}, #{targetVersionId}, #{targetVersionName}, #{boardColumn}, #{completedAt}, #{disposition}, #{workMinutes}, #{estimateMinutes}, #{reason}, #{contentSummary})
   </insert>
   <select id="selectItems" resultType="VersionReleaseItem">
@@ -311,6 +312,14 @@
   </select>
   <select id="countRecordsByProject" resultType="int">
     SELECT COUNT(*) FROM version_release WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+  <!-- 项目内下一个发布记录编号（sql/82），与 uk_release_no 同一分组口径 -->
+  <select id="selectNextReleaseNo" resultType="int">
+    SELECT COALESCE(MAX(release_no), 0) + 1 FROM version_release
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+  <select id="selectReleaseNo" resultType="java.lang.Integer">
+    SELECT release_no FROM version_release WHERE workspace_id = #{workspaceId} AND id = #{releaseId}
   </select>
   <select id="countSuccessByProject" resultType="int">
     SELECT COUNT(*) FROM version_release WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND result = 'success'

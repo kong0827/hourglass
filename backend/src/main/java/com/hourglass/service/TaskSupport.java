@@ -10,6 +10,9 @@ import com.hourglass.entity.TagTaskRow;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.TagMapper;
 import com.hourglass.mapper.TaskMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -26,6 +29,8 @@ import java.util.Set;
  */
 @Component
 class TaskSupport {
+
+    private static final Logger log = LoggerFactory.getLogger(TaskSupport.class);
 
     private final TaskMapper taskMapper;
     private final TagMapper tagMapper;
@@ -64,6 +69,52 @@ class TaskSupport {
                     ? "回收站中没有该任务：" + taskId : "任务不存在：" + taskId);
         }
         return t;
+    }
+
+    /**
+     * 分配项目内编号后插入（sql/82）。并发建工作项会抢到同一个号，由唯一键 uk_task_item_no 拒绝，
+     * 这里重算重试；失败的 INSERT 不会让 InnoDB 事务失效（与用例编号 TC-001 同一口径）。
+     * 静态 + 显式传 mapper：调用方仍直接持有写入动作，隔离 TaskSupport 的测试不会连插入一起屏蔽掉。
+     */
+    static void insertWithNo(TaskMapper mapper, Task t) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            t.setItemNo(mapper.selectNextItemNo(t.getWorkspaceId(), t.getReqId()));
+            try {
+                mapper.insert(t);
+                return;
+            } catch (DuplicateKeyException e) {
+                if (!numberConflict(e)) {
+                    throw e;
+                }
+                log.warn("工作项编号并发冲突，重试第 {} 次：project={}", attempt + 2, t.getReqId());
+            }
+        }
+        throw AppException.badRequest("工作项编号生成冲突，请重试");
+    }
+
+    /** 换项目 / 存量未取号：重新取号后更新，返回受影响行数（调用方据此做 CAS 判定） */
+    static int updateWithNo(TaskMapper mapper, Task t) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            t.setItemNo(mapper.selectNextItemNo(t.getWorkspaceId(), t.getReqId()));
+            try {
+                return mapper.update(t);
+            } catch (DuplicateKeyException e) {
+                if (!numberConflict(e)) {
+                    throw e;
+                }
+                log.warn("工作项换项目编号冲突，重试第 {} 次：project={}", attempt + 2, t.getReqId());
+            }
+        }
+        throw AppException.badRequest("工作项编号生成冲突，请重试");
+    }
+
+    /**
+     * 只重试编号撞键。工作项 ID 可由客户端指定，主键撞键是另一回事，
+     * 若一并重试会把「ID 已被占用」误报成编号冲突。
+     */
+    private static boolean numberConflict(DuplicateKeyException e) {
+        String message = e.getMessage();
+        return message != null && message.contains("uk_task_item_no");
     }
 
     List<String> tagNames(String workspaceId, String taskId) {

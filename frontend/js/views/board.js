@@ -4,7 +4,7 @@ import { API } from "../core/api.js";
 import { loadCategories, pruneStaleFilters, updateTagDatalist } from "../core/app.js";
 import { board, reqListEl } from "../core/dom.js";
 import { renderFilterChips, saveViewState } from "../core/filters-ui.js";
-import { boardParams, updateBrand } from "../core/filters.js";
+import { boardParams, updateBrand, workpageScopeQuery } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { renderAlertBar } from "../core/notifications.js";
@@ -16,7 +16,7 @@ import { guard, serverDecision } from "../core/transitions.js";
 import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
-import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, PRIORITIES, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, taskDescText, typeBadgeHTML, weekdayCN } from "../lib/format.js";
+import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, PRIORITIES, avatarHTML, colMeta, colName, dayDiff, elapsedText, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, taskDescText, typeBadgeHTML, weekdayCN } from "../lib/format.js";
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
@@ -36,18 +36,26 @@ var COL_TOP_AT = 360;
 /* 列内分组：列仍是状态，组只决定卡片怎么归堆，拖拽语义不变。
    分组偏好按「账号 + 空间」记住，与列内排序同一套做法。 */
 var BOARD_GROUPS = [["none", "不分组"], ["owner", "负责人"], ["priority", "优先级"], ["category", "模块"]];
+var BOARD_GROUPS2 = [["none", "不分组"], ["owner", "负责人"], ["priority", "优先级"], ["category", "模块"]];
 var BOARD_GROUP_KEY = "ds.boardGroup.v1";
+var BOARD_GROUP2_KEY = "ds.boardGroup2.v1";
 var BOARD_GROUP_FOLD_KEY = "ds.boardGroupFold.v1";
 function boardPrefKey(name){
   var u = (rt.currentUser && rt.currentUser.id) || "";
   var w = (rt.currentWs && rt.currentWs.id) || "";
   return name + ":" + u + ":" + w;
 }
-function readBoardGroup(){
+function readBoardGroupPref(key, list){
   var v = "";
-  try{ v = localStorage.getItem(boardPrefKey(BOARD_GROUP_KEY)); }catch(e){ return "none"; }
-  for(var i = 0; i < BOARD_GROUPS.length; i++) if(BOARD_GROUPS[i][0] === v) return v;
+  try{ v = localStorage.getItem(boardPrefKey(key)); }catch(e){ return "none"; }
+  for(var i = 0; i < list.length; i++) if(list[i][0] === v) return v;
   return "none";
+}
+function readBoardGroup(){
+  return readBoardGroupPref(BOARD_GROUP_KEY, BOARD_GROUPS);
+}
+function readBoardGroup2(){
+  return readBoardGroupPref(BOARD_GROUP2_KEY, BOARD_GROUPS2);
 }
 /* 模块加载时空间可能还没就绪（登录/切空间后才写入 rt.currentWs），
    所以不能只读一次：按「账号 + 空间」的键变化时重新取。 */
@@ -57,6 +65,14 @@ function currentBoardGroup(){
   var k = boardPrefKey(BOARD_GROUP_KEY);
   if(k !== boardGroupKeySeen){ boardGroupKeySeen = k; boardGroup = readBoardGroup(); }
   return boardGroup;
+}
+var boardGroup2 = "none";
+var boardGroup2KeySeen = "";
+function currentBoardGroup2(){
+  if(currentBoardGroup() === "none") return "none";
+  var k = boardPrefKey(BOARD_GROUP2_KEY);
+  if(k !== boardGroup2KeySeen){ boardGroup2KeySeen = k; boardGroup2 = readBoardGroup2(); }
+  return boardGroup2;
 }
 function readGroupFolds(){
   try{ return JSON.parse(localStorage.getItem(boardPrefKey(BOARD_GROUP_FOLD_KEY)) || "{}") || {}; }
@@ -79,21 +95,52 @@ function setBoardGroup(v){
   boardGroupKeySeen = boardPrefKey(BOARD_GROUP_KEY);
   try{ localStorage.setItem(boardPrefKey(BOARD_GROUP_KEY), v); }
   catch(e){ /* 受限环境只改本次会话 */ }
-  renderBoardGroupSeg();
+  /* 一级回到不分组时，二级也一起清掉：避免下拉显示不分组却仍在分组；
+     两级选同一维度没有意义，一级改了就把撞车的二级清掉 */
+  if(v === "none" || v === boardGroup2){
+    boardGroup2 = "none";
+    boardGroup2KeySeen = boardPrefKey(BOARD_GROUP2_KEY);
+    try{ localStorage.setItem(boardPrefKey(BOARD_GROUP2_KEY), "none"); }catch(e){ /* noop */ }
+  }
+  renderBoardGroupControls();
   render({animate:false});
 }
-function renderBoardGroupSeg(){
-  var seg = document.getElementById("boardGroupSeg");
-  if(!seg) return;
-  if(!seg.childElementCount){
-    seg.innerHTML = BOARD_GROUPS.map(function(g){
-      return '<button type="button" data-board-group="' + g[0] + '">' + g[1] + '</button>';
+function setBoardGroup2(v){
+  var ok = false;
+  for(var i = 0; i < BOARD_GROUPS2.length; i++) if(BOARD_GROUPS2[i][0] === v) ok = true;
+  if(!ok || currentBoardGroup() === "none" || currentBoardGroup2() === v) return;
+  boardGroup2 = v;
+  boardGroup2KeySeen = boardPrefKey(BOARD_GROUP2_KEY);
+  try{ localStorage.setItem(boardPrefKey(BOARD_GROUP2_KEY), v); }
+  catch(e){ /* 受限环境只改本次会话 */ }
+  renderBoardGroupControls();
+  render({animate:false});
+}
+function renderBoardGroupControls(){
+  var sel = document.getElementById("boardGroupSelect");
+  var sel2 = document.getElementById("boardGroup2Select");
+  if(!sel || !sel2) return;
+  if(!sel.childElementCount){
+    sel.innerHTML = BOARD_GROUPS.map(function(g){
+      return '<option value="' + g[0] + '">' + g[1] + '</option>';
     }).join("");
   }
-  var cur = currentBoardGroup();
-  Array.prototype.forEach.call(seg.querySelectorAll("[data-board-group]"), function(b){
-    b.setAttribute("aria-pressed", String(b.dataset.boardGroup === cur));
-  });
+  var cur = currentBoardGroup(), cur2 = currentBoardGroup2();
+  /* 二级下拉排除一级已选的维度：同一维度分两级只是重复自己 */
+  if(cur !== "none" && cur2 === cur){
+    cur2 = "none";
+    boardGroup2 = "none";
+    boardGroup2KeySeen = boardPrefKey(BOARD_GROUP2_KEY);
+    try{ localStorage.setItem(boardPrefKey(BOARD_GROUP2_KEY), "none"); }catch(e){ /* noop */ }
+  }
+  sel2.innerHTML = BOARD_GROUPS2.filter(function(g){
+    return g[0] === "none" || g[0] !== cur;
+  }).map(function(g){
+    return '<option value="' + g[0] + '">' + g[1] + '</option>';
+  }).join("");
+  sel.value = cur;
+  sel2.value = cur2;
+  sel2.disabled = cur === "none";
 }
 function groupValue(t, dim){
   if(dim === "owner") return t.owner || "";
@@ -132,6 +179,13 @@ function groupColumnItems(items, dim){
     return String(a.label).localeCompare(String(b.label), "zh-Hans-CN");
   });
   return out;
+}
+/* 两级分组：一级仍按状态列归堆，列内先按 groupDim 分大组，再按 groupDim2 分子组 */
+function groupColumnTree(items, dim1, dim2){
+  var groups = groupColumnItems(items, dim1);
+  if(dim1 === "none" || dim2 === "none") return groups;
+  groups.forEach(function(g){ g.subgroups = groupColumnItems(g.items, dim2); });
+  return groups;
 }
 
 function colSortKey(){
@@ -211,8 +265,13 @@ function showBoardError(msg){
 }
 function openColumnWorkpage(colId, range){
   if(!colId) return;
+  /* 把看板当前筛选带进子页面：进入后看到的仍是这一批工作项，而不是整列全量 */
+  var scope = workpageScopeQuery();
+  /* 已完成列的时间窗跟看板当前「本周完成 / 全部完成」一致，避免点进来就空 */
+  if(!range && colId === "done" && state.doneScope === "all") range = "all";
   var hash = "#/workcolumn?col=" + encodeURIComponent(colId);
   if(range) hash += "&range=" + encodeURIComponent(range);
+  if(scope) hash += "&" + scope;
   try{ history.pushState(null, "", hash); }
   catch(e){ window.location.hash = hash; }
   showView("workcolumn");
@@ -302,6 +361,39 @@ function loadMoreColumn(colId){
 }
 function refreshBoardPreserving(){
   loadBoard({silent:true});
+}
+function testStripHTML(t, editable){
+  var col = t.boardColumn;
+  var tester = t.testOwner || t.testOwnerUserId || "";
+  var isDone = col === "done";
+  if(col !== "test" && col !== "testing" && !(isDone && tester)) return "";
+  var claimBtn = '<button type="button" class="ct-claim" data-test-claim="' + esc(t.id) + '">开始测试</button>';
+  if(col === "test"){
+    if(tester){
+      return '<div class="card-test"><span class="ct-lbl">测试</span>' +
+        '<span class="ct-who">' + avatarHTML(tester) + esc(tester) + '</span>' +
+        '<span class="ct-tag">等待验证</span>' +
+        '<span class="ct-since">' + (t.testRequestedAt ? "提测 " + esc(elapsedText(t.testRequestedAt)) + "前" : "") + '</span></div>';
+    }
+    var waited = elapsedText(t.testRequestedAt);
+    var hot = t.testRequestedAt && (Date.now() - new Date(t.testRequestedAt).getTime()) >= 3 * 86400000;
+    return '<div class="card-test"><span class="ct-wait' + (hot ? " hot" : "") + '">待领取' +
+      (waited ? ' · 已等待 ' + esc(waited) : "") + '</span>' +
+      (editable ? claimBtn : '') + '</div>';
+  }
+  if(col === "testing"){
+    var measured = t.testStartedAt ? ("已测 " + elapsedText(t.testStartedAt)) : "刚开始";
+    return '<div class="card-test"><span class="ct-lbl">测试</span>' +
+      (tester ? '<span class="ct-who">' + avatarHTML(tester) + esc(tester) + '</span>'
+              : '<span class="ct-wait hot">待领取</span>') +
+      '<span class="ct-tag">' + esc(measured) + '</span>' +
+      (t.testStartedAt
+        ? '<span class="ct-since">' + esc(fmtTs(t.testStartedAt)) + '</span>'
+        : (editable && !tester ? claimBtn : '')) + '</div>';
+  }
+  return '<div class="card-test"><span class="ct-lbl">测试</span>' +
+    '<span class="ct-who">' + avatarHTML(tester) + esc(tester) + '</span>' +
+    (t.testFinishedAt ? '<span class="ct-tag">' + esc(fmtTs(t.testFinishedAt)) + ' 完成</span>' : '') + '</div>';
 }
 function cardHTML(t, idx){
   var s = dueState(t);
@@ -436,6 +528,7 @@ function cardHTML(t, idx){
           blockedTag + tagsHTML + '</div>'
       : '') +
     (metaHTML ? '<div class="card-meta">' + metaHTML + '</div>' : '') +
+    testStripHTML(t, editable) +
     '<div class="card-foot">' + progHTML +
       '<span data-member-task="' + esc(t.id) + '" title="负责人：' + esc(owner) + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + avatarHTML(owner) + '</span>' +
     '</div>' +
@@ -556,7 +649,7 @@ function render(opts){
   }
   rt.boardDirty = false;
   UI.hideTip();
-  renderBoardGroupSeg();
+  renderBoardGroupControls();
   if(!state.board) return;
 
   var scrollMemo = {}, boardLeft = board.scrollLeft;
@@ -601,8 +694,7 @@ function render(opts){
     var head = '<div class="board-col-head">' +
       '<span class="col-dot" style="background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"' +
         (isCustom ? ' role="button" tabindex="0" data-col-color="' + esc(c.id) + '" title="修改列颜色"' : '') + '></span>' +
-      '<span class="col-name" data-col-rename="' + esc(c.id) + '"' +
-        (c.done ? '' : ' role="button" tabindex="0" title="点击改名"') + '>' + esc(c.name) + '</span>' +
+      '<button class="col-name" type="button" data-col-open="' + esc(c.id) + '" title="打开「' + esc(c.name) + '」状态工作页">' + esc(c.name) + '</button>' +
       '<button class="col-count-btn" type="button" data-col-open="' + esc(c.id) + '" aria-live="polite"' +
         (c.done ? ' data-col-range="all"' : '') +
         ' title="' + esc(countTip) + '" aria-label="' + esc(countTip) + '">' + esc(countText) + '</button>' +
@@ -611,6 +703,7 @@ function render(opts){
         '<button class="icon-btn sm col-sort-btn' + (sortMode !== "manual" ? " on" : "") + '" type="button" data-col-sort="' + esc(c.id) + '"' +
           ' title="列内排序：' + COL_SORT_LABEL[sortMode] + '" aria-label="列内排序：' + COL_SORT_LABEL[sortMode] + '">' + icon("sort", 14) + '</button>') +
       '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新建工作项" aria-label="在「' + esc(c.name) + '」新建工作项">' + icon("plus", 14) + '</button>' +
+      '<button class="icon-btn sm" type="button" data-col-menu="' + esc(c.id) + '" title="「' + esc(c.name) + '」列设置" aria-label="「' + esc(c.name) + '」列设置" aria-haspopup="menu" aria-expanded="false">' + icon("more", 14) + '</button>' +
       '<button class="icon-btn sm" type="button" data-col-fold="' + esc(c.id) + '" title="' + (collapsed ? "展开" : "折叠") + '列" aria-label="' + (collapsed ? "展开" : "折叠") + '列" aria-expanded="' + (!collapsed) + '">' +
         icon(collapsed ? "right" : "caretDown", 14) + '</button>' +
     '</div>';
@@ -624,7 +717,8 @@ function render(opts){
       body += UI.colEmpty(emptyText, emptyIc);
     }else{
       var groupDim = currentBoardGroup();
-      groupColumnItems(items, groupDim).forEach(function(g){
+      var groupDim2 = currentBoardGroup2();
+      groupColumnTree(items, groupDim, groupDim2).forEach(function(g){
         if(groupDim !== "none"){
           var folded = isGroupFolded(c.id, g.key);
           body += '<button class="board-group-head' + (folded ? " folded" : "") + '" type="button"' +
@@ -636,7 +730,22 @@ function render(opts){
             '<span class="bg-n">' + g.items.length + '</span></button>';
           if(folded) return;
         }
-        g.items.forEach(function(t){ body += cardHTML(t); });
+        if(g.subgroups){
+          g.subgroups.forEach(function(sg){
+            var subKey = g.key + "|" + sg.key;
+            var subFolded = isGroupFolded(c.id, subKey);
+            body += '<button class="board-group-head depth-2' + (subFolded ? " folded" : "") + '" type="button"' +
+              ' data-group-fold="' + esc(groupFoldId(c.id, subKey)) + '"' +
+              ' aria-expanded="' + (!subFolded) + '"' +
+              ' title="' + esc(subFolded ? "展开" : "折叠") + '本子组">' +
+              icon(subFolded ? "right" : "caretDown", 12) +
+              '<span class="bg-name">' + esc(sg.label) + '</span>' +
+              '<span class="bg-n">' + sg.items.length + '</span></button>';
+            if(!subFolded) sg.items.forEach(function(t){ body += cardHTML(t); });
+          });
+        }else{
+          g.items.forEach(function(t){ body += cardHTML(t); });
+        }
       });
     }
     if(!c.done && cd.hasMore){
@@ -1011,6 +1120,34 @@ function endDrag(){
     send();
   });
 }
+/* 卡片上的「开始测试」：移入测试中并由后端自动认领给当前用户 */
+function claimTest(id){
+  var task = taskById(id);
+  if(!task) return;
+  function done(res){
+    var tester = (res.task && res.task.testOwner) || "我";
+    toast("已认领测试负责人：" + tester + "，开始测试", "fs");
+    loadBoard({silent:true});
+  }
+  function fail(ex){
+    toast("认领失败：" + (ex.message || "网络异常"), "bad");
+    loadBoard({silent:true});
+  }
+  /* 已在「测试中」只是没认领（批量移入）：直接补测试负责人与开始时间 */
+  if(task.boardColumn === "testing"){
+    API.post("/api/tasks/" + encodeURIComponent(id) + "/test-claim", {}).then(done).catch(fail);
+    return;
+  }
+  var wsId = rt.currentWs && rt.currentWs.id;
+  var items = [{ from: task.boardColumn, title: task.title }];
+  guard(wsId, items, "testing").then(function(pass){
+    if(!pass) return;
+    var body = { column: "testing" };
+    if(pass.reason) body.reason = pass.reason;
+    if(pass.force) body.force = true;
+    API.post("/api/tasks/" + encodeURIComponent(id) + "/move", body).then(done).catch(fail);
+  });
+}
 function cancelDrag(){ cleanupDrag(); render({animate:false}); }
 function cleanupDrag(){
   if(!drag) return;
@@ -1067,9 +1204,9 @@ document.addEventListener("pointercancel", onPointerCancel);
 /* 分组切换在列外工具条，单独接一层，不进卡片点击的判定链 */
 var boardToolbarEl = document.getElementById("boardToolbar");
 if(boardToolbarEl){
-  boardToolbarEl.addEventListener("click", function(e){
-    var btn = e.target.closest("[data-board-group]");
-    if(btn) setBoardGroup(btn.dataset.boardGroup);
+  boardToolbarEl.addEventListener("change", function(e){
+    if(e.target.id === "boardGroupSelect") setBoardGroup(e.target.value);
+    else if(e.target.id === "boardGroup2Select") setBoardGroup2(e.target.value);
   });
 }
 /* 列内滚过一屏后露出「回到顶部」；scroll 不冒泡，用捕获阶段接住 */
@@ -1113,8 +1250,8 @@ board.addEventListener("click", function(e){
   if(add){ state.inlineAdd = {col: add.dataset.add, value: ""}; openInlineAdd(add.dataset.add, ""); return; }
   var colorDot = e.target.closest("[data-col-color]");
   if(colorDot){ openColColorPop(colorDot, colorDot.dataset.colColor); return; }
-  var rename = e.target.closest("[data-col-rename]");
-  if(rename){ startColRename(rename, rename.dataset.colRename); return; }
+  var colMenuBtn = e.target.closest("[data-col-menu]");
+  if(colMenuBtn){ openColMenu(colMenuBtn, colMenuBtn.dataset.colMenu); return; }
   var more = e.target.closest("[data-more]");
   if(more){
     var colEl = more.closest(".board-col");
@@ -1129,6 +1266,8 @@ board.addEventListener("click", function(e){
   if(docBtn){ openReqDocAndJump(docBtn.dataset.openReqdoc); return; }
   var tmr = e.target.closest("[data-timer-toggle]");
   if(tmr){ toggleTaskTimer(tmr.dataset.timerToggle); return; }
+  var claim = e.target.closest("[data-test-claim]");
+  if(claim){ claimTest(claim.dataset.testClaim); return; }
   var tick = e.target.closest("[data-done-toggle]");
   if(tick){ toggleTaskDone(tick.dataset.doneToggle); return; }
   var ed = e.target.closest("[data-edit]");
@@ -1147,8 +1286,6 @@ board.addEventListener("dblclick", function(e){
   if(t) openTaskDrawer(null, t);
 });
 board.addEventListener("keydown", function(e){
-  var nameEl = e.target.closest("[data-col-rename]");
-  if(nameEl && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); startColRename(nameEl, nameEl.dataset.colRename); return; }
   var dot = e.target.closest("[data-col-color]");
   if(dot && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); openColColorPop(dot, dot.dataset.colColor); return; }
   if(e.target.closest("button")) return;   // 卡内按钮自己处理 Enter/Space
@@ -1171,21 +1308,24 @@ function startColRename(el, colId){
   input.focus();
   input.select();
   var done = false;
-  function restore(){
-    var span = document.createElement("span");
-    span.className = "col-name";
-    span.dataset.colRename = colId;
-    span.setAttribute("role","button");
-    span.setAttribute("tabindex","0");
-    span.title = "点击改名";
-    span.textContent = old;
-    if(input.parentNode) input.replaceWith(span);
+  function restore(focus){
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "col-name";
+    btn.dataset.colOpen = colId;
+    btn.title = "打开「" + old + "」状态工作页";
+    btn.textContent = old;
+    if(input.parentNode) input.replaceWith(btn);
+    /* Esc 取消时把焦点还给列名入口；失焦保存不抢焦点 */
+    if(focus && btn.isConnected){
+      try{ btn.focus({preventScroll:true}); }catch(e){ btn.focus(); }
+    }
   }
   function commit(save){
     if(done) return;
     done = true;
     var name = input.value.trim();
-    if(!save || !name || name === old){ restore(); return; }
+    if(!save || !name || name === old){ restore(!save); return; }
     API.put("/api/columns/" + encodeURIComponent(colId), { name: name, color: colColorOf(colId) }).then(function(){
       toast("已更新列「" + name + "」", "fs");
       loadBoard({silent:true});
@@ -1204,6 +1344,39 @@ function startColRename(el, colId){
 function colColorOf(colId){
   var c = colMeta(colId);
   return safeColor(c && c.color);
+}
+function openColMenu(anchor, colId){
+  var col = colMeta(colId);
+  if(!col) return;
+  var isCustom = (colId !== "backlog" && colId !== "doing" && colId !== "done");
+  var html = '<div class="menu-title">' + esc(colName(colId)) + '</div>' +
+    '<button class="menu-item" type="button" data-col-menu-open="' + esc(colId) + '"><span>打开状态工作页</span></button>' +
+    (col.done ? '' :
+      '<button class="menu-item" type="button" data-col-menu-rename="' + esc(colId) + '"><span>重命名列</span></button>') +
+    (isCustom
+      ? '<button class="menu-item" type="button" data-col-menu-color="' + esc(colId) + '"><span>设置列颜色</span></button>'
+      : '');
+  var el = document.createElement("div");
+  el.className = "menu";
+  el.innerHTML = html;
+  el.addEventListener("click", function(e){
+    var open = e.target.closest("[data-col-menu-open]");
+    if(open){ UI.closeAllPops(); openColumnWorkpage(open.dataset.colMenuOpen); return; }
+    var rename = e.target.closest("[data-col-menu-rename]");
+    if(rename){
+      UI.closeAllPops();
+      var nameEl = board.querySelector('.board-col[data-col="' + rename.dataset.colMenuRename + '"] .col-name');
+      if(nameEl) startColRename(nameEl, rename.dataset.colMenuRename);
+      return;
+    }
+    var color = e.target.closest("[data-col-menu-color]");
+    if(color){ UI.closeAllPops(); openColColorPop(anchor, color.dataset.colMenuColor); }
+  });
+  UI.openPop(el, anchor, {align:"right", onClose: function(){
+    anchor.setAttribute("aria-expanded", "false");
+    el.remove();
+  }});
+  anchor.setAttribute("aria-expanded", "true");
 }
 function openColSortMenu(anchor, colId){
   var cur = colSortOf(colId);

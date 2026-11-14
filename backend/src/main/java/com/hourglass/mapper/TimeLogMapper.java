@@ -26,6 +26,11 @@ public interface TimeLogMapper {
 
     /** 任务累计工时（不区分计时人，用于卡片/任务角标） */
     List<TimeAgg> sumByTaskByWorkspace(@Param("workspaceId") String workspaceId);
+    /**
+     * 本空间按任务拆分开发/测试工时：测试 = 计时自然日落在 [提测, 测试结束] 窗口内的已结束计时，
+     * 其余计入开发。窗口只保留最近一轮（重开后的早期轮次计时落回开发）。
+     */
+    List<TimeAgg> sumStageByTaskByWorkspace(@Param("workspaceId") String workspaceId);
     /** 本页任务的累计工时（按 id 批量） */
     List<TimeAgg> sumByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 

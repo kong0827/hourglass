@@ -47,7 +47,11 @@ function downloadCsv(filename, rows){
   var csv = "\uFEFF" + rows.map(function(row){ return row.map(csvCell).join(","); }).join("\r\n");
   triggerDownload(filename, csv, "text/csv;charset=utf-8;");
 }
-function managerTaskRowHTML(t){
+function managerTaskRowHTML(t, split){
+  var splitCells = split
+    ? '<td class="num">' + (t.devMinutes ? fmtMinutesShort(t.devMinutes) : "—") + '</td>'
+      + '<td class="num">' + (t.testMinutes ? fmtMinutesShort(t.testMinutes) : "—") + '</td>'
+    : "";
   return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
     + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
     + '<td>' + esc(t.reqName || "未归类") + '</td>'
@@ -55,10 +59,13 @@ function managerTaskRowHTML(t){
     + '<td>' + esc(taskStatusName(t)) + '</td>'
     + '<td class="num">' + esc(fmtDate(t.dueDate)) + '</td>'
     + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'
-    + '<td class="num">' + (t.totalMinutes ? fmtMinutesShort(t.totalMinutes) : "—") + '</td></tr>';
+    + '<td class="num">' + (t.totalMinutes ? fmtMinutesShort(t.totalMinutes) : "—") + '</td>'
+    + splitCells + '</tr>';
 }
 /* pager（可选）：{total, hasMore, fetch(offset) -> Promise<page>}，用于服务端分页的钻取表 */
-function openTaskTable(title, tasks, description, pager){
+function openTaskTable(title, tasks, description, pager, opts){
+  var split = !!(opts && opts.split);
+  var cols = split ? 9 : 7;
   var all = (tasks || []).slice();
   var total = pager && typeof pager.total === "number" ? pager.total : all.length;
   var hasMore = !!(pager && pager.hasMore && pager.fetch);
@@ -87,11 +94,11 @@ function openTaskTable(title, tasks, description, pager){
     return base;
   }
   function rowsHTML(){
-    if(!filtered.length) return '<tr><td colspan="7" class="manager-empty-cell">' +
+    if(!filtered.length) return '<tr><td colspan="' + cols + '" class="manager-empty-cell">' +
       (filterText.trim() ? "没有匹配的工作项" : "该口径下暂无工作项") + '</td></tr>';
-    return filtered.map(managerTaskRowHTML).join("")
+    return filtered.map(function(t){ return managerTaskRowHTML(t, split); }).join("")
       + (hasMore
-        ? '<tr><td colspan="7" class="manager-more-cell"><button class="btn sm block" type="button" data-manager-more'
+        ? '<tr><td colspan="' + cols + '" class="manager-more-cell"><button class="btn sm block" type="button" data-manager-more'
           + (loading ? ' disabled' : '') + '>'
           + (loading ? '加载中…' : '加载更多（已加载 ' + all.length + ' / 共 ' + total + ' 项）')
           + '</button></td></tr>'
@@ -116,6 +123,7 @@ function openTaskTable(title, tasks, description, pager){
     + searchBarHTML
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
     + '<th>工作项</th><th>项目</th><th>负责人</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
+    + (split ? '<th class="num">开发</th><th class="num">测试</th>' : '')
     + '</tr></thead><tbody>' + rowsHTML() + '</tbody></table></div></div></div>';
   document.body.appendChild(layer);
   var tbody = layer.querySelector("tbody");

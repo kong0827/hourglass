@@ -462,6 +462,27 @@ class VersionReleaseServiceTest {
         return service.savePlan("U", "W", "V", request);
     }
 
+    @Test void releaseAndWorkItemNumbersAreAllocatedPerProjectAndFrozenInSnapshot() {
+        when(mapper.selectNextReleaseNo("W", "P")).thenAnswer(i -> records.size() + 1);
+        scope.get(0).setItemNo(3);
+
+        VersionRelease first = confirm(request(plan("production"), "first"));
+        assertEquals(Integer.valueOf(1), first.getReleaseNo());
+        assertEquals(Integer.valueOf(3), first.getItems().get(0).getTaskItemNo());
+
+        VersionRelease second = confirm(request(null, "second"));
+        assertEquals(Integer.valueOf(2), second.getReleaseNo());
+
+        /* 回滚复制原事件快照：编号跟着历史证据走，不重新取号 */
+        ReleaseConfirmRequest rollback = request(null, "rollback");
+        rollback.setOperation("rollback");
+        rollback.setRelatedReleaseId(first.getId());
+        rollback.setActualTaskIds(Collections.singletonList("T1"));
+        VersionRelease rolled = confirm(rollback);
+        assertEquals(Integer.valueOf(3), rolled.getReleaseNo());
+        assertEquals(Integer.valueOf(3), rolled.getItems().get(0).getTaskItemNo());
+    }
+
     private VersionRelease confirmVersion(VersionReleasePlan plan, String versionId, String key, String environment, String taskId) {
         ReleaseConfirmRequest r = request(plan, key);
         r.setEnvironment(environment);

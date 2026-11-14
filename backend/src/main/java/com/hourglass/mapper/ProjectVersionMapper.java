@@ -38,6 +38,14 @@ public interface ProjectVersionMapper {
 
     int update(ProjectVersion version);
 
+    /** 关闭/取消版本：写入终态、原因与时间，并按 revision 做并发保护 */
+    int endVersion(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                   @Param("status") String status, @Param("reason") String reason,
+                   @Param("revision") Long revision);
+
+    /** 标记承诺基线已快照；只在尚未记录时写入，保证基线不被覆盖 */
+    int markCommitment(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
     /** 成员关系在任务侧变化时推进 revision（版本侧表单据此识别过期快照） */
     int touchRevision(@Param("workspaceId") String workspaceId, @Param("id") String id);
 

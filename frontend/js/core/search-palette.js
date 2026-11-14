@@ -254,7 +254,7 @@ function openHit(h){
   if(h.type === "demand"){
     showView("demands").then(function(){
       if(window.location.hash.indexOf("demands") < 0) return;
-      import("../views/demands.js").then(function(mod){ mod.openDemandById(h.id); });
+      import("../views/demands.js").then(function(mod){ mod.openDemandDetailById(h.id); });
     });
     return;
   }

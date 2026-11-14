@@ -10,13 +10,16 @@ import com.hourglass.dto.TaskMoveRequest;
 import com.hourglass.dto.TaskReopenRequest;
 import com.hourglass.entity.Subtask;
 import com.hourglass.entity.Task;
+import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.SubtaskMapper;
 import com.hourglass.mapper.TaskLogMapper;
 import com.hourglass.mapper.TaskMapper;
+import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -53,6 +56,7 @@ public class TaskWorkflowService {
     /** 状态流转矩阵：所有会改列的入口统一在这里判定 */
     private final ColumnTransitionService transitions;
     private final WorkspaceService workspaceService;
+    private final WorkspaceMemberMapper memberMapper;
     private final DeliveryScopeLock scopeLock;
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
@@ -64,7 +68,8 @@ public class TaskWorkflowService {
                                TaskCompletionService completionService, TaskAuditLogger audit,
                                NotificationEventService notificationEvents, TaskWatchService watchService,
                                ProjectAccessService projectAccess, ColumnTransitionService transitions,
-                               WorkspaceService workspaceService, DeliveryScopeLock scopeLock) {
+                               WorkspaceService workspaceService, WorkspaceMemberMapper memberMapper,
+                               DeliveryScopeLock scopeLock) {
         this.scopeLock = scopeLock;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -78,6 +83,7 @@ public class TaskWorkflowService {
         this.projectAccess = projectAccess;
         this.transitions = transitions;
         this.workspaceService = workspaceService;
+        this.memberMapper = memberMapper;
     }
 
     /** 强制移动只给空间主 / 管理员；非强制请求不查角色，避免每次移动多一次成员查询 */
@@ -126,23 +132,78 @@ public class TaskWorkflowService {
         return n - p > 1 ? p + (n - p) / 2 : -1;
     }
 
+    /** 测试时间统一落到分钟：避免同一分钟内的重复流转产生秒级噪声 */
+    private static LocalDateTime testNow() {
+        return LocalDateTime.now().withSecond(0).withNano(0);
+    }
+
     /**
-     * 测试时间口径：进入「测试中」记开始日（新一轮测试重置开始日并清空结束日）；
-     * 离开「测试中」记结束日 —— 测试通过和退回都代表这一轮测试结束。
+     * 测试时间口径：进入「待测试」记提测时间；进入「测试中」记开始时间（新一轮重置开始时间并清空结束时间）；
+     * 离开「测试中」记结束时间 —— 测试通过和退回都代表这一轮测试结束。
+     * 直接拖到已完成不补开始时间：没有可靠测试过程就不伪造时间。
      */
     public void applyTestTimestamps(Task task, String from, String to) {
         if (task == null || from == null || to == null || from.equals(to)) {
             return;
         }
-        LocalDate today = LocalDate.now();
+        LocalDateTime now = testNow();
+        boolean newRound = task.getTestFinishedAt() != null;
+        /* 从「测试中」退回待测队列不是重新提测：保留原提测时间，等待时长才不会被清零 */
+        if (Consts.COL_TEST.equals(to) && !Consts.COL_TESTING.equals(from)) {
+            task.setTestRequestedAt(now);
+        }
         if (Consts.COL_TESTING.equals(to)) {
-            if (task.getTestStartedAt() == null || task.getTestFinishedAt() != null) {
-                task.setTestStartedAt(today);
+            if (task.getTestStartedAt() == null || newRound) {
+                task.setTestStartedAt(now);
+                if (task.getTestRequestedAt() == null || newRound) {
+                    task.setTestRequestedAt(now);
+                }
             }
             task.setTestFinishedAt(null);
         } else if (Consts.COL_TESTING.equals(from)) {
-            task.setTestFinishedAt(today);
+            task.setTestFinishedAt(now);
         }
+    }
+
+    /**
+     * 测试流转：时间窗 + 进入「测试中」时的自动认领。
+     * 批量移动传 autoClaim=false，避免把整批待测工作项都算到操作者名下。
+     */
+    public boolean applyTestTransition(Task task, String from, String to, String workspaceId,
+                                       String actorId, boolean autoClaim) {
+        if (task == null || from == null || to == null || from.equals(to)) {
+            return false;
+        }
+        applyTestTimestamps(task, from, to);
+        return autoClaim && Consts.COL_TESTING.equals(to) && claimTestOwner(task, workspaceId, actorId);
+    }
+
+    /** 未指定测试负责人时认领给操作者；已有人选时不覆盖。 */
+    public boolean claimTestOwner(Task task, String workspaceId, String actorId) {
+        if (task == null || actorId == null || Texts.trimToNull(task.getTestOwnerUserId()) != null) {
+            return false;
+        }
+        WorkspaceMember member = memberMapper.selectMember(workspaceId, actorId);
+        String name = member == null ? null : Texts.trimToNull(member.getDisplayName());
+        if (name == null && member != null) {
+            name = Texts.trimToNull(member.getUsername());
+        }
+        task.setTestOwnerUserId(actorId);
+        task.setTestOwner(name == null ? null : Texts.cut(name, 32));
+        return true;
+    }
+
+    /** 提测 / 认领后通知测试负责人；开发负责人已由列流转通知覆盖，不重复打扰。 */
+    private void notifyTestOwner(String workspaceId, String actorId, Task task, String to) {
+        String tester = Texts.trimToNull(task.getTestOwnerUserId());
+        if (tester == null || tester.equals(actorId) || tester.equals(Texts.trimToNull(task.getOwnerUserId()))) {
+            return;
+        }
+        String body = Consts.COL_TESTING.equals(to)
+                ? "工作项「" + task.getTitle() + "」已进入测试中，由你负责测试"
+                : "工作项「" + task.getTitle() + "」已提测，等待你开始测试";
+        notificationEvents.notify(tester, workspaceId, UserNotificationPreferenceService.TASK_ASSIGNED,
+                "测试任务：" + task.getTitle(), body, task.getId(), task.getReqId());
     }
 
     @Transactional
@@ -185,6 +246,7 @@ public class TaskWorkflowService {
         task.setBoardColumn(to);
         String generatedDue = null;
         boolean autoTimerStarted = false;
+        boolean autoClaimedTest = false;
         Task resumed = null;
         if (!from.equals(to)) {
             /* 缺陷回归状态随列流转自动维护：提交待验证 / 验证通过 / 退回返工 */
@@ -192,7 +254,8 @@ public class TaskWorkflowService {
                 task.setRegressionStatus(DefectMeta.regressionForTransition(
                         task.getRegressionStatus(), from, to));
             }
-            applyTestTimestamps(task, from, to);
+            boolean autoClaim = req.getAutoClaim() == null || req.getAutoClaim();
+            autoClaimedTest = applyTestTransition(task, from, to, workspaceId, userId, autoClaim);
             if (Consts.COL_DONE.equals(to)) {
                 task.setCompletedAt(LocalDate.now());
                 /* 拖到已完成：把这个任务上所有人的计时都停掉（口径：每天 8 小时、跳过周末） */
@@ -261,12 +324,16 @@ public class TaskWorkflowService {
         String detail = from.equals(to)
                 ? "「" + support.columnName(workspaceId, to) + "」列内顺序调整"
                 : "从「" + support.columnName(workspaceId, from) + "」移动到「"
-                        + support.columnName(workspaceId, to) + "」" + moveSuffix(decision);
+                        + support.columnName(workspaceId, to) + "」" + moveSuffix(decision)
+                        + (autoClaimedTest ? "，认领测试" : "");
         /* 列内排序（from==to）不算流程事件，不写 from/to，免得把"停留"切成碎段 */
         audit.log(userId, workspaceId, id, "move", detail,
                 from.equals(to) ? null : from, from.equals(to) ? null : to);
         if (!from.equals(to)) {
             notifyColumnMove(workspaceId, userId, task, detail, true);
+            if (Consts.COL_TEST.equals(to) || Consts.COL_TESTING.equals(to)) {
+                notifyTestOwner(workspaceId, userId, task, to);
+            }
         }
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         if (returnTask) {
@@ -283,6 +350,45 @@ public class TaskWorkflowService {
         res.put("autoTimerStarted", autoTimerStarted);
         /* 完成后接力上的下一个任务（有的话），前端会提示"已接着开始「X」" */
         res.put("autoTimerTask", resumed == null ? null : resumed.getTitle());
+        return res;
+    }
+
+    /**
+     * 认领测试负责人：批量移入「测试中」不自动认领，之后由测试同学一键承接。
+     * 只补空位，不覆盖已指派的人；开始时间缺失时一并补记，避免「测试中却没有起点」。
+     */
+    @Transactional
+    public Map<String, Object> claimTest(String userId, String workspaceId, String id) {
+        Task task = lockActiveTask(workspaceId, id);
+        projectAccess.assertViewTask(workspaceId, userId, task);
+        projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
+        if (!Consts.COL_TESTING.equals(task.getBoardColumn())) {
+            throw AppException.badRequest("只有「测试中」的工作项可以认领测试负责人");
+        }
+        if (!claimTestOwner(task, workspaceId, userId)) {
+            throw new AppException(409, "该工作项已有测试负责人，请刷新后重试");
+        }
+        LocalDateTime now = testNow();
+        if (task.getTestStartedAt() == null) {
+            task.setTestStartedAt(now);
+        }
+        if (task.getTestRequestedAt() == null) {
+            task.setTestRequestedAt(now);
+        }
+        if (task.getUpdatedAt() != null) {
+            task.setVersionCheck(Boolean.TRUE);
+        }
+        int updatedRows = taskMapper.update(task);
+        if (Boolean.TRUE.equals(task.getVersionCheck()) && updatedRows == 0) {
+            throw new com.hourglass.common.AppException(409, "任务已被其他人修改，请刷新后重试");
+        }
+        audit.log(userId, workspaceId, id, "update", "认领测试负责人，开始测试");
+        Task result = taskMapper.selectById(id);
+        List<Task> batch = Collections.singletonList(result);
+        versionTaskMapper.enrichTasks(workspaceId, batch);
+        publications.enrichTasks(workspaceId, batch);
+        Map<String, Object> res = new LinkedHashMap<String, Object>();
+        res.put("task", result);
         return res;
     }
 
@@ -337,6 +443,7 @@ public class TaskWorkflowService {
             one.setColumn(req.getColumn());
             one.setAutoTimer(req.getAutoTimer() != null && req.getAutoTimer());
             one.setAutoResume(req.getAutoResume() != null && req.getAutoResume());
+            one.setAutoClaim(Boolean.FALSE);
             one.setReason(req.getReason());
             one.setForce(req.getForce());
             moveLocked(userId, workspaceId, taskId, one, locked.get(taskId), false);
@@ -372,6 +479,7 @@ public class TaskWorkflowService {
         req.setColumn(target);
         req.setAutoTimer(false);
         req.setAutoResume(false);
+        req.setAutoClaim(Boolean.FALSE);
         if (body != null) {
             req.setReason(body.getReason());
             req.setForce(body.getForce());
@@ -539,7 +647,7 @@ public class TaskWorkflowService {
         }
         nt.setRemindSent(Boolean.FALSE);
         nt.setSortOrder(taskMapper.maxSortOrder(workspaceId, firstCol) + SORT_STEP);
-        taskMapper.insert(nt);
+        TaskSupport.insertWithNo(taskMapper, nt);
         // 关联写入是并发完成的唯一裁决点：条件更新只允许第一个成功，落败方回删刚插入的任务（此刻尚无子任务/标签/日志）
         if (taskMapper.setRecurNext(doneTask.getId(), nt.getId()) == 0) {
             taskMapper.deleteById(nt.getId());

@@ -120,11 +120,18 @@ public class TaskQueryService {
      */
     public MyTasksPage myTasksPage(String userId, String displayName, boolean openOnly,
                                    BoardQuery query, int offset, int limit) {
+        return myTasksPage(userId, displayName, openOnly, false, query, offset, limit);
+    }
+
+    public MyTasksPage myTasksPage(String userId, String displayName, boolean openOnly, boolean testScope,
+                                   BoardQuery query, int offset, int limit) {
         MyTasksQuery pageQuery = new MyTasksQuery();
         pageQuery.setUserId(userId);
         pageQuery.setDisplayName(displayName);
         pageQuery.setOpenOnly(openOnly);
+        pageQuery.setTestScope(testScope);
         pageQuery.setQ(Texts.trimToNull(query.getQ()));
+        pageQuery.setTestOwners(query.getTestOwners());
         pageQuery.setPris(query.getPris());
         pageQuery.setCats(query.getCats());
         pageQuery.setReqs(query.getReqs());
@@ -810,6 +817,19 @@ public class TaskQueryService {
                 return false;
             }
         }
+        if (!query.getTestOwners().isEmpty()) {
+            boolean hit = false;
+            for (String value : query.getTestOwners()) {
+                boolean none = Consts.REQ_NONE.equals(value) ? Texts.trimToNull(t.getTestOwnerUserId()) == null : false;
+                if (none || value.equals(t.getTestOwner()) || value.equals(t.getTestOwnerUserId())) {
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit) {
+                return false;
+            }
+        }
         if (!query.getPris().isEmpty() && !query.getPris().contains(t.getPriority())) {
             return false;
         }
@@ -971,6 +991,7 @@ public class TaskQueryService {
                 : projectAccess.hiddenProjectIds(workspaceId, viewerId);
 
         Map<String, Integer> ownerCount = new LinkedHashMap<String, Integer>();
+        Map<String, Integer> testOwnerCount = new LinkedHashMap<String, Integer>();
         Map<String, Integer> priCount = new LinkedHashMap<String, Integer>();
         Map<String, Integer> catCount = new LinkedHashMap<String, Integer>();
         Map<String, Integer> typeCount = new LinkedHashMap<String, Integer>();
@@ -993,6 +1014,7 @@ public class TaskQueryService {
         }
         int unassigned = 0;
         int ownerUnassigned = 0;
+        int testOwnerUnassigned = 0;
         int catUnassigned = 0;
         Map<String, Integer> versionCount = new LinkedHashMap<String, Integer>();
         for (TaskFacetRow t : facets) {
@@ -1001,6 +1023,12 @@ public class TaskQueryService {
                 ownerUnassigned++;
             } else {
                 ownerCount.merge(owner, 1, Integer::sum);
+            }
+            String tester = Texts.trimToNull(t.getTestOwner());
+            if (tester == null) {
+                testOwnerUnassigned++;
+            } else {
+                testOwnerCount.merge(tester, 1, Integer::sum);
             }
             if (priCount.containsKey(t.getPriority())) {
                 priCount.merge(t.getPriority(), 1, Integer::sum);
@@ -1027,6 +1055,10 @@ public class TaskQueryService {
         for (Map.Entry<String, Integer> e : ownerCount.entrySet()) {
             meta.getOwners().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
         }
+        for (Map.Entry<String, Integer> e : testOwnerCount.entrySet()) {
+            meta.getTestOwners().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
+        }
+        meta.setTestOwnerUnassigned(testOwnerUnassigned);
         for (Map.Entry<String, Integer> e : priCount.entrySet()) {
             meta.getPris().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
         }

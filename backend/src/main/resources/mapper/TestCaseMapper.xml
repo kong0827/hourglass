@@ -126,7 +126,14 @@
       <when test="q.pri == '__none'"> AND (c.priority IS NULL OR c.priority = '') </when>
       <when test="q.pri != null"> AND c.priority = #{q.pri} </when>
     </choose>
-    <if test="q.owner != null"> AND c.latest_by = #{q.owner} </if>
+    <if test="q.owner != null">
+      <choose>
+        <when test='q.owner == "__none" or q.owner == "__none__"'>
+          AND (c.latest_by IS NULL OR c.latest_by = '')
+        </when>
+        <otherwise> AND c.latest_by = #{q.owner} </otherwise>
+      </choose>
+    </if>
     <if test="q.bugOnly"> AND <include refid="openBugExists"/> </if>
     <if test="q.q != null">
       AND (c.title LIKE CONCAT('%', #{q.q}, '%')
@@ -239,6 +246,27 @@
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
       AND latest_by IS NOT NULL AND latest_by &lt;&gt; ''
     ORDER BY latest_by
+  </select>
+
+  <select id="countFacetsByModule" resultType="java.util.HashMap">
+    SELECT COALESCE(module, '') AS k, COUNT(*) AS cnt
+    FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    GROUP BY module
+  </select>
+
+  <select id="countFacetsByPriority" resultType="java.util.HashMap">
+    SELECT COALESCE(priority, '') AS k, COUNT(*) AS cnt
+    FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    GROUP BY priority
+  </select>
+
+  <select id="countFacetsByOwner" resultType="java.util.HashMap">
+    SELECT COALESCE(latest_by, '') AS k, COUNT(*) AS cnt
+    FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    GROUP BY latest_by
   </select>
 
   <update id="clearBugTaskRefs">

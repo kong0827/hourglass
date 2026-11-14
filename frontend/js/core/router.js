@@ -42,13 +42,16 @@ function enterSettingsLazy(isCurrent){
 }
 var VIEWS = {
   mine:     { title:"我的工作", sub:"跨空间汇总「分派给我」的待办（按账号归属）", enter:enterMineView },
-  board:    { title:"工作项", sub:"看板视图：按列流转；同组可切到列表、日历与甘特", enter:null },
+  board:    { title:"工作项", sub:"看板视图：按列流转；同组可切到列表、层级、影响链、日历与甘特", enter:null },
   workcolumn: { title:"工作项", sub:"列状态工作页：当前列的时间窗、聚合指标与分页明细", enter:lazyEnter("workcolumn", "enterWorkColumn") },
   list:     { title:"工作项", sub:"列表视图：沿用当前筛选，点击行打开详情抽屉", enter:enterListView },
+  tree:     { title:"工作项", sub:"层级视图：按项目/计划版本/模块缩进分组，父级进度自动聚合", enter:lazyEnter("tree", "enterTreeView") },
+  chain:    { title:"工作项", sub:"依赖影响链：选定中心工作项，沿前置/后继依赖看「动它牵动谁、它被谁卡住」", enter:lazyEnter("chain", "enterChainView") },
   calendar: { title:"工作项", sub:"日历视图：按 [开始日期, 实际结束日] 逐日铺开", enter:enterCalendarView },
   gantt:    { title:"工作项", sub:"甘特视图：按开始/截止日期排布；拖动条改期", enter:lazyEnter("gantt", "enterGanttView") },
   projects: { title:"项目", sub:"项目列表与全局健康度；点项目名进入项目驾驶舱", enter:lazyEnter("projects", "enterProjectsView") },
   phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；发布日程跨项目汇总计划；全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
+  delivery: { title:"交付说明", sub:"一页式交付说明：承诺范围、实际发布、回归结果与遗留问题聚合成一份可对外提交的文档", enter:lazyEnter("delivery", "enterDeliveryView") },
   demands:  { title:"需求池",   sub:"四态看板与主状态工作页：待评审 → 已通过 → 已排期；已关闭保留原因与恢复去向", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
   testcases: { title:"测试", sub:"一条质量链路：用例 → 缺陷 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
@@ -67,8 +70,8 @@ var VIEWS = {
 /* 视图 → 侧栏一级入口。多个视图共用一个入口时，靠页内子导航切换 */
 var NAV_OF = {
   mine:"mine", review:"review",
-  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase",
-  board:"workitems", list:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems",
+  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", delivery:"phase",
+  board:"workitems", list:"workitems", tree:"workitems", chain:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems",
   requirements:"requirements", testcases:"testcases", branches:"branches",
   analysis:"insight", report:"insight",
   workload:"workload", risks:"risks"
@@ -85,6 +88,8 @@ var SUBNAV = {
   workitems: [
     { view:"board", label:"看板", title:"按状态分列，拖拽流转" },
     { view:"list", label:"列表", title:"表格字段、分组排序与批量操作" },
+    { view:"tree", label:"层级", title:"按项目/版本/模块缩进，父级进度自动聚合" },
+    { view:"chain", label:"影响链", title:"沿前置/后继依赖展开，动一个看一串" },
     { view:"calendar", label:"日历", title:"按日期铺开，格子可新建" },
     { view:"gantt", label:"甘特", title:"依赖、里程碑与基线" }
   ],
@@ -120,7 +125,7 @@ var TAB_OF = {
   mine: "mine", review: "mine",
   board: "board", list: "board", calendar: "board", gantt: "board", branches: "board", workcolumn: "board",
   projects: "projects", requirements: "projects", demands: "projects", testcases: "projects",
-  portfolio: "projects", project: "projects", phase: "projects",
+  portfolio: "projects", project: "projects", phase: "projects", delivery: "projects",
   messages: "messages",
   settings: "me", profile: "me"
 };

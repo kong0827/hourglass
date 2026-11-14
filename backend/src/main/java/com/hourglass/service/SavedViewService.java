@@ -77,8 +77,9 @@ public class SavedViewService {
             throw AppException.badRequest("视图参数必须是 JSON 对象");
         }
         ObjectNode out = JSON.createObjectNode();
-        /* scope 区分：任务视图（不存该字段）、需求池（demand）、文档（doc）、测试用例（testcase） */
-        copyEnum(root, out, "scope", "demand", "doc", "testcase");
+        /* scope 区分：任务视图（不存该字段）、需求池（demand）、文档（doc）、测试用例（testcase）、
+           缺陷（defect）、分支（branch） */
+        copyEnum(root, out, "scope", "demand", "doc", "testcase", "defect", "branch");
         String scope = root.path("scope").isTextual() ? root.get("scope").asText() : "";
         copyString(root, out, "q", 200);
         copyString(root, out, "due", 16);
@@ -163,7 +164,7 @@ public class SavedViewService {
             copyString(root, out, "pri", 20);
             copyString(root, out, "owner", 80);
             copyEnum(root, out, "status", "all", "untested", "passed", "failed", "blocked", "skipped");
-            copyEnum(root, out, "mode", "cases", "coverage");
+            copyEnum(root, out, "mode", "cases", "coverage", "plans", "report");
             JsonNode bug = root.get("bug");
             if (bug != null && !bug.isNull()) {
                 if (!bug.isBoolean()) {
@@ -171,6 +172,27 @@ public class SavedViewService {
                 }
                 out.put("bug", bug.asBoolean());
             }
+        }
+        /* 缺陷视图：项目范围 + 状态 / 严重度 / 优先级 / 负责人 / 发现版本；q 由上面的通用字段承载 */
+        if ("defect".equals(scope)) {
+            copyString(root, out, "reqId", 32);
+            copyString(root, out, "severity", 20);
+            copyString(root, out, "priority", 20);
+            copyString(root, out, "status", 20);
+            copyString(root, out, "owner", 80);
+            copyString(root, out, "version", 32);
+            copyString(root, out, "cat", 32);
+            copyString(root, out, "tag", 32);
+        }
+        /* 分支视图：项目 / 状态 / 负责人 + 看板或列表 / 分组方式；q 由通用字段承载 */
+        if ("branch".equals(scope)) {
+            copyString(root, out, "project", 32);
+            copyString(root, out, "status", 20);
+            copyString(root, out, "owner", 80);
+            copyString(root, out, "version", 32);
+            copyEnum(root, out, "mode", "board", "list");
+            copyEnum(root, out, "group", "status", "project");
+            copyEnum(root, out, "listGroup", "none", "status", "owner", "project");
         }
         String json = out.toString();
         if (json.length() > 1200) {

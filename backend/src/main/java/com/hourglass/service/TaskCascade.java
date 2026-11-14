@@ -57,7 +57,8 @@ public class TaskCascade {
             "time_log",
             "task_dependency",
             "task_baseline",
-            "version_task"));
+            "version_task",
+            "project_milestone_task"));
 
     /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失） */
     public static final List<String> PRESERVED_TASK_REF_TABLES = Collections.unmodifiableList(Arrays.asList(
@@ -104,7 +105,13 @@ public class TaskCascade {
             "dev_branch_log",
             "dev_branch",
             "version_task",
+            "project_milestone_task",
+            "project_milestone_log",
+            "project_milestone",
             "project_version",
+            "delivery_note_share",
+            "delivery_note_snapshot",
+            "delivery_note",
             "demand_log",
             "demand"));
 
@@ -131,10 +138,16 @@ public class TaskCascade {
     private final DemandMapper demandMapper;
     /** 需求人工判定随需求池一起清理，备份格式暂不包含该表 */
     private final com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper;
+    /** 承诺基线快照随任务数据一起清：任务重建后旧基线的比较口径已失效 */
+    private final com.hourglass.mapper.VersionCommitmentMapper versionCommitmentMapper;
+    /** 里程碑条件引用任务：任务整体清空后条件不再成立，连同里程碑一起清 */
+    private final com.hourglass.mapper.ProjectMilestoneMapper milestoneMapper;
     private final RequirementDocHistoryMapper docHistoryMapper;
     private final RequirementDocCommentMapper docCommentMapper;
     private final TestCaseMapper testCaseMapper;
     private final TestCaseRunMapper testCaseRunMapper;
+    /** 交付说明强归属版本：版本整体清空时草稿、快照与分享令牌一起清，避免留下打不开的对外链接 */
+    private final com.hourglass.mapper.DeliveryNoteMapper deliveryNoteMapper;
     private final DeliveryScopeLock scopeLock;
 
     public TaskCascade(TaskMapper taskMapper, TaskLogMapper logMapper,
@@ -153,7 +166,11 @@ public class TaskCascade {
                        ReqDocShareMapper reqDocShareMapper,
                        TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper,
                        com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper,
+                       com.hourglass.mapper.VersionCommitmentMapper versionCommitmentMapper,
+                       com.hourglass.mapper.ProjectMilestoneMapper milestoneMapper,
+                       com.hourglass.mapper.DeliveryNoteMapper deliveryNoteMapper,
                        DeliveryScopeLock scopeLock) {
+        this.deliveryNoteMapper = deliveryNoteMapper;
         this.scopeLock = scopeLock;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -181,6 +198,8 @@ public class TaskCascade {
         this.testCaseMapper = testCaseMapper;
         this.testCaseRunMapper = testCaseRunMapper;
         this.demandJudgementMapper = demandJudgementMapper;
+        this.versionCommitmentMapper = versionCommitmentMapper;
+        this.milestoneMapper = milestoneMapper;
     }
 
     /**
@@ -315,6 +334,8 @@ public class TaskCascade {
         baselineMapper.deleteByTaskIds(workspaceId, taskIds);
         /* 版本绑定同理：任务行消失后 version_task 留存会让 ID 复用时误挂旧版本 */
         versionTaskMapper.deleteByTaskIds(workspaceId, taskIds);
+        /* 里程碑条件引用同样按任务清除，避免 ID 复用时把旧条件挂到新任务上 */
+        milestoneMapper.deleteTaskLinksByTaskIds(workspaceId, taskIds);
         /* 待发邮件引用了任务 ID：任务删除后必须取消，避免继续外发 */
         mailDeliveryMapper.deleteByReferenceIds(taskIds);
         /* 用例转出的缺陷任务被彻底删除后，用例与流水上的缺陷引用同步解除，
@@ -350,6 +371,11 @@ public class TaskCascade {
         /* 版本绑定跟着任务走；版本/需求池条目强归属项目，但备份导入会重建同名项目，
            保留它们可延续绑定关系，只在整空间删除时清（wipeWorkspaceData） */
         versionTaskMapper.deleteByWorkspace(workspaceId);
+        versionCommitmentMapper.deleteByWorkspace(workspaceId);
+        /* 里程碑条件引用的是被清空的任务；JSON 备份暂不迁移里程碑，导入后不保留旧条件 */
+        milestoneMapper.deleteLogsByWorkspace(workspaceId);
+        milestoneMapper.deleteTaskLinksByWorkspace(workspaceId);
+        milestoneMapper.deleteByWorkspace(workspaceId);
         if (clearSnapshots) {
             /* 完成归档是任务的派生物；整体替换时先清，再按导入后的任务重建 */
             completionService.clearWorkspace(workspaceId);
@@ -381,6 +407,9 @@ public class TaskCascade {
         devBranchMapper.deleteLogsByWorkspace(workspaceId);
         devBranchMapper.deleteByWorkspace(workspaceId);
         versionMapper.deleteByWorkspace(workspaceId);
+        deliveryNoteMapper.deleteSharesByWorkspace(workspaceId);
+        deliveryNoteMapper.deleteSnapshotsByWorkspace(workspaceId);
+        deliveryNoteMapper.deleteByWorkspace(workspaceId);
         demandMapper.deleteLogsByWorkspace(workspaceId);
         demandJudgementMapper.deleteByWorkspace(workspaceId);
         demandMapper.deleteByWorkspace(workspaceId);
@@ -419,6 +448,9 @@ public class TaskCascade {
         /* 版本必须在需求池之后删：需求池通过 version_id 指向版本 */
         if (clearVersions) {
             versionMapper.deleteByWorkspace(workspaceId);
+            deliveryNoteMapper.deleteSharesByWorkspace(workspaceId);
+            deliveryNoteMapper.deleteSnapshotsByWorkspace(workspaceId);
+            deliveryNoteMapper.deleteByWorkspace(workspaceId);
         }
     }
 }

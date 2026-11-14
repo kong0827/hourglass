@@ -87,6 +87,28 @@ class TaskAuditLoggerDiffTest {
         assertTrue(parts.contains("取消里程碑"));
     }
 
+    @Test
+    void testOwnerReassignAndClearAreIncluded() {
+        Task old = task();
+        old.setTestOwnerUserId("U1");
+        old.setTestOwner("测试甲");
+        Task now = task();
+        now.setTestOwnerUserId("U2");
+        now.setTestOwner("测试乙");
+
+        List<String> parts = audit.diffParts("W1", old, now,
+                Collections.<String>emptyList(), Collections.<String>emptyList());
+
+        assertEquals(1, parts.size());
+        assertTrue(parts.contains("测试负责人 测试甲→测试乙"));
+
+        List<String> cleared = audit.diffParts("W1", now, task(),
+                Collections.<String>emptyList(), Collections.<String>emptyList());
+
+        assertEquals(1, cleared.size());
+        assertTrue(cleared.contains("测试负责人 测试乙→待领取"));
+    }
+
     private static Task task() {
         Task t = new Task();
         t.setWorkspaceId("W1");

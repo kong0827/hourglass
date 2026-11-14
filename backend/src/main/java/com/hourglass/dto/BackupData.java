@@ -94,7 +94,12 @@ public class BackupData {
         private String ownerUserId;
         private String remindTarget;
         private String completedAt;
-        /** 测试窗口：进入测试中 / 离开测试中的日期 */
+        /** 测试负责人账号与显示名快照 */
+        private String testOwnerUserId;
+        private String testOwner;
+        /** 提测时间 */
+        private String testRequestedAt;
+        /** 测试窗口：进入测试中 / 离开测试中的时间（旧备份为日期） */
         private String testStartedAt;
         private String testFinishedAt;
         private List<BackupSubtask> subtasks;
@@ -164,13 +169,26 @@ public class BackupData {
         private String reqId;
         private String name;
         private String desc;
-        /** planned/active/released */
+        /** planned/active/released/closed/canceled */
         private String status;
         private String startDate;
         private String targetDate;
         private String releasedAt;
+        private String endedAt;
+        private String endReason;
+        /** 承诺基线快照时间；旧备份没有该字段时版本视为未快照 */
+        private String commitmentAt;
+        /** 开发启动时冻结的工作项与预估，导入时按任务 ID 映射回指 */
+        private List<BackupCommitment> commitment;
         private String createdAt;
         private String updatedAt;
+    }
+
+    @Data
+    public static class BackupCommitment {
+        private String taskId;
+        private String taskTitle;
+        private Integer estimateMinutes;
     }
 
     @Data

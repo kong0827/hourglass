@@ -101,6 +101,11 @@ public class TaskAuditLogger {
         if (!Objects.equals(old.getOwner(), t.getOwner())) {
             parts.add("负责人 " + old.getOwner() + "→" + t.getOwner());
         }
+        /* 测试负责人与开发负责人相互独立：改派和清空回待领取都要留痕，否则「谁在测」这段历史断链 */
+        if (!Objects.equals(old.getTestOwnerUserId(), t.getTestOwnerUserId())
+                || !Objects.equals(old.getTestOwner(), t.getTestOwner())) {
+            parts.add("测试负责人 " + testOwnerName(old.getTestOwner()) + "→" + testOwnerName(t.getTestOwner()));
+        }
         /* 列变化单独写 move 日志（见 TaskWorkflowService.afterEditColumnChange()），这里不重复。 */
         if (!Objects.equals(old.getStartDate(), t.getStartDate())) {
             parts.add("开始日期 " + fmtDate(old.getStartDate()) + "→" + fmtDate(t.getStartDate()));
@@ -199,6 +204,11 @@ public class TaskAuditLogger {
             parts.add("进度备注");
         }
         return parts;
+    }
+
+    private String testOwnerName(String name) {
+        String trimmed = Texts.trimToNull(name);
+        return trimmed == null ? "待领取" : trimmed;
     }
 
     private String fmtDate(LocalDate date) {

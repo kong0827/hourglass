@@ -264,7 +264,14 @@ public class VersionReleaseService {
             if (member.equals(userId) && (snapshot == null || snapshot.get("role") == null)) throw AppException.badRequest("录入人必须是当前空间成员");
         }
         permissions.assertManageProjectForUpdate(userId, workspaceId, current.getReqId());
+        if (isEnded(current.getStatus())) {
+            throw AppException.badRequest("已关闭或已取消的版本不能创建发布计划或记录发布");
+        }
         return current;
+    }
+
+    private static boolean isEnded(String status) {
+        return "closed".equals(status) || "canceled".equals(status);
     }
 
     @Transactional
@@ -370,6 +377,9 @@ public class VersionReleaseService {
             ProjectVersion version = versionMapper.selectByIdForUpdate(workspaceId, before.getId());
             if (version == null || !Objects.equals(version.getReqId(), before.getReqId()))
                 throw new AppException(409, "版本项目已变化");
+            if (isEnded(version.getStatus())) {
+                throw AppException.badRequest("已关闭或已取消的版本不能加入发布计划：" + version.getName());
+            }
             permissions.assertManageProjectForUpdate(userId, workspaceId, version.getReqId());
             versions.add(version);
         }
@@ -463,7 +473,7 @@ public class VersionReleaseService {
         record.setIdempotencyKey(request.getIdempotencyKey());
         record.setRequestHash(hash);
         record.setPlanSnapshot(encode(c.plan));
-        if (mapper.insertRecord(record) != 1) throw new AppException(409, "发布记录写入冲突");
+        insertRecordWithNo(record);
         Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
         for (String id : request.getActualTaskIds()) {
             Task task = c.actual.get(id);
@@ -512,6 +522,9 @@ public class VersionReleaseService {
                 : found == null ? Collections.emptyList() : Collections.singletonList(found);
         for (VersionRelease record : records) {
             record.setItems(mapper.selectItems(workspaceId, record.getId()));
+            if (record.getRelatedReleaseId() != null) {
+                record.setRelatedReleaseNo(mapper.selectReleaseNo(workspaceId, record.getRelatedReleaseId()));
+            }
         }
         return records;
     }
@@ -547,11 +560,32 @@ public class VersionReleaseService {
                         + Objects.toString(versionName, "无") + "；" + reason, 255), encode(change));
     }
 
+    /**
+     * 分配项目内编号后写入发布记录（sql/82）。并发确认会抢到同一个号，由 uk_release_no 拒绝后重算重试；
+     * 失败的 INSERT 不会让 InnoDB 事务失效。幂等键撞键是另一回事，直接抛出，不伪装成编号冲突。
+     */
+    private void insertRecordWithNo(VersionRelease record) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            record.setReleaseNo(mapper.selectNextReleaseNo(record.getWorkspaceId(), record.getReqId()));
+            try {
+                if (mapper.insertRecord(record) != 1) throw new AppException(409, "发布记录写入冲突");
+                return;
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                String message = e.getMessage();
+                if (message == null || !message.contains("uk_release_no")) throw e;
+                log.warn("发布记录编号并发冲突，重试第 {} 次：project={}", attempt + 2, record.getReqId());
+            }
+        }
+        throw AppException.badRequest("发布记录编号生成冲突，请重试");
+    }
+
     private VersionReleaseItem snapshot(VersionRelease record, Task task, Demand demand, String disposition) {
         VersionReleaseItem item = new VersionReleaseItem();
         item.setWorkspaceId(record.getWorkspaceId());
         item.setReleaseId(record.getId());
         item.setTaskId(task.getId());
+        /* 编号在记录当时定格：工作项之后换项目会重新取号，历史证据不跟着变（sql/83） */
+        item.setTaskItemNo(task.getItemNo());
         item.setTitle(task.getTitle());
         item.setItemType(task.getItemType());
         item.setOwnerUserId(task.getOwnerUserId());

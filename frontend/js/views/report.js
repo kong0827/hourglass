@@ -11,7 +11,7 @@ import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import { fmtMinutesShort } from "../lib/format.js";
 import { labelFilterText } from "../lib/member-labels.js";
 
-var cache = null, seq = 0, reqId = "", roleTitle = "", companyName = "", loading = false, filterWorkspace = "", reportOptions = {};
+var cache = null, seq = 0, reqId = "", roleTitle = "", companyName = "", versionId = "", loading = false, filterWorkspace = "", reportOptions = {};
 function reportWorkspace(){ return rt.currentWs && rt.currentWs.id || ""; }
 ["ds:project-roles-changed","ds:member-company-changed","ds:member-job-title-changed","ds:member-label-options-changed","ds:member-roster-changed"].forEach(function(name){
   window.addEventListener(name, function(e){
@@ -86,11 +86,11 @@ function loadReport(opts){
   var body = $("reportBody");
   if(!body) return Promise.resolve(null);
   var ws = reportWorkspace();
-  if(filterWorkspace !== ws){ reqId = ""; roleTitle = ""; companyName = ""; cache = null; reportOptions = {}; filterWorkspace = ws; }
+  if(filterWorkspace !== ws){ reqId = ""; roleTitle = ""; companyName = ""; versionId = ""; cache = null; reportOptions = {}; filterWorkspace = ws; }
   var current = ++seq, scope;
   /* 项目删除或隐藏后退回全部；异步响应必须仍属于原空间与最新请求。 */
   if(reqId && rt.reqsLoaded && !rt.reqList.some(function(r){ return r.id === reqId && (!r.workspaceId || r.workspaceId === ws); })) reqId = "";
-  scope = { reqId:reqId || null, roleTitle:roleTitle || null, companyName:companyName || null };
+  scope = { reqId:reqId || null, roleTitle:roleTitle || null, companyName:companyName || null, versionId:versionId || null };
   loading = true; hideReportTip();
   body.innerHTML = reportToolbar() + UI.skeletonCards(4); body.setAttribute("aria-busy","true");
   return API.get("/api/manager/reports", scope).then(function(data){
@@ -101,7 +101,7 @@ function loadReport(opts){
     if(current !== seq || ws !== reportWorkspace()) return null;
     var status = ex && ex.code;
     if(scope.reqId && (status === 403 || status === 404)){
-      reqId = "";
+      reqId = ""; versionId = "";
       toast("所选项目已不可访问，已切换为全部项目", "warn");
       return loadReport(opts);
     }
@@ -280,6 +280,15 @@ function projectOptions(){
   var list = rt.reqList.filter(function(r){ return (!r.workspaceId || r.workspaceId === reportWorkspace()) && (!r.archivedAt || r.id === reqId); });
   return '<option value="">全部项目</option>' + list.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
 }
+function versionOptions(){
+  var list = (reportOptions.versions || []).slice();
+  if(versionId && !list.some(function(v){ return v.id === versionId; })){
+    list.push({ id:versionId, name:versionId });
+  }
+  return '<option value="">全部版本</option>' + list.map(function(v){
+    return '<option value="' + esc(v.id) + '"' + (v.id === versionId ? ' selected' : '') + '>' + esc(v.name) + '</option>';
+  }).join("");
+}
 function reportLabelOptions(values, selected, all, unset){
   var list = Array.from(new Set((values || []).filter(function(v){ return v && v !== "__unset__"; }).concat(selected && selected !== "__unset__" ? [selected] : [])));
   return '<option value="">' + all + '</option><option value="__unset__"' + (selected === "__unset__" ? ' selected' : '') + '>' + unset + '</option>'
@@ -287,7 +296,9 @@ function reportLabelOptions(values, selected, all, unset){
 }
 function reportScopeText(data){
   var scope = data.scope || {}, project = (rt.reqList || []).filter(function(p){ return p.id === scope.reqId; })[0];
+  var version = (reportOptions.versions || []).filter(function(v){ return v.id === scope.versionId; })[0];
   return '项目：' + (scope.reqId ? (project ? project.name : scope.reqId) : '全部项目')
+    + ' · 版本：' + (scope.versionId ? (version ? version.name : scope.versionId) : '全部版本')
     + ' · 公司：' + (scope.companyName === '__unset__' ? '未设公司' : labelFilterText(scope.companyName) || '全部公司')
     + ' · 角色：' + (scope.roleTitle === '__unset__' ? '未设角色' : labelFilterText(scope.roleTitle) || '全部角色');
 }
@@ -295,6 +306,7 @@ function reportToolbar(){
   var disabled = loading || !cache ? ' disabled' : '';
   return '<div class="manager-toolbar"><div><b>交付图表</b></div><div class="manager-actions"><button class="btn sm" type="button" data-report-csv' + disabled + '>导出 CSV</button><button class="btn sm" type="button" data-report-png' + disabled + '>导出 PNG</button>' + fullscreenButtonHTML() + '</div></div>'
     + '<div class="manager-label-filters"><label>项目 <select id="reportProjectSelect" class="mini-select">' + projectOptions() + '</select></label>'
+    + '<label>版本 <select id="reportVersionSelect" class="mini-select">' + versionOptions() + '</select></label>'
     + '<label>公司 <select id="reportCompanySelect" class="mini-select">' + reportLabelOptions(reportOptions.companyNames, companyName, '全部公司', '未设公司') + '</select></label>'
     + '<label>角色 <select id="reportRoleSelect" class="mini-select">' + reportLabelOptions(reportOptions.roleTitles, roleTitle, '全部角色', '未设角色') + '</select></label>'
     + '<button class="btn sm soft" type="button" data-report-clear>' + icon("close", 13) + '清除筛选</button></div><p class="roster-note">按工作项所属项目的有效主角色或兼岗筛选；所有图表与导出由后台按同一范围重算。</p>';
@@ -306,7 +318,7 @@ function renderReport(){
     + caliberHTML('燃尽：近 14 天，剩余 = 范围内全部工作项的总预估 − 截至当日已完成工作项的实际工时（不是剩余预估）；理想线从总预估线性降到 0，窗口之前完成的工作项也会扣减，因此首日剩余可能低于理想线。范围 =「全部项目」时含已归档项目，选中单个项目时只含该项目。速度：近 4 个自然周，按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与工作项、计时数据同源。')
     + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + defectChart(cache.defects || {}) + '</div>';
   wireReportTooltip($("reportBody"));
-  if(["reportProjectSelect","reportCompanySelect","reportRoleSelect"].indexOf(focused) !== -1){ var field = $(focused); if(field) field.focus(); }
+  if(["reportProjectSelect","reportVersionSelect","reportCompanySelect","reportRoleSelect"].indexOf(focused) !== -1){ var field = $(focused); if(field) field.focus(); }
 }
 function exportCsv(){
   if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
@@ -406,12 +418,13 @@ if($("reportBody")){
     if(drill){ onReportDrill(drill); return; }
     if(e.target.closest("[data-report-csv]")) exportCsv();
     else if(e.target.closest("[data-report-png]")) exportPng();
-    else if(e.target.closest("[data-report-clear]")){ reqId = ""; companyName = ""; roleTitle = ""; loadReport(); }
+    else if(e.target.closest("[data-report-clear]")){ reqId = ""; companyName = ""; roleTitle = ""; versionId = ""; loadReport(); }
     else if(e.target.closest("[data-empty-action]")) loadReport();
   });
   $("reportBody").addEventListener("change",function(e){
     var id = e.target.id;
-    if(id === "reportProjectSelect") reqId = e.target.value;
+    if(id === "reportProjectSelect"){ reqId = e.target.value; versionId = ""; }
+    else if(id === "reportVersionSelect") versionId = e.target.value;
     else if(id === "reportCompanySelect") companyName = e.target.value;
     else if(id === "reportRoleSelect") roleTitle = e.target.value;
     else return;

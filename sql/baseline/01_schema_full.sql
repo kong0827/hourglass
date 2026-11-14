@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-13: full schema after migrations 01-70 and 76 (57 tables).
+-- Updated 2026-11-14: full schema after migrations 01-70, 76-81 (64 tables).
 --
--- 完整结构与 sql/01-70 + 76 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、76 需求人工交付判定）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70、76-81 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -434,10 +434,13 @@ CREATE TABLE `project_version` (
   `req_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属项目ID',
   `name` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '版本名称',
   `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '版本说明与发布摘要',
-  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'planned' COMMENT 'planned/active/released',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'planned' COMMENT 'planned/active/released/closed/canceled',
   `start_date` date DEFAULT NULL COMMENT '计划开始日期',
   `target_date` date DEFAULT NULL COMMENT '计划发布日期',
   `released_at` datetime DEFAULT NULL COMMENT '实际发布日期（补录日期按当日零点保存）',
+  `ended_at` datetime DEFAULT NULL COMMENT '关闭或取消时间',
+  `end_reason` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关闭或取消原因',
+  `commitment_at` datetime DEFAULT NULL COMMENT '开始开发时的承诺基线快照时间',
   `revision` bigint NOT NULL DEFAULT 0,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -445,6 +448,72 @@ CREATE TABLE `project_version` (
   UNIQUE KEY `uk_req_version_name` (`req_id`,`name`),
   KEY `idx_ws_req` (`workspace_id`,`req_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目版本';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `version_commitment_task`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `version_commitment_task` (
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `task_title` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `estimate_minutes` int DEFAULT NULL,
+  PRIMARY KEY (`workspace_id`,`version_id`,`task_id`),
+  KEY `idx_ws_version` (`workspace_id`,`version_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='版本承诺基线任务快照';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `project_milestone`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_milestone` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `req_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'version/tasks/manual',
+  `version_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `target_date` date NOT NULL,
+  `owner_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_key` tinyint(1) NOT NULL DEFAULT '1',
+  `note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `achieved_at` datetime DEFAULT NULL COMMENT '仅人工确认写入；自动型由条件实时推导',
+  `achieved_note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `confirmed_by_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `canceled_at` datetime DEFAULT NULL,
+  `cancel_reason` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `revision` bigint NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ws_req` (`workspace_id`,`req_id`),
+  KEY `idx_ws_version` (`workspace_id`,`version_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目级里程碑';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `project_milestone_task`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_milestone_task` (
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `milestone_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`workspace_id`,`milestone_id`,`task_id`),
+  KEY `idx_ws_milestone` (`workspace_id`,`milestone_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工作项型里程碑达成条件';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `project_milestone_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_milestone_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `milestone_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `action` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `detail` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `operator_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ws_milestone` (`workspace_id`,`milestone_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='里程碑动态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `req_doc_comment`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -597,6 +666,8 @@ CREATE TABLE `task` (
   `title` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '标题',
   `description` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '描述（支持富文本 HTML）',
   `item_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'task' COMMENT '工作项类型：story用户故事/task任务/bug缺陷/epic史诗',
+  `item_no` int DEFAULT NULL COMMENT '项目内工作项编号（顺序分配，展示为 WI-001；空=尚未取号）',
+  `no_scope` varchar(32) GENERATED ALWAYS AS (coalesce(`req_id`,'')) STORED COMMENT '编号作用域：项目ID，无项目归空串（唯一键用，不参与写入）',
   `epic_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属史诗（Epic）任务ID（item_type=epic 时为空）',
   `demand_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联需求池需求ID（demand 表）',
   `severity` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '缺陷严重度：blocker阻断/critical严重/major一般/minor轻微',
@@ -623,8 +694,11 @@ CREATE TABLE `task` (
   `blocked_by_task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '等待的任务ID（可选的依赖关系）',
   `note` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '进度备注',
   `completed_at` date DEFAULT NULL COMMENT '完成日期',
-  `test_started_at` date DEFAULT NULL COMMENT '进入测试中的日期（新一轮测试重新记录）',
-  `test_finished_at` date DEFAULT NULL COMMENT '离开测试中的日期：测试通过或退回',
+  `test_owner_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '测试负责人账号ID；空=待领取',
+  `test_owner` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '测试负责人显示名快照',
+  `test_requested_at` datetime DEFAULT NULL COMMENT '进入待测试 / 新一轮直接开始测试的提测时间',
+  `test_started_at` datetime DEFAULT NULL COMMENT '进入测试中的时间（新一轮测试重新记录）',
+  `test_finished_at` datetime DEFAULT NULL COMMENT '离开测试中的时间：测试通过或退回',
   `published_at` date DEFAULT NULL,
   `publish_source` varchar(16) DEFAULT NULL,
   `published_release_id` varchar(32) DEFAULT NULL,
@@ -640,6 +714,7 @@ CREATE TABLE `task` (
   `gantt_end` date GENERATED ALWAYS AS (greatest(coalesce(`start_date`,`due_date`),coalesce(`due_date`,`start_date`))) STORED COMMENT '有效截止日（max(start,due)，甘特区间索引用）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_task_release_workspace` (`id`,`workspace_id`),
+  UNIQUE KEY `uk_task_item_no` (`workspace_id`,`no_scope`,`item_no`),
   KEY `idx_ws` (`workspace_id`),
   KEY `idx_board` (`workspace_id`,`board_column`,`sort_order`),
   KEY `idx_req` (`req_id`),
@@ -648,6 +723,7 @@ CREATE TABLE `task` (
   KEY `idx_deleted` (`deleted_at`),
   KEY `idx_remind` (`remind_at`,`remind_sent`),
   KEY `idx_owner_user` (`owner_user_id`,`workspace_id`),
+  KEY `idx_ws_test_owner` (`workspace_id`,`test_owner_user_id`,`board_column`),
   KEY `idx_blocked` (`workspace_id`,`is_blocked`),
   KEY `idx_branch` (`branch_id`),
   KEY `idx_gantt_range` (`workspace_id`,`deleted_at`,`gantt_start`,`gantt_end`,`id`),
@@ -1079,6 +1155,7 @@ CREATE TABLE `version_release` (
   `id` varchar(32) NOT NULL,
   `workspace_id` varchar(32) NOT NULL,
   `req_id` varchar(32) NOT NULL,
+  `release_no` int DEFAULT NULL COMMENT '项目内发布记录编号（顺序分配，展示为 REL-001；空=尚未取号）',
   `version_id` varchar(32) NOT NULL,
   `plan_id` varchar(32) DEFAULT NULL,
   `plan_revision` bigint DEFAULT NULL,
@@ -1110,6 +1187,7 @@ CREATE TABLE `version_release` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_release_workspace` (`id`,`workspace_id`),
   UNIQUE KEY `uk_release_request` (`workspace_id`,`version_id`,`idempotency_key`),
+  UNIQUE KEY `uk_release_no` (`workspace_id`,`req_id`,`release_no`),
   KEY `idx_release_project` (`workspace_id`,`req_id`,`occurred_at`),
   CONSTRAINT `fk_release_plan` FOREIGN KEY (`plan_id`,`workspace_id`) REFERENCES `version_release_plan` (`id`,`workspace_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_release_related` FOREIGN KEY (`related_release_id`,`workspace_id`) REFERENCES `version_release` (`id`,`workspace_id`) ON DELETE RESTRICT,
@@ -1122,6 +1200,7 @@ CREATE TABLE `version_release_item` (
   `workspace_id` varchar(32) NOT NULL,
   `release_id` varchar(32) NOT NULL,
   `task_id` varchar(32) NOT NULL,
+  `task_item_no` int DEFAULT NULL COMMENT '快照时的工作项编号（展示为 WI-001；空=任务已彻底删除）',
   `title` varchar(60) NOT NULL,
   `item_type` varchar(16) NOT NULL,
   `owner_user_id` varchar(32) DEFAULT NULL,
@@ -1156,6 +1235,56 @@ CREATE TABLE `version_log` (
   PRIMARY KEY (`id`),
   KEY `idx_version_log` (`workspace_id`,`version_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `delivery_note`;
+CREATE TABLE `delivery_note` (
+  `workspace_id` varchar(32) NOT NULL,
+  `version_id` varchar(32) NOT NULL,
+  `req_id` varchar(32) NOT NULL,
+  `audience` varchar(120) DEFAULT NULL COMMENT '交付对象（客户/验收方），首次确认后按版本记忆',
+  `support_contact` varchar(200) DEFAULT NULL COMMENT '对外支持联系方式',
+  `options` json DEFAULT NULL COMMENT '生成控制：语气/范围/粒度/证据密度/排版',
+  `narratives` json DEFAULT NULL COMMENT '人工改写的叙述文字，key=区块字段',
+  `confirmed` json DEFAULT NULL COMMENT '已确认的待确认项 key 列表',
+  `acceptance` varchar(1000) DEFAULT NULL COMMENT '验收结论补充说明',
+  `updated_by` varchar(32) DEFAULT NULL,
+  `revision` bigint NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`workspace_id`,`version_id`),
+  KEY `idx_ws_req` (`workspace_id`,`req_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交付说明草稿与生成控制（按版本记忆）';
+DROP TABLE IF EXISTS `delivery_note_snapshot`;
+CREATE TABLE `delivery_note_snapshot` (
+  `id` varchar(32) NOT NULL,
+  `workspace_id` varchar(32) NOT NULL,
+  `version_id` varchar(32) NOT NULL,
+  `req_id` varchar(32) NOT NULL,
+  `release_id` varchar(32) DEFAULT NULL COMMENT '取哪条发布记录；空=未确认发布的内部草稿',
+  `seq` int NOT NULL COMMENT '同一版本内第几次导出，从 1 起',
+  `doc_no` varchar(40) NOT NULL COMMENT '对外编号 DS-YYYYMMDD-NN',
+  `tone` varchar(16) NOT NULL COMMENT 'customer / manager / internal',
+  `title` varchar(200) NOT NULL,
+  `payload` mediumtext NOT NULL COMMENT '导出瞬间的完整聚合 JSON',
+  `content_hash` char(64) NOT NULL COMMENT 'payload 的 SHA-256',
+  `created_by` varchar(32) DEFAULT NULL,
+  `created_by_name` varchar(80) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ws_version_seq` (`workspace_id`,`version_id`,`seq`),
+  KEY `idx_ws_req` (`workspace_id`,`req_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交付说明不可变快照';
+DROP TABLE IF EXISTS `delivery_note_share`;
+CREATE TABLE `delivery_note_share` (
+  `workspace_id` varchar(32) NOT NULL,
+  `snapshot_id` varchar(32) NOT NULL,
+  `token` varchar(32) NOT NULL,
+  `allow_download` tinyint(1) NOT NULL DEFAULT '1' COMMENT '接收人是否可下载 PDF',
+  `view_count` int NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `expires_at` datetime DEFAULT NULL COMMENT '空=长期有效',
+  PRIMARY KEY (`workspace_id`,`snapshot_id`),
+  UNIQUE KEY `uk_token` (`token`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交付说明快照只读分享';
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

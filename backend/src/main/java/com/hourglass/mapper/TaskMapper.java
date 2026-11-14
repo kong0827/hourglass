@@ -167,6 +167,8 @@ public interface TaskMapper {
     /** 项目下已有正式交付（成功生产部署 / 重部署）的版本 ID */
     List<String> selectFormalSuccessVersionIdsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
     List<String> selectVersionPlanIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+    /** 版本下未完成（草稿 / 就绪）的发布计划：关闭或取消版本前必须先处理 */
+    List<String> selectVersionOpenPlanIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<Long> selectVersionAuditIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<String> selectEpicChildIdsForScope(@Param("workspaceId") String workspaceId, @Param("epicId") String epicId);
 
@@ -242,7 +244,14 @@ public interface TaskMapper {
 
     Integer maxSortOrder(@Param("workspaceId") String workspaceId, @Param("boardColumn") String boardColumn);
 
-    int clearReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+    /**
+     * 项目内下一个工作项编号（sql/82）。含软删除行：回收站里的编号不能发给新工作项。
+     * 按生成列 no_scope 分组，与唯一键 uk_task_item_no 同一口径（无项目归空串）。
+     */
+    int selectNextItemNo(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 删除项目时解绑工作项，并在「无项目」编号桶里从 baseNo 之后重新取号（含回收站） */
+    int clearReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId, @Param("baseNo") int baseNo);
 
     /** 某项目下挂着的任务数（含回收站，与 clearReq 的解绑范围一致；删除项目前统计用） */
     int countTasksByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
@@ -313,6 +322,9 @@ public interface TaskMapper {
 
     /** 用户改名后同步任务负责人（限其参与的空间；回收站任务一并更新） */
     int renameOwner(@Param("userId") String userId, @Param("oldName") String oldName, @Param("newName") String newName);
+
+    /** 用户改名后同步测试负责人显示名快照（账号ID权威，文本仅展示） */
+    int renameTestOwner(@Param("userId") String userId, @Param("oldName") String oldName, @Param("newName") String newName);
 
     /* ==================== 2026-10-16 评估报告改造新增 ==================== */
 

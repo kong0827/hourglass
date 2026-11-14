@@ -30,6 +30,7 @@
 <link rel="stylesheet" href="css/auth.css" />
 <link rel="stylesheet" href="css/mobile.css" />
 <link rel="stylesheet" href="css/assistant.css" />
+<link rel="stylesheet" href="css/delivery.css" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#2563EB" />
 <link rel="apple-touch-icon" href="icons/icon-1024.png" />
@@ -106,7 +107,7 @@
       </button>
 
       <span class="nav-sec">交付</span>
-      <button class="nav-item" type="button" data-view="workitems" title="工作项：看板、列表、日历、甘特四种视图">
+      <button class="nav-item" type="button" data-view="workitems" title="工作项：看板、列表、层级、影响链、日历、甘特六种视图">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/></svg>
         <span class="nl">工作项</span>
       </button>
@@ -283,58 +284,79 @@
     <!-- 筛选栏 48px（仅看板 / 列表） -->
     <div class="filterbar" id="filterbar" aria-label="筛选条件">
       <div class="fb-main">
-        <div class="fgroup" id="fgStatus">
-          <span class="group-label">截止期</span>
-          <span class="chips" id="chipsDue">
-            <button class="chip alert-over" id="chipOver" type="button" aria-pressed="false" aria-label="只看已逾期工作项"><i class="cdot"></i>已逾期 <span class="n" id="nOver">0</span></button>
-            <button class="chip alert-today" id="chipToday" type="button" aria-pressed="false" aria-label="只看今天到期的工作项"><i class="cdot"></i>今天到期 <span class="n" id="nToday">0</span></button>
-            <button class="chip alert-soon" id="chipSoon" type="button" aria-pressed="false" aria-label="只看 3 天内到期的工作项"><i class="cdot"></i>3 天内 <span class="n" id="nSoon">0</span></button>
-            <button class="chip alert-focus" id="chipFocus" type="button" aria-pressed="false" title="只看：逾期 + 今天到期 + 进行中的 P0"><i class="cdot"></i>今日聚焦</button>
-            <span class="chip calm" id="chipHealthy" hidden>暂无逾期</span>
-          </span>
+        <div class="fgroup fb-dims" id="fgStatus">
+          <button class="chip fb-dim" id="btnDueFilter" type="button" data-due-open aria-haspopup="true" aria-expanded="false" aria-controls="dueMenu" title="按截止期筛选：已逾期 / 今天到期 / 3 天内 / 今日聚焦">
+            <span class="fb-dim-label">到期</span>
+          </button>
+          <span class="chip calm" id="chipHealthy" hidden>暂无逾期</span>
+          <div class="menu popover fb-dim-menu" id="dueMenu" hidden>
+            <div class="menu-title">截止期</div>
+            <button class="menu-item dim-opt" id="chipOver" type="button" aria-pressed="false">
+              <span class="ck" aria-hidden="true"></span><i class="cdot over"></i>
+              <span class="dim-name">已逾期</span><span class="k" id="nOver">0</span>
+            </button>
+            <button class="menu-item dim-opt" id="chipToday" type="button" aria-pressed="false">
+              <span class="ck" aria-hidden="true"></span><i class="cdot today"></i>
+              <span class="dim-name">今天到期</span><span class="k" id="nToday">0</span>
+            </button>
+            <button class="menu-item dim-opt" id="chipSoon" type="button" aria-pressed="false">
+              <span class="ck" aria-hidden="true"></span><i class="cdot soon"></i>
+              <span class="dim-name">3 天内到期</span><span class="k" id="nSoon">0</span>
+            </button>
+            <button class="menu-item dim-opt" id="chipFocus" type="button" aria-pressed="false">
+              <span class="ck" aria-hidden="true"></span>
+              <span class="dim-name">今日聚焦（逾期 + 今天 + P0）</span>
+            </button>
+            <div class="menu-foot"><button class="btn sm" type="button" data-due-clear>清空截止期</button></div>
+          </div>
         </div>
 
         <div class="fgroup fb-dims" id="fgDims">
           <button class="chip fb-dim" type="button" data-dim-open="reqs" aria-haspopup="true" aria-expanded="false" title="按项目筛选（可多选）">项目</button>
           <button class="chip fb-dim" type="button" data-dim-open="columns" aria-haspopup="true" aria-expanded="false" title="按看板状态筛选（可多选）">状态</button>
           <button class="chip fb-dim" type="button" data-dim-open="owners" aria-haspopup="true" aria-expanded="false" title="按负责人筛选（可多选）">负责人</button>
+          <button class="chip fb-dim" type="button" data-dim-open="testOwners" aria-haspopup="true" aria-expanded="false" title="按测试负责人筛选（可多选，含待领取）">测试负责人</button>
           <button class="chip fb-dim" type="button" data-dim-open="pris" aria-haspopup="true" aria-expanded="false" title="按优先级筛选（可多选）">优先级</button>
           <div class="menu popover fb-dim-menu" id="fbDimMenu" hidden></div>
         </div>
 
         <div class="fgroup" id="fgMore" style="position:relative">
-          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" title="状态、负责人、优先级、类型、版本、模块、标签、项目与完成情况">
+          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="moreFilterMenu" title="更多筛选：模块、标签、类型、版本、截止与开始日期、完成情况">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
             更多筛选 <span class="n" id="moreFilterCount" hidden>0</span>
           </button>
           <div class="menu popover" id="moreFilterMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
         </div>
+      </div>
 
-        <div class="fb-active" id="fbActive">
-          <div class="fgroup" id="fgColumns" hidden><span class="chips" id="chipsColumns"></span></div>
-          <div class="fgroup" id="fgCompletion" hidden><span class="chips" id="chipsCompletion"></span></div>
-          <div class="fgroup" id="fgReqs" hidden><span class="chips" id="chipsReqs"></span></div>
-          <div class="fgroup" id="fgOwner" hidden><span class="chips" id="chipsOwner"></span></div>
-          <div class="fgroup" id="fgPri" hidden><span class="chips" id="chipsPri"></span></div>
-          <div class="fgroup" id="fgType" hidden><span class="chips" id="chipsType"></span></div>
-          <div class="fgroup" id="fgVersion" hidden><span class="chips" id="chipsVersion"></span></div>
-          <div class="fgroup" id="fgCats" hidden><span class="chips" id="chipsCats"></span></div>
-          <div class="fgroup" id="fgTags" hidden><span class="chips" id="chipsTags"></span></div>
-          <div class="fgroup" id="fgDate" hidden><span class="chips" id="chipsDate"></span></div>
-          <div class="fgroup" id="fgBlocked" hidden><span class="chips" id="chipsBlocked"></span></div>
-          <div class="fgroup" id="fgQuery" hidden><span class="chips" id="chipsQuery"></span></div>
-        </div>
+      <!-- 已选条件独立成区：左右两侧控件固定，条件再多只滚动这里，不把入口挤出视野 -->
+      <div class="fb-active" id="fbActive">
+        <div class="fgroup" id="fgCats" hidden><span class="chips" id="chipsCats"></span></div>
+        <div class="fgroup" id="fgTags" hidden><span class="chips" id="chipsTags"></span></div>
+        <div class="fgroup" id="fgType" hidden><span class="chips" id="chipsType"></span></div>
+        <div class="fgroup" id="fgVersion" hidden><span class="chips" id="chipsVersion"></span></div>
+        <div class="fgroup" id="fgDate" hidden><span class="chips" id="chipsDate"></span></div>
+        <div class="fgroup" id="fgCompletion" hidden><span class="chips" id="chipsCompletion"></span></div>
+        <div class="fgroup" id="fgBlocked" hidden><span class="chips" id="chipsBlocked"></span></div>
+        <div class="fgroup" id="fgQuery" hidden><span class="chips" id="chipsQuery"></span></div>
+        <!-- 四个高频维度直接在按钮上回显选中值，不再重复生成 chip；保留容器兼容旧渲染 -->
+        <div class="fgroup" id="fgReqs" hidden><span class="chips" id="chipsReqs"></span></div>
+        <div class="fgroup" id="fgColumns" hidden><span class="chips" id="chipsColumns"></span></div>
+        <div class="fgroup" id="fgOwner" hidden><span class="chips" id="chipsOwner"></span></div>
+        <div class="fgroup" id="fgPri" hidden><span class="chips" id="chipsPri"></span></div>
       </div>
 
       <div class="fb-right">
         <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
         </button>
-        <div class="fgroup" id="viewGroup" hidden><span class="chips" id="viewBox"></span></div>
+        <div class="fgroup" id="viewGroup">
+          <button class="chip" id="btnViewsMenu" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="viewsMenu" title="保存的视图：应用、删除或保存当前筛选">视图 <span class="n" id="viewsBadge" hidden>0</span></button>
+          <div class="menu popover" id="viewsMenu" hidden style="top:calc(100% + 6px)"></div>
+        </div>
         <div class="fb-actions" id="filterActions" hidden>
           <button class="chip" id="selectedSummary" type="button" title="清空全部筛选"></button>
-          <button class="btn sm" id="btnSaveView" type="button" title="把当前筛选条件存为视图（跨设备同步）">存为视图</button>
-          <button class="btn sm soft" id="btnClearFilter" type="button"><span data-icon="close"></span>&nbsp;清空筛选</button>
+          <button class="btn sm soft" id="btnClearFilter" type="button" title="清空筛选条件，保留当前项目范围"><span data-icon="close"></span>&nbsp;清空筛选</button>
         </div>
       </div>
     </div>
@@ -344,8 +366,13 @@
       <!-- ===== 看板 ===== -->
       <section class="view view-flush on" id="view-board" aria-label="工作项">
         <div class="board-toolbar" id="boardToolbar">
-          <span class="board-toolbar-label">列内分组</span>
-          <div class="seg mini" id="boardGroupSeg" role="group" aria-label="看板列内分组方式"></div>
+          <label class="board-toolbar-field"><span class="board-toolbar-label">分组</span>
+            <select id="boardGroupSelect" class="mini-select" aria-label="看板列内一级分组方式"></select>
+          </label>
+          <label class="board-toolbar-field"><span class="board-toolbar-label">二级</span>
+            <select id="boardGroup2Select" class="mini-select" aria-label="看板列内二级分组方式"></select>
+          </label>
+          <span class="foot-note board-toolbar-hint">列仍是状态，组只决定卡片归堆</span>
         </div>
         <div class="board" id="board"></div>
       </section>
@@ -359,13 +386,14 @@
       <section class="view" id="view-mine" aria-label="我的工作">
         <div class="view-page wide">
           <div class="page-toolbar">
-            <div class="seg mini mine-mode" id="mineMode" role="group" aria-label="我的 / 团队">
+            <div class="seg mini mine-mode" id="mineMode" role="group" aria-label="我的 / 待我测试 / 团队">
               <button type="button" data-mine-mode="mine" aria-pressed="true">我的</button>
+              <button type="button" data-mine-mode="test" aria-pressed="false">待我测试</button>
               <button type="button" data-mine-mode="team" aria-pressed="false">团队</button>
             </div>
             <span class="toolbar-meta" id="mineMeta">—</span>
             <span class="toolbar-right">
-              <label class="row row-gap" style="gap:6px">
+              <label class="row row-gap mine-hide-test" style="gap:6px">
                 <span class="toolbar-meta is-strong">分组</span>
                 <select id="mineGroup" class="mini-select" aria-label="分组方式">
                   <option value="due">按截止日期</option>
@@ -377,7 +405,7 @@
                   <option value="none">不分组</option>
                 </select>
               </label>
-              <label class="row row-gap" style="gap:6px">
+              <label class="row row-gap mine-hide-test" style="gap:6px">
                 <span class="toolbar-meta is-strong">二级</span>
                 <select id="mineSubgroup" class="mini-select" aria-label="二级分组方式">
                   <option value="none">不分组</option>
@@ -389,7 +417,7 @@
                   <option value="category">按模块</option>
                 </select>
               </label>
-              <label class="row row-gap" style="gap:6px">
+              <label class="row row-gap mine-hide-test" style="gap:6px">
                 <span class="toolbar-meta is-strong">排序</span>
                 <select id="mineSort" class="mini-select" aria-label="排序方式">
                   <option value="default">默认顺序</option>
@@ -409,8 +437,8 @@
                 <button type="button" data-list-density="standard" aria-pressed="true">标准</button>
                 <button type="button" data-list-density="relaxed" aria-pressed="false">宽松</button>
               </div>
-              <button class="btn sm" type="button" id="btnMineFields">显示字段</button>
-              <button class="btn sm" type="button" id="btnMineFold">折叠全部</button>
+              <button class="btn sm mine-hide-test" type="button" id="btnMineFields">显示字段</button>
+              <button class="btn sm mine-hide-test" type="button" id="btnMineFold">折叠全部</button>
               <button class="btn sm" type="button" id="btnMineRefresh">
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/></svg>
                 刷新
@@ -457,6 +485,56 @@
             </div>
             <div class="list-body" id="listBody"></div>
 
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 树形大纲 ===== -->
+      <section class="view" id="view-tree" aria-label="工作项层级视图">
+        <div class="view-page wide">
+          <div class="page-toolbar">
+            <label class="row row-gap" style="gap:6px">
+              <span class="toolbar-meta is-strong">一级</span>
+              <select id="treeLevel1" class="mini-select" aria-label="一级层级"></select>
+            </label>
+            <label class="row row-gap" style="gap:6px">
+              <span class="toolbar-meta is-strong">二级</span>
+              <select id="treeLevel2" class="mini-select" aria-label="二级层级"></select>
+            </label>
+            <label class="row row-gap" style="gap:6px">
+              <span class="toolbar-meta is-strong">三级</span>
+              <select id="treeLevel3" class="mini-select" aria-label="三级层级"></select>
+            </label>
+            <button class="btn sm ghost" type="button" id="btnTreeHideDone" aria-pressed="false">隐藏已完成</button>
+            <span class="toolbar-meta" id="treeMeta">—</span>
+            <span class="toolbar-right">
+              <button class="btn sm ghost" type="button" id="btnTreeExpand">全部展开</button>
+              <button class="btn sm ghost" type="button" id="btnTreeCollapse">全部折叠</button>
+            </span>
+          </div>
+          <div class="list-scroll" style="margin-top:12px">
+            <div class="list-head tree-head" id="treeHead"></div>
+            <div class="list-body" id="treeBody" role="tree" aria-label="工作项层级"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 依赖影响链 ===== -->
+      <section class="view" id="view-chain" aria-label="工作项依赖影响链">
+        <div class="view-page">
+          <div class="page-toolbar">
+            <button class="btn sm chain-picker-btn" id="btnChainPick" type="button" aria-haspopup="true" aria-expanded="false" title="选择要分析的工作项">
+              ◈ <span id="btnChainPickText">选择中心工作项</span> ▾
+            </button>
+            <div class="seg mini" id="chainDir" role="group" aria-label="展开方向">
+              <button type="button" data-dir="up" aria-pressed="false">上游</button>
+              <button type="button" data-dir="both" class="on" aria-pressed="true">双向</button>
+              <button type="button" data-dir="down" aria-pressed="false">下游</button>
+            </div>
+            <span class="toolbar-meta" id="chainMeta">—</span>
+          </div>
+          <div class="chain-scroll">
+            <div class="chain-body" id="chainBody"></div>
           </div>
         </div>
       </section>
@@ -542,10 +620,21 @@
                 </button>
                 <div class="menu popover" id="ganttFilterMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
               </div>
-              <button class="btn sm soft" type="button" id="ganttClearFilter" hidden><span data-icon="close"></span>&nbsp;清除筛选</button>
+              <button class="btn sm soft" type="button" id="ganttClearFilter" hidden title="清空筛选条件，保留当前项目范围"><span data-icon="close"></span>&nbsp;清空筛选</button>
               <label class="row row-gap" style="gap:6px">
                 <span class="toolbar-meta is-strong">分组</span>
-                <select id="ganttGroup" class="mini-select" aria-label="工作项分组方式">
+                <select id="ganttGroup" class="mini-select" aria-label="工作项一级分组方式">
+                  <option value="none">不分组</option>
+                  <option value="owner">负责人</option>
+                  <option value="priority">优先级</option>
+                  <option value="project">项目</option>
+                  <option value="category">模块</option>
+                  <option value="status">状态</option>
+                </select>
+              </label>
+              <label class="row row-gap" style="gap:6px">
+                <span class="toolbar-meta is-strong">二级</span>
+                <select id="ganttGroup2" class="mini-select" aria-label="工作项二级分组方式" disabled>
                   <option value="none">不分组</option>
                   <option value="owner">负责人</option>
                   <option value="priority">优先级</option>
@@ -780,6 +869,11 @@
         </div></div></div>
       </section>
 
+      <!-- ===== 交付：一页式交付说明（从版本卡 / 发布记录下钻） ===== -->
+      <section class="view" id="view-delivery" aria-label="一页式交付说明">
+        <div class="view-page" id="deliveryBody"></div>
+      </section>
+
       <!-- ===== 需求池 ===== -->
       <section class="view" id="view-demands" aria-label="需求池">
         <div class="view-page" id="demandsPage">
@@ -1012,6 +1106,11 @@
             </label>
             <span class="reqdoc-saved" id="reqDocSaved"></span>
             <span class="reqdoc-count" id="reqDocCount"></span>
+            <span class="seg mini doc-zoom" role="group" aria-label="正文缩放">
+              <button type="button" data-doc-zoom="out" title="缩小正文（Ctrl/⌘ + 滚轮）" aria-label="缩小正文"><span data-icon="zoomOut"></span></button>
+              <button type="button" data-doc-zoom="reset" data-doc-zoom-val title="恢复 100%">100%</button>
+              <button type="button" data-doc-zoom="in" title="放大正文（Ctrl/⌘ + 滚轮）" aria-label="放大正文"><span data-icon="zoomIn"></span></button>
+            </span>
             <span class="reqdoc-actions">
               <button class="btn sm ghost ai-action" type="button" id="reqDocAiSplit" title="用 AI 把当前文档拆成工作项草稿，勾选确认后才会创建">
                 <span data-icon="ai"></span>&nbsp;AI 拆成工作项
@@ -1331,16 +1430,8 @@
             <span class="toolbar-meta" id="tcMeta"></span>
             <span class="toolbar-right">
               <button type="button" class="label-help" id="tcHelp" aria-label="查看用例、计划、矩阵与报告的关系说明" title="测试模块使用说明"></button>
+              <select id="tcReq" class="mini-select" aria-label="选择项目范围"></select>
               <span class="tc-filterbar" id="tcFilterBar">
-                <span class="views-menu-wrap">
-                  <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
-                  <div class="menu popover" id="tcViewsMenu" hidden></div>
-                </span>
-                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" title="在所选项目内搜索用例 / 前置 / 测试数据 / 步骤" aria-label="在所选项目内搜索测试用例" />
-                <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
-                <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
-                <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
-                <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false" title="只看关联缺陷仍未完成（未删除、未进入完成列）的用例">未关闭缺陷</button>
                 <div class="chips" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
                   <button class="chip" type="button" data-tc-status="all" aria-pressed="true">全部</button>
                   <button class="chip" type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
@@ -1349,11 +1440,21 @@
                   <button class="chip" type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
                   <button class="chip" type="button" data-tc-status="skipped" aria-pressed="false" title="本次不执行 / 不适用">跳过</button>
                 </div>
-                <button class="btn sm soft" type="button" id="tcClearFilter" hidden><span data-icon="close"></span>&nbsp;清除筛选</button>
+                <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
+                <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
+                <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
+                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" title="在所选项目内搜索用例 / 前置 / 测试数据 / 步骤" aria-label="在所选项目内搜索测试用例" />
+                <span class="tc-fbar-end">
+                  <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false" title="只看关联缺陷仍未完成（未删除、未进入完成列）的用例">未关闭缺陷</button>
+                  <button class="btn sm soft" type="button" id="tcClearFilter" hidden><span data-icon="close"></span>&nbsp;清空筛选</button>
+                  <span class="views-menu-wrap">
+                    <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
+                    <div class="menu popover" id="tcViewsMenu" hidden></div>
+                  </span>
+                </span>
               </span>
               <span class="tc-actionbar">
-                <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选</button>
-                <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
+                <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选<span class="n" id="tcFilterCount" hidden>0</span></button>
                 <button class="btn sm ghost ai-action" type="button" id="btnCaseAi" title="用 AI 从需求文档或需求池条目生成测试用例草稿，勾选确认后才会创建"><span data-icon="ai"></span>&nbsp;AI 生成用例</button>
                 <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含编号、测试数据与步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
                 <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
@@ -1369,14 +1470,6 @@
           </div>
           <div class="tc-filterbar tc-defbar" id="tcDefectBar" hidden>
             <select id="tcDefReq" class="mini-select" aria-label="按项目筛选缺陷"></select>
-            <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索本项目缺陷…" title="在所选项目内搜索缺陷 / 编号 / 用例" aria-label="在所选项目内搜索缺陷" />
-            <select id="tcDefSeverity" class="mini-select" aria-label="按严重度筛选缺陷">
-              <option value="all">严重度：全部</option>
-              <option value="blocker">阻断</option>
-              <option value="critical">严重</option>
-              <option value="major">一般</option>
-              <option value="minor">轻微</option>
-            </select>
             <select id="tcDefStatus" class="mini-select" aria-label="按修复状态筛选缺陷">
               <option value="open">状态：未关闭</option>
               <option value="all">全部状态</option>
@@ -1386,8 +1479,33 @@
               <option value="closed">已关闭</option>
             </select>
             <select id="tcDefOwner" class="mini-select" aria-label="按负责人筛选缺陷"></select>
+            <select id="tcDefPriority" class="mini-select" aria-label="按优先级筛选缺陷"></select>
+            <select id="tcDefSeverity" class="mini-select" aria-label="按严重度筛选缺陷">
+              <option value="all">严重度：全部</option>
+              <option value="blocker">阻断</option>
+              <option value="critical">严重</option>
+              <option value="major">一般</option>
+              <option value="minor">轻微</option>
+            </select>
             <select id="tcDefVersion" class="mini-select" aria-label="按发现版本筛选缺陷"></select>
-            <button class="btn sm soft" type="button" id="tcDefReset" title="恢复默认：未关闭、全部严重度"><span data-icon="refresh"></span>&nbsp;重置</button>
+            <select id="tcDefCat" class="mini-select" aria-label="按模块筛选缺陷"></select>
+            <select id="tcDefTag" class="mini-select" aria-label="按标签筛选缺陷"></select>
+            <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索本项目缺陷…" title="在所选项目内搜索缺陷 / 编号 / 用例 / 模块 / 标签" aria-label="在所选项目内搜索缺陷" />
+            <button class="btn sm soft" type="button" id="tcDefReset" title="恢复默认：全部项目 · 未关闭，并清除严重度、优先级、负责人、发现版本、模块、标签与搜索"><span data-icon="refresh"></span>&nbsp;恢复默认</button>
+            <span class="views-menu-wrap">
+              <button class="btn sm ghost" type="button" id="tcDefViewsBtn" aria-haspopup="true" aria-expanded="false" title="缺陷视图：保存当前项目、状态与筛选条件">视图</button>
+              <div class="menu popover" id="tcDefViewsMenu" hidden></div>
+            </span>
+          </div>
+          <div class="tc-filterbar tc-planbar" id="tcPlanBar" hidden>
+            <input id="tcPlanSearch" type="search" class="tc-search" placeholder="搜索全部项目计划…" title="在全部项目中搜索计划名称 / 版本" aria-label="搜索测试计划" autocomplete="off" />
+            <select id="tcPlanStatus" class="mini-select" aria-label="按计划状态筛选">
+              <option value="all">状态：全部</option>
+              <option value="draft">草稿</option>
+              <option value="running">执行中</option>
+              <option value="done">已完成</option>
+            </select>
+            <button class="btn sm soft" type="button" id="tcPlanClearFilter" hidden title="清空计划搜索与状态筛选"><span data-icon="close"></span>&nbsp;清空筛选</button>
           </div>
           <div class="tc-stats" id="tcStats"></div>
           <div class="tc-bulkbar" id="tcBulkBar" hidden>
@@ -1681,24 +1799,36 @@
                 <button type="button" data-br-mode="board" aria-pressed="true">看板</button>
                 <button type="button" data-br-mode="list" aria-pressed="false">列表</button>
               </span>
-              <span class="br-search">
-                <select id="branchStatusFilter" aria-label="按状态筛选">
-                  <option value="">全部状态</option>
-                  <option value="dev">开发中</option>
-                  <option value="testing">待测试</option>
-                  <option value="merging">待合并</option>
-                  <option value="released">已发布</option>
-                </select>
-              </span>
-              <span class="br-search">
-                <select id="branchOwnerFilter" aria-label="按负责人筛选">
-                  <option value="">全部负责人</option>
-                </select>
-              </span>
-              <span class="br-search">
-                <select id="branchProjectFilter" aria-label="按项目筛选">
-                  <option value="">全部项目</option>
-                </select>
+              <button class="btn sm ghost tc-filter-toggle" type="button" id="branchFilterBtn" aria-expanded="false" aria-controls="branchFilterBar">筛选<span class="n" id="branchFilterCount" hidden>0</span></button>
+              <span class="br-filterbar" id="branchFilterBar">
+                <span class="br-search">
+                  <select id="branchProjectFilter" aria-label="按项目筛选">
+                    <option value="">全部项目</option>
+                  </select>
+                </span>
+                <span class="br-search">
+                  <select id="branchStatusFilter" aria-label="按状态筛选">
+                    <option value="">全部状态</option>
+                    <option value="dev">开发中</option>
+                    <option value="testing">待测试</option>
+                    <option value="merging">待合并</option>
+                    <option value="released">已发布</option>
+                  </select>
+                </span>
+                <span class="br-search">
+                  <select id="branchOwnerFilter" aria-label="按负责人筛选">
+                    <option value="">全部负责人</option>
+                  </select>
+                </span>
+                <span class="br-search">
+                  <select id="branchVersionFilter" aria-label="按版本筛选">
+                    <option value="">全部版本</option>
+                  </select>
+                </span>
+                <span class="br-search">
+                  <input type="search" id="branchSearch" placeholder="搜索全部分支…" title="在全部项目中搜索分支名 / 目标分支" aria-label="搜索全部分支" autocomplete="off" />
+                </span>
+                <button class="btn sm soft" type="button" id="branchClearFilter" hidden title="清空筛选：状态、负责人、版本、搜索与深链来源；保留当前项目"><span data-icon="close"></span>&nbsp;清空筛选</button>
               </span>
               <span class="br-search">
                 <select id="branchListGroup" aria-label="列表分组方式" hidden>
@@ -1709,8 +1839,9 @@
                 </select>
               </span>
               <button class="btn sm" type="button" id="branchGroupToggle" data-mode="status">按项目分组</button>
-              <span class="br-search">
-                <input type="search" id="branchSearch" placeholder="搜索全部分支…" title="在全部项目（或左侧所选项目）中搜索分支名 / 目标分支" aria-label="搜索全部分支" autocomplete="off" />
+              <span class="views-menu-wrap">
+                <button class="btn sm ghost" type="button" id="branchViewsBtn" aria-haspopup="true" aria-expanded="false" title="分支视图：保存当前项目、状态与筛选条件">视图</button>
+                <div class="menu popover" id="branchViewsMenu" hidden></div>
               </span>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>

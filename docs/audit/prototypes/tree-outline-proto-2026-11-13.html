@@ -1,0 +1,318 @@
+<style>
+  .to-root{--bg:#f6f7f9;--card:#fff;--line:#e5e7eb;--line2:#eef0f3;--text:#1f2329;--sub:#646a73;--faint:#8f959e;--blue:#3370ff;--blue-bg:#e8efff;--green:#34c724;--green-bg:#e6f6e4;--orange:#ff8800;--orange-bg:#fff1e0;--red:#f54a45;--red-bg:#feeceb;--purple:#7f3bf5;--purple-bg:#f1e8ff;--gray-bg:#f2f3f5;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);margin:-16px;padding:24px;box-sizing:border-box;min-height:100vh}
+  .to-root *{margin:0;padding:0;box-sizing:border-box}
+  .to-page{max-width:1180px;margin:0 auto}
+
+  /* 顶栏 */
+  .to-topbar{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .to-title{font-size:16px;font-weight:600}
+  .to-title small{font-size:12px;color:var(--faint);font-weight:400;margin-left:8px}
+  .to-spacer{flex:1}
+  .to-search{position:relative}
+  .to-search input{width:200px;padding:6px 10px 6px 28px;border:1px solid var(--line);border-radius:8px;font-size:12px;outline:none;background:#fff}
+  .to-search input:focus{border-color:var(--blue)}
+  .to-search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%)}
+  .to-btn{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12px;color:var(--sub);cursor:pointer}
+  .to-btn:hover{border-color:var(--blue);color:var(--blue)}
+  .to-btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  .to-btn.primary:hover{opacity:.9;color:#fff}
+  .to-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .to-seg button{padding:6px 10px;border:none;background:#fff;font-size:12px;color:var(--sub);cursor:pointer}
+  .to-seg button.on{background:var(--blue-bg);color:var(--blue);font-weight:500}
+
+  /* 树 */
+  .to-tree{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .to-thead,.to-row{display:grid;grid-template-columns:minmax(280px,1fr) 92px 66px 92px 84px 140px 76px 44px;align-items:center}
+  .to-thead{background:#fafbfc;border-bottom:1px solid var(--line);font-size:11px;color:var(--faint);padding:0}
+  .to-thead>div{padding:9px 10px}
+  .to-body{position:relative}
+  .to-row{border-bottom:1px solid var(--line2);font-size:12.5px;cursor:pointer;position:relative;transition:background .12s}
+  .to-row:hover{background:#f8faff}
+  .to-row:hover .to-quick{opacity:1}
+  .to-row>div{padding:8px 10px;display:flex;align-items:center;gap:6px;min-width:0}
+  .to-title-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+  .to-title-cell .t{display:inline-block;vertical-align:middle}
+  .to-caret{width:18px;height:18px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;color:var(--faint);transition:transform .16s;vertical-align:middle}
+  .to-caret:hover{background:var(--gray-bg);color:var(--sub)}
+  .to-caret.open{transform:rotate(90deg)}
+  .to-caret.leaf{visibility:hidden}
+  .to-type{font-size:11px;flex:none;width:18px;text-align:center}
+  .to-pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;white-space:nowrap}
+  .to-doing{background:var(--blue-bg);color:var(--blue)}
+  .to-done{background:var(--green-bg);color:#23a11d}
+  .to-todo{background:var(--gray-bg);color:var(--sub)}
+  .to-blocked{background:var(--red-bg);color:var(--red)}
+  .to-pri{font-size:11px;font-weight:600;width:26px;text-align:center;border-radius:4px;padding:1px 0}
+  .to-pri-p0{background:var(--red-bg);color:var(--red)}
+  .to-pri-p1{background:var(--orange-bg);color:var(--orange)}
+  .to-pri-p2{background:var(--blue-bg);color:var(--blue)}
+  .to-ava{width:20px;height:20px;border-radius:50%;color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+  .to-who{display:inline-block;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--sub);font-size:11.5px}
+  .to-due{font-size:11.5px;color:var(--sub)}
+  .to-due.late{color:var(--red);font-weight:500}
+  .to-prog{display:flex;align-items:center;gap:8px}
+  .to-prog .bar{width:78px;height:5px;border-radius:3px;background:var(--line2);overflow:hidden;flex:none}
+  .to-prog .bar i{display:block;height:100%;border-radius:3px;transition:width .3s}
+  .to-prog .pct{font-size:11px;color:var(--sub);width:30px}
+  .to-est{font-size:11.5px;color:var(--sub);text-align:right}
+  .to-quick{opacity:0;flex:none;width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--faint);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:opacity .12s}
+  .to-quick:hover{color:var(--blue);border-color:var(--blue)}
+
+  /* 缩进引导线 */
+  .to-row[data-depth="1"] .to-title-cell{padding-left:0}
+  .to-row .to-indent{flex:none;position:relative;height:100%;min-height:20px}
+  .to-row .to-indent:before{content:"";position:absolute;left:9px;top:-9px;bottom:-9px;width:1px;background:var(--line2)}
+  .to-row .to-indent:after{content:"";position:absolute;left:9px;top:50%;width:9px;height:1px;background:var(--line2)}
+  .to-row.first-child .to-indent:before{top:50%}
+  .to-row.last-child .to-indent:before{bottom:50%;height:auto;top:-9px}
+
+  .to-empty{padding:36px;text-align:center;color:var(--faint);font-size:12.5px}
+  .to-foot{padding:9px 14px;font-size:11px;color:var(--faint);border-top:1px solid var(--line);display:flex;gap:16px;background:#fafbfc}
+  .to-foot b{color:var(--sub);font-weight:500}
+
+  /* 密度 */
+  .to-root.compact .to-row>div{padding:4px 10px}
+  .to-root.compact .to-ava{width:18px;height:18px}
+  /* 紧凑模式下隐藏次要列 */
+  @media (max-width:900px){.to-thead,.to-row{grid-template-columns:minmax(200px,1fr) 92px 66px 140px 44px}.to-hide-m{display:none!important}}
+
+  /* 详情抽屉 */
+  .to-mask{position:fixed;inset:0;background:rgba(31,35,41,.28);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+  .to-mask.show{opacity:1;pointer-events:auto}
+  .to-drawer{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:92vw;background:#fff;box-shadow:-8px 0 24px rgba(0,0,0,.1);transform:translateX(100%);transition:transform .22s ease;z-index:41;display:flex;flex-direction:column}
+  .to-drawer.show{transform:translateX(0)}
+  .to-drawer-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .to-drawer-head h3{font-size:14px;font-weight:600;flex:1}
+  .to-x{width:26px;height:26px;border:none;background:transparent;border-radius:6px;font-size:16px;color:var(--faint);cursor:pointer}
+  .to-x:hover{background:var(--gray-bg);color:var(--sub)}
+  .to-drawer-body{padding:16px 18px;overflow:auto;font-size:12.5px;flex:1}
+  .to-dlabel{font-size:11px;color:var(--faint);margin:12px 0 4px}
+  .to-dlabel:first-child{margin-top:0}
+  .to-dval{color:var(--text);line-height:1.7}
+  .to-kv{display:grid;grid-template-columns:64px 1fr;row-gap:8px;font-size:12.5px}
+  .to-kv dt{color:var(--faint)}.to-kv dd{color:var(--text)}
+  .to-sub-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line2);font-size:12.5px}
+  .to-sub-item:last-child{border-bottom:none}
+  .to-note{margin-top:14px;padding:10px 12px;background:var(--blue-bg);border-radius:8px;font-size:11.5px;color:#2456c7;line-height:1.7}
+</style>
+
+<div class="to-root" id="toRoot">
+  <div class="to-page">
+    <div class="to-topbar">
+      <div class="to-title">工作项 · 树形大纲<small>原型 · 缩进树 + 折叠展开 + 父级进度聚合 · 2026-11-13</small></div>
+      <div class="to-spacer"></div>
+      <div class="to-search">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8f959e" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="toSearch" type="text" placeholder="搜索标题，自动展开命中路径" />
+      </div>
+      <button class="to-btn" id="toExpandAll">全部展开</button>
+      <button class="to-btn" id="toCollapseAll">全部折叠</button>
+      <div class="to-seg" role="group" aria-label="密度">
+        <button id="toComfort" class="on">舒适</button>
+        <button id="toCompact">紧凑</button>
+      </div>
+      <button class="to-btn primary">＋ 新建工作项</button>
+    </div>
+
+    <div class="to-tree">
+      <div class="to-thead">
+        <div>标题</div><div>状态</div><div>优先级</div><div class="to-hide-m">负责人</div><div class="to-hide-m">截止</div><div>进度</div><div></div>
+      </div>
+      <div class="to-body" id="toBody"></div>
+      <div class="to-foot" id="toFoot"></div>
+    </div>
+  </div>
+
+  <div class="to-mask" id="toMask"></div>
+  <aside class="to-drawer" id="toDrawer" aria-label="工作项详情">
+    <div class="to-drawer-head">
+      <span id="toDType" class="to-type" style="font-size:13px"></span>
+      <h3 id="toDTitle"></h3>
+      <button class="to-x" id="toClose" aria-label="关闭">×</button>
+    </div>
+    <div class="to-drawer-body" id="toDBody"></div>
+  </aside>
+</div>
+
+<script>
+(function(){
+  /* ---------- 数据：里程碑 → 需求 → 任务 三层 ---------- */
+  var N = function(id,parent,depth,type,title,status,pri,owner,due,prog,est,desc,children){
+    return {id:id,parent:parent,depth:depth,type:type,title:title,status:status,pri:pri,owner:owner,due:due,prog:prog,est:est,desc:desc,children:children||[]};
+  };
+  var tree = [
+    N("m1",null,0,"milestone","发布管理 v2.0",null,"P0","孔祥金","12-06",null,64,"里程碑口径：三项需求全部交付且 v158 上线生产。",[
+      N("r1","m1",1,"req","跨版本发布","doing","P0","孔祥金","11-20",null,24,"发布计划可跨项目勾选并预填，服务端逐项目校验。",[
+        N("t1","r1",2,"task","服务端逐项目校验","done","P0","孔祥金","11-12",100,8,"已完成并随 v150 部署。",[]),
+        N("t2","r1",2,"task","只读项目禁选交互","doing","P1","陈某某","11-18",60,5,"进行中：勾选态与禁用提示。",[]),
+        N("t3","r1",2,"task","发布计划下拉标注偏差","todo","P2","王某某","11-25",0,3,"待启动。",[])
+      ]),
+      N("r2","m1",1,"req","交付证据三钩子","doing","P1","孔祥金","12-02",null,40,"交付说明 / 变更台账 / 发布证据三个钩子在发布流程中强制留痕。",[
+        N("t4","r2",2,"task","交付说明钩子","done","P1","孔祥金","11-10",100,6,"已完成。",[]),
+        N("t5","r2",2,"task","变更台账钩子","doing","P1","陈某某","11-22",40,8,"进行中。",[]),
+        N("t6","r2",2,"task","发布证据钩子","todo","P2","王某某","12-02",0,8,"待启动，依赖发布记录 SHA256。",[])
+      ]),
+      N("r3","m1",1,"req","变更台账","todo","P2","陈某某","12-06",null,50,"面向审计的变更记录台账。",[
+        N("t7","r3",2,"task","台账字段设计","done","P2","陈某某","11-08",100,4,"已完成。",[]),
+        N("t8","r3",2,"task","台账与动态联动","todo","P2","陈某某","12-06",0,10,"待启动。",[])
+      ])
+    ]),
+    N("m2",null,0,"milestone","性能专项","doing","P1","王某某","12-20",null,12,"列表大数据量场景的性能基线。",[
+      N("r4","m2",1,"req","列表大数据量优化","doing","P1","王某某","12-20",null,12,"工作项列表 500+ 条时的渲染与加载优化。",[
+        N("t9","r4",2,"task","虚拟滚动调研","todo","P2","王某某","12-05",0,5,"待启动。",[]),
+        N("t10","r4",2,"task","分页与续拉优化","doing","P1","王某某","12-12",30,8,"进行中：版本分组已支持自动续拉至 500 上限。",[])
+      ])
+    ])
+  ];
+
+  var byId = {};
+  (function walk(list,parent){
+    list.forEach(function(n,i){
+      n.parent = parent||null;
+      n.index = i;
+      n.isFirst = i===0;
+      n.isLast = i===list.length-1;
+      byId[n.id]=n;
+      if(n.children.length) n.prog = Math.round(n.children.reduce(function(s,c){return s+c.prog;},0)/n.children.length);
+      walk(n.children,n.id);
+    });
+  })(tree,null);
+
+  /* ---------- 渲染 ---------- */
+  var collapsed = {"m2":true};
+  var query = "";
+  var root = document.getElementById("toRoot");
+  var body = document.getElementById("toBody");
+  var foot = document.getElementById("toFoot");
+
+  var TYPE = {milestone:{icon:"▣",color:"#7f3bf5"},req:{icon:"◆",color:"#3370ff"},task:{icon:"·",color:"#646a73"}};
+  var STATUS = {doing:{cls:"to-doing",label:"进行中"},done:{cls:"to-done",label:"已完成"},todo:{cls:"to-todo",label:"待办"},blocked:{cls:"to-blocked",label:"已阻塞"}};
+  function progColor(p){ return p>=100?"#34c724":p>0?"#3370ff":"#d0d5dd"; }
+
+  function match(n){
+    if(!query) return true;
+    if(n.title.toLowerCase().indexOf(query)!==-1) return true;
+    return n.children.some(function(c){return matchDeep(c);});
+  }
+  function matchDeep(n){
+    if(n.title.toLowerCase().indexOf(query)!==-1) return true;
+    return n.children.some(matchDeep);
+  }
+  function hasMatch(n){ return n.title.toLowerCase().indexOf(query)!==-1; }
+
+  function visible(n, ancestorsCollapsed){
+    var anc = ancestorsCollapsed || (n.parent && isHiddenByAncestor(n.parent));
+    if(anc) return;
+    if(query){
+      if(!match(n)) return;
+      renderRow(n,false);
+      n.children.forEach(function(c){ visible(c,false); });
+      return;
+    }
+    renderRow(n, !!collapsed[n.id]);
+    if(collapsed[n.id]) return;
+    n.children.forEach(function(c){ visible(c,false); });
+  }
+  function isHiddenByAncestor(id){
+    var p = byId[id] && byId[id].parent;
+    while(p){ if(collapsed[p]) return true; p = byId[p].parent; }
+    return false;
+  }
+
+  function renderRow(n, isCollapsed){
+    var row = document.createElement("div");
+    row.className = "to-row" + (n.isFirst?" first-child":"") + (n.isLast?" last-child":"");
+    row.dataset.id = n.id;
+    var t = TYPE[n.type];
+    var indentHtml = "";
+    for(var d=0; d<n.depth; d++){
+      indentHtml += '<span class="to-indent" data-d="'+d+'"></span>';
+    }
+    var caret = n.children.length ? '<span class="to-caret'+(isCollapsed?"":" open")+'" data-caret="'+n.id+'">▸</span>' : '<span class="to-caret leaf">▸</span>';
+    var hi = query && hasMatch(n) ? '<span class="t" style="background:#ffe9a8;border-radius:2px">'+escapeHtml(n.title)+'</span>' : '<span class="t">'+escapeHtml(n.title)+'</span>';
+    var st = n.status ? '<span class="to-pill '+STATUS[n.status].cls+'">'+STATUS[n.status].label+'</span>' : '<span style="color:'+t.color+';font-size:11px;font-weight:600">里程碑</span>';
+    var pri = n.pri ? '<span class="to-pri to-pri-'+n.pri.toLowerCase()+'">'+n.pri+'</span>' : '<span></span>';
+    var late = n.due && n.due < "11-13" && n.prog<100;
+    row.innerHTML =
+      '<div>'+indentHtml+caret+'<span class="to-title-cell" style="color:'+(n.children.length?'':'inherit')+'">'+hi+'</span>'+
+        '<button class="to-quick" data-add="'+n.id+'" title="新建子项">＋</button></div>'+
+      '<div>'+st+'</div>'+
+      '<div>'+pri+'</div>'+
+      '<div class="to-hide-m"><span class="to-ava" style="background:'+avatarColor(n.owner)+'">'+n.owner.charAt(0)+'</span><span class="to-who">'+n.owner+'</span></div>'+
+      '<div class="to-hide-m"><span class="to-due'+(late?" late":"")+'">'+n.due+(late?" ⚠":"")+'</span></div>'+
+      '<div class="to-prog"><span class="bar"><i style="width:'+n.prog+'%;background:'+progColor(n.prog)+'"></i></span><span class="pct">'+n.prog+'%</span></div>'+
+      '<div><span class="to-est">'+n.est+'h</span></div>';
+    body.appendChild(row);
+  }
+
+  function avatarColor(name){
+    var colors=["#3370ff","#7f3bf5","#14a87c","#ff8800","#f54a45"];
+    var h=0; for(var i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))>>>0;
+    return colors[h%colors.length];
+  }
+  function escapeHtml(s){return s.replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+  function stats(){
+    var ms=tree.length, reqs=0, tasks=0, done=0, est=0;
+    Object.keys(byId).forEach(function(id){
+      var n=byId[id];
+      if(n.type==="req")reqs++;
+      if(n.type==="task"){tasks++;est+=n.est;if(n.prog===100)done++;}
+    });
+    return {ms:ms,reqs:reqs,tasks:tasks,done:done,est:est};
+  }
+
+  function render(){
+    body.innerHTML="";
+    tree.forEach(function(n){ visible(n,false); });
+    if(!body.children.length){ body.innerHTML='<div class="to-empty">没有匹配「'+escapeHtml(query)+'」的工作项</div>'; }
+    var s=stats();
+    foot.innerHTML='<span>里程碑 <b>'+s.ms+'</b></span><span>需求 <b>'+s.reqs+'</b></span><span>任务 <b>'+s.tasks+'</b>（已完成 <b>'+s.done+'</b>）</span><span>预估合计 <b>'+s.est+'h</b></span><span style="margin-left:auto">父级进度 = 直接子项平均，随子项状态实时聚合</span>';
+  }
+
+  /* ---------- 交互 ---------- */
+  body.addEventListener("click",function(e){
+    var caret = e.target.closest("[data-caret]");
+    if(caret){ var id=caret.dataset.caret; if(collapsed[id])delete collapsed[id]; else collapsed[id]=true; render(); return; }
+    var add = e.target.closest("[data-add]");
+    if(add){ e.stopPropagation(); alert("演示原型：此处弹出「新建子项」，父级自动选中为 "+byId[add.dataset.add].title); return; }
+    var row = e.target.closest(".to-row");
+    if(row) openDrawer(byId[row.dataset.id]);
+  });
+
+  document.getElementById("toExpandAll").onclick=function(){ collapsed={}; render(); };
+  document.getElementById("toCollapseAll").onclick=function(){ collapsed={}; Object.keys(byId).forEach(function(id){ if(byId[id].children.length) collapsed[id]=true; }); render(); };
+  document.getElementById("toSearch").addEventListener("input",function(e){ query=e.target.value.trim().toLowerCase(); render(); });
+  document.getElementById("toComfort").onclick=function(){ this.classList.add("on"); document.getElementById("toCompact").classList.remove("on"); root.classList.remove("compact"); };
+  document.getElementById("toCompact").onclick=function(){ this.classList.add("on"); document.getElementById("toComfort").classList.remove("on"); root.classList.add("compact"); };
+
+  var mask=document.getElementById("toMask"), drawer=document.getElementById("toDrawer");
+  function openDrawer(n){
+    document.getElementById("toDType").textContent=TYPE[n.type].icon;
+    document.getElementById("toDType").style.color=TYPE[n.type].color;
+    document.getElementById("toDTitle").textContent=n.title;
+    var subs = n.children.length ? n.children.map(function(c){
+      var st=c.status?STATUS[c.status]:null;
+      return '<div class="to-sub-item"><span style="color:'+TYPE[c.type].color+'">'+TYPE[c.type].icon+'</span><span style="flex:1">'+escapeHtml(c.title)+'</span>'+(st?'<span class="to-pill '+st.cls+'">'+st.label+'</span>':'')+'<span class="to-pct" style="color:var(--faint);font-size:11px">'+c.prog+'%</span></div>';
+    }).join("") : '<div style="color:var(--faint)">无子项</div>';
+    document.getElementById("toDBody").innerHTML =
+      '<dl class="to-kv">'+
+      '<dt>状态</dt><dd>'+(n.status?'<span class="to-pill '+STATUS[n.status].cls+'">'+STATUS[n.status].label+'</span>':'—（由子项推导）')+'</dd>'+
+      '<dt>优先级</dt><dd>'+(n.pri?'<span class="to-pri to-pri-'+n.pri.toLowerCase()+'">'+n.pri+'</span>':'—')+'</dd>'+
+      '<dt>负责人</dt><dd>'+n.owner+'</dd>'+
+      '<dt>截止日期</dt><dd>'+n.due+'</dd>'+
+      '<dt>进度</dt><dd><span class="to-prog"><span class="bar"><i style="width:'+n.prog+'%;background:'+progColor(n.prog)+'"></i></span><span class="pct">'+n.prog+'%</span></span></dd>'+
+      '<dt>预估工时</dt><dd>'+n.est+'h</dd></dl>'+
+      '<div class="to-dlabel">描述</div><div class="to-dval">'+n.desc+'</div>'+
+      '<div class="to-dlabel">子项（'+n.children.length+'）</div>'+subs+
+      '<div class="to-note">说明：本原型演示「树形大纲」的信息架构与交互。实际实现时行数据来自现有列表 API，仅需返回父子关系字段；父级进度沿用 subtaskTotal / subtaskDone 聚合口径，与列表子任务计数列保持一致。</div>';
+    mask.classList.add("show"); drawer.classList.add("show");
+  }
+  function closeDrawer(){ mask.classList.remove("show"); drawer.classList.remove("show"); }
+  mask.onclick=closeDrawer;
+  document.getElementById("toClose").onclick=closeDrawer;
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape")closeDrawer(); });
+
+  render();
+})();
+</script>

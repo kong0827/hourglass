@@ -65,6 +65,8 @@ public class BoardResponse {
     @Data
     public static class Meta {
         private List<NameCount> owners = new ArrayList<NameCount>();
+        /** 测试负责人候选（按显示名快照计数） */
+        private List<NameCount> testOwners = new ArrayList<NameCount>();
         private List<NameCount> pris = new ArrayList<NameCount>();
         private List<CatCount> cats = new ArrayList<CatCount>();
         /** 工作项类型计数（story/task/bug/epic 固定顺序） */
@@ -82,6 +84,8 @@ public class BoardResponse {
         private int versionUnassigned;
         /** 未指定负责人任务数 */
         private int ownerUnassigned;
+        /** 未指定测试负责人（待领取）任务数 */
+        private int testOwnerUnassigned;
         /** 未指定模块任务数 */
         private int catUnassigned;
     }

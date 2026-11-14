@@ -77,10 +77,11 @@ public class BackupExportService {
     private final TaskDependencyMapper dependencyMapper;
     private final TaskBaselineMapper baselineMapper;
     private final ProjectVersionMapper versionMapper;
+    private final com.hourglass.mapper.VersionCommitmentMapper commitmentMapper;
     private final VersionTaskMapper versionTaskMapper;
     private final DemandMapper demandMapper;
 
-    public BackupExportService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper, BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper, TaskCommentMapper commentMapper, TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper, RequirementDocCommentMapper docCommentMapper, RequirementDocMapper requirementDocMapper, DevBranchMapper devBranchMapper, TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper, ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper, DemandMapper demandMapper) {
+    public BackupExportService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper, BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper, TaskCommentMapper commentMapper, TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper, RequirementDocCommentMapper docCommentMapper, RequirementDocMapper requirementDocMapper, DevBranchMapper devBranchMapper, TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper, ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper, DemandMapper demandMapper, com.hourglass.mapper.VersionCommitmentMapper commitmentMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -99,6 +100,7 @@ public class BackupExportService {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.demandMapper = demandMapper;
+        this.commitmentMapper = commitmentMapper;
     }
 
     public BackupData export(String workspaceId) {
@@ -176,6 +178,9 @@ public class BackupExportService {
             b.setOwnerUserId(t.getOwnerUserId());
             b.setRemindTarget(t.getRemindTarget());
             b.setCompletedAt(t.getCompletedAt() == null ? null : t.getCompletedAt().toString());
+            b.setTestOwnerUserId(t.getTestOwnerUserId());
+            b.setTestOwner(t.getTestOwner());
+            b.setTestRequestedAt(t.getTestRequestedAt() == null ? null : t.getTestRequestedAt().toString());
             b.setTestStartedAt(t.getTestStartedAt() == null ? null : t.getTestStartedAt().toString());
             b.setTestFinishedAt(t.getTestFinishedAt() == null ? null : t.getTestFinishedAt().toString());
             b.setSubtasks(subMap.get(t.getId()));
@@ -330,6 +335,15 @@ public class BackupExportService {
 
         /* v8：项目版本与需求池。版本只归属项目，需求池通过 req_id / version_id 关联；
            需求流转日志属于审计记录，与分支时间线同口径不随备份迁移 */
+        Map<String, List<BackupData.BackupCommitment>> commitmentByVersion =
+                new HashMap<String, List<BackupData.BackupCommitment>>();
+        for (com.hourglass.entity.VersionCommitmentTask row : commitmentMapper.selectByWorkspace(workspaceId)) {
+            BackupData.BackupCommitment bc = new BackupData.BackupCommitment();
+            bc.setTaskId(row.getTaskId());
+            bc.setTaskTitle(row.getTaskTitle());
+            bc.setEstimateMinutes(row.getEstimateMinutes());
+            commitmentByVersion.computeIfAbsent(row.getVersionId(), key -> new ArrayList<>()).add(bc);
+        }
         List<BackupData.BackupVersion> versions = new ArrayList<BackupData.BackupVersion>();
         for (ProjectVersion v : versionMapper.selectByWorkspace(workspaceId)) {
             if ("released".equals(v.getStatus()) || v.getReleasedAt() != null) {
@@ -344,6 +358,10 @@ public class BackupExportService {
             bv.setStartDate(v.getStartDate() == null ? null : v.getStartDate().toString());
             bv.setTargetDate(v.getTargetDate() == null ? null : v.getTargetDate().toString());
             bv.setReleasedAt(v.getReleasedAt() == null ? null : v.getReleasedAt().format(ISO_TS));
+            bv.setEndedAt(v.getEndedAt() == null ? null : v.getEndedAt().format(ISO_TS));
+            bv.setEndReason(v.getEndReason());
+            bv.setCommitmentAt(v.getCommitmentAt() == null ? null : v.getCommitmentAt().format(ISO_TS));
+            bv.setCommitment(commitmentByVersion.get(v.getId()));
             bv.setCreatedAt(v.getCreatedAt() == null ? null : v.getCreatedAt().format(ISO_TS));
             bv.setUpdatedAt(v.getUpdatedAt() == null ? null : v.getUpdatedAt().format(ISO_TS));
             versions.add(bv);

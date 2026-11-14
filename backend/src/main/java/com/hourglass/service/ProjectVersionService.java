@@ -8,9 +8,11 @@ import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
+import com.hourglass.entity.VersionCommitmentTask;
 import com.hourglass.mapper.ProjectVersionMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
+import com.hourglass.mapper.VersionCommitmentMapper;
 import com.hourglass.mapper.VersionTaskMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +39,11 @@ public class ProjectVersionService {
     private final VersionReleaseService releaseService;
     /** 删除不可逆：版本自身没有独立时间线，删除后只剩任务侧变更，必须留墓碑 */
     private final DeletionTraceService deletionTrace;
+    private final VersionCommitmentMapper commitmentMapper;
+    /** 交付说明快照可能已对外分享：有快照的版本只能归档，不能删除 */
+    private final com.hourglass.mapper.DeliveryNoteMapper deliveryNotes;
+    /** 发布型里程碑引用版本：有引用的版本不能删除，避免里程碑悬空 */
+    private final com.hourglass.mapper.ProjectMilestoneMapper milestoneMapper;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
     @org.springframework.beans.factory.annotation.Autowired
@@ -47,7 +54,9 @@ public class ProjectVersionService {
                                  ProjectAccessService projectAccess,
                                  DeliveryScopeLock scopeLock, ReleasePermissionService permissions,
                                  com.hourglass.mapper.ReleaseMapper releases, VersionReleaseService releaseService,
-                                 DeletionTraceService deletionTrace) {
+                                 DeletionTraceService deletionTrace, VersionCommitmentMapper commitmentMapper,
+                                 com.hourglass.mapper.DeliveryNoteMapper deliveryNotes,
+                                 com.hourglass.mapper.ProjectMilestoneMapper milestoneMapper) {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.taskMapper = taskMapper;
@@ -58,6 +67,9 @@ public class ProjectVersionService {
         this.releases = releases;
         this.releaseService = releaseService;
         this.deletionTrace = deletionTrace;
+        this.commitmentMapper = commitmentMapper;
+        this.deliveryNotes = deliveryNotes;
+        this.milestoneMapper = milestoneMapper;
     }
 
     public List<ProjectVersion> list(String workspaceId, String reqId) {
@@ -108,8 +120,9 @@ public class ProjectVersionService {
             version.setDoneCount(done);
             version.setProgressPct(tasks.isEmpty() ? 0 : (int) Math.round((double) progressSum / tasks.size()));
             if (userId != null) {
-                version.setCanManageReleasePlan(permissions.canManageProject(userId, workspaceId, reqId));
-                version.setCanPublish(permissions.canManageProject(userId, workspaceId, reqId));
+                boolean manage = permissions.canManageProject(userId, workspaceId, reqId) && !isEnded(version.getStatus());
+                version.setCanManageReleasePlan(manage);
+                version.setCanPublish(manage);
             }
         }
         return versions;
@@ -150,6 +163,9 @@ public class ProjectVersionService {
         if (req.getTaskIds() != null) {
             applyTasks(userId, version, req.getTaskIds(), req.getTaskChangeReason());
         }
+        if ("active".equals(version.getStatus())) {
+            captureCommitment(version);
+        }
         /* 版本域唯一缺日志的动作：创建后与 update/start 一样进 version_log */
         releaseService.log(userId, workspaceId, version.getId(), "version_create", null, null, version);
         return getForUpdate(workspaceId, version.getId());
@@ -174,6 +190,9 @@ public class ProjectVersionService {
         if ("released".equals(old.getStatus())) {
             throw AppException.badRequest("已发布的版本不能编辑");
         }
+        if (isEnded(old.getStatus())) {
+            throw AppException.badRequest("已关闭或已取消的版本不能编辑");
+        }
         /* 与前端 contentLocked 同口径：正式交付后版本内容只读；新范围请创建新版本或独立发布事件 */
         if (!taskMapper.selectVersionFormalSuccessIdsForScope(workspaceId, id).isEmpty()) {
             throw AppException.badRequest("版本已有成功正式发布记录，版本内容只读");
@@ -182,12 +201,17 @@ public class ProjectVersionService {
         old.setDescription(Texts.trimToNull(req.getDescription()));
         old.setStartDate(req.getStartDate());
         old.setTargetDate(req.getTargetDate());
-        old.setStatus(normalizeStatus(req.getStatus()));
+        String nextStatus = normalizeStatus(req.getStatus());
+        boolean becameActive = "planned".equals(old.getStatus()) && "active".equals(nextStatus);
+        old.setStatus(nextStatus);
         if (versionMapper.update(old) != 1) {
             throw new AppException(409, "版本已被其他人修改，请刷新后重试");
         }
         if (req.getTaskIds() != null) {
             applyTasks(userId, old, req.getTaskIds(), req.getTaskChangeReason());
+        }
+        if (becameActive) {
+            captureCommitment(old);
         }
         releaseService.log(userId, workspaceId, id, "version_update", req.getTaskChangeReason(), null, req);
         return getForUpdate(workspaceId, id);
@@ -205,6 +229,9 @@ public class ProjectVersionService {
         if ("released".equals(version.getStatus())) {
             throw AppException.badRequest("已发布的版本不能重新开始开发");
         }
+        if (isEnded(version.getStatus())) {
+            throw AppException.badRequest("已关闭或已取消的版本不能重新开始开发");
+        }
         if (!"active".equals(version.getStatus())
                 && !taskMapper.selectVersionFormalSuccessIdsForScope(workspaceId, id).isEmpty()) {
             throw AppException.badRequest("版本已有成功正式发布记录，版本内容只读");
@@ -217,8 +244,45 @@ public class ProjectVersionService {
             if (versionMapper.update(version) != 1) {
                 throw new AppException(409, "版本已被其他人修改");
             }
+            captureCommitment(version);
             releaseService.log(userId, workspaceId, id, "version_start", null, null, version);
         }
+        return getForUpdate(workspaceId, id);
+    }
+
+    /**
+     * 关闭 / 取消：版本作为交付批次结束，但不等同于发布。
+     * 项目可写成员即可操作，不依赖发布计划权限；原因与时间必须留痕。
+     */
+    @Transactional
+    public ProjectVersion end(String userId, String workspaceId, String id, String status, String reasonRaw) {
+        if (!"closed".equals(status) && !"canceled".equals(status)) {
+            throw AppException.badRequest("版本结束状态只能是关闭或取消");
+        }
+        ProjectVersion version = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, version.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, version.getReqId());
+        scopeLock.lockProjects(workspaceId, version.getReqId());
+        version = getForUpdate(workspaceId, id);
+        projectAccess.assertWriteForUpdate(workspaceId, userId, version.getReqId());
+        if ("released".equals(version.getStatus())) {
+            throw AppException.badRequest("已发布的版本不能关闭或取消");
+        }
+        if (isEnded(version.getStatus())) {
+            throw AppException.badRequest("版本已关闭或已取消，不能重复操作");
+        }
+        String reason = Texts.trimToNull(reasonRaw);
+        if (reason == null) {
+            throw AppException.badRequest("请填写关闭或取消原因");
+        }
+        if (!taskMapper.selectVersionOpenPlanIdsForScope(workspaceId, id).isEmpty()) {
+            throw new AppException(422, "版本仍有草稿或就绪的发布计划，请先完成或取消计划");
+        }
+        if (versionMapper.endVersion(workspaceId, id, status, reason, version.getRevision()) != 1) {
+            throw new AppException(409, "版本已被其他人修改，请刷新后重试");
+        }
+        releaseService.log(userId, workspaceId, id,
+                "closed".equals(status) ? "version_close" : "version_cancel", reason, null, status);
         return getForUpdate(workspaceId, id);
     }
 
@@ -252,10 +316,14 @@ public class ProjectVersionService {
             }
         }
         assertNoPlanOrLog(workspaceId, id);
+        if (milestoneMapper.countByVersion(workspaceId, id) > 0) {
+            throw new AppException(422, "版本仍有关联里程碑（含已取消）：里程碑保留历史，版本只能归档不能删除");
+        }
         deletionTrace.recordDelete(workspaceId, userId, "version_delete", "project_version", id,
                 version.getName(), "删除版本「" + version.getName() + "」（"
                         + (version.getReqId() == null ? "未归属项目" : "项目 " + version.getReqId())
                         + "；测试计划中的版本引用一并解除）");
+        commitmentMapper.deleteByVersion(workspaceId, id);
         if (versionMapper.deleteById(workspaceId, id) != 1) {
             throw new AppException(409, "版本已变化，请刷新后重试");
         }
@@ -269,6 +337,7 @@ public class ProjectVersionService {
         for (ProjectVersion version : versionMapper.selectByReqForUpdate(workspaceId, reqId)) {
             assertNoPlanOrLog(workspaceId, version.getId());
         }
+        commitmentMapper.deleteByReq(workspaceId, reqId);
         versionTaskMapper.deleteByReq(workspaceId, reqId);
         versionMapper.deleteByReq(workspaceId, reqId);
     }
@@ -288,6 +357,9 @@ public class ProjectVersionService {
         if (!taskMapper.selectVersionPlanIdsForScope(workspaceId, versionId).isEmpty()
                 || !taskMapper.selectVersionAuditIdsForScope(workspaceId, versionId).isEmpty()) {
             throw new AppException(422, "版本已有发布计划或审计历史，请归档而不是删除");
+        }
+        if (!deliveryNotes.selectSnapshotIdsByVersion(workspaceId, versionId).isEmpty()) {
+            throw new AppException(422, "版本已有交付说明快照（可能已对外分享），请归档而不是删除");
         }
     }
 
@@ -342,7 +414,14 @@ public class ProjectVersionService {
         return "active".equals(raw) ? "active" : "planned";
     }
 
+    private static boolean isEnded(String status) {
+        return "closed".equals(status) || "canceled".equals(status);
+    }
+
     private void applyTasks(String userId, ProjectVersion version, List<String> requestedIds, String reasonRaw) {
+        if (isEnded(version.getStatus())) {
+            throw AppException.badRequest("已关闭或已取消的版本不能调整工作项");
+        }
         Set<String> selected = new LinkedHashSet<String>();
         for (String raw : requestedIds) {
             String id = Texts.trimToNull(raw);
@@ -397,6 +476,35 @@ public class ProjectVersionService {
                     Collections.singletonMap("versionIds", oldIds), Collections.singletonMap("versionIds", newIds), reason);
         }
         releaseService.log(userId, version.getWorkspaceId(), version.getId(), "version_scope", reason, null, selected);
+    }
+
+    /**
+     * 承诺基线：版本进入开发中时冻结当时的工作项与预估。
+     * 只写一次（commitment_at 为空时），后续增删工作项只体现为「较基线新增 / 移出」。
+     */
+    private void captureCommitment(ProjectVersion version) {
+        if (version.getCommitmentAt() != null) {
+            return;
+        }
+        if (versionMapper.markCommitment(version.getWorkspaceId(), version.getId()) != 1) {
+            return;
+        }
+        List<Task> tasks = versionTaskMapper.selectCommitmentTasks(version.getWorkspaceId(), version.getId());
+        List<VersionCommitmentTask> rows = new ArrayList<VersionCommitmentTask>();
+        for (Task task : tasks) {
+            VersionCommitmentTask row = new VersionCommitmentTask();
+            row.setWorkspaceId(version.getWorkspaceId());
+            row.setVersionId(version.getId());
+            row.setTaskId(task.getId());
+            String title = task.getTitle() == null ? "" : task.getTitle();
+            row.setTaskTitle(title.length() > 120 ? title.substring(0, 120) : title);
+            row.setEstimateMinutes(task.getEstimateMinutes());
+            rows.add(row);
+        }
+        if (!rows.isEmpty() && commitmentMapper.insertBatch(version.getWorkspaceId(), version.getId(), rows) != rows.size()) {
+            throw new AppException(409, "承诺基线写入冲突，请刷新后重试");
+        }
+        version.setCommitmentAt(java.time.LocalDateTime.now());
     }
 
     private void validateDates(ProjectVersionSaveRequest request) {

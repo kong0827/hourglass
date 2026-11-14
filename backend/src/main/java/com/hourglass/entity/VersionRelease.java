@@ -11,6 +11,8 @@ public class VersionRelease {
     private String id;
     private String workspaceId;
     private String reqId;
+    /** 项目内发布记录编号，展示为 REL-001（sql/82） */
+    private Integer releaseNo;
     private String versionId;
     private String planId;
     private Long planRevision;
@@ -26,6 +28,8 @@ public class VersionRelease {
     private String artifactDigest;
     private String operation;
     private String relatedReleaseId;
+    /** 关联事件的编号，读取时按 relatedReleaseId 现查（可能指向别的版本，故不随记录定格） */
+    private Integer relatedReleaseNo;
     private String executorUserId;
     private String executorName;
     private String deviationReason;

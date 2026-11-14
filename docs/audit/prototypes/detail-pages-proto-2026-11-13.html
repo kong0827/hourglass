@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>工作项 / 需求详情 · 布局与交互原型（2026-11-13）</title>
+<style>
+:root{
+  --bg:#F5F6F8; --surface:#FFFFFF; --sunken:#F2F4F7; --hover:#F7F9FC;
+  --line:#E4E7EC; --line-soft:#EEF0F3; --line-strong:#D0D5DD;
+  --text:#101828; --text2:#475467; --text3:#667085; --faint:#98A2B3;
+  --blue:#2563EB; --blue-soft:#EFF4FF; --blue-border:#BFD3FE; --blue-fg:#1D4ED8;
+  --green:#12B76A; --green-soft:#ECFDF3; --green-border:#A6F4C5; --green-fg:#067647;
+  --orange:#F79009; --orange-soft:#FFFAEB; --orange-border:#FEDF89; --orange-fg:#B54708;
+  --red:#F04438; --red-soft:#FEF3F2; --red-border:#FDA29B; --red-fg:#B42318;
+  --purple:#7A5AF8; --purple-soft:#F4F3FF; --purple-border:#D9D6FE; --purple-fg:#5B3FD1;
+  --r-sm:8px; --r-md:10px; --r-lg:12px; --pill:999px;
+  --shadow:0 12px 32px -8px rgba(16,24,40,.16),0 4px 8px -4px rgba(16,24,40,.08);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:var(--font);color:var(--text);background:var(--bg);font-size:13px;-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font-family:var(--font)}
+h1,h2,h3,h4,p{margin:0}
+.stage{position:fixed;inset:0;overflow:hidden}
+
+/* ---------- 背景：被抽屉压住的看板 ---------- */
+.board-bg{position:absolute;inset:0;padding:0 32px 24px;background:#F7F8FA}
+.bg-top{height:58px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);background:#fff;margin:0 -32px;padding:0 32px}
+.bg-brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+.bg-brand .mark{width:24px;height:24px;border-radius:7px;background:linear-gradient(150deg,#2563EB,#7A5AF8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+.bg-crumb{color:var(--text3);font-size:12px}
+.bg-tabs{display:flex;gap:18px;font-size:12.5px;color:var(--text3);margin-left:12px}
+.bg-tabs b{color:var(--text);font-weight:600;border-bottom:2px solid var(--blue);padding-bottom:17px;margin-bottom:-18px}
+.bg-sp{flex:1}
+.bg-btn{height:28px;padding:0 11px;border:1px solid var(--line-strong);border-radius:7px;background:#fff;color:var(--text2);font-size:12px}
+.bg-btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.bg-filter{display:flex;align-items:center;gap:8px;padding:12px 0;flex-wrap:wrap}
+.bg-chip{height:25px;padding:0 9px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--text2);font-size:11.5px;display:inline-flex;align-items:center;gap:5px}
+.bg-chip.on{background:var(--blue-soft);border-color:var(--blue-border);color:var(--blue-fg)}
+.bg-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:4px}
+.bg-col{background:#F2F4F7;border-radius:10px;padding:10px;min-height:520px}
+.bg-col-h{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:650;color:var(--text2);padding:2px 4px 9px}
+.bg-col-h .n{color:var(--faint);font-weight:400}
+.bg-card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px}
+.bg-card .t{font-size:12px;font-weight:600;line-height:1.45;color:var(--text2)}
+.bg-card .m{font-size:10.5px;color:var(--faint);margin-top:5px;display:flex;justify-content:space-between}
+.bg-card .bar{height:4px;border-radius:2px;background:var(--line-soft);margin-top:7px;overflow:hidden}
+.bg-card .bar i{display:block;height:100%;background:var(--blue);border-radius:2px}
+.scrim{position:absolute;inset:0;background:rgba(16,24,40,.34);backdrop-filter:saturate(.9)}
+.stage.mobile .board-bg{filter:blur(6px)}
+.stage.mobile .scrim{background:rgba(16,24,40,.46)}
+
+/* ---------- 原型控制条 ---------- */
+.proto-bar{position:fixed;left:20px;top:16px;width:404px;z-index:12;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:12px;padding:7px 8px;box-shadow:var(--shadow)}
+.proto-bar .name{font-size:12px;font-weight:650;padding:0 2px;white-space:nowrap;width:100%}
+.proto-bar .name span{font-weight:400;color:var(--faint);margin-left:5px}
+.pb-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.pb-seg button{height:26px;padding:0 9px;border:0;border-right:1px solid var(--line);background:#fff;color:var(--text3);font-size:11.5px;cursor:pointer}
+.pb-seg button:last-child{border-right:0}
+.pb-seg button.on{background:var(--blue-soft);color:var(--blue-fg);font-weight:600}
+.pb-btn{height:26px;padding:0 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--text2);font-size:11.5px;cursor:pointer}
+.pb-btn:hover{border-color:var(--blue-border);color:var(--blue-fg)}
+.pb-btn.on{background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg);font-weight:600}
+
+/* ---------- 标注 ---------- */
+.annot-box{position:fixed;left:20px;top:108px;width:356px;max-height:calc(100vh - 132px);overflow:auto;z-index:11;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);display:none}
+.show-annot .annot-box{display:block}
+.annot-box h3{font-size:13px;font-weight:700;margin-bottom:2px}
+.annot-box .sub{font-size:11.5px;color:var(--faint);line-height:1.6;margin-bottom:10px}
+.annot-box ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.annot-box li{display:flex;gap:8px;font-size:11.5px;line-height:1.6;color:var(--text2)}
+.annot-box li b{font-weight:600;color:var(--text)}
+.annot-box .n{flex:none;width:18px;height:18px;border-radius:50%;background:var(--orange);color:#fff;font-size:10.5px;display:flex;align-items:center;justify-content:center;font-weight:700;margin-top:1px}
+.annot-point{display:none;position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;background:var(--orange);color:#fff;font-size:10.5px;font-weight:700;align-items:center;justify-content:center;z-index:8;box-shadow:0 0 0 2px #fff;font-style:normal}
+.show-annot .annot-point{display:flex}
+.stage.mobile .annot-box{top:108px;width:330px}
+
+/* ---------- 抽屉外壳 ---------- */
+.shell{position:absolute;top:0;right:0;bottom:0;width:1000px;max-width:100vw;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;box-shadow:-18px 0 44px -12px rgba(16,24,40,.18);z-index:3}
+.shell[hidden]{display:none}
+.stage.mobile .shell{left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%,-50%);width:390px;height:820px;border:8px solid #111827;border-radius:36px;box-shadow:0 30px 60px -20px rgba(0,0,0,.45);overflow:hidden;background:#fff}
+.stage.mobile .shell:before{content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:86px;height:18px;border-radius:0 0 12px 12px;background:#111827;z-index:20;pointer-events:none}
+
+/* ---------- 头部 ---------- */
+.d-head{flex:none;padding:14px 20px 0;background:#fff;border-bottom:1px solid var(--line);position:relative;z-index:6}
+.d-top{display:flex;align-items:flex-start;gap:11px}
+.type-chip{flex:none;width:32px;height:32px;border-radius:9px;background:var(--blue-soft);color:var(--blue-fg);display:flex;align-items:center;justify-content:center;margin-top:1px}
+.type-chip.demand{background:var(--purple-soft);color:var(--purple-fg)}
+.type-chip.bug{background:var(--red-soft);color:var(--red-fg)}
+.type-label{font-size:10.5px;font-weight:650;letter-spacing:.3px}
+.d-title-wrap{flex:1;min-width:0;padding-top:1px}
+.d-title-line{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.d-title{font-size:16.5px;font-weight:650;line-height:1.45;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;border-bottom:1px dashed transparent;cursor:text}
+.d-title:hover{border-bottom-color:var(--line-strong)}
+.d-title.editing{white-space:normal;outline:none;border-bottom-color:var(--blue);background:#fff}
+.d-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:4px;font-size:11.5px;color:var(--text3)}
+.d-meta .sep{color:#D0D5DD}
+.d-meta .who{display:inline-flex;align-items:center;gap:5px;color:var(--text2)}
+.d-acts{display:flex;align-items:center;gap:5px;flex:none;padding-top:1px}
+.icon-btn{width:30px;height:30px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--text3);display:inline-flex;align-items:center;justify-content:center;font-size:17px;line-height:1;cursor:pointer}
+.icon-btn:hover{background:var(--sunken);color:var(--text)}
+.icon-btn.bordered{border-color:var(--line);background:#fff;font-size:14px}
+.btn{height:30px;padding:0 11px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--text2);font-size:12px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--blue-border);color:var(--blue-fg)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.btn.primary:hover{opacity:.92;color:#fff}
+.btn.soft{background:var(--sunken);border-color:transparent;color:var(--text2)}
+.btn.sm{height:26px;padding:0 9px;font-size:11.5px;border-radius:7px}
+.btn.link{border:0;background:none;color:var(--blue-fg);padding:0;height:auto;font-size:11.5px}
+.btn.link:hover{text-decoration:underline}
+.d-tabs{display:flex;gap:2px;margin-top:11px;position:relative}
+.d-tab{height:37px;padding:0 11px;border:0;border-bottom:2px solid transparent;background:none;color:var(--text3);font-size:12.5px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
+.d-tab:hover{color:var(--text)}
+.d-tab.on{color:var(--blue-fg);border-bottom-color:var(--blue);font-weight:650}
+.d-tab .cnt{min-width:17px;height:16px;padding:0 5px;border-radius:var(--pill);background:var(--sunken);color:var(--text3);font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+.d-tab.on .cnt{background:var(--blue-soft);color:var(--blue-fg)}
+
+/* ---------- 状态胶囊 / 菜单 ---------- */
+.menu-wrap{position:relative;display:inline-flex}
+.status{display:inline-flex;align-items:center;gap:6px;height:23px;padding:0 8px 0 9px;border-radius:var(--pill);border:1px solid;font-size:11px;font-weight:650;cursor:pointer;white-space:nowrap;background:#fff}
+.status .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.status .caret{font-size:9px;margin-left:1px;opacity:.75}
+.status.todo{background:var(--sunken);border-color:var(--line);color:var(--text2)}
+.status.doing{background:var(--blue-soft);border-color:var(--blue-border);color:var(--blue-fg)}
+.status.test{background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg)}
+.status.done{background:var(--green-soft);border-color:var(--green-border);color:var(--green-fg)}
+.status.review{background:var(--orange-soft);border-color:var(--orange-border);color:var(--orange-fg)}
+.status.pass{background:var(--green-soft);border-color:var(--green-border);color:var(--green-fg)}
+.menu{position:absolute;top:calc(100% + 6px);left:0;z-index:9;min-width:188px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:4px}
+.menu[hidden]{display:none}
+.menu button{width:100%;height:30px;padding:0 9px;border:0;background:none;border-radius:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer;text-align:left}
+.menu button:hover{background:var(--hover);color:var(--text)}
+.menu button .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.menu .sep{height:1px;background:var(--line-soft);margin:4px 2px}
+.menu .hint{padding:5px 9px 3px;font-size:10.5px;color:var(--faint);line-height:1.5}
+.menu.danger button{color:var(--red-fg)}
+
+/* ---------- 主体 ---------- */
+.d-body{flex:1;min-height:0;overflow-y:auto;padding:16px 20px 26px;background:#fff;overscroll-behavior:contain}
+.pane{display:none}
+.pane.on{display:block}
+.sec{margin-top:18px;position:relative}
+.sec:first-child{margin-top:0}
+.sec-head{display:flex;align-items:center;gap:8px;margin-bottom:7px;position:relative}
+.sec-head h3{font-size:12.5px;font-weight:650;letter-spacing:.1px}
+.sec-head .right{margin-left:auto;display:flex;align-items:center;gap:8px;position:relative}
+.annot-point.lead{right:calc(100% + 7px);top:50%;transform:translateY(-50%)}
+.sec-hint{font-size:11px;color:var(--faint)}
+
+/* 事实条 */
+.facts{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);border-radius:10px;overflow:visible;position:relative}
+.fact{padding:9px 11px 10px;border-right:1px solid var(--line);min-width:0;position:relative}
+.fact:last-child{border-right:0}
+.fact-k{font-size:10.5px;color:var(--text3);display:flex;align-items:center;gap:4px;white-space:nowrap}
+.fact-v{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fact-v .muted{font-weight:400;color:var(--faint);font-size:11.5px}
+.fact .ava{width:18px;height:18px;font-size:9.5px}
+.bar{display:inline-block;width:56px;height:5px;border-radius:3px;background:var(--line-soft);overflow:hidden;flex:none}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--blue)}
+.bar.green i{background:var(--green)}
+.pri{display:inline-flex;height:19px;padding:0 6px;border-radius:5px;align-items:center;font-size:10.5px;font-weight:700;background:var(--red-soft);color:var(--red-fg)}
+
+/* 描述 */
+.desc{font-size:13px;line-height:1.75;color:var(--text2);white-space:pre-line}
+.desc b{color:var(--text);font-weight:600}
+.desc-edit textarea{width:100%;min-height:94px;border:1px solid var(--blue-border);border-radius:8px;padding:9px 10px;font:inherit;line-height:1.7;color:var(--text);resize:vertical;outline:none;background:#fff}
+.desc-edit .row{display:flex;gap:7px;justify-content:flex-end;margin-top:7px}
+.mut{color:var(--faint)}
+
+/* 双栏 */
+.cols{display:grid;grid-template-columns:1.4fr .92fr;gap:13px;margin-top:14px}
+.box{border:1px solid var(--line);border-radius:10px;padding:11px 13px;position:relative;background:#fff}
+.box-head{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.box-head b{font-size:12px;font-weight:650}
+.box-head .right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.box-foot-note{font-size:10.5px;color:var(--faint);line-height:1.6}
+.progline{display:flex;align-items:center;gap:7px;margin:2px 0 6px}
+.progline .bar{flex:1;min-width:0;width:auto;height:4px}
+.progline .pct{font-size:10.5px;color:var(--text3);flex:none}
+
+/* 检查项 */
+.ck{display:flex;gap:8px;align-items:flex-start;padding:6px 0;font-size:12px;border-bottom:1px dashed var(--line-soft);color:var(--text2);line-height:1.5}
+.ck:last-of-type{border-bottom:0}
+.ck input{appearance:none;-webkit-appearance:none;width:15px;height:15px;flex:none;border:1.5px solid var(--line-strong);border-radius:4px;margin:1px 0 0;cursor:pointer;position:relative;background:#fff}
+.ck input:checked{background:var(--blue);border-color:var(--blue)}
+.ck input:checked:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:7px;border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
+.ck.done span{color:var(--faint);text-decoration:line-through}
+.ck-add{margin-top:6px;height:28px;width:100%;border:1px dashed var(--line-strong);border-radius:7px;background:#fff;color:var(--faint);font-size:11.5px;cursor:pointer;text-align:left;padding:0 9px}
+.ck-add:hover{border-color:var(--blue-border);color:var(--blue-fg)}
+
+/* 交付 */
+.kv{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:11.5px;border-bottom:1px dashed var(--line-soft)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--text3);flex:none;width:62px}
+.kv .v{flex:1;min-width:0;color:var(--text2);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;background:var(--sunken);color:var(--text2);font-size:10.5px;font-weight:600;white-space:nowrap}
+.chip.blue{background:var(--blue-soft);color:var(--blue-fg)}
+.chip.warn{background:var(--orange-soft);color:var(--orange-fg)}
+.chip.ok{background:var(--green-soft);color:var(--green-fg)}
+.chip.purple{background:var(--purple-soft);color:var(--purple-fg)}
+.chip.ghost{background:#fff;border:1px solid var(--line);color:var(--text3);font-weight:500}
+
+/* 动态 */
+.acts{display:flex;flex-direction:column;gap:0}
+.act{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid var(--line-soft)}
+.act:last-child{border-bottom:0}
+.ava{width:24px;height:24px;border-radius:50%;background:#E0EAFF;color:#1D4ED8;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none}
+.ava.g{background:#D1FADF;color:#067647}
+.ava.o{background:#FEF0C7;color:#B54708}
+.ava.p{background:#EBE9FE;color:#5B3FD1}
+.act-main{flex:1;min-width:0;font-size:12px;line-height:1.55;color:var(--text2)}
+.act-main b{color:var(--text);font-weight:600}
+.act-main p{margin-top:2px;color:var(--text2)}
+.act-meta{font-size:10.5px;color:var(--faint);margin-top:3px}
+.act-line{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3)}
+.act-line .dot{width:6px;height:6px;border-radius:50%;background:var(--blue);flex:none}
+
+/* 执行页 */
+.timer{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);border-radius:10px}
+.timer .big{font-size:20px;font-weight:700;letter-spacing:-.4px}
+.timer .big small{font-size:11px;font-weight:400;color:var(--faint);margin-left:3px}
+.timer .sp{flex:1}
+.log{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line-soft);font-size:11.5px;color:var(--text2)}
+.log:last-child{border-bottom:0}
+.log .t{color:var(--faint);width:56px;flex:none}
+.log .h{margin-left:auto;font-weight:600}
+.file{display:flex;align-items:center;gap:9px;padding:7px 0;font-size:11.5px}
+.file .ico{width:26px;height:26px;border-radius:6px;background:var(--sunken);color:var(--text3);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex:none}
+.file .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)}
+.file .sz{color:var(--faint);font-size:10.5px}
+.dep{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:11.5px}
+.dep .ty{font-size:10px;color:var(--faint);flex:none}
+.dep .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2);font-weight:600}
+.empty-line{padding:9px 10px;border:1px dashed var(--line);border-radius:8px;color:var(--faint);font-size:11.5px;display:flex;align-items:center;gap:8px}
+
+/* 时间线 */
+.tl{position:relative;padding-left:16px}
+.tl:before{content:"";position:absolute;left:4px;top:4px;bottom:4px;width:1px;background:var(--line)}
+.tl-item{position:relative;padding:0 0 13px}
+.tl-item:last-child{padding-bottom:0}
+.tl-item:before{content:"";position:absolute;left:-15px;top:4px;width:7px;height:7px;border-radius:50%;background:#fff;border:2px solid var(--line-strong)}
+.tl-item.on:before{border-color:var(--blue)}
+.tl-item .h{font-size:11.5px;color:var(--text2);line-height:1.55}
+.tl-item .h b{font-weight:600;color:var(--text)}
+.tl-item .t{font-size:10.5px;color:var(--faint);margin-top:2px}
+
+/* 评论 */
+.composer{border:1px solid var(--line-strong);border-radius:10px;padding:9px 10px;margin-bottom:12px}
+.composer textarea{width:100%;border:0;outline:none;resize:none;font:inherit;line-height:1.6;min-height:44px;color:var(--text)}
+.composer textarea::placeholder{color:var(--faint)}
+.composer-acts{display:flex;align-items:center;gap:8px;margin-top:5px}
+.composer-acts .sp{flex:1}
+.filters{display:flex;gap:6px;margin-bottom:10px}
+.fchip{height:24px;padding:0 9px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--text3);font-size:11px;cursor:pointer}
+.fchip.on{background:var(--blue-soft);border-color:var(--blue-border);color:var(--blue-fg);font-weight:600}
+
+/* 需求：事实 6 格 / 指标 */
+.facts.six{grid-template-columns:repeat(6,1fr)}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.metric{border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.metric .k{font-size:10.5px;color:var(--text3)}
+.metric .v{font-size:15px;font-weight:700;margin-top:2px;letter-spacing:-.2px}
+.metric .v small{font-size:10.5px;color:var(--faint);font-weight:400;margin-left:2px}
+.metric .sub{font-size:10.5px;color:var(--faint);margin-top:1px}
+.wsjf{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;color:var(--text3);padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-top:9px}
+.wsjf b{color:var(--text);font-weight:650}
+.wsjf .score{color:var(--purple-fg);font-weight:700;margin-left:auto}
+.edit-banner{display:none;align-items:center;gap:9px;background:var(--blue-soft);border:1px solid var(--blue-border);border-radius:9px;padding:8px 11px;margin-bottom:12px;font-size:11.5px;color:var(--blue-fg)}
+.edit-banner b{font-weight:650}
+.edit-banner .sp{flex:1}
+.shell.editing .edit-banner{display:flex}
+.shell.editing .d-title,.shell.editing .desc{outline:1px dashed var(--blue-border);outline-offset:3px;border-radius:4px;min-height:20px}
+.shell.editing .d-title{cursor:text}
+.table{width:100%;border-collapse:collapse;font-size:11.5px}
+.table th{text-align:left;font-weight:600;color:var(--text3);font-size:10.5px;padding:7px 8px;background:#FAFBFC;border-bottom:1px solid var(--line);white-space:nowrap}
+.table td{padding:8px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+.table tr:last-child td{border-bottom:0}
+.table .t-title{font-weight:600;color:var(--text2)}
+.table .t-sub{font-size:10.5px;color:var(--faint);margin-top:1px}
+
+/* 手机说明 */
+.mob-note{display:none;position:fixed;left:20px;bottom:22px;width:330px;z-index:11;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);font-size:11.5px;line-height:1.65;color:var(--text2)}
+.mob-note b{display:block;font-size:12px;color:var(--text);margin-bottom:3px}
+.stage.mobile .mob-note{display:block}
+
+/* 移动端抽屉内布局 */
+.stage.mobile .d-head{padding:22px 14px 0}
+.stage.mobile .d-top{gap:8px}
+.stage.mobile .type-chip{width:26px;height:26px;border-radius:7px}
+.stage.mobile .type-chip svg{width:14px;height:14px}
+.stage.mobile .d-title{font-size:15px;white-space:nowrap}
+.stage.mobile .d-title-line{gap:7px;flex-wrap:nowrap}
+.stage.mobile .d-title-wrap{min-width:0}
+.stage.mobile .d-meta{font-size:10.5px;margin-top:3px;gap:5px}
+.stage.mobile .d-meta .hide-m{display:none}
+.stage.mobile .d-acts{gap:1px}
+.stage.mobile .d-acts .btn,.stage.mobile .d-acts .icon-btn.bordered{display:none}
+.stage.mobile .d-acts .icon-btn{width:26px;height:26px;font-size:15px}
+.stage.mobile .d-tabs{margin-top:8px;display:flex}
+.stage.mobile .d-tab{flex:1;justify-content:center;padding:0 3px;font-size:12px;height:35px;gap:4px}
+.stage.mobile .d-tab .cnt{min-width:15px;height:14px;font-size:9px;padding:0 4px}
+.stage.mobile .d-body{padding:12px 14px 74px}
+.stage.mobile .facts,.stage.mobile .facts.six{grid-template-columns:repeat(2,1fr)}
+.stage.mobile .facts:not(.six) .fact:last-child{grid-column:1/-1;border-right:0;border-bottom:0}
+.stage.mobile .fact:nth-child(2n){border-right:0}
+.stage.mobile .fact{border-bottom:1px solid var(--line)}
+.stage.mobile .facts.six .fact:nth-last-child(-n+2){border-bottom:0}
+.stage.mobile .cols{grid-template-columns:1fr;gap:11px}
+.stage.mobile .metrics{grid-template-columns:repeat(3,1fr);gap:7px}
+.stage.mobile .metric{padding:8px}
+.stage.mobile .metric .v{font-size:13px}
+.stage.mobile .tabs-scroll{overflow-x:auto}
+.stage.mobile .sec{margin-top:15px}
+.stage.mobile .d-title-line .status{order:3}
+.stage.mobile .wsjf{font-size:10.5px}
+.stage.mobile .edit-banner{flex-wrap:wrap}
+.stage.mobile .edit-banner .sp{display:none}
+.stage.mobile .table th:nth-child(2),.stage.mobile .table td:nth-child(2),
+.stage.mobile .table th:nth-child(5),.stage.mobile .table td:nth-child(5){display:none}
+.stage.mobile .table th,.stage.mobile .table td{padding:7px 5px}
+
+/* 移动底栏 */
+.mob-bar{display:none;position:absolute;left:0;right:0;bottom:0;height:58px;background:rgba(255,255,255,.97);border-top:1px solid var(--line);padding:0 12px;align-items:center;gap:8px;z-index:18;backdrop-filter:blur(6px)}
+.stage.mobile .mob-bar{display:flex}
+.mob-bar .sp{flex:1}
+.mob-bar .status{height:28px;font-size:11.5px}
+.mob-bar .btn{height:32px}
+.mob-bar .btn.primary{flex:1}
+.mob-bar .btn.danger{flex:1;border-color:var(--red-border);color:var(--red-fg)}
+.stage:not(.mobile) .mob-bar{display:none}
+
+/* 轻提示 / 截图弹层 */
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(10px);background:#101828;color:#fff;font-size:12px;border-radius:var(--pill);padding:8px 15px;opacity:0;pointer-events:none;transition:.18s;z-index:60;box-shadow:var(--shadow)}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.lightbox{position:fixed;inset:0;background:rgba(16,24,40,.7);z-index:55;display:none;align-items:center;justify-content:center;padding:28px}
+.lightbox.on{display:flex}
+.lb-card{width:min(1180px,92vw);max-height:92vh;background:#fff;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,.35)}
+.lb-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.lb-head h3{font-size:13px;font-weight:650}
+.lb-head .sp{flex:1}
+.lb-tabs{display:flex;gap:5px;overflow-x:auto}
+.lb-tab{height:26px;padding:0 9px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--text3);font-size:11px;cursor:pointer;white-space:nowrap}
+.lb-tab.on{background:var(--blue-soft);border-color:var(--blue-border);color:var(--blue-fg);font-weight:600}
+.lb-body{padding:12px;background:#F2F4F7;overflow:auto;flex:1;display:flex;justify-content:center;align-items:flex-start}
+.lb-body img{max-width:100%;max-height:calc(92vh - 120px);border-radius:8px;border:1px solid var(--line);background:#fff}
+.lb-cap{padding:8px 16px 12px;font-size:11px;color:var(--text3)}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- ============ 背景看板 ============ -->
+  <div class="board-bg" aria-hidden="true">
+    <div class="bg-top">
+      <div class="bg-brand"><span class="mark">沙</span>沙漏</div>
+      <span class="bg-crumb">支付业务部 / 清结算与对账平台</span>
+      <div class="bg-tabs"><span>概览</span><b>工作项</b><span>需求池</span><span>文档</span></div>
+      <span class="bg-sp"></span>
+      <button class="bg-btn">搜索</button>
+      <button class="bg-btn primary">＋ 新建</button>
+    </div>
+    <div class="bg-filter">
+      <span class="bg-chip on">我的</span><span class="bg-chip">全部项目</span><span class="bg-chip">未关闭</span><span class="bg-chip">本周到期</span>
+      <span class="bg-sp"></span><span class="bg-chip">看板 ▾</span><span class="bg-chip">分组：负责人</span>
+    </div>
+    <div class="bg-cols">
+      <div class="bg-col">
+        <div class="bg-col-h">待处理 <span class="n">18</span></div>
+        <div class="bg-card"><div class="t">对账单字段扩展</div><div class="m"><span>日终对账 · 12-10</span><span>陈昊</span></div><div class="bar"><i style="width:0"></i></div></div>
+        <div class="bg-card"><div class="t">决策流可视化编排</div><div class="m"><span>决策流 · 12-12</span><span>周敏</span></div><div class="bar"><i style="width:0"></i></div></div>
+        <div class="bg-card"><div class="t">风险事件实时告警</div><div class="m"><span>名单库 · 12-15</span><span>赵磊</span></div><div class="bar"><i style="width:0"></i></div></div>
+      </div>
+      <div class="bg-col">
+        <div class="bg-col-h">进行中 <span class="n">6</span></div>
+        <div class="bg-card"><div class="t">对账结果邮件通知</div><div class="m"><span>清结算 v3.2 · 12-07</span><span>陈昊</span></div><div class="bar"><i style="width:40%"></i></div></div>
+        <div class="bg-card"><div class="t">支付结果页优惠明细</div><div class="m"><span>统一支付 · 12-03</span><span>李娜</span></div><div class="bar"><i style="width:65%"></i></div></div>
+      </div>
+      <div class="bg-col">
+        <div class="bg-col-h">待测试 <span class="n">3</span></div>
+        <div class="bg-card"><div class="t">银联二维码扫码支付</div><div class="m"><span>统一支付 · 11-28</span><span>赵磊</span></div><div class="bar"><i style="width:80%"></i></div></div>
+      </div>
+      <div class="bg-col">
+        <div class="bg-col-h">已完成 <span class="n">24</span></div>
+        <div class="bg-card"><div class="t">对账文件自动下载</div><div class="m"><span>清结算 v3.1</span><span>孙琪</span></div><div class="bar"><i style="width:100%"></i></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <!-- ============ 原型控制条 ============ -->
+  <div class="proto-bar">
+    <div class="name">沙漏 · 详情页原型<span>2026-11-13</span></div>
+    <div class="pb-seg" id="segView">
+      <button class="on" data-view="task">工作项</button>
+      <button data-view="demand">需求</button>
+    </div>
+    <div class="pb-seg" id="segDevice">
+      <button class="on" data-device="desktop">桌面</button>
+      <button data-device="mobile">手机</button>
+    </div>
+    <button class="pb-btn" id="btnAnnot">标注</button>
+    <button class="pb-btn" id="btnShots">现状截图</button>
+  </div>
+
+  <!-- ============ 标注面板 ============ -->
+  <aside class="annot-box">
+    <h3>改了什么 · 为什么</h3>
+    <div class="sub">编号对应原型上的橙色圆点。原型只演示布局与交互，未改业务数据。</div>
+    <ol>
+      <li><span class="n">1</span><div><b>头部只留当前项的动作。</b>状态胶囊是唯一状态入口；「新建工作项」回到列表工具条，不再占用详情头部。</div></li>
+      <li><span class="n">2</span><div><b>需求详情改走同一套右侧抽屉。</b>与工作项同宽；编辑在原位切换，不再出现「详情弹窗 + 编辑抽屉」两层叠加。</div></li>
+      <li><span class="n">3</span><div><b>四个页签承载四类信息。</b>默认「概览」一屏回答到哪了；页签带数量，检查项与动态不用再滚两屏去找。</div></li>
+      <li><span class="n">4</span><div><b>事实条取代散落的表单字段。</b>负责人、截止、进度、投入点开即改，逐字段保存；不再用整页「保存 / 取消」收口。</div></li>
+      <li><span class="n">5</span><div><b>描述默认只读渲染。</b>编辑时才出现工具条；阅读者不必面对富文本编辑器和「必填 8/60」计数。</div></li>
+      <li><span class="n">6</span><div><b>检查项与交付证据并排。</b>进度由检查项派生（2/5 → 40%），不靠手拖滑块；右侧直接看版本、需求、发布与文档。</div></li>
+      <li><span class="n">7</span><div><b>评论与时间线合并成「动态」。</b>概览只留最近两条，其余一键进入；讨论不再埋在右栏底部。</div></li>
+      <li><span class="n">8</span><div><b>移动端头部与底栏固定。</b>关闭、状态、关注始终可见；需求详情打开时不再把焦点跳到文档选择器、从半截开始。</div></li>
+      <li><span class="n">9</span><div><b>需求事实 9 格 → 6 格，交付证据独立成块。</b>工作项表 8 列 → 5 列，版本并到标题下，窄屏隐藏次要列。</div></li>
+    </ol>
+  </aside>
+
+  <div class="mob-note">
+    <b>390 × 844 · 移动端</b>
+    头部固定，页签横排；概览一屏内先给状态、截止、进度，再给描述与检查项。底部操作条固定，关闭与状态不需要滚回顶部。切到「需求」看提交前评审的底栏动作。
+  </div>
+
+  <!-- ============ 工作项详情 ============ -->
+  <section class="shell" id="shellTask" aria-label="工作项详情原型">
+    <header class="d-head">
+      <div class="d-top">
+        <span class="type-chip" title="任务">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.4" y="3.8" width="11.2" height="12.8" rx="2"/><path d="M7.6 3.8V2.6h4.8v1.2M7.4 8.2h5.2M7.4 11.2h3.6"/></svg>
+        </span>
+        <div class="d-title-wrap">
+          <div class="d-title-line">
+            <h1 class="d-title" id="taskTitle" title="点击标题可直接修改">对账结果邮件通知</h1>
+            <span class="menu-wrap">
+              <button class="status doing" id="taskStatus" data-menu="taskStatus"><i class="dot"></i><span>进行中</span><span class="caret">▾</span></button>
+              <div class="menu" id="menuTaskStatus" hidden>
+                <div class="hint">切换状态会同步看板列</div>
+                <button data-status="todo"><i class="dot" style="color:#667085"></i>待处理</button>
+                <button data-status="doing"><i class="dot" style="color:#2563EB"></i>进行中</button>
+                <button data-status="test"><i class="dot" style="color:#F79009"></i>待测试</button>
+                <button data-status="test"><i class="dot" style="color:#F79009"></i>测试中</button>
+                <button data-status="done"><i class="dot" style="color:#12B76A"></i>已完成</button>
+              </div>
+              <i class="annot-point" data-n="1">1</i>
+            </span>
+          </div>
+          <div class="d-meta">
+            <span>清结算与对账平台</span><span class="sep">·</span><span class="hide-m">清结算 v3.2</span><span class="sep hide-m">·</span>
+            <span>截止 12-07</span><span class="sep hide-m">·</span><span class="who hide-m"><i class="ava">陈</i>陈昊</span>
+          </div>
+        </div>
+        <div class="d-acts">
+          <button class="icon-btn bordered" title="关注" aria-label="关注"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg></button>
+          <button class="icon-btn bordered" title="更多操作" aria-label="更多操作">⋯</button>
+          <button class="icon-btn" title="关闭" aria-label="关闭" data-close>×</button>
+        </div>
+      </div>
+      <div class="d-tabs" role="tablist">
+        <button class="d-tab on" data-tab="overview" role="tab">概览</button>
+        <button class="d-tab" data-tab="exec" role="tab">执行 <span class="cnt" id="ckCount">2/5</span></button>
+        <button class="d-tab" data-tab="rel" role="tab">关联</button>
+        <button class="d-tab" data-tab="activity" role="tab">动态 <span class="cnt">4</span></button>
+        <i class="annot-point" data-n="3" style="top:2px;right:-6px">3</i>
+      </div>
+    </header>
+
+    <div class="d-body" id="taskBody">
+      <!-- 概览 -->
+      <div class="pane on" data-pane="overview">
+        <div class="facts">
+          <div class="fact">
+            <div class="fact-k">负责人</div>
+            <div class="fact-v"><i class="ava">陈</i>陈昊</div>
+          </div>
+          <div class="fact">
+            <div class="fact-k">截止</div>
+            <div class="fact-v">12-07 <span class="muted">24 天后</span></div>
+          </div>
+          <div class="fact">
+            <div class="fact-k">优先级</div>
+            <div class="fact-v"><span class="pri">P0</span></div>
+          </div>
+          <div class="fact">
+            <div class="fact-k">进度 <span class="mut">由检查项派生</span></div>
+            <div class="fact-v"><span class="bar"><i id="factBar" style="width:40%"></i></span><span id="factPct">40%</span></div>
+          </div>
+          <div class="fact">
+            <div class="fact-k">实际 / 预估</div>
+            <div class="fact-v">3.5h <span class="muted">/ 8h</span></div>
+          </div>
+          <i class="annot-point" data-n="4" style="top:-7px;right:-7px">4</i>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head">
+            <h3>描述</h3>
+            <span class="right"><button class="btn link" id="btnDescEdit">编辑</button><i class="annot-point lead" data-n="5">5</i></span>
+          </div>
+          <div class="desc" id="descView">对账结果邮件通知。范围：日终对账模块的 v3.2 交付内容；涉及接口、数据与前端交互，完成后同步更新技术文档与发布说明。</div>
+          <div class="desc-edit" id="descEdit" hidden>
+            <textarea id="descInput">对账结果邮件通知。范围：日终对账模块的 v3.2 交付内容；涉及接口、数据与前端交互，完成后同步更新技术文档与发布说明。</textarea>
+            <div class="row"><button class="btn sm" id="btnDescCancel">取消</button><button class="btn sm primary" id="btnDescSave">保存描述</button></div>
+          </div>
+        </div>
+
+        <div class="cols">
+          <div class="box">
+            <div class="box-head">
+              <b>检查清单</b>
+              <span class="chip ghost" id="ckChip">2/5</span>
+              <span class="right"><button class="btn link" data-goto="exec">展开</button></span>
+            </div>
+            <div class="progline"><span class="bar"><i id="ckBar" style="width:40%"></i></span><span class="pct" id="ckPct">40%</span></div>
+            <label class="ck done"><input type="checkbox" checked data-ck="0"><span>梳理通知触发点与去重规则</span></label>
+            <label class="ck done"><input type="checkbox" checked data-ck="1"><span>邮件模板与变量替换</span></label>
+            <label class="ck"><input type="checkbox" data-ck="2"><span>失败重试与告警</span></label>
+            <label class="ck"><input type="checkbox" data-ck="3"><span>联调邮件网关</span></label>
+            <label class="ck"><input type="checkbox" data-ck="4"><span>更新发布说明</span></label>
+            <button class="ck-add">＋ 添加检查项，回车确认</button>
+            <i class="annot-point" data-n="6" style="top:-7px;right:-7px">6</i>
+          </div>
+          <div class="box">
+            <div class="box-head"><b>交付证据</b><span class="right"><button class="btn link" data-goto="rel">查看全部</button></span></div>
+            <div class="kv"><span class="k">计划版本</span><span class="v"><span class="chip blue">清结算 v3.2</span></span></div>
+            <div class="kv"><span class="k">关联需求</span><span class="v">支持微信支付 v3 退款接口</span></div>
+            <div class="kv"><span class="k">生产发布</span><span class="v"><span class="chip warn">未发布</span></span></div>
+            <div class="kv"><span class="k">文档</span><span class="v">对账通知技术方案</span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head">
+            <h3>最近动态</h3>
+            <span class="right"><button class="btn link" data-goto="activity">查看全部 4 条</button><i class="annot-point lead" data-n="7">7</i></span>
+          </div>
+          <div class="acts">
+            <div class="act">
+              <span class="ava">陈</span>
+              <div class="act-main"><b>陈昊</b> 补充了评论<p>邮件网关在测试环境限流，重试间隔改成 5 分钟。</p><div class="act-meta">11-12 16:20</div></div>
+            </div>
+            <div class="act">
+              <span class="ava p">周</span>
+              <div class="act-main"><b>周敏</b> 补充了评论<p>模板里金额字段要保留两位小数，已补到检查项。</p><div class="act-meta">11-12 17:05</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 执行 -->
+      <div class="pane" data-pane="exec">
+        <div class="sec" style="margin-top:0">
+          <div class="sec-head"><h3>检查清单</h3><span class="chip ghost" id="ckChip2">2/5</span><span class="right"><span class="sec-hint">勾选即保存 · 进度自动派生</span></span></div>
+          <div class="box">
+            <label class="ck done"><input type="checkbox" checked data-ck="0"><span>梳理通知触发点与去重规则</span></label>
+            <label class="ck done"><input type="checkbox" checked data-ck="1"><span>邮件模板与变量替换</span></label>
+            <label class="ck"><input type="checkbox" data-ck="2"><span>失败重试与告警</span></label>
+            <label class="ck"><input type="checkbox" data-ck="3"><span>联调邮件网关</span></label>
+            <label class="ck"><input type="checkbox" data-ck="4"><span>更新发布说明</span></label>
+            <button class="ck-add">＋ 添加检查项，回车确认</button>
+          </div>
+        </div>
+        <div class="sec">
+          <div class="sec-head"><h3>工时</h3><span class="right"><button class="btn link">补记一条</button></span></div>
+          <div class="timer">
+            <div class="big">3.5<small>h</small></div>
+            <span class="muted" style="font-size:11px">预估 8h · 已用 44%</span>
+            <span class="sp"></span>
+            <button class="btn sm">开始计时</button>
+            <button class="btn sm soft">补记</button>
+          </div>
+          <div style="margin-top:7px">
+            <div class="log"><span class="t">11-12</span><span>联调邮件网关与重试</span><span class="h">1.5h</span></div>
+            <div class="log"><span class="t">11-11</span><span>开发邮件模板与变量替换</span><span class="h">2.0h</span></div>
+          </div>
+        </div>
+        <div class="sec">
+          <div class="sec-head"><h3>附件</h3><span class="right"><button class="btn link">上传</button></span></div>
+          <div class="file"><span class="ico">MD</span><span class="nm">对账通知技术方案.md</span><span class="sz">18 KB</span></div>
+        </div>
+        <div class="sec">
+          <div class="sec-head"><h3>依赖关系</h3><span class="right"><span class="sec-hint">只连线，不改日期</span></span></div>
+          <div class="dep"><span class="ty">前置</span><span class="nm">支付结果页展示优惠明细</span><span class="chip ok">已排期</span></div>
+          <div class="empty-line"><span>＋</span>添加后置任务</div>
+        </div>
+      </div>
+
+      <!-- 关联 -->
+      <div class="pane" data-pane="rel">
+        <div class="sec" style="margin-top:0">
+          <div class="sec-head"><h3>计划与归属</h3><span class="right"><button class="btn link">调整</button></span></div>
+          <div class="box">
+            <div class="kv"><span class="k">计划版本</span><span class="v"><span class="chip blue">清结算 v3.2</span></span></div>
+            <div class="kv"><span class="k">关联需求</span><span class="v">支持微信支付 v3 退款接口 <span class="chip ok">已排期</span></span></div>
+            <div class="kv"><span class="k">所属史诗</span><span class="v">对账自动化 · 2026 Q4</span></div>
+            <div class="kv"><span class="k">所属分支</span><span class="v">release/2026.11</span></div>
+            <div class="kv"><span class="k">关联文档</span><span class="v">对账通知技术方案</span></div>
+          </div>
+        </div>
+        <div class="sec">
+          <div class="sec-head"><h3>生产发布事实</h3><span class="chip ghost">只读</span><span class="right"><span class="sec-hint">以真实发布记录为准</span></span></div>
+          <div class="box">
+            <div class="kv"><span class="k">当前状态</span><span class="v"><span class="chip warn">未发布</span></span></div>
+            <div class="kv"><span class="k">最近发布</span><span class="v">—</span></div>
+            <p class="box-foot-note" style="margin-top:6px">计划关联不代表实际交付。发布由有权限的人在发布计划里确认后写入，不在这里手工改。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 动态 -->
+      <div class="pane" data-pane="activity">
+        <div class="composer">
+          <textarea id="commentInput" placeholder="写下讨论、结论或卡点…（输入 @ 可提及成员）"></textarea>
+          <div class="composer-acts">
+            <button class="btn sm soft">附件</button>
+            <span class="sp"></span>
+            <span class="sec-hint">Ctrl / ⌘ + Enter 发送</span>
+            <button class="btn sm primary" id="btnCommentSend">发送</button>
+          </div>
+        </div>
+        <div class="filters">
+          <button class="fchip on">全部 4</button><button class="fchip">评论 2</button><button class="fchip">变更 2</button>
+        </div>
+        <div class="acts" id="activityList">
+          <div class="act">
+            <span class="ava">陈</span>
+            <div class="act-main"><b>陈昊</b> 补充了评论<p>邮件网关在测试环境限流，重试间隔改成 5 分钟。</p><div class="act-meta">11-12 16:20</div></div>
+          </div>
+          <div class="act">
+            <span class="ava p">周</span>
+            <div class="act-main"><b>周敏</b> 补充了评论<p>模板里金额字段要保留两位小数，已补到检查项。</p><div class="act-meta">11-12 17:05</div></div>
+          </div>
+          <div class="act">
+            <span class="ava" style="background:#E7F6EC;color:#067647">系</span>
+            <div class="act-main"><div class="act-line"><span class="dot"></span><b>陈昊</b> 将状态从「待处理」改为「进行中」</div><div class="act-meta">11-11 09:12</div></div>
+          </div>
+          <div class="act">
+            <span class="ava" style="background:#F2F4F7;color:#667085">系</span>
+            <div class="act-main"><div class="act-line"><span class="dot" style="background:#98A2B3"></span><b>周敏</b> 把工作项加入计划版本「清结算 v3.2」</div><div class="act-meta">11-10 18:40</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mob-bar">
+      <span class="menu-wrap">
+        <button class="status doing" data-menu="taskStatusM"><i class="dot"></i><span>进行中</span><span class="caret">▾</span></button>
+        <div class="menu" id="menuTaskStatusM" hidden style="bottom:calc(100% + 6px);top:auto">
+          <button data-status="todo"><i class="dot" style="color:#667085"></i>待处理</button>
+          <button data-status="doing"><i class="dot" style="color:#2563EB"></i>进行中</button>
+          <button data-status="test"><i class="dot" style="color:#F79009"></i>待测试</button>
+          <button data-status="done"><i class="dot" style="color:#12B76A"></i>已完成</button>
+        </div>
+      </span>
+      <button class="btn sm">关注</button>
+      <span class="sp"></span>
+      <button class="btn sm" data-close>关闭</button>
+    </div>
+  </section>
+
+  <!-- ============ 需求详情 ============ -->
+  <section class="shell" id="shellDemand" hidden aria-label="需求详情原型">
+    <header class="d-head">
+      <div class="d-top">
+        <span class="type-chip demand" title="需求">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 3.4h9.6v13.2L10 13.6l-4.8 3z"/></svg>
+        </span>
+        <div class="d-title-wrap">
+          <div class="d-title-line">
+            <h1 class="d-title" id="demandTitle" title="点击标题可直接修改">支付超时自动关单</h1>
+            <span class="menu-wrap">
+              <button class="status review" id="demandStatus" data-menu="demandStatus"><i class="dot"></i><span>待评审</span><span class="caret">▾</span></button>
+              <div class="menu" id="menuDemandStatus" hidden style="min-width:206px">
+                <div class="hint">评审结论会写入需求时间线</div>
+                <button data-dstatus="pass"><i class="dot" style="color:#12B76A"></i>通过，可排期</button>
+                <button data-dstatus="rej"><i class="dot" style="color:#F04438"></i>评审不通过…</button>
+                <div class="sep"></div>
+                <button data-dstatus="plan"><i class="dot" style="color:#2563EB"></i>排期进入版本…</button>
+                <button data-dstatus="close"><i class="dot" style="color:#667085"></i>关闭需求…</button>
+              </div>
+              <i class="annot-point" data-n="1">1</i>
+            </span>
+          </div>
+          <div class="d-meta">
+            <span>统一支付网关</span><span class="sep">·</span><span>对账</span><span class="sep">·</span><span>期望交付 11-23</span><span class="sep hide-m">·</span><span class="hide-m">提交于 10-05</span>
+          </div>
+        </div>
+        <div class="d-acts">
+          <button class="btn sm" id="btnDemandEdit">编辑</button>
+          <button class="btn sm primary" id="btnDemandPass">通过</button>
+          <button class="icon-btn bordered" title="更多操作">⋯</button>
+          <button class="icon-btn" title="关闭" data-close>×</button>
+        </div>
+      </div>
+      <div class="d-tabs" role="tablist">
+        <button class="d-tab on" data-tab="overview" role="tab">概览</button>
+        <button class="d-tab" data-tab="delivery" role="tab">交付 <span class="cnt">0/1</span></button>
+        <button class="d-tab" data-tab="rel" role="tab">关联</button>
+        <button class="d-tab" data-tab="records" role="tab">记录 <span class="cnt">6</span></button>
+        <i class="annot-point" data-n="3" style="top:2px;right:-6px">3</i>
+      </div>
+    </header>
+
+    <div class="d-body" id="demandBody">
+      <div class="edit-banner">
+        <b>编辑需求</b><span>标题、描述与验收标准就地改；状态与排期仍走状态动作。</span><span class="sp"></span>
+        <button class="btn sm" id="btnDemandEditCancel">取消</button>
+        <button class="btn sm primary" id="btnDemandEditSave">保存</button>
+      </div>
+
+      <!-- 需求概览 -->
+      <div class="pane on" data-pane="overview">
+        <div class="facts six">
+          <div class="fact"><div class="fact-k">优先级</div><div class="fact-v">中</div></div>
+          <div class="fact"><div class="fact-k">需求类型</div><div class="fact-v">新功能</div></div>
+          <div class="fact"><div class="fact-k">模块</div><div class="fact-v">对账</div></div>
+          <div class="fact"><div class="fact-k">目标版本</div><div class="fact-v"><span class="muted">待规划</span></div></div>
+          <div class="fact"><div class="fact-k">期望交付</div><div class="fact-v">11-23</div></div>
+          <div class="fact"><div class="fact-k">来源</div><div class="fact-v">线上问题复盘</div></div>
+          <i class="annot-point" data-n="9" style="top:-7px;right:-7px">9</i>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head"><h3>需求描述</h3><span class="right"><button class="btn link" data-demand-edit>编辑</button><i class="annot-point lead" data-n="5">5</i></span></div>
+          <div class="desc" id="demandDesc">支付网关当前「对账」模块在使用中反馈：支付超时自动关单影响日常操作效率。期望在不改变现有入口的前提下补齐能力，并兼容历史数据与既有权限模型。</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head"><h3>验收标准</h3></div>
+          <div class="desc" id="demandAccept">1. 支付超时自动关单 主流程可用，异常分支有明确提示；
+2. 关键操作有审计记录，权限符合空间与项目可见范围；
+3. 对账 模块回归通过，线上灰度 24 小时无 P0/P1 故障。</div>
+          <div class="wsjf">
+            <span>WSJF</span><b>业务 5</b><span>·</span><b>紧迫 7</b><span>·</span><b>风险 5</b><span>·</span><b>工作量 5</b>
+            <span class="score">3.4</span>
+            <span class="mut">四项都填才计分</span>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head"><h3>交付进度</h3><span class="right"><button class="btn link" data-goto="delivery">查看交付证据</button><i class="annot-point lead" data-n="6">6</i></span></div>
+          <div class="metrics">
+            <div class="metric"><div class="k">关联工作项</div><div class="v">0<small>/ 1 完成</small></div><div class="sub">1 个在推进</div></div>
+            <div class="metric"><div class="k">测试用例</div><div class="v">0<small>/ 0 通过</small></div><div class="sub">尚未关联用例</div></div>
+            <div class="metric"><div class="k">生产发布</div><div class="v" style="font-size:13px;padding-top:3px"><span class="chip warn">未发布</span></div><div class="sub">以发布记录为准</div></div>
+          </div>
+          <div class="box" style="margin-top:10px">
+            <div class="box-head"><b>关联工作项</b><span class="right"><button class="btn sm soft">＋ 拆分为工作项</button></span></div>
+            <div class="kv" style="padding:6px 0">
+              <span class="v" style="text-align:left;white-space:normal">
+                <span style="font-weight:600">银联二维码扫码支付</span>
+                <span class="chip ghost" style="margin-left:6px">用户故事</span>
+                <span class="chip" style="margin-left:4px">赵磊</span>
+                <span class="chip" style="margin-left:4px">4h</span>
+                <span class="chip blue" style="margin-left:4px">待测试</span>
+                <span class="chip ghost" style="margin-left:4px">未绑版本</span>
+              </span>
+            </div>
+            <p class="box-foot-note" style="margin-top:5px">当前生产全量生效 0 项；任务发布不等于需求业务验收。</p>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head"><h3>最近记录</h3><span class="right"><button class="btn link" data-goto="records">查看全部 6 条</button></span></div>
+          <div class="acts">
+            <div class="act"><span class="ava p">周</span><div class="act-main"><b>周敏</b> 提交需求，进入「待评审」<div class="act-meta">10-05 10:25</div></div></div>
+            <div class="act"><span class="ava">系</span><div class="act-main"><div class="act-line"><span class="dot" style="background:#98A2B3"></span>关联工作项「银联二维码扫码支付」</div><div class="act-meta">10-06 14:02</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 需求交付 -->
+      <div class="pane" data-pane="delivery">
+        <div class="sec" style="margin-top:0">
+          <div class="sec-head"><h3>交付判定</h3><span class="chip ghost">自动派生</span><span class="right"><button class="btn sm soft">人工判定</button></span></div>
+          <div class="box">
+            <p class="box-foot-note" style="font-size:11.5px;color:var(--text2)">当前由工作项、用例与发布记录自动派生；证据缺失时可人工补录，补录会留痕并可撤销。</p>
+          </div>
+        </div>
+        <div class="sec">
+          <div class="sec-head"><h3>交付证据</h3><span class="right"><span class="sec-hint">任务发布不等于业务验收</span></span></div>
+          <div class="metrics">
+            <div class="metric"><div class="k">工作项完成</div><div class="v">0<small>/ 1</small></div><div class="sub">0%</div></div>
+            <div class="metric"><div class="k">用例通过</div><div class="v">0<small>/ 0</small></div><div class="sub">未关联</div></div>
+            <div class="metric"><div class="k">生产发布</div><div class="v" style="font-size:13px;padding-top:3px"><span class="chip warn">未发布</span></div><div class="sub">最近发布 —</div></div>
+          </div>
+          <div class="box" style="margin-top:10px;padding:0;overflow:hidden">
+            <table class="table">
+              <thead><tr><th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th>生产发布</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><div class="t-title">银联二维码扫码支付</div><div class="t-sub">用户故事 · 4h · 未绑版本</div></td>
+                  <td><span class="chip ghost">故事</span></td>
+                  <td>赵磊</td>
+                  <td><span class="chip blue">待测试</span></td>
+                  <td><span class="chip ghost">未发布</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="box-foot-note" style="margin-top:6px">计划版本与发布事实分列；窄屏隐藏类型与发布列，点开工作项看完整记录。</p>
+        </div>
+        <div class="sec">
+          <div class="sec-head"><h3>人工交付判定记录</h3></div>
+          <div class="empty-line">暂无人工判定；自动派生结果优先展示。</div>
+        </div>
+      </div>
+
+      <!-- 需求关联 -->
+      <div class="pane" data-pane="rel">
+        <div class="sec" style="margin-top:0">
+          <div class="sec-head"><h3>关联文档</h3><span class="right"><button class="btn sm soft">＋ 关联文档</button></span></div>
+          <div class="empty-line">还没有关联文档；从当前项目的文档里选择。</div>
+        </div>
+        <div class="sec">
+          <div class="sec-head"><h3>附件</h3><span class="right"><button class="btn sm soft">上传附件</button></span></div>
+          <div class="empty-line">暂无附件（图片、PDF、Office、zip，单个 ≤10MB）</div>
+        </div>
+        <div class="sec">
+          <div class="sec-head"><h3>计划与归属</h3></div>
+          <div class="box">
+            <div class="kv"><span class="k">目标版本</span><span class="v"><span class="muted" style="font-weight:400">待规划</span></span></div>
+            <div class="kv"><span class="k">所属项目</span><span class="v">统一支付网关</span></div>
+            <div class="kv"><span class="k">模块</span><span class="v">对账</span></div>
+            <div class="kv"><span class="k">关联史诗</span><span class="v">支付体验优化 · 2026 Q4</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 需求记录 -->
+      <div class="pane" data-pane="records">
+        <div class="tl">
+          <div class="tl-item on"><div class="h"><b>周敏</b> 提交需求，进入「待评审」</div><div class="t">10-05 10:25</div></div>
+          <div class="tl-item"><div class="h">关联工作项「银联二维码扫码支付」</div><div class="t">10-06 14:02</div></div>
+          <div class="tl-item"><div class="h">补充验收标准</div><div class="t">10-08 09:40</div></div>
+          <div class="tl-item"><div class="h">期望交付日期调整为 11-23</div><div class="t">10-12 16:18</div></div>
+          <div class="tl-item"><div class="h">WSJF 评分更新为 3.4</div><div class="t">10-20 11:05</div></div>
+          <div class="tl-item"><div class="h"><b>周敏</b> 邀请 陈昊 参与评审</div><div class="t">11-02 10:30</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mob-bar">
+      <button class="btn danger" id="btnDemandRejectM">不通过</button>
+      <button class="btn primary" id="btnDemandPassM">通过</button>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- ============ 现状截图 ============ -->
+<div class="lightbox" id="lightbox">
+  <div class="lb-card">
+    <div class="lb-head">
+      <h3>现状截图 · 本地 8081</h3>
+      <div class="lb-tabs">
+        <button class="lb-tab on" data-shot="current-workitem-detail-2026-11-13.png" data-cap="工作项详情：1080px 抽屉、2.38 屏、187 个可交互控件">工作项 1440</button>
+        <button class="lb-tab" data-shot="current-workitem-detail-mobile-2026-11-13.png" data-cap="工作项详情移动端：4.49 屏；右栏（关联 / 评论）在第 3.5 屏">工作项 390</button>
+        <button class="lb-tab" data-shot="current-demand-detail-2026-11-13.png" data-cap="需求详情：720px 居中弹窗，高 1198px，超过 900px 视口；头部随内容滚走">需求 1440</button>
+        <button class="lb-tab" data-shot="current-demand-detail-mobile-2026-11-13.png" data-cap="需求详情移动端：打开即滚到 628px，标题、状态与「通过」不在首屏">需求 390</button>
+        <button class="lb-tab" data-shot="current-demand-edit-nested-2026-11-13.png" data-cap="点「编辑」后：720px 详情弹窗 + 560px 编辑抽屉两层叠加">嵌套编辑</button>
+      </div>
+      <span class="sp"></span>
+      <button class="btn sm" id="lbClose">关闭</button>
+    </div>
+    <div class="lb-body"><img id="lbImg" src="current-workitem-detail-2026-11-13.png" alt="现状截图"></div>
+    <div class="lb-cap" id="lbCap">工作项详情：1080px 抽屉、2.38 屏、187 个可交互控件</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var stage = document.getElementById('stage');
+  var shells = { task: document.getElementById('shellTask'), demand: document.getElementById('shellDemand') };
+  var currentView = 'task';
+
+  function toast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(t._tm); t._tm = setTimeout(function(){ t.classList.remove('on'); }, 1900);
+  }
+  function showView(v){
+    currentView = v;
+    shells.task.hidden = v !== 'task';
+    shells.demand.hidden = v !== 'demand';
+    document.querySelectorAll('#segView button').forEach(function(b){ b.classList.toggle('on', b.dataset.view === v); });
+  }
+  function setDevice(d){
+    stage.classList.toggle('mobile', d === 'mobile');
+    document.querySelectorAll('#segDevice button').forEach(function(b){ b.classList.toggle('on', b.dataset.device === d); });
+  }
+
+  document.getElementById('segView').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(b) showView(b.dataset.view);
+  });
+  document.getElementById('segDevice').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(b) setDevice(b.dataset.device);
+  });
+
+  var btnAnnot = document.getElementById('btnAnnot');
+  btnAnnot.addEventListener('click', function(){
+    var on = stage.classList.toggle('show-annot');
+    btnAnnot.classList.toggle('on', on);
+  });
+
+  // 页签
+  stage.addEventListener('click', function(e){
+    var tab = e.target.closest('.d-tab');
+    if(tab){
+      var shell = tab.closest('.shell');
+      shell.querySelectorAll('.d-tab').forEach(function(b){ b.classList.toggle('on', b === tab); });
+      shell.querySelectorAll('.pane').forEach(function(p){ p.classList.toggle('on', p.dataset.pane === tab.dataset.tab); });
+      var body = shell.querySelector('.d-body'); if(body) body.scrollTop = 0;
+      return;
+    }
+    var go = e.target.closest('[data-goto]');
+    if(go){
+      var s = go.closest('.shell');
+      var target = s.querySelector('.d-tab[data-tab="' + go.dataset.goto + '"]');
+      if(target) target.click();
+      return;
+    }
+  });
+
+  // 状态菜单
+  stage.addEventListener('click', function(e){
+    var trigger = e.target.closest('[data-menu]');
+    if(trigger){
+      var id = trigger.dataset.menu;
+      var menu = document.getElementById('menu' + id.charAt(0).toUpperCase() + id.slice(1));
+      if(!menu) menu = document.getElementById(id.replace('taskStatus','menuTaskStatus').replace('demandStatus','menuDemandStatus'));
+      if(menu){
+        document.querySelectorAll('.menu').forEach(function(m){ if(m !== menu) m.hidden = true; });
+        menu.hidden = !menu.hidden;
+        e.stopPropagation();
+      }
+      return;
+    }
+    if(!e.target.closest('.menu')){
+      document.querySelectorAll('.menu').forEach(function(m){ m.hidden = true; });
+    }
+  });
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('.menu-wrap')) document.querySelectorAll('.menu').forEach(function(m){ m.hidden = true; });
+  });
+
+  function setStatus(label, cls){
+    document.querySelectorAll('#taskStatus').forEach(function(el){
+      el.className = 'status ' + cls;
+      el.querySelector('span').textContent = label;
+    });
+    var mob = document.querySelector('#menuTaskStatusM')?.parentElement.querySelector('.status');
+    if(mob){ mob.className = 'status ' + cls; mob.querySelector('span').textContent = label; }
+  }
+  document.querySelectorAll('[data-status]').forEach(function(b){
+    b.addEventListener('click', function(){
+      setStatus(b.textContent.trim(), b.dataset.status === 'test' ? 'test' : b.dataset.status);
+      document.querySelectorAll('.menu').forEach(function(m){ m.hidden = true; });
+      toast('状态已改为「' + b.textContent.trim() + '」，看板列同步');
+    });
+  });
+
+  // 检查项（概览与执行页共享同一份状态）
+  var ckState = [true, true, false, false, false];
+  function syncChecklist(){
+    var all = document.querySelectorAll('#shellTask [data-ck]');
+    all.forEach(function(cb){
+      var i = Number(cb.dataset.ck);
+      cb.checked = !!ckState[i];
+      cb.closest('.ck').classList.toggle('done', !!ckState[i]);
+    });
+    var done = ckState.filter(Boolean).length;
+    var total = ckState.length;
+    var pct = Math.round(done / total * 100);
+    document.querySelectorAll('#ckCount,#ckChip,#ckChip2').forEach(function(el){ el.textContent = done + '/' + total; });
+    var bar = document.getElementById('ckBar'); if(bar) bar.style.width = pct + '%';
+    var pctEl = document.getElementById('ckPct'); if(pctEl) pctEl.textContent = pct + '%';
+    var fb = document.getElementById('factBar'); if(fb) fb.style.width = pct + '%';
+    var fp = document.getElementById('factPct'); if(fp) fp.textContent = pct + '%';
+  }
+  document.querySelectorAll('#shellTask [data-ck]').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      ckState[Number(cb.dataset.ck)] = cb.checked;
+      syncChecklist();
+    });
+  });
+  syncChecklist();
+
+  // 标题就地改
+  var taskTitle = document.getElementById('taskTitle');
+  function inlineTitle(el){
+    el.addEventListener('click', function(){
+      el.contentEditable = 'true'; el.classList.add('editing'); el.focus();
+      var r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    });
+    el.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter'){ ev.preventDefault(); el.blur(); }
+      if(ev.key === 'Escape'){ el.blur(); }
+    });
+    el.addEventListener('blur', function(){
+      el.contentEditable = 'false'; el.classList.remove('editing');
+      el.textContent = el.textContent.trim() || '未命名工作项';
+      toast('标题已保存');
+    });
+  }
+  inlineTitle(taskTitle); inlineTitle(document.getElementById('demandTitle'));
+
+  // 描述编辑
+  var descView = document.getElementById('descView'), descEdit = document.getElementById('descEdit'), descInput = document.getElementById('descInput');
+  document.getElementById('btnDescEdit').addEventListener('click', function(){
+    descInput.value = descView.textContent.trim();
+    descView.hidden = true; descEdit.hidden = false; descInput.focus();
+  });
+  document.getElementById('btnDescCancel').addEventListener('click', function(){
+    descEdit.hidden = true; descView.hidden = false;
+  });
+  document.getElementById('btnDescSave').addEventListener('click', function(){
+    descView.textContent = descInput.value.trim();
+    descEdit.hidden = true; descView.hidden = false;
+    toast('描述已保存');
+  });
+
+  // 评论
+  document.getElementById('btnCommentSend').addEventListener('click', function(){
+    var input = document.getElementById('commentInput');
+    var v = input.value.trim(); if(!v){ input.focus(); return; }
+    var row = document.createElement('div');
+    row.className = 'act';
+    row.innerHTML = '<span class="ava">管</span><div class="act-main"><b>平台管理员</b> 刚刚<p></p><div class="act-meta">刚刚</div></div>';
+    row.querySelector('p').textContent = v;
+    var list = document.getElementById('activityList');
+    list.insertBefore(row, list.firstChild);
+    input.value = '';
+    toast('评论已发送');
+  });
+
+  // 需求：编辑模式
+  var demandShell = document.getElementById('shellDemand');
+  var demandTitle = document.getElementById('demandTitle');
+  var demandDesc = document.getElementById('demandDesc');
+  var demandAccept = document.getElementById('demandAccept');
+  function demandEdit(on){
+    demandShell.classList.toggle('editing', on);
+    [demandTitle, demandDesc, demandAccept].forEach(function(el){ el.contentEditable = on ? 'true' : 'false'; });
+    if(on){
+      var tab = demandShell.querySelector('.d-tab[data-tab="overview"]'); if(tab) tab.click();
+      demandTitle.focus();
+    }
+  }
+  document.getElementById('btnDemandEdit').addEventListener('click', function(){ demandEdit(true); toast('编辑模式：改完点保存'); });
+  document.querySelectorAll('[data-demand-edit]').forEach(function(b){ b.addEventListener('click', function(){ demandEdit(true); }); });
+  document.getElementById('btnDemandEditCancel').addEventListener('click', function(){ demandEdit(false); });
+  document.getElementById('btnDemandEditSave').addEventListener('click', function(){ demandEdit(false); toast('需求已保存'); });
+
+  // 需求状态动作
+  function demandStatus(label, cls){
+    var el = document.getElementById('demandStatus');
+    el.className = 'status ' + cls;
+    el.querySelector('span').textContent = label;
+  }
+  document.querySelectorAll('[data-dstatus]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var kind = b.dataset.dstatus;
+      document.querySelectorAll('.menu').forEach(function(m){ m.hidden = true; });
+      if(kind === 'pass'){ demandStatus('已通过', 'pass'); toast('已通过「支付超时自动关单」，可排期进入版本'); }
+      else if(kind === 'rej'){ demandStatus('已关闭', 'todo'); toast('已记录评审不通过，原因会写入时间线'); }
+      else if(kind === 'plan'){ demandStatus('已排期', 'doing'); toast('已排期进入版本'); }
+      else { demandStatus('已关闭', 'todo'); toast('需求已关闭，可重新打开'); }
+    });
+  });
+  document.getElementById('btnDemandPass').addEventListener('click', function(){
+    demandStatus('已通过', 'pass'); toast('已通过「支付超时自动关单」，可排期进入版本');
+  });
+  document.getElementById('btnDemandPassM').addEventListener('click', function(){
+    demandStatus('已通过', 'pass'); toast('已通过，可排期进入版本');
+  });
+  document.getElementById('btnDemandRejectM').addEventListener('click', function(){
+    demandStatus('已关闭', 'todo'); toast('已记录评审不通过');
+  });
+
+  // 关闭提示（原型不真正关闭）
+  document.querySelectorAll('[data-close]').forEach(function(b){
+    b.addEventListener('click', function(){ toast('原型：关闭后回到看板，保留原滚动位置'); });
+  });
+
+  // 现状截图
+  var lb = document.getElementById('lightbox');
+  document.getElementById('btnShots').addEventListener('click', function(){ lb.classList.add('on'); });
+  document.getElementById('lbClose').addEventListener('click', function(){ lb.classList.remove('on'); });
+  lb.addEventListener('click', function(e){ if(e.target === lb) lb.classList.remove('on'); });
+  document.querySelectorAll('.lb-tab').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.lb-tab').forEach(function(x){ x.classList.toggle('on', x === b); });
+      document.getElementById('lbImg').src = b.dataset.shot;
+      document.getElementById('lbCap').textContent = b.dataset.cap;
+    });
+  });
+})();
+</script>
+</body>
+</html>

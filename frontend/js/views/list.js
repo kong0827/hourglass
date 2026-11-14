@@ -11,7 +11,7 @@ import { GROUP_IDS, groupOptionsHTML } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { canEditTask, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
-import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
+import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
@@ -268,6 +268,14 @@ function refreshListIfOpen(){
   var top = scroller ? scroller.scrollTop : 0;
   return loadList({silent:true, keepLoaded:true, restoreScroll:top});
 }
+/* 行内改状态的乐观重绘：直接按缓存重排分组与计数，不等网络往返 */
+function repaintListRows(){
+  if(activeView !== "list" || !lastItems.length) return;
+  var scroller = listScroller();
+  var top = scroller ? scroller.scrollTop : 0;
+  renderListItems(lastItems);
+  if(scroller) scroller.scrollTop = top;
+}
 function listRequestParams(offset, limit){
   var requestSort = smart.sort === "default" ? serverSort : smart.sort;
   if(requestSort === "estimate" || requestSort === "actual") requestSort = serverSort;
@@ -388,7 +396,17 @@ function taskCell(t, key, hasTypeCol){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
     var f = dueFlag(t);
     var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
-    return '<span class="cell"><span class="tag tag-cat" style="--tag-c:' + color + '">' + esc(colName(t.boardColumn)) + '</span>' + flagHTML + '</span>';
+    var chip = '<span class="tag tag-cat" style="--tag-c:' + color + '">' + esc(colName(t.boardColumn)) + '</span>';
+    /* 状态点开即改：可写才做成按钮，只读项目保持纯标签 */
+    if(canEditTask(t)){
+      chip = '<button class="tag tag-cat row-status" type="button" style="--tag-c:' + color + '"' +
+        ' data-row-status="' + esc(t.id) + '" aria-haspopup="menu"' +
+        ' aria-label="状态：' + esc(colName(t.boardColumn)) + '，点击修改"' +
+        ' title="点击改状态">' + esc(colName(t.boardColumn)) +
+        '<svg class="row-status-caret" width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5 8 10.5l4-4"/></svg>' +
+      '</button>';
+    }
+    return '<span class="cell">' + chip + flagHTML + '</span>';
   }
   if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
   if(key === "owner") return '<span class="cell" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
@@ -663,10 +681,17 @@ function mobileListCardHTML(t){
   var col = colMeta(t.boardColumn) || {};
   var p = progressOf(t);
   var projectName = t.reqId ? reqNameById(t.reqId) : "";
+  var colChip = '<span class="mtc-chip" style="--c:' + esc(col.color || CAT_DEFAULT_COLOR) + '"><i></i>' + esc(colName(t.boardColumn)) + '</span>';
+  if(canEditTask(t)){
+    colChip = '<button class="mtc-chip mtc-status" type="button" style="--c:' + esc(col.color || CAT_DEFAULT_COLOR) + '"' +
+      ' data-row-status="' + esc(t.id) + '" aria-haspopup="menu"' +
+      ' aria-label="状态：' + esc(colName(t.boardColumn)) + '，点击修改"><i></i>' + esc(colName(t.boardColumn)) +
+      '<svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5 8 10.5l4-4"/></svg></button>';
+  }
   return '<article class="mob-task-card" data-list-id="' + esc(t.id) + '" tabindex="0" role="row">' +
     '<div class="mtc-top">' +
       priTagHTML(t.priority || "P2") +
-      '<span class="mtc-chip" style="--c:' + esc(col.color || CAT_DEFAULT_COLOR) + '"><i></i>' + esc(colName(t.boardColumn)) + '</span>' +
+      colChip +
       (t.itemType && t.itemType !== "task" ? '<span class="mtc-chip ghost">' + esc(typeName(t.itemType)) + '</span>' : '') +
       '<span class="sp"></span>' +
       '<button class="mtc-ico" type="button" data-row-menu="' + esc(t.id) + '" aria-label="更多操作" title="更多操作">' + icon("more", 16) + '</button>' +
@@ -1018,6 +1043,8 @@ listBody.addEventListener("click", function(e){
   if(mobTimer){ toggleTaskTimer(mobTimer.dataset.mobTimer); return; }
   var menuBtn = e.target.closest("[data-row-menu]");
   if(menuBtn){ openRowMenu(menuBtn, menuBtn.dataset.rowMenu); return; }
+  var statusBtn = e.target.closest("[data-row-status]");
+  if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
   var row = e.target.closest("[data-list-id]");
   if(!row) return;
   var t = rt.listCache[row.dataset.listId];
@@ -1150,35 +1177,7 @@ function openRowMenu(anchor, id){
       return;
     }
     if(mv){
-      var to = mv.dataset.rowMove;
-      var wsId = rt.currentWs && rt.currentWs.id;
-      var items = [{ from: t.boardColumn, title: t.title }];
-      guard(wsId, items, to).then(function(pass){
-        if(!pass) return;
-        var body = { column: to };
-        if(pass.reason) body.reason = pass.reason;
-        if(pass.force) body.force = true;
-        var retried = false;
-        function fail(ex){
-          if(retried){ toast(ex.message || "移动失败", "bad"); return; }
-          retried = true;
-          serverDecision(wsId, items, to, ex).then(function(retry){
-            if(!retry){ if(ex.code !== 422 && ex.code !== 412) toast(ex.message || "移动失败", "bad"); return; }
-            body.reason = retry.reason;
-            body.force = retry.force;
-            send();
-          });
-        }
-        function send(){
-          API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", body).then(function(res){
-            toast("「" + t.title + "」移动到「" + colName(res.to) + "」" +
-              (res.autoTimerStarted ? " · 已开始计时" : "") +
-              (res.autoTimerTask ? " · 已接着开始「" + res.autoTimerTask + "」的计时" : ""));
-            loadList(); loadBoard({silent:true}); loadReqs();
-          }).catch(fail);
-        }
-        send();
-      });
+      moveTaskToColumn(t, mv.dataset.rowMove);
     }
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
@@ -1215,4 +1214,4 @@ window.addEventListener("ds:running-timer", function(){
   else refreshListIfOpen();
 });
 
-export { applyListSavedView, currentListViewId, currentListViewName, currentListViewParams, enterListView, listViewDeleted, loadList, markListViewSaved, refreshListIfOpen, renderSmartTabs };
+export { applyListSavedView, COL_WIDTHS, currentListViewId, currentListViewName, currentListViewParams, enterListView, isDoneTask, listViewDeleted, loadList, markListViewSaved, minutesText, refreshListIfOpen, renderSmartTabs, repaintListRows, taskCell };

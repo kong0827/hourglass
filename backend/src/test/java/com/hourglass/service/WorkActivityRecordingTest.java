@@ -83,7 +83,8 @@ class WorkActivityRecordingTest {
         org.springframework.test.util.ReflectionTestUtils.setField(docService, "taskQueries", mock(TaskQueryService.class));
         requirementService = new RequirementService(reqMapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
                 mock(ActivityService.class), workActivityService, docService,
-                mock(ProjectVersionService.class), mock(com.hourglass.mapper.ProjectVersionMapper.class),
+                mock(ProjectVersionService.class), mock(ProjectMilestoneService.class),
+                mock(com.hourglass.mapper.ProjectVersionMapper.class),
                 mock(DemandMapper.class), mock(com.hourglass.mapper.DevBranchMapper.class),
                 mock(ProjectAccessService.class), mock(AttachmentService.class),
                 mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(TestCaseService.class),

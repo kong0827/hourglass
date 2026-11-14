@@ -196,6 +196,12 @@ public class TaskController {
         return ApiResult.ok(workflowService.move(ctx.getUserId(), ctx.getWsId(), id, req));
     }
 
+    /** 认领测试负责人：批量移入「测试中」后仍待领取的工作项 */
+    @PostMapping("/api/tasks/{id}/test-claim")
+    public ApiResult<Map<String, Object>> claimTest(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(workflowService.claimTest(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
     /** 列表页批量改列：统一走 move 语义 */
     @PostMapping("/api/tasks/bulk-move")
     public ApiResult<Map<String, Object>> bulkMove(@Valid @RequestBody TaskBulkMoveRequest req,

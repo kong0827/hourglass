@@ -60,6 +60,7 @@ public class VersionPhaseService {
     private final DevBranchMapper branchMapper;
     private final ReleasePermissionService permissions;
     private final ReleaseMapper releaseMapper;
+    private final com.hourglass.mapper.VersionCommitmentMapper commitmentMapper;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
 
@@ -67,7 +68,8 @@ public class VersionPhaseService {
                                RequirementMapper reqMapper, DemandMapper demandMapper,
                                TimeLogMapper timeLogMapper, UserMapper userMapper,
                                ProjectAccessService projectAccess, DevBranchMapper branchMapper,
-                               ReleasePermissionService permissions, ReleaseMapper releaseMapper) {
+                               ReleasePermissionService permissions, ReleaseMapper releaseMapper,
+                               com.hourglass.mapper.VersionCommitmentMapper commitmentMapper) {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.reqMapper = reqMapper;
@@ -78,6 +80,7 @@ public class VersionPhaseService {
         this.branchMapper = branchMapper;
         this.permissions = permissions;
         this.releaseMapper = releaseMapper;
+        this.commitmentMapper = commitmentMapper;
     }
 
     /** T1.3：按版本聚合（含待规划任务桶与需求池排期计数） */
@@ -134,6 +137,11 @@ public class VersionPhaseService {
         Map<String, List<VersionRelease>> recordsByVersion = new HashMap<String, List<VersionRelease>>();
         for (VersionRelease record : projectRecords)
             recordsByVersion.computeIfAbsent(record.getVersionId(), key -> new ArrayList<VersionRelease>()).add(record);
+        Map<String, List<com.hourglass.entity.VersionCommitmentTask>> commitmentByVersion =
+                new HashMap<String, List<com.hourglass.entity.VersionCommitmentTask>>();
+        for (com.hourglass.entity.VersionCommitmentTask row : commitmentMapper.selectByReq(workspaceId, reqId)) {
+            commitmentByVersion.computeIfAbsent(row.getVersionId(), key -> new ArrayList<>()).add(row);
+        }
         for (ProjectVersion version : versions) {
             VersionStatsResponse.VersionStat stat = new VersionStatsResponse.VersionStat();
             stat.setId(version.getId());
@@ -143,6 +151,8 @@ public class VersionPhaseService {
             stat.setStartDate(version.getStartDate());
             stat.setTargetDate(version.getTargetDate());
             stat.setReleasedAt(version.getReleasedAt());
+            stat.setEndedAt(version.getEndedAt());
+            stat.setEndReason(version.getEndReason());
             stat.setRevision(version.getRevision());
             List<VersionRelease> records = recordsByVersion.getOrDefault(version.getId(), java.util.Collections.emptyList());
             VersionRelease latest = latestSuccess(records);
@@ -174,8 +184,9 @@ public class VersionPhaseService {
                         && version.getId().equals(summary.getLatestEffectiveRecord().getVersionId())) effective++;
             }
             stat.setEffectiveProductionTaskCount(effective);
-            stat.setCanManageReleasePlan(canManage);
-            stat.setCanPublish(canManage);
+            boolean ended = "closed".equals(version.getStatus()) || "canceled".equals(version.getStatus());
+            stat.setCanManageReleasePlan(canManage && !ended);
+            stat.setCanPublish(canManage && !ended);
             stat.setPreLaunchCount(0);
             Agg agg = aggOf(byVersion, version.getId());
             stat.setTaskCount(agg.tasks.size());
@@ -184,6 +195,7 @@ public class VersionPhaseService {
             int[] c = demandCounts.get(version.getId());
             stat.setDemandCount(c == null ? 0 : c[0]);
             stat.setScheduledDemandCount(c == null ? 0 : c[1]);
+            fillCommitment(stat, version, commitmentByVersion.get(version.getId()), agg.tasks);
             resp.getVersions().add(stat);
         }
         return resp;
@@ -315,14 +327,15 @@ public class VersionPhaseService {
             int released = 0, active = 0, planned = 0;
             VersionStatsResponse.VersionStat latest = null;
             for (VersionStatsResponse.VersionStat v : vs.getVersions()) {
+                /* 关闭/取消是终态，不计入「已发布 / 进行中 / 计划中」的节奏统计；历史仍留在版本列表 */
                 if ("released".equals(v.getStatus())) {
                     released++;
                 } else if ("active".equals(v.getStatus())) {
                     active++;
-                } else {
+                } else if ("planned".equals(v.getStatus())) {
                     planned++;
                 }
-                if (latest == null || newerVersion(v, latest)) {
+                if (!"canceled".equals(v.getStatus()) && (latest == null || newerVersion(v, latest))) {
                     latest = v;
                 }
             }
@@ -489,6 +502,7 @@ public class VersionPhaseService {
             }
             Task task = new Task();
             task.setId(item.getTaskId());
+            task.setItemNo(item.getTaskItemNo());
             task.setWorkspaceId(record.getWorkspaceId());
             task.setReqId(record.getReqId());
             task.setReqName(record.getProjectName());
@@ -638,6 +652,7 @@ public class VersionPhaseService {
     private void fillDoneStats(VersionStatsResponse.VersionStat stat, List<Task> tasks) {
         int done = 0;
         int work = 0;
+        int test = 0;
         int doneWork = 0;
         int estimate = 0;
         int estimatedWork = 0;
@@ -650,6 +665,7 @@ public class VersionPhaseService {
             int minutes = t.getTotalMinutes() == null ? 0 : t.getTotalMinutes();
             /* 投入工时按全部已记工时（开发中版本的"已投入"同样累计） */
             work += minutes;
+            test += Math.min(minutes, t.getTestMinutes() == null ? 0 : Math.max(0, t.getTestMinutes()));
             if (isDone) {
                 done++;
                 /* 任务均耗时只按完成任务自己的实际工时 */
@@ -672,6 +688,8 @@ public class VersionPhaseService {
         stat.setDoneCount(done);
         stat.setDoingCount(tasks.size() - done);
         stat.setWorkMinutes(work);
+        stat.setTestMinutes(test);
+        stat.setDevMinutes(Math.max(0, work - test));
         stat.setEstimateMinutes(estimate);
         stat.setRemainingMinutes(remaining);
         stat.setDeviationPct(pct(estimatedWork - estimatedTotal, estimatedTotal));
@@ -679,16 +697,70 @@ public class VersionPhaseService {
         stat.setAvgTaskMinutes(done == 0 ? null : Math.round((float) doneWork / done));
     }
 
+    /**
+     * 承诺基线对比：基线任务即使后来改了预估，也保留启动时的原值；
+     * 「完成」按当前绑定任务判断，避免把移出后完成的工作算进本轮承诺。
+     */
+    private void fillCommitment(VersionStatsResponse.VersionStat stat, ProjectVersion version,
+                                List<com.hourglass.entity.VersionCommitmentTask> baseline, List<Task> current) {
+        if (version.getCommitmentAt() == null || baseline == null) {
+            return;
+        }
+        Map<String, Integer> baselineEstimate = new HashMap<String, Integer>();
+        int estimate = 0;
+        for (com.hourglass.entity.VersionCommitmentTask row : baseline) {
+            int minutes = row.getEstimateMinutes() == null ? 0 : row.getEstimateMinutes();
+            baselineEstimate.put(row.getTaskId(), minutes);
+            estimate += minutes;
+        }
+        java.util.Set<String> currentIds = new java.util.HashSet<String>();
+        int added = 0;
+        int addedEstimate = 0;
+        int done = 0;
+        for (Task t : current) {
+            currentIds.add(t.getId());
+            if (!baselineEstimate.containsKey(t.getId())) {
+                added++;
+                addedEstimate += t.getEstimateMinutes() == null ? 0 : t.getEstimateMinutes();
+            } else if (Consts.COL_DONE.equals(t.getBoardColumn())) {
+                done++;
+            }
+        }
+        int removed = 0;
+        int removedEstimate = 0;
+        for (Map.Entry<String, Integer> entry : baselineEstimate.entrySet()) {
+            if (!currentIds.contains(entry.getKey())) {
+                removed++;
+                removedEstimate += entry.getValue();
+            }
+        }
+        VersionStatsResponse.Commitment commitment = new VersionStatsResponse.Commitment();
+        commitment.setCapturedAt(version.getCommitmentAt());
+        commitment.setTaskCount(baseline.size());
+        commitment.setEstimateMinutes(estimate);
+        commitment.setDoneCount(done);
+        commitment.setDonePct(pct(done, baseline.size()));
+        commitment.setAddedCount(added);
+        commitment.setAddedEstimateMinutes(addedEstimate);
+        commitment.setRemovedCount(removed);
+        commitment.setRemovedEstimateMinutes(removedEstimate);
+        stat.setCommitment(commitment);
+    }
+
     private void fillBucket(VersionStatsResponse.Bucket bucket, Agg agg) {
         int done = 0;
         int work = 0;
+        int test = 0;
         int estimate = 0;
         int remaining = 0;
         for (Task t : agg.tasks) {
             boolean isDone = Consts.COL_DONE.equals(t.getBoardColumn());
             if (isDone) {
                 done++;
-                work += t.getTotalMinutes() == null ? 0 : t.getTotalMinutes();
+                int minutes = t.getTotalMinutes() == null ? 0 : t.getTotalMinutes();
+                work += minutes;
+                /* 与 workMinutes 同一口径（只算已完成），拆分后才满足 开发 + 测试 = work */
+                test += Math.min(minutes, t.getTestMinutes() == null ? 0 : Math.max(0, t.getTestMinutes()));
             } else if (t.getEstimateMinutes() != null) {
                 remaining += t.getEstimateMinutes();
             }
@@ -698,6 +770,8 @@ public class VersionPhaseService {
         bucket.setDoneCount(done);
         bucket.setDoingCount(agg.tasks.size() - done);
         bucket.setWorkMinutes(work);
+        bucket.setTestMinutes(test);
+        bucket.setDevMinutes(Math.max(0, work - test));
         bucket.setEstimateMinutes(estimate);
         bucket.setRemainingMinutes(remaining);
     }

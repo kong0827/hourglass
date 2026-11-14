@@ -41,7 +41,9 @@ public class MyTasksController {
 
     @GetMapping("/api/my-tasks")
     public ApiResult<Map<String, Object>> myTasks(@RequestParam(required = false) String scope,
+                                                  @RequestParam(required = false) String view,
                                                   @RequestParam(required = false) String q,
+                                                  @RequestParam(required = false) String testOwners,
                                                   @RequestParam(required = false) String pris,
                                                   @RequestParam(required = false) String cats,
                                                   @RequestParam(required = false) String reqs,
@@ -64,11 +66,13 @@ public class MyTasksController {
         AppUser me = userMapper.selectById(userId);
         String displayName = me == null ? null : Texts.trimToNull(me.getDisplayName());
         boolean openOnly = !"all".equals(scope);
+        boolean testScope = "test".equals(view);
 
         /* IA-3：接入与看板相同的筛选参数（负责人维度天然固定为"我"） */
         com.hourglass.dto.BoardQuery query = com.hourglass.dto.BoardQuery.from(
                 q, null, pris, cats, reqs, tags, types, versions, due, focus, blocked, noDue, null, null, null,
                 null, columns, completion);
+        query.setTestOwners(splitCsv(testOwners));
         query.setDueFrom(date(dueFrom));
         query.setDueTo(date(dueTo));
         query.setStartFrom(date(startFrom));
@@ -77,7 +81,7 @@ public class MyTasksController {
         int off = offset == null ? 0 : Math.max(0, offset);
         int lim = limit == null ? DEFAULT_LIMIT
                 : Math.max(1, Math.min(TaskQueryService.MY_TASKS_MAX_LIMIT, limit));
-        MyTasksPage page = taskService.myTasksPage(userId, displayName, openOnly, query, off, lim);
+        MyTasksPage page = taskService.myTasksPage(userId, displayName, openOnly, testScope, query, off, lim);
         int loaded = off + page.getItems().size();
         /* 空页时不能继续 hasMore=true：COUNT 与列表之间被删会导致客户端 offset 不前进 */
         boolean hasMore = !page.getItems().isEmpty() && loaded < page.getTotal();
@@ -102,6 +106,20 @@ public class MyTasksController {
         res.put("spaces", spaces);
         res.put("matchedByNameOnly", page.getNameOnly());
         return ApiResult.ok(res);
+    }
+
+    private static java.util.List<String> splitCsv(String v) {
+        java.util.List<String> list = new java.util.ArrayList<String>();
+        if (v == null || v.trim().isEmpty()) {
+            return list;
+        }
+        for (String part : v.split(",")) {
+            String item = part.trim();
+            if (!item.isEmpty()) {
+                list.add(item);
+            }
+        }
+        return list;
     }
 
     private static java.time.LocalDate date(String v) {

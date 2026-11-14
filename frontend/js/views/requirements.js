@@ -681,6 +681,81 @@ function reqDocKanbanClearDrop(){
   for(var i = 0; i < cols.length; i++) cols[i].classList.remove("drop-active");
 }
 
+/* ---------- 正文缩放（阅读 / 编辑共用，只缩正文不缩工具栏） ---------- */
+
+var DOC_ZOOM_MIN = 0.8, DOC_ZOOM_MAX = 2, DOC_ZOOM_STEP = 0.1;
+var docZoomCache = null;
+
+function docZoomPref(){
+  if(docZoomCache != null) return docZoomCache;
+  var v = 1;
+  try{
+    var saved = parseFloat(localStorage.getItem("ds.reqDocZoom"));
+    if(isFinite(saved) && saved >= DOC_ZOOM_MIN && saved <= DOC_ZOOM_MAX) v = saved;
+  }catch(e){ /* 隐私模式忽略 */ }
+  docZoomCache = Math.round(v * 100) / 100;
+  return docZoomCache;
+}
+function docWidePref(){
+  try{ return localStorage.getItem("ds.reqDocWide") === "1"; }catch(e){ return false; }
+}
+/** 变量挂在视图根节点上：正文容器每次重绘都会重建，挂根节点才能一直生效 */
+function applyDocZoom(){
+  var root = $("view-requirements");
+  if(root) root.style.setProperty("--doc-zoom", String(docZoomPref()));
+  syncDocZoomUI();
+}
+function syncDocZoomUI(){
+  var z = docZoomPref();
+  var root = $("view-requirements");
+  if(!root) return;
+  root.querySelectorAll("[data-doc-zoom-val]").forEach(function(el){
+    el.textContent = Math.round(z * 100) + "%";
+  });
+  root.querySelectorAll('[data-doc-zoom="out"]').forEach(function(b){
+    b.disabled = z <= DOC_ZOOM_MIN + 0.001;
+  });
+  root.querySelectorAll('[data-doc-zoom="in"]').forEach(function(b){
+    b.disabled = z >= DOC_ZOOM_MAX - 0.001;
+  });
+  var wide = docWidePref();
+  root.querySelectorAll("[data-rrd-wide]").forEach(function(b){
+    b.setAttribute("aria-pressed", wide ? "true" : "false");
+    b.setAttribute("title", wide ? "退出宽屏阅读" : "宽屏阅读：收起左侧文档树");
+  });
+}
+function setDocZoom(next){
+  var z = Math.round(Math.min(DOC_ZOOM_MAX, Math.max(DOC_ZOOM_MIN, next)) * 100) / 100;
+  if(z === docZoomPref()) return;
+  docZoomCache = z;
+  try{ localStorage.setItem("ds.reqDocZoom", String(z)); }catch(e){ /* 隐私模式忽略 */ }
+  applyDocZoom();
+}
+function zoomDocBy(step){ setDocZoom(docZoomPref() + step); }
+function resetDocZoom(){ setDocZoom(1); }
+/** 宽屏只在本轮已选中文档时生效：没有正文可看时保留左树，避免“进得去出不来” */
+function applyDocWideState(){
+  var split = $("reqDocSplit");
+  if(!split) return;
+  split.classList.toggle("wide", docWidePref() && !!splitDocId);
+  syncDocZoomUI();
+}
+function toggleDocWide(){
+  if(!splitDocId) return;
+  try{ localStorage.setItem("ds.reqDocWide", docWidePref() ? "0" : "1"); }catch(e){ /* 忽略 */ }
+  applyDocWideState();
+}
+function docZoomControlHTML(){
+  return '<span class="seg mini doc-zoom" role="group" aria-label="正文缩放">' +
+    '<button type="button" data-doc-zoom="out" title="缩小正文（Ctrl/⌘ + 滚轮）" aria-label="缩小正文">' + icon("zoomOut", 14) + '</button>' +
+    '<button type="button" data-doc-zoom="reset" data-doc-zoom-val title="恢复 100%">' + docZoomLabel() + '</button>' +
+    '<button type="button" data-doc-zoom="in" title="放大正文（Ctrl/⌘ + 滚轮）" aria-label="放大正文">' + icon("zoomIn", 14) + '</button>' +
+  '</span>';
+}
+function docZoomLabel(){
+  return Math.round(docZoomPref() * 100) + "%";
+}
+
 /* ---------- 阅读：左侧文档树 + 右侧正文 ---------- */
 
 function reqDocSplitNodeHTML(r, depth, hasChild, collapsed){
@@ -716,6 +791,7 @@ function renderReqDocSplitNodes(nodes, children, depth){
 function renderReqDocSplit(){
   var box = $("reqDocSplitTree");
   if(!box) return;
+  applyDocWideState();
   /* 选中的文档已被删除：回到占位提示 */
   if(splitDocId && !reqDocById(splitDocId)){
     splitDocId = null;
@@ -795,6 +871,8 @@ function renderReqDocReader(doc){
       '<div class="rrd-title-row">' +
         '<h3><span class="rrd-title-text">' + esc(doc.title) + '</span>' + pubBadge + '</h3>' +
         '<span class="rrd-acts">' +
+          docZoomControlHTML() +
+          '<button class="btn sm ghost" type="button" data-rrd-wide aria-pressed="false" title="宽屏阅读：收起左侧文档树">' + icon("expand", 13) + ' 宽屏</button>' +
           (canWrite ? '<button class="btn sm ghost" type="button" data-rrd-rename="' + esc(doc.id) + '" title="重命名文档">' + icon("edit", 13) + ' 重命名</button>' : '') +
           '<button class="btn sm ghost" type="button" data-rrd-comments="' + esc(doc.id) + '" title="查看评论；选中正文可划线评论">' + icon("comment", 13) + ' 评论</button>' +
           '<button class="btn sm ghost" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canWrite ? "1" : "0") + '" title="查看历史版本">' + icon("clock", 13) + ' 历史版本</button>' +
@@ -824,6 +902,7 @@ function renderReqDocReader(doc){
         '</div>' +
       '</div>' +
     '</aside>';
+  syncDocZoomUI();
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
   renderReqDocCrumb($("rrdCrumb"), doc.id);
   var body = $("reqDocReaderBody");
@@ -3371,6 +3450,28 @@ function populateReqDocSelect(keep){
   syncAssocViewBtns();
 }
 (function wireRequirementView(){
+  /* 正文缩放：阅读页头与编辑页工具栏各一处控件，统一事件委托（阅读页会重绘） */
+  document.addEventListener("click", function(e){
+    var zb = e.target.closest("#view-requirements [data-doc-zoom]");
+    if(!zb) return;
+    var act = zb.dataset.docZoom;
+    if(act === "out") zoomDocBy(-DOC_ZOOM_STEP);
+    else if(act === "in") zoomDocBy(DOC_ZOOM_STEP);
+    else resetDocZoom();
+  });
+  /* Ctrl/⌘ + 滚轮：在正文上直接缩放；不算浏览器页面缩放 */
+  function docWheelHandler(e){
+    if(!(e.ctrlKey || e.metaKey)) return;
+    var t = e.target;
+    if(!t || !t.closest) return;
+    if(!t.closest("#reqDocReaderBody") && !t.closest("#reqDocRichBody") && !t.closest("#reqDocMdBody")) return;
+    e.preventDefault();
+    zoomDocBy(e.deltaY < 0 ? DOC_ZOOM_STEP : -DOC_ZOOM_STEP);
+  }
+  if($("reqDocReader")) $("reqDocReader").addEventListener("wheel", docWheelHandler, { passive: false });
+  if($("reqDocEditPage")) $("reqDocEditPage").addEventListener("wheel", docWheelHandler, { passive: false });
+  applyDocZoom();
+
   var tree = $("reqDocTree");
   if(tree){
     tree.addEventListener("click", function(e){
@@ -3543,6 +3644,7 @@ function populateReqDocSelect(keep){
       if(ex){ exportReqDocFromReader(ex.dataset.rrdExport); return; }
       var cb = e.target.closest("[data-rrd-comments]");
       if(cb){ toggleRrdComments(); return; }
+      if(e.target.closest("[data-rrd-wide]")){ toggleDocWide(); return; }
       if(e.target.closest("#rrdCommentsX")){ toggleRrdComments(false); return; }
       if(e.target.closest("#rrdCommentSend")){ submitRrdComment(); return; }
       if(e.target.closest("#rrdQuoteClear")){ setRrdQuote(null); return; }

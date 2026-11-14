@@ -35,6 +35,8 @@ public class RequirementService {
     /** 项目删除时连带清理它下面的需求 */
     private final RequirementDocService docService;
     private final ProjectVersionService versionService;
+    /** 里程碑强归属项目，随项目删除一并清理 */
+    private final ProjectMilestoneService milestoneService;
     private final com.hourglass.mapper.ProjectVersionMapper versionMapper;
     private final com.hourglass.mapper.DemandMapper demandMapper;
     private final DevBranchMapper branchMapper;
@@ -58,6 +60,7 @@ public class RequirementService {
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               ActivityService activityService, WorkActivityService workActivityService,
                               RequirementDocService docService, ProjectVersionService versionService,
+                              ProjectMilestoneService milestoneService,
                               com.hourglass.mapper.ProjectVersionMapper versionMapper,
                               com.hourglass.mapper.DemandMapper demandMapper,
                               DevBranchMapper branchMapper,
@@ -75,6 +78,7 @@ public class RequirementService {
         this.workActivityService = workActivityService;
         this.docService = docService;
         this.versionService = versionService;
+        this.milestoneService = milestoneService;
         this.versionMapper = versionMapper;
         this.demandMapper = demandMapper;
         this.branchMapper = branchMapper;
@@ -418,7 +422,9 @@ public class RequirementService {
         categoryService.purgeProject(workspaceId, id);
         logMapper.insertUnlinkReqLogs(workspaceId, id, userId,
                 "解除与已删除项目「" + r.getName() + "」的关联");
-        taskMapper.clearReq(workspaceId, id);
+        /* 编号是项目内序号：解绑后这些工作项归入「无项目」桶，接着该桶当前最大号往下取，
+           否则与已有无项目工作项撞 uk_task_item_no */
+        taskMapper.clearReq(workspaceId, id, taskMapper.selectNextItemNo(workspaceId, null) - 1);
         /* 直接归属该项目的分支退回空间级公共分支（分支本身保留）；与公共分支重名的先改名避免唯一键冲突 */
         branchMapper.renameClashesBeforeDetach(workspaceId, id);
         branchMapper.clearReqIdByReq(workspaceId, id);
@@ -426,7 +432,8 @@ public class RequirementService {
         docService.deleteByReq(workspaceId, id);
         /* 测试用例同样强归属项目：用例与执行流水一并清理 */
         int cases = caseService.deleteByReq(workspaceId, id);
-        /* 版本与绑定关系、需求池条目与流转日志同样强归属项目，一并清理 */
+        /* 里程碑、版本与绑定关系、需求池条目与流转日志同样强归属项目，一并清理 */
+        milestoneService.deleteByReq(workspaceId, id);
         versionService.deleteByReq(workspaceId, id);
         demandMapper.deleteLogsByReq(workspaceId, id);
         demandJudgementMapper.deleteByReq(workspaceId, id);

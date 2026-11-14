@@ -126,7 +126,14 @@
     grip: function (s) { return fillSvg(s, '<circle cx="7.6" cy="5.4" r="1.2"/><circle cx="12.4" cy="5.4" r="1.2"/><circle cx="7.6" cy="10" r="1.2"/><circle cx="12.4" cy="10" r="1.2"/><circle cx="7.6" cy="14.6" r="1.2"/><circle cx="12.4" cy="14.6" r="1.2"/>'); },
     inbox: function (s) { return svg(s, '<path d="M3.4 11.6 5.6 4.4h8.8l2.2 7.2v3a1.8 1.8 0 0 1-1.8 1.8H5.2a1.8 1.8 0 0 1-1.8-1.8Z"/><path d="M3.4 11.6h4l.9 2h3.4l.9-2h4"/>'); },
     filterOff: function (s) { return svg(s, '<path d="M3.6 6.2h8M13.6 6.2h2.8M5.8 10h3.4M12 10h4.2M8 13.8h4"/><path d="M16.4 3.6 3.6 16.4" stroke-width="1.4"/>'); },
-    shield: function (s) { return svg(s, '<path d="M10 2.6 16.4 5v5c0 3.6-2.6 6.4-6.4 7.6C6.2 16.4 3.6 13.6 3.6 10V5Z"/><path d="M7.6 10.2 9.4 12l3.2-3.6"/>'); }
+    shield: function (s) { return svg(s, '<path d="M10 2.6 16.4 5v5c0 3.6-2.6 6.4-6.4 7.6C6.2 16.4 3.6 13.6 3.6 10V5Z"/><path d="M7.6 10.2 9.4 12l3.2-3.6"/>'); },
+
+    /* ---- 交付说明 ---- */
+    note: function (s) { return svg(s, '<path d="M4 3.5h8l4 4v9H4Z"/><path d="M12 3.5v4h4"/><path d="M7 10.5h6M7 13.5h4"/>'); },
+    lock: function (s) { return svg(s, '<rect x="4" y="8.6" width="12" height="8" rx="2"/><path d="M6.8 8.6V6.4a3.2 3.2 0 0 1 6.4 0v2.2"/>'); },
+    share: function (s) { return svg(s, '<circle cx="15" cy="5" r="2.2"/><circle cx="5" cy="10" r="2.2"/><circle cx="15" cy="15" r="2.2"/><path d="M7 9 13 6M7 11l6 3"/>'); },
+    layers: function (s) { return svg(s, '<path d="M10 2.8 17.2 6.4 10 10 2.8 6.4Z"/><path d="M2.8 10.4 10 14l7.2-3.6M2.8 14 10 17.6 17.2 14"/>'); },
+    print: function (s) { return svg(s, '<path d="M6 7.4V3.6h8v3.8M6 14.6H4.2v-5h11.6v5H14"/><rect x="6" y="12" width="8" height="4.4" rx="1"/>'); }
   };
 
 export { ICONS };

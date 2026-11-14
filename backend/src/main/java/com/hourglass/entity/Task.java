@@ -39,10 +39,16 @@ public class Task {
     private Integer estimateMinutes;
     private String note;
     private LocalDate completedAt;
-    /** 进入「测试中」的日期（可重复测试，每轮重新记录开始日） */
-    private LocalDate testStartedAt;
-    /** 离开「测试中」的日期：测试通过或退回 / 重开时记录 */
-    private LocalDate testFinishedAt;
+    /** 测试负责人账号ID；为空表示「待领取」，与开发负责人相互独立 */
+    private String testOwnerUserId;
+    /** 测试负责人显示名快照；账号ID是权威绑定 */
+    private String testOwner;
+    /** 提测时间：进入「待测试」或新一轮直接进入「测试中」时记录 */
+    private LocalDateTime testRequestedAt;
+    /** 进入「测试中」的时间（可重复测试，每轮重新记录开始时刻） */
+    private LocalDateTime testStartedAt;
+    /** 离开「测试中」的时间：测试通过或退回 / 重开时记录 */
+    private LocalDateTime testFinishedAt;
     /** Derived readonly projection of immutable formal records; never persisted by task writes. */
     @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     private Boolean everPublished = Boolean.FALSE;
@@ -93,6 +99,8 @@ public class Task {
     private List<String> tags;
     /** 累计工时分钟（非表字段，查询时合并填充） */
     private Integer totalMinutes;
+    /** 测试工时分钟（非表字段）：已结束计时中自然日落在测试窗口内的部分，其余工时计入开发 */
+    private Integer testMinutes;
     /** 评论条数（非表字段，查询时合并填充） */
     private Integer commentCount;
     /** 附件条数（非表字段，查询时合并填充） */
@@ -111,6 +119,8 @@ public class Task {
 
     /** 工作项类型：story/task/bug/epic（sql/23；存量任务默认 task） */
     private String itemType;
+    /** 项目内工作项编号，展示为 WI-001（sql/82）；换项目重新取号，改类型不换号 */
+    private Integer itemNo;
     /** 缺陷严重度 blocker/critical/major/minor（仅 item_type=bug；sql/38） */
     private String severity;
     /** 发现环境（仅缺陷） */

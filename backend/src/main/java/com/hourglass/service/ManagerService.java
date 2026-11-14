@@ -16,6 +16,7 @@ import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TimeLogMapper;
+import com.hourglass.mapper.VersionTaskMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -79,6 +80,10 @@ public class ManagerService {
     /** 展示标签可选注入，保留已有构造器与调用方；不参与鉴权。 */
     @Autowired(required = false)
     private ProjectMemberRoleMapper roleMapper;
+
+    /** 报表版本筛选按需批量挂回任务绑定；测试与旧调用方可不注入。 */
+    @Autowired(required = false)
+    private VersionTaskMapper versionTaskMapper;
 
     @Autowired
     public ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
@@ -213,6 +218,7 @@ public class ManagerService {
         result.put("unassigned", bucketMetrics(unassignedTasks, today));
         result.put("canManageModules", releasePermission.canManageProject(
                 userId, workspaceId, requirement.getId()));
+        result.put("canWriteProject", projectAccess.canWrite(workspaceId, userId, requirement.getId()));
         result.put("weekly", weekly(tasks, today));
         result.put("epics", epics(tasks));
         RoleContext roles = roleContext(workspaceId, Collections.singletonList(requirement), snapshot.members);
@@ -229,17 +235,23 @@ public class ManagerService {
     }
 
     public Map<String, Object> reports(String workspaceId, String reqId, String userId) {
-        return reports(workspaceId, reqId, userId, null, null);
+        return reports(workspaceId, reqId, userId, null, null, null);
     }
 
     public Map<String, Object> reports(String workspaceId, String reqId, String userId,
                                        String roleTitle, String companyName) {
-        DisplayFilter filter = displayFilter(reqId, roleTitle, companyName);
+        return reports(workspaceId, reqId, userId, roleTitle, companyName, null);
+    }
+
+    public Map<String, Object> reports(String workspaceId, String reqId, String userId,
+                                       String roleTitle, String companyName, String versionId) {
+        DisplayFilter filter = displayFilter(reqId, roleTitle, companyName, versionId);
         LocalDate today = today();
         Snapshot snapshot = load(workspaceId, null, null, userId);
         List<Requirement> requirements = scopedRequirements(snapshot, filter.reqId);
         RoleContext roles = roleContext(workspaceId, requirements, snapshot.members);
         List<Task> baseTasks = filter.reqId == null ? snapshot.tasks : tasksForReq(snapshot.tasks, filter.reqId);
+        enrichVersions(workspaceId, baseTasks);
         Map<String, Object> options = filterOptions(baseTasks, roles);
         List<Task> tasks = filterTasks(baseTasks, roles, filter);
 
@@ -262,11 +274,21 @@ public class ManagerService {
                                                        String chart, String weekStart, String state,
                                                        String bucket, String date,
                                                        Integer offset, Integer limit) {
-        DisplayFilter filter = displayFilter(reqId, roleTitle, companyName);
+        return reportTasks(workspaceId, userId, reqId, roleTitle, companyName, chart, weekStart,
+                state, bucket, date, null, offset, limit);
+    }
+
+    public PageResult<Map<String, Object>> reportTasks(String workspaceId, String userId,
+                                                       String reqId, String roleTitle, String companyName,
+                                                       String chart, String weekStart, String state,
+                                                       String bucket, String date, String versionId,
+                                                       Integer offset, Integer limit) {
+        DisplayFilter filter = displayFilter(reqId, roleTitle, companyName, versionId);
         Snapshot snapshot = load(workspaceId, null, null, userId);
         List<Requirement> requirements = scopedRequirements(snapshot, filter.reqId);
         RoleContext roles = roleContext(workspaceId, requirements, snapshot.members);
         List<Task> baseTasks = filter.reqId == null ? snapshot.tasks : tasksForReq(snapshot.tasks, filter.reqId);
+        enrichVersions(workspaceId, baseTasks);
         List<Task> tasks = filterTasks(baseTasks, roles, filter);
 
         String kind = chart == null ? "" : chart.trim();
@@ -1240,27 +1262,40 @@ public class ManagerService {
             }
         }
         snapshot.logs = visibleLogs;
-        Map<String, Integer> actualByTask = new HashMap<String, Integer>();
-        for (TimeAgg aggregate : emptyIfNull(timeLogMapper.sumByTaskByWorkspace(workspaceId))) {
+        Map<String, TimeAgg> actualByTask = new HashMap<String, TimeAgg>();
+        for (TimeAgg aggregate : emptyIfNull(timeLogMapper.sumStageByTaskByWorkspace(workspaceId))) {
             if (aggregate != null && aggregate.getTaskId() != null) {
-                actualByTask.put(aggregate.getTaskId(), minutes(aggregate.getTotalMinutes()));
+                actualByTask.put(aggregate.getTaskId(), aggregate);
             }
         }
         for (Task task : snapshot.tasks) {
-            Integer totalMinutes = actualByTask.get(task.getId());
-            task.setTotalMinutes(totalMinutes == null ? 0 : totalMinutes);
+            TimeAgg aggregate = actualByTask.get(task.getId());
+            task.setTotalMinutes(aggregate == null ? 0 : minutes(aggregate.getTotalMinutes()));
+            task.setTestMinutes(aggregate == null ? 0 : minutes(aggregate.getTestMinutes()));
         }
         return snapshot;
     }
 
     private DisplayFilter displayFilter(String reqId, String roleTitle, String companyName) {
+        return displayFilter(reqId, roleTitle, companyName, null);
+    }
+
+    private DisplayFilter displayFilter(String reqId, String roleTitle, String companyName, String versionId) {
         DisplayFilter filter = new DisplayFilter();
         filter.reqId = trimmed(reqId);
         filter.roleUnset = UNSET_FILTER.equals(trimmed(roleTitle));
         filter.companyUnset = UNSET_FILTER.equals(trimmed(companyName));
         filter.roleTitle = filterValue(roleTitle, 32, "roleTitle");
         filter.companyName = filterValue(companyName, 64, "companyName");
+        filter.versionId = filterValue(versionId, 32, "versionId");
         return filter;
+    }
+
+    /** 报表按版本筛选需要任务侧绑定；未注入时保留调用方已挂好的数据（单测）。 */
+    private void enrichVersions(String workspaceId, List<Task> tasks) {
+        if (versionTaskMapper != null) {
+            versionTaskMapper.enrichTasks(workspaceId, tasks);
+        }
     }
 
     private String filterValue(String value, int maxLength, String name) {
@@ -1346,11 +1381,18 @@ public class ManagerService {
     }
 
     private List<Task> filterTasks(List<Task> tasks, RoleContext roles, DisplayFilter filter) {
-        if (!filter.hasMemberFilter()) {
+        if (!filter.hasMemberFilter() && filter.versionId == null) {
             return tasks;
         }
         List<Task> result = new ArrayList<Task>();
         for (Task task : tasks) {
+            if (filter.versionId != null && !task.getVersionIds().contains(filter.versionId)) {
+                continue;
+            }
+            if (!filter.hasMemberFilter()) {
+                result.add(task);
+                continue;
+            }
             MemberLabels labels = memberLabels(roles, task.getReqId(), taskOwnerId(task, roles));
             Set<String> titles = roleTitles(labels);
             boolean roleMatches = filter.roleTitle == null || (filter.roleUnset
@@ -1379,12 +1421,31 @@ public class ManagerService {
     private Map<String, Object> filterOptions(List<Task> tasks, RoleContext roles) {
         Set<String> titles = new LinkedHashSet<String>();
         Set<String> companies = new LinkedHashSet<String>();
+        Map<String, String> versions = new LinkedHashMap<String, String>();
         for (Task task : tasks) {
             addFilterOptions(memberLabels(roles, task.getReqId(), taskOwnerId(task, roles)), titles, companies);
+            for (int index = 0; index < task.getVersionIds().size(); index++) {
+                String id = task.getVersionIds().get(index);
+                if (id == null || id.trim().isEmpty()) {
+                    continue;
+                }
+                String name = index < task.getVersionNames().size() ? task.getVersionNames().get(index) : id;
+                if (!versions.containsKey(id)) {
+                    versions.put(id, name == null || name.trim().isEmpty() ? id : name);
+                }
+            }
+        }
+        List<Map<String, Object>> versionOptions = new ArrayList<Map<String, Object>>();
+        for (Map.Entry<String, String> entry : versions.entrySet()) {
+            Map<String, Object> option = new LinkedHashMap<String, Object>();
+            option.put("id", entry.getKey());
+            option.put("name", entry.getValue());
+            versionOptions.add(option);
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("roleTitles", sorted(titles));
         result.put("companyNames", sorted(companies));
+        result.put("versions", versionOptions);
         return result;
     }
 
@@ -1414,6 +1475,7 @@ public class ManagerService {
         scope.put("reqId", filter.reqId);
         scope.put("roleTitle", filter.roleUnset ? UNSET_FILTER : labelFilterOption(filter.roleTitle));
         scope.put("companyName", filter.companyUnset ? UNSET_FILTER : labelFilterOption(filter.companyName));
+        scope.put("versionId", filter.versionId);
         result.put("filterOptions", options);
         result.put("scope", scope);
     }
@@ -1609,8 +1671,12 @@ public class ManagerService {
             }
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
+        int actual = sumActual(tasks);
+        int test = sumTest(tasks);
         result.put("estimateMinutes", sumEstimate(tasks));
-        result.put("actualMinutes", sumActual(tasks));
+        result.put("actualMinutes", actual);
+        result.put("devMinutes", Math.max(0, actual - test));
+        result.put("testMinutes", test);
         result.put("remainingMinutes", sumRemaining(tasks));
         result.put("progressPct", averageProgress(tasks));
         result.put("deviationPct", completedEstimate == 0 ? null
@@ -1638,6 +1704,15 @@ public class ManagerService {
         int result = 0;
         for (Task task : tasks) {
             result += actual(task);
+        }
+        return result;
+    }
+
+    /** 测试工时合计不超过累计工时，避免脏数据让拆分为负 */
+    private int sumTest(List<Task> tasks) {
+        int result = 0;
+        for (Task task : tasks) {
+            result += Math.min(actual(task), Math.max(0, minutes(task.getTestMinutes())));
         }
         return result;
     }
@@ -1786,7 +1861,11 @@ public class ManagerService {
         item.put("reqName", reqName == null ? UNCATEGORIZED_NAME : reqName);
         item.put("progress", task.getProgress());
         item.put("estimateMinutes", task.getEstimateMinutes());
-        item.put("totalMinutes", actual(task));
+        int taskActual = actual(task);
+        int taskTest = Math.min(taskActual, Math.max(0, minutes(task.getTestMinutes())));
+        item.put("totalMinutes", taskActual);
+        item.put("devMinutes", Math.max(0, taskActual - taskTest));
+        item.put("testMinutes", taskTest);
         item.put("completedAt", task.getCompletedAt());
         item.put("createdAt", task.getCreatedAt());
         item.put("updatedAt", task.getUpdatedAt());
@@ -1976,6 +2055,7 @@ public class ManagerService {
         private String reqId;
         private String roleTitle;
         private String companyName;
+        private String versionId;
         private boolean roleUnset;
         private boolean companyUnset;
 

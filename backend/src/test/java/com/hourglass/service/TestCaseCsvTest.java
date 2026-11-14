@@ -122,10 +122,12 @@ class TestCaseCsvTest {
     @Test
     void exportRoundTripsQuotedSteps() {
         TestCaseView v = new TestCaseView();
+        v.setCaseNo(1);
         v.setTitle("登录,成功");
         v.setModule("账号\"核心\"");
         v.setPriority("P0");
         v.setPrecondition("已注册");
+        v.setTestData("账号：demo / 密码：123456");
         v.setStepsJson("[{\"action\":\"打开,登录页\",\"expected\":\"出现 \\\"输入框\\\"\"},{\"action\":\"输入密码\",\"expected\":\"\"}]");
         List<TestCaseView> rows = new ArrayList<TestCaseView>();
         rows.add(v);
@@ -136,16 +138,18 @@ class TestCaseCsvTest {
         assertTrue(text.startsWith("\uFEFF"));
         List<List<String>> parsed = Csv.parse(text);
         assertEquals(2, parsed.size());
-        assertEquals("登录,成功", parsed.get(1).get(0));
-        assertEquals("账号\"核心\"", parsed.get(1).get(1));
-        assertEquals("打开,登录页 => 出现 \"输入框\"\n输入密码", parsed.get(1).get(4));
+        assertEquals("TC-001", parsed.get(1).get(0));
+        assertEquals("登录,成功", parsed.get(1).get(1));
+        assertEquals("账号\"核心\"", parsed.get(1).get(2));
+        assertEquals("账号：demo / 密码：123456", parsed.get(1).get(5));
+        assertEquals("打开,登录页 => 出现 \"输入框\"\n输入密码", parsed.get(1).get(6));
     }
 
     @Test
     void templateHasHeaderAndExample() {
         List<List<String>> rows = Csv.parse(new String(service.templateCsv(), StandardCharsets.UTF_8));
         assertEquals(2, rows.size());
-        assertEquals("标题", rows.get(0).get(0));
-        assertTrue(rows.get(1).get(4).contains("=>"));
+        assertEquals("用例编号", rows.get(0).get(0));
+        assertTrue(rows.get(1).get(6).contains("=>"));
     }
 }

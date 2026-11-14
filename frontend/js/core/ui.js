@@ -120,6 +120,22 @@ import { icon } from "./icons.js";
     return z;
   }
 
+  /* 默认焦点只给屏幕上真实可见的控件：hidden/折叠区里的 select 也能被 focus，
+     会把长弹窗直接滚到底部（需求详情打开即错位就是这个原因） */
+  function firstVisibleField(m, focusSel) {
+    if (focusSel) {
+      var wanted = m.querySelector(focusSel);
+      if (wanted && !wanted.disabled) return wanted;
+    }
+    var list = m.querySelectorAll("input:not([type=hidden]),textarea,select,button");
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i];
+      if (el.disabled || el.hidden || el.closest("[hidden]")) continue;
+      if (!el.offsetParent) continue;
+      return el;
+    }
+    return focusables(m)[0];
+  }
   function openModal(m, focusSel) {
     if (!m) return;
     /* 所有弹窗共用同一套：焦点陷阱、遮罩关闭、焦点恢复；不再依赖手工在白名单里登记 */
@@ -128,8 +144,12 @@ import { icon } from "./icons.js";
     m.__prevFocus = lastFocus;
     m.style.zIndex = String(topOverlayZ() + 1);
     m.classList.add("open");
-    var target = focusSel ? m.querySelector(focusSel) : (m.querySelector("input:not([type=hidden]),textarea,select") || focusables(m)[0]);
-    setTimeout(function () { try { if (target) target.focus(); } catch (e) { /* noop */ } }, 40);
+    /* 打开位置固定在顶部：上一次滚到哪里都不能带进来 */
+    m.scrollTop = 0;
+    var body = m.querySelector(".sheet-body");
+    if (body) body.scrollTop = 0;
+    var target = firstVisibleField(m, focusSel);
+    setTimeout(function () { try { if (target) target.focus({ preventScroll: true }); } catch (e) { /* noop */ } }, 40);
   }
   function closeModal(m) {
     if (!m) return;

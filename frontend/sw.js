@@ -1,7 +1,7 @@
 /* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」）。
    SHELL 用相对路径，资源挂在任意上下文路径下都能正常工作。 */
-var CACHE_NAME = "hourglass-shell-v166";
+var CACHE_NAME = "hourglass-shell-v197";
 var SHELL = [
   "./",
   "index.html",
@@ -20,6 +20,7 @@ var SHELL = [
   "css/smart-table.css",
   "css/mobile.css",
   "css/assistant.css",
+  "css/delivery.css",
   "css/share.css",
   "css/auth.css",
   "js/core/ai-progress.js",
@@ -65,9 +66,11 @@ var SHELL = [
   "js/core/view-loader.js",
   "js/core/view-params.js",
   "js/lib/download.js",
+  "js/lib/delivery-doc.js",
   "js/lib/format.js",
   "js/lib/company.js",
   "js/lib/member-labels.js",
+  "js/lib/milestone-ui.js",
   "js/lib/gantt-shared.js",
   "js/lib/text-diff.js",
   "js/main.js",
@@ -76,7 +79,9 @@ var SHELL = [
   "js/views/board.js",
   "js/views/branches.js",
   "js/views/calendar.js",
+  "js/views/chain.js",
   "js/views/demands.js",
+  "js/views/delivery.js",
   "js/views/gantt.js",
   "js/views/list.js",
   "js/views/manager-shared.js",
@@ -93,6 +98,7 @@ var SHELL = [
   "js/views/risks.js",
   "js/views/settings.js",
   "js/views/testcases.js",
+  "js/views/tree.js",
   "js/views/workload.js",
   "js/views/workcolumn.js",
   "manifest.webmanifest",

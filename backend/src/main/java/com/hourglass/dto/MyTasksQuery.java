@@ -14,6 +14,8 @@ public class MyTasksQuery {
     private String displayName;
     private boolean openOnly;
     private String q;
+    /** 测试负责人显示名，__none 表示待领取 */
+    private List<String> testOwners = Collections.emptyList();
     private List<String> pris = Collections.emptyList();
     private List<String> cats = Collections.emptyList();
     private List<String> reqs = Collections.emptyList();
@@ -35,6 +37,8 @@ public class MyTasksQuery {
     private LocalDate startTo;
     private LocalDate today = LocalDate.now();
     private boolean nameOnly;
+    /** true=「待我测试」口径（我负责测试 + 我能写项目里无人认领的待测试） */
+    private boolean testScope;
     private int offset;
     private int limit = 100;
 
@@ -68,6 +72,14 @@ public class MyTasksQuery {
 
     public void setQ(String q) {
         this.q = q;
+    }
+
+    public List<String> getTestOwners() {
+        return testOwners;
+    }
+
+    public void setTestOwners(List<String> testOwners) {
+        this.testOwners = testOwners == null ? Collections.<String>emptyList() : testOwners;
     }
 
     public List<String> getPris() {
@@ -212,6 +224,14 @@ public class MyTasksQuery {
 
     public void setNameOnly(boolean nameOnly) {
         this.nameOnly = nameOnly;
+    }
+
+    public boolean isTestScope() {
+        return testScope;
+    }
+
+    public void setTestScope(boolean testScope) {
+        this.testScope = testScope;
     }
 
     public int getOffset() {

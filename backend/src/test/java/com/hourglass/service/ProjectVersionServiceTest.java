@@ -44,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -74,8 +75,14 @@ class ProjectVersionServiceTest {
     private final TaskAuditLogger taskAudit = mock(TaskAuditLogger.class);
     private final Map<String, List<String>> taskBindings = new HashMap<>();
     private final DeletionTraceService deletionTrace = mock(DeletionTraceService.class);
+    private final com.hourglass.mapper.VersionCommitmentMapper commitments =
+            mock(com.hourglass.mapper.VersionCommitmentMapper.class);
+    private final com.hourglass.mapper.DeliveryNoteMapper deliveryNotes =
+            mock(com.hourglass.mapper.DeliveryNoteMapper.class);
+    private final com.hourglass.mapper.ProjectMilestoneMapper milestones =
+            mock(com.hourglass.mapper.ProjectMilestoneMapper.class);
     private final ProjectVersionService service = new ProjectVersionService(versions, versionTasks, tasks, reqs,
-            access, lock, permissions, releases, releaseService, deletionTrace);
+            access, lock, permissions, releases, releaseService, deletionTrace, commitments, deliveryNotes, milestones);
 
     @BeforeEach
     void setUp() {
@@ -84,6 +91,10 @@ class ProjectVersionServiceTest {
         when(versions.deleteById(anyString(), anyString())).thenReturn(1);
         when(versionTasks.insertBatch(anyString(), anyString(), anyList())).thenReturn(1);
         when(versionTasks.deleteBinding(anyString(), anyString(), anyString())).thenReturn(1);
+        when(commitments.insertBatch(anyString(), anyString(), anyList())).thenAnswer(invocation -> {
+            List<?> rows = invocation.getArgument(2);
+            return rows.size();
+        });
         when(tasks.selectTaskVersionsForScope(eq(WS), anyString())).thenAnswer(invocation ->
                 taskBindings.getOrDefault(invocation.getArgument(1), Collections.emptyList()));
         when(versions.update(any(ProjectVersion.class))).thenReturn(1);
@@ -296,6 +307,127 @@ class ProjectVersionServiceTest {
         AppException error = assertThrows(AppException.class, () -> service.start(USER, WS, "V1"));
 
         assertEquals(400, error.getCode());
+        verify(versions, never()).update(any(ProjectVersion.class));
+    }
+
+    @Test
+    void startCapturesCommitmentSnapshotOfBoundTasksOnce() {
+        ProjectVersion planned = version("V1", "R1");
+        planned.setStatus("planned");
+        mockVersion(planned);
+        when(versions.markCommitment(WS, "V1")).thenReturn(1);
+        Task first = task("T1", "V1", "U1");
+        first.setEstimateMinutes(120);
+        Task second = task("T2", "V1", "U1");
+        second.setEstimateMinutes(60);
+        when(versionTasks.selectCommitmentTasks(WS, "V1")).thenReturn(Arrays.asList(first, second));
+
+        service.start(USER, WS, "V1");
+
+        ArgumentCaptor<List<com.hourglass.entity.VersionCommitmentTask>> rows = ArgumentCaptor.forClass(List.class);
+        verify(commitments).insertBatch(eq(WS), eq("V1"), rows.capture());
+        assertEquals(2, rows.getValue().size());
+        assertEquals("T1", rows.getValue().get(0).getTaskId());
+        assertEquals(120, rows.getValue().get(0).getEstimateMinutes());
+        assertNotNull(planned.getCommitmentAt());
+        assertEquals("active", planned.getStatus());
+    }
+
+    @Test
+    void startDoesNotRewriteCommitmentWhenAlreadyCaptured() {
+        ProjectVersion planned = version("V1", "R1");
+        planned.setStatus("planned");
+        planned.setCommitmentAt(LocalDateTime.of(2026, 10, 1, 9, 0));
+        mockVersion(planned);
+        when(versions.markCommitment(WS, "V1")).thenReturn(0);
+
+        service.start(USER, WS, "V1");
+
+        verify(versionTasks, never()).selectCommitmentTasks(anyString(), anyString());
+        verify(commitments, never()).insertBatch(anyString(), anyString(), anyList());
+    }
+
+    @Test
+    void deleteRemovesCommitmentRowsBeforeVersion() {
+        ProjectVersion deletable = version("V1", "R1");
+        deletable.setStatus("closed");
+        mockVersion(deletable);
+
+        service.delete(USER, WS, "V1");
+
+        InOrder order = inOrder(commitments, versions);
+        order.verify(commitments).deleteByVersion(WS, "V1");
+        order.verify(versions).deleteById(WS, "V1");
+    }
+
+    @Test
+    void closeWritesReasonAndEndedAtWithoutRequiringReleasePermission() {
+        ProjectVersion locked = version("V1", "R1");
+        locked.setRevision(2L);
+        ProjectVersion ended = version("V1", "R1");
+        ended.setStatus("closed");
+        ended.setEndReason("本轮结束，不再发布");
+        when(versions.selectById("V1")).thenReturn(locked);
+        when(versions.selectByIdForUpdate(WS, "V1")).thenReturn(locked, ended);
+        when(versions.endVersion(WS, "V1", "closed", "本轮结束，不再发布", 2L)).thenReturn(1);
+
+        ProjectVersion result = service.end(USER, WS, "V1", "closed", "  本轮结束，不再发布  ");
+
+        assertSame(ended, result);
+        verify(versions).endVersion(WS, "V1", "closed", "本轮结束，不再发布", 2L);
+        verify(releaseService).log(USER, WS, "V1", "version_close", "本轮结束，不再发布", null, "closed");
+        verify(access).assertWrite(WS, USER, "R1");
+        verifyNoInteractions(permissions);
+    }
+
+    @Test
+    void cancelRequiresReasonAndLeavesVersionUntouched() {
+        mockVersion(version("V1", "R1"));
+
+        AppException error = assertThrows(AppException.class,
+                () -> service.end(USER, WS, "V1", "canceled", " "));
+
+        assertEquals(400, error.getCode());
+        verify(versions, never()).endVersion(anyString(), anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(releaseService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"released", "closed", "canceled"})
+    void terminalVersionsCannotBeEndedAgain(String status) {
+        ProjectVersion version = version("V1", "R1");
+        version.setStatus(status);
+        mockVersion(version);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.end(USER, WS, "V1", "closed", "结束")).getCode());
+        verify(versions, never()).endVersion(anyString(), anyString(), anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    void endRejectsOpenReleasePlansBeforeWritingTerminalState() {
+        mockVersion(version("V1", "R1"));
+        when(tasks.selectVersionOpenPlanIdsForScope(WS, "V1")).thenReturn(Collections.singletonList("RP1"));
+
+        AppException error = assertThrows(AppException.class,
+                () -> service.end(USER, WS, "V1", "canceled", "作废"));
+
+        assertEquals(422, error.getCode());
+        verify(versions, never()).endVersion(anyString(), anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(releaseService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"closed", "canceled"})
+    void endedVersionsCannotBeEditedOrRestarted(String status) {
+        ProjectVersion version = version("V1", "R1");
+        version.setStatus(status);
+        mockVersion(version);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.start(USER, WS, "V1")).getCode());
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.update(USER, WS, "V1", updateRequest())).getCode());
         verify(versions, never()).update(any(ProjectVersion.class));
     }
 
@@ -524,6 +656,19 @@ class ProjectVersionServiceTest {
         verify(versions, never()).deleteByReq(anyString(), anyString());
         verify(versionTasks, never()).deleteByReq(anyString(), anyString());
         verify(releases, never()).deletePlansByVersion(anyString(), anyString());
+    }
+
+    @Test
+    void versionWithDeliveryNoteSnapshotCannotBeDeletedBecauseItMayBeSharedOutside() {
+        mockVersion(version("V1", "R1"));
+        when(versions.selectByReqForUpdate(WS, "R1")).thenReturn(Collections.singletonList(version("V1", "R1")));
+        when(deliveryNotes.selectSnapshotIdsByVersion(WS, "V1")).thenReturn(Collections.singletonList("DN1"));
+        AppException error = assertThrows(AppException.class, () -> service.delete(USER, WS, "V1"));
+        assertEquals(422, error.getCode());
+        assertTrue(error.getMessage().contains("交付说明快照"));
+        assertEquals(422, assertThrows(AppException.class, () -> service.deleteByReq(WS, "R1")).getCode());
+        verify(versions, never()).deleteById(anyString(), anyString());
+        verify(versions, never()).deleteByReq(anyString(), anyString());
     }
 
     @ParameterizedTest

@@ -17,4 +17,6 @@ public class BranchVersionTag {
     private String status;
     private String reqId;
     private String reqName;
+    /** 当前筛选范围内引用该版本的分支数（版本筛选下拉用） */
+    private Integer count;
 }

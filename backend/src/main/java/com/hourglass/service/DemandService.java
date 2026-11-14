@@ -925,8 +925,9 @@ public class DemandService {
                     || !d.getReqId().equals(target.getReqId())) {
                 throw AppException.badRequest("目标版本不存在或不属于该需求所在项目：" + versionId);
             }
-            if ("released".equals(target.getStatus()) || target.getReleasedAt() != null) {
-                throw AppException.badRequest("不能选择已发布版本");
+            if ("released".equals(target.getStatus()) || target.getReleasedAt() != null
+                    || "closed".equals(target.getStatus()) || "canceled".equals(target.getStatus())) {
+                throw AppException.badRequest("不能选择已发布、已关闭或已取消的版本");
             }
         }
         if (java.util.Objects.equals(versionId, d.getVersionId())) {
@@ -1084,8 +1085,9 @@ public class DemandService {
             if (v == null || !workspaceId.equals(v.getWorkspaceId()) || !d.getReqId().equals(v.getReqId())) {
                 throw AppException.badRequest("目标版本不存在或不属于该需求所在项目：" + versionId);
             }
-            if ("released".equals(v.getStatus()) || v.getReleasedAt() != null) {
-                throw AppException.badRequest("不能排入已发布版本");
+            if ("released".equals(v.getStatus()) || v.getReleasedAt() != null
+                    || "closed".equals(v.getStatus()) || "canceled".equals(v.getStatus())) {
+                throw AppException.badRequest("不能排入已发布、已关闭或已取消的版本");
             }
         }
         validateDates(body.getPlannedStart(), body.getPlannedEnd());

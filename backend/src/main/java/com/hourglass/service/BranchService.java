@@ -216,12 +216,23 @@ public class BranchService {
         return com.hourglass.dto.PageResult.of(items, total, q.getOffset(), q.getLimit());
     }
 
+    /** 版本筛选候选：按项目范围统计，忽略状态/负责人/关键词/版本自身筛选。 */
+    public List<BranchVersionTag> versions(String workspaceId, String userId, String projectId) {
+        BranchQuery query = new BranchQuery();
+        query.setProjectId(projectId);
+        BranchQuery q = normalize(workspaceId, userId, query);
+        q.setStatus(null);
+        q.setVersionId(null);
+        return branchMapper.selectVersionFacets(q);
+    }
+
     private BranchQuery normalize(String workspaceId, String userId, BranchQuery query) {
         BranchQuery q = query == null ? new BranchQuery() : query;
         q.setWorkspaceId(workspaceId);
         q.setViewerId(projectAccess.viewerScope(workspaceId, userId));
         q.setProjectId(Texts.trimToNull(q.getProjectId()));
         q.setOwnerUserId(Texts.trimToNull(q.getOwnerUserId()));
+        q.setVersionId(Texts.trimToNull(q.getVersionId()));
         q.setQ(Texts.trimToNull(q.getQ()));
         if (q.getStatus() != null && !LABELS.containsKey(q.getStatus())) {
             q.setStatus(null);
@@ -274,6 +285,7 @@ public class BranchService {
         q.setViewerId(src.getViewerId());
         q.setProjectId(src.getProjectId());
         q.setOwnerUserId(src.getOwnerUserId());
+        q.setVersionId(src.getVersionId());
         q.setStatus(src.getStatus());
         q.setQ(src.getQ());
         q.setOffset(src.getOffset());

@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -133,6 +134,21 @@ public class TestCaseService {
         java.util.Collections.sort(modules);
         page.setModules(modules);
         page.setOwners(caseMapper.selectOwners(workspaceId, rid));
+        page.setModuleCounts(facetCounts(caseMapper.countFacetsByModule(workspaceId, rid)));
+        page.setPriorityCounts(facetCounts(caseMapper.countFacetsByPriority(workspaceId, rid)));
+        page.setOwnerCounts(facetCounts(caseMapper.countFacetsByOwner(workspaceId, rid)));
+        Map<String, Integer> statusCounts = new LinkedHashMap<String, Integer>();
+        int executed = 0;
+        for (Map<String, Object> row : caseMapper.countGroupByStatus(workspaceId, rid)) {
+            String status = String.valueOf(row.get("status"));
+            int cnt = ((Number) row.get("cnt")).intValue();
+            statusCounts.put(status, cnt);
+            executed += cnt;
+        }
+        int all = caseMapper.countByReq(workspaceId, rid);
+        statusCounts.put("__untested", Math.max(0, all - executed));
+        statusCounts.put("__all", all);
+        page.setStatusCounts(statusCounts);
         return page;
     }
 
@@ -149,6 +165,22 @@ public class TestCaseService {
             rows.add(unlinked);
         }
         return rows;
+    }
+
+    /** 空字符串统一映射为 __none，供前端「未指定模块 / 未设置 / 未执行」计数使用 */
+    private static Map<String, Integer> facetCounts(List<Map<String, Object>> rows) {
+        Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+        if (rows == null) {
+            return counts;
+        }
+        for (Map<String, Object> row : rows) {
+            String key = String.valueOf(row.get("k"));
+            if (key == null || "null".equals(key) || key.isEmpty()) {
+                key = "__none";
+            }
+            counts.put(key, ((Number) row.get("cnt")).intValue());
+        }
+        return counts;
     }
 
     public CaseStatsView stats(String workspaceId, String userId, String reqId) {

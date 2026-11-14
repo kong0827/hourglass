@@ -5,6 +5,7 @@ import com.hourglass.common.Consts;
 import com.hourglass.common.DefectMeta;
 import com.hourglass.common.HtmlSanitizer;
 import com.hourglass.common.Ids;
+import com.hourglass.common.Nos;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.TaskSaveRequest;
 import com.hourglass.entity.AppUser;
@@ -137,6 +138,7 @@ public class TaskCommandService {
         t.setId(id);
         t.setWorkspaceId(workspaceId);
         applyRequest(userId, workspaceId, t, req, null);
+        applyTestOwner(workspaceId, t, req, null);
         assertDemandProjectUnchanged(workspaceId, t.getDemandId(), demandProject);
         validateNewDemandLink(workspaceId, null, t);
         projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
@@ -147,10 +149,15 @@ public class TaskCommandService {
         if (Consts.COL_DONE.equals(t.getBoardColumn())) {
             t.setCompletedAt(req.getCompletedAt() != null ? req.getCompletedAt() : LocalDate.now());
         }
-        if (Consts.COL_TESTING.equals(t.getBoardColumn())) {
-            t.setTestStartedAt(LocalDate.now());
+        if (Consts.COL_TEST.equals(t.getBoardColumn())) {
+            t.setTestRequestedAt(LocalDateTime.now().withSecond(0).withNano(0));
+        } else if (Consts.COL_TESTING.equals(t.getBoardColumn())) {
+            LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+            t.setTestRequestedAt(now);
+            t.setTestStartedAt(now);
+            workflow.claimTestOwner(t, workspaceId, userId);
         }
-        taskMapper.insert(t);
+        TaskSupport.insertWithNo(taskMapper, t);
         support.saveTags(workspaceId, id, req.getTags());
         /* T1.2：影响版本绑定（version_task，一任务一版本；不选=待规划） */
         String versionNote = applyVersionBinding(userId, workspaceId, t, null, req, null);
@@ -187,6 +194,7 @@ public class TaskCommandService {
                     UserNotificationPreferenceService.TASK_ASSIGNED,
                     "新任务指派：" + t.getTitle(), "任务「" + t.getTitle() + "」已指派给你", id, t.getReqId());
         }
+        notifyTestOwner(userId, workspaceId, t, "测试任务：");
         return savedTaskResponse(userId, workspaceId, id);
     }
 
@@ -209,7 +217,11 @@ public class TaskCommandService {
         t.setWorkspaceId(workspaceId);
         // applyRequest 需要原项目快照判定历史负责人绑定是否保持不变。
         t.setReqId(old.getReqId());
+        t.setTestOwnerUserId(old.getTestOwnerUserId());
+        t.setTestOwner(old.getTestOwner());
+        t.setTestRequestedAt(old.getTestRequestedAt());
         applyRequest(userId, workspaceId, t, req, old.getOwnerUserId());
+        applyTestOwner(workspaceId, t, req, old);
         projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
         /* 旧客户端 / 快捷编辑没传里程碑时保留原值，避免被默认值清掉 */
         if (req.getIsMilestone() == null) {
@@ -287,7 +299,8 @@ public class TaskCommandService {
             } else {
                 t.setCompletedAt(null);
             }
-            workflow.applyTestTimestamps(t, old.getBoardColumn(), t.getBoardColumn());
+            workflow.applyTestTransition(t, old.getBoardColumn(), t.getBoardColumn(),
+                    workspaceId, userId, true);
             /* 流转校验 + 计时联动：完成停表+接力 / 进入可计时列开表 / 进入不可计时列停表（与拖拽 move 同一口径） */
             moveSuffix = workflow.beforeEditColumnChange(userId, workspaceId, id, old.getBoardColumn(),
                     t.getBoardColumn(), req.getMoveReason(), Boolean.TRUE.equals(req.getForce()),
@@ -309,9 +322,20 @@ public class TaskCommandService {
         }
         t.setUpdatedAt(req.getOldUpdatedAt() == null ? old.getUpdatedAt() : req.getOldUpdatedAt());
         t.setVersionCheck(t.getUpdatedAt() != null);
-        int updatedRows = taskMapper.update(t);
+        /* 编号是项目内序号：换项目重新取号，改类型不换号。
+           存量未取号的行（sql/82 先于后端上线时创建的）在这次保存里补号。 */
+        boolean renumber = !Objects.equals(old.getReqId(), t.getReqId()) || old.getItemNo() == null;
+        t.setItemNo(old.getItemNo());
+        int updatedRows = renumber ? TaskSupport.updateWithNo(taskMapper, t) : taskMapper.update(t);
         if (updatedRows != 1) {
             throw new AppException(409, "任务已被其他人修改，请刷新后重新编辑");
+        }
+        if (renumber) {
+            String before = Nos.workItem(old.getItemNo());
+            String after = Nos.workItem(t.getItemNo());
+            if (!after.isEmpty() && !after.equals(before)) {
+                changes.add("编号 " + (before.isEmpty() ? "未取号" : before) + "→" + after);
+            }
         }
         /* Epic 改成其他类型时，其下子任务一并解除归属，避免悬空的 epic_id */
         if ("epic".equals(old.getItemType()) && !"epic".equals(t.getItemType())) {
@@ -346,6 +370,13 @@ public class TaskCommandService {
             notificationEvents.notify(t.getOwnerUserId(), workspaceId,
                     UserNotificationPreferenceService.TASK_UPDATED,
                     "任务更新：" + t.getTitle(), detail, id, t.getReqId());
+        }
+        boolean testOwnerChanged = !Objects.equals(old.getTestOwnerUserId(), t.getTestOwnerUserId());
+        if (testOwnerChanged) {
+            notifyTestOwner(userId, workspaceId, t, "测试负责人变更：");
+        } else if (columnChanged && (Consts.COL_TEST.equals(t.getBoardColumn())
+                || Consts.COL_TESTING.equals(t.getBoardColumn()))) {
+            notifyTestOwner(userId, workspaceId, t, "测试任务：");
         }
         return savedTaskResponse(userId, workspaceId, id);
     }
@@ -597,6 +628,54 @@ public class TaskCommandService {
         return u == null || Texts.trimToNull(u.getDisplayName()) == null ? "我" : u.getDisplayName();
     }
 
+    /** 测试负责人通知：不通知操作者本人，也不与开发负责人重复打扰。 */
+    private void notifyTestOwner(String userId, String workspaceId, Task t, String prefix) {
+        String tester = Texts.trimToNull(t.getTestOwnerUserId());
+        if (tester == null || tester.equals(userId) || tester.equals(Texts.trimToNull(t.getOwnerUserId()))) {
+            return;
+        }
+        notificationEvents.notify(tester, workspaceId, UserNotificationPreferenceService.TASK_ASSIGNED,
+                prefix + t.getTitle(), "工作项「" + t.getTitle() + "」由你负责测试", t.getId(), t.getReqId());
+    }
+
+    /**
+     * 测试负责人：与开发负责人相互独立，空=待领取。
+     * 未提交该字段（null）表示不调整；空串表示清空回待领取，便于换人或退回队列。
+     * 账号ID 是权威绑定，显示名只作快照；被指派人必须对最终项目有编辑权，
+     * 否则会出现"看得见测试任务但改不动"的死锁。
+     */
+    private void applyTestOwner(String workspaceId, Task t, TaskSaveRequest req, Task old) {
+        if (req.getTestOwnerUserId() == null) {
+            return;
+        }
+        String testerId = Texts.trimToNull(req.getTestOwnerUserId());
+        if (testerId == null) {
+            t.setTestOwnerUserId(null);
+            t.setTestOwner(null);
+            return;
+        }
+        boolean unchanged = old != null && testerId.equals(old.getTestOwnerUserId())
+                && Objects.equals(t.getReqId(), old.getReqId());
+        if (unchanged) {
+            t.setTestOwnerUserId(testerId);
+            t.setTestOwner(old.getTestOwner());
+            return;
+        }
+        WorkspaceMember member = memberMapper.selectMember(workspaceId, testerId);
+        if (member == null) {
+            throw AppException.badRequest("测试负责人不是该空间成员：" + testerId);
+        }
+        String name = Texts.trimToNull(member.getDisplayName());
+        if (name == null) {
+            name = Texts.trimToNull(member.getUsername());
+        }
+        if (!projectAccess.canWrite(workspaceId, testerId, t.getReqId())) {
+            throw AppException.badRequest("测试负责人没有该项目的编辑权限：" + (name == null ? testerId : name));
+        }
+        t.setTestOwnerUserId(testerId);
+        t.setTestOwner(name == null ? null : Texts.cut(name, 32));
+    }
+
     /**
      * Epic 归属校验：只支持一层聚合——同空间、未删除、item_type=epic、
      * Epic 不能挂到其他 Epic 下、须与任务属于同一项目、不能形成循环归属。
@@ -675,7 +754,9 @@ public class TaskCommandService {
             }
         }
         for (String versionId : target) {
-            if (!targetBelongsToReq(workspaceId, versionId, task.getReqId())) {
+            ProjectVersion targetVersion = taskMapper.selectVersionForScope(workspaceId, versionId);
+            if (targetVersion == null || task.getReqId() == null
+                    || !task.getReqId().equals(targetVersion.getReqId())) {
                 throw AppException.badRequest("影响版本不存在或不属于任务所在项目，请显式调整 versionIds 并填写原因：" + versionId);
             }
         }
@@ -693,6 +774,12 @@ public class TaskCommandService {
         unchanged.retainAll(target);
         delta.removeAll(unchanged);
         for (String versionId : delta) {
+            /* 终态版本冻结成员关系：新增与移除都不允许 */
+            ProjectVersion changedVersion = taskMapper.selectVersionForScope(workspaceId, versionId);
+            if (changedVersion != null
+                    && ("closed".equals(changedVersion.getStatus()) || "canceled".equals(changedVersion.getStatus()))) {
+                throw AppException.badRequest("已关闭或已取消的版本不能调整工作项成员：" + changedVersion.getName());
+            }
             if (!taskMapper.selectVersionFormalSuccessIdsForScope(workspaceId, versionId).isEmpty()) {
                 throw AppException.badRequest("版本已有成功正式发布记录，内容成员关系已冻结：" + versionId);
             }
@@ -800,14 +887,6 @@ public class TaskCommandService {
         state.put("demandTitle", demand == null ? null : demand.getTitle());
         state.put("reqId", demand == null ? null : demand.getReqId());
         return state;
-    }
-
-    private boolean targetBelongsToReq(String workspaceId, String versionId, String reqId) {
-        if (reqId == null) {
-            return false;
-        }
-        ProjectVersion v = taskMapper.selectVersionForScope(workspaceId, versionId);
-        return v != null && workspaceId.equals(v.getWorkspaceId()) && reqId.equals(v.getReqId());
     }
 
     private String versionDisplayName(String workspaceId, String versionId) {

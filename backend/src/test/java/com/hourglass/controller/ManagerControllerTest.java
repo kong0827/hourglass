@@ -62,23 +62,24 @@ class ManagerControllerTest {
 
     @Test
     void reportsBindsOptionalDisplayFiltersAndReturnsMetadata() throws Exception {
-        when(service.reports("W1", "R1", "U1", "测试", "A"))
-                .thenReturn(metadata("R1", "测试", "A"));
+        when(service.reports("W1", "R1", "U1", "测试", "A", "V1"))
+                .thenReturn(metadata("R1", "测试", "A", "V1"));
         mvc.perform(get("/api/manager/reports").param("reqId", "R1")
-                        .param("roleTitle", "测试").param("companyName", "A"))
+                        .param("roleTitle", "测试").param("companyName", "A").param("versionId", "V1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.scope.reqId").value("R1"))
                 .andExpect(jsonPath("$.data.scope.roleTitle").value("测试"))
                 .andExpect(jsonPath("$.data.scope.companyName").value("A"))
+                .andExpect(jsonPath("$.data.scope.versionId").value("V1"))
                 .andExpect(jsonPath("$.data.filterOptions.roleTitles[0]").value("测试"))
                 .andExpect(jsonPath("$.data.filterOptions.companyNames[1]").value("B"));
-        verify(service).reports("W1", "R1", "U1", "测试", "A");
+        verify(service).reports("W1", "R1", "U1", "测试", "A", "V1");
     }
 
     @Test
     void workloadBindsProjectAndUnsetFilters() throws Exception {
         when(service.workload("W1", "U1", "R1", "__unset__", "__unset__"))
-                .thenReturn(metadata("R1", "__unset__", "__unset__"));
+                .thenReturn(metadata("R1", "__unset__", "__unset__", null));
         mvc.perform(get("/api/manager/workload").param("reqId", "R1")
                         .param("roleTitle", "__unset__").param("companyName", "__unset__"))
                 .andExpect(status().isOk())
@@ -89,11 +90,11 @@ class ManagerControllerTest {
 
     @Test
     void missingFiltersAndOriginalJavaSignaturesRemainCompatible() throws Exception {
-        when(service.reports("W1", null, "U1", null, null)).thenReturn(metadata(null, null, null));
-        when(service.workload("W1", "U1", null, null, null)).thenReturn(metadata(null, null, null));
+        when(service.reports("W1", null, "U1", null, null, null)).thenReturn(metadata(null, null, null, null));
+        when(service.workload("W1", "U1", null, null, null)).thenReturn(metadata(null, null, null, null));
         mvc.perform(get("/api/manager/reports")).andExpect(status().isOk());
         mvc.perform(get("/api/manager/workload")).andExpect(status().isOk());
-        verify(service).reports("W1", null, "U1", null, null);
+        verify(service).reports("W1", null, "U1", null, null, null);
         verify(service).workload("W1", "U1", null, null, null);
         WorkspaceCtx context = new WorkspaceCtx("U1", workspace);
         controller.reports(null, context);
@@ -106,7 +107,7 @@ class ManagerControllerTest {
     void serviceValidationErrorsRemainHttp400() throws Exception {
         String longRole = String.join("", Collections.nCopies(33, "职"));
         String longCompany = String.join("", Collections.nCopies(65, "司"));
-        when(service.reports("W1", null, "U1", longRole, null))
+        when(service.reports("W1", null, "U1", longRole, null, null))
                 .thenThrow(AppException.badRequest("roleTitle 最多 32 个字符"));
         when(service.workload("W1", "U1", null, null, longCompany))
                 .thenThrow(AppException.badRequest("companyName 最多 64 个字符"));
@@ -116,14 +117,16 @@ class ManagerControllerTest {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value(400));
     }
 
-    private Map<String, Object> metadata(String reqId, String roleTitle, String companyName) {
+    private Map<String, Object> metadata(String reqId, String roleTitle, String companyName, String versionId) {
         Map<String, Object> options = new LinkedHashMap<String, Object>();
         options.put("roleTitles", Arrays.asList("测试", "开发"));
         options.put("companyNames", Arrays.asList("A", "B"));
+        options.put("versions", Collections.<Map<String, Object>>emptyList());
         Map<String, Object> scope = new LinkedHashMap<String, Object>();
         scope.put("reqId", reqId);
         scope.put("roleTitle", roleTitle);
         scope.put("companyName", companyName);
+        scope.put("versionId", versionId);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("filterOptions", options);
         result.put("scope", scope);

@@ -19,6 +19,8 @@ public class GanttQuery {
 
     private String q;
     private List<String> owners = new ArrayList<String>();
+    /** 测试负责人显示名快照，__none 表示待领取 */
+    private List<String> testOwners = new ArrayList<String>();
     private List<String> pris = new ArrayList<String>();
     private List<String> cats = new ArrayList<String>();
     private List<String> tags = new ArrayList<String>();
@@ -54,11 +56,18 @@ public class GanttQuery {
     /** 项目可见范围过滤：null 表示不过滤（owner/admin/viewer / 公开分享） */
     private String viewerId;
 
+    /**
+     * 搜索词里的工作项编号（WI-001 / wi1 / 纯数字）。
+     * ganttWhere 是看板与甘特共用的片段，两边都要给出这个口径，否则 OGNL 取不到属性直接报错。
+     */
+    public Integer getItemNo() { return com.hourglass.common.Nos.parseWorkItem(q); }
+
     public static GanttQuery from(BoardQuery b, LocalDate today, LocalDate from, LocalDate to,
                                   boolean includeDone) {
         GanttQuery q = new GanttQuery();
         q.q = b.getQ();
         q.owners = new ArrayList<String>(b.getOwners());
+        q.testOwners = new ArrayList<String>(b.getTestOwners());
         q.pris = new ArrayList<String>(b.getPris());
         q.cats = new ArrayList<String>(b.getCats());
         q.tags = new ArrayList<String>(b.getTags());

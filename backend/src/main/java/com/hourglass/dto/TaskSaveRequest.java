@@ -34,6 +34,14 @@ public class TaskSaveRequest {
     @Size(max = 32, message = "负责人账号ID不合法")
     private String ownerUserId;
 
+    /** 测试负责人账号ID；null=不变（新增时为空），空串=清空，变成「待领取」 */
+    @Size(max = 32, message = "测试负责人账号ID不合法")
+    private String testOwnerUserId;
+
+    /** 测试负责人显示名；与账号ID同时提交，未填时用账号当前显示名补齐 */
+    @Size(max = 32, message = "测试负责人不能超过 32 字")
+    private String testOwner;
+
     /** 模块ID（category.id；不填则用空间第一个模块） */
     @Size(max = 32, message = "模块ID不合法")
     private String categoryId;

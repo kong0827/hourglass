@@ -1,14 +1,17 @@
 /* views/demands · 需求池：四态看板、主状态工作页与交付证据派生阶段 */
 
 import { API } from "../core/api.js";
+import { loadCategories } from "../core/app.js";
 import { openAttPreview, previewable } from "../core/att-preview.js";
 import { $ } from "../core/dom.js";
+import { openDateAt } from "../core/date-picker.js";
 import { loadViews, pruneUnknownCats, savedViewsFor } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { listDensitySegHTML } from "../core/list-density.js";
 import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
+import { activeView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { canEditReq, catNameById, catTag, reqNameById, rt } from "../core/state.js";
@@ -93,6 +96,8 @@ var DEMAND_BOARD_PAGE = 50;
 var DEMAND_TABLE_PAGE = 100;
 var DEMAND_GANTT_PAGE = 100;
 var DEMAND_GANTT_MAX_DAYS = 730;
+/* 与服务端 DemandSaveRequest.source 的 @Size(max=40) 对齐 */
+var DEMAND_SOURCE_MAX = 40;
 /* 条内要放下「开发 12天+」这类文字所需的最小宽度 */
 var DEMG_SEG_LABEL_MIN_W = 68;
 var DEM_STAGE_ORDER = ["review", "plan", "design", "dev", "test", "complete", "release"];
@@ -147,6 +152,25 @@ function versionName(id){
 function demandVersionName(d){
   return d && (d.versionName || versionName(d.versionId)) || "";
 }
+/* 期望交付相对今天的天数：正数未到期，0 今天，负数已逾期 */
+function demandExpectDelta(d){
+  if(!d || !d.expectDate) return null;
+  var t = new Date(String(d.expectDate).substring(0, 10) + "T00:00:00");
+  if(isNaN(t.getTime())) return null;
+  var now = new Date();
+  return Math.round((t - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+}
+function demandExpectNote(d){
+  if(!d || !d.expectDate) return "尚未评估";
+  if(isClosedDemand(d)) return "已关闭";
+  var delta = demandExpectDelta(d);
+  if(delta === null) return "日期待确认";
+  if(delta > 1) return delta + " 天后交付";
+  if(delta === 1) return "明天交付";
+  if(delta === 0) return "今天交付";
+  return "已逾期 " + (-delta) + " 天";
+}
+function demandShortDay(s){ return s ? String(s).substring(5, 10) : "未定"; }
 function wsjfText(d){
   if(d.wsjfScore === null || d.wsjfScore === undefined) return "";
   return "WSJF " + (Math.round(d.wsjfScore * 10) / 10);
@@ -345,6 +369,12 @@ function enterDemandsView(){
   /* 浏览器可能无视 autocomplete，把上次搜索词直接写回输入框；以 demSmart.q 为准清理 */
   [0, 300, 1000, 2000, 4000].forEach(function(ms){ setTimeout(reconcileDemSearchInputs, ms); });
   loadViews().then(renderDemTabs);
+  /* 模块字典平时由看板加载；直接进需求池时这里补一次，否则模块列与模块筛选都拿不到候选 */
+  var catSig = JSON.stringify(rt.categoriesCache || []);
+  loadCategories().then(function(){
+    if(activeView !== "demands" || !demands.length) return;
+    if(JSON.stringify(rt.categoriesCache || []) !== catSig) render();
+  });
   listPrefs.load("demand-pool").then(function(){
     if(rt.reqsLoaded){
       syncReqSel();
@@ -407,6 +437,41 @@ function loadAllDemands(silent){
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试"
     });
   });
+}
+/* 行内编辑后的刷新：不闪骨架，按已加载深度补齐分页，并还原滚动位置。
+   服务端单页上限 100，加载超过一页时要继续取，否则改一个字段就把列表塌回第一页。 */
+function refreshDemandsInline(){
+  if(demWork.active || listPrefs.viewMode("demand-pool") !== "table"){ loadDemands({ silent:true }); return; }
+  var depth = Math.max(DEMAND_TABLE_PAGE, demands.length);
+  var view = demandBody.closest(".view");
+  var wrap = demandBody.querySelector(".tbl-wrap");
+  var top = view ? view.scrollTop : 0;
+  var left = wrap ? wrap.scrollLeft : 0;
+  var seq = ++demandLoadSeq;
+  var wsId = rt.currentWs && rt.currentWs.id;
+  var acc = [];
+  function step(){
+    return API.get("/api/demands/page", demandPageParams(acc.length, DEMAND_TABLE_PAGE)).then(function(page){
+      if(seq !== demandLoadSeq) return;
+      if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
+      acc = acc.concat(page.items || []);
+      demandTotal = page.total || 0;
+      demandHasMore = !!page.hasMore;
+      if(demandHasMore && acc.length < depth) return step();
+      if(listPrefs.viewMode("demand-pool") !== "table") return;
+      demandServerFiltered = true;
+      demandBoard = null;
+      demands = acc;
+      versions = [];
+      saveDemandCache("table");
+      render();
+      var v = demandBody.closest(".view");
+      if(v) v.scrollTop = top;
+      var w = demandBody.querySelector(".tbl-wrap");
+      if(w) w.scrollLeft = left;
+    });
+  }
+  step().catch(function(){ loadDemands({ silent:true }); });
 }
 /* 列表「加载更多」：按当前筛选条件追加下一页 */
 function loadMoreDemandTable(){
@@ -1113,21 +1178,23 @@ function statusTag(st){
 function demandCell(d, key){
   if(key === "title") return '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>';
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
-  if(key === "category") return catTag(d.categoryId) || "—";
+  if(key === "category") return demCategoryCell(d);
   if(key === "priority") return demPriorityCell(d);
   if(key === "status") return demStatusCell(d);
   if(key === "project") return demProjectCell(d);
   if(key === "version") return demVersionCell(d);
   if(key === "expectDate") return demExpectCell(d);
   if(key === "wsjf") return d.wsjfScore === null || d.wsjfScore === undefined ? "—" : (Math.round(d.wsjfScore * 10) / 10);
-  if(key === "source") return esc(d.source || "—");
+  if(key === "source") return demSourceCell(d);
   if(key === "createdAt") return esc(fmtTs(d.createdAt) || "—");
   return "—";
 }
 
-/* ---------- 列表行内编辑：优先级 / 状态 / 所属项目 / 期望交付 / 目标版本 ----------
+/* ---------- 列表行内编辑：优先级 / 状态 / 所属项目 / 期望交付 / 目标版本 / 模块 / 来源 ----------
    只改列表表格；看板卡片继续用拖拽与行内主按钮。状态沿用原状态机动作，
-   需要原因或版本的仍打开原弹窗，避免绕过流转规则。 */
+   需要原因或版本的仍打开原弹窗，避免绕过流转规则。
+   模块与来源没有专用端点，走整单 PUT：列表行已含 description/acceptText/wsjf 等全部字段，
+   按 demandSaveBody 回填后只覆盖目标字段，不会把说明类内容清空。 */
 function demInlineWritable(d){
   return !!d && !isClosedDemand(d) && canWriteDemand(d);
 }
@@ -1140,39 +1207,12 @@ function demInlineVersionEditable(d){
 }
 function demPriorityCell(d){
   if(!demInlineWritable(d)) return priTagHTML(d.priority || "P2");
-  var cur = d.priority || "P2";
-  return '<select class="dem-inline-select dem-inline-pri" data-dem-inline="priority" data-dem-id="' + esc(d.id) +
-    '" style="color:' + esc(priColor(cur)) + '" title="修改优先级" aria-label="优先级">' +
-    PRIORITIES.map(function(p){
-      return '<option value="' + p + '"' + (p === cur ? " selected" : "") + '>' + esc(priName(p)) + '</option>';
-    }).join("") + '</select>';
-}
-/* 目标状态只列当前角色能合法到达的项；需要补原因或选版本的沿用原动作 */
-function demInlineStatusOptions(d){
-  var out = [];
-  if(canReviewDemand(d)){
-    if(d.status === "review"){
-      out.push(["pass", "通过 → 已通过"]);
-      out.push(["rej", "评审不通过 → 已关闭"]);
-    }
-    if(d.status === "pass") out.push(["unpass", "撤回评审 → 待评审"]);
-  }
-  if(canScheduleDemand(d)){
-    if(d.status === "pass") out.push(["plan", "排期 → 已排期"]);
-    if(d.status === "plan") out.push(["unplan", "撤销排期 → 已通过"]);
-    if(!isClosedDemand(d)) out.push(["cancel", "关闭需求 → 已关闭"]);
-  }
-  return out;
+  return demInlineTrigger("priority", d, priTagHTML(d.priority || "P2"), "修改优先级", "dem-inline-pri");
 }
 function demStatusCell(d){
-  var opts = demInlineStatusOptions(d);
-  if(!opts.length) return statusTag(d.status);
-  return '<select class="dem-inline-select dem-inline-status s-' + esc(d.status) + '" data-dem-inline="status" data-dem-id="' +
-    esc(d.id) + '" title="修改状态" aria-label="状态">' +
-    '<option value="current" disabled selected>' + esc(statusName(d.status)) + '</option>' +
-    opts.map(function(o){
-      return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>';
-    }).join("") + '</select>';
+  /* 已关闭的行保持只读：恢复入口在「更多」菜单里，避免关闭行看起来还能直接流转 */
+  if(isClosedDemand(d) || !demandStatusMenuItems(d).length) return statusTag(d.status);
+  return demInlineTrigger("status", d, statusTag(d.status), "修改状态");
 }
 function demProjectCell(d){
   if(!demInlineProjectEditable(d)) return esc(reqNameById(d.reqId) || "—");
@@ -1180,29 +1220,161 @@ function demProjectCell(d){
     return r.id === d.reqId || (!r.archivedAt && canEditReq(r.id));
   });
   if(list.length <= 1) return esc(reqNameById(d.reqId) || "—");
-  return '<select class="dem-inline-select dem-inline-project" data-dem-inline="project" data-dem-id="' +
-    esc(d.id) + '" title="更换所属项目" aria-label="所属项目">' +
-    list.map(function(r){
-      return '<option value="' + esc(r.id) + '"' + (r.id === d.reqId ? " selected" : "") + '>' +
-        esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-    }).join("") + '</select>';
+  return demInlineTrigger("project", d,
+    '<span class="dem-inline-txt">' + esc(reqNameById(d.reqId) || "—") + '</span>', "更换所属项目");
 }
 function demExpectCell(d){
   var text = d.expectDate ? String(d.expectDate).substring(0, 10) : "";
   if(!demInlineWritable(d)) return esc(text || "—");
-  return '<input class="dem-inline-date" type="date" data-dem-inline="expectDate" data-dem-id="' + esc(d.id) +
-    '" value="' + esc(text) + '" title="修改期望交付" aria-label="期望交付">';
+  return demInlineTrigger("expectDate", d,
+    '<span class="dem-inline-date-t' + (text ? "" : " is-empty") + '">' + esc(text || "待评估") + '</span>',
+    "修改期望交付");
+}
+/* 模块候选按需求所属项目过滤；缓存未加载时保留原值，避免一次保存把模块悄悄改掉 */
+function demCategoryCell(d){
+  if(!demInlineWritable(d)) return catTag(d.categoryId) || "—";
+  var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === d.reqId; });
+  if(!cats.length) return catTag(d.categoryId) || "—";
+  return demInlineTrigger("category", d,
+    catTag(d.categoryId) || '<span class="dem-inline-date-t is-empty">未指定</span>', "修改模块");
+}
+/* 单元格统一触发器：读态就是普通文本或标签，悬停/聚焦才露出箭头与底色，点开才出现选项 */
+function demInlineTrigger(kind, d, inner, title, extraCls){
+  return '<button class="dem-inline-menu' + (extraCls ? " " + extraCls : "") + '" type="button"'
+    + ' data-dem-inline-menu="' + kind + '" data-dem-id="' + esc(d.id) + '"'
+    + ' aria-haspopup="' + (kind === "expectDate" ? "dialog" : "menu") + '" aria-expanded="false" title="' + esc(title) + '">'
+    + inner + icon("caretDown", 11) + '</button>';
+}
+/* 来源是纯文本，点单元格就地编辑：回车或失焦保存，Esc 取消，不做弹层 */
+function demSourceCell(d){
+  var text = d.source || "";
+  if(!demInlineWritable(d)) return esc(text || "—");
+  return '<button class="dem-inline-text' + (text ? "" : " is-empty") + '" type="button" data-dem-source-btn="' +
+    esc(d.id) + '" title="点击修改来源" aria-label="来源：' + esc(text || "未填写") + '">' + esc(text || "未填写") + '</button>';
+}
+function startDemSourceEdit(btn){
+  var d = findDemand(btn.dataset.demSourceBtn);
+  if(!d) return;
+  if(!demInlineWritable(d)){ denyDemandReadOnly(); return; }
+  var cur = d.source || "";
+  var td = btn.parentNode;
+  var el = document.createElement("span");
+  el.className = "dem-inline-text inline-edit-field";
+  el.setAttribute("contenteditable", "true");
+  el.setAttribute("role", "textbox");
+  el.setAttribute("aria-multiline", "false");
+  el.setAttribute("aria-label", "来源");
+  el.textContent = cur;
+  btn.replaceWith(el);
+  try{ el.focus(); }catch(e){ /* noop */ }
+  demandFocusEnd(el);
+  var done = false, over = false;
+  function finish(save){
+    if(done) return;
+    done = true;
+    var val = String(el.innerText || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    over = val.length > DEMAND_SOURCE_MAX;
+    if(over) val = val.slice(0, DEMAND_SOURCE_MAX);
+    td.innerHTML = demSourceCell(d);
+    if(!save || val === cur) return;
+    if(over) toast("来源最多 " + DEMAND_SOURCE_MAX + " 字，已截断保存", "warn");
+    demPutRow(d, { source: val || null }, val ? "来源已更新" : "已清空来源");
+  }
+  el.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); finish(false); return; }
+    if(e.key === "Enter"){ e.preventDefault(); e.stopPropagation(); finish(true); return; }
+    /* 输入到上限后挡掉继续输入，避免靠提交时截断 */
+    if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
+      && (el.innerText || "").length >= DEMAND_SOURCE_MAX && window.getSelection().isCollapsed){
+      e.preventDefault();
+    }
+  });
+  el.addEventListener("blur", function(){ finish(true); });
 }
 function demVersionCell(d){
   var text = esc(demandVersionName(d) || "—")
     + (plannedText(d) ? '<div class="foot-note">计划 ' + esc(plannedText(d)) + '</div>' : '');
   if(!demInlineVersionEditable(d)) return text;
-  return '<button class="dem-inline-btn" type="button" data-dem-version-btn="' + esc(d.id) +
-    '" aria-haspopup="menu" title="调整目标版本">' + esc(demandVersionName(d) || "未指定") +
-    icon("caretDown", 11) + '</button>'
+  return demInlineTrigger("version", d,
+    '<span class="dem-inline-txt">' + esc(demandVersionName(d) || "未指定") + '</span>', "调整目标版本")
     + (plannedText(d) ? '<div class="foot-note">计划 ' + esc(plannedText(d)) + '</div>' : '');
 }
-function openDemandVersionMenu(anchor, d){
+/* 点开才出现选项：菜单项统一带「当前」标记，选中即保存；需要原因或版本的仍交给原弹窗 */
+function demInlineMenu(anchor, title, items, onPick){
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "196px";
+  menu.innerHTML = '<div class="menu-title">' + esc(title) + '</div>'
+    + items.map(function(it){
+        return '<button class="menu-item" type="button" data-dem-inline-pick="' + esc(it.value) + '">'
+          + it.html + (it.current ? '<span class="k">当前</span>' : '') + '</button>';
+      }).join("");
+  UI.openPop(menu, anchor, { align:"left", width:210, onClose:function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dem-inline-pick]");
+    if(!b) return;
+    UI.closeAllPops();
+    onPick(b.dataset.demInlinePick);
+  });
+  var first = menu.querySelector(".menu-item");
+  if(first){ try{ first.focus({ preventScroll:true }); }catch(err){ /* noop */ } }
+}
+function openDemInlineMenu(btn){
+  var d = findDemand(btn.dataset.demId);
+  if(!d) return;
+  var kind = btn.dataset.demInlineMenu;
+  if(kind === "status") return openDemandStatusMenu(btn, d);
+  if(kind === "version") return openDemandVersionMenu(btn, d);
+  if(kind === "expectDate"){
+    var cur = d.expectDate ? String(d.expectDate).substring(0, 10) : "";
+    var r = btn.getBoundingClientRect();
+    openDateAt({ left:r.left, top:r.bottom, bottom:r.bottom }, {
+      value:cur,
+      onPick:function(v){
+        if((v || "") === cur) return;
+        demQuickUpdate(btn, d, "expect-date", { expectDate:v || null },
+          v ? ("期望交付已设为 " + v) : "已清空期望交付");
+      }
+    });
+    return;
+  }
+  if(kind === "priority"){
+    var pri = d.priority || "P2";
+    demInlineMenu(btn, "优先级", PRIORITIES.map(function(p){
+      return { value:p, current:p === pri,
+        html:'<span class="pdot ' + esc(p) + '" style="--p-c:' + esc(priColor(p)) + '"><i></i>' + esc(priName(p)) + '</span>' };
+    }), function(p){
+      if(p === pri) return;
+      demQuickUpdate(btn, d, "priority", { priority:p }, "优先级已调整为 " + p);
+    });
+    return;
+  }
+  if(kind === "project"){
+    var list = rt.reqList.filter(function(req){
+      return req.id === d.reqId || (!req.archivedAt && canEditReq(req.id));
+    });
+    demInlineMenu(btn, "所属项目", list.map(function(req){
+      return { value:req.id, current:req.id === d.reqId,
+        html:esc(req.name) + (req.archivedAt ? '<span class="k">已归档</span>' : '') };
+    }), function(reqId){
+      if(reqId === d.reqId) return;
+      demQuickUpdate(btn, d, "move", { reqId:reqId }, "已移至「" + reqNameById(reqId) + "」");
+    });
+    return;
+  }
+  if(kind === "category"){
+    var curCat = d.categoryId || "";
+    var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === d.reqId; });
+    demInlineMenu(btn, "模块", [{ value:"", current:!curCat, html:"未指定模块" }].concat(cats.map(function(c){
+      return { value:c.id, current:c.id === curCat, html:esc(c.name) };
+    })), function(next){
+      if(next === curCat) return;
+      demPutRow(d, { categoryId:next || null },
+        next ? ("模块已改为「" + catNameById(next) + "」") : "已清除模块", btn);
+    });
+  }
+}
+function openDemandVersionMenu(anchor, d, onSaved, queue){
   if(!anchor || !d) return;
   if(!demInlineVersionEditable(d)){ denySchedule(); return; }
   var menu = document.createElement("div");
@@ -1212,7 +1384,9 @@ function openDemandVersionMenu(anchor, d){
   UI.openPop(menu, anchor, { align:"left", width:240, onClose:function(){ menu.remove(); } });
   API.get("/api/versions", { reqId: d.reqId }).then(function(list){
     if(!document.body.contains(menu)) return;
-    var usable = (list || []).filter(function(v){ return v.status !== "released"; });
+    var usable = (list || []).filter(function(v){
+      return (v.status !== "released" && v.status !== "closed" && v.status !== "canceled") || v.id === d.versionId;
+    });
     usable.forEach(function(v){ versionNames[v.id] = v.name; });
     menu.__versions = usable;
     menu.innerHTML = '<div class="menu-title">目标版本</div>'
@@ -1245,14 +1419,16 @@ function openDemandVersionMenu(anchor, d){
     }).then(function(note){
       if(note === null) return;
       if(!note.trim()){ toast("请填写调期原因", "warn"); return; }
-      API.post("/api/demands/" + encodeURIComponent(d.id) + "/version", {
+      var save = function(){ return API.post("/api/demands/" + encodeURIComponent(d.id) + "/version", {
         revision: d.revision, versionId: vid, note: note.trim()
-      }).then(function(){
+      }); };
+      (queue || function(work){ return work(); })(save).then(function(res){
         toast(vid ? "目标版本已调整为「" + versionName(vid) + "」" : "已清除目标版本", "fs");
-        loadDemands();
+        refreshDemandsInline();
+        if(onSaved) onSaved(res);
       }).catch(function(ex){
         toast(ex.message || "调整目标版本失败", "bad");
-        if(ex.code === 409) loadDemands();
+        if(ex.code === 409) refreshDemandsInline();
       });
     });
   });
@@ -1262,48 +1438,28 @@ function demQuickUpdate(el, d, action, payload, okMsg, revert){
   payload.revision = d.revision;
   API.post("/api/demands/" + encodeURIComponent(d.id) + "/" + action, payload).then(function(){
     toast(okMsg, "fs");
-    loadDemands();
+    refreshDemandsInline();
   }).catch(function(ex){
     el.disabled = false;
     if(revert) revert();
     toast(ex.message || "修改失败", "bad");
-    if(ex.code === 409) loadDemands();
+    if(ex.code === 409) refreshDemandsInline();
   });
 }
-function handleDemInlineChange(el){
-  var d = findDemand(el.dataset.demId);
-  if(!d) return;
-  var field = el.dataset.demInline, val = el.value;
-  if(field === "status"){
-    /* 下拉只负责转交动作；取消弹窗时回到原状态显示 */
-    el.value = "current";
-    if(val === "pass") passDemand(d.id);
-    else if(val === "rej") rejectDemand(d.id);
-    else if(val === "unpass") unpassDemand(d.id);
-    else if(val === "plan") openPlanDialog(d.id);
-    else if(val === "unplan") unplanDemand(d.id);
-    else if(val === "cancel") cancelDemand(d.id);
-    return;
-  }
-  if(field === "priority"){
-    demQuickUpdate(el, d, "priority", { priority: val }, "优先级已调整为 " + val, function(){
-      el.value = d.priority || "P2";
-      el.style.color = priColor(d.priority || "P2");
-    });
-    return;
-  }
-  if(field === "project"){
-    demQuickUpdate(el, d, "move", { reqId: val }, "已移至「" + reqNameById(val) + "」", function(){
-      el.value = d.reqId;
-    });
-    return;
-  }
-  if(field === "expectDate"){
-    demQuickUpdate(el, d, "expect-date", { expectDate: val || null },
-      val ? ("期望交付已设为 " + val) : "已清空期望交付", function(){
-        el.value = d.expectDate ? String(d.expectDate).substring(0, 10) : "";
-      });
-  }
+/* 模块 / 来源走整单 PUT：列表行字段齐全，回填后只覆盖目标字段 */
+function demPutRow(d, patch, okMsg, el, revert){
+  if(el) el.disabled = true;
+  var body = demandSaveBody(d);
+  Object.keys(patch).forEach(function(k){ body[k] = patch[k]; });
+  API.put("/api/demands/" + encodeURIComponent(d.id), body).then(function(){
+    toast(okMsg, "fs");
+    refreshDemandsInline();
+  }).catch(function(ex){
+    if(el) el.disabled = false;
+    if(revert) revert();
+    toast(ex.message || "修改失败", "bad");
+    if(ex.code === 409) refreshDemandsInline();
+  });
 }
 /* ---------- 列表智能视图（预置 Tab + 自定义视图，参考任务列表） ---------- */
 
@@ -1681,7 +1837,7 @@ function demFilterMenuHTML(boardOnly){
   if(!priInner && !kindInner && !catInner && (boardOnly || !reqInner)){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前条件下没有可筛选的选项。</p></div>';
   }
-  html += '<div class="menu-foot"><button class="btn sm" type="button" data-dem-f-reset>重置筛选</button></div>';
+  html += '<div class="menu-foot"><button class="btn sm" type="button" data-dem-f-reset>清空筛选</button></div>';
   return html;
 }
 function openDemFilterPop(anchor, boardOnly){
@@ -2437,7 +2593,8 @@ function openDemandDialog(d){
   demandFormBaseline = demandFormSnapshot();
   UI.openModal($("dlgDemand"), "input");
 }
-/* 已进入流转的需求只放开说明类字段；标题、类型、优先级与日期沿用原有动作口径，控件锁住而不是提交后静默丢弃 */
+/* 已进入流转的需求只放开说明类字段；标题与类型锁住而不是提交后静默丢弃。
+   优先级与期望交付服务端 PUT 同样不落库，改它们要走列表行内或详情事实条的专用端点。 */
 function setDemandFormLocked(locked){
   [dTitle, dKind, dExpect].forEach(function(el){ if(el) el.disabled = locked; });
   var seg = $("segDemandPri");
@@ -2762,41 +2919,78 @@ function extOfName(filename){
   var idx = String(filename || "").lastIndexOf(".");
   return idx >= 0 ? String(filename).substring(idx + 1) : "";
 }
+/* 交付表只展示一个生产发布结论；历史发布压成一行小字，避免 5 列里塞两枚胶囊把表格撑宽 */
+function demandPublicationCell(task){
+  if(!task) return '<span class="tag ghost">未发布</span>';
+  var state = task.publicationState || "unpublished";
+  var meta = {
+    effective: ["生产生效", "tag-success"],
+    partial: ["生产部分生效", "tag-neutral"],
+    rolled_back: ["生产已回滚", "tag-neutral"],
+    unknown: ["生产覆盖未知", "tag-neutral"]
+  }[state];
+  var html = meta
+    ? '<span class="tag ' + meta[1] + '" title="仅来自正式生产发布记录">' + meta[0] + '</span>'
+    : '<span class="tag ghost">未发布</span>';
+  if(task.everPublished === true && state !== "effective"){
+    html += '<span class="t-sub">曾生产发布</span>';
+  }
+  return html;
+}
 function loadDemandTasks(layer, id, targetVersionId){
   var box = layer.querySelector("#demTasks");
-  if(!box) return;
+  var overview = layer.querySelector("#demandOverviewTasks");
+  var count = layer.querySelector("#tabDeliveryCount");
+  if(!box && !overview && !count) return;
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
     if(!layer.isConnected) return;
-    if(!tasks || !tasks.length){
-      box.innerHTML = '<div class="attach-empty">还没有关联工作项；通过「拆分为工作项」把需求拆开执行。</div>';
+    tasks = tasks || [];
+    if(!tasks.length){
+      if(count) count.textContent = "0/0";
+      if(overview) overview.innerHTML = '<li class="read-empty">尚未拆分工作项</li>';
+      if(box) box.innerHTML = '<div class="attach-empty">还没有关联工作项；通过「拆分为工作项」把需求拆开执行。</div>';
       return;
     }
     var published = tasks.filter(function(t){ return t.publicationState === "effective"; }).length;
     var partial = tasks.filter(function(t){ return t.publicationState === "partial"; }).length;
     var historical = tasks.filter(function(t){ return t.everPublished === true; }).length;
+    var done = tasks.filter(function(t){ return t.boardColumn === "done"; }).length;
     var delivery = "当前生产全量生效 " + published + " 项，部分生效 " + partial + " 项；曾生产发布 " + historical + " 项";
+    if(count) count.textContent = done + "/" + tasks.length;
+    if(overview){
+      overview.innerHTML = tasks.slice(0, 3).map(function(t){
+        var isDone = t.boardColumn === "done";
+        return '<li data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
+          + '<span class="ra-time">' + (isDone ? "已完成" : esc(colName(t.boardColumn))) + '</span>'
+          + '<span class="ra-txt">' + esc(t.title)
+          + (t.owner ? ' <span class="ra-owner">' + esc(t.owner) + '</span>' : '') + '</span></li>';
+      }).join("") + (tasks.length > 3 ? '<li class="read-empty">另有 ' + (tasks.length - 3) + ' 项，可在「交付」页签查看</li>' : "");
+    }
+    if(!box) return;
     box.innerHTML = '<p class="foot-note">' + esc(delivery) + '（' + published + '/' + tasks.length
-      + '）。任务发布不等于需求业务验收；下列版本为当前计划，实际交付以工作项详情中的版本发布记录为准。</p>'
-      + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr>'
-      + '<th>工作项</th><th>类型</th><th>负责人</th><th class="num">预估</th><th>状态</th><th>当前计划版本</th><th>生产发布事实</th><th>最近生产发布时间</th></tr></thead><tbody>'
+      + '）。任务发布不等于需求业务验收；版本为当前计划，实际交付以工作项详情中的版本发布记录为准。</p>'
+      + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl dem-evidence-tbl"><thead><tr>'
+      + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th>生产发布</th></tr></thead><tbody>'
       + tasks.map(function(t){
-        var done = t.boardColumn === "done";
+        var isDone = t.boardColumn === "done";
+        var verText = taskVersionsText(t) || "未绑版本";
+        var mismatch = targetVersionId && taskVersionIds(t).indexOf(targetVersionId) === -1;
         return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
-          + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(t.title) + '</td>'
+          + '<td class="t-title-cell"><div class="t-title">' + esc(t.title) + '</div>'
+            + '<div class="t-sub">' + esc((t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) + " · " : "") + verText)
+            + (mismatch ? ' · <span class="tag ghost">未关联目标版本</span>' : '') + '</div></td>'
           + '<td>' + typeBadgeHTML(t.itemType) + '</td>'
           + '<td>' + esc(t.owner || "—") + '</td>'
-          + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'
-          + '<td>' + (done ? '<span class="tag tag-success">已完成</span>'
+          + '<td>' + (isDone ? '<span class="tag tag-success">已完成</span>'
             : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
-          + '<td>' + esc(taskVersionsText(t) || "未绑版本")
-          + (targetVersionId && taskVersionIds(t).indexOf(targetVersionId) === -1 ? ' <span class="tag ghost">尚未关联需求目标版本</span>' : '') + '</td>'
-          + '<td>' + (taskPublicationHTML(t) || '未生产发布') + '</td>'
-          + '<td>' + esc(t.publishedAt ? fmtReleaseTime(t.publishedAt) : "—") + '</td>'
+          + '<td>' + demandPublicationCell(t) + '</td>'
           + '</tr>';
       }).join("")
       + '</tbody></table></div>';
   }).catch(function(){
-    if(layer.isConnected) box.innerHTML = '<div class="attach-empty">关联工作项加载失败</div>';
+    if(!layer.isConnected) return;
+    if(box) box.innerHTML = '<div class="attach-empty">关联工作项加载失败</div>';
+    if(overview) overview.innerHTML = '<li class="read-empty">关联工作项加载失败</li>';
   });
 }
 function loadDemandAttachments(layer, id, writable){
@@ -3022,84 +3216,704 @@ function revokeJudgement(id){
     });
   });
 }
+/* 流转记录存的是后端事件码，直接展示会露出 pass/rej 这类英文，统一翻成人话 */
+var DEM_LOG_ACTIONS = {
+  create:"新建需求", update:"编辑需求", priority:"调整优先级", expect:"调整期望交付",
+  version:"调整目标版本", move:"变更所属项目", pass:"评审通过", rej:"评审不通过",
+  plan:"排期", replan:"调期", unpass:"撤回评审", unplan:"撤销排期",
+  cancel:"取消需求", restore:"恢复需求", reopen:"重新打开",
+  judge_delivery:"人工判定交付阶段", revoke_delivery_judgement:"撤销人工判定"
+};
+function demandLogItemHTML(l){
+  /* 单字段动作（优先级/期望交付/目标版本）的 note 与结构化差异是同一句话：逐条去重，避免重复显示 */
+  var note = l.note || "";
+  var change = demandLogChange(l).split("；").filter(function(part){
+    return part && note.indexOf(part) === -1;
+  }).join("；");
+  var notes = (note ? '<span class="dem-log-note">' + esc(note) + '</span>' : '')
+    + (change ? '<span class="dem-log-note">' + esc(change) + '</span>' : '');
+  return '<li><span class="dem-log-ts">' + esc(fmtTs(l.createdAt) || "—") + '</span>'
+    + '<span class="dem-log-main"><b>' + esc(DEM_LOG_ACTIONS[l.action] || l.action || "") + '</b>'
+    + (l.operatorName || l.operator ? '<span class="dem-log-op">' + esc(l.operatorName || l.operator) + '</span>' : '')
+    + notes + '</span></li>';
+}
+/* ---------- 需求详情：与工作项共用「右侧抽屉 + 四页签 + 单一状态入口」 ---------- */
+function demandStatusDot(status){
+  if(status === "review") return "var(--info)";
+  if(status === "pass") return "var(--success)";
+  if(status === "plan") return "var(--primary)";
+  if(status === "rej" || status === "canceled" || status === "cancelled") return "var(--danger)";
+  return "var(--text-3)";
+}
+function demandStatusLabel(d){
+  /* 胶囊只表示评审/排期状态；交付阶段在「交付」页签按事实展示 */
+  return statusName(d.status);
+}
+function demandFootActs(d){
+  var acts = "";
+  if(canReviewDemand(d) && d.status === "review"){
+    acts += '<button class="btn sm" type="button" data-dem-rej="' + esc(d.id) + '">不通过</button>'
+      + '<button class="btn sm primary" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
+  }else if(canScheduleDemand(d) && d.status === "pass"){
+    acts += '<button class="btn sm primary" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
+  }else if(canReviewDemand(d) && isClosedDemand(d) && (d.closeReason === "rej" || d.status === "rej")){
+    acts += '<button class="btn sm" type="button" data-dem-reopen="' + esc(d.id) + '">重新打开</button>';
+  }else if(canScheduleDemand(d) && isClosedDemand(d) && d.closeReason !== "rej" && d.status !== "rej"){
+    acts += '<button class="btn sm" type="button" data-dem-restore="' + esc(d.id) + '">恢复至' + esc(restoreTargetName(d)) + '</button>';
+  }
+  return acts;
+}
+function demandStatusMenuItems(d){
+  var out = [];
+  if(canReviewDemand(d)){
+    if(d.status === "review"){
+      out.push({ act: "pass", label: "通过，可排期" });
+      out.push({ act: "rej", label: "评审不通过…", danger: true });
+    }
+    if(d.status === "pass") out.push({ act: "unpass", label: "撤回评审" });
+    if(isClosedDemand(d) && (d.closeReason === "rej" || d.status === "rej")){
+      out.push({ act: "reopen", label: "重新打开（回到待评审）" });
+    }
+  }
+  if(canScheduleDemand(d)){
+    if(d.status === "pass") out.push({ act: "plan", label: "排期进入版本…" });
+    if(d.status === "plan"){
+      out.push({ act: "replan", label: "调整排期…" });
+      out.push({ act: "unplan", label: "撤销排期…" });
+    }
+    if(isClosedDemand(d) && d.closeReason !== "rej" && d.status !== "rej"){
+      out.push({ act: "restore", label: "恢复至" + restoreTargetName(d) });
+    }
+    if(!isClosedDemand(d)) out.push({ act: "cancel", label: "关闭需求…", danger: true });
+  }
+  return out;
+}
+function runDemandStatusAction(d, act){
+  if(!d || !act) return;
+  if(act === "pass") return passDemand(d.id);
+  if(act === "rej") return rejectDemand(d.id);
+  if(act === "plan") return openPlanDialog(d.id);
+  if(act === "unpass") return unpassDemand(d.id);
+  if(act === "unplan") return unplanDemand(d.id);
+  if(act === "replan") return openPlanDialog(d.id, true);
+  if(act === "cancel") return cancelDemand(d.id);
+  if(act === "reopen") return reopenDemand(d.id);
+  if(act === "restore") return restoreDemand(d.id);
+}
+function openDemandStatusMenu(anchor, d){
+  var items = demandStatusMenuItems(d);
+  if(!items.length){ toast("当前状态没有可执行的动作", "warn"); return; }
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "198px";
+  menu.innerHTML = '<div class="menu-title">需求状态</div>' + items.map(function(it){
+    return '<button class="menu-item' + (it.danger ? " danger" : "") + '" type="button" data-dem-status-act="' + it.act + '">'
+      + esc(it.label) + '</button>';
+  }).join("");
+  UI.openPop(menu, anchor, { onClose: function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dem-status-act]");
+    if(!b) return;
+    UI.closeAllPops();
+    runDemandStatusAction(d, b.dataset.demStatusAct);
+  });
+}
+function openDemandDetailMore(anchor, d){
+  var items = demandMenuItems(d).filter(function(it){ return it.act === "edit" || it.act === "del"; });
+  if(!items.length) return;
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "140px";
+  menu.innerHTML = items.map(function(it){
+    return '<button class="menu-item' + (it.danger ? " danger" : "") + '" type="button" data-dem-detail-more="' + it.act + '">' + esc(it.label) + '</button>';
+  }).join("");
+  UI.openPop(menu, anchor, { onClose: function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dem-detail-more]");
+    if(!b) return;
+    UI.closeAllPops();
+    if(b.dataset.demDetailMore === "edit"){
+      /* 完整字段仍在编辑面板；先关详情，避免两层叠加 */
+      closeDemandDetailIfOpen();
+      setTimeout(function(){ openDemandDialog(d); }, 40);
+    }else if(b.dataset.demDetailMore === "del"){
+      deleteDemand(d.id);
+    }
+  });
+}
+function demandDetailPlain(text){
+  var value = text == null ? "" : String(text);
+  return value ? esc(value) : '<span class="muted">未填写</span>';
+}
+/* ---------- 需求详情就地编辑 ----------
+   文案（标题/描述/验收）点开即改，失焦或 ⌘/Ctrl+Enter 保存、Esc 还原；
+   属性（优先级/期望交付/目标版本/模块/来源）点开弹层选择后直接保存。
+   保存后只刷新当前详情，不再关闭重开；同一详情内的写操作串行，避免 revision 互相覆盖。 */
+function demandSaveQueued(layer, work){
+  var prev = layer.__demSaveQueue || Promise.resolve();
+  var next = prev.then(work, work);
+  layer.__demSaveQueue = next.then(function(){}, function(){});
+  return next;
+}
+function demandApplyServer(d, res){
+  if(!res) return;
+  Object.assign(d, res);
+  var cached = findDemand(d.id);
+  if(cached && cached !== d) Object.assign(cached, res);
+}
+function demandSaveBody(d){
+  return {
+    reqId: d.reqId,
+    title: d.title || "",
+    description: d.description || null,
+    acceptText: d.acceptText || null,
+    source: d.source || null,
+    itemKind: d.itemKind || "其他",
+    categoryId: d.categoryId || null,
+    priority: d.priority || "P2",
+    expectDate: d.expectDate || null,
+    plannedStart: d.plannedStart || null,
+    plannedEnd: d.plannedEnd || null,
+    revision: d.revision,
+    wsjfBusiness: d.wsjfBusiness == null ? null : d.wsjfBusiness,
+    wsjfUrgency: d.wsjfUrgency == null ? null : d.wsjfUrgency,
+    wsjfRisk: d.wsjfRisk == null ? null : d.wsjfRisk,
+    wsjfEffort: d.wsjfEffort == null ? null : d.wsjfEffort
+  };
+}
+function demandReloadInPlace(ctx){
+  return API.get("/api/demands/" + encodeURIComponent(ctx.d.id)).then(function(res){
+    demandApplyServer(ctx.d, res);
+    ctx.sync();
+  }).catch(function(){});
+}
+function demandSaveFailed(ex, ctx){
+  if(ex && ex.code === 409){
+    toast("需求已被其他人修改，已刷新为最新内容", "warn");
+    demandReloadInPlace(ctx);
+    loadDemands({ silent:true });
+    return;
+  }
+  toast((ex && ex.message) || "保存失败", "bad");
+}
+function demandQuickSave(ctx, action, payload, okMsg){
+  return demandSaveQueued(ctx.layer, function(){
+    payload.revision = ctx.d.revision;
+    return API.post("/api/demands/" + encodeURIComponent(ctx.d.id) + "/" + action, payload).then(function(res){
+      demandApplyServer(ctx.d, res);
+      ctx.sync();
+      toast(okMsg, "fs");
+      loadDemands({ silent:true });
+      return res;
+    }, function(ex){
+      demandSaveFailed(ex, ctx);
+      throw ex;
+    });
+  }).catch(function(){});
+}
+function demandPutField(ctx, patch, okMsg){
+  return demandSaveQueued(ctx.layer, function(){
+    var body = demandSaveBody(ctx.d);
+    Object.keys(patch).forEach(function(k){ body[k] = patch[k]; });
+    return API.put("/api/demands/" + encodeURIComponent(ctx.d.id), body).then(function(res){
+      demandApplyServer(ctx.d, res);
+      ctx.sync();
+      toast(okMsg, "fs");
+      loadDemands({ silent:true });
+      return res;
+    }, function(ex){
+      demandSaveFailed(ex, ctx);
+      throw ex;
+    });
+  }).catch(function(){});
+}
+function demandFieldValue(d, field){
+  if(field === "title") return d.title || "";
+  if(field === "desc") return d.description || "";
+  if(field === "source") return d.source || "";
+  return d.acceptText || "";
+}
+function demandRenderField(el, ctx, field){
+  if(field === "title") el.textContent = ctx.d.title || "";
+  else if(field === "source"){
+    el.textContent = ctx.d.source || "未填写";
+    el.title = ctx.d.source || "";
+  }
+  else el.innerHTML = demandDetailPlain(field === "desc" ? ctx.d.description : ctx.d.acceptText);
+}
+function demandFocusEnd(el){
+  try{
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }catch(e){ try{ el.focus(); }catch(err){ /* noop */ } }
+}
+function demandStartTextEdit(el, ctx, field){
+  if(!el || el.isContentEditable) return;
+  if(!canWriteDemand(ctx.d)){ denyDemandReadOnly(); return; }
+  if(isClosedDemand(ctx.d)){ toast("已关闭的需求不能直接编辑", "warn"); return; }
+  if(field === "title" && ctx.d.status !== "review") return;
+  el.textContent = demandFieldValue(ctx.d, field);
+  el.setAttribute("contenteditable", "true");
+  el.setAttribute("role", "textbox");
+  el.setAttribute("aria-multiline", field === "title" || field === "source" ? "false" : "true");
+  el.classList.add("inline-edit-field");
+  /* 窄屏概览是两列网格：编辑时让这一行独占整行，输入框才不会被压成窄条 */
+  var metaRow = el.closest ? el.closest(".rf-meta") : null;
+  if(metaRow) metaRow.classList.add("is-editing");
+  try{ el.focus(); }catch(e){ /* noop */ }
+  demandFocusEnd(el);
+}
+function demandCancelTextEdit(el, ctx, field){
+  if(!el || !el.isContentEditable) return;
+  el.removeAttribute("contenteditable");
+  el.removeAttribute("aria-multiline");
+  /* 来源的值本身不可聚焦，键盘入口是外层 data-dem-fact 行 */
+  if(field === "source") el.removeAttribute("role");
+  else el.setAttribute("role", "button");
+  el.classList.remove("inline-edit-field");
+  var metaRow = el.closest ? el.closest(".rf-meta") : null;
+  if(metaRow) metaRow.classList.remove("is-editing");
+  demandRenderField(el, ctx, field);
+}
+function demandFinishTextEdit(el, ctx, field, save){
+  if(!el || !el.isContentEditable) return;
+  var val = String(el.innerText || "").replace(/\u00a0/g, " ");
+  if(field === "title" || field === "source") val = val.replace(/[\r\n]+/g, " ").replace(/^\s+|\s+$/g, "");
+  else val = val.replace(/^\s+|\s+$/g, "");
+  if(save && field === "title" && !val){
+    toast("需求标题不能为空", "warn");
+    try{ el.focus(); }catch(e){ /* noop */ }
+    return;
+  }
+  var over = field === "source" && val.length > DEMAND_SOURCE_MAX;
+  if(over) val = val.slice(0, DEMAND_SOURCE_MAX);
+  el.removeAttribute("contenteditable");
+  if(field === "source") el.removeAttribute("role");
+  else el.setAttribute("role", "button");
+  el.removeAttribute("aria-multiline");
+  el.classList.remove("inline-edit-field");
+  var metaRow = el.closest ? el.closest(".rf-meta") : null;
+  if(metaRow) metaRow.classList.remove("is-editing");
+  if(!save || val === demandFieldValue(ctx.d, field)){
+    demandRenderField(el, ctx, field);
+    return;
+  }
+  if(over) toast("来源最多 " + DEMAND_SOURCE_MAX + " 字，已截断保存", "warn");
+  var patch = {};
+  if(field === "title") patch.title = val || null;
+  else if(field === "desc") patch.description = val || null;
+  else if(field === "source") patch.source = val || null;
+  else patch.acceptText = val || null;
+  var okMsg = field === "title" ? "标题已保存"
+    : field === "desc" ? "需求描述已保存"
+      : field === "source" ? (val ? "来源已更新" : "已清空来源")
+        : "验收标准已保存";
+  demandPutField(ctx, patch, okMsg);
+}
+function openDemandPriorityFact(anchor, ctx){
+  var cur = ctx.d.priority || "P2";
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "168px";
+  menu.innerHTML = '<div class="menu-title">优先级</div>' + PRIORITIES.map(function(p){
+    return '<button class="menu-item" type="button" data-dem-fact-pri="' + p + '">'
+      + '<span style="width:8px;height:8px;border-radius:50%;background:' + esc(priColor(p)) + '"></span>'
+      + p + ' · ' + esc(priName(p)) + (p === cur ? '<span class="k">当前</span>' : '') + '</button>';
+  }).join("");
+  UI.openPop(menu, anchor, { align:"left", width:190, onClose:function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dem-fact-pri]");
+    if(!b) return;
+    UI.closeAllPops();
+    var p = b.dataset.demFactPri;
+    if(p === cur) return;
+    demandQuickSave(ctx, "priority", { priority:p }, "优先级已调整为 " + p);
+  });
+  var first = menu.querySelector(".menu-item");
+  if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
+}
+function openDemandExpectFact(anchor, ctx){
+  var cur = ctx.d.expectDate ? String(ctx.d.expectDate).substring(0, 10) : "";
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.innerHTML = '<div class="menu-title">期望交付</div>'
+    + '<div class="menu-field"><input class="input" type="date" id="demFactExpect" value="' + esc(cur) + '" aria-label="期望交付日期"></div>'
+    + '<div class="menu-foot"><button class="btn sm" type="button" data-dem-exp-clear>清除</button>'
+    + '<button class="btn sm primary" type="button" data-dem-exp-save>保存</button></div>';
+  UI.openPop(menu, anchor, { align:"left", width:250, onClose:function(){ menu.remove(); } });
+  var input = menu.querySelector("#demFactExpect");
+  function commit(clear){
+    var next = clear ? "" : (input ? input.value : "");
+    UI.closeAllPops();
+    if((next || "") === cur) return;
+    demandQuickSave(ctx, "expect-date", { expectDate:next || null },
+      next ? ("期望交付已设为 " + next) : "已清空期望交付");
+  }
+  menu.addEventListener("click", function(e){
+    if(e.target.closest("[data-dem-exp-clear]")) commit(true);
+    else if(e.target.closest("[data-dem-exp-save]")) commit(false);
+  });
+  if(input){
+    input.addEventListener("keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); commit(false); }
+    });
+    setTimeout(function(){ try{ input.focus(); }catch(e){ /* noop */ } }, 30);
+  }
+}
+function openDemandModuleFact(anchor, ctx){
+  var cur = ctx.d.categoryId || "";
+  var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === ctx.d.reqId; });
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "200px";
+  menu.innerHTML = '<div class="menu-title">模块</div>'
+    + '<button class="menu-item" type="button" data-dem-fact-cat="">未指定模块'
+    + (!cur ? '<span class="k">当前</span>' : '') + '</button>'
+    + cats.map(function(c){
+        return '<button class="menu-item" type="button" data-dem-fact-cat="' + esc(c.id) + '">' + esc(c.name)
+          + (c.id === cur ? '<span class="k">当前</span>' : '') + '</button>';
+      }).join("")
+    + (cats.length ? "" : '<p class="foot-note" style="padding:8px 10px;margin:0">该项目还没有模块，可在项目设置里添加</p>');
+  UI.openPop(menu, anchor, { align:"left", width:220, onClose:function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dem-fact-cat]");
+    if(!b) return;
+    UI.closeAllPops();
+    var next = b.dataset.demFactCat || "";
+    if(next === cur) return;
+    demandPutField(ctx, { categoryId:next || null },
+      next ? ("模块已改为「" + catNameById(next) + "」") : "已清除模块");
+  });
+  var first = menu.querySelector(".menu-item");
+  if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
+}
+function openDemandFactEditor(kind, anchor, ctx){
+  if(!ctx || !ctx.d) return;
+  if(!canWriteDemand(ctx.d)){ denyDemandReadOnly(); return; }
+  if(isClosedDemand(ctx.d)){ toast("已关闭的需求不能直接编辑", "warn"); return; }
+  if(kind === "priority") return openDemandPriorityFact(anchor, ctx);
+  if(kind === "expect") return openDemandExpectFact(anchor, ctx);
+  if(kind === "version"){
+    return openDemandVersionMenu(anchor, ctx.d, function(res){
+      demandApplyServer(ctx.d, res);
+      ctx.sync();
+    }, function(work){ return demandSaveQueued(ctx.layer, work); });
+  }
+  if(kind === "module") return openDemandModuleFact(anchor, ctx);
+  /* 来源是纯文本，与标题/描述一样就地编辑，不再弹输入框 */
+  if(kind === "source"){
+    var textEl = anchor ? anchor.querySelector('[data-dem-text="source"]') : null;
+    if(textEl) demandStartTextEdit(textEl, ctx, "source");
+  }
+}
 function renderDemandDetail(d){
   var id = d.id;
-  var writable = canWriteDemand(d), canSplit = writable && !isClosedDemand(d);
-  var grid = [
-    ["状态", statusName(d.status)],
-    ["需求类型", d.itemKind || "其他"],
+  var writable = canWriteDemand(d), canEditText = writable && !isClosedDemand(d);
+  var canEditTitle = canEditText && d.status === "review";
+  var canSplit = canEditText;
+  var total = Number(d.taskCount) || 0, done = Number(d.taskDone) || 0;
+  var cases = Number(d.caseCount) || 0, passed = Number(d.casePassed) || 0;
+  var statusLabel = demandStatusLabel(d);
+  var statusDot = demandStatusDot(d.status);
+  function headMetaText(){
+    return [
+      reqNameById(d.reqId) || "未归属项目",
+      catNameById(d.categoryId) || null,
+      d.expectDate ? "期望交付 " + d.expectDate : null,
+      "提交于 " + (fmtTs(d.createdAt) || "—")
+    ].filter(Boolean).join(" · ");
+  }
+  var meta = headMetaText();
+  var relFacts = [
+    ["目标版本", demandVersionName(d) || "待规划"],
+    ["所属项目", reqNameById(d.reqId) || "未归属项目"],
     ["模块", catNameById(d.categoryId) || "未指定模块"],
-    ["优先级", priName(d.priority || "P2")],
-    ["需求目标版本", demandVersionName(d) || "待规划"],
-    ["计划开始", d.plannedStart || "未定"],
-    ["计划结束", d.plannedEnd || "未定"],
-    ["期望交付", d.expectDate || "待评估"],
-    ["需求来源", d.source || "—"]
+    ["来源", d.source || "—"]
   ];
-  if(d.status === "plan" && d.deliveryStage){
-    grid.push(["交付阶段", deliveryStageName(d.deliveryStage) + (d.deliveryStageSource === "manual" ? "（人工判定）" : "")]);
-    grid.push(["交付证据", "工作项 " + (Number(d.taskDone) || 0) + "/" + (Number(d.taskCount) || 0) + " · 用例 " + (Number(d.casePassed) || 0) + "/" + (Number(d.caseCount) || 0)]);
-    if(d.deliveredAt) grid.push([d.deliveryStageSource === "manual" ? "人工交付日期" : "生产发布", String(d.deliveredAt).substring(0, 10)]);
-  }
-  if(isClosedDemand(d)){
-    grid.push(["关闭原因", closeReasonName(d.closeReason || (d.status === "rej" ? "rej" : "cancel"))]);
-    grid.push(["关闭前阶段", closeStageName(d.closeStage || (d.status === "rej" ? "review" : "pass"))]);
-  }
   var wsjf = (d.wsjfBusiness != null)
-    ? '<div class="detail-section"><span class="section-title">WSJF 评分</span>'
-      + '<div class="wsjf-break"><span>业务 ' + d.wsjfBusiness + '</span><span>紧迫 ' + d.wsjfUrgency
+    ? '<div class="wsjf-break"><span>WSJF</span><span>业务 ' + d.wsjfBusiness + '</span><span>紧迫 ' + d.wsjfUrgency
       + '</span><span>风险 ' + d.wsjfRisk + '</span><span>工作量 ' + d.wsjfEffort
-      + '</span><b>' + wsjfText(d) + '</b></div></div>'
-    : "";
+      + '</span><b>' + wsjfText(d) + '</b><span class="muted">四项都填才计分</span></div>'
+    : '<p class="foot-note" style="margin:8px 0 0">WSJF 未评分：四项都填后才计分。</p>';
+  var stageLine = d.deliveryStage
+    ? '<p class="dem-evidence-line">当前交付阶段 <span class="tag dem-stage-tag st-' + esc(d.deliveryStage)
+      + (d.deliveryStageSource === "manual" ? " manual" : "") + '">' + esc(deliveryStageName(d.deliveryStage))
+      + '</span><span class="foot-note">' + (d.deliveryStageSource === "manual" ? "人工判定" : "由工作项、用例与发布记录派生")
+      + '</span></p>'
+    : '';
+  function demandFactsHTML(){
+    var pri = d.priority || "P2";
+    var ver = demandVersionName(d) || "待规划";
+    var planned = plannedText(d);
+    var expectDelta = demandExpectDelta(d);
+    var expectOverdue = !isClosedDemand(d) && expectDelta !== null && expectDelta < 0;
+    var donePct = total ? Math.round(done / total * 100) : 0;
+    var passPct = cases ? Math.round(passed / cases * 100) : 0;
+    var pub = (d.deliveryStageSource === "manual" && d.manualDeliveryStage === "delivered")
+      ? { label:"人工交付", sub:"人工判定", cls:" is-manual" }
+      : d.deliveredAt
+        ? { label:"已发布", sub:String(d.deliveredAt).substring(0, 10), cls:" is-done" }
+        : { label:"未发布", sub:"以发布记录为准", cls:"" };
+    var metaItems = [
+      ["type", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>',
+        "需求类型", d.itemKind || "其他", false],
+      ["module", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="3.2" y="11" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="11" width="5.8" height="5.8" rx="1.3"/></svg>',
+        "模块", catNameById(d.categoryId) || "未指定模块", true],
+      ["source", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 11.2 5 4.6h10l1.6 6.6v4.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M3.6 11.4h3.6l.9 1.7h3.8l.9-1.7h3.6"/></svg>',
+        "来源", d.source || "未填写", true]
+    ];
+    if(isClosedDemand(d)){
+      metaItems.push(["close", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.6"/><path d="M5.4 14.6 14.6 5.4"/></svg>',
+        "关闭原因", closeReasonName(d.closeReason || (d.status === "rej" ? "rej" : "cancel"))]);
+      metaItems.push(["stage", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 3.4v13.2"/><path d="M5.2 4.4h9.4l-2 3.2 2 3.2H5.2z"/></svg>',
+        "关闭前阶段", closeStageName(d.closeStage || (d.status === "rej" ? "review" : "pass"))]);
+    }
+    var factEdit = canEditText ? ' rf-edit' : '';
+    var verEdit = d.status === "plan" && canScheduleDemand(d);
+    return '<div class="read-facts wi-facts demand-facts" id="demandFacts" aria-label="需求概览">'
+      + '<div class="wi-row wi-row-main">'
+      +   '<div class="rf wi-card' + factEdit + '"' + (canEditText ? ' data-dem-fact="priority" role="button" tabindex="0" title="点击修改优先级"' : '') + '><span class="rf-k">优先级</span>'
+      +     '<b class="rf-v rf-v-lg" title="优先级 ' + esc(pri) + '"><span class="rf-dot" style="background:' + esc(priColor(pri)) + '"></span>' + esc(pri + " · " + priName(pri)) + '</b></div>'
+      +   '<div class="rf wi-card' + (verEdit ? ' rf-edit' : '') + '"' + (verEdit ? ' data-dem-fact="version" role="button" tabindex="0" title="点击调整目标版本"' : '') + '><span class="rf-k">目标版本</span>'
+      +     '<b class="rf-v rf-v-lg" title="' + esc(ver) + '">' + esc(ver) + '</b>'
+      +     '<span class="rf-sub">' + (planned
+              ? "计划 " + esc(demandShortDay(d.plannedStart)) + " → " + esc(demandShortDay(d.plannedEnd))
+              : "尚未进入版本计划") + '</span></div>'
+      +   '<div class="rf wi-card rf-date' + (expectOverdue ? " overdue" : "") + factEdit + '"' + (canEditText ? ' data-dem-fact="expect" role="button" tabindex="0" title="点击修改期望交付"' : '') + '><span class="rf-k">期望交付</span>'
+      +     '<b class="rf-v rf-v-lg" title="' + esc(d.expectDate || "待评估") + '">' + esc(d.expectDate || "待评估") + '</b>'
+      +     '<span class="rf-sub">' + esc(demandExpectNote(d)) + '</span></div>'
+      + '</div>'
+      + '<div class="wi-card wi-delivery demand-band">'
+      +   '<div class="rf wi-delivery-cell dem-band-cell"><span class="rf-k">关联工作项</span>'
+      +     '<span class="rf-sub">' + (total ? (total - done) + " 个未完成" : "尚未拆分") + '</span>'
+      +     '<div class="rf-v dem-band-figure"><b class="rf-stat-num">' + done + '</b>'
+      +       '<span class="dem-band-unit">/ ' + total + ' 完成</span>'
+      +       '<span class="rf-prog dem-band-bar" role="progressbar" aria-label="工作项完成度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + donePct + '"><i style="width:' + donePct + '%"></i></span>'
+      +     '</div></div>'
+      +   '<div class="rf wi-delivery-cell dem-band-cell"><span class="rf-k">测试用例</span>'
+      +     '<span class="rf-sub">' + (cases ? passPct + "% 通过" : "尚未关联用例") + '</span>'
+      +     '<div class="rf-v dem-band-figure"><b class="rf-stat-num">' + passed + '</b>'
+      +       '<span class="dem-band-unit">/ ' + cases + ' 通过</span>'
+      +       '<span class="rf-prog dem-band-bar" role="progressbar" aria-label="测试用例通过率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + passPct + '"><i style="width:' + passPct + '%"></i></span>'
+      +     '</div></div>'
+      +   '<div class="rf wi-delivery-cell dem-band-cell"><span class="rf-k">生产发布</span>'
+      +     '<span class="rf-sub">' + esc(pub.sub) + '</span>'
+      +     '<div class="rf-v dem-band-figure"><span class="dem-band-state' + pub.cls + '"><i></i>' + esc(pub.label) + '</span></div>'
+      +   '</div>'
+      + '</div>'
+      + '<div class="wi-card wi-meta-card demand-meta-card">'
+      +   metaItems.map(function(m){
+            var editable = !!m[4] && canEditText;
+            return '<div class="rf rf-meta' + (editable ? ' rf-edit' : '') + '" data-meta="' + m[0] + '"'
+              + (editable ? ' data-dem-fact="' + m[0] + '" role="button" tabindex="0" title="点击修改' + esc(m[2]) + '"' : '') + '>'
+              + '<span class="rf-k"><span class="rf-meta-ico" aria-hidden="true">' + m[1] + '</span>' + esc(m[2]) + '</span>'
+              + '<b class="rf-v"' + (m[0] === "source" && editable ? ' data-dem-text="source"' : '') + ' title="' + esc(m[3]) + '">' + esc(m[3]) + '</b></div>';
+          }).join("")
+      + '</div>'
+      + '</div>';
+  }
   var layer = document.createElement("div");
-  layer.className = "modal-layer";
+  layer.className = "modal-layer demand-detail";
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
+  layer.setAttribute("aria-labelledby", "demandDetailTitle");
   layer.setAttribute("data-ai-demand", id);
   demandDetailLayer = layer;
   layer.__uiOnClose = function(){
     if(demandDetailLayer === layer) demandDetailLayer = null;
     setTimeout(function(){ layer.remove(); }, 0);
   };
-  layer.innerHTML = '<div class="sheet md"><div class="sheet-head"><div style="flex:1;min-width:0">'
-    + '<h2>' + esc(d.title) + '</h2>'
-    + '<div class="desc">' + esc(reqNameById(d.reqId)) + ' · 提交于 ' + esc(fmtTs(d.createdAt) || "—") + '</div></div>'
-    + (writable && !isClosedDemand(d) ? '<button class="btn sm" type="button" data-dem-edit="' + esc(id) + '">' + icon("edit", 13) + ' 编辑</button>' : '')
-    + (canSplit ? '<button class="btn sm add" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button>' : '')
-    + '<button class="icon-btn sm" type="button" data-dem-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
-    + '<div class="sheet-body phase-note">'
-    + '<div class="detail-grid">' + grid.map(function(g){
-        return '<div class="detail-item"><span>' + esc(g[0]) + '</span><b>' + esc(g[1]) + '</b></div>';
-      }).join("") + '</div>'
-    + (isClosedDemand(d) ? '<p class="foot-note">' + esc(closeReasonName(d.closeReason || (d.status === "rej" ? "rej" : "cancel"))) + '，历史保留；'
-      + ((d.closeReason === "rej" || d.status === "rej") ? '可重新打开回到「待评审」。' : '可恢复至「' + esc(restoreTargetName(d)) + '」。') + '</p>' : '')
-    + (d.deliveryEvidenceMissing ? '<p class="foot-note">目标版本已发布，但没有有效生产发布记录；请人工补录真实交付证据。</p>' : '')
-    + '<p class="foot-note">需求调期、撤排与关闭不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
-    + (demandActs(d) ? '<div class="row row-gap">' + demandActs(d) + '</div>' : '')
-    + demandJudgementSectionHTML(d)
-    + (d.description ? '<div class="detail-section"><span class="section-title">需求描述</span><div class="detail-copy">' + esc(d.description) + '</div></div>' : '')
-    + (d.acceptText ? '<div class="detail-section"><span class="section-title">验收标准</span><div class="detail-copy">' + esc(d.acceptText) + '</div></div>' : '')
-    + (isClosedDemand(d) && d.reviewNote ? '<div class="detail-section"><span class="section-title">关闭原因说明</span><div class="detail-copy">' + esc(d.reviewNote) + '</div></div>' : '')
-    + wsjf
-    + '<div class="detail-section"><span class="section-title">关联文档</span>'
-    + '<div class="attach-list" id="demDocs"><div class="attach-empty">加载中…</div></div>'
-    + (writable ? '<div class="dem-doc-add"><select id="demDocPick" aria-label="选择要关联的文档"></select>'
-      + '<button class="btn sm add" type="button" data-dem-doc-link>' + icon("plus", 13) + ' 关联文档</button></div>' : '')
+  layer.innerHTML =
+    '<div class="sheet demand-sheet">'
+    + '<div class="drawer-head demand-head">'
+    +   '<span class="head-icon t-demand" aria-hidden="true">' + icon("demand", 17) + '</span>'
+    +   '<div class="head-txt">'
+    +     '<div class="head-title-line">'
+    +       '<h2 id="demandDetailTitle"' + (canEditTitle ? ' class="demand-title-edit" data-dem-text="title" tabindex="0" role="button" title="点击修改标题"' : '') + '>' + esc(d.title) + '</h2>'
+    +       '<button class="ds-status" type="button" id="demandStatusPill" aria-haspopup="menu" title="切换需求状态"' + (demandStatusMenuItems(d).length ? '' : ' disabled') + '>'
+    +         '<i id="demandStatusDot" style="background:' + statusDot + '"></i><span id="demandStatusName">' + esc(statusLabel) + '</span>'
+    +         '<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>'
+    +       '</button>'
+    +     '</div>'
+    +     '<div class="head-sub">' + esc(meta) + '</div>'
+    +   '</div>'
+    +   '<div class="head-tools">'
+    +     (demandMenuItems(d).length ? '<button class="btn sm ghost" type="button" data-dem-detail-more-btn aria-haspopup="menu" aria-expanded="false" title="更多操作">' + icon("more", 14) + ' 更多</button>' : '')
+    +     '<button class="icon-btn sm" type="button" data-dem-x aria-label="关闭">' + icon("close", 15) + '</button>'
+    +   '</div>'
     + '</div>'
-    + '<div class="detail-section"><span class="section-title">关联工作项</span>'
-    + '<div id="demTasks"><div class="attach-empty">加载中…</div></div>'
-    + (canSplit ? '<div style="margin-top:8px"><button class="btn sm add" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button></div>' : '')
+    + '<div class="drawer-tabs demand-tabs" role="tablist">'
+    +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="overview" aria-selected="true">概览</button>'
+    +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="delivery" aria-selected="false">交付 <span class="tab-cnt" id="tabDeliveryCount"></span></button>'
+    +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="rel" aria-selected="false">关联</button>'
+    +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="records" aria-selected="false">记录 <span class="tab-cnt" id="tabRecordCount"></span></button>'
     + '</div>'
-    + '<div class="detail-section"><span class="section-title">附件</span>'
-    + '<div class="attach-list" id="demAtts"><div class="attach-empty">加载中…</div></div>'
-    + (writable ? '<div style="margin-top:8px"><button class="btn sm add" type="button" data-dem-attup>' + icon("upload", 13) + ' 上传附件</button>'
-      + '<input type="file" id="demAttFile" hidden accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx,.xls,.doc,.docx,.ppt,.pptx"></div>' : '')
+    + '<div class="drawer-body demand-body" id="demandDetailBody">'
+    +   '<div class="drawer-pane" data-dem-pane="overview">'
+    +     demandFactsHTML()
+    +     (isClosedDemand(d) ? '<p class="foot-note">历史保留；' + esc((d.closeReason === "rej" || d.status === "rej") ? "可重新打开回到「待评审」。" : "可恢复至「" + restoreTargetName(d) + "」。") + '</p>' : '')
+    +     (d.deliveryEvidenceMissing ? '<p class="foot-note">目标版本已发布，但没有有效生产发布记录；请人工补录真实交付证据。</p>' : '')
+    +     '<p class="foot-note">需求调期、撤排与关闭不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>需求描述</h3>' + (canEditText ? '<span class="foot-note">点击正文修改</span>' : '') + '</div>'
+    +       '<div class="read-desc demand-copy' + (canEditText ? ' is-editable' : '') + '" id="demandDescView"'
+    +         (canEditText ? ' data-dem-text="desc" tabindex="0" role="button" aria-label="需求描述，点击编辑" title="点击编辑；失焦或 ⌘/Ctrl+Enter 保存，Esc 取消"' : '')
+    +       '>' + demandDetailPlain(d.description) + '</div>'
+    +     '</section>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>验收标准</h3><span class="foot-note">完成的前提' + (canEditText ? ' · 点击修改' : '') + '</span></div>'
+    +       '<div class="read-desc demand-copy' + (canEditText ? ' is-editable' : '') + '" id="demandAcceptView"'
+    +         (canEditText ? ' data-dem-text="accept" tabindex="0" role="button" aria-label="验收标准，点击编辑" title="点击编辑；失焦或 ⌘/Ctrl+Enter 保存，Esc 取消"' : '')
+    +       '>' + demandDetailPlain(d.acceptText) + '</div>'
+    +       wsjf
+    +     '</section>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>交付进度</h3>'
+    +         '<span class="read-cnt">' + done + ' / ' + total + ' 完成</span>'
+    +         (canSplit ? '<button class="btn sm soft" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button>' : '')
+    +         '<button class="link-btn" type="button" data-demand-goto="delivery">查看交付证据</button></div>'
+    +       '<ul class="read-activity demand-overview-tasks" id="demandOverviewTasks"><li class="read-empty">加载关联工作项…</li></ul>'
+    +     '</section>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>最近记录</h3><button class="link-btn" type="button" data-demand-goto="records">查看全部</button></div>'
+    +       '<ul class="read-activity dem-logs" id="demandRecentLogs"><li class="read-empty">加载中…</li></ul>'
+    +     '</section>'
+    +   '</div>'
+    +   '<div class="drawer-pane" data-dem-pane="delivery" hidden>'
+    +     (d.status === "plan" ? '<section class="read-card">' + demandJudgementSectionHTML(d) + '</section>' : '')
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>交付证据</h3><span class="foot-note">任务发布不等于业务验收</span></div>'
+    +       (d.deliveryStage ? stageLine : '')
+    +       '<div id="demTasks"><div class="attach-empty">加载中…</div></div>'
+    +     '</section>'
+    +   '</div>'
+    +   '<div class="drawer-pane" data-dem-pane="rel" hidden>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>关联文档</h3>' + (writable ? '<span class="foot-note">从当前项目的文档里选择</span>' : '') + '</div>'
+    +       '<div class="attach-list" id="demDocs"><div class="attach-empty">加载中…</div></div>'
+    +       (writable ? '<div class="dem-doc-add"><select id="demDocPick" aria-label="选择要关联的文档"></select>'
+    +         '<button class="btn sm add" type="button" data-dem-doc-link>' + icon("plus", 13) + ' 关联文档</button></div>' : '')
+    +     '</section>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>附件</h3><span class="foot-note">单个 ≤10MB</span></div>'
+    +       '<div class="attach-list" id="demAtts"><div class="attach-empty">加载中…</div></div>'
+    +       (writable ? '<div style="margin-top:8px"><button class="btn sm add" type="button" data-dem-attup>' + icon("upload", 13) + ' 上传附件</button>'
+    +         '<input type="file" id="demAttFile" hidden accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx,.xls,.doc,.docx,.ppt,.pptx"></div>' : '')
+    +     '</section>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>计划与归属</h3><span class="foot-note">关联需求或文档会同步项目</span></div>'
+    +       '<dl class="read-evidence">' + relFacts.map(function(g){
+              return '<dt>' + esc(g[0]) + '</dt><dd title="' + esc(g[1]) + '">' + esc(g[1]) + '</dd>';
+            }).join("") + '</dl>'
+    +     '</section>'
+    +   '</div>'
+    +   '<div class="drawer-pane" data-dem-pane="records" hidden>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>流转记录</h3><span class="foot-note">状态、排期与交付操作</span></div>'
+    +       '<ul class="read-activity dem-logs" id="demLogs"><li class="foot-note">加载中…</li></ul>'
+    +     '</section>'
+    +   '</div>'
     + '</div>'
-    + '<div class="detail-section"><span class="section-title">流转时间线</span><ul class="dem-logs" id="demLogs"><li class="foot-note">加载中…</li></ul></div>'
-    + '</div></div>';
+    + (demandFootActs(d) ? '<div class="drawer-foot demand-foot">'
+      + '<span class="hint" id="demandFootHint">状态由头部胶囊统一调整；标题、描述、验收与属性可直接点击修改，失焦自动保存</span>'
+      + '<span class="demand-foot-acts">' + demandFootActs(d) + '</span></div>' : '')
+    + '</div>';
   document.body.appendChild(layer);
+  function syncReadViews(){
+    var titleEl = layer.querySelector("#demandDetailTitle");
+    if(titleEl && !titleEl.isContentEditable) titleEl.textContent = d.title || "";
+    var descEl = layer.querySelector("#demandDescView");
+    if(descEl && !descEl.isContentEditable) descEl.innerHTML = demandDetailPlain(d.description);
+    var acceptEl = layer.querySelector("#demandAcceptView");
+    if(acceptEl && !acceptEl.isContentEditable) acceptEl.innerHTML = demandDetailPlain(d.acceptText);
+    var facts = layer.querySelector("#demandFacts");
+    if(facts){
+      /* 键盘选择属性后整组重建，焦点要落回同一项，否则会跳回页首 */
+      var focused = document.activeElement;
+      var focusedKind = focused && facts.contains(focused) ? focused.dataset.demFact : null;
+      var tmp = document.createElement("div");
+      tmp.innerHTML = demandFactsHTML();
+      var next = tmp.firstElementChild;
+      if(next){
+        facts.replaceWith(next);
+        if(focusedKind){
+          var again = next.querySelector('[data-dem-fact="' + focusedKind + '"]');
+          if(again){ try{ again.focus({ preventScroll:true }); }catch(err){ try{ again.focus(); }catch(e2){ /* noop */ } } }
+        }
+      }
+    }
+    var sub = layer.querySelector(".demand-head .head-sub");
+    if(sub) sub.textContent = headMetaText();
+  }
+  var detailCtx = { layer:layer, d:d, sync:syncReadViews };
+  layer.addEventListener("focusout", function(e){
+    var textEl = e.target && e.target.closest ? e.target.closest("[data-dem-text]") : null;
+    if(!textEl || !textEl.isContentEditable) return;
+    demandFinishTextEdit(textEl, detailCtx, textEl.dataset.demText, true);
+  });
+  layer.addEventListener("keydown", function(e){
+    var textEl = e.target.closest ? e.target.closest("[data-dem-text]") : null;
+    if(textEl && textEl.isContentEditable){
+      if(e.key === "Escape"){
+        e.preventDefault(); e.stopPropagation();
+        demandCancelTextEdit(textEl, detailCtx, textEl.dataset.demText);
+        return;
+      }
+      var single = textEl.dataset.demText === "title" || textEl.dataset.demText === "source";
+      var sel = window.getSelection();
+      if(textEl.dataset.demText === "source" && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
+        && String(textEl.innerText || "").replace(/\n+$/, "").length >= DEMAND_SOURCE_MAX
+        && sel && sel.isCollapsed){
+        e.preventDefault();
+        return;
+      }
+      if(e.key === "Enter" && (single || e.metaKey || e.ctrlKey)){
+        e.preventDefault();
+        demandFinishTextEdit(textEl, detailCtx, textEl.dataset.demText, true);
+      }
+      return;
+    }
+    if(e.key !== "Enter" && e.key !== " ") return;
+    var factEl = e.target.closest ? e.target.closest("[data-dem-fact]") : null;
+    if(factEl){
+      e.preventDefault();
+      openDemandFactEditor(factEl.dataset.demFact, factEl, detailCtx);
+      return;
+    }
+    if(textEl){
+      e.preventDefault();
+      demandStartTextEdit(textEl, detailCtx, textEl.dataset.demText);
+    }
+  });
+  function setDemandTab(name){
+    layer.querySelectorAll("[data-dem-tab]").forEach(function(b){
+      b.setAttribute("aria-selected", b.dataset.demTab === name ? "true" : "false");
+    });
+    layer.querySelectorAll("[data-dem-pane]").forEach(function(p){ p.hidden = p.dataset.demPane !== name; });
+    var body = layer.querySelector("#demandDetailBody");
+    if(body) body.scrollTop = 0;
+  }
   layer.addEventListener("click", function(e){
-    if(e.target.closest("[data-dem-x]")) UI.closeModal(layer);
+    if(e.target.closest("[data-dem-x]")){ UI.closeModal(layer); return; }
+    var tab = e.target.closest("[data-dem-tab]");
+    if(tab){ setDemandTab(tab.dataset.demTab); return; }
+    var go = e.target.closest("[data-demand-goto]");
+    if(go){ setDemandTab(go.dataset.demandGoto); return; }
+    var statusPill = e.target.closest("#demandStatusPill");
+    if(statusPill){ openDemandStatusMenu(statusPill, d); return; }
+    var textEl = e.target.closest("[data-dem-text]");
+    if(textEl && !textEl.isContentEditable){
+      demandStartTextEdit(textEl, detailCtx, textEl.dataset.demText);
+      return;
+    }
+    var factEl = e.target.closest("[data-dem-fact]");
+    if(factEl){ openDemandFactEditor(factEl.dataset.demFact, factEl, detailCtx); return; }
+    var moreBtn = e.target.closest("[data-dem-detail-more-btn]");
+    if(moreBtn){ openDemandDetailMore(moreBtn, d); return; }
     /* 状态动作的子层叠在详情之上：取消回到详情，成功后由动作关闭详情 */
     var p = e.target.closest("[data-dem-pass]"); if(p){ passDemand(p.dataset.demPass); return; }
     var r = e.target.closest("[data-dem-rej]"); if(r){ rejectDemand(r.dataset.demRej); return; }
@@ -3107,7 +3921,8 @@ function renderDemandDetail(d){
     var ro = e.target.closest("[data-dem-reopen]"); if(ro){ reopenDemand(ro.dataset.demReopen); return; }
     var restore = e.target.closest("[data-dem-restore]"); if(restore){ restoreDemand(restore.dataset.demRestore); return; }
     var menuBtn = e.target.closest("[data-dem-menu-btn]"); if(menuBtn){ openDemandRowMenu(menuBtn, d); return; }
-    var ed = e.target.closest("[data-dem-edit]"); if(ed){ openDemandDialog(d); return; }
+    var ed = e.target.closest("[data-dem-edit]");
+    if(ed){ closeDemandDetailIfOpen(); setTimeout(function(){ openDemandDialog(d); }, 40); return; }
     var judge = e.target.closest("[data-dem-judge]"); if(judge){ openJudgementDialog(id); return; }
     var judgeRevoke = e.target.closest("[data-dem-judge-revoke]"); if(judgeRevoke){ revokeJudgement(id); return; }
     var at = e.target.closest("[data-dem-addtask]");
@@ -3232,25 +4047,23 @@ function renderDemandDetail(d){
       }
     }).catch(function(ex){ toast(ex && ex.message ? ex.message : "上传失败", "bad"); });
   });
-  UI.openModal(layer);
+  UI.openModal(layer, "[data-dem-x]");
   loadDemandTasks(layer, id, d.versionId);
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
   loadDemandJudgements(layer, id);
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
     var ul = layer.querySelector("#demLogs");
-    if(!ul) return;
-    ul.innerHTML = logs.length ? logs.map(function(l){
-      return '<li><span class="dem-log-ts">' + esc(fmtTs(l.createdAt) || "—") + '</span>'
-        + '<b>' + esc(l.action || "") + '</b>'
-        + (l.operatorName || l.operator ? '<span class="dem-log-op">' + esc(l.operatorName || l.operator) + '</span>' : '')
-        + (l.note ? '<span class="dem-log-note">' + esc(l.note) + '</span>' : '')
-        + (demandLogChange(l) ? '<span class="dem-log-note">' + esc(demandLogChange(l)) + '</span>' : '')
-        + '</li>';
-    }).join("") : '<li class="foot-note">暂无流转记录</li>';
+    var recent = layer.querySelector("#demandRecentLogs");
+    var count = layer.querySelector("#tabRecordCount");
+    if(count) count.textContent = logs.length ? String(logs.length) : "";
+    if(ul) ul.innerHTML = logs.length ? logs.map(demandLogItemHTML).join("") : '<li class="foot-note">暂无流转记录</li>';
+    if(recent) recent.innerHTML = logs.length ? logs.slice().reverse().slice(0, 2).map(demandLogItemHTML).join("") : '<li class="read-empty">暂无记录</li>';
   }).catch(function(){
     var ul = layer.querySelector("#demLogs");
     if(ul) ul.innerHTML = '<li class="foot-note">时间线加载失败</li>';
+    var recent = layer.querySelector("#demandRecentLogs");
+    if(recent) recent.innerHTML = '<li class="read-empty">最近记录加载失败</li>';
   });
 }
 
@@ -3259,9 +4072,11 @@ function demandLogChange(log){
   try{
     var data = typeof log.changeData === "string" ? JSON.parse(log.changeData) : log.changeData;
     var before = data.before || {}, after = data.after || {}, parts = [];
+    /* 快照里同一空值可能是 null / undefined / 空串，直接比较会渲染出「未设置 → 未设置」这种假变更 */
+    var norm = function(v){ return (v === null || v === undefined || v === "") ? "" : String(v); };
     [["reqId", "所属项目"], ["categoryId", "模块"], ["versionName", "目标版本"], ["plannedStart", "计划开始"],
       ["plannedEnd", "计划结束"], ["expectDate", "期望交付"], ["priority", "优先级"], ["status", "状态"]].forEach(function(field){
-      var key = field[0], a = before[key], b = after[key];
+      var key = field[0], a = norm(before[key]), b = norm(after[key]);
       if(a === b) return;
       if(key === "status"){ a = a ? statusName(a) : "未设置"; b = b ? statusName(b) : "未设置"; }
       else if(key === "reqId"){ a = a ? reqNameById(a) : "未设置"; b = b ? reqNameById(b) : "未设置"; }
@@ -3444,8 +4259,10 @@ if(demandBody) demandBody.addEventListener("click", function(e){
     render();
     return;
   }
-  var vb = e.target.closest("[data-dem-version-btn]");
-  if(vb){ openDemandVersionMenu(vb, findDemand(vb.dataset.demVersionBtn)); return; }
+  var im = e.target.closest("[data-dem-inline-menu]");
+  if(im){ openDemInlineMenu(im); return; }
+  var sb = e.target.closest("[data-dem-source-btn]");
+  if(sb){ startDemSourceEdit(sb); return; }
   var dt = e.target.closest("[data-dem-detail]");
   if(dt){ showDemandDetail(dt.dataset.demDetail); return; }
   var restore = e.target.closest("[data-dem-restore]");
@@ -3482,8 +4299,6 @@ if(demandBody){
 }
 if(demandBody){
   demandBody.addEventListener("change", function(e){
-    var inline = e.target.closest("[data-dem-inline]");
-    if(inline){ handleDemInlineChange(inline); return; }
     var boardStage = e.target.closest("[data-demb-stage]");
     if(boardStage){
       demBoardStage = boardStage.value === "all" || DELIVERY_STAGES.some(function(s){ return s[0] === boardStage.value; }) ? boardStage.value : "all";

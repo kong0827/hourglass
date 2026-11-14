@@ -15,7 +15,7 @@ import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, colMeta, colName, duePresetDate, fmtFull, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, syncColumns, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, avatarHTML, colMeta, colName, duePresetDate, elapsedText, fmtFull, fmtMinutesShort, fmtShortMD, fmtTs, iso, parseDate, priColor, priName, priTagHTML, syncColumns, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
 import { loadBoard } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 import { openTaskTable } from "./manager-shared.js";
@@ -137,10 +137,13 @@ function loadMine(opts){
     mineBody.innerHTML = UI.skeletonRows(6);
     if(mineMeta) mineMeta.textContent = "加载中…";
   }
-  /* 完成情况=已完成时 scope 必须是 all，否则 openOnly 与 completion=done 叠加后恒为空 */
-  var scope = state.completion === "done" ? "all" : "open";
+  /* 完成情况=已完成时 scope 必须是 all，否则 openOnly 与 completion=done 叠加后恒为空；
+     待我测试只看在测队列，完成情况筛选对这里无意义，直接丢弃 */
+  var testMode = currentMineMode() === "test";
+  var scope = (!testMode && state.completion === "done") ? "all" : "open";
   var params = filterParams({scope: scope, offset: offset, limit: MINE_PAGE_SIZE});
   delete params.owners;      // 负责人维度天然是我
+  if(testMode){ params.view = "test"; delete params.completion; }
   /* 显示列偏好先就位再渲染，避免首屏按默认列闪一帧 */
   listPrefs.load("my-tasks").then(function(){
     if(seq !== mineSeq) return;
@@ -330,6 +333,15 @@ var MINE_COLS = [
   {k:"updatedAt", label:"更新", w:"76px", align:"right"}
 ];
 var MINE_OPS_W = "76px";
+/* 待我测试只看交接信息：状态 / 提测时间 / 等待或已测时长 / 开发负责人 */
+var MINE_TEST_COLS = [
+  {k:"title", label:"工作项", w:"minmax(260px,2fr)"},
+  {k:"testStatus", label:"状态", w:"104px"},
+  {k:"testRequested", label:"提测时间", w:"112px"},
+  {k:"testElapsed", label:"等待 / 已测", w:"110px"},
+  {k:"owner", label:"开发负责人", w:"128px"}
+];
+var MINE_TEST_OPS_W = "176px";
 var MINE_CLOSED_KEY = "ds.mineClosed";
 var mineClosed = (function(){
   try{
@@ -528,6 +540,7 @@ function currentMineMode(){
   var ws = rt.currentWs;
   return currentMode(ws ? ws.id : "", ws && ws.myRole);
 }
+function mineTestMode(){ return currentMineMode() === "test"; }
 function syncMineModeUI(){
   if(!mineModeEl) return;
   var mode = currentMineMode();
@@ -535,13 +548,20 @@ function syncMineModeUI(){
     b.setAttribute("aria-pressed", String(b.dataset.mineMode === mode));
   });
   document.body.classList.toggle("mine-team", isMobile() && mode === "team");
+  var mineView = document.getElementById("view-mine");
+  if(mineView) mineView.classList.toggle("is-test", mode === "test");
 }
 function setMineMode(mode){
+  var prev = currentMineMode();
   var ws = rt.currentWs;
   saveMode(ws ? ws.id : "", mode);
+  /* 三种模式的请求参数不同：切换时清空，避免先拿旧模式的数据渲染一帧 */
+  if(mode !== prev){
+    mineAll = []; mineSpaces = []; mineTotal = 0; mineHasMore = false; mineCache = {};
+  }
   syncMineModeUI();
   if(mode === "team"){ renderTeam(); return; }
-  if(!mineAll.length) loadMine(); else rerenderMine();
+  if(mineAll.length) rerenderMine(); else loadMine();
 }
 function hm(minutes){
   var h = (Number(minutes) || 0) / 60;
@@ -625,7 +645,7 @@ function renderTeam(opts){
   syncMineModeUI();
   if(mineStats) mineStats.innerHTML = "";
   var mineView = document.getElementById("view-mine");
-  if(mineView){ mineView.classList.remove("is-empty"); mineView.classList.add("is-team"); }
+  if(mineView){ mineView.classList.remove("is-empty", "is-test"); mineView.classList.add("is-team"); }
   var range = teamRange();
   if(mineMeta) mineMeta.textContent = "团队视图 · " + range.label;
   if(!mineBody) return;
@@ -794,7 +814,8 @@ function mobileMineCardHTML(t){
     '</div>' +
   '</article>';
 }
-function renderMobileMine(sections){
+function renderMobileMine(sections, cardFn){
+  var card = cardFn || mobileMineCardHTML;
   if(mineStats) mineStats.innerHTML = "";
   var html = '<div class="mob-groups">';
   sections.forEach(function(s){
@@ -808,11 +829,11 @@ function renderMobileMine(sections){
             ? '<div class="mine-mob-subgroup-head"><h4>' + esc(sub.label) + '</h4>' +
               '<span class="mob-group-n">' + sub.rows.length + '</span></div>'
             : '') +
-          '<div class="mob-card-list">' + sub.rows.map(mobileMineCardHTML).join("") + '</div>' +
+          '<div class="mob-card-list">' + sub.rows.map(card).join("") + '</div>' +
         '</section>';
       }).join("");
     }else{
-      inner = '<div class="mob-card-list">' + s.rows.map(mobileMineCardHTML).join("") + '</div>';
+      inner = '<div class="mob-card-list">' + s.rows.map(card).join("") + '</div>';
     }
     html += '<section class="mob-group" data-mine-group="' + esc(s.key) + '">' +
       (s.label
@@ -848,11 +869,13 @@ function renderMine(d, append){
   mineAll.forEach(function(t){ mineCache[t.workspaceId + "|" + t.id] = t; });
   var items = mineFiltered(mineAll);
   var filtering = mineFiltering();
+  var testMode = mineTestMode();
   /* 空态时分组/排序/空间控件没有可作用的对象，先收起，避免空页面顶着一排设置 */
   var mineView = document.getElementById("view-mine");
   if(mineView){
     mineView.classList.toggle("is-empty", !items.length);
     mineView.classList.remove("is-team");
+    mineView.classList.toggle("is-test", testMode);
   }
   if(mineMeta){
     var nameOnly = mineNameOnly;
@@ -860,13 +883,17 @@ function renderMine(d, append){
     var countTxt = filtering
       ? ("筛选出 " + items.length + " / " + loaded + " 项（已加载）")
       : ("已加载 " + loaded + (mineTotal > loaded ? (" / " + mineTotal) : "") + " 项");
-    mineMeta.textContent = countTxt + " · 覆盖 " + spaces.length + " 个空间" +
+    mineMeta.textContent = (testMode ? "待我测试 · " : "") + countTxt + " · 覆盖 " + spaces.length + " 个空间" +
       (mineHasMore ? " · 还有更多，可继续加载" : "") +
-      (nameOnly > 0 ? (" · 其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
+      (!testMode && nameOnly > 0 ? (" · 其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
   }
   if(!mineAll.length){
     if(mineStats) mineStats.innerHTML = "";
-    mineBody.innerHTML = UI.emptyState({
+    mineBody.innerHTML = UI.emptyState(testMode ? {
+      icon:"checkCircle", title:"没有待你测试的工作项",
+      text:"研发把工作项移到「待测试」后，会出现在这里；项目里没人认领的待测队列也汇总在这里，先到先得。",
+      actionLabel:"去工作项"
+    } : {
       icon:"checkCircle", title:"没有分派给你的工作项",
       text:"被指派到你账号的工作项会汇总在这里（跨你参与的全部空间）。新成员可以先去「工作项」看看团队正在做什么；若老数据只填了显示名、没有绑定账号，请在工作项里重新指定负责人。",
       actionLabel:"去工作项"
@@ -893,6 +920,7 @@ function renderMine(d, append){
     });
     return;
   }
+  if(testMode){ renderMineTest(items); return; }
   renderMineStats(items);
   var sections = mineSections(items);
   if(isMobile()){ renderMobileMine(sections); return; }
@@ -944,6 +972,169 @@ function renderMine(d, append){
   if(scroller) scroller.style.setProperty("--mine-cols", cols.map(function(c){ return c.w; }).concat(MINE_OPS_W).join(" "));
   mineSyncFoldBtn(sections);
 }
+/* ---- 待我测试：同事移入「待测试」后，测试同学在这里承接 ---- */
+function mineTestStatusHTML(t){
+  if(t.boardColumn === "testing") return '<span class="mini-tag ok">测试中</span>';
+  return t.testOwnerUserId ? '<span class="mini-tag">待测试</span>' : '<span class="mini-tag warn">待领取</span>';
+}
+function mineTestRequestedCell(t){
+  var txt = t.testRequestedAt ? fmtTs(t.testRequestedAt) : "—";
+  if(!t.testRequestedAt) return '<span class="cell muted">' + txt + '</span>';
+  return '<span class="cell" title="' + esc(t.testRequestedAt) + '">' + esc(txt) + '</span>';
+}
+function mineTestElapsedText(t){
+  var from = t.boardColumn === "testing" ? (t.testStartedAt || t.testRequestedAt) : t.testRequestedAt;
+  var el = elapsedText(from);
+  return el ? ((t.boardColumn === "testing" ? "已测 " : "等待 ") + el) : "";
+}
+function mineTestElapsedCell(t){
+  var txt = mineTestElapsedText(t);
+  return txt ? '<span class="cell">' + esc(txt) + '</span>' : '<span class="cell muted">—</span>';
+}
+function mineTestOwnerCell(t){
+  if(!t.owner) return '<span class="cell muted">—</span>';
+  return '<span class="cell mine-test-dev">' + avatarHTML(t.owner, "sm") +
+    '<span class="mine-cell-txt">' + esc(t.owner) + '</span></span>';
+}
+function mineTestActsHTML(t){
+  var editable = canEditTask(t);
+  var acts = [];
+  if(editable && t.boardColumn === "test"){
+    acts.push('<button class="btn sm primary" type="button" data-test-claim>' +
+      (t.testOwnerUserId ? "开始测试" : "开始测试并认领") + '</button>');
+  }else if(editable && t.boardColumn === "testing"){
+    acts.push('<button class="btn sm" type="button" data-test-reject>退回…</button>');
+    acts.push('<button class="btn sm primary" type="button" data-test-pass>通过</button>');
+  }
+  return '<span class="mine-acts mine-test-acts">' + acts.join("") + '</span>';
+}
+function mineTestRowCells(t, cols){
+  return cols.map(function(c){
+    if(c.k === "title") return mineTaskCell(t, cols);
+    if(c.k === "testStatus") return '<span class="cell">' + mineTestStatusHTML(t) + '</span>';
+    if(c.k === "testRequested") return mineTestRequestedCell(t);
+    if(c.k === "testElapsed") return mineTestElapsedCell(t);
+    if(c.k === "owner") return mineTestOwnerCell(t);
+    return "";
+  }).join("");
+}
+function mineTestRowHTML(t, cols){
+  return '<div class="list-row" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
+      ' tabindex="0" role="row">' +
+    mineTestRowCells(t, cols) + mineTestActsHTML(t) +
+  '</div>';
+}
+function mineTestSortRows(rows){
+  /* 最久没动的排前面：先看提测时间，缺时间再按标题兜底 */
+  return rows.slice().sort(function(a, b){
+    var x = a.testRequestedAt || "", y = b.testRequestedAt || "";
+    if(x !== y) return x < y ? -1 : 1;
+    return String(a.title || "").localeCompare(String(b.title || ""), "zh-Hans-CN");
+  });
+}
+function mineTestSections(items){
+  var unclaimed = [], claimed = [];
+  items.forEach(function(t){
+    if(t.testOwnerUserId) claimed.push(t);
+    else unclaimed.push(t);
+  });
+  var secs = [];
+  if(unclaimed.length){
+    secs.push({key:"unclaimed", label:"待领取 · 项目内", tone:"warning", subs: [],
+      hint:"还没人认领的待测队列，先到先得", rows:mineTestSortRows(unclaimed)});
+  }
+  if(claimed.length){
+    secs.push({key:"claimed", label:"测试中 · 我认领", tone:"info", subs: [],
+      hint:"已认领给你，含尚未开始的待测试", rows:mineTestSortRows(claimed)});
+  }
+  return secs;
+}
+function renderMineTestStats(items){
+  if(!mineStats) return;
+  if(isMobile()){ mineStats.innerHTML = ""; return; }
+  var unclaimed = 0, testing = 0, oldest = null;
+  items.forEach(function(t){
+    if(!t.testOwnerUserId) unclaimed++;
+    if(t.boardColumn === "testing") testing++;
+    if(t.testRequestedAt && (!oldest || t.testRequestedAt < oldest)) oldest = t.testRequestedAt;
+  });
+  mineStats.innerHTML =
+    '<span class="mine-stat">待领取 <b>' + unclaimed + '</b></span>' +
+    '<span class="mine-stat today">测试中 <b>' + testing + '</b></span>' +
+    '<span class="mine-stat">最久等待 <b>' + esc(oldest ? elapsedText(oldest) : "—") + '</b></span>' +
+    '<span class="mine-stat-hint">含项目内尚未认领的待测队列 · 先到先得</span>';
+}
+function renderMineTest(items){
+  renderMineTestStats(items);
+  var sections = mineTestSections(items);
+  if(isMobile()){ renderMobileMine(sections, mobileMineTestCardHTML); return; }
+  var cols = MINE_TEST_COLS;
+  var grid = cols.map(function(c){ return c.w; }).concat(MINE_TEST_OPS_W).join(" ");
+  var html = '<div class="mine-groups"><div class="list-scroll mine-list" style="--mine-cols:' + esc(grid) + '">' +
+    '<div class="list-head">' +
+      cols.map(function(c){ return '<span>' + esc(c.label) + '</span>'; }).join("") +
+      '<span class="ta-r">操作</span>' +
+    '</div><div class="list-body">';
+  sections.forEach(function(s){
+    if(!s.rows.length) return;
+    var gk = mineGroupKey("test", s.key);
+    var closed = !!mineClosed[gk];
+    html += '<section class="mine-grp' + (closed ? " collapsed" : "") + ' has-head" data-mine-group="' + esc(s.key) + '" data-tone="' + esc(s.tone || "neutral") + '">' +
+      '<div class="mine-grp-h" role="button" tabindex="0" aria-expanded="' + (!closed) + '" data-mine-toggle="' + esc(gk) + '">' +
+        '<span class="mine-grp-chev" aria-hidden="true">' + icon("chevronRight", 15) + '</span>' +
+        '<span class="mine-grp-name">' + esc(s.label) + '</span>' +
+        '<span class="mine-grp-n">' + s.rows.length + '</span>' +
+        (s.hint ? '<span class="mine-grp-hint">' + esc(s.hint) + '</span>' : '') +
+        '<span class="mine-grp-act">' + (closed ? "展开" : "收起") + '</span>' +
+      '</div>' +
+      '<div class="mine-grp-body">' + s.rows.map(function(t){ return mineTestRowHTML(t, cols); }).join("") + '</div>' +
+    '</section>';
+  });
+  html += '</div></div></div>' + mineMoreHTML();
+  mineBody.innerHTML = html;
+  mineSyncFoldBtn(sections);
+}
+function mobileMineTestCardHTML(t){
+  var path = [t.workspaceName, t.reqName].filter(function(x){ return !!x; }).join(" · ");
+  return '<article class="mob-task-card" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
+      ' tabindex="0" role="row">' +
+    '<div class="mtc-top">' +
+      mineTestStatusHTML(t) +
+      '<span class="sp"></span>' +
+      '<span class="mtc-path">' + esc(path || "—") + '</span>' +
+    '</div>' +
+    '<h3 class="mtc-title">' + esc(t.title) + '</h3>' +
+    '<div class="mtc-meta">' +
+      '<span>提测 ' + esc(t.testRequestedAt ? fmtTs(t.testRequestedAt) : "—") + '</span>' +
+      '<span>' + esc(mineTestElapsedText(t) || "—") + '</span>' +
+      '<span class="mtc-path">开发 ' + esc(t.owner || "—") + '</span>' +
+    '</div>' +
+    '<div class="mtc-test-acts">' + mineTestActsHTML(t) + '</div>' +
+  '</article>';
+}
+/* 认领：待测试列直接移入测试中（后端自动认领）；已在测试中但空位时走显式认领 */
+function mineTestClaim(t){
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(t.boardColumn === "test"){ mineChangeColumn(t, "testing", "认领失败"); return; }
+  API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/test-claim", {}).then(function(res){
+    var nt = res && res.task;
+    var who = (nt && nt.testOwner) || (rt.currentUser && rt.currentUser.displayName) || "我";
+    toast("已认领「" + t.title + "」开始测试（测试负责人：" + who + "）", "fs");
+    loadMine({silent:true});
+    loadBoard({silent:true});
+  }).catch(function(ex){ toast(ex.message || "认领失败", "bad"); });
+}
+function mineTestReject(t){
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  UI.showPrompt({
+    title:"退回「测试中」→「进行中」",
+    desc:"退回代表本轮测试结束并记录结束时间；原因会写入活动记录并通知开发负责人。",
+    label:"退回原因", placeholder:"例如：关键用例未通过 / 缺少自测记录",
+    maxLength:120, required:true, okText:"确认退回"
+  }).then(function(reason){ if(reason) mineChangeColumn(t, "doing", "退回失败", reason); });
+}
 function renderMineStats(items){
   if(!mineStats) return;
   if(isMobile()){ mineStats.innerHTML = ""; return; }
@@ -973,6 +1164,7 @@ function mineAnyGroupOpen(sections){
 }
 function mineSyncFoldBtn(sections){
   if(!btnMineFold) return;
+  if(mineTestMode()){ btnMineFold.hidden = true; return; }
   var has = state.mineGroup !== "none";
   btnMineFold.hidden = !has;
   btnMineFold.textContent = has && mineAnyGroupOpen(sections) ? "折叠全部" : "展开全部";
@@ -1008,8 +1200,9 @@ function mineMoreHTML(){
 function mineTaskFromRow(row){
   return mineCache[(row.dataset.mineWs || "") + "|" + row.dataset.mineId] || null;
 }
-/* 状态变更统一走 move：沿用流转矩阵的原因/强制弹窗，完成后同步计时与看板 */
-function mineChangeColumn(t, column, failText){
+/* 状态变更统一走 move：沿用流转矩阵的原因/强制弹窗，完成后同步计时与看板。
+   presetReason 表示调用方已收集过原因（如测试退回），不再二次弹窗。 */
+function mineChangeColumn(t, column, failText, presetReason){
   if(!t || !column || column === t.boardColumn) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var from = t.boardColumn;
@@ -1032,7 +1225,7 @@ function mineChangeColumn(t, column, failText){
     loadBoard({silent:true});
     loadRunningTimer();
   }
-  guard(t.workspaceId, items, column).then(function(pass){
+  guard(t.workspaceId, items, column, { reason: presetReason || null }).then(function(pass){
     if(!pass) return;
     var retried = false;
     send(pass).then(ok).catch(function(ex){
@@ -1188,6 +1381,9 @@ if(mineBody){
     /* 行内字段控件自己处理点击，不能顺带打开详情抽屉 */
     if(e.target.closest("select,input")) return;
     var t = mineTaskFromRow(row);
+    if(e.target.closest("[data-test-claim]")){ e.stopPropagation(); mineTestClaim(t); return; }
+    if(e.target.closest("[data-test-reject]")){ e.stopPropagation(); mineTestReject(t); return; }
+    if(e.target.closest("[data-test-pass]")){ e.stopPropagation(); mineChangeColumn(t, "done", "测试通过失败"); return; }
     var cell = e.target.closest("[data-mine-cell]");
     if(cell){ e.stopPropagation(); openMineCellMenu(cell, t); return; }
     if(e.target.closest("[data-mine-done]")){ e.stopPropagation(); mineComplete(t); return; }

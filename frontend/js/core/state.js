@@ -47,7 +47,7 @@ rt.commentSending = false;
 rt.alertTab = "notice";
 
 var state = {
-  q:"", owners:[], pris:[], cats:[], reqs:[], tags:[], types:[], versions:[], columns:[],
+  q:"", owners:[], testOwners:[], pris:[], cats:[], reqs:[], tags:[], types:[], versions:[], columns:[],
   completion:"", due:null, focus:false, doneScope:"week", blocked:false,
   noDue:false, dueFrom:null, dueTo:null, startFrom:null, startTo:null,
   board:null, loadSeq:0, boardGen:0,
@@ -191,7 +191,7 @@ function dueMetaClass(kind){
   return "meta ok";
 }
 function filterOn(){
-  return !!(state.q || state.owners.length || state.pris.length || state.cats.length
+  return !!(state.q || state.owners.length || state.testOwners.length || state.pris.length || state.cats.length
     || state.reqs.length || state.tags.length || state.types.length || state.versions.length
     || state.columns.length || state.completion
     || state.due || state.focus || state.blocked || state.noDue
@@ -200,7 +200,7 @@ function filterOn(){
 function selectedFilterCount(){
   var n = 0;
   if(state.q) n++;
-  n += state.owners.length + state.pris.length + state.cats.length + state.reqs.length + state.tags.length + state.types.length + state.versions.length + state.columns.length;
+  n += state.owners.length + state.testOwners.length + state.pris.length + state.cats.length + state.reqs.length + state.tags.length + state.types.length + state.versions.length + state.columns.length;
   if(state.completion) n++;
   if(state.due) n++;
   if(state.focus) n++;

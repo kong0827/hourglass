@@ -87,10 +87,12 @@ export function promptReason(sourceName, targetName, count, descOverride) {
 
 /**
  * 移动前判定：items = [{from, title}]，target 为目标列。
+ * opts.reason 表示调用方已收集过原因（如「退回」必填说明），不再二次弹窗。
  * 返回 {reason, force} 表示可以继续；返回 null 表示用户取消或被禁止。
  * 规则读取失败时不阻断，交给后端兜底（后端仍会校验）。
  */
-export function guard(wsId, items, target) {
+export function guard(wsId, items, target, opts) {
+  var presetReason = opts && opts.reason ? opts.reason : null;
   var list = (items || []).filter(function (it) { return it && it.from && it.from !== target; });
   if (!list.length) return Promise.resolve({ reason: null, force: false });
   return loadRules(wsId).then(function () {
@@ -114,13 +116,13 @@ export function guard(wsId, items, target) {
         return ok ? { reason: null, force: true } : null;
       });
     }
-    if (needReason) {
+    if (needReason && !presetReason) {
       var sourceName = list.length > 1 ? "所选列" : columnName(wsId, needReason.from);
       return promptReason(sourceName, columnName(wsId, target), list.length).then(function (reason) {
         return reason ? { reason: reason, force: false } : null;
       });
     }
-    return { reason: null, force: false };
+    return { reason: presetReason, force: false };
   }).catch(function () {
     return { reason: null, force: false };
   });

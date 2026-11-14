@@ -1,0 +1,164 @@
+<style>
+  .ch-root{--bg:#f6f7f9;--card:#fff;--line:#e5e7eb;--line2:#eef0f3;--text:#1f2329;--sub:#646a73;--faint:#8f959e;--blue:#3370ff;--blue-bg:#e8efff;--green:#34c724;--green-bg:#e6f6e4;--orange:#ff8800;--orange-bg:#fff1e0;--red:#f54a45;--red-bg:#feeceb;--purple:#7f3bf5;--purple-bg:#f1e8ff;--gray-bg:#f2f3f5;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);margin:-16px;padding:24px;box-sizing:border-box;min-height:100vh}
+  .ch-root *{margin:0;padding:0;box-sizing:border-box}
+  .ch-page{max-width:960px;margin:0 auto}
+  .ch-top{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .ch-title{font-size:16px;font-weight:600}
+  .ch-title small{font-size:12px;color:var(--faint);font-weight:400;margin-left:8px}
+  .ch-picker{position:relative}
+  .ch-picker-btn{display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--blue);border-radius:8px;background:var(--blue-bg);color:#2456c7;font-size:13px;font-weight:500;cursor:pointer;max-width:340px}
+  .ch-picker-btn .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ch-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .ch-seg button{padding:7px 14px;border:none;background:#fff;font-size:12.5px;color:var(--sub);cursor:pointer}
+  .ch-seg button.on{background:var(--blue-bg);color:var(--blue);font-weight:500}
+  .ch-spacer{flex:1}
+  .ch-meta{font-size:12px;color:var(--faint)}
+
+  .ch-sec{margin-top:18px}
+  .ch-sec-label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--sub);margin-bottom:8px}
+  .ch-sec-label .n{font-weight:400;color:var(--faint);background:var(--gray-bg);border-radius:10px;padding:1px 8px}
+  .ch-branch{margin-left:14px;border-left:2px solid var(--line2);padding-left:14px;display:flex;flex-direction:column;gap:6px}
+  .ch-branch.first-level{margin-left:0;border-left:none;padding-left:0}
+  .ch-node{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:box-shadow .15s,border-color .15s;max-width:640px}
+  .ch-node:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(51,112,255,.12)}
+  .ch-node .tp{font-size:11px;flex:none}
+  .ch-node .ti{font-size:13px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ch-node .st{font-size:11px;flex:none}
+  .ch-node .who{flex:none}
+  .ch-ava{width:20px;height:20px;border-radius:50%;color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center}
+  .ch-due{font-size:11px;color:var(--sub);flex:none}
+  .ch-edge{display:flex;align-items:center;gap:8px;margin:2px 0 2px 24px;font-size:11px;color:var(--faint)}
+  .ch-edge .ln{width:24px;height:14px;border-left:2px solid #c9d4e8;border-bottom:2px solid #c9d4e8;border-bottom-left-radius:8px;flex:none}
+  .ch-dep-tag{background:var(--purple-bg);color:var(--purple);border-radius:4px;padding:1px 7px;font-weight:600}
+  .ch-dep-tag.lag{background:var(--orange-bg);color:var(--orange)}
+  .ch-cycle{font-size:11px;color:var(--red);background:var(--red-bg);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
+  .ch-multi{font-size:10px;color:var(--blue);background:var(--blue-bg);border-radius:4px;padding:1px 6px;flex:none}
+  .ch-center-card{margin:18px 0;background:linear-gradient(135deg,#eef3ff,#fff);border:2px solid var(--blue);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(51,112,255,.10)}
+  .ch-center-card .badge{font-size:10px;background:var(--blue);color:#fff;border-radius:4px;padding:2px 8px;flex:none}
+  .ch-center-card .ti{font-size:15px;font-weight:600;flex:1;min-width:0}
+  .ch-center-hint{font-size:11px;color:var(--faint);text-align:center;margin-top:10px}
+  .ch-empty{padding:32px;text-align:center;color:var(--faint);font-size:12.5px}
+  .ch-doing{background:var(--blue-bg);color:var(--blue)}
+  .ch-done{background:var(--green-bg);color:#23a11d}
+  .ch-todo{background:var(--gray-bg);color:var(--sub)}
+  .ch-blocked{background:var(--red-bg);color:var(--red)}
+  .ch-ava-lg{width:30px;height:30px;font-size:12px}
+</style>
+
+<div class="ch-root">
+  <div class="ch-page">
+    <div class="ch-top">
+      <div class="ch-title">影响链<small>原型 · 前置/后继依赖链路 · 点击节点重新居中 · 2026-11-13</small></div>
+      <div class="ch-picker">
+        <button class="ch-picker-btn" type="button">◈ <span class="t">决策流可视化编排</span> ▾</button>
+      </div>
+      <div class="ch-seg" role="group" aria-label="方向">
+        <button type="button" data-dir="up" class="on">上游</button>
+        <button type="button" data-dir="both">双向</button>
+        <button type="button" data-dir="down">下游</button>
+      </div>
+      <div class="ch-spacer"></div>
+      <div class="ch-meta">前置 3 · 后继 4 · 最深 2 级</div>
+    </div>
+
+    <!-- 上游 -->
+    <div class="ch-sec">
+      <div class="ch-sec-label">▲ 上游 · 它卡在谁后面 <span class="n">3 项前驱</span></div>
+      <div class="ch-branch first-level">
+        <div class="ch-node">
+          <span class="tp">● 用户故事</span><span class="ti">规则引擎升级</span>
+          <span class="st ch-done">已完成</span><span class="ch-due">11-08</span>
+          <span class="ch-ava" style="background:#7f3bf5">陈</span>
+        </div>
+        <div class="ch-edge"><span class="ln"></span><span class="ch-dep-tag">FS</span> 前驱完成后才能开始 <span class="ch-dep-tag lag">+1天</span></div>
+        <div class="ch-node">
+          <span class="tp">● 用户故事</span><span class="ti">核心框架适配</span>
+          <span class="st ch-done">已完成</span><span class="ch-due">11-05</span>
+          <span class="ch-ava" style="background:#14a87c">王</span>
+        </div>
+      </div>
+      <div class="branch-gap" style="height:8px"></div>
+      <div class="ch-branch first-level">
+        <div class="ch-node">
+          <span class="tp">● 需求</span><span class="ti">名单库建设</span>
+          <span class="st ch-doing">进行中</span><span class="ch-due">11-18</span>
+          <span class="ch-ava" style="background:#ff8800">李</span>
+          <span class="ch-multi">2 条入边</span>
+        </div>
+        <div class="ch-edge"><span class="ln"></span><span class="ch-dep-tag">FS</span> 无滞后</div>
+      </div>
+      <div class="branch-gap" style="height:8px"></div>
+      <div class="ch-branch first-level">
+        <div class="ch-node">
+          <span class="tp">● 里程碑</span><span class="ti">需求评审通过</span>
+          <span class="st ch-done">已完成</span><span class="ch-due">11-02</span>
+          <span class="ch-ava" style="background:#3370ff">孔</span>
+        </div>
+        <div class="ch-edge"><span class="ln"></span><span class="ch-dep-tag">FF</span> 前驱完成时本项须完成</div>
+      </div>
+    </div>
+
+    <!-- 中心 -->
+    <div class="ch-center-card">
+      <span class="badge">中心工作项</span>
+      <span class="tp" style="font-size:12px">● 用户故事</span>
+      <span class="ti">决策流可视化编排</span>
+      <span class="st ch-doing">进行中</span>
+      <span class="progress" style="display:flex;align-items:center;gap:6px"><span style="width:80px;height:6px;border-radius:3px;background:var(--line2);display:block;overflow:hidden"><i style="display:block;height:100%;width:60%;background:var(--blue);border-radius:3px"></i></span><span style="font-size:11px;color:var(--sub)">60%</span></span>
+      <span class="ch-due">11-20</span>
+      <span class="ch-ava ch-ava-lg" style="background:#3370ff">孔</span>
+    </div>
+    <div class="ch-center-hint">点击任意节点将其移到中心 · 点击节点右侧空白处打开详情抽屉</div>
+
+    <!-- 下游 -->
+    <div class="ch-sec">
+      <div class="ch-sec-label">▼ 下游 · 它解锁了谁 <span class="n">4 项后继</span></div>
+      <div class="ch-branch first-level">
+        <div class="ch-node">
+          <span class="tp">● 任务</span><span class="ti">联调与回归</span>
+          <span class="st ch-todo">待办</span><span class="ch-due">11-24</span>
+          <span class="ch-ava" style="background:#7f3bf5">陈</span>
+          <span class="ch-multi">2 条入边</span>
+        </div>
+        <div class="ch-edge"><span class="ln"></span><span class="ch-dep-tag">FS</span> <span class="ch-dep-tag lag">+2天</span></div>
+        <div class="ch-node">
+          <span class="tp">● 任务</span><span class="ti">灰度发布</span>
+          <span class="st ch-todo">待办</span><span class="ch-due">11-28</span>
+          <span class="ch-ava" style="background:#3370ff">孔</span>
+        </div>
+        <div class="ch-edge"><span class="ln"></span><span class="ch-dep-tag">FS</span> 无滞后 · 继续展开 1 项后继</div>
+        <div class="ch-branch">
+          <div class="ch-node">
+            <span class="tp">● 版本</span><span class="ti">风控引擎 v1.2 发布</span>
+            <span class="st ch-todo">待办</span><span class="ch-due">12-02</span>
+            <span class="ch-ava" style="background:#14a87c">王</span>
+          </div>
+        </div>
+      </div>
+      <div class="branch-gap" style="height:8px"></div>
+      <div class="ch-branch first-level">
+        <div class="ch-node">
+          <span class="tp">● 任务</span><span class="ti">接口文档更新</span>
+          <span class="st ch-todo">待办</span><span class="ch-due">11-26</span>
+          <span class="ch-ava" style="background:#ff8800">李</span>
+        </div>
+        <div class="ch-edge"><span class="ln"></span><span class="ch-dep-tag">SS</span> 与前驱同时启动</div>
+        <div class="ch-node">
+          <span class="tp">● 任务</span><span class="ti">培训材料准备</span>
+          <span class="st ch-todo">待办</span><span class="ch-due">12-01</span>
+          <span class="ch-ava" style="background:#7f3bf5">陈</span>
+        </div>
+      </div>
+      <div class="branch-gap" style="height:8px"></div>
+      <div class="ch-branch first-level">
+        <div class="ch-edge" style="margin-left:0"><span class="ch-dep-tag">SF</span> 本项开始是前驱完成的信号</div>
+        <div class="ch-node">
+          <span class="tp">● 缺陷</span><span class="ti">编排界面偶发卡顿</span>
+          <span class="st ch-doing">进行中</span><span class="ch-due">11-19</span>
+          <span class="ch-ava" style="background:#f54a45">赵</span>
+        </div>
+        <div class="ch-edge"><span class="ln"></span><span class="ch-cycle">↩ 检测到环路：回到「决策流可视化编排」— 不再展开</span></div>
+      </div>
+    </div>
+  </div>
+</div>

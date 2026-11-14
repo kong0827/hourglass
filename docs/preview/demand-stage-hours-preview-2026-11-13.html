@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 需求池阶段工时原型</title>
+<style>
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --st-review:#667085; --st-plan:#0B8AD9; --st-design:#6941C6; --st-dev:#2563EB;
+  --st-test:#B54708; --st-complete:#067647; --st-release:#0E7C70;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,Menlo,monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --sidebar-w:220px; --topbar-h:60px; --label-w:360px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:var(--font-sans);font-size:13px;color:var(--text);background:var(--bg-app);-webkit-font-smoothing:antialiased;}
+button,input,select{font:inherit;color:inherit;}
+button{border:0;background:none;cursor:pointer;}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+.app{display:flex;min-height:100vh;}
+.sidebar{width:var(--sidebar-w);flex:0 0 auto;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);position:sticky;top:0;height:100vh;}
+.side-brand{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;}
+.brand-mark{width:32px;height:32px;border-radius:var(--r-sm);background:var(--primary);display:grid;place-items:center;color:#fff;}
+.side-brand-name{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.side-ws{padding:0 12px 10px;}
+.ws-switch{display:flex;align-items:center;gap:9px;width:100%;height:44px;padding:0 9px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);}
+.ws-avatar{width:24px;height:24px;font-size:11px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-weight:700;}
+.ws-n{font-size:13px;font-weight:600;display:block;text-align:left;}
+.ws-kind{font-size:11px;color:var(--text-3);display:block;text-align:left;}
+.side-nav{flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column;gap:1px;padding:0 12px 12px;}
+.nav-sec{padding:12px 10px 4px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-3);}
+.nav-item{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--r-sm);color:var(--text-2);font-size:13px;font-weight:550;width:100%;text-align:left;}
+.nav-item:hover{background:var(--surface-hover);color:var(--text);}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650;}
+.side-foot{border-top:1px solid var(--border);padding:10px 12px;}
+.side-user{display:flex;align-items:center;gap:9px;padding:8px 6px;border-radius:var(--r-sm);}
+.avatar{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--primary);}
+.side-user-n{font-size:12.5px;font-weight:600;line-height:1.25;}
+.side-user-r{font-size:11px;color:var(--text-3);}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;}
+.topbar{height:var(--topbar-h);display:flex;align-items:center;gap:14px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border);}
+.tb-title{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.tb-sub{font-size:12px;color:var(--text-3);margin-top:1px;}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.proto-pill{font-size:11px;font-weight:650;padding:3px 9px;border-radius:var(--r-pill);background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
+.icon-btn{width:32px;height:32px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2);border:1px solid transparent;}
+.icon-btn:hover{background:var(--surface-hover);border-color:var(--border);}
+.content{flex:1 1 auto;padding:18px 24px 40px;display:flex;flex-direction:column;gap:14px;min-width:0;}
+.proto-banner{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px dashed var(--primary-border);border-radius:var(--r-md);background:var(--primary-soft);color:var(--primary-fg);font-size:12px;line-height:1.6;}
+.proto-banner b{font-weight:700;}
+.proto-banner .btn{margin-left:auto;background:var(--surface);}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;}
+.page-head h1{font-size:20px;font-weight:700;letter-spacing:-.02em;}
+.page-head p{font-size:12.5px;color:var(--text-3);line-height:1.65;margin-top:5px;max-width:860px;}
+.view-tabs{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;flex:0 0 auto;}
+.view-tabs button{height:28px;padding:0 13px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--text-2);}
+.view-tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+.btn{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.btn:hover{background:var(--surface-hover);color:var(--text);border-color:var(--border-strong);}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-fg);border-color:var(--primary-fg);color:#fff;}
+.btn.new{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.toolbar{display:flex;align-items:center;gap:12px;padding:10px 14px;flex-wrap:wrap;}
+.toolbar-meta{font-size:12px;color:var(--text-3);}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.mini-select{height:30px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:0 8px;font-size:12px;color:var(--text-2);}
+.toolbar .label-help{width:26px;height:26px;border-radius:50%;border:1px solid var(--border);color:var(--text-3);font-size:12px;display:grid;place-items:center;}
+.smart-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap;}
+.smart-tabs{display:inline-flex;gap:2px;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);}
+.smart-tabs button{height:26px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-2);}
+.smart-tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.search{height:30px;width:210px;border:1px solid var(--border);border-radius:var(--r-sm);padding:0 9px;font-size:12px;background:var(--surface);}
+.search::placeholder{color:var(--text-3);}
+.chip{height:28px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:550;white-space:nowrap;}
+.control{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);white-space:nowrap;}
+.control select{height:28px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:0 7px;font-size:12px;color:var(--text);}
+.spacer{margin-left:auto;}
+.gantt-tools{display:flex;align-items:center;gap:12px;padding:9px 14px;flex-wrap:wrap;}
+.gantt-tools .group{display:flex;align-items:center;gap:6px;}
+.gantt-tools .group>span{font-size:11.5px;font-weight:650;color:var(--text-2);}
+.legend{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:11.5px;color:var(--text-2);align-items:center;}
+.lg{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.sw{width:9px;height:9px;border-radius:3px;}
+.sw-gap{width:14px;height:0;border-top:1.5px dashed var(--border-strong);}
+.sw-expect{width:0;height:11px;border-left:1.5px dashed var(--danger);}
+.gantt-hint{font-size:11px;color:var(--text-3);margin-left:auto;display:flex;align-items:center;gap:6px;}
+.gantt-card{padding:10px 12px 12px;overflow:hidden;}
+.gantt-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.gantt-scroll{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.gantt-axis{display:flex;height:50px;background:var(--surface-sunken);border-bottom:1px solid var(--border);position:relative;z-index:2;}
+.axis-corner{width:var(--label-w);flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 14px;font-size:11.5px;font-weight:650;color:var(--text-2);border-right:1px solid var(--border);background:var(--surface);}
+.axis-corner span{font-size:10.5px;font-weight:600;color:var(--text-3);}
+.axis-track{position:relative;flex:0 0 auto;height:50px;}
+.axis-month{position:absolute;top:7px;font-size:11px;font-weight:700;color:var(--text-2);white-space:nowrap;}
+.axis-week{position:absolute;top:27px;font-size:9.5px;color:var(--text-3);white-space:nowrap;transform:translateX(-50%);}
+.axis-today{position:absolute;top:7px;transform:translateX(-50%);background:var(--danger);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:var(--r-pill);white-space:nowrap;z-index:3;}
+.gantt-body{position:relative;}
+.g-group{display:flex;align-items:center;height:30px;background:var(--surface-sunken);border-bottom:1px solid var(--border);padding:0 12px;gap:7px;font-size:11.5px;}
+.g-group .caret{color:var(--text-3);font-size:10px;width:10px;}
+.g-group .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+.g-group b{font-weight:650;color:var(--text);}
+.g-group .cnt{font-size:10.5px;color:var(--text-3);}
+.g-group .sum{margin-left:auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.g-row{display:flex;border-bottom:1px solid var(--border);}
+.g-row:last-child{border-bottom:none;}
+.g-row:hover .g-label{background:var(--surface-hover);}
+.g-label{width:var(--label-w);flex:0 0 auto;padding:8px 12px 8px 14px;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;}
+.g-line1{display:flex;align-items:center;gap:6px;min-width:0;}
+.pri{width:6px;height:6px;border-radius:50%;flex:0 0 auto;}
+.pri-P0{background:var(--danger);} .pri-P1{background:var(--warning);} .pri-P2{background:var(--info);} .pri-P3{background:var(--text-3);}
+.g-title{font-size:12.5px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;min-width:0;}
+.stage-pill{font-size:9.5px;font-weight:650;padding:1px 6px;border-radius:var(--r-pill);white-space:nowrap;border:1px solid transparent;flex:0 0 auto;}
+.stage-pill.st-review{background:var(--surface-sunken);color:var(--st-review);border-color:var(--border);}
+.stage-pill.st-plan{background:var(--info-soft);color:var(--info-fg);border-color:var(--info-border);}
+.stage-pill.st-design{background:var(--plum-soft);color:var(--plum-fg);border-color:var(--plum-border);}
+.stage-pill.st-dev{background:var(--primary-soft);color:var(--primary-fg);border-color:var(--primary-border);}
+.stage-pill.st-test{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
+.stage-pill.st-complete,.stage-pill.st-release{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border);}
+.g-meta{font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.g-hours{display:flex;align-items:center;gap:5px;min-width:0;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;}
+.hchip{font-size:9.5px;font-weight:650;padding:1px 5px;border-radius:4px;flex:0 0 auto;}
+.hchip.est{background:var(--surface-sunken);color:var(--text-2);}
+.hchip.act{background:var(--primary-soft);color:var(--primary-fg);}
+.hchip.zero{background:var(--surface-sunken);color:var(--text-3);font-weight:550;}
+.hsplit{font-size:9.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;}
+.g-track{position:relative;flex:0 0 auto;background-image:linear-gradient(to right,var(--border) 0 1px,transparent 1px 100%);background-repeat:repeat-x;background-position:0 0;}
+.g-track::after{content:"";position:absolute;inset:0;background-image:linear-gradient(to right,color-mix(in srgb,var(--border) 55%,transparent) 0 1px,transparent 1px 100%);background-size:var(--week-w) 100%;pointer-events:none;opacity:.55;}
+.seg{position:absolute;z-index:3;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center;gap:5px;overflow:hidden;padding:0 6px;white-space:nowrap;font-size:9.5px;font-weight:650;color:var(--stage-color);background:color-mix(in srgb,var(--stage-color) 16%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--stage-color) 38%,transparent);cursor:default;}
+.seg:hover{box-shadow:inset 0 0 0 1px var(--stage-color),var(--shadow-sm);}
+.seg .h{font-weight:600;color:color-mix(in srgb,var(--stage-color) 82%,var(--text-2));font-variant-numeric:tabular-nums;}
+.seg.open::after{content:"";position:absolute;top:0;bottom:0;right:0;width:3px;background:repeating-linear-gradient(to bottom,var(--stage-color) 0 3px,transparent 3px 6px);opacity:.7;}
+.seg.point{width:10px;height:10px;padding:0;border-radius:2px;transform:rotate(45deg);box-shadow:0 0 0 2px var(--surface);background:var(--stage-color);}
+.seg.point .seg-label{display:none;}
+.seg.point:hover{filter:brightness(1.08);}
+.gap{position:absolute;z-index:2;height:0;border-top:1.5px dashed var(--border-strong);pointer-events:none;}
+.gap span{position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-size:9px;color:var(--text-3);background:var(--surface);padding:0 3px;white-space:nowrap;}
+.expect{position:absolute;top:4px;bottom:4px;width:0;border-left:1.5px dashed var(--danger);opacity:.8;z-index:4;pointer-events:none;}
+.expect::before{content:"";position:absolute;top:-2px;left:-3px;width:6px;height:6px;border-radius:50%;background:var(--danger);}
+.today-line{position:absolute;top:0;bottom:0;border-left:1.5px dashed var(--danger);opacity:.5;pointer-events:none;z-index:1;}
+.gantt-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text-3);line-height:1.6;}
+.gantt-foot b{color:var(--text-2);font-weight:650;}
+.stats-card{padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px;}
+.stats-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+.stats-head h2{font-size:14.5px;font-weight:700;letter-spacing:-.01em;}
+.stats-head .scope{font-size:11.5px;color:var(--text-3);margin-top:3px;}
+.stats-controls{margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.segctl{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;}
+.segctl button{height:26px;padding:0 10px;border-radius:6px;font-size:11.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.segctl button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.stat-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.stat-kpi{background:var(--surface-sunken);border-radius:var(--r-sm);padding:10px 12px;min-width:0;}
+.stat-kpi span{display:block;font-size:10.5px;color:var(--text-3);}
+.stat-kpi b{display:block;font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.35;font-variant-numeric:tabular-nums;}
+.stat-kpi b small{font-size:11px;font-weight:600;color:var(--text-2);margin-left:2px;}
+.stat-kpi em{display:block;font-style:normal;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mix{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.mix-label{font-size:11px;color:var(--text-3);white-space:nowrap;}
+.mix-bar{flex:1 1 320px;height:10px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;display:flex;min-width:220px;}
+.mix-bar i{display:block;height:100%;}
+.mix-legend{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text-2);flex-wrap:wrap;}
+.mix-legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.mix-legend i{width:8px;height:8px;border-radius:2px;}
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r-md);}
+table.stats{width:100%;border-collapse:collapse;font-size:12px;min-width:720px;}
+table.stats th{background:var(--surface-sunken);text-align:left;font-size:10.5px;font-weight:700;color:var(--text-3);padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+table.stats th.num,table.stats td.num{text-align:right;font-variant-numeric:tabular-nums;}
+table.stats th .dot{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:5px;vertical-align:1px;}
+table.stats td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text-2);white-space:nowrap;}
+table.stats tbody tr:hover td{background:var(--surface-hover);}
+table.stats tbody tr:last-child td{border-bottom:none;}
+table.stats tr.total td{background:var(--surface-sunken);font-weight:700;color:var(--text);border-top:1px solid var(--border-strong);}
+table.stats td.dim{font-weight:650;color:var(--text);max-width:260px;overflow:hidden;text-overflow:ellipsis;}
+table.stats td.dim small{display:block;font-size:10.5px;font-weight:500;color:var(--text-3);margin-top:2px;}
+.muted{color:var(--text-3);font-weight:500;}
+.cellbar{display:block;height:3px;border-radius:2px;background:var(--surface-active);margin-top:4px;overflow:hidden;}
+.cellbar i{display:block;height:100%;background:var(--primary);border-radius:2px;}
+.stats-note{font-size:11px;color:var(--text-3);line-height:1.7;padding:0 2px;}
+.stats-note b{color:var(--text-2);font-weight:650;}
+.notes-card{padding:14px 16px 16px;}
+.notes-card h2{font-size:14.5px;font-weight:700;margin-bottom:4px;}
+.notes-card>p{font-size:11.5px;color:var(--text-3);line-height:1.7;margin-bottom:12px;}
+.notes-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+.notes-grid h3{font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.notes-grid ul{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.notes-grid li{font-size:11px;line-height:1.65;color:var(--text-3);}
+.notes-grid li b{color:var(--text-2);font-weight:650;}
+.tag{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:var(--r-pill);margin-right:4px;vertical-align:1px;}
+.tag.ok{background:var(--success-soft);color:var(--success-fg);}
+.tag.warn{background:var(--warning-soft);color:var(--warning-fg);}
+.tag.info{background:var(--primary-soft);color:var(--primary-fg);}
+.tag.mute{background:var(--surface-sunken);color:var(--text-3);}
+.tip{position:fixed;z-index:90;max-width:300px;padding:8px 10px;border-radius:8px;background:#101828;color:#fff;font-size:11px;line-height:1.55;box-shadow:var(--shadow-lg);pointer-events:none;opacity:0;transform:translateY(3px);transition:opacity .1s ease,transform .1s ease;}
+.tip.on{opacity:1;transform:none;}
+.tip b{font-size:11.5px;font-weight:650;display:block;margin-bottom:1px;}
+.tip span{color:rgba(255,255,255,.75);}
+.tip em{display:block;margin-top:3px;font-style:normal;color:rgba(255,255,255,.55);}
+.tip .warn{color:#FEC84B;}
+@media (max-width:1200px){
+  .notes-grid{grid-template-columns:repeat(2,1fr);}
+  .stat-kpis{grid-template-columns:repeat(2,1fr);}
+  :root{--label-w:330px;}
+}
+@media (max-width:900px){
+  .sidebar{display:none;}
+  .content{padding:14px;}
+  .page-head{flex-direction:column;}
+  .notes-grid{grid-template-columns:1fr;}
+  .stats-controls{margin-left:0;}
+  :root{--label-w:280px;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-brand">
+      <span class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5h8M5 15.5h8M6 2.5v3.2L9 9l3-3.3V2.5M6 15.5v-3.2L9 9l3 3.3v3.2"/></svg>
+      </span>
+      <span class="side-brand-name">沙漏</span>
+    </div>
+    <div class="side-ws">
+      <button class="ws-switch" type="button">
+        <span class="ws-avatar">东</span>
+        <span style="min-width:0">
+          <span class="ws-n">东证自研</span>
+          <span class="ws-kind">研发空间 · 18 人</span>
+        </span>
+      </button>
+    </div>
+    <nav class="side-nav">
+      <div class="nav-sec">我的</div>
+      <button class="nav-item" type="button">我的工作</button>
+      <button class="nav-item" type="button">周回顾</button>
+      <div class="nav-sec">规划</div>
+      <button class="nav-item on" type="button">需求池</button>
+      <button class="nav-item" type="button">版本</button>
+      <div class="nav-sec">执行</div>
+      <button class="nav-item" type="button">看板</button>
+      <button class="nav-item" type="button">甘特图</button>
+      <button class="nav-item" type="button">日历</button>
+      <div class="nav-sec">交付</div>
+      <button class="nav-item" type="button">测试用例</button>
+      <button class="nav-item" type="button">发布计划</button>
+      <button class="nav-item" type="button">报表</button>
+    </nav>
+    <div class="side-foot">
+      <div class="side-user">
+        <span class="avatar">孔</span>
+        <span><span class="side-user-n">孔祥金</span><span class="side-user-r">空间管理员</span></span>
+      </div>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="tb-title">需求池</div>
+        <div class="tb-sub">东证自研 · 规划</div>
+      </div>
+      <div class="tb-right">
+        <span class="proto-pill">原型 · 未实施</span>
+        <button class="icon-btn" type="button" title="帮助">?</button>
+      </div>
+    </header>
+    <main class="content">
+      <div class="proto-banner">
+        <div><b>需求池甘特 · 阶段工时补充</b>　甘特条增加阶段工时，新增「按阶段」分组，并提供项目 / 目标版本 / 模块三个维度的阶段工时统计。下面的数字为演示数据。</div>
+        <button class="btn sm" type="button" onclick="document.getElementById('notes').scrollIntoView({behavior:'smooth'})">口径与逻辑</button>
+      </div>
+
+      <section class="page-head">
+        <div>
+          <h1>需求池</h1>
+          <p>四态看板与主状态工作页：待评审 → 已通过 → 已排期；已关闭保留原因与恢复去向。当前原型聚焦「甘特」形态下的阶段工时。</p>
+        </div>
+        <div class="view-tabs" role="group" aria-label="需求池展示形式">
+          <button type="button">看板</button>
+          <button type="button">列表</button>
+          <button type="button" class="on">甘特</button>
+        </div>
+      </section>
+
+      <section class="card toolbar">
+        <span class="toolbar-meta">全空间 · 共 <b>7</b> 条 · 5 组 · 已加载 7 条</span>
+        <div class="toolbar-right">
+          <button class="label-help" type="button" title="甘特怎么画">?</button>
+          <button class="btn new" type="button" onclick="document.getElementById('stats').scrollIntoView({behavior:'smooth'})">工时统计</button>
+          <select class="mini-select" aria-label="选择项目">
+            <option>全部项目</option><option>交易终端</option><option>风控中台</option><option>运营后台</option>
+          </select>
+          <button class="btn primary" type="button">+ 提需求</button>
+        </div>
+      </section>
+
+      <section class="card smart-bar" aria-label="需求视图">
+        <div class="smart-tabs">
+          <button type="button">全部</button><button type="button">待评审</button><button type="button">已通过</button><button type="button" class="on">已排期</button><button type="button">已关闭</button>
+        </div>
+        <input class="search" type="search" placeholder="搜索全部需求…" aria-label="搜索需求">
+        <button class="chip" type="button">筛选</button>
+        <label class="control">分组
+          <select id="groupMode">
+            <option value="stage" selected>按阶段（当前）</option>
+            <option value="none">不分组</option>
+          </select>
+        </label>
+        <label class="control">二级
+          <select><option>不分组</option><option>按项目</option><option>按优先级</option></select>
+        </label>
+        <label class="control">排序
+          <select><option>默认顺序</option><option>按优先级</option><option>按期望交付</option></select>
+        </label>
+        <span class="spacer"></span>
+        <button class="btn sm" type="button">导出当前视图</button>
+        <button class="btn sm" type="button">＋ 保存视图</button>
+      </section>
+
+      <section class="card gantt-tools" aria-label="甘特工具">
+        <div class="group"><span>刻度</span><select class="mini-select"><option>日</option><option>周</option><option>月</option></select></div>
+        <div class="group"><span>缩放</span><select class="mini-select"><option>紧凑</option><option selected>标准</option><option>宽松</option></select></div>
+        <div class="group"><span>范围</span><select class="mini-select"><option>适配全部</option><option>按月查看</option></select></div>
+        <div class="group"><span>行形态</span><select class="mini-select" id="rowForm"><option value="demand" selected>一需求一行</option><option value="stage">按阶段拆行</option></select></div>
+        <div class="group"><span>条上标注</span><select class="mini-select" id="labelMode"><option value="both" selected>天数 + 工时</option><option value="days">仅天数</option></select></div>
+        <div class="gantt-hint">阶段取自真实记录，缺失不补 0 天 · 工时来自工作项计时</div>
+      </section>
+
+      <section class="card gantt-card" id="ganttCard">
+        <div class="gantt-head">
+          <div class="legend" id="legend"></div>
+          <div class="gantt-hint">
+            <span>当前阶段 = 最晚的进行中阶段；无进行中取最晚记录</span>
+          </div>
+        </div>
+        <div class="gantt-scroll" id="ganttScroll">
+          <div class="gantt-axis" id="ganttAxis"></div>
+          <div class="gantt-body" id="ganttBody"></div>
+          <div class="today-line" id="todayLine"></div>
+        </div>
+        <div class="gantt-foot">
+          <span><b>工时口径：</b>预估来自关联工作项；实际来自计时器与手工补记，测试窗口内的计时归测试，其余归开发。</span>
+          <span>评审 / 排期 / 设计 / 发布没有计时来源，只显示阶段天数。</span>
+        </div>
+      </section>
+
+      <section class="card stats-card" id="stats">
+        <div class="stats-head">
+          <div>
+            <h2>工时统计 · 按阶段</h2>
+            <div class="scope">跟随当前筛选 · 7 条需求 · 服务端全量聚合，不受甘特分页影响</div>
+          </div>
+          <div class="stats-controls">
+            <label class="control">维度
+              <span class="segctl" id="dimCtl" role="group" aria-label="统计维度">
+                <button type="button" class="on" data-dim="project">项目</button>
+                <button type="button" data-dim="version">目标版本</button>
+                <button type="button" data-dim="module">模块</button>
+              </span>
+            </label>
+            <label class="control">口径
+              <span class="segctl" id="metricCtl" role="group" aria-label="统计口径">
+                <button type="button" class="on" data-metric="actual">实际工时</button>
+                <button type="button" data-metric="estimate">预估工时</button>
+                <button type="button" data-metric="days">阶段天数</button>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="stat-kpis" id="statKpis"></div>
+        <div class="mix" id="mixRow"></div>
+        <div class="table-wrap">
+          <table class="stats" id="statsTable"></table>
+        </div>
+        <div class="stats-note" id="statsNote"></div>
+      </section>
+
+      <section class="card notes-card" id="notes">
+        <h2>口径与逻辑复核</h2>
+        <p>阶段时间轴按真实记录回放，不做计划推算；工时统计只使用已有的工作项预估与计时记录。下面是实施前需要一起确认的边界。</p>
+        <div class="notes-grid">
+          <div>
+            <h3>阶段时间轴</h3>
+            <ul>
+              <li><span class="tag ok">已复核</span><b>评审</b>：创建 → 最后一次通过；待评审到今天，拒绝停在拒绝日；同日拒绝后重开按时间比较，不会误停。</li>
+              <li><span class="tag ok">已复核</span><b>排期</b>：最后一次排期 / 调期；撤排后保留历史段；旧排期晚于最后通过时收成单点。</li>
+              <li><span class="tag ok">已复核</span><b>开发 / 测试 / 发布</b>：真实开工、用例与测试窗口、成功生产发布条目；取消停在取消日。</li>
+              <li><span class="tag warn">边界</span><b>无工作项</b>时，即使用例全部通过也不会出现「完成」点（当前要求 taskCount &gt; 0），需要确认是否符合预期。</li>
+              <li><span class="tag info">语义</span><b>按阶段分组</b>是按需求「当前阶段」归组，不拆行；<b>按阶段拆行</b>把一条需求按 评审 / 排期 / 设计 / 开发 / 测试 / 完成 / 发布 展开成多行，只画该阶段。</li>
+            </ul>
+          </div>
+          <div>
+            <h3>工时归属 v1</h3>
+            <ul>
+              <li><span class="tag ok">建议</span><b>预估</b>：关联工作项 estimate_minutes 合计，整体计入「开发」；工作项预估没有阶段字段。</li>
+              <li><span class="tag ok">建议</span><b>实际</b>：time_log 已结束记录；落在工作项测试窗口内的归「测试」，其余归「开发」。</li>
+              <li><span class="tag warn">边界</span><b>测试窗口只保留最近一轮</b>：task.test_started_at / test_finished_at 会被新一轮覆盖，早期轮次计时可能落入开发。</li>
+              <li><span class="tag info">可选</span>若要在评审 / 设计 / 测试分别录入预估，需要新增「阶段预估」字段或子表，属于 v2。</li>
+            </ul>
+          </div>
+          <div>
+            <h3>维度可行性</h3>
+            <ul>
+              <li><span class="tag ok">可行</span><b>项目</b>：demand.req_id；按项目可见性过滤，与列表一致。</li>
+              <li><span class="tag warn">可行</span><b>目标版本</b>：demand.version_id，是排期目标版本，不等于实际生产发布版本；中途换版本会把工时归到当前目标版本。</li>
+              <li><span class="tag warn">可行</span><b>模块</b>：demand.category_id，是需求模块；模块按项目维护，同名模块需带项目前缀；需求未填模块会落到「未指定」。</li>
+              <li><span class="tag mute">后续</span><b>负责人 / 人员</b>：需求没有负责人字段；工时记录有计时人，但按人统计需要单独口径。</li>
+            </ul>
+          </div>
+          <div>
+            <h3>实施前确认</h3>
+            <ul>
+              <li><span class="tag warn">口径</span>测试工时按「最近一轮测试窗口」还是从 task_log 重建全部测试轮次？后者更准，SQL 更复杂。</li>
+              <li><span class="tag warn">口径</span>版本维度用「目标版本」还是「实际生产发布版本」？两者在换版本 / 回滚时会不一致。</li>
+              <li><span class="tag warn">口径</span>模块维度只认需求模块，还是需求未填时回退到工作项模块？回退会产生跨维度重复。</li>
+              <li><span class="tag info">范围</span>阶段天数是否需要一并上线？它是自然日、阶段可重叠，不能与工时相加。</li>
+              <li><span class="tag info">形态</span>「按阶段拆行」是否随 v1 上线？它最贴合「甘特按阶段看工时」，但行数和滚动明显增加。</li>
+              <li><span class="tag info">性能</span>统计需服务端按全部匹配需求聚合，不能只算甘特已加载的 100 条。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+var TODAY = "2026-11-13";
+var ORDER = ["review","plan","design","dev","test","complete","release"];
+var STAGE = {
+  review:{name:"评审",color:"var(--st-review)"},
+  plan:{name:"排期",color:"var(--st-plan)"},
+  design:{name:"设计",color:"var(--st-design)"},
+  dev:{name:"开发",color:"var(--st-dev)"},
+  test:{name:"测试",color:"var(--st-test)"},
+  complete:{name:"完成",color:"var(--st-complete)"},
+  release:{name:"发布",color:"var(--st-release)"}
+};
+var DEMANDS = [
+  {id:"D1",title:"条件单改造",project:"交易终端",version:"V2.4",module:"条件单",priority:"P1",current:"release",
+   expect:"2026-11-15",estimateMin:3360,devMin:2160,testMin:780,tasks:4,estTasks:4,
+   stages:[
+     {s:"review",a:"2026-09-28",b:"2026-10-09"},
+     {s:"plan",a:"2026-10-12",b:"2026-10-12",point:true},
+     {s:"design",a:"2026-10-10",b:"2026-10-20"},
+     {s:"dev",a:"2026-10-15",b:"2026-11-05"},
+     {s:"test",a:"2026-11-03",b:"2026-11-11"},
+     {s:"complete",a:"2026-11-11",b:"2026-11-11",point:true},
+     {s:"release",a:"2026-11-12",b:"2026-11-12",point:true}
+   ]},
+  {id:"D2",title:"行情回放",project:"交易终端",version:"V2.5",module:"行情",priority:"P1",current:"test",
+   expect:"2026-11-20",estimateMin:2400,devMin:1440,testMin:450,tasks:3,estTasks:3,
+   stages:[
+     {s:"review",a:"2026-10-12",b:"2026-10-20"},
+     {s:"plan",a:"2026-10-20",b:"2026-10-22"},
+     {s:"design",a:"2026-10-21",b:"2026-10-30"},
+     {s:"dev",a:"2026-10-28",b:"2026-11-13",open:true},
+     {s:"test",a:"2026-11-10",b:"2026-11-13",open:true}
+   ]},
+  {id:"D3",title:"自选股分组",project:"交易终端",version:"V2.5",module:"自选",priority:"P2",current:"dev",
+   expect:"2026-11-25",estimateMin:1440,devMin:540,testMin:0,tasks:2,estTasks:2,
+   stages:[
+     {s:"review",a:"2026-11-01",b:"2026-11-06"},
+     {s:"plan",a:"2026-11-10",b:"2026-11-10",point:true},
+     {s:"dev",a:"2026-11-09",b:"2026-11-13",open:true}
+   ]},
+  {id:"D4",title:"规则引擎性能",project:"风控中台",version:"V1.8",module:"规则",priority:"P0",current:"test",
+   expect:"2026-11-18",estimateMin:4320,devMin:2700,testMin:1080,tasks:5,estTasks:4,
+   stages:[
+     {s:"review",a:"2026-10-05",b:"2026-10-15"},
+     {s:"plan",a:"2026-10-15",b:"2026-10-18"},
+     {s:"design",a:"2026-10-16",b:"2026-10-26"},
+     {s:"dev",a:"2026-10-22",b:"2026-11-11"},
+     {s:"test",a:"2026-11-08",b:"2026-11-13",open:true}
+   ]},
+  {id:"D5",title:"风险快照导出",project:"风控中台",version:"V1.8",module:"报表",priority:"P2",current:"complete",
+   expect:"2026-11-14",estimateMin:1920,devMin:1440,testMin:300,tasks:3,estTasks:3,
+   stages:[
+     {s:"review",a:"2026-09-20",b:"2026-09-29"},
+     {s:"plan",a:"2026-09-29",b:"2026-10-09"},
+     {s:"design",a:"2026-10-08",b:"2026-10-16"},
+     {s:"dev",a:"2026-10-14",b:"2026-10-28"},
+     {s:"test",a:"2026-10-26",b:"2026-11-03"},
+     {s:"complete",a:"2026-11-03",b:"2026-11-03",point:true}
+   ]},
+  {id:"D6",title:"活动配置审批",project:"运营后台",version:"V3.2",module:"活动",priority:"P2",current:"dev",
+   expect:"2026-12-01",estimateMin:960,devMin:240,testMin:0,tasks:2,estTasks:1,
+   stages:[
+     {s:"review",a:"2026-11-02",b:"2026-11-09"},
+     {s:"plan",a:"2026-11-12",b:"2026-11-12",point:true},
+     {s:"dev",a:"2026-11-11",b:"2026-11-13",open:true}
+   ]},
+  {id:"D7",title:"数据看板重构",project:"运营后台",version:"",module:"看板",priority:"P2",current:"review",
+   expect:"2026-12-15",estimateMin:0,devMin:0,testMin:0,tasks:0,estTasks:0,
+   stages:[
+     {s:"review",a:"2026-10-20",b:"2026-11-13",open:true}
+   ]}
+];
+var state = { dim:"project", metric:"actual", group:"stage", rowForm:"demand", labelMode:"both", collapsed:{} };
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
+function parse(s){ return Date.parse(s + "T00:00:00Z"); }
+function iso(t){ return new Date(t).toISOString().slice(0,10); }
+function addDays(s,n){ var d = new Date(parse(s)); d.setUTCDate(d.getUTCDate()+n); return iso(d.getTime()); }
+function days(a,b){ return Math.round((parse(b)-parse(a))/86400000); }
+function incDays(a,b){ return days(a,b)+1; }
+function md(s){ return s ? s.slice(5).replace("-","/") : "—"; }
+function fmtH(min){
+  var m = Number(min)||0;
+  if(!m) return "—";
+  var h = Math.round(m/6)/10;
+  return h.toFixed(m % 60 === 0 ? 0 : 1) + "h";
+}
+function sum(arr,fn){ return arr.reduce(function(s,x){ return s + (Number(fn(x))||0); },0); }
+function stageDays(d, s){
+  var total = 0;
+  d.stages.forEach(function(x){
+    if(x.s === s) total += incDays(x.a, x.b);
+  });
+  return total;
+}
+function stageRecordCount(d){
+  return d.stages.filter(function(x){ return incDays(x.a,x.b) > 0; }).length;
+}
+function actualMin(d){ return d.devMin + d.testMin; }
+function stageTitle(d, x){
+  var n = STAGE[x.s].name;
+  var span = x.point ? x.a : (x.a === x.b ? x.a : x.a + " → " + x.b);
+  var ds = x.point ? "单日节点" : (incDays(x.a,x.b) + " 天" + (x.open ? "（进行中）" : ""));
+  var h = "";
+  if(x.s === "dev") h = "实际 " + fmtH(d.devMin) + " · 预估 " + fmtH(d.estimateMin);
+  else if(x.s === "test") h = "实际 " + fmtH(d.testMin) + "（仅测试窗口内的计时）";
+  else h = "无计时来源，只显示阶段天数";
+  return "<b>" + n + "</b><span>" + span + " · " + ds + "</span><em>" + h + "</em>";
+}
+function tipAttr(html){ return ' data-tip="' + String(html).replace(/"/g,"&quot;") + '"'; }
+
+function renderLegend(){
+  $("legend").innerHTML = ORDER.map(function(s){
+    return '<span class="lg"><i class="sw" style="background:' + STAGE[s].color + '"></i>' + STAGE[s].name + '</span>';
+  }).join("") +
+  '<span class="lg"><i class="sw-gap"></i>缺口</span>' +
+  '<span class="lg"><i class="sw-expect"></i>期望交付</span>';
+}
+
+function ganttRange(){
+  var min = null, max = null;
+  DEMANDS.forEach(function(d){
+    d.stages.forEach(function(x){
+      if(!min || x.a < min) min = x.a;
+      if(!max || x.b > max) max = x.b;
+    });
+  });
+  if(!min) min = TODAY;
+  if(!max) max = TODAY;
+  if(TODAY < min) min = TODAY;
+  if(TODAY > max) max = TODAY;
+  return { start:addDays(min,-5), end:addDays(max,5) };
+}
+
+function place(stages){
+  var laneEnd = [], out = [];
+  stages.slice().sort(function(a,b){
+    return a.a.localeCompare(b.a) || ORDER.indexOf(a.s)-ORDER.indexOf(b.s);
+  }).forEach(function(x){
+    var a = parse(x.a), b = parse(x.b);
+    if(b < a) b = a;
+    var lane = 0;
+    while(laneEnd[lane] !== undefined && a <= laneEnd[lane]) lane++;
+    laneEnd[lane] = b;
+    out.push({x:x, lane:lane});
+  });
+  return { placed:out, lanes:Math.max(1,laneEnd.length) };
+}
+
+function groupRows(){
+  if(state.group === "none") return [{key:"",label:"",rows:DEMANDS.slice()}];
+  var map = {};
+  DEMANDS.forEach(function(d){
+    var k = d.current;
+    if(!map[k]) map[k] = {key:k,label:STAGE[k].name,rows:[]};
+    map[k].rows.push(d);
+  });
+  return ORDER.filter(function(k){ return map[k]; }).map(function(k){ return map[k]; });
+}
+
+function renderGantt(){
+  var range = ganttRange();
+  var totalDays = incDays(range.start, range.end);
+  var cardW = $("ganttCard").clientWidth - 26;
+  var labelW = cardW < 900 ? 240 : 360;
+  var trackW = Math.max(320, cardW - labelW);
+  var dayW = trackW / totalDays;
+  var todayX = dayW * days(range.start, TODAY) + dayW/2;
+  $("ganttScroll").style.setProperty("--label-w", labelW + "px");
+  document.documentElement.style.setProperty("--label-w", labelW + "px");
+
+  var axis = '<div class="axis-corner">需求 <span>' + DEMANDS.length + '</span></div><div class="axis-track" style="width:' + trackW + 'px">';
+  var months = {}, ticks = [];
+  var cur = range.start;
+  while(cur <= range.end){
+    var d = new Date(parse(cur));
+    var key = cur.slice(0,7);
+    if(!months[key]) months[key] = cur;
+    if(d.getUTCDay() === 1) ticks.push(cur);
+    cur = addDays(cur,1);
+  }
+  Object.keys(months).forEach(function(k){
+    var at = months[k];
+    var x = dayW * days(range.start, at);
+    if(x < 3) x = 3;
+    axis += '<span class="axis-month" style="left:' + x + 'px">' + Number(k.slice(5,7)) + '月</span>';
+  });
+  ticks.forEach(function(s){
+    var x = dayW * days(range.start, s);
+    axis += '<span class="axis-week" style="left:' + x + 'px">' + md(s) + '</span>';
+  });
+  axis += '<span class="axis-today" style="left:' + todayX + 'px">今天</span></div>';
+  $("ganttAxis").innerHTML = axis;
+  $("todayLine").style.left = (labelW + todayX) + "px";
+
+  var html = "";
+  groupRows().forEach(function(g){
+    if(state.group !== "none"){
+      var collapsed = !!state.collapsed[g.key];
+      var est = sum(g.rows,function(d){ return d.estimateMin; });
+      var act = sum(g.rows,function(d){ return actualMin(d); });
+      var rowCount = state.rowForm === "stage" ? sum(g.rows,function(d){ return d.stages.length; }) : g.rows.length;
+      html += '<div class="g-group" data-group="' + g.key + '">' +
+        '<span class="caret">' + (collapsed ? "▸" : "▾") + '</span>' +
+        '<i class="dot" style="background:' + STAGE[g.key].color + '"></i>' +
+        '<b>' + g.label + '</b><span class="cnt">' + g.rows.length + ' 项' + (rowCount !== g.rows.length ? ' · ' + rowCount + ' 行' : '') + '</span>' +
+        '<span class="sum">估 ' + fmtH(est) + ' · 实 ' + fmtH(act) + '</span></div>';
+      if(collapsed) return;
+    }
+    if(state.rowForm === "stage"){
+      g.rows.forEach(function(d){
+        d.stages.slice().sort(function(a,b){ return ORDER.indexOf(a.s) - ORDER.indexOf(b.s); }).forEach(function(x){
+          html += rowHTML(d, range, dayW, trackW, x.s);
+        });
+      });
+    }else{
+      g.rows.forEach(function(d){ html += rowHTML(d, range, dayW, trackW); });
+    }
+  });
+  $("ganttBody").innerHTML = html;
+}
+
+function rowHTML(d, range, dayW, trackW, onlyStage){
+  var list = onlyStage ? d.stages.filter(function(x){ return x.s === onlyStage; }) : d.stages;
+  var p = place(list);
+  var rowH = Math.max(68, 52 + p.lanes * 18);
+  var bars = "";
+  p.placed.forEach(function(item){
+    var x = item.x;
+    var a = parse(x.a), b = parse(x.b);
+    if(b < parse(range.start) || a > parse(range.end)) return;
+    var s = a < parse(range.start) ? parse(range.start) : a;
+    var e = b > parse(range.end) ? parse(range.end) : b;
+    var left = dayW * days(range.start, iso(s));
+    var width = Math.max(x.point ? 10 : 4, dayW * incDays(iso(s), iso(e)) - 1);
+    var top = 8 + item.lane * 19;
+    var title = stageTitle(d, x);
+    if(x.point){
+      bars += '<button type="button" class="seg point" style="left:' + (left + dayW/2 - 5) + 'px;top:' + (top + 2) +
+        'px;--stage-color:' + STAGE[x.s].color + '" aria-label="' + esc(STAGE[x.s].name + " " + x.a) + '"' + tipAttr(title) + '></button>';
+      return;
+    }
+    var span = incDays(x.a, x.b);
+    var label = "";
+    if(width >= 120 && state.labelMode === "both" && (x.s === "dev" || x.s === "test")){
+      label = '<span class="seg-label">' + STAGE[x.s].name + ' ' + span + '天</span><span class="h">' + fmtH(x.s === "dev" ? d.devMin : d.testMin) + '</span>';
+    }else if(width >= 64){
+      label = '<span class="seg-label">' + STAGE[x.s].name + ' ' + span + '天</span>';
+    }
+    bars += '<button type="button" class="seg' + (x.open ? " open" : "") + '" style="left:' + left + 'px;width:' + width +
+      'px;top:' + top + 'px;--stage-color:' + STAGE[x.s].color + '" aria-label="' + esc(STAGE[x.s].name) + '"' + tipAttr(title) + '>' + label + '</button>';
+  });
+
+  var nonPoint = p.placed.filter(function(i){ return !i.x.point; }).sort(function(a,b){ return a.x.a.localeCompare(b.x.a); });
+  for(var i=1;i<nonPoint.length;i++){
+    var prev = nonPoint[i-1], next = nonPoint[i];
+    if(next.x.a > addDays(prev.x.b,1)){
+      var gs = addDays(prev.x.b,1), ge = addDays(next.x.a,-1);
+      var gl = dayW * days(range.start, gs);
+      var gw = Math.max(2, dayW * incDays(gs,ge) - 1);
+      var gapLabel = gw >= 64 ? '<span>缺口 ' + incDays(gs,ge) + '天</span>' : '';
+      bars += '<span class="gap" style="left:' + gl + 'px;width:' + gw + 'px;top:' + (8 + prev.lane*19 + 8) + 'px"' + (gapLabel ? '' : ' title="缺口 ' + incDays(gs,ge) + ' 天"') + '>' + gapLabel + '</span>';
+    }
+  }
+  if(d.expect && d.expect >= range.start && d.expect <= range.end){
+    bars += '<span class="expect" style="left:' + (dayW*days(range.start,d.expect)+dayW/2) + 'px" title="期望交付 ' + d.expect + '"></span>';
+  }
+
+  var estMin, actMin, split, pillStage;
+  if(onlyStage){
+    pillStage = onlyStage;
+    estMin = onlyStage === "dev" ? d.estimateMin : 0;
+    actMin = onlyStage === "dev" ? d.devMin : (onlyStage === "test" ? d.testMin : 0);
+    split = onlyStage === "dev" ? "实际 + 预估（预估计入开发）" : (onlyStage === "test" ? "仅测试窗口内计时" : "无计时来源，只统计天数");
+  }else{
+    pillStage = d.current;
+    estMin = d.estimateMin;
+    actMin = actualMin(d);
+    split = d.testMin ? ('开发 ' + fmtH(d.devMin) + ' · 测试 ' + fmtH(d.testMin)) : (d.estimateMin ? '尚无测试计时' : '无计时记录');
+  }
+  var est = fmtH(estMin), act = fmtH(actMin);
+  return '<div class="g-row" data-row="' + d.id + (onlyStage || "") + '" style="height:' + rowH + 'px">' +
+    '<div class="g-label" style="height:' + rowH + 'px">' +
+      '<div class="g-line1"><i class="pri pri-' + d.priority + '"></i>' +
+        '<button type="button" class="g-title" title="' + esc(d.title) + '">' + esc(d.title) + '</button>' +
+        '<span class="stage-pill st-' + pillStage + '">' + STAGE[pillStage].name + '</span></div>' +
+      '<div class="g-meta">' + esc(d.project) + ' · ' + esc(d.version || "未指定版本") + ' · ' + esc(d.module || "未指定模块") + (onlyStage ? '' : ' · 期望 ' + md(d.expect)) + '</div>' +
+      '<div class="g-hours"><span class="hchip est">估 ' + est + '</span><span class="hchip ' + (act === "—" ? "zero" : "act") + '">实 ' + act + '</span><span class="hsplit">' + split + '</span></div>' +
+    '</div>' +
+    '<div class="g-track" style="width:' + trackW + 'px;height:' + rowH + 'px;--week-w:' + (dayW*7) + 'px">' + bars + '</div>' +
+  '</div>';
+}
+
+function aggregate(){
+  var groups = {};
+  DEMANDS.forEach(function(d){
+    var key, label;
+    if(state.dim === "project"){ key = d.project; label = d.project; }
+    else if(state.dim === "version"){
+      key = d.project + "|" + (d.version || "__none");
+      label = d.project + " · " + (d.version || "未指定版本");
+    }else{
+      key = d.project + "|" + (d.module || "__none");
+      label = d.project + " · " + (d.module || "未指定模块");
+    }
+    if(!groups[key]) groups[key] = {key:key,label:label,demands:[],est:0,dev:0,test:0,days:{}};
+    var g = groups[key];
+    g.demands.push(d);
+    g.est += d.estimateMin;
+    g.dev += d.devMin;
+    g.test += d.testMin;
+    ORDER.forEach(function(s){ g.days[s] = (g.days[s]||0) + stageDays(d,s); });
+  });
+  return Object.keys(groups).map(function(k){ return groups[k]; }).sort(function(a,b){
+    if(state.metric === "days") return sumDays(b) - sumDays(a) || b.demands.length - a.demands.length;
+    return (b.dev+b.test) - (a.dev+a.test) || b.est - a.est;
+  });
+}
+function sumDays(g){ return ORDER.reduce(function(s,x){ return s + (g.days[x]||0); },0); }
+function allTotals(){
+  return {
+    est: sum(DEMANDS,function(d){ return d.estimateMin; }),
+    dev: sum(DEMANDS,function(d){ return d.devMin; }),
+    test: sum(DEMANDS,function(d){ return d.testMin; }),
+    tasks: sum(DEMANDS,function(d){ return d.tasks; }),
+    estTasks: sum(DEMANDS,function(d){ return d.estTasks; }),
+    withActual: DEMANDS.filter(function(d){ return actualMin(d) > 0; }).length,
+    withEstimate: DEMANDS.filter(function(d){ return d.estimateMin > 0; }).length,
+    noEstimate: DEMANDS.filter(function(d){ return d.estimateMin === 0; }).length,
+    stageRecords: sum(DEMANDS,function(d){ return stageRecordCount(d); })
+  };
+}
+function renderStats(){
+  var groups = aggregate();
+  var t = allTotals();
+  var actual = t.dev + t.test;
+  var kpis = "", mix = "", note = "", cols = [], rows = "";
+
+  if(state.metric === "actual" || state.metric === "estimate"){
+    cols = [
+      {k:"dev",name:"开发",color:STAGE.dev.color},
+      {k:"test",name:"测试",color:STAGE.test.color},
+      {k:"total",name:"合计",color:"var(--text-3)"}
+    ];
+  }else{
+    cols = ORDER.map(function(s){ return {k:s,name:STAGE[s].name,color:STAGE[s].color}; });
+  }
+
+  if(state.metric === "actual"){
+    var diff = actual - t.est;
+    var pct = t.est ? Math.round(diff / t.est * 100) : 0;
+    kpis =
+      kpi("预估合计", fmtH(t.est), "来自 " + t.estTasks + "/" + t.tasks + " 个已估工作项") +
+      kpi("实际合计", fmtH(actual), "开发 " + fmtH(t.dev) + " · 测试 " + fmtH(t.test)) +
+      kpi("实际 − 预估", (diff>=0?"+":"−") + fmtH(Math.abs(diff)) + (t.est ? "（" + (pct>=0?"+":"") + pct + "%）" : ""), "负数表示低于预估") +
+      kpi("计时覆盖", t.withActual + "/" + DEMANDS.length + " 条", "有计时记录的需求");
+    mix = '<span class="mix-label">实际工时构成</span><span class="mix-bar">' +
+      '<i style="width:' + (actual ? t.dev/actual*100 : 0) + '%;background:' + STAGE.dev.color + '"></i>' +
+      '<i style="width:' + (actual ? t.test/actual*100 : 0) + '%;background:' + STAGE.test.color + '"></i></span>' +
+      '<span class="mix-legend"><span><i style="background:' + STAGE.dev.color + '"></i>开发 ' + fmtH(t.dev) + '</span>' +
+      '<span><i style="background:' + STAGE.test.color + '"></i>测试 ' + fmtH(t.test) + '</span></span>';
+    note = "<b>实际工时</b>来自计时器与手工补记；工作项测试窗口内的计时归测试，其余归开发。" +
+      "评审 / 排期 / 设计 / 完成 / 发布没有计时来源，不参与工时统计。" +
+      "统计范围跟随当前筛选，服务端按全部匹配需求聚合，不受甘特分页影响。";
+  }else if(state.metric === "estimate"){
+    kpis =
+      kpi("预估合计", fmtH(t.est), "全部计入开发列") +
+      kpi("预估覆盖", t.estTasks + "/" + t.tasks + " 项", Math.round(t.estTasks/(t.tasks||1)*100) + "% 的关联工作项有预估") +
+      kpi("无预估需求", t.noEstimate + " 条", "其中含无工作项的需求") +
+      kpi("平均每条", fmtH(Math.round(t.est / DEMANDS.length)), "按当前 " + DEMANDS.length + " 条需求");
+    mix = '<span class="mix-label">预估分布</span><span class="mix-bar">' +
+      '<i style="width:' + (t.est?100:0) + '%;background:' + STAGE.dev.color + '"></i></span>' +
+      '<span class="mix-legend"><span><i style="background:' + STAGE.dev.color + '"></i>开发预估 ' + fmtH(t.est) + '</span>' +
+      '<span class="muted">测试阶段暂不拆分预估</span></span>';
+    note = "<b>预估工时</b>取关联工作项的 estimate_minutes 合计。工作项预估没有阶段字段，v1 统一计入开发列；" +
+      "测试列显示「—」。若要在评审 / 设计 / 测试分别录入预估，需要新增阶段预估字段（v2）。";
+  }else{
+    var withDev = DEMANDS.filter(function(d){ return stageDays(d,"dev") > 0; }).length;
+    var avgDev = withDev ? Math.round(sum(DEMANDS,function(d){ return stageDays(d,"dev"); }) / withDev) : 0;
+    var maxTest = Math.max.apply(null, DEMANDS.map(function(d){ return stageDays(d,"test"); }));
+    kpis =
+      kpi("需求数", DEMANDS.length + " 条", "当前筛选范围") +
+      kpi("阶段记录", t.stageRecords + " 段", "有真实记录的阶段区间") +
+      kpi("平均开发天数", avgDev + " 天", "有开发阶段的需求") +
+      kpi("最长测试", maxTest + " 天", "含进行中与周末");
+    mix = '<span class="mix-label">口径提示</span><span class="mix-legend">阶段天数按自然日计算，含周末与中间缺口；阶段可以并行重叠，因此不设合计。</span>';
+    note = "<b>阶段天数</b>是每条需求该阶段首尾的自然日，不代表投入工时。评审、排期、设计、完成、发布都可以统计天数；" +
+      "开发与测试同时也有工时口径，二者不能相加。";
+  }
+
+  $("statKpis").innerHTML = kpis;
+  $("mixRow").innerHTML = mix;
+
+  var head = '<thead><tr><th>维度</th><th class="num">需求数</th>' + cols.map(function(c){
+    return '<th class="num"><span class="dot" style="background:' + c.color + '"></span>' + c.name + '</th>';
+  }).join("") + '</tr></thead>';
+
+  groups.forEach(function(g){
+    rows += '<tr><td class="dim">' + esc(g.label) + '<small>' + g.demands.length + ' 条需求</small></td><td class="num">' + g.demands.length + '</td>' +
+      cols.map(function(c){
+        if(state.metric === "days"){
+          return '<td class="num">' + (g.days[c.k] ? g.days[c.k] + '天' : '<span class="muted">—</span>') + '</td>';
+        }
+        if(state.metric === "estimate"){
+          if(c.k === "test") return '<td class="num"><span class="muted" title="工作项预估没有阶段字段，暂不拆分测试">—</span></td>';
+          var ev = g.est;
+          return '<td class="num">' + (c.k === "total" && ev ? '<b>' + fmtH(ev) + '</b><span class="cellbar"><i style="width:' + (t.est ? ev/t.est*100 : 0) + '%"></i></span>' : (ev ? fmtH(ev) : '<span class="muted">—</span>')) + '</td>';
+        }
+        if(c.k === "total"){
+          var v = g.dev + g.test;
+          return '<td class="num"><b>' + fmtH(v) + '</b><span class="cellbar"><i style="width:' + (actual ? v/actual*100 : 0) + '%"></i></span></td>';
+        }
+        var v = c.k === "dev" ? g.dev : g.test;
+        return '<td class="num">' + (v ? fmtH(v) : '<span class="muted">—</span>') + '</td>';
+      }).join("") + '</tr>';
+  });
+
+  var totalCells;
+  if(state.metric === "days"){
+    totalCells = ORDER.map(function(s){
+      var v = sum(DEMANDS,function(d){ return stageDays(d,s); });
+      return '<td class="num">' + (v ? v + '天' : '<span class="muted">—</span>') + '</td>';
+    }).join("");
+  }else if(state.metric === "estimate"){
+    totalCells =
+      '<td class="num">' + fmtH(t.est) + '</td>' +
+      '<td class="num"><span class="muted">—</span></td>' +
+      '<td class="num">' + fmtH(t.est) + '</td>';
+  }else{
+    totalCells =
+      '<td class="num">' + fmtH(t.dev) + '</td>' +
+      '<td class="num">' + fmtH(t.test) + '</td>' +
+      '<td class="num">' + fmtH(actual) + '</td>';
+  }
+  rows += '<tr class="total"><td class="dim">合计</td><td class="num">' + DEMANDS.length + '</td>' + totalCells + '</tr>';
+
+  $("statsTable").innerHTML = head + '<tbody>' + rows + '</tbody>';
+  $("statsNote").innerHTML = note;
+}
+function kpi(label,value,sub){
+  return '<div class="stat-kpi"><span>' + label + '</span><b>' + value + '</b><em>' + sub + '</em></div>';
+}
+
+function render(){
+  renderLegend();
+  renderGantt();
+  renderStats();
+}
+
+document.addEventListener("click", function(e){
+  var g = e.target.closest("[data-group]");
+  if(g){
+    var k = g.getAttribute("data-group");
+    state.collapsed[k] = !state.collapsed[k];
+    renderGantt();
+    return;
+  }
+  var dim = e.target.closest("[data-dim]");
+  if(dim){
+    state.dim = dim.getAttribute("data-dim");
+    document.querySelectorAll("[data-dim]").forEach(function(b){ b.classList.toggle("on", b === dim); });
+    renderStats();
+    return;
+  }
+  var metric = e.target.closest("[data-metric]");
+  if(metric){
+    state.metric = metric.getAttribute("data-metric");
+    document.querySelectorAll("[data-metric]").forEach(function(b){ b.classList.toggle("on", b === metric); });
+    renderStats();
+  }
+});
+$("groupMode").addEventListener("change", function(e){
+  state.group = e.target.value;
+  state.collapsed = {};
+  renderGantt();
+});
+$("labelMode").addEventListener("change", function(e){
+  state.labelMode = e.target.value;
+  renderGantt();
+});
+$("rowForm").addEventListener("change", function(e){
+  state.rowForm = e.target.value;
+  renderGantt();
+});
+
+var tip = $("tip");
+document.addEventListener("mousemove", function(e){
+  var el = e.target.closest("[data-tip]");
+  if(!el){ tip.classList.remove("on"); return; }
+  tip.innerHTML = el.getAttribute("data-tip");
+  tip.classList.add("on");
+  var x = e.clientX + 14, y = e.clientY + 14;
+  var w = tip.offsetWidth, h = tip.offsetHeight;
+  if(x + w > window.innerWidth - 12) x = e.clientX - w - 14;
+  if(y + h > window.innerHeight - 12) y = e.clientY - h - 14;
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+});
+document.addEventListener("mouseleave", function(){ tip.classList.remove("on"); });
+
+(function initFromQuery(){
+  var q = new URLSearchParams(location.search);
+  var dim = q.get("dim"), metric = q.get("metric"), rowForm = q.get("row");
+  if(rowForm){
+    state.rowForm = rowForm;
+    $("rowForm").value = rowForm;
+  }
+  if(dim){
+    state.dim = dim;
+    document.querySelectorAll("[data-dim]").forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-dim") === dim); });
+  }
+  if(metric){
+    state.metric = metric;
+    document.querySelectorAll("[data-metric]").forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-metric") === metric); });
+  }
+})();
+render();
+</script>
+</body>
+</html>

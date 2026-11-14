@@ -48,7 +48,7 @@ class RequirementServiceTest {
     private final DevBranchMapper branches = mock(DevBranchMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementService service = new RequirementService(reqs, tasks, logs, activity,
-            workActivity, docs, versionService, versions, demands, branches, access,
+            workActivity, docs, versionService, mock(ProjectMilestoneService.class), versions, demands, branches, access,
             mock(AttachmentService.class), mock(com.hourglass.mapper.MailDeliveryMapper.class),
             mock(TestCaseService.class), mock(ProjectTemplateService.class),
             mock(com.hourglass.mapper.WorkspaceMemberMapper.class), mock(CategoryService.class));
@@ -102,6 +102,8 @@ class RequirementServiceTest {
         when(versions.selectByReq(WS, "R1")).thenReturn(Arrays.asList(version("V1"), version("V2")));
         when(demands.selectByReq(WS, "R1")).thenReturn(Collections.singletonList(new Demand()));
         when(tasks.countTasksByReq(WS, "R1")).thenReturn(1);
+        /* 「无项目」编号桶已用到 3 号：解绑的工作项从 4 号接着取 */
+        when(tasks.selectNextItemNo(WS, null)).thenReturn(4);
         com.hourglass.mapper.InviteProjectGrantMapper inviteGrants =
                 mock(com.hourglass.mapper.InviteProjectGrantMapper.class);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "inviteGrantMapper", inviteGrants);
@@ -118,7 +120,7 @@ class RequirementServiceTest {
 
         verify(logs).insertUnlinkReqLogs(WS, "R1", VIEWER,
                 "解除与已删除项目「项目一」的关联");
-        verify(tasks).clearReq(WS, "R1");
+        verify(tasks).clearReq(WS, "R1", 3);
         verify(docs).deleteByReq(WS, "R1");
         verify(versionService).deleteByReq(WS, "R1");
         verify(demands).deleteLogsByReq(WS, "R1");

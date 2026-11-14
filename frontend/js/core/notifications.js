@@ -524,7 +524,7 @@ function routeNotificationLink(kind, refId, type){
       toast("无法打开通知关联内容，请手动前往对应页面", "warn");
     });
   }
-  if(kind === "demand"){ go("demands", function(m){ m.openDemandById(refId); }); return true; }
+  if(kind === "demand"){ go("demands", function(m){ m.openDemandDetailById(refId); }); return true; }
   if(kind === "doc"){ go("requirements", function(m){ m.openReqDocAndJump(refId); }); return true; }
   if(kind === "branch"){ go("branches", function(m){ if(m.openBranchById) m.openBranchById(refId); }); return true; }
   if(kind === "version"){

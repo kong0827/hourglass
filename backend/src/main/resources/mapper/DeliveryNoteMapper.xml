@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.DeliveryNoteMapper">
+
+  <sql id="noteColumns">
+    workspace_id, version_id, req_id, audience, support_contact, options, narratives, confirmed,
+    acceptance, updated_by, revision, created_at, updated_at
+  </sql>
+
+  <select id="selectByVersion" resultType="DeliveryNote">
+    SELECT <include refid="noteColumns"/> FROM delivery_note
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+  </select>
+
+  <select id="selectByVersionForUpdate" resultType="DeliveryNote">
+    SELECT <include refid="noteColumns"/> FROM delivery_note
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} FOR UPDATE
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO delivery_note (workspace_id, version_id, req_id, audience, support_contact, options,
+      narratives, confirmed, acceptance, updated_by, revision)
+    VALUES (#{workspaceId}, #{versionId}, #{reqId}, #{audience}, #{supportContact}, #{options},
+      #{narratives}, #{confirmed}, #{acceptance}, #{updatedBy}, 1)
+    ON DUPLICATE KEY UPDATE
+      req_id = VALUES(req_id), audience = VALUES(audience), support_contact = VALUES(support_contact),
+      options = VALUES(options), narratives = VALUES(narratives), confirmed = VALUES(confirmed),
+      acceptance = VALUES(acceptance), updated_by = VALUES(updated_by), revision = revision + 1
+  </insert>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM delivery_note WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <insert id="insertSnapshot">
+    INSERT INTO delivery_note_snapshot (id, workspace_id, version_id, req_id, release_id, seq, doc_no,
+      tone, title, payload, content_hash, created_by, created_by_name)
+    VALUES (#{id}, #{workspaceId}, #{versionId}, #{reqId}, #{releaseId}, #{seq}, #{docNo},
+      #{tone}, #{title}, #{payload}, #{contentHash}, #{createdBy}, #{createdByName})
+  </insert>
+
+  <select id="selectSnapshotById" resultType="DeliveryNoteSnapshot">
+    SELECT id, workspace_id, version_id, req_id, release_id, seq, doc_no, tone, title, payload,
+      content_hash, created_by, created_by_name, created_at
+    FROM delivery_note_snapshot WHERE id = #{id}
+  </select>
+
+  <select id="selectSnapshotsByVersion" resultType="DeliveryNoteSnapshot">
+    SELECT id, workspace_id, version_id, req_id, release_id, seq, doc_no, tone, title,
+      content_hash, created_by, created_by_name, created_at
+    FROM delivery_note_snapshot
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+    ORDER BY seq DESC
+  </select>
+
+  <select id="selectMaxSeq" resultType="java.lang.Integer">
+    SELECT MAX(seq) FROM delivery_note_snapshot
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+  </select>
+
+  <select id="selectSnapshotIdsByVersion" resultType="java.lang.String">
+    SELECT id FROM delivery_note_snapshot
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+    ORDER BY id FOR UPDATE
+  </select>
+
+  <delete id="deleteSnapshotsByWorkspace">
+    DELETE FROM delivery_note_snapshot WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="selectShareBySnapshot" resultType="DeliveryNoteShare">
+    SELECT workspace_id, snapshot_id, token, allow_download, view_count, created_at, expires_at
+    FROM delivery_note_share WHERE workspace_id = #{workspaceId} AND snapshot_id = #{snapshotId}
+  </select>
+
+  <select id="selectShareByToken" resultType="DeliveryNoteShare">
+    SELECT workspace_id, snapshot_id, token, allow_download, view_count, created_at, expires_at
+    FROM delivery_note_share WHERE token = #{token}
+  </select>
+
+  <insert id="upsertShare">
+    INSERT INTO delivery_note_share (workspace_id, snapshot_id, token, allow_download, expires_at)
+    VALUES (#{workspaceId}, #{snapshotId}, #{token}, #{allowDownload}, #{expiresAt})
+    ON DUPLICATE KEY UPDATE token = VALUES(token), allow_download = VALUES(allow_download),
+      expires_at = VALUES(expires_at), created_at = CURRENT_TIMESTAMP
+  </insert>
+
+  <delete id="deleteShare">
+    DELETE FROM delivery_note_share WHERE workspace_id = #{workspaceId} AND snapshot_id = #{snapshotId}
+  </delete>
+
+  <update id="increaseViewCount">
+    UPDATE delivery_note_share SET view_count = view_count + 1
+    WHERE workspace_id = #{workspaceId} AND snapshot_id = #{snapshotId}
+  </update>
+
+  <delete id="deleteSharesByWorkspace">
+    DELETE FROM delivery_note_share WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

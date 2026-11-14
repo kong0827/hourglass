@@ -44,6 +44,7 @@ public class BranchController {
     public ApiResult<com.hourglass.dto.BranchBoard> board(@RequestParam(required = false) String workspace,
                                                           @RequestParam(required = false) String project,
                                                           @RequestParam(required = false) String ownerUserId,
+                                                          @RequestParam(required = false) String version,
                                                           @RequestParam(required = false) String q,
                                                           @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
@@ -51,6 +52,7 @@ public class BranchController {
         com.hourglass.dto.BranchQuery query = new com.hourglass.dto.BranchQuery();
         query.setProjectId(project);
         query.setOwnerUserId(ownerUserId);
+        query.setVersionId(version);
         query.setQ(q);
         if (limit != null) {
             query.setLimit(limit);
@@ -64,6 +66,7 @@ public class BranchController {
                                                         @RequestParam(required = false) String status,
                                                         @RequestParam(required = false) String project,
                                                         @RequestParam(required = false) String ownerUserId,
+                                                        @RequestParam(required = false) String version,
                                                         @RequestParam(required = false) String q,
                                                         @RequestParam(required = false) Integer offset,
                                                         @RequestParam(required = false) Integer limit) {
@@ -73,6 +76,7 @@ public class BranchController {
         query.setStatus(status);
         query.setProjectId(project);
         query.setOwnerUserId(ownerUserId);
+        query.setVersionId(version);
         query.setQ(q);
         if (offset != null) {
             query.setOffset(offset);
@@ -94,6 +98,16 @@ public class BranchController {
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(branchService.options(ws.getId(), userId, project,
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    /** 版本筛选候选：当前项目/可见范围内分支的影响版本及分支数 */
+    @GetMapping("/api/branches/versions")
+    public ApiResult<List<com.hourglass.dto.BranchVersionTag>> versions(
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) String project) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(branchService.versions(ws.getId(), userId, project));
     }
 
     @GetMapping("/api/branches/{id}")

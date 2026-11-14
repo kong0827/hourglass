@@ -110,7 +110,7 @@ public class TaskPublicationService {
         List<VersionRelease> visible = new java.util.ArrayList<VersionRelease>();
         for (VersionRelease record : releaseMapper.selectTaskRecords(workspaceId, taskId)) {
             if (permissions.canViewProject(userId, workspaceId, record.getReqId())) {
-                record.setItems(releaseMapper.selectItems(workspaceId, record.getId()));
+                withDetail(workspaceId, record);
                 visible.add(record);
             }
         }
@@ -123,11 +123,19 @@ public class TaskPublicationService {
         List<VersionRelease> records = new java.util.ArrayList<VersionRelease>();
         for (VersionRelease record : releaseMapper.selectTaskRecords(workspaceId, task.getId())) {
             if (permissions.canViewProject(userId, workspaceId, record.getReqId())) {
-                record.setItems(releaseMapper.selectItems(workspaceId, record.getId()));
+                withDetail(workspaceId, record);
                 records.add(record);
             }
         }
         return records;
+    }
+
+    /** 快照明细 + 关联事件编号：编号按 relatedReleaseId 现查，回滚可能指向别的版本 */
+    private void withDetail(String workspaceId, VersionRelease record) {
+        record.setItems(releaseMapper.selectItems(workspaceId, record.getId()));
+        if (record.getRelatedReleaseId() != null) {
+            record.setRelatedReleaseNo(releaseMapper.selectReleaseNo(workspaceId, record.getRelatedReleaseId()));
+        }
     }
 
 }

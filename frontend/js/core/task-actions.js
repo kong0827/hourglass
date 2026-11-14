@@ -8,12 +8,12 @@ import { taskPayloadWith } from "./shortcuts.js";
 import { state, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { deleteTask, openTaskDrawer } from "./task-drawer.js";
 import { openDateAt } from "./date-picker.js";
-import { guard, serverDecision } from "./transitions.js";
-import { UI, copyToClipboard, esc, toast } from "./ui.js";
+import { guard, loadRules, ruleFor, serverDecision } from "./transitions.js";
+import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
 import { CAT_DEFAULT_COLOR, COLUMNS, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMinutesShort, parseDate } from "../lib/format.js";
 import { loadBoard, loadReqs, render } from "../views/board.js";
 import { refreshCalendarIfOpen, refreshGanttIfOpen, renderCalendar } from "../views/calendar.js";
-import { loadList, refreshListIfOpen } from "../views/list.js";
+import { loadList, refreshListIfOpen, repaintListRows } from "../views/list.js";
 
 function taskLink(id){
   return window.location.origin + window.location.pathname + "#/board?task=" + encodeURIComponent(id);
@@ -226,23 +226,116 @@ setInterval(function(){
     }
   });
 }, 60000);
-/** 带流转判定的移动：先本地判定，服务端仍拒绝时按 412/422 补救一次 */
-function guardedMove(t, target, send, onSuccess){
+/** 带流转判定的移动：先本地判定，服务端仍拒绝时按 412/422 补救一次。
+    opts.from 用于乐观更新后仍按「移动前的列」判定；opts.onFail 在取消/被拒/失败时回滚。 */
+function guardedMove(t, target, send, onSuccess, opts){
   var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
-  var items = [{ from: t.boardColumn, title: t.title }];
+  var onFail = (opts && opts.onFail) || function(){};
+  var items = [{ from: (opts && opts.from) || t.boardColumn, title: t.title }];
   return guard(wsId, items, target).then(function(pass){
-    if(!pass) return;
+    if(!pass){ onFail(); return false; }
     var retried = false;
     function fail(ex){
-      if(retried){ toast(ex.message || "操作失败", "bad"); return; }
+      if(retried){ toast(ex.message || "操作失败", "bad"); onFail(); return false; }
       retried = true;
-      serverDecision(wsId, items, target, ex).then(function(retry){
-        if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "操作失败", "bad"); return; }
-        send(retry).then(onSuccess).catch(function(e){ toast(e.message || "操作失败", "bad"); });
+      return serverDecision(wsId, items, target, ex).then(function(retry){
+        if(!retry){
+          if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "操作失败", "bad");
+          onFail();
+          return false;
+        }
+        return send(retry).then(onSuccess).catch(function(e){
+          toast(e.message || "操作失败", "bad"); onFail(); return false;
+        });
       });
     }
-    send(pass).then(onSuccess).catch(fail);
+    return send(pass).then(onSuccess).catch(fail);
   });
+}
+/* ===== 行内状态 chip / 卡片菜单 / 行菜单共用的改列 =====
+   乐观更新看板与列表缓存 → 失败或取消回滚 → 成功后可一键撤销。 */
+var moveSeqByTask = Object.create(null);
+function moveTaskToColumn(t, to){
+  if(!t || !to || t.boardColumn === to) return Promise.resolve(false);
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return Promise.resolve(false); }
+  var from = t.boardColumn;
+  var seq = (moveSeqByTask[t.id] || 0) + 1;
+  moveSeqByTask[t.id] = seq;
+  /* 看板、列表、详情缓存可能持有同一工作项的不同对象，乐观更新要一起改 */
+  var mirrors = [t];
+  [taskById(t.id), rt.listCache[t.id], taskCacheExtra[t.id]].forEach(function(m){
+    if(m && mirrors.indexOf(m) < 0) mirrors.push(m);
+  });
+  function stale(){ return moveSeqByTask[t.id] !== seq; }
+  function paint(col){
+    if(stale()) return;
+    mirrors.forEach(function(m){ m.boardColumn = col; });
+    if(state.board && activeView === "board") render({animate:false});
+    repaintListRows();
+  }
+  paint(to);
+  return guardedMove(t, to, function(pass){
+    var body = { column: to };
+    if(pass.reason) body.reason = pass.reason;
+    if(pass.force) body.force = true;
+    return API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", body);
+  }, function(res){
+    var landed = (res && res.to) || to;
+    paint(landed);
+    if(!stale()){
+      var msg = "「" + t.title + "」移动到「" + colName(landed) + "」" +
+        (res && res.autoTimerStarted ? " · 已开始计时" : "") +
+        (res && res.autoTimerTask ? " · 已接着开始「" + res.autoTimerTask + "」的计时" : "");
+      toastAction(msg, "撤销", function(){
+        moveTaskToColumn(taskById(t.id) || t, from);
+      }, "", 6000);
+    }
+    loadBoard({silent:true});
+    loadReqs();
+    refreshListIfOpen();
+    refreshCalendarIfOpen();
+    refreshGanttIfOpen();
+    /* 缺陷的回归状态随列流转，测试页 / 我的工作需要跟着重取 */
+    window.dispatchEvent(new CustomEvent("ds:task-saved", { detail:{ id:t.id, created:false } }));
+    return true;
+  }, { from: from, onFail: function(){ paint(from); } });
+}
+/** 状态 chip 的列菜单：只列出可去的列，当前列打勾且不可点 */
+function openStatusMenu(anchor, taskId){
+  var t = taskById(taskId) || rt.listCache[taskId];
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
+  var el = document.createElement("div");
+  el.className = "menu status-menu";
+  el.setAttribute("role", "menu");
+  function paintMenu(){
+    el.innerHTML = '<div class="menu-title">移动「' + esc(t.title) + '」到</div>' +
+      COLUMNS.map(function(c){
+        var cur = c.id === t.boardColumn;
+        var rule = cur ? "allow" : ruleFor(wsId, t.boardColumn, c.id);
+        var tip = cur ? "当前所在列"
+          : rule === "deny" ? "该流转被限制，需空间主 / 管理员强制"
+          : rule === "reason" ? "该流转需要填写原因"
+          : "移动到「" + c.name + "」";
+        return '<button class="menu-item" type="button" role="menuitem" data-status-to="' + esc(c.id) + '"' +
+          (cur ? ' disabled aria-current="true"' : "") + ' title="' + esc(tip) + '">' +
+          '<span class="status-dot" style="background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"></span>' +
+          esc(c.name) +
+          (cur ? '<span class="k">当前</span>' : rule === "reason" ? '<span class="k">需原因</span>' : rule === "deny" ? '<span class="k">受限</span>' : "") +
+        '</button>';
+      }).join("");
+  }
+  paintMenu();
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-status-to]");
+    if(!b || b.disabled) return;
+    UI.closeAllPops();
+    moveTaskToColumn(t, b.dataset.statusTo);
+  });
+  UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
+  /* 规则首次读取是异步的：先按默认规则开菜单，拿到矩阵后原地补上「需原因 / 受限」 */
+  loadRules(wsId).then(function(){ if(el.isConnected) paintMenu(); }).catch(function(){});
 }
 function toggleTaskDone(taskId){
   var t = taskById(taskId);
@@ -354,21 +447,10 @@ function openCardMenu(anchor, taskId){
     }
     if(mv){
       UI.closeAllPops();
-      var to = mv.dataset.cmMove;
-      guardedMove(t, to, function(pass){
-        var body = { column: to };
-        if(pass.reason) body.reason = pass.reason;
-        if(pass.force) body.force = true;
-        return API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", body);
-      }, function(res){
-        toast("「" + t.title + "」移动到「" + colName(res.to) + "」" +
-          (res.autoTimerStarted ? " · 已开始计时" : "") +
-          (res.autoTimerTask ? " · 已接着开始「" + res.autoTimerTask + "」的计时" : ""));
-        loadBoard({silent:true}); loadReqs(); refreshListIfOpen();
-      });
+      moveTaskToColumn(t, mv.dataset.cmMove);
     }
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
 }
 
-export { handleDeepLink, hashParam, loadRunningTimer, openCardMenu, openDuePopover, openTaskById, taskLink, toggleTaskDone, toggleTaskTimer };
+export { handleDeepLink, hashParam, loadRunningTimer, moveTaskToColumn, openCardMenu, openDuePopover, openStatusMenu, openTaskById, taskLink, toggleTaskDone, toggleTaskTimer };

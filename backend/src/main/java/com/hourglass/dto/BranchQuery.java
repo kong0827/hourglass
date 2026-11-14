@@ -15,8 +15,10 @@ public class BranchQuery {
     /** 直接归属该项目的分支 + 归属于该项目（或尚未关联任务）的公共分支 */
     private String projectId;
     private String status;
-    /** 非空时按负责人账号过滤（owner_user_id）；负责人手填姓名的分支不在此列，用关键词搜 */
+    /** 非空时按负责人账号过滤（owner_user_id）；__none__ 表示未指派（账号与姓名都为空） */
     private String ownerUserId;
+    /** 非空时只保留影响版本包含该版本的分支（task → version_task 推导） */
+    private String versionId;
     /** 名称/目标分支/负责人/影响版本/归属项目 模糊搜索 */
     private String q;
     private int offset;

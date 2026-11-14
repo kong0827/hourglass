@@ -67,6 +67,10 @@ public interface ReleaseMapper {
     List<VersionRelease> selectRecords(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<VersionRelease> selectTaskRecords(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
     int insertRecord(VersionRelease record);
+    /** 项目内下一个发布记录编号（sql/82）；并发撞 uk_release_no 时由调用方重算重试 */
+    int selectNextReleaseNo(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+    /** 按 ID 取编号：回滚关联的事件可能属于别的版本，不在本版本记录列表里 */
+    Integer selectReleaseNo(@Param("workspaceId") String workspaceId, @Param("releaseId") String releaseId);
     int insertItem(VersionReleaseItem item);
     List<VersionReleaseItem> selectItems(@Param("workspaceId") String workspaceId, @Param("releaseId") String releaseId);
     /** JSON target identity lists; explicit mapping avoids global List type-handler side effects. */

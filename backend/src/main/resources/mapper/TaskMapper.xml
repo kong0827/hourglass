@@ -5,9 +5,9 @@
   <sql id="cols">
     id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
     progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at,
-    test_started_at, test_finished_at, recur_type, recur_next_id,
+    test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at,
-    item_type AS itemType, epic_id AS epicId, demand_id AS demandId,
+    item_type AS itemType, item_no AS itemNo, epic_id AS epicId, demand_id AS demandId,
     severity, environment, reproduce_steps, found_version_id, regression_status
   </sql>
 
@@ -177,6 +177,14 @@
                      WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}))
     ORDER BY id FOR UPDATE
   </select>
+  <select id="selectVersionOpenPlanIdsForScope" resultType="string">
+    SELECT id FROM version_release_plan WHERE workspace_id = #{workspaceId}
+      AND status IN ('draft', 'ready')
+      AND (version_id = #{versionId}
+           OR id IN (SELECT plan_id FROM version_release_plan_version
+                     WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}))
+    ORDER BY id FOR UPDATE
+  </select>
   <select id="selectVersionAuditIdsForScope" resultType="long">
     SELECT id FROM version_log WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} ORDER BY id FOR UPDATE
   </select>
@@ -225,10 +233,48 @@
        任何一次筛选口径调整都不会出现"计数与列表不一致"。 -->
   <sql id="myTasksWhere">
     WHERE t.deleted_at IS NULL
-      AND (t.owner_user_id = #{userId}
-           <if test="displayName != null and displayName != ''">
-             OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
-           </if>)
+      <choose>
+        <when test="testScope">
+          <!-- 待我测试：已认领给我的测试列工作项 + 我能写项目里无人认领的待测试队列 -->
+          AND (
+            (t.test_owner_user_id = #{userId} AND t.board_column IN ('test', 'testing'))
+            OR (t.board_column = 'test' AND t.test_owner_user_id IS NULL
+                AND (
+                  m.role IN ('owner', 'admin')
+                  OR (m.role &lt;&gt; 'viewer' AND (
+                    t.req_id IS NULL
+                    OR EXISTS (SELECT 1 FROM project_member pmw
+                               WHERE pmw.workspace_id = t.workspace_id
+                                 AND pmw.project_id = t.req_id
+                                 AND pmw.user_id = #{userId} AND pmw.access = 'write')
+                    OR ((m.project_access_mode IS NULL OR m.project_access_mode &lt;&gt; 'assigned')
+                        AND NOT EXISTS (SELECT 1 FROM project_member pmr
+                                        WHERE pmr.workspace_id = t.workspace_id
+                                          AND pmr.project_id = t.req_id
+                                          AND pmr.user_id = #{userId}
+                                          AND pmr.access IN ('none', 'read')))
+                  ))
+                ))
+          )
+        </when>
+        <otherwise>
+          AND (t.owner_user_id = #{userId}
+               <if test="displayName != null and displayName != ''">
+                 OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
+               </if>)
+        </otherwise>
+      </choose>
+      <!-- 测试负责人：__none=待领取；显示名与账号 ID 双口径，兼容尚未绑定账号的历史数据 -->
+      <if test="testOwners != null and testOwners.size() > 0">
+        AND (
+        <foreach collection="testOwners" item="to" separator=" OR ">
+          <choose>
+            <when test="to == '__none'">(t.test_owner_user_id IS NULL AND (t.test_owner IS NULL OR t.test_owner = ''))</when>
+            <otherwise>(t.test_owner = #{to} OR t.test_owner_user_id = #{to})</otherwise>
+          </choose>
+        </foreach>
+        )
+      </if>
       <!-- 跨空间「我的任务」也不展示被显式设为不可见的项目；owner/admin/viewer 不受限 -->
       AND (m.role IN ('owner', 'admin', 'viewer')
            OR NOT EXISTS (SELECT 1 FROM project_member pm
@@ -355,7 +401,8 @@
   <select id="selectMyTasks" resultType="Task">
     SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category_id,
            t.board_column, t.item_type, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
-           t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.test_started_at, t.test_finished_at,
+           t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at,
+           t.test_owner_user_id, t.test_owner, t.test_requested_at, t.test_started_at, t.test_finished_at,
            t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
            t.estimate_minutes, bc.processing_rule, w.name AS workspace_name
@@ -374,7 +421,7 @@
     FROM task t
     JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
     <include refid="myTasksWhere"/>
-    <if test="nameOnly"> AND t.owner_user_id IS NULL </if>
+    <if test="nameOnly and !testScope"> AND t.owner_user_id IS NULL </if>
   </select>
 
   <!-- 覆盖空间：按筛选后的全量任务去重，分页不会让"覆盖 N 个空间"缩水 -->
@@ -390,12 +437,12 @@
   <insert id="insert">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
-                      test_started_at, test_finished_at,
-                      recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, epic_id, demand_id,
+                      test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
+                      recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, item_no, epic_id, demand_id,
                       severity, environment, reproduce_steps, found_version_id, regression_status, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{categoryId},
             #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
-            #{note}, #{completedAt}, #{testStartedAt}, #{testFinishedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{epicId}, #{demandId},
+            #{note}, #{completedAt}, #{testOwnerUserId}, #{testOwner}, #{testRequestedAt}, #{testStartedAt}, #{testFinishedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{itemNo}, #{epicId}, #{demandId},
             #{severity}, #{environment}, #{reproduceSteps}, #{foundVersionId}, #{regressionStatus},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -404,17 +451,18 @@
   <insert id="insertBatch">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes,
-                      is_blocked, blocked_reason, blocked_by_task_id, note, completed_at, test_started_at, test_finished_at,
+                      is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
                       recur_type, remind_at,
-                      remind_target, remind_sent, sort_order, item_type, epic_id, demand_id,
+                      remind_target, remind_sent, sort_order, item_type, item_no, epic_id, demand_id,
                       severity, environment, reproduce_steps, found_version_id, regression_status, created_at, deleted_at)
     VALUES
     <foreach collection="list" item="t" separator=",">
       (#{t.id}, #{t.workspaceId}, #{t.title}, #{t.description}, #{t.priority}, #{t.owner}, #{t.ownerUserId},
        #{t.categoryId}, #{t.boardColumn}, #{t.startDate}, #{t.dueDate}, #{t.reqId}, #{t.reqDocId}, #{t.branchId},
        #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
-       #{t.note}, #{t.completedAt}, #{t.testStartedAt}, #{t.testFinishedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
-       #{t.sortOrder}, COALESCE(#{t.itemType}, 'task'), #{t.epicId}, #{t.demandId},
+       #{t.note}, #{t.completedAt}, #{t.testOwnerUserId}, #{t.testOwner}, #{t.testRequestedAt}, #{t.testStartedAt}, #{t.testFinishedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
+       #{t.sortOrder}, COALESCE(#{t.itemType}, 'task'), #{t.itemNo}, #{t.epicId}, #{t.demandId},
        #{t.severity}, #{t.environment}, #{t.reproduceSteps}, #{t.foundVersionId}, #{t.regressionStatus},
        COALESCE(#{t.createdAt}, CURRENT_TIMESTAMP), #{t.deletedAt})
     </foreach>
@@ -442,6 +490,9 @@
       blocked_by_task_id = #{blockedByTaskId},
       note = #{note},
       completed_at = #{completedAt},
+      test_owner_user_id = #{testOwnerUserId},
+      test_owner = #{testOwner},
+      test_requested_at = #{testRequestedAt},
       test_started_at = #{testStartedAt},
       test_finished_at = #{testFinishedAt},
       recur_type = #{recurType},
@@ -450,6 +501,7 @@
       remind_sent = #{remindSent},
       sort_order = #{sortOrder},
       item_type = COALESCE(#{itemType}, 'task'),
+      item_no = #{itemNo},
       epic_id = #{epicId},
       demand_id = #{demandId},
       severity = #{severity},
@@ -553,8 +605,10 @@
     UPDATE task SET remind_sent = 1 WHERE id = #{id}
   </update>
 
+  <!-- 周期任务的后继链接是内部记账；updated_at 列带 ON UPDATE CURRENT_TIMESTAMP，
+       若让它顺手刷新版本号，本次移动的 CAS（WHERE updated_at = 旧值）必然落空并报 409 -->
   <update id="setRecurNext">
-    UPDATE task SET recur_next_id = #{recurNextId} WHERE id = #{id} AND recur_next_id IS NULL
+    UPDATE task SET recur_next_id = #{recurNextId}, updated_at = updated_at WHERE id = #{id} AND recur_next_id IS NULL
   </update>
 
   <update id="setEpic">
@@ -594,6 +648,26 @@
       )
   </update>
 
+  <!-- 测试负责人文本同步：账号绑定优先；未绑定账号的历史值仍按同名成员检查 -->
+  <update id="renameTestOwner">
+    UPDATE task SET test_owner = #{newName}
+    WHERE workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
+      AND (
+        test_owner_user_id = #{userId}
+        OR (
+          test_owner_user_id IS NULL
+          AND test_owner = #{oldName}
+          AND NOT EXISTS (
+            SELECT 1 FROM workspace_member m
+            JOIN app_user u ON u.id = m.user_id
+            WHERE m.workspace_id = task.workspace_id
+              AND m.user_id &lt;&gt; #{userId}
+              AND u.display_name = #{oldName}
+          )
+        )
+      )
+  </update>
+
   <update id="updateSortOrder">
     UPDATE task SET sort_order = #{sortOrder} WHERE id = #{id}
   </update>
@@ -603,9 +677,25 @@
     WHERE workspace_id = #{workspaceId} AND board_column = #{boardColumn} AND deleted_at IS NULL
   </select>
 
+  <!-- 取号含软删除行：回收站里的编号不能发给新工作项；no_scope 与 uk_task_item_no 同一分组口径 -->
+  <select id="selectNextItemNo" resultType="int">
+    SELECT COALESCE(MAX(item_no), 0) + 1 FROM task
+    WHERE workspace_id = #{workspaceId} AND no_scope = COALESCE(#{reqId}, '')
+  </select>
+
+  <!--
+    删除项目：解绑的工作项归入「无项目」编号桶，按 baseNo 顺延重新取号（含回收站）。
+    取号与置空 req_id 必须在同一条语句里：只改编号会先撞上本项目已有编号（uk_task_item_no）。
+    派生表带窗口函数，MySQL 会先物化再更新，序号不受更新过程影响。
+  -->
   <update id="clearReq">
-    UPDATE task SET req_id = NULL, req_doc_id = NULL, demand_id = NULL, found_version_id = NULL, updated_at = GREATEST(NOW(), DATE_ADD(updated_at, INTERVAL 1 SECOND))
-    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    UPDATE task t
+    JOIN (SELECT id, ROW_NUMBER() OVER (ORDER BY created_at, id) AS seq
+          FROM task WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}) n ON n.id = t.id
+    SET t.item_no = #{baseNo} + n.seq,
+        t.req_id = NULL, t.req_doc_id = NULL, t.demand_id = NULL, t.found_version_id = NULL,
+        t.updated_at = GREATEST(NOW(), DATE_ADD(t.updated_at, INTERVAL 1 SECOND))
+    WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId}
   </update>
 
   <select id="countTasksByReq" resultType="int">
@@ -770,6 +860,7 @@
     <if test="query.q != null">
       AND (
         LOCATE(LOWER(#{query.q}), LOWER(t.title)) > 0
+        <if test="query.itemNo != null">OR t.item_no = #{query.itemNo}</if>
         OR LOCATE(LOWER(#{query.q}), LOWER(t.description)) > 0
         OR LOCATE(LOWER(#{query.q}), LOWER(t.note)) > 0
         OR EXISTS (SELECT 1 FROM category cg
@@ -792,6 +883,16 @@
         <choose>
           <when test="o == '__none'">(t.owner IS NULL OR t.owner = '')</when>
           <otherwise>t.owner = #{o}</otherwise>
+        </choose>
+      </foreach>
+      )
+    </if>
+    <if test="query.testOwners != null and query.testOwners.size() > 0">
+      AND (
+      <foreach collection="query.testOwners" item="to" separator=" OR ">
+        <choose>
+          <when test="to == '__none'">(t.test_owner_user_id IS NULL AND (t.test_owner IS NULL OR t.test_owner = ''))</when>
+          <otherwise>(t.test_owner = #{to} OR t.test_owner_user_id = #{to})</otherwise>
         </choose>
       </foreach>
       )
@@ -1187,7 +1288,7 @@
 
   <!-- buildMeta / 到期计数：只取窄列，顺序与 selectAll 一致，保证 owners/cats 排列不变 -->
   <select id="selectBoardFacets" resultType="TaskFacetRow">
-    SELECT t.id, t.owner, t.priority, t.category_id, t.req_id, t.board_column, bc.processing_rule, t.due_date, t.item_type
+    SELECT t.id, t.owner, t.test_owner, t.priority, t.category_id, t.req_id, t.board_column, bc.processing_rule, t.due_date, t.item_type
     FROM task t
     LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL

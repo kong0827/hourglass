@@ -297,6 +297,7 @@ body.mob-sheet-open{overflow:hidden;}
   z-index:3;
 }
 [data-layout="mobile"] .drawer-foot .hint{display:none;}
+[data-layout="mobile"] .drawer.read-mode .drawer-foot{display:flex;}
 /* 移动端只保留一个主按钮，“保存并继续”从右上角更多菜单进入 */
 [data-layout="mobile"] #btnSaveTaskContinue{display:none;}
 [data-layout="mobile"] .task-detail-layout{grid-template-columns:1fr !important;display:block;}
@@ -305,8 +306,14 @@ body.mob-sheet-open{overflow:hidden;}
   display:block;width:38px;height:4px;border-radius:2px;background:var(--border-strong);
   margin:8px auto 0;flex:0 0 auto;
 }
-[data-layout="mobile"] #btnDrawerStatus{display:inline-flex;}
-.drawer-foot #btnDrawerStatus{display:none;}
+/* 移动端底栏主操作：状态 / 关注 / 关闭（头部保留同一状态胶囊） */
+[data-layout="mobile"] #btnTaskWatch{display:none;}
+[data-layout="mobile"] .drawer-foot #btnFootStatus{
+  display:inline-flex;height:36px;padding:0 10px;font-size:12.5px;
+}
+[data-layout="mobile"] .drawer-foot #btnFootWatch{display:inline-flex;align-items:center;gap:6px;}
+[data-layout="mobile"] .drawer-foot .foot-sp{display:block;flex:1 1 auto;}
+[data-layout="mobile"] .drawer-foot #btnDeleteTask{display:none;}
 
 /* ===================== 手机任务卡（我的任务 / 列表 / 看板共用） ===================== */
 [data-layout="mobile"] .mob-card-list{display:flex;flex-direction:column;gap:8px;}
@@ -363,6 +370,17 @@ body.mob-sheet-open{overflow:hidden;}
 }
 [data-layout="mobile"] .mtc-chip i{width:6px;height:6px;border-radius:50%;background:var(--c,var(--text-3));flex:0 0 auto;}
 [data-layout="mobile"] .mtc-chip.ghost{background:transparent;border:1px solid var(--border);color:var(--text-3);}
+/* 状态 chip 在移动端也是按钮：加高到 26px，并用伪元素把可点区域撑到 44px */
+[data-layout="mobile"] button.mtc-chip.mtc-status{
+  position:relative;height:26px;padding:0 8px;gap:5px;appearance:none;font-family:inherit;
+  border:1px solid color-mix(in srgb, var(--c,var(--text-3)) 34%, transparent);
+  background:color-mix(in srgb, var(--c,var(--text-3)) 12%, var(--surface));
+  color:color-mix(in srgb, var(--c,var(--text-3)) 58%, var(--text));
+  cursor:pointer;
+}
+[data-layout="mobile"] button.mtc-chip.mtc-status::after{content:"";position:absolute;left:0;right:0;top:-9px;bottom:-9px;}
+[data-layout="mobile"] button.mtc-chip.mtc-status:active{border-color:var(--c,var(--text-3));}
+[data-layout="mobile"] button.mtc-chip.mtc-status svg{opacity:.55;flex:0 0 auto;}
 [data-layout="mobile"] .mtc-ico{
   width:26px;height:26px;border-radius:50%;flex:0 0 auto;
   display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-3);
@@ -405,6 +423,12 @@ body.mob-sheet-open{overflow:hidden;}
   font-size:12.5px;font-weight:650;
 }
 [data-layout="mobile"] .mtc-act.done{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+/* 待我测试：认领/退回/通过始终可见，不走左滑 */
+[data-layout="mobile"] .mtc-test-acts{
+  display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+}
+[data-layout="mobile"] .mtc-test-acts .mine-acts{flex:1 1 auto;gap:8px;}
+[data-layout="mobile"] .mtc-test-acts .btn{flex:1 1 0;justify-content:center;}
 
 /* 我的任务页头 */
 [data-layout="mobile"] .mob-groups .mine-more{padding-top:8px;}
@@ -537,12 +561,7 @@ body.mob-sheet-open{overflow:hidden;}
 .ptr-indicator.on{opacity:1;}
 [data-layout="mobile"] .view{overscroll-behavior-y:contain;}
 
-/* 抽屉操作条状态按钮 */
-[data-layout="mobile"] .drawer-foot #btnDrawerStatus{
-  display:inline-flex;width:44px;height:44px;flex:0 0 auto;
-  border:1px solid var(--border);border-radius:var(--r-sm);
-  background:var(--surface);color:var(--text-2);
-}
+/* 抽屉底部操作条 */
 [data-layout="mobile"] .drawer-foot .btn{min-height:44px;}
 [data-layout="mobile"] .drawer-notice{margin:0 16px;}
 [data-layout="mobile"] .drawer-status{
@@ -551,6 +570,54 @@ body.mob-sheet-open{overflow:hidden;}
 }
 [data-layout="mobile"] .drawer.is-create .drawer-body{padding-bottom:24px;}
 [data-layout="mobile"] .drawer.is-create .drawer-foot{position:sticky;}
+
+/* 需求详情：全屏抽屉 + 概览事实两列；交付表隐藏类型与发布列，避免横滑 */
+[data-layout="mobile"] .modal-layer.demand-detail .demand-sheet{width:100%;height:100%;}
+[data-layout="mobile"] .demand-head{min-height:0;height:auto;padding:8px 12px;gap:8px;}
+[data-layout="mobile"] .demand-head .head-icon{display:none;}
+[data-layout="mobile"] .demand-head .head-title-line{gap:6px;}
+[data-layout="mobile"] .demand-head .head-title-line h2{flex:1 1 auto;min-width:0;font-size:15px;}
+[data-layout="mobile"] .demand-head .head-sub{display:none;}
+[data-layout="mobile"] .demand-head .head-tools{gap:4px;}
+[data-layout="mobile"] .demand-head .head-tools [data-dem-detail-more-btn]{
+  width:30px;height:30px;padding:0;gap:0;font-size:0;justify-content:center;
+}
+[data-layout="mobile"] .demand-tabs{padding:0 8px;overflow-x:auto;}
+[data-layout="mobile"] .demand-body{padding:12px 14px 24px;gap:12px;}
+[data-layout="mobile"] .demand-facts .wi-row-main{grid-template-columns:repeat(2,minmax(0,1fr));}
+[data-layout="mobile"] .demand-facts .wi-row-main .rf-date{grid-column:1/-1;}
+[data-layout="mobile"] .demand-facts .wi-card{padding:9px 12px 10px;}
+[data-layout="mobile"] .demand-band{grid-template-columns:1fr;}
+[data-layout="mobile"] .demand-band .dem-band-cell{padding:10px 12px;}
+[data-layout="mobile"] .demand-band .dem-band-cell + .dem-band-cell{
+  border-left:0;border-top:1px solid color-mix(in srgb,var(--primary) 14%,var(--border));
+}
+[data-layout="mobile"] .demand-meta-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;}
+[data-layout="mobile"] .demand-meta-card .rf-meta{justify-self:stretch;}
+[data-layout="mobile"] .demand-meta-card .rf-v{flex:0 1 auto;min-width:0;max-width:none;font-size:13px;}
+[data-layout="mobile"] .demand-body .wsjf-break{
+  flex-wrap:nowrap;gap:10px;overflow-x:auto;font-size:12.5px;padding-bottom:2px;scrollbar-width:none;
+}
+[data-layout="mobile"] .demand-body .wsjf-break::-webkit-scrollbar{display:none;}
+[data-layout="mobile"] .demand-body .wsjf-break > *{flex:0 0 auto;}
+[data-layout="mobile"] .demand-body .read-card{padding:11px 12px;}
+[data-layout="mobile"] .demand-foot{
+  display:flex;height:calc(64px + var(--safe-b));padding:0 14px var(--safe-b);
+  position:sticky;bottom:0;z-index:3;
+}
+[data-layout="mobile"] .demand-foot .hint{display:none;}
+[data-layout="mobile"] .demand-foot .demand-foot-acts{margin-left:0;width:100%;}
+[data-layout="mobile"] .demand-foot .btn{flex:1 1 0;min-height:44px;justify-content:center;}
+[data-layout="mobile"] .dem-evidence-tbl{table-layout:fixed;}
+[data-layout="mobile"] .dem-evidence-tbl th:nth-child(1){width:50%;}
+[data-layout="mobile"] .dem-evidence-tbl th:nth-child(3){width:23%;}
+[data-layout="mobile"] .dem-evidence-tbl th:nth-child(4){width:27%;}
+[data-layout="mobile"] .dem-evidence-tbl th:nth-child(2),
+[data-layout="mobile"] .dem-evidence-tbl td:nth-child(2),
+[data-layout="mobile"] .dem-evidence-tbl th:nth-child(5),
+[data-layout="mobile"] .dem-evidence-tbl td:nth-child(5){display:none;}
+[data-layout="mobile"] .dem-evidence-tbl th,
+[data-layout="mobile"] .dem-evidence-tbl td{padding:7px 6px;}
 
 /* ===================== 我的 / 团队模式 ===================== */
 [data-layout="mobile"] .mine-mode{display:inline-flex;}
@@ -751,7 +818,8 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-actionbar #btnCaseCsvOut,
 [data-layout="mobile"] .tc-actionbar #btnCaseCsvIn,
 [data-layout="mobile"] .tc-actionbar [data-view-fullscreen]{display:none !important;}
-[data-layout="mobile"] .tc-actionbar #tcReq{flex:1 1 130px;min-width:110px;max-width:none;}
+/* 项目范围脱离操作组：手机首屏仍可见，并排在第一行最前 */
+[data-layout="mobile"] .toolbar-right > #tcReq{order:0;flex:1 1 130px;min-width:110px;max-width:none;}
 [data-layout="mobile"] .tc-filterbar{display:none;}
 [data-layout="mobile"] .tc-filterbar.is-open{  display:flex;flex:1 1 100%;order:2;flex-direction:column;align-items:stretch;gap:8px;
   padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);
@@ -759,6 +827,7 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-filterbar.is-open .views-menu-wrap,
 [data-layout="mobile"] .tc-filterbar.is-open #tcViewsBtn,
 [data-layout="mobile"] .tc-filterbar.is-open #tcBug{width:auto;align-self:flex-start;justify-content:flex-start;}
+[data-layout="mobile"] .tc-filterbar.is-open .tc-fbar-end{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;margin-left:0;}
 [data-layout="mobile"] .tc-filterbar.is-open .tc-search,
 [data-layout="mobile"] .tc-filterbar.is-open .mini-select{width:100%;max-width:none;height:38px;font-size:16px;}
 [data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg{width:100%;}
@@ -769,11 +838,29 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-defbar .mini-select{flex:1 1 calc(50% - 32px);width:auto;max-width:none;min-width:0;height:34px;font-size:16px;}
 [data-layout="mobile"] .tc-defbar #tcDefReq{max-width:none;}
 [data-layout="mobile"] .tc-defbar #tcDefReset{flex:0 0 auto;align-self:center;height:34px;padding:0 8px;}
+/* 计划筛选与缺陷一致：直接平铺，不并入「筛选」折叠面板 */
+[data-layout="mobile"] .tc-filterbar.tc-planbar{display:flex;flex:1 1 100%;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 8px;padding:0;}
+[data-layout="mobile"] .tc-planbar .tc-search{flex:1 1 100%;width:100%;min-width:0;height:34px;font-size:16px;}
+[data-layout="mobile"] .tc-planbar .mini-select{flex:1 1 calc(50% - 32px);width:auto;max-width:none;min-width:0;height:34px;font-size:16px;}
+[data-layout="mobile"] .tc-planbar #tcPlanClearFilter{flex:0 0 auto;height:34px;padding:0 8px;}
 /* 缺陷统计 2×2 铺满，避免 3+1 换行留空 */
 [data-layout="mobile"] .tc-def-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0;}
 [data-layout="mobile"] .tc-def-stats .tc-stat{justify-content:center;padding:6px 8px;}
 /* 底部留给悬浮按钮，滚到底时最后一行不被遮住 */
 [data-layout="mobile"] .tc-defects{padding-bottom:56px;}
+
+/* ===================== 分支：筛选收进面板 ===================== */
+[data-layout="mobile"] .br-filterbar{display:none;}
+[data-layout="mobile"] .br-filterbar.is-open{
+  display:flex;flex:1 1 100%;order:2;flex-direction:column;align-items:stretch;gap:8px;
+  padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);
+}
+[data-layout="mobile"] .br-filterbar.is-open .br-search,
+[data-layout="mobile"] .br-filterbar.is-open .br-search select,
+[data-layout="mobile"] .br-filterbar.is-open .br-search input{width:100%;max-width:none;min-width:0;}
+[data-layout="mobile"] .br-filterbar.is-open .br-search select,
+[data-layout="mobile"] .br-filterbar.is-open .br-search input{height:38px;font-size:16px;}
+[data-layout="mobile"] .br-filterbar.is-open #branchClearFilter{align-self:flex-start;height:34px;}
 
 /* ===================== 版本阶段：时间轴竖排、表格本地滚动 ===================== */
 [data-layout="mobile"] .phase-tl{flex-wrap:wrap;gap:6px;padding:6px 0 2px;}

@@ -38,6 +38,19 @@
     GROUP BY task_id
   </select>
 
+  <!-- 开发/测试拆分：窗口两端齐备才判定，按自然日比较以兼容 DATE 与 DATETIME 两种建表 -->
+  <select id="sumStageByTaskByWorkspace" resultType="TimeAgg">
+    SELECT tl.task_id AS taskId,
+           SUM(tl.minutes) AS total_minutes,
+           SUM(CASE WHEN t.test_started_at IS NOT NULL AND t.test_finished_at IS NOT NULL
+                     AND DATE(tl.started_at) BETWEEN DATE(t.test_started_at) AND DATE(t.test_finished_at)
+                    THEN tl.minutes ELSE 0 END) AS test_minutes
+    FROM time_log tl
+    INNER JOIN task t ON t.workspace_id = tl.workspace_id AND t.id = tl.task_id
+    WHERE tl.workspace_id = #{workspaceId} AND tl.ended_at IS NOT NULL AND t.deleted_at IS NULL
+    GROUP BY tl.task_id
+  </select>
+
   <update id="closeRunning">
     UPDATE time_log SET ended_at = NOW(), minutes = #{minutes}
     WHERE task_id = #{taskId} AND user_id = #{userId} AND ended_at IS NULL

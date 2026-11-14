@@ -11,6 +11,8 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * {@code BoardQuery} 参数解析器（BE-ARCH-2）。
@@ -52,8 +54,23 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
         query.setDueTo(date(request.getParameter("dueTo")));
         query.setStartFrom(date(request.getParameter("startFrom")));
         query.setStartTo(date(request.getParameter("startTo")));
+        query.setTestOwners(csv(request.getParameter("testOwners")));
         query.normalizeDateRanges();
         return query;
+    }
+
+    private List<String> csv(String v) {
+        List<String> list = new ArrayList<String>();
+        if (v == null || v.trim().isEmpty()) {
+            return list;
+        }
+        for (String part : v.split(",")) {
+            String item = part.trim();
+            if (!item.isEmpty()) {
+                list.add(item);
+            }
+        }
+        return list;
     }
 
     private LocalDate date(String v) {
