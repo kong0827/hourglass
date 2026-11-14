@@ -4292,8 +4292,9 @@ function openReqDocInNewTab(id){
   if(!id) return;
   var url = window.location.origin + window.location.pathname
     + "#/requirements?doc=" + encodeURIComponent(id);
-  /* 带 noopener 时返回值恒为 null，别拿它判断是否被拦截 */
-  window.open(url, "_blank", "noopener");
+  var win = window.open(url, "_blank");
+  /* 弹窗被浏览器拦下时退回同页跳转，至少不丢这次点击 */
+  if(!win) openReqDocAndJump(id);
 }
 /* 深链 #/requirements?doc=<id>：新标签页落到文档正文，而不是文档列表 */
 var reqDocDeepLinkDone = false;
