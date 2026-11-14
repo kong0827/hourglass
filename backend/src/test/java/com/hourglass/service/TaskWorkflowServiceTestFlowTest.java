@@ -118,6 +118,21 @@ class TaskWorkflowServiceTestFlowTest {
     }
 
     @Test
+    void secondRoundKeepsResubmitTimeWhenClaimedFromQueue() {
+        Task task = new Task();
+        LocalDateTime resubmitted = LocalDateTime.of(2026, 11, 3, 9, 0);
+        task.setTestRequestedAt(resubmitted);
+        task.setTestStartedAt(LocalDateTime.of(2026, 11, 1, 9, 30));
+        task.setTestFinishedAt(LocalDateTime.of(2026, 11, 2, 10, 0));
+
+        service.applyTestTimestamps(task, Consts.COL_TEST, Consts.COL_TESTING);
+
+        assertEquals(resubmitted, task.getTestRequestedAt());
+        assertEquals(LocalDateTime.now().withSecond(0).withNano(0), task.getTestStartedAt());
+        assertNull(task.getTestFinishedAt());
+    }
+
+    @Test
     void sortingInsideTestingDoesNotResetTheWindow() {
         Task task = new Task();
         task.setTestStartedAt(LocalDateTime.of(2026, 11, 1, 9, 30));

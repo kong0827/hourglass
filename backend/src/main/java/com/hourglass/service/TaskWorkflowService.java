@@ -155,7 +155,10 @@ public class TaskWorkflowService {
         if (Consts.COL_TESTING.equals(to)) {
             if (task.getTestStartedAt() == null || newRound) {
                 task.setTestStartedAt(now);
-                if (task.getTestRequestedAt() == null || newRound) {
+                /* 从「待测试」进来时，提测时间已在移入待测试时记录，新一轮也应保留；
+                   只有跳过待测试直接进入「测试中」才用当前时间补提测证据。 */
+                if (task.getTestRequestedAt() == null
+                        || (newRound && !Consts.COL_TEST.equals(from))) {
                     task.setTestRequestedAt(now);
                 }
             }
