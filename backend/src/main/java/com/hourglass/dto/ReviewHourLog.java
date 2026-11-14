@@ -16,6 +16,8 @@ public class ReviewHourLog {
     private String taskId;
     private String title;
     private String reqName;
+    /** 取自工作项所属项目（time_log 本身无项目列）；空即未归类 */
+    private String reqId;
     private Integer minutes;
     private String origin;
 }

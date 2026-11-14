@@ -22,6 +22,10 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         <div class="head-sub" id="taskDrawerSub"></div>
       </div>
       <div class="head-tools">
+        <button class="btn sm" type="button" id="btnDrawerBack" hidden title="返回上一个工作项">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.4 4.6 7 10l5.4 5.4"/></svg>
+          <span id="drawerBackLabel">返回</span>
+        </button>
         <button class="btn sm" type="button" id="btnDrawerEdit" hidden title="编辑工作项字段">
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.6l3.6 3.6M4 16l1-4 9.4-9.4a1.6 1.6 0 0 1 2.3 0l1.7 1.7a1.6 1.6 0 0 1 0 2.3L9 16.2z"/></svg>
           编辑

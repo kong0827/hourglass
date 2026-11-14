@@ -213,6 +213,7 @@
            l.task_id AS task_id,
            t.title,
            r.name AS req_name,
+           r.id AS req_id,
            l.minutes,
            l.origin
     FROM time_log l

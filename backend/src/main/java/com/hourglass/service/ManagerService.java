@@ -1451,6 +1451,7 @@ public class ManagerService {
         row.put("title", task == null ? "未关联工作项" : task.getTitle());
         String reqName = task == null || task.getReqId() == null ? null : reqNames.get(task.getReqId());
         row.put("reqName", reqName == null ? UNCATEGORIZED_NAME : reqName);
+        row.put("reqId", reqName == null ? null : task.getReqId());
         row.put("minutes", minutes(log.getMinutes()));
         row.put("origin", log.getOrigin());
         return row;

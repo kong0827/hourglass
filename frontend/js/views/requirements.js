@@ -252,6 +252,9 @@ function enterRequirementsView(){
   setReqDocMode(reqDocMode);
   /* 文档列表带「已完成/总工作项」，看板或抽屉里改过任务后必须重新取，否则计数停在旧值 */
   loadReqDocs(true).then(function(){ renderReqDocMode(); });
+  /* 新标签页深链只消费一次：之后在同页里切来切去不再把正文强行推出来 */
+  var deepDoc = reqDocDeepLinkDone ? "" : docDeepLinkId();
+  if(deepDoc){ reqDocDeepLinkDone = true; openReqDocEditor(deepDoc); }
 }
 function showReqDocList(){
   /* 同视图内再点「文档」也要先处理未保存正文，不能直接清空编辑态 */
@@ -4284,6 +4287,27 @@ function openReqDocAndJump(id){
     openReqDocEditor(id);
   });
 }
+/* 从工作项抽屉里看文档：同页跳转会连带收起抽屉、丢掉正在看的工作项，改在新标签页打开 */
+function openReqDocInNewTab(id){
+  if(!id) return;
+  var url = window.location.origin + window.location.pathname
+    + "#/requirements?doc=" + encodeURIComponent(id);
+  /* 带 noopener 时返回值恒为 null，别拿它判断是否被拦截 */
+  window.open(url, "_blank", "noopener");
+}
+/* 深链 #/requirements?doc=<id>：新标签页落到文档正文，而不是文档列表 */
+var reqDocDeepLinkDone = false;
+function docDeepLinkId(){
+  var h = String(window.location.hash || "");
+  var q = h.indexOf("?");
+  if(q < 0) return "";
+  var parts = h.substring(q + 1).split("&");
+  for(var i = 0; i < parts.length; i++){
+    var kv = parts[i].split("=");
+    if(decodeURIComponent(kv[0]) === "doc") return decodeURIComponent(kv[1] || "");
+  }
+  return "";
+}
 function populateReqDocSelect(keep){
   var sel = $("iReqDoc");
   if(!sel) return;
@@ -4997,4 +5021,4 @@ function notifyReqDocChanged(docId, actor){
   openReqDocEditor(editingDocId);
 }
 
-export { aiBtnBusy, aiErrMsg, aiUsageText, ensureReqDocOptions, enterRequirementsView, isReqDocEditing, loadReqDocs, notifyReqDocChanged, openNewReqDocDialog, openReqDocAndJump, populateReqDocSelect, refreshReqDocListIfOpen, refreshReqDocTasksIfOpen, reqDocDirty, reqDocList, reqDocNameById, reqDocStatusLabel, reqDocsError, reqDocsLoaded, setReqDocProjectFilter, tryCloseReqDocEditor };
+export { aiBtnBusy, aiErrMsg, aiUsageText, ensureReqDocOptions, enterRequirementsView, isReqDocEditing, loadReqDocs, notifyReqDocChanged, openNewReqDocDialog, openReqDocAndJump, openReqDocInNewTab, populateReqDocSelect, refreshReqDocListIfOpen, refreshReqDocTasksIfOpen, reqDocDirty, reqDocList, reqDocNameById, reqDocStatusLabel, reqDocsError, reqDocsLoaded, setReqDocProjectFilter, tryCloseReqDocEditor };

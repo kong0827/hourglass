@@ -205,11 +205,13 @@ class ManagerServiceTest {
         assertEquals("T1", aliceLogs.get(0).get("taskId"));
         assertEquals("T1", aliceLogs.get(0).get("title"));
         assertEquals("项目一", aliceLogs.get(0).get("reqName"));
+        assertEquals("R1", aliceLogs.get(0).get("reqId"), "计时明细带项目 ID 供前端关联跳转");
         assertEquals(60, aliceLogs.get(0).get("minutes"));
         List<Map<String, Object>> loggedOnlyLogs = castList(member(members, "U2").get("weekLogs"));
         assertEquals(1, loggedOnlyLogs.size());
         assertEquals("未关联工作项", loggedOnlyLogs.get(0).get("title"));
         assertEquals("未归类", loggedOnlyLogs.get(0).get("reqName"));
+        assertEquals(null, loggedOnlyLogs.get(0).get("reqId"), "无工作项的计时 reqId 为空，前端回落纯文本");
         assertEquals("2026-11-02", workload.get("lastWeekStart"), "上周对比下钻需要上周周一日期");
         List<Map<String, Object>> aliceLastLogs = castList(alice.get("lastWeekLogs"));
         assertEquals(1, aliceLastLogs.size(), "上周计时明细用于差异下钻，本周记录不进入");
@@ -715,6 +717,7 @@ class ManagerServiceTest {
         assertEquals(1, castList(aliceRow.get("projects")).size());
         assertEquals(1, castList(aliceRow.get("weekLogs")).size(), "下钻/导出明细与统计必须同源");
         assertEquals("T1", castList(aliceRow.get("weekLogs")).get(0).get("taskId"));
+        assertEquals("R1", castList(aliceRow.get("weekLogs")).get(0).get("reqId"));
         Map<String, Object> bobRow = member(castList(filtered.get("members")), "U2");
         assertEquals(0, bobRow.get("remainingMinutes"));
         assertEquals(60, bobRow.get("weekMinutes"), "计时人职能不匹配也保留其在匹配负责人任务上的计时");

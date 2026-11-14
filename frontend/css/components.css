@@ -2335,6 +2335,9 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   .drawer.read-mode .head-tools #btnDrawerEdit{
     width:30px;height:30px;padding:0;gap:0;font-size:0;justify-content:center;
   }
+  .drawer.read-mode .head-tools #btnDrawerBack{
+    width:30px;height:30px;padding:0;gap:0;font-size:0;justify-content:center;
+  }
 }
 
 /* 需求详情：与工作项共用右侧抽屉外壳（审计 2026-11-13 P1） */

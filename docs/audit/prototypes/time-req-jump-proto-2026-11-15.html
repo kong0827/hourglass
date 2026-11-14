@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>计时明细项目归属跳转原型 · 2026-11-15</title>
+<style>
+  /* 令牌与产品 tokens.css 浅色一致 */
+  :root{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+    --border:#E4E7EC; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085;
+    --scrim:rgba(16,24,40,.32);
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-fg:#1D4ED8;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-fg:#B54708;
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px;
+    --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+    --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg-app);color:var(--text);font:14px/1.5 "Inter",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:16px;}
+  button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer;}
+  input,select{font:inherit;color:inherit;}
+  [hidden]{display:none !important;}
+
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 auto 14px;max-width:1080px;}
+  .bar h1{font-size:15px;font-weight:650;margin-right:auto;}
+  .bar .note{width:100%;font-size:12px;color:var(--text-3);}
+  .bar button{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 12px;color:var(--text-2);font-size:13px;}
+  .bar button:hover{border-color:var(--border-strong);}
+  .bar button.on{background:var(--warning-soft);border-color:var(--warning);color:var(--warning-fg);}
+
+  /* 底层视图示意：跳转前=周回顾，跳转后=项目视图 */
+  .base{max-width:1080px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 20px;min-height:220px;}
+  .base .crumb{font-size:12px;color:var(--text-3);margin-bottom:6px;}
+  .base h2{font-size:17px;font-weight:650;}
+  .base .desc{margin-top:6px;font-size:12.5px;color:var(--text-2);}
+  .base .stats{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
+  .base .stat{background:var(--surface-sunken);border-radius:var(--r-md);padding:10px 14px;font-size:12px;color:var(--text-3);}
+  .base .stat b{display:block;font-size:17px;color:var(--text);font-variant-numeric:tabular-nums;}
+
+  /* 弹层（同产品 modal-layer / sheet） */
+  .modal-layer{position:fixed;inset:0;z-index:200;display:none;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto;background:var(--scrim);}
+  .modal-layer.open{display:flex;}
+  .sheet{width:100%;max-width:480px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xl);}
+  .manager-drill-sheet{max-width:none;width:min(1080px,94vw);}
+  .sheet-head{display:flex;align-items:flex-start;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);}
+  .sheet-head h2{font-size:16px;font-weight:650;letter-spacing:-.01em;}
+  .sheet-head .desc{margin-top:2px;font-size:12.5px;color:var(--text-2);line-height:18px;}
+  .sheet-body{padding:16px 20px;display:flex;flex-direction:column;gap:12px;}
+  .icon-btn{width:28px;height:28px;flex:0 0 auto;display:grid;place-items:center;border-radius:var(--r-xs);color:var(--text-3);font-size:15px;}
+  .icon-btn:hover{background:var(--surface-hover);color:var(--text);}
+
+  /* 表格（同产品 manager-tbl） */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .manager-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .manager-tbl th{height:36px;padding:0 10px;background:var(--surface-sunken);border-bottom:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-align:left;white-space:nowrap;}
+  .manager-tbl td{padding:12px 10px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle;}
+  .manager-tbl tbody tr:last-child td{border-bottom:none;}
+  .manager-tbl tbody tr[data-open-task]{cursor:pointer;}
+  .manager-tbl tbody tr[data-open-task]:hover{background:var(--surface-hover);}
+  .manager-tbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .manager-task-title{max-width:320px;display:flex;align-items:center;gap:5px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .manager-empty-cell{padding:22px!important;text-align:center!important;color:var(--text-3)!important;}
+
+  /* 关联跳转 chip（同产品 components.css .assoc-link） */
+  .assoc-link{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;text-align:left;
+    text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;border-radius:var(--r-xs);color:inherit;}
+  .assoc-link:hover{color:var(--primary-fg);text-decoration-style:solid;}
+  .assoc-link:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+
+  .tag{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;font-size:11px;line-height:1;white-space:nowrap;}
+  .tag-ghost{background:var(--surface-sunken);color:var(--text-3);}
+
+  /* 成员负载下钻（同产品 member-*） */
+  .member-back{align-self:flex-start;font-size:12.5px;color:var(--primary-fg);}
+  .member-back:hover{text-decoration:underline;}
+  .member-layer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 -4px;}
+  .member-layer-head>b{font-size:13px;color:var(--text);}
+  .member-layer-head>span{min-width:0;font-size:12px;color:var(--text-3);}
+  .member-link{font-size:12.5px;color:var(--primary-fg);}
+  .member-link:hover{text-decoration:underline;}
+
+  /* 补记工时弹窗（同产品 reqdoc-dlg-*），新增「计入项目」归属行 */
+  .dlg-pad{padding:20px;}
+  .reqdoc-dlg-title{margin:0;font-size:15.5px;font-weight:650;color:var(--text);}
+  .reqdoc-dlg-msg{margin:8px 0 0;font-size:13px;line-height:1.65;color:var(--text-2);}
+  .reqdoc-dlg-form{display:flex;flex-direction:column;gap:12px;margin-top:16px;}
+  .reqdoc-dlg-field{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--text-3);}
+  .reqdoc-dlg-field select,.reqdoc-dlg-field input{height:34px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background-color:var(--surface);font-size:13px;color:var(--text);}
+  .reqdoc-dlg-field select:focus,.reqdoc-dlg-field input:focus{outline:none;border-color:var(--border-strong);}
+  .reqdoc-dlg-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+  .btn{height:32px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:13px;color:var(--text-2);}
+  .btn:hover{border-color:var(--border-strong);}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .btn.primary:hover{background:#1D4ED8;}
+  .time-attr{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:34px;font-size:13px;color:var(--text);}
+  .time-attr-note{font-size:12px;color:var(--text-3);}
+
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#101828;color:#fff;font-size:13px;border-radius:var(--r-sm);padding:8px 14px;display:none;max-width:90vw;z-index:300;}
+  #toast.warn{background:var(--warning);color:#fff;}
+  #toast.show{display:block;}
+
+  @media (max-width:640px){
+    body{padding:10px;}
+    .modal-layer{padding:12px 8px;}
+    .manager-drill-sheet{width:100%;}
+    .sheet-head{padding:14px 16px;}
+    .sheet-body{padding:14px 16px;}
+    .dlg-pad{padding:16px;}
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>计时明细 · 项目归属跳转原型</h1>
+  <button id="openLog" type="button">计时明细</button>
+  <button id="openMember" type="button">成员负载 · 计时</button>
+  <button id="openTimeAdd" type="button">补记工时</button>
+  <button id="openTimeAddPlain" type="button">补记 · 未归类工作项</button>
+  <button id="roToggle" type="button">只读项目</button>
+  <button id="resetBtn" type="button">重置</button>
+  <p class="note">派生口径：计时的项目归属跟随工作项所属项目。明细表「项目」列与补记弹窗「计入项目」均为可点跳转 chip（只读项目也可跳）；未归类回落纯文本。点 chip 关闭浮层并落到项目视图；点记录行仍打开工作项。</p>
+</div>
+
+<main class="base" id="baseView"></main>
+
+<!-- 计时明细（周回顾 / 投入分析共用 openLogTable 形态） -->
+<div class="modal-layer" id="logLayer" role="dialog" aria-modal="true" aria-label="计时明细">
+  <div class="sheet manager-drill-sheet">
+    <div class="sheet-head">
+      <div style="flex:1;min-width:0">
+        <h2>计时明细 · 清结算小组</h2>
+        <div class="desc">共 6 条 · 合计 14h · 点击记录行打开工作项，点项目名跳转项目</div>
+      </div>
+      <button class="icon-btn" type="button" data-close aria-label="关闭">✕</button>
+    </div>
+    <div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl">
+      <thead><tr><th class="num">日期</th><th>成员</th><th>工作项</th><th>项目</th><th class="num">耗时</th></tr></thead>
+      <tbody id="logBody"></tbody>
+    </table></div></div>
+  </div>
+</div>
+
+<!-- 成员负载 · 成员抽屉计时层（memberLogsHTML 形态） -->
+<div class="modal-layer" id="memberLayer" role="dialog" aria-modal="true" aria-label="成员负载：赵磊">
+  <div class="sheet manager-drill-sheet">
+    <div class="sheet-head">
+      <div style="flex:1;min-width:0">
+        <h2>成员负载 · 赵磊</h2>
+        <div class="desc" id="memberDesc">剩余 21h · 4 个未完成工作项 · 本周已计 9.5h</div>
+      </div>
+      <button class="icon-btn" type="button" data-close aria-label="关闭">✕</button>
+    </div>
+    <div class="sheet-body" id="memberBody"></div>
+  </div>
+</div>
+
+<!-- 补记工时（dlgTimeAdd 形态 + 计入项目归属行） -->
+<div class="modal-layer" id="timeAddLayer" role="dialog" aria-modal="true" aria-labelledby="timeAddTitle">
+  <div class="sheet dlg-pad">
+    <h3 class="reqdoc-dlg-title" id="timeAddTitle">补记工时</h3>
+    <p class="reqdoc-dlg-msg">为忘开表、加班等场景补一条实际工时。补记不经过工作时段裁剪，直接计入工作项与报表；可在下方记录列表删除或作废。</p>
+    <div class="reqdoc-dlg-form">
+      <div class="reqdoc-dlg-field">
+        <span>计入项目</span>
+        <div class="time-attr" id="timeAttr"></div>
+      </div>
+      <label class="reqdoc-dlg-field"><span>成员</span>
+        <select id="iTimeUser"><option>赵磊</option><option>周敏</option><option>吴俊</option></select>
+      </label>
+      <label class="reqdoc-dlg-field"><span>日期</span><input id="iTimeDate" type="date" value="2026-11-15"></label>
+      <label class="reqdoc-dlg-field"><span>时长（小时）</span><input id="iTimeHours" type="number" min="0.5" max="24" step="0.5" placeholder="例如 1.5"></label>
+      <label class="reqdoc-dlg-field"><span>备注（选填）</span><input id="iTimeNote" type="text" maxlength="200" placeholder="例如 联调支持"></label>
+    </div>
+    <div class="reqdoc-dlg-foot">
+      <button class="btn" type="button" data-close>取消</button>
+      <button class="btn primary" type="button" id="timeAddOk">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+(function(){
+  var PROJECTS = {
+    p1: { id:"R4ohfd6ha97zjtedr3ogg", name:"清结算与对账平台" },
+    p2: { id:"R4wejtfugwrudffx8x4x9", name:"统一支付网关" },
+    p3: { id:"Rvlauh8rxq7fihkg126sq", name:"风控规则引擎" }
+  };
+  /* 与演示库一致的样本：含补记、未归类、无工作项（任务已删）三类边界 */
+  var LOGS = [
+    { id:"l1", date:"11-10", member:"赵磊", taskId:"t1", title:"联调回调地址", reqKey:"p1", minutes:120, origin:"timer" },
+    { id:"l2", date:"11-11", member:"赵磊", taskId:"Kr9vof65na3g5h4130i38", title:"差错工单自动分派", reqKey:"p1", minutes:300, origin:"manual", note:"补记开发/联调工时" },
+    { id:"l3", date:"11-12", member:"周敏", taskId:"t3", title:"支付渠道对账脚本", reqKey:"p2", minutes:180, origin:"timer" },
+    { id:"l4", date:"11-12", member:"赵磊", taskId:"t4", title:"规则命中率回归", reqKey:"p3", minutes:90, origin:"timer" },
+    { id:"l5", date:"11-13", member:"赵磊", taskId:"t5", title:"周会与值班支持", reqKey:null, minutes:60, origin:"timer" },
+    { id:"l6", date:"11-14", member:"吴俊", taskId:null, title:null, reqKey:null, minutes:90, origin:"manual" }
+  ];
+  var PROTO = window.PROTO = {
+    ro:false, view:"review", jumps:[], opens:[], lastJump:null, lastOpenTask:null,
+    memberKind:"logs", timeAddPlain:false, projects:PROJECTS, logs:LOGS
+  };
+  var toastEl = document.getElementById("toast"), toastTimer = null;
+  function toast(msg, warn){
+    toastEl.textContent = msg;
+    toastEl.className = "show" + (warn ? " warn" : "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.className = ""; }, 2600);
+  }
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]; }); }
+  function fmtHours(m){ var h = m / 60; return (h % 1 ? h.toFixed(1) : h) + "h"; }
+  /* 同产品 format.js assocLinkHTML：空 id 回落纯文本 */
+  function assocLinkHTML(id, label, plain){
+    if(!id) return esc(plain != null ? plain : (label || "—"));
+    var title = "打开项目：" + label;
+    return '<button type="button" class="assoc-link" data-jump-project="' + esc(id) + '" title="' + esc(title) + '" aria-label="' + esc(title) + '">' + esc(label) + '</button>';
+  }
+  function projChip(reqKey, plain){
+    var p = reqKey ? PROJECTS[reqKey] : null;
+    return assocLinkHTML(p ? p.id : "", p ? p.name : "", plain);
+  }
+  function totalMinutes(rows){ var t = 0; rows.forEach(function(l){ t += l.minutes; }); return t; }
+
+  function renderBase(){
+    var el = document.getElementById("baseView");
+    if(PROTO.view === "project"){
+      var p = null;
+      Object.keys(PROJECTS).forEach(function(k){ if(PROJECTS[k].id === PROTO.lastJump) p = PROJECTS[k]; });
+      el.innerHTML = '<div class="crumb">项目 / ' + esc(p.name) + '</div>'
+        + '<h2>' + esc(p.name) + '</h2>'
+        + '<div class="desc">项目视图（示意）：关联跳转落点。跳转时所有浮层已关闭，与产品 showView 行为一致。</div>'
+        + '<div class="stats"><div class="stat"><b>12</b>未完成工作项</div><div class="stat"><b>86h</b>本周计时</div><div class="stat"><b>3</b>进行中版本</div></div>';
+    }else{
+      el.innerHTML = '<div class="crumb">周回顾</div><h2>本周回顾 · 清结算小组</h2>'
+        + '<div class="desc">底层视图（示意）：打开上方浮层查看计时明细；点项目 chip 会关闭浮层并跳转到这里的项目视图。</div>'
+        + '<div class="stats"><div class="stat"><b>14h</b>本周合计</div><div class="stat"><b>6</b>计时记录</div><div class="stat"><b>3</b>参与成员</div></div>';
+    }
+  }
+
+  function logRowsHTML(rows, withMember){
+    return rows.map(function(l){
+      var attrs = l.taskId ? ' data-open-task="' + esc(l.taskId) + '" data-task-title="' + esc(l.title || "") + '" title="打开工作项详情"' : "";
+      var origin = l.origin === "manual" ? ' <span class="tag tag-ghost">补记</span>' : "";
+      return '<tr' + attrs + '><td class="num">' + esc(l.date) + '</td>'
+        + (withMember ? '<td>' + esc(l.member) + '</td>' : "")
+        + '<td><div class="manager-task-title">' + esc(l.title || "未关联工作项") + origin + '</div></td>'
+        + '<td>' + projChip(l.reqKey, "未归类") + '</td>'
+        + '<td class="num">' + fmtHours(l.minutes) + '</td></tr>';
+    }).join("");
+  }
+  function renderLog(){
+    document.getElementById("logBody").innerHTML = logRowsHTML(LOGS, true);
+  }
+  function renderMember(){
+    var body = document.getElementById("memberBody");
+    var mine = LOGS.filter(function(l){ return l.member === "赵磊"; });
+    if(PROTO.memberKind === "projects"){
+      document.getElementById("memberDesc").textContent = "剩余 21h · 4 个未完成工作项 · 本周已计 9.5h";
+      body.innerHTML = '<div class="member-layer-head"><b>项目分布</b><button class="member-link" type="button" data-member-all>查看全部工作项 →</button></div>'
+        + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>项目</th><th class="num">未完成工作项</th><th class="num">剩余预估</th></tr></thead><tbody>'
+        + '<tr data-member-project="p1" tabindex="0" title="查看该项目下的工作项"><td><b>清结算与对账平台</b></td><td class="num">3</td><td class="num">16h</td></tr>'
+        + '<tr data-member-project="p3" tabindex="0" title="查看该项目下的工作项"><td><b>风控规则引擎</b></td><td class="num">1</td><td class="num">5h</td></tr>'
+        + '</tbody></table></div>';
+    }else if(PROTO.memberKind === "tasks"){
+      var pk = PROTO.memberProj || "p1";
+      document.getElementById("memberDesc").textContent = PROJECTS[pk].name + " · 未完成工作项 · 点项目名跳转";
+      body.innerHTML = '<button class="member-back" type="button" data-member-back>← 返回项目分布</button>'
+        + '<div class="member-layer-head"><b>工作项</b><span>点项目名跳转项目，点行打开工作项</span></div>'
+        + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>工作项</th><th>项目</th><th>状态</th><th class="num">实际</th></tr></thead><tbody>'
+        + '<tr data-open-task="t1" data-task-title="联调回调地址"><td><div class="manager-task-title">联调回调地址</div></td><td>' + projChip(pk, "未归类") + '</td><td>进行中</td><td class="num">2h</td></tr>'
+        + '<tr data-open-task="Kr9vof65na3g5h4130i38" data-task-title="差错工单自动分派"><td><div class="manager-task-title">差错工单自动分派</div></td><td>' + projChip(pk, "未归类") + '</td><td>已完成</td><td class="num">5h</td></tr>'
+        + '</tbody></table></div>';
+    }else{
+      document.getElementById("memberDesc").textContent = "本周合计 9.5h";
+      body.innerHTML = '<button class="member-back" type="button" data-member-back>← 返回项目分布</button>'
+        + '<div class="member-layer-head"><b>本周计时</b><span>共 ' + mine.length + ' 条 · 点击记录行打开工作项</span></div>'
+        + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th class="num">日期</th><th>工作项</th><th>项目</th><th class="num">耗时</th></tr></thead><tbody>'
+        + logRowsHTML(mine, false) + '</tbody></table></div>';
+    }
+  }
+  function renderTimeAttr(){
+    var el = document.getElementById("timeAttr");
+    if(PROTO.timeAddPlain){
+      el.innerHTML = '<span>未归类</span><span class="time-attr-note">该工作项未归属任何项目，报表计入「未归类」</span>';
+    }else{
+      el.innerHTML = projChip("p1", "未归类")
+        + '<span class="time-attr-note">跟随工作项所属项目；如需调整请修改工作项的项目</span>';
+    }
+  }
+
+  function openLayer(id){ document.getElementById(id).classList.add("open"); }
+  function closeAll(){
+    ["logLayer","memberLayer","timeAddLayer"].forEach(function(id){ document.getElementById(id).classList.remove("open"); });
+  }
+  function jump(pid){
+    var p = null;
+    Object.keys(PROJECTS).forEach(function(k){ if(PROJECTS[k].id === pid) p = PROJECTS[k]; });
+    if(!p) return;
+    closeAll();
+    PROTO.view = "project"; PROTO.lastJump = pid; PROTO.jumps.push(pid);
+    renderBase();
+    toast("已跳转项目：" + p.name);
+  }
+  function openTask(tid, title){
+    PROTO.opens.push(tid); PROTO.lastOpenTask = tid;
+    toast("已打开工作项详情：" + (title || tid));
+  }
+
+  /* 捕获阶段全局委托：先于行级冒泡，chip 点击不会误开工作项（同产品 task-actions） */
+  document.addEventListener("click", function(e){
+    var chip = e.target.closest ? e.target.closest("[data-jump-project]") : null;
+    if(chip){ e.preventDefault(); e.stopPropagation(); jump(chip.getAttribute("data-jump-project")); }
+  }, true);
+
+  ["logLayer","memberLayer","timeAddLayer"].forEach(function(id){
+    var layer = document.getElementById(id);
+    layer.addEventListener("click", function(e){
+      if(e.target.closest("[data-close]")){ layer.classList.remove("open"); return; }
+      if(e.target.closest("[data-member-back]")){ PROTO.memberKind = "projects"; renderMember(); return; }
+      if(e.target.closest("[data-member-logs]")){ PROTO.memberKind = "logs"; renderMember(); return; }
+      var projRow = e.target.closest("[data-member-project]");
+      if(projRow){ PROTO.memberKind = "tasks"; PROTO.memberProj = projRow.getAttribute("data-member-project"); renderMember(); return; }
+      if(e.target.closest("[data-member-all]")){ toast("查看全部工作项（既有行为示意）"); return; }
+      var row = e.target.closest("[data-open-task]");
+      if(row){ openTask(row.getAttribute("data-open-task"), row.getAttribute("data-task-title")); }
+    });
+  });
+
+  document.getElementById("openLog").addEventListener("click", function(){ renderLog(); openLayer("logLayer"); });
+  document.getElementById("openMember").addEventListener("click", function(){ PROTO.memberKind = "logs"; renderMember(); openLayer("memberLayer"); });
+  function tryTimeAdd(plain){
+    if(PROTO.ro){ toast("你对该项目只有查看权限", true); return; }
+    PROTO.timeAddPlain = plain;
+    renderTimeAttr();
+    document.getElementById("iTimeHours").value = "";
+    document.getElementById("iTimeNote").value = "";
+    openLayer("timeAddLayer");
+  }
+  document.getElementById("openTimeAdd").addEventListener("click", function(){ tryTimeAdd(false); });
+  document.getElementById("openTimeAddPlain").addEventListener("click", function(){ tryTimeAdd(true); });
+  document.getElementById("timeAddOk").addEventListener("click", function(){
+    var h = Number(document.getElementById("iTimeHours").value);
+    if(!h || h < 0.5 || h > 24){ toast("时长需在 0.5 ~ 24 小时之间", true); return; }
+    document.getElementById("timeAddLayer").classList.remove("open");
+    toast("已保存补记 " + h + "h（示意），计入项目跟随工作项");
+  });
+  document.getElementById("roToggle").addEventListener("click", function(){
+    PROTO.ro = !PROTO.ro;
+    this.classList.toggle("on", PROTO.ro);
+    this.textContent = PROTO.ro ? "只读项目 · 开" : "只读项目";
+  });
+  document.getElementById("resetBtn").addEventListener("click", function(){
+    closeAll();
+    PROTO.ro = false; PROTO.view = "review"; PROTO.jumps = []; PROTO.opens = [];
+    PROTO.lastJump = null; PROTO.lastOpenTask = null; PROTO.memberKind = "logs";
+    var ro = document.getElementById("roToggle");
+    ro.classList.remove("on"); ro.textContent = "只读项目";
+    renderBase();
+  });
+
+  renderBase();
+})();
+</script>
+</body>
+</html>

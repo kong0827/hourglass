@@ -2045,6 +2045,8 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .reqdoc-dlg-field select{padding:0 34px 0 12px;}
 .reqdoc-dlg-field select:focus,.reqdoc-dlg-field input:not([type="file"]):focus{outline:none;border-color:var(--border-strong);}
 .reqdoc-dlg-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+.time-attr{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:34px;font-size:13px;color:var(--text);}
+.time-attr-note{font-size:12px;color:var(--text-3);}
 
 /* 历史版本弹层：左侧快照列表 + 右侧阅读/对比（类 Git 行对齐分栏） */
 #dlgReqDocHistory{

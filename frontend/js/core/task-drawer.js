@@ -8,7 +8,7 @@ import { attachEnvDict, recordEnv } from "./env-dict.js";
 import { companyChipHTML, companyNameOf, companyColor } from "../lib/company.js";
 import { loadProjectMembers, peekProjectMembers, memberRoleTitles, effectiveMemberRole, taskMemberLabel } from "../lib/member-labels.js";
 import { openPeoplePicker, optionSubText } from "../lib/people-picker.js";
-import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, rfHoursAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
+import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, rfHoursAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeProject, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { canEditReq, canEditTask, canManageProject, catNameById, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
@@ -48,6 +48,8 @@ function syncDrawerDirty(){
    既有区块整体搬入「执行 / 关联 / 动态」，保留原 id 与事件绑定：
    计时开始/停止、补记工时、检查项、附件、依赖、评论都不重写。 */
 var drawerMode = "edit", drawerTab = "overview", timelineCache = [];
+/* 从抽屉里的关联跳到另一个工作项（如所属史诗）时压下的层级，供头部「返回」逐层退回 */
+var drawerBackStack = [];
 var drawerTabsEl = $("drawerTabs"), drawerBodyEl = $("drawerBody"),
     drawerStatusPill = $("drawerStatusPill"), btnDrawerEdit = $("btnDrawerEdit"),
     btnFootStatus = $("btnFootStatus"), btnFootWatch = $("btnFootWatch");
@@ -462,7 +464,7 @@ function renderReadAssoc(){
     evAssocRow("所属分支", "branch", branchId, branchId ? (assocText("iBranch") || "加载中…") : "未设置", "打开分支详情"),
     depRow,
     docId
-      ? evRow("关联文档", assocText("iReqDoc") || (docSel && !docSel.getAttribute("data-ready") ? "加载中…" : "未设置"), 'data-ev-doc="' + esc(docId) + '"', "打开关联文档")
+      ? evRow("关联文档", assocText("iReqDoc") || (docSel && !docSel.getAttribute("data-ready") ? "加载中…" : "未设置"), 'data-ev-doc="' + esc(docId) + '"', "在新标签页打开关联文档")
       : evRow("关联文档", "未设置", "", ""),
     t.itemType === "bug"
       ? '<dt>来源用例</dt><dd id="readSourceCase" class="ev-case-cell"><span class="ev-case-empty">加载中…</span></dd>'
@@ -879,6 +881,8 @@ function syncAssocViewBtns(){
     var sel = $(p[0]), btn = $(p[1]);
     if(btn) btn.hidden = !(sel && sel.value);
   });
+  var docBtn = $("iReqDocView");
+  if(docBtn) docBtn.title = "在新标签页打开文档";
 }
 /* 需求 / 分支候选异步灌进下拉，到位后阅读态关联卡与来源卡要跟着重画，否则会停在空值上 */
 function syncAssocRead(){
@@ -2212,6 +2216,47 @@ function loadWatchStatus(taskId){
     }
   });
 }
+/* 抽屉内的「返回上一层」：只记录抽屉自己走过的关联跳转，外部打开仍从零开始 */
+function pushDrawerBack(){
+  if(!rt.editingId) return null;
+  var entry = {
+    id: rt.editingId,
+    title: (taskDrawerTitle && taskDrawerTitle.textContent) || (taskCacheExtra[rt.editingId] || {}).title || "",
+    tab: drawerTab,
+    scroll: drawerBodyEl ? drawerBodyEl.scrollTop : 0
+  };
+  drawerBackStack.push(entry);
+  syncDrawerBackBtn();
+  return entry;
+}
+/* 跳转没成功（任务不存在，或被「放弃未保存改动」拦下）时撤掉刚压的那层 */
+function dropDrawerBack(entry){
+  var i = entry ? drawerBackStack.lastIndexOf(entry) : -1;
+  if(i < 0) return;
+  drawerBackStack.splice(i, 1);
+  syncDrawerBackBtn();
+}
+function syncDrawerBackBtn(){
+  var btn = $("btnDrawerBack");
+  if(!btn) return;
+  var top = drawerBackStack[drawerBackStack.length - 1];
+  btn.hidden = !top;
+  if(top) btn.title = "返回「" + (top.title || "上一个工作项") + "」";
+}
+function drawerGoBack(){
+  var prev = drawerBackStack.pop();
+  syncDrawerBackBtn();
+  if(!prev) return;
+  import("./task-actions.js").then(function(m){
+    return m.openTaskById(prev.id, {
+      keepBackStack: true,
+      restoreView: { tab: prev.tab, scroll: prev.scroll }
+    });
+  }).then(function(ok){
+    /* 打开失败或被「放弃未保存改动」拦下时，当前还停在原来那层，别把返回栈吞掉 */
+    if(!ok || rt.editingId !== prev.id){ drawerBackStack.push(prev); syncDrawerBackBtn(); }
+  });
+}
 function openTaskDrawer(colId, task, defaults){
   if(!task && roleReadOnly()){ toast("查看者为只读角色，不能新建工作项", "warn"); return; }
   /* 从搜索、通知、看板其它卡片直接换任务时，也必须走未保存确认；
@@ -2236,6 +2281,9 @@ function openTaskDrawer(colId, task, defaults){
   }
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
+  /* 从外部（搜索、看板、通知）打开时重置返回栈；抽屉内的关联跳转与「返回」会保住它 */
+  if(!(defaults && defaults.keepBackStack)) drawerBackStack = [];
+  syncDrawerBackBtn();
   /* 上层弹层可登记“抽屉关闭后刷新自己”的回调（如下钻表、需求详情的关联列表） */
   rt.drawerOnClose = (defaults && typeof defaults.onClose === "function") ? defaults.onClose : null;
   /* 切任务前先收好上一条未发送的评论草稿 */
@@ -3194,6 +3242,8 @@ function forceCloseTaskDrawer(opts){
   rt.drawerOnClose = null;
   closeDrawer();
   clearWorkTick();
+  drawerBackStack = [];
+  syncDrawerBackBtn();
   rt.editingId = null;
   if(onClose){ try{ onClose(); }catch(e){ /* 刷新失败不影响关闭 */ } }
   if(opener && opener.isConnected && opener.focus){
@@ -3430,15 +3480,18 @@ if(docViewBtn) docViewBtn.addEventListener("click", function(){
   var sel = $("iReqDoc");
   var id = sel ? (sel.value || "") : "";
   if(!id) return;
-  loadView("requirements").then(function(m){ m.openReqDocAndJump(id); });
+  loadView("requirements").then(function(m){ m.openReqDocInNewTab(id); });
 });
 var sourceRemoveBtn = $("drawerSourceRemove");
 if(sourceRemoveBtn) sourceRemoveBtn.addEventListener("click", function(){
   if(denyReadOnly()) return;
   var sel = $("iDemand");
   if(!sel) return;
+  var hadLink = !!sel.value;
   sel.value = "";
   sel.dispatchEvent(new Event("change", { bubbles:true }));
+  /* 读态表单没人提交：只清字段会让来源卡当场消失、刷新后又回来，这里立即落库 */
+  if(hadLink && drawerMode === "read" && rt.editingId) factSave("已移除关联需求");
 });
 /* 需求下拉由 demands 模块异步填充，值不变但选项变化时同步来源卡与自动标记 */
 if(iDemand && window.MutationObserver){
@@ -4408,6 +4461,8 @@ $("btnCancelTask").addEventListener("click", function(){
 });
 $("taskScrim").addEventListener("click", tryCloseTaskDrawer);
 if(btnDrawerEdit) btnDrawerEdit.addEventListener("click", function(){ enterDrawerEdit(); });
+var btnDrawerBack = $("btnDrawerBack");
+if(btnDrawerBack) btnDrawerBack.addEventListener("click", drawerGoBack);
 /* ==================== 读态正文点开即改：标题 / 描述 ====================
    点正文就地编辑，失焦或 Ctrl/⌘ + Enter 保存、Esc 还原；保存走「保存并继续」整单提交，
    抽屉不关闭、页签与滚动位置保留。只读项目与新建态不给就地入口。 */
@@ -5154,6 +5209,16 @@ function openTimeAddDialog(){
     html += '<option value="' + esc(o.id) + '">' + esc(o.name) + '</option>';
   });
   if(iTimeUser) iTimeUser.innerHTML = html;
+  if(iTimeProject){
+    /* 派生口径：归属跟随工作项所属项目，只展示+跳转，不在此编辑 */
+    var pid = readTask().reqId || "";
+    var pname = pid ? reqNameById(pid) : "";
+    var hasProj = !!(pid && pname && pname !== "无");
+    iTimeProject.innerHTML = (hasProj ? assocLinkHTML("project", pid, pname) : "<span>未归类</span>")
+      + '<span class="time-attr-note">'
+      + (hasProj ? "跟随工作项所属项目；如需调整请修改工作项的项目" : "该工作项未归属任何项目，报表计入「未归类」")
+      + "</span>";
+  }
   if(iTimeDate && rt.TODAY) iTimeDate.value = rt.TODAY.getFullYear() + "-" + pad2(rt.TODAY.getMonth() + 1) + "-" + pad2(rt.TODAY.getDate());
   if(iTimeHours) iTimeHours.value = "";
   if(iTimeNote) iTimeNote.value = "";
@@ -6083,7 +6148,7 @@ if(readFactsBox){
       if(goto.dataset.factGoto === "doc"){
         var docGo = $("iReqDoc") ? ($("iReqDoc").value || "") : "";
         if(docGo){
-          import("../views/requirements.js").then(function(m){ m.openReqDocAndJump(docGo); });
+          import("../views/requirements.js").then(function(m){ m.openReqDocInNewTab(docGo); });
         }else{
           enterDrawerEdit();
           setDrawerTab("rel");
@@ -6144,9 +6209,18 @@ function evDrill(el){
   var demandId = el.getAttribute("data-ev-demand");
   if(demandId){ import("../views/demands.js").then(function(m){ m.openDemandDetailById(demandId); }); return; }
   var docId = el.getAttribute("data-ev-doc");
-  if(docId){ import("../views/requirements.js").then(function(m){ m.openReqDocAndJump(docId); }); return; }
+  if(docId){ import("../views/requirements.js").then(function(m){ m.openReqDocInNewTab(docId); }); return; }
   var epicId = el.getAttribute("data-ev-task");
-  if(epicId){ import("./task-actions.js").then(function(m){ m.openTaskById(epicId); }); return; }
+  if(epicId){
+    /* 史诗换掉当前抽屉内容：先记下这一层，头部「返回」能回到原工作项 */
+    var back = epicId === rt.editingId ? null : pushDrawerBack();
+    import("./task-actions.js").then(function(m){
+      return m.openTaskById(epicId, { keepBackStack:true });
+    }).then(function(ok){
+      if(back && (!ok || rt.editingId !== epicId)) dropDrawerBack(back);
+    });
+    return;
+  }
   var branchId = el.getAttribute("data-ev-branch");
   if(branchId){ import("../views/branches.js").then(function(m){ m.openBranchById(branchId); }); return; }
   var caseId = el.getAttribute("data-ev-case");

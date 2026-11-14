@@ -181,7 +181,7 @@ function memberLogsHTML(m, scope, dayIdx){
     var origin = l.origin === "manual" ? ' <span class="tag tag-ghost">补记</span>' : "";
     return '<tr' + attrs + '><td class="num">' + esc(fmtDate(l.date)) + '</td>'
       + '<td><div class="manager-task-title">' + esc(l.title) + origin + '</div></td>'
-      + '<td>' + esc(l.reqName || "未归类") + '</td><td class="num">' + fmtHours(l.minutes) + '</td></tr>';
+      + '<td>' + assocLinkHTML("project", l.reqId, l.reqName, {plain:"未归类"}) + '</td><td class="num">' + fmtHours(l.minutes) + '</td></tr>';
   }).join("") || '<tr><td colspan="4" class="manager-empty-cell">该时段暂无计时记录</td></tr>';
   return '<button class="member-back" type="button" data-member-back>← 返回项目分布</button>'
     + '<div class="member-layer-head"><b>' + (scope === "last" ? "上周计时" : "本周计时") + '</b>'

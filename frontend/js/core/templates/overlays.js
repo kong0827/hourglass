@@ -275,6 +275,10 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
             <h3 class="reqdoc-dlg-title" id="dlgTimeAddTitle">补记工时</h3>
             <p class="reqdoc-dlg-msg">为忘开表、加班等场景补一条实际工时。补记不经过工作时段裁剪，直接计入工作项与报表；可在下方记录列表删除或作废。</p>
             <div class="reqdoc-dlg-form">
+              <div class="reqdoc-dlg-field">
+                <span>计入项目</span>
+                <div class="time-attr" id="iTimeProject"></div>
+              </div>
               <label class="reqdoc-dlg-field">
                 <span>成员</span>
                 <select id="iTimeUser"></select>

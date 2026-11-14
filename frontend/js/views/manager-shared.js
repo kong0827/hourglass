@@ -4,7 +4,7 @@ import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc } from "../core/ui.js";
 import { triggerDownload } from "../lib/download.js";
-import { avatarHTML, colName, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, colName, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
 
 /* 口径说明默认收起，避免每条管理视图顶部都出现一整块提示条 */
 function caliberHTML(text){
@@ -190,7 +190,7 @@ function openLogTable(title, logs, description, opts){
       return '<tr' + attrs + '><td class="num">' + esc(fmtDate(l.date)) + '</td>'
         + (showMember ? '<td>' + esc(l.member || l.userId || "—") + '</td>' : '')
         + '<td><div class="manager-task-title">' + esc(l.title || "未关联工作项") + origin + '</div></td>'
-        + '<td>' + esc(l.reqName || "未归类") + '</td>'
+        + '<td>' + assocLinkHTML("project", l.reqId, l.reqName, {plain:"未归类"}) + '</td>'
         + '<td class="num">' + fmtHours(l.minutes) + '</td></tr>';
     }).join("")
       + (hasMore
