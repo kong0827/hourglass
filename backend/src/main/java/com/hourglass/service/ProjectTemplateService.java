@@ -1,15 +1,13 @@
 package com.hourglass.service;
 
-import com.hourglass.common.Ids;
+import com.hourglass.dto.CategoryRequest;
 import com.hourglass.dto.ColumnRequest;
 import com.hourglass.dto.ProjectTemplateView;
 import com.hourglass.dto.ProjectVersionSaveRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.ProjectVersion;
-import com.hourglass.entity.TestModule;
 import com.hourglass.mapper.ProjectVersionMapper;
-import com.hourglass.mapper.TestModuleMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,18 +68,18 @@ public class ProjectTemplateService {
     private final RequirementDocService docService;
     private final ProjectVersionService versionService;
     private final ProjectVersionMapper versionMapper;
-    private final TestModuleMapper moduleMapper;
+    private final CategoryService categoryService;
     private final com.hourglass.mapper.RequirementDocMapper docMapper;
 
     public ProjectTemplateService(BoardColumnService columnService, RequirementDocService docService,
                                   ProjectVersionService versionService, ProjectVersionMapper versionMapper,
-                                  TestModuleMapper moduleMapper,
+                                  CategoryService categoryService,
                                   com.hourglass.mapper.RequirementDocMapper docMapper) {
         this.columnService = columnService;
         this.docService = docService;
         this.versionService = versionService;
         this.versionMapper = versionMapper;
-        this.moduleMapper = moduleMapper;
+        this.categoryService = categoryService;
         this.docMapper = docMapper;
     }
 
@@ -113,7 +111,7 @@ public class ProjectTemplateService {
         }
         applyColumns(workspaceId, d.columns);
         applyDocs(workspaceId, userId, reqId, d);
-        applyModules(workspaceId, reqId, d.modules);
+        applyModules(workspaceId, userId, reqId, d.modules);
         applyVersion(workspaceId, userId, reqId, d.versionName);
     }
 
@@ -165,15 +163,11 @@ public class ProjectTemplateService {
         }
     }
 
-    private void applyModules(String workspaceId, String reqId, List<String> names) {
-        for (int i = 0; i < names.size(); i++) {
-            TestModule m = new TestModule();
-            m.setId(Ids.gen("M"));
-            m.setWorkspaceId(workspaceId);
-            m.setReqId(reqId);
-            m.setName(names.get(i));
-            m.setSortOrder(i);
-            moduleMapper.insert(m);
+    private void applyModules(String workspaceId, String userId, String reqId, List<String> names) {
+        for (String name : names) {
+            CategoryRequest req = new CategoryRequest();
+            req.setName(name);
+            categoryService.create(workspaceId, userId, reqId, req);
         }
     }
 
