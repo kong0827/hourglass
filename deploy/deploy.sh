@@ -110,6 +110,7 @@ VERIFY_FILES=(
   "js/views/projects.js"
   "js/views/report.js"
   "js/views/requirements.js"
+  "js/views/release.js"
   "js/views/review.js"
   "js/views/risks.js"
   "js/views/settings.js"
