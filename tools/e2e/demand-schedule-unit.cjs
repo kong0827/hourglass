@@ -17,8 +17,29 @@ const elements = {};
   "fDemandTitle", "btnSaveDemand", "demandFormTitle"]
   .forEach(id => { elements[id] = element(); });
 const requests = [], notices = [];
+/* 关闭需求改成自绘弹层：给一个最小 DOM，让 openModal 立即输入原因并确认 */
+function makeLayer(){
+  const note = { value:"", focus(){} }, reason = { value:"cancel" }, ok = { disabled:false };
+  const handlers = {};
+  const layer = {
+    className:"", innerHTML:"", __uiOnClose:null,
+    setAttribute(){}, appendChild(){}, remove(){},
+    addEventListener(name, fn){ handlers[name] = fn; },
+    querySelector(sel){
+      if(sel === "#demCloseNote") return note;
+      if(sel === "#demCloseReason") return reason;
+      if(sel === "[data-dem-close-ok]") return ok;
+      return null;
+    }
+  };
+  layer.fireOk = () => {
+    if(handlers.click) handlers.click({ target:{ closest:sel => sel === "[data-dem-close-ok]" ? ok : null } });
+  };
+  return layer;
+}
+const fakeDoc = { body:{ appendChild(){} }, createElement:() => makeLayer(), activeElement:null };
 const context = vm.createContext({
-  console, setTimeout, clearTimeout,
+  console, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {},
   window:{ addEventListener() {}, dispatchEvent() {} }, CustomEvent:function(){},
   $: id => elements[id] || null,
   rt:{ currentWs:{ id:"W1", myRole:"member" }, reqList:[], demandReqId:"R1" },
@@ -28,7 +49,9 @@ const context = vm.createContext({
     post: (url, body) => { requests.push({ url, body }); return Promise.resolve({}); },
     getAllPages: () => Promise.resolve([])
   },
-  UI:{ openModal() {}, closeModal() {}, showPrompt:() => Promise.resolve("调整范围") },
+  document:fakeDoc,
+  UI:{ openModal(layer){ if(layer && layer.fireOk){ layer.querySelector("#demCloseNote").value = "调整范围"; layer.fireOk(); } }, closeModal() {}, showPrompt:() => Promise.resolve("调整范围") },
+  drawerDemandOpts:{ reqId:"R1" }, closeDemandDetailIfOpen(){}, denySchedule(){}, syncAssocRead(){}, renderReadView(){},
   toast: message => notices.push(message),
   listPrefs:{ viewMode:() => "table" },
   isMobile:() => false,
@@ -52,7 +75,7 @@ function demand(status = "plan") {
   return { id:"D1", reqId:"R1", title:"需求", status, canSchedule:true, revision:7,
     versionId:"V1", priority:"P1", plannedStart:"2026-12-01", plannedEnd:"2026-12-10" };
 }
-async function flush() { await Promise.resolve(); await Promise.resolve(); }
+async function flush() { for (let i = 0; i < 10; i++) await Promise.resolve(); }
 
 (async () => {
   // 生命周期回归独立于下方业务模型断言，也可直接运行专用文件。
@@ -60,14 +83,14 @@ async function flush() { await Promise.resolve(); await Promise.resolve(); }
   context.demands = [demand()];
   assert.equal(context.canScheduleDemand(context.demands[0]), true);
   assert.equal(context.canScheduleDemand({ reqId:"R1", canSchedule:false }), false);
-  assert.equal(context.statusName("canceled"), "已取消");
-  assert.ok(context.DEM_PRESETS.some(p => p[0] === "canceled"));
+  assert.equal(context.statusName("canceled"), "已关闭 · 中途取消");
+  assert.ok(context.DEM_PRESETS.some(p => p[0] === "closed"));
   assert.ok(context.demandMenuItems(context.demands[0]).some(it => it.act === "replan"));
   assert.ok(context.demandMenuItems(context.demands[0]).some(it => it.act === "cancel"));
   assert.ok(!context.demandMenuItems(context.demands[0]).some(it => it.act === "unpass"));
   assert.ok(!context.demandActs({ ...demand("pass"), canSchedule:false }).includes("data-dem-plan"));
   assert.ok(context.demandActs(demand("canceled")).includes("data-dem-restore"));
-  assert.ok(context.cardHTML(demand("canceled"), { noDrag:true }).includes("已取消"));
+  assert.ok(context.cardHTML(demand("canceled"), { noDrag:true }).includes("中途取消"));
   assert.ok(context.demandCell(context.demands[0], "version").includes("2026-12-01"));
 
   context.openPlanDialog("D1", true);
@@ -114,13 +137,13 @@ async function flush() { await Promise.resolve(); await Promise.resolve(); }
   context.loadDemandTasks(layer, "D1", "V1");
   await flush();
   assert.ok(taskBox.innerHTML.includes("当前生产全量生效 1 项，部分生效 0 项；曾生产发布 1 项（1/2）"));
-  assert.ok(taskBox.innerHTML.includes("任务版本、附加版本"));
-  assert.ok(taskBox.innerHTML.includes("未生产发布"));
-  assert.ok(taskBox.innerHTML.includes("2026-11-09"));
+  assert.ok(taskBox.innerHTML.includes("任务版本") && taskBox.innerHTML.includes("附加版本"));
+  assert.ok(taskBox.innerHTML.includes("未发布"));
+  assert.ok(taskBox.innerHTML.includes("生产生效"));
   assert.ok(taskBox.innerHTML.includes("不等于需求业务验收"));
-  assert.ok(taskBox.innerHTML.includes("当前计划版本"));
+  assert.ok(taskBox.innerHTML.includes("版本为当前计划"));
   assert.ok(!taskBox.innerHTML.includes("任务实际版本"));
-  assert.equal(taskBox.innerHTML.split("尚未关联需求目标版本").length - 1, 1);
+  assert.equal(taskBox.innerHTML.split("未关联目标版本").length - 1, 1);
   context.API.getAllPages = () => Promise.resolve([
     { id:"T3", title:"灰度", boardColumn:"doing", versionIds:["V1"], publicationState:"partial", everPublished:true },
     { id:"T4", title:"回滚", boardColumn:"done", versionIds:["V1"], publicationState:"rolled_back", everPublished:true },
@@ -133,10 +156,10 @@ async function flush() { await Promise.resolve(); await Promise.resolve(); }
   context.API.getAllPages = () => Promise.resolve([{ id:"T6", title:"待规划", boardColumn:"backlog", versionIds:[] }]);
   context.loadDemandTasks(layer, "D1", "V1");
   await flush();
-  assert.ok(taskBox.innerHTML.includes("尚未关联需求目标版本"));
+  assert.ok(taskBox.innerHTML.includes("未关联目标版本"));
   context.loadDemandTasks(layer, "D1", null);
   await flush();
-  assert.ok(!taskBox.innerHTML.includes("尚未关联需求目标版本"));
+  assert.ok(!taskBox.innerHTML.includes("未关联目标版本"));
   const phaseSource = fs.readFileSync(path.join(root, "frontend/js/views/phase.js"), "utf8");
   vm.runInContext(phaseSource.slice(phaseSource.indexOf("function demandStatusLabel("), phaseSource.indexOf("function openVersionDemandsModal(")), context);
   assert.equal(context.demandStatusLabel("canceled"), "已取消");
@@ -153,7 +176,7 @@ async function flush() { await Promise.resolve(); await Promise.resolve(); }
     before:{ versionName:"1.0", status:"plan" }, after:{ versionName:"2.0", status:"canceled" }
   }) });
   assert.ok(change.includes("1.0 → 2.0"));
-  assert.ok(change.includes("已排期 → 已取消"));
+  assert.ok(change.includes("已排期 → 已关闭"));
   assert.equal(context.demandLogChange({ changeData:"invalid JSON" }), "");
   elements.iDemand = element();
   elements.iDemand.dataset = { demandReq:"R1" };

@@ -517,8 +517,7 @@
             <button class="btn sm ghost" type="button" id="btnTreeHideDone" aria-pressed="false">隐藏已完成</button>
             <span class="toolbar-meta" id="treeMeta">—</span>
             <span class="toolbar-right">
-              <button class="btn sm ghost" type="button" id="btnTreeExpand">全部展开</button>
-              <button class="btn sm ghost" type="button" id="btnTreeCollapse">全部折叠</button>
+              <button class="btn sm ghost" type="button" id="btnTreeToggleAll">全部折叠</button>
             </span>
           </div>
           <div class="list-scroll" style="margin-top:12px">
@@ -541,6 +540,9 @@
               <button type="button" data-dir="down" aria-pressed="false">下游</button>
             </div>
             <span class="toolbar-meta" id="chainMeta">—</span>
+            <span class="toolbar-right">
+              <button class="icon-btn sm" id="btnChainHelp" type="button" aria-label="影响链说明" title="影响链说明" aria-haspopup="true" aria-expanded="false"></button>
+            </span>
           </div>
           <div class="chain-scroll">
             <div class="chain-body" id="chainBody"></div>
@@ -1605,10 +1607,10 @@
           <div class="tc-report" id="tcReport" hidden></div>
           <div class="tc-plans" id="tcPlans" hidden></div>
           <div class="tc-cases-wrap" id="tcCasesWrap">
-            <aside class="tc-side" id="tcSidePanel" hidden aria-label="模块目录与自定义分组">
+            <aside class="tc-side" id="tcSidePanel" hidden aria-label="项目目录与分组">
               <div class="tc-side-tabs" role="tablist" aria-label="归类方式">
-                <button type="button" role="tab" id="tcSideTabDir" data-tc-side="dir" aria-selected="true" aria-controls="tcSideBody">模块目录</button>
-                <button type="button" role="tab" id="tcSideTabSet" data-tc-side="set" aria-selected="false" aria-controls="tcSideBody">自定义分组</button>
+                <button type="button" role="tab" id="tcSideTabDir" data-tc-side="dir" aria-selected="true" aria-controls="tcSideBody">项目目录</button>
+                <button type="button" role="tab" id="tcSideTabSet" data-tc-side="set" aria-selected="false" aria-controls="tcSideBody">分组</button>
               </div>
               <div class="tc-side-body" id="tcSideBody" role="tabpanel" aria-labelledby="tcSideTabDir"></div>
               <div class="tc-side-foot" id="tcSideFoot"></div>
@@ -1623,7 +1625,7 @@
                 <span class="tc-bulk-hint" id="tcBulkHint"></span>
                 <span class="tc-lh-grow"></span>
                 <div class="tc-lh-tools" id="tcListHeadTools">
-                  <button class="btn sm ghost" type="button" id="tcPanelBtn" aria-expanded="false" aria-controls="tcSidePanel" title="打开模块目录与自定义分组：把用例拖到目录节点＝移动归属，拖到分组＝加入分组"><span data-icon="folder"></span>&nbsp;<span id="tcPanelBtnLabel">目录 / 分组</span></button>
+                  <button class="btn sm ghost" type="button" id="tcPanelBtn" aria-expanded="false" aria-controls="tcSidePanel" title="打开项目目录与分组：把用例拖到目录节点＝移动归属，拖到分组＝加入分组"><span data-icon="folder"></span>&nbsp;<span id="tcPanelBtnLabel">目录 / 分组</span></button>
                   <select id="tcSort" class="mini-select" aria-label="排序字段" title="排序字段"></select>
                   <button class="btn sm ghost tc-sortdir" type="button" id="tcSortDir" aria-label="切换升序 / 降序" title="切换升序 / 降序">↓</button>
                   <select id="tcGroupBy" class="mini-select" aria-label="分组维度" title="分组维度"></select>
@@ -1632,8 +1634,7 @@
                     <option value="100" selected>每页 100 条</option>
                     <option value="200">每页 200 条</option>
                   </select>
-                  <button class="btn sm ghost" type="button" id="tcGrpCollapseAll" hidden>全部折叠</button>
-                  <button class="btn sm ghost" type="button" id="tcGrpExpandAll" hidden>全部展开</button>
+                  <button class="btn sm ghost" type="button" id="tcGrpToggleAll" hidden>全部折叠</button>
                 </div>
                 <div class="tc-bulkbar" id="tcBulkBar" hidden>
                   <span class="tc-bulk-acts">
@@ -1688,8 +1689,8 @@
               </div>
               <div class="row row-gap">
                 <div class="field" style="flex:1 1 55%">
-                  <label for="cModule">模块目录 <small class="tc-optional">选填 · 单归属，决定覆盖矩阵口径</small></label>
-                  <select id="cModule" aria-label="选择模块目录节点"></select>
+                  <label for="cModule">项目目录 <small class="tc-optional">选填 · 单归属，决定覆盖矩阵口径</small></label>
+                  <select id="cModule" aria-label="选择项目目录节点"></select>
                 </div>
                 <div class="field" style="flex:1 1 30%">
                   <label for="cPri">优先级 <small class="tc-optional">选填</small></label>
@@ -1728,8 +1729,8 @@
             <div class="stack">
               <p class="foot-note" id="caseBatchSub"></p>
               <div class="field">
-                <label for="bModule">模块目录 <small class="tc-optional">默认保持原值</small></label>
-                <select id="bModule" aria-label="批量设置模块目录"></select>
+                <label for="bModule">项目目录 <small class="tc-optional">默认保持原值</small></label>
+                <select id="bModule" aria-label="批量设置项目目录"></select>
                 <p class="foot-note">目录是单归属：设为新节点即从原节点移出，编号与执行历史不变。</p>
               </div>
               <div class="field">
@@ -1750,7 +1751,7 @@
           </div>
         </div></div></div>
 
-        <!-- 新建 / 编辑自定义分组（用例集，多归属） -->
+        <!-- 新建 / 编辑分组（用例集，多归属） -->
         <div class="modal-layer" id="dlgCaseSet" role="dialog" aria-modal="true" aria-labelledby="caseSetTitle"><div class="sheet md"><div class="sheet-body">
           <div class="panel">
             <div class="panel-head"><h3 id="caseSetTitle">新建分组</h3><button class="icon-btn sm" type="button" id="dlgCaseSetX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
@@ -1764,6 +1765,7 @@
                 <label for="csNote">用途说明 <small class="tc-optional">选填</small></label>
                 <textarea id="csNote" maxlength="200" placeholder="这批用例服务于哪次测试目的"></textarea>
               </div>
+              <p class="foot-note" id="csParentHint" hidden></p>
               <div class="field">
                 <label id="csVisLabel">可见范围</label>
                 <div class="cs-vis" id="csVis" role="radiogroup" aria-labelledby="csVisLabel">
@@ -2108,6 +2110,7 @@
                   <option value="status">按状态分组</option>
                   <option value="owner">按负责人分组</option>
                   <option value="project">按项目分组</option>
+                  <option value="repo">按仓库分组</option>
                 </select>
               </span>
               <button class="btn sm" type="button" id="branchGroupToggle" data-mode="status">按项目分组</button>
@@ -2118,7 +2121,7 @@
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
-              <button class="btn sm ghost" type="button" id="branchReposBtn" hidden title="管理 GitLab 仓库绑定与同步">仓库</button>
+              <button class="btn sm ghost" type="button" id="branchReposBtn" hidden title="管理 GitLab 仓库绑定与同步">仓库设置</button>
               <button class="btn primary sm" type="button" id="branchNew">
                 <span data-icon="plus"></span>&nbsp;新建分支
               </button>
@@ -2129,6 +2132,8 @@
             <div class="br-life" id="branchLifeChips" role="group" aria-label="分支生命周期"></div>
             <div class="br-pending" id="branchPending" hidden></div>
           </div>
+
+          <div class="br-repostrip" id="branchRepoStrip" hidden></div>
 
           <!-- 四列分组：开发中 / 待测试 / 待合并 / 已发布（计数已在列头与顶栏，不再重复放一排状态格子） -->
           <div class="br-groups" id="branchGroups"></div>
@@ -3145,6 +3150,10 @@
         <span>所属项目</span>
         <select id="brReq"><option value="">空间级公共分支</option></select>
       </label>
+      <label class="reqdoc-dlg-field" id="brRepoField" hidden>
+        <span>所属仓库（选填）</span>
+        <select id="brRepo"><option value="">不归属仓库（手工分支）</option></select>
+      </label>
       <div class="br-dlg-2col">
         <div class="reqdoc-dlg-field">
           <span>负责人</span>
@@ -3172,54 +3181,80 @@
 <!-- GitLab 仓库绑定：只读同步远程分支与已合并 MR；仅空间主可管理 -->
 <div class="modal-layer side" id="dlgRepo" role="dialog" aria-modal="true" aria-labelledby="dlgRepoTitle">
   <div class="sheet reqdoc-dlg br-dlg br-repo-dlg">
-    <h3 class="reqdoc-dlg-title" id="dlgRepoTitle">GitLab 仓库</h3>
-    <p class="reqdoc-dlg-msg">只读同步远程分支与已合并 MR，不会向仓库写任何内容。访问令牌只保存密文，保存后不再显示。</p>
-    <div class="br-repo-list" id="repoList"><div class="tl-empty">加载中…</div></div>
-    <div class="reqdoc-dlg-form">
-      <input type="hidden" id="repoId" />
-      <div class="br-dlg-2col">
-        <label class="reqdoc-dlg-field">
-          <span>所属项目</span>
-          <select id="repoReq"><option value="">请选择项目</option></select>
-        </label>
-        <label class="reqdoc-dlg-field">
-          <span>仓库名</span>
-          <input id="repoName" type="text" maxlength="80" placeholder="选填，默认取地址末段" autocomplete="off" />
-        </label>
+    <!-- 一级：仓库列表，按项目分组 -->
+    <div id="repoListView">
+      <h3 class="reqdoc-dlg-title" id="dlgRepoTitle">GitLab 仓库</h3>
+      <p class="reqdoc-dlg-msg">只读同步远程分支与已合并 MR，不会向仓库写任何内容。一个项目可以绑定多个仓库，同步出的分支按仓库隔离。</p>
+      <div class="br-repo-list" id="repoList"><div class="tl-empty">加载中…</div></div>
+      <div class="reqdoc-dlg-foot">
+        <button class="btn primary" type="button" id="repoNew">＋ 新建绑定</button>
+        <span style="flex:1 1 auto"></span>
+        <span class="br-repo-foot-hint">定时同步每 10 分钟</span>
+        <button class="btn" type="button" id="dlgRepoCancel">关闭</button>
       </div>
-      <label class="reqdoc-dlg-field">
-        <span>GitLab 地址</span>
-        <input id="repoUrl" type="text" maxlength="500" placeholder="https://gitlab.example.com" autocomplete="off" />
-      </label>
-      <label class="reqdoc-dlg-field">
-        <span>项目标识</span>
-        <input id="repoRef" type="text" maxlength="200" placeholder="数字 ID 或 group/project" autocomplete="off" />
-      </label>
-      <div class="br-dlg-2col">
-        <label class="reqdoc-dlg-field">
-          <span>默认目标分支</span>
-          <input id="repoTarget" type="text" maxlength="80" placeholder="例如 main（不同步导入）" autocomplete="off" />
-        </label>
-        <label class="reqdoc-dlg-field">
-          <span>导入策略</span>
-          <select id="repoPolicy">
-            <option value="recent90">近 90 天有提交</option>
-            <option value="all">全部分支</option>
-            <option value="manual">只同步已跟踪分支</option>
-          </select>
-        </label>
-      </div>
-      <label class="reqdoc-dlg-field">
-        <span>访问令牌</span>
-        <input id="repoToken" type="password" maxlength="500" placeholder="留空表示不修改" autocomplete="new-password" />
-      </label>
-      <label class="br-check"><input type="checkbox" id="repoEnabled" checked /> 参与定时同步（每 10 分钟）</label>
     </div>
-    <div class="reqdoc-dlg-foot">
-      <button class="btn ghost" type="button" id="repoNew">新建绑定</button>
-      <span style="flex:1 1 auto"></span>
-      <button class="btn" type="button" id="dlgRepoCancel">关闭</button>
-      <button class="btn primary" type="button" id="dlgRepoOk">保存</button>
+    <!-- 二级：单个仓库的详情与编辑 -->
+    <div id="repoDetailView" hidden>
+      <button class="br-repo-back" type="button" id="repoBack">← 全部仓库</button>
+      <div class="br-repo-detail-title">
+        <h3 class="reqdoc-dlg-title" id="dlgRepoDetailTitle">新建绑定</h3>
+        <span id="dlgRepoDetailBadge"></span>
+      </div>
+      <p class="reqdoc-dlg-msg" id="dlgRepoDetailSub">填写 GitLab 连接信息，沙漏只读拉取分支与已合并 MR。</p>
+      <div class="br-sync-card" id="repoSyncCard" hidden>
+        <div class="br-sync-card-top">
+          <b id="repoSyncWhen">尚未同步</b>
+          <button class="btn sm" type="button" id="repoSyncNow">立即同步</button>
+        </div>
+        <div class="br-sync-card-facts" id="repoSyncFacts"></div>
+      </div>
+      <div class="reqdoc-dlg-form">
+        <input type="hidden" id="repoId" />
+        <div class="br-dlg-2col">
+          <label class="reqdoc-dlg-field">
+            <span>所属项目</span>
+            <select id="repoReq"><option value="">请选择项目</option></select>
+          </label>
+          <label class="reqdoc-dlg-field">
+            <span>仓库名</span>
+            <input id="repoName" type="text" maxlength="80" placeholder="选填，默认取地址末段" autocomplete="off" />
+          </label>
+        </div>
+        <label class="reqdoc-dlg-field">
+          <span>GitLab 地址</span>
+          <input id="repoUrl" type="text" maxlength="500" placeholder="https://gitlab.example.com" autocomplete="off" />
+        </label>
+        <label class="reqdoc-dlg-field">
+          <span>项目标识</span>
+          <input id="repoRef" type="text" maxlength="200" placeholder="数字 ID 或 group/project" autocomplete="off" />
+        </label>
+        <div class="br-dlg-2col">
+          <label class="reqdoc-dlg-field">
+            <span>默认目标分支</span>
+            <input id="repoTarget" type="text" maxlength="80" placeholder="例如 main（不同步导入）" autocomplete="off" />
+          </label>
+          <label class="reqdoc-dlg-field">
+            <span>导入策略</span>
+            <select id="repoPolicy">
+              <option value="recent90">近 90 天有提交</option>
+              <option value="all">全部分支</option>
+              <option value="manual">只同步已跟踪分支</option>
+            </select>
+          </label>
+        </div>
+        <label class="reqdoc-dlg-field">
+          <span>访问令牌</span>
+          <input id="repoToken" type="password" maxlength="500" placeholder="留空表示不修改" autocomplete="new-password" />
+        </label>
+        <p class="br-field-hint" id="repoTokenHint"></p>
+        <label class="br-check"><input type="checkbox" id="repoEnabled" checked /> 参与定时同步（每 10 分钟）<span class="br-check-hint">关闭后仍可手动同步</span></label>
+        <p class="br-field-hint" id="repoEditLockHint" hidden>已有同步分支时，不能更换所属项目、GitLab 地址或项目标识。</p>
+      </div>
+      <div class="reqdoc-dlg-foot">
+        <span style="flex:1 1 auto"></span>
+        <button class="btn" type="button" id="repoDetailCancel">取消</button>
+        <button class="btn primary" type="button" id="dlgRepoOk">保存修改</button>
+      </div>
     </div>
   </div>
 </div>

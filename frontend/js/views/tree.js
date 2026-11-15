@@ -22,7 +22,7 @@ import { COL_WIDTHS, isDoneTask, minutesText, taskCell } from "./list.js";
 
 var treeBody = $("treeBody"), treeHead = $("treeHead"), treeMeta = $("treeMeta"),
     selL1 = $("treeLevel1"), selL2 = $("treeLevel2"), selL3 = $("treeLevel3"),
-    btnHideDone = $("btnTreeHideDone");
+    btnHideDone = $("btnTreeHideDone"), btnExpandAll = $("btnTreeToggleAll");
 var lastItems = [], lastTree = [];
 var treeHasMore = false, treeLoadingMore = false;
 var PAGE_SIZE = 100;
@@ -254,6 +254,7 @@ function updateTreeMeta(){
   /* 屏面上没有父级行（拍平或空结果）时，不解释父级聚合口径 */
   if(nodeCount) text += " · 父级进度按已加载子项平均，子任务按合计";
   treeMeta.textContent = text;
+  syncExpandAllBtn();
 }
 function countLeaves(children){
   var n = 0;
@@ -365,6 +366,16 @@ function loadTree(opts){
   });
 }
 /* ---------- 工具条 ---------- */
+/* 可见的顶层分组里还有没折起来的，就算「展开态」：折叠中的分组下面的展开状态看不见，不参与判断 */
+function anyTreeExpanded(){
+  return lastTree.some(function(n){ return !n.task && !collapsed[n.key]; });
+}
+function syncExpandAllBtn(){
+  if(!btnExpandAll) return;
+  var expanded = anyTreeExpanded();
+  btnExpandAll.textContent = expanded ? "全部折叠" : "全部展开";
+  btnExpandAll.title = expanded ? "折叠所有分组" : "展开所有分组";
+}
 function syncHideDoneBtn(){
   btnHideDone.setAttribute("aria-pressed", hideDone ? "true" : "false");
   btnHideDone.classList.toggle("on", hideDone);
@@ -439,13 +450,10 @@ btnHideDone.addEventListener("click", function(){
   syncHideDoneBtn();
   if(activeView === "tree") renderTreeItems();
 });
-$("btnTreeExpand").addEventListener("click", function(){
+btnExpandAll.addEventListener("click", function(){
+  var collapse = anyTreeExpanded();
   collapsed = {};
-  if(activeView === "tree") renderTreeItems();
-});
-$("btnTreeCollapse").addEventListener("click", function(){
-  collapsed = {};
-  walkNodes(lastTree, function(n){ collapsed[n.key] = true; });
+  if(collapse) walkNodes(lastTree, function(n){ collapsed[n.key] = true; });
   if(activeView === "tree") renderTreeItems();
 });
 treeBody.addEventListener("click", function(e){

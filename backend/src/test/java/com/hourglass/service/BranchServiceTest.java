@@ -34,13 +34,15 @@ class BranchServiceTest {
     private static final String WS = "W1";
 
     private final DevBranchMapper branchMapper = mock(DevBranchMapper.class);
+    private final com.hourglass.mapper.ProjectRepoMapper repoMapper =
+            mock(com.hourglass.mapper.ProjectRepoMapper.class);
     private final TaskMapper taskMapper = mock(TaskMapper.class);
     private final UserMapper userMapper = mock(UserMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementMapper requirementMapper = mock(RequirementMapper.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
     private final DeletionTraceService deletionTrace = mock(DeletionTraceService.class);
-    private final BranchService service = new BranchService(branchMapper, taskMapper, userMapper, access,
+    private final BranchService service = new BranchService(branchMapper, repoMapper, taskMapper, userMapper, access,
             requirementMapper, events, deletionTrace);
 
     @Test
@@ -247,6 +249,87 @@ class BranchServiceTest {
         assertEquals("R1", countQuery.getValue().getProjectId());
         assertEquals(rowsQuery.getValue().getOffset(), countQuery.getValue().getOffset());
         assertEquals(rowsQuery.getValue().getLimit(), countQuery.getValue().getLimit());
+    }
+
+    @Test
+    void boardIncludesRepoCountsWithUnassignedBucket() {
+        when(access.viewerScope(WS, "U1")).thenReturn("U1");
+        java.util.Map<String, Object> bound = new java.util.HashMap<String, Object>();
+        bound.put("repoId", "RP1");
+        bound.put("cnt", 2);
+        java.util.Map<String, Object> unassigned = new java.util.HashMap<String, Object>();
+        unassigned.put("repoId", null);
+        unassigned.put("cnt", 1);
+        when(branchMapper.countGroupByRepo(any(BranchQuery.class)))
+                .thenReturn(Arrays.asList(bound, unassigned));
+
+        com.hourglass.dto.BranchBoard board = service.board(WS, "U1", new BranchQuery());
+
+        assertEquals(Integer.valueOf(2), board.getRepoCounts().get("RP1"));
+        assertEquals(Integer.valueOf(1), board.getRepoCounts().get("__none__"), "未绑定仓库的分支单列一桶");
+        assertEquals(Integer.valueOf(3), board.getRepoCounts().get("all"));
+    }
+
+    @Test
+    void createWithRepoBindsRepoAndSkipsManualNameCheck() {
+        com.hourglass.entity.ProjectRepo repo = new com.hourglass.entity.ProjectRepo();
+        repo.setId("RP1");
+        repo.setWorkspaceId(WS);
+        repo.setReqId("R1");
+        when(repoMapper.selectById("RP1")).thenReturn(repo);
+        com.hourglass.entity.Requirement project = new com.hourglass.entity.Requirement();
+        project.setId("R1");
+        project.setWorkspaceId(WS);
+        when(requirementMapper.selectById("R1")).thenReturn(project);
+        com.hourglass.dto.BranchSaveRequest req = new com.hourglass.dto.BranchSaveRequest();
+        req.setName("feature/x");
+        req.setReqId("R1");
+        req.setRepoId("RP1");
+
+        service.create("U1", WS, req);
+
+        ArgumentCaptor<DevBranch> saved = ArgumentCaptor.forClass(DevBranch.class);
+        verify(branchMapper).insert(saved.capture());
+        assertEquals("RP1", saved.getValue().getRepoId(), "手工创建时可直接归属某个仓库");
+        verify(branchMapper).selectByRepoAndName(WS, "RP1", "feature/x");
+    }
+
+    @Test
+    void createRejectsRepoFromAnotherProject() {
+        com.hourglass.entity.ProjectRepo repo = new com.hourglass.entity.ProjectRepo();
+        repo.setId("RP1");
+        repo.setWorkspaceId(WS);
+        repo.setReqId("R2");
+        when(repoMapper.selectById("RP1")).thenReturn(repo);
+        com.hourglass.entity.Requirement project = new com.hourglass.entity.Requirement();
+        project.setId("R1");
+        project.setWorkspaceId(WS);
+        when(requirementMapper.selectById("R1")).thenReturn(project);
+        com.hourglass.dto.BranchSaveRequest req = new com.hourglass.dto.BranchSaveRequest();
+        req.setName("feature/x");
+        req.setReqId("R1");
+        req.setRepoId("RP1");
+
+        com.hourglass.common.AppException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                com.hourglass.common.AppException.class, () -> service.create("U1", WS, req));
+
+        assertEquals(400, ex.getCode());
+        verify(branchMapper, org.mockito.Mockito.never()).insert(any(DevBranch.class));
+    }
+
+    @Test
+    void updateRejectsChangingRepo() {
+        DevBranch b = branch("B1");
+        b.setReqId("R1");
+        b.setRepoId("RP1");
+        when(branchMapper.selectById("B1")).thenReturn(b);
+        com.hourglass.dto.BranchSaveRequest req = new com.hourglass.dto.BranchSaveRequest();
+        req.setRepoId("RP2");
+
+        com.hourglass.common.AppException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                com.hourglass.common.AppException.class, () -> service.update("U1", WS, "B1", req));
+
+        assertEquals(400, ex.getCode(), "换仓库等于换远程事实，编辑接口不接");
     }
 
     private DevBranch branch(String id) {

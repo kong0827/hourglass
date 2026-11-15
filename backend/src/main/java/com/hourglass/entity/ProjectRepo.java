@@ -44,4 +44,8 @@ public class ProjectRepo {
     private Boolean tokenConfigured;
     /** 所属项目名 */
     private String reqName;
+    /** 该仓库下进行中（outcome=open）的分支数 */
+    private Integer openBranchCount;
+    /** 该仓库下待确认（outcome=pending）的分支数 */
+    private Integer pendingBranchCount;
 }

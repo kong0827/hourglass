@@ -61,13 +61,30 @@ public class TestModuleController {
         return ApiResult.ok(moduleService.update(userId, ws.getId(), id, req));
     }
 
-    /** 删除节点：仍有子目录或挂着用例时拒绝，避免把归类悄悄丢掉 */
+    /**
+     * 删除节点：仍有子目录或动态规则引用时拒绝；有工作项 / 需求 / 用例时迁到 targetId。
+     * 目录删除限空间主、管理员或项目负责人。
+     */
     @DeleteMapping("/api/test-modules/{id}")
     public ApiResult<Void> delete(@PathVariable String id,
+                                  @RequestParam(required = false) String targetId,
                                   @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        moduleService.delete(userId, ws.getId(), id);
+        moduleService.delete(userId, ws.getId(), id,
+                targetId == null || targetId.trim().isEmpty() ? null : targetId.trim());
+        return ApiResult.ok(null);
+    }
+
+    /** 同级排序（拖拽目录）：ids 必须恰好是该父级的全部直接子目录 */
+    @PutMapping("/api/test-modules/order")
+    public ApiResult<Void> order(@Valid @RequestBody com.hourglass.dto.ColumnOrderRequest req,
+                                 @RequestParam String reqId,
+                                 @RequestParam(required = false) String parentId,
+                                 @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        moduleService.order(userId, ws.getId(), reqId, parentId, req.getIds());
         return ApiResult.ok(null);
     }
 }

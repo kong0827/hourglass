@@ -5,6 +5,7 @@ import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.DocCategoryNode;
 import com.hourglass.dto.DocCategorySaveRequest;
+import com.hourglass.dto.DocCategoryVisibilityRequest;
 import com.hourglass.entity.DocCategory;
 import com.hourglass.entity.Requirement;
 import com.hourglass.mapper.DocCategoryMapper;
@@ -55,7 +56,7 @@ public class DocCategoryService {
     public List<DocCategoryNode> tree(String workspaceId, String userId, String reqId) {
         String scope = scopeKey(reqId);
         assertViewScope(workspaceId, userId, scope);
-        return buildTree(categoryMapper.selectByScope(workspaceId, scope), scope);
+        return buildTree(categoryMapper.selectByScope(workspaceId, scope), scope, userId);
     }
 
     /** 空间下全部可见分类（前端一次取回后按 reqId 分组到项目 / 空间两棵树）。 */
@@ -76,27 +77,27 @@ public class DocCategoryService {
         }
         List<DocCategoryNode> out = new ArrayList<DocCategoryNode>();
         for (Map.Entry<String, List<DocCategory>> e : byScope.entrySet()) {
-            out.addAll(buildTree(e.getValue(), e.getKey()));
+            out.addAll(buildTree(e.getValue(), e.getKey(), userId));
         }
         return out;
     }
 
-    private List<DocCategoryNode> buildTree(List<DocCategory> rows, String scope) {
+    private List<DocCategoryNode> buildTree(List<DocCategory> rows, String scope, String userId) {
         Map<String, List<DocCategory>> children = childrenOf(rows);
         List<DocCategoryNode> out = new ArrayList<DocCategoryNode>();
         for (DocCategory root : rootsOf(rows)) {
-            appendNode(out, root, children, scope, 1);
+            appendNode(out, root, children, scope, 1, userId);
         }
         return out;
     }
 
     private void appendNode(List<DocCategoryNode> out, DocCategory c, Map<String, List<DocCategory>> children,
-                            String scope, int level) {
-        out.add(nodeOf(c, scope, level));
+                            String scope, int level, String userId) {
+        out.add(nodeOf(c, scope, level, userId));
         List<DocCategory> kids = children.get(c.getId());
         if (kids != null && level < DEPTH_GUARD) {
             for (DocCategory kid : kids) {
-                appendNode(out, kid, children, scope, level + 1);
+                appendNode(out, kid, children, scope, level + 1, userId);
             }
         }
     }
@@ -153,6 +154,8 @@ public class DocCategoryService {
         c.setReqId(scope);
         c.setParentId(parentId);
         c.setName(name);
+        c.setVisibility(visOf(req.getVisibility()));
+        c.setMemberIds(joinIds(defaultMembersOf(workspaceId, scope, c.getVisibility(), req.getMemberIds())));
         c.setSortOrder(nextSortOrder(rows, parentId));
         try {
             categoryMapper.insert(c);
@@ -161,8 +164,9 @@ public class DocCategoryService {
         }
         auditService.recordCurrent(workspaceId, "doc_category_create", "doc_category", c.getId(), name, true,
                 "新建文档分类「" + name + "」" + (scope.isEmpty() ? "（空间级）" : "（项目 " + scope + "）")
-                        + (parentId.isEmpty() ? "（顶级）" : "（第 " + level + " 级）"), null);
-        return nodeOf(c, scope, level);
+                        + (parentId.isEmpty() ? "（顶级）" : "（第 " + level + " 级）")
+                        + defaultLabel(c.getVisibility()), null);
+        return nodeOf(c, scope, level, userId);
     }
 
     /** 改名（本期不支持移动分类：保留原 parentId 与 sortOrder）。 */
@@ -192,7 +196,35 @@ public class DocCategoryService {
         auditService.recordCurrent(workspaceId, "doc_category_update", "doc_category", id, name, true,
                 what.toString(), null);
         List<DocCategory> rows = categoryMapper.selectByScope(workspaceId, scope);
-        return nodeOf(c, scope, levelOf(c, rows));
+        return nodeOf(c, scope, levelOf(c, rows), userId);
+    }
+
+    /**
+     * 改分类的默认可见范围：只影响之后在该分类新建的文档，不动已有文档，因此不需要收窄确认。
+     * 门控与分类维护一致（空间级 = 空间主/管理员，项目级 = 项目可写），名单校验同文档 members 档。
+     */
+    @Transactional
+    public DocCategoryNode changeVisibility(String userId, String workspaceId, String id,
+                                            DocCategoryVisibilityRequest req) {
+        DocCategory c = categoryMapper.selectById(id);
+        if (c == null || !workspaceId.equals(c.getWorkspaceId())) {
+            throw AppException.notFound("分类节点不存在：" + id);
+        }
+        String scope = scopeKey(c.getReqId());
+        assertManageScope(workspaceId, userId, scope);
+        String oldVis = visOf(c.getVisibility());
+        String visibility = visOf(req.getVisibility());
+        List<String> members = defaultMembersOf(workspaceId, scope, visibility, req.getMemberIds());
+        c.setVisibility(visibility);
+        c.setMemberIds(joinIds(members));
+        categoryMapper.update(c);
+        if (!oldVis.equals(visibility)) {
+            auditService.recordCurrent(workspaceId, "doc_category_update", "doc_category", id, c.getName(), true,
+                    "分类「" + c.getName() + "」默认可见范围：" + visLabel(oldVis) + " → " + visLabel(visibility),
+                    null);
+        }
+        List<DocCategory> rows = categoryMapper.selectByScope(workspaceId, scope);
+        return nodeOf(c, scope, levelOf(c, rows), userId);
     }
 
     /** 删除分类：仍有子分类或仍挂着文档时拒绝，避免把归类与文档一并丢掉。 */
@@ -321,7 +353,7 @@ public class DocCategoryService {
         return max + 1;
     }
 
-    private static DocCategoryNode nodeOf(DocCategory c, String scope, int level) {
+    private DocCategoryNode nodeOf(DocCategory c, String scope, int level, String userId) {
         DocCategoryNode node = new DocCategoryNode();
         node.setId(c.getId());
         node.setReqId(scope);
@@ -329,7 +361,101 @@ public class DocCategoryService {
         node.setName(c.getName());
         node.setLevel(level);
         node.setSortOrder(c.getSortOrder() == null ? 0 : c.getSortOrder());
+        String visibility = visOf(c.getVisibility());
+        List<String> members = splitIds(c.getMemberIds());
+        node.setVisibility(visibility);
+        node.setMemberCount(RequirementDocService.VIS_MEMBERS.equals(visibility) ? members.size() : 0);
+        /* 名单是账号 ID：只回传给能在这个范围新建文档的人，其他人只给人数 */
+        if (!members.isEmpty()
+                && projectAccess.canWrite(c.getWorkspaceId(), userId, scope.isEmpty() ? null : scope)) {
+            node.setMemberIds(members);
+        }
         return node;
+    }
+
+    /** 可见范围归一：空按团队共享，非法值拒绝 */
+    private static String visOf(String raw) {
+        String v = Texts.trimToNull(raw);
+        if (v == null) {
+            return RequirementDocService.VIS_TEAM;
+        }
+        if (RequirementDocService.VIS_TEAM.equals(v) || RequirementDocService.VIS_MEMBERS.equals(v)
+                || RequirementDocService.VIS_PERSONAL.equals(v)) {
+            return v;
+        }
+        throw AppException.badRequest("文档可见范围不合法");
+    }
+
+    private static String visLabel(String visibility) {
+        if (RequirementDocService.VIS_MEMBERS.equals(visibility)) {
+            return "指定成员可见";
+        }
+        if (RequirementDocService.VIS_PERSONAL.equals(visibility)) {
+            return "仅负责人可见";
+        }
+        return "团队共享";
+    }
+
+    private static String defaultLabel(String visibility) {
+        return RequirementDocService.VIS_TEAM.equals(visibility) ? "" : "，默认" + visLabel(visibility);
+    }
+
+    /**
+     * 分类默认名单：去重、上限 50、至少 1 人，且每位成员都要能看到该范围（空间级看空间成员身份）。
+     * 非 members 档不接受名单，避免前端状态错位时把名单静默落库。
+     */
+    private List<String> defaultMembersOf(String workspaceId, String scope, String visibility, List<String> raw) {
+        if (!RequirementDocService.VIS_MEMBERS.equals(visibility)) {
+            if (raw != null && !raw.isEmpty()) {
+                throw AppException.badRequest("非「指定成员可见」不需要成员名单");
+            }
+            return new ArrayList<String>();
+        }
+        List<String> ids = splitIds(joinIds(raw));
+        if (ids.isEmpty()) {
+            throw AppException.badRequest("「指定成员可见」至少要选一位成员");
+        }
+        if (ids.size() > 50) {
+            throw AppException.badRequest("指定成员最多 50 位，请改用团队共享");
+        }
+        for (String uid : ids) {
+            if (!projectAccess.canView(workspaceId, uid, scope.isEmpty() ? null : scope)) {
+                throw AppException.badRequest("所选成员里有人看不到该范围，请先在成员管理里授权");
+            }
+        }
+        return ids;
+    }
+
+    private static List<String> splitIds(String raw) {
+        List<String> ids = new ArrayList<String>();
+        if (raw == null) {
+            return ids;
+        }
+        for (String part : raw.split(",")) {
+            String uid = Texts.trimToNull(part);
+            if (uid != null && !ids.contains(uid)) {
+                ids.add(uid);
+            }
+        }
+        return ids;
+    }
+
+    private static String joinIds(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String id : ids) {
+            String uid = Texts.trimToNull(id);
+            if (uid == null) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(',');
+            }
+            sb.append(uid);
+        }
+        return sb.toString();
     }
 
     private static String rootKey(String parentId) {

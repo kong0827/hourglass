@@ -9,7 +9,7 @@ import { attachEnvDict, recordEnv } from "../core/env-dict.js";
 import { icon } from "../core/icons.js";
 import { openTaskById, taskLink } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, catNameById, rt, state } from "../core/state.js";
+import { canEditReq, canManageProject, catNameById, rt, state } from "../core/state.js";
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
@@ -30,7 +30,7 @@ var caseBatchSaving = false;
 var caseModules = [];     /* 模块名候选（自由文本口径，CSV 与旧数据仍可能出现） */
 var caseOwners = [];
 var caseFacetCounts = { module:{}, owner:{}, priority:{} };
-var caseModuleNodes = [];  /* 模块目录树：服务端 DFS 扁平列表，带层级与计数 */
+var caseModuleNodes = [];  /* 项目目录树：服务端 DFS 扁平列表，带层级与计数 */
 var caseModuleIdCounts = {};
 var casePageSize = 100;    /* 每页条数：50 / 100 / 200 */
 var caseSort = "created";
@@ -46,12 +46,15 @@ var caseGroupSeq = 0;
 var caseSelAll = false;     /* 全选筛选结果：含未加载的行，按条件生效 */
 var caseSelScope = null;    /* 全选本组：{dim,key,label}，范围再收窄一个维度 */
 var caseExclude = {};       /* 全选后取消勾选的行 */
-var caseSide = "";          /* ""=面板收起；dir=模块目录；set=自定义分组 */
+var caseSide = "";          /* ""=面板收起；dir=项目目录；set=分组 */
 var caseSets = [];
 var caseSetSeq = 0;
+var caseSetOpen = {};       /* 分组折叠态：分组 id -> false 表示折叠，缺省即展开 */
+var caseSetSub = true;      /* 选中父分组时是否显示子分组用例（服务端按子树去重） */
 var caseDirOpen = {};       /* 目录折叠态：节点 id -> false 表示折叠，缺省即展开 */
 var caseDirQuery = "";
 var caseDrag = null;        /* 正在拖动的用例：{anchor,selection,count,target,action} */
+var caseOrderDrag = null;   /* 手动排序中拖动的用例行：{id,target,action} */
 var caseFormModules = [];   /* 用例弹窗所属项目的目录树（全部项目下与浏览项目不同） */
 var caseFormModuleReq = null;
 var caseFormModulePrev = "";  /* 目录下拉的上一个值：点「＋ 新建目录…」取消后回退 */
@@ -276,6 +279,7 @@ function caseFilterQuery(reqId){
     owner: ownerFilter === "all" ? null : ownerFilter,
     demandId: single && demandFilter !== "all" ? demandFilter : null,
     setId: single && setFilter !== "all" ? setFilter : null,
+    setSub: single && setFilter !== "all" && caseSetSub ? true : null,
     bugOnly: bugOnly ? true : null,
     q: searchText || null,
     searchWide: caseSearchWide ? true : null,
@@ -328,11 +332,12 @@ var GROUP_PAGE = 20;   /* 段内一次取多少行 */
 var GROUP_SHOW = 6;    /* 段内首屏显示多少行，其余点「段内加载更多」展开 */
 var CASE_SORTS = [
   ["created", "创建时间"], ["updated", "更新时间"], ["executed", "最近执行"],
-  ["no", "用例编号"], ["pri", "优先级"], ["module", "模块目录"], ["status", "执行结果"]
+  ["no", "用例编号"], ["pri", "优先级"], ["module", "项目目录"], ["status", "执行结果"],
+  ["manual", "手动排序"]
 ];
 var CASE_GROUP_DIMS = [
-  ["", "不分组"], ["module", "模块目录"], ["priority", "优先级"], ["status", "执行结果"],
-  ["owner", "执行人"], ["demand", "主需求"], ["set", "自定义分组"]
+  ["", "不分组"], ["module", "项目目录"], ["priority", "优先级"], ["status", "执行结果"],
+  ["owner", "执行人"], ["demand", "主需求"], ["set", "分组"]
 ];
 function caseGroupQuery(){
   var q = caseFilterQuery();
@@ -436,6 +441,10 @@ function toggleSegment(key){
   else caseGroupCollapsed[key] = true;
   render();
   if(!caseGroupCollapsed[key]) loadSegmentRows(key, false);
+}
+/* 空段也渲染段体（写明「该分组下没有用例」），折叠同样有效，所以按「有没有未折叠的段」判断 */
+function anySegmentExpanded(){
+  return caseGroupSegs.some(function(s){ return !caseGroupCollapsed[s.key]; });
 }
 function collapseAllSegments(on){
   caseGroupCollapsed = {};
@@ -2300,6 +2309,33 @@ function syncDropBanner(){
         : '　放到左侧目录节点或分组段头上完成归类') + '</span>';
     return;
   }
+  if(caseOrderDrag){
+    el.hidden = false;
+    el.className = "tc-drop-banner live";
+    el.innerHTML = icon("move", 13) + '<span>正在调整用例顺序'
+      + (caseOrderDrag.target
+        ? '　' + esc(caseOrderDrag.action) + '「<b>' + esc(caseOrderDrag.target) + '</b>」'
+        : '　拖到目标行上：上/下半边决定插到它前面还是后面') + '</span>';
+    return;
+  }
+  if(caseSetDrag){
+    el.hidden = false;
+    el.className = "tc-drop-banner live";
+    el.innerHTML = icon("layers", 13) + '<span>正在拖动分组「<b>' + esc(caseSetDrag.name) + '</b>」'
+      + (caseSetDrag.target
+        ? '　' + esc(caseSetDrag.action) + '「<b>' + esc(caseSetDrag.target) + '</b>」'
+        : '　放到别的分组上：中间＝成为子分组（继承可见范围），上/下边缘＝同级排序') + '</span>';
+    return;
+  }
+  if(caseDirDrag){
+    el.hidden = false;
+    el.className = "tc-drop-banner live";
+    el.innerHTML = icon("folder", 13) + '<span>正在拖动目录「<b>' + esc(caseDirDrag.name) + '</b>」'
+      + (caseDirDrag.target
+        ? '　' + esc(caseDirDrag.action) + '「<b>' + esc(caseDirDrag.target) + '</b>」'
+        : '　放到别的目录上：中间＝成为子目录，上/下边缘＝同级排序') + '</span>';
+    return;
+  }
   var hint = caseGroupBy ? segmentDragHint() : "";
   if(!hint){ el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
@@ -2314,7 +2350,7 @@ function renderGrouped(anyFilter){
       icon: anyFilter ? "filterOff" : "checklist",
       title: anyFilter ? "没有符合条件的用例" : "还没有可分组的内容",
       text: caseGroupBy === "set"
-        ? "先在左侧「自定义分组」里建一个分组并把用例加进去，再按分组查看。"
+        ? "先在左侧「分组」里建一个分组并把用例加进去，再按分组查看。"
         : (anyFilter ? "换个筛选条件，或点「清空筛选」再试。" : "点右上角「新建用例」录入第一条。")
     });
     return;
@@ -2480,6 +2516,9 @@ function syncQueryBar(){
       }).join("");
     }
     sortSel.value = caseSort;
+    sortSel.title = caseSort === "manual"
+      ? "手动排序：直接拖动用例行改顺序；只在单项目、不分组、无其它筛选且已加载完时可用"
+      : "";
     UI.markFiltered(sortSel, caseSort === "created" && caseSortDir === "desc");
   }
   var dirBtn = $("tcSortDir");
@@ -2499,7 +2538,7 @@ function syncQueryBar(){
     grp.value = caseScopeAll ? "" : caseGroupBy;
     grp.disabled = caseScopeAll;
     grp.title = caseScopeAll
-      ? "分组显示只在单个项目下提供：目录与自定义分组都是项目内结构"
+      ? "分组显示只在单个项目下提供：目录与分组都是项目内结构"
       : "按维度分段显示：段头带计数与结果分布，可折叠、可段内翻页、可整组全选";
     UI.markFiltered(grp, !caseGroupBy);
   }
@@ -2526,11 +2565,15 @@ function syncQueryBar(){
     }
     pb.title = dirActive
       ? "当前只显示该目录下的用例；点击打开目录面板调整或清除"
-      : "打开模块目录与自定义分组：把用例拖到目录节点＝移动归属，拖到分组＝加入分组";
+      : "打开项目目录与分组：把用例拖到目录节点＝移动归属，拖到分组＝加入分组";
   }
-  var ca = $("tcGrpCollapseAll"), ea = $("tcGrpExpandAll");
-  if(ca) ca.hidden = !caseGroupBy;
-  if(ea) ea.hidden = !caseGroupBy;
+  var gt = $("tcGrpToggleAll");
+  if(gt){
+    var segOpen = anySegmentExpanded();
+    gt.hidden = !caseGroupBy;
+    gt.textContent = segOpen ? "全部折叠" : "全部展开";
+    gt.title = segOpen ? "折叠所有已展开的段" : "展开所有有内容的段";
+  }
   var sa = $("tcSelFiltered");
   if(sa){
     var on = caseSelAll && !caseSelScope;
@@ -2628,6 +2671,7 @@ function tcViewParams(){
     scope: "testcase", reqId: caseReqId || "", all: caseScopeAll ? 1 : 0,
     status: statusFilter, moduleId: moduleFilter, moduleSub: caseModuleSub ? 1 : 0,
     pri: priFilter, owner: ownerFilter, demandId: demandFilter, setId: setFilter,
+    setSub: caseSetSub ? 1 : 0,
     bug: !!bugOnly, q: searchText || "", wide: caseSearchWide ? 1 : 0,
     sort: caseSort, sortDir: caseSortDir, groupBy: caseGroupBy, pageSize: casePageSize,
     mode: tcMode
@@ -2676,6 +2720,7 @@ function applyTcView(v){
   ownerFilter = typeof p.owner === "string" && p.owner ? p.owner : "all";
   demandFilter = typeof p.demandId === "string" && p.demandId ? p.demandId : "all";
   setFilter = typeof p.setId === "string" && p.setId ? p.setId : "all";
+  caseSetSub = !(p.setSub === 0 || p.setSub === false);
   bugOnly = !!p.bug;
   searchText = typeof p.q === "string" ? p.q.toLowerCase() : "";
   caseSearchWide = !!(p.wide === 1 || p.wide === true);
@@ -3148,6 +3193,7 @@ function caseRowHTML(c, segKey){
     : "";
   return '<div class="tc-row' + (sel ? " is-selected" : "") + (dragging ? " is-dragging" : "") + '"'
     + ' data-tc-open="' + esc(c.id) + '"'
+    + (manualOrderScope() ? ' data-tc-order-row="' + esc(c.id) + '"' : "")
     + (w && !caseScopeAll ? ' draggable="true" data-tc-drag="' + esc(c.id) + '"' : "")
     + '>'
     + pick
@@ -5533,7 +5579,7 @@ function importCasesCsv(file){
   }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
 }
 
-/* ---------- 左侧面板：模块目录（单归属）与自定义分组（多归属） ----------
+/* ---------- 左侧面板：项目目录（单归属）与分组（多归属） ----------
    目录回答「这条用例属于哪个功能域」：单归属，计数不重叠，用于归类、筛选与分组统计；
    分组回答「这批用例服务于哪次测试目的」：计数可重叠，删分组不删用例。 */
 
@@ -5546,6 +5592,11 @@ var editingSetId = null;
 var setSaving = false;
 var setPickSel = "";
 var setPickBusy = false;
+var setDialogParent = "";   /* 在某个父分组下新建时暂存父组 id；编辑时为空 */
+var setDialogParentVis = ""; /* 子分组继承的可见范围（继承后弹窗里不可改） */
+var caseSetDrag = null;     /* 正在拖动的分组：{id,name,target,action} */
+var caseDirDrag = null;     /* 正在拖动的目录节点：{id,name,target,action} */
+var reorderBusy = false;
 
 function toggleSidePanel(tab){
   caseSide = (tab === "dir" || tab === "set") ? tab : "";
@@ -5573,7 +5624,7 @@ function afterStructureChange(){
   return sets;
 }
 
-/* ---------- 模块目录面板 ---------- */
+/* ---------- 项目目录面板 ---------- */
 
 /* 目录计数是项目内全量（服务端 tree 不带筛选），与筛选下拉的「命中数」口径不同，脚注写明 */
 function dirNoneCount(){
@@ -5619,7 +5670,7 @@ function renderDirPanel(){
   var caret = focused ? prev.selectionStart : 0;
   body.innerHTML = '<div class="tc-side-tools">'
     + '<label class="tc-dir-search">' + icon("search", 13)
-    + '<input type="search" id="tcDirSearch" placeholder="搜索目录…" aria-label="搜索模块目录" autocomplete="off" value="' + esc(caseDirQuery) + '" /></label>'
+    + '<input type="search" id="tcDirSearch" placeholder="搜索目录…" aria-label="搜索项目目录" autocomplete="off" value="' + esc(caseDirQuery) + '" /></label>'
     + (isWritable() ? '<button class="btn sm ghost" type="button" data-tc-dir-new title="新建顶级目录">' + icon("plus", 13) + ' 新建</button>' : "")
     + '</div><div class="tc-dir-list" id="tcDirList"></div>';
   renderDirList();
@@ -5666,7 +5717,8 @@ function dirNodeRowHTML(n){
   var open = dirNodeOpen(n);
   var count = caseModuleSub ? (n.subtreeCount || 0) : (n.caseCount || 0);
   var path = modulePathOf(n.id);
-  return '<div class="tc-dir-node lv' + n.level + (on ? " on" : "") + '" style="margin-left:' + dirIndentPx(n.level) + 'px" data-tc-dir="' + esc(n.id) + '">'
+  return '<div class="tc-dir-node lv' + n.level + (on ? " on" : "") + '" style="margin-left:' + dirIndentPx(n.level) + 'px" data-tc-dir="' + esc(n.id) + '"'
+    + (isWritable() ? ' draggable="true" data-tc-dir-drag="' + esc(n.id) + '"' : "") + '>'
     + dirToggleHTML(n.id, dirHasKids(n.id), open, n.name)
     + '<button class="tc-dir-pick" type="button" data-tc-dir-pick="' + esc(n.id) + '" aria-pressed="' + (on ? "true" : "false") + '"'
     + ' title="' + esc(path) + ' · ' + count + ' 条' + (caseModuleSub ? "（含子目录）" : "（仅本节点）") + '，拖用例到此＝移动归属">'
@@ -5675,7 +5727,9 @@ function dirNodeRowHTML(n){
     + (isWritable() ? '<span class="tc-dir-acts">'
       + '<button class="icon-btn sm" type="button" data-tc-dir-add="' + esc(n.id) + '" title="新建子目录" aria-label="在 ' + esc(n.name) + ' 下新建子目录">' + icon("plus", 13) + '</button>'
       + '<button class="icon-btn sm" type="button" data-tc-dir-edit="' + esc(n.id) + '" title="重命名" aria-label="重命名 ' + esc(n.name) + '">' + icon("edit", 13) + '</button>'
-      + '<button class="icon-btn sm" type="button" data-tc-dir-del="' + esc(n.id) + '" title="删除目录" aria-label="删除 ' + esc(n.name) + '">' + icon("trash", 13) + '</button>'
+      + (canManageProject(caseReqId)
+        ? '<button class="icon-btn sm" type="button" data-tc-dir-del="' + esc(n.id) + '" title="删除目录（仅负责人）" aria-label="删除 ' + esc(n.name) + '">' + icon("trash", 13) + '</button>'
+        : "")
       + '</span>' : "")
     + '</div>';
 }
@@ -5740,6 +5794,7 @@ function renameModuleNode(id){
 }
 function deleteModuleNode(id){
   if(dirBusy) return;
+  if(!canManageProject(caseReqId)){ toast("仅空间主、管理员或项目负责人可删除目录", "warn"); return; }
   var n = moduleNodeById(id);
   if(!n){ toast("目录不存在，请刷新后重试", "warn"); return; }
   var kids = dirHasKids(id), own = n.caseCount || 0;
@@ -5768,7 +5823,7 @@ function deleteModuleNode(id){
   });
 }
 
-/* ---------- 自定义分组面板 ---------- */
+/* ---------- 分组面板 ---------- */
 
 function setById(id){
   for(var i = 0; i < caseSets.length; i++) if(caseSets[i].id === id) return caseSets[i];
@@ -5796,6 +5851,33 @@ function loadCaseSets(force){
     return caseSets;
   });
 }
+function setHasKids(id){
+  for(var i = 0; i < caseSets.length; i++) if((caseSets[i].parentId || "") === id) return true;
+  return false;
+}
+function setNodeOpen(s){ return caseSetOpen[s.id] !== false; }
+function setAncestorIds(id){
+  var out = [], guard = 0, s = setById(id);
+  while(s && s.parentId && guard++ < 64){
+    out.push(s.parentId);
+    s = setById(s.parentId);
+  }
+  return out;
+}
+function bucketSetRows(vis, out){
+  caseSets.forEach(function(s){
+    if(s.parentId || s.visibility !== vis) return;
+    out.push({ s: s, level: 1 });
+    if(setNodeOpen(s)) appendSetKids(s.id, 2, out);
+  });
+}
+function appendSetKids(parentId, level, out){
+  caseSets.forEach(function(s){
+    if((s.parentId || "") !== parentId) return;
+    out.push({ s: s, level: level });
+    if(setNodeOpen(s)) appendSetKids(s.id, level + 1, out);
+  });
+}
 function renderSetPanel(){
   var body = $("tcSideBody"), foot = $("tcSideFoot");
   if(!body) return;
@@ -5809,14 +5891,14 @@ function renderSetPanel(){
     html += '<p class="tc-side-empty">分组加载失败：' + esc(caseSetsError)
       + ' <button class="btn sm ghost" type="button" data-tc-set-retry>重试</button></p>';
   }else{
-    var bucket = function(label, list, empty){
-      return '<div class="tc-set-label">' + label + '</div>'
-        + (list.length ? list.map(setItemHTML).join("") : '<p class="tc-side-empty">' + empty + '</p>');
-    };
-    html += bucket("团队共享 · 进交付说明与发布证据", caseSets.filter(function(s){ return s.visibility === "team"; }), "还没有团队分组。");
-    html += bucket("指定成员可见 · 不进证据", caseSets.filter(function(s){ return s.visibility === "members"; }), "还没有指定成员可见的分组。");
-    html += bucket("仅自己可见 · 不进证据", caseSets.filter(function(s){ return s.visibility === "personal"; }), "还没有个人分组。");
+    var rows = [];
+    bucketSetRows("team", rows);
+    bucketSetRows("members", rows);
+    bucketSetRows("personal", rows);
+    html += rows.length ? rows.map(function(r){ return setItemHTML(r.s, r.level); }).join("")
+      : '<p class="tc-side-empty">还没有分组，点上方「新建分组」。</p>';
     html += '<div class="tc-set-item special' + (setFilter === "__none" ? " on" : "") + '">'
+      + '<span class="tc-dir-toggle ph"></span>'
       + '<button class="tc-set-pick" type="button" data-tc-set-pick="__none" aria-pressed="' + (setFilter === "__none" ? "true" : "false") + '"'
       + ' title="只看没有加入任何可见分组的用例">'
       + '<span class="tc-set-ico">' + icon("inbox", 13) + '</span>'
@@ -5825,7 +5907,14 @@ function renderSetPanel(){
   html += '</div>';
   body.innerHTML = html;
   if(foot){
-    foot.innerHTML = '<p class="tc-side-note">多归属：一条用例可进多个分组，分组间计数可重叠、不能相加当总数。分组是引用不是复制，删除分组不删用例。只有<b>团队共享</b>分组进交付说明与发布证据；指定成员 / 仅自己可见用于联调与个人整理，要写进证据先转为团队共享（需创建人操作）。</p>';
+    var sel = setFilter !== "all" && setFilter !== "__none" ? setById(setFilter) : null;
+    var kids = !!(sel && setHasKids(sel.id));
+    foot.innerHTML = (kids
+      ? '<button class="tc-side-switch' + (caseSetSub ? " on" : "") + '" type="button" id="tcSetSub"'
+        + ' role="switch" aria-checked="' + (caseSetSub ? "true" : "false") + '">'
+        + '<span class="sw-box">' + (caseSetSub ? icon("check", 11) : "") + '</span>显示子分组用例</button>'
+      : "")
+      + '<p class="tc-side-note">多归属：一条用例可进多个分组，分组间计数可重叠、不能相加当总数。分组可嵌套，<b>子组继承父组可见范围</b>，父组计数按子树去重。只有<b>团队共享</b>分组进证据；证据只按顶级团队分组出一行。</p>';
   }
   renderSetDetail();
 }
@@ -5834,22 +5923,34 @@ function setVisTagHTML(s, full){
   var label = full ? SET_VIS_LABEL[vis] : { team: "团队", members: "指定成员", personal: "仅自己" }[vis];
   return '<span class="tc-vis-tag ' + vis + '">' + label + '</span>';
 }
-function setItemHTML(s){
+function setItemHTML(s, level){
   var on = setFilter === s.id;
   var dyn = setDynamic(s);
-  var title = s.name + " · " + (s.caseCount || 0) + " 条，"
+  var kids = setHasKids(s.id);
+  var count = kids ? (s.subtreeCount || 0) : (s.caseCount || 0);
+  var title = s.name + " · " + count + " 条" + (kids ? "（含子分组，去重）" : "") + "，"
     + (dyn ? "成员由规则自动收录，不能手工增删" : "拖用例到此＝加入分组（原分组保留）");
-  return '<div class="tc-set-item' + (on ? " on" : "") + (dyn ? " is-dyn" : "") + '" data-tc-set="' + esc(s.id) + '">'
+  return '<div class="tc-set-item lv' + level + (on ? " on" : "") + (dyn ? " is-dyn" : "") + '"'
+    + ' style="margin-left:' + dirIndentPx(level) + 'px"'
+    + ' data-tc-set="' + esc(s.id) + '" draggable="' + (isWritable() ? "true" : "false") + '" data-tc-set-drag="' + esc(s.id) + '">'
+    + (kids
+      ? '<button class="tc-dir-toggle" type="button" data-tc-set-toggle="' + esc(s.id) + '"'
+        + ' aria-expanded="' + (setNodeOpen(s) ? "true" : "false") + '" aria-label="' + (setNodeOpen(s) ? "折叠 " : "展开 ") + esc(s.name) + '">'
+        + icon("chevronRight", 12) + '</button>'
+      : '<span class="tc-dir-toggle ph"></span>')
     + '<button class="tc-set-pick" type="button" data-tc-set-pick="' + esc(s.id) + '" aria-pressed="' + (on ? "true" : "false") + '"'
     + ' title="' + esc(title) + '">'
     + '<span class="tc-set-ico">' + icon(dyn ? "refresh" : "layers", 13) + '</span>'
     + '<span class="tc-set-main"><span class="tc-set-name">' + esc(s.name)
     + setVisTagHTML(s) + (dyn ? '<span class="tc-vis-tag dyn">动态</span>' : "") + '</span>'
     + (s.note ? '<span class="tc-set-sub">' + esc(s.note) + '</span>' : "")
-    + '</span><span class="tc-set-n">' + (s.caseCount || 0) + '</span></button>'
-    + (s.editable ? '<span class="tc-set-acts">'
-      + '<button class="icon-btn sm" type="button" data-tc-set-edit="' + esc(s.id) + '" title="编辑分组" aria-label="编辑分组 ' + esc(s.name) + '">' + icon("edit", 13) + '</button>'
-      + '<button class="icon-btn sm" type="button" data-tc-set-del="' + esc(s.id) + '" title="删除分组（不删用例）" aria-label="删除分组 ' + esc(s.name) + '">' + icon("trash", 13) + '</button>'
+    + '</span><span class="tc-set-n">' + count + '</span></button>'
+    + (isWritable() ? '<span class="tc-set-acts">'
+      + '<button class="icon-btn sm" type="button" data-tc-set-add="' + esc(s.id) + '" title="新建子分组" aria-label="在 ' + esc(s.name) + ' 下新建子分组">' + icon("plus", 13) + '</button>'
+      + (s.editable
+        ? '<button class="icon-btn sm" type="button" data-tc-set-edit="' + esc(s.id) + '" title="编辑分组" aria-label="编辑分组 ' + esc(s.name) + '">' + icon("edit", 13) + '</button>'
+          + '<button class="icon-btn sm" type="button" data-tc-set-del="' + esc(s.id) + '" title="删除分组（不删用例）" aria-label="删除分组 ' + esc(s.name) + '">' + icon("trash", 13) + '</button>'
+        : "")
       + '</span>' : "")
     + '</div>';
 }
@@ -5880,11 +5981,13 @@ function renderSetDetail(){
   if(!s || tcMode !== "cases" || caseScopeAll){ box.hidden = true; box.innerHTML = ""; return; }
   var dyn = setDynamic(s);
   var rule = dyn ? setRuleText(s.ruleJson) : "";
+  var kids = setHasKids(s.id);
+  var total = kids ? (s.subtreeCount || 0) : (s.caseCount || 0);
   var html = '<div class="tc-setd-head">'
     + '<span class="tc-setd-ico">' + icon(dyn ? "refresh" : "layers", 14) + '</span>'
     + '<span class="tc-setd-main"><b>' + esc(s.name) + '</b>' + setVisTagHTML(s, true)
     + (dyn ? '<span class="tc-vis-tag dyn">动态收录</span>' : "")
-    + '<span class="tc-setd-n">' + (s.caseCount || 0) + ' 条</span>'
+    + '<span class="tc-setd-n">' + total + ' 条' + (kids ? '（含子分组，去重）' : '') + '</span>'
     + (s.note ? '<span class="tc-setd-note">' + esc(s.note) + '</span>' : "")
     + '</span>'
     + (s.editable ? '<button class="btn sm ghost" type="button" data-tc-set-edit="' + esc(s.id) + '">'
@@ -5919,6 +6022,10 @@ function renderSetDetail(){
 }
 function pickSetNode(id){
   setFilter = setFilter === id ? "all" : id;
+  if(setFilter !== "all" && setFilter !== "__none"){
+    setAncestorIds(setFilter).forEach(function(aid){ caseSetOpen[aid] = true; });
+  }
+  if(caseSide === "set") renderSetPanel();
   loadCases();
 }
 /* ---------- 分组弹框：可见范围（团队 / 指定成员 / 仅自己）× 类型（手工 / 动态） ----------
@@ -6075,7 +6182,7 @@ function renderRuleBuilder(rule){
     + '<div class="cs-rule-grid">'
     + field("csRuleStatus", "执行结果", [["all", "全部"], ["passed", "通过"], ["failed", "失败"], ["blocked", "阻塞"], ["skipped", "跳过"], ["__untested", "未执行"]], r.status)
     + field("csRulePri", "优先级", [["all", "全部"]].concat(PRIORITIES.map(function(p){ return [p, p + " · " + priName(p)]; })).concat([["__none", "未设置"]]), r.pri)
-    + field("csRuleModule", "模块目录", modOpts, r.moduleId)
+    + field("csRuleModule", "项目目录", modOpts, r.moduleId)
     + field("csRuleDemand", "主需求", demandOpts, r.demandId)
     + field("csRuleOwner", "最近执行人", ownerOpts, r.owner)
     + '<div class="field"><label for="csRuleQ">关键词</label>'
@@ -6263,7 +6370,7 @@ function syncSetDialog(){
   }
   if(kind === "dynamic") refreshRuleHits();
 }
-function openSetDialog(id){
+function openSetDialog(id, parentId){
   if(!isWritable()){ toast("当前项目只读，无法维护分组", "warn"); return; }
   var s = id ? setById(id) : null;
   if(id && !s){ toast("分组不存在或不可见", "warn"); return; }
@@ -6271,20 +6378,32 @@ function openSetDialog(id){
     toast(s.visibility === "members" ? "指定成员可见的分组只有创建人可以修改" : "个人分组只有创建人可以修改", "warn");
     return;
   }
+  var parent = !s && parentId ? setById(parentId) : null;
+  if(!s && parentId && !parent){ toast("父分组不存在，请刷新后重试", "warn"); return; }
   editingSetId = s ? s.id : null;
   setDialogSnap = s || null;
-  $("caseSetTitle").textContent = s ? "编辑分组 · " + s.name : "新建分组";
+  setDialogParent = parent ? parent.id : "";
+  setDialogParentVis = parent ? parent.visibility : "";
+  $("caseSetTitle").textContent = s ? "编辑分组 · " + s.name
+    : (parent ? "新建子分组 · " + parent.name : "新建分组");
   $("csName").value = s ? s.name : "";
   $("csNote").value = s && s.note ? s.note : "";
   $("fSetName").classList.remove("invalid");
-  var vis = s ? s.visibility : "team";
+  var vis = s ? s.visibility : (parent ? parent.visibility : "team");
   var me = (rt.currentUser || {}).id;
   /* 收窄团队分组只允许创建人：直接禁用选项并说明原因，而不是等保存报错 */
   var narrowLocked = !!(s && s.visibility === "team" && s.createdByUserId && me && s.createdByUserId !== me);
   Array.prototype.forEach.call(document.querySelectorAll('input[name="csVis"]'), function(r){
     r.checked = r.value === vis;
-    r.disabled = narrowLocked && r.value !== "team";
+    r.disabled = !!parent || (narrowLocked && r.value !== "team");
   });
+  var ph = $("csParentHint");
+  if(ph){
+    ph.hidden = !parent;
+    ph.textContent = parent
+      ? "子分组挂在「" + parent.name + "」下，可见范围与名单随父组继承（" + SET_VIS_LABEL[parent.visibility] + "）；要改范围请改父组。"
+      : "";
+  }
   var kind = setDynamic(s) ? "dynamic" : "manual";
   Array.prototype.forEach.call(document.querySelectorAll('input[name="csKind"]'), function(r){ r.checked = r.value === kind; });
   setWhoSel = {};
@@ -6314,7 +6433,8 @@ function saveCaseSet(){
   var vis = csVisValue(), kind = csKindValue();
   var wasEdit = editingSetId;
   var body = { name: name, note: $("csNote").value.trim() || null, visibility: vis, kind: kind };
-  if(vis === "members"){
+  if(!wasEdit && setDialogParent) body.parentId = setDialogParent;
+  if(vis === "members" && !setDialogParent){
     var ids = whoSelectedIds();
     if(!ids.length){ toast("「指定成员可见」至少要选一位成员", "warn"); return; }
     if(ids.length > SET_MAX_MEMBERS){ toast("指定成员最多 " + SET_MAX_MEMBERS + " 位，请改用团队共享", "warn"); return; }
@@ -6333,6 +6453,7 @@ function saveCaseSet(){
   var withInit = kind === "manual" && !wasEdit && $("csInit").checked && caseTotal > 0;
   var initFilter = withInit ? caseFilterQuery() : null;
   setSaving = true;
+  var parentOpen = !wasEdit && setDialogParent;
   setCaseBusy($("btnSaveCaseSet"), true, "保存中…");
   var call = wasEdit
     ? API.put("/api/case-sets/" + encodeURIComponent(wasEdit), body)
@@ -6360,6 +6481,8 @@ function saveCaseSet(){
         + (n ? "，收录 " + n + " 条用例" : ""), "fs");
     }
     afterStructureChange().then(function(){
+      if(parentOpen) caseSetOpen[parentOpen] = true;
+      renderSetPanel();
       /* 从「加入分组」里顺手新建的分组，建完直接选中，省掉再找一次 */
       if(!wasEdit && r.id && $("dlgSetPick").classList.contains("open")){
         setPickSel = r.id;
@@ -6376,6 +6499,12 @@ function saveCaseSet(){
 function deleteCaseSet(id){
   var s = setById(id);
   if(!s){ toast("分组不存在或不可见", "warn"); return; }
+  var kids = 0;
+  caseSets.forEach(function(x){ if((x.parentId || "") === id) kids++; });
+  if(kids){
+    toast("分组「" + s.name + "」下还有 " + kids + " 个子分组，请先移走或删除子分组", "warn");
+    return;
+  }
   UI.showConfirm({
     title: "删除分组", okText: "删除分组",
     msg: "删除分组「<b>" + esc(s.name) + "</b>」（" + (s.caseCount || 0) + " 条成员引用）？<b>用例本体保留</b>，只是不再属于这个分组。已加入测试计划的用例不受影响。"
@@ -6535,6 +6664,187 @@ function setDropTarget(el, label, action){
   }
   if(caseDrag){ caseDrag.target = label; caseDrag.action = action; syncDropBanner(); }
 }
+/* ---------- 目录 / 分组自身的拖拽：中间＝换父级，上下边缘＝同级排序 ---------- */
+
+var structDropEl = null;
+var structDropZone = "";
+function clearStructDropTarget(){
+  if(structDropEl) structDropEl.classList.remove("drop-before", "drop-after", "drop-into");
+  structDropEl = null;
+  structDropZone = "";
+}
+function markStructDropTarget(el, zone){
+  if(structDropEl !== el){
+    clearStructDropTarget();
+    structDropEl = el;
+  }
+  if(structDropZone !== zone){
+    if(structDropEl) structDropEl.classList.remove("drop-before", "drop-after", "drop-into");
+    structDropZone = zone;
+    if(el) el.classList.add("drop-" + zone);
+  }
+}
+function structZoneOf(el, e){
+  var r = el.getBoundingClientRect();
+  var y = (e.clientY - r.top) / Math.max(1, r.height);
+  return y < 0.3 ? "before" : (y > 0.7 ? "after" : "into");
+}
+function setDescendsFrom(ancId, id){
+  var cur = setById(id), guard = 0;
+  while(cur && cur.parentId && guard++ < 64){
+    if(cur.parentId === ancId) return true;
+    cur = setById(cur.parentId);
+  }
+  return false;
+}
+function dirDescendsFrom(ancId, id){
+  var cur = moduleNodeById(id), guard = 0;
+  while(cur && cur.parentId && guard++ < 64){
+    if(cur.parentId === ancId) return true;
+    cur = moduleNodeById(cur.parentId);
+  }
+  return false;
+}
+function dragOverStruct(e, kind){
+  var drag = kind === "set" ? caseSetDrag : caseDirDrag;
+  var el = e.target && e.target.closest ? e.target.closest(kind === "set" ? "[data-tc-set]" : "[data-tc-dir]") : null;
+  var id = el ? (kind === "set" ? el.dataset.tcSet : el.dataset.tcDir) : "";
+  var special = kind === "set" ? id === "__none" : (id === "all" || id === "__none");
+  var cycle = id ? (kind === "set" ? setDescendsFrom(drag.id, id) : dirDescendsFrom(drag.id, id)) : true;
+  if(!el || special || drag.id === id || cycle){
+    clearStructDropTarget();
+    drag.target = "";
+    drag.action = "";
+    syncDropBanner();
+    return;
+  }
+  if(kind === "set"){
+    var ts = setById(id);
+    if(!ts || !ts.editable){ clearStructDropTarget(); drag.target = ""; drag.action = ""; syncDropBanner(); return; }
+  }
+  var zone = structZoneOf(el, e);
+  e.preventDefault();
+  try{ e.dataTransfer.dropEffect = "move"; }catch(err){ /* 同用例拖拽 */ }
+  markStructDropTarget(el, zone);
+  drag.target = kind === "set" ? (setById(id) || {}).name : modulePathOf(id);
+  drag.action = zone === "into"
+    ? (kind === "set" ? "成为子分组（继承可见范围）：" : "成为子目录：")
+    : (zone === "before" ? "排到它前面：" : "排到它后面：");
+  syncDropBanner();
+}
+function dropStruct(e, kind){
+  var drag = kind === "set" ? caseSetDrag : caseDirDrag;
+  var el = e.target && e.target.closest ? e.target.closest(kind === "set" ? "[data-tc-set]" : "[data-tc-dir]") : null;
+  var id = el ? (kind === "set" ? el.dataset.tcSet : el.dataset.tcDir) : "";
+  var zone = el ? (structDropEl === el ? structDropZone : structZoneOf(el, e)) : "";
+  caseSetDrag = null;
+  caseDirDrag = null;
+  clearStructDropTarget();
+  syncDropBanner();
+  if(!drag || !el || !id || !zone || drag.id === id || reorderBusy) return;
+  /* 落点没经过 dragover 也会到这里（脚本派发、拖拽中途重渲染）：成环与只读节点必须再挡一次，
+     不能只靠 dragover 不标落点来拦 */
+  if(kind === "set"){
+    var ts = setById(id);
+    if(!ts || !ts.editable || setDescendsFrom(drag.id, id)) return;
+  }else if(dirDescendsFrom(drag.id, id)){
+    return;
+  }
+  if(kind === "set") applySetDrag(drag, id, zone);
+  else applyDirDrag(drag, id, zone);
+}
+function caseSetBody(s, parentId){
+  var body = { name: s.name, note: s.note || null, visibility: s.visibility,
+    kind: setDynamic(s) ? "dynamic" : "manual" };
+  if(setDynamic(s) && s.ruleJson){
+    try{ body.rule = JSON.parse(s.ruleJson); }catch(err){ body.rule = null; }
+  }
+  if(parentId !== undefined) body.parentId = parentId;
+  return body;
+}
+function applySetDrag(drag, targetId, zone){
+  var s = setById(drag.id), target = setById(targetId);
+  if(!s || !target) return;
+  if(zone === "into"){
+    reorderBusy = true;
+    API.put("/api/case-sets/" + encodeURIComponent(s.id), caseSetBody(s, target.id)).then(function(){
+      reorderBusy = false;
+      caseSetOpen[target.id] = true;
+      toast("分组「" + s.name + "」已挂到「" + target.name + "」下，可见范围随父组", "fs");
+      afterStructureChange();
+    }).catch(function(ex){
+      reorderBusy = false;
+      toast(ex.message || "移动分组失败", "bad");
+    });
+    return;
+  }
+  var parentId = target.parentId || "";
+  var sib = caseSets.filter(function(x){ return (x.parentId || "") === parentId; });
+  var locked = sib.filter(function(x){ return !x.editable; });
+  if(locked.length){ toast("同级里有你无权调整的分组，无法手动排序", "warn"); return; }
+  var ids = sib.map(function(x){ return x.id; }).filter(function(id){ return id !== s.id; });
+  var at = ids.indexOf(target.id);
+  if(at < 0) at = ids.length;
+  ids.splice(zone === "after" ? at + 1 : at, 0, s.id);
+  reorderBusy = true;
+  var moveFirst = (s.parentId || "") !== parentId
+    ? API.put("/api/case-sets/" + encodeURIComponent(s.id), caseSetBody(s, parentId))
+    : Promise.resolve();
+  moveFirst.then(function(){
+    return API.put("/api/case-sets/order", { reqId: caseReqId, parentId: parentId, ids: ids });
+  }).then(function(){
+    reorderBusy = false;
+    caseSetOpen[parentId] = true;
+    toast("分组顺序已更新", "fs");
+    afterStructureChange();
+  }).catch(function(ex){
+    reorderBusy = false;
+    toast(ex.message || "调整分组顺序失败", "bad");
+  });
+}
+function applyDirDrag(drag, targetId, zone){
+  var n = moduleNodeById(drag.id), target = moduleNodeById(targetId);
+  if(!n || !target) return;
+  var move = function(parentId){
+    return API.put("/api/test-modules/" + encodeURIComponent(n.id), { name: n.name, parentId: parentId });
+  };
+  if(zone === "into"){
+    reorderBusy = true;
+    move(target.id).then(function(){
+      reorderBusy = false;
+      caseDirOpen[target.id] = true;
+      toast("目录「" + n.name + "」已挂到「" + target.name + "」下", "fs");
+      afterStructureChange();
+    }).catch(function(ex){
+      reorderBusy = false;
+      toast(ex.message || "移动目录失败", "bad");
+    });
+    return;
+  }
+  var parentId = target.parentId || "";
+  var ids = caseModuleNodes.filter(function(x){ return (x.parentId || "") === parentId; })
+    .map(function(x){ return x.id; })
+    .filter(function(id){ return id !== n.id; });
+  var at = ids.indexOf(target.id);
+  if(at < 0) at = ids.length;
+  ids.splice(zone === "after" ? at + 1 : at, 0, n.id);
+  reorderBusy = true;
+  var moveFirst = (n.parentId || "") !== parentId ? move(parentId) : Promise.resolve();
+  moveFirst.then(function(){
+    return API.put("/api/test-modules/order?reqId=" + encodeURIComponent(caseReqId)
+      + "&parentId=" + encodeURIComponent(parentId), { ids: ids });
+  }).then(function(){
+    reorderBusy = false;
+    caseDirOpen[parentId] = true;
+    toast("目录顺序已更新", "fs");
+    afterStructureChange();
+  }).catch(function(ex){
+    reorderBusy = false;
+    toast(ex.message || "调整目录顺序失败", "bad");
+  });
+}
+
+
 function dropTargetOf(el){
   if(!el) return null;
   if(el.dataset.tcDir && el.dataset.tcDir !== "all"){
@@ -7045,7 +7355,12 @@ if($("tcSearchScope")){
   });
 }
 /* 查询条：排序 / 分组 / 每页 / 全选筛选结果 */
-if($("tcSort")) $("tcSort").addEventListener("change", function(){ caseSort = this.value; loadCases(); });
+if($("tcSort")) $("tcSort").addEventListener("change", function(){
+  caseSort = this.value;
+  /* 手动排序是「从上到下的顺序」，切过来默认升序，符合刚拖完的直觉 */
+  if(caseSort === "manual" && caseSortDir !== "asc"){ caseSortDir = "asc"; }
+  loadCases();
+});
 if($("tcSortDir")){
   $("tcSortDir").addEventListener("click", function(){
     caseSortDir = caseSortDir === "asc" ? "desc" : "asc";
@@ -7064,8 +7379,7 @@ if($("tcPageSize")){
     loadCases();
   });
 }
-if($("tcGrpCollapseAll")) $("tcGrpCollapseAll").addEventListener("click", function(){ collapseAllSegments(true); });
-if($("tcGrpExpandAll")) $("tcGrpExpandAll").addEventListener("click", function(){ collapseAllSegments(false); });
+if($("tcGrpToggleAll")) $("tcGrpToggleAll").addEventListener("click", function(){ collapseAllSegments(anySegmentExpanded()); });
 if($("tcSelFiltered")) $("tcSelFiltered").addEventListener("click", selectAllFiltered);
 if($("tcPanelBtn")) $("tcPanelBtn").addEventListener("click", function(){ toggleSidePanel(caseSide ? "" : "dir"); });
 var tcFilterBtn = $("tcFilterBtn"), tcFilterBar = $("tcFilterBar");
@@ -7244,7 +7558,7 @@ function tcHelpHTML(){
   return '<div class="menu-title">测试模块使用说明</div>' +
     '<div class="type-help-list">' +
       row("用例", "最小验证单元，挂在项目下；记录步骤与预期，最新一次执行结果（未执行/通过/失败/阻塞）决定统计口径。项目范围可切「全部项目」：按项目分组逐段加载，段内翻页；目录筛选、分组显示与拖拽归类只在单个项目下提供。") +
-      row("目录 / 分组", "模块目录是单归属：一个用例只属一个节点（层级不限、只禁止成环），拖到节点＝移动归属，计数不重叠并进覆盖矩阵。自定义分组是多归属：拖到分组＝加入，原分组保留，删分组不删用例；动态分组按规则自动收录（可一键存成回归集），成员不能手工增删。可见范围分团队共享 / 指定成员 / 仅自己可见，只有团队共享分组进交付说明与发布证据。") +
+      row("目录 / 分组", "项目目录是单归属：一个用例只属一个节点（层级不限、只禁止成环），拖到节点＝移动归属，计数不重叠并进覆盖矩阵。分组是多归属：拖到分组＝加入，原分组保留，删分组不删用例；动态分组按规则自动收录（可一键存成回归集），成员不能手工增删。可见范围分团队共享 / 指定成员 / 仅自己可见，只有团队共享分组进交付说明与发布证据。") +
       row("查询", "排序字段与升降序、每页 50/100/200 条、按维度分组显示（段头带计数与结果分布，可折叠、可段内翻页、可整组全选）。统计条上的执行结果计数可直接点按筛选，计数始终是全项目口径、不随当前筛选变化。「全选筛选结果」按条件生效、含未加载的行；明确勾选只覆盖已加载的行。搜索默认只匹配标题 / 编号 / 模块，勾选「含步骤与前置」才搜大字段（较慢）。") +
       row("缺陷", "按缺陷（工作项类型=缺陷）逐行汇总当前项目范围，可切换「全部项目」或单个项目；默认只看未关闭并按严重度排序，跨项目时每行标明所属项目。待修复、修复中、待回归都算未关闭，进入完成列且回归通过才算关闭。") +
       row("测试计划", "从用例库圈选一批组成一轮测试：在计划详情里逐条勾选，或在用例页按筛选整批加入（一次最多 2000 条，已在计划内的自动跳过）。批量记录结果时同时写回用例最近结果并追加执行流水，按版本留痕，完成后锁定为快照。项目范围同样支持全部/单选，全部项目下按项目分组，新建计划需先选一个项目。") +
@@ -7568,20 +7882,122 @@ if($("tcSidePanel")){
     if((b = e.target.closest("[data-tc-dir-edit]"))){ renameModuleNode(b.dataset.tcDirEdit); return; }
     if((b = e.target.closest("[data-tc-dir-del]"))){ deleteModuleNode(b.dataset.tcDirDel); return; }
     if((b = e.target.closest("[data-tc-set-new]"))){ openSetDialog(null); return; }
+    if((b = e.target.closest("[data-tc-set-toggle]"))){
+      var sid = b.dataset.tcSetToggle;
+      caseSetOpen[sid] = !setNodeOpen({ id: sid });
+      renderSetPanel();
+      return;
+    }
+    if((b = e.target.closest("[data-tc-set-add]"))){ openSetDialog(null, b.dataset.tcSetAdd); return; }
     if((b = e.target.closest("[data-tc-set-pick]"))){ pickSetNode(b.dataset.tcSetPick); return; }
     if((b = e.target.closest("[data-tc-set-edit]"))){ openSetDialog(b.dataset.tcSetEdit); return; }
     if((b = e.target.closest("[data-tc-set-del]"))){ deleteCaseSet(b.dataset.tcSetDel); return; }
     if((b = e.target.closest("[data-tc-set-retry]"))){ loadCaseSets(true); return; }
-    if(e.target.closest("#tcDirSub")){ caseModuleSub = !caseModuleSub; loadCases(); }
+    if(e.target.closest("#tcDirSub")){ caseModuleSub = !caseModuleSub; loadCases(); return; }
+    if(e.target.closest("#tcSetSub")){ caseSetSub = !caseSetSub; renderSetPanel(); loadCases(); return; }
   });
   $("tcSidePanel").addEventListener("input", function(e){
     if(e.target.id === "tcDirSearch"){ caseDirQuery = e.target.value; renderDirList(); }
   });
 }
 
+/* ---------- 手动排序：拖动用例行改顺序 ----------
+   只在「列表口径与排序接口完全一致」时开放：单项目、不分组、无其它筛选、单层目录且已加载完；
+   否则服务端校验会因范围不一致拒绝，先在界面上把不可排序的原因说清楚。 */
+function manualOrderScope(){
+  if(tcMode !== "cases" || caseScopeAll || caseSort !== "manual" || caseGroupBy) return null;
+  if(!caseReqId) return null;
+  if(statusFilter !== "all" || priFilter !== "all" || ownerFilter !== "all"
+      || demandFilter !== "all" || setFilter !== "all" || bugOnly || searchText) return null;
+  if(moduleFilter !== "all" && moduleFilter !== "__none" && caseModuleSub) return null;
+  if(cases.length < caseTotal) return null;
+  return { reqId: caseReqId, moduleId: moduleFilter === "all" ? "" : moduleFilter };
+}
+function dragOverOrder(e){
+  var row = e.target && e.target.closest ? e.target.closest("[data-tc-order-row]") : null;
+  if(!row || row.dataset.tcOrderRow === caseOrderDrag.id){
+    clearStructDropTarget();
+    caseOrderDrag.target = "";
+    caseOrderDrag.action = "";
+    syncDropBanner();
+    return;
+  }
+  e.preventDefault();
+  try{ e.dataTransfer.dropEffect = "move"; }catch(err){ /* 同上 */ }
+  var r = row.getBoundingClientRect();
+  var zone = (e.clientY - r.top) > r.height / 2 ? "after" : "before";
+  var c = caseById(row.dataset.tcOrderRow);
+  markStructDropTarget(row, zone);
+  caseOrderDrag.target = c ? c.title : "";
+  caseOrderDrag.action = zone === "after" ? "排到它后面" : "排到它前面";
+  syncDropBanner();
+}
+function dropOrder(e){
+  var drag = caseOrderDrag;
+  caseOrderDrag = null;
+  var row = e.target && e.target.closest ? e.target.closest("[data-tc-order-row]") : null;
+  var zone = row && structDropEl === row ? structDropZone : "";
+  clearStructDropTarget();
+  syncDropBanner();
+  if(!drag || !row || !zone || row.dataset.tcOrderRow === drag.id) return;
+  var scope = manualOrderScope();
+  if(!scope){ toast("当前筛选下不能手动排序，请清空筛选后再试", "warn"); return; }
+  var ids = cases.map(function(c){ return c.id; }).filter(function(id){ return id !== drag.id; });
+  var at = ids.indexOf(row.dataset.tcOrderRow);
+  if(at < 0) return;
+  ids.splice(zone === "after" ? at + 1 : at, 0, drag.id);
+  reorderBusy = true;
+  API.put("/api/test-cases/order", {
+    reqId: scope.reqId, moduleId: scope.moduleId, moduleSub: false, ids: ids
+  }).then(function(){
+    reorderBusy = false;
+    toast("用例顺序已更新", "fs");
+    loadCases();
+  }).catch(function(ex){
+    reorderBusy = false;
+    toast(ex.message || "调整顺序失败", "bad");
+  });
+}
+
 /* 拖拽归类：用例行是拖动源，目录节点 / 分组项 / 分组段头是放置目标。
    语义随目标变化（目录＝移动、分组＝加入、优先级段＝改优先级），放置前一律先确认。 */
 document.addEventListener("dragstart", function(e){
+  var setEl = e.target && e.target.closest ? e.target.closest("[data-tc-set-drag]") : null;
+  if(setEl && isWritable()){
+    var s = setById(setEl.dataset.tcSetDrag);
+    if(s && s.editable){
+      caseSetDrag = { id: s.id, name: s.name, target: "", action: "" };
+      try{
+        e.dataTransfer.setData("text/plain", "set:" + s.id);
+        e.dataTransfer.effectAllowed = "move";
+      }catch(err){ /* 同下 */ }
+      syncDropBanner();
+      return;
+    }
+  }
+  var dirEl = e.target && e.target.closest ? e.target.closest("[data-tc-dir-drag]") : null;
+  if(dirEl && isWritable()){
+    var n = moduleNodeById(dirEl.dataset.tcDirDrag);
+    if(n){
+      caseDirDrag = { id: n.id, name: n.name, target: "", action: "" };
+      try{
+        e.dataTransfer.setData("text/plain", "dir:" + n.id);
+        e.dataTransfer.effectAllowed = "move";
+      }catch(err){ /* 同上 */ }
+      syncDropBanner();
+      return;
+    }
+  }
+  var orderRow = e.target && e.target.closest ? e.target.closest("[data-tc-order-row]") : null;
+  if(orderRow && manualOrderScope()){
+    caseOrderDrag = { id: orderRow.dataset.tcOrderRow, target: "", action: "" };
+    try{
+      e.dataTransfer.setData("text/plain", orderRow.dataset.tcOrderRow);
+      e.dataTransfer.effectAllowed = "move";
+    }catch(err){ /* 同下 */ }
+    syncDropBanner();
+    return;
+  }
   var row = e.target && e.target.closest ? e.target.closest("[data-tc-drag]") : null;
   if(!row || tcMode !== "cases" || caseScopeAll) return;
   var c = caseById(row.dataset.tcDrag);
@@ -7596,6 +8012,19 @@ document.addEventListener("dragstart", function(e){
   syncDropBanner();
 });
 document.addEventListener("dragend", function(){
+  if(caseOrderDrag){
+    caseOrderDrag = null;
+    clearStructDropTarget();
+    syncDropBanner();
+    return;
+  }
+  if(caseSetDrag || caseDirDrag){
+    caseSetDrag = null;
+    caseDirDrag = null;
+    clearStructDropTarget();
+    syncDropBanner();
+    return;
+  }
   if(!caseDrag) return;
   caseDrag = null;
   clearDropTarget();
@@ -7603,6 +8032,9 @@ document.addEventListener("dragend", function(){
   syncDropBanner();
 });
 document.addEventListener("dragover", function(e){
+  if(caseOrderDrag){ dragOverOrder(e); return; }
+  if(caseSetDrag){ dragOverStruct(e, "set"); return; }
+  if(caseDirDrag){ dragOverStruct(e, "dir"); return; }
   if(!caseDrag) return;
   var el = e.target && e.target.closest ? e.target.closest("[data-tc-dir],[data-tc-set],[data-tc-seg-drop]") : null;
   var t = dropTargetOf(el);
@@ -7615,6 +8047,16 @@ document.addEventListener("dragover", function(e){
   setDropTarget(el, t.label, t.action);
 });
 document.addEventListener("drop", function(e){
+  if(caseOrderDrag){
+    e.preventDefault();
+    dropOrder(e);
+    return;
+  }
+  if(caseSetDrag || caseDirDrag){
+    e.preventDefault();
+    dropStruct(e, caseSetDrag ? "set" : "dir");
+    return;
+  }
   if(!caseDrag) return;
   var el = e.target && e.target.closest ? e.target.closest("[data-tc-dir],[data-tc-set],[data-tc-seg-drop]") : null;
   var t = dropTargetOf(el);
@@ -7725,7 +8167,7 @@ $("cModule").addEventListener("change", function(){
   sel.value = caseFormModulePrev;
   if(!caseFormWritable()){ toast("当前项目只读，无法新建目录", "warn"); return; }
   UI.showPrompt({
-    title: "新建模块目录",
+    title: "新建项目目录",
     desc: "目录是单归属：一个用例只属一个节点，层级不限。新建的是顶级目录，可在左侧目录面板里调整层级。",
     label: "目录名称（≤50 字）", maxLength: 50, okText: "创建"
   }).then(function(name){

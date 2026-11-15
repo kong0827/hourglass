@@ -16,6 +16,24 @@ public interface CaseSetMapper {
 
     CaseSet selectById(@Param("id") String id);
 
+    /** 项目下全部分组（不筛可见性）：重挂父级 / 级联可见范围 / 子树计算用 */
+    List<CaseSet> selectByReqAll(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 删除守卫：仍有子分组时拒绝 */
+    int countChildren(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+                      @Param("parentId") String parentId);
+
+    /** 同级分组排序：当前最大值（新建 / 换父级时排到末尾） */
+    int maxSortOrder(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+                     @Param("parentId") String parentId);
+
+    int updateSortOrder(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                        @Param("sortOrder") int sortOrder);
+
+    /** 父组可见范围变化时级联到子组 */
+    int updateScope(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                    @Param("visibility") String visibility, @Param("ownerUserId") String ownerUserId);
+
     /** 项目下全部动态分组（自愈刷新用，不过可见性） */
     List<CaseSet> selectDynamicByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 

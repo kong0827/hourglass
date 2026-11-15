@@ -72,6 +72,15 @@ public class CaseSetController {
         return ApiResult.ok(null);
     }
 
+    /** 同级分组手动排序：整体提交该父级下的分组顺序 */
+    @PutMapping("/api/case-sets/order")
+    public ApiResult<Map<String, Object>> order(@Valid @RequestBody com.hourglass.dto.CaseSetOrderRequest req,
+                                                @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(setService.order(userId, ws.getId(), req));
+    }
+
     /** 加入分组：范围支持勾选或「全选筛选结果」，已在组内的跳过 */
     @PostMapping("/api/case-sets/{id}/members")
     public ApiResult<Map<String, Object>> addMembers(@PathVariable String id,

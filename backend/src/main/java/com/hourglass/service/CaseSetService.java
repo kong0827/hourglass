@@ -75,11 +75,17 @@ public class CaseSetService {
         caseService.refreshDynamicSets(workspaceId, reqId);
         boolean writable = projectAccess.canWrite(workspaceId, userId, reqId);
         List<CaseSetView> rows = setMapper.selectVisibleWithCounts(workspaceId, reqId, userId);
+        Map<String, CaseSetView> byId = new LinkedHashMap<String, CaseSetView>();
         for (CaseSetView v : rows) {
+            v.setParentId(rootKey(v.getParentId()));
+            byId.put(v.getId(), v);
             v.setEditable(writable && (VIS_TEAM.equals(v.getVisibility()) || userId.equals(v.getOwnerUserId())));
             if (VIS_MEMBERS.equals(v.getVisibility())) {
                 v.setMemberIds(setMapper.selectMemberIds(v.getId()));
             }
+        }
+        for (CaseSetView v : rows) {
+            v.setLevel(levelOf(v, byId));
         }
         return rows;
     }
@@ -148,10 +154,14 @@ public class CaseSetService {
             throw AppException.badRequest("请选择所属项目");
         }
         projectAccess.assertWrite(workspaceId, userId, reqId);
-        String visibility = visOf(req.getVisibility());
+        /* 子分组继承父组可见范围：父组是什么范围，子组就是什么范围 */
+        CaseSet parent = parentOf(userId, workspaceId, reqId, req.getParentId());
+        String visibility = parent == null ? visOf(req.getVisibility()) : parent.getVisibility();
         String kind = kindOf(req.getKind());
         String name = Texts.cut(req.getName().trim(), 60);
-        List<String> memberIds = memberIdsOf(workspaceId, reqId, visibility, req.getMemberIds());
+        List<String> memberIds = parent != null && VIS_MEMBERS.equals(visibility)
+                ? setMapper.selectMemberIds(parent.getId())
+                : memberIdsOf(workspaceId, reqId, visibility, req.getMemberIds());
         String ruleJson = null;
         if (KIND_DYNAMIC.equals(kind)) {
             ruleJson = ruleJsonOf(req.getRule(), name);
@@ -161,40 +171,67 @@ public class CaseSetService {
         s.setId(Ids.gen("CS"));
         s.setWorkspaceId(workspaceId);
         s.setReqId(reqId);
+        s.setParentId(parent == null ? "" : parent.getId());
+        s.setSortOrder(setMapper.maxSortOrder(workspaceId, reqId, s.getParentId()) + 1);
         s.setName(name);
         s.setNote(Texts.trimToNull(req.getNote()));
         s.setVisibility(visibility);
         s.setKind(kind);
         s.setRuleJson(ruleJson);
-        s.setOwnerUserId(VIS_TEAM.equals(visibility) ? "" : userId);
+        s.setOwnerUserId(parent != null ? rootKey(parent.getOwnerUserId())
+                : (VIS_TEAM.equals(visibility) ? "" : userId));
         s.setCreatedBy(CurrentUser.get().getDisplayName());
         s.setCreatedByUserId(userId);
         try {
             setMapper.insert(s);
         } catch (DuplicateKeyException e) {
-            throw AppException.badRequest("已有同名分组「" + s.getName() + "」");
+            throw AppException.badRequest("同级下已有同名分组「" + s.getName() + "」");
         }
         if (!memberIds.isEmpty()) {
             setMapper.insertMembers(workspaceId, s.getId(), memberIds);
         }
         caseService.refreshDynamicSet(workspaceId, s);
         auditService.recordCurrent(workspaceId, "case_set_create", "case_set", s.getId(), s.getName(), true,
-                "新建用例分组「" + s.getName() + "」（" + visLabel(visibility) + " · " + kindLabel(kind) + "）", null);
-        return viewOf(s, setMapper.selectCaseIds(s.getId()).size(), true, memberIds);
+                "新建用例分组「" + s.getName() + "」（" + visLabel(visibility) + " · " + kindLabel(kind) + "）"
+                        + (parent == null ? "" : "，父分组「" + parent.getName() + "」"), null);
+        return reloadView(workspaceId, userId, reqId, s.getId(), memberIds);
     }
 
     @Transactional
     public CaseSetView update(String userId, String workspaceId, String setId, CaseSetSaveRequest req) {
         CaseSet s = requireVisible(workspaceId, userId, setId);
         assertManage(userId, workspaceId, s);
-        String visibility = visOf(req.getVisibility());
+        List<CaseSet> all = setMapper.selectByReqAll(workspaceId, s.getReqId());
+        /* parentId 缺省=保持原父级；空串=移到顶级 */
+        String parentId = req.getParentId() == null ? rootKey(s.getParentId()) : rootKey(req.getParentId());
+        if (parentId.equals(s.getId())) {
+            throw AppException.badRequest("分组不能挂到自己下面");
+        }
+        CaseSet parent = null;
+        if (!parentId.isEmpty()) {
+            parent = requireVisible(workspaceId, userId, parentId);
+            if (!s.getReqId().equals(parent.getReqId())) {
+                throw AppException.badRequest("父分组不属于同一项目：" + parentId);
+            }
+            assertManage(userId, workspaceId, parent);
+            assertNoCycle(s.getId(), parentId, all);
+        }
+        boolean moved = !parentId.equals(rootKey(s.getParentId()));
+        /* 子分组继承父组可见范围：有父组时以父组为准，忽略请求里的 visibility */
+        String visibility = parent == null ? visOf(req.getVisibility()) : parent.getVisibility();
         if (VIS_TEAM.equals(s.getVisibility()) && !VIS_TEAM.equals(visibility)
                 && !userId.equals(s.getCreatedByUserId())) {
             throw AppException.badRequest("团队共享分组收窄可见范围需由创建人操作，避免其他成员突然看不到");
         }
+        String ownerUserId = parent != null ? rootKey(parent.getOwnerUserId())
+                : (VIS_TEAM.equals(visibility) ? ""
+                        : (VIS_TEAM.equals(s.getVisibility()) ? userId : rootKey(s.getOwnerUserId())));
         String kind = kindOf(req.getKind());
         String name = Texts.cut(req.getName().trim(), 60);
-        List<String> memberIds = memberIdsOf(workspaceId, s.getReqId(), visibility, req.getMemberIds());
+        List<String> memberIds = VIS_MEMBERS.equals(visibility)
+                ? (parent != null ? setMapper.selectMemberIds(parent.getId())
+                        : memberIdsOf(workspaceId, s.getReqId(), visibility, req.getMemberIds()))
+                : Collections.<String>emptyList();
         String ruleJson = null;
         if (KIND_DYNAMIC.equals(kind)) {
             ruleJson = ruleJsonOf(req.getRule(), name);
@@ -202,6 +239,7 @@ public class CaseSetService {
         }
         String oldName = s.getName();
         String oldVis = s.getVisibility();
+        String oldOwner = rootKey(s.getOwnerUserId());
         String oldKind = s.getKind();
         s.setName(name);
         s.setNote(Texts.trimToNull(req.getNote()));
@@ -209,16 +247,31 @@ public class CaseSetService {
         s.setKind(kind);
         /* 动态改手工：保留当前已收录的成员作为手工挑选结果，不清空 */
         s.setRuleJson(ruleJson);
-        s.setOwnerUserId(VIS_TEAM.equals(visibility) ? ""
-                : (VIS_TEAM.equals(oldVis) ? userId : s.getOwnerUserId()));
+        s.setOwnerUserId(ownerUserId);
+        s.setParentId(parentId);
+        if (moved) {
+            s.setSortOrder(setMapper.maxSortOrder(workspaceId, s.getReqId(), parentId) + 1);
+        }
         try {
             setMapper.update(s);
         } catch (DuplicateKeyException e) {
-            throw AppException.badRequest("已有同名分组「" + s.getName() + "」");
+            throw AppException.badRequest("同级下已有同名分组「" + s.getName() + "」");
         }
         setMapper.deleteMembersBySet(setId);
         if (!memberIds.isEmpty()) {
             setMapper.insertMembers(workspaceId, setId, memberIds);
+        }
+        /* 可见范围变化或换父级：整棵子树跟着继承，避免子组还挂在旧范围下 */
+        if (!oldVis.equals(visibility) || !oldOwner.equals(ownerUserId)) {
+            for (String childId : descendantIds(setId, all)) {
+                setMapper.updateScope(workspaceId, childId, visibility, ownerUserId);
+                if (VIS_MEMBERS.equals(visibility)) {
+                    setMapper.deleteMembersBySet(childId);
+                    if (!memberIds.isEmpty()) {
+                        setMapper.insertMembers(workspaceId, childId, memberIds);
+                    }
+                }
+            }
         }
         caseService.refreshDynamicSet(workspaceId, s);
         StringBuilder what = new StringBuilder("编辑用例分组「").append(s.getName()).append("」");
@@ -231,22 +284,66 @@ public class CaseSetService {
         if (!oldKind.equals(kind)) {
             what.append("，类型由").append(kindLabel(oldKind)).append("改为").append(kindLabel(kind));
         }
+        if (moved) {
+            what.append("，父分组改为").append(parent == null ? "顶级" : "「" + parent.getName() + "」");
+        }
         auditService.recordCurrent(workspaceId, "case_set_update", "case_set", setId, s.getName(), true,
                 what.toString(), null);
-        return viewOf(s, setMapper.selectCaseIds(setId).size(), true, memberIds);
+        return reloadView(workspaceId, userId, s.getReqId(), setId, memberIds);
     }
 
-    /** 删除分组只解除引用，用例本体、执行历史与证据都保留 */
+    /** 删除分组只解除引用，用例本体、执行历史与证据都保留；仍有子分组时先要求处理 */
     @Transactional
     public void delete(String userId, String workspaceId, String setId) {
         CaseSet s = requireVisible(workspaceId, userId, setId);
         assertManage(userId, workspaceId, s);
+        int kids = setMapper.countChildren(workspaceId, s.getReqId(), setId);
+        if (kids > 0) {
+            throw AppException.badRequest("分组「" + s.getName() + "」下还有 " + kids
+                    + " 个子分组，请先移走或删除子分组");
+        }
         int members = setMapper.selectCaseIds(setId).size();
         setMapper.deleteMembersBySet(setId);
         setMapper.deleteItemsBySet(setId);
         setMapper.delete(workspaceId, setId);
         auditService.recordCurrent(workspaceId, "case_set_delete", "case_set", setId, s.getName(), true,
                 "删除用例分组「" + s.getName() + "」，解除 " + members + " 条用例的引用（用例本体保留）", null);
+    }
+
+    /** 同级分组排序：ids 必须是该父级下当前用户可见且可改的全部分组，按数组顺序重写序号 */
+    @Transactional
+    public Map<String, Object> order(String userId, String workspaceId, com.hourglass.dto.CaseSetOrderRequest req) {
+        String reqId = Texts.trimToNull(req.getReqId());
+        if (reqId == null) {
+            throw AppException.badRequest("请选择所属项目");
+        }
+        projectAccess.assertWrite(workspaceId, userId, reqId);
+        String parentId = rootKey(req.getParentId());
+        if (!parentId.isEmpty()) {
+            CaseSet parent = requireVisible(workspaceId, userId, parentId);
+            if (!reqId.equals(parent.getReqId())) {
+                throw AppException.badRequest("父分组不属于同一项目：" + parentId);
+            }
+        }
+        Map<String, CaseSet> byId = new LinkedHashMap<String, CaseSet>();
+        for (CaseSet s : setMapper.selectByReqAll(workspaceId, reqId)) {
+            byId.put(s.getId(), s);
+        }
+        for (String id : req.getIds()) {
+            CaseSet s = byId.get(id);
+            if (s == null || !parentId.equals(rootKey(s.getParentId()))) {
+                throw AppException.badRequest("排序列表与同级分组不一致，请刷新后重试");
+            }
+            assertManage(userId, workspaceId, s);
+        }
+        for (int i = 0; i < req.getIds().size(); i++) {
+            setMapper.updateSortOrder(workspaceId, req.getIds().get(i), i);
+        }
+        auditService.recordCurrent(workspaceId, "case_set_update", "project", reqId, null, true,
+                "调整 " + req.getIds().size() + " 个分组的手动顺序", null);
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("updated", req.getIds().size());
+        return out;
     }
 
     /** 加入分组：勾选或按筛选全选都走这里，已在分组内的自动去重 */
@@ -472,10 +569,96 @@ public class CaseSetService {
         return KIND_DYNAMIC.equals(kind) ? "动态" : "手工";
     }
 
-    private static CaseSetView viewOf(CaseSet s, int caseCount, boolean editable, List<String> memberIds) {
+    /** 父分组：必须同项目、当前用户可见，且能管理（团队分组要求写权限） */
+    private CaseSet parentOf(String userId, String workspaceId, String reqId, String rawParentId) {
+        String parentId = rootKey(rawParentId);
+        if (parentId.isEmpty()) {
+            return null;
+        }
+        CaseSet parent = requireVisible(workspaceId, userId, parentId);
+        if (!reqId.equals(parent.getReqId())) {
+            throw AppException.badRequest("父分组不属于同一项目：" + parentId);
+        }
+        assertManage(userId, workspaceId, parent);
+        return parent;
+    }
+
+    private static void assertNoCycle(String id, String newParentId, List<CaseSet> all) {
+        Map<String, CaseSet> byId = new LinkedHashMap<String, CaseSet>();
+        for (CaseSet s : all) {
+            byId.put(s.getId(), s);
+        }
+        String cursor = newParentId;
+        int guard = 0;
+        while (!cursor.isEmpty() && guard++ <= all.size()) {
+            if (cursor.equals(id)) {
+                throw AppException.badRequest("分组不能挂到自己的子分组下");
+            }
+            CaseSet up = byId.get(cursor);
+            cursor = up == null ? "" : rootKey(up.getParentId());
+        }
+    }
+
+    private static List<String> descendantIds(String id, List<CaseSet> all) {
+        List<String> out = new ArrayList<String>();
+        collectDescendants(id, all, out);
+        return out;
+    }
+
+    private static void collectDescendants(String parentId, List<CaseSet> all, List<String> out) {
+        for (CaseSet s : all) {
+            if (parentId.equals(rootKey(s.getParentId())) && !out.contains(s.getId())) {
+                out.add(s.getId());
+                collectDescendants(s.getId(), all, out);
+            }
+        }
+    }
+
+    private static int levelOf(CaseSetView v, Map<String, CaseSetView> byId) {
+        int level = 1;
+        String cursor = rootKey(v.getParentId());
+        int guard = 0;
+        while (!cursor.isEmpty() && guard++ < 64) {
+            level++;
+            CaseSetView up = byId.get(cursor);
+            cursor = up == null ? "" : rootKey(up.getParentId());
+        }
+        return level;
+    }
+
+    /** 更新后按列表同口径取回一行（直接成员数 / 子树去重数都由 SQL 算） */
+    private CaseSetView reloadView(String workspaceId, String userId, String reqId, String setId,
+                                   List<String> memberIds) {
+        List<CaseSetView> rows = setMapper.selectVisibleWithCounts(workspaceId, reqId, userId);
+        Map<String, CaseSetView> byId = new LinkedHashMap<String, CaseSetView>();
+        for (CaseSetView v : rows) {
+            v.setParentId(rootKey(v.getParentId()));
+            byId.put(v.getId(), v);
+        }
+        for (CaseSetView v : rows) {
+            if (setId.equals(v.getId())) {
+                v.setMemberIds(memberIds == null ? new ArrayList<String>() : memberIds);
+                v.setEditable(true);
+                v.setLevel(levelOf(v, byId));
+                return v;
+            }
+        }
+        CaseSet s = setMapper.selectById(setId);
+        return viewOf(s, 0, 0, true, memberIds);
+    }
+
+    private static String rootKey(String id) {
+        String s = Texts.trimToNull(id);
+        return s == null ? "" : s;
+    }
+
+    private static CaseSetView viewOf(CaseSet s, int caseCount, int subtreeCount, boolean editable,
+                                      List<String> memberIds) {
         CaseSetView v = new CaseSetView();
         v.setId(s.getId());
         v.setReqId(s.getReqId());
+        v.setParentId(rootKey(s.getParentId()));
+        v.setSortOrder(s.getSortOrder() == null ? 0 : s.getSortOrder());
         v.setName(s.getName());
         v.setNote(s.getNote());
         v.setVisibility(s.getVisibility());
@@ -488,6 +671,7 @@ public class CaseSetService {
         v.setCreatedAt(s.getCreatedAt());
         v.setUpdatedAt(s.getUpdatedAt());
         v.setCaseCount(caseCount);
+        v.setSubtreeCount(subtreeCount);
         v.setEditable(editable);
         return v;
     }

@@ -174,16 +174,18 @@ try{
   await sleep(300);
   const afterCollapse = await evaluate(`document.querySelectorAll("#view-tree [data-tree-id]").length`);
   assert(afterCollapse < before, `折叠分组后工作项 ${before} → ${afterCollapse}`);
-  await evaluate(`document.getElementById("btnTreeExpand").click(); true`);
-  await sleep(300);
-  const afterExpand = await evaluate(`document.querySelectorAll("#view-tree [data-tree-id]").length`);
-  assert(afterExpand === before, `全部展开后恢复 ${afterExpand}`);
-  await evaluate(`document.getElementById("btnTreeCollapse").click(); true`);
+  const labelExpanded = await evaluate(`document.getElementById("btnTreeToggleAll").textContent.trim()`);
+  assert(labelExpanded === "全部折叠", `有展开分组时按钮显示「全部折叠」（实际 ${labelExpanded}）`);
+  await evaluate(`document.getElementById("btnTreeToggleAll").click(); true`);
   await sleep(300);
   const afterCollapseAll = await evaluate(`document.querySelectorAll("#view-tree [data-tree-id]").length`);
   assert(afterCollapseAll === 0, `全部折叠后剩 ${afterCollapseAll} 个工作项行`);
-  await evaluate(`document.getElementById("btnTreeExpand").click(); true`);
+  const labelCollapsed = await evaluate(`document.getElementById("btnTreeToggleAll").textContent.trim()`);
+  assert(labelCollapsed === "全部展开", `全部折叠后按钮显示「全部展开」（实际 ${labelCollapsed}）`);
+  await evaluate(`document.getElementById("btnTreeToggleAll").click(); true`);
   await sleep(300);
+  const afterExpand = await evaluate(`document.querySelectorAll("#view-tree [data-tree-id]").length`);
+  assert(afterExpand === before, `全部展开后恢复 ${afterExpand}`);
 
   /* 3b. 无障碍：tree 容器 + 每行 aria-level，箭头只是装饰；键盘可遍历且切换后不丢焦点。
      行 DOM 每次切换都会重建，所以按键都打在「当前焦点行」上，再重新取焦点元素判断。 */

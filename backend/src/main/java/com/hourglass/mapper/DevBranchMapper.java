@@ -33,6 +33,12 @@ public interface DevBranchMapper {
     /** 各生命周期条数（忽略 q.outcome；与分页同一口径，供 chips 计数） */
     List<java.util.Map<String, Object>> countGroupByOutcome(@Param("q") com.hourglass.dto.BranchQuery q);
 
+    /** 各仓库条数（忽略 q.repoId；未绑定仓库的行返回 null 键），供仓库条计数 */
+    List<java.util.Map<String, Object>> countGroupByRepo(@Param("q") com.hourglass.dto.BranchQuery q);
+
+    /** 空间内按仓库 × 生命周期的条数（仓库列表的进行中 / 待确认计数） */
+    List<java.util.Map<String, Object>> countRepoOutcomes(@Param("workspaceId") String workspaceId);
+
     /** 已发布分支的平均发布周期（天）；无样本返回 null */
     Double selectAvgCycleDays(@Param("q") com.hourglass.dto.BranchQuery q);
 

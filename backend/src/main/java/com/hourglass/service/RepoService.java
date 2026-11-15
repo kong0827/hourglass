@@ -15,7 +15,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -49,6 +51,7 @@ public class RepoService {
     public List<ProjectRepo> list(String workspaceId, String userId) {
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         List<ProjectRepo> repos = repoMapper.selectVisible(workspaceId, viewerId);
+        fillBranchCounts(workspaceId, repos);
         for (ProjectRepo repo : repos) {
             publicView(repo);
         }
@@ -66,7 +69,36 @@ public class RepoService {
     public ProjectRepo getPublic(String workspaceId, String userId, String id) {
         ProjectRepo repo = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, repo.getReqId());
+        fillBranchCounts(workspaceId, java.util.Collections.singletonList(repo));
         return publicView(repo);
+    }
+
+    /** 仓库列表与详情要显示「进行中 / 待确认」：一次按仓库×生命周期汇总，避免每个仓库各查一次 */
+    private void fillBranchCounts(String workspaceId, List<ProjectRepo> repos) {
+        if (repos.isEmpty()) {
+            return;
+        }
+        Map<String, ProjectRepo> byId = new HashMap<String, ProjectRepo>();
+        for (ProjectRepo repo : repos) {
+            repo.setOpenBranchCount(0);
+            repo.setPendingBranchCount(0);
+            byId.put(repo.getId(), repo);
+        }
+        for (Map<String, Object> row : branchMapper.countRepoOutcomes(workspaceId)) {
+            Object repoId = row.get("repoId");
+            ProjectRepo repo = repoId == null ? null : byId.get(String.valueOf(repoId));
+            if (repo == null) {
+                continue;
+            }
+            /* outcome 为空是生命周期字段上线前的老数据，按进行中算 */
+            String outcome = row.get("outcome") == null ? "open" : String.valueOf(row.get("outcome"));
+            int cnt = ((Number) row.get("cnt")).intValue();
+            if ("open".equals(outcome)) {
+                repo.setOpenBranchCount(repo.getOpenBranchCount() + cnt);
+            } else if ("pending".equals(outcome)) {
+                repo.setPendingBranchCount(repo.getPendingBranchCount() + cnt);
+            }
+        }
     }
 
     @Transactional

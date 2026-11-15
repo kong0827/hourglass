@@ -1092,6 +1092,10 @@ function sortedProjects(){
   if(drillSort === "progress") list.sort(function(a, b){ return (a.progressPct || 0) - (b.progressPct || 0); });
   return list;
 }
+/* 只按当前可见项目判断：被「只看需关注」过滤掉的项目留有展开态，不应让按钮显示「全部收起」 */
+function anyDrillExpanded(){
+  return sortedProjects().some(function(p){ return !!expanded["p:" + p.reqId]; });
+}
 function drillControls(){
   function opt(v, label){
     return '<option value="' + v + '"' + (drillSort === v ? " selected" : "") + '>' + label + '</option>';
@@ -1099,8 +1103,7 @@ function drillControls(){
   return '<select id="drillSort" class="mini-select" aria-label="项目排序">'
     + opt("default", "默认排序") + opt("overdue", "逾期优先") + opt("progress", "进度最低") + '</select>'
     + '<button class="btn sm" type="button" data-drill-risk aria-pressed="' + drillOnlyRisk + '">只看需关注</button>'
-    + '<button class="btn sm" type="button" data-drill-expand>全部展开</button>'
-    + '<button class="btn sm" type="button" data-drill-collapse>全部收起</button>'
+    + '<button class="btn sm" type="button" data-drill-expand-toggle>' + (anyDrillExpanded() ? "全部收起" : "全部展开") + '</button>'
     + '<button class="btn sm" type="button" data-drill-export>导出</button>';
 }
 function renderDrill(){
@@ -1277,8 +1280,10 @@ function onClick(e){
       renderDrill();
       return;
     }
-    if(e.target.closest("[data-drill-expand]")){ expandAllDrill(); return; }
-    if(e.target.closest("[data-drill-collapse]")){ collapseAllDrill(); return; }
+    if(e.target.closest("[data-drill-expand-toggle]")){
+      if(anyDrillExpanded()) collapseAllDrill(); else expandAllDrill();
+      return;
+    }
     if(e.target.closest("[data-drill-export]")){ exportDrill(); return; }
     var epicOpen = e.target.closest("[data-drill-open]");
     if(epicOpen){

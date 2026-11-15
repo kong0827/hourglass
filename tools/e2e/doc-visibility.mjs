@@ -25,7 +25,7 @@ const ADMIN = "sunqi";         // 空间管理员（项目只读，不在名单�
 const BLIND = "zhoumin";       // 项目不可见成员（access=none）
 
 const WS = "Smw9zcftmwwnrwuon";                         // 支付业务部
-const PROJ = "R4wejtfugwrudffx8x4x9";                   // 统一支付网关
+const PROJ = "Rfgp99z09lmjz0dn94hzv";                   // 统一支付网关（对应 2026-11-15 重灌的演示库）
 const UID = {
   owner: "Umw9zcexjho9z9jjc",
   listed: "Umw9zcf2k1pcmhb0y",
@@ -34,6 +34,7 @@ const UID = {
   blind: "Umw9zcfmah9inhkgm"
 };
 const T_PREFIX = "E2E可见范围";
+const CAT_PREFIX = "E2E分类默认";
 
 const MYSQL = ["/usr/local/mysql/bin/mysql", "-h", "127.0.0.1", "-P", "3307", "-u", "hourglass", "-phourglass123",
   "--default-character-set=utf8mb4", "hourglass", "-N", "-e"];
@@ -134,8 +135,19 @@ const shot = async (name, keepToast) => {
   SHOTS.push(out);
   console.log("  SHOT " + out);
 };
+/* 侧边弹窗内容高于 900px 视口时会被截断：临时调高视口再拍，拍完还原 */
+const tallShot = async (name, keepToast) => {
+  try{ await call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1500, deviceScaleFactor: 1, mobile: false }); }
+  catch(e){ return shot(name, keepToast); }
+  await sleep(250);
+  await shot(name, keepToast);
+  try{ await call("Emulation.clearDeviceMetricsOverride"); }catch(e){}
+  await sleep(150);
+};
 
-const created = { team: null, members: null, personal: null, narrow: null, draft: null };
+const created = { team: null, members: null, personal: null, narrow: null, draft: null,
+  seedUi: null, seedApi: null, seedForced: null };
+let seedCatId = null;
 let wiped = false;
 const testDocIds = () => {
   const rows = sqlRaw(`SELECT id FROM requirement_doc WHERE workspace_id='${WS}' AND title LIKE '${T_PREFIX}%'`);
@@ -154,6 +166,8 @@ const wipeDocs = () => {
   const ids = testDocIds();
   cleanupArtifacts(ids);
   if(ids.length) sql(`DELETE FROM requirement_doc WHERE id IN (${ids.map(i => "'" + i + "'").join(",")})`);
+  /* 上次中断可能留下分类默认样本分类：样本文档已按标题删净，再删分类，避免同级重名挡住重建 */
+  sql(`DELETE FROM doc_category WHERE workspace_id='${WS}' AND name LIKE '${CAT_PREFIX}%'`);
   /* 上次中断的运行可能已删文档、留下活动行：按标题前缀兜底清掉，动态流不残留测试记录 */
   sql(`DELETE FROM work_activity WHERE workspace_id='${WS}' AND entity_type='requirement_doc' AND detail LIKE '%${T_PREFIX}%'`);
   wiped = true;
@@ -164,6 +178,7 @@ try{
   const preDocs = sql(`SELECT COUNT(*) FROM requirement_doc WHERE workspace_id='${WS}'`);
   const preMembers = sql(`SELECT COUNT(*) FROM doc_visibility_member WHERE workspace_id='${WS}'`);
   const preActs = sql(`SELECT COUNT(*) FROM work_activity WHERE workspace_id='${WS}' AND entity_type='requirement_doc'`);
+  const preCats = sql(`SELECT COUNT(*) FROM doc_category WHERE workspace_id='${WS}'`);
 
   let version = null;
   for(let i = 0; i < 50 && !version; i++){
@@ -537,6 +552,115 @@ try{
       l.querySelector("[data-vis-x]").click(); return true; })()`);
   });
 
+  await section("[I] 分类默认可见范围：新建预填，不改已有文档", async () => {
+    await login(OWNER, PASS);
+    const cat = await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const c = await API.post("/api/doc-categories", { name: "${CAT_PREFIX}", reqId: ${JSON.stringify(PROJ)} });
+      const saved = await API.put("/api/doc-categories/" + encodeURIComponent(c.id) + "/visibility",
+        { visibility: "members", memberIds: [${JSON.stringify(UID.listed)}] });
+      const tree = await API.get("/api/doc-categories", { reqId: ${JSON.stringify(PROJ)} });
+      const node = (tree || []).filter(x => x.id === c.id)[0];
+      return { id: c.id,
+        saved: { vis: saved.visibility, mc: saved.memberCount, members: saved.memberIds },
+        node: node ? { vis: node.visibility, mc: node.memberCount, members: node.memberIds } : null };
+    })()`);
+    seedCatId = cat.id;
+    assert(cat.saved.vis === "members" && cat.saved.mc === 1, "接口：分类默认档保存为「指定成员 1 人」");
+    assert(cat.node && cat.node.vis === "members" && (cat.node.members || []).indexOf(UID.listed) >= 0,
+      "树接口回显默认档与名单（可写成员可见名单）");
+    assert(sql(`SELECT CONCAT(visibility, '|', member_ids) FROM doc_category WHERE id='${cat.id}'`)
+      === "members|" + UID.listed, "库：默认档与名单落 doc_category");
+
+    await showRequirements();
+    await waitFor(`!!document.querySelector('.rs-cat[data-rs-cat="${cat.id}"]')`, "分类出现在阅读树", 15000);
+    const chip = await evaluate(`(() => { const n = document.querySelector('.rs-cat[data-rs-cat="${cat.id}"]');
+      const c = n && n.querySelector('.doc-vis-chip');
+      return c ? { text: c.textContent.trim(), title: c.title } : null; })()`);
+    assert(chip && chip.text === "默认 1 人" && /只影响之后新建的文档/.test(chip.title || ""), "分类行显示「默认 1 人」徽标");
+    await shot("cat-default-chip");
+
+    await evaluate(`(() => { const el = document.querySelector('.rs-cat[data-rs-cat="${cat.id}"]');
+      el.dispatchEvent(new MouseEvent("contextmenu", { bubbles:true, cancelable:true, clientX: 260, clientY: 240 }));
+      return true; })()`);
+    await waitFor(`!!document.querySelector('#reqDocCtxMenu.open [data-ctx-act="catvis"]')`, "分类右键出现默认可见范围入口", 8000);
+    await clickSel('#reqDocCtxMenu [data-ctx-act="catvis"]');
+    await waitFor(`!![...document.querySelectorAll(".modal-layer.open")].find(l => /分类默认可见范围/.test(l.textContent))`, "分类默认弹窗", 8000);
+    await waitFor(`!!(document.querySelector('#docCatVisWho [data-vis-uid="${UID.listed}"]')||{}).checked`, "默认名单预勾选李娜", 12000);
+    const dlg = await evaluate(`(() => { const l = [...document.querySelectorAll(".modal-layer.open")].find(x => /分类默认可见范围/.test(x.textContent));
+      const r = l.querySelector('#docCatVisOpts input:checked');
+      return { vis: r && r.value, note: /只是新建时的默认值/.test(l.textContent),
+        listed: !!(l.querySelector('#docCatVisWho [data-vis-uid="${UID.listed}"]')||{}).checked }; })()`);
+    assert(dlg.vis === "members" && dlg.listed, "弹窗回显指定成员档并勾选默认名单");
+    assert(dlg.note, "弹窗说明「只是新建时的默认值」");
+    await tallShot("cat-default-dialog");
+    await evaluate(`(() => { const l = [...document.querySelectorAll(".modal-layer.open")].find(x => /分类默认可见范围/.test(x.textContent));
+      l.querySelector("[data-catvis-x]").click(); return true; })()`);
+    await waitFor(`![...document.querySelectorAll(".modal-layer.open")].some(l => /分类默认可见范围/.test(l.textContent))`, "关闭分类默认弹窗", 8000);
+
+    await evaluate(`document.getElementById("reqDocNew").click(); true`);
+    await waitFor(`document.getElementById("dlgNewReqDoc").classList.contains("open")`, "新建文档弹窗", 10000);
+    await waitFor(`!!document.querySelector('#newReqDocCategory option[value="${cat.id}"]')`, "分类候选包含样本分类", 12000);
+    await evaluate(`(() => { const s = document.getElementById("newReqDocCategory");
+      s.value = ${JSON.stringify(cat.id)}; s.dispatchEvent(new Event("change", { bubbles:true })); return true; })()`);
+    await waitFor(`!!(document.querySelector('#newReqDocWho [data-vis-uid="${UID.listed}"]')||{}).checked`, "新建弹窗预选默认名单李娜", 12000);
+    const seeded = await evaluate(`(() => { const r = document.querySelector('#newReqDocVis input:checked');
+      const h = document.getElementById("newDocVisHint");
+      return { vis: r && r.value, hint: h ? h.textContent : "", hidden: h ? h.hidden : true,
+        proj: document.getElementById("newReqDocProject").value }; })()`);
+    assert(seeded.vis === "members", "选中分类后新建弹窗预选「指定成员」");
+    assert(!seeded.hidden && seeded.hint.indexOf("按分类「" + CAT_PREFIX + "」默认：指定成员 1 人") === 0,
+      "预填提示说明来源与带入人数（hidden=" + seeded.hidden + " · " + JSON.stringify(seeded.hint) + "）");
+    assert(seeded.proj === PROJ, "分类带出归属项目");
+    await evaluate(`(() => { const l = document.getElementById("dlgNewReqDoc");
+      l.scrollTop = l.scrollHeight;
+      const body = l.querySelector(".sheet-body"); if(body) body.scrollTop = body.scrollHeight;
+      const sheet = l.querySelector(".sheet"); if(sheet) sheet.scrollTop = sheet.scrollHeight;
+      const hint = document.getElementById("newDocVisHint");
+      if(hint) hint.scrollIntoView({ block: "center", behavior: "instant" });
+      return true; })()`);
+    await sleep(350);
+    await tallShot("newdoc-seeded");
+    await evaluate(`(() => { const t = document.getElementById("newReqDocTitle");
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(t), "value").set.call(t, "${T_PREFIX}-分类默认带入");
+      t.dispatchEvent(new Event("input", { bubbles:true })); return true; })()`);
+    await evaluate(`document.getElementById("dlgNewReqDocOk").click(); true`);
+    await waitFor(`!document.getElementById("dlgNewReqDoc").classList.contains("open")`, "分类默认样本创建完成", 15000);
+    await waitFor(`import("./js/views/requirements.js").then(m => m.reqDocList.some(x => x.title === "${T_PREFIX}-分类默认带入"))`, "列表出现分类默认样本", 15000);
+    const uiRow = await evaluate(`import("./js/views/requirements.js").then(m => m.reqDocList).then(l => {
+      const d = l.find(x => x.title === "${T_PREFIX}-分类默认带入");
+      return d ? { id: d.id, vis: d.visibility, mc: d.memberCount, cat: d.categoryId } : null; })`);
+    assert(uiRow && uiRow.vis === "members" && uiRow.mc === 1 && uiRow.cat === cat.id, "界面新建：按分类默认落为指定成员 1 人");
+    if(uiRow){ created.seedUi = uiRow.id; }
+    assert(uiRow && sql(`SELECT visibility FROM requirement_doc WHERE id='${uiRow.id}'`) === "members", "库：界面新建文档 visibility=members");
+    await evaluate(`import("./js/views/requirements.js").then(m => m.tryCloseReqDocEditor())`);
+
+    /* 接口口径：不带 visibility 复制默认（后端兜底）；显式 team 覆盖；已有文档换分类不改可见范围 */
+    const api = await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const base = { reqId: ${JSON.stringify(PROJ)}, categoryId: ${JSON.stringify(cat.id)},
+        content: "<p>E2E 分类默认样本</p>", format: "html", docType: "requirement", status: "draft" };
+      const seeded = await API.post("/api/req-docs", Object.assign({}, base, { title: "${T_PREFIX}-接口不带档位" }));
+      const forced = await API.post("/api/req-docs", Object.assign({}, base,
+        { title: "${T_PREFIX}-接口显式团队", visibility: "team" }));
+      const teamDoc = await API.get("/api/req-docs/${created.team}");
+      await API.put("/api/req-docs/${created.team}", { reqId: ${JSON.stringify(PROJ)}, title: teamDoc.title,
+        content: teamDoc.content, format: teamDoc.format, docType: teamDoc.docType, status: teamDoc.status,
+        categoryId: ${JSON.stringify(cat.id)} });
+      const kept = await API.get("/api/req-docs/${created.team}");
+      const seededFresh = await API.get("/api/req-docs/" + seeded.id);
+      return { seeded: { id: seeded.id, vis: seededFresh.visibility, members: seededFresh.memberIds },
+        forced: { id: forced.id, vis: forced.visibility, members: forced.memberIds || [] },
+        kept: { vis: kept.visibility, cat: kept.categoryId } };
+    })()`);
+    created.seedApi = api.seeded.id;
+    created.seedForced = api.forced.id;
+    assert(api.seeded.vis === "members" && (api.seeded.members || []).indexOf(UID.listed) >= 0,
+      "接口新建不带档位：复制分类默认档与名单");
+    assert(api.forced.vis === "team" && !(api.forced.members || []).length, "接口新建显式 team：覆盖分类默认");
+    assert(api.kept.vis === "team" && api.kept.cat === cat.id, "已有文档换分类不改可见范围（仍团队共享）");
+  });
+
   await section("[H] 收尾：删除样本并核对级联", async () => {
     await login(OWNER, PASS);
     const del = await evaluate(`(async () => {
@@ -559,6 +683,9 @@ try{
     assert(postMembers === preMembers, "库：名单总数回到运行前（" + preMembers + "）");
     const postActs = sql(`SELECT COUNT(*) FROM work_activity WHERE workspace_id='${WS}' AND entity_type='requirement_doc'`);
     assert(postActs === preActs, "库：文档动态回到运行前（无测试残留：" + preActs + " → " + postActs + "）");
+    if(seedCatId) assert(sql(`SELECT COUNT(*) FROM doc_category WHERE id='${seedCatId}'`) === "0", "库：分类默认样本分类已清理");
+    const postCats = sql(`SELECT COUNT(*) FROM doc_category WHERE workspace_id='${WS}'`);
+    assert(postCats === preCats, "库：分类总数回到运行前（" + preCats + " → " + postCats + "）");
   });
 
   await drainBad();

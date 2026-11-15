@@ -52,6 +52,10 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `98_git_repo_sync.sql` 支持项目多仓库 Git 只读同步：新建 `project_repo`（仓库地址、GitLab 项目标识、默认目标分支、AES-GCM 令牌密文、导入策略 `recent90` / `all` / `manual`、启停与最近同步结果）与 `dev_branch_alias`（同一 SHA 的删旧建新识别为改名）；`dev_branch` 增远程事实（`remote_state` / `remote_head_*` / `last_seen_*`）、合并证据（`merged*` / `merge_evidence`）、人工判定（`decision*` / `decided_*`）、生命周期 `outcome`（open / done / canceled / ignored / pending）与 `pending_reason`、`sync_status`、`sync_error`，并用生成列 `owner_key` 把唯一键从 `uk_ws_req_name` 换成 `uk_ws_owner_name`（仓库分支按 repo 隔离、手工分支按项目隔离），新增 `idx_ws_outcome` / `idx_ws_repo_state`；`dev_branch_log` 增 `actor_type` 区分人工与系统同步。脚本幂等、只增结构，不物理删除分支、不回填历史提交事实；执行时须带 `--default-character-set=utf8mb4`。
 
+`100_case_category_tree.sql` 把用例目录合并进项目目录：`category` 增 `parent_id`（同级同名唯一，名称上限放宽到 50），`test_module` 节点沿用原 id 迁入，顶层同名节点合并到任务 / 需求已在用的 `category` 并改写用例 `module_id` 与动态分组 `rule_json.moduleId`；`case_set` 增 `parent_id` 支持嵌套分组，`test_case` 增 `sort_order` 支持手动排序。`test_module` 表保留用于回滚，服务层不再读写；脚本幂等、不改编号与执行历史。
+
+`101_doc_category_default_visibility.sql` 给文档分类加默认可见范围：`doc_category` 增 `visibility`（team / members / personal，默认 team）与 `member_ids`（逗号分隔的账号 ID，最多 50 人）。它只是默认值、不参与可见判定：新建文档挂在分类上且未显式指定可见范围时复制成文档自己的设置，之后每篇仍可单独调整；存量文档与把文档换到该分类都不会被自动改。不新建表、不需要级联清理或备份调整；脚本幂等，无需回填。
+
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。
 
 ## 3. 基线漂移校验

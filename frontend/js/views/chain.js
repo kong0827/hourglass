@@ -7,6 +7,7 @@
 
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
+import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
 import { progressOf, rt } from "../core/state.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
@@ -16,7 +17,7 @@ import { assocLinkHTML, avatarHTML, colMeta, colName, fmtShortMD, parseDate, sev
 import { isDoneTask } from "./list.js";
 
 var chainBody = $("chainBody"), chainMeta = $("chainMeta"),
-    btnPicker = $("btnChainPick"), segDir = $("chainDir");
+    btnPicker = $("btnChainPick"), segDir = $("chainDir"), btnHelp = $("btnChainHelp");
 var taskMap = {}, deps = [];
 var centerId = null, direction = "both";
 var chainLoaded = false;
@@ -290,6 +291,30 @@ function refreshChainIfOpen(){
   var top = scroller ? scroller.scrollTop : 0;
   return loadChainData({ silent:true }).then(function(){
     if(scroller) scroller.scrollTop = top;
+  });
+}
+/* ---------- 说明（工具条右侧的 ?） ---------- */
+var chainHelpPop = null;
+if(btnHelp){
+  btnHelp.innerHTML = icon("helpCircle", 15);
+  btnHelp.addEventListener("click", function(){
+    if(UI.popOpen(chainHelpPop)){ UI.closeAllPops(); return; }
+    var el = document.createElement("div");
+    el.className = "menu popover type-help-pop chain-help-pop";
+    el.innerHTML = '<div class="menu-title">影响链怎么看</div>' +
+      '<div class="type-help-list">' +
+        '<div class="type-help-row"><span class="mini-tag">中心</span>' +
+          '<span class="type-help-desc">分析的起点。点任意节点可把它换为中心；点工作项名称打开详情。</span></div>' +
+        '<div class="type-help-row"><span class="mini-tag">上游</span>' +
+          '<span class="type-help-desc">它卡在谁后面（前置依赖）；「下游」反之，是它解锁了谁（后继依赖）。</span></div>' +
+        '<div class="type-help-row"><span class="mini-tag">依赖</span>' +
+          '<span class="type-help-desc">边上的 <b>FS/SS/FF/SF</b> 是依赖类型，<b>+N 天</b> 是滞后天数；「检测到环路」表示依赖成环，不再深入。</span></div>' +
+        '<div class="type-help-row"><span class="mini-tag">深度</span>' +
+          '<span class="type-help-desc">每条链最多展开 4 级，更深的只标注剩余数量。</span></div>' +
+      '</div>';
+    chainHelpPop = el;
+    UI.openPop(el, btnHelp, { align:"right", width:Math.max(300, Math.min(380, window.innerWidth - 16)),
+      onClose:function(){ el.remove(); chainHelpPop = null; } });
   });
 }
 btnPicker.addEventListener("click", openPicker);

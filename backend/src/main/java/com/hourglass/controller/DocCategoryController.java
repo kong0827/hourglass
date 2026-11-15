@@ -4,6 +4,7 @@ import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.DocCategoryNode;
 import com.hourglass.dto.DocCategorySaveRequest;
+import com.hourglass.dto.DocCategoryVisibilityRequest;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.DocCategoryService;
 import com.hourglass.service.WorkspaceService;
@@ -66,6 +67,16 @@ public class DocCategoryController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(categoryService.update(userId, ws.getId(), id, req));
+    }
+
+    /** 改分类的默认可见范围：只影响之后在该分类新建的文档，不动已有文档 */
+    @PutMapping("/api/doc-categories/{id}/visibility")
+    public ApiResult<DocCategoryNode> changeVisibility(@PathVariable String id,
+                                                       @Valid @RequestBody DocCategoryVisibilityRequest req,
+                                                       @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(categoryService.changeVisibility(userId, ws.getId(), id, req));
     }
 
     /** 删除节点：仍有子分类或挂着文档时拒绝，避免把归类悄悄丢掉 */

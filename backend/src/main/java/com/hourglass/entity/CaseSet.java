@@ -11,6 +11,10 @@ public class CaseSet {
     private String id;
     private String workspaceId;
     private String reqId;
+    /** 父分组ID；空串=顶级。子组继承父组可见范围 */
+    private String parentId;
+    /** 同级手动排序序号（小在前） */
+    private Integer sortOrder;
     private String name;
     private String note;
     /** team = 团队共享（进交付说明与发布证据）；members = 指定成员可见；personal = 仅自己可见（后两者不进证据链） */

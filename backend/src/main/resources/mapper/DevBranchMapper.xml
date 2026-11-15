@@ -107,9 +107,14 @@
         AND b.owner_user_id = #{q.ownerUserId}
       </when>
     </choose>
-    <if test="q.repoId != null and q.repoId != ''">
-      AND b.repo_id = #{q.repoId}
-    </if>
+    <choose>
+      <when test='q.repoId == "__none__"'>
+        AND b.repo_id IS NULL
+      </when>
+      <when test="q.repoId != null and q.repoId != ''">
+        AND b.repo_id = #{q.repoId}
+      </when>
+    </choose>
     <if test="q.versionId != null and q.versionId != ''">
       AND EXISTS (SELECT 1 FROM task tv
                    JOIN version_task vtv ON vtv.task_id = tv.id AND vtv.workspace_id = tv.workspace_id
@@ -201,6 +206,22 @@
     FROM dev_branch b
     WHERE <include refid="pageWhereBase"/>
     GROUP BY b.outcome
+  </select>
+
+  <!-- 仓库 chips 计数：忽略仓库自身筛选，其余条件照旧；未绑定仓库的行为 NULL 键 -->
+  <select id="countGroupByRepo" resultType="map">
+    SELECT b.repo_id AS repoId, COUNT(*) AS cnt
+    FROM dev_branch b
+    WHERE <include refid="pageWhere"/>
+    GROUP BY b.repo_id
+  </select>
+
+  <!-- 仓库列表的进行中 / 待确认计数（一次扫全空间，按仓库汇总） -->
+  <select id="countRepoOutcomes" resultType="map">
+    SELECT b.repo_id AS repoId, b.outcome AS outcome, COUNT(*) AS cnt
+    FROM dev_branch b
+    WHERE b.workspace_id = #{workspaceId} AND b.repo_id IS NOT NULL
+    GROUP BY b.repo_id, b.outcome
   </select>
 
   <select id="selectAvgCycleDays" resultType="double">
@@ -506,10 +527,10 @@
   </update>
 
   <insert id="insert">
-    INSERT INTO dev_branch (id, workspace_id, req_id, name, status, owner, owner_user_id, target_branch, note,
+    INSERT INTO dev_branch (id, workspace_id, req_id, repo_id, name, status, owner, owner_user_id, target_branch, note,
                             `source`, outcome, merged,
                             dev_at, test_at, merge_at, released_at, sort_order, created_at, updated_at)
-    VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{status}, #{owner}, #{ownerUserId}, #{targetBranch}, #{note},
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{repoId}, #{name}, #{status}, #{owner}, #{ownerUserId}, #{targetBranch}, #{note},
             COALESCE(#{source}, 'manual'), COALESCE(#{outcome}, 'open'), COALESCE(#{merged}, 0),
             #{devAt}, #{testAt}, #{mergeAt}, #{releasedAt},
             COALESCE(#{sortOrder}, 0), COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))

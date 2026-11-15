@@ -167,6 +167,7 @@ function applyBoard(board){
     columns: board.columns || {},
     counts: board.counts || {},
     outcomeCounts: board.outcomeCounts || {},
+    repoCounts: board.repoCounts || {},
     avgCycleDays: board.avgCycleDays == null ? null : board.avgCycleDays
   };
   branchExtra = { dev:[], testing:[], merging:[], released:[] };
@@ -368,7 +369,10 @@ function filteredBranchRows(){
   var q = branchSearchText();
   return branchRows.filter(function(b){
     if(branchOutcomeFilter !== "all" && (b.outcome || "open") !== branchOutcomeFilter) return false;
-    if(branchRepoFilter && b.repoId !== branchRepoFilter) return false;
+    if(branchRepoFilter){
+      if(branchRepoFilter === "__none__"){ if(b.repoId) return false; }
+      else if(b.repoId !== branchRepoFilter) return false;
+    }
     if(branchFilter && b.status !== branchFilter) return false;
     if(branchOwnerFilter === "__none__"){
       if(b.ownerUserId || b.owner) return false;
@@ -388,7 +392,7 @@ function branchProjectsText(b){
   var names = (b.projects || []).map(function(p){ return p.projectName || p.projectId; }).filter(Boolean);
   return names.length ? names.join("、") : "空间级";
 }
-function branchRowHTML(b){
+function branchRowHTML(b, showRepo){
   var sm = branchStatusMeta(b.status);
   var stay = branchStay(b);
   var writable = canEditBranch(b);
@@ -397,6 +401,9 @@ function branchRowHTML(b){
   var ocTag = oc === "open" ? "" : '<span class="br-tag-mini' + (oc === "pending" ? " warn" : (oc === "done" ? " ok" : ""))
     + '" title="' + esc(oc === "pending" ? branchPendingReasonText(b.pendingReason) : "生命周期：" + branchOutcomeMeta(oc).name)
     + '">' + esc(branchOutcomeMeta(oc).name) + '</span>';
+  var repoCell = b.repoName
+    ? esc(b.repoName)
+    : (b.repoId ? esc(branchRepoName(b.repoId)) : '<span class="foot-note" title="手工创建，没有绑定 GitLab 仓库">未归属仓库</span>');
   return '<tr data-branch="' + esc(b.id) + '" tabindex="0">' +
     '<td class="br-sel-cell"><input type="checkbox" data-br-select="' + esc(b.id) + '"'
       + (branchSelected[b.id] ? " checked" : "") + ' aria-label="选择分支 ' + esc(b.name) + '" /></td>' +
@@ -407,6 +414,7 @@ function branchRowHTML(b){
       : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') + ocTag + '</td>' +
     '<td>' + (b.owner ? avatarHTML(b.owner, "sm") + ' ' + esc(b.owner) : '<span class="foot-note">未指派</span>') + '</td>' +
     '<td>' + esc(branchProjectsText(b)) + '</td>' +
+    (showRepo ? '<td>' + repoCell + '</td>' : '') +
     '<td>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</td>' +
     '<td class="num">' + taskTxt + '</td>' +
     '<td title="' + esc(stay.tip) + '">' + esc(stay.text) + '</td>' +
@@ -429,6 +437,10 @@ function branchGroupInfo(b){
     var p = (b.projects || [])[0];
     if(p && (p.projectId || p.projectName)) return { key: p.projectId || "__none__", label: p.projectName || p.projectId || "未知项目" };
     return { key: "__none__", label: "空间级公共分支" };
+  }
+  if(branchListGroup === "repo"){
+    if(b.repoId) return { key: b.repoId, label: b.repoName || branchRepoName(b.repoId) };
+    return { key: "__none__", label: "未归属仓库" };
   }
   return null;
 }
@@ -455,23 +467,26 @@ function buildBranchGroups(rows){
 }
 function renderBranchList(rows){
   var body;
+  var showRepo = branchRepoCache.length > 0 || rows.some(function(b){ return !!b.repoId; });
+  var cols = showRepo ? 10 : 9;
   var allSel = !!rows.length && rows.every(function(b){ return !!branchSelected[b.id]; });
   if(!rows.length){
-    body = '<tr><td colspan="9" class="manager-empty-cell">没有匹配的分支</td></tr>';
+    body = '<tr><td colspan="' + cols + '" class="manager-empty-cell">没有匹配的分支</td></tr>';
   }else if(branchListGroup !== "none"){
     body = buildBranchGroups(rows).map(function(g){
       var head = (g.dot ? '<i class="br-dot ' + esc(g.dot) + '"></i>' : '') +
         '<span class="bgr-name">' + esc(g.label) + '</span>' +
         '<span class="bgr-n">' + g.rows.length + ' 条</span>';
-      return '<tr class="br-group-row"><td colspan="9">' + head + '</td></tr>' +
-        g.rows.map(branchRowHTML).join("");
+      return '<tr class="br-group-row"><td colspan="' + cols + '">' + head + '</td></tr>' +
+        g.rows.map(function(b){ return branchRowHTML(b, showRepo); }).join("");
     }).join("");
   }else{
-    body = rows.map(branchRowHTML).join("");
+    body = rows.map(function(b){ return branchRowHTML(b, showRepo); }).join("");
   }
   return '<div class="br-list-wrap"><table class="manager-tbl br-list">' +
     '<thead><tr><th class="br-sel-cell"><input type="checkbox" data-br-select-all aria-label="全选当前列表"'
-      + (allSel ? " checked" : "") + ' /></th><th>分支</th><th>状态</th><th>负责人</th><th>项目</th><th>目标分支</th>' +
+      + (allSel ? " checked" : "") + ' /></th><th>分支</th><th>状态</th><th>负责人</th><th>项目</th>'
+      + (showRepo ? '<th>仓库</th>' : '') + '<th>目标分支</th>' +
       '<th class="num">工作项</th><th>停留</th><th>更新时间</th></tr></thead>' +
     '<tbody>' + body + '</tbody></table></div>';
 }
@@ -557,18 +572,99 @@ function branchRepoName(id){
   }
   return id || "";
 }
+function repoLabel(r){
+  return r.name || r.repoUrl || r.id;
+}
+/* 仓库筛选跟随项目：选了项目就只列该项目的仓库 */
+function projectRepos(){
+  return branchRepoCache.filter(function(r){
+    return !branchProjectFilter || r.reqId === branchProjectFilter;
+  });
+}
+function scopeRepoToProject(){
+  if(!branchRepoFilter || branchRepoFilter === "__none__" || !branchReposLoaded) return;
+  var r = findRepo(branchRepoFilter);
+  if(!r || (branchProjectFilter && r.reqId !== branchProjectFilter)){
+    branchRepoFilter = "";
+    if($("branchRepoFilter")) $("branchRepoFilter").value = "";
+  }
+}
+function repoFreshness(r){
+  if(r.syncEnabled === false){
+    return { dot:"off", text:"已暂停", title:"定时同步已暂停，仍可手动同步" };
+  }
+  if(r.lastSyncStatus === "error"){
+    return { dot:"warn", text:"同步失败", title:r.lastSyncError || "上次同步失败" };
+  }
+  if(!r.lastSyncAt){
+    return { dot:"off", text:"未同步", title:"还没有同步过" };
+  }
+  var ms = Date.now() - new Date(r.lastSyncAt).getTime();
+  var ago;
+  if(!(ms > 0) || ms < 60000) ago = "刚刚";
+  else if(ms < 3600000) ago = Math.floor(ms / 60000) + " 分钟前";
+  else if(ms < 86400000) ago = Math.floor(ms / 3600000) + " 小时前";
+  else ago = Math.floor(ms / 86400000) + " 天前";
+  return { dot:"ok", text: ago + "同步", title:"上次同步：" + fmtTs(r.lastSyncAt) };
+}
 function populateRepoFilter(){
   var sel = $("branchRepoFilter");
   if(!sel) return;
+  var repos = projectRepos();
+  var counts = (branchBoard && branchBoard.repoCounts) || {};
+  var unassigned = counts.__none__ || 0;
   var cur = branchRepoFilter || "";
-  var html = '<option value="">全部仓库</option>';
-  branchRepoCache.forEach(function(r){
-    html += '<option value="' + esc(r.id) + '">' + esc(r.name || r.repoUrl || r.id) + '</option>';
+  var html = '<option value="">' + (branchProjectFilter && repos.length ? "全部仓库（" + repos.length + "）" : "全部仓库") + '</option>';
+  repos.forEach(function(r){
+    html += '<option value="' + esc(r.id) + '">' + esc(repoLabel(r)) + '</option>';
   });
+  if(unassigned) html += '<option value="__none__">未归属仓库（' + unassigned + '）</option>';
   sel.innerHTML = html;
-  var hasCur = !cur || branchRepoCache.some(function(r){ return r.id === cur; });
-  if(!hasCur) branchRepoFilter = "";
+  if(branchReposLoaded && cur && cur !== "__none__" && !repos.some(function(r){ return r.id === cur; })) branchRepoFilter = "";
+  if(cur === "__none__" && branchBoard && !unassigned) branchRepoFilter = "";
   sel.value = branchRepoFilter || "";
+}
+/* 本项目仓库条：选了项目就把「这个项目由哪几个仓库组成」摆在分支上方，不用先开抽屉 */
+function renderRepoStrip(){
+  var host = $("branchRepoStrip");
+  if(!host) return;
+  var repos = projectRepos();
+  var counts = (branchBoard && branchBoard.repoCounts) || {};
+  var unassigned = counts.__none__ || 0;
+  if(!branchProjectFilter || (!repos.length && !unassigned)){
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  var failed = repos.filter(function(r){
+    return r.syncEnabled !== false && r.lastSyncStatus === "error";
+  }).length;
+  var chips = '<button type="button" class="br-repochip' + (branchRepoFilter ? "" : " on") +
+    '" data-br-repo="" aria-pressed="' + (branchRepoFilter ? "false" : "true") + '">' +
+    '<span class="nm">全部</span><span class="num">' + (counts.all || 0) + '</span></button>';
+  chips += repos.map(function(r){
+    var on = branchRepoFilter === r.id;
+    var fresh = repoFreshness(r);
+    return '<button type="button" class="br-repochip' + (on ? " on" : "") + (r.syncEnabled === false ? " paused" : "") +
+      '" data-br-repo="' + esc(r.id) + '" aria-pressed="' + (on ? "true" : "false") +
+      '" title="' + esc(repoLabel(r) + " · " + fresh.title) + '">' +
+      '<span class="nm">' + esc(repoLabel(r)) + '</span>' +
+      '<span class="st"><i class="' + fresh.dot + '"></i>' + esc(fresh.text) + '</span>' +
+      '<span class="num">' + (counts[r.id] || 0) + '</span></button>';
+  }).join("");
+  if(unassigned){
+    chips += '<button type="button" class="br-repochip muted' + (branchRepoFilter === "__none__" ? " on" : "") +
+      '" data-br-repo="__none__" aria-pressed="' + (branchRepoFilter === "__none__" ? "true" : "false") +
+      '" title="手工创建、没有绑定仓库的分支">' +
+      '<span class="nm">未归属仓库</span><span class="st"><i class="off"></i>手工</span>' +
+      '<span class="num">' + unassigned + '</span></button>';
+  }
+  host.hidden = false;
+  host.innerHTML = '<div class="br-repostrip-head"><b>本项目仓库</b><span>' + repos.length + ' 个仓库' +
+      (failed ? ' · <em class="err">' + failed + ' 个同步失败</em>' : "") + '</span>' +
+      (isWorkspaceOwner() ? '<button type="button" class="br-repostrip-manage" data-br-repo-manage>管理仓库 →</button>' : "") +
+    '</div>' +
+    '<div class="br-repostrip-chips">' + chips + '</div>';
 }
 function isWorkspaceOwner(){
   return !!(rt.currentWs && rt.currentWs.myRole === "owner");
@@ -679,6 +775,7 @@ function renderBranches(){
   syncBranchFilterControls();
   renderLifecycleChips();
   renderPendingBar();
+  renderRepoStrip();
   updateRepoButton();
   /* 列表模式没有四列分组，容器要退出 grid 布局，否则表格只能占 1/4 宽 */
   box.classList.toggle("br-list-mode", branchViewMode === "list");
@@ -689,11 +786,12 @@ function renderBranches(){
     var cycle = branchCycleAvg();
     var extra = "";
     if(branchProjectFilter) extra += " · 项目「" + esc(projectFilterName) + "」";
-    if(branchRepoFilter) extra += " · 仓库「" + esc(branchRepoName(branchRepoFilter)) + "」";
+    if(branchRepoFilter) extra += " · 仓库「" + esc(branchRepoFilter === "__none__" ? "未归属仓库" : branchRepoName(branchRepoFilter)) + "」";
     if(branchOwnerFilter) extra += " · 负责人「" + esc(branchOwnerFilterName()) + "」";
     if(branchVersionFilter) extra += " · 版本「" + esc(branchVersionFilterName()) + "」";
     if(branchOutcomeFilter !== "open") extra += " · 生命周期「" + esc(branchOutcomeMeta(branchOutcomeFilter).name) + "」";
     if(branchGroupMode === "project") extra += " · 按项目分组（仅统计已加载 " + branchList.length + " 条）";
+    if(branchGroupMode === "repo") extra += " · 按仓库分组（仅统计已加载 " + branchList.length + " 条）";
     if(branchViewMode === "list") extra += " · 列表视图";
     /* 汇总里的每一档都可点击：直接按状态筛选，和分组头的点击等价 */
     var metaLink = function(id, html){
@@ -779,6 +877,10 @@ function renderBranches(){
     box.innerHTML = renderProjectGroups(branchList);
     return;
   }
+  if(branchGroupMode === "repo"){
+    box.innerHTML = renderRepoGroups(branchList);
+    return;
+  }
 
   box.innerHTML = BRANCH_STATUS.map(function(s){
         var col = (branchBoard && branchBoard.columns[s.id]) || {};
@@ -815,6 +917,38 @@ function projectNameById(id){
     if(rt.reqList[i].id === id) return rt.reqList[i].name || id;
   }
   return id;
+}
+/* 按仓库分组：同名分支在不同仓库各算一条，未绑定仓库的手工分支单独成组 */
+function renderRepoGroups(rows){
+  var groups = {};
+  rows.forEach(function(b){
+    var key = b.repoId || "__none__";
+    var name = b.repoName || branchRepoName(b.repoId) || "未归属仓库";
+    if(!groups[key]) groups[key] = { id: key, name: name, items: [] };
+    groups[key].items.push(b);
+  });
+  var list = Object.keys(groups).map(function(k){ return groups[k]; });
+  list.sort(function(a, b){
+    if(a.id === "__none__") return 1;
+    if(b.id === "__none__") return -1;
+    return String(a.name).localeCompare(String(b.name), "zh-CN");
+  });
+  return list.map(function(g){
+    g.items.sort(function(a, b){
+      var d = branchStatusOrder(a.status) - branchStatusOrder(b.status);
+      return d !== 0 ? d : String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+    });
+    return '<div class="br-group" data-repo-group="' + esc(g.id) + '">' +
+      '<div class="br-group-head' + (branchRepoFilter === g.id ? " on" : "") + '" role="button" tabindex="0" title="点击只看这个仓库">' +
+        '<i class="br-dot" aria-hidden="true"></i>' +
+        '<span class="br-group-name">' + esc(g.name) + '</span>' +
+        '<span class="br-group-n">' + g.items.length + '</span>' +
+      '</div>' +
+      '<div class="br-group-body">' +
+        (g.items.length ? g.items.map(branchCardHTML).join("") : '<div class="br-empty">暂无</div>') +
+      '</div>' +
+    '</div>';
+  }).join("");
 }
 function renderProjectGroups(rows){
   var groups = {};
@@ -884,9 +1018,14 @@ function branchShortSha(sha){
 /* 卡片/列表的仓库、远程与生命周期标记：只展示事实，不把状态说成结论 */
 function branchCardBadges(b){
   var out = [];
-  if(b.repoId || b.repoName){
+  var hasRepo = !!(b.repoId || b.repoName);
+  /* 已经按仓库筛过时不再重复挂仓库标签；未归属筛选下反过来标出来源 */
+  if(hasRepo && !branchRepoFilter){
     out.push('<span class="br-tag-mini repo" title="' + esc("来源仓库：" + (b.repoUrl || b.repoName || b.repoId)) + '">'
       + esc(b.repoName || "已解绑仓库") + '</span>');
+  }
+  if(!hasRepo && branchRepoFilter === "__none__"){
+    out.push('<span class="br-tag-mini" title="手工创建，没有绑定 GitLab 仓库">未归属仓库</span>');
   }
   var oc = b.outcome || "open";
   if(oc !== "open"){
@@ -1026,7 +1165,11 @@ function fillBranchReqOptions(sel, cur){
   if(!rt.reqsLoaded){
     ensureReqs(function(){
       var s = $("brReq");
-      if(rt.reqsLoaded && s === sel) fillBranchReqOptions(s, cur);
+      if(rt.reqsLoaded && s === sel){
+        fillBranchReqOptions(s, cur);
+        /* 项目列表迟到时，把仓库候选也按选中项目补上 */
+        fillBranchRepoOptions($("brRepo"), "", s.value, !!brEditingId);
+      }
     });
     return;
   }
@@ -1037,6 +1180,40 @@ function fillBranchReqOptions(sel, cur){
     html += '<option value="' + esc(r.id) + '"' + (r.id === cur ? " selected" : "") + '>' + esc(r.name || r.id) + (r.archivedAt ? "（已归档）" : "") + '</option>';
   });
   sel.innerHTML = html;
+}
+/* 所属仓库：只列该项目的仓库；没有绑定仓库或空间级分支时整个字段收起 */
+function branchReposFor(reqId){
+  if(!reqId) return [];
+  return branchRepoCache.filter(function(r){ return r.reqId === reqId; });
+}
+function fillBranchRepoOptions(sel, cur, reqId, disabled, fallbackLabel){
+  if(!sel) return;
+  var field = $("brRepoField");
+  var repos = branchReposFor(reqId);
+  var known = repos.some(function(r){ return r.id === cur; });
+  if(!repos.length && !cur){
+    if(field) field.hidden = true;
+    sel.innerHTML = '<option value="">不归属仓库（手工分支）</option>';
+    sel.value = "";
+    sel.disabled = true;
+    return;
+  }
+  if(field) field.hidden = false;
+  var html = '<option value="">不归属仓库（手工分支）</option>';
+  repos.forEach(function(r){
+    html += '<option value="' + esc(r.id) + '"' + (r.id === cur ? " selected" : "") + '>' + esc(repoLabel(r)) + '</option>';
+  });
+  /* 编辑已绑定仓库但它已不在可见缓存里：保留当前值，别让下拉悄悄改成「手工分支」 */
+  if(cur && !known){
+    html += '<option value="' + esc(cur) + '" selected>' + esc(fallbackLabel || cur) + '</option>';
+  }
+  sel.innerHTML = html;
+  sel.value = cur || "";
+  sel.disabled = !!disabled;
+}
+function ensureBranchRepos(cb){
+  if(branchReposLoaded){ cb(); return; }
+  loadRepos().then(cb, cb);
 }
 function openBranchDialog(id){
   brDialogTask = null;
@@ -1149,7 +1326,25 @@ function openBranchDialogWith(id, b, options){
   $("brTarget").value = b ? (b.targetBranch || "") : "";
   $("brNote").value = b ? (b.note || "") : "";
   fillBranchStatusOptions($("brStatus"), b ? b.status : "dev");
-  fillBranchReqOptions($("brReq"), b ? (b.reqId || "") : (fromTask ? taskProjectId : ""));
+  fillBranchReqOptions($("brReq"), b ? (b.reqId || "") : (fromTask ? taskProjectId : (branchProjectFilter || "")));
+  /* 所属仓库：新建时跟随项目与当前仓库筛选；编辑时只读展示（换仓库会打乱远程事实） */
+  var chosenReq = ($("brReq") || {}).value || "";
+  var initialRepo = "";
+  if(b){
+    initialRepo = b.repoId || "";
+  }else if(branchRepoFilter && branchRepoFilter !== "__none__"){
+    var presetRepo = findRepo(branchRepoFilter);
+    if(presetRepo && presetRepo.reqId === chosenReq) initialRepo = presetRepo.id;
+  }
+  fillBranchRepoOptions($("brRepo"), initialRepo, chosenReq, !!b, b ? (b.repoName || branchRepoName(b.repoId)) : "");
+  if(!b){
+    ensureBranchRepos(function(){
+      var d = $("dlgBranch");
+      if(!d || !d.classList.contains("open") || brEditingId) return;
+      fillBranchRepoOptions($("brRepo"), ($("brRepo") || {}).value || initialRepo,
+        ($("brReq") || {}).value || "", false);
+    });
+  }
 
   /* 负责人：沿用任务抽屉的口径（成员列表 + 账号绑定），改用带公司·岗位的人员浮层。
      从任务里就地新建时默认跟任务负责人走，避免把分支指派给「当前操作人」；
@@ -1223,7 +1418,10 @@ function submitBranchDialog(){
     owner: ownerName || null,
     ownerUserId: ownerId || null
   };
-  if(!brEditingId) payload.status = ($("brStatus") || {}).value || "dev";
+  if(!brEditingId){
+    payload.status = ($("brStatus") || {}).value || "dev";
+    payload.repoId = ($("brRepo") || {}).value || null;
+  }
 
   var req = brEditingId
     ? API.put("/api/branches/" + encodeURIComponent(brEditingId), payload)
@@ -1748,6 +1946,12 @@ function applyBranchView(v){
   }
   branchProjectFilter = p.project && (rt.reqList || []).some(function(r){ return r.id === p.project; }) ? p.project : "";
   branchRepoFilter = typeof p.repo === "string" ? p.repo : "";
+  if(branchRepoFilter && branchRepoFilter !== "__none__" && branchRepoCache.length
+     && !branchRepoCache.some(function(r){
+       return r.id === branchRepoFilter && (!branchProjectFilter || r.reqId === branchProjectFilter);
+     })){
+    branchRepoFilter = "";
+  }
   branchOutcomeFilter = BRANCH_OUTCOMES.some(function(o){ return o.id === p.outcome; }) ? p.outcome : "open";
   branchFilter = p.status && branchStatusMeta(p.status).hint ? p.status : "";
   branchOwnerFilter = p.owner === "__none__"
@@ -1755,8 +1959,8 @@ function applyBranchView(v){
     : (p.owner && ownerOptions("").some(function(o){ return o.id === p.owner; }) ? p.owner : "");
   branchVersionFilter = typeof p.version === "string" ? p.version : "";
   branchViewMode = p.mode === "list" ? "list" : "board";
-  branchGroupMode = p.group === "project" ? "project" : "status";
-  branchListGroup = ["none", "status", "owner", "project"].indexOf(p.listGroup) !== -1 ? p.listGroup : "none";
+  branchGroupMode = ["project", "repo"].indexOf(p.group) !== -1 ? p.group : "status";
+  branchListGroup = ["none", "status", "owner", "project", "repo"].indexOf(p.listGroup) !== -1 ? p.listGroup : "none";
   var search = $("branchSearch");
   if(search) search.value = typeof p.q === "string" ? p.q : "";
   try{ localStorage.setItem(BRANCH_VIEW_KEY, branchViewMode); }catch(e){ /* 受限环境忽略 */ }
@@ -1816,9 +2020,13 @@ function renderBranchViewsMenu(){
 function updateBranchGroupToggle(){
   var btn = $("branchGroupToggle");
   if(!btn) return;
-  var isProject = branchGroupMode === "project";
-  btn.textContent = isProject ? "按状态分组" : "按项目分组";
-  btn.classList.toggle("primary", !isProject);
+  /* 三种分组轮换：状态 → 项目 → 仓库 → 状态 */
+  var next = branchGroupMode === "status" ? "project" : (branchGroupMode === "project" ? "repo" : "status");
+  var nextName = next === "project" ? "按项目分组" : (next === "repo" ? "按仓库分组" : "按状态分组");
+  btn.textContent = nextName;
+  btn.setAttribute("data-mode", branchGroupMode);
+  btn.setAttribute("title", "当前" + (branchGroupMode === "project" ? "按项目" : (branchGroupMode === "repo" ? "按仓库" : "按状态")) + "分组，点击改为" + nextName);
+  btn.classList.toggle("primary", branchGroupMode === "status");
   /* 分组只在看板视图有意义 */
   btn.hidden = branchViewMode === "list";
 }
@@ -1840,6 +2048,7 @@ function updateBranchModeUI(){
 /* ---------- GitLab 仓库绑定（仅空间主可管理） ---------- */
 
 var repoEditingId = null;
+var repoDetailOpen = false;
 function fillRepoReqOptions(cur){
   var sel = $("repoReq");
   if(!sel) return;
@@ -1855,10 +2064,58 @@ function fillRepoReqOptions(cur){
   sel.innerHTML = html;
   if(cur) sel.value = cur;
 }
-function resetRepoForm(repo){
+function repoStatusBadge(r){
+  var f = repoFreshness(r);
+  if(f.dot === "ok") return '<span class="br-tag-mini ok">同步正常</span>';
+  if(f.dot === "warn") return '<span class="br-tag-mini warn">同步失败</span>';
+  if(r.syncEnabled === false) return '<span class="br-tag-mini">已暂停</span>';
+  return '<span class="br-tag-mini">未同步</span>';
+}
+function repoProjectLabel(r){
+  return r.reqName || projectNameById(r.reqId) || r.reqId || "未关联项目";
+}
+function paintRepoSyncCard(repo){
+  var card = $("repoSyncCard");
+  if(!card) return;
+  if(!repo){ card.hidden = true; return; }
+  card.hidden = false;
+  if($("repoSyncWhen")){
+    $("repoSyncWhen").textContent = repo.lastSyncAt
+      ? ("上次同步：" + fmtTs(repo.lastSyncAt))
+      : (repo.lastSyncStatus === "error" ? "上次同步失败" : "还没有同步过");
+  }
+  var facts = $("repoSyncFacts");
+  if(facts){
+    var bits = [
+      '<span>进行中 <em>' + (repo.openBranchCount || 0) + '</em></span>',
+      '<span>待确认 <em>' + (repo.pendingBranchCount || 0) + '</em></span>'
+    ];
+    if(repo.lastSyncStatus === "error" && repo.lastSyncError){
+      bits.push('<span class="msg err">失败原因：' + esc(repo.lastSyncError) + '</span>');
+    } else if(repo.lastSyncStatus === "ok" && repo.lastSyncSummary){
+      bits.push('<span class="msg">' + esc(repo.lastSyncSummary) + '</span>');
+    }
+    facts.innerHTML = bits.join("");
+  }
+}
+function paintRepoHead(repo){
+  if($("dlgRepoDetailBadge")) $("dlgRepoDetailBadge").innerHTML = repo ? repoStatusBadge(repo) : "";
+  if($("dlgRepoDetailSub") && repo){
+    $("dlgRepoDetailSub").textContent = "所属项目：" + repoProjectLabel(repo) +
+      " · 已跟踪 " + (repo.openBranchCount || 0) + " 条进行中分支" +
+      ((repo.pendingBranchCount || 0) ? " · " + repo.pendingBranchCount + " 条待确认" : "");
+  }
+  paintRepoSyncCard(repo);
+}
+function setRepoLevel(open){
+  repoDetailOpen = !!open;
+  if($("repoListView")) $("repoListView").hidden = !!open;
+  if($("repoDetailView")) $("repoDetailView").hidden = !open;
+}
+function resetRepoForm(repo, presetReqId){
   repoEditingId = repo ? repo.id : null;
   if($("repoId")) $("repoId").value = repo ? repo.id : "";
-  fillRepoReqOptions(repo ? (repo.reqId || "") : (branchProjectFilter || ""));
+  fillRepoReqOptions(repo ? (repo.reqId || "") : (presetReqId || branchProjectFilter || ""));
   if($("repoName")) $("repoName").value = repo ? (repo.name || "") : "";
   if($("repoUrl")) $("repoUrl").value = repo ? (repo.repoUrl || "") : "";
   if($("repoRef")) $("repoRef").value = repo ? (repo.projectRef || "") : "";
@@ -1872,51 +2129,123 @@ function resetRepoForm(repo){
       ? (repo.tokenConfigured ? "已配置令牌，留空表示不修改" : "未配置令牌，填写后保存")
       : "填写 GitLab 访问令牌（PRIVATE-TOKEN）";
   }
+  if($("repoTokenHint")){
+    $("repoTokenHint").textContent = repo
+      ? "令牌只保存密文；更换后旧令牌不会在 GitLab 侧自动吊销。"
+      : "令牌只保存密文，保存后不再显示原文。";
+  }
+  if($("repoEditLockHint")) $("repoEditLockHint").hidden = !repo;
+  if($("dlgRepoDetailTitle")) $("dlgRepoDetailTitle").textContent = repo ? (repo.name || repo.repoUrl || "仓库") : "新建绑定";
+  if($("dlgRepoDetailSub")){
+    $("dlgRepoDetailSub").textContent = repo
+      ? "所属项目：" + repoProjectLabel(repo)
+      : "填写 GitLab 连接信息，沙漏只读拉取分支与已合并 MR。";
+  }
+  paintRepoHead(repo);
+  if($("repoSyncNow")) $("repoSyncNow").disabled = !repo;
   if($("dlgRepoOk")) $("dlgRepoOk").textContent = repo ? "保存修改" : "创建绑定";
+}
+function openRepoDetailLevel(repo, presetReqId){
+  resetRepoForm(repo, presetReqId);
+  setRepoLevel(true);
+  var first = $("repoUrl");
+  if(first && !repo) setTimeout(function(){ try{ first.focus(); }catch(e){} }, 60);
+}
+function openRepoListLevel(){
+  repoEditingId = null;
+  setRepoLevel(false);
+  paintRepoList();
+}
+function repoGroups(){
+  var groups = [], byKey = {};
+  branchRepoCache.forEach(function(r){
+    var key = r.reqId || "";
+    if(!byKey[key]){
+      byKey[key] = { reqId: key, name: repoProjectLabel(r), repos: [] };
+      groups.push(byKey[key]);
+    }
+    byKey[key].repos.push(r);
+  });
+  return groups;
+}
+function repoRowHTML(r){
+  var f = repoFreshness(r);
+  var stats = '<span class="st"><i class="' + f.dot + '"></i>' + esc(f.text) + '</span>';
+  if(r.openBranchCount != null) stats += '<span>' + r.openBranchCount + ' 条进行中</span>';
+  if(r.pendingBranchCount) stats += '<span class="warn">' + r.pendingBranchCount + ' 条待确认</span>';
+  if(r.lastSyncStatus === "error" && r.lastSyncError){
+    stats += '<span class="err" title="' + esc(r.lastSyncError) + '">' + esc(r.lastSyncError) + '</span>';
+  } else if(r.lastSyncStatus === "ok" && r.lastSyncSummary){
+    stats += '<span class="sum">' + esc(r.lastSyncSummary) + '</span>';
+  }
+  return '<div class="br-repo-card' + (r.syncEnabled === false ? " paused" : "") + '">' +
+    '<div class="info">' +
+      '<div class="nm"><button class="br-repo-name" type="button" data-repo-open="' + esc(r.id) + '">' + esc(r.name || r.repoUrl || r.id) + '</button>' +
+        repoStatusBadge(r) +
+        (r.tokenConfigured ? '<span class="br-tag-mini ok">令牌已配置</span>' : '<span class="br-tag-mini warn">未配置令牌</span>') +
+      '</div>' +
+      '<div class="url" title="' + esc(r.repoUrl || "") + '">' + esc(r.repoUrl || "—") + ' · ' + esc(r.projectRef || "—") + '</div>' +
+      '<div class="meta br-repo-meta">' + stats + '</div>' +
+    '</div>' +
+    '<div class="acts">' +
+      '<button class="btn sm" type="button" data-repo-sync="' + esc(r.id) + '">同步</button>' +
+      '<button class="btn sm ghost br-repo-open-btn" type="button" data-repo-open="' + esc(r.id) + '">详情</button>' +
+      '<button class="br-repo-more" type="button" data-repo-more="' + esc(r.id) + '" aria-label="更多操作" aria-haspopup="true" aria-expanded="false">···</button>' +
+    '</div>' +
+  '</div>';
 }
 function paintRepoList(){
   var box = $("repoList");
   if(!box) return;
   if(!branchRepoCache.length){
-    box.innerHTML = '<div class="tl-empty">还没有绑定仓库。填写下方信息后点「创建绑定」。</div>';
+    box.innerHTML = '<div class="br-repo-empty">' +
+      '<b>还没有绑定仓库</b>' +
+      '<span>点下方「＋ 新建绑定」为项目绑定 GitLab 仓库。</span>' +
+      '<span>一个项目可以有多个仓库（例如前端 / 后端 / 定时任务），同步出的分支按仓库隔离，同名也不会互相覆盖。</span>' +
+    '</div>';
     return;
   }
-  box.innerHTML = branchRepoCache.map(function(r){
-    var last = r.lastSyncAt ? esc(fmtTs(r.lastSyncAt)) : "尚未同步";
-    var status = r.lastSyncStatus === "ok" ? "同步正常"
-      : (r.lastSyncStatus === "error" ? "同步失败" : "未同步");
-    var detail = r.lastSyncStatus === "error" && r.lastSyncError ? r.lastSyncError : (r.lastSyncSummary || "");
-    return '<div class="br-repo-card' + (r.syncEnabled === false ? " paused" : "") + '">' +
-      '<div class="info">' +
-        '<div class="nm">' + esc(r.name || r.repoUrl || r.id) +
-          (r.tokenConfigured ? '<span class="br-tag-mini ok">令牌已配置</span>' : '<span class="br-tag-mini warn">未配置令牌</span>') +
-          (r.syncEnabled === false ? '<span class="br-tag-mini">已暂停</span>' : "") +
-        '</div>' +
-        '<div class="url" title="' + esc(r.repoUrl || "") + '">' + esc(r.repoUrl || "—") + ' · ' + esc(r.projectRef || "—") + '</div>' +
-        '<div class="meta">' + esc(r.reqName || projectNameById(r.reqId) || r.reqId || "未关联项目") +
-          ' · ' + last + ' · ' + esc(status) + (detail ? ' · ' + esc(detail) : "") + '</div>' +
+  box.innerHTML = repoGroups().map(function(g){
+    return '<section class="br-repo-group">' +
+      '<div class="br-repo-group-head">' +
+        '<b>' + esc(g.name) + '</b>' +
+        '<span class="n">' + g.repos.length + ' 个仓库</span>' +
+        '<span class="ln"></span>' +
+        '<button class="br-ghost-link" type="button" data-repo-add="' + esc(g.reqId) + '">+ 为本项目绑定仓库</button>' +
       '</div>' +
-      '<div class="acts">' +
-        '<button class="btn sm" type="button" data-repo-edit="' + esc(r.id) + '">编辑</button>' +
-        '<button class="btn sm ghost" type="button" data-repo-sync="' + esc(r.id) + '">立即同步</button>' +
-        '<button class="btn sm ghost" type="button" data-repo-toggle="' + esc(r.id) + '">' + (r.syncEnabled === false ? "启用" : "暂停") + '</button>' +
-      '</div>' +
-    '</div>';
+      g.repos.map(repoRowHTML).join("") +
+    '</section>';
   }).join("");
+}
+function findRepo(id){
+  for(var i = 0; i < branchRepoCache.length; i++) if(branchRepoCache[i].id === id) return branchRepoCache[i];
+  return null;
+}
+function openRepoMenu(anchor, id){
+  var r = findRepo(id);
+  if(!r) return;
+  var el = document.createElement("div");
+  el.className = "menu br-status-menu";
+  el.innerHTML =
+    '<button class="menu-item" type="button" data-repo-open="' + esc(id) + '">查看与编辑</button>' +
+    '<button class="menu-item" type="button" data-repo-sync="' + esc(id) + '">立即同步</button>' +
+    '<button class="menu-item" type="button" data-repo-toggle="' + esc(id) + '">' +
+      (r.syncEnabled === false ? "启用定时同步" : "暂停定时同步") + '</button>';
+  el.addEventListener("click", function(e){
+    if(e.target.closest("[data-repo-open]")){ UI.closeAllPops(); openRepoDetailLevel(findRepo(id)); return; }
+    if(e.target.closest("[data-repo-sync]")){ UI.closeAllPops(); syncRepoNow(id); return; }
+    if(e.target.closest("[data-repo-toggle]")){ UI.closeAllPops(); toggleRepo(id); }
+  });
+  UI.openPop(el, anchor, { align: "right", sheet: true });
 }
 function openRepoDialog(){
   if(!isWorkspaceOwner()){ toast("只有空间主可以管理仓库绑定", "warn"); return; }
-  resetRepoForm(null);
-  paintRepoList();
+  openRepoListLevel();
   UI.openModal($("dlgRepo"));
   loadRepos(true).then(function(){
     paintRepoList();
     populateRepoFilter();
   });
-}
-function findRepo(id){
-  for(var i = 0; i < branchRepoCache.length; i++) if(branchRepoCache[i].id === id) return branchRepoCache[i];
-  return null;
 }
 function submitRepoDialog(){
   var reqId = (($("repoReq") || {}).value || "").trim();
@@ -1926,6 +2255,7 @@ function submitRepoDialog(){
   if(!repoUrl){ toast("请填写 GitLab 地址", "warn"); return; }
   if(!projectRef){ toast("请填写 GitLab 项目标识", "warn"); return; }
   var token = (($("repoToken") || {}).value || "").trim();
+  var editingId = repoEditingId;
   var payload = {
     reqId: reqId,
     name: (($("repoName") || {}).value || "").trim() || null,
@@ -1938,17 +2268,20 @@ function submitRepoDialog(){
   if(token) payload.token = token;
   var btn = $("dlgRepoOk");
   if(btn) btn.disabled = true;
-  var req = repoEditingId
-    ? API.put("/api/repos/" + encodeURIComponent(repoEditingId), payload)
+  var req = editingId
+    ? API.put("/api/repos/" + encodeURIComponent(editingId), payload)
     : API.post("/api/repos", payload);
   req.then(function(r){
     if(btn) btn.disabled = false;
-    toast(repoEditingId ? ("已保存仓库「" + (r.name || r.repoUrl) + "」") : ("已绑定仓库「" + (r.name || r.repoUrl) + "」"), "fs");
-    resetRepoForm(null);
+    toast(editingId ? ("已保存仓库「" + (r.name || r.repoUrl) + "」") : ("已绑定仓库「" + (r.name || r.repoUrl) + "」"), "fs");
+    var savedId = r && r.id ? r.id : editingId;
     return loadRepos(true).then(function(){
       paintRepoList();
       populateRepoFilter();
       loadBranches(true);
+      var fresh = savedId ? findRepo(savedId) : null;
+      if(fresh && (editingId || repoDetailOpen)) openRepoDetailLevel(fresh);
+      else openRepoListLevel();
     });
   }).catch(function(ex){
     if(btn) btn.disabled = false;
@@ -1960,7 +2293,11 @@ function toggleRepo(id){
   if(!r) return;
   API.post("/api/repos/" + encodeURIComponent(id) + "/enabled?enabled=" + (r.syncEnabled === false ? "true" : "false"))
     .then(function(){ return loadRepos(true); })
-    .then(function(){ paintRepoList(); toast(r.syncEnabled === false ? "已启用定时同步" : "已暂停定时同步", "fs"); })
+    .then(function(){
+      paintRepoList();
+      if(repoDetailOpen && repoEditingId === id){ var fresh = findRepo(id); if(fresh) paintRepoHead(fresh); }
+      toast(r.syncEnabled === false ? "已启用定时同步" : "已暂停定时同步", "fs");
+    })
     .catch(function(ex){ toast(ex.message || "修改同步状态失败", "bad"); });
 }
 function syncRepoNow(id){
@@ -1976,6 +2313,7 @@ function syncRepoNow(id){
     })
     .then(function(){
       paintRepoList();
+      if(repoDetailOpen && repoEditingId === id){ var fresh = findRepo(id); if(fresh) paintRepoHead(fresh); }
       loadBranches(true).then(function(){ if(branchViewMode === "list") loadBranchRows(); });
     })
     .catch(function(ex){ toast(ex.message || "同步失败", "bad"); });
@@ -2071,16 +2409,28 @@ function clearGroupOver(){
         renderBranches();
         return;
       }
-      var pg = e.target.closest("[data-project]");
+      /* 只认分组头本身：卡片上的点击不应顺带切项目/仓库筛选 */
+      var pg = e.target.closest("[data-project] > .br-group-head");
       if(pg){
-        if(pg.dataset.project && pg.dataset.project !== "__none__") branchProjectFilter = pg.dataset.project;
+        var pgEl = pg.parentNode;
+        if(pgEl.dataset.project && pgEl.dataset.project !== "__none__") branchProjectFilter = pgEl.dataset.project;
         if($("branchProjectFilter")) $("branchProjectFilter").value = branchProjectFilter;
         /* 版本候选跟随项目：换了项目就把版本条件收回，避免停在别项目的版本上 */
         branchVersionFilter = "";
         if($("branchVersionFilter")) $("branchVersionFilter").value = "";
+        scopeRepoToProject();
+        populateRepoFilter();
         branchGroupMode = "status";
         updateBranchGroupToggle();
         loadBranches(true);
+        return;
+      }
+      var rg = e.target.closest("[data-repo-group] > .br-group-head");
+      if(rg){
+        var rid = rg.parentNode.dataset.repoGroup;
+        branchRepoFilter = branchRepoFilter === rid ? "" : rid;
+        syncBranchFilterControls();
+        if(branchViewMode === "list") loadBranchRows(); else loadBranches(true);
       }
     });
   }
@@ -2162,6 +2512,9 @@ function clearGroupOver(){
       branchProjectFilter = e.target.value;
       branchVersionFilter = "";
       if($("branchVersionFilter")) $("branchVersionFilter").value = "";
+      /* 仓库筛选跟随项目：当前仓库不属于新项目就自动收回，避免停在空结果上 */
+      scopeRepoToProject();
+      populateRepoFilter();
       loadBranches(true);
     });
   }
@@ -2240,18 +2593,33 @@ function clearGroupOver(){
       if(branchViewMode === "list") loadBranchRows(); else loadBranches(true);
     });
   }
+  if($("branchRepoStrip")){
+    $("branchRepoStrip").addEventListener("click", function(e){
+      if(e.target.closest("[data-br-repo-manage]")){ openRepoDialog(); return; }
+      var chip = e.target.closest("[data-br-repo]");
+      if(!chip) return;
+      branchRepoFilter = chip.dataset.brRepo || "";
+      syncBranchFilterControls();
+      if(branchViewMode === "list") loadBranchRows(); else loadBranches(true);
+    });
+  }
   if($("branchReposBtn")) $("branchReposBtn").addEventListener("click", openRepoDialog);
-  if($("repoNew")) $("repoNew").addEventListener("click", function(){ resetRepoForm(null); });
+  if($("repoNew")) $("repoNew").addEventListener("click", function(){ openRepoDetailLevel(null, branchProjectFilter || ""); });
+  if($("repoBack")) $("repoBack").addEventListener("click", openRepoListLevel);
   if($("dlgRepoCancel")) $("dlgRepoCancel").addEventListener("click", function(){ UI.closeModal($("dlgRepo")); });
+  if($("repoDetailCancel")) $("repoDetailCancel").addEventListener("click", openRepoListLevel);
   if($("dlgRepoOk")) $("dlgRepoOk").addEventListener("click", submitRepoDialog);
+  if($("repoSyncNow")) $("repoSyncNow").addEventListener("click", function(){ if(repoEditingId) syncRepoNow(repoEditingId); });
   if($("repoList")){
     $("repoList").addEventListener("click", function(e){
-      var ed = e.target.closest("[data-repo-edit]");
-      if(ed){ var r = findRepo(ed.dataset.repoEdit); if(r) resetRepoForm(r); return; }
+      var add = e.target.closest("[data-repo-add]");
+      if(add){ openRepoDetailLevel(null, add.dataset.repoAdd || ""); return; }
+      var more = e.target.closest("[data-repo-more]");
+      if(more){ openRepoMenu(more, more.dataset.repoMore); return; }
       var sy = e.target.closest("[data-repo-sync]");
       if(sy){ syncRepoNow(sy.dataset.repoSync); return; }
-      var tg = e.target.closest("[data-repo-toggle]");
-      if(tg) toggleRepo(tg.dataset.repoToggle);
+      var open = e.target.closest("[data-repo-open]");
+      if(open){ openRepoDetailLevel(findRepo(open.dataset.repoOpen)); }
     });
   }
   if($("branchListGroup")){
@@ -2262,7 +2630,8 @@ function clearGroupOver(){
   }
   if($("branchGroupToggle")){
     $("branchGroupToggle").addEventListener("click", function(){
-      branchGroupMode = branchGroupMode === "status" ? "project" : "status";
+      branchGroupMode = branchGroupMode === "status" ? "project"
+        : (branchGroupMode === "project" ? "repo" : "status");
       updateBranchGroupToggle();
       renderBranches();
     });
@@ -2271,6 +2640,12 @@ function clearGroupOver(){
   if($("dlgBranchCancel")) $("dlgBranchCancel").addEventListener("click", closeBranchDialog);
   if($("dlgBranchOk")) $("dlgBranchOk").addEventListener("click", submitBranchDialog);
   if($("brOwnerBtn")) $("brOwnerBtn").addEventListener("click", function(){ openBranchOwnerPicker($("brOwnerBtn")); });
+  if($("brReq")){
+    $("brReq").addEventListener("change", function(){
+      /* 仓库候选只属于所选项目：换项目就重画，已选仓库自然收回 */
+      fillBranchRepoOptions($("brRepo"), "", this.value, !!brEditingId);
+    });
+  }
   if($("brName")){
     $("brName").addEventListener("keydown", function(e){
       if(e.key === "Enter"){ e.preventDefault(); submitBranchDialog(); }

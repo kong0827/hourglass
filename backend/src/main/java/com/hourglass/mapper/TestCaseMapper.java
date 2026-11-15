@@ -46,6 +46,25 @@ public interface TestCaseMapper {
     /** 目录节点删除前检查：仍直接挂载的用例数 */
     int countByModuleId(@Param("workspaceId") String workspaceId, @Param("moduleId") String moduleId);
 
+    /** 目录改名：同步 module 展示快照（关联与筛选仍只认 module_id） */
+    int updateModuleSnapshot(@Param("workspaceId") String workspaceId, @Param("moduleId") String moduleId,
+                             @Param("module") String module);
+
+    /** 目录删除：把其下用例迁到目标目录，快照与 module_id 一起改 */
+    int moveCasesToModule(@Param("workspaceId") String workspaceId, @Param("fromId") String fromId,
+                          @Param("toId") String toId, @Param("module") String module);
+
+    /** 手动排序：项目内当前最大值（新用例追加到末尾） */
+    Integer maxSortOrder(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    int updateSortOrder(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                        @Param("sortOrder") int sortOrder);
+
+    /** 手动排序的当前顺序：目录内（__none = 未归类；null = 整个项目）按序号读取 */
+    List<String> selectIdsForOrder(@Param("workspaceId") String workspaceId,
+                                   @Param("reqId") String reqId,
+                                   @Param("moduleId") String moduleId);
+
     /** 筛选下拉候选值（不受当前筛选影响） */
     List<String> selectModules(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 

@@ -13,9 +13,11 @@ import com.hourglass.dto.BranchVersionTag;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.DevBranch;
 import com.hourglass.entity.DevBranchLog;
+import com.hourglass.entity.ProjectRepo;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.DevBranchMapper;
+import com.hourglass.mapper.ProjectRepoMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.UserMapper;
@@ -70,6 +72,7 @@ public class BranchService {
     }
 
     private final DevBranchMapper branchMapper;
+    private final ProjectRepoMapper repoMapper;
     private final TaskMapper taskMapper;
     private final UserMapper userMapper;
     private final ProjectAccessService projectAccess;
@@ -80,10 +83,12 @@ public class BranchService {
     @org.springframework.beans.factory.annotation.Autowired
     private TaskQueryService taskQueries;
 
-    public BranchService(DevBranchMapper branchMapper, TaskMapper taskMapper, UserMapper userMapper,
+    public BranchService(DevBranchMapper branchMapper, ProjectRepoMapper repoMapper, TaskMapper taskMapper,
+                         UserMapper userMapper,
                          ProjectAccessService projectAccess, RequirementMapper requirementMapper,
                          NotificationEventService notificationEvents, DeletionTraceService deletionTrace) {
         this.branchMapper = branchMapper;
+        this.repoMapper = repoMapper;
         this.taskMapper = taskMapper;
         this.userMapper = userMapper;
         this.projectAccess = projectAccess;
@@ -191,6 +196,7 @@ public class BranchService {
         BranchBoard board = new BranchBoard();
         board.setCounts(counts);
         board.setOutcomeCounts(outcomeCountsOf(base));
+        board.setRepoCounts(repoCountsOf(base));
         board.setAvgCycleDays(avgCycleDays(base));
         List<DevBranch> all = new ArrayList<DevBranch>();
         for (String status : LABELS.keySet()) {
@@ -285,6 +291,22 @@ public class BranchService {
             String outcome = String.valueOf(row.get("outcome"));
             int cnt = ((Number) row.get("cnt")).intValue();
             counts.put(outcome, cnt);
+        }
+        counts.put("all", sumCounts(counts));
+        return counts;
+    }
+
+    private Map<String, Integer> repoCountsOf(BranchQuery q) {
+        Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+        /* 仓库条要看到每个仓库各自多少条：忽略仓库自身筛选，状态维度也交给 chips */
+        BranchQuery cq = copyOf(q);
+        cq.setRepoId(null);
+        cq.setStatus(null);
+        for (Map<String, Object> row : branchMapper.countGroupByRepo(cq)) {
+            Object repoId = row.get("repoId");
+            String key = repoId == null ? "__none__" : String.valueOf(repoId);
+            int cnt = ((Number) row.get("cnt")).intValue();
+            counts.put(key, cnt);
         }
         counts.put("all", sumCounts(counts));
         return counts;
@@ -442,8 +464,23 @@ public class BranchService {
         String name = normalizeName(req.getName());
         String reqId = normalizeReqId(workspaceId, req.getReqId());
         projectAccess.assertWrite(workspaceId, userId, reqId);
-        if (branchMapper.countByName(workspaceId, name, reqId, null) > 0) {
-            throw AppException.badRequest("分支「" + name + "」已存在");
+        String repoId = Texts.trimToNull(req.getRepoId());
+        if (repoId == null) {
+            if (branchMapper.countByName(workspaceId, name, reqId, null) > 0) {
+                throw AppException.badRequest("分支「" + name + "」已存在");
+            }
+        } else {
+            ProjectRepo repo = repoMapper.selectById(repoId);
+            if (repo == null || !workspaceId.equals(repo.getWorkspaceId())) {
+                throw AppException.badRequest("所属仓库不存在：" + repoId);
+            }
+            /* 仓库分支的归属项目来自仓库绑定；对不上说明调用方把两个项目的参数拼错了 */
+            if (reqId == null || !reqId.equals(repo.getReqId())) {
+                throw AppException.badRequest("所属仓库不属于所选项目");
+            }
+            if (branchMapper.selectByRepoAndName(workspaceId, repoId, name) != null) {
+                throw AppException.badRequest("该仓库下已存在分支「" + name + "」");
+            }
         }
         String status = normalizeStatus(req.getStatus(), ST_DEV);
 
@@ -451,6 +488,7 @@ public class BranchService {
         b.setId(Ids.gen("B"));
         b.setWorkspaceId(workspaceId);
         b.setReqId(reqId);
+        b.setRepoId(repoId);
         b.setName(name);
         b.setStatus(status);
         applyOwner(b, userId, req.getOwner(), req.getOwnerUserId());
@@ -482,6 +520,11 @@ public class BranchService {
         String name = req.getName() == null ? b.getName() : normalizeName(req.getName());
         String reqId = req.getReqId() == null ? b.getReqId() : normalizeReqId(workspaceId, req.getReqId());
         projectAccess.assertWrite(workspaceId, userId, reqId);
+        /* 换仓库等于换一套远程事实与命名空间：不在这里支持，避免同步把两条分支的事实搅在一起 */
+        String repoId = Texts.trimToNull(req.getRepoId());
+        if (repoId != null && !repoId.equals(b.getRepoId())) {
+            throw AppException.badRequest("分支的所属仓库创建后不可修改");
+        }
         /* 同步分支的名称/归属来自仓库：本地改名会让下一次同步把它判成「消失 + 新分支」 */
         if (b.getRepoId() != null) {
             if (!name.equals(b.getName())) {

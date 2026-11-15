@@ -4,8 +4,10 @@ import com.hourglass.common.AppException;
 import com.hourglass.dto.CategoryRequest;
 import com.hourglass.entity.Category;
 import com.hourglass.entity.Requirement;
+import com.hourglass.mapper.CaseSetMapper;
 import com.hourglass.mapper.CategoryMapper;
 import com.hourglass.mapper.RequirementMapper;
+import com.hourglass.mapper.TestCaseMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -21,7 +23,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 模块增删的破坏性行为：同项目迁移、至少保留一个、权限与审计文案。 */
+/** 目录增删改的破坏性行为：子目录守卫、同项目迁移、权限与审计文案。 */
 class CategoryServiceTest {
 
     private static final String WS = "W1";
@@ -36,8 +38,11 @@ class CategoryServiceTest {
     private final ProjectAccessService projectAccess = mock(ProjectAccessService.class);
     private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
     private final WorkspaceMetaCache metaCache = mock(WorkspaceMetaCache.class);
+    private final TestCaseMapper caseMapper = mock(TestCaseMapper.class);
+    private final CaseSetMapper setMapper = mock(CaseSetMapper.class);
     private final CategoryService service = new CategoryService(categoryMapper, requirementMapper,
-            activityService, deletionTrace, projectAccess, releasePermission, metaCache);
+            activityService, deletionTrace, projectAccess, releasePermission, metaCache,
+            caseMapper, setMapper);
 
     @BeforeEach
     void setUp() {
@@ -47,18 +52,22 @@ class CategoryServiceTest {
         project.setName("项目一");
         when(requirementMapper.selectById(PROJECT)).thenReturn(project);
         when(releasePermission.canManageProject(USER, WS, PROJECT)).thenReturn(true);
-        when(categoryMapper.maxSortOrder(WS, PROJECT)).thenReturn(4);
+        when(categoryMapper.maxSortOrder(WS, PROJECT, "")).thenReturn(4);
     }
 
     @Test
-    void deleteMovesTasksAndDemandsToFirstSiblingAndLogsCounts() {
+    void deleteMovesTasksDemandsAndCasesToFirstSiblingAndLogsCounts() {
         Category front = category("G1", "前端", PROJECT);
         Category back = category("G2", "后端", PROJECT);
         Category foreign = category("G9", "别的项目", OTHER_PROJECT);
         when(categoryMapper.selectById(WS, "G1")).thenReturn(front);
         when(metaCache.categories(WS)).thenReturn(Arrays.asList(front, back, foreign));
+        when(categoryMapper.countTasksByCategory(WS, PROJECT, "G1")).thenReturn(3);
+        when(categoryMapper.countDemandsByCategory(WS, PROJECT, "G1")).thenReturn(1);
+        when(caseMapper.countByModuleId(WS, "G1")).thenReturn(2);
         when(categoryMapper.moveTasksToCategory(WS, PROJECT, "G1", "G2")).thenReturn(3);
         when(categoryMapper.moveDemandsToCategory(WS, PROJECT, "G1", "G2")).thenReturn(1);
+        when(caseMapper.moveCasesToModule(WS, "G1", "G2", "后端")).thenReturn(2);
         when(categoryMapper.selectTaskIdsForCascade(WS, PROJECT, "G1"))
                 .thenReturn(Arrays.asList("K1", "K2", "K3"));
 
@@ -66,11 +75,12 @@ class CategoryServiceTest {
 
         verify(categoryMapper).moveTasksToCategory(WS, PROJECT, "G1", "G2");
         verify(categoryMapper).moveDemandsToCategory(WS, PROJECT, "G1", "G2");
+        verify(caseMapper).moveCasesToModule(WS, "G1", "G2", "后端");
         verify(categoryMapper).deleteById(WS, "G1");
         verify(deletionTrace).logTaskCascade(WS, USER, Arrays.asList("K1", "K2", "K3"),
-                "因删除模块「前端」，自动改到「后端」");
+                "因删除目录「前端」，自动改到「后端」");
         verify(activityService).logConfig(WS,
-                "项目「项目一」删除模块「前端」，其下 3 个工作项与 1 个需求已改到「后端」");
+                "项目「项目一」删除目录「前端」，其下 3 个工作项、1 个需求、2 条用例已改到「后端」");
     }
 
     @Test
@@ -87,10 +97,22 @@ class CategoryServiceTest {
     }
 
     @Test
-    void deleteKeepsLastModule() {
+    void deleteRejectsDirectoryWithChildren() {
+        Category front = category("G1", "前端", PROJECT);
+        when(categoryMapper.selectById(WS, "G1")).thenReturn(front);
+        when(categoryMapper.countChildren(WS, PROJECT, "G1")).thenReturn(2);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.delete(WS, USER, "G1", null)).getCode());
+        verify(categoryMapper, never()).deleteById(any(), any());
+    }
+
+    @Test
+    void deleteOnlyDirectoryWithContentNeedsMigrationTarget() {
         Category only = category("G1", "其他", PROJECT);
         when(categoryMapper.selectById(WS, "G1")).thenReturn(only);
         when(metaCache.categories(WS)).thenReturn(Collections.singletonList(only));
+        when(categoryMapper.countTasksByCategory(WS, PROJECT, "G1")).thenReturn(5);
 
         assertEquals(400, assertThrows(AppException.class,
                 () -> service.delete(WS, USER, "G1", null)).getCode());
@@ -108,7 +130,7 @@ class CategoryServiceTest {
 
         service.delete(WS, USER, "G1", null);
 
-        verify(activityService).logConfig(WS, "项目「项目一」删除模块「前端」，该模块没有工作项与需求");
+        verify(activityService).logConfig(WS, "项目「项目一」删除目录「前端」，该目录没有工作项、需求与用例");
     }
 
     @Test
@@ -128,14 +150,16 @@ class CategoryServiceTest {
     }
 
     @Test
-    void createRequiresManagePermission() {
+    void createAllowedForWriteMemberWithoutManagePermission() {
         when(releasePermission.canManageProject(USER, WS, PROJECT)).thenReturn(false);
         CategoryRequest req = new CategoryRequest();
         req.setName("新模块");
+        when(categoryMapper.insert(any(Category.class))).thenReturn(1);
 
-        assertEquals(403, assertThrows(AppException.class,
-                () -> service.create(WS, USER, PROJECT, req)).getCode());
-        verify(categoryMapper, never()).insert(any(Category.class));
+        service.create(WS, USER, PROJECT, req);
+
+        verify(projectAccess).assertWrite(WS, USER, PROJECT);
+        verify(categoryMapper).insert(any(Category.class));
     }
 
     private Category category(String id, String name, String projectId) {

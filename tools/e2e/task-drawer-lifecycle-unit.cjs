@@ -22,7 +22,7 @@ function element(id) {
   const classes = new Set(), attributes = {}, listeners = {};
   let html = "";
   return {
-    id, value:"", disabled:false, hidden:false, textContent:"", dataset:{}, options:[],
+    id, value:"", disabled:false, hidden:false, textContent:"", dataset:{}, options:[], style:{},
     get selectedOptions() { return this.options.filter(o => o.selected); },
     get innerHTML() { return html; },
     set innerHTML(value) {
@@ -53,16 +53,31 @@ function harness() {
     console, $,
     // 此处不调度焦点计时器；所有受测异步边界均由真实 Promise 驱动。
     setTimeout:() => 0, clearTimeout() {},
-    document:{ body:{}, documentElement:{}, activeElement:null, createElement:tag => element(tag) },
+    window:{ SUNEDITOR:{ create:() => ({ setContents(){}, getContents(){ return ""; }, disable(){}, enable(){} }) }, CURRENT_WORKSPACE:"" },
+    SUNEDITOR:{ create:() => ({ setContents(){}, getContents(){ return ""; }, disable(){}, enable(){} }) },
+    document:{ body:{}, documentElement:{}, activeElement:null, createElement:tag => element(tag), querySelector:() => null },
     rt:{ taskFormSeq:0, editingId:null, formDirty:false, drawerReadOnly:false, colDefsCache:[], currentWs:{ id:"W1" }, reqList:[] },
     state:{ runningTimer:null }, taskCacheExtra:{}, COLUMNS:[],
     normalizedIds:ids => Array.isArray(ids) ? [...new Set(ids.filter(Boolean))] : [],
-    taskVersionIds:task => task.versionIds || [],
+    taskVersionIds:task => task.versionIds || [], taskVersionsText:() => "", taskVersionLinksHTML:() => "",
+    drawerDemandId:() => "",
+    assocLinkHTML:() => "", docTypeName:value => value || "", itemTypeInfoHTML:() => "",
+    versionPhaseInfoHTML:() => "", releaseSnapshotHTML:() => "", fmtMinutes:value => String(value),
+    fmtMinutesShort:value => String(value), fmtSize:value => String(value), fmtShortMD:value => value || "",
+    fmtTs:value => value || "", pad2:value => String(value), parseDate:value => value, priColor:() => "",
+    startPresetDate:() => "", duePresetDate:() => "", spanText:() => "", elapsedText:() => "",
+    weekdayCN:() => "", avatarHTML:() => "", dayDiff:() => 0, ITEM_TYPE_DESCS:{}, CAT_DEFAULT_COLOR:"",
+    PRIORITIES:["P0","P1","P2","P3"], icon:() => "", catNameById:() => "",
+    depAssocCounts:() => ({ total:0, pred:0, succ:0 }),
     selectedVersionIds:sel => sel.selectedOptions.map(o => o.value),
     sameIds:(left, right) => JSON.stringify([...left].sort()) === JSON.stringify([...right].sort()),
     canEditTask:task => task.canEdit !== false, canEditReq:id => id !== "READONLY", roleReadOnly:() => false,
     defaultReqId:() => "R1", projCats:() => [], projFirstCat:() => "",
+    currentReqId:() => ($("iReq") && $("iReq").value) || "", reqNameById:id => id || "",
+    colMeta:() => ({ name:"" }), priName:code => code || "", itemNoText:() => "", fmtFactDate:value => value || "",
     ownerPick:() => ({ name:"", userId:null }), esc:value => String(value),
+    isHtml:value => /<[^>]+>/.test(String(value || "")),
+    plainTextToHtml:value => "<p>" + String(value || "") + "</p>",
     API:{
       get(url) {
         // 打开抽屉会拉取依赖关系；依赖区块不属于本用例关注点，返回空列表即可。
@@ -72,7 +87,7 @@ function harness() {
       put(url, body) { const d = deferred(); requests.push({ url, body, ...d }); return d.promise; },
       post(url, body) { return this.put(url, body); }
     },
-    UI:{ wireTooltips() {}, showPrompt() { const d = deferred(); prompts.push(d); return d.promise; } },
+    UI:{ wireTooltips() {}, showPrompt() { const d = deferred(); prompts.push(d); return d.promise; }, anyDialogOpen:() => false, topModalZ:() => 1000 },
     guard() { const d = deferred(); guards.push(d); return d.promise; },
     serverDecision() { const d = deferred(); decisions.push(d); return d.promise; },
     toast:message => notices.push(message), taskPublicationHTML:() => "", fmtReleaseTime:value => value,
@@ -84,13 +99,14 @@ function harness() {
   for (const name of ["iItemType", "iSeverity", "iEnvironment", "iReproSteps", "iRegression", "taskFormHint", "reqDocPickerBtn", "btnAttach"]) globals[name] = $(name);
   globals.taskDrawer.querySelector = selector => selector === ".drawer" ? $("drawerRoot") : null;
   globals.taskForm.querySelectorAll = selector => selector === "input,select,textarea" ? Object.values(elements).filter(el => /^i[A-Z]/.test(el.id)) : [];
-  for (const name of ["closeMention", "syncDateBounds", "renderActualEstimate", "populateColSelect", "populateReqSelect", "populateOwnerSelect", "refreshOwnerSelect", "renderTagChips", "clearDefectFields", "syncDefectFields", "syncTypeButtons", "syncSeverityButtons", "syncTitleCount", "syncDueNote", "syncDrawerSource", "syncDrawerFacts", "syncAssocMore", "syncAssocViewBtns", "syncProgVal", "syncCatSeg", "syncFormSegs", "syncMoreSummary", "clearPendingCommentFiles", "stashCommentDraft", "restoreCommentDraft", "discardCommentDraft", "loadWatchStatus", "loadWorkStatus", "loadAttachments", "loadSubtasks", "loadComments", "loadTimeline", "loadTaskReleaseRecords", "clearWorkTick", "ensureDemand", "ensureFoundVersion", "ensureEpic", "ensureReqDoc", "ensureBranch", "rememberReqId", "syncVersionReason", "closeDepInline"]) globals[name] = () => {};
+  for (const name of ["closeMention", "syncDateBounds", "renderActualEstimate", "populateColSelect", "populateReqSelect", "populateOwnerSelect", "refreshOwnerSelect", "populateTestOwnerSelect", "refreshTestOwnerSelect", "refreshDepCreateOwners", "testOwnerPick", "renderTagChips", "clearDefectFields", "syncDefectFields", "syncTypeButtons", "syncSeverityButtons", "syncTitleCount", "syncDueNote", "syncDrawerSource", "syncDrawerFacts", "syncAssocMore", "syncAssocViewBtns", "syncProgVal", "syncCatSeg", "syncFormSegs", "syncMoreSummary", "clearPendingCommentFiles", "stashCommentDraft", "restoreCommentDraft", "discardCommentDraft", "loadWatchStatus", "loadWorkStatus", "loadAttachments", "loadSubtasks", "loadComments", "loadTimeline", "loadTaskReleaseRecords", "clearWorkTick", "ensureDemand", "ensureFoundVersion", "ensureEpic", "ensureReqDoc", "ensureBranch", "rememberReqId", "syncVersionReason", "closeDepInline", "closeTimeAddInline", "syncTestWindow", "setSaveLoading", "syncInlineTextAffordance"]) globals[name] = () => {};
   globals.ensureVersion = keep => {
     const sel = $("iVersion");
     sel.options = (Array.isArray(keep) ? keep : []).map(value => ({ value, selected:true }));
     sel.setAttribute("data-ready", "1");
   };
   for (const name of refreshNames) globals[name] = () => refreshes.push(name);
+  for (const name of ["refreshTreeIfOpen", "refreshChainIfOpen"]) globals[name] = () => {};
   const context = vm.createContext(globals);
   const sections = [
     slice(drawerSource, "function syncDrawerDirty(", "function focusField("),
@@ -98,13 +114,13 @@ function harness() {
     slice(drawerSource, "function syncTaskPublication(", "function loadTaskReleaseRecords("),
     slice(drawerSource, "function openDrawer(", "/**"),
     slice(drawerSource, "function applyDrawerReadOnly(", "/** 只读抽屉"),
-    slice(drawerSource, "function openTaskDrawer(", "function syncProgByCol("),
+    slice(drawerSource, "function syncDrawerBackBtn(", "function syncProgByCol("),
     slice(drawerSource, "function syncProgByCol(", "/* 路由切换前"),
     slice(drawerSource, "function forceCloseTaskDrawer(", "function wireSegKeyboard("),
     slice(drawerSource, "function syncDrawerHead(", "function isoDate("),
     slice(drawerSource, 'taskForm.addEventListener("submit",', '$("btnCloseTask").addEventListener(')
   ];
-  vm.runInContext("var origProgress = 0, startedDone = false, commentsCache = []; var demandTargetCache = {}, demandTargetPending = {}; var lastCommentDraftId = null, pendingCommentFiles = [];", context);
+  vm.runInContext("var origProgress = 0, startedDone = false, commentsCache = []; var demandTargetCache = {}, demandTargetPending = {}; var lastCommentDraftId = null, pendingCommentFiles = []; var depInlineOpen = false; var depState = { taskId:null, seq:0, edges:[], pending:[], loading:false, error:'', pickerItems:[], pickerLoading:false, mode:'', alignOnce:false }; var inlineText = null, factSaveView = null, factSaveQueued = false, factSaveMsg = '';", context);
   for (const section of sections) vm.runInContext(section, context, { filename:"task-drawer.js (real source)" });
   function open({ edit = false, demand = false, readOnly = false } = {}) {
     const task = edit ? { id:"T1", reqId:readOnly ? "READONLY" : "R1", title:"原任务", boardColumn:"backlog", versionIds:[], canEdit:!readOnly } : null;
@@ -209,6 +225,7 @@ async function versionRace({ failOld = false, readOnly = false } = {}) {
     versionOptionsCache:{}, taskOptionsCache:{}, taskCacheExtra:{},
     API:{ get() { const d = deferred(); pending.push(d); return d.promise; } },
     normalizedIds:ids => ids, versionContentLocked:() => false, esc:String,
+    versionReadOnly:() => false, versionEnded:() => false,
     document:{ createElement:tag => element(tag) }
   });
   vm.runInContext(slice(phaseSource, "function fetchVersions(", "/* 「发现版本」"), context, { filename:"phase.js (real source)" });

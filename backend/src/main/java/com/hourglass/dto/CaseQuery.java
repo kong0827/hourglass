@@ -30,6 +30,10 @@ public class CaseQuery {
     private String demandId;
     /** 用例集 ID / __none（未加入任何可见分组） */
     private String setId;
+    /** 分组筛选是否含子分组用例（服务层展开为 setIds） */
+    private boolean setSub;
+    /** 服务层展开后的分组范围（setId + 子树），XML 只用它 */
+    private List<String> setIds;
     /** 仅看关联缺陷仍有效未完成（未删除、未进入完成列）的用例 */
     private boolean bugOnly;
     /** 回归集谓词：最近失败 / 阻塞，或关联缺陷仍未关闭（动态分组规则用） */
@@ -37,7 +41,7 @@ public class CaseQuery {
     private String q;
     /** 搜索范围：false 只搜标题/编号/模块，true 才搜前置、测试数据、步骤等大字段 */
     private boolean searchWide;
-    /** 排序字段白名单：created / updated / executed / no / pri / module / status */
+    /** 排序字段白名单：created / updated / executed / no / pri / module / status / manual */
     private String sort = "created";
     /** asc / desc */
     private String sortDir = "desc";

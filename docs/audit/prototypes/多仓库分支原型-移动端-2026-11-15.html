@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>多仓库项目 · 移动端原型</title>
+<style>
+  :root{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --border:#E4E7EC; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085;
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+    --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+    --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+    --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    --font-mono:"SFMono-Regular",Consolas,Menlo,monospace;
+    --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+    --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+    --shadow-lg:0 -12px 24px -6px rgba(16,24,40,.10);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{background:#E9ECF1;font-family:var(--font-sans);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased;}
+  .wrap{width:390px;margin:0 auto;padding:16px 0 30px;}
+  .head{color:var(--text-2);padding:0 14px 10px;}
+  .head h1{font-size:15px;margin:0 0 4px;color:var(--text);}
+  .head p{margin:0;font-size:11px;line-height:17px;color:var(--text-3);}
+  .phone{width:390px;background:var(--bg-app);border:1px solid var(--border-strong);border-radius:20px;overflow:hidden;margin:0 0 14px;box-shadow:0 10px 30px rgba(16,24,40,.10);}
+  .cap{background:var(--surface-sunken);border-bottom:1px solid var(--border);padding:9px 14px;font-size:11px;color:var(--text-2);}
+  .cap b{color:var(--text);}
+  .statusbar{height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:10px;color:var(--text-3);background:var(--surface);}
+  .nav{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--border);}
+  .nav b{font-size:14px;}
+  .nav .ic{width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:var(--text-2);}
+  .body{padding:10px 12px 14px;}
+  .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden;background:var(--surface);}
+  .seg button{border:0;background:transparent;height:26px;padding:0 10px;font-size:11px;color:var(--text-2);}
+  .seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:28px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:11.5px;color:var(--text-2);white-space:nowrap;}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600;}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--text-2);}
+  .btn.sm{height:24px;padding:0 8px;font-size:11px;}
+  .btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+  .n{display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 4px;border-radius:var(--r-pill);background:var(--primary);color:#fff;font-size:10px;font-weight:600;}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+  .fchip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:11px;color:var(--text-2);white-space:nowrap;}
+  .fchip.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+
+  .lifes{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-bottom:2px;}
+  .life{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);font-size:11px;color:var(--text-2);white-space:nowrap;}
+  .life.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600;}
+  .pending{margin-top:8px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--warning-fg);background:var(--warning-soft);border:1px solid var(--warning-border);border-radius:var(--r-sm);padding:7px 9px;}
+
+  .strip{margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:9px 10px;}
+  .strip-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+  .strip-head b{font-size:11.5px;}
+  .strip-head span{font-size:10.5px;color:var(--primary-fg);}
+  .rchips{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:2px;}
+  .rchip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:11px;color:var(--text-2);}
+  .rchip .nm{font-family:var(--font-mono);font-size:10.5px;font-weight:600;color:var(--text);}
+  .rchip .st{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text-3);}
+  .rchip .st i{width:5px;height:5px;border-radius:50%;background:var(--success);}
+  .rchip .st i.err{background:var(--danger);}
+  .rchip .st i.off{background:var(--text-3);}
+  .rchip .num{min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;background:var(--surface-sunken);border-radius:var(--r-pill);font-size:10px;font-weight:600;}
+  .rchip.on{border-color:var(--primary-border);background:var(--primary-soft);}
+  .rchip.on .nm{color:var(--primary-fg);}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 10px;margin-top:8px;box-shadow:var(--shadow-xs);}
+  .card-top{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+  .badge{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:var(--r-pill);font-size:10.5px;font-weight:600;border:1px solid transparent;}
+  .b-dev{background:var(--info-soft);color:var(--info-fg);border-color:var(--info-border);}
+  .b-test{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
+  .b-merge{background:var(--plum-soft);color:var(--plum-fg);border-color:var(--plum-border);}
+  .card .name{font-family:var(--font-mono);font-size:11.5px;font-weight:600;margin:7px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .badges{display:flex;gap:4px;flex-wrap:wrap;}
+  .mini{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 5px;border-radius:4px;font-size:10px;border:1px solid var(--border);background:var(--surface-sunken);color:var(--text-2);white-space:nowrap;}
+  .mini.repo{font-family:var(--font-mono);background:var(--surface);border-color:var(--border-strong);}
+  .mini.ok{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+  .mini.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+  .foot{display:flex;align-items:center;justify-content:space-between;margin-top:7px;font-size:10.5px;color:var(--text-3);}
+  .avatar{width:23px;height:23px;border-radius:50%;background:#1D4ED8;color:#fff;font-size:9.5px;display:inline-flex;align-items:center;justify-content:center;font-weight:600;}
+
+  .filtersheet{background:var(--surface);border-top:1px solid var(--border);padding:10px 12px 14px;}
+  .filtersheet .grab{width:34px;height:4px;border-radius:2px;background:var(--border-strong);margin:0 auto 10px;}
+  .filtersheet h3{margin:0 0 8px;font-size:13px;}
+  .field{margin-bottom:8px;}
+  .field label{display:block;font-size:10.5px;color:var(--text-2);margin-bottom:3px;}
+  .input{height:32px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);display:flex;align-items:center;padding:0 9px;font-size:11.5px;color:var(--text);}
+  .input.mono{font-family:var(--font-mono);font-size:11px;}
+  .input .tail{margin-left:auto;font-size:10px;color:var(--text-3);}
+  .actions{display:flex;gap:8px;margin-top:10px;}
+
+  .listhead{padding:9px 12px 0;display:flex;align-items:center;justify-content:space-between;font-size:11px;}
+  .listhead b{font-size:11.5px;}
+  .listhead span{font-size:10px;color:var(--text-3);}
+  .repo{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:9px 10px;margin:7px 12px 0;}
+  .repo .nm{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:650;flex-wrap:wrap;}
+  .repo .url{font-family:var(--font-mono);font-size:10px;color:var(--text-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .repo .stat{display:flex;align-items:center;gap:9px;margin-top:4px;font-size:10px;color:var(--text-3);flex-wrap:wrap;}
+  .repo .stat i{width:5px;height:5px;border-radius:50%;background:var(--success);display:inline-block;margin-right:3px;}
+  .repo .stat i.err{background:var(--danger);}
+  .repo .stat i.off{background:var(--text-3);}
+  .repo .acts{display:flex;justify-content:flex-end;gap:6px;margin-top:7px;}
+  .repo.err{border-color:var(--danger-border);background:linear-gradient(0deg,rgba(240,68,56,.03),rgba(240,68,56,.03)),var(--surface);}
+  .note{font-size:10.5px;line-height:16px;color:var(--text-3);padding:8px 12px;margin:8px 12px 0;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:var(--surface-sunken);}
+  .footbar{display:flex;align-items:center;gap:8px;padding:10px 12px 12px;margin-top:8px;background:var(--surface);border-top:1px solid var(--border);}
+  .footbar .sp{flex:1;}
+  .footbar .hint{font-size:10px;color:var(--text-3);}
+
+  .back{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-2);margin-bottom:5px;}
+  .title{font-size:14px;font-family:var(--font-mono);font-weight:650;display:flex;align-items:center;gap:6px;}
+  .sub{font-size:10.5px;color:var(--text-3);margin-top:3px;}
+  .sync{background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 10px;margin:9px 0 12px;}
+  .sync .top{display:flex;align-items:center;justify-content:space-between;font-size:11px;}
+  .sync .top b{font-size:11.5px;}
+  .sync .facts{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:10px;color:var(--text-2);}
+  .sync .facts em{font-style:normal;font-weight:650;color:var(--text);}
+  .sect{margin-bottom:13px;}
+  .sect h4{margin:0 0 7px;font-size:11.5px;}
+  .danger{border:1px solid var(--danger-border);background:var(--danger-soft);border-radius:var(--r-md);padding:9px 10px;}
+  .danger b{font-size:11px;color:var(--danger-fg);}
+  .danger p{margin:4px 0 7px;font-size:10.5px;line-height:16px;color:var(--text-2);}
+  .sw{width:30px;height:17px;border-radius:var(--r-pill);background:var(--primary);position:relative;display:inline-block;vertical-align:middle;margin-right:5px;}
+  .sw:after{content:"";position:absolute;top:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#fff;}
+
+  /* explain markers */
+  .expl{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;padding:0;margin-left:4px;border:0;border-radius:50%;font:650 9px/1 var(--font-sans);vertical-align:1px;cursor:help;flex:0 0 auto;}
+  .expl.q{background:var(--info-soft);color:var(--info-fg);box-shadow:inset 0 0 0 1px var(--info-border);}
+  .expl.w{background:var(--warning-soft);color:var(--warning-fg);box-shadow:inset 0 0 0 1px var(--warning-border);}
+  .expl:focus-visible{outline:2px solid rgba(37,99,235,.35);outline-offset:2px;}
+  .head .legend{display:flex;align-items:center;gap:5px;margin-top:6px;font-size:10.5px;color:var(--text-3);}
+  .expl-pop{position:fixed;z-index:50;max-width:280px;background:#101828;color:#fff;font-size:11px;line-height:16px;padding:8px 10px;border-radius:8px;box-shadow:0 12px 24px -6px rgba(16,24,40,.2);pointer-events:none;}
+  .expl-pop b{display:block;font-size:10px;letter-spacing:.04em;margin-bottom:2px;font-weight:600;color:#D0D5DD;}
+  .expl-pop.q b{color:#B2DDFF;}
+  .expl-pop.w b{color:#FEDF89;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>多仓库分支 · 移动端（390）</h1>
+    <p>仓库条在窄屏换行展示；仓库抽屉全屏；“列表 → 详情”仍然是两级。</p>
+    <p class="legend">标注：<span class="expl q" aria-hidden="true">?</span>口径 / 名词解释<span class="expl w" aria-hidden="true">!</span>风险与注意 · 点按标记查看说明</p>
+  </div>
+
+  <div class="phone">
+    <div class="cap"><b>M1 · 分支页</b>：仓库条 + 仓库标签</div>
+    <div class="statusbar"><span>9:41</span><span>5G ▮</span></div>
+    <div class="nav"><span class="ic">☰</span><b>分支</b><span class="ic">⋯</span></div>
+    <div class="body">
+      <div class="row" style="justify-content:space-between;">
+        <span class="seg"><button class="on">看板</button><button>列表</button></span>
+        <span style="font-size:10.5px;color:var(--text-3);">12 条进行中</span>
+      </div>
+      <div class="filters">
+        <span class="fchip on">项目：支付中台</span>
+        <span class="fchip">仓库：全部（3）</span>
+        <span class="fchip">筛选<span class="n">2</span></span>
+      </div>
+      <div class="lifes">
+        <span class="life on">进行中 12</span>
+        <span class="life">已完成 48</span>
+        <span class="life">待确认 1</span>
+      </div>
+      <div class="pending">1 条待确认 · payment-api 远程已消失<button type="button" class="expl w" aria-label="注意：待确认含义" data-tip="远程分支删除后不会自动清理；沙漏把该分支标为待确认，人工确认后才转已完成或已取消。">!</button></div>
+      <div class="strip">
+        <div class="strip-head"><b>本项目仓库</b><span>管理 →</span></div>
+        <div class="rchips">
+          <span class="rchip on"><span class="nm">全部</span><span class="num">12</span></span>
+          <span class="rchip"><span class="nm">payment-api</span><span class="st"><i></i>2 分钟前</span><span class="num">5</span></span>
+          <span class="rchip"><span class="nm">payment-web</span><span class="st"><i></i>8 分钟前</span><span class="num">4</span></span>
+          <span class="rchip"><span class="nm">payment-job</span><span class="st"><i class="err"></i>失败</span><span class="num">3</span></span>
+          <span class="rchip"><span class="nm">未归属仓库<button type="button" class="expl q" aria-label="解释：未归属仓库" data-tip="手工建的分支不属于任何仓库，单独成组；绑定对应仓库后会归位。">?</button></span><span class="st"><i class="off"></i>手工</span><span class="num">1</span></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="badge b-dev">开发中 ▾</span><span class="avatar" style="background:#5B3FD1">李</span></div>
+        <div class="name">feature/refund-v2</div>
+        <div class="badges"><span class="mini repo">payment-api</span><span class="mini">HEAD 9f3c21ab</span></div>
+        <div class="foot"><span>2/5 工作项</span><span>已 3 天</span></div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="badge b-dev">开发中 ▾</span></div>
+        <div class="name">feature/refund-v2</div>
+        <div class="badges"><span class="mini repo">payment-web</span><span class="mini">HEAD 51aa09cd</span><button type="button" class="expl q" aria-label="解释：同名分支" data-tip="同名分支在不同仓库各算一条，靠仓库标签区分，不会被合并或覆盖。">?</button></div>
+        <div class="foot"><span>1/3 工作项</span><span>已 3 天</span></div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="badge b-merge">待合并 ▾</span></div>
+        <div class="name">feature/settle-retry</div>
+        <div class="badges"><span class="mini repo">payment-job</span><span class="mini warn">同步失败</span></div>
+        <div class="foot"><span>2/2 工作项</span><span>已 1 天</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phone">
+    <div class="cap"><b>M2 · 分支筛选面板</b>：仓库候选跟随项目</div>
+    <div class="statusbar"><span>9:41</span><span>5G ▮</span></div>
+    <div class="nav"><span class="ic">☰</span><b>分支</b><span class="ic">⋯</span></div>
+    <div class="body" style="opacity:.35;padding-bottom:0;">
+      <div class="card" style="margin-top:0;"><div class="name">feature/refund-v2</div></div>
+      <div class="card"><div class="name">feature/merchant-bill</div></div>
+      <div class="card"><div class="name">hotfix/settle-lock</div></div>
+    </div>
+    <div class="filtersheet" style="box-shadow:var(--shadow-lg);">
+      <div class="grab"></div>
+      <h3>筛选与视图</h3>
+      <div class="field"><label>项目</label><div class="input">支付中台<span class="tail">▾</span></div></div>
+      <div class="field"><div style="display:flex;align-items:center;"><label>仓库（仅列本项目的仓库）</label><button type="button" class="expl q" aria-label="解释：仓库候选范围" data-tip="切换项目后只列新项目绑定的仓库；当前仓库不属于新项目会自动收回为「全部仓库」。">?</button></div><div class="input">全部仓库（3）<span class="tail">▾</span></div></div>
+      <div class="field"><label>状态</label><div class="input">全部状态<span class="tail">▾</span></div></div>
+      <div class="field"><label>负责人</label><div class="input">全部负责人<span class="tail">▾</span></div></div>
+      <div class="actions"><button class="btn" style="flex:1">清空</button><button class="btn primary" style="flex:1">应用筛选</button></div>
+    </div>
+  </div>
+
+  <div class="phone">
+    <div class="cap"><b>M3 · 仓库抽屉 · 列表</b>：按项目分组</div>
+    <div class="statusbar"><span>9:41</span><span>5G ▮</span></div>
+    <div class="nav"><span class="ic">←</span><b>GitLab 仓库</b><span class="ic">×</span></div>
+    <div class="listhead"><b>支付中台</b><span>3 个仓库 · + 绑定</span></div>
+    <div class="repo">
+      <div class="nm">payment-api <span class="mini ok">同步正常</span></div>
+      <div class="url">gitlab.example.com · payment/payment-api</div>
+      <div class="stat"><span><i></i>2 分钟前</span><span>5 条进行中</span><span>1 待确认</span></div>
+      <div class="acts"><button class="btn sm">同步</button><button class="btn sm ghost">详情 ›</button></div>
+    </div>
+    <div class="repo">
+      <div class="nm">payment-web <span class="mini ok">同步正常</span></div>
+      <div class="url">gitlab.example.com · payment/payment-web</div>
+      <div class="stat"><span><i></i>8 分钟前</span><span>4 条进行中</span></div>
+      <div class="acts"><button class="btn sm">同步</button><button class="btn sm ghost">详情 ›</button></div>
+    </div>
+    <div class="repo err">
+      <div class="nm">payment-job <span class="mini warn">同步失败</span></div>
+      <div class="url">gitlab.example.com · payment/payment-job</div>
+      <div class="stat"><span><i class="err"></i>09:41 失败</span><span>3 条进行中</span></div>
+      <div class="stat" style="color:var(--danger-fg)">401 Unauthorized：令牌已过期<button type="button" class="expl w" aria-label="注意：同步失败影响" data-tip="同步失败不会清空已同步分支；修复令牌后重试补齐增量。">!</button></div>
+      <div class="acts"><button class="btn sm">重试</button><button class="btn sm ghost">详情 ›</button></div>
+    </div>
+    <div class="note">一个项目可以绑定多个仓库；同步出的分支按仓库隔离，同名不会互相覆盖。</div>
+    <div class="footbar"><button class="btn primary" style="flex:1">＋ 新建绑定</button><span class="hint">每 10 分钟</span></div>
+  </div>
+
+  <div class="phone">
+    <div class="cap"><b>M4 · 仓库抽屉 · 详情</b>：顶部先讲上次同步</div>
+    <div class="statusbar"><span>9:41</span><span>5G ▮</span></div>
+    <div class="nav"><span class="ic">←</span><b>仓库详情</b><span class="ic">×</span></div>
+    <div class="body">
+      <span class="back">← 支付中台 · 3 个仓库</span>
+      <div class="title">payment-api <span class="mini ok">同步正常</span></div>
+      <div class="sub">后端服务 · 5 条进行中 · 1 条待确认</div>
+      <div class="sync">
+        <div class="top"><b>上次同步 2 分钟前</b><button class="btn sm">同步</button></div>
+        <div class="facts"><span>导入 <em>5</em></span><span>合并 <em>2</em></span><span>消失 <em>1</em></span><span>待确认 <em>1</em></span></div>
+      </div>
+      <div class="sect">
+        <h4>连接</h4>
+        <div class="field"><label>GitLab 地址</label><div class="input mono">gitlab.example.com</div></div>
+        <div class="field"><label>项目标识</label><div class="input mono">payment/payment-api</div></div>
+        <div class="field"><div style="display:flex;align-items:center;"><label>访问令牌</label><button type="button" class="expl w" aria-label="注意：令牌规则" data-tip="页面不回显令牌原文；更换后旧令牌不会自动在 GitLab 吊销，需要到 GitLab 侧手动吊销。">!</button></div><div class="input">••••••••<span class="tail">已配置</span></div></div>
+        <div class="actions"><button class="btn" style="flex:1">更换令牌</button><button class="btn" style="flex:1">测试连接</button></div>
+      </div>
+      <div class="sect">
+        <h4>同步策略</h4>
+        <div class="field"><label>默认目标分支</label><div class="input mono">main</div></div>
+        <div class="field"><label>导入策略</label><div class="input">近 90 天有提交<span class="tail">▾</span></div></div>
+        <div style="font-size:11px;color:var(--text-2);margin-top:8px;"><span class="sw"></span>参与定时同步（每 10 分钟）</div>
+      </div>
+      <div class="danger">
+        <b>解绑仓库</b>
+        <p>已同步的 5 条分支会保留，显示为「已解绑仓库」，不会被删除。</p>
+        <button class="btn sm" style="color:var(--danger-fg);border-color:var(--danger-border);">解绑…</button>
+      </div>
+    </div>
+    <div class="footbar"><span class="sp"></span><button class="btn">取消</button><button class="btn primary">保存</button></div>
+  </div>
+
+  <div class="head" style="padding-top:4px;">
+    <p>移动端不出现令牌原文；列表不堆“编辑 / 暂停 / 解绑”三个按钮，统一进详情页。</p>
+  </div>
+</div>
+<script>
+(() => {
+  let pop = null, owner = null;
+  const close = () => { if (pop) pop.remove(); pop = null; owner = null; };
+  const show = el => {
+    close();
+    const warn = el.classList.contains('w');
+    pop = document.createElement('div');
+    pop.className = 'expl-pop ' + (warn ? 'w' : 'q');
+    const b = document.createElement('b');
+    b.textContent = warn ? '注意' : '解释';
+    const t = document.createElement('span');
+    t.textContent = el.dataset.tip;
+    pop.append(b, t);
+    document.body.appendChild(pop);
+    owner = el;
+    const r = el.getBoundingClientRect();
+    const pr = pop.getBoundingClientRect();
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - pr.width / 2), innerWidth - pr.width - 8);
+    let top = r.bottom + 6;
+    if (top + pr.height > innerHeight - 8) top = r.top - pr.height - 6;
+    pop.style.left = left + 'px';
+    pop.style.top = Math.max(8, top) + 'px';
+  };
+  document.querySelectorAll('.expl[data-tip]').forEach(el => {
+    el.addEventListener('mouseenter', () => show(el));
+    el.addEventListener('mouseleave', () => { if (owner === el) close(); });
+    el.addEventListener('focus', () => show(el));
+    el.addEventListener('blur', () => { if (owner === el) close(); });
+  });
+  document.addEventListener('click', e => {
+    const el = e.target.closest('.expl[data-tip]');
+    if (el) { e.preventDefault(); show(el); return; }
+    close();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  window.addEventListener('scroll', close, true);
+})();
+</script>
+</body>
+</html>

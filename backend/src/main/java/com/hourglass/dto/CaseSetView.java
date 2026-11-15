@@ -10,6 +10,11 @@ public class CaseSetView {
 
     private String id;
     private String reqId;
+    /** 父分组ID；空串=顶级 */
+    private String parentId;
+    /** 树内层级（顶级=1），前端直接按此缩进 */
+    private int level;
+    private int sortOrder;
     private String name;
     private String note;
     private String visibility;
@@ -25,6 +30,9 @@ public class CaseSetView {
     private String createdByUserId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** 直接成员数 */
     private int caseCount;
+    /** 子树去重成员数（含自身与全部子分组；多归属分组只在本子树内去重） */
+    private int subtreeCount;
     private boolean editable;
 }

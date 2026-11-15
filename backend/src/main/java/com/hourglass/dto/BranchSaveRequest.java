@@ -34,6 +34,10 @@ public class BranchSaveRequest {
     @Size(max = 32, message = "所属项目ID不合法")
     private String reqId;
 
+    /** 所属仓库ID（仅新建时可指定；绑仓库的分支由该仓库的同步维护远程事实） */
+    @Size(max = 32, message = "所属仓库ID不合法")
+    private String repoId;
+
     @Size(max = 200, message = "备注不能超过 200 字")
     private String note;
 }

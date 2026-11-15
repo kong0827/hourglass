@@ -5,11 +5,11 @@
   <insert id="insert">
     INSERT INTO test_case
       (id, workspace_id, req_id, demand_id, case_no, title, precondition, test_data, module, module_id, priority, steps,
-       latest_status, latest_note, latest_by, latest_by_user_id, latest_at, latest_bug_task_id,
+       sort_order, latest_status, latest_note, latest_by, latest_by_user_id, latest_at, latest_bug_task_id,
        created_by, created_by_user_id, created_at, updated_at)
     VALUES
       (#{id}, #{workspaceId}, #{reqId}, #{demandId}, #{caseNo}, #{title}, #{precondition}, #{testData}, #{module}, #{moduleId}, #{priority}, #{steps},
-       #{latestStatus}, #{latestNote}, #{latestBy}, #{latestByUserId}, #{latestAt}, #{latestBugTaskId},
+       COALESCE(#{sortOrder}, 0), #{latestStatus}, #{latestNote}, #{latestBy}, #{latestByUserId}, #{latestAt}, #{latestBugTaskId},
        #{createdBy}, #{createdByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -25,7 +25,8 @@
         module = #{module},
         module_id = #{moduleId},
         priority = #{priority},
-        steps = #{steps}
+        steps = #{steps},
+        sort_order = COALESCE(#{sortOrder}, sort_order)
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
@@ -162,6 +163,11 @@
                                OR EXISTS (SELECT 1 FROM case_set_member sm
                                           WHERE sm.set_id = s.id AND sm.user_id = #{q.viewerId})))
       </when>
+      <when test="q.setIds != null and q.setIds.size() > 0">
+        AND EXISTS (SELECT 1 FROM case_set_item si
+                    WHERE si.case_id = c.id AND si.set_id IN
+                    <foreach collection="q.setIds" item="sid" open="(" separator="," close=")">#{sid}</foreach>)
+      </when>
       <when test="q.setId != null">
         AND EXISTS (SELECT 1 FROM case_set_item si
                     WHERE si.case_id = c.id AND si.set_id = #{q.setId})
@@ -212,18 +218,18 @@
       LEFT JOIN (
         WITH RECURSIVE mo AS (
           SELECT n.id AS id, CAST(LPAD(COALESCE(n.sort_order, 0), 6, '0') AS CHAR(512)) AS p, 1 AS d
-            FROM test_module n
-           WHERE n.workspace_id = #{q.workspaceId} AND n.req_id = #{q.reqId}
+            FROM category n
+           WHERE n.workspace_id = #{q.workspaceId} AND n.project_id = #{q.reqId}
              AND (COALESCE(n.parent_id, '') = ''
-                  OR NOT EXISTS (SELECT 1 FROM test_module p0
+                  OR NOT EXISTS (SELECT 1 FROM category p0
                                   WHERE p0.id = n.parent_id
                                     AND p0.workspace_id = n.workspace_id
-                                    AND p0.req_id = n.req_id))
+                                    AND p0.project_id = n.project_id))
           UNION ALL
           SELECT n.id, CONCAT(mo.p, '/', LPAD(COALESCE(n.sort_order, 0), 6, '0')), mo.d + 1
-            FROM test_module n JOIN mo ON n.parent_id = mo.id
+            FROM category n JOIN mo ON n.parent_id = mo.id
            WHERE mo.d &lt; 64
-             AND n.workspace_id = #{q.workspaceId} AND n.req_id = #{q.reqId}
+             AND n.workspace_id = #{q.workspaceId} AND n.project_id = #{q.reqId}
         )
         SELECT id, p FROM mo
       ) mo ON mo.id = c.module_id
@@ -233,6 +239,7 @@
   <!-- 排序字段白名单：值不拼进 SQL，只在这里选列；空值类统一排在末尾（升序口径） -->
   <sql id="pageOrder">
     <choose>
+      <when test="q.sort == 'manual'"> ORDER BY c.sort_order </when>
       <when test="q.sort == 'no'"> ORDER BY c.case_no </when>
       <when test="q.sort == 'pri'"> ORDER BY FIELD(COALESCE(c.priority, '__none'), 'P0','P1','P2','P3','__none') </when>
       <when test="q.sort == 'executed'"> ORDER BY c.latest_at </when>
@@ -334,18 +341,38 @@
   </select>
 
   <!-- 自定义分组是多归属：一条用例可进多个分组，段间计数可重叠，不能相加当总数 -->
+  <!-- 分组段计数：分组可嵌套，父组按整棵子树去重（一条用例在父子组都收录也只算一次） -->
   <select id="countGroupsBySet" resultType="java.util.HashMap">
-    SELECT s.id AS k, <include refid="groupSums"/>
-    FROM test_case c
-    JOIN case_set_item si ON si.case_id = c.id AND si.workspace_id = c.workspace_id
-    JOIN case_set s ON s.id = si.set_id AND s.workspace_id = c.workspace_id
-    LEFT JOIN demand d ON d.id = c.demand_id
-    LEFT JOIN task t ON t.id = c.latest_bug_task_id
-    <include refid="pageWhere"/>
-      AND (s.visibility = 'team' OR s.owner_user_id = #{q.viewerId}
-           OR EXISTS (SELECT 1 FROM case_set_member sm
-                      WHERE sm.set_id = s.id AND sm.user_id = #{q.viewerId}))
-    GROUP BY s.id
+    WITH RECURSIVE st AS (
+      SELECT s.id AS root_id, s.id AS node_id, 1 AS d
+        FROM case_set s
+       WHERE s.workspace_id = #{q.workspaceId} AND s.req_id = #{q.reqId}
+      UNION ALL
+      SELECT st.root_id, c2.id, st.d + 1
+        FROM case_set c2 JOIN st ON c2.parent_id = st.node_id
+       WHERE st.d &lt; 64
+         AND c2.workspace_id = #{q.workspaceId} AND c2.req_id = #{q.reqId}
+    )
+    SELECT t.k, COUNT(*) AS cnt,
+           COALESCE(SUM(CASE WHEN t.st = 'passed' THEN 1 ELSE 0 END), 0) AS passed,
+           COALESCE(SUM(CASE WHEN t.st = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
+           COALESCE(SUM(CASE WHEN t.st = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
+           COALESCE(SUM(CASE WHEN t.st = 'skipped' THEN 1 ELSE 0 END), 0) AS skipped,
+           COALESCE(SUM(CASE WHEN t.st IS NULL THEN 1 ELSE 0 END), 0) AS untested
+    FROM (
+      SELECT DISTINCT st.root_id AS k, c.id AS cid, c.latest_status AS st
+      FROM test_case c
+      JOIN case_set_item si ON si.case_id = c.id AND si.workspace_id = c.workspace_id
+      JOIN st ON st.node_id = si.set_id
+      JOIN case_set s ON s.id = st.root_id AND s.workspace_id = c.workspace_id
+      LEFT JOIN demand d ON d.id = c.demand_id
+      LEFT JOIN task t ON t.id = c.latest_bug_task_id
+      <include refid="pageWhere"/>
+        AND (s.visibility = 'team' OR s.owner_user_id = #{q.viewerId}
+             OR EXISTS (SELECT 1 FROM case_set_member sm
+                        WHERE sm.set_id = s.id AND sm.user_id = #{q.viewerId}))
+    ) t
+    GROUP BY t.k
   </select>
 
   <select id="countFacetsByModuleId" resultType="java.util.HashMap">
@@ -358,6 +385,37 @@
   <select id="countByModuleId" resultType="int">
     SELECT COUNT(*) FROM test_case
     WHERE workspace_id = #{workspaceId} AND module_id = #{moduleId}
+  </select>
+
+  <update id="updateModuleSnapshot">
+    UPDATE test_case SET module = #{module}
+    WHERE workspace_id = #{workspaceId} AND module_id = #{moduleId}
+  </update>
+
+  <update id="moveCasesToModule">
+    UPDATE test_case SET module_id = #{toId}, module = #{module}
+    WHERE workspace_id = #{workspaceId} AND module_id = #{fromId}
+  </update>
+
+  <select id="maxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+
+  <update id="updateSortOrder">
+    UPDATE test_case SET sort_order = #{sortOrder}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <select id="selectIdsForOrder" resultType="string">
+    SELECT id FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    <choose>
+      <when test="moduleId == null"></when>
+      <when test="moduleId == '__none'"> AND module_id IS NULL </when>
+      <otherwise> AND module_id = #{moduleId} </otherwise>
+    </choose>
+    ORDER BY sort_order, created_at, id
   </select>
 
   <select id="selectModules" resultType="string">

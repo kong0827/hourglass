@@ -12,6 +12,8 @@ import com.hourglass.dto.AiInvestmentSummaryRequest;
 import com.hourglass.dto.AiInvestmentSummaryResponse;
 import com.hourglass.dto.AiReviewRequest;
 import com.hourglass.dto.AiReviewResponse;
+import com.hourglass.dto.AiSelectionRequest;
+import com.hourglass.dto.AiSelectionResponse;
 import com.hourglass.dto.AiSplitResponse;
 import com.hourglass.dto.AiTestCaseRequest;
 import com.hourglass.dto.AiTestCaseResponse;
@@ -20,6 +22,7 @@ import com.hourglass.service.AiConfigService;
 import com.hourglass.service.AiInvestmentService;
 import com.hourglass.service.AiReqDocService;
 import com.hourglass.service.AiReviewService;
+import com.hourglass.service.AiSelectionService;
 import com.hourglass.service.AiTestCaseService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,16 +53,19 @@ public class AiController {
     private final AiReviewService reviewService;
     private final AiTestCaseService testCaseService;
     private final AiInvestmentService investmentService;
+    private final AiSelectionService selectionService;
     private final WorkspaceService workspaceService;
 
     public AiController(AiConfigService configService, AiReqDocService reqDocService,
                         AiReviewService reviewService, AiTestCaseService testCaseService,
-                        AiInvestmentService investmentService, WorkspaceService workspaceService) {
+                        AiInvestmentService investmentService, AiSelectionService selectionService,
+                        WorkspaceService workspaceService) {
         this.configService = configService;
         this.reqDocService = reqDocService;
         this.reviewService = reviewService;
         this.testCaseService = testCaseService;
         this.investmentService = investmentService;
+        this.selectionService = selectionService;
         this.workspaceService = workspaceService;
     }
 
@@ -114,6 +120,31 @@ public class AiController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(reqDocService.applyTasks(userId, ws.getId(), id, req.getTasks()));
+    }
+
+    /**
+     * 文档选区处理：改写 / 缩写 / 解释。
+     *
+     * <p>只返回建议，不写文档。用户点「替换」后由前端写回编辑器并走正常保存，
+     * 保存时服务端自动留历史版本，可在「历史版本」里恢复。
+     */
+    @PostMapping("/api/ai/reqdoc/{id}/selection")
+    public ApiResult<AiSelectionResponse> selection(@PathVariable String id,
+                                                    @Valid @RequestBody AiSelectionRequest req,
+                                                    @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(selectionService.transform(userId, ws.getId(), id, req));
+    }
+
+    /** 把选中的一段文字提为工作项草稿（不落库；勾选确认后复用创建接口） */
+    @PostMapping("/api/ai/reqdoc/{id}/selection/tasks")
+    public ApiResult<AiSplitResponse> selectionTasks(@PathVariable String id,
+                                                     @Valid @RequestBody AiSelectionRequest req,
+                                                     @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(selectionService.tasks(userId, ws.getId(), id, req));
     }
 
     /** 从需求文档或需求池条目生成测试用例草稿（不落库） */

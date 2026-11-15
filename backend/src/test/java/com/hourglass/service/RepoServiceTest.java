@@ -18,9 +18,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,7 +51,7 @@ class RepoServiceTest {
         req.setId(PROJECT);
         req.setWorkspaceId(WS);
         req.setName("项目一");
-        when(requirementMapper.selectById(PROJECT)).thenReturn(req);
+        lenient().when(requirementMapper.selectById(PROJECT)).thenReturn(req);
     }
 
     @Test
@@ -99,6 +101,33 @@ class RepoServiceTest {
                 () -> service.update("U1", WS, "R1", request("group/two")));
         assertEquals(400, ex.getCode());
         verify(repoMapper, never()).update(any(ProjectRepo.class));
+    }
+
+    @Test
+    void listFillsOpenAndPendingBranchCounts() {
+        ProjectRepo repo = new ProjectRepo();
+        repo.setId("R1");
+        repo.setWorkspaceId(WS);
+        repo.setReqId(PROJECT);
+        repo.setTokenCipher("cipher");
+        when(projectAccess.viewerScope(WS, "U1")).thenReturn("U1");
+        when(repoMapper.selectVisible(WS, "U1")).thenReturn(Collections.singletonList(repo));
+        java.util.Map<String, Object> open = new java.util.HashMap<String, Object>();
+        open.put("repoId", "R1");
+        open.put("outcome", "open");
+        open.put("cnt", 5);
+        java.util.Map<String, Object> pending = new java.util.HashMap<String, Object>();
+        pending.put("repoId", "R1");
+        pending.put("outcome", "pending");
+        pending.put("cnt", 1);
+        when(branchMapper.countRepoOutcomes(WS)).thenReturn(java.util.Arrays.asList(open, pending));
+
+        ProjectRepo out = service.list(WS, "U1").get(0);
+
+        assertEquals(Integer.valueOf(5), out.getOpenBranchCount());
+        assertEquals(Integer.valueOf(1), out.getPendingBranchCount());
+        assertEquals(Boolean.TRUE, out.getTokenConfigured(), "列表仍只下发是否配置令牌");
+        assertNull(out.getTokenCipher());
     }
 
     private RepoSaveRequest request(String projectRef) {

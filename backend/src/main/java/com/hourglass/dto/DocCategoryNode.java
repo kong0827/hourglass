@@ -19,4 +19,10 @@ public class DocCategoryNode {
     /** 1 = 顶级，不限层级 */
     private int level;
     private int sortOrder;
+    /** 分类默认可见范围（team / members / personal）：仅新建文档时套用，不改变已有文档 */
+    private String visibility;
+    /** 默认名单人数；team / personal 恒为 0 */
+    private int memberCount;
+    /** 默认名单：只有对该范围可写的人回传，其他人只给人数 */
+    private java.util.List<String> memberIds;
 }

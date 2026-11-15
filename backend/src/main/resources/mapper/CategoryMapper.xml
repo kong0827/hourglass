@@ -3,27 +3,37 @@
 <mapper namespace="com.hourglass.mapper.CategoryMapper">
 
   <select id="selectByWorkspace" resultType="Category">
-    SELECT id, workspace_id, project_id, name, color, sort_order, created_at
+    SELECT id, workspace_id, project_id, parent_id, name, color, sort_order, created_at
     FROM category WHERE workspace_id = #{workspaceId} ORDER BY sort_order, id
   </select>
 
+  <select id="selectByProject" resultType="Category">
+    SELECT id, workspace_id, project_id, parent_id, name, color, sort_order, created_at
+    FROM category
+    WHERE workspace_id = #{workspaceId} AND project_id = #{projectId}
+    ORDER BY sort_order, name, id
+  </select>
+
   <select id="selectById" resultType="Category">
-    SELECT id, workspace_id, project_id, name, color, sort_order, created_at
+    SELECT id, workspace_id, project_id, parent_id, name, color, sort_order, created_at
     FROM category WHERE workspace_id = #{workspaceId} AND id = #{id}
   </select>
 
   <select id="selectByName" resultType="Category">
-    SELECT id, workspace_id, project_id, name, color, sort_order, created_at
-    FROM category WHERE workspace_id = #{workspaceId} AND project_id = #{projectId} AND name = #{name}
+    SELECT id, workspace_id, project_id, parent_id, name, color, sort_order, created_at
+    FROM category
+    WHERE workspace_id = #{workspaceId} AND project_id = #{projectId}
+      AND parent_id = #{parentId} AND name = #{name}
   </select>
 
   <insert id="insert">
-    INSERT INTO category (id, workspace_id, project_id, name, color, sort_order)
-    VALUES (#{id}, #{workspaceId}, #{projectId}, #{name}, #{color}, #{sortOrder})
+    INSERT INTO category (id, workspace_id, project_id, parent_id, name, color, sort_order)
+    VALUES (#{id}, #{workspaceId}, #{projectId}, COALESCE(#{parentId}, ''),
+            #{name}, #{color}, #{sortOrder})
   </insert>
 
   <update id="update">
-    UPDATE category SET name = #{name}, color = #{color}
+    UPDATE category SET parent_id = COALESCE(#{parentId}, ''), name = #{name}, color = #{color}
     WHERE workspace_id = #{workspaceId} AND id = #{id}
   </update>
 
@@ -33,7 +43,12 @@
 
   <select id="maxSortOrder" resultType="int">
     SELECT COALESCE(MAX(sort_order), -1) FROM category
-    WHERE workspace_id = #{workspaceId} AND project_id = #{projectId}
+    WHERE workspace_id = #{workspaceId} AND project_id = #{projectId} AND parent_id = #{parentId}
+  </select>
+
+  <select id="countChildren" resultType="int">
+    SELECT COUNT(*) FROM category
+    WHERE workspace_id = #{workspaceId} AND project_id = #{projectId} AND parent_id = #{parentId}
   </select>
 
   <update id="updateSortOrder">
@@ -45,6 +60,16 @@
     SELECT id FROM task
     WHERE workspace_id = #{workspaceId} AND req_id = #{projectId} AND category_id = #{categoryId}
     ORDER BY id
+  </select>
+
+  <select id="countTasksByCategory" resultType="int">
+    SELECT COUNT(*) FROM task
+    WHERE workspace_id = #{workspaceId} AND req_id = #{projectId} AND category_id = #{categoryId}
+  </select>
+
+  <select id="countDemandsByCategory" resultType="int">
+    SELECT COUNT(*) FROM demand
+    WHERE workspace_id = #{workspaceId} AND req_id = #{projectId} AND category_id = #{categoryId}
   </select>
 
   <update id="moveTasksToCategory">

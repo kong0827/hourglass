@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 项目目录多级归类与嵌套分组 · 原型 · 2026-11-15</title>
+<link rel="stylesheet" href="../../../../frontend/css/tokens.css">
+<link rel="stylesheet" href="../../../../frontend/css/base.css">
+<link rel="stylesheet" href="../../../../frontend/css/components.css">
+<link rel="stylesheet" href="../../../../frontend/css/layout.css">
+<link rel="stylesheet" href="../../../../frontend/css/views.css">
+<style>
+  html,body{height:auto;overflow:auto;}
+  body{background:var(--bg-app);}
+  svg.ic{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
+  .proto-bar{display:flex;align-items:center;gap:10px;padding:8px 16px;background:#101828;color:#fff;font-size:12.5px;position:sticky;top:0;z-index:20;}
+  .proto-bar b{font-size:13px;}
+  .proto-bar .tag{padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.14);font-size:10.5px;letter-spacing:.04em;}
+  .proto-bar .sp{flex:1 1 auto;}
+  .proto-shell{display:flex;min-height:calc(100vh - 38px);}
+  .proto-nav{flex:0 0 196px;background:var(--surface);border-right:1px solid var(--border);padding:14px 10px;}
+  .proto-brand{display:flex;align-items:center;gap:8px;font-weight:700;margin:0 6px 14px;}
+  .proto-brand i{width:22px;height:22px;border-radius:7px;background:var(--primary);display:inline-block;}
+  .proto-nav .sec{margin:14px 8px 4px;font-size:10.5px;font-weight:700;letter-spacing:.04em;color:var(--text-3);}
+  .proto-nav .it{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:6px;color:var(--text-2);font-size:12.5px;}
+  .proto-nav .it.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+  .proto-main{flex:1 1 auto;min-width:0;padding:14px 18px 40px;}
+  .proto-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+  .proto-head h1{font-size:17px;margin:0;}
+  .proto-sub{color:var(--text-3);font-size:12.5px;}
+  .proto-state{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:11.5px;color:var(--text-3);}
+  .proto-state .dot{width:7px;height:7px;border-radius:50%;background:var(--success);}
+  .proto-note{margin:0 0 12px;padding:8px 10px;border:1px solid var(--warning-border);background:var(--warning-soft);color:var(--warning-fg);border-radius:8px;font-size:12px;line-height:1.6;}
+  .proto-block{margin-top:22px;}
+  .proto-block h2{font-size:13px;margin:0 0 8px;}
+  .tc-side{position:static;max-height:none;}
+  .tc-cases-main{min-height:0;}
+  .proto-ghost{border:1px dashed var(--border-strong);border-radius:10px;padding:14px;color:var(--text-3);font-size:12.5px;background:var(--surface);line-height:1.8;}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 13h4l2 3h4l2-3h4"/></symbol>
+</svg>
+
+<div class="proto-bar">
+  <span class="tag">PROTOTYPE</span>
+  <b>沙漏 · 项目目录多级归类 + 嵌套分组 + 手动排序</b>
+  <span class="sp"></span>
+  <span>2026-11-15 · 待评审</span>
+</div>
+
+<div class="proto-shell">
+  <nav class="proto-nav" aria-label="原型导航">
+    <div class="proto-brand"><i></i>沙漏</div>
+    <div class="sec">规划</div>
+    <div class="it">我的工作</div>
+    <div class="it">需求池</div>
+    <div class="it">项目</div>
+    <div class="sec">交付</div>
+    <div class="it on">测试用例</div>
+    <div class="it">缺陷</div>
+  </nav>
+
+  <main class="proto-main">
+    <div class="proto-head">
+      <h1>测试用例</h1>
+      <span class="proto-sub">支付核心 · 384 条</span>
+      <span class="proto-state"><i class="dot"></i>项目目录与任务模块是同一棵树</span>
+    </div>
+    <p class="proto-note">左面板只保留一套「项目目录」：任务、需求、用例共用同一棵树，项目里已有目录直接出现在这里；分组用于多归属的测试目的（可嵌套）。用例拖到目录＝移动归属，拖到分组＝加入；目录与分组都支持拖到另一端改父级，同级上下拖拽调顺序。</p>
+
+    <div class="tc-cases-wrap" style="align-items:stretch">
+      <aside class="tc-side" style="min-height:560px">
+        <div class="tc-side-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected="true">项目目录</button>
+          <button type="button" role="tab" aria-selected="false">分组</button>
+        </div>
+        <div class="tc-side-body">
+          <div class="tc-side-tools">
+            <label class="tc-dir-search"><svg class="ic" width="13" height="13"><use href="#i-search"></use></svg><input type="search" placeholder="搜索目录…" value=""></label>
+            <button class="btn sm ghost" type="button"><svg class="ic" width="13" height="13"><use href="#i-plus"></use></svg> 新建</button>
+          </div>
+          <div class="tc-dir-list">
+            <div class="tc-dir-node special on">
+              <span class="tc-dir-toggle ph"></span>
+              <button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-check"></use></svg><span class="tc-dir-name">全部用例</span><span class="tc-dir-n">384</span></button>
+            </div>
+            <div class="tc-dir-node">
+              <button class="tc-dir-toggle" aria-expanded="true"><svg class="ic" width="12" height="12"><use href="#i-chev"></use></svg></button>
+              <button class="tc-dir-pick" type="button" title="支付核心 · 128 条（含子目录）"><svg class="ic" width="13" height="13"><use href="#i-folder"></use></svg><span class="tc-dir-name">支付核心</span><span class="tc-dir-n">128</span></button>
+              <span class="tc-dir-acts"><button class="icon-btn sm" title="新建子目录"><svg class="ic" width="13" height="13"><use href="#i-plus"></use></svg></button><button class="icon-btn sm" title="重命名"><svg class="ic" width="13" height="13"><use href="#i-edit"></use></svg></button><button class="icon-btn sm" title="删除"><svg class="ic" width="13" height="13"><use href="#i-trash"></use></svg></button></span>
+            </div>
+            <div class="tc-dir-node drop-on" style="margin-left:14px">
+              <button class="tc-dir-toggle" aria-expanded="true"><svg class="ic" width="12" height="12"><use href="#i-chev"></use></svg></button>
+              <button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-folder"></use></svg><span class="tc-dir-name">下单</span><span class="tc-dir-n">86</span></button>
+              <span class="tc-dir-acts"><button class="icon-btn sm" title="新建子目录"><svg class="ic" width="13" height="13"><use href="#i-plus"></use></svg></button><button class="icon-btn sm" title="重命名"><svg class="ic" width="13" height="13"><use href="#i-edit"></use></svg></button><button class="icon-btn sm" title="删除"><svg class="ic" width="13" height="13"><use href="#i-trash"></use></svg></button></span>
+            </div>
+            <div class="tc-dir-node" style="margin-left:28px">
+              <span class="tc-dir-toggle ph"></span>
+              <button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-folder"></use></svg><span class="tc-dir-name">优惠券</span><span class="tc-dir-n">24</span></button>
+            </div>
+            <div class="tc-dir-node" style="margin-left:28px">
+              <span class="tc-dir-toggle ph"></span>
+              <button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-folder"></use></svg><span class="tc-dir-name">支付方式</span><span class="tc-dir-n">31</span></button>
+            </div>
+            <div class="tc-dir-node" style="margin-left:14px">
+              <button class="tc-dir-toggle" aria-expanded="false"><svg class="ic" width="12" height="12"><use href="#i-chev"></use></svg></button>
+              <button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-folder"></use></svg><span class="tc-dir-name">退款</span><span class="tc-dir-n">42</span></button>
+            </div>
+            <div class="tc-dir-node">
+              <span class="tc-dir-toggle ph"></span>
+              <button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-folder"></use></svg><span class="tc-dir-name">对账</span><span class="tc-dir-n">57</span></button>
+            </div>
+            <div class="tc-dir-node special">
+              <span class="tc-dir-toggle ph"></span>
+              <button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-inbox"></use></svg><span class="tc-dir-name">未归类</span><span class="tc-dir-n">12</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="tc-side-foot">
+          <button class="tc-side-switch on" type="button"><span class="sw-box"><svg class="ic" width="11" height="11"><use href="#i-check"></use></svg></span>显示子目录用例</button>
+          <p class="tc-side-note">单归属；拖入＝移动（原目录移出，编号与执行历史不变）。与任务模块同一棵树。写成员可建目录、改名、移动用例；<b>删除目录限负责人 / 管理员</b>。</p>
+        </div>
+      </aside>
+
+      <div class="tc-cases-main">
+        <div style="display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:12px;color:var(--text-3)">
+          <label class="tc-ctl"><span>排序</span><select class="mini-select"><option>手动排序</option><option>创建时间</option><option>优先级</option></select></label>
+          <button class="btn sm ghost" type="button">↑</button><button class="btn sm ghost" type="button">↓</button>
+          <span style="width:1px;height:16px;background:var(--border)"></span>
+          <label class="tc-ctl"><span>分组</span><select class="mini-select"><option>不分组</option><option>项目目录</option><option>自定义分组</option></select></label>
+          <span style="flex:1"></span>
+          <span style="color:var(--primary-fg);font-weight:600">拖动手柄或整行调整顺序 · 仅单目录视图可用</span>
+        </div>
+
+        <p style="margin:0 0 8px;font-size:12px;color:var(--text-3)">当前：支付核心 / 下单 · 86 条 · 手动顺序</p>
+
+        <div style="border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
+            <span style="color:var(--text-3)"><svg class="ic" width="14" height="14"><use href="#i-grip"></use></svg></span>
+            <input type="checkbox">
+            <span style="flex:0 0 82px;color:var(--text-3);font-size:12px">TC-001</span>
+            <span style="flex:1 1 auto;font-size:13px">下单页选择优惠券后金额重算</span>
+            <span style="font-size:11.5px;color:var(--text-3)">P0 · 通过</span>
+          </div>
+          <div style="height:2px;background:var(--primary);margin:0 8px;border-radius:2px"></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface-hover)">
+            <span style="color:var(--text-3)"><svg class="ic" width="14" height="14"><use href="#i-grip"></use></svg></span>
+            <input type="checkbox">
+            <span style="flex:0 0 82px;color:var(--text-3);font-size:12px">TC-002</span>
+            <span style="flex:1 1 auto;font-size:13px">优惠券叠加规则：不可与满减同享</span>
+            <span style="font-size:11.5px;color:var(--text-3)">P0 · 未执行</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
+            <span style="color:var(--text-3)"><svg class="ic" width="14" height="14"><use href="#i-grip"></use></svg></span>
+            <input type="checkbox">
+            <span style="flex:0 0 82px;color:var(--text-3);font-size:12px">TC-003</span>
+            <span style="flex:1 1 auto;font-size:13px">下单超时 30 分钟自动关闭</span>
+            <span style="font-size:11.5px;color:var(--text-3)">P1 · 失败</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+            <span style="color:var(--text-3)"><svg class="ic" width="14" height="14"><use href="#i-grip"></use></svg></span>
+            <input type="checkbox">
+            <span style="flex:0 0 82px;color:var(--text-3);font-size:12px">TC-004</span>
+            <span style="flex:1 1 auto;font-size:13px">库存不足时的下单提示</span>
+            <span style="font-size:11.5px;color:var(--text-3)">P2 · 阻塞</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="proto-block">
+      <h2>分组页（同一左面板第二个页签）</h2>
+      <div class="tc-cases-wrap" style="align-items:stretch">
+        <aside class="tc-side" style="min-height:430px">
+          <div class="tc-side-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected="false">项目目录</button>
+            <button type="button" role="tab" aria-selected="true">分组</button>
+          </div>
+          <div class="tc-side-body">
+            <div class="tc-side-tools">
+              <span class="tc-side-title"><svg class="ic" width="13" height="13"><use href="#i-layers"></use></svg>多归属 · 可嵌套</span>
+              <button class="btn sm ghost" type="button"><svg class="ic" width="13" height="13"><use href="#i-plus"></use></svg> 新建分组</button>
+            </div>
+            <div class="tc-set-list">
+              <div class="tc-set-label">团队共享 · 进交付说明与发布证据</div>
+              <div class="tc-set-item">
+                <button class="tc-dir-toggle" aria-expanded="true"><svg class="ic" width="12" height="12"><use href="#i-chev"></use></svg></button>
+                <button class="tc-set-pick" type="button"><span class="tc-set-ico"><svg class="ic" width="13" height="13"><use href="#i-layers"></use></svg></span><span class="tc-set-main"><span class="tc-set-name">回归集 · 冒烟</span><span class="tc-set-sub">父组计数含子组（去重）</span></span><span class="tc-set-n">64</span></button>
+                <span class="tc-set-acts"><button class="icon-btn sm" title="新建子分组"><svg class="ic" width="13" height="13"><use href="#i-plus"></use></svg></button><button class="icon-btn sm" title="编辑"><svg class="ic" width="13" height="13"><use href="#i-edit"></use></svg></button><button class="icon-btn sm" title="删除"><svg class="ic" width="13" height="13"><use href="#i-trash"></use></svg></button></span>
+              </div>
+              <div class="tc-set-item" style="margin-left:14px">
+                <span class="tc-dir-toggle ph"></span>
+                <button class="tc-set-pick" type="button"><span class="tc-set-ico"><svg class="ic" width="13" height="13"><use href="#i-layers"></use></svg></span><span class="tc-set-main"><span class="tc-set-name">登录与鉴权</span><span class="tc-set-sub">手工挑选</span></span><span class="tc-set-n">18</span></button>
+              </div>
+              <div class="tc-set-item drop-on" style="margin-left:14px">
+                <span class="tc-dir-toggle ph"></span>
+                <button class="tc-set-pick" type="button"><span class="tc-set-ico"><svg class="ic" width="13" height="13"><use href="#i-layers"></use></svg></span><span class="tc-set-main"><span class="tc-set-name">支付主链路</span><span class="tc-set-sub">动态收录 · 失败或阻塞</span><span class="tc-vis-tag">团队</span></span><span class="tc-set-n">46</span></button>
+              </div>
+              <div class="tc-set-item">
+                <span class="tc-dir-toggle ph"></span>
+                <button class="tc-set-pick" type="button"><span class="tc-set-ico"><svg class="ic" width="13" height="13"><use href="#i-layers"></use></svg></span><span class="tc-set-main"><span class="tc-set-name">联调 · 支付渠道</span><span class="tc-set-sub">指定成员可见 · 不进证据</span><span class="tc-vis-tag">名单</span></span><span class="tc-set-n">12</span></button>
+              </div>
+              <div class="tc-set-label">仅自己可见 · 不进证据</div>
+              <div class="tc-set-item">
+                <span class="tc-dir-toggle ph"></span>
+                <button class="tc-set-pick" type="button"><span class="tc-set-ico"><svg class="ic" width="13" height="13"><use href="#i-layers"></use></svg></span><span class="tc-set-main"><span class="tc-set-name">我的排查清单</span><span class="tc-set-sub">个人</span></span><span class="tc-set-n">7</span></button>
+              </div>
+            </div>
+          </div>
+          <div class="tc-side-foot">
+            <button class="tc-side-switch" type="button"><span class="sw-box"></span>显示子分组用例</button>
+            <p class="tc-side-note">多归属：一条用例可进多个分组。子分组<b>继承父组可见范围</b>；父组计数按子树去重。只有团队共享分组进证据；证据只按顶级团队分组出一行，避免父子重复相加。</p>
+          </div>
+        </aside>
+        <div class="tc-cases-main">
+          <div class="proto-ghost">拖用例到分组＝加入（原分组保留）；拖分组到另一个分组＝改父级。同级分组上下拖动＝排序。动态分组不接受拖入（成员由规则派生）。<br><br>分组页签同样支持搜索、展开 / 折叠、按父组显示子树计数；hover 才出现新建子组 / 编辑 / 删除，减少视觉噪音。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="proto-block">
+      <h2>只读成员看到的同一面板</h2>
+      <div class="tc-cases-wrap" style="align-items:stretch">
+        <aside class="tc-side" style="min-height:300px">
+          <div class="tc-side-tabs"><button type="button" role="tab" aria-selected="true">项目目录</button><button type="button" role="tab" aria-selected="false">分组</button></div>
+          <div class="tc-side-body">
+            <div class="tc-dir-list">
+              <div class="tc-dir-node special"><span class="tc-dir-toggle ph"></span><button class="tc-dir-pick" type="button"><span class="tc-dir-name">全部用例</span><span class="tc-dir-n">384</span></button></div>
+              <div class="tc-dir-node"><button class="tc-dir-toggle" aria-expanded="true"><svg class="ic" width="12" height="12"><use href="#i-chev"></use></svg></button><button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-folder"></use></svg><span class="tc-dir-name">支付核心</span><span class="tc-dir-n">128</span></button></div>
+              <div class="tc-dir-node" style="margin-left:14px"><button class="tc-dir-toggle" aria-expanded="true"><svg class="ic" width="12" height="12"><use href="#i-chev"></use></svg></button><button class="tc-dir-pick" type="button"><svg class="ic" width="13" height="13"><use href="#i-folder"></use></svg><span class="tc-dir-name">下单</span><span class="tc-dir-n">86</span></button></div>
+            </div>
+          </div>
+          <div class="tc-side-foot"><p class="tc-side-note" style="margin:0">只读：可以展开、筛选、导出；不显示新建 / 改名 / 删除按钮，也不能拖拽。目录维护需要项目写权限，删除还要负责人 / 管理员。</p></div>
+        </aside>
+        <div class="tc-cases-main"><div class="proto-ghost">只读态不隐藏已有结构，只是不允许改动；查看者仍能按目录与分组理解覆盖范围。</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

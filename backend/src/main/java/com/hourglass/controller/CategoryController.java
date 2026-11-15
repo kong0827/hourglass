@@ -87,13 +87,15 @@ public class CategoryController {
         return ApiResult.ok();
     }
 
+    /** 同级排序：parentId 空串=顶级；旧调用不传 parentId 时保持整项目排序口径 */
     @PutMapping("/api/categories/order")
     public ApiResult<Void> order(@Valid @RequestBody ColumnOrderRequest req,
                                  @RequestParam String project,
+                                 @RequestParam(required = false) String parentId,
                                  @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        categoryService.order(ws.getId(), userId, project, req.getIds());
+        categoryService.order(ws.getId(), userId, project, parentId, req.getIds());
         return ApiResult.ok();
     }
 }

@@ -19,14 +19,17 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO doc_category (id, workspace_id, req_id, parent_id, name, sort_order)
-    VALUES (#{id}, #{workspaceId}, COALESCE(#{reqId}, ''), COALESCE(#{parentId}, ''), #{name}, COALESCE(#{sortOrder}, 0))
+    INSERT INTO doc_category (id, workspace_id, req_id, parent_id, name, visibility, member_ids, sort_order)
+    VALUES (#{id}, #{workspaceId}, COALESCE(#{reqId}, ''), COALESCE(#{parentId}, ''), #{name},
+            COALESCE(#{visibility}, 'team'), COALESCE(#{memberIds}, ''), COALESCE(#{sortOrder}, 0))
   </insert>
 
   <update id="update">
     UPDATE doc_category
     SET parent_id = COALESCE(#{parentId}, ''),
         name = #{name},
+        visibility = COALESCE(#{visibility}, 'team'),
+        member_ids = COALESCE(#{memberIds}, ''),
         sort_order = COALESCE(#{sortOrder}, 0)
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>

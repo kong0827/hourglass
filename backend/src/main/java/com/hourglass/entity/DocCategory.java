@@ -19,6 +19,10 @@ public class DocCategory {
     /** 父分类 ID，空串 = 顶级 */
     private String parentId;
     private String name;
+    /** 分类默认可见范围：team / members / personal；仅新建文档时套用，不参与可见判定 */
+    private String visibility;
+    /** 分类默认指定成员账号 ID，逗号分隔（visibility=members 时有效） */
+    private String memberIds;
     private Integer sortOrder;
     private LocalDateTime createdAt;
 }

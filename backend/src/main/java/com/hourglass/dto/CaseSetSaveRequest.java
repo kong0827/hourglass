@@ -13,6 +13,10 @@ public class CaseSetSaveRequest {
     /** 新建时必填；编辑时忽略（分组不跨项目移动） */
     private String reqId;
 
+    /** 父分组ID；空串=顶级。子组继承父组可见范围（填写后 visibility 以父组为准） */
+    @Size(max = 32, message = "父分组参数不合法")
+    private String parentId;
+
     @NotBlank(message = "请填写分组名称")
     @Size(max = 60, message = "分组名称最多 60 字")
     private String name;

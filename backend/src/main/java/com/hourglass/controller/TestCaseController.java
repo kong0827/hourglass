@@ -207,6 +207,25 @@ public class TestCaseController {
         return ApiResult.ok(caseService.restoreModule(userId, ws.getId(), req));
     }
 
+    /** 手动排序的当前顺序（目录内 / 未归类 / 整个项目） */
+    @GetMapping("/api/test-cases/order")
+    public ApiResult<List<String>> orderIds(@RequestParam String reqId,
+                                            @RequestParam(required = false) String moduleId,
+                                            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.orderIds(userId, ws.getId(), reqId, moduleId));
+    }
+
+    /** 手动排序：整体提交当前目录的用例顺序，按数组下标重写序号 */
+    @PutMapping("/api/test-cases/order")
+    public ApiResult<java.util.Map<String, Object>> reorder(@Valid @RequestBody com.hourglass.dto.CaseOrderRequest req,
+                                                            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.reorder(userId, ws.getId(), req));
+    }
+
     /** 记录一次执行结果（passed / failed / blocked） */
     @PostMapping("/api/test-cases/{id}/runs")
     public ApiResult<TestCaseRun> run(@PathVariable String id,

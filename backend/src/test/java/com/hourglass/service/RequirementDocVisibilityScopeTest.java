@@ -137,6 +137,75 @@ class RequirementDocVisibilityScopeTest {
     }
 
     @Test
+    void createWithoutVisibilityCopiesCategoryDefaults() {
+        DocCategoryService cats = mock(DocCategoryService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "docCategories", cats);
+        when(cats.findForDoc(WS, "C1")).thenReturn(category("members", OTHER + "," + OTHER));
+        when(access.canView(WS, OTHER, null)).thenReturn(true);
+        when(docs.selectById(anyString())).thenReturn(null);
+        ReqDocSaveRequest req = saveRequest("分类文档", null, null);
+        req.setCategoryId("C1");
+
+        service.create(OWNER, WS, req);
+
+        verify(docs).insert(org.mockito.ArgumentMatchers.argThat(
+                d -> RequirementDocService.VIS_MEMBERS.equals(d.getVisibility())));
+        verify(docs).insertVisibilityMembers(eq(WS), anyString(), eq(Collections.singletonList(OTHER)));
+    }
+
+    @Test
+    void explicitTeamOverridesCategoryDefault() {
+        DocCategoryService cats = mock(DocCategoryService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "docCategories", cats);
+        when(cats.findForDoc(WS, "C1")).thenReturn(category("members", OTHER));
+        when(docs.selectById(anyString())).thenReturn(null);
+        ReqDocSaveRequest req = saveRequest("分类文档", "team", null);
+        req.setCategoryId("C1");
+
+        service.create(OWNER, WS, req);
+
+        verify(docs).insert(org.mockito.ArgumentMatchers.argThat(
+                d -> RequirementDocService.VIS_TEAM.equals(d.getVisibility())));
+        verify(docs, never()).insertVisibilityMembers(anyString(), anyString(), any());
+    }
+
+    @Test
+    void categoryDefaultWithOnlyStaleMembersFallsBackToTeam() {
+        DocCategoryService cats = mock(DocCategoryService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "docCategories", cats);
+        when(cats.findForDoc(WS, "C1")).thenReturn(category("members", OTHER));
+        when(access.canView(WS, OTHER, null)).thenReturn(false);
+        when(docs.selectById(anyString())).thenReturn(null);
+        ReqDocSaveRequest req = saveRequest("分类文档", null, null);
+        req.setCategoryId("C1");
+
+        service.create(OWNER, WS, req);
+
+        verify(docs).insert(org.mockito.ArgumentMatchers.argThat(
+                d -> RequirementDocService.VIS_TEAM.equals(d.getVisibility())));
+        verify(docs, never()).insertVisibilityMembers(anyString(), anyString(), any());
+    }
+
+    @Test
+    void updateDoesNotReapplyCategoryDefault() {
+        DocCategoryService cats = mock(DocCategoryService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "docCategories", cats);
+        when(cats.findForDoc(WS, "C1")).thenReturn(category("members", OTHER));
+        when(docs.selectById(DOC)).thenReturn(published("team", OWNER));
+        when(access.roleOf(WS, OWNER)).thenReturn(ProjectAccessService.ROLE_MEMBER);
+        when(docs.update(any(RequirementDoc.class), any())).thenReturn(1);
+        ReqDocSaveRequest req = saveRequest("换分类", null, null);
+        req.setCategoryId("C1");
+
+        service.update(OWNER, WS, DOC, req);
+
+        /* 分类默认值只在新建时复制一次：已有文档换分类不改可见范围 */
+        verify(docs).update(org.mockito.ArgumentMatchers.argThat(
+                d -> RequirementDocService.VIS_TEAM.equals(d.getVisibility())), any());
+        verify(docs, never()).insertVisibilityMembers(anyString(), anyString(), any());
+    }
+
+    @Test
     void narrowingTeamDocRequiresItsOwner() {
         when(docs.selectById(DOC)).thenReturn(published("team", OTHER));
         when(access.roleOf(WS, OWNER)).thenReturn(ProjectAccessService.ROLE_ADMIN);
@@ -239,6 +308,16 @@ class RequirementDocVisibilityScopeTest {
                 () -> service.changeVisibility(OWNER, WS, DOC, "members", Collections.<String>emptyList()));
         assertEquals(400, ex.getCode());
         verify(docs, never()).updateVisibility(anyString(), anyString(), anyString(), any(), any());
+    }
+
+    private com.hourglass.entity.DocCategory category(String visibility, String memberIds) {
+        com.hourglass.entity.DocCategory c = new com.hourglass.entity.DocCategory();
+        c.setId("C1");
+        c.setWorkspaceId(WS);
+        c.setName("研发文档");
+        c.setVisibility(visibility);
+        c.setMemberIds(memberIds);
+        return c;
     }
 
     private RequirementDoc published(String visibility, String ownerUserId) {

@@ -68,8 +68,14 @@ class TestCaseServiceTest {
                     mock(com.hourglass.mapper.TestPlanMapper.class),
                     planCases, auditService, mock(NumberSeqService.class),
                     caseTasks, tasks, members,
-                    new TestModuleService(modules, cases, access, auditService,
-                            mock(com.hourglass.mapper.CaseSetMapper.class)),
+                    new TestModuleService(new CategoryService(
+                            mock(com.hourglass.mapper.CategoryMapper.class),
+                            mock(com.hourglass.mapper.RequirementMapper.class),
+                            mock(ActivityService.class), mock(DeletionTraceService.class),
+                            mock(ProjectAccessService.class), mock(ReleasePermissionService.class),
+                            mock(WorkspaceMetaCache.class),
+                            mock(com.hourglass.mapper.TestCaseMapper.class),
+                            mock(com.hourglass.mapper.CaseSetMapper.class)), auditService),
                     mock(com.hourglass.mapper.CaseSetMapper.class));
 
     @BeforeEach

@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>多仓库项目 · 分支与仓库管理原型</title>
+<style>
+  :root{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+    --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+    --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+    --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+    --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+    --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+    --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+    --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+    --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+    --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+    --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:#E9ECF1;font-family:var(--font-sans);color:var(--text);-webkit-font-smoothing:antialiased;font-size:13px;}
+  .proto-head{max-width:1440px;margin:0 auto;padding:28px 32px 10px;color:var(--text-2);}
+  .proto-head h1{font-size:17px;margin:0 0 6px;color:var(--text);}
+  .proto-head p{margin:0;font-size:12px;line-height:19px;color:var(--text-3);}
+  .frame{max-width:1440px;margin:0 auto 34px;background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);}
+  .frame-cap{display:flex;align-items:center;gap:10px;padding:12px 18px;background:var(--surface-sunken);border-bottom:1px solid var(--border);font-size:12px;color:var(--text-2);}
+  .frame-cap b{color:var(--text);font-size:12.5px;}
+  .frame-cap .tag{font-size:11px;padding:2px 7px;border-radius:var(--r-pill);background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border);}
+  .frame-cap .tag.new{background:var(--plum-soft);color:var(--plum-fg);border-color:var(--plum-border);}
+
+  /* app shell */
+  .app{display:flex;height:820px;background:var(--bg-app);}
+  .rail{width:212px;flex:0 0 212px;background:var(--surface);border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:3px;}
+  .brand{display:flex;align-items:center;gap:9px;padding:2px 8px 16px;}
+  .brand i{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#2563EB,#7A5AF8);display:block;}
+  .brand b{font-size:13.5px;}
+  .nav-group{font-size:10.5px;color:var(--text-3);letter-spacing:.06em;padding:11px 10px 5px;}
+  .nav-item{display:flex;align-items:center;gap:9px;height:32px;padding:0 10px;border-radius:var(--r-sm);color:var(--text-2);font-size:12.5px;}
+  .nav-item .ic{width:13px;height:13px;border:1.4px solid var(--text-3);border-radius:4px;opacity:.7;}
+  .nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+  .nav-item.on .ic{border-color:var(--primary-fg);background:rgba(37,99,235,.12);opacity:1;}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .topbar{height:52px;flex:0 0 52px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid var(--border);background:var(--surface);}
+  .topbar h2{font-size:15px;margin:0;font-weight:650;}
+  .crumb{font-size:11.5px;color:var(--text-3);margin-left:8px;}
+  .ws-pill{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-2);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 10px;background:var(--surface);}
+  .avatar{width:24px;height:24px;border-radius:50%;background:#1D4ED8;color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:600;}
+  .page{padding:16px 22px 22px;overflow:hidden;}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:34px;}
+  .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden;background:var(--surface);}
+  .seg button{border:0;background:transparent;padding:0 12px;height:28px;font-size:12px;color:var(--text-2);cursor:default;}
+  .seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+  .meta{font-size:11.5px;color:var(--text-3);}
+  .page-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .toolbar-right{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;}
+  .btn{display:inline-flex;align-items:center;gap:5px;height:29px;padding:0 11px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:12px;color:var(--text-2);font-family:inherit;cursor:default;white-space:nowrap;}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600;}
+  .btn.ghost{border-color:transparent;background:transparent;}
+  .btn.sm{height:26px;padding:0 9px;font-size:11.5px;}
+  .btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+  .sel{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 9px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:12px;color:var(--text-2);}
+  .sel.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+  .sel .car{font-size:9px;color:var(--text-3);}
+  .sel.on .car{color:var(--primary-fg);}
+  .search{display:flex;align-items:center;height:29px;width:168px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);padding:0 9px;color:var(--text-3);font-size:12px;}
+  .count-n{display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 4px;border-radius:var(--r-pill);background:var(--primary);color:#fff;font-size:10px;font-weight:600;margin-left:2px;}
+
+  .filter-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:9px;}
+  .lifebar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:10px;}
+  .chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);font-size:11.5px;color:var(--text-2);}
+  .chip b{font-size:11.5px;color:var(--text);}
+  .chip.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+  .chip.on b{color:var(--primary-fg);}
+  .chip .dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);}
+  .pending-note{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--warning-fg);background:var(--warning-soft);border:1px solid var(--warning-border);border-radius:var(--r-pill);padding:3px 9px;}
+
+  /* NEW repo strip */
+  .repo-strip{margin-top:12px;border:1px solid var(--border);background:var(--surface);border-radius:var(--r-lg);padding:10px 12px;display:flex;align-items:center;gap:10px;}
+  .repo-strip-head{display:flex;flex-direction:column;gap:2px;flex:0 0 auto;padding-right:11px;border-right:1px solid var(--border);}
+  .repo-strip-head b{font-size:12px;font-weight:650;}
+  .repo-strip-head span{font-size:10.5px;color:var(--text-3);}
+  .repo-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
+  .repo-chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);font-size:11.5px;color:var(--text-2);}
+  .repo-chip .nm{font-weight:600;color:var(--text);font-family:var(--font-mono);font-size:11px;}
+  .repo-chip .st{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--text-3);}
+  .repo-chip .st i{width:6px;height:6px;border-radius:50%;background:var(--success);display:block;}
+  .repo-chip .st i.warn{background:var(--warning);}
+  .repo-chip .st i.off{background:var(--text-3);}
+  .repo-chip .num{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:var(--r-pill);background:var(--surface-sunken);font-size:10.5px;color:var(--text-2);font-weight:600;}
+  .repo-chip.on{border-color:var(--primary-border);background:var(--primary-soft);}
+  .repo-chip.on .nm{color:var(--primary-fg);}
+  .repo-chip.muted .nm{font-family:var(--font-sans);color:var(--text-3);font-weight:500;}
+  .repo-strip .manage{flex:0 0 auto;font-size:11.5px;color:var(--primary-fg);white-space:nowrap;}
+
+  .board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px;}
+  .col{background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-lg);padding:9px;min-height:330px;}
+  .col-head{display:flex;align-items:center;justify-content:space-between;padding:0 3px 8px;}
+  .col-head b{font-size:12px;}
+  .col-head .n{font-size:11px;color:var(--text-3);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 10px;margin-bottom:7px;box-shadow:var(--shadow-xs);}
+  .card-top{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+  .badge{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:var(--r-pill);font-size:10.5px;font-weight:600;border:1px solid transparent;}
+  .b-dev{background:var(--info-soft);color:var(--info-fg);border-color:var(--info-border);}
+  .b-test{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
+  .b-merge{background:var(--plum-soft);color:var(--plum-fg);border-color:var(--plum-border);}
+  .b-rel{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border);}
+  .card .name{font-family:var(--font-mono);font-size:11.5px;font-weight:600;margin:7px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mini{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 5px;border-radius:4px;font-size:10px;border:1px solid var(--border);background:var(--surface-sunken);color:var(--text-2);white-space:nowrap;}
+  .mini.repo{font-family:var(--font-mono);background:var(--surface);border-color:var(--border-strong);color:var(--text-2);}
+  .mini.ok{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+  .mini.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+  .mini.sha{font-family:var(--font-mono);color:var(--text-3);}
+  .badges{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;}
+  .card .foot{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10.5px;color:var(--text-3);}
+  .card .target{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);margin-bottom:6px;}
+
+  /* drawer overlay */
+  .overlay{position:relative;height:820px;background:var(--bg-app);overflow:hidden;}
+  .overlay .scrim{position:absolute;inset:0;background:rgba(16,24,40,.32);}
+  .sheet{position:absolute;top:0;right:0;bottom:0;width:640px;background:var(--surface);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;}
+  .sheet-head{padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+  .sheet-head h3{margin:0 0 4px;font-size:15px;}
+  .sheet-head p{margin:0;font-size:11.5px;line-height:18px;color:var(--text-3);max-width:500px;}
+  .x{width:26px;height:26px;border-radius:var(--r-sm);border:1px solid var(--border);color:var(--text-3);display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .sheet-body{flex:1;overflow:hidden;padding:14px 18px;}
+  .sheet-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+  .ghost-link{font-size:11.5px;color:var(--text-3);}
+  .group-head{display:flex;align-items:center;gap:7px;margin:4px 0 8px;}
+  .group-head b{font-size:11.5px;}
+  .group-head .n{font-size:10.5px;color:var(--text-3);}
+  .group-head .ln{flex:1;height:1px;background:var(--border);}
+  .repo-row{display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);margin-bottom:7px;}
+  .repo-row .main{flex:1;min-width:0;}
+  .repo-row .nm{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;flex-wrap:wrap;}
+  .repo-row .url{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .repo-row .stat{display:flex;align-items:center;gap:10px;margin-top:5px;font-size:10.5px;color:var(--text-3);flex-wrap:wrap;}
+  .repo-row .stat span{display:inline-flex;align-items:center;gap:4px;}
+  .repo-row .stat i{width:6px;height:6px;border-radius:50%;background:var(--success);display:block;}
+  .repo-row .stat i.warn{background:var(--danger);}
+  .repo-row .stat i.off{background:var(--text-3);}
+  .repo-row .acts{display:flex;align-items:center;gap:5px;flex:0 0 auto;}
+  .repo-row.err{border-color:var(--danger-border);background:linear-gradient(0deg,rgba(240,68,56,.03),rgba(240,68,56,.03)),var(--surface);}
+  .more{width:26px;height:26px;border-radius:var(--r-sm);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;letter-spacing:1px;}
+  .emptybox{border:1px dashed var(--border-strong);border-radius:var(--r-lg);padding:26px;text-align:center;color:var(--text-3);font-size:12px;line-height:20px;background:var(--surface-sunken);}
+
+  /* edit form */
+  .back{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-2);margin-bottom:8px;}
+  .edit-title{display:flex;align-items:center;gap:8px;}
+  .edit-title h3{margin:0;font-size:16px;font-family:var(--font-mono);}
+  .sub{font-size:11.5px;color:var(--text-3);margin:5px 0 0;}
+  .sync-card{border:1px solid var(--border);background:var(--surface-sunken);border-radius:var(--r-md);padding:10px 12px;margin:12px 0 14px;}
+  .sync-card .top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .sync-card .top b{font-size:12px;}
+  .sync-card .facts{display:flex;gap:14px;margin-top:7px;font-size:11px;color:var(--text-2);flex-wrap:wrap;}
+  .sync-card .facts em{font-style:normal;color:var(--text);font-weight:650;}
+  .form-sect{margin-bottom:14px;}
+  .form-sect h4{margin:0 0 8px;font-size:12px;display:flex;align-items:center;gap:6px;}
+  .form-sect h4 .hint{font-weight:400;font-size:10.5px;color:var(--text-3);}
+  .field{margin-bottom:9px;}
+  .field label{display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;}
+  .input{height:32px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);display:flex;align-items:center;padding:0 10px;font-size:12px;color:var(--text);}
+  .input.mono{font-family:var(--font-mono);font-size:11.5px;}
+  .input .tail{margin-left:auto;font-size:10.5px;color:var(--text-3);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+  .toggle{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-2);}
+  .sw{width:30px;height:17px;border-radius:var(--r-pill);background:var(--primary);position:relative;display:inline-block;}
+  .sw:after{content:"";position:absolute;top:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#fff;}
+  .danger-zone{border:1px solid var(--danger-border);border-radius:var(--r-md);padding:10px 12px;background:var(--danger-soft);}
+  .danger-zone b{font-size:11.5px;color:var(--danger-fg);}
+  .danger-zone p{margin:4px 0 8px;font-size:11px;line-height:17px;color:var(--text-2);}
+
+  /* project cockpit */
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:13px 14px;margin-bottom:11px;}
+  .panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px;}
+  .panel-head b{font-size:12.5px;}
+  .panel-head span{font-size:10.5px;color:var(--text-3);}
+  .brief{display:grid;grid-template-columns:1fr 260px;gap:16px;}
+  .goal{font-size:12.5px;color:var(--text-2);line-height:19px;margin:6px 0 10px;}
+  .facts{display:flex;gap:20px;flex-wrap:wrap;font-size:11px;color:var(--text-3);}
+  .facts b{display:block;font-size:12.5px;color:var(--text);font-weight:600;margin-top:2px;}
+  .risks{display:flex;gap:5px;flex-wrap:wrap;align-content:flex-start;}
+  .tag{display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 6px;border-radius:4px;font-size:10.5px;border:1px solid var(--border);background:var(--surface-sunken);color:var(--text-2);}
+  .tag.ok{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+  .tag.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+  .del-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .del-card{border:1px solid var(--border);border-radius:var(--r-md);padding:11px 12px;background:var(--surface);text-align:left;}
+  .del-card .t{font-size:11px;color:var(--text-3);display:flex;align-items:center;justify-content:space-between;}
+  .del-card .v{font-size:19px;font-weight:650;margin:5px 0 3px;}
+  .del-card .f{font-size:10.5px;color:var(--text-3);}
+  .del-card.new{border-color:var(--primary-border);background:linear-gradient(0deg,rgba(37,99,235,.04),rgba(37,99,235,.04)),var(--surface);}
+  .del-card.new .v{color:var(--primary-fg);}
+  .repo-line{display:grid;grid-template-columns:1.2fr 1.6fr .8fr .9fr .7fr auto;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid var(--border);font-size:11.5px;}
+  .repo-line:last-child{border-bottom:0;}
+  .repo-line .nm{display:flex;align-items:center;gap:6px;font-weight:600;}
+  .repo-line .nm code{font-family:var(--font-mono);font-size:11px;}
+  .repo-line .url{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .repo-line .num{font-size:11px;color:var(--text-2);}
+  .repo-line .acts{display:flex;gap:5px;justify-content:flex-end;}
+  .status{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--text-2);}
+  .status i{width:6px;height:6px;border-radius:50%;background:var(--success);display:block;}
+  .status i.err{background:var(--danger);}
+  .status i.off{background:var(--text-3);}
+
+
+  .overlay>.ghost{position:absolute;inset:0;background:var(--bg-app);}
+  .ghost .g-top{height:52px;background:var(--surface);border-bottom:1px solid var(--border);}
+  .ghost .g-page{padding:18px 22px;}
+  .ghost .g-title{width:120px;height:18px;border-radius:6px;background:var(--border-strong);margin-bottom:16px;}
+  .ghost .g-bar{height:30px;width:62%;background:var(--surface-sunken);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;}
+  .ghost .g-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .ghost .g-cols i{display:block;height:430px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:12px;}
+  .ghost .g-cols i:nth-child(2){background:var(--surface-sunken);}
+
+  /* annotation */
+  .notes{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px;background:var(--surface-sunken);border-top:1px solid var(--border);}
+  .note{font-size:11px;line-height:17px;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 9px;}
+  .note b{color:var(--primary-fg);font-weight:600;}
+
+  /* explain markers */
+  .expl{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;padding:0;margin-left:4px;border:0;border-radius:50%;font:650 9.5px/1 var(--font-sans);vertical-align:1px;cursor:help;}
+  .expl.q{background:var(--info-soft);color:var(--info-fg);box-shadow:inset 0 0 0 1px var(--info-border);}
+  .expl.w{background:var(--warning-soft);color:var(--warning-fg);box-shadow:inset 0 0 0 1px var(--warning-border);}
+  .expl:focus-visible{outline:2px solid var(--ring-focus);outline-offset:2px;}
+  .proto-head .legend{display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11.5px;color:var(--text-3);}
+  .expl-pop{position:fixed;z-index:50;max-width:300px;background:#101828;color:#fff;font-size:11.5px;line-height:17px;padding:8px 10px;border-radius:8px;box-shadow:var(--shadow-lg);pointer-events:none;}
+  .expl-pop b{display:block;font-size:10.5px;letter-spacing:.04em;margin-bottom:2px;font-weight:600;color:#D0D5DD;}
+  .expl-pop.q b{color:#B2DDFF;}
+  .expl-pop.w b{color:#FEDF89;}
+</style>
+</head>
+<body>
+
+<div class="proto-head">
+  <h1>多仓库项目 · 分支与仓库管理（原型）</h1>
+  <p>场景：项目「支付中台」绑定 3 个 GitLab 仓库（payment-api / payment-web / payment-job）。目标：分支页能看见仓库维度、仓库管理改为「列表 → 详情」两级，不再在一个抽屉里塞表单。</p>
+  <p class="legend">标注：<span class="expl q" aria-hidden="true">?</span>口径 / 名词解释<span class="expl w" aria-hidden="true">!</span>风险与注意 · 悬停或点按标记查看说明</p>
+</div>
+
+<!-- ================= A 分支页 ================= -->
+<div class="frame">
+  <div class="frame-cap"><b>A · 分支页</b><span class="tag new">新增</span> 选中项目后，仓库成为分支的可见维度：仓库概览条、仓库筛选联动、卡片带仓库标签、可按仓库分组。<span style="margin-left:auto">1440</span></div>
+  <div class="app">
+    <aside class="rail">
+      <div class="brand"><i></i><b>沙漏</b></div>
+      <div class="nav-group">工作</div>
+      <div class="nav-item"><span class="ic"></span>我的工作</div>
+      <div class="nav-item"><span class="ic"></span>工作项</div>
+      <div class="nav-item"><span class="ic"></span>项目</div>
+      <div class="nav-item on"><span class="ic"></span>分支</div>
+      <div class="nav-item"><span class="ic"></span>测试</div>
+      <div class="nav-item"><span class="ic"></span>缺陷</div>
+      <div class="nav-group">交付</div>
+      <div class="nav-item"><span class="ic"></span>版本与发布</div>
+      <div class="nav-item"><span class="ic"></span>文档</div>
+      <div class="nav-item"><span class="ic"></span>洞察</div>
+      <div class="nav-group">空间</div>
+      <div class="nav-item"><span class="ic"></span>设置</div>
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div style="display:flex;align-items:baseline"><h2>分支</h2><span class="crumb">支付中台 · 3 个仓库</span></div>
+        <div class="ws-pill"><span class="avatar">孔</span>研发空间<span style="color:var(--text-3)">·</span>空间主</div>
+      </div>
+      <div class="page">
+        <div class="page-toolbar">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="seg"><button class="on">看板</button><button>列表</button></span>
+            <span class="meta">12 条进行中 · 平均周期 6 天</span>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn sm ghost">筛选<span class="count-n">2</span></button>
+            <button class="btn sm">按仓库分组</button><button type="button" class="expl q" aria-label="解释：按仓库分组" data-tip="同名分支按仓库分组后不会混在一起；分组只影响看板排列，不改变筛选条件与计数。">?</button>
+            <button class="btn sm ghost">视图</button>
+            <button class="btn sm ghost">仓库设置</button>
+            <button class="btn primary sm">＋ 新建分支</button>
+          </div>
+        </div>
+
+        <div class="filter-row">
+          <span class="sel on">项目：支付中台 <span class="car">▾</span></span>
+          <span class="sel">仓库：全部（3） <span class="car">▾</span></span>
+          <span class="sel">状态 <span class="car">▾</span></span>
+          <span class="sel">负责人 <span class="car">▾</span></span>
+          <span class="sel">版本 <span class="car">▾</span></span>
+          <span class="search">搜索所选项目分支…</span>
+          <button class="btn sm soft">清空筛选</button>
+        </div>
+
+        <div class="lifebar">
+          <div class="chips">
+            <span class="chip on">进行中 <b>12</b></span>
+            <span class="chip">已完成 <b>48</b></span>
+            <span class="chip">已取消 <b>3</b></span>
+            <span class="chip">已忽略 <b>2</b></span>
+            <span class="chip">待确认 <b>1</b></span><button type="button" class="expl w" aria-label="注意：待确认含义" data-tip="待确认 = 远程分支已删除或合并状态判断不了。系统不会自动改状态，人工确认后才转「已完成」或「已取消」。">!</button>
+            <span class="chip">全部 <b>66</b></span>
+          </div>
+          <span class="pending-note">1 条待确认 · payment-api 远程已消失</span>
+        </div>
+
+        <div class="repo-strip">
+          <div class="repo-strip-head"><b>本项目仓库</b><span>3 个 · 1 个同步失败</span></div>
+          <div class="repo-chips">
+            <span class="repo-chip on"><span class="nm">全部</span><span class="num">12</span></span>
+            <span class="repo-chip"><span class="nm">payment-api</span><span class="st"><i></i>2 分钟前</span><span class="num">5</span></span>
+            <span class="repo-chip"><span class="nm">payment-web</span><span class="st"><i></i>8 分钟前</span><span class="num">4</span></span>
+            <span class="repo-chip"><span class="nm">payment-job</span><span class="st"><i class="warn"></i>同步失败</span><span class="num">3</span></span>
+            <span class="repo-chip muted"><span class="nm">未归属仓库</span><span class="st"><i class="off"></i>手工</span><span class="num">1</span></span>
+          </div>
+          <span class="manage">管理仓库 →</span>
+        </div>
+
+        <div class="board">
+          <div class="col">
+            <div class="col-head"><b>开发中</b><span class="n">7</span></div>
+            <div class="card">
+              <div class="card-top"><span class="badge b-dev">开发中 ▾</span><span class="avatar" style="background:#5B3FD1">李</span></div>
+              <div class="name">feature/refund-v2</div>
+              <div class="badges"><span class="mini repo">payment-api</span><span class="mini sha">HEAD 9f3c21ab</span><button type="button" class="expl q" aria-label="解释：HEAD 含义" data-tip="HEAD 是上次同步到的提交号；同步失败时保留上一次的值，不会清空。">?</button></div>
+              <div class="target">→ main</div>
+              <div class="foot"><span>2/5 工作项</span><span>已 3 天</span></div>
+            </div>
+            <div class="card">
+              <div class="card-top"><span class="badge b-dev">开发中 ▾</span><span class="avatar" style="background:#067647">王</span></div>
+              <div class="name">feature/refund-v2</div>
+              <div class="badges"><span class="mini repo">payment-web</span><span class="mini sha">HEAD 51aa09cd</span></div>
+              <div class="target">→ main</div>
+              <div class="foot"><span>1/3 工作项</span><span>已 3 天</span></div>
+            </div>
+            <div class="card">
+              <div class="card-top"><span class="badge b-dev">开发中 ▾</span></div>
+              <div class="name">hotfix/settle-lock</div>
+              <div class="badges"><span class="mini repo">payment-job</span><span class="mini warn">同步失败</span></div>
+              <div class="target">→ main</div>
+              <div class="foot"><span>无关联工作项</span><span>已 1 天</span></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="col-head"><b>待测试</b><span class="n">3</span></div>
+            <div class="card">
+              <div class="card-top"><span class="badge b-test">待测试 ▾</span><span class="avatar" style="background:#B54708">张</span></div>
+              <div class="name">feature/merchant-bill</div>
+              <div class="badges"><span class="mini repo">payment-api</span><span class="mini ok">已合并 main</span><button type="button" class="expl q" aria-label="解释：合并状态来源" data-tip="合并状态取自远程 MR 记录；直接推送、压缩合并可能识别不到，可在分支详情里人工改状态。">?</button></div>
+              <div class="target">→ main</div>
+              <div class="foot"><span>4/4 工作项</span><span>已 2 天</span></div>
+            </div>
+            <div class="card">
+              <div class="card-top"><span class="badge b-test">待测试 ▾</span></div>
+              <div class="name">feature/fee-rule</div>
+              <div class="badges"><span class="mini repo">payment-web</span><span class="mini sha">HEAD 73bd02ee</span></div>
+              <div class="target">→ release/1.8</div>
+              <div class="foot"><span>3/5 工作项</span><span>已 4 天</span></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="col-head"><b>待合并</b><span class="n">2</span><button type="button" class="expl q" aria-label="解释：待合并含义" data-tip="待合并 = 分支已推送、关联工作项已完成，等待人工合并到目标分支。同步只读取，不会替人合并。">?</button></div>
+            <div class="card">
+              <div class="card-top"><span class="badge b-merge">待合并 ▾</span></div>
+              <div class="name">feature/risk-split</div>
+              <div class="badges"><span class="mini repo">payment-api</span><span class="mini sha">HEAD c0de77aa</span></div>
+              <div class="target">→ release/1.8</div>
+              <div class="foot"><span>5/5 工作项</span><span>已 6 小时</span></div>
+            </div>
+            <div class="card">
+              <div class="card-top"><span class="badge b-merge">待合并 ▾</span></div>
+              <div class="name">feature/settle-retry</div>
+              <div class="badges"><span class="mini repo">payment-job</span><span class="mini sha">HEAD e11f9b20</span></div>
+              <div class="target">→ main</div>
+              <div class="foot"><span>2/2 工作项</span><span>已 1 天</span></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="col-head"><b>已发布</b><span class="n">0</span></div>
+            <div class="card" style="border-style:dashed;background:transparent;box-shadow:none;">
+              <div class="emptybox" style="border:0;background:transparent;padding:20px 6px;">本周期还没有已发布分支</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <span class="note"><b>① 仓库条</b>：进了项目就说明“这个项目由哪几个仓库组成”，同步状态与分支数一眼可见，不用先开抽屉。</span>
+    <span class="note"><b>② 仓库筛选跟随项目</b>：切项目时仓库下拉只列该项目仓库；当前仓库不属于新项目会自动收回。</span>
+    <span class="note"><b>③ 同名分支可辨</b>：feature/refund-v2 在 api 与 web 各一条，卡片带仓库标签，按仓库分组后不会混在一起。</span>
+    <span class="note"><b>④ 未归属仓库</b>：手工建的分支没有 repo_id，单列成一个“未归属仓库”桶，不再隐身在列表里。</span>
+  </div>
+</div>
+
+<!-- ================= B 仓库抽屉 · 列表态 ================= -->
+<div class="frame">
+  <div class="frame-cap"><b>B · 仓库管理抽屉 · 列表态</b><span class="tag new">改造</span> 按项目分组，行内直接看同步结果与分支数；编辑改为进入下一级，不再与列表挤在同一个抽屉里。<span style="margin-left:auto">1440</span></div>
+  <div class="overlay">
+    <div class="ghost">
+      <div class="g-top"></div>
+      <div class="g-page">
+        <div class="g-title"></div>
+        <div class="g-bar"></div>
+        <div class="g-cols"><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="sheet-head">
+        <div>
+          <h3>GitLab 仓库</h3>
+          <p>只读同步远程分支与已合并 MR，不向仓库写任何内容。一个项目可以绑定多个仓库，分支按仓库隔离。<button type="button" class="expl q" aria-label="解释：只读同步" data-tip="同步只调用 GitLab 只读接口。分支状态、负责人、工作项关联都在沙漏里维护，远程变更不会覆盖这些字段。">?</button></p>
+        </div>
+        <div class="x">×</div>
+      </div>
+      <div class="sheet-body">
+        <div class="group-head"><b>支付中台</b><span class="n">3 个仓库</span><span class="ln"></span><span class="ghost-link">+ 为本项目绑定仓库</span></div>
+        <div class="repo-row">
+          <div class="main">
+            <div class="nm">payment-api <span class="mini ok">同步正常</span><span class="mini">令牌已配置</span></div>
+            <div class="url">https://gitlab.example.com · payment/payment-api</div>
+            <div class="stat"><span><i></i>2 分钟前同步</span><span>5 条进行中</span><span>1 待确认</span><span>导入 5 · 合并 2</span></div>
+          </div>
+          <div class="acts"><button class="btn sm">同步</button><span class="more">···</span></div>
+        </div>
+        <div class="repo-row">
+          <div class="main">
+            <div class="nm">payment-web <span class="mini ok">同步正常</span><span class="mini">令牌已配置</span></div>
+            <div class="url">https://gitlab.example.com · payment/payment-web</div>
+            <div class="stat"><span><i></i>8 分钟前同步</span><span>4 条进行中</span><span>导入 4 · 合并 1</span></div>
+          </div>
+          <div class="acts"><button class="btn sm">同步</button><span class="more">···</span></div>
+        </div>
+        <div class="repo-row err">
+          <div class="main">
+            <div class="nm">payment-job <span class="mini warn">同步失败</span><span class="mini">令牌已配置</span></div>
+            <div class="url">https://gitlab.example.com · payment/payment-job</div>
+            <div class="stat"><span><i class="warn"></i>今天 09:41 失败</span><span>3 条进行中</span><span style="color:var(--danger-fg)">401 Unauthorized：令牌已过期</span><button type="button" class="expl w" aria-label="注意：同步失败的影响" data-tip="同步失败不会清空该仓库已同步的分支与统计；修复令牌后点「重试」补齐增量即可。">!</button></div>
+          </div>
+          <div class="acts"><button class="btn sm">重试</button><span class="more">···</span></div>
+        </div>
+        <div class="group-head" style="margin-top:14px"><b>履约平台</b><span class="n">1 个仓库</span><span class="ln"></span><span class="ghost-link">+ 为本项目绑定仓库</span></div>
+        <div class="repo-row">
+          <div class="main">
+            <div class="nm">fulfill-core <span class="mini">已暂停</span><button type="button" class="expl q" aria-label="解释：暂停语义" data-tip="暂停后不参与每 10 分钟定时同步，手动同步仍然可用；已同步的分支保持只读展示。">?</button></div>
+            <div class="url">https://gitlab.example.com · ops/fulfill-core</div>
+            <div class="stat"><span><i class="off"></i>已暂停 3 天</span><span>2 条进行中</span></div>
+          </div>
+          <div class="acts"><button class="btn sm ghost">启用</button><span class="more">···</span></div>
+        </div>
+        <div class="emptybox" style="margin-top:14px;text-align:left;padding:14px;">
+          <b style="color:var(--text);font-size:11.5px;">还没绑定的项目不会出现在这里</b><br />
+          一个项目可以有多个仓库（例如前端 / 后端 / 定时任务），同步出的分支按仓库隔离，同名也不会互相覆盖。
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn primary">＋ 新建绑定</button>
+        <span class="ghost-link">定时同步每 10 分钟 · 最近一次全部同步 08:52</span>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <span class="note"><b>列表态只做三件事</b>：看状态、立即同步、进入详情。编辑、暂停、解绑收进 <b>···</b> 菜单。</span>
+    <span class="note"><b>失败行直接给原因</b>：401 / 404 / 网络错误原文展示，不再只显示一行截断的摘要。</span>
+    <span class="note"><b>按项目分组</b>：分组头带“为本项目绑定仓库”，从项目上下文进入时预填项目。</span>
+  </div>
+</div>
+
+<!-- ================= C 仓库抽屉 · 编辑态 ================= -->
+<div class="frame">
+  <div class="frame-cap"><b>C · 仓库管理抽屉 · 编辑态</b><span class="tag new">改造</span> 独立一页表单：连接 / 同步策略 / 令牌 / 解绑分区，顶部先给“上次同步做了什么”。<span style="margin-left:auto">1440</span></div>
+  <div class="overlay">
+    <div class="ghost">
+      <div class="g-top"></div>
+      <div class="g-page">
+        <div class="g-title"></div>
+        <div class="g-bar"></div>
+        <div class="g-cols"><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="sheet-head">
+        <div>
+          <span class="back">← 支付中台 · 3 个仓库</span>
+          <div class="edit-title"><h3>payment-api</h3><span class="mini ok">同步正常</span></div>
+          <p class="sub">所属项目：支付中台 · 已跟踪 5 条进行中分支 · 1 条待确认</p>
+        </div>
+        <div class="x">×</div>
+      </div>
+      <div class="sheet-body">
+        <div class="sync-card">
+          <div class="top">
+            <b>上次同步：2 分钟前</b>
+            <button class="btn sm">立即同步</button>
+          </div>
+          <div class="facts"><span>导入 <em>5</em></span><span>更新 HEAD <em>3</em></span><span>已合并 <em>2</em></span><span>远程消失 <em>1</em><button type="button" class="expl q" aria-label="解释：远程消失" data-tip="远程消失 = 上次同步后远程分支被删除。记录保留并标为待确认，不自动删除。">?</button></span><span>待确认 <em>1</em></span></div>
+        </div>
+
+        <div class="form-sect">
+          <h4>连接 <span class="hint">只读 GitLab REST API</span></h4>
+          <div class="field"><label>GitLab 地址</label><div class="input mono">https://gitlab.example.com</div></div>
+          <div class="field"><label>项目标识</label><div class="input mono">payment/payment-api<span class="tail">数字 ID 或 group/project</span></div></div>
+          <div class="field"><div style="display:flex;align-items:center;"><label>访问令牌</label><button type="button" class="expl w" aria-label="注意：令牌规则" data-tip="页面不回显令牌原文；更换后旧令牌不会自动在 GitLab 吊销，需要到 GitLab 侧手动吊销。">!</button></div><div class="input">••••••••••••<span class="tail">已配置 · 7 天前更新</span></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:5px;">
+              <button class="btn sm ghost">更换令牌</button>
+              <button class="btn sm ghost">测试连接</button>
+              <span class="meta">测试只读取项目信息，不写仓库</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-sect">
+          <h4>同步策略</h4>
+          <div class="row2">
+            <div class="field"><label>默认目标分支</label><div class="input mono">main<span class="tail">同步时排除</span></div></div>
+            <div class="field"><label>导入策略</label><div class="input">近 90 天有提交<span class="tail">▾</span></div></div>
+          </div>
+          <div class="toggle"><span class="sw"></span>参与定时同步（每 10 分钟）<span class="meta">关闭后仍可手动同步</span></div>
+        </div>
+
+        <div class="danger-zone">
+          <b>解绑仓库</b>
+          <p>已同步的 5 条分支会保留，来源显示为「已解绑仓库」，不会被删除；重新绑定同一仓库后可恢复追踪。</p>
+          <button class="btn sm" style="color:var(--danger-fg);border-color:var(--danger-border);background:var(--surface);">解绑…</button>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <span style="flex:1"></span>
+        <button class="btn">取消</button>
+        <button class="btn primary">保存修改</button>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <span class="note"><b>顶部同步卡</b>：先回答“上次同步到底改了什么”，再让人改配置；失败时这里换成错误原文 + 重试。</span>
+    <span class="note"><b>编辑是独立一页</b>：左侧返回列表，标题就是仓库名，不会出现“表单在下面、编辑的是哪条要靠记”的情况。</span>
+    <span class="note"><b>解绑语义</b>：软解绑，分支与时间线不删；菜单里没有“删除绑定”这种含糊说法。</span>
+  </div>
+</div>
+
+<!-- ================= D 项目驾驶舱 ================= -->
+<div class="frame">
+  <div class="frame-cap"><b>D · 项目驾驶舱</b><span class="tag new">新增</span> 交付资源里补“代码仓库”，下面直接列本项目的仓库与分支数；从这里进入分支页会自动带项目和仓库。<span style="margin-left:auto">1440</span></div>
+  <div class="app" style="height:auto;">
+    <aside class="rail">
+      <div class="brand"><i></i><b>沙漏</b></div>
+      <div class="nav-group">工作</div>
+      <div class="nav-item"><span class="ic"></span>我的工作</div>
+      <div class="nav-item"><span class="ic"></span>工作项</div>
+      <div class="nav-item on"><span class="ic"></span>项目</div>
+      <div class="nav-item"><span class="ic"></span>分支</div>
+      <div class="nav-item"><span class="ic"></span>测试</div>
+      <div class="nav-item"><span class="ic"></span>缺陷</div>
+      <div class="nav-group">交付</div>
+      <div class="nav-item"><span class="ic"></span>版本与发布</div>
+      <div class="nav-item"><span class="ic"></span>文档</div>
+      <div class="nav-item"><span class="ic"></span>洞察</div>
+      <div class="nav-group">空间</div>
+      <div class="nav-item"><span class="ic"></span>设置</div>
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div style="display:flex;align-items:baseline"><h2>项目驾驶舱</h2><span class="crumb">支付中台</span></div>
+        <div class="ws-pill"><span class="avatar">孔</span>研发空间</div>
+      </div>
+      <div class="page">
+        <div class="panel">
+          <div class="brief">
+            <div>
+              <div class="panel-head" style="margin-bottom:0;"><b>支付中台</b><span>负责人 孔祥金</span></div>
+              <p class="goal">统一收单、退款与分账链路，把支付能力收敛成一套可复用的服务。</p>
+              <div class="facts">
+                <span>计划周期<b>10-08 → 12-20</b></span>
+                <span>计划剩余<b>35 天</b></span>
+                <span>首版上线<b>11-02</b></span>
+              </div>
+            </div>
+            <div>
+              <div class="panel-head" style="margin-bottom:6px;"><b>风险信号</b></div>
+              <div class="risks"><span class="tag warn">阻塞 2 项</span><span class="tag warn">3 人超载</span><span class="tag warn">payment-job 同步失败</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><b>交付资源</b><span>打开时自动按本项目筛选</span></div>
+          <div class="del-grid">
+            <div class="del-card"><div class="t">文档</div><div class="v">12</div><div class="f">需求 / 方案文档</div></div>
+            <div class="del-card"><div class="t">测试用例</div><div class="v">86</div><div class="f">3 个测试计划</div></div>
+            <div class="del-card"><div class="t">版本</div><div class="v">5</div><div class="f">首版 / 迭代</div></div>
+            <div class="del-card new"><div class="t">代码仓库 <span class="mini ok">2 正常</span></div><div class="v">3</div><div class="f">12 条进行中分支 · 1 个仓库同步失败</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><b>代码仓库</b><span>只读同步 · 分支按仓库隔离 · <span style="color:var(--primary-fg)">管理仓库 →</span></span></div>
+          <div class="repo-line">
+            <div class="nm"><code>payment-api</code><span class="mini">后端服务</span></div>
+            <div class="url">https://gitlab.example.com/payment/payment-api</div>
+            <div class="status"><i></i>2 分钟前</div>
+            <div class="num">5 条进行中 · 1 待确认</div>
+            <div class="num">导入 5 · 合并 2</div>
+            <div class="acts"><button class="btn sm ghost">同步</button><button class="btn sm">查看分支 →</button></div>
+          </div>
+          <div class="repo-line">
+            <div class="nm"><code>payment-web</code><span class="mini">收银台</span></div>
+            <div class="url">https://gitlab.example.com/payment/payment-web</div>
+            <div class="status"><i></i>8 分钟前</div>
+            <div class="num">4 条进行中</div>
+            <div class="num">导入 4 · 合并 1</div>
+            <div class="acts"><button class="btn sm ghost">同步</button><button class="btn sm">查看分支 →</button></div>
+          </div>
+          <div class="repo-line">
+            <div class="nm"><code>payment-job</code><span class="mini">对账任务</span></div>
+            <div class="url">https://gitlab.example.com/payment/payment-job</div>
+            <div class="status"><i class="err"></i>今天 09:41 失败</div>
+            <div class="num">3 条进行中</div>
+            <div class="num" style="color:var(--danger-fg)">令牌已过期<button type="button" class="expl w" aria-label="注意：同步失败影响" data-tip="同步失败的项目仍保留既有分支与统计；修复令牌后重试补齐，不影响已关联的工作项。">!</button></div>
+            <div class="acts"><button class="btn sm">重试</button><button class="btn sm">查看分支 →</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <span class="note"><b>驾驶舱只读</b>：能给项目负责人看仓库状态，但令牌与绑定仍在“设置 / 仓库管理”里，避免在业务页里出现凭据操作。</span>
+    <span class="note"><b>“查看分支”带过滤</b>：跳到分支页时带 project + repo，落地就是该项目该仓库的分支。</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  let pop = null, owner = null;
+  const close = () => { if (pop) pop.remove(); pop = null; owner = null; };
+  const show = el => {
+    close();
+    const warn = el.classList.contains('w');
+    pop = document.createElement('div');
+    pop.className = 'expl-pop ' + (warn ? 'w' : 'q');
+    const b = document.createElement('b');
+    b.textContent = warn ? '注意' : '解释';
+    const t = document.createElement('span');
+    t.textContent = el.dataset.tip;
+    pop.append(b, t);
+    document.body.appendChild(pop);
+    owner = el;
+    const r = el.getBoundingClientRect();
+    const pr = pop.getBoundingClientRect();
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - pr.width / 2), innerWidth - pr.width - 8);
+    let top = r.bottom + 6;
+    if (top + pr.height > innerHeight - 8) top = r.top - pr.height - 6;
+    pop.style.left = left + 'px';
+    pop.style.top = Math.max(8, top) + 'px';
+  };
+  document.querySelectorAll('.expl[data-tip]').forEach(el => {
+    el.addEventListener('mouseenter', () => show(el));
+    el.addEventListener('mouseleave', () => { if (owner === el) close(); });
+    el.addEventListener('focus', () => show(el));
+    el.addEventListener('blur', () => { if (owner === el) close(); });
+  });
+  document.addEventListener('click', e => {
+    const el = e.target.closest('.expl[data-tip]');
+    if (el) { e.preventDefault(); show(el); return; }
+    close();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  window.addEventListener('scroll', close, true);
+})();
+</script>
+</body>
+</html>

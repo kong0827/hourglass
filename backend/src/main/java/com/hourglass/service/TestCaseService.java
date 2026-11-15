@@ -63,7 +63,7 @@ public class TestCaseService {
     /** 动态分组：成员由规则派生，读取时自愈刷新 */
     private static final String KIND_DYNAMIC = "dynamic";
     private static final java.util.Set<String> SORTS = new java.util.HashSet<String>(
-            java.util.Arrays.asList("created", "updated", "executed", "no", "pri", "module", "status"));
+            java.util.Arrays.asList("created", "updated", "executed", "no", "pri", "module", "status", "manual"));
     private static final java.util.Set<String> GROUP_DIMS = new java.util.HashSet<String>(
             java.util.Arrays.asList("module", "priority", "status", "owner", "demand", "set"));
 
@@ -206,6 +206,7 @@ public class TestCaseService {
         query.setDemandId(Texts.trimToNull(query.getDemandId()));
         query.setSetId(Texts.trimToNull(query.getSetId()));
         /* 分组筛选也要过可见性：别人的个人 / 指定成员分组不能靠猜 ID 反查成员 */
+        query.setSetIds(null);
         if (query.getSetId() != null && !NONE.equals(query.getSetId())) {
             com.hourglass.entity.CaseSet set = setMapper.selectById(query.getSetId());
             if (set == null || !workspaceId.equals(set.getWorkspaceId()) || !rid.equals(set.getReqId())
@@ -213,6 +214,13 @@ public class TestCaseService {
                 throw AppException.notFound("分组不存在：" + query.getSetId());
             }
             refreshDynamicSet(workspaceId, set);
+            /* 分组可嵌套：点父组默认看整棵子树的用例，setSub=false 只看直接成员 */
+            List<String> scope = new ArrayList<String>();
+            scope.add(set.getId());
+            if (query.isSetSub()) {
+                collectDescendantSets(set.getId(), setMapper.selectByReqAll(workspaceId, rid), scope);
+            }
+            query.setSetIds(scope);
         }
         query.setModuleId(Texts.trimToNull(query.getModuleId()));
         query.setModuleIds(null);
@@ -283,8 +291,10 @@ public class TestCaseService {
             }
             out.add(segment(byKey, NONE, "未关联需求"));
         } else if ("set".equals(dim)) {
-            for (com.hourglass.dto.CaseSetView s : setMapper.selectVisibleWithCounts(workspaceId, rid, userId)) {
-                out.add(segment(byKey, s.getId(), s.getName()));
+            List<com.hourglass.dto.CaseSetView> sets = setMapper.selectVisibleWithCounts(workspaceId, rid, userId);
+            Map<String, String> paths = setPaths(sets);
+            for (com.hourglass.dto.CaseSetView s : sets) {
+                out.add(segment(byKey, s.getId(), paths.get(s.getId())));
             }
         } else {
             List<String> keys = new ArrayList<String>(byKey.keySet());
@@ -317,6 +327,30 @@ public class TestCaseService {
         for (com.hourglass.dto.CaseModuleNode n : nodes) {
             String parent = n.getParentId() == null || n.getParentId().isEmpty() ? null : paths.get(n.getParentId());
             paths.put(n.getId(), parent == null ? n.getName() : parent + " / " + n.getName());
+        }
+        return paths;
+    }
+
+    /** 分组段头标签：嵌套分组显示「父组 / 子组」，同级重名时也能区分 */
+    private static Map<String, String> setPaths(List<com.hourglass.dto.CaseSetView> rows) {
+        Map<String, com.hourglass.dto.CaseSetView> byId = new LinkedHashMap<String, com.hourglass.dto.CaseSetView>();
+        for (com.hourglass.dto.CaseSetView s : rows) {
+            byId.put(s.getId(), s);
+        }
+        Map<String, String> paths = new LinkedHashMap<String, String>();
+        for (com.hourglass.dto.CaseSetView s : rows) {
+            StringBuilder path = new StringBuilder(s.getName());
+            String cursor = Texts.trimToNull(s.getParentId());
+            int guard = 0;
+            while (cursor != null && guard++ < 64) {
+                com.hourglass.dto.CaseSetView up = byId.get(cursor);
+                if (up == null) {
+                    break;
+                }
+                path.insert(0, up.getName() + " / ");
+                cursor = Texts.trimToNull(up.getParentId());
+            }
+            paths.put(s.getId(), path.toString());
         }
         return paths;
     }
@@ -381,6 +415,17 @@ public class TestCaseService {
     private List<String> membersOf(com.hourglass.entity.CaseSet set) {
         return CaseSetService.VIS_MEMBERS.equals(set.getVisibility())
                 ? setMapper.selectMemberIds(set.getId()) : java.util.Collections.<String>emptyList();
+    }
+
+    /** 分组子树展开：父组选中时把全部后代加进范围（可见范围继承，子组一定可见） */
+    private static void collectDescendantSets(String parentId, List<com.hourglass.entity.CaseSet> all,
+                                              List<String> out) {
+        for (com.hourglass.entity.CaseSet s : all) {
+            if (parentId.equals(Texts.trimToNull(s.getParentId())) && !out.contains(s.getId())) {
+                out.add(s.getId());
+                collectDescendantSets(s.getId(), all, out);
+            }
+        }
     }
 
     /** 规则 JSON → 查询条件：只认白名单字段，未知字段被忽略而不是拼进 SQL */
@@ -747,6 +792,8 @@ public class TestCaseService {
      * 取号走 number_seq（sql/87）：删除用例不回收编号。
      */
     private void insertWithNo(TestCase c) {
+        /* 手动排序：新用例排在项目末尾，不打断用户已有的顺序 */
+        c.setSortOrder(caseMapper.maxSortOrder(c.getWorkspaceId(), c.getReqId()) + 1);
         for (int attempt = 0; attempt < 3; attempt++) {
             c.setCaseNo(numberSeq.nextCase(c.getWorkspaceId(), c.getReqId()));
             try {
@@ -761,6 +808,8 @@ public class TestCaseService {
 
     /** 换项目：编号是当前项目内的序号，过去后重新取号，避免与目标项目已有编号撞唯一键 */
     private void updateMovedWithNo(TestCase c) {
+        /* 换项目后旧序号在新项目里没有意义：重新排到末尾 */
+        c.setSortOrder(caseMapper.maxSortOrder(c.getWorkspaceId(), c.getReqId()) + 1);
         for (int attempt = 0; attempt < 3; attempt++) {
             c.setCaseNo(numberSeq.nextCase(c.getWorkspaceId(), c.getReqId()));
             try {
@@ -1000,7 +1049,7 @@ public class TestCaseService {
             String module = null;
             String moduleId = null;
             if (moduleSet) {
-                com.hourglass.entity.TestModule node =
+                com.hourglass.entity.Category node =
                         moduleService.resolveForCase(workspaceId, e.getKey(), moduleNodeId, moduleText);
                 moduleId = node == null ? null : node.getId();
                 module = node == null ? null : node.getName();
@@ -1096,9 +1145,14 @@ public class TestCaseService {
         int moved = 0;
         for (Map.Entry<String, Map<String, List<String>>> e : changed.entrySet()) {
             String name = nameByReq.get(e.getKey());
+            int nextSort = caseMapper.maxSortOrder(workspaceId, e.getKey()) + 1;
             for (Map.Entry<String, List<String>> n : e.getValue().entrySet()) {
                 moved += caseMapper.updateModuleBatch(workspaceId, n.getValue(),
                         n.getKey().isEmpty() ? null : n.getKey(), name);
+                /* 换目录的用例排到末尾，保持目标目录已有的手动顺序 */
+                for (String caseId : n.getValue()) {
+                    caseMapper.updateSortOrder(workspaceId, caseId, nextSort++);
+                }
             }
         }
         String label = targetId == null ? "未归类" : joinNames(nameByReq.values());
@@ -1157,6 +1211,49 @@ public class TestCaseService {
         Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
         out.put("restored", restored);
         out.put("skipped", prevById.size() - cases.size());
+        return out;
+    }
+
+    /** 手动排序的当前顺序：目录内（__none = 未归类；不传 = 整个项目） */
+    public List<String> orderIds(String userId, String workspaceId, String reqId, String moduleId) {
+        String rid = ensureProject(workspaceId, reqId);
+        projectAccess.assertView(workspaceId, userId, rid);
+        String key = Texts.trimToNull(moduleId);
+        if (key != null && !NONE.equals(key)) {
+            moduleService.requireNode(workspaceId, rid, key);
+        }
+        return caseMapper.selectIdsForOrder(workspaceId, rid, key);
+    }
+
+    /**
+     * 手动排序：ids 必须恰好是当前目录的用例全集，按数组顺序重写序号。
+     * 只调整顺序，不改归属、编号与执行历史；目录内排序互不干扰。
+     */
+    @Transactional
+    public Map<String, Object> reorder(String userId, String workspaceId, com.hourglass.dto.CaseOrderRequest req) {
+        String rid = ensureProject(workspaceId, req.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, rid);
+        String key = Texts.trimToNull(req.getModuleId());
+        if (key != null && !NONE.equals(key)) {
+            moduleService.requireNode(workspaceId, rid, key);
+        }
+        List<String> current = caseMapper.selectIdsForOrder(workspaceId, rid, key);
+        if (current.size() > MAX_BATCH) {
+            throw AppException.badRequest("单个目录用例超过 " + MAX_BATCH + " 条，暂不支持整体排序");
+        }
+        java.util.Set<String> unique = new java.util.HashSet<String>(req.getIds());
+        if (unique.size() != req.getIds().size() || current.size() != unique.size()
+                || !unique.containsAll(current)) {
+            throw AppException.badRequest("排序列表与当前目录的用例不一致，请刷新后重试");
+        }
+        for (int i = 0; i < req.getIds().size(); i++) {
+            caseMapper.updateSortOrder(workspaceId, req.getIds().get(i), i);
+        }
+        auditService.recordCurrent(workspaceId, "test_case_reorder", "project", rid, null, true,
+                "调整 " + req.getIds().size() + " 条用例的手动顺序"
+                        + (key == null ? "（整个项目）" : "（目录内）"), null);
+        Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
+        out.put("updated", req.getIds().size());
         return out;
     }
 
@@ -1696,7 +1793,7 @@ public class TestCaseService {
         c.setPrecondition(Texts.trimToNull(req.getPrecondition()));
         c.setTestData(Texts.trimToNull(req.getTestData()));
         /* 归属以目录节点为准；只给文本时按名称找节点，找不到补建顶级节点 */
-        com.hourglass.entity.TestModule node =
+        com.hourglass.entity.Category node =
                 moduleService.resolveForCase(c.getWorkspaceId(), reqId, req.getModuleId(), req.getModule());
         c.setModuleId(node == null ? null : node.getId());
         c.setModule(node == null ? null : node.getName());

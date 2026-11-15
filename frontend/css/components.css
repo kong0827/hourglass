@@ -38,6 +38,10 @@
 .btn.danger-solid{background:var(--danger-solid);border-color:var(--danger-solid);color:#fff;}
 .btn.danger-solid:hover{background:var(--danger-solid-hover);border-color:var(--danger-solid-hover);}
 .btn.sm{height:28px;padding:0 10px;font-size:12.5px;border-radius:var(--r-xs);}
+/* 这几处「清空筛选 / 恢复默认」是静态 data-icon（默认 16px），与 JS 生成的同款按钮（13px）对齐；
+   用例页窄屏只剩图标时由 views.css 的媒体查询放大到 14px（那个文件在后面加载） */
+#btnClearFilter svg,#ganttClearFilter svg,#tcPlanClearFilter svg,#branchClearFilter svg,
+#tcClearFilter svg,#tcDefReset svg{width:13px;height:13px;}
 /* 超小档：图标翻页 / 行内极紧凑位置，24px 与 chip、seg 对齐 */
 .btn.xs{height:24px;padding:0 7px;font-size:11.5px;border-radius:var(--r-xs);gap:4px;}
 .btn.lg{height:40px;padding:0 18px;font-size:14px;}

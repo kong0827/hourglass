@@ -2,16 +2,61 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.hourglass.mapper.CaseSetMapper">
 
+  <!-- 子树递归：root_id 为祖先，node_id 为子树内节点；d 只防脏数据成环 -->
+  <sql id="subtreeCte">
+    WITH RECURSIVE st AS (
+      SELECT s.id AS root_id, s.id AS node_id, 1 AS d
+        FROM case_set s
+       WHERE s.workspace_id = #{workspaceId} AND s.req_id = #{reqId}
+      UNION ALL
+      SELECT st.root_id, c.id, st.d + 1
+        FROM case_set c JOIN st ON c.parent_id = st.node_id
+       WHERE st.d &lt; 64
+         AND c.workspace_id = #{workspaceId} AND c.req_id = #{reqId}
+    )
+  </sql>
+
   <select id="selectVisibleWithCounts" resultType="com.hourglass.dto.CaseSetView">
-    SELECT s.id, s.req_id, s.name, s.note, s.visibility, s.owner_user_id, s.kind, s.rule_json,
+    <include refid="subtreeCte"/>
+    SELECT s.id, s.req_id, s.parent_id, COALESCE(s.sort_order, 0) AS sort_order,
+           s.name, s.note, s.visibility, s.owner_user_id, s.kind, s.rule_json,
            s.created_by, s.created_by_user_id, s.created_at, s.updated_at,
-           (SELECT COUNT(*) FROM case_set_item i WHERE i.set_id = s.id) AS case_count
+           (SELECT COUNT(*) FROM case_set_item i WHERE i.set_id = s.id) AS case_count,
+           (SELECT COUNT(DISTINCT i.case_id)
+              FROM st JOIN case_set_item i ON i.set_id = st.node_id AND i.workspace_id = s.workspace_id
+             WHERE st.root_id = s.id) AS subtree_count
     FROM case_set s
     WHERE s.workspace_id = #{workspaceId} AND s.req_id = #{reqId}
       AND (s.visibility = 'team' OR s.owner_user_id = #{viewerId}
            OR EXISTS (SELECT 1 FROM case_set_member m WHERE m.set_id = s.id AND m.user_id = #{viewerId}))
-    ORDER BY CASE s.visibility WHEN 'team' THEN 0 WHEN 'members' THEN 1 ELSE 2 END, s.created_at, s.id
+    ORDER BY COALESCE(s.sort_order, 0), s.created_at, s.id
   </select>
+
+  <select id="selectByReqAll" resultType="com.hourglass.entity.CaseSet">
+    SELECT * FROM case_set
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    ORDER BY COALESCE(sort_order, 0), created_at, id
+  </select>
+
+  <select id="countChildren" resultType="int">
+    SELECT COUNT(*) FROM case_set
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND parent_id = #{parentId}
+  </select>
+
+  <select id="maxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM case_set
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND parent_id = #{parentId}
+  </select>
+
+  <update id="updateSortOrder">
+    UPDATE case_set SET sort_order = #{sortOrder}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <update id="updateScope">
+    UPDATE case_set SET visibility = #{visibility}, owner_user_id = COALESCE(#{ownerUserId}, '')
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
 
   <select id="selectDynamicByReq" resultType="com.hourglass.entity.CaseSet">
     SELECT * FROM case_set
@@ -55,15 +100,20 @@
     WHERE s.workspace_id = #{workspaceId}
   </delete>
 
-  <!-- 团队分组证据口径：成员按最近一轮结果分布；空分组保留一行 0 条，未执行由总数反推在服务层算 -->
+  <!-- 团队分组证据口径：只按顶级团队分组出一行，计数按整棵子树去重，
+       父子不重复相加；空分组保留一行 0 条，未执行由总数反推在服务层算。 -->
   <select id="countTeamSetResults" resultType="map">
-    SELECT s.id AS setId, s.name AS name, s.kind AS kind, c.latest_status AS status, COUNT(c.id) AS cnt
+    <include refid="subtreeCte"/>
+    SELECT s.id AS setId, s.name AS name, s.kind AS kind, c.latest_status AS status,
+           COUNT(DISTINCT c.id) AS cnt
     FROM case_set s
-    LEFT JOIN case_set_item i ON i.set_id = s.id AND i.workspace_id = s.workspace_id
+    JOIN st ON st.root_id = s.id
+    LEFT JOIN case_set_item i ON i.set_id = st.node_id AND i.workspace_id = s.workspace_id
     LEFT JOIN test_case c ON c.id = i.case_id AND c.workspace_id = i.workspace_id
-    WHERE s.workspace_id = #{workspaceId} AND s.req_id = #{reqId} AND s.visibility = 'team'
+    WHERE s.workspace_id = #{workspaceId} AND s.req_id = #{reqId}
+      AND s.visibility = 'team' AND s.parent_id = ''
     GROUP BY s.id, s.name, s.kind, c.latest_status
-    ORDER BY s.created_at, s.id
+    ORDER BY COALESCE(s.sort_order, 0), s.created_at, s.id
   </select>
 
   <select id="selectById" resultType="com.hourglass.entity.CaseSet">
@@ -72,15 +122,19 @@
 
   <insert id="insert">
     INSERT INTO case_set
-      (id, workspace_id, req_id, name, note, visibility, kind, rule_json, owner_user_id, created_by, created_by_user_id)
+      (id, workspace_id, req_id, parent_id, sort_order, name, note, visibility, kind, rule_json,
+       owner_user_id, created_by, created_by_user_id)
     VALUES
-      (#{id}, #{workspaceId}, #{reqId}, #{name}, #{note}, #{visibility}, #{kind}, #{ruleJson},
+      (#{id}, #{workspaceId}, #{reqId}, COALESCE(#{parentId}, ''), COALESCE(#{sortOrder}, 0),
+       #{name}, #{note}, #{visibility}, #{kind}, #{ruleJson},
        COALESCE(#{ownerUserId}, ''), #{createdBy}, #{createdByUserId})
   </insert>
 
   <update id="update">
     UPDATE case_set
-    SET name = #{name}, note = #{note}, visibility = #{visibility}, kind = #{kind}, rule_json = #{ruleJson},
+    SET parent_id = COALESCE(#{parentId}, ''),
+        sort_order = COALESCE(#{sortOrder}, sort_order),
+        name = #{name}, note = #{note}, visibility = #{visibility}, kind = #{kind}, rule_json = #{ruleJson},
         owner_user_id = COALESCE(#{ownerUserId}, '')
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>

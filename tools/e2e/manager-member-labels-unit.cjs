@@ -146,7 +146,7 @@ async function managerScopeTests(view){
     members:[{key:'U1',name:'一',companyName:'公司甲',jobTitle:'后端开发',roleTitles:['测试'],remainingMinutes:60,capacityMinutes:480,weekMinutes:30,dayMinutes:[30,0,0,0,0,0,0],projects:[],tasks:[],weekLogs:[]}],projects:[],burndown:{points:[]},velocity:{weeks:[]},flow:{weeks:[]},delivery:{buckets:[]},defects:{weeks:[]}});
   await c[load]();setScope('P1','旧自定义','公司甲');const calls=[];
   h.API.get=(url,params)=>{const d=deferred();calls.push({url,params,d});return d.promise;};
-  const first=c[load]();assert.deepEqual(plain(calls[0].params),{reqId:'P1',roleTitle:'旧自定义',companyName:'公司甲'});
+  const first=c[load]();assert.deepEqual(plain(calls[0].params),view==='report'?{reqId:'P1',roleTitle:'旧自定义',companyName:'公司甲',versionId:null}:{reqId:'P1',roleTitle:'旧自定义',companyName:'公司甲'});
   if(view==='workload')c.exportWorkloadScope();else c.exportCsv();assert.equal(h.downloads.length,0,'loading cannot export stale cache');
   setScope('P2','测试','__unset__');const second=c[load]();calls[1].d.resolve(data({reqId:'P2',roleTitle:'测试',companyName:'__unset__'}));await second;
   calls[0].d.resolve(data({reqId:'P1',roleTitle:'旧自定义',companyName:'公司甲'}));await first;assert.equal(c.cache.scope.reqId,'P2','late request cannot overwrite latest filters');
@@ -155,7 +155,7 @@ async function managerScopeTests(view){
   assert.equal(calls.length,2,'CSV uses cache, never an unfiltered extra API');
   const late=c[load]();c.rt.currentWs.id='W2';calls[2].d.resolve(data({reqId:'P1'}));await late;assert.equal(c.cache.scope.reqId,'P2','old workspace responses ignored');
   if(view==='workload')c.exportWorkloadScope();else c.exportCsv();assert.equal(h.downloads.length,1,'old workspace data cannot export');
-  const newSpace=c[load]();assert.deepEqual(plain(calls[3].params),{reqId:null,roleTitle:null,companyName:null});calls[3].d.resolve(data({}));await newSpace;
+  const newSpace=c[load]();assert.deepEqual(plain(calls[3].params),view==='report'?{reqId:null,roleTitle:null,companyName:null,versionId:null}:{reqId:null,roleTitle:null,companyName:null});calls[3].d.resolve(data({}));await newSpace;
   setScope('P1','测试','公司甲');const inaccessible=c[load]();calls[4].d.reject(Object.assign(new Error('hidden'),{code:403}));await flush();
   assert.equal(calls[5].params.reqId,null);calls[5].d.resolve(data({roleTitle:'测试',companyName:'公司甲'}));await inaccessible;
   const error=c[load]();calls[6].d.reject(new Error('offline'));await error;

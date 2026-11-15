@@ -17,6 +17,8 @@ public class BranchBoard {
     private Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
     /** 生命周期条数（open/done/canceled/ignored/pending）+ all，忽略 outcome 条件 */
     private Map<String, Integer> outcomeCounts = new LinkedHashMap<String, Integer>();
+    /** 仓库条数：key = repoId，未绑定仓库的分支记在 __none__，另有 all */
+    private Map<String, Integer> repoCounts = new LinkedHashMap<String, Integer>();
     private Double avgCycleDays;
 
     @Data

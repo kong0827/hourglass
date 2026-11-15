@@ -9,13 +9,16 @@ import java.util.List;
 @Mapper
 public interface CategoryMapper {
 
-    /** 空间内全部项目模块（缓存全量口径；展示解析/跨项目筛选共用） */
+    /** 空间内全部项目目录（缓存全量口径；展示解析/跨项目筛选共用） */
     List<Category> selectByWorkspace(@Param("workspaceId") String workspaceId);
+
+    List<Category> selectByProject(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId);
 
     Category selectById(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
+    /** 同级同名判定：parentId 空串表示顶级 */
     Category selectByName(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
-                          @Param("name") String name);
+                          @Param("parentId") String parentId, @Param("name") String name);
 
     int insert(Category category);
 
@@ -23,7 +26,9 @@ public interface CategoryMapper {
 
     int deleteById(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
-    Integer maxSortOrder(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId);
+    /** 同级末尾序号：parentId 空串表示顶级 */
+    Integer maxSortOrder(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
+                         @Param("parentId") String parentId);
 
     int updateSortOrder(@Param("workspaceId") String workspaceId, @Param("id") String id,
                         @Param("sortOrder") int sortOrder);
@@ -36,6 +41,15 @@ public interface CategoryMapper {
     List<String> selectTaskIdsForCascade(@Param("workspaceId") String workspaceId,
                                          @Param("projectId") String projectId,
                                          @Param("categoryId") String categoryId);
+
+    int countTasksByCategory(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
+                             @Param("categoryId") String categoryId);
+
+    int countDemandsByCategory(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
+                               @Param("categoryId") String categoryId);
+
+    int countChildren(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
+                      @Param("parentId") String parentId);
 
     /** 删除项目模块时：该项目下需求迁到目标模块 */
     int moveDemandsToCategory(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,

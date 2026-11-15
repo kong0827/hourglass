@@ -89,7 +89,9 @@ public class SavedViewService {
         copyEnum(root, out, "subgroup", "none", "status", "owner", "priority", "project", "category", "version");
         copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated", "expect", "wsjf", "created",
                 "title", "type", "column", "owner", "progress", "project", "version",
-                "category", "startDate", "tags", "subtasks", "comments");
+                "category", "startDate", "tags", "subtasks", "comments",
+                /* 测试用例视图的排序值也要能存进视图 */
+                "no", "executed", "module", "status", "manual");
         copyEnum(root, out, "sortDir", "asc", "desc");
         copyStringArray(root, out, "owners");
         copyStringArray(root, out, "pris");
@@ -157,14 +159,23 @@ public class SavedViewService {
             copyString(root, out, "reqId", 32);
             copyEnum(root, out, "mode", "tree", "kanban", "read", "feed");
         }
-        /* 测试用例视图：项目 + 执行结果 + 模块/优先级/执行人 + 仅看有缺陷 + 展示方式 */
+        /* 测试用例视图：项目 + 执行结果 + 目录/优先级/执行人/需求/分组 + 仅看有缺陷 + 展示方式 */
         if ("testcase".equals(scope)) {
             copyString(root, out, "reqId", 32);
             copyString(root, out, "module", 50);
+            copyString(root, out, "moduleId", 32);
             copyString(root, out, "pri", 20);
             copyString(root, out, "owner", 80);
+            copyString(root, out, "demandId", 32);
+            copyString(root, out, "setId", 32);
             copyEnum(root, out, "status", "all", "untested", "passed", "failed", "blocked", "skipped");
+            copyEnum(root, out, "groupBy", "", "module", "priority", "status", "owner", "demand", "set");
             copyEnum(root, out, "mode", "cases", "coverage", "plans", "report");
+            copyBool(root, out, "all");
+            copyBool(root, out, "wide");
+            copyBool(root, out, "moduleSub");
+            copyBool(root, out, "setSub");
+            copyInt(root, out, "pageSize");
             JsonNode bug = root.get("bug");
             if (bug != null && !bug.isNull()) {
                 if (!bug.isBoolean()) {
@@ -210,6 +221,34 @@ public class SavedViewService {
             throw AppException.badRequest("视图参数不合法：" + key + " 应为字符串");
         }
         out.put(key, Texts.cut(node.asText(), maxLen));
+    }
+
+    /** 视图里的开关字段：布尔值或 0/1 都接受（前端按 1/0 传） */
+    private void copyBool(JsonNode root, ObjectNode out, String key) {
+        JsonNode node = root.get(key);
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (node.isBoolean()) {
+            out.put(key, node.asBoolean());
+            return;
+        }
+        if (node.isInt() && (node.asInt() == 0 || node.asInt() == 1)) {
+            out.put(key, node.asInt() == 1);
+            return;
+        }
+        throw AppException.badRequest("视图参数不合法：" + key + " 应为布尔值");
+    }
+
+    private void copyInt(JsonNode root, ObjectNode out, String key) {
+        JsonNode node = root.get(key);
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (!node.isInt()) {
+            throw AppException.badRequest("视图参数不合法：" + key + " 应为整数");
+        }
+        out.put(key, node.asInt());
     }
 
     private void copyDate(JsonNode root, ObjectNode out, String key) {

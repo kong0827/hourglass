@@ -22,12 +22,14 @@ public class TestCase {
     private String testData;
     /** 功能模块：自由填写，列表筛选用 */
     private String module;
-    /** 所属目录节点 ID（test_module.id）；module 文本是它的展示快照 */
+    /** 所属项目目录节点 ID（category.id）；module 文本是它的展示快照 */
     private String moduleId;
     /** 优先级档位：P0/P1/P2/P3，空 = 未设置 */
     private String priority;
     /** 执行步骤 JSON：[{"action":"操作","expected":"预期结果"}] */
     private String steps;
+    /** 手动排序序号（项目内递增，小在前）；选择「手动排序」时使用 */
+    private Integer sortOrder;
     /** 最近执行结果：passed / failed / blocked，空 = 未执行 */
     private String latestStatus;
     private String latestNote;

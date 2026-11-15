@@ -304,6 +304,7 @@ public class RequirementDocService {
     public RequirementDoc create(String userId, String workspaceId, ReqDocSaveRequest req) {
         String reqId = ensureProject(workspaceId, req.getReqId());
         projectAccess.assertWrite(workspaceId, userId, reqId);
+        seedFromCategory(workspaceId, reqId, req);
         RequirementDoc d = new RequirementDoc();
         d.setId(Ids.gen("D"));
         d.setWorkspaceId(workspaceId);
@@ -313,6 +314,42 @@ public class RequirementDocService {
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, d.getId(), userId,
                 "create", "创建了文档「" + d.getTitle() + "」");
         return withMembers(docMapper.selectById(d.getId()));
+    }
+
+    /**
+     * 新建文档套用分类默认可见范围：只在请求没显式给 visibility 时生效（显式值含 team 一律以请求为准）。
+     * 默认名单里已看不到该范围的人静默剔除；剔除后 members 档为空则回退团队共享，避免建出谁都打不开的文档。
+     * 只用于新建：编辑器保存不重套默认，换分类也不自动改已有文档的可见范围。
+     */
+    private void seedFromCategory(String workspaceId, String reqId, ReqDocSaveRequest req) {
+        if (Texts.trimToNull(req.getVisibility()) != null) {
+            return;
+        }
+        String categoryId = Texts.trimToNull(req.getCategoryId());
+        if (categoryId == null || docCategories == null) {
+            return;
+        }
+        com.hourglass.entity.DocCategory cat = docCategories.findForDoc(workspaceId, categoryId);
+        String visibility = cat == null ? null : Texts.trimToNull(cat.getVisibility());
+        if (visibility == null || VIS_TEAM.equals(visibility)) {
+            return;
+        }
+        java.util.List<String> members = new java.util.ArrayList<String>();
+        if (VIS_MEMBERS.equals(visibility)) {
+            String raw = cat.getMemberIds();
+            for (String part : raw == null ? new String[0] : raw.split(",")) {
+                String uid = Texts.trimToNull(part);
+                if (uid != null && !members.contains(uid)
+                        && projectAccess.canView(workspaceId, uid, reqId)) {
+                    members.add(uid);
+                }
+            }
+            if (members.isEmpty()) {
+                return;
+            }
+            req.setMemberIds(members);
+        }
+        req.setVisibility(visibility);
     }
 
     @Transactional

@@ -526,12 +526,16 @@ try{
   } else {
     console.log("  SKIP 段内加载更多（当前数据没有超过首屏的段）");
   }
-  await click("#tcGrpCollapseAll");
+  await click("#tcGrpToggleAll");
   await sleep(800);
   assert((await segInfo()).every(s => s.expanded === "false" && s.rows === 0), "全部折叠后段内不渲染行");
-  await click("#tcGrpExpandAll");
+  const labelCollapsed = await evaluate(`document.getElementById("tcGrpToggleAll").textContent.trim()`);
+  assert(labelCollapsed === "全部展开", `全部折叠后按钮显示「全部展开」（实际 ${labelCollapsed}）`);
+  await click("#tcGrpToggleAll");
   await sleep(1500);
   assert((await segInfo()).every(s => s.expanded === "true"), "全部展开后段头 aria-expanded 为真");
+  const labelExpanded = await evaluate(`document.getElementById("tcGrpToggleAll").textContent.trim()`);
+  assert(labelExpanded === "全部折叠", `全部展开后按钮显示「全部折叠」（实际 ${labelExpanded}）`);
 
   const selSeg = (await segInfo()).find(s => !s.empty);
   const segTotal = Number((selSeg.count.match(/(\d+)/) || [])[1] || 0);

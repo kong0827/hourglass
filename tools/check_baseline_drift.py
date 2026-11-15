@@ -11,6 +11,7 @@ HEAD 代码依赖的列若缺失就会在首次请求报错——本脚本在 CI
   - 增量里的 CREATE TABLE t          → 基线必须存在表 t
   - 增量里的 ALTER TABLE t ADD COLUMN c → 基线表 t 必须有列 c
   - 增量里的 ALTER TABLE t ADD KEY k  → 基线表 t 必须有索引 k
+  - 增量里建完又 DROP TABLE 的临时表（如迁移映射表）不要求进基线
 范围：sql/ 根目录的全部编号增量（早期 01_schema.sql 已归档到 sql/legacy/，不参与）。
 
 用法：python3 tools/check_baseline_drift.py [仓库根目录]
@@ -41,18 +42,27 @@ def parse_baseline(path):
     return tables
 
 def parse_increments(sql_dir, skip):
-    """返回 (items, dropped)：
+    """返回 (items, dropped, transient_tables)：
     items 为基线必须满足项 [(file, table, kind, name)]；
     dropped 为后续增量已删除的 (table, kind, name) —— 列/索引被改名或移除后，
-    早期增量的 ADD 不再要求基线保留（61 号脚本把 demand.category 改成 category_id 即此情形）。"""
+    早期增量的 ADD 不再要求基线保留（61 号脚本把 demand.category 改成 category_id 即此情形）；
+    transient_tables 为增量里建完又删掉的临时表（迁移映射表），最终不存在，不应进基线。"""
     items = []
     dropped = set()
+    alive = set()
     for fn in sorted(os.listdir(sql_dir)):
         if not fn.endswith(".sql") or fn in skip or not re.match(r"\d+", fn):
             continue
         sql = open(os.path.join(sql_dir, fn), encoding="utf-8").read()
-        for m in re.finditer(r"CREATE TABLE(?:\s+IF NOT EXISTS)?\s+`(\w+)`", sql, re.I):
-            items.append((fn, m.group(1), "table", m.group(1)))
+        # 按脚本内出现顺序模拟建表 / 删表：迁移里的临时映射表建完就删，最终不应进基线
+        for m in re.finditer(
+                r"CREATE TABLE(?:\s+IF NOT EXISTS)?\s+`(\w+)`|DROP TABLE(?:\s+IF EXISTS)?\s+`(\w+)`",
+                sql, re.I):
+            if m.group(1):
+                items.append((fn, m.group(1), "table", m.group(1)))
+                alive.add(m.group(1))
+            else:
+                alive.discard(m.group(2))
         for m in re.finditer(r"CALL\s+hg_delivery_column\(\s*'([^']+)'\s*,\s*'([^']+)'", sql, re.I):
             items.append((fn, m.group(1), "column", m.group(2)))
         # ALTER TABLE t ... ;（语句体可能含多个 ADD/DROP COLUMN/KEY；61 起幂等脚本写在 PREPARE 字符串里，同样能匹配）
@@ -66,7 +76,7 @@ def parse_increments(sql_dir, skip):
                 dropped.add((table, "column", c.group(1)))
             for k in re.finditer(r"DROP KEY\s+`(\w+)`", body, re.I):
                 dropped.add((table, "key", k.group(1)))
-    return items, dropped
+    return items, dropped, alive
 
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else \
@@ -78,10 +88,13 @@ def main():
         return 1
 
     tables = parse_baseline(baseline_path)
-    items, dropped = parse_increments(sql_dir, skip=set())
+    items, dropped, alive = parse_increments(sql_dir, skip=set())
     missing = []
     for fn, table, kind, name in items:
         if (table, kind, name) in dropped:
+            continue
+        # 增量里最后被删掉的临时表：最终不存在，不要求基线保留（列/键同理）
+        if table not in alive:
             continue
         if kind == "table":
             if table not in tables:
