@@ -19,8 +19,9 @@ import { VIEWS, showView, viewFromHash } from "./core/router.js";
 import { handleDeepLink, hashParam, openTaskById } from "./core/task-actions.js";
 import { buildFormControls, renderTagChips, syncFormSegs, syncProgVal } from "./core/task-drawer.js";
 import { UI } from "./core/ui.js";
+import { rt } from "./core/state.js";
 import { loadBoard, loadReqs, showBoardSkeleton } from "./views/board.js";
-import { loadBranches } from "./views/branches.js";
+import { loadView, viewModule } from "./core/view-loader.js";
 import { initTheme } from "./core/theme.js";
 /* 桌面端日期 / 时间、下拉自绘面板（副作用注册，移动端自动回落原生） */
 import "./core/date-picker.js";
@@ -135,7 +136,12 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
     }
   });
   loadReqs();
-  loadBranches();
+  /* 分支模块 126KB，只用于卡片上的分支标签；首屏渲染后再拉，避免和首屏抢带宽 */
+  function warmBranches(){
+    loadView("branches").then(function(m){ m.loadBranches(); }).catch(function(){});
+  }
+  if(window.requestIdleCallback) window.requestIdleCallback(warmBranches, {timeout:2500});
+  else setTimeout(warmBranches, 1200);
   loadViews();
   loadMe(meUser);
   initSSE();
@@ -147,6 +153,28 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
 
   /* O-4：注册 Service Worker（离线只读：静态壳可离线打开，/api/ 永不缓存） */
   if("serviceWorker" in navigator){
+    /* 换版交接：静态资源缓存优先，新 HTML 配旧 JS 会短暂不同版。
+       新 SW 接管页面时（首次安装除外）空闲就自动刷新；有未保存输入时改为手动刷新入口。 */
+    var swHadController = !!navigator.serviceWorker.controller;
+    function canReloadForUpdate(){
+      if(rt.formDirty || UI.anyDialogOpen()) return false;
+      var drawer = $("taskDrawer");
+      if(drawer && drawer.classList.contains("on")) return false;
+      /* 文档正文编辑器是整页编辑，不属于弹窗，单独看它有没有未保存修改 */
+      var req = viewModule("requirements");
+      return !(req && req.reqDocDirty);
+    }
+    function reloadForUpdate(){
+      if(canReloadForUpdate()){ window.location.reload(); return; }
+      UI.toastAction("新版本已就绪，保存后刷新即可更新", "刷新", function(){
+        if(canReloadForUpdate()) window.location.reload();
+        else UI.toast("请先保存或关闭正在编辑的面板，再刷新页面", "warn");
+      }, "", 30000);
+    }
+    navigator.serviceWorker.addEventListener("controllerchange", function(){
+      if(!swHadController) return;   /* 首次安装：页面没有旧版本资源可混用 */
+      reloadForUpdate();
+    });
     window.addEventListener("load", function(){
       navigator.serviceWorker.register(API.appBase + "/sw.js").catch(function(){ /* http 直连不支持 SW，忽略 */ });
     });

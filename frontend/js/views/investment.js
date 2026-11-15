@@ -160,8 +160,12 @@ function loadInvestment(opts){
 }
 
 function enterInvestmentView(){
-  if(rt.reqsLoaded) loadInvestment();
-  else loadReqs().then(function(){ return loadInvestment(); });
+  /* 项目列表只用于筛选下拉：与投入数据并行，不阻塞首屏 */
+  if(rt.reqsLoaded){ loadInvestment(); return; }
+  loadInvestment();
+  loadReqs().then(function(){
+    if(document.body.dataset.view === "investment" && cache) renderInvestment();
+  });
 }
 
 /* ---------- 口径提示：? 解释定义，! 提示边界 ---------- */

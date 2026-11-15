@@ -78,8 +78,12 @@ function wireReportTooltip(el){
   });
 }
 function enterReportView(){
-  if(rt.reqsLoaded) loadReport();
-  else loadReqs().then(loadReport);
+  /* 项目列表只用于筛选下拉，不参与接口查询：与报表请求并行，回来后再补一次工具栏 */
+  if(rt.reqsLoaded){ loadReport(); return; }
+  loadReport();
+  loadReqs().then(function(){
+    if(document.body.dataset.view === "report" && cache) renderReport();
+  });
 }
 function loadReport(opts){
   opts = opts || {};

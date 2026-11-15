@@ -17,10 +17,26 @@ import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncF
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
 import { taskPublicationHTML, assocLinkHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, PRIORITIES, avatarHTML, colMeta, colName, dayDiff, elapsedText, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, localDatetime, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, taskDescText, typeBadgeHTML, weekdayCN } from "../lib/format.js";
-import { branchNameById } from "./branches.js";
-import { loadView } from "../core/view-loader.js";
-import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
+import { loadView, viewModule } from "../core/view-loader.js";
 import { taskMemberLabel, syncTaskMemberTooltips } from "../lib/member-labels.js";
+
+/* 需求文档与分支是体积较大的低频视图：看板只用到「名称查询 + 点击跳转」，
+   按需 import 即可，不再把两个模块钉进首屏静态依赖图。 */
+function reqDocNameById(id){
+  var m = viewModule("requirements");
+  return m ? m.reqDocNameById(id) : null;
+}
+function branchNameById(id){
+  var m = viewModule("branches");
+  return m ? m.branchNameById(id) : "";
+}
+function loadReqDocsLazy(){
+  loadView("requirements").then(function(m){ return m.loadReqDocs(); }).catch(function(){});
+}
+function openReqDoc(reqDocId){
+  /* 加载失败的提示由 view-loader 统一给，这里不重复弹 */
+  loadView("requirements").then(function(m){ m.openReqDocAndJump(reqDocId); }).catch(function(){});
+}
 
 /* 已完成是长期累积数据：看板只放最近 N 条，完整回看进「列状态工作页」 */
 var DONE_BOARD_PREVIEW = 6;
@@ -312,7 +328,7 @@ function loadBoard(opts){
     /* 计时状态加载后由 ds:running-timer 监听统一重绘，避免这里与监听器各渲染一次 */
     loadRunningTimer();
     /* 卡片上的需求名来自需求列表（首次加载后会重绘一次） */
-    loadReqDocs();
+    loadReqDocsLazy();
   }).catch(function(ex){
     if(opts._busy) UI.syncBusy(false);
     if(seq !== state.loadSeq) return;
@@ -321,11 +337,15 @@ function loadBoard(opts){
     else toast("加载失败：" + (ex.message || "网络异常"), "bad");
   });
 }
-var reqLoadSeq = 0;
+var reqLoadSeq = 0, reqsPending = null, reqsPendingWs = "";
 function loadReqs(){
-  var seq = ++reqLoadSeq;
+  /* 启动、报表/投入入口、看板刷新可能同时触发：同一空间复用进行中的请求，
+     避免重复拉全量项目列表；换空间时按新空间另发一次。 */
   var wsId = rt.currentWs && rt.currentWs.id;
-  return API.getAllPages("/api/reqs").then(function(list){
+  if(reqsPending && reqsPendingWs === wsId) return reqsPending;
+  var seq = ++reqLoadSeq;
+  reqsPendingWs = wsId || "";
+  var pending = API.getAllPages("/api/reqs").then(function(list){
     if(seq !== reqLoadSeq) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
     rt.reqList = list || [];
@@ -339,6 +359,11 @@ function loadReqs(){
       reqListEl.innerHTML = UI.errorState("项目加载失败，请稍后重试");
     }
   });
+  var wrapped = pending.then(function(){
+    if(reqsPending === wrapped){ reqsPending = null; reqsPendingWs = ""; }
+  });
+  reqsPending = wrapped;
+  return wrapped;
 }
 function loadMoreColumn(colId){
   var cd = state.board && state.board.columns[colId];
@@ -1271,7 +1296,7 @@ board.addEventListener("click", function(e){
   var menuBtn = e.target.closest("[data-card-menu]");
   if(menuBtn){ openCardMenu(menuBtn, menuBtn.dataset.cardMenu); return; }
   var docBtn = e.target.closest("[data-open-reqdoc]");
-  if(docBtn){ openReqDocAndJump(docBtn.dataset.openReqdoc); return; }
+  if(docBtn){ openReqDoc(docBtn.dataset.openReqdoc); return; }
   var tmr = e.target.closest("[data-timer-toggle]");
   if(tmr){ toggleTaskTimer(tmr.dataset.timerToggle); return; }
   var claim = e.target.closest("[data-test-claim]");

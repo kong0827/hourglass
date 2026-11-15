@@ -9,7 +9,6 @@ import { handleDeepLink } from "./task-actions.js";
 import { UI } from "./ui.js";
 import { loadView, viewModule } from "./view-loader.js";
 import { loadBoard, loadReqs, render } from "../views/board.js";
-import { enterBranchesView, loadBranches, renderBranches } from "../views/branches.js";
 import { enterCalendarView, loadCalendar } from "../views/calendar.js";
 import { enterListView, loadList } from "../views/list.js";
 import { enterMineView } from "../views/mine.js";
@@ -66,7 +65,7 @@ var VIEWS = {
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
   dochistory: { title:"文档历史", sub:"单文档的历史快照：左侧版本，右侧阅读与逐行对比；版本在 URL 里", enter:enterDocHistoryLazy },
   testcases: { title:"测试", sub:"一条质量链路：用例 → 缺陷 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
-  branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
+  branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:lazyEnter("branches", "enterBranchesView") },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
   analysis: { title:"报表", sub:"团队节奏与质量体检：趋势、完成记录、流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
   portfolio: { title:"项目", sub:"一屏看全部项目：健康度、逾期与本周投入；点项目名进入驾驶舱", enter:lazyEnter("portfolio", "enterPortfolioView") },
@@ -383,7 +382,7 @@ function refreshActiveView(opts){
   else if(activeView === "list") loadList({silent:true, keepLoaded:true});
   else if(activeView === "projects") loadReqs();
   else if(activeView === "mine") window.dispatchEvent(new CustomEvent("ds:refresh-mine"));
-  else if(activeView === "branches") loadBranches(true).then(renderBranches);
+  else if(activeView === "branches") loadView("branches").then(function(m){ m.loadBranches(true).then(m.renderBranches); });
   else if(activeView === "gantt") loadView("gantt").then(function(m){ m.loadGantt({silent:true}); });
   else if(activeView === "analysis") loadView("analysis").then(function(m){ m.refreshAnalysisTab(true); });
   else if(activeView === "requirements") loadView("requirements").then(function(m){ m.loadReqDocs(!!(opts && opts.manual)); });

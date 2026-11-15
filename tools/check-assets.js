@@ -3,7 +3,8 @@
    2) 页面引用的 js/css 是否都在预缓存清单里（漏一个，离线就会白屏）；
    3) ES Module 的静态 import 图是否完整（新拆的模块忘记进 SHELL 会离线报错）；
    4) CACHE_NAME 是否带版本号；
-   5) 每个 ES Module 的语法是否可通过（CI 冒烟，不需要浏览器环境）。
+   5) 每个 ES Module 的语法是否可通过（CI 冒烟，不需要浏览器环境）；
+   6) index.html 的 modulepreload 清单是否与 main.js 首屏 import 图一致。
    用法：node tools/check-assets.js */
 const fs = require("fs");
 const path = require("path");
@@ -96,7 +97,10 @@ if (missing.length) fail("SHELL 里这些文件不存在：\n  " + missing.join(
 if (notPrecached.length) fail("被引用但未预缓存（离线会白屏）：\n  " + notPrecached.join("\n  "));
 if (shellSet.has("/js/app.js")) fail("SHELL 仍引用已拆分的 /js/app.js");
 if (syntaxErrors.length) fail("以下模块语法错误：\n" + syntaxErrors.join("\n\n"));
-console.log("OK：静态资源清单完整（含 ES Module import 图与语法）");
+
+const preload = spawnSync(process.execPath, [path.join(__dirname, "gen-modulepreload.js"), "--check"], { encoding: "utf8" });
+if (preload.status !== 0) fail(String(preload.stderr || preload.stdout || "modulepreload 校验失败").trim());
+console.log("OK：静态资源清单完整（含 ES Module import 图、语法与 modulepreload）");
 
 function fail(msg) {
   console.error("FAIL: " + msg);

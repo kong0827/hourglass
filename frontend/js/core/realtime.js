@@ -6,11 +6,10 @@ import { loadUnread } from "./notifications.js";
 import { refreshActiveView } from "./router.js";
 import { rt } from "./state.js";
 import { showDrawerNotice } from "./task-drawer.js";
-import { viewModule } from "./view-loader.js";
+import { loadView, viewModule } from "./view-loader.js";
 import { UI } from "./ui.js";
 import { iso, startOfDay } from "../lib/format.js";
 import { drag, loadBoard, loadReqs, pending, refreshBoardPreserving } from "../views/board.js";
-import { loadBranches, renderBranches } from "../views/branches.js";
 
 var sse = {conn:null, lastMsg:0, retry:0, timer:null, debounce:null, lastRefresh:0,
   pending:false, pendingEntity:"", disconnectedAt:0};
@@ -68,7 +67,7 @@ function refreshByEntity(entity){
     return;
   }
   if(entity === "branch"){
-    loadBranches(true).then(renderBranches).catch(function(){ /* 忽略 */ });
+    loadView("branches").then(function(m){ return m.loadBranches(true).then(m.renderBranches); }).catch(function(){ /* 忽略 */ });
     refreshActiveView();
     return;
   }

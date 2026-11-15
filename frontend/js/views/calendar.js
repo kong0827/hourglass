@@ -14,7 +14,6 @@ import { bindRetry } from "../core/utils.js";
 import { addDays, dayKey, fmtMD, iso, pad2, parseDate, priColor, rgbaOf, weekdayCN } from "../lib/format.js";
 import { cardHTML, loadBoard } from "./board.js";
 import { loadView } from "../core/view-loader.js";
-import { openReqDocAndJump } from "./requirements.js";
 
 var calGrid = $("calGrid"), calLabel = $("calLabel"), calDayList = $("calDayList");
 var calLayout = null;
@@ -293,7 +292,10 @@ function wireCardContainer(root){
     var menu = e.target.closest("[data-card-menu]");
     if(menu){ openCardMenu(menu, menu.dataset.cardMenu); return; }
     var docBtn = e.target.closest("[data-open-reqdoc]");
-    if(docBtn){ openReqDocAndJump(docBtn.dataset.openReqdoc); return; }
+    if(docBtn){
+      loadView("requirements").then(function(m){ m.openReqDocAndJump(docBtn.dataset.openReqdoc); }).catch(function(){});
+      return;
+    }
     var tmr = e.target.closest("[data-timer-toggle]");
     if(tmr){ toggleTaskTimer(tmr.dataset.timerToggle); return; }
     var tick = e.target.closest("[data-done-toggle]");

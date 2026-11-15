@@ -1,7 +1,11 @@
-/* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
+/* 沙漏 Service Worker：API 永不缓存，静态资源缓存优先 + 后台更新，离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」）。
-   SHELL 用相对路径，资源挂在任意上下文路径下都能正常工作。 */
-var CACHE_NAME = "hourglass-shell-v256";
+   SHELL 用相对路径，资源挂在任意上下文路径下都能正常工作。
+   静态资源走 stale-while-revalidate：命中缓存立即返回，同时后台回源更新；
+   页面导航（index.html）仍网络优先，发布换版后第一次导航就能拿到新外壳。
+   !! 缓存优先不会发现同名文件的新内容：只要前端文件有改动，发布时必须升 CACHE_NAME，
+   否则 sw.js 不变、浏览器不会更新 SW，用户会一直拿旧 JS。 */
+var CACHE_NAME = "hourglass-shell-v257";
 var SHELL = [
   "./",
   "index.html",
@@ -150,23 +154,45 @@ self.addEventListener("fetch", function (event) {
   var scopePath = new URL(self.registration.scope).pathname;
   if (url.pathname.indexOf(scopePath + "api/") === 0) return;
 
-  event.respondWith(
-    fetch(request).then(function (response) {
-      if (!url.search && response && response.status === 200 && response.type === "basic") {
-        var copy = response.clone();
-        caches.open(CACHE_NAME).then(function (cache) {
-          cache.put(request, copy).catch(function () {});
-        });
-      }
-      return response;
-    }).catch(function () {
-      return caches.match(request).then(function (hit) {
-        if (hit) return hit;
-        if (request.mode === "navigate") {
-          return caches.match(new URL("index.html", self.registration.scope).href);
-        }
-        return new Response("", { status: 503, statusText: "offline" });
+  /* 带查询串的请求多半是导出/下载，不落缓存 */
+  var cacheable = !url.search;
+
+  function putIfOk(response) {
+    if (cacheable && response && response.status === 200 && response.type === "basic") {
+      var copy = response.clone();
+      caches.open(CACHE_NAME).then(function (cache) {
+        cache.put(request, copy).catch(function () {});
       });
-    })
-  );
+    }
+    return response;
+  }
+
+  function offline(request) {
+    return caches.match(request).then(function (hit) {
+      if (hit) return hit;
+      if (request.mode === "navigate") {
+        return caches.match(new URL("index.html", self.registration.scope).href);
+      }
+      return new Response("", { status: 503, statusText: "offline" });
+    });
+  }
+
+  /* 运行时配置部署后允许手改（不改构建）：走网络优先，避免被旧缓存钉住 */
+  if (url.pathname === scopePath + "config.js") {
+    event.respondWith(fetch(request).then(putIfOk).catch(function () { return offline(request); }));
+    return;
+  }
+
+  /* 页面导航保持网络优先：部署新版本后不会一直用旧 index.html */
+  if (request.mode === "navigate") {
+    event.respondWith(fetch(request).then(putIfOk).catch(function () { return offline(request); }));
+    return;
+  }
+
+  /* 其余静态资源：缓存优先立即返回，网络请求在后台更新缓存 */
+  var network = fetch(request).then(putIfOk);
+  event.respondWith(caches.match(request).then(function (hit) {
+    return hit || network.catch(function () { return offline(request); });
+  }));
+  event.waitUntil(network.then(function () {}, function () {}));
 });
