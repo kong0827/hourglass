@@ -147,6 +147,10 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
   position:sticky;top:0;z-index:5;
 }
 .list-head > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 列头口径标记：不能继承上面的截断，否则小圆点被裁掉 */
+.list-head > .th-help-wrap{display:flex;align-items:center;gap:4px;overflow:visible;}
+.list-head > .th-help-wrap > .lh-sort{flex:0 1 auto;min-width:0;margin-right:0;}
+.list-head > .th-help-wrap > .caliber-mark{flex:0 0 auto;}
 /* 列头可点击排序：文字截断，箭头常驻右侧 */
 .list-head .lh-sort,.project-table-head .lh-sort{
   display:flex;align-items:center;gap:2px;max-width:100%;min-width:0;
@@ -383,6 +387,8 @@ body.proj-reordering{cursor:grabbing;}
 .project-table-head,.project-table-row{display:grid;align-items:center;gap:12px;padding:0 14px;}
 .project-table-head{height:36px;background:var(--surface-sunken);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-2);}
 .project-table-head > span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 表头带口径标记的列：标记不能被表头的 ellipsis 裁掉，和排序按钮并排对齐 */
+.project-table-head > .th-help-wrap{display:flex;align-items:center;gap:4px;overflow:visible;}
 .project-table-row{min-height:56px;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text-2);}
 .project-table-row:last-child{border-bottom:none;}
 .project-table-row:hover{background:var(--surface-hover);}
@@ -3473,7 +3479,15 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .version-task-tools input{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:13px;}
 .version-task-count{flex:0 0 auto;font-size:12px;color:var(--text-3);}
 .version-task-list{max-height:430px;overflow:auto;border:1px solid var(--border);border-radius:var(--r-sm);}
+/* 分组渲染：清单保留原有边框与滚动，组头吸顶 */
+.version-task-list .release-task-group[hidden]{display:none;}
+.version-task-sheet.is-expanded{position:fixed;inset:24px 4vw;width:auto;max-width:none;z-index:var(--z-overlay);display:flex;flex-direction:column;}
+.version-task-sheet.is-expanded .sheet-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
+.version-task-sheet.is-expanded .version-task-list{flex:1 1 auto;max-height:none;min-height:120px;}
+.version-task-sheet.is-expanded .version-change-reason{flex:0 0 auto;}
 .version-task-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;}
+/* display:flex 会盖掉 [hidden] 的默认隐藏，筛选要显式关掉 */
+.version-task-row[hidden]{display:none;}
 .version-task-row:last-child{border-bottom:none;}
 .version-task-row:hover{background:var(--surface-hover);}
 .version-task-row input{margin-top:3px;}
@@ -3580,11 +3594,30 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .release-risk textarea{min-height:60px;}
 .release-evidence{border-top:1px dashed var(--border);margin-top:10px;padding-top:8px;display:flex;flex-direction:column;gap:6px;min-width:0;}
 .release-evidence p{margin:0;}
-.release-picker{display:flex;flex-direction:column;gap:8px;min-width:0;}
+.release-picker{display:flex;flex-direction:column;gap:8px;min-width:0;position:relative;}
 .release-picker-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
 .release-picker-tools input[type="search"]{flex:1 1 180px;min-width:140px;}
 .release-picker-tools select{flex:0 1 auto;}
 .release-picker-count{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.release-picker-expand{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;}
+.release-picker-expand svg{flex:0 0 auto;}
+/* 分组头吸顶在清单滚动区里：多版本几十项时始终知道自己在哪一组 */
+.release-task-group{display:flex;flex-direction:column;min-width:0;}
+.release-task-group-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;min-height:32px;padding:5px 10px;background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+.release-task-group:not(:first-child) .release-task-group-head{border-top:1px solid var(--border);}
+.release-group-toggle{display:inline-flex;align-items:center;gap:5px;min-width:0;flex:0 1 auto;padding:0;border:0;background:none;font-size:12.5px;font-weight:600;color:var(--text-2);cursor:pointer;text-align:left;}
+.release-group-toggle:hover{color:var(--text);}
+.release-group-toggle svg{flex:0 0 auto;transition:transform var(--dur-fast) var(--ease-out);}
+.release-task-group.is-collapsed .release-group-toggle svg{transform:rotate(-90deg);}
+.release-group-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.release-group-all{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto;font-size:11.5px;color:var(--text-3);cursor:pointer;}
+.release-group-all input{flex:0 0 auto;width:14px;height:14px;margin:0;accent-color:var(--primary);}
+.release-group-count{flex:0 0 auto;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.release-task-group-body[hidden]{display:none;}
+/* 放大：同一个节点改成视口内的大浮层，DOM 仍留在表单里，勾选读回与事件委托都不受影响。
+   压暗用浮层自身一圈巨大的外阴影：加独立盖层会盖住浮层背景，行区域会透出灰底。 */
+.release-picker.is-expanded{position:fixed;inset:11vh 2vw;z-index:var(--z-overlay);padding:14px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--shadow-xl),0 0 0 100vmax rgba(16,24,40,.38);}
+.release-picker.is-expanded .release-task-picker{flex:1 1 auto;min-height:0;max-height:none;}
 /* .version-task-row 的 display:flex 会覆盖浏览器对 [hidden] 的默认隐藏，筛选必须显式关掉 */
 .release-task-row[hidden]{display:none;}
 .release-version-list{display:flex;flex-direction:column;gap:8px;max-height:min(60dvh,480px);overflow:auto;}
@@ -3593,6 +3626,10 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .release-version-item b{font-size:14px;font-weight:600;color:var(--text);}
 .release-version-item small{font-size:12px;color:var(--text-3);}
 .release-version-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;max-height:min(38dvh,320px);overflow:auto;padding:2px;}
+/* 搜索条横跨整行并吸顶：项目组按列排布，滚动时仍能改搜索词 */
+.release-version-tools{grid-column:1/-1;position:sticky;top:-2px;z-index:3;display:flex;align-items:center;gap:10px;padding:4px 2px 8px;background:var(--surface);}
+.release-version-tools input[type="search"]{flex:1 1 auto;min-width:0;}
+.release-version-count{flex:0 0 auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .release-version-group{display:flex;flex-direction:column;gap:2px;min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
 .release-version-project{display:flex;align-items:center;gap:8px;margin:0 0 6px;padding:2px 4px 6px;border-bottom:1px solid var(--border);}
 .release-version-project-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--text-2);}
@@ -3673,6 +3710,13 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
   .release-section .form-grid{grid-template-columns:1fr;}
   .release-section .row{flex-wrap:wrap;}
   .version-task-tools{flex-wrap:wrap;}
+  .version-task-tools select{flex:1 1 30%;}
+  /* 手机上计数与放大按钮共占一行：各自整行会把工具栏撑成四层，挤压清单 */
+  .version-task-sheet .version-task-tools .release-picker-count{flex:1 1 auto;margin-left:0;}
+  .version-task-sheet .version-task-tools .release-picker-expand{flex:0 0 auto;}
+  .version-task-sheet.is-expanded{inset:0;border:0;border-radius:0;}
+  .version-task-sheet.is-expanded .sheet-head,
+  .version-task-sheet.is-expanded .sheet-foot{border-radius:0;}
 }
 /* 发布弹窗在手机上占满全屏：表单长、字段密，半屏弹层会把「实际发布」挤到折叠线以下 */
 @media(max-width:639px){
@@ -3687,13 +3731,23 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
   .release-sheet .btn,.release-sheet select,.release-sheet input{min-height:44px;}
   .release-sheet textarea{min-height:88px;}
   .release-page .btn,.release-page select,.release-page input{min-height:44px;}
+  /* 44px 触控高度只给文本控件：勾选框被拉成竖条会看起来像按钮 */
+  .release-page input[type="checkbox"],.release-sheet input[type="checkbox"]{min-height:0;width:16px;height:16px;flex:0 0 auto;}
   .release-page .release-tab{min-height:44px;}
   .release-page textarea{min-height:88px;}
   .release-picker-tools input[type="search"]{flex:1 1 100%;}
   .release-picker-tools .btn{flex:1 1 auto;}
   .release-picker-count{flex:1 1 100%;margin-left:0;}
   .release-task-picker{max-height:46dvh;}
+  .release-task-group-head{min-height:40px;padding:6px 10px;}
+  .release-picker.is-expanded{inset:0;padding:12px;border:0;border-radius:0;}
+  .release-picker.is-expanded .release-picker-tools{flex:0 0 auto;}
+  .release-picker.is-expanded .release-picker-count{flex:1 1 auto;}
+  .release-picker.is-expanded .release-picker-expand{flex:0 0 auto;}
   .release-version-picker{grid-template-columns:1fr;max-height:36dvh;}
+  .release-version-tools{flex-wrap:wrap;}
+  .release-version-tools input[type="search"]{flex:1 1 100%;min-height:40px;}
+  .release-version-count{flex:0 0 auto;margin-left:auto;}
   .release-version-row{min-height:44px;}
   .release-chip{max-width:150px;}
   .plan-br-summary{flex:1 1 100%;margin-left:0;line-height:17px;}
@@ -3982,6 +4036,10 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 /* 收尾控件成组换行并靠右：视图始终在筛选行最右，不单独落到下一行左侧 */
 .tc-filterbar .tc-fbar-end{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto;}
 .tc-actionbar{display:flex;align-items:center;gap:8px;flex:0 0 auto;flex-wrap:nowrap;}
+/* 导出菜单顶部：Excel / CSV 格式切换，两个按钮等宽 */
+.tc-export-fmt{padding:0 6px 5px;}
+.tc-export-fmt .seg{display:flex;width:100%;}
+.tc-export-fmt .seg button{flex:1 1 0;justify-content:center;}
 /* 手机才出现：把筛选条件收进可展开面板，首屏只留筛选入口 / 项目 / 新增 */
 .tc-filter-toggle{display:none;}
 /* 筛选面板收起时，按钮上仍显示生效条件数 */
@@ -4019,17 +4077,21 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 #tcStats .tc-stat-info{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:4px;color:var(--text-3);cursor:help;flex:none;}
 #tcStats .tc-stat-info:hover{color:var(--text-2);}
 /* 搜索框内置范围选择：默认只搜标题 / 编号 / 模块 */
-.tc-searchwrap{display:flex;align-items:center;gap:6px;flex:1 1 150px;min-width:130px;max-width:230px;height:30px;padding:0 4px 0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.tc-searchwrap{display:flex;align-items:center;gap:6px;flex:1 1 200px;min-width:170px;max-width:250px;height:30px;padding:0 4px 0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
 .tc-searchwrap:focus-within{border-color:var(--primary);box-shadow:var(--ring-focus);}
 .tc-searchwrap .tc-search-ic{display:inline-flex;flex:0 0 auto;color:var(--text-3);}
 .tc-searchwrap .tc-search-ic svg{width:14px;height:14px;}
 .tc-searchwrap .tc-search{flex:1 1 auto;width:auto;min-width:0;height:auto;padding:0;border:0;background:none;font-size:12.5px;}
 .tc-searchwrap .tc-search:focus{outline:none;border:0;box-shadow:none;}
 .tc-search-scope{flex:0 0 auto;height:22px;padding:0 2px;border:0;border-radius:var(--r-xs);background:var(--surface-sunken);color:var(--text-2);font-size:11px;font-weight:600;cursor:pointer;}
-/* 宽屏筛选条单行：搜索框吸收剩余宽度 */
+/* 宽屏筛选条单行：搜索框吸收剩余宽度
+   目录入口挪进这一行后，统计条 + 六个筛选控件已接近占满，宽屏再收紧标签内边距与间距，
+   给搜索框留出可读宽度；窄屏沿用原值（那里整条独占一行，不缺空间） */
 @media (min-width:1240px){
-  #tcFilterBar{flex:1 1 0;flex-wrap:nowrap;min-width:0;}
-  #tcFilterBar .mini-select{flex:0 1 auto;min-width:104px;max-width:190px;padding:0 24px 0 8px;}
+  #tcFilterBar{flex:1 1 0;flex-wrap:nowrap;min-width:0;gap:6px;}
+  #tcFilterBar .mini-select{flex:0 1 auto;min-width:104px;max-width:190px;padding:0 20px 0 8px;}
+  #tcStats{gap:0;}
+  #tcStats .tc-stat{padding:0 7px;}
 }
 /* 筛选卡放不下整句「清空筛选」时只留图标，把宽度让给搜索框（左侧栏展开时内容区更窄）
    只留图标时按钮同步收成 28×28 方形、图标降到 14px：否则 16px 的 × 在无文字按钮里显大，
@@ -4322,6 +4384,115 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 @supports (field-sizing:content){
   .tc-step-row textarea{field-sizing:content;resize:none;height:auto;}
 }
+
+/* ---------------- 用例编辑抽屉：主次分区（标题 → 追溯 → 属性 → 步骤 → 更多） ---------------- */
+.cf-form{display:flex;flex-direction:column;gap:22px;min-width:0;}
+.cf-sec{min-width:0;}
+.cf-sec-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.cf-num{font:600 10.5px/1 var(--font-mono);color:var(--text-3);background:var(--surface-sunken);border-radius:5px;padding:4px 5px;letter-spacing:.03em;}
+.cf-sec-h h3{margin:0;font-size:13px;line-height:20px;font-weight:600;color:var(--text);}
+.cf-meta{margin-left:auto;font-size:11px;line-height:16px;font-weight:500;color:var(--text-3);white-space:nowrap;}
+.cf-meta.must{color:var(--text-2);}
+.cf-help{margin:0;font-size:11.5px;line-height:18px;color:var(--text-3);}
+.cf-subline{display:flex;align-items:flex-start;gap:12px;}
+.cf-subline .cf-help{flex:1 1 auto;}
+.cf-count{flex:none;font-size:11px;line-height:18px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.cf-rowlabel{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.cf-link{border:0;background:none;padding:0 2px;border-radius:4px;font:inherit;font-size:12px;font-weight:500;line-height:22px;color:var(--primary-fg);cursor:pointer;}
+.cf-link:hover{text-decoration:underline;}
+.cf-link:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+/* 标题是主信息：比普通输入更高更醒目 */
+.field input.cf-title{height:46px;padding:0 12px;font-size:15px;font-weight:500;letter-spacing:.005em;}
+
+/* 需求：已选=浅蓝卡片，未选=虚线空态，状态胶囊单独占位 */
+.cf-demand{height:42px;border-color:var(--primary-border);background:var(--primary-soft);border-radius:var(--r-md);padding:0 10px;gap:10px;}
+.cf-demand:hover{border-color:#9FBDFC;background:var(--primary-soft);}
+.cf-demand .search-trigger-text{font-size:13px;font-weight:500;}
+.cf-demand .cf-demand-badge{flex:none;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--primary-border);color:var(--primary-hover);}
+.cf-demand .cf-demand-state{flex:none;display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--primary-border);color:var(--primary-hover);font-size:11px;line-height:18px;}
+.cf-demand.is-empty{background:var(--surface);border:1px dashed var(--border-strong);}
+.cf-demand.is-empty:hover{background:#FBFCFD;border-color:var(--primary);}
+.cf-demand.is-empty .search-trigger-text{font-weight:400;}
+.cf-demand.is-empty .cf-demand-badge{background:var(--surface-sunken);border-color:var(--border);color:var(--text-3);}
+.cf-demand.is-empty .cf-demand-state{display:none;}
+
+/* 需求下挂两条支路：目录继承 + 工作项 */
+.cf-nest{margin:12px 0 0 12px;padding:2px 0 2px 14px;border-left:2px solid var(--border);display:flex;flex-direction:column;gap:10px;}
+.cf-nest-row{display:flex;align-items:flex-start;gap:10px;}
+.cf-nest-label{flex:none;width:64px;font-size:12px;font-weight:500;line-height:30px;color:var(--text-3);}
+.cf-nest-val{flex:1 1 auto;min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:30px;}
+.cf-nest #cModule{width:auto;min-width:170px;max-width:280px;height:30px;padding:0 30px 0 10px;font-size:12.5px;}
+.cf-nest .cf-task-val{display:block;flex:1 1 100%;padding-left:0;}
+.cf-tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;font-size:11px;font-weight:500;background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);}
+.cf-tag.ok{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+.cf-tag.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+/* 工作项沿用多选清单，但在支路里去边框、贴左排 */
+.cf-nest .case-task-box{border:0;background:transparent;overflow:visible;}
+.cf-nest .case-task-tools{padding:0 0 6px;border:0;background:transparent;}
+.cf-nest .case-task-tools input{height:30px;}
+.cf-nest .case-task-list{max-height:150px;padding:0;}
+.cf-nest .case-task-option{padding:5px 6px;}
+.cf-nest .case-task-empty{padding:0;font-size:12px;line-height:30px;}
+.cf-task-hint{margin-top:6px;}
+
+/* 优先级分段：隐藏原生 select，仅承载取值 */
+.cf-attrs{display:flex;flex-wrap:wrap;gap:12px;}
+.cf-attr{flex:0 1 360px;min-width:220px;}
+.cf-attr-lab{display:block;margin-bottom:6px;font-size:11px;line-height:16px;font-weight:500;color:var(--text-3);}
+.cf-seg{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;height:34px;padding:3px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);}
+.cf-seg button{border:0;border-radius:5px;background:transparent;font:500 12px var(--font-sans);color:var(--text-2);cursor:pointer;}
+.cf-seg button:hover{color:var(--text);}
+.cf-seg button.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.1);}
+.cf-seg button.on[data-pri="P0"]{color:var(--p0-fg);}
+.cf-seg button.on[data-pri="P1"]{color:var(--p1-fg);}
+.cf-seg button:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.cf-seg button:disabled{opacity:.5;cursor:not-allowed;}
+.cf-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+/* 步骤：列头 + 表格化行（序号 / 操作 / 预期 / 行操作） */
+.cf-steps-head{display:grid;grid-template-columns:24px minmax(0,1.35fr) minmax(0,1fr) 132px;align-items:center;height:30px;background:var(--surface-sunken);border:1px solid var(--border);border-bottom:0;border-radius:var(--r-md) var(--r-md) 0 0;font-size:11px;font-weight:500;color:var(--text-3);}
+.cf-steps-head span{padding-left:12px;}
+.cf-steps-head span:first-child{padding-left:0;text-align:center;}
+.cf-steps-head span:last-child{padding-left:0;}
+.cf-steps{display:block;margin-bottom:0;padding:0;border:1px solid var(--border);border-radius:0 0 var(--r-md) var(--r-md);background:var(--surface);}
+.cf-steps .tc-step-row{grid-template-columns:24px minmax(0,1.35fr) minmax(0,1fr) 132px;gap:0;align-items:stretch;min-height:44px;padding:0;border-bottom:1px solid var(--border);}
+.cf-steps .tc-step-row:last-child{border-bottom:0;}
+.cf-steps .tc-step-row textarea{flex:none;width:100%;min-width:0;height:44px;min-height:44px;padding:9px 12px;border:0;border-left:1px solid var(--border);border-radius:0;background:transparent;font-size:13px;line-height:20px;resize:none;}
+.cf-steps .tc-step-row textarea:focus{outline:none;border-color:transparent;background:#F8FAFF;box-shadow:inset 0 0 0 2px var(--primary);}
+.cf-steps .tc-step-row textarea:disabled{background:var(--surface-sunken);color:var(--text-2);}
+.cf-steps .tc-step-no{display:flex;align-items:flex-start;justify-content:center;padding:12px 0 0;font-family:var(--font-mono);font-size:11px;line-height:20px;}
+.cf-steps .tc-step-acts{display:flex;justify-content:flex-end;gap:2px;padding:8px 6px 0;opacity:.5;transition:opacity var(--dur-fast) var(--ease-out);}
+.cf-steps .tc-step-row:hover .tc-step-acts,.cf-steps .tc-step-acts:focus-within{opacity:1;}
+.cf-steps > .foot-note{margin:0;padding:12px;}
+@supports (field-sizing:content){
+  .cf-steps .tc-step-row textarea{height:auto;min-height:44px;field-sizing:content;}
+}
+.cf-step-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;}
+.cf-step-hint{margin-left:auto;text-align:right;}
+
+/* 更多字段默认收起：多数用例只填标题与步骤 */
+.cf-more{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.cf-more summary{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;list-style:none;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--text);}
+.cf-more summary::-webkit-details-marker{display:none;}
+.cf-more summary:hover{color:var(--primary-hover);}
+.cf-more summary:focus-visible{outline:none;border-radius:var(--r-md);box-shadow:var(--ring-focus);}
+.cf-more .cf-chev{display:inline-flex;color:var(--text-3);transition:transform var(--dur-fast) var(--ease-out);}
+.cf-more[open] .cf-chev{transform:rotate(90deg);}
+.cf-more-meta{margin-left:auto;font-size:11px;font-weight:400;color:var(--text-3);}
+.cf-more-body{display:flex;flex-direction:column;gap:14px;padding:2px 12px 14px;}
+
+/* 提交错误汇总 + 页脚（取消 / 保存） */
+.cf-errsum{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--danger-border);border-radius:var(--r-md);background:var(--danger-soft);}
+.cf-errsum .cf-ei{flex:none;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#FFF;font:700 11px/18px var(--font-sans);text-align:center;}
+.cf-errsum b{display:block;font-size:12.5px;line-height:18px;color:var(--danger-fg);}
+.cf-errlinks{display:flex;flex-wrap:wrap;gap:14px;margin-top:3px;}
+.cf-errlinks button{border:0;background:none;padding:0;border-radius:4px;font:inherit;font-size:12px;line-height:18px;color:var(--danger-fg);text-decoration:underline;cursor:pointer;}
+.cf-errlinks button:focus-visible{outline:none;box-shadow:0 0 0 2px #FFF,0 0 0 4px var(--danger);}
+.cf-foot{display:flex;align-items:center;gap:8px;}
+.cf-save-note{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);}
+.cf-save-note i{flex:none;width:6px;height:6px;border-radius:50%;background:var(--success);}
+.cf-foot-grow{flex:1 1 auto;}
+
 /* 用例编辑：验证工作项多选（先选主需求，候选限定该需求） */
 .case-task-box{border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;}
 .case-task-tools{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface-sunken);}
@@ -4355,16 +4526,16 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
   display:flex;flex-direction:column;min-height:200px;max-height:calc(100vh - 200px);
   border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;
 }
-.tc-side-tabs{display:flex;gap:2px;flex:0 0 auto;padding:6px 6px 0;border-bottom:1px solid var(--border);background:var(--surface-sunken);}
-.tc-side-tabs button{
-  flex:1 1 0;min-width:0;height:30px;padding:0 6px;border:0;border-radius:var(--r-sm) var(--r-sm) 0 0;
-  background:none;font:inherit;font-size:12.5px;font-weight:600;color:var(--text-3);cursor:pointer;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.tc-side-tabs button:hover{background:var(--surface-hover);color:var(--text);}
-.tc-side-tabs button[aria-selected="true"]{background:var(--surface);color:var(--primary-fg);box-shadow:inset 0 -2px 0 var(--primary);}
-.tc-side-tabs button:focus-visible{outline:none;box-shadow:var(--ring-focus);}
 .tc-side-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:8px;}
+/* 左栏只放自定义分组：标题带项目用例总数，下面是搜索与分组树 */
+.tc-side-groups .tc-side-body{padding-top:6px;}
+.tc-side-count{
+  flex:0 0 auto;margin-right:auto;padding:0 6px;height:18px;display:inline-flex;align-items:center;
+  border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);
+  font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;
+}
+.tc-set-search{flex:0 0 auto;width:100%;margin:0 0 8px;}
+.tc-set-sep{height:1px;margin:6px 2px;background:var(--border);}
 .tc-side-foot{flex:0 0 auto;padding:8px 10px;border-top:1px solid var(--border);background:var(--surface-sunken);}
 .tc-side-tools{display:flex;align-items:center;gap:6px;margin:0 0 8px;}
 .tc-side-title{display:inline-flex;align-items:center;gap:5px;flex:1 1 auto;min-width:0;font-size:12px;font-weight:600;color:var(--text-2);}
@@ -4380,7 +4551,18 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .tc-side-switch.on .sw-box{border-color:var(--primary);background:var(--primary-soft);}
 .tc-side-switch:focus-visible{outline:none;border-radius:var(--r-xs);box-shadow:var(--ring-focus);}
 
-/* 模块目录：单归属，拖入＝移动 */
+/* 目录筛选：入口在顶部筛选条，弹层里完成筛选与目录维护 */
+.tc-dirfilter{display:inline-flex;position:relative;}
+.tc-dirmenu{
+  display:flex;flex-direction:column;padding:8px;overflow:hidden;
+  max-height:min(66vh,480px);min-width:260px;
+}
+.tc-dirmenu-head{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin:0 0 6px;}
+.tc-dirmenu .tc-dir-list{flex:1 1 auto;min-height:80px;overflow:auto;overscroll-behavior:contain;}
+.tc-dirmenu .tc-side-foot{flex:0 0 auto;margin:6px -8px -8px;border-radius:0 0 var(--r-lg) var(--r-lg);}
+.tc-dirmenu .tc-side-note{margin-top:5px;}
+
+/* 模块目录：单归属，拖入＝移动归属 */
 .tc-dir-search{
   display:flex;align-items:center;gap:5px;flex:1 1 auto;min-width:0;height:28px;padding:0 8px;
   border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text-3);

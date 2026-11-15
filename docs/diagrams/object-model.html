@@ -180,7 +180,7 @@
         <div class="node-name">空间</div>
         <div class="node-sub">协作与数据隔离边界</div>
         <div class="chips">
-          <span>成员与角色</span><span>看板列</span><span>标签字典</span><span>公共分支</span><span>通知与 AI</span>
+          <span>成员与角色</span><span>看板列</span><span>标签字典</span><span>公共分支</span><span>空间文档与分类</span><span>通知与共享 AI</span>
         </div>
       </div>
       <div class="arrow">→</div>
@@ -190,11 +190,11 @@
       </div>
       <div class="arrow">→</div>
       <div class="children">
-        <div class="child"><b>模块</b><span>项目级分类，不是层级节点</span></div>
-        <div class="child"><b>版本</b><span>项目内切分的交付批次</span></div>
-        <div class="child"><b>需求文档</b><span>项目内多级文档树</span></div>
-        <div class="child"><b>测试用例 / 测试计划</b><span>质量验证资产与执行容器</span></div>
-        <div class="child"><b>分支</b><span>也可为空间级公共分支</span></div>
+        <div class="child"><b>模块（目录树）</b><span>任务 / 需求 / 用例共用，可分层</span></div>
+        <div class="child"><b>版本</b><span>交付批次，可关闭或取消</span></div>
+        <div class="child"><b>文档</b><span>项目或空间级，三档可见范围</span></div>
+        <div class="child"><b>测试用例 / 测试计划</b><span>用例目录与用例集，质量资产与执行容器</span></div>
+        <div class="child"><b>分支</b><span>也可为空间级公共分支，支持仓库只读同步</span></div>
         <div class="child work">
           <b>工作项</b>
           <div class="types"><i>任务</i><i>用户故事</i><i>缺陷</i><i>史诗</i></div>
@@ -220,7 +220,7 @@
     </div>
     <div class="flow-note">
       <span class="tag">提测支线</span>
-      <span><b>工作项 → 测试计划 / 用例执行 → 失败 → 缺陷工作项</b>，缺陷回到同一块看板继续流转</span>
+      <span><b>工作项 → 测试计划 / 用例执行 → 失败 → 缺陷工作项</b>，缺陷回到同一块看板继续流转；发布前必测检查结果随计划快照冻结</span>
     </div>
   </section>
 
@@ -233,7 +233,7 @@
     <div class="relations">
       <div class="rel"><div class="pair">史诗 <em>←</em> 工作项.所属史诗</div><div class="desc">同项目、不嵌套，用于归堆大颗粒需求</div></div>
       <div class="rel"><div class="pair">需求池条目 <em>←</em> 工作项.关联需求</div><div class="desc">评审通过后建立，取消不连带删除工作项</div></div>
-      <div class="rel"><div class="pair">需求文档 <em>←</em> 工作项.关联文档</div><div class="desc">方案与执行对齐，可从文档派生草稿</div></div>
+      <div class="rel"><div class="pair">文档 <em>←</em> 工作项.关联文档</div><div class="desc">项目或空间文档皆可关联，可从文档派生草稿</div></div>
       <div class="rel"><div class="pair">分支 <em>←</em> 工作项.所属分支</div><div class="desc">跟踪一条分支从开发到发布</div></div>
       <div class="rel"><div class="pair">版本 <em>↔</em> 工作项</div><div class="desc">多对多；可关联多个计划版本，都须同项目</div></div>
       <div class="rel"><div class="pair">发布计划 <em>↔</em> 版本</div><div class="desc">一个计划可跨版本、跨项目</div></div>

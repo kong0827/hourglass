@@ -30,6 +30,20 @@ function refreshChainIfOpen(){
 }
 import { refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
 import { refreshListIfOpen } from "../views/list.js";
+import { initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
+
+registerHelp({
+  "drawer.actual": {
+    title:"实际工时 / 实际投入",
+    rows:[
+      ["包含什么", "这张工作项所有已结束的计时 + 手工补记；正在进行的计时不计，作废的记录不计。", "ok"],
+      ["自动计时的裁剪", "按个人工作时段（默认 09:00–18:00）、跳过周末、每人每天 8 小时额度计算。", "info"],
+      ["补记不算裁剪", "手工补记填多少算多少，但仍占用当天后续自动计时的额度。", "mute"],
+      ["与驾驶舱的关系", "项目驾驶舱的「实际投入」由各工作项合计后再按测试窗口拆成窗口内 / 窗口外，这里只显示单项合计。", "mute"]
+    ]
+  }
+});
+initCaliberHelp();
 
 /* 抽屉未保存改动的视觉同步：.drawer 加 .dirty，页脚 hint 变警示文案 */
 function syncDrawerDirty(){

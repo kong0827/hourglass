@@ -133,6 +133,7 @@ async function group(name, run) {
 /* ---------- 固定数据 ---------- */
 let p1, p2, d1, d2, plan;
 let mA, mB, mC, mD, mE;                 // 账号体系 / 登录 / 验证码 / 对账 / 空目录
+let mDefault;                            // 新建项目时产品预置的「其他」目录
 const c = {};                            // c1..c12 + x1（跨项目）
 let setTeam, setPersonal;
 const MARK = 'ZZQMARK';
@@ -166,6 +167,9 @@ async function fixture() {
   mC = (await post('/api/test-modules', {reqId: p1, name: '验证码', parentId: mB})).id;
   mD = (await post('/api/test-modules', {reqId: p1, name: '对账'})).id;
   mE = (await post('/api/test-modules', {reqId: p1, name: '空目录'})).id;
+  mDefault = ((await get('/api/test-cases', {reqId: p1, limit: 1})).moduleNodes || [])
+    .find(n => n.level === 1 && n.name === '其他').id;
+  eq(mDefault !== mA, true, '新建项目自带默认目录「其他」（与自建目录不同节点）');
 
   const rows = [
     ['c1', '登录成功跳转首页', mB, 'P0', d1, 'passed', null, {precondition: '环境标记 ' + MARK}],
@@ -203,7 +207,8 @@ async function groupList() {
   eq(all.total, 12, '项目内共 12 条用例');
   eq(all.items.length, 12, '默认页宽返回全部');
   eq(all.limit, 100, '默认 limit=100');
-  check(all.moduleNodes.length === 5, '列表附带目录树', all.moduleNodes);
+  eq(all.moduleNodes.map(n => n.name),
+    ['其他', '账号体系', '登录', '验证码', '对账', '空目录'], '列表附带目录树（DFS，含预置目录）');
   eq(all.moduleIdCounts.__none, 3, '目录计数含未归类');
   eq(all.moduleIdCounts[mB], 3, '目录计数按节点');
   eq(all.statusCounts.__untested, 3, '未执行计数');
@@ -285,7 +290,7 @@ async function groupList() {
 /* ---------- B 分组计数 ---------- */
 async function groupSegments() {
   const mods = await get('/api/test-cases/groups', {reqId: p1, groupBy: 'module'});
-  eq(counts(mods), {[mA]: 1, [mB]: 3, [mC]: 2, [mD]: 3, [mE]: 0, __none: 3}, '目录分组计数（含空目录段）');
+  eq(counts(mods), {[mDefault]: 0, [mA]: 1, [mB]: 3, [mC]: 2, [mD]: 3, [mE]: 0, __none: 3}, '目录分组计数（含空目录段）');
   eq(seg(mods, mC).label, '账号体系 / 登录 / 验证码', '目录段头是全路径');
   eq(seg(mods, mB).passed, 2, '段内结果分布：登录 2 通过');
   eq(seg(mods, mB).failed, 1, '段内结果分布：登录 1 失败');
@@ -311,7 +316,7 @@ async function groupSegments() {
   eq(counts(vsets), {[setTeam.id]: 3}, '别人的个人分组不出现在段头');
 
   const scoped = await get('/api/test-cases/groups', {reqId: p1, groupBy: 'module', pri: 'P0'});
-  eq(counts(scoped), {[mA]: 0, [mB]: 1, [mC]: 1, [mD]: 0, [mE]: 0, __none: 1}, '分组计数跟随当前筛选');
+  eq(counts(scoped), {[mDefault]: 0, [mA]: 0, [mB]: 1, [mC]: 1, [mD]: 0, [mE]: 0, __none: 1}, '分组计数跟随当前筛选');
   const scopedSet = await get('/api/test-cases/groups',
     {reqId: p1, groupBy: 'set', moduleId: mA, moduleSub: true});
   eq(counts(scopedSet), {[setTeam.id]: 3, [setPersonal.id]: 1}, '分组段计数也受目录筛选约束');
@@ -323,16 +328,16 @@ async function groupSegments() {
 /* ---------- C 目录 CRUD ---------- */
 async function groupDirectory() {
   const tree = await get('/api/test-modules', {reqId: p1});
-  eq(tree.map(n => n.name), ['账号体系', '登录', '验证码', '对账', '空目录'], '目录树按 DFS 顺序');
-  eq(tree.map(n => n.level), [1, 2, 3, 1, 1], '层级正确');
+  eq(tree.map(n => n.name), ['其他', '账号体系', '登录', '验证码', '对账', '空目录'], '目录树按 DFS 顺序');
+  eq(tree.map(n => n.level), [1, 1, 2, 3, 1, 1], '层级正确');
   eq(tree.find(n => n.id === mA).subtreeCount, 6, '父节点子树计数含后代');
   eq(tree.find(n => n.id === mA).caseCount, 1, '父节点自身计数不含后代');
   const lv4 = await post('/api/test-modules', {reqId: p1, name: '第四级', parentId: mC});
   eq(lv4.level, 4, '目录可建到第 4 级（不限层级，与文档分类同口径）');
   const lv5 = await post('/api/test-modules', {reqId: p1, name: '第五级', parentId: lv4.id});
   eq(lv5.level, 5, '目录可继续建到第 5 级');
-  await admin.reject('POST', '/api/test-modules', {reqId: p1, name: '登录', parentId: mA}, 400);
-  await admin.reject('POST', '/api/test-modules', {reqId: p1, name: '对账'}, 400);
+  await admin.reject('POST', '/api/test-modules', {reqId: p1, name: '登录', parentId: mA}, 409);
+  await admin.reject('POST', '/api/test-modules', {reqId: p1, name: '对账'}, 409);
   const foreignNode = await post('/api/test-modules', {reqId: p2, name: '风控目录'});
   await admin.reject('POST', '/api/test-modules', {reqId: p1, name: '借别项目目录', parentId: foreignNode.id}, 400);
   await admin.reject('POST', '/api/test-cases', {reqId: p1, title: '借别项目节点', moduleId: foreignNode.id}, 400);
@@ -728,7 +733,8 @@ async function groupMembersAndEvidence() {
   // 名单内成员即使拿到写权限也不是创建人：改不了指定成员分组；团队分组收窄同样要创建人
   await put(wsPath('/project-access'), {userId: outsider.me.id, projectId: p1, access: 'write'});
   await outsider.reject('PUT', `/api/case-sets/${setMembers.id}`,
-    {reqId: p1, name: '偷改', visibility: 'members', memberIds: [outsider.me.id]}, 400);
+    {reqId: p1, name: '偷改', visibility: 'members', memberIds: [outsider.me.id]}, 403);
+  await outsider.reject('DELETE', `/api/case-sets/${setMembers.id}`, undefined, 403);
   await outsider.reject('PUT', `/api/case-sets/${setTeam.id}`,
     {reqId: p1, name: '冒烟集', visibility: 'members', memberIds: [outsider.me.id]}, 400);
   await put(wsPath('/project-access'), {userId: outsider.me.id, projectId: p1, access: 'read'});

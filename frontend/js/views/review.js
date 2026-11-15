@@ -9,9 +9,22 @@ import { openTaskById } from "../core/task-actions.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, dayKey, fmtMD, fmtMinute, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
+import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { loadReqs, pending } from "./board.js";
 import { openLogTable, openTaskTable } from "./manager-shared.js";
 import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
+
+registerHelp({
+  "review.onTime": {
+    title:"按期率",
+    rows:[
+      ["怎么算", "本周期完成的工作项里，完成日期不晚于计划截止日的占比。", "ok"],
+      ["分母", "只算设置了截止日期的完成项；没设截止日期的完成项不计入分母，也不记为延期。", "info"],
+      ["全部没截止日", "分母为 0 时卡片显示 0%，摘要会注明「完成项均未设置截止日期」，不代表全部延期。", "warn"]
+    ]
+  }
+});
+initCaliberHelp();
 
 function reviewTitle(off){
   return off === -1 ? "上周回顾" : (off === 0 ? "本周回顾" : "回顾");
@@ -422,7 +435,7 @@ function renderReview(d){
   var overN = (d.counts && d.counts.over) || 0;
   var stats = [
     {k:"完成", v:s.done, u:"项", cls:"", drill:"done"},
-    {k:"按期率", v:s.onTimeRate, u:"%", cls:(s.onTimeRate < 60 ? "warn" : "good"), drill:"rate"},
+    {k:"按期率", v:s.onTimeRate, u:"%", cls:(s.onTimeRate < 60 ? "warn" : "good"), drill:"rate", help:"review.onTime"},
     {k:"延期", v:s.late, u:"项", cls:(s.late > 0 ? "warn" : ""), drill:"late"},
     {k:"参与成员", v:s.members, u:"人", cls:"", drill:"members"},
     {k:"逾期", v:overN, u:"项", cls:(overN > 0 ? "bad" : ""), drill:"over"},
@@ -430,9 +443,12 @@ function renderReview(d){
   ];
   $("statGrid").innerHTML = stats.map(function(x){
     var inner = '<div class="k">' + x.k + '</div><div class="v">' + x.v + '<small>' + x.u + '</small></div>';
-    return x.drill
+    var card = x.drill
       ? '<button class="stat clickable ' + x.cls + '" type="button" data-review-stat="' + x.drill + '" title="查看明细" aria-label="' + x.k + '：查看明细">' + inner + '</button>'
       : '<div class="stat ' + x.cls + '">' + inner + '</div>';
+    return x.help
+      ? '<div class="stat-wrap">' + card + caliberMarkHTML(x.help, false, "查看「" + x.k + "」口径") + '</div>'
+      : card;
   }).join("");
 
   renderReviewPivot(d);

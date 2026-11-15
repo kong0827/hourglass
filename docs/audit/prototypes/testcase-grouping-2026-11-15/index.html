@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>新建用例 · 需求继承模块 + 分组多选 · 原型</title>
+</head>
+<body>
+<!-- FRAGMENT START -->
+<div class="hg-wrap">
+<style>
+  .hg-wrap{
+    --bg-app:#F7F8FA; --surface:#FFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+    --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+    --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-fg:#5B3FD1;
+    --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+    --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+    --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-family:var(--font);color:var(--text);background:#E9ECF1;font-size:13px;line-height:20px;
+    padding:24px;overflow:auto;
+  }
+  .hg-wrap *{box-sizing:border-box;margin:0;padding:0}
+  .frame{width:1392px;display:grid;grid-template-columns:900px 456px;gap:24px;align-items:start}
+
+  /* ---------- 左：应用场景 + 抽屉 ---------- */
+  .app{position:relative;height:900px;border-radius:16px;overflow:hidden;background:var(--bg-app);
+       border:1px solid var(--border);box-shadow:var(--shadow-md);display:flex}
+  .rail{width:64px;background:#111827;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .rail .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#2563EB,#7A5AF8);margin-bottom:12px}
+  .rail .ri{width:36px;height:34px;border-radius:8px;display:grid;place-items:center;color:#98A2B3;font-size:11px}
+  .rail .ri.on{background:#1F2937;color:#FFF}
+  .side{width:168px;border-right:1px solid var(--border);background:var(--surface);padding:16px 10px}
+  .side h4{font-size:11px;letter-spacing:.06em;color:var(--text-3);font-weight:600;margin:14px 8px 6px}
+  .side .nav{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2)}
+  .side .nav.on{background:var(--primary-soft);color:var(--primary-hover);font-weight:600}
+  .side .dot{width:6px;height:6px;border-radius:2px;background:currentColor;opacity:.45}
+  .list{flex:1;min-width:0;padding:16px 18px;overflow:hidden}
+  .list-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .list-head b{font-size:15px}
+  .list-head small{color:var(--text-3)}
+  .case{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);
+        border-radius:10px;padding:10px 12px;margin-bottom:8px}
+  .case .no{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--text-3);width:52px;flex:none}
+  .case .t{font-weight:500;font-size:12.5px}
+  .case .m{color:var(--text-3);font-size:11.5px;margin-top:2px}
+  .scrim{position:absolute;inset:0;background:rgba(16,24,40,.32)}
+
+  /* ---------- 抽屉 ---------- */
+  .drawer{position:absolute;top:0;right:0;bottom:0;width:620px;background:var(--surface);
+          box-shadow:var(--shadow-xl);display:flex;flex-direction:column}
+  .dw-head{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px}
+  .dw-head h2{font-size:16px;line-height:24px}
+  .dw-head p{color:var(--text-3);font-size:12px;margin-top:2px}
+  .dw-x{margin-left:auto;width:28px;height:28px;border:0;background:transparent;color:var(--text-3);
+        font-size:18px;border-radius:var(--r-sm);cursor:pointer}
+  .dw-body{flex:1;overflow:auto;padding:16px 22px 18px;position:relative}
+  .field{margin-bottom:14px}
+  .field > label{display:flex;align-items:center;gap:6px;font-weight:600;font-size:12.5px;margin-bottom:6px}
+  .opt{font-weight:400;color:var(--text-3);font-size:11.5px}
+  .ctrl{width:100%;height:40px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);
+        padding:0 12px;font:inherit;color:var(--text);display:flex;align-items:center;gap:8px}
+  .ctrl.sunken{background:var(--surface-sunken);border-color:transparent}
+  .ctrl .caret{margin-left:auto;color:var(--text-3);font-size:11px}
+  .hint{color:var(--text-3);font-size:11.5px;margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:var(--r-pill);
+        background:var(--primary-soft);color:var(--primary-hover);border:1px solid var(--primary-border);font-size:12px;font-weight:500}
+  .pill.grey{background:var(--surface-sunken);border-color:var(--border);color:var(--text-2);font-weight:400}
+  .pill .x{border:0;background:transparent;color:inherit;opacity:.6;cursor:pointer;font-size:12px;padding:0}
+  .tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;font-size:11px;
+       background:var(--surface-sunken);color:var(--text-2);font-weight:500}
+  .tag.inherit{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+  .tag.manual{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+  .tag.dyn{background:var(--plum-soft);color:var(--plum-fg);border:1px solid #D9D6FE}
+  .tag.team{background:var(--primary-soft);color:var(--primary-hover)}
+  .tag.self{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+  .link{color:var(--primary-hover);cursor:pointer;font-weight:500;font-size:11.5px}
+  .demand{display:flex;align-items:center;gap:10px;border:1px solid var(--primary-border);background:var(--primary-soft);
+          border-radius:var(--r-md);padding:9px 12px}
+  .demand .ic{width:26px;height:26px;border-radius:7px;background:#FFF;border:1px solid var(--primary-border);
+              display:grid;place-items:center;color:var(--primary-hover);font-size:12px;font-weight:700}
+  .demand .dmain{flex:1;min-width:0}
+  .demand .dmain b{font-size:12.5px;display:block}
+  .demand .dmain span{font-size:11.5px;color:var(--text-3)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:40px;padding:6px 8px;
+         border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+  .addchip{height:26px;border:1px dashed var(--border-strong);background:transparent;border-radius:var(--r-pill);
+           color:var(--text-2);font:inherit;font-size:12px;padding:0 10px;cursor:pointer}
+  .addchip:hover{border-color:var(--primary);color:var(--primary-hover);background:var(--primary-soft)}
+  .steps{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+  .step{display:grid;grid-template-columns:24px 1fr 1fr 24px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border)}
+  .step:last-child{border-bottom:0}
+  .step .n{width:20px;height:20px;border-radius:50%;background:var(--surface-sunken);color:var(--text-3);
+           display:grid;place-items:center;font-size:11px}
+  .step input{border:0;background:transparent;font:inherit;font-size:12.5px;outline:none;width:100%}
+  .step .ph{color:var(--text-3)}
+  .dw-foot{position:relative;border-top:1px solid var(--border);padding:12px 22px;display:flex;align-items:center;gap:10px;background:var(--surface)}
+  .dw-foot .note{color:var(--text-3);font-size:11.5px;flex:1}
+  .btn{height:34px;padding:0 14px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);
+       color:var(--text);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#FFF}
+  .btn.primary:hover{background:var(--primary-hover)}
+
+  /* ---------- 分组浮层 ---------- */
+  .pop{position:absolute;left:22px;top:0;background:var(--surface);border:1px solid var(--border);
+       border-radius:var(--r-lg);box-shadow:var(--shadow-xl);display:none;z-index:5;overflow:hidden}
+  .pop.open{display:block}
+  .pop .search{padding:10px 12px 8px;border-bottom:1px solid var(--border)}
+  .pop .search input{width:100%;height:32px;border:1px solid var(--primary-border);border-radius:var(--r-sm);
+                     background:var(--primary-soft);padding:0 10px;font:inherit;font-size:12.5px;color:var(--text);outline:none}
+  .pop .tree{max-height:250px;overflow:auto;padding:8px 6px}
+  .row{display:flex;align-items:center;gap:8px;height:34px;padding:0 8px;border-radius:8px;cursor:pointer}
+  .row:hover{background:var(--surface-hover)}
+  .row .box{width:16px;height:16px;border:1.5px solid var(--border-strong);border-radius:5px;flex:none;
+            display:grid;place-items:center;background:#FFF}
+  .row.on .box{background:var(--primary);border-color:var(--primary);color:#FFF;font-size:10px;font-weight:700}
+  .row.dis{opacity:.55;cursor:not-allowed}
+  .row.lv2{padding-left:30px}
+  .row.lv3{padding-left:52px}
+  .row .nm{font-size:12.5px;flex:1;min-width:0;display:flex;align-items:center;gap:6px}
+  .row .cnt{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .row .why{font-size:11px;color:var(--text-3)}
+  .newrow{display:flex;align-items:center;gap:8px;padding:4px 8px 4px 30px;color:var(--primary-hover);font-weight:500;cursor:pointer;font-size:12px}
+  .newrow input{border:0;border-bottom:1px solid var(--primary-border);background:transparent;font:inherit;font-size:12px;outline:none;width:100%;color:var(--text)}
+  .pop-foot{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface-sunken)}
+  .pop-foot .sum{flex:1;font-size:11.5px;color:var(--text-2)}
+
+  /* ---------- 右侧说明 ---------- */
+  .notes{background:#FFF;border:1px solid var(--border);border-radius:16px;padding:20px 20px 18px;box-shadow:var(--shadow-md)}
+  .notes h3{font-size:14px;margin-bottom:4px}
+  .notes .sub{color:var(--text-3);font-size:12px;margin-bottom:14px}
+  .note{border-top:1px solid var(--border);padding:12px 0}
+  .note:first-of-type{border-top:0;padding-top:4px}
+  .note h5{font-size:12.5px;display:flex;gap:8px;align-items:center;margin-bottom:4px}
+  .num{width:18px;height:18px;border-radius:50%;background:var(--primary-soft);color:var(--primary-hover);
+       font-size:11px;font-weight:700;display:grid;place-items:center;flex:none}
+  .note p{color:var(--text-2);font-size:12px;line-height:19px}
+  .model{margin-top:12px;background:var(--surface-sunken);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--text-2)}
+  .model code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--text);background:#FFF;
+              border:1px solid var(--border);border-radius:4px;padding:0 4px}
+  .model .ln{display:flex;gap:6px;margin-top:6px}
+  .model .ln:first-child{margin-top:0}
+
+  @media (max-width:1240px){
+    .frame{width:100%;grid-template-columns:1fr}
+  }
+</style>
+
+<div class="frame">
+  <div class="app">
+    <div class="rail">
+      <div class="logo"></div>
+      <div class="ri on">我的</div><div class="ri">需求</div><div class="ri">项目</div>
+      <div class="ri">工作</div><div class="ri">测试</div>
+    </div>
+    <div class="side">
+      <h4>规划</h4>
+      <div class="nav"><i class="dot"></i>需求池</div>
+      <div class="nav"><i class="dot"></i>项目</div>
+      <div class="nav"><i class="dot"></i>版本</div>
+      <h4>交付</h4>
+      <div class="nav"><i class="dot"></i>工作项</div>
+      <div class="nav"><i class="dot"></i>文档</div>
+      <div class="nav on"><i class="dot"></i>测试</div>
+      <h4>洞察</h4>
+      <div class="nav"><i class="dot"></i>报表</div>
+    </div>
+    <div class="list">
+      <div class="list-head"><b>用例</b><small>支付中台 · 共 36 条</small></div>
+      <div class="case"><span class="no">TC-031</span><div><div class="t">回调幂等：重复通知只入账一次</div><div class="m">支付中台 · P0 · 通过</div></div></div>
+      <div class="case"><span class="no">TC-032</span><div><div class="t">回调失败重试：最多 5 次</div><div class="m">支付中台 / 回调 · P1 · 失败</div></div></div>
+      <div class="case"><span class="no">TC-033</span><div><div class="t">对账差异：T+1 自动补单</div><div class="m">支付中台 / 对账 · P1 · 未执行</div></div></div>
+    </div>
+    <div class="scrim"></div>
+
+    <!-- 抽屉开始 -->
+    <section class="drawer" aria-label="新建用例">
+      <header class="dw-head">
+        <div>
+          <h2>新建用例</h2>
+          <p>项目：支付中台（只读）· 需求决定覆盖口径，模块与分组负责组织和筛选</p>
+        </div>
+        <button class="dw-x" type="button" aria-label="关闭">×</button>
+      </header>
+
+      <div class="dw-body">
+        <div class="field">
+          <label>用例标题 <span style="color:var(--danger)">*</span></label>
+          <div class="ctrl sunken">回调幂等：重复通知只入账一次</div>
+        </div>
+
+        <div class="field">
+          <label>关联需求 <span class="opt">建议填写 · 需求决定覆盖矩阵的口径</span></label>
+          <div class="demand">
+            <span class="ic">DM</span>
+            <div class="dmain">
+              <b>DM-12 支付回调幂等改造</b>
+              <span>模块：支付中台 · P1 · 评审中</span>
+            </div>
+            <span class="link">更换</span>
+          </div>
+          <div class="hint">候选只列本项目需求，选中即带出其模块；允许改，不回写需求。确实无法归属时 <span class="link">暂不关联</span>，保存后进「未纳入覆盖」清单。</div>
+        </div>
+
+        <div class="field">
+          <label>验证工作项 <span class="opt">选填 · 仅可选该需求下的工作项</span></label>
+          <div class="chips">
+            <span class="pill grey">WI-231 回调重试改造 <button class="x" aria-label="移除">×</button></span>
+            <span class="pill grey">WI-234 幂等记录表 <button class="x" aria-label="移除">×</button></span>
+            <button class="addchip" type="button">＋ 选择工作项</button>
+          </div>
+        </div>
+
+        <div class="field" id="modField">
+          <label>项目模块 <span class="opt">选填 · 单归属 · 只做分类与过滤</span></label>
+          <div class="ctrl">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#667085" stroke-width="1.4"><path d="M1.8 4.6h4l1.3 1.6h7.1v6.3c0 .6-.5 1.1-1.1 1.1H2.9c-.6 0-1.1-.5-1.1-1.1V4.6Z"/></svg>
+            支付中台
+            <span class="caret">▾</span>
+          </div>
+          <div class="hint">
+            <span class="tag inherit" id="modTag">继承自需求模块</span>
+            与需求分类是同一棵项目目录树；<span class="link" id="modSwitch">手动修改</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>分组 <span class="opt">选填 · 多归属 · 可嵌套 · 自己维护</span></label>
+          <div class="chips" id="groupField">
+            <button class="addchip" type="button" id="pickBtn">＋ 选择分组</button>
+          </div>
+          <div class="hint">分组只是组织与圈选，不改变覆盖口径；“动态”分组按规则自动收录，不能手工加入。</div>
+        </div>
+
+        <div class="field">
+          <label>优先级 <span class="opt">选填</span></label>
+          <div class="ctrl">P1 · 高 <span class="caret">▾</span></div>
+        </div>
+
+        <div class="field" style="margin-bottom:4px">
+          <label>测试步骤 <span class="opt">操作 / 预期</span></label>
+          <div class="steps">
+            <div class="step"><span class="n">1</span><input value="同一通知重复推送 3 次" /><input class="ph" placeholder="预期结果" /><span style="color:var(--text-3)">⋮</span></div>
+            <div class="step"><span class="n">2</span><input class="ph" placeholder="操作步骤" /><input class="ph" placeholder="预期结果" /><span style="color:var(--text-3)">⋮</span></div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="dw-foot">
+        <span class="note">保存后可在左侧分组树里继续拖拽调整</span>
+        <button class="btn" type="button">取消</button>
+        <button class="btn primary" type="button">保存</button>
+      </footer>
+
+      <!-- 分组浮层 -->
+      <div class="pop" id="pop" role="dialog" aria-label="选择分组">
+        <div class="search"><input id="gq" placeholder="搜索分组…" /></div>
+        <div class="tree" id="tree">
+          <div class="row lv1 on" data-id="paydom" data-chip="支付域" data-vis="team">
+            <span class="box">✓</span><span class="nm">支付域 <span class="tag team">团队</span></span><span class="cnt">18</span>
+          </div>
+          <div class="row lv2 on" data-id="paycb" data-chip="支付域 / 支付回调" data-vis="team">
+            <span class="box">✓</span><span class="nm">支付回调</span><span class="cnt">7</span>
+          </div>
+          <div class="row lv2" data-id="payrec" data-chip="支付域 / 支付对账" data-vis="team">
+            <span class="box"></span><span class="nm">支付对账</span><span class="cnt">5</span>
+          </div>
+          <div class="row lv3" data-id="paydiff" data-chip="支付域 / 支付对账 / 差异补单" data-vis="team">
+            <span class="box"></span><span class="nm">差异补单</span><span class="cnt">2</span>
+          </div>
+          <div class="row lv1 dis" data-id="regress" data-chip="回归集" data-vis="dyn">
+            <span class="box"></span><span class="nm">回归集 <span class="tag dyn">动态</span></span><span class="why">按规则自动收录</span><span class="cnt">12</span>
+          </div>
+          <div class="row lv1 on" data-id="smoke" data-chip="核心冒烟" data-vis="self">
+            <span class="box">✓</span><span class="nm">核心冒烟 <span class="tag self">仅自己</span></span><span class="cnt">4</span>
+          </div>
+          <div class="newrow" id="newSet">＋ 在「支付域」下新建子分组</div>
+        </div>
+        <div class="pop-foot">
+          <span class="sum" id="sum">已选 2 个分组（可多选，保存后也在组内）</span>
+          <button class="btn" type="button" id="newBtn">新建分组</button>
+          <button class="btn primary" type="button" id="doneBtn">完成</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <aside class="notes">
+    <h3>设计要点</h3>
+    <p class="sub">新建用例 · 需求继承模块 + 分组多选</p>
+
+    <div class="note">
+      <h5><span class="num">1</span>先项目，后需求</h5>
+      <p>项目是容器：权限、用例编号、目录树、测试计划都挂在项目上，所以页头先定项目（全部项目下新建时先选目标项目）。需求属于项目（<code style="font-family:ui-monospace,Menlo,monospace;font-size:11px">Demand.reqId</code>），需求候选只列本项目的，因此选了需求不会再切换项目——“带出项目”这件事在结构上已经不可能出错。</p>
+    </div>
+
+    <div class="note">
+      <h5><span class="num">2</span>需求可空，覆盖才有口径</h5>
+      <p>需求不是必填：不关联的用例照常进项目用例库，但不计入需求覆盖矩阵，归到「未纳入覆盖」清单可查可补。需求与用例模块在本产品里是同一棵项目目录树，选中需求即带出模块并标「继承自需求模块」，可改、不回写、可恢复继承。</p>
+    </div>
+
+    <div class="note">
+      <h5><span class="num">3</span>模块不是必填</h5>
+      <p>需求没设模块时保持「未归类」，也可以手动选。模块只用于分类、过滤与统计切片，不再宣称“决定覆盖矩阵口径”——覆盖只按需求和工作项算。</p>
+    </div>
+
+    <div class="note">
+      <h5><span class="num">4</span>分组是自己建的，多归属可嵌套</h5>
+      <p>手工分组由用户建，一条用例可进多个组，原分组保留；支持在浮层里就地新建子分组。从左侧选中某个分组进来新建时，默认带上该组。</p>
+    </div>
+
+    <div class="note">
+      <h5><span class="num">5</span>动态分组只读</h5>
+      <p>按规则自动收录的「动态」分组在表单里置灰并注明原因，避免“手工加了没生效”的误解；可见范围标签沿用团队 / 指定成员 / 仅自己。</p>
+    </div>
+
+    <div class="note">
+      <h5><span class="num">6</span>真正的“带出项目”在需求侧入口</h5>
+      <p>从需求详情写用例（覆盖抽屉加「写用例」）时，用需求的 <code style="font-family:ui-monospace,Menlo,monospace;font-size:11px">reqId</code> 预填项目、<code style="font-family:ui-monospace,Menlo,monospace;font-size:11px">demandId</code> 预填需求、模块预填需求模块——这才是需求带项目的合理形态；表单里跨项目搜需求不建议，会把用例搬到别的项目、破坏编号与权限。</p>
+    </div>
+
+    <div class="model">
+      <div class="ln"><code>demand.category_id</code> → 支付中台</div>
+      <div class="ln"><code>test_case.module_id</code> → 同一节点（可改）</div>
+      <div class="ln"><code>case_set_item</code> → 支付回调 / 核心冒烟（多行）</div>
+      <div class="ln"><code>test_case.demand_id</code> → DM-12（覆盖口径）</div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+  var pop = document.getElementById("pop");
+  var drawer = document.querySelector(".drawer");
+  var body = document.querySelector(".dw-body");
+  var groupField = document.getElementById("groupField");
+  var tree = document.getElementById("tree");
+  var sum = document.getElementById("sum");
+
+  function selectedRows(){
+    return Array.prototype.slice.call(tree.querySelectorAll(".row.on"));
+  }
+  function renderChips(){
+    groupField.querySelectorAll(".pill").forEach(function(p){ p.remove(); });
+    var btn = document.getElementById("pickBtn");
+    selectedRows().forEach(function(r){
+      var chip = document.createElement("span");
+      chip.className = "pill";
+      chip.setAttribute("data-id", r.dataset.id);
+      chip.innerHTML = '<span>' + r.dataset.chip + '</span>'
+        + (r.dataset.vis === "self" ? '<span style="opacity:.65;font-weight:400">仅自己</span>' : '')
+        + '<button class="x" type="button" aria-label="移除">×</button>';
+      chip.querySelector(".x").addEventListener("click", function(){
+        r.classList.remove("on");
+        r.querySelector(".box").textContent = "";
+        renderChips();
+      });
+      groupField.insertBefore(chip, btn);
+    });
+    var n = selectedRows().length;
+    sum.textContent = n
+      ? "已选 " + n + " 个分组（可多选，保存后也在组内）"
+      : "未选择分组（可跳过，之后在左侧分组树里补）";
+  }
+
+  function positionPop(){
+    var d = drawer.getBoundingClientRect();
+    var g = groupField.getBoundingClientRect();
+    pop.style.left = (g.left - d.left) + "px";
+    pop.style.width = g.width + "px";
+    var top = g.bottom - d.top + 8;
+    pop.style.top = top + "px";
+    var room = d.height - top - 118;
+    var rows = Math.max(3, Math.floor((room - 16) / 34));
+    tree.style.maxHeight = (rows * 34 + 16) + "px";
+  }
+  function openPop(){
+    var d = drawer.getBoundingClientRect();
+    var g = groupField.getBoundingClientRect();
+    var want = d.top + 84;
+    if(g.top > want + 4) body.scrollTop += (g.top - want);
+    else if(g.top < want - 4) body.scrollTop = Math.max(0, body.scrollTop - (want - g.top));
+    positionPop();
+    pop.classList.add("open");
+    document.getElementById("gq").focus();
+  }
+  document.getElementById("pickBtn").addEventListener("click", function(e){
+    e.stopPropagation();
+    if(pop.classList.contains("open")) pop.classList.remove("open"); else openPop();
+  });
+  document.getElementById("doneBtn").addEventListener("click", function(){ pop.classList.remove("open"); });
+  document.getElementById("gq").addEventListener("input", function(){
+    var q = this.value.trim().toLowerCase();
+    tree.querySelectorAll(".row").forEach(function(r){
+      var hit = !q || (r.dataset.chip + r.textContent).toLowerCase().indexOf(q) >= 0;
+      r.style.display = hit ? "" : "none";
+    });
+  });
+  tree.querySelectorAll(".row:not(.dis)").forEach(function(r){
+    r.addEventListener("click", function(){
+      r.classList.toggle("on");
+      r.querySelector(".box").textContent = r.classList.contains("on") ? "✓" : "";
+      renderChips();
+    });
+  });
+
+  /* 就地新建子分组 */
+  var newSet = document.getElementById("newSet");
+  function startCreate(){
+    if(newSet.querySelector("input")) return;
+    newSet.textContent = "＋ ";
+    var inp = document.createElement("input");
+    inp.placeholder = "子分组名称，回车创建";
+    inp.addEventListener("keydown", function(ev){
+      if(ev.key === "Enter" && inp.value.trim()){
+        var row = document.createElement("div");
+        row.className = "row lv3 on";
+        row.dataset.id = "new-" + Date.now();
+        row.dataset.chip = "支付域 / 支付对账 / " + inp.value.trim();
+        row.dataset.vis = "team";
+        row.innerHTML = '<span class="box">✓</span><span class="nm">' + inp.value.trim()
+          + '</span><span class="cnt">0</span>';
+        row.addEventListener("click", function(){
+          row.classList.toggle("on");
+          row.querySelector(".box").textContent = row.classList.contains("on") ? "✓" : "";
+          renderChips();
+        });
+        tree.insertBefore(row, newSet);
+        newSet.textContent = "＋ 在「支付域」下新建子分组";
+        renderChips();
+      } else if(ev.key === "Escape"){
+        newSet.textContent = "＋ 在「支付域」下新建子分组";
+      }
+    });
+    newSet.appendChild(inp);
+    inp.focus();
+  }
+  newSet.addEventListener("click", startCreate);
+  document.getElementById("newBtn").addEventListener("click", startCreate);
+
+  /* 模块继承 ↔ 手动修改 */
+  var modSwitch = document.getElementById("modSwitch");
+  var modTag = document.getElementById("modTag");
+  modSwitch.addEventListener("click", function(){
+    var manual = modTag.classList.toggle("manual");
+    modTag.classList.toggle("inherit", !manual);
+    modTag.textContent = manual ? "已手动修改 · 不回写需求" : "继承自需求模块";
+    modSwitch.textContent = manual ? "恢复继承" : "手动修改";
+  });
+
+  renderChips();
+  if(/state=(picker|open)/.test(location.search)) openPop();
+})();
+</script>
+</div>
+<!-- FRAGMENT END -->
+</body>
+</html>

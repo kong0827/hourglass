@@ -16,9 +16,50 @@ import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, assocLinkHTML, avatarHTML, colMeta, colName, duePresetDate, elapsedText, fmtFull, fmtMinutesShort, fmtShortMD, fmtTs, iso, parseDate, priColor, priName, priTagHTML, syncColumns, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
+import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { loadBoard } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 import { openTaskTable } from "./manager-shared.js";
+
+registerHelp({
+  "mine.doneRate": {
+    title:"完成率",
+    rows:[
+      ["怎么算", "区间内完成的工作项数 ÷ 计划工作项数。", "ok"],
+      ["计划怎么来", "完成时间落在区间内的，加上截止日期落在区间内的（同一个工作项只算一次）；所以计划里可能包含早已完成、但截止日在本期的项。", "info"],
+      ["快照部分", "逾期、被阻塞与待处理是当前快照，不随「本月 / 近 30 天」切换。", "mute"]
+    ]
+  },
+  "mine.load": {
+    title:"成员负载",
+    rows:[
+      ["怎么算", "该成员在所选区间内的实际计时 ÷（区间工作日 × 每日 8h 容量），不是按未完成工作项的预估任务量算。", "ok"],
+      ["容量", "区间内周一至周五统一折算，不区分成员档期、请假或兼职比例。", "info"],
+      ["计时归入", "按计时开始日期落在区间内统计。", "mute"],
+      ["阈值", "超过 100% 为超出容量；90%–100% 为接近容量。", "warn"]
+    ]
+  },
+  "mine.stats": {
+    title:"统计条",
+    rows:[
+      ["范围", "只统计当前已载入的「我的工作」项；继续滚动会补载，数字随之变化，不是整个空间的全量。", "warn"],
+      ["共", "当前筛选后的全部项，含已完成和执行结束的项。", "ok"],
+      ["逾期 / 今天到期", "按截止日期与今天比较；已完成、执行结束的项不计入逾期，没有截止日期的项也不计入今天到期。", "info"],
+      ["被阻塞", "当前标记为阻塞的项，是此刻的快照。", "mute"],
+      ["未设截止", "未完成、执行未结束且没有截止日期的项。", "mute"]
+    ]
+  },
+  "mine.testQueue": {
+    title:"测试队列统计",
+    rows:[
+      ["范围", "当前已载入的测试队列，含你认领的项和项目内尚未认领的待测项，同样不是全量。", "warn"],
+      ["待领取", "没有测试负责人的项，不是「你没认领」的数量。", "info"],
+      ["测试中", "看板列处于测试中的项，不含已认领但还没开始的待测项。", "ok"],
+      ["最久等待", "最早一次提测时间到现在的时长；退回后重新提测会从新时间重新计算。", "mute"]
+    ]
+  }
+});
+initCaliberHelp();
 
 function wsNameById(id){
   for(var i = 0; i < rt.allWorkspaces.length; i++) if(rt.allWorkspaces[i].id === id) return rt.allWorkspaces[i].name;
@@ -683,7 +724,7 @@ function renderTeam(opts){
     var delta = Math.round((Number(h.deltaWeek) || 0) * 100);
     var html = '<div class="team-panel">' + teamRangeBarHTML(range) +
       '<section class="team-hero">' +
-        '<div class="th-main"><b>' + rate + '%</b><span>' + range.label + '完成率</span>' +
+        '<div class="th-main"><b>' + rate + '%</b><span class="caliber-label">' + range.label + '完成率' + caliberMarkHTML("mine.doneRate", false, "查看「完成率」口径") + '</span>' +
           '<em class="' + (delta >= 0 ? "up" : "down") + '" title="与前一等长周期比较">' +
             (delta >= 0 ? "↑ +" + delta : "↓ " + Math.abs(delta)) + '%</em></div>' +
         '<div class="th-grid">' +
@@ -717,7 +758,8 @@ function renderTeam(opts){
     } else {
       var members = workload.members || [];
       var capDays = Number(workload.rangeWorkdays) || 0;
-      html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3><span class="foot-note">' + range.label + '计时 / ' + capDays + ' 个工作日容量</span></div>' +
+      html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3>' + caliberMarkHTML("mine.load", false, "查看「成员负载」口径")
+        + '<span class="foot-note">' + range.label + '计时 / ' + capDays + ' 个工作日容量</span></div>' +
         (members.length ? '<div class="team-load">' + members.map(function(m){
           var pct = Math.round((Number(m.percent) || 0) * 100);
           var cls = pct > 100 ? "over" : (pct >= 90 ? "near" : "");
@@ -1064,7 +1106,8 @@ function renderMineTestStats(items){
     '<span class="mine-stat">待领取 <b>' + unclaimed + '</b></span>' +
     '<span class="mine-stat today">测试中 <b>' + testing + '</b></span>' +
     '<span class="mine-stat">最久等待 <b>' + esc(oldest ? elapsedText(oldest) : "—") + '</b></span>' +
-    '<span class="mine-stat-hint">含项目内尚未认领的待测队列 · 先到先得</span>';
+    '<span class="mine-stat-hint">含项目内尚未认领的待测队列 · 先到先得'
+      + caliberMarkHTML("mine.testQueue", false, "查看测试队列口径") + '</span>';
 }
 function renderMineTest(items){
   renderMineTestStats(items);
@@ -1154,7 +1197,8 @@ function renderMineStats(items){
     '<span class="mine-stat today">今天到期 <b>' + today + '</b></span>' +
     '<span class="mine-stat blocked">被阻塞 <b>' + blocked + '</b></span>' +
     '<span class="mine-stat">未设截止 <b>' + noDue + '</b></span>' +
-    '<span class="mine-stat-hint">统计基于已载入项 · 悬停行显示快捷操作</span>';
+    '<span class="mine-stat-hint">统计基于已载入项 · 悬停行显示快捷操作'
+      + caliberMarkHTML("mine.stats", false, "查看统计条口径") + '</span>';
 }
 function mineAnyGroupOpen(sections){
   if(state.mineGroup === "none") return false;

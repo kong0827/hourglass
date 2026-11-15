@@ -14,12 +14,96 @@ import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { loadView } from "../core/view-loader.js";
+import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { openMilestoneDetail } from "../lib/milestone-ui.js";
 import {
   colName, dayKey, demandNoText, fmtMinutesShort, fmtReleaseTime,
   releaseEnvironmentName, releasePlanNoText, releaseSnapshotHTML, taskVersionIds, typeBadgeHTML
 } from "../lib/format.js";
 import { openBranchById } from "./branches.js";
+
+registerHelp({
+  "version.actual": {
+    title:"已投入工时",
+    rows:[
+      ["包含什么", "版本当前绑定工作项的全部已结束计时 + 手工补记，未完成的工作项也计入。", "ok"],
+      ["范围", "与上方「版本工作项」同源，含首版上线前自动归入的折算项；其他版本或未绑定工作项不计。", "info"]
+    ]
+  },
+  "version.estimate": {
+    title:"预估工时",
+    rows:[
+      ["怎么算", "全部绑定工作项的预估相加，已完成与未完成都算；没填预估的按 0 计。", "ok"],
+      ["别拿它算剩余", "它是总量，不扣已投入，也不区分完成状态；看剩余请用「剩余预估」。", "info"]
+    ]
+  },
+  "version.remaining": {
+    title:"剩余预估",
+    rows:[
+      ["怎么算", "只累加未完成工作项的预估原值，已完成工作项不参与。", "ok"],
+      ["不扣已投入", "数字不会减去已发生的计时，已超预估的未完成项也不归零；它是「未完成项还挂着多少预估」，不是「还要再干多久」。", "warn"],
+      ["没填预估", "未完成但没填预估的工作项按 0 计，所以可能低估实际剩余。", "mute"]
+    ]
+  },
+  "version.variance": {
+    title:"整体偏差",
+    rows:[
+      ["怎么算", "（已完成工作项的实际 − 其预估）÷ 这些工作项的预估；±15% 内视为准确。", "ok"],
+      ["只算已完成", "未完成工作项不参与；已完成但没填预估的工作项也不参与。", "info"],
+      ["别和总数相减", "不能拿卡片的「已投入工时 − 预估工时」直接算这个百分比，两者范围不同。", "warn"]
+    ]
+  },
+  "version.onTime": {
+    title:"准时完成率",
+    rows:[
+      ["分母", "已完成工作项里填了截止日期的那些。", "ok"],
+      ["按时", "完成时间不晚于截止日期（含当天）即算按时。", "info"],
+      ["不参与", "没填截止日期或还没完成的工作项不计入分母。", "mute"],
+      ["边界", "「完成」指工作项流转到完成列，不等于该版本实际发布。", "warn"]
+    ]
+  },
+  "version.commit.scope": {
+    title:"冻结范围",
+    rows:[
+      ["怎么来", "开始开发时把当时绑定的工作项数与预估快照下来，之后一直以这份快照为准。", "ok"],
+      ["不回写", "工作项后来改了预估、换算或移动，都不会改这里；它回答「当初承诺了多少」。", "info"]
+    ]
+  },
+  "version.commit.done": {
+    title:"基线完成",
+    rows:[
+      ["怎么算", "基线内、当前仍绑定且已流转到完成列的工作项 ÷ 冻结范围。", "ok"],
+      ["分母含移出", "分母是冻结时的全部项，后来移出的仍在分母里，分子却不再有它，所以完成率可能到不了 100%。", "warn"],
+      ["新增不算", "启动后新增的工作项既不进分母、也不算进这里的完成数。", "mute"]
+    ]
+  },
+  "version.commit.added": {
+    title:"启动后新增",
+    rows:[
+      ["怎么算", "当前绑定、但基线快照里没有的工作项数；预估取当前值。", "ok"],
+      ["影响", "新增会抬高上方「预估工时」和「已投入」，但不改基线完成率的分母。", "info"]
+    ]
+  },
+  "version.commit.removed": {
+    title:"基线移出",
+    rows:[
+      ["怎么算", "基线里有、现在已不再绑定到该版本的工作项数。", "ok"],
+      ["预估取值", "显示的是冻结时的预估快照，不是这些工作项现在的预估。", "info"],
+      ["影响", "移出项仍占基线分母，但不再计入完成数，属于范围收缩。", "warn"]
+    ]
+  },
+  "version.workSplit": {
+    title:"工时拆分",
+    rows:[
+      ["合计", "所有绑定工作项的已结束计时 + 手工补记，未完成的工作项也计入。", "ok"],
+      ["测试窗口内", "计时日期落在该工作项「提测 → 测试结束」窗口内的分钟，且不超过它的实际工时。", "info"],
+      ["测试窗口外", "合计 − 窗口内：包含需求评审、设计、开发、联调、会议、运维等窗口外的全部计时，不只是写代码。", "info"],
+      ["按当前归属分组", "模块 / 负责人按工作项此刻的归属汇总，中途改模块或换负责人会把整段历史工时挪到新分组。", "warn"],
+      ["条形与百分比", "条形按最大项归一便于比长短，右侧百分比才是占合计的比例。", "mute"]
+    ]
+  }
+});
+initCaliberHelp();
 
 var TABS = [
   { key:"overview", label:"概览" },
@@ -33,7 +117,7 @@ var SORTS = [["default","风险优先"],["actual","实际工时"],["estimate","�
 var SORT_KEYS = SORTS.map(function(s){ return s[0]; });
 var STATUS_FILTERS = [["","全部状态"],["done","已完成"],["open","未完成"],["over","已逾期"],["pre","上线前归入"]];
 var TYPE_FILTERS = [["","全部类型"],["story","需求"],["task","任务"],["bug","缺陷"],["epic","史诗"]];
-var ROLL_DIMS = [["module","模块"],["owner","负责人"],["stage","阶段"]];
+var ROLL_DIMS = [["module","模块"],["owner","负责人"],["stage","计时窗口"]];
 var NONE = "__none__";
 /* 联动筛选：从关联实体（模块 / 分支 / 需求 / 阶段 / 负责人）点进来时落在这些字段上，
    与手工筛选共用同一份状态和同一串 hash，分享出去的链接能还原同一份明细 */
@@ -470,13 +554,18 @@ function emptyRow(cols, text){
 
 /* ==================== 概览 ==================== */
 
-function cell(value, label, tone, drill){
+function cell(value, label, tone, drill, help){
   var style = tone ? ' class="vd-' + tone + '"' : "";
+  var inner;
   if(drill){
-    return '<button type="button" class="pcell drillable" data-vd-drill="' + esc(drill) + '" title="在工作项页查看该口径明细">'
+    inner = '<button type="button" class="pcell drillable" data-vd-drill="' + esc(drill) + '" title="在工作项页查看该口径明细">'
       + '<b' + style + '>' + value + '</b><span>' + esc(label) + '</span></button>';
+  } else {
+    inner = '<div class="pcell"><b' + style + '>' + value + '</b><span>' + esc(label) + '</span></div>';
   }
-  return '<div class="pcell"><b' + style + '>' + value + '</b><span>' + esc(label) + '</span></div>';
+  if(!help) return inner;
+  return '<div class="vd-cell-wrap">' + inner
+    + caliberMarkHTML(help.key, !!help.warn, "查看「" + label + "」口径") + '</div>';
 }
 function overviewHTML(){
   var s = st.stat || {}, v = st.version || {};
@@ -484,11 +573,11 @@ function overviewHTML(){
     cell(st.tasks.length, "版本工作项", "", "all"),
     cell(num(s.doneCount), "已完成", "ok", "done"),
     cell(num(s.doingCount), "未完成", "", "open"),
-    cell(hours(s.workMinutes), "已投入工时", "", "logged"),
-    cell(hours(s.estimateMinutes), "预估工时", "", ""),
-    cell(hours(s.remainingMinutes), "剩余预估", "", "open"),
-    cell(pctText(s.deviationPct), "整体偏差", devTone(s.deviationPct), "deviation"),
-    cell(s.onTimePct === null || s.onTimePct === undefined ? "—" : s.onTimePct + "%", "准时完成率", "", "ontime")
+    cell(hours(s.workMinutes), "已投入工时", "", "logged", { key:"version.actual" }),
+    cell(hours(s.estimateMinutes), "预估工时", "", "", { key:"version.estimate" }),
+    cell(hours(s.remainingMinutes), "剩余预估", "", "open", { key:"version.remaining", warn:true }),
+    cell(pctText(s.deviationPct), "整体偏差", devTone(s.deviationPct), "deviation", { key:"version.variance", warn:true }),
+    cell(s.onTimePct === null || s.onTimePct === undefined ? "—" : s.onTimePct + "%", "准时完成率", "", "ontime", { key:"version.onTime" })
   ];
   var demandCount = num(s.demandCount);
   cells.push('<button type="button" class="pcell drillable" data-vd-tab="demands" title="查看排到该版本的需求">'
@@ -496,7 +585,8 @@ function overviewHTML(){
   var kpis = '<div class="pgrid vd-kpis">' + cells.join("") + '</div>'
     + '<p class="foot-note vd-caliber">范围 = 该版本绑定的工作项'
     + (st.tasks.some(function(t){ return t._pre; }) ? "，含首版上线前未绑版本的折算项（行内标注）" : "")
-    + '。偏差 =（实际 − 预估）÷ 预估，±15% 内视为准确；完成不等于实际发布。</p>';
+    + '。整体偏差只算已完成且有预估的工作项：偏差 =（这些工作项的实际 − 预估）÷ 预估，±15% 内视为准确；'
+    + '剩余预估是未完成工作项的预估之和，不扣已投入；完成不等于实际发布。</p>';
   return kpis
     + progressPanel()
     + commitmentPanel()
@@ -544,14 +634,16 @@ function commitmentPanel(){
     return panel("承诺基线", "", '<p class="hint">还没有基线。开始开发时会冻结当时的范围与预估，之后新增 / 移出都与它对比。</p>');
   }
   var rows = [
-    ["冻结范围", num(c.taskCount) + " 项", "预估 " + hours(c.estimateMinutes)],
-    ["基线完成", (c.donePct === null || c.donePct === undefined ? "—" : c.donePct + "%"), num(c.doneCount) + " 项已完成"],
-    ["启动后新增", num(c.addedCount) + " 项", c.addedEstimateMinutes ? "预估 " + hours(c.addedEstimateMinutes) : "无新增预估"],
-    ["基线移出", num(c.removedCount) + " 项", c.removedEstimateMinutes ? "预估 " + hours(c.removedEstimateMinutes) : "无移出预估"]
+    ["冻结范围", num(c.taskCount) + " 项", "预估 " + hours(c.estimateMinutes), "version.commit.scope", false],
+    ["基线完成", (c.donePct === null || c.donePct === undefined ? "—" : c.donePct + "%"), num(c.doneCount) + " 项已完成", "version.commit.done", true],
+    ["启动后新增", num(c.addedCount) + " 项", c.addedEstimateMinutes ? "预估 " + hours(c.addedEstimateMinutes) : "无新增预估", "version.commit.added", false],
+    ["基线移出", num(c.removedCount) + " 项", c.removedEstimateMinutes ? "预估 " + hours(c.removedEstimateMinutes) : "无移出预估", "version.commit.removed", true]
   ];
   var inner = '<div class="vd-cmp">' + rows.map(function(r, i){
     var tone = i === 2 && num(c.addedCount) ? " vd-warn-text" : (i === 3 && num(c.removedCount) ? " vd-bad-text" : "");
-    return '<div class="vd-cmp-cell"><span>' + esc(r[0]) + '</span><b class="' + tone.trim() + '">' + esc(r[1]) + '</b><small>' + esc(r[2]) + '</small></div>';
+    return '<div class="vd-cmp-cell"><span class="caliber-label">' + esc(r[0])
+      + caliberMarkHTML(r[3], r[4], "查看「" + r[0] + "」口径")
+      + '</span><b class="' + tone.trim() + '">' + esc(r[1]) + '</b><small>' + esc(r[2]) + '</small></div>';
   }).join("") + '</div>'
     + '<p class="foot-note">基线只快照一次' + (c.capturedAt ? "（" + esc(dateText(c.capturedAt)) + " 冻结）" : "")
     + '；预估变更不回写基线，新增 / 移出按当前绑定与基线的差集计算。</p>';
@@ -581,9 +673,9 @@ function rollupRows(){
     var dev = tasks.filter(function(t){ return devOf(t) > 0; });
     var test = tasks.filter(function(t){ return testOf(t) > 0; });
     return [
-      { key:"dev", kind:"stage", name:"开发", note:"预估 + 测试窗口外计时", color:"var(--info)", items:dev.length,
+      { key:"dev", kind:"stage", name:"测试窗口外", note:"预估 + 窗口外计时", color:"var(--info)", items:dev.length,
         minutes:dev.reduce(function(a, t){ return a + devOf(t); }, 0) },
-      { key:"test", kind:"stage", name:"测试", note:"测试窗口内计时", color:"var(--plum)", items:test.length,
+      { key:"test", kind:"stage", name:"测试窗口内", note:"窗口内计时", color:"var(--plum)", items:test.length,
         minutes:test.reduce(function(a, t){ return a + testOf(t); }, 0) }
     ];
   }
@@ -632,7 +724,7 @@ var LINK_META = {
   cat:{ field:"cat", icon:"tag", label:"模块", name:function(v){ return catName(v === NONE ? "" : v); } },
   branch:{ field:"branch", icon:"branch", label:"分支", name:branchName },
   demand:{ field:"demand", icon:"demand", label:"需求", name:demandLabel },
-  stage:{ field:"stage", icon:"clock", label:"阶段", name:function(v){ return v === "test" ? "测试计时" : "开发计时"; } }
+  stage:{ field:"stage", icon:"clock", label:"计时窗口", name:function(v){ return v === "test" ? "窗口内计时" : "窗口外计时"; } }
 };
 function linkedBarHTML(){
   var f = st.filters;
@@ -663,7 +755,7 @@ function entityChip(kind, id, label){
     + icon(m.icon, 11) + '<span>' + esc(label) + '</span></button>';
 }
 /* 负责人已经是筛选行里的下拉，不再重复做成联动 chip；其余四种来源才上联动条 */
-var LINK_LABEL = { cat:"模块", branch:"分支", demand:"需求", stage:"阶段", owner:"负责人" };
+var LINK_LABEL = { cat:"模块", branch:"分支", demand:"需求", stage:"计时窗口", owner:"负责人" };
 function linkBtn(kind, value, label){
   return '<button class="vd-funnel" type="button" data-vd-link="' + esc(kind + ":" + value) + '"'
     + ' title="把本页工作项联动到该' + esc(LINK_LABEL[kind]) + '：' + esc(label) + '" aria-label="按' + esc(label) + '联动筛选工作项">'
@@ -683,7 +775,7 @@ function rollupPanel(){
       return '<div class="vd-dist-row"><span class="vd-dist-name">'
         + '<i style="background:' + esc(r.color) + '"></i>'
         + '<button class="vd-dist-open" type="button" data-vd-link="' + esc(r.kind + ":" + r.key) + '"'
-        + ' title="看该' + esc(r.kind === "cat" ? "模块" : r.kind === "owner" ? "负责人" : "阶段") + '下的工作项明细">'
+        + ' title="看该' + esc(r.kind === "cat" ? "模块" : r.kind === "owner" ? "负责人" : "计时窗口") + '下的工作项明细">'
         + '<span>' + esc(r.name) + '</span>' + icon("chevronRight", 11) + '</button>'
         + (r.note ? '<small>' + esc(r.note) + '</small>' : "") + '</span>'
         + '<span class="vd-dist-bar" title="' + esc(r.name + " " + hours(r.minutes) + "，占合计 " + share + "%") + '">'
@@ -694,7 +786,8 @@ function rollupPanel(){
     : '<p class="hint">还没有已记工时，工时分布会在成员计时后出现。</p>';
   var s = st.stat || {};
   /* 条形按最大项归一便于横向比长短，右侧百分比是占合计：两个分母不同，脚注说清楚 */
-  var split = '<p class="foot-note">合计 ' + hours(s.workMinutes) + '（开发 ' + hours(s.devMinutes) + ' / 测试 ' + hours(s.testMinutes) + '）'
+  var split = '<p class="foot-note">合计 ' + hours(s.workMinutes) + '（窗口外 ' + hours(s.devMinutes) + ' / 窗口内 ' + hours(s.testMinutes) + '）'
+    + caliberMarkHTML("version.workSplit", true, "查看工时拆分口径")
     + (rows.length ? ' · 条形按最大项归一，百分比为占合计' : "") + '</p>';
   return panel("工时分布", seg, body + split);
 }
@@ -844,8 +937,8 @@ function scopeHTML(){
   var meta = '<span class="meta-right">' + rows.length + " / " + st.tasks.length + " 项 · 预估 " + hours(est) + " · 实际 " + hours(act) + '</span>';
   return scopeFiltersHTML() + panel("版本工作项", meta,
     tableWrap('<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th class="num">截止</th>'
-      + '<th class="num">预估</th><th class="num">实际</th><th class="num">开发</th><th class="num">测试</th>', body)
-    + '<p class="foot-note">点击行打开工作项详情抽屉；开发 / 测试按测试窗口拆分计时。</p>');
+      + '<th class="num">预估</th><th class="num">实际</th><th class="num">窗口外</th><th class="num">窗口内</th>', body)
+    + '<p class="foot-note">点击行打开工作项详情抽屉；窗口内 / 外按测试窗口（提测 → 测试结束）拆分计时，窗口外含评审、设计、开发、运维等。</p>');
 }
 
 /* ==================== 需求 ==================== */
@@ -1053,7 +1146,7 @@ function openDemand(id){
 }
 function jumpBoard(){
   /* 与版本卡下钻同一口径：清掉旧筛选，按当前项目 + 该版本过滤，已完成列放到全部历史。
-     看板有的筛选（关键词 / 模块 / 负责人 / 类型）一并带过去，没有的（分支 / 需求 / 阶段 / 状态）如实说明 */
+     看板有的筛选（关键词 / 模块 / 负责人 / 类型）一并带过去，没有的（分支 / 需求 / 计时窗口 / 状态）如实说明 */
   var f = st.filters, carried = [], left = [];
   state.q = f.q || ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = [];
   if(f.q){ carried.push("关键词"); }
@@ -1062,7 +1155,7 @@ function jumpBoard(){
   if(f.type){ state.types = [f.type]; carried.push("类型"); }
   if(f.branch) left.push("分支");
   if(f.demand) left.push("需求");
-  if(f.stage) left.push("阶段");
+  if(f.stage) left.push("计时窗口");
   if(f.status) left.push("状态");
   if(f.owner === NONE) left.push("未指派");
   if(f.cat === NONE) left.push("未指定模块");

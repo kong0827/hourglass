@@ -48,6 +48,10 @@
 .vd-kpis .pcell b.vd-ok{color:var(--success-fg);}
 .vd-kpis .pcell b.vd-warn-text{color:var(--warning-fg);}
 .vd-kpis .pcell b.vd-bad-text{color:var(--danger-fg);}
+/* 指标卡口径标记：按钮是 .pcell 本身的下钻入口，标记只能做兄弟节点，避免按钮嵌套 */
+.vd-kpis>.vd-cell-wrap{position:relative;display:flex;min-width:0;}
+.vd-cell-wrap>.pcell{flex:1 1 auto;min-width:0;padding-right:26px;}
+.vd-cell-wrap>.caliber-mark{position:absolute;top:6px;right:6px;z-index:1;}
 
 /* ---------- 范围进度 ---------- */
 .vd-progress{display:flex;align-items:center;gap:14px;}

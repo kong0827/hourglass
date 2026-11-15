@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>新建用例 v3 · 主次重排 · 原型</title>
+</head>
+<body>
+<!-- FRAGMENT START -->
+<div class="hg-wrap">
+<style>
+  .hg-wrap{
+    --bg-app:#F7F8FA; --surface:#FFF; --surface-sunken:#F2F4F7; --surface-line:#FBFCFD;
+    --border:#E4E7EC; --border-soft:#EEF0F3; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085; --text-4:#98A2B3;
+    --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE;
+    --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318; --danger-border:#FECDCA;
+    --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+    --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+    --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-family:var(--font);color:var(--text);background:#E9ECF1;font-size:13px;line-height:20px;
+    padding:24px;overflow:auto;
+  }
+  .hg-wrap *{box-sizing:border-box;margin:0;padding:0}
+  .hg-wrap [hidden]{display:none!important}
+  .frame{width:1392px}
+  .app{position:relative;height:1200px;border-radius:16px;overflow:hidden;background:var(--bg-app);
+       border:1px solid var(--border);box-shadow:var(--shadow-md);display:flex}
+
+  .rail{width:64px;background:#111827;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:6px;flex:none}
+  .rail .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#2563EB,#7A5AF8);margin-bottom:12px}
+  .rail .ri{width:40px;height:36px;border-radius:9px;display:grid;place-items:center;color:#98A2B3;font-size:11px}
+  .rail .ri.on{background:#1F2937;color:#FFF}
+  .gside{width:168px;background:var(--surface);border-right:1px solid var(--border);padding:16px 10px;flex:none}
+  .gside h4{font-size:11px;letter-spacing:.06em;color:var(--text-3);font-weight:600;margin:14px 8px 6px}
+  .gside .nav{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2)}
+  .gside .nav.on{background:var(--primary-soft);color:var(--primary-hover);font-weight:600}
+  .gside .dot{width:6px;height:6px;border-radius:2px;background:currentColor;opacity:.45}
+
+  .list{flex:1;min-width:0;padding:16px 18px;overflow:hidden}
+  .list-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .list-head b{font-size:15px}
+  .list-head small{color:var(--text-3)}
+  .case{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);
+        border-radius:10px;padding:10px 12px;margin-bottom:8px}
+  .case .no{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--text-3);width:52px;flex:none}
+  .case .t{font-weight:500;font-size:12.5px}
+  .case .m{color:var(--text-3);font-size:11.5px;margin-top:2px}
+  .scrim{position:absolute;inset:0;background:rgba(16,24,40,.32)}
+
+  /* ---------------- 抽屉 ---------------- */
+  .drawer{position:absolute;top:0;right:0;bottom:0;width:700px;background:var(--surface);
+          box-shadow:var(--shadow-xl);display:flex;flex-direction:column}
+  .dw-head{padding:18px 28px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
+  .dw-head h2{font-size:18px;line-height:26px;font-weight:600;letter-spacing:-.01em}
+  .dw-ctx{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;line-height:18px;color:var(--text-3);margin-top:7px}
+  .dw-ctx .ro{display:inline-flex;align-items:center;gap:5px;background:var(--surface-sunken);border:1px solid var(--border-soft);
+              border-radius:6px;padding:1px 7px;color:var(--text-2);font-weight:500}
+  .dw-ctx .sep{color:var(--border-strong)}
+  .dw-ctx b{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums}
+  .dw-x{margin:-6px -8px 0 auto;width:36px;height:36px;border:0;background:transparent;color:var(--text-3);
+        font-size:19px;line-height:1;border-radius:8px;cursor:pointer;flex:none}
+  .dw-x:hover{background:var(--surface-sunken);color:var(--text)}
+  .dw-x:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft),0 0 0 1px var(--primary)}
+
+  .dw-body{flex:1;min-height:0;overflow:auto;padding:16px 28px 20px}
+  .sec{margin-bottom:24px}
+  .sec:last-of-type{margin-bottom:8px}
+  .sec-h{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .sec-h .num{font:600 10.5px/1 ui-monospace,Menlo,monospace;color:var(--text-3);background:var(--surface-sunken);
+              border-radius:5px;padding:4px 5px;letter-spacing:.03em;font-variant-numeric:tabular-nums}
+  .sec-h h3{font-size:13px;line-height:20px;font-weight:600;letter-spacing:.005em}
+  .sec-h .meta{margin-left:auto;font-size:11px;line-height:16px;color:var(--text-3);font-weight:500}
+  .sec-h .meta.must{color:var(--text-2)}
+
+  .field{margin-bottom:16px}
+  .field:last-child{margin-bottom:0}
+  .rowlabel{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .rowlabel label,.field > label{font-size:12px;line-height:18px;font-weight:600;color:var(--text-2)}
+  .req{color:var(--danger);font-weight:600;margin-left:3px}
+  .help{font-size:11.5px;line-height:18px;color:var(--text-3);margin-top:6px}
+  .subline{display:flex;align-items:flex-start;gap:12px;margin-top:6px}
+  .subline .help{margin-top:0;flex:1}
+  .count{font-size:11px;line-height:18px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  .inp{width:100%;height:44px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);
+       padding:0 14px;font:inherit;font-size:13px;color:var(--text);outline:none}
+  .inp::placeholder{color:var(--text-4)}
+  .inp:hover{border-color:var(--border-strong)}
+  .inp:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .inp.title{height:46px;font-size:15px;font-weight:500;letter-spacing:.005em}
+  .inp.bad{border-color:var(--danger-border);background:var(--danger-soft)}
+  .inp.bad:focus{border-color:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+
+  .demand{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;border:1px solid var(--primary-border);
+          background:var(--primary-soft);border-radius:var(--r-md);cursor:pointer}
+  .demand:hover{border-color:#9FBDFC}
+  .demand:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft),0 0 0 1px var(--primary)}
+  .demand .dic{width:24px;height:24px;border-radius:6px;background:#FFF;border:1px solid var(--primary-border);
+               display:grid;place-items:center;font:700 10px/1 var(--font);color:var(--primary-hover);flex:none}
+  .demand .dname{font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .demand .dstate{font-size:11px;line-height:18px;color:var(--primary-hover);background:#FFF;
+                  border:1px solid var(--primary-border);border-radius:var(--r-pill);padding:0 7px;flex:none}
+  .demand .dcaret{margin-left:auto;color:var(--text-3);display:inline-flex;flex:none}
+  .demand.empty{background:var(--surface);border:1px dashed var(--border-strong)}
+  .demand.empty:hover{background:var(--surface-line);border-color:var(--primary)}
+  .demand.empty .dic{background:var(--surface-sunken);border-color:var(--border);color:var(--text-3)}
+  .demand.empty .dname{color:var(--text-2);font-weight:400}
+  .demand.empty .dstate{display:none}
+
+  .nest{margin:12px 0 0 12px;padding:2px 0 2px 14px;border-left:2px solid var(--border);
+        display:flex;flex-direction:column;gap:12px}
+  .nest-row{display:flex;align-items:flex-start;gap:10px}
+  .nest-row .nl{width:64px;flex:none;font-size:12px;line-height:26px;color:var(--text-3);font-weight:500}
+  .nest-row .nv{flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:26px}
+  .mod{font-size:13px;font-weight:500;line-height:26px}
+  .tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;font-size:11px;font-weight:500}
+  .tag.ok{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+  .tag.warn{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+  .linkbtn{border:0;background:transparent;padding:0 2px;font:inherit;font-size:12px;line-height:26px;
+           color:var(--primary-hover);font-weight:500;cursor:pointer;border-radius:4px}
+  .linkbtn:hover{text-decoration:underline}
+  .linkbtn:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft),0 0 0 1px var(--primary)}
+  .dis{font-size:12px;line-height:26px;color:var(--text-4);cursor:not-allowed}
+
+  .chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 4px 0 8px;border-radius:6px;
+        background:#FFF;border:1px solid var(--border);font-size:12px;color:var(--text)}
+  .chip .vis{font-size:11px;color:var(--text-3)}
+  .chip .cx{width:18px;height:18px;border:0;border-radius:4px;background:transparent;color:var(--text-3);
+            cursor:pointer;font-size:12px;line-height:1;padding:0}
+  .chip .cx:hover{background:var(--surface-sunken);color:var(--text)}
+  .chip .cx:focus-visible{outline:none;box-shadow:0 0 0 2px var(--primary)}
+  .addchip{height:26px;border:1px dashed var(--border-strong);background:transparent;border-radius:6px;
+           color:var(--text-2);font:inherit;font-size:12px;padding:0 9px;cursor:pointer}
+  .addchip:hover{border-color:var(--primary);color:var(--primary-hover);background:var(--primary-soft)}
+  .addchip:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft),0 0 0 1px var(--primary)}
+
+  .attrs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .attr label,.attr .alab{display:block;font-size:11px;line-height:16px;font-weight:500;color:var(--text-3);margin-bottom:6px}
+  .sel{width:100%;height:38px;border:1px solid var(--border);border-radius:9px;background:var(--surface);
+       padding:0 10px;font:inherit;font-size:13px;color:var(--text);outline:none;appearance:none;
+       background-image:linear-gradient(45deg,transparent 50%,#667085 50%),linear-gradient(135deg,#667085 50%,transparent 50%);
+       background-position:calc(100% - 15px) 17px,calc(100% - 10px) 17px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+  .sel:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;height:38px;padding:3px;background:var(--surface-sunken);
+       border:1px solid var(--border-soft);border-radius:9px}
+  .seg button{border:0;background:transparent;border-radius:7px;font:500 12px var(--font);color:var(--text-2);cursor:pointer;
+              font-variant-numeric:tabular-nums}
+  .seg button:hover{color:var(--text)}
+  .seg button.on{background:#FFF;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.1)}
+  .seg button:focus-visible{outline:none;box-shadow:0 0 0 2px var(--primary)}
+
+  .steps{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:#FFF}
+  .steps.invalid{border-color:var(--danger-border)}
+  .shead,.srow{display:grid;grid-template-columns:34px minmax(0,1fr) minmax(0,1fr) 30px;align-items:center}
+  .shead{height:30px;background:var(--surface-line);border-bottom:1px solid var(--border-soft);
+         font-size:11px;line-height:16px;font-weight:500;color:var(--text-3)}
+  .shead span{padding-left:12px}
+  .srow{border-bottom:1px solid var(--border-soft);min-height:44px}
+  .srow:last-child{border-bottom:0}
+  .sn{font-size:11px;color:var(--text-3);text-align:center;font-variant-numeric:tabular-nums}
+  .srow input{width:100%;height:44px;border:0;border-left:1px solid var(--border-soft);background:transparent;
+              padding:0 12px;font:inherit;font-size:13px;color:var(--text);outline:none}
+  .srow input::placeholder{color:var(--text-4)}
+  .srow input:focus{background:#F8FAFF;box-shadow:inset 0 0 0 2px var(--primary)}
+  .srow input.bad{background:var(--danger-soft);box-shadow:inset 0 -2px 0 var(--danger)}
+  .del{width:24px;height:24px;margin:0 auto;border:0;border-radius:5px;background:transparent;color:var(--text-4);
+       cursor:pointer;font-size:14px;line-height:1;opacity:0}
+  .srow:hover .del,.del:focus-visible{opacity:1}
+  .del:hover{background:var(--danger-soft);color:var(--danger-fg)}
+  .del:focus-visible{outline:none;box-shadow:0 0 0 2px var(--primary)}
+  .stepfoot{display:flex;align-items:center;gap:4px;margin-top:8px}
+  .stepfoot .count{margin-left:auto}
+  .smbtn{height:28px;padding:0 8px;border:1px solid transparent;border-radius:7px;background:transparent;
+         color:var(--text-2);font:inherit;font-size:12px;font-weight:500;cursor:pointer}
+  .smbtn:hover{background:var(--surface-sunken);color:var(--text)}
+  .smbtn:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft),0 0 0 1px var(--primary)}
+
+  .ferr{display:flex;gap:6px;align-items:flex-start;margin-top:8px;font-size:12px;line-height:18px;color:var(--danger-fg)}
+  .ferr .ei2{width:14px;height:14px;border-radius:50%;background:var(--danger);color:#FFF;
+             font:700 9px/14px var(--font);text-align:center;flex:none;margin-top:2px}
+
+  .more{border:1px solid var(--border-soft);border-radius:var(--r-md);background:var(--surface-line)}
+  .more[open]{background:#FFF;border-color:var(--border)}
+  .more summary{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;cursor:pointer;
+                font-size:12.5px;font-weight:500;list-style:none}
+  .more summary::-webkit-details-marker{display:none}
+  .more summary:hover{color:var(--primary-hover)}
+  .more summary:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft);border-radius:9px}
+  .more .chev{color:var(--text-3);display:inline-flex;transition:transform .15s ease}
+  .more[open] .chev{transform:rotate(90deg)}
+  .more summary .meta{margin-left:auto;font-size:11px;color:var(--text-3);font-weight:400}
+  .more-body{padding:2px 12px 14px;display:grid;gap:14px}
+  .ta{width:100%;border:1px solid var(--border);border-radius:9px;background:#FFF;padding:9px 12px;
+      font:inherit;font-size:13px;line-height:20px;color:var(--text);outline:none;resize:none}
+  .ta:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .ta::placeholder{color:var(--text-4)}
+
+  .dw-foot{border-top:1px solid var(--border);padding:12px 28px;display:flex;align-items:center;gap:8px;background:var(--surface)}
+  .save-note{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3)}
+  .save-note .dot{width:6px;height:6px;border-radius:50%;background:#12B76A;flex:none}
+  .dw-foot .grow{flex:1}
+  .btn{height:36px;padding:0 14px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);
+       color:var(--text);font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--surface-line)}
+  .btn:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft),0 0 0 1px var(--primary)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#FFF}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn.primary[disabled]{background:#B9CDFB;border-color:#B9CDFB;color:#FFF;cursor:not-allowed}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--text-2)}
+  .btn.ghost:hover{background:var(--surface-sunken);color:var(--text)}
+
+  .errsum{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--danger-border);background:var(--danger-soft);
+          border-radius:var(--r-md);padding:10px 12px;margin-bottom:18px}
+  .errsum .ei{width:18px;height:18px;border-radius:50%;background:var(--danger);color:#FFF;
+              font:700 11px/18px var(--font);text-align:center;flex:none}
+  .errsum b{font-size:12.5px;line-height:18px;color:var(--danger-fg);display:block}
+  .errsum .elinks{display:flex;gap:14px;margin-top:3px;flex-wrap:wrap}
+  .errsum .elinks button{border:0;background:transparent;padding:0;font:inherit;font-size:12px;line-height:18px;
+                         color:var(--danger-fg);text-decoration:underline;cursor:pointer}
+  .errsum .elinks button:focus-visible{outline:none;box-shadow:0 0 0 2px #FFF,0 0 0 4px var(--danger)}
+
+  /* ---------------- 下方说明 ---------------- */
+  .below{display:grid;grid-template-columns:860px 508px;gap:24px;margin-top:16px;align-items:start}
+  .card{background:#FFF;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-md);overflow:hidden}
+  .card h3{font-size:13px;line-height:20px;padding:13px 16px;border-bottom:1px solid var(--border);
+           display:flex;align-items:center;gap:8px;font-weight:600}
+  .card h3 .sub{font-weight:400;color:var(--text-3);font-size:11.5px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border-soft);vertical-align:top;
+        font-size:11.5px;line-height:17px}
+  th{background:var(--surface-sunken);color:var(--text-3);font-weight:600;font-size:11px;white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  td b{font-weight:600}
+  .rule{display:block;color:var(--text-3);font-size:10.5px;line-height:15px;margin-top:1px}
+  .tdim{color:var(--text-3)}
+  .hl{background:#FFFCF5}
+  .tier{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:5px;font-size:10.5px;
+        font-weight:600;white-space:nowrap}
+  .tier.p0{background:var(--primary);color:#FFF}
+  .tier.p1{background:var(--primary-soft);color:var(--primary-hover);border:1px solid var(--primary-border)}
+  .tier.p2{background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border)}
+  .tier.p3{background:#FFF;color:var(--text-3);border:1px dashed var(--border-strong)}
+  .dec{padding:4px 16px 14px}
+  .dec .item{padding:10px 0;border-bottom:1px dashed var(--border)}
+  .dec .item:last-child{border-bottom:0}
+  .dec h5{font-size:12px;line-height:18px;display:flex;gap:7px;align-items:center;margin-bottom:4px;font-weight:600}
+  .dec .num{width:18px;height:18px;border-radius:50%;background:var(--primary-soft);color:var(--primary-hover);
+            font-size:11px;font-weight:700;display:grid;place-items:center;flex:none}
+  .dec p{font-size:11.5px;color:var(--text-2);line-height:18px}
+  .dec p b{font-weight:600;color:var(--text)}
+  .states{padding:14px 16px;display:grid;gap:14px}
+  .states .st{display:grid;gap:6px}
+  .states .demo{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:8px;
+                border:1px solid var(--border);font-size:12px;color:var(--text-2);width:fit-content;min-width:220px}
+  .states .demo.readonly{background:var(--surface-sunken);border-color:var(--border-soft);color:var(--text-2)}
+  .states .demo.disabled{background:#FFF;color:var(--text-4)}
+  .states .demo.bad{border-color:var(--danger-border);background:var(--danger-soft);color:var(--danger-fg);
+                    box-shadow:inset 0 -2px 0 var(--danger)}
+  .states .demo .lock{font-size:11px}
+  .states p{font-size:11.5px;line-height:18px;color:var(--text-3)}
+  .states p b{color:var(--text);font-weight:600}
+  @media (prefers-reduced-motion:reduce){.more .chev{transition:none}}
+  @media (max-width:1240px){.frame{width:100%}.below{grid-template-columns:1fr}}
+</style>
+
+<div class="frame">
+<div class="app">
+  <div class="rail">
+    <div class="logo"></div>
+    <div class="ri">我的</div><div class="ri">需求</div><div class="ri on">项目</div>
+    <div class="ri">工作</div><div class="ri">测试</div>
+  </div>
+  <aside class="gside">
+    <h4>规划</h4>
+    <div class="nav"><i class="dot"></i>需求池</div>
+    <div class="nav on"><i class="dot"></i>项目</div>
+    <div class="nav"><i class="dot"></i>版本</div>
+    <h4>交付</h4>
+    <div class="nav"><i class="dot"></i>工作项</div>
+    <div class="nav"><i class="dot"></i>文档</div>
+    <div class="nav"><i class="dot"></i>测试</div>
+    <h4>洞察</h4>
+    <div class="nav"><i class="dot"></i>报表</div>
+  </aside>
+  <div class="list">
+    <div class="list-head"><b>用例</b><small>支付中台 · 共 14 条</small></div>
+    <div class="case"><span class="no">TC-031</span><div><div class="t">回调幂等：重复通知只入账一次</div><div class="m">支付回调 · P0 · 通过</div></div></div>
+    <div class="case"><span class="no">TC-032</span><div><div class="t">回调失败重试：最多 5 次</div><div class="m">支付回调 · P1 · 失败</div></div></div>
+    <div class="case"><span class="no">TC-033</span><div><div class="t">对账差异：T+1 自动补单</div><div class="m">支付对账 / 差异补单 · P1 · 未执行</div></div></div>
+    <div class="case"><span class="no">TC-034</span><div><div class="t">退款金额与手续费拆分</div><div class="m">退款 · P1 · 通过</div></div></div>
+    <div class="case"><span class="no">TC-036</span><div><div class="t">支付渠道降级到备用通道</div><div class="m">渠道网关 · P0 · 通过</div></div></div>
+    <div class="case"><span class="no">TC-038</span><div><div class="t">重复关单幂等</div><div class="m">订单 · P2 · 通过</div></div></div>
+    <div class="case"><span class="no">TC-039</span><div><div class="t">金额精度：0.01 边界</div><div class="m">退款 · P1 · 失败</div></div></div>
+    <div class="case"><span class="no">TC-041</span><div><div class="t">银行渠道对账文件解析</div><div class="m">支付对账 · P1 · 通过</div></div></div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="drawer" aria-label="新建用例">
+    <header class="dw-head">
+      <div style="min-width:0">
+        <h2>新建用例</h2>
+        <p class="dw-ctx">
+          <span class="ro">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#475467" stroke-width="1.6" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></svg>
+            支付中台 · 只读
+          </span>
+          <span class="sep">·</span>
+          <span>保存后编号 <b>TC-045</b></span>
+          <span class="sep">·</span>
+          <span>草稿仅自己可见</span>
+        </p>
+      </div>
+      <button class="dw-x" type="button" aria-label="关闭新建用例">×</button>
+    </header>
+
+    <div class="dw-body" id="dwBody">
+      <div class="errsum" id="errSum" role="alert" hidden>
+        <span class="ei">!</span>
+        <div>
+          <b id="errSumT">2 处还需要处理</b>
+          <div class="elinks" id="errLinks"></div>
+        </div>
+      </div>
+
+      <!-- 01 主信息 -->
+      <section class="sec">
+        <div class="sec-h"><span class="num">01</span><h3>这条用例验证什么</h3><span class="meta must">必填 · 1 项</span></div>
+        <div class="field">
+          <div class="rowlabel"><label for="caseTitle">用例标题<span class="req">*</span></label></div>
+          <input id="caseTitle" class="inp title" type="text" autofocus aria-required="true"
+                 aria-describedby="titleHelp titleErr" value="回调幂等：重复通知只入账一次" />
+          <div class="subline">
+            <p class="help" id="titleHelp">写成「对象 + 条件 + 预期」，执行的人不用回头问。</p>
+            <span class="count" id="titleCount">21 / 120</span>
+          </div>
+          <p class="ferr" id="titleErr" aria-live="polite" hidden><span class="ei2">!</span>请填写用例标题，执行和缺陷回链都靠它识别。</p>
+        </div>
+      </section>
+
+      <!-- 02 追溯 -->
+      <section class="sec">
+        <div class="sec-h"><span class="num">02</span><h3>关联需求，带出模块与工作项</h3><span class="meta">建议填写</span></div>
+        <div class="field">
+          <div class="rowlabel">
+            <label for="demandBox">关联需求</label>
+            <button class="linkbtn" type="button" id="demandClear" style="font-size:11.5px;color:var(--text-3)">暂不关联</button>
+          </div>
+          <div class="demand" id="demandBox" role="button" tabindex="0" aria-label="D M 12 支付回调幂等改造，点击更换需求">
+            <span class="dic">DM</span>
+            <span class="dname">DM-12 支付回调幂等改造</span>
+            <span class="dstate">评审中</span>
+            <span class="dcaret">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.8 6 7.8 9 4.8"/></svg>
+            </span>
+          </div>
+          <div class="demand empty" id="demandEmpty" role="button" tabindex="0" hidden aria-label="选择本项目需求">
+            <span class="dic">＋</span>
+            <span class="dname">选择「支付中台」下的需求</span>
+            <span class="dcaret">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.8 6 7.8 9 4.8"/></svg>
+            </span>
+          </div>
+          <p class="help" id="demandHelp">候选只列本项目需求；选中后模块自动继承，工作项从该需求下挑选。不关联也能保存，覆盖页可补。</p>
+        </div>
+
+        <div class="nest" id="nestPicked">
+          <div class="nest-row">
+            <span class="nl">项目模块</span>
+            <div class="nv">
+              <span class="mod" id="modName">支付回调</span>
+              <span class="tag ok" id="modTag">继承自需求</span>
+              <button class="linkbtn" type="button" id="modSwitch">手动修改</button>
+              <button class="linkbtn" type="button" id="modAdd">＋ 子目录</button>
+            </div>
+          </div>
+          <div class="nest-row">
+            <span class="nl">验证工作项</span>
+            <div class="nv">
+              <span class="chip">WI-231 回调重试改造<button class="cx" type="button" aria-label="移除工作项 WI-231">×</button></span>
+              <span class="chip">WI-234 幂等记录表<button class="cx" type="button" aria-label="移除工作项 WI-234">×</button></span>
+              <button class="addchip" type="button">＋ 选择</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="nest" id="nestEmpty" hidden>
+          <div class="nest-row">
+            <span class="nl">项目模块</span>
+            <div class="nv">
+              <button class="addchip" type="button">选择模块</button>
+              <span class="tag warn">未继承</span>
+            </div>
+          </div>
+          <div class="nest-row">
+            <span class="nl">验证工作项</span>
+            <div class="nv"><span class="dis" aria-disabled="true">先选需求，再从该需求下挑工作项</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 03 分组 -->
+      <section class="sec">
+        <div class="sec-h"><span class="num">03</span><h3>放进哪些分组</h3><span class="meta">选填 · 可多归属</span></div>
+        <div class="chips">
+          <span class="chip"># 支付回调<span class="vis">团队</span><button class="cx" type="button" aria-label="移出分组 支付回调">×</button></span>
+          <span class="chip"># 核心冒烟<span class="vis">仅自己</span><button class="cx" type="button" aria-label="移出分组 核心冒烟">×</button></span>
+          <button class="addchip" type="button">＋ 选择分组</button>
+          <button class="linkbtn" type="button">新建分组</button>
+        </div>
+        <p class="help">分组只决定「在哪能看到」，不改用例归属；动态分组按规则自动收录，不能手工加入。</p>
+      </section>
+
+      <!-- 04 属性 -->
+      <section class="sec">
+        <div class="sec-h"><span class="num">04</span><h3>分类属性</h3><span class="meta">都有默认值，不改也能保存</span></div>
+        <div class="attrs">
+          <div class="attr">
+            <label for="caseType">用例类型</label>
+            <select id="caseType" class="sel">
+              <option selected>功能测试</option><option>接口测试</option><option>性能测试</option>
+              <option>安全测试</option><option>兼容性</option><option>其他</option>
+            </select>
+          </div>
+          <div class="attr">
+            <span class="alab" id="priLab">优先级</span>
+            <div class="seg" role="group" aria-labelledby="priLab">
+              <button type="button" aria-pressed="false">P0</button>
+              <button type="button" class="on" aria-pressed="true">P1</button>
+              <button type="button" aria-pressed="false">P2</button>
+              <button type="button" aria-pressed="false">P3</button>
+            </div>
+          </div>
+          <div class="attr">
+            <label for="caseStage">适用阶段</label>
+            <select id="caseStage" class="sel">
+              <option>冒烟</option><option selected>系统测试</option><option>回归</option><option>验收</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- 05 步骤 -->
+      <section class="sec">
+        <div class="sec-h"><span class="num">05</span><h3>怎么测：步骤与预期</h3><span class="meta must">必填 · 至少 1 行</span></div>
+        <div class="steps" id="steps">
+          <div class="shead"><span>#</span><span>操作步骤</span><span>预期结果</span><span></span></div>
+          <div id="stepList">
+            <div class="srow">
+              <span class="sn">1</span>
+              <input value="调用下单接口，取到支付单号" aria-label="第 1 步操作步骤" />
+              <input value="返回成功，订单状态为待支付" aria-label="第 1 步预期结果" />
+              <button class="del" type="button" aria-label="删除第 1 步">×</button>
+            </div>
+            <div class="srow">
+              <span class="sn">2</span>
+              <input value="把同一回调通知重复推送 3 次" aria-label="第 2 步操作步骤" />
+              <input value="仅入账一次，重复请求仍返回成功" aria-label="第 2 步预期结果" />
+              <button class="del" type="button" aria-label="删除第 2 步">×</button>
+            </div>
+            <div class="srow">
+              <span class="sn">3</span>
+              <input value="查询账户流水与幂等记录表" aria-label="第 3 步操作步骤" />
+              <input value="只有一条入账记录，无重复流水" aria-label="第 3 步预期结果" />
+              <button class="del" type="button" aria-label="删除第 3 步">×</button>
+            </div>
+          </div>
+        </div>
+        <div class="stepfoot">
+          <button class="smbtn" type="button" id="addStep">＋ 添加步骤</button>
+          <button class="smbtn" type="button">从模板插入</button>
+          <span class="count" id="stepCount">3 行</span>
+        </div>
+        <p class="ferr" id="stepErr" aria-live="polite" hidden><span class="ei2">!</span><span id="stepErrT"></span></p>
+      </section>
+
+      <!-- 更多 -->
+      <details class="more" id="more">
+        <summary><span class="chev">
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg>
+        </span>更多字段<span class="meta">前置条件 · 关键词 · 选填</span></summary>
+        <div class="more-body">
+          <div class="field">
+            <label for="preCond">前置条件</label>
+            <textarea id="preCond" class="ta" rows="2" placeholder="例如：商户已开通回调，幂等记录表为空">商户已开通支付回调，回调地址可访问；幂等记录表为空。</textarea>
+          </div>
+          <div class="field">
+            <label for="keywords">关键词</label>
+            <input id="keywords" class="inp" style="height:38px" placeholder="用逗号分隔，便于搜索" />
+            <p class="help">多数用例不填这两项，所以默认收起；执行需要时再补。</p>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <footer class="dw-foot">
+      <span class="save-note"><i class="dot"></i>离开会自动保留草稿</span>
+      <span class="grow"></span>
+      <button class="btn ghost" type="button">取消</button>
+      <button class="btn" type="button" id="draftBtn">保存为草稿</button>
+      <button class="btn primary" type="button" id="saveBtn">保存</button>
+    </footer>
+  </section>
+</div>
+
+<div class="below">
+  <div class="card">
+    <h3>字段优先级 <span class="sub">为什么是这个顺序：先能认出这条用例，再能追溯，最后才是分类与正文</span></h3>
+    <table>
+      <thead>
+        <tr><th style="width:88px">层级</th><th style="width:186px">字段</th><th style="width:236px">放在哪、做成什么</th><th>理由</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tier p0">主 · 必填</span></td>
+          <td><b>用例标题</b></td>
+          <td>首屏第一行，46px 高、15px 字，自动聚焦</td>
+          <td>执行、覆盖、缺陷回链都靠它辨认；先写它，思路不被打断。</td>
+        </tr>
+        <tr>
+          <td><span class="tier p1">次 · 建议</span></td>
+          <td><b>关联需求</b></td>
+          <td>标题下方整行选择器，选中后蓝底高亮</td>
+          <td>决定覆盖矩阵口径与工作项候选。比模块更靠前——模块是从它继承来的。</td>
+        </tr>
+        <tr>
+          <td><span class="tier p1">次 · 派生</span></td>
+          <td>项目模块 / 验证工作项</td>
+          <td>缩进在需求下，用一条竖线连成支线，不再各占一个字段</td>
+          <td>两者都依附需求：模块可继承、工作项只能在需求内选。单独摆一个模块框，会诱导用户先选模块再发现需求，顺序倒置。</td>
+        </tr>
+        <tr>
+          <td><span class="tier p2">组织</span></td>
+          <td><b>分组</b></td>
+          <td>单行 chips，可多选，行内可删</td>
+          <td>回答「在哪能看到」，不改用例本身；放在属性之前，因为它是导航而不是分类。</td>
+        </tr>
+        <tr>
+          <td><span class="tier p2">属性</span></td>
+          <td>类型 / 优先级 / 阶段</td>
+          <td>三列一行；优先级用四段控件，其余用下拉</td>
+          <td>三者都有默认值，不改也能存；并排后视线只在一条水平线上移动。</td>
+        </tr>
+        <tr>
+          <td><span class="tier p2">正文</span></td>
+          <td><b>步骤 + 预期</b></td>
+          <td>两列对齐的表，列头常驻，行内可删</td>
+          <td>唯一成对出现的结构，用表而不是两个 textarea；出错能落到具体某一行某一列。</td>
+        </tr>
+        <tr>
+          <td><span class="tier p3">折叠</span></td>
+          <td>前置条件 / 关键词</td>
+          <td>「更多字段」默认收起，展开后才占高度</td>
+          <td>多数用例不填；默认收起让前五项在首屏内看完（渐进披露）。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>排版与交互规范 <span class="sub">UI/UX Pro Max 规则在本原型的落地</span></h3>
+    <table>
+      <thead><tr><th style="width:158px">规则</th><th>本原型</th></tr></thead>
+      <tbody>
+        <tr><td><b>间距节奏</b><span class="rule">§5 spacing-scale</span></td><td>4 / 8 / 12 / 16 / 24：字段内 8，字段间 16，区块间 24。</td></tr>
+        <tr><td><b>字阶</b><span class="rule">§6 font-scale</span></td><td>18 抽屉标题 · 15 标题输入 · 13 控件值 · 12 标签 · 11 徽标与辅助。</td></tr>
+        <tr><td><b>字重层次</b><span class="rule">§6 weight-hierarchy</span></td><td>600 区块标题与字段标签，500 控件值，400 说明文字。</td></tr>
+        <tr><td><b>对比度</b><span class="rule">§6 color-accessible-pairs</span></td><td>正文 #475467（7.5:1）、辅助 #667085（4.9:1）、主色 #2563EB（5.2:1），均 ≥ 4.5:1。</td></tr>
+        <tr><td><b>可见标签</b><span class="rule">§8 input-labels</span></td><td>每个字段都有 label，占位符只放示例，不当标签用。</td></tr>
+        <tr><td><b>必填标识</b><span class="rule">§8 required-indicators</span></td><td>标题旁 <b>*</b>，区块右侧写明「必填 · 1 项」，不只靠红色。</td></tr>
+        <tr><td><b>错误就近</b><span class="rule">§8 error-placement</span></td><td>错误在字段正下方；步骤错误标在缺预期的那一格与行下方。</td></tr>
+        <tr><td><b>错误汇总</b><span class="rule">§8 error-summary</span></td><td>提交失败时顶部汇总，可点跳到具体字段；自动聚焦第一个错误。</td></tr>
+        <tr><td><b>焦点可见</b><span class="rule">§1 focus-states</span></td><td>3px 焦点环 + 描边；Tab 顺序与视觉顺序一致。</td></tr>
+        <tr><td><b>单一主行动</b><span class="rule">§8 primary-action</span></td><td>只有「保存」是主按钮，草稿与取消降级。</td></tr>
+        <tr><td><b>渐进披露</b><span class="rule">§8 progressive-disclosure</span></td><td>前置条件与关键词收进「更多字段」。</td></tr>
+        <tr><td><b>只读 ≠ 禁用</b><span class="rule">§8 read-only-distinction</span></td><td>项目是只读（下沉底 + 锁 + 「只读」字样）；工作项是禁用（浅字 + 原因说明）。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>与上一版的差异 <span class="sub">同样的字段，重排后首屏少看两个框</span></h3>
+    <div class="dec">
+      <div class="item"><h5><span class="num">1</span>可见字段 8 → 6</h5><p>模块与工作项并入需求支线，标题、需求、分组、属性、步骤、更多，一屏看完。</p></div>
+      <div class="item"><h5><span class="num">2</span>标题成为第一视觉落点</h5><p>字号 13 → 15，输入框 34 → 46 并自动聚焦；打开抽屉直接开始写，不用先找位置。</p></div>
+      <div class="item"><h5><span class="num">3</span>分组上移、属性并排</h5><p>分组从属性之后移到之前（先决定「在哪看到」），类型/优先级/阶段由三段竖排改为一行三列。</p></div>
+      <div class="item"><h5><span class="num">4</span>步骤有列头与行内删除</h5><p>「操作步骤 / 预期结果」常驻列头；每行右侧删除键悬停出现，行号自动重排。</p></div>
+      <div class="item"><h5><span class="num">5</span>加错误汇总与聚焦</h5><p>上一版只有一行脚注提示；现在顶部汇总可跳转，第一个错误字段自动获得焦点。</p></div>
+      <div class="item"><h5><span class="num">6</span>草稿的差别写清楚</h5><p>页脚写明「离开会自动保留草稿」；保存为草稿不校验步骤，保存校验标题与步骤。</p></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>三种状态 <span class="sub">别让用户分不清「不能改」和「现在还不能填」</span></h3>
+    <div class="states">
+      <div class="st">
+        <div class="demo readonly">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#475467" stroke-width="1.6" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></svg>
+          支付中台<span style="margin-left:auto;font-size:11px;color:var(--text-3)">只读</span>
+        </div>
+        <p><b>只读</b>：项目由页面决定，放开会变成「搬项目」。下沉底色 + 锁图标 + 文字标注，内容保持可读。</p>
+      </div>
+      <div class="st">
+        <div class="demo disabled" aria-disabled="true">先选需求，再从该需求下挑工作项</div>
+        <p><b>禁用</b>：工作项依赖需求。用浅色文字写出原因，而不是只降透明度让人猜。</p>
+      </div>
+      <div class="st">
+        <div class="demo bad">仅入账一次，重复请求仍返回成功<span style="margin-left:auto;font-size:11px">！</span></div>
+        <p><b>错误</b>：红底 + 下边线 + 字段正下方一句「第 2 行缺预期结果」，并同步 aria-live。</p>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+(function(){
+  var qs = new URLSearchParams(location.search);
+  var mode = qs.get("state") || "";
+  var $ = function(id){ return document.getElementById(id); };
+
+  var picked = true;
+  var manual = false;
+  var demandBox = $("demandBox"), demandEmpty = $("demandEmpty");
+  var nestPicked = $("nestPicked"), nestEmpty = $("nestEmpty");
+  var modName = $("modName"), modTag = $("modTag"), modSwitch = $("modSwitch");
+  var demandHelp = $("demandHelp");
+
+  function renderDemand(){
+    demandBox.hidden = !picked;
+    demandEmpty.hidden = picked;
+    nestPicked.hidden = !picked;
+    nestEmpty.hidden = picked;
+    demandHelp.textContent = picked
+      ? "候选只列本项目需求；选中后模块自动继承，工作项从该需求下挑选。不关联也能保存，覆盖页可补。"
+      : "未关联需求：模块需手动选择，工作项在本项目内挑。之后可在覆盖页补上需求。";
+  }
+  function renderModule(){
+    if(!picked) return;
+    modTag.textContent = manual ? "已手动修改" : "继承自需求";
+    modTag.className = "tag " + (manual ? "warn" : "ok");
+    modSwitch.textContent = manual ? "恢复继承" : "手动修改";
+  }
+  demandBox.addEventListener("click", function(){
+    picked = true; renderDemand(); renderModule();
+    $("demandClear").focus();
+  });
+  demandEmpty.addEventListener("click", function(){
+    picked = true; renderDemand(); renderModule();
+  });
+  demandBox.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); demandBox.click(); }
+  });
+  demandEmpty.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); demandEmpty.click(); }
+  });
+  $("demandClear").addEventListener("click", function(){
+    picked = false; renderDemand();
+  });
+  modSwitch.addEventListener("click", function(){
+    manual = !manual; renderModule();
+  });
+
+  /* 步骤 */
+  function rows(){ return Array.prototype.slice.call(document.querySelectorAll("#stepList .srow")); }
+  function renumber(){
+    rows().forEach(function(r, i){
+      r.querySelector(".sn").textContent = i + 1;
+      r.querySelectorAll("input")[0].setAttribute("aria-label", "第 " + (i + 1) + " 步操作步骤");
+      r.querySelectorAll("input")[1].setAttribute("aria-label", "第 " + (i + 1) + " 步预期结果");
+      r.querySelector(".del").setAttribute("aria-label", "删除第 " + (i + 1) + " 步");
+    });
+    $("stepCount").textContent = rows().length + " 行";
+  }
+  function addRow(){
+    var div = document.createElement("div");
+    div.className = "srow";
+    div.innerHTML = '<span class="sn"></span>'
+      + '<input placeholder="做一步什么操作" aria-label="操作步骤" />'
+      + '<input placeholder="应该看到什么结果" aria-label="预期结果" />'
+      + '<button class="del" type="button" aria-label="删除该步">×</button>';
+    $("stepList").appendChild(div);
+    renumber();
+    div.querySelector("input").focus();
+  }
+  $("addStep").addEventListener("click", addRow);
+  $("stepList").addEventListener("click", function(e){
+    var b = e.target.closest(".del");
+    if(!b) return;
+    var r = b.closest(".srow");
+    if(rows().length === 1){ r.querySelectorAll("input").forEach(function(i){ i.value = ""; }); }
+    else r.remove();
+    renumber(); validateSteps(attempted);
+  });
+  $("stepList").addEventListener("input", function(){ if(attempted) validateSteps(true); });
+
+  var attempted = false;
+  function validateSteps(showAll){
+    var bad = [];
+    rows().forEach(function(r, i){
+      var ins = r.querySelectorAll("input");
+      var op = ins[0].value.trim(), exp = ins[1].value.trim();
+      ins[1].classList.remove("bad");
+      ins[1].removeAttribute("aria-invalid");
+      if(!op && !exp && !showAll) return;
+      if(!op || !exp){
+        bad.push(i + 1);
+        ins[1].classList.add("bad");
+        ins[1].setAttribute("aria-invalid", "true");
+      }
+    });
+    var empty = rows().every(function(r){
+      var ins = r.querySelectorAll("input");
+      return !ins[0].value.trim() && !ins[1].value.trim();
+    });
+    var box = $("steps"), err = $("stepErr"), save = $("saveBtn");
+    var fail = bad.length > 0 || empty;
+    box.classList.toggle("invalid", fail);
+    err.hidden = !fail;
+    if(fail){
+      $("stepErrT").textContent = empty
+        ? "至少写下 1 行步骤和预期，执行时才有据可依。"
+        : "第 " + bad.join("、") + " 行还缺" + (bad.length > 1 ? "预期结果" : "预期结果") + "。";
+      save.disabled = true;
+    } else {
+      save.disabled = false;
+    }
+    return { fail: fail, bad: bad, empty: empty };
+  }
+
+  /* 标题 */
+  var title = $("caseTitle"), titleErr = $("titleErr"), titleCount = $("titleCount");
+  function renderCount(){ titleCount.textContent = title.value.trim().length + " / 120"; }
+  title.addEventListener("input", renderCount);
+  title.addEventListener("blur", function(){
+    var bad = !title.value.trim();
+    title.classList.toggle("bad", bad);
+    titleErr.hidden = !bad;
+    if(bad) title.setAttribute("aria-invalid", "true"); else title.removeAttribute("aria-invalid");
+  });
+  title.addEventListener("input", function(){
+    if(!title.value.trim()) return;
+    title.classList.remove("bad");
+    title.removeAttribute("aria-invalid");
+    titleErr.hidden = true;
+  });
+
+  /* 提交 */
+  var errSum = $("errSum");
+  $("saveBtn").addEventListener("click", function(){
+    attempted = true;
+    var problems = [];
+    var tBad = !title.value.trim();
+    title.classList.toggle("bad", tBad);
+    titleErr.hidden = !tBad;
+    if(tBad) title.setAttribute("aria-invalid", "true");
+    if(tBad) problems.push({ label: "用例标题", el: title });
+
+    var s = validateSteps(true);
+    if(s.empty){
+      problems.push({ label: "测试步骤", el: $("#steps") });
+    } else if(s.bad.length){
+      problems.push({ label: "第 " + s.bad.join("、") + " 行预期结果", el: rows()[s.bad[0] - 1].querySelectorAll("input")[1] });
+    }
+
+    if(!problems.length){ errSum.hidden = true; return; }
+    $("errSumT").textContent = problems.length + " 处还需要处理";
+    var links = $("errLinks");
+    links.innerHTML = "";
+    problems.forEach(function(p){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.label;
+      b.addEventListener("click", function(){
+        p.el.scrollIntoView({ block: "center", behavior: "smooth" });
+        if(p.el.focus) p.el.focus({ preventScroll: true });
+      });
+      links.appendChild(b);
+    });
+    errSum.hidden = false;
+    $("dwBody").scrollTop = 0;
+    problems[0].el.focus({ preventScroll: true });
+    problems[0].el.scrollIntoView({ block: "center" });
+  });
+
+  /* 状态：invalid / more */
+  if(mode === "invalid"){
+    attempted = true;
+    title.value = "";
+    renderCount();
+    title.classList.add("bad");
+    title.setAttribute("aria-invalid", "true");
+    titleErr.hidden = false;
+    rows()[1].querySelectorAll("input")[1].value = "";
+    validateSteps(true);
+    $("errSumT").textContent = "2 处还需要处理";
+    var mk = function(t){
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = t; $("errLinks").appendChild(b);
+    };
+    mk("用例标题"); mk("第 2 行预期结果");
+    errSum.hidden = false;
+    $("saveBtn").disabled = true;
+  }
+  if(mode === "more"){
+    document.querySelector(".app").style.height = "1358px";
+    $("more").open = true;
+    picked = false;
+    renderDemand();
+    validateSteps(false);
+    $("preCond").focus({ preventScroll: true });
+  }
+
+  renderDemand();
+  renderModule();
+  renumber();
+  renderCount();
+  validateSteps(false);
+})();
+</script>
+</div>
+<!-- FRAGMENT END -->
+</body>
+</html>

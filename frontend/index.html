@@ -704,6 +704,7 @@
           <section class="gantt-load" id="ganttLoad" hidden aria-label="成员负载">
             <div class="gantt-load-head">
               <strong>成员负载</strong>
+              <button class="caliber-mark" type="button" data-caliber-help="gantt.load" aria-label="查看成员负载口径" title="查看成员负载口径">?</button>
               <span class="foot-note" id="ganttLoadRange"></span>
               <button class="icon-btn sm" type="button" id="ganttLoadClose" aria-label="关闭负载面板">×</button>
             </div>
@@ -1516,11 +1517,14 @@
                 <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选<span class="n" id="tcFilterCount" hidden>0</span></button>
                 <button class="btn sm ghost ai-action" type="button" id="btnCaseAi" title="用 AI 从需求文档或需求池条目生成测试用例草稿，勾选确认后才会创建"><span data-icon="ai"></span>&nbsp;AI 生成用例</button>
                 <span class="views-menu-wrap">
-                  <button class="btn sm ghost" type="button" id="btnCaseCsvOut" aria-haspopup="true" aria-expanded="false" title="导出 CSV：当前筛选结果 / 勾选的行 / 项目全部，或下载导入模板"><span data-icon="download"></span>&nbsp;导出 CSV</button>
+                  <button class="btn sm ghost" type="button" id="btnCaseCsvOut" aria-haspopup="true" aria-expanded="false" title="导出 Excel / CSV：当前筛选结果 / 勾选的行 / 项目全部"><span data-icon="download"></span>&nbsp;导出</button>
                   <div class="menu popover" id="tcExportMenu" hidden></div>
                 </span>
-                <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
-                <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入：按表头识别列，兼容「用例名称 / 需求对应 / 测试步骤 / 期望结果」；Excel 请先另存为 CSV"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
+                <input type="file" id="tcCsvFile" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden aria-hidden="true" />
+                <span class="views-menu-wrap" id="tcImportWrap">
+                  <button class="btn sm ghost" type="button" id="btnCaseCsvIn" aria-haspopup="true" aria-expanded="false" title="从 Excel（.xlsx / .xls）或 CSV 批量导入，也可先下载导入模板"><span data-icon="upload"></span>&nbsp;导入</button>
+                  <div class="menu popover" id="tcImportMenu" hidden></div>
+                </span>
                 <button class="btn sm ghost" type="button" id="btnPlanNew" hidden><span data-icon="plus"></span>&nbsp;新建计划</button>
                 <button class="btn sm primary" type="button" id="btnDefectNew" hidden><span data-icon="plus"></span>&nbsp;新建缺陷</button>
                 <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
@@ -1541,6 +1545,22 @@
                   <option value="title">标题</option>
                   <option value="all">含步骤与前置</option>
                 </select>
+              </span>
+              <span class="tc-dirfilter" id="tcDirFilter" hidden>
+                <button class="btn sm ghost" type="button" id="tcDirBtn" aria-haspopup="true" aria-expanded="false" aria-controls="tcDirMenu" title="按项目目录筛选用例；新建、改名与删除目录也在弹层里">
+                  <span data-icon="folder"></span>&nbsp;<span id="tcDirBtnLabel">目录：全部</span>
+                </button>
+                <div class="menu popover tc-dirmenu" id="tcDirMenu" hidden>
+                  <div class="tc-dirmenu-head">
+                    <label class="tc-dir-search">
+                      <span data-icon="search" aria-hidden="true"></span>
+                      <input type="search" id="tcDirSearch" placeholder="搜索目录…" aria-label="搜索项目目录" autocomplete="off" />
+                    </label>
+                    <button class="btn sm ghost" type="button" id="tcDirNewBtn" data-tc-dir-new title="新建顶级目录"><span data-icon="plus"></span>&nbsp;新建</button>
+                  </div>
+                  <div class="tc-dir-list" id="tcDirList" role="tree" aria-label="项目目录"></div>
+                  <div class="tc-side-foot" id="tcDirFoot"></div>
+                </div>
               </span>
               <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
               <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
@@ -1607,12 +1627,8 @@
           <div class="tc-report" id="tcReport" hidden></div>
           <div class="tc-plans" id="tcPlans" hidden></div>
           <div class="tc-cases-wrap" id="tcCasesWrap">
-            <aside class="tc-side" id="tcSidePanel" hidden aria-label="项目目录与分组">
-              <div class="tc-side-tabs" role="tablist" aria-label="归类方式">
-                <button type="button" role="tab" id="tcSideTabDir" data-tc-side="dir" aria-selected="true" aria-controls="tcSideBody">项目目录</button>
-                <button type="button" role="tab" id="tcSideTabSet" data-tc-side="set" aria-selected="false" aria-controls="tcSideBody">分组</button>
-              </div>
-              <div class="tc-side-body" id="tcSideBody" role="tabpanel" aria-labelledby="tcSideTabDir"></div>
+            <aside class="tc-side tc-side-groups" id="tcSidePanel" hidden aria-label="自定义分组">
+              <div class="tc-side-body" id="tcSideBody"></div>
               <div class="tc-side-foot" id="tcSideFoot"></div>
             </aside>
             <div class="tc-cases-main">
@@ -1625,7 +1641,7 @@
                 <span class="tc-bulk-hint" id="tcBulkHint"></span>
                 <span class="tc-lh-grow"></span>
                 <div class="tc-lh-tools" id="tcListHeadTools">
-                  <button class="btn sm ghost" type="button" id="tcPanelBtn" aria-expanded="false" aria-controls="tcSidePanel" title="打开项目目录与分组：把用例拖到目录节点＝移动归属，拖到分组＝加入分组"><span data-icon="folder"></span>&nbsp;<span id="tcPanelBtnLabel">目录 / 分组</span></button>
+                  <button class="btn sm ghost" type="button" id="tcPanelBtn" aria-expanded="true" aria-controls="tcSidePanel" title="收起左侧分组"><span data-icon="layers"></span>&nbsp;<span id="tcPanelBtnLabel">分组</span></button>
                   <select id="tcSort" class="mini-select" aria-label="排序字段" title="排序字段"></select>
                   <button class="btn sm ghost tc-sortdir" type="button" id="tcSortDir" aria-label="切换升序 / 降序" title="切换升序 / 降序">↓</button>
                   <select id="tcGroupBy" class="mini-select" aria-label="分组维度" title="分组维度"></select>
@@ -1660,62 +1676,127 @@
             <div class="case-detail" id="caseDetailView"></div>
             <div class="sheet-body proj-dlg-body" id="caseEditBody" hidden>
           <div class="panel">
-            <div class="panel-head"><h3 id="caseFormTitle">新建用例</h3><span class="case-edit-acts"><button class="btn sm ghost" type="button" id="caseEditBack">取消</button><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></span></div>
-            <div class="stack">
-              <div class="field" id="fCaseTitle">
-                <label for="cTitle">用例标题 <span class="req">*</span></label>
-                <input id="cTitle" type="text" maxlength="100" placeholder="一句话说清验证什么" autocomplete="off" />
-                <span class="err">请填写用例标题</span>
+            <div class="panel-head cf-head">
+              <div class="cf-head-main">
+                <h3 id="caseFormTitle">新建用例</h3>
+                <p class="cf-ctx" id="caseFormCtx" hidden></p>
               </div>
-              <div class="field">
-                <label for="cDemandPicker">关联需求 <small class="tc-optional">选填 · 仅本项目需求池条目</small></label>
-                <button type="button" class="search-trigger" id="cDemandPicker" aria-haspopup="dialog" aria-expanded="false">
-                  <span class="search-trigger-text placeholder" id="cDemandPickerText">搜索并选择需求</span>
-                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
-                </button>
-                <select id="cDemand" hidden tabindex="-1" aria-hidden="true"></select>
+              <span class="case-edit-acts"><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></span>
+            </div>
+            <div class="cf-form">
+              <div class="cf-errsum" id="caseErrSum" role="alert" hidden>
+                <span class="cf-ei" aria-hidden="true">!</span>
+                <div>
+                  <b id="caseErrTitle">还有 1 处需要处理</b>
+                  <div class="cf-errlinks" id="caseErrLinks"></div>
+                </div>
               </div>
-              <div class="field">
-                <label for="cTaskSearch">验证工作项 <small class="tc-optional">选填 · 先关联主需求，仅可选该需求下的工作项</small></label>
-                <div class="case-task-box" id="cTaskBox">
-                  <div class="case-task-tools" id="cTaskTools" hidden>
-                    <input id="cTaskSearch" type="search" maxlength="50" placeholder="筛选工作项标题或编号" autocomplete="off" aria-label="筛选工作项" />
-                    <span class="case-task-count" id="cTaskCount" role="status"></span>
+
+              <!-- 01 主信息：先写清验证什么 -->
+              <section class="cf-sec">
+                <div class="cf-sec-h"><span class="cf-num" aria-hidden="true">01</span><h3>这条用例验证什么</h3><span class="cf-meta must">必填</span></div>
+                <div class="field" id="fCaseTitle">
+                  <label for="cTitle">用例标题 <span class="req">*</span></label>
+                  <input id="cTitle" class="cf-title" type="text" maxlength="100" placeholder="一句话说清验证什么" autocomplete="off" aria-required="true" aria-describedby="cTitleHelp cTitleErr" />
+                  <div class="cf-subline">
+                    <p class="cf-help" id="cTitleHelp">写成「对象 + 条件 + 预期」，执行的人不用回头问。</p>
+                    <span class="cf-count" id="cTitleCount">0 / 100</span>
                   </div>
-                  <div class="case-task-list" id="cTaskList" role="group" aria-label="验证工作项"></div>
-                  <div class="case-task-empty" id="cTaskEmpty">关联主需求后，可选择该需求下的工作项。</div>
+                  <span class="err" id="cTitleErr" aria-live="polite">请填写用例标题</span>
                 </div>
-                <p class="foot-note case-task-hint">未选择工作项时按「需求级覆盖」统计；选择后可在需求详情与覆盖矩阵按工作项追溯。</p>
-              </div>
-              <div class="row row-gap">
-                <div class="field" style="flex:1 1 55%">
-                  <label for="cModule">项目目录 <small class="tc-optional">选填 · 单归属，决定覆盖矩阵口径</small></label>
-                  <select id="cModule" aria-label="选择项目目录节点"></select>
+              </section>
+
+              <!-- 02 追溯：需求决定目录继承与工作项候选 -->
+              <section class="cf-sec">
+                <div class="cf-sec-h"><span class="cf-num" aria-hidden="true">02</span><h3>关联需求，带出目录与工作项</h3><span class="cf-meta">建议填写</span></div>
+                <div class="field">
+                  <div class="cf-rowlabel">
+                    <label for="cDemandPicker">关联需求</label>
+                    <button class="cf-link" type="button" id="cDemandClear" hidden>暂不关联</button>
+                  </div>
+                  <button type="button" class="search-trigger cf-demand is-empty" id="cDemandPicker" aria-haspopup="dialog" aria-expanded="false">
+                    <span class="cf-demand-badge" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5h6l4 4v11H5z"/><path d="M11 2.5v4h4"/></svg></span>
+                    <span class="search-trigger-text placeholder" id="cDemandPickerText">搜索并选择需求</span>
+                    <span class="cf-demand-state" id="cDemandState" hidden></span>
+                    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
+                  </button>
+                  <select id="cDemand" hidden tabindex="-1" aria-hidden="true"></select>
+                  <p class="cf-help">候选只列本项目需求；选中后目录自动继承，工作项从该需求下挑选。不关联也能保存，覆盖页可补。</p>
                 </div>
-                <div class="field" style="flex:1 1 30%">
-                  <label for="cPri">优先级 <small class="tc-optional">选填</small></label>
-                  <select id="cPri" aria-label="优先级（选填）"></select>
+                <div class="cf-nest">
+                  <div class="cf-nest-row">
+                    <span class="cf-nest-label">项目目录</span>
+                    <div class="cf-nest-val">
+                      <select id="cModule" aria-label="选择项目目录节点"></select>
+                      <span class="cf-tag" id="cModuleTag" hidden></span>
+                      <button class="cf-link" type="button" id="cModuleInherit" hidden>恢复继承</button>
+                      <button class="cf-link" type="button" id="cModuleNew">＋ 子目录</button>
+                    </div>
+                  </div>
+                  <div class="cf-nest-row">
+                    <span class="cf-nest-label">验证工作项</span>
+                    <div class="cf-nest-val cf-task-val">
+                      <div class="case-task-box" id="cTaskBox">
+                        <div class="case-task-tools" id="cTaskTools" hidden>
+                          <input id="cTaskSearch" type="search" maxlength="50" placeholder="筛选工作项标题或编号" autocomplete="off" aria-label="筛选工作项" />
+                          <span class="case-task-count" id="cTaskCount" role="status"></span>
+                        </div>
+                        <div class="case-task-list" id="cTaskList" role="group" aria-label="验证工作项"></div>
+                        <div class="case-task-empty" id="cTaskEmpty">关联主需求后，可选择该需求下的工作项。</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div class="field">
-                <label for="cPrecondition">前置条件</label>
-                <textarea id="cPrecondition" maxlength="1000" placeholder="选填：数据准备、环境要求…"></textarea>
-              </div>
-              <div class="field">
-                <label for="cTestData">测试数据 <small class="tc-optional">选填 · 执行时要准备的账号、金额、边界值</small></label>
-                <textarea id="cTestData" maxlength="1000" placeholder="如：账号 demo / 密码 123456；金额 0.01、99999.99"></textarea>
-              </div>
-              <div class="field">
-                <label>执行步骤</label>
-                <div class="tc-steps" id="tcSteps"></div>
-                <button class="btn sm ghost" type="button" id="btnCaseAddStep" title="步骤输入中按 Ctrl+Enter 可在下方快捷插入新行"><span data-icon="plus"></span>&nbsp;添加步骤</button>
-              </div>
+                <p class="cf-help cf-task-hint">未选择工作项时按「需求级覆盖」统计；选择后可在需求详情与覆盖矩阵按工作项追溯。</p>
+              </section>
+
+              <!-- 03 属性：都有默认值 -->
+              <section class="cf-sec">
+                <div class="cf-sec-h"><span class="cf-num" aria-hidden="true">03</span><h3>分类属性</h3><span class="cf-meta">不改也能保存</span></div>
+                <div class="cf-attrs">
+                  <div class="cf-attr">
+                    <span class="cf-attr-lab" id="cPriLab">优先级</span>
+                    <div class="cf-seg" id="cPriSeg" role="group" aria-labelledby="cPriLab"></div>
+                    <select id="cPri" class="cf-sr-only" tabindex="-1" aria-hidden="true"></select>
+                  </div>
+                </div>
+                <p class="cf-help">P0 阻塞主流程、必须回归；P1 核心功能；P2/P3 一般与边缘。「不设置」表示暂不区分。</p>
+              </section>
+
+              <!-- 04 步骤：列头对齐，序号连续 -->
+              <section class="cf-sec">
+                <div class="cf-sec-h"><span class="cf-num" aria-hidden="true">04</span><h3>怎么测：步骤与预期</h3><span class="cf-meta"><span id="caseStepCount">0 行</span> · 最多 30 行</span></div>
+                <div class="cf-steps-head" aria-hidden="true"><span>#</span><span>操作步骤</span><span>预期结果</span><span></span></div>
+                <div class="tc-steps cf-steps" id="tcSteps" role="group" aria-label="执行步骤"></div>
+                <div class="cf-step-foot">
+                  <button class="btn sm ghost" type="button" id="btnCaseAddStep" title="步骤输入中按 Ctrl+Enter 可在下方快捷插入新行"><span data-icon="plus"></span>&nbsp;添加步骤</button>
+                  <span class="cf-help cf-step-hint">预期结果写成可观察的结果；留空按「只记录操作」保存</span>
+                </div>
+              </section>
+
+              <details class="cf-more" id="caseMore">
+                <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>更多字段<span class="cf-more-meta">前置条件 · 测试数据 · 选填</span></summary>
+                <div class="cf-more-body">
+                  <div class="field">
+                    <label for="cPrecondition">前置条件</label>
+                    <textarea id="cPrecondition" maxlength="1000" placeholder="选填：数据准备、环境要求…"></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="cTestData">测试数据 <small class="tc-optional">执行时要准备的账号、金额、边界值</small></label>
+                    <textarea id="cTestData" maxlength="1000" placeholder="如：账号 demo / 密码 123456；金额 0.01、99999.99"></textarea>
+                  </div>
+                </div>
+              </details>
+
               <details class="entity-log" id="caseTimeline" hidden>
                 <summary><span class="caret" aria-hidden="true">▶</span>变更记录 <span class="cnt" id="caseTimelineCount"></span></summary>
                 <div class="timeline" id="caseTimelineList"></div>
               </details>
               <p class="foot-note" id="caseReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
-              <div class="row row-gap" id="caseSaveRow">
+              <div class="cf-foot" id="caseSaveRow">
+                <span class="cf-save-note"><i aria-hidden="true"></i>保存后可继续记录执行与转缺陷</span>
+                <span class="cf-foot-grow"></span>
+                <button class="btn ghost" type="button" id="caseEditBack">取消</button>
                 <button class="btn primary" type="button" id="btnSaveCase">保存</button>
               </div>
             </div>

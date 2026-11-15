@@ -176,25 +176,25 @@
     <div class="fb-card c-blue">
       <div class="fb-kicker">02 · 方案</div>
       <div class="fb-name">需求文档</div>
-      <div class="fb-desc">多级文档树、全文检索与历史快照；方案与需求互链，可发布分享。</div>
-      <div class="fb-rec">requirement_doc</div>
+      <div class="fb-desc">项目或空间级文档，多级树 + 分类树；可见范围分团队 / 成员 / 个人，支持全文检索、历史对比与划线评论，可发布分享。</div>
+      <div class="fb-rec">requirement_doc · doc_category</div>
     </div>
     <div class="fb-card c-plum">
       <div class="fb-kicker">03 · 执行</div>
       <div class="fb-name">工作项</div>
-      <div class="fb-desc">拆成任务 / 故事 / 缺陷 / 史诗；看板、日历、甘特共用筛选与口径。拖入「进行中」自动开表。</div>
+      <div class="fb-desc">拆成任务 / 故事 / 缺陷 / 史诗；看板、列表、层级、影响链、日历、甘特共用筛选与口径。拖入「进行中」自动开表。</div>
       <div class="fb-rec">task · time_log</div>
     </div>
     <div class="fb-card c-green">
       <div class="fb-kicker">04 · 编排</div>
       <div class="fb-name">版本与计划</div>
-      <div class="fb-desc">工作项可关联多个计划版本；发布计划跨版本、跨项目，只描述打算怎么发。</div>
+      <div class="fb-desc">工作项可关联多个计划版本；开始开发冻结承诺基线，版本可关闭或取消；发布计划跨版本、跨项目，只描述打算怎么发。</div>
       <div class="fb-rec">project_version · version_task</div>
     </div>
     <div class="fb-card c-warn">
       <div class="fb-kicker">05 · 发布</div>
       <div class="fb-name">实际发布</div>
-      <div class="fb-desc">预览后确认，记录环境、目标、制品与覆盖；部署 / 重部署 / 回滚追加事件，形成不可变快照。</div>
+      <div class="fb-desc">预览后确认，记录环境、目标、制品与覆盖；发布前核对必测用例，结果随计划冻结；部署 / 重部署 / 回滚追加事件。</div>
       <div class="fb-rec">version_release</div>
     </div>
     <div class="fb-card c-green">
@@ -222,8 +222,8 @@
     </div>
 
     <div class="fb-note warn">
-      <span class="nt">不通过 → 归档</span>
-      <span class="nd">补充说明后可重开；已取消需求可恢复。</span>
+      <span class="nt">关闭 → 归档</span>
+      <span class="nd">拒绝、取消、重复同属关闭；可按阶段恢复或重开。</span>
     </div>
     <div class="fb-note info">
       <span class="nt">AI 拆任务草稿</span>

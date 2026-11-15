@@ -1449,11 +1449,24 @@ public class TestCaseService {
         return com.hourglass.common.Csv.toCsv(lines);
     }
 
+    /** Excel 模板：可回导的 8 列 + 示例行 + 填写说明页；优先级列带下拉 */
+    public byte[] templateXlsx() {
+        return com.hourglass.common.CaseExcel.template();
+    }
+
     /** 导出项目全部用例（口径同列表页：创建时间倒序） */
     public byte[] exportCsv(String workspaceId, String userId, String reqId) {
         String rid = ensureProject(workspaceId, reqId);
         projectAccess.assertView(workspaceId, userId, rid);
         return csvOf(caseMapper.selectViewByReq(workspaceId, rid));
+    }
+
+    /** 导出项目全部用例（Excel，带表头样式与执行信息列） */
+    public byte[] exportXlsx(String workspaceId, String userId, String reqId) {
+        String rid = ensureProject(workspaceId, reqId);
+        projectAccess.assertView(workspaceId, userId, rid);
+        return com.hourglass.common.CaseExcel.export(
+                caseMapper.selectViewByReq(workspaceId, rid), projectName(rid));
     }
 
     /** 按当前筛选导出（含未加载的行）：条数上限与批量动作一致，超出明确报错而不是截断 */
@@ -1467,6 +1480,20 @@ public class TestCaseService {
         query.setOffset(0);
         query.setLimit(Math.max(1, total));
         return csvOf(total == 0 ? new ArrayList<TestCaseView>() : caseMapper.selectViewByQuery(query));
+    }
+
+    /** 按当前筛选导出（Excel）：与 CSV 同一口径与上限 */
+    public byte[] exportXlsxByFilter(String workspaceId, String userId, CaseQuery query) {
+        String rid = normalizeQuery(workspaceId, userId, query);
+        int total = caseMapper.countByQuery(query);
+        if (total > MAX_BATCH) {
+            throw AppException.badRequest("一次最多导出 " + MAX_BATCH + " 条用例，当前命中 "
+                    + total + " 条，请先缩小筛选范围");
+        }
+        query.setOffset(0);
+        query.setLimit(Math.max(1, total));
+        return com.hourglass.common.CaseExcel.export(
+                total == 0 ? new ArrayList<TestCaseView>() : caseMapper.selectViewByQuery(query), projectName(rid));
     }
 
     /** 导出所选：只导出当前用户可见项目的用例 */
@@ -1483,6 +1510,32 @@ public class TestCaseService {
             projectAccess.assertView(workspaceId, userId, v.getReqId());
         }
         return csvOf(rows);
+    }
+
+    /** 导出所选（Excel）；行顺序与勾选一致（按 mapper 返回顺序） */
+    public byte[] exportXlsxByIds(String workspaceId, String userId, List<String> rawIds) {
+        List<String> ids = distinctIds(rawIds);
+        if (ids.isEmpty()) {
+            throw AppException.badRequest("请先勾选要导出的用例");
+        }
+        List<TestCaseView> rows = new ArrayList<TestCaseView>();
+        for (int i = 0; i < ids.size(); i += 500) {
+            rows.addAll(caseMapper.selectViewByIds(workspaceId, ids.subList(i, Math.min(ids.size(), i + 500))));
+        }
+        for (TestCaseView v : rows) {
+            projectAccess.assertView(workspaceId, userId, v.getReqId());
+        }
+        return com.hourglass.common.CaseExcel.export(rows,
+                rows.isEmpty() ? null : projectName(rows.get(0).getReqId()));
+    }
+
+    /** 项目名只作工作表名，取不到时退回「测试用例」 */
+    private String projectName(String reqId) {
+        if (reqId == null) {
+            return null;
+        }
+        Requirement r = reqMapper.selectById(reqId);
+        return r == null ? null : r.getName();
     }
 
     private byte[] csvOf(List<TestCaseView> rows) {
@@ -1512,9 +1565,9 @@ public class TestCaseService {
      * 导入用例：逐行校验并创建，单行失败不影响其余行；返回
      * {total, created, failed, errors:[{row, message}], ignored:[列名]}（errors 最多 20 条）。
      *
-     * 两种格式都接受：
+     * 两种格式都接受：CSV 文本与 Excel（.xlsx / .xls，只读第一个工作表，表头可在说明行下方）。
      * 1) 表头驱动：按列名识别（标题/用例名称、模块/需求对应、优先级、前置条件、
-     *    测试步骤、期望结果），外部 Excel 另存 CSV 后可直接导入；
+     *    测试步骤、期望结果），外部表格直接导入；
      *    步骤与期望分两列时按行号一一配对，行首"1."等编号自动去掉。
      * 2) 无表头：沿用旧位置口径（标题, 模块, 优先级, 前置条件, 步骤），
      *    步骤列按换行分步、"操作 => 预期"。
@@ -1524,20 +1577,29 @@ public class TestCaseService {
     public Map<String, Object> importCsv(String userId, String workspaceId, String reqId, String text) {
         String rid = ensureProject(workspaceId, reqId);
         projectAccess.assertWrite(workspaceId, userId, rid);
-        List<List<String>> rows = com.hourglass.common.Csv.parse(text == null ? "" : text);
+        return importRows(userId, workspaceId, rid,
+                com.hourglass.common.Csv.parse(text == null ? "" : text));
+    }
+
+    /** 导入 Excel（.xlsx / .xls）：只读第一个工作表，逐行口径与 CSV 完全一致 */
+    @Transactional
+    public Map<String, Object> importExcel(String userId, String workspaceId, String reqId, byte[] data) {
+        String rid = ensureProject(workspaceId, reqId);
+        projectAccess.assertWrite(workspaceId, userId, rid);
+        return importRows(userId, workspaceId, rid, com.hourglass.common.CaseExcel.read(data));
+    }
+
+    private Map<String, Object> importRows(String userId, String workspaceId, String rid,
+                                           List<List<String>> rows) {
         Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
         List<Map<String, Object>> errors = new ArrayList<Map<String, Object>>();
         int created = 0;
-        int start = 0;
-        Map<String, Integer> cols = new java.util.HashMap<String, Integer>();
-        if (!rows.isEmpty()) {
-            cols = mapHeader(rows.get(0));
-        }
-        boolean headerMode = cols.containsKey("title");
-        if (headerMode) {
-            start = 1; // 表头行
-        }
-        int dataRows = rows.size() - start;
+        int headerIndex = findHeaderRow(rows);
+        boolean headerMode = headerIndex >= 0;
+        int start = headerMode ? headerIndex + 1 : 0;
+        Map<String, Integer> cols = headerMode
+                ? mapHeader(rows.get(headerIndex)) : new java.util.HashMap<String, Integer>();
+        int dataRows = Math.max(0, rows.size() - start);
         if (dataRows > IMPORT_MAX_ROWS) {
             throw AppException.badRequest("单次最多导入 " + IMPORT_MAX_ROWS + " 行（当前 " + dataRows + " 行），请拆分文件");
         }
@@ -1592,7 +1654,7 @@ public class TestCaseService {
         out.put("errors", errors);
         out.put("headerMode", headerMode);
         out.put("renumbered", headerMode && cols.containsKey("no"));
-        out.put("ignored", headerMode ? ignoredColumns(rows.get(0)) : new ArrayList<String>());
+        out.put("ignored", headerMode ? ignoredColumns(rows.get(headerIndex)) : new ArrayList<String>());
         int skipped = Math.max(0, dataRows - created - errors.size());
         out.put("skipped", skipped);
         /* 一条都没导入且存在错误时，审计结果记为失败，便于按结果筛选问题导入 */
@@ -1600,6 +1662,27 @@ public class TestCaseService {
                 created > 0 || errors.isEmpty(), "导入测试用例：成功 " + created + " 条，失败 "
                         + errors.size() + " 条，跳过 " + skipped + " 条", null);
         return out;
+    }
+
+    /**
+     * 表头行定位：首行含「标题」即认；否则在前 10 行里找同时含标题与至少两类列的标题行，
+     * 兼容外部表格在表头上方放一行说明/标题。
+     */
+    private static int findHeaderRow(List<List<String>> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return -1;
+        }
+        if (mapHeader(rows.get(0)).containsKey("title")) {
+            return 0;
+        }
+        int limit = Math.min(rows.size(), 10);
+        for (int i = 1; i < limit; i++) {
+            Map<String, Integer> cols = mapHeader(rows.get(i));
+            if (cols.containsKey("title") && cols.size() >= 2) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** 列名 → 语义键；未知列返回 null，调用方只取认识的列 */
@@ -1652,10 +1735,23 @@ public class TestCaseService {
         if (s.contains("期望") || s.contains("预期")) {
             return "expected";
         }
+        /* 以下只读列会被明确忽略；「预期结果」必须排在「结果」判断之前 */
+        if (s.contains("结果") || s.contains("状态")) {
+            return "status";
+        }
+        if (s.contains("执行人") || s.contains("测试人员") || s.contains("负责人")) {
+            return "owner";
+        }
+        if (s.contains("执行时间") || s.contains("测试时间") || s.contains("完成时间")) {
+            return "executedAt";
+        }
+        if (s.contains("备注")) {
+            return "note";
+        }
         return null;
     }
 
-    /** 引用了但无法落库的列：执行结果、截图、缺陷、执行人/时间 */
+    /** 引用了但无法落库的列：执行结果、执行人/时间、备注、截图与缺陷 */
     private static List<String> ignoredColumns(List<String> header) {
         List<String> out = new ArrayList<String>();
         if (header == null) {
@@ -1669,8 +1765,10 @@ public class TestCaseService {
             if (s.isEmpty()) {
                 continue;
             }
-            boolean ignore = s.contains("测试结果") || s.contains("截图") || s.contains("缺陷")
-                    || s.contains("测试人员") || s.contains("测试时间") || s.contains("执行人");
+            String kind = headerKind(s);
+            boolean ignore = "status".equals(kind) || "owner".equals(kind) || "executedAt".equals(kind)
+                    || "note".equals(kind) || s.contains("截图") || s.contains("缺陷")
+                    || s.contains("附件") || s.contains("证据");
             if (ignore && !out.contains(s)) {
                 out.add(s);
             }
@@ -1708,13 +1806,39 @@ public class TestCaseService {
     }
 
     /**
-     * 两列结构（测试步骤 / 期望结果）按行号配对：第 n 条操作对应第 n 条期望。
+     * 保位置分行：去掉行首编号但保留空行，供「步骤 + 预期」两列按行号配对；
+     * 尾随空行忽略（导出时空预期会留一行序号，回导时仍是同一步）。
+     */
+    private static List<String> splitLinesKeep(String raw) {
+        List<String> out = new ArrayList<String>();
+        if (raw == null) {
+            return out;
+        }
+        for (String line : raw.split("\r?\n", -1)) {
+            out.add(STEP_NO.matcher(line.trim()).replaceFirst("").trim());
+        }
+        while (!out.isEmpty() && out.get(out.size() - 1).isEmpty()) {
+            out.remove(out.size() - 1);
+        }
+        return out;
+    }
+
+    /**
+     * 两列结构（测试步骤 / 期望结果）按行号配对：第 n 条操作对应第 n 条期望；
+     * 某步没有预期时保留空位，不把后续预期错配到前一步。
      * 行数不一致时以操作为准，多出的期望行并入最后一步，避免内容丢失。
      */
     private List<TestCaseSaveRequest.StepItem> pairSteps(String stepsRaw, String expectedRaw) {
-        List<String> actions = splitLines(stepsRaw);
-        List<String> expects = splitLines(expectedRaw);
-        if (actions.isEmpty()) {
+        List<String> actions = splitLinesKeep(stepsRaw);
+        List<String> expects = splitLinesKeep(expectedRaw);
+        boolean hasAction = false;
+        for (String action : actions) {
+            if (!action.isEmpty()) {
+                hasAction = true;
+                break;
+            }
+        }
+        if (!hasAction) {
             throw AppException.badRequest("「测试步骤」为空，无法与期望结果逐行对应");
         }
         if (actions.size() > 30) {
@@ -1722,24 +1846,49 @@ public class TestCaseService {
         }
         List<TestCaseSaveRequest.StepItem> items = new ArrayList<TestCaseSaveRequest.StepItem>();
         for (int i = 0; i < actions.size(); i++) {
+            String action = actions.get(i);
+            String expected = i < expects.size() ? expects.get(i) : null;
+            if (action.isEmpty()) {
+                if (expected == null || expected.isEmpty()) {
+                    continue;
+                }
+                /* 空操作行带着预期：并入上一步；没有上一步时把预期当操作保留，不静默丢弃 */
+                if (!items.isEmpty()) {
+                    TestCaseSaveRequest.StepItem last = items.get(items.size() - 1);
+                    String merged = last.getExpected() == null || last.getExpected().isEmpty()
+                            ? expected : last.getExpected() + "\n" + expected;
+                    last.setExpected(Texts.cut(merged, 500));
+                } else {
+                    TestCaseSaveRequest.StepItem item = new TestCaseSaveRequest.StepItem();
+                    item.setAction(Texts.cut(expected, 200));
+                    items.add(item);
+                }
+                continue;
+            }
             TestCaseSaveRequest.StepItem item = new TestCaseSaveRequest.StepItem();
-            item.setAction(Texts.cut(actions.get(i), 200));
-            if (i < expects.size()) {
-                item.setExpected(Texts.cut(expects.get(i), 500));
+            item.setAction(Texts.cut(action, 200));
+            if (expected != null && !expected.isEmpty()) {
+                item.setExpected(Texts.cut(expected, 500));
             }
             items.add(item);
         }
         if (expects.size() > actions.size()) {
             StringBuilder extra = new StringBuilder();
             for (int i = actions.size(); i < expects.size(); i++) {
+                if (expects.get(i).isEmpty()) {
+                    continue;
+                }
                 if (extra.length() > 0) {
                     extra.append('\n');
                 }
                 extra.append(expects.get(i));
             }
-            TestCaseSaveRequest.StepItem last = items.get(items.size() - 1);
-            String merged = last.getExpected() == null ? extra.toString() : last.getExpected() + "\n" + extra;
-            last.setExpected(Texts.cut(merged, 500));
+            if (extra.length() > 0 && !items.isEmpty()) {
+                TestCaseSaveRequest.StepItem last = items.get(items.size() - 1);
+                String merged = last.getExpected() == null || last.getExpected().isEmpty()
+                        ? extra.toString() : last.getExpected() + "\n" + extra;
+                last.setExpected(Texts.cut(merged, 500));
+            }
         }
         return items;
     }

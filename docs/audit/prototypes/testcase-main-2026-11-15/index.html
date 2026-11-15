@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>用例主页面 · 目录/分组/筛选重排 · 原型</title>
+</head>
+<body>
+<!-- FRAGMENT START -->
+<div class="hg-wrap">
+<style>
+  .hg-wrap{
+    --bg-app:#F7F8FA; --surface:#FFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+    --border:#E4E7EC; --border-soft:#EEF0F3; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085; --text-4:#98A2B3;
+    --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-fg:#067647; --success-border:#A6F4C5;
+    --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318; --danger-border:#FECDCA;
+    --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-fg:#5B3FD1; --plum-border:#D9D6FE;
+    --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+    --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+    --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-family:var(--font);color:var(--text);background:#E9ECF1;font-size:13px;line-height:20px;
+    padding:24px;overflow:auto;
+  }
+  .hg-wrap *{box-sizing:border-box;margin:0;padding:0}
+  .frame{width:1392px}
+  .app{display:flex;height:900px;border-radius:16px;overflow:hidden;background:var(--bg-app);
+       border:1px solid var(--border);box-shadow:var(--shadow-md)}
+  .rail{width:64px;background:#111827;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:6px;flex:none}
+  .rail .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#2563EB,#7A5AF8);margin-bottom:12px}
+  .rail .ri{width:40px;height:36px;border-radius:9px;display:grid;place-items:center;color:#98A2B3;font-size:11px}
+  .rail .ri.on{background:#1F2937;color:#FFF}
+  .gside{width:168px;background:var(--surface);border-right:1px solid var(--border);padding:16px 10px;flex:none}
+  .gside h4{font-size:11px;letter-spacing:.06em;color:var(--text-3);font-weight:600;margin:14px 8px 6px}
+  .gside .nav{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2)}
+  .gside .nav.on{background:var(--primary-soft);color:var(--primary-hover);font-weight:600}
+  .gside .dot{width:6px;height:6px;border-radius:2px;background:currentColor;opacity:.45}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-app)}
+  .crumbrow{height:46px;display:flex;align-items:center;gap:8px;padding:0 20px;flex:none}
+  .crumb{display:flex;align-items:center;gap:6px;color:var(--text-3);font-size:12.5px}
+  .crumb b{color:var(--text);font-weight:600}
+  .crumb .badge{height:20px;padding:0 7px;border-radius:6px;background:var(--surface);border:1px solid var(--border);
+                font-size:11px;color:var(--text-2);display:inline-flex;align-items:center}
+  .crumbrow .grow{flex:1}
+  .crumbrow .meta{color:var(--text-3);font-size:12px}
+
+  .tabsrow{display:flex;align-items:center;gap:10px;padding:0 20px 10px;flex:none}
+  .seg{display:inline-flex;background:#EDF0F4;border-radius:9px;padding:2px}
+  .seg button{height:30px;padding:0 12px;border:0;background:transparent;border-radius:7px;font:inherit;font-size:12.5px;
+              color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .seg button.on{background:#FFF;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.08)}
+  .seg .cnt{height:16px;min-width:16px;padding:0 5px;border-radius:8px;background:var(--danger-soft);color:var(--danger-fg);
+            font-size:10px;font-weight:600;display:inline-flex;align-items:center}
+  .tabsrow .grow{flex:1}
+  .msel{height:30px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:0 8px;
+        font:inherit;font-size:12px;color:var(--text);cursor:pointer}
+  .btn{height:30px;padding:0 11px;border-radius:8px;border:1px solid var(--border);background:var(--surface);
+       color:var(--text);font:inherit;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{background:var(--surface-hover)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#FFF}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--text-2)}
+  .btn.ghost:hover{background:var(--surface);border-color:var(--border)}
+  .btn.soft{background:var(--surface-sunken);border-color:transparent}
+  .btn.sm{height:26px;padding:0 9px;font-size:11.5px}
+
+  /* ---------- 筛选条 ---------- */
+  .filterbar{display:flex;align-items:center;gap:8px;padding:0 20px 10px;flex:none;flex-wrap:nowrap}
+  .search{position:relative;width:236px;flex:none}
+  .search input{width:100%;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);
+                padding:0 10px 0 30px;font:inherit;font-size:12.5px;outline:none}
+  .search input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .search .ic{position:absolute;left:10px;top:9px;color:var(--text-4);font-size:12px}
+  .search .scope{position:absolute;right:4px;top:4px;height:24px;border:0;background:var(--surface-sunken);
+                 border-radius:6px;font:inherit;font-size:11px;color:var(--text-2);padding:0 6px;cursor:pointer}
+  .fsel{height:32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:0 9px;
+        font:inherit;font-size:12px;color:var(--text-2);cursor:pointer}
+  .fsel.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-hover);font-weight:500}
+  .toggle{height:32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:0 10px;
+          font:inherit;font-size:12px;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .toggle.on{background:var(--plum-soft);border-color:var(--plum-border);color:var(--plum-fg);font-weight:500}
+  .filterbar .grow{flex:1}
+  .rescount{color:var(--text-3);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+  /* ---------- 筛选 chip ---------- */
+  .chipbar{display:flex;align-items:center;gap:6px;padding:0 20px 10px;flex:none;flex-wrap:wrap}
+  .chipbar[hidden]{display:none}
+  .fchip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border-radius:var(--r-pill);
+         background:var(--surface);border:1px solid var(--border);font-size:11.5px;color:var(--text-2)}
+  .fchip b{font-weight:600;color:var(--text)}
+  .fchip button{border:0;background:transparent;color:var(--text-3);cursor:pointer;font-size:12px;padding:0}
+  .chipbar .save{color:var(--primary-hover);font-size:11.5px;font-weight:500;cursor:pointer;margin-left:2px}
+  .chipbar .clear{color:var(--text-3);font-size:11.5px;cursor:pointer}
+
+  /* ---------- 主体 ---------- */
+  .body{flex:1;min-height:0;display:flex;gap:0;padding:0 20px 14px}
+  .navpanel{width:248px;flex:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+            display:flex;flex-direction:column;overflow:hidden;margin-right:12px}
+  .navhead{padding:8px;border-bottom:1px solid var(--border);flex:none}
+  .navtabs{display:flex;background:var(--surface-sunken);border-radius:8px;padding:2px}
+  .navtabs button{flex:1;height:28px;border:0;background:transparent;border-radius:6px;font:inherit;font-size:12px;
+                  color:var(--text-2);cursor:pointer}
+  .navtabs button.on{background:#FFF;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.08)}
+  .navsearch{margin-top:8px;position:relative}
+  .navsearch input{width:100%;height:30px;border:1px solid var(--border-soft);background:var(--surface-sunken);
+                   border-radius:7px;padding:0 8px 0 26px;font:inherit;font-size:12px;outline:none}
+  .navsearch .ic{position:absolute;left:8px;top:8px;color:var(--text-4);font-size:11px}
+  .navtree{flex:1;overflow:auto;padding:6px}
+  .node{display:flex;align-items:center;gap:6px;height:32px;padding:0 8px;border-radius:7px;cursor:pointer;
+        color:var(--text-2);font-size:12.5px;position:relative}
+  .node:hover{background:var(--surface-hover)}
+  .node.on{background:var(--primary-soft);color:var(--primary-hover);font-weight:600}
+  .node .tw{width:12px;color:var(--text-4);font-size:9px;flex:none;text-align:center}
+  .node .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .node .cnt{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;flex:none}
+  .node.on .cnt{color:var(--primary-hover)}
+  .node.lv2{padding-left:22px}
+  .node.lv3{padding-left:38px}
+  .node.dim .nm{color:var(--text-3)}
+  .ntag{height:17px;padding:0 5px;border-radius:5px;font-size:10px;display:inline-flex;align-items:center;flex:none}
+  .ntag.team{background:var(--primary-soft);color:var(--primary-hover)}
+  .ntag.self{background:var(--warning-soft);color:var(--warning-fg)}
+  .ntag.dyn{background:var(--plum-soft);color:var(--plum-fg)}
+  .navfoot{flex:none;border-top:1px solid var(--border);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+  .navtodo{flex:none;border-top:1px solid var(--border);padding:8px 10px}
+  .navtodo h6{font-size:10.5px;letter-spacing:.04em;color:var(--text-3);font-weight:600;margin-bottom:4px}
+  .todo{display:flex;align-items:center;gap:6px;height:26px;padding:0 6px;border-radius:6px;font-size:11.5px;
+        color:var(--text-2);cursor:pointer}
+  .todo:hover{background:var(--surface-hover)}
+  .todo .d{width:6px;height:6px;border-radius:50%;background:var(--warning-fg);opacity:.7}
+  .todo b{margin-left:auto;color:var(--text);font-variant-numeric:tabular-nums}
+  .navsec{display:flex;align-items:center;justify-content:space-between;padding:2px 8px 6px;color:var(--text-3);font-size:10.5px}
+  .navfoot .acts{display:flex;align-items:center;gap:6px}
+  .navfoot .hint{color:var(--text-3);font-size:11px;line-height:16px}
+  .navfooter-pin{display:flex;align-items:center;gap:4px;color:var(--text-3);font-size:11px}
+
+  .listcol{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--surface);
+           border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .listmeta{height:44px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--border)}
+  .statchip{height:26px;padding:0 9px;border-radius:var(--r-pill);border:1px solid transparent;background:transparent;
+            font:inherit;font-size:11.5px;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+  .statchip:hover{background:var(--surface-hover)}
+  .statchip b{font-variant-numeric:tabular-nums}
+  .statchip.on{background:var(--primary-soft);color:var(--primary-hover);border-color:var(--primary-border);font-weight:600}
+  .statchip.on b{color:var(--primary-hover)}
+  .statchip .d{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.55}
+  .statchip.pass .d{background:var(--success)}
+  .statchip.fail .d{background:var(--danger)}
+  .statchip.block .d{background:var(--warning-fg)}
+  .statchip.none .d{background:var(--text-4)}
+  .listmeta .grow{flex:1}
+  .listmeta .msel{height:28px;font-size:11.5px}
+  .listmeta .lbl{font-size:11.5px;color:var(--text-3)}
+  .listmeta .selwrap{display:inline-flex;align-items:center;gap:4px}
+
+  .bulkbar{height:40px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--primary-soft);
+           border-bottom:1px solid var(--primary-border)}
+  .bulkbar[hidden]{display:none}
+  .bulkbar .cnt{font-size:12px;color:var(--primary-hover);font-weight:600;margin-right:4px}
+  .bulkbar .btn{height:26px;font-size:11.5px}
+
+  .table{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .thead,.trow{display:grid;grid-template-columns:34px 70px minmax(200px,1fr) 128px 156px 48px 70px 62px;
+               gap:6px;align-items:center;padding:0 10px}
+  .thead{height:36px;flex:none;background:var(--surface-sunken);border-bottom:1px solid var(--border);
+         font-size:11px;color:var(--text-3);font-weight:600}
+  .tbody{flex:1;overflow:auto}
+  .trow{height:52px;border-bottom:1px solid var(--border-soft);cursor:pointer;overflow:hidden}
+  .trow:hover{background:#FAFBFC}
+  .trow.sel{background:var(--primary-soft)}
+  .trow .cb{width:15px;height:15px;border:1.5px solid var(--border-strong);border-radius:4px;background:#FFF;
+            display:grid;place-items:center;cursor:pointer;font-size:10px;color:#FFF}
+  .trow.sel .cb{background:var(--primary);border-color:var(--primary)}
+  .no{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--text-3)}
+  .tt{min-width:0;overflow:hidden}
+  .tt b{display:block;font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tt > span{display:block;font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .bugdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--danger);margin-right:5px;
+          vertical-align:1px;flex:none}
+  .mod{font-size:11.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mod .sep{color:var(--text-4);margin:0 3px}
+  .grps{display:flex;gap:3px;overflow:hidden}
+  .gchip{height:20px;padding:0 6px;border-radius:5px;background:var(--surface-sunken);color:var(--text-2);
+         font-size:10.5px;display:inline-flex;align-items:center;white-space:nowrap;max-width:86px;overflow:hidden;text-overflow:ellipsis}
+  .gchip::before{content:"#";opacity:.4;margin-right:1px}
+  .gchip.dyn{background:var(--plum-soft);color:var(--plum-fg)}
+  .gchip.self{background:var(--warning-soft);color:var(--warning-fg)}
+  .pri{font-size:11px;font-weight:600;color:var(--text-2)}
+  .pri.p0{color:var(--danger-fg)}
+  .pri.p1{color:var(--warning-fg)}
+  .res{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border-radius:6px;font-size:11px;font-weight:500}
+  .res.pass{background:var(--success-soft);color:var(--success-fg)}
+  .res.fail{background:var(--danger-soft);color:var(--danger-fg)}
+  .res.block{background:var(--warning-soft);color:var(--warning-fg)}
+  .res.todo{background:var(--surface-sunken);color:var(--text-3)}
+  .res .d{width:5px;height:5px;border-radius:50%;background:currentColor}
+  .own{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-2);overflow:hidden}
+  .av{width:20px;height:20px;border-radius:50%;background:#E0E7FF;color:#3730A3;font-size:10px;
+      display:grid;place-items:center;flex:none;font-weight:600}
+  .av.c2{background:#FEF3C7;color:#92400E}
+  .av.c3{background:#D1FAE5;color:#065F46}
+
+  .sec{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;background:#F7F9FC;
+       border-bottom:1px solid var(--border-soft);position:sticky;top:0;z-index:2;cursor:pointer}
+  .sec .tw{font-size:9px;color:var(--text-3);width:10px;text-align:center}
+  .sec b{font-size:12px}
+  .sec .c{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .sec .tag{height:18px;padding:0 6px;border-radius:5px;font-size:10px;background:var(--plum-soft);color:var(--plum-fg);display:inline-flex;align-items:center}
+  .sec .tag.grey{background:var(--surface-sunken);color:var(--text-2)}
+  .sec .grow{flex:1}
+
+  .pager{height:34px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;border-top:1px solid var(--border);
+         color:var(--text-3);font-size:11.5px;background:var(--surface)}
+  .pager .grow{flex:1}
+  .empty{padding:40px;text-align:center;color:var(--text-3);font-size:12.5px}
+
+  /* ---------- 说明 ---------- */
+  .notes{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}
+  .ncard{background:#FFF;border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-md)}
+  .ncard h5{font-size:12.5px;display:flex;gap:8px;align-items:center;margin-bottom:6px}
+  .num{width:18px;height:18px;border-radius:50%;background:var(--primary-soft);color:var(--primary-hover);
+       font-size:11px;font-weight:700;display:grid;place-items:center;flex:none}
+  .ncard p{font-size:11.5px;line-height:18px;color:var(--text-2)}
+  .ncard code{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;background:var(--surface-sunken);
+              border-radius:4px;padding:0 4px;color:var(--text)}
+  @media (max-width:1240px){.frame{width:100%}.app{height:820px}.notes{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+<div class="frame">
+<div class="app">
+  <div class="rail">
+    <div class="logo"></div>
+    <div class="ri">我的</div><div class="ri">需求</div><div class="ri on">项目</div>
+    <div class="ri">工作</div><div class="ri">测试</div>
+  </div>
+  <aside class="gside">
+    <h4>规划</h4>
+    <div class="nav"><i class="dot"></i>需求池</div>
+    <div class="nav on"><i class="dot"></i>项目</div>
+    <div class="nav"><i class="dot"></i>版本</div>
+    <h4>交付</h4>
+    <div class="nav"><i class="dot"></i>工作项</div>
+    <div class="nav"><i class="dot"></i>文档</div>
+    <div class="nav"><i class="dot"></i>测试</div>
+    <h4>洞察</h4>
+    <div class="nav"><i class="dot"></i>报表</div>
+  </aside>
+
+  <main class="main">
+    <div class="crumbrow">
+      <div class="crumb"><span>项目</span><span>/</span><b>支付中台</b><span class="badge">测试</span></div>
+      <span class="grow"></span>
+      <span class="meta">需求 2 · 用例 14 · 未关联需求 8</span>
+    </div>
+
+    <div class="tabsrow">
+      <span class="seg" id="modeSeg">
+        <button class="on" data-mode="cases">用例</button>
+        <button data-mode="defects">缺陷 <span class="cnt">6</span></button>
+        <button data-mode="plans">测试计划</button>
+        <button data-mode="coverage">覆盖矩阵</button>
+        <button data-mode="report">测试报告</button>
+      </span>
+      <span class="grow"></span>
+      <select class="msel" aria-label="项目范围"><option>支付中台</option><option>全部项目</option></select>
+      <button class="btn ghost">视图 ▾</button>
+      <button class="btn ghost">导出 CSV</button>
+      <button class="btn ghost">AI 生成用例</button>
+      <button class="btn primary">＋ 新建用例</button>
+    </div>
+
+    <div class="filterbar">
+      <span class="search">
+        <span class="ic">⌕</span>
+        <input id="q" placeholder="搜索标题 / 编号 / 步骤" />
+        <select class="scope" id="qScope" aria-label="搜索范围"><option>标题</option><option>全部</option></select>
+      </span>
+      <select class="fsel" id="pri"><option value="">优先级</option><option>P0</option><option>P1</option><option>P2</option></select>
+      <select class="fsel" id="owner"><option value="">执行人</option><option>我</option><option>陈工</option><option>李雷</option></select>
+      <select class="fsel" id="demand"><option value="">需求</option><option>DM-12 支付回调幂等改造</option><option>DM-09 对账差异补单</option><option value="__none">未关联需求</option></select>
+      <button class="toggle" id="bugT">未关闭缺陷</button>
+      <button class="btn ghost" id="moreBtn">＋ 更多筛选</button>
+      <span class="grow"></span>
+      <span class="rescount" id="rescount">共 14 条</span>
+    </div>
+
+    <div class="chipbar" id="chipbar" hidden></div>
+
+    <div class="body">
+      <aside class="navpanel">
+        <div class="navhead">
+          <div class="navtabs" id="navTabs">
+            <button class="on" data-tab="dir">模块目录</button>
+            <button data-tab="set">分组</button>
+          </div>
+          <div class="navsearch"><span class="ic">⌕</span><input id="nq" placeholder="搜索目录 / 分组" /></div>
+        </div>
+        <div class="navtree" id="navTree"></div>
+        <div class="navtodo" id="navTodo"></div>
+        <div class="navfoot" id="navFoot"></div>
+      </aside>
+
+      <section class="listcol">
+        <div class="listmeta">
+          <div id="stats"></div>
+          <span class="grow"></span>
+          <select class="msel" id="groupBy" aria-label="分组维度">
+            <option value="">平铺展示</option>
+            <option value="mod">按模块分组</option>
+            <option value="set">按分组分组</option>
+            <option value="pri">按优先级分组</option>
+            <option value="owner">按执行人分组</option>
+            <option value="res">按执行结果分组</option>
+          </select>
+          <select class="msel" id="sort" aria-label="排序"><option>最近更新</option><option>编号</option><option>优先级</option></select>
+          <button class="btn ghost sm">↕</button>
+          <select class="msel" aria-label="每页条数"><option>50 / 页</option><option selected>100 / 页</option></select>
+          <button class="btn ghost sm" id="selAll">全选筛选结果</button>
+        </div>
+
+        <div class="bulkbar" id="bulkbar" hidden>
+          <span class="cnt" id="bulkCnt">已选 0 条</span>
+          <button class="btn soft">改模块</button>
+          <button class="btn soft">加入分组</button>
+          <button class="btn soft">加入测试计划</button>
+          <button class="btn ghost">改优先级</button>
+          <button class="btn ghost">导出所选</button>
+          <button class="btn ghost" style="color:var(--danger-fg)">删除</button>
+          <span class="grow" style="flex:1"></span>
+          <button class="btn ghost" id="bulkClear">取消选择</button>
+        </div>
+
+        <div class="table">
+          <div class="thead">
+            <span></span><span>编号</span><span>用例</span><span>模块</span><span>分组（多归属）</span><span>优先级</span><span>结果</span><span>执行人</span>
+          </div>
+          <div class="tbody" id="rows"></div>
+        </div>
+
+        <div class="pager">
+          <span id="pagerInfo">已加载 14 / 14 条</span>
+          <span class="grow"></span>
+          <span>拖拽：到模块＝改归属 · 到分组＝加入分组（原组保留）</span>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="notes">
+  <div class="ncard">
+    <h5><span class="num">1</span>目录与分组常驻同一条导航</h5>
+    <p>取消折叠面板，左侧固定 248px。两个页签共用一棵树的位置，各自底部写明拖拽语义：模块是<b>单归属</b>（拖进去＝移动），分组是<b>多归属</b>（拖进去＝加入，原组保留）。动态分组带「动态」标记且不能作为拖放目标。</p>
+  </div>
+  <div class="ncard">
+    <h5><span class="num">2</span>统计即状态筛选，筛选收敛到一行</h5>
+    <p>原来的统计卡与筛选条合成一区：执行结果计数变成列表头上的可点 chip，点一下就是“只看失败的”；项目、优先级、执行人、需求、缺陷收敛到同一行，其余条件进「更多筛选」。已生效的条件以 chip 呈现，可单删、可「保存为视图」。</p>
+  </div>
+  <div class="ncard">
+    <h5><span class="num">3</span>分组维度回到表头，不再和筛选混在一起</h5>
+    <p>排序、分组维度、每页都只影响“看的方式”，统一放在表头右侧。按分组分组时同一用例会在多个组下重复出现，组头标「多归属」，悬停有解释；组头吸顶、可折叠。</p>
+  </div>
+  <div class="ncard">
+    <h5><span class="num">4</span>术语与口径一次改到底</h5>
+    <p>「用例集」统一叫<b>分组</b>；「项目目录」叫<b>模块目录</b>，与需求分类同树。删掉“目录决定覆盖矩阵口径”的说法——覆盖只按需求与工作项算，未关联需求的用例进「未纳入覆盖」清单。全部项目模式下导航置灰，提示先选项目。</p>
+  </div>
+</div>
+</div>
+
+<script>
+(function(){
+  var CASES = [
+    {no:"TC-031", t:"回调幂等：重复通知只入账一次", d:"DM-12 支付回调幂等改造", mod:["支付回调"], sets:["支付域 / 支付回调","核心冒烟"], pri:"P0", res:"pass", owner:"我", bug:false, up:"11-15"},
+    {no:"TC-032", t:"回调失败重试：最多 5 次", d:"DM-12 支付回调幂等改造", mod:["支付回调"], sets:["支付域 / 支付回调"], pri:"P1", res:"fail", owner:"陈工", bug:true, up:"11-14"},
+    {no:"TC-033", t:"对账差异：T+1 自动补单", d:"DM-09 对账差异补单", mod:["支付对账","差异补单"], sets:["支付域 / 支付对账"], pri:"P1", res:"todo", owner:"李雷", bug:false, up:"11-14"},
+    {no:"TC-034", t:"退款金额与手续费拆分", d:"", mod:["退款"], sets:["支付域"], pri:"P1", res:"pass", owner:"我", bug:false, up:"11-13"},
+    {no:"TC-035", t:"部分退款后再次退款", d:"", mod:["退款"], sets:["支付域"], pri:"P2", res:"block", owner:"陈工", bug:false, up:"11-13"},
+    {no:"TC-036", t:"支付渠道降级到备用通道", d:"", mod:["渠道网关"], sets:["核心冒烟"], pri:"P0", res:"pass", owner:"我", bug:false, up:"11-12"},
+    {no:"TC-037", t:"超时订单自动关单", d:"", mod:["订单"], sets:[], pri:"P2", res:"todo", owner:"李雷", bug:false, up:"11-12"},
+    {no:"TC-038", t:"重复关单幂等", d:"DM-12 支付回调幂等改造", mod:["订单"], sets:["支付域 / 支付回调"], pri:"P2", res:"pass", owner:"李雷", bug:false, up:"11-11"},
+    {no:"TC-039", t:"金额精度：0.01 边界", d:"", mod:["退款"], sets:["核心冒烟"], pri:"P1", res:"fail", owner:"我", bug:true, up:"11-11"},
+    {no:"TC-040", t:"优惠券与支付金额叠加", d:"", mod:["订单"], sets:[], pri:"P2", res:"todo", owner:"陈工", bug:false, up:"11-10"},
+    {no:"TC-041", t:"银行渠道对账文件解析", d:"DM-09 对账差异补单", mod:["支付对账"], sets:["支付域 / 支付对账"], pri:"P1", res:"pass", owner:"陈工", bug:false, up:"11-10"},
+    {no:"TC-042", t:"对账不平自动告警", d:"DM-09 对账差异补单", mod:["支付对账"], sets:["回归集"], pri:"P1", res:"pass", owner:"我", bug:false, up:"11-09"},
+    {no:"TC-043", t:"支付中台鉴权失败返回", d:"", mod:["渠道网关"], sets:["核心冒烟"], pri:"P0", res:"pass", owner:"我", bug:false, up:"11-09"},
+    {no:"TC-044", t:"网关限流返回 429", d:"", mod:["未归类"], sets:[], pri:"P2", res:"block", owner:"李雷", bug:false, up:"11-08"}
+  ];
+  var DIR = [
+    {id:"cb", name:"支付回调", lv:1},
+    {id:"rec", name:"支付对账", lv:1, open:true},
+    {id:"diff", name:"差异补单", lv:2, parent:"rec"},
+    {id:"refund", name:"退款", lv:1},
+    {id:"gw", name:"渠道网关", lv:1},
+    {id:"order", name:"订单", lv:1},
+    {id:"none", name:"未归类", lv:1, dim:true}
+  ];
+  var SETS = [
+    {id:"domain", name:"支付域", lv:1, tag:"团队", cnt:4, open:true},
+    {id:"scb", name:"支付回调", lv:2, range:"支付域", open:true},
+    {id:"srec", name:"支付对账", lv:2, range:"支付域"},
+    {id:"smoke", name:"核心冒烟", lv:1, tagSelf:"仅自己"},
+    {id:"regress", name:"回归集", lv:1, tagDyn:"动态", dyn:true},
+    {id:"ungrouped", name:"未分组", lv:1, dim:true}
+  ];
+  var RES = {pass:"通过", fail:"失败", block:"阻塞", todo:"未执行"};
+  var OWNER_CLS = {"我":"", "陈工":"c2", "李雷":"c3"};
+
+  var st = {tab:"dir", node:null, q:"", pri:"", owner:"", demand:"", bug:false, groupBy:"", selected:{}};
+
+  function countForDir(n){
+    if(n.id === "none") return CASES.filter(function(c){ return c.mod[0] === "未归类"; }).length;
+    var path = dirPath(n);
+    return CASES.filter(function(c){
+      var p = c.mod.join("/");
+      return p === path || p.indexOf(path + "/") === 0;
+    }).length;
+  }
+  function dirPath(n){
+    var parts = [n.name], cur = n;
+    while(cur.parent){
+      cur = DIR.filter(function(x){ return x.id === cur.parent; })[0];
+      parts.unshift(cur.name);
+    }
+    return parts.join("/");
+  }
+  function countForSet(s){
+    if(s.id === "ungrouped") return CASES.filter(function(c){ return !c.sets.length; }).length;
+    if(s.lv === 1){
+      return CASES.filter(function(c){
+        return c.sets.some(function(g){ return g === s.name || g.indexOf(s.name + " / ") === 0; });
+      }).length;
+    }
+    return CASES.filter(function(c){ return c.sets.indexOf(s.range + " / " + s.name) >= 0; }).length;
+  }
+  function setPath(s){ return s.range ? s.range + " / " + s.name : s.name; }
+
+  function filtered(){
+    return CASES.filter(function(c){
+      if(st.node){
+        if(st.node.type === "dir"){
+          if(st.node.id === "none"){ if(c.mod[0] !== "未归类") return false; }
+          else if(c.mod.join("/").indexOf(st.node.path) !== 0) return false;
+        }else{
+          if(st.node.id === "ungrouped"){ if(c.sets.length) return false; }
+          else if(!c.sets.some(function(g){ return g === st.node.path || g.indexOf(st.node.path + " / ") === 0; })) return false;
+        }
+      }
+      if(st.pri && c.pri !== st.pri) return false;
+      if(st.owner && c.owner !== st.owner) return false;
+      if(st.demand){
+        if(st.demand === "__none" ? !!c.d : c.d.indexOf(st.demand) < 0) return false;
+      }
+      if(st.bug && !c.bug) return false;
+      if(st.q){
+        var k = st.q.toLowerCase();
+        if((c.no + " " + c.t + " " + c.d).toLowerCase().indexOf(k) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderNav(){
+    var tree = document.getElementById("navTree");
+    var foot = document.getElementById("navFoot");
+    var todo = document.getElementById("navTodo");
+    var q = document.getElementById("nq").value.trim();
+    var html = "";
+    if(st.tab === "dir"){
+      html += '<div class="navsec"><span>本项目模块</span><span>' + CASES.length + ' 条用例</span></div>';
+      DIR.forEach(function(n){
+        var c = countForDir(n);
+        var shown = !q || n.name.indexOf(q) >= 0 || dirPath(n).indexOf(q) >= 0;
+        if(!shown) return;
+        html += '<div class="node lv' + n.lv + (n.dim ? " dim" : "")
+          + (st.node && st.node.id === n.id ? " on" : "")
+          + '" data-kind="dir" data-id="' + n.id + '">'
+          + '<span class="tw">' + (n.open ? "▾" : "") + '</span>'
+          + '<span class="nm">' + n.name + '</span><span class="cnt">' + c + '</span></div>';
+      });
+      foot.innerHTML = '<div class="acts"><button class="btn ghost sm">＋ 新建模块</button>'
+        + '<button class="btn ghost sm">管理</button></div>'
+        + '<div class="hint">模块单归属：拖用例到节点＝移动归属；与需求分类是同一棵树。</div>';
+    }else{
+      html += '<div class="navsec"><span>本项目分组</span><span>可多归属 · 可嵌套</span></div>';
+      SETS.forEach(function(s){
+        var c = countForSet(s);
+        if(q && s.name.indexOf(q) < 0) return;
+        html += '<div class="node lv' + s.lv + (s.dim ? " dim" : "") + (s.dyn ? " dim" : "")
+          + (st.node && st.node.id === s.id ? " on" : "")
+          + '" data-kind="set" data-id="' + s.id + '">'
+          + '<span class="tw">' + (s.open ? "▾" : "") + '</span>'
+          + '<span class="nm">' + s.name + '</span>'
+          + (s.tag ? '<span class="ntag team">' + s.tag + '</span>' : '')
+          + (s.tagSelf ? '<span class="ntag self">' + s.tagSelf + '</span>' : '')
+          + (s.tagDyn ? '<span class="ntag dyn">' + s.tagDyn + '</span>' : '')
+          + '<span class="cnt">' + c + '</span></div>';
+      });
+      foot.innerHTML = '<div class="acts"><button class="btn ghost sm">＋ 新建分组</button>'
+        + '<button class="btn ghost sm">管理</button></div>'
+        + '<div class="hint">分组多归属：拖用例进来＝加入分组，原组保留；动态分组按规则收录，不能拖入。</div>';
+    }
+    var noDemand = CASES.filter(function(c){ return !c.d; }).length;
+    var noMod = CASES.filter(function(c){ return c.mod[0] === "未归类"; }).length;
+    var noSet = CASES.filter(function(c){ return !c.sets.length; }).length;
+    todo.innerHTML = '<h6>待归类</h6>'
+      + '<div class="todo" data-todo="demand"><span class="d"></span>未关联需求<b>' + noDemand + '</b></div>'
+      + '<div class="todo" data-todo="nomod"><span class="d"></span>无模块<b>' + noMod + '</b></div>'
+      + '<div class="todo" data-todo="noset"><span class="d"></span>无分组<b>' + noSet + '</b></div>';
+    todo.querySelectorAll("[data-todo]").forEach(function(el){
+      el.addEventListener("click", function(){
+        var k = el.dataset.todo;
+        if(k === "demand"){ st.demand = "__none"; st.node = null; }
+        if(k === "nomod"){ st.tab = "dir"; selectTab("dir"); st.node = {type:"dir", id:"none", name:"未归类", path:"未归类", lv:1, dim:true}; }
+        if(k === "noset"){ st.tab = "set"; selectTab("set"); st.node = {type:"set", id:"ungrouped", name:"未分组", path:"未分组", lv:1, dim:true}; }
+        syncControls(); render();
+      });
+    });
+    tree.innerHTML = html;
+    tree.querySelectorAll(".node").forEach(function(el){
+      el.addEventListener("click", function(){
+        var kind = el.dataset.kind, id = el.dataset.id;
+        if(st.node && st.node.id === id){ st.node = null; }
+        else if(kind === "dir"){
+          var n = DIR.filter(function(x){ return x.id === id; })[0];
+          st.node = {type:"dir", id:id, name:n.name, path:dirPath(n), lv:n.lv, dim:!!n.dim};
+        }else{
+          var s = SETS.filter(function(x){ return x.id === id; })[0];
+          st.node = {type:"set", id:id, name:s.name, path:setPath(s), lv:s.lv, dyn:!!s.dyn};
+        }
+        render();
+      });
+    });
+  }
+  function selectTab(tab){
+    var host = document.getElementById("navTabs");
+    host.querySelectorAll("button").forEach(function(x){ x.classList.toggle("on", x.dataset.tab === tab); });
+  }
+
+  function resOf(list, key){ return list.filter(function(c){ return c.res === key; }).length; }
+
+  function renderStats(list){
+    var all = list.length;
+    var defs = [["", "全部", all, ""], ["pass","通过",resOf(list,"pass"),"pass"],
+                ["fail","失败",resOf(list,"fail"),"fail"], ["block","阻塞",resOf(list,"block"),"block"],
+                ["todo","未执行",resOf(list,"todo"),"none"]];
+    document.getElementById("stats").innerHTML = defs.map(function(d){
+      var on = (st.status || "") === d[0];
+      return '<button class="statchip ' + d[3] + (on ? " on" : "") + '" data-status="' + d[0] + '">'
+        + (d[3] ? '<span class="d"></span>' : '') + d[1] + ' <b>' + d[2] + '</b></button>';
+    }).join("");
+  }
+
+  function renderChips(){
+    var bar = document.getElementById("chipbar");
+    var out = [];
+    if(st.node) out.push(["node", (st.node.type === "dir" ? "模块：" : "分组：") + st.node.path]);
+    if(st.pri) out.push(["pri", "优先级：" + st.pri]);
+    if(st.owner) out.push(["owner", "执行人：" + st.owner]);
+    if(st.demand) out.push(["demand", "需求：" + (st.demand === "__none" ? "未关联" : st.demand)]);
+    if(st.bug) out.push(["bug", "未关闭缺陷"]);
+    if(!out.length){ bar.hidden = true; bar.innerHTML = ""; return; }
+    bar.hidden = false;
+    bar.innerHTML = out.map(function(o){
+      return '<span class="fchip"><b>' + o[1] + '</b><button data-rm="' + o[0] + '">×</button></span>';
+    }).join("")
+      + '<span class="save">＋ 保存为视图</span>'
+      + '<span class="clear" id="clearAll">清空筛选</span>';
+    bar.querySelectorAll("[data-rm]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var k = b.dataset.rm;
+        if(k === "node") st.node = null;
+        else if(k === "bug") st.bug = false;
+        else st[k] = "";
+        syncControls(); render();
+      });
+    });
+    document.getElementById("clearAll").addEventListener("click", function(){
+      st.node = null; st.pri = ""; st.owner = ""; st.demand = ""; st.bug = false; st.q = "";
+      syncControls(); render();
+    });
+  }
+
+  function rowsHtml(list){
+    return list.map(function(c){
+      var sel = !!st.selected[c.no];
+      var mod = c.mod.join('<span class="sep">/</span>');
+      var groups = c.sets.slice(0,2).map(function(g){
+        var leaf = g.split(" / ").pop();
+        var cls = g === "回归集" ? " dyn" : "";
+        return '<span class="gchip' + cls + '" title="' + g + '">' + leaf + '</span>';
+      }).join("") + (c.sets.length > 2 ? '<span class="gchip" title="还有 ' + (c.sets.length - 2) + ' 个分组">+' + (c.sets.length - 2) + '</span>' : "")
+        + (!c.sets.length ? '<span style="color:var(--text-4);font-size:10.5px">未分组</span>' : "");
+      return '<div class="trow' + (sel ? " sel" : "") + '" data-no="' + c.no + '">'
+        + '<span class="cb" data-cb="1">' + (sel ? "✓" : "") + '</span>'
+        + '<span class="no">' + c.no + '</span>'
+        + '<span class="tt"><b>' + (c.bug ? '<span class="bugdot" title="有未关闭缺陷"></span>' : '') + c.t + '</b><span>'
+        + (c.d || "未关联需求") + ' · 更新 ' + c.up + '</span></span>'
+        + '<span class="mod">' + mod + '</span>'
+        + '<span class="grps">' + groups + '</span>'
+        + '<span class="pri ' + c.pri.toLowerCase() + '">' + c.pri + '</span>'
+        + '<span><span class="res ' + c.res + '"><span class="d"></span>' + RES[c.res] + '</span></span>'
+        + '<span class="own"><span class="av ' + OWNER_CLS[c.owner] + '">' + c.owner.slice(0,1) + '</span>' + c.owner + '</span>'
+        + '</div>';
+    }).join("");
+  }
+
+  function sectionKey(c, dim){
+    if(dim === "mod") return c.mod[0];
+    if(dim === "pri") return c.pri;
+    if(dim === "owner") return c.owner;
+    if(dim === "res") return RES[c.res];
+    return "";
+  }
+
+  function renderRows(list){
+    var host = document.getElementById("rows");
+    var html = "";
+    if(!list.length){ host.innerHTML = '<div class="empty">没有命中的用例。试试清空筛选，或切到「未归类 / 未分组」补齐归类。</div>'; return; }
+    if(st.groupBy === "set"){
+      var order = ["支付域 / 支付回调","支付域 / 支付对账","核心冒烟","回归集","未分组"];
+      var seen = {};
+      order.forEach(function(g){
+        var rows = list.filter(function(c){
+          return g === "未分组" ? !c.sets.length : c.sets.indexOf(g) >= 0;
+        });
+        if(!rows.length) return;
+        seen[g] = rows;
+        html += '<div class="sec"><span class="tw">▾</span><b>' + g + '</b><span class="c">' + rows.length + ' 条</span>'
+          + (g === "回归集" ? '<span class="tag">动态 · 规则收录</span>' : '')
+          + '<span class="tag grey">多归属</span><span class="grow"></span></div>' + rowsHtml(rows);
+      });
+      list.forEach(function(c){
+        c.sets.forEach(function(g){
+          if(seen[g]) return;
+          seen[g] = true;
+          var rows = list.filter(function(x){ return x.sets.indexOf(g) >= 0; });
+          html += '<div class="sec"><span class="tw">▾</span><b>' + g + '</b><span class="c">' + rows.length + ' 条</span>'
+            + '<span class="tag grey">多归属</span><span class="grow"></span></div>' + rowsHtml(rows);
+        });
+      });
+    }else if(st.groupBy){
+      var buckets = {};
+      list.forEach(function(c){
+        var k = sectionKey(c, st.groupBy);
+        (buckets[k] = buckets[k] || []).push(c);
+      });
+      Object.keys(buckets).forEach(function(k){
+        html += '<div class="sec"><span class="tw">▾</span><b>' + k + '</b><span class="c">'
+          + buckets[k].length + ' 条</span><span class="grow"></span></div>' + rowsHtml(buckets[k]);
+      });
+    }else{
+      html = rowsHtml(list);
+    }
+    host.innerHTML = html;
+    host.querySelectorAll(".trow").forEach(function(tr){
+      tr.addEventListener("click", function(ev){
+        var no = tr.dataset.no;
+        if(ev.target.closest("[data-cb]")){
+          st.selected[no] = !st.selected[no];
+        }else{
+          st.selected[no] = !st.selected[no];
+        }
+        renderRows(filtered());
+        renderBulk();
+      });
+    });
+  }
+
+  function renderBulk(){
+    var n = Object.keys(st.selected).filter(function(k){ return st.selected[k]; }).length;
+    var bar = document.getElementById("bulkbar");
+    bar.hidden = !n;
+    document.getElementById("bulkCnt").textContent = "已选 " + n + " 条";
+  }
+
+  function syncControls(){
+    document.getElementById("pri").value = st.pri;
+    document.getElementById("owner").value = st.owner;
+    document.getElementById("demand").value = st.demand;
+    document.getElementById("bugT").classList.toggle("on", st.bug);
+    document.getElementById("q").value = st.q;
+    document.getElementById("pri").classList.toggle("on", !!st.pri);
+    document.getElementById("owner").classList.toggle("on", !!st.owner);
+    document.getElementById("demand").classList.toggle("on", !!st.demand);
+  }
+
+  function render(){
+    var list = filtered();
+    renderNav();
+    renderStats(list);
+    renderChips();
+    renderRows(list);
+    renderBulk();
+    document.getElementById("rescount").textContent = "共 " + list.length + " 条";
+    document.getElementById("pagerInfo").textContent = "已加载 " + list.length + " / " + list.length + " 条";
+  }
+
+  document.getElementById("navTabs").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    st.tab = b.dataset.tab; st.node = null;
+    this.querySelectorAll("button").forEach(function(x){ x.classList.toggle("on", x === b); });
+    render();
+  });
+  document.getElementById("nq").addEventListener("input", renderNav);
+  document.getElementById("q").addEventListener("input", function(){ st.q = this.value; render(); });
+  ["pri","owner","demand"].forEach(function(id){
+    document.getElementById(id).addEventListener("change", function(){
+      st[id] = this.value; syncControls(); render();
+    });
+  });
+  document.getElementById("bugT").addEventListener("click", function(){ st.bug = !st.bug; syncControls(); render(); });
+  document.getElementById("moreBtn").addEventListener("click", function(){
+    this.textContent = this.textContent === "＋ 更多筛选" ? "收起更多" : "＋ 更多筛选";
+    var extra = document.getElementById("extraBar");
+    if(extra){ extra.remove(); return; }
+    var bar = document.createElement("div");
+    bar.id = "extraBar"; bar.className = "filterbar";
+    bar.innerHTML = '<select class="fsel"><option>工作项</option><option>WI-231 回调重试改造</option></select>'
+      + '<select class="fsel"><option>创建人</option><option>我</option><option>陈工</option></select>'
+      + '<select class="fsel"><option>更新时间</option><option>近 7 天</option><option>近 30 天</option></select>'
+      + '<button class="toggle">无模块</button><button class="toggle">无分组</button>';
+    document.getElementById("chipbar").before(bar);
+  });
+  document.getElementById("groupBy").addEventListener("change", function(){ st.groupBy = this.value; render(); });
+  document.getElementById("selAll").addEventListener("click", function(){
+    filtered().forEach(function(c){ st.selected[c.no] = true; });
+    render();
+  });
+  document.getElementById("bulkClear").addEventListener("click", function(){
+    st.selected = {}; render();
+  });
+  document.getElementById("stats").addEventListener("click", function(e){
+    var b = e.target.closest("[data-status]"); if(!b) return;
+    st.status = b.dataset.status; render();
+  });
+  document.getElementById("modeSeg").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    this.querySelectorAll("button").forEach(function(x){ x.classList.toggle("on", x === b); });
+  });
+
+  render();
+  /* 截图状态：?state=group 直接演示「按分组」视图 */
+  if(/state=group/.test(location.search)){
+    st.groupBy = "set";
+    document.getElementById("groupBy").value = "set";
+    render();
+  }
+})();
+</script>
+</div>
+<!-- FRAGMENT END -->
+</body>
+</html>

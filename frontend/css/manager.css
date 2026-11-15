@@ -16,6 +16,9 @@
 .manager-caliber[open]>summary{color:var(--text-2);}
 .manager-caliber[open]>div{margin-top:4px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-2);}
 .manager-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+.manager-kpi-wrap{position:relative;display:flex;min-width:0;}
+.manager-kpi-wrap>.manager-kpi{flex:1;min-width:0;}
+.manager-kpi-wrap>.caliber-mark{position:absolute;top:10px;right:10px;z-index:1;}
 .manager-kpi{min-width:0;min-height:108px;padding:15px 16px;display:flex;flex-direction:column;align-items:flex-start;gap:7px;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);transition:border-color var(--dur-fast),box-shadow var(--dur-fast);}
 .manager-kpi:hover{border-color:var(--primary-border);box-shadow:var(--shadow-md);}
 .manager-kpi>span{font-size:12.5px;color:var(--text-2);}
@@ -113,6 +116,7 @@
 .member-sheet-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
 .member-sheet-kpi{padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
 .member-sheet-kpi>i{display:block;font-style:normal;font-size:11.5px;color:var(--text-3);}
+.member-sheet-kpi>i.caliber-label{display:inline-flex;align-items:center;gap:4px;}
 .member-sheet-kpi>b{display:block;margin-top:3px;font-size:16px;line-height:22px;color:var(--text);font-variant-numeric:tabular-nums;}
 .member-sheet-kpi>span{display:block;margin-top:2px;font-size:11.5px;color:var(--text-3);}
 .member-layer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 -4px;}
@@ -433,6 +437,12 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .ms-form>label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text-2);}
 .ms-check{flex-direction:row!important;align-items:center;gap:8px!important;}
 .ms-task-list{max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:var(--r-md);padding:6px;display:grid;gap:2px;}
+/* 搜索占一整行，两个筛选与计数并排；行用 grid 排，[hidden] 要显式关掉 */
+.ms-task-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px;}
+.ms-task-tools input[type="search"]{flex:1 1 100%;}
+.ms-task-tools select{flex:1 1 0;min-width:104px;}
+.ms-task-count{flex:0 0 auto;margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.ms-task-opt[hidden]{display:none;}
 .ms-task-opt{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 6px;border-radius:var(--r-sm);}
 .ms-task-opt:hover{background:var(--surface);}
 .ms-task-opt span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

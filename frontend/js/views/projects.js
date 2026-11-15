@@ -10,12 +10,25 @@ import { canEditReq, canManageProject, reqNameById, roleReadOnly, rt, state, tas
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, populateReqSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
+import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { CAT_DEFAULT_COLOR, colName, docTypeName, fmtTs, reqStatusName, typeBadgeHTML } from "../lib/format.js";
 import * as activityUI from "../core/activity-ui.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { openDemandsForReq } from "./demands.js";
 import { loadReqDocs, openNewReqDocDialog, openReqDocAndJump, reqDocList, reqDocStatusLabel, setReqDocProjectFilter } from "./requirements.js";
+
+registerHelp({
+  "projects.progress": {
+    title:"项目进度",
+    rows:[
+      ["怎么算", "项目全部工作项完成度的平均值：已完成的工作项按 100% 计，其余按各自的进度值计，没填进度按 0。", "ok"],
+      ["不是完成数占比", "和旁边「N 工作项 · M 完成」不是同一口径。例：1 个完成 + 1 个 90%，进度约 95%，而不是 50%。", "warn"],
+      ["不加权", "不按预估工时加权，长任务和短任务的权重相同。", "info"]
+    ]
+  }
+});
+initCaliberHelp();
 
 var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
     rObjective = $("rObjective"), rOwner = $("rOwner"), rPlanStart = $("rPlanStart"), rPlanEnd = $("rPlanEnd"),
@@ -395,6 +408,7 @@ function renderReqList(){
         '<span class="progress" style="width:140px"><span class="bar"><i style="width:' + r.progressPct +
           '%;background:' + (r.status === "done" ? "var(--success)" : "var(--primary)") + '"></i></span></span>' +
         '<span style="font-weight:600;color:var(--text-2)">' + r.progressPct + '%</span>' +
+        caliberMarkHTML("projects.progress", false, "查看「项目进度」口径") +
         '<span>' + r.taskCount + ' 工作项 · ' + r.doneCount + ' 完成' +
           (Number(r.docCount) ? (' · ' + r.docCount + ' 文档') : '') + '</span>' +
       '</div>' +
@@ -481,10 +495,13 @@ function renderProjectTable(list){
       var hint = active
         ? (projectSort.dir === PROJECT_SORT_DEFAULT_DIR[key] ? "切换排序方向（再点一次恢复手动顺序）" : "恢复手动顺序")
         : "按「" + labels[key] + "」排序";
-      return '<span aria-sort="' + (active ? (projectSort.dir === "desc" ? "descending" : "ascending") : "none") + '">' +
+      return '<span' + (key === "progress" ? ' class="th-help-wrap"' : "") +
+        ' aria-sort="' + (active ? (projectSort.dir === "desc" ? "descending" : "ascending") : "none") + '">' +
         '<button class="lh-sort' + (active ? " on" : "") + '" type="button" data-project-sort="' + esc(key) + '"' +
           ' title="' + esc(hint) + '">' + esc(labels[key]) +
-          '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button></span>';
+          '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button>' +
+          (key === "progress" ? caliberMarkHTML("projects.progress", false, "查看「项目进度」口径") : "") +
+        '</span>';
     }).join("") + '<span>操作</span></div>' +
     '<div class="project-table-body">' + list.map(function(r){
       return '<div class="project-table-row" data-req-id="' + esc(r.id) + '">' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';

@@ -86,6 +86,7 @@
     }
     .ta-item.hot { background: var(--primary-soft); border-color: var(--primary-border); }
     .ta-item.hot-plum { background: var(--plum-soft); border-color: var(--plum-border); }
+    .ta-items.six .ta-item { flex: 1 1 30%; min-width: 0; }
     .ta-item-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
     .ta-item-desc { font-size: 11.8px; line-height: 1.55; color: var(--text-2); }
     .ta-item.hot .ta-item-name { color: var(--primary-fg); }
@@ -180,7 +181,7 @@
           <span class="ta-tag tag-plum"><span class="dot"></span>应用层</span>
           <span class="ta-layer-note">Spring Boot 2.7.18 · Java 8 · 单 jar 只含 API</span>
         </div>
-        <div class="ta-items">
+        <div class="ta-items six">
           <div class="ta-item">
             <div class="ta-item-name">Spring Security</div>
             <div class="ta-item-desc">数据库账号登录 · 会话 + CSRF · 角色与项目可见性</div>
@@ -199,7 +200,11 @@
           </div>
           <div class="ta-item">
             <div class="ta-item-name">AI 外呼</div>
-            <div class="ta-item-desc">每人自配模型与额度，默认禁止访问内网</div>
+            <div class="ta-item-desc">团队共享或个人自配模型与额度，默认禁止访问内网</div>
+          </div>
+          <div class="ta-item">
+            <div class="ta-item-name">GitLab 只读同步</div>
+            <div class="ta-item-desc">按仓库拉取分支与提交，待确认队列人工核对，不回写</div>
           </div>
         </div>
       </div>
@@ -209,11 +214,11 @@
       <div class="ta-layer">
         <div class="ta-layer-head">
           <span class="ta-tag tag-warn"><span class="dot"></span>数据层</span>
-          <span class="ta-layer-note">MySQL 8 · utf8mb4 · 56 张表</span>
+          <span class="ta-layer-note">MySQL 8 · utf8mb4 · 75 张表</span>
         </div>
         <div class="ta-items">
           <div class="ta-item">
-            <div class="ta-item-name">56 张表</div>
+            <div class="ta-item-name">75 张表</div>
             <div class="ta-item-desc">工时、流转与发布事实直读；每个统计数字可回溯</div>
           </div>
           <div class="ta-item">
@@ -241,7 +246,7 @@
       </div>
       <div class="ta-card c3">
         <h3>外部依赖</h3>
-        <p>仅通知渠道可选外联：邮件、Webhook、Server酱、PushPlus；AI 模型地址由用户自配，默认禁止访问内网。</p>
+        <p>仅通知渠道与集成可选外联：邮件、Webhook、Server酱、PushPlus；GitLab 按仓库只读拉取分支与提交；AI 模型地址团队共享或个人自配，默认禁止访问内网。</p>
         <p>没有隐藏的中间件——看得见的每个组件都可以在自己服务器上审计。</p>
       </div>
     </aside>

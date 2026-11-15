@@ -18,20 +18,20 @@
 .inv-chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);font-size:11.5px;color:var(--text-3);white-space:nowrap;}
 .inv-chip b{color:var(--text);font-weight:650;}
 
-.inv-mark{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;flex:0 0 auto;border-radius:50%;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-3);font-size:10px;font-weight:700;line-height:1;cursor:pointer;}
-.inv-mark:hover{color:var(--text);background:var(--surface-hover);border-color:var(--text-3);}
-.inv-mark.warn{color:var(--warning-fg);border-color:var(--warning-border);background:var(--warning-soft);}
-.inv-mark.warn:hover{border-color:var(--warning-fg);}
-
 .inv-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;}
 .inv-kpi{min-width:0;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
 .inv-kl{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--text-3);}
 .inv-kv{margin-top:4px;font-size:21px;line-height:1.25;font-weight:680;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
 .inv-kv small{font-size:11.5px;font-weight:600;color:var(--text-3);margin-left:2px;}
-.inv-kd{margin-top:3px;font-size:11px;color:var(--text-3);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inv-kd{margin-top:3px;font-size:11px;color:var(--text-3);line-height:1.5;white-space:normal;overflow:visible;text-overflow:clip;}
 .inv-kpi.hl{background:var(--primary-soft);border-color:var(--primary-border);}
 .inv-kpi.hl .inv-kl,.inv-kpi.hl .inv-kd,.inv-kpi.hl .inv-kv{color:var(--primary-fg);}
-.inv-kpi.hl .inv-mark{border-color:var(--primary-border);color:var(--primary-fg);background:var(--surface);}
+.inv-kpi.hl .caliber-mark{border-color:var(--primary-border);color:var(--primary-fg);background:var(--surface);}
+/* 可下钻的卡片（去重人力）：悬停与键盘聚焦给出可点反馈 */
+.inv-kpi-link{cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+.inv-kpi-link:hover{border-color:var(--primary-border);box-shadow:var(--shadow-xs);}
+.inv-kpi-link:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+/* 1440 六列时说明文字放不下一行，放开换行，别把口径说明省略掉 */
 
 .inv-compose{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
 .inv-compose-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
@@ -51,6 +51,10 @@
 
 .inv-trend{display:flex;align-items:stretch;gap:22px;height:158px;padding:12px 6px 0;border-bottom:1px solid var(--border-strong);}
 .inv-col{flex:1 1 0;min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;}
+/* 可下钻的月份柱：整列给点击热区，空槽也能点出提示 */
+.inv-col-link{cursor:pointer;border-radius:var(--r-sm);}
+.inv-col-link:hover{background:var(--surface-hover);}
+.inv-col-link:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
 .inv-v{font-size:11px;font-weight:650;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;}
 .inv-bar{display:flex;align-items:flex-end;width:100%;max-width:64px;border-radius:6px 6px 0 0;overflow:hidden;}
 .inv-bar i{display:block;width:100%;height:100%;min-height:2px;border-radius:6px 6px 0 0;background:var(--primary);}
@@ -63,9 +67,12 @@
 
 .inv-tbl-wrap{border:1px solid var(--border);border-radius:var(--r-md);overflow:auto;}
 .inv-tbl{min-width:720px;}
-.inv-tbl tbody tr.row{cursor:pointer;}
-.inv-tbl tbody tr.row:hover td{background:var(--surface-hover);}
-.inv-tbl tbody tr.row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+/* 表头口径标记与表头文字并排，保持右对齐列不换行 */
+.inv-tbl th .th-help-wrap{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+/* 行类名不能用全局工具类 .row（base.css 的 .row{display:flex} 会把 tr 变成 flex，表体与表头错位） */
+.inv-tbl tbody tr.inv-row{cursor:pointer;}
+.inv-tbl tbody tr.inv-row:hover td{background:var(--surface-hover);}
+.inv-tbl tbody tr.inv-row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
 .inv-tbl tr.total td{background:var(--surface-sunken);font-weight:650;}
 .inv-name{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .inv-name b{font-size:12.5px;font-weight:650;color:var(--text);}
@@ -87,9 +94,6 @@
 .inv-notes-grid ul{list-style:none;display:flex;flex-direction:column;gap:6px;}
 .inv-notes-grid li{font-size:11.5px;color:var(--text-2);line-height:1.6;}
 .inv-notes-grid li b{color:var(--text);font-weight:650;}
-
-.inv-help-pop{max-height:min(540px,78vh);overflow:auto;}
-.inv-help-note{margin:2px 10px 10px;padding:8px 10px;border-radius:var(--r-sm);background:var(--warning-soft);color:var(--warning-fg);font-size:11.5px;line-height:1.6;}
 
 @media (max-width:1280px){
   .inv-kpis{grid-template-columns:repeat(3,minmax(0,1fr));}

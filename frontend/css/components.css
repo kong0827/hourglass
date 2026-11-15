@@ -134,11 +134,10 @@
 .type-help-desc{font-size:12px;color:var(--text-2);line-height:18px;min-width:0;}
 .tc-help-note{margin:0;padding:0 10px 10px;line-height:18px;}
 
+/* 文本类控件用排除法取全：裸 <input>（无 type）若不在白名单里会退回浏览器原生直角深色边框。
+   复选框 / 单选 / 滑块 / 取色 / 文件 / 按钮各自有专门样式，不并入这一套。 */
 .input,.textarea,.select,
-.field input[type="text"],.field input[type="password"],.field input[type="email"],
-.field input[type="url"],.field input[type="tel"],.field input[type="date"],
-.field input[type="datetime-local"],.field input[type="time"],.field input[type="month"],
-.field input[type="week"],.field input[type="search"],.field input[type="number"],
+.field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
 .field textarea,.field select{
   width:100%;height:34px;padding:0 10px;
   background-color:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
@@ -146,13 +145,16 @@
   transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
 }
 .field textarea,.textarea{height:auto;min-height:72px;padding:8px 10px;line-height:1.6;resize:vertical;}
-.field input::placeholder,.field textarea::placeholder{color:var(--text-3);}
-.field input:hover,.field textarea:hover,.field select:hover{border-color:var(--border-strong);}
-.field input:focus,.field textarea:focus,.field select:focus{
+.field input::placeholder,.field textarea::placeholder,
+.input::placeholder,.textarea::placeholder{color:var(--text-3);}
+.field input:hover,.field textarea:hover,.field select:hover,
+.input:hover,.textarea:hover,.select:hover{border-color:var(--border-strong);}
+.field input:focus,.field textarea:focus,.field select:focus,
+.input:focus,.textarea:focus,.select:focus{
   outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);
 }
 .field input:disabled,.field textarea:disabled,.field select:disabled,
-.input:disabled{
+.input:disabled,.textarea:disabled,.select:disabled{
   background:var(--surface-sunken);color:var(--text-3);cursor:not-allowed;
 }
 .field .err{display:none;font-size:12px;color:var(--danger-fg);line-height:18px;}
@@ -1772,8 +1774,22 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .panel-head .meta-right{margin-left:auto;font-size:12px;color:var(--text-3);}
 .panel + .panel{margin-top:0;}
 
+/* 口径提示：? 解释定义，! 提示边界（lib/caliber-help.js） */
+.caliber-mark{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;flex:0 0 auto;border-radius:50%;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-3);font-size:10px;font-weight:700;line-height:1;cursor:pointer;font-family:inherit;}
+.caliber-mark:hover{color:var(--text);background:var(--surface-hover);border-color:var(--text-3);}
+.caliber-mark.warn{color:var(--warning-fg);border-color:var(--warning-border);background:var(--warning-soft);}
+.caliber-mark.warn:hover{border-color:var(--warning-fg);}
+.caliber-mark:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+/* 标签与口径标记并排：用在表头 / 统计卡标题等文字本身就带标记的位置 */
+.caliber-label{display:inline-flex;align-items:center;gap:4px;}
+.caliber-pop{max-height:min(540px,78vh);overflow:auto;}
+.caliber-note{margin:2px 10px 10px;padding:8px 10px;border-radius:var(--r-sm);background:var(--warning-soft);color:var(--warning-fg);font-size:11.5px;line-height:1.6;}
+
 /* 统计卡 */
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;}
+.stat-wrap{position:relative;display:flex;min-width:0;}
+.stat-wrap>.stat{flex:1;min-width:0;}
+.stat-wrap>.caliber-mark{position:absolute;top:10px;right:10px;}
 .stat{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
   padding:14px;display:flex;flex-direction:column;gap:2px;
@@ -2027,6 +2043,8 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .wi-hours-main > .rf-k{grid-area:1/1;}
 .wi-hours-main > .rf-v-lg{grid-area:2/1;font-size:16px;}
 .wi-hours-cell > .rf-sub{grid-area:1/2;justify-self:end;align-self:center;margin:0;}
+.wi-hours-cell > .rf-sub.rf-hours-meta{display:inline-flex;align-items:center;gap:4px;overflow:visible;}
+.rf-hours-note{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .wi-hours-main:hover{background:color-mix(in srgb,var(--primary) 6%,transparent);}
 .wi-hours-main:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
 /* 补记入口默认隐身，hover/聚焦显现；触屏常显，避免与「改预估」误触 */
@@ -2386,7 +2404,14 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .case-detail{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
 /* 阅读态/编辑态共用外壳：hidden 必须压过上面的 display:flex，否则两个容器会同时占位 */
 .case-detail[hidden]{display:none;}
-.case-edit-acts{margin-left:auto;display:flex;align-items:center;gap:6px;}
+.case-edit-acts{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none;}
+/* 编辑态头部：标题 + 上下文（项目 / 编号 / 只读），X 右侧常驻 */
+.case-drawer .cf-head{align-items:flex-start;}
+.cf-head-main{flex:1 1 auto;min-width:0;}
+.cf-ctx{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:5px 0 0;font-size:12px;line-height:18px;color:var(--text-3);}
+.cf-ctx b{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;}
+.cf-ctx .cf-sep{color:var(--border-strong);}
+.cf-ctx .cf-ro{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface-sunken);color:var(--text-2);font-weight:500;}
 /* 编辑态表单比抽屉高：标题与保存固定在上下缘，滚到哪都能直接取消或保存（原居中弹框的「按钮被推出屏幕」） */
 .case-drawer #caseEditBody .panel-head{position:sticky;top:-20px;z-index:2;margin:-20px -20px 12px;padding:14px 20px;
   background:var(--surface);border-bottom:1px solid var(--border);}
@@ -2395,6 +2420,11 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 /* 正文 20px 底内边距会让保存行悬空 20px；保存行自身的 12px 内边距已够，底内边距归零后贴住抽屉下缘。
    只读态没有保存行，保留原内边距，免得末行文字贴着抽屉底 */
 .case-drawer #caseEditBody:not(.is-readonly){padding-bottom:0;}
+/* 内容不足一屏时页脚贴住抽屉底缘，与长表单吸附时的位置一致 */
+.case-drawer #caseEditBody > .panel{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+.case-drawer #caseEditBody .cf-form{flex:1 1 auto;}
+.case-drawer #caseEditBody:not(.is-readonly) .panel{padding-bottom:0;}
+.case-drawer #caseEditBody .cf-foot{margin-top:auto;}
 .case-detail-head{display:flex;align-items:flex-start;gap:12px;padding:16px 20px 12px;border-bottom:1px solid var(--border);}
 .case-detail-headline{flex:1 1 auto;min-width:0;}
 .case-detail-titleline{display:flex;align-items:center;gap:8px;min-width:0;}

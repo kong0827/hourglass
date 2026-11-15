@@ -45,14 +45,26 @@ function collectRows(sel) {
   });
   return rows;
 }
+/* 层级选项（如项目目录）的缩进写在文本前的全角空格里：原生下拉与读屏需要它，
+   自绘面板则按 data-level 用内边距还原——直接 trim 会把缩进一起吞掉，父子节点就看不出层级 */
+var INDENT_RE = /^[　\s]+/;
 function optRow(o) {
+  var raw = o.label || o.textContent || "";
+  var path = (o.dataset && o.dataset.path) || "";
   return {
     kind: "opt",
     value: o.value,
-    label: (o.label || o.textContent || "").trim(),
+    label: raw.replace(INDENT_RE, "").replace(/\s+$/, ""),
+    level: Number(o.dataset && o.dataset.level) || 1,
+    path: path,
+    searchKey: searchKey(raw + " " + path),
     disabled: !!o.disabled,
     selected: !!o.selected
   };
+}
+/* 匹配时忽略空白与路径分隔符：「账户 前端」也能命中「账户 / 前端交互」 */
+function searchKey(s) {
+  return String(s || "").toLowerCase().replace(/[\s　\/·]+/g, "");
 }
 
 function buildPanel(sel, done) {
@@ -100,11 +112,14 @@ function buildPanel(sel, done) {
     b.setAttribute("role", "option");
     b.setAttribute("aria-selected", r.selected ? "true" : "false");
     b.dataset.value = r.value;
+    b.dataset.search = r.searchKey;
     b.disabled = r.disabled;
-    b.title = r.label;
+    b.title = r.path || r.label;
     var label = document.createElement("span");
     label.className = "sp-label";
     label.textContent = r.label || "（空）";
+    var depth = Math.min(8, Math.max(0, (r.level || 1) - 1));
+    if (depth) label.style.paddingLeft = (depth * 14) + "px";
     b.appendChild(label);
     var check = document.createElement("span");
     check.className = "sp-check";
@@ -166,9 +181,9 @@ function buildPanel(sel, done) {
 
   if (search) {
     search.addEventListener("input", function () {
-      var q = search.value.trim().toLowerCase();
+      var q = searchKey(search.value);
       opts.forEach(function (b) {
-        b.hidden = !!(q && b.title.toLowerCase().indexOf(q) === -1);
+        b.hidden = !!(q && b.dataset.search.indexOf(q) === -1);
       });
       groups.forEach(function (g) {
         var any = g.items.some(function (b) { return !b.hidden; });
@@ -252,7 +267,8 @@ document.addEventListener("keydown", function (e) {
   clearTimeout(jumpTimer);
   jumpTimer = setTimeout(function () { jumpBuf = ""; }, 600);
   var hit = Array.prototype.find.call(sel.options, function (o) {
-    return !o.disabled && (o.label || o.textContent || "").trim().toLowerCase().indexOf(jumpBuf) === 0;
+    var txt = (o.label || o.textContent || "").replace(/^[　\s]+/, "");
+    return !o.disabled && txt.trim().toLowerCase().indexOf(jumpBuf) === 0;
   });
   if (hit) {
     e.preventDefault();

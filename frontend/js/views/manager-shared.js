@@ -123,7 +123,7 @@ function openTaskTable(title, tasks, description, pager, opts){
     + searchBarHTML
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
     + '<th>工作项</th><th>项目</th><th>负责人</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
-    + (split ? '<th class="num">开发</th><th class="num">测试</th>' : '')
+    + (split ? '<th class="num">测试窗口外</th><th class="num">测试窗口内</th>' : '')
     + '</tr></thead><tbody>' + rowsHTML() + '</tbody></table></div></div></div>';
   document.body.appendChild(layer);
   var tbody = layer.querySelector("tbody");

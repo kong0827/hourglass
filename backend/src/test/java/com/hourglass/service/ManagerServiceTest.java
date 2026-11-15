@@ -1030,6 +1030,40 @@ class ManagerServiceTest {
     }
 
     @Test
+    void investmentGroupsPositionsByJobTitleSeparateFromProjectRole() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", "A", "产品经理");
+        WorkspaceMember bob = workspaceMember("U2", "Bob", "A", "后端开发");
+        Task task = ownedTask("T1", "R1", "U1", 300);
+        task.setStartDate(LocalDate.of(2026, 10, 2));
+        when(roleMapper.selectByProject(WORKSPACE, "R1")).thenReturn(Collections.singletonList(
+                role("R1", "U1", "业务接口人")));
+        ManagerService service = service(Collections.singletonList(task),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(
+                        timeLog("U1", "T1", LocalDateTime.of(2026, 10, 5, 9, 0), 100),
+                        timeLog("U2", "T1", LocalDateTime.of(2026, 10, 6, 9, 0), 50)),
+                Arrays.asList(alice, bob));
+
+        Map<String, Object> data = service.investment(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null);
+        List<Map<String, Object>> positions = castList(castMap(data.get("rows")).get("position"));
+        assertEquals("产品经理", positions.get(0).get("name"), "按实际工时降序，产品经理排首位");
+        assertEquals(100, positions.get(0).get("actualMinutes"));
+        assertEquals(300, positions.get(0).get("estimateMinutes"), "预估按负责人岗位归集");
+        assertEquals(1, positions.get(0).get("users"));
+        assertEquals("后端开发", positions.get(1).get("name"));
+        assertEquals(50, positions.get(1).get("actualMinutes"));
+        List<Map<String, Object>> roles = castList(castMap(data.get("rows")).get("role"));
+        assertEquals("业务接口人", roles.get(0).get("name"), "职能取空间岗位，项目角色是另一个口径");
+
+        PageResult<Map<String, Object>> drill = service.investmentTasks(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-12-31", null, null, null, "position", "产品经理", 0, 10);
+        assertEquals(1, drill.getTotal());
+        assertEquals(100, drill.getItems().get(0).get("totalMinutes"));
+        assertEquals(300, drill.getItems().get(0).get("estimateMinutes"));
+    }
+
+    @Test
     void investmentDrillUsesSameScopeAndValidatesRange() {
         Task task = ownedTask("T1", "R1", "U1", 600);
         task.setStartDate(LocalDate.of(2026, 10, 2));
@@ -1063,6 +1097,21 @@ class ManagerServiceTest {
                 "2026-10-01", "2026-12-31", null, null, null, "member", "u:U1", 0, 10);
         assertEquals(1, memberDrill.getTotal());
         assertEquals(180, memberDrill.getItems().get(0).get("totalMinutes"), "成员下钻只算该成员自己的计时");
+
+        PageResult<Map<String, Object>> monthDrill = service.investmentTasks(WORKSPACE, VIEWER,
+                "2026-10-01", "2026-10-31", null, null, null, null, null, 0, 10);
+        assertEquals(2, monthDrill.getTotal(), "不传维度时按区间返回全部工作项");
+        Map<String, Object> monthRow = null;
+        for (Map<String, Object> row : monthDrill.getItems()) {
+            if ("T1".equals(row.get("id"))) {
+                monthRow = row;
+            }
+        }
+        assertEquals(210, monthRow.get("totalMinutes"));
+        assertEquals(600, monthRow.get("estimateMinutes"));
+        PageResult<Map<String, Object>> emptyMonthDrill = service.investmentTasks(WORKSPACE, VIEWER,
+                "2026-11-01", "2026-11-30", null, null, null, null, null, 0, 10);
+        assertEquals(0, emptyMonthDrill.getTotal(), "整月下钻只含该月发生的计时和计划开始的工作项");
 
         assertEquals(400, assertThrows(AppException.class, () -> service.investment(WORKSPACE, VIEWER,
                 "2026-12-31", "2026-10-01", null, null, null)).getCode());

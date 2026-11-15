@@ -141,7 +141,7 @@
       <div class="rows">
         <div class="row"><span class="k">覆盖版本</span><span class="v">可跨版本、跨项目，当前版本固定包含</span></div>
         <div class="row"><span class="k">计划信息</span><span class="v">计划时间 · 负责人 · 环境 · 说明</span></div>
-        <div class="row"><span class="k">工作项范围</span><span class="v">取所选版本内容的并集</span></div>
+        <div class="row"><span class="k">工作项范围</span><span class="v">取所选版本内容的并集；开始开发后冻结承诺基线</span></div>
       </div>
       <div class="state">
         <span class="pill draft">草稿</span><span class="arrow">→</span>
@@ -158,6 +158,7 @@
         <div class="row"><span class="k">版本内容</span><span class="v">这个版本计划交付的工作项</span></div>
         <div class="row"><span class="k">计划范围</span><span class="v">本次计划选中的工作项</span></div>
         <div class="row"><span class="k">实际范围</span><span class="v">本次真实要发布的工作项</span></div>
+        <div class="row"><span class="k">必测检查</span><span class="v">发布必测用例的通过情况随计划冻结</span></div>
       </div>
       <p>未完成、晚于事件完成、需求已取消或跨范围的工作项都会<b>显式列出</b>，不静默排除。</p>
     </div>
@@ -170,6 +171,7 @@
         <div class="row"><span class="k">失败</span><span class="v">只留一次不可变尝试</span></div>
         <div class="row"><span class="k">成功</span><span class="v">记录 + 条目 + 快照</span></div>
         <div class="row"><span class="k">归属</span><span class="v">实际记录始终归属当前版本</span></div>
+        <div class="row"><span class="k">版本收口</span><span class="v">已关闭 / 已取消的版本不再建计划或记录发布</span></div>
       </div>
       <div class="state">
         <span class="pill done">成功 · 发布证据</span>
@@ -183,7 +185,7 @@
     <div class="guard-grid">
       <div class="guard g1"><b>完成 ≠ 发布</b><span>test / staging、回滚与部分成功都不计为有效生产发布。</span></div>
       <div class="guard g2"><b>计划完成有前提</b><span>覆盖的全部版本都完成成功生产部署 / 重部署，计划才完成。</span></div>
-      <div class="guard g3"><b>成功事实冻结内容</b><span>冻结的是内容关联，不锁任务完成、回退与计时。</span></div>
+      <div class="guard g3"><b>成功事实冻结内容</b><span>冻结的是内容关联与发布必测证据，不锁任务完成、回退与计时。</span></div>
       <div class="guard g4"><b>响应未知先查询</b><span>保留原请求与幂等键，先查记录再决定重试，不换键重发。</span></div>
     </div>
   </div>

@@ -11,7 +11,29 @@ import { companyChipHTML } from "../lib/company.js";
 import { memberRoleTitles, labelFilterText } from "../lib/member-labels.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { assocLinkHTML, avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
+import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, taskStatusName } from "./manager-shared.js";
+
+registerHelp({
+  "workload.remaining": {
+    title:"剩余预估",
+    rows:[
+      ["怎么算", "每个未完成工作项按 max(0, 预估 − 已计工时) 计算后求和；已超出预估的工作项按 0 计。", "ok"],
+      ["只算未完成", "已完成工作项不参与；未填预估的未完成项按 0 计，可能低估实际剩余。", "mute"],
+      ["和版本页不同", "版本详情的「剩余预估」直接累加未完成项预估、不扣已投入；这里扣了已计工时，两处数字会不一样。", "warn"]
+    ]
+  },
+  "workload.load": {
+    title:"负载",
+    rows:[
+      ["怎么算", "剩余预估 ÷（剩余工作日 × 每日容量，当前按 8h），四舍五入到整数百分比。", "ok"],
+      ["剩余工作日", "从今天到该成员未完成工作项的最晚截止日，只数工作日；没有截止日按 5 天，至少 1 天、最多按 30 天算。", "info"],
+      ["状态阈值", "大于 100% 为超载；85%–100% 为接近满载；低于 85% 为正常。", "warn"],
+      ["本周已计", "按计时开始日期落在本周统计，换周即清零，和负载不是同一个窗口。", "mute"]
+    ]
+  }
+});
+initCaliberHelp();
 
 var cache = null, seq = 0, mode = "week", loading = false, filterWorkspace = "", activeMemberSheet = null;
 var workloadFilter = { reqId:"", roleTitle:"", companyName:"" }, workloadOptions = {};
@@ -93,9 +115,9 @@ function memberProject(m, reqId){
 function memberKpisHTML(m){
   return '<div class="member-sheet-kpis">'
     + '<div class="member-sheet-kpi"><i>未完成工作项</i><b>' + memberTaskCount(m) + ' 项</b></div>'
-    + '<div class="member-sheet-kpi"><i>剩余预估</i><b>' + fmtHours(m.remainingMinutes) + '</b><span>剩余 ' + (m.workdays || 0) + ' 个工作日</span></div>'
+    + '<div class="member-sheet-kpi"><i class="caliber-label">剩余预估' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</i><b>' + fmtHours(m.remainingMinutes) + '</b><span>剩余 ' + (m.workdays || 0) + ' 个工作日</span></div>'
     + '<div class="member-sheet-kpi"><i>本周已计</i><b>' + fmtHours(m.weekMinutes) + '</b><span>上周 ' + fmtHours(m.lastWeekMinutes) + '</span></div>'
-    + '<div class="member-sheet-kpi"><i>负载</i><b>' + (Number(m.loadPct) || 0) + '%</b><span>容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
+    + '<div class="member-sheet-kpi"><i class="caliber-label">负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</i><b>' + (Number(m.loadPct) || 0) + '%</b><span>容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
     + '</div>';
 }
 function memberProjectsHTML(m){
@@ -266,7 +288,10 @@ function matrix(){
   var projects = (cache.projects || []).slice();
   var hasNone = (cache.members || []).some(function(m){return (m.projects||[]).some(function(p){return !p.reqId && p.remainingMinutes>0;});});
   if(hasNone) projects.push({id:"",name:"未归类"});
-  var head = '<tr><th>成员</th>' + projects.map(function(p){return '<th class="num">'+esc(p.name)+'</th>';}).join("") + '<th class="num">合计剩余</th><th>总负载</th><th>状态</th></tr>';
+  var head = '<tr><th>成员</th>' + projects.map(function(p){return '<th class="num">'+esc(p.name)+'</th>';}).join("")
+    + '<th class="num"><span class="caliber-label">合计剩余' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</span></th>'
+    + '<th><span class="caliber-label">总负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</span></th>'
+    + '<th>状态</th></tr>';
   var rows = (cache.members || []).map(function(m){
     var cells = projects.map(function(p){
       var group=(m.projects||[]).filter(function(x){return (x.reqId||"")===(p.id||"");})[0];

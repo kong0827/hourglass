@@ -406,7 +406,7 @@ public class CaseSetService {
     private void assertManage(String userId, String workspaceId, CaseSet s) {
         projectAccess.assertWrite(workspaceId, userId, s.getReqId());
         if (!VIS_TEAM.equals(s.getVisibility()) && !userId.equals(s.getOwnerUserId())) {
-            throw AppException.badRequest(VIS_MEMBERS.equals(s.getVisibility())
+            throw new AppException(403, VIS_MEMBERS.equals(s.getVisibility())
                     ? "指定成员可见的分组只有创建人可以修改" : "个人分组只有创建人可以修改");
         }
     }

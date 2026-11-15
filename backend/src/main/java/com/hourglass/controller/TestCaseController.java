@@ -279,12 +279,61 @@ public class TestCaseController {
         return ApiResult.ok(caseService.fileDefect(userId, ws.getId(), id, req));
     }
 
-    /* ==================== CSV 导入导出（A3 存量迁移） ==================== */
+    /* ==================== CSV / Excel 导入导出（A3 存量迁移） ==================== */
 
     /** 导入模板（表头 + 示例行，UTF-8 BOM，Excel 直接打开） */
     @GetMapping("/api/test-cases/template.csv")
     public org.springframework.http.ResponseEntity<byte[]> templateCsv() {
         return csvResponse(caseService.templateCsv(), "test-case-template.csv");
+    }
+
+    /** Excel 模板：样式化表头 + 示例行 + 填写说明页，优先级带下拉 */
+    @GetMapping("/api/test-cases/template.xlsx")
+    public org.springframework.http.ResponseEntity<byte[]> templateXlsx() {
+        return xlsxResponse(caseService.templateXlsx(), "test-case-template.xlsx");
+    }
+
+    /** 导出 Excel：scope 口径与 CSV 相同（all / filter / ids） */
+    @GetMapping("/api/test-cases/export.xlsx")
+    public org.springframework.http.ResponseEntity<byte[]> exportXlsx(@ModelAttribute CaseQuery query,
+                                                                      @RequestParam(required = false) String workspace,
+                                                                      @RequestParam(required = false) String scope,
+                                                                      @RequestParam(required = false) List<String> ids) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        if ("ids".equals(scope)) {
+            return xlsxResponse(caseService.exportXlsxByIds(ws.getId(), userId, ids), "test-cases-selected.xlsx");
+        }
+        if ("filter".equals(scope)) {
+            return xlsxResponse(caseService.exportXlsxByFilter(ws.getId(), userId, query), "test-cases-filtered.xlsx");
+        }
+        return xlsxResponse(caseService.exportXlsx(ws.getId(), userId, query.getReqId()), "test-cases.xlsx");
+    }
+
+    /** 导入 Excel（.xlsx / .xls，body 为 base64），逐行口径与 CSV 一致 */
+    @PostMapping("/api/test-cases/import.xlsx")
+    public ApiResult<java.util.Map<String, Object>> importXlsx(@RequestBody java.util.Map<String, String> body,
+                                                               @RequestParam String reqId,
+                                                               @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        String encoded = body == null ? null : body.get("file");
+        if (encoded == null || encoded.trim().isEmpty()) {
+            throw new com.hourglass.common.AppException(400, "导入内容为空");
+        }
+        if (encoded.length() > 12_000_000) {
+            throw new com.hourglass.common.AppException(400, "Excel 文件过大（约 8MB 上限），请拆分文件");
+        }
+        byte[] bytes;
+        try {
+            bytes = java.util.Base64.getDecoder().decode(encoded);
+        } catch (IllegalArgumentException ex) {
+            throw new com.hourglass.common.AppException(400, "文件内容无效，请上传 .xlsx 或 .xls 文件");
+        }
+        if (bytes.length > 8 * 1024 * 1024) {
+            throw new com.hourglass.common.AppException(400, "Excel 文件过大（约 8MB 上限），请拆分文件");
+        }
+        return ApiResult.ok(caseService.importExcel(userId, ws.getId(), reqId, bytes));
     }
 
     /** 导出：scope=all（项目全部，默认）/ filter（当前筛选，含未加载行）/ ids（勾选的行） */
@@ -326,6 +375,15 @@ public class TestCaseController {
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + filename + "\"")
                 .contentType(new org.springframework.http.MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
+                .body(body);
+    }
+
+    private static org.springframework.http.ResponseEntity<byte[]> xlsxResponse(byte[] body, String filename) {
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(body);
     }
 }

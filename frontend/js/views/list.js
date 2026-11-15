@@ -19,10 +19,32 @@ import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskPublicationH
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
+import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { loadProjectMembers, memberRoleTitles, taskMemberLabel, syncTaskMemberTooltips } from "../lib/member-labels.js";
 
 /* 共用显示列设置读取同一份可变标签表，统一任务列表及其列设置的版本术语。 */
 listPrefs.labels("task-list").version = "计划版本";
+
+registerHelp({
+  "list.progress": {
+    title:"进度",
+    rows:[
+      ["已完成", "看板列为「已完成」时固定 100%，不看记录值。", "ok"],
+      ["有检查项", "已完成检查项 ÷ 检查项总数（四舍五入）；勾选检查项不会回写工作项自身记录的进度。", "info"],
+      ["其他", "取工作项上记录的进度，未填写按 0 显示；0 且不在进行中时列表显示「—」。", "mute"],
+      ["与项目列表不同", "项目列表的「进度」是各工作项存储进度的平均值，不按检查项换算，同一工作项两处可能不一致。", "warn"]
+    ]
+  },
+  "list.work": {
+    title:"工时",
+    rows:[
+      ["怎么算", "该工作项所有已结束的计时 + 手工补录工时，满 60 分钟换算为小时（保留 1 位小数）。", "ok"],
+      ["不含", "预估工时、进行中和暂停中的计时都不计入。", "mute"],
+      ["预估在哪看", "预估工时是计划值，在详情抽屉或版本页单独展示，不与本列相加。", "info"]
+    ]
+  }
+});
+initCaliberHelp();
 
 var listBody = $("listBody"), listMeta = $("listMeta"), listSort = $("listSort"),
     btnListBulk = $("btnListBulk"), listHead = $("listHead");
@@ -360,6 +382,8 @@ function applyGrid(el){
   var widths = listPrefs.columns("task-list").map(function(key){ return COL_WIDTHS[key] || "120px"; });
   el.style.gridTemplateColumns = ["40px"].concat(widths, ["48px"]).join(" ");
 }
+/* 列头带口径提示的字段；标记必须与排序按钮平级，避免按钮嵌套按钮 */
+var LIST_HEAD_HELP = { progress:"list.progress", work:"list.work" };
 function renderListHead(){
   var labels = listPrefs.labels("task-list");
   listHead.innerHTML = '<span><input type="checkbox" class="cbx" data-list-select-all aria-label="全选当前页" /></span>' +
@@ -367,10 +391,13 @@ function renderListHead(){
       var sortKey = HEAD_SORT_MAP[key] || key;
       var active = smart.sort === sortKey;
       var ind = active ? (smart.sortDir === "desc" ? "↓" : "↑") : "";
-      return '<span aria-sort="' + (active ? (smart.sortDir === "desc" ? "descending" : "ascending") : "none") + '">' +
+      var help = LIST_HEAD_HELP[key]
+        ? caliberMarkHTML(LIST_HEAD_HELP[key], false, "查看「" + labels[key] + "」口径") : "";
+      return '<span' + (help ? ' class="th-help-wrap"' : "") +
+        ' aria-sort="' + (active ? (smart.sortDir === "desc" ? "descending" : "ascending") : "none") + '">' +
         '<button class="lh-sort' + (active ? " on" : "") + '" type="button" data-sort-col="' + esc(key) + '"' +
           ' title="按「' + esc(labels[key]) + '」排序">' + esc(labels[key]) +
-          '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button></span>';
+          '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button>' + help + '</span>';
     }).join("") + '<span></span>';
   applyGrid(listHead);
   syncListColumnsBtn();

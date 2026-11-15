@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>发布计划工作项清单 · 分组 / 范围筛选 / 放大（原型 2026-11-15）</title>
+<link rel="stylesheet" href="../../../frontend/css/tokens.css" />
+<link rel="stylesheet" href="../../../frontend/css/base.css" />
+<link rel="stylesheet" href="../../../frontend/css/components.css" />
+<link rel="stylesheet" href="../../../frontend/css/views.css" />
+<style>
+  /* 原型页自身：base.css 为应用壳把 body 设成 flex，这里恢复成文档流 */
+  body{display:block;overflow:visible;background:var(--bg-app);padding:26px 24px 64px;}
+  .proto-head,.proto-sec{max-width:1180px;margin:0 auto;}
+  .proto-head{margin-bottom:22px;}
+  .proto-head h1{font-size:19px;font-weight:680;margin:0 0 6px;letter-spacing:.2px;}
+  .proto-head .lead{font-size:13px;line-height:1.7;color:var(--text-2);margin:0;max-width:900px;}
+  .proto-head .lead b{color:var(--text);font-weight:600;}
+  .proto-sec{margin-bottom:30px;}
+  .proto-sec-h{display:flex;align-items:center;gap:9px;margin:0 0 10px;}
+  .proto-sec-h .no{display:inline-grid;place-content:center;width:20px;height:20px;flex:none;
+    border-radius:6px;background:var(--primary-soft);border:1px solid var(--primary-border);
+    color:var(--primary-fg);font-size:11.5px;font-weight:700;}
+  .proto-sec-h h2{font-size:15px;font-weight:650;margin:0;}
+  .proto-sec-h .tag{font-size:11.5px;color:var(--text-3);}
+
+  .proto-frame{position:relative;border:1px solid var(--border-strong);border-radius:var(--r-lg);
+    background:var(--surface);overflow:hidden;padding:16px 22px 20px;}
+  .proto-frame.is-overlay{height:600px;padding:0;}
+  .proto-frame.is-device{width:390px;height:700px;padding:0;border:8px solid #101828;border-radius:26px;}
+  .proto-cap{margin:8px 0 0;font-size:12px;color:var(--text-3);line-height:1.6;}
+  .proto-cap b{color:var(--text-2);font-weight:600;}
+
+  /* 字段标题：与发布表单里的「这次计划发布哪些工作项」同一行 */
+  .pick-field{font-size:13px;font-weight:600;color:var(--text);margin:0 0 8px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+  .pick-field .sub{font-size:12px;font-weight:400;color:var(--text-3);}
+  .pick-note{margin:10px 0 0;padding:8px 10px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);
+    background:var(--surface-sunken);font-size:11.5px;line-height:1.6;color:var(--text-3);}
+  .pick-note b{color:var(--text-2);font-weight:600;}
+
+  /* 帧内模拟被遮住的发布表单 */
+  .vp{position:absolute;inset:0;padding:20px 24px;background:var(--surface);}
+  .vp h3{font-size:16px;margin:0 0 4px;}
+  .vp .sub{font-size:11.5px;color:var(--text-3);margin:0 0 14px;}
+  .vp .vcard{display:inline-flex;flex-direction:column;gap:4px;width:210px;padding:10px 12px;border:1px solid var(--border);
+    border-radius:var(--r-sm);margin-right:10px;font-size:12px;color:var(--text-2);background:var(--surface-sunken);}
+  .vp .vcard small{color:var(--text-3);font-size:11px;}
+  .vp .line{height:12px;border-radius:4px;background:var(--surface-sunken);margin:10px 0;}
+
+  /* 放大帧：帧内用绝对定位复现（真实为 position:fixed）；压暗沿用产品的外阴影，帧的 overflow:hidden 把它裁在帧内 */
+  .is-overlay .release-page{position:relative;height:100%;padding:0;}
+  .is-overlay .release-picker.is-expanded{position:absolute;inset:34px 28px;}
+
+  /* 移动端帧：把 @media (max-width:700px) 的规则按容器复现（正式样式按视口生效） */
+  .is-device .release-picker-tools input[type="search"]{flex:1 1 100%;}
+  .is-device .release-picker-tools .btn{flex:1 1 auto;}
+  .is-device .release-picker-count{flex:1 1 100%;margin-left:0;}
+  .is-device .release-picker.is-expanded{position:absolute;inset:0;padding:12px;border:0;border-radius:0;}
+  .is-device .release-picker.is-expanded .release-picker-tools{flex:0 0 auto;}
+  .is-device .release-picker.is-expanded .release-picker-count{flex:1 1 auto;}
+  .is-device .release-picker.is-expanded .release-picker-expand{flex:0 0 auto;}
+  .is-device .release-task-group-head{min-height:40px;padding:6px 10px;}
+  .is-device input[type="checkbox"]{width:16px;height:16px;min-height:0;flex:0 0 auto;}
+  .is-device .release-page{padding:0;max-width:none;}
+
+  /* 口径表 */
+  .spec{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
+  .spec th{background:var(--surface-sunken);color:var(--text-3);font-size:11.5px;font-weight:600;text-align:left;
+    padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .spec td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:top;line-height:1.6;}
+  .spec tr:last-child td{border-bottom:0;}
+  .spec td b{color:var(--text);font-weight:600;}
+  .spec code{font-family:var(--font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;
+    background:var(--surface-sunken);border:1px solid var(--border);border-radius:4px;padding:0 4px;}
+</style>
+</head>
+<body>
+
+<div class="proto-head">
+  <h1>发布计划工作项清单 · 分组 / 范围筛选 / 放大</h1>
+  <p class="lead">发布计划的「计划」「实际」两张页签共用同一份工作项清单。清单长了以后只能在 300px 的滚动区里一路下拉，
+    这里给它三个入口：<b>按版本 / 状态 / 负责人分组</b>、<b>全部 / 已选 / 未选范围筛选</b>、<b>放大成大浮层</b>。
+    下面五个帧直接套用产品样式（tokens / base / components / views），依次是单版本、多版本分组、范围筛选、放大、移动端。</p>
+</div>
+
+<!-- A 桌面 · 单版本 -->
+<section class="proto-sec">
+  <div class="proto-sec-h"><span class="no">A</span><h2>桌面 · 单版本：分组自动退化为「不分组」</h2><span class="tag">1440</span></div>
+  <div class="proto-frame">
+    <div class="release-page">
+      <p class="pick-field">这次计划发布哪些工作项 <span class="sub">（26 项 · 本版本已覆盖工作项 7/26）</span></p>
+      <div class="release-picker">
+        <div class="release-picker-tools">
+          <input type="search" placeholder="搜索标题或 ID" aria-label="搜索工作项" />
+          <select aria-label="按状态筛选"><option>全部状态</option></select>
+          <select aria-label="按选择状态筛选"><option>全部</option></select>
+          <select aria-label="工作项分组方式"><option>不分组</option></select>
+          <button class="btn sm" type="button">全选可见</button>
+          <button class="btn sm" type="button">仅选已完成</button>
+          <button class="btn sm" type="button">清空</button>
+          <span class="release-picker-count">已选 2 / 共 4</span>
+          <button class="btn sm release-picker-expand" type="button" title="放大或收起工作项列表">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+            <span>放大</span>
+          </button>
+        </div>
+        <p class="hint">另有 1 个未绑定版本的工作项，不属于本版本范围，不能选入。</p>
+        <div class="release-task-picker">
+          <section class="release-task-group is-flat">
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>支付链路全链路压测</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>支付网关 批量处理</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>风控告警阈值配置</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>支付网关 稳定性加固</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="proto-cap"><b>分组下拉</b>显示「不分组」，选项里也没有「按版本」——计划只含一个版本时按版本分组没有信息量。
+      在版本选择里再加一个版本，分组立刻恢复「按版本」，已勾项不变。<br />
+      <b>工具栏顺序</b>：搜索 → 状态 → 选择范围 → 分组 → 全选可见 / 仅选已完成 / 清空 → 计数 → 放大。</p>
+  </div>
+</section>
+
+<!-- B 桌面 · 多版本分组 -->
+<section class="proto-sec">
+  <div class="proto-sec-h"><span class="no">B</span><h2>桌面 · 多版本：按版本分组、折叠与整组全选</h2><span class="tag">1440</span></div>
+  <div class="proto-frame">
+    <div class="release-page">
+      <p class="pick-field">这次计划发布哪些工作项 <span class="sub">（26 项 · 本版本已覆盖工作项 7/26）</span></p>
+      <div class="release-picker">
+        <div class="release-picker-tools">
+          <input type="search" placeholder="搜索标题或 ID" aria-label="搜索工作项" />
+          <select aria-label="按状态筛选"><option>全部状态</option></select>
+          <select aria-label="按选择状态筛选"><option>全部</option></select>
+          <select aria-label="工作项分组方式"><option>按版本</option></select>
+          <button class="btn sm" type="button">全选可见</button>
+          <button class="btn sm" type="button">仅选已完成</button>
+          <button class="btn sm" type="button">清空</button>
+          <span class="release-picker-count">已选 3 / 共 7</span>
+          <button class="btn sm release-picker-expand" type="button" title="放大或收起工作项列表">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+            <span>放大</span>
+          </button>
+        </div>
+        <div class="release-task-picker" style="max-height:430px">
+          <section class="release-task-group">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="true" title="收起本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">支付网关 v2.2</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" data-partial /><span>全选本组</span></label>
+              <span class="release-group-count">已选 2 / 4</span>
+            </div>
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>支付链路全链路压测</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>支付网关 批量处理</b><small>测试中 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>风控告警阈值配置</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>支付网关 稳定性加固</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+            </div>
+          </section>
+          <section class="release-task-group is-collapsed">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="false" title="展开本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">反欺诈 v1.2</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" data-partial /><span>全选本组</span></label>
+              <span class="release-group-count">已选 1 / 2</span>
+            </div>
+            <div class="release-task-group-body" hidden>
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>反欺诈规则引擎灰度</b><small>待处理 · 完成 — · 版本 反欺诈 v1.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>设备指纹采集</b><small>待处理 · 完成 — · 版本 反欺诈 v1.2</small></span></label>
+            </div>
+          </section>
+          <section class="release-task-group is-collapsed">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="false" title="展开本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">待规划（未绑定版本）</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" /><span>全选本组</span></label>
+              <span class="release-group-count">已选 0 / 1</span>
+            </div>
+            <div class="release-task-group-body" hidden>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>支付通道限额改造</b><small>待处理 · 完成 — · 版本 待规划</small></span></label>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="proto-cap"><b>分组头吸顶</b>在清单滚动区顶部：左侧箭头折叠整组，右侧「全选本组」与「已选 x / y」按<b>当前筛选后的可见行</b>统计——
+      勾上只作用于可见行，取消作用于整组，和「全选可见 / 清空」同一口径。分组顺序按工作项首次出现顺序，不额外排序；
+      「待规划（未绑定版本）」只在有未绑定工作项时出现。</p>
+  </div>
+</section>
+
+<!-- C 桌面 · 范围筛选 -->
+<section class="proto-sec">
+  <div class="proto-sec-h"><span class="no">C</span><h2>桌面 · 范围筛选：只看已选 / 只看未选</h2><span class="tag">1440</span></div>
+  <div class="proto-frame">
+    <div class="release-page">
+      <p class="pick-field">这次计划发布哪些工作项 <span class="sub">（26 项 · 本版本已覆盖工作项 7/26）</span></p>
+      <div class="release-picker">
+        <div class="release-picker-tools">
+          <input type="search" placeholder="搜索标题或 ID" aria-label="搜索工作项" />
+          <select aria-label="按状态筛选"><option>全部状态</option></select>
+          <select aria-label="按选择状态筛选"><option>已选</option></select>
+          <select aria-label="工作项分组方式"><option>按版本</option></select>
+          <button class="btn sm" type="button">全选可见</button>
+          <button class="btn sm" type="button">仅选已完成</button>
+          <button class="btn sm" type="button">清空</button>
+          <span class="release-picker-count">已选 3 / 共 7</span>
+          <button class="btn sm release-picker-expand" type="button" title="放大或收起工作项列表">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+            <span>放大</span>
+          </button>
+        </div>
+        <div class="release-task-picker" style="max-height:260px">
+          <section class="release-task-group">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="true" title="收起本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">支付网关 v2.2</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" data-partial /><span>全选本组</span></label>
+              <span class="release-group-count">已选 2 / 4</span>
+            </div>
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>支付链路全链路压测</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>支付网关 批量处理</b><small>测试中 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+            </div>
+          </section>
+          <section class="release-task-group">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="true" title="收起本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">反欺诈 v1.2</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" data-partial /><span>全选本组</span></label>
+              <span class="release-group-count">已选 1 / 2</span>
+            </div>
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>反欺诈规则引擎灰度</b><small>待处理 · 完成 — · 版本 反欺诈 v1.2</small></span></label>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="pick-note">「已选」只看勾选过的行，「未选」反之；与搜索、状态筛选叠加。当前选「已选」后，反欺诈组只剩 1 行，
+        「待规划」组因为没有已选项<b>整组隐藏</b>，分组计数仍按整组统计（已选 1 / 2）。勾掉某行会立刻从列表里消失，
+        「全部」即可找回。</p>
+    </div>
+  </div>
+</section>
+
+<!-- D 桌面 · 放大浮层 -->
+<section class="proto-sec">
+  <div class="proto-sec-h"><span class="no">D</span><h2>桌面 · 放大：同一份清单浮在视口中间</h2><span class="tag">1440 · 96vw × 78dvh</span></div>
+  <div class="proto-frame is-overlay">
+    <div class="vp">
+      <h3>发布计划</h3>
+      <p class="sub">单版本发布工作台：计划、实际记录、发布历史与版本内容</p>
+      <div>
+        <span class="vcard">支付网关 v2.2<small>进行中 · 目标 2026-12-11</small></span>
+        <span class="vcard">反欺诈 v1.2<small>未选 · 目标 2026-12-18</small></span>
+      </div>
+      <div class="line"></div>
+      <div class="line" style="width:72%"></div>
+    </div>
+    <div class="release-page">
+      <div class="release-picker is-expanded">
+        <div class="release-picker-tools">
+          <input type="search" placeholder="搜索标题或 ID" aria-label="搜索工作项" />
+          <select aria-label="按状态筛选"><option>全部状态</option></select>
+          <select aria-label="按选择状态筛选"><option>全部</option></select>
+          <select aria-label="工作项分组方式"><option>按版本</option></select>
+          <button class="btn sm" type="button">全选可见</button>
+          <button class="btn sm" type="button">仅选已完成</button>
+          <button class="btn sm" type="button">清空</button>
+          <span class="release-picker-count">已选 3 / 共 7</span>
+          <button class="btn sm release-picker-expand" type="button" aria-expanded="true" title="放大或收起工作项列表">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.4v5.2H3.8"/><path d="M9 8.6 3.6 3.2"/><path d="M11 16.6v-5.2h5.2"/><path d="M11 11.4l5.4 5.4"/></svg>
+            <span>收起</span>
+          </button>
+        </div>
+        <div class="release-task-picker">
+          <section class="release-task-group">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="true" title="收起本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">支付网关 v2.2</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" data-partial /><span>全选本组</span></label>
+              <span class="release-group-count">已选 2 / 4</span>
+            </div>
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>支付链路全链路压测</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>支付网关 批量处理</b><small>测试中 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>风控告警阈值配置</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>支付网关 稳定性加固</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+            </div>
+          </section>
+          <section class="release-task-group">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="true" title="收起本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">反欺诈 v1.2</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" data-partial /><span>全选本组</span></label>
+              <span class="release-group-count">已选 1 / 2</span>
+            </div>
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>反欺诈规则引擎灰度</b><small>待处理 · 完成 — · 版本 反欺诈 v1.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>设备指纹采集</b><small>测试中 · 完成 — · 版本 反欺诈 v1.2</small></span></label>
+            </div>
+          </section>
+          <section class="release-task-group">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="true" title="收起本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">待规划（未绑定版本）</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" /><span>全选本组</span></label>
+              <span class="release-group-count">已选 0 / 1</span>
+            </div>
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>支付通道限额改造</b><small>待处理 · 完成 — · 版本 待规划</small></span></label>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="proto-cap"><b>放大态</b>：外阴影压暗页面，清单高度随浮层拉伸，分组头仍吸顶；点「收起」、点浮层以外空白或按 Esc 退出（压暗用浮层外阴影，不加盖层，所以浮层行列始终是实心白底）。
+    <b>实现约束</b>：放大只改定位（<code>.is-expanded</code> 加 <code>position:fixed</code>），DOM 仍留在发布表单内，
+    所以 <code>checks()</code> 读回与事件委托完全不用改，勾选状态也不会因为放大 / 收起而丢失。打开时焦点落到搜索框，收起时回到「放大」按钮。</p>
+</section>
+
+<!-- E 移动端 -->
+<section class="proto-sec">
+  <div class="proto-sec-h"><span class="no">E</span><h2>移动端 390 · 放大即全屏</h2><span class="tag">390 × 700</span></div>
+  <div class="proto-frame is-device">
+    <div class="release-page">
+      <div class="release-picker is-expanded">
+        <div class="release-picker-tools">
+          <input type="search" placeholder="搜索标题或 ID" aria-label="搜索工作项" />
+          <select aria-label="按状态筛选"><option>全部状态</option></select>
+          <select aria-label="按选择状态筛选"><option>全部</option></select>
+          <select aria-label="工作项分组方式"><option>按版本</option></select>
+          <button class="btn sm" type="button">全选可见</button>
+          <button class="btn sm" type="button">仅选已完成</button>
+          <button class="btn sm" type="button">清空</button>
+          <span class="release-picker-count">已选 1 / 共 6</span>
+          <button class="btn sm release-picker-expand" type="button" aria-expanded="true" title="收起工作项列表">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.4v5.2H3.8"/><path d="M9 8.6 3.6 3.2"/><path d="M11 16.6v-5.2h5.2"/><path d="M11 11.4l5.4 5.4"/></svg>
+            <span>收起</span>
+          </button>
+        </div>
+        <div class="release-task-picker">
+          <section class="release-task-group">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="true" title="收起本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">反欺诈 v1.2</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" data-partial /><span>全选本组</span></label>
+              <span class="release-group-count">已选 1 / 3</span>
+            </div>
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" checked /><span><b>反欺诈规则引擎灰度</b><small>待处理 · 完成 — · 版本 反欺诈 v1.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>设备指纹采集</b><small>待处理 · 完成 — · 版本 反欺诈 v1.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>风险名单同步</b><small>测试中 · 完成 — · 版本 反欺诈 v1.2</small></span></label>
+            </div>
+          </section>
+          <section class="release-task-group">
+            <div class="release-task-group-head">
+              <button type="button" class="release-group-toggle" aria-expanded="true" title="收起本组">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.8 10 12.8l5-5"/></svg>
+                <span class="release-group-name">支付网关 v2.2</span>
+              </button>
+              <label class="release-group-all"><input type="checkbox" /><span>全选本组</span></label>
+              <span class="release-group-count">已选 0 / 3</span>
+            </div>
+            <div class="release-task-group-body">
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>支付链路全链路压测</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>支付网关 批量处理</b><small>待处理 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+              <label class="version-task-row release-task-row"><input type="checkbox" /><span><b>支付网关 稳定性加固</b><small>测试中 · 完成 — · 版本 支付网关 v2.2</small></span></label>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="proto-cap" style="max-width:640px"><b>移动端放大</b>：桌面浮层的 96vw × 78dvh 换成整屏、零内边距，工具栏换成「搜索独占一行 → 三个下拉 → 三个按钮与计数一行 → 收起一行」，和真机截图一致。
+    勾选框固定 16px——原来 44px 触控高度规则会把复选框拉成白色竖条，这一批顺带修掉（版本行同样受益）。</p>
+</section>
+
+<!-- 口径 -->
+<section class="proto-sec">
+  <div class="proto-sec-h"><span class="no">F</span><h2>交互口径</h2></div>
+  <table class="spec">
+    <tr><th style="width:150px">项</th><th>口径</th></tr>
+    <tr><td><b>默认分组</b></td><td>按版本。计划范围只有一个版本时下拉不出现「按版本」、显示「不分组」；版本选择再加一个版本立刻恢复按版本，已勾项不变。</td></tr>
+    <tr><td><b>分组选项</b></td><td>按版本 / 按状态（已完成、未完成）/ 按负责人（显示名，空为「未指派」）/ 不分组。分组顺序按工作项首次出现顺序，不额外排序。</td></tr>
+    <tr><td><b>分组头</b></td><td>吸顶；左侧箭头折叠整组（<code>aria-expanded</code>）；「已选 x / y」按当前筛选后的可见行统计。</td></tr>
+    <tr><td><b>全选本组</b></td><td>勾上只作用于可见行，取消作用于整组（含被筛掉的行）；与「全选可见 / 清空」同一口径。部分选中时为 indeterminate。</td></tr>
+    <tr><td><b>范围筛选</b></td><td>全部 / 已选 / 未选，与搜索、状态筛选叠加；空分组自动隐藏；勾选后按当前筛选即时重排。</td></tr>
+    <tr><td><b>放大</b></td><td>桌面 96vw × 78dvh 居中压暗背景，移动端全屏；「收起」/ 点浮层外空白 / Esc 退出；打开聚焦搜索框，收起聚焦回按钮。</td></tr>
+    <tr><td><b>状态保持</b></td><td>搜索词、状态、范围、分组、折叠状态存在视图状态里，列表因勾选重建时原样保留。</td></tr>
+    <tr><td><b>共用范围</b></td><td>发布计划的「计划」「实际」共用同一组件；本轮不改版本页「管理工作项」弹窗、里程碑关联任务、跨项目选版本弹窗——同款长列表，列为下一批候选。</td></tr>
+  </table>
+</section>
+
+<script>
+  document.querySelectorAll('input[type="checkbox"][data-partial]').forEach(function(cb){ cb.indeterminate = true; });
+</script>
+</body>
+</html>

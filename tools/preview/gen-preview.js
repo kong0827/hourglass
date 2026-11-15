@@ -107,6 +107,8 @@ for (const m of modules) visit(m);
    依赖方从 __NS 解构取用；其余模块保持平铺（导出仍以原标识符对外可见）。 */
 const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "settings", "profile",
   "phase", "version", "demands", "portfolio", "project", "workload", "risks", "report", "testcases", "messages",
+  /* release 顶层从 __NS 取 phase.js 的 mountReleaseWorkspace；不包一层会先于 phase 求值拿到 undefined */
+  "release",
   /* 这些也是 router 里的懒加载视图，必须各自包一层作用域：delivery 顶层有 function $(sel,root)
      （querySelector 版），平铺会覆盖 core/dom 的 $(id)（getElementById 版），整包按 id 取元素全变 null；
      investment 顶层的 state / cache 也会与别的平铺模块重名。真实 ESM 各文件独立作用域，没有这个问题。 */

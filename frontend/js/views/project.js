@@ -14,7 +14,43 @@ import { companyChipHTML } from "../lib/company.js";
 import { DEFAULT_ROLE_TITLES, loadMemberLabelOptions, effectiveMemberRole, memberRoleTitles, labelFilterOption, labelFilterText } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
 import { milestoneEvidence, milestoneKindName, milestoneStatusTag, openMilestoneDetail } from "../lib/milestone-ui.js";
+import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } from "./manager-shared.js";
+
+registerHelp({
+  "project.span": {
+    title:"计划周期（工作项跨度）",
+    rows:[
+      ["怎么算", "取项目下工作项计划开始的最早日期与计划截止的最晚日期；没填日期的工作项不参与。", "ok"],
+      ["不是项目计划", "顶部「项目目标」里的计划周期取项目自身的计划起止，和工作项跨度是两份数据，数值允许不一致。", "warn"],
+      ["空值", "所有工作项都没填日期时显示「—」。", "mute"]
+    ]
+  },
+  "project.estimate": {
+    title:"预估工时合计",
+    rows:[
+      ["合计", "项目全部工作项的预估相加，未填预估的工作项按 0 计。", "ok"],
+      ["剩余", "Σ max(0, 预估 − 实际)，只统计未完成的工作项；已超出预估的按 0 计，不出现负数。", "info"]
+    ]
+  },
+  "project.actual": {
+    title:"实际投入",
+    rows:[
+      ["包含什么", "项目全部工作项（待处理 / 进行中 / 已完成）的已结束计时 + 手工补记之和；进行中的计时和已作废的记录不计。", "ok"],
+      ["窗口内 / 外", "测试窗口内 = 计时日期落在「测试开始 → 测试结束」窗口内的分钟（含首尾两天）；其余全部计入测试窗口外，包含评审、设计、开发、联调、项目管理等非测试时间。", "info"],
+      ["没有测试窗口", "没进入过「测试中」，或测试还没结束的工作项，计时全部计入测试窗口外。", "mute"]
+    ]
+  },
+  "project.variance": {
+    title:"工时偏差（已完成工作项口径）",
+    rows:[
+      ["怎么算", "（已完成工作项的实际 − 预估）÷ 已完成工作项的预估；未完成的工作项不参与。", "ok"],
+      ["预估为 0", "已完成工作项的预估合计为 0 时不给偏差率，显示「—」。", "mute"],
+      ["别和总数相减", "分母不含未完成工作项，不能拿卡片上的总实际与总预估直接算这个百分比。", "warn"]
+    ]
+  }
+});
+initCaliberHelp();
 
 var VIEW_KEY = "project-view";
 var cache = null, seq = 0;
@@ -102,8 +138,12 @@ function loadProject(opts){
     cache = data; renderProject();
   }).catch(function(ex){ if(current === seq && wsId === workspaceId() && selected.id === rt.managerProjectId) body.innerHTML = UI.errorState(ex.message); });
 }
-function metric(label, value, foot, kind){
-  return '<button class="manager-kpi" type="button" data-project-metric="' + kind + '"><span>' + esc(label) + '</span><b>' + value + '</b><small>' + esc(foot) + '</small></button>';
+function metric(label, value, foot, kind, help){
+  var mark = help ? caliberMarkHTML(help.key, !!help.warn, "查看「" + label + "」口径") : "";
+  return '<div class="manager-kpi-wrap">'
+    + '<button class="manager-kpi" type="button" data-project-metric="' + kind + '">'
+    + '<span>' + esc(label) + '</span><b>' + value + '</b><small>' + esc(foot) + '</small></button>'
+    + mark + '</div>';
 }
 function distRow(label, value, total, kind, cls){
   var pct = total ? Math.round(value / total * 100) : 0;
@@ -586,23 +626,29 @@ function openMilestoneCreate(){
     + '<label>达成方式<select class="mini-select" data-ms-kind>'
     + '<option value="version">版本发布后</option><option value="tasks">工作项全部完成</option><option value="manual">人工确认</option>'
     + '</select></label>'
-    + '<label>名称<input class="inp" data-ms-name maxlength="120" placeholder="留空自动生成"></label>'
-    + '<label>目标日期<input class="inp" type="date" data-ms-date value="' + esc(defaultMilestoneDate(14)) + '"></label>'
+    + '<label>名称<input class="input" data-ms-name maxlength="120" placeholder="留空自动生成"></label>'
+    + '<label>目标日期<input class="input" type="date" data-ms-date value="' + esc(defaultMilestoneDate(14)) + '"></label>'
     + '<label>负责人<select class="mini-select" data-ms-owner>'
     + members.map(function(m){ return '<option value="' + esc(m.key) + '"' + (m.key === ownerDefault ? " selected" : "") + '>' + esc(m.name) + '</option>'; }).join("")
     + (members.length ? "" : '<option value="">项目负责人</option>') + '</select></label>'
     + '<div data-ms-cond="version"><label>关联版本<select class="mini-select" data-ms-version><option value="">加载中…</option></select></label></div>'
     + '<div data-ms-cond="tasks" hidden><label>关联工作项</label>'
+    + '<div class="ms-task-tools">'
+    + '<input class="input" type="search" placeholder="搜索工作项标题" aria-label="搜索工作项" data-ms-search autocomplete="off">'
+    + '<select class="mini-select" data-ms-state aria-label="按状态筛选"><option value="">全部状态</option><option value="done">仅已完成</option><option value="open">仅未完成</option></select>'
+    + '<select class="mini-select" data-ms-scope aria-label="按勾选状态筛选"><option value="">全部</option><option value="selected">已选</option><option value="unselected">未选</option></select>'
+    + '<span class="ms-task-count" data-ms-task-count role="status"></span></div>'
     + '<div class="ms-task-list">' + (tasks.length
       ? tasks.map(function(t){
         var done = t.boardColumn === "done";
-        return '<label class="ms-task-opt"><input type="checkbox" value="' + esc(t.id) + '" data-ms-task>'
+        return '<label class="ms-task-opt" data-ms-task-row data-task-state="' + (done ? "done" : "open") + '" data-task-title="' + esc(String(t.title || "").toLowerCase()) + '"><input type="checkbox" value="' + esc(t.id) + '" data-ms-task>'
           + '<span>' + esc(t.title) + '</span>' + (done ? '<small>已完成</small>' : '') + '</label>';
       }).join("")
       : '<p class="foot-note">该项目还没有可关联的工作项。</p>') + '</div>'
+    + '<p class="foot-note" data-ms-task-empty hidden>没有匹配的工作项，试试清空搜索或切换筛选。</p>'
     + '<p class="foot-note" data-ms-task-hint>关联工作项全部完成才算达成。</p></div>'
     + '<label class="ms-check"><input type="checkbox" data-ms-key checked>关键里程碑（用于概览提示，不影响判定）</label>'
-    + '<label>说明（可选）<textarea class="inp" data-ms-note maxlength="500" rows="2"></textarea></label>'
+    + '<label>说明（可选）<textarea class="textarea" data-ms-note maxlength="500" rows="2"></textarea></label>'
     + '<div class="phase-acts"><button class="btn sm primary" type="button" data-ms-save>新建里程碑</button>'
     + '<button class="btn sm ghost" type="button" data-ms-close>取消</button></div>'
     + '</div></div></div>';
@@ -617,6 +663,24 @@ function openMilestoneCreate(){
   var versions = [];
   function selectedTasks(){
     return Array.prototype.slice.call(layer.querySelectorAll("[data-ms-task]")).filter(function(x){ return x.checked; });
+  }
+  var msQuery = "", msState = "", msScope = "";
+  /* 只隐藏行，不重建：勾选、日期联动和「至少 1 项」判定都还读同一批输入框 */
+  function filterTasks(){
+    var q = msQuery.trim().toLowerCase(), rows = layer.querySelectorAll("[data-ms-task-row]"), shown = 0, checked = 0;
+    rows.forEach(function(row){
+      var cb = row.querySelector("[data-ms-task]");
+      var chosen = !!(cb && cb.checked);
+      if(chosen) checked++;
+      var match = (!q || (row.getAttribute("data-task-title") || "").indexOf(q) !== -1)
+        && (!msState || (msState === "done" ? row.getAttribute("data-task-state") === "done" : row.getAttribute("data-task-state") !== "done"))
+        && (!msScope || (msScope === "selected" ? chosen : !chosen));
+      row.hidden = !match; if(match) shown++;
+    });
+    var count = layer.querySelector("[data-ms-task-count]");
+    if(count) count.textContent = "已选 " + checked + " / 共 " + rows.length + " 项";
+    var empty = layer.querySelector("[data-ms-task-empty]");
+    if(empty) empty.hidden = !(rows.length && !shown);
   }
   function versionOf(id){
     return versions.filter(function(v){ return v.id === id; })[0] || null;
@@ -645,6 +709,7 @@ function openMilestoneCreate(){
       var due = latestTaskDue();
       if(due && !dateEl.dataset.touched) dateEl.value = due;
     }
+    filterTasks();
   }
   API.get("/api/versions", { reqId:reqId }).then(function(rows){
     /* 已关闭 / 已取消的版本不会再有 production 成功证据，不能作为发布型里程碑条件 */
@@ -665,7 +730,14 @@ function openMilestoneCreate(){
   kindEl.addEventListener("change", syncRule);
   dateEl.addEventListener("change", function(){ dateEl.dataset.touched = "1"; });
   versionEl.addEventListener("change", function(){ dateEl.dataset.touched = ""; syncRule(); });
+  layer.addEventListener("input", function(e){
+    if(!e.target.matches("[data-ms-search]")) return;
+    msQuery = e.target.value;
+    filterTasks();
+  });
   layer.addEventListener("change", function(e){
+    if(e.target.matches("[data-ms-state]")){ msState = e.target.value; filterTasks(); return; }
+    if(e.target.matches("[data-ms-scope]")){ msScope = e.target.value; filterTasks(); return; }
     if(e.target.matches("[data-ms-task]")){
       dateEl.dataset.touched = "";
       syncRule();
@@ -726,8 +798,8 @@ function moduleMetricCells(row){
     + '<td class="num" data-label="工作项">' + (Number(row.done) || 0) + ' / ' + (Number(row.total) || 0) + '</td>'
     + '<td class="num" data-label="预估">' + fmtHours(row.estimateMinutes) + '</td>'
     + '<td class="num" data-label="实际工时">' + fmtHours(row.actualMinutes) + '</td>'
-    + '<td class="num" data-label="开发">' + fmtHours(row.devMinutes) + '</td>'
-    + '<td class="num" data-label="测试">' + fmtHours(row.testMinutes) + '</td>'
+    + '<td class="num" data-label="窗口外">' + fmtHours(row.devMinutes) + '</td>'
+    + '<td class="num" data-label="窗口内">' + fmtHours(row.testMinutes) + '</td>'
     + '<td class="num" data-label="剩余">' + fmtHours(row.remainingMinutes) + '</td>'
     + '<td class="num" data-label="偏差">' + moduleDeviation(row.deviationPct) + '</td>';
 }
@@ -774,8 +846,8 @@ function moduleTotalRow(m, c, total, canManage){
     + '<td class="num" data-label="工作项">' + (c.done || 0) + ' / ' + total + '</td>'
     + '<td class="num" data-label="预估">' + fmtHours(m.estimateMinutes) + '</td>'
     + '<td class="num" data-label="实际工时">' + fmtHours(m.actualMinutes) + '</td>'
-    + '<td class="num" data-label="开发">' + fmtHours(m.devMinutes) + '</td>'
-    + '<td class="num" data-label="测试">' + fmtHours(m.testMinutes) + '</td>'
+    + '<td class="num" data-label="窗口外">' + fmtHours(m.devMinutes) + '</td>'
+    + '<td class="num" data-label="窗口内">' + fmtHours(m.testMinutes) + '</td>'
     + '<td class="num" data-label="剩余">' + fmtHours(m.remainingMinutes) + '</td>'
     + '<td class="num" data-label="偏差" title="项目整体偏差见上方工时偏差卡片">—</td>'
     + '<td data-label="风险">' + moduleRisk({ overdue:c.overdue, blocked:c.blocked, done:c.done, total:total }) + '</td>'
@@ -805,13 +877,13 @@ function modulePanel(p, m, c){
     + modules.length + ' 个模块 · ' + total + ' 个工作项</span></div>'
     + '<div class="project-modules-tools">'
     + '<details class="manager-caliber project-modules-caliber"><summary>口径</summary><div>'
-    + '模块指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；开发 / 测试按测试窗口（提测 → 测试结束）内的计时拆分，开发 + 测试 = 实际工时；偏差只取已完成且填了预估的工作项。'
+    + '模块指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；窗口内 / 外按测试窗口（提测 → 测试结束）内的计时拆分，窗口外含评审、设计、开发、运维等全部其余计时，窗口内 + 外 = 实际工时；偏差只取已完成且填了预估的工作项。'
     + 'Σ模块 + 未指定 = 项目合计；项目整体进度仍按全部工作项计算，不是模块百分比的平均。</div></details>'
     + (canManage ? '<button class="btn sm primary" type="button" data-module-add>+ 添加模块</button>' : '')
     + '</div></div>'
     + '<p class="project-modules-note">像项目一样看每个模块的进度、预估与实际；删除模块时，其下工作项与需求迁到目标模块。</p>'
     + '<div class="tbl-wrap"><table class="manager-tbl project-modules-tbl"><thead><tr>'
-    + '<th>模块</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">开发</th><th class="num">测试</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
+    + '<th>模块</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">窗口外</th><th class="num">窗口内</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
     + (canManage ? '<th class="num" aria-label="操作"></th>' : '') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
     + '<p class="project-modules-foot-note"><span class="project-modules-foot-main"><i class="project-modules-foot-info" aria-hidden="true">' + icon("infoCircle", 13) + '</i>'
     + '<span>未指定为没有模块归属的工作项，单独统计；模块合计 + 未指定 = 项目合计。项目整体进度仍按全部工作项计算，不是模块百分比的平均。</span></span>'
@@ -898,13 +970,13 @@ function renderProject(){
   var epics = cache.epics || [];
   var toolbar = '<div class="manager-toolbar"><div>' + projectSwitchButton() + '</div>'
     + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span>' + fullscreenButtonHTML() + '</div></div>';
-  var overview = caliberHTML('整体进度 = Σ工作项完成度 ÷ 工作项数；指标由工作项流转、预估与自动计时汇总，不提供手填项目进度。分布按看板列的处理规则归类：待处理含「等待接续」列，进行中含「正常处理」的自定义列，「执行结束」列单独计数、不计未完成。')
+  var overview = caliberHTML('整体进度 = Σ工作项完成度 ÷ 工作项数；指标由工作项流转、预估与自动计时汇总，不提供手填项目进度。各指标卡右上角的 ? / ! 说明该数字的细分口径与边界。分布按看板列的处理规则归类：待处理含「等待接续」列，进行中含「正常处理」的自定义列，「执行结束」列单独计数、不计未完成。')
     + projectBrief(p, m, c, cache.members)
     + '<div class="manager-kpis">'
-    + metric("计划周期", '<span class="manager-date-value">' + fmtDate(m.startDate) + ' → ' + fmtDate(m.dueDate) + '</span>', total + " 个工作项", "all")
-    + metric("预估工时合计", fmtHours(m.estimateMinutes), "剩余 " + fmtHours(m.remainingMinutes), "estimate")
-    + metric("实际投入", fmtHours(m.actualMinutes), "开发 " + fmtHours(m.devMinutes) + " · 测试 " + fmtHours(m.testMinutes), "actual")
-    + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance") + '</div>'
+    + metric("工作项跨度", '<span class="manager-date-value">' + fmtDate(m.startDate) + ' → ' + fmtDate(m.dueDate) + '</span>', total + " 个工作项", "all", {key:"project.span", warn:true})
+    + metric("预估工时合计", fmtHours(m.estimateMinutes), "剩余 " + fmtHours(m.remainingMinutes), "estimate", {key:"project.estimate"})
+    + metric("实际投入", fmtHours(m.actualMinutes), "窗口外 " + fmtHours(m.devMinutes) + " · 窗口内 " + fmtHours(m.testMinutes), "actual", {key:"project.actual"})
+    + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance", {key:"project.variance", warn:true}) + '</div>'
     + modulePanel(p, m, c)
     + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>工作项分布</b><span>' + total + ' 个工作项</span></div>'
     + distRow("待处理", c.backlog || 0, total, "backlog") + distRow("进行中", c.doing || 0, total, "doing", "info")

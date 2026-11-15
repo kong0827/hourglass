@@ -125,7 +125,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <span class="rf-k">实际工时</span>
                   <b class="rf-v rf-v-lg" id="rfHours">—</b>
                 </div>
-                <span class="rf-sub" id="rfHoursNote"></span>
+                <span class="rf-sub rf-hours-meta"><span class="rf-hours-note" id="rfHoursNote"></span><button class="caliber-mark" type="button" data-caliber-help="drawer.actual" aria-label="查看实际工时口径" title="查看实际工时口径">?</button></span>
                 <button class="wi-hours-add" type="button" id="rfHoursAdd" title="补记一条实际工时（忘开表、加班等）" aria-label="补记实际工时">
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.2v11.6M4.2 10h11.6"/></svg>
                 </button>
@@ -371,7 +371,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             <div class="drawer-edit-block" id="fProgress" hidden>
               <div class="form-grid" style="margin-top:12px">
                 <div class="field">
-                  <div class="field-label">实际投入</div>
+                  <div class="field-label">实际投入<button class="caliber-mark" type="button" data-caliber-help="drawer.actual" aria-label="查看实际投入口径" title="查看实际投入口径">?</button></div>
                   <div class="est-actual" id="iActual">—</div>
                   <div class="work-row" style="gap:8px">
                     <span class="hint" id="iActualHint" style="margin-right:auto">按工作时段折算的计时累计</span>

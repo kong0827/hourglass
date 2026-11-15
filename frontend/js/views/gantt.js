@@ -15,10 +15,24 @@ import { registerViewParams } from "../core/view-params.js";
 import { bindRetry } from "../core/utils.js";
 import { COLUMNS, PRIORITIES, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, typeName } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
+import { initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { milestoneEvidence, milestoneStatusMeta, openMilestoneDetail } from "../lib/milestone-ui.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 import { refreshListIfOpen } from "./list.js";
+
+registerHelp({
+  "gantt.load": {
+    title:"成员负载",
+    rows:[
+      ["预估怎么来", "带估时的排期工作项，按计划工期把预估分摊到覆盖的每周（按工作日比例），归到负责人账号名下。", "ok"],
+      ["实际怎么来", "当前筛选范围内的已结束计时，按开始日期归周、按计时人归组，与工作项负责人无关。", "info"],
+      ["容量与颜色", "每周容量固定 5 个工作日 × 8 小时 = 40h；预估超过容量的 85% 标黄，超过 100% 标红。", "mute"],
+      ["不计入", "预估只算带估时且有起止日期的工作项；实际只算已结束的计时，进行中的不计。", "mute"]
+    ]
+  }
+});
+initCaliberHelp();
 
 var ganttScroll = $("ganttScroll"), ganttMeta = $("ganttMeta"),
     ganttShowDoneEl = $("ganttShowDone"), ganttZoomEl = $("ganttZoom"),

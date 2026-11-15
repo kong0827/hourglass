@@ -94,8 +94,9 @@
 
     .er-legend {
       display: flex; justify-content: center; flex-wrap: wrap; gap: 22px;
-      margin-top: 18px; font-size: 12px; color: var(--text-2);
+      font-size: 12px; color: var(--text-2);
     }
+    #hg-er-core .er-legend { margin-top: 16px; }
     .er-legend span { display: inline-flex; align-items: center; gap: 6px; }
     .lg-dot { width: 8px; height: 8px; border-radius: 999px; }
 
@@ -125,7 +126,7 @@
 
   <div class="er-head">
     <h1>沙漏 · 核心 ER 图</h1>
-    <p>56 张表中的核心 21 张 · 实线为外键关联，⊸ 为快照 / 派生关系</p>
+    <p>75 张表中的核心 24 张 · 实线为外键关联，⊸ 为快照 / 派生关系</p>
   </div>
 
   <div class="er-grid">
@@ -156,21 +157,28 @@
       <div class="er-table">
         <div class="er-thead th-primary"><code>demand</code><span>需求池 · 评审状态机</span></div>
         <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>所属项目</em></div>
-        <div class="er-row"><code>status</code><em>review/pass/plan/rej/canceled</em></div>
+        <div class="er-row"><code>status</code><em>review/pass/plan/closed</em></div>
         <div class="er-row"><code>wsjf_business / urgency / risk / effort</code><em>自动打分</em></div>
       </div>
 
       <div class="er-table">
         <div class="er-thead th-gray"><code>requirement_doc</code><span>文档树</span></div>
-        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>项目内多级树</em></div>
-        <div class="er-row"><code>parent_id · doc_type</code><em>需求 / 方案 / 验收</em></div>
-        <div class="er-row"><code>status · published_at</code><em>草稿 / 已发布</em></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>项目内多级树；req_id 空 = 空间级</em></div>
+        <div class="er-row"><code>parent_id · <span class="fk">category_id</span></code><em>文档层级 / 分类树</em></div>
+        <div class="er-row"><code>visibility</code><em>team / members / personal</em></div>
+        <div class="er-row"><code>status · published_at · doc_type</code><em>草稿 / 已发布 · 文档分类</em></div>
       </div>
 
       <div class="er-table">
-        <div class="er-thead th-gray"><code>category</code><span>项目模块</span></div>
-        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">project_id</span></code><em>按项目分组</em></div>
-        <div class="er-row"><code>name · color</code><em>模块统计口径</em></div>
+        <div class="er-thead th-gray"><code>doc_category</code><span>文档分类树</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>req_id 空串 = 空间级</em></div>
+        <div class="er-row"><code>parent_id · name</code><em>单归属，不限层级，仅防环</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>category</code><span>模块 · 项目目录树</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">project_id</span> · <span class="fk">parent_id</span></code><em>不限层级，仅防环</em></div>
+        <div class="er-row"><code>name · color</code><em>任务 / 需求 / 用例共用 · 统计口径</em></div>
       </div>
 
       <div class="er-table">
@@ -201,8 +209,8 @@
       <div class="er-table">
         <div class="er-thead th-success"><code>project_version</code><span>版本</span></div>
         <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>版本归属项目</em></div>
-        <div class="er-row"><code>status</code><em>planned / active / released</em></div>
-        <div class="er-row"><code>target_date · released_at</code><em>计划 / 实际发布日</em></div>
+        <div class="er-row"><code>status</code><em>planned / active / released / closed / canceled</em></div>
+        <div class="er-row"><code>target_date · released_at · commitment_at</code><em>计划 / 发布 / 承诺基线时间</em></div>
       </div>
 
       <div class="er-table">
@@ -216,11 +224,20 @@
         <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>空 = 空间级公共分支</em></div>
         <div class="er-row"><code>status</code><em>dev/testing/merging/released</em></div>
         <div class="er-row"><code><span class="fk">owner_user_id</span> · target_branch</code><em>负责人 / 要合到哪</em></div>
+        <div class="er-row"><code><span class="fk">repo_id</span> · sync_status · outcome</code><em>远端分支来源与待确认状态</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>project_repo</code><span>GitLab 仓库 · 只读同步</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>一个项目可绑多个仓库</em></div>
+        <div class="er-row"><code>token_cipher · import_policy</code><em>AES-GCM 存令牌 · recent90 / all / manual</em></div>
+        <div class="er-row"><code>last_sync_status · last_sync_at</code><em>同步结果与时间</em></div>
       </div>
 
       <div class="er-table">
         <div class="er-thead th-gray"><code>test_case</code><span>用例 · 最近执行结果</span></div>
         <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span> · <span class="fk">demand_id</span></code><em>项目下，可挂需求</em></div>
+        <div class="er-row"><code><span class="fk">category_id</span></code><em>用例目录（项目目录树）</em></div>
         <div class="er-row"><code>latest_status</code><em>passed/failed/blocked</em></div>
         <div class="er-row"><code><span class="fk">latest_bug_task_id</span></code><em>失败转缺陷</em></div>
       </div>
@@ -234,6 +251,12 @@
 
     <div class="er-col">
       <div class="er-domain d3"><span class="dot"></span>留痕事实 · 发布证据与统计直读</div>
+
+      <div class="er-table">
+        <div class="er-thead th-plum"><code>version_commitment_task</code><span>承诺基线</span></div>
+        <div class="er-row"><code><span class="pk">version_id</span> + <span class="fk">task_id</span></code><em>开始开发时冻结</em></div>
+        <div class="er-row"><code>task_title · estimate_minutes</code><em>与当前范围比对偏差</em></div>
+      </div>
 
       <div class="er-table">
         <div class="er-thead th-plum"><code>time_log</code><span>工时记录</span></div>
@@ -274,7 +297,7 @@
         <div class="er-row"><code><span class="pk">id</span> · <span class="fk">plan_id</span> · <span class="fk">version_id</span></code><em>计划可空（紧急记录）</em></div>
         <div class="er-row"><code>operation · result · occurred_at</code><em>部署 / 重部署 / 回滚</em></div>
         <div class="er-row"><code>environment · coverage · artifact_digest</code><em>生产证据</em></div>
-        <div class="er-row"><code>plan_snapshot · plan_revision</code><em>计划时间冻结</em></div>
+        <div class="er-row"><code>plan_snapshot · plan_revision</code><em>计划时间与发布必测结果冻结</em></div>
         <div class="er-row"><code>idempotency_key · request_hash</code><em>防重复提交</em></div>
       </div>
 
@@ -301,16 +324,20 @@
       <div class="er-rel-item"><span class="arrow">→</span><span><code>task.req_doc_id</code> → <code>requirement_doc</code>：文档可拆任务草稿，方案与执行对齐</span></div>
       <div class="er-rel-item"><span class="arrow">→</span><span><code>task.branch_id</code> → <code>dev_branch</code>：分支状态独立流转，从开发到已发布</span></div>
       <div class="er-rel-item"><span class="arrow">↔</span><span><code>version_task</code> ↔ <code>task</code> / <code>project_version</code>：多对多，版本内容 ≠ 发布范围</span></div>
-      <div class="er-rel-item"><span class="arrow">→</span><span><code>category.project_id</code> → <code>requirement</code>：模块合计 + 未指定 = 项目合计</span></div>
-      <div class="er-rel-item"><span class="arrow">→</span><span><code>version_release.plan_id</code> → <code>version_release_plan</code>：计划可空，确认时冻结 <code>plan_snapshot</code></span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>category</code> → <code>requirement</code>：任务 / 需求 / 用例共用目录树，目录合计 + 未指定 = 项目合计</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>doc_category.req_id</code> → <code>requirement</code>：空串为空间级分类，文档单归属、不限层级</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>version_release.plan_id</code> → <code>version_release_plan</code>：计划可空，确认时冻结 <code>plan_snapshot</code> 与发布必测证据</span></div>
       <div class="er-rel-item"><span class="arrow">→</span><span><code>version_release_item.release_id</code> → <code>version_release</code>：逐项处置与工时，构成发布偏差</span></div>
       <div class="er-rel-item"><span class="arrow">⊸</span><span><code>task.published_release_id</code> ⊸ <code>version_release</code>：徽标由成功 production 记录派生，不人工写</span></div>
       <div class="er-rel-item"><span class="arrow">→</span><span><code>test_case_run.case_id</code> → <code>test_case</code>：执行流水；失败可转出缺陷任务</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>project_repo.req_id</code> → <code>requirement</code>：仓库只读拉取分支，<code>dev_branch.repo_id</code> 回指来源</span></div>
+      <div class="er-rel-item"><span class="arrow">⊸</span><span><code>version_commitment_task</code> ⊸ <code>project_version</code>：开始开发时冻结承诺范围，当前范围另算</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>test_case_task</code> / <code>case_set_item</code>：用例与工作项追溯、用例集多归属（图未展开）</span></div>
       <div class="er-rel-item"><span class="arrow">⊸</span><span><code>task_completion_record</code> ⊸ <code>task</code>：完成时冗余快照，任务改名 / 删除后统计不失真</span></div>
     </div>
   </div>
 
-  <div class="er-foot"><b>全库 56 张表 · 每张事实表都带 workspace_id</b> —— 这是备份按空间导出/导入的物理基础；发布证据以 MySQL 备份为准</div>
+  <div class="er-foot"><b>全库 75 张表 · 每张事实表都带 workspace_id</b> —— 这是备份按空间导出/导入的物理基础；发布证据以 MySQL 备份为准</div>
 </div>
 </body>
 </html>

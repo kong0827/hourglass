@@ -79,8 +79,26 @@ class AiSelectionServiceTest {
     @Test
     void normalizeActionRejectsUnknown() {
         assertEquals("to_task", AiSelectionService.normalizeAction("TO_TASK"));
+        assertEquals("expand", AiSelectionService.normalizeAction(" Expand "));
         assertEquals(400, assertThrows(AppException.class,
                 () -> AiSelectionService.normalizeAction("translate")).getCode());
+    }
+
+    /** 待确认假设的清洗口径：去空白、按字截断、超过 4 条丢弃；非数组或全空返回空列表 */
+    @Test
+    void textListCleansAndCapsItems() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.JsonNode root = om.readTree(
+                "{\"assumptions\":[\" 需要确认超时时间 \",\"\",\"   \",\""
+                        + repeat("字", 70) + "\",\"第四条\",\"第五条\"]}");
+        java.util.List<String> out = AiSelectionService.textList(root, "assumptions", 40, 4);
+        assertEquals(4, out.size());
+        assertEquals("需要确认超时时间", out.get(0));
+        assertEquals(40, AiSelectionService.charCount(out.get(1)));
+        assertEquals("第四条", out.get(2));
+        assertEquals("第五条", out.get(3));
+        assertEquals(0, AiSelectionService.textList(root, "missing", 40, 4).size());
+        assertEquals(0, AiSelectionService.textList(null, "assumptions", 40, 4).size());
     }
 
     /** 字数按码点算：一个 emoji 算一个字，和前端「N 字」口径一致 */
@@ -101,6 +119,62 @@ class AiSelectionServiceTest {
         String out = AiSelectionService.sanitizeOutput(sb.toString());
         assertEquals(6000, AiSelectionService.charCount(out));
         assertEquals("😀", out.substring(out.length() - 2));
+    }
+
+    /** 扩写：正文与待确认假设分开返回，替换只用到 text */
+    @Test
+    void expandKeepsAssumptionsOutOfText() {
+        RequirementDocService docService = mock(RequirementDocService.class);
+        AiConfigService configService = mock(AiConfigService.class);
+        AiClient client = mock(AiClient.class);
+        TaskMapper taskMapper = mock(TaskMapper.class);
+        RequirementDoc doc = new RequirementDoc();
+        doc.setId("doc1");
+        doc.setTitle("字段说明");
+        doc.setFormat("markdown");
+        when(docService.getVisible("w1", "u1", "doc1")).thenReturn(doc);
+        when(configService.resolve("u1", "w1")).thenReturn(new com.hourglass.dto.AiConfig());
+        AiClient.Reply reply = new AiClient.Reply();
+        reply.content = "{\"text\":\"字段说明表列出三个字段。\",\"assumptions\":[\" 超时策略待确认 \",\"\"]}";
+        when(client.chat(any(), any(), any(), anyBoolean())).thenReturn(reply);
+
+        AiSelectionService svc = new AiSelectionService(docService, configService, client, taskMapper);
+        AiSelectionRequest req = new AiSelectionRequest();
+        req.setAction("expand");
+        req.setSelection("字段说明表列出三个字段：id、status、updatedAt。");
+
+        com.hourglass.dto.AiSelectionResponse res = svc.transform("u1", "w1", "doc1", req);
+        assertEquals("expand", res.getAction());
+        assertEquals("字段说明表列出三个字段。", res.getText());
+        assertEquals(1, res.getNotes().size());
+        assertEquals("超时策略待确认", res.getNotes().get(0));
+    }
+
+    /** 模型不按 JSON 返回时降级为纯文本建议，不能直接报错丢掉结果 */
+    @Test
+    void expandFallsBackToPlainTextWhenJsonMissing() {
+        RequirementDocService docService = mock(RequirementDocService.class);
+        AiConfigService configService = mock(AiConfigService.class);
+        AiClient client = mock(AiClient.class);
+        TaskMapper taskMapper = mock(TaskMapper.class);
+        RequirementDoc doc = new RequirementDoc();
+        doc.setId("doc1");
+        doc.setTitle("字段说明");
+        doc.setFormat("markdown");
+        when(docService.getVisible("w1", "u1", "doc1")).thenReturn(doc);
+        when(configService.resolve("u1", "w1")).thenReturn(new com.hourglass.dto.AiConfig());
+        AiClient.Reply reply = new AiClient.Reply();
+        reply.content = "```text\n字段说明表列出三个字段。\n```";
+        when(client.chat(any(), any(), any(), anyBoolean())).thenReturn(reply);
+
+        AiSelectionService svc = new AiSelectionService(docService, configService, client, taskMapper);
+        AiSelectionRequest req = new AiSelectionRequest();
+        req.setAction("expand");
+        req.setSelection("字段说明表列出三个字段：id、status、updatedAt。");
+
+        com.hourglass.dto.AiSelectionResponse res = svc.transform("u1", "w1", "doc1", req);
+        assertEquals("字段说明表列出三个字段。", res.getText());
+        assertEquals(0, res.getNotes().size());
     }
 
     private static String repeat(String unit, int times) {

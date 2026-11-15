@@ -4134,7 +4134,7 @@ function renderDemandDetail(d){
     var count = layer.querySelector("#tabRecordCount");
     if(count) count.textContent = logs.length ? String(logs.length) : "";
     if(ul) ul.innerHTML = logs.length ? logs.map(demandLogItemHTML).join("") : '<li class="foot-note">暂无流转记录</li>';
-    if(recent) recent.innerHTML = logs.length ? logs.slice().reverse().slice(0, 2).map(demandLogItemHTML).join("") : '<li class="read-empty">暂无记录</li>';
+    if(recent) recent.innerHTML = logs.length ? logs.slice(0, 2).map(demandLogItemHTML).join("") : '<li class="read-empty">暂无记录</li>';
   }).catch(function(){
     var ul = layer.querySelector("#demLogs");
     if(ul) ul.innerHTML = '<li class="foot-note">时间线加载失败</li>';

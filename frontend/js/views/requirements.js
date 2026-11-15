@@ -3362,6 +3362,7 @@ function rdaEnsureNodes(){
   rdaBubble.innerHTML = '<span class="rda-badge">' + icon("ai") + ' AI</span>'
     + '<button type="button" data-rda-act="rewrite">改写</button>'
     + '<button type="button" data-rda-act="shorten">缩写</button>'
+    + '<button type="button" data-rda-act="expand">扩写</button>'
     + '<button type="button" data-rda-act="explain">解释</button>'
     + '<span class="rda-sep" aria-hidden="true"></span>'
     + '<button type="button" data-rda-act="to_task">提为工作项</button>';
@@ -3559,7 +3560,8 @@ function rdaDelta(d){
 function rdaOpenCard(action, d, err){
   rdaEnsureNodes();
   rdaCard.hidden = false;
-  var title = action === "rewrite" ? "改写建议" : (action === "shorten" ? "缩写建议" : "这段在说什么");
+  var title = action === "rewrite" ? "改写建议"
+    : (action === "shorten" ? "缩写建议" : (action === "expand" ? "扩写建议" : "这段在说什么"));
   var head = '<div class="rda-head"><span class="rda-title">' + esc(title) + '</span>'
     + '<span class="rda-usage">' + (d && d.usage ? esc(aiUsageText(d.usage)) : "") + '</span>'
     + '<button class="rda-x" type="button" data-rda="close" aria-label="关闭">×</button></div>';
@@ -3572,9 +3574,11 @@ function rdaOpenCard(action, d, err){
     return;
   }
   if(!d){
+    var busyText = action === "explain" ? "正在读这段文字…"
+      : (action === "expand" ? "正在扩写这段文字…" : "正在生成建议…");
     rdaCard.innerHTML = head + '<div class="rda-body"><div class="rda-loading">'
       + '<span class="rda-dots" aria-hidden="true"><i></i><i></i><i></i></span>'
-      + (action === "explain" ? "正在读这段文字…" : "正在生成建议…") + '</div></div>'
+      + busyText + '</div></div>'
       + '<div class="rda-foot"><span class="rda-hint">通常需要 5–30 秒</span>'
       + '<button type="button" data-rda="cancel">取消</button></div>';
     rdaPlaceCard();
@@ -3592,6 +3596,14 @@ function rdaOpenCard(action, d, err){
   }else{
     body = orig + '<div class="rda-block"><div class="rda-lbl">建议</div>'
       + '<div class="rda-sug">' + esc(d.text || "") + '</div></div>';
+    /* 假设是模型补出来、原文没有依据的内容：只展示，不随「替换」写回正文 */
+    if(action === "expand"){
+      var assume = (d.notes || []).map(function(n){ return '<li>' + esc(n) + '</li>'; }).join("");
+      if(assume){
+        body += '<div class="rda-block"><div class="rda-lbl">待确认假设（不会写回正文）</div>'
+          + '<ul class="rda-notes">' + assume + '</ul></div>';
+      }
+    }
   }
   /* 解释不改正文，字数变化没有意义，不显示 */
   var foot = '<div class="rda-foot">'

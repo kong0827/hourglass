@@ -15,9 +15,9 @@ import javax.validation.constraints.Size;
 @Data
 public class AiSelectionRequest {
 
-    /** rewrite 改写 / shorten 缩写 / explain 解释 / to_task 提为工作项 */
+    /** rewrite 改写 / shorten 缩写 / expand 扩写 / explain 解释 / to_task 提为工作项 */
     @NotBlank(message = "缺少操作类型")
-    @Pattern(regexp = "^(rewrite|shorten|explain|to_task)$", message = "不支持的操作")
+    @Pattern(regexp = "^(rewrite|shorten|expand|explain|to_task)$", message = "不支持的操作")
     private String action;
 
     @NotBlank(message = "请先选中要处理的文字")

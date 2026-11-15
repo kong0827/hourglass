@@ -101,12 +101,12 @@ function formHTML(act, m){
   var rev = '<input type="hidden" name="msAct" value="' + esc(act) + '">';
   if(act === "achieve"){
     return '<div class="ms-action-form">' + rev + '<p class="foot-note">负责人：' + esc(m.ownerName || "—") + ' · 日期：' + esc(fmtTs(new Date().toISOString())) + '</p>'
-      + '<label>说明（可选）<input class="inp" data-ms-field="note" maxlength="500" placeholder="例如：客户验收通过"></label>'
+      + '<label>说明（可选）<input class="input" data-ms-field="note" maxlength="500" placeholder="例如：客户验收通过"></label>'
       + '<div class="phase-acts"><button class="btn sm primary" type="button" data-ms-submit="achieve">确认达成</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
   if(act === "revoke"){
-    return '<div class="ms-action-form">' + rev + '<label>撤销原因（可选）<input class="inp" data-ms-field="reason" maxlength="500"></label>'
+    return '<div class="ms-action-form">' + rev + '<label>撤销原因（可选）<input class="input" data-ms-field="reason" maxlength="500"></label>'
       + '<div class="phase-acts"><button class="btn sm ghost danger" type="button" data-ms-submit="revoke">确认撤销</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
@@ -115,12 +115,12 @@ function formHTML(act, m){
     var next = iso(addDays(base, 7));
     return '<div class="ms-action-form">' + rev
       + '<p class="foot-note">' + esc(m.targetDate || "未设置") + ' → 新日期（默认顺延 7 天）</p>'
-      + '<label>新目标日期<input class="inp" type="date" data-ms-field="targetDate" value="' + esc(next) + '"></label>'
-      + '<label>改期原因<input class="inp" data-ms-field="reason" maxlength="500" placeholder="必填"></label>'
+      + '<label>新目标日期<input class="input" type="date" data-ms-field="targetDate" value="' + esc(next) + '"></label>'
+      + '<label>改期原因<input class="input" data-ms-field="reason" maxlength="500" placeholder="必填"></label>'
       + '<div class="phase-acts"><button class="btn sm primary" type="button" data-ms-submit="reschedule">确认改期</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
-  return '<div class="ms-action-form">' + rev + '<label>取消原因<input class="inp" data-ms-field="reason" maxlength="500" placeholder="必填"></label>'
+  return '<div class="ms-action-form">' + rev + '<label>取消原因<input class="input" data-ms-field="reason" maxlength="500" placeholder="必填"></label>'
     + '<p class="foot-note">取消后保留历史与原因，不计入达成统计。</p>'
     + '<div class="phase-acts"><button class="btn sm ghost danger" type="button" data-ms-submit="cancel">确认取消</button>'
     + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';

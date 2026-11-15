@@ -115,7 +115,7 @@ class AiInvestmentServiceTest {
         verify(client).chat(any(AiConfig.class), anyString(), user.capture(), eq(false));
         String prompt = user.getValue();
         assertTrue(prompt.contains("实际 8.0 小时"), "合计工时由服务端折算成小时喂给模型");
-        assertTrue(prompt.contains("开发 6.0 小时 / 测试 2.0 小时"));
+        assertTrue(prompt.contains("测试窗口外 6.0 小时 / 测试窗口内 2.0 小时"));
         assertTrue(prompt.contains("Alice"));
         assertTrue(prompt.contains("登录页改版"));
         assertTrue(prompt.contains("阻塞"));
@@ -150,13 +150,13 @@ class AiInvestmentServiceTest {
     void buildFactsRendersPeriodTotalsMembersItemsAndTruncation() {
         String facts = service.buildFacts(data(), null);
         assertTrue(facts.contains("周期：2026-10-01 — 2026-12-31（92 天）"));
-        assertTrue(facts.contains("合计：实际 8.0 小时（开发 6.0 小时 / 测试 2.0 小时）"));
+        assertTrue(facts.contains("合计：实际 8.0 小时（测试窗口外 6.0 小时 / 测试窗口内 2.0 小时）"));
         assertTrue(facts.contains("预估 15.0 小时"));
         assertTrue(facts.contains("去重人力 2 人"));
         assertTrue(facts.contains("投入 1.0 人天"));
         assertTrue(facts.contains("1. Alice（开发 · A 公司）"));
         assertTrue(facts.contains("实际占比 75%"));
-        assertTrue(facts.contains("- 登录页改版（项目甲 · 实际 6.0 小时，其中测试 1.0 小时 · 进行中 · 阻塞）"));
+        assertTrue(facts.contains("- 登录页改版（项目甲 · 实际 6.0 小时，其中测试窗口内 1.0 小时 · 进行中 · 阻塞）"));
         assertTrue(facts.contains("…另有工作项未列出"));
         assertTrue(facts.contains("2. Bob（测试 · A 公司）"));
         assertFalse(facts.contains("管理者补充"), "没有补充说明时不追加该段");

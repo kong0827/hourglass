@@ -81,8 +81,8 @@ public class AiInvestmentService {
                 + "3. 客观第三人称叙述，出现成员时用给定的人名。不要出现\"AI\"\"本工具\"\"根据数据\"这类字样，也不要客套开场。\n"
                 + "4. 只输出纯 Markdown 文本，不要 ``` 围栏。结构固定：先一个「## 团队概览」，"
                 + "再为给定的每个成员各写一个「## 成员名」二级标题（顺序与给定一致、人名照抄），最后一个「## 风险与提示」。\n"
-                + "5. 「团队概览」用 2-4 句概括本期总投入、人力与开发/测试结构；每个成员节用「- 」列表写其主要工作内容与投入，"
-                + "一条一行、不超过 50 字，动词开头并带上对象；「风险与提示」写逾期、阻塞、测试占比偏高或投入明显失衡等，确实没有就写\"- 无\"。\n"
+                + "5. 「团队概览」用 2-4 句概括本期总投入、人力与测试窗口内 / 外结构（窗口外含需求评审、设计、开发、运维等，不要写成「开发工时」）；每个成员节用「- 」列表写其主要工作内容与投入，"
+                + "一条一行、不超过 50 字，动词开头并带上对象；「风险与提示」写逾期、阻塞、窗口内计时占比偏高或投入明显失衡等，确实没有就写\"- 无\"。\n"
                 + "6. 预估与实际归属周期不同，不要计算或暗示「预估 − 实际」的偏差结论。\n"
                 + "7. 全文控制在 600 字以内，宁短勿长。";
 
@@ -118,8 +118,8 @@ public class AiInvestmentService {
         sb.append("周期：").append(str(range.get("from"))).append(" — ").append(str(range.get("to")))
                 .append("（").append(num(range.get("days"))).append(" 天）\n");
         sb.append("合计：实际 ").append(hours(num(totals.get("actualMinutes"))))
-                .append("（开发 ").append(hours(num(totals.get("devMinutes"))))
-                .append(" / 测试 ").append(hours(num(totals.get("testMinutes")))).append("）");
+                .append("（测试窗口外 ").append(hours(num(totals.get("devMinutes"))))
+                .append(" / 测试窗口内 ").append(hours(num(totals.get("testMinutes")))).append("）");
         sb.append("；预估 ").append(hours(num(totals.get("estimateMinutes"))));
         sb.append("；去重人力 ").append(num(totals.get("users"))).append(" 人");
         sb.append("；投入 ").append(personDays(num(totals.get("actualMinutes")))).append(" 人天");
@@ -139,8 +139,8 @@ public class AiInvestmentService {
                 sb.append("）");
             }
             sb.append("：实际 ").append(hours(num(member.get("actualMinutes"))))
-                    .append("（开发 ").append(hours(num(member.get("devMinutes"))))
-                    .append(" / 测试 ").append(hours(num(member.get("testMinutes")))).append("）");
+                    .append("（测试窗口外 ").append(hours(num(member.get("devMinutes"))))
+                    .append(" / 测试窗口内 ").append(hours(num(member.get("testMinutes")))).append("）");
             sb.append("，预估 ").append(hours(num(member.get("estimateMinutes"))));
             sb.append("，实际占比 ").append(num(member.get("sharePct"))).append("%");
             sb.append("，").append(num(member.get("projects"))).append(" 个项目 / ")
@@ -156,7 +156,7 @@ public class AiInvestmentService {
                         sb.append(" · 实际 ").append(hours(itemActual));
                         int itemTest = num(item.get("testMinutes"));
                         if (itemTest > 0) {
-                            sb.append("，其中测试 ").append(hours(itemTest));
+                            sb.append("，其中测试窗口内 ").append(hours(itemTest));
                         }
                     } else if (num(item.get("estimateMinutes")) > 0) {
                         sb.append(" · 预估 ").append(hours(num(item.get("estimateMinutes"))));

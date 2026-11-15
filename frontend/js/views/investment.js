@@ -2,6 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
+import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import { rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -9,14 +10,17 @@ import { AIProgress, aiErrorText, aiUsageText } from "../core/ai-progress.js";
 import { labelFilterText } from "../lib/member-labels.js";
 import { triggerDownload } from "../lib/download.js";
 import { avatarHTML, colName, mdLite } from "../lib/format.js";
+import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { loadReqs } from "./board.js";
 import { downloadCsv, fmtDate, fmtHours, openTaskTable } from "./manager-shared.js";
 
-var DIM_LABEL = { project:"项目", member:"成员", company:"公司", role:"角色" };
+var DIM_LABEL = { project:"项目", member:"成员", company:"公司", role:"角色", position:"职能" };
 var METRIC_KEY = { act:"actualMinutes", est:"estimateMinutes" };
+/* 与 ManagerService 的 UNASSIGNED_MEMBER_KEY 对齐：未指派的预估计工时但不计人力 */
+var UNASSIGNED_MEMBER_KEY = "x:unassigned";
 var state = { mode:"quarter", year:0, quarter:0, dim:"project", metric:"act", customFrom:"", customTo:"" };
 var filters = { reqId:"", companyName:"", roleTitle:"", memberUserIds:[] };
-var cache = null, options = {}, pivotRows = [], seq = 0, loading = false, filterWorkspace = "", helpPop = null;
+var cache = null, options = {}, pivotRows = [], seq = 0, loading = false, filterWorkspace = "";
 /* AI 总结按「空间#周期#筛选」缓存：翻周期/改筛选不覆盖已生成的结果，导出时取当前范围那一份 */
 var aiCache = {}, aiBusy = false, memberPop = null, exportPop = null;
 
@@ -183,22 +187,23 @@ var HELP = {
     rows:[
       ["来源", "本期所有已结束且分钟 > 0 的计时记录之和，按开始日期归属周期。", "ok"],
       ["归属", "按计时人统计，不按工作项负责人统计：跨项目支援、代记的工时会留在实际计时人身上。", "info"],
-      ["构成", "开发 + 测试 = 实际；未结束和 0 分钟计时不计。", "mute"]
+      ["构成", "测试窗口内 + 测试窗口外 = 实际；未结束和 0 分钟计时不计。", "mute"]
     ]
   },
   dev: {
-    title:"开发工时",
+    title:"测试窗口外工时",
     rows:[
       ["怎么算", "实际工时 − 测试窗口内的计时分钟。", "ok"],
-      ["没有窗口", "工作项没有提测/测试结束记录时，全部实际计时都计入开发。", "mute"]
+      ["包含", "需求评审、方案与设计、开发、联调、验收、运维等不在测试窗口内的计时都在这里，不只是开发。", "info"],
+      ["没有窗口", "工作项没有提测/测试结束记录时，全部实际计时都计入窗口外。", "mute"]
     ]
   },
   test: {
-    title:"测试工时",
+    title:"测试窗口内工时",
     rows:[
       ["怎么算", "计时日期落在工作项「提测 → 测试结束」窗口内的分钟，含首尾两天。", "ok"],
-      ["最近一轮", "窗口只保留最近一轮测试；重开测试前的早期轮次会回落到开发。", "warn"],
-      ["不是角色", "测试工时不按人的岗位或测试计划推断，只看计时日期是否落在窗口内。", "mute"]
+      ["最近一轮", "窗口只保留最近一轮测试；重开测试前的早期轮次会回落到窗口外。", "warn"],
+      ["不是角色", "这里按时间窗口切分，不按人的岗位或测试计划推断：产品、设计在窗口内的计时也会落在这里。要按岗位看投入，切「职能」维度。", "mute"]
     ]
   },
   estimate: {
@@ -217,10 +222,19 @@ var HELP = {
     ]
   },
   compose: {
-    title:"开发 / 测试构成",
+    title:"测试窗口内 / 外构成",
     rows:[
-      ["拆分", "测试 = 计时日期落在工作项测试窗口内的分钟；其余全部计入开发。", "ok"],
-      ["注意", "一个工作项只保留最近一轮测试窗口，重开前的早期计时会落回开发。", "warn"]
+      ["拆分", "窗口内 = 计时日期落在工作项测试窗口内的分钟；其余全部计入窗口外。", "ok"],
+      ["不是开发/测试", "窗口外包含需求评审、设计、开发、运维等；要区分岗位请切「职能」维度。", "info"],
+      ["注意", "一个工作项只保留最近一轮测试窗口，重开前的早期计时会落回窗口外。", "warn"]
+    ]
+  },
+  position: {
+    title:"职能维度",
+    rows:[
+      ["怎么算", "按成员在空间里设置的岗位归集：实际按计时人岗位，预估按负责人岗位。", "ok"],
+      ["和角色的区别", "「角色」是项目内角色（如业务接口人、项目负责人），会随项目变；「职能」是空间岗位（如产品经理、后端开发），同一个人只归一处。", "info"],
+      ["兼岗", "一人多岗时按空间岗位归集，不做拆分；没有设置岗位的归入「未设岗位」。", "mute"]
     ]
   },
   trend: {
@@ -234,7 +248,8 @@ var HELP = {
   pivot: {
     title:"维度与筛选",
     rows:[
-      ["同一口径", "项目 / 成员 / 公司 / 角色共用同一批计时与预估，切换只换分组，不换口径。", "ok"],
+      ["同一口径", "项目 / 成员 / 公司 / 角色 / 职能共用同一批计时与预估，切换只换分组，不换口径。", "ok"],
+      ["职能", "职能取空间岗位，与项目角色不是一回事：角色会随项目变，职能只按人算。", "info"],
       ["成员", "实际按计时人，预估按负责人；公司来自空间成员，角色按项目有效主角色归属，兼岗在筛选时也能命中。", "info"],
       ["下钻", "点行按同一周期与筛选下钻到工作项；实际和预估会合并到同一工作项上。", "mute"]
     ]
@@ -245,38 +260,18 @@ var HELP = {
       ["重复计数", "一个工作项可以同时绑定多个版本，按版本汇总会把同一段工时报多次。", "warn"],
       ["版本投入", "单版本投入请看版本详情或版本页的单版本汇总。", "info"]
     ]
+  },
+  share: {
+    title:"占比",
+    rows:[
+      ["怎么算", "该分组的选中指标 ÷ 当前维度下全部行的合计；分母随「按实际 / 按预估」切换。", "ok"],
+      ["合计行", "合计恒为 100%；选中指标的合计为 0 时显示「—」。", "mute"],
+      ["显示", "各组占比按最大余数法取整，相加恰好 100%，与直接四舍五入相比可能有 1 个百分点的差异。", "info"]
+    ]
   }
 };
-function helpHTML(key){
-  var def = HELP[key];
-  if(!def) return "";
-  return '<div class="menu-title">' + esc(def.title) + '</div>'
-    + '<div class="type-help-list">' + def.rows.map(function(row){
-      return '<div class="type-help-row"><span class="mini-tag ' + row[2] + '">' + row[0] + '</span>'
-        + '<span class="type-help-desc">' + row[1] + '</span></div>';
-    }).join("") + '</div>'
-    + (def.note ? '<div class="inv-help-note">' + def.note + '</div>' : "");
-}
-function openHelp(anchor, key){
-  if(!anchor) return;
-  if(helpPop) UI.closeAllPops();
-  var el = document.createElement("div");
-  el.className = "menu popover type-help-pop inv-help-pop";
-  el.innerHTML = helpHTML(key);
-  helpPop = el;
-  /* 靠左的 ? 向右展开，靠右的 ? 向左展开，避免宽弹层被夹到屏幕边缘、离锚点太远 */
-  var align = anchor.getBoundingClientRect().left > window.innerWidth / 2 ? "right" : "left";
-  UI.openPop(el, anchor, {
-    align:align,
-    width:Math.max(300, Math.min(460, window.innerWidth - 16)),
-    onClose:function(){ el.remove(); helpPop = null; }
-  });
-}
-function markHTML(key, warn, label){
-  return '<button class="inv-mark' + (warn ? ' warn' : '') + '" type="button" data-inv-help="' + key + '"'
-    + ' aria-label="' + esc(label || "查看口径说明") + '" title="' + esc(label || "查看口径说明") + '">'
-    + (warn ? "!" : "?") + '</button>';
-}
+registerHelp(HELP);
+initCaliberHelp();
 
 /* ---------- 工具条 ---------- */
 function yearOptions(){
@@ -356,7 +351,7 @@ function toolbarHTML(){
     + labelOptions(options.roleTitles, filters.roleTitle, "全部角色", "未设角色") + '</select></label>'
     + '<button class="btn sm soft" type="button" data-inv-clear>清除筛选</button>'
     + '<span class="inv-period-note">' + esc(periodStatusText(periodRange()))
-    + markHTML("crossPeriod", true, "查看跨期口径提醒") + '</span>'
+    + caliberMarkHTML("crossPeriod", true, "查看跨期口径提醒") + '</span>'
     + '</div>';
 }
 
@@ -430,8 +425,10 @@ function openMemberPicker(anchor){
 /* ---------- 总览 ---------- */
 function kpiHTML(label, value, unit, desc, opts){
   opts = opts || {};
-  return '<div class="inv-kpi' + (opts.hl ? " hl" : "") + '">'
-    + '<span class="inv-kl">' + label + markHTML(opts.help, false, "查看「" + label + "」口径") + '</span>'
+  var link = opts.link ? ' role="button" tabindex="0" data-inv-kpi="' + opts.link + '"'
+    + ' aria-label="' + esc(label + " " + value + (unit || "") + "，点击查看成员明细") + '"' : "";
+  return '<div class="inv-kpi' + (opts.hl ? " hl" : "") + (opts.link ? " inv-kpi-link" : "") + '"' + link + '>'
+    + '<span class="inv-kl">' + label + caliberMarkHTML(opts.help, false, "查看「" + label + "」口径") + '</span>'
     + '<div class="inv-kv">' + value + (unit ? '<small>' + unit + '</small>' : '') + '</div>'
     + '<div class="inv-kd" title="' + esc(desc) + '">' + esc(desc) + '</div></div>';
 }
@@ -442,18 +439,18 @@ function overviewHTML(){
   var test = Number(totals.testMinutes) || 0;
   var estimate = Number(totals.estimateMinutes) || 0;
   var days = Math.round(actual / 480 * 10) / 10;
-  var userNote = Number(totals.users) ? ("共 " + totals.users + " 人 · " + totals.projects + " 个项目") : "本期没有可归集的人力";
+  var userNote = Number(totals.users) ? ("共 " + totals.users + " 人 · " + totals.projects + " 个项目 · 点击查看成员") : "本期没有可归集的人力";
   return '<section class="inv-card"><div class="inv-card-head"><div>'
-    + '<h2>投入总览 ' + markHTML("pivot", false, "查看本页口径") + '</h2>'
+    + '<h2>投入总览 ' + caliberMarkHTML("pivot", false, "查看本页口径") + '</h2>'
     + '<p>' + esc(scopeText()) + ' · ' + esc(periodStatusText(periodRange())) + '</p></div>'
     + '<div class="inv-head-ctl"><span class="inv-chip">口径 <b>计时发生日</b></span></div></div>'
     + '<div class="inv-card-body"><div class="inv-kpis">'
-    + kpiHTML("去重人力", totals.users || 0, "人", userNote, { hl:true, help:"headcount" })
-    + kpiHTML("实际工时", fmtHours(actual), "", "开发 " + fmtHours(dev) + " · 测试 " + fmtHours(test), { help:"actual" })
-    + kpiHTML("开发", fmtHours(dev), "", "实际中落在测试窗口外的部分", { help:"dev" })
-    + kpiHTML("测试", fmtHours(test), "", "测试窗口内的计时", { help:"test" })
-    + '<div class="inv-kpi"><span class="inv-kl">预估工时' + markHTML("estimate", false, "查看「预估工时」口径")
-    + markHTML("crossPeriod", true, "查看预估跨期提醒") + '</span>'
+    + kpiHTML("去重人力", totals.users || 0, "人", userNote, { hl:true, help:"headcount", link: Number(totals.users) ? "member" : "" })
+    + kpiHTML("实际工时", fmtHours(actual), "", "窗口外 " + fmtHours(dev) + " · 窗口内 " + fmtHours(test), { help:"actual" })
+    + kpiHTML("测试窗口外", fmtHours(dev), "", "含评审、设计、开发、运维等计时", { help:"dev" })
+    + kpiHTML("测试窗口内", fmtHours(test), "", "提测 → 测试结束期间的计时", { help:"test" })
+    + '<div class="inv-kpi"><span class="inv-kl">预估工时' + caliberMarkHTML("estimate", false, "查看「预估工时」口径")
+    + caliberMarkHTML("crossPeriod", true, "查看预估跨期提醒") + '</span>'
     + '<div class="inv-kv">' + fmtHours(estimate) + '</div>'
     + '<div class="inv-kd" title="按计划开始日整条归入，与按日发生的实际不可直接相减">按计划开始日整条归入</div></div>'
     + kpiHTML("投入人天", days, "人天", "实际消耗 ÷ 8 小时，按 8h/人日折算", { help:"days" })
@@ -461,22 +458,22 @@ function overviewHTML(){
 }
 function composeHTML(actual, dev, test, estimate){
   if(!actual){
-    return '<div class="inv-compose"><div class="inv-compose-top"><span class="inv-ct">开发 / 测试构成 '
-      + markHTML("compose", false, "查看开发 / 测试拆分口径") + '</span><span class="inv-cs">本期暂无实际计时</span></div>'
+    return '<div class="inv-compose"><div class="inv-compose-top"><span class="inv-ct">测试窗口内 / 外构成 '
+      + caliberMarkHTML("compose", false, "查看测试窗口内 / 外拆分口径") + '</span><span class="inv-cs">本期暂无实际计时</span></div>'
       + '<div class="inv-stack"></div>'
       + '<div class="inv-compose-note">预估 ' + fmtHours(estimate) + ' 仍按计划开始日归属；实际为 0 时不计算构成占比。</div></div>';
   }
   var devPct = Math.round(dev * 100 / actual);
   var testPct = 100 - devPct;
   return '<div class="inv-compose">'
-    + '<div class="inv-compose-top"><span class="inv-ct">开发 / 测试构成 ' + markHTML("compose", false, "查看开发 / 测试拆分口径") + '</span>'
+    + '<div class="inv-compose-top"><span class="inv-ct">测试窗口内 / 外构成 ' + caliberMarkHTML("compose", false, "查看测试窗口内 / 外拆分口径") + '</span>'
     + '<span class="inv-cs">' + fmtHours(dev) + ' / ' + fmtHours(actual) + '</span></div>'
-    + '<div class="inv-stack" role="img" aria-label="开发 ' + devPct + '%，测试 ' + testPct + '%">'
+    + '<div class="inv-stack" role="img" aria-label="测试窗口外 ' + devPct + '%，测试窗口内 ' + testPct + '%">'
     + '<i class="dev" style="width:' + devPct + '%"></i><i class="test" style="width:' + testPct + '%"></i></div>'
     + '<div class="inv-compose-legend">'
-    + '<span><i class="dev"></i>开发 ' + fmtHours(dev) + '（' + devPct + '%）</span>'
-    + '<span><i class="test"></i>测试 ' + fmtHours(test) + '（' + testPct + '%）</span></div>'
-    + '<div class="inv-compose-note">测试 = 计时日期落在工作项「提测 → 测试结束」窗口内的分钟；其余计入开发。测试窗口只保留最近一轮。</div></div>';
+    + '<span><i class="dev"></i>窗口外 ' + fmtHours(dev) + '（' + devPct + '%）</span>'
+    + '<span><i class="test"></i>窗口内 ' + fmtHours(test) + '（' + testPct + '%）</span></div>'
+    + '<div class="inv-compose-note">窗口内 = 计时日期落在工作项「提测 → 测试结束」的分钟；窗口外包含需求评审、设计、开发、运维等全部其余计时，不等于「开发」。测试窗口只保留最近一轮。</div></div>';
 }
 
 /* ---------- 趋势 ---------- */
@@ -499,9 +496,14 @@ function trendHTML(){
     else if(!value) cap = "无记录";
     else cap = "完整月";
     var height = value ? Math.max(2, Math.round(value * 100 / max)) : 0;
-    var tip = m.name + "：实际 " + fmtHours(value) + " · 开发 " + fmtHours(m.devMinutes)
-      + " · 测试 " + fmtHours(m.testMinutes) + " · 预估 " + fmtHours(estimate);
-    return '<div class="inv-col" title="' + esc(tip) + '">'
+    var tip = m.name + "：实际 " + fmtHours(value) + " · 窗口外 " + fmtHours(m.devMinutes)
+      + " · 窗口内 " + fmtHours(m.testMinutes) + " · 预估 " + fmtHours(estimate);
+    var linkable = !future;
+    return '<div class="inv-col' + (linkable ? " inv-col-link" : "") + '"'
+      + (linkable
+        ? ' role="button" tabindex="0" data-inv-month="' + esc(m.key) + '" aria-label="查看 ' + esc(m.name) + ' 的投入明细"'
+        : "")
+      + ' title="' + esc(tip + (linkable ? " · 点击查看该月工作项" : "")) + '">'
       + '<span class="inv-v">' + (value ? fmtHours(value) : "—") + '</span>'
       + '<div class="inv-bar' + (partial ? " partial" : "") + (empty ? " empty" : "") + '" style="height:' + height + '%">'
       + (value ? '<i></i>' : '') + '</div>'
@@ -509,7 +511,7 @@ function trendHTML(){
       + '<span class="inv-cap">' + cap + '</span></div>';
   }).join("");
   return '<section class="inv-card"><div class="inv-card-head"><div>'
-    + '<h2>投入趋势 ' + markHTML("trend", false, "查看趋势口径") + '</h2>'
+    + '<h2>投入趋势 ' + caliberMarkHTML("trend", false, "查看趋势口径") + '</h2>'
     + '<p>按计时发生月份分桶；' + (state.mode === "custom"
         ? '自定义区间跨几个月就铺几个月。'
         : '用于看季度之间或年内的抬升与回落，不改变上方口径。') + '</p></div>'
@@ -520,7 +522,7 @@ function trendHTML(){
         : state.mode === "quarter" ? '<span>季度内按月拆开；空槽表示该月没有计时和预估记录</span>'
         : '<span>年度按月铺开；未来月份用空槽标记，不补 0 柱</span>')
     + '<span>当月为截至 ' + esc(fmtDate(today)) + ' 的部分数据</span>'
-    + '<span>悬停柱子可看开发 / 测试 / 预估</span></div></div></section>';
+    + '<span>悬停柱子可看窗口内 / 外与预估；点柱子查看该月工作项</span></div></div></section>';
 }
 
 /* ---------- 维度表 ---------- */
@@ -554,13 +556,16 @@ function pivotHTML(){
   });
   pivotRows = rows;
   var head = '<div class="inv-card-head"><div>'
-    + '<h2>按维度拆分 ' + markHTML("pivot", false, "查看维度与筛选口径") + '</h2>'
-    + '<p>四种维度共用同一批计时与预估，切换只换分组，不换口径；点行下钻到工作项。'
+    + '<h2>按维度拆分 ' + caliberMarkHTML("pivot", false, "查看维度与筛选口径") + '</h2>'
+    + '<p>五种维度共用同一批计时与预估，切换只换分组，不换口径；点行下钻到工作项。'
     + ((filters.memberUserIds || []).length ? '已圈选 ' + filters.memberUserIds.length + ' 名成员，其余成员不进入统计。' : '')
     + '</p></div>'
     + '<div class="inv-head-ctl">'
     + '<span class="inv-seg" role="group" aria-label="拆分维度">'
-    + Object.keys(DIM_LABEL).map(function(dim){
+    + Object.keys(DIM_LABEL).filter(function(dim){
+      /* 老服务端没有新维度时不显示空簇 */
+      return !!(cache.rows && cache.rows[dim]);
+    }).map(function(dim){
       return '<button type="button" data-inv-dim="' + dim + '" class="' + (state.dim === dim ? "on" : "") + '" aria-pressed="' + (state.dim === dim) + '">' + DIM_LABEL[dim] + '</button>';
     }).join("") + '</span>'
     + '<span class="inv-seg" role="group" aria-label="占比指标">'
@@ -588,7 +593,7 @@ function pivotHTML(){
     var nameCell = state.dim === "member"
       ? '<span class="inv-name inv-name-member">' + avatarHTML(row.name || "未命名", "sm") + '<span class="inv-name-txt">' + nameInner + '</span></span>'
       : '<span class="inv-name">' + nameInner + '</span>';
-    return '<tr class="row" tabindex="0" data-inv-row="' + index + '" title="点击下钻到该分组的工作项">'
+    return '<tr class="inv-row" tabindex="0" data-inv-row="' + index + '" title="点击下钻到该分组的工作项">'
       + '<td>' + nameCell + '</td>'
       + '<td class="num"><b>' + fmtHours(actual) + '</b></td>'
       + '<td class="num">' + fmtHours(dev) + '</td>'
@@ -613,17 +618,22 @@ function pivotHTML(){
     + '<td class="num">' + (metricTotal ? "100%" : "—") + '</td></tr>';
   return '<section class="inv-card">' + head + '<div class="inv-card-body">'
     + '<div class="inv-tbl-wrap"><table class="manager-tbl inv-tbl"><thead><tr>'
-    + '<th>' + DIM_LABEL[state.dim] + '</th><th class="num">实际工时</th><th class="num">开发</th><th class="num">测试</th>'
-    + '<th class="num">预估工时</th><th class="num">投入人天</th><th class="num">' + (state.metric === "act" ? "占比（按实际）" : "占比（按预估）") + '</th>'
+    + '<th>' + (state.dim === "position"
+        ? '<span class="th-help-wrap">职能' + caliberMarkHTML("position", false, "查看「职能」口径") + '</span>'
+        : DIM_LABEL[state.dim]) + '</th>'
+    + '<th class="num">实际工时</th><th class="num">测试窗口外</th><th class="num">测试窗口内</th>'
+    + '<th class="num">预估工时</th><th class="num">投入人天</th><th class="num"><span class="th-help-wrap">'
+    + (state.metric === "act" ? "占比（按实际）" : "占比（按预估）")
+    + caliberMarkHTML("share", false, "查看「占比」口径") + '</span></th>'
     + '</tr></thead><tbody>' + body + totalRow + '</tbody></table></div>'
-    + '<div class="inv-foot"><b>实际</b>按计时开始日归入周期，开发 + 测试 = 实际；<b>预估</b>按计划开始日整条归入，二者不可直接相减。'
-    + '<b>版本</b>不进入本页维度 ' + markHTML("versionWarn", true, "查看版本维度提醒") + '</div></div></section>';
+    + '<div class="inv-foot"><b>实际</b>按计时开始日归入周期，测试窗口内 + 外 = 实际（窗口外含评审、设计、开发、运维等）；<b>预估</b>按计划开始日整条归入，二者不可直接相减。'
+    + '<b>版本</b>不进入本页维度 ' + caliberMarkHTML("versionWarn", true, "查看版本维度提醒") + '</div></div></section>';
 }
 
 /* ---------- 口径卡 ---------- */
 function notesHTML(){
   return '<section class="inv-card inv-notes"><div class="inv-card-head"><div>'
-    + '<h2>口径与边界 ' + markHTML("crossPeriod", false, "查看周期归属口径") + '</h2>'
+    + '<h2>口径与边界 ' + caliberMarkHTML("crossPeriod", false, "查看周期归属口径") + '</h2>'
     + '<p>不新增录入项：只读聚合现有计时、工作项与成员配置。关键指标旁的「?」解释定义，「!」提示容易误读的边界。</p></div></div>'
     + '<div class="inv-card-body"><div class="inv-notes-grid">'
     + '<div><h3>周期归属</h3><ul>'
@@ -633,12 +643,14 @@ function notesHTML(){
     + '<div><h3>资源口径</h3><ul>'
     + '<li><b>成员</b>：实际按计时人，预估按负责人；同一人多项目只算 1 人。</li>'
     + '<li><b>公司 / 角色</b>：公司来自空间成员；角色按项目有效主角色归属，兼岗在筛选时也能命中。</li>'
+    + '<li><b>职能</b>：取空间成员岗位（产品经理、后端开发、运营等），没填岗位时回落到项目角色；同一个人只归一处，便于看非研发投入。</li>'
     + '<li><b>筛选</b>：实际看计时人，预估看负责人，跨项目支援的计时不会漏。</li></ul></div>'
     + '<div><h3>边界</h3><ul>'
     + '<li><b>版本</b>：工作项可多绑版本，按版本会重复计数，因此不进入本页维度。</li>'
     + '<li><b>未结束计时</b>：ended_at 为空不计，避免把进行中的计时算成已发生工时。</li>'
     + '<li><b>预估偏差</b>：周期归属不同，本页不展示「预估 − 实际」的偏差结论。</li></ul></div>'
     + '<div><h3>下钻</h3><ul>'
+    + '<li><b>入口</b>：维度表行、去重人力卡片、趋势柱都可下钻，分别看该分组、该成员、该月的工作项。</li>'
     + '<li><b>同一范围</b>：下钻沿用当前周期与项目 / 公司 / 角色筛选，不另开口径。</li>'
     + '<li><b>合并</b>：同一工作项的实际与预估会合并成一行，实际列只含本期计时。</li>'
     + '<li><b>只读</b>：明细里不修改工时，点击行打开工作项详情。</li></ul></div>'
@@ -658,24 +670,123 @@ function renderInvestment(){
 }
 
 /* ---------- 下钻 ---------- */
-function openDrill(row){
-  if(!row || !cache) return;
-  var range = periodRange();
-  var base = {
-    from:range.from, to:range.to,
+function drillBase(from, to){
+  return {
+    from:from, to:to,
     reqId:filters.reqId || null,
     companyName:filters.companyName || null,
     roleTitle:filters.roleTitle || null,
     memberUserIds:(filters.memberUserIds && filters.memberUserIds.length) ? filters.memberUserIds : null,
-    dimension:state.dim,
-    key:row.key,
     limit:100
   };
+}
+function openDrill(row, dim){
+  if(!row || !cache) return;
+  var range = periodRange();
+  var dimension = dim || state.dim;
+  var base = Object.assign(drillBase(range.from, range.to), { dimension:dimension, key:row.key });
   API.get("/api/manager/investment/tasks", Object.assign({}, base, { offset:0 })).then(function(page){
     var rows = (page && page.items) || [];
     if(!rows.length){ toast("该分组下本期暂无投入记录", "warn"); return; }
-    openTaskTable(DIM_LABEL[state.dim] + " · " + (row.name || "未命名"), rows,
+    openTaskTable(DIM_LABEL[dimension] + " · " + (row.name || "未命名"), rows,
       periodLabel() + " · " + scopeText() + " · 共 " + page.total + " 项 · 实际与预估按同一周期归集", {
+        total:page.total,
+        hasMore:page.hasMore,
+        fetch:function(offset){
+          return API.get("/api/manager/investment/tasks", Object.assign({}, base, { offset:offset }));
+        }
+      }, { split:true });
+  }).catch(function(ex){
+    toast(ex && ex.message ? ex.message : "明细加载失败", "bad");
+  });
+}
+/* 去重人力卡片：先列人，点人再用成员维度下钻到工作项 */
+function memberDrillRows(){
+  return ((cache && cache.rows && cache.rows.member) || [])
+    .filter(function(row){ return row && row.key !== UNASSIGNED_MEMBER_KEY; })
+    .slice()
+    .sort(function(a, b){
+      return ((Number(b.actualMinutes) || 0) - (Number(a.actualMinutes) || 0))
+        || ((Number(b.estimateMinutes) || 0) - (Number(a.estimateMinutes) || 0))
+        || String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN");
+    });
+}
+function memberDrillRowHTML(row){
+  var meta = (row.companyName || "未设公司") + " · " + (row.roleTitle || "未设角色");
+  return '<tr data-inv-member-drill="' + esc(row.key) + '" tabindex="0"'
+    + ' title="查看 ' + esc(row.name || "未命名") + ' 本期的工作项">'
+    + '<td><span class="inv-name inv-name-member">' + avatarHTML(row.name || "未命名", "sm")
+    + '<span class="inv-name-txt"><b>' + esc(row.name || "未命名") + '</b><small>' + esc(meta) + '</small></span></span></td>'
+    + '<td class="num">' + (row.projects || 0) + '</td>'
+    + '<td class="num">' + (row.tasks || 0) + '</td>'
+    + '<td class="num"><b>' + fmtHours(row.actualMinutes) + '</b></td>'
+    + '<td class="num">' + fmtHours(row.devMinutes) + '</td>'
+    + '<td class="num">' + fmtHours(row.testMinutes) + '</td>'
+    + '<td class="num">' + fmtHours(row.estimateMinutes) + '</td>'
+    + '<td class="num">' + personDays(row.actualMinutes) + '</td></tr>';
+}
+function openMemberDrill(){
+  if(!cache || loading) return;
+  var rows = memberDrillRows();
+  if(!rows.length){ toast("本期没有可归集的人力", "warn"); return; }
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.setAttribute("aria-label", "去重人力明细");
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.innerHTML = '<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
+    + '<h2>去重人力 · ' + rows.length + ' 人</h2>'
+    + '<div class="desc">' + esc(periodLabel() + " · " + scopeText() + " · 按实际工时排序，点成员查看其本期工作项") + '</div></div>'
+    + '<button class="icon-btn sm" type="button" data-inv-member-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
+    + '<th>成员</th><th class="num">项目</th><th class="num">工作项</th><th class="num">实际工时</th>'
+    + '<th class="num">测试窗口外</th><th class="num">测试窗口内</th><th class="num">预估工时</th><th class="num">投入人天</th>'
+    + '</tr></thead><tbody>' + rows.map(memberDrillRowHTML).join("") + '</tbody></table></div>'
+    + '<div class="inv-foot">去重人力按人合并；未指派的预估计入工时但不计入人数。实际与预估按同一周期归集。</div>'
+    + '</div></div>';
+  document.body.appendChild(layer);
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-inv-member-close]")){ UI.closeModal(layer); return; }
+    var tr = e.target.closest("[data-inv-member-drill]");
+    if(!tr) return;
+    var hit = rows.filter(function(r){ return r.key === tr.dataset.invMemberDrill; })[0];
+    if(!hit) return;
+    UI.closeModal(layer);
+    openDrill(hit, "member");
+  });
+  layer.addEventListener("keydown", function(e){
+    if(e.key !== "Enter" && e.key !== " ") return;
+    var tr = e.target.closest && e.target.closest("[data-inv-member-drill]");
+    if(!tr || tr !== e.target) return;
+    e.preventDefault();
+    tr.click();
+  });
+  UI.openModal(layer);
+}
+/* 趋势柱：把区间夹到该自然月，看这一个月的工作项 */
+function monthRange(key){
+  var parts = key.split("-");
+  var year = Number(parts[0]), month = Number(parts[1]);
+  var lastDay = new Date(year, month, 0).getDate();
+  return { from: key + "-01", to: key + "-" + pad2(lastDay) };
+}
+function openMonthDrill(key){
+  if(!cache || loading || !key) return;
+  var range = periodRange();
+  var own = monthRange(key);
+  var from = range.from > own.from ? range.from : own.from;
+  var to = range.to < own.to ? range.to : own.to;
+  if(from > to){ toast("该月不在当前统计区间内", "warn"); return; }
+  var month = (cache.months || []).filter(function(m){ return m.key === key; })[0];
+  var name = month ? month.name : key;
+  var base = drillBase(from, to);
+  API.get("/api/manager/investment/tasks", Object.assign({}, base, { offset:0 })).then(function(page){
+    var rows = (page && page.items) || [];
+    if(!rows.length){ toast("该月没有可下钻的投入记录", "warn"); return; }
+    openTaskTable(name + " · 投入明细", rows,
+      periodLabel() + " · " + scopeText() + " · 仅 " + name + " · 共 " + page.total
+        + " 项 · 实际按计时发生日、预估按计划开始日归入该月", {
         total:page.total,
         hasMore:page.hasMore,
         fetch:function(offset){
@@ -695,11 +806,11 @@ function exportCsv(){
     ["指标", "数值"],
     ["去重人力", (totals.users || 0) + " 人"],
     ["实际工时（分钟）", totals.actualMinutes || 0],
-    ["开发（分钟）", totals.devMinutes || 0],
-    ["测试（分钟）", totals.testMinutes || 0],
+    ["测试窗口外（分钟）", totals.devMinutes || 0],
+    ["测试窗口内（分钟）", totals.testMinutes || 0],
     ["预估工时（分钟）", totals.estimateMinutes || 0],
     ["投入人天", Math.round((Number(totals.actualMinutes) || 0) / 480 * 10) / 10],
-    [], ["月份", "实际（分钟）", "开发（分钟）", "测试（分钟）", "预估（分钟）"]];
+    [], ["月份", "实际（分钟）", "测试窗口外（分钟）", "测试窗口内（分钟）", "预估（分钟）"]];
   ((cache.months || [])).forEach(function(m){
     rows.push([m.key, m.actualMinutes, m.devMinutes, m.testMinutes, m.estimateMinutes]);
   });
@@ -707,7 +818,7 @@ function exportCsv(){
   var list = ((cache.rows && cache.rows[state.dim]) || []).slice();
   list.sort(function(a, b){ return (Number(b[metric]) || 0) - (Number(a[metric]) || 0); });
   var shares = shareList(list, metric);
-  rows.push([], [DIM_LABEL[state.dim], "预估（分钟）", "实际（分钟）", "开发（分钟）", "测试（分钟）", "占比%"]);
+  rows.push([], [DIM_LABEL[state.dim], "预估（分钟）", "实际（分钟）", "测试窗口外（分钟）", "测试窗口内（分钟）", "占比%"]);
   list.forEach(function(r, i){
     rows.push([r.name, r.estimateMinutes, r.actualMinutes, r.devMinutes, r.testMinutes, shares[i]]);
   });
@@ -842,8 +953,8 @@ function openAiDrawer(r){
   var totals = cache.totals || {};
   var src = layer.querySelector("[data-ai-src]");
   src.innerHTML = '<span class="mini-tag ok">实际 ' + fmtHours(totals.actualMinutes) + '</span>'
-    + '<span class="mini-tag">开发 ' + fmtHours(totals.devMinutes) + '</span>'
-    + '<span class="mini-tag warn">测试 ' + fmtHours(totals.testMinutes) + '</span>'
+    + '<span class="mini-tag">窗口外 ' + fmtHours(totals.devMinutes) + '</span>'
+    + '<span class="mini-tag warn">窗口内 ' + fmtHours(totals.testMinutes) + '</span>'
     + '<span class="mini-tag info">' + (Math.round((Number(totals.actualMinutes) || 0) / 480 * 10) / 10) + ' 人天</span>';
   var mdBox = layer.querySelector("[data-ai-md]");
   mdBox.innerHTML = '<div class="inv-ai-loading">' + UI.skeletonRows(5) + '</div>';
@@ -916,7 +1027,7 @@ function reportMarkdown(rep){
   md += "- 范围：" + rep.scope + "\n";
   md += "- 生成：" + rep.generatedAt + (rep.generatedBy ? " · " + rep.generatedBy : "") + "\n\n";
   md += "## 1. 投入统计\n\n";
-  md += "| 成员 | 角色 / 公司 | 实际 | 开发 | 测试 | 预估 | 人天 | 工作项 |\n";
+  md += "| 成员 | 角色 / 公司 | 实际 | 测试窗口外 | 测试窗口内 | 预估 | 人天 | 工作项 |\n";
   md += "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n";
   rep.members.forEach(function(m){
     md += "| " + (m.name || "未命名") + " | " + [m.roleTitle || "未设角色", m.companyName || "未设公司"].join(" · ")
@@ -935,7 +1046,8 @@ function reportMarkdown(rep){
     md += "| " + a.member + " | " + a.title + " | " + a.reqName + " | " + a.status + " | " + fmtHours(a.actualMinutes) + " |\n";
   });
   if(rep.truncatedMembers) md += "\n> 成员较多，附录仅列出前 " + REPORT_MAX_MEMBERS + " 名成员的工作项。\n";
-  md += "\n---\n\n口径：实际工时按计时发生日归期、按计时人归属；测试 = 最近一轮「提测 → 测试结束」窗口内的计时；"
+  md += "\n---\n\n口径：实际工时按计时发生日归期、按计时人归属；测试窗口内 = 最近一轮「提测 → 测试结束」窗口内的计时，"
+    + "其余计时（需求评审、设计、开发、运维等）全部计入窗口外；"
     + "预估按计划开始日整条归入、按负责人归属，与实际不可直接相减。人天 = 实际 ÷ 8 小时。\n\n"
     + "本报告由沙漏生成 · 统计数字来自系统计时记录；「工作总结」一节由 AI 撰写，仅供参考。\n";
   return md;
@@ -945,7 +1057,7 @@ function reportTableHTML(rep){
   function td(v){ return "<td>" + esc(v == null ? "" : String(v)) + "</td>"; }
   var t = rep.totals;
   var stats = '<table class="rp-table"><thead><tr>' + th("成员") + th("角色 / 公司")
-    + th("实际") + th("开发") + th("测试") + th("预估") + th("人天") + th("工作项") + '</tr></thead><tbody>';
+    + th("实际") + th("测试窗口外") + th("测试窗口内") + th("预估") + th("人天") + th("工作项") + '</tr></thead><tbody>';
   rep.members.forEach(function(m){
     stats += '<tr>' + td(m.name || "未命名") + td([m.roleTitle || "未设角色", m.companyName || "未设公司"].join(" · "))
       + td(fmtHours(m.actualMinutes)) + td(fmtHours(m.devMinutes)) + td(fmtHours(m.testMinutes))
@@ -990,7 +1102,8 @@ function reportDocHTML(rep, forWord){
     + '<h2>2. 工作总结' + (rep.ai ? ' <span class="rp-ai-tag">✦ AI 生成 · 仅供参考</span>' : '') + '</h2>' + aiHTML
     + '<h2>3. 工作项明细（附录）</h2>' + tables.appendix
     + (rep.truncatedMembers ? '<p class="rp-muted">成员较多，附录仅列出前 ' + REPORT_MAX_MEMBERS + ' 名成员的工作项。</p>' : '')
-    + '<p class="rp-foot">口径：实际工时按计时发生日归期、按计时人归属；测试 = 最近一轮「提测 → 测试结束」窗口内的计时；'
+    + '<p class="rp-foot">口径：实际工时按计时发生日归期、按计时人归属；测试窗口内 = 最近一轮「提测 → 测试结束」窗口内的计时，'
+    + '其余计时（需求评审、设计、开发、运维等）全部计入窗口外；'
     + '预估按计划开始日整条归入、按负责人归属，与实际不可直接相减。人天 = 实际 ÷ 8 小时。<br>'
     + '本报告由沙漏生成 · 统计数字来自系统计时记录；「工作总结」一节由 AI 撰写，仅供参考。</p>'
     + '</body></html>';
@@ -1080,7 +1193,8 @@ function openReportPreview(){
       + '<div class="rp-md" data-report-md></div>'
       + '<div class="rp-sec"><span class="no">3</span>工作项明细（附录）</div>' + tables.appendix
       + (rep.truncatedMembers ? '<div class="rp-muted">成员较多，附录仅列出前 ' + REPORT_MAX_MEMBERS + ' 名成员的工作项。</div>' : '')
-      + '<div class="rp-foot">口径：实际工时按计时发生日归期、按计时人归属；测试 = 最近一轮「提测 → 测试结束」窗口内的计时；'
+      + '<div class="rp-foot">口径：实际工时按计时发生日归期、按计时人归属；测试窗口内 = 最近一轮「提测 → 测试结束」窗口内的计时，'
+      + '其余计时（需求评审、设计、开发、运维等）全部计入窗口外；'
       + '预估按计划开始日整条归入、按负责人归属，与实际不可直接相减。人天 = 实际 ÷ 8 小时。<br>'
       + '本报告由沙漏生成 · 统计数字来自系统计时记录；「工作总结」一节由 AI 撰写，仅供参考。</div>'
       + '</div>';
@@ -1132,8 +1246,6 @@ function onInvestmentClick(e){
     renderInvestment();
     return;
   }
-  var mark = e.target.closest("[data-inv-help]");
-  if(mark){ openHelp(mark, mark.dataset.invHelp); return; }
   if(e.target.closest("[data-inv-ai]")){ runAiSummary(); return; }
   var exportBtn = e.target.closest("[data-inv-export]");
   if(exportBtn){ openExportMenu(exportBtn); return; }
@@ -1157,6 +1269,14 @@ function onInvestmentClick(e){
     else { filters = { reqId:"", companyName:"", roleTitle:"", memberUserIds:[] }; loadInvestment(); }
     return;
   }
+  var kpi = e.target.closest("[data-inv-kpi]");
+  if(kpi){
+    /* 卡片里的「?」只打开口径说明，不再触发下钻 */
+    if(!e.target.closest(".caliber-mark")) openMemberDrill();
+    return;
+  }
+  var monthCol = e.target.closest("[data-inv-month]");
+  if(monthCol){ openMonthDrill(monthCol.dataset.invMonth); return; }
   var row = e.target.closest("[data-inv-row]");
   if(row) openDrill(pivotRows[Number(row.dataset.invRow)]);
 }
@@ -1193,6 +1313,18 @@ function onInvestmentChange(e){
 }
 function onInvestmentKeydown(e){
   if(e.key !== "Enter" && e.key !== " ") return;
+  var kpi = e.target.closest && e.target.closest("[data-inv-kpi]");
+  if(kpi && kpi === e.target){
+    e.preventDefault();
+    openMemberDrill();
+    return;
+  }
+  var monthCol = e.target.closest && e.target.closest("[data-inv-month]");
+  if(monthCol && monthCol === e.target){
+    e.preventDefault();
+    openMonthDrill(monthCol.dataset.invMonth);
+    return;
+  }
   var row = e.target.closest && e.target.closest("[data-inv-row]");
   if(!row) return;
   e.preventDefault();

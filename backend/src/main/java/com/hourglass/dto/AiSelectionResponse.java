@@ -14,10 +14,10 @@ public class AiSelectionResponse {
 
     private String action;
 
-    /** rewrite/shorten：替换文本（纯文本，段落之间空一行）；explain：解释正文 */
+    /** rewrite/shorten/expand：替换文本（纯文本，段落之间空一行）；explain：解释正文 */
     private String text;
 
-    /** explain 专用：可能引起误解或原文没写清的地方；rewrite/shorten 为空 */
+    /** explain：可能引起误解或原文没写清的地方；expand：待确认假设（只展示，不随替换写回）；rewrite/shorten 为空 */
     private List<String> notes = new ArrayList<String>();
 
     private int beforeChars;

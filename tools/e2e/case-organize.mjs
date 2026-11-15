@@ -301,8 +301,8 @@ try{
   })()`);
   assert(!bar.hidden, "查询条在用例页可见");
   assert(bar.ids[0] === "tcBulkAll", "列表头首个控件是两级全选入口");
-  assert(bar.ids.indexOf("tcPanelBtn") !== -1, "列表头仍保留「目录 / 分组」入口");
-  assert(JSON.stringify(bar.sorts) === JSON.stringify(["created","updated","executed","no","pri","module","status"]), "排序字段 7 项且顺序固定");
+  assert(bar.ids.indexOf("tcPanelBtn") !== -1, "列表头保留左栏「分组」入口");
+  assert(JSON.stringify(bar.sorts) === JSON.stringify(["created","updated","executed","no","pri","module","status","manual"]), "排序字段 8 项（含手动排序）且顺序固定");
   assert(bar.dims.length === 7 && bar.dims[0] === "不分组" && bar.dims[6] === "自定义分组", "分组维度 7 项（含不分组与自定义分组）");
   assert(JSON.stringify(bar.pages) === JSON.stringify(["50","100","200"]), "每页 50 / 100 / 200");
   assert(bar.selTitle.indexOf("2000") !== -1, "全选筛选结果标注单次事务上限 2000");
@@ -323,16 +323,48 @@ try{
   await click("#tcSortDir");
   await sleep(1000);
 
-  /* ---------------- B 模块目录面板 ---------------- */
-  group("B 模块目录：面板 / 搜索 / 含子目录 / 增删改 / 层级不限");
-  await click("#tcPanelBtn");
-  await waitFor(`!document.getElementById("tcSidePanel").hidden`, "目录面板展开");
+  /* 全部项目：目录与左栏收起，分组维度固定为「按项目」且不可改 */
+  await setSelect("tcReq", "__all__");
+  await sleep(1200);
+  const allScope = await evaluate(`(() => ({
+    dir: document.getElementById("tcDirFilter").hidden,
+    panel: document.getElementById("tcSidePanel").hidden,
+    dims: [...document.getElementById("tcGroupBy").options].map(o => o.textContent),
+    dimVal: document.getElementById("tcGroupBy").value,
+    dimLocked: document.getElementById("tcGroupBy").disabled,
+    secs: document.querySelectorAll("#tcList .tc-group").length
+  }))()`);
+  assert(allScope.dir, "全部项目下目录入口收起（目录只在单项目内）");
+  assert(allScope.panel, "全部项目下左栏分组收起");
+  assert(allScope.dims.length === 1 && allScope.dims[0] === "按项目" && allScope.dimVal === "project",
+    "全部项目下分组维度只剩「按项目」且已选中（" + allScope.dims.join("/") + "）");
+  assert(allScope.dimLocked && allScope.secs > 0, "「按项目」为展示口径不可改，列表按项目分段");
+  await setSelect("tcReq", reqId);
+  await sleep(1200);
+  const backSingle = await evaluate(`(() => ({
+    dir: !document.getElementById("tcDirFilter").hidden,
+    panel: !document.getElementById("tcSidePanel").hidden
+  }))()`);
+  assert(backSingle.dir && backSingle.panel, "切回单项目后目录入口与左栏分组恢复");
+
+  /* ---------------- B 目录：筛选入口上移 + 弹层内维护 ---------------- */
+  group("B 目录：入口在筛选条 / 弹层内搜索 / 含子目录 / 增删改 / 层级不限");
+  const entry = await evaluate(`(() => ({
+    dirVisible: !document.getElementById("tcDirFilter").hidden,
+    dirLabel: document.getElementById("tcDirBtnLabel").textContent,
+    dirOpen: document.getElementById("tcDirBtn").getAttribute("aria-expanded"),
+    panelExpanded: document.getElementById("tcPanelBtn").getAttribute("aria-expanded"),
+    hasSide: document.getElementById("tcCasesWrap").classList.contains("has-side"),
+    tabs: document.querySelectorAll("#tcSidePanel .tc-side-tabs").length
+  }))()`);
+  assert(entry.dirVisible && entry.dirLabel === "目录：全部", "目录筛选入口在筛选条上，默认「全部」");
+  assert(entry.dirOpen === "false" && entry.tabs === 0, "目录弹层默认收起，左栏不再有目录页签");
+  assert(entry.panelExpanded === "true" && entry.hasSide, "左栏分组默认展开，列表仍让位");
+  await click("#tcDirBtn");
+  await waitFor(`!document.getElementById("tcDirMenu").hidden`, "目录弹层展开");
   await sleep(600);
   const side = await evaluate(`(() => ({
-    expanded: document.getElementById("tcPanelBtn").getAttribute("aria-expanded"),
-    hasSide: document.getElementById("tcCasesWrap").classList.contains("has-side"),
-    dirSelected: document.getElementById("tcSideTabDir").getAttribute("aria-selected"),
-    labelledby: document.getElementById("tcSideBody").getAttribute("aria-labelledby"),
+    expanded: document.getElementById("tcDirBtn").getAttribute("aria-expanded"),
     rows: [...document.querySelectorAll("#tcDirList .tc-dir-node")].map(n => ({
       id: n.dataset.tcDir || null,
       name: (n.querySelector(".tc-dir-name")||{}).textContent,
@@ -340,13 +372,12 @@ try{
       lv: [...n.classList].filter(c => c.indexOf("lv") === 0)[0],
       special: n.classList.contains("special")
     })),
-    note: (document.querySelector("#tcSideFoot .tc-side-note")||{}).textContent || ""
+    note: (document.querySelector("#tcDirFoot .tc-side-note")||{}).textContent || ""
   }))()`);
-  assert(side.expanded === "true" && side.hasSide, "面板按钮 aria-expanded 与 has-side 同步");
-  assert(side.dirSelected === "true" && side.labelledby === "tcSideTabDir", "目录页签选中且 tabpanel labelledby 正确");
+  assert(side.expanded === "true", "弹层展开后入口 aria-expanded=true");
   assert(side.rows[0].name === "全部用例" && side.rows[side.rows.length - 1].name === "未归类", "目录首行「全部用例」、末行「未归类」");
   assert(side.rows[0].id === null, "「全部用例」不是放置目标（无 data-tc-dir）");
-  assert(side.rows[side.rows.length - 1].id === "__none", "「未归类」是放置目标");
+  assert(side.rows[side.rows.length - 1].id === "__none", "「未归类」保留放置目标语义");
   assert(side.note.indexOf("单归属") !== -1 && side.note.indexOf("目录层级不限") !== -1, "脚注交代单归属与层级不限");
   const noneCount = Number(side.rows[side.rows.length - 1].n);
   const directSum = baseline.nodes.reduce((s, n) => s + n.caseCount, 0);
@@ -439,12 +470,13 @@ try{
   assert(!!lv4UI && lv4UI.margin === "42px", "第 4 级缩进按 level 计算（3×14px）");
   assert(!!lv4UI && lv4UI.hasAdd, "第 4 级仍提供「＋子目录」（层级不限）");
   assert(!!lv4UI && lv4UI.title.split(" / ").length >= 4, "第 4 级节点 title 给出完整路径", lv4UI.title);
-  await shot("panel-dir-1440.png");
+  await shot("dir-menu-1440.png");
+  await click("#tcDirBtn");
+  await waitFor(`document.getElementById("tcDirMenu").hidden`, "目录弹层收起");
+  await sleep(300);
 
   /* ---------------- C 自定义分组面板 ---------------- */
   group("C 自定义分组：团队 / 个人 / 计数 / 编辑 / 删除保留用例");
-  await click("#tcSideTabSet");
-  await waitFor(`document.getElementById("tcSideTabSet").getAttribute("aria-selected") === "true"`, "切到分组页签");
   await sleep(1200);
   const setPanel = await evaluate(`(() => ({
     labels: [...document.querySelectorAll("#tcSideBody .tc-set-label")].map(e => e.textContent),
@@ -455,7 +487,7 @@ try{
   assert(setPanel.labels[0].indexOf("进交付说明与发布证据") !== -1 && setPanel.labels[1].indexOf("不进证据") !== -1 && setPanel.labels[2].indexOf("不进证据") !== -1, "分段标题交代可见范围与是否进证据");
   assert(setPanel.note.indexOf("多归属") !== -1 && setPanel.note.indexOf("删除分组不删用例") !== -1, "脚注交代多归属与删除语义");
   assert(setPanel.note.indexOf("只有团队共享分组进交付说明与发布证据") !== -1 && setPanel.note.indexOf("需创建人操作") !== -1, "脚注交代只有团队共享进证据、转团队需创建人");
-  assert(setPanel.noneRow[0] === "未加入任何分组", "提供「未加入任何分组」入口");
+  assert(setPanel.noneRow[0] === "全部用例" && setPanel.noneRow[1] === "未加入任何分组", "分组面板首行「全部用例」、次行「未加入任何分组」");
 
   const makeSet = async (name, visibility, withInit) => {
     await click("[data-tc-set-new]");
@@ -485,7 +517,6 @@ try{
   if(personalSet) created.sets.push(personalSet.id);
   assert(personalSet && personalSet.caseCount === 0, "未勾选初始成员时个人分组为空");
 
-  await click("#tcSideTabSet");
   await sleep(1200);
   const setRows = await evaluate(`[...document.querySelectorAll("#tcSideBody .tc-set-item:not(.special)")].map(e => ({
     id: e.dataset.tcSet,
@@ -537,7 +568,16 @@ try{
   const labelExpanded = await evaluate(`document.getElementById("tcGrpToggleAll").textContent.trim()`);
   assert(labelExpanded === "全部折叠", `全部展开后按钮显示「全部折叠」（实际 ${labelExpanded}）`);
 
-  const selSeg = (await segInfo()).find(s => !s.empty);
+  /* 演示库里有用例的 module_id 指向已不存在的目录节点，按目录分段可能全空；
+     段选与批量范围换用执行结果维度，保证这一段验证的是真实数据 */
+  let selSeg = (await segInfo()).find(s => !s.empty);
+  if(!selSeg){
+    await setSelect("tcGroupBy", "status");
+    await waitFor(`document.querySelectorAll("#tcList .tc-seg").length > 0`, "按执行结果分段");
+    await sleep(1200);
+    selSeg = (await segInfo()).find(s => !s.empty);
+  }
+  assert(!!selSeg, "存在非空段可做组内全选");
   const segTotal = Number((selSeg.count.match(/(\d+)/) || [])[1] || 0);
   await evaluate(`(() => { document.querySelector('[data-tc-seg-sel="' + ${JSON.stringify(selSeg.key)} + '"]').click(); return true; })()`);
   await sleep(900);
@@ -571,20 +611,42 @@ try{
 
   /* ---------------- E 拖拽归类 ---------------- */
   group("E 拖拽：目录＝移动（可撤销）/ 分组＝加入（撤销只退本次）/ 优先级段＝改优先级");
-  await click("#tcSideTabDir");
-  await sleep(900);
-  const firstRow = await evaluate(`(() => {
-    const r = document.querySelector("#tcList .tc-row[data-tc-drag]");
-    return r ? { id: r.dataset.tcDrag, no: (r.querySelector(".tc-no")||{}).textContent } : null;
+  /* 目录树收进了筛选弹层：拖拽落点改由「按目录」段头承担，语义与原来一致（单归属移动） */
+  await setSelect("tcGroupBy", "module");
+  await waitFor(`document.querySelectorAll("#tcList .tc-seg").length > 0`, "按目录分段");
+  await sleep(1400);
+  const findSegRow = () => evaluate(`(() => {
+    const r = document.querySelector("#tcList .tc-seg .tc-row[data-tc-drag]");
+    return r ? { id: r.dataset.tcDrag, seg: r.dataset.tcPickSeg, no: (r.querySelector(".tc-no")||{}).textContent } : null;
   })()`);
+  let firstRow = await findSegRow();
+  const sourceNode = (newNode || {}).id;
+  const targetNode = (childNode || {}).id;
+  /* 演示库里用例的 module_id 指向已删除的目录，按目录分段拿不到可拖行；
+     临时挂一条用例到新建目录，拖完即删，避免污染后续统计 */
+  let tempCase = null;
+  if(!firstRow && sourceNode){
+    tempCase = await api(`return await API.post("/api/test-cases", { reqId: ${JSON.stringify(reqId)},
+      title: ${JSON.stringify(PREFIX)} + "临时拖拽用例", moduleId: ${JSON.stringify(sourceNode)}, priority: "P2" });`);
+    await setSelect("tcGroupBy", "");
+    await sleep(800);
+    await setSelect("tcGroupBy", "module");
+    await waitFor(`document.querySelectorAll("#tcList .tc-seg").length > 0`, "按目录分段（含临时用例）");
+    await sleep(1400);
+    await evaluate(`(() => { const s = document.querySelector('#tcList .tc-seg[data-tc-seg-drop="' + ${JSON.stringify(sourceNode)} + '"]');
+      const t = s && s.querySelector(".tc-seg-toggle");
+      if(t && t.getAttribute("aria-expanded") !== "true") t.click(); return true; })()`);
+    await sleep(1400);
+    firstRow = await findSegRow();
+  }
   assert(!!firstRow, "用例行可拖动（draggable + data-tc-drag）");
-  const targetNode = (newNode || baseline.nodes[0] || {}).id;
-  const beforeMove = baseline.cases.find(c => c.id === firstRow.id);
-  const dragInfo = await dragTo('#tcList .tc-row[data-tc-drag="' + firstRow.id + '"]', '#tcDirList .tc-dir-node[data-tc-dir="' + targetNode + '"]');
+  assert(!!targetNode && targetNode !== firstRow.seg, "新建的空目录段可作移动落点");
+  const beforeMove = tempCase || baseline.cases.find(c => c.id === firstRow.id);
+  const dragInfo = await dragTo('#tcList .tc-row[data-tc-drag="' + firstRow.id + '"]', '#tcList .tc-seg[data-tc-seg-drop="' + targetNode + '"]');
   assert(dragInfo.dragging, "拖动源行标记 is-dragging");
   assert(dragInfo.marked, "放置目标标记 drop-on");
   assert(dragInfo.banner.indexOf("移动归属") !== -1, "拖动中提示条实时写出落点语义");
-  assert(dragInfo.effect === "move", "目录落点 dropEffect=move");
+  assert(dragInfo.effect === "move", "目录段落点 dropEffect=move");
   await waitFor(`document.getElementById("dlgConfirm").classList.contains("open")`, "移动确认框");
   await shot("move-confirm-1440.png");
   const moveConfirm = await confirmOk();
@@ -593,14 +655,16 @@ try{
   assert(moveConfirm.notes.join("|").indexOf("编号") !== -1 && moveConfirm.notes.join("|").indexOf("计划范围不变") !== -1, "说明覆盖编号不变与计划范围不变");
   assert(moveConfirm.preview.length > 0, "确认框列出被移动的用例");
   const movedCase = await caseOf(firstRow.id);
-  assert(movedCase && movedCase.moduleId === targetNode, "拖到目录节点后归属已改");
+  assert(movedCase && movedCase.moduleId === targetNode, "拖到目录段后归属已改");
   assert(await clickToastAction("撤销"), "移动成功 toast 带「撤销」");
   const restoredCase = await caseOf(firstRow.id);
   assert(restoredCase && (restoredCase.moduleId || null) === (beforeMove.moduleId || null), "撤销后回到原目录归属");
-
-  await click("#tcSideTabSet");
+  if(tempCase) await api(`await API.del("/api/test-cases/" + ${JSON.stringify(tempCase.id)}); return true;`);
+  await setSelect("tcGroupBy", "");
   await sleep(1200);
-  const joinInfo = await dragTo('#tcList .tc-row[data-tc-drag="' + firstRow.id + '"]', '#tcSideBody .tc-set-item[data-tc-set="' + (personalSet || {}).id + '"]');
+  const joinRow = await evaluate(`(() => { const r = document.querySelector("#tcList .tc-row[data-tc-drag]"); return r ? r.dataset.tcDrag : null; })()`);
+  assert(!!joinRow, "平铺列表里有用例行可拖入分组");
+  const joinInfo = await dragTo('#tcList .tc-row[data-tc-drag="' + joinRow + '"]', '#tcSideBody .tc-set-item[data-tc-set="' + (personalSet || {}).id + '"]');
   assert(joinInfo.effect === "copy", "分组落点 dropEffect=copy（加入而非移动）");
   assert(joinInfo.banner.indexOf("加入分组") !== -1, "分组落点提示「加入分组（原分组保留）」");
   await sleep(1800);
@@ -616,12 +680,18 @@ try{
   await waitFor(`document.querySelectorAll("#tcList .tc-seg").length > 0`, "按优先级分段");
   await sleep(1200);
   const hasP0 = await evaluate(`!!document.querySelector('#tcList .tc-seg[data-tc-seg-drop="P0"]')`);
-  if(hasP0){
-    const priDrag = await dragTo('#tcList .tc-row[data-tc-drag="' + firstRow.id + '"]', '#tcList .tc-seg[data-tc-seg-drop="P0"]');
+  const priRow = await evaluate(`(() => {
+    const seg = [...document.querySelectorAll("#tcList .tc-seg")]
+      .find(s => s.dataset.tcSegDrop !== "P0" && s.querySelector(".tc-row[data-tc-drag]"));
+    const r = seg && seg.querySelector(".tc-row[data-tc-drag]");
+    return r ? r.dataset.tcDrag : null;
+  })()`);
+  if(hasP0 && priRow){
+    const priDrag = await dragTo('#tcList .tc-row[data-tc-drag="' + priRow + '"]', '#tcList .tc-seg[data-tc-seg-drop="P0"]');
     assert(priDrag.effect === "move", "优先级段头 dropEffect=move");
     const priConfirm = await confirmOk();
     assert(priConfirm.title.indexOf("P0") !== -1, "优先级确认框写明目标优先级");
-    const priCase = await caseOf(firstRow.id);
+    const priCase = await caseOf(priRow);
     assert(priCase && priCase.priority === "P0", "拖到优先级段头后优先级已改");
   } else {
     console.log("  SKIP 优先级拖拽（没有 P0 段）");
@@ -752,7 +822,6 @@ try{
   await sleep(2000);
   const bulkJoined = await setOf((personalSet || {}).id);
   assert(bulkJoined && bulkJoined.caseCount === baseline.total, "按筛选批量加入分组成员数 = 范围条数");
-  await click("#tcSideTabSet");
   await sleep(1200);
   await evaluate(`(() => { document.querySelector('#tcSideBody .tc-set-item[data-tc-set="' + ${JSON.stringify((personalSet || {}).id)} + '"] .tc-set-pick').click(); return true; })()`);
   await sleep(1500);
@@ -847,7 +916,6 @@ try{
   if(dynSet) created.sets.push(dynSet.id);
   assert(dynSet && /"regression":true/.test(dynSet.ruleJson || ""), "规则 JSON 持久化回归口径");
   const dynCount = (dynSet || {}).caseCount || 0;
-  await click("#tcSideTabSet");
   await sleep(1200);
   const dynRow = await evaluate(`(() => {
     const e = document.querySelector('#tcSideBody .tc-set-item[data-tc-set="' + ${JSON.stringify((dynSet || {}).id)} + '"]');
@@ -894,7 +962,6 @@ try{
     return ((r && (r.items || r)) || []).find(s => s.name === ${JSON.stringify(PREFIX + "联调名单")}) || null;`);
   assert(!!memSet && memSet.visibility === "members" && (memSet.memberIds || []).length === 1, "指定成员分组落库含 1 名名单成员");
   if(memSet) created.sets.push(memSet.id);
-  await click("#tcSideTabSet");
   await sleep(1200);
   await evaluate(`(() => { const b = document.querySelector('#tcSideBody .tc-set-item[data-tc-set="' + ${JSON.stringify((memSet || {}).id)} + '"] .tc-set-pick'); if(b) b.click(); return !!b; })()`);
   await sleep(1600);
@@ -995,11 +1062,15 @@ try{
   assert(mobile.actsOpacity === "1", "手机上维护按钮常显（触屏没有 hover）");
   assert(!mobile.overflow, "390px 无横向溢出");
   await shot("mobile-390-panel.png");
-  await click("#tcSideTabDir");
-  await sleep(1000);
+  await click("#tcDirBtn");
+  await waitFor(`!document.getElementById("tcDirMenu").hidden`, "手机上目录弹层展开");
+  await sleep(800);
   await shot("mobile-390-dir.png");
-  await setSelect("tcGroupBy", "module");
-  await waitFor(`document.querySelectorAll("#tcList .tc-seg").length > 0`, "手机上按目录分段");
+  await evaluate(`import("./js/core/ui.js").then(m => { m.UI.closeAllPops(); return true; })`);
+  await sleep(500);
+  /* 按目录分段在演示数据下没有非空段，拖拽提示只挂在非空段头；用优先级维度验证同一条样式 */
+  await setSelect("tcGroupBy", "priority");
+  await waitFor(`document.querySelectorAll("#tcList .tc-seg").length > 0`, "手机上按优先级分段");
   await sleep(1200);
   const segHint = await evaluate(`(() => {
     const h = document.querySelector("#tcList .tc-seg-hint");

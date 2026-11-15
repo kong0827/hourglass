@@ -41,6 +41,7 @@ function setup(view){
     avatarHTML:()=>'',icon:()=>'',fullscreenButtonHTML:()=>'',loadBarHTML:n=>String(n),
     fmtHours:n=>String(n||0)+'m',fmtDate:v=>v||'—',fmtMinutesShort:n=>n,typeBadgeHTML:()=>'',
     taskStatusName:t=>t.boardColumn,caliberHTML:s=>s,downloadCsv:(name,rows)=>downloads.push({name,rows:plain(rows)}),
+    registerHelp(){},initCaliberHelp(){},caliberMarkHTML:(key,warn)=>'<mark data-caliber-help="'+key+'">'+(warn?'!':'?')+'</mark>',
     statusBucket:t=>t.boardColumn,dueState:()=>({kind:'normal'}),openTaskTable(){},openTaskById(){},loadCategories(){},
     loadReqs:()=>Promise.resolve(),listPrefs:{viewMode:()=> 'board',load:()=>Promise.resolve(),setViewMode:()=>Promise.resolve()},
     DEFAULT_ROLE_TITLES:['后端开发','产品经理','全栈工程师'],loadMemberLabelOptions:()=>Promise.resolve({roleTitles:['后端开发','测试'],companyNames:['公司甲']})});

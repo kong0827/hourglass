@@ -141,7 +141,9 @@
       <div class="df-item"><b>拖入「已完成」</b>· 停表并接力</div>
       <div class="df-item"><b>手工补记 / 作废重算</b>· 事后修正</div>
       <div class="df-item"><b>需求评审 / 分支流转</b>· 状态变化即留痕</div>
-      <div class="df-item"><b>制定计划 → 确认发布</b>· 人工预览后写入记录</div>
+      <div class="df-item"><b>文档发布 / 共享</b>· 可见范围三档即时生效</div>
+      <div class="df-item"><b>仓库同步</b>· GitLab 只读拉取，待确认项人工核对</div>
+      <div class="df-item"><b>制定计划 → 确认发布</b>· 人工预览与必测检查后写入记录</div>
     </div>
 
     <div class="df-arrow">
@@ -159,7 +161,8 @@
       <div class="df-table"><b><code>task_completion_record</code></b><span>完成快照 · 改名 / 删除后仍可统计</span></div>
       <div class="df-table"><b><code>version_release_plan</code> + <code>plan_version</code> / <code>plan_task</code></b><span>发布计划 · 已计划，尚未发生</span></div>
       <div class="df-table"><b><code>version_release</code> + <code>release_item</code></b><span>实际发布 · 不可变快照与逐项处置</span></div>
-      <div class="df-item"><b>需求 / 分支日志</b>· <code>demand_log</code>、<code>dev_branch_log</code></div>
+      <div class="df-item"><b>文档快照</b>· <code>requirement_doc_history</code>、<code>doc_category</code></div>
+      <div class="df-item"><b>需求 / 分支 / 仓库日志</b>· <code>demand_log</code>、<code>dev_branch_log</code>、<code>project_repo</code></div>
     </div>
 
     <div class="df-arrow">
@@ -177,7 +180,7 @@
       <div class="df-item"><b>计时归属</b>· 一人同一时刻只计一个任务</div>
       <div class="df-item"><b>完成 ≠ 发布</b>· 徽标只由成功 production 记录派生</div>
       <div class="df-item"><b>计划 ≠ 事实</b>· 计划可改，确认后的发布记录不可变</div>
-      <div class="df-item"><b>模块合计 + 未指定 = 项目合计</b>· 整体进度仍按全部工作项算</div>
+      <div class="df-item"><b>模块合计 + 未指定 = 项目合计</b>· 任务 / 需求 / 用例共用同一棵目录树，整体进度仍按全部工作项算</div>
     </div>
 
     <div class="df-arrow">
@@ -191,10 +194,10 @@
       <div class="df-stage-head"><span class="df-num n4">4</span><b>输出</b></div>
       <div class="df-stage-sub">共享来源 · 按对象与时段查询</div>
       <div class="df-item"><b>我的工作</b>· 跨空间汇总，按筛选与计时状态</div>
-      <div class="df-item"><b>看板 / 甘特 / 日历 / 列表</b>· 共享筛选与逾期判定</div>
-      <div class="df-item"><b>项目驾驶舱</b>· 整体健康度 + 按模块统计</div>
+      <div class="df-item"><b>看板 / 列表 / 层级 / 影响链 / 甘特 / 日历</b>· 共享筛选与逾期判定</div>
+      <div class="df-item"><b>项目驾驶舱</b>· 整体健康度 + 按目录统计</div>
       <div class="df-item"><b>版本 / 发布日程 / 发布历史</b>· 计划、实际与偏差</div>
-      <div class="df-item"><b>周回顾 / 报表 / 成员负载</b>· 工时与流转的聚合</div>
+      <div class="df-item"><b>周回顾 / 报表 / 投入结构 / 成员负载</b>· 工时与流转的聚合</div>
     </div>
   </div>
 
@@ -205,7 +208,7 @@
     </div>
     <div class="df-chips">
       <span class="df-chip">项目健康度</span>
-      <span class="df-chip">模块统计</span>
+      <span class="df-chip">目录统计</span>
       <span class="df-chip">看板进度</span>
       <span class="df-chip">甘特成员负载</span>
       <span class="df-chip">燃尽图</span>
@@ -215,6 +218,7 @@
       <span class="df-chip">周回顾</span>
       <span class="df-chip">月度清单</span>
       <span class="df-chip">流程体检</span>
+      <span class="df-chip">投入结构</span>
       <span class="df-chip pub">发布日程</span>
       <span class="df-chip pub">发布历史</span>
       <span class="df-chip pub">发布偏差</span>

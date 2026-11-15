@@ -394,7 +394,7 @@ public class ManagerService {
      * 投入结构（年度 / 季度）。
      *
      * <p>实际工时按 {@code time_log.started_at} 的日期归属周期，预估工时按工作项的
-     * 计划开始日（空则创建日）整条归属；开发 / 测试沿用「计时日期落在测试窗口内」的拆分。
+     * 计划开始日（空则创建日）整条归属；窗口内 / 外沿用「计时日期是否落在测试窗口内」的拆分。
      * 周期边界只决定「算哪一段」，跨期工作项不会被摊分到多个周期。</p>
      */
     public Map<String, Object> investment(String workspaceId, String userId,
@@ -413,6 +413,7 @@ public class ManagerService {
         Map<String, InvestBucket> members = new LinkedHashMap<String, InvestBucket>();
         Map<String, InvestBucket> companies = new LinkedHashMap<String, InvestBucket>();
         Map<String, InvestBucket> roles = new LinkedHashMap<String, InvestBucket>();
+        Map<String, InvestBucket> positions = new LinkedHashMap<String, InvestBucket>();
         Map<String, InvestBucket> months = new LinkedHashMap<String, InvestBucket>();
         InvestBucket totals = new InvestBucket("total", "合计");
 
@@ -430,6 +431,8 @@ public class ManagerService {
             bucket(members, item.memberKey, item.memberName).add(item);
             bucket(companies, item.companyKey, item.companyName).add(item);
             bucket(roles, item.roleKey, item.roleName).add(item);
+            /* 岗位缺失和「未指派负责人」不是一回事，这里单独叫「未设岗位」 */
+            bucket(positions, item.positionKey, item.positionName == null ? "未设岗位" : item.positionName).add(item);
             bucket(months, monthKey(item.date), monthLabel(item.date)).add(item);
             totals.add(item);
         }
@@ -439,6 +442,7 @@ public class ManagerService {
         rows.put("member", investmentRows(members, true));
         rows.put("company", investmentRows(companies, false));
         rows.put("role", investmentRows(roles, false));
+        rows.put("position", investmentRows(positions, false));
 
         Map<String, Object> range = new LinkedHashMap<String, Object>();
         range.put("from", context.from.toString());
@@ -466,7 +470,7 @@ public class ManagerService {
         return result;
     }
 
-    /** 投入结构下钻：按同一周期与筛选，把某个分组内的计时 / 预估聚到工作项上。 */
+    /** 投入结构下钻：按同一周期与筛选，把某个分组内的计时 / 预估聚到工作项上；不传维度时返回区间内全部工作项。 */
     public PageResult<Map<String, Object>> investmentTasks(String workspaceId, String userId,
                                                            String fromValue, String toValue,
                                                            String reqId, String roleTitle, String companyName,
@@ -483,19 +487,23 @@ public class ManagerService {
                                                            Integer offset, Integer limit,
                                                            List<String> memberUserIds) {
         String dim = trimmed(dimension);
-        if (!"project".equals(dim) && !"member".equals(dim)
-                && !"company".equals(dim) && !"role".equals(dim)) {
-            throw AppException.badRequest("不支持的投入分析维度");
-        }
         String target = trimmed(key);
-        if (target == null) {
-            throw AppException.badRequest("缺少下钻分组");
+        /* 不传维度时按整个区间下钻（趋势柱按月点开用），传维度则必须带分组键 */
+        if (dim != null) {
+            if (!"project".equals(dim) && !"member".equals(dim)
+                    && !"company".equals(dim) && !"role".equals(dim)
+                    && !"position".equals(dim)) {
+                throw AppException.badRequest("不支持的投入分析维度");
+            }
+            if (target == null) {
+                throw AppException.badRequest("缺少下钻分组");
+            }
         }
         InvestmentContext context = investmentContext(workspaceId, userId, fromValue, toValue,
                 reqId, roleTitle, companyName, memberUserIds);
         Map<String, InvestmentTaskRow> grouped = new LinkedHashMap<String, InvestmentTaskRow>();
         for (InvestmentItem item : context.items) {
-            if (!investmentItemInGroup(item, dim, target)) {
+            if (dim != null && !investmentItemInGroup(item, dim, target)) {
                 continue;
             }
             String taskId = item.task.getId();
@@ -816,6 +824,9 @@ public class ManagerService {
         item.roleFilterTitles = roleTitles(labels);
         item.companyKey = item.companyName == null ? UNASSIGNED_KEY : item.companyName;
         item.roleKey = item.roleName == null ? UNASSIGNED_KEY : item.roleName;
+        /* 职能取空间岗位，不受项目角色覆盖：产品经理在项目里可能挂「业务接口人」 */
+        item.positionName = labels.jobTitle;
+        item.positionKey = item.positionName == null ? UNASSIGNED_KEY : item.positionName;
         return item;
     }
 
@@ -836,6 +847,8 @@ public class ManagerService {
         item.roleFilterTitles = roleTitles(labels);
         item.companyKey = item.companyName == null ? UNASSIGNED_KEY : item.companyName;
         item.roleKey = item.roleName == null ? UNASSIGNED_KEY : item.roleName;
+        item.positionName = labels.jobTitle;
+        item.positionKey = item.positionName == null ? UNASSIGNED_KEY : item.positionName;
         return item;
     }
 
@@ -962,6 +975,9 @@ public class ManagerService {
         }
         if ("company".equals(dimension)) {
             return key.equals(item.companyKey);
+        }
+        if ("position".equals(dimension)) {
+            return key.equals(item.positionKey);
         }
         return key.equals(item.roleKey);
     }
@@ -2733,6 +2749,8 @@ public class ManagerService {
         private String companyName;
         private String roleKey;
         private String roleName;
+        private String positionKey;
+        private String positionName;
         private Set<String> roleFilterTitles;
     }
 
