@@ -652,6 +652,31 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <span data-icon="plus"></span>&nbsp;补记
                 </button>
               </div>
+              <!-- 补记在工时区内联展开：不再在任务抽屉上再叠一层弹框 -->
+              <div class="wl-add" id="dlgTimeAdd" hidden>
+                <div class="wl-add-head">
+                  <b>补记工时</b>
+                  <span class="wl-add-hint">补记不经过工作时段裁剪，直接计入工作项与报表；可在下方记录列表删除或作废。</span>
+                  <button class="icon-btn sm" type="button" id="dlgTimeAddCancel" aria-label="收起补记工时">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+                  </button>
+                </div>
+                <div class="wl-add-grid">
+                  <div class="field span2">
+                    <span class="field-label">计入项目</span>
+                    <div class="time-attr" id="iTimeProject"></div>
+                  </div>
+                  <label class="field"><span class="field-label">成员</span><select id="iTimeUser"></select></label>
+                  <label class="field"><span class="field-label">日期</span><input id="iTimeDate" type="date" /></label>
+                  <label class="field"><span class="field-label">时长（小时）</span><input id="iTimeHours" type="number" min="0.5" max="24" step="0.5" placeholder="例如 1.5" /></label>
+                  <label class="field"><span class="field-label">备注（选填）</span><input id="iTimeNote" type="text" maxlength="200" placeholder="例如 联调支持" /></label>
+                </div>
+                <div class="wl-add-foot">
+                  <span class="grow"></span>
+                  <button class="btn sm" type="button" data-time-add-cancel>取消</button>
+                  <button class="btn sm primary" type="button" id="dlgTimeAddOk">保存</button>
+                </div>
+              </div>
               <div class="work-log" id="workLogList"></div>
             </div>
           </div>

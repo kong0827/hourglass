@@ -23,7 +23,7 @@ html[data-theme="dark"] .dl-export-wrap{
 /* ============ 页头与提示条 ============ */
 .dl-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;}
 .dl-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.dl-title-row h1{font-size:20px;font-weight:700;letter-spacing:-.015em;line-height:1.25;margin:0;}
+.dl-title-row h1{font-size:var(--fs-page-title);font-weight:700;letter-spacing:-.015em;line-height:1.25;margin:0;}
 .dl-sub{font-size:12.5px;color:var(--text-3);line-height:1.7;margin:6px 0 0;max-width:680px;}
 .dl-facts{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--text-3);}
 .dl-facts span{display:inline-flex;align-items:center;gap:5px;}

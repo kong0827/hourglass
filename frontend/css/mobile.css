@@ -77,7 +77,7 @@
 [data-layout="mobile"] #btnTheme{display:none !important;}
 [data-layout="mobile"] .tb-left{flex:1 1 auto;min-width:0;max-width:none;}
 [data-layout="mobile"] .tb-title{
-  font-size:16px;line-height:22px;
+  font-size:var(--fs-page-title-sm);line-height:22px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 [data-layout="mobile"] .tb-right{flex:0 0 auto;justify-content:flex-end;gap:6px;min-width:0;}
@@ -753,6 +753,9 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .bkl,
 [data-layout="mobile"] .wsjf-grid{grid-template-columns:1fr;}
 [data-layout="mobile"] .field-row{flex-direction:column;}
+[data-layout="mobile"] .wl-add-grid{grid-template-columns:1fr;}
+[data-layout="mobile"] .wl-add input,[data-layout="mobile"] .wl-add select{min-height:44px;}
+[data-layout="mobile"] .wl-add .btn{min-height:44px;}
 [data-layout="mobile"] .br-groups,
 [data-layout="mobile"] .br-flow{grid-template-columns:1fr;}
 [data-layout="mobile"] .br-kv,
@@ -822,19 +825,22 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .toolbar-right > #tcReq{order:0;flex:1 1 130px;min-width:110px;max-width:none;}
 [data-layout="mobile"] .tc-filterbar{display:none;}
 [data-layout="mobile"] .tc-filterbar.is-open{display:flex;flex:0 0 auto;width:100%;flex-direction:column;align-items:stretch;gap:8px;
-  padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);
+  padding:10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);
 }
+[data-layout="mobile"] .tc-filtercard{gap:8px;padding:8px;}
+[data-layout="mobile"] .tc-vsep{display:none;}
 [data-layout="mobile"] .tc-filterbar.is-open .views-menu-wrap,
 [data-layout="mobile"] .tc-filterbar.is-open #tcViewsBtn,
 [data-layout="mobile"] .tc-filterbar.is-open #tcBug{width:auto;align-self:flex-start;justify-content:flex-start;}
 [data-layout="mobile"] .tc-filterbar.is-open .tc-fbar-end{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;margin-left:0;}
-[data-layout="mobile"] .tc-filterbar.is-open .tc-search,
 [data-layout="mobile"] .tc-filterbar.is-open .mini-select{width:100%;max-width:none;height:38px;font-size:16px;}
-/* 统计 chips 条：手机上换行铺满、隐藏口径提示，点按区域加大 */
-[data-layout="mobile"] #tcStats{gap:6px;padding:8px 10px;}
-[data-layout="mobile"] #tcStats .tc-stat-total{flex:1 1 100%;margin-right:0;}
-[data-layout="mobile"] #tcStats .tc-stat{flex:1 1 auto;justify-content:center;height:30px;}
-[data-layout="mobile"] #tcStats .tc-stat-hint{display:none;}
+[data-layout="mobile"] .tc-searchwrap{flex:1 1 100%;max-width:none;height:38px;}
+[data-layout="mobile"] .tc-searchwrap .tc-search{font-size:16px;}
+[data-layout="mobile"] .tc-search-scope{height:28px;font-size:13px;}
+/* 统计 chips：手机上换行铺满，点按区域加大；口径说明看 title，不占行 */
+[data-layout="mobile"] #tcStats{gap:6px;padding:0;}
+[data-layout="mobile"] #tcStats .tc-stat{flex:1 1 calc(33.333% - 4px);justify-content:center;height:30px;}
+[data-layout="mobile"] #tcStats .tc-stat-info{display:none;}
 /* 缺陷 tab 的筛选项直接平铺：没有「筛选」开关，默认全部可见；搜索与重置同行，四个下拉两行 */
 [data-layout="mobile"] .tc-defbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 8px;padding:0;}
 [data-layout="mobile"] .tc-defbar .tc-search{flex:1 1 100%;width:100%;min-width:0;height:34px;font-size:16px;}
@@ -890,6 +896,8 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-row{flex-wrap:wrap;gap:8px;padding:12px;}
 [data-layout="mobile"] .tc-row .mini-tag{margin-top:0;}
 [data-layout="mobile"] .tc-acts{width:100%;justify-content:flex-start;}
+/* 关联缺陷标题占宽，手机上收窄成一行，别把行末「⋯」挤到下一行 */
+[data-layout="mobile"] .tc-acts [data-case-bug]{max-width:118px;overflow:hidden;text-overflow:ellipsis;}
 [data-layout="mobile"] .tc-step-row{display:grid;grid-template-columns:22px 1fr auto;row-gap:6px;}
 [data-layout="mobile"] .tc-step-row .tc-step-no{grid-column:1;grid-row:1;}
 [data-layout="mobile"] .tc-step-row .tc-step-acts{grid-column:3;grid-row:1;padding-top:0;}
@@ -910,13 +918,22 @@ body.mob-sheet-open{overflow:hidden;}
 /* 触屏没有 hover，目录/分组的维护按钮常显 */
 [data-layout="mobile"] .tc-dir-acts,[data-layout="mobile"] .tc-set-acts{opacity:1;}
 [data-layout="mobile"] .tc-dir-acts .icon-btn.sm,[data-layout="mobile"] .tc-set-acts .icon-btn.sm{width:30px;height:30px;}
-[data-layout="mobile"] .tc-querybar{gap:6px;}
-[data-layout="mobile"] .tc-querybar .btn{height:34px;}
+[data-layout="mobile"] .tc-listhead{gap:6px;row-gap:6px;padding:8px;}
+[data-layout="mobile"] .tc-listhead .btn{height:34px;}
+[data-layout="mobile"] .tc-lh-grow{display:none;}
+[data-layout="mobile"] .tc-bulk-hint{display:none;}
+[data-layout="mobile"] .tc-lh-tools{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;}
+[data-layout="mobile"] .tc-lh-tools #tcPanelBtn{flex:1 1 100%;justify-content:center;}
+[data-layout="mobile"] .tc-lh-tools #tcSort,
+[data-layout="mobile"] .tc-lh-tools #tcGroupBy{flex:1 1 0;min-width:0;height:34px;font-size:14px;}
+[data-layout="mobile"] .tc-lh-tools #tcSortDir{flex:0 0 34px;height:34px;}
+[data-layout="mobile"] .tc-lh-tools #tcPageSize{flex:1 1 100%;height:34px;font-size:14px;}
 [data-layout="mobile"] .tc-ctl{flex:1 1 calc(50% - 3px);min-width:0;}
 [data-layout="mobile"] .tc-ctl .mini-select{flex:1 1 auto;width:auto;min-width:0;height:34px;font-size:16px;}
-[data-layout="mobile"] .tc-query-grow{display:none;}
 [data-layout="mobile"] #tcSelFiltered{flex:1 1 100%;justify-content:center;}
-[data-layout="mobile"] .tc-bulk-acts{margin-left:0;flex:1 1 100%;}
+[data-layout="mobile"] .tc-bulkbar{flex:1 1 100%;margin-left:0;}
+[data-layout="mobile"] .tc-bulk-acts{flex:1 1 100%;}
+[data-layout="mobile"] .tc-menu{top:auto;bottom:32px;}
 [data-layout="mobile"] .tc-seg-head{gap:6px;padding:8px;}
 [data-layout="mobile"] .tc-seg-name{flex:1 1 auto;max-width:100%;}
 [data-layout="mobile"] .tc-seg-bar{flex:1 1 60px;}

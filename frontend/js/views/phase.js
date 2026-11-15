@@ -1754,13 +1754,51 @@ function chooseReleaseVersion(versions){
     openReleaseDetail(versionId, "plan");
   });
 }
-/* 独立真实 ESM 弹窗：关闭/切项目/切路由/切空间后不渲染迟到响应。 */
-function releaseDialog(v, title, onClose){
+/* 发布工作台是页面级子页：入口先记下参数并落 #/release，再由 views/release.js 把同一份工作区挂到页面容器。
+   只有页面一个容器：计划、实际、历史、内容都在这一页，不再有弹框内页签与版本页页签并存的第二套。 */
+var releaseIntent = null;
+function releasePageSurface(host, v, returnHash){
+  var root = document.createElement("div");
+  root.className = "release-page";
+  root.innerHTML = '<div class="page-toolbar release-page-bar">'
+    + '<button class="btn sm ghost" type="button" data-release-back><span aria-hidden="true">←</span> 返回版本</button>'
+    + '<span class="toolbar-meta"><b>' + esc(v.name) + '</b> · 发布工作台</span>'
+    + '<span class="toolbar-right"><span class="hint">计划只描述打算怎么发；发布记录使用不可变工作项快照</span></span>'
+    + '</div><div class="release-body release-page-body" aria-live="polite"></div>';
+  host.innerHTML = "";
+  host.appendChild(root);
+  var surface = {
+    layer: root,
+    body: root.querySelector(".release-page-body"),
+    isPage: true,
+    current: function(){ return document.body.dataset.view === "release"; },
+    /* 从版本详情下钻进来就回那一页；从版本列表 / 日程进来回版本页（日程的 onClose 会重拉列表） */
+    close: function(){
+      if(returnHash){
+        try{ history.pushState(null, "", returnHash); }catch(e){ /* file:// 等受限环境：直接切视图 */ }
+        showView("version");
+        return;
+      }
+      showView("phase");
+    },
+    scrollTop: function(){ var sec = document.getElementById("view-release"); return sec ? sec.scrollTop : 0; },
+    scrollTo: function(top){ var sec = document.getElementById("view-release"); if(sec) sec.scrollTop = top || 0; }
+  };
+  root.querySelector("[data-release-back]").addEventListener("click", function(){ surface.close(); });
+  return surface;
+}
+export function takeReleaseIntent(){
+  var it = releaseIntent;
+  releaseIntent = null;
+  return it;
+}
+/* 发布说明是轻量只读说明（不是工作流），仍用弹框；发布工作台已迁到子页 */
+function releaseDialog(v, title){
   var layer = document.createElement("div"), disposed = false;
   var reqId = rt.phaseReqId, wsId = (rt.currentWs || {}).id, route = document.body.dataset.view;
   layer.className = "modal-layer";
   layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-label", title);
-  layer.__uiOnClose = function(){ disposed = true; if(onClose) onClose(); setTimeout(function(){ layer.remove(); }, 0); };
+  layer.__uiOnClose = function(){ disposed = true; setTimeout(function(){ layer.remove(); }, 0); };
   layer.innerHTML = '<div class="sheet release-sheet"><div class="sheet-head"><div style="flex:1;min-width:0"><h2>' + esc(v.name) + ' · ' + esc(title) + '</h2>'
     + '<p class="desc">计划版本不等于实际交付；发布记录使用不可变工作项快照。</p></div><button class="icon-btn sm" type="button" data-release-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body release-body" aria-live="polite">' + UI.skeletonRows(3) + '</div></div>';
@@ -1772,6 +1810,16 @@ function releaseDialog(v, title, onClose){
     if(!valid && !disposed) UI.closeModal(layer);
     return valid;
   }};
+}
+/* 保留原入口签名：所有调用方只换落点，不改业务流程 */
+function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, forceNewPlan){
+  var v = knownVersion || findVersion(id);
+  var reqId = (v && v.reqId) || rt.phaseReqId;
+  releaseIntent = { id:id, reqId:reqId, entry:entry || "plan", version:v || null, onClose:onClose || null, presetVersionIds:presetVersionIds || null, forceNewPlan:!!forceNewPlan,
+    returnHash: document.body.dataset.view === "version" ? String(window.location.hash || "") : "" };
+  import("../core/view-loader.js").then(function(m){ return m.loadView("release"); }).then(function(mod){
+    mod.openReleasePage({ id:id, reqId:reqId, tab: entry === "actual" ? "actual" : "plan" });
+  }).catch(function(ex){ toast(ex.message || "打开发布计划失败", "bad"); });
 }
 function releaseRecordHTML(record){ return releaseSnapshotHTML(record); }
 /* 交付说明是低频视图：按需拉模块再落路由，不把纸张渲染器拉进版本页首屏 */
@@ -1800,37 +1848,37 @@ function exportReleaseRecordCSV(record){
   document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 function publishVersion(id){ openReleaseDetail(id, "actual"); }
-function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, forceNewPlan){
-  var v = knownVersion || findVersion(id);
-  if(!v) return;
-  var dlg = releaseDialog(v, "发布工作区", onClose), layer = dlg.layer;
+export function mountReleaseWorkspace(pageHost, opts){
+  var id = opts.id, v = opts.version, entry = opts.entry || "plan";
+  if(!id || !v) return null;
+  var dlg = releasePageSurface(pageHost, v, opts.returnHash || ""), layer = dlg.layer;
   var base = "/api/versions/" + encodeURIComponent(id), reqId = v.reqId, wsId = (rt.currentWs || {}).id, userId = (rt.currentUser || {}).id;
-  var syncBannerTimer = null, syncRowTimer = null, syncDebounceTimer = null, pendingBranchId = null;
+  var syncBannerTimer = null, syncRowTimer = null, syncDebounceTimer = null;
   var justSynced = {};      /* 最近一次同步变化的分支 id，8 秒内重画也保留高亮 */
   document.addEventListener("ds:sse-entity", onBranchSync);
-  var prevClose = layer.__uiOnClose;
-  layer.__uiOnClose = function(){
+  function cleanup(){
     document.removeEventListener("ds:sse-entity", onBranchSync);
     if(syncBannerTimer){ clearTimeout(syncBannerTimer); syncBannerTimer = null; }
     if(syncRowTimer){ clearTimeout(syncRowTimer); syncRowTimer = null; }
     if(syncDebounceTimer){ clearTimeout(syncDebounceTimer); syncDebounceTimer = null; }
-    if(prevClose) prevClose();
-    /* 分支抽屉不支持叠在弹窗之上：先关工作区再开抽屉，避免抽屉被压在下面 */
-    if(pendingBranchId){ var bid = pendingBranchId; pendingBranchId = null; setTimeout(function(){ openBranchById(bid); }, 0); }
-  };
+    if(opts.onClose) opts.onClose();
+  }
+  dlg.destroy = cleanup;
   var storageKey = "hourglass:release-pending:" + JSON.stringify([wsId, userId, id]);
   var plans = [], planId = null, records = [], tasks = [], members = [], preview = null, previewContext = null;
   var busy = false, loadSeq = 0, previewSeq = 0, mayManage = false, mayPublish = false;
   var planOptions = null, planScopeVersionIds = null, planTaskPoolCache = {}, planTaskFetchKey = "", planTaskErrorKey = "", planTaskSeq = 0;
-  var presetPlanVersionIds = presetVersionIds && presetVersionIds.length ? normalizedIds(presetVersionIds) : null;
+  var presetPlanVersionIds = opts.presetVersionIds && opts.presetVersionIds.length ? normalizedIds(opts.presetVersionIds) : null;
   var pending = null, storageError = "", recoveryMessage = "", recoveredRecord = null, retryAllowed = false, resetAllowed = false;
   var page = 0, filters = {result:"", environment:"", operation:""}, advancedOpen = false;
   /* 版本操作记录（version_log）：与正式发布记录分开，打开时拉一次，刷新按钮重新拉 */
   var verLog = {id:null, rows:[], error:""}, verLogSeq = 0;
   /* 发布检查：只读汇总本版本测试计划，随关联计划变化重新拉取；结论同时冻结进正式记录 */
   var releaseCheck = null, checkSeq = 0, checkLoading = false;
-  /* 计划 / 实际 / 历史 / 内容 四个工作面，入口决定初始页；入口只决定看哪页，不再用顶部报错兜底 */
-  var activeTab = entry === "actual" ? "actual" : "plan", planJustSaved = false, planSavedRevision = null, restoreScroll = null, entryFocus = entry === "actual";
+  /* 计划 / 实际 / 历史 / 内容 四个工作面：优先用 URL 里的页签，其次看入口；入口只决定看哪页 */
+  var activeTab = ["plan", "actual", "history", "content"].indexOf(opts.tab) >= 0 ? opts.tab : (entry === "actual" ? "actual" : "plan");
+  var syncingFromHash = false;
+  var planJustSaved = false, planSavedRevision = null, restoreScroll = null, entryFocus = entry === "actual";
   var actualDraft = {planId:"", occurredAt:localMinute(), environment:"production", targetKeys:"", coverage:"full", artifactRef:"", artifactDigest:"", operation:"deploy", relatedReleaseId:"", executorUserId:"", actualTaskIds:[], deviationReason:"", result:"success", notes:"", failureReason:""};
   var actualPlanTouched = false;
   var releasePickerRef = null;  /* 计划负责人 / 实际执行人人员浮层引用；整表重绘前先收起，避免锚点被替换 */
@@ -1842,8 +1890,8 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
     }
   }catch(ex){ storageError = "无法安全读取待确认请求；禁止新建事件，请恢复会话存储后重开。"; }
   function current(){
-    if(userId !== (rt.currentUser || {}).id){ UI.closeModal(layer); return false; }
-    return dlg.current();
+    if(userId !== (rt.currentUser || {}).id){ dlg.close(); return false; }
+    return dlg.current() && reqId === rt.phaseReqId && wsId === (rt.currentWs || {}).id;
   }
   function error(msg, scope){
     var targets = scope === "plan" ? ["[data-plan-error]"]
@@ -2368,9 +2416,10 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
       b.classList.toggle("is-active", on); b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1;
     });
     layer.querySelectorAll("[data-release-panel]").forEach(function(p){ p.hidden = p.getAttribute("data-release-panel") !== key; });
-    dlg.body.scrollTop = 0;
+    dlg.scrollTo(0);
     if(focus && key === "actual") focusActual();
     if(key === "actual" && !releaseCheck && !checkLoading) loadCheck();
+    if(opts.onTab && !syncingFromHash) opts.onTab(key);
   }
   function focusActual(){
     ["[data-release-occurredAt]", "[data-release-executorUserId]", "[data-release-artifactRef]", "[data-release-artifactDigest]", "[data-release-targetKeys]"].some(function(sel){
@@ -2463,7 +2512,8 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
   function setBusy(on){
     busy = on;
     layer.querySelectorAll('input, select, textarea, button').forEach(function(el){
-      if(el.matches('[data-release-close]')) return;
+      /* 加载中也要能离开：返回按钮和关闭按钮不被忙碌态锁住 */
+      if(el.matches('[data-release-close], [data-release-back]')) return;
       if(on){ el.dataset.wasDisabled = el.disabled ? "1" : "0"; el.disabled = true; }
       else if(el.dataset.wasDisabled !== undefined){ el.disabled = el.dataset.wasDisabled === "1"; delete el.dataset.wasDisabled; }
     });
@@ -2622,7 +2672,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
   }
   function openCheckCase(caseId){
     var projectId = reqId;
-    UI.closeModal(layer);
+    /* 页面模式下由路由切换负责收掉工作台；用例仍按同一入口打开 */
     import("./testcases.js").then(function(m){
       showView("testcases");
       m.setTcMode("cases");
@@ -2699,7 +2749,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
       + '<div class="release-panel" role="tabpanel" id="release-panel-history" aria-labelledby="release-tab-history" data-release-panel="history"' + (activeTab === "history" ? '' : ' hidden') + '>' + historySection + versionLogSection + '</div>'
       + '<div class="release-panel" role="tabpanel" id="release-panel-content" aria-labelledby="release-tab-content" data-release-panel="content"' + (activeTab === "content" ? '' : ' hidden') + '>' + contentSection + '</div>';
     renderHistory(); renderVersionLog(); renderCheck(); syncControls(); syncAdvanced(); updateChecklists(); refreshPlanBranches(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
-    if(restoreScroll != null){ dlg.body.scrollTop = restoreScroll; restoreScroll = null; }
+    if(restoreScroll != null){ dlg.scrollTo(restoreScroll); restoreScroll = null; }
     if(entryFocus){ entryFocus = false; focusActual(); }
     if(mayManage && activeTab === "plan") ensurePlanTaskPool();
   }
@@ -2725,16 +2775,17 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
       presetPlanVersionIds = null;
       planTaskPoolCache = {}; planTaskFetchKey = ""; planTaskErrorKey = ""; planTaskSeq++;
       taskOptionsCache[reqId] = tasks; if(cache && rt.phaseReqId === reqId) cache.tasks = tasks;
-      if(planId === null) planId = forceNewPlan ? "" : (plans.length ? plans[0].id : "");
+      if(planId === null) planId = opts.forceNewPlan ? "" : (plans.length ? plans[0].id : "");
       if(planId && !plans.some(function(p){ return p.id === planId; })) planId = "";
       /* 首次进入实际记录面：自动带出匹配版本与环境的就绪计划，避免误记成紧急发布 */
       if(!pending && !storageError && !actualPlanTouched && !actualDraft.planId) actualDraft.planId = preferredActualPlanId();
       /* 刷新 / 重新加载时重新拉版本操作记录，避免展示过期列表 */
       verLog = {id:null, rows:[], error:""}; verLogSeq++;
-      busy = false; render(); loadCheck();
+      /* 工具栏在释放容器外：重画 body 前必须先解禁，否则「刷新 / 返回版本」会一直停在被禁用状态 */
+      setBusy(false); render(); loadCheck();
     }).catch(function(ex){
       if(!current() || seq !== loadSeq) return;
-      busy = false; retryAllowed = false;
+      setBusy(false); retryAllowed = false;
       dlg.body.innerHTML = '<p class="release-error" role="alert">' + esc(ex.message || "加载失败；旧请求仍保留") + '</p><button class="btn" data-release-refresh type="button">重新查询 / 加载</button>';
     });
   }
@@ -2906,7 +2957,8 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
     if(syncOpen){
       /* 跳去分支抽屉要先关掉工作区：有未保存的计划修改时先确认，避免草稿被静默丢弃 */
       var syncBranchId = syncOpen.getAttribute("data-plan-sync-open");
-      confirmDiscardPlan(function(){ pendingBranchId = syncBranchId; UI.closeModal(layer); });
+      /* 页面模式下分支抽屉直接叠在工作台上，关闭后仍回发布计划，不再先退一层弹框 */
+      confirmDiscardPlan(function(){ openBranchById(syncBranchId); });
       return;
     }
     if(e.target.closest('[data-plan-sync-close]')){ var syncHost = layer.querySelector("[data-plan-sync-host]"); if(syncHost) syncHost.innerHTML = ""; return; }
@@ -2954,7 +3006,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
       if(!b.reason){ error("请填写新建 / 修改计划理由", "plan"); return; }
       if(b.status === "ready" && (!b.plannedAt || !b.ownerUserId || !b.plannedTaskIds.length || !b.targetKeys.length)){ error("就绪计划需要时间、负责人、明确任务范围与目标键", "plan"); return; }
       readActual(); setBusy(true); invalidatePreview();
-      (p ? API.put(base + "/release-plan", b) : API.post(base + "/release-plans", b)).then(function(saved){ if(current()){ planId = saved.id; planJustSaved = true; planSavedRevision = saved.revision == null ? null : saved.revision; restoreScroll = dlg.body.scrollTop; setBusy(false); toast("独立发布计划已保存", "fs"); load(); } }).catch(function(ex){ if(current()){ setBusy(false); error(ex.message || "计划保存失败", "plan"); } }); return;
+      (p ? API.put(base + "/release-plan", b) : API.post(base + "/release-plans", b)).then(function(saved){ if(current()){ planId = saved.id; planJustSaved = true; planSavedRevision = saved.revision == null ? null : saved.revision; restoreScroll = dlg.scrollTop(); setBusy(false); toast("独立发布计划已保存", "fs"); load(); } }).catch(function(ex){ if(current()){ setBusy(false); error(ex.message || "计划保存失败", "plan"); } }); return;
     }
     var confirm = e.target.closest('[data-release-confirm]');
     if(!confirm || confirm.disabled || !preview || !mayPublish) return;
@@ -2966,6 +3018,15 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
     if(persist({body:b, createdAt:new Date().toISOString()})) sendPending();
   });
   load();
+  return {
+    id: id,
+    setTab: function(key){
+      if(busy) return;
+      syncingFromHash = true;
+      try{ switchTab(key, false); } finally { syncingFromHash = false; }
+    },
+    destroy: cleanup
+  };
 }
 function startVersion(id){
   var v = findVersion(id);
@@ -3052,7 +3113,7 @@ function bindingDialogGuard(layer){
     });
   }};
 }
-function openVersionTasks(id, fresh){
+function openVersionTasks(id, fresh, preset){
   var v = findVersion(id);
   if(!v) return;
   if(!canWritePhase()){ denyPhaseReadOnly(); return; }
@@ -3063,13 +3124,18 @@ function openVersionTasks(id, fresh){
       if(seq !== versionBindingSeq || reqId !== rt.phaseReqId || wsId !== (rt.currentWs || {}).id || userId !== (rt.currentUser || {}).id || route !== document.body.dataset.view || !cache) return;
       cache.versions = rs[0]; cache.tasks = rs[1];
       var current = findVersion(id);
-      openVersionTasks(id, true);
+      openVersionTasks(id, true, preset);
     }).catch(function(ex){ if(seq === versionBindingSeq && reqId === rt.phaseReqId && wsId === (rt.currentWs || {}).id && userId === (rt.currentUser || {}).id && route === document.body.dataset.view) toast(ex.message || "加载版本内容范围失败", "bad"); });
     return;
   }
   if(versionContentLocked(v)){ toast("已有成功正式发布，版本内容范围只读", "warn"); return; }
   var selected = {}, query = "";
   cache.tasks.forEach(function(t){ if(taskVersionIds(t).indexOf(id) !== -1) selected[t.id] = true; });
+  /* 新建工作项会先收起本弹框：回来时还原用户勾选（新建项按数据里的真实关联决定，不被旧快照覆盖） */
+  if(preset){
+    (preset.on || []).forEach(function(tid){ selected[tid] = true; });
+    (preset.off || []).forEach(function(tid){ delete selected[tid]; });
+  }
   var versionNames = {};
   cache.versions.forEach(function(item){ versionNames[item.id] = item.name; });
   var rows = cache.tasks.slice().sort(function(a, b){
@@ -3131,7 +3197,17 @@ function openVersionTasks(id, fresh){
     if(!guard.current() || guard.busy()) return;
     if(!canWritePhase()){ denyPhaseReadOnly(); return; }
     if(e.target.closest("[data-version-task-new]")){
-      openTaskDrawer("backlog", null, { reqId: v.reqId, versionIds: [v.id] });
+      /* 一次只留一层浮层：先收起版本弹框，任务抽屉建完/关闭后再回到这里，勾选原样还原 */
+      var keep = {
+        on: selectedIds(),
+        off: Object.keys(selected).filter(function(tid){ return !selected[tid]; })
+      };
+      UI.closeModal(layer);
+      openTaskDrawer("backlog", null, {
+        reqId: v.reqId,
+        versionIds: [v.id],
+        onClose: function(){ openVersionTasks(id, false, keep); }
+      });
       return;
     }
     var save = e.target.closest("[data-version-task-save]");

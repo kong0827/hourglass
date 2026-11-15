@@ -28,6 +28,10 @@ public class ReqDocView {
     private String ownerUserId;
     /** 发布时间（空 = 草稿） */
     private LocalDateTime publishedAt;
+    /** 可见范围：team / members / personal（仅对已发布生效） */
+    private String visibility;
+    /** 指定可见成员数（visibility=members 时展示「指定 N 人」） */
+    private Integer memberCount;
     /** 正文纯文本摘要（服务端从 HTML 抽出来，最长 80 字） */
     private String excerpt;
     private Integer taskCount;

@@ -300,7 +300,8 @@ try{
     };
   })()`);
   assert(!bar.hidden, "查询条在用例页可见");
-  assert(bar.ids[0] === "tcPanelBtn", "查询条首个控件是「目录 / 分组」入口");
+  assert(bar.ids[0] === "tcBulkAll", "列表头首个控件是两级全选入口");
+  assert(bar.ids.indexOf("tcPanelBtn") !== -1, "列表头仍保留「目录 / 分组」入口");
   assert(JSON.stringify(bar.sorts) === JSON.stringify(["created","updated","executed","no","pri","module","status"]), "排序字段 7 项且顺序固定");
   assert(bar.dims.length === 7 && bar.dims[0] === "不分组" && bar.dims[6] === "自定义分组", "分组维度 7 项（含不分组与自定义分组）");
   assert(JSON.stringify(bar.pages) === JSON.stringify(["50","100","200"]), "每页 50 / 100 / 200");
@@ -791,14 +792,14 @@ try{
     return {
       segGone: !document.getElementById("tcStatusSeg"),
       chips: [...el.querySelectorAll("[data-tc-status]")].map(x => x.tagName + ":" + x.dataset.tcStatus),
-      hint: (el.querySelector(".tc-stat-hint")||{}).textContent || "",
+      hint: (el.querySelector(".tc-stat-info")||{}).getAttribute("title") || "",
       oneLine: kids.every(x => Math.abs(center(x) - center(bar)) <= 4),
       beforeBar: !!(el.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING)
     };
   })()`);
   assert(strip0.segGone && strip0.chips.length === 6 && strip0.chips.every(c => c.indexOf("BUTTON:") === 0),
     "执行结果分段并入统计条：6 个可点计数按钮（" + strip0.chips.join("/") + "）");
-  assert(/点计数即筛选/.test(strip0.hint) && strip0.beforeBar && strip0.oneLine, "统计条位于筛选条之前、单行，并带口径提示");
+  assert(/点计数即按/.test(strip0.hint) && strip0.beforeBar && strip0.oneLine, "统计条位于筛选条之前、单行，并带口径提示（" + strip0.hint + "）");
   const counts0 = await evaluate(`[...document.querySelectorAll("#tcStats [data-tc-status]")].map(x => x.textContent.trim()).join("|")`);
   await click('#tcStats [data-tc-status="failed"]');
   await sleep(1200);
@@ -808,7 +809,7 @@ try{
     meta: (document.getElementById("tcMeta")||{}).textContent || ""
   }))()`);
   assert(JSON.stringify(strip1.on) === JSON.stringify(["failed"]), "点计数即筛选并呈选中态");
-  assert(strip1.counts === counts0 && /筛选出/.test(strip1.meta), "计数不受当前筛选影响，meta 交代筛选口径");
+  assert(strip1.counts === counts0 && /显示 \d+ \/ 共 \d+/.test(strip1.meta), "计数不受当前筛选影响，meta 交代筛选口径");
   await shot("stats-chips-filtered-1440.png");
   await click("#tcClearFilter");
   await sleep(1000);

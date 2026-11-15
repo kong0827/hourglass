@@ -138,7 +138,7 @@
   position:relative;z-index:40;
 }
 .tb-left{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;}
-.tb-title{font-size:20px;line-height:26px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tb-title{font-size:var(--fs-page-title);line-height:26px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tb-sub{font-size:12px;line-height:16px;font-weight:500;color:var(--text-3);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tb-sub.breadcrumb{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;}
 .tb-sub.breadcrumb span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;max-width:100%;}
@@ -349,8 +349,8 @@ body.fs-view .fs-exit{display:inline-flex;}
    宽度上限只用于超宽屏兜底：普通 1440/1920 屏上让内容吃满可用区域，
    否则两侧会空出几百像素（甘特图这类信息密集页尤其明显）。 */
 .view-page{display:flex;flex-direction:column;gap:16px;padding-top:16px;max-width:2000px;margin:0 auto;width:100%;}
-.page-toolbar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;min-height:32px;}
-.toolbar-title{font-size:16px;font-weight:650;letter-spacing:-.01em;}
+.page-toolbar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;min-height:var(--toolbar-h);}
+.toolbar-title{font-size:var(--fs-page-title-sm);font-weight:650;letter-spacing:-.01em;}
 .toolbar-meta{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 /* 静态字段标签（分组 / 排序 / 空间）：12px 三级灰在页底只有 4.68:1，发虚 */
 .toolbar-meta.is-strong{color:var(--text-2);font-weight:550;}
@@ -460,7 +460,7 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 /* 移动端样式统一在 css/mobile.css（按 body[data-layout] 生效） */
 
 /* ---------- 全局搜索面板（Cmd/Ctrl+K） ---------- */
-.search-palette{z-index:1200;}
+.search-palette{z-index:var(--z-palette);}
 .palette-sheet{
   width:min(640px, calc(100vw - 32px)); margin:12vh auto 0; padding:0;
   display:flex; flex-direction:column; max-height:min(70vh, 620px); overflow:hidden;

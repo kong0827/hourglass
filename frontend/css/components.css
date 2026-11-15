@@ -817,12 +817,46 @@ html[data-theme="dark"] .avatar{box-shadow:0 0 0 1px rgba(255,255,255,.16);}
 .card.dragging{opacity:.4;box-shadow:none;transform:none;}
 body.dragging-active{cursor:grabbing;user-select:none;}
 .drag-ghost{
-  position:fixed;left:0;top:0;z-index:900;pointer-events:none;margin:0;
+  position:fixed;left:0;top:0;z-index:var(--z-drag);pointer-events:none;margin:0;
   box-shadow:var(--shadow-lg);transform-origin:top left;cursor:grabbing;
 }
 .drop-line{height:2px;border-radius:var(--r-pill);background:var(--primary);margin:2px 0;list-style:none;}
 .placeholder{width:100%;border-radius:var(--r-md);background:var(--primary-soft);}
 .card.just-moved{animation:ds-flash 900ms var(--ease-out);}
+
+/* ===================== 4.7.1 页面骨架：页头 / 页签 =====================
+   工作列与版本详情原先逐行复制同一套页头；标题、页签、返回键在这里共用，
+   页面文件只保留各自的附加区块（统计、子行、操作按钮）。 */
+.wc-head,.vd-head{
+  position:sticky;top:0;z-index:var(--z-sticky);background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:var(--head-pad-y) var(--head-pad-x) 0;
+}
+.wc-head-top,.vd-head-top{display:flex;align-items:center;gap:10px;row-gap:6px;flex-wrap:wrap;min-width:0;}
+.wc-head-top .sp,.vd-head-top .sp{flex:1 1 auto;min-width:0;}
+.wc-back,.vd-back,.page-back{
+  flex:0 0 auto;height:30px;padding:0 10px;display:inline-flex;align-items:center;gap:5px;
+  border:1px solid var(--primary-border);border-radius:7px;
+  background:var(--primary-soft);color:var(--primary-fg);font-size:12px;font-weight:600;
+}
+.wc-back:hover,.vd-back:hover,.page-back:hover{background:var(--primary);border-color:var(--primary);color:#fff;}
+.wc-back:focus-visible,.vd-back:focus-visible,.page-back:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.wc-title,.vd-title{
+  margin:0;min-width:0;font-size:var(--fs-page-title);line-height:1.25;font-weight:680;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.wc-tabs,.vd-tabs{display:flex;gap:20px;margin-top:8px;overflow-x:auto;scrollbar-width:none;}
+.wc-tabs::-webkit-scrollbar,.vd-tabs::-webkit-scrollbar{display:none;}
+.wc-tab,.vd-tab{
+  flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
+  min-height:var(--tab-h);padding:0 1px;border:0;border-bottom:2px solid transparent;
+  background:transparent;color:var(--text-2);font-size:12.5px;white-space:nowrap;
+}
+.wc-tab b,.vd-tab b{font-size:11px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.wc-tab:hover,.vd-tab:hover{color:var(--primary-fg);}
+.wc-tab:focus-visible,.vd-tab:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--primary-border);border-radius:var(--r-xs);}
+.wc-tab.on,.vd-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650;}
+.wc-tab.on b,.vd-tab.on b{color:var(--primary-fg);}
 
 /* ===================== 4.8 Drawer / Modal ===================== */
 .drawer-layer{position:fixed;inset:0;z-index:120;pointer-events:none;}
@@ -1254,7 +1288,7 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .field-row .field{flex:1 1 0;}
 @media (max-width:680px){.field-row{flex-direction:column;}}
 
-.modal-layer{position:fixed;inset:0;z-index:200;display:none;align-items:flex-start;justify-content:center;
+.modal-layer{position:fixed;inset:0;z-index:var(--z-overlay);display:none;align-items:flex-start;justify-content:center;
   padding:40px 20px;overflow:auto;background:var(--scrim);}
 .modal-layer.open{display:flex;animation:ds-fade-in var(--dur-base) var(--ease-out);}
 /* 侧滑表单：录入或编辑业务实体时从右侧进入，保留列表上下文。
@@ -1344,7 +1378,7 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 
 /* ===================== 4.9 Toast ===================== */
 .toast-layer{
-  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:300;
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:var(--z-toast);
   display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none;
 }
 .toast{
@@ -1652,9 +1686,11 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .ap-empty{padding:20px 14px;text-align:center;font-size:12.5px;color:var(--text-3);}
 
 /* ===================== 4.11 EmptyState / ErrorState ===================== */
+/* 空态三档：整页 .empty-state / 表内 .tbl-empty（管理表格另用 .manager-empty-cell）/
+   列内 .col-empty。三档只共用几何令牌，颜色与字号仍按所在容器取舍。 */
 .empty-state{
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-  min-height:240px;padding:40px;text-align:center;
+  min-height:var(--empty-page-min);padding:var(--empty-page-pad);text-align:center;
 }
 .empty-state .es-ic{color:var(--text-3);margin-bottom:6px;}
 .empty-state h3{font-size:15px;font-weight:600;color:var(--text);}
@@ -1673,7 +1709,7 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .col-empty p{margin:0;font-size:12px;line-height:18px;}
 
 /* 表格空态行：内边距与居中收进工具类，各页不再各写一套内联样式 */
-.tbl-empty{text-align:center;padding:16px 12px;}
+.tbl-empty{text-align:center;padding:var(--empty-table-pad);font-size:12.5px;color:var(--text-3);}
 
 /* ===================== 4.12 Skeleton ===================== */
 .skel{background:var(--surface-sunken);border-radius:var(--r-xs);animation:ds-shimmer 1.4s ease-in-out infinite;}
@@ -1687,7 +1723,7 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 
 /* ===================== 4.13 Tooltip / Progress / Spinner ===================== */
 .tip{
-  position:fixed;z-index:400;padding:5px 8px;border-radius:var(--r-xs);
+  position:fixed;z-index:var(--z-tip);padding:5px 8px;border-radius:var(--r-xs);
   background:var(--text);color:var(--text-inverse);font-size:12px;line-height:16px;
   box-shadow:var(--shadow-md);pointer-events:none;max-width:280px;
   animation:ds-fade-in var(--dur-fast) var(--ease-out);
@@ -2338,6 +2374,64 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   .drawer.read-mode .head-tools #btnDrawerBack{
     width:30px;height:30px;padding:0;gap:0;font-size:0;justify-content:center;
   }
+}
+
+/* 用例详情：查看与编辑同处右侧抽屉，阅读态不再是一张可编辑的整表单。
+   头/页签固定，只有正文滚动；关闭一次直接回到列表上下文。 */
+.modal-layer.case-drawer .sheet{width:min(820px,100vw);overflow:hidden;}
+.case-detail{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
+/* 阅读态/编辑态共用外壳：hidden 必须压过上面的 display:flex，否则两个容器会同时占位 */
+.case-detail[hidden]{display:none;}
+.case-edit-acts{margin-left:auto;display:flex;align-items:center;gap:6px;}
+/* 编辑态表单比抽屉高：标题与保存固定在上下缘，滚到哪都能直接取消或保存（原居中弹框的「按钮被推出屏幕」） */
+.case-drawer #caseEditBody .panel-head{position:sticky;top:-20px;z-index:2;margin:-20px -20px 12px;padding:14px 20px;
+  background:var(--surface);border-bottom:1px solid var(--border);}
+.case-drawer #caseSaveRow{position:sticky;bottom:0;z-index:2;margin:0 -20px;padding:12px 20px;
+  background:var(--surface);border-top:1px solid var(--border);}
+/* 正文 20px 底内边距会让保存行悬空 20px；保存行自身的 12px 内边距已够，底内边距归零后贴住抽屉下缘。
+   只读态没有保存行，保留原内边距，免得末行文字贴着抽屉底 */
+.case-drawer #caseEditBody:not(.is-readonly){padding-bottom:0;}
+.case-detail-head{display:flex;align-items:flex-start;gap:12px;padding:16px 20px 12px;border-bottom:1px solid var(--border);}
+.case-detail-headline{flex:1 1 auto;min-width:0;}
+.case-detail-titleline{display:flex;align-items:center;gap:8px;min-width:0;}
+.case-detail-titleline h2{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em;line-height:1.4;min-width:0;overflow-wrap:anywhere;}
+.case-title-edit{cursor:text;border-radius:var(--r-xs);padding:1px 4px;margin-left:-4px;transition:background var(--dur-fast) var(--ease-out);}
+.case-title-edit:hover{background:var(--surface-hover);}
+.case-title-edit:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.case-title-edit[contenteditable="true"]{background:var(--surface);box-shadow:inset 0 0 0 1px var(--primary);outline:0;}
+.case-detail-meta{margin:4px 0 0;font-size:12px;color:var(--text-3);line-height:18px;}
+.case-detail-acts{display:flex;align-items:center;gap:6px;flex:0 0 auto;}
+.case-detail-tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--border);overflow-x:auto;}
+.case-detail-tabs button{height:36px;padding:0 10px;border:0;background:none;border-bottom:2px solid transparent;font-size:12.5px;color:var(--text-2);white-space:nowrap;}
+.case-detail-tabs button:hover{color:var(--text);}
+.case-detail-tabs button.on{color:var(--text);border-bottom-color:var(--primary);font-weight:600;}
+.case-detail-tabs .cnt{margin-left:2px;font-size:11px;font-weight:500;color:var(--text-3);}
+.case-detail-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px 20px 24px;display:flex;flex-direction:column;gap:14px;}
+.case-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
+.case-fact{background:var(--surface);padding:9px 11px;display:flex;flex-direction:column;gap:3px;min-width:0;}
+.case-fact .k{font-size:11px;color:var(--text-3);}
+.case-fact .v{font-size:12.5px;color:var(--text);overflow-wrap:anywhere;}
+.case-read-block{border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;background:var(--surface);}
+.case-read-block h4{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:8px;}
+.case-read-block h4 .btn{margin-left:auto;}
+.case-read-text{margin:0;font-size:12.5px;line-height:19px;color:var(--text);white-space:pre-line;}
+.case-read-text.muted{color:var(--text-3);}
+.case-last-run{display:flex;flex-direction:column;gap:7px;}
+.case-last-run .when{font-size:12px;color:var(--text-3);}
+.case-last-run .note{margin:0;font-size:12.5px;line-height:19px;color:var(--text);white-space:pre-line;}
+.case-last-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
+.case-steps-read{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
+.case-steps-read li{display:flex;gap:10px;padding:10px 12px;background:var(--surface);}
+.case-steps-read .no{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--surface-sunken);color:var(--text-2);font-size:10.5px;font-weight:600;display:grid;place-items:center;margin-top:1px;}
+.case-steps-read .act{margin:0;font-size:12.5px;line-height:19px;}
+.case-steps-read .exp{margin:3px 0 0;font-size:12px;line-height:18px;color:var(--text-3);}
+.case-assoc{display:flex;flex-wrap:wrap;gap:6px;}
+.case-empty{padding:22px 12px;text-align:center;font-size:12.5px;color:var(--text-3);}
+@media (max-width:760px){
+  .case-detail-head{padding:12px;}
+  .case-detail-tabs{padding:0 8px;}
+  .case-detail-body{padding:12px 12px 20px;}
+  .case-facts{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 
 /* 需求详情：与工作项共用右侧抽屉外壳（审计 2026-11-13 P1） */

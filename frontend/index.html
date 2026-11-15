@@ -751,10 +751,11 @@
             </div>
             <div class="req-list" id="reqList"></div>
           </div>
-          <div class="modal-layer" id="dlgProject" role="dialog" aria-modal="true" aria-labelledby="reqFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
+          <div class="modal-layer side" id="dlgProject" role="dialog" aria-modal="true" aria-labelledby="reqFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
             <div class="panel">
               <div class="panel-head"><h3 id="reqFormTitle">新建项目</h3><button class="icon-btn sm" type="button" id="dlgProjectX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
               <div class="stack proj-form-grid">
+                <div class="form-sec span2">基本信息</div>
                 <div class="field span2" id="fReqName">
                   <label for="rName">项目名称 <span class="req">*</span></label>
                   <input id="rName" type="text" maxlength="40" placeholder="例如：资金上场小程序" autocomplete="off" />
@@ -768,6 +769,7 @@
                   <label for="rObjective">项目目标</label>
                   <textarea id="rObjective" maxlength="400" placeholder="选填：一句话说明这个项目要达成的结果，会显示在项目驾驶舱首屏"></textarea>
                 </div>
+                <div class="form-sec span2">计划与负责人</div>
                 <div class="field">
                   <label for="rOwner">项目负责人</label>
                   <select id="rOwner" aria-label="项目负责人"><option value="">未指定</option></select>
@@ -782,11 +784,6 @@
                     <input id="rPlanEnd" type="date" aria-label="计划结束日" />
                   </div>
                 </div>
-                <div class="field span2" id="fReqTemplate">
-                  <label for="rTemplate">项目模板 <small class="tc-optional">仅新建时生效</small></label>
-                  <select id="rTemplate" aria-label="选择项目模板"></select>
-                  <p class="foot-note" id="rTemplateHint">只补充缺失的列、文档骨架、测试模块与默认版本，不覆盖已有内容</p>
-                </div>
                 <div class="field span2">
                   <label>项目状态</label>
                   <div class="seg" id="segReqStatus">
@@ -794,6 +791,12 @@
                     <button type="button" data-rst="done">已交付</button>
                     <button type="button" data-rst="hold">已搁置</button>
                   </div>
+                </div>
+                <div class="form-sec span2">高级设置</div>
+                <div class="field span2" id="fReqTemplate">
+                  <label for="rTemplate">项目模板 <small class="tc-optional">仅新建时生效</small></label>
+                  <select id="rTemplate" aria-label="选择项目模板"></select>
+                  <p class="foot-note" id="rTemplateHint">只补充缺失的列、文档骨架、测试模块与默认版本，不覆盖已有内容</p>
                 </div>
                 <div class="field span2" id="projReleasePolicy" hidden>
                   <label for="rReleasePolicy">发布检查策略</label>
@@ -890,6 +893,11 @@
       <!-- ===== 版本详情子页（从版本卡 / 全部版本 / 发布日程 / 驾驶舱穿透） ===== -->
       <section class="view" id="view-version" aria-label="版本详情">
         <div id="versionBody"></div>
+      </section>
+
+      <!-- ===== 发布工作台子页（计划 / 实际 / 历史 / 内容；#/release?id=&reqId=&tab=） ===== -->
+      <section class="view" id="view-release" aria-label="发布计划工作台">
+        <div id="releaseBody"></div>
       </section>
 
       <!-- ===== 交付：一页式交付说明（从版本卡 / 发布记录下钻） ===== -->
@@ -1269,10 +1277,10 @@
         </div>
 
         <!-- 新建文档：先选项目、填标题，确认后进编辑页 -->
-        <div class="modal-layer" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle">
-          <div class="sheet reqdoc-dlg">
-            <h3 class="reqdoc-dlg-title" id="dlgNewReqDocTitle">新建文档</h3>
-            <p class="reqdoc-dlg-msg">先选分类（可选）；分类会带出归属项目。不选分类时可直接关联有权限的项目，或留空间级（如开发手册）。确认后进入编辑页。</p>
+        <div class="modal-layer side" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="dlgNewReqDocTitle">新建文档</h3><button class="icon-btn sm" type="button" id="dlgNewReqDocX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <p class="foot-note">先选分类（可选）；分类会带出归属项目。不选分类时可直接关联有权限的项目，或留空间级（如开发手册）。确认后进入编辑页。</p>
             <div class="reqdoc-dlg-form">
               <label class="reqdoc-dlg-field">
                 <span>分类</span>
@@ -1328,7 +1336,7 @@
               <button class="btn primary" type="button" id="dlgNewReqDocOk">新建并编辑</button>
             </div>
           </div>
-        </div>
+        </div></div></div>
 
         <!-- 关闭编辑页：未保存时三选一 -->
         <div class="modal-layer" id="dlgReqDocClose" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocCloseTitle">
@@ -1343,10 +1351,15 @@
           </div>
         </div>
 
-        <!-- AI 拆分：草稿先给人看，确认后才创建 -->
-        <div class="modal-layer" id="dlgAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgAiSplitTitle">
+        <!-- AI 拆分：草稿先给人看，确认后才创建；结果作为右侧结果板，随时可关 -->
+        <div class="modal-layer side" id="dlgAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgAiSplitTitle">
           <div class="sheet ai-dlg">
-            <h3 class="reqdoc-dlg-title" id="dlgAiSplitTitle">AI 拆出的工作项</h3>
+            <div class="panel-head">
+              <h3 id="dlgAiSplitTitle">AI 拆出的工作项</h3>
+              <button class="icon-btn sm" type="button" id="dlgAiSplitX" aria-label="关闭">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+              </button>
+            </div>
             <p class="reqdoc-dlg-msg" id="dlgAiSplitMsg">勾选要创建的工作项，标题和优先级可以直接改；没勾的不会创建。</p>
             <div class="ai-list" id="aiSplitList"></div>
             <div class="ai-usage" id="aiSplitUsage"></div>
@@ -1358,9 +1371,14 @@
         </div>
 
         <!-- AI 完成度检查 -->
-        <div class="modal-layer" id="dlgAiAudit" role="dialog" aria-modal="true" aria-labelledby="dlgAiAuditTitle">
+        <div class="modal-layer side" id="dlgAiAudit" role="dialog" aria-modal="true" aria-labelledby="dlgAiAuditTitle">
           <div class="sheet ai-dlg">
-            <h3 class="reqdoc-dlg-title" id="dlgAiAuditTitle">完成度检查</h3>
+            <div class="panel-head">
+              <h3 id="dlgAiAuditTitle">完成度检查</h3>
+              <button class="icon-btn sm" type="button" id="dlgAiAuditX" aria-label="关闭">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+              </button>
+            </div>
             <p class="reqdoc-dlg-msg" id="dlgAiAuditSummary">—</p>
             <div class="ai-score" id="aiAuditScore"></div>
             <div class="ai-list" id="aiAuditList"></div>
@@ -1389,71 +1407,74 @@
           </div>
         </div>
 
-        <!-- 历史版本：左侧快照列表，右侧阅读/对比；对比为类 Git 的行对齐分栏 -->
-        <div class="modal-layer" id="dlgReqDocHistory" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocHistoryTitle">
-          <div class="sheet wide reqdoc-history-dlg">
-            <div class="sheet-head rh-head">
-              <div class="rh-head-main">
-                <h2 id="dlgReqDocHistoryTitle">历史版本</h2>
-                <div class="desc">正文每次保留一版快照，最多保留最近 20 版；恢复前当前内容会先留档</div>
-              </div>
-              <button class="icon-btn sm" type="button" id="dlgReqDocHistoryX" aria-label="关闭">
-                <span data-icon="close"></span>
-              </button>
+      </section>
+
+      <!-- ===== 交付：文档历史子页（#/dochistory?doc=&version=&mode=&view=） =====
+           原先 1080 居中双栏弹框：版本在 URL 里，刷新、分享、后退都回到同一版；
+           左列表选版本，右侧阅读/对比，差异跳转与恢复逻辑仍走 requirements.js 同一份代码 -->
+      <section class="view view-flush" id="view-dochistory" aria-label="文档历史">
+        <div class="doc-history-page" id="dlgReqDocHistory">
+          <header class="dh-head">
+            <button class="page-back" type="button" id="docHistoryBack">
+              <span data-icon="left"></span>返回文档
+            </button>
+            <div class="dh-head-main">
+              <h1 id="docHistoryDocName">加载中…</h1>
+              <div class="dh-sub"><span class="dh-kicker">历史版本</span><span id="docHistoryProject"></span><span class="dh-hint"><span class="dh-sep">·</span>正文每次保留一版快照，最多保留最近 20 版；恢复前当前内容会先留档</span></div>
             </div>
-            <div class="rh-body">
-              <aside class="rh-vlist" aria-label="历史快照">
-                <div class="rh-vlist-head"><span>历史快照</span><em id="reqDocHistoryCount"></em></div>
-                <div class="rh-vscroll" id="reqDocHistoryList"></div>
-                <div class="rh-vlist-foot">快照记录的是「保存前」的正文；最近一次保存后的内容即当前版本。</div>
-              </aside>
-              <div class="rh-pane">
-                <div class="rh-pane-head">
-                  <div class="rh-pane-meta">
-                    <span class="dot"></span>
-                    <b id="reqDocHistoryVerTitle">—</b>
-                    <span class="who" id="reqDocHistoryWho"></span>
+          </header>
+          <div class="rh-body">
+            <aside class="rh-vlist" aria-label="历史快照">
+              <div class="rh-vlist-head"><span>历史快照</span><em id="reqDocHistoryCount"></em></div>
+              <div class="rh-vscroll" id="reqDocHistoryList"></div>
+              <div class="rh-vlist-foot">快照记录的是「保存前」的正文；最近一次保存后的内容即当前版本。</div>
+            </aside>
+            <div class="rh-pane">
+              <div class="rh-pane-head">
+                <div class="rh-pane-meta">
+                  <span class="dot"></span>
+                  <b id="reqDocHistoryVerTitle">—</b>
+                  <span class="who" id="reqDocHistoryWho"></span>
+                </div>
+                <div class="rh-pane-actions">
+                  <div class="seg mini" id="reqDocHistoryModeSeg" role="group" aria-label="查看方式">
+                    <button type="button" data-rh-mode="read" aria-pressed="false">阅读</button>
+                    <button type="button" data-rh-mode="compare" aria-pressed="true">对比</button>
                   </div>
-                  <div class="rh-pane-actions">
-                    <div class="seg mini" id="reqDocHistoryModeSeg" role="group" aria-label="查看方式">
-                      <button type="button" data-rh-mode="read" aria-pressed="false">阅读</button>
-                      <button type="button" data-rh-mode="compare" aria-pressed="true">对比</button>
-                    </div>
-                    <button class="btn primary sm" type="button" id="reqDocHistoryRestore">恢复此版本</button>
-                  </div>
+                  <button class="btn primary sm" type="button" id="reqDocHistoryRestore">恢复此版本</button>
                 </div>
-                <div class="rh-cmp-bar" id="reqDocHistoryCmpBar">
-                  <span class="rh-pick"><label for="reqDocHistoryBase">基准</label><select id="reqDocHistoryBase"></select></span>
-                  <span class="rh-arrow">→</span>
-                  <span class="rh-pick"><label for="reqDocHistoryTarget">对比</label><select id="reqDocHistoryTarget"></select></span>
-                  <span class="rh-stats" id="reqDocHistoryStats"></span>
-                  <span class="rh-spacer"></span>
-                  <div class="seg mini" id="reqDocHistoryViewSeg" role="group" aria-label="对比视图">
-                    <button type="button" data-rh-view="split" aria-pressed="true">分栏</button>
-                    <button type="button" data-rh-view="unified" aria-pressed="false">统一</button>
-                  </div>
-                  <button class="btn ghost sm" type="button" id="reqDocHistoryFoldAll">展开全部</button>
+              </div>
+              <div class="rh-cmp-bar" id="reqDocHistoryCmpBar">
+                <span class="rh-pick"><label for="reqDocHistoryBase">基准</label><select id="reqDocHistoryBase"></select></span>
+                <span class="rh-arrow">→</span>
+                <span class="rh-pick"><label for="reqDocHistoryTarget">对比</label><select id="reqDocHistoryTarget"></select></span>
+                <span class="rh-stats" id="reqDocHistoryStats"></span>
+                <span class="rh-spacer"></span>
+                <div class="seg mini" id="reqDocHistoryViewSeg" role="group" aria-label="对比视图">
+                  <button type="button" data-rh-view="split" aria-pressed="true">分栏</button>
+                  <button type="button" data-rh-view="unified" aria-pressed="false">统一</button>
                 </div>
-                <div class="rh-meta-diff" id="reqDocHistoryMetaDiff" hidden></div>
-                <div class="rh-diff-shell" id="reqDocHistoryDiffShell">
-                  <div class="rh-diff-wrap" id="reqDocHistoryDiff"></div>
-                  <div class="rh-ovl" id="reqDocHistoryOvl"></div>
-                </div>
-                <div class="rh-identical" id="reqDocHistoryIdentical" hidden>
-                  <div class="ic">✓</div>
-                  <b>两个版本正文完全一致</b>
-                  <p>没有可对比的差异，可切换基准或对比版本再看。</p>
-                </div>
-                <div class="rh-read" id="reqDocHistoryRead" hidden></div>
-                <div class="rh-pane-empty" id="reqDocHistoryEmpty" hidden></div>
-                <div class="rh-diff-foot" id="reqDocHistoryDiffFoot">
-                  <span class="rh-hunk-pos">差异 <b id="reqDocHistoryHunkNow">1</b> / <span id="reqDocHistoryHunkAll">0</span></span>
-                  <button class="btn xs" type="button" id="reqDocHistoryPrev" aria-label="上一处差异">↑</button>
-                  <button class="btn xs" type="button" id="reqDocHistoryNext" aria-label="下一处差异">↓</button>
-                  <span class="rh-foot-hint">点击折叠条展开未改动内容</span>
-                  <span class="rh-spacer"></span>
-                  <span class="rh-foot-stat" id="reqDocHistoryFootStat"></span>
-                </div>
+                <button class="btn ghost sm" type="button" id="reqDocHistoryFoldAll">展开全部</button>
+              </div>
+              <div class="rh-meta-diff" id="reqDocHistoryMetaDiff" hidden></div>
+              <div class="rh-diff-shell" id="reqDocHistoryDiffShell">
+                <div class="rh-diff-wrap" id="reqDocHistoryDiff"></div>
+                <div class="rh-ovl" id="reqDocHistoryOvl"></div>
+              </div>
+              <div class="rh-identical" id="reqDocHistoryIdentical" hidden>
+                <div class="ic">✓</div>
+                <b>两个版本正文完全一致</b>
+                <p>没有可对比的差异，可切换基准或对比版本再看。</p>
+              </div>
+              <div class="rh-read" id="reqDocHistoryRead" hidden></div>
+              <div class="rh-pane-empty" id="reqDocHistoryEmpty" hidden></div>
+              <div class="rh-diff-foot" id="reqDocHistoryDiffFoot">
+                <span class="rh-hunk-pos">差异 <b id="reqDocHistoryHunkNow">1</b> / <span id="reqDocHistoryHunkAll">0</span></span>
+                <button class="btn xs" type="button" id="reqDocHistoryPrev" aria-label="上一处差异">↑</button>
+                <button class="btn xs" type="button" id="reqDocHistoryNext" aria-label="下一处差异">↓</button>
+                <span class="rh-foot-hint">点击折叠条展开未改动内容</span>
+                <span class="rh-spacer"></span>
+                <span class="rh-foot-stat" id="reqDocHistoryFootStat"></span>
               </div>
             </div>
           </div>
@@ -1507,22 +1528,29 @@
               </span>
             </span>
           </div>
-          <div class="tc-stats" id="tcStats" role="group" aria-label="执行结果统计与筛选"></div>
-          <div class="tc-filterbar" id="tcFilterBar">
-            <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
-            <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
-            <select id="tcModule" class="mini-select" aria-label="按模块目录筛选用例"></select>
-            <button class="btn sm ghost" type="button" id="tcModuleSub" aria-pressed="false" hidden title="包含所选目录的子目录用例">含子目录</button>
-            <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" title="在所选项目内搜索用例 / 前置 / 测试数据 / 步骤" aria-label="在所选项目内搜索测试用例" />
-            <button class="btn sm ghost" type="button" id="tcSearchWide" aria-pressed="false" title="默认只搜标题、编号、模块；开启后才搜前置、测试数据与步骤（大字段，较慢）">含步骤与前置</button>
-            <span class="tc-fbar-end">
-              <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false" title="只看关联缺陷仍未完成（未删除、未进入完成列）的用例">未关闭缺陷</button>
-              <button class="btn sm soft" type="button" id="tcClearFilter" hidden><span data-icon="close"></span>&nbsp;清空筛选</button>
-              <span class="views-menu-wrap">
-                <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
-                <div class="menu popover" id="tcViewsMenu" hidden></div>
+          <div class="tc-filtercard" id="tcFilterCard">
+            <div class="tc-stats" id="tcStats" role="group" aria-label="按执行结果筛选用例，计数为项目全量口径"></div>
+            <span class="tc-vsep" aria-hidden="true"></span>
+            <div class="tc-filterbar" id="tcFilterBar">
+              <span class="tc-searchwrap">
+                <span class="tc-search-ic" data-icon="search" aria-hidden="true"></span>
+                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" aria-label="在所选项目内搜索测试用例" />
+                <select id="tcSearchScope" class="tc-search-scope" aria-label="搜索范围">
+                  <option value="title">标题</option>
+                  <option value="all">含步骤与前置</option>
+                </select>
               </span>
-            </span>
+              <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
+              <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
+              <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false" title="只看关联缺陷仍未完成（未删除、未进入完成列）的用例">未关闭缺陷</button>
+              <button class="btn sm soft" type="button" id="tcClearFilter" hidden title="清空当前项目的全部筛选条件"><span data-icon="close"></span><span id="tcClearFilterLabel">&nbsp;清空筛选</span></button>
+              <span class="tc-fbar-end">
+                <span class="views-menu-wrap">
+                  <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
+                  <div class="menu popover" id="tcViewsMenu" hidden></div>
+                </span>
+              </span>
+            </div>
           </div>
           <div class="tc-filterbar tc-defbar" id="tcDefectBar" hidden>
             <select id="tcDefReq" class="mini-select" aria-label="按项目筛选缺陷"></select>
@@ -1563,27 +1591,6 @@
             </select>
             <button class="btn sm soft" type="button" id="tcPlanClearFilter" hidden title="清空计划搜索与状态筛选"><span data-icon="close"></span>&nbsp;清空筛选</button>
           </div>
-          <div class="tc-querybar" id="tcQueryBar" hidden>
-            <button class="btn sm ghost" type="button" id="tcPanelBtn" aria-expanded="false" aria-controls="tcSidePanel" title="打开模块目录与自定义分组：把用例拖到目录节点＝移动归属，拖到分组＝加入分组"><span data-icon="folder"></span>&nbsp;目录 / 分组</button>
-            <label class="tc-ctl"><span>排序</span>
-              <select id="tcSort" class="mini-select" aria-label="排序字段"></select>
-            </label>
-            <button class="btn sm ghost" type="button" id="tcSortDir" title="切换升序 / 降序">降序</button>
-            <label class="tc-ctl"><span>分组</span>
-              <select id="tcGroupBy" class="mini-select" aria-label="分组维度"></select>
-            </label>
-            <label class="tc-ctl"><span>每页</span>
-              <select id="tcPageSize" class="mini-select" aria-label="每页条数">
-                <option value="50">50 条</option>
-                <option value="100" selected>100 条</option>
-                <option value="200">200 条</option>
-              </select>
-            </label>
-            <span class="tc-query-grow"></span>
-            <button class="btn sm ghost" type="button" id="tcGrpCollapseAll" hidden>全部折叠</button>
-            <button class="btn sm ghost" type="button" id="tcGrpExpandAll" hidden>全部展开</button>
-            <button class="btn sm soft" type="button" id="tcSelFiltered" title="选中当前筛选命中的全部用例（含未加载的行），一次最多 2000 条">全选筛选结果</button>
-          </div>
           <div class="tc-defects" id="tcDefects" hidden>
             <div class="tc-def-stats" id="tcDefStats"></div>
             <div class="tc-def-card">
@@ -1609,30 +1616,50 @@
             <div class="tc-cases-main">
               <div class="tc-drop-banner" id="tcDropBanner" hidden></div>
               <div class="tc-setd" id="tcSetDetail" hidden></div>
-              <div class="tc-bulkbar" id="tcBulkBar" hidden>
+              <div class="tc-listhead" id="tcQueryBar" hidden>
                 <label class="tc-bulk-all"><input type="checkbox" id="tcBulkAll" /> <span id="tcBulkAllLabel">全选已加载</span></label>
                 <span class="tc-bulk-count" id="tcBulkCount"></span>
+                <button class="btn sm soft tc-selall" type="button" id="tcSelFiltered" title="选中当前筛选命中的全部用例（含未加载的行），一次最多 2000 条">全选筛选结果</button>
                 <span class="tc-bulk-hint" id="tcBulkHint"></span>
-                <span class="tc-bulk-acts">
-                  <button class="btn sm soft" type="button" id="btnTcBatchEdit">改模块</button>
-                  <button class="btn sm soft" type="button" id="btnTcBatchPri">改优先级</button>
-                  <button class="btn sm ghost" type="button" id="btnTcBatchSet">加入分组</button>
-                  <button class="btn sm ghost" type="button" id="btnTcBatchUnset" hidden>移出分组</button>
-                  <button class="btn sm primary" type="button" id="btnTcBatchPlan">加入测试计划</button>
-                  <button class="btn sm ghost" type="button" id="btnTcBatchExport">导出所选</button>
-                  <button class="btn sm ghost danger" type="button" id="btnTcBatchDel">删除</button>
-                  <button class="btn sm ghost" type="button" id="btnTcBatchClear">取消选择</button>
-                </span>
+                <span class="tc-lh-grow"></span>
+                <div class="tc-lh-tools" id="tcListHeadTools">
+                  <button class="btn sm ghost" type="button" id="tcPanelBtn" aria-expanded="false" aria-controls="tcSidePanel" title="打开模块目录与自定义分组：把用例拖到目录节点＝移动归属，拖到分组＝加入分组"><span data-icon="folder"></span>&nbsp;<span id="tcPanelBtnLabel">目录 / 分组</span></button>
+                  <select id="tcSort" class="mini-select" aria-label="排序字段" title="排序字段"></select>
+                  <button class="btn sm ghost tc-sortdir" type="button" id="tcSortDir" aria-label="切换升序 / 降序" title="切换升序 / 降序">↓</button>
+                  <select id="tcGroupBy" class="mini-select" aria-label="分组维度" title="分组维度"></select>
+                  <select id="tcPageSize" class="mini-select" aria-label="每页条数" title="每页条数">
+                    <option value="50">每页 50 条</option>
+                    <option value="100" selected>每页 100 条</option>
+                    <option value="200">每页 200 条</option>
+                  </select>
+                  <button class="btn sm ghost" type="button" id="tcGrpCollapseAll" hidden>全部折叠</button>
+                  <button class="btn sm ghost" type="button" id="tcGrpExpandAll" hidden>全部展开</button>
+                </div>
+                <div class="tc-bulkbar" id="tcBulkBar" hidden>
+                  <span class="tc-bulk-acts">
+                    <button class="btn sm soft" type="button" id="btnTcBatchEdit">改模块</button>
+                    <button class="btn sm soft" type="button" id="btnTcBatchPri">改优先级</button>
+                    <button class="btn sm ghost" type="button" id="btnTcBatchSet">加入分组</button>
+                    <button class="btn sm ghost" type="button" id="btnTcBatchUnset" hidden>移出分组</button>
+                    <button class="btn sm primary" type="button" id="btnTcBatchPlan">加入测试计划</button>
+                    <button class="btn sm ghost" type="button" id="btnTcBatchExport">导出所选</button>
+                    <button class="btn sm ghost danger" type="button" id="btnTcBatchDel">删除</button>
+                    <button class="btn sm ghost" type="button" id="btnTcBatchClear">取消选择</button>
+                  </span>
+                </div>
               </div>
               <div class="tc-list" id="tcList"></div>
             </div>
           </div>
         </div>
 
-        <!-- 新建 / 编辑用例 -->
-        <div class="modal-layer" id="dlgCase" role="dialog" aria-modal="true" aria-labelledby="caseFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
+        <!-- 用例详情：阅读态与编辑态共用右侧抽屉，查看不再是一张可编辑的整表单 -->
+        <div class="modal-layer side case-drawer" id="dlgCase" role="dialog" aria-modal="true" aria-label="用例详情">
+          <div class="sheet">
+            <div class="case-detail" id="caseDetailView"></div>
+            <div class="sheet-body proj-dlg-body" id="caseEditBody" hidden>
           <div class="panel">
-            <div class="panel-head"><h3 id="caseFormTitle">新建用例</h3><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="panel-head"><h3 id="caseFormTitle">新建用例</h3><span class="case-edit-acts"><button class="btn sm ghost" type="button" id="caseEditBack">取消</button><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></span></div>
             <div class="stack">
               <div class="field" id="fCaseTitle">
                 <label for="cTitle">用例标题 <span class="req">*</span></label>
@@ -1953,9 +1980,14 @@
         </div></div></div>
 
         <!-- AI 用例草稿：可改标题/优先级/模块，步骤只读核对 -->
-        <div class="modal-layer" id="dlgAiCaseResult" role="dialog" aria-modal="true" aria-labelledby="aiCaseResultTitle">
+        <div class="modal-layer side" id="dlgAiCaseResult" role="dialog" aria-modal="true" aria-labelledby="aiCaseResultTitle">
           <div class="sheet ai-dlg">
-            <h3 class="reqdoc-dlg-title" id="aiCaseResultTitle">AI 生成的测试用例</h3>
+            <div class="panel-head">
+              <h3 id="aiCaseResultTitle">AI 生成的测试用例</h3>
+              <button class="icon-btn sm" type="button" id="dlgAiCaseResultX" aria-label="关闭">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+              </button>
+            </div>
             <p class="reqdoc-dlg-msg" id="aiCaseResultMsg">勾选要创建的用例，标题可以直接改；没勾的不会创建。</p>
             <div class="ai-list" id="aiCaseList"></div>
             <div class="ai-usage" id="aiCaseUsage"></div>
@@ -2028,12 +2060,12 @@
       <section class="view" id="view-branches" aria-label="分支">
         <div class="view-page br-page">
           <div class="page-toolbar">
+            <span class="seg mini" id="branchModeSeg" role="group" aria-label="分支视图">
+              <button type="button" data-br-mode="board" aria-pressed="true">看板</button>
+              <button type="button" data-br-mode="list" aria-pressed="false">列表</button>
+            </span>
             <span class="toolbar-meta" id="branchMeta"></span>
             <span class="toolbar-right">
-              <span class="seg mini" id="branchModeSeg" role="group" aria-label="分支视图">
-                <button type="button" data-br-mode="board" aria-pressed="true">看板</button>
-                <button type="button" data-br-mode="list" aria-pressed="false">列表</button>
-              </span>
               <button class="btn sm ghost tc-filter-toggle" type="button" id="branchFilterBtn" aria-expanded="false" aria-controls="branchFilterBar">筛选<span class="n" id="branchFilterCount" hidden>0</span></button>
               <span class="br-filterbar" id="branchFilterBar">
                 <span class="br-search">

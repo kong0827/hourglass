@@ -3,25 +3,8 @@
 
 #view-version{padding:0;overflow:auto;}
 
-/* ---------- 页头 ---------- */
-.vd-head{
-  position:sticky;top:0;z-index:20;background:var(--surface);
-  border-bottom:1px solid var(--border);
-  padding:10px var(--content-pad) 0;
-}
-.vd-head-top{display:flex;align-items:center;gap:10px;row-gap:6px;flex-wrap:wrap;min-width:0;}
-.vd-head-top .sp{flex:1 1 auto;min-width:0;}
-.vd-back{
-  flex:0 0 auto;height:30px;padding:0 10px;display:inline-flex;align-items:center;gap:5px;
-  border:1px solid var(--primary-border);border-radius:7px;
-  background:var(--primary-soft);color:var(--primary-fg);font-size:12px;font-weight:600;
-}
-.vd-back:hover{background:var(--primary);border-color:var(--primary);color:#fff;}
-.vd-back:focus-visible{outline:none;box-shadow:var(--ring-focus);}
-.vd-title{
-  margin:0;min-width:0;font-size:19px;line-height:1.3;font-weight:680;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
+/* ---------- 页头 ----------
+   骨架（sticky、标题、页签、返回键）在 components.css §4.7.1，这里只放附加件 */
 .vd-lock{flex:0 0 auto;font-size:11px;}
 .vd-switch{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);}
 .vd-switch .mini-select{max-width:220px;}
@@ -39,18 +22,6 @@
 .vd-dot{opacity:.5;user-select:none;}
 .vd-rev{font-variant-numeric:tabular-nums;}
 .vd-acts{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;}
-.vd-tabs{display:flex;gap:20px;margin-top:8px;overflow-x:auto;scrollbar-width:none;}
-.vd-tabs::-webkit-scrollbar{display:none;}
-.vd-tab{
-  flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
-  min-height:38px;padding:0 1px;border:0;border-bottom:2px solid transparent;
-  background:transparent;color:var(--text-2);font-size:12.5px;white-space:nowrap;
-}
-.vd-tab b{font-size:11px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
-.vd-tab:hover{color:var(--primary-fg);}
-.vd-tab:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--primary-border);border-radius:var(--r-xs);}
-.vd-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650;}
-.vd-tab.on b{color:var(--primary-fg);}
 
 /* ---------- 内容区 ---------- */
 .vd-body{
@@ -289,7 +260,7 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 @media (max-width:700px){
   .vd-head{padding:8px 12px 0;}
   .vd-body{padding:12px 12px calc(24px + var(--tabbar-space));gap:10px;}
-  .vd-title{font-size:17px;flex:1 1 auto;}
+  .vd-title{font-size:var(--fs-page-title-sm);flex:1 1 auto;}
   .vd-lock{display:none;}
   .vd-switch{flex:1 1 calc(100% - 42px);}
   .vd-switch .mini-select{flex:1 1 auto;max-width:none;height:36px;}

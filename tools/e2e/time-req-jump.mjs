@@ -1,13 +1,13 @@
 /* 计时明细项目归属跳转 E2E（候选2 · 派生口径，Node 18+ 原生 CDP）
    范围：周回顾/投入分析计时明细（openLogTable）、成员负载计时下钻（memberLogsHTML）的「项目」列
-   与补记弹窗「计入项目」行：有归属渲染可点跳转 chip，未归类回落纯文本；跳转关浮层落项目视图。
+   与补记工时「计入项目」行：有归属渲染可点跳转 chip，未归类回落纯文本；跳转收起面板落项目视图。
    覆盖：
      A 契约：/api/review/hour-logs、/api/stats/hour-logs、/api/manager/workload 三端点行带 reqId，
        与 reqName 同源（未归类双空），并与空间项目列表对账。
      B 周回顾下钻：chip 结构/aria/悬停态；未归类纯文本；点 chip 关浮层落项目视图。
      C 行点击仍开工作项抽屉（不误跳）；chip 键盘 Enter 跳转 + 焦点环。
      D 成员负载计时层：chip + 未归类纯文本；返回项目分布后 chip 仍可跳。
-     E 补记弹窗：计入项目=工作项所属项目（只展示+跳转，非编辑控件）；未归类工作项纯文本；保存入口不被破坏（取消退出，不写库）。
+     E 补记工时（任务内联）：计入项目=工作项所属项目（只展示+跳转，非编辑控件）；未归类工作项纯文本；取消退出不写库。
      F 只读成员(zhoumin)：chip 仍可跳转；补记入口被既有守卫拦（提示查看权限）。
      G 移动端 390：浮层不超视口、表格横滚、合成触摸点 chip 跳转（headless 移动仿真不送原始输入，如实登记）。
    数据：支付业务部演示库。未归类样本为可逆改动：运行前把 SAMPLE_TASK.req_id 置 NULL（直接 SQL，不产生应用日志），
@@ -54,7 +54,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* 预览直供前端比运行 jar 新时的已知环境缺口，单独归桶 */
 const KNOWN_GAP_APIS = ["/api/doc-categories", "/api/test-modules"];
-const isKnownGap = url => KNOWN_GAP_APIS.some(p => String(url).indexOf(p) !== -1);
+/* 环境缺口单独归桶：演示库缺 project_repo / dev_branch.outcome 的 500，
+   以及运行中的 jar 早于源码、还没有 /api/branches/pending 的 404（2026-11-15 前已存在） */
+const BASELINE_API = /\/api\/(mobile\/team-overview|repos(\b|\/)|branches\/(options|board|pending)\b)/;
+const isKnownGap = url => KNOWN_GAP_APIS.some(p => String(url).indexOf(p) !== -1) || BASELINE_API.test(String(url));
 
 class Cdp {
   constructor(ws){ this.ws = ws; this.id = 0; this.pending = new Map(); this.errors = []; this.netErrors = [];
@@ -80,7 +83,10 @@ class Cdp {
       else this.errors.push("console.error: " + text);
     }else if(msg.method === "Log.entryAdded" && msg.params.entry.level === "error"){
       const e = msg.params.entry;
-      if(/Failed to load resource/.test(e.text || "")) this.resourceErrors.push("resource: " + (e.url || "") + " + e.text");
+      if(/Failed to load resource/.test(e.text || "")){
+        if(isKnownGap(e.url || "")) this.knownGaps.push("resource " + e.url);
+        else this.resourceErrors.push("resource: " + (e.url || "") + " + e.text");
+      }
       else this.errors.push("log: " + e.text);
     }
   }
@@ -340,27 +346,28 @@ try{
     assert((await landedProject()).view === "project", "工作项层 chip 落项目视图");
   });
 
-  await section("[E] 补记弹窗计入项目（派生口径）", async () => {
+  await section("[E] 补记工时在任务内联展开（派生口径）", async () => {
     await openDrawer(SNAP_TASK);
     await evaluate(`(() => { const b = document.getElementById("rfHoursAdd") || document.getElementById("btnActualAdd"); if(b) b.click(); return true; })()`);
-    await waitFor(`document.getElementById("dlgTimeAdd").classList.contains("open")`, "补记弹窗", 8000);
+    await waitFor(`!document.getElementById("dlgTimeAdd").hidden`, "补记面板展开", 8000);
+    assert(await evaluate(`!document.querySelector("#dlgTimeAdd.modal-layer, .modal-layer.open #dlgTimeAdd")`), "补记不再叠在任务抽屉上（一层浮层）");
     assert(await evaluate(`(document.querySelector("#iTimeProject [data-jump-project]")||{}).getAttribute && document.querySelector("#iTimeProject [data-jump-project]").getAttribute("data-jump-project") === "${PROJ}"`), "计入项目=工作项所属项目");
     assert(await evaluate(`document.querySelector("#iTimeProject [data-jump-project]").textContent`) === "清结算与对账平台", "计入项目名称正确");
     assert(await evaluate(`!document.querySelector("#iTimeProject select, #iTimeProject input")`), "计入项目非编辑控件");
     assert(await evaluate(`document.querySelector("#iTimeProject .time-attr-note").textContent.indexOf("跟随工作项所属项目") >= 0`), "归属说明文案");
     await shot("desktop-time-add");
     await clickAt("#iTimeProject [data-jump-project]");
-    await waitFor(`!document.getElementById("dlgTimeAdd").classList.contains("open")`, "chip 跳转关弹窗", 8000);
-    assert((await landedProject()).pid === PROJ, "补记弹窗 chip 落项目视图");
+    await waitFor(`document.getElementById("dlgTimeAdd").hidden`, "chip 跳转收起补记面板", 8000);
+    assert((await landedProject()).pid === PROJ, "补记面板 chip 落项目视图");
     await closeDrawer();
     await openDrawer(SAMPLE_TASK);
     await evaluate(`(() => { const b = document.getElementById("rfHoursAdd") || document.getElementById("btnActualAdd"); if(b) b.click(); return true; })()`);
-    await waitFor(`document.getElementById("dlgTimeAdd").classList.contains("open")`, "未归类补记弹窗", 8000);
+    await waitFor(`!document.getElementById("dlgTimeAdd").hidden`, "未归类补记面板", 8000);
     assert(await evaluate(`!document.querySelector("#iTimeProject [data-jump-project]") && document.getElementById("iTimeProject").textContent.indexOf("未归类") >= 0`), "未归类工作项纯文本回落");
     await shot("desktop-time-add-plain");
     await evaluate(`(() => { document.getElementById("dlgTimeAddCancel").click(); return true; })()`);
     await sleep(200);
-    assert(await evaluate(`!document.getElementById("dlgTimeAdd").classList.contains("open")`), "取消关闭弹窗（不写库）");
+    assert(await evaluate(`document.getElementById("dlgTimeAdd").hidden`), "取消收起补记面板（不写库）");
     await closeDrawer();
   });
 
@@ -379,7 +386,7 @@ try{
     await openDrawer(SNAP_TASK);
     await evaluate(`(() => { const b = document.getElementById("rfHoursAdd") || document.getElementById("btnActualAdd"); if(b) b.click(); return true; })()`);
     await sleep(400);
-    assert(await evaluate(`!document.getElementById("dlgTimeAdd").classList.contains("open")`), "只读不给开补记弹窗");
+    assert(await evaluate(`document.getElementById("dlgTimeAdd").hidden`), "只读不给开补记面板");
     assert(await evaluate(`(document.getElementById("toastWrap")||{}).textContent.indexOf("只有查看权限") >= 0`), "只读补记提示查看权限");
     await shot("desktop-readonly", true);
     await closeDrawer();
@@ -411,8 +418,9 @@ try{
     await shot("mobile-landed");
     await openDrawer(SNAP_TASK);
     await evaluate(`(() => { const b = document.getElementById("rfHoursAdd") || document.getElementById("btnActualAdd"); if(b) b.click(); return true; })()`);
-    await waitFor(`document.getElementById("dlgTimeAdd").classList.contains("open")`, "390 补记弹窗", 8000);
-    assert(await evaluate(`(() => { const s = document.querySelector("#dlgTimeAdd .sheet"); const r = s.getBoundingClientRect(); return r.width <= 390 && r.left >= 0; })()`), "补记弹窗适配 390");
+    await waitFor(`!document.getElementById("dlgTimeAdd").hidden`, "390 补记面板", 8000);
+    assert(await evaluate(`(() => { const el = document.getElementById("dlgTimeAdd"); const r = el.getBoundingClientRect(); return r.width <= 390 && r.left >= 0; })()`), "补记面板适配 390");
+    assert(await evaluate(`(() => { const el = document.getElementById("dlgTimeAdd"); return !document.querySelector(".modal-layer.open") && el.closest(".drawer") !== null && el.querySelectorAll("input,select").length >= 4; })()`), "补记留在任务抽屉内，未另起浮层");
     await shot("mobile-time-add");
     await evaluate(`(() => { document.getElementById("dlgTimeAddCancel").click(); return true; })()`);
     await closeDrawer();
@@ -425,7 +433,7 @@ try{
   assert(cdp.errors.length === 0, "控制台零报错" + (cdp.errors.length ? "：" + cdp.errors.join(" | ") : ""));
   assert(cdp.netErrors.length === 0, "无 4xx/5xx" + (cdp.netErrors.length ? "：" + cdp.netErrors.join(" | ") : ""));
   assert(cdp.resourceErrors.length === 0, "无资源加载报错" + (cdp.resourceErrors.length ? "：" + cdp.resourceErrors.join(" | ") : ""));
-  if(cdp.knownGaps.length) console.log("  INFO 环境缺口（预览前端新于运行 jar）：" + cdp.knownGaps.length + " 次 " + [...new Set(cdp.knownGaps)].join(" | "));
+  if(cdp.knownGaps.length) console.log("  INFO 已知环境缺口（预览/库结构与运行 jar 不一致）：" + cdp.knownGaps.length + " 次 " + [...new Set(cdp.knownGaps)].join(" | "));
   console.log("  截图 " + SHOTS.length + " 张：" + SHOTS.join(", "));
 }catch(e){
   failed++;

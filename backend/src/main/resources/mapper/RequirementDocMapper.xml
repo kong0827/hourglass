@@ -3,8 +3,20 @@
 <mapper namespace="com.hourglass.mapper.RequirementDocMapper">
 
   <sql id="cols">
-    id, workspace_id, req_id, parent_id, category_id, title, doc_type, content, format, content_brief, status, published_at, sort_order,
-    owner, owner_user_id, created_at, updated_at
+    id, workspace_id, req_id, parent_id, category_id, title, doc_type, content, format, content_brief, status, published_at,
+    visibility, sort_order, owner, owner_user_id, created_at, updated_at
+  </sql>
+
+  <!-- 文档级可见范围：仅约束已发布文档；草稿仍由 !seeAllDrafts 那条规则单独判定。
+       负责人始终可见；空间管理员不在名单时同样不可见（与用例分组口径一致）。 -->
+  <sql id="visibilityWhere">
+    <if test="userId != null">
+      AND (d.published_at IS NULL
+           OR d.visibility = 'team'
+           OR d.owner_user_id = #{userId}
+           OR EXISTS (SELECT 1 FROM doc_visibility_member dvm
+                      WHERE dvm.doc_id = d.id AND dvm.user_id = #{userId}))
+    </if>
   </sql>
 
   <!-- 列表与全局搜索共用的关键字谓词：同一口径，避免「列表能搜到、全局搜不到」 -->
@@ -43,6 +55,7 @@
                           AND pm.user_id = #{viewerId}
                           AND pm.access = 'none')
       </if>
+      <include refid="visibilityWhere"/>
     ORDER BY d.updated_at DESC
     LIMIT #{limit}
   </select>
@@ -66,15 +79,17 @@
     <if test="!seeAllDrafts">
       AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
     </if>
+    <include refid="visibilityWhere"/>
     <include refid="keywordWhere"/>
   </sql>
 
   <!-- 列表：不读正文，只读 content_brief；任务数一次 GROUP BY 汇总 -->
   <select id="selectViewByWorkspace" resultType="com.hourglass.dto.ReqDocView">
     SELECT d.id, d.req_id, d.parent_id, d.category_id, d.title, d.doc_type, d.format, d.sort_order,
-           d.status, d.owner, d.owner_user_id, d.published_at, d.created_at, d.updated_at,
+           d.status, d.owner, d.owner_user_id, d.published_at, d.visibility, d.created_at, d.updated_at,
            r.name AS req_name,
            d.content_brief AS content_brief,
+           (SELECT COUNT(*) FROM doc_visibility_member dvm WHERE dvm.doc_id = d.id) AS member_count,
            COALESCE(tc.task_count, 0) AS task_count,
            COALESCE(tc.done_count, 0) AS done_count
     FROM requirement_doc d
@@ -121,9 +136,9 @@
 
   <insert id="insert">
     INSERT INTO requirement_doc (id, workspace_id, req_id, parent_id, category_id, title, doc_type, content, format, content_brief,
-                                 status, published_at, sort_order, owner, owner_user_id, created_at, updated_at)
+                                 status, published_at, visibility, sort_order, owner, owner_user_id, created_at, updated_at)
     VALUES (#{id}, #{workspaceId}, #{reqId}, #{parentId}, #{categoryId}, #{title}, #{docType}, #{content}, #{format}, #{contentBrief},
-            #{status}, #{publishedAt}, COALESCE(#{sortOrder}, 0), #{owner}, #{ownerUserId},
+            #{status}, #{publishedAt}, #{visibility}, COALESCE(#{sortOrder}, 0), #{owner}, #{ownerUserId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -139,6 +154,7 @@
       content_brief = #{doc.contentBrief},
       status        = #{doc.status},
       <!-- published_at 只由 updatePublished 维护：编辑已发布文档不改变发布状态，也不会覆盖并发的发布/收回 -->
+      visibility    = #{doc.visibility},
       sort_order    = COALESCE(#{doc.sortOrder}, 0),
       owner         = #{doc.owner},
       owner_user_id = #{doc.ownerUserId},
@@ -154,6 +170,15 @@
   <update id="updatePublished">
     UPDATE requirement_doc SET published_at = #{publishedAt}, updated_at = updated_at
     WHERE id = #{id}
+  </update>
+
+  <update id="updateVisibility">
+    UPDATE requirement_doc
+    SET visibility = #{visibility},
+        owner = #{owner},
+        owner_user_id = #{ownerUserId},
+        updated_at = updated_at
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
   <!-- 看板拖拽的轻量状态流转：只动状态与更新时间，不走整篇乐观锁 -->
@@ -187,7 +212,12 @@
 
   <select id="countGroupByReq" resultType="java.util.HashMap">
     SELECT req_id AS reqId, COUNT(*) AS cnt
-    FROM requirement_doc WHERE workspace_id = #{workspaceId}
+    FROM requirement_doc d
+    WHERE d.workspace_id = #{workspaceId}
+    <if test="!seeAllDrafts">
+      AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
+    </if>
+    <include refid="visibilityWhere"/>
     GROUP BY req_id
   </select>
 
@@ -224,14 +254,16 @@
     <if test="!seeAllDrafts">
       AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
     </if>
+    <include refid="visibilityWhere"/>
   </sql>
 
   <!-- 需求池需求 → 文档：列表字段与 selectViewByWorkspace 保持一致 -->
   <select id="selectByDemand" resultType="com.hourglass.dto.ReqDocView">
     SELECT d.id, d.req_id, d.parent_id, d.title, d.doc_type, d.format, d.sort_order,
-           d.status, d.owner, d.owner_user_id, d.published_at, d.created_at, d.updated_at,
+           d.status, d.owner, d.owner_user_id, d.published_at, d.visibility, d.created_at, d.updated_at,
            r.name AS req_name,
            d.content_brief AS content_brief,
+           (SELECT COUNT(*) FROM doc_visibility_member dvm WHERE dvm.doc_id = d.id) AS member_count,
            COALESCE(tc.task_count, 0) AS task_count,
            COALESCE(tc.done_count, 0) AS done_count
     FROM demand_doc_link l
@@ -328,4 +360,43 @@
     UPDATE requirement_doc SET parent_id = #{parentId}
     WHERE workspace_id = #{workspaceId} AND id = #{id}
   </update>
+
+  <!-- 文档可见成员 -->
+
+  <select id="selectVisibilityMemberIds" resultType="string">
+    SELECT user_id FROM doc_visibility_member WHERE doc_id = #{docId}
+    ORDER BY created_at, user_id
+  </select>
+
+  <select id="countVisibilityMember" resultType="int">
+    SELECT COUNT(*) FROM doc_visibility_member WHERE doc_id = #{docId} AND user_id = #{userId}
+  </select>
+
+  <insert id="insertVisibilityMembers">
+    INSERT IGNORE INTO doc_visibility_member (doc_id, user_id, workspace_id)
+    VALUES
+    <foreach collection="userIds" item="uid" separator=",">
+      (#{docId}, #{uid}, #{workspaceId})
+    </foreach>
+  </insert>
+
+  <delete id="deleteVisibilityMembersByDoc">
+    DELETE FROM doc_visibility_member WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+  </delete>
+
+  <delete id="deleteVisibilityMembersByReq">
+    DELETE m FROM doc_visibility_member m
+    INNER JOIN requirement_doc d ON d.id = m.doc_id
+    WHERE m.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteVisibilityMembersByWorkspace">
+    DELETE FROM doc_visibility_member WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="selectVisibilityMembersByWorkspace" resultType="java.util.HashMap">
+    SELECT doc_id AS docId, user_id AS userId
+    FROM doc_visibility_member WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at, user_id
+  </select>
 </mapper>

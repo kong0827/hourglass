@@ -13,6 +13,7 @@ import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.dto.ReqDocShareResponse;
 import com.hourglass.dto.ReqDocStatusRequest;
 import com.hourglass.dto.ReqDocView;
+import com.hourglass.dto.ReqDocVisibilityRequest;
 import com.hourglass.entity.ReqDocShare;
 import com.hourglass.entity.RequirementDoc;
 import com.hourglass.entity.RequirementDocHistory;
@@ -232,6 +233,17 @@ public class RequirementDocController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(docService.changeStatus(userId, ws.getId(), id, req.getStatus()));
+    }
+
+    /** 调整可见范围：轻量接口，只改范围与名单，不携带正文也不走整篇乐观锁 */
+    @PutMapping("/api/req-docs/{id}/visibility")
+    public ApiResult<RequirementDoc> changeVisibility(@PathVariable String id,
+                                                      @Valid @RequestBody ReqDocVisibilityRequest req,
+                                                      @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.changeVisibility(userId, ws.getId(), id,
+                req.getVisibility(), req.getMemberIds()));
     }
 
     /** 行内重命名：轻量接口，只改标题，不携带正文也不走整篇乐观锁 */

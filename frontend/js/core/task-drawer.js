@@ -2288,6 +2288,7 @@ function openTaskDrawer(colId, task, defaults){
   rt.drawerOnClose = (defaults && typeof defaults.onClose === "function") ? defaults.onClose : null;
   /* 切任务前先收好上一条未发送的评论草稿 */
   stashCommentDraft(lastCommentDraftId || rt.editingId);
+  closeTimeAddInline();
   rt.taskFormSeq++;
   setSaveLoading(false); // 新抽屉独立管理 loading，后续再应用当前表单的只读权限
   demandTargetCache = {}; demandTargetPending = {};
@@ -3240,6 +3241,7 @@ function forceCloseTaskDrawer(opts){
   var opener = rt.drawerOpener;
   var onClose = rt.drawerOnClose;
   rt.drawerOnClose = null;
+  closeTimeAddInline();
   closeDrawer();
   clearWorkTick();
   drawerBackStack = [];
@@ -5201,6 +5203,24 @@ function renderWorkRecords(list){
   });
   workLogList.innerHTML = html;
 }
+function closeTimeAddInline(){
+  if(dlgTimeAdd) dlgTimeAdd.hidden = true;
+}
+function openTimeAddInline(){
+  if(!dlgTimeAdd) return;
+  /* 入口可能在概览：先把执行页签与工时区展开，再在区内展开表单 */
+  if(rt.editingId) setDrawerTab("exec");
+  var sect = $("fWork");
+  if(sect){
+    sect.hidden = false;
+    sect.classList.remove("collapsed");
+    var head = sect.querySelector(".drawer-sect-head");
+    if(head) head.setAttribute("aria-expanded", "true");
+  }
+  dlgTimeAdd.hidden = false;
+  try{ dlgTimeAdd.scrollIntoView({ block:"nearest" }); }catch(e){ /* 老浏览器无平滑滚动 */ }
+  try{ iTimeHours.focus({ preventScroll:true }); }catch(e){ try{ iTimeHours.focus(); }catch(e2){ /* noop */ } }
+}
 function openTimeAddDialog(){
   if(!dlgTimeAdd) return;
   if(!rt.currentUser || !rt.currentUser.id){ toast("当前账号信息缺失，无法补记", "warn"); return; }
@@ -5222,7 +5242,7 @@ function openTimeAddDialog(){
   if(iTimeDate && rt.TODAY) iTimeDate.value = rt.TODAY.getFullYear() + "-" + pad2(rt.TODAY.getMonth() + 1) + "-" + pad2(rt.TODAY.getDate());
   if(iTimeHours) iTimeHours.value = "";
   if(iTimeNote) iTimeNote.value = "";
-  UI.openModal(dlgTimeAdd, "#iTimeHours");
+  openTimeAddInline();
 }
 /* 概览工时格、「工时」区块和「实际投入」旁边各有一个补记入口，共用同一个弹窗 */
 function openTimeAddFromEntry(){
@@ -5234,8 +5254,19 @@ if(btnTimerAdd) btnTimerAdd.addEventListener("click", openTimeAddFromEntry);
 if(btnActualAdd) btnActualAdd.addEventListener("click", openTimeAddFromEntry);
 if(rfHoursAdd) rfHoursAdd.addEventListener("click", openTimeAddFromEntry);
 if(dlgTimeAddCancel){
-  dlgTimeAddCancel.addEventListener("click", function(){ UI.closeModal(dlgTimeAdd); });
+  dlgTimeAddCancel.addEventListener("click", closeTimeAddInline);
 }
+if(dlgTimeAdd){
+  dlgTimeAdd.addEventListener("click", function(e){
+    if(e.target.closest("[data-time-add-cancel]")) closeTimeAddInline();
+  });
+}
+/* 「计入项目」等关联 chip 会离开本面板：先收起补记，避免跳转后还停在旧表单 */
+document.addEventListener("click", function(e){
+  if(!dlgTimeAdd || dlgTimeAdd.hidden || !e.target.closest) return;
+  if(e.target.closest("#dlgTimeAdd [data-jump-project],#dlgTimeAdd [data-jump-version],#dlgTimeAdd [data-jump-task],"
+    + "#dlgTimeAdd [data-jump-demand],#dlgTimeAdd [data-jump-doc],#dlgTimeAdd [data-jump-branch],#dlgTimeAdd [data-jump-case]")) closeTimeAddInline();
+}, true);
 if(dlgTimeAddOk){
   dlgTimeAddOk.addEventListener("click", function(){
     var taskId = rt.editingId;
@@ -5254,7 +5285,7 @@ if(dlgTimeAddOk){
     dlgTimeAddOk.disabled = true;
     API.post(url, {}).then(function(){
       toast("已补记 " + fmtMinutes(minutes), "fs");
-      UI.closeModal(dlgTimeAdd);
+      closeTimeAddInline();
       recSeq++;
       loadWorkRecords(taskId, recSeq);
       fetchTimer(taskId, workSeq);

@@ -98,7 +98,7 @@
 .manager-load.hot .progress>i{background:var(--warning)}.manager-load.over .progress>i{background:var(--danger)}
 .manager-load.over b{color:var(--danger-fg)}
 .mini-tag.ok{background:var(--success-soft);color:var(--success-fg)}.mini-tag.warn{background:var(--warning-soft);color:var(--warning-fg)}.mini-tag.over{background:var(--danger-soft);color:var(--danger-fg)}
-.manager-empty-cell{padding:22px!important;text-align:center!important;color:var(--text-3)!important;}
+.manager-empty-cell{padding:var(--empty-table-pad)!important;text-align:center!important;color:var(--text-3)!important;font-size:12.5px;}
 .manager-more-cell{padding:8px!important;border-bottom:none!important;}
 /* .sheet 默认 max-width:480px 会把下钻表格截断，这里必须显式放开 */
 .manager-drill-sheet{max-width:none;width:min(1080px,94vw);}

@@ -468,25 +468,31 @@ try{
   await sleep(1000);
   const caseOrder = await evaluate(`(() => {
     const bar = document.getElementById("tcFilterBar");
-    const ids = ["tcOwner","tcPri","tcModule","tcSearch"];
-    return ids.map(id => [...bar.querySelectorAll("*")].findIndex(x => x.id === id));
+    const ids = ["tcSearch","tcOwner","tcPri"];
+    return {
+      pos: ids.map(id => [...bar.querySelectorAll("*")].findIndex(x => x.id === id)),
+      hasModule: !!document.getElementById("tcModule"),
+      sameCard: document.getElementById("tcFilterCard").contains(bar)
+        && document.getElementById("tcFilterCard").contains(document.getElementById("tcStats"))
+    };
   })()`);
-  assert(caseOrder.slice(0, 4).every((v, i) => v >= 0 && (i === 0 || v > caseOrder[i - 1])),
-    "用例筛选顺序：执行人 → 优先级 → 模块 → 搜索（执行结果已并入统计 chips 条）");
+  assert(caseOrder.pos.every((v, i) => v >= 0 && (i === 0 || v > caseOrder.pos[i - 1])),
+    "用例筛选顺序：搜索（含范围）→ 执行人 → 优先级");
+  assert(!caseOrder.hasModule, "模块筛选下拉已下线（模块只在目录面板中） ");
+  assert(caseOrder.sameCard, "统计 chips 与筛选条件同处一张卡");
 
   const caseFacets = await evaluate(`(() => {
     const grab = id => [...document.getElementById(id).options].slice(1).map(o => o.textContent.trim());
     const chips = [...document.querySelectorAll("#tcStats [data-tc-status]")].map(b => b.textContent.trim());
     const owner = [...document.getElementById("tcOwner").options].map(o => o.textContent.trim());
     return {
-      pri: grab("tcPri"), mod: grab("tcModule"), owner,
+      pri: grab("tcPri"), owner,
       chips,
       ownerNone: owner.find(t => t.indexOf("未指定执行人") === 0) || "",
-      zero: grab("tcPri").concat(grab("tcModule")).filter(t => /（0）$/.test(t))
+      zero: grab("tcPri").filter(t => /（0）$/.test(t))
     };
   })()`);
   assert(caseFacets.pri.length && caseFacets.pri.every(t => /（\d+）$/.test(t)), "用例优先级候选带计数（" + caseFacets.pri.join(" / ") + "）");
-  assert(caseFacets.mod.length && caseFacets.mod.every(t => /（\d+）$/.test(t)), "用例模块候选带计数（" + caseFacets.mod.join(" / ") + "）");
   assert(caseFacets.chips.every(t => /\d+$/.test(t)), "执行结果 chips 带计数（" + caseFacets.chips.join(" / ") + "）");
   assert(caseFacets.zero.length === 0, "用例零结果选项不出现");
   if(caseFacets.ownerNone){
@@ -520,13 +526,13 @@ try{
     const hid = id => { const el = document.getElementById(id); return !el || getComputedStyle(el).display === "none" || el.hidden; };
     return {
       search: hid("tcSearch"), chips: hid("tcStats"), owner: hid("tcOwner"),
-      module: hid("tcModule"), clear: hid("tcClearFilter"),
+      card: hid("tcFilterCard"), clear: hid("tcClearFilter"),
       req: getComputedStyle(document.getElementById("tcReq")).display
     };
   })()`;
   const coverageBar = await evaluate(coverHidden);
-  assert(coverageBar.search && coverageBar.chips && coverageBar.owner && coverageBar.module && coverageBar.clear,
-    "覆盖矩阵隐藏用例筛选维度，避免维度混用");
+  assert(coverageBar.search && coverageBar.chips && coverageBar.owner && coverageBar.card && coverageBar.clear,
+    "覆盖矩阵隐藏整张用例筛选卡，避免维度混用");
   assert(coverageBar.req !== "none", "覆盖矩阵保留项目范围控件");
 
   await click('[data-tc-mode="report"]');

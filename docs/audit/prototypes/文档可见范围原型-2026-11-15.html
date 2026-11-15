@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 文档可见范围（照用例三档）原型 2026-11-15</title>
+<style>
+/* ===== 设计令牌：与 frontend/css/tokens.css 一致 ===== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --surface-active:#E9ECF1; --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);font-size:14px;line-height:1.55}
+button{font-family:inherit;font-size:13px;cursor:pointer;border:none;background:none;color:inherit}
+svg{display:block}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px}
+
+/* ===== 原型说明条 ===== */
+.proto-bar{background:var(--primary-soft);border-bottom:1px solid var(--primary-border);padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:30}
+.pb-title{font-weight:700;font-size:13px;color:var(--primary-fg);display:flex;align-items:center;gap:8px}
+.pb-note{font-size:11.5px;color:var(--text-3)}
+.scenarios{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.sc-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r-pill);border:1px solid var(--primary-border);background:var(--surface);color:var(--primary-fg);font-size:12px;font-weight:500;transition:all .12s}
+.sc-chip:hover{background:var(--primary-soft);border-color:var(--primary)}
+.sc-chip .n{width:16px;height:16px;border-radius:50%;background:var(--primary);color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.sc-chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.sc-chip.active .n{background:rgba(255,255,255,.25)}
+
+/* ===== 规则横幅 ===== */
+.rule{margin:14px 20px 0;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
+.rule-head{padding:9px 14px;font-size:12.5px;font-weight:700;color:var(--text-2);background:var(--surface-sunken);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rule-head .mini{font-weight:500;color:var(--text-3);font-size:11px}
+.rule-body{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:0}
+.rule-col{padding:11px 14px;font-size:12.5px;color:var(--text-2)}
+.rule-col+.rule-col{border-left:1px solid var(--border)}
+.rule-col .tag{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:var(--r-pill);margin-bottom:6px}
+.rule-col.before .tag{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+.rule-col.after .tag{background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border)}
+.rule-col.keep .tag{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.rule-col b{color:var(--text)}
+.rule-col ul{margin:4px 0 0 16px}
+.rule-col li{margin:2px 0}
+.rule-col code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:4px;padding:0 4px;color:var(--text-2)}
+
+/* ===== 场景 ===== */
+.scene{display:none;padding:16px 20px 8px}
+.scene.on{display:block}
+.scene-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.scene-head h2{font-size:15px;font-weight:700}
+.scene-head p{font-size:12px;color:var(--text-3)}
+
+/* ===== 通用组件 ===== */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);font-weight:500;transition:all .12s;white-space:nowrap}
+.btn:hover{background:var(--surface-hover)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-hover)}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn:disabled:hover{background:var(--surface)}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:var(--r-pill);font-size:10.5px;font-weight:650;border:1px solid var(--border);background:var(--surface-sunken);color:var(--text-3)}
+.pill.blue{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+.pill.green{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg)}
+.pill.amber{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+.pill.red{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* ===== 弹窗 ===== */
+.dialog-wrap{display:flex;justify-content:center;padding:8px 0 4px}
+.dialog{width:640px;max-width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);overflow:hidden}
+.dlg-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.dlg-head .t{font-size:14.5px;font-weight:700;flex:1}
+.dlg-head .x{color:var(--text-3);font-size:16px;line-height:1}
+.dlg-body{padding:16px 18px;display:flex;flex-direction:column;gap:13px;max-height:520px;overflow-y:auto}
+.dlg-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface)}
+.field .lbl{font-size:12px;font-weight:650;color:var(--text-2);margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.field .lbl .req{color:var(--danger)}
+.inp{width:100%;padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:13px;color:var(--text)}
+.inp::placeholder{color:var(--text-3)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden}
+.seg button{padding:5px 12px;font-size:12px;color:var(--text-2);background:var(--surface)}
+.seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+
+/* ===== 可见范围三档卡片 ===== */
+.vis-opts{display:flex;flex-direction:column;gap:8px}
+.vis-card{display:flex;gap:10px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--r-md);background:var(--surface);cursor:pointer;transition:all .12s;text-align:left;width:100%}
+.vis-card:hover{border-color:var(--primary-border);background:var(--primary-soft)}
+.vis-card.on{border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 0 1px var(--primary) inset}
+.vis-card .radio{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--border-strong);flex:none;margin-top:2px;display:grid;place-items:center;background:var(--surface)}
+.vis-card.on .radio{border-color:var(--primary)}
+.vis-card.on .radio::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--primary)}
+.vis-card .v-main{flex:1;min-width:0}
+.vis-card .v-title{font-size:13px;font-weight:650;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.vis-card .v-desc{font-size:11.5px;color:var(--text-3);margin-top:2px;line-height:1.5}
+.vis-card.locked{opacity:.6;cursor:not-allowed}
+.vis-card.locked:hover{border-color:var(--border-strong);background:var(--surface)}
+
+/* ===== 成员选择 ===== */
+.picker{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface)}
+.picker-head{padding:8px 11px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--surface-sunken)}
+.picker-head .t{font-size:12px;font-weight:650;color:var(--text-2)}
+.picker-head .cnt{margin-left:auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.picker-search{padding:7px 10px;border-bottom:1px solid var(--border)}
+.picker-search .inp{padding:5px 9px;font-size:12px}
+.picker-list{max-height:196px;overflow-y:auto;padding:4px}
+.mem{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r-xs);cursor:pointer}
+.mem:hover{background:var(--surface-hover)}
+.mem.disabled{opacity:.55;cursor:not-allowed}
+.mem.disabled:hover{background:transparent}
+.cb{width:15px;height:15px;border:1.5px solid var(--border-strong);border-radius:4px;flex:none;display:grid;place-items:center;background:var(--surface)}
+.mem.on .cb{background:var(--primary);border-color:var(--primary)}
+.mem.on .cb::after{content:"";width:7px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translateY(-1px)}
+.avatar{width:24px;height:24px;border-radius:50%;background:var(--surface-sunken);border:1px solid var(--border);display:grid;place-items:center;font-size:10.5px;font-weight:700;color:var(--text-2);flex:none}
+.mem .m-main{flex:1;min-width:0}
+.mem .m-name{font-size:12.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mem .m-sub{font-size:10.5px;color:var(--text-3)}
+.mem .m-why{font-size:10.5px;color:var(--warning-fg);background:var(--warning-soft);border:1px solid var(--warning-border);border-radius:4px;padding:0 5px;line-height:15px}
+.hint{font-size:11.5px;color:var(--text-3);display:flex;gap:6px;align-items:flex-start;line-height:1.5}
+.hint svg{flex:none;margin-top:2px}
+
+/* ===== 应用框架 ===== */
+.viewswitch{display:inline-flex;gap:4px;padding:3px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:10px}
+.viewswitch button{padding:4px 11px;border-radius:5px;font-size:12px;color:var(--text-2)}
+.viewswitch button.on{background:var(--surface);color:var(--text);font-weight:650;box-shadow:var(--shadow-xs)}
+.viewpane{display:none}
+.viewpane.on{display:block}
+.who{font-size:11.5px;color:var(--text-3);margin:0 0 8px 1px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.who .pill{font-weight:600}
+
+.app{display:flex;height:520px;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface)}
+.tree{width:262px;flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface)}
+.tree-head{padding:10px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.tree-head .t{font-size:12.5px;font-weight:700;color:var(--text-2)}
+.tree-head .new{margin-left:auto}
+.tree-body{flex:1;overflow-y:auto;padding:8px}
+.tree-tip{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);line-height:1.5;background:var(--surface)}
+.rs-proj-head{display:flex;align-items:center;gap:7px;width:100%;padding:7px 9px;border-radius:var(--r-xs);text-align:left}
+.rs-proj-head:hover{background:var(--surface-hover)}
+.rs-proj-head .rp-name{font-size:13px;font-weight:650;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-count{font-size:11px;color:var(--text-3);flex:none}
+.rs-node{display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px 6px 26px;border-radius:var(--r-xs);text-align:left}
+.rs-node:hover{background:var(--surface-hover)}
+.rs-node.active{background:var(--primary-soft)}
+.rs-node .rs-title{font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs-node.active .rs-title{color:var(--primary-fg);font-weight:600}
+.rs-act{display:grid;place-items:center;width:18px;height:18px;border-radius:4px;color:var(--text-3)}
+.rs-act:hover{background:var(--surface-active)}
+.tag-mini{flex:none;font-size:9.5px;font-weight:650;border-radius:4px;padding:0 4px;line-height:14px}
+.tag-mini.team{color:var(--success-fg);background:var(--success-soft);border:1px solid var(--success-border)}
+.tag-mini.mem{color:var(--primary-fg);background:var(--primary-soft);border:1px solid var(--primary-border)}
+.tag-mini.self{color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border)}
+.tag-mini.draft{color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border)}
+
+/* ===== 阅读区 ===== */
+.reader{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-app)}
+.reader-head{padding:13px 17px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:flex-start;gap:12px}
+.rh-main{flex:1;min-width:0}
+.rh-crumb{font-size:11.5px;color:var(--text-3);display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap}
+.rh-crumb b{color:var(--text-2);font-weight:600}
+.rh-title{font-size:16.5px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rh-meta{font-size:11.5px;color:var(--text-3);margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rh-actions{display:flex;align-items:center;gap:8px;flex:none}
+.reader-body{flex:1;overflow-y:auto;padding:16px}
+.readonly-banner{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:var(--r-md);background:var(--warning-soft);border:1px solid var(--warning-border);color:var(--warning-fg);font-size:12.5px;margin-bottom:12px}
+.readonly-banner.info{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+.doc-content{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:20px 24px}
+.doc-content h3{font-size:15px;margin:0 0 8px}
+.doc-content p{font-size:13px;color:var(--text-2);margin:7px 0}
+.doc-content ul{margin:6px 0 6px 19px;font-size:13px;color:var(--text-2)}
+
+/* ===== 权限说明面板 ===== */
+.perm{width:308px;flex:none;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column}
+.perm-head{padding:10px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.perm-head .t{font-size:12.5px;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:7px}
+.perm-head .ro{margin-left:auto;font-size:10px;font-weight:600;color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-pill);padding:1px 8px}
+.perm-body{flex:1;overflow-y:auto;padding:10px 13px;display:flex;flex-direction:column;gap:11px}
+.perm-mine{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:var(--r-sm);font-size:12px;line-height:1.45}
+.perm-mine.edit{background:var(--success-soft);border:1px solid var(--success-border);color:var(--success-fg)}
+.perm-mine.read{background:var(--warning-soft);border:1px solid var(--warning-border);color:var(--warning-fg)}
+.perm-mine svg{flex:none;margin-top:1px}
+.perm-row{display:flex;gap:10px;font-size:12px;line-height:1.5}
+.perm-row .k{width:88px;flex:none;color:var(--text-3)}
+.perm-row .v{flex:1;min-width:0;color:var(--text-2)}
+.perm-row .v b{color:var(--text)}
+.perm-people{display:flex;flex-wrap:wrap;gap:5px}
+.perm-people .pers{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:var(--r-pill);background:var(--surface-sunken);border:1px solid var(--border);font-size:11px;color:var(--text-2)}
+.perm-note{font-size:11.5px;color:var(--text-3);line-height:1.55;padding:8px 10px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm)}
+.perm-note b{color:var(--text-2)}
+.perm-sec-title{font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.02em}
+
+/* ===== 404 状态 ===== */
+.notfound{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:30px;text-align:center}
+.notfound .ico{width:44px;height:44px;border-radius:50%;background:var(--surface-sunken);border:1px solid var(--border);display:grid;place-items:center;color:var(--text-3)}
+.notfound .t{font-size:14px;font-weight:700;color:var(--text-2)}
+.notfound .s{font-size:12px;color:var(--text-3);max-width:360px;line-height:1.6}
+.notfound .why{margin-top:4px;font-size:11.5px;color:var(--warning-fg);background:var(--warning-soft);border:1px solid var(--warning-border);border-radius:var(--r-sm);padding:7px 11px;max-width:390px;text-align:left;line-height:1.55}
+
+/* ===== 收窄确认 ===== */
+.narrow-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.narrow-card{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
+.nc-head{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-sunken);font-size:12.5px;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:8px}
+.nc-body{padding:14px}
+.nc-title{font-size:14px;font-weight:700;margin-bottom:6px}
+.nc-text{font-size:12.5px;color:var(--text-2);line-height:1.6}
+.impact{margin:10px 0;border:1px solid var(--warning-border);background:var(--warning-soft);border-radius:var(--r-sm);padding:9px 11px;font-size:12px;color:var(--warning-fg)}
+.impact b{color:#7A2E0E}
+.impact .names{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.impact .names span{background:#fff;border:1px solid var(--warning-border);border-radius:var(--r-pill);padding:0 7px;font-size:11px;color:var(--text-2)}
+.nc-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.locked-note{display:flex;gap:8px;align-items:flex-start;padding:10px 11px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:var(--surface-sunken);font-size:12px;color:var(--text-3);line-height:1.55}
+.locked-note svg{flex:none;margin-top:1px}
+
+/* ===== 草稿 + 矩阵 ===== */
+.steps{display:flex;align-items:stretch;gap:0;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface);margin-bottom:14px}
+.step{flex:1;padding:12px 14px;position:relative}
+.step+.step{border-left:1px solid var(--border)}
+.step .st-no{font-size:10.5px;font-weight:700;color:var(--text-3);letter-spacing:.04em}
+.step .st-t{font-size:13px;font-weight:700;margin:2px 0 3px;display:flex;align-items:center;gap:6px}
+.step .st-d{font-size:11.5px;color:var(--text-3);line-height:1.5}
+.matrix-wrap{border:1px solid var(--border);border-radius:var(--r-md);overflow:auto;background:var(--surface)}
+table.matrix{border-collapse:collapse;width:100%;min-width:880px;font-size:12px}
+.matrix th,.matrix td{padding:9px 11px;border-bottom:1px solid var(--border);border-left:1px solid var(--border);text-align:left;vertical-align:top}
+.matrix th:first-child,.matrix td:first-child{border-left:none}
+.matrix thead th{background:var(--surface-sunken);font-weight:650;color:var(--text-2);font-size:11.5px;white-space:nowrap}
+.matrix tbody tr:last-child td{border-bottom:none}
+.matrix td:first-child{font-weight:650;white-space:nowrap}
+.matrix .vis-team{color:var(--success-fg)}
+.matrix .vis-mem{color:var(--primary-fg)}
+.matrix .vis-self{color:var(--text-2)}
+.cell{display:flex;flex-direction:column;gap:2px;line-height:1.4}
+.cell .ok{color:var(--success-fg);font-weight:600}
+.cell .ro{color:var(--warning-fg);font-weight:600}
+.cell .no{color:var(--text-3);font-weight:600}
+.cell .sub{font-size:10.5px;color:var(--text-3)}
+.matrix-note{margin-top:8px;font-size:11.5px;color:var(--text-3);line-height:1.6}
+.matrix-note b{color:var(--text-2)}
+
+/* ===== 落地改动 ===== */
+.impl{margin:10px 20px 26px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
+.impl-head{padding:9px 14px;background:var(--surface-sunken);border-bottom:1px solid var(--border);font-size:12.5px;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:8px}
+.impl-body{padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:6px 22px;font-size:12px;color:var(--text-2)}
+.impl-body .li{display:flex;gap:7px;line-height:1.55}
+.impl-body .li .n{width:16px;height:16px;border-radius:50%;background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:9.5px;font-weight:700;display:grid;place-items:center;flex:none;margin-top:2px}
+.impl-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <div class="pb-title">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 8h14M5 16h14"/></svg>
+    沙漏 · 文档可见范围（照用例三档）
+  </div>
+  <div class="pb-note">已发布生效 · 默认团队共享 · 管理员同样受限 · 仅团队共享可分享</div>
+  <div class="scenarios">
+    <button class="sc-chip active" data-sc="s1"><span class="n">1</span>新建与三档</button>
+    <button class="sc-chip" data-sc="s2"><span class="n">2</span>团队共享</button>
+    <button class="sc-chip" data-sc="s3"><span class="n">3</span>指定成员 · 管理员受限</button>
+    <button class="sc-chip" data-sc="s4"><span class="n">4</span>仅自己</button>
+    <button class="sc-chip" data-sc="s5"><span class="n">5</span>收窄守卫</button>
+    <button class="sc-chip" data-sc="s6"><span class="n">6</span>草稿叠加与生效矩阵</button>
+  </div>
+</div>
+
+<section class="rule">
+  <div class="rule-head">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+    规则变化
+    <span class="mini">口径对齐 <code>case_set.visibility</code> + <code>case_set_member</code></span>
+  </div>
+  <div class="rule-body">
+    <div class="rule-col before">
+      <span class="tag">现状</span>
+      <ul>
+        <li>已发布：只看项目可见范围，无文档级开关</li>
+        <li>草稿：仅负责人 + 空间管理员</li>
+        <li>空间管理员对所有文档有改删豁免</li>
+        <li>项目可写者都能生成公开分享链接</li>
+      </ul>
+    </div>
+    <div class="rule-col after">
+      <span class="tag">方案</span>
+      <ul>
+        <li>文档加 <code>visibility</code>：团队共享（默认）/ 指定成员 / 仅自己</li>
+        <li>可见 = 项目可见范围 ∩ 文档可见范围</li>
+        <li>管理员同样受可见范围约束（不在名单即 404）</li>
+        <li>仅 <b>团队共享</b> 可生成公开分享链接</li>
+      </ul>
+    </div>
+    <div class="rule-col keep">
+      <span class="tag">不变</span>
+      <ul>
+        <li>可见范围只约束<b>已发布</b>；草稿仍仅负责人 + 管理员</li>
+        <li>改删仍走创建人保护（负责人 / 名单内管理员）</li>
+        <li>收窄（团队 → 受限）必须负责人本人操作</li>
+        <li>存量文档零回填，默认团队共享，行为不变</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 场景 1：新建与三档 ============ -->
+<div class="scene on" id="s1">
+  <div class="scene-head">
+    <h2>1 · 新建文档：选择可见范围</h2>
+    <p>默认「团队共享」保持存量行为；选「指定成员」才出现名单。</p>
+  </div>
+  <div class="dialog-wrap">
+    <div class="dialog">
+      <div class="dlg-head">
+        <span class="t">新建文档</span>
+        <span class="x">×</span>
+      </div>
+      <div class="dlg-body">
+        <div class="field">
+          <div class="lbl">标题 <span class="req">*</span></div>
+          <input class="inp" value="支付网关对接说明">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <div class="lbl">归属</div>
+            <input class="inp" value="远航计划">
+          </div>
+          <div class="field">
+            <div class="lbl">分类</div>
+            <input class="inp" value="技术方案">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <div class="lbl">格式</div>
+            <div class="seg"><button class="on">Markdown</button><button>富文本</button></div>
+          </div>
+          <div class="field">
+            <div class="lbl">文档类型</div>
+            <input class="inp" value="技术">
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="lbl">可见范围 <span class="pill blue" id="visPill">团队共享</span></div>
+          <div class="vis-opts" id="visOpts">
+            <button class="vis-card on" data-vis="team" type="button">
+              <span class="radio"></span>
+              <span class="v-main">
+                <span class="v-title">团队共享 <span class="pill green">默认</span></span>
+                <span class="v-desc">能看到该项目（空间级文档则为空间）的成员都能阅读。可生成公开只读链接。</span>
+              </span>
+            </button>
+            <button class="vis-card" data-vis="members" type="button">
+              <span class="radio"></span>
+              <span class="v-main">
+                <span class="v-title">指定成员</span>
+                <span class="v-desc">仅负责人和勾选的成员可见，最多 50 人；勾选范围须先能看到本项目。不可生成分享链接。</span>
+              </span>
+            </button>
+            <button class="vis-card" data-vis="personal" type="button">
+              <span class="radio"></span>
+              <span class="v-main">
+                <span class="v-title">仅自己</span>
+                <span class="v-desc">只有负责人可见，空间管理员也不可见（除非被负责人加入名单并改为「指定成员」）。不可生成分享链接。</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="field" id="pickerField" hidden>
+          <div class="lbl">可见成员 <span class="pill amber">至少 1 人</span></div>
+          <div class="picker">
+            <div class="picker-head">
+              <span class="t">选择成员</span>
+              <span class="cnt" id="memCnt">3 / 50</span>
+            </div>
+            <div class="picker-search"><input class="inp" placeholder="搜索姓名 / 账号"></div>
+            <div class="picker-list" id="memList">
+              <div class="mem on"><span class="cb"></span><span class="avatar">孙</span><span class="m-main"><span class="m-name">孙琪 <span class="pill blue">负责人 · 我</span></span><span class="m-sub">产品 · 项目负责人</span></span></div>
+              <div class="mem on"><span class="cb"></span><span class="avatar">李</span><span class="m-main"><span class="m-name">李娜</span><span class="m-sub">研发 · 可参与本项目</span></span></div>
+              <div class="mem on"><span class="cb"></span><span class="avatar">陈</span><span class="m-main"><span class="m-name">陈昊</span><span class="m-sub">测试 · 可参与本项目</span></span></div>
+              <div class="mem"><span class="cb"></span><span class="avatar">王</span><span class="m-main"><span class="m-name">王芳</span><span class="m-sub">设计 · 可参与本项目</span></span></div>
+              <div class="mem disabled" title="看不到本项目"><span class="cb"></span><span class="avatar">周</span><span class="m-main"><span class="m-name">周敏 <span class="m-why">看不到本项目</span></span><span class="m-sub">仅在「星图计划」，不能勾选</span></span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hint">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+          <span>草稿始终仅负责人 + 空间管理员可见；<b>发布后</b>才按上面的可见范围生效。收窄为「指定成员 / 仅自己」后，公开分享链接不可用，已有链接自动撤销。</span>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn">取消</button>
+        <button class="btn primary">创建文档</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 场景 2：团队共享 ============ -->
+<div class="scene" id="s2">
+  <div class="scene-head">
+    <h2>2 · 已发布 · 团队共享（默认）</h2>
+    <p>与现在完全一致；权限说明面板多一行「可见范围」，分享链接可用。</p>
+  </div>
+  <div class="who"><span class="pill blue">视角：负责人 孙琪</span> 团队共享档对空间管理员同样可见，不受名单限制。</div>
+  <div class="app">
+    <aside class="tree">
+      <div class="tree-head"><span class="t">文档</span><button class="btn sm new">+ 新建</button></div>
+      <div class="tree-body">
+        <div class="rs-proj-head"><span class="rp-name">远航计划</span><span class="rp-count">3</span></div>
+        <button class="rs-node active"><span class="rs-title">支付网关对接说明</span><span class="tag-mini team">团队</span></button>
+        <button class="rs-node"><span class="rs-title">接口设计 · 对账</span><span class="tag-mini team">团队</span></button>
+        <button class="rs-node"><span class="rs-title">运维手册</span><span class="tag-mini draft">草稿</span></button>
+      </div>
+      <div class="tree-tip">列表对本空间可见成员展示；不可见文档不占位，也不会出现在搜索结果里。</div>
+    </aside>
+    <section class="reader">
+      <div class="reader-head">
+        <div class="rh-main">
+          <div class="rh-crumb"><b>远航计划</b><span>·</span><span>技术方案</span></div>
+          <div class="rh-title">支付网关对接说明 <span class="pill green">已发布</span> <span class="pill green">团队共享</span></div>
+          <div class="rh-meta"><span>负责人 孙琪</span><span>·</span><span>更新于 10 分钟前</span></div>
+        </div>
+        <div class="rh-actions">
+          <button class="btn">分享</button>
+          <button class="btn primary">编辑文档</button>
+        </div>
+      </div>
+      <div class="reader-body">
+        <div class="doc-content">
+          <h3>1. 接口范围</h3>
+          <p>本期对接支付网关的下单、查询、退款三个接口，回调统一走网关转发。</p>
+          <h3>2. 幂等约定</h3>
+          <ul><li>商户订单号作为幂等键，重复请求返回原结果</li><li>回调处理失败按 1 / 5 / 15 分钟重试</li></ul>
+          <h3>3. 联调排期</h3>
+          <p>网关侧 11-18 提供沙箱，联调窗口两天，失败回滚到上一版收银台。</p>
+        </div>
+      </div>
+    </section>
+    <aside class="perm">
+      <div class="perm-head">
+        <span class="t">权限说明</span>
+        <span class="ro">只读</span>
+      </div>
+      <div class="perm-body">
+        <div class="perm-mine edit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+          <span><b>孙琪</b> · 你可编辑 / 删除（你是负责人）</span>
+        </div>
+        <div class="perm-row"><span class="k">归属</span><span class="v">项目 · <b>远航计划</b></span></div>
+        <div class="perm-row"><span class="k">可见范围</span><span class="v">已发布 · <b>团队共享</b> → 能看到本项目的成员（12 人）</span></div>
+        <div class="perm-row"><span class="k">可编辑 / 删除</span><span class="v"><span class="perm-people"><span class="pers">你（负责人）</span><span class="pers">空间管理员</span></span></span></div>
+        <div class="perm-row"><span class="k">公开分享</span><span class="v">可用：可生成限时公开只读链接</span></div>
+        <div class="perm-note">当前为团队共享，与升级前行为一致。改为「指定成员 / 仅自己」后，<b>空间管理员也可能看不到</b>，且分享链接会被撤销。</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ============ 场景 3：指定成员 + 管理员受限 ============ -->
+<div class="scene" id="s3">
+  <div class="scene-head">
+    <h2>3 · 已发布 · 指定成员（管理员不在名单）</h2>
+    <p>切换视角：负责人 / 名单成员 / 空间管理员。管理员不在名单即 404，与用例「管理员也受限」一致。</p>
+  </div>
+  <div class="viewswitch" data-group="s3">
+    <button class="on" data-view="owner">负责人 孙琪</button>
+    <button data-view="member">名单成员 李娜</button>
+    <button data-view="admin">空间管理员 周敏（不在名单）</button>
+  </div>
+
+  <div class="viewpane on" data-view="owner" data-scope="s3">
+    <div class="who"><span class="pill blue">视角：负责人 孙琪</span><span class="pill green">在名单中</span> 可编辑，可调整名单；分享按钮禁用。</div>
+    <div class="app">
+      <aside class="tree">
+        <div class="tree-head"><span class="t">文档</span><button class="btn sm new">+ 新建</button></div>
+        <div class="tree-body">
+          <div class="rs-proj-head"><span class="rp-name">远航计划</span><span class="rp-count">3</span></div>
+          <button class="rs-node active"><span class="rs-title">支付网关对接说明</span><span class="tag-mini mem">指定 3 人</span></button>
+          <button class="rs-node"><span class="rs-title">接口设计 · 对账</span><span class="tag-mini team">团队</span></button>
+          <button class="rs-node"><span class="rs-title">运维手册</span><span class="tag-mini draft">草稿</span></button>
+        </div>
+        <div class="tree-tip">受限文档仅负责人和名单成员可见；其他人（含管理员）看不到标题。</div>
+      </aside>
+      <section class="reader">
+        <div class="reader-head">
+          <div class="rh-main">
+            <div class="rh-crumb"><b>远航计划</b><span>·</span><span>技术方案</span></div>
+            <div class="rh-title">支付网关对接说明 <span class="pill green">已发布</span> <span class="pill blue">指定成员 · 3 人</span></div>
+            <div class="rh-meta"><span>负责人 孙琪</span><span>·</span><span>更新于 10 分钟前</span></div>
+          </div>
+          <div class="rh-actions">
+            <button class="btn" disabled title="指定成员可见的文档不生成公开链接">分享</button>
+            <button class="btn primary">编辑文档</button>
+          </div>
+        </div>
+        <div class="reader-body">
+          <div class="doc-content">
+            <h3>1. 接口范围</h3>
+            <p>本期对接支付网关的下单、查询、退款三个接口，回调统一走网关转发。</p>
+            <h3>2. 幂等约定</h3>
+            <ul><li>商户订单号作为幂等键，重复请求返回原结果</li><li>回调处理失败按 1 / 5 / 15 分钟重试</li></ul>
+            <h3>3. 联调排期</h3>
+            <p>网关侧 11-18 提供沙箱，联调窗口两天，失败回滚到上一版收银台。</p>
+          </div>
+        </div>
+      </section>
+      <aside class="perm">
+        <div class="perm-head"><span class="t">权限说明</span><span class="ro">只读</span></div>
+        <div class="perm-body">
+          <div class="perm-mine edit">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            <span><b>孙琪</b> · 你可编辑 / 删除（你是负责人）</span>
+          </div>
+          <div class="perm-row"><span class="k">归属</span><span class="v">项目 · <b>远航计划</b></span></div>
+          <div class="perm-row"><span class="k">可见范围</span><span class="v">已发布 · <b>指定成员（3 人）</b>：你、李娜、陈昊</span></div>
+          <div class="perm-row"><span class="k">可编辑 / 删除</span><span class="v"><span class="perm-people"><span class="pers">你（负责人）</span><span class="pers">名单内管理员</span></span></span></div>
+          <div class="perm-row"><span class="k">公开分享</span><span class="v">不可用（仅团队共享档可生成）</span></div>
+          <div class="perm-note">空间管理员未被豁免：不在名单说明里的管理员同样看不到本文，也不能编辑 / 删除。如需管理员可见，请把人加入名单或改回团队共享。</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="viewpane" data-view="member" data-scope="s3">
+    <div class="who"><span class="pill amber">视角：名单成员 李娜</span><span class="pill blue">在名单中</span> 可阅读、可评论；不可编辑。</div>
+    <div class="app">
+      <aside class="tree">
+        <div class="tree-head"><span class="t">文档</span><button class="btn sm new">+ 新建</button></div>
+        <div class="tree-body">
+          <div class="rs-proj-head"><span class="rp-name">远航计划</span><span class="rp-count">3</span></div>
+          <button class="rs-node active"><span class="rs-title">支付网关对接说明</span><span class="tag-mini mem">指定 3 人</span></button>
+          <button class="rs-node"><span class="rs-title">接口设计 · 对账</span><span class="tag-mini team">团队</span></button>
+          <button class="rs-node"><span class="rs-title">运维手册</span><span class="tag-mini draft">草稿</span></button>
+        </div>
+        <div class="tree-tip">李娜在名单内，能看到并打开；但修改仍需负责人或名单内管理员。</div>
+      </aside>
+      <section class="reader">
+        <div class="reader-head">
+          <div class="rh-main">
+            <div class="rh-crumb"><b>远航计划</b><span>·</span><span>技术方案</span></div>
+            <div class="rh-title">支付网关对接说明 <span class="pill green">已发布</span> <span class="pill blue">指定成员 · 3 人</span></div>
+            <div class="rh-meta"><span>负责人 孙琪</span><span>·</span><span>更新于 10 分钟前</span></div>
+          </div>
+          <div class="rh-actions">
+            <button class="btn" disabled title="指定成员可见的文档不生成公开链接">分享</button>
+            <button class="btn" disabled title="仅文档负责人或名单内管理员可编辑">编辑文档</button>
+          </div>
+        </div>
+        <div class="reader-body">
+          <div class="readonly-banner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            你只读：你在本文可见名单中；编辑 / 删除仅限负责人或名单内管理员。
+          </div>
+          <div class="doc-content">
+            <h3>1. 接口范围</h3>
+            <p>本期对接支付网关的下单、查询、退款三个接口，回调统一走网关转发。</p>
+            <h3>2. 幂等约定</h3>
+            <ul><li>商户订单号作为幂等键，重复请求返回原结果</li><li>回调处理失败按 1 / 5 / 15 分钟重试</li></ul>
+            <h3>3. 联调排期</h3>
+            <p>网关侧 11-18 提供沙箱，联调窗口两天，失败回滚到上一版收银台。</p>
+          </div>
+        </div>
+      </section>
+      <aside class="perm">
+        <div class="perm-head"><span class="t">权限说明</span><span class="ro">只读</span></div>
+        <div class="perm-body">
+          <div class="perm-mine read">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            <span><b>李娜</b> · 你只读（你在可见名单中）</span>
+          </div>
+          <div class="perm-row"><span class="k">归属</span><span class="v">项目 · <b>远航计划</b></span></div>
+          <div class="perm-row"><span class="k">可见范围</span><span class="v">已发布 · <b>指定成员（3 人）</b>：孙琪、你、陈昊</span></div>
+          <div class="perm-row"><span class="k">可编辑 / 删除</span><span class="v"><span class="perm-people"><span class="pers">孙琪（负责人）</span><span class="pers">名单内管理员</span></span></span></div>
+          <div class="perm-row"><span class="k">公开分享</span><span class="v">不可用（仅团队共享档可生成）</span></div>
+          <div class="perm-note">名单成员可阅读、评论；如需修改正文，请找负责人调整或把你改为负责人。</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="viewpane" data-view="admin" data-scope="s3">
+    <div class="who"><span class="pill red">视角：空间管理员 周敏</span><span class="pill amber">不在名单</span> 列表不展示，直链按「文档不存在」处理。</div>
+    <div class="app">
+      <aside class="tree">
+        <div class="tree-head"><span class="t">文档</span><button class="btn sm new">+ 新建</button></div>
+        <div class="tree-body">
+          <div class="rs-proj-head"><span class="rp-name">远航计划</span><span class="rp-count">2</span></div>
+          <button class="rs-node"><span class="rs-title">接口设计 · 对账</span><span class="tag-mini team">团队</span></button>
+          <button class="rs-node"><span class="rs-title">运维手册</span><span class="tag-mini draft">草稿</span></button>
+        </div>
+        <div class="tree-tip">「支付网关对接说明」不会出现在列表里，计数也只算可见文档（3 → 2）。</div>
+      </aside>
+      <section class="reader">
+        <div class="notfound">
+          <span class="ico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+          </span>
+          <div class="t">文档不存在或你没有访问权限</div>
+          <div class="s">直接打开受限文档的链接时，与「已删除」返回同一个 404，不暴露标题与是否存在。</div>
+          <div class="why">原因：本文可见范围为「指定成员（3 人）」，你不在名单内。<b>空间管理员同样受可见范围约束</b>——这是与用例分组一致的口径。需要处理时请让负责人把你加入名单，或调整可见范围。</div>
+        </div>
+      </section>
+      <aside class="perm">
+        <div class="perm-head"><span class="t">权限说明</span><span class="ro">只读</span></div>
+        <div class="perm-body">
+          <div class="perm-mine read">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.6 17a2 2 0 001.7 3h15.4a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+            <span><b>周敏</b> · 你无访问权限（不在可见名单）</span>
+          </div>
+          <div class="perm-note">面板只说明原因，不展示文档标题、负责人和名单内容——避免从权限说明侧漏出受限信息。</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 场景 4：仅自己 ============ -->
+<div class="scene" id="s4">
+  <div class="scene-head">
+    <h2>4 · 已发布 · 仅自己</h2>
+    <p>最窄档：除负责人外（含管理员）一律 404；分享不可用。</p>
+  </div>
+  <div class="viewswitch" data-group="s4">
+    <button class="on" data-view="owner">负责人</button>
+    <button data-view="other">项目可写成员 / 管理员</button>
+  </div>
+
+  <div class="viewpane on" data-view="owner" data-scope="s4">
+    <div class="who"><span class="pill blue">视角：负责人 孙琪</span><span class="pill amber">仅自己</span> 可编辑；改回团队共享不受「收窄守卫」限制。</div>
+    <div class="app">
+      <aside class="tree">
+        <div class="tree-head"><span class="t">文档</span><button class="btn sm new">+ 新建</button></div>
+        <div class="tree-body">
+          <div class="rs-proj-head"><span class="rp-name">远航计划</span><span class="rp-count">3</span></div>
+          <button class="rs-node active"><span class="rs-title">支付网关对接说明</span><span class="tag-mini self">仅自己</span></button>
+          <button class="rs-node"><span class="rs-title">接口设计 · 对账</span><span class="tag-mini team">团队</span></button>
+          <button class="rs-node"><span class="rs-title">运维手册</span><span class="tag-mini draft">草稿</span></button>
+        </div>
+        <div class="tree-tip">「仅自己」只有负责人能看到这一行；其他成员和管理员都看不到。</div>
+      </aside>
+      <section class="reader">
+        <div class="reader-head">
+          <div class="rh-main">
+            <div class="rh-crumb"><b>远航计划</b><span>·</span><span>技术方案</span></div>
+            <div class="rh-title">支付网关对接说明 <span class="pill green">已发布</span> <span class="pill">仅自己</span></div>
+            <div class="rh-meta"><span>负责人 孙琪</span><span>·</span><span>更新于 10 分钟前</span></div>
+          </div>
+          <div class="rh-actions">
+            <button class="btn" disabled title="仅团队共享档可生成公开链接">分享</button>
+            <button class="btn primary">编辑文档</button>
+          </div>
+        </div>
+        <div class="reader-body">
+          <div class="readonly-banner info">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+            本文已是「仅自己」：除你之外，空间管理员也看不到。收窄时已提醒受影响成员。
+          </div>
+          <div class="doc-content">
+            <h3>1. 接口范围</h3>
+            <p>本期对接支付网关的下单、查询、退款三个接口，回调统一走网关转发。</p>
+            <h3>2. 幂等约定</h3>
+            <ul><li>商户订单号作为幂等键，重复请求返回原结果</li><li>回调处理失败按 1 / 5 / 15 分钟重试</li></ul>
+          </div>
+        </div>
+      </section>
+      <aside class="perm">
+        <div class="perm-head"><span class="t">权限说明</span><span class="ro">只读</span></div>
+        <div class="perm-body">
+          <div class="perm-mine edit">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            <span><b>孙琪</b> · 你可编辑 / 删除（你是负责人）</span>
+          </div>
+          <div class="perm-row"><span class="k">归属</span><span class="v">项目 · <b>远航计划</b></span></div>
+          <div class="perm-row"><span class="k">可见范围</span><span class="v">已发布 · <b>仅自己</b>（仅负责人可见）</span></div>
+          <div class="perm-row"><span class="k">可编辑 / 删除</span><span class="v"><span class="perm-people"><span class="pers">你（负责人）</span></span></span></div>
+          <div class="perm-row"><span class="k">公开分享</span><span class="v">不可用（仅团队共享档可生成）</span></div>
+          <div class="perm-note">收窄到「仅自己」会让原先可见的成员全部失去访问；<b>操作必须由负责人确认</b>，管理员也不能代为收窄或恢复。</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="viewpane" data-view="other" data-scope="s4">
+    <div class="who"><span class="pill red">视角：项目可写成员 / 空间管理员</span><span class="pill amber">均不在名单</span> 列表不展示，直链 404。</div>
+    <div class="app">
+      <aside class="tree">
+        <div class="tree-head"><span class="t">文档</span><button class="btn sm new">+ 新建</button></div>
+        <div class="tree-body">
+          <div class="rs-proj-head"><span class="rp-name">远航计划</span><span class="rp-count">2</span></div>
+          <button class="rs-node"><span class="rs-title">接口设计 · 对账</span><span class="tag-mini team">团队</span></button>
+          <button class="rs-node"><span class="rs-title">运维手册</span><span class="tag-mini draft">草稿</span></button>
+        </div>
+        <div class="tree-tip">「仅自己」文档对所有人隐藏，包括空间主 / 管理员。</div>
+      </aside>
+      <section class="reader">
+        <div class="notfound">
+          <span class="ico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+          </span>
+          <div class="t">文档不存在或你没有访问权限</div>
+          <div class="s">列表、搜索、评论区、附件、需求关联与 AI 摘要全部按同一口径过滤，不允许从旁路反推内容。</div>
+          <div class="why">本文为「仅自己」，只有负责人能访问。管理动作也受限制：管理员无法在此文档上改删或调整可见范围。</div>
+        </div>
+      </section>
+      <aside class="perm">
+        <div class="perm-head"><span class="t">权限说明</span><span class="ro">只读</span></div>
+        <div class="perm-body">
+          <div class="perm-mine read">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.6 17a2 2 0 001.7 3h15.4a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+            <span><b>你</b> · 无访问权限（文档为「仅自己」）</span>
+          </div>
+          <div class="perm-note">不展示标题与名单；404 与「文档不存在」同文案。</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 场景 5：收窄守卫 ============ -->
+<div class="scene" id="s5">
+  <div class="scene-head">
+    <h2>5 · 收窄守卫与确认</h2>
+    <p>团队共享 → 指定成员 / 仅自己，必须负责人本人操作；扩大不受限。</p>
+  </div>
+  <div class="viewswitch" data-group="s5">
+    <button class="on" data-view="owner">我是负责人</button>
+    <button data-view="notowner">我不是负责人（项目可写）</button>
+  </div>
+
+  <div class="viewpane on" data-view="owner" data-scope="s5">
+    <div class="narrow-wrap">
+      <div class="narrow-card">
+        <div class="nc-head">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          可见范围 · 团队共享 → 指定成员
+        </div>
+        <div class="nc-body">
+          <div class="nc-title">确认收窄「支付网关对接说明」？</div>
+          <div class="nc-text">收窄后，不在名单里的成员将立刻无法在列表、搜索和直链中访问本文。操作会写入活动记录。</div>
+          <div class="impact">
+            将有 <b>9 位成员</b> 失去访问（当前可见 12 人 → 保留 3 人）
+            <div class="names"><span>王芳</span><span>赵磊</span><span>周敏（管理员）</span><span>吴俊</span><span>郑楠</span><span>+4</span></div>
+          </div>
+          <div class="hint">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+            <span>已有的公开分享链接会同步撤销；评论、附件随文档一起变为不可见。</span>
+          </div>
+          <div class="nc-foot">
+            <button class="btn">取消</button>
+            <button class="btn primary">仍要收窄</button>
+          </div>
+        </div>
+      </div>
+      <div class="narrow-card">
+        <div class="nc-head">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          扩大：指定成员 → 团队共享
+        </div>
+        <div class="nc-body">
+          <div class="nc-title">扩大可见范围不受守卫限制</div>
+          <div class="nc-text">负责人、名单内管理员都可以把文档改回团队共享；改回后文档重新对项目 / 空间可见成员开放，分享链接恢复可用。</div>
+          <div class="impact" style="border-color:var(--success-border);background:var(--success-soft);color:var(--success-fg)">
+            不会让任何人「突然看不到」，因此不要求创建人确认。
+          </div>
+          <div class="nc-foot"><button class="btn primary">改回团队共享</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="viewpane" data-view="notowner" data-scope="s5">
+    <div class="narrow-wrap">
+      <div class="narrow-card">
+        <div class="nc-head">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+          可见范围 · 团队共享 → 受限
+        </div>
+        <div class="nc-body">
+          <div class="nc-title">收窄选项对你不可用</div>
+          <div class="nc-text">你是本项目可写成员，但不是文档负责人。团队共享文档收窄到「指定成员 / 仅自己」必须负责人操作，避免其他成员突然看不到。</div>
+          <div class="vis-opts" style="margin-top:10px">
+            <div class="vis-card locked">
+              <span class="radio"></span>
+              <span class="v-main">
+                <span class="v-title">指定成员 <span class="pill amber">仅负责人</span></span>
+                <span class="v-desc">你仍可查看名单与阅读；不能改为指定成员。</span>
+              </span>
+            </div>
+            <div class="vis-card locked">
+              <span class="radio"></span>
+              <span class="v-main">
+                <span class="v-title">仅自己 <span class="pill amber">仅负责人</span></span>
+                <span class="v-desc">不能把公共文档收窄为个人可见。</span>
+              </span>
+            </div>
+          </div>
+          <div class="locked-note" style="margin-top:10px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            <span>服务端同样校验（不能只靠前端禁用）：非负责人调用收窄接口返回 400「团队共享文档收窄可见范围需由负责人操作」。</span>
+          </div>
+        </div>
+      </div>
+      <div class="narrow-card">
+        <div class="nc-head">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          仍可做的组织类操作
+        </div>
+        <div class="nc-body">
+          <div class="nc-text">项目可写成员仍可：调整排序、新建子文档、评论、在团队共享档下生成分享链接（与现状一致）。这些操作不改父文档正文与可见状态。</div>
+          <div class="nc-foot"><button class="btn">我知道了</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 场景 6：草稿叠加与矩阵 ============ -->
+<div class="scene" id="s6">
+  <div class="scene-head">
+    <h2>6 · 草稿叠加与生效矩阵</h2>
+    <p>可见范围只约束已发布；草稿统一仅负责人 + 空间管理员。下表是实现与验收的共同口径。</p>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="st-no">STEP 1 · 草稿</div>
+      <div class="st-t">仅负责人 + 管理员</div>
+      <div class="st-d">无论选了哪档，未发布内容都不对名单成员开放；避免半成品被提前看到。</div>
+    </div>
+    <div class="step">
+      <div class="st-no">STEP 2 · 发布</div>
+      <div class="st-t">按可见范围生效</div>
+      <div class="st-d">发布瞬间开始按 team / members / personal 计算；列表、搜索、评论、附件同步切换。</div>
+    </div>
+    <div class="step">
+      <div class="st-no">STEP 3 · 调整</div>
+      <div class="st-t">扩大随时，收窄需负责人</div>
+      <div class="st-d">收窄会让部分成员失去访问，需负责人确认；扩大（回到团队共享）不受限制。</div>
+    </div>
+  </div>
+
+  <div class="matrix-wrap">
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>文档状态 / 可见范围</th>
+          <th>负责人</th>
+          <th>名单成员</th>
+          <th>项目其他可写成员</th>
+          <th>空间管理员（非名单）</th>
+          <th>空间查看者</th>
+          <th>公开分享</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>草稿（任意档）</td>
+          <td><span class="cell"><span class="ok">可见 · 可编辑</span><span class="sub">草稿始终归负责人</span></span></td>
+          <td><span class="cell"><span class="no">404</span><span class="sub">发布后才生效</span></span></td>
+          <td><span class="cell"><span class="no">404</span><span class="sub">含项目可写者</span></span></td>
+          <td><span class="cell"><span class="ok">可见 · 可编辑</span><span class="sub">管理员可见草稿（现状不变）</span></span></td>
+          <td><span class="cell"><span class="no">404</span></span></td>
+          <td><span class="cell"><span class="no">不可用</span><span class="sub">未发布</span></span></td>
+        </tr>
+        <tr>
+          <td class="vis-team">已发布 · 团队共享</td>
+          <td><span class="cell"><span class="ok">可见 · 可编辑</span></span></td>
+          <td><span class="cell"><span class="no">—</span><span class="sub">不适用</span></span></td>
+          <td><span class="cell"><span class="ok">可见</span><span class="sub">只读（创建人保护）</span></span></td>
+          <td><span class="cell"><span class="ok">可见 · 可编辑</span><span class="sub">A 档豁免，仅在可见之后生效</span></span></td>
+          <td><span class="cell"><span class="ok">可见</span><span class="sub">只读</span></span></td>
+          <td><span class="cell"><span class="ok">可用</span><span class="sub">限时只读链接</span></span></td>
+        </tr>
+        <tr>
+          <td class="vis-mem">已发布 · 指定成员</td>
+          <td><span class="cell"><span class="ok">可见 · 可编辑</span></span></td>
+          <td><span class="cell"><span class="ok">可见</span><span class="sub">只读</span></span></td>
+          <td><span class="cell"><span class="no">404</span></span></td>
+          <td><span class="cell"><span class="no">404</span><span class="sub">不在名单即不可见</span></span></td>
+          <td><span class="cell"><span class="no">404</span></span></td>
+          <td><span class="cell"><span class="no">不可用</span></span></td>
+        </tr>
+        <tr>
+          <td class="vis-self">已发布 · 仅自己</td>
+          <td><span class="cell"><span class="ok">可见 · 可编辑</span></span></td>
+          <td><span class="cell"><span class="no">—</span><span class="sub">不适用</span></span></td>
+          <td><span class="cell"><span class="no">404</span></span></td>
+          <td><span class="cell"><span class="no">404</span><span class="sub">管理员也受限</span></span></td>
+          <td><span class="cell"><span class="no">404</span></span></td>
+          <td><span class="cell"><span class="no">不可用</span></span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="matrix-note">
+    <b>补注：</b>① 项目可见范围与文档可见范围取交集——项目里「不可见」的成员，即使被加进名单也仍然看不到（保存名单时会提示先授权）。② 名单上限 50 人，至少 1 人，只能选本空间成员。③ 名单内管理员恢复 A 档豁免（可见后可编辑 / 删除）。④ 评论、附件、搜索摘要、需求关联、AI 源文档全部复用同一判定，避免旁路。
+  </div>
+</div>
+
+<section class="impl">
+  <div class="impl-head">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    落地改动（原型阶段，仅列范围，未改产品代码）
+  </div>
+  <div class="impl-body">
+    <div class="li"><span class="n">1</span><span><code>sql/99_doc_visibility.sql</code>：<code>requirement_doc.visibility</code> 默认 <code>team</code> + <code>doc_visibility_member</code> 表（照 <code>case_set_member</code>）。</span></div>
+    <div class="li"><span class="n">2</span><span>后端：<code>RequirementDocService.canSeeDoc</code> 统一判定（草稿 → 可见范围 → 项目范围）；<code>getVisible</code> 改为复用。</span></div>
+    <div class="li"><span class="n">3</span><span>SQL 过滤：列表 / 搜索 / 计数两处 predicate 增加 <code>visibility</code> 与名单 <code>EXISTS</code> 子查询。</span></div>
+    <div class="li"><span class="n">4</span><span>写入：保存请求带 visibility + memberIds；收窄守卫（负责人）、名单校验（≥1、≤50、项目可见）。</span></div>
+    <div class="li"><span class="n">5</span><span>旁路：评论 / 附件 / 需求关联 / AI 源文档改走 <code>canSeeDoc</code>；分享仅 team 档可创建，收窄时撤销旧链接。</span></div>
+    <div class="li"><span class="n">6</span><span>前端：新建 / 编辑弹窗三档 + 成员选择；列表档位徽标；权限说明面板「可见范围」行；收窄确认框。</span></div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var chips = document.querySelectorAll(".sc-chip");
+  function showScene(id){
+    document.querySelectorAll(".scene").forEach(function(s){ s.classList.toggle("on", s.id === id); });
+    chips.forEach(function(c){ c.classList.toggle("active", c.getAttribute("data-sc") === id); });
+    if (history.replaceState) history.replaceState(null, "", "#" + id);
+  }
+  chips.forEach(function(c){
+    c.addEventListener("click", function(){ showScene(c.getAttribute("data-sc")); });
+  });
+  var qs = new URLSearchParams(location.search);
+  var initial = qs.get("sc") || (location.hash || "").replace("#", "");
+  if (initial && document.getElementById(initial)) showScene(initial);
+  window.scrollTo(0, 0);
+
+  /* 场景 1：三档切换 */
+  var visLabels = { team: "团队共享", members: "指定成员", personal: "仅自己" };
+  var pill = document.getElementById("visPill");
+  var picker = document.getElementById("pickerField");
+  document.querySelectorAll("#visOpts .vis-card").forEach(function(card){
+    card.addEventListener("click", function(){
+      document.querySelectorAll("#visOpts .vis-card").forEach(function(c){ c.classList.remove("on"); });
+      card.classList.add("on");
+      var v = card.getAttribute("data-vis");
+      pill.textContent = visLabels[v];
+      picker.hidden = v !== "members";
+    });
+  });
+  /* 场景 1：成员勾选计数 */
+  var mems = document.querySelectorAll("#memList .mem");
+  var cnt = document.getElementById("memCnt");
+  function syncCount(){
+    var n = document.querySelectorAll("#memList .mem.on").length;
+    cnt.textContent = n + " / 50";
+  }
+  mems.forEach(function(m){
+    m.addEventListener("click", function(){
+      if (m.classList.contains("disabled")) return;
+      m.classList.toggle("on");
+      syncCount();
+    });
+  });
+  syncCount();
+
+  /* 视角切换（场景 3 / 4 / 5） */
+  document.querySelectorAll(".viewswitch").forEach(function(sw){
+    var scope = sw.getAttribute("data-group");
+    sw.querySelectorAll("button").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        sw.querySelectorAll("button").forEach(function(b){ b.classList.remove("on"); });
+        btn.classList.add("on");
+        var v = btn.getAttribute("data-view");
+        document.querySelectorAll('.viewpane[data-scope="' + scope + '"]').forEach(function(p){
+          p.classList.toggle("on", p.getAttribute("data-view") === v);
+        });
+      });
+    });
+  });
+
+  /* 截图 / 深链：?sc=s3&view=admin */
+  var presetView = new URLSearchParams(location.search).get("view");
+  if (presetView){
+    var presetBtn = document.querySelector('.viewswitch button[data-view="' + presetView + '"]');
+    if (presetBtn) presetBtn.click();
+  }
+  window.scrollTo(0, 0);
+})();
+</script>
+</body>
+</html>

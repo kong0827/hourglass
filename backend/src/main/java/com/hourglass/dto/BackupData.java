@@ -343,6 +343,10 @@ public class BackupData {
         private String status;
         /** 发布时间（空=草稿）；旧备份没有该字段，导入时按已发布回填（同 sql/42 迁移口径） */
         private String publishedAt;
+        /** 可见范围（team/members/personal）；旧备份缺省 team，保持升级前行为 */
+        private String visibility;
+        /** 指定可见成员账号 ID（visibility=members 时随备份迁移） */
+        private List<String> memberIds;
         private String owner;
         private String ownerUserId;
         private Integer sortOrder;

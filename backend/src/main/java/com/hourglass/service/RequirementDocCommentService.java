@@ -295,8 +295,11 @@ public class RequirementDocCommentService {
             throw AppException.notFound("文档不存在：" + docId);
         }
         projectAccess.assertView(workspaceId, userId, doc.getReqId());
-        if (!RequirementDocService.canSeeDraft(doc.getOwnerUserId(), doc.getPublishedAt(), userId,
-                projectAccess.roleOf(workspaceId, userId))) {
+        boolean member = userId != null
+                && RequirementDocService.VIS_MEMBERS.equals(doc.getVisibility())
+                && docMapper.countVisibilityMember(doc.getId(), userId) > 0;
+        if (!RequirementDocService.canSeeDoc(doc.getVisibility(), doc.getOwnerUserId(), doc.getPublishedAt(),
+                userId, projectAccess.roleOf(workspaceId, userId), member)) {
             throw AppException.notFound("文档不存在：" + docId);
         }
         return doc;

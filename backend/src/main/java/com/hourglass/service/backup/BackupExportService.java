@@ -296,6 +296,22 @@ public class BackupExportService {
         data.setBaselineAt(baselineAt == null ? null : baselineAt.format(ISO_TS));
 
         /* v6：需求文档（含正文）与分支池。分支操作时间线属于审计记录，不随备份迁移 */
+        java.util.Map<String, java.util.List<String>> visMembers =
+                new java.util.HashMap<String, java.util.List<String>>();
+        for (java.util.Map<String, Object> row : requirementDocMapper.selectVisibilityMembersByWorkspace(workspaceId)) {
+            Object docId = row.get("docId");
+            Object userId = row.get("userId");
+            if (docId == null || userId == null) {
+                continue;
+            }
+            String key = String.valueOf(docId);
+            java.util.List<String> list = visMembers.get(key);
+            if (list == null) {
+                list = new java.util.ArrayList<String>();
+                visMembers.put(key, list);
+            }
+            list.add(String.valueOf(userId));
+        }
         List<BackupData.BackupReqDoc> reqDocs = new ArrayList<BackupData.BackupReqDoc>();
         for (RequirementDoc d : requirementDocMapper.selectAllByWorkspace(workspaceId)) {
             BackupData.BackupReqDoc bd = new BackupData.BackupReqDoc();
@@ -308,6 +324,8 @@ public class BackupExportService {
             bd.setFormat(d.getFormat() == null ? "html" : d.getFormat());
             bd.setStatus(d.getStatus());
             bd.setPublishedAt(d.getPublishedAt() == null ? null : d.getPublishedAt().format(ISO_TS));
+            bd.setVisibility(d.getVisibility());
+            bd.setMemberIds(visMembers.get(d.getId()));
             bd.setOwner(d.getOwner());
             bd.setOwnerUserId(d.getOwnerUserId());
             bd.setSortOrder(d.getSortOrder());

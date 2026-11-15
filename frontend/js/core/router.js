@@ -32,6 +32,14 @@ function enterRequirementsLazy(isCurrent){
     return m;
   });
 }
+/* 文档历史是 requirements 的子页：同一模块渲染，只换外层页面壳 */
+function enterDocHistoryLazy(isCurrent){
+  return loadView("requirements").then(function(m){
+    if(isCurrent && !isCurrent()) return m;
+    m.enterDocHistoryView();
+    return m;
+  });
+}
 function enterSettingsLazy(isCurrent){
   return loadView("settings").then(function(m){
     if(isCurrent && !isCurrent()) return m;
@@ -52,9 +60,11 @@ var VIEWS = {
   projects: { title:"项目", sub:"项目列表与全局健康度；点项目名进入项目驾驶舱", enter:lazyEnter("projects", "enterProjectsView") },
   phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；发布日程跨项目汇总计划；全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
   version:  { title:"版本详情", sub:"单版本详情页：范围、投入、需求、发布事实与操作记录", enter:lazyEnter("version", "enterVersionView") },
+  release:  { title:"发布计划", sub:"单版本发布工作台：计划、实际记录、发布历史与版本内容；页签与版本都在 URL 里", enter:lazyEnter("release", "enterReleaseView") },
   delivery: { title:"交付说明", sub:"一页式交付说明：承诺范围、实际发布、回归结果与遗留问题聚合成一份可对外提交的文档", enter:lazyEnter("delivery", "enterDeliveryView") },
   demands:  { title:"需求池",   sub:"四态看板与主状态工作页：待评审 → 已通过 → 已排期；已关闭保留原因与恢复去向", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
+  dochistory: { title:"文档历史", sub:"单文档的历史快照：左侧版本，右侧阅读与逐行对比；版本在 URL 里", enter:enterDocHistoryLazy },
   testcases: { title:"测试", sub:"一条质量链路：用例 → 缺陷 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
@@ -72,9 +82,9 @@ var VIEWS = {
 /* 视图 → 侧栏一级入口。多个视图共用一个入口时，靠页内子导航切换 */
 var NAV_OF = {
   mine:"mine", review:"review",
-  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", version:"phase", delivery:"phase",
+  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", version:"phase", release:"phase", delivery:"phase",
   board:"workitems", list:"workitems", tree:"workitems", chain:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems",
-  requirements:"requirements", testcases:"testcases", branches:"branches",
+  requirements:"requirements", dochistory:"requirements", testcases:"testcases", branches:"branches",
   analysis:"insight", report:"insight", investment:"insight",
   workload:"workload", risks:"risks"
 };
@@ -127,7 +137,7 @@ var NAV_GROUPS = [
 var TAB_OF = {
   mine: "mine", review: "mine",
   board: "board", list: "board", calendar: "board", gantt: "board", branches: "board", workcolumn: "board",
-  projects: "projects", requirements: "projects", demands: "projects", testcases: "projects",
+  projects: "projects", requirements: "projects", dochistory: "projects", demands: "projects", testcases: "projects",
   portfolio: "projects", project: "projects", phase: "projects", version: "projects", delivery: "projects",
   messages: "messages",
   settings: "me", profile: "me"
@@ -303,7 +313,7 @@ function syncViewHash(name){
   var h = "#/" + name;
   if(window.location.hash === h) return;
   /* 分支、工作项列、需求主状态工作页、版本详情与文档深链：保留查询参数，避免 showView 抹掉下钻位置 */
-  if((name === "branches" || name === "workcolumn" || name === "demands" || name === "version" || name === "requirements")
+  if((name === "branches" || name === "workcolumn" || name === "demands" || name === "version" || name === "release" || name === "requirements" || name === "dochistory")
       && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }
@@ -337,6 +347,14 @@ window.addEventListener("popstate", function(){
     /* 同一版本内换页签 / 改筛选，或后退到另一个版本：都交给详情页对齐 */
     var vdMod = viewModule("version");
     if(vdMod && vdMod.refreshFromHash) vdMod.refreshFromHash();
+  }else if(n === "release"){
+    /* 发布工作台：后退/前进换页签或换版本都交给子页对齐，不整页重进 */
+    var relMod = viewModule("release");
+    if(relMod && relMod.refreshFromHash) relMod.refreshFromHash();
+  }else if(n === "dochistory"){
+    /* 文档历史：后退/前进换版本或视图，交给子页对齐 */
+    var rhMod = viewModule("requirements");
+    if(rhMod && rhMod.refreshDocHistoryFromHash) rhMod.refreshDocHistoryFromHash();
   }else if(n === "demands"){
     enterDemandRoute();
   }
@@ -344,6 +362,16 @@ window.addEventListener("popstate", function(){
   handleDeepLink();
 });
 window.addEventListener("hashchange", function(){
+  if(viewFromHash() === "release" && activeView === "release"){
+    var relMod = viewModule("release");
+    if(relMod && relMod.refreshFromHash) relMod.refreshFromHash();
+    return;
+  }
+  if(viewFromHash() === "dochistory" && activeView === "dochistory"){
+    var rhMod = viewModule("requirements");
+    if(rhMod && rhMod.refreshDocHistoryFromHash) rhMod.refreshDocHistoryFromHash();
+    return;
+  }
   if(activeView !== "demands" || viewFromHash() !== "demands") return;
   if(String(window.location.hash || "") === demandRouteHash) return;
   enterDemandRoute();

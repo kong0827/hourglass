@@ -45,7 +45,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* 预览直供的前端比运行中的 jar 新：文档分类/测试模块接口在源码里已有、jar 里还没打进去。
    这类 404 属环境差异，单独归桶并如实报出，不与本次改动的报错混在一起。 */
-const KNOWN_GAP_APIS = ["/api/doc-categories", "/api/test-modules"];
+/* 预览直供前端与运行 jar/演示库结构不一致的已知缺口：源码已有但 jar 未打进
+   （doc-categories / test-modules / branches-pending），以及演示库缺 project_repo /
+   dev_branch.outcome 带来的 500（2026-11-15 前已存在），都不算本次改动引入 */
+const KNOWN_GAP_APIS = ["/api/doc-categories", "/api/test-modules", "/api/repos",
+  "/api/branches/board", "/api/branches/options", "/api/branches/pending",
+  "/api/mobile/team-overview"];
 const isKnownGap = url => KNOWN_GAP_APIS.some(p => String(url).indexOf(p) !== -1);
 /* F 段故意被拒的探针：只读成员直接 POST reorder（403）+ 三种非法排列（400）。
    按 reorder 路径精确登记，次数必须与预算一致，其余 4xx 仍照常判失败。 */

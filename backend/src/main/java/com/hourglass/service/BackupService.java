@@ -597,6 +597,10 @@ public class BackupService {
                         ? RequirementDocService.excerptOfMarkdown(doc.getContent())
                         : RequirementDocService.excerptOf(doc.getContent()));
                 doc.setStatus(oneOf(bd.getStatus(), new String[]{"draft", "active", "done"}, "draft"));
+                /* 旧备份没有可见范围：按团队共享回填，保持升级前行为；成员按现存账号过滤 */
+                String visibility = oneOf(bd.getVisibility(),
+                        new String[]{"team", "members", "personal"}, "team");
+                doc.setVisibility(visibility);
                 doc.setOwner(Texts.cut(Texts.trimToNull(bd.getOwner()), 32));
                 String ownerUserId = Texts.trimToNull(bd.getOwnerUserId());
                 doc.setOwnerUserId(ownerUserId != null && st.memberIds.contains(ownerUserId)
@@ -606,6 +610,18 @@ public class BackupService {
                 doc.setUpdatedAt(parseTs(bd.getUpdatedAt()));
                 doc.setPublishedAt(parseTs(bd.getPublishedAt()));
                 requirementDocMapper.insert(doc);
+                if ("members".equals(visibility) && bd.getMemberIds() != null) {
+                    java.util.List<String> uids = new java.util.ArrayList<String>();
+                    for (String rawUid : bd.getMemberIds()) {
+                        String uid = Texts.trimToNull(rawUid);
+                        if (uid != null && st.memberIds.contains(uid) && !uids.contains(uid)) {
+                            uids.add(uid);
+                        }
+                    }
+                    if (!uids.isEmpty()) {
+                        requirementDocMapper.insertVisibilityMembers(workspaceId, id, uids);
+                    }
+                }
                 st.reqDocCount++;
                 if (original != null) {
                     docIdByOriginal.put(original, id);

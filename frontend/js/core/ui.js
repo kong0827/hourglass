@@ -138,6 +138,8 @@ import { icon } from "./icons.js";
   }
   function openModal(m, focusSel) {
     if (!m) return;
+    /* 静态弹窗的按钮接线可能在覆盖层注入前就跑过一次：开弹窗时补接，见 wire() */
+    wire();
     /* 所有弹窗共用同一套：焦点陷阱、遮罩关闭、焦点恢复；不再依赖手工在白名单里登记 */
     if (!m.__uiWired) { m.__uiWired = true; wireModal(m, function () { requestCloseModal(m); }); }
     lastFocus = document.activeElement;
@@ -575,14 +577,18 @@ import { icon } from "./icons.js";
   }
 
   /* ==================== 弹窗按钮接线 ==================== */
+  var staticWired = false;
   function wire() {
     var dlgConfirm = document.getElementById("dlgConfirm");
-    if (dlgConfirm) {
-      document.getElementById("dlgConfirmOk").addEventListener("click", function () { settleConfirm(true); });
-      document.getElementById("dlgConfirmCancel").addEventListener("click", function () { settleConfirm(false); });
-      document.getElementById("dlgConfirmX").addEventListener("click", function () { settleConfirm(false); });
-      wireModal(dlgConfirm, function () { settleConfirm(false); });
-    }
+    /* 覆盖层由 templates/index.js 注入，可能晚于本模块求值：那时先不接，
+       等第一次 openModal 再补一次，否则确认框/X 会点了没反应 */
+    if (!dlgConfirm || staticWired) return;
+    staticWired = true;
+    document.getElementById("dlgConfirmOk").addEventListener("click", function () { settleConfirm(true); });
+    document.getElementById("dlgConfirmCancel").addEventListener("click", function () { settleConfirm(false); });
+    document.getElementById("dlgConfirmX").addEventListener("click", function () { settleConfirm(false); });
+    wireModal(dlgConfirm, function () { settleConfirm(false); });
+    dlgConfirm.__uiWired = true;
     [["dlgWsCreate", ["dlgWsCreateX", "dlgWsCreateCancel"]],
      ["dlgViewName", ["dlgViewNameX", "dlgViewNameCancel"]],
      ["dlgWsDelete", ["dlgWsDeleteX", "dlgWsDeleteCancel"]],

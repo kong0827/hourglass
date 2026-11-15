@@ -444,6 +444,7 @@ public class TaskCascade {
         docCommentMapper.deleteByWorkspace(workspaceId);
         docHistoryMapper.deleteAllByWorkspace(workspaceId);
         reqDocShareMapper.deleteByWorkspace(workspaceId);
+        requirementDocMapper.deleteVisibilityMembersByWorkspace(workspaceId);
         requirementDocMapper.deleteAllByWorkspace(workspaceId);
         attachmentService.deleteAllWithFiles(workspaceId);
         deleteRepoBindings(workspaceId);
@@ -476,6 +477,8 @@ public class TaskCascade {
             /* 文档历史不在备份格式里：导入时保留旧快照，避免“备份没带就直接删”。
                同空间导入文档 ID 通常复用，历史仍可对应；跨空间可能成为孤立历史，但不再静默丢数据。 */
             reqDocShareMapper.deleteByWorkspace(workspaceId);
+            /* 可见成员是文档的从属数据：文档整体替换时一并清掉，避免同 ID 重建混入旧名单 */
+            requirementDocMapper.deleteVisibilityMembersByWorkspace(workspaceId);
             requirementDocMapper.deleteAllByWorkspace(workspaceId);
         }
         if (clearBranches) {

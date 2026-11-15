@@ -14,41 +14,12 @@
 .mob-stage-link{width:100%;margin:0 0 10px;justify-content:center;color:var(--primary-fg);
   border-color:var(--primary-border);background:var(--primary-soft);}
 
-/* ---------- 页头 ---------- */
-.wc-head{
-  position:sticky;top:0;z-index:20;background:var(--surface);
-  border-bottom:1px solid var(--border);
-  padding:10px var(--content-pad) 0;
-}
-.wc-head-top{display:flex;align-items:center;gap:10px;row-gap:6px;flex-wrap:wrap;min-width:0;}
-.wc-back{
-  flex:0 0 auto;height:30px;padding:0 10px;display:inline-flex;align-items:center;gap:5px;
-  border:1px solid var(--primary-border);border-radius:7px;
-  background:var(--primary-soft);color:var(--primary-fg);font-size:12px;font-weight:600;
-}
-.wc-back:hover{background:var(--primary);border-color:var(--primary);color:#fff;}
-.wc-back:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft);}
-.wc-title{
-  margin:0;min-width:0;font-size:19px;line-height:1.3;font-weight:680;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
+/* ---------- 页头 ----------
+   骨架（sticky、标题、页签、返回键）在 components.css §4.7.1，这里只放附加件 */
 .wc-title-tag{flex:0 0 auto;font-size:11.5px;}
 .wc-rule-btn{flex:0 0 auto;color:var(--text-3);}
-.wc-head-top .sp{flex:1 1 auto;min-width:0;}
 .wc-total{flex:0 0 auto;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums;}
-.wc-tabs{display:flex;gap:20px;margin-top:6px;overflow-x:auto;scrollbar-width:none;}
-.wc-tabs::-webkit-scrollbar{display:none;}
-.wc-tab{
-  flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
-  min-height:38px;padding:0 1px;border:0;border-bottom:2px solid transparent;
-  background:transparent;color:var(--text-2);font-size:12.5px;white-space:nowrap;
-}
 .wc-tab .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
-.wc-tab b{font-size:11px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
-.wc-tab:hover{color:var(--primary-fg);}
-.wc-tab:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--primary-border);border-radius:var(--r-xs);}
-.wc-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650;}
-.wc-tab.on b{color:var(--primary-fg);}
 
 /* ---------- 内容区 ---------- */
 .wc-body{width:100%;max-width:1600px;margin:0 auto;padding:14px var(--content-pad) 32px;}
@@ -355,7 +326,7 @@
 @media (max-width:700px){
   .wc-head{padding:8px 12px 0;}
   .wc-body{padding:12px 12px 24px;}
-  .wc-title{font-size:17px;}
+  .wc-title{font-size:var(--fs-page-title-sm);}
   .wc-title-tag,.wc-total{display:none;}
   .wc-tabs{gap:16px;margin-top:2px;}
   .wc-tab{min-height:44px;font-size:13px;}

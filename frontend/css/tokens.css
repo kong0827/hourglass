@@ -75,6 +75,32 @@
   --drawer-w-lg:800px;
   --board-col-w:300px;
 
+  /* ---- 版式骨架（场景 5）：页头 / 工具条 / 页签 / 表内空态 ----
+     同名控件只认这一组值；页面文件不再自带字号与内边距。
+     字号档位收敛为 11 / 12 / 13 / 14 / 16 / 20 六档，
+     断点沿用 639 / 900 / 1024 / 1280（媒体查询无法读变量，改断点时按此清单搜）。 */
+  --fs-page-title:20px;
+  --fs-page-title-sm:16px;
+  --head-pad-y:16px;
+  --head-pad-x:22px;
+  --toolbar-h:36px;
+  --tab-h:38px;
+  --thead-h:36px;
+  --row-h:56px;
+  --row-h-lg:62px;
+  --empty-page-min:240px;
+  --empty-page-pad:40px;
+  --empty-table-pad:16px 12px;
+
+  /* ---- 层级表：页面内 sticky 最低，浮层按打开顺序递增 ----
+     JS 的 topOverlayZ() 会在此之上继续加 1，避免同层遮挡。 */
+  --z-sticky:20;
+  --z-overlay:200;
+  --z-toast:300;
+  --z-tip:400;
+  --z-drag:900;
+  --z-palette:1200;
+
   /* ---- 面板调色板（模块 / 看板列取色器预设） ---- */
   --palette-1:#2563EB; --palette-2:#12B76A; --palette-3:#F79009; --palette-4:#F04438;
   --palette-5:#7A5AF8; --palette-6:#0E9384; --palette-7:#DD2590; --palette-8:#98A2B3;

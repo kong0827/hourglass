@@ -470,10 +470,13 @@ public class AttachmentService {
         return t.getReqId();
     }
 
-    /** 草稿文档的附件与正文同口径：仅作者与空间 owner/admin 可见，避免绕过文档列表直取附件 */
+    /** 文档的附件与正文同口径：草稿仅作者与空间 owner/admin；已发布再叠加文档可见范围，避免绕过文档列表直取附件 */
     private void assertDocDraftVisible(String workspaceId, String userId, RequirementDoc doc) {
-        if (!RequirementDocService.canSeeDraft(doc.getOwnerUserId(), doc.getPublishedAt(), userId,
-                projectAccess.roleOf(workspaceId, userId))) {
+        boolean member = userId != null
+                && RequirementDocService.VIS_MEMBERS.equals(doc.getVisibility())
+                && docMapper.countVisibilityMember(doc.getId(), userId) > 0;
+        if (!RequirementDocService.canSeeDoc(doc.getVisibility(), doc.getOwnerUserId(), doc.getPublishedAt(),
+                userId, projectAccess.roleOf(workspaceId, userId), member)) {
             throw AppException.notFound("文档不存在：" + doc.getId());
         }
     }

@@ -66,7 +66,7 @@ class RequirementServiceTest {
         agg.setDone(1);
         agg.setProgressSum(150);
         when(tasks.countByReq(WS)).thenReturn(Collections.singletonList(agg));
-        when(docs.countByReqMap(WS)).thenReturn(Collections.singletonMap("R1", 3));
+        when(docs.countByReqMap(WS, VIEWER, false)).thenReturn(Collections.singletonMap("R1", 3));
 
         Map<String, Object> versionRow = new HashMap<String, Object>();
         versionRow.put("reqId", "R1");

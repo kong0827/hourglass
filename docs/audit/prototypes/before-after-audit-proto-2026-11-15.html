@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 审计修复前后对比原型 · 2026-11-15</title>
+<style>
+/* ============ 令牌（与 frontend/css/tokens.css 对齐） ============ */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --ring:0 0 0 3px rgba(37,99,235,.16);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:#EDEFF3;font-family:var(--font-sans);font-size:13px;color:var(--text);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+input,select,textarea{font:inherit;color:inherit}
+svg{display:block}
+[hidden]{display:none !important}
+code{font-family:var(--font-mono);font-size:11px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+
+/* ============ 原型工具条 ============ */
+.proto-bar{position:sticky;top:0;z-index:90;min-height:48px;display:flex;align-items:center;gap:14px;padding:7px 14px;
+  background:#0C1424;color:#E7EEF9;box-shadow:0 1px 0 rgba(255,255,255,.06);flex-wrap:wrap}
+.pb-brand{display:flex;align-items:center;gap:8px;font-weight:650;letter-spacing:.01em;white-space:nowrap;font-size:13px}
+.pb-brand i{width:18px;height:18px;border-radius:6px;background:linear-gradient(135deg,#5B8DEF,#8B5CF6);display:inline-block}
+.pb-tag{font-size:9.5px;font-weight:750;letter-spacing:.08em;color:#9FD0FF;background:rgba(46,144,250,.18);border:1px solid rgba(46,144,250,.3);padding:2px 6px;border-radius:999px}
+.pb-date{font-size:11px;color:#8FA3BF;font-family:var(--font-mono)}
+.pb-grow{flex:1}
+.pb-group{display:flex;align-items:center;gap:6px;font-size:11px;color:#9DB0C9;white-space:nowrap}
+.pb-seg{display:inline-flex;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:2px;flex-wrap:wrap}
+.pb-seg button{height:24px;padding:0 9px;border-radius:6px;font-size:11px;color:#B9C7DB;white-space:nowrap}
+.pb-seg button.on{background:#F1F6FF;color:#0C1424;font-weight:650}
+.pb-seg button:hover:not(.on){background:rgba(255,255,255,.08)}
+.pb-chk{display:flex;align-items:center;gap:6px;font-size:11px;color:#B9C7DB;cursor:pointer;user-select:none}
+.pb-chk input{accent-color:#5B8DEF}
+
+/* ============ 对比板 ============ */
+#board{padding:18px 18px 42px;max-width:1680px;margin:0 auto}
+.scene-head{display:flex;align-items:flex-start;gap:12px;margin:0 2px 12px;flex-wrap:wrap}
+.scene-head h1{margin:0;font-size:18px;font-weight:750;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.scene-head .sub{margin:4px 0 0;font-size:12px;color:var(--text-2);max-width:980px;line-height:1.65}
+.scene-head .ev{margin-left:auto;font-size:10.5px;color:var(--text-3);text-align:right;line-height:1.7}
+.pri{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.03em}
+.pri.p0{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border)}
+.pri.p1{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+.pri.p2{background:var(--info-soft);color:var(--info-fg);border:1px solid var(--info-border)}
+.compare{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+.compare.solo-before{grid-template-columns:minmax(0,1fr)}
+.compare.solo-after{grid-template-columns:minmax(0,1fr)}
+.compare.solo-before .pane.after,.compare.solo-after .pane.before{display:none}
+.pane{margin:0;min-width:0;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm)}
+.pane.before{border-top:3px solid #E5484D}
+.pane.after{border-top:3px solid #12B76A}
+.pane figcaption{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);background:#FCFCFD;min-height:38px}
+.pane figcaption .tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.04em}
+.pane.before .tag{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border)}
+.pane.after .tag{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.pane figcaption b{font-size:12px;font-weight:650}
+.pane figcaption .meta{font-size:10.5px;color:var(--text-3);margin-left:auto;white-space:nowrap}
+.pane .solo{margin-left:6px;height:22px;padding:0 7px;border:1px solid var(--border);border-radius:5px;font-size:10px;color:var(--text-2);background:#fff}
+.pane .solo:hover{background:var(--surface-hover)}
+.viewport{--s:.78;position:relative;overflow:hidden;background:#E9ECF1;border-bottom:1px solid var(--border);display:flex;justify-content:center}
+.screen{width:820px;height:640px;position:relative;overflow:hidden;background:var(--bg-app);transform-origin:top center;transform:scale(var(--s));flex:0 0 auto}
+.ann-list{margin:0;padding:10px 14px 12px;list-style:none;display:grid;gap:6px}
+.ann-list li{display:flex;gap:8px;font-size:11.5px;color:var(--text-2);line-height:1.55}
+.ann-list .n{flex:0 0 auto}
+.ann-list li b{color:var(--text)}
+.n{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;font-size:9.5px;font-weight:800;color:#fff;background:#E5484D;line-height:1;vertical-align:1px;margin-right:3px}
+.after .n,.n.green{background:#0E9F6E}
+.n.blue{background:#2563EB}
+.n.gray{background:#667085}
+body.no-ann .n{display:none}
+.take{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 34px}
+.take-col{background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 14px}
+.take-col h4{margin:0 0 6px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3)}
+.take-col ul{margin:0;padding-left:16px;font-size:12px;line-height:1.75;color:var(--text-2)}
+.take-col li b{color:var(--text)}
+.mig{grid-column:1/-1;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.mig table{width:100%;border-collapse:collapse;font-size:11.5px}
+.mig th,.mig td{text-align:left;padding:7px 12px;border-bottom:1px solid var(--border)}
+.mig th{background:var(--surface-sunken);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3)}
+.mig tr:last-child td{border-bottom:0}
+.mig td:first-child{font-weight:600}
+.mig .to{color:var(--success-fg);font-weight:600}
+
+/* ============ App 外壳 ============ */
+.app{display:grid;grid-template-columns:176px minmax(0,1fr);height:100%;background:var(--bg-app)}
+.nav{background:#FBFCFE;border-right:1px solid var(--border);padding:12px 10px 9px;display:flex;flex-direction:column;min-height:0}
+.nav-brand{display:flex;align-items:center;gap:8px;padding:1px 5px 11px}
+.nav-logo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#2563EB,#7A5AF8);display:grid;place-items:center;color:#fff;font-size:13px;font-weight:750;box-shadow:0 4px 10px rgba(37,99,235,.24)}
+.nav-brand b{font-size:14px}
+.space{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 8px;margin-bottom:11px}
+.space-av{width:23px;height:23px;border-radius:7px;background:#E7EDF9;color:#33507A;font-weight:750;font-size:10px;display:grid;place-items:center}
+.space b{display:block;font-size:11.5px;font-weight:650}
+.space small{display:block;font-size:9.5px;color:var(--text-3);margin-top:1px}
+.nav-sec{font-size:9.5px;font-weight:700;letter-spacing:.06em;color:var(--text-3);padding:9px 7px 4px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;height:29px;padding:0 8px;border-radius:7px;color:var(--text-2);font-size:11.5px;font-weight:550}
+.nav-item svg{width:14px;height:14px;color:#7A8699;stroke-width:1.6;flex:0 0 auto}
+.nav-item:hover{background:var(--surface-hover)}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.nav-item.on svg{color:var(--primary-fg)}
+.nav-foot{margin-top:auto;display:flex;align-items:center;gap:7px;padding:9px 5px 1px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-3)}
+.avatar{width:22px;height:22px;border-radius:50%;background:#E7EDF9;color:#33507A;font-size:9.5px;font-weight:750;display:grid;place-items:center}
+.main{min-width:0;display:flex;flex-direction:column;min-height:0}
+.topbar{height:44px;display:flex;align-items:center;gap:9px;padding:0 16px;border-bottom:1px solid var(--border);background:#fff;flex:0 0 auto}
+.topbar .grow{flex:1}
+.tb-search{display:flex;align-items:center;gap:6px;height:27px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface-sunken);color:var(--text-3);font-size:10.5px;min-width:170px}
+.tb-search kbd{margin-left:auto;font-family:var(--font-mono);font-size:9px;border:1px solid var(--border-strong);border-radius:3px;padding:0 3px;background:#fff}
+.tb-icon{width:27px;height:27px;border-radius:7px;display:grid;place-items:center;color:var(--text-2)}
+.tb-icon:hover{background:var(--surface-hover)}
+.btn{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 9px;border-radius:7px;border:1px solid var(--border-strong);background:#fff;color:var(--text-2);font-size:11px;font-weight:600;white-space:nowrap}
+.btn svg{width:13px;height:13px}
+.btn:hover{background:var(--surface-hover)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 1px 2px rgba(37,99,235,.3)}
+.btn.primary:hover{background:var(--primary-hover)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.sm{height:25px;padding:0 8px;font-size:10.5px}
+.btn.danger{color:var(--danger-fg)}
+.icon-btn{width:25px;height:25px;border-radius:6px;display:grid;place-items:center;color:var(--text-2)}
+.icon-btn:hover{background:var(--surface-hover)}
+.icon-btn svg{width:14px;height:14px}
+.pagehead{padding:13px 18px 0}
+.pagehead h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em}
+.pagehead p{margin:3px 0 0;font-size:11px;color:var(--text-3)}
+.crumb{font-size:10.5px;color:var(--text-3);margin-bottom:2px}
+.modes{display:flex;gap:2px;padding:10px 18px 0;border-bottom:1px solid var(--border);margin-bottom:11px;overflow:hidden}
+.mode{position:relative;height:33px;padding:0 10px;font-size:11.5px;font-weight:600;color:var(--text-3);white-space:nowrap}
+.mode.on{color:var(--primary-fg)}
+.mode.on:after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;border-radius:2px;background:var(--primary)}
+.mode .cnt{display:inline-grid;place-items:center;min-width:16px;height:15px;padding:0 4px;margin-left:4px;border-radius:999px;background:var(--surface-sunken);color:var(--text-3);font-size:9px;font-weight:700}
+.content{padding:0 18px 18px;min-width:0}
+.toolrow{display:flex;align-items:center;gap:6px;margin-bottom:9px;flex-wrap:wrap}
+.scope{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 8px;border:1px solid var(--border-strong);border-radius:7px;background:#fff;font-size:10.5px;font-weight:600}
+.chips{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:10px;color:var(--text-2);white-space:nowrap}
+.chip.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.toolrow .grow{flex:1}
+.tbl-wrap{border:1px solid var(--border);border-radius:9px;overflow:hidden;background:#fff}
+.tbl{width:100%;border-collapse:collapse;font-size:10.5px}
+.tbl th,.tbl td{text-align:left;padding:0 8px;height:34px;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbl th{height:30px;background:var(--surface-sunken);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);font-weight:700}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tr.on td{background:var(--primary-soft)}
+.tbl .t{font-weight:600;color:var(--text);max-width:190px}
+.tbl .no{font-family:var(--font-mono);font-size:9.5px;color:var(--text-3)}
+.badge{display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 6px;border-radius:999px;font-size:9.5px;font-weight:650;border:1px solid transparent;white-space:nowrap}
+.badge:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.badge.pass{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border)}
+.badge.fail{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border)}
+.badge.block{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border)}
+.badge.skip{background:var(--surface-sunken);color:var(--text-3);border-color:var(--border)}
+.badge.none{background:#fff;color:var(--text-3);border-color:var(--border-strong)}
+.badge.none:before{background:transparent;border:1px solid currentColor}
+.pdot{display:inline-grid;place-items:center;min-width:22px;height:17px;padding:0 4px;border-radius:4px;font-size:9px;font-weight:800}
+.pdot.p0{background:var(--danger-soft);color:var(--danger-fg)}
+.pdot.p1{background:var(--warning-soft);color:var(--warning-fg)}
+.pdot.p2{background:var(--info-soft);color:var(--info-fg)}
+.pdot.p3{background:var(--surface-sunken);color:var(--text-3)}
+.muted{color:var(--text-3)}
+
+/* ============ 浮层：弹框 / 抽屉 / 侧板 ============ */
+.scrim{position:absolute;inset:0;background:rgba(16,24,40,.34);z-index:20}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:22;background:#fff;border-radius:11px;box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden;max-height:calc(100% - 40px)}
+.modal.md{width:500px}
+.modal.lg{width:620px}
+.modal.sm{width:330px}
+.modal-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border);flex:0 0 auto}
+.modal-head h3{margin:0;font-size:13px;font-weight:700;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal-head .sub{font-size:9.5px;color:var(--text-3)}
+.modal-body{padding:12px 14px;overflow:auto;min-height:0;font-size:10.5px;line-height:1.6}
+.modal-foot{display:flex;align-items:center;gap:7px;padding:9px 14px;border-top:1px solid var(--border);flex:0 0 auto}
+.modal-foot .grow{flex:1}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px}
+.form-grid .full{grid-column:1/-1}
+.field label{display:block;font-size:9.5px;font-weight:650;color:var(--text-2);margin-bottom:3px}
+.field label .req{color:var(--danger)}
+.input,.select,.textarea{display:flex;align-items:center;height:27px;border:1px solid var(--border-strong);border-radius:6px;background:#fff;padding:0 7px;font-size:10.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.input.focus{border-color:var(--primary);box-shadow:var(--ring)}
+.textarea{height:46px;align-items:flex-start;padding-top:5px;line-height:1.5;white-space:normal}
+.help{font-size:9px;color:var(--text-3);margin-top:2px;line-height:1.5}
+.steps{border:1px solid var(--border);border-radius:7px;overflow:hidden}
+.steps .row{display:grid;grid-template-columns:26px minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
+.steps .row:last-child{border-bottom:0}
+.steps .row>span{padding:5px 7px;font-size:10px;line-height:1.5}
+.steps .row>span+span{border-left:1px solid var(--border)}
+.steps .idx{font-family:var(--font-mono);font-size:9px;color:var(--text-3);text-align:center;background:#FCFCFD}
+.drawer-lg{position:absolute;top:0;right:0;bottom:0;width:570px;max-width:100%;background:#fff;z-index:24;box-shadow:-18px 0 42px rgba(16,24,40,.16);display:flex;flex-direction:column;border-left:1px solid var(--border)}
+.drawer-lg.full{width:100%}
+.dhead{display:flex;align-items:flex-start;gap:9px;padding:11px 14px 9px;border-bottom:1px solid var(--border);flex:0 0 auto}
+.type-ico{width:28px;height:28px;border-radius:8px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;flex:0 0 auto}
+.type-ico svg{width:15px;height:15px}
+.dhead-main{min-width:0;flex:1 1 auto}
+.dtitle-row{display:flex;align-items:center;gap:6px;min-width:0}
+.dtitle-row h2{margin:0;font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px dashed transparent}
+.dtitle-row h2[data-edit-title]{cursor:text}
+.dtitle-row h2[data-edit-title]:hover{border-bottom-color:var(--border-strong)}
+.dmeta{font-size:9.5px;color:var(--text-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dhead-acts{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+.drawer-tabs{display:flex;gap:1px;padding:0 10px;border-bottom:1px solid var(--border);flex:0 0 auto;overflow:hidden}
+.drawer-tab{position:relative;height:33px;padding:0 8px;font-size:10.5px;font-weight:650;color:var(--text-3);white-space:nowrap}
+.drawer-tab .num{font-family:var(--font-mono);font-size:8.5px;color:var(--text-3);margin-left:2px}
+.drawer-tab.on{color:var(--text)}
+.drawer-tab.on:after{content:"";position:absolute;left:6px;right:6px;bottom:-1px;height:2px;background:var(--text);border-radius:2px}
+.drawer-body{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 14px 20px}
+.sec{margin-bottom:14px}
+.sec:last-child{margin-bottom:0}
+.sec h4{margin:0 0 6px;font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);display:flex;align-items:center;gap:5px}
+.sec p{margin:0 0 5px;font-size:10.5px;line-height:1.65;color:var(--text-2)}
+.facts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.fact{border:1px solid var(--border);border-radius:7px;padding:6px 8px;background:#fff;min-width:0}
+.fact span{display:block;font-size:9px;color:var(--text-3);margin-bottom:2px}
+.fact b{display:block;font-size:10.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fact.edit b{border-bottom:1px dashed var(--border-strong);cursor:text}
+.fact.edit b:hover{border-bottom-color:var(--primary)}
+.exec{border:1px solid var(--border);border-radius:7px;padding:8px;display:grid;gap:4px;font-size:10px;color:var(--text-2)}
+.exec b{color:var(--text)}
+.exec .ok{color:var(--success-fg);font-weight:700}
+.exec .bad{color:var(--danger-fg);font-weight:700}
+.side-panel{position:absolute;top:0;right:0;bottom:0;width:350px;max-width:100%;background:#fff;z-index:24;box-shadow:-18px 0 42px rgba(16,24,40,.16);display:flex;flex-direction:column;border-left:1px solid var(--border)}
+.side-panel .drawer-body{padding:12px 13px 16px}
+.side-panel .form-grid{grid-template-columns:1fr 1fr}
+.subhead{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;margin:12px 0 6px;color:var(--text)}
+.subhead:first-child{margin-top:0}
+.kv{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-2);padding:4px 0;border-bottom:1px dashed var(--border)}
+.kv b{margin-left:auto;color:var(--text);font-weight:600}
+
+/* 层叠示意 */
+.layer-legend{position:absolute;left:12px;bottom:12px;z-index:40;background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px 10px;box-shadow:var(--shadow-md);width:188px}
+.layer-legend h5{margin:0 0 6px;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3)}
+.layer-legend .lr{display:flex;align-items:center;gap:6px;font-size:9.5px;color:var(--text-2);padding:3px 0;border-bottom:1px dashed var(--border)}
+.layer-legend .lr:last-child{border-bottom:0}
+.layer-legend .lr b{margin-left:auto;font-family:var(--font-mono);font-size:8.5px;color:var(--text-3)}
+.stack-scrim{position:absolute;inset:0;background:rgba(16,24,40,.22);z-index:20}
+.stack-modal{position:absolute;left:34px;top:64px;width:430px;z-index:22;background:#fff;border-radius:9px;box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden}
+.stack-drawer{position:absolute;right:22px;top:46px;bottom:26px;width:330px;z-index:26;background:#fff;border-radius:9px;box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden}
+.stack-small{position:absolute;right:14px;top:230px;width:270px;z-index:30;background:#fff;border-radius:9px;box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden}
+.layer-badge{position:absolute;z-index:50;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:4px;background:#101828;color:#fff;font-size:9px;font-weight:700}
+.inline-open{border:1px solid var(--primary-border);background:var(--primary-soft);border-radius:7px;padding:7px 8px;margin-top:7px}
+.inline-open .io-head{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:var(--primary-fg)}
+.inline-open .io-body{margin-top:6px;display:grid;grid-template-columns:1fr 64px 1.2fr;gap:6px;align-items:end}
+.inline-open .io-foot{display:flex;align-items:center;gap:6px;margin-top:6px}
+
+/* 样式拼贴 */
+.styleboard{padding:12px 14px;display:grid;gap:9px}
+.sample{border:1px solid var(--border);border-radius:8px;background:#fff;padding:8px 10px;position:relative}
+.sample .lab{position:absolute;right:6px;top:5px;font-family:var(--font-mono);font-size:8px;color:var(--danger-fg);background:var(--danger-soft);border:1px solid var(--danger-border);border-radius:3px;padding:0 3px}
+.sample h3{margin:0;font-size:17px;font-weight:700}
+.sample h3.s15{font-size:13px}
+.sample h3.s19{font-size:16px}
+.sample h3.s20{font-size:17px}
+.sample h3.s22{font-size:18px}
+.sample .bar{display:flex;gap:4px;margin-top:6px;align-items:center}
+.sample .fake-tab{display:inline-grid;place-items:center;border:1px solid var(--border);border-radius:6px;font-size:9px;color:var(--text-2);background:#fff;padding:0 8px}
+.fake-tab.h26{height:24px}
+.fake-tab.h28{height:26px}
+.fake-tab.h30{height:28px}
+.fake-tab.h38{height:33px}
+.fake-tab.h40{height:35px}
+.empty{border:1px dashed var(--border-strong);border-radius:8px;padding:14px 10px;text-align:center;color:var(--text-3);font-size:10px;background:#FCFCFD}
+.empty b{display:block;font-size:10.5px;color:var(--text-2);margin-bottom:2px}
+.empty.pad10{padding:9px 8px}
+.empty.pad30{padding:22px 10px}
+.empty.solid{border-style:solid;background:var(--surface-sunken)}
+.spec-rail{border-left:1px solid var(--border);padding:12px 12px 16px;background:#FBFCFE}
+.spec-rail h4{margin:0 0 8px;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3)}
+.spec{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed var(--border);font-size:9.5px;color:var(--text-2)}
+.spec b{margin-left:auto;font-family:var(--font-mono);font-size:8.5px;color:var(--primary-fg);background:var(--primary-soft);border-radius:3px;padding:1px 4px}
+.layout-2{display:grid;grid-template-columns:minmax(0,1fr) 196px;min-height:0;flex:1}
+.unified-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:24px 12px;border:1px dashed var(--border-strong);border-radius:9px;background:#FCFCFD;color:var(--text-3);font-size:10px}
+.unified-empty b{font-size:11px;color:var(--text-2)}
+
+/* 文档历史 */
+.diff{border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:10px}
+.diff .ln{display:grid;grid-template-columns:22px minmax(0,1fr);border-bottom:1px solid var(--border)}
+.diff .ln:last-child{border-bottom:0}
+.diff .no{font-family:var(--font-mono);font-size:8.5px;color:var(--text-3);text-align:center;background:#FCFCFD;padding:4px 0}
+.diff .tx{padding:4px 7px;line-height:1.55;color:var(--text-2);white-space:pre-wrap}
+.diff .add{background:#ECFDF3}
+.diff .del{background:#FEF3F2}
+.doc-layout{display:grid;grid-template-columns:216px minmax(0,1fr);gap:12px;padding:0 18px 18px;min-height:0;flex:1;overflow:hidden}
+.doc-list{border:1px solid var(--border);border-radius:9px;background:#fff;overflow:hidden}
+.doc-list .dh{padding:7px 9px;border-bottom:1px solid var(--border);font-size:9.5px;font-weight:700;color:var(--text-3);background:var(--surface-sunken);letter-spacing:.04em;text-transform:uppercase}
+.doc-list .di{padding:7px 9px;border-bottom:1px solid var(--border);font-size:10px;color:var(--text-2)}
+.doc-list .di.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.doc-list .di small{display:block;font-size:8.5px;color:var(--text-3);margin-top:2px;font-weight:400}
+.doc-main{border:1px solid var(--border);border-radius:9px;background:#fff;padding:11px 12px;min-width:0;overflow:hidden}
+.doc-main h3{margin:0 0 4px;font-size:13px;font-weight:700}
+.doc-main .meta{font-size:9.5px;color:var(--text-3);margin-bottom:8px}
+.note-card{border:1px solid var(--primary-border);background:var(--primary-soft);border-radius:8px;padding:9px 10px;font-size:10px;line-height:1.6;color:var(--primary-fg)}
+.note-card b{display:block;margin-bottom:2px}
+
+/* 截图模式 */
+body.capture #board{padding:8px 10px 18px}
+body.capture .proto-bar{position:static}
+body.capture .pane{box-shadow:none}
+@media (max-width:1120px){
+  .compare{grid-template-columns:minmax(0,1fr)}
+  .compare .pane.after{border-top-color:#12B76A}
+  .take{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<header class="proto-bar">
+  <div class="pb-brand"><i></i>沙漏 · 审计修复原型 <span class="pb-tag">前后对比</span></div>
+  <span class="pb-date">2026-11-15</span>
+  <span class="pb-grow"></span>
+  <div class="pb-group">场景
+    <span class="pb-seg" id="sceneSeg">
+      <button data-scene="case" class="on">1 用例详情</button>
+      <button data-scene="release">2 发布计划</button>
+      <button data-scene="nest">3 多层嵌套</button>
+      <button data-scene="form">4 表单容器</button>
+      <button data-scene="styles">5 样式统一</button>
+      <button data-scene="doc">6 文档 / AI</button>
+    </span>
+  </div>
+  <label class="pb-chk"><input type="checkbox" id="annChk" checked> 标注</label>
+</header>
+<main id="board"></main>
+
+<script>
+(function(){
+  'use strict';
+
+  var state = { scene:'case', solo:null };
+  var q = new URLSearchParams(location.search);
+  if (q.get('scene')) state.scene = q.get('scene');
+  if (q.get('capture') === '1') document.body.classList.add('capture');
+  if (q.get('ann') === '0') { document.body.classList.add('no-ann'); document.getElementById('annChk').checked = false; }
+
+  /* ---------- 图标 ---------- */
+  function ico(name, size){
+    var s = size || 14;
+    var m = {
+      search:'<circle cx="8.5" cy="8.5" r="5.2"/><path d="m12.4 12.4 3.1 3.1"/>',
+      bell:'<path d="M5 7a3 3 0 0 1 6 0v2.2l1 1.8H4l1-1.8Z"/><path d="M6.8 12.4a1.4 1.4 0 0 0 2.4 0"/>',
+      spark:'<path d="M8 2.5 9.2 6l3.5 1.2-3.5 1.2L8 12l-1.2-3.6L3.3 7.2 6.8 6Z"/><path d="M12.5 10.5l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6Z"/>',
+      plus:'<path d="M8 3.5v9M3.5 8h9"/>',
+      close:'<path d="m4 4 8 8M12 4 4 12"/>',
+      chev:'<path d="m5.5 6.5 2.5 2.5 2.5-2.5"/>',
+      doc:'<path d="M4.5 2.5h4l3 3v8h-7Z"/><path d="M8.5 2.5v3h3"/>',
+      check:'<path d="m3.5 8.2 3 3 6-6"/>',
+      bug:'<path d="M6 6a2 2 0 0 1 4 0v4a2 2 0 0 1-4 0Z"/><path d="M4 7h2M10 7h2M4.5 10.5 6 10M10 10l1.5.5M6.5 4 5.8 2.8M9.5 4l.7-1.2"/>',
+      clock:'<circle cx="8" cy="8" r="5.4"/><path d="M8 5v3.2l2 1.2"/>',
+      link:'<path d="M6.4 9.6 9.6 6.4"/><path d="M5.2 8.2 3.8 9.6a2 2 0 0 0 2.8 2.8L8 11"/><path d="M10.8 7.8l1.4-1.4a2 2 0 0 0-2.8-2.8L8 5"/>',
+      folder:'<path d="M2.8 5.2h4l1.2 1.6h5.2v5.4H2.8Z"/>',
+      more:'<circle cx="3.5" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12.5" cy="8" r="1"/>',
+      play:'<path d="M5 3.5 12 8l-7 4.5Z"/>',
+      arrow:'<path d="M3.5 8h9M9 4.5 12.5 8 9 11.5"/>',
+      back:'<path d="M12.5 8h-9M7 4.5 3.5 8 7 11.5"/>',
+      user:'<circle cx="8" cy="5.6" r="2.4"/><path d="M3.8 13a4.4 4.4 0 0 1 8.4 0"/>',
+      version:'<path d="M3 4.5h10v7H3Z"/><path d="M5.5 9.5h5"/>',
+      board:'<rect x="2.8" y="3.5" width="10.4" height="9" rx="1"/><path d="M6 3.5v9M10 3.5v9"/>'
+    };
+    return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(m[name]||m.doc)+'</svg>';
+  }
+
+  /* ---------- 公共外壳 ---------- */
+  function navHTML(active){
+    function it(label, icon, on){ return '<div class="nav-item'+(on?' on':'')+'">'+ico(icon)+'<span>'+label+'</span></div>'; }
+    return '<aside class="nav">'
+      + '<div class="nav-brand"><span class="nav-logo">沙</span><b>沙漏</b></div>'
+      + '<div class="space"><span class="space-av">支</span><div><b>支付业务部</b><small>13 位成员</small></div></div>'
+      + '<div class="nav-sec">工作</div>'
+      + it('我的工作','user')
+      + it('需求','doc')
+      + it('测试用例','check',active==='test')
+      + it('版本与发布','version',active==='version')
+      + it('甘特与看板','board')
+      + '<div class="nav-sec">项目</div>'
+      + it('资金中台','folder')
+      + it('收银台','folder')
+      + '<div class="nav-foot"><span class="avatar">孔</span><span>孔祥金</span></div>'
+      + '</aside>';
+  }
+  function appHTML(main, active){
+    return '<div class="app">'+navHTML(active)
+      + '<div class="main"><div class="topbar">'
+      + '<div class="tb-search">'+ico('search')+'<span>搜索工作项、用例、文档</span><kbd>⌘K</kbd></div>'
+      + '<span class="grow"></span>'
+      + '<button class="btn sm ghost">'+ico('spark')+' AI</button>'
+      + '<button class="icon-btn">'+ico('bell')+'</button>'
+      + '<span class="avatar">孔</span>'
+      + '</div>'+main+'</div></div>';
+  }
+  function testPage(){
+    var rows = [
+      ['TC-201','支付回调重复通知只记一次账','支付回调','P0','pass','通过','周敏','11-15 09:12'],
+      ['TC-202','退款金额超过原单拒绝','退款','P0','fail','失败','孔祥金','11-14 18:40'],
+      ['TC-203','分账比例合计不为 100 时拦截','分账','P1','block','阻塞','李哲','11-14 16:03'],
+      ['TC-204','对账单下载字段完整','对账','P1','none','未执行','—','—'],
+      ['TC-205','商户号为空时提示','商户','P2','pass','通过','王倩','11-13 11:20'],
+      ['TC-206','并发退款幂等','退款','P0','pass','通过','周敏','11-12 20:15'],
+      ['TC-207','异步通知重试 3 次','通知','P2','skip','跳过','李哲','11-12 09:05']
+    ];
+    return '<div class="pagehead"><h1>测试用例</h1><p>支付业务部 · 6 个模块 · 186 条</p></div>'
+      + '<div class="modes">'
+      + '<button class="mode on">用例 <span class="cnt">186</span></button>'
+      + '<button class="mode">测试计划 <span class="cnt">8</span></button>'
+      + '<button class="mode">覆盖矩阵</button>'
+      + '<button class="mode">缺陷 <span class="cnt">12</span></button>'
+      + '</div>'
+      + '<div class="content">'
+      + '<div class="toolrow">'
+      + '<span class="scope">全部项目 '+ico('chev',12)+'</span>'
+      + '<span class="chip on">通过 122</span><span class="chip">失败 8</span><span class="chip">阻塞 3</span><span class="chip">未执行 53</span>'
+      + '<span class="grow"></span>'
+      + '<button class="btn sm">筛选</button><button class="btn sm">导出</button>'
+      + '<button class="btn primary sm">'+ico('plus')+'新建用例</button>'
+      + '</div>'
+      + '<div class="tbl-wrap"><table class="tbl"><thead><tr>'
+      + '<th>编号</th><th>用例标题</th><th>模块</th><th>优先级</th><th>执行结果</th><th>执行人</th><th>最近执行</th>'
+      + '</tr></thead><tbody>'
+      + rows.map(function(r,i){
+          return '<tr'+(i===0?' class="on"':'')+'><td class="no">'+r[0]+'</td><td class="t">'+r[1]+'</td><td>'+r[2]+'</td>'
+            + '<td><span class="pdot '+r[3].toLowerCase()+'">'+r[3]+'</span></td>'
+            + '<td><span class="badge '+r[4]+'">'+r[5]+'</span></td><td>'+r[6]+'</td><td class="muted">'+r[7]+'</td></tr>';
+        }).join('')
+      + '</tbody></table></div></div>';
+  }
+  function versionPage(){
+    return '<div class="pagehead"><div class="crumb">版本与发布 / v2.8.0</div><h1>v2.8.0 资金中台</h1><p>计划发布 2026-11-20 · 负责人 周敏 · 23 个工作项</p></div>'
+      + '<div class="modes"><button class="mode">概览</button><button class="mode on">发布计划 <span class="cnt">23</span></button><button class="mode">实际发布</button><button class="mode">证据</button></div>'
+      + '<div class="content">'
+      + '<div class="toolrow"><span class="chip on">全部 23</span><span class="chip">阻塞 2</span><span class="chip">未排期 4</span><span class="grow"></span><button class="btn sm">导出</button><button class="btn primary sm">'+ico('plus')+'添加工作项</button></div>'
+      + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>工作项</th><th>负责人</th><th>状态</th><th>计划</th><th>实际</th><th>证据</th></tr></thead><tbody>'
+      + '<tr><td class="t">支付回调幂等改造</td><td>周敏</td><td><span class="badge pass">已完成</span></td><td>11-18</td><td>11-18</td><td class="muted">3 条</td></tr>'
+      + '<tr><td class="t">退款审批流对接</td><td>孔祥金</td><td><span class="badge block">阻塞</span></td><td>11-19</td><td class="muted">—</td><td class="muted">1 条</td></tr>'
+      + '<tr><td class="t">对账单字段补齐</td><td>李哲</td><td><span class="badge pass">已完成</span></td><td>11-18</td><td>11-17</td><td class="muted">2 条</td></tr>'
+      + '<tr><td class="t">分账比例校验</td><td>王倩</td><td><span class="badge fail">未开始</span></td><td>11-20</td><td class="muted">—</td><td class="muted">0 条</td></tr>'
+      + '<tr><td class="t">异步通知重试策略</td><td>李哲</td><td><span class="badge pass">已完成</span></td><td>11-19</td><td>11-19</td><td class="muted">4 条</td></tr>'
+      + '</tbody></table></div>'
+      + '</div>';
+  }
+  function projectPage(){
+    return '<div class="pagehead"><h1>项目</h1><p>支付业务部 · 6 个项目 · 2 个归档</p></div>'
+      + '<div class="modes"><button class="mode on">项目列表</button><button class="mode">成员与权限</button><button class="mode">归档</button></div>'
+      + '<div class="content"><div class="toolrow"><span class="scope">全部项目 '+ico('chev',12)+'</span><span class="grow"></span><button class="btn primary sm">'+ico('plus')+'新建项目</button></div>'
+      + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>项目</th><th>负责人</th><th>成员</th><th>进行中</th><th>更新</th></tr></thead><tbody>'
+      + '<tr><td class="t">资金中台</td><td>周敏</td><td>8</td><td>12</td><td class="muted">11-15 09:12</td></tr>'
+      + '<tr><td class="t">收银台</td><td>孔祥金</td><td>6</td><td>7</td><td class="muted">11-14 18:40</td></tr>'
+      + '<tr><td class="t">对账平台</td><td>李哲</td><td>4</td><td>3</td><td class="muted">11-13 16:03</td></tr>'
+      + '<tr><td class="t">商户后台</td><td>王倩</td><td>5</td><td>2</td><td class="muted">11-12 11:20</td></tr>'
+      + '</tbody></table></div></div>';
+  }
+
+  /* ---------- 场景 1：用例详情 ---------- */
+  function caseBefore(){
+    return appHTML(testPage(),'test')
+      + '<div class="scrim"></div>'
+      + '<div class="modal md">'
+      + '<div class="modal-head"><h3><span class="n">1</span>查看用例</h3><span class="sub">TC-201</span><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="modal-body">'
+      + '<div class="form-grid">'
+      + '<div class="field full"><label>用例标题 <span class="req">*</span></label><div class="input">支付回调重复通知只记一次账</div></div>'
+      + '<div class="field"><label>优先级</label><div class="select">P0 · 阻塞发布</div></div>'
+      + '<div class="field"><label>模块</label><div class="select">支付回调</div></div>'
+      + '<div class="field full"><label>前置条件</label><div class="textarea">商户已开通支付回调，模拟网关重复推送 3 次。</div></div>'
+      + '</div>'
+      + '<div style="margin-top:9px"><div class="sec h4" style="font-size:9.5px;font-weight:750;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px">执行步骤 <span class="n">2</span></div>'
+      + '<div class="steps">'
+      + '<div class="row"><span class="idx">1</span><span>网关连续推送 3 次相同回调</span><span>仅记 1 次账，返回 success</span></div>'
+      + '<div class="row"><span class="idx">2</span><span>查账户流水与订单状态</span><span>流水 1 条，订单状态已支付</span></div>'
+      + '</div></div>'
+      + '<div style="margin-top:8px;font-size:9.5px;color:var(--text-3)"><span class="n">3</span>只是查看，也要面对整张表单和底部「保存 / 取消」。</div>'
+      + '</div>'
+      + '<div class="modal-foot"><span class="grow"></span><button class="btn sm">取消</button><button class="btn primary sm">保存</button></div>'
+      + '</div>';
+  }
+  function caseAfter(){
+    return appHTML(testPage(),'test')
+      + '<div class="scrim"></div>'
+      + '<div class="drawer-lg">'
+      + '<div class="dhead"><span class="type-ico">'+ico('check')+'</span>'
+      + '<div class="dhead-main"><div class="dtitle-row"><h2 data-edit-title><span class="n green">1</span>支付回调重复通知只记一次账</h2><span class="badge pass">通过</span></div>'
+      + '<div class="dmeta">TC-201 · 支付回调 · P0 · 执行人 周敏 · 最近执行 11-15 09:12</div></div>'
+      + '<div class="dhead-acts"><button class="btn sm ghost">编辑</button><button class="icon-btn">'+ico('more')+'</button><button class="icon-btn">'+ico('close')+'</button></div></div>'
+      + '<div class="drawer-tabs">'
+      + '<button class="drawer-tab on" data-tab="ov">概览</button>'
+      + '<button class="drawer-tab" data-tab="st">步骤 <span class="num">2</span></button>'
+      + '<button class="drawer-tab" data-tab="ex">执行历史 <span class="num">4</span></button>'
+      + '<button class="drawer-tab" data-tab="df">缺陷 <span class="num">1</span></button>'
+      + '</div>'
+      + '<div class="drawer-body">'
+      + '<div class="pane" data-pane="ov">'
+      + '<div class="sec"><h4>事实</h4><div class="facts">'
+      + '<div class="fact"><span>优先级</span><b>P0</b></div><div class="fact edit"><span>模块 <span class="n green">2</span></span><b>支付回调</b></div><div class="fact"><span>执行人</span><b>周敏</b></div>'
+      + '<div class="fact"><span>最近执行</span><b>11-15 09:12</b></div><div class="fact"><span>所属计划</span><b>v2.8.0 发布必测</b></div><div class="fact"><span>用例编号</span><b>TC-201</b></div>'
+      + '</div></div>'
+      + '<div class="sec"><h4>前置条件</h4><p>商户已开通支付回调，模拟网关重复推送 3 次。</p></div>'
+      + '<div class="sec"><h4>最近一次执行 <span class="n green">3</span></h4><div class="exec"><div><b>通过</b> · 周敏 · 11-15 09:12 · 用时 2 分 18 秒</div><div>「重复推送后只产生 1 条入账流水，订单状态保持已支付。」</div><div class="ok">'+ico('check',12)+' 4 条断言全部通过</div></div></div>'
+      + '<div class="sec"><h4>关联</h4><p>工作项 · 支付回调幂等改造　文档 · 回调重试说明　缺陷 · 1 条已关闭</p></div>'
+      + '</div>'
+      + '<div class="pane" data-pane="st" hidden>'
+      + '<div class="sec"><h4>执行步骤 <span class="n green">4</span></h4><div class="steps">'
+      + '<div class="row"><span class="idx">1</span><span>网关连续推送 3 次相同回调</span><span>仅记 1 次账，返回 success</span></div>'
+      + '<div class="row"><span class="idx">2</span><span>查账户流水与订单状态</span><span>流水 1 条，订单状态已支付</span></div>'
+      + '</div></div><div class="sec"><h4>测试数据</h4><p>商户号 M20261115001，订单号 O202611150001。</p></div>'
+      + '</div>'
+      + '<div class="pane" data-pane="ex" hidden>'
+      + '<div class="sec"><h4>执行历史 <span class="n green">5</span></h4><div class="exec" style="margin-bottom:6px"><div><b>通过</b> · 周敏 · 11-15 09:12</div><div>重复推送后只产生 1 条入账流水。</div></div>'
+      + '<div class="exec" style="margin-bottom:6px"><div><b>通过</b> · 周敏 · 11-12 20:15</div><div>首轮回归通过。</div></div>'
+      + '<div class="exec"><div><b>失败</b> · 李哲 · 11-10 16:03</div><div class="bad">第 2 次推送产生重复流水。</div></div></div>'
+      + '</div>'
+      + '<div class="pane" data-pane="df" hidden>'
+      + '<div class="sec"><h4>关联缺陷</h4><div class="exec"><div><b>BUG-118</b> 重复回调产生两条流水 · 已关闭</div><div>修复版本 v2.7.3 · 回归通过 11-12</div></div></div>'
+      + '</div>'
+      + '</div>'
+      + '</div>';
+  }
+
+  /* ---------- 场景 2：发布计划 ---------- */
+  function releaseBefore(){
+    return appHTML(versionPage(),'version')
+      + '<div class="scrim"></div>'
+      + '<div class="modal lg">'
+      + '<div class="modal-head"><h3><span class="n">1</span>发布计划 · v2.8.0</h3><span class="sub">23 个工作项</span><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="drawer-tabs" style="padding-left:12px"><button class="drawer-tab on">计划</button><button class="drawer-tab">实际发布</button><button class="drawer-tab">证据</button></div>'
+      + '<div class="modal-body" style="padding-top:8px">'
+      + '<div class="toolrow"><span class="chip on">全部 23</span><span class="chip">阻塞 2</span><span class="grow"></span><span class="n">2</span></div>'
+      + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>工作项</th><th>负责人</th><th>状态</th><th>计划</th><th>实际</th></tr></thead><tbody>'
+      + '<tr><td class="t">支付回调幂等改造</td><td>周敏</td><td><span class="badge pass">已完成</span></td><td>11-18</td><td>11-18</td></tr>'
+      + '<tr><td class="t">退款审批流对接</td><td>孔祥金</td><td><span class="badge block">阻塞</span></td><td>11-19</td><td class="muted">—</td></tr>'
+      + '<tr><td class="t">对账单字段补齐</td><td>李哲</td><td><span class="badge pass">已完成</span></td><td>11-18</td><td>11-17</td></tr>'
+      + '<tr><td class="t">分账比例校验</td><td>王倩</td><td><span class="badge fail">未开始</span></td><td>11-20</td><td class="muted">—</td></tr>'
+      + '</tbody></table></div>'
+      + '<div style="margin-top:8px;font-size:9.5px;color:var(--text-3)"><span class="n">3</span>工作台塞在弹框里，刷新、分享、返回都要先关掉它。</div>'
+      + '</div>'
+      + '<div class="modal-foot"><span class="grow"></span><button class="btn sm">关闭</button><button class="btn primary sm">添加工作项</button></div>'
+      + '</div>';
+  }
+  function releaseAfter(){
+    var page = '<div class="pagehead"><div class="crumb">版本与发布 / v2.8.0 '+ico('chev',11)+'</div><h1><span class="n green">1</span>发布计划</h1><p>计划发布 2026-11-20 · 负责人 周敏 · 23 个工作项</p></div>'
+      + '<div class="modes"><button class="mode">概览</button><button class="mode on">发布计划 <span class="cnt">23</span></button><button class="mode">实际发布</button><button class="mode">证据</button></div>'
+      + '<div class="content"><div class="layout-2" style="gap:12px"><div>'
+      + '<div class="toolrow"><span class="chip on">全部 23</span><span class="chip">阻塞 2</span><span class="chip">未排期 4</span><span class="grow"></span><button class="btn sm">导出</button><button class="btn primary sm">'+ico('plus')+'添加工作项</button></div>'
+      + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>工作项</th><th>负责人</th><th>状态</th><th>计划</th><th>实际</th><th>证据</th></tr></thead><tbody>'
+      + '<tr><td class="t">支付回调幂等改造</td><td>周敏</td><td><span class="badge pass">已完成</span></td><td>11-18</td><td>11-18</td><td class="muted">3 条</td></tr>'
+      + '<tr><td class="t">退款审批流对接</td><td>孔祥金</td><td><span class="badge block">阻塞</span></td><td>11-19</td><td class="muted">—</td><td class="muted">1 条</td></tr>'
+      + '<tr><td class="t">对账单字段补齐</td><td>李哲</td><td><span class="badge pass">已完成</span></td><td>11-18</td><td>11-17</td><td class="muted">2 条</td></tr>'
+      + '<tr><td class="t">分账比例校验</td><td>王倩</td><td><span class="badge fail">未开始</span></td><td>11-20</td><td class="muted">—</td><td class="muted">0 条</td></tr>'
+      + '<tr><td class="t">异步通知重试策略</td><td>李哲</td><td><span class="badge pass">已完成</span></td><td>11-19</td><td>11-19</td><td class="muted">4 条</td></tr>'
+      + '</tbody></table></div></div>'
+      + '<aside style="border:1px solid var(--border);border-radius:9px;background:#fff;padding:9px 10px">'
+      + '<div style="font-size:9.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:7px"><span class="n green">2</span>发布摘要</div>'
+      + '<div class="kv">承诺范围<b>23</b></div><div class="kv">已完成<b>17</b></div><div class="kv">阻塞<b style="color:var(--danger-fg)">2</b></div><div class="kv">未排期<b style="color:var(--warning-fg)">4</b></div><div class="kv">必测通过率<b>96%</b></div>'
+      + '<div style="margin-top:8px;font-size:9.5px;color:var(--text-3);line-height:1.6"><span class="n green">3</span>页面有独立 URL，刷新、分享、返回都不丢位置。</div>'
+      + '</aside></div></div>';
+    return appHTML(page,'version');
+  }
+
+  /* ---------- 场景 3：多层嵌套 ---------- */
+  function nestBefore(){
+    return appHTML(versionPage(),'version')
+      + '<div class="stack-scrim"></div>'
+      + '<div class="layer-legend"><h5>当前叠层</h5>'
+      + '<div class="lr"><span class="n">1</span>版本任务绑定 <b>z 200</b></div>'
+      + '<div class="lr"><span class="n">2</span>任务抽屉 <b>z 201</b></div>'
+      + '<div class="lr"><span class="n">3</span>补记工时 <b>z 202</b></div>'
+      + '<div style="margin-top:6px;font-size:9px;color:var(--danger-fg);line-height:1.5">关闭一次只退一层，<br>用户不知道自己在哪。</div>'
+      + '</div>'
+      + '<div class="stack-modal">'
+      + '<div class="modal-head"><h3>绑定任务到 v2.8.0</h3><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="modal-body"><div style="font-size:9.5px;color:var(--text-3);margin-bottom:6px">选择要纳入本次发布的工作项</div>'
+      + '<div class="tbl-wrap"><table class="tbl"><tbody>'
+      + '<tr><td>支付回调幂等改造</td><td><span class="badge pass">已完成</span></td></tr>'
+      + '<tr><td>退款审批流对接</td><td><span class="badge block">阻塞</span></td></tr>'
+      + '<tr><td>对账单字段补齐</td><td><span class="badge pass">已完成</span></td></tr>'
+      + '</tbody></table></div></div>'
+      + '<div class="modal-foot"><span class="grow"></span><button class="btn sm">取消</button><button class="btn primary sm">绑定 3 项</button></div>'
+      + '</div>'
+      + '<div class="stack-drawer">'
+      + '<div class="dhead"><div class="dhead-main"><div class="dtitle-row"><h2>支付回调幂等改造</h2></div><div class="dmeta">工作项 · 进行中 · 周敏</div></div><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="drawer-body"><div class="sec"><h4>执行</h4><p>检查项 3/5 · 附件 2 · 评论 4</p></div><div class="sec"><h4>工时</h4><p>本周已记 6.5 小时</p><button class="btn sm" style="margin-top:4px">补记工时</button></div></div>'
+      + '</div>'
+      + '<div class="stack-small">'
+      + '<div class="modal-head"><h3><span class="n">3</span>补记工时</h3><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="modal-body"><div class="form-grid"><div class="field"><label>日期</label><div class="input">2026-11-15</div></div><div class="field"><label>时长</label><div class="input">2.5 小时</div></div><div class="field full"><label>说明</label><div class="textarea">回调幂等联调</div></div></div></div>'
+      + '<div class="modal-foot"><span class="grow"></span><button class="btn sm">取消</button><button class="btn primary sm">保存</button></div>'
+      + '</div>';
+  }
+  function nestAfter(){
+    var page = '<div class="pagehead"><div class="crumb">版本与发布 / v2.8.0 '+ico('chev',11)+'</div><h1>发布计划</h1><p>计划发布 2026-11-20 · 负责人 周敏 · 23 个工作项</p></div>'
+      + '<div class="modes"><button class="mode">概览</button><button class="mode on">发布计划 <span class="cnt">23</span></button><button class="mode">实际发布</button></div>'
+      + '<div class="content"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>工作项</th><th>负责人</th><th>状态</th><th>计划</th></tr></thead><tbody>'
+      + '<tr><td class="t">支付回调幂等改造</td><td>周敏</td><td><span class="badge pass">已完成</span></td><td>11-18</td></tr>'
+      + '<tr><td class="t">退款审批流对接</td><td>孔祥金</td><td><span class="badge block">阻塞</span></td><td>11-19</td></tr>'
+      + '</tbody></table></div></div>';
+    return appHTML(page,'version')
+      + '<div class="scrim"></div>'
+      + '<div class="drawer-lg" style="width:500px">'
+      + '<div class="dhead"><span class="type-ico">'+ico('check')+'</span><div class="dhead-main"><div class="dtitle-row"><h2><span class="n green">1</span>支付回调幂等改造</h2><span class="badge block">阻塞</span></div><div class="dmeta">工作项 · 进行中 · 周敏 · v2.8.0</div></div><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="drawer-tabs"><button class="drawer-tab on">概览</button><button class="drawer-tab">执行</button><button class="drawer-tab">工时 <span class="num">3</span></button><button class="drawer-tab">动态 <span class="num">4</span></button></div>'
+      + '<div class="drawer-body"><div class="sec"><h4>进度</h4><p>检查项 3/5 · 60% · 由清单派生</p></div><div class="sec"><h4>本周工时</h4><p>6.5 小时 · 3 条记录</p>'
+      + '<div class="inline-open"><div class="io-head"><span class="n green">2</span>补记工时 <span style="margin-left:auto;font-weight:400;color:var(--text-3)">在任务内展开，不再叠第 3 层</span></div>'
+      + '<div class="io-body"><div class="field"><label>日期</label><div class="input">2026-11-15</div></div><div class="field"><label>时长</label><div class="input">2.5h</div></div><div class="field"><label>说明</label><div class="input">回调幂等联调</div></div></div>'
+      + '<div class="io-foot"><span class="grow"></span><button class="btn sm">取消</button><button class="btn primary sm">保存</button></div></div></div>'
+      + '<div class="sec"><h4>关联</h4><p>版本 v2.8.0 · 测试用例 4 条 · 缺陷 1 条</p></div>'
+      + '<div style="font-size:9.5px;color:var(--text-3);margin-top:8px"><span class="n green">3</span>关闭一次直接回到发布计划，不再逐层退出。</div>'
+      + '</div></div>';
+  }
+
+  /* ---------- 场景 4：表单容器 ---------- */
+  function formBefore(){
+    return appHTML(projectPage(),'test')
+      + '<div class="scrim"></div>'
+      + '<div class="modal md">'
+      + '<div class="modal-head"><h3><span class="n">1</span>新建项目</h3><span class="sub">11 个字段</span><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="modal-body"><div class="form-grid">'
+      + '<div class="field full"><label>项目名称 <span class="req">*</span></label><div class="input focus">资金中台二期</div></div>'
+      + '<div class="field"><label>项目负责人</label><div class="select">周敏 '+ico('chev',11)+'</div></div>'
+      + '<div class="field"><label>可见范围</label><div class="select">空间内全部成员 '+ico('chev',11)+'</div></div>'
+      + '<div class="field"><label>开始日期</label><div class="input">2026-11-20</div></div>'
+      + '<div class="field"><label>计划结束</label><div class="input">2027-01-31</div></div>'
+      + '<div class="field full"><label>项目说明</label><div class="textarea">资金中台二期：退款审批流、分账比例校验与对账字段补齐。</div></div>'
+      + '<div class="field full"><label>默认工作项视图</label><div class="select">看板 · 按状态 '+ico('chev',11)+'</div></div>'
+      + '</div>'
+      + '<div style="margin-top:8px;font-size:9.5px;color:var(--text-3)"><span class="n">2</span>看不到项目列表，负责人和命名只能凭记忆填。</div>'
+      + '<div style="margin-top:3px;font-size:9.5px;color:var(--text-3)"><span class="n">3</span>创建后弹框关闭，才回到列表确认结果。</div>'
+      + '</div>'
+      + '<div class="modal-foot"><span class="grow"></span><button class="btn sm">取消</button><button class="btn primary sm">创建项目</button></div>'
+      + '</div>';
+  }
+  function formAfter(){
+    return appHTML(projectPage(),'test')
+      + '<div class="scrim" style="background:rgba(16,24,40,.18)"></div>'
+      + '<div class="side-panel">'
+      + '<div class="dhead"><div class="dhead-main"><div class="dtitle-row"><h2><span class="n green">1</span>新建项目</h2></div><div class="dmeta">项目列表保留在左侧，随时对照</div></div><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="drawer-body">'
+      + '<div class="subhead">基本信息</div>'
+      + '<div class="field"><label>项目名称 <span class="req">*</span></label><div class="input focus">资金中台二期</div><div class="help">创建后仍可在项目设置中修改。</div></div>'
+      + '<div class="form-grid"><div class="field"><label>项目负责人</label><div class="select">周敏 '+ico('chev',11)+'</div></div><div class="field"><label>可见范围</label><div class="select">空间内全部成员 '+ico('chev',11)+'</div></div><div class="field"><label>开始日期</label><div class="input">2026-11-20</div></div><div class="field"><label>计划结束</label><div class="input">2027-01-31</div></div></div>'
+      + '<div class="subhead">默认设置 <span class="n green">2</span></div>'
+      + '<div class="field"><label>项目说明</label><div class="textarea">资金中台二期：退款审批流、分账比例校验与对账字段补齐。</div></div>'
+      + '<div class="field" style="margin-top:7px"><label>默认工作项视图</label><div class="select">看板 · 按状态 '+ico('chev',11)+'</div></div>'
+      + '<div style="margin-top:8px;font-size:9.5px;color:var(--text-3)"><span class="n green">3</span>侧板不遮住列表，创建后原地看到新项目。</div>'
+      + '</div>'
+      + '<div class="modal-foot"><span class="grow"></span><button class="btn sm">取消</button><button class="btn primary sm">创建项目</button></div>'
+      + '</div>';
+  }
+
+  /* ---------- 场景 5：样式统一 ---------- */
+  function stylesBefore(){
+    var html = '<div class="pagehead"><h1>页面样式拼贴</h1><p>同样的页头、页签、空状态，在不同页面各写一套</p></div>'
+      + '<div class="styleboard">'
+      + '<div class="sample"><span class="lab">工作列 · 标题 19 / padding 10 24 / sticky</span><h3 class="s19">我的工作</h3><div class="bar"><span class="fake-tab h38 on" style="background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)">今天</span><span class="fake-tab h38">本周</span><span class="fake-tab h38">本月</span></div></div>'
+      + '<div class="sample"><span class="lab">版本 · 标题 19 / 与工作列逐行复制</span><h3 class="s19">v2.8.0 资金中台</h3><div class="bar"><span class="fake-tab h38" style="background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)">发布计划</span><span class="fake-tab h38">实际发布</span><span class="fake-tab h38">证据</span></div></div>'
+      + '<div class="sample"><span class="lab">交付 · 标题 20 / padding 16 / 页头 860 竖排</span><h3 class="s20">v2.8.0 交付说明</h3><div class="bar"><span class="fake-tab h26">概览</span><span class="fake-tab h28">质量</span><span class="fake-tab h30">证据</span></div></div>'
+      + '<div class="sample"><span class="lab">管理 · 标题 15 / 页头 36 / KPI 11.5</span><h3 class="s15">管理驾驶舱</h3><div class="bar"><span class="fake-tab h28">本周</span><span class="fake-tab h26">本月</span><span class="fake-tab h30">本季</span></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px">'
+      + '<div class="empty pad10"><b>暂无数据</b><span style="font-size:9px">padding 10 / 字号 11</span></div>'
+      + '<div class="empty pad30 solid"><b>还没有工作项</b><span style="font-size:9px">padding 30 / 实线底</span></div>'
+      + '<div class="empty"><b>没有匹配结果</b><span style="font-size:9px">虚线框 / 字号 10</span></div>'
+      + '</div>'
+      + '<div class="sample"><span class="lab">表格：表头 30/36/38/44，行高 44/54/56/62</span><div class="tbl-wrap"><table class="tbl"><thead><tr><th>工作项</th><th>负责人</th><th>状态</th></tr></thead><tbody><tr><td class="t">支付回调幂等改造</td><td>周敏</td><td><span class="badge pass">已完成</span></td></tr><tr><td class="t">退款审批流对接</td><td>孔祥金</td><td><span class="badge block">阻塞</span></td></tr></tbody></table></div></div>'
+      + '</div>';
+    return appHTML(html,'test');
+  }
+  function stylesAfter(){
+    var page = '<div class="pagehead"><div class="crumb">工作 / 我的工作</div><h1><span class="n green">1</span>我的工作</h1><p>今天 · 12 项待处理 · 2 项阻塞</p></div>'
+      + '<div class="layout-2">'
+      + '<div style="min-width:0;padding:0 0 18px 18px">'
+      + '<div class="modes" style="padding-left:0;padding-right:0"><button class="mode on">今天 <span class="cnt">12</span></button><button class="mode">本周 <span class="cnt">38</span></button><button class="mode">本月</button></div>'
+      + '<div class="toolrow"><span class="scope">全部项目 '+ico('chev',12)+'</span><span class="chip on">待处理 8</span><span class="chip">进行中 3</span><span class="chip">阻塞 1</span><span class="grow"></span><button class="btn sm">筛选</button></div>'
+      + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>工作项</th><th>项目</th><th>负责人</th><th>状态</th><th>截止</th></tr></thead><tbody>'
+      + '<tr><td class="t">支付回调幂等改造</td><td>资金中台</td><td>周敏</td><td><span class="badge pass">已完成</span></td><td>11-18</td></tr>'
+      + '<tr><td class="t">退款审批流对接</td><td>资金中台</td><td>孔祥金</td><td><span class="badge block">阻塞</span></td><td>11-19</td></tr>'
+      + '<tr><td class="t">对账单字段补齐</td><td>对账平台</td><td>李哲</td><td><span class="badge pass">已完成</span></td><td>11-18</td></tr>'
+      + '<tr><td class="t">分账比例校验</td><td>资金中台</td><td>王倩</td><td><span class="badge fail">未开始</span></td><td>11-20</td></tr>'
+      + '</tbody></table></div>'
+      + '<div class="unified-empty" style="margin-top:10px"><span class="n green">4</span><b>没有匹配结果</b><span>清空筛选或换个关键词再试</span><button class="btn sm" style="margin-top:4px">清空筛选</button></div>'
+      + '</div>'
+      + '<aside class="spec-rail"><h4><span class="n green">2</span>统一规范</h4>'
+      + '<div class="spec">页头标题<b>20 / 16</b></div><div class="spec">页头内边距<b>16 22</b></div>'
+      + '<div class="spec">工具条高度<b>36</b></div><div class="spec">页签高度<b>38</b></div>'
+      + '<div class="spec">表头 / 行高<b>36 / 56</b></div><div class="spec">字号档位<b>11 12 13 14 16 20</b></div>'
+      + '<div class="spec">断点<b>639 900 1024 1280</b></div><div class="spec">z-index<b>10 20 100 200 300 400</b></div>'
+      + '<div style="margin-top:8px;font-size:9px;color:var(--text-3);line-height:1.65"><span class="n green">3</span>先立令牌，再按页面迁移；不全局 sed。</div>'
+      + '</aside></div>';
+    return appHTML(page,'test');
+  }
+
+  /* ---------- 场景 6：文档 / AI ---------- */
+  function docBefore(){
+    var page = '<div class="pagehead"><div class="crumb">需求 / 资金中台 / 文档</div><h1>支付回调重试说明</h1><p>v2.8.0 · 负责人 周敏 · 最近更新 11-15 08:40</p></div>'
+      + '<div class="content"><div style="border:1px solid var(--border);border-radius:9px;background:#fff;padding:12px 14px;font-size:10.5px;line-height:1.75;color:var(--text-2);max-width:560px">'
+      + '<b style="color:var(--text)">一、背景</b><br>支付网关在超时后会对同一笔回调重复推送，当前实现按推送次数入账，造成重复流水。<br><br><b style="color:var(--text)">二、方案</b><br>以商户号 + 订单号作为幂等键，首次入账后记录处理结果，后续推送直接返回 success。'
+      + '</div></div>';
+    return appHTML(page,'test')
+      + '<div class="scrim"></div>'
+      + '<div class="modal lg" style="width:700px">'
+      + '<div class="modal-head"><h3><span class="n">1</span>文档历史</h3><span class="sub">12 个版本 · 双栏对比</span><button class="icon-btn">'+ico('close')+'</button></div>'
+      + '<div class="modal-body" style="padding:0"><div style="display:grid;grid-template-columns:190px minmax(0,1fr);min-height:330px">'
+      + '<div style="border-right:1px solid var(--border);background:#FCFCFD"><div style="padding:7px 9px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-3)">版本</div>'
+      + '<div style="padding:7px 9px;border-bottom:1px solid var(--border);font-size:10px;background:var(--primary-soft);color:var(--primary-fg);font-weight:650">v12 · 11-15 08:40 · 周敏<small style="display:block;color:var(--text-3);font-size:8.5px;font-weight:400">补充幂等键说明</small></div>'
+      + '<div style="padding:7px 9px;border-bottom:1px solid var(--border);font-size:10px">v11 · 11-14 18:22 · 孔祥金</div>'
+      + '<div style="padding:7px 9px;border-bottom:1px solid var(--border);font-size:10px">v10 · 11-13 16:05 · 周敏</div>'
+      + '<div style="padding:7px 9px;font-size:10px">v9 · 11-12 09:31 · 李哲</div></div>'
+      + '<div style="padding:9px 11px"><div style="font-size:9.5px;font-weight:700;color:var(--text-2);margin-bottom:5px">v11 → v12</div><div class="diff">'
+      + '<div class="ln"><span class="no">1</span><span class="tx">一、背景</span></div>'
+      + '<div class="ln"><span class="no">2</span><span class="tx del">- 以订单号作为幂等键。</span></div>'
+      + '<div class="ln"><span class="no">2</span><span class="tx add">+ 以商户号 + 订单号作为幂等键，首次入账后记录处理结果。</span></div>'
+      + '<div class="ln"><span class="no">3</span><span class="tx">后续推送直接返回 success。</span></div>'
+      + '</div><div style="margin-top:8px;font-size:9.5px;color:var(--text-3)"><span class="n">2</span>双栏在弹框里，关闭后滚动位置和对比版本都丢失。</div></div>'
+      + '</div></div>'
+      + '<div class="modal-foot"><span style="font-size:9.5px;color:var(--text-3)"><span class="n">3</span>不能直接分享某个版本的链接</span><span class="grow"></span><button class="btn sm">关闭</button><button class="btn primary sm">恢复此版本</button></div>'
+      + '</div>';
+  }
+  function docAfter(){
+    var page = '<div class="pagehead"><div class="crumb">需求 / 资金中台 / 文档 / <b style="color:var(--text-2)">支付回调重试说明</b></div><h1><span class="n green">1</span>文档历史</h1><p>v2.8.0 · 12 个版本 · 当前查看 v11 → v12 对比</p></div>'
+      + '<div class="modes"><button class="mode">正文</button><button class="mode on">历史 <span class="cnt">12</span></button><button class="mode">评论 <span class="cnt">4</span></button><button class="mode">分享</button></div>'
+      + '<div class="doc-layout">'
+      + '<div class="doc-list"><div class="dh">版本</div>'
+      + '<div class="di on">v12 · 11-15 08:40<small>周敏 · 补充幂等键说明</small></div>'
+      + '<div class="di">v11 · 11-14 18:22<small>孔祥金 · 调整方案段</small></div>'
+      + '<div class="di">v10 · 11-13 16:05<small>周敏 · 初稿</small></div>'
+      + '<div class="di">v9 · 11-12 09:31<small>李哲 · 补充背景</small></div>'
+      + '</div>'
+      + '<div class="doc-main"><div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><h3 style="flex:1">v11 → v12</h3><button class="btn sm">复制链接</button><button class="btn sm">恢复此版本</button></div>'
+      + '<div class="meta"><span class="n green">2</span>对比保留双栏；URL 带版本号，刷新与分享都不丢上下文。</div>'
+      + '<div class="diff">'
+      + '<div class="ln"><span class="no">1</span><span class="tx">一、背景</span></div>'
+      + '<div class="ln"><span class="no">2</span><span class="tx del">- 以订单号作为幂等键。</span></div>'
+      + '<div class="ln"><span class="no">2</span><span class="tx add">+ 以商户号 + 订单号作为幂等键，首次入账后记录处理结果。</span></div>'
+      + '<div class="ln"><span class="no">3</span><span class="tx">后续推送直接返回 success。</span></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px">'
+      + '<div class="note-card"><b><span class="n green">3</span>AI 结果同样改右侧结果板</b>AI 拆分 / 审计 / 生成用例的结果落在当前页右侧，补 X 与「插入文档」；不再用无关闭路径的居中结果层。</div>'
+      + '<div class="note-card" style="border-color:var(--border);background:#FCFCFD;color:var(--text-2)"><b style="color:var(--text)">保留双栏</b>版本列表 + 差异正文的布局不变，只把容器从 1080 弹框换成可刷新、可分享的子页。</div>'
+      + '</div></div></div>';
+    return appHTML(page,'test');
+  }
+
+  /* ---------- 场景元数据 ---------- */
+  var scenes = {
+    case: {
+      title:'用例详情与编辑', pri:'P0', scope:'测试用例',
+      sub:'同一件事两套容器：查看和编辑都塞进居中 720 弹框；建议并入右侧抽屉，默认阅读态、字段就地编辑、四个页签带计数。',
+      ev:'frontend/index.html:1633 · frontend/js/views/testcases.js:3613',
+      before:{label:'居中弹框 720', meta:'遮住列表 · 查看也进表单 · 整单保存', body:caseBefore,
+        ann:['只是查看，也要面对整张表单和底部保存栏。','步骤、执行历史、缺陷都堆在同一张表单里，没有阅读层级。','列表上下文被遮住，关掉才能确认下一条。']},
+      after:{label:'右侧抽屉 · 阅读态', meta:'保留列表 · 4 页签 · 就地编辑', body:caseAfter,
+        ann:['右侧抽屉保留列表上下文，关闭回到原位置。','默认阅读态；标题、模块等字段带虚线，点击就地改。','四页签带计数，打开前就知道有没有执行历史与缺陷。','没有底部保存栏，单字段即改即存。','执行历史独立成页签，可对比最近三次。']},
+      take:['查看态仍是表单：所有字段可编辑，误改风险高。','720 居中弹框遮住列表，无法边看边比较。','执行历史、缺陷、步骤没有独立容器。'],
+      win:['查看/编辑合一，先读后改。','列表上下文保留，切换用例不用反复关闭。','页签带计数，内容多少一眼可见。']
+    },
+    release: {
+      title:'发布计划工作台', pri:'P0', scope:'版本与发布',
+      sub:'发布计划是页面级工作流，却装在 960 居中弹框里；建议回归页面，保留页签与右侧摘要，刷新、分享、返回都不丢位置。',
+      ev:'frontend/js/views/phase.js:1758 · frontend/js/views/phase.js:1803',
+      before:{label:'居中弹框 960', meta:'页面级工作台 · 超屏滚动 · 无 URL', body:releaseBefore,
+        ann:['版本页已经有「发布计划」页签，弹框里又重复一套页签。','下方还有表格和摘要，900 高视口要滚动才能看完。','刷新或分享时无法保留当前页签与筛选。']},
+      after:{label:'页面级子页', meta:'独立 URL · 页签 · 右侧摘要', body:releaseAfter,
+        ann:['发布计划回到版本页签，标题与面包屑说明当前位置。','右侧固定摘要：承诺、完成、阻塞、未排期与必测通过率。','独立 URL 可刷新、可分享，返回直接回到版本概览。']},
+      take:['页面级工作流塞进弹框，超屏与滚动不可避免。','弹框内页签与版本页页签重复。','无法分享「当前正在看哪个计划」。'],
+      win:['回归页面，一屏完成计划与摘要判断。','页签、筛选、滚动位置都可保留。','链接可直接发给同事。']
+    },
+    nest: {
+      title:'三层嵌套：版本绑定 → 任务 → 补记工时', pri:'P0', scope:'版本 / 任务 / 工时',
+      sub:'从版本任务绑定进入任务抽屉，再叠补记工时弹框，关闭要退三层；建议任务内联补记工时，最多一层抽屉。',
+      ev:'frontend/js/views/phase.js:3134 · frontend/js/core/task-drawer.js:5225',
+      before:{label:'3 层叠加', meta:'z 200 / 201 / 202', body:nestBefore,
+        ann:['版本任务绑定弹框：选择要纳入发布的工作项。','任务抽屉叠在弹框上，遮住刚选的列表。','补记工时再叠一层，关闭一次只退一层。']},
+      after:{label:'1 层抽屉', meta:'任务内联补记工时', body:nestAfter,
+        ann:['只保留任务抽屉一层，版本计划在背后保持可见。','工时在抽屉内展开，字段与按钮都在原位。','关闭一次直接回到发布计划。']},
+      take:['三层浮层叠加，关闭顺序容易误操作。','工时是任务的附属信息，却单独占据一层。','返回路径长，用户容易迷失。'],
+      win:['一层容器，任务与工时在同一上下文。','补记工时内联展开，保存后原位刷新。','关闭一次回到版本计划。']
+    },
+    form: {
+      title:'业务表单容器', pri:'P1', scope:'项目 / 需求文档 / 测试计划',
+      sub:'项目新建、需求文档、测试计划等 8–11 字段表单仍是居中弹框；建议统一右侧侧板，列表保持可见，字段分组。',
+      ev:'frontend/index.html:754 · frontend/index.html:1272 · frontend/index.html:1970',
+      before:{label:'居中弹框 720', meta:'11 字段 · 遮列表 · 整单保存', body:formBefore,
+        ann:['11 个字段居中铺开，没有分组。','看不到项目列表，负责人与命名只能凭记忆。','创建后弹框关闭，才回到列表确认结果。']},
+      after:{label:'右侧侧板 560', meta:'列表可见 · 分组 · 创建后原地刷新', body:formAfter,
+        ann:['侧板保留左侧项目列表，可边看边填。','字段按「基本信息 / 默认设置」分组，重点字段更突出。','创建后侧板关闭，列表原地出现新项目。']},
+      take:['项目、需求文档、测试计划、记录执行、转缺陷仍是居中弹框。','字段多时弹框超屏，底部按钮被推走。','无法参照列表或其它记录填写。'],
+      win:['统一右侧侧板，与需求/版本/分支编辑一致。','字段分组，主次清楚。','创建后原地反馈，不离开列表。']
+    },
+    styles: {
+      title:'样式统一：页头 / 工具条 / 页签 / 空状态', pri:'P1', scope:'全站',
+      sub:'字号 29 档、页头 7 套、工具条 10 套、页签 7 套、空状态约 60 个自写类；建议先立令牌，再按页面迁移。',
+      ev:'frontend/css/views.css · frontend/css/components.css · frontend/css/layout.css',
+      before:{label:'现状：拼贴', meta:'7 套页头 · 7 套页签 · 60 个空状态', body:stylesBefore,
+        ann:['页头标题 15/16/18/19/20/22 六档，padding 0/10 24/16 三种。','页签高度 26/28/30/38/40 五种，同一「切换」控件观感不同。','空状态 padding 10–40、字号 11–13，是否虚线框也不一致。','表格表头 30/36/38/44、行高 44/54/56/62 四档并存。']},
+      after:{label:'建议：统一骨架', meta:'页头 20 · 工具条 36 · 页签 38', body:stylesAfter,
+        ann:['统一页头：标题 20 / 16 两档，内边距 16 22。','统一工具条 36、页签 38、表头 36、行高 56/62。','字号收敛到 11/12/13/14/16/20 六档。','空状态收敛为整页/表内/列内三类。','断点收敛到 639/900/1024/1280；z-index 立层级表。']},
+      take:['同类控件各写一套，改一次要改 5–7 处。','字号半像素档占 42.3%，统计行与页脚发虚。','断点 27 个值，平板区间行为不可预期。'],
+      win:['页头/工具条/页签/空状态各一套，跨页一致。','令牌先行，按页面迁移，不做全局批量替换。','视觉密度稳定，跨页切换不跳动。']
+    },
+    doc: {
+      title:'查看类：文档历史 / AI 结果', pri:'P1', scope:'需求文档 / AI',
+      sub:'文档历史是 1080 居中双栏弹框，AI 结果居中且没有 X；建议历史改子页、AI 结果改右侧结果板，关闭路径完整。',
+      ev:'frontend/index.html:1393 · frontend/index.html:1347 · frontend/index.html:1361',
+      before:{label:'居中双栏 1080', meta:'关闭丢上下文 · 无版本文档链接', body:docBefore,
+        ann:['1080 居中双栏：版本列表 + 差异正文。','关闭后对比版本与滚动位置都丢失。','无法直接分享「v11 → v12」的链接。']},
+      after:{label:'子页 + 右侧结果板', meta:'可刷新/分享 · AI 结果可关闭', body:docAfter,
+        ann:['文档历史回归子页，面包屑说明位置。','双栏布局保留；URL 带版本号，刷新与分享都不丢。','AI 拆分/审计/生成结果改右侧结果板，补 X 与「插入文档」。']},
+      take:['文档历史 1080 弹框，关闭即丢失对比状态。','AI 拆分/审计/用例结果没有右上角 X。','查看类内容占用页面级宽度，却不能刷新或分享。'],
+      win:['历史子页可刷新、可分享、可返回文档。','AI 结果落到右侧结果板，关闭路径完整。','查看与编辑容器分离，职责清楚。']
+    }
+  };
+
+  function annList(items){
+    return '<ol class="ann-list">'+items.map(function(t,i){
+      return '<li><span class="n">'+(i+1)+'</span><span>'+t+'</span></li>';
+    }).join('')+'</ol>';
+  }
+  function paneHTML(kind, data){
+    return '<figure class="pane '+kind+'">'
+      + '<figcaption><span class="tag">'+(kind==='before'?'现状':'建议')+'</span><b>'+data.label+'</b><span class="meta">'+data.meta+'</span><button class="solo" data-solo="'+kind+'">放大</button></figcaption>'
+      + '<div class="viewport"><div class="screen">'+data.body()+'</div></div>'
+      + annList(data.ann)
+      + '</figure>';
+  }
+  function renderScene(){
+    var s = scenes[state.scene] || scenes.case;
+    var solo = state.solo ? ' solo-'+state.solo : '';
+    var html = '<section class="scene">'
+      + '<div class="scene-head"><div style="flex:1;min-width:280px"><h1><span class="pri '+s.pri.toLowerCase()+'">'+s.pri+'</span>'+s.title+'</h1><p class="sub">'+s.sub+'</p></div>'
+      + '<div class="ev">'+s.ev+'<br><button class="solo" data-solo="reset" style="margin-top:5px">并排查看</button></div></div>'
+      + '<div class="compare'+solo+'">'+paneHTML('before',s.before)+paneHTML('after',s.after)+'</div>'
+      + '<div class="take">'
+      + '<div class="take-col"><h4>现状问题</h4><ul>'+s.take.map(function(t){return '<li>'+t+'</li>'}).join('')+'</ul></div>'
+      + '<div class="take-col"><h4>建议效果</h4><ul>'+s.win.map(function(t){return '<li>'+t+'</li>'}).join('')+'</ul></div>'
+      + (state.scene === 'form' ? '<div class="mig"><table><thead><tr><th>仍用居中弹框</th><th>当前尺寸</th><th>建议容器</th></tr></thead><tbody>'
+        + '<tr><td>新建 / 编辑项目</td><td>720 居中</td><td class="to">右侧侧板 560</td></tr>'
+        + '<tr><td>新建需求文档</td><td>430 居中</td><td class="to">右侧侧板 560</td></tr>'
+        + '<tr><td>测试计划 / 记录执行 / 转缺陷</td><td>480 / 720 居中</td><td class="to">右侧抽屉</td></tr>'
+        + '<tr><td>AI 拆分 / 审计 / 用例结果</td><td>居中结果层，无 X</td><td class="to">右侧结果板 + X</td></tr>'
+        + '</tbody></table></div>' : '')
+      + '</div>'
+      + '</section>';
+    document.getElementById('board').innerHTML = html;
+    fit();
+  }
+
+  function fit(){
+    document.querySelectorAll('.viewport').forEach(function(v){
+      var avail = v.clientWidth, solo = v.closest('.compare.solo-before,.compare.solo-after');
+      var s = Math.min(avail / 820, solo ? 1.6 : 1.55);
+      v.style.setProperty('--s', s.toFixed(4));
+      v.style.height = Math.round(640 * s) + 'px';
+    });
+  }
+
+  function setSeg(container, attr, value){
+    container.querySelectorAll('button').forEach(function(b){
+      b.classList.toggle('on', b.dataset[attr] === value);
+    });
+  }
+
+  document.getElementById('sceneSeg').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-scene]'); if (!b) return;
+    state.scene = b.dataset.scene; state.solo = null;
+    setSeg(this,'scene',state.scene);
+    renderScene();
+    try { history.replaceState(null,'', '?scene='+state.scene); } catch(err){}
+  });
+  document.getElementById('annChk').addEventListener('change', function(){
+    document.body.classList.toggle('no-ann', !this.checked);
+    try { history.replaceState(null,'', '?scene='+state.scene+(this.checked?'':'&ann=0')); } catch(err){}
+  });
+  document.getElementById('board').addEventListener('click', function(e){
+    var solo = e.target.closest('[data-solo]');
+    if (solo){
+      var v = solo.dataset.solo;
+      state.solo = (v === 'reset' || state.solo === v) ? null : v;
+      renderScene();
+      return;
+    }
+    var tab = e.target.closest('[data-tab]');
+    if (tab){
+      var host = tab.closest('.drawer-lg');
+      if (!host) return;
+      host.querySelectorAll('[data-tab]').forEach(function(t){ t.classList.toggle('on', t === tab); });
+      host.querySelectorAll('[data-pane]').forEach(function(p){ p.hidden = p.dataset.pane !== tab.dataset.tab; });
+      return;
+    }
+    var title = e.target.closest('[data-edit-title]');
+    if (title){
+      if (title.isContentEditable){
+        title.contentEditable = 'false';
+      } else {
+        title.contentEditable = 'true';
+        title.focus();
+        var r = document.createRange(); r.selectNodeContents(title);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      }
+    }
+  });
+  window.addEventListener('resize', fit);
+  window.addEventListener('keydown', function(e){
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.target.closest('input,textarea,[contenteditable="true"]')) return;
+    var keys = Object.keys(scenes), i = keys.indexOf(state.scene);
+    state.scene = keys[(i + (e.key === 'ArrowRight' ? 1 : keys.length - 1)) % keys.length];
+    state.solo = null;
+    setSeg(document.getElementById('sceneSeg'),'scene',state.scene);
+    renderScene();
+    try { history.replaceState(null,'', '?scene='+state.scene); } catch(err){}
+  });
+
+  setSeg(document.getElementById('sceneSeg'),'scene',state.scene);
+  renderScene();
+})();
+</script>
+</body>
+</html>

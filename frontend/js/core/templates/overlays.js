@@ -269,39 +269,6 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
             </div>
           </div>
         </div>
-<!-- 手工补记工时 -->
-        <div class="modal-layer" id="dlgTimeAdd" role="dialog" aria-modal="true" aria-labelledby="dlgTimeAddTitle">
-          <div class="sheet">
-            <h3 class="reqdoc-dlg-title" id="dlgTimeAddTitle">补记工时</h3>
-            <p class="reqdoc-dlg-msg">为忘开表、加班等场景补一条实际工时。补记不经过工作时段裁剪，直接计入工作项与报表；可在下方记录列表删除或作废。</p>
-            <div class="reqdoc-dlg-form">
-              <div class="reqdoc-dlg-field">
-                <span>计入项目</span>
-                <div class="time-attr" id="iTimeProject"></div>
-              </div>
-              <label class="reqdoc-dlg-field">
-                <span>成员</span>
-                <select id="iTimeUser"></select>
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>日期</span>
-                <input id="iTimeDate" type="date" />
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>时长（小时）</span>
-                <input id="iTimeHours" type="number" min="0.5" max="24" step="0.5" placeholder="例如 1.5" />
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>备注（选填）</span>
-                <input id="iTimeNote" type="text" maxlength="200" placeholder="例如 联调支持" />
-              </label>
-            </div>
-            <div class="reqdoc-dlg-foot">
-              <button class="btn" type="button" id="dlgTimeAddCancel">取消</button>
-              <button class="btn primary" type="button" id="dlgTimeAddOk">保存</button>
-            </div>
-          </div>
-        </div>
 <!-- 快捷键与录入语法帮助（?） -->
         <div class="modal-layer" id="dlgHelp" role="dialog" aria-modal="true" aria-labelledby="dlgHelpTitle">
           <div class="sheet">

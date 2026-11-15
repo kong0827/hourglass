@@ -42,6 +42,13 @@ public class ReqDocSaveRequest {
     @Pattern(regexp = "^(draft|active|done)?$", message = "文档状态不合法")
     private String status;
 
+    /** 可见范围：team 团队共享 / members 指定成员 / personal 仅负责人；新建省略按 team，编辑省略沿用原值 */
+    @Pattern(regexp = "^(team|members|personal)?$", message = "文档可见范围不合法")
+    private String visibility;
+
+    /** 指定可见成员账号 ID（visibility=members 时必填 1–50 人） */
+    private java.util.List<String> memberIds;
+
     @Size(max = 32, message = "负责人不合法")
     private String owner;
 

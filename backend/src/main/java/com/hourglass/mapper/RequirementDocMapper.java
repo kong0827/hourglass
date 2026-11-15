@@ -58,6 +58,11 @@ public interface RequirementDocMapper {
     int updatePublished(@Param("id") String id,
                         @Param("publishedAt") java.time.LocalDateTime publishedAt);
 
+    /** 只改可见范围：不推进 updated_at，避免打开中的编辑器被误判并发冲突 */
+    int updateVisibility(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                         @Param("visibility") String visibility,
+                         @Param("owner") String owner, @Param("ownerUserId") String ownerUserId);
+
     /** 看板拖拽状态流转：只动 status，不触碰正文与乐观锁 */
     int updateStatus(@Param("workspaceId") String workspaceId,
                      @Param("id") String id,
@@ -79,8 +84,10 @@ public interface RequirementDocMapper {
     /** 某项目下的需求数（删除项目前拦一下） */
     int countByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
-    /** 项目列表一次性取各项目的需求数，避免逐项目 COUNT */
-    java.util.List<java.util.Map<String, Object>> countGroupByReq(@Param("workspaceId") String workspaceId);
+    /** 项目列表一次性取各项目的需求数，避免逐项目 COUNT；按查看人可见性过滤 */
+    java.util.List<java.util.Map<String, Object>> countGroupByReq(@Param("workspaceId") String workspaceId,
+                                                                 @Param("userId") String userId,
+                                                                 @Param("seeAllDrafts") boolean seeAllDrafts);
 
     /** 需求删除时，把关联到它的任务解绑（任务本身保留） */
     int clearTaskRef(@Param("workspaceId") String workspaceId, @Param("reqDocId") String reqDocId);
@@ -144,4 +151,22 @@ public interface RequirementDocMapper {
     /** 备份恢复：补齐父文档引用 */
     int updateParent(@Param("workspaceId") String workspaceId, @Param("id") String id,
                      @Param("parentId") String parentId);
+
+    /* ---------------- 文档可见成员 ---------------- */
+
+    List<String> selectVisibilityMemberIds(@Param("docId") String docId);
+
+    int countVisibilityMember(@Param("docId") String docId, @Param("userId") String userId);
+
+    int insertVisibilityMembers(@Param("workspaceId") String workspaceId, @Param("docId") String docId,
+                                @Param("userIds") List<String> userIds);
+
+    int deleteVisibilityMembersByDoc(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
+
+    int deleteVisibilityMembersByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    int deleteVisibilityMembersByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 备份导出：一次取全空间的成员名单（docId / userId） */
+    List<java.util.Map<String, Object>> selectVisibilityMembersByWorkspace(@Param("workspaceId") String workspaceId);
 }

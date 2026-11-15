@@ -135,14 +135,30 @@ try{
       return !!document.querySelector('[data-tc-open]');
     })()`, "用例列表", 30000);
   };
-  const openFirstCase = async () => {
+  /* 点行先进阅读态抽屉，步骤编辑器点「编辑」才出现 */
+  const openFirstCase = async (edit = true) => {
     await evaluate("document.querySelector('[data-tc-open]').click()");
-    await waitFor("getComputedStyle(document.getElementById('dlgCase')).display !== 'none' && document.querySelectorAll('#tcSteps .tc-step-row').length > 0", "用例弹框");
+    await waitFor(`(() => {
+      const d = document.getElementById('dlgCase'), v = document.getElementById('caseDetailView');
+      return !!d && d.classList.contains('open') && !!v && !v.hidden && !!v.querySelector('h2');
+    })()`, "用例抽屉阅读态");
+    if(edit){
+      await evaluate("document.querySelector('#caseDetailView [data-case-edit]').click()");
+      await waitFor("!document.getElementById('caseEditBody').hidden && document.querySelectorAll('#tcSteps .tc-step-row').length > 0", "用例编辑态");
+    }
     await sleep(450); /* 等开框过渡结束再截图，避免半透明叠影 */
   };
   const closeCase = async () => {
-    await evaluate("document.getElementById('dlgCaseX').click()");
-    await waitFor("getComputedStyle(document.getElementById('dlgCase')).display === 'none'", "关闭弹框");
+    await evaluate(`(() => {
+      const edit = document.getElementById('caseEditBody');
+      if(edit && !edit.hidden) document.getElementById('dlgCaseX').click();
+      else {
+        const b = document.querySelector('#caseDetailView [data-case-close]');
+        if(b) b.click();
+      }
+      return true;
+    })()`);
+    await waitFor("getComputedStyle(document.getElementById('dlgCase')).display === 'none'", "关闭用例抽屉");
   };
 
   console.log("用例步骤交互 E2E\n  地址：" + BASE);
@@ -214,21 +230,29 @@ try{
   await setViewport(1440, 900, false);
   await login(VIEWER);
   await openCases();
-  await openFirstCase();
-  const c = await evaluate(`(() => {
-    const acts = document.querySelector('#tcSteps .tc-step-acts');
-    const ta = document.querySelector('#tcSteps textarea');
-    return {
-      title: document.getElementById('caseFormTitle').textContent,
-      actsHidden: !acts || getComputedStyle(acts).display === 'none',
-      addHidden: getComputedStyle(document.getElementById('btnCaseAddStep')).display === 'none',
-      taDisabled: ta.disabled
+  await openFirstCase(false);
+  const c = await evaluate(`(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const view = document.getElementById('caseDetailView');
+    const out = {
+      read: !view.hidden && document.getElementById('caseEditBody').hidden,
+      title: (view.querySelector('.case-detail-head h2') || {}).textContent || "",
+      canEdit: !!view.querySelector('[data-case-edit]'),
+      canRun: !!view.querySelector('[data-case-run]'),
+      titleEditable: !!view.querySelector('[data-case-title-edit]')
     };
+    const stepsTab = view.querySelector('[data-case-tab="steps"]');
+    if(stepsTab){ stepsTab.click(); await wait(80); }
+    out.stepCount = view.querySelectorAll('.case-steps-read li').length;
+    out.stepActs = view.querySelectorAll('.tc-step-acts').length;
+    out.stepInputs = view.querySelectorAll('textarea').length;
+    return out;
   })()`);
-  assert(c.title.indexOf("查看用例") === 0, "查看者打开为查看态（" + c.title + "）");
-  assert(c.actsHidden, "只读态隐藏插行/排序/删除按钮");
-  assert(c.addHidden && c.taDisabled, "只读态隐藏添加按钮且输入禁用");
+  assert(c.read && c.title.trim().length > 0, "查看者打开为阅读态（" + c.title.trim() + "）");
+  assert(!c.canEdit && !c.canRun && !c.titleEditable, "只读态不给编辑 / 记录执行 / 改标题入口");
+  assert(c.stepCount > 0 && c.stepActs === 0 && c.stepInputs === 0, "步骤页签是只读列表，没有插行/排序/删除");
   await shot("case-steps-readonly.png");
+  await closeCase();
 
   const realErrors = cdp.errors.filter(e => !/favicon|net::|Failed to load resource/.test(e));
   assert(realErrors.length === 0, "无运行时错误" + (realErrors.length ? "：" + realErrors.join(" | ") : ""));

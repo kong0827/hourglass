@@ -170,14 +170,21 @@ try{
   assert(!seed.error && !!seed.caseId, "新建 E2E 用例成功" + (seed.error ? "：" + seed.error : ""));
   await waitFor(`!!document.querySelector('[data-tc-open="${seed.caseId}"]')`, "新用例行渲染");
 
-  /* A1 创建人 ≠ 执行人：行 meta 显示创建人；首次执行按钮文案为「执行」 */
+  /* A1 行 meta 两行分别交代归属与执行；创建人不再占行（详情抽屉的变更记录可查）。
+     首次执行按钮文案为「执行」 */
   const a1 = await evaluate(`(() => {
     const row = document.querySelector('[data-tc-open="${seed.caseId}"]');
-    const meta = row.querySelector('.tc-meta').textContent;
+    const meta = (row.querySelector('.tc-meta') || {}).textContent || "";
+    const meta2 = (row.querySelector('.tc-meta-2') || {}).textContent || "";
     const runBtn = row.querySelector('[data-tc-run]');
-    return { metaHasCreator: meta.indexOf('创建：') >= 0, runLabel: runBtn ? runBtn.textContent.trim() : "", hasDefect: !!row.querySelector('[data-tc-defect]') };
+    return {
+      metaHasModule: meta.indexOf('回归') >= 0,
+      metaHasSteps: meta2.indexOf('步骤') >= 0,
+      runLabel: runBtn ? runBtn.textContent.trim() : "",
+      hasDefect: !!row.querySelector('[data-tc-defect]')
+    };
   })()`);
-  assert(a1.metaHasCreator, "用例行显示创建人（创建：…）");
+  assert(a1.metaHasModule && a1.metaHasSteps, "用例行 meta 分两行显示归属与步骤");
   assert(a1.runLabel === "执行", "首次执行按钮文案为「执行」");
   assert(!a1.hasDefect, "未执行时不出现「转缺陷」");
 
@@ -356,14 +363,14 @@ try{
   /* A11 点「来源用例」回跳用例视图并打开该用例 */
   await evaluate(`document.querySelector('#readSourceCase .ev-case-link').click()`);
   await waitFor(`document.body.dataset.view === 'testcases'`, "回跳用例视图", 25000);
-  await waitFor(visible("dlgCase"), "来源用例编辑弹框打开", 25000);
-  await waitFor(`(() => { const el = document.getElementById('cTitle'); return el && el.value.indexOf('E2E 执行链路') >= 0; })()`, "来源用例标题回填", 25000);
+  await waitFor(visible("dlgCase"), "来源用例抽屉打开", 25000);
+  await waitFor(`(() => { const h = document.querySelector('#caseDetailView h2'); return h && h.textContent.indexOf('E2E 执行链路') >= 0; })()`, "来源用例标题", 25000);
   const a11 = await evaluate(`(() => {
-    return { header: document.getElementById('caseFormTitle').textContent, title: document.getElementById('cTitle').value };
+    return { header: (document.querySelector('#caseDetailView .case-detail-meta') || {}).textContent || '', title: (document.querySelector('#caseDetailView h2') || {}).textContent || '' };
   })()`);
   assert(a11.title.indexOf("E2E 执行链路") >= 0, "回跳打开的是来源用例（" + a11.header + "）");
-  await evaluate(`document.getElementById('dlgCaseX').click()`);
-  await waitFor(`!document.getElementById('dlgCase').classList.contains('open')`, "关闭用例弹框");
+  await evaluate(`document.querySelector('#caseDetailView [data-case-close]').click()`);
+  await waitFor(`!document.getElementById('dlgCase').classList.contains('open')`, "关闭用例抽屉");
 
   /* A12 缺陷 tab：来源用例 chip 可点（data-tc-def-case） */
   await evaluate(`(async () => { const m = await import("./js/views/testcases.js"); m.setTcMode("defects"); return true; })()`);
@@ -380,7 +387,8 @@ try{
   await call("Page.navigate", { url: "about:blank" });
   await call("Page.navigate", { url: BASE + "/#/testcases" });
   await waitFor("document.body.dataset.layout === 'mobile' && document.body.dataset.view === 'testcases'", "移动布局");
-  /* 移动端 fresh 加载默认项目可能不是种子用例所在项目：等下拉就绪后显式切到该项目再等行渲染 */
+  /* 移动端 fresh 加载默认项目可能不是种子用例所在项目：等项目列表就绪后，把下拉切到该项目再等行渲染 */
+  await waitFor(`import("./js/core/state.js").then(({rt}) => rt.reqsLoaded)`, "移动端项目列表就绪", 25000);
   await waitFor(`(() => { const sel = document.getElementById('tcReq'); return sel && [...sel.options].some(o => o.value === ${JSON.stringify(seed.reqId)}); })()`, "移动端项目下拉就绪", 25000);
   await evaluate(`(() => { const sel = document.getElementById('tcReq'); sel.value = ${JSON.stringify(seed.reqId)}; sel.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   await waitFor(`!!document.querySelector('[data-tc-run="${seed.caseId}"]')`, "移动端用例执行按钮", 25000);

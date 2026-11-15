@@ -145,8 +145,10 @@ async function main(){
       await call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: !!mobile });
       await sleep(450);
     };
+    /* 演示库缺 project_repo / 分支看板数据导致的 500（2026-11-15 08:39 前已存在），与本页无关 */
+    const BASELINE_FAIL = /\/api\/(branches\/options|branches\/board|repos)/;
     const noExceptions = label => {
-      const bad = cdp.takeExceptions();
+      const bad = cdp.takeExceptions().filter(e => !BASELINE_FAIL.test(JSON.stringify(e)));
       assert(!bad.length, label + " 出现脚本异常：" + JSON.stringify(bad.slice(0, 2)));
     };
     /* 横向溢出、不可达控件与指标格孤行：子页最常见的三类布局缺陷 */
@@ -581,13 +583,13 @@ async function main(){
     await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(main.versionName)}`, "回到主用例版本", 25000);
     for(const [tool, selector, label] of [
       ["edit", "#dlgVersion.open", "编辑版本"],
-      ["plan", ".modal-layer.open .release-sheet", "计划与历史"],
+      ["plan", "#view-release .release-body", "计划与历史"],
       ["note", ".modal-layer.open .release-sheet", "发布说明"]
     ]){
       const exists = await evaluate(`!!document.querySelector('#versionBody [data-vd-tool="${tool}"]')`);
       if(!exists){ pass(`当前版本无「${label}」入口（权限/终态），跳过`); continue; }
       await evaluate(`document.querySelector('#versionBody [data-vd-tool="${tool}"]').click()`);
-      await waitFor(`!!document.querySelector(${JSON.stringify(selector)})`, label + " 弹窗", 20000);
+      await waitFor(`!!document.querySelector(${JSON.stringify(selector)})`, label + " 打开", 20000);
       if(tool === "edit"){
         /* 编辑弹窗是静态表单：标题是动作名，版本名在输入框里，项目名在绑定行 */
         await waitFor(`document.getElementById("vName").value === ${JSON.stringify(main.versionName)}`, "编辑弹窗回填版本名", 20000);
@@ -603,6 +605,15 @@ async function main(){
         await evaluate(`document.getElementById("dlgVersionX").click()`);
         await waitFor(`!document.querySelector("#dlgVersion.open")`, "编辑弹窗关闭");
         pass(`写操作「编辑版本」复用版本页弹窗并回填：${form.name} / ${form.project} / 开始 ${form.start || "未设"}`);
+      }else if(tool === "plan"){
+        /* 发布工作台已迁到 #/release 子页：从详情下钻，返回要回到这一页而不是版本列表 */
+        await waitFor(`document.body.dataset.view === "release" && document.querySelector("#view-release .release-body").textContent.trim().length > 40`, label + " 页面内容", 25000);
+        const pageTitle = await evaluate(`(document.querySelector("#view-release .release-page-bar b") || {}).textContent || ""`);
+        assert(pageTitle === main.versionName, `工作台页头版本名不对：「${pageTitle}」应为「${main.versionName}」`);
+        await shot("05-页面-plan");
+        await evaluate(`document.querySelector("#view-release [data-release-back]").click()`);
+        await waitFor(`document.body.dataset.view === "version" && document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(main.versionName)}`, label + " 回到版本详情", 20000);
+        pass(`「${label}」进入发布工作台子页，返回落在版本详情：${pageTitle}`);
       }else{
         await waitFor(`(() => {
           const h = document.querySelector(".modal-layer.open .release-sheet h2");

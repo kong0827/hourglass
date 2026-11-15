@@ -237,6 +237,22 @@ public class SseService {
             RequirementDoc d = docMapper.selectById(docId);
             if (d != null && wsId.equals(d.getWorkspaceId())) {
                 projectId = d.getReqId();
+                /* 已发布文档收窄为指定成员/仅自己后，事件只推给负责人 + 名单，管理员也不例外 */
+                String vis = d.getVisibility();
+                if (d.getPublishedAt() != null && vis != null && !RequirementDocService.VIS_TEAM.equals(vis)) {
+                    Set<String> allowed = new HashSet<String>();
+                    if (d.getOwnerUserId() != null) {
+                        allowed.add(d.getOwnerUserId());
+                    }
+                    if (RequirementDocService.VIS_MEMBERS.equals(vis)) {
+                        allowed.addAll(docMapper.selectVisibilityMemberIds(d.getId()));
+                    }
+                    for (String uid : roles.keySet()) {
+                        if (!allowed.contains(uid)) {
+                            blocked.add(uid);
+                        }
+                    }
+                }
             }
         }
         if (projectId == null) {

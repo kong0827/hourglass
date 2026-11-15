@@ -716,6 +716,11 @@ function renderBranches(){
   if(isList) pruneBranchSelection();
   var listRows = isList ? filteredBranchRows() : null;
   var hasFilter = branchHasFilter();
+  /* 一条分支都没有、也没加任何筛选：筛选条针对的是不存在的数据，整条收起，只留空态与新建指引 */
+  var filterBarEl = $("branchFilterBar"), filterBtnEl = $("branchFilterBtn"), lifeChipsEl = $("branchLifeChips");
+  if(filterBarEl) filterBarEl.hidden = !st.total && !hasFilter;
+  if(filterBtnEl) filterBtnEl.hidden = !st.total && !hasFilter;
+  if(lifeChipsEl) lifeChipsEl.hidden = !st.total && !hasFilter;
   /* 全空时空态里已有主操作，工具栏不再重复放一个「新建分支」；有数据或筛选无结果时保留 */
   var branchNewBtn = $("branchNew");
   var canCreate = !!branchNewBtn && !roleReadOnly();

@@ -54,6 +54,13 @@ public class RequirementDocService {
     /** 每篇文档保留的历史快照版数上限 */
     private static final int HISTORY_KEEP = 20;
 
+    /** 文档可见范围（照用例分组三档），仅对已发布文档生效 */
+    public static final String VIS_TEAM = "team";
+    public static final String VIS_MEMBERS = "members";
+    public static final String VIS_PERSONAL = "personal";
+    /** 指定成员上限：超出说明该用团队共享 */
+    private static final int MAX_VIS_MEMBERS = 50;
+
     /** 摘要长度 */
     private static final int EXCERPT_MAX = 80;
 
@@ -197,6 +204,33 @@ public class RequirementDocService {
         return ProjectAccessService.isPrivileged(role);
     }
 
+    /**
+     * 已发布文档的可见范围：负责人始终可见；团队共享对项目内成员开放；
+     * 指定成员/仅自己按名单与负责人判定。空间管理员不在名单时同样不可见（与用例分组口径一致）。
+     */
+    public static boolean canSeePublished(String visibility, String ownerUserId, String userId, boolean member) {
+        if (userId != null && userId.equals(ownerUserId)) {
+            return true;
+        }
+        if (visibility == null || VIS_TEAM.equals(visibility)) {
+            return true;
+        }
+        /* 名单只对 members 档生效；personal 即使残留成员行也不放宽 */
+        return VIS_MEMBERS.equals(visibility) && member;
+    }
+
+    /**
+     * 文档统一可见判定：草稿仍按作者 + 空间 owner/admin；已发布再叠加文档级可见范围。
+     * member 由调用方按需查询（仅 members 档需要）。
+     */
+    public static boolean canSeeDoc(String visibility, String ownerUserId, java.time.LocalDateTime publishedAt,
+                                    String userId, String role, boolean member) {
+        if (publishedAt == null) {
+            return canSeeDraft(ownerUserId, null, userId, role);
+        }
+        return canSeePublished(visibility, ownerUserId, userId, member);
+    }
+
     public RequirementDoc get(String workspaceId, String id) {
         RequirementDoc d = docMapper.selectById(id);
         if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
@@ -205,13 +239,27 @@ public class RequirementDocService {
         return d;
     }
 
-    /** 读取前校验项目可见范围与草稿可见性（不可见一律按不存在处理） */
+    /** 读取前校验项目可见范围与文档可见范围（不可见一律按不存在处理） */
     public RequirementDoc getVisible(String workspaceId, String userId, String id) {
         RequirementDoc d = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, d.getReqId());
-        if (!canSeeDraft(d.getOwnerUserId(), d.getPublishedAt(), userId,
-                projectAccess.roleOf(workspaceId, userId))) {
+        if (!canSeeDoc(d.getVisibility(), d.getOwnerUserId(), d.getPublishedAt(), userId,
+                projectAccess.roleOf(workspaceId, userId), isVisibilityMember(d, userId))) {
             throw AppException.notFound("文档不存在：" + id);
+        }
+        return withMembers(d);
+    }
+
+    /** 指定成员名单只在 members 档查询；其他档位不做多余查询 */
+    private boolean isVisibilityMember(RequirementDoc d, String userId) {
+        return userId != null && VIS_MEMBERS.equals(d.getVisibility())
+                && docMapper.countVisibilityMember(d.getId(), userId) > 0;
+    }
+
+    /** 详情返回前带上名单，供前端权限面板回显；列表只给 memberCount，不带逐人名单 */
+    private RequirementDoc withMembers(RequirementDoc d) {
+        if (d != null && VIS_MEMBERS.equals(d.getVisibility())) {
+            d.setMemberIds(docMapper.selectVisibilityMemberIds(d.getId()));
         }
         return d;
     }
@@ -259,17 +307,30 @@ public class RequirementDocService {
         RequirementDoc d = new RequirementDoc();
         d.setId(Ids.gen("D"));
         d.setWorkspaceId(workspaceId);
-        apply(d, reqId, req, userId);
+        List<String> memberIds = apply(d, reqId, req, userId);
         docMapper.insert(d);
+        saveVisibilityMembers(workspaceId, d.getId(), memberIds);
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, d.getId(), userId,
                 "create", "创建了文档「" + d.getTitle() + "」");
-        return docMapper.selectById(d.getId());
+        return withMembers(docMapper.selectById(d.getId()));
     }
 
     @Transactional
     public RequirementDoc update(String userId, String workspaceId, String id, ReqDocSaveRequest req) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
         assertDocMutate(workspaceId, userId, d);
+        String oldVisibility = Texts.trimToNull(d.getVisibility());
+        List<String> oldMemberIds = VIS_MEMBERS.equals(oldVisibility)
+                ? docMapper.selectVisibilityMemberIds(id) : java.util.Collections.<String>emptyList();
+        String requestedVisibility = Texts.trimToNull(req.getVisibility());
+        if (requestedVisibility != null && VIS_TEAM.equals(oldVisibility)
+                && !VIS_TEAM.equals(requestedVisibility)) {
+            /* 团队共享收窄会让其他成员突然看不到：只允许文档负责人操作，避免管理员误锁他人 */
+            String owner = Texts.trimToNull(d.getOwnerUserId());
+            if (owner != null && !owner.equals(userId)) {
+                throw AppException.badRequest("团队共享文档收窄可见范围需由文档负责人操作，避免其他成员突然看不到");
+            }
+        }
         /* 乐观锁：打开文档时的 updatedAt 原样带回，与库内当前版本不一致说明他人先保存过 */
         java.time.LocalDateTime oldUpdatedAt = parseUpdatedAt(req.getUpdatedAt());
         String oldReqId = d.getReqId();
@@ -283,9 +344,21 @@ public class RequirementDocService {
         String oldOwnerUserId = d.getOwnerUserId();
         String reqId = ensureProject(workspaceId, req.getReqId());
         projectAccess.assertWrite(workspaceId, userId, reqId);
-        apply(d, reqId, req, userId);
+        List<String> memberIds = apply(d, reqId, req, userId, oldVisibility, oldMemberIds);
         if (docMapper.update(d, oldUpdatedAt) == 0) {
             throw AppException.conflict("文档已被他人修改，请刷新查看最新内容后再保存");
+        }
+        saveVisibilityMembers(workspaceId, id, memberIds);
+        String newVisibility = Texts.trimToNull(d.getVisibility());
+        /* 存量文档 visibility 为空等同团队共享（与 SQL 默认值口径一致），不产生「team → team」噪音动态 */
+        String oldVisNorm = oldVisibility == null ? VIS_TEAM : oldVisibility;
+        if (!Objects.equals(oldVisNorm, newVisibility)) {
+            if (!VIS_TEAM.equals(newVisibility)) {
+                /* 可见范围收窄后旧公开链接必须立即失效，否则绕过名单继续对外暴露正文 */
+                shareMapper.deleteByDoc(workspaceId, id);
+            }
+            workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
+                    "可见范围：" + visLabel(oldVisNorm) + " → " + visLabel(newVisibility));
         }
         recordChange(userId, workspaceId, id, "标题", oldTitle, d.getTitle());
         recordChange(userId, workspaceId, id, "分类", oldDocType.getLabel(),
@@ -330,12 +403,52 @@ public class RequirementDocService {
                 || !Objects.equals(oldContent, d.getContent())
                 || !Objects.equals(oldStatus, d.getStatus())
                 || oldDocType != DocumentType.parseOrOther(d.getDocType())
-                || !Objects.equals(oldReqId, d.getReqId());
+                || !Objects.equals(oldReqId, d.getReqId())
+                || !Objects.equals(oldVisNorm, newVisibility);
         if (changed) {
             notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已更新",
                     "文档内容或属性有更新");
         }
-        return docMapper.selectById(id);
+        return withMembers(docMapper.selectById(id));
+    }
+
+    /**
+     * 单独调整可见范围（不改正文）：与编辑路径共用负责人门控、收窄保护与名单校验。
+     * 团队共享收窄为指定成员/仅负责人只允许文档负责人操作，收窄后旧公开链接立即失效。
+     */
+    @Transactional
+    public RequirementDoc changeVisibility(String userId, String workspaceId, String id, String visibility,
+                                           java.util.List<String> memberIds) {
+        RequirementDoc d = getVisible(workspaceId, userId, id);
+        assertDocMutate(workspaceId, userId, d);
+        String oldVisibility = Texts.trimToNull(d.getVisibility());
+        String oldVisNorm = oldVisibility == null ? VIS_TEAM : oldVisibility;
+        String newVisibility = visibility == null ? VIS_TEAM : visOf(visibility);
+        if (VIS_TEAM.equals(oldVisNorm) && !VIS_TEAM.equals(newVisibility)) {
+            String owner = Texts.trimToNull(d.getOwnerUserId());
+            if (owner != null && !owner.equals(userId)) {
+                throw AppException.badRequest("团队共享文档收窄可见范围需由文档负责人操作，避免其他成员突然看不到");
+            }
+        }
+        java.util.List<String> members = memberIdsOf(workspaceId, d.getReqId(), newVisibility, memberIds);
+        String ownerName = d.getOwner();
+        String ownerUserId = d.getOwnerUserId();
+        /* 非团队共享必须有真实负责人账号，否则文档会变成谁都打不开；历史自由文本负责人归到操作者 */
+        if (!VIS_TEAM.equals(newVisibility) && Texts.trimToNull(ownerUserId) == null) {
+            AppUser me = userMapper.selectById(userId);
+            ownerName = me == null ? ownerName : Texts.cut(me.getDisplayName(), 32);
+            ownerUserId = userId;
+        }
+        docMapper.updateVisibility(workspaceId, id, newVisibility, ownerName, ownerUserId);
+        saveVisibilityMembers(workspaceId, id, members);
+        if (!VIS_TEAM.equals(newVisibility)) {
+            shareMapper.deleteByDoc(workspaceId, id);
+        }
+        if (!Objects.equals(oldVisNorm, newVisibility)) {
+            workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
+                    "可见范围：" + visLabel(oldVisNorm) + " → " + visLabel(newVisibility));
+        }
+        return withMembers(docMapper.selectById(id));
     }
 
     /** 需求文档活动查询前复用详情可见性校验。 */
@@ -455,7 +568,7 @@ public class RequirementDocService {
             docMapper.updateStatus(workspaceId, id, status);
             recordChange(userId, workspaceId, id, "状态", d.getStatus(), status);
         }
-        return docMapper.selectById(id);
+        return withMembers(docMapper.selectById(id));
     }
 
     /**
@@ -476,7 +589,7 @@ public class RequirementDocService {
             notifyDocOwner(docMapper.selectById(id), userId,
                     "文档「" + newTitle + "」已更新", "文档标题：由「" + oldTitle + "」改为「" + newTitle + "」");
         }
-        return docMapper.selectById(id);
+        return withMembers(docMapper.selectById(id));
     }
 
     /**
@@ -505,6 +618,7 @@ public class RequirementDocService {
         commentMapper.deleteByDoc(workspaceId, id);
         historyMapper.deleteByDoc(workspaceId, id);
         shareMapper.deleteByDoc(workspaceId, id);
+        docMapper.deleteVisibilityMembersByDoc(workspaceId, id);
         attachmentService.deleteByTarget(workspaceId, id, AttachmentService.KIND_DOC);
         docMapper.delete(d.getId());
         workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
@@ -527,6 +641,7 @@ public class RequirementDocService {
             attachmentService.deleteByTarget(workspaceId, docId, AttachmentService.KIND_DOC);
             workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId);
         }
+        docMapper.deleteVisibilityMembersByReq(workspaceId, reqId);
         return docMapper.deleteByReq(workspaceId, reqId);
     }
 
@@ -575,7 +690,7 @@ public class RequirementDocService {
                 "restore", "恢复到第 " + h.getVersionNo() + " 版（" + h.getTitle() + "）");
         notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已恢复到历史版本",
                 "文档已恢复到第 " + h.getVersionNo() + " 版，请确认内容");
-        return docMapper.selectById(docId);
+        return withMembers(docMapper.selectById(docId));
     }
 
     /**
@@ -596,10 +711,13 @@ public class RequirementDocService {
             /* 收回发布即吊销分享：旧链接不能在再次发布后自动复活，需重新生成 */
             shareMapper.deleteByDoc(workspaceId, id);
         }
+        String vis = Texts.trimToNull(d.getVisibility());
+        String visible = VIS_MEMBERS.equals(vis) ? "，仅指定成员可见"
+                : VIS_PERSONAL.equals(vis) ? "，仅负责人可见" : "，成员可见";
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
-                published ? "发布了文档「" + d.getTitle() + "」，成员可见"
+                published ? "发布了文档「" + d.getTitle() + "」" + visible
                         : "收回了文档「" + d.getTitle() + "」的发布，转为草稿");
-        return docMapper.selectById(id);
+        return withMembers(docMapper.selectById(id));
     }
 
     /* ---------------- 只读分享 ---------------- */
@@ -613,6 +731,10 @@ public class RequirementDocService {
         projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         if (d.getPublishedAt() == null) {
             throw AppException.badRequest("文档尚未发布，发布后才能生成分享链接");
+        }
+        String vis = Texts.trimToNull(d.getVisibility());
+        if (vis != null && !VIS_TEAM.equals(vis)) {
+            throw AppException.badRequest("仅团队共享文档可生成公开分享链接，请先调整可见范围");
         }
         ReqDocShare share = new ReqDocShare();
         share.setWorkspaceId(workspaceId);
@@ -658,7 +780,10 @@ public class RequirementDocService {
             throw AppException.notFound("分享链接无效或已过期");
         }
         RequirementDoc d = docMapper.selectById(share.getDocId());
-        if (d == null || !share.getWorkspaceId().equals(d.getWorkspaceId()) || d.getPublishedAt() == null) {
+        String vis = d == null ? null : Texts.trimToNull(d.getVisibility());
+        if (d == null || !share.getWorkspaceId().equals(d.getWorkspaceId()) || d.getPublishedAt() == null
+                || (vis != null && !VIS_TEAM.equals(vis))) {
+            /* 文档收回发布或收窄为指定成员/仅自己后，旧链接一律失效，不能绕过名单继续对外暴露 */
             throw AppException.notFound("分享链接无效或已过期");
         }
         Workspace ws = workspaceMapper.selectById(share.getWorkspaceId());
@@ -774,9 +899,9 @@ public class RequirementDocService {
     }
 
     /** 项目列表用：一次 GROUP BY 取全部项目的需求数 */
-    public java.util.Map<String, Integer> countByReqMap(String workspaceId) {
+    public java.util.Map<String, Integer> countByReqMap(String workspaceId, String userId, boolean seeAllDrafts) {
         java.util.Map<String, Integer> out = new java.util.HashMap<String, Integer>();
-        for (java.util.Map<String, Object> row : docMapper.countGroupByReq(workspaceId)) {
+        for (java.util.Map<String, Object> row : docMapper.countGroupByReq(workspaceId, userId, seeAllDrafts)) {
             Object k = row.get("reqId");
             Object v = row.get("cnt");
             if (k != null && v instanceof Number) {
@@ -900,7 +1025,16 @@ public class RequirementDocService {
                 title, body, "doc", d.getId(), d.getReqId());
     }
 
-    private void apply(RequirementDoc d, String reqId, ReqDocSaveRequest req, String userId) {
+    private List<String> apply(RequirementDoc d, String reqId, ReqDocSaveRequest req, String userId) {
+        return apply(d, reqId, req, userId, null, java.util.Collections.<String>emptyList());
+    }
+
+    /**
+     * 写入文档字段，并返回需要落库的指定可见成员名单。
+     * 可见范围省略时：编辑沿用原值、新建默认团队共享；收窄/放宽后成员名单由这里统一归一。
+     */
+    private List<String> apply(RequirementDoc d, String reqId, ReqDocSaveRequest req, String userId,
+                               String oldVisibility, List<String> oldMemberIds) {
         String code = Texts.trimToNull(req.getDocType());
         /* 省略分类时编辑沿用原值；新建及旧文档缺省归入其他。显式非法分类必须拒绝。 */
         DocumentType docType = code == null ? DocumentType.parseOrOther(d.getDocType()) : DocumentType.parse(code);
@@ -944,6 +1078,80 @@ public class RequirementDocService {
             AppUser me = userMapper.selectById(userId);
             d.setOwner(me == null ? null : Texts.cut(me.getDisplayName(), 32));
             d.setOwnerUserId(userId);
+        }
+        String currentVisibility = Texts.trimToNull(d.getVisibility());
+        String visibility = visOf(Texts.trimToNull(req.getVisibility()) != null
+                ? req.getVisibility() : (oldVisibility != null ? oldVisibility : currentVisibility));
+        d.setVisibility(visibility);
+        /* 非团队共享必须有真实负责人账号，否则文档会变成谁都打不开；
+           历史自由文本负责人没有账号 ID 时，收窄动作落到操作者身上 */
+        if (!VIS_TEAM.equals(visibility) && Texts.trimToNull(d.getOwnerUserId()) == null) {
+            AppUser me = userMapper.selectById(userId);
+            d.setOwner(me == null ? d.getOwner() : Texts.cut(me.getDisplayName(), 32));
+            d.setOwnerUserId(userId);
+        }
+        /* 名单省略时沿用原名单（编辑器保存不带名单，不能静默清空）。
+           沿用不再复核项目可见性：名单成员后来被移出项目不该阻断正文保存；主动改名单时才校验。 */
+        if (req.getMemberIds() == null && VIS_MEMBERS.equals(visibility)
+                && VIS_MEMBERS.equals(Texts.trimToNull(oldVisibility))) {
+            return oldMemberIds == null ? java.util.Collections.<String>emptyList() : oldMemberIds;
+        }
+        return memberIdsOf(d.getWorkspaceId(), reqId, visibility,
+                req.getMemberIds() == null ? oldMemberIds : req.getMemberIds());
+    }
+
+    /** 可见范围归一：非法值拒绝，避免把拼错的值静默落成 team */
+    private static String visOf(String raw) {
+        String v = Texts.trimToNull(raw);
+        if (v == null) {
+            return VIS_TEAM;
+        }
+        if (VIS_TEAM.equals(v) || VIS_MEMBERS.equals(v) || VIS_PERSONAL.equals(v)) {
+            return v;
+        }
+        throw AppException.badRequest("文档可见范围不合法");
+    }
+
+    private static String visLabel(String visibility) {
+        if (VIS_MEMBERS.equals(visibility)) {
+            return "指定成员可见";
+        }
+        if (VIS_PERSONAL.equals(visibility)) {
+            return "仅负责人可见";
+        }
+        return "团队共享";
+    }
+
+    /** 指定成员名单：去重、上限，且必须真的看得到本项目，否则授权没有意义 */
+    private List<String> memberIdsOf(String workspaceId, String reqId, String visibility, List<String> raw) {
+        if (!VIS_MEMBERS.equals(visibility)) {
+            return java.util.Collections.emptyList();
+        }
+        List<String> ids = new java.util.ArrayList<String>();
+        for (String id : raw == null ? java.util.Collections.<String>emptyList() : raw) {
+            String uid = Texts.trimToNull(id);
+            if (uid != null && !ids.contains(uid)) {
+                ids.add(uid);
+            }
+        }
+        if (ids.isEmpty()) {
+            throw AppException.badRequest("「指定成员可见」至少要选一位成员");
+        }
+        if (ids.size() > MAX_VIS_MEMBERS) {
+            throw AppException.badRequest("指定成员最多 " + MAX_VIS_MEMBERS + " 位，请改用团队共享");
+        }
+        for (String uid : ids) {
+            if (!projectAccess.canView(workspaceId, uid, reqId)) {
+                throw AppException.badRequest("所选成员里有人看不到本项目，请先在成员管理里授权");
+            }
+        }
+        return ids;
+    }
+
+    private void saveVisibilityMembers(String workspaceId, String docId, List<String> memberIds) {
+        docMapper.deleteVisibilityMembersByDoc(workspaceId, docId);
+        if (memberIds != null && !memberIds.isEmpty()) {
+            docMapper.insertVisibilityMembers(workspaceId, docId, memberIds);
         }
     }
 

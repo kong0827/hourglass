@@ -5,6 +5,7 @@ import { $, chipsCats, chipsDate, chipsOwner, chipsPri, chipsReqs, chipsTags, ch
 import { currentFilterParams, toggleFilterValue, updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
 import { isMobile } from "./layout.js";
+import { currentMode } from "./mobile-rules.js";
 import { activeView, showView } from "./router.js";
 import { catNameById, filterOn, rt, selectedFilterCount, state } from "./state.js";
 import { UI, esc, toast, toastAction } from "./ui.js";
@@ -303,10 +304,15 @@ function syncDueButton(){
 function syncDimButtons(){
   if(!dimGroup) return;
   syncDueButton();
+  var inMine = activeView === "mine";
+  var mineTest = inMine && rt.currentWs
+    && currentMode(rt.currentWs.id, rt.currentWs.myRole) === "test";
   dimGroup.querySelectorAll("[data-dim-open]").forEach(function(btn){
     var kind = btn.dataset.dimOpen;
-    /* 我的工作天然只含本人任务，负责人维度没有意义，不摆出来制造「点了没反应」 */
-    btn.hidden = activeView === "mine" && kind === "owners";
+    /* 我的工作天然只含本人任务，负责人维度没有意义；测试负责人只在「待我测试」有意义，
+       普通模式下不摆出来制造「点了没反应」。已选条件仍保留按钮，筛选不会隐身到清不掉。 */
+    btn.hidden = inMine && (kind === "owners"
+      || (kind === "testOwners" && !mineTest && !dimSelected(kind).length));
     var n = dimSelected(kind).length;
     var values = dimSelectedText(kind);
     var labelEl = btn.querySelector(".fb-dim-label");
@@ -1694,4 +1700,4 @@ window.addEventListener("ds:view-search", function(){
 });
 updateMobFilterSummary();
 
-export { applyView, clearFilters, deleteView, loadViews, markHumanSearchInput, openMobFilterSheet, pruneUnknownCats, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, toggleIn, updateMobFilterSummary };
+export { applyView, clearFilters, deleteView, loadViews, markHumanSearchInput, openMobFilterSheet, pruneUnknownCats, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, syncDimButtons, toggleIn, updateMobFilterSummary };

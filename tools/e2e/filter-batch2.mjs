@@ -204,7 +204,7 @@ try{
     };
   })()`);
   assert(reqPos.parent.indexOf("toolbar-right") !== -1, "项目范围控件位于工具栏右侧（" + reqPos.parent + "）");
-  assert(reqPos.barParent.indexOf("tc-page") !== -1, "筛选条独立成行，不再挤在工具栏右侧（" + reqPos.barParent + "）");
+  assert(reqPos.barParent.indexOf("tc-filtercard") !== -1, "筛选条与执行结果 chips 同处一张筛选卡，不再挤在工具栏右侧（" + reqPos.barParent + "）");
   assert(reqPos.stripBeforeBar, "统计 chips 条在筛选条之前：点计数即筛选");
   assert(reqPos.order === 1, "DOM 顺序：说明图标 → 项目（" + reqPos.order + "）");
   await shot("audit-batch2-cases-1440.png");

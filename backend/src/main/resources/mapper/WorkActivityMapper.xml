@@ -40,6 +40,13 @@
     <if test="!seeAllDrafts">
       AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
     </if>
+    <if test="userId != null">
+      AND (d.published_at IS NULL
+           OR d.visibility = 'team'
+           OR d.owner_user_id = #{userId}
+           OR EXISTS (SELECT 1 FROM doc_visibility_member dvm
+                      WHERE dvm.doc_id = d.id AND dvm.user_id = #{userId}))
+    </if>
   </sql>
 
   <select id="selectDocActivities" resultType="com.hourglass.dto.ReqDocActivityView">

@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { btnMineFields, btnMineFold, btnMineRefresh, mineBody, mineGroup, mineMeta, mineSort, mineSpaceFilter, mineStats, mineSubgroup } from "../core/dom.js";
-import { clearFilters } from "../core/filters-ui.js";
+import { clearFilters, syncDimButtons } from "../core/filters-ui.js";
 import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
@@ -560,6 +560,8 @@ function setMineMode(mode){
     mineAll = []; mineSpaces = []; mineTotal = 0; mineHasMore = false; mineCache = {};
   }
   syncMineModeUI();
+  /* 测试负责人维度只在「待我测试」摆出来，切模式后筛选栏立即重排 */
+  syncDimButtons();
   if(mode === "team"){ renderTeam(); return; }
   if(mineAll.length) rerenderMine(); else loadMine();
 }

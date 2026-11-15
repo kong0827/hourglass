@@ -128,7 +128,8 @@ public class RequirementService {
                 aggByReq.put(a.getReqId(), a);
             }
         }
-        java.util.Map<String, Integer> docCounts = docService.countByReqMap(workspaceId);
+        java.util.Map<String, Integer> docCounts =
+                docService.countByReqMap(workspaceId, userId, ProjectAccessService.isPrivileged(role));
         /* 版本数供删除确认框提示：一次 GROUP BY 汇总，避免逐项目查询 */
         java.util.Map<String, Integer> versionCounts = new java.util.HashMap<String, Integer>();
         for (java.util.Map<String, Object> row : versionMapper.countGroupByReq(workspaceId)) {

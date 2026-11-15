@@ -31,8 +31,12 @@ public class RequirementDoc {
     private String status;
     /** 发布时间（空 = 草稿，仅作者与空间管理员可见） */
     private LocalDateTime publishedAt;
+    /** 可见范围：team=团队共享 / members=指定成员 / personal=仅负责人；仅对已发布文档生效 */
+    private String visibility;
     private String owner;
     private String ownerUserId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** 指定可见成员账号 ID（visibility=members 时由服务层按需装载，不落库） */
+    private transient java.util.List<String> memberIds;
 }
