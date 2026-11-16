@@ -3054,6 +3054,7 @@
                   <option value="member_add">添加成员</option>
                   <option value="member_remove">移除成员</option>
                   <option value="member_company">标注成员公司</option>
+                  <option value="member_job_title">标注成员岗位</option>
                   <option value="project_role">标注项目角色</option>
                   <option value="workspace_delete">删除空间</option>
                   <option value="project_delete">删除项目</option>
@@ -3218,7 +3219,20 @@
                   <input id="meEmail" type="email" maxlength="254" autocomplete="email" placeholder="用于接收个人事件邮件，可留空" />
                   <span class="hint">邮件通知关闭时不会发送；清除邮箱后仅保留站内通知。</span>
                 </div>
+                <div class="field" id="fMeCompany">
+                  <label for="meCompany">公司</label>
+                  <input id="meCompany" type="text" maxlength="64" autocomplete="off" list="meCompanyOptions" placeholder="选择已有公司或输入新名称" />
+                  <datalist id="meCompanyOptions"></datalist>
+                  <span class="hint">用于成员列表、负责人展示与筛选；留空表示未设置。</span>
+                </div>
+                <div class="field" id="fMeJobTitle">
+                  <label for="meJobTitle">岗位</label>
+                  <input id="meJobTitle" type="text" maxlength="32" autocomplete="off" list="meJobTitleOptions" placeholder="选择已有岗位或输入新名称" />
+                  <datalist id="meJobTitleOptions"></datalist>
+                  <span class="hint">本空间的默认岗位；项目角色优先，不改变任何权限。</span>
+                </div>
               </div>
+              <p class="set-hint" id="meOrgScope" hidden></p>
               <div class="set-actions">
                 <button class="btn primary" type="button" id="meNameSave">保存基本信息</button>
               </div>

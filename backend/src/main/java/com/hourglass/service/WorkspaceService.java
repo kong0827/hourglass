@@ -441,7 +441,7 @@ public class WorkspaceService {
     @Transactional
     public String updateMemberCompany(String operatorId, String workspaceId, String targetUserId,
                                       String companyName) {
-        requireManager(operatorId, workspaceId);
+        requireMemberLabelEditor(operatorId, workspaceId, targetUserId);
         WorkspaceMember target = memberMapper.selectMember(workspaceId, targetUserId);
         if (target == null) {
             throw AppException.notFound("成员不存在：" + targetUserId);
@@ -454,24 +454,41 @@ public class WorkspaceService {
         AppUser u = userMapper.selectById(targetUserId);
         String display = u == null || Texts.trimToNull(u.getDisplayName()) == null
                 ? targetUserId : u.getDisplayName();
+        boolean self = operatorId != null && operatorId.equals(targetUserId);
         activityService.logConfig(workspaceId, operatorId, name == null
-                ? "清除成员「" + display + "」的公司标注"
-                : "标注成员「" + display + "」的公司为「" + name + "」");
+                ? (self ? "清除自己的公司标注" : "清除成员「" + display + "」的公司标注")
+                : (self ? "修改自己的公司为「" + name + "」"
+                        : "标注成员「" + display + "」的公司为「" + name + "」"));
         return name == null ? "" : name;
     }
 
-    /** 空间默认职能：只改 job_title，不修改成员角色或项目权限。 */
+    /** 公司/岗位是展示属性：空间主/管理员可改任意成员，非查看者可改自己；个人空间不展示这两项。 */
+    private void requireMemberLabelEditor(String operatorId, String workspaceId, String targetUserId) {
+        if (operatorId != null && operatorId.equals(targetUserId)) {
+            Workspace ws = requireWriter(operatorId, workspaceId);
+            if ("personal".equals(ws.getType())) {
+                throw AppException.badRequest("个人空间不展示公司与岗位");
+            }
+            return;
+        }
+        requireManager(operatorId, workspaceId);
+    }
+
+    /** 空间默认岗位：只改 job_title，不修改成员角色或项目权限。 */
     @Transactional
     public String updateMemberJobTitle(String operatorId, String workspaceId, String targetUserId, String jobTitle) {
-        requireManager(operatorId, workspaceId);
+        requireMemberLabelEditor(operatorId, workspaceId, targetUserId);
         memberLabelOptions.lockWorkspace(workspaceId);
         WorkspaceMember target = memberMapper.selectMember(workspaceId, targetUserId);
         if (target == null) throw AppException.notFound("成员不存在：" + targetUserId);
         String title = ProjectMemberRoleService.normalizeTitle(jobTitle, 32);
         memberMapper.updateJobTitle(workspaceId, targetUserId, title.isEmpty() ? null : title);
+        boolean self = operatorId != null && operatorId.equals(targetUserId);
         memberLabelLogs.record(workspaceId, operatorId, "member_job_title", "member", targetUserId,
-                target.getDisplayName(), "成员「" + targetUserId + "」的空间默认职能："
-                        + (title.isEmpty() ? "清除" : title));
+                target.getDisplayName(), self
+                        ? "修改自己的默认岗位：" + (title.isEmpty() ? "清除" : title)
+                        : "成员「" + targetUserId + "」的空间默认岗位："
+                                + (title.isEmpty() ? "清除" : title));
         return title;
     }
 

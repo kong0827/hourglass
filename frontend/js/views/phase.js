@@ -2114,8 +2114,8 @@ export function mountReleaseWorkspace(pageHost, opts){
       options:members.map(memberToOption), currentId:m ? m.id : "", currentName:chosen,
       unavailable:(isPlan && chosen && !m) ? { id:chosen, name:chosen } : null,
       allowClear:isPlan, clearLabel:"未指派",
-      foot:isPlan ? "<b>岗位</b> = 空间默认职能（项目内另有覆盖）；计划负责人可与实际执行人不同。仅展示，不改变权限。"
-                  : "<b>岗位</b> = 空间默认职能；实际执行人独立于记录人，须为当前空间成员。仅展示，不改变权限。",
+      foot:isPlan ? "<b>岗位</b> = 空间默认岗位（项目内另有覆盖）；计划负责人可与实际执行人不同。仅展示，不改变权限。"
+                  : "<b>岗位</b> = 空间默认岗位；实际执行人独立于记录人，须为当前空间成员。仅展示，不改变权限。",
       onPick:function(o){
         hidden.value = o ? o.id : "";
         anchor.innerHTML = peopleFieldHTML(o || null, emptyLabel);

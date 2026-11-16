@@ -97,7 +97,7 @@ function loadWorkload(opts){
 }
 function workloadMemberLabels(m){
   var roles = Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m);
-  return '<div class="manager-member-labels">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span class="roster-empty">空间职能：' + esc(m.jobTitle) + '</span>' : '')
+  return '<div class="manager-member-labels">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span class="roster-empty">空间岗位：' + esc(m.jobTitle) + '</span>' : '')
     + roles.map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("") + (!roles.length ? '<span class="roster-empty">未设角色</span>' : '') + '</div>';
 }
 /* —— 成员抽屉：成员 → 项目 → 工作项 / 计时明细 逐层穿透 —— */
@@ -332,7 +332,7 @@ function exportWorkloadScope(){
   if(!cache || loading || filterWorkspace !== workloadWorkspace()) return;
   /* 不再请求未带筛选的 mobile 月报；只导出已渲染的后台 scope 数据。 */
   var rows = [["成员负载", workloadScopeText(cache)], ["统计日期",cache.today || "", "本周开始",cache.weekStart || ""], [],
-    ["成员","公司","空间默认职能","项目角色（主+兼岗）","未完成工作项","剩余预估(h)","容量(h)","负载","本周工时(h)","上周工时(h)"].concat(WEEK_DAY_NAMES.map(function(d){ return d + "(h)"; }))];
+    ["成员","公司","空间默认岗位","项目角色（主+兼岗）","未完成工作项","剩余预估(h)","容量(h)","负载","本周工时(h)","上周工时(h)"].concat(WEEK_DAY_NAMES.map(function(d){ return d + "(h)"; }))];
   var members = cache.members || [];
   members.forEach(function(m){
     rows.push([m.name,m.companyName || "未设公司",m.jobTitle || "",(Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m)).join(" / "),memberTaskCount(m),

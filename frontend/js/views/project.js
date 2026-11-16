@@ -161,13 +161,13 @@ function weeklyChart(weeks){
 function memberRows(members){
   if(!members.length) return '<tr><td colspan="6" class="manager-empty-cell">暂无未完成工作项</td></tr>';
   return members.map(function(m){
-    return '<tr data-member-key="' + esc(m.key) + '" tabindex="0" title="查看该成员的项目工作项"><td><span class="manager-person">' + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></span><div class="manager-member-labels">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span class="roster-empty">空间职能：' + esc(m.jobTitle) + '</span>' : '') + memberRoleTitles(m).map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("") + '</div></td>'
+    return '<tr data-member-key="' + esc(m.key) + '" tabindex="0" title="查看该成员的项目工作项"><td><span class="manager-person">' + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></span><div class="manager-member-labels">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span class="roster-empty">空间岗位：' + esc(m.jobTitle) + '</span>' : '') + memberRoleTitles(m).map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("") + '</div></td>'
       + '<td class="num">' + m.taskCount + '</td><td class="num">' + fmtHours(m.remainingMinutes) + '</td>'
       + '<td class="num">' + fmtHours(m.actualWeekMinutes) + '</td><td>' + loadBarHTML(m.loadPct) + '</td>'
       + '<td>' + (m.overloaded ? '<span class="mini-tag over">超载</span>' : (m.loadPct >= 85 ? '<span class="mini-tag warn">接近满载</span>' : '<span class="mini-tag ok">正常</span>')) + '</td></tr>';
   }).join("");
 }
-/* ---------- 成员与角色：空间默认职能 + 项目主角色覆盖 + 兼岗 ---------- */
+/* ---------- 成员与角色：空间默认岗位 + 项目主角色覆盖 + 兼岗 ---------- */
 var rosterCache = { key:"", data:null, loading:false, error:null, seq:0, options:{} };
 var rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
 var rosterWrites = new Set();
@@ -197,12 +197,12 @@ function memberLabelFilters(list, f, prefix){
 }
 function rosterPanel(){
   return '<section class="manager-panel roster-panel"><div class="manager-panel-head"><b>成员与角色</b><span id="rosterSummary" aria-live="polite">加载中…</span></div>'
-    + '<p class="roster-note">公司与默认职能在空间设置中维护；本项目主角色留空时沿用空间默认职能，可另设最多 5 个兼岗。角色只影响展示与筛选，不改变权限；空间查看者不参与项目。</p>'
+    + '<p class="roster-note">公司与默认岗位在空间设置中维护；本项目主角色留空时沿用空间默认岗位，可另设最多 5 个兼岗。角色只影响展示与筛选，不改变权限；空间查看者不参与项目。</p>'
     + '<div id="rosterTools"></div><div class="tbl-wrap"><table class="manager-tbl roster-tbl"><thead id="rosterHeader"></thead>'
     + '<tbody id="rosterBody"><tr><td colspan="8" class="manager-empty-cell">加载中…</td></tr></tbody></table></div></section>';
 }
 function roleOptions(role){
-  return '<option value=""' + (!role ? ' selected' : '') + '>沿用空间默认职能</option>'
+  return '<option value=""' + (!role ? ' selected' : '') + '>沿用空间默认岗位</option>'
     + roleCandidates(role).map(function(r){ return '<option value="' + esc(r) + '"' + (r === role ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join("")
     + '<option value="__custom__"' + (role === "__custom__" ? ' selected' : '') + '>自定义角色…</option>';
 }
@@ -211,7 +211,7 @@ function rosterRoleSelect(m, canEdit){
   var source = m.roleSource || (role ? "project" : (m.jobTitle ? "workspace" : "unset"));
   return (canEdit ? '<select class="mini-select roster-role" data-roster-role="' + esc(m.userId) + '" aria-label="' + esc(m.displayName || m.username || m.userId) + '的本项目主角色"' + (rosterBusy() ? ' disabled' : '') + '>' + roleOptions(role) + '</select>'
     : '<span class="tag tag-ghost">' + esc(effective || "未设角色") + '</span>')
-    + '<small class="roster-role-source">' + esc(source === "project" ? "本项目覆盖 · " + effective : (source === "workspace" ? "空间默认 · " + effective : "未设职能（空间与项目均未设置）")) + '</small>';
+    + '<small class="roster-role-source">' + esc(source === "project" ? "本项目覆盖 · " + effective : (source === "workspace" ? "空间默认 · " + effective : "未设岗位（空间与项目均未设置）")) + '</small>';
 }
 function rosterBusy(){ return rosterWrites.has(rosterCache.key); }
 function filteredRoster(){ return (rosterCache.data && rosterCache.data.members || []).filter(function(m){ return matchesMemberLabels(m, rosterUi); }); }
@@ -251,7 +251,7 @@ function paintRoster(){
       + '<button class="btn sm primary" type="button" data-roster-batch' + (busy || !rosterUi.selected.size ? ' disabled' : '') + '>批量设置</button><button class="btn sm ghost" type="button" data-roster-unselect' + disabled + '>取消选择</button>'
       + '<small>沿用默认只清除主角色覆盖，不清除兼岗。全选仅当前过滤行。</small></div>' : '');
   if(header) header.innerHTML = '<tr>' + (canEdit ? '<th class="roster-check"><label class="roster-check-label"><input type="checkbox" data-roster-all aria-label="全选当前过滤成员"' + (list.length && rosterUi.selected.size === list.length ? ' checked' : '') + (busy || !list.length ? ' disabled' : '') + '><span>全选当前过滤成员</span></label></th>' : '')
-    + '<th>成员</th><th>公司</th><th>空间默认职能</th><th>本项目主角色</th><th>兼岗</th><th>项目权限</th><th>可见来源</th></tr>';
+    + '<th>成员</th><th>公司</th><th>空间默认岗位</th><th>本项目主角色</th><th>兼岗</th><th>项目权限</th><th>可见来源</th></tr>';
   var allBox = header && header.querySelector("[data-roster-all]");
   if(allBox) allBox.indeterminate = rosterUi.selected.size > 0 && rosterUi.selected.size < list.length;
   body.innerHTML = list.map(function(m){
@@ -261,7 +261,7 @@ function paintRoster(){
       + (canEdit ? '<td class="roster-check"><label class="roster-check-label"><input type="checkbox" data-roster-check="' + esc(m.userId) + '" aria-label="选择' + esc(name) + '"' + (rosterUi.selected.has(m.userId) ? ' checked' : '') + disabled + '><span>选择' + esc(name) + '</span></label></td>' : '')
       + '<td data-label="成员"><span class="manager-person">' + avatarHTML(name, "sm") + '<span class="roster-who"><b>' + esc(name) + '</b><small>@' + esc(m.username || m.userId) + '</small></span></span></td>'
       + '<td data-label="公司">' + companyChipHTML(m.companyName) + '</td>'
-      + '<td data-label="空间默认职能">' + esc(m.jobTitle || "未设职能") + '</td>'
+      + '<td data-label="空间默认岗位">' + esc(m.jobTitle || "未设岗位") + '</td>'
       + '<td data-label="本项目主角色">' + rosterRoleSelect(m, canEdit) + '</td>'
       + '<td data-label="兼岗"><div class="manager-member-labels">' + secondary.map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("")
       + (canEdit ? '<button class="btn sm ' + (secondary.length ? "ghost" : "add") + '" type="button" data-roster-secondary="' + esc(m.userId) + '" aria-label="编辑' + esc(name) + '的兼岗"' + disabled + '>' + (secondary.length ? "编辑兼岗" : "+ 添加兼岗") + '</button>' : (!secondary.length ? '<span class="roster-empty">无兼岗</span>' : '')) + '</div></td>'
@@ -301,7 +301,7 @@ function announceRosterChange(ctx, message){
 }
 function customRole(value, prev){
   if(value !== "__custom__") return Promise.resolve(value || "");
-  return UI.showPrompt({ title:"自定义项目主角色", desc:"只设置本项目主角色；不修改空间默认职能或兼岗。", label:"角色名称", value:prev || "", maxLength:32, required:true });
+  return UI.showPrompt({ title:"自定义项目主角色", desc:"只设置本项目主角色；不修改空间默认岗位或兼岗。", label:"角色名称", value:prev || "", maxLength:32, required:true });
 }
 function rosterMember(id){ return (rosterCache.data && rosterCache.data.members || []).filter(function(m){ return m.userId === id; })[0]; }
 function saveRosterRole(sel){
@@ -311,7 +311,7 @@ function saveRosterRole(sel){
     if(title === null || !editableRoster(ctx)) return;
     return API.put(ctx.base + "/" + encodeURIComponent(m.userId), { roleTitle:title }).then(function(){
       rosterWrites.delete(ctx.key);
-      announceRosterChange(ctx, title ? "已设置项目主角色「" + title + "」" : "已沿用空间默认职能，兼岗保持不变");
+      announceRosterChange(ctx, title ? "已设置项目主角色「" + title + "」" : "已沿用空间默认岗位，兼岗保持不变");
     });
   }).catch(function(ex){ toast(ex.message || "角色设置失败，请重试", "bad"); }).finally(function(){ finishRosterWrite(ctx); });
 }
@@ -319,7 +319,7 @@ function saveRosterSecondary(id){
   var m = rosterMember(id), ctx = rosterContext();
   if(!m || !startRosterWrite(ctx)) return;
   UI.showPrompt({ title:"编辑兼岗", label:"兼岗角色（逗号分隔）", value:(m.secondaryRoleTitles || []).join("，"), required:false, maxLength:164,
-    desc:"最多 5 个角色，用中文或英文逗号分隔，每个最多 32 字。重复项自动合并；留空清除兼岗，不改变主角色或空间默认职能。" }).then(function(value){
+    desc:"最多 5 个角色，用中文或英文逗号分隔，每个最多 32 字。重复项自动合并；留空清除兼岗，不改变主角色或空间默认岗位。" }).then(function(value){
       if(value === null || !editableRoster(ctx)) return;
       var roles = uniqueLabels(value.split(/[,，]/).map(function(s){ return s.trim(); }));
       if(roles.length > 5 || roles.some(function(r){ return Array.from(r).length > 32; })) throw new Error("最多 5 个兼岗，每个最多 32 字；请重新编辑");
@@ -341,7 +341,7 @@ function saveRosterBatch(){
   customRole(value, "").then(function(title){
     if(title === null || !editableRoster(ctx)) return;
     return UI.showConfirm({ title:"批量设置 " + ids.length + " 位成员", danger:false, okText:"确认设置",
-      msg:esc(title ? "将主角色设为「" + title + "」。" : "只清除本项目主角色覆盖，沿用各自空间默认职能。") + "<br>不修改兼岗、公司或权限。" }).then(function(ok){
+      msg:esc(title ? "将主角色设为「" + title + "」。" : "只清除本项目主角色覆盖，沿用各自空间默认岗位。") + "<br>不修改兼岗、公司或权限。" }).then(function(ok){
         if(!ok || !editableRoster(ctx)) return;
         return API.put(ctx.base, { userIds:ids, roleTitle:title }).then(function(result){
           rosterWrites.delete(ctx.key);
@@ -359,7 +359,7 @@ function openRosterCopy(){
   layer.className = "modal-layer side"; layer.setAttribute("role","dialog"); layer.setAttribute("aria-modal","true"); layer.setAttribute("aria-label","从其他项目复制角色");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); },0); };
   layer.innerHTML = '<form class="sheet roster-copy-sheet"><div class="sheet-head"><h2>从其他项目复制角色</h2><button class="icon-btn sm" type="button" data-copy-close aria-label="关闭">' + icon("close",15) + '</button></div>'
-    + '<div class="sheet-body"><p class="roster-note">仅复制同空间、双方都有的成员的有效主角色（含空间继承）与兼岗，形成本项目覆盖快照；不修改公司、空间默认职能或权限。默认跳过目标已有主角色覆盖或兼岗的成员；来源未设角色的不复制。</p>'
+    + '<div class="sheet-body"><p class="roster-note">仅复制同空间、双方都有的成员的有效主角色（含空间继承）与兼岗，形成本项目覆盖快照；不修改公司、空间默认岗位或权限。默认跳过目标已有主角色覆盖或兼岗的成员；来源未设角色的不复制。</p>'
     + '<label for="rosterCopyProject">来源项目</label><select id="rosterCopyProject" class="mini-select"' + (!projects.length ? ' disabled' : '') + '>'
     + projects.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.name) + (p.archivedAt ? '（已归档）' : '') + '</option>'; }).join("") + '</select>'
     + (!projects.length ? '<p class="roster-note">当前没有可见的同空间其他项目。</p>' : '')
@@ -393,7 +393,7 @@ function projectMemberTasks(key){
 function exportProjectMembers(){
   if(!cache) return;
   var rows = [["项目成员负载", cache.project.name], ["公司", memberFilter.companyName === "__unset__" ? "未设公司" : labelFilterText(memberFilter.companyName) || "全部公司", "角色", memberFilter.roleTitle === "__unset__" ? "未设角色" : labelFilterText(memberFilter.roleTitle) || "全部角色"], [],
-    ["成员","公司","空间默认职能","项目有效角色（主+兼岗）","未完成工作项","剩余预估(小时)","本周已计(小时)","负载"]];
+    ["成员","公司","空间默认岗位","项目有效角色（主+兼岗）","未完成工作项","剩余预估(小时)","本周已计(小时)","负载"]];
   var members = filteredProjectMembers();
   members.forEach(function(m){ rows.push([m.name,m.companyName || "未设公司",m.jobTitle || "",memberRoleTitles(m).join(" / "),m.taskCount,hoursNum(m.remainingMinutes),hoursNum(m.actualWeekMinutes),m.loadPct + "%"]); });
   rows.push([], ["成员","工作项","状态","截止","预估(小时)","实际(小时)"]);

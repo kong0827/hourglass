@@ -3,6 +3,7 @@
 import { API } from "../core/api.js";
 import { renderSideUser } from "../core/app.js";
 import { isAssistantEnabled, setAssistantEnabled } from "../core/assistant.js";
+import { attachCombo } from "../core/combo.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { showView } from "../core/router.js";
@@ -12,6 +13,7 @@ import { loadView } from "../core/view-loader.js";
 import { refreshOwnerSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarColor, avatarColorIndex, initial, pad2 } from "../lib/format.js";
+import { loadMemberLabelOptions } from "../lib/member-labels.js";
 import { loadBoard } from "./board.js";
 
 var meReadyCbs = [];function afterMeReady(fn){
@@ -44,6 +46,7 @@ function enterProfileView(){
     $("fMeName").classList.remove("invalid");
   }
   if($("meEmail")) $("meEmail").value = rt.currentUser.email || "";
+  fillMeOrg();
   fillMeSelects();
   ["meOldPwd","meNewPwd","meAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.value = ""; });
   ["fMeNewPwd","fMeAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.classList.remove("invalid"); });
@@ -54,6 +57,108 @@ function enterProfileView(){
   loadNotificationPreferences();
   syncAssistantPref();
 }
+/* 公司与岗位：空间级展示属性。个人空间不展示；查看者只读；非查看者可改自己。 */
+var meOrgBaseline = { companyName: "", jobTitle: "" };
+var meCompanyCombo = null, meJobTitleCombo = null;
+function meOrgEditable(){
+  return !!(rt.currentWs && rt.currentWs.type === "shared" && rt.currentWs.myRole !== "viewer");
+}
+function currentWsMember(){
+  var uid = rt.currentUser && rt.currentUser.id;
+  if(!uid) return null;
+  var list = rt.wsMembersCache || [];
+  for(var i = 0; i < list.length; i++){
+    if(list[i].userId === uid) return list[i];
+  }
+  return null;
+}
+function meOrgDraft(){
+  return {
+    companyName: $("meCompany") ? $("meCompany").value.trim() : "",
+    jobTitle: $("meJobTitle") ? $("meJobTitle").value.trim() : ""
+  };
+}
+function fillMeOrgFields(m){
+  var company = (m && m.companyName) || "", job = (m && m.jobTitle) || "";
+  meOrgBaseline = { companyName: company, jobTitle: job };
+  if($("meCompany")) $("meCompany").value = company;
+  if($("meJobTitle")) $("meJobTitle").value = job;
+}
+function loadMeOrgOptions(){
+  var wsId = rt.currentWs && rt.currentWs.id;
+  if(!wsId || rt.currentWs.type !== "shared") return;
+  loadMemberLabelOptions(wsId).then(function(options){
+    if(!rt.currentWs || rt.currentWs.id !== wsId) return;
+    var companyList = $("meCompanyOptions"), jobList = $("meJobTitleOptions");
+    if(companyList) companyList.innerHTML = (options.companyNames || []).map(function(v){ return '<option value="' + esc(v) + '"></option>'; }).join("");
+    if(jobList) jobList.innerHTML = (options.roleTitles || []).map(function(v){ return '<option value="' + esc(v) + '"></option>'; }).join("");
+    if(meCompanyCombo) meCompanyCombo.refresh();
+    if(meJobTitleCombo) meJobTitleCombo.refresh();
+  }).catch(function(){ /* 候选加载失败仍可手动输入 */ });
+}
+function fillMeOrg(){
+  var shared = !!(rt.currentWs && rt.currentWs.type === "shared");
+  ["fMeCompany","fMeJobTitle"].forEach(function(id){
+    var field = $(id); if(field) field.hidden = !shared;
+  });
+  var scope = $("meOrgScope");
+  if(scope){
+    scope.hidden = !shared;
+    if(shared){
+      scope.textContent = "公司与岗位只对空间「" + (rt.currentWs.name || "") + "」生效；切换空间后显示该空间的值。"
+        + (rt.currentWs.myRole === "viewer" ? "你是查看者，只能查看。" : "");
+    }
+  }
+  var editable = meOrgEditable();
+  ["meCompany","meJobTitle"].forEach(function(id){
+    var el = $(id); if(el) el.disabled = !editable;
+  });
+  if(!shared){ fillMeOrgFields(null); return; }
+  var member = currentWsMember();
+  if(member){ fillMeOrgFields(member); loadMeOrgOptions(); return; }
+  var wsId = rt.currentWs.id;
+  API.get("/api/workspaces/" + encodeURIComponent(wsId) + "/members").then(function(list){
+    if(!rt.currentWs || rt.currentWs.id !== wsId) return;
+    rt.wsMembersCache = list || [];
+    fillMeOrgFields(currentWsMember());
+    loadMeOrgOptions();
+  }).catch(function(){ fillMeOrgFields(null); });
+}
+function saveMeOrg(){
+  if(!meOrgEditable()) return Promise.resolve(false);
+  var draft = meOrgDraft();
+  var companyChanged = draft.companyName !== meOrgBaseline.companyName;
+  var jobChanged = draft.jobTitle !== meOrgBaseline.jobTitle;
+  if(!companyChanged && !jobChanged) return Promise.resolve(false);
+  var wsId = rt.currentWs.id, userId = rt.currentUser.id;
+  var base = "/api/workspaces/" + encodeURIComponent(wsId) + "/members/" + encodeURIComponent(userId);
+  var calls = [];
+  if(companyChanged){
+    calls.push(API.put(base + "/company", { companyName: draft.companyName }).then(function(){
+      meOrgBaseline.companyName = draft.companyName;
+      var member = currentWsMember();
+      if(member) member.companyName = draft.companyName || null;
+    }));
+  }
+  if(jobChanged){
+    calls.push(API.put(base + "/job-title", { jobTitle: draft.jobTitle }).then(function(){
+      meOrgBaseline.jobTitle = draft.jobTitle;
+      var member = currentWsMember();
+      if(member) member.jobTitle = draft.jobTitle || null;
+    }));
+  }
+  return Promise.all(calls).then(function(){
+    if(companyChanged){
+      window.dispatchEvent(new CustomEvent("ds:member-company-changed", {detail:{workspaceId:wsId, userId:userId, companyName:draft.companyName}}));
+    }
+    if(jobChanged){
+      window.dispatchEvent(new CustomEvent("ds:member-job-title-changed", {detail:{workspaceId:wsId, userId:userId, jobTitle:draft.jobTitle}}));
+    }
+    return true;
+  });
+}
+if($("meCompany")) meCompanyCombo = attachCombo($("meCompany"), {chevron:true});
+if($("meJobTitle")) meJobTitleCombo = attachCombo($("meJobTitle"), {chevron:true});
 var NOTIFY_EVENTS = {
   task_assigned: ["工作项指派", "工作项创建或负责人变更后指派给我"],
   task_comment: ["评论与@", "我负责的工作项有新评论，或评论中被 @ 提及"],
@@ -217,22 +322,40 @@ $("meNameSave") && $("meNameSave").addEventListener("click", function(){
   var name = $("meNameInput").value.trim();
   var email = $("meEmail") ? $("meEmail").value.trim() : "";
   if(!name){ $("fMeName").classList.add("invalid"); toast("请填写显示名", "warn"); return; }
-  if(rt.currentUser && name === rt.currentUser.displayName && email === (rt.currentUser.email || "")){ toast("基本信息没有变化"); return; }
+  var basicChanged = !(rt.currentUser && name === rt.currentUser.displayName && email === (rt.currentUser.email || ""));
+  var draft = meOrgDraft();
+  var orgChanged = meOrgEditable() && (draft.companyName !== meOrgBaseline.companyName || draft.jobTitle !== meOrgBaseline.jobTitle);
+  if(!basicChanged && !orgChanged){ toast("基本信息没有变化"); return; }
   var btn = $("meNameSave");
   btn.disabled = true;
-  API.put("/api/auth/profile", { displayName: name, email: email }).then(function(res){
+  var basicSaved = false;
+  var step = Promise.resolve();
+  if(basicChanged){
+    step = step.then(function(){
+      return API.put("/api/auth/profile", { displayName: name, email: email }).then(function(res){
+        rt.currentUser.displayName = (res && res.displayName) || name;
+        rt.currentUser.email = res ? res.email : email;
+        rt.OWNER_DEFAULT = rt.currentUser.displayName;
+        renderSideUser(rt.currentUser);
+        refreshOwnerSelect();
+        basicSaved = true;
+      });
+    });
+  }
+  step.then(saveMeOrg).then(function(){
     btn.disabled = false;
-    rt.currentUser.displayName = (res && res.displayName) || name;
-    rt.currentUser.email = res ? res.email : email;
-    rt.OWNER_DEFAULT = rt.currentUser.displayName;
-    renderSideUser(rt.currentUser);
-    refreshOwnerSelect();
     enterProfileView();
     toast("基本信息已保存", "fs");
     loadBoard({silent:true});
   }).catch(function(ex){
     btn.disabled = false;
-    toast(ex.message || "保存失败", "bad");
+    if(basicSaved){
+      enterProfileView();
+      loadBoard({silent:true});
+      toast("显示名/邮箱已保存；公司或岗位保存失败：" + (ex.message || "未知错误"), "bad");
+    } else {
+      toast(ex.message || "保存失败", "bad");
+    }
   });
 });
 ["meStart","meEnd","meMax"].forEach(function(id){

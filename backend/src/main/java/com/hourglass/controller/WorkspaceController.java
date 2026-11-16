@@ -192,7 +192,7 @@ public class WorkspaceController {
         return ApiResult.ok();
     }
 
-    /** 标注成员公司（空间主/管理员）：只写展示字段，不改变任何权限 */
+    /** 标注成员公司（空间主/管理员）或修改本人公司（非查看者）：只写展示字段，不改变任何权限 */
     @PutMapping("/api/workspaces/{id}/members/{userId}/company")
     public ApiResult<Void> updateMemberCompany(@PathVariable String id, @PathVariable String userId,
                                                @RequestBody(required = false) MemberCompanyRequest req,
@@ -202,12 +202,15 @@ public class WorkspaceController {
         String saved = workspaceService.updateMemberCompany(me, id, userId,
                 req == null ? null : req.getCompanyName());
         String name = memberName(me, id, userId);
+        boolean self = me.equals(userId);
         audit.recordCurrent(id, "member_company", "member", userId, name, true,
-                "成员 " + name + " 的公司标注为「" + (saved.isEmpty() ? "未标注" : saved)
+                (self ? "修改自己的公司为「" : "成员 " + name + " 的公司标注为「")
+                        + (saved.isEmpty() ? "未标注" : saved)
                         + "」（空间「" + ws.getName() + "」）", request);
         return ApiResult.ok();
     }
 
+    /** 标注成员岗位（空间主/管理员）或修改本人岗位（非查看者）：留痕由业务事务内统一写入 */
     @PutMapping("/api/workspaces/{id}/members/{userId}/job-title")
     public ApiResult<Void> updateMemberJobTitle(@PathVariable String id, @PathVariable String userId,
                                                @RequestBody(required = false) MemberJobTitleRequest req) {

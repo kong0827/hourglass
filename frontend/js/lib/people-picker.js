@@ -84,7 +84,7 @@ export function openPeoplePicker(cfg){
       '<div class="search-picker-tools"><span class="pp-count" aria-live="polite"></span></div>' +
     '</div>' +
     '<div class="search-picker-results" id="' + listId + '" role="listbox" aria-label="' + esc(cur.title) + '"></div>' +
-    '<div class="search-picker-foot">' + (cur.foot || '<b>岗位</b> = 本项目有效职能（项目覆盖优先，否则沿用空间默认）；兼岗另列。仅展示，不改变权限。') + '</div>';
+    '<div class="search-picker-foot">' + (cur.foot || '<b>岗位</b> = 本项目有效岗位（项目覆盖优先，否则沿用空间默认）；兼岗另列。仅展示，不改变权限。') + '</div>';
   var input = el.querySelector("input");
   var clearSearchBtn = el.querySelector(".pp-clear-search");
   var results = el.querySelector(".search-picker-results");

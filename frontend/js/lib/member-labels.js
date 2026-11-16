@@ -1,4 +1,4 @@
-/* 成员职能展示与缓存：角色不是授权依据。缓存隔离到空间/项目。 */
+/* 成员岗位展示与缓存：角色不是授权依据。缓存隔离到空间/项目。 */
 import { API } from "../core/api.js";
 import { rt } from "../core/state.js";
 

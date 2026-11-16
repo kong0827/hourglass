@@ -15,7 +15,7 @@ public class WorkspaceMember {
     private String projectAccessMode;
     /** 空间级公司名，自由文本；仅展示与筛选，不参与鉴权 */
     private String companyName;
-    /** 空间默认职能，仅展示，不参与鉴权 */
+    /** 空间默认岗位，仅展示，不参与鉴权 */
     private String jobTitle;
     private LocalDateTime createdAt;
 

@@ -1,5 +1,6 @@
 package com.hourglass.service;
 
+import com.hourglass.common.AppException;
 import com.hourglass.dto.MemberLabelOptions;
 import com.hourglass.entity.*;
 import com.hourglass.mapper.*;
@@ -28,6 +29,7 @@ class MemberLabelTransactionTest {
     private final ProjectMemberRoleMapper roles = mock(ProjectMemberRoleMapper.class);
     private final RequirementMapper projects = mock(RequirementMapper.class);
     private final WorkspaceMemberLabelOptionMapper options = mock(WorkspaceMemberLabelOptionMapper.class);
+    private final WorkspaceMemberCache cache = mock(WorkspaceMemberCache.class);
     private final TaskLogMapper activityMapper = mock(TaskLogMapper.class);
     private final AuditLogMapper auditMapper = mock(AuditLogMapper.class);
     private ProjectMemberRoleService roleService;
@@ -62,7 +64,6 @@ class MemberLabelTransactionTest {
         when(auditMapper.insert(any())).thenAnswer(call -> { audits.add(call.getArgument(0)); return 1; });
         roleService = transactional(new ProjectMemberRoleService(members, mock(ProjectMemberMapper.class), roles,
                 access, projects, options, logs));
-        WorkspaceMemberCache cache = mock(WorkspaceMemberCache.class);
         Workspace ws = new Workspace(); ws.setMyRole("owner"); ws.setId("W1");
         when(cache.view("W1", "owner")).thenReturn(ws);
         workspaceService = transactional(new WorkspaceService(mock(WorkspaceMapper.class), members, mock(UserMapper.class),
@@ -164,6 +165,31 @@ class MemberLabelTransactionTest {
         verify(members).updateJobTitle("W1", "U1", "产品经理");
         assertEquals(1, activities.size());
         assertEquals("member_job_title", audits.get(0).getAction());
+    }
+
+    @Test
+    void memberCanUpdateOwnCompanyAndJobTitle() {
+        Workspace self = new Workspace(); self.setId("W1"); self.setType("shared"); self.setMyRole("member");
+        when(cache.view("W1", "U1")).thenReturn(self);
+        workspaceService.updateMemberCompany("U1", "W1", "U1", "蓝海银行");
+        workspaceService.updateMemberJobTitle("U1", "W1", "U1", "测试");
+        verify(members).updateCompanyName("W1", "U1", "蓝海银行");
+        verify(members).updateJobTitle("W1", "U1", "测试");
+    }
+
+    @Test
+    void viewerCannotUpdateOwnCompany() {
+        Workspace self = new Workspace(); self.setId("W1"); self.setType("shared"); self.setMyRole("viewer");
+        when(cache.view("W1", "V1")).thenReturn(self);
+        assertThrows(AppException.class, () -> workspaceService.updateMemberCompany("V1", "W1", "V1", "蓝海银行"));
+        verify(members, never()).updateCompanyName(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void personalWorkspaceRejectsSelfLabels() {
+        Workspace self = new Workspace(); self.setId("W1"); self.setType("personal"); self.setMyRole("owner");
+        when(cache.view("W1", "U1")).thenReturn(self);
+        assertThrows(AppException.class, () -> workspaceService.updateMemberJobTitle("U1", "W1", "U1", "测试"));
     }
 
     private Map<String, Integer> saveBatch() {

@@ -5617,7 +5617,7 @@ function buildTestPickerCfg(anchor){
     options:st.pending || st.error ? [] : ownerPickerOptions(),
     currentId:cur.id, currentName:cur.name, unavailable:cur.unavailable,
     allowClear:true, clearLabel:"待领取（不指定）",
-    foot:"<b>岗位</b> = 本项目有效职能；测试负责人与开发负责人共用候选。仅展示，不改变权限。",
+    foot:"<b>岗位</b> = 本项目有效岗位；测试负责人与开发负责人共用候选。仅展示，不改变权限。",
     loading:st.pending, error:st.error ? (st.error.message || "网络异常") : "",
     onRetry:function(){ ensureProjectRoles(currentProjectId(), true); refreshTestPicker(); },
     onPick:function(o){

@@ -414,7 +414,7 @@ function loadWsMemberList(){
     /* 多空间主等权：owner 之间可互相管理；最后一位空间主不可降级或移除 */
     $("btnWsLeave").hidden = isOwner && ownerCount <= 1;
     wsMemberList.innerHTML = (rt.currentWs.type === "shared"
-      ? '<div class="member-label-toolbar foot-note">默认职能用于本空间所有项目；项目角色留空时自动沿用，已有项目覆盖不变。'
+      ? '<div class="member-label-toolbar foot-note">默认岗位用于本空间所有项目；项目角色留空时自动沿用，已有项目覆盖不变。'
         + (isManager ? ' <button class="btn sm" type="button" data-member-label-options>管理公司与角色候选</button>' : '') + '</div>' : '')
       + rt.wsMembersCache.map(function(m){
       var isSelf = rt.currentUser && m.userId === rt.currentUser.id;
@@ -443,8 +443,8 @@ function loadWsMemberList(){
       }
       var job = "";
       if(rt.currentWs.type === "shared"){
-        job = isManager ? '<button class="org-chip editable" type="button" data-member-job-title="' + esc(m.userId) + '" title="设置空间默认职能（项目可覆盖，不改变权限）">职能 · ' + esc(m.jobTitle || "未设置") + '</button>'
-          : '<span class="org-chip">职能 · ' + esc(m.jobTitle || "未设置") + '</span>';
+        job = isManager ? '<button class="org-chip editable" type="button" data-member-job-title="' + esc(m.userId) + '" title="设置空间默认岗位（项目可覆盖，不改变权限）">岗位 · ' + esc(m.jobTitle || "未设置") + '</button>'
+          : '<span class="org-chip">岗位 · ' + esc(m.jobTitle || "未设置") + '</span>';
       }
       var assignBtn = (canManageRow && role === "member")
         ? '<button class="btn sm" type="button" data-assign-projects="' + esc(m.userId) + '">分配项目</button>'
@@ -521,10 +521,10 @@ function editMemberLabel(userId, kind){
   if(!m || !canManageMemberLabels()) return;
   var wsId = rt.currentWs.id, isJob = kind === "job-title", field = isJob ? "jobTitle" : "companyName", max = isJob ? 32 : 64;
   var inputId = "memberLabelInput" + Date.now();
-  var layer = memberLabelLayer((isJob ? "默认职能" : "公司") + " · " + (m.displayName || m.username || userId),
-    isJob ? "维护一次，本空间各项目默认沿用；项目覆盖优先。留空清除默认职能，不改变权限。"
+  var layer = memberLabelLayer((isJob ? "默认岗位" : "公司") + " · " + (m.displayName || m.username || userId),
+    isJob ? "维护一次，本空间各项目默认沿用；项目覆盖优先。留空清除默认岗位，不改变权限。"
       : "选择已有公司或输入新名称；请避免同一公司的不同写法。留空清除，不改变权限。",
-    '<div class="field"><label for="' + inputId + '">' + (isJob ? "空间默认职能" : "公司名称") + '</label>'
+    '<div class="field"><label for="' + inputId + '">' + (isJob ? "空间默认岗位" : "公司名称") + '</label>'
       + '<input id="' + inputId + '" type="text" list="' + inputId + 'Options" maxlength="' + max + '" autocomplete="off" value="' + esc(m[field] || "") + '" placeholder="' + (isJob ? "例如：全栈工程师 / 产品经理" : "选择或输入公司") + '">'
       + '<datalist id="' + inputId + 'Options"></datalist><small class="foot-note">可选择候选或直接输入新的名称。</small></div>');
   var input = layer.querySelector("input"), err = layer.querySelector("[data-label-error]"), form = layer.querySelector("form"), busy = false;
@@ -545,13 +545,13 @@ function editMemberLabel(userId, kind){
       UI.closeModal(layer);
       window.dispatchEvent(new CustomEvent(isJob ? "ds:member-job-title-changed" : "ds:member-company-changed", {detail:{workspaceId:wsId, userId:userId, jobTitle:isJob ? value : undefined, companyName:isJob ? undefined : value}}));
       if(rt.currentWs && rt.currentWs.id === wsId) loadWsMemberList();
-      toast(value ? "已保存" + (isJob ? "默认职能" : "公司") + "「" + value + "」" : "已清除" + (isJob ? "默认职能" : "公司"), "fs");
+      toast(value ? "已保存" + (isJob ? "默认岗位" : "公司") + "「" + value + "」" : "已清除" + (isJob ? "默认岗位" : "公司"), "fs");
     }).catch(function(ex){ busy = false; form.querySelectorAll("button,input").forEach(function(el){ el.disabled = false; }); err.textContent = ex.message || "保存失败，请重试"; });
   });
 }
 function editMemberCompany(userId){ editMemberLabel(userId, "company"); }
 var CAND_OPTIONS = {
-  role: { label:"角色 / 职能候选", max:32, placeholder:"输入角色后按 Enter" },
+  role: { label:"角色 / 岗位候选", max:32, placeholder:"输入角色或岗位后按 Enter" },
   company: { label:"公司候选", max:64, placeholder:"输入公司后按 Enter" }
 };
 var CAND_MAX_ITEMS = 100;
@@ -567,7 +567,7 @@ function candSectHTML(kind, inputId){
   '</section>';
 }
 function openMemberLabelOptions(){
-  if(!canManageMemberLabels()){ toast("仅空间主或管理员可维护角色候选", "warn"); return; }
+  if(!canManageMemberLabels()){ toast("仅空间主或管理员可维护角色与岗位候选", "warn"); return; }
   var wsId = rt.currentWs.id;
   var layer = memberLabelLayer("公司与角色候选", "维护后供成员标注与筛选选择，内置角色及已使用标签会自动保留为建议；删除候选不会清除成员标签或改变权限。",
     candSectHTML("role", "memberRoleOptions") + candSectHTML("company", "memberCompanyOptions"));
@@ -2229,7 +2229,7 @@ if(actFilterBtn && actFilterPop){
 var AUDIT_LABEL = {
   login:"登录成功", login_fail:"登录失败", logout:"退出登录",
   role_change:"权限变更", export:"数据导出", import:"备份恢复", clear:"清空数据",
-  member_add:"添加成员", member_remove:"移除成员", member_company:"标注成员公司",
+  member_add:"添加成员", member_remove:"移除成员", member_company:"标注成员公司", member_job_title:"标注成员岗位",
   project_role:"标注项目角色", workspace_delete:"删除空间",
   project_delete:"删除项目", project_release_policy:"修改发布检查策略", user_create:"新建账号", user_update:"修改账号",
   user_delete:"删除账号", password_reset:"重置密码", user_disable:"禁用账号", user_enable:"启用账号",
