@@ -1,13 +1,20 @@
 package com.hourglass.service;
 
 import com.hourglass.common.AppException;
+import org.apache.poi.util.Units;
+import org.apache.poi.xwpf.usermodel.Document;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -69,5 +76,72 @@ class RequirementDocImportWordTest {
 
         AppException ex = assertThrows(AppException.class, () -> docService.importWord(mock(File.class)));
         assertEquals(400, ex.getCode());
+    }
+
+    /** docx 内嵌图片必须转成带 MIME 的 data URL 并穿过正文白名单，否则导入后只剩文字。 */
+    @Test
+    void docxEmbeddedImageSurvivesConversionAndSanitize() throws Exception {
+        /* 1x1 PNG：最小合法图片，避免测试依赖外部素材 */
+        byte[] png = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+        File file = File.createTempFile("hourglass-docx-image-", ".docx");
+        try {
+            try (XWPFDocument doc = new XWPFDocument(); FileOutputStream out = new FileOutputStream(file)) {
+                /* xdocreport 要求恰好一个 styles 部件，空白新建的 POI 文档默认没有 */
+                doc.createStyles();
+                /* 真实 Word 文档必有节属性；缺 sectPr 时 xdocreport 遍历页眉页脚会 NPE */
+                if (doc.getDocument().getBody().getSectPr() == null) {
+                    doc.getDocument().getBody().addNewSectPr();
+                }
+                XWPFRun run = doc.createParagraph().createRun();
+                run.setText("before-image");
+                run.addPicture(new ByteArrayInputStream(png), Document.PICTURE_TYPE_PNG, "dot.png",
+                        Units.toEMU(12), Units.toEMU(12));
+                doc.write(out);
+            }
+
+            String html = new DocPreviewService().preview(file, "docx").get("content");
+            assertTrue(html.contains("data:image/png;base64,"), "转换结果应内联 base64 图片：" + html);
+
+            String clean = RequirementDocService.sanitize(html);
+            assertNotNull(clean);
+            assertTrue(clean.contains("data:image/png;base64,"), "清洗后图片不应被丢弃：" + clean);
+            assertTrue(clean.contains("before-image"));
+        } finally {
+            file.delete();
+        }
+    }
+
+    /** 导入 → 清洗 → 导出整条链路：导出的 .docx 仍应带同一张图片和文字。 */
+    @Test
+    void importedDocxCanBeExportedBackToDocxWithImage() throws Exception {
+        byte[] png = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+        File file = File.createTempFile("hourglass-docx-roundtrip-", ".docx");
+        try {
+            try (XWPFDocument doc = new XWPFDocument(); FileOutputStream out = new FileOutputStream(file)) {
+                doc.createStyles();
+                if (doc.getDocument().getBody().getSectPr() == null) {
+                    doc.getDocument().getBody().addNewSectPr();
+                }
+                XWPFRun run = doc.createParagraph().createRun();
+                run.setText("roundtrip-text");
+                run.addPicture(new ByteArrayInputStream(png), Document.PICTURE_TYPE_PNG, "dot.png",
+                        Units.toEMU(12), Units.toEMU(12));
+                doc.write(out);
+            }
+
+            String html = new DocPreviewService().preview(file, "docx").get("content");
+            String clean = RequirementDocService.sanitize(html);
+            assertNotNull(clean);
+
+            byte[] exported = new HtmlDocxService().toDocx(clean);
+            try (XWPFDocument reopened = new XWPFDocument(new ByteArrayInputStream(exported))) {
+                assertEquals(1, reopened.getAllPictures().size(), "导出的 docx 应包含内嵌图片");
+                assertTrue(reopened.getDocument().getBody().xmlText().contains("roundtrip-text"));
+            }
+        } finally {
+            file.delete();
+        }
     }
 }

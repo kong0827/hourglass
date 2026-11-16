@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 文档模板管理交互原型 2026-11-16</title>
+<style>
+/* ===== 设计令牌：与 frontend/css/tokens.css 一致 ===== */
+:root{
+  color-scheme: light;
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --surface-active:#E9ECF1; --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-solid:#D92D20; --danger-solid-hover:#B42318;
+  --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --scrim:rgba(16,24,40,.32);
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+}
+html[data-theme="dark"]{
+  color-scheme: dark;
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D; --surface-hover:#1F2937;
+  --surface-active:#26313F; --border:#25303D; --border-strong:#334153;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+  --danger:#F97066; --danger-solid:#D92D20; --danger-solid-hover:#B42318;
+  --danger-soft:#2B1615; --danger-border:#5C2A26; --danger-fg:#FDA29B;
+  --scrim:rgba(0,0,0,.55);
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --shadow-xl:0 24px 48px -12px rgba(0,0,0,.6);
+  --ring-focus:0 0 0 3px rgba(76,141,255,.28);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);font-size:14px;line-height:1.55}
+button{font-family:inherit;font-size:13px;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:13px;color:var(--text)}
+svg{display:block}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ===== 原型说明条 ===== */
+.proto-bar{background:var(--primary-soft);border-bottom:1px solid var(--primary-border);padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+.pb-title{font-weight:700;font-size:13px;color:var(--primary-fg);display:flex;align-items:center;gap:8px}
+.pb-note{font-size:11.5px;color:var(--text-3)}
+.scenarios{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.proto-tools{display:flex;align-items:center;gap:8px}
+.sc-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r-pill);border:1px solid var(--primary-border);background:var(--surface);color:var(--primary-fg);font-size:12px;font-weight:500;transition:all .12s}
+.sc-chip:hover{background:var(--primary-soft);border-color:var(--primary)}
+.sc-chip .n{width:16px;height:16px;border-radius:50%;background:var(--primary);color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.sc-chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.sc-chip.active .n{background:rgba(255,255,255,.25)}
+.role-seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden;background:var(--surface)}
+.role-seg button{padding:4px 10px;font-size:12px;color:var(--text-2);border-right:1px solid var(--border)}
+.role-seg button:last-child{border-right:none}
+.role-seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.theme-btn{width:28px;height:28px;border:1px solid var(--border-strong);border-radius:var(--r-sm);background:var(--surface);display:grid;place-items:center;font-size:13px;color:var(--text-2)}
+.theme-btn:hover{background:var(--surface-hover)}
+.proto-hint{padding:7px 20px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:8px;min-height:32px}
+.proto-hint .dot{width:6px;height:6px;border-radius:50%;background:var(--primary);flex:none}
+
+/* ===== 通用组件 ===== */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);font-weight:500;transition:background .12s,border-color .12s,color .12s;white-space:nowrap}
+.btn:hover{background:var(--surface-hover)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-hover)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--surface-hover)}
+.btn.danger{background:var(--surface);border-color:var(--danger-border);color:var(--danger-fg)}
+.btn.danger:hover{background:var(--danger-soft)}
+.btn.danger-solid{background:var(--danger-solid);border-color:var(--danger-solid);color:#fff}
+.btn.danger-solid:hover{background:var(--danger-solid-hover);border-color:var(--danger-solid-hover)}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,.select-like:focus-visible,.menu-item:focus-visible{outline:none;box-shadow:var(--ring-focus)}
+
+/* ===== 应用框架 ===== */
+.stage{padding:16px 20px 6px}
+.app{position:relative;display:flex;flex-direction:column;height:620px;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:var(--bg-app);box-shadow:var(--shadow-xs)}
+.app-top{height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:7px;font-weight:700;font-size:14px}
+.logo .mark{width:20px;height:20px;border-radius:6px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:11px}
+.crumb{font-size:12px;color:var(--text-3)}
+.crumb b{color:var(--text-2);font-weight:600}
+.app-top .spacer{flex:1}
+.app-user{font-size:11.5px;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.avatar-mini{width:22px;height:22px;border-radius:50%;background:var(--surface-sunken);border:1px solid var(--border);display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--text-2)}
+.page{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--bg-app)}
+.page-toolbar{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+.mode-tabs{display:inline-flex;gap:2px}
+.mode-tabs button{padding:4px 10px;border-radius:var(--r-xs);font-size:12px;color:var(--text-3)}
+.mode-tabs button.on{background:var(--surface-sunken);color:var(--text);font-weight:600}
+.mode-tabs button:hover{background:var(--surface-hover)}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.search{width:196px;height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);font-size:12px}
+.search::placeholder{color:var(--text-3)}
+.search:focus{outline:none;border-color:var(--border-strong);background:var(--surface)}
+.tpl-entry.pulse{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:650;animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.28)}70%{box-shadow:0 0 0 7px rgba(37,99,235,0)}100%{box-shadow:0 0 0 0 rgba(37,99,235,0)}}
+
+.doc-list{flex:1;overflow:auto;padding:10px 14px 18px;display:flex;flex-direction:column;gap:14px}
+.doc-group{display:flex;flex-direction:column;gap:2px}
+.dg-head{display:flex;align-items:center;gap:7px;padding:5px 8px;font-size:12.5px;font-weight:650;color:var(--text-2)}
+.dg-head .cnt{font-size:11px;color:var(--text-3);font-weight:500}
+.dg-head .plus{margin-left:auto;font-size:11px;color:var(--text-3)}
+.doc-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--r-xs);cursor:default}
+.doc-row:hover{background:var(--surface-hover)}
+.doc-row.active{background:var(--primary-soft)}
+.doc-row .di{width:15px;height:15px;color:var(--text-3);flex:none;display:grid;place-items:center}
+.doc-row .dt{font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-row.active .dt{color:var(--primary-fg);font-weight:600}
+.doc-row .dm{font-size:11px;color:var(--text-3);flex:none}
+
+/* ===== 遮罩与抽屉 ===== */
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:15;animation:fade .15s ease-out}
+.sheet{position:absolute;top:0;right:0;bottom:0;width:min(560px,100%);z-index:20;display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-xl);animation:slideIn .18s var(--ease-out)}
+.sheet-body{flex:1;min-height:0;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.sheet-foot{flex:none;padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface)}
+.sheet-head{display:flex;align-items:center;gap:10px}
+.sheet-head h3{font-size:15px;font-weight:700;flex:1}
+.sheet-head .cnt{font-size:11.5px;color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums}
+.x{width:26px;height:26px;border-radius:var(--r-xs);color:var(--text-3);display:grid;place-items:center;font-size:15px;line-height:1}
+.x:hover{background:var(--surface-hover);color:var(--text)}
+.sheet-note{font-size:11.5px;color:var(--text-3);line-height:1.6}
+.ro-banner{display:flex;align-items:flex-start;gap:8px;padding:9px 11px;border-radius:var(--r-sm);background:var(--warning-soft);border:1px solid var(--warning-border);color:var(--warning-fg);font-size:11.5px;line-height:1.5}
+.ro-banner b{font-weight:650}
+
+/* ===== 模板列表 ===== */
+.tpl-list{display:flex;flex-direction:column;gap:6px}
+.tpl-row{display:flex;align-items:center;gap:8px;min-height:42px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);transition:border-color .12s}
+.tpl-row:hover{border-color:var(--border-strong)}
+.tpl-name{flex:1;min-width:0;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag-builtin{flex:none;font-size:10px;font-weight:650;color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-pill);padding:1px 7px;line-height:14px}
+.tag-new{flex:none;font-size:10px;font-weight:650;color:var(--success-fg);background:var(--success-soft);border:1px solid var(--success-border);border-radius:var(--r-pill);padding:1px 7px;line-height:14px}
+.tpl-meta{flex:none;font-size:11.5px;color:var(--text-3);white-space:nowrap}
+.tpl-skel{margin:0 0 2px;padding:10px 12px;max-height:200px;overflow:auto;border-left:2px solid var(--border-strong);border-radius:var(--r-xs);background:var(--surface-sunken);font-family:var(--font-mono);font-size:12px;line-height:1.65;color:var(--text-2);white-space:pre-wrap;word-break:break-word}
+
+/* ===== 新建模板表单 ===== */
+.add-head{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);font-size:12px;font-weight:650;color:var(--text-2)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field .lbl{font-size:12px;font-weight:600;color:var(--text-2)}
+.field input[type=text],.field select,.field textarea{padding:0 10px;height:34px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);width:100%}
+.field textarea{height:auto;min-height:128px;padding:9px 11px;resize:vertical;font-family:var(--font-mono);font-size:12.5px;line-height:1.6}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--border-strong)}
+.field [aria-invalid="true"]{border-color:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+.field .hint{font-size:11px;color:var(--text-3)}
+.err{font-size:11px;color:var(--danger-fg);display:flex;align-items:center;gap:5px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.add-actions{display:flex;align-items:center;gap:10px;margin-top:2px}
+.add-actions .hint{font-size:11px;color:var(--text-3)}
+
+/* ===== 新建文档抽屉（联动场景） ===== */
+.select-wrap{position:relative}
+.select-like{width:100%;height:34px;padding:0 34px 0 11px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);text-align:left;font-size:13px;color:var(--text);display:flex;align-items:center;position:relative}
+.select-like .chev{position:absolute;right:11px;color:var(--text-3);font-size:10px;transform:translateY(-1px)}
+.select-like:focus{border-color:var(--border-strong)}
+.menu{position:fixed;z-index:60;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--shadow-lg);max-height:250px;overflow:auto;animation:fade .12s}
+.menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border-radius:var(--r-xs);font-size:12.5px;color:var(--text);text-align:left}
+.menu-item:hover{background:var(--surface-hover)}
+.menu-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+.menu-item .ck{margin-left:auto;color:var(--primary);font-size:12px}
+.menu-sep{height:1px;background:var(--border);margin:4px 6px}
+
+/* ===== 入口标注 ===== */
+.callout{position:absolute;z-index:10;width:236px;padding:10px 12px;border:1px solid var(--primary-border);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--shadow-md);font-size:11.5px;line-height:1.55;color:var(--text-2)}
+.callout b{color:var(--text);font-weight:650}
+.callout::before{content:"";position:absolute;top:-6px;right:52px;width:10px;height:10px;background:var(--surface);border-left:1px solid var(--primary-border);border-top:1px solid var(--primary-border);transform:rotate(45deg)}
+
+/* ===== 删除确认 ===== */
+.confirm-wrap{position:absolute;inset:0;z-index:40;background:var(--scrim);display:grid;place-items:center;animation:fade .12s}
+.confirm{width:360px;max-width:calc(100% - 32px);padding:18px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--shadow-xl)}
+.confirm h4{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.confirm h4 .ic{width:22px;height:22px;border-radius:50%;background:var(--danger-soft);color:var(--danger-fg);display:grid;place-items:center;font-size:12px}
+.confirm p{margin:8px 0 0;font-size:12.5px;line-height:1.65;color:var(--text-2)}
+.confirm .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+
+/* ===== 吐司 ===== */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:80;padding:8px 14px;border-radius:var(--r-sm);background:#101828;color:#fff;font-size:12.5px;box-shadow:var(--shadow-lg);animation:toastIn .18s var(--ease-out)}
+html[data-theme="dark"] .toast{background:#E7ECF3;color:#101828}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes slideIn{from{opacity:.6;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+/* ===== 落地口径 ===== */
+.impl{margin:10px 20px 26px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
+.impl-head{padding:9px 14px;font-size:12.5px;font-weight:700;color:var(--text-2);background:var(--surface-sunken);border-bottom:1px solid var(--border)}
+.impl-body{padding:10px 14px;display:flex;flex-direction:column;gap:7px}
+.impl-body .li{display:flex;gap:9px;font-size:12px;color:var(--text-2);line-height:1.6}
+.impl-body .li .n{width:18px;height:18px;border-radius:50%;background:var(--primary-soft);color:var(--primary-fg);font-size:10px;font-weight:700;display:grid;place-items:center;flex:none;margin-top:1px}
+.impl-body code{font-family:var(--font-mono);font-size:11px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:4px;padding:0 4px;color:var(--text-2)}
+@media (max-width:900px){
+  .scenarios{width:100%;margin-left:0}
+  .proto-tools{margin-left:auto}
+  .search{display:none}
+}
+</style>
+</head>
+<body>
+<header class="proto-bar">
+  <span class="pb-title">沙漏 · 文档模板管理</span>
+  <span class="pb-note">2026-11-16 · 文档页工具条入口 + 右侧管理抽屉；内置只读，自定义模板仅空间主 / 管理员可维护</span>
+  <div class="scenarios" id="scenarios">
+    <button class="sc-chip active" data-sc="s1"><span class="n">1</span>工具条入口</button>
+    <button class="sc-chip" data-sc="s2"><span class="n">2</span>管理抽屉</button>
+    <button class="sc-chip" data-sc="s3"><span class="n">3</span>预览骨架</button>
+    <button class="sc-chip" data-sc="s4"><span class="n">4</span>新建模板</button>
+    <button class="sc-chip" data-sc="s5"><span class="n">5</span>成员只读</button>
+    <button class="sc-chip" data-sc="s6"><span class="n">6</span>新建文档联动</button>
+  </div>
+  <div class="proto-tools">
+    <div class="role-seg" id="roleSeg" role="group" aria-label="切换视角">
+      <button type="button" data-role="owner" class="on">空间主</button>
+      <button type="button" data-role="member">普通成员</button>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button" title="切换深浅主题" aria-label="切换深浅主题">◐</button>
+  </div>
+</header>
+<p class="proto-hint"><span class="dot"></span><span id="hintText">文档页工具条新增「模板」入口：在「视图」左侧，列表 / 看板 / 阅读 / 动态四种模式下常驻。</span></p>
+
+<main class="stage">
+  <div class="app" id="app">
+    <div class="app-top">
+      <span class="logo"><span class="mark">沙</span>沙漏</span>
+      <span class="crumb">工作项 / <b>文档</b></span>
+      <span class="spacer"></span>
+      <span class="app-user"><span class="avatar-mini">陈</span><span id="userLabel">陈思远 · 空间主</span></span>
+    </div>
+
+    <div class="page">
+      <div class="page-toolbar">
+        <span class="mode-tabs"><button class="on">阅读</button><button>列表</button><button>看板</button><button>动态</button></span>
+        <span class="toolbar-right">
+          <button class="btn sm ghost tpl-entry" id="tplEntry" type="button" aria-haspopup="dialog">模板</button>
+          <button class="btn sm ghost" type="button">视图</button>
+          <input class="search" type="search" placeholder="搜索全部文档…" aria-label="搜索全部文档">
+          <button class="btn primary sm" type="button">新建文档</button>
+        </span>
+      </div>
+      <div class="doc-list">
+        <div class="doc-group">
+          <div class="dg-head">额度中心 <span class="cnt">3 篇</span><span class="plus">＋</span></div>
+          <div class="doc-row active"><span class="di">▤</span><span class="dt">权限校验技术方案</span><span class="dm">陈思远 · 11-15</span></div>
+          <div class="doc-row"><span class="di">▤</span><span class="dt">额度冻结需求文档</span><span class="dm">李雨桐 · 11-14</span></div>
+          <div class="doc-row"><span class="di">▤</span><span class="dt">发布检查单</span><span class="dm">王凯 · 11-13</span></div>
+        </div>
+        <div class="doc-group">
+          <div class="dg-head">空间文档 <span class="cnt">1 篇</span><span class="plus">＋</span></div>
+          <div class="doc-row"><span class="di">▤</span><span class="dt">开发手册</span><span class="dm">陈思远 · 11-10</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <!-- 模板管理抽屉 -->
+    <aside class="sheet" id="tplSheet" hidden aria-hidden="true">
+      <div class="sheet-body">
+        <div class="sheet-head">
+          <h3>文档模板</h3>
+          <span class="cnt" id="tplCount">共 7 个</span>
+          <button class="x" id="tplClose" type="button" aria-label="关闭">×</button>
+        </div>
+        <p class="sheet-note" id="sheetNote">新建文档时可选用这里的正文骨架；内置模板由系统提供，不能删除。自定义模板仅空间主 / 管理员可维护，新建后立即出现在「使用模板」下拉里。</p>
+        <div class="ro-banner" id="roBanner" hidden><span>ⓘ</span><span>当前为<b>普通成员</b>：可以预览模板并在新建文档时选用；新建与删除仅空间主 / 管理员可操作。</span></div>
+        <div class="tpl-list" id="tplList"></div>
+        <div id="tplAdd">
+          <div class="add-head">新建自定义模板</div>
+          <div class="field" style="margin-top:10px">
+            <span class="lbl">名称</span>
+            <input id="tplName" type="text" maxlength="20" placeholder="例如：接口联调记录" autocomplete="off" aria-describedby="nameErr">
+            <span class="err" id="nameErr" hidden></span>
+          </div>
+          <div class="row2" style="margin-top:12px">
+            <label class="field"><span class="lbl">适用类型</span>
+              <select id="tplType"><option>需求文档</option><option>技术方案</option><option>测试验收</option><option>其他</option></select>
+            </label>
+            <label class="field"><span class="lbl">正文格式</span>
+              <select id="tplFmt"><option>Markdown</option><option>富文本</option></select>
+            </label>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <span class="lbl">正文骨架</span>
+            <textarea id="tplBody" rows="7" placeholder="# 背景与目标&#10;&#10;# 方案概述&#10;&#10;# 结论" aria-describedby="bodyErr"></textarea>
+            <span class="err" id="bodyErr" hidden></span>
+          </div>
+          <div class="add-actions">
+            <button class="btn primary" id="addBtn" type="button">新建模板</button>
+            <span class="hint">新建后无需刷新，「使用模板」下拉立即生效</span>
+          </div>
+        </div>
+      </div>
+      <div class="sheet-foot"><button class="btn" id="tplClose2" type="button">关闭</button></div>
+    </aside>
+
+    <!-- 新建文档抽屉（联动场景） -->
+    <aside class="sheet" id="newDocSheet" hidden aria-hidden="true">
+      <div class="sheet-body">
+        <div class="sheet-head">
+          <h3>新建文档</h3>
+          <button class="x" id="newDocClose" type="button" aria-label="关闭">×</button>
+        </div>
+        <p class="sheet-note">先选分类（可选）；分类会带出归属项目。确认后进入编辑页。</p>
+        <label class="field"><span class="lbl">所属项目</span>
+          <select><option>额度中心</option><option>留空间级（关联可选）</option></select>
+        </label>
+        <label class="field"><span class="lbl">文档名称</span>
+          <input type="text" placeholder="例如：权限校验技术方案">
+        </label>
+        <label class="field"><span class="lbl">类型</span>
+          <select><option>技术方案</option><option>需求文档</option><option>测试验收</option><option>其他</option></select>
+        </label>
+        <div class="field">
+          <span class="lbl">使用模板</span>
+          <div class="select-wrap">
+            <button class="select-like" id="tplSelectBtn" type="button" aria-haspopup="listbox" aria-expanded="false">
+              <span id="tplSelectLabel">空白文档</span><span class="chev">▼</span>
+            </button>
+            <div class="menu" id="tplMenu" role="listbox" hidden></div>
+          </div>
+          <span class="hint" id="tplPickHint">选中后会把骨架写入正文，保存后仍可自由编辑。</span>
+        </div>
+        <label class="field"><span class="lbl">正文格式</span>
+          <select><option>Markdown（默认，可导入导出）</option><option>富文本</option></select>
+        </label>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn" type="button">取消</button>
+        <button class="btn primary" type="button">新建并编辑</button>
+      </div>
+    </aside>
+
+    <div class="callout" id="callout" hidden>
+      <b>新增入口「模板」</b><br>与「视图」并列，属于工具条二级操作；打开右侧管理抽屉，不跳页、不打断当前文档浏览。
+    </div>
+
+    <div class="confirm-wrap" id="confirmWrap" hidden>
+      <div class="confirm" role="alertdialog" aria-modal="true">
+        <h4><span class="ic">!</span>删除模板</h4>
+        <p id="confirmMsg">删除后新建文档时不再出现该模板；已用该模板创建的文档不受影响。</p>
+        <div class="foot">
+          <button class="btn" id="confirmCancel" type="button">取消</button>
+          <button class="btn danger-solid" id="confirmOk" type="button">删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<section class="impl">
+  <div class="impl-head">落地口径（已按此实现）</div>
+  <div class="impl-body">
+    <div class="li"><span class="n">1</span><span>入口：<code>frontend/index.html</code> 文档页工具条「模板」ghost 按钮，位置在「视图」左侧。</span></div>
+    <div class="li"><span class="n">2</span><span>抽屉：<code>dlgDocTpl</code>（560px 右侧滑出），列表复用 <code>GET /api/doc-templates</code>，与新建文档下拉共用一份缓存。</span></div>
+    <div class="li"><span class="n">3</span><span>内置 5 个模板来自后端常量（<code>DocTemplateService</code>），<code>builtin:true</code> 只读、无删除按钮。</span></div>
+    <div class="li"><span class="n">4</span><span>新建走 <code>POST /api/doc-templates</code>：名称 ≤20 字、必填正文；重名后端拒绝并回显「已存在同名模板」。</span></div>
+    <div class="li"><span class="n">5</span><span>删除走 <code>DELETE /api/doc-templates/{id}</code>，二次确认；内置模板后端同样拒绝删除。</span></div>
+    <div class="li"><span class="n">6</span><span>权限：新建 / 删除仅空间主或管理员；普通成员只读预览，接口侧 <code>assertManage</code> 兜底。</span></div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var esc = function(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  };
+
+  /* ---------- 数据 ---------- */
+  var templates = [
+    { id:"builtin:requirement", name:"需求文档", type:"需求文档", fmt:"Markdown", builtin:true,
+      content:"# 背景与目标\n\n<!-- 为什么做，解决谁的什么问题 -->\n\n# 范围与非目标\n\n- 本期范围：\n- 明确不做：\n\n# 用户故事 / 功能点\n\n1. \n\n# 验收标准\n\n- [ ] \n\n# 风险与依赖\n\n- \n" },
+    { id:"builtin:technical", name:"技术方案", type:"技术方案", fmt:"Markdown", builtin:true,
+      content:"# 现状与问题\n\n\n# 方案概述\n\n\n# 备选方案与取舍\n\n| 方案 | 优点 | 缺点 | 结论 |\n| --- | --- | --- | --- |\n|  |  |  |  |\n\n# 影响面\n\n- 接口 / 数据：\n- 兼容与迁移：\n\n# 回滚与验证\n\n- \n" },
+    { id:"builtin:acceptance", name:"测试验收", type:"测试验收", fmt:"Markdown", builtin:true,
+      content:"# 验收范围\n\n\n# 环境与数据\n\n\n# 验收用例\n\n| 编号 | 场景 | 预期 | 结果 |\n| --- | --- | --- | --- |\n|  |  |  |  |\n\n# 遗留问题\n\n- \n" },
+    { id:"builtin:decision", name:"决策记录", type:"其他", fmt:"Markdown", builtin:true,
+      content:"# 背景\n\n\n# 选项\n\n1. \n2. \n\n# 决定\n\n\n# 理由与后果\n\n- \n\n# 状态\n\n提议 / 已接受 / 已替代\n" },
+    { id:"builtin:retro", name:"复盘", type:"其他", fmt:"Markdown", builtin:true,
+      content:"# 目标与结果\n\n- 目标：\n- 结果：\n\n# 偏差与原因\n\n\n# 做得好的\n\n- \n\n# 待改进\n\n- \n\n# 可复用资产\n\n- \n" },
+    { id:"DT-1001", name:"接口联调记录", type:"技术方案", fmt:"Markdown", builtin:false,
+      content:"# 联调范围\n\n\n# 环境与账号\n\n\n# 接口清单\n\n| 接口 | 负责人 | 状态 |\n| --- | --- | --- |\n|  |  |  |\n\n# 遗留问题\n\n- \n" },
+    { id:"DT-1002", name:"发布检查单", type:"其他", fmt:"Markdown", builtin:false,
+      content:"# 发布前\n\n- [ ] 回归通过\n- [ ] 回滚脚本就绪\n- [ ] 发布窗口已通知\n\n# 发布后\n\n- [ ] 冒烟通过\n- [ ] 监控无异常\n" }
+  ];
+  var state = { role:"owner", scene:"s1", selectedTpl:"", confirmId:null, newIds:{} };
+
+  var $ = function(id){ return document.getElementById(id); };
+  var tplSheet = $("tplSheet"), newDocSheet = $("newDocSheet"), scrim = $("scrim");
+  var confirmWrap = $("confirmWrap"), toastEl = $("toast");
+  var hintMap = {
+    s1:"文档页工具条新增「模板」入口：在「视图」左侧，列表 / 看板 / 阅读 / 动态四种模式下常驻。",
+    s2:"空间主视角：内置 5 个模板只读；自定义模板可删除；底部可直接新建。列表与「使用模板」下拉共用同一份数据。",
+    s3:"点「预览」就地展开骨架原文，不跳页、不打断当前上下文；再点「收起」。",
+    s4:"填写名称与正文后点「新建模板」：名称为空、重名或正文为空都会在字段下方提示；成功后列表与下拉同步。",
+    s5:"普通成员视角：隐藏新建表单与删除按钮，只保留预览与「新建文档时选用」；接口侧仍会二次校验权限。",
+    s6:"新建文档 →「使用模板」下拉立即出现刚建的自定义模板，不需要刷新页面。"
+  };
+
+  /* ---------- 模板列表 ---------- */
+  function canManage(){ return state.role === "owner"; }
+  function renderList(){
+    var wrap = $("tplList");
+    wrap.innerHTML = templates.map(function(t){
+      var del = (!t.builtin && canManage())
+        ? '<button class="btn sm danger" type="button" data-del="' + esc(t.id) + '">删除</button>' : "";
+      return '<div class="tpl-row" data-id="' + esc(t.id) + '">' +
+        '<span class="tpl-name">' + esc(t.name) +
+          (t.builtin ? '<span class="tag-builtin">内置</span>' : "") +
+          (state.newIds[t.id] ? '<span class="tag-new">新建</span>' : "") +
+        '</span>' +
+        '<span class="tpl-meta">' + esc(t.type) + ' · ' + esc(t.fmt) + '</span>' +
+        '<button class="btn sm ghost" type="button" data-prev aria-expanded="false">预览</button>' + del +
+      '</div>' +
+      '<pre class="tpl-skel" hidden>' + esc(t.content) + '</pre>';
+    }).join("");
+    $("tplCount").textContent = "共 " + templates.length + " 个";
+    renderMenu();
+  }
+  function findTpl(id){
+    for (var i = 0; i < templates.length; i++) if (templates[i].id === id) return templates[i];
+    return null;
+  }
+  function togglePreview(btn){
+    var row = btn.closest(".tpl-row"); if (!row) return;
+    var pre = row.nextElementSibling; if (!pre) return;
+    var open = pre.hidden;
+    pre.hidden = !open;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.textContent = open ? "收起" : "预览";
+    if (open) pre.scrollIntoView({ block:"nearest" });
+  }
+
+  /* ---------- 删除 ---------- */
+  function openConfirm(id){
+    var t = findTpl(id); if (!t) return;
+    state.confirmId = id;
+    $("confirmMsg").textContent = "删除后新建文档时不再出现「" + t.name + "」；已用该模板创建的文档不受影响。";
+    confirmWrap.hidden = false;
+  }
+  function closeConfirm(){ state.confirmId = null; confirmWrap.hidden = true; }
+  $("confirmCancel").addEventListener("click", closeConfirm);
+  $("confirmOk").addEventListener("click", function(){
+    var t = findTpl(state.confirmId);
+    closeConfirm();
+    if (!t) return;
+    templates = templates.filter(function(x){ return x.id !== t.id; });
+    delete state.newIds[t.id];
+    if (state.selectedTpl === t.id) selectTpl("");
+    renderList();
+    toast("已删除模板「" + t.name + "」");
+  });
+  confirmWrap.addEventListener("click", function(e){ if (e.target === confirmWrap) closeConfirm(); });
+
+  /* ---------- 新建模板 ---------- */
+  function showErr(id, msg){
+    var el = $(id);
+    if (msg){ el.textContent = "✕ " + msg; el.hidden = false; }
+    else { el.textContent = ""; el.hidden = true; }
+  }
+  function clearForm(){
+    $("tplName").value = ""; $("tplBody").value = "";
+    $("tplName").removeAttribute("aria-invalid");
+    $("tplBody").removeAttribute("aria-invalid");
+    showErr("nameErr", ""); showErr("bodyErr", "");
+  }
+  function addTemplate(){
+    var name = $("tplName").value.trim();
+    var body = $("tplBody").value;
+    var ok = true;
+    $("tplName").removeAttribute("aria-invalid");
+    $("tplBody").removeAttribute("aria-invalid");
+    showErr("nameErr", ""); showErr("bodyErr", "");
+    if (!name){ showErr("nameErr", "请填写模板名称"); $("tplName").setAttribute("aria-invalid","true"); ok = false; }
+    else if (templates.some(function(t){ return t.name === name; })){
+      showErr("nameErr", "已存在同名模板：" + name); $("tplName").setAttribute("aria-invalid","true"); ok = false;
+    }
+    if (!body.trim()){ showErr("bodyErr", "请填写正文骨架"); $("tplBody").setAttribute("aria-invalid","true"); ok = false; }
+    if (!ok) return;
+    var t = { id:"DT-" + Date.now(), name:name, type:$("tplType").value, fmt:$("tplFmt").value, builtin:false, content:body };
+    templates.push(t);
+    state.newIds[t.id] = true;
+    renderList();
+    clearForm();
+    toast("已新建模板「" + name + "」");
+    var row = document.querySelector('.tpl-row[data-id="' + t.id + '"]');
+    if (row) row.scrollIntoView({ block:"nearest" });
+  }
+  $("addBtn").addEventListener("click", addTemplate);
+  $("tplName").addEventListener("input", function(){ $("tplName").removeAttribute("aria-invalid"); showErr("nameErr",""); });
+  $("tplBody").addEventListener("input", function(){ $("tplBody").removeAttribute("aria-invalid"); showErr("bodyErr",""); });
+
+  /* ---------- 列表事件 ---------- */
+  $("tplList").addEventListener("click", function(e){
+    var pv = e.target.closest("[data-prev]");
+    if (pv){ togglePreview(pv); return; }
+    var del = e.target.closest("[data-del]");
+    if (del){ openConfirm(del.getAttribute("data-del")); return; }
+  });
+
+  /* ---------- 角色 ---------- */
+  function applyRole(){
+    document.querySelectorAll("#roleSeg [data-role]").forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-role") === state.role);
+    });
+    var owner = canManage();
+    $("tplAdd").hidden = !owner;
+    $("roBanner").hidden = owner;
+    $("sheetNote").textContent = owner
+      ? "新建文档时可选用这里的正文骨架；内置模板由系统提供，不能删除。自定义模板仅空间主 / 管理员可维护，新建后立即出现在「使用模板」下拉里。"
+      : "新建文档时可选用这里的正文骨架；内置模板由系统提供，不能删除。";
+    $("userLabel").textContent = owner ? "陈思远 · 空间主" : "李雨桐 · 普通成员";
+    renderList();
+  }
+  $("roleSeg").addEventListener("click", function(e){
+    var b = e.target.closest("[data-role]");
+    if (!b) return;
+    state.role = b.getAttribute("data-role");
+    applyRole();
+  });
+
+  /* ---------- 抽屉开关 ---------- */
+  function openTplSheet(){
+    newDocSheet.hidden = true;
+    tplSheet.hidden = false; tplSheet.setAttribute("aria-hidden","false");
+    scrim.hidden = false;
+    $("callout").hidden = true;
+  }
+  function closeSheets(){
+    tplSheet.hidden = true; tplSheet.setAttribute("aria-hidden","true");
+    newDocSheet.hidden = true; newDocSheet.setAttribute("aria-hidden","true");
+    scrim.hidden = true;
+  }
+  $("tplEntry").addEventListener("click", function(){
+    if (!tplSheet.hidden) return;
+    openTplSheet();
+    if (state.scene === "s1") setScene("s2", false);
+  });
+  $("tplClose").addEventListener("click", closeSheets);
+  $("tplClose2").addEventListener("click", closeSheets);
+  $("newDocClose").addEventListener("click", closeSheets);
+  scrim.addEventListener("click", closeSheets);
+
+  /* ---------- 新建文档联动 ---------- */
+  function renderMenu(){
+    var menu = $("tplMenu"); if (!menu) return;
+    var opts = [{ id:"", name:"空白文档", builtin:false }].concat(templates);
+    menu.innerHTML = opts.map(function(t, i){
+      return (i === 1 ? '<div class="menu-sep"></div>' : "") +
+        '<button type="button" class="menu-item' + (state.selectedTpl === t.id ? " on" : "") + '" data-pick="' + esc(t.id) + '">' +
+          '<span>' + esc(t.name) + (t.builtin ? "（内置）" : "") + '</span>' +
+          (state.selectedTpl === t.id ? '<span class="ck">✓</span>' : "") +
+        '</button>';
+    }).join("");
+  }
+  function selectTpl(id){
+    state.selectedTpl = id;
+    var t = id ? findTpl(id) : null;
+    $("tplSelectLabel").textContent = t ? t.name + (t.builtin ? "（内置）" : "") : "空白文档";
+    $("tplPickHint").textContent = t
+      ? "将写入「" + t.name + "」的正文骨架；保存后仍可自由编辑。"
+      : "选中后会把骨架写入正文，保存后仍可自由编辑。";
+    renderMenu();
+  }
+  function placeMenu(){
+    var menu = $("tplMenu"), btn = $("tplSelectBtn");
+    if (!menu || menu.hidden || !btn) return;
+    var r = btn.getBoundingClientRect();
+    menu.style.left = r.left + "px";
+    menu.style.top = (r.bottom + 4) + "px";
+    menu.style.width = r.width + "px";
+    menu.style.maxHeight = Math.max(180, Math.min(340, window.innerHeight - r.bottom - 16)) + "px";
+  }
+  function openMenu(open){
+    $("tplMenu").hidden = !open;
+    $("tplSelectBtn").setAttribute("aria-expanded", open ? "true" : "false");
+    if (open){ placeMenu(); requestAnimationFrame(placeMenu); }
+  }
+  newDocSheet.addEventListener("animationend", placeMenu);
+  window.addEventListener("resize", placeMenu);
+  var ndBody = document.querySelector("#newDocSheet .sheet-body");
+  if (ndBody) ndBody.addEventListener("scroll", placeMenu);
+  $("tplSelectBtn").addEventListener("click", function(){ openMenu($("tplMenu").hidden); });
+  $("tplMenu").addEventListener("click", function(e){
+    var b = e.target.closest("[data-pick]");
+    if (!b) return;
+    selectTpl(b.getAttribute("data-pick"));
+    openMenu(false);
+  });
+  document.addEventListener("click", function(e){
+    if ($("newDocSheet").hidden) return;
+    if (e.target.closest(".select-wrap")) return;
+    openMenu(false);
+  });
+  function openNewDocSheet(){
+    tplSheet.hidden = true; tplSheet.setAttribute("aria-hidden","true");
+    newDocSheet.hidden = false; newDocSheet.setAttribute("aria-hidden","false");
+    scrim.hidden = false;
+    $("callout").hidden = true;
+    renderMenu();
+    openMenu(true);
+  }
+
+  /* ---------- 吐司 ---------- */
+  var toastTimer = null;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.hidden = true; }, 2200);
+  }
+
+  /* ---------- 入口标注定位 ---------- */
+  function placeCallout(){
+    var app = $("app"), entry = $("tplEntry"), co = $("callout");
+    if (co.hidden) return;
+    var ar = app.getBoundingClientRect(), er = entry.getBoundingClientRect();
+    co.style.top = (er.bottom - ar.top + 10) + "px";
+    co.style.left = Math.max(10, Math.min(er.left - ar.left - 176, ar.width - 250)) + "px";
+  }
+  window.addEventListener("resize", placeCallout);
+
+  /* ---------- 场景 ---------- */
+  function setScene(id, syncHash){
+    state.scene = id;
+    document.querySelectorAll(".sc-chip").forEach(function(c){
+      c.classList.toggle("active", c.getAttribute("data-sc") === id);
+    });
+    $("hintText").textContent = hintMap[id] || "";
+    $("tplEntry").classList.toggle("pulse", id === "s1");
+    closeConfirm();
+    clearForm();
+    state.newIds = {};
+    if (id !== "s5" && state.role !== "owner"){ state.role = "owner"; applyRole(); }
+    if (id === "s1"){
+      closeSheets();
+      $("callout").hidden = false;
+      placeCallout();
+    } else {
+      $("callout").hidden = true;
+    }
+    if (id === "s2" || id === "s3" || id === "s4" || id === "s5"){
+      openTplSheet();
+      renderList();
+    }
+    if (id === "s3"){
+      var row = document.querySelector('.tpl-row[data-id="builtin:technical"]');
+      if (row){
+        var btn = row.querySelector("[data-prev]");
+        if (btn) togglePreview(btn);
+        row.scrollIntoView({ block:"center" });
+      }
+    }
+    if (id === "s4"){
+      $("tplName").value = "值班交接";
+      $("tplType").value = "技术方案";
+      $("tplFmt").value = "Markdown";
+      $("tplBody").value = "# 交接范围\n\n\n# 当前进展\n\n\n# 待办与风险\n\n- \n\n# 联系人\n\n- \n";
+      $("tplAdd").scrollIntoView({ block:"nearest" });
+      setTimeout(function(){ $("addBtn").focus(); }, 60);
+    }
+    if (id === "s5"){
+      state.role = "member";
+      applyRole();
+    }
+    if (id === "s6"){
+      state.selectedTpl = "DT-1001";
+      openNewDocSheet();
+      selectTpl("DT-1001");
+    }
+    if (syncHash !== false && history.replaceState) history.replaceState(null, "", "#" + id);
+  }
+  $("scenarios").addEventListener("click", function(e){
+    var b = e.target.closest(".sc-chip");
+    if (b) setScene(b.getAttribute("data-sc"));
+  });
+
+  /* ---------- 主题 ---------- */
+  $("themeBtn").addEventListener("click", function(){
+    var root = document.documentElement;
+    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+    $("themeBtn").textContent = root.dataset.theme === "dark" ? "☀" : "◐";
+  });
+
+  /* ---------- 初始化 ---------- */
+  var qs = new URLSearchParams(location.search);
+  if (qs.get("theme") === "dark"){
+    document.documentElement.dataset.theme = "dark";
+    $("themeBtn").textContent = "☀";
+  }
+  var initial = qs.get("sc") || (location.hash || "").replace("#", "");
+  applyRole();
+  setScene(initial && hintMap[initial] ? initial : "s1", false);
+  window.scrollTo(0, 0);
+})();
+</script>
+</body>
+</html>

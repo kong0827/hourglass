@@ -1025,7 +1025,7 @@ public class RequirementDocService {
     }
 
     /**
-     * 图片白名单：只允许 png/jpeg/gif/webp 的 data URL 或 http(s) 外链，单图 3MB 以内。
+     * 图片白名单：只允许 png/jpeg/gif/webp/bmp 的 data URL 或 http(s) 外链，单图 3MB 以内。
      * 刻意排除 svg（可内嵌脚本）与其它 data 类型。
      */
     private static void filterImages(org.jsoup.nodes.Element body) {
@@ -1036,6 +1036,7 @@ public class RequirementDocService {
                     || src.startsWith("data:image/jpg;base64,")
                     || src.startsWith("data:image/gif;base64,")
                     || src.startsWith("data:image/webp;base64,")
+                    || src.startsWith("data:image/bmp;base64,")
                     || src.startsWith("http://")
                     || src.startsWith("https://");
             if (!ok || src.length() > 3_000_000) {

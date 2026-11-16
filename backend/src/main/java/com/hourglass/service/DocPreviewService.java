@@ -1,6 +1,7 @@
 package com.hourglass.service;
 
 import com.hourglass.common.AppException;
+import fr.opensagres.poi.xwpf.converter.core.ImageManager;
 import fr.opensagres.poi.xwpf.converter.xhtml.XHTMLConverter;
 import fr.opensagres.poi.xwpf.converter.xhtml.XHTMLOptions;
 import org.apache.poi.hwpf.HWPFDocument;
@@ -50,12 +51,64 @@ public class DocPreviewService {
         try (InputStream in = new FileInputStream(file);
              XWPFDocument doc = new XWPFDocument(in)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            XHTMLConverter.getInstance().convert(doc, out, XHTMLOptions.create());
+            XHTMLOptions options = XHTMLOptions.create().setImageManager(new EmbedImgManager());
+            XHTMLConverter.getInstance().convert(doc, out, options);
             return new String(out.toByteArray(), StandardCharsets.UTF_8);
         } catch (Exception e) {
             /* 部分工具导出的精简 docx 缺 styles 等部件，XHTML 转换会失败；降级为纯文本提取 */
             log.warn("docx XHTML 转换失败，降级文本预览：{}", file.getName(), e);
             return docxTextToHtml(file);
+        }
+    }
+
+    /**
+     * docx 内嵌图片直接转成浏览器可渲染的 data URL。
+     * xdocreport 默认只输出 word/media/xxx 相对路径，正文里没有对应文件，导入后必然裂图；
+     * 官方 Base64EmbedImgManager 又写成 data:;base64（缺 MIME），会被正文图片白名单丢弃，
+     * 所以这里按图片扩展名补齐 image/png、image/jpeg 等类型。
+     */
+    private static final class EmbedImgManager extends ImageManager {
+
+        private byte[] picture;
+        private String mime;
+
+        EmbedImgManager() {
+            super(new File(""), "");
+        }
+
+        @Override
+        public void extract(String uri, byte[] bytes) {
+            this.picture = bytes;
+            this.mime = mimeOf(uri);
+        }
+
+        @Override
+        public String resolve(String uri) {
+            if (picture == null || mime == null) {
+                return uri;
+            }
+            return "data:" + mime + ";base64," + java.util.Base64.getEncoder().encodeToString(picture);
+        }
+
+        /** 只映射浏览器与正文白名单都认的位图格式；emf/wmf 等矢量图保持原样，由清洗阶段丢弃 */
+        private static String mimeOf(String uri) {
+            String name = uri == null ? "" : uri.toLowerCase(java.util.Locale.ROOT);
+            if (name.endsWith(".png")) {
+                return "image/png";
+            }
+            if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+                return "image/jpeg";
+            }
+            if (name.endsWith(".gif")) {
+                return "image/gif";
+            }
+            if (name.endsWith(".webp")) {
+                return "image/webp";
+            }
+            if (name.endsWith(".bmp")) {
+                return "image/bmp";
+            }
+            return null;
         }
     }
 

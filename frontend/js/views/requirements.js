@@ -47,6 +47,9 @@ var reqDocReadOnly = false;
 /* A 创建人保护：项目可写但非负责人/管理员 → 正文只读，但分享/评论仍按项目可写保留 */
 var reqDocOwnerLocked = false;
 var docTemplatesCache = null;
+/* 新建文档：选中文件后先解析成预览，点「新建并编辑」时直接写入这份内容，避免二次转换 */
+var newReqDocParsed = null;
+var newReqDocParseSeq = 0;
 /* 文档可见范围（照用例分组三档）：仅约束已发布文档；rrdDocDetail 保存最近打开详情，供权限面板回显名单 */
 var DOC_VIS_MAX = 50;
 var DOC_VIS_META = {
@@ -1331,7 +1334,8 @@ function renderReqDocReader(doc){
           '<button class="btn sm ghost" type="button" data-rrd-comments="' + esc(doc.id) + '" title="查看评论；选中正文可划线评论">' + icon("comment", 13) + ' 评论</button>' +
           '<button class="btn sm ghost" type="button" data-rrd-perm="' + esc(doc.id) + '" title="查看这篇文档的权限说明（只读）">' + icon("shield", 13) + ' 权限说明</button>' +
           '<button class="btn sm ghost" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canMut ? "1" : "0") + '" title="查看历史版本">' + icon("clock", 13) + ' 历史版本</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="导出文档">' + icon("download", 13) + ' 导出</button>' +
+          '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="按原格式导出 Markdown / HTML">' + icon("download", 13) + ' 导出</button>' +
+          '<button class="btn sm ghost" type="button" data-rrd-export-word="' + esc(doc.id) + '" title="导出为 Word 文档（.docx），保留标题、表格与内嵌图片">' + icon("download", 13) + ' Word</button>' +
           '<button class="btn sm" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canMut ? '' : ' disabled title="仅文档负责人或空间管理员可编辑"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
         '</span>' +
       '</div>' +
@@ -1819,10 +1823,12 @@ function resetNewReqDocVis(){
   showEl($("newReqDocWhoField"), false);
   docVisPaint("newDoc", $("newReqDocWho"));
   renderNewDocVisHint();
+  syncNewReqDocMoreSum();
 }
 function syncNewReqDocVis(){
   var vis = newReqDocVisValue();
   showEl($("newReqDocWhoField"), vis === "members");
+  syncNewReqDocMoreSum();
   if(vis !== "members") return;
   var reqId = $("newReqDocProject") ? ($("newReqDocProject").value || "") : "";
   docVisLoad("newDoc", reqId, $("newReqDocWho"));
@@ -1845,6 +1851,7 @@ function applyDocCatDefaultToNewDoc(){
   if($("newReqDocVis")) $("newReqDocVis").innerHTML = docVisOptionsHTML(vis, false, "newDocVis");
   showEl($("newReqDocWhoField"), vis === "members");
   renderNewDocVisHint();
+  syncNewReqDocMoreSum();
   if(vis !== "members") return;
   var reqId = $("newReqDocProject") ? ($("newReqDocProject").value || "") : "";
   docVisLoad("newDoc", reqId, $("newReqDocWho")).then(pruneNewDocSeed);
@@ -1862,6 +1869,7 @@ function pruneNewDocSeed(){
   newDocVisSeed.dropped = dropped;
   docVisPaint("newDoc", $("newReqDocWho"));
   renderNewDocVisHint();
+  syncNewReqDocMoreSum();
 }
 function renderNewDocVisHint(){
   var el = $("newDocVisHint");
@@ -1875,12 +1883,12 @@ function renderNewDocVisHint(){
     + (vis === newDocVisSeed.vis ? "" : "；本文档将按你选的「" + docVisName(vis) + "」保存")
     + (newDocVisSeed.dropped ? "（" + newDocVisSeed.dropped + " 人已不在项目，未带入）" : "");
 }
-/* 新建弹窗：把可见范围与成员名单插到「上级文档」之后（不改 index.html，避免与并行改动冲突） */
+/* 新建弹窗：可见范围与成员名单注入「更多设置」挂载点，主流程只留名称/位置/起点 */
 function ensureNewReqDocVisUI(){
   var form = document.querySelector("#dlgNewReqDoc .reqdoc-dlg-form");
   if(!form || $("newReqDocVisField")) return;
   ensureDocVisStyles();
-  var anchor = $("newReqDocParent") ? $("newReqDocParent").closest(".reqdoc-dlg-field") : null;
+  var mount = $("newReqDocVisMount") || form;
   var html = '<div class="reqdoc-dlg-field" id="newReqDocVisField">'
       + '<span>可见范围</span>'
       + '<div id="newReqDocVis"></div>'
@@ -1891,14 +1899,14 @@ function ensureNewReqDocVisUI(){
       + '<div class="cs-who" id="newReqDocWho">' + docVisPickerHTML() + '</div>'
       + '<small style="color:var(--text-3);display:block;margin-top:4px;">草稿始终仅负责人与空间管理员可见；发布后才按可见范围生效。</small>'
     + '</div>';
-  if(anchor) anchor.insertAdjacentHTML("afterend", html);
-  else form.insertAdjacentHTML("beforeend", html);
+  mount.insertAdjacentHTML("beforeend", html);
   $("newReqDocVis").innerHTML = docVisOptionsHTML("team", false, "newDocVis");
   $("newReqDocVis").addEventListener("change", function(){
     syncNewReqDocVis();
     renderNewDocVisHint();
   });
   bindDocVisPicker($("newReqDocWho"), "newDoc");
+  $("newReqDocWho").addEventListener("change", syncNewReqDocMoreSum);
 }
 function docVisMemberName(uid){
   if(!uid) return "";
@@ -2666,10 +2674,24 @@ function reqDocParentCandidates(reqId, excludeId){
     return (d.reqId || "") === scope && d.id !== excludeId && !banned[d.id];
   }).sort(reqDocSort);
 }
+/* 上级文档下拉：按 parentId 还原父子关系，DFS 排序并逐层缩进，避免不同层级的同名文档分不清 */
 function parentOptionsHTML(list, emptyLabel){
-  return '<option value="">' + esc(emptyLabel) + '</option>' + list.map(function(d){
-    return '<option value="' + esc(d.id) + '">' + esc(d.title) + '</option>';
-  }).join("");
+  var byId = {};
+  list.forEach(function(d){ byId[d.id] = d; });
+  var kids = {}, roots = [];
+  list.forEach(function(d){
+    var pid = d.parentId || "";
+    if(pid && pid !== d.id && byId[pid]) (kids[pid] = kids[pid] || []).push(d);
+    else roots.push(d);
+  });
+  var out = '<option value="">' + esc(emptyLabel) + '</option>';
+  (function walk(nodes, depth){
+    nodes.slice().sort(reqDocSort).forEach(function(d){
+      out += '<option value="' + esc(d.id) + '">' + "　".repeat(Math.min(depth, 6)) + esc(d.title) + '</option>';
+      walk(kids[d.id] || [], depth + 1);
+    });
+  })(roots, 0);
+  return out;
 }
 /* 分类子树 id 集合（含自身）：新建文档选分类后，上级文档只列该分类子树内的文档 */
 function reqDocCatSubtreeIds(cid){
@@ -2681,29 +2703,22 @@ function reqDocCatSubtreeIds(cid){
   }
   return out;
 }
-/* 分类下拉：仅列可写范围（项目按写权限、空间级按非查看者），树形缩进，分组头禁用 */
+/* 分类下拉：只列当前归属范围内的目录（项目按写权限、空间级按非查看者），树形缩进 */
 function fillNewReqDocCategories(selected){
   var sel = $("newReqDocCategory");
   if(!sel) return;
-  var cats = docCategories || [];
-  var opts = '<option value="">无分类（直接关联项目 / 空间级）</option>';
-  var scopes = [];
-  rt.reqList.forEach(function(r){ if(canEditReq(r.id)) scopes.push({ reqId: r.id, name: r.name, kind: "proj" }); });
-  if(!roleReadOnly()) scopes.push({ reqId: "", name: "空间文档", kind: "space" });
-  scopes.forEach(function(sc){
-    var list = cats.filter(function(c){ return (c.reqId || "") === sc.reqId; });
-    if(!list.length) return;
-    opts += '<option value="" disabled>── ' + esc(sc.name) + (sc.kind === "space" ? "（空间级）" : "") + ' ──</option>';
-    var byId = {}; list.forEach(function(c){ byId[c.id] = c; });
-    var kids = {}; list.forEach(function(c){ var pid = c.parentId || ""; if(pid && byId[pid]) (kids[pid] = kids[pid] || []).push(c); });
-    var roots = list.filter(function(c){ var pid = c.parentId || ""; return !pid || !byId[pid]; });
-    (function walk(nodes, depth){
-      nodes.slice().sort(docCatSort).forEach(function(c){
-        opts += '<option value="' + esc(c.id) + '"' + (c.id === selected ? " selected" : "") + '>' + "　".repeat(Math.min(depth, 6) + 1) + esc(c.name) + '</option>';
-        walk(kids[c.id] || [], depth + 1);
-      });
-    })(roots, 0);
-  });
+  var reqFilter = $("newReqDocProject") ? ($("newReqDocProject").value || "") : "";
+  var cats = roleReadOnly() ? [] : (docCategories || []).filter(function(c){ return (c.reqId || "") === reqFilter; });
+  var opts = '<option value="">无分类（不放进目录）</option>';
+  var byId = {}; cats.forEach(function(c){ byId[c.id] = c; });
+  var kids = {}; cats.forEach(function(c){ var pid = c.parentId || ""; if(pid && byId[pid]) (kids[pid] = kids[pid] || []).push(c); });
+  var roots = cats.filter(function(c){ var pid = c.parentId || ""; return !pid || !byId[pid]; });
+  (function walk(nodes, depth){
+    nodes.slice().sort(docCatSort).forEach(function(c){
+      opts += '<option value="' + esc(c.id) + '"' + (c.id === selected ? " selected" : "") + '>' + "　".repeat(Math.min(depth, 6) + 1) + esc(c.name) + '</option>';
+      walk(kids[c.id] || [], depth + 1);
+    });
+  })(roots, 0);
   sel.innerHTML = opts;
   sel.value = selected || "";
   if(sel.value !== (selected || "")) sel.value = "";
@@ -2743,6 +2758,7 @@ function syncNewReqDocProjFromCat(){
     fillNewReqDocProjectOptions();
     if(hint) hint.textContent = "未选分类：可关联有权限的项目，或留空间级（关联可选）";
   }
+  syncNewReqDocPath();
 }
 function fillNewReqDocParents(selected){
   var sel = $("newReqDocParent");
@@ -2762,6 +2778,31 @@ function fillNewReqDocParents(selected){
   sel.disabled = !list.length;
   sel.value = cur || "";
   if(sel.value !== (cur || "")) sel.value = "";
+  syncNewReqDocPath();
+}
+/* 位置摘要：归属 › 分类 › 上级，一眼看清文档会落到哪一层 */
+function syncNewReqDocPath(){
+  var el = $("newReqDocPath");
+  if(!el) return;
+  var reqId = $("newReqDocProject") ? ($("newReqDocProject").value || "") : "";
+  var catSel = $("newReqDocCategory");
+  var catLabel = "无分类";
+  if(catSel && catSel.value && catSel.selectedIndex >= 0) catLabel = catSel.options[catSel.selectedIndex].text.replace(/^[\s\u3000]+/, "");
+  var pSel = $("newReqDocParent");
+  var parentLabel = "顶层";
+  if(pSel && pSel.value && pSel.selectedIndex >= 0) parentLabel = pSel.options[pSel.selectedIndex].text.replace(/^[\s\u3000]+/, "");
+  el.innerHTML = "位置：<b>" + [reqDocProjectName(reqId), catLabel, parentLabel].map(esc).join("</b><i>›</i><b>") + "</b>";
+}
+/* 更多设置收起时也要能看到当前值：类型 + 可见范围 */
+function syncNewReqDocMoreSum(){
+  var el = $("newReqDocMoreSum");
+  if(!el) return;
+  var type = docTypeName($("newReqDocType") ? $("newReqDocType").value : "requirement");
+  var vis = newReqDocVisValue();
+  var visLabel = vis === "members"
+    ? "指定 " + Object.keys(docVisPickerState("newDoc").sel).length + " 人"
+    : docVisName(vis);
+  el.textContent = "类型：" + type + " · 可见范围：" + visLabel;
 }
 function fillDocParentSelect(doc){
   var sel = $("reqDocParent");
@@ -2822,20 +2863,24 @@ function openNewReqDocDialog(reqId, opts){
   opts = opts || {};
   var writable = rt.reqList.filter(function(r){ return canEditReq(r.id); });
   var defProj = (reqId && canEditReq(reqId)) ? reqId : (writable.length ? writable[0].id : "");
+  var preCat = opts.categoryId || "";
+  var preCatObj = preCat ? docCatById(preCat) : null;
+  if(preCatObj) defProj = preCatObj.reqId || "";
   fillNewReqDocProjectOptions(defProj);
   if($("newReqDocTitle")) $("newReqDocTitle").value = "";
   if($("newReqDocFormat")) $("newReqDocFormat").value = "markdown";
-  if($("newReqDocFile")) $("newReqDocFile").value = "";
+  resetNewReqDocPreview();
   setNewReqDocSource("blank");
   fillDocTypeSelect("newReqDocType", "requirement");
   fillDocTemplateSelect();
-  /* 分类优先：先填分类，再由分类带出项目（无分类时项目可选、关联非必选），最后按范围填上级文档 */
-  var preCat = opts.categoryId || "";
+  /* 归属先定，分类只列该范围的目录；分类再带出上级文档候选 */
   fillNewReqDocCategories(preCat);
   syncNewReqDocProjFromCat();
   fillNewReqDocParents(opts.parentId || "");
   if(!docCategoriesLoaded){
     loadDocCategories().then(function(){
+      var pc = preCat ? docCatById(preCat) : null;
+      fillNewReqDocProjectOptions(pc ? (pc.reqId || "") : defProj);
       fillNewReqDocCategories(preCat);
       syncNewReqDocProjFromCat();
       fillNewReqDocParents(opts.parentId || "");
@@ -2858,19 +2903,136 @@ function fillDocTemplateSelect(){
     sel.innerHTML = '<option value="">空白文档</option>' + list.map(function(t){
       return '<option value="' + esc(t.id) + '">' + esc(t.name) + (t.builtin ? '（内置）' : '') + '</option>';
     }).join("");
+    /* 模板异步到货时若已在「使用模板」模式，补选第一套骨架 */
+    var tplBtn = document.querySelector('#newReqDocSource [data-docsrc="template"][aria-pressed="true"]');
+    if(tplBtn && !sel.value && sel.options.length > 1){
+      sel.value = sel.options[1].value;
+      applyDocTemplateToNewDoc();
+    }
   };
   if(docTemplatesCache){ fill(docTemplatesCache); return; }
   API.get("/api/doc-templates").then(function(list){ fill(list || []); }).catch(function(){ /* 模板加载失败不阻塞新建 */ });
 }
+/* ---------- 文档模板管理：内置模板只读，自定义模板仅空间主 / 管理员可增删 ---------- */
+function canManageDocTpl(){
+  var role = currentRole();
+  return role === "owner" || role === "admin";
+}
+function openDocTplDialog(){
+  fillDocTypeSelect("docTplNewType", "requirement");
+  if($("docTplNewName")) $("docTplNewName").value = "";
+  if($("docTplNewFormat")) $("docTplNewFormat").value = "markdown";
+  if($("docTplNewContent")) $("docTplNewContent").value = "";
+  if($("docTplAddBox")) $("docTplAddBox").hidden = !canManageDocTpl();
+  UI.openModal($("dlgDocTpl"));
+  loadDocTplManage();
+}
+function loadDocTplManage(){
+  var list = $("docTplList");
+  if(!list) return;
+  list.innerHTML = UI.skeletonRows(3);
+  API.get("/api/doc-templates").then(function(rows){
+    /* 与新建文档下拉共用同一份缓存：增删后下拉立即同步 */
+    docTemplatesCache = rows || [];
+    renderDocTplManage();
+  }).catch(function(ex){
+    list.innerHTML = UI.errorState(ex.message || "模板加载失败");
+  });
+}
+function renderDocTplManage(){
+  var list = $("docTplList");
+  if(!list) return;
+  var rows = docTemplatesCache || [];
+  if(!rows.length){ list.innerHTML = UI.colEmpty("暂无模板"); return; }
+  list.innerHTML = rows.map(function(t){
+    return '<div class="cfg-row doc-tpl-row" data-doc-tpl="' + esc(t.id) + '">' +
+      '<span class="doc-tpl-name">' + esc(t.name) + (t.builtin ? '<span class="tag">内置</span>' : '') + '</span>' +
+      '<span class="doc-tpl-meta">' + esc(docTypeName(t.docType)) + ' · ' + (t.format === "html" ? "富文本" : "Markdown") + '</span>' +
+      '<button class="btn sm ghost" type="button" data-doc-tpl-prev aria-expanded="false">预览</button>' +
+      (t.deletable ? '<button class="btn sm danger" type="button" data-doc-tpl-del>删除</button>' : '') +
+      '</div>' +
+      '<pre class="doc-tpl-skel" hidden>' + esc(t.content || "（空模板）") + '</pre>';
+  }).join("");
+}
+function toggleDocTplSkel(btn){
+  var row = btn.closest("[data-doc-tpl]");
+  var pre = row && row.nextElementSibling;
+  if(!pre || !pre.classList.contains("doc-tpl-skel")) return;
+  var on = pre.hidden;
+  pre.hidden = !on;
+  btn.setAttribute("aria-expanded", on ? "true" : "false");
+  btn.textContent = on ? "收起" : "预览";
+}
+function resetDocTplAddBtn(){
+  var btn = $("docTplAddBtn");
+  if(btn){ btn.disabled = false; btn.textContent = "新建模板"; }
+}
+function createDocTpl(){
+  if(!canManageDocTpl()){ toast("只有空间主 / 管理员可以新建模板", "warn"); return; }
+  var name = ($("docTplNewName").value || "").trim();
+  if(!name){ toast("请填写模板名称", "warn"); $("docTplNewName").focus(); return; }
+  var content = $("docTplNewContent").value || "";
+  if(!content.trim()){ toast("请填写正文骨架", "warn"); $("docTplNewContent").focus(); return; }
+  var btn = $("docTplAddBtn");
+  if(btn){ btn.disabled = true; btn.textContent = "新建中…"; }
+  API.post("/api/doc-templates", {
+    name: name,
+    docType: $("docTplNewType").value || "other",
+    format: $("docTplNewFormat").value || "markdown",
+    content: content
+  }).then(function(){
+    toast("已新建模板「" + name + "」", "fs");
+    $("docTplNewName").value = "";
+    $("docTplNewContent").value = "";
+    resetDocTplAddBtn();
+    loadDocTplManage();
+  }).catch(function(ex){
+    toast(ex.message || "新建模板失败", "bad");
+    resetDocTplAddBtn();
+  });
+}
+function deleteDocTpl(id){
+  if(!canManageDocTpl()){ toast("只有空间主 / 管理员可以删除模板", "warn"); return; }
+  var t = (docTemplatesCache || []).filter(function(x){ return x.id === id; })[0];
+  if(!t || t.builtin) return;
+  UI.showConfirm({
+    title: "删除模板",
+    msg: "删除后新建文档时不再出现「" + esc(t.name) + "」；已用该模板创建的文档不受影响。",
+    okText: "删除"
+  }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/doc-templates/" + encodeURIComponent(id)).then(function(){
+      toast("已删除模板「" + t.name + "」", "fs");
+      loadDocTplManage();
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
 function setNewReqDocSource(src){
-  var source = src === "file" ? "file" : "blank";
+  var source = src === "file" || src === "template" ? src : "blank";
   var btns = document.querySelectorAll("#newReqDocSource [data-docsrc]");
   for(var i = 0; i < btns.length; i++){
     btns[i].setAttribute("aria-pressed", btns[i].dataset.docsrc === source ? "true" : "false");
   }
-  showEl($("newReqDocFormatField"), source === "blank");
-  showEl($("newReqDocTemplateField"), source === "blank");
-  showEl($("newReqDocFileField"), source === "file");
+  showEl($("newReqDocBlankBody"), source === "blank");
+  showEl($("newReqDocTemplateBody"), source === "template");
+  showEl($("newReqDocFileBody"), source === "file");
+  if(source === "blank") resetNewReqDocPreview();
+  if(source === "template"){
+    var t = $("newReqDocTemplate");
+    /* 快捷创建：进模板模式就预选第一套骨架，不让用户面对「模板：空白文档」 */
+    if(t && !t.value && t.options.length > 1) t.value = t.options[1].value;
+    applyDocTemplateToNewDoc();
+  }
+}
+/* 模板自带类型与格式：选中即同步，省掉两处重复选择 */
+function applyDocTemplateToNewDoc(){
+  var sel = $("newReqDocTemplate");
+  if(!sel || !sel.value || !docTemplatesCache) return;
+  var tpl = docTemplatesCache.filter(function(t){ return t.id === sel.value; })[0];
+  if(!tpl) return;
+  if(tpl.docType && $("newReqDocType")) $("newReqDocType").value = tpl.docType;
+  if(tpl.format && $("newReqDocFormat")) $("newReqDocFormat").value = tpl.format;
+  syncNewReqDocMoreSum();
 }
 /* 按扩展名判断导入形态：word / markdown / html */
 function reqDocFileKind(name){
@@ -2880,6 +3042,111 @@ function reqDocFileKind(name){
   if(ext === "md" || ext === "markdown" || ext === "txt") return "markdown";
   if(ext === "html" || ext === "htm") return "html";
   return null;
+}
+function reqDocFileExt(name){
+  var m = /\.([^.]+)$/.exec(String(name || ""));
+  return m ? m[1].toLowerCase() : "";
+}
+/* 预览用沙箱文档：与阅读页排版接近，图片按容器宽度收缩 */
+function docPreviewDocument(inner){
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+    + 'body{margin:0;padding:16px 20px;font:14px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:#1f2329;background:#fff;word-break:break-word;}'
+    + 'img{max-width:100%;height:auto;}'
+    + 'table{border-collapse:collapse;width:100%;margin:10px 0;}'
+    + 'td,th{border:1px solid #dcdfe6;padding:6px 8px;font-size:13px;vertical-align:top;}'
+    + 'th{background:#f5f7fa;text-align:left;}'
+    + 'pre{background:#f6f8fa;padding:10px 12px;border-radius:6px;overflow:auto;white-space:pre-wrap;}'
+    + 'h1,h2,h3,h4,h5,h6{margin:14px 0 8px;line-height:1.4;}'
+    + 'blockquote{margin:8px 0;padding-left:12px;border-left:3px solid #dcdfe6;color:#646a73;}'
+    + 'hr{border:0;border-top:1px solid #dcdfe6;margin:14px 0;}'
+    + '</style></head><body>' + (inner || "") + '</body></html>';
+}
+function countDocImages(html){
+  var m = String(html || "").match(/<img\b/gi);
+  return m ? m.length : 0;
+}
+function docImportMetaText(file, label, html){
+  var imgs = countDocImages(html);
+  var parts = [file.name, label, imgs ? ("含 " + imgs + " 张图片") : "无内嵌图片"];
+  if(reqDocFileExt(file.name) === "doc"){
+    parts.push("旧版 .doc 只能保留文字，建议另存为 .docx 再导入");
+  }
+  return parts.join(" · ");
+}
+/* Word 由服务端转 HTML（内嵌图片已转 data URL），返回清洗后的正文 */
+function fetchWordImport(file){
+  var fd = new FormData();
+  fd.append("file", file);
+  var url = API.url("/api/req-docs/import-word" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  return fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-XSRF-TOKEN": csrfCookie() },
+    body: fd
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    return res.json().catch(function(){ return null; });
+  }).then(function(json){
+    if(!json || json.code !== 0){ throw new Error((json && json.message) || "导入失败"); }
+    return json.data || {};
+  });
+}
+function showNewReqDocPreview(meta, html){
+  if($("newReqDocPreviewMeta")) $("newReqDocPreviewMeta").textContent = meta;
+  if($("newReqDocPreviewFrame")) $("newReqDocPreviewFrame").srcdoc = docPreviewDocument(html);
+  if($("newReqDocPreview")) $("newReqDocPreview").hidden = false;
+}
+function resetNewReqDocPreview(){
+  newReqDocParsed = null;
+  newReqDocParseSeq++;
+  if($("newReqDocFile")) $("newReqDocFile").value = "";
+  if($("newReqDocPreview")) $("newReqDocPreview").hidden = true;
+  if($("newReqDocPreviewFrame")) $("newReqDocPreviewFrame").removeAttribute("srcdoc");
+}
+/* 选文件后只解析成预览，不写库；点「新建并编辑」时才用这份内容建文档 */
+function parseNewReqDocFile(file){
+  var kind = reqDocFileKind(file.name);
+  var seq = ++newReqDocParseSeq;
+  var stale = function(){ return seq !== newReqDocParseSeq; };
+  newReqDocParsed = null;
+  if($("newReqDocPreview")) $("newReqDocPreview").hidden = true;
+  if(!kind){
+    return Promise.reject(new Error("暂不支持该文件格式，请上传 Word、Markdown、TXT 或 HTML 文件"));
+  }
+  if(kind === "word"){
+    return fetchWordImport(file).then(function(data){
+      if(stale()) return;
+      var html = data.content || "";
+      if(!html) throw new Error("文档内容为空或无法识别");
+      newReqDocParsed = { file: file, kind: kind, content: html, format: "html" };
+      showNewReqDocPreview(docImportMetaText(file, "Word → 富文本", html), html);
+    });
+  }
+  return readTextFile(file).then(function(text){
+    if(kind === "html"){
+      return loadMarkdownLib().then(function(){
+        if(stale()) return;
+        var safe = window.DOMPurify.sanitize(text);
+        newReqDocParsed = { file: file, kind: kind, content: text, format: "html" };
+        showNewReqDocPreview(docImportMetaText(file, "HTML", safe), safe);
+      });
+    }
+    if(reqDocFileExt(file.name) === "txt"){
+      if(stale()) return;
+      newReqDocParsed = { file: file, kind: kind, content: text, format: "markdown" };
+      showNewReqDocPreview(docImportMetaText(file, "纯文本", ""), "<pre>" + esc(text) + "</pre>");
+      return;
+    }
+    return loadMarkdownLib().then(function(){
+      if(stale()) return;
+      var html = "";
+      try{ html = window.marked.parse(text, { gfm: true, breaks: false }); }catch(e){ html = ""; }
+      var safe = window.DOMPurify.sanitize(html);
+      newReqDocParsed = { file: file, kind: kind, content: text, format: "markdown" };
+      showNewReqDocPreview(docImportMetaText(file, "Markdown", safe), safe);
+    });
+  });
 }
 function closeNewReqDocDialog(){
   var d = $("dlgNewReqDoc");
@@ -2955,14 +3222,6 @@ function setNewReqDocBusy(label){
   ok.disabled = !!label;
   ok.textContent = label || "新建并编辑";
 }
-/* 创建已成功、导入却失败：不静默留下空稿，直接进入草稿让用户继续编辑或重新导入 */
-function recoverFailedNewDocImport(doc, file, ex){
-  closeNewReqDocDialog();
-  loadReqDocs(true);
-  openReqDocEditor(doc.id);
-  toast("导入失败：" + ((ex && ex.message) || "网络异常") +
-    "；已创建草稿「" + (doc.title || file.name) + "」，可继续编辑，也可在编辑器里重新导入", "bad", 12000);
-}
 function submitNewReqDoc(){
   var ok = $("dlgNewReqDocOk");
   if(ok && ok.disabled) return;
@@ -2977,7 +3236,9 @@ function submitNewReqDoc(){
     if((cat.reqId || "") !== (reqId || "")){ toast("文档归属项目须与所选分类一致", "warn"); return; }
   }
   var source = document.querySelector('#newReqDocSource [data-docsrc][aria-pressed="true"]');
-  var isFile = !!(source && source.dataset.docsrc === "file");
+  var sourceKind = source ? source.dataset.docsrc : "blank";
+  var isFile = sourceKind === "file";
+  var isTemplate = sourceKind === "template";
   var file = isFile && $("newReqDocFile") ? $("newReqDocFile").files[0] : null;
   if(isFile && !file){ toast("请选择要上传的文件", "warn"); return; }
   if(file && file.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
@@ -2985,16 +3246,26 @@ function submitNewReqDoc(){
   if(isFile && !kind){ toast("暂不支持该文件格式，请上传 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
   if(!title && file) title = file.name.replace(/\.[^.]+$/, "");
   if(!title){ toast("请填写文档名称", "warn"); $("newReqDocTitle").focus(); return; }
+  if(isTemplate && !(docTemplatesCache && $("newReqDocTemplate").value)){
+    toast("模板还没加载好，请稍候或改用空白文档", "warn");
+    return;
+  }
+  if(isFile && (!newReqDocParsed || newReqDocParsed.file !== file)){
+    toast("文件尚未解析完成，请稍候或重新选择文件", "warn");
+    return;
+  }
   var format = $("newReqDocFormat") ? $("newReqDocFormat").value : "markdown";
-  if(kind === "word" || kind === "html") format = "html";
-  if(kind === "markdown") format = "markdown";
-  var parentId = $("newReqDocParent") ? $("newReqDocParent").value : "";
-  var tplContent = "";
-  if(!isFile && $("newReqDocTemplate") && $("newReqDocTemplate").value && docTemplatesCache){
+  var content = "";
+  if(isFile){
+    /* 预览时已经转换/清洗过，这里直接写入同一份内容，保证所见即所得 */
+    format = newReqDocParsed.format;
+    content = newReqDocParsed.content;
+  }else if(isTemplate && $("newReqDocTemplate") && $("newReqDocTemplate").value && docTemplatesCache){
     var tplId = $("newReqDocTemplate").value;
     var tpl = docTemplatesCache.filter(function(t){ return t.id === tplId; })[0];
-    if(tpl){ tplContent = tpl.content || ""; format = tpl.format || format; }
+    if(tpl){ content = tpl.content || ""; format = tpl.format || format; }
   }
+  var parentId = $("newReqDocParent") ? $("newReqDocParent").value : "";
   var visibility = newReqDocVisValue();
   var memberIds = visibility === "members" ? Object.keys(docVisPickerState("newDoc").sel) : [];
   if(visibility === "members" && !memberIds.length){
@@ -3002,38 +3273,26 @@ function submitNewReqDoc(){
     showEl($("newReqDocWhoField"), true);
     return;
   }
-  var createdDoc = null;
-  setNewReqDocBusy("新建文档…");
+  setNewReqDocBusy(isFile ? "导入文档…" : "新建文档…");
   API.post("/api/req-docs", {
-    reqId: reqId || null, title: title, content: tplContent, status: "draft",
-    format: format, docType: $("newReqDocType").value, parentId: parentId || null,
+    reqId: reqId || null, title: title, content: content, status: "draft",
+    format: format, docType: ($("newReqDocType") && $("newReqDocType").value) || "requirement", parentId: parentId || null,
     categoryId: categoryId || "", visibility: visibility, memberIds: memberIds
   })
     .then(function(doc){
-      createdDoc = doc;
       if(isFile){
-        return kind === "word"
-          ? importWordForNewDoc(doc, file, setNewReqDocBusy)
-          : importTextForNewDoc(doc, file, kind, setNewReqDocBusy);
+        finishNewReqDocImport(doc, file.name, format);
+        return;
       }
       closeNewReqDocDialog();
       loadReqDocs(true);
       openReqDocEditor(doc.id);
       toast("已创建「" + doc.title + "」，接着写正文", "fs");
-      return null;
     })
     .catch(function(ex){
-      if(createdDoc) recoverFailedNewDocImport(createdDoc, file, ex);
-      else toast("新建文档失败：" + (ex.message || "网络异常"), "bad");
+      toast("新建文档失败：" + (ex.message || "网络异常"), "bad");
     })
     .then(function(){ setNewReqDocBusy(null); });
-}
-function putReqDocContent(doc, content, format){
-  return API.put("/api/req-docs/" + encodeURIComponent(doc.id), {
-    reqId: doc.reqId, title: doc.title, content: content, status: "draft",
-    format: format, docType: doc.docType || "requirement", parentId: doc.parentId || null,
-    updatedAt: doc.updatedAt || ""
-  });
 }
 function readTextFile(file){
   return new Promise(function(resolve, reject){
@@ -3049,35 +3308,6 @@ function finishNewReqDocImport(doc, fileName, format){
   openReqDocEditor(doc.id);
   toast("已导入「" + fileName + "」为" + (format === "markdown" ? " Markdown" : "富文本")
     + "，可直接在线编辑", "fs");
-}
-function importTextForNewDoc(doc, file, format, onStage){
-  if(onStage) onStage("读取文件…");
-  return readTextFile(file).then(function(text){
-    if(onStage) onStage("写入正文…");
-    return putReqDocContent(doc, text, format);
-  }).then(function(){ finishNewReqDocImport(doc, file.name, format); });
-}
-function importWordForNewDoc(doc, file, onStage){
-  if(onStage) onStage("转换文件…");
-  var fd = new FormData();
-  fd.append("file", file);
-  var url = API.url("/api/req-docs/import-word" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
-  return fetch(url, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "X-XSRF-TOKEN": csrfCookie() },
-    body: fd
-  }).then(function(res){
-    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
-    return res.json().catch(function(){ return null; });
-  }).then(function(json){
-    if(!json || json.code !== 0){ throw new Error((json && json.message) || "导入失败"); }
-    if(onStage) onStage("写入正文…");
-    var content = (json.data && json.data.content) || "";
-    return putReqDocContent(doc, content, "html")
-      .then(function(){ finishNewReqDocImport(doc, file.name, "html"); });
-  });
 }
 function openReqDocEditor(id){
   var seq = ++reqDocOpenSeq;
@@ -5179,6 +5409,19 @@ function importReqDoc(){
     input.click();
   }
 }
+/* 编辑器导入：解析成预览弹窗，确认后才写入正文；取消则正文保持不变 */
+var importPreviewConfirm = null;
+function closeDocImportPreview(){
+  importPreviewConfirm = null;
+  if($("dlgDocImportPreview")) UI.closeModal($("dlgDocImportPreview"));
+  if($("docImportPreviewFrame")) $("docImportPreviewFrame").removeAttribute("srcdoc");
+}
+function openDocImportPreview(file, html, label, onConfirm){
+  importPreviewConfirm = onConfirm || null;
+  if($("docImportPreviewMeta")) $("docImportPreviewMeta").textContent = docImportMetaText(file, label, html);
+  if($("docImportPreviewFrame")) $("docImportPreviewFrame").srcdoc = docPreviewDocument(html);
+  UI.openModal($("dlgDocImportPreview"));
+}
 function onReqDocImportFile(e){
   var input = e.target;
   var f = input.files && input.files[0];
@@ -5188,9 +5431,38 @@ function onReqDocImportFile(e){
   if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
   var kind = reqDocFileKind(f.name);
   if(!kind){ toast("暂不支持该文件格式，请导入 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
-  if(kind === "word"){ importWordFile(f); return; }
+  if(kind === "word"){
+    toast("正在解析 Word 文档…", "info");
+    fetchWordImport(f).then(function(data){
+      var html = data.content || "";
+      openDocImportPreview(f, html, "Word → 富文本", function(){
+        applyImportedHtml(f.name, html);
+      });
+    }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
+    return;
+  }
   readTextFile(f).then(function(text){
-    applyImportedText(f.name, text, kind);
+    if(kind === "html"){
+      loadMarkdownLib().then(function(){
+        openDocImportPreview(f, window.DOMPurify.sanitize(text), "HTML", function(){
+          applyImportedText(f.name, text, "html");
+        });
+      }).catch(function(ex){ toast(ex.message || "预览组件加载失败", "bad"); });
+      return;
+    }
+    if(reqDocFileExt(f.name) === "txt"){
+      openDocImportPreview(f, "<pre>" + esc(text) + "</pre>", "纯文本", function(){
+        applyImportedText(f.name, text, "markdown");
+      });
+      return;
+    }
+    loadMarkdownLib().then(function(){
+      var html = "";
+      try{ html = window.marked.parse(text, { gfm: true, breaks: false }); }catch(err){ html = ""; }
+      openDocImportPreview(f, window.DOMPurify.sanitize(html), "Markdown", function(){
+        applyImportedText(f.name, text, "markdown");
+      });
+    }).catch(function(ex){ toast(ex.message || "预览组件加载失败", "bad"); });
   }).catch(function(ex){ toast(ex.message || "读取文件失败", "bad"); });
 }
 /* 导入文本类文件：按文件类型切换文档格式，正文直接进入可编辑状态 */
@@ -5238,44 +5510,27 @@ function applyImportedText(name, text, format){
   ensureEditor().then(function(ed){ if(ed && editingMeta.format === "html") apply(); })
     .catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
 }
-function importWordFile(f){
-  var fd = new FormData();
-  fd.append("file", f);
-  var url = API.url("/api/req-docs/import-word" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
-  toast("正在导入 Word 文档…", "info");
-  fetch(url, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "X-XSRF-TOKEN": csrfCookie() },
-    body: fd
-  }).then(function(res){
-    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
-    return res.json().catch(function(){ return null; });
-  }).then(function(json){
-    if(!json || json.code !== 0){ throw new Error((json && json.message) || "导入失败"); }
-    var data = json.data || {};
-    if(editingMeta.format !== "html"){
-      editingMeta.format = "html";
-      setDocFormatUI("html");
-    }
-    var apply = function(){
-      if(!reqEditor) return;
-      setReqEditorContents(data.content);
-      markReqDocDirty();
-      rebuildToc();
-      updateReqDocCount();
-      toast("已导入「" + f.name + "」，可直接编辑，记得保存", "fs");
-    };
-    if(reqEditor){
+function applyImportedHtml(name, html){
+  if(editingMeta.format !== "html"){
+    editingMeta.format = "html";
+    setDocFormatUI("html");
+  }
+  var apply = function(){
+    if(!reqEditor) return;
+    setReqEditorContents(html);
+    markReqDocDirty();
+    rebuildToc();
+    updateReqDocCount();
+    toast("已导入「" + name + "」，可直接编辑，记得保存", "fs");
+  };
+  if(reqEditor){
+    apply();
+  }else{
+    ensureEditor().then(function(ed){
+      if(!ed || editingMeta.format !== "html") return;
       apply();
-    }else{
-      ensureEditor().then(function(ed){
-        if(!ed || editingMeta.format !== "html") return;
-        apply();
-      }).catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
-    }
-  }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
+    }).catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
+  }
 }
 function exportReqDoc(){
   var md = isMarkdownDoc();
@@ -5314,6 +5569,70 @@ function exportReqDocFromReader(docId){
     a.click();
     setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
     toast("已导出 " + name, "fs");
+  }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
+}
+/* Word 导出：Markdown 先用 marked 转 HTML，再交服务端用 POI 生成真实 .docx（含内嵌图片） */
+function downloadBlob(filename, blob){
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
+}
+function reqDocExportWordHTML(){
+  if(isMarkdownDoc()){
+    var src = $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
+    return loadMarkdownLib().then(function(){
+      try{ return window.marked.parse(src, { gfm: true, breaks: false }); }
+      catch(e){ return esc(src).replace(/\n/g, "<br>"); }
+    });
+  }
+  return Promise.resolve(reqEditor ? reqEditor.getContents(true) : "");
+}
+function exportReqDocWordFrom(title, html){
+  var url = API.url("/api/req-docs/export-docx" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  toast("正在生成 Word 文档…", "info");
+  return fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", "X-XSRF-TOKEN": csrfCookie() },
+    body: JSON.stringify({ title: title || "文档", html: html || "" })
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    if(!res.ok){
+      return res.json().catch(function(){ return null; }).then(function(json){
+        throw new Error((json && json.message) || "导出失败");
+      });
+    }
+    return res.blob();
+  }).then(function(blob){
+    var name = (title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ".docx";
+    downloadBlob(name, blob);
+    toast("已导出 " + name, "fs");
+  });
+}
+function exportReqDocWord(){
+  reqDocExportWordHTML().then(function(html){
+    return exportReqDocWordFrom(editingMeta.title || "文档", html);
+  }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
+}
+function exportReqDocWordFromReader(docId){
+  var doc = reqDocById(docId);
+  if(!doc){ toast("文档信息未加载", "bad"); return; }
+  API.get("/api/req-docs/" + encodeURIComponent(docId)).then(function(full){
+    var htmlPromise = Promise.resolve(full.content || "");
+    if(full.format === "markdown"){
+      htmlPromise = loadMarkdownLib().then(function(){
+        try{ return window.marked.parse(full.content || "", { gfm: true, breaks: false }); }
+        catch(e){ return esc(full.content || "").replace(/\n/g, "<br>"); }
+      });
+    }
+    return htmlPromise.then(function(html){
+      return exportReqDocWordFrom(full.title || "文档", html);
+    });
   }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
 }
 /* 发布/收回发布：草稿仅作者与空间管理员可见，发布后按项目访问规则可见 */
@@ -5713,6 +6032,8 @@ function populateReqDocSelect(keep){
         openReqDocHistory(hb.dataset.rrdHistory, { fromReader: true, canRestore: hb.dataset.canRestore === "1" });
         return;
       }
+      var exw = e.target.closest("[data-rrd-export-word]");
+      if(exw){ exportReqDocWordFromReader(exw.dataset.rrdExportWord); return; }
       var ex = e.target.closest("[data-rrd-export]");
       if(ex){ exportReqDocFromReader(ex.dataset.rrdExport); return; }
       var cb = e.target.closest("[data-rrd-comments]");
@@ -5756,6 +6077,21 @@ function populateReqDocSelect(keep){
     });
   }
   if($("reqDocNew")) $("reqDocNew").addEventListener("click", function(){ openNewReqDocDialog(reqDocReqFilter || undefined); });
+  if($("reqDocTplBtn")) $("reqDocTplBtn").addEventListener("click", openDocTplDialog);
+  if($("dlgDocTplX")) $("dlgDocTplX").addEventListener("click", function(){ UI.closeModal($("dlgDocTpl")); });
+  if($("dlgDocTplClose")) $("dlgDocTplClose").addEventListener("click", function(){ UI.closeModal($("dlgDocTpl")); });
+  if($("docTplAddBtn")) $("docTplAddBtn").addEventListener("click", createDocTpl);
+  if($("docTplList")) $("docTplList").addEventListener("click", function(e){
+    var pv = e.target.closest("[data-doc-tpl-prev]");
+    if(pv){ toggleDocTplSkel(pv); return; }
+    var del = e.target.closest("[data-doc-tpl-del]");
+    if(del){
+      var row = del.closest("[data-doc-tpl]");
+      if(row) deleteDocTpl(row.dataset.docTpl);
+      return;
+    }
+    if(e.target.closest("[data-empty-action]")) loadDocTplManage();
+  });
   if($("reqDocProjFilterClear")) $("reqDocProjFilterClear").addEventListener("click", function(){ setReqDocProjectFilter(null); });
   if($("reqDocLoadError")) $("reqDocLoadError").addEventListener("click", function(e){
     var btn = e.target.closest("[data-reqdoc-reload]");
@@ -5774,7 +6110,10 @@ function populateReqDocSelect(keep){
     submitNewReqDoc();
   });
   if($("newReqDocProject")) $("newReqDocProject").addEventListener("change", function(){
+    /* 归属变了：分类只列新范围内的目录，上级文档候选同步重算 */
+    fillNewReqDocCategories("");
     fillNewReqDocParents("");
+    syncNewReqDocPath();
     /* 指定成员候选取「能看到该项目」的人；换项目后重新加载 */
     syncNewReqDocVis();
   });
@@ -5783,6 +6122,7 @@ function populateReqDocSelect(keep){
     syncNewReqDocProjFromCat();
     fillNewReqDocParents("");
     applyDocCatDefaultToNewDoc();
+    syncNewReqDocPath();
   });
   var srcBtns = document.querySelectorAll("#newReqDocSource [data-docsrc]");
   for(var si = 0; si < srcBtns.length; si++){
@@ -5790,11 +6130,24 @@ function populateReqDocSelect(keep){
       btn.addEventListener("click", function(){ setNewReqDocSource(btn.dataset.docsrc); });
     })(srcBtns[si]);
   }
+  if($("newReqDocTemplate")) $("newReqDocTemplate").addEventListener("change", applyDocTemplateToNewDoc);
+  if($("newReqDocType")) $("newReqDocType").addEventListener("change", syncNewReqDocMoreSum);
   if($("newReqDocFile")) $("newReqDocFile").addEventListener("change", function(){
     var f = this.files && this.files[0];
-    if(f && !($("newReqDocTitle").value || "").trim()){
+    if(!f){ resetNewReqDocPreview(); return; }
+    if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); resetNewReqDocPreview(); return; }
+    if(!($("newReqDocTitle").value || "").trim()){
       $("newReqDocTitle").value = f.name.replace(/\.[^.]+$/, "");
     }
+    setNewReqDocBusy("解析文件…");
+    parseNewReqDocFile(f).catch(function(ex){
+      resetNewReqDocPreview();
+      toast(ex.message || "文件解析失败", "bad");
+    }).then(function(){ setNewReqDocBusy(null); });
+  });
+  if($("newReqDocPreviewReset")) $("newReqDocPreviewReset").addEventListener("click", function(){
+    resetNewReqDocPreview();
+    if($("newReqDocFile")) $("newReqDocFile").click();
   });
   if($("newReqDocTitle")){
     $("newReqDocTitle").addEventListener("keydown", function(e){
@@ -6012,6 +6365,14 @@ function populateReqDocSelect(keep){
   }
   if($("reqDocImport")) $("reqDocImport").addEventListener("click", importReqDoc);
   if($("reqDocExport")) $("reqDocExport").addEventListener("click", exportReqDoc);
+  if($("reqDocExportWord")) $("reqDocExportWord").addEventListener("click", exportReqDocWord);
+  if($("dlgDocImportPreviewOk")) $("dlgDocImportPreviewOk").addEventListener("click", function(){
+    var run = importPreviewConfirm;
+    closeDocImportPreview();
+    if(run) run();
+  });
+  if($("dlgDocImportPreviewCancel")) $("dlgDocImportPreviewCancel").addEventListener("click", closeDocImportPreview);
+  if($("dlgDocImportPreviewX")) $("dlgDocImportPreviewX").addEventListener("click", closeDocImportPreview);
   if($("reqDocImportFile")) $("reqDocImportFile").addEventListener("change", onReqDocImportFile);
   if($("reqDocParent")) $("reqDocParent").addEventListener("change", function(){ markReqDocDirty(); });
   $("reqDocType").addEventListener("change", markReqDocDirty);

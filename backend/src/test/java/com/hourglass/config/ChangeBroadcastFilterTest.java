@@ -10,6 +10,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 class ChangeBroadcastFilterTest {
@@ -29,5 +30,20 @@ class ChangeBroadcastFilterTest {
 
         verify(versions).bump(any());
         verify(sse).broadcast(eq("changed"), any(), eq("T1"), any(), any(), eq("task"), any());
+    }
+
+    @Test
+    void docConversionEndpointsDoNotBroadcast() throws Exception {
+        SseService sse = mock(SseService.class);
+        WorkspaceVersionService versions = mock(WorkspaceVersionService.class);
+        ChangeBroadcastFilter filter = new ChangeBroadcastFilter(sse, versions);
+
+        for (String uri : new String[]{"/api/req-docs/import-word", "/api/req-docs/export-docx"}) {
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", uri);
+            filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+        }
+
+        verify(versions, never()).bump(any());
+        verify(sse, never()).broadcast(any(), any(), any(), any(), any(), any(), any());
     }
 }

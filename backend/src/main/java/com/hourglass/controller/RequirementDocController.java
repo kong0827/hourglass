@@ -20,8 +20,14 @@ import com.hourglass.entity.RequirementDocHistory;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkActivity;
 import com.hourglass.entity.Workspace;
+import com.hourglass.service.HtmlDocxService;
 import com.hourglass.service.RequirementDocService;
 import com.hourglass.service.WorkspaceService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,6 +41,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.validation.Valid;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -47,10 +54,13 @@ public class RequirementDocController {
 
     private final RequirementDocService docService;
     private final WorkspaceService workspaceService;
+    private final HtmlDocxService htmlDocxService;
 
-    public RequirementDocController(RequirementDocService docService, WorkspaceService workspaceService) {
+    public RequirementDocController(RequirementDocService docService, WorkspaceService workspaceService,
+                                    HtmlDocxService htmlDocxService) {
         this.docService = docService;
         this.workspaceService = workspaceService;
+        this.htmlDocxService = htmlDocxService;
     }
 
     /** 需求列表（含所属项目名、关联任务数、正文摘要），不含完整正文；keyword 按标题/正文模糊搜索 */
@@ -170,6 +180,40 @@ public class RequirementDocController {
                 temp.delete();
             }
         }
+    }
+
+    /**
+     * 导出 Word（.docx）：正文由前端按当前编辑内容传入，Markdown 已先转成 HTML。
+     * 这里再走一次白名单清洗，避免把未经清洗的 HTML 直接写进文件。
+     */
+    @PostMapping("/api/req-docs/export-docx")
+    public ResponseEntity<byte[]> exportDocx(@RequestBody Map<String, String> body,
+                                             @RequestParam(required = false) String workspace) {
+        workspaceService.resolve(CurrentUser.id(), workspace);
+        String html = body == null ? null : body.get("html");
+        if (html != null && html.length() > 12_000_000) {
+            throw AppException.badRequest("文档正文过大，暂不支持导出 Word");
+        }
+        String clean = RequirementDocService.sanitize(html);
+        byte[] bytes = htmlDocxService.toDocx(clean == null ? "" : clean);
+        String title = body == null ? null : body.get("title");
+        String name = docxFileName(title);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
+        headers.setContentDisposition(ContentDisposition.attachment()
+                .filename(name, StandardCharsets.UTF_8).build());
+        headers.setContentLength(bytes.length);
+        return new ResponseEntity<byte[]>(bytes, headers, HttpStatus.OK);
+    }
+
+    private String docxFileName(String title) {
+        String base = title == null ? "" : title.trim();
+        base = base.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_");
+        if (base.length() > 80) {
+            base = base.substring(0, 80);
+        }
+        return (base.isEmpty() ? "文档" : base) + ".docx";
     }
 
     @PutMapping("/api/req-docs/{id}")

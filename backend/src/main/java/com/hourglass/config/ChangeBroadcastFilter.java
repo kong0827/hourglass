@@ -67,6 +67,10 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
         if (uri.startsWith("/api/notifications")) {
             return;
         }
+        /* Word 导入预览与导出只是文档转换，不写库；选文件预览是高频动作，不能让全空间白刷新 */
+        if (uri.startsWith("/api/req-docs/import-word") || uri.startsWith("/api/req-docs/export-docx")) {
+            return;
+        }
         /* AI 的交互大多是**只读**的（拆需求出草稿、完成度体检、周报润色、改自己的 AI 配置），
            但它们都是 POST，照常广播会让空间里其他人白刷新一遍。
            唯一真写库的是 /api/ai/reqdoc/{id}/tasks（把草稿建成任务），必须照常广播。 */

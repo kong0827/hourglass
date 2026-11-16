@@ -6,6 +6,7 @@ import com.hourglass.dto.PageResult;
 import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.entity.RequirementDoc;
 import com.hourglass.entity.Workspace;
+import com.hourglass.service.HtmlDocxService;
 import com.hourglass.service.RequirementDocService;
 import com.hourglass.service.WorkspaceService;
 import org.junit.jupiter.api.AfterEach;
@@ -44,7 +45,7 @@ class RequirementDocControllerRoutingTest {
         ws.setId("W1");
         when(workspaceService.resolve(eq("U1"), any())).thenReturn(ws);
 
-        mvc = MockMvcBuilders.standaloneSetup(new RequirementDocController(docService, workspaceService))
+        mvc = MockMvcBuilders.standaloneSetup(new RequirementDocController(docService, workspaceService, mock(HtmlDocxService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         LoginUser user = new LoginUser("U1", "u1", "x", "我", "user");

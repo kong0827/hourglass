@@ -1145,6 +1145,7 @@
               <button class="rm-btn" type="button" role="tab" data-rdmode="feed" aria-selected="false">动态</button>
             </span>
             <span class="toolbar-right">
+              <button class="btn sm ghost" type="button" id="reqDocTplBtn" aria-haspopup="dialog" title="文档模板管理：查看、新建与删除模板">模板</button>
               <span class="views-menu-wrap">
                 <button class="btn sm ghost" type="button" id="rdViewsBtn" aria-haspopup="true" aria-expanded="false" title="文档视图：保存当前搜索、项目范围与展示方式">视图</button>
                 <div class="menu popover" id="rdViewsMenu" hidden></div>
@@ -1232,8 +1233,11 @@
                   <button class="menu-item" type="button" id="reqDocImport" title="导入 Word / Markdown / TXT / HTML 文件">
                     <span data-icon="upload"></span>导入文件…
                   </button>
-                  <button class="menu-item" type="button" id="reqDocExport" title="导出为 Markdown 文件">
-                    <span data-icon="download"></span>导出文件
+                  <button class="menu-item" type="button" id="reqDocExport" title="按当前格式导出 Markdown / HTML 文件">
+                    <span data-icon="download"></span>导出 Markdown / HTML
+                  </button>
+                  <button class="menu-item" type="button" id="reqDocExportWord" title="导出为 Word 文档（.docx），保留标题、表格与内嵌图片">
+                    <span data-icon="download"></span>导出 Word（.docx）
                   </button>
                   <button class="menu-item" type="button" id="reqDocCopy"><span data-icon="copy"></span>复制正文</button>
                   <button class="menu-item" type="button" id="reqDocPrint"><span data-icon="print"></span>打印 / 导出 PDF</button>
@@ -1335,64 +1339,135 @@
           </section>
         </div>
 
-        <!-- 新建文档：先选项目、填标题，确认后进编辑页 -->
-        <div class="modal-layer side" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
+        <!-- 新建文档：名称 → 位置 → 起点，三步走；类型与可见范围收进「更多设置」 -->
+        <div class="modal-layer side" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle"><div class="sheet reqdoc-new-sheet"><div class="sheet-body proj-dlg-body">
           <div class="panel">
             <div class="panel-head"><h3 id="dlgNewReqDocTitle">新建文档</h3><button class="icon-btn sm" type="button" id="dlgNewReqDocX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
-            <p class="foot-note">先选分类（可选）；分类会带出归属项目。不选分类时可直接关联有权限的项目，或留空间级（如开发手册）。确认后进入编辑页。</p>
-            <div class="reqdoc-dlg-form">
-              <label class="reqdoc-dlg-field">
-                <span>分类</span>
-                <select id="newReqDocCategory"></select>
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>所属项目</span>
-                <select id="newReqDocProject"></select>
-                <small id="newReqDocProjHint" style="color:var(--text-3);display:block;margin-top:4px;">未选分类：可关联有权限的项目，或留空间级（关联可选）</small>
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>文档名称</span>
-                <input id="newReqDocTitle" type="text" maxlength="100" placeholder="例如：权限校验技术方案">
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>类型</span>
-                <select id="newReqDocType"></select>
-              </label>
-              <label class="reqdoc-dlg-field" id="newReqDocTemplateField">
-                <span>使用模板</span>
-                <select id="newReqDocTemplate">
-                  <option value="">空白文档</option>
-                </select>
-              </label>
-              <div class="reqdoc-dlg-field">
-                <span>新建方式</span>
-                <div class="seg mini" id="newReqDocSource" role="group" aria-label="新建方式">
-                  <button type="button" data-docsrc="blank" aria-pressed="true">空白新建</button>
-                  <button type="button" data-docsrc="file" aria-pressed="false">上传文件</button>
+            <div class="reqdoc-dlg-form nd-form">
+              <section class="nd-sec">
+                <div class="nd-sec-h"><span class="nd-sec-no">1</span>文档名称</div>
+                <input id="newReqDocTitle" class="nd-title" type="text" maxlength="100" placeholder="例如：权限校验技术方案">
+                <p class="nd-sec-hint">只有名称必填；回车即可按默认创建，其余都能建好后再改。</p>
+              </section>
+
+              <section class="nd-sec">
+                <div class="nd-sec-h"><span class="nd-sec-no">2</span>存放位置<em>分类是目录，决定挂到哪个项目下</em></div>
+                <div class="nd-loc">
+                  <label class="reqdoc-dlg-field">
+                    <span>归属</span>
+                    <select id="newReqDocProject"></select>
+                    <small id="newReqDocProjHint">未选分类：可关联有权限的项目，或留空间级（关联可选）</small>
+                  </label>
+                  <label class="reqdoc-dlg-field">
+                    <span>分类（可选）</span>
+                    <select id="newReqDocCategory"></select>
+                  </label>
                 </div>
-              </div>
-              <label class="reqdoc-dlg-field" id="newReqDocFormatField">
-                <span>正文格式</span>
-                <select id="newReqDocFormat">
-                  <option value="markdown">Markdown（默认，可导入导出）</option>
-                  <option value="html">富文本</option>
-                </select>
-              </label>
-              <label class="reqdoc-dlg-field" id="newReqDocFileField" hidden>
-                <span>选择文件</span>
-                <input id="newReqDocFile" type="file" accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
-                <small style="color:var(--text-3);display:block;margin-top:4px;">支持 Word（.docx / .doc）、Markdown、TXT、HTML；导入后可继续在线编辑</small>
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>上级文档</span>
-                <select id="newReqDocParent">
-                  <option value="">无（作为顶层文档）</option>
-                </select>
-              </label>
+                <label class="reqdoc-dlg-field">
+                  <span>上级文档（可选）</span>
+                  <select id="newReqDocParent">
+                    <option value="">无（作为顶层文档）</option>
+                  </select>
+                </label>
+                <p class="nd-path" id="newReqDocPath"></p>
+              </section>
+
+              <section class="nd-sec">
+                <div class="nd-sec-h"><span class="nd-sec-no">3</span>从哪里开始</div>
+                <div class="nd-src" id="newReqDocSource" role="group" aria-label="从哪里开始">
+                  <button type="button" data-docsrc="blank" aria-pressed="true"><b>空白文档</b><small>直接写正文</small></button>
+                  <button type="button" data-docsrc="template" aria-pressed="false"><b>使用模板</b><small>套用现成骨架</small></button>
+                  <button type="button" data-docsrc="file" aria-pressed="false"><b>导入文件</b><small>先预览再导入</small></button>
+                </div>
+                <div class="nd-src-body" id="newReqDocBlankBody">
+                  <label class="reqdoc-dlg-field">
+                    <span>正文格式</span>
+                    <select id="newReqDocFormat">
+                      <option value="markdown">Markdown（默认，可导入导出）</option>
+                      <option value="html">富文本</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="nd-src-body" id="newReqDocTemplateBody" hidden>
+                  <label class="reqdoc-dlg-field">
+                    <span>模板</span>
+                    <select id="newReqDocTemplate">
+                      <option value="">空白文档</option>
+                    </select>
+                    <small>模板自带的类型与格式会一并套用</small>
+                  </label>
+                </div>
+                <div class="nd-src-body" id="newReqDocFileBody" hidden>
+                  <label class="doc-pick">
+                    <span>选择文件</span>
+                    <input id="newReqDocFile" type="file" accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
+                    <small>支持 Word（.docx / .doc）、Markdown、TXT、HTML；选择后会先预览，确认无误再导入</small>
+                  </label>
+                  <div class="doc-import-inline" id="newReqDocPreview" hidden>
+                    <div class="doc-import-inline-bar">
+                      <span id="newReqDocPreviewMeta"></span>
+                      <span class="doc-import-inline-sp"></span>
+                      <button class="link-btn" type="button" id="newReqDocPreviewReset">重新选择</button>
+                    </div>
+                    <iframe id="newReqDocPreviewFrame" sandbox="" title="文件导入预览"></iframe>
+                  </div>
+                </div>
+              </section>
+
+              <details class="nd-more" id="newReqDocMore">
+                <summary><span>更多设置</span><i id="newReqDocMoreSum"></i></summary>
+                <div class="nd-more-body" id="newReqDocVisMount">
+                  <label class="reqdoc-dlg-field">
+                    <span>类型<em>文档性质，只影响列表徽标与模板推荐</em></span>
+                    <select id="newReqDocType"></select>
+                  </label>
+                </div>
+              </details>
             </div>
             <div class="reqdoc-dlg-foot">
               <button class="btn" type="button" id="dlgNewReqDocCancel">取消</button>
               <button class="btn primary" type="button" id="dlgNewReqDocOk">新建并编辑</button>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 文档模板：内置模板只读，自定义模板仅空间主 / 管理员可维护 -->
+        <div class="modal-layer side" id="dlgDocTpl" role="dialog" aria-modal="true" aria-labelledby="dlgDocTplTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="dlgDocTplTitle">文档模板</h3><button class="icon-btn sm" type="button" id="dlgDocTplX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <p class="foot-note">新建文档时可选用这里的正文骨架；内置模板由系统提供，不能删除。自定义模板仅空间主 / 管理员可维护，新建后立即出现在「使用模板」下拉里。</p>
+            <div class="cfg-list" id="docTplList"></div>
+            <div id="docTplAddBox" hidden>
+              <div class="cfg-add-head">新建自定义模板</div>
+              <div class="reqdoc-dlg-form doc-tpl-form">
+                <label class="reqdoc-dlg-field">
+                  <span>名称</span>
+                  <input id="docTplNewName" type="text" maxlength="20" placeholder="例如：接口联调记录" autocomplete="off" />
+                </label>
+                <div class="form-grid">
+                  <label class="reqdoc-dlg-field">
+                    <span>适用类型</span>
+                    <select id="docTplNewType"></select>
+                  </label>
+                  <label class="reqdoc-dlg-field">
+                    <span>正文格式</span>
+                    <select id="docTplNewFormat">
+                      <option value="markdown">Markdown</option>
+                      <option value="html">富文本</option>
+                    </select>
+                  </label>
+                </div>
+                <label class="reqdoc-dlg-field">
+                  <span>正文骨架</span>
+                  <textarea id="docTplNewContent" rows="8" placeholder="# 背景与目标&#10;&#10;# 方案概述&#10;&#10;# 结论"></textarea>
+                </label>
+              </div>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="docTplAddBtn">新建模板</button>
+              </div>
+            </div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn" type="button" id="dlgDocTplClose">关闭</button>
             </div>
           </div>
         </div></div></div>
@@ -1406,6 +1481,28 @@
               <button class="btn ghost" type="button" id="dlgReqDocCloseCancel">取消</button>
               <button class="btn" type="button" id="dlgReqDocCloseDiscard">不保存</button>
               <button class="btn primary" type="button" id="dlgReqDocCloseSave">保存并关闭</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 文件导入预览：Word / Markdown / TXT / HTML 选择后先看效果，确认才写入正文 -->
+        <div class="modal-layer" id="dlgDocImportPreview" role="dialog" aria-modal="true" aria-labelledby="dlgDocImportPreviewTitle">
+          <div class="sheet md">
+            <div class="sheet-body">
+              <div class="panel">
+                <div class="panel-head">
+                  <h3 id="dlgDocImportPreviewTitle">导入预览</h3>
+                  <button class="icon-btn sm" type="button" id="dlgDocImportPreviewX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button>
+                </div>
+                <p class="foot-note" id="docImportPreviewMeta"></p>
+                <div class="doc-import-preview">
+                  <iframe id="docImportPreviewFrame" sandbox="" title="导入预览"></iframe>
+                </div>
+              </div>
+              <div class="reqdoc-dlg-foot">
+                <button class="btn" type="button" id="dlgDocImportPreviewCancel">取消</button>
+                <button class="btn primary" type="button" id="dlgDocImportPreviewOk">确认导入</button>
+              </div>
             </div>
           </div>
         </div>
