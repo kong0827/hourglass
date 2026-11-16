@@ -115,7 +115,7 @@ var TABS = [
 var TAB_KEYS = TABS.map(function(t){ return t.key; });
 var SORTS = [["default","风险优先"],["actual","实际工时"],["estimate","预估工时"],["due","截止日期"],["title","标题"]];
 var SORT_KEYS = SORTS.map(function(s){ return s[0]; });
-var STATUS_FILTERS = [["","全部状态"],["done","已完成"],["open","未完成"],["over","已逾期"],["pre","上线前归入"]];
+var STATUS_FILTERS = [["","全部状态"],["done","已完成"],["moving","进行中"],["idle","未开始"],["open","未完成"],["over","已逾期"],["pre","上线前归入"]];
 var TYPE_FILTERS = [["","全部类型"],["story","需求"],["task","任务"],["bug","缺陷"],["epic","史诗"]];
 var ROLL_DIMS = [["module","模块"],["owner","负责人"],["stage","计时窗口"]];
 var NONE = "__none__";
@@ -612,7 +612,9 @@ function progressPanel(){
     return '<i style="width:' + (g.n * 100 / total) + '%;background:' + g.color + '" title="' + esc(g.label + " " + g.n + " 项") + '"></i>';
   }).join("");
   var legend = seg.map(function(g){
-    return '<span class="vd-lg"><i style="background:' + g.color + '"></i>' + esc(g.label) + ' <b>' + g.n + '</b></span>';
+    if(!g.n) return "";
+    return '<button class="vd-lg vd-lg-btn" type="button" data-vd-drill="' + g.key + '" title="在工作项页查看「' + esc(g.label) + '」明细">'
+      + '<i style="background:' + g.color + '"></i>' + esc(g.label) + ' <b>' + g.n + '</b></button>';
   }).join("");
   /* 百分比是完成率，色条是范围构成：两者口径不同，各自标注，避免「0% 却填了大半」的误读 */
   var aria = seg.map(function(g){ return g.label + " " + g.n + " 项"; }).join("，");
@@ -623,7 +625,7 @@ function progressPanel(){
       + '<span class="vd-bar" role="img" aria-label="' + esc("范围构成：" + aria) + '">' + bar + '</span></span>'
       + '</div>'
       + '<div class="vd-legend">' + legend
-      + (over ? '<button class="vd-lg vd-lg-btn" type="button" data-vd-drill="over"><i style="background:var(--danger)"></i>已逾期 <b>' + over + '</b></button>' : "")
+      + (over ? '<button class="vd-lg vd-lg-btn vd-lg-danger" type="button" data-vd-drill="over" title="在工作项页查看「已逾期」明细"><i style="background:var(--danger)"></i>已逾期 <b>' + over + '</b></button>' : "")
       + '</div>'
     : '<p class="hint">该版本还没有工作项，先在「管理范围」里绑定，或在工作项抽屉里选择计划版本。</p>');
   return panel("范围进度", '<span class="meta-right">' + (total ? done + " / " + total + " 项已完成" : "") + '</span>', inner);
@@ -861,6 +863,8 @@ function filteredTasks(){
   var rows = st.tasks.filter(function(t){
     if(f.status === "done" && !isDone(t)) return false;
     if(f.status === "open" && isDone(t)) return false;
+    if(f.status === "moving" && (isDone(t) || actOf(t) <= 0)) return false;
+    if(f.status === "idle" && (isDone(t) || actOf(t) > 0)) return false;
     if(f.status === "over" && !isOver(t)) return false;
     if(f.status === "pre" && !t._pre) return false;
     if(f.owner && (f.owner === NONE ? (t.owner || "").trim() !== "" : (t.owner || "").trim() !== f.owner)) return false;
@@ -1190,6 +1194,8 @@ function drill(kind){
     f.sort = "actual";
   }
   else if(kind === "done") f.status = "done";
+  else if(kind === "moving") f.status = "moving";
+  else if(kind === "idle") f.status = "idle";
   else if(kind === "open") f.status = "open";
   else if(kind === "over") f.status = "over";
   else if(kind === "logged") f.sort = "actual";

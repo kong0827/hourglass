@@ -5,7 +5,7 @@
    页面导航（index.html）仍网络优先，发布换版后第一次导航就能拿到新外壳。
    !! 缓存优先不会发现同名文件的新内容：只要前端文件有改动，发布时必须升 CACHE_NAME，
    否则 sw.js 不变、浏览器不会更新 SW，用户会一直拿旧 JS。 */
-var CACHE_NAME = "hourglass-shell-v257";
+var CACHE_NAME = "hourglass-shell-v258";
 var SHELL = [
   "./",
   "index.html",
