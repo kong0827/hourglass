@@ -58,6 +58,7 @@
 <link rel="modulepreload" href="js/core/layout.js" />
 <link rel="modulepreload" href="js/core/list-density.js" />
 <link rel="modulepreload" href="js/core/list-preferences.js" />
+<link rel="modulepreload" href="js/core/mention-picker.js" />
 <link rel="modulepreload" href="js/core/mobile-rules.js" />
 <link rel="modulepreload" href="js/core/nav-telemetry.js" />
 <link rel="modulepreload" href="js/core/no-autofill.js" />
@@ -386,7 +387,7 @@
         </div>
 
         <div class="fgroup" id="fgMore" style="position:relative">
-          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="moreFilterMenu" title="更多筛选：模块、标签、类型、版本、截止与开始日期、完成情况">
+          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="moreFilterMenu" title="更多筛选：模块、标签、类型、版本、截止与开始日期、完成情况、发布态">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
             更多筛选 <span class="n" id="moreFilterCount" hidden>0</span>
           </button>
@@ -402,6 +403,7 @@
         <div class="fgroup" id="fgVersion" hidden><span class="chips" id="chipsVersion"></span></div>
         <div class="fgroup" id="fgDate" hidden><span class="chips" id="chipsDate"></span></div>
         <div class="fgroup" id="fgCompletion" hidden><span class="chips" id="chipsCompletion"></span></div>
+        <div class="fgroup" id="fgPubState" hidden><span class="chips" id="chipsPubState"></span></div>
         <div class="fgroup" id="fgBlocked" hidden><span class="chips" id="chipsBlocked"></span></div>
         <div class="fgroup" id="fgQuery" hidden><span class="chips" id="chipsQuery"></span></div>
         <!-- 四个高频维度直接在按钮上回显选中值，不再重复生成 chip；保留容器兼容旧渲染 -->
@@ -1216,9 +1218,6 @@
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
               </button>
-              <button class="btn sm ghost" type="button" id="reqDocPublish" title="草稿仅作者与空间管理员可见；发布后项目成员可见">
-                <span data-icon="eye"></span>&nbsp;发布
-              </button>
               <button class="btn sm ghost" type="button" id="reqDocShare" title="生成只读分享链接（需先发布）">
                 <span data-icon="link"></span>&nbsp;分享
               </button>
@@ -1242,9 +1241,16 @@
                   <button class="menu-item" type="button" id="reqDocCopy"><span data-icon="copy"></span>复制正文</button>
                   <button class="menu-item" type="button" id="reqDocPrint"><span data-icon="print"></span>打印 / 导出 PDF</button>
                   <div class="menu-sep"></div>
+                  <button class="menu-item" type="button" id="reqDocUnpublish" title="收回后仅作者与空间管理员可见，已生成的分享链接同时失效；收回不影响继续编辑" hidden><span data-icon="ban"></span>收回发布</button>
                   <button class="menu-item danger" type="button" id="reqDocDelete">删除文档</button>
                 </div>
               </span>
+              <span class="reqdoc-pub-chip" id="reqDocPubChip" hidden title="已发布，项目成员可查看；收回发布在「更多」菜单">
+                <span data-icon="check"></span>&nbsp;已发布
+              </span>
+              <button class="btn sm soft" type="button" id="reqDocPublish" title="发布后项目成员可见（当前草稿仅你与管理员可见；发布后仍可继续编辑）">
+                <span data-icon="eye"></span>&nbsp;发布
+              </button>
               <button class="btn sm primary" type="button" id="reqDocSave">保存</button>
             </span>
             <input type="file" id="reqDocImportFile" hidden accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
@@ -1343,11 +1349,22 @@
         <div class="modal-layer side" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle"><div class="sheet reqdoc-new-sheet"><div class="sheet-body proj-dlg-body">
           <div class="panel">
             <div class="panel-head"><h3 id="dlgNewReqDocTitle">新建文档</h3><button class="icon-btn sm" type="button" id="dlgNewReqDocX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <p class="nd-ctx" id="newReqDocCtx"></p>
             <div class="reqdoc-dlg-form nd-form">
+              <div class="cf-errsum" id="newReqDocErr" role="alert" hidden>
+                <span class="cf-ei" aria-hidden="true">!</span>
+                <div>
+                  <b>还有 1 处需要处理</b>
+                  <div class="cf-errlinks"><button type="button" id="newReqDocErrTitle">文档名称：请填写文档名称</button></div>
+                </div>
+              </div>
               <section class="nd-sec">
                 <div class="nd-sec-h"><span class="nd-sec-no">1</span>文档名称</div>
                 <input id="newReqDocTitle" class="nd-title" type="text" maxlength="100" placeholder="例如：权限校验技术方案">
-                <p class="nd-sec-hint">只有名称必填；回车即可按默认创建，其余都能建好后再改。</p>
+                <div class="nd-subline">
+                  <span class="title-kbd"><span class="kbd">Enter</span> 直接创建并进入编辑</span>
+                  <span class="counter" id="newReqDocTitleCount">0/100</span>
+                </div>
               </section>
 
               <section class="nd-sec">
@@ -1358,10 +1375,13 @@
                     <select id="newReqDocProject"></select>
                     <small id="newReqDocProjHint">未选分类：可关联有权限的项目，或留空间级（关联可选）</small>
                   </label>
-                  <label class="reqdoc-dlg-field">
-                    <span>分类（可选）</span>
-                    <select id="newReqDocCategory"></select>
-                  </label>
+                  <div class="reqdoc-dlg-field" id="newReqDocCatField">
+                    <label for="newReqDocCategory">分类（可选）</label>
+                    <div class="nd-cat-row">
+                      <select id="newReqDocCategory"></select>
+                      <button class="btn sm add" type="button" id="newReqDocCatAdd" title="新建分类（选中分类时建为其子分类）">＋ 新建</button>
+                    </div>
+                  </div>
                 </div>
                 <label class="reqdoc-dlg-field">
                   <span>上级文档（可选）</span>
@@ -1370,6 +1390,7 @@
                   </select>
                 </label>
                 <p class="nd-path" id="newReqDocPath"></p>
+                <p class="nd-note">分类只影响归档位置，不改变所属项目；项目决定谁能在文档里关联用例与工作项。</p>
               </section>
 
               <section class="nd-sec">
@@ -1414,7 +1435,7 @@
                 </div>
               </section>
 
-              <details class="nd-more" id="newReqDocMore">
+              <details class="nd-more" id="newReqDocMore" open>
                 <summary><span>更多设置</span><i id="newReqDocMoreSum"></i></summary>
                 <div class="nd-more-body" id="newReqDocVisMount">
                   <label class="reqdoc-dlg-field">
@@ -1426,6 +1447,7 @@
             </div>
             <div class="reqdoc-dlg-foot">
               <button class="btn" type="button" id="dlgNewReqDocCancel">取消</button>
+              <button class="btn" type="button" id="dlgNewReqDocCreateOnly">仅创建</button>
               <button class="btn primary" type="button" id="dlgNewReqDocOk">新建并编辑</button>
             </div>
           </div>
@@ -1476,10 +1498,11 @@
         <div class="modal-layer" id="dlgReqDocClose" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocCloseTitle">
           <div class="sheet reqdoc-dlg">
             <h3 class="reqdoc-dlg-title" id="dlgReqDocCloseTitle">有未保存的修改</h3>
-            <p class="reqdoc-dlg-msg">关闭前要保存这次编辑吗？</p>
+            <p class="reqdoc-dlg-msg" id="dlgReqDocCloseMsg">关闭前要保存这次编辑吗？</p>
             <div class="reqdoc-dlg-foot">
               <button class="btn ghost" type="button" id="dlgReqDocCloseCancel">取消</button>
               <button class="btn" type="button" id="dlgReqDocCloseDiscard">不保存</button>
+              <button class="btn" type="button" id="dlgReqDocCloseSaveDraft" hidden>存为草稿并关闭</button>
               <button class="btn primary" type="button" id="dlgReqDocCloseSave">保存并关闭</button>
             </div>
           </div>
@@ -1852,7 +1875,7 @@
                   <label for="cTitle">用例标题 <span class="req">*</span></label>
                   <input id="cTitle" class="cf-title" type="text" maxlength="100" placeholder="一句话说清验证什么" autocomplete="off" aria-required="true" aria-describedby="cTitleHelp cTitleErr" />
                   <div class="cf-subline">
-                    <p class="cf-help" id="cTitleHelp">写成「对象 + 条件 + 预期」，执行的人不用回头问。</p>
+                    <p class="cf-help" id="cTitleHelp">写成「对象 + 条件 + 预期」，执行的人不用回头问。<span class="cf-kbd">Enter</span> 保存</p>
                     <span class="cf-count" id="cTitleCount">0 / 100</span>
                   </div>
                   <span class="err" id="cTitleErr" aria-live="polite">请填写用例标题</span>
@@ -1884,6 +1907,8 @@
                       <span class="cf-tag" id="cModuleTag" hidden></span>
                       <button class="cf-link" type="button" id="cModuleInherit" hidden>恢复继承</button>
                       <button class="cf-link" type="button" id="cModuleNew">＋ 子目录</button>
+                      <p class="cf-help cf-pathline" id="cModulePath" hidden></p>
+                      <p class="cf-help cf-modnote">模块是项目内的目录，只影响归类；选它不会改变所属项目。</p>
                     </div>
                   </div>
                   <div class="cf-nest-row">
@@ -1905,7 +1930,7 @@
 
               <!-- 03 属性：都有默认值 -->
               <section class="cf-sec">
-                <div class="cf-sec-h"><span class="cf-num" aria-hidden="true">03</span><h3>分类属性</h3><span class="cf-meta">不改也能保存</span></div>
+                <div class="cf-sec-h"><span class="cf-num" aria-hidden="true">03</span><h3>分类属性</h3><span class="cf-meta">默认 P2 · 可改</span></div>
                 <div class="cf-attrs">
                   <div class="cf-attr">
                     <span class="cf-attr-lab" id="cPriLab">优先级</span>
@@ -1928,7 +1953,7 @@
               </section>
 
               <details class="cf-more" id="caseMore">
-                <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>更多字段<span class="cf-more-meta">前置条件 · 测试数据 · 选填</span></summary>
+                <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>更多字段<span class="cf-more-meta" id="caseMoreMeta">未填 · 选填</span></summary>
                 <div class="cf-more-body">
                   <div class="field">
                     <label for="cPrecondition">前置条件</label>
@@ -1943,9 +1968,10 @@
 
               <p class="foot-note" id="caseReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
               <div class="cf-foot" id="caseSaveRow">
-                <span class="cf-save-note"><i aria-hidden="true"></i>保存后可继续记录执行与转缺陷</span>
+                <span class="cf-save-note"><i aria-hidden="true"></i>保存后可在详情补步骤、记录执行与转缺陷</span>
                 <span class="cf-foot-grow"></span>
                 <button class="btn ghost" type="button" id="caseEditBack">取消</button>
+                <button class="btn" type="button" id="btnSaveCaseAgain">保存并再建一条</button>
                 <button class="btn primary" type="button" id="btnSaveCase">保存</button>
               </div>
             </div>

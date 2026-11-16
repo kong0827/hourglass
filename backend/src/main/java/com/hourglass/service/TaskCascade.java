@@ -59,7 +59,8 @@ public class TaskCascade {
             "task_baseline",
             "version_task",
             "project_milestone_task",
-            "test_case_task"));
+            "test_case_task",
+            "task_publication_judgement"));
 
     /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失；
         req_doc_comment 保留评论正文，只解除「转为工作项」引用） */
@@ -89,6 +90,7 @@ public class TaskCascade {
             "task_dependency",
             "task_baseline",
             "gantt_share",
+            "task_publication_judgement",
             "task",
             "test_case_run",
             "test_case",
@@ -141,6 +143,8 @@ public class TaskCascade {
     private final DemandMapper demandMapper;
     /** 需求人工判定随需求池一起清理，备份格式暂不包含该表 */
     private final com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper;
+    /** 工作项发布人工标记随任务一起清理，备份格式暂不包含该表 */
+    private final com.hourglass.mapper.TaskPublicationJudgementMapper publicationJudgementMapper;
     /** 承诺基线快照随任务数据一起清：任务重建后旧基线的比较口径已失效 */
     private final com.hourglass.mapper.VersionCommitmentMapper versionCommitmentMapper;
     /** 里程碑条件引用任务：任务整体清空后条件不再成立，连同里程碑一起清 */
@@ -183,6 +187,7 @@ public class TaskCascade {
                        TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper,
                        com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper,
                        com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper,
+                       com.hourglass.mapper.TaskPublicationJudgementMapper publicationJudgementMapper,
                        com.hourglass.mapper.VersionCommitmentMapper versionCommitmentMapper,
                        com.hourglass.mapper.ProjectMilestoneMapper milestoneMapper,
                        com.hourglass.mapper.DeliveryNoteMapper deliveryNoteMapper,
@@ -220,6 +225,7 @@ public class TaskCascade {
         this.testCaseRunMapper = testCaseRunMapper;
         this.caseTaskMapper = caseTaskMapper;
         this.demandJudgementMapper = demandJudgementMapper;
+        this.publicationJudgementMapper = publicationJudgementMapper;
         this.versionCommitmentMapper = versionCommitmentMapper;
         this.milestoneMapper = milestoneMapper;
     }
@@ -343,6 +349,8 @@ public class TaskCascade {
         timeLogMapper.deleteByTaskIds(workspaceId, taskIds);
         attachmentService.deleteByTasks(workspaceId, taskIds);
         logMapper.deleteByTaskIds(workspaceId, taskIds);
+        /* 人工发布标记强归属工作项：任务行消失后保留会指向不存在的 ID */
+        publicationJudgementMapper.deleteByTasks(workspaceId, taskIds);
         /* 完成快照不随任务删除：任务清单是历史快照，彻底删除后仍保留；
            ID 复用由 create() 里的 hasSnapshot 检查拦住。 */
         /* 第九轮审查 #1/#2：评论与应用内通知必须跟着任务一起清，否则已删除的任务 ID
@@ -382,6 +390,7 @@ public class TaskCascade {
         dependencyMapper.deleteByWorkspace(workspaceId);
         baselineMapper.deleteByWorkspace(workspaceId);
         ganttShareMapper.deleteByWorkspace(workspaceId);
+        publicationJudgementMapper.deleteByWorkspace(workspaceId);
         taskMapper.deleteAllByWorkspace(workspaceId);
         /* 任务整体清空后，用例上的缺陷任务引用一定失效；先解除再决定是否删用例。
            旧备份保留用例时也要解除，避免列表继续展示打不开的缺陷入口。 */

@@ -1931,6 +1931,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .head-txt{flex:1 1 auto;min-width:0;}
 .head-txt h2{flex:none;font-size:16px;font-weight:650;line-height:1.3;letter-spacing:-.01em;}
 .head-sub{font-size:11.5px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 头部「只有 X 必填」胶囊：先给底线，弱化在长句里被忽略 */
+.sub-only{display:inline-flex;align-items:center;height:17px;padding:0 6px;margin-left:2px;border-radius:var(--r-pill);
+  background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-weight:500;vertical-align:-2px;}
 .head-tools{flex:0 0 auto;display:flex;align-items:center;gap:7px;}
 .head-more-wrap{position:relative;}
 .head-more-wrap .menu{left:auto;right:0;top:calc(100% + 6px);min-width:190px;}
@@ -1949,6 +1952,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .title-foot{display:flex;align-items:center;gap:10px;min-height:17px;margin-top:2px;}
 .title-foot .err{flex:1 1 auto;display:none;font-size:11px;color:var(--danger-fg);line-height:1.5;}
 .title-wrap.invalid .title-foot .err{display:block;}
+.title-kbd{display:inline-flex;align-items:center;gap:2px;font-size:10.5px;color:var(--text-3);white-space:nowrap;}
+.kbd{display:inline-flex;align-items:center;height:16px;padding:0 4px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;background:var(--surface);font:500 10.5px/1 var(--font-mono);color:var(--text-2);}
+.task-errsum{margin-bottom:11px;}
 .counter{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;margin-left:auto;}
 .counter.near{color:var(--danger-fg);font-weight:650;}
 
@@ -1988,6 +1994,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .ctx-item{display:flex;flex-direction:column;gap:5px;min-width:0;}
 .ctx-item-wide{grid-column:1/-1;}
 .ctx-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:650;letter-spacing:.04em;color:var(--primary-fg);}
+.ctx-path{margin:0;font-size:11px;line-height:16px;color:var(--text-2);}
+.ctx-path b{font-weight:600;color:var(--text);}
+.ctx-note{margin:0;font-size:10.5px;line-height:15px;color:var(--text-3);}
 .ctx select{height:34px;padding:0 32px 0 10px;background-color:var(--surface);font-size:13px;}
 .auto{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:var(--success-fg);line-height:1;}
 .auto::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--success);}
@@ -2964,6 +2973,9 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .wi-meta-card [data-fact-jump="version"] .rf-k{background:var(--plum-soft);color:var(--plum-fg);}
 /* 文档入口与需求概览同色（信息蓝），区别于中性的附件 */
 .wi-meta-card [data-meta="docs"] .rf-k{background:var(--info-soft);color:var(--info-fg);}
+/* 阻塞：未阻塞时保持中性，只有真的被阻塞才染警示色 */
+.wi-meta-card .rf-block.is-blocked .rf-k{background:var(--warning-soft);color:var(--warning-fg);}
+.wi-meta-card .rf-block.is-blocked .rf-v{color:var(--warning-fg);font-weight:700;}
 .wi-facts .rf-meta-ico{display:inline-flex;flex:0 0 auto;color:inherit;}
 .wi-facts .rf-meta-ico svg{width:12px;height:12px;}
 /* 类型图标跟随标签块的绿色，形状仍区分故事/缺陷/史诗 */
@@ -3145,6 +3157,12 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 /* 与交付带同构：淡紫底 + 同强度描边，紫色只留给阶段胶囊/节点/进度线 */
 .read-card.test-card{border-color:color-mix(in srgb,var(--plum) 16%,var(--border));padding:11px 13px;
   background:color-mix(in srgb,var(--plum) 3%,var(--surface));}
+/* 读态阻塞卡：只在被阻塞时出现，不占常规工作项的信息位 */
+.read-card.read-blocked{border-color:var(--warning-border);padding:11px 13px;background:var(--warning-soft);}
+.read-card.read-blocked .read-card-head{margin-bottom:6px;}
+.read-card.read-blocked .read-card-head h3{color:var(--warning-fg);}
+.read-blocked-reason{margin:0;font-size:12.5px;line-height:1.6;color:var(--text);word-break:break-word;white-space:pre-wrap;}
+.read-card.read-blocked .foot-note{margin-top:5px;}
 .read-card.test-card .read-card-head{margin-bottom:8px;}
 .test-head-actions{margin-left:auto;display:flex;align-items:center;gap:10px;}
 .tf-hist-toggle{display:inline-flex;align-items:center;gap:5px;color:var(--text-3);}
@@ -3332,10 +3350,57 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .case-detail-tabs button.on{color:var(--text);border-bottom-color:var(--primary);font-weight:600;}
 .case-detail-tabs .cnt{margin-left:2px;font-size:11px;font-weight:500;color:var(--text-3);}
 .case-detail-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px 20px 24px;display:flex;flex-direction:column;gap:14px;}
-.case-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
-.case-fact{background:var(--surface);padding:9px 11px;display:flex;flex-direction:column;gap:3px;min-width:0;}
-.case-fact .k{font-size:11px;color:var(--text-3);}
-.case-fact .v{font-size:12.5px;color:var(--text);overflow-wrap:anywhere;}
+/* 关键信息小卡：只放优先级 / 执行人 / 最近执行；模块、需求、分组进下面的整宽归属区 */
+.case-keyrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.case-kcard{display:flex;flex-direction:column;gap:4px;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);}
+.case-kcard.is-edit{cursor:pointer;background:var(--surface);position:relative;}
+.case-kcard.is-edit:hover{border-color:var(--primary-border);background:var(--surface-hover);}
+.case-kcard.is-edit:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.case-kcard .kk{display:flex;align-items:center;font-size:11px;color:var(--text-3);}
+.case-kcard .kv{font-size:13px;font-weight:600;color:var(--text);overflow-wrap:anywhere;}
+.case-kcard .kv .muted{font-weight:400;}
+.case-kcard .case-seg{flex-wrap:wrap;}
+.case-kv-sub{margin-left:5px;font-size:11px;font-weight:400;color:var(--text-3);}
+/* 追溯 / 归类：标题在卡片外，卡片内一行一个维度，整宽展示路径与 chips */
+.case-sec{display:flex;flex-direction:column;gap:6px;}
+.case-sec-head{display:flex;align-items:center;gap:8px;padding:0 2px;min-height:20px;}
+.case-sec-head h4{margin:0;font-size:12px;font-weight:600;color:var(--text-2);}
+.case-sec-head .sub{font-size:11px;color:var(--text-3);}
+.case-sec-head .tag{margin-left:auto;font-size:11px;color:var(--text-3);}
+.case-sec-note{margin:0;padding:0 2px;font-size:11.5px;line-height:17px;color:var(--text-3);}
+.case-sec-note b{font-weight:600;color:var(--text-2);}
+.case-affil{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;}
+.case-affil-row{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:center;gap:10px;min-height:38px;padding:6px 12px;}
+.case-affil-row + .case-affil-row{border-top:1px solid var(--border);}
+.case-affil-row .ak{display:flex;align-items:center;white-space:nowrap;font-size:11.5px;color:var(--text-3);}
+.case-affil-row .av{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0;font-size:12.5px;line-height:19px;color:var(--text);}
+.case-affil-row .av b{font-weight:600;}
+.case-affil-row.is-edit{cursor:pointer;transition:background var(--dur-fast) var(--ease-out);}
+.case-affil-row.is-edit:hover{background:var(--surface-hover);}
+.case-affil-row.is-edit:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.case-affil-row.is-edit:hover .case-pencil{opacity:1;color:var(--primary-fg);}
+.case-affil-row.is-ro{background:var(--surface-sunken);}
+.case-affil-row.is-ro .av{color:var(--text-2);}
+.case-affil-row .case-select{height:30px;}
+.case-dtag{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;padding:1px 6px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:10.5px;color:var(--text-3);white-space:nowrap;}
+.case-ro-note{font-size:11.5px;color:var(--text-3);}
+.case-path-sep{color:var(--text-3);}
+.case-setchip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface-sunken);font-size:12px;color:var(--text-2);}
+.case-setchip .sh{font-size:10px;color:var(--text-3);}
+.case-affil-link{padding:0;border:0;background:none;color:var(--primary-fg);font:inherit;font-size:12px;cursor:pointer;}
+.case-affil-link:hover{text-decoration:underline;text-underline-offset:2px;}
+.case-empty-v{font-size:12px;color:var(--text-3);}
+/* 验证工作项：chips 带完成点；编辑态每项就地移除，末尾给挂载入口 */
+.case-witem{display:inline-flex;align-items:center;gap:6px;max-width:100%;height:26px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);font:inherit;font-size:12px;color:var(--text-2);}
+button.case-witem{cursor:pointer;}
+button.case-witem:hover{border-color:var(--primary-border);color:var(--text);}
+.case-witem .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.case-witem .x{display:inline-grid;place-items:center;width:16px;height:16px;margin:0 -3px 0 1px;padding:0;border:0;border-radius:var(--r-xs);background:none;color:var(--text-3);cursor:pointer;}
+.case-witem .x:hover{background:var(--surface-hover);color:var(--danger-fg);}
+.case-wadd{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 8px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:none;font:inherit;font-size:12px;color:var(--primary-fg);cursor:pointer;}
+.case-wadd:hover{background:var(--primary-soft);border-color:var(--primary-border);}
+.case-wdot{flex:0 0 auto;width:6px;height:6px;border-radius:50%;background:var(--border-strong);}
+.case-wdot.done{background:var(--success-fg);}
 .case-read-block{border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;background:var(--surface);}
 .case-read-block h4{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:8px;}
 .case-read-block h4 .btn{margin-left:auto;}
@@ -3347,20 +3412,15 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .case-last-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
 .case-assoc{display:flex;flex-wrap:wrap;gap:6px;}
 .case-empty{padding:22px 12px;text-align:center;font-size:12.5px;color:var(--text-3);}
-/* 事实区与字段说明：可改的格子给朝向与悬停，派生值只读并标注来源 */
-.case-fact-edit{cursor:pointer;position:relative;transition:background var(--dur-fast) var(--ease-out);}
-.case-fact-edit:hover{background:var(--surface-hover);}
-.case-fact-edit:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+/* 字段说明：可改的格子给朝向与悬停，派生值只读并标注来源 */
 .case-pencil{display:inline-flex;align-items:center;margin-left:6px;color:var(--text-3);opacity:.5;transition:opacity var(--dur-fast) var(--ease-out);vertical-align:-2px;}
-.case-fact-edit:hover .case-pencil{opacity:1;color:var(--primary-fg);}
+.case-kcard.is-edit:hover .case-pencil{opacity:1;color:var(--primary-fg);}
 .case-derived{margin-left:6px;padding:1px 5px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);font-size:10px;font-weight:500;letter-spacing:.02em;vertical-align:1px;}
 .case-hint-btn{width:15px;height:15px;margin-left:5px;padding:0;border:1px solid var(--border);border-radius:50%;background:var(--surface);color:var(--text-3);font-size:10px;font-weight:600;line-height:13px;text-align:center;cursor:pointer;vertical-align:-2px;}
 .case-hint-btn:hover{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft);}
 .case-hint-pop{padding:12px 14px;}
 .case-hint-pop .menu-title{margin:0 0 6px;}
 .case-hint-text{margin:0;font-size:12px;line-height:18px;color:var(--text-2);}
-.case-state-hint{display:flex;align-items:flex-start;gap:8px;margin:0;padding:9px 12px;border:1px solid var(--warning-border);border-radius:var(--r-md);background:var(--warning-soft);font-size:12px;line-height:18px;color:var(--text-2);}
-.case-state-hint svg{flex:0 0 auto;margin-top:2px;color:var(--warning-fg);}
 .case-link-btn{padding:0;border:0;background:none;color:var(--primary-fg);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
 .case-demand-title{overflow-wrap:anywhere;}
 .case-jump{display:inline-flex;align-items:center;margin-left:4px;padding:2px;border:0;border-radius:var(--r-xs);background:none;color:var(--text-3);cursor:pointer;vertical-align:-2px;}
@@ -3416,7 +3476,6 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .case-seg button:hover{color:var(--text);}
 .case-seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.08);}
 .case-select{width:100%;height:28px;padding:0 6px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);color:var(--text);font-size:12.5px;}
-.case-module-v{display:block;}
 .case-select:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
 .case-detail-foot{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface);}
 .case-detail-foot .grow{flex:1 1 auto;}
@@ -3439,11 +3498,16 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   .case-detail-head{padding:12px;}
   .case-detail-tabs{padding:0 8px;}
   .case-detail-body{padding:12px 12px 20px;}
-  .case-facts{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .case-keyrow{grid-template-columns:repeat(2,minmax(0,1fr));}
   .case-steps-head,.case-step-row{grid-template-columns:24px minmax(0,1fr) minmax(0,1fr) 44px;}
   .case-steps-grid.is-ro .case-steps-head,.case-steps-grid.is-ro .case-step-row{grid-template-columns:24px minmax(0,1fr) minmax(0,1fr);}
   .case-step-acts{flex-wrap:wrap;justify-content:center;padding:6px 2px;}
   .case-detail-foot{padding:10px 12px;}
+}
+@media (max-width:640px){
+  .case-keyrow{grid-template-columns:1fr;}
+  .case-affil-row{grid-template-columns:1fr;gap:3px;padding:8px 12px;}
+  .case-sec-head .tag{display:none;}
 }
 
 /* 需求详情：与工作项共用右侧抽屉外壳（审计 2026-11-13 P1） */
@@ -4730,12 +4794,13 @@ body.proj-reordering{cursor:grabbing;}
 .comment-item .ci-file:hover{border-color:var(--primary-border);color:var(--primary-fg);}
 .comment-item .ci-file .cf-name{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .comment-item .ci-file .cf-size{color:var(--text-3);font-variant-numeric:tabular-nums;}
-.comment-mention{
-  position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:20;padding:4px;
-  max-height:220px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-sm);box-shadow:var(--shadow-md);
+/* @ 候选浮层：挂在 body 上并用 fixed 定位，避免被抽屉 / 侧栏的滚动容器裁剪 */
+.mention-pop{
+  position:fixed;z-index:150;padding:4px;overflow-y:auto;overscroll-behavior:contain;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  box-shadow:var(--shadow-md);
 }
-.comment-mention[hidden]{display:none;}
+.mention-pop[hidden]{display:none;}
 .cm-item{
   display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:var(--r-xs);
   background:transparent;color:var(--text);font-size:13px;text-align:left;cursor:pointer;
@@ -5086,8 +5151,13 @@ body.proj-reordering{cursor:grabbing;}
 .reqdoc-cat .rr-rename:hover{color:var(--text);background:var(--surface-active);}
 /* 分组内暂无文档/分类时的占位（可写范围提示右击新建） */
 .reqdoc-cat-empty{padding:14px;text-align:center;font-size:12px;color:var(--text-3);border-top:1px solid var(--border);}
-/* 发布按钮：已发布时弱化为“收回发布” */
-#reqDocPublish.is-published{color:var(--warning-fg);}
+/* 已发布徽标：发布后按钮换成它，让「已保存 ≠ 已发布」一眼可见（收回发布在「更多」菜单） */
+.reqdoc-pub-chip{
+  display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;white-space:nowrap;
+  border:1px solid var(--success-border);border-radius:var(--r-xs);
+  background:var(--success-soft);color:var(--success-fg);font-size:12.5px;font-weight:600;
+}
+.reqdoc-pub-chip svg{width:14px;height:14px;}
 
 /* 编辑页：独立成页，无边框书写区（像笔记应用那样，不要方框） */
 .reqdoc-editpage{max-width:1480px;margin:0 auto;width:100%;padding:14px var(--content-pad) 0;cursor:text;}
@@ -5411,7 +5481,8 @@ body.proj-reordering{cursor:grabbing;}
 /* 宽屏阅读：收起左树，正文独占整栏（无正文可读时不生效，见 applyDocWideState） */
 .reqdoc-split.wide{grid-template-columns:minmax(0,1fr);}
 .reqdoc-split.wide .reqdoc-split-tree{display:none;}
-.reqdoc-split-tree{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:6px;max-height:calc(100vh - 170px);overflow:auto;}
+.reqdoc-split-tree{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:6px;max-height:calc(100vh - 170px);overflow:auto;
+  position:sticky;top:12px;overscroll-behavior:contain;}
 .rs-proj{display:flex;flex-direction:column;}
 .rs-proj-head{display:flex;align-items:center;gap:6px;width:100%;padding:7px 8px;border:none;background:transparent;border-radius:var(--r-xs);cursor:pointer;font-family:inherit;text-align:left;}
 .rs-proj-head:hover{background:var(--surface-hover);}
@@ -5743,8 +5814,17 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .nd-sec-no{display:inline-flex;align-items:center;justify-content:center;flex:none;width:18px;height:18px;border-radius:50%;background:var(--surface-sunken);color:var(--text-2);font-size:11px;font-weight:650;}
 .nd-title{height:42px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:15px;font-weight:550;color:var(--text);}
 .nd-title:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+.nd-title.invalid{border-color:var(--danger);box-shadow:0 0 0 3px var(--danger-soft);}
+.nd-subline{display:flex;align-items:center;gap:8px;margin-top:-4px;min-height:16px;}
+.nd-subline .counter{margin-left:auto;}
+.nd-ctx .sub-only{vertical-align:-3px;}
+.nd-ctx{margin:-4px 0 0;font-size:11.5px;line-height:16px;color:var(--text-3);}
+.nd-note{margin:0;font-size:11.5px;line-height:1.5;color:var(--text-3);}
 .nd-sec-hint{margin:0;font-size:11.5px;line-height:1.5;color:var(--text-3);}
 .nd-loc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:0 14px;align-items:start;}
+.nd-cat-row{display:flex;gap:6px;align-items:center;}
+.nd-cat-row select{flex:1 1 auto;min-width:0;}
+.nd-cat-row .btn{flex:none;height:34px;}
 .nd-path{margin:0;min-height:18px;font-size:12px;line-height:1.5;color:var(--text-3);}
 .nd-path b{font-weight:550;color:var(--text-2);}
 .nd-path i{margin:0 6px;font-style:normal;color:var(--border-strong);}
@@ -8070,6 +8150,8 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .cf-subline{display:flex;align-items:flex-start;gap:12px;}
 .cf-subline .cf-help{flex:1 1 auto;}
 .cf-count{flex:none;font-size:11px;line-height:18px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.cf-ctx .cf-only{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-pill);background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-weight:500;}
+.cf-kbd{display:inline-flex;align-items:center;height:16px;padding:0 4px;margin:0 2px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;background:var(--surface);font:500 10.5px/1 var(--font-mono);color:var(--text-2);}
 .cf-rowlabel{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .cf-link{border:0;background:none;padding:0 2px;border-radius:4px;font:inherit;font-size:12px;font-weight:500;line-height:22px;color:var(--primary-fg);cursor:pointer;}
 .cf-link:hover{text-decoration:underline;}
@@ -8096,6 +8178,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .cf-nest-val{flex:1 1 auto;min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:30px;}
 .cf-nest #cModule{width:auto;min-width:170px;max-width:280px;height:30px;padding:0 30px 0 10px;font-size:12.5px;}
 .cf-nest .cf-task-val{display:block;flex:1 1 100%;padding-left:0;}
+.cf-pathline{flex:1 1 100%;margin-top:-2px;}
+.cf-pathline b{font-weight:500;color:var(--text-2);}
+.cf-modnote{flex:1 1 100%;margin-top:-4px;}
 .cf-tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;font-size:11px;font-weight:500;background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);}
 .cf-tag.ok{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
 .cf-tag.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
@@ -11468,7 +11553,7 @@ body.mob-sheet-open{overflow:hidden;}
 /* ===================== 其余视图收窄（390px 不横向滚动） ===================== */
 [data-layout="mobile"] .view-page,
 [data-layout="mobile"] .view-page.wide{max-width:100%;}
-[data-layout="mobile"] .reqdoc-split-tree{max-height:44vh;}
+[data-layout="mobile"] .reqdoc-split-tree{max-height:44vh;position:static;}
 [data-layout="mobile"] .rf-detail{max-width:140px;}
 [data-layout="mobile"] .rf-doc{flex:none;max-width:130px;}
 [data-layout="mobile"] .set-layout,
@@ -12663,6 +12748,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
 
 
 
+
 <!-- modulepreload:end -->
 </head>
 <body data-preview="1" data-view="board">
@@ -13785,9 +13871,6 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
               </button>
-              <button class="btn sm ghost" type="button" id="reqDocPublish" title="草稿仅作者与空间管理员可见；发布后项目成员可见">
-                <span data-icon="eye"></span>&nbsp;发布
-              </button>
               <button class="btn sm ghost" type="button" id="reqDocShare" title="生成只读分享链接（需先发布）">
                 <span data-icon="link"></span>&nbsp;分享
               </button>
@@ -13811,9 +13894,16 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                   <button class="menu-item" type="button" id="reqDocCopy"><span data-icon="copy"></span>复制正文</button>
                   <button class="menu-item" type="button" id="reqDocPrint"><span data-icon="print"></span>打印 / 导出 PDF</button>
                   <div class="menu-sep"></div>
+                  <button class="menu-item" type="button" id="reqDocUnpublish" title="收回后仅作者与空间管理员可见，已生成的分享链接同时失效；收回不影响继续编辑" hidden><span data-icon="ban"></span>收回发布</button>
                   <button class="menu-item danger" type="button" id="reqDocDelete">删除文档</button>
                 </div>
               </span>
+              <span class="reqdoc-pub-chip" id="reqDocPubChip" hidden title="已发布，项目成员可查看；收回发布在「更多」菜单">
+                <span data-icon="check"></span>&nbsp;已发布
+              </span>
+              <button class="btn sm soft" type="button" id="reqDocPublish" title="发布后项目成员可见（当前草稿仅你与管理员可见；发布后仍可继续编辑）">
+                <span data-icon="eye"></span>&nbsp;发布
+              </button>
               <button class="btn sm primary" type="button" id="reqDocSave">保存</button>
             </span>
             <input type="file" id="reqDocImportFile" hidden accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
@@ -13912,11 +14002,22 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
         <div class="modal-layer side" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle"><div class="sheet reqdoc-new-sheet"><div class="sheet-body proj-dlg-body">
           <div class="panel">
             <div class="panel-head"><h3 id="dlgNewReqDocTitle">新建文档</h3><button class="icon-btn sm" type="button" id="dlgNewReqDocX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <p class="nd-ctx" id="newReqDocCtx"></p>
             <div class="reqdoc-dlg-form nd-form">
+              <div class="cf-errsum" id="newReqDocErr" role="alert" hidden>
+                <span class="cf-ei" aria-hidden="true">!</span>
+                <div>
+                  <b>还有 1 处需要处理</b>
+                  <div class="cf-errlinks"><button type="button" id="newReqDocErrTitle">文档名称：请填写文档名称</button></div>
+                </div>
+              </div>
               <section class="nd-sec">
                 <div class="nd-sec-h"><span class="nd-sec-no">1</span>文档名称</div>
                 <input id="newReqDocTitle" class="nd-title" type="text" maxlength="100" placeholder="例如：权限校验技术方案">
-                <p class="nd-sec-hint">只有名称必填；回车即可按默认创建，其余都能建好后再改。</p>
+                <div class="nd-subline">
+                  <span class="title-kbd"><span class="kbd">Enter</span> 直接创建并进入编辑</span>
+                  <span class="counter" id="newReqDocTitleCount">0/100</span>
+                </div>
               </section>
 
               <section class="nd-sec">
@@ -13927,10 +14028,13 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                     <select id="newReqDocProject"></select>
                     <small id="newReqDocProjHint">未选分类：可关联有权限的项目，或留空间级（关联可选）</small>
                   </label>
-                  <label class="reqdoc-dlg-field">
-                    <span>分类（可选）</span>
-                    <select id="newReqDocCategory"></select>
-                  </label>
+                  <div class="reqdoc-dlg-field" id="newReqDocCatField">
+                    <label for="newReqDocCategory">分类（可选）</label>
+                    <div class="nd-cat-row">
+                      <select id="newReqDocCategory"></select>
+                      <button class="btn sm add" type="button" id="newReqDocCatAdd" title="新建分类（选中分类时建为其子分类）">＋ 新建</button>
+                    </div>
+                  </div>
                 </div>
                 <label class="reqdoc-dlg-field">
                   <span>上级文档（可选）</span>
@@ -13939,6 +14043,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                   </select>
                 </label>
                 <p class="nd-path" id="newReqDocPath"></p>
+                <p class="nd-note">分类只影响归档位置，不改变所属项目；项目决定谁能在文档里关联用例与工作项。</p>
               </section>
 
               <section class="nd-sec">
@@ -13983,7 +14088,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                 </div>
               </section>
 
-              <details class="nd-more" id="newReqDocMore">
+              <details class="nd-more" id="newReqDocMore" open>
                 <summary><span>更多设置</span><i id="newReqDocMoreSum"></i></summary>
                 <div class="nd-more-body" id="newReqDocVisMount">
                   <label class="reqdoc-dlg-field">
@@ -13995,6 +14100,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
             </div>
             <div class="reqdoc-dlg-foot">
               <button class="btn" type="button" id="dlgNewReqDocCancel">取消</button>
+              <button class="btn" type="button" id="dlgNewReqDocCreateOnly">仅创建</button>
               <button class="btn primary" type="button" id="dlgNewReqDocOk">新建并编辑</button>
             </div>
           </div>
@@ -14045,10 +14151,11 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
         <div class="modal-layer" id="dlgReqDocClose" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocCloseTitle">
           <div class="sheet reqdoc-dlg">
             <h3 class="reqdoc-dlg-title" id="dlgReqDocCloseTitle">有未保存的修改</h3>
-            <p class="reqdoc-dlg-msg">关闭前要保存这次编辑吗？</p>
+            <p class="reqdoc-dlg-msg" id="dlgReqDocCloseMsg">关闭前要保存这次编辑吗？</p>
             <div class="reqdoc-dlg-foot">
               <button class="btn ghost" type="button" id="dlgReqDocCloseCancel">取消</button>
               <button class="btn" type="button" id="dlgReqDocCloseDiscard">不保存</button>
+              <button class="btn" type="button" id="dlgReqDocCloseSaveDraft" hidden>存为草稿并关闭</button>
               <button class="btn primary" type="button" id="dlgReqDocCloseSave">保存并关闭</button>
             </div>
           </div>
@@ -14421,7 +14528,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                   <label for="cTitle">用例标题 <span class="req">*</span></label>
                   <input id="cTitle" class="cf-title" type="text" maxlength="100" placeholder="一句话说清验证什么" autocomplete="off" aria-required="true" aria-describedby="cTitleHelp cTitleErr" />
                   <div class="cf-subline">
-                    <p class="cf-help" id="cTitleHelp">写成「对象 + 条件 + 预期」，执行的人不用回头问。</p>
+                    <p class="cf-help" id="cTitleHelp">写成「对象 + 条件 + 预期」，执行的人不用回头问。<span class="cf-kbd">Enter</span> 保存</p>
                     <span class="cf-count" id="cTitleCount">0 / 100</span>
                   </div>
                   <span class="err" id="cTitleErr" aria-live="polite">请填写用例标题</span>
@@ -14453,6 +14560,8 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                       <span class="cf-tag" id="cModuleTag" hidden></span>
                       <button class="cf-link" type="button" id="cModuleInherit" hidden>恢复继承</button>
                       <button class="cf-link" type="button" id="cModuleNew">＋ 子目录</button>
+                      <p class="cf-help cf-pathline" id="cModulePath" hidden></p>
+                      <p class="cf-help cf-modnote">模块是项目内的目录，只影响归类；选它不会改变所属项目。</p>
                     </div>
                   </div>
                   <div class="cf-nest-row">
@@ -14474,7 +14583,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
 
               <!-- 03 属性：都有默认值 -->
               <section class="cf-sec">
-                <div class="cf-sec-h"><span class="cf-num" aria-hidden="true">03</span><h3>分类属性</h3><span class="cf-meta">不改也能保存</span></div>
+                <div class="cf-sec-h"><span class="cf-num" aria-hidden="true">03</span><h3>分类属性</h3><span class="cf-meta">默认 P2 · 可改</span></div>
                 <div class="cf-attrs">
                   <div class="cf-attr">
                     <span class="cf-attr-lab" id="cPriLab">优先级</span>
@@ -14497,7 +14606,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
               </section>
 
               <details class="cf-more" id="caseMore">
-                <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>更多字段<span class="cf-more-meta">前置条件 · 测试数据 · 选填</span></summary>
+                <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>更多字段<span class="cf-more-meta" id="caseMoreMeta">未填 · 选填</span></summary>
                 <div class="cf-more-body">
                   <div class="field">
                     <label for="cPrecondition">前置条件</label>
@@ -14512,9 +14621,10 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
 
               <p class="foot-note" id="caseReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
               <div class="cf-foot" id="caseSaveRow">
-                <span class="cf-save-note"><i aria-hidden="true"></i>保存后可继续记录执行与转缺陷</span>
+                <span class="cf-save-note"><i aria-hidden="true"></i>保存后可在详情补步骤、记录执行与转缺陷</span>
                 <span class="cf-foot-grow"></span>
                 <button class="btn ghost" type="button" id="caseEditBack">取消</button>
+                <button class="btn" type="button" id="btnSaveCaseAgain">保存并再建一条</button>
                 <button class="btn primary" type="button" id="btnSaveCase">保存</button>
               </div>
             </div>
@@ -17340,8 +17450,21 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
               <div class="rf rf-edit rf-meta" data-fact-edit="tags" role="button" tabindex="0" title="点击修改标签">
                 <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg></span>标签</span><b class="rf-v rf-tags" id="rfTags">—</b>
               </div>
+              <div class="rf rf-edit rf-meta rf-block" data-fact-edit="blocked" role="button" tabindex="0" title="点击标记阻塞">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.4 17 16H3z"/><path d="M10 8v3.4M10 13.6h.01"/></svg></span>阻塞</span><b class="rf-v" id="rfBlocked">未阻塞</b>
+              </div>
             </div>
           </div>
+
+          <!-- 被阻塞时才出现：卡点原因与解除入口，常规工作项不占位 -->
+          <section class="read-card read-blocked" id="readBlockedCard" hidden>
+            <div class="read-card-head">
+              <h3>阻塞 / 卡点</h3>
+              <button class="link-btn" type="button" id="readBlockedClear">解除阻塞</button>
+            </div>
+            <p class="read-blocked-reason" id="readBlockedReason">—</p>
+            <p class="foot-note">阻塞期间该工作项上的计时已停止；看板卡片显示橙色条纹。</p>
+          </section>
 
           <!-- 测试交接：提测时间 / 测试负责人 / 测试时间窗；未指派时显式提示 -->
           <section class="read-card test-card" id="readTestCard" hidden>
@@ -17418,6 +17541,13 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
 
         <!-- 编辑态：保留完整字段，低频项折叠 -->
         <div class="drawer-edit-overview" id="drawerEditOverview">
+      <div class="cf-errsum task-errsum" id="taskErrSum" role="alert" hidden>
+        <span class="cf-ei" aria-hidden="true">!</span>
+        <div>
+          <b id="taskErrTitle">还有 1 处需要处理</b>
+          <div class="cf-errlinks" id="taskErrLinks"></div>
+        </div>
+      </div>
       <!-- 标题：最高优先级字段 -->
       <div class="title-wrap" id="fTitle">
         <div class="title-row">
@@ -17426,6 +17556,7 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
           <span class="req-chip">必填</span>
         </div>
         <div class="title-foot">
+          <span class="title-kbd"><span class="kbd">Enter</span> 保存</span>
           <span class="err">请填写工作项标题</span>
           <span class="counter" id="iTitleCount">0/60</span>
         </div>
@@ -17483,6 +17614,8 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
         <div class="ctx-item ctx-item-wide">
           <div class="ctx-label">模块</div>
           <div class="seg" id="segCat" role="group" aria-label="模块"></div>
+          <p class="ctx-path" id="catPathLine" hidden></p>
+          <p class="ctx-note" id="catNote" hidden>模块是项目内的目录，只影响归类；选它不会改变所属项目。</p>
         </div>
       </div>
 
@@ -17490,7 +17623,7 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
       <div class="task-detail-layout">
         <div class="task-detail-main stack">
           <section class="drawer-card">
-            <div class="drawer-card-head"><h3>内容</h3><span class="foot-note">只有标题必填</span></div>
+            <div class="drawer-card-head"><h3>内容</h3><span class="foot-note">描述与标签均为选填</span></div>
             <div class="field">
               <label class="field-label">描述</label>
               <div id="iDesc" style="min-height:120px"></div>
@@ -17970,7 +18103,6 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
             <div class="drawer-sect-body">
               <div class="comment-list" id="commentList"></div>
               <div class="comment-form">
-                <div class="comment-mention" id="commentMention" hidden></div>
                 <div class="comment-compose">
                   <textarea id="iComment" maxlength="500" placeholder="写下讨论、结论或卡点…（输入 @ 可提及成员，Ctrl/⌘ + Enter 发送）"></textarea>
                   <div class="comment-attach-chips" id="commentAttachChips" hidden></div>
@@ -18029,6 +18161,7 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
       <span class="hint" id="taskFormHint">保存后可拖动卡片调整状态与顺序</span>
       <button class="btn danger" type="button" id="btnDeleteTask" hidden>删除</button>
       <button class="btn" type="button" id="btnCancelTask">取消</button>
+      <button class="btn" type="submit" id="btnSaveTaskAgain" hidden>保存并再建一条</button>
       <button class="btn" type="submit" id="btnSaveTaskContinue" hidden title="保存后留在当前工作项，继续补充评论、检查项或时间">保存并继续</button>
       <button class="btn primary" type="submit" id="btnSaveTask">保存</button>
     </div>
@@ -18481,7 +18614,7 @@ var reqListEl = $("reqList");
 var reqExpanded = {};
 var iRemindTarget = $("iRemindTarget"), iBlocked = $("iBlocked"), iBlockedReason = $("iBlockedReason");
 var fComments = $("fComments"), commentList = $("commentList"), commentCount = $("commentCount"),
-    iComment = $("iComment"), btnCommentSend = $("btnCommentSend"), commentMention = $("commentMention"),
+    iComment = $("iComment"), btnCommentSend = $("btnCommentSend"),
     btnCommentAttach = $("btnCommentAttach"), iCommentFiles = $("iCommentFiles"),
     commentAttachChips = $("commentAttachChips"), commentAttachTip = $("commentAttachTip");
 var drawerNotice = $("drawerNotice"), drawerNoticeText = $("drawerNoticeText"),
@@ -22057,6 +22190,347 @@ function openPeoplePicker(cfg){
     close: function(){ if(UI.popOpen(el)) UI.closeAllPops(); }
   };
 }
+/* ---- core/mention-picker.js ---- */
+/* core/mention-picker · 评论框 @提及
+   候选浮层挂到 body 并用 fixed 定位：评论框通常位于抽屉 / 侧栏的滚动容器内，
+   绝对定位会被 overflow 裁掉（候选多时面板顶部整块被页签盖住）。
+   浮层优先出现在输入框上方，上方空间不足时翻到下方，并始终限制在视口内。 */
+
+var esc = esc2;
+var MAX_ITEMS = 50;
+var MAX_HEIGHT = 240;
+var RETRY_MS = 30000;
+var GAP = 6;
+var MIN_WIDTH = 260;
+var MAX_WIDTH = 420;
+/* 同一时刻只开一个候选框，避免两个评论框的下拉叠在一起 */
+var active = null;
+
+/* 与后端 Mentions 同口径：字母/数字/下划线视为名字的延续，中文按字母处理 */
+function isWordChar(ch){
+  return !!ch && (/[A-Za-z0-9_]/.test(ch) || ch.charCodeAt(0) > 127);
+}
+function hasMentionToken(text, name){
+  var token = "@" + name;
+  var from = 0;
+  while(true){
+    var at = text.indexOf(token, from);
+    if(at < 0) return false;
+    if(!isWordChar(text.charAt(at + token.length))) return true;
+    from = at + 1;
+  }
+}
+/* 中文没有词边界，"请@张三" 是自然写法；只有 ASCII 字母/数字/下划线前的 @ 视为邮箱 */
+function startBlocked(ch){
+  return !!ch && /[A-Za-z0-9_]/.test(ch);
+}
+
+/**
+ * @param {HTMLTextAreaElement} input 评论输入框
+ * @param {Object} opts
+ *   canOpen()            返回 false 时不弹候选（如只读）
+ *   excludeUserId        字符串或函数：候选里排除自己
+ *   loadMembers(force)   返回成员数组的 Promise（按空间 / 任务 / 文档可见范围）
+ */
+function createMentionPicker(input, opts){
+  if(!input) return null;
+  opts = opts || {};
+
+  var picked = [];
+  var members = [];
+  var loadState = "idle";   /* idle / loading / ready / error */
+  var loading = false;
+  var failedAt = 0;
+  var seq = 0;              /* reset 后丢弃迟到的成员响应 */
+  var layer = null;
+  var opened = false;
+  var items = [];
+  var index = 0;
+  var start = 0;
+  var end = 0;
+  var notice = "";
+  var frame = 0;
+  var blurTimer = 0;
+
+  function canOpen(){
+    return !opts.canOpen || !!opts.canOpen();
+  }
+  function selfId(){
+    var v = opts.excludeUserId;
+    return typeof v === "function" ? (v() || "") : (v || "");
+  }
+
+  function loadMembers(force){
+    if(!opts.loadMembers || loading) return;
+    if(!force && loadState === "ready") return;
+    /* 候选拉取失败后短暂退避，避免断网时每次输入都重试 */
+    if(!force && failedAt && Date.now() - failedAt < RETRY_MS) return;
+    loading = true;
+    loadState = "loading";
+    var my = seq;
+    if(opened) render();
+    var p;
+    try{
+      p = opts.loadMembers(force);
+    }catch(e){
+      p = Promise.reject(e);
+    }
+    Promise.resolve(p).then(function(list){
+      if(my !== seq) return;
+      loading = false;
+      failedAt = 0;
+      loadState = "ready";
+      members = list || [];
+      if(document.activeElement === input) detect();
+    }, function(){
+      if(my !== seq) return;
+      loading = false;
+      failedAt = Date.now();
+      loadState = "error";
+      if(document.activeElement === input) detect();
+    });
+  }
+
+  function ensureLayer(){
+    if(layer) return layer;
+    layer = document.createElement("div");
+    layer.className = "mention-pop";
+    layer.setAttribute("role", "listbox");
+    layer.hidden = true;
+    /* 按下时不抢焦点，否则 blur 先关面板，click 无法命中 */
+    layer.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    layer.addEventListener("click", function(e){
+      if(e.target.closest("[data-mp-retry]")){ loadMembers(true); return; }
+      var b = e.target.closest("[data-mp-idx]");
+      if(b) pick(Number(b.dataset.mpIdx));
+    });
+    document.body.appendChild(layer);
+    return layer;
+  }
+
+  function place(){
+    if(!opened || !layer) return;
+    if(!document.documentElement.contains(input)){ close(); return; }
+    var r = input.getBoundingClientRect();
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var width = Math.round(Math.min(Math.max(r.width, MIN_WIDTH), MAX_WIDTH, vw - 16));
+    var above = r.top - GAP - 8;
+    var below = vh - r.bottom - GAP - 8;
+    var openAbove = above >= 160 || above >= below;
+    var space = Math.max(openAbove ? above : below, 96);
+    layer.style.width = width + "px";
+    layer.style.left = Math.round(Math.max(8, Math.min(r.left, vw - width - 8))) + "px";
+    layer.style.maxHeight = Math.round(Math.min(MAX_HEIGHT, space)) + "px";
+    if(openAbove){
+      layer.style.top = "auto";
+      layer.style.bottom = Math.round(vh - r.top + GAP) + "px";
+    }else{
+      layer.style.bottom = "auto";
+      layer.style.top = Math.round(r.bottom + GAP) + "px";
+    }
+  }
+
+  function onViewportChange(){
+    if(frame) return;
+    frame = requestAnimationFrame(function(){
+      frame = 0;
+      place();
+    });
+  }
+
+  function close(){
+    opened = false;
+    items = [];
+    index = 0;
+    notice = "";
+    if(layer) layer.hidden = true;
+    if(active === api) active = null;
+    window.removeEventListener("scroll", onViewportChange, true);
+    window.removeEventListener("resize", onViewportChange);
+  }
+
+  function open(nextItems, st, en, nt){
+    if(active && active !== api) active.close();
+    active = api;
+    opened = true;
+    items = nextItems || [];
+    index = 0;
+    start = st;
+    end = en;
+    notice = nt || "";
+    render();
+    window.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("resize", onViewportChange);
+  }
+
+  function render(){
+    ensureLayer();
+    layer.hidden = !opened;
+    if(!opened) return;
+    if(!items.length){
+      layer.innerHTML = '<div class="cm-empty"' +
+        (loadState === "error" ? ' data-mp-retry="1" role="button" tabindex="0"' : '') +
+        '>' + esc(notice || "") + '</div>';
+      place();
+      return;
+    }
+    layer.innerHTML = items.map(function(m, i){
+      return '<button type="button" class="cm-item' + (i === index ? " on" : "") + '" data-mp-idx="' + i + '" role="option" aria-selected="' + (i === index) + '">' +
+        avatarHTML(m.displayName, "sm") +
+        '<span class="cm-name ellipsis">' + esc(m.displayName) + '</span>' +
+        (m.username ? '<span class="cm-user">@' + esc(m.username) + '</span>' : '') +
+      '</button>';
+    }).join("");
+    place();
+    var on = layer.querySelector(".cm-item.on");
+    if(on && on.scrollIntoView) on.scrollIntoView({ block: "nearest" });
+  }
+
+  function remember(m){
+    for(var i = 0; i < picked.length; i++){
+      if(picked[i].userId === m.userId) return;
+    }
+    picked.push({ userId: m.userId, displayName: m.displayName });
+  }
+
+  function pick(i){
+    var m = items[i];
+    if(!m) return;
+    remember(m);
+    var insert = "@" + m.displayName + " ";
+    input.value = input.value.slice(0, start) + insert + input.value.slice(end);
+    var caret = start + insert.length;
+    close();
+    try{
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    }catch(e){ /* noop */ }
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function move(step){
+    var n = items.length;
+    if(!n) return;
+    index = (index + step + n) % n;
+    render();
+  }
+
+  /* 中文输入法常打出全角 ＠，统一成半角，否则前端不触发、后端也解析不到 */
+  function normalizeFullWidth(){
+    if(input.value.indexOf("＠") < 0) return;
+    var caret = input.selectionStart;
+    input.value = input.value.replace(/＠/g, "@");
+    try{ input.setSelectionRange(caret, caret); }catch(e){ /* noop */ }
+  }
+
+  function detect(){
+    if(!canOpen()){ close(); return; }
+    loadMembers();
+    var caret = input.selectionStart;
+    if(caret == null) caret = input.value.length;
+    var before = input.value.slice(0, caret);
+    var at = before.lastIndexOf("@");
+    if(at < 0 || startBlocked(before.charAt(at - 1))){ close(); return; }
+    var query = before.slice(at + 1);
+    if(/\s/.test(query)){ close(); return; }
+    var self = selfId();
+    var q = query.toLowerCase();
+    var list = members.filter(function(m){
+      if(!m || !m.userId || !m.displayName) return false;
+      if(self && m.userId === self) return false;
+      return (m.displayName || "").toLowerCase().indexOf(q) >= 0
+        || (m.username || "").toLowerCase().indexOf(q) >= 0;
+    }).slice(0, MAX_ITEMS);
+    var nt = "";
+    if(loadState !== "ready"){
+      nt = loadState === "error" ? "成员加载失败，点击重试" : "正在加载成员…";
+    }else if(!list.length && !q){
+      nt = "暂无可提及的成员";
+    }
+    if(!list.length && !nt){ close(); return; }
+    open(list, at, caret, nt);
+  }
+
+  function onKeydown(e){
+    if(!opened) return;
+    if(e.isComposing || e.keyCode === 229) return;
+    /* Ctrl/⌘ + Enter 是发送评论，留给业务快捷键 */
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    if(e.key === "ArrowDown"){ e.preventDefault(); e.stopImmediatePropagation(); move(1); return; }
+    if(e.key === "ArrowUp"){ e.preventDefault(); e.stopImmediatePropagation(); move(-1); return; }
+    /* 只有真正有候选时才把 Enter / Tab 交给选择，加载与失败提示态下回车仍按普通换行处理 */
+    if((e.key === "Enter" || e.key === "Tab") && items.length){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      pick(index);
+      return;
+    }
+    if(e.key === "Escape"){ e.stopImmediatePropagation(); close(); }
+  }
+
+  function onInput(e){
+    if(e && e.isComposing) return;
+    if(!canOpen()){ close(); return; }
+    normalizeFullWidth();
+    detect();
+  }
+
+  function onFocus(){
+    if(!canOpen()) return;
+    loadMembers();
+  }
+
+  function onBlur(){
+    blurTimer = setTimeout(close, 120);
+  }
+
+  var api = {
+    close: close,
+    /* 切换任务 / 文档时调用：丢弃旧候选与已点选成员 */
+    reset: function(){
+      seq++;
+      loading = false;
+      failedAt = 0;
+      loadState = "idle";
+      members = [];
+      picked = [];
+      close();
+    },
+    /* 评论发送后只清点选记录，候选成员仍可复用 */
+    clearPicked: function(){ picked = []; },
+    /* 只把仍留在正文里的点选成员发给后端：删掉 @名字 后不应再通知 */
+    idsInText: function(text){
+      return picked.filter(function(p){
+        return hasMentionToken(text, p.displayName);
+      }).map(function(p){ return p.userId; });
+    },
+    isOpen: function(){ return opened; },
+    refreshMembers: function(){ loadMembers(true); },
+    destroy: function(){
+      close();
+      clearTimeout(blurTimer);
+      input.removeEventListener("focus", onFocus);
+      input.removeEventListener("input", onInput);
+      input.removeEventListener("click", detect);
+      input.removeEventListener("blur", onBlur);
+      input.removeEventListener("keydown", onKeydown);
+      if(layer && layer.parentNode) layer.parentNode.removeChild(layer);
+      layer = null;
+    }
+  };
+
+  input.addEventListener("focus", onFocus);
+  input.addEventListener("input", onInput);
+  input.addEventListener("click", detect);
+  input.addEventListener("blur", onBlur);
+  /* keydown 在这里注册，业务侧后注册的发送快捷键排在它后面，
+     Enter/Tab 被消费时用 stopImmediatePropagation 拦住 */
+  input.addEventListener("keydown", onKeydown);
+  return api;
+}
+
 /* ---- core/transitions.js ---- */
 /* core/transitions · 状态流转矩阵：规则缓存、移动前判定、原因弹窗 */
 
@@ -24399,6 +24873,7 @@ window.addEventListener("ds:running-timer", function(){
 
 
 
+
 var copyToClipboard = copyText; var esc = esc2;
 
 
@@ -24507,6 +24982,7 @@ function setDrawerMode(mode){
   if(mode === "read" && !rt.editingId) mode = "edit";
   drawerMode = mode;
   var isRead = mode === "read";
+  if(rt.editingId) showTaskErrors([]);
   var root = taskDrawer.querySelector(".drawer");
   if(root) root.classList.toggle("read-mode", isRead);
   var readBox = $("drawerReadOverview"), editBox = $("drawerEditOverview");
@@ -24522,6 +24998,8 @@ function setDrawerMode(mode){
   if(taskDrawerTitle) taskDrawerTitle.title = isRead ? "点击编辑工作项" : "";
   if(btnSaveTask) btnSaveTask.hidden = isRead || rt.drawerReadOnly;
   if(btnSaveTaskContinue) btnSaveTaskContinue.hidden = isRead || rt.drawerReadOnly || !rt.editingId;
+  var againBtn = $("btnSaveTaskAgain");
+  if(againBtn) againBtn.hidden = isRead || rt.drawerReadOnly || !!rt.editingId;
   if(btnDeleteTask) btnDeleteTask.hidden = rt.drawerReadOnly || !rt.editingId;
   var cancelBtn = $("btnCancelTask");
   if(cancelBtn) cancelBtn.textContent = isRead ? "关闭" : "取消";
@@ -25249,6 +25727,11 @@ function setSaveLoading(loading){
       btnSaveTaskContinue.disabled = true;
       btnSaveTaskContinue.classList.add("loading");
     }
+    var againBtnLoading = $("btnSaveTaskAgain");
+    if(againBtnLoading){
+      againBtnLoading.disabled = true;
+      againBtnLoading.classList.add("loading");
+    }
   }else{
     btnSaveTask.textContent = btnSaveTask.dataset.saveText || "保存";
     btnSaveTask.disabled = false;
@@ -25256,6 +25739,11 @@ function setSaveLoading(loading){
     if(btnSaveTaskContinue){
       btnSaveTaskContinue.disabled = false;
       btnSaveTaskContinue.classList.remove("loading");
+    }
+    var againBtnIdle = $("btnSaveTaskAgain");
+    if(againBtnIdle){
+      againBtnIdle.disabled = false;
+      againBtnIdle.classList.remove("loading");
     }
     factSaving = false;
     /* 保存期间又点了一个就地字段：排队的那次在这里补发，避免两次整单提交互相覆盖 */
@@ -25637,24 +26125,30 @@ function syncDrawerHead(){
     noChip.hidden = !noLabel;
     noChip.textContent = noLabel;
   }
-  var reqSel = $("iReq"), colSel = $("iCol");
+  var reqSel = $("iReq");
   var reqName = (reqSel && reqSel.value && reqSel.selectedIndex >= 0) ? reqSel.options[reqSel.selectedIndex].textContent : "";
-  var colName = (colSel && colSel.selectedIndex >= 0) ? colSel.options[colSel.selectedIndex].textContent : "";
   var sub = $("taskDrawerSub");
   if(sub){
-    var parts = [];
-    if(reqName) parts.push(reqName);
     if(rt.editingId){
+      var parts = [];
+      if(reqName) parts.push(reqName);
       /* 读态头部按原型：项目 · 版本 · 截止 · 负责人；列名由状态胶囊承担，不再重复 */
       var vn = versionNamesNow();
       if(vn) parts.push(vn);
       if(iDue && iDue.value) parts.push("截止 " + fmtFactDate(iDue.value));
       var ownName = ownerNameNow();
       if(ownName) parts.push(ownName);
-    }else if(colName){
-      parts.push("新建到「" + colName + "」");
+      sub.textContent = parts.join(" · ");
+    }else{
+      /* 新建态先给底线与去向：编号在保存后生成，字段只有标题必填 */
+      sub.textContent = "";
+      if(reqName) sub.appendChild(document.createTextNode(reqName + " · "));
+      sub.appendChild(document.createTextNode("保存后自动编号 · "));
+      var onlyPill = document.createElement("span");
+      onlyPill.className = "sub-only";
+      onlyPill.textContent = "只有标题必填";
+      sub.appendChild(onlyPill);
     }
-    sub.textContent = parts.join(" · ");
   }
   var colLabel = $("ctxColLabel");
   if(colLabel) colLabel.textContent = rt.editingId ? "所在列" : "新建到";
@@ -25854,6 +26348,28 @@ function syncDrawerFacts(){
     else if(est && act) hoursNote = "剩余 " + fmtMinutesShort(est - act);
     $("rfHoursNote").innerHTML = hoursNote && act > est ? '<span class="rf-chip">' + esc(hoursNote) + '</span>' : esc(hoursNote);
     if($("rfHoursWrap")) $("rfHoursWrap").classList.toggle("overdue", !!hoursNote && act > est);
+  }
+  renderReadBlocked();
+}
+/* 阅读态阻塞：事实条上的状态与卡点卡同源，都读表单当前值，就地切换后无需重新打开详情 */
+function renderReadBlocked(){
+  var blocked = !!(iBlocked && iBlocked.checked);
+  var reason = blocked && iBlockedReason ? String(iBlockedReason.value || "").trim() : "";
+  var chip = $("rfBlocked"), chipWrap = chip && chip.closest ? chip.closest(".rf-block") : null;
+  if(chip){
+    chip.textContent = blocked ? "已阻塞" : "未阻塞";
+    if(chipWrap){
+      chipWrap.classList.toggle("is-blocked", blocked);
+      chipWrap.title = blocked ? ("已阻塞" + (reason ? "：" + reason : "（未填原因）")) : "点击标记阻塞";
+    }
+  }
+  var card = $("readBlockedCard");
+  if(card){
+    card.hidden = !blocked;
+    var reasonEl = $("readBlockedReason");
+    if(reasonEl) reasonEl.textContent = reason || "未填写卡点原因";
+    var clearBtn = $("readBlockedClear");
+    if(clearBtn) clearBtn.hidden = !!rt.drawerReadOnly;
   }
 }
 /* 测试窗口：提测 / 开始 / 结束三个时点只读展示；有测试经历的任务换列后仍可回看 */
@@ -26098,6 +26614,25 @@ function syncMoreSummary(){
   if(iBlocked && iBlocked.checked) parts.push("已阻塞");
   el.textContent = parts.length ? "· " + parts.join(" · ") : "· 未设置";
 }
+/* 新建态空标题等错误的顶部汇总：长表单滚下去后，行内红字容易被漏看 */
+function showTaskErrors(list){
+  var box = $("taskErrSum"), title = $("taskErrTitle"), links = $("taskErrLinks");
+  if(!box) return;
+  list = list || [];
+  box.hidden = !!rt.editingId || !list.length;
+  if(!list.length){
+    if(links) links.innerHTML = "";
+    return;
+  }
+  if(title) title.textContent = "还有 " + list.length + " 处需要处理";
+  if(links) links.innerHTML = list.map(function(it){
+    return '<button type="button" data-task-err="' + esc(it.target) + '">' + esc(it.label) + '</button>';
+  }).join("");
+}
+function focusTaskErr(target){
+  var el = target === "sevGrid" ? document.querySelector("#sevGrid [data-sev]") : $(target);
+  if(el) focusField(el);
+}
 if(iSeverity) iSeverity.addEventListener("change", function(){
   var fs = $("fSeverity");
   if(fs && iSeverity.value) fs.classList.remove("invalid");
@@ -26186,6 +26721,7 @@ function applyDrawerReadOnly(readOnly){
       el.tabIndex = readOnly ? -1 : 0;
     });
   }
+  renderReadBlocked();
   var descEl = $("readDesc");
   if(descEl){
     descEl.classList.toggle("read-only", !!readOnly);
@@ -26252,6 +26788,7 @@ function syncCatSeg(){
   var reqId = currentReqId();
   if(!reqId){
     segCat.innerHTML = '<span class="foot-note">未挂项目，模块为「未指定」</span>';
+    syncCatPath();
     return;
   }
   var cats = projCats(reqId);
@@ -26260,12 +26797,36 @@ function syncCatSeg(){
       ? '<button class="chip" type="button" data-cat-cfg="1">去项目设置添加</button>'
       : "";
     segCat.innerHTML = '<span class="foot-note">该项目还没有模块</span>' + cfg;
+    syncCatPath();
     return;
   }
   segCat.innerHTML = '<button type="button" data-fcat="" aria-pressed="' + (rt.formCat === "") + '">未指定</button>' +
     cats.map(function(c){
       return '<button type="button" data-fcat="' + esc(c.id) + '" aria-pressed="' + (c.id === rt.formCat) + '">' + esc(c.name) + '</button>';
     }).join("");
+  syncCatPath();
+}
+/* 模块路径：选中后回显完整层级，避免同名节点选错 */
+function syncCatPath(){
+  var line = $("catPathLine"), note = $("catNote");
+  if(!line) return;
+  var reqId = currentReqId();
+  var cats = projCats(reqId);
+  var byId = {};
+  cats.forEach(function(c){ byId[c.id] = c; });
+  var parts = [], cur = rt.formCat ? byId[rt.formCat] : null, guard = 0;
+  while(cur && guard++ < 10){
+    parts.unshift(cur.name);
+    cur = cur.parentId ? byId[cur.parentId] : null;
+  }
+  var path = parts.join(" › ");
+  if(!path){ line.hidden = true; line.innerHTML = ""; }
+  else{
+    var full = [reqNameById(reqId), path].filter(Boolean).join(" › ");
+    line.innerHTML = "位置：<b>" + esc(full) + "</b>";
+    line.hidden = false;
+  }
+  if(note) note.hidden = !(reqId && cats.length);
 }
 /* 切换项目后校准模块选中：原模块不属于新项目则回到「未指定」，空值本身合法不再回落第一项 */
 function ensureCatForProject(reqId){
@@ -26495,6 +27056,7 @@ function syncFormSegs(){
   segRecur.querySelectorAll("[data-recur]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.recur === rt.formRecur);
   });
+  syncCatPath();
 }
 function renderTagChips(){
   tagWrap.querySelectorAll(".tag").forEach(function(el){ el.remove(); });
@@ -26697,11 +27259,8 @@ function openTaskDrawer(colId, task, defaults){
   $("fVersionChangeReason").hidden = true;
   rt.editingId = task ? task.id : null;
   rt.formDirty = false;
-  mentionPicked = [];
   /* 换任务后候选可能属于上一个项目，先清掉再按需重拉 */
-  mentionCandidateTask = null;
-  mentionCandidates = [];
-  closeMention();
+  if(commentMentionPicker) commentMentionPicker.reset();
   /* 新建任务先确定项目，再据其权限决定表单是否只读 */
   var initialReqId = task ? (task.reqId || "") : ((defaults && defaults.reqId) || defaultReqId());
   var readOnly = task ? !canEditTask(task) : !canEditReq(initialReqId);
@@ -26792,12 +27351,14 @@ function openTaskDrawer(colId, task, defaults){
     syncDateBounds();
     if(iEstimate) iEstimate.value = "";
     renderActualEstimate(0, null);
-    rt.formPri = "P2";
-    /* 从需求拆解时沿用需求模块；不属于该项目或已删则回落到该项目第一个 */
+    rt.formPri = (defaults && defaults.priority) || "P2";
+    /* 从需求拆解时沿用需求模块；显式传入（含空串=未指定）优先，只在没传时回落到该项目第一个 */
     var presetCat = defaults && defaults.categoryId;
+    var catExplicit = defaults && defaults.categoryId !== undefined;
     var catCands = projCats(initialReqId);
-    rt.formCat = catCands.some(function(c){ return c.id === presetCat; })
-      ? presetCat : ((catCands[0] || {}).id || "");
+    var catHit = !!presetCat && catCands.some(function(c){ return c.id === presetCat; });
+    rt.formCat = catHit ? presetCat
+      : (catExplicit ? "" : ((catCands[0] || {}).id || ""));
     populateColSelect();
     iCol.value = colId || "backlog";
     populateReqSelect(initialReqId);
@@ -26812,7 +27373,7 @@ function openTaskDrawer(colId, task, defaults){
     }
     /* 新建时不能沿用上一个工作项的需求选择 */
     if($("iDemand")) $("iDemand").value = rt.formDemandId || "";
-    if(iItemType) iItemType.value = (defaults && defaults.itemType === "bug") ? "bug" : "task";
+    if(iItemType) iItemType.value = (defaults && defaults.itemType) || "task";
     clearDefectFields();
     ensureVersion(normalizedIds(defaults && defaults.versionIds));
     ensureFoundVersion("");
@@ -26846,7 +27407,7 @@ function openTaskDrawer(colId, task, defaults){
     loadWatchStatus(null);
     if(commentList) commentList.innerHTML = "";
     if(commentCount) commentCount.textContent = "";
-    closeMention();
+    if(commentMentionPicker) commentMentionPicker.close();
   }
   initDependencies(task);
   syncDefectFields();
@@ -26863,6 +27424,7 @@ function openTaskDrawer(colId, task, defaults){
   syncCatSeg();
   syncFormSegs();
   syncMoreSummary();
+  showTaskErrors([]);
   applyDrawerReadOnly(readOnly);
   syncTaskPublication(task);
   syncDrawerFacts();
@@ -27758,7 +28320,20 @@ taskForm.addEventListener("input", function(e){
     fTitle.classList.remove("invalid");
     syncTitleCount();
     syncDrawerHead();
+    if(iTitle.value.trim()) showTaskErrors([]);
   }
+});
+var taskErrLinks = $("taskErrLinks");
+if(taskErrLinks) taskErrLinks.addEventListener("click", function(e){
+  var b = e.target.closest("[data-task-err]");
+  if(b) focusTaskErr(b.getAttribute("data-task-err"));
+});
+/* 标题行提示「Enter 保存」：回车即整单提交，输入法组字中的回车不算 */
+iTitle.addEventListener("keydown", function(e){
+  if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
+  e.preventDefault();
+  if(!btnSaveTask || btnSaveTask.disabled) return;
+  taskForm.requestSubmit(btnSaveTask);
 });
 taskForm.addEventListener("change", function(e){
   if(formSettling(e.target)) return; // 异步下拉回填期间的伪 change 不算用户改动
@@ -28102,7 +28677,7 @@ function sendComment(){
     /* 只发附件时给一个占位正文：评论正文在后端是必填的 */
     content: text || "上传了附件",
     /* 从候选里点选过的成员精确带上 ID：正文重名时也能通知到被选中的那位 */
-    mentionUserIds: pickedMentionIds(text)
+    mentionUserIds: commentMentionPicker ? commentMentionPicker.idsInText(text) : []
   }).then(function(comment){
     if(!files.length || !comment || comment.id == null) return;
     return uploadCommentFiles(comment.id, files).then(function(failed){
@@ -28115,8 +28690,10 @@ function sendComment(){
     /* 发送期间切到了别的任务：不要把新任务抽屉里的草稿清掉 */
     if(rt.editingId !== id) return;
     iComment.value = "";
-    closeMention();
-    mentionPicked = [];
+    if(commentMentionPicker){
+      commentMentionPicker.close();
+      commentMentionPicker.clearPicked();
+    }
     clearPendingCommentFiles();
     discardCommentDraft(id);
     /* 评论已发表：把这部分从脏基线里移走，不影响表单其他未保存字段 */
@@ -28156,191 +28733,25 @@ if(commentCompose){
 }
 
 /* ==================== 评论 @提及 ==================== */
-var mentionState = {open:false, items:[], index:0, start:0, end:0};
-var mentionMembersLoading = false;
-/* 候选拉取失败后短暂退避，避免断网时每次输入都重试 */
-var mentionMembersFailedAt = 0;
-var MENTION_RETRY_MS = 30000;
-/* 候选只含对该任务所在项目可见的成员；按任务缓存，避免把隐藏项目的成员点进去 */
-var mentionCandidateTask = null;
-var mentionCandidates = [];
-var mentionPicked = [];
-/* idle / loading / ready / error：@ 后候选区据此展示加载与失败提示，避免静默无反应 */
-var mentionLoadState = "idle";
-/* @ 后不出现空白，视为一次提及输入；"a@b.com" 这类邮箱不会被识别。
-   候选最多渲染 50 条并在框内滚动，避免成员多时“只能靠输入名字才找得到人” */
-var MENTION_MAX_ITEMS = 50;
-function currentMentionMembers(){
-  return mentionCandidates.filter(function(m){
-    return m && m.userId && m.displayName && (!rt.currentUser || m.userId !== rt.currentUser.id);
-  });
-}
-function ensureMentionMembers(force){
-  var taskId = rt.editingId;
-  if(!taskId || mentionMembersLoading || mentionCandidateTask === taskId) return;
-  if(!force && mentionMembersFailedAt && Date.now() - mentionMembersFailedAt < MENTION_RETRY_MS) return;
-  mentionMembersLoading = true;
-  mentionLoadState = "loading";
-  if(mentionState.open){ mentionState.notice = "正在加载成员…"; renderMention(); }
-  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/mention-candidates").then(function(list){
-    mentionMembersLoading = false;
-    mentionMembersFailedAt = 0;
-    mentionLoadState = "ready";
-    if(rt.editingId !== taskId) return;
-    mentionCandidateTask = taskId;
-    mentionCandidates = list || [];
-    if(document.activeElement === iComment) detectMention();
-  }).catch(function(){
-    mentionMembersLoading = false;
-    mentionMembersFailedAt = Date.now();
-    mentionLoadState = "error";
-    if(document.activeElement === iComment) detectMention();
-  });
-}
-function rememberMention(m){
-  for(var i = 0; i < mentionPicked.length; i++){
-    if(mentionPicked[i].userId === m.userId) return;
+/* 候选只含对该任务所在项目可见的成员；切换任务时 reset() 丢弃旧候选 */
+var commentMentionPicker = iComment ? createMentionPicker(iComment, {
+  canOpen: function(){ return !rt.drawerReadOnly; },
+  excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+  loadMembers: function(){
+    var taskId = rt.editingId;
+    if(!taskId) return Promise.reject(new Error("未选择工作项"));
+    return API.get("/api/tasks/" + encodeURIComponent(taskId) + "/mention-candidates");
   }
-  mentionPicked.push({userId: m.userId, displayName: m.displayName});
-}
-/* 与后端 Mentions 同口径：字母/数字/下划线视为名字的延续，中文按字母处理 */
-function isMentionWordChar(ch){
-  return !!ch && (/[A-Za-z0-9_]/.test(ch) || ch.charCodeAt(0) > 127);
-}
-function hasMentionToken(text, name){
-  var token = "@" + name;
-  var from = 0;
-  while(true){
-    var at = text.indexOf(token, from);
-    if(at < 0) return false;
-    if(!isMentionWordChar(text.charAt(at + token.length))) return true;
-    from = at + 1;
-  }
-}
-/* 只把仍留在正文里的点选成员发给后端：删掉 @名字 后不应再通知 */
-function pickedMentionIds(text){
-  return mentionPicked.filter(function(p){
-    return hasMentionToken(text, p.displayName);
-  }).map(function(p){ return p.userId; });
-}
-function closeMention(){
-  mentionState.open = false;
-  if(commentMention) commentMention.hidden = true;
-}
-/* 中文没有词边界，"请@张三" 是自然写法；只有 ASCII 字母/数字/下划线前的 @ 视为邮箱 */
-function isMentionStartBlocked(ch){
-  return !!ch && /[A-Za-z0-9_]/.test(ch);
-}
-/* 中文输入法常打出全角 ＠，统一成半角，否则前端不触发、后端也解析不到 */
-function normalizeFullWidthMention(){
-  if(!iComment || iComment.value.indexOf("＠") < 0) return;
-  var caret = iComment.selectionStart;
-  iComment.value = iComment.value.replace(/＠/g, "@");
-  try{ iComment.setSelectionRange(caret, caret); }catch(e){ /* noop */ }
-}
-function detectMention(){
-  if(!iComment || rt.drawerReadOnly){ closeMention(); return; }
-  normalizeFullWidthMention();
-  ensureMentionMembers();
-  var caret = iComment.selectionStart;
-  var before = iComment.value.slice(0, caret);
-  var at = before.lastIndexOf("@");
-  if(at < 0){ closeMention(); return; }
-  if(isMentionStartBlocked(before.charAt(at - 1))){ closeMention(); return; }
-  var query = before.slice(at + 1);
-  if(/\s/.test(query)){ closeMention(); return; }
-  var q = query.toLowerCase();
-  var items = currentMentionMembers().filter(function(m){
-    return (m.displayName || "").toLowerCase().indexOf(q) >= 0
-      || (m.username || "").toLowerCase().indexOf(q) >= 0;
-  }).slice(0, MENTION_MAX_ITEMS);
-  var notice = "";
-  if(mentionLoadState !== "ready"){
-    notice = mentionLoadState === "error" ? "成员加载失败，点击重试" : "正在加载成员…";
-  }else if(!items.length && !q){
-    notice = "暂无可提及的成员";
-  }
-  if(!items.length && !notice){ closeMention(); return; }
-  mentionState = {open:true, items:items, index:0, start:at, end:caret, notice:notice};
-  renderMention();
-}
-function renderMention(){
-  if(!commentMention) return;
-  commentMention.hidden = !mentionState.open;
-  if(!mentionState.open) return;
-  if(!mentionState.items.length){
-    commentMention.innerHTML = '<div class="cm-empty"' +
-      (mentionLoadState === "error" ? ' data-cm-retry="1" role="button" tabindex="0"' : '') +
-      '>' + esc(mentionState.notice || "") + '</div>';
-    return;
-  }
-  commentMention.innerHTML = mentionState.items.map(function(m, i){
-    return '<button type="button" class="cm-item' + (i === mentionState.index ? " on" : "") + '" data-cm-idx="' + i + '">' +
-      avatarHTML(m.displayName, "sm") +
-      '<span class="cm-name ellipsis">' + esc(m.displayName) + '</span>' +
-      (m.username ? '<span class="cm-user">@' + esc(m.username) + '</span>' : '') +
-    '</button>';
-  }).join("");
-  var on = commentMention.querySelector(".cm-item.on");
-  if(on && on.scrollIntoView) on.scrollIntoView({block:"nearest"});
-}
-function pickMention(idx){
-  var m = mentionState.items[idx];
-  if(!m) return;
-  rememberMention(m);
-  var insert = "@" + m.displayName + " ";
-  iComment.value = iComment.value.slice(0, mentionState.start) + insert + iComment.value.slice(mentionState.end);
-  var caret = mentionState.start + insert.length;
-  closeMention();
-  try{
-    iComment.focus();
-    iComment.setSelectionRange(caret, caret);
-  }catch(e){ /* noop */ }
-}
-function moveMention(step){
-  var n = mentionState.items.length;
-  if(!n) return;
-  mentionState.index = (mentionState.index + step + n) % n;
-  renderMention();
-}
-function mentionKeydown(e){
-  if(!mentionState.open) return false;
-  if(e.key === "ArrowDown"){ e.preventDefault(); e.stopPropagation(); moveMention(1); return true; }
-  if(e.key === "ArrowUp"){ e.preventDefault(); e.stopPropagation(); moveMention(-1); return true; }
-  /* 只有真正有候选时才把 Enter 交给选择，加载/失败提示态下回车仍按普通换行处理 */
-  if((e.key === "Enter" || e.key === "Tab") && mentionState.items.length){
-    e.preventDefault();
-    e.stopPropagation();
-    pickMention(mentionState.index);
-    return true;
-  }
-  if(e.key === "Escape"){ e.stopPropagation(); closeMention(); return true; }
-  return false;
-}
+}) : null;
 if(iComment){
-  /* 聚焦评论框即预载候选，真正敲 @ 时下拉可直接出现，不必等接口 */
-  iComment.addEventListener("focus", function(){ ensureMentionMembers(); });
-  iComment.addEventListener("input", detectMention);
-  iComment.addEventListener("click", detectMention);
-  iComment.addEventListener("blur", function(){ setTimeout(closeMention, 120); });
   iComment.addEventListener("keydown", function(e){
     if(e.isComposing || e.keyCode === 229) return;
-    if(mentionKeydown(e)) return;
     if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
       e.preventDefault();
       /* 阻止冒泡：否则文档级 Ctrl+Enter 会把评论当成“保存任务”，跟着提交并关闭抽屉 */
       e.stopPropagation();
       sendComment();
     }
-  });
-}
-if(commentMention){
-  /* 按下时不让 textarea 失焦，否则 blur 先关掉候选框，click 无法命中 */
-  commentMention.addEventListener("mousedown", function(e){ e.preventDefault(); });
-  commentMention.addEventListener("click", function(e){
-    if(e.target.closest("[data-cm-retry]")){ ensureMentionMembers(true); return; }
-    var b = e.target.closest("[data-cm-idx]");
-    if(b) pickMention(Number(b.dataset.cmIdx));
   });
 }
 if(commentList){
@@ -28528,6 +28939,7 @@ taskForm.addEventListener("submit", function(e){
   e.preventDefault();
   if(rt.drawerReadOnly || btnSaveTask.disabled) return;
   var saveAndContinue = !!(e.submitter && e.submitter.id === "btnSaveTaskContinue");
+  var saveAgain = !!(e.submitter && e.submitter.id === "btnSaveTaskAgain");
   /* 读态就地单字段保存：任何一步失败都要把表单还原成服务器上的值，
      否则读态卡片会停在一个根本没落库的新值上。编辑态失败保留输入供改了再存。 */
   var inlineFact = factSaving && drawerMode === "read" && !!rt.editingId;
@@ -28541,8 +28953,10 @@ taskForm.addEventListener("submit", function(e){
     if(inlineFact) revertFailedFactSave(view);
   }
   var title = iTitle.value.trim();
+  showTaskErrors([]);
   if(!title){
     fTitle.classList.add("invalid");
+    showTaskErrors([{ target:"iTitle", label:"工作项标题：请填写工作项标题" }]);
     focusField(iTitle);
     failSave();
     return;
@@ -28555,12 +28969,14 @@ taskForm.addEventListener("submit", function(e){
   /* 开始日期 ≤ 截止日期（服务端也有同样校验，这里先拦一道省一次往返） */
   if(iStart.value && iDue.value && iStart.value > iDue.value){
     failSave("开始日期不能晚于截止日期");
+    showTaskErrors([{ target:"iStart", label:"开始日期：不能晚于截止日期" }]);
     focusField(iStart);
     return;
   }
   var itemTypeValue = (iItemType && iItemType.value) || "task";
   if(itemTypeValue === "bug" && !(iSeverity && iSeverity.value)){
     failSave("缺陷必须选择严重度");
+    showTaskErrors([{ target:"sevGrid", label:"严重度：缺陷必须选择严重度" }]);
     var severityField = $("fSeverity");
     if(severityField) severityField.classList.add("invalid");
     var firstSevBtn = document.querySelector("#sevGrid [data-sev]");
@@ -28752,29 +29168,54 @@ taskForm.addEventListener("submit", function(e){
         var createdId = !wasEdit && nt ? nt.id : null;
         /* 新建时暂存的依赖要等工作项拿到 id 后才能落库；先记数量再关抽屉 */
         var pendingDepCount = createdId ? depState.pending.length : 0;
-        forceCloseTaskDrawer();
-        if(wasEdit){
-          toast("已更新「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""), "fs");
-        }else if(createdId && pendingDepCount){
-          toast("已创建工作项「" + nt.title + "」，正在建立依赖…", "fs");
-          flushPendingDependencies(createdId).then(function(res){
-            if(res && res.failed){
-              toast("工作项已创建，但有 " + res.failed + " 条依赖未建立，可在详情里重新添加", "warn");
-            }else{
-              toast("已创建工作项「" + nt.title + "」，并建立 " + ((res && res.total) || pendingDepCount) + " 条依赖", "fs");
-            }
-            refreshGanttIfOpen();
-          });
-        }else{
-          var tip = "已创建工作项「" + nt.title + "」";
-          var kind = "fs";
-          if(nt.dueDate){
-            var d = dayDiff(parseDate(nt.dueDate), rt.TODAY);
-            if(d < 0){ tip += "，已逾期 " + Math.abs(d) + " 天"; kind = "warn"; }
-            else if(d === 0) tip += "，今天到期";
-            else if(d <= 3) tip += "，剩余 " + d + " 天";
+        if(createdId && saveAgain){
+          /* 保存并再建一条：保留项目 / 类型 / 优先级 / 模块 / 列，清空内容后重开同一抽屉 */
+          var nextDefaults = {
+            keepBackStack: true,
+            reqId: payload.reqId || "",
+            itemType: payload.itemType,
+            priority: payload.priority,
+            categoryId: payload.categoryId,
+            demandId: payload.demandId || null
+          };
+          var reopenForNext = function(){
+            openTaskDrawer(payload.boardColumn, null, nextDefaults);
+          };
+          toast("已创建工作项「" + nt.title + "」，接着写下一条", "fs");
+          if(pendingDepCount){
+            flushPendingDependencies(createdId).then(function(res){
+              if(res && res.failed) toast("刚创建的工作项有 " + res.failed + " 条依赖未建立，可在详情里重新添加", "warn");
+              refreshGanttIfOpen();
+              reopenForNext();
+            });
+          }else{
+            reopenForNext();
           }
-          toast(tip, kind);
+        }else{
+          forceCloseTaskDrawer();
+          if(wasEdit){
+            toast("已更新「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""), "fs");
+          }else if(createdId && pendingDepCount){
+            toast("已创建工作项「" + nt.title + "」，正在建立依赖…", "fs");
+            flushPendingDependencies(createdId).then(function(res){
+              if(res && res.failed){
+                toast("工作项已创建，但有 " + res.failed + " 条依赖未建立，可在详情里重新添加", "warn");
+              }else{
+                toast("已创建工作项「" + nt.title + "」，并建立 " + ((res && res.total) || pendingDepCount) + " 条依赖", "fs");
+              }
+              refreshGanttIfOpen();
+            });
+          }else{
+            var tip = "已创建工作项「" + nt.title + "」";
+            var kind = "fs";
+            if(nt.dueDate){
+              var d = dayDiff(parseDate(nt.dueDate), rt.TODAY);
+              if(d < 0){ tip += "，已逾期 " + Math.abs(d) + " 天"; kind = "warn"; }
+              else if(d === 0){ tip += "，今天到期"; }
+              else if(d <= 3){ tip += "，剩余 " + d + " 天"; }
+            }
+            toast(tip, kind);
+          }
         }
       }
     }
@@ -30549,6 +30990,48 @@ function openTagsFact(){
     factSave();
   });
 }
+/* 阻塞是整单保存里的一个字段：读态切换后走同一条保存链路，计时联动与审计照旧 */
+function applyBlockedState(blocked, reason, okMsg){
+  if(!iBlocked) return;
+  iBlocked.checked = !!blocked;
+  if(iBlockedReason){
+    iBlockedReason.disabled = !blocked;
+    iBlockedReason.value = blocked ? (reason || "") : "";
+  }
+  syncMoreSummary();
+  renderReadBlocked();
+  factSave(okMsg);
+}
+function openBlockedFact(){
+  if(!rt.editingId) return;
+  var blocked = !!(iBlocked && iBlocked.checked);
+  var reason = (iBlockedReason && iBlockedReason.value || "").trim();
+  if(blocked){
+    UI.showConfirm({
+      title:"解除阻塞",
+      msg: reason ? "当前卡点：" + esc(reason) : "当前工作项处于阻塞状态（未填写原因）。",
+      okText:"解除阻塞",
+      cancelText:"保持阻塞",
+      danger:false
+    }).then(function(ok){
+      if(!ok || !rt.editingId) return;
+      applyBlockedState(false, "", "已解除阻塞");
+    });
+    return;
+  }
+  UI.showPrompt({
+    title:"标记阻塞",
+    desc:"说明卡在什么上、等谁、预计何时解除；原因可留空。标记后会停止该工作项上的运行中计时，并在卡片上显示橙色条纹。",
+    value:"",
+    placeholder:"等谁 / 等什么 / 预计何时解除",
+    maxLength:120,
+    required:false,
+    okText:"标记阻塞"
+  }).then(function(v){
+    if(v === null || !rt.editingId) return;
+    applyBlockedState(true, v, "已标记阻塞");
+  });
+}
 function openFactEditor(kind, anchor){
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   if(!rt.editingId) return;
@@ -30560,6 +31043,14 @@ function openFactEditor(kind, anchor){
   else if(kind === "dateRange") openDateRangeFact(anchor);
   else if(kind === "estimate") openEstimateFact(anchor);
   else if(kind === "tags") openTagsFact();
+  else if(kind === "blocked") openBlockedFact();
+}
+var readBlockedClearBtn = $("readBlockedClear");
+if(readBlockedClearBtn){
+  readBlockedClearBtn.addEventListener("click", function(){
+    if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+    openBlockedFact();
+  });
 }
 var readFactsBox = $("readFacts");
 if(readFactsBox){
@@ -40893,7 +41384,11 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
       reloadForUpdate();
     });
     window.addEventListener("load", function(){
-      navigator.serviceWorker.register(API.appBase + "/sw.js").catch(function(){ /* http 直连不支持 SW，忽略 */ });
+      navigator.serviceWorker.register(API.appBase + "/sw.js").then(function(reg){
+        /* 浏览器自身的 SW 更新检查最多约 24 小时一次，发布后可能整天都拿旧缓存；
+           每次打开页面主动查一次（sw.js 只有几 KB），换版当天就能接管 */
+        if(reg && reg.update) reg.update().catch(function(){});
+      }).catch(function(){ /* http 直连不支持 SW，忽略 */ });
     });
   }
   updateOnlineBadge();
@@ -51101,6 +51596,7 @@ __NS["views/requirements.js"] = (function(){
 
 
 
+
 var esc = esc2;
 var aiErrMsg = aiErrorText;
 var activityUI = __NS["core/activity-ui.js"];
@@ -51276,8 +51772,9 @@ function ensureEditor(){
     });
     reqEditor.onChange = function(){
       if(reqDocSuppressChange) return;
-      /* 程序化回填可能晚于抑制窗口触发 onChange：与基线一致就不算用户修改 */
-      if(reqEditorBaseline != null && reqEditor.getContents(true) === reqEditorBaseline) return;
+      /* 程序化回填可能晚于抑制窗口触发 onChange：与基线一致就不算用户修改。
+         已脏后不再比：大正文（内嵌图片）每次按键都全量序列化会明显卡顿 */
+      if(!reqDocDirty && reqEditorBaseline != null && reqEditor.getContents(true) === reqEditorBaseline) return;
       markReqDocDirty();
       scheduleDraftSave();
       scheduleTocRebuild();
@@ -51368,6 +51865,7 @@ function showReqDocList(){
   if(isReqDocEditing()){ tryCloseReqDocEditor(); return; }
   reqDocOpenSeq++;
   editingDocId = null;
+  if(reqDocCommentMention) reqDocCommentMention.reset();
   state.reqDocId = null;
   reqDocDirty = false;
   tocItems = [];
@@ -51970,6 +52468,9 @@ var rrdQuote = null;
 var rrdSelText = "";
 var rrdFlashCommentId = null;
 var rrdSelBubble = null;
+/* 两处文档评论框各自的 @ 候选：编辑页一个、阅读侧栏一个（侧栏会随渲染重建） */
+var reqDocCommentMention = null;
+var rrdMentionPicker = null;
 var readerExportSeq = 0;
 var feedSeq = 0;
 var draggingReqDocId = null;
@@ -52391,6 +52892,18 @@ function reqDocReaderOpenLinks(body){
     links[i].setAttribute("rel", "noopener noreferrer");
   }
 }
+/* 先在惰性的 template 里给图片加懒加载/异步解码再挂载：直接 innerHTML 会立刻解码全部内嵌图片 */
+function reqDocReaderFill(body, cleanHtml){
+  var tpl = document.createElement("template");
+  tpl.innerHTML = cleanHtml;
+  var imgs = tpl.content.querySelectorAll("img");
+  for(var i = 0; i < imgs.length; i++){
+    imgs[i].setAttribute("loading", "lazy");
+    imgs[i].setAttribute("decoding", "async");
+  }
+  body.textContent = "";
+  body.appendChild(tpl.content);
+}
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
@@ -52462,6 +52975,7 @@ function renderReqDocReader(doc){
     '</aside>';
   syncDocZoomUI();
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
+  bindRrdMention();
   renderReqDocCrumb($("rrdCrumb"), doc.id);
   var body = $("reqDocReaderBody");
   var id = doc.id;
@@ -52470,10 +52984,10 @@ function renderReqDocReader(doc){
     if(doc.format === "markdown"){
       var html = "";
       try{ html = window.marked.parse(doc.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
-      body.innerHTML = window.DOMPurify.sanitize(html);
+      reqDocReaderFill(body, window.DOMPurify.sanitize(html));
     }else{
       /* 服务端已按白名单清洗过，这里再过一道 DOMPurify（双保险） */
-      body.innerHTML = window.DOMPurify.sanitize(doc.content || "");
+      reqDocReaderFill(body, window.DOMPurify.sanitize(doc.content || ""));
     }
     reqDocReaderOpenLinks(body);
     rrdApplyHighlights();
@@ -53248,8 +53762,11 @@ function submitRrdComment(){
   if(btn) btn.disabled = true;
   var body = { content: content };
   if(rrdQuote) body.quoteText = rrdQuote;
+  var mentionIds = rrdMentionPicker ? rrdMentionPicker.idsInText(content) : [];
+  if(mentionIds.length) body.mentionUserIds = mentionIds;
   API.post("/api/req-docs/" + encodeURIComponent(rrdCommentsDocId) + "/comments", body).then(function(){
     if(ta) ta.value = "";
+    if(rrdMentionPicker){ rrdMentionPicker.close(); rrdMentionPicker.clearPicked(); }
     setRrdQuote(null);
     loadRrdComments();
   }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
@@ -53295,8 +53812,22 @@ function rrdApplyHighlights(){
     try{ range.surroundContents(mark); }catch(e){ /* 跨节点时不强行高亮 */ }
   });
 }
-function ensureRrdSelBubble(){
-  if(rrdSelBubble) return rrdSelBubble;
+/* 阅读侧栏评论框每次渲染都会重建，@ 候选按当前文档的可见成员拉取 */
+function bindRrdMention(){
+  if(rrdMentionPicker){ rrdMentionPicker.destroy(); rrdMentionPicker = null; }
+  var ta = $("rrdCommentInput");
+  if(!ta) return;
+  rrdMentionPicker = createMentionPicker(ta, {
+    canOpen: function(){ return rrdCanComment && !!rrdCommentsDocId; },
+    excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+    loadMembers: function(){
+      var docId = rrdCommentsDocId;
+      if(!docId) return Promise.reject(new Error("未打开文档"));
+      return API.get("/api/req-docs/" + encodeURIComponent(docId) + "/mention-candidates");
+    }
+  });
+}
+function ensureRrdSelBubble(){  if(rrdSelBubble) return rrdSelBubble;
   var b = document.createElement("button");
   b.type = "button";
   b.id = "rrdSelBubble";
@@ -53814,6 +54345,50 @@ function fillNewReqDocCategories(selected){
   sel.innerHTML = opts;
   sel.value = selected || "";
   if(sel.value !== (selected || "")) sel.value = "";
+  if($("newReqDocCatAdd")) $("newReqDocCatAdd").hidden = roleReadOnly();
+}
+/* 新建文档时就地建分类：选中分类则建为其子分类，否则建在当前归属的顶层；建好直接选中 */
+function beginQuickCreateNewDocCat(){
+  var sel = $("newReqDocCategory");
+  var row = sel && sel.parentNode;
+  if(!row || $("newReqDocCatName")) return;
+  var parent = sel.value ? docCatById(sel.value) : null;
+  var scope = parent ? (parent.reqId || "") : ($("newReqDocProject") ? ($("newReqDocProject").value || "") : "");
+  if(!reqDocCatManageable(scope)){
+    toast(scope ? "你对该项目只有查看权限，无法维护分类" : "空间级分类仅空间主或管理员可维护", "warn");
+    return;
+  }
+  reqDocCatNameInput({
+    anchorEl: row, value: "",
+    placeholder: (parent ? "在「" + parent.name + "」下新建子分类" : "在「" + reqDocProjectName(scope) + "」顶层新建分类") + "，回车创建 / Esc 取消",
+    inputClass: "nd-cat-input",
+    onCommit: function(name){
+      API.post("/api/doc-categories", { reqId: scope, name: name, parentId: parent ? parent.id : "" }).then(function(created){
+        toast("已创建分类「" + name + "」", "fs");
+        if(parent) delete reqDocCollapsedCats[parent.id];
+        return loadDocCategories(true).then(function(){
+          var id = created && created.id;
+          if(!id){
+            var hit = (docCategories || []).filter(function(c){
+              return (c.reqId || "") === scope && (c.parentId || "") === (parent ? parent.id : "") && c.name === name;
+            })[0];
+            id = hit ? hit.id : "";
+          }
+          fillNewReqDocCategories(id);
+          syncNewReqDocProjFromCat();
+          fillNewReqDocParents("");
+          applyDocCatDefaultToNewDoc();
+          syncNewReqDocPath();
+        });
+      }).catch(function(ex){ toast(ex.message || "创建分类失败", "bad"); });
+    }
+  });
+  var input = row.nextSibling;
+  if(input && input.classList && input.classList.contains("nd-cat-input")){
+    input.id = "newReqDocCatName";
+    /* 抽屉内 Esc 只取消输入，不能冒泡到全局把整个新建抽屉关掉 */
+    input.addEventListener("keydown", function(e){ if(e.key === "Escape") e.stopPropagation(); });
+  }
 }
 /* 项目下拉：可写项目 + 空间级（关联可选）；查看者无可写范围 */
 function fillNewReqDocProjectOptions(selected){
@@ -53884,6 +54459,25 @@ function syncNewReqDocPath(){
   var parentLabel = "顶层";
   if(pSel && pSel.value && pSel.selectedIndex >= 0) parentLabel = pSel.options[pSel.selectedIndex].text.replace(/^[\s\u3000]+/, "");
   el.innerHTML = "位置：<b>" + [reqDocProjectName(reqId), catLabel, parentLabel].map(esc).join("</b><i>›</i><b>") + "</b>";
+  syncNewReqDocCtx();
+}
+/* 新建弹窗头部：先说明落点、保存后的去向与唯一必填项 */
+function syncNewReqDocCtx(){
+  var el = $("newReqDocCtx");
+  if(!el) return;
+  var reqId = $("newReqDocProject") ? ($("newReqDocProject").value || "") : "";
+  el.innerHTML = esc(reqId ? reqDocProjectName(reqId) : "空间级") + " · 保存后进入编辑 · <span class=\"sub-only\">只有名称必填</span>";
+}
+/* 名称输入行：Enter 提示与字数，和新建工作项的标题行同一套表达 */
+function syncNewReqDocTitleCount(){
+  var input = $("newReqDocTitle"), out = $("newReqDocTitleCount");
+  if(!input || !out) return;
+  out.textContent = (input.value || "").length + "/" + (input.maxLength > 0 ? input.maxLength : "");
+}
+function showNewReqDocError(show){
+  var box = $("newReqDocErr"), input = $("newReqDocTitle");
+  if(box) box.hidden = !show;
+  if(input) input.classList.toggle("invalid", !!show);
 }
 /* 更多设置收起时也要能看到当前值：类型 + 可见范围 */
 function syncNewReqDocMoreSum(){
@@ -53959,7 +54553,9 @@ function openNewReqDocDialog(reqId, opts){
   var preCatObj = preCat ? docCatById(preCat) : null;
   if(preCatObj) defProj = preCatObj.reqId || "";
   fillNewReqDocProjectOptions(defProj);
+  showNewReqDocError(false);
   if($("newReqDocTitle")) $("newReqDocTitle").value = "";
+  syncNewReqDocTitleCount();
   if($("newReqDocFormat")) $("newReqDocFormat").value = "markdown";
   resetNewReqDocPreview();
   setNewReqDocSource("blank");
@@ -53983,6 +54579,7 @@ function openNewReqDocDialog(reqId, opts){
   ensureNewReqDocVisUI();
   resetNewReqDocVis();
   applyDocCatDefaultToNewDoc();
+  if($("newReqDocMore")) $("newReqDocMore").open = true;
   UI.openModal($("dlgNewReqDoc"));
   setTimeout(function(){ if($("newReqDocTitle")) $("newReqDocTitle").focus(); }, 40);
 }
@@ -54241,6 +54838,7 @@ function parseNewReqDocFile(file){
   });
 }
 function closeNewReqDocDialog(){
+  showNewReqDocError(false);
   var d = $("dlgNewReqDoc");
   if(d) UI.closeModal(d);
 }
@@ -54310,13 +54908,16 @@ function createReqDocTask(){
 }
 function setNewReqDocBusy(label){
   var ok = $("dlgNewReqDocOk");
+  var only = $("dlgNewReqDocCreateOnly");
+  if(only) only.disabled = !!label;
   if(!ok) return;
   ok.disabled = !!label;
   ok.textContent = label || "新建并编辑";
 }
-function submitNewReqDoc(){
+function submitNewReqDoc(keepList){
   var ok = $("dlgNewReqDocOk");
   if(ok && ok.disabled) return;
+  showNewReqDocError(false);
   var categoryId = $("newReqDocCategory") ? $("newReqDocCategory").value : "";
   var reqId = $("newReqDocProject").value;   // 空 = 空间级（关联可选）
   var title = ($("newReqDocTitle").value || "").trim();
@@ -54337,7 +54938,12 @@ function submitNewReqDoc(){
   var kind = file ? reqDocFileKind(file.name) : null;
   if(isFile && !kind){ toast("暂不支持该文件格式，请上传 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
   if(!title && file) title = file.name.replace(/\.[^.]+$/, "");
-  if(!title){ toast("请填写文档名称", "warn"); $("newReqDocTitle").focus(); return; }
+  if(!title){
+    showNewReqDocError(true);
+    toast("请填写文档名称", "warn");
+    $("newReqDocTitle").focus();
+    return;
+  }
   if(isTemplate && !(docTemplatesCache && $("newReqDocTemplate").value)){
     toast("模板还没加载好，请稍候或改用空白文档", "warn");
     return;
@@ -54372,6 +54978,12 @@ function submitNewReqDoc(){
     categoryId: categoryId || "", visibility: visibility, memberIds: memberIds
   })
     .then(function(doc){
+      if(keepList){
+        closeNewReqDocDialog();
+        loadReqDocs(true);
+        toast("已创建「" + doc.title + "」，留在列表", "fs");
+        return;
+      }
       if(isFile){
         finishNewReqDocImport(doc, file.name, format);
         return;
@@ -54407,6 +55019,8 @@ function openReqDocEditor(id){
   API.get("/api/req-docs/" + encodeURIComponent(id)).then(function(doc){
     if(seq !== reqDocOpenSeq) return;   // 连续点开多份：丢弃过期的响应
     editingDocId = doc.id;
+    /* 换文档后成员可见范围可能不同，先丢弃上一份的候选 */
+    if(reqDocCommentMention) reqDocCommentMention.reset();
     state.reqDocId = doc.id;
     reqDocDirty = false;
     editingMeta = {
@@ -54452,6 +55066,7 @@ function closeReqDocEditor(){
   if($("reqDocEditPage")) $("reqDocEditPage").hidden = true;
   if($("reqDocListPage")) $("reqDocListPage").hidden = false;
   editingDocId = null;
+  if(reqDocCommentMention) reqDocCommentMention.reset();
   reqDirtyReset();
   renderReqDocMode();
   /* 阅读视图里刚编辑过：右侧正文可能是旧的，重新拉一次 */
@@ -54461,10 +55076,38 @@ function reqDirtyReset(){
   reqDocDirty = false;
   state.reqDocId = null;
 }
+/* 关闭弹窗两种形态：dirty（有未保存修改，三选一）与 draft-clean（已保存但仍是草稿，问是否发布） */
+var reqDocCloseMode = "dirty";
+function openReqDocCloseDialog(mode){
+  reqDocCloseMode = mode === "draft-clean" ? "draft-clean" : "dirty";
+  var draftClean = reqDocCloseMode === "draft-clean";
+  var dlg = $("dlgReqDocClose");
+  if(!dlg) return;
+  if($("dlgReqDocCloseTitle")) $("dlgReqDocCloseTitle").textContent = draftClean ? "这篇文档仍是草稿" : "有未保存的修改";
+  if($("dlgReqDocCloseMsg")) $("dlgReqDocCloseMsg").textContent = draftClean
+    ? "项目成员现在看不到它。是留在草稿继续编辑，还是现在发布？"
+    : "关闭前要保存这次编辑吗？" + (editingMeta.publishedAt ? "" : "这篇文档仍是草稿。");
+  if($("dlgReqDocCloseCancel")) $("dlgReqDocCloseCancel").textContent = draftClean ? "留在草稿" : "取消";
+  if($("dlgReqDocCloseDiscard")) $("dlgReqDocCloseDiscard").hidden = draftClean;
+  if($("dlgReqDocCloseSaveDraft")) $("dlgReqDocCloseSaveDraft").hidden = draftClean || !!editingMeta.publishedAt;
+  if($("dlgReqDocCloseSave")) $("dlgReqDocCloseSave").textContent = (editingMeta.publishedAt && !draftClean) ? "保存并关闭" : "发布并关闭";
+  UI.openModal(dlg);
+}
+function finishCloseReqDoc(){
+  closeReqDocCloseDialog(true);
+  closeReqDocEditor();
+  continueReqDocRoute();
+}
 function tryCloseReqDocEditor(nextView){
-  if(nextView) reqDocPendingView = nextView;
-  if(!reqDocDirty){ closeReqDocEditor(); continueReqDocRoute(); return; }
-  UI.openModal($("dlgReqDocClose"));
+  /* 直接绑在 click 上时第一个参数是事件对象，只有路由守卫传的字符串才是目标视图 */
+  if(typeof nextView === "string") reqDocPendingView = nextView;
+  if(reqDocDirty){ openReqDocCloseDialog("dirty"); return; }
+  /* 干净但仍是草稿：关闭是作者认为「写完了」的时刻，兜底问一次是否发布 */
+  if(editingDocId && !editingMeta.publishedAt && !reqDocReadOnly && !reqDocOwnerLocked){
+    openReqDocCloseDialog("draft-clean");
+    return;
+  }
+  closeReqDocEditor(); continueReqDocRoute();
 }
 function closeReqDocCloseDialog(keepPending){
   if(!keepPending) reqDocPendingView = null;
@@ -55227,8 +55870,8 @@ function fillReqDocEditor(doc){
       toast(ex.message || "编辑器加载失败", "bad");
     });
   }
-  $("reqDocSaved").textContent = doc.updatedAt ? ("最后保存 " + fmtTs(doc.updatedAt)) : "尚未保存";
   reqDocDirty = false;
+  refreshReqDocSavedText();
   /* 正文换人了：目录要跟着换（重建前先清掉旧的高亮） */
   tocActive = null;
   rebuildToc();
@@ -55244,9 +55887,12 @@ function fillReqDocProjectSelect(selected){
   }).join("");
   if(cur) sel.value = cur;
 }
+var reqDocCountTimer = null;
 function markReqDocDirty(){
   if(reqDocReadOnly) return;
-  updateReqDocCount();
+  /* 字数统计要遍历全文，按键期间合并到停顿后再算 */
+  if(reqDocCountTimer) clearTimeout(reqDocCountTimer);
+  reqDocCountTimer = setTimeout(function(){ reqDocCountTimer = null; updateReqDocCount(); }, 300);
   if(reqDocDirty) return;
   reqDocDirty = true;
   if($("reqDocSaved")) $("reqDocSaved").textContent = "有未保存的修改";
@@ -55391,24 +56037,16 @@ function submitReqDocComment(){
   var body = { content: content };
   if(reqDocCommentQuote) body.quoteText = reqDocCommentQuote;
   if(reqDocReplyTo) body.parentId = reqDocReplyTo;
-  var mentionIds = parseMentionIds(content);
+  var mentionIds = reqDocCommentMention ? reqDocCommentMention.idsInText(content) : [];
   if(mentionIds.length) body.mentionUserIds = mentionIds;
   API.post("/api/req-docs/" + encodeURIComponent(editingDocId) + "/comments", body).then(function(){
     if(ta) ta.value = "";
+    if(reqDocCommentMention){ reqDocCommentMention.close(); reqDocCommentMention.clearPicked(); }
     setReqDocCommentQuote(null);
     setReqDocReplyTo(null);
     loadReqDocComments(editingDocId);
   }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
   .then(function(){ if(btn) btn.disabled = false; });
-}
-function parseMentionIds(text){
-  var members = rt.wsMembersCache || [];
-  var ids = [];
-  members.forEach(function(m){
-    var name = m.displayName || m.username || "";
-    if(name && text.indexOf("@" + name) >= 0 && ids.indexOf(m.userId) < 0) ids.push(m.userId);
-  });
-  return ids;
 }
 function resolveReqDocComment(commentId, resolved){
   if(!editingDocId) return;
@@ -55520,14 +56158,32 @@ function printReqDoc(){
 
 var reqDocDraftTimer = null;
 function draftKey(docId){ return "hg.docDraft:" + docId; }
+/* localStorage 每源约 5MB，内嵌图片的大正文存不下，序列化本身也拖慢编辑 */
+var REQ_DOC_DRAFT_MAX_CHARS = 1500000;
+var reqDocDraftSkipWarnedId = null;
+function warnReqDocDraftSkipped(){
+  if(reqDocDraftSkipWarnedId === editingDocId) return;
+  reqDocDraftSkipWarnedId = editingDocId;
+  toast("正文较大（含图片），不再自动存本地草稿，请及时保存", "warn");
+}
 function scheduleDraftSave(){
   if(reqDocDraftTimer) clearTimeout(reqDocDraftTimer);
   reqDocDraftTimer = setTimeout(function(){
     if(!editingDocId || reqDocReadOnly || !reqDocDirty) return;
+    var key = draftKey(editingDocId);
     try{
       var content = getEditorContent();
-      if(content) localStorage.setItem(draftKey(editingDocId), JSON.stringify({ content: content, ts: Date.now(), format: editingMeta.format }));
-    }catch(e){ /* 存储满时静默忽略 */ }
+      if(!content) return;
+      if(content.length > REQ_DOC_DRAFT_MAX_CHARS){
+        localStorage.removeItem(key);
+        warnReqDocDraftSkipped();
+        return;
+      }
+      localStorage.setItem(key, JSON.stringify({ content: content, ts: Date.now(), format: editingMeta.format }));
+    }catch(e){
+      try{ localStorage.removeItem(key); }catch(e2){ /* 存储不可用 */ }
+      warnReqDocDraftSkipped();
+    }
   }, 3000);
 }
 function checkDraftRecovery(docId){
@@ -56403,7 +57059,9 @@ function confirmReloadReqDoc(){
     if(ok && editingDocId === id) openReqDocEditor(id);
   });
 }
-function saveReqDoc(){
+/* opts.silent：关闭链路的保存，成功后不弹「仍可发布」提示（由关闭弹窗决定后续动作） */
+function saveReqDoc(opts){
+  var silent = !!(opts && opts.silent);
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return Promise.resolve(null); }
   if(reqDocSaving) return reqDocSavePromise || Promise.resolve(null);
   var title = (editingMeta.title || "").trim();
@@ -56444,6 +57102,7 @@ function saveReqDoc(){
     editingDocId = doc.id;
     state.reqDocId = doc.id;
     editingMeta.updatedAt = doc.updatedAt || editingMeta.updatedAt;
+    if(doc.publishedAt !== undefined) editingMeta.publishedAt = doc.publishedAt || null;
     /* 分类/归属可能随保存变化：即便用户还在输入（不走 fillReqDocEditor），元数据也要对齐服务器返回值 */
     editingMeta.categoryId = doc.categoryId || "";
     editingMeta.reqId = doc.reqId || "";
@@ -56456,7 +57115,19 @@ function saveReqDoc(){
       fillReqDocEditor(doc);
     }
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
-    toast("文档已保存", "fs");
+    refreshReqDocPublishBtn();
+    if(silent){
+      /* 关闭链路的保存：成功后直接关闭，发布与否由关闭弹窗上的按钮决定 */
+    }else if(editingMeta.publishedAt){
+      toast("文档已保存", "fs");
+    }else{
+      /* 保存 ≠ 发布：不打断写作，但把「仍是草稿」和一次性「发布」动作一起递到手边。
+         提示在屏幕上停留 8 秒，点的时候要确认还是这篇文档，避免发布到后来打开的文档 */
+      UI.toastAction("已保存为草稿 · 项目成员暂不可见", "发布", function(){
+        if(editingDocId !== doc.id){ toast("已切换文档，没有发布「" + (doc.title || "原文档") + "」", "warn"); return; }
+        reqDocSetPublished(true);
+      }, "fs", 8000);
+    }
     loadReqDocs(true);
     activityUI.loadInto($("reqDocActivityList"), "/api/req-docs/" + encodeURIComponent(doc.id) + "/activities");
     return doc;
@@ -56727,25 +57398,35 @@ function exportReqDocWordFromReader(docId){
     });
   }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
 }
-/* 发布/收回发布：草稿仅作者与空间管理员可见，发布后按项目访问规则可见 */
-function refreshReqDocPublishBtn(){
-  var b = $("reqDocPublish");
-  if(!b) return;
-  var published = !!editingMeta.publishedAt;
-  b.textContent = published ? "收回发布" : "发布";
-  b.title = published ? "收回后仅作者与空间管理员可见，已生成的分享链接同时失效；收回不影响继续编辑" : "发布后项目成员可见，发布后仍可继续编辑";
-  b.classList.toggle("is-published", published);
+/* 保存状态文案：草稿必须带后缀，避免「已保存」被读成「已发布」 */
+function refreshReqDocSavedText(){
+  var el = $("reqDocSaved");
+  if(!el || reqDocDirty) return;   // 脏状态文案由 markReqDocDirty / 保存分支负责
+  var base = editingMeta.updatedAt ? ("最后保存 " + fmtTs(editingMeta.updatedAt)) : "尚未保存";
+  el.textContent = base + (editingMeta.publishedAt ? "" : " · 草稿");
 }
-function toggleReqDocPublish(){
-  if(!editingDocId) return;
-  if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+/* 发布/收回发布：草稿仅作者与空间管理员可见，发布后按项目访问规则可见。
+   发布是进入可见范围的动作而非每次保存的步骤，因此已发布态用徽标展示，收回收进「更多」菜单 */
+function refreshReqDocPublishBtn(){
   var published = !!editingMeta.publishedAt;
-  var btn = $("reqDocPublish");
-  if(btn) btn.disabled = true;
-  API.put("/api/req-docs/" + encodeURIComponent(editingDocId) + "/publish", { published: !published }).then(function(d){
+  var ro = reqDocReadOnly || reqDocOwnerLocked;
+  var b = $("reqDocPublish");
+  if(b) b.hidden = published || ro;
+  var chip = $("reqDocPubChip");
+  if(chip) chip.hidden = !published;
+  var un = $("reqDocUnpublish");
+  if(un) un.hidden = !published || ro;
+}
+function reqDocSetPublished(published){
+  if(!editingDocId) return Promise.resolve(false);
+  if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return Promise.resolve(false); }
+  var btns = ["reqDocPublish", "reqDocUnpublish"].map(function(id){ return $(id); }).filter(Boolean);
+  btns.forEach(function(b){ b.disabled = true; });
+  return API.put("/api/req-docs/" + encodeURIComponent(editingDocId) + "/publish", { published: !!published }).then(function(d){
     editingMeta.publishedAt = (d && d.publishedAt) || null;
     refreshReqDocPublishBtn();
     refreshReqDocShareBtn();
+    refreshReqDocSavedText();
     /* 搜索态下列表来自 reqDocSearchList，两处都要同步，否则徽标仍是「草稿」 */
     [reqDocList, reqDocSearchList].forEach(function(list){
       if(!list) return;
@@ -56755,12 +57436,16 @@ function toggleReqDocPublish(){
     });
     renderReqDocMode();
     var vis = docVisOf(editingMeta);
-    toast(published ? "已收回发布，文档转为草稿，原分享链接已失效"
-      : vis === "members" ? "已发布，仅指定成员可见"
+    toast(published ? (vis === "members" ? "已发布，仅指定成员可见"
       : vis === "personal" ? "已发布，仅负责人可见"
-      : "已发布，项目成员现在可以查看；仍可继续编辑", "fs");
-  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); })
-    .then(function(){ if(btn) btn.disabled = false; });
+      : "已发布，项目成员现在可以查看；仍可继续编辑")
+      : "已收回发布，文档转为草稿，原分享链接已失效", "fs");
+    return true;
+  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); return false; })
+    .then(function(ok){
+      btns.forEach(function(b){ b.disabled = false; });
+      return ok;
+    });
 }
 function reqDocShareUrl(token){
   if(location.protocol === "file:") return "share.html?token=" + token + "&kind=doc";
@@ -57194,8 +57879,17 @@ function populateReqDocSelect(keep){
   });
   if($("dlgNewReqDocX")) $("dlgNewReqDocX").addEventListener("click", closeNewReqDocDialog);
   if($("dlgNewReqDocCancel")) $("dlgNewReqDocCancel").addEventListener("click", closeNewReqDocDialog);
-  if($("dlgNewReqDocOk")) $("dlgNewReqDocOk").addEventListener("click", submitNewReqDoc);
-  if($("dlgNewReqDoc")) UI.setModalSubmit($("dlgNewReqDoc"), submitNewReqDoc);
+  if($("dlgNewReqDocOk")) $("dlgNewReqDocOk").addEventListener("click", function(){ submitNewReqDoc(false); });
+  if($("dlgNewReqDocCreateOnly")) $("dlgNewReqDocCreateOnly").addEventListener("click", function(){ submitNewReqDoc(true); });
+  if($("dlgNewReqDoc")) UI.setModalSubmit($("dlgNewReqDoc"), function(){ submitNewReqDoc(false); });
+  if($("newReqDocTitle")) $("newReqDocTitle").addEventListener("input", function(){
+    syncNewReqDocTitleCount();
+    if(this.value.trim()) showNewReqDocError(false);
+  });
+  if($("newReqDocErr")) $("newReqDocErr").addEventListener("click", function(e){
+    if(!e.target.closest("button")) return;
+    if($("newReqDocTitle")) $("newReqDocTitle").focus();
+  });
   if($("newReqDocTitle")) $("newReqDocTitle").addEventListener("keydown", function(e){
     if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
     e.preventDefault();
@@ -57216,6 +57910,7 @@ function populateReqDocSelect(keep){
     applyDocCatDefaultToNewDoc();
     syncNewReqDocPath();
   });
+  if($("newReqDocCatAdd")) $("newReqDocCatAdd").addEventListener("click", beginQuickCreateNewDocCat);
   var srcBtns = document.querySelectorAll("#newReqDocSource [data-docsrc]");
   for(var si = 0; si < srcBtns.length; si++){
     (function(btn){
@@ -57230,6 +57925,7 @@ function populateReqDocSelect(keep){
     if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); resetNewReqDocPreview(); return; }
     if(!($("newReqDocTitle").value || "").trim()){
       $("newReqDocTitle").value = f.name.replace(/\.[^.]+$/, "");
+      syncNewReqDocTitleCount();
     }
     setNewReqDocBusy("解析文件…");
     parseNewReqDocFile(f).catch(function(ex){
@@ -57247,13 +57943,30 @@ function populateReqDocSelect(keep){
     });
   }
   if($("reqDocBack")) $("reqDocBack").addEventListener("click", tryCloseReqDocEditor);
-  if($("dlgReqDocCloseCancel")) $("dlgReqDocCloseCancel").addEventListener("click", closeReqDocCloseDialog);
+  if($("dlgReqDocCloseCancel")){
+    $("dlgReqDocCloseCancel").addEventListener("click", function(){
+      /* 草稿兜底弹窗里「留在草稿」= 不发布直接关；未保存弹窗里「取消」= 留在编辑器 */
+      if(reqDocCloseMode === "draft-clean"){ finishCloseReqDoc(); return; }
+      closeReqDocCloseDialog();
+    });
+  }
   if($("dlgReqDocCloseDiscard")){
     $("dlgReqDocCloseDiscard").addEventListener("click", function(){
       reqDocDirty = false;
-      closeReqDocCloseDialog(true);
-      closeReqDocEditor();
-      continueReqDocRoute();
+      finishCloseReqDoc();
+    });
+  }
+  if($("dlgReqDocCloseSaveDraft")){
+    $("dlgReqDocCloseSaveDraft").addEventListener("click", function(){
+      var btn = this;
+      if(btn.disabled) return;
+      btn.disabled = true;
+      saveReqDoc({ silent: true }).then(function(doc){
+        btn.disabled = false;
+        if(!doc) return;   // 保存失败：保留弹窗与本地正文，用户可重试或放弃
+        toast("已存为草稿并关闭（仅你可见）", "fs");
+        finishCloseReqDoc();
+      });
     });
   }
   if($("dlgReqDocCloseSave")){
@@ -57261,12 +57974,16 @@ function populateReqDocSelect(keep){
       var btn = this;
       if(btn.disabled) return;
       btn.disabled = true;
-      saveReqDoc().then(function(doc){
-        btn.disabled = false;
-        if(!doc) return;   // 保存失败：保留弹窗与本地正文，用户可重试或放弃
-        closeReqDocCloseDialog(true);
-        closeReqDocEditor();
-        continueReqDocRoute();
+      var done = function(){ btn.disabled = false; };
+      if(reqDocCloseMode === "draft-clean"){
+        reqDocSetPublished(true).then(function(ok){ done(); if(ok) finishCloseReqDoc(); });
+        return;
+      }
+      saveReqDoc({ silent: true }).then(function(doc){
+        if(!doc){ done(); return; }   // 保存失败：保留弹窗与本地正文，用户可重试或放弃
+        if(editingMeta.publishedAt){ done(); toast("文档已保存", "fs"); finishCloseReqDoc(); return; }
+        /* 草稿：先保存已成功，再发布；发布失败就留在弹窗，正文已落库不会丢 */
+        reqDocSetPublished(true).then(function(ok){ done(); if(ok) finishCloseReqDoc(); });
       });
     });
   }
@@ -57283,7 +58000,8 @@ function populateReqDocSelect(keep){
       if(e.target.closest(".menu-item")) UI.closeAllPops();
     });
   }
-  if($("reqDocPublish")) $("reqDocPublish").addEventListener("click", toggleReqDocPublish);
+  if($("reqDocPublish")) $("reqDocPublish").addEventListener("click", function(){ reqDocSetPublished(true); });
+  if($("reqDocUnpublish")) $("reqDocUnpublish").addEventListener("click", function(){ reqDocSetPublished(false); });
   if($("reqDocShare")) $("reqDocShare").addEventListener("click", openReqDocShare);
   if($("reqDocShareCopy")) $("reqDocShareCopy").addEventListener("click", reqDocCopyShare);
   if($("reqDocShareRevoke")) $("reqDocShareRevoke").addEventListener("click", reqDocRevokeShare);
@@ -57407,6 +58125,15 @@ function populateReqDocSelect(keep){
     rdaHideBubble();
   });
   if($("reqDocCommentInput")){
+    reqDocCommentMention = createMentionPicker($("reqDocCommentInput"), {
+      canOpen: function(){ return !roleReadOnly() && !!editingDocId; },
+      excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+      loadMembers: function(){
+        var docId = editingDocId;
+        if(!docId) return Promise.reject(new Error("未打开文档"));
+        return API.get("/api/req-docs/" + encodeURIComponent(docId) + "/mention-candidates");
+      }
+    });
     $("reqDocCommentInput").addEventListener("keydown", function(e){
       if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ submitReqDocComment(); }
     });
@@ -76495,6 +77222,8 @@ var caseInlineEdit = null;   /* 阅读态正在就地编辑：{kind:"pre"|"testD
 var caseInlineNewStep = null; /* 阅读态刚插入、还没保存的步骤行下标；取消时回滚 */
 var caseDetailSaving = false;
 var caseDetailModules = { reqId: null, list: [], loading: null };
+/* 分组归属：list 是当前用例可见的全部分组，d.inCase 标记已加入；与 caseSets（左侧面板）分开缓存 */
+var caseDetailSets = { reqId: null, caseId: null, list: [], loading: null, error: "", seq: 0 };
 var caseRunning = false;
 var caseDefecting = false;
 var caseMoreLoading = false;
@@ -79821,6 +80550,20 @@ function renderModuleTag(){
   }
   tag.hidden = false;
   if(inherit) inherit.hidden = !(caseModuleInherited && v && v !== caseModuleInherited);
+  syncModulePath();
+}
+/* 模块是项目内的目录：把「项目 › 目录 › 子目录」摊开，避免同名节点看不出归属 */
+function syncModulePath(){
+  var el = $("cModulePath");
+  if(!el) return;
+  var sel = $("cModule");
+  var id = sel && sel.value !== "__new" ? sel.value : "";
+  var nodes = caseFormModules.length ? caseFormModules : caseModuleNodes;
+  var path = id ? modulePathOf(id, nodes) : "";
+  if(!path){ el.hidden = true; el.innerHTML = ""; return; }
+  var full = [reqNameOf(caseFormReqId), path.replace(/ \/ /g, " › ")].filter(Boolean).join(" › ");
+  el.innerHTML = "位置：<b>" + esc(full) + "</b>";
+  el.hidden = false;
 }
 
 /* ---------- 验证工作项：先选主需求，再选该需求下的工作项 ---------- */
@@ -80070,6 +80813,7 @@ function syncCaseFormCtx(c){
   var no = c && caseNoText(c);
   if(no) parts.push("编号 <b>" + esc(no) + "</b>");
   else if(caseFormWritable()) parts.push("保存后自动编号");
+  if(!c && caseFormWritable()) parts.push('<span class="cf-only">只有标题必填</span>');
   el.innerHTML = parts.join('<span class="cf-sep" aria-hidden="true">·</span>');
   el.hidden = !parts.length;
 }
@@ -80098,6 +80842,14 @@ function syncCaseMore(){
   var more = $("caseMore");
   if(!more) return;
   more.open = !!($("cPrecondition").value.trim() || $("cTestData").value.trim());
+  syncCaseMoreMeta();
+}
+/* 收起时也能看出填了几项，不用展开确认 */
+function syncCaseMoreMeta(){
+  var meta = $("caseMoreMeta");
+  if(!meta) return;
+  var n = ($("cPrecondition").value.trim() ? 1 : 0) + ($("cTestData").value.trim() ? 1 : 0);
+  meta.textContent = (n ? "已填 " + n + " 项" : "未填") + " · 选填";
 }
 
 /* 弹窗所属项目的目录树：全部项目下新建到别的项目时，不能拿浏览项目的节点当候选 */
@@ -80152,7 +80904,7 @@ function openNewDialog(targetReqId){
   caseModuleInherited = "";
   loadFormModules(caseFormReqId, preset);
   syncPriOptions();
-  $("cPri").value = "";
+  $("cPri").value = "P2";
   renderPriSeg();
   $("cPrecondition").value = "";
   $("cTestData").value = "";
@@ -80221,6 +80973,8 @@ function openCaseDetail(id){
   UI.openModal($("dlgCase"));
   loadCaseDetailRuns(id);
   loadCaseDetailModules(c.reqId);
+  /* 每次打开都取最新归属：分组可能在左侧面板或其他会话里改过 */
+  loadCaseDetailSets(c, true);
 }
 function openEditDialog(id){
   var c = caseById(id);
@@ -80292,18 +81046,109 @@ function openCaseHint(key, anchor){
 function casePriText(p){
   return p ? esc(priName(p) || p) : '<span class="muted">未设置</span>';
 }
-function caseModuleText(c){
-  var name = moduleNameById(caseDetailModules.list, c.moduleId) || c.module || "";
-  return name ? esc(name) : '<span class="muted">未归类</span>';
+/* 目录节点只存 parentId：抽屉按祖先链拼「一级 / 二级 / 末级」，末段加粗 */
+function modulePathById(nodes, id){
+  if(!id) return [];
+  var map = {};
+  (nodes || []).forEach(function(n){ map[n.id] = n; });
+  var out = [], cur = map[id], guard = 0;
+  while(cur && guard++ < 64){
+    out.unshift(cur.name || "");
+    cur = cur.parentId ? map[cur.parentId] : null;
+  }
+  return out;
 }
-function caseDetailFact(k, v, opts){
+function caseModuleText(c){
+  var path = modulePathById(caseDetailModules.list, c.moduleId);
+  if(path.length){
+    return path.map(function(n, i){
+      return i === path.length - 1 ? '<b>' + esc(n) + '</b>' : esc(n);
+    }).join(' <span class="case-path-sep">/</span> ');
+  }
+  return c.module ? esc(c.module) : '<span class="muted">未归类</span>';
+}
+/* 关键信息才用小卡：优先级可改，执行人 / 最近执行为派生值 */
+function caseKeyCard(k, v, opts){
   opts = opts || {};
-  var cls = "case-fact" + (opts.act ? " case-fact-edit" : "");
-  return '<div class="' + cls + '"' + (opts.act ? ' data-case-act="' + opts.act + '" role="button" tabindex="0" title="修改' + esc(k) + '"' : "") + '>'
-    + '<span class="k">' + esc(k) + (opts.hint ? caseHintBtn(opts.hint) : "")
+  return '<div class="case-kcard' + (opts.act ? ' is-edit' : '') + '"'
+    + (opts.act ? ' data-case-act="' + opts.act + '" role="button" tabindex="0" title="修改' + esc(k) + '"' : "") + '>'
+    + '<span class="kk">' + esc(k) + (opts.hint ? caseHintBtn(opts.hint) : "")
     + (opts.derived ? '<span class="case-derived">' + opts.derived + '</span>' : "")
     + (opts.act ? '<span class="case-pencil" aria-hidden="true">' + icon("edit", 11) + '</span>' : "")
-    + '</span><span class="v">' + v + '</span></div>';
+    + '</span><div class="kv">' + v + '</div></div>';
+}
+function caseSetScopeLabel(s){
+  return s.visibility === "personal" ? "仅我" : (s.visibility === "members" ? "指定" : "团队");
+}
+function caseSetChipsHTML(c, writable){
+  var sets = caseDetailSets.caseId === c.id ? caseDetailSets.list : null;
+  var html = "";
+  if(caseDetailSets.caseId === c.id && caseDetailSets.error){
+    html = '<span class="case-empty-v">分组加载失败</span>';
+  }else if(sets === null || (caseDetailSets.caseId === c.id && caseDetailSets.loading && !sets.length)){
+    html = '<span class="case-empty-v">分组加载中…</span>';
+  }else{
+    var mine = sets.filter(function(s){ return s.inCase; });
+    html = mine.length ? mine.map(function(s){
+      return '<span class="case-setchip">' + esc(s.name)
+        + '<span class="sh">' + esc(caseSetScopeLabel(s)) + '</span></span>';
+    }).join("") : '<span class="case-empty-v">未加入分组</span>';
+  }
+  if(writable){
+    var has = sets && sets.some(function(s){ return s.inCase; });
+    html += '<button type="button" class="case-affil-link" data-case-act="sets">' + (has ? "管理分组" : "加入分组") + '</button>';
+  }
+  return html;
+}
+function caseWorkChipsHTML(tasks, clickable){
+  return tasks.map(function(t){
+    var inner = '<span class="case-wdot' + (t.boardColumn === "done" ? ' done' : '') + '"></span>'
+      + '<span class="t">' + esc(t.taskTitle || t.taskId) + '</span>';
+    return clickable
+      ? '<button type="button" class="case-witem" data-case-task="' + esc(t.taskId) + '" title="打开工作项">' + inner + '</button>'
+      : '<span class="case-witem is-ro">' + inner + '</span>';
+  }).join("");
+}
+/* 区块标题在卡片外：追溯 / 归类，一行一个维度 */
+function caseSecHeadHTML(title, sub, tag){
+  return '<div class="case-sec-head"><h4>' + esc(title) + '</h4>'
+    + (sub ? '<span class="sub">' + esc(sub) + '</span>' : '')
+    + (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') + '</div>';
+}
+function caseSecHTML(title, sub, tag, rows, note){
+  return '<section class="case-sec">' + caseSecHeadHTML(title, sub, tag)
+    + '<div class="case-affil">' + rows + '</div>'
+    + (note ? '<p class="case-sec-note">' + note + '</p>' : '') + '</section>';
+}
+function caseAffilRowHTML(label, inner, opts){
+  opts = opts || {};
+  var cls = "case-affil-row" + (opts.act ? " is-edit" : "") + (opts.ro ? " is-ro" : "");
+  var tag = opts.act ? ' data-case-act="' + opts.act + '" role="button" tabindex="0"'
+    + (opts.title ? ' title="' + esc(opts.title) + '"' : "") : "";
+  return '<div class="' + cls + '"' + tag + '><span class="ak">' + esc(label)
+    + (opts.hint ? caseHintBtn(opts.hint) : "")
+    + (opts.act ? '<span class="case-pencil" aria-hidden="true">' + icon("edit", 11) + '</span>' : "")
+    + '</span><div class="av">' + inner + '</div></div>';
+}
+/* 验证工作项一行说完：chips 带完成点；编辑态每项可就地移除 */
+function caseWorkValueHTML(tasks, writable, edit){
+  if(!tasks.length){
+    return '<span class="case-empty-v">未挂工作项</span>'
+      + (writable ? '<button type="button" class="case-affil-link" data-case-act="tasks">挂工作项</button>' : '');
+  }
+  var chips = edit
+    ? tasks.map(function(t){
+      var title = t.taskTitle || t.taskId;
+      return '<span class="case-witem"><span class="case-wdot' + (t.boardColumn === "done" ? ' done' : '') + '"></span>'
+        + '<span class="t">' + esc(title) + '</span>'
+        + '<button type="button" class="x" data-case-act="edit-task-remove" data-task-id="' + esc(t.taskId) + '"'
+        + ' aria-label="移除 ' + esc(title) + '">' + icon("close", 11) + '</button></span>';
+    }).join("")
+    : caseWorkChipsHTML(tasks, writable);
+  return chips + (writable
+    ? '<button type="button" class="' + (edit ? 'case-wadd' : 'case-affil-link') + '" data-case-act="tasks">'
+      + (edit ? icon("plus", 11) + ' 挂工作项' : '调整') + '</button>'
+    : '');
 }
 function caseDetailMetaText(c){
   var parts = [reqNameOf(c.reqId), caseNoText(c)];
@@ -80323,26 +81168,25 @@ function caseReadBlock(title, text, empty, field, writable){
     + '<h4>' + esc(title) + '</h4>'
     + '<p class="case-read-text' + (text ? '' : ' muted') + '">' + (text ? esc(text) : esc(empty || "未设置")) + '</p></section>';
 }
-function caseDemandCell(c){
-  if(!c.demandId) return '<span class="muted">未关联</span>';
+function caseDemandCell(c, writable){
+  if(!c.demandId){
+    return writable
+      ? '<button type="button" class="case-affil-link" data-case-act="demand">关联需求</button>'
+      : '<span class="muted">未关联</span>';
+  }
   return '<span class="case-demand-title">' + esc(c.demandTitle || c.demandId) + '</span>'
     + '<button type="button" class="case-jump" data-case-jump="demand" title="打开需求详情" aria-label="打开需求详情">'
     + icon("extlink", 12) + '</button>';
 }
 function caseDetailOverview(c, writable){
   var tasks = c.tasks || [];
-  var facts = '<div class="case-facts">'
-    + caseDetailFact("优先级", casePriText(c.priority), { act: writable ? "priority" : "", hint: "priority" })
-    + caseDetailFact("模块", caseModuleText(c), { act: writable ? "module" : "", hint: "module" })
-    + caseDetailFact("验证工作项", tasks.length ? tasks.length + " 项" : '<span class="muted">未关联</span>', { act: writable ? "tasks" : "" })
-    + caseDetailFact("关联需求", caseDemandCell(c), { act: writable ? "demand" : "", hint: "demand" })
-    + caseDetailFact("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
-    + caseDetailFact("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>', { derived: "派生" })
+  var keys = '<div class="case-keyrow">'
+    + caseKeyCard("优先级", casePriText(c.priority), { act: writable ? "priority" : "", hint: "priority" })
+    + caseKeyCard("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + caseKeyCard("最近执行", c.latestAt
+      ? esc(fmtTs(c.latestAt)) + (c.latestStatus ? '<span class="case-kv-sub">' + (STATUS_LABEL[c.latestStatus] || "") + '</span>' : "")
+      : '<span class="muted">未执行</span>', { derived: "派生" })
     + '</div>';
-  var stateHint = writable && !tasks.length
-    ? '<p class="case-state-hint">' + icon("infoCircle", 14) + '<span>未挂工作项：这条用例的覆盖只记在需求级，'
-      + '<button type="button" class="case-link-btn" data-case-act="tasks">挂工作项</button></span></p>'
-    : "";
   var last = "";
   if(c.latestStatus){
     var bug = c.latestBugTaskId
@@ -80363,19 +81207,20 @@ function caseDetailOverview(c, writable){
     last = '<section class="case-read-block"><h4>最近一次执行</h4>'
       + '<p class="case-read-text muted">还没有执行记录；' + (writable ? '点右上「记录执行」记录第一次结果。' : '等待有权限的成员执行。') + '</p></section>';
   }
-  var assoc = tasks.length
-    ? '<div class="case-assoc">' + tasks.map(function(t){
-      return '<button class="chip" type="button" data-case-task="' + esc(t.taskId) + '">'
-        + esc(t.taskTitle || t.taskId) + '</button>';
-    }).join("") + '</div>'
-    : "";
-  return facts
-    + stateHint
+  return keys
+    + caseSecHTML("追溯", "这条用例在验证什么", "建议关联",
+      caseAffilRowHTML("关联需求", caseDemandCell(c, writable),
+        { act: writable ? "demand" : "", title: "修改关联需求" })
+      + caseAffilRowHTML("验证工作项", caseWorkValueHTML(tasks, writable, false)),
+      writable ? '未挂工作项时按<b>需求级</b>统计覆盖；挂上后可按工作项追溯。' : '')
+    + caseSecHTML("归类", "放在哪、归谁管", "可选",
+      caseAffilRowHTML("模块", caseModuleText(c),
+        { act: writable ? "module" : "", title: "修改模块" })
+      + caseAffilRowHTML("分组", caseSetChipsHTML(c, writable)))
     + caseReadBlock("前置条件", c.precondition, "未设置前置条件", "pre", writable)
     + caseReadBlock("测试数据", c.testData, "未设置测试数据", "testData", writable)
     + caseDetailSteps(c, writable)
     + last
-    + assoc
     + '<details class="entity-log case-timeline" id="caseTimeline" hidden>'
     + '<summary><span class="caret" aria-hidden="true">▶</span>变更记录 <span class="cnt" id="caseTimelineCount"></span></summary>'
     + '<div class="timeline" id="caseTimelineList"></div></details>';
@@ -80524,7 +81369,15 @@ function caseDraftFrom(c){
     module: c.module || "",
     demandId: c.demandId || "",
     demandTitle: c.demandTitle || "",
-    tasks: (c.tasks || []).map(function(t){ return { taskId: t.taskId, taskTitle: t.taskTitle || "" }; }),
+    tasks: (c.tasks || []).map(function(t){
+      return {
+        taskId: t.taskId,
+        taskTitle: t.taskTitle || "",
+        itemType: t.itemType || "",
+        boardColumn: t.boardColumn || "",
+        itemNo: t.itemNo || null
+      };
+    }),
     precondition: c.precondition || "",
     testData: c.testData || "",
     steps: (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
@@ -80593,23 +81446,31 @@ function caseDetailEditHTML(c, writable){
     return '<button type="button" data-case-pri="' + o[0] + '" aria-pressed="' + (d.priority === o[0]) + '"'
       + ' title="' + esc(o[0] ? priName(o[0]) : "暂不区分") + '">' + o[1] + '</button>';
   }).join("");
-  var facts = '<div class="case-facts">'
-    + '<div class="case-fact"><span class="k">优先级' + caseHintBtn("priority") + '</span><span class="v">'
-    + '<div class="case-seg" data-case-pri-seg role="group" aria-label="优先级">' + priSeg + '</div></span></div>'
-    + '<div class="case-fact"><span class="k">模块' + caseHintBtn("module") + '</span><span class="v case-module-v">'
-    + '<select class="case-select" data-case-draft="moduleId" aria-label="模块">' + caseDraftModuleOptions(d) + '</select>'
-    + '</span></div>'
-    + '<div class="case-fact case-fact-edit" data-case-act="edit-tasks" role="button" tabindex="0"><span class="k">验证工作项'
-    + '<span class="case-pencil">' + icon("edit", 11) + '</span></span><span class="v">'
-    + (d.tasks.length ? d.tasks.length + " 项" : '<span class="muted">未关联</span>') + '</span></div>'
-    + '<div class="case-fact case-fact-edit" data-case-act="edit-demand" role="button" tabindex="0"><span class="k">关联需求'
-    + caseHintBtn("demand") + '<span class="case-pencil">' + icon("edit", 11) + '</span></span><span class="v">'
-    + (d.demandId ? esc(d.demandTitle || d.demandId) : '<span class="muted">未关联</span>') + '</span></div>'
-    + caseDetailFact("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
-    + caseDetailFact("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>', { derived: "派生" })
-    + '</div>'
-    + (!d.tasks.length ? '<p class="case-state-hint">' + icon("infoCircle", 14) + '<span>未挂工作项：这条用例的覆盖只记在需求级，'
-      + '<button type="button" class="case-link-btn" data-case-act="edit-tasks">挂工作项</button></span></p>' : "");
+  var keys = '<div class="case-keyrow">'
+    + '<div class="case-kcard"><span class="kk">优先级' + caseHintBtn("priority") + '</span>'
+    + '<div class="kv"><div class="case-seg" data-case-pri-seg role="group" aria-label="优先级">' + priSeg + '</div></div></div>'
+    + caseKeyCard("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + caseKeyCard("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + '</div>';
+  var trace = caseSecHTML("追溯", "这条用例在验证什么", "建议关联",
+    caseAffilRowHTML("关联需求",
+      (d.demandId
+        ? '<span class="case-demand-title">' + esc(d.demandTitle || d.demandId) + '</span>'
+          + '<button type="button" class="case-affil-link" data-case-act="edit-demand-clear">暂不关联</button>'
+        : '<span class="muted">未关联</span>'),
+      { act: "edit-demand", title: "修改关联需求" })
+    + caseAffilRowHTML("验证工作项", caseWorkValueHTML(d.tasks, true, true)));
+  var classify = caseSecHTML("归类", "放在哪、归谁管", "可选",
+    caseAffilRowHTML("项目",
+      esc(reqNameOf(c.reqId))
+      + '<span class="case-dtag">' + icon("lock", 11) + ' 只读</span>'
+      + '<span class="case-ro-note">由创建入口决定，不能在详情里改</span>',
+      { ro: true })
+    + caseAffilRowHTML("模块",
+      '<select class="case-select" data-case-draft="moduleId" aria-label="模块">'
+      + caseDraftModuleOptions(d) + '</select>')
+    + caseAffilRowHTML("分组", caseSetChipsHTML(c, true)),
+    '<b>模块是项目内的目录</b>：只能选「' + esc(reqNameOf(c.reqId)) + '」下的节点，选它不会改变所属项目。');
   var steps = d.steps.length
     ? caseDraftStepRowsHTML(d)
     : '<div class="case-step-empty">还没有步骤；点下方「添加步骤」补充操作与预期。</div>';
@@ -80622,7 +81483,7 @@ function caseDetailEditHTML(c, writable){
     + '<div class="case-detail-acts"><span class="case-edit-badge">编辑中</span>'
     + '<button class="icon-btn sm" type="button" data-case-edit-cancel aria-label="退出编辑" title="退出编辑">' + icon("close", 15) + '</button>'
     + '</div></div>'
-    + '<div class="case-detail-body" role="group" aria-label="编辑用例">' + facts
+    + '<div class="case-detail-body" role="group" aria-label="编辑用例">' + keys + trace + classify
     + '<section class="case-read-block"><h4>前置条件</h4>'
     + '<textarea class="case-block-input" data-case-draft="precondition" maxlength="1000" placeholder="选填：数据准备、环境要求…">'
     + esc(d.precondition) + '</textarea></section>'
@@ -80713,6 +81574,33 @@ function loadCaseDetailModules(reqId){
   });
   return caseDetailModules.loading;
 }
+/* 分组列表带 inCase 标记：一次请求同时拿到「可选分组」和「当前归属」 */
+function loadCaseDetailSets(c, force){
+  if(!c || !c.id || !c.reqId) return Promise.resolve([]);
+  if(!force && caseDetailSets.caseId === c.id && caseDetailSets.list.length) return Promise.resolve(caseDetailSets.list);
+  if(!force && caseDetailSets.caseId === c.id && caseDetailSets.loading) return caseDetailSets.loading;
+  var id = c.id, reqId = c.reqId, my = ++caseDetailSets.seq;
+  caseDetailSets.reqId = reqId;
+  caseDetailSets.caseId = id;
+  caseDetailSets.error = "";
+  if(force) caseDetailSets.list = [];
+  var p = API.get("/api/case-sets", { reqId: reqId, caseId: id }).then(function(list){
+    if(my !== caseDetailSets.seq) return caseDetailSets.list;
+    caseDetailSets.list = list || [];
+    caseDetailSets.loading = null;
+    if(caseDetailId === id) renderCaseDetail();
+    return caseDetailSets.list;
+  }).catch(function(ex){
+    if(my !== caseDetailSets.seq) return caseDetailSets.list;
+    caseDetailSets.loading = null;
+    /* 分组读失败不影响抽屉其余内容：归属行给出失败态，不弹全局错误 */
+    caseDetailSets.error = ex.message || "分组加载失败";
+    if(caseDetailId === id) renderCaseDetail();
+    return caseDetailSets.list;
+  });
+  caseDetailSets.loading = p;
+  return p;
+}
 function saveCaseDetailDraft(){
   var c = caseById(caseDetailId);
   if(!c || !caseDetailDraft || caseDetailSaving) return;
@@ -80737,7 +81625,15 @@ function saveCaseDetailDraft(){
     applyCaseBody(caseById(c.id) || c, body, {
       module: moduleNameById(caseDetailModules.list, body.moduleId),
       demandTitle: d.demandTitle || "",
-      tasks: (d.tasks || []).map(function(t){ return { taskId: t.taskId, taskTitle: t.taskTitle || "" }; })
+      tasks: (d.tasks || []).map(function(t){
+        return {
+          taskId: t.taskId,
+          taskTitle: t.taskTitle || "",
+          itemType: t.itemType || "",
+          boardColumn: t.boardColumn || "",
+          itemNo: t.itemNo || null
+        };
+      })
     });
     toast("用例已保存");
     renderCaseDetail();
@@ -80927,6 +81823,7 @@ function openCasePick(kind, anchor){
   else if(kind === "module") openCaseModulePop(anchor, c);
   else if(kind === "demand") openCaseDemandPop(anchor, c);
   else if(kind === "tasks") openCaseTasksPop(anchor, c);
+  else if(kind === "sets") openCaseSetsPop(anchor, c);
 }
 function openCasePriPop(anchor){
   var target = casePickTarget();
@@ -81100,7 +81997,14 @@ function openCaseTasksPop(anchor, c){
       var id = cb.getAttribute("data-task");
       if(cb.checked){
         var hit = list.filter(function(t){ return t.taskId === id; })[0];
-        if(hit) sel[id] = { taskId: id, taskTitle: hit.taskTitle || "" };
+        /* 保留看板列等派生字段：抽屉 chips 的完成态直接读本地数据，不再逐条查 */
+        if(hit) sel[id] = {
+          taskId: id,
+          taskTitle: hit.taskTitle || "",
+          itemType: hit.itemType || "",
+          boardColumn: hit.boardColumn || "",
+          itemNo: hit.itemNo || null
+        };
       }else{
         delete sel[id];
       }
@@ -81120,6 +82024,90 @@ function openCaseTasksPop(anchor, c){
   }).catch(function(){
     if(seq !== caseInlinePickSeq) return;
     el.querySelector(".case-task-pop-list").innerHTML = '<div class="menu-empty">工作项加载失败，请关闭后重试。</div>';
+  });
+}
+/* 分组浮层：成员是引用，增删走分组自己的接口；应用后按差集各发一次请求 */
+function applyCaseSetMembership(c, ids){
+  var cur = (caseDetailSets.list || []).filter(function(s){ return s.inCase; }).map(function(s){ return s.id; });
+  var add = ids.filter(function(id){ return cur.indexOf(id) < 0; });
+  var del = cur.filter(function(id){ return ids.indexOf(id) < 0; });
+  if(!add.length && !del.length){ UI.closeAllPops(); return; }
+  var chain = Promise.resolve();
+  add.forEach(function(id){
+    chain = chain.then(function(){
+      return API.post("/api/case-sets/" + encodeURIComponent(id) + "/members", { ids: [c.id] });
+    });
+  });
+  del.forEach(function(id){
+    chain = chain.then(function(){
+      return API.post("/api/case-sets/" + encodeURIComponent(id) + "/members/remove", { ids: [c.id] });
+    });
+  });
+  chain.then(function(){
+    UI.closeAllPops();
+    toast("分组已更新");
+    loadCaseDetailSets(c, true);
+    /* 左侧分组面板的成员数也要跟着变 */
+    if(typeof loadCaseSets === "function") loadCaseSets(true);
+  }).catch(function(ex){
+    toast(ex.message || "分组更新失败", "bad");
+  });
+}
+function openCaseSetsPop(anchor, c){
+  var pending = {};
+  function currentList(){
+    return caseDetailSets.caseId === c.id ? caseDetailSets.list : [];
+  }
+  function resetPending(){
+    pending = {};
+    currentList().forEach(function(s){ if(s.inCase) pending[s.id] = true; });
+  }
+  resetPending();
+  var el = document.createElement("div");
+  el.className = "menu case-set-pop";
+  function renderRows(){
+    var list = currentList();
+    var rows = list.length ? list.map(function(s){
+      var locked = !s.editable || s.kind === "dynamic";
+      var why = s.kind === "dynamic" ? "规则自动收录" : (!s.editable ? "只有创建人可以修改" : "");
+      return '<label class="case-task-pick' + (locked ? " is-locked" : "") + '" title="' + esc(why) + '">'
+        + '<input type="checkbox" data-set="' + esc(s.id) + '"' + (pending[s.id] ? " checked" : "")
+        + (locked ? " disabled" : "") + ' />'
+        + '<span class="case-task-pick-main"><span class="case-task-pick-title">' + esc(s.name) + '</span>'
+        + '<span class="case-task-pick-meta">' + esc(caseSetScopeLabel(s) + ' · ' + (s.caseCount || 0) + ' 条'
+          + (why ? ' · ' + why : '')) + '</span></span></label>';
+    }).join("") : (caseDetailSets.loading
+      ? '<div class="menu-empty">分组加载中…</div>'
+      : '<div class="menu-empty">该项目还没有分组；先在左侧「分组」面板新建。</div>');
+    var box = el.querySelector(".case-task-pop-list");
+    if(box) box.innerHTML = rows;
+    var note = el.querySelector(".case-pop-note");
+    if(note) note.textContent = "已选 " + Object.keys(pending).length + " 个";
+  }
+  el.innerHTML = '<div class="menu-title">分组<span class="case-pop-note"></span></div>'
+    + '<div class="case-task-pop-list"></div>'
+    + '<div class="case-pop-foot"><button class="btn" type="button" data-set-close>取消</button>'
+    + '<button class="btn primary" type="button" data-set-apply>应用</button></div>';
+  renderRows();
+  UI.openPop(el, anchor, { width: 340 });
+  if(caseDetailSets.caseId !== c.id){
+    loadCaseDetailSets(c, true).then(function(){ resetPending(); renderRows(); });
+  }else if(caseDetailSets.loading){
+    caseDetailSets.loading.then(function(){ resetPending(); renderRows(); });
+  }
+  el.querySelector(".case-task-pop-list").addEventListener("change", function(e){
+    var cb = e.target.closest("[data-set]");
+    if(!cb || cb.disabled) return;
+    var id = cb.getAttribute("data-set");
+    if(cb.checked) pending[id] = true;
+    else delete pending[id];
+    var note = el.querySelector(".case-pop-note");
+    if(note) note.textContent = "已选 " + Object.keys(pending).length + " 个";
+  });
+  el.querySelector(".case-pop-foot").addEventListener("click", function(e){
+    if(e.target.closest("[data-set-close]")){ UI.closeAllPops(); return; }
+    if(!e.target.closest("[data-set-apply]")) return;
+    applyCaseSetMembership(c, Object.keys(pending));
   });
 }
 var caseInlinePickSeq = 0;
@@ -81333,7 +82321,9 @@ function setCaseBusy(btn, busy, label){
     delete btn.dataset.label;
   }
 }
-function saveCase(){
+function saveCase(){ submitCase(false); }
+function saveCaseAgain(){ submitCase(true); }
+function submitCase(again){
   if(caseSaving || !caseFormWritable()) return;
   var title = $("cTitle").value.trim();
   if(!title){
@@ -81355,19 +82345,41 @@ function saveCase(){
     taskIds: Object.keys(caseTaskSel),
     steps: collectSteps()
   };
+  var btn = again ? $("btnSaveCaseAgain") : $("btnSaveCase");
   caseSaving = true;
-  setCaseBusy($("btnSaveCase"), true, "保存中…");
-  API.post("/api/test-cases", body).then(function(){
+  setCaseBusy(btn, true, "保存中…");
+  API.post("/api/test-cases", body).then(function(created){
     caseSaving = false;
-    setCaseBusy($("btnSaveCase"), false);
+    setCaseBusy(btn, false);
+    if(again){
+      toast("已创建 " + (caseNoText(created) || "用例") + "，接着写下一条");
+      resetCaseFormForNext();
+      loadCases();
+      return;
+    }
     closeCaseDialog();
     toast("用例已创建");
     loadCases();
   }).catch(function(ex){
     caseSaving = false;
-    setCaseBusy($("btnSaveCase"), false);
+    setCaseBusy(btn, false);
     toast(ex.message || "保存失败", "bad");
   });
+}
+/* 再建一条：保留需求 / 模块 / 工作项 / 优先级，只清本条的标题、步骤与更多字段 */
+function resetCaseFormForNext(){
+  $("cTitle").value = "";
+  $("cPrecondition").value = "";
+  $("cTestData").value = "";
+  editingCase = { id: null, steps: [{ action: "", expected: "" }] };
+  renderStepRows();
+  applyReadOnly(!caseFormWritable());
+  syncCaseFormCtx(null);
+  syncCaseTitleMeta();
+  syncCaseMore();
+  showCaseErrors([]);
+  caseFormBaseline = caseFormSnapshot();
+  $("cTitle").focus();
 }
 function removeCase(id){
   var c = caseById(id);
@@ -85485,6 +86497,7 @@ $("tcSteps").addEventListener("keydown", function(e){
   focusStep(idx + 1);
 });
 $("btnSaveCase").addEventListener("click", saveCase);
+$("btnSaveCaseAgain").addEventListener("click", saveCaseAgain);
 /* 目录下拉里的「＋ 新建目录…」：保留原来自由文本录入的便利，但落到真实节点上 */
 $("cModule").addEventListener("change", function(){
   var sel = this;
@@ -85515,6 +86528,9 @@ $("cTitle").addEventListener("input", function(){
   $("fCaseTitle").classList.remove("invalid");
   syncCaseTitleMeta();
   if(this.value.trim()) showCaseErrors([]);
+});
+["cPrecondition", "cTestData"].forEach(function(id){
+  $(id).addEventListener("input", syncCaseMoreMeta);
 });
 $("cPriSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-pri]");
@@ -85611,11 +86627,38 @@ $("caseDetailView").addEventListener("click", function(e){
   var actEl = e.target.closest("[data-case-act]");
   if(actEl){
     var act = actEl.getAttribute("data-case-act");
-    var anchor = actEl.closest(".case-fact") || actEl;
-    if(act === "priority" || act === "module" || act === "demand" || act === "tasks"
-      || act === "edit-demand" || act === "edit-tasks"){
+    var anchor = actEl;
+    if(act === "edit-demand-clear"){
+      if(!caseDetailDraft) return;
+      var dtasks = (caseDetailDraft.tasks || []).length;
+      function clearDemand(){
+        caseDetailDraft.demandId = "";
+        caseDetailDraft.demandTitle = "";
+        caseDetailDraft.tasks = [];
+        syncCaseDraftDirty();
+        renderCaseDetail();
+      }
+      if(dtasks){
+        UI.showConfirm({
+          title: "取消关联需求",
+          msg: "现有 " + dtasks + " 个验证工作项会一并移除；保存后生效。",
+          okText: "取消关联",
+          cancelText: "保留"
+        }).then(function(ok){ if(ok) clearDemand(); });
+      }else clearDemand();
+      return;
+    }
+    if(act === "edit-task-remove"){
+      if(!caseDetailDraft) return;
+      var tid = actEl.getAttribute("data-task-id");
+      caseDetailDraft.tasks = (caseDetailDraft.tasks || []).filter(function(t){ return t.taskId !== tid; });
+      syncCaseDraftDirty();
+      renderCaseDetail();
+      return;
+    }
+    if(act === "priority" || act === "module" || act === "demand" || act === "tasks" || act === "sets"
+      || act === "edit-demand"){
       if(act === "edit-demand") act = "demand";
-      if(act === "edit-tasks") act = "tasks";
       openCasePick(act, anchor);
       return;
     }
@@ -89691,6 +90734,6 @@ window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-16 05:23</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-16 07:17</span></div>
 </body>
 </html>

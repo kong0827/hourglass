@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-15: full schema after migrations 01-101 (75 tables).
+-- Updated 2026-11-16: full schema after migrations 01-102 (76 tables).
 --
--- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -1056,6 +1056,41 @@ CREATE TABLE `task_log` (
   KEY `idx_ws_created` (`workspace_id`,`created_at`),
   KEY `idx_ws_task_created` (`workspace_id`,`task_id`,`created_at`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1696 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务操作日志（时间线）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `task_publication_judgement`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `task_publication_judgement` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '人工标记记录ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '工作项ID（task.id）',
+  `judged_state` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '人工标记状态：published已发布',
+  `effective_on` date NOT NULL COMMENT '标记生效日期；历史迁移时填写实际发布时间',
+  `judge_reason` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '人工标记原因（迁移来源、无发布记录说明）',
+  `judged_by_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '标记人账号ID',
+  `judged_by_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '标记人名称快照',
+  `judged_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '标记时间',
+  `revoked_at` datetime(6) DEFAULT NULL COMMENT '撤销时间；为空表示当前生效',
+  `revoked_by_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '撤销人账号ID',
+  `revoked_by_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '撤销人名称快照',
+  `revoke_reason` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '撤销原因',
+  `active_task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    GENERATED ALWAYS AS (CASE WHEN `revoked_at` IS NULL THEN `task_id` ELSE NULL END) STORED
+    COMMENT '生效标记归一化键；撤销后为NULL',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_task_active_judgement` (`workspace_id`,`active_task_id`),
+  KEY `idx_task_judgement_history` (`workspace_id`,`task_id`,`judged_at`,`id`),
+  CONSTRAINT `chk_task_judgement_state`
+    CHECK (`judged_state` IN ('published')),
+  CONSTRAINT `chk_task_judgement_revoke`
+    CHECK (
+      (`revoked_at` IS NULL AND `revoked_by_user_id` IS NULL
+        AND `revoked_by_name` IS NULL AND `revoke_reason` IS NULL)
+      OR
+      (`revoked_at` IS NOT NULL AND `revoked_by_user_id` IS NOT NULL
+        AND `revoked_by_name` IS NOT NULL AND `revoke_reason` IS NOT NULL)
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工作项历史发布人工标记（追加式，撤销后保留历史；不作为生产发布证据）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `task_tag`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

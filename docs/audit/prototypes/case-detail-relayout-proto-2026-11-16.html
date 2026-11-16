@@ -1,0 +1,1991 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>用例详情 · 归属重排原型（2026-11-16）</title>
+<style>
+/* ===== 设计令牌：与 frontend/css/tokens.css 同口径 ===== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085; --text-inverse:#FFFFFF;
+  --scrim:rgba(16,24,40,.32);
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --p0:#F04438; --p0-soft:#FEF3F2; --p0-fg:#B42318;
+  --p1:#F79009; --p1-soft:#FFFAEB; --p1-fg:#B54708;
+  --p2:#2E90FA; --p2-soft:#EFF8FF; --p2-fg:#175CD3;
+  --p3:#667085; --p3-soft:#F2F4F7; --p3-fg:#475467;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  --ease-out:cubic-bezier(.2,.8,.2,1); --dur-fast:120ms; --dur-base:180ms;
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D; --surface-hover:#1F2937; --surface-active:#26313F;
+  --border:#25303D; --border-strong:#334153; --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798; --text-inverse:#0D1219;
+  --scrim:rgba(0,0,0,.55);
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-border:#5C2A26; --danger-fg:#FDA29B;
+  --info:#53B1FD; --info-soft:#10202F; --info-border:#1F4468; --info-fg:#84CAFF;
+  --plum:#9B8AFB; --plum-soft:#1D1933; --plum-border:#3B3266; --plum-fg:#B9ACFC;
+  --p0:#F97066; --p0-soft:#2B1615; --p0-fg:#FDA29B;
+  --p1:#FDB022; --p1-soft:#2A2110; --p1-fg:#FEC84B;
+  --p2:#53B1FD; --p2-soft:#10202F; --p2-fg:#84CAFF;
+  --p3:#7B8798; --p3-soft:#1A222D; --p3-fg:#A9B4C2;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --shadow-xl:0 24px 48px -12px rgba(0,0,0,.6);
+  --ring-focus:0 0 0 3px rgba(76,141,255,.28);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit;}
+input,textarea,select{font-family:inherit;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px;border:2px solid var(--surface);}
+::-webkit-scrollbar-thumb:hover{background:var(--text-3);}
+
+/* ===== 原型工具条（仅评审用） ===== */
+.proto-bar{position:sticky;top:0;z-index:90;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:9px 16px;background:var(--surface);border-bottom:1px solid var(--border);}
+.proto-bar .pt{font-size:13px;font-weight:700;color:var(--text);margin-right:2px;}
+.proto-bar .psub{font-size:11.5px;color:var(--text-3);margin-right:auto;min-width:0;}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;background:var(--surface);}
+.seg button{padding:5px 11px;font-size:12px;font-weight:600;color:var(--text-2);border-right:1px solid var(--border);}
+.seg button:last-child{border-right:0;}
+.seg button[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-fg);}
+.seg button:disabled{opacity:.45;cursor:not-allowed;}
+.pbtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border:1px solid var(--border);
+  border-radius:var(--r-sm);background:var(--surface);font-size:12px;font-weight:600;color:var(--text-2);}
+.pbtn:hover{border-color:var(--border-strong);background:var(--surface-hover);color:var(--text);}
+.pbtn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.pbtn.primary:hover{background:var(--primary-hover);}
+.pbtn[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+
+/* ===== 舞台：左用例列表 + 右详情抽屉 ===== */
+.stage{display:flex;justify-content:center;align-items:flex-start;gap:18px;padding:22px 16px 90px;}
+.stage.narrow .case-list{display:none;}
+.case-list{width:318px;flex:0 0 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-xs);overflow:hidden;position:sticky;top:70px;}
+.case-list-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border);}
+.case-list-head b{font-size:12.5px;font-weight:650;}
+.case-list-head span{margin-left:auto;font-size:11px;color:var(--text-3);}
+.case-row{display:flex;gap:9px;width:100%;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);}
+.case-row:last-child{border-bottom:0;}
+.case-row:hover{background:var(--surface-hover);}
+.case-row.on{background:var(--primary-soft);}
+.case-row .dot{width:7px;height:7px;border-radius:50%;margin-top:6px;flex:0 0 auto;background:var(--text-3);}
+.case-row .dot.passed{background:var(--success);}
+.case-row .dot.failed{background:var(--danger);}
+.case-row .dot.blocked{background:var(--warning);}
+.cr-main{min-width:0;flex:1 1 auto;}
+.cr-top{display:flex;align-items:center;gap:6px;}
+.cr-top b{font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--text-3);}
+.cr-title{display:block;margin-top:2px;font-size:12.5px;font-weight:600;line-height:1.42;color:var(--text);overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.case-row.on .cr-title{color:var(--primary-fg);}
+
+.drawer{flex:1 1 auto;min-width:0;max-width:860px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-xl);box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;
+  max-height:calc(100vh - 130px);}
+.stage.narrow .drawer{max-width:760px;}
+@media (max-width:900px){
+  .case-list{display:none;}
+  .stage{padding:12px 10px 60px;}
+  .drawer{max-height:calc(100vh - 110px);}
+}
+
+/* ===== 头部 ===== */
+.head{display:flex;align-items:flex-start;gap:12px;padding:16px 20px 12px;border-bottom:1px solid var(--border);}
+.head-main{flex:1 1 auto;min-width:0;}
+.head-line{display:flex;align-items:flex-start;gap:8px;min-width:0;}
+.st-pill{flex:0 0 auto;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;
+  border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-2);font-size:11.5px;font-weight:650;margin-top:2px;}
+.st-pill i{width:6px;height:6px;border-radius:50%;background:var(--text-3);}
+.st-pill.passed{background:var(--success-soft);color:var(--success-fg);}
+.st-pill.passed i{background:var(--success);}
+.st-pill.failed{background:var(--danger-soft);color:var(--danger-fg);}
+.st-pill.failed i{background:var(--danger);}
+.st-pill.blocked{background:var(--warning-soft);color:var(--warning-fg);}
+.st-pill.blocked i{background:var(--warning);}
+.tc-title{flex:1 1 auto;min-width:0;margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em;line-height:1.4;
+  overflow-wrap:anywhere;border-radius:var(--r-xs);padding:1px 4px;margin-left:-4px;transition:background var(--dur-fast);}
+.tc-title[data-act]:hover{background:var(--surface-hover);cursor:text;}
+.tc-title[data-act]:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.tc-title.readonly{cursor:default;}
+.title-input{flex:1 1 auto;min-width:0;width:auto;padding:2px 6px;margin:-1px -6px 0;border:1px solid var(--primary-border);
+  border-radius:var(--r-xs);background:var(--surface);color:var(--text);font-size:16px;font-weight:650;line-height:1.4;
+  font-family:inherit;outline:0;resize:none;overflow:hidden;}
+.title-input:focus{box-shadow:var(--ring-focus);}
+.head-meta{margin:5px 0 0;font-size:12px;line-height:18px;color:var(--text-3);}
+.head-count{margin-left:10px;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.head-acts{display:flex;align-items:center;gap:6px;flex:0 0 auto;}
+.edit-badge{flex:0 0 auto;margin-top:2px;display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:var(--r-pill);
+  background:var(--primary-soft);color:var(--primary-fg);font-size:11.5px;font-weight:650;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border);
+  border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.btn:hover{border-color:var(--border-strong);background:var(--surface-hover);color:var(--text);}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-hover);}
+.btn.sm{height:26px;padding:0 10px;font-size:12px;}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--text-2);}
+.btn.ghost:hover{background:var(--surface-hover);color:var(--text);}
+.btn.danger{color:var(--danger-fg);border-color:var(--danger-border);background:var(--danger-soft);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.icon-btn{width:30px;height:30px;display:grid;place-items:center;border-radius:var(--r-sm);border:1px solid transparent;color:var(--text-3);}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text);}
+.icon-btn svg{width:15px;height:15px;}
+
+/* ===== 页签 ===== */
+.tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--border);overflow-x:auto;flex:0 0 auto;}
+.tabs button{height:36px;padding:0 10px;border-bottom:2px solid transparent;font-size:12.5px;color:var(--text-2);white-space:nowrap;}
+.tabs button:hover{color:var(--text);}
+.tabs button.on{color:var(--text);border-bottom-color:var(--primary);font-weight:600;}
+.tabs .cnt{margin-left:3px;font-size:11px;font-weight:500;color:var(--text-3);}
+
+/* ===== 正文 ===== */
+.body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px 20px 22px;
+  display:flex;flex-direction:column;gap:12px;}
+.ro-note{display:flex;align-items:flex-start;gap:7px;padding:8px 11px;border:1px solid var(--warning-border);
+  border-radius:var(--r-sm);background:var(--warning-soft);color:var(--warning-fg);font-size:11.5px;line-height:1.5;}
+.ro-note svg{width:14px;height:14px;flex:0 0 auto;margin-top:1px;}
+
+/* ===== 关键信息（只给小卡）+ 归属（整宽标签行）===== */
+.keyrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.kcard{position:relative;display:flex;flex-direction:column;gap:2px;min-width:0;padding:8px 11px;
+  border-radius:var(--r-md);background:var(--surface-sunken);}
+.kcard .kk{display:flex;align-items:center;gap:4px;font-size:10.5px;line-height:15px;color:var(--text-3);}
+.kcard .kv{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;
+  font-size:12.5px;line-height:18px;color:var(--text);overflow-wrap:anywhere;}
+.kcard .kv.muted{color:var(--text-3);}
+.kcard .derived{font-size:10px;color:var(--text-3);}
+.kcard.editable{cursor:pointer;transition:background var(--dur-fast);}
+.kcard.editable:hover{background:var(--surface-active);}
+.kcard.editable:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.kcard .pencil{position:absolute;right:7px;top:7px;width:18px;height:18px;display:grid;place-items:center;border-radius:var(--r-xs);
+  color:var(--text-3);opacity:0;transition:opacity var(--dur-fast),background var(--dur-fast),color var(--dur-fast);}
+.kcard .pencil svg{width:11px;height:11px;}
+.kcard.editable:hover .pencil{opacity:1;}
+.kcard .pencil:hover{background:var(--primary-soft);color:var(--primary-fg);}
+.kcard .seg-btns{width:100%;}
+.kcard .seg-btns button{height:26px;font-size:11px;padding:0 2px;}
+
+.affil{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;}
+.affil-head{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+.affil-head h4{margin:0;font-size:12px;font-weight:650;color:var(--text-2);}
+.affil-head .sum{margin-left:auto;font-size:10.5px;color:var(--text-3);}
+.affil-row{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start;
+  padding:8px 12px;border-bottom:1px solid var(--border);}
+.affil-row:last-child{border-bottom:0;}
+.affil-row .ak{display:flex;align-items:center;gap:4px;font-size:11.5px;line-height:22px;color:var(--text-3);white-space:nowrap;}
+.affil-row .av{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;min-height:22px;}
+.affil-row.editable{cursor:pointer;transition:background var(--dur-fast);}
+.affil-row.editable:hover{background:var(--surface-hover);}
+.affil-row.editable:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.affil-row .pencil{width:18px;height:18px;display:grid;place-items:center;border-radius:var(--r-xs);
+  color:var(--text-3);opacity:0;transition:opacity var(--dur-fast),background var(--dur-fast);}
+.affil-row .pencil svg{width:11px;height:11px;}
+.affil-row.editable:hover .pencil{opacity:1;}
+.path{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;min-height:22px;padding:0 4px;margin-left:-4px;
+  border-radius:var(--r-xs);font-size:12.5px;line-height:18px;color:var(--text-2);text-align:left;}
+.path b{font-weight:650;color:var(--text);}
+.path .sep{color:var(--text-3);opacity:.65;}
+.path:hover{background:var(--primary-soft);}
+.affil .dem{display:inline-flex;align-items:center;gap:7px;min-width:0;max-width:100%;min-height:22px;
+  font-size:12.5px;line-height:18px;color:var(--text);text-align:left;}
+.affil .dem .dt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.affil .dem:hover .dt{color:var(--primary-fg);}
+.affil .dem .jump{opacity:0;transition:opacity var(--dur-fast);}
+.affil .dem:hover .jump{opacity:1;}
+.affil select{height:28px;width:100%;max-width:300px;padding:0 24px 0 7px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text);font-size:12px;outline:0;appearance:none;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 6px center;cursor:pointer;}
+.affil select:focus{border-color:var(--primary);box-shadow:var(--ring-focus);}
+.jump{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:var(--r-xs);color:var(--text-3);flex:0 0 auto;}
+.jump:hover{background:var(--primary-soft);color:var(--primary-fg);}
+.jump svg{width:11px;height:11px;}
+.empty-v{font-size:12px;line-height:18px;color:var(--text-3);}
+.muted{color:var(--text-3);}
+.link-inline{padding:0 1px;color:var(--primary-fg);font-size:11.5px;font-weight:600;}
+.link-inline:hover{text-decoration:underline;}
+.affil-row .pencil:focus-visible,.affil .dem .jump:focus-visible{opacity:1;outline:2px solid var(--primary);outline-offset:1px;}
+
+.setchip{display:inline-flex;align-items:center;gap:6px;height:24px;max-width:100%;padding:0 9px;
+  border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);
+  font-size:11.5px;color:var(--text-2);}
+.setchip:hover{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);}
+.setchip .sh{font-size:10px;color:var(--text-3);}
+.setchip.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);}
+
+.worksec{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;}
+.witems{display:flex;flex-wrap:wrap;gap:7px;padding:10px 12px;}
+.witem{display:inline-flex;align-items:center;gap:7px;max-width:100%;min-height:30px;padding:3px 10px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+  font-size:12px;line-height:18px;color:var(--text);text-align:left;}
+.witem:hover{border-color:var(--primary-border);background:var(--surface-hover);}
+.witem .wt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.witem .wdot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;background:var(--border-strong);}
+.wdot.todo{background:var(--border-strong);}
+.wdot.doing{background:var(--info);}
+.wdot.done{background:var(--success);}
+.witem .wst{font-size:10.5px;color:var(--text-3);}
+.witem.done .wt{color:var(--text-2);}
+.wempty{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 12px;font-size:12px;color:var(--text-3);}
+
+/* 方案 B：归属改整宽卡片（标签在上，值在下） */
+.layout-b .affil{background:transparent;border:0;border-radius:0;overflow:visible;}
+.layout-b .affil-head{padding:0 0 7px;background:transparent;border:0;}
+.layout-b .affil-row{grid-template-columns:minmax(0,1fr);gap:3px;padding:10px 13px;margin-bottom:8px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.layout-b .affil-row:last-child{margin-bottom:0;border-bottom:1px solid var(--border);}
+.layout-b .affil-row .ak{line-height:16px;}
+.layout-b .affil select{max-width:420px;}
+@media (max-width:640px){
+  .keyrow{grid-template-columns:1fr 1fr;}
+  .kcard:first-child{grid-column:1 / -1;}
+  .affil-row{grid-template-columns:minmax(0,1fr);gap:2px;}
+  .affil-row .ak{line-height:16px;}
+  .affil select{max-width:none;}
+}
+.pri{display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:4px;font-size:10.5px;font-weight:700;}
+.pri.P0{background:var(--p0-soft);color:var(--p0-fg);}
+.pri.P1{background:var(--p1-soft);color:var(--p1-fg);}
+.pri.P2{background:var(--p2-soft);color:var(--p2-fg);}
+.pri.P3{background:var(--p3-soft);color:var(--p3-fg);}
+.pri.none{background:var(--surface-sunken);color:var(--text-3);font-weight:600;}
+
+.block{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:12px 14px;}
+
+/* 说明：? 收起，点开才看；审阅时可用工具条「展开说明」铺开 */
+.hint-btn{flex:0 0 auto;width:15px;height:15px;padding:0;border:1px solid var(--border-strong);border-radius:50%;
+  background:var(--surface);color:var(--text-3);font-size:10px;font-weight:700;line-height:13px;text-align:center;}
+.hint-btn:hover{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);}
+.hint-line{margin:8px 0 0;padding:7px 9px;border-radius:var(--r-xs);background:var(--surface-sunken);
+  font-size:11.5px;line-height:17px;color:var(--text-2);}
+.hint-line b{display:inline-block;margin-right:6px;color:var(--text);}
+.hint-line + .hint-line{margin-top:4px;}
+.req{color:var(--danger-fg);font-weight:700;margin-left:2px;}
+.tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-pill);font-size:10.5px;font-weight:600;
+  background:var(--surface-sunken);color:var(--text-3);}
+.tag.ok{background:var(--success-soft);color:var(--success-fg);}
+.block-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-height:18px;}
+.block-head h4{margin:0;font-size:12px;font-weight:600;color:var(--text-2);}
+.block-head .hint{margin-left:auto;font-size:10.5px;color:var(--text-3);opacity:0;transition:opacity var(--dur-fast);}
+.block-head .hint b{font-weight:600;color:var(--text-2);}
+.block.editable:hover .hint{opacity:1;}
+.block .txt{margin:0;font-size:12.5px;line-height:19px;white-space:pre-line;overflow-wrap:anywhere;}
+.block .txt.muted{color:var(--text-3);}
+.block.editable .txt{cursor:text;}
+.block textarea{display:block;width:100%;min-height:66px;padding:7px 9px;border:1px solid var(--primary-border);
+  border-radius:var(--r-xs);background:var(--surface);color:var(--text);font-size:12.5px;line-height:19px;resize:vertical;outline:0;}
+.block textarea:focus{box-shadow:var(--ring-focus);}
+.block .edit-acts{display:flex;align-items:center;gap:6px;margin-top:8px;}
+.block .kbd-note{font-size:10.5px;color:var(--text-3);}
+
+/* 步骤 */
+.steps{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--border);}
+.steps-head,.step-row{display:grid;grid-template-columns:26px minmax(0,1.25fr) minmax(0,1fr) 96px;gap:10px;align-items:start;}
+.steps-head{padding:7px 11px;background:var(--surface-sunken);font-size:10.5px;color:var(--text-3);}
+.step-row{background:var(--surface);padding:9px 11px;border-top:1px solid var(--border);}
+.step-row:hover{background:var(--surface-hover);}
+.step-no{width:18px;height:18px;margin-top:1px;border-radius:50%;background:var(--surface-sunken);color:var(--text-2);
+  font-size:10.5px;font-weight:600;display:grid;place-items:center;}
+.step-cell{min-width:0;font-size:12.5px;line-height:19px;overflow-wrap:anywhere;}
+.step-cell.exp{color:var(--text-3);}
+.step-cell.editable{cursor:text;}
+.step-cell textarea{display:block;width:100%;min-height:34px;padding:4px 6px;border:1px solid var(--primary-border);
+  border-radius:var(--r-xs);background:var(--surface);color:var(--text);font-size:12.5px;line-height:19px;resize:vertical;outline:0;}
+.step-cell textarea:focus{box-shadow:var(--ring-focus);}
+.step-acts{display:flex;align-items:center;gap:2px;justify-content:flex-end;opacity:0;transition:opacity var(--dur-fast);}
+.step-row:hover .step-acts,.step-acts:focus-within{opacity:1;}
+.step-acts button{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-xs);color:var(--text-3);}
+.step-acts button:hover{background:var(--surface-active);color:var(--text);}
+.step-acts button.del:hover{background:var(--danger-soft);color:var(--danger-fg);}
+.step-acts button:disabled{opacity:.35;cursor:not-allowed;}
+.step-acts svg{width:12px;height:12px;}
+.step-foot{display:flex;align-items:center;gap:8px;padding:8px 11px;background:var(--surface);border-top:1px solid var(--border);}
+.step-empty{padding:16px 12px;background:var(--surface);text-align:center;font-size:12px;color:var(--text-3);border-top:1px solid var(--border);}
+
+/* 最近执行 */
+.last-run{display:flex;flex-direction:column;gap:7px;}
+.last-run .when{font-size:12px;color:var(--text-3);}
+.last-run .note{margin:0;font-size:12.5px;line-height:19px;}
+.last-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
+.chip{display:inline-flex;align-items:center;gap:5px;height:24px;max-width:100%;padding:0 9px;border:1px solid var(--border);
+  border-radius:var(--r-pill);background:var(--surface);font-size:11.5px;color:var(--text-2);}
+.chip:hover{border-color:var(--border-strong);background:var(--surface-hover);color:var(--text);}
+.chip .ct{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* 执行历史 / 缺陷 / 变更记录 */
+.run-item{border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;background:var(--surface);}
+.run-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
+.run-top .by{color:var(--text-2);font-weight:600;}
+.run-note{margin:6px 0 0;font-size:12.5px;line-height:19px;color:var(--text);}
+.empty{padding:22px 12px;text-align:center;font-size:12.5px;color:var(--text-3);}
+.timeline{display:flex;flex-direction:column;gap:0;}
+.tl-item{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:8px 0;border-bottom:1px dashed var(--border);}
+.tl-item:last-child{border-bottom:0;}
+.tl-item .t{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.tl-item .x{font-size:12.5px;color:var(--text-2);}
+
+/* 编辑态 */
+.edit-note{margin:0;font-size:11px;line-height:1.6;color:var(--text-3);}
+.edit-note b{color:var(--text-2);font-weight:650;}
+.work-checks{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;}
+.work-checks-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);background:var(--surface-sunken);}
+.work-checks-head b{font-size:12px;font-weight:650;color:var(--text-2);}
+.work-checks-head span{margin-left:auto;font-size:11px;color:var(--text-3);}
+.work-check{display:flex;align-items:center;gap:9px;width:100%;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);}
+.work-check:last-child{border-bottom:0;}
+.work-check:hover{background:var(--surface-hover);}
+.work-check .box{width:15px;height:15px;border:1.5px solid var(--border-strong);border-radius:4px;display:grid;place-items:center;flex:0 0 auto;color:transparent;}
+.work-check.on .box{background:var(--primary);border-color:var(--primary);color:#fff;}
+.work-check .box svg{width:10px;height:10px;}
+.work-check .wt{font-size:12.5px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.work-check.on .wt{font-weight:600;}
+.foot{display:flex;align-items:center;gap:8px;padding:12px 20px;
+  border-top:1px solid var(--border);background:var(--surface);}
+.foot-slot{flex:0 0 auto;}
+.foot-slot:empty{display:none;}
+.foot .note{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text-3);}
+.foot .grow{flex:1 1 auto;}
+.foot .dirty{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--warning-fg);}
+.foot .dirty[hidden]{display:none;}
+.foot .dirty i{width:6px;height:6px;border-radius:50%;background:var(--warning);}
+.save-status{font-size:11px;color:var(--text-3);}
+.save-status.ok{color:var(--success-fg);}
+.save-status.bad{color:var(--danger-fg);}
+
+/* ===== 浮层 ===== */
+.pop{position:fixed;z-index:220;width:330px;max-width:calc(100vw - 20px);background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-xl);overflow:hidden;animation:popin var(--dur-fast) var(--ease-out);}
+@keyframes popin{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+.pop-title{padding:9px 12px;border-bottom:1px solid var(--border);font-size:11.5px;font-weight:650;color:var(--text-2);}
+.pop-body{padding:10px 12px 12px;font-size:12px;line-height:18px;color:var(--text-2);}
+.pop-body b{color:var(--text);font-weight:650;}
+.pop-list{max-height:300px;overflow:auto;padding:5px;}
+.menu-item{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:6px 9px;border-radius:var(--r-sm);
+  text-align:left;font-size:12.5px;color:var(--text);}
+.menu-item:hover,.menu-item:focus-visible{background:var(--surface-hover);}
+.menu-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.menu-item .mi{flex:0 0 auto;width:20px;display:grid;place-items:center;color:var(--text-3);}
+.menu-item .mi svg{width:13px;height:13px;}
+.menu-item .mt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu-item .ms{font-size:10.5px;color:var(--text-3);}
+.menu-item.on .ms{color:var(--primary-fg);opacity:.8;}
+.menu-sep{height:1px;margin:5px 4px;background:var(--border);}
+.pop-search{padding:8px;border-bottom:1px solid var(--border);}
+.pop-search input{width:100%;height:32px;padding:0 10px 0 30px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);color:var(--text);font-size:12.5px;outline:0;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='9' cy='9' r='6'/%3E%3Cpath d='M17 17l-3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:9px center;}
+.pop-search input:focus{border-color:var(--primary);box-shadow:var(--ring-focus);}
+.pop-foot{display:flex;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid var(--border);background:var(--surface-sunken);}
+.pop-foot .grow{flex:1 1 auto;font-size:11px;color:var(--text-3);}
+.st-tag{display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:var(--r-pill);font-size:10px;font-weight:600;white-space:nowrap;}
+.st-tag.pass{background:var(--success-soft);color:var(--success-fg);}
+.st-tag.plan{background:var(--info-soft);color:var(--info-fg);}
+.st-tag.dev{background:var(--warning-soft);color:var(--warning-fg);}
+.st-tag.closed{background:var(--surface-sunken);color:var(--text-3);}
+.st-tag.bad{background:var(--danger-soft);color:var(--danger-fg);}
+.st-tag.warn{background:var(--warning-soft);color:var(--warning-fg);}
+
+/* ===== 弹窗 ===== */
+.scrim{position:fixed;inset:0;z-index:240;background:var(--scrim);display:grid;place-items:center;padding:16px;animation:fade var(--dur-fast);}
+@keyframes fade{from{opacity:0;}to{opacity:1;}}
+.modal{width:min(430px,94vw);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-xl);overflow:hidden;animation:popin var(--dur-base) var(--ease-out);}
+.modal-head{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--border);}
+.modal-head h3{margin:0;font-size:13.5px;font-weight:650;}
+.modal-head .icon-btn{margin-left:auto;}
+.modal-body{padding:14px 16px;display:flex;flex-direction:column;gap:12px;}
+.modal-body p{margin:0;font-size:12.5px;line-height:1.6;color:var(--text-2);}
+.modal-field{display:flex;flex-direction:column;gap:6px;}
+.modal-field > label{font-size:11.5px;color:var(--text-3);}
+.modal-field input,.modal-field textarea{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);color:var(--text);font-size:12.5px;outline:0;}
+.modal-field input{height:32px;}
+.modal-field textarea{min-height:64px;resize:vertical;line-height:19px;}
+.modal-field input:focus,.modal-field textarea:focus{border-color:var(--primary);box-shadow:var(--ring-focus);}
+.modal-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:11px 16px;border-top:1px solid var(--border);background:var(--surface-sunken);}
+.seg-btns{display:inline-flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;width:100%;}
+.seg-btns button{flex:1 1 0;height:30px;font-size:12px;font-weight:600;color:var(--text-2);border-right:1px solid var(--border);}
+.seg-btns button:last-child{border-right:0;}
+.seg-btns button[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-fg);}
+
+/* ===== Toast ===== */
+.toast-wrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:400;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;}
+.toast{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:var(--r-md);background:var(--text);color:var(--surface);
+  font-size:12.5px;font-weight:550;box-shadow:var(--shadow-lg);animation:toastin var(--dur-base) var(--ease-out);max-width:min(92vw,460px);}
+.toast .ti{display:inline-grid;place-items:center;width:16px;height:16px;flex:0 0 auto;}
+.toast.ok .ti{color:var(--success);}
+.toast.warn .ti{color:var(--warning);}
+.toast.bad .ti{color:var(--danger);}
+@keyframes toastin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+/* ===== 方案说明 ===== */
+.explain{position:fixed;top:0;right:0;bottom:0;z-index:300;width:min(460px,94vw);background:var(--surface);
+  border-left:1px solid var(--border);box-shadow:var(--shadow-xl);transform:translateX(102%);transition:transform var(--dur-base) var(--ease-out);
+  display:flex;flex-direction:column;}
+.explain.open{transform:none;}
+.explain-head{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--border);}
+.explain-head h3{margin:0;font-size:13.5px;font-weight:650;}
+.explain-head .icon-btn{margin-left:auto;}
+.explain-body{flex:1 1 auto;overflow:auto;padding:14px 16px 60px;display:flex;flex-direction:column;gap:10px;}
+.explain-body h4{margin:10px 0 0;font-size:12.5px;font-weight:650;color:var(--text);}
+.explain-body p,.explain-body li{font-size:12px;line-height:1.65;color:var(--text-2);}
+.explain-body p{margin:0;}
+.explain-body ul,.explain-body ol{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px;}
+.explain-body table{width:100%;border-collapse:collapse;font-size:11.5px;}
+.explain-body th,.explain-body td{border:1px solid var(--border);padding:5px 7px;text-align:left;vertical-align:top;color:var(--text-2);}
+.explain-body th{background:var(--surface-sunken);font-weight:650;color:var(--text-3);}
+.explain-body code{padding:0 4px;border-radius:4px;background:var(--surface-sunken);font-family:var(--font-mono);font-size:10.5px;}
+.explain-lead{padding:9px 11px;border:1px solid var(--primary-border);border-radius:var(--r-sm);background:var(--primary-soft);color:var(--primary-fg)!important;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="proto-bar">
+  <span class="pt">用例详情 · 归属重排</span>
+  <span class="psub">小卡只放关键信息；模块、需求、分组、工作项回到整宽归属区</span>
+  <div class="seg" id="modeSeg" role="group" aria-label="视图">
+    <button type="button" data-mode="read" aria-pressed="true">阅读态</button>
+    <button type="button" data-mode="edit" aria-pressed="false">完整编辑</button>
+  </div>
+  <div class="seg" id="layoutSeg" role="group" aria-label="归属区布局">
+    <button type="button" data-layout="rows" aria-pressed="true">归属条</button>
+    <button type="button" data-layout="cards" aria-pressed="false">归属卡</button>
+  </div>
+  <button class="pbtn" type="button" id="roToggle" aria-pressed="false">只读项目</button>
+  <button class="pbtn" type="button" id="failToggle" aria-pressed="false">模拟保存失败</button>
+  <button class="pbtn" type="button" id="vpToggle" aria-pressed="false">窄屏 760</button>
+  <button class="pbtn" type="button" id="themeToggle" aria-pressed="false">深色</button>
+  <button class="pbtn" type="button" id="hintToggle" aria-pressed="false">展开说明</button>
+  <button class="pbtn" type="button" id="explainBtn">方案说明</button>
+  <button class="pbtn primary" type="button" id="resetBtn">重置</button>
+</div>
+
+<div class="stage" id="stage">
+  <aside class="case-list" aria-label="用例列表">
+    <div class="case-list-head"><b>用例</b><span>流程引擎 · 4 条</span></div>
+    <div id="caseList"></div>
+  </aside>
+  <section class="drawer" id="drawer" aria-label="用例详情">
+    <div id="drawerHead"></div>
+    <div id="drawerTabs"></div>
+    <div class="body" id="drawerBody"></div>
+    <div class="foot-slot" id="drawerFoot"></div>
+  </section>
+</div>
+
+<div id="popHost"></div>
+<div id="modalHost"></div>
+<div class="toast-wrap" id="toastWrap"></div>
+
+<aside class="explain" id="explain" aria-label="方案说明">
+  <div class="explain-head">
+    <h3>方案说明 · 用例详情归属重排</h3>
+    <button class="icon-btn" type="button" id="explainClose" aria-label="关闭方案说明">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+    </button>
+  </div>
+  <div class="explain-body">
+    <p class="explain-lead">上一版把六个字段做成等权小卡：模块只剩「支付下单」四个字，看不出目录路径；验证工作项只剩「2 项」，看不到验的是哪两件事；分组没有位置。本版按信息类型重新分层——小卡只留给关键摘要，归属回到整宽行，工作项独立成区。</p>
+
+    <h4>分层规则</h4>
+    <table>
+      <thead><tr><th>层级</th><th>内容</th><th>形态</th></tr></thead>
+      <tbody>
+        <tr><td>关键摘要</td><td>优先级、执行人、最近执行</td><td>3 张浅底小卡，值短、可扫读；优先级可就地改</td></tr>
+        <tr><td>归属</td><td>模块、关联需求、分组</td><td>整宽标签行，左标签右值，值可换行</td></tr>
+        <tr><td>覆盖</td><td>验证工作项</td><td>独立区，工作项标题 chip + 状态点，不再压成计数</td></tr>
+        <tr><td>正文</td><td>前置条件、测试数据、步骤、最近执行</td><td>保持上一版结构不变</td></tr>
+      </tbody>
+    </table>
+
+    <h4>分组（本次补上）</h4>
+    <ul>
+      <li>一条用例可同时属于多个分组：成员是引用不是复制，删分组不删用例。</li>
+      <li>团队共享分组可进交付证据；个人分组只本人可见，进不了证据链。chip 上标「共享 / 仅我」。</li>
+      <li>没加入任何分组时显示空态与「加入分组」，不隐藏入口。</li>
+      <li>分组只影响筛选与交付证据，不阻断保存与执行。</li>
+      <li><b>数据缺口：</b>后端目前只有 /api/case-sets 的分组 CRUD 与成员增删，没有「这条用例属于哪些分组」的读取接口。落地前需补 /api/test-cases/{id}/sets 或 /api/case-sets?caseId=。</li>
+    </ul>
+
+    <h4>方案 A / B 对比</h4>
+    <table>
+      <thead><tr><th>方案</th><th>形态</th><th>适合</th></tr></thead>
+      <tbody>
+        <tr><td><b>A 归属条</b></td><td>一个块内 4 行，标签左置 58px，行间细线</td><td>默认推荐：密度高，模块路径与需求左对齐，适合经常扫读</td></tr>
+        <tr><td><b>B 归属卡</b></td><td>每项一张整宽卡片，标签在上、值在下，可换行</td><td>模块层级深、分组多、标题长时更舒展，但纵向更长</td></tr>
+      </tbody>
+    </table>
+    <p>工具条「归属条 / 归属卡」可切换对照；两种方案字段、交互完全一致，只是排版不同。</p>
+
+    <h4>交互</h4>
+    <ul>
+      <li>阅读态点模块行开浮层、点需求行搜索替换、点分组行多选、点工作项区增删；选完即存，失败回滚。</li>
+      <li>编辑态同构：同一位置换成下拉、勾选与分段按钮，不另起一套表单。</li>
+      <li>改关联需求仍会重算模块继承与工作项候选；不匹配的工作项保存前确认移除。</li>
+      <li>只读项目隐藏全部编辑入口，归属区退化为纯展示。</li>
+    </ul>
+
+    <h4>需要拍板</h4>
+    <ol>
+      <li>归属区选 A 归属条还是 B 归属卡（推荐 A，信息更紧凑）。</li>
+      <li>分组放在概览归属区，还是单独一个页签（本原型放归属区，理由是分组属于「这条用例归在哪」）。</li>
+      <li>分组 chip 是否显示成员数（本原型不显示，仅在浮层列表里显示，避免 chip 过长）。</li>
+      <li>关键摘要三卡是否保留：本原型保留，作为不读正文也能看到的执行概览。</li>
+    </ol>
+  </div>
+</aside>
+
+<script>
+(function(){
+  "use strict";
+
+  var esc = function(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  }); };
+
+  var ICON = {
+    close:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>',
+    pencil:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.6l3.6 3.6M4 16l1-4 9.4-9.4a1.6 1.6 0 0 1 2.3 0l1.7 1.7a1.6 1.6 0 0 1 0 2.3L9 16.2z"/></svg>',
+    jump:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13l6-6M8 7h5v5"/></svg>',
+    plus:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>',
+    up:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15V5M6 9l4-4 4 4"/></svg>',
+    down:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5v10M6 11l4 4 4-4"/></svg>',
+    trash:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10"/></svg>',
+    check:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"/></svg>',
+    search:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="6"/><path d="M17 17l-3.5-3.5"/></svg>',
+    folder:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 5.5h5l1.6 1.8H17v7.2H3z"/></svg>',
+    minus:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 10h10"/></svg>',
+    lock:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.6"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg>',
+    ok:'<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="8"/><path d="M6.5 10.5l2.5 2.5 4.5-5"/></svg>',
+    warn:'<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7v4m0 3h.01M8.3 3.3L2.6 13a1.6 1.6 0 0 0 1.4 2.4h12a1.6 1.6 0 0 0 1.4-2.4L11.7 3.3a1.6 1.6 0 0 0-2.8 0z"/></svg>'
+  };
+
+  var STATUS = {
+    untested:{label:"未执行", cls:""},
+    passed:{label:"通过", cls:"passed"},
+    failed:{label:"失败", cls:"failed"},
+    blocked:{label:"阻塞", cls:"blocked"},
+    skipped:{label:"跳过", cls:""}
+  };
+  var PRI_NAMES = {P0:"阻塞主流程", P1:"核心功能", P2:"一般功能", P3:"边缘场景"};
+
+  /* 说明只在点开时出现：平时不占行高（合并自 2026-11-16 降噪稿） */
+  var HINTS = {
+    title:{t:"标题怎么写", b:"写成「对象 + 条件 + 预期」，执行的人不用回头问。只写验证点，不要复述需求标题。<br>例：取消已支付订单后，库存回滚且订单状态变为已取消。"},
+    pri:{t:"优先级口径", b:"P0 阻塞主流程、必须回归；P1 核心功能；P2 一般功能；P3 边缘场景。不设置 = 暂不区分，不影响保存与执行。"},
+    demand:{t:"关联需求能带出什么", b:"候选只列本项目需求。选中后模块自动继承需求上的目录，验证工作项从该需求下挑选。<br>不关联也能保存，覆盖先记在需求级。"},
+    module:{t:"模块取自哪里", b:"模块就是项目目录节点：一条用例只归一个模块，用于筛选、分组与统计。切换需求会按需求上的模块重新继承，也可以手动指定。"},
+    step:{t:"步骤与预期", b:"预期结果写成可观察、可判断的结果：页面文案、字段状态、数值变化。预期留空 = 只记录操作，不判通过；最多 30 行。<br>输入时按 Ctrl + Enter 在下方插入新行。"}
+  };
+  function hintBtn(key){
+    return '<button class="hint-btn" type="button" data-hint="' + key + '" aria-label="' + esc(HINTS[key].t) + '">?</button>';
+  }
+  function hintLine(key){
+    return state.hints ? '<p class="hint-line"><b>' + esc(HINTS[key].t) + '</b>' + HINTS[key].b + '</p>' : "";
+  }
+
+  var DEMANDS = [
+    {id:"d-appr", title:"审批流程中连着过两次同一审批人的合并审批", status:"pass", label:"评审通过", moduleId:"m-appr-2"},
+    {id:"d-pay", title:"统一支付网关 · 幂等校验", status:"dev", label:"开发中", moduleId:"m-pay"},
+    {id:"d-refund", title:"退款审批流", status:"pass", label:"评审通过", moduleId:"m-refund"},
+    {id:"d-auth", title:"登录安全加固", status:"plan", label:"规划中", moduleId:"m-auth"},
+    {id:"d-report", title:"营收对账报表", status:"plan", label:"规划中", moduleId:""}
+  ];
+
+  var DEMAND_TASKS = [
+    {id:"t-a1", demandId:"d-appr", title:"外接流程审批人解析", st:"doing"},
+    {id:"t-a2", demandId:"d-appr", title:"一级/二级部门负责人授权", st:"done"},
+    {id:"t-a3", demandId:"d-appr", title:"连续节点合并校验", st:"todo"},
+    {id:"t-p1", demandId:"d-pay", title:"支付回调幂等", st:"doing"},
+    {id:"t-p2", demandId:"d-pay", title:"退款重试", st:"done"},
+    {id:"t-p3", demandId:"d-pay", title:"对账文件补偿", st:"todo"},
+    {id:"t-r1", demandId:"d-refund", title:"退款审批节点", st:"done"},
+    {id:"t-r2", demandId:"d-refund", title:"退款重试", st:"done"},
+    {id:"t-u1", demandId:"d-auth", title:"登录失败计数", st:"todo"},
+    {id:"t-u2", demandId:"d-auth", title:"账号锁定策略", st:"todo"},
+    {id:"t-s1", demandId:"d-report", title:"营收对账报表", st:"todo"},
+    {id:"t-s2", demandId:"d-report", title:"报表导出", st:"todo"}
+  ];
+
+  /* 分组：多归属、共享/个人两种可见范围，成员是引用不是复制 */
+  var CASE_SETS = [
+    {id:"cs-smoke", name:"支付冒烟", scope:"team", count:8},
+    {id:"cs-reg", name:"回归 · 支付网关", scope:"team", count:14},
+    {id:"cs-release", name:"上线审计证据", scope:"team", count:11},
+    {id:"cs-refund", name:"退款专项", scope:"team", count:3},
+    {id:"cs-own", name:"我负责的用例", scope:"private", count:5}
+  ];
+  var TASK_ST = {todo:{label:"未开始", cls:"todo"}, doing:{label:"进行中", cls:"doing"}, done:{label:"已完成", cls:"done"}};
+
+  var MODULES = [
+    {id:"", name:"未归类", depth:0},
+    {id:"m-appr", name:"流程引擎", depth:0},
+    {id:"m-appr-1", name:"流程引擎 / 外接流程", depth:1},
+    {id:"m-appr-2", name:"流程引擎 / 审批节点", depth:1},
+    {id:"m-pay", name:"支付下单", depth:0},
+    {id:"m-pay-1", name:"支付下单 / 回调", depth:1},
+    {id:"m-pay-2", name:"支付下单 / 对账", depth:1},
+    {id:"m-refund", name:"退款", depth:0},
+    {id:"m-refund-1", name:"退款 / 审核", depth:1},
+    {id:"m-auth", name:"登录与权限", depth:0}
+  ];
+
+  function seed(){
+    return [
+      {
+        id:"c8", no:"TC-008", project:"流程引擎",
+        title:"验证外接流程中存在三个连续节点为一级部门负责人、二级部门负责人、一级部门负责人，一级部门负责人授权给二级部门负责人审批",
+        status:"untested", pri:"", moduleId:"",
+        demand:DEMANDS[0], tasks:[], setIds:[],
+        pre:"", testData:"", steps:[],
+        lastBy:"", lastAt:"", note:"", bugId:"", bugTitle:"",
+        runs:[],
+        logs:[{t:"2026-11-15 09:41", text:"创建用例"}]
+      },
+      {
+        id:"c12", no:"TC-012", project:"流程引擎",
+        title:"支付回调重复投递时退款不重复入账", status:"failed", pri:"P1", moduleId:"m-pay-1",
+        demand:DEMANDS[1], tasks:[{id:"t-p1", title:"支付回调幂等", st:"doing"}, {id:"t-p2", title:"退款重试", st:"done"}],
+        setIds:["cs-smoke", "cs-reg"],
+        pre:"已登录；沙箱环境切换到支付业务部；存在可退款订单。",
+        testData:"账号 admin / 123456；订单号 TEST-20261114-001；回调签名使用默认密钥。",
+        steps:[
+          {a:"提交退款申请", e:"退款单创建成功，状态为待审核"},
+          {a:"重复投递同一回调 3 次", e:"只入账一次；重复回调返回成功但不入账"},
+          {a:"查询账户流水", e:"仅 1 条退款流水"}
+        ],
+        lastBy:"陈昊", lastAt:"2026-11-14 18:47", note:"第 2 步重复回调导致重复入账 2 次。",
+        bugId:"b-1024", bugTitle:"重复回调导致重复入账",
+        runs:[
+          {status:"failed", by:"陈昊", at:"2026-11-14 18:47", env:"沙箱 · 支付业务部", note:"第 2 步重复回调导致重复入账 2 次。"},
+          {status:"passed", by:"陈昊", at:"2026-11-13 15:20", env:"沙箱 · 支付业务部", note:""}
+        ],
+        logs:[
+          {t:"2026-11-15 10:02", text:"标题由「支付回调退款」改为「支付回调重复投递时退款不重复入账」"},
+          {t:"2026-11-14 18:47", text:"记录执行结果 · 失败"},
+          {t:"2026-11-14 18:48", text:"转出缺陷「重复回调导致重复入账」"},
+          {t:"2026-11-12 11:30", text:"创建用例"}
+        ]
+      },
+      {
+        id:"c15", no:"TC-015", project:"流程引擎",
+        title:"退款审批：财务驳回后退回发起人可修改重提", status:"passed", pri:"P2", moduleId:"m-refund-1",
+        demand:DEMANDS[2], tasks:[{id:"t-r1", title:"退款审批节点", st:"done"}],
+        setIds:["cs-reg"],
+        pre:"已存在待审批退款单。",
+        testData:"账号 finance01 / 123456；退款单 RF-20261115-002。",
+        steps:[
+          {a:"财务账号驳回退款单", e:"退回发起人，状态为已驳回"},
+          {a:"发起人修改金额后重提", e:"重新进入财务待审"}
+        ],
+        lastBy:"吴军", lastAt:"2026-11-15 10:12", note:"", bugId:"", bugTitle:"",
+        runs:[{status:"passed", by:"吴军", at:"2026-11-15 10:12", env:"预发环境", note:""}],
+        logs:[
+          {t:"2026-11-15 10:12", text:"记录执行结果 · 通过"},
+          {t:"2026-11-10 16:20", text:"创建用例"}
+        ]
+      },
+      {
+        id:"c20", no:"TC-020", project:"流程引擎",
+        title:"登录失败三次后锁定账号 5 分钟", status:"blocked", pri:"P0", moduleId:"m-auth",
+        demand:DEMANDS[3], tasks:[{id:"t-u1", title:"登录失败计数", st:"todo"}],
+        setIds:["cs-own"],
+        pre:"SSO 测试环境可用。", testData:"账号 locked_demo / 123456。",
+        steps:[
+          {a:"连续输错密码 3 次", e:"账号锁定，提示剩余解锁时间"},
+          {a:"第 4 次使用正确密码登录", e:"仍被拒绝，直到锁定期结束"}
+        ],
+        lastBy:"孔祥劲", lastAt:"2026-11-15 16:03", note:"SSO 测试环境未就绪，网关返回 502，无法完成验证。",
+        bugId:"", bugTitle:"",
+        runs:[{status:"blocked", by:"孔祥劲", at:"2026-11-15 16:03", env:"SSO 测试环境", note:"网关返回 502。"}],
+        logs:[
+          {t:"2026-11-15 16:03", text:"记录执行结果 · 阻塞"},
+          {t:"2026-11-09 14:05", text:"创建用例"}
+        ]
+      }
+    ];
+  }
+
+  var DATA = seed();
+  var state = {
+    id:"c8", mode:"read", readOnly:false, failMode:false, narrow:false, hints:false, layout:"rows",
+    tab:"overview", saving:false, saveFailed:false,
+    editField:null, stepEdit:null, editTitle:false, titleDraft:"",
+    pop:null, popAnchor:null, popOutside:null,
+    modal:null, draft:null, pendingTasks:null, pendingTasksOpen:false, pendingSets:null,
+    runDraft:null, demandQuery:"", taskQuery:""
+  };
+
+  var $ = function(id){ return document.getElementById(id); };
+  var stage = $("stage"), listEl = $("caseList"), headEl = $("drawerHead"),
+      tabsEl = $("drawerTabs"), bodyEl = $("drawerBody"), footEl = $("drawerFoot"), drawerEl = $("drawer");
+
+  function deep(o){ return JSON.parse(JSON.stringify(o)); }
+  function autoGrowTitle(t){
+    t.style.height = "auto";
+    t.style.height = Math.min(t.scrollHeight, 68) + "px";
+  }  function cur(){ return DATA.filter(function(x){ return x.id === state.id; })[0]; }
+  function editable(){ return !state.readOnly; }
+  function inEdit(){ return state.mode === "edit"; }
+  function findDemand(id){ return DEMANDS.filter(function(d){ return d.id === id; })[0] || null; }
+  function findModule(id){
+    var hit = MODULES.filter(function(m){ return m.id === (id || ""); })[0];
+    return hit ? hit.name : "未归类";
+  }
+  function findSet(id){ return CASE_SETS.filter(function(s){ return s.id === id; })[0] || null; }
+  function tasksOf(demandId){ return DEMAND_TASKS.filter(function(t){ return t.demandId === demandId; }); }
+  function taskById(id){ return DEMAND_TASKS.filter(function(t){ return t.id === id; })[0] || null; }
+  function nowText(){
+    var d = new Date(), p = function(n){ return n < 10 ? "0" + n : "" + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function dueTasksMismatch(demandId, tasks){
+    if(!tasks || !tasks.length) return [];
+    return tasks.filter(function(t){
+      var src = taskById(t.id) || t;
+      return !src.demandId || src.demandId !== demandId;
+    });
+  }
+
+  /* ==================== 渲染 ==================== */
+  function render(){ renderList(); renderDrawer(); syncToolbar(); }
+
+  function renderList(){
+    if(!listEl) return;
+    listEl.innerHTML = DATA.map(function(c){
+      var st = STATUS[c.status] || STATUS.untested;
+      return '<button type="button" class="case-row' + (c.id === state.id ? " on" : "") + '" data-pick="' + c.id + '">'
+        + '<span class="dot ' + st.cls + '"></span>'
+        + '<span class="cr-main"><span class="cr-top"><b>' + esc(c.no) + '</b>'
+        + (c.pri ? '<span class="pri ' + c.pri + '">' + c.pri + '</span>' : "")
+        + '</span><span class="cr-title">' + esc(c.title) + '</span></span></button>';
+    }).join("");
+  }
+
+  function renderDrawer(){
+    var c = cur();
+    if(!c) return;
+    headEl.innerHTML = headHTML(c);
+    if(inEdit()){
+      tabsEl.innerHTML = "";
+      tabsEl.hidden = true;
+    }else{
+      tabsEl.hidden = false;
+      tabsEl.innerHTML = tabsHTML(c);
+    }
+    bodyEl.innerHTML = inEdit() ? editBodyHTML(state.draft) : readBodyHTML(c);
+    footEl.innerHTML = inEdit() ? editFootHTML() : "";
+    if(inEdit()){
+      var t = $("editTitleInput");
+      if(t){
+        autoGrowTitle(t);
+        if(state.focusTitle){ state.focusTitle = false; t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+      }
+      if(state.stepFocus !== null && state.stepFocus !== undefined){
+        var nf = document.querySelector('[data-step-draft="' + state.stepFocus + '"][data-k="a"]');
+        state.stepFocus = null;
+        if(nf) nf.focus();
+      }
+      syncDirty();
+    }else if(state.editTitle){
+      var it = $("inlineTitle");
+      if(it && document.activeElement !== it){ it.focus(); it.setSelectionRange(it.value.length, it.value.length); }
+    }else if(state.editField){
+      var tf = $("fieldEdit");
+      if(tf && document.activeElement !== tf){ tf.focus(); }
+    }else if(state.stepEdit){
+      var st = $("stepEdit");
+      if(st && document.activeElement !== st){ st.focus(); var v = st.value; st.setSelectionRange(v.length, v.length); }
+    }
+  }
+
+  function headHTML(c){
+    var meta = [c.project, c.no, c.lastAt ? ("最近执行 " + c.lastAt) : "最近执行 未执行"];
+    var saving = state.saving ? '<span class="save-status">保存中…</span>' : "";
+    if(inEdit()){
+      var d = state.draft || c;
+      return '<div class="head"><div class="head-main">'
+        + '<div class="head-line">' + stPill(c)
+        + '<textarea class="title-input" id="editTitleInput" rows="1" maxlength="100" aria-label="用例标题">' + esc(d.title) + '</textarea>'
+        + '</div>'
+        + '<p class="head-meta">' + esc(meta.join(" · ")) + '<span class="head-count" id="titleCount">' + (d.title || "").length + ' / 100</span></p>'
+        + '</div><div class="head-acts"><span class="edit-badge">编辑中</span>' + saving
+        + '<button class="icon-btn" type="button" data-act="cancel" title="退出编辑">' + ICON.close + '</button>'
+        + '</div></div>';
+    }
+    return '<div class="head"><div class="head-main">'
+      + '<div class="head-line">' + stPill(c) + titleHTML(c) + '</div>'
+      + '<p class="head-meta">' + esc(meta.join(" · ")) + (saving ? ' · ' : "") + saving + '</p>'
+      + '</div><div class="head-acts">'
+      + (editable() ? '<button class="btn sm" type="button" data-act="run">记录执行</button>'
+        + '<button class="btn sm primary" type="button" data-act="edit">编辑</button>' : "")
+      + '<button class="icon-btn" type="button" data-act="close" title="关闭">' + ICON.close + '</button>'
+      + '</div></div>';
+  }
+
+  function stPill(c){
+    var st = STATUS[c.status] || STATUS.untested;
+    return '<span class="st-pill ' + st.cls + '"><i></i>' + st.label + '</span>';
+  }
+
+  function titleHTML(c){
+    if(state.editTitle){
+      return '<input class="title-input" id="inlineTitle" data-title value="' + esc(state.titleDraft) + '" maxlength="100" aria-label="用例标题">';
+    }
+    if(!editable()) return '<h2 class="tc-title readonly">' + esc(c.title) + '</h2>';
+    return '<h2 class="tc-title" data-act="title" role="button" tabindex="0" title="点击修改标题">' + esc(c.title) + '</h2>';
+  }
+
+  function tabsHTML(c){
+    var tabs = [
+      ["overview", "概览", null],
+      ["runs", "执行历史", c.runs.length],
+      ["defects", "缺陷", c.bugs ? c.bugs.length : (c.bugId ? 1 : 0)],
+      ["logs", "变更记录", c.logs.length]
+    ];
+    return tabs.map(function(t){
+      return '<button type="button" role="tab" data-tab="' + t[0] + '" aria-selected="' + (state.tab === t[0]) + '"'
+        + ' class="' + (state.tab === t[0] ? "on" : "") + '">' + t[1]
+        + (t[2] === null ? "" : '<span class="cnt">' + t[2] + '</span>') + '</button>';
+    }).join("");
+  }
+
+  /* ---------- 阅读态 ---------- */
+  function readBodyHTML(c){
+    var h = state.readOnly
+      ? '<div class="ro-note">' + ICON.lock + '<span>你对该项目只有查看权限：字段仍可阅读与跳转，但不显示就地编辑入口。</span></div>'
+      : "";
+    if(state.tab === "runs") return h + runsHTML(c);
+    if(state.tab === "defects") return h + defectsHTML(c);
+    if(state.tab === "logs") return h + logsHTML(c);
+    return h + keyCardsHTML(c) + hintLine("pri") + affilHTML(c) + hintLine("module") + hintLine("demand")
+      + worksecHTML(c) + blockHTML(c, "pre") + blockHTML(c, "testData")
+      + stepsHTML(c) + lastRunHTML(c);
+  }
+
+  /* 小卡只承载关键摘要：优先级、执行人、最近执行 */
+  function keyCard(label, inner, opts){
+    opts = opts || {};
+    var w = editable();
+    var cls = "kcard" + (opts.editable && w ? " editable" : "");
+    var attrs = opts.editable && w
+      ? ' data-act="' + opts.act + '" tabindex="0" role="button" title="修改' + esc(label) + '"' : "";
+    return '<div class="' + cls + '"' + attrs + '>'
+      + '<span class="kk">' + esc(label) + (opts.hint ? hintBtn(opts.hint) : "")
+      + (opts.derived ? '<span class="derived">派生</span>' : "")
+      + (opts.editable && w ? '<span class="pencil" aria-hidden="true">' + ICON.pencil + '</span>' : "")
+      + '</span>'
+      + '<div class="kv' + (opts.muted ? " muted" : "") + '">' + inner + '</div></div>';
+  }
+
+  function keyCardsHTML(c){
+    var priV = c.pri
+      ? '<span class="pri ' + c.pri + '">' + c.pri + '</span><span>' + esc(PRI_NAMES[c.pri] || "") + '</span>'
+      : '<span class="muted">未设置</span>';
+    var byV = c.lastBy ? esc(c.lastBy) : '<span class="muted">未执行</span>';
+    var stTag = {passed:"pass", failed:"bad", blocked:"warn"}[c.status] || "closed";
+    var st = STATUS[c.status] || STATUS.untested;
+    var atV = c.lastAt
+      ? '<span>' + esc(c.lastAt) + '</span><span class="st-tag ' + stTag + '">' + esc(st.label) + '</span>'
+      : '<span class="muted">未执行</span>';
+    return '<div class="keyrow">'
+      + keyCard("优先级", priV, {editable:true, act:"edit-pri", hint:"pri"})
+      + keyCard("执行人", byV, {muted:!c.lastBy, derived:true})
+      + keyCard("最近执行", atV, {muted:!c.lastAt, derived:true})
+      + '</div>';
+  }
+
+  /* 归属：整宽标签行，值可换行；不再压成小卡 */
+  function affilRow(label, inner, rowAct, hint){
+    return '<div class="affil-row' + (rowAct ? " editable" : "") + '"' + (rowAct ? ' data-row-act="' + rowAct + '"' : "") + '>'
+      + '<span class="ak">' + esc(label) + (hint ? hintBtn(hint) : "") + '</span>'
+      + '<div class="av">' + inner
+      + (rowAct ? '<button type="button" class="pencil" data-act="' + rowAct + '" aria-label="修改' + esc(label) + '">' + ICON.pencil + '</button>' : "")
+      + '</div></div>';
+  }
+
+  function pathHTML(c){
+    if(!c.moduleId) return '<span class="empty-v">未归类（不选目录）</span>';
+    var segs = findModule(c.moduleId).split(" / ");
+    return '<span class="path">' + segs.map(function(s, i){
+      var last = i === segs.length - 1;
+      return (i ? '<span class="sep">/</span>' : "") + (last ? '<b>' + esc(s) + '</b>' : '<span>' + esc(s) + '</span>');
+    }).join("") + '</span>';
+  }
+
+  function setsHTML(c){
+    var ids = c.setIds || [];
+    if(!ids.length) return '<span class="empty-v">未加入分组</span>'
+      + (editable() ? '<button type="button" class="link-inline" data-act="edit-sets">加入分组</button>' : "");
+    return ids.map(function(id){
+      var s = findSet(id);
+      if(!s) return "";
+      return '<span class="setchip">' + esc(s.name) + '<span class="sh">' + (s.scope === "private" ? "仅我" : "共享") + '</span></span>';
+    }).join("")
+      + (editable() ? '<button type="button" class="setchip on" data-act="edit-sets"><span class="sh">+</span> 管理分组</button>' : "");
+  }
+
+  function affilHTML(c){
+    var w = editable();
+    var demV = c.demand
+      ? '<span class="dem"><span class="dt">' + esc(c.demand.title) + '</span>'
+        + '<span class="st-tag ' + c.demand.status + '">' + esc(c.demand.label) + '</span>'
+        + '<button type="button" class="jump" data-jump="demand" title="打开需求详情" aria-label="打开需求详情">' + ICON.jump + '</button></span>'
+      : '<span class="empty-v">未关联需求</span>'
+        + (w ? '<button type="button" class="link-inline" data-act="edit-demand">关联需求</button>' : "");
+    return '<section class="affil">'
+      + '<div class="affil-head"><h4>归属</h4><span class="sum">决定筛选、分组与交付证据口径</span></div>'
+      + affilRow("模块", pathHTML(c) + (!c.moduleId && w ? '<button type="button" class="link-inline" data-act="edit-module">选择模块</button>' : ""), w ? "edit-module" : "", "module")
+      + affilRow("关联需求", demV, w ? "edit-demand" : "", "demand")
+      + affilRow("分组", setsHTML(c), w ? "edit-sets" : "")
+      + '</section>';
+  }
+
+  /* 工作项独立成区：看得到验的是哪几件事、各自进展 */
+  function worksecHTML(c){
+    var w = editable();
+    var tasks = c.tasks || [];
+    var done = tasks.filter(function(t){ return (t.st || "todo") === "done"; }).length;
+    var body = tasks.length
+      ? '<div class="witems">' + tasks.map(function(t){
+          var st = TASK_ST[t.st || "todo"] || TASK_ST.todo;
+          return '<button type="button" class="witem' + (t.st === "done" ? " done" : "") + '"'
+            + (w ? ' data-act="edit-tasks" title="调整验证工作项"' : ' title="' + esc(st.label) + '"') + '>'
+            + '<span class="wdot ' + st.cls + '"></span><span class="wt">' + esc(t.title) + '</span>'
+            + '<span class="wst">' + esc(st.label) + '</span></button>';
+        }).join("") + '</div>'
+      : '<div class="wempty"><span>未挂工作项：覆盖只记在需求级，不进工作项验收。</span>'
+        + (w ? '<button type="button" class="link-inline" data-act="edit-tasks">挂工作项</button>' : "") + '</div>';
+    return '<section class="worksec">'
+      + '<div class="affil-head"><h4>验证工作项</h4><span class="sum">'
+      + (tasks.length ? (tasks.length + " 项 · " + done + " 项已完成") : "未挂") + '</span>'
+      + (w && tasks.length ? '<button type="button" class="link-inline" data-act="edit-tasks">调整</button>' : "")
+      + '</div>' + body + '</section>';
+  }
+
+  function blockHTML(c, field){
+    var label = field === "pre" ? "前置条件" : "测试数据";
+    var empty = field === "pre" ? "未设置前置条件" : "未设置测试数据";
+    var val = c[field] || "";
+    var w = editable();
+    var editing = state.editField && state.editField.field === field;
+    var head = '<div class="block-head"><h4>' + esc(label) + '</h4>'
+      + (w && !editing ? '<span class="hint"><b>点击</b>就地编辑</span>' : "") + '</div>';
+    if(editing){
+      return '<section class="block"><div class="block-head"><h4>' + esc(label) + '</h4></div>'
+        + '<textarea id="fieldEdit" data-field="' + field + '" data-baseline="' + esc(val) + '" maxlength="1000"'
+        + ' placeholder="' + esc(field === "pre" ? "选填：数据准备、环境要求…" : "执行时要准备的账号、金额、边界值") + '">'
+        + esc(val) + '</textarea>'
+        + '<div class="edit-acts"><span class="kbd-note">失焦或 Ctrl/⌘+Enter 保存 · Esc 还原</span></div></section>';
+    }
+    return '<section class="block' + (w ? " editable" : "") + '"' + (w ? ' data-act="edit-' + field + '" tabindex="0" role="button" title="点击编辑' + label + '"' : "") + '>'
+      + head
+      + '<p class="txt' + (val ? "" : " muted") + '">' + esc(val || empty) + '</p></section>';
+  }
+
+  function stepsHTML(c){
+    var w = editable();
+    var steps = c.steps || [];
+    var rows = steps.length ? steps.map(function(s, i){
+      var editingA = state.stepEdit && state.stepEdit.i === i && state.stepEdit.k === "a";
+      var editingE = state.stepEdit && state.stepEdit.i === i && state.stepEdit.k === "e";
+      var cellA = editingA
+        ? '<textarea id="stepEdit" data-step="' + i + '" data-k="a" data-baseline="' + esc(s.a) + '" placeholder="做了什么">' + esc(s.a) + '</textarea>'
+        : '<div class="step-cell' + (w ? " editable" : "") + '"' + (w ? ' data-act="step-a" data-i="' + i + '" tabindex="0" role="button"' : "") + '>' + esc(s.a || "（未填写操作）") + '</div>';
+      var cellE = editingE
+        ? '<textarea id="stepEdit" data-step="' + i + '" data-k="e" data-baseline="' + esc(s.e) + '" placeholder="看到什么（可留空）">' + esc(s.e) + '</textarea>'
+        : '<div class="step-cell exp' + (w ? " editable" : "") + '"' + (w ? ' data-act="step-e" data-i="' + i + '" tabindex="0" role="button"' : "") + '>' + esc(s.e || "（未填写预期）") + '</div>';
+      var acts = w ? '<span class="step-acts">'
+        + '<button type="button" data-act="step-ins" data-i="' + i + '" title="在下方插入" aria-label="在步骤 ' + (i + 1) + ' 下方插入">' + ICON.plus + '</button>'
+        + '<button type="button" data-act="step-up" data-i="' + i + '" title="上移"' + (i === 0 ? " disabled" : "") + '>' + ICON.up + '</button>'
+        + '<button type="button" data-act="step-down" data-i="' + i + '" title="下移"' + (i === steps.length - 1 ? " disabled" : "") + '>' + ICON.down + '</button>'
+        + '<button type="button" class="del" data-act="step-del" data-i="' + i + '" title="删除该步骤">' + ICON.trash + '</button>'
+        + '</span>' : '<span></span>';
+      return '<div class="step-row"><span class="step-no">' + (i + 1) + '</span>' + cellA + cellE + acts + '</div>';
+    }).join("") : '<div class="step-empty">还没有步骤' + (w ? '；点下方「添加步骤」补充操作与预期。' : "。") + '</div>';
+    return '<section class="block" style="padding:0">'
+      + '<div class="block-head" style="padding:12px 14px 0;margin-bottom:0"><h4>怎么测：步骤与预期' + hintBtn("step") + '</h4>'
+      + '<span class="hint" style="opacity:1"><b>' + steps.length + '</b> / 30 行</span></div>'
+      + '<div class="steps" style="margin-top:9px;border-left:0;border-right:0;border-bottom:0;border-radius:0">'
+      + '<div class="steps-head"><span>#</span><span>操作步骤<span class="req">*</span></span><span>预期结果</span><span></span></div>'
+      + rows
+      + (w ? '<div class="step-foot"><button class="btn sm ghost" type="button" data-act="add-step">' + ICON.plus + ' 添加步骤</button>'
+        + '<span class="kbd-note">点单元格直接改；失焦或 Ctrl+Enter 保存，Esc 还原</span></div>' : "")
+      + '</div></section>';
+  }
+
+  function lastRunHTML(c){
+    if(!c.lastAt){
+      return '<section class="block"><div class="block-head"><h4>最近一次执行</h4></div>'
+        + '<p class="txt muted">还没有执行记录；' + (editable() ? '点右上「记录执行」记录第一次结果。' : "等待有权限的成员执行。") + '</p></section>';
+    }
+    var st = STATUS[c.status] || STATUS.untested;
+    return '<section class="block"><div class="block-head"><h4>最近一次执行</h4>'
+      + '<button class="btn sm ghost" type="button" data-tab="runs" style="margin-left:auto">全部记录</button></div>'
+      + '<div class="last-run"><div><span class="st-pill ' + st.cls + '"><i></i>' + st.label + '</span>'
+      + ' <span class="when">' + esc(c.lastBy) + ' · ' + esc(c.lastAt) + '</span></div>'
+      + (c.note ? '<p class="note">' + esc(c.note) + '</p>' : "")
+      + '<div class="last-acts">'
+      + (c.bugId ? '<button class="chip" type="button" data-bug="' + esc(c.bugId) + '"><span class="ct">缺陷 · ' + esc(c.bugTitle) + '</span></button>'
+        : (editable() && c.status !== "passed" ? '<button class="btn sm ghost" type="button" data-act="defect">转缺陷</button>' : ""))
+      + '</div></div></section>';
+  }
+
+  function runsHTML(c){
+    if(!c.runs.length) return '<p class="empty">还没有执行记录；' + (editable() ? '点右上「记录执行」记录第一次结果。' : "等待有权限的成员执行。") + '</p>';
+    return c.runs.map(function(r){
+      var st = STATUS[r.status] || STATUS.untested;
+      return '<div class="run-item" style="margin-bottom:8px"><div class="run-top">'
+        + '<span class="st-pill ' + st.cls + '"><i></i>' + st.label + '</span>'
+        + '<span class="by">' + esc(r.by) + '</span><span>' + esc(r.at) + '</span>'
+        + (r.env ? '<span>' + esc(r.env) + '</span>' : "")
+        + '</div>' + (r.note ? '<p class="run-note">' + esc(r.note) + '</p>' : "") + '</div>';
+    }).join("");
+  }
+
+  function defectsHTML(c){
+    if(!c.bugId) return '<p class="empty">还没有转出缺陷；失败执行后可在概览里「转缺陷」。</p>';
+    return '<div class="case-assoc"><button class="chip" type="button" data-bug="' + esc(c.bugId) + '"><span class="ct">' + esc(c.bugTitle) + '</span></button></div>';
+  }
+
+  function logsHTML(c){
+    return '<div class="timeline">' + c.logs.map(function(l){
+      return '<div class="tl-item"><span class="t">' + esc(l.t) + '</span><span class="x">' + esc(l.text) + '</span></div>';
+    }).join("") + '</div>';
+  }
+
+  /* ---------- 编辑态 ---------- */
+  function editBodyHTML(d){
+    var inherited = d.demand && d.demand.moduleId && d.moduleId === d.demand.moduleId;
+    var priSeg = [["", "不设置"], ["P0", "P0"], ["P1", "P1"], ["P2", "P2"], ["P3", "P3"]].map(function(o){
+      return '<button type="button" data-pri-pick="' + o[0] + '" aria-pressed="' + (d.pri === o[0]) + '">' + o[1] + '</button>';
+    }).join("");
+    var stTag = {passed:"pass", failed:"bad", blocked:"warn"}[d.status] || "closed";
+    var st = STATUS[d.status] || STATUS.untested;
+    var keys = '<div class="keyrow">'
+      + '<div class="kcard"><span class="kk">优先级' + hintBtn("pri") + '</span>'
+      + '<div class="kv"><div class="seg-btns" data-pri-seg role="group" aria-label="优先级">' + priSeg + '</div></div></div>'
+      + '<div class="kcard"><span class="kk">执行人<span class="derived">派生</span></span>'
+      + '<div class="kv muted">' + (d.lastBy ? esc(d.lastBy) : "未执行") + '</div></div>'
+      + '<div class="kcard"><span class="kk">最近执行<span class="derived">派生</span></span>'
+      + '<div class="kv muted">' + (d.lastAt
+        ? esc(d.lastAt) + '<span class="st-tag ' + stTag + '">' + esc(st.label) + '</span>'
+        : "未执行") + '</div></div>'
+      + '</div>';
+
+    var demV = d.demand
+      ? '<span class="dem"><span class="dt">' + esc(d.demand.title) + '</span>'
+        + '<span class="st-tag ' + d.demand.status + '">' + esc(d.demand.label) + '</span></span>'
+      : '<span class="empty-v">未关联需求</span>';
+    var setsV = (d.setIds || []).length
+      ? (d.setIds || []).map(function(id){
+          var s = findSet(id);
+          return s ? '<span class="setchip on">' + esc(s.name) + '<span class="sh">' + (s.scope === "private" ? "仅我" : "共享") + '</span></span>' : "";
+        }).join("") + '<button type="button" class="setchip on" data-act="edit-sets"><span class="sh">+</span> 管理</button>'
+      : '<span class="empty-v">未加入分组</span><button type="button" class="link-inline" data-act="edit-sets">加入分组</button>';
+
+    var affil = '<section class="affil">'
+      + '<div class="affil-head"><h4>归属</h4><span class="sum">决定筛选、分组与交付证据口径</span></div>'
+      + '<div class="affil-row"><span class="ak">模块' + hintBtn("module") + '</span><div class="av">'
+      + '<select data-draft="module"><option value=""' + (d.moduleId ? "" : " selected") + '>未归类（不选目录）</option>'
+      + MODULES.filter(function(m){ return m.id; }).map(function(m){
+        return '<option value="' + m.id + '"' + (d.moduleId === m.id ? " selected" : "") + '>'
+          + (m.depth ? "　└ " : "") + esc(m.name) + '</option>';
+      }).join("") + '</select>'
+      + (inherited ? '<span class="tag ok">继承自需求</span>' : "")
+      + '</div></div>'
+      + '<div class="affil-row editable" data-row-act="edit-demand"><span class="ak">关联需求' + hintBtn("demand") + '</span>'
+      + '<div class="av">' + demV + '<button type="button" class="pencil" data-act="edit-demand" aria-label="修改关联需求">' + ICON.pencil + '</button></div></div>'
+      + '<div class="affil-row editable" data-row-act="edit-sets"><span class="ak">分组</span>'
+      + '<div class="av">' + setsV + '<button type="button" class="pencil" data-act="edit-sets" aria-label="修改分组">' + ICON.pencil + '</button></div></div>'
+      + '</section>';
+
+    var tasks = d.tasks || [];
+    var done = tasks.filter(function(t){ return (t.st || "todo") === "done"; }).length;
+    var work = '<section class="worksec">'
+      + '<div class="affil-head"><h4>验证工作项</h4><span class="sum">'
+      + (tasks.length ? (tasks.length + " 项 · " + done + " 项已完成") : "未挂") + '</span>'
+      + '<button type="button" class="link-inline" data-act="edit-tasks">' + (tasks.length ? "调整" : "挂工作项") + '</button>'
+      + '</div>'
+      + (tasks.length
+        ? '<div class="witems">' + tasks.map(function(t){
+            var ts = TASK_ST[t.st || "todo"] || TASK_ST.todo;
+            return '<button type="button" class="witem' + (t.st === "done" ? " done" : "") + '" data-act="edit-tasks" title="调整验证工作项">'
+              + '<span class="wdot ' + ts.cls + '"></span><span class="wt">' + esc(t.title) + '</span>'
+              + '<span class="wst">' + esc(ts.label) + '</span></button>';
+          }).join("") + '</div>'
+        : '<div class="wempty"><span>未挂工作项：覆盖只记在需求级，不进工作项验收。</span></div>')
+      + '</section>';
+
+    return keys + hintLine("pri") + affil + hintLine("module") + hintLine("demand") + work
+      + '<section class="block"><div class="block-head"><h4>前置条件</h4></div>'
+      + '<textarea data-draft="pre" maxlength="1000" placeholder="选填：数据准备、环境要求…">' + esc(d.pre) + '</textarea></section>'
+      + '<section class="block"><div class="block-head"><h4>测试数据</h4></div>'
+      + '<textarea data-draft="testData" maxlength="1000" placeholder="执行时要准备的账号、金额、边界值">' + esc(d.testData) + '</textarea></section>'
+      + '<section class="block" style="padding:0">'
+      + '<div class="block-head" style="padding:12px 14px 0;margin-bottom:0"><h4>怎么测：步骤与预期' + hintBtn("step") + '</h4>'
+      + '<span class="hint" style="opacity:1"><b>' + d.steps.length + '</b> / 30 行</span></div>'
+      + '<div class="steps" style="margin-top:9px;border-left:0;border-right:0;border-bottom:0;border-radius:0">'
+      + '<div class="steps-head"><span>#</span><span>操作步骤<span class="req">*</span></span><span>预期结果</span><span></span></div>'
+      + d.steps.map(function(s, i){
+        return '<div class="step-row"><span class="step-no">' + (i + 1) + '</span>'
+          + '<div class="step-cell"><textarea data-step-draft="' + i + '" data-k="a" placeholder="做了什么">' + esc(s.a) + '</textarea></div>'
+          + '<div class="step-cell exp"><textarea data-step-draft="' + i + '" data-k="e" placeholder="看到什么（可留空）">' + esc(s.e) + '</textarea></div>'
+          + '<span class="step-acts" style="opacity:1">'
+          + '<button type="button" data-act="d-step-ins" data-i="' + i + '" title="在下方插入">' + ICON.plus + '</button>'
+          + '<button type="button" data-act="d-step-up" data-i="' + i + '" title="上移"' + (i === 0 ? " disabled" : "") + '>' + ICON.up + '</button>'
+          + '<button type="button" data-act="d-step-down" data-i="' + i + '" title="下移"' + (i === d.steps.length - 1 ? " disabled" : "") + '>' + ICON.down + '</button>'
+          + '<button type="button" class="del" data-act="d-step-del" data-i="' + i + '" title="删除">' + ICON.trash + '</button>'
+          + '</span></div>';
+      }).join("")
+      + '<div class="step-foot"><button class="btn sm ghost" type="button" data-act="d-add-step">' + ICON.plus + ' 添加步骤</button></div>'
+      + '</div></section>';
+  }
+
+  function editDirty(){ return !!(state.draft && JSON.stringify(state.draft) !== JSON.stringify(cur())); }
+  function syncDirty(){ var el = $("editDirty"); if(el) el.hidden = !editDirty(); }
+  function syncTitleCount(){
+    var el = $("titleCount");
+    if(el && state.draft) el.textContent = (state.draft.title || "").length + " / 100";
+  }
+
+  function editFootHTML(){
+    return '<div class="foot"><span class="dirty" id="editDirty" hidden><i aria-hidden="true"></i>有未保存的修改</span><span class="grow"></span>'
+      + '<button class="btn" type="button" data-act="cancel">取消</button>'
+      + '<button class="btn primary" type="button" data-act="save-draft">保存</button></div>';
+  }
+
+  /* ==================== 浮层 ==================== */
+  function closePop(){
+    if(state.pop && state.pop.parentNode) state.pop.parentNode.removeChild(state.pop);
+    if(state.popOutside) document.removeEventListener("mousedown", state.popOutside, true);
+    state.pop = null; state.popAnchor = null; state.popOutside = null;
+  }
+
+  function openPop(html, anchor, opts){
+    closePop();
+    var el = document.createElement("div");
+    el.className = "pop";
+    el.innerHTML = html;
+    $("popHost").appendChild(el);
+    var r = anchor.getBoundingClientRect();
+    var w = el.offsetWidth, h = el.offsetHeight;
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    var top = r.bottom + 6;
+    if(top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+    state.pop = el;
+    state.popAnchor = anchor;
+    state.popOutside = function(e){
+      if(e.target.closest && (e.target.closest(".pop") || e.target.closest("[data-act]"))) return;
+      closePop();
+    };
+    setTimeout(function(){ document.addEventListener("mousedown", state.popOutside, true); }, 0);
+    return el;
+  }
+
+  function openPriPop(anchor){
+    var c = inEdit() ? state.draft : cur();
+    var items = [["", "不设置"], ["P0", "阻塞主流程"], ["P1", "核心功能"], ["P2", "一般功能"], ["P3", "边缘场景"]];
+    var html = '<div class="pop-title">优先级</div><div class="pop-list">' + items.map(function(it){
+      return '<button type="button" class="menu-item' + ((c.pri || "") === it[0] ? " on" : "") + '" data-pick-pri="' + it[0] + '">'
+        + '<span class="mi">' + (it[0] ? '<span class="pri ' + it[0] + '">' + it[0] + '</span>' : '<span class="muted">—</span>') + '</span>'
+        + '<span class="mt">' + esc(it[1]) + '</span>'
+        + ((c.pri || "") === it[0] ? '<span class="ms">当前</span>' : "") + '</button>';
+    }).join("") + '</div>';
+    openPop(html, anchor);
+  }
+
+  function openModulePop(anchor){
+    var c = inEdit() ? state.draft : cur();
+    var html = '<div class="pop-title">模块</div><div class="pop-list">'
+      + MODULES.map(function(m){
+        return '<button type="button" class="menu-item' + ((c.moduleId || "") === m.id ? " on" : "") + '" data-pick-module="' + m.id + '">'
+          + '<span class="mi">' + (m.depth ? "" : (m.id ? ICON.folder : ICON.minus)) + '</span>'
+          + '<span class="mt">' + (m.depth ? "　└ " : "") + esc(m.id ? m.name : "未归类（不选目录）") + '</span>'
+          + ((c.moduleId || "") === m.id ? '<span class="ms">当前</span>' : "") + '</button>';
+      }).join("")
+      + '<div class="menu-sep"></div>'
+      + '<button type="button" class="menu-item" data-new-module="1"><span class="mi">' + ICON.plus + '</span><span class="mt">新建子目录…</span></button>'
+      + '</div>'
+      + '<div class="pop-foot"><span class="grow">模块即项目目录节点：一条用例只归一个，用于筛选、分组与统计</span></div>';
+    openPop(html, anchor);
+  }
+
+  function openDemandPop(anchor){
+    state.demandQuery = "";
+    var c = inEdit() ? state.draft : cur();
+    var list = DEMANDS.filter(function(d){ return d.id !== (c.demand && c.demand.id); });
+    var html = '<div class="pop-title">关联需求</div>'
+      + '<div class="pop-search"><input id="demandSearch" type="search" placeholder="搜索需求标题" autocomplete="off"></div>'
+      + '<div class="pop-list" id="demandList">' + demandItemsHTML(list) + '</div>'
+      + '<div class="pop-foot"><span class="grow">候选只列本项目需求；切换后模块与工作项候选会重算</span></div>';
+    openPop(html, anchor);
+  }
+
+  function demandItemsHTML(list){
+    if(!list.length) return '<div class="empty" style="padding:18px 10px">没有匹配的需求</div>';
+    return list.map(function(d){
+      return '<button type="button" class="menu-item" data-pick-demand="' + d.id + '">'
+        + '<span class="mi"></span><span class="mt">' + esc(d.title) + '</span>'
+        + '<span class="st-tag ' + d.status + '">' + esc(d.label) + '</span></button>';
+    }).join("");
+  }
+
+  function openTasksPop(anchor){
+    var c = inEdit() ? state.draft : cur();
+    var demandId = c.demand && c.demand.id;
+    if(!demandId){
+      openPop('<div class="pop-title">验证工作项</div><div class="empty" style="padding:18px 12px">先关联需求，再从该需求下挑工作项。</div>', anchor);
+      return;
+    }
+    state.pendingTasks = c.tasks.map(function(t){ return t.id; });
+    state.taskQuery = "";
+    var list = tasksOf(demandId);
+    var html = '<div class="pop-title">验证工作项</div>'
+      + '<div class="pop-search"><input id="taskSearch" type="search" placeholder="筛选工作项标题" autocomplete="off"></div>'
+      + '<div class="pop-list" id="taskList">' + taskItemsHTML(list, "") + '</div>'
+      + '<div class="pop-foot"><span class="grow" id="taskCount">已选 ' + state.pendingTasks.length + ' 项</span>'
+      + '<button class="btn sm" type="button" data-act="tasks-clear">清空</button>'
+      + '<button class="btn sm primary" type="button" data-act="tasks-apply">应用</button></div>';
+    openPop(html, anchor);
+  }
+
+  function taskItemsHTML(list, q){
+    var arr = list.filter(function(t){ return !q || t.title.indexOf(q) >= 0; });
+    if(!arr.length) return '<div class="empty" style="padding:18px 10px">没有匹配的工作项</div>';
+    return arr.map(function(t){
+      var on = state.pendingTasks.indexOf(t.id) >= 0;
+      return '<button type="button" class="work-check' + (on ? " on" : "") + '" data-toggle-task="' + t.id + '">'
+        + '<span class="box">' + ICON.check + '</span><span class="wt">' + esc(t.title) + '</span></button>';
+    }).join("");
+  }
+
+  /* 分组多选：共享分组进交付证据，个人分组只本人可见 */
+  function setItemsHTML(){
+    return CASE_SETS.map(function(s){
+      var on = (state.pendingSets || []).indexOf(s.id) >= 0;
+      return '<button type="button" class="work-check' + (on ? " on" : "") + '" data-toggle-set="' + s.id + '">'
+        + '<span class="box">' + ICON.check + '</span>'
+        + '<span class="wt" style="flex:1 1 auto">' + esc(s.name) + '</span>'
+        + '<span class="st-tag ' + (s.scope === "private" ? "closed" : "plan") + '">' + (s.scope === "private" ? "仅我" : "共享") + '</span>'
+        + '<span style="font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums">' + s.count + '</span></button>';
+    }).join("");
+  }
+
+  function openSetsPop(anchor){
+    var c = inEdit() ? state.draft : cur();
+    state.pendingSets = (c.setIds || []).slice();
+    var html = '<div class="pop-title">分组</div>'
+      + '<div class="pop-list" id="setList">' + setItemsHTML() + '</div>'
+      + '<div class="pop-foot"><span class="grow" id="setCount">已选 ' + state.pendingSets.length + ' 个分组</span>'
+      + '<button class="btn sm" type="button" data-act="sets-new">新建分组</button>'
+      + '<button class="btn sm primary" type="button" data-act="sets-apply">应用</button></div>';
+    openPop(html, anchor);
+  }
+
+  function applySets(){
+    var ids = (state.pendingSets || []).slice();
+    var names = ids.map(function(id){ var s = findSet(id); return s ? s.name : ""; }).filter(Boolean);
+    if(inEdit()){
+      state.draft.setIds = ids;
+      closePop(); render();
+      return;
+    }
+    persist(function(){
+      var c = cur();
+      c.setIds = ids;
+      pushLog(ids.length ? ("更新分组 · " + names.join("、")) : "移出全部分组");
+    }, ids.length ? ("已加入 " + ids.length + " 个分组") : "已移出全部分组");
+  }
+
+  function clearTasks(){
+    state.pendingTasks = [];
+    var c = inEdit() ? state.draft : cur();
+    var demandId = c.demand && c.demand.id;
+    var list = $("taskList");
+    if(list) list.innerHTML = taskItemsHTML(demandId ? tasksOf(demandId) : [], state.taskQuery);
+    var cnt = $("taskCount");
+    if(cnt) cnt.textContent = "已选 0 项";
+  }
+
+  function applyTasks(){
+    var picked = (state.pendingTasks || []).slice().map(function(id){
+      var src = taskById(id);
+      return {id:id, title:src ? src.title : id, st:src && src.st ? src.st : "todo"};
+    });
+    if(inEdit()){
+      state.draft.tasks = picked;
+      closePop(); render();
+      return;
+    }
+    persist(function(){
+      cur().tasks = picked;
+      pushLog("更新验证工作项 · " + picked.length + " 项");
+    }, "验证工作项已更新");
+  }
+
+  /* ==================== 弹窗 ==================== */
+  function openModal(html){
+    closeModal();
+    var scrim = document.createElement("div");
+    scrim.className = "scrim";
+    scrim.innerHTML = html;
+    $("modalHost").appendChild(scrim);
+    state.modal = scrim;
+    scrim.addEventListener("mousedown", function(e){ if(e.target === scrim) closeModal(); });
+    return scrim;
+  }
+  function closeModal(){
+    if(state.modal && state.modal.parentNode) state.modal.parentNode.removeChild(state.modal);
+    state.modal = null;
+    state.runDraft = null;
+  }
+
+  function confirmRemoveHTML(count, title){
+    return '<div class="modal"><div class="modal-head"><h3>更换关联需求</h3></div>'
+      + '<div class="modal-body"><p>新需求与原关联需求不同，<b>' + count + ' 个验证工作项</b>不属于该需求，保存时会一并移除。</p>'
+      + '<p style="color:var(--text-3)">新需求：' + esc(title) + '</p></div>'
+      + '<div class="modal-foot"><button class="btn" type="button" data-modal="cancel">取消</button>'
+      + '<button class="btn danger" type="button" data-modal="ok">仍要更换</button></div></div>';
+  }
+
+  function confirmDiscardHTML(){
+    return '<div class="modal"><div class="modal-head"><h3>放弃未保存的修改？</h3></div>'
+      + '<div class="modal-body"><p>退出编辑后，本次填写的内容不会保存。</p></div>'
+      + '<div class="modal-foot"><button class="btn" type="button" data-modal="cancel">继续编辑</button>'
+      + '<button class="btn danger" type="button" data-modal="ok">放弃修改</button></div></div>';
+  }
+
+  function runModalHTML(){
+    var r = state.runDraft;
+    var opts = [["passed", "通过"], ["failed", "失败"], ["blocked", "阻塞"], ["skipped", "跳过"]];
+    return '<div class="modal"><div class="modal-head"><h3>记录执行结果</h3>'
+      + '<button class="icon-btn" type="button" data-modal="cancel" aria-label="关闭">' + ICON.close + '</button></div>'
+      + '<div class="modal-body"><div class="modal-field"><label>结果</label>'
+      + '<div class="seg-btns" role="group" aria-label="执行结果">' + opts.map(function(o){
+        return '<button type="button" data-run-status="' + o[0] + '" aria-pressed="' + (r.status === o[0]) + '">' + o[1] + '</button>';
+      }).join("") + '</div></div>'
+      + '<div class="modal-field"><label>环境</label><input id="runEnv" value="' + esc(r.env) + '" placeholder="如：沙箱 · 支付业务部"></div>'
+      + '<div class="modal-field"><label>备注</label><textarea id="runNote" placeholder="失败时写清现象与复现路径">' + esc(r.note) + '</textarea></div></div>'
+      + '<div class="modal-foot"><button class="btn" type="button" data-modal="cancel">取消</button>'
+      + '<button class="btn primary" type="button" data-modal="save-run">保存</button></div></div>';
+  }
+
+  /* ==================== 持久化 ==================== */
+  function persist(applyFn, okMsg){
+    var prev = JSON.stringify(DATA);
+    applyFn();
+    closePop();
+    state.editField = null;
+    state.stepEdit = null;
+    state.editTitle = false;
+    state.saving = true;
+    render();
+    setTimeout(function(){
+      if(state.failMode){
+        DATA = JSON.parse(prev);
+        state.saving = false;
+        render();
+        toast("保存失败，已回到服务器值", "bad");
+      }else{
+        state.saving = false;
+        render();
+        toast(okMsg || "已保存", "ok");
+      }
+    }, 620);
+  }
+
+  function pushLog(text){ var c = cur(); c.logs.unshift({t:nowText(), text:text}); }
+
+  /* ==================== 事件 ==================== */
+  drawerEl.addEventListener("click", function(e){
+    var t = e.target;
+
+    var hint = t.closest("[data-hint]");
+    if(hint){
+      e.stopPropagation(); e.preventDefault();
+      var h = HINTS[hint.getAttribute("data-hint")];
+      if(h) openPop('<div class="pop-title">' + esc(h.t) + '</div><div class="pop-body">' + h.b + '</div>', hint);
+      return;
+    }
+
+    var ps = t.closest("[data-pri-pick]");
+    if(ps){
+      e.stopPropagation();
+      if(inEdit() && state.draft){
+        state.draft.pri = ps.getAttribute("data-pri-pick");
+        ps.parentNode.querySelectorAll("[data-pri-pick]").forEach(function(b){
+          b.setAttribute("aria-pressed", String(b === ps));
+        });
+        syncDirty();
+      }
+      return;
+    }
+
+    var jump = t.closest("[data-jump]");
+    if(jump){ e.stopPropagation(); toast("打开关联需求详情（原型不展开）", "ok"); return; }
+
+    var tab = t.closest("[data-tab]");
+    if(tab){ state.tab = tab.getAttribute("data-tab"); state.editField = null; state.stepEdit = null; render(); return; }
+
+    var bug = t.closest("[data-bug]");
+    if(bug){ toast("打开缺陷工作项（原型不展开）", "ok"); return; }
+
+    var act = t.closest("[data-act]") || t.closest("[data-row-act]");
+    if(!act) return;
+    var a = act.getAttribute("data-act") || act.getAttribute("data-row-act");
+
+    if(a === "close"){ toast("关闭详情（原型不展开）", "ok"); return; }
+    if(a === "title"){
+      if(!editable()) return;
+      state.editTitle = true; state.titleDraft = cur().title; render(); return;
+    }
+    if(a === "edit"){
+      if(!editable()) return;
+      state.mode = "edit"; state.draft = deep(cur()); state.draft.tasks = deep(cur().tasks);
+      state.editField = null; state.stepEdit = null; state.focusTitle = true; render(); return;
+    }
+    if(a === "cancel"){
+      if(inEdit()){
+        discardOrLeave();
+      }else{
+        state.editField = null; state.stepEdit = null; render();
+      }
+      return;
+    }
+    if(a === "run"){ state.runDraft = {status:"passed", note:"", env:""}; openModal(runModalHTML()); return; }
+    if(a === "defect"){ toast("打开转缺陷弹窗（原型不展开）", "ok"); return; }
+
+    if(a === "edit-pri"){ openPriPop(act); return; }
+    if(a === "edit-module"){ openModulePop(act); return; }
+    if(a === "edit-demand"){ openDemandPop(act); return; }
+    if(a === "edit-tasks"){ openTasksPop(act); return; }
+    if(a === "edit-sets"){ openSetsPop(act); return; }
+    if(a === "edit-demand-draft"){ openDemandPop(act); return; }
+    if(a === "edit-tasks-draft"){ openTasksPop(act); return; }
+
+    if(a === "edit-pre" || a === "edit-testData"){
+      if(!editable()) return;
+      var field = a === "edit-pre" ? "pre" : "testData";
+      state.editField = {field:field};
+      render();
+      return;
+    }
+    if(a === "step-a" || a === "step-e"){
+      if(!editable()) return;
+      state.stepEdit = {i:Number(act.getAttribute("data-i")), k:a === "step-a" ? "a" : "e"};
+      render();
+      return;
+    }
+    if(a === "add-step"){
+      persist(function(){ cur().steps.push({a:"", e:""}); }, "已添加步骤");
+      return;
+    }
+    if(a === "step-ins"){
+      var i = Number(act.getAttribute("data-i"));
+      persist(function(){ cur().steps.splice(i + 1, 0, {a:"", e:""}); }, "已插入步骤");
+      return;
+    }
+    if(a === "step-up" || a === "step-down" || a === "step-del"){
+      var idx = Number(act.getAttribute("data-i"));
+      persist(function(){
+        var s = cur().steps, tmp;
+        if(a === "step-up" && idx > 0){ tmp = s[idx - 1]; s[idx - 1] = s[idx]; s[idx] = tmp; }
+        if(a === "step-down" && idx < s.length - 1){ tmp = s[idx + 1]; s[idx + 1] = s[idx]; s[idx] = tmp; }
+        if(a === "step-del") s.splice(idx, 1);
+      }, a === "step-del" ? "已删除步骤" : "顺序已调整");
+      return;
+    }
+    if(a === "save-draft"){ saveDraft(); return; }    if(a === "d-add-step"){ state.draft.steps.push({a:"", e:""}); render(); return; }
+    if(a === "d-step-ins"){
+      var di = Number(act.getAttribute("data-i"));
+      state.draft.steps.splice(di + 1, 0, {a:"", e:""}); render(); return;
+    }
+    if(a === "d-step-up" || a === "d-step-down" || a === "d-step-del"){
+      var dj = Number(act.getAttribute("data-i")), s = state.draft.steps, tmp;
+      if(a === "d-step-up" && dj > 0){ tmp = s[dj - 1]; s[dj - 1] = s[dj]; s[dj] = tmp; }
+      if(a === "d-step-down" && dj < s.length - 1){ tmp = s[dj + 1]; s[dj + 1] = s[dj]; s[dj] = tmp; }
+      if(a === "d-step-del") s.splice(dj, 1);
+      render(); return;
+    }
+  });
+
+  drawerEl.addEventListener("keydown", function(e){
+    var t = e.target;
+    if(t.id === "inlineTitle"){
+      if(e.key === "Enter"){ e.preventDefault(); commitTitle(t.value); }
+      if(e.key === "Escape"){ state.editTitle = false; render(); }
+      return;
+    }
+    if(t.id === "fieldEdit"){
+      if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); commitField(t); }
+      if(e.key === "Escape"){ state.editField = null; render(); }
+      return;
+    }
+    if(t.id === "stepEdit"){
+      if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); commitStep(t); }
+      if(e.key === "Escape"){ state.stepEdit = null; render(); }
+      return;
+    }
+    var sdi = t.getAttribute && t.getAttribute("data-step-draft");
+    if(sdi !== null && e.key === "Enter" && (e.ctrlKey || e.metaKey)){
+      e.preventDefault();
+      if(state.draft){
+        var si = Number(sdi) + 1;
+        state.draft.steps.splice(si, 0, {a:"", e:""});
+        state.stepFocus = si;
+        render();
+      }
+      return;
+    }
+    if((e.key === "Enter" || e.key === " ") && t.classList && t.classList.contains("kcard") && t.getAttribute("data-act")){
+      e.preventDefault(); t.click();
+    }
+  });
+
+  drawerEl.addEventListener("focusout", function(e){
+    var t = e.target;
+    if(t.id === "inlineTitle"){
+      setTimeout(function(){ if(state.editTitle) commitTitle(t.value); }, 0);
+      return;
+    }
+    if(t.id === "fieldEdit"){
+      setTimeout(function(){ if(state.editField) commitField(t); }, 0);
+      return;
+    }
+    if(t.id === "stepEdit"){
+      setTimeout(function(){ if(state.stepEdit) commitStep(t); }, 0);
+      return;
+    }
+  });
+
+  function commitTitle(val){
+    var v = String(val || "").replace(/\s+/g, " ").trim();
+    var c = cur();
+    if(!v){
+      state.titleDraft = c.title;
+      render();
+      toast("用例标题不能为空", "warn");
+      return;
+    }
+    state.editTitle = false;
+    if(v === c.title){ render(); return; }
+    persist(function(){ var k = cur(); k.title = v; pushLog("标题改为「" + v + "」"); }, "标题已更新");
+  }
+
+  function commitField(t){
+    var field = t.getAttribute("data-field");
+    var val = t.value;
+    var base = t.getAttribute("data-baseline") || "";
+    state.editField = null;
+    if(val === base){ render(); return; }
+    persist(function(){ var c = cur(); c[field] = val; pushLog("修改" + (field === "pre" ? "前置条件" : "测试数据")); }, "已保存");
+  }
+
+  function commitStep(t){
+    var i = Number(t.getAttribute("data-step")), k = t.getAttribute("data-k");
+    var val = t.value;
+    var base = t.getAttribute("data-baseline") || "";
+    state.stepEdit = null;
+    if(val === base){ render(); return; }
+    persist(function(){ cur().steps[i][k] = val; pushLog("修改步骤 " + (i + 1)); }, "步骤已保存");
+  }
+
+  function saveDraft(){
+    var d = state.draft;
+    var title = (d.title || "").replace(/\s+/g, " ").trim();
+    if(!title){
+      toast("请填写用例标题", "warn");
+      var inp = $("editTitleInput");
+      if(inp){ inp.style.borderColor = "var(--danger)"; inp.focus(); }
+      return;
+    }
+    d.title = title;
+    if(state.failMode){
+      state.saving = true; render();
+      setTimeout(function(){
+        state.saving = false; render();
+        toast("保存失败：修改仍留在编辑态，可直接重试", "bad");
+      }, 620);
+      return;
+    }
+    state.mode = "read";
+    var snapshot = deep(d);
+    persist(function(){
+      var c = cur();
+      var changed = [];
+      if(c.pri !== snapshot.pri) changed.push("优先级");
+      if(c.moduleId !== snapshot.moduleId) changed.push("模块");
+      if((c.demand && c.demand.id) !== (snapshot.demand && snapshot.demand.id)) changed.push("关联需求");
+      if(JSON.stringify(c.setIds || []) !== JSON.stringify(snapshot.setIds || [])) changed.push("分组");
+      c.pri = snapshot.pri;
+      c.moduleId = snapshot.moduleId;
+      c.demand = snapshot.demand;
+      c.setIds = snapshot.setIds;
+      c.tasks = snapshot.tasks;
+      c.pre = snapshot.pre;
+      c.testData = snapshot.testData;
+      c.steps = snapshot.steps;
+      c.title = snapshot.title;
+      pushLog(changed.length ? ("修改" + changed.join("、")) : "保存用例");
+    }, "用例已保存");
+    state.draft = null;
+  }
+
+  /* ---- 浮层内事件 ---- */
+  document.addEventListener("click", function(e){
+    var t = e.target;
+
+    /* 浮层挂在 popHost，不在抽屉内，需单独接动作 */
+    var popAct = t.closest("[data-act]");
+    if(popAct){
+      var pa = popAct.getAttribute("data-act");
+      if(pa === "sets-apply"){ applySets(); return; }
+      if(pa === "sets-new"){ closePop(); toast("新建分组（沿用分组管理的弹窗）", "ok"); return; }
+      if(pa === "tasks-apply"){ applyTasks(); return; }
+      if(pa === "tasks-clear"){ clearTasks(); return; }
+    }
+
+    var pick = t.closest("[data-pick-pri]");
+    if(pick){
+      var pri = pick.getAttribute("data-pick-pri");
+      if(inEdit()){ state.draft.pri = pri; closePop(); render(); }
+      else{ persist(function(){ var c = cur(); c.pri = pri; pushLog(pri ? "优先级改为 " + pri : "清除优先级"); }, pri ? ("优先级已改为 " + pri) : "已清除优先级"); }
+      return;
+    }
+
+    var mod = t.closest("[data-pick-module]");
+    if(mod){
+      var mid = mod.getAttribute("data-pick-module");
+      if(inEdit()){ state.draft.moduleId = mid; closePop(); render(); }
+      else{ persist(function(){ var c = cur(); c.moduleId = mid; pushLog("模块改为 " + findModule(mid)); }, "模块已更新"); }
+      return;
+    }
+    if(t.closest("[data-new-module]")){ closePop(); toast("新建子目录（沿用现有弹窗）", "ok"); return; }
+
+    var dem = t.closest("[data-pick-demand]");
+    if(dem){ chooseDemand(dem.getAttribute("data-pick-demand")); return; }
+
+    var tgl = t.closest("[data-toggle-task]");
+    if(tgl){
+      var id = tgl.getAttribute("data-toggle-task");
+      var ix = state.pendingTasks.indexOf(id);
+      if(ix >= 0) state.pendingTasks.splice(ix, 1); else state.pendingTasks.push(id);
+      tgl.classList.toggle("on");
+      var cnt = $("taskCount");
+      if(cnt) cnt.textContent = "已选 " + state.pendingTasks.length + " 项";
+      return;
+    }
+
+    var stgl = t.closest("[data-toggle-set]");
+    if(stgl && state.pendingSets){
+      var sid = stgl.getAttribute("data-toggle-set");
+      var sx = state.pendingSets.indexOf(sid);
+      if(sx >= 0) state.pendingSets.splice(sx, 1); else state.pendingSets.push(sid);
+      stgl.classList.toggle("on");
+      var sc = $("setCount");
+      if(sc) sc.textContent = "已选 " + state.pendingSets.length + " 个分组";
+      return;
+    }
+
+    var ms = t.closest("[data-modal]");
+    if(ms){
+      var kind = ms.getAttribute("data-modal");
+      if(kind === "cancel"){ closeModal(); return; }
+      if(kind === "ok"){
+        var fn = state.modalConfirm;
+        closeModal();
+        if(fn) fn();
+        return;
+      }
+      if(kind === "save-run"){ saveRun(); return; }
+    }
+
+    var rs = t.closest("[data-run-status]");
+    if(rs){
+      state.runDraft.status = rs.getAttribute("data-run-status");
+      document.querySelectorAll("[data-run-status]").forEach(function(b){
+        b.setAttribute("aria-pressed", b === rs ? "true" : "false");
+      });
+      return;
+    }
+  });
+
+  document.addEventListener("input", function(e){
+    var t = e.target;
+    if(t.id === "inlineTitle"){ state.titleDraft = t.value; return; }
+    if(t.id === "demandSearch"){
+      state.demandQuery = t.value.trim();
+      var c = inEdit() ? state.draft : cur();
+      var list = DEMANDS.filter(function(d){
+        return d.id !== (c.demand && c.demand.id) && (!state.demandQuery || d.title.indexOf(state.demandQuery) >= 0);
+      });
+      var box = $("demandList");
+      if(box) box.innerHTML = demandItemsHTML(list);
+      return;
+    }
+    if(t.id === "taskSearch"){
+      state.taskQuery = t.value.trim();
+      var c2 = inEdit() ? state.draft : cur();
+      var box2 = $("taskList");
+      if(box2 && c2.demand) box2.innerHTML = taskItemsHTML(tasksOf(c2.demand.id), state.taskQuery);
+      return;
+    }
+    if(t.id === "runEnv"){ if(state.runDraft) state.runDraft.env = t.value; return; }
+    if(t.id === "runNote"){ if(state.runDraft) state.runDraft.note = t.value; return; }
+    if(t.id === "editTitleInput"){
+      autoGrowTitle(t);
+      if(state.draft) state.draft.title = t.value;
+      syncTitleCount();
+      syncDirty();
+      return;
+    }
+    var dk = t.getAttribute("data-draft");
+    if(dk && state.draft){
+      if(dk === "module") state.draft.moduleId = t.value;
+      else state.draft[dk] = t.value;
+      syncDirty();
+      return;
+    }
+    var sd = t.getAttribute("data-step-draft");
+    if(sd && state.draft){
+      state.draft.steps[Number(sd)][t.getAttribute("data-k")] = t.value;
+      syncDirty();
+    }
+  });
+
+  document.addEventListener("change", function(e){
+    var t = e.target;
+    if(t.id === "runEnv" && state.runDraft) state.runDraft.env = t.value;
+    if(t.id === "runNote" && state.runDraft) state.runDraft.note = t.value;
+  });
+
+  function chooseDemand(id){
+    var d = findDemand(id);
+    if(!d) return;
+    var target = inEdit() ? state.draft : cur();
+    var mismatch = dueTasksMismatch(id, target.tasks);
+    var apply = function(){
+      if(inEdit()){
+        state.draft.demand = d;
+        if(mismatch.length) state.draft.tasks = [];
+        if(d.moduleId) state.draft.moduleId = d.moduleId;
+        closePop(); render();
+      }else{
+        persist(function(){
+          var c = cur();
+          c.demand = d;
+          if(mismatch.length) c.tasks = [];
+          if(d.moduleId) c.moduleId = d.moduleId;
+          pushLog("关联需求改为「" + d.title + "」" + (mismatch.length ? "，移除 " + mismatch.length + " 个不匹配工作项" : "")
+            + (d.moduleId ? "，模块继承为「" + findModule(d.moduleId) + "」" : ""));
+        }, "关联需求已更新");
+      }
+    };
+    if(mismatch.length){
+      state.modalConfirm = apply;
+      openModal(confirmRemoveHTML(mismatch.length, d.title));
+    }else{
+      apply();
+    }
+  }
+
+  function saveRun(){
+    var r = state.runDraft;
+    if(!r) return;
+    var envEl = $("runEnv"), noteEl = $("runNote");
+    var env = envEl ? envEl.value.trim() : r.env;
+    var note = noteEl ? noteEl.value.trim() : r.note;
+    var status = r.status;
+    closeModal();
+    var st = STATUS[status] || STATUS.untested;
+    persist(function(){
+      var c = cur();
+      c.status = status;
+      c.lastBy = "admin";
+      c.lastAt = nowText();
+      c.note = note;
+      c.runs.unshift({status:status, by:"admin", at:c.lastAt, env:env, note:note});
+      pushLog("记录执行结果 · " + st.label);
+    }, "执行结果已记录");
+  }
+
+  /* ---- 头部操作：编辑态退出确认 ---- */
+  function discardOrLeave(){
+    if(!inEdit()) return;
+    var dirty = JSON.stringify(state.draft) !== JSON.stringify(cur());
+    if(!dirty){ state.mode = "read"; state.draft = null; render(); return; }
+    state.modalConfirm = function(){ state.mode = "read"; state.draft = null; render(); };
+    openModal(confirmDiscardHTML());
+  }
+
+  /* ==================== 工具条 ==================== */
+  function syncToolbar(){
+    var seg = $("modeSeg");
+    seg.querySelectorAll("button").forEach(function(b){
+      var on = b.getAttribute("data-mode") === state.mode;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.disabled = state.readOnly && b.getAttribute("data-mode") === "edit";
+    });
+    $("roToggle").setAttribute("aria-pressed", state.readOnly ? "true" : "false");
+    $("failToggle").setAttribute("aria-pressed", state.failMode ? "true" : "false");
+    $("vpToggle").setAttribute("aria-pressed", state.narrow ? "true" : "false");
+    $("hintToggle").setAttribute("aria-pressed", state.hints ? "true" : "false");
+    $("themeToggle").setAttribute("aria-pressed", document.documentElement.getAttribute("data-theme") === "dark" ? "true" : "false");
+    var lseg = $("layoutSeg");
+    if(lseg) lseg.querySelectorAll("button").forEach(function(b){
+      b.setAttribute("aria-pressed", b.getAttribute("data-layout") === state.layout ? "true" : "false");
+    });
+    bodyEl.classList.toggle("layout-b", state.layout === "cards");
+    stage.classList.toggle("narrow", state.narrow);
+  }
+
+  $("modeSeg").addEventListener("click", function(e){
+    var b = e.target.closest("[data-mode]");
+    if(!b || b.disabled) return;
+    var m = b.getAttribute("data-mode");
+    if(m === state.mode) return;
+    if(m === "edit"){
+      if(state.readOnly){ toast("只读项目不能进入编辑", "warn"); return; }
+      state.mode = "edit";
+      state.draft = deep(cur());
+      state.editField = null; state.stepEdit = null; state.editTitle = false; state.focusTitle = true;
+      closePop(); render();
+    }else{
+      discardOrLeave();
+    }
+  });
+
+  $("layoutSeg").addEventListener("click", function(e){
+    var b = e.target.closest("[data-layout]");
+    if(!b || b.getAttribute("data-layout") === state.layout) return;
+    state.layout = b.getAttribute("data-layout");
+    syncToolbar();
+    toast(state.layout === "cards" ? "方案 B：归属改整宽卡片" : "方案 A：归属条（推荐）", "ok");
+  });
+
+  $("roToggle").addEventListener("click", function(){
+    state.readOnly = !state.readOnly;
+    if(state.readOnly && state.mode === "edit"){ state.mode = "read"; state.draft = null; }
+    state.editField = null; state.stepEdit = null; state.editTitle = false;
+    closePop(); render();
+  });
+
+  $("failToggle").addEventListener("click", function(){
+    state.failMode = !state.failMode;
+    toast(state.failMode ? "已开启：保存 0.6 秒后按服务器值回滚" : "已关闭保存失败演示", state.failMode ? "warn" : "ok");
+    syncToolbar();
+  });
+
+  $("vpToggle").addEventListener("click", function(){
+    state.narrow = !state.narrow;
+    syncToolbar();
+  });
+
+  $("hintToggle").addEventListener("click", function(){
+    state.hints = !state.hints;
+    closePop(); render(); syncToolbar();
+    toast(state.hints ? "已展开各分区的填写说明" : "已收起说明，只留 ? 提示", "ok");
+  });
+
+  $("themeToggle").addEventListener("click", function(){
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    syncToolbar();
+  });
+
+  $("resetBtn").addEventListener("click", function(){
+    closePop(); closeModal();
+    DATA = seed();
+    state = {
+      id:"c8", mode:"read", readOnly:false, failMode:false, narrow:state.narrow, hints:false, layout:"rows",
+      tab:"overview", saving:false, saveFailed:false,
+      editField:null, stepEdit:null, editTitle:false, titleDraft:"",
+      pop:null, popAnchor:null, popOutside:null,
+      modal:null, draft:null, pendingTasks:null, pendingTasksOpen:false, pendingSets:null,
+      runDraft:null, demandQuery:"", taskQuery:""
+    };
+    render();
+    toast("已重置演示数据", "ok");
+  });
+
+  $("explainBtn").addEventListener("click", function(){ $("explain").classList.add("open"); });
+  $("explainClose").addEventListener("click", function(){ $("explain").classList.remove("open"); });
+
+  /* ---- 列表 ---- */
+  listEl.addEventListener("click", function(e){
+    var row = e.target.closest("[data-pick]");
+    if(!row) return;
+    if(state.saving){ toast("上一次保存还没结束", "warn"); return; }
+    state.id = row.getAttribute("data-pick");
+    state.tab = "overview";
+    state.mode = "read";
+    state.draft = null;
+    state.editField = null; state.stepEdit = null; state.editTitle = false;
+    closePop(); closeModal();
+    render();
+  });
+
+  /* ---- Toast ---- */
+  function toast(msg, kind){
+    var el = document.createElement("div");
+    el.className = "toast " + (kind || "ok");
+    el.innerHTML = '<span class="ti">' + (kind === "bad" || kind === "warn" ? ICON.warn : ICON.ok) + '</span>' + esc(msg);
+    $("toastWrap").appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 2200);
+  }
+
+  /* 便于评审直链：#c12 / #c12-edit / #c12-cards */
+  (function initFromHash(){
+    var h = String(location.hash || "").replace(/^#/, "");
+    if(!h) return;
+    var parts = h.split("-");
+    var id = parts[0];
+    if(DATA.some(function(x){ return x.id === id; })) state.id = id;
+    if(parts.indexOf("cards") >= 0) state.layout = "cards";
+    if(parts.indexOf("narrow") >= 0) state.narrow = true;
+    if(parts.indexOf("dark") >= 0) document.documentElement.setAttribute("data-theme", "dark");
+    if(parts.indexOf("edit") >= 0 && !state.readOnly){
+      state.mode = "edit";
+      state.draft = deep(cur());
+    }
+  })();
+
+  render();
+
+  /* 评审直链：#c12-sets 直接展开分组浮层 */
+  (function openFromHash(){
+    if(!/sets/.test(location.hash || "")) return;
+    var btn = document.querySelector(".affil-row [data-act='edit-sets']");
+    if(btn) openSetsPop(btn);
+  })();
+})();
+</script>
+</body>
+</html>

@@ -49,7 +49,8 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
                 integer(request.getParameter("doneOffset")),
                 integer(request.getParameter("openLimit")),
                 request.getParameter("columns"),
-                request.getParameter("completion"));
+                request.getParameter("completion"),
+                request.getParameter("pubState"));
         query.setDueFrom(date(request.getParameter("dueFrom")));
         query.setDueTo(date(request.getParameter("dueTo")));
         query.setStartFrom(date(request.getParameter("startFrom")));

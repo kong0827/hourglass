@@ -10,7 +10,7 @@ import { activeView } from "../core/router.js";
 import { GROUP_IDS, groupOptionsHTML } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
-import { canEditTask, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
 import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
@@ -848,12 +848,16 @@ if($("btnListColumns")) $("btnListColumns").addEventListener("click", function()
 function syncListSelectionUI(){
   var checked = listBody.querySelectorAll("[data-row-check]:checked");
   var n = checked.length;
+  var checkedIds = [];
+  checked.forEach(function(cb){ checkedIds.push(cb.dataset.rowCheck); });
   /* 原「移入回收站」按钮在顶部工具栏、其它批量操作在列表上方，两条并存既重复、
      又让批量入口看起来"只有一个删除"。现在统一收进列表上方那一条（元素保留，仅常驻隐藏）。 */
   btnListBulk.hidden = true;
   if(listBulkBar){
     listBulkBar.hidden = n === 0;
     if(n > 0){
+      /* 人工发布标记要逐条校验项目权限：混合权限的选区不提供入口，避免整批被后端拒绝 */
+      var pubOK = canBulkPublish(checkedIds);
       listBulkBar.innerHTML = '<div class="bulk-bar">' +
         '<span class="bk-n">已选 ' + n + ' 项</span>' +
         '<button class="btn sm" type="button" data-bulk="pri">改优先级</button>' +
@@ -861,6 +865,10 @@ function syncListSelectionUI(){
         '<button class="btn sm" type="button" data-bulk="due">改截止</button>' +
         '<button class="btn sm" type="button" data-bulk="col">改所在列</button>' +
         '<button class="btn sm" type="button" data-bulk="tag">加标签</button>' +
+        (pubOK
+          ? '<button class="btn sm" type="button" data-bulk="pub">标记已发布</button>' +
+            '<button class="btn sm" type="button" data-bulk="pub-revoke">撤销发布标记</button>'
+          : "") +
         '<span class="spacer"></span>' +
         '<button class="btn sm danger" type="button" data-bulk="del">' + icon("trash", 13) + ' 移入回收站</button>' +
         '<button class="btn sm ghost" type="button" data-bulk="clear">取消选择</button>' +
@@ -878,6 +886,89 @@ function syncListSelectionUI(){
 }
 function bulkIds(){
   return Object.keys(rt.listSelected).filter(function(k){ return rt.listSelected[k]; });
+}
+/* 人工发布标记单次上限与后端一致；选区里任一工作项无管理权限就不提供批量入口 */
+var MAX_PUBLICATION_BATCH = 100;
+function canBulkPublish(ids){
+  if(!ids || !ids.length || ids.length > MAX_PUBLICATION_BATCH) return false;
+  for(var i = 0; i < ids.length; i++){
+    var t = rt.listCache[ids[i]];
+    if(!t || t.deletedAt || !canManageProject(t.reqId)) return false;
+  }
+  return true;
+}
+function refreshAfterBulkPublication(){
+  rt.listSelected = {};
+  loadList();
+  loadBoard({silent:true});
+  loadReqs();
+}
+function openBulkPublicationDialog(){
+  var ids = bulkIds();
+  if(!ids.length) return;
+  if(ids.length > MAX_PUBLICATION_BATCH){ toast("单次最多标记 " + MAX_PUBLICATION_BATCH + " 项，请减少选择", "warn"); return; }
+  if(!canBulkPublish(ids)){ toast("所选工作项中有不可管理的项目，请分开操作", "warn"); return; }
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.innerHTML = '<div class="sheet xs"><div class="sheet-body"><div class="panel"><div class="panel-head"><h3>'
+    + '标记 ' + ids.length + ' 项为已发布（人工）</h3>'
+    + '<button class="icon-btn sm" type="button" data-bulkpub-x aria-label="关闭">' + icon("close", 14) + '</button></div>'
+    + '<div class="stack"><p class="foot-note">用于补录从其他系统迁移、没有正式发布记录的历史数据。'
+    + '只影响工作项徽标与「发布态」筛选，不写入版本发布记录，也不参与需求交付派生与统计；每项单独留痕。</p>'
+    + '<label class="field"><span>生效日期</span><input class="input" type="date" id="bulkPubDate" value="' + esc(rt.TODAY_ISO) + '" max="' + esc(rt.TODAY_ISO) + '"></label>'
+    + '<label class="field"><span>补录原因（必填）</span><textarea class="input" id="bulkPubNote" rows="4" maxlength="500" placeholder="例如：从旧系统迁移，原系统发布记录未同步"></textarea></label>'
+    + '<div class="row row-gap"><button class="btn primary" type="button" data-bulkpub-ok>保存标记</button>'
+    + '<button class="btn" type="button" data-bulkpub-x>取消</button></div>'
+    + '</div></div></div></div>';
+  document.body.appendChild(layer);
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-bulkpub-x]")){ UI.closeModal(layer); return; }
+    var ok = e.target.closest("[data-bulkpub-ok]");
+    if(!ok) return;
+    var note = layer.querySelector("#bulkPubNote").value.trim();
+    var effectiveOn = layer.querySelector("#bulkPubDate").value;
+    if(!effectiveOn){ toast("请选择标记生效日期", "warn"); layer.querySelector("#bulkPubDate").focus(); return; }
+    if(!note){ toast("请填写人工标记原因", "warn"); layer.querySelector("#bulkPubNote").focus(); return; }
+    ok.disabled = true;
+    UI.syncBusy(true);
+    API.post("/api/tasks/publication-judgement/batch", {
+      taskIds: ids, effectiveOn: effectiveOn, note: note
+    }).then(function(res){
+      UI.syncBusy(false);
+      UI.closeModal(layer);
+      toast("已标记 " + ((res && res.marked) || ids.length) + " 项为发布过（仅影响展示与筛选）", "fs");
+      refreshAfterBulkPublication();
+    }).catch(function(ex){
+      UI.syncBusy(false);
+      ok.disabled = false;
+      toast(ex.message || "批量标记失败", "bad");
+    });
+  });
+  UI.openModal(layer, "select");
+}
+function revokeBulkPublication(){
+  var ids = bulkIds();
+  if(!ids.length) return;
+  if(ids.length > MAX_PUBLICATION_BATCH){ toast("单次最多撤销 " + MAX_PUBLICATION_BATCH + " 项，请减少选择", "warn"); return; }
+  if(!canBulkPublish(ids)){ toast("所选工作项中有不可管理的项目，请分开操作", "warn"); return; }
+  UI.showPrompt({ title:"撤销 " + ids.length + " 项的发布标记", desc:"撤销后回落为未发布；正式发布记录不受影响，历史记录保留。没有生效标记的条目会自动跳过。",
+    label:"撤销原因（必填）", required:true, maxLength:500, okText:"撤销标记" }).then(function(note){
+    if(note === null) return;
+    if(!note.trim()){ toast("请填写撤销原因", "warn"); return; }
+    UI.syncBusy(true);
+    API.post("/api/tasks/publication-judgement/batch/revoke", { taskIds: ids, note: note.trim() })
+      .then(function(res){
+        UI.syncBusy(false);
+        toast("已撤销 " + ((res && res.revoked) || ids.length) + " 项发布标记", "fs");
+        refreshAfterBulkPublication();
+      }).catch(function(ex){
+        UI.syncBusy(false);
+        toast(ex.message || "批量撤销失败", "bad");
+      });
+  });
 }
 function bulkApply(patchFor, label){
   var ids = bulkIds();
@@ -1024,6 +1115,8 @@ if(listBulkBar){
       btnListBulk.click();
       return;
     }
+    if(kind === "pub"){ openBulkPublicationDialog(); return; }
+    if(kind === "pub-revoke"){ revokeBulkPublication(); return; }
     if(kind === "tag"){
       UI.showPrompt({ title: "批量添加标签", label: "标签名（≤16 字，已存在则跳过）", maxLength: 16, okText: "添加" })
         .then(function(input){

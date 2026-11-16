@@ -159,6 +159,31 @@ sudo nginx -t && sudo systemctl reload nginx
 
 浏览器访问 `http://服务器IP/hourglass/` → 应跳转登录页，用第 3 步设置的账号登录。
 
+### 5.1 与其他应用共用同一个 Nginx（子路径 `/hourglass`）
+
+多应用共用一个 server 时，沙漏只占 `/hourglass` 前缀，**不要把 `location /` 指向本应用**。前端静态 location 必须带协商缓存头，否则浏览器按 `Last-Modified` 走启发式缓存，发布后一段时间仍可能拿到旧页面：
+
+```nginx
+location ^~ /hourglass/ {
+    alias /app/ywzt/hourglass/front/;   # 按实际目录改
+    index index.html;
+    add_header Cache-Control "no-cache";
+}
+```
+
+`no-cache` 是"可以存、但每次先协商"，命中 ETag 时是 304，代价很小；不要写成 `immutable` 或长 `max-age`——前端文件名不带内容哈希。改完执行 `nginx -t && nginx -s reload`。
+
+手工同步前端（不走 `deploy.sh`）时，同步完成后要按内容重新生成 SW 缓存版本号，否则浏览器可能继续用旧缓存：
+
+```bash
+cd /app/ywzt/hourglass/front
+H=$(find . -type f ! -name sw.js -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
+sed -i -E "s/hourglass-shell-[A-Za-z0-9._-]+/hourglass-shell-$H/" sw.js
+grep -o 'hourglass-shell-[A-Za-z0-9]*' sw.js | head -1
+```
+
+`deploy.sh` 与 `build.bat` 已自动执行这一步；只有手工同步才需要手动跑。
+
 ## 6. 暴露面检查（重要）
 
 ```bash

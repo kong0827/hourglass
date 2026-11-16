@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文档阅读工具栏 · 图标化原型（2026-11-16）</title>
+<style>
+/* ========== 设计令牌（对齐 frontend/css/tokens.css） ========== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+  --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-active:#1E40AF;
+  --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --warning-soft:#FFFAEB; --warning-fg:#B54708;
+  --tip-bg:#101828; --tip-fg:#FFFFFF;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px;
+  --dur-fast:120ms; --ease-out:cubic-bezier(.2,.8,.2,1);
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",
+              "PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+}
+html[data-theme="dark"]{
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D;
+  --surface-hover:#1F2937; --surface-active:#26313F;
+  --border:#25303D; --border-strong:#334153;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-active:#3B76DE;
+  --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --warning-soft:#2A2110; --warning-fg:#FEC84B;
+  --tip-bg:#26313F; --tip-fg:#E7ECF3;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --ring-focus:0 0 0 3px rgba(76,141,255,.28);
+}
+
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg-app);color:var(--text);font-family:var(--font-sans);font-size:13px;}
+
+/* ========== 原型外壳 ========== */
+.proto-head{max-width:1120px;margin:0 auto;padding:22px 28px 14px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;}
+.proto-head h1{margin:0;font-size:18px;font-weight:650;}
+.proto-head .sub{margin:4px 0 0;font-size:12px;color:var(--text-3);}
+.proto-ctrl{display:flex;gap:8px;flex-wrap:wrap;}
+.seg{display:inline-flex;align-items:stretch;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;}
+.seg button{border:0;background:transparent;height:28px;padding:0 12px;font-size:12.5px;font-family:inherit;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);}
+.seg button + button{border-left:1px solid var(--border);}
+.seg button:hover{background:var(--surface-hover);color:var(--text);}
+.seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.proto-main{max-width:1120px;margin:0 auto;padding:0 28px 56px;}
+.hint{margin:10px 2px 0;font-size:12px;color:var(--text-3);}
+
+/* ========== 复刻：文档阅读态（左树 + 正文） ========== */
+.mock{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:hidden;min-height:300px;}
+.mock-tree{width:232px;flex:0 0 auto;border-right:1px solid var(--border);padding:14px 10px;overflow:hidden;transition:width 200ms var(--ease-out),padding 200ms var(--ease-out),opacity 160ms var(--ease-out);}
+.mock.wide .mock-tree{width:0;padding-left:0;padding-right:0;opacity:0;border-right-color:transparent;}
+.mock-tree-inner{min-width:212px;}
+.tree-head{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px;padding:6px 8px;}
+.tree-head .cnt{margin-left:auto;color:var(--text-3);font-size:11px;background:var(--surface-sunken);border-radius:999px;padding:1px 7px;font-weight:500;}
+.tree-head .tag{font-size:11px;color:var(--text-3);font-weight:400;}
+.tree-item{font-size:12.5px;color:var(--text-2);padding:6px 8px 6px 22px;border-radius:var(--r-xs);display:flex;align-items:center;gap:6px;}
+.tree-item.active{background:var(--primary-soft);color:var(--primary-fg);font-weight:550;}
+.draft-mini{font-size:11px;font-weight:600;color:var(--warning-fg);background:var(--warning-soft);border-radius:4px;padding:0 4px;line-height:16px;}
+.mock-doc{flex:1;min-width:0;padding:16px 22px 24px;}
+.crumb{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:7px;}
+.crumb a{color:var(--primary);text-decoration:none;}
+.crumb a:hover{text-decoration:underline;}
+.title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:10px;}
+.title-row h3{margin:0;font-size:17px;font-weight:650;line-height:1.4;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.draft{font-size:12px;font-weight:600;color:var(--warning-fg);background:var(--warning-soft);border-radius:4px;padding:1px 6px;line-height:18px;}
+.acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.tb[hidden]{display:none;}
+.meta{margin-top:8px;font-size:12px;color:var(--text-3);}
+.rule{border:0;border-top:1px solid var(--border);margin:14px 0 0;}
+.mock-body{padding-top:16px;font-size:13.5px;line-height:1.8;}
+.mock-body a{color:var(--primary);word-break:break-all;text-decoration:underline;text-underline-offset:2px;}
+
+/* ========== 按钮体系（对齐 components.css） ========== */
+.btn{height:34px;padding:0 14px;border-radius:var(--r-sm);display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13.5px;font-weight:550;font-family:inherit;white-space:nowrap;flex:0 0 auto;cursor:pointer;transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);}
+.btn svg{flex:0 0 auto;}
+.btn:not(.soft):hover{background:var(--surface-hover);border-color:var(--border-strong);}
+.btn:not(.soft):active{background:var(--surface-active);}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--text-2);}
+.btn.ghost:hover{background:var(--surface-hover);color:var(--text);}
+.btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.btn.soft:hover{background:var(--primary-soft);border-color:var(--primary);}
+.btn.sm{height:28px;padding:0 10px;font-size:12.5px;border-radius:var(--r-xs);}
+.btn:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+
+/* 纯图标按钮：方形 ghost，宽高同 .btn.sm */
+.ibtn{width:28px;padding:0;justify-content:center;position:relative;}
+.vdiv{width:1px;height:16px;background:var(--border);flex:0 0 auto;}
+
+/* 宽屏按下态（对齐 views.css rrd-acts 规则） */
+.acts [data-wide][aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-fg);border-color:transparent;}
+
+/* 评论数量角标 */
+.cnt-badge{position:absolute;top:-5px;right:-6px;min-width:16px;height:16px;border-radius:999px;background:var(--primary);color:#fff;font-size:10.5px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--surface);line-height:1;pointer-events:none;}
+
+/* 缩放控件（对齐 .seg.mini.doc-zoom） */
+.zseg{display:inline-flex;align-items:stretch;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;flex:0 0 auto;}
+.zseg button{border:0;background:transparent;height:26px;padding:0 8px;font-size:12px;font-family:inherit;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;}
+.zseg button + button{border-left:1px solid var(--border);}
+.zseg button:hover{background:var(--surface-hover);color:var(--text);}
+.zseg .z-out,.zseg .z-in{width:26px;padding:0;}
+.zseg .z-reset{min-width:46px;padding:0 4px;font-variant-numeric:tabular-nums;}
+.zseg button:disabled{opacity:.4;cursor:default;background:none;color:var(--text-3);}
+
+/* ========== 统一深色提示（悬停 / 键盘聚焦 350ms 出现） ========== */
+[data-tip]{position:relative;}
+[data-tip]::after{content:attr(data-tip);position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);background:var(--tip-bg);color:var(--tip-fg);font-size:12px;line-height:1;font-weight:500;padding:6px 9px;border-radius:var(--r-xs);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity var(--dur-fast) ease 0s;z-index:80;box-shadow:var(--shadow-md);}
+[data-tip]:hover::after,[data-tip]:focus-visible::after{opacity:1;transition-delay:350ms;}
+.tip-show[data-tip]::after{opacity:1;transition:none;}
+
+/* ========== 说明区块 ========== */
+.block{margin-top:40px;}
+.block h2{font-size:14.5px;font-weight:650;margin:0 0 12px;}
+.tbl-wrap{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface);}
+table{border-collapse:collapse;width:100%;font-size:12.5px;}
+th{background:var(--surface-sunken);text-align:left;padding:8px 14px;font-size:12px;color:var(--text-2);font-weight:600;border-bottom:1px solid var(--border);}
+td{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle;}
+tr:last-child td{border-bottom:0;}
+td b{color:var(--text);font-weight:600;}
+.tic{display:inline-flex;align-items:center;color:var(--text);width:52px;}
+.states{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 12px 12px;}
+.tile .demo{height:64px;display:flex;align-items:flex-start;justify-content:center;padding-top:2px;}
+.tile .cap{font-size:11.5px;color:var(--text-3);text-align:center;margin-top:12px;line-height:1.5;}
+.force-hover{background:var(--surface-hover)!important;color:var(--text)!important;}
+ul.notes{margin:0;padding-left:18px;color:var(--text-2);font-size:12.8px;line-height:2;}
+ul.notes b{color:var(--text);}
+.proto-foot{max-width:1120px;margin:0 auto;padding:0 28px 40px;font-size:11.5px;color:var(--text-3);}
+
+/* Toast：点击图标按钮的动作回执 */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(8px);background:var(--tip-bg);color:var(--tip-fg);font-size:12.5px;padding:8px 14px;border-radius:var(--r-sm);opacity:0;pointer-events:none;transition:opacity 160ms ease,transform 160ms ease;z-index:99;box-shadow:var(--shadow-md);}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition-duration:0.001ms!important;animation-duration:0.001ms!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="proto-head">
+  <div>
+    <h1>文档阅读工具栏 · 图标化原型</h1>
+    <p class="sub">2026-11-16 · 对应阅读态 rrd-acts 工具栏（requirements.js:1345）· 单文件离线交互稿</p>
+  </div>
+  <div class="proto-ctrl">
+    <div class="seg" id="schemeSeg" role="group" aria-label="方案切换">
+      <button type="button" class="on" data-scheme="cur">现状</button>
+      <button type="button" data-scheme="a">方案A · 全图标化</button>
+      <button type="button" data-scheme="b">方案B · 导出留文字</button>
+    </div>
+    <div class="seg" id="themeSeg" role="group" aria-label="主题切换">
+      <button type="button" class="on" data-set-theme="light">浅色</button>
+      <button type="button" data-set-theme="dark">深色</button>
+    </div>
+  </div>
+</header>
+
+<main class="proto-main">
+
+  <!-- 复刻阅读态：左树 + 正文 -->
+  <section class="mock" id="mock">
+    <aside class="mock-tree" id="mockTree">
+      <div class="mock-tree-inner">
+        <div class="tree-head">↓ 流程引擎 <span class="cnt">1</span></div>
+        <div class="tree-item active">李冠儒-提高出金比例申请流程 <span class="draft-mini">草稿</span></div>
+        <div class="tree-head" style="margin-top:6px;">⊕ 空间文档 <span class="tag">不挂项目</span> <span class="cnt">0</span></div>
+        <div class="tree-item" style="color:var(--text-3);">右击分组头可新建分类或文档</div>
+      </div>
+    </aside>
+    <div class="mock-doc">
+      <div class="crumb">流程引擎 <span>/</span> <a href="javascript:void(0)">李冠儒-提高出金比例申请流程</a></div>
+      <div class="title-row">
+        <h3>李冠儒-提高出金比例申请流程 <span class="draft">草稿</span></h3>
+        <span class="acts" id="acts">
+          <!-- 三套工具栏由 JS 渲染，按方案二选一显示 -->
+        </span>
+      </div>
+      <div class="meta">需求文档 · 负责人 刘恬恬 · 草稿 · 更新于 11-16 14:17</div>
+      <hr class="rule">
+      <div class="mock-body">
+        <a href="javascript:void(0)">https://page.weixin.qq.com/smartpage/p/b1_AakATgZHAKs5cUZy6FSTLCR79l1?p=guuOMs</a>
+      </div>
+    </div>
+  </section>
+  <p class="hint">· 工具栏可交互：悬停或键盘聚焦出统一提示（350ms 延迟）；「宽屏」可切换并收起左树；缩放控件可用；点击任意按钮右下角弹动作回执。</p>
+
+  <!-- 图标语义对照 -->
+  <section class="block">
+    <h2>图标语义对照</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th style="width:130px;">动作</th><th style="width:64px;">图标</th><th>提示文案（悬停 / 聚焦）</th><th>大众认知依据</th></tr></thead>
+        <tbody>
+          <tr><td><b>宽屏 / 退出宽屏</b></td><td><span class="tic" data-icon="expand" data-size="16"></span></td><td>宽屏阅读 / 退出宽屏</td><td>四角外扩 = 全屏铺开，通用；按下态高亮兜底，不会认错</td></tr>
+          <tr><td><b>重命名</b></td><td><span class="tic" data-icon="edit" data-size="16"></span></td><td>重命名文档</td><td>铅笔 = 编辑 / 改名，通用符号</td></tr>
+          <tr><td><b>评论</b></td><td><span class="tic" data-icon="comment" data-size="16"></span></td><td>评论 · 选中正文可划线</td><td>气泡 = 评论，通用；右上角标显示数量</td></tr>
+          <tr><td><b>权限说明</b></td><td><span class="tic" data-icon="shield" data-size="16"></span></td><td>权限说明（只读）</td><td>盾牌 = 权限 / 安全，通用；与现有左树锁形提示同族</td></tr>
+          <tr><td><b>历史版本</b></td><td><span class="tic" data-icon="clock" data-size="16"></span></td><td>历史版本</td><td>时钟 = 历史 / 时间线，通用符号</td></tr>
+          <tr><td><b>导出（原格式）</b></td><td><span class="tic" data-icon="download" data-size="16"></span></td><td>导出 Markdown / HTML</td><td>下箭头入托盘 = 下载 / 导出，通用符号</td></tr>
+          <tr><td><b>导出 Word</b></td><td><span class="tic" data-icon="docW" data-size="16"></span></td><td>导出 Word（.docx）</td><td>文档形 + W 字样指向 Word 格式；<b>新增图标</b>，与通用下载区分</td></tr>
+          <tr><td><b>编辑文档</b></td><td><span class="tic" data-icon="edit" data-size="16"></span></td><td>—（保留「图标 + 文字」）</td><td>主操作保留文字更醒目，不做纯图标；位置不变</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 控件态一览 -->
+  <section class="block">
+    <h2>控件态一览</h2>
+    <div class="states" id="states"></div>
+  </section>
+
+  <!-- 设计说明 -->
+  <section class="block">
+    <h2>设计说明</h2>
+    <ul class="notes">
+      <li>图标全部沿用 <b>icons.js 现有线性风格</b>（20 视框 / 1.5 描边 / 圆角端点），仅「Word 导出」新增一枚「文档 + W」图标，与通用下载箭头区分。</li>
+      <li>纯图标按钮：悬停或键盘聚焦 <b>350ms</b> 后显示统一深色提示（12px）；落地时补 <b>aria-label</b> 并保留 title 兜底，提示文案用短句。</li>
+      <li>组间加 <b>细分隔线</b>：宽屏 ｜ 文档操作（重命名 / 评论 / 权限 / 历史）｜ 导出 ｜ 编辑——图标化后靠分组保持可扫读。</li>
+      <li>评论按钮加<b>数量角标</b>；「宽屏」保留按下态（aria-pressed）并切换 expand / compress 图标。</li>
+      <li>「编辑文档」是主操作：保留图标 + 文字（soft 底），仍在最右，不做纯图标。</li>
+      <li><b>方案 A</b> 全部次级按钮图标化；若评审认为「导出 / Word」两个下载形图标易混，选<b>方案 B</b>：这两个保留文字，其余图标化。</li>
+      <li>缩放控件（100%）与事件绑定（data-rrd-* 属性）不动，仅换展示形态，实现成本低；移动端口径不变（可看即可）。</li>
+    </ul>
+  </section>
+
+</main>
+
+<p class="proto-foot">沙漏 · 文档阅读工具栏图标化原型 · 2026-11-16 · 单文件离线，可直接双击打开</p>
+<div id="toast" role="status"></div>
+
+<script>
+/* ========== 图标（对齐 icons.js：20 视框 / 1.5 描边） ========== */
+var ICONS = {
+  expand:'<path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/>',
+  compress:'<path d="M9 3.4v5.2H3.8"/><path d="M9 8.6 3.6 3.2"/><path d="M11 16.6v-5.2h5.2"/><path d="M11 11.4l5.4 5.4"/>',
+  edit:'<path d="M13.6 3.2l3.2 3.2L7 16.2l-4.2.8.8-4.2Z"/><path d="M12.2 4.6l3.2 3.2"/>',
+  comment:'<path d="M3.6 6.2A2.2 2.2 0 0 1 5.8 4h8.4a2.2 2.2 0 0 1 2.2 2.2v4.6a2.2 2.2 0 0 1-2.2 2.2H8.6L4.9 16.2v-3.2H5.8a2.2 2.2 0 0 1-2.2-2.2Z"/>',
+  shield:'<path d="M10 2.6 16.4 5v5c0 3.6-2.6 6.4-6.4 7.6C6.2 16.4 3.6 13.6 3.6 10V5Z"/><path d="M7.6 10.2 9.4 12l3.2-3.6"/>',
+  clock:'<circle cx="10" cy="10" r="7.2"/><path d="M10 5.8V10l3 1.8"/>',
+  download:'<path d="M10 3v9.6M6.2 8.8 10 12.6 13.8 8.8M4.4 15.6h11.2"/>',
+  zoomIn:'<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/><path d="M6.6 8.8h4.4M8.8 6.6v4.4"/>',
+  zoomOut:'<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/><path d="M6.6 8.8h4.4"/>',
+  docW:'<path d="M4 3.5h8l4 4v9H4Z"/><path d="M12 3.5v4h4"/><path d="M6.9 8.8l1 4 2.1-3.2 2.1 3.2 1-4"/>'
+};
+function icon(name, size){
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+ICONS[name]+'</svg>';
+}
+/* 表格 / 控件态里的静态图标位 */
+document.querySelectorAll('[data-icon]').forEach(function(el){
+  el.innerHTML = icon(el.dataset.icon, el.dataset.size || 16);
+});
+
+/* ========== 工具栏渲染：现状 / 方案A / 方案B ========== */
+var ZSEG =
+  '<span class="zseg" role="group" aria-label="正文缩放">' +
+    '<button type="button" class="z-out" title="缩小正文（Ctrl/⌘ + 滚轮）" aria-label="缩小正文">' + icon('zoomOut',14) + '</button>' +
+    '<button type="button" class="z-reset" title="恢复 100%">100%</button>' +
+    '<button type="button" class="z-in" title="放大正文（Ctrl/⌘ + 滚轮）" aria-label="放大正文">' + icon('zoomIn',14) + '</button>' +
+  '</span>';
+
+var tbCur =
+  '<div class="tb tb-cur">' + ZSEG +
+    '<button class="btn sm ghost" type="button" data-wide aria-pressed="false" title="宽屏阅读：收起左侧文档树">' + icon('expand',13) + ' 宽屏</button>' +
+    '<button class="btn sm ghost" type="button" data-act="重命名文档" title="重命名文档">' + icon('edit',13) + ' 重命名</button>' +
+    '<button class="btn sm ghost" type="button" data-act="评论" title="查看评论；选中正文可划线评论">' + icon('comment',13) + ' 评论</button>' +
+    '<button class="btn sm ghost" type="button" data-act="权限说明" title="查看这篇文档的权限说明（只读）">' + icon('shield',13) + ' 权限说明</button>' +
+    '<button class="btn sm ghost" type="button" data-act="查看历史版本" title="查看历史版本">' + icon('clock',13) + ' 历史版本</button>' +
+    '<button class="btn sm ghost" type="button" data-act="导出 Markdown / HTML" title="按原格式导出 Markdown / HTML">' + icon('download',13) + ' 导出</button>' +
+    '<button class="btn sm ghost" type="button" data-act="导出 Word（.docx）" title="导出为 Word 文档（.docx），保留标题、表格与内嵌图片">' + icon('download',13) + ' Word</button>' +
+    '<button class="btn sm soft" type="button" data-act="编辑文档">' + icon('edit',13) + ' 编辑文档</button>' +
+  '</div>';
+
+function ibtn(ic, tip, act, extra){
+  return '<button class="btn sm ghost ibtn" type="button" data-tip="' + tip + '" aria-label="' + tip + '" data-act="' + act + '"' + (extra || '') + '>' + icon(ic,14) + '</button>';
+}
+var tbA =
+  '<div class="tb tb-a" hidden>' + ZSEG +
+    '<span class="vdiv"></span>' +
+    '<button class="btn sm ghost ibtn" type="button" data-wide aria-pressed="false" data-tip="宽屏阅读" aria-label="宽屏阅读">' + icon('expand',14) + '</button>' +
+    '<span class="vdiv"></span>' +
+    ibtn('edit','重命名文档','重命名文档') +
+    ibtn('comment','评论 · 选中正文可划线','评论',' data-n="3"') +
+    ibtn('shield','权限说明（只读）','权限说明') +
+    ibtn('clock','历史版本','查看历史版本') +
+    '<span class="vdiv"></span>' +
+    ibtn('download','导出 Markdown / HTML','导出 Markdown / HTML') +
+    ibtn('docW','导出 Word（.docx）','导出 Word（.docx）') +
+    '<span class="vdiv"></span>' +
+    '<button class="btn sm soft" type="button" data-act="编辑文档">' + icon('edit',13) + ' 编辑文档</button>' +
+  '</div>';
+
+var tbB =
+  '<div class="tb tb-b" hidden>' + ZSEG +
+    '<span class="vdiv"></span>' +
+    '<button class="btn sm ghost ibtn" type="button" data-wide aria-pressed="false" data-tip="宽屏阅读" aria-label="宽屏阅读">' + icon('expand',14) + '</button>' +
+    '<span class="vdiv"></span>' +
+    ibtn('edit','重命名文档','重命名文档') +
+    ibtn('comment','评论 · 选中正文可划线','评论') +
+    ibtn('shield','权限说明（只读）','权限说明') +
+    ibtn('clock','历史版本','查看历史版本') +
+    '<span class="vdiv"></span>' +
+    '<button class="btn sm ghost" type="button" data-act="导出 Markdown / HTML" title="按原格式导出 Markdown / HTML">' + icon('download',13) + ' 导出</button>' +
+    '<button class="btn sm ghost" type="button" data-act="导出 Word（.docx）" title="导出为 Word 文档（.docx），保留标题、表格与内嵌图片">' + icon('docW',13) + ' Word</button>' +
+    '<span class="vdiv"></span>' +
+    '<button class="btn sm soft" type="button" data-act="编辑文档">' + icon('edit',13) + ' 编辑文档</button>' +
+  '</div>';
+
+document.getElementById('acts').innerHTML = tbCur + tbA + tbB;
+
+/* 评论角标：方案 A/B 的评论图标钮右上角显示数量 3 */
+document.querySelectorAll('.tb-a .ibtn[data-n], .tb-b .ibtn[data-n]').forEach(function(b){
+  var s = document.createElement('span');
+  s.className = 'cnt-badge';
+  s.textContent = b.dataset.n;
+  b.appendChild(s);
+});
+
+/* ========== 方案切换 ========== */
+var schemeSeg = document.getElementById('schemeSeg');
+function setScheme(k){
+  schemeSeg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.scheme === k); });
+  document.querySelectorAll('.acts .tb').forEach(function(t){
+    t.hidden = (t.classList.contains('tb-' + k) ? false : true);
+  });
+}
+schemeSeg.addEventListener('click', function(e){
+  var b = e.target.closest('button[data-scheme]');
+  if(b) setScheme(b.dataset.scheme);
+});
+
+/* ========== 主题切换 ========== */
+document.getElementById('themeSeg').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-set-theme]');
+  if(!b) return;
+  var dark = b.dataset.setTheme === 'dark';
+  if(dark) document.documentElement.setAttribute('data-theme','dark');
+  else document.documentElement.removeAttribute('data-theme');
+  this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
+});
+
+/* ========== 宽屏：切换按下态 + 图标 + 提示文案 + 收起左树 ========== */
+function setWide(on){
+  document.getElementById('mock').classList.toggle('wide', on);
+  document.querySelectorAll('[data-wide]').forEach(function(b){
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if(b.classList.contains('ibtn')){
+      b.innerHTML = icon(on ? 'compress' : 'expand', 14);
+      b.setAttribute('data-tip', on ? '退出宽屏' : '宽屏阅读');
+      b.setAttribute('aria-label', on ? '退出宽屏' : '宽屏阅读');
+    }else{
+      b.innerHTML = icon(on ? 'compress' : 'expand', 13) + ' 宽屏';
+      b.setAttribute('title', on ? '退出宽屏阅读' : '宽屏阅读：收起左侧文档树');
+    }
+  });
+}
+
+/* ========== 缩放控件 ========== */
+var zoom = 100;
+function renderZoom(){
+  document.querySelectorAll('.z-reset').forEach(function(b){
+    b.textContent = zoom + '%';
+    b.disabled = (zoom === 100);
+  });
+  document.querySelectorAll('.z-out').forEach(function(b){ b.disabled = zoom <= 50; });
+  document.querySelectorAll('.z-in').forEach(function(b){ b.disabled = zoom >= 200; });
+}
+document.addEventListener('click', function(e){
+  var zi = e.target.closest('.z-in'), zo = e.target.closest('.z-out'), zr = e.target.closest('.z-reset');
+  if(zi){ zoom = Math.min(200, zoom + 10); renderZoom(); }
+  else if(zo){ zoom = Math.max(50, zoom - 10); renderZoom(); }
+  else if(zr){ zoom = 100; renderZoom(); }
+});
+renderZoom();
+
+/* ========== 点击回执（Toast）与宽屏联动 ========== */
+var toastEl = document.getElementById('toast'), toastTimer = null;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 1600);
+}
+document.addEventListener('click', function(e){
+  if(e.target.closest('[data-wide]')){ setWide(document.querySelector('[data-wide]').getAttribute('aria-pressed') !== 'true'); return; }
+  var a = e.target.closest('[data-act]');
+  if(a) toast('演示触发：' + a.dataset.act);
+});
+
+/* ========== 控件态一览 ========== */
+var STATES = [
+  {cap:'默认：透明 ghost，与正文共处一行不抢视觉', html:'<button class="btn sm ghost ibtn" type="button">' + icon('edit',14) + '</button>'},
+  {cap:'悬停：浅灰底 + 图标转主文字色', html:'<button class="btn sm ghost ibtn force-hover" type="button">' + icon('edit',14) + '</button>'},
+  {cap:'按下（宽屏开）：主色浅底，图标切换', html:'<button class="btn sm ghost ibtn" type="button" aria-pressed="true" style="background:var(--primary-soft);color:var(--primary-fg);">' + icon('compress',14) + '</button>'},
+  {cap:'禁用：无权限时置灰（如查看者重命名）', html:'<button class="btn sm ghost ibtn" type="button" disabled title="仅文档负责人或空间管理员可编辑">' + icon('shield',14) + '</button>'},
+  {cap:'数量角标：有评论时显示条数', html:'<button class="btn sm ghost ibtn" type="button">' + icon('comment',14) + '<span class="cnt-badge">3</span></button>'},
+  {cap:'提示常显：悬停 / 聚焦 350ms 后出现（此处强制展示）', html:'<button class="btn sm ghost ibtn tip-show" type="button" data-tip="历史版本" aria-label="历史版本">' + icon('clock',14) + '</button>'}
+];
+document.getElementById('states').innerHTML = STATES.map(function(s){
+  return '<div class="tile"><div class="demo">' + s.html + '</div><div class="cap">' + s.cap + '</div></div>';
+}).join('');
+</script>
+</body>
+</html>

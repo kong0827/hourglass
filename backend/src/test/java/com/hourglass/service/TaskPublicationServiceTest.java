@@ -14,7 +14,8 @@ class TaskPublicationServiceTest {
     private final TaskMapper tasks = mock(TaskMapper.class);
     private final ReleasePermissionService permissions = mock(ReleasePermissionService.class);
     private final TaskPublicationService service = new TaskPublicationService(tasks, mapper,
-            mock(TaskLogMapper.class), mock(DeliveryScopeLock.class), permissions, new ObjectMapper());
+            mock(TaskLogMapper.class), mock(DeliveryScopeLock.class), permissions, new ObjectMapper(),
+            mock(com.hourglass.mapper.TaskPublicationJudgementMapper.class));
 
     @Test void failedTestAndStagingCannotGrantProductionBadge() {
         VersionRelease failed = event("failed", 1, "a"); failed.setResult("failed");
@@ -66,9 +67,14 @@ class TaskPublicationServiceTest {
         when(mapper.selectPublicationRecords("W", Collections.singletonList("T"))).thenReturn(Collections.emptyList());
         service.enrichTasks("W", Collections.singletonList(task)); assertNull(task.getPublishedAt()); assertNull(task.getPublishSource()); assertFalse(task.getEverPublished());
     }
-    @Test void manualHttpWritesAndMapperMutationsAreAbsent() {
-        for (java.lang.reflect.Method method : com.hourglass.controller.TaskPublicationController.class.getDeclaredMethods())
-            assertNull(method.getAnnotation(org.springframework.web.bind.annotation.PostMapping.class));
+    @Test void manualJudgementHttpWritesStayOutOfReleaseRecords() {
+        for (java.lang.reflect.Method method : com.hourglass.controller.TaskPublicationController.class.getDeclaredMethods()) {
+            org.springframework.web.bind.annotation.PostMapping post =
+                    method.getAnnotation(org.springframework.web.bind.annotation.PostMapping.class);
+            if (post == null) continue;
+            for (String path : post.value())
+                assertTrue(path.contains("publication-judgement"), path);
+        }
         for (java.lang.reflect.Method method : ReleaseMapper.class.getMethods()) assertFalse(Arrays.asList("publishTask", "unpublishTask").contains(method.getName()));
     }
     @Test void deletedTaskHistoryIncludesFailureTestAndRollbackWithProjectVisibility() {

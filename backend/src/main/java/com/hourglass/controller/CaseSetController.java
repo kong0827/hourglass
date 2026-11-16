@@ -36,13 +36,17 @@ public class CaseSetController {
         this.workspaceService = workspaceService;
     }
 
-    /** 项目下当前用户可见的分组（团队共享 + 自己的个人分组），带成员数与可编辑标记 */
+    /**
+     * 项目下当前用户可见的分组（团队共享 + 自己的个人分组），带成员数与可编辑标记。
+     * caseId 可选：用例抽屉回显归属，逐组返回 inCase 标记。
+     */
     @GetMapping("/api/case-sets")
     public ApiResult<List<CaseSetView>> list(@RequestParam String reqId,
+                                             @RequestParam(required = false) String caseId,
                                              @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(setService.list(ws.getId(), userId, reqId));
+        return ApiResult.ok(setService.list(ws.getId(), userId, reqId, caseId));
     }
 
     @PostMapping("/api/case-sets")

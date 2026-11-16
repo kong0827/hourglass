@@ -65,7 +65,8 @@ class VersionPhaseServiceTest {
             mock(com.hourglass.mapper.VersionCommitmentMapper.class);
     private final TaskPublicationService publications = new TaskPublicationService(mock(com.hourglass.mapper.TaskMapper.class),
             releases, mock(com.hourglass.mapper.TaskLogMapper.class), mock(DeliveryScopeLock.class), permissions,
-            new com.fasterxml.jackson.databind.ObjectMapper());
+            new com.fasterxml.jackson.databind.ObjectMapper(),
+            mock(com.hourglass.mapper.TaskPublicationJudgementMapper.class));
     private final VersionPhaseService service = new VersionPhaseService(versions, versionTasks, reqs,
             demands, timeLogs, users, access, branches, permissions, releases, commitments);
     private final java.util.Map<String, java.util.List<String>> taskBindings = new java.util.HashMap<String, java.util.List<String>>();

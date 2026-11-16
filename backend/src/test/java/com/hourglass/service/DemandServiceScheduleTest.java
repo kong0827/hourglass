@@ -55,7 +55,8 @@ class DemandServiceScheduleTest {
     private final com.hourglass.mapper.ReleaseMapper releases = mock(com.hourglass.mapper.ReleaseMapper.class);
     private final com.hourglass.mapper.VersionTaskMapper bindings = mock(com.hourglass.mapper.VersionTaskMapper.class);
     private final TaskPublicationService publications = new TaskPublicationService(tasks, releases,
-            mock(com.hourglass.mapper.TaskLogMapper.class), lock, permissions, new ObjectMapper());
+            mock(com.hourglass.mapper.TaskLogMapper.class), lock, permissions, new ObjectMapper(),
+            mock(com.hourglass.mapper.TaskPublicationJudgementMapper.class));
     private Demand demand;
     private ProjectVersion version;
 

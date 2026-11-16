@@ -3,10 +3,12 @@ package com.hourglass.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hourglass.common.AppException;
 import com.hourglass.entity.Task;
+import com.hourglass.entity.TaskPublicationJudgement;
 import com.hourglass.entity.VersionRelease;
 import com.hourglass.mapper.ReleaseMapper;
 import com.hourglass.mapper.TaskLogMapper;
 import com.hourglass.mapper.TaskMapper;
+import com.hourglass.mapper.TaskPublicationJudgementMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -18,12 +20,15 @@ public class TaskPublicationService {
     private final TaskMapper taskMapper;
     private final ReleaseMapper releaseMapper;
     private final ReleasePermissionService permissions;
+    private final TaskPublicationJudgementMapper judgementMapper;
 
     public TaskPublicationService(TaskMapper taskMapper, ReleaseMapper releaseMapper, TaskLogMapper logMapper,
-                                  DeliveryScopeLock scopeLock, ReleasePermissionService permissions, ObjectMapper json) {
+                                  DeliveryScopeLock scopeLock, ReleasePermissionService permissions, ObjectMapper json,
+                                  TaskPublicationJudgementMapper judgementMapper) {
         this.taskMapper = taskMapper;
         this.releaseMapper = releaseMapper;
         this.permissions = permissions;
+        this.judgementMapper = judgementMapper;
     }
 
     /** Read-only projection; callers must have already applied task/project visibility. */
@@ -31,10 +36,14 @@ public class TaskPublicationService {
         java.util.List<String> ids = new java.util.ArrayList<String>();
         for (Task task : tasks) if (workspaceId.equals(task.getWorkspaceId()) && !ids.contains(task.getId())) ids.add(task.getId());
         java.util.Map<String, PublicationSummary> summaries = new java.util.HashMap<String, PublicationSummary>();
+        java.util.Map<String, TaskPublicationJudgement> judgements = new java.util.HashMap<String, TaskPublicationJudgement>();
         for (int start = 0; start < ids.size(); start += 500) {
             List<String> batch = ids.subList(start, Math.min(start + 500, ids.size()));
             List<VersionRelease> records = releaseMapper.selectPublicationRecords(workspaceId, batch);
             for (String id : batch) summaries.put(id, project(id, records));
+            for (TaskPublicationJudgement judgement : judgementMapper.selectActiveByTasks(workspaceId, batch)) {
+                judgements.put(judgement.getTaskId(), judgement);
+            }
         }
         for (Task task : tasks) {
             PublicationSummary summary = summaries.get(task.getId());
@@ -45,6 +54,12 @@ public class TaskPublicationService {
             task.setCanPublish(false); task.setCanUnpublish(false);
             task.setEverPublished(summary.isEverPublished()); task.setPublicationState(summary.getPublicationState());
             task.setPublicationTargets(summary.getPublicationTargets());
+            /* 人工标记与正式记录并列投影，输出层优先正式记录；它不改变 publicationState。 */
+            TaskPublicationJudgement judgement = judgements.get(task.getId());
+            task.setManualPublished(judgement != null);
+            task.setManualPublishedAt(judgement == null ? null : judgement.getEffectiveOn());
+            task.setManualJudgeName(judgement == null ? null : judgement.getJudgedByName());
+            task.setManualJudgeReason(judgement == null ? null : judgement.getJudgeReason());
         }
     }
 

@@ -103,6 +103,7 @@ public class SavedViewService {
         copyStringArray(root, out, "versions");
         copyStringArray(root, out, "columns");
         copyEnum(root, out, "completion", "open", "done");
+        copyEnum(root, out, "pubState", "published", "unpublished");
         /* 自定义日期区间与「无截止日期」也是筛选条件，随视图保存 */
         copyDate(root, out, "dueFrom");
         copyDate(root, out, "dueTo");

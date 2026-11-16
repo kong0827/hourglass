@@ -155,8 +155,21 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <div class="rf rf-edit rf-meta" data-fact-edit="tags" role="button" tabindex="0" title="点击修改标签">
                 <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg></span>标签</span><b class="rf-v rf-tags" id="rfTags">—</b>
               </div>
+              <div class="rf rf-edit rf-meta rf-block" data-fact-edit="blocked" role="button" tabindex="0" title="点击标记阻塞">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.4 17 16H3z"/><path d="M10 8v3.4M10 13.6h.01"/></svg></span>阻塞</span><b class="rf-v" id="rfBlocked">未阻塞</b>
+              </div>
             </div>
           </div>
+
+          <!-- 被阻塞时才出现：卡点原因与解除入口，常规工作项不占位 -->
+          <section class="read-card read-blocked" id="readBlockedCard" hidden>
+            <div class="read-card-head">
+              <h3>阻塞 / 卡点</h3>
+              <button class="link-btn" type="button" id="readBlockedClear">解除阻塞</button>
+            </div>
+            <p class="read-blocked-reason" id="readBlockedReason">—</p>
+            <p class="foot-note">阻塞期间该工作项上的计时已停止；看板卡片显示橙色条纹。</p>
+          </section>
 
           <!-- 测试交接：提测时间 / 测试负责人 / 测试时间窗；未指派时显式提示 -->
           <section class="read-card test-card" id="readTestCard" hidden>
@@ -233,6 +246,13 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
 
         <!-- 编辑态：保留完整字段，低频项折叠 -->
         <div class="drawer-edit-overview" id="drawerEditOverview">
+      <div class="cf-errsum task-errsum" id="taskErrSum" role="alert" hidden>
+        <span class="cf-ei" aria-hidden="true">!</span>
+        <div>
+          <b id="taskErrTitle">还有 1 处需要处理</b>
+          <div class="cf-errlinks" id="taskErrLinks"></div>
+        </div>
+      </div>
       <!-- 标题：最高优先级字段 -->
       <div class="title-wrap" id="fTitle">
         <div class="title-row">
@@ -241,6 +261,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <span class="req-chip">必填</span>
         </div>
         <div class="title-foot">
+          <span class="title-kbd"><span class="kbd">Enter</span> 保存</span>
           <span class="err">请填写工作项标题</span>
           <span class="counter" id="iTitleCount">0/60</span>
         </div>
@@ -298,6 +319,8 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         <div class="ctx-item ctx-item-wide">
           <div class="ctx-label">模块</div>
           <div class="seg" id="segCat" role="group" aria-label="模块"></div>
+          <p class="ctx-path" id="catPathLine" hidden></p>
+          <p class="ctx-note" id="catNote" hidden>模块是项目内的目录，只影响归类；选它不会改变所属项目。</p>
         </div>
       </div>
 
@@ -305,7 +328,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
       <div class="task-detail-layout">
         <div class="task-detail-main stack">
           <section class="drawer-card">
-            <div class="drawer-card-head"><h3>内容</h3><span class="foot-note">只有标题必填</span></div>
+            <div class="drawer-card-head"><h3>内容</h3><span class="foot-note">描述与标签均为选填</span></div>
             <div class="field">
               <label class="field-label">描述</label>
               <div id="iDesc" style="min-height:120px"></div>
@@ -769,9 +792,9 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             </details>
           </section>
 
-          <!-- 生产发布事实：有正式发布数据时才出现，避免占用首屏 -->
+          <!-- 生产发布事实：有正式记录或人工标记时才出现，避免占用首屏 -->
           <section class="drawer-card" id="taskPublication" hidden>
-            <div class="drawer-card-head"><h3>生产发布事实（只读）</h3><span id="taskPublishedBadge"></span></div>
+            <div class="drawer-card-head"><h3>生产发布事实</h3><span id="taskPublishedBadge"></span></div>
             <p class="hint" id="taskPublicationInfo"></p>
             <div id="taskReleaseRecords" aria-live="polite"></div>
           </section>
@@ -785,7 +808,6 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             <div class="drawer-sect-body">
               <div class="comment-list" id="commentList"></div>
               <div class="comment-form">
-                <div class="comment-mention" id="commentMention" hidden></div>
                 <div class="comment-compose">
                   <textarea id="iComment" maxlength="500" placeholder="写下讨论、结论或卡点…（输入 @ 可提及成员，Ctrl/⌘ + Enter 发送）"></textarea>
                   <div class="comment-attach-chips" id="commentAttachChips" hidden></div>
@@ -844,6 +866,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
       <span class="hint" id="taskFormHint">保存后可拖动卡片调整状态与顺序</span>
       <button class="btn danger" type="button" id="btnDeleteTask" hidden>删除</button>
       <button class="btn" type="button" id="btnCancelTask">取消</button>
+      <button class="btn" type="submit" id="btnSaveTaskAgain" hidden>保存并再建一条</button>
       <button class="btn" type="submit" id="btnSaveTaskContinue" hidden title="保存后留在当前工作项，继续补充评论、检查项或时间">保存并继续</button>
       <button class="btn primary" type="submit" id="btnSaveTask">保存</button>
     </div>

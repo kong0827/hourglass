@@ -70,6 +70,11 @@ public class CaseSetService {
     /* ---------- 查询 ---------- */
 
     public List<CaseSetView> list(String workspaceId, String userId, String reqId) {
+        return list(workspaceId, userId, reqId, null);
+    }
+
+    /** caseId 非空时按用例回显归属：给每个可见分组补 inCase 标记，供抽屉勾选与 chips 使用 */
+    public List<CaseSetView> list(String workspaceId, String userId, String reqId, String caseId) {
         projectAccess.assertView(workspaceId, userId, reqId);
         /* 动态分组先自愈，列表里的成员数才与规则一致 */
         caseService.refreshDynamicSets(workspaceId, reqId);
@@ -82,6 +87,18 @@ public class CaseSetService {
             v.setEditable(writable && (VIS_TEAM.equals(v.getVisibility()) || userId.equals(v.getOwnerUserId())));
             if (VIS_MEMBERS.equals(v.getVisibility())) {
                 v.setMemberIds(setMapper.selectMemberIds(v.getId()));
+            }
+        }
+        String cid = Texts.trimToNull(caseId);
+        if (cid != null) {
+            TestCase c = caseMapper.selectById(cid);
+            if (c == null || !workspaceId.equals(c.getWorkspaceId()) || !reqId.equals(c.getReqId())) {
+                throw AppException.notFound("用例不存在：" + cid);
+            }
+            Set<String> inSetIds =
+                    new HashSet<String>(setMapper.selectVisibleSetIdsByCase(workspaceId, cid, userId));
+            for (CaseSetView v : rows) {
+                v.setInCase(inSetIds.contains(v.getId()));
             }
         }
         for (CaseSetView v : rows) {

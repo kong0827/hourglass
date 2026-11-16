@@ -131,6 +131,8 @@ var caseInlineEdit = null;   /* 阅读态正在就地编辑：{kind:"pre"|"testD
 var caseInlineNewStep = null; /* 阅读态刚插入、还没保存的步骤行下标；取消时回滚 */
 var caseDetailSaving = false;
 var caseDetailModules = { reqId: null, list: [], loading: null };
+/* 分组归属：list 是当前用例可见的全部分组，d.inCase 标记已加入；与 caseSets（左侧面板）分开缓存 */
+var caseDetailSets = { reqId: null, caseId: null, list: [], loading: null, error: "", seq: 0 };
 var caseRunning = false;
 var caseDefecting = false;
 var caseMoreLoading = false;
@@ -3457,6 +3459,20 @@ function renderModuleTag(){
   }
   tag.hidden = false;
   if(inherit) inherit.hidden = !(caseModuleInherited && v && v !== caseModuleInherited);
+  syncModulePath();
+}
+/* 模块是项目内的目录：把「项目 › 目录 › 子目录」摊开，避免同名节点看不出归属 */
+function syncModulePath(){
+  var el = $("cModulePath");
+  if(!el) return;
+  var sel = $("cModule");
+  var id = sel && sel.value !== "__new" ? sel.value : "";
+  var nodes = caseFormModules.length ? caseFormModules : caseModuleNodes;
+  var path = id ? modulePathOf(id, nodes) : "";
+  if(!path){ el.hidden = true; el.innerHTML = ""; return; }
+  var full = [reqNameOf(caseFormReqId), path.replace(/ \/ /g, " › ")].filter(Boolean).join(" › ");
+  el.innerHTML = "位置：<b>" + esc(full) + "</b>";
+  el.hidden = false;
 }
 
 /* ---------- 验证工作项：先选主需求，再选该需求下的工作项 ---------- */
@@ -3706,6 +3722,7 @@ function syncCaseFormCtx(c){
   var no = c && caseNoText(c);
   if(no) parts.push("编号 <b>" + esc(no) + "</b>");
   else if(caseFormWritable()) parts.push("保存后自动编号");
+  if(!c && caseFormWritable()) parts.push('<span class="cf-only">只有标题必填</span>');
   el.innerHTML = parts.join('<span class="cf-sep" aria-hidden="true">·</span>');
   el.hidden = !parts.length;
 }
@@ -3734,6 +3751,14 @@ function syncCaseMore(){
   var more = $("caseMore");
   if(!more) return;
   more.open = !!($("cPrecondition").value.trim() || $("cTestData").value.trim());
+  syncCaseMoreMeta();
+}
+/* 收起时也能看出填了几项，不用展开确认 */
+function syncCaseMoreMeta(){
+  var meta = $("caseMoreMeta");
+  if(!meta) return;
+  var n = ($("cPrecondition").value.trim() ? 1 : 0) + ($("cTestData").value.trim() ? 1 : 0);
+  meta.textContent = (n ? "已填 " + n + " 项" : "未填") + " · 选填";
 }
 
 /* 弹窗所属项目的目录树：全部项目下新建到别的项目时，不能拿浏览项目的节点当候选 */
@@ -3788,7 +3813,7 @@ function openNewDialog(targetReqId){
   caseModuleInherited = "";
   loadFormModules(caseFormReqId, preset);
   syncPriOptions();
-  $("cPri").value = "";
+  $("cPri").value = "P2";
   renderPriSeg();
   $("cPrecondition").value = "";
   $("cTestData").value = "";
@@ -3857,6 +3882,8 @@ function openCaseDetail(id){
   UI.openModal($("dlgCase"));
   loadCaseDetailRuns(id);
   loadCaseDetailModules(c.reqId);
+  /* 每次打开都取最新归属：分组可能在左侧面板或其他会话里改过 */
+  loadCaseDetailSets(c, true);
 }
 function openEditDialog(id){
   var c = caseById(id);
@@ -3928,18 +3955,109 @@ function openCaseHint(key, anchor){
 function casePriText(p){
   return p ? esc(priName(p) || p) : '<span class="muted">未设置</span>';
 }
-function caseModuleText(c){
-  var name = moduleNameById(caseDetailModules.list, c.moduleId) || c.module || "";
-  return name ? esc(name) : '<span class="muted">未归类</span>';
+/* 目录节点只存 parentId：抽屉按祖先链拼「一级 / 二级 / 末级」，末段加粗 */
+function modulePathById(nodes, id){
+  if(!id) return [];
+  var map = {};
+  (nodes || []).forEach(function(n){ map[n.id] = n; });
+  var out = [], cur = map[id], guard = 0;
+  while(cur && guard++ < 64){
+    out.unshift(cur.name || "");
+    cur = cur.parentId ? map[cur.parentId] : null;
+  }
+  return out;
 }
-function caseDetailFact(k, v, opts){
+function caseModuleText(c){
+  var path = modulePathById(caseDetailModules.list, c.moduleId);
+  if(path.length){
+    return path.map(function(n, i){
+      return i === path.length - 1 ? '<b>' + esc(n) + '</b>' : esc(n);
+    }).join(' <span class="case-path-sep">/</span> ');
+  }
+  return c.module ? esc(c.module) : '<span class="muted">未归类</span>';
+}
+/* 关键信息才用小卡：优先级可改，执行人 / 最近执行为派生值 */
+function caseKeyCard(k, v, opts){
   opts = opts || {};
-  var cls = "case-fact" + (opts.act ? " case-fact-edit" : "");
-  return '<div class="' + cls + '"' + (opts.act ? ' data-case-act="' + opts.act + '" role="button" tabindex="0" title="修改' + esc(k) + '"' : "") + '>'
-    + '<span class="k">' + esc(k) + (opts.hint ? caseHintBtn(opts.hint) : "")
+  return '<div class="case-kcard' + (opts.act ? ' is-edit' : '') + '"'
+    + (opts.act ? ' data-case-act="' + opts.act + '" role="button" tabindex="0" title="修改' + esc(k) + '"' : "") + '>'
+    + '<span class="kk">' + esc(k) + (opts.hint ? caseHintBtn(opts.hint) : "")
     + (opts.derived ? '<span class="case-derived">' + opts.derived + '</span>' : "")
     + (opts.act ? '<span class="case-pencil" aria-hidden="true">' + icon("edit", 11) + '</span>' : "")
-    + '</span><span class="v">' + v + '</span></div>';
+    + '</span><div class="kv">' + v + '</div></div>';
+}
+function caseSetScopeLabel(s){
+  return s.visibility === "personal" ? "仅我" : (s.visibility === "members" ? "指定" : "团队");
+}
+function caseSetChipsHTML(c, writable){
+  var sets = caseDetailSets.caseId === c.id ? caseDetailSets.list : null;
+  var html = "";
+  if(caseDetailSets.caseId === c.id && caseDetailSets.error){
+    html = '<span class="case-empty-v">分组加载失败</span>';
+  }else if(sets === null || (caseDetailSets.caseId === c.id && caseDetailSets.loading && !sets.length)){
+    html = '<span class="case-empty-v">分组加载中…</span>';
+  }else{
+    var mine = sets.filter(function(s){ return s.inCase; });
+    html = mine.length ? mine.map(function(s){
+      return '<span class="case-setchip">' + esc(s.name)
+        + '<span class="sh">' + esc(caseSetScopeLabel(s)) + '</span></span>';
+    }).join("") : '<span class="case-empty-v">未加入分组</span>';
+  }
+  if(writable){
+    var has = sets && sets.some(function(s){ return s.inCase; });
+    html += '<button type="button" class="case-affil-link" data-case-act="sets">' + (has ? "管理分组" : "加入分组") + '</button>';
+  }
+  return html;
+}
+function caseWorkChipsHTML(tasks, clickable){
+  return tasks.map(function(t){
+    var inner = '<span class="case-wdot' + (t.boardColumn === "done" ? ' done' : '') + '"></span>'
+      + '<span class="t">' + esc(t.taskTitle || t.taskId) + '</span>';
+    return clickable
+      ? '<button type="button" class="case-witem" data-case-task="' + esc(t.taskId) + '" title="打开工作项">' + inner + '</button>'
+      : '<span class="case-witem is-ro">' + inner + '</span>';
+  }).join("");
+}
+/* 区块标题在卡片外：追溯 / 归类，一行一个维度 */
+function caseSecHeadHTML(title, sub, tag){
+  return '<div class="case-sec-head"><h4>' + esc(title) + '</h4>'
+    + (sub ? '<span class="sub">' + esc(sub) + '</span>' : '')
+    + (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') + '</div>';
+}
+function caseSecHTML(title, sub, tag, rows, note){
+  return '<section class="case-sec">' + caseSecHeadHTML(title, sub, tag)
+    + '<div class="case-affil">' + rows + '</div>'
+    + (note ? '<p class="case-sec-note">' + note + '</p>' : '') + '</section>';
+}
+function caseAffilRowHTML(label, inner, opts){
+  opts = opts || {};
+  var cls = "case-affil-row" + (opts.act ? " is-edit" : "") + (opts.ro ? " is-ro" : "");
+  var tag = opts.act ? ' data-case-act="' + opts.act + '" role="button" tabindex="0"'
+    + (opts.title ? ' title="' + esc(opts.title) + '"' : "") : "";
+  return '<div class="' + cls + '"' + tag + '><span class="ak">' + esc(label)
+    + (opts.hint ? caseHintBtn(opts.hint) : "")
+    + (opts.act ? '<span class="case-pencil" aria-hidden="true">' + icon("edit", 11) + '</span>' : "")
+    + '</span><div class="av">' + inner + '</div></div>';
+}
+/* 验证工作项一行说完：chips 带完成点；编辑态每项可就地移除 */
+function caseWorkValueHTML(tasks, writable, edit){
+  if(!tasks.length){
+    return '<span class="case-empty-v">未挂工作项</span>'
+      + (writable ? '<button type="button" class="case-affil-link" data-case-act="tasks">挂工作项</button>' : '');
+  }
+  var chips = edit
+    ? tasks.map(function(t){
+      var title = t.taskTitle || t.taskId;
+      return '<span class="case-witem"><span class="case-wdot' + (t.boardColumn === "done" ? ' done' : '') + '"></span>'
+        + '<span class="t">' + esc(title) + '</span>'
+        + '<button type="button" class="x" data-case-act="edit-task-remove" data-task-id="' + esc(t.taskId) + '"'
+        + ' aria-label="移除 ' + esc(title) + '">' + icon("close", 11) + '</button></span>';
+    }).join("")
+    : caseWorkChipsHTML(tasks, writable);
+  return chips + (writable
+    ? '<button type="button" class="' + (edit ? 'case-wadd' : 'case-affil-link') + '" data-case-act="tasks">'
+      + (edit ? icon("plus", 11) + ' 挂工作项' : '调整') + '</button>'
+    : '');
 }
 function caseDetailMetaText(c){
   var parts = [reqNameOf(c.reqId), caseNoText(c)];
@@ -3959,26 +4077,25 @@ function caseReadBlock(title, text, empty, field, writable){
     + '<h4>' + esc(title) + '</h4>'
     + '<p class="case-read-text' + (text ? '' : ' muted') + '">' + (text ? esc(text) : esc(empty || "未设置")) + '</p></section>';
 }
-function caseDemandCell(c){
-  if(!c.demandId) return '<span class="muted">未关联</span>';
+function caseDemandCell(c, writable){
+  if(!c.demandId){
+    return writable
+      ? '<button type="button" class="case-affil-link" data-case-act="demand">关联需求</button>'
+      : '<span class="muted">未关联</span>';
+  }
   return '<span class="case-demand-title">' + esc(c.demandTitle || c.demandId) + '</span>'
     + '<button type="button" class="case-jump" data-case-jump="demand" title="打开需求详情" aria-label="打开需求详情">'
     + icon("extlink", 12) + '</button>';
 }
 function caseDetailOverview(c, writable){
   var tasks = c.tasks || [];
-  var facts = '<div class="case-facts">'
-    + caseDetailFact("优先级", casePriText(c.priority), { act: writable ? "priority" : "", hint: "priority" })
-    + caseDetailFact("模块", caseModuleText(c), { act: writable ? "module" : "", hint: "module" })
-    + caseDetailFact("验证工作项", tasks.length ? tasks.length + " 项" : '<span class="muted">未关联</span>', { act: writable ? "tasks" : "" })
-    + caseDetailFact("关联需求", caseDemandCell(c), { act: writable ? "demand" : "", hint: "demand" })
-    + caseDetailFact("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
-    + caseDetailFact("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>', { derived: "派生" })
+  var keys = '<div class="case-keyrow">'
+    + caseKeyCard("优先级", casePriText(c.priority), { act: writable ? "priority" : "", hint: "priority" })
+    + caseKeyCard("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + caseKeyCard("最近执行", c.latestAt
+      ? esc(fmtTs(c.latestAt)) + (c.latestStatus ? '<span class="case-kv-sub">' + (STATUS_LABEL[c.latestStatus] || "") + '</span>' : "")
+      : '<span class="muted">未执行</span>', { derived: "派生" })
     + '</div>';
-  var stateHint = writable && !tasks.length
-    ? '<p class="case-state-hint">' + icon("infoCircle", 14) + '<span>未挂工作项：这条用例的覆盖只记在需求级，'
-      + '<button type="button" class="case-link-btn" data-case-act="tasks">挂工作项</button></span></p>'
-    : "";
   var last = "";
   if(c.latestStatus){
     var bug = c.latestBugTaskId
@@ -3999,19 +4116,20 @@ function caseDetailOverview(c, writable){
     last = '<section class="case-read-block"><h4>最近一次执行</h4>'
       + '<p class="case-read-text muted">还没有执行记录；' + (writable ? '点右上「记录执行」记录第一次结果。' : '等待有权限的成员执行。') + '</p></section>';
   }
-  var assoc = tasks.length
-    ? '<div class="case-assoc">' + tasks.map(function(t){
-      return '<button class="chip" type="button" data-case-task="' + esc(t.taskId) + '">'
-        + esc(t.taskTitle || t.taskId) + '</button>';
-    }).join("") + '</div>'
-    : "";
-  return facts
-    + stateHint
+  return keys
+    + caseSecHTML("追溯", "这条用例在验证什么", "建议关联",
+      caseAffilRowHTML("关联需求", caseDemandCell(c, writable),
+        { act: writable ? "demand" : "", title: "修改关联需求" })
+      + caseAffilRowHTML("验证工作项", caseWorkValueHTML(tasks, writable, false)),
+      writable ? '未挂工作项时按<b>需求级</b>统计覆盖；挂上后可按工作项追溯。' : '')
+    + caseSecHTML("归类", "放在哪、归谁管", "可选",
+      caseAffilRowHTML("模块", caseModuleText(c),
+        { act: writable ? "module" : "", title: "修改模块" })
+      + caseAffilRowHTML("分组", caseSetChipsHTML(c, writable)))
     + caseReadBlock("前置条件", c.precondition, "未设置前置条件", "pre", writable)
     + caseReadBlock("测试数据", c.testData, "未设置测试数据", "testData", writable)
     + caseDetailSteps(c, writable)
     + last
-    + assoc
     + '<details class="entity-log case-timeline" id="caseTimeline" hidden>'
     + '<summary><span class="caret" aria-hidden="true">▶</span>变更记录 <span class="cnt" id="caseTimelineCount"></span></summary>'
     + '<div class="timeline" id="caseTimelineList"></div></details>';
@@ -4160,7 +4278,15 @@ function caseDraftFrom(c){
     module: c.module || "",
     demandId: c.demandId || "",
     demandTitle: c.demandTitle || "",
-    tasks: (c.tasks || []).map(function(t){ return { taskId: t.taskId, taskTitle: t.taskTitle || "" }; }),
+    tasks: (c.tasks || []).map(function(t){
+      return {
+        taskId: t.taskId,
+        taskTitle: t.taskTitle || "",
+        itemType: t.itemType || "",
+        boardColumn: t.boardColumn || "",
+        itemNo: t.itemNo || null
+      };
+    }),
     precondition: c.precondition || "",
     testData: c.testData || "",
     steps: (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
@@ -4229,23 +4355,31 @@ function caseDetailEditHTML(c, writable){
     return '<button type="button" data-case-pri="' + o[0] + '" aria-pressed="' + (d.priority === o[0]) + '"'
       + ' title="' + esc(o[0] ? priName(o[0]) : "暂不区分") + '">' + o[1] + '</button>';
   }).join("");
-  var facts = '<div class="case-facts">'
-    + '<div class="case-fact"><span class="k">优先级' + caseHintBtn("priority") + '</span><span class="v">'
-    + '<div class="case-seg" data-case-pri-seg role="group" aria-label="优先级">' + priSeg + '</div></span></div>'
-    + '<div class="case-fact"><span class="k">模块' + caseHintBtn("module") + '</span><span class="v case-module-v">'
-    + '<select class="case-select" data-case-draft="moduleId" aria-label="模块">' + caseDraftModuleOptions(d) + '</select>'
-    + '</span></div>'
-    + '<div class="case-fact case-fact-edit" data-case-act="edit-tasks" role="button" tabindex="0"><span class="k">验证工作项'
-    + '<span class="case-pencil">' + icon("edit", 11) + '</span></span><span class="v">'
-    + (d.tasks.length ? d.tasks.length + " 项" : '<span class="muted">未关联</span>') + '</span></div>'
-    + '<div class="case-fact case-fact-edit" data-case-act="edit-demand" role="button" tabindex="0"><span class="k">关联需求'
-    + caseHintBtn("demand") + '<span class="case-pencil">' + icon("edit", 11) + '</span></span><span class="v">'
-    + (d.demandId ? esc(d.demandTitle || d.demandId) : '<span class="muted">未关联</span>') + '</span></div>'
-    + caseDetailFact("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
-    + caseDetailFact("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>', { derived: "派生" })
-    + '</div>'
-    + (!d.tasks.length ? '<p class="case-state-hint">' + icon("infoCircle", 14) + '<span>未挂工作项：这条用例的覆盖只记在需求级，'
-      + '<button type="button" class="case-link-btn" data-case-act="edit-tasks">挂工作项</button></span></p>' : "");
+  var keys = '<div class="case-keyrow">'
+    + '<div class="case-kcard"><span class="kk">优先级' + caseHintBtn("priority") + '</span>'
+    + '<div class="kv"><div class="case-seg" data-case-pri-seg role="group" aria-label="优先级">' + priSeg + '</div></div></div>'
+    + caseKeyCard("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + caseKeyCard("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + '</div>';
+  var trace = caseSecHTML("追溯", "这条用例在验证什么", "建议关联",
+    caseAffilRowHTML("关联需求",
+      (d.demandId
+        ? '<span class="case-demand-title">' + esc(d.demandTitle || d.demandId) + '</span>'
+          + '<button type="button" class="case-affil-link" data-case-act="edit-demand-clear">暂不关联</button>'
+        : '<span class="muted">未关联</span>'),
+      { act: "edit-demand", title: "修改关联需求" })
+    + caseAffilRowHTML("验证工作项", caseWorkValueHTML(d.tasks, true, true)));
+  var classify = caseSecHTML("归类", "放在哪、归谁管", "可选",
+    caseAffilRowHTML("项目",
+      esc(reqNameOf(c.reqId))
+      + '<span class="case-dtag">' + icon("lock", 11) + ' 只读</span>'
+      + '<span class="case-ro-note">由创建入口决定，不能在详情里改</span>',
+      { ro: true })
+    + caseAffilRowHTML("模块",
+      '<select class="case-select" data-case-draft="moduleId" aria-label="模块">'
+      + caseDraftModuleOptions(d) + '</select>')
+    + caseAffilRowHTML("分组", caseSetChipsHTML(c, true)),
+    '<b>模块是项目内的目录</b>：只能选「' + esc(reqNameOf(c.reqId)) + '」下的节点，选它不会改变所属项目。');
   var steps = d.steps.length
     ? caseDraftStepRowsHTML(d)
     : '<div class="case-step-empty">还没有步骤；点下方「添加步骤」补充操作与预期。</div>';
@@ -4258,7 +4392,7 @@ function caseDetailEditHTML(c, writable){
     + '<div class="case-detail-acts"><span class="case-edit-badge">编辑中</span>'
     + '<button class="icon-btn sm" type="button" data-case-edit-cancel aria-label="退出编辑" title="退出编辑">' + icon("close", 15) + '</button>'
     + '</div></div>'
-    + '<div class="case-detail-body" role="group" aria-label="编辑用例">' + facts
+    + '<div class="case-detail-body" role="group" aria-label="编辑用例">' + keys + trace + classify
     + '<section class="case-read-block"><h4>前置条件</h4>'
     + '<textarea class="case-block-input" data-case-draft="precondition" maxlength="1000" placeholder="选填：数据准备、环境要求…">'
     + esc(d.precondition) + '</textarea></section>'
@@ -4349,6 +4483,33 @@ function loadCaseDetailModules(reqId){
   });
   return caseDetailModules.loading;
 }
+/* 分组列表带 inCase 标记：一次请求同时拿到「可选分组」和「当前归属」 */
+function loadCaseDetailSets(c, force){
+  if(!c || !c.id || !c.reqId) return Promise.resolve([]);
+  if(!force && caseDetailSets.caseId === c.id && caseDetailSets.list.length) return Promise.resolve(caseDetailSets.list);
+  if(!force && caseDetailSets.caseId === c.id && caseDetailSets.loading) return caseDetailSets.loading;
+  var id = c.id, reqId = c.reqId, my = ++caseDetailSets.seq;
+  caseDetailSets.reqId = reqId;
+  caseDetailSets.caseId = id;
+  caseDetailSets.error = "";
+  if(force) caseDetailSets.list = [];
+  var p = API.get("/api/case-sets", { reqId: reqId, caseId: id }).then(function(list){
+    if(my !== caseDetailSets.seq) return caseDetailSets.list;
+    caseDetailSets.list = list || [];
+    caseDetailSets.loading = null;
+    if(caseDetailId === id) renderCaseDetail();
+    return caseDetailSets.list;
+  }).catch(function(ex){
+    if(my !== caseDetailSets.seq) return caseDetailSets.list;
+    caseDetailSets.loading = null;
+    /* 分组读失败不影响抽屉其余内容：归属行给出失败态，不弹全局错误 */
+    caseDetailSets.error = ex.message || "分组加载失败";
+    if(caseDetailId === id) renderCaseDetail();
+    return caseDetailSets.list;
+  });
+  caseDetailSets.loading = p;
+  return p;
+}
 function saveCaseDetailDraft(){
   var c = caseById(caseDetailId);
   if(!c || !caseDetailDraft || caseDetailSaving) return;
@@ -4373,7 +4534,15 @@ function saveCaseDetailDraft(){
     applyCaseBody(caseById(c.id) || c, body, {
       module: moduleNameById(caseDetailModules.list, body.moduleId),
       demandTitle: d.demandTitle || "",
-      tasks: (d.tasks || []).map(function(t){ return { taskId: t.taskId, taskTitle: t.taskTitle || "" }; })
+      tasks: (d.tasks || []).map(function(t){
+        return {
+          taskId: t.taskId,
+          taskTitle: t.taskTitle || "",
+          itemType: t.itemType || "",
+          boardColumn: t.boardColumn || "",
+          itemNo: t.itemNo || null
+        };
+      })
     });
     toast("用例已保存");
     renderCaseDetail();
@@ -4563,6 +4732,7 @@ function openCasePick(kind, anchor){
   else if(kind === "module") openCaseModulePop(anchor, c);
   else if(kind === "demand") openCaseDemandPop(anchor, c);
   else if(kind === "tasks") openCaseTasksPop(anchor, c);
+  else if(kind === "sets") openCaseSetsPop(anchor, c);
 }
 function openCasePriPop(anchor){
   var target = casePickTarget();
@@ -4736,7 +4906,14 @@ function openCaseTasksPop(anchor, c){
       var id = cb.getAttribute("data-task");
       if(cb.checked){
         var hit = list.filter(function(t){ return t.taskId === id; })[0];
-        if(hit) sel[id] = { taskId: id, taskTitle: hit.taskTitle || "" };
+        /* 保留看板列等派生字段：抽屉 chips 的完成态直接读本地数据，不再逐条查 */
+        if(hit) sel[id] = {
+          taskId: id,
+          taskTitle: hit.taskTitle || "",
+          itemType: hit.itemType || "",
+          boardColumn: hit.boardColumn || "",
+          itemNo: hit.itemNo || null
+        };
       }else{
         delete sel[id];
       }
@@ -4756,6 +4933,90 @@ function openCaseTasksPop(anchor, c){
   }).catch(function(){
     if(seq !== caseInlinePickSeq) return;
     el.querySelector(".case-task-pop-list").innerHTML = '<div class="menu-empty">工作项加载失败，请关闭后重试。</div>';
+  });
+}
+/* 分组浮层：成员是引用，增删走分组自己的接口；应用后按差集各发一次请求 */
+function applyCaseSetMembership(c, ids){
+  var cur = (caseDetailSets.list || []).filter(function(s){ return s.inCase; }).map(function(s){ return s.id; });
+  var add = ids.filter(function(id){ return cur.indexOf(id) < 0; });
+  var del = cur.filter(function(id){ return ids.indexOf(id) < 0; });
+  if(!add.length && !del.length){ UI.closeAllPops(); return; }
+  var chain = Promise.resolve();
+  add.forEach(function(id){
+    chain = chain.then(function(){
+      return API.post("/api/case-sets/" + encodeURIComponent(id) + "/members", { ids: [c.id] });
+    });
+  });
+  del.forEach(function(id){
+    chain = chain.then(function(){
+      return API.post("/api/case-sets/" + encodeURIComponent(id) + "/members/remove", { ids: [c.id] });
+    });
+  });
+  chain.then(function(){
+    UI.closeAllPops();
+    toast("分组已更新");
+    loadCaseDetailSets(c, true);
+    /* 左侧分组面板的成员数也要跟着变 */
+    if(typeof loadCaseSets === "function") loadCaseSets(true);
+  }).catch(function(ex){
+    toast(ex.message || "分组更新失败", "bad");
+  });
+}
+function openCaseSetsPop(anchor, c){
+  var pending = {};
+  function currentList(){
+    return caseDetailSets.caseId === c.id ? caseDetailSets.list : [];
+  }
+  function resetPending(){
+    pending = {};
+    currentList().forEach(function(s){ if(s.inCase) pending[s.id] = true; });
+  }
+  resetPending();
+  var el = document.createElement("div");
+  el.className = "menu case-set-pop";
+  function renderRows(){
+    var list = currentList();
+    var rows = list.length ? list.map(function(s){
+      var locked = !s.editable || s.kind === "dynamic";
+      var why = s.kind === "dynamic" ? "规则自动收录" : (!s.editable ? "只有创建人可以修改" : "");
+      return '<label class="case-task-pick' + (locked ? " is-locked" : "") + '" title="' + esc(why) + '">'
+        + '<input type="checkbox" data-set="' + esc(s.id) + '"' + (pending[s.id] ? " checked" : "")
+        + (locked ? " disabled" : "") + ' />'
+        + '<span class="case-task-pick-main"><span class="case-task-pick-title">' + esc(s.name) + '</span>'
+        + '<span class="case-task-pick-meta">' + esc(caseSetScopeLabel(s) + ' · ' + (s.caseCount || 0) + ' 条'
+          + (why ? ' · ' + why : '')) + '</span></span></label>';
+    }).join("") : (caseDetailSets.loading
+      ? '<div class="menu-empty">分组加载中…</div>'
+      : '<div class="menu-empty">该项目还没有分组；先在左侧「分组」面板新建。</div>');
+    var box = el.querySelector(".case-task-pop-list");
+    if(box) box.innerHTML = rows;
+    var note = el.querySelector(".case-pop-note");
+    if(note) note.textContent = "已选 " + Object.keys(pending).length + " 个";
+  }
+  el.innerHTML = '<div class="menu-title">分组<span class="case-pop-note"></span></div>'
+    + '<div class="case-task-pop-list"></div>'
+    + '<div class="case-pop-foot"><button class="btn" type="button" data-set-close>取消</button>'
+    + '<button class="btn primary" type="button" data-set-apply>应用</button></div>';
+  renderRows();
+  UI.openPop(el, anchor, { width: 340 });
+  if(caseDetailSets.caseId !== c.id){
+    loadCaseDetailSets(c, true).then(function(){ resetPending(); renderRows(); });
+  }else if(caseDetailSets.loading){
+    caseDetailSets.loading.then(function(){ resetPending(); renderRows(); });
+  }
+  el.querySelector(".case-task-pop-list").addEventListener("change", function(e){
+    var cb = e.target.closest("[data-set]");
+    if(!cb || cb.disabled) return;
+    var id = cb.getAttribute("data-set");
+    if(cb.checked) pending[id] = true;
+    else delete pending[id];
+    var note = el.querySelector(".case-pop-note");
+    if(note) note.textContent = "已选 " + Object.keys(pending).length + " 个";
+  });
+  el.querySelector(".case-pop-foot").addEventListener("click", function(e){
+    if(e.target.closest("[data-set-close]")){ UI.closeAllPops(); return; }
+    if(!e.target.closest("[data-set-apply]")) return;
+    applyCaseSetMembership(c, Object.keys(pending));
   });
 }
 var caseInlinePickSeq = 0;
@@ -4969,7 +5230,9 @@ function setCaseBusy(btn, busy, label){
     delete btn.dataset.label;
   }
 }
-function saveCase(){
+function saveCase(){ submitCase(false); }
+function saveCaseAgain(){ submitCase(true); }
+function submitCase(again){
   if(caseSaving || !caseFormWritable()) return;
   var title = $("cTitle").value.trim();
   if(!title){
@@ -4991,19 +5254,41 @@ function saveCase(){
     taskIds: Object.keys(caseTaskSel),
     steps: collectSteps()
   };
+  var btn = again ? $("btnSaveCaseAgain") : $("btnSaveCase");
   caseSaving = true;
-  setCaseBusy($("btnSaveCase"), true, "保存中…");
-  API.post("/api/test-cases", body).then(function(){
+  setCaseBusy(btn, true, "保存中…");
+  API.post("/api/test-cases", body).then(function(created){
     caseSaving = false;
-    setCaseBusy($("btnSaveCase"), false);
+    setCaseBusy(btn, false);
+    if(again){
+      toast("已创建 " + (caseNoText(created) || "用例") + "，接着写下一条");
+      resetCaseFormForNext();
+      loadCases();
+      return;
+    }
     closeCaseDialog();
     toast("用例已创建");
     loadCases();
   }).catch(function(ex){
     caseSaving = false;
-    setCaseBusy($("btnSaveCase"), false);
+    setCaseBusy(btn, false);
     toast(ex.message || "保存失败", "bad");
   });
+}
+/* 再建一条：保留需求 / 模块 / 工作项 / 优先级，只清本条的标题、步骤与更多字段 */
+function resetCaseFormForNext(){
+  $("cTitle").value = "";
+  $("cPrecondition").value = "";
+  $("cTestData").value = "";
+  editingCase = { id: null, steps: [{ action: "", expected: "" }] };
+  renderStepRows();
+  applyReadOnly(!caseFormWritable());
+  syncCaseFormCtx(null);
+  syncCaseTitleMeta();
+  syncCaseMore();
+  showCaseErrors([]);
+  caseFormBaseline = caseFormSnapshot();
+  $("cTitle").focus();
 }
 function removeCase(id){
   var c = caseById(id);
@@ -9121,6 +9406,7 @@ $("tcSteps").addEventListener("keydown", function(e){
   focusStep(idx + 1);
 });
 $("btnSaveCase").addEventListener("click", saveCase);
+$("btnSaveCaseAgain").addEventListener("click", saveCaseAgain);
 /* 目录下拉里的「＋ 新建目录…」：保留原来自由文本录入的便利，但落到真实节点上 */
 $("cModule").addEventListener("change", function(){
   var sel = this;
@@ -9151,6 +9437,9 @@ $("cTitle").addEventListener("input", function(){
   $("fCaseTitle").classList.remove("invalid");
   syncCaseTitleMeta();
   if(this.value.trim()) showCaseErrors([]);
+});
+["cPrecondition", "cTestData"].forEach(function(id){
+  $(id).addEventListener("input", syncCaseMoreMeta);
 });
 $("cPriSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-pri]");
@@ -9247,11 +9536,38 @@ $("caseDetailView").addEventListener("click", function(e){
   var actEl = e.target.closest("[data-case-act]");
   if(actEl){
     var act = actEl.getAttribute("data-case-act");
-    var anchor = actEl.closest(".case-fact") || actEl;
-    if(act === "priority" || act === "module" || act === "demand" || act === "tasks"
-      || act === "edit-demand" || act === "edit-tasks"){
+    var anchor = actEl;
+    if(act === "edit-demand-clear"){
+      if(!caseDetailDraft) return;
+      var dtasks = (caseDetailDraft.tasks || []).length;
+      function clearDemand(){
+        caseDetailDraft.demandId = "";
+        caseDetailDraft.demandTitle = "";
+        caseDetailDraft.tasks = [];
+        syncCaseDraftDirty();
+        renderCaseDetail();
+      }
+      if(dtasks){
+        UI.showConfirm({
+          title: "取消关联需求",
+          msg: "现有 " + dtasks + " 个验证工作项会一并移除；保存后生效。",
+          okText: "取消关联",
+          cancelText: "保留"
+        }).then(function(ok){ if(ok) clearDemand(); });
+      }else clearDemand();
+      return;
+    }
+    if(act === "edit-task-remove"){
+      if(!caseDetailDraft) return;
+      var tid = actEl.getAttribute("data-task-id");
+      caseDetailDraft.tasks = (caseDetailDraft.tasks || []).filter(function(t){ return t.taskId !== tid; });
+      syncCaseDraftDirty();
+      renderCaseDetail();
+      return;
+    }
+    if(act === "priority" || act === "module" || act === "demand" || act === "tasks" || act === "sets"
+      || act === "edit-demand"){
       if(act === "edit-demand") act = "demand";
-      if(act === "edit-tasks") act = "tasks";
       openCasePick(act, anchor);
       return;
     }

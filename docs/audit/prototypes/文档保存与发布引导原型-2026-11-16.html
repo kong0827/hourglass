@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文档保存与发布 · 引导设计原型（2026-11-16）</title>
+<style>
+/* ========== 设计令牌（对齐 frontend/css/tokens.css） ========== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+  --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085; --text-inverse:#FFFFFF;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-active:#1E40AF;
+  --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning-soft:#FFFAEB; --warning-fg:#B54708;
+  --danger-fg:#B42318;
+  --tip-bg:#101828; --tip-fg:#FFFFFF;
+  --scrim:rgba(16,24,40,.32);
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px;
+  --dur-fast:120ms; --ease-out:cubic-bezier(.2,.8,.2,1);
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",
+              "PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+}
+html[data-theme="dark"]{
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D;
+  --surface-hover:#1F2937; --surface-active:#26313F;
+  --border:#25303D; --border-strong:#334153;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798; --text-inverse:#0D1219;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-active:#3B76DE;
+  --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+  --warning-soft:#2A2110; --warning-fg:#FEC84B;
+  --danger-fg:#FDA29B;
+  --tip-bg:#26313F; --tip-fg:#E7ECF3;
+  --scrim:rgba(0,0,0,.55);
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --ring-focus:0 0 0 3px rgba(76,141,255,.28);
+}
+
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg-app);color:var(--text);font-family:var(--font-sans);font-size:13px;}
+
+/* ========== 原型外壳 ========== */
+.proto-head{max-width:1240px;margin:0 auto;padding:22px 28px 14px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;}
+.proto-head h1{margin:0;font-size:18px;font-weight:650;}
+.proto-head .sub{margin:4px 0 0;font-size:12px;color:var(--text-3);}
+.proto-ctrl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.seg{display:inline-flex;align-items:stretch;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;}
+.seg button{border:0;background:transparent;height:28px;padding:0 12px;font-size:12.5px;font-family:inherit;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);}
+.seg button + button{border-left:1px solid var(--border);}
+.seg button:hover{background:var(--surface-hover);color:var(--text);}
+.seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.proto-main{max-width:1240px;margin:0 auto;padding:0 28px 56px;}
+.hint{margin:10px 2px 0;font-size:12px;color:var(--text-3);}
+.hint b{color:var(--text-2);}
+
+/* ========== 复刻：编辑态 ========== */
+.editor{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:visible;}
+.ed-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--border);}
+.ed-crumb{font-size:12.5px;color:var(--text-3);display:flex;align-items:center;gap:6px;}
+.ed-crumb a{color:var(--primary);text-decoration:none;font-weight:550;}
+.reqdoc-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto;}
+.selchip{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-xs);font-size:12.5px;color:var(--text-2);background:var(--surface);white-space:nowrap;}
+.selchip em{font-style:normal;color:var(--text-3);font-size:11.5px;}
+.selchip b{font-weight:550;color:var(--text);}
+.saved{font-size:12px;color:var(--text-3);white-space:nowrap;padding:0 2px;}
+.saved.dirty{color:var(--warning-fg);}
+.ed-body{padding:14px 18px 18px;}
+.canvas{width:100%;min-height:300px;resize:vertical;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:18px 22px;font-family:inherit;font-size:13.5px;line-height:1.9;color:var(--text);outline:none;}
+.canvas:focus{border-color:var(--primary-border);box-shadow:var(--ring-focus);}
+
+/* ========== 按钮体系（对齐 components.css） ========== */
+.btn{height:34px;padding:0 14px;border-radius:var(--r-sm);display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13.5px;font-weight:550;font-family:inherit;white-space:nowrap;flex:0 0 auto;cursor:pointer;transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);}
+.btn svg{flex:0 0 auto;}
+.btn:hover{background:var(--surface-hover);border-color:var(--border-strong);}
+.btn:active{background:var(--surface-active);}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--text-2);}
+.btn.ghost:hover{background:var(--surface-hover);color:var(--text);}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--text-inverse);}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);}
+.btn.primary:active{background:var(--primary-active);border-color:var(--primary-active);}
+.btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.btn.soft:hover{background:var(--primary-soft);border-color:var(--primary);}
+.btn.ai-action{background:transparent;border-color:transparent;color:var(--primary-fg);}
+.btn.ai-action:hover{background:var(--primary-soft);color:var(--primary-fg);}
+.btn.sm{height:28px;padding:0 10px;font-size:12.5px;border-radius:var(--r-xs);}
+.btn:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.icon-btn{width:28px;height:28px;padding:0;border:0;border-radius:var(--r-xs);background:transparent;color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text);}
+.icon-btn:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.zseg{display:inline-flex;align-items:stretch;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;flex:0 0 auto;}
+.zseg button{border:0;background:transparent;height:26px;padding:0 8px;font-size:12px;font-family:inherit;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;}
+.zseg button + button{border-left:1px solid var(--border);}
+.zseg .z-out,.zseg .z-in{width:26px;padding:0;}
+.zseg .z-reset{min-width:46px;padding:0 4px;font-variant-numeric:tabular-nums;}
+
+/* 已发布 chip（状态展示，非按钮） */
+.pub-chip{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:var(--r-xs);border:1px solid var(--success-border);background:var(--success-soft);color:var(--success-fg);font-size:12.5px;font-weight:600;white-space:nowrap;flex:0 0 auto;}
+
+/* 更多菜单 */
+.more-wrap{position:relative;display:inline-flex;}
+.menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--shadow-md);padding:4px;min-width:200px;z-index:90;}
+.menu[hidden]{display:none;}
+.menu button{display:flex;width:100%;align-items:center;gap:8px;border:0;background:none;padding:7px 10px;border-radius:var(--r-xs);font-size:12.5px;color:var(--text-2);cursor:pointer;font-family:inherit;text-align:left;}
+.menu button:hover{background:var(--surface-hover);color:var(--text);}
+.menu .danger{color:var(--danger-fg);}
+.menu-sep{height:1px;background:var(--border);margin:4px 6px;}
+
+/* ========== 浮层：Toast（可带动作） ========== */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(8px);background:var(--tip-bg);color:var(--tip-fg);font-size:12.5px;padding:8px 10px 8px 14px;border-radius:var(--r-sm);opacity:0;pointer-events:none;transition:opacity 160ms ease,transform 160ms ease;z-index:99;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:12px;max-width:min(560px,92vw);}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+#toast .t-act{border:1px solid rgba(255,255,255,.3);background:transparent;color:inherit;font-size:12px;border-radius:var(--r-xs);padding:3px 10px;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;}
+#toast .t-act:hover{background:rgba(255,255,255,.14);}
+html[data-theme="dark"] #toast .t-act{border-color:rgba(255,255,255,.22);}
+
+/* ========== 浮层：对话框 ========== */
+.dlg-mask{position:fixed;inset:0;background:var(--scrim);display:flex;align-items:center;justify-content:center;z-index:120;opacity:0;pointer-events:none;transition:opacity 160ms ease;}
+.dlg-mask.show{opacity:1;pointer-events:auto;}
+.dlg{width:min(430px,92vw);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);padding:22px 22px 18px;}
+.dlg h4{margin:0 0 8px;font-size:15px;font-weight:650;}
+.dlg p{margin:0;color:var(--text-2);font-size:13px;line-height:1.7;}
+.dlg .chk{display:flex;gap:7px;align-items:center;margin-top:14px;font-size:12.5px;color:var(--text-2);cursor:pointer;}
+.dlg .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;flex-wrap:wrap;}
+
+/* ========== 说明区块 ========== */
+.block{margin-top:40px;}
+.block h2{font-size:14.5px;font-weight:650;margin:0 0 12px;}
+.tbl-wrap{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface);}
+table{border-collapse:collapse;width:100%;font-size:12.5px;}
+th{background:var(--surface-sunken);text-align:left;padding:8px 14px;font-size:12px;color:var(--text-2);font-weight:600;border-bottom:1px solid var(--border);}
+td{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:top;line-height:1.7;}
+tr:last-child td{border-bottom:0;}
+td b{color:var(--text);font-weight:600;}
+ul.notes{margin:0;padding-left:18px;color:var(--text-2);font-size:12.8px;line-height:2;}
+ul.notes b{color:var(--text);}
+.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 18px;font-size:12.5px;color:var(--text-2);}
+.flow .step{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface-sunken);white-space:nowrap;}
+.flow .step.strong{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.flow .step.dim{color:var(--text-3);border-style:dashed;background:transparent;}
+.flow .arr{color:var(--text-3);}
+.proto-foot{max-width:1240px;margin:0 auto;padding:0 28px 40px;font-size:11.5px;color:var(--text-3);}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition-duration:0.001ms!important;animation-duration:0.001ms!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="proto-head">
+  <div>
+    <h1>文档保存与发布 · 引导设计原型</h1>
+    <p class="sub">2026-11-16 · 编辑页保存/发布链路（index.html #reqDocSave / #reqDocPublish）· 单文件离线交互稿</p>
+  </div>
+  <div class="proto-ctrl">
+    <div class="seg" id="schemeSeg" role="group" aria-label="方案切换">
+      <button type="button" class="on" data-scheme="cur">现状</button>
+      <button type="button" data-scheme="a1">A1 · 轻提示</button>
+      <button type="button" data-scheme="a2">A2 · 保存后确认</button>
+      <button type="button" data-scheme="b">B · 保存并发布</button>
+    </div>
+    <div class="seg" id="stateSeg" role="group" aria-label="文档状态切换">
+      <button type="button" class="on" data-state="draft">草稿</button>
+      <button type="button" data-state="published">已发布</button>
+    </div>
+    <div class="seg" id="themeSeg" role="group" aria-label="主题切换">
+      <button type="button" class="on" data-set-theme="light">浅色</button>
+      <button type="button" data-set-theme="dark">深色</button>
+    </div>
+  </div>
+</header>
+
+<main class="proto-main">
+
+  <!-- 复刻编辑态 -->
+  <section class="editor" id="editor">
+    <div class="ed-bar" id="edBar"><!-- 由 JS 渲染 --></div>
+    <div class="ed-body">
+      <textarea class="canvas" id="canvas" spellcheck="false">背景
+经纪人提现出金比例目前固定 0.6%，运营侧在 Q3 收到多起「比例与结算口径不一致」的反馈，需要走一次比例调整的申请与审批流程。
+
+目标
+明确提高出金比例的申请口径、审批链路与生效时间，避免口头确认。
+
+范围
+1. 适用于直营经纪人与合作经纪人的提现出金；
+2. 调整幅度不超过 0.2 个百分点；
+3. 生效时间以财务结算系统配置为准。
+
+流程
+申请人提交 → 直属主管审批 → 财务复核 → 运营确认生效。</textarea>
+    </div>
+  </section>
+  <p class="hint">
+    可交互：<b>改动正文</b>会出现「有未保存的修改」；点击 <b>保存</b> 走当前方案；点 <b>发布</b> 直接发布；
+    点 <b>← 返回</b> 触发关闭链路；右上角可切换 <b>草稿 / 已发布</b> 与明暗主题。
+  </p>
+
+  <!-- 链路图 -->
+  <section class="block">
+    <h2>链路与提示位置</h2>
+    <div class="flow">
+      <span class="step">① 编写 / 保存</span><span class="arr">→</span>
+      <span class="step strong">② 草稿 · 仅负责人与管理员可见</span><span class="arr">→（保存后提示 / 关闭兜底）</span>
+      <span class="step strong">③ 发布</span><span class="arr">→</span>
+      <span class="step">④ 项目成员可见（编辑即时生效）</span>
+    </div>
+  </section>
+
+  <!-- 方案对照 -->
+  <section class="block">
+    <h2>方案对照</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th style="width:150px;">方案</th><th>保存草稿后</th><th>关闭编辑器（仍是草稿）</th><th>发布入口</th><th>主要代价</th></tr></thead>
+        <tbody>
+          <tr><td><b>现状</b></td><td>仅 toast「文档已保存」</td><td>直接关闭，无提醒</td><td>工具栏中部 ghost 按钮，与 AI/大纲混排</td><td>问题持续：作者以为保存即发布</td></tr>
+          <tr><td><b>A1 轻提示（推荐）</b></td><td>toast「已保存为草稿 · 暂不可见」+「发布」动作，不打断</td><td>弹窗「仍是草稿」：留在草稿 / 发布并关闭（未保存时三选一）</td><td>移到保存左侧 + soft 底；已发布变绿色「已发布」chip</td><td>提示可能被无视（非阻断）</td></tr>
+          <tr><td><b>A2 保存后确认</b></td><td>弹窗「是否发布？」暂不发布 / 发布；可勾选本次编辑不再提醒</td><td>同 A1</td><td>同 A1</td><td>每次保存多一步确认，长文写作易疲劳（首保弹一次可缓解）</td></tr>
+          <tr><td><b>B 保存并发布</b></td><td>主按钮即「保存并发布」；「仅保存草稿」为次按钮</td><td>三选一：不保存 / 存为草稿关闭 / 发布并关闭</td><td>主按钮即发布（已发布后回退为「保存」）</td><td>易误发布半成品；主按钮语义随状态变化</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 设计说明 -->
+  <section class="block">
+    <h2>设计说明</h2>
+    <ul class="notes">
+      <li><b>发布是一次性状态迁移</b>（草稿 → 项目可见）：已发布的文档再保存即时生效，无需重复发布。因此引导按「首次进入可见」设计，而不是每次保存都加确认。</li>
+      <li><b>问题根因有两个</b>：一是保存后没有任何「仍是草稿」的反馈；二是发布入口混在 AI / 大纲等 ghost 按钮中间且离保存很远。A 系列同时修这两点。</li>
+      <li><b>保存后提示用不打断的 toast</b>（带「发布」动作），长文反复保存时不制造弹窗疲劳；<b>关闭是作者认为「做完了」的时刻</b>，此时兜底问一次。</li>
+      <li>A2 的弹窗仅<b>本次编辑首次保存</b>触发，勾选「本次编辑不再提醒」后降级为 toast —— 兼顾「不想被打断」和「别忘发布」。</li>
+      <li><b>已发布后不再提示</b>：发布按钮变绿色「已发布」chip（状态展示，非按钮）；收回发布低频且会失效分享链接，收进「更多」菜单。</li>
+      <li>发布提示文案沿用现有可见范围口径（团队共享 / 指定成员 / 仅自己），不新造概念；列表与左树的「草稿 / 已发布」徽标不变。</li>
+      <li>自动保存的本地草稿恢复（#reqDocAutoDraft）不触发任何发布提示；导入 / 模板新建的文档首次保存走同一口径。</li>
+      <li>若团队更希望「保存即对团队可见」，选 <b>方案 B</b>：默认动作改为发布，但需接受误发布半成品的风险（可收回，代价可控）；<b>推荐 A1</b>。</li>
+    </ul>
+  </section>
+
+</main>
+
+<p class="proto-foot">沙漏 · 文档保存与发布引导原型 · 2026-11-16 · 单文件离线，可直接双击打开</p>
+
+<div id="toast" role="status"></div>
+<div class="dlg-mask" id="dlgMask"><div class="dlg" id="dlgBox"></div></div>
+
+<script>
+/* ========== 图标（对齐 icons.js：20 视框 / 1.5 描边） ========== */
+var ICONS = {
+  eye:'<path d="M2.6 10S5.4 4.8 10 4.8 17.4 10 17.4 10 14.6 15.2 10 15.2 2.6 10 2.6 10Z"/><circle cx="10" cy="10" r="2.4"/>',
+  link:'<path d="M8.4 11.6a3.4 3.4 0 0 0 4.8 0l2.6-2.6a3.4 3.4 0 0 0-4.8-4.8L9.8 5.4"/><path d="M11.6 8.4a3.4 3.4 0 0 0-4.8 0L4.2 11a3.4 3.4 0 0 0 4.8 4.8l1.1-1.1"/>',
+  more:'<circle cx="4.6" cy="10" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.4" fill="currentColor" stroke="none"/><circle cx="15.4" cy="10" r="1.4" fill="currentColor" stroke="none"/>',
+  check:'<path d="M4.4 10.4 8 14l7.6-8"/>',
+  clock:'<circle cx="10" cy="10" r="7.2"/><path d="M10 5.8V10l3 1.8"/>',
+  upload:'<path d="M10 13.6V4M6.2 8.2 10 4.4 13.8 8.2M4.4 15.6h11.2"/>',
+  download:'<path d="M10 3v9.6M6.2 8.8 10 12.6 13.8 8.8M4.4 15.6h11.2"/>',
+  print:'<path d="M6 7.4V3.6h8v3.8M6 14.6H4.2v-5h11.6v5H14"/><rect x="6" y="12" width="8" height="4.4" rx="1"/>',
+  ai:'<path d="M8.6 2.8 10 7l4.2 1.4L10 9.8 8.6 14 7.2 9.8 3 8.4 7.2 7Z"/><path d="M15.2 13.2 15.9 15l1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z"/>',
+  listUl:'<path d="M7.6 5.6h8.6M7.6 10h8.6M7.6 14.4h8.6"/><path d="M4 5.6h.01M4 10h.01M4 14.4h.01"/>',
+  ban:'<circle cx="10" cy="10" r="7.2"/><path d="M4.9 15.1 15.1 4.9"/>',
+  back:'<path d="M12 4.6 6.6 10 12 15.4"/>',
+  zoomIn:'<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/><path d="M6.6 8.8h4.4M8.8 6.6v4.4"/>',
+  zoomOut:'<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/><path d="M6.6 8.8h4.4"/>'
+};
+function icon(name, size, sw){
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="'+(sw||1.5)+'" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+ICONS[name]+'</svg>';
+}
+
+/* ========== 演示状态 ========== */
+var S = { scheme:'cur', published:false, dirty:false, muted:false, lastSaved:'14:17', zoom:100 };
+
+/* ========== 提示 / 弹窗 ========== */
+var toastEl = document.getElementById('toast'), toastTimer = null;
+function toast(msg, act){
+  toastEl.innerHTML = '<span class="t-msg">' + msg + '</span>' + (act ? '<button class="t-act" type="button" id="toastAct">' + act.label + '</button>' : '');
+  toastEl.classList.add('show');
+  if(act) document.getElementById('toastAct').onclick = function(){ hideToast(); act.fn(); };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, act ? 7000 : 3000);
+}
+function hideToast(){ toastEl.classList.remove('show'); }
+
+var dlgMask = document.getElementById('dlgMask'), dlgBox = document.getElementById('dlgBox');
+function openDlg(cfg){
+  var btns = cfg.buttons.map(function(b, i){
+    return '<button class="btn sm ' + (b.kind || '') + '" type="button" data-di="' + i + '">' + b.text + '</button>';
+  }).join('');
+  var chk = cfg.check ? '<label class="chk"><input type="checkbox" id="dlgChk" /> ' + cfg.check + '</label>' : '';
+  dlgBox.innerHTML = '<h4>' + cfg.title + '</h4><p>' + cfg.msg + '</p>' + chk + '<div class="foot">' + btns + '</div>';
+  dlgMask.classList.add('show');
+  dlgBox.querySelectorAll('[data-di]').forEach(function(b){
+    b.onclick = function(){
+      var i = +b.dataset.di;
+      var checked = cfg.check && document.getElementById('dlgChk').checked;
+      closeDlg();
+      cfg.buttons[i].fn(checked);
+    };
+  });
+}
+function closeDlg(){ dlgMask.classList.remove('show'); }
+dlgMask.addEventListener('click', function(e){ if(e.target === dlgMask) closeDlg(); });
+
+/* ========== 保存 / 发布 / 关闭 ========== */
+function nowHM(){
+  var d = new Date();
+  return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+}
+function doSave(kind, silent){
+  S.dirty = false;
+  S.lastSaved = nowHM();
+  renderSaved();
+
+  if(silent){                                  /* 关闭链路：静默保存，不再触发发布引导 */
+    toast(S.published ? '文档已保存' : '已存为草稿并关闭（仅你可见）');
+    return;
+  }
+  if(S.published){
+    toast('文档已保存');
+    return;
+  }
+  if(kind === 'publish'){
+    publish(false);
+    toast('已保存并发布，项目成员现在可以查看');
+    return;
+  }
+  if(S.scheme === 'cur'){
+    toast('文档已保存');                       /* 现状：无任何「仍是草稿」反馈 */
+    return;
+  }
+  if(S.scheme === 'a2' && !S.muted){
+    openDlg({
+      title:'已保存为草稿',
+      msg:'这篇文档还没有发布，项目成员现在看不到。要现在发布吗？',
+      check:'本次编辑不再提醒（仍可在保存提示中发布）',
+      buttons:[
+        {text:'暂不发布', kind:'ghost'},
+        {text:'发布', kind:'primary', fn:function(){ publish(false); }}
+      ]
+    });
+    dlgBox.querySelector('#dlgChk').addEventListener('change', function(e){ S.muted = e.target.checked; });
+    return;
+  }
+  if(S.scheme === 'b'){
+    toast('已保存为草稿 · 项目成员暂不可见');   /* B：次按钮为显式选择，不再附加动作 */
+    return;
+  }
+  toast('已保存为草稿 · 项目成员暂不可见', { label:'发布', fn:function(){ publish(false); } });
+}
+function publish(closeAfter){
+  S.published = true;
+  S.dirty = false;
+  render();
+  if(closeAfter) toast('已发布并关闭编辑器（演示）');
+  else toast('已发布，项目成员现在可以查看');
+}
+function unpublish(){
+  S.published = false;
+  render();
+  toast('已收回发布：文档转为草稿，原分享链接已失效');
+}
+function closeFlow(){
+  var cur = S.scheme === 'cur';
+  if(S.dirty){
+    if(cur){
+      openDlg({
+        title:'有未保存的修改',
+        msg:'关闭前要保存这次编辑吗？',
+        buttons:[
+          {text:'不保存', kind:'ghost', fn:function(){ toast('已关闭编辑器（演示）'); }},
+          {text:'保存并关闭', kind:'primary', fn:function(){ doSave('save'); toast('已关闭编辑器（演示）'); }}
+        ]
+      });
+    }else{
+      openDlg({
+        title:'有未保存的修改',
+        msg:'关闭前要保存这次编辑吗？' + (S.published ? '' : '这篇文档仍是草稿。'),
+        buttons:[
+          {text:'不保存', kind:'ghost', fn:function(){ toast('已关闭编辑器（演示）'); }},
+          {text:'存为草稿并关闭', kind:'ghost', fn:function(){ doSave('save', true); }},
+          {text:'发布并关闭', kind:'primary', fn:function(){
+            S.dirty = false; publish(true);
+          }}
+        ]
+      });
+    }
+    return;
+  }
+  if(!S.published && !cur){
+    openDlg({
+      title:'这篇文档仍是草稿',
+      msg:'项目成员现在看不到它。是留在草稿继续编辑，还是现在发布？',
+      buttons:[
+        {text:'留在草稿', kind:'ghost', fn:function(){ toast('已关闭编辑器（草稿，仅你可见）'); }},
+        {text:'发布并关闭', kind:'primary', fn:function(){ publish(true); }}
+      ]
+    });
+    return;
+  }
+  toast('已关闭编辑器（演示）');
+}
+function doShare(){
+  if(!S.published){ toast('文档尚未发布，先发布再生成分享链接'); return; }
+  toast('已生成只读分享链接（演示）');
+}
+
+/* ========== 工具栏渲染 ========== */
+function ZSEG(){
+  return '<span class="zseg" role="group" aria-label="正文缩放">' +
+    '<button type="button" class="z-out" data-z="out" title="缩小正文">' + icon('zoomOut',14) + '</button>' +
+    '<button type="button" class="z-reset" data-z="reset" title="恢复 100%">' + S.zoom + '%</button>' +
+    '<button type="button" class="z-in" data-z="in" title="放大正文">' + icon('zoomIn',14) + '</button>' +
+  '</span>';
+}
+function menuHTML(){
+  return '<div class="more-wrap">' +
+    '<button class="icon-btn" type="button" data-act="more" aria-label="更多文档操作" title="更多操作">' + icon('more',16) + '</button>' +
+    '<div class="menu" id="moreMenu" hidden>' +
+      '<button type="button" data-mi="历史版本">' + icon('clock',14) + '历史版本</button>' +
+      '<button type="button" data-mi="导入文件…">' + icon('upload',14) + '导入文件…</button>' +
+      '<button type="button" data-mi="导出 Markdown / HTML">' + icon('download',14) + '导出 Markdown / HTML</button>' +
+      '<button type="button" data-mi="导出 Word（.docx）">' + icon('download',14) + '导出 Word（.docx）</button>' +
+      '<button type="button" data-mi="打印 / 导出 PDF">' + icon('print',14) + '打印 / 导出 PDF</button>' +
+      (S.published ? '<div class="menu-sep"></div><button type="button" data-mi="收回发布">' + icon('ban',14) + '收回发布</button>' : '') +
+      '<div class="menu-sep"></div>' +
+      '<button type="button" class="danger" data-mi="删除文档">删除文档</button>' +
+    '</div>' +
+  '</div>';
+}
+function publishArea(){
+  /* 本次演示假设当前用户是文档负责人（可编辑/发布） */
+  if(S.scheme === 'cur'){
+    return '<button class="btn sm ghost" type="button" data-act="publish" title="草稿仅作者与空间管理员可见；发布后项目成员可见">' +
+      icon('eye',13) + ' ' + (S.published ? '收回发布' : '发布') + '</button>';
+  }
+  if(S.scheme === 'b' && !S.published){
+    return '<button class="btn sm ghost" type="button" data-act="saveOnly" title="仅保存，文档保持草稿，项目成员不可见">仅保存草稿</button>' +
+      '<button class="btn sm primary" type="button" data-act="savePublish" title="保存并发布，项目成员立即可见">' + icon('eye',13) + ' 保存并发布</button>';
+  }
+  if(S.published){
+    return '<span class="pub-chip" title="已发布，项目成员可查看；收回发布在「更多」菜单">' + icon('check',13) + ' 已发布</span>' +
+      '<button class="btn sm primary" type="button" data-act="save">保存</button>';
+  }
+  return '<button class="btn sm soft" type="button" data-act="publish" title="发布后项目成员可见（当前草稿仅你与管理员可见）">' + icon('eye',13) + ' 发布</button>' +
+    '<button class="btn sm primary" type="button" data-act="save">保存</button>';
+}
+function renderBar(){
+  var html =
+    '<button class="icon-btn" type="button" data-act="back" aria-label="返回文档列表" title="返回文档列表（有未保存会先确认）">' + icon('back',16,1.8) + '</button>' +
+    '<span class="ed-crumb">流程引擎 <span>/</span> <a href="javascript:void(0)">李冠儒-提高出金比例申请流程</a></span>' +
+    '<span class="selchip"><em>分类</em><b>流程引擎</b> ▾</span>' +
+    '<span class="selchip"><em>类型</em><b>需求文档</b> ▾</span>' +
+    '<span class="selchip"><em>上级</em><b>无</b> ▾</span>' +
+    '<span class="saved" id="savedText"></span>' +
+    ZSEG() +
+    '<span class="reqdoc-actions">' +
+      '<button class="btn sm ai-action" type="button" data-act="ai">' + icon('ai',13) + ' AI 拆成工作项</button>' +
+      '<button class="btn sm ai-action" type="button" data-act="ai">' + icon('ai',13) + ' AI 检查完成度</button>' +
+      '<button class="btn sm ghost" type="button" data-act="toc" title="显示/隐藏大纲">' + icon('listUl',13) + ' 大纲</button>' +
+      '<button class="btn sm ghost" type="button" data-act="share" title="生成只读分享链接（需先发布）">' + icon('link',13) + ' 分享</button>' +
+      menuHTML() +
+      publishArea() +
+    '</span>';
+  document.getElementById('edBar').innerHTML = html;
+  renderSaved();
+}
+function renderSaved(){
+  var el = document.getElementById('savedText');
+  if(!el) return;
+  if(S.dirty){ el.textContent = '有未保存的修改'; el.classList.add('dirty'); }
+  else{ el.textContent = (S.published ? '最后保存 ' : '最后保存 ') + S.lastSaved + (S.published ? '' : ' · 草稿'); el.classList.remove('dirty'); }
+}
+function render(){
+  document.querySelectorAll('#stateSeg button').forEach(function(b){
+    b.classList.toggle('on', (b.dataset.state === 'published') === S.published);
+  });
+  renderBar();
+}
+
+/* ========== 交互绑定 ========== */
+document.addEventListener('click', function(e){
+  /* 更多菜单开关 */
+  var moreBtn = e.target.closest('[data-act="more"]');
+  var menu = document.getElementById('moreMenu');
+  if(moreBtn){
+    if(menu) menu.hidden = !menu.hidden;
+    return;
+  }
+  if(menu && !menu.hidden && !e.target.closest('#moreMenu')) menu.hidden = true;
+
+  var mi = e.target.closest('[data-mi]');
+  if(mi){
+    var v = mi.dataset.mi;
+    if(menu) menu.hidden = true;
+    if(v === '收回发布') unpublish();
+    else toast('演示触发：' + v);
+    return;
+  }
+
+  var a = e.target.closest('[data-act]');
+  if(!a) return;
+  switch(a.dataset.act){
+    case 'back': closeFlow(); break;
+    case 'publish': S.published ? unpublish() : publish(false); break;
+    case 'save': doSave('save'); break;
+    case 'saveOnly': doSave('save'); break;
+    case 'savePublish': doSave('publish'); break;
+    case 'share': doShare(); break;
+    case 'ai': toast('演示触发：AI 动作'); break;
+    case 'toc': toast('演示触发：大纲'); break;
+  }
+});
+
+/* 缩放 */
+document.addEventListener('click', function(e){
+  var z = e.target.closest('[data-z]');
+  if(!z) return;
+  if(z.dataset.z === 'in') S.zoom = Math.min(200, S.zoom + 10);
+  else if(z.dataset.z === 'out') S.zoom = Math.max(50, S.zoom - 10);
+  else S.zoom = 100;
+  renderBar();
+});
+
+/* 未保存检测 */
+document.getElementById('canvas').addEventListener('input', function(){
+  S.dirty = true;
+  renderSaved();
+});
+
+/* 方案切换 */
+document.getElementById('schemeSeg').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-scheme]');
+  if(!b) return;
+  this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
+  S.scheme = b.dataset.scheme;
+  render();
+});
+
+/* 文档状态切换（演示入口） */
+document.getElementById('stateSeg').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-state]');
+  if(!b) return;
+  S.published = b.dataset.state === 'published';
+  S.dirty = false;
+  hideToast();
+  render();
+});
+
+/* 主题切换 */
+document.getElementById('themeSeg').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-set-theme]');
+  if(!b) return;
+  var dark = b.dataset.setTheme === 'dark';
+  if(dark) document.documentElement.setAttribute('data-theme','dark');
+  else document.documentElement.removeAttribute('data-theme');
+  this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
+});
+
+render();
+</script>
+</body>
+</html>

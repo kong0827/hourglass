@@ -48,7 +48,7 @@ rt.alertTab = "notice";
 
 var state = {
   q:"", owners:[], testOwners:[], pris:[], cats:[], reqs:[], tags:[], types:[], versions:[], columns:[],
-  completion:"", due:null, focus:false, doneScope:"week", blocked:false,
+  completion:"", pubState:null, due:null, focus:false, doneScope:"week", blocked:false,
   noDue:false, dueFrom:null, dueTo:null, startFrom:null, startTo:null,
   board:null, loadSeq:0, boardGen:0,
   reviewData:null, statsWeeks:8, flowDays:90, workScope:"mine", reviewWork:null,
@@ -194,6 +194,7 @@ function filterOn(){
   return !!(state.q || state.owners.length || state.testOwners.length || state.pris.length || state.cats.length
     || state.reqs.length || state.tags.length || state.types.length || state.versions.length
     || state.columns.length || state.completion
+    || state.pubState
     || state.due || state.focus || state.blocked || state.noDue
     || state.dueFrom || state.dueTo || state.startFrom || state.startTo);
 }
@@ -202,6 +203,7 @@ function selectedFilterCount(){
   if(state.q) n++;
   n += state.owners.length + state.testOwners.length + state.pris.length + state.cats.length + state.reqs.length + state.tags.length + state.types.length + state.versions.length + state.columns.length;
   if(state.completion) n++;
+  if(state.pubState) n++;
   if(state.due) n++;
   if(state.focus) n++;
   if(state.blocked) n++;

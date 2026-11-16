@@ -27,6 +27,8 @@ public class MyTasksQuery {
     private List<String> columns = Collections.emptyList();
     /** 完成情况：null=全部，open=未完成，done=已完成 */
     private String completion;
+    /** 发布态：null=全部，published / unpublished */
+    private String pubState;
     private boolean blocked;
     private String due;
     private boolean focus;
@@ -152,6 +154,14 @@ public class MyTasksQuery {
 
     public void setCompletion(String completion) {
         this.completion = completion;
+    }
+
+    public String getPubState() {
+        return pubState;
+    }
+
+    public void setPubState(String pubState) {
+        this.pubState = pubState;
     }
 
     public boolean isBlocked() {

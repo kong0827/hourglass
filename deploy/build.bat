@@ -103,6 +103,9 @@ if errorlevel 1 goto :pack_fail
 
 robocopy "frontend" "%PACKAGE%\frontend\hourglass" /E /NFL /NDL /NJH /NJS /NP >nul
 if errorlevel 8 goto :pack_fail
+rem regenerate SW cache name from frontend content (requires Node.js)
+node tools\stamp-sw.js --inplace "%PACKAGE%\frontend\hourglass"
+if errorlevel 1 goto :pack_fail
 
 copy /y "backend\src\main\resources\application.yml" "%CONF_DIR%\application.yml" >nul
 if errorlevel 1 goto :pack_fail

@@ -50,6 +50,7 @@ NEW_DB=""
 REQUESTED_DB="${DEPLOY_DB_NAME:-}"
 CURRENT_DB=""
 TARGET_DB=""
+SW_NAME=""
 
 # 需要做字节级校验的前端文件（相对 frontend 目录）
 VERIFY_FILES=(
@@ -533,10 +534,14 @@ if [ "$NEED_FRONT" -eq 1 ]; then
   rm -rf "$FRONT_STAGE"
   mkdir -p "${FRONT_STAGE}/hourglass"
   cp -R frontend/. "${FRONT_STAGE}/hourglass/"
+  # 发布副本按 SHELL 内容哈希生成 CACHE_NAME：前端一改 sw.js 字节就变，
+  # 不会因为漏升版本号让用户卡在旧缓存（只改副本，不动工作区源码）
+  command -v node >/dev/null 2>&1 || die "找不到 node：前端发布需要它生成 SW 缓存版本号"
+  SW_NAME="$(node tools/stamp-sw.js --inplace "${FRONT_STAGE}/hourglass")" || die "生成 SW 缓存版本号失败"
   COPYFILE_DISABLE=1 tar -czf "$FRONT_TAR" -C "$FRONT_STAGE" hourglass
   LOCAL_FRONT_SIZE="$(wc -c < "$FRONT_TAR" | tr -d ' ')"
   LOCAL_FRONT_SHA="$(sha256sum "$FRONT_TAR" | cut -c1-16)"
-  ok "frontend：$(ls -lh "$FRONT_TAR" | awk '{print $5}')  sha256(前16)=${LOCAL_FRONT_SHA}"
+  ok "frontend：$(ls -lh "$FRONT_TAR" | awk '{print $5}')  sha256(前16)=${LOCAL_FRONT_SHA}  SW=${SW_NAME}"
 else
   info "前端：无改动，跳过打包"
 fi
@@ -759,6 +764,7 @@ for f in "${VERIFY_FILES[@]}"; do
   curl -fsS -m 15 "$B/hourglass/$f" -o "$o"
   echo "FILE $f $(wc -c < "$o" | tr -d ' ') $(sha256sum "$o" | cut -c1-16)"
 done
+echo "SWCACHE $(grep -o 'hourglass-shell-[A-Za-z0-9._-]*' "$VERIFY_DIR/sw.js" 2>/dev/null | head -1)"
 # Credentials remain only on the server and are never printed.
 AU="$(read_env AUTH_USER)"
 AP="$(read_env AUTH_PASSWORD)"
@@ -811,9 +817,12 @@ REMOTE
 
   if [ "$NEED_FRONT" -eq 1 ]; then
     while read -r _ f sz h; do
-      if [ -f "frontend/$f" ]; then
-        lh="$(sha256sum "frontend/$f" | cut -c1-16)"
-        lsz="$(wc -c < "frontend/$f" | tr -d ' ')"
+      # 比对实际发布的那份副本：sw.js 在副本里被改写成了内容哈希版本号
+      lf="$FRONT_STAGE/hourglass/$f"
+      [ -f "$lf" ] || lf="frontend/$f"
+      if [ -f "$lf" ]; then
+        lh="$(sha256sum "$lf" | cut -c1-16)"
+        lsz="$(wc -c < "$lf" | tr -d ' ')"
         if [ "$lh" = "$h" ] && [ "$lsz" = "$sz" ]; then
           printf '    %s✓%s %-14s %8s bytes  %s\n' "$C_OK" "$C_RST" "$f" "$sz" "$h"
         else
@@ -822,6 +831,13 @@ REMOTE
         fi
       fi
     done < <(printf '%s\n' "$VERIFY_OUT" | grep '^FILE ')
+    SW_REMOTE="$(vget SWCACHE | awk '{print $2}')"
+    if [ -n "$SW_NAME" ] && [ "$SW_REMOTE" = "$SW_NAME" ]; then
+      ok "线上 SW 缓存版本：${SW_REMOTE}（内容哈希）"
+    else
+      err "SW 版本不一致：期望 ${SW_NAME:-缺失} / 线上 ${SW_REMOTE:-缺失}"
+      VERIFY_FAIL=1
+    fi
   fi
 
   LOGIN="$(vget LOGIN | sed 's/^LOGIN //')"

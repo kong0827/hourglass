@@ -176,7 +176,11 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
       reloadForUpdate();
     });
     window.addEventListener("load", function(){
-      navigator.serviceWorker.register(API.appBase + "/sw.js").catch(function(){ /* http 直连不支持 SW，忽略 */ });
+      navigator.serviceWorker.register(API.appBase + "/sw.js").then(function(reg){
+        /* 浏览器自身的 SW 更新检查最多约 24 小时一次，发布后可能整天都拿旧缓存；
+           每次打开页面主动查一次（sw.js 只有几 KB），换版当天就能接管 */
+        if(reg && reg.update) reg.update().catch(function(){});
+      }).catch(function(){ /* http 直连不支持 SW，忽略 */ });
     });
   }
   updateOnlineBadge();

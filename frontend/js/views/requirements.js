@@ -8,6 +8,7 @@ import { activeView, showView } from "../core/router.js";
 import { canEditDoc, canEditReq, currentRole, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead, syncAssocViewBtns } from "../core/task-drawer.js";
+import { createMentionPicker } from "../core/mention-picker.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
 import * as activityUI from "../core/activity-ui.js";
@@ -184,8 +185,9 @@ function ensureEditor(){
     });
     reqEditor.onChange = function(){
       if(reqDocSuppressChange) return;
-      /* 程序化回填可能晚于抑制窗口触发 onChange：与基线一致就不算用户修改 */
-      if(reqEditorBaseline != null && reqEditor.getContents(true) === reqEditorBaseline) return;
+      /* 程序化回填可能晚于抑制窗口触发 onChange：与基线一致就不算用户修改。
+         已脏后不再比：大正文（内嵌图片）每次按键都全量序列化会明显卡顿 */
+      if(!reqDocDirty && reqEditorBaseline != null && reqEditor.getContents(true) === reqEditorBaseline) return;
       markReqDocDirty();
       scheduleDraftSave();
       scheduleTocRebuild();
@@ -276,6 +278,7 @@ function showReqDocList(){
   if(isReqDocEditing()){ tryCloseReqDocEditor(); return; }
   reqDocOpenSeq++;
   editingDocId = null;
+  if(reqDocCommentMention) reqDocCommentMention.reset();
   state.reqDocId = null;
   reqDocDirty = false;
   tocItems = [];
@@ -878,6 +881,9 @@ var rrdQuote = null;
 var rrdSelText = "";
 var rrdFlashCommentId = null;
 var rrdSelBubble = null;
+/* 两处文档评论框各自的 @ 候选：编辑页一个、阅读侧栏一个（侧栏会随渲染重建） */
+var reqDocCommentMention = null;
+var rrdMentionPicker = null;
 var readerExportSeq = 0;
 var feedSeq = 0;
 var draggingReqDocId = null;
@@ -1299,6 +1305,18 @@ function reqDocReaderOpenLinks(body){
     links[i].setAttribute("rel", "noopener noreferrer");
   }
 }
+/* 先在惰性的 template 里给图片加懒加载/异步解码再挂载：直接 innerHTML 会立刻解码全部内嵌图片 */
+function reqDocReaderFill(body, cleanHtml){
+  var tpl = document.createElement("template");
+  tpl.innerHTML = cleanHtml;
+  var imgs = tpl.content.querySelectorAll("img");
+  for(var i = 0; i < imgs.length; i++){
+    imgs[i].setAttribute("loading", "lazy");
+    imgs[i].setAttribute("decoding", "async");
+  }
+  body.textContent = "";
+  body.appendChild(tpl.content);
+}
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
@@ -1370,6 +1388,7 @@ function renderReqDocReader(doc){
     '</aside>';
   syncDocZoomUI();
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
+  bindRrdMention();
   renderReqDocCrumb($("rrdCrumb"), doc.id);
   var body = $("reqDocReaderBody");
   var id = doc.id;
@@ -1378,10 +1397,10 @@ function renderReqDocReader(doc){
     if(doc.format === "markdown"){
       var html = "";
       try{ html = window.marked.parse(doc.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
-      body.innerHTML = window.DOMPurify.sanitize(html);
+      reqDocReaderFill(body, window.DOMPurify.sanitize(html));
     }else{
       /* 服务端已按白名单清洗过，这里再过一道 DOMPurify（双保险） */
-      body.innerHTML = window.DOMPurify.sanitize(doc.content || "");
+      reqDocReaderFill(body, window.DOMPurify.sanitize(doc.content || ""));
     }
     reqDocReaderOpenLinks(body);
     rrdApplyHighlights();
@@ -2156,8 +2175,11 @@ function submitRrdComment(){
   if(btn) btn.disabled = true;
   var body = { content: content };
   if(rrdQuote) body.quoteText = rrdQuote;
+  var mentionIds = rrdMentionPicker ? rrdMentionPicker.idsInText(content) : [];
+  if(mentionIds.length) body.mentionUserIds = mentionIds;
   API.post("/api/req-docs/" + encodeURIComponent(rrdCommentsDocId) + "/comments", body).then(function(){
     if(ta) ta.value = "";
+    if(rrdMentionPicker){ rrdMentionPicker.close(); rrdMentionPicker.clearPicked(); }
     setRrdQuote(null);
     loadRrdComments();
   }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
@@ -2203,8 +2225,22 @@ function rrdApplyHighlights(){
     try{ range.surroundContents(mark); }catch(e){ /* 跨节点时不强行高亮 */ }
   });
 }
-function ensureRrdSelBubble(){
-  if(rrdSelBubble) return rrdSelBubble;
+/* 阅读侧栏评论框每次渲染都会重建，@ 候选按当前文档的可见成员拉取 */
+function bindRrdMention(){
+  if(rrdMentionPicker){ rrdMentionPicker.destroy(); rrdMentionPicker = null; }
+  var ta = $("rrdCommentInput");
+  if(!ta) return;
+  rrdMentionPicker = createMentionPicker(ta, {
+    canOpen: function(){ return rrdCanComment && !!rrdCommentsDocId; },
+    excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+    loadMembers: function(){
+      var docId = rrdCommentsDocId;
+      if(!docId) return Promise.reject(new Error("未打开文档"));
+      return API.get("/api/req-docs/" + encodeURIComponent(docId) + "/mention-candidates");
+    }
+  });
+}
+function ensureRrdSelBubble(){  if(rrdSelBubble) return rrdSelBubble;
   var b = document.createElement("button");
   b.type = "button";
   b.id = "rrdSelBubble";
@@ -2722,6 +2758,50 @@ function fillNewReqDocCategories(selected){
   sel.innerHTML = opts;
   sel.value = selected || "";
   if(sel.value !== (selected || "")) sel.value = "";
+  if($("newReqDocCatAdd")) $("newReqDocCatAdd").hidden = roleReadOnly();
+}
+/* 新建文档时就地建分类：选中分类则建为其子分类，否则建在当前归属的顶层；建好直接选中 */
+function beginQuickCreateNewDocCat(){
+  var sel = $("newReqDocCategory");
+  var row = sel && sel.parentNode;
+  if(!row || $("newReqDocCatName")) return;
+  var parent = sel.value ? docCatById(sel.value) : null;
+  var scope = parent ? (parent.reqId || "") : ($("newReqDocProject") ? ($("newReqDocProject").value || "") : "");
+  if(!reqDocCatManageable(scope)){
+    toast(scope ? "你对该项目只有查看权限，无法维护分类" : "空间级分类仅空间主或管理员可维护", "warn");
+    return;
+  }
+  reqDocCatNameInput({
+    anchorEl: row, value: "",
+    placeholder: (parent ? "在「" + parent.name + "」下新建子分类" : "在「" + reqDocProjectName(scope) + "」顶层新建分类") + "，回车创建 / Esc 取消",
+    inputClass: "nd-cat-input",
+    onCommit: function(name){
+      API.post("/api/doc-categories", { reqId: scope, name: name, parentId: parent ? parent.id : "" }).then(function(created){
+        toast("已创建分类「" + name + "」", "fs");
+        if(parent) delete reqDocCollapsedCats[parent.id];
+        return loadDocCategories(true).then(function(){
+          var id = created && created.id;
+          if(!id){
+            var hit = (docCategories || []).filter(function(c){
+              return (c.reqId || "") === scope && (c.parentId || "") === (parent ? parent.id : "") && c.name === name;
+            })[0];
+            id = hit ? hit.id : "";
+          }
+          fillNewReqDocCategories(id);
+          syncNewReqDocProjFromCat();
+          fillNewReqDocParents("");
+          applyDocCatDefaultToNewDoc();
+          syncNewReqDocPath();
+        });
+      }).catch(function(ex){ toast(ex.message || "创建分类失败", "bad"); });
+    }
+  });
+  var input = row.nextSibling;
+  if(input && input.classList && input.classList.contains("nd-cat-input")){
+    input.id = "newReqDocCatName";
+    /* 抽屉内 Esc 只取消输入，不能冒泡到全局把整个新建抽屉关掉 */
+    input.addEventListener("keydown", function(e){ if(e.key === "Escape") e.stopPropagation(); });
+  }
 }
 /* 项目下拉：可写项目 + 空间级（关联可选）；查看者无可写范围 */
 function fillNewReqDocProjectOptions(selected){
@@ -2792,6 +2872,25 @@ function syncNewReqDocPath(){
   var parentLabel = "顶层";
   if(pSel && pSel.value && pSel.selectedIndex >= 0) parentLabel = pSel.options[pSel.selectedIndex].text.replace(/^[\s\u3000]+/, "");
   el.innerHTML = "位置：<b>" + [reqDocProjectName(reqId), catLabel, parentLabel].map(esc).join("</b><i>›</i><b>") + "</b>";
+  syncNewReqDocCtx();
+}
+/* 新建弹窗头部：先说明落点、保存后的去向与唯一必填项 */
+function syncNewReqDocCtx(){
+  var el = $("newReqDocCtx");
+  if(!el) return;
+  var reqId = $("newReqDocProject") ? ($("newReqDocProject").value || "") : "";
+  el.innerHTML = esc(reqId ? reqDocProjectName(reqId) : "空间级") + " · 保存后进入编辑 · <span class=\"sub-only\">只有名称必填</span>";
+}
+/* 名称输入行：Enter 提示与字数，和新建工作项的标题行同一套表达 */
+function syncNewReqDocTitleCount(){
+  var input = $("newReqDocTitle"), out = $("newReqDocTitleCount");
+  if(!input || !out) return;
+  out.textContent = (input.value || "").length + "/" + (input.maxLength > 0 ? input.maxLength : "");
+}
+function showNewReqDocError(show){
+  var box = $("newReqDocErr"), input = $("newReqDocTitle");
+  if(box) box.hidden = !show;
+  if(input) input.classList.toggle("invalid", !!show);
 }
 /* 更多设置收起时也要能看到当前值：类型 + 可见范围 */
 function syncNewReqDocMoreSum(){
@@ -2867,7 +2966,9 @@ function openNewReqDocDialog(reqId, opts){
   var preCatObj = preCat ? docCatById(preCat) : null;
   if(preCatObj) defProj = preCatObj.reqId || "";
   fillNewReqDocProjectOptions(defProj);
+  showNewReqDocError(false);
   if($("newReqDocTitle")) $("newReqDocTitle").value = "";
+  syncNewReqDocTitleCount();
   if($("newReqDocFormat")) $("newReqDocFormat").value = "markdown";
   resetNewReqDocPreview();
   setNewReqDocSource("blank");
@@ -2891,6 +2992,7 @@ function openNewReqDocDialog(reqId, opts){
   ensureNewReqDocVisUI();
   resetNewReqDocVis();
   applyDocCatDefaultToNewDoc();
+  if($("newReqDocMore")) $("newReqDocMore").open = true;
   UI.openModal($("dlgNewReqDoc"));
   setTimeout(function(){ if($("newReqDocTitle")) $("newReqDocTitle").focus(); }, 40);
 }
@@ -3149,6 +3251,7 @@ function parseNewReqDocFile(file){
   });
 }
 function closeNewReqDocDialog(){
+  showNewReqDocError(false);
   var d = $("dlgNewReqDoc");
   if(d) UI.closeModal(d);
 }
@@ -3218,13 +3321,16 @@ function createReqDocTask(){
 }
 function setNewReqDocBusy(label){
   var ok = $("dlgNewReqDocOk");
+  var only = $("dlgNewReqDocCreateOnly");
+  if(only) only.disabled = !!label;
   if(!ok) return;
   ok.disabled = !!label;
   ok.textContent = label || "新建并编辑";
 }
-function submitNewReqDoc(){
+function submitNewReqDoc(keepList){
   var ok = $("dlgNewReqDocOk");
   if(ok && ok.disabled) return;
+  showNewReqDocError(false);
   var categoryId = $("newReqDocCategory") ? $("newReqDocCategory").value : "";
   var reqId = $("newReqDocProject").value;   // 空 = 空间级（关联可选）
   var title = ($("newReqDocTitle").value || "").trim();
@@ -3245,7 +3351,12 @@ function submitNewReqDoc(){
   var kind = file ? reqDocFileKind(file.name) : null;
   if(isFile && !kind){ toast("暂不支持该文件格式，请上传 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
   if(!title && file) title = file.name.replace(/\.[^.]+$/, "");
-  if(!title){ toast("请填写文档名称", "warn"); $("newReqDocTitle").focus(); return; }
+  if(!title){
+    showNewReqDocError(true);
+    toast("请填写文档名称", "warn");
+    $("newReqDocTitle").focus();
+    return;
+  }
   if(isTemplate && !(docTemplatesCache && $("newReqDocTemplate").value)){
     toast("模板还没加载好，请稍候或改用空白文档", "warn");
     return;
@@ -3280,6 +3391,12 @@ function submitNewReqDoc(){
     categoryId: categoryId || "", visibility: visibility, memberIds: memberIds
   })
     .then(function(doc){
+      if(keepList){
+        closeNewReqDocDialog();
+        loadReqDocs(true);
+        toast("已创建「" + doc.title + "」，留在列表", "fs");
+        return;
+      }
       if(isFile){
         finishNewReqDocImport(doc, file.name, format);
         return;
@@ -3315,6 +3432,8 @@ function openReqDocEditor(id){
   API.get("/api/req-docs/" + encodeURIComponent(id)).then(function(doc){
     if(seq !== reqDocOpenSeq) return;   // 连续点开多份：丢弃过期的响应
     editingDocId = doc.id;
+    /* 换文档后成员可见范围可能不同，先丢弃上一份的候选 */
+    if(reqDocCommentMention) reqDocCommentMention.reset();
     state.reqDocId = doc.id;
     reqDocDirty = false;
     editingMeta = {
@@ -3360,6 +3479,7 @@ function closeReqDocEditor(){
   if($("reqDocEditPage")) $("reqDocEditPage").hidden = true;
   if($("reqDocListPage")) $("reqDocListPage").hidden = false;
   editingDocId = null;
+  if(reqDocCommentMention) reqDocCommentMention.reset();
   reqDirtyReset();
   renderReqDocMode();
   /* 阅读视图里刚编辑过：右侧正文可能是旧的，重新拉一次 */
@@ -3369,10 +3489,38 @@ function reqDirtyReset(){
   reqDocDirty = false;
   state.reqDocId = null;
 }
+/* 关闭弹窗两种形态：dirty（有未保存修改，三选一）与 draft-clean（已保存但仍是草稿，问是否发布） */
+var reqDocCloseMode = "dirty";
+function openReqDocCloseDialog(mode){
+  reqDocCloseMode = mode === "draft-clean" ? "draft-clean" : "dirty";
+  var draftClean = reqDocCloseMode === "draft-clean";
+  var dlg = $("dlgReqDocClose");
+  if(!dlg) return;
+  if($("dlgReqDocCloseTitle")) $("dlgReqDocCloseTitle").textContent = draftClean ? "这篇文档仍是草稿" : "有未保存的修改";
+  if($("dlgReqDocCloseMsg")) $("dlgReqDocCloseMsg").textContent = draftClean
+    ? "项目成员现在看不到它。是留在草稿继续编辑，还是现在发布？"
+    : "关闭前要保存这次编辑吗？" + (editingMeta.publishedAt ? "" : "这篇文档仍是草稿。");
+  if($("dlgReqDocCloseCancel")) $("dlgReqDocCloseCancel").textContent = draftClean ? "留在草稿" : "取消";
+  if($("dlgReqDocCloseDiscard")) $("dlgReqDocCloseDiscard").hidden = draftClean;
+  if($("dlgReqDocCloseSaveDraft")) $("dlgReqDocCloseSaveDraft").hidden = draftClean || !!editingMeta.publishedAt;
+  if($("dlgReqDocCloseSave")) $("dlgReqDocCloseSave").textContent = (editingMeta.publishedAt && !draftClean) ? "保存并关闭" : "发布并关闭";
+  UI.openModal(dlg);
+}
+function finishCloseReqDoc(){
+  closeReqDocCloseDialog(true);
+  closeReqDocEditor();
+  continueReqDocRoute();
+}
 function tryCloseReqDocEditor(nextView){
-  if(nextView) reqDocPendingView = nextView;
-  if(!reqDocDirty){ closeReqDocEditor(); continueReqDocRoute(); return; }
-  UI.openModal($("dlgReqDocClose"));
+  /* 直接绑在 click 上时第一个参数是事件对象，只有路由守卫传的字符串才是目标视图 */
+  if(typeof nextView === "string") reqDocPendingView = nextView;
+  if(reqDocDirty){ openReqDocCloseDialog("dirty"); return; }
+  /* 干净但仍是草稿：关闭是作者认为「写完了」的时刻，兜底问一次是否发布 */
+  if(editingDocId && !editingMeta.publishedAt && !reqDocReadOnly && !reqDocOwnerLocked){
+    openReqDocCloseDialog("draft-clean");
+    return;
+  }
+  closeReqDocEditor(); continueReqDocRoute();
 }
 function closeReqDocCloseDialog(keepPending){
   if(!keepPending) reqDocPendingView = null;
@@ -4135,8 +4283,8 @@ function fillReqDocEditor(doc){
       toast(ex.message || "编辑器加载失败", "bad");
     });
   }
-  $("reqDocSaved").textContent = doc.updatedAt ? ("最后保存 " + fmtTs(doc.updatedAt)) : "尚未保存";
   reqDocDirty = false;
+  refreshReqDocSavedText();
   /* 正文换人了：目录要跟着换（重建前先清掉旧的高亮） */
   tocActive = null;
   rebuildToc();
@@ -4152,9 +4300,12 @@ function fillReqDocProjectSelect(selected){
   }).join("");
   if(cur) sel.value = cur;
 }
+var reqDocCountTimer = null;
 function markReqDocDirty(){
   if(reqDocReadOnly) return;
-  updateReqDocCount();
+  /* 字数统计要遍历全文，按键期间合并到停顿后再算 */
+  if(reqDocCountTimer) clearTimeout(reqDocCountTimer);
+  reqDocCountTimer = setTimeout(function(){ reqDocCountTimer = null; updateReqDocCount(); }, 300);
   if(reqDocDirty) return;
   reqDocDirty = true;
   if($("reqDocSaved")) $("reqDocSaved").textContent = "有未保存的修改";
@@ -4299,24 +4450,16 @@ function submitReqDocComment(){
   var body = { content: content };
   if(reqDocCommentQuote) body.quoteText = reqDocCommentQuote;
   if(reqDocReplyTo) body.parentId = reqDocReplyTo;
-  var mentionIds = parseMentionIds(content);
+  var mentionIds = reqDocCommentMention ? reqDocCommentMention.idsInText(content) : [];
   if(mentionIds.length) body.mentionUserIds = mentionIds;
   API.post("/api/req-docs/" + encodeURIComponent(editingDocId) + "/comments", body).then(function(){
     if(ta) ta.value = "";
+    if(reqDocCommentMention){ reqDocCommentMention.close(); reqDocCommentMention.clearPicked(); }
     setReqDocCommentQuote(null);
     setReqDocReplyTo(null);
     loadReqDocComments(editingDocId);
   }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
   .then(function(){ if(btn) btn.disabled = false; });
-}
-function parseMentionIds(text){
-  var members = rt.wsMembersCache || [];
-  var ids = [];
-  members.forEach(function(m){
-    var name = m.displayName || m.username || "";
-    if(name && text.indexOf("@" + name) >= 0 && ids.indexOf(m.userId) < 0) ids.push(m.userId);
-  });
-  return ids;
 }
 function resolveReqDocComment(commentId, resolved){
   if(!editingDocId) return;
@@ -4428,14 +4571,32 @@ function printReqDoc(){
 
 var reqDocDraftTimer = null;
 function draftKey(docId){ return "hg.docDraft:" + docId; }
+/* localStorage 每源约 5MB，内嵌图片的大正文存不下，序列化本身也拖慢编辑 */
+var REQ_DOC_DRAFT_MAX_CHARS = 1500000;
+var reqDocDraftSkipWarnedId = null;
+function warnReqDocDraftSkipped(){
+  if(reqDocDraftSkipWarnedId === editingDocId) return;
+  reqDocDraftSkipWarnedId = editingDocId;
+  toast("正文较大（含图片），不再自动存本地草稿，请及时保存", "warn");
+}
 function scheduleDraftSave(){
   if(reqDocDraftTimer) clearTimeout(reqDocDraftTimer);
   reqDocDraftTimer = setTimeout(function(){
     if(!editingDocId || reqDocReadOnly || !reqDocDirty) return;
+    var key = draftKey(editingDocId);
     try{
       var content = getEditorContent();
-      if(content) localStorage.setItem(draftKey(editingDocId), JSON.stringify({ content: content, ts: Date.now(), format: editingMeta.format }));
-    }catch(e){ /* 存储满时静默忽略 */ }
+      if(!content) return;
+      if(content.length > REQ_DOC_DRAFT_MAX_CHARS){
+        localStorage.removeItem(key);
+        warnReqDocDraftSkipped();
+        return;
+      }
+      localStorage.setItem(key, JSON.stringify({ content: content, ts: Date.now(), format: editingMeta.format }));
+    }catch(e){
+      try{ localStorage.removeItem(key); }catch(e2){ /* 存储不可用 */ }
+      warnReqDocDraftSkipped();
+    }
   }, 3000);
 }
 function checkDraftRecovery(docId){
@@ -5311,7 +5472,9 @@ function confirmReloadReqDoc(){
     if(ok && editingDocId === id) openReqDocEditor(id);
   });
 }
-function saveReqDoc(){
+/* opts.silent：关闭链路的保存，成功后不弹「仍可发布」提示（由关闭弹窗决定后续动作） */
+function saveReqDoc(opts){
+  var silent = !!(opts && opts.silent);
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return Promise.resolve(null); }
   if(reqDocSaving) return reqDocSavePromise || Promise.resolve(null);
   var title = (editingMeta.title || "").trim();
@@ -5352,6 +5515,7 @@ function saveReqDoc(){
     editingDocId = doc.id;
     state.reqDocId = doc.id;
     editingMeta.updatedAt = doc.updatedAt || editingMeta.updatedAt;
+    if(doc.publishedAt !== undefined) editingMeta.publishedAt = doc.publishedAt || null;
     /* 分类/归属可能随保存变化：即便用户还在输入（不走 fillReqDocEditor），元数据也要对齐服务器返回值 */
     editingMeta.categoryId = doc.categoryId || "";
     editingMeta.reqId = doc.reqId || "";
@@ -5364,7 +5528,19 @@ function saveReqDoc(){
       fillReqDocEditor(doc);
     }
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
-    toast("文档已保存", "fs");
+    refreshReqDocPublishBtn();
+    if(silent){
+      /* 关闭链路的保存：成功后直接关闭，发布与否由关闭弹窗上的按钮决定 */
+    }else if(editingMeta.publishedAt){
+      toast("文档已保存", "fs");
+    }else{
+      /* 保存 ≠ 发布：不打断写作，但把「仍是草稿」和一次性「发布」动作一起递到手边。
+         提示在屏幕上停留 8 秒，点的时候要确认还是这篇文档，避免发布到后来打开的文档 */
+      UI.toastAction("已保存为草稿 · 项目成员暂不可见", "发布", function(){
+        if(editingDocId !== doc.id){ toast("已切换文档，没有发布「" + (doc.title || "原文档") + "」", "warn"); return; }
+        reqDocSetPublished(true);
+      }, "fs", 8000);
+    }
     loadReqDocs(true);
     activityUI.loadInto($("reqDocActivityList"), "/api/req-docs/" + encodeURIComponent(doc.id) + "/activities");
     return doc;
@@ -5635,25 +5811,35 @@ function exportReqDocWordFromReader(docId){
     });
   }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
 }
-/* 发布/收回发布：草稿仅作者与空间管理员可见，发布后按项目访问规则可见 */
-function refreshReqDocPublishBtn(){
-  var b = $("reqDocPublish");
-  if(!b) return;
-  var published = !!editingMeta.publishedAt;
-  b.textContent = published ? "收回发布" : "发布";
-  b.title = published ? "收回后仅作者与空间管理员可见，已生成的分享链接同时失效；收回不影响继续编辑" : "发布后项目成员可见，发布后仍可继续编辑";
-  b.classList.toggle("is-published", published);
+/* 保存状态文案：草稿必须带后缀，避免「已保存」被读成「已发布」 */
+function refreshReqDocSavedText(){
+  var el = $("reqDocSaved");
+  if(!el || reqDocDirty) return;   // 脏状态文案由 markReqDocDirty / 保存分支负责
+  var base = editingMeta.updatedAt ? ("最后保存 " + fmtTs(editingMeta.updatedAt)) : "尚未保存";
+  el.textContent = base + (editingMeta.publishedAt ? "" : " · 草稿");
 }
-function toggleReqDocPublish(){
-  if(!editingDocId) return;
-  if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+/* 发布/收回发布：草稿仅作者与空间管理员可见，发布后按项目访问规则可见。
+   发布是进入可见范围的动作而非每次保存的步骤，因此已发布态用徽标展示，收回收进「更多」菜单 */
+function refreshReqDocPublishBtn(){
   var published = !!editingMeta.publishedAt;
-  var btn = $("reqDocPublish");
-  if(btn) btn.disabled = true;
-  API.put("/api/req-docs/" + encodeURIComponent(editingDocId) + "/publish", { published: !published }).then(function(d){
+  var ro = reqDocReadOnly || reqDocOwnerLocked;
+  var b = $("reqDocPublish");
+  if(b) b.hidden = published || ro;
+  var chip = $("reqDocPubChip");
+  if(chip) chip.hidden = !published;
+  var un = $("reqDocUnpublish");
+  if(un) un.hidden = !published || ro;
+}
+function reqDocSetPublished(published){
+  if(!editingDocId) return Promise.resolve(false);
+  if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return Promise.resolve(false); }
+  var btns = ["reqDocPublish", "reqDocUnpublish"].map(function(id){ return $(id); }).filter(Boolean);
+  btns.forEach(function(b){ b.disabled = true; });
+  return API.put("/api/req-docs/" + encodeURIComponent(editingDocId) + "/publish", { published: !!published }).then(function(d){
     editingMeta.publishedAt = (d && d.publishedAt) || null;
     refreshReqDocPublishBtn();
     refreshReqDocShareBtn();
+    refreshReqDocSavedText();
     /* 搜索态下列表来自 reqDocSearchList，两处都要同步，否则徽标仍是「草稿」 */
     [reqDocList, reqDocSearchList].forEach(function(list){
       if(!list) return;
@@ -5663,12 +5849,16 @@ function toggleReqDocPublish(){
     });
     renderReqDocMode();
     var vis = docVisOf(editingMeta);
-    toast(published ? "已收回发布，文档转为草稿，原分享链接已失效"
-      : vis === "members" ? "已发布，仅指定成员可见"
+    toast(published ? (vis === "members" ? "已发布，仅指定成员可见"
       : vis === "personal" ? "已发布，仅负责人可见"
-      : "已发布，项目成员现在可以查看；仍可继续编辑", "fs");
-  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); })
-    .then(function(){ if(btn) btn.disabled = false; });
+      : "已发布，项目成员现在可以查看；仍可继续编辑")
+      : "已收回发布，文档转为草稿，原分享链接已失效", "fs");
+    return true;
+  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); return false; })
+    .then(function(ok){
+      btns.forEach(function(b){ b.disabled = false; });
+      return ok;
+    });
 }
 function reqDocShareUrl(token){
   if(location.protocol === "file:") return "share.html?token=" + token + "&kind=doc";
@@ -6102,8 +6292,17 @@ function populateReqDocSelect(keep){
   });
   if($("dlgNewReqDocX")) $("dlgNewReqDocX").addEventListener("click", closeNewReqDocDialog);
   if($("dlgNewReqDocCancel")) $("dlgNewReqDocCancel").addEventListener("click", closeNewReqDocDialog);
-  if($("dlgNewReqDocOk")) $("dlgNewReqDocOk").addEventListener("click", submitNewReqDoc);
-  if($("dlgNewReqDoc")) UI.setModalSubmit($("dlgNewReqDoc"), submitNewReqDoc);
+  if($("dlgNewReqDocOk")) $("dlgNewReqDocOk").addEventListener("click", function(){ submitNewReqDoc(false); });
+  if($("dlgNewReqDocCreateOnly")) $("dlgNewReqDocCreateOnly").addEventListener("click", function(){ submitNewReqDoc(true); });
+  if($("dlgNewReqDoc")) UI.setModalSubmit($("dlgNewReqDoc"), function(){ submitNewReqDoc(false); });
+  if($("newReqDocTitle")) $("newReqDocTitle").addEventListener("input", function(){
+    syncNewReqDocTitleCount();
+    if(this.value.trim()) showNewReqDocError(false);
+  });
+  if($("newReqDocErr")) $("newReqDocErr").addEventListener("click", function(e){
+    if(!e.target.closest("button")) return;
+    if($("newReqDocTitle")) $("newReqDocTitle").focus();
+  });
   if($("newReqDocTitle")) $("newReqDocTitle").addEventListener("keydown", function(e){
     if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
     e.preventDefault();
@@ -6124,6 +6323,7 @@ function populateReqDocSelect(keep){
     applyDocCatDefaultToNewDoc();
     syncNewReqDocPath();
   });
+  if($("newReqDocCatAdd")) $("newReqDocCatAdd").addEventListener("click", beginQuickCreateNewDocCat);
   var srcBtns = document.querySelectorAll("#newReqDocSource [data-docsrc]");
   for(var si = 0; si < srcBtns.length; si++){
     (function(btn){
@@ -6138,6 +6338,7 @@ function populateReqDocSelect(keep){
     if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); resetNewReqDocPreview(); return; }
     if(!($("newReqDocTitle").value || "").trim()){
       $("newReqDocTitle").value = f.name.replace(/\.[^.]+$/, "");
+      syncNewReqDocTitleCount();
     }
     setNewReqDocBusy("解析文件…");
     parseNewReqDocFile(f).catch(function(ex){
@@ -6155,13 +6356,30 @@ function populateReqDocSelect(keep){
     });
   }
   if($("reqDocBack")) $("reqDocBack").addEventListener("click", tryCloseReqDocEditor);
-  if($("dlgReqDocCloseCancel")) $("dlgReqDocCloseCancel").addEventListener("click", closeReqDocCloseDialog);
+  if($("dlgReqDocCloseCancel")){
+    $("dlgReqDocCloseCancel").addEventListener("click", function(){
+      /* 草稿兜底弹窗里「留在草稿」= 不发布直接关；未保存弹窗里「取消」= 留在编辑器 */
+      if(reqDocCloseMode === "draft-clean"){ finishCloseReqDoc(); return; }
+      closeReqDocCloseDialog();
+    });
+  }
   if($("dlgReqDocCloseDiscard")){
     $("dlgReqDocCloseDiscard").addEventListener("click", function(){
       reqDocDirty = false;
-      closeReqDocCloseDialog(true);
-      closeReqDocEditor();
-      continueReqDocRoute();
+      finishCloseReqDoc();
+    });
+  }
+  if($("dlgReqDocCloseSaveDraft")){
+    $("dlgReqDocCloseSaveDraft").addEventListener("click", function(){
+      var btn = this;
+      if(btn.disabled) return;
+      btn.disabled = true;
+      saveReqDoc({ silent: true }).then(function(doc){
+        btn.disabled = false;
+        if(!doc) return;   // 保存失败：保留弹窗与本地正文，用户可重试或放弃
+        toast("已存为草稿并关闭（仅你可见）", "fs");
+        finishCloseReqDoc();
+      });
     });
   }
   if($("dlgReqDocCloseSave")){
@@ -6169,12 +6387,16 @@ function populateReqDocSelect(keep){
       var btn = this;
       if(btn.disabled) return;
       btn.disabled = true;
-      saveReqDoc().then(function(doc){
-        btn.disabled = false;
-        if(!doc) return;   // 保存失败：保留弹窗与本地正文，用户可重试或放弃
-        closeReqDocCloseDialog(true);
-        closeReqDocEditor();
-        continueReqDocRoute();
+      var done = function(){ btn.disabled = false; };
+      if(reqDocCloseMode === "draft-clean"){
+        reqDocSetPublished(true).then(function(ok){ done(); if(ok) finishCloseReqDoc(); });
+        return;
+      }
+      saveReqDoc({ silent: true }).then(function(doc){
+        if(!doc){ done(); return; }   // 保存失败：保留弹窗与本地正文，用户可重试或放弃
+        if(editingMeta.publishedAt){ done(); toast("文档已保存", "fs"); finishCloseReqDoc(); return; }
+        /* 草稿：先保存已成功，再发布；发布失败就留在弹窗，正文已落库不会丢 */
+        reqDocSetPublished(true).then(function(ok){ done(); if(ok) finishCloseReqDoc(); });
       });
     });
   }
@@ -6191,7 +6413,8 @@ function populateReqDocSelect(keep){
       if(e.target.closest(".menu-item")) UI.closeAllPops();
     });
   }
-  if($("reqDocPublish")) $("reqDocPublish").addEventListener("click", toggleReqDocPublish);
+  if($("reqDocPublish")) $("reqDocPublish").addEventListener("click", function(){ reqDocSetPublished(true); });
+  if($("reqDocUnpublish")) $("reqDocUnpublish").addEventListener("click", function(){ reqDocSetPublished(false); });
   if($("reqDocShare")) $("reqDocShare").addEventListener("click", openReqDocShare);
   if($("reqDocShareCopy")) $("reqDocShareCopy").addEventListener("click", reqDocCopyShare);
   if($("reqDocShareRevoke")) $("reqDocShareRevoke").addEventListener("click", reqDocRevokeShare);
@@ -6315,6 +6538,15 @@ function populateReqDocSelect(keep){
     rdaHideBubble();
   });
   if($("reqDocCommentInput")){
+    reqDocCommentMention = createMentionPicker($("reqDocCommentInput"), {
+      canOpen: function(){ return !roleReadOnly() && !!editingDocId; },
+      excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+      loadMembers: function(){
+        var docId = editingDocId;
+        if(!docId) return Promise.reject(new Error("未打开文档"));
+        return API.get("/api/req-docs/" + encodeURIComponent(docId) + "/mention-candidates");
+      }
+    });
     $("reqDocCommentInput").addEventListener("keydown", function(e){
       if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ submitReqDocComment(); }
     });

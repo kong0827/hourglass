@@ -38,6 +38,16 @@
     ORDER BY COALESCE(sort_order, 0), created_at, id
   </select>
 
+  <!-- 用例详情回显：只取当前用户可见的分组，个人 / 指定成员分组不泄露给无关成员 -->
+  <select id="selectVisibleSetIdsByCase" resultType="string">
+    SELECT DISTINCT s.id
+    FROM case_set s
+    JOIN case_set_item i ON i.set_id = s.id AND i.case_id = #{caseId} AND i.workspace_id = s.workspace_id
+    WHERE s.workspace_id = #{workspaceId}
+      AND (s.visibility = 'team' OR s.owner_user_id = #{viewerId}
+           OR EXISTS (SELECT 1 FROM case_set_member m WHERE m.set_id = s.id AND m.user_id = #{viewerId}))
+  </select>
+
   <select id="countChildren" resultType="int">
     SELECT COUNT(*) FROM case_set
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND parent_id = #{parentId}

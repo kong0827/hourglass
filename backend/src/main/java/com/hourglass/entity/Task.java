@@ -62,6 +62,15 @@ public class Task {
     private String publishSource;
     @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     private String publishedReleaseId;
+    /** 历史迁移数据的「已发布」人工标记；只来自 task_publication_judgement 生效记录，不作为生产发布证据。 */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private Boolean manualPublished = Boolean.FALSE;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private LocalDate manualPublishedAt;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private String manualJudgeName;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private String manualJudgeReason;
     /** 非表字段：详情查询按当前身份计算，客户端不能通过普通保存授予发布权限。 */
     private Boolean canPublish = Boolean.FALSE;
     private Boolean canUnpublish = Boolean.FALSE;

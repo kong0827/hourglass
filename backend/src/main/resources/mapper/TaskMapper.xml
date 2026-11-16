@@ -357,6 +357,8 @@
         )
       </if>
       <if test="blocked"> AND t.is_blocked = 1 </if>
+      <if test="pubState == 'published'"> AND <include refid="taskPublishedExists"/> </if>
+      <if test="pubState == 'unpublished'"> AND NOT <include refid="taskPublishedExists"/> </if>
       <if test="due != null">
         <choose>
           <when test="due == 'over'">AND t.board_column &lt;&gt; 'done' AND t.due_date &lt; #{today}
@@ -834,6 +836,18 @@
       AND t.owner_user_id IS NULL
       AND t.workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
   </update>
+  <!-- 发布态口径：成功生产发布记录（回滚过也算发布过）或历史迁移的人工标记；
+       人工标记只补录已发生的发布事实，不参与需求交付派生与版本统计。 -->
+  <sql id="taskPublishedExists">
+    (EXISTS (SELECT 1 FROM version_release_item ri
+             JOIN version_release vr ON vr.id = ri.release_id AND vr.workspace_id = ri.workspace_id
+             WHERE ri.workspace_id = t.workspace_id AND ri.task_id = t.id
+               AND vr.environment = 'production' AND vr.result = 'success'
+               AND ri.disposition IN ('published', 'rolled_back'))
+     OR EXISTS (SELECT 1 FROM task_publication_judgement tj
+                WHERE tj.workspace_id = t.workspace_id AND tj.task_id = t.id AND tj.revoked_at IS NULL))
+  </sql>
+
   <!-- ==================== 甘特图（V1.4 SQL 区间分页） ==================== -->
   <!-- 口径与 TaskService.match() 对齐；区间用生成列 gantt_start/gantt_end（见 sql/16） -->
   <sql id="ganttWhere">
@@ -991,6 +1005,12 @@
     </if>
     <if test="query.blocked">
       AND t.is_blocked = 1
+    </if>
+    <if test="query.pubState == 'published'">
+      AND <include refid="taskPublishedExists"/>
+    </if>
+    <if test="query.pubState == 'unpublished'">
+      AND NOT <include refid="taskPublishedExists"/>
     </if>
     <if test="query.noDue">
       AND t.due_date IS NULL

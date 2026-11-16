@@ -46,7 +46,8 @@ class TaskCommandDeliveryScopeTest {
             mock(TimeLogService.class), locks, permissions);
     private final ReleaseMapper records = mock(ReleaseMapper.class);
     private final TaskPublicationService publications = spy(new TaskPublicationService(tasks, records,
-            mock(TaskLogMapper.class), locks, permissions, new com.fasterxml.jackson.databind.ObjectMapper()));
+            mock(TaskLogMapper.class), locks, permissions, new com.fasterxml.jackson.databind.ObjectMapper(),
+            mock(com.hourglass.mapper.TaskPublicationJudgementMapper.class)));
     private final Map<String, List<String>> persistedBindings = new HashMap<String, List<String>>();
     private Task old;
     private Demand demand;

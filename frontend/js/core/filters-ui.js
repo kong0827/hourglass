@@ -106,6 +106,12 @@ function completionLabel(v){
   for(var i = 0; i < COMPLETION_OPTIONS.length; i++) if(COMPLETION_OPTIONS[i][0] === (v || "")) return COMPLETION_OPTIONS[i][1];
   return "全部";
 }
+/* 发布态：已发布 = 成功生产发布记录或人工历史标记（回滚过也算发布过） */
+var PUB_OPTIONS = [["", "全部"], ["published", "已发布"], ["unpublished", "未发布"]];
+function pubStateLabel(v){
+  for(var i = 0; i < PUB_OPTIONS.length; i++) if(PUB_OPTIONS[i][0] === (v || "")) return PUB_OPTIONS[i][1];
+  return "全部";
+}
 function itemVal(o){ return o.id !== undefined ? o.id : o.name; }
 /* 项目 / 模块：与其它维度一样带计数，「未指定」作为空值项保留在末位 */
 function reqItems(meta){
@@ -204,6 +210,17 @@ function renderCompletionChip(){
     '<button class="chip-x" type="button" data-clear-dim="completion" title="清除完成情况筛选" aria-label="清除完成情况筛选">' +
     icon("close", 12) + '</button></span>';
   $("fgCompletion").hidden = false;
+}
+function renderPubStateChip(){
+  var box = $("chipsPubState");
+  if(!box) return;
+  if(!state.pubState){ box.innerHTML = ""; $("fgPubState").hidden = true; return; }
+  box.innerHTML = '<span class="chip chip-split" aria-pressed="true">' +
+    '<button class="chip-main" type="button" data-edit-dim="pubState" title="修改发布态筛选">发布态：' +
+    esc(pubStateLabel(state.pubState)) + '</button>' +
+    '<button class="chip-x" type="button" data-clear-dim="pubState" title="清除发布态筛选" aria-label="清除发布态筛选">' +
+    icon("close", 12) + '</button></span>';
+  $("fgPubState").hidden = false;
 }
 function renderReqsChip(){
   chipsReqs.innerHTML = "";
@@ -451,6 +468,7 @@ var MF_DIMS = [
   { key:"due", title:"截止日期", icon:"calendar" },
   { key:"start", title:"开始日期", icon:"calendar" },
   { key:"completion", title:"完成情况", icon:"checkCircle" },
+  { key:"pubState", title:"发布态", icon:"checkCircle" },
   { key:"blocked", title:"其他", icon:"filterOff" }
 ];
 var mfDim = "cats", mfQ = "", mfValQ = "", mfMeta = null;
@@ -462,6 +480,7 @@ function mfSelectedCount(key){
   if(key === "due") return (state.noDue ? 1 : 0) + ((state.dueFrom || state.dueTo) ? 1 : 0);
   if(key === "start") return (state.startFrom || state.startTo) ? 1 : 0;
   if(key === "completion") return state.completion ? 1 : 0;
+  if(key === "pubState") return state.pubState ? 1 : 0;
   if(key === "blocked") return state.blocked ? 1 : 0;
   return (state[key] || []).length;
 }
@@ -494,6 +513,7 @@ function mfDimHasQuery(key, q){
   if(key === "due") return "截止无截止".indexOf(q) !== -1;
   if(key === "start") return "开始".indexOf(q) !== -1;
   if(key === "completion") return "全部未完成已完成".indexOf(q) !== -1;
+  if(key === "pubState") return "发布态已发布未发布人工".indexOf(q) !== -1;
   if(key === "blocked") return "阻塞其他".indexOf(q) !== -1;
   var items = mfItems(key);
   for(var i = 0; i < items.length; i++) if(mfHit(items[i], q)) return true;
@@ -525,8 +545,8 @@ function mfValuesHTML(key){
   var def = mfDef(key);
   if(!def) return '<p class="mf-empty">没有匹配的筛选条件</p>';
   var n = mfSelectedCount(key);
-  var items = (key === "due" || key === "start" || key === "completion" || key === "blocked") ? [] : mfItems(key);
-  var hint = key === "completion" ? "单选" : (key === "blocked" ? "开关" : (key === "due" || key === "start" ? "区间" : "多选 · " + items.length + " 个"));
+  var items = (key === "due" || key === "start" || key === "completion" || key === "pubState" || key === "blocked") ? [] : mfItems(key);
+  var hint = key === "completion" || key === "pubState" ? "单选" : (key === "blocked" ? "开关" : (key === "due" || key === "start" ? "区间" : "多选 · " + items.length + " 个"));
   var head = '<div class="mf-vals-head"><span class="mf-vt">' + def.title + '</span>' +
     '<span class="mf-vh">' + hint + '</span>' +
     (n ? '<button class="mf-clear" type="button" data-mf-clear="' + key + '">清空</button>' : "") + '</div>';
@@ -538,6 +558,15 @@ function mfValuesHTML(key){
         '" aria-pressed="' + on + '"><span class="mf-ck" aria-hidden="true">' + (on ? icon("check", 12) : "") + '</span>' +
         '<span class="mf-opt-name">' + o[1] + '</span></button>';
     }).join("") + '</div>';
+  }
+  if(key === "pubState"){
+    return head + '<div class="mf-opts">' + PUB_OPTIONS.map(function(o){
+      var on = (state.pubState || "") === o[0];
+      return '<button class="mf-opt" type="button" data-mf-opt="pubState" data-mf-val="' + o[0] + '" data-pubstate="' + o[0] +
+        '" aria-pressed="' + on + '"><span class="mf-ck" aria-hidden="true">' + (on ? icon("check", 12) : "") + '</span>' +
+        '<span class="mf-opt-name">' + o[1] + '</span></button>';
+    }).join("") + '</div>' +
+      '<p class="foot-note mf-hint">已发布 = 成功生产发布记录，或人工补录的历史发布事实；回滚过也算发布过。</p>';
   }
   if(key === "blocked"){
     return head + '<div class="mf-opts"><button class="mf-opt" type="button" data-mf-opt="blocked" data-mf-val="1" data-blocked-filter aria-pressed="' +
@@ -708,6 +737,8 @@ function clearMfDim(key){
     state.startFrom = null; state.startTo = null;
   }else if(key === "completion"){
     state.completion = "";
+  }else if(key === "pubState"){
+    state.pubState = null;
   }else if(key === "blocked"){
     state.blocked = false;
   }else{
@@ -859,6 +890,7 @@ function renderFilterChips(){
   }
   renderColumnsChips();
   renderCompletionChip();
+  renderPubStateChip();
   renderDateChip();
   renderBlockedChip();
   renderQueryChip();
@@ -871,7 +903,7 @@ function renderFilterChips(){
   }
   updateFilterActions();
   var sig = [state.owners, state.testOwners, state.pris, state.types, state.versions, state.columns, state.completion,
-    state.cats, state.tags, state.reqs, state.blocked, state.q,
+    state.pubState, state.cats, state.tags, state.reqs, state.blocked, state.q,
     state.noDue, state.dueFrom, state.dueTo, state.startFrom, state.startTo].join("|");
   if(sig !== lastActiveSig){
     lastActiveSig = sig;
@@ -930,7 +962,7 @@ function saveViewState(){
         owners: state.owners.slice(), testOwners: state.testOwners.slice(), pris: state.pris.slice(),
         cats: state.cats.slice(), reqs: state.reqs.slice(),
         tags: state.tags.slice(), types: state.types.slice(), versions: state.versions.slice(),
-        columns: state.columns.slice(), completion: state.completion,
+        columns: state.columns.slice(), completion: state.completion, pubState: state.pubState,
         due: state.due, focus: state.focus, blocked: state.blocked, doneScope: state.doneScope,
         noDue: state.noDue, dueFrom: state.dueFrom, dueTo: state.dueTo,
         startFrom: state.startFrom, startTo: state.startTo
@@ -957,6 +989,8 @@ function restoreViewState(){
     });
     var newCompletion = f.completion || "";
     if(newCompletion !== state.completion){ state.completion = newCompletion; changed = true; }
+    var newPubState = (f.pubState === "published" || f.pubState === "unpublished") ? f.pubState : null;
+    if(newPubState !== state.pubState){ state.pubState = newPubState; changed = true; }
     var newDue = f.due || null;
     if(newDue !== state.due){ state.due = newDue; changed = true; }
     var newFocus = !!f.focus;
@@ -1123,6 +1157,7 @@ function clearFilters(opts){
   state.q = ""; state.owners = []; state.testOwners = []; state.pris = []; state.cats = [];
   if(!keepReqs) state.reqs = [];
   state.tags = []; state.types = []; state.versions = []; state.columns = []; state.completion = "";
+  state.pubState = null;
   state.due = null; state.focus = false; state.blocked = false;
   state.noDue = false; state.dueFrom = null; state.dueTo = null;
   state.startFrom = null; state.startTo = null;
@@ -1200,6 +1235,12 @@ function handleFilterClick(e){
   var comp = e.target.closest("[data-completion]");
   if(comp){
     state.completion = comp.dataset.completion || "";
+    reloadFilteredViews();
+    return;
+  }
+  var pub = e.target.closest("[data-pubstate]");
+  if(pub){
+    state.pubState = pub.dataset.pubstate || null;
     reloadFilteredViews();
     return;
   }
@@ -1358,6 +1399,7 @@ function parseViewParams(p){
     owners: owners, testOwners: testOwners, pris: pris, cats: cats, reqs: reqs, tags: tags, types: types, versions: versions,
     columns: columns,
     completion: p.completion === "open" || p.completion === "done" ? p.completion : "",
+    pubState: p.pubState === "published" || p.pubState === "unpublished" ? p.pubState : null,
     due: (p.due === "over" || p.due === "today" || p.due === "soon") ? p.due : null,
     noDue: p.noDue === true,
     dueFrom: dueFrom, dueTo: dueTo, startFrom: startFrom, startTo: startTo,
@@ -1400,6 +1442,7 @@ function applyView(v){
   state.q = f.q; state.owners = f.owners; state.testOwners = f.testOwners; state.pris = f.pris; state.cats = pruneUnknownCats(f.cats);
   state.reqs = f.reqs; state.tags = f.tags; state.types = f.types; state.versions = f.versions;
   state.columns = f.columns; state.completion = f.completion;
+  state.pubState = f.pubState || null;
   state.due = f.due; state.focus = f.focus;
   state.noDue = f.noDue;
   state.dueFrom = f.dueFrom || null; state.dueTo = f.dueTo || null;
@@ -1542,8 +1585,10 @@ function updateMobFilterSummary(){
   var startRange = dateRangeText(state.startFrom, state.startTo);
   if(startRange) bits.push("开始 " + startRange);
   if(state.blocked) bits.push("仅看阻塞");
+  if(state.pubState) bits.push(pubStateLabel(state.pubState));
   var n = selectedFilterCount() - (state.q ? 1 : 0) - (state.focus ? 1 : 0)
     - (state.due ? 1 : 0) - (state.blocked ? 1 : 0) - (state.noDue ? 1 : 0)
+    - (state.pubState ? 1 : 0)
     - ((state.dueFrom || state.dueTo) ? 1 : 0) - ((state.startFrom || state.startTo) ? 1 : 0);
   if(n > 0) bits.push(n + " 项筛选");
   var text = bits.length ? (mobFilterLabel() + " · " + bits.join(" · ")) : (mobFilterLabel() + " · 全部");

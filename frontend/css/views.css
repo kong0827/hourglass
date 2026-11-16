@@ -1132,12 +1132,13 @@ body.proj-reordering{cursor:grabbing;}
 .comment-item .ci-file:hover{border-color:var(--primary-border);color:var(--primary-fg);}
 .comment-item .ci-file .cf-name{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .comment-item .ci-file .cf-size{color:var(--text-3);font-variant-numeric:tabular-nums;}
-.comment-mention{
-  position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:20;padding:4px;
-  max-height:220px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-sm);box-shadow:var(--shadow-md);
+/* @ 候选浮层：挂在 body 上并用 fixed 定位，避免被抽屉 / 侧栏的滚动容器裁剪 */
+.mention-pop{
+  position:fixed;z-index:150;padding:4px;overflow-y:auto;overscroll-behavior:contain;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  box-shadow:var(--shadow-md);
 }
-.comment-mention[hidden]{display:none;}
+.mention-pop[hidden]{display:none;}
 .cm-item{
   display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:var(--r-xs);
   background:transparent;color:var(--text);font-size:13px;text-align:left;cursor:pointer;
@@ -1146,7 +1147,7 @@ body.proj-reordering{cursor:grabbing;}
 .cm-item .cm-user{font-size:11.5px;color:var(--text-3);flex:0 0 auto;}
 .cm-item:hover,.cm-item.on{background:var(--primary-soft);}
 .cm-empty{padding:9px 10px;font-size:12.5px;color:var(--text-3);text-align:center;user-select:none;}
-.cm-empty[data-cm-retry]{color:var(--primary-fg);cursor:pointer;}
+.cm-empty[data-mp-retry]{color:var(--primary-fg);cursor:pointer;}
 
 /* ===================== 阻塞 / 卡点字段（N-4） ===================== */
 .blocked-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
@@ -1488,8 +1489,13 @@ body.proj-reordering{cursor:grabbing;}
 .reqdoc-cat .rr-rename:hover{color:var(--text);background:var(--surface-active);}
 /* 分组内暂无文档/分类时的占位（可写范围提示右击新建） */
 .reqdoc-cat-empty{padding:14px;text-align:center;font-size:12px;color:var(--text-3);border-top:1px solid var(--border);}
-/* 发布按钮：已发布时弱化为“收回发布” */
-#reqDocPublish.is-published{color:var(--warning-fg);}
+/* 已发布徽标：发布后按钮换成它，让「已保存 ≠ 已发布」一眼可见（收回发布在「更多」菜单） */
+.reqdoc-pub-chip{
+  display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;white-space:nowrap;
+  border:1px solid var(--success-border);border-radius:var(--r-xs);
+  background:var(--success-soft);color:var(--success-fg);font-size:12.5px;font-weight:600;
+}
+.reqdoc-pub-chip svg{width:14px;height:14px;}
 
 /* 编辑页：独立成页，无边框书写区（像笔记应用那样，不要方框） */
 .reqdoc-editpage{max-width:1480px;margin:0 auto;width:100%;padding:14px var(--content-pad) 0;cursor:text;}
@@ -1813,7 +1819,8 @@ body.proj-reordering{cursor:grabbing;}
 /* 宽屏阅读：收起左树，正文独占整栏（无正文可读时不生效，见 applyDocWideState） */
 .reqdoc-split.wide{grid-template-columns:minmax(0,1fr);}
 .reqdoc-split.wide .reqdoc-split-tree{display:none;}
-.reqdoc-split-tree{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:6px;max-height:calc(100vh - 170px);overflow:auto;}
+.reqdoc-split-tree{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:6px;max-height:calc(100vh - 170px);overflow:auto;
+  position:sticky;top:12px;overscroll-behavior:contain;}
 .rs-proj{display:flex;flex-direction:column;}
 .rs-proj-head{display:flex;align-items:center;gap:6px;width:100%;padding:7px 8px;border:none;background:transparent;border-radius:var(--r-xs);cursor:pointer;font-family:inherit;text-align:left;}
 .rs-proj-head:hover{background:var(--surface-hover);}
@@ -2145,8 +2152,17 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .nd-sec-no{display:inline-flex;align-items:center;justify-content:center;flex:none;width:18px;height:18px;border-radius:50%;background:var(--surface-sunken);color:var(--text-2);font-size:11px;font-weight:650;}
 .nd-title{height:42px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:15px;font-weight:550;color:var(--text);}
 .nd-title:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+.nd-title.invalid{border-color:var(--danger);box-shadow:0 0 0 3px var(--danger-soft);}
+.nd-subline{display:flex;align-items:center;gap:8px;margin-top:-4px;min-height:16px;}
+.nd-subline .counter{margin-left:auto;}
+.nd-ctx .sub-only{vertical-align:-3px;}
+.nd-ctx{margin:-4px 0 0;font-size:11.5px;line-height:16px;color:var(--text-3);}
+.nd-note{margin:0;font-size:11.5px;line-height:1.5;color:var(--text-3);}
 .nd-sec-hint{margin:0;font-size:11.5px;line-height:1.5;color:var(--text-3);}
 .nd-loc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:0 14px;align-items:start;}
+.nd-cat-row{display:flex;gap:6px;align-items:center;}
+.nd-cat-row select{flex:1 1 auto;min-width:0;}
+.nd-cat-row .btn{flex:none;height:34px;}
 .nd-path{margin:0;min-height:18px;font-size:12px;line-height:1.5;color:var(--text-3);}
 .nd-path b{font-weight:550;color:var(--text-2);}
 .nd-path i{margin:0 6px;font-style:normal;color:var(--border-strong);}
@@ -4472,6 +4488,8 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .cf-subline{display:flex;align-items:flex-start;gap:12px;}
 .cf-subline .cf-help{flex:1 1 auto;}
 .cf-count{flex:none;font-size:11px;line-height:18px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.cf-ctx .cf-only{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-pill);background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-weight:500;}
+.cf-kbd{display:inline-flex;align-items:center;height:16px;padding:0 4px;margin:0 2px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;background:var(--surface);font:500 10.5px/1 var(--font-mono);color:var(--text-2);}
 .cf-rowlabel{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .cf-link{border:0;background:none;padding:0 2px;border-radius:4px;font:inherit;font-size:12px;font-weight:500;line-height:22px;color:var(--primary-fg);cursor:pointer;}
 .cf-link:hover{text-decoration:underline;}
@@ -4498,6 +4516,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .cf-nest-val{flex:1 1 auto;min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:30px;}
 .cf-nest #cModule{width:auto;min-width:170px;max-width:280px;height:30px;padding:0 30px 0 10px;font-size:12.5px;}
 .cf-nest .cf-task-val{display:block;flex:1 1 100%;padding-left:0;}
+.cf-pathline{flex:1 1 100%;margin-top:-2px;}
+.cf-pathline b{font-weight:500;color:var(--text-2);}
+.cf-modnote{flex:1 1 100%;margin-top:-4px;}
 .cf-tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;font-size:11px;font-weight:500;background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);}
 .cf-tag.ok{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
 .cf-tag.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}

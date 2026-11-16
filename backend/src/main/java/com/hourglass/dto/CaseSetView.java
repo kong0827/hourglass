@@ -35,4 +35,6 @@ public class CaseSetView {
     /** 子树去重成员数（含自身与全部子分组；多归属分组只在本子树内去重） */
     private int subtreeCount;
     private boolean editable;
+    /** 按用例筛列表时：该用例是否已在这个分组内（其他场景为 false） */
+    private boolean inCase;
 }

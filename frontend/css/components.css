@@ -1040,6 +1040,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .head-txt{flex:1 1 auto;min-width:0;}
 .head-txt h2{flex:none;font-size:16px;font-weight:650;line-height:1.3;letter-spacing:-.01em;}
 .head-sub{font-size:11.5px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 头部「只有 X 必填」胶囊：先给底线，弱化在长句里被忽略 */
+.sub-only{display:inline-flex;align-items:center;height:17px;padding:0 6px;margin-left:2px;border-radius:var(--r-pill);
+  background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-weight:500;vertical-align:-2px;}
 .head-tools{flex:0 0 auto;display:flex;align-items:center;gap:7px;}
 .head-more-wrap{position:relative;}
 .head-more-wrap .menu{left:auto;right:0;top:calc(100% + 6px);min-width:190px;}
@@ -1058,6 +1061,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .title-foot{display:flex;align-items:center;gap:10px;min-height:17px;margin-top:2px;}
 .title-foot .err{flex:1 1 auto;display:none;font-size:11px;color:var(--danger-fg);line-height:1.5;}
 .title-wrap.invalid .title-foot .err{display:block;}
+.title-kbd{display:inline-flex;align-items:center;gap:2px;font-size:10.5px;color:var(--text-3);white-space:nowrap;}
+.kbd{display:inline-flex;align-items:center;height:16px;padding:0 4px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;background:var(--surface);font:500 10.5px/1 var(--font-mono);color:var(--text-2);}
+.task-errsum{margin-bottom:11px;}
 .counter{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;margin-left:auto;}
 .counter.near{color:var(--danger-fg);font-weight:650;}
 
@@ -1097,6 +1103,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .ctx-item{display:flex;flex-direction:column;gap:5px;min-width:0;}
 .ctx-item-wide{grid-column:1/-1;}
 .ctx-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:650;letter-spacing:.04em;color:var(--primary-fg);}
+.ctx-path{margin:0;font-size:11px;line-height:16px;color:var(--text-2);}
+.ctx-path b{font-weight:600;color:var(--text);}
+.ctx-note{margin:0;font-size:10.5px;line-height:15px;color:var(--text-3);}
 .ctx select{height:34px;padding:0 32px 0 10px;background-color:var(--surface);font-size:13px;}
 .auto{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:var(--success-fg);line-height:1;}
 .auto::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--success);}
@@ -2073,6 +2082,9 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .wi-meta-card [data-fact-jump="version"] .rf-k{background:var(--plum-soft);color:var(--plum-fg);}
 /* 文档入口与需求概览同色（信息蓝），区别于中性的附件 */
 .wi-meta-card [data-meta="docs"] .rf-k{background:var(--info-soft);color:var(--info-fg);}
+/* 阻塞：未阻塞时保持中性，只有真的被阻塞才染警示色 */
+.wi-meta-card .rf-block.is-blocked .rf-k{background:var(--warning-soft);color:var(--warning-fg);}
+.wi-meta-card .rf-block.is-blocked .rf-v{color:var(--warning-fg);font-weight:700;}
 .wi-facts .rf-meta-ico{display:inline-flex;flex:0 0 auto;color:inherit;}
 .wi-facts .rf-meta-ico svg{width:12px;height:12px;}
 /* 类型图标跟随标签块的绿色，形状仍区分故事/缺陷/史诗 */
@@ -2196,6 +2208,24 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .assoc-edit:focus-visible{outline:2px solid var(--primary);outline-offset:1px;opacity:1;}
 .assoc-edit svg{width:13px;height:13px;}
 @media (hover:none){.assoc-edit{opacity:1;}}
+/* 生产发布一行：值是跳转按钮，右侧人工标记入口单独命中，避免按钮嵌套 */
+.read-evidence dd.ev-publication{display:flex;align-items:center;gap:8px;overflow:visible;white-space:normal;}
+.read-evidence dd.ev-publication .ev-link{flex:0 1 auto;min-width:0;cursor:pointer;color:var(--primary-fg);border-radius:var(--r-xs);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;padding:0;font-size:12.5px;
+  transition:color var(--dur-fast) var(--ease-out);}
+.read-evidence dd.ev-publication .ev-link:hover{color:var(--primary);text-decoration:underline;text-underline-offset:2px;}
+.read-evidence dd.ev-publication .ev-link:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.read-evidence dd.ev-publication .ev-actions{display:inline-flex;gap:8px;flex:0 0 auto;}
+.read-evidence dd.ev-publication .ev-actions .link-btn{padding:0;font-size:12px;background:none;border:0;color:var(--primary-fg);cursor:pointer;}
+.read-evidence dd.ev-publication .ev-actions .link-btn:hover{color:var(--primary);text-decoration:underline;text-underline-offset:2px;}
+.read-evidence dd.ev-publication .ev-actions .link-btn:focus-visible{outline:2px solid var(--primary);outline-offset:1px;border-radius:var(--r-xs);}
+/* 人工标记历史：与正式发布记录同区展示，撤销项弱化但保留 */
+.pub-manual-head{margin:14px 0 6px;}
+.pub-logs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;}
+.pub-logs li{display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px;line-height:18px;color:var(--text-2);}
+.pub-logs li.is-revoked{opacity:.72;}
+.pub-logs .pub-log-ts{color:var(--text-3);white-space:nowrap;}
+.pub-logs .pub-log-note{color:var(--text-2);}
 /* 就地编辑浮层：复用 search-picker 骨架，宽度与人员浮层一致 */
 .assoc-picker{width:344px;display:flex;flex-direction:column;}
 .assoc-picker .search-picker-results{flex:1 1 auto;min-height:0;max-height:min(360px,60vh);overflow-y:auto;padding:6px;scrollbar-width:thin;}
@@ -2254,6 +2284,12 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 /* 与交付带同构：淡紫底 + 同强度描边，紫色只留给阶段胶囊/节点/进度线 */
 .read-card.test-card{border-color:color-mix(in srgb,var(--plum) 16%,var(--border));padding:11px 13px;
   background:color-mix(in srgb,var(--plum) 3%,var(--surface));}
+/* 读态阻塞卡：只在被阻塞时出现，不占常规工作项的信息位 */
+.read-card.read-blocked{border-color:var(--warning-border);padding:11px 13px;background:var(--warning-soft);}
+.read-card.read-blocked .read-card-head{margin-bottom:6px;}
+.read-card.read-blocked .read-card-head h3{color:var(--warning-fg);}
+.read-blocked-reason{margin:0;font-size:12.5px;line-height:1.6;color:var(--text);word-break:break-word;white-space:pre-wrap;}
+.read-card.read-blocked .foot-note{margin-top:5px;}
 .read-card.test-card .read-card-head{margin-bottom:8px;}
 .test-head-actions{margin-left:auto;display:flex;align-items:center;gap:10px;}
 .tf-hist-toggle{display:inline-flex;align-items:center;gap:5px;color:var(--text-3);}
@@ -2441,10 +2477,57 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .case-detail-tabs button.on{color:var(--text);border-bottom-color:var(--primary);font-weight:600;}
 .case-detail-tabs .cnt{margin-left:2px;font-size:11px;font-weight:500;color:var(--text-3);}
 .case-detail-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px 20px 24px;display:flex;flex-direction:column;gap:14px;}
-.case-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
-.case-fact{background:var(--surface);padding:9px 11px;display:flex;flex-direction:column;gap:3px;min-width:0;}
-.case-fact .k{font-size:11px;color:var(--text-3);}
-.case-fact .v{font-size:12.5px;color:var(--text);overflow-wrap:anywhere;}
+/* 关键信息小卡：只放优先级 / 执行人 / 最近执行；模块、需求、分组进下面的整宽归属区 */
+.case-keyrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.case-kcard{display:flex;flex-direction:column;gap:4px;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);}
+.case-kcard.is-edit{cursor:pointer;background:var(--surface);position:relative;}
+.case-kcard.is-edit:hover{border-color:var(--primary-border);background:var(--surface-hover);}
+.case-kcard.is-edit:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.case-kcard .kk{display:flex;align-items:center;font-size:11px;color:var(--text-3);}
+.case-kcard .kv{font-size:13px;font-weight:600;color:var(--text);overflow-wrap:anywhere;}
+.case-kcard .kv .muted{font-weight:400;}
+.case-kcard .case-seg{flex-wrap:wrap;}
+.case-kv-sub{margin-left:5px;font-size:11px;font-weight:400;color:var(--text-3);}
+/* 追溯 / 归类：标题在卡片外，卡片内一行一个维度，整宽展示路径与 chips */
+.case-sec{display:flex;flex-direction:column;gap:6px;}
+.case-sec-head{display:flex;align-items:center;gap:8px;padding:0 2px;min-height:20px;}
+.case-sec-head h4{margin:0;font-size:12px;font-weight:600;color:var(--text-2);}
+.case-sec-head .sub{font-size:11px;color:var(--text-3);}
+.case-sec-head .tag{margin-left:auto;font-size:11px;color:var(--text-3);}
+.case-sec-note{margin:0;padding:0 2px;font-size:11.5px;line-height:17px;color:var(--text-3);}
+.case-sec-note b{font-weight:600;color:var(--text-2);}
+.case-affil{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;}
+.case-affil-row{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:center;gap:10px;min-height:38px;padding:6px 12px;}
+.case-affil-row + .case-affil-row{border-top:1px solid var(--border);}
+.case-affil-row .ak{display:flex;align-items:center;white-space:nowrap;font-size:11.5px;color:var(--text-3);}
+.case-affil-row .av{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0;font-size:12.5px;line-height:19px;color:var(--text);}
+.case-affil-row .av b{font-weight:600;}
+.case-affil-row.is-edit{cursor:pointer;transition:background var(--dur-fast) var(--ease-out);}
+.case-affil-row.is-edit:hover{background:var(--surface-hover);}
+.case-affil-row.is-edit:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.case-affil-row.is-edit:hover .case-pencil{opacity:1;color:var(--primary-fg);}
+.case-affil-row.is-ro{background:var(--surface-sunken);}
+.case-affil-row.is-ro .av{color:var(--text-2);}
+.case-affil-row .case-select{height:30px;}
+.case-dtag{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;padding:1px 6px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:10.5px;color:var(--text-3);white-space:nowrap;}
+.case-ro-note{font-size:11.5px;color:var(--text-3);}
+.case-path-sep{color:var(--text-3);}
+.case-setchip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface-sunken);font-size:12px;color:var(--text-2);}
+.case-setchip .sh{font-size:10px;color:var(--text-3);}
+.case-affil-link{padding:0;border:0;background:none;color:var(--primary-fg);font:inherit;font-size:12px;cursor:pointer;}
+.case-affil-link:hover{text-decoration:underline;text-underline-offset:2px;}
+.case-empty-v{font-size:12px;color:var(--text-3);}
+/* 验证工作项：chips 带完成点；编辑态每项就地移除，末尾给挂载入口 */
+.case-witem{display:inline-flex;align-items:center;gap:6px;max-width:100%;height:26px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);font:inherit;font-size:12px;color:var(--text-2);}
+button.case-witem{cursor:pointer;}
+button.case-witem:hover{border-color:var(--primary-border);color:var(--text);}
+.case-witem .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.case-witem .x{display:inline-grid;place-items:center;width:16px;height:16px;margin:0 -3px 0 1px;padding:0;border:0;border-radius:var(--r-xs);background:none;color:var(--text-3);cursor:pointer;}
+.case-witem .x:hover{background:var(--surface-hover);color:var(--danger-fg);}
+.case-wadd{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 8px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:none;font:inherit;font-size:12px;color:var(--primary-fg);cursor:pointer;}
+.case-wadd:hover{background:var(--primary-soft);border-color:var(--primary-border);}
+.case-wdot{flex:0 0 auto;width:6px;height:6px;border-radius:50%;background:var(--border-strong);}
+.case-wdot.done{background:var(--success-fg);}
 .case-read-block{border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;background:var(--surface);}
 .case-read-block h4{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:8px;}
 .case-read-block h4 .btn{margin-left:auto;}
@@ -2456,20 +2539,15 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .case-last-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
 .case-assoc{display:flex;flex-wrap:wrap;gap:6px;}
 .case-empty{padding:22px 12px;text-align:center;font-size:12.5px;color:var(--text-3);}
-/* 事实区与字段说明：可改的格子给朝向与悬停，派生值只读并标注来源 */
-.case-fact-edit{cursor:pointer;position:relative;transition:background var(--dur-fast) var(--ease-out);}
-.case-fact-edit:hover{background:var(--surface-hover);}
-.case-fact-edit:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+/* 字段说明：可改的格子给朝向与悬停，派生值只读并标注来源 */
 .case-pencil{display:inline-flex;align-items:center;margin-left:6px;color:var(--text-3);opacity:.5;transition:opacity var(--dur-fast) var(--ease-out);vertical-align:-2px;}
-.case-fact-edit:hover .case-pencil{opacity:1;color:var(--primary-fg);}
+.case-kcard.is-edit:hover .case-pencil{opacity:1;color:var(--primary-fg);}
 .case-derived{margin-left:6px;padding:1px 5px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);font-size:10px;font-weight:500;letter-spacing:.02em;vertical-align:1px;}
 .case-hint-btn{width:15px;height:15px;margin-left:5px;padding:0;border:1px solid var(--border);border-radius:50%;background:var(--surface);color:var(--text-3);font-size:10px;font-weight:600;line-height:13px;text-align:center;cursor:pointer;vertical-align:-2px;}
 .case-hint-btn:hover{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft);}
 .case-hint-pop{padding:12px 14px;}
 .case-hint-pop .menu-title{margin:0 0 6px;}
 .case-hint-text{margin:0;font-size:12px;line-height:18px;color:var(--text-2);}
-.case-state-hint{display:flex;align-items:flex-start;gap:8px;margin:0;padding:9px 12px;border:1px solid var(--warning-border);border-radius:var(--r-md);background:var(--warning-soft);font-size:12px;line-height:18px;color:var(--text-2);}
-.case-state-hint svg{flex:0 0 auto;margin-top:2px;color:var(--warning-fg);}
 .case-link-btn{padding:0;border:0;background:none;color:var(--primary-fg);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
 .case-demand-title{overflow-wrap:anywhere;}
 .case-jump{display:inline-flex;align-items:center;margin-left:4px;padding:2px;border:0;border-radius:var(--r-xs);background:none;color:var(--text-3);cursor:pointer;vertical-align:-2px;}
@@ -2525,7 +2603,6 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .case-seg button:hover{color:var(--text);}
 .case-seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.08);}
 .case-select{width:100%;height:28px;padding:0 6px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);color:var(--text);font-size:12.5px;}
-.case-module-v{display:block;}
 .case-select:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
 .case-detail-foot{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface);}
 .case-detail-foot .grow{flex:1 1 auto;}
@@ -2548,11 +2625,16 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   .case-detail-head{padding:12px;}
   .case-detail-tabs{padding:0 8px;}
   .case-detail-body{padding:12px 12px 20px;}
-  .case-facts{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .case-keyrow{grid-template-columns:repeat(2,minmax(0,1fr));}
   .case-steps-head,.case-step-row{grid-template-columns:24px minmax(0,1fr) minmax(0,1fr) 44px;}
   .case-steps-grid.is-ro .case-steps-head,.case-steps-grid.is-ro .case-step-row{grid-template-columns:24px minmax(0,1fr) minmax(0,1fr);}
   .case-step-acts{flex-wrap:wrap;justify-content:center;padding:6px 2px;}
   .case-detail-foot{padding:10px 12px;}
+}
+@media (max-width:640px){
+  .case-keyrow{grid-template-columns:1fr;}
+  .case-affil-row{grid-template-columns:1fr;gap:3px;padding:8px 12px;}
+  .case-sec-head .tag{display:none;}
 }
 
 /* 需求详情：与工作项共用右侧抽屉外壳（审计 2026-11-13 P1） */

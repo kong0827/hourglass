@@ -57,7 +57,8 @@ class TaskQueryServiceReleasePermissionTest {
     private final com.hourglass.mapper.ReleaseMapper records = mock(com.hourglass.mapper.ReleaseMapper.class);
     private final TaskPublicationService publications = new TaskPublicationService(tasks, records,
             mock(TaskLogMapper.class), mock(DeliveryScopeLock.class), permissions,
-            new com.fasterxml.jackson.databind.ObjectMapper());
+            new com.fasterxml.jackson.databind.ObjectMapper(),
+            mock(com.hourglass.mapper.TaskPublicationJudgementMapper.class));
 
     @BeforeEach
     void readableTask() {

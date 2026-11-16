@@ -52,6 +52,7 @@ public class MyTasksController {
                                                   @RequestParam(required = false) String versions,
                                                   @RequestParam(required = false) String columns,
                                                   @RequestParam(required = false) String completion,
+                                                  @RequestParam(required = false) String pubState,
                                                   @RequestParam(required = false) Boolean blocked,
                                                   @RequestParam(required = false) String due,
                                                   @RequestParam(required = false) Boolean focus,
@@ -71,7 +72,7 @@ public class MyTasksController {
         /* IA-3：接入与看板相同的筛选参数（负责人维度天然固定为"我"） */
         com.hourglass.dto.BoardQuery query = com.hourglass.dto.BoardQuery.from(
                 q, null, pris, cats, reqs, tags, types, versions, due, focus, blocked, noDue, null, null, null,
-                null, columns, completion);
+                null, columns, completion, pubState);
         query.setTestOwners(splitCsv(testOwners));
         query.setDueFrom(date(dueFrom));
         query.setDueTo(date(dueTo));

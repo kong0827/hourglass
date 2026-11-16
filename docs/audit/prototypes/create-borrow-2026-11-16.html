@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>新建工作项 / 新建文档 · 借鉴用例新建 · 前后对比</title>
+</head>
+<body>
+<!-- FRAGMENT START -->
+<div class="hg-wrap" id="wrap">
+<style>
+  .hg-wrap{
+    --bg-app:#F7F8FA; --surface:#FFF; --surface-sunken:#F2F4F7; --surface-line:#FBFCFD;
+    --border:#E4E7EC; --border-soft:#EEF0F3; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085; --text-4:#98A2B3;
+    --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318; --danger-border:#FDA29B;
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+    --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+    --ring:0 0 0 3px rgba(37,99,235,.16);
+    --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:"SFMono-Regular",Consolas,Menlo,monospace;
+    font-family:var(--font);color:var(--text);background:#E9ECF1;font-size:13px;line-height:20px;
+    padding:22px 24px 40px;overflow:auto;
+  }
+  .hg-wrap[data-theme="dark"]{
+    --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D; --surface-line:#182029;
+    --border:#25303D; --border-soft:#1F2934; --border-strong:#334153;
+    --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798; --text-4:#5B6675;
+    --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+    --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+    --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+    --danger:#F97066; --danger-soft:#2B1615; --danger-fg:#FDA29B; --danger-border:#5C2A26;
+    --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+    --shadow-xl:0 24px 48px -12px rgba(0,0,0,.6);
+    --ring:0 0 0 3px rgba(76,141,255,.28);
+    background:#0B0F15;
+  }
+  .hg-wrap *{box-sizing:border-box;margin:0;padding:0}
+  .hg-wrap [hidden]{display:none!important}
+  .hg-wrap button,.hg-wrap input,.hg-wrap select,.hg-wrap textarea{font-family:inherit}
+
+  /* 顶部工具条 */
+  .topbar{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+  .tb-title b{font-size:15px;font-weight:600}
+  .tb-title span{font-size:11.5px;color:var(--text-3);margin-left:8px}
+  .tb-tools{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .switch{display:flex;gap:2px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:9px}
+  .switch button{height:30px;padding:0 12px;border:0;border-radius:7px;background:transparent;font-size:12.5px;font-weight:500;color:var(--text-2);cursor:pointer}
+  .switch button[aria-selected="true"]{background:var(--primary);color:#FFF;font-weight:600}
+  .switch button:focus-visible{outline:none;box-shadow:var(--ring)}
+  .tool-btn{height:36px;padding:0 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:500;cursor:pointer}
+  .tool-btn:hover{background:var(--surface-sunken);color:var(--text)}
+  .tool-btn:focus-visible{outline:none;box-shadow:var(--ring)}
+
+  /* 应用骨架 */
+  .frame{width:100%;max-width:1392px}
+  .app{position:relative;height:1200px;border-radius:16px;overflow:hidden;background:var(--bg-app);border:1px solid var(--border);box-shadow:var(--shadow-md);display:flex}
+  .rail{width:64px;background:#111827;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:6px;flex:none}
+  .hg-wrap[data-theme="dark"] .rail{background:#080C12;border-right:1px solid var(--border)}
+  .rail .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#2563EB,#7A5AF8);margin-bottom:12px}
+  .rail .ri{width:40px;height:34px;border-radius:9px;display:grid;place-items:center;color:#98A2B3;font-size:10.5px}
+  .rail .ri.on{background:#1F2937;color:#FFF}
+  .gside{width:168px;background:var(--surface);border-right:1px solid var(--border);padding:16px 10px;flex:none}
+  .gside .g-title{font-size:11px;letter-spacing:.06em;color:var(--text-3);font-weight:600;margin:8px 8px 6px}
+  .gside .nav{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;border-radius:8px;color:var(--text-2);font-size:12.5px}
+  .gside .nav.on{background:var(--primary-soft);color:var(--primary-hover);font-weight:600}
+  .gside .dot{width:6px;height:6px;border-radius:2px;background:currentColor;opacity:.45}
+  .list{flex:1;min-width:0;padding:16px 18px;overflow:hidden}
+  .list-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .list-head b{font-size:15px}
+  .list-head small{color:var(--text-3);margin-left:2px}
+  .list-head .spacer{flex:1}
+  .mini-btn{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);font-size:12px;font-weight:500;color:var(--text-2);cursor:pointer}
+  .mini-btn.add{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft)}
+  .board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;max-width:860px}
+  .bcol{background:var(--surface-sunken);border:1px solid var(--border-soft);border-radius:10px;padding:8px}
+  .bcol h5{font-size:11px;color:var(--text-3);font-weight:600;margin:2px 4px 8px}
+  .wcard{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 9px;margin-bottom:7px}
+  .wcard .t{font-size:11.5px;font-weight:500;line-height:16px}
+  .wcard .m{font-size:10.5px;color:var(--text-3);margin-top:4px}
+  .dlist{max-width:760px;display:flex;flex-direction:column;gap:7px}
+  .drow{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:12px}
+  .drow .ic{width:22px;height:22px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-size:10px;font-weight:600}
+  .drow .meta{margin-left:auto;color:var(--text-3);font-size:10.5px}
+
+  .scrim{position:absolute;inset:0;background:rgba(16,24,40,.32)}
+  .hg-wrap[data-theme="dark"] .scrim{background:rgba(0,0,0,.55)}
+  .app.closed .scrim{opacity:0;pointer-events:none}
+  .app.closed .drawer{transform:translateX(102%)}
+  .drawer{position:absolute;top:0;right:0;bottom:0;width:1080px;max-width:100%;background:var(--surface);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;transition:transform .24s cubic-bezier(.2,.8,.2,1)}
+
+  /* 抽屉 */
+  .dw-head{padding:14px 24px 11px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;flex:none}
+  .dw-head h2{font-size:18px;line-height:26px;font-weight:600;letter-spacing:-.01em}
+  .dw-ctx{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:5px;font-size:12px;line-height:18px;color:var(--text-3)}
+  .dw-ctx .sep{color:var(--border-strong)}
+  .dw-ctx b{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums}
+  .only{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-pill);background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-weight:500}
+  .xref{margin-left:auto;width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:var(--text-3);cursor:pointer;font-size:18px;line-height:1;display:grid;place-items:center;flex:none}
+  .xref:hover{background:var(--surface-sunken);color:var(--text)}
+  .dw-body{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:22px;padding:18px 24px 20px}
+  .dw-main{min-width:0;display:flex;flex-direction:column;gap:14px}
+  .dw-aside{min-width:0}
+  .title-row{display:flex;align-items:center;gap:8px}
+  .title-inp{flex:1;min-width:0;height:44px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:15px;font-weight:500;color:var(--text)}
+  .title-inp:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring)}
+  .title-inp.bad{border-color:var(--danger);box-shadow:0 0 0 3px rgba(240,68,56,.12)}
+  .req-chip{flex:none;height:22px;padding:0 7px;border-radius:var(--r-pill);background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);font-size:11px;font-weight:500;display:inline-flex;align-items:center}
+  .subline{display:flex;align-items:center;gap:10px;margin-top:5px;font-size:11.5px;line-height:18px;color:var(--text-3)}
+  .subline .grow{flex:1}
+  .kbd{display:inline-flex;align-items:center;height:16px;padding:0 4px;margin:0 2px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;background:var(--surface);font:500 10.5px/1 var(--mono);color:var(--text-2)}
+  .count{font-variant-numeric:tabular-nums;color:var(--text-3)}
+
+  .classify{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-line)}
+  .classify .lbl{font-size:11.5px;color:var(--text-3);font-weight:500}
+  .seg{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--border);border-radius:7px;background:var(--surface-sunken)}
+  .seg button{height:24px;padding:0 8px;border:0;border-radius:5px;background:transparent;font-size:11.5px;font-weight:500;color:var(--text-2);cursor:pointer}
+  .seg button.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.1)}
+  .seg button.on[data-pri="P0"]{color:#B42318}
+  .seg button.on[data-pri="P1"]{color:#B54708}
+  .classify .divider{width:1px;height:20px;background:var(--border)}
+
+  .ctxbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--primary-soft)}
+  .ctx-item{min-width:0}
+  .ctx-item .lbl{display:block;font-size:11px;line-height:16px;font-weight:500;color:var(--text-3);margin-bottom:4px}
+  .ctx-item select{width:100%;height:30px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);font-size:12px;color:var(--text)}
+  .ctx-item.wide{grid-column:1/-1}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chipx{height:26px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:11.5px;color:var(--text-2);cursor:pointer}
+  .chipx.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);font-weight:500}
+  .pathline{flex:1 1 100%;margin-top:2px;font-size:11.5px;line-height:18px;color:var(--text-3)}
+  .pathline b{font-weight:500;color:var(--text-2)}
+  .modnote{flex:1 1 100%;margin-top:-2px;font-size:11px;line-height:17px;color:var(--text-3)}
+
+  .card{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:12px}
+  .card-h{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .card-h h3{font-size:13px;font-weight:600}
+  .card-h .note{margin-left:auto;font-size:11px;color:var(--text-3);font-weight:400}
+  .field{min-width:0}
+  .field + .field{margin-top:10px}
+  .field label{display:block;font-size:11.5px;font-weight:500;color:var(--text-3);margin-bottom:5px}
+  .field input[type=text],.field input[type=date],.field input[type=number],.field select,.field textarea{width:100%;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);font-size:12.5px;color:var(--text)}
+  .field input[type=text],.field input[type=date],.field input[type=number],.field select{height:32px;padding:0 9px}
+  .field textarea{min-height:96px;padding:9px 10px;resize:vertical;line-height:20px}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring)}
+  .field .hint{display:block;margin-top:4px;font-size:10.5px;line-height:16px;color:var(--text-3)}
+  .form2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .quick{display:flex;align-items:center;gap:5px;margin-top:6px;flex-wrap:wrap}
+  .quick .hint-inline{font-size:10.5px;color:var(--text-3);margin-right:2px}
+  .quick .q{height:22px;padding:0 7px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:10.5px;color:var(--text-2);cursor:pointer}
+
+  .more{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+  .more summary{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;list-style:none;cursor:pointer;font-size:12.5px;font-weight:500}
+  .more summary::-webkit-details-marker{display:none}
+  .more summary .caret{color:var(--text-3);transition:transform .16s}
+  .more[open] summary .caret{transform:rotate(180deg)}
+  .more-sum{margin-left:auto;font-size:11px;font-weight:400;color:var(--text-3)}
+  .more-sum b{font-weight:500;color:var(--text-2)}
+  .more-body{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:2px 12px 12px}
+
+  .aside-card{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);padding:11px 12px}
+  .aside-card + .aside-card{margin-top:10px}
+  .aside-card b{display:block;font-size:12px;margin-bottom:4px}
+  .aside-card p{font-size:11px;line-height:17px;color:var(--text-3)}
+  .aside-card .mini-list{margin-top:7px;display:flex;flex-direction:column;gap:5px}
+  .aside-card .mini-list span{font-size:11px;color:var(--text-2)}
+  .aside-card .mini-list span::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--border-strong);margin-right:6px;vertical-align:1px}
+
+  .dw-foot{padding:11px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex:none;background:var(--surface)}
+  .foot-hint{font-size:11.5px;color:var(--text-3)}
+  .grow{flex:1}
+  .btn{height:34px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:12.5px;font-weight:500;cursor:pointer}
+  .btn:hover{background:var(--surface-sunken)}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--text-2)}
+  .btn.ghost:hover{background:var(--surface-sunken);color:var(--text)}
+  .btn.primary{border-color:var(--primary);background:var(--primary);color:#FFF}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn:focus-visible{outline:none;box-shadow:var(--ring)}
+
+  .errsum{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--danger-border);border-radius:var(--r-md);background:var(--danger-soft)}
+  .errsum .ei{flex:none;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#FFF;font:700 11px/18px var(--font);text-align:center}
+  .errsum b{display:block;font-size:12px;line-height:18px;color:var(--danger-fg)}
+  .errsum button{margin-top:2px;border:0;background:none;padding:0;font-size:11.5px;color:var(--danger-fg);text-decoration:underline;cursor:pointer}
+  .inline-err{display:none;margin-top:4px;font-size:11px;color:var(--danger-fg)}
+  .show-err .inline-err{display:block}
+
+  /* 文档弹窗 */
+  .modalwrap{position:absolute;inset:0;display:grid;place-items:center;padding:28px}
+  .app.closed .modalwrap{display:none}
+  .dlg{width:780px;max-width:100%;max-height:100%;background:var(--surface);border-radius:14px;box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden}
+  .dlg-head{padding:15px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
+  .dlg-head h2{font-size:17px;line-height:24px;font-weight:600}
+  .dlg-body{padding:16px 20px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+  .step{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px}
+  .step-no{width:26px;height:26px;border-radius:8px;background:var(--surface-sunken);color:var(--text-3);display:grid;place-items:center;font:600 11px/1 var(--mono)}
+  .step-h{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .step-h h3{font-size:13px;font-weight:600}
+  .step-h .meta{margin-left:auto;font-size:11px;color:var(--text-3)}
+  .step-body{padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-line)}
+  .name-inp{width:100%;height:42px;padding:0 11px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:14px;font-weight:500;color:var(--text)}
+  .name-inp:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring)}
+  .name-inp.bad{border-color:var(--danger)}
+  .loc3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .loc3 select{width:100%;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);font-size:12px}
+  .pathbox{display:flex;align-items:center;gap:5px;margin-top:8px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface-sunken);font-size:11.5px;color:var(--text-3)}
+  .pathbox b{font-weight:500;color:var(--text-2)}
+  .start-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .start-opt{border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:9px 10px;text-align:left;cursor:pointer}
+  .start-opt.on{border-color:var(--primary-border);background:var(--primary-soft)}
+  .start-opt b{display:block;font-size:12px;color:var(--text)}
+  .start-opt span{display:block;margin-top:2px;font-size:10.5px;line-height:15px;color:var(--text-3)}
+  .more-doc{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+  .more-doc summary{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;list-style:none;cursor:pointer;font-size:12.5px;font-weight:500}
+  .more-doc summary::-webkit-details-marker{display:none}
+  .more-doc .sum{margin-left:auto;font-size:11px;font-weight:400;color:var(--text-3)}
+  .more-doc .more-body{grid-template-columns:1fr 1fr}
+  .dlg-foot{padding:11px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .dlg-foot .foot-hint{font-size:11.5px;color:var(--text-3)}
+
+  /* 说明表 */
+  .docs{width:100%;max-width:1392px;margin-top:16px;display:flex;flex-direction:column;gap:12px}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-md)}
+  .panel h3{font-size:13.5px;font-weight:600;margin-bottom:9px}
+  .panel h3 .sub{font-size:11px;font-weight:400;color:var(--text-3);margin-left:6px}
+  .panel table{width:100%;border-collapse:collapse;font-size:11.5px;line-height:17px}
+  .panel th{text-align:left;font-weight:600;color:var(--text-2);background:var(--surface-sunken);padding:7px 9px;border-bottom:1px solid var(--border)}
+  .panel td{padding:7px 9px;border-bottom:1px solid var(--border-soft);color:var(--text-2);vertical-align:top}
+  .panel tr:last-child td{border-bottom:0}
+  .panel td b{color:var(--text);font-weight:600}
+  .tagx{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;font-size:10px;font-weight:600}
+  .tagx.yes{background:var(--success-soft);color:var(--success-fg)}
+  .tagx.no{background:var(--surface-sunken);color:var(--text-3)}
+  .tagx.eq{background:var(--primary-soft);color:var(--primary-fg)}
+  .panel .note{margin-top:8px;font-size:11px;color:var(--text-3)}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);padding:9px 14px;border-radius:9px;background:#101828;color:#FFF;font-size:12px;box-shadow:var(--shadow-xl);z-index:20;display:flex;align-items:center;gap:7px}
+  .toast::before{content:"";width:6px;height:6px;border-radius:50%;background:#75E0A7}
+  .hg-wrap[data-theme="dark"] .toast{background:#E7ECF3;color:#101828}
+</style>
+
+<div id="appRoot"></div>
+</div>
+<script>
+(function(){
+  var wrap = document.getElementById("wrap");
+  var MODULES = [
+    { id:"all", name:"未指定", parentId:"" },
+    { id:"sec", name:"权限与安全", parentId:"" },
+    { id:"auth", name:"认证", parentId:"sec" },
+    { id:"sso", name:"单点登录", parentId:"auth" }
+  ];
+  var TASK_MORE = { recur:"", remindWho:"owner", remindAt:"", blocked:false };
+  /* 上级目录随分类走：切换分类后旧上级不保留，避免路径出现空段 */
+  var DOC_PARENTS = {
+    "产品需求": ["需求说明", "无上级"],
+    "技术方案": ["概要设计", "无上级"],
+    "联调记录": ["外部接口", "无上级"]
+  };
+  var DOC = { name:"产业客户套保额度申请需求说明", type:"requirement", vis:"member", project:"产业客户套保服务平台", category:"产品需求", parent:"需求说明", start:"blank" };
+  var S = {
+    scene:"task", mode:"after", theme:"light", toast:"",
+    task:{ title:"回调幂等：重复通知只入账一次", type:"task", pri:"P2", project:"研发协同", owner:"孔祥劲", testOwner:"", col:"待处理", module:"auth", desc:"", tags:"", start:"", due:"2026-11-20", est:"4", milestone:false, more:Object.assign({},TASK_MORE), closed:false, err:false, focus:false, next:245 },
+    doc:Object.assign({}, DOC), docClosed:false, docErr:false, docFocus:false
+  };
+  var initial = new URLSearchParams(location.search);
+  if(initial.get("scene") === "doc") S.scene = "doc";
+  if(initial.get("theme") === "dark") S.theme = "dark";
+  if(initial.get("mode") === "before") S.mode = "before";
+
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+  function $(s, root){ return (root || document).querySelector(s); }
+  function after(){ return S.mode === "after"; }
+  function modulePath(id){
+    var by = {}; MODULES.forEach(function(m){ by[m.id] = m; });
+    var parts = [], cur = by[id], guard = 0;
+    while(cur && guard++ < 10 && cur.id !== "all"){ parts.unshift(cur.name); cur = cur.parentId ? by[cur.parentId] : null; }
+    return parts.join(" › ");
+  }
+  function moduleName(id){ var m = MODULES.filter(function(x){ return x.id === id; })[0]; return m ? m.name : "未指定"; }
+  function moreSet(){
+    var m = S.task.more, list = [];
+    if(m.recur) list.push("循环");
+    if(m.remindWho && m.remindWho !== "owner") list.push("提醒对象");
+    if(m.remindAt) list.push("提醒时间");
+    if(m.blocked) list.push("被阻塞");
+    return list;
+  }
+  function moreSummary(){
+    var list = moreSet();
+    if(!after()) return "· 未设置";
+    return list.length ? "已设置 " + list.length + " 项 · " + list.join("、") : "未设置 · 选填";
+  }
+  function toast(msg){ S.toast = msg; render(); setTimeout(function(){ if(S.toast === msg){ S.toast = ""; render(); } }, 2600); }
+
+  function topbar(){
+    return '<div class="topbar">'
+      + '<div class="tb-title"><b>新建工作项 / 新建文档 · 借鉴用例新建</b><span>2026-11-16 · 原型</span></div>'
+      + '<div class="tb-tools">'
+      +   '<div class="switch" role="tablist" aria-label="场景">'
+      +     '<button type="button" data-scene="task" aria-selected="' + (S.scene === "task") + '">新建工作项</button>'
+      +     '<button type="button" data-scene="doc" aria-selected="' + (S.scene === "doc") + '">新建文档</button>'
+      +   '</div>'
+      +   '<div class="switch" role="tablist" aria-label="版本">'
+      +     '<button type="button" data-mode="before" aria-selected="' + (S.mode === "before") + '">现状</button>'
+      +     '<button type="button" data-mode="after" aria-selected="' + (S.mode === "after") + '">新案</button>'
+      +   '</div>'
+      +   '<button class="tool-btn" type="button" data-act="theme">' + (S.theme === "dark" ? "浅色" : "深色") + '</button>'
+      + '</div></div>';
+  }
+
+  function shell(inner, appCls){
+    return '<div class="stage"><div class="frame"><div class="app ' + (appCls || "") + '">'
+      + '<aside class="rail"><div class="logo"></div><div class="ri">我的</div><div class="ri">项目</div><div class="ri on">工作</div><div class="ri">测试</div></aside>'
+      + '<aside class="gside"><div class="g-title">当前空间</div><div class="nav on"><span class="dot"></span>研发协同</div><div class="nav"><span class="dot"></span>产业客户</div><div class="g-title">工作</div><div class="nav"><span class="dot"></span>我的工作</div><div class="nav"><span class="dot"></span>工作项</div><div class="nav"><span class="dot"></span>需求池</div></aside>'
+      + inner + '</div></div></div>';
+  }
+
+  function taskStage(){
+    var t = S.task;
+    var cards = [
+      ["权限校验中间件重构","研发协同 · P1"],
+      ["登录页错误码统一","研发协同 · P2"],
+      ["单点登出回调 500","研发协同 · P0"],
+      ["审计日志导出","研发协同 · P2"]
+    ];
+    var left = '<main class="list"><div class="list-head"><b>工作项</b><small>研发协同</small><span class="spacer"></span>'
+      + '<button class="mini-btn add" type="button" data-act="reopen-task">＋ 新建工作项</button></div>'
+      + '<div class="board"><div class="bcol"><h5>待处理</h5>'
+      + cards.slice(0,2).map(function(c){ return '<div class="wcard"><div class="t">' + c[0] + '</div><div class="m">' + c[1] + '</div></div>'; }).join("")
+      + '</div><div class="bcol"><h5>进行中</h5>'
+      + cards.slice(2).map(function(c){ return '<div class="wcard"><div class="t">' + c[0] + '</div><div class="m">' + c[1] + '</div></div>'; }).join("")
+      + '</div><div class="bcol"><h5>已完成</h5><div class="wcard"><div class="t">登录限流策略</div><div class="m">研发协同 · 昨天</div></div></div></div></main>';
+    return shell(left + '<div class="scrim" data-act="close-task"></div>' + taskDrawer(), t.closed ? "closed" : "");
+  }
+
+  function taskDrawer(){
+    var t = S.task, a = after();
+    var module = MODULES.filter(function(m){ return m.id === t.module; })[0] || MODULES[0];
+    var path = t.module && t.module !== "all" ? modulePath(t.module) : "";
+    var ctx = a ? '<p class="dw-ctx"><span>' + esc(t.project) + '</span><span class="sep">·</span><span>保存后自动编号</span><span class="sep">·</span><span class="only">只有标题必填</span></p>' : "";
+    var err = a && t.err ? '<div class="errsum" role="alert"><span class="ei">!</span><div><b>还有 1 处需要处理</b><button type="button" data-act="focus-title">工作项标题：请填写工作项标题</button></div></div>' : "";
+    var typeBtns = [["task","任务"],["story","用户故事"],["bug","缺陷"],["epic","史诗"]].map(function(x){
+      return '<button type="button" data-type="' + x[0] + '" class="' + (t.type === x[0] ? "on" : "") + '" aria-pressed="' + (t.type === x[0]) + '">' + x[1] + '</button>';
+    }).join("");
+    var priBtns = ["P0","P1","P2","P3"].map(function(p){
+      return '<button type="button" data-pri="' + p + '" class="' + (t.pri === p ? "on" : "") + '">' + p + '</button>';
+    }).join("");
+    var chips = MODULES.map(function(m){
+      return '<button type="button" class="chipx ' + (t.module === m.id ? "on" : "") + '" data-module="' + m.id + '">' + esc(m.name) + '</button>';
+    }).join("");
+    var set = moreSet();
+    return '<section class="drawer" id="taskDrawer">'
+      + '<header class="dw-head"><div style="min-width:0"><h2>新建工作项</h2>' + ctx + '</div><button class="xref" type="button" data-act="close-task" aria-label="关闭">×</button></header>'
+      + '<div class="dw-body"><div class="dw-main">'
+      +   err
+      +   '<div class="title-wrap' + (a && t.err ? ' show-err' : '') + '">'
+      +     '<div class="title-row"><input id="tTitle" class="title-inp' + (a && t.err ? ' bad' : '') + '" type="text" maxlength="60" value="' + esc(t.title) + '" placeholder="一句话说清要做什么，例如：重构权限校验中间件" autocomplete="off" /><span class="req-chip">必填</span></div>'
+      +     '<div class="subline"><span>' + (a ? '<span class="kbd">Enter</span> 保存' : '') + '</span><span class="grow"></span><span class="count">' + t.title.length + '/60</span></div>'
+      +     '<span class="inline-err">请填写工作项标题</span>'
+      +   '</div>'
+      +   '<div class="classify"><span class="lbl">类型</span><div class="seg" role="group" aria-label="工作项类型">' + typeBtns + '</div><span class="divider"></span><span class="lbl">优先级</span><div class="seg" role="group" aria-label="优先级">' + priBtns + '</div>' + (a ? '<span class="lbl" style="margin-left:auto;color:var(--text-3)">默认 P2 · 可改</span>' : '') + '</div>'
+      +   '<div class="ctxbar">'
+      +     '<div class="ctx-item"><span class="lbl">所属项目</span><select id="tProject"><option>研发协同</option><option>产业客户套保服务平台</option></select></div>'
+      +     '<div class="ctx-item"><span class="lbl">负责人</span><select id="tOwner"><option>' + esc(t.owner) + '</option><option>我</option><option>待领取</option></select></div>'
+      +     '<div class="ctx-item"><span class="lbl">测试负责人</span><select id="tTestOwner"><option value="">待领取</option><option>吴俊</option></select></div>'
+      +     '<div class="ctx-item"><span class="lbl">新建到</span><select id="tCol"><option>待处理</option><option>进行中</option><option>已完成</option></select></div>'
+      +     '<div class="ctx-item wide"><span class="lbl">模块</span><div class="chips">' + chips + '</div>'
+      +       (a && path ? '<div class="pathline">位置：<b>' + esc(t.project + " › " + path) + '</b></div>' : '')
+      +       (a ? '<div class="modnote">模块是项目内的目录，只影响归类；选它不会改变所属项目。</div>' : '')
+      +     '</div>'
+      +   '</div>'
+      +   '<section class="card"><div class="card-h"><h3>内容</h3><span class="note">' + (a ? '描述与标签均为选填' : '只有标题必填') + '</span></div>'
+      +     '<div class="field"><label for="tDesc">描述</label><textarea id="tDesc" placeholder="背景、验收口径、参考链接…">' + esc(t.desc) + '</textarea></div>'
+      +     '<div class="field"><label for="tTags">标签</label><input id="tTags" type="text" maxlength="60" value="' + esc(t.tags) + '" placeholder="回车或逗号添加 · 最多 8 个" /></div>'
+      +   '</section>'
+      +   '<section class="card"><div class="card-h"><h3>计划</h3><span class="note">开始留空则只在截止日出现</span></div>'
+      +     '<div class="form2"><div class="field"><label for="tStart">开始日期</label><input id="tStart" type="date" value="' + esc(t.start) + '" /></div><div class="field"><label for="tDue">截止日期</label><input id="tDue" type="date" value="' + esc(t.due) + '" /></div></div>'
+      +     '<div class="quick"><span class="hint-inline">开始快捷</span><button class="q" type="button" data-act="noop">今天</button><button class="q" type="button" data-act="noop">清空</button><span class="hint-inline" style="margin-left:8px">截止快捷</span><button class="q" type="button" data-act="noop">今天</button><button class="q" type="button" data-act="noop">明天</button><button class="q" type="button" data-act="noop">本周五</button></div>'
+      +     '<div class="form2"><div class="field"><label for="tEst">预计耗时（小时，可选）</label><input id="tEst" type="text" value="' + esc(t.est) + '" placeholder="例如 4" /></div><div class="field"><label>节点</label><div style="display:flex;align-items:center;gap:7px;height:32px"><input id="tMs" type="checkbox" ' + (t.milestone ? "checked" : "") + ' /><span style="font-size:12px">里程碑（单日节点）</span></div><span class="hint">勾选后甘特图用菱形展示，不占工期</span></div></div>'
+      +   '</section>'
+      +   '<details class="more" id="taskMore"' + (set.length ? " open" : "") + '><summary><span>更多设置</span><span class="more-sum" id="moreSum">' + moreSummary() + '</span><span class="caret">⌄</span></summary>'
+      +     '<div class="more-body">'
+      +       '<div class="field"><label for="tRecur">循环</label><select id="tRecur"><option value="">不循环</option><option value="daily" ' + (t.more.recur === "daily" ? "selected" : "") + '>每天</option><option value="weekly" ' + (t.more.recur === "weekly" ? "selected" : "") + '>每周</option></select></div>'
+      +       '<div class="field"><label for="tRemindWho">提醒谁</label><select id="tRemindWho"><option value="owner">仅负责人</option><option value="owner+admin" ' + (t.more.remindWho === "owner+admin" ? "selected" : "") + '>负责人 + 空间主</option></select></div>'
+      +       '<div class="field"><label for="tRemindAt">提醒时间</label><input id="tRemindAt" type="text" value="' + esc(t.more.remindAt) + '" placeholder="选择日期与时间" /></div>'
+      +       '<div class="field"><label>阻塞 / 卡点</label><div style="display:flex;align-items:center;gap:7px;height:32px"><input id="tBlocked" type="checkbox" ' + (t.more.blocked ? "checked" : "") + ' /><span style="font-size:12px">被阻塞</span></div></div>'
+      +     '</div></details>'
+      + '</div>'
+      + '<aside class="dw-aside">'
+      +   '<div class="aside-card"><b>新建后可继续补充</b><p>检查项、附件、工时、评论与操作时间线在详情里，不再占用创建流程。</p><div class="mini-list"><span>检查项与附件</span><span>计时与工时</span><span>评论与动态</span></div></div>'
+      +   '<div class="aside-card"><b>' + (a ? "保存后去哪" : "创建后去哪") + '</b><p>' + (a ? '保存后回到列表；需要补细节时再点开详情，或直接再建一条。' : '保存后回到列表，可拖动卡片调整状态与顺序。') + '</p></div>'
+      + '</aside></div>'
+      + '<footer class="dw-foot"><span class="foot-hint">' + (a ? '保存后可在详情继续补检查项、附件与评论' : '保存后可拖动卡片调整状态与顺序') + '</span><span class="grow"></span>'
+      +   '<button class="btn ghost" type="button" data-act="close-task">取消</button>'
+      +   (a ? '<button class="btn" type="button" data-act="save-again">保存并再建一条</button>' : '')
+      +   '<button class="btn primary" type="button" data-act="save-task">保存</button>'
+      + '</footer>'
+      + '</section>';
+  }
+
+  function docStage(){
+    var d = S.doc, a = after(), closed = S.docClosed;
+    var docs = [
+      ["产业客户套保额度申请需求说明","产品需求 · 11-14"],
+      ["额度占用与释放规则","产品需求 · 11-12"],
+      ["审批流状态机说明","技术方案 · 11-08"],
+      ["柜面开户接口联调记录","联调记录 · 11-05"]
+    ];
+    var list = '<main class="list"><div class="list-head"><b>需求文档</b><small>产业客户套保服务平台</small><span class="spacer"></span><button class="mini-btn add" type="button" data-act="reopen-doc">＋ 新建文档</button></div>'
+      + '<div class="dlist">' + docs.map(function(x){ return '<div class="drow"><span class="ic">文</span><span>' + x[0] + '</span><span class="meta">' + x[1] + '</span></div>'; }).join("") + '</div></main>';
+    var err = a && S.docErr ? '<div class="errsum" role="alert"><span class="ei">!</span><div><b>还有 1 处需要处理</b><button type="button" data-act="focus-doc-name">文档名称：请填写文档名称</button></div></div>' : "";
+    var ctx = a ? '<p class="dw-ctx"><span>产业客户套保服务平台</span><span class="sep">·</span><span>保存后进入编辑</span><span class="sep">·</span><span class="only">只有名称必填</span></p>' : "";
+    return shell(list + '<div class="scrim"></div>'
+      + '<div class="modalwrap"><div class="dlg" role="dialog" aria-modal="true" aria-label="新建文档">'
+      + '<header class="dlg-head"><div style="min-width:0"><h2>新建文档</h2>' + ctx + '</div><button class="xref" type="button" data-act="close-doc" aria-label="关闭">×</button></header>'
+      + '<div class="dlg-body">'
+      +   err
+      +   '<section class="step"><span class="step-no">01</span><div>'
+      +     '<div class="step-h"><h3>文档名称</h3><span class="meta">必填</span></div>'
+      +     '<div class="step-body"><input id="dName" class="name-inp' + (a && S.docErr ? ' bad' : '') + '" type="text" maxlength="80" value="' + esc(d.name) + '" placeholder="例如：产业客户套保额度申请需求说明" autocomplete="off" />'
+      +       '<div class="subline"><span>' + (a ? '<span class="kbd">Enter</span> 直接创建并进入编辑' : '') + '</span><span class="grow"></span><span class="count">' + d.name.length + ' / 80</span></div>'
+      +       '<span class="inline-err">请填写文档名称</span>'
+      +     '</div></div></section>'
+      +   '<section class="step"><span class="step-no">02</span><div>'
+      +     '<div class="step-h"><h3>存放位置</h3><span class="meta">决定归档目录</span></div>'
+      +     '<div class="step-body"><div class="loc3"><select id="dProject"><option>产业客户套保服务平台</option><option>空间级（不关联项目）</option></select><select id="dCategory">' + Object.keys(DOC_PARENTS).map(function(c){ return '<option' + (d.category === c ? ' selected' : '') + '>' + c + '</option>'; }).join("") + '</select><select id="dParent">' + (DOC_PARENTS[d.category] || ["无上级"]).map(function(p){ return '<option' + (d.parent === p ? ' selected' : '') + '>' + p + '</option>'; }).join("") + '</select></div>'
+      +       '<div class="pathbox">位置：<b id="docPath">' + esc(docPathText()) + '</b></div>'
+      +       (a ? '<span class="hint" style="margin-top:6px">分类只影响归档位置，不改变所属项目；项目决定谁能在文档里关联用例与工作项。</span>' : '')
+      +     '</div></div></section>'
+      +   '<section class="step"><span class="step-no">03</span><div>'
+      +     '<div class="step-h"><h3>从哪里开始</h3><span class="meta">之后都能改</span></div>'
+      +     '<div class="step-body"><div class="start-grid">'
+      +       '<button class="start-opt ' + (d.start === "blank" ? "on" : "") + '" type="button" data-start="blank"><b>空白文档</b><span>从零开始写正文</span></button>'
+      +       '<button class="start-opt ' + (d.start === "tpl" ? "on" : "") + '" type="button" data-start="tpl"><b>模板</b><span>按需求 / 技术方案模板开头</span></button>'
+      +       '<button class="start-opt ' + (d.start === "import" ? "on" : "") + '" type="button" data-start="import"><b>Word 导入</b><span>先预览，再决定保留哪些</span></button>'
+      +     '</div></div></div></section>'
+      +   '<details class="more-doc" open><summary><span>更多设置</span><span class="sum" id="docMoreSum">类型：需求文档 · 可见范围：成员</span><span class="caret">⌄</span></summary>'
+      +     '<div class="more-body"><div class="field"><label for="dType">文档类型</label><select id="dType">' + [["requirement","需求文档"],["tech","技术方案"],["joint","联调记录"]].map(function(x){ return '<option value="' + x[1] + '"' + (S.doc.type === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join("") + '</select></div>'
+      +     '<div class="field"><label for="dVis">可见范围</label><select id="dVis">' + [["成员可见","member"],["空间主与管理员","owner"],["仅自己","self"]].map(function(x){ return '<option' + (S.doc.vis === x[1] ? ' selected' : '') + '>' + x[0] + '</option>'; }).join("") + '</select></div></div></details>'
+      + '</div>'
+      + '<footer class="dlg-foot"><span class="foot-hint">' + (a ? '创建后进入编辑，可继续写正文、加附件、关联需求与用例' : '') + '</span><span class="grow"></span>'
+      +   '<button class="btn ghost" type="button" data-act="close-doc">取消</button>'
+      +   (a ? '<button class="btn" type="button" data-act="save-doc-only">仅创建</button>' : '')
+      +   '<button class="btn primary" type="button" data-act="save-doc">新建并编辑</button>'
+      + '</footer></div></div>', closed ? "closed" : "");
+  }
+
+  function tables(){
+    if(S.scene === "task") return taskTables();
+    return docTables();
+  }
+
+  function taskTables(){
+    return '<div class="docs">'
+      + '<div class="panel"><h3>借鉴清单 <span class="sub">从用例新建与文档创建里挑出适合工作项的部分</span></h3><table>'
+      + '<thead><tr><th style="width:92px">来源</th><th style="width:220px">做法</th><th style="width:220px">工作项现状</th><th style="width:250px">新案</th><th style="width:58px">结论</th><th>理由</th></tr></thead><tbody>'
+      + '<tr><td>用例新建</td><td>头部写明「只有标题必填」</td><td>提示藏在「内容」卡片头</td><td>提到头部上下文，卡片头改说「描述与标签均为选填」</td><td><span class="tagx yes">借</span></td><td>创建前先给底线，减少“还要填多少”的犹豫。</td></tr>'
+      + '<tr><td>用例新建</td><td>模块下回显「位置：项目 › 目录 › 子目录」</td><td>只有一排模块 chips，同名节点看不出层级</td><td>选中后在 chips 下补一行完整路径</td><td><span class="tagx yes">借</span></td><td>只加回显，不改 chips 的快速选择方式。</td></tr>'
+      + '<tr><td>用例新建</td><td>模块下补一句「选它不会改变所属项目」</td><td>无说明</td><td>同一句口径放在路径下</td><td><span class="tagx yes">借</span></td><td>工作项模块同样挂在项目下，歧义一致。</td></tr>'
+      + '<tr><td>用例新建</td><td>更多字段摘要显示「未填 / 已填 N 项」</td><td>固定「· 未设置」，不代表实际状态</td><td>未设置 / 已设置 N 项 · 循环、被阻塞</td><td><span class="tagx yes">借</span></td><td>收起也知道改过什么，不用展开确认。</td></tr>'
+      + '<tr><td>用例新建</td><td>「保存并再建一条」保留上下文</td><td>新建态只有「保存」，保存即关闭</td><td>加次按钮，保留项目 / 类型 / 优先级 / 模块 / 列</td><td><span class="tagx yes">借</span></td><td>批量录工作项时不用反复重选归属。</td></tr>'
+      + '<tr><td>用例新建</td><td>标题下提示「Enter 保存」</td><td>表单原生回车能提交，但页面没写</td><td>标题计数旁补快捷键提示</td><td><span class="tagx yes">借</span></td><td>只补可发现性，行为本来就是表单提交。</td></tr>'
+      + '<tr><td>用例新建</td><td>空标题时顶部汇总「还有 1 处需要处理」</td><td>只有标题下方红字</td><td>顶部汇总 + 行内红框，点击可定位</td><td><span class="tagx yes">借</span></td><td>长表单滚动后，行内错误容易被漏看。</td></tr>'
+      + '<tr><td>文档创建</td><td>名称回车直接创建</td><td>同上，隐式支持</td><td>沿用表单提交，补提示</td><td><span class="tagx eq">一致</span></td><td>不需要额外改行为。</td></tr>'
+      + '<tr><td>文档创建</td><td>名称 → 位置 → 起点三步</td><td>单页，字段按类型渐进</td><td>不拆步</td><td><span class="tagx no">不借</span></td><td>工作项字段有类型联动，拆步会多跳且难以回看。</td></tr>'
+      + '<tr><td>用例详情</td><td>「保存并编辑 / 进详情继续补」</td><td>保存后回列表，详情另点</td><td>保持回列表，只把“去哪补”写进脚注</td><td><span class="tagx no">不借</span></td><td>新建后最常做的是继续建或拖状态，不是立刻进详情。</td></tr>'
+      + '</tbody></table></div>'
+      + '<div class="panel"><h3>前后对比 <span class="sub">同一屏内看得见的变化</span></h3><table>'
+      + '<thead><tr><th style="width:110px">位置</th><th style="width:330px">现状</th><th style="width:360px">新案</th><th>用户收益</th></tr></thead><tbody>'
+      + '<tr><td><b>头部</b></td><td>只有「新建工作项」</td><td>项目 · 保存后自动编号 · 只有标题必填</td><td>先知道落在哪、编号怎么来</td></tr>'
+      + '<tr><td><b>标题</b></td><td>无快捷键提示</td><td>Enter 保存 + 计数</td><td>少一次鼠标移动</td></tr>'
+      + '<tr><td><b>模块</b></td><td>只有 chips</td><td>chips + 完整路径 + 不改变项目说明</td><td>同名目录不再选错</td></tr>'
+      + '<tr><td><b>更多设置</b></td><td>固定「· 未设置」</td><td>已设置 2 项 · 循环、被阻塞</td><td>收起也心里有数</td></tr>'
+      + '<tr><td><b>保存动作</b></td><td>取消 / 保存</td><td>取消 / 保存并再建一条 / 保存</td><td>连续录入不中断</td></tr>'
+      + '<tr><td><b>空标题</b></td><td>仅行内红字</td><td>顶部汇总 + 行内红框 + 定位</td><td>长表单不漏错</td></tr>'
+      + '</tbody></table></div>'
+      + '<div class="panel"><h3>落地清单 <span class="sub">待确认后实施，接口与数据模型不动</span></h3><table>'
+      + '<thead><tr><th style="width:170px">改动</th><th style="width:300px">位置</th><th style="width:70px">量级</th><th>说明</th></tr></thead><tbody>'
+      + '<tr><td><b>头部上下文</b></td><td>templates/task-drawer.js · 新建态渲染</td><td>8 行</td><td>项目取当前表单项目，“保存后自动编号”仅新建态。</td></tr>'
+      + '<tr><td><b>模块路径 + 说明</b></td><td>task-drawer.js 模块段渲染</td><td>10 行</td><td>复用项目模块树，无需新接口。</td></tr>'
+      + '<tr><td><b>更多设置摘要</b></td><td>task-drawer.js 摘要同步</td><td>6 行</td><td>先算已设置项，再统一文案。</td></tr>'
+      + '<tr><td><b>保存并再建一条</b></td><td>task-drawer.js 新建态提交</td><td>20 行</td><td>POST 已返回工作项；成功后清标题 / 描述 / 计划 / 更多。</td></tr>'
+      + '<tr><td><b>空标题汇总</b></td><td>task-drawer.js 校验</td><td>12 行</td><td>复用行内错误，新增顶部汇总与定位。</td></tr>'
+      + '</tbody></table><p class="note">原型只表达层级与交互，<b>未改生产代码、未提交</b>；默认优先级 P2 现状已一致，不列为改动。</p></div>'
+      + '</div>';
+  }
+
+  function docTables(){
+    return '<div class="docs">'
+      + '<div class="panel"><h3>借鉴清单 <span class="sub">文档三步布局保留，只补创建前后的信息</span></h3><table>'
+      + '<thead><tr><th style="width:92px">来源</th><th style="width:220px">做法</th><th style="width:220px">文档现状</th><th style="width:250px">新案</th><th style="width:58px">结论</th><th>理由</th></tr></thead><tbody>'
+      + '<tr><td>用例新建</td><td>头部写明「只有名称必填」</td><td>只有底部动作，没说明底线</td><td>头部补「空间/项目 · 保存后进入编辑 · 只有名称必填」</td><td><span class="tagx yes">借</span></td><td>三步布局容易被误以为每步都要填满。</td></tr>'
+      + '<tr><td>用例新建</td><td>标题下提示「Enter 保存」</td><td>已支持回车提交，但没写</td><td>名称下补「Enter 直接创建并进入编辑」</td><td><span class="tagx yes">借</span></td><td>只补可发现性，不改提交逻辑。</td></tr>'
+      + '<tr><td>用例新建</td><td>模块说明「只影响归类」</td><td>位置只回显路径</td><td>路径下补「分类只影响归档位置，不改变所属项目」</td><td><span class="tagx yes">借</span></td><td>分类与项目的关系最容易误解。</td></tr>'
+      + '<tr><td>用例新建</td><td>空标题顶部汇总</td><td>仅名称下方红字</td><td>顶部「还有 1 处需要处理」+ 定位</td><td><span class="tagx yes">借</span></td><td>弹窗不高，但能统一错误口径。</td></tr>'
+      + '<tr><td>用例新建</td><td>保存后去哪写清楚</td><td>只有按钮文字「新建并编辑」</td><td>脚注「创建后进入编辑，可继续…」</td><td><span class="tagx yes">借</span></td><td>把主按钮的后果提前说清。</td></tr>'
+      + '<tr><td>用例新建</td><td>保存并再建一条</td><td>只能进编辑</td><td>次按钮「仅创建」，留在列表</td><td><span class="tagx yes">借</span></td><td>批量建目录时不强制进编辑器。</td></tr>'
+      + '<tr><td>用例新建</td><td>更多字段摘要显示实际值</td><td>已显示「类型 · 可见范围」</td><td>保持</td><td><span class="tagx eq">一致</span></td><td>文档这块已经做对了。</td></tr>'
+      + '<tr><td>用例新建</td><td>更多字段默认收起</td><td>上轮已定为默认展开</td><td>不收起</td><td><span class="tagx no">不借</span></td><td>展开是有意为之，避免“看不见可见范围”。</td></tr>'
+      + '<tr><td>用例详情</td><td>右侧摘要卡</td><td>弹窗无侧栏</td><td>不加</td><td><span class="tagx no">不借</span></td><td>三步布局已占满横向，侧栏会压缩名称与位置。</td></tr>'
+      + '</tbody></table></div>'
+      + '<div class="panel"><h3>前后对比 <span class="sub">三步布局不变，只把“必填 / 回车 / 创建后”说清楚</span></h3><table>'
+      + '<thead><tr><th style="width:110px">位置</th><th style="width:330px">现状</th><th style="width:360px">新案</th><th>用户收益</th></tr></thead><tbody>'
+      + '<tr><td><b>头部</b></td><td>只有「新建文档」</td><td>项目 · 保存后进入编辑 · 只有名称必填</td><td>先知道底线与去向</td></tr>'
+      + '<tr><td><b>名称</b></td><td>计数 0 / 80</td><td>Enter 直接创建并进入编辑 + 计数</td><td>少点一次按钮</td></tr>'
+      + '<tr><td><b>位置</b></td><td>路径回显</td><td>路径 + 分类不改变所属项目</td><td>不再担心改分类会挪项目</td></tr>'
+      + '<tr><td><b>底部</b></td><td>取消 / 新建并编辑</td><td>提示 + 取消 / 仅创建 / 新建并编辑</td><td>批量建文档时不被强制进编辑器</td></tr>'
+      + '<tr><td><b>空名称</b></td><td>仅行内红字</td><td>顶部汇总 + 行内红框 + 定位</td><td>错误口径与用例一致</td></tr>'
+      + '</tbody></table></div>'
+      + '<div class="panel"><h3>落地清单 <span class="sub">待确认后实施，三步布局与接口不动</span></h3><table>'
+      + '<thead><tr><th style="width:170px">改动</th><th style="width:300px">位置</th><th style="width:70px">量级</th><th>说明</th></tr></thead><tbody>'
+      + '<tr><td><b>头部上下文</b></td><td>index.html #dlgNewReqDoc · sync 路径</td><td>6 行</td><td>空间级时显示「空间级」，项目时显示项目名。</td></tr>'
+      + '<tr><td><b>名称回车提示</b></td><td>index.html 名称步骤</td><td>2 行</td><td>提交逻辑已在，仅补提示。</td></tr>'
+      + '<tr><td><b>分类说明</b></td><td>位置步骤 #newReqDocPath 下</td><td>2 行</td><td>与用例模块同一句口径。</td></tr>'
+      + '<tr><td><b>仅创建</b></td><td>submitNewReqDoc(keepList)</td><td>12 行</td><td>创建成功后不进入编辑，留在列表。</td></tr>'
+      + '<tr><td><b>错误汇总</b></td><td>名称步骤 + 弹窗顶部</td><td>10 行</td><td>复用用例的展示结构。</td></tr>'
+      + '</tbody></table><p class="note">原型只表达层级与交互，<b>未改生产代码、未提交</b>；更多设置默认展开保持现状。</p></div>'
+      + '</div>';
+  }
+
+  function render(){
+    wrap.dataset.theme = S.theme;
+    var toastHTML = S.toast ? '<div class="toast" role="status">' + esc(S.toast) + '</div>' : "";
+    document.getElementById("appRoot").innerHTML = topbar()
+      + (S.scene === "task" ? taskStage() : docStage())
+      + tables() + toastHTML;
+    if(S.task.focus){ S.task.focus = false; var t = $("#tTitle"); if(t) t.focus(); }
+    if(S.docFocus){ S.docFocus = false; var d = $("#dName"); if(d) d.focus(); }
+  }
+
+  function saveTask(again){
+    var t = S.task;
+    if(!t.title.trim()){
+      t.err = true; t.focus = true; render();
+      return;
+    }
+    t.err = false;
+    var no = "WI-" + t.next;
+    t.next += 1;
+    if(again){
+      t.title = ""; t.desc = ""; t.tags = ""; t.start = ""; t.due = ""; t.est = ""; t.milestone = false;
+      t.more = Object.assign({}, TASK_MORE); t.focus = true;
+      render(); toast("已创建 " + no + "，接着写下一条");
+      return;
+    }
+    t.closed = true;
+    render(); toast("已创建 " + no);
+  }
+
+  function saveDoc(keepList){
+    var d = S.doc;
+    if(!d.name.trim()){
+      S.docErr = true; S.docFocus = true; render();
+      return;
+    }
+    S.docErr = false; S.docClosed = true;
+    var title = d.name;
+    render();
+    toast(keepList ? "已创建《" + title + "》，留在列表" : "已创建《" + title + "》，进入编辑");
+  }
+
+  function docMore(){
+    var typeLabel = { requirement:"需求文档", tech:"技术方案", joint:"联调记录" }[S.doc.type] || "需求文档";
+    var visLabel = S.doc.vis === "member" ? "成员" : (S.doc.vis === "owner" ? "空间主与管理员" : "仅自己");
+    var el = $("#docMoreSum");
+    if(el) el.textContent = "类型：" + typeLabel + " · 可见范围：" + visLabel;
+  }
+  function docPathText(){
+    var parts = [S.doc.project || "空间级", S.doc.category];
+    if(S.doc.parent && S.doc.parent !== "无上级") parts.push(S.doc.parent);
+    return parts.join(" › ");
+  }
+  function syncDocPath(){
+    var el = $("#docPath");
+    if(el) el.textContent = docPathText();
+  }
+  function syncMoreSummary(){
+    var el = $("#moreSum");
+    if(el) el.innerHTML = moreSummary().replace(/(\d+ 项)/, "<b>$1</b>");
+  }
+
+  wrap.addEventListener("click", function(e){
+    var scene = e.target.closest("[data-scene]");
+    if(scene){ S.scene = scene.getAttribute("data-scene"); S.docClosed = false; S.task.closed = false; S.docErr = false; S.task.err = false; render(); return; }
+    var mode = e.target.closest("[data-mode]");
+    if(mode){
+      S.mode = mode.getAttribute("data-mode");
+      S.task.closed = false; S.docClosed = false; S.task.err = false; S.docErr = false;
+      render(); return;
+    }
+    var mod = e.target.closest("[data-module]");
+    if(mod){
+      S.task.module = mod.getAttribute("data-module");
+      render(); return;
+    }
+    var type = e.target.closest("[data-type]");
+    if(type){
+      S.task.type = type.getAttribute("data-type");
+      render(); return;
+    }
+    var pri = e.target.closest("[data-pri]");
+    if(pri){
+      S.task.pri = pri.getAttribute("data-pri");
+      render(); return;
+    }
+    var start = e.target.closest("[data-start]");
+    if(start){ S.doc.start = start.getAttribute("data-start"); render(); return; }
+    var act = e.target.closest("[data-act]");
+    if(!act) return;
+    var a = act.getAttribute("data-act");
+    if(a === "theme"){ S.theme = S.theme === "dark" ? "light" : "dark"; render(); return; }
+    if(a === "close-task" || a === "reopen-task"){ S.task.closed = a === "close-task"; S.task.err = false; render(); return; }
+    if(a === "close-doc" || a === "reopen-doc"){ S.docClosed = a === "close-doc"; S.docErr = false; render(); return; }
+    if(a === "save-task"){ saveTask(false); return; }
+    if(a === "save-again"){ saveTask(true); return; }
+    if(a === "save-doc"){ saveDoc(false); return; }
+    if(a === "save-doc-only"){ saveDoc(true); return; }
+    if(a === "focus-title"){ S.task.focus = true; render(); return; }
+    if(a === "focus-doc-name"){ S.docFocus = true; render(); return; }
+  });
+
+  wrap.addEventListener("input", function(e){
+    if(e.target.id === "tTitle"){
+      S.task.title = e.target.value;
+      S.task.err = false;
+      var count = e.target.closest(".title-wrap").querySelector(".count");
+      if(count) count.textContent = S.task.title.length + "/60";
+      e.target.classList.remove("bad");
+      return;
+    }
+    if(e.target.id === "tDesc"){ S.task.desc = e.target.value; return; }
+    if(e.target.id === "tTags"){ S.task.tags = e.target.value; return; }
+    if(e.target.id === "tStart"){ S.task.start = e.target.value; return; }
+    if(e.target.id === "tDue"){ S.task.due = e.target.value; return; }
+    if(e.target.id === "tEst"){ S.task.est = e.target.value; return; }
+    if(e.target.id === "tRemindAt"){ S.task.more.remindAt = e.target.value; syncMoreSummary(); return; }
+    if(e.target.id === "dName"){
+      S.doc.name = e.target.value;
+      S.docErr = false;
+      var c = e.target.closest(".step-body").querySelector(".count");
+      if(c) c.textContent = S.doc.name.length + " / 80";
+      e.target.classList.remove("bad");
+    }
+  });
+
+  wrap.addEventListener("change", function(e){
+    var id = e.target.id;
+    if(id === "tRecur"){ S.task.more.recur = e.target.value; syncMoreSummary(); return; }
+    if(id === "tRemindWho"){ S.task.more.remindWho = e.target.value; syncMoreSummary(); return; }
+    if(id === "tBlocked"){ S.task.more.blocked = e.target.checked; syncMoreSummary(); return; }
+    if(id === "tMs"){ S.task.milestone = e.target.checked; return; }
+    if(id === "dCategory"){
+      S.doc.category = e.target.value;
+      S.doc.parent = (DOC_PARENTS[S.doc.category] || ["无上级"])[0];
+      render(); return;
+    }
+    if(id === "dProject" || id === "dParent"){
+      if(id === "dProject") S.doc.project = e.target.value;
+      if(id === "dParent") S.doc.parent = e.target.value;
+      syncDocPath(); return;
+    }
+    if(id === "dType"){ S.doc.type = { "需求文档":"requirement", "技术方案":"tech", "联调记录":"joint" }[e.target.value] || "requirement"; docMore(); return; }
+    if(id === "dVis"){ S.doc.vis = e.target.value === "成员可见" ? "member" : (e.target.value === "仅自己" ? "self" : "owner"); docMore(); return; }
+  });
+
+  wrap.addEventListener("keydown", function(e){
+    if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
+    if(e.target.id === "tTitle"){ e.preventDefault(); saveTask(false); return; }
+    if(e.target.id === "dName"){ e.preventDefault(); saveDoc(false); }
+  });
+
+  render();
+})();
+</script>
+</div>
+</body>
+</html>

@@ -208,6 +208,14 @@ function taskPublicationHTML(task){
   var meta = {effective:["生产生效", "tag-success"], partial:["生产部分生效", "tag-neutral"], rolled_back:["生产已回滚", "tag-neutral"], unknown:["生产覆盖未知", "tag-neutral"]}[state];
   var html = meta ? '<span class="tag task-published-badge ' + meta[1] + '" title="仅来自正式生产发布记录">' + meta[0] + '</span>' : "";
   if(task.everPublished === true) html += '<span class="tag tag-neutral" title="历史发布事实，不代表当前生产生效">曾生产发布</span>';
+  /* 人工标记只补录「有没有发布过」，不提供生产生效证据：正式记录存在时不重复出徽标 */
+  if(task.manualPublished === true && !meta && task.everPublished !== true){
+    var tip = "人工补录的历史发布事实" + (task.manualPublishedAt ? "（" + esc(task.manualPublishedAt) + "）" : "")
+      + (task.manualJudgeName ? " · " + esc(task.manualJudgeName) : "")
+      + (task.manualJudgeReason ? "：" + esc(task.manualJudgeReason) : "")
+      + "；不代表当前生产生效，也不参与需求交付统计";
+    html += '<span class="tag tag-neutral" title="' + tip + '">已发布（人工）</span>';
+  }
   return html;
 }
 function releaseEnvironmentName(env){ return {production:"生产", staging:"预发布", test:"测试"}[env] || env || "未记录环境"; }

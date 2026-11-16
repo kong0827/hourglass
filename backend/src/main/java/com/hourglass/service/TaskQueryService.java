@@ -140,6 +140,7 @@ public class TaskQueryService {
         pageQuery.setVersions(query.getVersions());
         pageQuery.setColumns(query.getColumns());
         pageQuery.setCompletion(query.getCompletion());
+        pageQuery.setPubState(query.getPubState());
         pageQuery.setBlocked(query.isBlocked());
         pageQuery.setDue(query.getDue());
         pageQuery.setFocus(query.isFocus());
@@ -779,6 +780,7 @@ public class TaskQueryService {
                 || !query.getVersions().isEmpty()
                 || !query.getColumns().isEmpty()
                 || query.getCompletion() != null
+                || query.getPubState() != null
                 || query.getDue() != null
                 || query.isFocus()
                 || query.isBlocked()
@@ -918,6 +920,14 @@ public class TaskQueryService {
         /* N-4：仅看被阻塞 */
         if (query.isBlocked() && !Boolean.TRUE.equals(t.getBlocked())) {
             return false;
+        }
+        /* 发布态：正式生产发布记录或人工历史标记；回滚过也算发布过 */
+        if (query.getPubState() != null) {
+            boolean published = Boolean.TRUE.equals(t.getEverPublished())
+                    || Boolean.TRUE.equals(t.getManualPublished());
+            if ("published".equals(query.getPubState()) != published) {
+                return false;
+            }
         }
         /* O-25：仅看没有截止日期的任务（日历「本月未排期」用） */
         if (query.isNoDue() && t.getDueDate() != null) {

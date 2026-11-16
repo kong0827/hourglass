@@ -30,6 +30,8 @@ public class GanttQuery {
     private List<String> columns = new ArrayList<String>();
     /** 完成情况：null=全部，open=未完成，done=已完成 */
     private String completion;
+    /** 发布态：null=全部，published / unpublished */
+    private String pubState;
     /** 非 __none 的影响版本ID */
     private List<String> versionIds = new ArrayList<String>();
     /** 是否包含「待规划」（未绑定版本） */
@@ -74,6 +76,7 @@ public class GanttQuery {
         q.types = new ArrayList<String>(b.getTypes());
         q.columns = new ArrayList<String>(b.getColumns());
         q.completion = b.getCompletion();
+        q.pubState = b.getPubState();
         for (String version : b.getVersions()) {
             if (Consts.REQ_NONE.equals(version)) {
                 q.versionNone = true;

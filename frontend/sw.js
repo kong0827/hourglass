@@ -3,9 +3,11 @@
    SHELL 用相对路径，资源挂在任意上下文路径下都能正常工作。
    静态资源走 stale-while-revalidate：命中缓存立即返回，同时后台回源更新；
    页面导航（index.html）仍网络优先，发布换版后第一次导航就能拿到新外壳。
-   !! 缓存优先不会发现同名文件的新内容：只要前端文件有改动，发布时必须升 CACHE_NAME，
-   否则 sw.js 不变、浏览器不会更新 SW，用户会一直拿旧 JS。 */
-var CACHE_NAME = "hourglass-shell-v263";
+   发布换版的三道防线（用户不需要清缓存）：
+   1) 发布时 tools/stamp-sw.js 按 SHELL 内容哈希改写 CACHE_NAME，前端一改 sw.js 就变；
+   2) 页面每次打开主动 registration.update()，不等浏览器最多约 24 小时的自动检查；
+   3) 安装与后台回源一律 cache:"no-cache"，不吃 HTTP 缓存里的旧副本。 */
+var CACHE_NAME = "hourglass-shell-v267";
 var SHELL = [
   "./",
   "index.html",
@@ -49,6 +51,7 @@ var SHELL = [
   "js/core/layout.js",
   "js/core/list-density.js",
   "js/core/list-preferences.js",
+  "js/core/mention-picker.js",
   "js/core/mobile-rules.js",
   "js/core/nav-telemetry.js",
   "js/core/no-autofill.js",
@@ -124,7 +127,16 @@ var SHELL = [
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(SHELL);
+      /* 逐项写入，单个文件 404/超时不能让整次安装失败：addAll 一旦 reject，
+         新 SW 永远装不上，用户会被钉在旧版本上直到下一次发布修好 */
+      return Promise.all(SHELL.map(function (url) {
+        return fetch(url, { cache: "no-cache", credentials: "same-origin" }).then(function (response) {
+          if (!response || response.status !== 200 || response.type !== "basic") {
+            throw new Error("unexpected response: " + url);
+          }
+          return cache.put(url, response);
+        }).catch(function () {});
+      }));
     }).then(function () {
       return self.skipWaiting();
     })
@@ -157,6 +169,17 @@ self.addEventListener("fetch", function (event) {
   /* 带查询串的请求多半是导出/下载，不落缓存 */
   var cacheable = !url.search;
 
+  /* 回源时绕开 HTTP 缓存里的旧副本。nginx 没配 Cache-Control 时浏览器会按
+     Last-Modified 推算新鲜期直接返回旧文件，后台"更新"就会把旧字节写回 SW 缓存。
+     导航请求（mode=navigate）不可用 Request 克隆，退回浏览器默认策略。 */
+  function freshFetch(request) {
+    try {
+      return fetch(new Request(request, { cache: "no-cache" }));
+    } catch (e) {
+      return fetch(request);
+    }
+  }
+
   function putIfOk(response) {
     if (cacheable && response && response.status === 200 && response.type === "basic") {
       var copy = response.clone();
@@ -179,18 +202,18 @@ self.addEventListener("fetch", function (event) {
 
   /* 运行时配置部署后允许手改（不改构建）：走网络优先，避免被旧缓存钉住 */
   if (url.pathname === scopePath + "config.js") {
-    event.respondWith(fetch(request).then(putIfOk).catch(function () { return offline(request); }));
+    event.respondWith(freshFetch(request).then(putIfOk).catch(function () { return offline(request); }));
     return;
   }
 
   /* 页面导航保持网络优先：部署新版本后不会一直用旧 index.html */
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).then(putIfOk).catch(function () { return offline(request); }));
+    event.respondWith(freshFetch(request).then(putIfOk).catch(function () { return offline(request); }));
     return;
   }
 
   /* 其余静态资源：缓存优先立即返回，网络请求在后台更新缓存 */
-  var network = fetch(request).then(putIfOk);
+  var network = freshFetch(request).then(putIfOk);
   event.respondWith(caches.match(request).then(function (hit) {
     return hit || network.catch(function () { return offline(request); });
   }));

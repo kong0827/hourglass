@@ -22,6 +22,7 @@ var FILTER_KEYS = [
   { k: "versions", kind: "list", s: "versions" },
   { k: "columns", kind: "list", s: "columns" },
   { k: "completion", kind: "text" },
+  { k: "pubState", kind: "text" },
   { k: "due", kind: "text" },
   { k: "noDue", kind: "bool" },
   { k: "dueFrom", kind: "text" },
@@ -122,7 +123,7 @@ if(brandSub) brandSub.addEventListener("click", function(e){
 /* 列状态工作页从看板进入时沿用通用筛选语境：
    状态列与完成情况属于目标页自身维度，不随筛选带过去（否则会和被点的列冲突）。 */
 var WORKPAGE_SCOPE_KEYS = ["q", "owners", "testOwners", "pris", "cats", "reqs", "tags", "types", "versions",
-  "due", "noDue", "blocked", "focus", "dueFrom", "dueTo", "startFrom", "startTo"];
+  "due", "noDue", "blocked", "focus", "dueFrom", "dueTo", "startFrom", "startTo", "pubState"];
 function workpageScopeQuery(){
   var parts = [];
   WORKPAGE_SCOPE_KEYS.forEach(function(k){

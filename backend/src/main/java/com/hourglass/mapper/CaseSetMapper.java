@@ -19,6 +19,11 @@ public interface CaseSetMapper {
     /** 项目下全部分组（不筛可见性）：重挂父级 / 级联可见范围 / 子树计算用 */
     List<CaseSet> selectByReqAll(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 当前用户可见、且包含该用例的分组 ID（用例抽屉回显归属） */
+    List<String> selectVisibleSetIdsByCase(@Param("workspaceId") String workspaceId,
+                                           @Param("caseId") String caseId,
+                                           @Param("viewerId") String viewerId);
+
     /** 删除守卫：仍有子分组时拒绝 */
     int countChildren(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
                       @Param("parentId") String parentId);
