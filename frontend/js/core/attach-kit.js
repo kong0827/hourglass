@@ -1,7 +1,7 @@
 /* core/attach-kit · 全局附件组件：拖拽 / 点击 / 粘贴上传，待传文件清单，
    在线预览与下载的统一入口。执行证据、任务附件、缺陷证据共用同一套口径。 */
 
-import { API } from "./api.js";
+import { API, csrfCookie } from "./api.js";
 import { openAttPreview, previewable, kindOf } from "./att-preview.js";
 import { icon } from "./icons.js";
 import { esc, toast } from "./ui.js";
@@ -22,10 +22,6 @@ function fmtSize(n){
   if(n < 1024) return n + " B";
   if(n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
   return (n / 1024 / 1024).toFixed(1) + " MB";
-}
-function csrfCookie(){
-  var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
-  return m ? decodeURIComponent(m[1]) : "";
 }
 function withWs(url){
   var ws = window.CURRENT_WORKSPACE;

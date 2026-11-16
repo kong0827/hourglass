@@ -1,6 +1,6 @@
 /* views/testcases · 测试用例：用例库、执行结果标记、失败一键转缺陷 */
 
-import { API } from "../core/api.js";
+import { API, csrfCookie } from "../core/api.js";
 import { AIProgress, aiApplyFailText, aiErrorText, aiUsageText } from "../core/ai-progress.js";
 import { previewable } from "../core/att-preview.js";
 import { createAttachKit, bindFileDrop, uploadAttachment, openAttachment, attachmentChipHTML, validateFiles, reportRejected } from "../core/attach-kit.js";
@@ -2002,10 +2002,6 @@ function printTestReport(){
 
 /* ---------- 执行历史与证据 ---------- */
 
-function csrfCookie(){
-  var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
-  return m ? decodeURIComponent(m[1]) : "";
-}
 function attUrl(id){
   return API.url("/api/attachments/" + encodeURIComponent(id) + "/download" +
     (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));

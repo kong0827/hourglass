@@ -1,6 +1,6 @@
 /* views/requirements · 文档（树、编辑页、AI 拆分/审计） */
 
-import { API } from "../core/api.js";
+import { API, csrfCookie } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { attachmentChipHTML, openAttachment, downloadUrl, bindFileDrop, uploadAttachment, validateFiles, reportRejected } from "../core/attach-kit.js";

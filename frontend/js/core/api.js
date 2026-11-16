@@ -4,6 +4,10 @@
     var m = document.cookie.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
     return m ? decodeURIComponent(m[1]) : "";
   }
+  /* 裸 fetch（文件上传、导入等）绕过 request()，需自行取 CSRF 头 */
+  function csrfCookie() {
+    return readCookie("XSRF-TOKEN");
+  }
 
   /* 运行时配置见 frontend/config.js；未加载时回退到同源 /hourglass */
   var CFG = window.__APP_CONFIG__ || {};
@@ -236,4 +240,4 @@
     }
 };
 
-export { API };
+export { API, csrfCookie };

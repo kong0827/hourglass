@@ -2,7 +2,7 @@
 
 import { icon } from "./icons.js";
 import { esc, toast } from "./ui.js";
-import { API } from "./api.js";
+import { API, csrfCookie } from "./api.js";
 
 var VENDOR_BASE = API.url("/vendor/univer/");
 var SHEETJS_URL = API.url("/vendor/sheetjs/xlsx.full.min.js");
@@ -30,11 +30,6 @@ var vendorPromise = null;
 var rootEl = null, hostEl = null, headName = null, headMeta = null, headActs = null, bodyEl = null;
 var univerInst = null, univerAPI = null;
 var current = null; /* { attachment, canEdit, onSaved } */
-
-function csrf(){
-  var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
-  return m ? decodeURIComponent(m[1]) : "";
-}
 
 /* ---------- vendor 懒加载（只注入一次） ---------- */
 
@@ -456,7 +451,7 @@ function saveCurrent(){
       (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
     return fetch(url, {
       method: "POST", credentials: "same-origin",
-      headers: { "X-XSRF-TOKEN": csrf() },
+      headers: { "X-XSRF-TOKEN": csrfCookie() },
       body: fd
     }).then(function(res){
       if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }

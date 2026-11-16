@@ -1,6 +1,6 @@
 /* core/task-drawer · 任务详情抽屉、评论、检查清单、附件、工时 */
 
-import { API } from "./api.js";
+import { API, csrfCookie } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
 import { bindFileDrop, validateFiles, reportRejected, uploadAttachment } from "./attach-kit.js";
 import { attachCombo } from "./combo.js";
@@ -4936,10 +4936,6 @@ iSubNew.addEventListener("keydown", function(e){
     toast(ex.message || "添加失败", "bad");
   });
 });
-function csrfCookie(){
-  var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
-  return m ? decodeURIComponent(m[1]) : "";
-}
 function extOfName(filename){
   var idx = String(filename || "").lastIndexOf(".");
   return idx >= 0 ? String(filename).substring(idx + 1) : "";
