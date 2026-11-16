@@ -105,3 +105,6 @@ deploy/nginx-local.conf
 # Python 缓存
 tools/__pycache__/
 *.pyc
+
+# 本地补丁/构建日志等临时产物（可能含配置密钥摘录）
+.tmp-patch/
