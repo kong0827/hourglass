@@ -1878,9 +1878,9 @@
                 </div>
                 <div class="cf-nest">
                   <div class="cf-nest-row">
-                    <span class="cf-nest-label">项目目录</span>
+                    <span class="cf-nest-label">模块</span>
                     <div class="cf-nest-val">
-                      <select id="cModule" aria-label="选择项目目录节点"></select>
+                      <select id="cModule" aria-label="选择模块（项目目录节点）"></select>
                       <span class="cf-tag" id="cModuleTag" hidden></span>
                       <button class="cf-link" type="button" id="cModuleInherit" hidden>恢复继承</button>
                       <button class="cf-link" type="button" id="cModuleNew">＋ 子目录</button>
@@ -1941,10 +1941,6 @@
                 </div>
               </details>
 
-              <details class="entity-log" id="caseTimeline" hidden>
-                <summary><span class="caret" aria-hidden="true">▶</span>变更记录 <span class="cnt" id="caseTimelineCount"></span></summary>
-                <div class="timeline" id="caseTimelineList"></div>
-              </details>
               <p class="foot-note" id="caseReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
               <div class="cf-foot" id="caseSaveRow">
                 <span class="cf-save-note"><i aria-hidden="true"></i>保存后可继续记录执行与转缺陷</span>
@@ -1963,9 +1959,9 @@
             <div class="stack">
               <p class="foot-note" id="caseBatchSub"></p>
               <div class="field">
-                <label for="bModule">项目目录 <small class="tc-optional">默认保持原值</small></label>
-                <select id="bModule" aria-label="批量设置项目目录"></select>
-                <p class="foot-note">目录是单归属：设为新节点即从原节点移出，编号与执行历史不变。</p>
+                <label for="bModule">模块 <small class="tc-optional">默认保持原值</small></label>
+                <select id="bModule" aria-label="批量设置模块"></select>
+                <p class="foot-note">模块是单归属：设为新节点即从原节点移出，编号与执行历史不变。</p>
               </div>
               <div class="field">
                 <label for="bPri">优先级 <small class="tc-optional">选择后统一覆盖</small></label>

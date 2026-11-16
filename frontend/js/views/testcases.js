@@ -124,6 +124,13 @@ var caseDetailId = null;
 var caseDetailTab = "overview";
 var caseDetailRuns = null;
 var caseDetailSeq = 0;
+/* 抽屉两态：阅读态点字段就地改，编辑态按同一结构批量改；完整表单只留给新建 */
+var caseDetailEditing = false;
+var caseDetailDraft = null;
+var caseInlineEdit = null;   /* 阅读态正在就地编辑：{kind:"pre"|"testData", text} 或 {kind:"step", i, k, text} */
+var caseInlineNewStep = null; /* 阅读态刚插入、还没保存的步骤行下标；取消时回滚 */
+var caseDetailSaving = false;
+var caseDetailModules = { reqId: null, list: [], loading: null };
 var caseRunning = false;
 var caseDefecting = false;
 var caseMoreLoading = false;
@@ -338,11 +345,11 @@ var GROUP_PAGE = 20;   /* 段内一次取多少行 */
 var GROUP_SHOW = 6;    /* 段内首屏显示多少行，其余点「段内加载更多」展开 */
 var CASE_SORTS = [
   ["created", "创建时间"], ["updated", "更新时间"], ["executed", "最近执行"],
-  ["no", "用例编号"], ["pri", "优先级"], ["module", "项目目录"], ["status", "执行结果"],
+  ["no", "用例编号"], ["pri", "优先级"], ["module", "模块"], ["status", "执行结果"],
   ["manual", "手动排序"]
 ];
 var CASE_GROUP_DIMS = [
-  ["", "不分组"], ["module", "项目目录"], ["priority", "优先级"], ["status", "执行结果"],
+  ["", "不分组"], ["module", "模块"], ["priority", "优先级"], ["status", "执行结果"],
   ["owner", "执行人"], ["demand", "主需求"], ["set", "自定义分组"]
 ];
 function caseGroupQuery(){
@@ -3829,39 +3836,6 @@ function openCaseCreate(){
   });
   UI.openPop(el, btn, { align: "right", width: 240, onClose: function(){ el.remove(); } });
 }
-function fillCaseForm(c){
-  caseFormReqId = c.reqId || caseReqId;
-  editingCase = {
-    id: c.id,
-    demandId: c.demandId || "",
-    demandTitle: c.demandTitle || "",
-    steps: (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
-  };
-  $("caseFormTitle").textContent = caseFormWritable() ? "编辑用例" : "查看用例";
-  $("cTitle").value = c.title || "";
-  caseFormModulePrev = c.moduleId || "";
-  /* 编辑态只知道用例自己的目录；需求上的目录不再回填，避免把"继承"标错 */
-  caseModuleInherited = "";
-  loadFormModules(caseFormReqId, c.moduleId || "");
-  syncPriOptions();
-  $("cPri").value = c.priority || "";
-  renderPriSeg();
-  $("cPrecondition").value = c.precondition || "";
-  $("cTestData").value = c.testData || "";
-  setDemandValue(c.demandId || "", c.demandTitle || "");
-  resetCaseTaskState();
-  (c.tasks || []).forEach(function(t){ caseTaskSel[t.taskId] = t; });
-  if(c.demandId) loadCaseTaskOptions(); else renderCaseTaskPicker();
-  loadDemandOptions(caseFormReqId);
-  renderStepRows();
-  applyReadOnly(!caseFormWritable());
-  syncCaseFormCtx(c);
-  syncCaseTitleMeta();
-  syncCaseMore();
-  showCaseErrors([]);
-  bindCaseTimeline(c.id);
-  caseFormBaseline = caseFormSnapshot();
-}
 /* 改成右侧抽屉后，列表点行先看，再看细节；编辑是抽屉内的显式动作 */
 function openCaseDetail(id){
   var c = caseById(id);
@@ -3869,6 +3843,12 @@ function openCaseDetail(id){
   caseDetailId = id;
   caseDetailTab = "overview";
   caseDetailRuns = null;
+  caseDetailEditing = false;
+  caseDetailDraft = null;
+  caseInlineEdit = null;
+  caseInlineNewStep = null;
+  caseDetailFocusTitle = false;
+  caseDraftFocusStep = null;
   caseFormReqId = c.reqId || caseReqId;
   $("caseEditBody").hidden = true;
   $("caseDetailView").hidden = false;
@@ -3876,35 +3856,17 @@ function openCaseDetail(id){
   renderCaseDetail();
   UI.openModal($("dlgCase"));
   loadCaseDetailRuns(id);
+  loadCaseDetailModules(c.reqId);
 }
 function openEditDialog(id){
   var c = caseById(id);
   if(!c) return;
-  fillCaseForm(c);
-  $("caseDetailView").hidden = true;
-  $("caseEditBody").hidden = false;
-  $("caseEditBack").hidden = false;
-  UI.openModal($("dlgCase"), "input");
-}
-/* 编辑态返回阅读态：放弃未保存的修改要先确认，避免误点「取消」丢输入 */
-function backToCaseDetail(){
-  /* 新建没有阅读态可回：取消等同关闭，仍要走脏检查确认 */
-  if(!caseDetailId){ tryCloseCaseDialog(); return; }
-  function go(){
-    caseFormBaseline = null;
-    editingCase = null;
-    $("caseEditBody").hidden = true;
-    $("caseDetailView").hidden = false;
-    $("caseEditBack").hidden = true;
+  if(caseDetailId !== id){
+    openCaseDetail(id);
+  }else if(!caseDetailEditing){
     renderCaseDetail();
   }
-  if(!caseFormWritable() || !caseFormDirty()){ go(); return; }
-  UI.showConfirm({
-    title: "放弃未保存的修改？",
-    msg: "用例还没有保存，返回详情后填写的内容会丢失。",
-    okText: "放弃修改",
-    cancelText: "继续编辑"
-  }).then(function(ok){ if(ok) go(); });
+  startCaseDetailEdit();
 }
 function caseDefectsOf(runs){
   var seen = {}, out = [];
@@ -3930,7 +3892,6 @@ function loadCaseDetailRuns(id){
 }
 function caseDetailCounts(c){
   return {
-    steps: (c.steps || []).length,
     runs: caseDetailRuns ? caseDetailRuns.length : "…",
     defects: caseDetailRuns ? caseDefectsOf(caseDetailRuns).length : "…"
   };
@@ -3939,40 +3900,85 @@ function syncCaseDetailCounts(){
   var c = caseById(caseDetailId), box = $("caseDetailView");
   if(!c || !box) return;
   var n = caseDetailCounts(c);
-  ["steps", "runs", "defects"].forEach(function(k){
+  ["runs", "defects"].forEach(function(k){
     var el = box.querySelector('[data-count="' + k + '"]');
     if(el) el.textContent = n[k];
   });
 }
-function caseDetailFact(k, v){
-  return '<div class="case-fact"><span class="k">' + esc(k) + '</span><span class="v">' + v + '</span></div>';
+
+/* ---------- 抽屉字段说明：默认只留 ?，点开看口径 ---------- */
+var CASE_HINTS = {
+  priority: { t: "优先级口径", b: "P0 阻塞主流程、必须回归；P1 核心功能；P2 一般功能；P3 边缘场景。不设置表示暂不区分，不影响保存与执行。" },
+  module: { t: "模块取自哪里", b: "模块就是项目目录节点：一条用例只归一个模块，用于筛选、分组与统计。需求带了目录时新建会默认继承，之后可单独调整。" },
+  demand: { t: "关联需求能带出什么", b: "候选只列本项目需求。关联后可从该需求下挑验证工作项，覆盖会同时记到需求与工作项。" },
+  step: { t: "步骤怎么写", b: "操作写做了什么，预期写看到什么；预期可留空，表示只记录操作。最多 30 行。" }
+};
+function caseHintBtn(key){
+  var h = CASE_HINTS[key];
+  return h ? '<button class="case-hint-btn" type="button" data-case-hint="' + key + '" aria-label="' + esc(h.t) + '">?</button>' : "";
+}
+function openCaseHint(key, anchor){
+  var h = CASE_HINTS[key];
+  if(!h) return;
+  var el = document.createElement("div");
+  el.className = "menu case-hint-pop";
+  el.innerHTML = '<div class="menu-title">' + esc(h.t) + '</div><p class="case-hint-text">' + esc(h.b) + '</p>';
+  UI.openPop(el, anchor, { width: 300 });
+}
+function casePriText(p){
+  return p ? esc(priName(p) || p) : '<span class="muted">未设置</span>';
+}
+function caseModuleText(c){
+  var name = moduleNameById(caseDetailModules.list, c.moduleId) || c.module || "";
+  return name ? esc(name) : '<span class="muted">未归类</span>';
+}
+function caseDetailFact(k, v, opts){
+  opts = opts || {};
+  var cls = "case-fact" + (opts.act ? " case-fact-edit" : "");
+  return '<div class="' + cls + '"' + (opts.act ? ' data-case-act="' + opts.act + '" role="button" tabindex="0" title="修改' + esc(k) + '"' : "") + '>'
+    + '<span class="k">' + esc(k) + (opts.hint ? caseHintBtn(opts.hint) : "")
+    + (opts.derived ? '<span class="case-derived">' + opts.derived + '</span>' : "")
+    + (opts.act ? '<span class="case-pencil" aria-hidden="true">' + icon("edit", 11) + '</span>' : "")
+    + '</span><span class="v">' + v + '</span></div>';
 }
 function caseDetailMetaText(c){
-  var parts = [];
-  if(caseNoText(c)) parts.push(caseNoText(c));
-  var req = reqNameOf(c.reqId);
-  if(req) parts.push(req);
-  if(c.module) parts.push(c.module);
-  if(c.priority) parts.push(priName(c.priority));
-  parts.push(STATUS_LABEL[c.latestStatus] || "未执行");
-  if(c.latestBy) parts.push("执行人 " + c.latestBy);
-  if(c.latestAt) parts.push(fmtTs(c.latestAt));
-  return esc(parts.join(" · "));
+  var parts = [reqNameOf(c.reqId), caseNoText(c)];
+  if(c.latestStatus) parts.push("最近执行 " + (STATUS_LABEL[c.latestStatus] || c.latestStatus));
+  return esc(parts.filter(Boolean).join(" · "));
 }
-function caseReadBlock(title, text, empty){
-  return '<section class="case-read-block"><h4>' + esc(title) + '</h4>'
+function caseReadBlock(title, text, empty, field, writable){
+  if(field && writable && caseInlineEdit && caseInlineEdit.kind === field){
+    return '<section class="case-read-block is-editing"><h4>' + esc(title) + '</h4>'
+      + '<textarea class="case-block-input" data-case-block-edit="' + field + '" maxlength="1000"'
+      + ' placeholder="' + esc(field === "pre" ? "选填：数据准备、环境要求…" : "执行时要准备的账号、金额、边界值") + '">'
+      + esc(text || "") + '</textarea>'
+      + '<span class="case-kbd-note">失焦或 Ctrl+Enter 保存 · Esc 还原</span></section>';
+  }
+  return '<section class="case-read-block' + (field && writable ? " case-block-edit" : "") + '"'
+    + (field && writable ? ' data-case-act="' + field + '" role="button" tabindex="0" title="点击编辑' + esc(title) + '"' : "") + '>'
+    + '<h4>' + esc(title) + '</h4>'
     + '<p class="case-read-text' + (text ? '' : ' muted') + '">' + (text ? esc(text) : esc(empty || "未设置")) + '</p></section>';
 }
+function caseDemandCell(c){
+  if(!c.demandId) return '<span class="muted">未关联</span>';
+  return '<span class="case-demand-title">' + esc(c.demandTitle || c.demandId) + '</span>'
+    + '<button type="button" class="case-jump" data-case-jump="demand" title="打开需求详情" aria-label="打开需求详情">'
+    + icon("extlink", 12) + '</button>';
+}
 function caseDetailOverview(c, writable){
+  var tasks = c.tasks || [];
   var facts = '<div class="case-facts">'
-    + caseDetailFact("优先级", c.priority ? esc(priName(c.priority)) : '<span class="muted">未设置</span>')
-    + caseDetailFact("模块", c.module ? esc(c.module) : '<span class="muted">未归类</span>')
-    + caseDetailFact("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>')
-    + caseDetailFact("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>')
-    + caseDetailFact("关联需求", c.demandId && c.demandTitle
-      ? assocLinkHTML("demand", c.demandId, c.demandTitle) : '<span class="muted">未关联</span>')
-    + caseDetailFact("用例编号", caseNoText(c) ? esc(caseNoText(c)) : '<span class="muted">未取号</span>')
+    + caseDetailFact("优先级", casePriText(c.priority), { act: writable ? "priority" : "", hint: "priority" })
+    + caseDetailFact("模块", caseModuleText(c), { act: writable ? "module" : "", hint: "module" })
+    + caseDetailFact("验证工作项", tasks.length ? tasks.length + " 项" : '<span class="muted">未关联</span>', { act: writable ? "tasks" : "" })
+    + caseDetailFact("关联需求", caseDemandCell(c), { act: writable ? "demand" : "", hint: "demand" })
+    + caseDetailFact("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + caseDetailFact("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>', { derived: "派生" })
     + '</div>';
+  var stateHint = writable && !tasks.length
+    ? '<p class="case-state-hint">' + icon("infoCircle", 14) + '<span>未挂工作项：这条用例的覆盖只记在需求级，'
+      + '<button type="button" class="case-link-btn" data-case-act="tasks">挂工作项</button></span></p>'
+    : "";
   var last = "";
   if(c.latestStatus){
     var bug = c.latestBugTaskId
@@ -3993,28 +3999,72 @@ function caseDetailOverview(c, writable){
     last = '<section class="case-read-block"><h4>最近一次执行</h4>'
       + '<p class="case-read-text muted">还没有执行记录；' + (writable ? '点右上「记录执行」记录第一次结果。' : '等待有权限的成员执行。') + '</p></section>';
   }
-  var tasks = (c.tasks || []).length
-    ? '<section class="case-read-block"><h4>关联工作项<span class="cnt">' + c.tasks.length + '</span></h4>'
-      + '<div class="case-assoc">' + c.tasks.map(function(t){
-        return '<button class="chip" type="button" data-case-task="' + esc(t.taskId) + '">'
-          + esc(t.taskTitle || t.taskId) + '</button>';
-      }).join("") + '</div></section>'
+  var assoc = tasks.length
+    ? '<div class="case-assoc">' + tasks.map(function(t){
+      return '<button class="chip" type="button" data-case-task="' + esc(t.taskId) + '">'
+        + esc(t.taskTitle || t.taskId) + '</button>';
+    }).join("") + '</div>'
     : "";
   return facts
-    + caseReadBlock("前置条件", c.precondition, "未设置前置条件")
-    + caseReadBlock("测试数据", c.testData, "未设置测试数据")
+    + stateHint
+    + caseReadBlock("前置条件", c.precondition, "未设置前置条件", "pre", writable)
+    + caseReadBlock("测试数据", c.testData, "未设置测试数据", "testData", writable)
+    + caseDetailSteps(c, writable)
     + last
-    + tasks;
+    + assoc
+    + '<details class="entity-log case-timeline" id="caseTimeline" hidden>'
+    + '<summary><span class="caret" aria-hidden="true">▶</span>变更记录 <span class="cnt" id="caseTimelineCount"></span></summary>'
+    + '<div class="timeline" id="caseTimelineList"></div></details>';
 }
-function caseDetailSteps(c){
-  var steps = c.steps || [];
-  if(!steps.length) return '<p class="case-empty">还没有步骤；点「编辑」补充操作与预期结果。</p>';
-  return '<ol class="case-steps-read">' + steps.map(function(s, i){
-    return '<li><span class="no">' + (i + 1) + '</span><div>'
-      + '<p class="act">' + esc(s.action || "") + '</p>'
-      + (s.expected ? '<p class="exp">预期：' + esc(s.expected) + '</p>' : '')
-      + '</div></li>';
-  }).join("") + '</ol>';
+function caseStepCellHTML(step, i, k, writable){
+  var editing = caseInlineEdit && caseInlineEdit.kind === "step" && caseInlineEdit.i === i && caseInlineEdit.k === k;
+  var val = k === "action" ? (step.action || "") : (step.expected || "");
+  if(editing){
+    return '<textarea class="case-step-input" data-case-step-edit="' + k + '" data-i="' + i + '" maxlength="' + (k === "action" ? 200 : 500)
+      + '" placeholder="' + (k === "action" ? "做了什么" : "看到什么（可留空）") + '">' + esc(caseInlineEdit.text || "") + '</textarea>';
+  }
+  var text = val || (k === "action" ? "（未填写操作）" : "（未填写预期）");
+  var cls = "case-step-cell" + (val ? "" : " muted") + (writable ? " editable" : "");
+  return '<div class="' + cls + '"' + (writable ? ' data-case-act="step" data-i="' + i + '" data-k="' + k + '" role="button" tabindex="0"' : "") + '>'
+    + esc(text) + '</div>';
+}
+function caseStepRowHTML(step, i, total, writable){
+  var acts = writable ? '<span class="case-step-acts">'
+    + '<button type="button" data-case-act="step-ins" data-i="' + i + '" title="在下方插入" aria-label="在步骤 ' + (i + 1) + ' 下方插入">' + icon("plus", 13) + '</button>'
+    + '<button type="button" data-case-act="step-up" data-i="' + i + '" title="上移"' + (i === 0 ? " disabled" : "") + '>' + icon("up", 13) + '</button>'
+    + '<button type="button" data-case-act="step-down" data-i="' + i + '" title="下移"' + (i === total - 1 ? " disabled" : "") + '>' + icon("down", 13) + '</button>'
+    + '<button type="button" class="danger" data-case-act="step-del" data-i="' + i + '" title="删除该步骤">' + icon("trash", 13) + '</button>'
+    + '</span>' : '<span></span>';
+  return '<div class="case-step-row"><span class="case-step-no">' + (i + 1) + '</span>'
+    + caseStepCellHTML(step, i, "action", writable)
+    + caseStepCellHTML(step, i, "expected", writable)
+    + acts + '</div>';
+}
+/* 阅读态新增/插入的步骤只是本地占位行，不写进 c.steps（关抽屉或改点别处时不会留下空行） */
+function caseStepsView(c){
+  var steps = (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; });
+  if(caseInlineNewStep !== null && caseInlineNewStep >= 0 && caseInlineNewStep <= steps.length){
+    steps.splice(caseInlineNewStep, 0, { action: "", expected: "" });
+  }
+  return steps;
+}
+function caseDetailSteps(c, writable){
+  var steps = caseStepsView(c);
+  var rows = steps.map(function(s, i){ return caseStepRowHTML(s, i, steps.length, writable); }).join("");
+  if(!steps.length){
+    rows = '<div class="case-step-empty">还没有步骤'
+      + (writable ? '；点下方「添加步骤」补充操作与预期。' : "。") + '</div>';
+  }
+  return '<section class="case-read-block case-steps-block">'
+    + '<h4>怎么测：步骤与预期' + caseHintBtn("step")
+    + '<span class="cnt">' + steps.length + " / 30 行</span></h4>"
+    + '<div class="case-steps-grid' + (writable ? "" : " is-ro") + '">'
+    + '<div class="case-steps-head"><span>#</span><span>操作步骤<span class="case-req">*</span></span><span>预期结果</span><span></span></div>'
+    + rows + '</div>'
+    + (writable ? '<div class="case-step-foot"><button class="btn sm ghost" type="button" data-case-act="step-add">'
+      + icon("plus", 13) + ' 添加步骤</button>'
+      + '<span class="case-kbd-note">点单元格直接改；失焦或 Ctrl+Enter 保存，Esc 还原</span></div>' : "")
+    + '</section>';
 }
 function caseDetailRunsHTML(c, writable){
   if(caseDetailRuns === null) return '<p class="case-empty">正在加载执行记录…</p>';
@@ -4046,17 +4096,39 @@ function renderCaseDetail(){
   var box = $("caseDetailView");
   if(!c || !box){ if(box) box.innerHTML = ""; return; }
   var writable = caseWritable(c);
+  var prevBody = box.querySelector(".case-detail-body");
+  var keepTop = prevBody ? prevBody.scrollTop : 0;
+  function restoreScroll(){
+    var nb = box.querySelector(".case-detail-body");
+    if(nb) nb.scrollTop = keepTop;
+  }
+  if(caseDetailEditing && caseDetailDraft){
+    box.innerHTML = caseDetailEditHTML(c, writable);
+    syncCaseDraftDirty();
+    restoreScroll();
+    var t = $("caseEditTitle");
+    if(t) autoGrowCaseTitle(t);
+    if(caseDetailFocusTitle){
+      caseDetailFocusTitle = false;
+      if(t){ t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+    }
+    if(caseDraftFocusStep !== null){
+      var fs = caseDraftFocusStep;
+      caseDraftFocusStep = null;
+      var fta = box.querySelector('[data-case-draft-step="' + fs + '"][data-k="action"]');
+      if(fta) fta.focus();
+    }
+    return;
+  }
   var counts = caseDetailCounts(c);
   var tabs = [
     ["overview", "概览", null],
-    ["steps", "步骤", counts.steps],
     ["runs", "执行历史", counts.runs],
     ["defects", "缺陷", counts.defects]
   ];
-  var pane = caseDetailTab === "steps" ? caseDetailSteps(c)
-    : caseDetailTab === "runs" ? caseDetailRunsHTML(c, writable)
-      : caseDetailTab === "defects" ? caseDetailDefectsHTML()
-        : caseDetailOverview(c, writable);
+  var pane = caseDetailTab === "runs" ? caseDetailRunsHTML(c, writable)
+    : caseDetailTab === "defects" ? caseDetailDefectsHTML()
+      : caseDetailOverview(c, writable);
   box.innerHTML = '<div class="case-detail-head"><div class="case-detail-headline">'
     + '<div class="case-detail-titleline">' + statusBadgeHTML(c.latestStatus)
     + '<h2' + (writable ? ' class="case-title-edit" data-case-title-edit tabindex="0" title="点击修改标题" role="button"' : '') + '>'
@@ -4073,6 +4145,244 @@ function renderCaseDetail(){
         + (t[2] === null ? '' : ' <span class="cnt" data-count="' + t[0] + '">' + t[2] + '</span>') + '</button>';
     }).join("") + '</div>'
     + '<div class="case-detail-body" role="tabpanel">' + pane + '</div>';
+  restoreScroll();
+  if(caseDetailTab === "overview") bindCaseTimeline(c.id);
+}
+
+/* ---------- 抽屉编辑态：与阅读态同一结构，草稿一次保存 ---------- */
+var caseDetailFocusTitle = false;
+var caseDraftFocusStep = null;
+function caseDraftFrom(c){
+  return {
+    title: c.title || "",
+    priority: c.priority || "",
+    moduleId: c.moduleId || "",
+    module: c.module || "",
+    demandId: c.demandId || "",
+    demandTitle: c.demandTitle || "",
+    tasks: (c.tasks || []).map(function(t){ return { taskId: t.taskId, taskTitle: t.taskTitle || "" }; }),
+    precondition: c.precondition || "",
+    testData: c.testData || "",
+    steps: (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
+  };
+}
+function caseDraftBody(d, c){
+  return {
+    reqId: c.reqId,
+    title: (d.title || "").trim(),
+    precondition: (d.precondition || "").trim() || null,
+    testData: (d.testData || "").trim() || null,
+    moduleId: d.moduleId || null,
+    module: null,
+    priority: d.priority || null,
+    demandId: d.demandId || null,
+    taskIds: (d.tasks || []).map(function(t){ return t.taskId; }),
+    steps: (d.steps || []).filter(function(s){ return s.action || s.expected; })
+      .map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
+  };
+}
+function caseDraftDirty(){
+  var c = caseById(caseDetailId);
+  if(!c || !caseDetailDraft) return false;
+  return JSON.stringify(caseDraftBody(caseDetailDraft, c)) !== JSON.stringify(caseDraftBody(caseDraftFrom(c), c));
+}
+function syncCaseDraftDirty(){
+  var el = $("caseDraftDirty");
+  if(el) el.hidden = !caseDraftDirty();
+  var count = $("caseTitleCount");
+  if(count && caseDetailDraft) count.textContent = (caseDetailDraft.title || "").length + " / 100";
+}
+function autoGrowCaseTitle(el){
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 68) + "px";
+}
+function caseDraftModuleOptions(d){
+  var list = caseDetailModules.reqId === caseById(caseDetailId).reqId ? caseDetailModules.list : [];
+  var html = '<option value=""' + (d.moduleId ? "" : " selected") + '>未归类（不选目录）</option>';
+  list.forEach(function(n){
+    var pad = "";
+    for(var i = 1; i < Math.min(n.level || 1, 7); i++) pad += "　";
+    html += '<option value="' + esc(n.id) + '"' + (d.moduleId === n.id ? " selected" : "") + '>'
+      + esc(pad + (n.name || "")) + '</option>';
+  });
+  if(d.moduleId && !list.some(function(n){ return n.id === d.moduleId; })){
+    html += '<option value="' + esc(d.moduleId) + '" selected>' + esc(d.module || "当前模块") + '</option>';
+  }
+  return html;
+}
+function caseDraftStepRowsHTML(d){
+  return d.steps.map(function(s, i){
+    return '<div class="case-step-row"><span class="case-step-no">' + (i + 1) + '</span>'
+      + '<textarea class="case-step-input" data-case-draft-step="' + i + '" data-k="action" maxlength="200" placeholder="做了什么">' + esc(s.action) + '</textarea>'
+      + '<textarea class="case-step-input" data-case-draft-step="' + i + '" data-k="expected" maxlength="500" placeholder="看到什么（可留空）">' + esc(s.expected) + '</textarea>'
+      + '<span class="case-step-acts">'
+      + '<button type="button" data-case-act="d-step-ins" data-i="' + i + '" title="在下方插入">' + icon("plus", 13) + '</button>'
+      + '<button type="button" data-case-act="d-step-up" data-i="' + i + '" title="上移"' + (i === 0 ? " disabled" : "") + '>' + icon("up", 13) + '</button>'
+      + '<button type="button" data-case-act="d-step-down" data-i="' + i + '" title="下移"' + (i === d.steps.length - 1 ? " disabled" : "") + '>' + icon("down", 13) + '</button>'
+      + '<button type="button" class="danger" data-case-act="d-step-del" data-i="' + i + '" title="删除">' + icon("trash", 13) + '</button>'
+      + '</span></div>';
+  }).join("");
+}
+function caseDetailEditHTML(c, writable){
+  var d = caseDetailDraft;
+  var priSeg = [["", "不设置"]].concat(PRIORITIES.map(function(p){ return [p, p]; })).map(function(o){
+    return '<button type="button" data-case-pri="' + o[0] + '" aria-pressed="' + (d.priority === o[0]) + '"'
+      + ' title="' + esc(o[0] ? priName(o[0]) : "暂不区分") + '">' + o[1] + '</button>';
+  }).join("");
+  var facts = '<div class="case-facts">'
+    + '<div class="case-fact"><span class="k">优先级' + caseHintBtn("priority") + '</span><span class="v">'
+    + '<div class="case-seg" data-case-pri-seg role="group" aria-label="优先级">' + priSeg + '</div></span></div>'
+    + '<div class="case-fact"><span class="k">模块' + caseHintBtn("module") + '</span><span class="v case-module-v">'
+    + '<select class="case-select" data-case-draft="moduleId" aria-label="模块">' + caseDraftModuleOptions(d) + '</select>'
+    + '</span></div>'
+    + '<div class="case-fact case-fact-edit" data-case-act="edit-tasks" role="button" tabindex="0"><span class="k">验证工作项'
+    + '<span class="case-pencil">' + icon("edit", 11) + '</span></span><span class="v">'
+    + (d.tasks.length ? d.tasks.length + " 项" : '<span class="muted">未关联</span>') + '</span></div>'
+    + '<div class="case-fact case-fact-edit" data-case-act="edit-demand" role="button" tabindex="0"><span class="k">关联需求'
+    + caseHintBtn("demand") + '<span class="case-pencil">' + icon("edit", 11) + '</span></span><span class="v">'
+    + (d.demandId ? esc(d.demandTitle || d.demandId) : '<span class="muted">未关联</span>') + '</span></div>'
+    + caseDetailFact("执行人", c.latestBy ? esc(c.latestBy) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + caseDetailFact("最近执行", c.latestAt ? esc(fmtTs(c.latestAt)) : '<span class="muted">未执行</span>', { derived: "派生" })
+    + '</div>'
+    + (!d.tasks.length ? '<p class="case-state-hint">' + icon("infoCircle", 14) + '<span>未挂工作项：这条用例的覆盖只记在需求级，'
+      + '<button type="button" class="case-link-btn" data-case-act="edit-tasks">挂工作项</button></span></p>' : "");
+  var steps = d.steps.length
+    ? caseDraftStepRowsHTML(d)
+    : '<div class="case-step-empty">还没有步骤；点下方「添加步骤」补充操作与预期。</div>';
+  return '<div class="case-detail-head case-detail-head-edit"><div class="case-detail-headline">'
+    + '<div class="case-detail-titleline">' + statusBadgeHTML(c.latestStatus)
+    + '<textarea class="case-title-input" id="caseEditTitle" rows="1" maxlength="100" aria-label="用例标题">'
+    + esc(d.title) + '</textarea></div>'
+    + '<p class="case-detail-meta">' + caseDetailMetaText(c)
+    + '<span class="case-title-count" id="caseTitleCount">' + (d.title || "").length + ' / 100</span></p></div>'
+    + '<div class="case-detail-acts"><span class="case-edit-badge">编辑中</span>'
+    + '<button class="icon-btn sm" type="button" data-case-edit-cancel aria-label="退出编辑" title="退出编辑">' + icon("close", 15) + '</button>'
+    + '</div></div>'
+    + '<div class="case-detail-body" role="group" aria-label="编辑用例">' + facts
+    + '<section class="case-read-block"><h4>前置条件</h4>'
+    + '<textarea class="case-block-input" data-case-draft="precondition" maxlength="1000" placeholder="选填：数据准备、环境要求…">'
+    + esc(d.precondition) + '</textarea></section>'
+    + '<section class="case-read-block"><h4>测试数据</h4>'
+    + '<textarea class="case-block-input" data-case-draft="testData" maxlength="1000" placeholder="执行时要准备的账号、金额、边界值">'
+    + esc(d.testData) + '</textarea></section>'
+    + '<section class="case-read-block case-steps-block">'
+    + '<h4>怎么测：步骤与预期' + caseHintBtn("step")
+    + '<span class="cnt">' + d.steps.length + ' / 30 行</span></h4>'
+    + '<div class="case-steps-grid">'
+    + '<div class="case-steps-head"><span>#</span><span>操作步骤<span class="case-req">*</span></span><span>预期结果</span><span></span></div>'
+    + steps + '</div>'
+    + '<div class="case-step-foot"><button class="btn sm ghost" type="button" data-case-act="d-step-add">'
+    + icon("plus", 13) + ' 添加步骤</button>'
+    + '<span class="case-kbd-note">步骤输入中按 Ctrl+Enter 可在下方插入新行</span></div></section>'
+    + '</div>'
+    + '<div class="case-detail-foot"><span class="case-dirty" id="caseDraftDirty" hidden><i aria-hidden="true"></i>有未保存的修改</span>'
+    + '<span class="grow"></span>'
+    + '<button class="btn" type="button" data-case-edit-cancel>取消</button>'
+    + '<button class="btn primary" type="button" data-case-edit-save>保存</button></div>';
+}
+function startCaseDetailEdit(){
+  var c = caseById(caseDetailId);
+  if(!c || !caseWritable(c)) return;
+  var draft = caseDraftFrom(c);
+  /* 标题刚改完就点「编辑」时保存还在路上：以标题框里的文字为准带进草稿 */
+  var titleEl = $("caseDetailView").querySelector("[data-case-title-edit]");
+  if(titleEl){
+    var typed = (titleEl.textContent || "").replace(/\s+/g, " ").trim();
+    if(typed && typed !== c.title) draft.title = typed;
+  }
+  /* 点「编辑」前可能正停在某个就地编辑框里：把已输入的文字带进草稿，避免被这次切换吞掉 */
+  if(caseInlineEdit){
+    if(caseInlineEdit.kind === "step"){
+      if(caseInlineNewStep !== null && caseInlineEdit.i >= draft.steps.length){
+        draft.steps.push({ action: "", expected: "" });
+      }
+      var row = draft.steps[caseInlineEdit.i];
+      if(row) row[caseInlineEdit.k === "action" ? "action" : "expected"] = caseInlineEdit.text || "";
+    }else if(caseInlineEdit.kind === "pre"){
+      draft.precondition = caseInlineEdit.text || "";
+    }else if(caseInlineEdit.kind === "testData"){
+      draft.testData = caseInlineEdit.text || "";
+    }
+  }
+  caseDetailEditing = true;
+  caseDetailDraft = draft;
+  caseDetailTab = "overview";
+  caseInlineEdit = null;
+  caseInlineNewStep = null;
+  caseDetailFocusTitle = true;
+  loadCaseDetailModules(c.reqId);
+  renderCaseDetail();
+}
+function cancelCaseDetailEdit(){
+  if(!caseDetailEditing) return;
+  function go(){
+    caseDetailEditing = false;
+    caseDetailDraft = null;
+    caseInlineEdit = null;
+    caseInlineNewStep = null;
+    renderCaseDetail();
+  }
+  if(!caseDraftDirty()){ go(); return; }
+  UI.showConfirm({
+    title: "放弃未保存的修改？",
+    msg: "退出编辑后，本次填写的内容不会保存。",
+    okText: "放弃修改",
+    cancelText: "继续编辑"
+  }).then(function(ok){ if(ok) go(); });
+}
+function loadCaseDetailModules(reqId){
+  if(!reqId) return Promise.resolve([]);
+  if(caseDetailModules.reqId === reqId && caseDetailModules.list.length) return Promise.resolve(caseDetailModules.list);
+  if(caseDetailModules.reqId === reqId && caseDetailModules.loading) return caseDetailModules.loading;
+  caseDetailModules.reqId = reqId;
+  caseDetailModules.list = [];
+  caseDetailModules.loading = API.get("/api/test-modules", { reqId: reqId }).then(function(nodes){
+    if(caseDetailModules.reqId !== reqId) return caseDetailModules.list;
+    caseDetailModules.list = nodes || [];
+    caseDetailModules.loading = null;
+    /* 模块名以目录树为准：加载完成后补一次渲染，免得先显示「未归类」 */
+    if(caseDetailId && !$("caseDetailView").hidden) renderCaseDetail();
+    return caseDetailModules.list;
+  }).catch(function(){
+    caseDetailModules.loading = null;
+    return [];
+  });
+  return caseDetailModules.loading;
+}
+function saveCaseDetailDraft(){
+  var c = caseById(caseDetailId);
+  if(!c || !caseDetailDraft || caseDetailSaving) return;
+  var d = caseDetailDraft;
+  var title = (d.title || "").replace(/\s+/g, " ").trim();
+  if(!title){
+    toast("请填写用例标题", "warn");
+    var t = $("caseEditTitle");
+    if(t) t.focus();
+    return;
+  }
+  d.title = title;
+  var body = caseDraftBody(d, c);
+  body.module = null;
+  caseDetailSaving = true;
+  var btn = $("caseDetailView").querySelector("[data-case-edit-save]");
+  setCaseBusy(btn, true, "保存中…");
+  API.put("/api/test-cases/" + encodeURIComponent(c.id), body).then(function(){
+    caseDetailSaving = false;
+    caseDetailEditing = false;
+    caseDetailDraft = null;
+    applyCaseBody(caseById(c.id) || c, body, {
+      module: moduleNameById(caseDetailModules.list, body.moduleId),
+      demandTitle: d.demandTitle || "",
+      tasks: (d.tasks || []).map(function(t){ return { taskId: t.taskId, taskTitle: t.taskTitle || "" }; })
+    });
+    toast("用例已保存");
+    renderCaseDetail();
+    loadCases();
+  }).catch(function(ex){
+    caseDetailSaving = false;
+    setCaseBusy(btn, false);
+    toast(ex.message || "保存失败，修改仍在编辑态", "bad");
+  });
 }
 function startCaseTitleEdit(el){
   if(!el || el.isContentEditable) return;
@@ -4089,28 +4399,367 @@ function startCaseTitleEdit(el){
 }
 /* 标题就地保存：仍走整条 PUT，避免出现只改标题的第二个写入口 */
 function saveCaseTitle(c, title){
-  var body = {
+  saveCasePatch(c, { title: title }, "标题已更新");
+}
+/* 整条 PUT 的唯一入口：阅读态就地改、字段浮层、编辑态保存都走这里拼 body */
+function caseBodyOf(c, patch){
+  patch = patch || {};
+  return {
     reqId: c.reqId,
-    title: title,
-    precondition: c.precondition || null,
-    testData: c.testData || null,
-    moduleId: c.moduleId || null,
-    module: c.module || null,
-    priority: c.priority || null,
-    demandId: c.demandId || null,
-    taskIds: (c.tasks || []).map(function(t){ return t.taskId; }),
-    steps: (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
+    title: patch.title !== undefined ? patch.title : (c.title || ""),
+    precondition: patch.precondition !== undefined ? patch.precondition : (c.precondition || null),
+    testData: patch.testData !== undefined ? patch.testData : (c.testData || null),
+    moduleId: patch.moduleId !== undefined ? patch.moduleId : (c.moduleId || null),
+    module: null,
+    priority: patch.priority !== undefined ? patch.priority : (c.priority || null),
+    demandId: patch.demandId !== undefined ? patch.demandId : (c.demandId || null),
+    taskIds: patch.taskIds !== undefined ? patch.taskIds : (c.tasks || []).map(function(t){ return t.taskId; }),
+    steps: patch.steps !== undefined ? patch.steps
+      : (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
   };
-  API.put("/api/test-cases/" + encodeURIComponent(c.id), body).then(function(){
-    c.title = title;
-    toast("标题已更新");
+}
+function applyCaseBody(c, body, patch){
+  patch = patch || {};
+  c.title = body.title || "";
+  c.precondition = body.precondition || "";
+  c.testData = body.testData || "";
+  c.moduleId = body.moduleId || "";
+  c.module = body.moduleId ? (patch.module || moduleNameById(caseDetailModules.list, body.moduleId) || c.module || "") : "";
+  c.priority = body.priority || "";
+  c.demandId = body.demandId || "";
+  if(patch.demandTitle !== undefined) c.demandTitle = patch.demandTitle;
+  if(patch.tasks !== undefined) c.tasks = patch.tasks;
+  c.steps = (body.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; });
+}
+/* 保存串行化：连点两个格子时，后一次提交要等前一次的返回值落到本地对象上再拼 body */
+var casePatchChain = Promise.resolve();
+function saveCasePatch(c, patch, okMsg, ed){
+  if(!c || !caseWritable(c)) return Promise.resolve(false);
+  var id = c.id;
+  function run(){
+    var cur = caseById(id);
+    if(!cur) return false;
+    var body = caseBodyOf(cur, patch);
+    return API.put("/api/test-cases/" + encodeURIComponent(id), body).then(function(){
+      /* 列表可能已被刷新替换成新对象，就地更新抽屉当前引用的那一条 */
+      applyCaseBody(caseById(id) || cur, body, patch);
+      /* 请求期间用户可能已经在改别的字段：只清理本次提交对应的就地编辑 */
+      if(!ed || caseInlineEdit === ed){ caseInlineEdit = null; caseInlineNewStep = null; }
+      toast(okMsg || "已保存");
+      renderCaseDetail();
+      loadCases();
+      return true;
+    }).catch(function(ex){
+      toast(ex.message || "保存失败", "bad");
+      renderCaseDetail();
+      return false;
+    });
+  }
+  casePatchChain = casePatchChain.then(run, run);
+  return casePatchChain;
+}
+
+/* ---------- 阅读态就地编辑：前置条件 / 测试数据 / 步骤 ---------- */
+function beginCaseBlockEdit(field){
+  var c = caseById(caseDetailId);
+  if(!c || !caseWritable(c)) return;
+  caseInlineEdit = {
+    kind: field,
+    text: field === "pre" ? (c.precondition || "") : (c.testData || "")
+  };
+  renderCaseDetail();
+  var ta = $("caseDetailView").querySelector("[data-case-block-edit]");
+  if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+function beginCaseStepEdit(i, k){
+  var c = caseById(caseDetailId);
+  var s = c && caseStepsView(c)[i];
+  if(!s) return;
+  caseInlineEdit = { kind: "step", i: i, k: k, text: k === "action" ? (s.action || "") : (s.expected || "") };
+  renderCaseDetail();
+  var ta = $("caseDetailView").querySelector("[data-case-step-edit]");
+  if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+function cancelCaseInlineEdit(){
+  if(!caseInlineEdit && caseInlineNewStep === null) return;
+  caseInlineEdit = null;
+  caseInlineNewStep = null;
+  renderCaseDetail();
+}
+/* 新增 / 插入步骤只挂一条本地占位行并直接进入编辑，避免空行提交后被服务端过滤掉 */
+function insertCaseStepRow(after){
+  var c = caseById(caseDetailId);
+  if(!c || !caseWritable(c)) return;
+  var len = (c.steps || []).length + (caseInlineNewStep !== null ? 1 : 0);
+  if(len >= 30){ toast("步骤最多 30 条", "warn"); return; }
+  var at = after === null || after === undefined ? len : after + 1;
+  caseInlineNewStep = at;
+  caseInlineEdit = { kind: "step", i: at, k: "action", text: "" };
+  renderCaseDetail();
+  var ta = $("caseDetailView").querySelector("[data-case-step-edit]");
+  if(ta) ta.focus();
+}
+function commitCaseInlineEdit(el){
+  var ed = caseInlineEdit;
+  var c = caseById(caseDetailId);
+  if(!ed || !c) return;
+  if(ed.kind === "step"){
+    var steps = caseStepsView(c);
+    var row = steps[ed.i];
+    if(!row){ cancelCaseInlineEdit(); return; }
+    row[ed.k] = (ed.text || "").trim();
+    if(!row.action && row.expected){
+      toast("请先填写操作步骤", "warn");
+      if(el) el.focus();
+      return;
+    }
+    if(caseInlineNewStep !== null && !row.action && !row.expected){
+      /* 占位行没填内容：直接撤掉，不打扰服务端 */
+      cancelCaseInlineEdit();
+      return;
+    }
+    steps = steps.filter(function(s){ return s.action || s.expected; });
+    saveCasePatch(c, { steps: steps }, "步骤已更新", ed);
+    return;
+  }
+  var val = (ed.text || "").trim();
+  var old = ed.kind === "pre" ? (c.precondition || "") : (c.testData || "");
+  if(val === old){ cancelCaseInlineEdit(); return; }
+  var patch = {};
+  patch[ed.kind] = val || null;
+  saveCasePatch(c, patch, "已更新", ed);
+}
+function mutateCaseSteps(fn, msg){
+  var c = caseById(caseDetailId);
+  if(!c || !caseWritable(c)) return;
+  var steps = (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; });
+  fn(steps);
+  saveCasePatch(c, { steps: steps.slice(0, 30) }, msg);
+}
+
+/* ---------- 字段浮层：优先级 / 模块 / 关联需求 / 验证工作项 ---------- */
+function casePickTarget(){
+  return caseDetailEditing ? caseDetailDraft : caseById(caseDetailId);
+}
+function applyCasePick(patch, msg){
+  if(caseDetailEditing && caseDetailDraft){
+    Object.keys(patch).forEach(function(k){
+      if(k === "demandTitle") return;
+      if(k === "tasks") caseDetailDraft.tasks = patch.tasks;
+      else caseDetailDraft[k] = patch[k];
+    });
+    if(patch.demandTitle !== undefined) caseDetailDraft.demandTitle = patch.demandTitle;
+    UI.closeAllPops();
     renderCaseDetail();
-    loadCases();
-  }).catch(function(ex){
-    toast(ex.message || "保存失败", "bad");
-    renderCaseDetail();
+    return;
+  }
+  UI.closeAllPops();
+  saveCasePatch(caseById(caseDetailId), patch, msg);
+}
+function openCasePick(kind, anchor){
+  var c = caseById(caseDetailId);
+  if(!c || !caseWritable(c)) return;
+  if(kind === "priority") openCasePriPop(anchor);
+  else if(kind === "module") openCaseModulePop(anchor, c);
+  else if(kind === "demand") openCaseDemandPop(anchor, c);
+  else if(kind === "tasks") openCaseTasksPop(anchor, c);
+}
+function openCasePriPop(anchor){
+  var target = casePickTarget();
+  var cur = target.priority || "";
+  var el = document.createElement("div");
+  el.className = "menu";
+  el.innerHTML = '<div class="menu-title">优先级</div>'
+    + [["", "不设置"]].concat(PRIORITIES.map(function(p){ return [p, p + " · " + priName(p)]; })).map(function(o){
+      return '<button class="menu-item' + (cur === o[0] ? " on" : "") + '" type="button" data-pick="' + o[0] + '">'
+        + '<span>' + esc(o[1]) + '</span>' + (cur === o[0] ? icon("check", 14) : "") + '</button>';
+    }).join("");
+  UI.openPop(el, anchor, { width: 220 });
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-pick]");
+    if(!b) return;
+    applyCasePick({ priority: b.getAttribute("data-pick") || null },
+      b.getAttribute("data-pick") ? "优先级已改为 " + b.getAttribute("data-pick") : "已清除优先级");
   });
 }
+function openCaseModulePop(anchor, c){
+  if(caseDetailModules.reqId !== c.reqId || (!caseDetailModules.list.length && !caseDetailModules.loading)){
+    loadCaseDetailModules(c.reqId).then(function(){
+      if(caseDetailEditing) renderCaseDetail();
+    });
+  }
+  var target = casePickTarget();
+  var cur = target.moduleId || "";
+  var list = caseDetailModules.reqId === c.reqId ? caseDetailModules.list : [];
+  var el = document.createElement("div");
+  el.className = "menu case-module-pop";
+  el.innerHTML = '<div class="menu-title">模块 <span class="case-pop-note">项目目录节点</span></div>'
+    + '<button class="menu-item' + (cur ? "" : " on") + '" type="button" data-pick=""><span>未归类（不选目录）</span>'
+    + (cur ? "" : icon("check", 14)) + '</button>'
+    + (list.length ? list.map(function(n){
+      var pad = "";
+      for(var i = 1; i < Math.min(n.level || 1, 7); i++) pad += "　";
+      return '<button class="menu-item' + (cur === n.id ? " on" : "") + '" type="button" data-pick="' + esc(n.id) + '">'
+        + '<span>' + esc(pad + (n.name || "")) + '</span>' + (cur === n.id ? icon("check", 14) : "") + '</button>';
+    }).join("") : '<div class="menu-empty">' + (caseDetailModules.loading ? "模块加载中…" : "该项目还没有目录节点") + '</div>');
+  UI.openPop(el, anchor, { width: 260 });
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-pick]");
+    if(!b) return;
+    var id = b.getAttribute("data-pick") || "";
+    applyCasePick({ moduleId: id || null, module: id ? moduleNameById(list, id) : "" }, id ? "模块已更新" : "已移出模块");
+  });
+}
+function openCaseDemandPop(anchor, c){
+  var target = casePickTarget();
+  var el = document.createElement("div");
+  el.className = "menu search-picker case-demand-pop";
+  el.innerHTML = '<div class="search-picker-head"><div class="search-picker-search">' + icon("search", 15)
+    + '<input type="search" placeholder="搜索需求标题、描述或来源" aria-label="搜索需求" autocomplete="off" /></div>'
+    + '<div class="search-picker-tools"><span class="search-picker-count" role="status"></span></div></div>'
+    + '<div class="search-picker-results"></div>'
+    + '<div class="search-picker-foot">仅本项目需求池；输入关键词可搜索全部条目</div>';
+  UI.openPop(el, anchor, { width: 360 });
+  var box = el.querySelector(".search-picker-results"), count = el.querySelector(".search-picker-count");
+  var seq = 0, timer = null, cache = {};
+  function render(list, q){
+    list.forEach(function(d){ cache[d.id] = d; });
+    var cur = target.demandId || "";
+    var html = '<button type="button" class="search-picker-clear' + (cur ? "" : " selected") + '" data-pick="">'
+      + icon("close", 13) + '<span>不关联需求</span></button>';
+    if(!list.length){
+      html += '<div class="search-picker-empty">' + (q ? "没有找到匹配的需求，换个关键词试试。" : "本项目需求池暂无需求。") + '</div>';
+    }else{
+      html += list.map(function(d){
+        return '<button type="button" class="search-picker-option' + (d.id === cur ? " selected" : "") + '" data-pick="' + esc(d.id) + '">'
+          + '<span class="search-picker-option-main"><span class="search-picker-option-title">' + esc(d.title || "未命名需求") + '</span>'
+          + (demandMetaText(d) ? '<span class="search-picker-option-meta">' + esc(demandMetaText(d)) + '</span>' : "")
+          + '</span>' + (d.id === cur ? icon("check", 15) : "") + '</button>';
+      }).join("");
+    }
+    box.innerHTML = html;
+    count.textContent = list.length + " 条";
+  }
+  function load(q){
+    var my = ++seq;
+    count.textContent = "搜索中…";
+    API.get("/api/demands/page", { reqId: c.reqId, q: q || "", offset: 0, limit: 20, sort: "created" }).then(function(page){
+      if(my !== seq) return;
+      render(page.items || [], q);
+    }).catch(function(){
+      if(my !== seq) return;
+      box.innerHTML = '<div class="search-picker-error">需求加载失败，请重试</div>';
+      count.textContent = "加载失败";
+    });
+  }
+  load("");
+  var input = el.querySelector("input");
+  input.addEventListener("input", function(){
+    clearTimeout(timer);
+    var q = input.value.trim();
+    timer = setTimeout(function(){ load(q); }, 250);
+  });
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-pick]");
+    if(!b) return;
+    var id = b.getAttribute("data-pick") || "";
+    if(id === (casePickTarget().demandId || "")){ UI.closeAllPops(); return; }
+    var picked = id ? cache[id] || null : null;
+    var currentTasks = (casePickTarget().tasks || []).length;
+    function apply(){
+      var patch = { demandId: id || null, demandTitle: picked ? picked.title : "", tasks: [], taskIds: [] };
+      if(id && picked && picked.categoryId){
+        patch.moduleId = picked.categoryId;
+        loadCaseDetailModules(c.reqId);
+      }
+      applyCasePick(patch, id ? "关联需求已更新" : "已取消关联需求");
+    }
+    if(id && currentTasks){
+      UI.showConfirm({
+        title: "更换关联需求",
+        msg: "现有 " + currentTasks + " 个验证工作项可能不属于新需求，保存时会一并移除。",
+        okText: "更换并移除",
+        cancelText: "取消"
+      }).then(function(ok){ if(ok) apply(); });
+    }else{
+      apply();
+    }
+  });
+}
+function openCaseTasksPop(anchor, c){
+  var target = casePickTarget();
+  if(!target.demandId){
+    var el = document.createElement("div");
+    el.className = "menu case-hint-pop";
+    el.innerHTML = '<div class="menu-title">验证工作项</div>'
+      + '<p class="case-hint-text">工作项从关联需求下挑选；先关联需求，再回来挂工作项。</p>'
+      + '<button class="btn sm primary case-pop-act" type="button" data-go-demand>去关联需求</button>';
+    UI.openPop(el, anchor, { width: 280 });
+    el.addEventListener("click", function(e){
+      if(!e.target.closest("[data-go-demand]")) return;
+      UI.closeAllPops();
+      openCasePick("demand", anchor);
+    });
+    return;
+  }
+  var el = document.createElement("div");
+  el.className = "menu case-task-pop";
+  el.innerHTML = '<div class="menu-title">验证工作项<span class="case-pop-note">已选 0 项</span></div>'
+    + '<div class="case-task-pop-list">' + UI.skeletonRows(3) + '</div>';
+  UI.openPop(el, anchor, { width: 340 });
+  var seq = ++caseInlinePickSeq;
+  var sel = {};
+  (target.tasks || []).forEach(function(t){ sel[t.taskId] = t; });
+  API.get("/api/test-cases/task-options", { reqId: c.reqId, demandId: target.demandId }).then(function(rows){
+    if(seq !== caseInlinePickSeq) return;
+    var list = rows || [];
+    var note = el.querySelector(".case-pop-note");
+    function syncNote(){
+      if(note) note.textContent = "已选 " + Object.keys(sel).length + " 项";
+    }
+    function render(){
+      var box = el.querySelector(".case-task-pop-list");
+      if(!list.length){ box.innerHTML = '<div class="menu-empty">该需求下还没有工作项；先在需求详情「拆分为工作项」。</div>'; return; }
+      box.innerHTML = list.map(function(t){
+        return '<label class="case-task-pick"><input type="checkbox" data-task="' + esc(t.taskId) + '"'
+          + (sel[t.taskId] ? " checked" : "") + ' /><span class="case-task-pick-main"><span class="case-task-pick-title">'
+          + esc(t.taskTitle || t.taskId) + '</span><span class="case-task-pick-meta">'
+          + esc([itemNoText(t.itemNo), typeName(t.itemType), colName(t.boardColumn)].filter(Boolean).join(" · "))
+          + '</span></span></label>';
+      }).join("");
+      syncNote();
+    }
+    render();
+    el.querySelector(".case-task-pop-list").addEventListener("change", function(e){
+      var cb = e.target.closest("[data-task]");
+      if(!cb) return;
+      var id = cb.getAttribute("data-task");
+      if(cb.checked){
+        var hit = list.filter(function(t){ return t.taskId === id; })[0];
+        if(hit) sel[id] = { taskId: id, taskTitle: hit.taskTitle || "" };
+      }else{
+        delete sel[id];
+      }
+      syncNote();
+    });
+    var foot = document.createElement("div");
+    foot.className = "case-pop-foot";
+    foot.innerHTML = '<button class="btn" type="button" data-close>取消</button>'
+      + '<button class="btn primary" type="button" data-save-tasks>保存</button>';
+    el.appendChild(foot);
+    foot.addEventListener("click", function(e){
+      if(e.target.closest("[data-close]")){ UI.closeAllPops(); return; }
+      if(!e.target.closest("[data-save-tasks]")) return;
+      var tasks = Object.keys(sel).map(function(id){ return sel[id]; });
+      applyCasePick({ tasks: tasks, taskIds: tasks.map(function(t){ return t.taskId; }) }, "验证工作项已更新");
+    });
+  }).catch(function(){
+    if(seq !== caseInlinePickSeq) return;
+    el.querySelector(".case-task-pop-list").innerHTML = '<div class="menu-empty">工作项加载失败，请关闭后重试。</div>';
+  });
+}
+var caseInlinePickSeq = 0;
+
 function commitCaseTitleEdit(el){
   if(!el || !el.isContentEditable) return;
   el.contentEditable = "false";
@@ -4227,6 +4876,11 @@ function closeCaseDialog(){
   caseDetailId = null;
   caseDetailRuns = null;
   caseDetailSeq++;
+  caseDetailEditing = false;
+  caseDetailDraft = null;
+  caseInlineEdit = null;
+  caseInlineNewStep = null;
+  caseDetailSaving = false;
   $("caseDetailView").innerHTML = "";
   UI.closeModal($("dlgCase"));
 }
@@ -4236,10 +4890,26 @@ function tryCloseCaseDialog(afterClose){
     closeCaseDialog();
     if(afterClose) afterClose();
   }
-  if(!caseFormWritable() || !caseFormDirty()){ finish(); return; }
+  var drawerDirty = caseDetailEditing && caseDraftDirty();
+  var formDirty = !$("caseEditBody").hidden && caseFormWritable() && caseFormDirty();
+  /* 阅读态就地编辑不阻塞关闭会把刚输入的内容一起丢掉，所以也纳入判断 */
+  var inlineDirty = false;
+  if(caseInlineEdit){
+    var ic = caseById(caseDetailId);
+    if(ic){
+      if(caseInlineEdit.kind === "step"){
+        var st = caseStepsView(ic)[caseInlineEdit.i];
+        if(st) inlineDirty = (caseInlineEdit.text || "") !== (caseInlineEdit.k === "action" ? (st.action || "") : (st.expected || ""));
+      }else{
+        inlineDirty = (caseInlineEdit.text || "") !== (caseInlineEdit.kind === "pre" ? (ic.precondition || "") : (ic.testData || ""));
+      }
+    }
+  }
+  if(!drawerDirty && !formDirty && !inlineDirty){ finish(); return; }
   UI.showConfirm({
     title: "放弃未保存的修改？",
-    msg: "用例还没有保存，关闭后填写的内容会丢失。",
+    msg: drawerDirty ? "退出编辑后，本次填写的内容不会保存。"
+      : inlineDirty ? "正在编辑的内容还没有保存。" : "用例还没有保存，关闭后填写的内容会丢失。",
     okText: "放弃修改",
     cancelText: "继续编辑"
   }).then(function(ok){ if(ok) finish(); });
@@ -4321,47 +4991,14 @@ function saveCase(){
     taskIds: Object.keys(caseTaskSel),
     steps: collectSteps()
   };
-  var isEdit = !!editingCase.id;
   caseSaving = true;
   setCaseBusy($("btnSaveCase"), true, "保存中…");
-  var p = isEdit
-    ? API.put("/api/test-cases/" + encodeURIComponent(editingCase.id), body)
-    : API.post("/api/test-cases", body);
-  p.then(function(){
+  API.post("/api/test-cases", body).then(function(){
     caseSaving = false;
     setCaseBusy($("btnSaveCase"), false);
-    if(!isEdit){
-      closeCaseDialog();
-      toast("用例已创建");
-      loadCases();
-      return;
-    }
-    /* 保存后留在抽屉里回到阅读态：用户还要接着看步骤、执行历史或转缺陷 */
-    var c = caseById(editingCase.id);
-    if(c){
-      c.title = title;
-      c.precondition = body.precondition || "";
-      c.testData = body.testData || "";
-      c.priority = body.priority || "";
-      c.moduleId = body.moduleId || "";
-      c.module = moduleNameById(caseFormModules, body.moduleId) || c.module || "";
-      c.demandId = body.demandId || "";
-      var ds = $("cDemand");
-      c.demandTitle = body.demandId && ds.selectedOptions[0] ? ds.selectedOptions[0].textContent : "";
-      c.tasks = Object.keys(caseTaskSel).map(function(id){ return caseTaskSel[id]; });
-    }
-    caseFormBaseline = caseFormSnapshot();
-    caseDetailId = editingCase.id;
-    caseDetailTab = "overview";
-    $("caseEditBody").hidden = true;
-    $("caseDetailView").hidden = false;
-    $("caseEditBack").hidden = true;
-    renderCaseDetail();
-    loadCaseDetailRuns(caseDetailId);
-    toast("用例已保存");
-    loadCases().then(function(){
-      if(caseDetailId && caseDetailId === editingCase.id) renderCaseDetail();
-    });
+    closeCaseDialog();
+    toast("用例已创建");
+    loadCases();
   }).catch(function(ex){
     caseSaving = false;
     setCaseBusy($("btnSaveCase"), false);
@@ -6461,7 +7098,7 @@ function renderRuleBuilder(rule){
     + '<div class="cs-rule-grid">'
     + field("csRuleStatus", "执行结果", [["all", "全部"], ["passed", "通过"], ["failed", "失败"], ["blocked", "阻塞"], ["skipped", "跳过"], ["__untested", "未执行"]], r.status)
     + field("csRulePri", "优先级", [["all", "全部"]].concat(PRIORITIES.map(function(p){ return [p, p + " · " + priName(p)]; })).concat([["__none", "未设置"]]), r.pri)
-    + field("csRuleModule", "项目目录", modOpts, r.moduleId)
+    + field("csRuleModule", "模块", modOpts, r.moduleId)
     + field("csRuleDemand", "主需求", demandOpts, r.demandId)
     + field("csRuleOwner", "最近执行人", ownerOpts, r.owner)
     + '<div class="field"><label for="csRuleQ">关键词</label>'
@@ -8572,33 +9209,156 @@ $("dlgCase").addEventListener("keydown", function(e){
   if(!caseSaving && !$("btnSaveCase").disabled) saveCase();
 });
 UI.setModalCloseGuard($("dlgCase"), function(){ tryCloseCaseDialog(); });
-$("caseEditBack").addEventListener("click", backToCaseDetail);
+$("caseEditBack").addEventListener("click", function(){ tryCloseCaseDialog(); });
 UI.setModalSubmit($("dlgCase"), function(){
   if($("caseEditBody").hidden) return;
   if(!caseSaving && !$("btnSaveCase").disabled) saveCase();
 });
-/* 阅读态：页签、编辑、执行、关联跳转与标题就地修改都在同一个容器里委派 */
+/* 阅读态 + 编辑态：页签、字段就地改、编辑、执行、关联跳转与标题都在同一个容器里委派 */
 $("caseDetailView").addEventListener("click", function(e){
+  var hint = e.target.closest("[data-case-hint]");
+  if(hint){ e.stopPropagation(); openCaseHint(hint.getAttribute("data-case-hint"), hint); return; }
   var tab = e.target.closest("[data-case-tab]");
-  if(tab){ caseDetailTab = tab.dataset.caseTab; renderCaseDetail(); return; }
+  if(tab){ caseDetailTab = tab.dataset.caseTab; caseInlineEdit = null; caseInlineNewStep = null; renderCaseDetail(); return; }
   if(e.target.closest("[data-case-close]")){ tryCloseCaseDialog(); return; }
-  if(e.target.closest("[data-case-edit]")){ openEditDialog(caseDetailId); return; }
+  if(e.target.closest("[data-case-edit]")){ startCaseDetailEdit(); return; }
+  if(e.target.closest("[data-case-edit-cancel]")){ cancelCaseDetailEdit(); return; }
+  if(e.target.closest("[data-case-edit-save]")){ saveCaseDetailDraft(); return; }
   if(e.target.closest("[data-case-run]")){ openRunDialog(caseDetailId); return; }
   if(e.target.closest("[data-case-defect]")){ openDefectDialog(caseDetailId); return; }
+  if(e.target.closest("[data-case-jump]")){
+    var c0 = caseById(caseDetailId);
+    if(c0 && c0.demandId) openDemandDetailById(c0.demandId);
+    return;
+  }
   var bug = e.target.closest("[data-case-bug]");
   if(bug){ openTaskById(bug.dataset.caseBug); return; }
   var task = e.target.closest("[data-case-task]");
   if(task){ openTaskById(task.dataset.caseTask); return; }
+  var pri = e.target.closest("[data-case-pri]");
+  if(pri && caseDetailDraft){
+    caseDetailDraft.priority = pri.getAttribute("data-case-pri") || "";
+    pri.parentNode.querySelectorAll("[data-case-pri]").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b === pri));
+    });
+    syncCaseDraftDirty();
+    return;
+  }
+  var actEl = e.target.closest("[data-case-act]");
+  if(actEl){
+    var act = actEl.getAttribute("data-case-act");
+    var anchor = actEl.closest(".case-fact") || actEl;
+    if(act === "priority" || act === "module" || act === "demand" || act === "tasks"
+      || act === "edit-demand" || act === "edit-tasks"){
+      if(act === "edit-demand") act = "demand";
+      if(act === "edit-tasks") act = "tasks";
+      openCasePick(act, anchor);
+      return;
+    }
+    if(act === "pre" || act === "testData"){ beginCaseBlockEdit(act); return; }
+    if(act === "step"){ beginCaseStepEdit(Number(actEl.getAttribute("data-i")), actEl.getAttribute("data-k")); return; }
+    if(act === "step-add"){ insertCaseStepRow(null); return; }
+    if(act === "step-ins"){ insertCaseStepRow(Number(actEl.getAttribute("data-i"))); return; }
+    if(act === "step-up" || act === "step-down" || act === "step-del"){
+      var i = Number(actEl.getAttribute("data-i"));
+      mutateCaseSteps(function(s){
+        var tmp;
+        if(act === "step-up" && i > 0){ tmp = s[i - 1]; s[i - 1] = s[i]; s[i] = tmp; }
+        if(act === "step-down" && i < s.length - 1){ tmp = s[i + 1]; s[i + 1] = s[i]; s[i] = tmp; }
+        if(act === "step-del") s.splice(i, 1);
+      }, "步骤已更新");
+      return;
+    }
+    if(act === "d-step-add"){
+      if(caseDetailDraft.steps.length >= 30){ toast("步骤最多 30 条", "warn"); return; }
+      caseDetailDraft.steps.push({ action: "", expected: "" });
+      caseDraftFocusStep = caseDetailDraft.steps.length - 1;
+      renderCaseDetail();
+      return;
+    }
+    if(act === "d-step-ins" || act === "d-step-up" || act === "d-step-down" || act === "d-step-del"){
+      var di = Number(actEl.getAttribute("data-i")), ds = caseDetailDraft.steps, tmp2;
+      if(act === "d-step-ins"){
+        if(ds.length >= 30){ toast("步骤最多 30 条", "warn"); return; }
+        ds.splice(di + 1, 0, { action: "", expected: "" });
+        caseDraftFocusStep = di + 1;
+      }
+      if(act === "d-step-up" && di > 0){ tmp2 = ds[di - 1]; ds[di - 1] = ds[di]; ds[di] = tmp2; }
+      if(act === "d-step-down" && di < ds.length - 1){ tmp2 = ds[di + 1]; ds[di + 1] = ds[di]; ds[di] = tmp2; }
+      if(act === "d-step-del") ds.splice(di, 1);
+      renderCaseDetail();
+      return;
+    }
+  }
   var title = e.target.closest("[data-case-title-edit]");
   if(title) startCaseTitleEdit(title);
 });
+$("caseDetailView").addEventListener("input", function(e){
+  var t = e.target;
+  if(t.id === "caseEditTitle" && caseDetailDraft){
+    autoGrowCaseTitle(t);
+    caseDetailDraft.title = t.value;
+    syncCaseDraftDirty();
+    return;
+  }
+  var dk = t.getAttribute("data-case-draft");
+  if(dk && caseDetailDraft){
+    caseDetailDraft[dk] = t.value;
+    syncCaseDraftDirty();
+    return;
+  }
+  var ds = t.getAttribute("data-case-draft-step");
+  if(ds && caseDetailDraft){
+    var row = caseDetailDraft.steps[Number(ds)];
+    if(row) row[t.getAttribute("data-k")] = t.value;
+    syncCaseDraftDirty();
+    return;
+  }
+  if(t.hasAttribute("data-case-block-edit") || t.hasAttribute("data-case-step-edit")){
+    if(caseInlineEdit) caseInlineEdit.text = t.value;
+  }
+});
+$("caseDetailView").addEventListener("change", function(e){
+  var t = e.target;
+  if(t.getAttribute("data-case-draft") === "moduleId" && caseDetailDraft){
+    caseDetailDraft.moduleId = t.value;
+    caseDetailDraft.module = moduleNameById(caseDetailModules.list, t.value);
+    syncCaseDraftDirty();
+  }
+});
 $("caseDetailView").addEventListener("keydown", function(e){
-  var el = e.target.closest("[data-case-title-edit]");
+  var t = e.target;
+  if(t.id === "caseEditTitle"){
+    if(e.key === "Enter"){ e.preventDefault(); t.blur(); }
+    return;
+  }
+  if(t.hasAttribute("data-case-step-edit") || t.hasAttribute("data-case-block-edit")){
+    if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); commitCaseInlineEdit(t); }
+    else if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); cancelCaseInlineEdit(); }
+    return;
+  }
+  var ds = t.getAttribute && t.getAttribute("data-case-draft-step");
+  if(ds !== null && e.key === "Enter" && (e.ctrlKey || e.metaKey)){
+    e.preventDefault();
+    if(caseDetailDraft){
+      var at = Number(ds) + 1;
+      caseDetailDraft.steps.splice(at, 0, { action: "", expected: "" });
+      caseDraftFocusStep = at;
+      renderCaseDetail();
+    }
+    return;
+  }
+  var el = t.closest("[data-case-title-edit]");
+  if(t.tagName !== "BUTTON" && (e.key === "Enter" || e.key === " ")){
+    var actBtn = t.closest && t.closest('[data-case-act][role="button"]');
+    if(actBtn){ e.preventDefault(); actBtn.click(); return; }
+  }
   if(!el) return;
   if(el.isContentEditable){
     if(e.key === "Enter"){ e.preventDefault(); el.blur(); }
     else if(e.key === "Escape"){
       e.preventDefault();
+      e.stopPropagation();
       el.textContent = el.dataset.original || "";
       el.contentEditable = "false";
       el.blur();
@@ -8609,7 +9369,12 @@ $("caseDetailView").addEventListener("keydown", function(e){
   }
 });
 $("caseDetailView").addEventListener("focusout", function(e){
-  var el = e.target.closest("[data-case-title-edit]");
+  var t = e.target;
+  if(t.hasAttribute("data-case-block-edit") || t.hasAttribute("data-case-step-edit")){
+    if(caseInlineEdit) commitCaseInlineEdit(t);
+    return;
+  }
+  var el = t.closest("[data-case-title-edit]");
   if(el && el.isContentEditable) commitCaseTitleEdit(el);
 });
 

@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>编辑用例 · 降噪原型 2026-11-16</title>
+<style>
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085; --text-inverse:#FFFFFF;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --p0-fg:#B42318; --p1-fg:#B54708;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  --scrim:rgba(16,24,40,.32);
+}
+body[data-theme="dark"]{
+  --bg-app:#0E1116; --surface:#171B21; --surface-sunken:#11151A; --surface-hover:#1E232A;
+  --border:#2A3038; --border-strong:#3A414B;
+  --text:#E7EAEE; --text-2:#AEB6C2; --text-3:#8A93A0; --text-inverse:#101828;
+  --primary:#5B8DFF; --primary-hover:#7BA5FF; --primary-soft:#18213A; --primary-border:#2F4370; --primary-fg:#8FB1FF;
+  --success:#4DD08D; --success-soft:#12251C; --success-border:#1F4A35; --success-fg:#5FD79A;
+  --warning:#E0A33A; --warning-soft:#2A2214; --warning-border:#4C3D1C; --warning-fg:#E9B75C;
+  --danger:#F4776C; --danger-soft:#2C1817; --danger-border:#572924; --danger-fg:#F58C82;
+  --info:#5B9BFF; --info-soft:#141F32; --info-border:#27405F; --info-fg:#8FB8FF;
+  --p0-fg:#F58C82; --p1-fg:#E9B75C;
+  --shadow-md:0 4px 12px rgba(0,0,0,.45); --shadow-xl:0 24px 48px rgba(0,0,0,.55);
+  --scrim:rgba(0,0,0,.55);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg-app);color:var(--text);font:13px/1.55 var(--font-sans)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+
+/* ============ 原型外壳（不属于产品界面） ============ */
+.app{display:flex;flex-direction:column;height:100%}
+.app-head{flex:none;display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em}
+.brand span{font-size:12px;color:var(--text-3)}
+.tools{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:2px;padding:2px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm)}
+.tab{height:26px;padding:0 12px;border:0;background:transparent;border-radius:var(--r-xs);font-size:12.5px;color:var(--text-2)}
+.tab.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow-xs)}
+.icon-btn{width:32px;height:32px;border:1px solid var(--border);background:var(--surface);border-radius:var(--r-sm);display:inline-grid;place-items:center;font-size:14px;color:var(--text-2)}
+.icon-btn:hover{border-color:var(--border-strong);color:var(--text)}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);cursor:pointer;user-select:none}
+.chk input{width:14px;height:14px;accent-color:var(--primary)}
+.chk input:disabled{opacity:.45}
+.chk.disabled{opacity:.5;cursor:default}
+.statebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;font-size:12px;color:var(--text-3)}
+.statebar .lbl{color:var(--text-2);font-weight:500}
+.state-btn{height:24px;padding:0 9px;border:1px solid var(--border);background:var(--surface);border-radius:var(--r-xs);font-size:11.5px;color:var(--text-2)}
+.state-btn:hover{border-color:var(--border-strong);color:var(--text)}
+.state-btn.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+.statebar .sep{color:var(--border-strong)}
+.changelog{position:relative;margin-left:auto}
+.changelog summary{list-style:none;cursor:pointer;font-size:12px;color:var(--primary-fg);font-weight:500}
+.changelog summary::-webkit-details-marker{display:none}
+.changelog summary:hover{text-decoration:underline}
+.changelog ul{position:absolute;right:0;top:calc(100% + 6px);z-index:30;margin:0;padding:12px 16px 12px 30px;width:430px;max-width:calc(100vw - 40px);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-xl);font-size:12px;line-height:19px;color:var(--text-2)}
+.changelog li{margin:2px 0}
+.changelog b{color:var(--text);font-weight:600}
+
+.stage{flex:1 1 auto;min-height:0;display:flex;justify-content:flex-end;padding:20px;overflow:auto;background:
+  radial-gradient(1200px 400px at 20% 0%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%),
+  var(--bg-app);}
+/* ============ 抽屉 ============ */
+.drawer{width:min(820px,100%);height:100%;display:flex;flex-direction:column;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xl);overflow:hidden}
+.cf-head{flex:none;display:flex;align-items:flex-start;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border)}
+.cf-head-main{flex:1 1 auto;min-width:0}
+.cf-head h3{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em;line-height:24px}
+.cf-ctx{display:flex;align-items:center;gap:6px;margin:4px 0 0;font-size:12px;line-height:18px;color:var(--text-3)}
+.cf-ctx b{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums}
+.cf-ctx .sep{color:var(--border-strong)}
+.cf-body{flex:1 1 auto;min-height:0;overflow:auto;padding:20px}
+.cf-foot{flex:none;display:flex;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface)}
+.cf-grow{flex:1 1 auto}
+
+/* ---------- 表单 ---------- */
+.cf-form{display:flex;flex-direction:column;gap:22px}
+.cf-sec{min-width:0}
+.cf-sec-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;min-height:22px}
+.cf-num{flex:none;font:600 10.5px/1 var(--font-mono);color:var(--text-3);background:var(--surface-sunken);border-radius:5px;padding:4px 5px;letter-spacing:.03em}
+.cf-sec-h h3{margin:0;font-size:13px;line-height:20px;font-weight:600;color:var(--text)}
+.cf-sec-h h3 .req{color:var(--danger-fg);font-weight:600;margin-left:2px}
+.cf-sec-h > .cf-link{margin-left:auto}
+.cf-meta{margin-left:auto;font-size:11px;line-height:16px;font-weight:500;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums}
+.cf-meta.must{color:var(--text-2)}
+.cf-link{border:0;background:none;padding:0 2px;border-radius:4px;font:inherit;font-size:12px;font-weight:500;line-height:20px;color:var(--primary-fg);cursor:pointer}
+.cf-link:hover{text-decoration:underline}
+.cf-link:focus-visible{outline:none;box-shadow:var(--ring-focus)}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field>label{font-size:12px;font-weight:600;color:var(--text-2)}
+.cf-rowlabel{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cf-subline{display:flex;align-items:flex-start;gap:12px;min-height:0}
+.cf-count{flex:none;margin-left:auto;font-size:11px;line-height:18px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.err{font-size:11.5px;line-height:18px;color:var(--danger-fg)}
+.cf-help{margin:0;font-size:11.5px;line-height:18px;color:var(--text-3)}
+
+.cf-title{width:100%;height:46px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+  font-size:15px;font-weight:500;letter-spacing:.005em}
+.cf-title::placeholder{font-weight:400;color:var(--text-3)}
+.cf-title:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus)}
+.cf-title.bad{border-color:var(--danger);box-shadow:0 0 0 3px rgba(240,68,56,.14)}
+
+/* 说明：? 图标 + 点击弹层 */
+.hint-wrap{position:relative;display:inline-flex;flex:none}
+.hint-btn{width:18px;height:18px;padding:0;border:1px solid var(--border);border-radius:50%;background:var(--surface);
+  display:inline-grid;place-items:center;font-size:11px;font-weight:600;line-height:1;color:var(--text-3);cursor:pointer;transition:all .12s}
+.hint-btn:hover{border-color:var(--border-strong);color:var(--text);background:var(--surface-hover)}
+.hint-btn.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg)}
+.hint-btn:focus-visible{outline:none;box-shadow:var(--ring-focus)}
+.hint-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:12;width:320px;max-width:calc(100vw - 72px);
+  padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--shadow-md);
+  font-size:12px;line-height:19px;color:var(--text-2);animation:pop-in .12s ease-out}
+.hint-pop[hidden]{display:none}
+.hint-pop p{margin:0}
+.hint-pop p + p{margin-top:5px}
+.hint-pop .hint-eg{margin-top:6px;padding:6px 8px;border-radius:var(--r-xs);background:var(--surface-sunken);font-size:11.5px;color:var(--text-2)}
+.hint-pop .hint-eg b{font-weight:600;color:var(--text)}
+.hint-pop dl{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;margin:6px 0 0}
+.hint-pop dt{display:flex;align-items:center;gap:5px;font-weight:600;color:var(--text)}
+.hint-pop dd{margin:0}
+.hint-pop .pd{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+@keyframes pop-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+/* 「全部展开说明」审阅模式：说明改为行内段落，避免多个气泡互相压住 */
+body.hints-inline .hint-wrap{display:contents}
+body.hints-inline .hint-btn{display:none}
+body.hints-inline .cf-sec-h{flex-wrap:wrap}
+body.hints-inline .hint-pop{position:static;flex:1 0 100%;order:9;width:auto;max-width:none;margin:0 0 2px;
+  padding:0;border:0;background:transparent;box-shadow:none;animation:none;color:var(--text-3)}
+body.hints-inline .hint-pop .hint-eg{padding:0;background:none;color:var(--text-3)}
+body.hints-inline .hint-pop .hint-eg b{color:var(--text-2)}
+body.hints-inline .hint-pop dl{display:inline-grid;grid-auto-flow:column;gap:2px 14px;margin:5px 0 0}
+body.hints-inline .hint-pop dt{font-weight:400;color:var(--text-3)}
+
+/* 状态型提示（仅在该状态下出现）：只留一行，不做横幅 */
+.cf-state{margin:4px 0 0;display:flex;align-items:flex-start;gap:6px;font-size:11.5px;line-height:18px;color:var(--text-2)}
+.cf-state[hidden]{display:none}
+.cf-state .si{flex:none;width:14px;height:14px;margin-top:2px;border-radius:50%;background:var(--info);color:#fff;
+  font:700 10px/14px var(--font-sans);text-align:center}
+.cf-state .cf-link{font-size:11.5px;line-height:18px;margin-left:2px}
+
+/* 需求选择 */
+.cf-demand{display:flex;align-items:center;gap:10px;width:100%;height:42px;padding:0 10px;border:1px solid var(--primary-border);
+  border-radius:var(--r-md);background:var(--primary-soft);text-align:left}
+.cf-demand:hover{border-color:#9FBDFC}
+.cf-demand.is-empty{background:var(--surface);border:1px dashed var(--border-strong)}
+.cf-demand.is-empty:hover{background:var(--surface-hover);border-color:var(--primary)}
+.cf-demand-badge{flex:none;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:var(--surface);
+  border:1px solid var(--primary-border);color:var(--primary-hover);font-size:12px}
+.cf-demand.is-empty .cf-demand-badge{background:var(--surface-sunken);border-color:var(--border);color:var(--text-3)}
+.cf-demand-text{flex:1 1 auto;min-width:0;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cf-demand.is-empty .cf-demand-text{font-weight:400;color:var(--text-3)}
+.cf-demand .caret{flex:none;color:var(--text-3);font-size:11px}
+.cf-demand:focus-visible{outline:none;box-shadow:var(--ring-focus)}
+
+/* 目录 + 工作项支路 */
+.cf-nest{margin:12px 0 0 12px;padding:2px 0 2px 14px;border-left:2px solid var(--border);display:flex;flex-direction:column;gap:10px}
+.cf-nest-row{display:flex;align-items:flex-start;gap:10px}
+.cf-nest-label{flex:none;width:64px;font-size:12px;font-weight:500;line-height:30px;color:var(--text-3)}
+.cf-nest-val{flex:1 1 auto;min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:30px}
+.cf-nest-val.col{display:block}
+select.cf-sel{height:30px;min-width:170px;max-width:280px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);font-size:12.5px}
+select.cf-sel:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus)}
+.cf-tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;font-size:11px;font-weight:500;
+  background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2)}
+.cf-tag.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+
+.case-task-tools{display:flex;align-items:center;gap:10px}
+.case-task-tools input{flex:1 1 auto;min-width:0;height:30px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);font-size:12.5px}
+.case-task-tools input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus)}
+.case-task-count{flex:none;font-size:12px;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums}
+.case-task-list{margin-top:4px;max-height:150px;overflow:auto}
+.case-task-opt{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:var(--r-xs);cursor:pointer}
+.case-task-opt:hover{background:var(--surface-hover)}
+.case-task-opt input{margin-top:2px;width:14px;height:14px;accent-color:var(--primary)}
+.case-task-opt .tt{font-size:12.5px;line-height:18px}
+.case-task-opt .ts{display:block;font-size:11px;line-height:16px;color:var(--text-3);font-family:var(--font-mono)}
+.case-task-empty{font-size:12px;line-height:30px;color:var(--text-3)}
+.case-task-empty[hidden]{display:none}
+
+/* 优先级 */
+.cf-seg{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;height:34px;padding:3px;background:var(--surface-sunken);
+  border:1px solid var(--border);border-radius:var(--r-sm);max-width:360px}
+.cf-seg button{border:0;border-radius:5px;background:transparent;font-size:12px;font-weight:500;color:var(--text-2)}
+.cf-seg button:hover{color:var(--text)}
+.cf-seg button.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow-xs)}
+.cf-seg button.on[data-pri="P0"]{color:var(--p0-fg)}
+.cf-seg button.on[data-pri="P1"]{color:var(--p1-fg)}
+
+/* 步骤表 */
+.cf-steps-head{display:grid;grid-template-columns:24px minmax(0,1.35fr) minmax(0,1fr) 132px;align-items:center;height:30px;
+  background:var(--surface-sunken);border:1px solid var(--border);border-bottom:0;border-radius:var(--r-md) var(--r-md) 0 0;
+  font-size:11px;font-weight:500;color:var(--text-3)}
+.cf-steps-head span{padding-left:12px}
+.cf-steps-head span:first-child{padding-left:0;text-align:center}
+.cf-steps-head span:last-child{padding-left:0}
+.cf-steps-head .req{color:var(--danger-fg)}
+.cf-steps{display:block;border:1px solid var(--border);border-radius:0 0 var(--r-md) var(--r-md);background:var(--surface)}.tc-step-row{display:grid;grid-template-columns:24px minmax(0,1.35fr) minmax(0,1fr) 132px;min-height:44px;border-bottom:1px solid var(--border)}
+.tc-step-row:last-child{border-bottom:0}
+.tc-step-no{display:flex;align-items:flex-start;justify-content:center;padding:12px 0 0;font-family:var(--font-mono);font-size:11px;line-height:20px;color:var(--text-3)}
+.tc-step-row textarea{width:100%;min-width:0;height:44px;min-height:44px;padding:9px 12px;border:0;border-left:1px solid var(--border);
+  border-radius:0;background:transparent;font-size:13px;line-height:20px;resize:none}
+.tc-step-row textarea::placeholder{color:var(--text-3)}
+.tc-step-row textarea:focus{outline:none;background:var(--primary-soft);box-shadow:inset 0 0 0 2px var(--primary)}
+@supports (field-sizing:content){
+  .tc-step-row textarea{height:auto;min-height:44px;field-sizing:content}
+}
+.tc-step-acts{display:flex;justify-content:flex-end;gap:2px;padding:8px 6px 0;opacity:.45;transition:opacity .12s}
+.tc-step-row:hover .tc-step-acts,.tc-step-acts:focus-within{opacity:1}
+.step-ico{width:22px;height:22px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--text-3);font-size:12px;line-height:22px}
+.step-ico:hover{background:var(--surface-sunken);color:var(--text)}
+.step-ico.del:hover{background:var(--danger-soft);color:var(--danger-fg)}
+.cf-step-foot{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
+.cf-step-foot .cf-help{margin-left:auto;text-align:right}
+
+/* 更多字段 */
+.cf-more{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+.cf-more summary{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;list-style:none;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--text)}
+.cf-more summary::-webkit-details-marker{display:none}
+.cf-more summary:hover{color:var(--primary-hover)}
+.cf-chev{display:inline-flex;color:var(--text-3);transition:transform .12s}
+.cf-more[open] .cf-chev{transform:rotate(90deg)}
+.cf-more-meta{margin-left:auto;font-size:11px;font-weight:400;color:var(--text-3)}
+.cf-more-body{display:flex;flex-direction:column;gap:14px;padding:2px 12px 14px}
+textarea.cf-ta{width:100%;min-height:64px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);font-size:12.5px;line-height:19px;resize:vertical}
+textarea.cf-ta:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus)}
+textarea.cf-ta::placeholder{color:var(--text-3)}
+
+/* 错误汇总 */
+.cf-errsum{display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;padding:10px 12px;border:1px solid var(--danger-border);
+  border-radius:var(--r-md);background:var(--danger-soft)}
+.cf-errsum[hidden]{display:none}
+.cf-errsum .ei{flex:none;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;font:700 11px/18px var(--font-sans);text-align:center}
+.cf-errsum b{display:block;font-size:12.5px;line-height:18px;color:var(--danger-fg)}
+.cf-errlinks{display:flex;flex-wrap:wrap;gap:14px;margin-top:3px}
+.cf-errlinks button{border:0;background:none;padding:0;font-size:12px;line-height:18px;color:var(--danger-fg);text-decoration:underline}
+
+/* 按钮 */
+.btn{height:32px;padding:0 14px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);
+  font-size:12.5px;font-weight:500;color:var(--text-2)}
+.btn:hover{border-color:var(--border-strong);color:var(--text)}
+.btn.primary{border-color:var(--primary);background:var(--primary);color:#fff;font-weight:600}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--surface-hover);border-color:transparent;color:var(--text)}
+.btn.sm{height:28px;padding:0 10px;font-size:12px}
+.cf-dirty{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3)}
+.cf-dirty[hidden]{display:none}
+.cf-dirty i{width:6px;height:6px;border-radius:50%;background:var(--warning)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,8px);z-index:60;padding:8px 14px;border-radius:var(--r-sm);
+  background:var(--text);color:var(--text-inverse);font-size:12.5px;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:all .16s}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* 改前/改后显隐 */
+body[data-mode="after"] .legacy-only{display:none!important}
+body[data-mode="before"] .new-only{display:none!important}
+
+@media (max-width:760px){
+  .stage{padding:0}
+  .drawer{width:100%;height:100%;border:0;border-radius:0}
+  .cf-sec-h{flex-wrap:wrap}
+  .hint-pop{width:min(300px,calc(100vw - 56px))}
+  .cf-steps-head,.tc-step-row{grid-template-columns:22px minmax(0,1fr) 88px}
+  .cf-steps-head span:nth-child(3){display:none}
+  .tc-step-row textarea:nth-of-type(2){display:none}
+}
+</style>
+</head>
+<body data-theme="light" data-mode="after">
+
+<div class="app">
+  <header class="app-head">
+    <div class="brand">
+      <h1>编辑用例 · 降噪原型</h1>
+      <span>2026-11-16 · 只改提示形态与分组排版，字段、校验与保存口径不变</span>
+    </div>
+    <div class="tools">
+      <div class="tabs" id="modeTabs">
+        <button class="tab" type="button" data-mode="before">改前</button>
+        <button class="tab on" type="button" data-mode="after">改后</button>
+      </div>
+      <label class="chk" id="allHintsWrap"><input type="checkbox" id="chkAllHints"> 全部展开说明</label>
+      <button class="icon-btn" type="button" id="btnTheme" title="切换浅色 / 深色" aria-label="切换主题">&#9680;</button>
+    </div>
+    <div class="statebar">
+      <span class="lbl">演示状态</span>
+      <button class="state-btn" type="button" data-state="none">未关联需求</button>
+      <button class="state-btn on" type="button" data-state="demand">已关联 · 0 工作项</button>
+      <button class="state-btn" type="button" data-state="task">已关联 · 1 工作项</button>
+      <span class="sep">|</span>
+      <span>点标题旁的 ? 看收起的说明；Esc 关闭；改标题、勾工作项、增删步骤都会真实联动。</span>
+      <details class="changelog">
+        <summary>改动清单</summary>
+        <ul>
+          <li><b>删掉分组头右标签</b>：必填 / 建议填写 / 不改也能保存——必填已由 <span style="font-family:var(--font-mono)">*</span> 表达，其余两条零信息。</li>
+          <li><b>整段说明收进 ?</b>：标题写法、候选范围、P0–P3 口径、预期结果写法，点开才看，平时不占行高。</li>
+          <li><b>只留会变的提示</b>：未挂工作项时那句「覆盖记在需求级」改为状态下才出现（感叹号行）。</li>
+          <li><b>删页脚常驻说明</b>：「保存后可继续记录执行与转缺陷」改为有改动时才出现的「有未保存的修改」。</li>
+          <li><b>合并重复标签</b>：01/02 分组标题与字段标签同义，去掉字段标签行；「暂不关联」移到分组头右侧。</li>
+          <li><b>步骤去重</b>：每格 placeholder 里的（必填）/（选填）×6 收成列头一个 <span style="font-family:var(--font-mono)">*</span>。</li>
+          <li><b>计数只在该出现时出现</b>：标题字数在聚焦或有内容时显示；步骤行数保留「3 / 30 行」。</li>
+        </ul>
+      </details>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="drawer" role="dialog" aria-modal="true" aria-label="编辑用例">
+      <div class="cf-head">
+        <div class="cf-head-main">
+          <h3>编辑用例</h3>
+          <p class="cf-ctx">流程引擎 <span class="sep">·</span> 编号 <b>TC-008</b></p>
+        </div>
+        <button class="icon-btn" type="button" aria-label="关闭" style="border:0;background:none;width:26px;height:26px;font-size:16px;color:var(--text-3)">&#10005;</button>
+      </div>
+
+      <div class="cf-body">
+        <div class="cf-errsum" id="errSum" role="alert" hidden>
+          <span class="ei" aria-hidden="true">!</span>
+          <div>
+            <b id="errTitle">还有 1 处需要处理</b>
+            <div class="cf-errlinks"><button type="button" id="errLinkTitle">用例标题</button></div>
+          </div>
+        </div>
+
+        <div class="cf-form">
+          <!-- 01 -->
+          <section class="cf-sec">
+            <div class="cf-sec-h">
+              <span class="cf-num" aria-hidden="true">01</span>
+              <h3>这条用例验证什么<span class="req" aria-hidden="true">*</span></h3>
+              <span class="hint-wrap new-only">
+                <button class="hint-btn" type="button" data-hint="h-title" aria-expanded="false" aria-label="标题写法说明">?</button>
+                <div class="hint-pop" id="h-title" hidden>
+                  <p>写成「对象 + 条件 + 预期」，执行的人不用回头问。</p>
+                  <p class="hint-eg"><b>例</b>　取消已支付订单后，库存回滚且订单状态变为已取消</p>
+                  <p>只写验证点，不要复述需求标题。</p>
+                </div>
+              </span>
+              <span class="cf-meta must legacy-only">必填</span>
+            </div>
+            <div class="cf-rowlabel legacy-only"><label for="cTitle">用例标题 <span style="color:var(--danger-fg)">*</span></label></div>
+            <input id="cTitle" class="cf-title" type="text" maxlength="100" autocomplete="off" aria-required="true" aria-label="用例标题"
+              value="验证外协流程中存在三个连续节点为一级部门负责人、二级部门负责人、一级部门负责人，一级部门负责人授权给二级部门"
+              data-ph-before="一句话说清验证什么" data-ph-after="一句话说清验证什么，如：取消订单后库存回滚" />
+            <div class="cf-subline">
+              <span class="err" id="cTitleErr" hidden>请填写用例标题</span>
+              <span class="cf-count" id="cTitleCount" hidden>0 / 100</span>
+            </div>
+            <p class="cf-help legacy-only" style="margin-top:6px">写成「对象 + 条件 + 预期」，执行的人不用回头问。</p>
+          </section>
+
+          <!-- 02 -->
+          <section class="cf-sec">
+            <div class="cf-sec-h">
+              <span class="cf-num" aria-hidden="true">02</span>
+              <h3>关联需求<span class="legacy-only">，带出目录与工作项</span></h3>
+              <span class="hint-wrap new-only">
+                <button class="hint-btn" type="button" data-hint="h-demand" aria-expanded="false" aria-label="关联需求说明">?</button>
+                <div class="hint-pop" id="h-demand" hidden>
+                  <p>候选只列本项目需求。选中后目录自动继承，工作项从该需求下挑选。</p>
+                  <p>不关联也能保存，覆盖先记在需求级，之后可在覆盖页补。</p>
+                </div>
+              </span>
+              <span class="cf-meta legacy-only">建议填写</span>
+              <button class="cf-link new-only" type="button" id="cDemandClear" hidden>暂不关联</button>
+            </div>
+            <div class="field">
+              <div class="cf-rowlabel legacy-only"><label>关联需求</label><button class="cf-link" type="button" id="cDemandClearLegacy" hidden>暂不关联</button></div>
+              <button type="button" class="cf-demand is-empty" id="cDemandPicker" aria-haspopup="dialog" aria-expanded="false">
+                <span class="cf-demand-badge" aria-hidden="true">&#128196;</span>
+                <span class="cf-demand-text placeholder" id="cDemandText">搜索并选择需求</span>
+                <svg class="caret" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
+              </button>
+              <p class="cf-help legacy-only" style="margin-top:6px">候选只列本项目需求；选中后目录自动继承，工作项从该需求下挑选。不关联也能保存，覆盖页可补。</p>
+            </div>
+
+            <div class="cf-nest">
+              <div class="cf-nest-row">
+                <span class="cf-nest-label">项目目录</span>
+                <div class="cf-nest-val">
+                  <select class="cf-sel" id="cModule" aria-label="选择项目目录节点">
+                    <option value="">未归类（不选目录）</option>
+                    <option>流程引擎</option>
+                    <option>审批与流转</option>
+                  </select>
+                  <span class="cf-tag warn" id="cModuleTag">未归类</span>
+                  <button class="cf-link" type="button" id="cModuleInherit" hidden>恢复继承</button>
+                  <button class="cf-link" type="button" id="cModuleNew">＋ 子目录</button>
+                </div>
+              </div>
+              <div class="cf-nest-row">
+                <span class="cf-nest-label">验证工作项</span>
+                <div class="cf-nest-val col">
+                  <div id="cTaskBox">
+                    <div class="case-task-tools" id="cTaskTools" hidden>
+                      <input id="cTaskSearch" type="search" maxlength="50" placeholder="筛选工作项标题或编号" autocomplete="off" aria-label="筛选工作项">
+                      <span class="case-task-count" id="cTaskCount" role="status">已选 0 / 1</span>
+                    </div>
+                    <div class="case-task-list" id="cTaskList" role="group" aria-label="验证工作项" hidden>
+                      <label class="case-task-opt">
+                        <input type="checkbox" id="cTaskOne">
+                        <span class="tt">审批流程中连着过两次同一审批人的合并为一次
+                          <span class="ts">WI-092 · 任务 · 测试中</span>
+                        </span>
+                      </label>
+                    </div>
+                    <div class="case-task-empty" id="cTaskEmpty">关联主需求后，可选择该需求下的工作项。</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="cf-help legacy-only" style="margin-top:6px">未选择工作项时按「需求级覆盖」统计；选择后可在需求详情与覆盖矩阵按工作项追溯。</p>
+            <div class="cf-state new-only" id="cohint" hidden>
+              <span class="si" aria-hidden="true">!</span>
+              <span>未挂工作项：这条用例的覆盖只记在需求级。<button class="cf-link" type="button" id="cohintAct">挂工作项</button></span>
+            </div>
+          </section>
+
+          <!-- 03 -->
+          <section class="cf-sec">
+            <div class="cf-sec-h">
+              <span class="cf-num" aria-hidden="true">03</span>
+              <h3>分类属性</h3>
+              <span class="hint-wrap new-only">
+                <button class="hint-btn" type="button" data-hint="h-pri" aria-expanded="false" aria-label="优先级说明">?</button>
+                <div class="hint-pop" id="h-pri" hidden>
+                  <p>决定回归顺序，不影响保存与执行。</p>
+                  <dl>
+                    <dt><span class="pd" style="background:var(--p0-fg)"></span>P0</dt><dd>阻塞主流程，必须回归</dd>
+                    <dt><span class="pd" style="background:var(--p1-fg)"></span>P1</dt><dd>核心功能</dd>
+                    <dt><span class="pd" style="background:var(--info-fg)"></span>P2</dt><dd>一般功能</dd>
+                    <dt><span class="pd"></span>P3</dt><dd>边缘场景</dd>
+                  </dl>
+                  <p style="margin-top:6px">不设置 = 暂不区分。</p>
+                </div>
+              </span>
+              <span class="cf-meta legacy-only">不改也能保存</span>
+            </div>
+            <div class="cf-seg" id="cPriSeg" role="group" aria-label="优先级">
+              <button type="button" class="on" data-pri="">不设置</button>
+              <button type="button" data-pri="P0">P0</button>
+              <button type="button" data-pri="P1">P1</button>
+              <button type="button" data-pri="P2">P2</button>
+              <button type="button" data-pri="P3">P3</button>
+            </div>
+            <p class="cf-help legacy-only" style="margin-top:6px">P0 阻塞主流程、必须回归；P1 核心功能；P2/P3 一般与边缘。「不设置」表示暂不区分。</p>
+          </section>
+
+          <!-- 04 -->
+          <section class="cf-sec">
+            <div class="cf-sec-h">
+              <span class="cf-num" aria-hidden="true">04</span>
+              <h3>怎么测：步骤与预期</h3>
+              <span class="hint-wrap new-only">
+                <button class="hint-btn" type="button" data-hint="h-step" aria-expanded="false" aria-label="步骤与预期说明">?</button>
+                <div class="hint-pop" id="h-step" hidden>
+                  <p>预期结果写成可观察、可判断的结果：页面文案、字段状态、数值变化。</p>
+                  <p>预期结果留空 = 只记录操作，不判通过；最多 30 行。</p>
+                  <p>输入时按 <b>Ctrl + Enter</b> 在下方插入新行。</p>
+                </div>
+              </span>
+              <span class="cf-meta legacy-only">3 行 · 最多 30 行</span>
+              <span class="cf-meta new-only" id="caseStepCount">3 / 30 行</span>
+            </div>
+            <div class="cf-steps-head" aria-hidden="true">
+              <span>#</span>
+              <span>操作步骤<span class="req new-only"> *</span></span>
+              <span>预期结果</span>
+              <span></span>
+            </div>
+            <div class="cf-steps" id="tcSteps" role="group" aria-label="执行步骤"></div>
+            <div class="cf-step-foot">
+              <button class="btn ghost sm" type="button" id="btnAddStep" title="步骤输入中按 Ctrl+Enter 可在下方快捷插入新行">＋ 添加步骤</button>
+              <span class="cf-help legacy-only">预期结果写成可观察的结果；留空按「只记录操作」保存</span>
+            </div>
+          </section>
+
+          <details class="cf-more" id="caseMore">
+            <summary>
+              <span class="cf-chev" aria-hidden="true">&#9656;</span>更多字段
+              <span class="cf-more-meta" id="moreMeta">前置条件 · 测试数据<span class="legacy-only"> · 选填</span></span>
+            </summary>
+            <div class="cf-more-body">
+              <div class="field">
+                <label for="cPre">前置条件</label>
+                <textarea id="cPre" class="cf-ta" maxlength="1000" placeholder="选填：数据准备、环境要求…"></textarea>
+              </div>
+              <div class="field">
+                <label for="cData">测试数据</label>
+                <textarea id="cData" class="cf-ta" maxlength="1000" placeholder="如：账号 demo / 密码 123456；金额 0.01、99999.99"></textarea>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div class="cf-foot">
+        <span class="cf-dirty" id="dirty" hidden><i aria-hidden="true"></i>有未保存的修改</span>
+        <span class="cf-save-note legacy-only" style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3)"><i style="width:6px;height:6px;border-radius:50%;background:var(--success)"></i>保存后可继续记录执行与转缺陷</span>
+        <span class="cf-grow"></span>
+        <button class="btn ghost" type="button" id="btnCancel">取消</button>
+        <button class="btn primary" type="button" id="btnSave">保存</button>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+/* ---------- 主题 ---------- */
+$('#btnTheme').addEventListener('click', () => {
+  document.body.dataset.theme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
+});
+
+/* ---------- 说明弹层 ---------- */
+function closeHints() {
+  $$('.hint-pop').forEach(p => { p.hidden = true; });
+  $$('.hint-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-expanded', 'false'); });
+  document.body.classList.remove('hints-inline');
+  const chk = $('#chkAllHints');
+  if (chk) chk.checked = false;
+}
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.hint-btn');
+  if (btn) {
+    const pop = document.getElementById(btn.dataset.hint);
+    const wasOpen = !pop.hidden;
+    closeHints();
+    if (!wasOpen) {
+      pop.hidden = false;
+      btn.classList.add('on');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    return;
+  }
+  if (!e.target.closest('.hint-pop') && !e.target.closest('#chkAllHints')) {
+    if (!document.body.classList.contains('hints-inline')) closeHints();
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeHints(); $('#toast').classList.remove('on'); } });
+$('#chkAllHints').addEventListener('change', e => {
+  const on = e.target.checked;
+  document.body.classList.toggle('hints-inline', on);
+  $$('.hint-btn').forEach(b => {
+    const pop = document.getElementById(b.dataset.hint);
+    pop.hidden = !on;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-expanded', String(on));
+  });
+});
+
+/* ---------- 改前 / 改后 ---------- */
+function setMode(mode) {
+  document.body.dataset.mode = mode;
+  $$('#modeTabs .tab').forEach(t => t.classList.toggle('on', t.dataset.mode === mode));
+  $$('[data-ph-before]').forEach(el => {
+    el.placeholder = mode === 'before' ? el.dataset.phBefore : el.dataset.phAfter;
+  });
+  $('#chkAllHints').disabled = mode === 'before';
+  $('#allHintsWrap').classList.toggle('disabled', mode === 'before');
+  closeHints();
+  applyDemoState(currentState);
+}
+$$('#modeTabs .tab').forEach(t => t.addEventListener('click', () => setMode(t.dataset.mode)));
+
+/* ---------- 标题计数：聚焦或有内容才出现 ---------- */
+const title = $('#cTitle');
+function syncTitle() {
+  const n = title.value.trim().length;
+  const cnt = $('#cTitleCount');
+  const show = document.activeElement === title || n > 0;
+  cnt.hidden = !show;
+  cnt.textContent = n + ' / 100';
+  if (n > 0) { $('#cTitleErr').hidden = true; title.classList.remove('bad'); if (!$('#errSum').hidden) $('#errSum').hidden = true; }
+}
+title.addEventListener('focus', syncTitle);
+title.addEventListener('blur', () => setTimeout(syncTitle, 0));
+title.addEventListener('input', () => { syncTitle(); markDirty(); });
+
+/* ---------- 优先级 ---------- */
+$$('#cPriSeg button').forEach(b => b.addEventListener('click', () => {
+  $$('#cPriSeg button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  markDirty();
+}));
+
+/* ---------- 需求 / 工作项 状态演示 ---------- */
+let currentState = 'demand';
+const DEMAND_TEXT = '审批流程中连着过两次同一审批人的合并为一次';
+
+function applyDemoState(state) {
+  currentState = state;
+  $$('.state-btn').forEach(b => b.classList.toggle('on', b.dataset.state === state));
+  const picker = $('#cDemandPicker');
+  const hasDemand = state !== 'none';
+  picker.classList.toggle('is-empty', !hasDemand);
+  $('#cDemandText').textContent = hasDemand ? DEMAND_TEXT : '搜索并选择需求';
+  $('#cDemandClear').hidden = !hasDemand;
+  $('#cDemandClearLegacy').hidden = !hasDemand;
+
+  $('#cTaskTools').hidden = !hasDemand;
+  $('#cTaskList').hidden = !hasDemand;
+  $('#cTaskEmpty').hidden = hasDemand;
+  $('#cTaskOne').checked = state === 'task';
+  $('#cTaskCount').textContent = '已选 ' + (state === 'task' ? 1 : 0) + ' / 1';
+
+  // 只在「有需求但没挂工作项」时提示覆盖口径
+  $('#cohint').hidden = !(hasDemand && state !== 'task');
+}
+$$('.state-btn').forEach(b => b.addEventListener('click', () => applyDemoState(b.dataset.state)));
+$('#cTaskOne').addEventListener('change', e => {
+  $('#cTaskCount').textContent = '已选 ' + (e.target.checked ? 1 : 0) + ' / 1';
+  $('#cohint').hidden = e.target.checked;
+  $$('.state-btn').forEach(b => b.classList.toggle('on', b.dataset.state === (e.target.checked ? 'task' : 'demand')));
+  markDirty();
+});
+$('#cohintAct').addEventListener('click', () => {
+  $('#cTaskOne').checked = true;
+  $('#cTaskOne').dispatchEvent(new Event('change'));
+  $('#cTaskOne').focus();
+});
+$('#cDemandPicker').addEventListener('click', () => {
+  applyDemoState(currentState === 'none' ? 'demand' : 'none');
+  markDirty();
+});
+$('#cDemandClear').addEventListener('click', () => applyDemoState('none'));
+$('#cDemandClearLegacy').addEventListener('click', () => applyDemoState('none'));
+
+/* ---------- 目录 ---------- */
+function syncModule() {
+  const v = $('#cModule').value;
+  const tag = $('#cModuleTag');
+  tag.hidden = false;
+  tag.textContent = v || '未归类';
+  tag.classList.toggle('warn', !v);
+  $('#cModuleInherit').hidden = true;
+}
+$('#cModule').addEventListener('change', () => { syncModule(); markDirty(); });
+$('#cModuleNew').addEventListener('click', () => toast('原型：新建子目录'));
+
+/* ---------- 步骤表 ---------- */
+const MAX_STEP = 30;
+function renumber() {
+  $$('#tcSteps .tc-step-row').forEach((row, i) => { $('.tc-step-no', row).textContent = i + 1; });
+  const n = $$('#tcSteps .tc-step-row').length;
+  $('#caseStepCount').textContent = n + ' / ' + MAX_STEP + ' 行';
+  $('#btnAddStep').disabled = n >= MAX_STEP;
+  $('#btnAddStep').style.opacity = n >= MAX_STEP ? .45 : '';
+}
+function stepRow(op = '', ex = '') {
+  const row = document.createElement('div');
+  row.className = 'tc-step-row';
+  row.innerHTML =
+    '<span class="tc-step-no"></span>' +
+    '<textarea rows="1" data-ph-before="操作步骤（必填）" data-ph-after="做了什么"></textarea>' +
+    '<textarea rows="1" data-ph-before="预期结果（选填）" data-ph-after="看到什么（可留空）"></textarea>' +
+    '<span class="tc-step-acts">' +
+      '<button class="step-ico add" type="button" title="在下方插入一行">＋</button>' +
+      '<button class="step-ico up" type="button" title="上移">↑</button>' +
+      '<button class="step-ico down" type="button" title="下移">↓</button>' +
+      '<button class="step-ico del" type="button" title="删除本行">✕</button>' +
+    '</span>';
+  const tas = $$('textarea', row);
+  tas[0].value = op; tas[1].value = ex;
+  tas.forEach(t => t.addEventListener('input', markDirty));
+  return row;
+}
+function refreshPlaceholders() {
+  $$('[data-ph-before]').forEach(el => {
+    el.placeholder = document.body.dataset.mode === 'before' ? el.dataset.phBefore : el.dataset.phAfter;
+  });
+}
+$('#tcSteps').addEventListener('click', e => {
+  const btn = e.target.closest('.step-ico');
+  if (!btn) return;
+  const row = btn.closest('.tc-step-row');
+  const rows = $$('#tcSteps .tc-step-row');
+  const idx = rows.indexOf(row);
+  if (btn.classList.contains('del')) {
+    if (rows.length === 1) { $$('textarea', row).forEach(t => t.value = ''); }
+    else row.remove();
+  } else if (btn.classList.contains('up') && idx > 0) {
+    $('#tcSteps').insertBefore(row, rows[idx - 1]);
+  } else if (btn.classList.contains('down') && idx < rows.length - 1) {
+    $('#tcSteps').insertBefore(rows[idx + 1], row);
+  } else if (btn.classList.contains('add')) {
+    const r = stepRow();
+    row.after(r);
+    refreshPlaceholders();
+    $('textarea', r).focus();
+  }
+  renumber();
+  markDirty();
+});
+$('#btnAddStep').addEventListener('click', () => {
+  const rows = $$('#tcSteps .tc-step-row');
+  if (rows.length >= MAX_STEP) return;
+  const r = stepRow();
+  $('#tcSteps').append(r);
+  refreshPlaceholders();
+  renumber();
+  $('textarea', r).focus();
+  markDirty();
+});
+$('#tcSteps').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    const row = e.target.closest('.tc-step-row');
+    const r = stepRow();
+    row.after(r);
+    refreshPlaceholders();
+    renumber();
+    $('textarea', r).focus();
+  }
+});
+/* ---------- 更多字段摘要 ---------- */
+function syncMore() {
+  const filled = ['#cPre', '#cData'].filter(s => $(s).value.trim()).length;
+  const meta = $('#moreMeta');
+  if (filled > 0) meta.innerHTML = '已填 ' + filled + ' 项';
+  else meta.innerHTML = '前置条件 · 测试数据' + (document.body.dataset.mode === 'before' ? ' · 选填' : '');
+}
+['#cPre', '#cData'].forEach(s => $(s).addEventListener('input', () => { syncMore(); markDirty(); }));
+
+/* ---------- 脏标记 / 校验 / 保存 ---------- */
+function markDirty() { $('#dirty').hidden = false; }
+$('#btnSave').addEventListener('click', () => {
+  const n = title.value.trim().length;
+  if (!n) {
+    $('#cTitleErr').hidden = false;
+    title.classList.add('bad');
+    $('#errSum').hidden = false;
+    $('#errTitle').textContent = '还有 1 处需要处理';
+    title.focus();
+    return;
+  }
+  $('#errSum').hidden = true;
+  $('#dirty').hidden = true;
+  toast('已保存（原型）');
+});
+$('#errLinkTitle').addEventListener('click', () => { title.focus(); title.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+$('#btnCancel').addEventListener('click', () => toast('原型：关闭抽屉'));
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 1600);
+}
+
+/* ---------- 初始化 ---------- */
+const hash = location.hash.slice(1);
+[['流程审批中，一级部门负责人连续三级审批后授权二级部门', '结果在「我的待办」出现且原审批人不再收到提醒'],
+ ['', ''],
+ ['', '']].forEach(([op, ex]) => $('#tcSteps').append(stepRow(op, ex)));
+renumber();
+applyDemoState(hash.includes('none') ? 'none' : hash.includes('task') ? 'task' : 'demand');
+syncModule();
+syncTitle();
+syncMore();
+if (hash.includes('dark')) document.body.dataset.theme = 'dark';
+setMode(hash.includes('before') ? 'before' : 'after');
+if (hash.includes('hints')) { $('#chkAllHints').checked = true; $('#chkAllHints').dispatchEvent(new Event('change')); }
+</script>
+</body>
+</html>
