@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script>
+/* 自诊断：收集脚本错误与 console.error，探测结束后在日志面板显示 */
+window.__errs = [];
+window.addEventListener("error", function(e){
+  window.__errs.push((e.message || "script error") + " @ " + String(e.filename || "").split("/").pop() + ":" + (e.lineno || "?"));
+});
+window.addEventListener("unhandledrejection", function(e){
+  window.__errs.push("rejection: " + (e.reason && e.reason.message || String(e.reason)));
+});
+(function(){
+  var orig = console.error;
+  console.error = function(){
+    var args = Array.prototype.slice.call(arguments);
+    window.__errs.push("console.error: " + args.map(function(a){
+      try{ return typeof a === "object" ? JSON.stringify(a).slice(0, 200) : String(a).slice(0, 200); }catch(_){ return "[unserializable]"; }
+    }).join(" "));
+    orig.apply(console, args);
+  };
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Univer 文档模块 · 最小技术验证页（POC）</title>
+<link rel="stylesheet" href="vendor/design.css">
+<link rel="stylesheet" href="vendor/ui.css">
+<link rel="stylesheet" href="vendor/docs-ui.css">
+<style>
+:root{
+  --primary:#3370ff;--primary-soft:rgba(51,112,255,.08);--primary-border:rgba(51,112,255,.3);
+  --success:#389e0d;--success-soft:rgba(56,158,13,.09);
+  --warning:#d48806;--warning-soft:rgba(212,136,6,.1);
+  --danger:#cf1322;--danger-soft:rgba(207,19,34,.08);
+  --text:#1f2329;--text-2:#4e5969;--text-3:#86909c;
+  --border:#e5e6eb;--border-strong:#d0d3d9;
+  --surface:#fff;--sunken:#f5f6f8;--bg:#f2f3f5;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;display:flex;flex-direction:column}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:15px;font-weight:680}
+header .sub{font-size:12px;color:var(--text-3)}
+header .acts{margin-left:auto;display:flex;gap:8px}
+button{cursor:pointer;font:inherit}
+.btn{height:28px;padding:0 12px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12.5px}
+.btn:hover{border-color:var(--border-strong);background:var(--sunken)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+main{flex:1;display:flex;min-height:0}
+#app{flex:1 1 auto;min-width:0;position:relative}
+aside{flex:0 0 420px;min-width:0;overflow:hidden;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+.panel-head{padding:10px 12px;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:650;color:var(--text-2);display:flex;align-items:center;gap:8px}
+.panel-head .cnt{font-size:11px;color:var(--text-3);font-weight:500}
+#probeTable{flex:0 0 auto;max-height:46%;overflow:auto;border-bottom:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+th{position:sticky;top:0;background:var(--sunken);color:var(--text-3);font-weight:600;text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px}
+td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top;word-break:break-all}
+tr:hover td{background:var(--sunken)}
+.st{display:inline-block;font-size:10.5px;font-weight:650;padding:0 7px;border-radius:9px;white-space:nowrap}
+.st.pass{color:var(--success);background:var(--success-soft)}
+.st.fail{color:var(--danger);background:var(--danger-soft)}
+.st.idle{color:var(--text-3);border:1px dashed var(--border)}
+.st.run{color:var(--primary);background:var(--primary-soft)}
+td .ms{color:var(--text-3);font-size:11px;margin-left:6px}
+td .detail{color:var(--text-2);font-size:11.5px;display:block;margin-top:2px;line-height:1.5}
+.logwrap{flex:1;display:flex;flex-direction:column;min-height:0}
+#log{flex:1;overflow:auto;padding:10px 12px;font:11.5px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text-2);white-space:pre-wrap;word-break:break-all;background:var(--sunken)}
+#log .ok{color:var(--success)}
+#log .err{color:var(--danger)}
+#log .dim{color:var(--text-3)}
+.dumphead{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center}
+#dump{height:180px;overflow:auto;margin:0 12px 12px;padding:8px 10px;background:var(--sunken);border:1px solid var(--border);border-radius:8px;font:11px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre;color:var(--text-2)}
+.hintline{padding:0 12px 10px;font-size:11.5px;color:var(--text-3)}
+.hintline b{color:var(--text-2)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Univer 文档模块 · 最小技术验证页</h1>
+  <span class="sub">开源核心 1.5.2 · UMD 本地引入 · 验证 Doc facade API 成熟度</span>
+  <div class="acts">
+    <button class="btn primary" id="runAllBtn" type="button">运行全部探测</button>
+    <button class="btn" id="dumpBtn" type="button">查看当前快照 JSON</button>
+    <button class="btn" id="clearLogBtn" type="button">清空日志</button>
+  </div>
+</header>
+
+<main>
+  <div id="app"></div>
+  <aside>
+    <div class="panel-head">Facade API 探测清单 <span class="cnt" id="cnt"></span></div>
+    <div id="probeTable">
+      <table>
+        <colgroup><col style="width:34%"><col style="width:12%"><col></colgroup>
+        <thead><tr><th>探测项</th><th>结果</th><th>说明</th></tr></thead>
+        <tbody id="probeBody"></tbody>
+      </table>
+    </div>
+    <div class="logwrap">
+      <div class="panel-head">运行日志</div>
+      <div id="log"></div>
+    </div>
+    <div class="dumphead">
+      <b style="font-size:12px">快照 JSON</b>
+      <span class="hintline" style="padding:0">仅显示 dataStream 前 600 字符与段落结构</span>
+    </div>
+    <pre id="dump">（尚未读取）</pre>
+    <p class="hintline"><b>用法：</b>先「运行全部探测」，然后在左侧编辑器里选中一段文字，再点「读取选区」「替换选区」做实操验证。</p>
+  </aside>
+</main>
+
+<script src="vendor/react.production.min.js"></script>
+<script>
+/* react/jsx-runtime 垫片：Univer UMD 的浏览器分支把 window.React 当 jsx-runtime 传入，但 React 18 UMD 不含 jsx。
+   按官方 jsx-runtime 产物直接构造 element（children 留在 props 里，key 挂元素上）。 */
+(function (R) {
+  if (!R) return;
+  var RE = Symbol.for("react.element");
+  function jsx(type, config, key) {
+    var props = Object.assign({}, config);
+    var ref = null;
+    if (config != null && config.ref !== undefined) { ref = config.ref; delete props.ref; }
+    if (config != null && config.key !== undefined) { key = key === undefined ? "" + config.key : key; delete props.key; }
+    return { $$typeof: RE, type: type, key: key === undefined ? null : "" + key, ref: ref, props: props, _owner: null };
+  }
+  R.jsx = jsx; R.jsxs = jsx; R.jsxDEV = jsx;
+})(window.React);
+</script>
+<script src="vendor/react-dom.production.min.js"></script>
+<script src="vendor/rxjs.umd.min.js"></script>
+<script src="vendor/echarts.min.js"></script>
+<script src="vendor/redi.js"></script>
+<script src="vendor/redi-react-bindings.js"></script>
+<script src="vendor/themes.js"></script>
+<script src="vendor/protocol.js"></script>
+<script src="vendor/core.js"></script>
+<script src="vendor/rpc.js"></script>
+<script src="vendor/design.js"></script>
+<script src="vendor/engine-render.js"></script>
+<script src="vendor/engine-formula.js"></script>
+<script src="vendor/drawing.js"></script>
+<script src="vendor/ui.js"></script>
+<script src="vendor/docs.js"></script>
+<script src="vendor/docs-ui.js"></script>
+<script src="vendor/core-facade.js"></script>
+<script src="vendor/docs-facade.js"></script>
+<script src="vendor/engine-formula-facade.js"></script>
+<script src="vendor/ui-facade.js"></script>
+<script src="vendor/docs-ui-facade.js"></script>
+<script src="vendor/locale-design-zh-CN.js"></script>
+<script src="vendor/locale-ui-zh-CN.js"></script>
+<script src="vendor/locale-docs-ui-zh-CN.js"></script>
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+function log(msg, cls){
+  var el = $("log");
+  var line = document.createElement("div");
+  if(cls) line.className = cls;
+  line.textContent = new Date().toLocaleTimeString("zh-CN", {hour12:false}) + "  " + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function protoMethods(obj, depth){
+  var names = [];
+  var o = obj;
+  for(var i = 0; i < (depth || 2) && o; i++){
+    o = Object.getPrototypeOf(o);
+    if(!o) break;
+    Object.getOwnPropertyNames(o).forEach(function(n){
+      if(n !== "constructor" && names.indexOf(n) < 0) names.push(n);
+    });
+  }
+  return names;
+}
+
+/* ================= 探测项 ================= */
+var univer, univerAPI, activeDoc;
+var PROBES = [
+  { id:"P0", name:"脚本与全局对象加载", fn:function(){
+      var need = ["UniverCore","UniverCoreFacade","UniverEngineRender","UniverEngineFormula","UniverUi","UniverDocs","UniverDocsUi","UniverDesignZhCN","UniverUiZhCN","UniverDocsUiZhCN"];
+      var missing = need.filter(function(n){ return typeof window[n] === "undefined"; });
+      if(missing.length) throw new Error("缺少全局: " + missing.join(", "));
+      return "10 个全局对象齐全";
+  }},
+  { id:"P1", name:"初始化 Univer + 注册插件", fn:function(){
+      var Univer = UniverCore.Univer, LocaleType = UniverCore.LocaleType, mergeLocales = UniverCore.mergeLocales;
+      var FUniver = UniverCoreFacade.FUniver;
+      univer = new Univer({
+        logLevel: UniverCore.LogLevel ? UniverCore.LogLevel.VERBOSE : undefined,
+        locale: LocaleType.ZH_CN,
+        locales: { [LocaleType.ZH_CN]: mergeLocales(UniverDesignZhCN, UniverUiZhCN, UniverDocsUiZhCN) }
+      });
+      univer.registerPlugin(UniverEngineRender.UniverRenderEnginePlugin);
+      univer.registerPlugin(UniverEngineFormula.UniverFormulaEnginePlugin);
+      univer.registerPlugin(UniverUi.UniverUIPlugin, { container: "app" });
+      univer.registerPlugin(UniverDocs.UniverDocsPlugin);
+      univer.registerPlugin(UniverDocsUi.UniverDocsUIPlugin);
+      univerAPI = FUniver.newAPI(univer);
+      window.__univer = univer; window.__univerAPI = univerAPI; window.__activeDoc = null;
+      return "univerAPI 类型: " + (univerAPI && univerAPI.constructor ? univerAPI.constructor.name : typeof univerAPI);
+  }},
+  { id:"P2", name:"createDocument 创建文档实例", fn:function(){
+      var doc = univerAPI.createDocument({ name: "登录模块需求说明（验证）" });
+      if(!doc) throw new Error("createDocument 返回空");
+      activeDoc = doc;
+      window.__activeDoc = doc;
+      var m = protoMethods(doc, 2);
+      window.__docMethods = m;
+      return "实例 OK · unitId=" + (doc.getId ? doc.getId() : "?") + " · FDocument 方法 " + m.length + " 个";
+  }},
+  { id:"P3", name:"FUniver / FDocument 方法枚举", fn:function(){
+      var u = protoMethods(univerAPI, 2);
+      var d = window.__docMethods || [];
+      window.__univerMethods = u;
+      return "FUniver " + u.length + " 个: " + u.filter(function(n){ return /doc|Doc|Selection|Range|Command|Undo|Snapshot|Text/i.test(n); }).join(", ").slice(0, 300);
+  }},
+  { id:"P4", name:"读取文档快照（save / getSnapshot）", fn:function(){
+      var snap = null, via = "";
+      if(activeDoc.save){ snap = activeDoc.save(); via = "save()"; }
+      if(!snap && activeDoc.getDocumentDataModel){
+        var dm = activeDoc.getDocumentDataModel();
+        if(dm && dm.getSnapshot){ snap = dm.getSnapshot(); via = "getDocumentDataModel().getSnapshot()"; }
+      }
+      if(!snap) throw new Error("save()/getSnapshot 均不可用");
+      window.__snap = snap;
+      var body = snap.body || {};
+      return "经 " + via + " · 键: " + Object.keys(snap).join(",") + " · dataStream " + ((body.dataStream || "").length) + " 字 · paragraphs " + ((body.paragraphs || []).length) + " 段";
+  }},
+  { id:"P5", name:"选区 API 探测（getSelection）", fn:function(){
+      var found = [];
+      var d = protoMethods(activeDoc, 2);
+      d.forEach(function(n){ if(/selection|Selection|range|Range/i.test(n)) found.push("FDocument." + n); });
+      var u = window.__univerMethods || [];
+      u.forEach(function(n){ if(/selection|Selection|range|Range/i.test(n)) found.push("FUniver." + n); });
+      if(!found.length) throw new Error("facade 未暴露任何选区方法（需走底层命令/事件）");
+      return found.join(" · ");
+  }},
+  { id:"P6", name:"撤销/重做命令探测", fn:function(){
+      var u = window.__univerMethods || [];
+      var found = u.filter(function(n){ return /undo|redo/i.test(n); });
+      if(!found.length) throw new Error("FUniver 未暴露 undo/redo");
+      return found.join(" · ");
+  }},
+  { id:"P7", name:"带内容快照创建文档（标题+段落）", fn:function(){
+      /* 基于真实空文档快照构造一份需求内容：标题层级用 paragraphStyle.paragraphStyle.headingLevel */
+      var base = window.__snap || {};
+      var paras = [];
+      var ds = "";
+      function para(text, level){
+        paras.push({ startIndex: ds.length, paragraphStyle: level ? { paragraphStyle: { headingLevel: level } } : undefined });
+        ds += text + "\r";
+      }
+      para("登录模块需求说明", 1);
+      para("1. 概述", 2);
+      para("统一认证平台的登录模块承担全部子系统入口，本期补齐失败反馈与安全防护短板。");
+      para("2. 失败反馈", 2);
+      para("登录失败需要有提示。");
+      var snap2 = JSON.parse(JSON.stringify(base));
+      snap2.id = "poc-" + Date.now();
+      snap2.name = "登录模块需求说明（带内容）";
+      snap2.body = Object.assign({}, base.body || {}, { dataStream: ds, paragraphs: paras, textRuns: [] });
+      var doc2 = univerAPI.createDocument(snap2);
+      if(!doc2) throw new Error("createDocument(带内容) 返回空");
+      activeDoc = doc2;
+      var saved = doc2.save();
+      var back = saved && saved.body && saved.body.dataStream || "";
+      var kept = back.indexOf("登录失败需要有提示。") >= 0;
+      window.__snap = saved;
+      return "第二实例 OK · save() 往返 dataStream " + back.length + " 字 · 内容保留 " + (kept ? "是" : "否!") + " · 需人工看标题渲染";
+  }},
+  { id:"P8", name:"快照 → 纯文本序列化", fn:function(){
+      /* 按 paragraphs[].startIndex 切 dataStream：标题段加 # 前缀，等价后端 htmlToText 的替换物 */
+      var snap = window.__snap;
+      if(!snap) throw new Error("无快照");
+      var body = snap.body || {};
+      var ds = body.dataStream || "";
+      var paras = body.paragraphs || [];
+      var out = [], heads = 0;
+      for(var i = 0; i < paras.length; i++){
+        var p = paras[i];
+        var end = i + 1 < paras.length ? paras[i + 1].startIndex : ds.length;
+        var t = ds.slice(p.startIndex, end).replace(/[\r\n]+$/, "");
+        if(!t) continue;
+        var ps = p.paragraphStyle && (p.paragraphStyle.paragraphStyle || p.paragraphStyle) || {};
+        if(ps.headingLevel){ out.push("#".repeat(Math.min(ps.headingLevel, 6)) + " " + t); heads++; }
+        else out.push(t);
+      }
+      var text = out.join("\n");
+      window.__plain = text;
+      return "序列化 " + text.length + " 字 · 标题段 " + heads + " 个 · 首行: " + (out[0] || "").slice(0, 24);
+  }},
+  { id:"P9", name:"AI 写回模拟（替换 + 撤销）", fn:function(){
+      /* 模拟 AI 扩写写回：A 路径 getTextRange().setText()；失败再试 B 路径 deleteRange+insertText；最后 undo 验证可撤销 */
+      var doc = activeDoc;
+      var target = "登录失败需要有提示。";
+      var repl = "登录失败时，登录表单需在按钮下方就地提示具体原因（如密码错误、账号锁定），2 秒后可重试。";
+      var ds = (doc.save().body || {}).dataStream || "";
+      var idx = ds.indexOf(target);
+      if(idx < 0) throw new Error("快照中未找到目标句，无法模拟写回");
+      var notes = [], replaced = false;
+      try{
+        var range = doc.getTextRange(idx, idx + target.length);
+        if(range && range.setText) replaced = range.setText(repl);
+        notes.push("A getTextRange().setText(): " + (replaced ? "OK" : "不可用"));
+      }catch(e){ notes.push("A 异常: " + e.message); }
+      var ds2 = (doc.save().body || {}).dataStream || "";
+      var okA = ds2.indexOf(repl) >= 0 && ds2.indexOf(target) < 0;
+      if(!okA){
+        var d1 = doc.deleteRange({ startOffset: idx, endOffset: idx + target.length });
+        var d2 = d1 && doc.insertText(idx, repl);
+        notes.push("B deleteRange+insertText: " + (d1 && d2 ? "OK" : "不可用"));
+        ds2 = (doc.save().body || {}).dataStream || "";
+      }
+      replaced = ds2.indexOf(repl) >= 0 && ds2.indexOf(target) < 0;
+      var undone = doc.undo();
+      var ds3 = (doc.save().body || {}).dataStream || "";
+      var restored = undone && ds3.indexOf(target) >= 0 && ds3.indexOf(repl) < 0;
+      return notes.join(" · ") + " → 替换生效 " + (replaced ? "是" : "否") + " · undo 恢复原文 " + (restored ? "是" : "否");
+  }},
+];
+
+var state = {};
+function renderTable(){
+  var tb = $("probeBody");
+  tb.innerHTML = "";
+  PROBES.forEach(function(p){
+    var st = state[p.id] || { s: "idle" };
+    var tr = document.createElement("tr");
+    var td1 = document.createElement("td"); td1.textContent = p.id + " " + p.name;
+    var td2 = document.createElement("td");
+    var sp = document.createElement("span");
+    sp.className = "st " + st.s;
+    sp.textContent = { idle:"待运行", run:"运行中", pass:"通过", fail:"失败" }[st.s];
+    td2.appendChild(sp);
+    if(st.ms != null){ var ms = document.createElement("span"); ms.className = "ms"; ms.textContent = st.ms + "ms"; td2.appendChild(ms); }
+    var td3 = document.createElement("td");
+    if(st.detail){ var d = document.createElement("span"); d.className = "detail"; d.textContent = st.detail; td3.appendChild(d); }
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+    tb.appendChild(tr);
+  });
+  var pass = PROBES.filter(function(p){ return state[p.id] && state[p.id].s === "pass"; }).length;
+  var fail = PROBES.filter(function(p){ return state[p.id] && state[p.id].s === "fail"; }).length;
+  $("cnt").textContent = "通过 " + pass + " · 失败 " + fail + " · 共 " + PROBES.length;
+}
+async function runProbe(p){
+  state[p.id] = { s: "run" };
+  renderTable();
+  var t0 = performance.now();
+  try{
+    var r = await p.fn();
+    if(r instanceof Promise) r = await r;
+    state[p.id] = { s: "pass", ms: Math.round(performance.now() - t0), detail: String(r) };
+    log("[" + p.id + "] PASS " + p.name + " — " + String(r), "ok");
+  }catch(e){
+    state[p.id] = { s: "fail", ms: Math.round(performance.now() - t0), detail: e.message };
+    log("[" + p.id + "] FAIL " + p.name + " — " + e.message, "err");
+  }
+  renderTable();
+}
+async function runAll(){
+  $("runAllBtn").disabled = true;
+  window.__errs.length = 0;
+  log("—— 开始运行全部探测 ——", "dim");
+  for(const p of PROBES){ await runProbe(p); }
+  if(window.__errs.length){
+    log("—— 运行期间捕获 " + window.__errs.length + " 条错误 ——", "err");
+    window.__errs.slice(0, 8).forEach(function(m){ log("  ⚠ " + m, "err"); });
+  }
+  log("—— 探测结束 ——", "dim");
+  $("runAllBtn").disabled = false;
+}
+
+$("runAllBtn").addEventListener("click", runAll);
+$("clearLogBtn").addEventListener("click", function(){ $("log").innerHTML = ""; });
+$("dumpBtn").addEventListener("click", function(){
+  var snap = window.__snap || (activeDoc && activeDoc.save && activeDoc.save());
+  if(!snap){ $("dump").textContent = "（无快照：请先运行 P1/P2）"; return; }
+  var body = snap.body || {};
+  var lines = [];
+  lines.push("// id: " + snap.id + "  name: " + (snap.name || ""));
+  lines.push("// dataStream(" + (body.dataStream || "").length + "):");
+  lines.push(JSON.stringify((body.dataStream || "").slice(0, 600)));
+  lines.push("// paragraphs " + (body.paragraphs || []).length + " 段:");
+  (body.paragraphs || []).slice(0, 12).forEach(function(p, i){
+    lines.push("  [" + i + "] " + JSON.stringify(p));
+  });
+  lines.push("// 其余键: " + Object.keys(snap).filter(function(k){ return k !== "body"; }).join(", "));
+  $("dump").textContent = lines.join("\n");
+});
+
+log("页面就绪。Univer 1.5.2 UMD 已加载；点「运行全部探测」开始。", "dim");
+renderTable();
+</script>
+</body>
+</html>

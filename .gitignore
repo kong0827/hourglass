@@ -60,6 +60,10 @@ backup/
 # 审查过程的临时截图与版本化登录稿不发布；文档真正引用的正式截图见下方白名单。
 docs/brand/login-live-*.png
 docs/images/_shot_*.png
+# POC 验证过程截图：仅本地核对用，不作为文档证据发布
+docs/poc/**/*.png
+# 前端布局核对临时稿
+frontend/.tmp-*
 # 白名单：以下 16 张已被 docs/ 与 README 引用，必须随仓库发布（缺任一都会造成死链）
 !docs/images/_shot_ai_split.png
 !docs/images/_shot_calendar-wide.png
