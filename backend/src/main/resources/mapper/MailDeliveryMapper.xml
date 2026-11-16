@@ -24,9 +24,10 @@
     WHERE id = #{id} AND status = 'pending'
   </update>
 
+  <!-- next_attempt_at 是 NOT NULL：重试耗尽时传 null，落库保留上次时间，失败行的状态已由 status 表达。 -->
   <update id="markAttemptFailed">
     UPDATE mail_delivery
-    SET status = #{status}, attempts = #{attempts}, next_attempt_at = #{nextAttemptAt},
+    SET status = #{status}, attempts = #{attempts}, next_attempt_at = COALESCE(#{nextAttemptAt}, next_attempt_at),
         last_error = #{lastError}
     WHERE id = #{id} AND status = 'pending'
   </update>
