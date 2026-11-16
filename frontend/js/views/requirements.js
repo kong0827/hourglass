@@ -1158,8 +1158,11 @@ function syncDocZoomUI(){
   });
   var wide = docWidePref();
   root.querySelectorAll("[data-rrd-wide]").forEach(function(b){
+    var tip = wide ? "退出宽屏" : "宽屏阅读（收起左侧文档树）";
     b.setAttribute("aria-pressed", wide ? "true" : "false");
-    b.setAttribute("title", wide ? "退出宽屏阅读" : "宽屏阅读：收起左侧文档树");
+    b.setAttribute("data-tip", tip);
+    b.setAttribute("aria-label", tip);
+    if(b.classList.contains("ibtn")) b.innerHTML = icon(wide ? "compress" : "expand", 15);
   });
 }
 function setDocZoom(next){
@@ -1347,14 +1350,18 @@ function renderReqDocReader(doc){
         '<h3><span class="rrd-title-text">' + esc(doc.title) + '</span>' + pubBadge + docVisChip(doc) + '</h3>' +
         '<span class="rrd-acts">' +
           docZoomControlHTML() +
-          '<button class="btn sm ghost" type="button" data-rrd-wide aria-pressed="false" title="宽屏阅读：收起左侧文档树">' + icon("expand", 13) + ' 宽屏</button>' +
-          (canMut ? '<button class="btn sm ghost" type="button" data-rrd-rename="' + esc(doc.id) + '" title="重命名文档">' + icon("edit", 13) + ' 重命名</button>' : '') +
-          '<button class="btn sm ghost" type="button" data-rrd-comments="' + esc(doc.id) + '" title="查看评论；选中正文可划线评论">' + icon("comment", 13) + ' 评论</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-perm="' + esc(doc.id) + '" title="查看这篇文档的权限说明（只读）">' + icon("shield", 13) + ' 权限说明</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canMut ? "1" : "0") + '" title="查看历史版本">' + icon("clock", 13) + ' 历史版本</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="按原格式导出 Markdown / HTML">' + icon("download", 13) + ' 导出</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-export-word="' + esc(doc.id) + '" title="导出为 Word 文档（.docx），保留标题、表格与内嵌图片">' + icon("download", 13) + ' Word</button>' +
-          '<button class="btn sm" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canMut ? '' : ' disabled title="仅文档负责人或空间管理员可编辑"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
+          '<span class="vdiv" aria-hidden="true"></span>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-wide aria-pressed="false" data-tip="宽屏阅读（收起左侧文档树）" aria-label="宽屏阅读">' + icon("expand", 15) + '</button>' +
+          '<span class="vdiv" aria-hidden="true"></span>' +
+          (canMut ? '<button class="btn sm ghost ibtn" type="button" data-rrd-rename="' + esc(doc.id) + '" data-tip="重命名文档" aria-label="重命名文档">' + icon("edit", 15) + '</button>' : '') +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-comments="' + esc(doc.id) + '" id="rrdCommentsBtn" data-tip="评论 · 选中正文可划线" aria-label="评论">' + icon("comment", 15) + '<span class="rrd-cnt" id="rrdCommentsBadge" hidden></span></button>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-perm="' + esc(doc.id) + '" data-tip="权限说明（只读）" aria-label="权限说明">' + icon("shield", 15) + '</button>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canMut ? "1" : "0") + '" data-tip="历史版本" aria-label="历史版本">' + icon("clock", 15) + '</button>' +
+          '<span class="vdiv" aria-hidden="true"></span>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-export="' + esc(doc.id) + '" data-tip="导出 Markdown / HTML" aria-label="导出 Markdown / HTML">' + icon("download", 15) + '</button>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-export-word="' + esc(doc.id) + '" data-tip="导出 Word（.docx）" aria-label="导出 Word">' + icon("docW", 15) + '</button>' +
+          '<span class="vdiv" aria-hidden="true"></span>' +
+          '<button class="btn sm soft" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canMut ? ' data-tip="编辑这篇文档" aria-label="编辑文档"' : ' disabled title="仅文档负责人或空间管理员可编辑"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
         '</span>' +
       '</div>' +
       '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
@@ -1387,6 +1394,8 @@ function renderReqDocReader(doc){
       '<div class="rrdc-pane rrdc-perm" id="rrdPanePerm" hidden></div>' +
     '</aside>';
   syncDocZoomUI();
+  UI.wireTooltips(box);
+  loadRrdCommentCount(doc.id);
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
   bindRrdMention();
   renderReqDocCrumb($("rrdCrumb"), doc.id);
@@ -2125,6 +2134,25 @@ function openDocCatVisDialog(catId){
   syncWho();
   UI.openModal(layer);
 }
+/* 评论条数角标：单独走 counts 接口，一次轻量请求，不拉评论正文 */
+function loadRrdCommentCount(docId){
+  if(!docId) return;
+  API.get("/api/req-docs/" + encodeURIComponent(docId) + "/comments/counts").then(function(c){
+    if(rrdCommentsDocId !== docId) return;
+    var n = (c && c.total) || 0;
+    var badge = $("rrdCommentsBadge");
+    if(badge){
+      badge.hidden = !n;
+      badge.textContent = n ? (n > 99 ? "99+" : String(n)) : "";
+    }
+    var btn = $("rrdCommentsBtn");
+    if(btn){
+      var tip = n ? "评论（" + n + " 条）· 选中正文可划线" : "评论 · 选中正文可划线";
+      btn.setAttribute("data-tip", tip);
+      btn.setAttribute("aria-label", n ? "评论（" + n + " 条）" : "评论");
+    }
+  }).catch(function(){ /* 计数失败不打扰阅读 */ });
+}
 function loadRrdComments(){
   var list = $("rrdCommentList");
   if(!list || !rrdCommentsDocId) return;
@@ -2182,6 +2210,7 @@ function submitRrdComment(){
     if(rrdMentionPicker){ rrdMentionPicker.close(); rrdMentionPicker.clearPicked(); }
     setRrdQuote(null);
     loadRrdComments();
+    loadRrdCommentCount(rrdCommentsDocId);
   }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
   .then(function(){ if(btn) btn.disabled = false; });
 }
@@ -2191,6 +2220,7 @@ function deleteRrdComment(commentId){
     if(!ok) return;
     API.del("/api/req-docs/" + encodeURIComponent(rrdCommentsDocId) + "/comments/" + encodeURIComponent(commentId)).then(function(){
       loadRrdComments();
+      loadRrdCommentCount(rrdCommentsDocId);
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
 }

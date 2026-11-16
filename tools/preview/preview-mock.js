@@ -258,6 +258,22 @@
         '<h2>做法</h2><ul><li>异常明细单独建表</li><li>保留原流水号与失败原因</li></ul>' }
   ];
 
+  /* 文档评论：角标与列表同源，避免出现「角标 3 条、列表为空」的错位 */
+  var docComments = {
+    D1: [
+      { id: 1, userName: "李娜", createdAt: ts(-1, 16, 40), resolved: false,
+        quoteText: "先鉴权再进业务", content: "这里的白名单要不要按环境区分？", deletable: false },
+      { id: 2, userName: "王浩", createdAt: ts(-1, 18, 5), resolved: false,
+        quoteText: "", content: "建议补一条越权访问的日志字段说明。", deletable: false },
+      { id: 3, userName: "我", createdAt: ts(0, 9, 12), resolved: true,
+        quoteText: "系统接口放行清单要单独维护", content: "放行清单已经加进配置中心，等下周验收。", deletable: true }
+    ],
+    D2: [
+      { id: 4, userName: "陈工", createdAt: ts(-2, 10, 30), resolved: false,
+        quoteText: "", content: "异常明细表要加索引吗？", deletable: false }
+    ]
+  };
+
   /* 文档最近动态：按天倒序，覆盖创建/更新/状态流转/发布几类操作 */
   var docActivities = [
     { id: 1, docId: "D1", docTitle: "权限校验需求", reqId: "R1", actorName: "我",
@@ -570,6 +586,8 @@
       for (var bi = 0; bi < branches.length; bi++) if (branches[bi].id === brId) return branches[bi];
       return branches[0];
     }
+    /* 文档分类是扁平数组；缺这条会落到通用兜底返回对象，文档树在 cats.forEach 处直接抛错 */
+    if (clean === "/api/doc-categories") { return []; }
     if (clean === "/api/req-docs") {
       /* 生产接口分页返回 {items,total,hasMore}，前端统一走 getAllPages（读 page.items）；
          这里必须给出同样的形状，否则列表/阅读树都拿不到数据 */
@@ -584,6 +602,18 @@
     }
     /* 动态流要在单 id 正则之前判断，否则 "activities" 会被当成文档 id */
     if (clean === "/api/req-docs/activities") { return docActivities; }
+    /* 评论条数角标 / 评论列表：同样要先于单 id 判断，且都从 docComments 取数 */
+    var cCountM = /^\/api\/req-docs\/([A-Za-z0-9_-]+)\/comments\/counts$/.exec(clean);
+    if (cCountM) {
+      var cRows0 = docComments[cCountM[1]] || [];
+      var unresolved0 = cRows0.filter(function (c) { return !c.resolved; }).length;
+      return { total: cRows0.length, unresolved: unresolved0 };
+    }
+    var cListM = /^\/api\/req-docs\/([A-Za-z0-9_-]+)\/comments$/.exec(clean);
+    if (cListM) {
+      var cRows1 = docComments[cListM[1]] || [];
+      return { items: cRows1, total: cRows1.length, hasMore: false };
+    }
     if (/^\/api\/req-docs\/[A-Za-z0-9_-]+$/.test(clean)) {
       var did = clean.split("/").pop();
       for (var di = 0; di < reqDocs.length; di++) if (reqDocs[di].id === did) return reqDocs[di];
@@ -988,6 +1018,21 @@
       me.sourceName = teamOn ? "团队 AI" : "我的 API Key";
       me.status = !me.enabled ? "AI 已关闭" : (teamOn ? "已就绪：调用走团队额度" : "已就绪：调用走我的额度");
       data = me;
+    } else if (method === "POST" && /^\/api\/req-docs\/[A-Za-z0-9_-]+\/comments$/.test(clean)) {
+      /* 发表评论写回内存：侧栏与角标刷新后能看到新评论 */
+      var cDocId = clean.split("/")[3];
+      var cBucket = docComments[cDocId] || (docComments[cDocId] = []);
+      var cNew = { id: 90 + cBucket.length, userName: "我", createdAt: ts(0, 12, 0), resolved: false,
+                   quoteText: (reqBody && reqBody.quoteText) || "",
+                   content: (reqBody && reqBody.content) || "", deletable: true };
+      cBucket.push(cNew);
+      data = cNew;
+    } else if (method === "DELETE" && /^\/api\/req-docs\/[A-Za-z0-9_-]+\/comments\/[A-Za-z0-9_-]+$/.test(clean)) {
+      var cDelId = clean.split("/").pop();
+      Object.keys(docComments).forEach(function (k) {
+        docComments[k] = docComments[k].filter(function (c) { return String(c.id) !== cDelId; });
+      });
+      data = {};
     } else {
       /* 非 GET 也要走 pick：AI 的拆分/体检都是 POST，返回空对象会让界面直接报错 */
       var picked = pick(clean);

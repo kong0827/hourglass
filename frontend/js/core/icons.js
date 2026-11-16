@@ -136,7 +136,9 @@
     lock: function (s) { return svg(s, '<rect x="4" y="8.6" width="12" height="8" rx="2"/><path d="M6.8 8.6V6.4a3.2 3.2 0 0 1 6.4 0v2.2"/>'); },
     share: function (s) { return svg(s, '<circle cx="15" cy="5" r="2.2"/><circle cx="5" cy="10" r="2.2"/><circle cx="15" cy="15" r="2.2"/><path d="M7 9 13 6M7 11l6 3"/>'); },
     layers: function (s) { return svg(s, '<path d="M10 2.8 17.2 6.4 10 10 2.8 6.4Z"/><path d="M2.8 10.4 10 14l7.2-3.6M2.8 14 10 17.6 17.2 14"/>'); },
-    print: function (s) { return svg(s, '<path d="M6 7.4V3.6h8v3.8M6 14.6H4.2v-5h11.6v5H14"/><rect x="6" y="12" width="8" height="4.4" rx="1"/>'); }
+    print: function (s) { return svg(s, '<path d="M6 7.4V3.6h8v3.8M6 14.6H4.2v-5h11.6v5H14"/><rect x="6" y="12" width="8" height="4.4" rx="1"/>'); },
+    /* Word 导出：文档形 + W 字样，与通用下载图标区分 */
+    docW: function (s) { return svg(s, '<path d="M4 3.5h8l4 4v9H4Z"/><path d="M12 3.5v4h4"/><path d="M6.9 8.8l1 4 2.1-3.2 2.1 3.2 1-4"/>'); }
   };
 
 export { ICONS };

@@ -3099,6 +3099,24 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .assoc-edit:focus-visible{outline:2px solid var(--primary);outline-offset:1px;opacity:1;}
 .assoc-edit svg{width:13px;height:13px;}
 @media (hover:none){.assoc-edit{opacity:1;}}
+/* 生产发布一行：值是跳转按钮，右侧人工标记入口单独命中，避免按钮嵌套 */
+.read-evidence dd.ev-publication{display:flex;align-items:center;gap:8px;overflow:visible;white-space:normal;}
+.read-evidence dd.ev-publication .ev-link{flex:0 1 auto;min-width:0;cursor:pointer;color:var(--primary-fg);border-radius:var(--r-xs);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;padding:0;font-size:12.5px;
+  transition:color var(--dur-fast) var(--ease-out);}
+.read-evidence dd.ev-publication .ev-link:hover{color:var(--primary);text-decoration:underline;text-underline-offset:2px;}
+.read-evidence dd.ev-publication .ev-link:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.read-evidence dd.ev-publication .ev-actions{display:inline-flex;gap:8px;flex:0 0 auto;}
+.read-evidence dd.ev-publication .ev-actions .link-btn{padding:0;font-size:12px;background:none;border:0;color:var(--primary-fg);cursor:pointer;}
+.read-evidence dd.ev-publication .ev-actions .link-btn:hover{color:var(--primary);text-decoration:underline;text-underline-offset:2px;}
+.read-evidence dd.ev-publication .ev-actions .link-btn:focus-visible{outline:2px solid var(--primary);outline-offset:1px;border-radius:var(--r-xs);}
+/* 人工标记历史：与正式发布记录同区展示，撤销项弱化但保留 */
+.pub-manual-head{margin:14px 0 6px;}
+.pub-logs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;}
+.pub-logs li{display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px;line-height:18px;color:var(--text-2);}
+.pub-logs li.is-revoked{opacity:.72;}
+.pub-logs .pub-log-ts{color:var(--text-3);white-space:nowrap;}
+.pub-logs .pub-log-note{color:var(--text-2);}
 /* 就地编辑浮层：复用 search-picker 骨架，宽度与人员浮层一致 */
 .assoc-picker{width:344px;display:flex;flex-direction:column;}
 .assoc-picker .search-picker-results{flex:1 1 auto;min-height:0;max-height:min(360px,60vh);overflow-y:auto;padding:6px;scrollbar-width:thin;}
@@ -4809,7 +4827,7 @@ body.proj-reordering{cursor:grabbing;}
 .cm-item .cm-user{font-size:11.5px;color:var(--text-3);flex:0 0 auto;}
 .cm-item:hover,.cm-item.on{background:var(--primary-soft);}
 .cm-empty{padding:9px 10px;font-size:12.5px;color:var(--text-3);text-align:center;user-select:none;}
-.cm-empty[data-cm-retry]{color:var(--primary-fg);cursor:pointer;}
+.cm-empty[data-mp-retry]{color:var(--primary-fg);cursor:pointer;}
 
 /* ===================== 阻塞 / 卡点字段（N-4） ===================== */
 .blocked-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
@@ -5629,6 +5647,14 @@ body.proj-reordering{cursor:grabbing;}
 .doc-zoom button[data-doc-zoom="reset"]{min-width:46px;padding:0 4px;font-variant-numeric:tabular-nums;}
 .doc-zoom button:disabled{opacity:.4;cursor:default;background:none;color:var(--text-3);}
 .rrd-acts [data-rrd-wide][aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-fg);border-color:transparent;}
+/* 阅读工具栏图标化：28×28 图标按钮 + 分组分隔线 + 评论角标（提示走 ui.js 的 data-tip） */
+.rrd-acts .ibtn{width:28px;padding:0;justify-content:center;position:relative;}
+.rrd-acts .vdiv{width:1px;height:16px;background:var(--border);flex:0 0 auto;}
+.rrd-acts .rrd-cnt{
+  position:absolute;top:-5px;right:-6px;box-sizing:content-box;min-width:16px;height:16px;padding:0 4px;
+  border-radius:999px;background:var(--primary);color:#fff;font-size:10.5px;font-weight:600;
+  line-height:16px;text-align:center;border:2px solid var(--surface);pointer-events:none;
+}
 /* 阅读模式：评论侧栏 + 划线高亮 + 选区气泡 */
 #reqDocReader.with-comments{display:flex;gap:14px;align-items:flex-start;}
 #reqDocReader .rrd-main{flex:1;min-width:0;}
@@ -5748,30 +5774,30 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
   .rda-bubble{max-width:calc(100vw - 16px);overflow:auto;}
 }
 
-/* ---- 分类树右键菜单：固定定位浅色卡片，与项目令牌一致；点菜单外/Esc/滚动关闭 ---- */
-.reqdoc-ctx{
+/* ---- 分类树 / 用例分组右键菜单：固定定位浅色卡片，与项目令牌一致；点菜单外/Esc/滚动关闭 ---- */
+.reqdoc-ctx,.tc-ctx{
   position:fixed;z-index:1200;min-width:184px;max-width:264px;padding:5px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
   box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transform:scale(.98);transform-origin:top left;
   transition:opacity var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out);
 }
-.reqdoc-ctx.open{opacity:1;pointer-events:auto;transform:scale(1);}
-.reqdoc-ctx .ctx-head{
+.reqdoc-ctx.open,.tc-ctx.open{opacity:1;pointer-events:auto;transform:scale(1);}
+.reqdoc-ctx .ctx-head,.tc-ctx .ctx-head{
   padding:5px 9px 6px;margin-bottom:4px;border-bottom:1px solid var(--border);
   font-size:11.5px;font-weight:650;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.reqdoc-ctx button{
+.reqdoc-ctx button,.tc-ctx button{
   display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:none;background:none;
   border-radius:var(--r-xs);cursor:pointer;font-family:inherit;font-size:13px;color:var(--text);text-align:left;
 }
-.reqdoc-ctx button:hover{background:var(--surface-hover);}
-.reqdoc-ctx button .ic{flex:none;display:grid;place-items:center;color:var(--text-3);}
-.reqdoc-ctx button:hover .ic{color:var(--text-2);}
-.reqdoc-ctx button.danger{color:var(--danger-fg);}
-.reqdoc-ctx button.danger .ic{color:var(--danger-fg);}
-.reqdoc-ctx button.danger:hover{background:var(--danger-soft);}
-.reqdoc-ctx .sep{height:1px;margin:4px 6px;background:var(--border);}
-.reqdoc-ctx .ctx-note{padding:6px 9px;font-size:11.5px;line-height:1.5;color:var(--text-3);}
+.reqdoc-ctx button:hover,.tc-ctx button:hover{background:var(--surface-hover);}
+.reqdoc-ctx button .ic,.tc-ctx button .ic{flex:none;display:grid;place-items:center;color:var(--text-3);}
+.reqdoc-ctx button:hover .ic,.tc-ctx button:hover .ic{color:var(--text-2);}
+.reqdoc-ctx button.danger,.tc-ctx button.danger{color:var(--danger-fg);}
+.reqdoc-ctx button.danger .ic,.tc-ctx button.danger .ic{color:var(--danger-fg);}
+.reqdoc-ctx button.danger:hover,.tc-ctx button.danger:hover{background:var(--danger-soft);}
+.reqdoc-ctx .sep,.tc-ctx .sep{height:1px;margin:4px 6px;background:var(--border);}
+.reqdoc-ctx .ctx-note,.tc-ctx .ctx-note{padding:6px 9px;font-size:11.5px;line-height:1.5;color:var(--text-3);}
 
 /* ---- 最近动态：按天分组的文档活动流 ---- */
 .reqdoc-feed{display:flex;flex-direction:column;gap:14px;}
@@ -13041,7 +13067,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
         </div>
 
         <div class="fgroup" id="fgMore" style="position:relative">
-          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="moreFilterMenu" title="更多筛选：模块、标签、类型、版本、截止与开始日期、完成情况">
+          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="moreFilterMenu" title="更多筛选：模块、标签、类型、版本、截止与开始日期、完成情况、发布态">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
             更多筛选 <span class="n" id="moreFilterCount" hidden>0</span>
           </button>
@@ -13057,6 +13083,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
         <div class="fgroup" id="fgVersion" hidden><span class="chips" id="chipsVersion"></span></div>
         <div class="fgroup" id="fgDate" hidden><span class="chips" id="chipsDate"></span></div>
         <div class="fgroup" id="fgCompletion" hidden><span class="chips" id="chipsCompletion"></span></div>
+        <div class="fgroup" id="fgPubState" hidden><span class="chips" id="chipsPubState"></span></div>
         <div class="fgroup" id="fgBlocked" hidden><span class="chips" id="chipsBlocked"></span></div>
         <div class="fgroup" id="fgQuery" hidden><span class="chips" id="chipsQuery"></span></div>
         <!-- 四个高频维度直接在按钮上回显选中值，不再重复生成 chip；保留容器兼容旧渲染 -->
@@ -13889,7 +13916,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                     <span data-icon="download"></span>导出 Markdown / HTML
                   </button>
                   <button class="menu-item" type="button" id="reqDocExportWord" title="导出为 Word 文档（.docx），保留标题、表格与内嵌图片">
-                    <span data-icon="download"></span>导出 Word（.docx）
+                    <span data-icon="docW"></span>导出 Word（.docx）
                   </button>
                   <button class="menu-item" type="button" id="reqDocCopy"><span data-icon="copy"></span>复制正文</button>
                   <button class="menu-item" type="button" id="reqDocPrint"><span data-icon="print"></span>打印 / 导出 PDF</button>
@@ -16512,6 +16539,22 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
         '<h2>做法</h2><ul><li>异常明细单独建表</li><li>保留原流水号与失败原因</li></ul>' }
   ];
 
+  /* 文档评论：角标与列表同源，避免出现「角标 3 条、列表为空」的错位 */
+  var docComments = {
+    D1: [
+      { id: 1, userName: "李娜", createdAt: ts(-1, 16, 40), resolved: false,
+        quoteText: "先鉴权再进业务", content: "这里的白名单要不要按环境区分？", deletable: false },
+      { id: 2, userName: "王浩", createdAt: ts(-1, 18, 5), resolved: false,
+        quoteText: "", content: "建议补一条越权访问的日志字段说明。", deletable: false },
+      { id: 3, userName: "我", createdAt: ts(0, 9, 12), resolved: true,
+        quoteText: "系统接口放行清单要单独维护", content: "放行清单已经加进配置中心，等下周验收。", deletable: true }
+    ],
+    D2: [
+      { id: 4, userName: "陈工", createdAt: ts(-2, 10, 30), resolved: false,
+        quoteText: "", content: "异常明细表要加索引吗？", deletable: false }
+    ]
+  };
+
   /* 文档最近动态：按天倒序，覆盖创建/更新/状态流转/发布几类操作 */
   var docActivities = [
     { id: 1, docId: "D1", docTitle: "权限校验需求", reqId: "R1", actorName: "我",
@@ -16824,6 +16867,8 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
       for (var bi = 0; bi < branches.length; bi++) if (branches[bi].id === brId) return branches[bi];
       return branches[0];
     }
+    /* 文档分类是扁平数组；缺这条会落到通用兜底返回对象，文档树在 cats.forEach 处直接抛错 */
+    if (clean === "/api/doc-categories") { return []; }
     if (clean === "/api/req-docs") {
       /* 生产接口分页返回 {items,total,hasMore}，前端统一走 getAllPages（读 page.items）；
          这里必须给出同样的形状，否则列表/阅读树都拿不到数据 */
@@ -16838,6 +16883,18 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
     }
     /* 动态流要在单 id 正则之前判断，否则 "activities" 会被当成文档 id */
     if (clean === "/api/req-docs/activities") { return docActivities; }
+    /* 评论条数角标 / 评论列表：同样要先于单 id 判断，且都从 docComments 取数 */
+    var cCountM = /^\/api\/req-docs\/([A-Za-z0-9_-]+)\/comments\/counts$/.exec(clean);
+    if (cCountM) {
+      var cRows0 = docComments[cCountM[1]] || [];
+      var unresolved0 = cRows0.filter(function (c) { return !c.resolved; }).length;
+      return { total: cRows0.length, unresolved: unresolved0 };
+    }
+    var cListM = /^\/api\/req-docs\/([A-Za-z0-9_-]+)\/comments$/.exec(clean);
+    if (cListM) {
+      var cRows1 = docComments[cListM[1]] || [];
+      return { items: cRows1, total: cRows1.length, hasMore: false };
+    }
     if (/^\/api\/req-docs\/[A-Za-z0-9_-]+$/.test(clean)) {
       var did = clean.split("/").pop();
       for (var di = 0; di < reqDocs.length; di++) if (reqDocs[di].id === did) return reqDocs[di];
@@ -17242,6 +17299,21 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
       me.sourceName = teamOn ? "团队 AI" : "我的 API Key";
       me.status = !me.enabled ? "AI 已关闭" : (teamOn ? "已就绪：调用走团队额度" : "已就绪：调用走我的额度");
       data = me;
+    } else if (method === "POST" && /^\/api\/req-docs\/[A-Za-z0-9_-]+\/comments$/.test(clean)) {
+      /* 发表评论写回内存：侧栏与角标刷新后能看到新评论 */
+      var cDocId = clean.split("/")[3];
+      var cBucket = docComments[cDocId] || (docComments[cDocId] = []);
+      var cNew = { id: 90 + cBucket.length, userName: "我", createdAt: ts(0, 12, 0), resolved: false,
+                   quoteText: (reqBody && reqBody.quoteText) || "",
+                   content: (reqBody && reqBody.content) || "", deletable: true };
+      cBucket.push(cNew);
+      data = cNew;
+    } else if (method === "DELETE" && /^\/api\/req-docs\/[A-Za-z0-9_-]+\/comments\/[A-Za-z0-9_-]+$/.test(clean)) {
+      var cDelId = clean.split("/").pop();
+      Object.keys(docComments).forEach(function (k) {
+        docComments[k] = docComments[k].filter(function (c) { return String(c.id) !== cDelId; });
+      });
+      data = {};
     } else {
       /* 非 GET 也要走 pick：AI 的拆分/体检都是 POST，返回空对象会让界面直接报错 */
       var picked = pick(clean);
@@ -18087,9 +18159,9 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
             </details>
           </section>
 
-          <!-- 生产发布事实：有正式发布数据时才出现，避免占用首屏 -->
+          <!-- 生产发布事实：有正式记录或人工标记时才出现，避免占用首屏 -->
           <section class="drawer-card" id="taskPublication" hidden>
-            <div class="drawer-card-head"><h3>生产发布事实（只读）</h3><span id="taskPublishedBadge"></span></div>
+            <div class="drawer-card-head"><h3>生产发布事实</h3><span id="taskPublishedBadge"></span></div>
             <p class="hint" id="taskPublicationInfo"></p>
             <div id="taskReleaseRecords" aria-live="polite"></div>
           </section>
@@ -19021,7 +19093,9 @@ var channelCards = $("channelCards"), notifyStatus = $("notifyStatus"),
     lock: function (s) { return svg(s, '<rect x="4" y="8.6" width="12" height="8" rx="2"/><path d="M6.8 8.6V6.4a3.2 3.2 0 0 1 6.4 0v2.2"/>'); },
     share: function (s) { return svg(s, '<circle cx="15" cy="5" r="2.2"/><circle cx="5" cy="10" r="2.2"/><circle cx="15" cy="15" r="2.2"/><path d="M7 9 13 6M7 11l6 3"/>'); },
     layers: function (s) { return svg(s, '<path d="M10 2.8 17.2 6.4 10 10 2.8 6.4Z"/><path d="M2.8 10.4 10 14l7.2-3.6M2.8 14 10 17.6 17.2 14"/>'); },
-    print: function (s) { return svg(s, '<path d="M6 7.4V3.6h8v3.8M6 14.6H4.2v-5h11.6v5H14"/><rect x="6" y="12" width="8" height="4.4" rx="1"/>'); }
+    print: function (s) { return svg(s, '<path d="M6 7.4V3.6h8v3.8M6 14.6H4.2v-5h11.6v5H14"/><rect x="6" y="12" width="8" height="4.4" rx="1"/>'); },
+    /* Word 导出：文档形 + W 字样，与通用下载图标区分 */
+    docW: function (s) { return svg(s, '<path d="M4 3.5h8l4 4v9H4Z"/><path d="M12 3.5v4h4"/><path d="M6.9 8.8l1 4 2.1-3.2 2.1 3.2 1-4"/>'); }
   };
 
 function icon(name, size) {
@@ -20227,6 +20301,14 @@ function taskPublicationHTML(task){
   var meta = {effective:["生产生效", "tag-success"], partial:["生产部分生效", "tag-neutral"], rolled_back:["生产已回滚", "tag-neutral"], unknown:["生产覆盖未知", "tag-neutral"]}[state];
   var html = meta ? '<span class="tag task-published-badge ' + meta[1] + '" title="仅来自正式生产发布记录">' + meta[0] + '</span>' : "";
   if(task.everPublished === true) html += '<span class="tag tag-neutral" title="历史发布事实，不代表当前生产生效">曾生产发布</span>';
+  /* 人工标记只补录「有没有发布过」，不提供生产生效证据：正式记录存在时不重复出徽标 */
+  if(task.manualPublished === true && !meta && task.everPublished !== true){
+    var tip = "人工补录的历史发布事实" + (task.manualPublishedAt ? "（" + esc(task.manualPublishedAt) + "）" : "")
+      + (task.manualJudgeName ? " · " + esc(task.manualJudgeName) : "")
+      + (task.manualJudgeReason ? "：" + esc(task.manualJudgeReason) : "")
+      + "；不代表当前生产生效，也不参与需求交付统计";
+    html += '<span class="tag tag-neutral" title="' + tip + '">已发布（人工）</span>';
+  }
   return html;
 }
 function releaseEnvironmentName(env){ return {production:"生产", staging:"预发布", test:"测试"}[env] || env || "未记录环境"; }
@@ -20543,7 +20625,7 @@ rt.alertTab = "notice";
 
 var state = {
   q:"", owners:[], testOwners:[], pris:[], cats:[], reqs:[], tags:[], types:[], versions:[], columns:[],
-  completion:"", due:null, focus:false, doneScope:"week", blocked:false,
+  completion:"", pubState:null, due:null, focus:false, doneScope:"week", blocked:false,
   noDue:false, dueFrom:null, dueTo:null, startFrom:null, startTo:null,
   board:null, loadSeq:0, boardGen:0,
   reviewData:null, statsWeeks:8, flowDays:90, workScope:"mine", reviewWork:null,
@@ -20689,6 +20771,7 @@ function filterOn(){
   return !!(state.q || state.owners.length || state.testOwners.length || state.pris.length || state.cats.length
     || state.reqs.length || state.tags.length || state.types.length || state.versions.length
     || state.columns.length || state.completion
+    || state.pubState
     || state.due || state.focus || state.blocked || state.noDue
     || state.dueFrom || state.dueTo || state.startFrom || state.startTo);
 }
@@ -20697,6 +20780,7 @@ function selectedFilterCount(){
   if(state.q) n++;
   n += state.owners.length + state.testOwners.length + state.pris.length + state.cats.length + state.reqs.length + state.tags.length + state.types.length + state.versions.length + state.columns.length;
   if(state.completion) n++;
+  if(state.pubState) n++;
   if(state.due) n++;
   if(state.focus) n++;
   if(state.blocked) n++;
@@ -22304,8 +22388,30 @@ function createMentionPicker(input, opts){
       var b = e.target.closest("[data-mp-idx]");
       if(b) pick(Number(b.dataset.mpIdx));
     });
+    layer.addEventListener("keydown", function(e){
+      if((e.key === "Enter" || e.key === " ") && e.target.closest("[data-mp-retry]")){
+        e.preventDefault();
+        loadMembers(true);
+      }
+    });
     document.body.appendChild(layer);
     return layer;
+  }
+
+  /* 输入框上方最近的裁剪边界（抽屉正文、侧栏等滚动容器）：
+     只按视口算的话，候选会盖住抽屉页签和顶栏，翻到下方更自然 */
+  function clipTop(inputTop){
+    var top = 0;
+    var el = input.parentElement;
+    while(el && el !== document.body && el !== document.documentElement){
+      var cs = window.getComputedStyle(el);
+      if(/(auto|scroll|hidden)/.test(cs.overflowY)){
+        var r = el.getBoundingClientRect();
+        if(r.height > 0 && r.top < inputTop && r.top > top) top = r.top;
+      }
+      el = el.parentElement;
+    }
+    return top;
   }
 
   function place(){
@@ -22315,13 +22421,15 @@ function createMentionPicker(input, opts){
     var vw = window.innerWidth;
     var vh = window.innerHeight;
     var width = Math.round(Math.min(Math.max(r.width, MIN_WIDTH), MAX_WIDTH, vw - 16));
-    var above = r.top - GAP - 8;
+    var above = r.top - clipTop(r.top) - GAP - 8;
     var below = vh - r.bottom - GAP - 8;
     var openAbove = above >= 160 || above >= below;
     var space = Math.max(openAbove ? above : below, 96);
+    /* 视口边缘兜底：下方空间极小（移动端键盘弹起）时不要把浮层顶出屏幕 */
+    var visible = Math.max(openAbove ? r.top - GAP : vh - r.bottom - GAP, 0);
     layer.style.width = width + "px";
     layer.style.left = Math.round(Math.max(8, Math.min(r.left, vw - width - 8))) + "px";
-    layer.style.maxHeight = Math.round(Math.min(MAX_HEIGHT, space)) + "px";
+    layer.style.maxHeight = Math.round(Math.min(MAX_HEIGHT, space, visible)) + "px";
     if(openAbove){
       layer.style.top = "auto";
       layer.style.bottom = Math.round(vh - r.top + GAP) + "px";
@@ -24465,12 +24573,16 @@ if($("btnListColumns")) $("btnListColumns").addEventListener("click", function()
 function syncListSelectionUI(){
   var checked = listBody.querySelectorAll("[data-row-check]:checked");
   var n = checked.length;
+  var checkedIds = [];
+  checked.forEach(function(cb){ checkedIds.push(cb.dataset.rowCheck); });
   /* 原「移入回收站」按钮在顶部工具栏、其它批量操作在列表上方，两条并存既重复、
      又让批量入口看起来"只有一个删除"。现在统一收进列表上方那一条（元素保留，仅常驻隐藏）。 */
   btnListBulk.hidden = true;
   if(listBulkBar){
     listBulkBar.hidden = n === 0;
     if(n > 0){
+      /* 人工发布标记要逐条校验项目权限：混合权限的选区不提供入口，避免整批被后端拒绝 */
+      var pubOK = canBulkPublish(checkedIds);
       listBulkBar.innerHTML = '<div class="bulk-bar">' +
         '<span class="bk-n">已选 ' + n + ' 项</span>' +
         '<button class="btn sm" type="button" data-bulk="pri">改优先级</button>' +
@@ -24478,6 +24590,10 @@ function syncListSelectionUI(){
         '<button class="btn sm" type="button" data-bulk="due">改截止</button>' +
         '<button class="btn sm" type="button" data-bulk="col">改所在列</button>' +
         '<button class="btn sm" type="button" data-bulk="tag">加标签</button>' +
+        (pubOK
+          ? '<button class="btn sm" type="button" data-bulk="pub">标记已发布</button>' +
+            '<button class="btn sm" type="button" data-bulk="pub-revoke">撤销发布标记</button>'
+          : "") +
         '<span class="spacer"></span>' +
         '<button class="btn sm danger" type="button" data-bulk="del">' + icon("trash", 13) + ' 移入回收站</button>' +
         '<button class="btn sm ghost" type="button" data-bulk="clear">取消选择</button>' +
@@ -24495,6 +24611,89 @@ function syncListSelectionUI(){
 }
 function bulkIds(){
   return Object.keys(rt.listSelected).filter(function(k){ return rt.listSelected[k]; });
+}
+/* 人工发布标记单次上限与后端一致；选区里任一工作项无管理权限就不提供批量入口 */
+var MAX_PUBLICATION_BATCH = 100;
+function canBulkPublish(ids){
+  if(!ids || !ids.length || ids.length > MAX_PUBLICATION_BATCH) return false;
+  for(var i = 0; i < ids.length; i++){
+    var t = rt.listCache[ids[i]];
+    if(!t || t.deletedAt || !canManageProject(t.reqId)) return false;
+  }
+  return true;
+}
+function refreshAfterBulkPublication(){
+  rt.listSelected = {};
+  loadList();
+  loadBoard({silent:true});
+  loadReqs();
+}
+function openBulkPublicationDialog(){
+  var ids = bulkIds();
+  if(!ids.length) return;
+  if(ids.length > MAX_PUBLICATION_BATCH){ toast("单次最多标记 " + MAX_PUBLICATION_BATCH + " 项，请减少选择", "warn"); return; }
+  if(!canBulkPublish(ids)){ toast("所选工作项中有不可管理的项目，请分开操作", "warn"); return; }
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.innerHTML = '<div class="sheet xs"><div class="sheet-body"><div class="panel"><div class="panel-head"><h3>'
+    + '标记 ' + ids.length + ' 项为已发布（人工）</h3>'
+    + '<button class="icon-btn sm" type="button" data-bulkpub-x aria-label="关闭">' + icon("close", 14) + '</button></div>'
+    + '<div class="stack"><p class="foot-note">用于补录从其他系统迁移、没有正式发布记录的历史数据。'
+    + '只影响工作项徽标与「发布态」筛选，不写入版本发布记录，也不参与需求交付派生与统计；每项单独留痕。</p>'
+    + '<label class="field"><span>生效日期</span><input class="input" type="date" id="bulkPubDate" value="' + esc(rt.TODAY_ISO) + '" max="' + esc(rt.TODAY_ISO) + '"></label>'
+    + '<label class="field"><span>补录原因（必填）</span><textarea class="input" id="bulkPubNote" rows="4" maxlength="500" placeholder="例如：从旧系统迁移，原系统发布记录未同步"></textarea></label>'
+    + '<div class="row row-gap"><button class="btn primary" type="button" data-bulkpub-ok>保存标记</button>'
+    + '<button class="btn" type="button" data-bulkpub-x>取消</button></div>'
+    + '</div></div></div></div>';
+  document.body.appendChild(layer);
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-bulkpub-x]")){ UI.closeModal(layer); return; }
+    var ok = e.target.closest("[data-bulkpub-ok]");
+    if(!ok) return;
+    var note = layer.querySelector("#bulkPubNote").value.trim();
+    var effectiveOn = layer.querySelector("#bulkPubDate").value;
+    if(!effectiveOn){ toast("请选择标记生效日期", "warn"); layer.querySelector("#bulkPubDate").focus(); return; }
+    if(!note){ toast("请填写人工标记原因", "warn"); layer.querySelector("#bulkPubNote").focus(); return; }
+    ok.disabled = true;
+    UI.syncBusy(true);
+    API.post("/api/tasks/publication-judgement/batch", {
+      taskIds: ids, effectiveOn: effectiveOn, note: note
+    }).then(function(res){
+      UI.syncBusy(false);
+      UI.closeModal(layer);
+      toast("已标记 " + ((res && res.marked) || ids.length) + " 项为发布过（仅影响展示与筛选）", "fs");
+      refreshAfterBulkPublication();
+    }).catch(function(ex){
+      UI.syncBusy(false);
+      ok.disabled = false;
+      toast(ex.message || "批量标记失败", "bad");
+    });
+  });
+  UI.openModal(layer, "select");
+}
+function revokeBulkPublication(){
+  var ids = bulkIds();
+  if(!ids.length) return;
+  if(ids.length > MAX_PUBLICATION_BATCH){ toast("单次最多撤销 " + MAX_PUBLICATION_BATCH + " 项，请减少选择", "warn"); return; }
+  if(!canBulkPublish(ids)){ toast("所选工作项中有不可管理的项目，请分开操作", "warn"); return; }
+  UI.showPrompt({ title:"撤销 " + ids.length + " 项的发布标记", desc:"撤销后回落为未发布；正式发布记录不受影响，历史记录保留。没有生效标记的条目会自动跳过。",
+    label:"撤销原因（必填）", required:true, maxLength:500, okText:"撤销标记" }).then(function(note){
+    if(note === null) return;
+    if(!note.trim()){ toast("请填写撤销原因", "warn"); return; }
+    UI.syncBusy(true);
+    API.post("/api/tasks/publication-judgement/batch/revoke", { taskIds: ids, note: note.trim() })
+      .then(function(res){
+        UI.syncBusy(false);
+        toast("已撤销 " + ((res && res.revoked) || ids.length) + " 项发布标记", "fs");
+        refreshAfterBulkPublication();
+      }).catch(function(ex){
+        UI.syncBusy(false);
+        toast(ex.message || "批量撤销失败", "bad");
+      });
+  });
 }
 function bulkApply(patchFor, label){
   var ids = bulkIds();
@@ -24641,6 +24840,8 @@ if(listBulkBar){
       btnListBulk.click();
       return;
     }
+    if(kind === "pub"){ openBulkPublicationDialog(); return; }
+    if(kind === "pub-revoke"){ revokeBulkPublication(); return; }
     if(kind === "tag"){
       UI.showPrompt({ title: "批量添加标签", label: "标签名（≤16 字，已存在则跳过）", maxLength: 16, okText: "添加" })
         .then(function(input){
@@ -25104,22 +25305,37 @@ function evAssocRow(label, kind, id, text, hint){
     : "";
   return '<dt>' + esc(label) + '</dt><dd class="ev-assoc">' + val + edit + '</dd>';
 }
+/* 生产发布一行：正式记录优先；没有正式记录时人工标记只说「发布过」，不冒充生产生效 */
+function publicationEvidenceRow(t){
+  var hasPub = !!(t.publishedAt || t.everPublished || (Array.isArray(t.publicationTargets) && t.publicationTargets.length));
+  var manual = t.manualPublished === true;
+  var formal = t.publishedAt ? ("已发布 · " + fmtReleaseTime(t.publishedAt))
+    : (t.everPublished ? "有发布记录" : "");
+  var text = formal || (manual ? ("已发布（人工）" + (t.manualPublishedAt ? " · 生效 " + t.manualPublishedAt : "")) : "未发布");
+  var value = hasPub
+    ? '<button type="button" class="ev-link" data-ev-goto="publication" title="查看生产发布记录">' + esc(text) + '</button>'
+    : '<span class="' + (manual ? "" : "ev-empty") + '">' + esc(text) + '</span>';
+  var actions = "";
+  if(t.id && !t.deletedAt && canManageProject(t.reqId)){
+    actions = '<span class="ev-actions">'
+      + '<button type="button" class="link-btn" data-pub-judge title="补录从其他系统迁移的历史发布事实">'
+      + (manual ? "修改标记" : "标记已发布") + '</button>'
+      + (manual ? '<button type="button" class="link-btn" data-pub-revoke title="撤销人工发布标记">撤销标记</button>' : "")
+      + '</span>';
+  }
+  return '<dt>生产发布</dt><dd class="ev-publication">' + value + actions + '</dd>';
+}
 function renderReadEvidence(){
   var dl = $("readEvidence");
   if(!dl) return;
   var t = readTask();
-  var hasPub = !!(t.publishedAt || t.everPublished || (Array.isArray(t.publicationTargets) && t.publicationTargets.length));
-  var pub = t.publishedAt ? ("已发布 · " + fmtReleaseTime(t.publishedAt))
-    : (t.everPublished ? "有发布记录" : "未发布");
   var demandId = drawerDemandId();
   dl.innerHTML = [
     evRow("计划版本", versionNamesNow() || "待规划", 'data-ev-goto="version"', "查看计划版本与关联"),
     demandId
       ? evRow("关联需求", demandNameNow() || "未关联", 'data-ev-demand="' + esc(demandId) + '"', "打开需求详情")
       : evRow("关联需求", "未关联", "", ""),
-    hasPub
-      ? evRow("生产发布", pub, 'data-ev-goto="publication"', "查看生产发布记录")
-      : evRow("生产发布", pub, "", "")
+    publicationEvidenceRow(t)
   ].join("");
 }
 /* ==================== 读态测试卡：谁测、何时提测、测了多久 ==================== */
@@ -26532,20 +26748,41 @@ function syncDemandTarget(){
 function syncTaskPublication(task){
   var box = $("taskPublication");
   if(!box) return;
-  /* 没有正式发布事实时不占首屏；确有发布历史时由 loadTaskReleaseRecords 再展开 */
-  var hasPub = !!(task && (task.publishedAt || task.everPublished
+  /* 没有正式发布事实时不占首屏；确有发布记录或人工标记时展开 */
+  var hasPub = !!(task && (task.publishedAt || task.everPublished || task.manualPublished === true
     || (Array.isArray(task.publicationTargets) && task.publicationTargets.length)));
   box.hidden = !task || !hasPub;
   if(!task) return;
   $("taskPublishedBadge").innerHTML = taskPublicationHTML(task);
   $("taskPublicationInfo").textContent = "正式发布记录派生的只读事实；已完成不等于生产生效，执行状态可独立修改。"
     + (task.publishedAt ? " 最近生产发布：" + fmtReleaseTime(task.publishedAt) + "。" : "")
-    + (Array.isArray(task.publicationTargets) && task.publicationTargets.length ? " 目标：" + task.publicationTargets.map(function(t){ return typeof t === "string" ? t : (t.targetKey || t.key || "") + "（" + (t.state || t.publicationState || "unknown") + "）"; }).join("、") : "");
+    + (Array.isArray(task.publicationTargets) && task.publicationTargets.length ? " 目标：" + task.publicationTargets.map(function(t){ return typeof t === "string" ? t : (t.targetKey || t.key || "") + "（" + (t.state || t.publicationState || "unknown") + "）"; }).join("、") : "")
+    + (task.manualPublished === true
+      ? " 人工标记：已发布（生效 " + (task.manualPublishedAt || "—")
+        + (task.manualJudgeName ? " · " + task.manualJudgeName : "") + "）"
+        + (task.manualJudgeReason ? "：" + task.manualJudgeReason : "")
+        + "；仅用于展示与筛选，不参与需求交付统计。"
+      : "");
   renderReadView();
 }
 /* 换项目守卫要按「有没有发布记录」判定（后端 selectTaskRecordIdsForScope 口径，含失败 / 测试 / 回滚），
    比 everPublished（仅生产成功）宽。这里存下已读到的记录数：>0 一定能拦，读不到（-1）就交给后端裁决。 */
 var releaseRecordGuard = { taskId:null, count:-1 };
+function publicationJudgementLogHTML(j){
+  var revoked = !!j.revokedAt;
+  return '<li' + (revoked ? ' class="is-revoked"' : '') + '>'
+    + '<span class="pub-log-ts">' + esc(j.effectiveOn || "—") + '</span>'
+    + '<b>已发布（人工）</b>'
+    + '<span>' + esc(j.judgedByName || "—") + '</span>'
+    + '<span class="pub-log-ts">' + esc(fmtTs(j.judgedAt) || "—") + '</span>'
+    + (j.judgeReason ? '<span class="pub-log-note">' + esc(j.judgeReason) + '</span>' : '')
+    + (revoked
+      ? '<span class="tag ghost">已撤销</span><span class="pub-log-note">'
+        + esc(fmtTs(j.revokedAt) || "") + ' · ' + esc(j.revokedByName || "—")
+        + (j.revokeReason ? ' · ' + esc(j.revokeReason) : "") + '</span>'
+      : '<span class="tag tag-success">当前生效</span>')
+    + '</li>';
+}
 function loadTaskReleaseRecords(task){
   var box = $("taskReleaseRecords");
   releaseRecordGuard = { taskId: task ? task.id : null, count:-1 };
@@ -26556,10 +26793,13 @@ function loadTaskReleaseRecords(task){
   box.textContent = "交付记录加载中…";
   Promise.all([
     API.get("/api/task/" + encodeURIComponent(task.id)),
-    API.get("/api/tasks/" + encodeURIComponent(task.id) + "/release-records")
+    API.get("/api/tasks/" + encodeURIComponent(task.id) + "/release-records"),
+    API.get("/api/tasks/" + encodeURIComponent(task.id) + "/publication-judgements", { offset:0, limit:100 })
+      .catch(function(){ return { items:[] }; })
   ]).then(function(results){
     if(!assocStillCurrent(seq, task.id, reqId)) return;
     var fresh = results[0], records = results[1] || [];
+    var judgements = (results[2] && results[2].items) || [];
     releaseRecordGuard = { taskId: task.id, count: records.length };
     if(!fresh || (fresh.reqId || "") !== (task.reqId || "")){
       box.textContent = "工作项已变化或不可见，请刷新详情后查看交付记录。";
@@ -26568,14 +26808,91 @@ function loadTaskReleaseRecords(task){
     }
     if(fresh){
       var current = taskCacheExtra[task.id];
-      ["publicationState", "everPublished", "publicationTargets", "publishedAt", "publishSource", "publishedReleaseId"].forEach(function(key){ current[key] = fresh[key]; });
+      ["publicationState", "everPublished", "publicationTargets", "publishedAt", "publishSource", "publishedReleaseId",
+        "manualPublished", "manualPublishedAt", "manualJudgeName", "manualJudgeReason"].forEach(function(key){ current[key] = fresh[key]; });
       syncTaskPublication(current);
     }
-    box.innerHTML = records.length ? '<h4>正式发布历史（含失败 / 测试 / 回滚）</h4>' + records.map(function(record){ return releaseSnapshotHTML(record, task.id); }).join("") : '<p class="hint">未留正式发布记录，不反推或伪造历史。</p>';
-    if(records.length) $("taskPublication").hidden = false;
+    var recordsHTML = records.length
+      ? '<h4>正式发布历史（含失败 / 测试 / 回滚）</h4>' + records.map(function(record){ return releaseSnapshotHTML(record, task.id); }).join("")
+      : '<p class="hint">未留正式发布记录' + (judgements.length ? '；下方为人工补录的历史发布事实。' : '，不反推或伪造历史。') + '</p>';
+    var manualHTML = judgements.length
+      ? '<h4 class="pub-manual-head">人工标记历史</h4><ul class="pub-logs">'
+        + judgements.map(publicationJudgementLogHTML).join("") + '</ul>'
+      : "";
+    box.innerHTML = recordsHTML + manualHTML;
+    if(records.length || judgements.length) $("taskPublication").hidden = false;
   }).catch(function(ex){
     if(assocStillCurrent(seq, task.id, reqId)) box.textContent = "交付记录加载失败：" + (ex.message || "请重开详情重试");
   });
+}
+/* 人工发布标记：只补录「有没有发布过」，不写正式发布记录，也不改需求交付阶段 */
+function openPublicationJudgementDialog(task){
+  if(!task || !task.id) return;
+  if(!canManageProject(task.reqId)){
+    toast("仅空间主、管理员或项目负责人可标记工作项发布状态", "warn");
+    return;
+  }
+  var date = task.manualPublishedAt || rt.TODAY_ISO;
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.innerHTML = '<div class="sheet xs"><div class="sheet-body"><div class="panel"><div class="panel-head"><h3>'
+    + (task.manualPublished ? "修改人工发布标记" : "标记为已发布（人工）") + '</h3>'
+    + '<button class="icon-btn sm" type="button" data-pub-judge-x aria-label="关闭">' + icon("close", 14) + '</button></div>'
+    + '<div class="stack"><p class="foot-note">用于补录从其他系统迁移、没有正式发布记录的历史数据。'
+    + '标记只影响工作项徽标与「发布态」筛选，不写入版本发布记录，也不参与需求交付派生与统计。</p>'
+    + '<label class="field"><span>生效日期</span><input class="input" type="date" id="pubJudgeDate" value="' + esc(date) + '" max="' + esc(rt.TODAY_ISO) + '"></label>'
+    + '<label class="field"><span>补录原因（必填）</span><textarea class="input" id="pubJudgeNote" rows="4" maxlength="500" placeholder="例如：从旧系统迁移，原系统记录已随项目归档">' + esc(task.manualJudgeReason || "") + '</textarea></label>'
+    + '<div class="row row-gap"><button class="btn primary" type="button" data-pub-judge-ok>保存标记</button>'
+    + '<button class="btn" type="button" data-pub-judge-x>取消</button></div>'
+    + '</div></div></div></div>';
+  document.body.appendChild(layer);
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-pub-judge-x]")){ UI.closeModal(layer); return; }
+    var ok = e.target.closest("[data-pub-judge-ok]");
+    if(!ok) return;
+    var note = layer.querySelector("#pubJudgeNote").value.trim();
+    var effectiveOn = layer.querySelector("#pubJudgeDate").value;
+    if(!effectiveOn){ toast("请选择标记生效日期", "warn"); layer.querySelector("#pubJudgeDate").focus(); return; }
+    if(!note){ toast("请填写人工标记原因", "warn"); layer.querySelector("#pubJudgeNote").focus(); return; }
+    ok.disabled = true;
+    API.post("/api/tasks/" + encodeURIComponent(task.id) + "/publication-judgement", {
+      effectiveOn:effectiveOn, note:note
+    }).then(function(){
+      UI.closeModal(layer);
+      toast("已标记为发布过（仅影响展示与筛选）", "fs");
+      refreshAfterPublicationChange(task);
+    }).catch(function(ex){
+      ok.disabled = false;
+      toast(ex.message || "保存标记失败", "bad");
+    });
+  });
+  UI.openModal(layer, "select");
+}
+function revokePublicationJudgement(task){
+  if(!task || !task.id) return;
+  if(!canManageProject(task.reqId)){
+    toast("仅空间主、管理员或项目负责人可撤销工作项发布标记", "warn");
+    return;
+  }
+  UI.showPrompt({ title:"撤销人工发布标记", desc:"撤销后该工作项回落为未发布，正式发布记录不受影响；历史记录保留。",
+    label:"撤销原因（必填）", required:true, maxLength:500, okText:"撤销标记" }).then(function(note){
+    if(note === null) return;
+    if(!note.trim()){ toast("请填写撤销原因", "warn"); return; }
+    API.post("/api/tasks/" + encodeURIComponent(task.id) + "/publication-judgement/revoke", {
+      note:note.trim()
+    }).then(function(){
+      toast("人工发布标记已撤销", "fs");
+      refreshAfterPublicationChange(task);
+    }).catch(function(ex){ toast(ex.message || "撤销失败", "bad"); });
+  });
+}
+function refreshAfterPublicationChange(task){
+  loadTaskReleaseRecords(task);
+  /* 筛选视图（看板 / 列表 / 甘特 / 我的工作）都要按新的发布态重算；动态加载避免与筛选模块成环 */
+  import("./filters.js").then(function(m){ m.reloadFilteredViews(); }).catch(function(){});
 }
 var versionSel = $("iVersion");
 if(versionSel){
@@ -31196,6 +31513,20 @@ if(drawerBodyEl){
   };
   drawerBodyEl.addEventListener("click", assocEditActivate);
   drawerBodyEl.addEventListener("keydown", assocEditActivate);
+  /* 人工发布标记入口：只补录历史发布事实，权限与后端 assertManageProject 同口径 */
+  var pubActivate = function(e){
+    var el = e.target.closest ? e.target.closest("[data-pub-judge],[data-pub-revoke]") : null;
+    if(!el) return;
+    if(e.type === "keydown"){
+      if(e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+    }
+    var task = readTask();
+    if(el.hasAttribute("data-pub-judge")) openPublicationJudgementDialog(task);
+    else revokePublicationJudgement(task);
+  };
+  drawerBodyEl.addEventListener("click", pubActivate);
+  drawerBodyEl.addEventListener("keydown", pubActivate);
 }
 
 /* ---- core/search-palette.js ---- */
@@ -36938,6 +37269,12 @@ function completionLabel(v){
   for(var i = 0; i < COMPLETION_OPTIONS.length; i++) if(COMPLETION_OPTIONS[i][0] === (v || "")) return COMPLETION_OPTIONS[i][1];
   return "全部";
 }
+/* 发布态：已发布 = 成功生产发布记录或人工历史标记（回滚过也算发布过） */
+var PUB_OPTIONS = [["", "全部"], ["published", "已发布"], ["unpublished", "未发布"]];
+function pubStateLabel(v){
+  for(var i = 0; i < PUB_OPTIONS.length; i++) if(PUB_OPTIONS[i][0] === (v || "")) return PUB_OPTIONS[i][1];
+  return "全部";
+}
 function itemVal(o){ return o.id !== undefined ? o.id : o.name; }
 /* 项目 / 模块：与其它维度一样带计数，「未指定」作为空值项保留在末位 */
 function reqItems(meta){
@@ -37036,6 +37373,17 @@ function renderCompletionChip(){
     '<button class="chip-x" type="button" data-clear-dim="completion" title="清除完成情况筛选" aria-label="清除完成情况筛选">' +
     icon("close", 12) + '</button></span>';
   $("fgCompletion").hidden = false;
+}
+function renderPubStateChip(){
+  var box = $("chipsPubState");
+  if(!box) return;
+  if(!state.pubState){ box.innerHTML = ""; $("fgPubState").hidden = true; return; }
+  box.innerHTML = '<span class="chip chip-split" aria-pressed="true">' +
+    '<button class="chip-main" type="button" data-edit-dim="pubState" title="修改发布态筛选">发布态：' +
+    esc(pubStateLabel(state.pubState)) + '</button>' +
+    '<button class="chip-x" type="button" data-clear-dim="pubState" title="清除发布态筛选" aria-label="清除发布态筛选">' +
+    icon("close", 12) + '</button></span>';
+  $("fgPubState").hidden = false;
 }
 function renderReqsChip(){
   chipsReqs.innerHTML = "";
@@ -37283,6 +37631,7 @@ var MF_DIMS = [
   { key:"due", title:"截止日期", icon:"calendar" },
   { key:"start", title:"开始日期", icon:"calendar" },
   { key:"completion", title:"完成情况", icon:"checkCircle" },
+  { key:"pubState", title:"发布态", icon:"checkCircle" },
   { key:"blocked", title:"其他", icon:"filterOff" }
 ];
 var mfDim = "cats", mfQ = "", mfValQ = "", mfMeta = null;
@@ -37294,6 +37643,7 @@ function mfSelectedCount(key){
   if(key === "due") return (state.noDue ? 1 : 0) + ((state.dueFrom || state.dueTo) ? 1 : 0);
   if(key === "start") return (state.startFrom || state.startTo) ? 1 : 0;
   if(key === "completion") return state.completion ? 1 : 0;
+  if(key === "pubState") return state.pubState ? 1 : 0;
   if(key === "blocked") return state.blocked ? 1 : 0;
   return (state[key] || []).length;
 }
@@ -37326,6 +37676,7 @@ function mfDimHasQuery(key, q){
   if(key === "due") return "截止无截止".indexOf(q) !== -1;
   if(key === "start") return "开始".indexOf(q) !== -1;
   if(key === "completion") return "全部未完成已完成".indexOf(q) !== -1;
+  if(key === "pubState") return "发布态已发布未发布人工".indexOf(q) !== -1;
   if(key === "blocked") return "阻塞其他".indexOf(q) !== -1;
   var items = mfItems(key);
   for(var i = 0; i < items.length; i++) if(mfHit(items[i], q)) return true;
@@ -37357,8 +37708,8 @@ function mfValuesHTML(key){
   var def = mfDef(key);
   if(!def) return '<p class="mf-empty">没有匹配的筛选条件</p>';
   var n = mfSelectedCount(key);
-  var items = (key === "due" || key === "start" || key === "completion" || key === "blocked") ? [] : mfItems(key);
-  var hint = key === "completion" ? "单选" : (key === "blocked" ? "开关" : (key === "due" || key === "start" ? "区间" : "多选 · " + items.length + " 个"));
+  var items = (key === "due" || key === "start" || key === "completion" || key === "pubState" || key === "blocked") ? [] : mfItems(key);
+  var hint = key === "completion" || key === "pubState" ? "单选" : (key === "blocked" ? "开关" : (key === "due" || key === "start" ? "区间" : "多选 · " + items.length + " 个"));
   var head = '<div class="mf-vals-head"><span class="mf-vt">' + def.title + '</span>' +
     '<span class="mf-vh">' + hint + '</span>' +
     (n ? '<button class="mf-clear" type="button" data-mf-clear="' + key + '">清空</button>' : "") + '</div>';
@@ -37370,6 +37721,15 @@ function mfValuesHTML(key){
         '" aria-pressed="' + on + '"><span class="mf-ck" aria-hidden="true">' + (on ? icon("check", 12) : "") + '</span>' +
         '<span class="mf-opt-name">' + o[1] + '</span></button>';
     }).join("") + '</div>';
+  }
+  if(key === "pubState"){
+    return head + '<div class="mf-opts">' + PUB_OPTIONS.map(function(o){
+      var on = (state.pubState || "") === o[0];
+      return '<button class="mf-opt" type="button" data-mf-opt="pubState" data-mf-val="' + o[0] + '" data-pubstate="' + o[0] +
+        '" aria-pressed="' + on + '"><span class="mf-ck" aria-hidden="true">' + (on ? icon("check", 12) : "") + '</span>' +
+        '<span class="mf-opt-name">' + o[1] + '</span></button>';
+    }).join("") + '</div>' +
+      '<p class="foot-note mf-hint">已发布 = 成功生产发布记录，或人工补录的历史发布事实；回滚过也算发布过。</p>';
   }
   if(key === "blocked"){
     return head + '<div class="mf-opts"><button class="mf-opt" type="button" data-mf-opt="blocked" data-mf-val="1" data-blocked-filter aria-pressed="' +
@@ -37540,6 +37900,8 @@ function clearMfDim(key){
     state.startFrom = null; state.startTo = null;
   }else if(key === "completion"){
     state.completion = "";
+  }else if(key === "pubState"){
+    state.pubState = null;
   }else if(key === "blocked"){
     state.blocked = false;
   }else{
@@ -37691,6 +38053,7 @@ function renderFilterChips(){
   }
   renderColumnsChips();
   renderCompletionChip();
+  renderPubStateChip();
   renderDateChip();
   renderBlockedChip();
   renderQueryChip();
@@ -37703,7 +38066,7 @@ function renderFilterChips(){
   }
   updateFilterActions();
   var sig = [state.owners, state.testOwners, state.pris, state.types, state.versions, state.columns, state.completion,
-    state.cats, state.tags, state.reqs, state.blocked, state.q,
+    state.pubState, state.cats, state.tags, state.reqs, state.blocked, state.q,
     state.noDue, state.dueFrom, state.dueTo, state.startFrom, state.startTo].join("|");
   if(sig !== lastActiveSig){
     lastActiveSig = sig;
@@ -37762,7 +38125,7 @@ function saveViewState(){
         owners: state.owners.slice(), testOwners: state.testOwners.slice(), pris: state.pris.slice(),
         cats: state.cats.slice(), reqs: state.reqs.slice(),
         tags: state.tags.slice(), types: state.types.slice(), versions: state.versions.slice(),
-        columns: state.columns.slice(), completion: state.completion,
+        columns: state.columns.slice(), completion: state.completion, pubState: state.pubState,
         due: state.due, focus: state.focus, blocked: state.blocked, doneScope: state.doneScope,
         noDue: state.noDue, dueFrom: state.dueFrom, dueTo: state.dueTo,
         startFrom: state.startFrom, startTo: state.startTo
@@ -37789,6 +38152,8 @@ function restoreViewState(){
     });
     var newCompletion = f.completion || "";
     if(newCompletion !== state.completion){ state.completion = newCompletion; changed = true; }
+    var newPubState = (f.pubState === "published" || f.pubState === "unpublished") ? f.pubState : null;
+    if(newPubState !== state.pubState){ state.pubState = newPubState; changed = true; }
     var newDue = f.due || null;
     if(newDue !== state.due){ state.due = newDue; changed = true; }
     var newFocus = !!f.focus;
@@ -37955,6 +38320,7 @@ function clearFilters(opts){
   state.q = ""; state.owners = []; state.testOwners = []; state.pris = []; state.cats = [];
   if(!keepReqs) state.reqs = [];
   state.tags = []; state.types = []; state.versions = []; state.columns = []; state.completion = "";
+  state.pubState = null;
   state.due = null; state.focus = false; state.blocked = false;
   state.noDue = false; state.dueFrom = null; state.dueTo = null;
   state.startFrom = null; state.startTo = null;
@@ -38032,6 +38398,12 @@ function handleFilterClick(e){
   var comp = e.target.closest("[data-completion]");
   if(comp){
     state.completion = comp.dataset.completion || "";
+    reloadFilteredViews();
+    return;
+  }
+  var pub = e.target.closest("[data-pubstate]");
+  if(pub){
+    state.pubState = pub.dataset.pubstate || null;
     reloadFilteredViews();
     return;
   }
@@ -38190,6 +38562,7 @@ function parseViewParams(p){
     owners: owners, testOwners: testOwners, pris: pris, cats: cats, reqs: reqs, tags: tags, types: types, versions: versions,
     columns: columns,
     completion: p.completion === "open" || p.completion === "done" ? p.completion : "",
+    pubState: p.pubState === "published" || p.pubState === "unpublished" ? p.pubState : null,
     due: (p.due === "over" || p.due === "today" || p.due === "soon") ? p.due : null,
     noDue: p.noDue === true,
     dueFrom: dueFrom, dueTo: dueTo, startFrom: startFrom, startTo: startTo,
@@ -38232,6 +38605,7 @@ function applyView(v){
   state.q = f.q; state.owners = f.owners; state.testOwners = f.testOwners; state.pris = f.pris; state.cats = pruneUnknownCats(f.cats);
   state.reqs = f.reqs; state.tags = f.tags; state.types = f.types; state.versions = f.versions;
   state.columns = f.columns; state.completion = f.completion;
+  state.pubState = f.pubState || null;
   state.due = f.due; state.focus = f.focus;
   state.noDue = f.noDue;
   state.dueFrom = f.dueFrom || null; state.dueTo = f.dueTo || null;
@@ -38374,8 +38748,10 @@ function updateMobFilterSummary(){
   var startRange = dateRangeText(state.startFrom, state.startTo);
   if(startRange) bits.push("开始 " + startRange);
   if(state.blocked) bits.push("仅看阻塞");
+  if(state.pubState) bits.push(pubStateLabel(state.pubState));
   var n = selectedFilterCount() - (state.q ? 1 : 0) - (state.focus ? 1 : 0)
     - (state.due ? 1 : 0) - (state.blocked ? 1 : 0) - (state.noDue ? 1 : 0)
+    - (state.pubState ? 1 : 0)
     - ((state.dueFrom || state.dueTo) ? 1 : 0) - ((state.startFrom || state.startTo) ? 1 : 0);
   if(n > 0) bits.push(n + " 项筛选");
   var text = bits.length ? (mobFilterLabel() + " · " + bits.join(" · ")) : (mobFilterLabel() + " · 全部");
@@ -38555,6 +38931,7 @@ var FILTER_KEYS = [
   { k: "versions", kind: "list", s: "versions" },
   { k: "columns", kind: "list", s: "columns" },
   { k: "completion", kind: "text" },
+  { k: "pubState", kind: "text" },
   { k: "due", kind: "text" },
   { k: "noDue", kind: "bool" },
   { k: "dueFrom", kind: "text" },
@@ -38655,7 +39032,7 @@ if(brandSub) brandSub.addEventListener("click", function(e){
 /* 列状态工作页从看板进入时沿用通用筛选语境：
    状态列与完成情况属于目标页自身维度，不随筛选带过去（否则会和被点的列冲突）。 */
 var WORKPAGE_SCOPE_KEYS = ["q", "owners", "testOwners", "pris", "cats", "reqs", "tags", "types", "versions",
-  "due", "noDue", "blocked", "focus", "dueFrom", "dueTo", "startFrom", "startTo"];
+  "due", "noDue", "blocked", "focus", "dueFrom", "dueTo", "startFrom", "startTo", "pubState"];
 function workpageScopeQuery(){
   var parts = [];
   WORKPAGE_SCOPE_KEYS.forEach(function(k){
@@ -52745,8 +53122,11 @@ function syncDocZoomUI(){
   });
   var wide = docWidePref();
   root.querySelectorAll("[data-rrd-wide]").forEach(function(b){
+    var tip = wide ? "退出宽屏" : "宽屏阅读（收起左侧文档树）";
     b.setAttribute("aria-pressed", wide ? "true" : "false");
-    b.setAttribute("title", wide ? "退出宽屏阅读" : "宽屏阅读：收起左侧文档树");
+    b.setAttribute("data-tip", tip);
+    b.setAttribute("aria-label", tip);
+    if(b.classList.contains("ibtn")) b.innerHTML = icon(wide ? "compress" : "expand", 15);
   });
 }
 function setDocZoom(next){
@@ -52934,14 +53314,18 @@ function renderReqDocReader(doc){
         '<h3><span class="rrd-title-text">' + esc(doc.title) + '</span>' + pubBadge + docVisChip(doc) + '</h3>' +
         '<span class="rrd-acts">' +
           docZoomControlHTML() +
-          '<button class="btn sm ghost" type="button" data-rrd-wide aria-pressed="false" title="宽屏阅读：收起左侧文档树">' + icon("expand", 13) + ' 宽屏</button>' +
-          (canMut ? '<button class="btn sm ghost" type="button" data-rrd-rename="' + esc(doc.id) + '" title="重命名文档">' + icon("edit", 13) + ' 重命名</button>' : '') +
-          '<button class="btn sm ghost" type="button" data-rrd-comments="' + esc(doc.id) + '" title="查看评论；选中正文可划线评论">' + icon("comment", 13) + ' 评论</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-perm="' + esc(doc.id) + '" title="查看这篇文档的权限说明（只读）">' + icon("shield", 13) + ' 权限说明</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canMut ? "1" : "0") + '" title="查看历史版本">' + icon("clock", 13) + ' 历史版本</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="按原格式导出 Markdown / HTML">' + icon("download", 13) + ' 导出</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-export-word="' + esc(doc.id) + '" title="导出为 Word 文档（.docx），保留标题、表格与内嵌图片">' + icon("download", 13) + ' Word</button>' +
-          '<button class="btn sm" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canMut ? '' : ' disabled title="仅文档负责人或空间管理员可编辑"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
+          '<span class="vdiv" aria-hidden="true"></span>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-wide aria-pressed="false" data-tip="宽屏阅读（收起左侧文档树）" aria-label="宽屏阅读">' + icon("expand", 15) + '</button>' +
+          '<span class="vdiv" aria-hidden="true"></span>' +
+          (canMut ? '<button class="btn sm ghost ibtn" type="button" data-rrd-rename="' + esc(doc.id) + '" data-tip="重命名文档" aria-label="重命名文档">' + icon("edit", 15) + '</button>' : '') +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-comments="' + esc(doc.id) + '" id="rrdCommentsBtn" data-tip="评论 · 选中正文可划线" aria-label="评论">' + icon("comment", 15) + '<span class="rrd-cnt" id="rrdCommentsBadge" hidden></span></button>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-perm="' + esc(doc.id) + '" data-tip="权限说明（只读）" aria-label="权限说明">' + icon("shield", 15) + '</button>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canMut ? "1" : "0") + '" data-tip="历史版本" aria-label="历史版本">' + icon("clock", 15) + '</button>' +
+          '<span class="vdiv" aria-hidden="true"></span>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-export="' + esc(doc.id) + '" data-tip="导出 Markdown / HTML" aria-label="导出 Markdown / HTML">' + icon("download", 15) + '</button>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-export-word="' + esc(doc.id) + '" data-tip="导出 Word（.docx）" aria-label="导出 Word">' + icon("docW", 15) + '</button>' +
+          '<span class="vdiv" aria-hidden="true"></span>' +
+          '<button class="btn sm soft" type="button" data-rrd-edit="' + esc(doc.id) + '"' + (canMut ? ' data-tip="编辑这篇文档" aria-label="编辑文档"' : ' disabled title="仅文档负责人或空间管理员可编辑"') + '>' + icon("edit", 13) + ' 编辑文档</button>' +
         '</span>' +
       '</div>' +
       '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
@@ -52974,6 +53358,8 @@ function renderReqDocReader(doc){
       '<div class="rrdc-pane rrdc-perm" id="rrdPanePerm" hidden></div>' +
     '</aside>';
   syncDocZoomUI();
+  UI.wireTooltips(box);
+  loadRrdCommentCount(doc.id);
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
   bindRrdMention();
   renderReqDocCrumb($("rrdCrumb"), doc.id);
@@ -53712,6 +54098,25 @@ function openDocCatVisDialog(catId){
   syncWho();
   UI.openModal(layer);
 }
+/* 评论条数角标：单独走 counts 接口，一次轻量请求，不拉评论正文 */
+function loadRrdCommentCount(docId){
+  if(!docId) return;
+  API.get("/api/req-docs/" + encodeURIComponent(docId) + "/comments/counts").then(function(c){
+    if(rrdCommentsDocId !== docId) return;
+    var n = (c && c.total) || 0;
+    var badge = $("rrdCommentsBadge");
+    if(badge){
+      badge.hidden = !n;
+      badge.textContent = n ? (n > 99 ? "99+" : String(n)) : "";
+    }
+    var btn = $("rrdCommentsBtn");
+    if(btn){
+      var tip = n ? "评论（" + n + " 条）· 选中正文可划线" : "评论 · 选中正文可划线";
+      btn.setAttribute("data-tip", tip);
+      btn.setAttribute("aria-label", n ? "评论（" + n + " 条）" : "评论");
+    }
+  }).catch(function(){ /* 计数失败不打扰阅读 */ });
+}
 function loadRrdComments(){
   var list = $("rrdCommentList");
   if(!list || !rrdCommentsDocId) return;
@@ -53769,6 +54174,7 @@ function submitRrdComment(){
     if(rrdMentionPicker){ rrdMentionPicker.close(); rrdMentionPicker.clearPicked(); }
     setRrdQuote(null);
     loadRrdComments();
+    loadRrdCommentCount(rrdCommentsDocId);
   }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
   .then(function(){ if(btn) btn.disabled = false; });
 }
@@ -53778,6 +54184,7 @@ function deleteRrdComment(commentId){
     if(!ok) return;
     API.del("/api/req-docs/" + encodeURIComponent(rrdCommentsDocId) + "/comments/" + encodeURIComponent(commentId)).then(function(){
       loadRrdComments();
+      loadRrdCommentCount(rrdCommentsDocId);
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
 }
@@ -83834,7 +84241,7 @@ function syncSidePanel(){
   var show = tcMode === "cases" && !caseScopeAll && !!caseReqId && !!caseSide;
   panel.hidden = !show;
   wrap.classList.toggle("has-side", show);
-  if(!show) return;
+  if(!show){ closeTcSetCtx(); return; }
   /* 左栏默认展开：首次进入项目就取分组，不用等用户再点一次 */
   if(caseSetsReq !== caseReqId) loadCaseSets();
   renderSetPanel();
@@ -84233,12 +84640,10 @@ function setItemHTML(s, level){
     + setVisTagHTML(s) + (dyn ? '<span class="tc-vis-tag dyn">动态</span>' : "") + '</span>'
     + (s.note ? '<span class="tc-set-sub">' + esc(s.note) + '</span>' : "")
     + '</span><span class="tc-set-n">' + count + '</span></button>'
-    + (isWritable() ? '<span class="tc-set-acts">'
+    + (isWritable() && s.editable ? '<span class="tc-set-acts">'
       + '<button class="icon-btn sm" type="button" data-tc-set-add="' + esc(s.id) + '" title="新建子分组" aria-label="在 ' + esc(s.name) + ' 下新建子分组">' + icon("plus", 13) + '</button>'
-      + (s.editable
-        ? '<button class="icon-btn sm" type="button" data-tc-set-edit="' + esc(s.id) + '" title="编辑分组" aria-label="编辑分组 ' + esc(s.name) + '">' + icon("edit", 13) + '</button>'
-          + '<button class="icon-btn sm" type="button" data-tc-set-del="' + esc(s.id) + '" title="删除分组（不删用例）" aria-label="删除分组 ' + esc(s.name) + '">' + icon("trash", 13) + '</button>'
-        : "")
+      + '<button class="icon-btn sm" type="button" data-tc-set-edit="' + esc(s.id) + '" title="编辑分组" aria-label="编辑分组 ' + esc(s.name) + '">' + icon("edit", 13) + '</button>'
+      + '<button class="icon-btn sm" type="button" data-tc-set-del="' + esc(s.id) + '" title="删除分组（不删用例）" aria-label="删除分组 ' + esc(s.name) + '">' + icon("trash", 13) + '</button>'
       + '</span>' : "")
     + '</div>';
 }
@@ -84315,6 +84720,71 @@ function pickSetNode(id){
   }
   if(caseSide === "set") renderSetPanel();
   loadCases();
+}
+/* ---------- 分组右键菜单：与文档分类树同款；只读项目只留「只看该分组」 ---------- */
+var tcSetCtxEl = null;
+var tcSetCtxTarget = "";
+
+function tcSetCtxMenu(){
+  if(tcSetCtxEl) return tcSetCtxEl;
+  var el = document.createElement("div");
+  el.className = "tc-ctx";
+  el.id = "tcSetCtxMenu";
+  el.setAttribute("role", "menu");
+  el.setAttribute("aria-label", "分组右键菜单");
+  document.body.appendChild(el);
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-ctx-act]");
+    if(!b) return;
+    var act = b.dataset.ctxAct, id = tcSetCtxTarget;
+    closeTcSetCtx();
+    if(act === "new") openSetDialog(null, id);
+    else if(act === "new-top") openSetDialog(null);
+    else if(act === "edit") openSetDialog(id);
+    else if(act === "del") deleteCaseSet(id);
+    else if(act === "pick") pickSetNode(id);
+  });
+  tcSetCtxEl = el;
+  return el;
+}
+function closeTcSetCtx(){
+  if(tcSetCtxEl) tcSetCtxEl.classList.remove("open");
+  tcSetCtxTarget = "";
+}
+function openTcSetCtx(x, y, id){
+  var s = id ? setById(id) : null;
+  var writable = isWritable();
+  var editable = !!(s && writable && s.editable);
+  var html = '<div class="ctx-head">' + (s ? "分组：" + esc(s.name) : "分组") + '</div>';
+  var any = false;
+  if(s){
+    html += '<button type="button" data-ctx-act="pick"><span class="ic">' + icon("checklist", 14) + '</span>'
+      + (setFilter === s.id ? "取消该分组筛选" : "只看该分组") + '</button>';
+    any = true;
+    if(editable){
+      html += '<button type="button" data-ctx-act="new"><span class="ic">' + icon("plus", 14) + '</span>新建子分组</button>'
+        + '<div class="sep"></div>'
+        + '<button type="button" data-ctx-act="edit"><span class="ic">' + icon("edit", 14) + '</span>编辑分组…</button>'
+        + '<button type="button" data-ctx-act="del" class="danger"><span class="ic">' + icon("trash", 14) + '</span>删除分组</button>';
+    }
+    if(!editable){
+      html += '<div class="ctx-note">' + (writable
+        ? (s.visibility === "members" ? "指定成员可见的分组只有创建人可以修改 / 删除。" : "个人分组只有创建人可以修改 / 删除。")
+        : "你对该项目只读，只能查看和筛选分组。") + '</div>';
+    }
+  }else if(writable){
+    html += '<button type="button" data-ctx-act="new-top"><span class="ic">' + icon("plus", 14) + '</span>新建分组</button>';
+    any = true;
+  }
+  if(!any) return false;
+  var el = tcSetCtxMenu();
+  tcSetCtxTarget = s ? s.id : "";
+  el.innerHTML = html;
+  el.classList.add("open");
+  var w = el.offsetWidth, h = el.offsetHeight, vw = window.innerWidth || 1200, vh = window.innerHeight || 800;
+  el.style.left = Math.max(8, Math.min(x, vw - w - 8)) + "px";
+  el.style.top = Math.max(8, Math.min(y, vh - h - 8)) + "px";
+  return true;
 }
 /* ---------- 分组弹框：可见范围（团队 / 指定成员 / 仅自己）× 类型（手工 / 动态） ----------
    规则不新造查询语言：字段与用例库筛选一一对应，命中数直接用同一条查询试算。 */
@@ -86208,6 +86678,26 @@ if($("tcSidePanel")){
   $("tcSidePanel").addEventListener("input", function(e){
     if(e.target.id === "tcSetSearch"){ caseSetQuery = e.target.value; renderSetPanel(); }
   });
+  /* 右键分组行＝对该分组新建子组 / 编辑 / 删除；右键空白处＝新建顶级分组 */
+  $("tcSidePanel").addEventListener("contextmenu", function(e){
+    var row = e.target.closest("[data-tc-set]");
+    if(row){
+      if(openTcSetCtx(e.clientX, e.clientY, row.dataset.tcSet)) e.preventDefault();
+      return;
+    }
+    if(e.target.closest("#tcSideBody") && isWritable()){
+      if(openTcSetCtx(e.clientX, e.clientY, "")) e.preventDefault();
+    }
+  });
+  document.addEventListener("click", function(e){
+    if(tcSetCtxEl && tcSetCtxEl.classList.contains("open") && !e.target.closest(".tc-ctx")) closeTcSetCtx();
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && tcSetCtxEl && tcSetCtxEl.classList.contains("open")) closeTcSetCtx();
+  });
+  window.addEventListener("scroll", function(){
+    if(tcSetCtxEl && tcSetCtxEl.classList.contains("open")) closeTcSetCtx();
+  }, true);
 }
 /* 顶部目录弹层：筛选 + 目录维护。拖目录节点仍可改父级 / 同级排序 */
 if($("tcDirBtn") && $("tcDirMenu")){
@@ -90734,6 +91224,6 @@ window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-16 07:17</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-16 08:56</span></div>
 </body>
 </html>

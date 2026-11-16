@@ -6743,7 +6743,7 @@ function syncSidePanel(){
   var show = tcMode === "cases" && !caseScopeAll && !!caseReqId && !!caseSide;
   panel.hidden = !show;
   wrap.classList.toggle("has-side", show);
-  if(!show) return;
+  if(!show){ closeTcSetCtx(); return; }
   /* 左栏默认展开：首次进入项目就取分组，不用等用户再点一次 */
   if(caseSetsReq !== caseReqId) loadCaseSets();
   renderSetPanel();
@@ -7142,12 +7142,10 @@ function setItemHTML(s, level){
     + setVisTagHTML(s) + (dyn ? '<span class="tc-vis-tag dyn">动态</span>' : "") + '</span>'
     + (s.note ? '<span class="tc-set-sub">' + esc(s.note) + '</span>' : "")
     + '</span><span class="tc-set-n">' + count + '</span></button>'
-    + (isWritable() ? '<span class="tc-set-acts">'
+    + (isWritable() && s.editable ? '<span class="tc-set-acts">'
       + '<button class="icon-btn sm" type="button" data-tc-set-add="' + esc(s.id) + '" title="新建子分组" aria-label="在 ' + esc(s.name) + ' 下新建子分组">' + icon("plus", 13) + '</button>'
-      + (s.editable
-        ? '<button class="icon-btn sm" type="button" data-tc-set-edit="' + esc(s.id) + '" title="编辑分组" aria-label="编辑分组 ' + esc(s.name) + '">' + icon("edit", 13) + '</button>'
-          + '<button class="icon-btn sm" type="button" data-tc-set-del="' + esc(s.id) + '" title="删除分组（不删用例）" aria-label="删除分组 ' + esc(s.name) + '">' + icon("trash", 13) + '</button>'
-        : "")
+      + '<button class="icon-btn sm" type="button" data-tc-set-edit="' + esc(s.id) + '" title="编辑分组" aria-label="编辑分组 ' + esc(s.name) + '">' + icon("edit", 13) + '</button>'
+      + '<button class="icon-btn sm" type="button" data-tc-set-del="' + esc(s.id) + '" title="删除分组（不删用例）" aria-label="删除分组 ' + esc(s.name) + '">' + icon("trash", 13) + '</button>'
       + '</span>' : "")
     + '</div>';
 }
@@ -7224,6 +7222,71 @@ function pickSetNode(id){
   }
   if(caseSide === "set") renderSetPanel();
   loadCases();
+}
+/* ---------- 分组右键菜单：与文档分类树同款；只读项目只留「只看该分组」 ---------- */
+var tcSetCtxEl = null;
+var tcSetCtxTarget = "";
+
+function tcSetCtxMenu(){
+  if(tcSetCtxEl) return tcSetCtxEl;
+  var el = document.createElement("div");
+  el.className = "tc-ctx";
+  el.id = "tcSetCtxMenu";
+  el.setAttribute("role", "menu");
+  el.setAttribute("aria-label", "分组右键菜单");
+  document.body.appendChild(el);
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-ctx-act]");
+    if(!b) return;
+    var act = b.dataset.ctxAct, id = tcSetCtxTarget;
+    closeTcSetCtx();
+    if(act === "new") openSetDialog(null, id);
+    else if(act === "new-top") openSetDialog(null);
+    else if(act === "edit") openSetDialog(id);
+    else if(act === "del") deleteCaseSet(id);
+    else if(act === "pick") pickSetNode(id);
+  });
+  tcSetCtxEl = el;
+  return el;
+}
+function closeTcSetCtx(){
+  if(tcSetCtxEl) tcSetCtxEl.classList.remove("open");
+  tcSetCtxTarget = "";
+}
+function openTcSetCtx(x, y, id){
+  var s = id ? setById(id) : null;
+  var writable = isWritable();
+  var editable = !!(s && writable && s.editable);
+  var html = '<div class="ctx-head">' + (s ? "分组：" + esc(s.name) : "分组") + '</div>';
+  var any = false;
+  if(s){
+    html += '<button type="button" data-ctx-act="pick"><span class="ic">' + icon("checklist", 14) + '</span>'
+      + (setFilter === s.id ? "取消该分组筛选" : "只看该分组") + '</button>';
+    any = true;
+    if(editable){
+      html += '<button type="button" data-ctx-act="new"><span class="ic">' + icon("plus", 14) + '</span>新建子分组</button>'
+        + '<div class="sep"></div>'
+        + '<button type="button" data-ctx-act="edit"><span class="ic">' + icon("edit", 14) + '</span>编辑分组…</button>'
+        + '<button type="button" data-ctx-act="del" class="danger"><span class="ic">' + icon("trash", 14) + '</span>删除分组</button>';
+    }
+    if(!editable){
+      html += '<div class="ctx-note">' + (writable
+        ? (s.visibility === "members" ? "指定成员可见的分组只有创建人可以修改 / 删除。" : "个人分组只有创建人可以修改 / 删除。")
+        : "你对该项目只读，只能查看和筛选分组。") + '</div>';
+    }
+  }else if(writable){
+    html += '<button type="button" data-ctx-act="new-top"><span class="ic">' + icon("plus", 14) + '</span>新建分组</button>';
+    any = true;
+  }
+  if(!any) return false;
+  var el = tcSetCtxMenu();
+  tcSetCtxTarget = s ? s.id : "";
+  el.innerHTML = html;
+  el.classList.add("open");
+  var w = el.offsetWidth, h = el.offsetHeight, vw = window.innerWidth || 1200, vh = window.innerHeight || 800;
+  el.style.left = Math.max(8, Math.min(x, vw - w - 8)) + "px";
+  el.style.top = Math.max(8, Math.min(y, vh - h - 8)) + "px";
+  return true;
 }
 /* ---------- 分组弹框：可见范围（团队 / 指定成员 / 仅自己）× 类型（手工 / 动态） ----------
    规则不新造查询语言：字段与用例库筛选一一对应，命中数直接用同一条查询试算。 */
@@ -9117,6 +9180,26 @@ if($("tcSidePanel")){
   $("tcSidePanel").addEventListener("input", function(e){
     if(e.target.id === "tcSetSearch"){ caseSetQuery = e.target.value; renderSetPanel(); }
   });
+  /* 右键分组行＝对该分组新建子组 / 编辑 / 删除；右键空白处＝新建顶级分组 */
+  $("tcSidePanel").addEventListener("contextmenu", function(e){
+    var row = e.target.closest("[data-tc-set]");
+    if(row){
+      if(openTcSetCtx(e.clientX, e.clientY, row.dataset.tcSet)) e.preventDefault();
+      return;
+    }
+    if(e.target.closest("#tcSideBody") && isWritable()){
+      if(openTcSetCtx(e.clientX, e.clientY, "")) e.preventDefault();
+    }
+  });
+  document.addEventListener("click", function(e){
+    if(tcSetCtxEl && tcSetCtxEl.classList.contains("open") && !e.target.closest(".tc-ctx")) closeTcSetCtx();
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && tcSetCtxEl && tcSetCtxEl.classList.contains("open")) closeTcSetCtx();
+  });
+  window.addEventListener("scroll", function(){
+    if(tcSetCtxEl && tcSetCtxEl.classList.contains("open")) closeTcSetCtx();
+  }, true);
 }
 /* 顶部目录弹层：筛选 + 目录维护。拖目录节点仍可改父级 / 同级排序 */
 if($("tcDirBtn") && $("tcDirMenu")){

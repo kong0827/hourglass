@@ -1967,6 +1967,14 @@ body.proj-reordering{cursor:grabbing;}
 .doc-zoom button[data-doc-zoom="reset"]{min-width:46px;padding:0 4px;font-variant-numeric:tabular-nums;}
 .doc-zoom button:disabled{opacity:.4;cursor:default;background:none;color:var(--text-3);}
 .rrd-acts [data-rrd-wide][aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-fg);border-color:transparent;}
+/* 阅读工具栏图标化：28×28 图标按钮 + 分组分隔线 + 评论角标（提示走 ui.js 的 data-tip） */
+.rrd-acts .ibtn{width:28px;padding:0;justify-content:center;position:relative;}
+.rrd-acts .vdiv{width:1px;height:16px;background:var(--border);flex:0 0 auto;}
+.rrd-acts .rrd-cnt{
+  position:absolute;top:-5px;right:-6px;box-sizing:content-box;min-width:16px;height:16px;padding:0 4px;
+  border-radius:999px;background:var(--primary);color:#fff;font-size:10.5px;font-weight:600;
+  line-height:16px;text-align:center;border:2px solid var(--surface);pointer-events:none;
+}
 /* 阅读模式：评论侧栏 + 划线高亮 + 选区气泡 */
 #reqDocReader.with-comments{display:flex;gap:14px;align-items:flex-start;}
 #reqDocReader .rrd-main{flex:1;min-width:0;}
@@ -2086,30 +2094,30 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
   .rda-bubble{max-width:calc(100vw - 16px);overflow:auto;}
 }
 
-/* ---- 分类树右键菜单：固定定位浅色卡片，与项目令牌一致；点菜单外/Esc/滚动关闭 ---- */
-.reqdoc-ctx{
+/* ---- 分类树 / 用例分组右键菜单：固定定位浅色卡片，与项目令牌一致；点菜单外/Esc/滚动关闭 ---- */
+.reqdoc-ctx,.tc-ctx{
   position:fixed;z-index:1200;min-width:184px;max-width:264px;padding:5px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
   box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transform:scale(.98);transform-origin:top left;
   transition:opacity var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out);
 }
-.reqdoc-ctx.open{opacity:1;pointer-events:auto;transform:scale(1);}
-.reqdoc-ctx .ctx-head{
+.reqdoc-ctx.open,.tc-ctx.open{opacity:1;pointer-events:auto;transform:scale(1);}
+.reqdoc-ctx .ctx-head,.tc-ctx .ctx-head{
   padding:5px 9px 6px;margin-bottom:4px;border-bottom:1px solid var(--border);
   font-size:11.5px;font-weight:650;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.reqdoc-ctx button{
+.reqdoc-ctx button,.tc-ctx button{
   display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:none;background:none;
   border-radius:var(--r-xs);cursor:pointer;font-family:inherit;font-size:13px;color:var(--text);text-align:left;
 }
-.reqdoc-ctx button:hover{background:var(--surface-hover);}
-.reqdoc-ctx button .ic{flex:none;display:grid;place-items:center;color:var(--text-3);}
-.reqdoc-ctx button:hover .ic{color:var(--text-2);}
-.reqdoc-ctx button.danger{color:var(--danger-fg);}
-.reqdoc-ctx button.danger .ic{color:var(--danger-fg);}
-.reqdoc-ctx button.danger:hover{background:var(--danger-soft);}
-.reqdoc-ctx .sep{height:1px;margin:4px 6px;background:var(--border);}
-.reqdoc-ctx .ctx-note{padding:6px 9px;font-size:11.5px;line-height:1.5;color:var(--text-3);}
+.reqdoc-ctx button:hover,.tc-ctx button:hover{background:var(--surface-hover);}
+.reqdoc-ctx button .ic,.tc-ctx button .ic{flex:none;display:grid;place-items:center;color:var(--text-3);}
+.reqdoc-ctx button:hover .ic,.tc-ctx button:hover .ic{color:var(--text-2);}
+.reqdoc-ctx button.danger,.tc-ctx button.danger{color:var(--danger-fg);}
+.reqdoc-ctx button.danger .ic,.tc-ctx button.danger .ic{color:var(--danger-fg);}
+.reqdoc-ctx button.danger:hover,.tc-ctx button.danger:hover{background:var(--danger-soft);}
+.reqdoc-ctx .sep,.tc-ctx .sep{height:1px;margin:4px 6px;background:var(--border);}
+.reqdoc-ctx .ctx-note,.tc-ctx .ctx-note{padding:6px 9px;font-size:11.5px;line-height:1.5;color:var(--text-3);}
 
 /* ---- 最近动态：按天分组的文档活动流 ---- */
 .reqdoc-feed{display:flex;flex-direction:column;gap:14px;}
