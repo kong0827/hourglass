@@ -107,6 +107,8 @@ for (const m of modules) visit(m);
    依赖方从 __NS 解构取用；其余模块保持平铺（导出仍以原标识符对外可见）。 */
 const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "settings", "profile",
   "phase", "version", "demands", "portfolio", "project", "workload", "risks", "report", "testcases", "messages",
+  /* 顶栏/侧栏角标预取会触发 branches 的动态 import，预览稿没有可 import 的文件路径 */
+  "branches",
   /* release 顶层从 __NS 取 phase.js 的 mountReleaseWorkspace；不包一层会先于 phase 求值拿到 undefined */
   "release",
   /* 这些也是 router 里的懒加载视图，必须各自包一层作用域：delivery 顶层有 function $(sel,root)
@@ -136,8 +138,8 @@ function collectExports(code) {
     });
     return m;
   });
-  code.replace(/^export\s+(function|const|var|let|class)\s+([A-Za-z_$][\w$]*)/gm,
-    function (m, kind, id) { exported[id] = id; return m; });
+  code.replace(/^export\s+(async\s+)?(function|const|var|let|class)\s+([A-Za-z_$][\w$]*)/gm,
+    function (m, isAsync, kind, id) { exported[id] = id; return m; });
   return exported;
 }
 const exportsCache = new Map();
@@ -150,8 +152,8 @@ function exportsOf(name) {
 function transformModule(name, code) {
   const exported = collectExports(code);
   code = code.replace(/^\s*export\s*\{([\s\S]*?)\};\s*$/gm, "");
-  code = code.replace(/^export\s+(function|const|var|let|class)\s+([A-Za-z_$][\w$]*)/gm,
-    function (m, kind, id) { return kind + " " + id; });
+  code = code.replace(/^export\s+(async\s+)?(function|const|var|let|class)\s+([A-Za-z_$][\w$]*)/gm,
+    function (m, isAsync, kind, id) { return (isAsync || "") + kind + " " + id; });
   /* 副作用导入（import "x";）没有 from，必须单独剥掉，否则平铺后就是语法错误 */
   code = code.replace(/^\s*import\s+"([^"]+)";\s*$/gm, "");
   code = code.replace(/^\s*import\s+([^;]*?)\s+from\s+"([^"]+)";\s*$/gm, function (m, clause, spec) {

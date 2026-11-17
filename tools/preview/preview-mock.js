@@ -82,6 +82,11 @@
   );
 
   var tasks = backlog.concat(doing, done);
+  /* 演示发布事实：每三条一条生产生效、一条人工补录，供各列表的发布徽标与筛选看效果 */
+  tasks.forEach(function (t, i) {
+    if (i % 3 === 0) { t.publicationState = "effective"; t.everPublished = true; t.publishedAt = shift(-2); t.publicationTargets = ["prod"]; }
+    else if (i % 3 === 1) { t.manualPublished = true; t.manualPublishedAt = shift(-9); }
+  });
 
   /* ---------------- 成员负载（名册 + 成员工作台） ---------------- */
   var workload = (function () {
@@ -174,6 +179,11 @@
     var kw = p.get("q") || "", due = p.get("due");
     var blockedOnly = p.get("blocked") === "true";
     var noDue = p.get("noDue") === "true";
+    var pubState = p.get("pubState") || "";
+    function published(t) {
+      return !!(t.publishedAt || t.everPublished === true || t.manualPublished === true
+        || (t.publicationState && t.publicationState !== "unpublished"));
+    }
     var todayIso = shift(0);
     var items = tasks.filter(function (t) {
       if (kw && (t.title || "").indexOf(kw) === -1 && (t.description || "").indexOf(kw) === -1) return false;
@@ -184,6 +194,8 @@
       if (tags.length && !(t.tags || []).some(function (x) { return tags.indexOf(x) !== -1; })) return false;
       if (noDue && t.dueDate) return false;
       if (blockedOnly && !t.blocked) return false;
+      if (pubState === "published" && !published(t)) return false;
+      if (pubState === "unpublished" && published(t)) return false;
       if (due === "over" && !(t.dueDate && t.dueDate < todayIso && t.boardColumn !== "done")) return false;
       if (due === "today" && t.dueDate !== todayIso) return false;
       if (due === "soon") {
@@ -378,15 +390,18 @@
       reqId: "R1", reqName: "流程引擎", reqDocId: "D1", reqDocTitle: "权限校验需求",
       owner: "我", ownerUserId: "U1", category: "后端", priority: "P2",
       startDate: shift(-9), completedAt: shift(-1), firstStartedAt: ts(-9, 9, 10), lastEndedAt: ts(-1, 17, 30),
-      totalMinutes: 480, createdAt: ts(-1, 17, 31) },
+      totalMinutes: 480, createdAt: ts(-1, 17, 31),
+      publicationState: "effective", everPublished: true, publishedAt: shift(-1), publicationTargets: ["prod"] },
     { id: 3, workspaceId: "W1", taskId: "K8", title: "代理登录权限修正", description: "代理人登录后菜单权限未刷新",
       reqId: null, reqName: null, owner: "陈工", ownerUserId: "U2", category: "后端", priority: "P1",
       startDate: shift(-6), completedAt: shift(-3), firstStartedAt: ts(-6, 14, 0), lastEndedAt: ts(-3, 11, 20),
-      totalMinutes: 205, createdAt: ts(-3, 11, 21) },
+      totalMinutes: 205, createdAt: ts(-3, 11, 21),
+      manualPublished: true, manualPublishedAt: shift(-2) },
     { id: 2, workspaceId: "W1", taskId: "K15", title: "归档脚本重试机制", description: "失败批次隔 5 分钟重试，最多 3 次",
       reqId: "R1", reqName: "流程引擎", owner: "我", ownerUserId: "U1", category: "后端", priority: "P2",
       startDate: shift(-12), completedAt: shift(-7), firstStartedAt: null, lastEndedAt: null,
-      totalMinutes: 0, createdAt: ts(-7, 18, 0) },
+      totalMinutes: 0, createdAt: ts(-7, 18, 0),
+      publicationState: "rolled_back", everPublished: true },
     { id: 1, workspaceId: "W1", taskId: "K16", title: "对账异常明细落库", description: "异常明细单独建表，附原流水号",
       reqId: "R1", reqName: "流程引擎", owner: "我", ownerUserId: "U1", category: "后端", priority: "P0",
       startDate: shift(-20), completedAt: shift(-14), firstStartedAt: ts(-20, 9, 0), lastEndedAt: ts(-14, 16, 40),
@@ -398,12 +413,36 @@
     notifyWebhook: null, notifyChannel: "webhook", notifyEnabled: true, notifyLastStatus: "success"
   };
 
+  /* 版本页演示数据：进行中 1 个、计划中 1 个、已发布 4 个，够看焦点卡、分组折叠与阶段汇总 */
+  function pv(id, name, status, startDate, targetDate, tasks, done, demands, est, act, dev, test, releasedAt) {
+    return { id: id, reqId: "R1", name: name, status: status, startDate: startDate, targetDate: targetDate,
+      taskCount: tasks, doneCount: done, demandCount: demands,
+      estimateMinutes: est, workMinutes: act, devMinutes: dev, testMinutes: test,
+      releasedAt: releasedAt || null, preLaunchCount: 0,
+      canPublish: status !== "planned", canManageReleasePlan: true,
+      branches: [], description: "" };
+  }
+  var previewVersions = [
+    pv("V1", "1.2 权限改造", "active", shift(-10), shift(3), 6, 2, 3, 2880, 1200, 900, 300),
+    pv("V2", "1.3 权限收官", "planned", "", shift(14), 0, 0, 2, 0, 0, 0, 0),
+    pv("V3", "1.1 权限基线", "released", shift(-30), shift(-22), 5, 5, 2, 1200, 1180, 900, 280, shift(-22)),
+    pv("V4", "1.0 权限上线", "released", shift(-46), shift(-38), 8, 8, 4, 1920, 2000, 1500, 500, shift(-38)),
+    pv("V5", "0.9 灰度验证", "released", shift(-62), shift(-54), 4, 4, 1, 960, 900, 700, 200, shift(-54)),
+    pv("V6", "0.8 权限初版", "released", shift(-80), shift(-70), 7, 7, 3, 1680, 1620, 1240, 380, shift(-70)),
+    { id: "V7", reqId: "R2", name: "2.0 结算升级", status: "planned", startDate: "", targetDate: shift(20),
+      taskCount: 0, doneCount: 0, demandCount: 1, estimateMinutes: 0, workMinutes: 0,
+      devMinutes: 0, testMinutes: 0, releasedAt: null, preLaunchCount: 0,
+      canPublish: false, canManageReleasePlan: true, branches: [], description: "" }
+  ];
+
   var routes = {
     /* 演示用：当前登录者是「普通用户」，同时是共享空间「团队空间」的空间主
        —— 设置页应只给邀请链接，不给"按登录名直接加人" */
     "/api/auth/me": { id: "U1", displayName: "我", username: "me", role: "user", lastWorkspaceId: "W2",
       workStartHour: 9, workEndHour: 18, workMaxHours: 8 },
     "/api/workspaces": [ws, { id: "W2", name: "团队空间", type: "shared", myRole: "owner", memberCount: 3, ownerId: "U1" }],
+    /* 版本页只读首版上线时间；阶段卡不在预览范围 */
+    "/api/phase/stats": { firstReleasedAt: null, mvp: {}, post: {} },
     "/api/board": board,
     "/api/tasks/list": { items: tasks, total: tasks.length },
     /* 生产接口分页返回 {items,total,hasMore}，前端统一走 getAllPages */
@@ -804,7 +843,19 @@
     var off = Number((/[?&]offset=(\d+)/.exec(u) || [])[1] || 0);
     var lim = Number((/[?&]limit=(\d+)/.exec(u) || [])[1] || 100);
     lim = Math.min(Math.max(lim, 1), 100);
-    var rows = completions || [];
+    var pubM = /[?&]pub=(published|unpublished)/.exec(u);
+    var pub = pubM ? pubM[1] : "";
+    /* 发布态在本清单内过滤，统计字段同步按过滤后口径（与后端 SQL 一致） */
+    function publishedRow(r) {
+      return !!(r.publishedAt || r.everPublished === true || r.manualPublished === true
+        || (r.publicationState && r.publicationState !== "unpublished")
+        || (Array.isArray(r.publicationTargets) && r.publicationTargets.length));
+    }
+    var rows = (completions || []).filter(function (r) {
+      if (pub === "published") return publishedRow(r);
+      if (pub === "unpublished") return !publishedRow(r);
+      return true;
+    });
     var page = rows.slice(off, off + lim);
     var totalMinutes = 0, counts = {};
     rows.forEach(function (r) {
@@ -1080,15 +1131,15 @@
       routes["/api/categories"] = routes["/api/categories"].filter(function (c) { return c.id !== cdel; });
       data = {};
     } else if (clean === "/api/versions" && method === "GET") {
-      /* 工作项抽屉的「计划版本」候选：生产按项目过滤，这里给两档可编辑状态 */
+      /* 工作项抽屉的「计划版本」候选与版本页共用一份，生产按项目过滤 */
       var vqM = /[?&]reqId=([^&]*)/.exec(u);
       var vqReq = vqM ? decodeURIComponent(vqM[1]) : "";
-      var versionRows = [
-        { id: "V1", reqId: "R1", name: "1.2 权限改造", status: "active" },
-        { id: "V2", reqId: "R1", name: "1.3 权限收官", status: "planned" },
-        { id: "V3", reqId: "R2", name: "2.0 结算升级", status: "planned" }
-      ];
-      data = versionRows.filter(function (v) { return !vqReq || v.reqId === vqReq; });
+      data = previewVersions.filter(function (v) { return !vqReq || v.reqId === vqReq; });
+    } else if (clean === "/api/versions/stats" && method === "GET") {
+      var vsM = /[?&]reqId=([^&]*)/.exec(u);
+      var vsReq = vsM ? decodeURIComponent(vsM[1]) : "";
+      var vsRows = previewVersions.filter(function (v) { return !vsReq || v.reqId === vsReq; });
+      data = { versions: vsRows, unbound: { taskCount: 5, doneCount: 2, estimateMinutes: 600, workMinutes: 480, devMinutes: 380, testMinutes: 100 } };
     } else if (clean === "/api/versions/task-options") {
       /* 工作项抽屉的「所属史诗」候选：生产由后端按项目过滤，这里给两条演示史诗 */
       var optM = /[?&]reqId=([^&]*)/.exec(u);
@@ -1097,9 +1148,37 @@
         { id: "E1", title: "权限体系重构（史诗）", itemType: "epic", reqId: "R1", epicId: null },
         { id: "E2", title: "结算链路升级（史诗）", itemType: "epic", reqId: "R2", epicId: null }
       ];
-      data = epicRows.concat(tasks.map(function (t) {
-        return { id: t.id, title: t.title, itemType: t.itemType || "task", epicId: t.epicId || null, reqId: t.reqId || null };
+      data = epicRows.concat(tasks.map(function (t, i) {
+        var row = { id: t.id, title: t.title, itemType: t.itemType || "task", epicId: t.epicId || null, reqId: t.reqId || null,
+          /* 版本页焦点卡 / 阶段汇总演示：流程引擎的工作项挂 V1，结算项目挂 V7 */
+          versionIds: t.reqId === "R2" ? ["V7"] : (t.reqId === "R1" ? ["V1"] : []),
+          owner: t.owner || "我", categoryId: null, demandId: null,
+          estimateMinutes: t.estimateMinutes || (t.reqId === "R1" ? 480 : 0), totalMinutes: t.totalMinutes || 0,
+          testMinutes: t.id === "K1" ? 120 : 0, blocked: !!t.blocked, boardColumn: t.boardColumn };
+        /* 演示发布状态：每四条一条生产生效、一条人工补录，供版本「管理工作项」的徽标/筛选/分组页看效果 */
+        if (i % 4 === 0) {
+          row.publicationState = "effective";
+          row.everPublished = true;
+          row.publishedAt = "2026-11-10";
+          row.publicationTargets = ["prod"];
+        } else if (i % 4 === 1) {
+          row.manualPublished = true;
+          row.manualPublishedAt = "2026-10-22";
+        }
+        return row;
       })).filter(function (t) { return !optReq || t.reqId === optReq; });
+      /* 焦点卡按「6 个工作项 · 2 项已完成 · 48h 预估」演示；补两条已完成工作项，
+         让单版本阶段汇总与卡片口径一致 */
+      if (!optReq || optReq === "R1") {
+        data = data.concat([
+          { id: "K1D1", title: "权限矩阵联动校验", itemType: "task", epicId: null, reqId: "R1", versionIds: ["V1"],
+            owner: "我", categoryId: null, demandId: "D1", estimateMinutes: 480, totalMinutes: 300,
+            testMinutes: 0, blocked: false, boardColumn: "done" },
+          { id: "K1D2", title: "压测脚本与基线", itemType: "task", epicId: null, reqId: "R1", versionIds: ["V1"],
+            owner: "我", categoryId: null, demandId: "D1", estimateMinutes: 480, totalMinutes: 420,
+            testMinutes: 0, blocked: false, boardColumn: "done" }
+        ]);
+      }
     } else if (clean === "/api/completions") {
       data = mockCompletions(u);
     } else if (clean === "/api/gantt") {
