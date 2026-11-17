@@ -89,6 +89,17 @@ class ManagerControllerTest {
     }
 
     @Test
+    void workloadBindsRangeWithoutLosingDisplayFilters() throws Exception {
+        when(service.workloadRange("W1", "U1", "2026-10-19", "2026-11-17", "R1", null, null))
+                .thenReturn(metadata("R1", null, null, null));
+        mvc.perform(get("/api/manager/workload").param("from", "2026-10-19")
+                        .param("to", "2026-11-17").param("reqId", "R1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scope.reqId").value("R1"));
+        verify(service).workloadRange("W1", "U1", "2026-10-19", "2026-11-17", "R1", null, null);
+    }
+
+    @Test
     void missingFiltersAndOriginalJavaSignaturesRemainCompatible() throws Exception {
         when(service.reports("W1", null, "U1", null, null, null)).thenReturn(metadata(null, null, null, null));
         when(service.workload("W1", "U1", null, null, null)).thenReturn(metadata(null, null, null, null));

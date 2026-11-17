@@ -2,7 +2,9 @@ package com.hourglass.service;
 
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.AppNotificationMapper;
+import com.hourglass.mapper.DemandCommentMapper;
 import com.hourglass.mapper.DemandMapper;
+import com.hourglass.mapper.DemandWatchMapper;
 import com.hourglass.mapper.DevBranchMapper;
 import com.hourglass.mapper.GanttShareMapper;
 import com.hourglass.mapper.MailDeliveryMapper;
@@ -63,9 +65,10 @@ public class TaskCascade {
             "task_publication_judgement"));
 
     /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失；
-        req_doc_comment 保留评论正文，只解除「转为工作项」引用） */
+        req_doc_comment / demand_comment 保留评论正文，只解除「转为工作项」引用） */
     public static final List<String> PRESERVED_TASK_REF_TABLES = Collections.unmodifiableList(Arrays.asList(
-            "task_completion_record", "version_release_item", "version_release_plan_task", "req_doc_comment"));
+            "task_completion_record", "version_release_item", "version_release_plan_task", "req_doc_comment",
+            "demand_comment"));
 
     /** 空间清空/覆盖导入不能删除或遗留的交付数据；存在任意行即拒绝重建。 */
     public static final List<String> PRESERVED_WORKSPACE_DELIVERY_TABLES = Collections.unmodifiableList(Arrays.asList(
@@ -117,6 +120,8 @@ public class TaskCascade {
             "delivery_note_share",
             "delivery_note_snapshot",
             "delivery_note",
+            "demand_comment",
+            "demand_watch",
             "demand_log",
             "demand"));
 
@@ -141,6 +146,10 @@ public class TaskCascade {
     private final VersionTaskMapper versionTaskMapper;
     private final ProjectVersionMapper versionMapper;
     private final DemandMapper demandMapper;
+    /** 需求池评论：随需求清空；彻底删除任务时只解除转项引用 */
+    private final DemandCommentMapper demandCommentMapper;
+    /** 需求关注人不在备份格式里：需求整体替换时一并清掉，避免同 ID 重建混入旧名单 */
+    private final DemandWatchMapper demandWatchMapper;
     /** 需求人工判定随需求池一起清理，备份格式暂不包含该表 */
     private final com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper;
     /** 工作项发布人工标记随任务一起清理，备份格式暂不包含该表 */
@@ -182,8 +191,9 @@ public class TaskCascade {
                        RequirementDocCommentMapper docCommentMapper,
                        TaskCompletionService completionService, DevBranchMapper devBranchMapper,
                        VersionTaskMapper versionTaskMapper, ProjectVersionMapper versionMapper,
-                       DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper,
-                       ReqDocShareMapper reqDocShareMapper,
+                       DemandMapper demandMapper, DemandCommentMapper demandCommentMapper,
+                       DemandWatchMapper demandWatchMapper,
+                       MailDeliveryMapper mailDeliveryMapper, ReqDocShareMapper reqDocShareMapper,
                        TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper,
                        com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper,
                        com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper,
@@ -219,6 +229,8 @@ public class TaskCascade {
         this.versionTaskMapper = versionTaskMapper;
         this.versionMapper = versionMapper;
         this.demandMapper = demandMapper;
+        this.demandCommentMapper = demandCommentMapper;
+        this.demandWatchMapper = demandWatchMapper;
         this.mailDeliveryMapper = mailDeliveryMapper;
         this.reqDocShareMapper = reqDocShareMapper;
         this.testCaseMapper = testCaseMapper;
@@ -376,6 +388,8 @@ public class TaskCascade {
         caseTaskMapper.deleteByTaskIds(workspaceId, taskIds);
         /* 文档评论转出的工作项被彻底删除：评论保留，解除转项引用，避免回链指向不存在的任务 */
         docCommentMapper.clearTaskRefsByTaskIds(workspaceId, taskIds);
+        /* 需求评论转出的工作项同理：评论属于需求，不随任务消失 */
+        demandCommentMapper.clearTaskRefsByTaskIds(workspaceId, taskIds);
     }
 
     /**
@@ -465,6 +479,8 @@ public class TaskCascade {
         deliveryNoteMapper.deleteByWorkspace(workspaceId);
         demandMapper.deleteLogsByWorkspace(workspaceId);
         demandJudgementMapper.deleteByWorkspace(workspaceId);
+        demandCommentMapper.deleteByWorkspace(workspaceId);
+        demandWatchMapper.deleteByWorkspace(workspaceId);
         demandMapper.deleteByWorkspace(workspaceId);
         numberSeqMapper.deleteByWorkspace(workspaceId);
     }
@@ -476,7 +492,7 @@ public class TaskCascade {
     public void clearWorkspaceDataForImport(String workspaceId, boolean clearRequirementDocs,
                                             boolean clearBranches, boolean clearVersions,
                                             boolean clearDemands, boolean clearTestCases,
-                                            boolean clearDocComments) {
+                                            boolean clearDocComments, boolean clearDemandComments) {
         purgeWorkspaceTaskData(workspaceId, true, clearTestCases);
         if (clearRequirementDocs) {
             requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
@@ -500,6 +516,12 @@ public class TaskCascade {
             requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
             /* 人工判定不在备份格式里：需求整体替换时一并清理，避免同 ID 重建混入旧判定 */
             demandJudgementMapper.deleteByWorkspace(workspaceId);
+            /* 评论随需求整体替换；旧备份没有评论字段时保留现有评论 */
+            if (clearDemandComments) {
+                demandCommentMapper.deleteByWorkspace(workspaceId);
+            }
+            /* 关注名单随需求整体替换：备份格式不含关注人，旧名单不能套到同 ID 重建的新需求上 */
+            demandWatchMapper.deleteByWorkspace(workspaceId);
             /* 需求流转日志同样不在备份里：保留审计记录，不随导入清空 */
             demandMapper.deleteByWorkspace(workspaceId);
         }

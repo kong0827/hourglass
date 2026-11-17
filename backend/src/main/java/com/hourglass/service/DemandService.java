@@ -62,6 +62,7 @@ public class DemandService {
     /** 删除不可逆：需求自身的流转日志会一起清掉，必须在删除前写独立墓碑 */
     private final DeletionTraceService deletionTrace;
     private final NumberSeqService numberSeq;
+    private final DemandWatchService demandWatch;
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
     @org.springframework.beans.factory.annotation.Autowired
@@ -74,6 +75,9 @@ public class DemandService {
     /** 人工判定是需求的追加式记录，需求删除时必须一起清理 */
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.DemandDeliveryJudgementMapper judgementMapper;
+    /** 评论区强归属需求：需求硬删除时一起清理，评论转出的工作项保留 */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.DemandCommentMapper demandCommentMapper;
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public DemandService(DemandMapper demandMapper, RequirementMapper reqMapper,
@@ -83,7 +87,8 @@ public class DemandService {
                          com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
                          com.hourglass.mapper.TestCaseMapper caseMapper, CategoryMapper categoryMapper,
                          DeliveryScopeLock deliveryLock, ReleasePermissionService releasePermission,
-                         DeletionTraceService deletionTrace, NumberSeqService numberSeq) {
+                         DeletionTraceService deletionTrace, NumberSeqService numberSeq,
+                         DemandWatchService demandWatch) {
         this.demandMapper = demandMapper;
         this.reqMapper = reqMapper;
         this.versionMapper = versionMapper;
@@ -99,6 +104,7 @@ public class DemandService {
         this.releasePermission = releasePermission;
         this.deletionTrace = deletionTrace;
         this.numberSeq = numberSeq;
+        this.demandWatch = demandWatch;
     }
 
     /** 列表模式分页：筛选/排序/分页全在 SQL，counts 忽略 status 与列内阶段条件 */
@@ -905,6 +911,8 @@ public class DemandService {
         d.setPriority(priority);
         save(d);
         logChange(d, userId, "priority", "优先级：" + old + " → " + priority, null, before);
+        demandWatch.notifyWatchers(d, userId, UserNotificationPreferenceService.DEMAND_WATCH,
+                "需求「" + d.getTitle() + "」优先级已调整", old + " → " + priority, null);
         return getVisible(workspaceId, userId, id);
     }
 
@@ -923,6 +931,8 @@ public class DemandService {
         d.setExpectDate(expectDate);
         save(d);
         logChange(d, userId, "expect", "期望交付：" + old + " → " + next, null, before);
+        demandWatch.notifyWatchers(d, userId, UserNotificationPreferenceService.DEMAND_WATCH,
+                "需求「" + d.getTitle() + "」期望交付已调整", old + " → " + next, null);
         return getVisible(workspaceId, userId, id);
     }
 
@@ -1260,6 +1270,8 @@ public class DemandService {
         if (!releases.selectDemandRecords(workspaceId, id).isEmpty()) {
             throw AppException.badRequest("需求已有正式发布历史，不能删除，请保留或取消以维护历史证据");
         }
+        /* 关注行随需求一起删除，收件人必须在清表前取出，否则删完就找不到该通知谁 */
+        List<String> watcherIds = demandWatch.watcherIds(workspaceId, id);
         deletionTrace.recordDelete(workspaceId, userId, "demand_delete", "demand", id, d.getTitle(),
                 "删除需求「" + d.getTitle() + "」（"
                         + (d.getReqId() == null ? "未归属项目" : "项目 " + d.getReqId())
@@ -1282,9 +1294,21 @@ public class DemandService {
         /* 条目本身要删，留着它自己的流转日志只会变成查不到主人的孤儿行 */
         demandMapper.deleteLogsByDemand(workspaceId, id);
         judgementMapper.deleteByDemand(workspaceId, id);
+        demandCommentMapper.deleteByDemand(workspaceId, id);
+        demandWatch.clear(workspaceId, id);
         demandMapper.deleteById(workspaceId, id);
-        notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被删除",
-                "需求已从需求池删除，关联任务已解绑");
+        /* 需求已硬删除：通知不带详情深链，避免通知中心点开一片空白 */
+        String title = "需求「" + d.getTitle() + "」已被删除";
+        String body = "需求已从需求池删除，关联任务已解绑";
+        java.util.Set<String> notified = new java.util.HashSet<String>();
+        if (d.getCreatedBy() != null && !d.getCreatedBy().equals(userId)) {
+            notificationEvents.notifyLinked(d.getCreatedBy(), workspaceId,
+                    UserNotificationPreferenceService.DEMAND_STATUS, title, body,
+                    null, null, d.getReqId());
+            notified.add(d.getCreatedBy());
+        }
+        demandWatch.notifyWatchers(watcherIds, d, userId,
+                UserNotificationPreferenceService.DEMAND_WATCH, title, body, notified, false);
     }
 
     /* ------------------------------------------------------------------ */
@@ -1487,24 +1511,30 @@ public class DemandService {
     }
 
     private void notifyStatus(Demand d, String actorId, String action, String detail) {
-        if (d.getCreatedBy() == null || d.getCreatedBy().equals(actorId)) {
-            return;
+        String title = "需求「" + d.getTitle() + "」" + action;
+        String body = detail == null ? "需求状态已变更为：" + action : Texts.cut(detail, 400);
+        java.util.Set<String> notified = new java.util.HashSet<String>();
+        if (d.getCreatedBy() != null && !d.getCreatedBy().equals(actorId)) {
+            notificationEvents.notifyLinked(d.getCreatedBy(), d.getWorkspaceId(),
+                    UserNotificationPreferenceService.DEMAND_STATUS, title, body,
+                    "demand", d.getId(), d.getReqId());
+            notified.add(d.getCreatedBy());
         }
-        notificationEvents.notifyLinked(d.getCreatedBy(), d.getWorkspaceId(),
-                UserNotificationPreferenceService.DEMAND_STATUS,
-                "需求「" + d.getTitle() + "」" + action,
-                detail == null ? "需求状态已变更为：" + action : Texts.cut(detail, 400),
-                "demand", d.getId(), d.getReqId());
+        demandWatch.notifyWatchers(d, actorId, UserNotificationPreferenceService.DEMAND_WATCH,
+                title, body, notified);
     }
 
     /** 编辑/删除：提交人不是操作者时告知，避免自己的需求被改动却毫不知情 */
     private void notifyCreator(Demand d, String actorId, String title, String body) {
-        if (d.getCreatedBy() == null || d.getCreatedBy().equals(actorId)) {
-            return;
+        java.util.Set<String> notified = new java.util.HashSet<String>();
+        if (d.getCreatedBy() != null && !d.getCreatedBy().equals(actorId)) {
+            notificationEvents.notifyLinked(d.getCreatedBy(), d.getWorkspaceId(),
+                    UserNotificationPreferenceService.DEMAND_STATUS, title, body,
+                    "demand", d.getId(), d.getReqId());
+            notified.add(d.getCreatedBy());
         }
-        notificationEvents.notifyLinked(d.getCreatedBy(), d.getWorkspaceId(),
-                UserNotificationPreferenceService.DEMAND_STATUS, title, body,
-                "demand", d.getId(), d.getReqId());
+        demandWatch.notifyWatchers(d, actorId, UserNotificationPreferenceService.DEMAND_WATCH,
+                title, body, notified);
     }
 
     private void fillWsjf(Demand d) {

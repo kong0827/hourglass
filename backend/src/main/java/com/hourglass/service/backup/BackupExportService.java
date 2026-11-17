@@ -81,9 +81,10 @@ public class BackupExportService {
     private final com.hourglass.mapper.VersionCommitmentMapper commitmentMapper;
     private final VersionTaskMapper versionTaskMapper;
     private final DemandMapper demandMapper;
+    private final com.hourglass.mapper.DemandCommentMapper demandCommentMapper;
     private final com.hourglass.mapper.DocTemplateMapper docTemplateMapper;
 
-    public BackupExportService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper, BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper, TaskCommentMapper commentMapper, TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper, com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper, RequirementDocCommentMapper docCommentMapper, RequirementDocMapper requirementDocMapper, DevBranchMapper devBranchMapper, TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper, ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper, DemandMapper demandMapper, com.hourglass.mapper.VersionCommitmentMapper commitmentMapper, com.hourglass.mapper.DocTemplateMapper docTemplateMapper) {
+    public BackupExportService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper, BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper, TaskCommentMapper commentMapper, TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper, com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper, RequirementDocCommentMapper docCommentMapper, RequirementDocMapper requirementDocMapper, DevBranchMapper devBranchMapper, TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper, ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper, DemandMapper demandMapper, com.hourglass.mapper.VersionCommitmentMapper commitmentMapper, com.hourglass.mapper.DocTemplateMapper docTemplateMapper, com.hourglass.mapper.DemandCommentMapper demandCommentMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -103,6 +104,7 @@ public class BackupExportService {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.demandMapper = demandMapper;
+        this.demandCommentMapper = demandCommentMapper;
         this.commitmentMapper = commitmentMapper;
         this.docTemplateMapper = docTemplateMapper;
     }
@@ -500,6 +502,23 @@ public class BackupExportService {
             docComments.add(b);
         }
         data.setDocComments(docComments);
+
+        List<BackupData.BackupDemandComment> demandComments = new ArrayList<BackupData.BackupDemandComment>();
+        for (com.hourglass.entity.DemandComment c : demandCommentMapper.selectByWorkspace(workspaceId)) {
+            BackupData.BackupDemandComment b = new BackupData.BackupDemandComment();
+            b.setId(c.getId());
+            b.setDemandId(c.getDemandId());
+            b.setUserId(c.getUserId());
+            b.setContent(c.getContent());
+            b.setParentId(c.getParentId());
+            b.setResolvedAt(ts(c.getResolvedAt()));
+            b.setResolvedBy(c.getResolvedBy());
+            b.setMentions(c.getMentions());
+            b.setTaskId(c.getTaskId());
+            b.setCreatedAt(ts(c.getCreatedAt()));
+            demandComments.add(b);
+        }
+        data.setDemandComments(demandComments);
 
         List<BackupData.BackupDocTemplate> docTemplates = new ArrayList<BackupData.BackupDocTemplate>();
         for (com.hourglass.entity.DocTemplate t : docTemplateMapper.selectByWorkspace(workspaceId)) {

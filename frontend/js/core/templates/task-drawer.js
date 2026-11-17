@@ -315,6 +315,14 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <label class="ctx-label" for="iCol" id="ctxColLabel">新建到</label>
           <select id="iCol" aria-label="新建到哪一列"></select>
         </div>
+        <!-- 史诗归属：新建时就要能直接挂，不放进「关联」页签 -->
+        <div class="ctx-item" id="ctxEpicItem">
+          <div class="ctx-label">
+            <label for="iEpic">所属史诗</label>
+            <button type="button" class="label-help" id="iEpicHelp" aria-label="查看史诗（Epic）的说明" title="史诗（Epic）是什么"></button>
+          </div>
+          <select id="iEpic" title="先选项目，候选只列出该项目的史诗"></select>
+        </div>
         <!-- 模块挂项目：常驻在归属条，随项目切换重算候选 -->
         <div class="ctx-item ctx-item-wide">
           <div class="ctx-label">模块</div>
@@ -756,18 +764,10 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             <details class="assoc-more" id="assocMore">
               <summary>
                 <span>更多关联</span>
-                <span class="foot-note" id="assocMoreSummary">史诗 / 分支 / 文档</span>
+                <span class="foot-note" id="assocMoreSummary">分支 / 文档</span>
                 <span class="caret"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
               </summary>
               <div class="assoc-more-body">
-                <div class="field">
-                  <div class="field-label">
-                    <label for="iEpic">所属史诗</label>
-                    <button type="button" class="label-help" id="iEpicHelp" aria-label="查看史诗（Epic）的说明" title="史诗（Epic）是什么"></button>
-                  </div>
-                  <select id="iEpic"></select>
-                  <span class="hint" id="iEpicHint">先选项目，再挂到该项目的史诗下。</span>
-                </div>
                 <div class="field">
                   <div class="field-label">
                     <label for="iBranch">所属分支</label>

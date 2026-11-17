@@ -25,12 +25,14 @@ class DemandServiceNotificationTest {
     private final ProjectVersionMapper versions = mock(ProjectVersionMapper.class);
     private final RequirementMapper reqs = mock(RequirementMapper.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
+    private final DemandWatchService demandWatch = mock(DemandWatchService.class);
     private final DemandService service = new DemandService(demands, reqs,
             versions, mock(TaskMapper.class), events, mock(RequirementDocMapper.class),
             mock(ProjectAccessService.class), mock(AttachmentService.class),
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
             mock(com.hourglass.mapper.CategoryMapper.class), mock(DeliveryScopeLock.class),
-            mock(ReleasePermissionService.class), mock(DeletionTraceService.class), mock(NumberSeqService.class));
+            mock(ReleasePermissionService.class), mock(DeletionTraceService.class), mock(NumberSeqService.class),
+            demandWatch);
 
     @org.junit.jupiter.api.BeforeEach
     void successfulUpdates() {
@@ -39,6 +41,8 @@ class DemandServiceNotificationTest {
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "caseTaskMapper",
                 mock(com.hourglass.mapper.TestCaseTaskMapper.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "demandCommentMapper",
+                mock(com.hourglass.mapper.DemandCommentMapper.class));
         org.mockito.Mockito.lenient()
                 .when(demands.selectDetail(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(inv -> demands.selectById(inv.getArgument(1)));
@@ -135,8 +139,9 @@ class DemandServiceNotificationTest {
 
         service.delete("admin", "W1", "D1");
 
+        /* 需求已硬删除：提交通知不能带详情深链，否则通知中心点开是空白 */
         verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
-                eq("需求「Demand」已被删除"), anyString(), eq("demand"), eq("D1"), eq("R1"));
+                eq("需求「Demand」已被删除"), anyString(), isNull(), isNull(), eq("R1"));
     }
 
     @Test

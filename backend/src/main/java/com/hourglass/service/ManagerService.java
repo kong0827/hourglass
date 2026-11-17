@@ -1013,6 +1013,14 @@ public class ManagerService {
         return workload(workspaceId, userId, null, null, reqId, roleTitle, companyName);
     }
 
+    /** 桌面端按预设区间取「区间已计」；缺任一日期时退回自然周口径。 */
+    public Map<String, Object> workloadRange(String workspaceId, String userId,
+                                             String from, String to,
+                                             String reqId, String roleTitle, String companyName) {
+        return workload(workspaceId, userId, optionalDate(from, "from"), optionalDate(to, "to"),
+                reqId, roleTitle, companyName);
+    }
+
     public Map<String, Object> workload(String workspaceId, String userId,
                                         LocalDate rangeFrom, LocalDate rangeTo,
                                         String reqId, String roleTitle, String companyName) {
@@ -1811,6 +1819,17 @@ public class ManagerService {
     private LocalDate requiredDate(String value, String name) {
         if (!hasText(value)) {
             throw AppException.badRequest("缺少 " + name);
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (java.time.format.DateTimeParseException ex) {
+            throw AppException.badRequest(name + " 需为 yyyy-MM-dd");
+        }
+    }
+
+    private LocalDate optionalDate(String value, String name) {
+        if (!hasText(value)) {
+            return null;
         }
         try {
             return LocalDate.parse(value.trim());

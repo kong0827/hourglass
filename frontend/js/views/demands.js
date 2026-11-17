@@ -10,6 +10,7 @@ import { loadViews, pruneUnknownCats, savedViewsFor } from "../core/filters-ui.j
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { listDensitySegHTML } from "../core/list-density.js";
+import { createMentionPicker } from "../core/mention-picker.js";
 import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { activeView } from "../core/router.js";
@@ -110,6 +111,8 @@ var versionNames = {};       /* 列表模式：全空间 versionId → 名称 */
 var editingDemandId = null;
 var planDemandId = null;
 var demandDetailLayer = null;  /* 当前打开的需求详情，供动作成功后一并关闭 */
+var demandCommentReplyTo = null;   /* 当前回复的顶层评论 ID（一层回复） */
+var demandCommentMention = null;   /* 详情内发表评论的 @ 提及选择器 */
 var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null;
 var planDemandRevision = null, planAction = "plan";
 var formPri = "P2";
@@ -131,6 +134,8 @@ function plannedText(d){
 }
 function denyDemandReadOnly(){ toast("你对该项目只有查看权限", "warn"); }
 function writableReqs(){ return rt.reqList.filter(function(r){ return canEditReq(r.id); }); }
+/* 看板范围名：具体项目用项目名，全部项目模式统一展示「全部项目」 */
+function demScopeName(){ return rt.demandReqId ? reqNameById(rt.demandReqId) : "全部项目"; }
 function statusName(st){
   if(st === "rej") return "已关闭 · 评审不通过";
   if(st === "canceled" || st === "cancelled") return "已关闭 · 中途取消";
@@ -182,11 +187,10 @@ function wsjfText(d){
 function syncReqSel(){
   if(!demandReq) return;
   var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.demandReqId; });
-  demandReq.innerHTML = list.map(function(r){
+  demandReq.innerHTML = '<option value="">全部项目</option>' + list.map(function(r){
     return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
   }).join("");
-  if(!rt.demandReqId && list.length) rt.demandReqId = list[0].id;
-  if(rt.demandReqId) demandReq.value = rt.demandReqId;
+  demandReq.value = rt.demandReqId || "";
 }
 var demandLoadSeq = 0;
 function readDemandRoute(){
@@ -262,7 +266,7 @@ function loadDemands(opts){
   if(demWork.active){ loadDemandWorkpage(); return; }
   if(mode === "gantt"){ loadDemandGantt(silent); return; }
   if(mode === "table"){ loadAllDemands(silent); return; }
-  if(!rt.demandReqId || !rt.reqList.length){
+  if(!rt.reqList.length){
     demandBody.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
       text:"先在「项目」里创建项目，需求池按项目收纳需求。"
@@ -272,8 +276,9 @@ function loadDemands(opts){
   }
   var reqId = rt.demandReqId;
   var wsId = rt.currentWs && rt.currentWs.id;
-  if(demandsMeta) demandsMeta.textContent = reqNameById(rt.demandReqId);
+  if(demandsMeta) demandsMeta.textContent = demScopeName();
   if(!silent) demandBody.innerHTML = UI.skeletonRows(2);
+  /* 「全部项目」没有版本清单可拉：卡片版本名由列表行自带，排期对话框按需求所属项目现查 */
   Promise.all([
     API.get("/api/demands/board", {
       reqId: reqId, limit: DEMAND_BOARD_PAGE,
@@ -283,7 +288,7 @@ function loadDemands(opts){
       cats: demSmart.cats.join(","),
       deliveryStage: demBoardStage === "all" ? null : demBoardStage
     }),
-    API.get("/api/versions", { reqId: reqId })
+    reqId ? API.get("/api/versions", { reqId: reqId }) : Promise.resolve([])
   ]).then(function(rs){
     if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
@@ -604,7 +609,7 @@ function syncModeUI(mode){
   if(bc) bc.hidden = demWork.active || mode !== "table";
   /* 工作页自带筛选与分组，不叠加看板/列表工具条 */
   if(demSmartBar) demSmartBar.hidden = demWork.active || mode === "board";
-  if(demBoardBar) demBoardBar.hidden = demWork.active || mode !== "board" || !rt.demandReqId;
+  if(demBoardBar) demBoardBar.hidden = demWork.active || mode !== "board";
   if(demandGanttBar) demandGanttBar.hidden = demWork.active || mode !== "gantt";
   if(demandGanttHelp) demandGanttHelp.hidden = demWork.active || mode !== "gantt";
   if(demandsPage){
@@ -614,9 +619,11 @@ function syncModeUI(mode){
     if(vw) vw.classList.toggle("is-dem-gantt", !demWork.active && mode === "gantt");
   }
   if(demandBody) demandBody.classList.toggle("demg-body", !demWork.active && mode === "gantt");
-  /* 只读项目不显示「提需求」；列表/甘特为全空间，只要有一个可写项目即可 */
+  /* 只读项目不显示「提需求」；列表/甘特为全空间，只要有一个可写项目即可；
+     看板「全部项目」同全空间口径，聚焦到只读项目时维持隐藏 */
   var bn = $("btnDemandNew");
-  if(bn) bn.style.display = (!demWork.active && writableReqs().length && (mode !== "board" || canEditReq(rt.demandReqId))) ? "" : "none";
+  if(bn) bn.style.display = (!demWork.active && writableReqs().length
+    && (mode !== "board" || (!rt.demandReqId || canEditReq(rt.demandReqId)))) ? "" : "none";
   syncDemGanttControls();
   syncDemBoard();
 }
@@ -656,7 +663,7 @@ function render(){
   if(mode === "table"){ renderDemandTable(); return; }
   if(demandsMeta){
     var mt = demBoardMatchText();
-    demandsMeta.textContent = reqNameById(rt.demandReqId) + (mt ? (" · " + mt) : "");
+    demandsMeta.textContent = demScopeName() + (mt ? (" · " + mt) : "");
   }
   if(!demands.length && !versions.length && !demandBoard){
     demandBody.innerHTML = UI.emptyState({
@@ -680,11 +687,41 @@ function render(){
       + (status === "plan" ? demandBoardStageFilterHTML() : "")
       + '<span class="bkl-count">' + (filtered ? (col.matched || 0) + " / " + ((demandBoard.counts || {}).plan || 0) : (col.matched || 0)) + '</span></div>'
       + (status === "plan" ? demandBoardDistHTML() : "")
-      + (items.map(cardHTML).join("") || '<div class="foot-note demb-col-empty">'
+      + (demBoardCardsHTML(items) || '<div class="foot-note demb-col-empty">'
         + (filtered ? '该阶段暂无需求<br><button type="button" class="link-btn" data-demb-stage-clear>显示全部阶段</button>' : (demBoardHasCond() ? "没有匹配需求" : "暂无需求")) + '</div>')
       + more
       + '</div>';
   }).join("") + '</div>';
+}
+/* 全部项目模式下按项目分泳道，泳道头即项目名，卡片不再重复；聚焦项目时直接平铺 */
+function demBoardCardsHTML(items){
+  if(!items.length) return "";
+  if(rt.demandReqId) return items.map(cardHTML).join("");
+  return demBoardLanes(items).map(function(g){
+    return '<div class="bkl-lane"><div class="bkl-lane-head"><span class="bkl-lane-name">' + esc(g.label) + '</span>'
+      + '<span class="bkl-lane-count">' + g.rows.length + ' 条</span></div>'
+      + g.rows.map(function(d){ return cardHTML(d); }).join("") + '</div>';
+  }).join("");
+}
+/* 泳道顺序跟随项目选择器（空间 sort_order），不在 reqList 的项目兜底排最后 */
+function demBoardLanes(items){
+  var groups = {}, order = [];
+  items.forEach(function(d){
+    var key = d.reqId || "__none";
+    if(!groups[key]){ groups[key] = []; order.push(key); }
+    groups[key].push(d);
+  });
+  var rank = {};
+  rt.reqList.forEach(function(r, i){ rank[r.id] = i; });
+  order.sort(function(a, b){
+    var ai = rank[a] === undefined ? 9999 : rank[a], bi = rank[b] === undefined ? 9999 : rank[b];
+    if(ai !== bi) return ai - bi;
+    return demBoardLaneLabel(a).localeCompare(demBoardLaneLabel(b), "zh-CN");
+  });
+  return order.map(function(k){ return { key:k, label:demBoardLaneLabel(k), rows:groups[k] }; });
+}
+function demBoardLaneLabel(key){
+  return key === "__none" ? "未归类" : (reqNameById(key) || "未命名项目");
 }
 /* 行内只保留当前状态的主操作，其余动作收进“更多”，删除仍走危险色与确认 */
 function demandMenuItems(d){
@@ -1566,7 +1603,7 @@ function demViewRows(){
 function demFilterCount(){
   return demSmart.pris.length + demSmart.kinds.length + demSmart.cats.length + demSmart.reqs.length + (demSmart.q ? 1 : 0);
 }
-/* ---------- 看板紧凑搜索/筛选（范围固定为当前项目，条件与列表共用） ---------- */
+/* ---------- 看板紧凑搜索/筛选（聚焦项目搜该项目，「全部项目」搜整个空间；条件与列表共用） ---------- */
 function demBoardFilterCount(){
   return demSmart.pris.length + demSmart.kinds.length + demSmart.cats.length;
 }
@@ -1582,8 +1619,11 @@ function demBoardMatchText(){
 function syncDemBoard(){
   if(!demBoardBar) return;
   var mode = listPrefs.viewMode("demand-pool");
-  demBoardBar.hidden = demWork.active || mode !== "board" || !rt.demandReqId;
-  if(demBoardInput && demBoardInput.value !== demSmart.q) demBoardInput.value = demSmart.q;
+  demBoardBar.hidden = demWork.active || mode !== "board";
+  if(demBoardInput){
+    demBoardInput.placeholder = rt.demandReqId ? "搜索本项目需求…" : "搜索全部项目需求…";
+    if(demBoardInput.value !== demSmart.q) demBoardInput.value = demSmart.q;
+  }
   var fc = demBoardBar.querySelector("[data-demb-fcount]");
   if(fc){ var n = demBoardFilterCount(); fc.hidden = n === 0; fc.textContent = n; }
   var clr = demBoardBar.querySelector("[data-demb-clear]");
@@ -1591,7 +1631,7 @@ function syncDemBoard(){
   var mt = demBoardBar.querySelector("[data-demb-match]");
   if(mt){
     var text = demBoardMatchText();
-    mt.textContent = (text ? text + " · " : "") + "仅当前项目";
+    mt.textContent = (text ? text + " · " : "") + (rt.demandReqId ? "仅当前项目" : "全部项目");
   }
 }
 function renderDemTabs(){
@@ -2509,6 +2549,27 @@ function syncPriSeg(){
     b.setAttribute("aria-pressed", code === formPri);
   });
 }
+/* WSJF 就地计分：截断口径与保存端一致（前三项 0-10、工作量 1-10）；
+   四项齐全才显示得分，摘要行同步示值，留空回落「未评分」 */
+function syncWsjfLive(){
+  var vals = [dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value].map(function(v){
+    return String(v == null ? "" : v).trim();
+  });
+  var complete = vals.every(function(v){ return v !== ""; });
+  var score = null;
+  if(complete){
+    var nums = vals.map(function(v, i){
+      return Math.max(i === 3 ? 1 : 0, Math.min(10, Number(v) || 0));
+    });
+    score = Math.round((nums[0] + nums[1] + nums[2]) * 10 / nums[3]) / 10;
+  }
+  var live = $("wsjfLive"), meta = $("wsjfMeta");
+  if(live){
+    live.hidden = score == null;
+    if(score != null) live.textContent = "四项齐全：WSJF = " + score;
+  }
+  if(meta) meta.textContent = score == null ? "未评分 · 选填" : "已评 " + score;
+}
 function findDemand(id){
   for(var i = 0; i < demands.length; i++) if(demands[i].id === id) return demands[i];
   return null;
@@ -2569,11 +2630,22 @@ function openDemandDialog(d){
   dReq.innerHTML = opts.map(function(r){
     return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
   }).join("");
-  dReq.value = d ? d.reqId : (canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
+  dReq.value = d ? d.reqId : (rt.demandReqId && canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
   dReq.disabled = !!d;
   dTitle.value = d ? d.title : "";
   dDesc.value = d ? (d.description || "") : "";
   dAccept.value = d ? (d.acceptText || "") : "";
+  /* 来源联想：候选来自当前已加载需求的来源原值，只提示不代入 */
+  var dlSource = $("dlDemandSource");
+  if(dlSource){
+    var seen = {};
+    dlSource.innerHTML = demands.reduce(function(html, x){
+      var s = (x.source || "").trim();
+      if(!s || seen[s]) return html;
+      seen[s] = 1;
+      return html + '<option value="' + esc(s) + '"></option>';
+    }, "");
+  }
   dSource.value = d ? (d.source || "") : "";
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
   /* 模块按所选项目过滤：候选只列该项目下的模块 */
@@ -2584,9 +2656,23 @@ function openDemandDialog(d){
   dWsjfU.value = d && d.wsjfUrgency != null ? d.wsjfUrgency : "";
   dWsjfR.value = d && d.wsjfRisk != null ? d.wsjfRisk : "";
   dWsjfE.value = d && d.wsjfEffort != null ? d.wsjfEffort : "";
+  syncWsjfLive();
   fDemandTitle.classList.remove("invalid");
   demandFormTitle.textContent = d ? "编辑需求" : "提需求";
   btnSaveDemand.textContent = d ? "保存" : "提交评审";
+  /* 底部提示随模式切换：编辑态不说「新需求进入待评审」；已流转锁定态由 demandLockNote 说明，这里隐藏 */
+  var footNote = $("demandFootNote");
+  if(footNote){
+    if(!d){
+      footNote.textContent = "新需求进入「待评审」；仅空间主可通过、拒绝或排期";
+      footNote.hidden = false;
+    }else if(d.status === "review"){
+      footNote.textContent = "编辑保存不改变流转状态";
+      footNote.hidden = false;
+    }else{
+      footNote.hidden = true;
+    }
+  }
   btnSaveDemand.disabled = false;
   demandFormSeq++;
   syncPriSeg();
@@ -2651,7 +2737,8 @@ function saveDemand(){
     if(seq === demandFormSeq){
       closeDemandDialog();
       if(wasEdit) closeDemandDetailIfOpen();
-      if(body.reqId !== rt.demandReqId){
+      /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围 */
+      if(rt.demandReqId && body.reqId !== rt.demandReqId){
         rt.demandReqId = body.reqId;
         if(demandReq) demandReq.value = body.reqId;
       }
@@ -3101,6 +3188,126 @@ function loadDemandDocs(layer, id, reqId, writable){
     }
   }).catch(function(ex){
     if(layer.isConnected) box.innerHTML = '<div class="attach-empty">' + esc(ex.message || "关联文档加载失败") + '</div>';
+  });
+}
+
+/* ---------- 需求评论：一层回复、解决、@提及、转工作项 ---------- */
+
+function demandCommentThreadHTML(c){
+  var html = demandCommentItemHTML(c, false);
+  if(c.replies && c.replies.length){
+    html += '<div class="reqdoc-comment-replies">';
+    c.replies.forEach(function(r){ html += demandCommentItemHTML(r, true); });
+    html += '</div>';
+  }
+  return html;
+}
+
+function demandCommentItemHTML(c, isReply){
+  var resolvedBadge = c.resolved ? '<span class="reqdoc-resolved-badge">已解决</span>' : '';
+  var taskLink = c.taskId
+    ? '<a class="reqdoc-comment-tasklink" href="#" data-open-task="' + esc(c.taskId) + '">已转工作项</a>'
+    : '';
+  var actions = '';
+  if(c.deletable){
+    actions = '<div class="reqdoc-comment-actions-r">';
+    if(!isReply) actions += '<button class="btn sm soft" type="button" data-dem-comment-reply="' + esc(c.id) + '" data-dem-comment-user="' + esc(c.userName || "") + '">回复</button>';
+    if(!isReply) actions += '<button class="btn sm soft" type="button" data-dem-comment-resolve="' + esc(c.id) + '" data-dem-comment-resolved="' + (c.resolved ? "1" : "0") + '">' + (c.resolved ? "重新打开" : "解决") + '</button>';
+    if(!c.taskId) actions += '<button class="btn sm soft" type="button" data-dem-comment-totask="' + esc(c.id) + '">转工作项</button>';
+    actions += '<button class="btn sm danger" type="button" data-dem-comment-del="' + esc(c.id) + '">删除</button>';
+    actions += '</div>';
+  }
+  return '<div class="reqdoc-comment-item' + (isReply ? ' is-reply' : '') + (c.resolved ? ' is-resolved' : '') + '" data-dem-comment-id="' + esc(c.id) + '">'
+    + '<div class="reqdoc-comment-head">'
+    +   '<span class="reqdoc-comment-user">' + esc(c.userName || "—") + '</span>'
+    +   resolvedBadge + taskLink
+    +   '<span class="reqdoc-comment-time">' + esc(fmtTs(c.createdAt) || "—") + '</span>'
+    + '</div>'
+    + '<div class="reqdoc-comment-body">' + esc(c.content) + '</div>'
+    + actions
+    + '</div>';
+}
+
+function loadDemandComments(layer, id){
+  var list = layer.querySelector("#demCommentList");
+  if(!list) return;
+  var unresolved = layer.querySelector("#demCommentUnresolved");
+  var params = unresolved && unresolved.checked ? { unresolved: true } : {};
+  Promise.all([
+    API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/comments", params),
+    API.get("/api/demands/" + encodeURIComponent(id) + "/comments/counts")
+  ]).then(function(res){
+    if(!layer.isConnected) return;
+    var rows = res[0] || [];
+    var counts = res[1] || {};
+    var tab = layer.querySelector("#tabCommentCount");
+    if(tab) tab.textContent = counts.total ? String(counts.total) : "";
+    if(!rows.length){
+      list.innerHTML = '<div class="reqdoc-comment-empty">' + (params.unresolved ? "没有未解决的评论" : "还没有评论") + '</div>';
+      return;
+    }
+    list.innerHTML = rows.map(demandCommentThreadHTML).join("");
+  }).catch(function(ex){
+    if(layer.isConnected) list.innerHTML = '<div class="reqdoc-comment-empty">' + esc(ex.message || "评论加载失败") + '</div>';
+  });
+}
+
+function setDemandCommentReply(layer, commentId, userName){
+  demandCommentReplyTo = commentId || null;
+  var chip = layer.querySelector("#demCommentReplyChip");
+  var txt = layer.querySelector("#demCommentReplyText");
+  var ta = layer.querySelector("#demCommentInput");
+  if(chip) chip.hidden = !demandCommentReplyTo;
+  if(txt) txt.textContent = userName || "";
+  if(demandCommentReplyTo && ta) ta.focus();
+}
+
+function submitDemandComment(layer, id){
+  var ta = layer.querySelector("#demCommentInput");
+  var content = (ta && ta.value || "").trim();
+  if(!content){ toast("评论内容不能为空", "warn"); if(ta) ta.focus(); return; }
+  var btn = layer.querySelector("#demCommentSend");
+  if(btn && btn.disabled) return;
+  if(btn) btn.disabled = true;
+  var body = { content: content };
+  if(demandCommentReplyTo) body.parentId = demandCommentReplyTo;
+  var mentionIds = demandCommentMention ? demandCommentMention.idsInText(content) : [];
+  if(mentionIds.length) body.mentionUserIds = mentionIds;
+  API.post("/api/demands/" + encodeURIComponent(id) + "/comments", body).then(function(){
+    if(ta) ta.value = "";
+    if(demandCommentMention){ demandCommentMention.close(); demandCommentMention.clearPicked(); }
+    setDemandCommentReply(layer, null, "");
+    loadDemandComments(layer, id);
+  }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
+  .then(function(){ if(btn) btn.disabled = false; });
+}
+
+function resolveDemandComment(layer, id, commentId, resolved){
+  API.put("/api/demands/" + encodeURIComponent(id) + "/comments/" + encodeURIComponent(commentId) + "/resolve",
+    { resolved: !resolved }).then(function(){
+    loadDemandComments(layer, id);
+    toast(resolved ? "已重新打开" : "已标记为解决", "fs");
+  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+}
+
+function demandCommentToTask(layer, id, commentId){
+  UI.showConfirm({ title: "转为工作项", msg: "将这条评论转为待办工作项？", okText: "转为工作项" }).then(function(ok){
+    if(!ok) return;
+    API.post("/api/demands/" + encodeURIComponent(id) + "/comments/" + encodeURIComponent(commentId) + "/to-task")
+      .then(function(task){
+        loadDemandComments(layer, id);
+        toast("已创建工作项「" + (task.title || "") + "」", "fs");
+      }).catch(function(ex){ toast(ex.message || "转工作项失败", "bad"); });
+  });
+}
+
+function deleteDemandComment(layer, id, commentId){
+  UI.showConfirm({ title: "删除评论", msg: "删除后不可恢复；顶层评论会连同回复一起删除。", okText: "删除评论", danger: true }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/demands/" + encodeURIComponent(id) + "/comments/" + encodeURIComponent(commentId)).then(function(){
+      loadDemandComments(layer, id);
+      toast("评论已删除", "fs");
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
 }
 
@@ -3638,6 +3845,148 @@ function openDemandFactEditor(kind, anchor, ctx){
     if(textEl) demandStartTextEdit(textEl, ctx, "source");
   }
 }
+/* ---------- 提醒人（关注） ----------
+   一个人一份名单：提交人默认接收，不占名单；项目可写者可代他人添加/移除，任何可见成员可自我关注。
+   关注后走 demand_watch 个人偏好，与提交人的 demand_status 分开，避免两边重复打扰。 */
+function updateDemandWatchButton(layer, res){
+  var btn = layer.querySelector("[data-dem-watch-btn]");
+  if(!btn) return;
+  var isCreator = !!(rt.currentUser && res && res.creatorId && rt.currentUser.id === res.creatorId);
+  var on = !isCreator && !!(res && res.watching);
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  var label = btn.querySelector("[data-dem-watch-label]");
+  if(label) label.textContent = isCreator ? "提醒人" : (on ? "已关注" : "关注");
+  var cnt = btn.querySelector("[data-dem-watch-count]");
+  if(cnt){
+    var n = res ? Number(res.count) || 0 : 0;
+    cnt.textContent = n ? String(n) : "";
+    cnt.hidden = !n;
+  }
+}
+function loadDemandWatch(layer, id){
+  /* 同一个抽屉元素会复用于不同需求，先清掉上一条的名单，避免浮层闪出别人的关注人 */
+  layer.__demWatch = null;
+  return API.get("/api/demands/" + encodeURIComponent(id) + "/watch").then(function(res){
+    if(!layer.isConnected) return;
+    layer.__demWatch = res;
+    updateDemandWatchButton(layer, res);
+  }).catch(function(){ /* 名单加载失败不影响详情主体 */ });
+}
+function openDemandWatchPop(anchor, layer, id){
+  function show(res){
+    var menu = document.createElement("div");
+    menu.className = "menu dem-watch-pop";
+    menu.style.minWidth = "300px";
+    function rowsHTML(){
+      var out = [];
+      if(res.creatorId){
+        out.push('<div class="dem-watch-row is-owner"><span class="dem-watch-name">' + esc(res.creatorName || res.creatorId)
+          + '</span><span class="dem-watch-sub">提交人 · 默认接收通知</span></div>');
+      }
+      (res.watchers || []).forEach(function(w){
+        var self = rt.currentUser && rt.currentUser.id === w.userId;
+        var canRemove = self || res.canManage;
+        out.push('<div class="dem-watch-row">'
+          + '<span class="dem-watch-name">' + esc(w.userName || w.userId) + (self ? '<span class="k">我</span>' : '') + '</span>'
+          + '<span class="dem-watch-sub">' + (w.addedByName && w.addedBy !== w.userId ? "由 " + esc(w.addedByName) + " 添加" : "已关注") + '</span>'
+          + (canRemove
+            ? '<button class="icon-btn xs" type="button" data-dem-watch-remove="' + esc(w.userId) + '" title="'
+              + (self ? "取消关注" : "移除提醒人") + '" aria-label="' + (self ? "取消关注" : "移除提醒人") + '">'
+              + icon("close", 12) + '</button>'
+            : '')
+          + '</div>');
+      });
+      if(!res.watchers || !res.watchers.length){
+        out.push('<p class="foot-note dem-watch-empty">除了提交人，还没有其他提醒人。</p>');
+      }
+      return out.join("");
+    }
+    function render(){
+      /* 提交人默认就收通知，不进名单，也不提供「关注 / 取消关注」以免名单出现两条自己 */
+      var isCreator = !!(rt.currentUser && res.creatorId && rt.currentUser.id === res.creatorId);
+      menu.innerHTML = '<div class="menu-title">提醒人</div>'
+        + '<div class="dem-watch-list">' + rowsHTML() + '</div>'
+        + (res.canManage
+          ? '<div class="dem-watch-add"><select class="input" id="demWatchPick" aria-label="选择要添加的提醒人"><option value="">加载成员…</option></select>'
+            + '<button class="btn sm soft" type="button" data-dem-watch-add>' + icon("plus", 12) + ' 添加</button></div>'
+          : '')
+        + '<div class="menu-foot">'
+        + (isCreator
+          ? '<span class="foot-note">你是提交人，状态流转、内容编辑与新评论默认通知你</span>'
+          : '<button class="btn sm ' + (res.watching ? '' : 'primary') + '" type="button" data-dem-watch-toggle>'
+            + (res.watching ? '取消关注' : '关注这个需求') + '</button>'
+            + '<span class="foot-note">关注后状态流转、内容编辑、行内优先级/期望交付调整与新评论都会通知你</span>')
+        + '</div>';
+      if(res.canManage) fillPicker();
+    }
+    function fillPicker(){
+      var sel = menu.querySelector("#demWatchPick");
+      if(!sel) return;
+      API.get("/api/demands/" + encodeURIComponent(id) + "/mention-candidates").then(function(members){
+        if(!menu.isConnected || !sel.isConnected) return;
+        var taken = {};
+        (res.watchers || []).forEach(function(w){ taken[w.userId] = 1; });
+        if(res.creatorId) taken[res.creatorId] = 1;
+        var opts = (members || []).filter(function(m){ return m.userId && !taken[m.userId]; });
+        sel.innerHTML = opts.length
+          ? '<option value="">选择成员…</option>' + opts.map(function(m){
+              return '<option value="' + esc(m.userId) + '">' + esc(m.displayName || m.username || m.userId) + '</option>';
+            }).join("")
+          : '<option value="">没有可添加的成员</option>';
+      }).catch(function(){
+        if(sel && sel.isConnected) sel.innerHTML = '<option value="">成员加载失败</option>';
+      });
+    }
+    function apply(next){
+      if(!next) return;
+      res = next;
+      layer.__demWatch = next;
+      updateDemandWatchButton(layer, next);
+      render();
+    }
+    menu.addEventListener("click", function(e){
+      var toggle = e.target.closest("[data-dem-watch-toggle]");
+      if(toggle){
+        var wasWatching = !!res.watching;
+        toggle.disabled = true;
+        var req = wasWatching
+          ? API.del("/api/demands/" + encodeURIComponent(id) + "/watch")
+          : API.post("/api/demands/" + encodeURIComponent(id) + "/watch", {});
+        req.then(function(next){ apply(next); toast(wasWatching ? "已取消关注" : "已关注，需求变更会通知你", "fs"); })
+          .catch(function(ex){ toggle.disabled = false; toast(ex.message || "操作失败", "bad"); });
+        return;
+      }
+      var rm = e.target.closest("[data-dem-watch-remove]");
+      if(rm){
+        rm.disabled = true;
+        API.del("/api/demands/" + encodeURIComponent(id) + "/watchers/" + encodeURIComponent(rm.dataset.demWatchRemove))
+          .then(function(next){ apply(next); toast("已移除提醒人", "fs"); })
+          .catch(function(ex){ rm.disabled = false; toast(ex.message || "移除失败", "bad"); });
+        return;
+      }
+      var add = e.target.closest("[data-dem-watch-add]");
+      if(add){
+        var sel = menu.querySelector("#demWatchPick");
+        var uid = sel && sel.value;
+        if(!uid){ toast("先选择要添加的成员", "warn"); return; }
+        add.disabled = true;
+        API.post("/api/demands/" + encodeURIComponent(id) + "/watchers", { userId: uid })
+          .then(function(next){ apply(next); toast("已添加提醒人", "fs"); })
+          .catch(function(ex){ add.disabled = false; toast(ex.message || "添加失败", "bad"); });
+      }
+    });
+    UI.openPop(menu, anchor, { align:"right", width:320, onClose:function(){ menu.remove(); } });
+    render();
+  }
+  if(layer.__demWatch){ show(layer.__demWatch); return; }
+  API.get("/api/demands/" + encodeURIComponent(id) + "/watch").then(function(res){
+    if(!layer.isConnected) return;
+    layer.__demWatch = res;
+    updateDemandWatchButton(layer, res);
+    show(res);
+  }).catch(function(ex){ toast(ex.message || "提醒人加载失败", "bad"); });
+}
 function renderDemandDetail(d){
   var id = d.id;
   var writable = canWriteDemand(d), canEditText = writable && !isClosedDemand(d);
@@ -3757,6 +4106,7 @@ function renderDemandDetail(d){
   }
   var layer = document.createElement("div");
   layer.className = "modal-layer demand-detail";
+  demandCommentReplyTo = null;
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
   layer.setAttribute("aria-labelledby", "demandDetailTitle");
@@ -3764,6 +4114,11 @@ function renderDemandDetail(d){
   demandDetailLayer = layer;
   layer.__uiOnClose = function(){
     if(demandDetailLayer === layer) demandDetailLayer = null;
+    if(layer.__commentMention){
+      layer.__commentMention.close();
+      if(demandCommentMention === layer.__commentMention) demandCommentMention = null;
+    }
+    demandCommentReplyTo = null;
     setTimeout(function(){ layer.remove(); }, 0);
   };
   layer.innerHTML =
@@ -3782,6 +4137,8 @@ function renderDemandDetail(d){
     +     '<div class="head-sub">' + esc(meta) + '</div>'
     +   '</div>'
     +   '<div class="head-tools">'
+    +     '<button class="btn sm ghost dem-watch-btn" type="button" data-dem-watch-btn aria-haspopup="menu" aria-expanded="false" aria-pressed="false" title="提醒人：关注后需求变更会通知你">'
+    +       icon("eye", 14) + ' <span data-dem-watch-label>关注</span><span class="dem-watch-count" data-dem-watch-count hidden></span></button>'
     +     (demandMenuItems(d).length ? '<button class="btn sm ghost" type="button" data-dem-detail-more-btn aria-haspopup="menu" aria-expanded="false" title="更多操作">' + icon("more", 14) + ' 更多</button>' : '')
     +     '<button class="icon-btn sm" type="button" data-dem-x aria-label="关闭">' + icon("close", 15) + '</button>'
     +   '</div>'
@@ -3790,6 +4147,7 @@ function renderDemandDetail(d){
     +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="overview" aria-selected="true">概览</button>'
     +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="delivery" aria-selected="false">交付 <span class="tab-cnt" id="tabDeliveryCount"></span></button>'
     +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="rel" aria-selected="false">关联</button>'
+    +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="comments" aria-selected="false">评论 <span class="tab-cnt" id="tabCommentCount"></span></button>'
     +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="records" aria-selected="false">记录 <span class="tab-cnt" id="tabRecordCount"></span></button>'
     + '</div>'
     + '<div class="drawer-body demand-body" id="demandDetailBody">'
@@ -3854,6 +4212,28 @@ function renderDemandDetail(d){
               return '<dt>' + esc(g[0]) + '</dt><dd title="' + esc(g[1]) + '">' + esc(g[1]) + '</dd>';
             }).join("") + '</dl>'
     +     '</section>'
+    +   '</div>'
+    +   '<div class="drawer-pane" data-dem-pane="comments" hidden>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>评论</h3>'
+    +         '<label class="reqdoc-unresolved-toggle"><input type="checkbox" id="demCommentUnresolved"> 只看未解决</label></div>'
+    +       '<div class="reqdoc-comment-list" id="demCommentList"><div class="reqdoc-comment-empty">加载中…</div></div>'
+    +     '</section>'
+    +     (writable
+      ? '<section class="read-card">'
+        + '<div class="reqdoc-comment-form" id="demCommentForm">'
+        +   '<div class="reqdoc-comment-quotechip" id="demCommentReplyChip" hidden>'
+        +     '<span>回复</span><span class="qc-text" id="demCommentReplyText"></span>'
+        +     '<button class="qc-x" type="button" data-dem-comment-reply-clear title="取消回复" aria-label="取消回复">×</button>'
+        +   '</div>'
+        +   '<textarea id="demCommentInput" rows="3" maxlength="1000" placeholder="写下评论，输入 @ 可提及成员"></textarea>'
+        +   '<div class="reqdoc-comment-actions">'
+        +     '<span class="foot-note">一层回复 · @成员会收到站内通知</span>'
+        +     '<button class="btn sm primary" type="button" id="demCommentSend">发表评论</button>'
+        +   '</div>'
+        + '</div>'
+        + '</section>'
+      : '<p class="foot-note">当前为只读：只有项目可写成员可以发表评论。</p>')
     +   '</div>'
     +   '<div class="drawer-pane" data-dem-pane="records" hidden>'
     +     '<section class="read-card">'
@@ -3953,6 +4333,17 @@ function renderDemandDetail(d){
     if(copyNo){ copyToClipboard(copyNo.textContent, "需求编号 " + copyNo.textContent + " 已复制到剪贴板"); return; }
     var tab = e.target.closest("[data-dem-tab]");
     if(tab){ setDemandTab(tab.dataset.demTab); return; }
+    var replyClear = e.target.closest("[data-dem-comment-reply-clear]");
+    if(replyClear){ setDemandCommentReply(layer, null, ""); return; }
+    var cReply = e.target.closest("[data-dem-comment-reply]");
+    if(cReply){ setDemandCommentReply(layer, cReply.dataset.demCommentReply, cReply.dataset.demCommentUser); return; }
+    var cResolve = e.target.closest("[data-dem-comment-resolve]");
+    if(cResolve){ resolveDemandComment(layer, id, cResolve.dataset.demCommentResolve, cResolve.dataset.demCommentResolved === "1"); return; }
+    var cToTask = e.target.closest("[data-dem-comment-totask]");
+    if(cToTask){ demandCommentToTask(layer, id, cToTask.dataset.demCommentTotask); return; }
+    var cDel = e.target.closest("[data-dem-comment-del]");
+    if(cDel){ deleteDemandComment(layer, id, cDel.dataset.demCommentDel); return; }
+    if(e.target.closest("#demCommentSend")){ submitDemandComment(layer, id); return; }
     var go = e.target.closest("[data-demand-goto]");
     if(go){ setDemandTab(go.dataset.demandGoto); return; }
     var relJump = e.target.closest("[data-dem-rel-jump]");
@@ -3980,6 +4371,8 @@ function renderDemandDetail(d){
     }
     var factEl = e.target.closest("[data-dem-fact]");
     if(factEl){ openDemandFactEditor(factEl.dataset.demFact, factEl, detailCtx); return; }
+    var watchBtn = e.target.closest("[data-dem-watch-btn]");
+    if(watchBtn){ openDemandWatchPop(watchBtn, layer, id); return; }
     var moreBtn = e.target.closest("[data-dem-detail-more-btn]");
     if(moreBtn){ openDemandDetailMore(moreBtn, d); return; }
     /* 状态动作的子层叠在详情之上：取消回到详情，成功后由动作关闭详情 */
@@ -4084,6 +4477,25 @@ function renderDemandDetail(d){
       return;
     }
   });
+  layer.addEventListener("change", function(e){
+    if(e.target && e.target.id === "demCommentUnresolved") loadDemandComments(layer, id);
+  });
+  if(writable){
+    var commentInput = layer.querySelector("#demCommentInput");
+    if(commentInput){
+      demandCommentMention = createMentionPicker(commentInput, {
+        canOpen: function(){ return layer.isConnected; },
+        excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+        loadMembers: function(){
+          return API.get("/api/demands/" + encodeURIComponent(id) + "/mention-candidates");
+        }
+      });
+      layer.__commentMention = demandCommentMention;
+      commentInput.addEventListener("keydown", function(e){
+        if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitDemandComment(layer, id);
+      });
+    }
+  }
   function uploadDemandFiles(files){
     if(!writable){ denyDemandReadOnly(); return; }
     var box = layer.querySelector("#demAtts");
@@ -4128,6 +4540,8 @@ function renderDemandDetail(d){
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
   loadDemandJudgements(layer, id);
+  loadDemandComments(layer, id);
+  loadDemandWatch(layer, id);
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
     var ul = layer.querySelector("#demLogs");
     var recent = layer.querySelector("#demandRecentLogs");
@@ -4201,6 +4615,9 @@ if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){
   if(!b) return;
   formPri = b.dataset.dpri;
   syncPriSeg();
+});
+[dWsjfB, dWsjfU, dWsjfR, dWsjfE].forEach(function(el){
+  if(el) el.addEventListener("input", syncWsjfLive);
 });
 if($("dlgDemandPlanX")) $("dlgDemandPlanX").addEventListener("click", function(){ UI.closeModal($("dlgDemandPlan")); });
 if(btnDoPlan) btnDoPlan.addEventListener("click", doPlan);

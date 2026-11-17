@@ -50,6 +50,7 @@ public class UserService implements UserDetailsService {
     private final com.hourglass.mapper.ProjectMemberMapper projectMemberMapper;
     private final TaskMapper taskMapper;
     private final com.hourglass.mapper.TaskWatchMapper taskWatchMapper;
+    private final com.hourglass.mapper.DemandWatchMapper demandWatchMapper;
     private final RequirementMapper reqMapper;
     private final com.hourglass.mapper.DevBranchMapper devBranchMapper;
     private final com.hourglass.mapper.RequirementDocMapper requirementDocMapper;
@@ -72,6 +73,7 @@ public class UserService implements UserDetailsService {
                        com.hourglass.mapper.ProjectMemberMapper projectMemberMapper,
                        TaskMapper taskMapper,
                        com.hourglass.mapper.TaskWatchMapper taskWatchMapper,
+                       com.hourglass.mapper.DemandWatchMapper demandWatchMapper,
                        RequirementMapper reqMapper,
                        com.hourglass.mapper.DevBranchMapper devBranchMapper,
                        com.hourglass.mapper.RequirementDocMapper requirementDocMapper,
@@ -83,6 +85,7 @@ public class UserService implements UserDetailsService {
         this.projectMemberMapper = projectMemberMapper;
         this.taskMapper = taskMapper;
         this.taskWatchMapper = taskWatchMapper;
+        this.demandWatchMapper = demandWatchMapper;
         this.reqMapper = reqMapper;
         this.devBranchMapper = devBranchMapper;
         this.requirementDocMapper = requirementDocMapper;
@@ -334,8 +337,9 @@ public class UserService implements UserDetailsService {
         }
         /* 账号删除后清掉业务表上的负责人引用，保留显示名文本作为历史快照 */
         taskMapper.clearOwnerUser(id);
-        /* 关注关系跨空间保留在任务上，账号删除后必须一并清掉 */
+        /* 关注关系跨空间保留在任务/需求上，账号删除后必须一并清掉 */
         taskWatchMapper.deleteAllByUser(id);
+        demandWatchMapper.deleteAllByUser(id);
         devBranchMapper.clearOwnerUser(id);
         requirementDocMapper.clearOwnerUser(id);
         workspaceService.deleteUserArtifacts(id);

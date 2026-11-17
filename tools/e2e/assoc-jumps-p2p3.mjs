@@ -303,25 +303,25 @@ try{
 
   await section("[P2-8] 成员负载 下钻工作项 项目名", async () => {
     await gotoHash("#/workload", "workload");
-    await waitFor(`document.querySelectorAll("#view-workload [data-member-open]").length > 0`, "负载矩阵渲染", 20000);
-    /* 切到「按人」矩阵：项目格可直接穿透到该项目工作项 */
+    await waitFor(`document.querySelectorAll("#view-workload [data-member-open]").length > 0`, "成员负载渲染", 20000);
+    /* 切到「按人」名册：点成员卡片打开成员工作台子页面 */
     await evaluate(`(() => { const b = document.querySelector("#view-workload [data-load-mode='person']"); if(b && !b.disabled) b.click(); return true; })()`);
-    await sleep(400);
-    let opened = await evaluate(`(() => { const c = document.querySelector("#view-workload [data-member-open][data-member-layer='tasks']"); if(c){ c.click(); return true; } return false; })()`);
-    if(!opened){
-      /* 矩阵无项目格时，逐个点成员名 → 项目分布 → 查看全部工作项 */
-      const keys = await evaluate(`[...document.querySelectorAll("#view-workload .manager-person[data-member-open]")].map(b => b.dataset.memberOpen)`);
-      for(const k of keys){
-        await evaluate(`(() => { const b = document.querySelector("#view-workload .manager-person[data-member-open=" + ${JSON.stringify(k)} + "]"); if(b) b.click(); return true; })()`);
-        let has = false;
-        try{ await waitFor(`!!document.querySelector(".modal-layer.open [data-member-all]")`, "成员项目分布", 3000); has = true; }catch(e){ has = false; }
-        if(has){ await evaluate(`document.querySelector(".modal-layer.open [data-member-all]").click(); true`); opened = true; break; }
-        await closeAll();
-      }
+    await sleep(300);
+    const keys = await evaluate(`[...document.querySelectorAll("#view-workload .member-card[data-member-open]")].map(b => b.dataset.memberOpen)`);
+    let opened = false;
+    for(const k of keys){
+      await evaluate(`(() => { const b = document.querySelector("#view-workload .member-card[data-member-open=" + ${JSON.stringify(k)} + "]"); if(b) b.click(); return true; })()`);
+      try{
+        await waitFor(`!!document.querySelector("#view-workload .member-page")`, "成员工作台打开", 4000);
+        opened = await evaluate(`document.querySelectorAll("#view-workload [data-member-tasks-panel] [data-open-task]").length > 0`);
+      }catch(e){ opened = false; }
+      if(opened) break;
+      await gotoHash("#/workload", "workload");
+      await sleep(300);
     }
     if(!opened){ skip("workload-project：当前范围无可下钻工作项的成员"); return; }
-    await waitFor(`document.querySelectorAll(".modal-layer.open [data-open-task] .assoc-link[data-jump-project]").length > 0`, "成员工作项项目名渲染", 12000);
-    await jumpTest("workload-project", "project", ".modal-layer.open [data-open-task] .assoc-link[data-jump-project]", { shot:"p2-workload-project" });
+    await waitFor(`document.querySelectorAll("#view-workload [data-member-tasks-panel] [data-open-task] .assoc-link[data-jump-project]").length > 0`, "成员工作项项目名渲染", 12000);
+    await jumpTest("workload-project", "project", "#view-workload [data-member-tasks-panel] [data-open-task] .assoc-link[data-jump-project]", { shot:"p2-workload-project" });
   });
 
   await section("[P2-9] 需求文档 阅读态面包屑 项目名", async () => {

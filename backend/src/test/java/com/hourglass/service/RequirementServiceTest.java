@@ -110,6 +110,12 @@ class RequirementServiceTest {
         com.hourglass.mapper.DemandDeliveryJudgementMapper judgements =
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "demandJudgementMapper", judgements);
+        com.hourglass.mapper.DemandCommentMapper comments =
+                mock(com.hourglass.mapper.DemandCommentMapper.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "demandCommentMapper", comments);
+        com.hourglass.mapper.DemandWatchMapper watches =
+                mock(com.hourglass.mapper.DemandWatchMapper.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "demandWatchMapper", watches);
 
         RequirementDeleteResult result = service.delete(VIEWER, WS, "R1");
 
@@ -125,6 +131,8 @@ class RequirementServiceTest {
         verify(versionService).deleteByReq(WS, "R1");
         verify(demands).deleteLogsByReq(WS, "R1");
         verify(judgements).deleteByReq(WS, "R1");
+        verify(comments).deleteByWorkspaceReq(WS, "R1");
+        verify(watches).deleteByWorkspaceReq(WS, "R1");
         verify(demands).deleteByReq(WS, "R1");
         verify(access).clearProject(WS, "R1");
         /* 邀请上对该项目的预分配同步清掉，避免残留授权 */

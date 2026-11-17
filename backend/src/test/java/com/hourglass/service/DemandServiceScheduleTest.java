@@ -47,11 +47,13 @@ class DemandServiceScheduleTest {
     private final AttachmentService attachments = mock(AttachmentService.class);
     private final com.hourglass.mapper.MailDeliveryMapper mail = mock(com.hourglass.mapper.MailDeliveryMapper.class);
     private final com.hourglass.mapper.TestCaseMapper cases = mock(com.hourglass.mapper.TestCaseMapper.class);
+    private final com.hourglass.mapper.DemandCommentMapper demandComments =
+            mock(com.hourglass.mapper.DemandCommentMapper.class);
     private final DeletionTraceService deletionTrace = mock(DeletionTraceService.class);
     private final DemandService service = new DemandService(demands, projects, versions, tasks, events,
             docs, access, attachments, mail, cases,
             mock(com.hourglass.mapper.CategoryMapper.class), lock, permissions,
-            deletionTrace, mock(NumberSeqService.class));
+            deletionTrace, mock(NumberSeqService.class), mock(DemandWatchService.class));
     private final com.hourglass.mapper.ReleaseMapper releases = mock(com.hourglass.mapper.ReleaseMapper.class);
     private final com.hourglass.mapper.VersionTaskMapper bindings = mock(com.hourglass.mapper.VersionTaskMapper.class);
     private final TaskPublicationService publications = new TaskPublicationService(tasks, releases,
@@ -69,6 +71,7 @@ class DemandServiceScheduleTest {
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "caseTaskMapper",
                 mock(com.hourglass.mapper.TestCaseTaskMapper.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "demandCommentMapper", demandComments);
         lenient().when(demands.selectDetail(any(), anyString()))
                 .thenAnswer(inv -> demands.selectById(inv.getArgument(1)));
         doCallRealMethod().when(bindings).enrichTasks(anyString(), anyList());
@@ -615,6 +618,7 @@ class DemandServiceScheduleTest {
         order.verify(tasks).clearDemandRef("W1", "D1");
         order.verify(demands).deleteLogsByDemand("W1", "D1");
         order.verify(demands).deleteById("W1", "D1");
+        verify(demandComments).deleteByDemand("W1", "D1");
         verify(mail).deleteByReferenceIds(Collections.singletonList("D1"));
         verify(docs).deleteDemandLinksByDemand("W1", "D1");
         verify(cases).clearDemandRefs("W1", "D1");

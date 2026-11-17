@@ -3,6 +3,7 @@ package com.hourglass.service;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.AppNotificationMapper;
 import com.hourglass.mapper.DemandMapper;
+import com.hourglass.mapper.DemandWatchMapper;
 import com.hourglass.mapper.DevBranchMapper;
 import com.hourglass.mapper.GanttShareMapper;
 import com.hourglass.mapper.ProjectVersionMapper;
@@ -79,6 +80,7 @@ class TaskCascadeTest {
     private VersionTaskMapper versionTaskMapper;
     private ProjectVersionMapper versionMapper;
     private DemandMapper demandMapper;
+    private DemandWatchMapper demandWatchMapper;
     private TestCaseMapper testCaseMapper;
     private TestCaseRunMapper testCaseRunMapper;
     private com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
@@ -112,6 +114,7 @@ class TaskCascadeTest {
         versionTaskMapper = mock(VersionTaskMapper.class);
         versionMapper = mock(ProjectVersionMapper.class);
         demandMapper = mock(DemandMapper.class);
+        demandWatchMapper = mock(DemandWatchMapper.class);
         testCaseMapper = mock(TestCaseMapper.class);
         testCaseRunMapper = mock(TestCaseRunMapper.class);
         caseTaskMapper = mock(com.hourglass.mapper.TestCaseTaskMapper.class);
@@ -123,6 +126,8 @@ class TaskCascadeTest {
                 baselineMapper, ganttShareMapper, reqMapper, requirementDocMapper,
                 mock(com.hourglass.mapper.RequirementDocHistoryMapper.class),
                 docCommentMapper, completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
+                mock(com.hourglass.mapper.DemandCommentMapper.class),
+                demandWatchMapper,
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
                 reqDocShareMapper, testCaseMapper, testCaseRunMapper, caseTaskMapper,
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class),
@@ -225,7 +230,7 @@ class TaskCascadeTest {
                 com.hourglass.common.AppException.class, () -> cascade.wipeWorkspaceData(WS));
         assertTrue(error.getMessage().contains("导入新空间"));
         org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
-                () -> cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true));
+                () -> cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true, true));
         org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
                 () -> cascade.purgeWorkspaceTaskData(WS, true, true));
         verify(taskMapper, never()).deleteAllByWorkspace(WS);
@@ -311,7 +316,7 @@ class TaskCascadeTest {
         when(taskMapper.selectTasksForScope(WS)).thenReturn(Collections.singletonList(current));
 
         cascade.wipeWorkspaceData(WS);
-        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true);
+        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true, true);
         verify(taskMapper, org.mockito.Mockito.times(2)).deleteAllByWorkspace(WS);
         verify(reqMapper, org.mockito.Mockito.times(2)).deleteAllByWorkspace(WS);
         verify(versionMapper, org.mockito.Mockito.times(2)).deleteByWorkspace(WS);
@@ -377,6 +382,7 @@ class TaskCascadeTest {
         verify(deliveryNoteMapper).deleteSnapshotsByWorkspace(WS);
         verify(deliveryNoteMapper).deleteByWorkspace(WS);
         verify(demandMapper).deleteLogsByWorkspace(WS);
+        verify(demandWatchMapper).deleteByWorkspace(WS);
         verify(demandMapper).deleteByWorkspace(WS);
         /* 删除空间时编号序列一起清，避免留下孤立行 */
         verify(numberSeqMapper).deleteByWorkspace(WS);
@@ -384,7 +390,7 @@ class TaskCascadeTest {
 
     @Test
     void importClearingKeepsAuditLogsAttachmentsAndOptionalData() {
-        cascade.clearWorkspaceDataForImport(WS, false, false, false, false, false, false);
+        cascade.clearWorkspaceDataForImport(WS, false, false, false, false, false, false, false);
 
         verify(taskMapper).deleteAllByWorkspace(WS);
         verify(testCaseRunMapper, never()).deleteByWorkspace(WS);
@@ -403,8 +409,10 @@ class TaskCascadeTest {
         verify(versionMapper, never()).deleteByWorkspace(WS);
         verify(deliveryNoteMapper, never()).deleteByWorkspace(WS);
         verify(demandMapper, never()).deleteByWorkspace(WS);
+        /* 关注名单不在备份里：导入不重建需求时不清理 */
+        verify(demandWatchMapper, never()).deleteByWorkspace(WS);
 
-        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true);
+        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true, true);
 
         verify(requirementDocMapper).deleteAllByWorkspace(WS);
         verify(testCaseRunMapper).deleteByWorkspace(WS);
@@ -420,6 +428,8 @@ class TaskCascadeTest {
         verify(deliveryNoteMapper).deleteByWorkspace(WS);
         /* 需求流转日志不在备份里，导入时必须保留 */
         verify(demandMapper, never()).deleteLogsByWorkspace(WS);
+        /* 关注名单也不在备份里：需求整体替换时清掉，避免旧关注人套到同 ID 新需求上 */
+        verify(demandWatchMapper).deleteByWorkspace(WS);
         verify(demandMapper).deleteByWorkspace(WS);
         /* 覆盖导入不清编号序列：序列只增不减，导入后下一次取号不能回收旧号 */
         verify(numberSeqMapper, never()).deleteByWorkspace(WS);
@@ -433,7 +443,7 @@ class TaskCascadeTest {
                 "project_milestone_task", "test_case_task", "task_publication_judgement"),
                 TaskCascade.TASK_CHILD_TABLES);
         assertEquals(Arrays.asList("task_completion_record", "version_release_item", "version_release_plan_task",
-                        "req_doc_comment"),
+                        "req_doc_comment", "demand_comment"),
                 TaskCascade.PRESERVED_TASK_REF_TABLES);
         assertEquals(Arrays.asList("version_release", "version_release_item", "version_release_plan", "version_release_plan_version", "version_release_plan_task", "version_log"),
                 TaskCascade.PRESERVED_WORKSPACE_DELIVERY_TABLES);
@@ -453,7 +463,7 @@ class TaskCascadeTest {
                 "app_notification", "dev_branch_log", "dev_branch",
                 "version_task", "project_milestone_task", "project_milestone_log", "project_milestone",
                 "project_version", "delivery_note_share", "delivery_note_snapshot", "delivery_note",
-                "demand_log", "demand"),
+                "demand_comment", "demand_watch", "demand_log", "demand"),
                 TaskCascade.WORKSPACE_TASK_TABLES);
     }
 

@@ -53,6 +53,11 @@ public class RequirementService {
     /** 需求随项目删除时，人工交付判定一并清理 */
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper;
+    /** 需求评论与关注人强归属需求，删项目时随需求一并清理 */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.DemandCommentMapper demandCommentMapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.DemandWatchMapper demandWatchMapper;
     /** 删项目时清掉邀请上对它的预分配 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hourglass.mapper.InviteProjectGrantMapper inviteGrantMapper;
@@ -443,6 +448,8 @@ public class RequirementService {
         versionService.deleteByReq(workspaceId, id);
         demandMapper.deleteLogsByReq(workspaceId, id);
         demandJudgementMapper.deleteByReq(workspaceId, id);
+        demandCommentMapper.deleteByWorkspaceReq(workspaceId, id);
+        demandWatchMapper.deleteByWorkspaceReq(workspaceId, id);
         demandMapper.deleteByReq(workspaceId, id);
         projectAccess.clearProject(workspaceId, id);
         if (inviteGrantMapper != null) {

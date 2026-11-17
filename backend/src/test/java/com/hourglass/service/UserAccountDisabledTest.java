@@ -35,6 +35,7 @@ class UserAccountDisabledTest {
             mock(com.hourglass.mapper.ProjectMemberMapper.class),
             mock(com.hourglass.mapper.TaskMapper.class),
             mock(com.hourglass.mapper.TaskWatchMapper.class),
+            mock(com.hourglass.mapper.DemandWatchMapper.class),
             mock(com.hourglass.mapper.RequirementMapper.class),
             mock(com.hourglass.mapper.DevBranchMapper.class),
             mock(com.hourglass.mapper.RequirementDocMapper.class),

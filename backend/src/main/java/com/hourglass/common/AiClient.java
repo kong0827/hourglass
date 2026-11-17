@@ -131,7 +131,9 @@ public class AiClient {
                     e.getResponseBodyAsString(StandardCharsets.UTF_8),
                     cfg.shared() ? cfg.getSourceLabel() : null), e);
         } catch (ResourceAccessException e) {
-            log.warn("AI 上游连接失败：model={} error={}", cfg.getModel(), e.getClass().getSimpleName());
+            /* 只记类名会把 connect refused / unknown host / read timeout 等根因全吞掉，排障时无法区分 */
+            log.warn("AI 上游连接失败：model={} {}：{}", cfg.getModel(),
+                    e.getClass().getSimpleName(), brief(String.valueOf(e.getMessage())));
             throw new AppException(504, DEFAULT_TIMEOUT_MSG + "，请检查网络或换更快的模型", e);
         } catch (AppException e) {
             throw e;

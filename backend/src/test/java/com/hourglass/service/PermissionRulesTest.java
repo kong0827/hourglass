@@ -80,7 +80,8 @@ class PermissionRulesTest {
                 mock(InviteMapper.class),
                 mock(com.hourglass.mapper.InviteProjectGrantMapper.class), projectMemberMapper,
                 mock(com.hourglass.mapper.ProjectMemberRoleMapper.class),
-                mock(com.hourglass.mapper.TaskWatchMapper.class), mock(TaskCascade.class),
+                mock(com.hourglass.mapper.TaskWatchMapper.class),
+                mock(com.hourglass.mapper.DemandWatchMapper.class), mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class),
                 mock(com.hourglass.mapper.WorkspaceMemberLabelOptionMapper.class), mock(MemberLabelLogService.class),
                 projectAccessService);

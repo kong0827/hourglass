@@ -83,6 +83,88 @@
 
   var tasks = backlog.concat(doing, done);
 
+  /* ---------------- 成员负载（名册 + 成员工作台） ---------------- */
+  var workload = (function () {
+    var base = new Date(); base.setHours(0, 0, 0, 0);
+    var monday = new Date(base); monday.setDate(base.getDate() - ((base.getDay() + 6) % 7));
+    var lastMonday = new Date(monday); lastMonday.setDate(monday.getDate() - 7);
+    var todayIdx = (base.getDay() + 6) % 7;
+    function reqName(id) { return id === "R1" ? "流程引擎" : (id === "R2" ? "结算改造" : null); }
+    function taskOf(t) {
+      return { id: t.id, title: t.title, priority: t.priority, boardColumn: t.boardColumn,
+        processingRule: t.boardColumn === "backlog" ? "backlog" : "normal",
+        dueDate: t.dueDate, reqId: t.reqId, reqName: reqName(t.reqId),
+        estimateMinutes: t.estimateMinutes, totalMinutes: t.totalMinutes || 0,
+        blocked: !!t.blocked, itemType: t.isMilestone ? "milestone" : "task", updatedAt: t.updatedAt };
+    }
+    var openTasks = tasks.filter(function (t) { return t.boardColumn !== "done"; });
+    function ownedBy(uid) { return openTasks.filter(function (t) { return t.ownerUserId === uid; }); }
+    function dayMinutes(pairs) {
+      var out = [0, 0, 0, 0, 0, 0, 0];
+      pairs.forEach(function (p) { out[p[0]] = p[1]; });
+      return out;
+    }
+    function log(date, taskId, title, reqId, minutes, origin) {
+      return { date: date, taskId: taskId, title: title, reqId: reqId, reqName: reqName(reqId),
+        minutes: minutes, origin: origin || "timer" };
+    }
+    var lastLogDate = iso(new Date(lastMonday.getTime() + 2 * 86400000));
+    var members = [
+      { key: "U1", name: "我", companyName: "北京总部", jobTitle: "后端开发", roleTitles: ["后端开发"], secondaryRoleTitles: ["技术负责人"],
+        remainingMinutes: 3600, workdays: 5, capacityMinutes: 2400, loadPct: 150, overloaded: true,
+        weekMinutes: 390, lastWeekMinutes: 300,
+        dayMinutes: dayMinutes(todayIdx > 0 ? [[todayIdx - 1, 210], [todayIdx, 180]] : [[todayIdx, 390]]),
+        projects: [
+          { reqId: "R1", name: "流程引擎", remainingMinutes: 1800, taskCount: 4, roleTitles: ["后端开发"] },
+          { reqId: "", name: "未归类", remainingMinutes: 1800, taskCount: 9, roleTitles: ["后端开发"] }
+        ],
+        tasks: ownedBy("U1").map(taskOf),
+        weekLogs: [
+          log(todayIdx > 0 ? iso(new Date(monday.getTime() + (todayIdx - 1) * 86400000)) : shift(0), "K1", "重构权限校验中间件", "R1", 210),
+          log(shift(0), "K1", "重构权限校验中间件", "R1", 180)
+        ],
+        lastWeekLogs: [log(lastLogDate, "K2", "导出 CSV 补工时列", null, 300)] },
+      { key: "U2", name: "陈工", companyName: "北京总部", jobTitle: "后端开发", roleTitles: ["后端开发"], secondaryRoleTitles: [],
+        remainingMinutes: 1140, workdays: 5, capacityMinutes: 2400, loadPct: 48, overloaded: false,
+        weekMinutes: 240, lastWeekMinutes: 420,
+        dayMinutes: dayMinutes([[Math.max(0, todayIdx - 1), 240]]),
+        projects: [
+          { reqId: "R2", name: "结算改造", remainingMinutes: 900, taskCount: 1, roleTitles: ["后端开发"] },
+          { reqId: "", name: "未归类", remainingMinutes: 240, taskCount: 1, roleTitles: ["后端开发"] }
+        ],
+        tasks: ownedBy("U2").map(taskOf),
+        weekLogs: [log(shift(0), "G1", "结算批处理拆分（跨月）", "R2", 240)],
+        lastWeekLogs: [log(lastLogDate, "G1", "结算批处理拆分（跨月）", "R2", 420)] },
+      { key: "U3", name: "李雷", companyName: "上海研发", jobTitle: "测试", roleTitles: ["测试"], secondaryRoleTitles: ["质量保障"],
+        remainingMinutes: 600, workdays: 3, capacityMinutes: 1440, loadPct: 42, overloaded: false,
+        weekMinutes: 150, lastWeekMinutes: 90,
+        dayMinutes: dayMinutes([[todayIdx, 150]]),
+        projects: [{ reqId: "R2", name: "结算改造", remainingMinutes: 600, taskCount: 1, roleTitles: ["测试"] }],
+        tasks: ownedBy("U3").map(taskOf),
+        weekLogs: [log(shift(0), "G2", "对账差异回溯（阻塞+逾期）", "R2", 150)],
+        lastWeekLogs: [] },
+      { key: "U4", name: "王芳", companyName: "上海研发", jobTitle: "产品经理", roleTitles: ["产品经理"], secondaryRoleTitles: [],
+        remainingMinutes: 0, workdays: 0, capacityMinutes: 0, loadPct: 0, overloaded: false,
+        weekMinutes: 210, lastWeekMinutes: 180,
+        dayMinutes: dayMinutes(todayIdx > 0 ? [[todayIdx - 1, 120], [todayIdx, 90]] : [[todayIdx, 210]]),
+        projects: [{ reqId: "R1", name: "流程引擎", remainingMinutes: 0, taskCount: 0, roleTitles: ["产品经理"] }],
+        tasks: [],
+        weekLogs: [
+          log(todayIdx > 0 ? iso(new Date(monday.getTime() + (todayIdx - 1) * 86400000)) : shift(0), null, "权限矩阵接口联调", "R1", 120, "manual"),
+          log(shift(0), null, "权限矩阵接口联调", "R1", 90, "manual")
+        ],
+        lastWeekLogs: [log(lastLogDate, null, "需求澄清会", "R1", 180)] }
+    ];
+    return {
+      today: shift(0), capacityMinutesPerDay: 480, workdays: 5,
+      weekStart: iso(monday), lastWeekStart: iso(lastMonday),
+      projects: [{ id: "R1", name: "流程引擎" }, { id: "R2", name: "结算改造" }],
+      members: members,
+      filterOptions: { roleTitles: ["后端开发", "测试", "产品经理"], companyNames: ["北京总部", "上海研发"] },
+      scope: { reqId: "", roleTitle: "", companyName: "" }
+    };
+  })();
+
   /* /api/tasks/list 的筛选在预览里也照做：筛选/分组/清除的界面效果才可验证 */
   function mockTaskList(url) {
     var p = new URLSearchParams(url.split("?")[1] || "");
@@ -332,6 +414,7 @@
       ],
       total: 2, hasMore: false
     },
+    "/api/manager/workload": workload,
     "/api/views": [{ id: "V1", name: "我的 P0", params: JSON.stringify({ pris: ["P0"] }) }],
     /* 设置页「看板列 / 分类」用：之前缺这两条路由，预览会显示"加载失败" */
     "/api/columns": [
@@ -668,6 +751,54 @@
   };
   var ganttBaselineAt = ts(-2, 18, 0);
 
+  /* 区间工时演示数据：只在本周/上周之外的区间里额外出现，便于看出「近30天 / 本月」差异 */
+  var workloadExtraLogs = {
+    U1: [{ date: shift(-25), minutes: 240 }, { date: shift(-11), minutes: 150 }],
+    U2: [{ date: shift(-18), minutes: 90 }],
+    U3: [{ date: shift(-11), minutes: 45 }],
+    U4: [{ date: shift(-18), minutes: 60 }]
+  };
+  function isoAdd(isoDate, days) {
+    var p = isoDate.split("-");
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    d.setDate(d.getDate() + days);
+    return iso(d);
+  }
+  function workdaysBetween(from, to) {
+    var count = 0, p = from.split("-");
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    var end = new Date(Number(to.split("-")[0]), Number(to.split("-")[1]) - 1, Number(to.split("-")[2]));
+    while (d <= end) {
+      var dow = d.getDay();
+      if (dow !== 0 && dow !== 6) count++;
+      d.setDate(d.getDate() + 1);
+    }
+    return count;
+  }
+  function mockWorkload(u) {
+    var fm = /[?&]from=(\d{4}-\d{2}-\d{2})/.exec(u), tm = /[?&]to=(\d{4}-\d{2}-\d{2})/.exec(u);
+    if (!fm || !tm) return workload;
+    var from = fm[1], to = tm[1];
+    if (from > to) { var swap = from; from = to; to = swap; }
+    /* 与后端一致：超过 92 天从终点往前截断 */
+    if (isoAdd(to, -91) > from) from = isoAdd(to, -91);
+    var out = JSON.parse(JSON.stringify(workload));
+    out.rangeFrom = from;
+    out.rangeTo = to;
+    out.rangeWorkdays = workdaysBetween(from, to);
+    out.members.forEach(function (m) {
+      var minutes = 0;
+      (m.weekLogs || []).concat(m.lastWeekLogs || []).forEach(function (l) {
+        if (l.date >= from && l.date <= to) minutes += Number(l.minutes) || 0;
+      });
+      (workloadExtraLogs[m.key] || []).forEach(function (l) {
+        if (l.date >= from && l.date <= to) minutes += Number(l.minutes) || 0;
+      });
+      m.rangeMinutes = minutes;
+    });
+    return out;
+  }
+
   /* 任务清单分页：明细按 offset/limit 切页，统计字段按全月口径汇总（与后端一致） */
   function mockCompletions(u) {
     var off = Number((/[?&]offset=(\d+)/.exec(u) || [])[1] || 0);
@@ -811,6 +942,8 @@
     } else if (clean === "/api/tasks/list") {
       /* 列表/甘特/未排期共用：按查询参数筛选，并保持 {items,total} 结构 */
       data = mockTaskList(u);
+    } else if (clean === "/api/manager/workload") {
+      data = mockWorkload(u);
     } else if (/^\/api\/projects\/[A-Za-z0-9_-]+\/release-policy$/.test(clean)) {
       /* 策略即时保存：写回内存，重新打开项目也保持刚才的选择 */
       if (method === "PUT") {
@@ -927,6 +1060,17 @@
       var cdel = clean.split("/").pop();
       routes["/api/categories"] = routes["/api/categories"].filter(function (c) { return c.id !== cdel; });
       data = {};
+    } else if (clean === "/api/versions/task-options") {
+      /* 工作项抽屉的「所属史诗」候选：生产由后端按项目过滤，这里给两条演示史诗 */
+      var optM = /[?&]reqId=([^&]*)/.exec(u);
+      var optReq = optM ? decodeURIComponent(optM[1]) : "";
+      var epicRows = [
+        { id: "E1", title: "权限体系重构（史诗）", itemType: "epic", reqId: "R1", epicId: null },
+        { id: "E2", title: "结算链路升级（史诗）", itemType: "epic", reqId: "R2", epicId: null }
+      ];
+      data = epicRows.concat(tasks.map(function (t) {
+        return { id: t.id, title: t.title, itemType: t.itemType || "task", epicId: t.epicId || null, reqId: t.reqId || null };
+      })).filter(function (t) { return !optReq || t.reqId === optReq; });
     } else if (clean === "/api/completions") {
       data = mockCompletions(u);
     } else if (clean === "/api/gantt") {

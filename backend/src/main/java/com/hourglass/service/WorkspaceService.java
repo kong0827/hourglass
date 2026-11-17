@@ -76,6 +76,8 @@ public class WorkspaceService {
     private final ProjectMemberMapper projectMemberMapper;
     private final ProjectMemberRoleMapper projectMemberRoleMapper;
     private final TaskWatchMapper taskWatchMapper;
+    /** 需求关注关系同样只在本空间有效，成员退出/移除时清理 */
+    private final com.hourglass.mapper.DemandWatchMapper demandWatchMapper;
     /** 任务/项目/文档/分支/依赖/附件等清空清单统一收口在 TaskCascade */
     private final TaskCascade cascade;
     /** 配置审计日志 */
@@ -103,6 +105,7 @@ public class WorkspaceService {
                             ProjectMemberMapper projectMemberMapper,
                             ProjectMemberRoleMapper projectMemberRoleMapper,
                             TaskWatchMapper taskWatchMapper,
+                            com.hourglass.mapper.DemandWatchMapper demandWatchMapper,
                             TaskCascade cascade,
                             com.hourglass.service.ActivityService activityService,
                             WorkspaceMemberCache memberCache,
@@ -126,6 +129,7 @@ public class WorkspaceService {
         this.projectMemberMapper = projectMemberMapper;
         this.projectMemberRoleMapper = projectMemberRoleMapper;
         this.taskWatchMapper = taskWatchMapper;
+        this.demandWatchMapper = demandWatchMapper;
         this.cascade = cascade;
         this.activityService = activityService;
         this.memberCache = memberCache;
@@ -688,6 +692,7 @@ public class WorkspaceService {
             projectMemberRoleMapper.deleteByUser(workspaceId, targetUserId);
             /* 关注关系只在本空间有效，退出后清理，重新加入需重新关注 */
             taskWatchMapper.deleteByWorkspaceUser(workspaceId, targetUserId);
+            demandWatchMapper.deleteByWorkspaceUser(workspaceId, targetUserId);
             activityService.logConfig(workspaceId, userId, "退出空间");
             CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
             return;
@@ -716,6 +721,7 @@ public class WorkspaceService {
         projectMemberRoleMapper.deleteByUser(workspaceId, targetUserId);
         /* 关注关系只在本空间有效，移除后清理，重新加入需重新关注 */
         taskWatchMapper.deleteByWorkspaceUser(workspaceId, targetUserId);
+        demandWatchMapper.deleteByWorkspaceUser(workspaceId, targetUserId);
         AppUser target = userMapper.selectById(targetUserId);
         activityService.logConfig(workspaceId, userId, "移除成员「"
                 + (target == null || target.getDisplayName() == null ? targetUserId : target.getDisplayName()) + "」");

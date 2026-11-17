@@ -91,6 +91,8 @@ class TaskPurgeTest {
                 mock(TaskCompletionService.class),
                 mock(DevBranchMapper.class), mock(VersionTaskMapper.class),
                 mock(ProjectVersionMapper.class), mock(DemandMapper.class),
+                mock(com.hourglass.mapper.DemandCommentMapper.class),
+                mock(com.hourglass.mapper.DemandWatchMapper.class),
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
                 mock(com.hourglass.mapper.ReqDocShareMapper.class),
                 mock(com.hourglass.mapper.TestCaseMapper.class),

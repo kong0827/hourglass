@@ -1045,10 +1045,12 @@
                 <label for="dAccept">验收标准</label>
                 <textarea id="dAccept" maxlength="2000" placeholder="做到什么程度算完成…"></textarea>
               </div>
-              <div class="form-grid span2">
+              <div class="form-sec span2">归类</div>
+              <div class="form-grid three span2">
                 <div class="field">
                   <label for="dSource">需求来源</label>
-                  <input id="dSource" type="text" maxlength="40" placeholder="例如：财务 · 刘" autocomplete="off" />
+                  <input id="dSource" type="text" maxlength="40" placeholder="例如：财务 · 刘" list="dlDemandSource" autocomplete="off" />
+                  <datalist id="dlDemandSource"></datalist>
                 </div>
                 <div class="field">
                   <label for="dKind">需求类型</label>
@@ -1059,12 +1061,13 @@
                     <option value="其他">其他</option>
                   </select>
                 </div>
-              </div>
-              <div class="form-grid three span2">
                 <div class="field">
                   <label for="dCategory">模块</label>
                   <select id="dCategory"></select>
                 </div>
+              </div>
+              <div class="form-sec span2">优先级与交付</div>
+              <div class="form-grid span2">
                 <div class="field">
                   <label>优先级</label>
                   <div class="seg" id="segDemandPri">
@@ -1075,24 +1078,27 @@
                   </div>
                 </div>
                 <div class="field">
-                  <label for="dExpect">期望交付日期</label>
+                  <label for="dExpect">期望交付日期 <small class="tc-optional">选填</small></label>
                   <input id="dExpect" type="date" />
                 </div>
               </div>
-              <div class="field span2">
-                <label>WSJF 评分（可选）</label>
-                <div class="wsjf-grid">
-                  <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" placeholder="0-10" /></span>
-                  <span class="wsjf-item"><label for="dWsjfU">紧迫程度</label><input id="dWsjfU" type="number" min="0" max="10" placeholder="0-10" /></span>
-                  <span class="wsjf-item"><label for="dWsjfR">风险缓解</label><input id="dWsjfR" type="number" min="0" max="10" placeholder="0-10" /></span>
-                  <span class="wsjf-item"><label for="dWsjfE">工作量</label><input id="dWsjfE" type="number" min="1" max="10" placeholder="1-10" /></span>
+              <details class="wsjf-more span2" id="wsjfMore">
+                <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>WSJF 评分<span class="wsjf-more-meta" id="wsjfMeta">未评分 · 选填</span></summary>
+                <div class="wsjf-more-body">
+                  <div class="wsjf-grid">
+                    <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" placeholder="0-10" /></span>
+                    <span class="wsjf-item"><label for="dWsjfU">紧迫程度</label><input id="dWsjfU" type="number" min="0" max="10" placeholder="0-10" /></span>
+                    <span class="wsjf-item"><label for="dWsjfR">风险缓解</label><input id="dWsjfR" type="number" min="0" max="10" placeholder="0-10" /></span>
+                    <span class="wsjf-item"><label for="dWsjfE">工作量</label><input id="dWsjfE" type="number" min="1" max="10" placeholder="1-10" /></span>
+                  </div>
+                  <span class="wsjf-live" id="wsjfLive" hidden></span>
+                  <span class="hint">可不填：四项都填才自动计分 WSJF =（业务 + 紧迫 + 风险）÷ 工作量；留空不评分，列表默认按优先级排序</span>
                 </div>
-                <span class="hint">可不填：四项都填才自动计分 WSJF =（业务 + 紧迫 + 风险）÷ 工作量；留空不评分，列表默认按优先级排序</span>
-              </div>
-              <div class="row row-gap span2">
+              </details>
+              <div class="dlg-foot-row span2">
+                <p class="foot-note" id="demandFootNote">新需求进入「待评审」；仅空间主可通过、拒绝或排期</p>
                 <button class="btn primary" type="button" id="btnSaveDemand">提交评审</button>
               </div>
-              <p class="foot-note span2">新需求进入「待评审」；仅空间主可通过 / 拒绝 / 排期</p>
             </div>
           </div>
         </div></div></div>

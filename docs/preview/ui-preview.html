@@ -2208,6 +2208,9 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 }
 .modal-layer.side .sheet-body{flex:1 1 auto;min-height:0;overflow:auto;}
 .modal-layer.side .sheet-foot{border-radius:0;}
+/* 侧滑弹窗占满整列高度：`.sheet.md` 在 .modal-layer 下的 100vh-80px 上限是居中弹窗的口径，
+   两者同优先级且居中规则在后，会把侧滑也压短 80px、底部留出一条空隙 */
+.modal-layer.side .sheet.md{max-height:none;}
 /* 侧滑面板只有 560 宽，原来 720 宽的双列表单会把长文本框压到 250；侧滑内改单列，短字段仍可自行分行 */
 .modal-layer.side .proj-dlg-body .stack.proj-form-grid{grid-template-columns:minmax(0,1fr);}
 @keyframes ds-slide-in-right{from{opacity:.5;transform:translateX(28px);}to{opacity:1;transform:none;}}
@@ -3639,6 +3642,27 @@ button.case-witem:hover{border-color:var(--primary-border);color:var(--text);}
 .dem-evidence-tbl .t-title{font-weight:550;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dem-evidence-tbl .t-sub{margin-top:2px;font-size:11.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dem-evidence-tbl tbody tr[data-open-task] td:first-child{color:var(--text);font-weight:inherit;}
+/* 提醒人：头部关注入口 + 浮层名单 */
+.demand-head .dem-watch-btn{gap:5px;}
+.demand-head .dem-watch-btn.is-on{color:var(--primary-fg);background:var(--primary-soft);border-color:transparent;}
+.dem-watch-count{min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--primary-soft);color:var(--primary-fg);
+  font-size:10.5px;font-weight:650;display:inline-flex;align-items:center;justify-content:center;}
+.dem-watch-btn.is-on .dem-watch-count{background:var(--primary);color:#fff;}
+.dem-watch-list{display:flex;flex-direction:column;gap:2px;max-height:220px;overflow-y:auto;padding:2px 0 4px;}
+.dem-watch-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;
+  column-gap:8px;row-gap:1px;padding:6px 10px;border-radius:var(--r-xs);}
+.dem-watch-row:hover{background:var(--surface-hover);}
+.dem-watch-name{grid-area:1/1;display:flex;align-items:center;gap:6px;min-width:0;
+  font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dem-watch-name .k{margin-left:auto;font-size:10.5px;font-weight:500;color:var(--primary-fg);}
+.dem-watch-sub{grid-area:2/1;font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dem-watch-row .icon-btn{grid-area:1/2/3/3;align-self:center;}
+.dem-watch-row.is-owner .dem-watch-name{font-weight:550;}
+.dem-watch-empty{padding:4px 10px 8px;margin:0;}
+.dem-watch-add{display:flex;align-items:center;gap:6px;padding:8px 10px;border-top:1px solid var(--border);}
+.dem-watch-add .input{flex:1 1 auto;min-width:0;height:28px;font-size:12px;}
+.dem-watch-pop .menu-foot{flex-wrap:wrap;align-items:center;gap:6px 8px;}
+.dem-watch-pop .menu-foot .foot-note{flex:1 1 100%;margin:4px 0 0;line-height:1.45;}
 
 /* ---------- 全局附件组件（core/attach-kit.js） ---------- */
 .icon-btn.xs{width:22px;height:22px;}
@@ -7571,6 +7595,11 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .bkl-card[draggable="true"]{cursor:grab;}
 .bkl-card[draggable="true"]:active{cursor:grabbing;}
 .bkl-card.bkl-dragging{opacity:.45;}
+/* 全部项目泳道：列内按项目分组，轻量头行只带项目名与计数 */
+.bkl-lane{display:flex;flex-direction:column;gap:8px;padding:8px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
+.bkl-lane-head{display:flex;align-items:center;gap:8px;padding:0 2px;min-width:0;}
+.bkl-lane-name{font-size:12.5px;font-weight:600;color:var(--text-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bkl-lane-count{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;flex:0 0 auto;}
 .bkl-col-over{outline:2px dashed var(--primary);outline-offset:4px;border-radius:var(--r-md);}
 /* 拖动中：合法目标列持续淡光提示，悬停到不合法列给出禁用反馈 */
 .bkl-col-can{background:color-mix(in srgb, var(--primary) 6%, transparent);border-radius:var(--r-md);}
@@ -7581,6 +7610,20 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .wsjf-item{display:flex;flex-direction:column;gap:4px;min-width:0;}
 .wsjf-item label{font-size:11.5px;color:var(--text-3);}
 .wsjf-item input{width:100%;}
+/* WSJF 评分：默认折叠、摘要示值；展开后四项齐全就地显示得分 */
+.wsjf-more{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.wsjf-more summary{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;list-style:none;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--text);}
+.wsjf-more summary::-webkit-details-marker{display:none;}
+.wsjf-more summary:hover{color:var(--primary-hover);}
+.wsjf-more summary:focus-visible{outline:none;border-radius:var(--r-md);box-shadow:var(--ring-focus);}
+.wsjf-more .cf-chev{display:inline-flex;color:var(--text-3);transition:transform var(--dur-fast) var(--ease-out);}
+.wsjf-more[open] .cf-chev{transform:rotate(90deg);}
+.wsjf-more-meta{margin-left:auto;font-size:11px;font-weight:400;color:var(--text-3);}
+.wsjf-more-body{display:flex;flex-direction:column;gap:8px;padding:2px 12px 12px;}
+.wsjf-live{font-size:11.5px;font-weight:500;color:var(--text-2);}
+.dlg-foot-row{display:flex;align-items:center;gap:12px;}
+.dlg-foot-row .foot-note{flex:1;min-width:0;margin:0;}
+.dlg-foot-row .btn{flex:0 0 auto;}
 .wsjf-break{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--text-2);}
 .wsjf-break b{font-size:15px;color:var(--plum-fg);}
 .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;}
@@ -10063,7 +10106,7 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 .manager-search{width:100%;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;outline:none;}
 .manager-search:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);}
 .manager-search::placeholder{color:var(--text-3);}
-/* 成员负载抽屉：成员 → 项目 → 工作项 / 计时明细 逐层穿透 */
+/* 成员负载：名册卡片 → 成员工作台子页面（项目 / 工作项 / 计时明细） */
 .member-sheet{width:min(880px,94vw);}
 .member-sheet-id{display:flex;align-items:center;gap:12px;min-width:0;}
 .member-sheet-id h2{display:flex;align-items:center;gap:8px;}
@@ -10101,6 +10144,136 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 @media(max-width:680px){
   .member-sheet-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
   .member-days{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+/* —— 名册：概览、成员筛选、分组与卡片 —— */
+.wl-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.wl-summary-item{display:flex;flex-direction:column;gap:3px;min-width:0;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+.wl-summary-item>span{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-2);}
+.wl-summary-item>b{font-size:21px;line-height:27px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+.wl-summary-item>small{font-size:11.5px;color:var(--text-3);}
+.wl-summary-item.danger>b{color:var(--danger-fg);}
+.wl-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-2px 0 12px;}
+.wl-search{flex:1 1 240px;min-width:180px;height:30px;padding:0 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:12.5px;outline:none;}
+.wl-search:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);}
+.wl-search::placeholder{color:var(--text-3);}
+.wl-period{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-2px 0 12px;}
+.wl-period-label{font-size:12px;color:var(--text-2);}
+.wl-period-dates{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.wl-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.wl-chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;background:var(--surface);border:1px solid var(--border);border-radius:999px;color:var(--text-2);font-size:12.5px;cursor:pointer;transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);}
+.wl-chip:hover{background:var(--surface-hover);border-color:var(--border-strong);color:var(--text);}
+.wl-chip:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.wl-chip>b{font-size:11.5px;font-weight:650;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.wl-chip[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.wl-chip[aria-pressed="true"]>b{color:var(--primary-fg);}
+.wl-group{margin-bottom:18px;}
+.wl-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:0 2px 8px;margin-bottom:10px;border-bottom:1px solid var(--border);}
+.wl-group-head>b{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:650;color:var(--text);}
+.wl-group-head>span{min-width:0;font-size:12px;color:var(--text-3);text-align:right;}
+.wl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start;}
+.member-card{display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);cursor:pointer;transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);}
+.member-card:hover{border-color:var(--primary-border);box-shadow:var(--shadow-md);}
+.member-card:focus-within{border-color:var(--primary-border);}
+.member-card-head{display:flex;align-items:center;gap:10px;min-width:0;}
+.member-card-id{flex:1;min-width:0;}
+.member-card-id>b{display:block;font-size:14.5px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.member-card-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:11.5px;color:var(--text-3);}
+.member-status{display:inline-flex;align-items:center;flex:0 0 auto;height:22px;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;}
+.member-status.ok{background:var(--success-soft);color:var(--success-fg);}
+.member-status.hot{background:var(--warning-soft);color:var(--warning-fg);}
+.member-status.over{background:var(--danger-soft);color:var(--danger-fg);}
+.member-status.idle{background:var(--surface-sunken);color:var(--text-3);}
+.member-card-roles{display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-height:20px;}
+.member-card-roles .tag{font-size:11px;}
+.member-loadline{display:grid;grid-template-columns:auto minmax(90px,1fr);align-items:center;gap:4px 8px;font-size:11.5px;color:var(--text-3);}
+.member-loadline .manager-load{min-width:0;}
+.member-loadline .manager-load b{min-width:34px;}
+.member-loadline>span:last-child{grid-column:1/-1;}
+.member-card-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.member-stat{padding:7px 8px;background:var(--surface-sunken);border-radius:var(--r-md);text-align:center;min-width:0;}
+.member-stat>i{display:block;font-style:normal;font-size:11px;color:var(--text-3);}
+.member-stat>b{display:block;margin-top:2px;font-size:14.5px;font-weight:650;line-height:19px;color:var(--text);font-variant-numeric:tabular-nums;}
+.member-stat.danger{background:var(--danger-soft);}
+.member-stat.danger>b{color:var(--danger-fg);}
+.member-stat.warn{background:var(--warning-soft);}
+.member-stat.warn>b{color:var(--warning-fg);}
+.member-card-projects{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:22px;}
+.wl-proj-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 8px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:999px;font-size:11.5px;color:var(--text-2);}
+.wl-proj-chip>b{min-width:0;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wl-proj-chip>i{font-style:normal;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.wl-proj-chip.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.wl-proj-chip.on>i{color:var(--primary-fg);}
+.wl-proj-more{font-size:11.5px;color:var(--text-3);}
+.member-card-foot{display:flex;align-items:center;gap:10px;padding-top:8px;margin-top:auto;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-3);}
+.member-card-foot .member-link{margin-left:auto;font-size:12px;}
+.wl-more{display:flex;align-items:center;justify-content:center;padding:12px 0 4px;}
+.wl-more .btn{min-width:240px;}
+.wl-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:44px 16px;background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--r-lg);color:var(--text-3);font-size:13px;text-align:center;}
+.wl-week-who{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.wl-week-company{display:block;margin-top:2px;font-size:11.5px;color:var(--text-3);}
+/* —— 成员工作台子页面 —— */
+.member-page{display:flex;flex-direction:column;gap:14px;min-width:0;padding-bottom:24px;}
+.member-page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+.member-page-id{display:flex;align-items:center;gap:14px;min-width:0;}
+.member-page-id h2{display:flex;align-items:center;gap:8px;margin:0;font-size:18px;line-height:24px;font-weight:650;color:var(--text);}
+.member-page-meta{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-top:5px;font-size:12px;color:var(--text-3);}
+.member-page-head .member-card-roles{margin-top:6px;}
+.member-page-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.member-page .member-back{padding:2px 6px;border-radius:var(--r-xs);transition:background var(--dur-fast) var(--ease-out);}
+.member-page .member-back:hover{background:var(--surface-hover);text-decoration:none;}
+.member-state-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.member-state{padding:10px 8px;background:var(--surface-sunken);border-radius:var(--r-md);text-align:center;min-width:0;}
+.member-state>i{display:block;font-style:normal;font-size:11.5px;color:var(--text-3);}
+.member-state>b{display:block;margin-top:3px;font-size:16px;line-height:21px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+.member-state.danger{background:var(--danger-soft);}
+.member-state.danger>b{color:var(--danger-fg);}
+.member-state.warn{background:var(--warning-soft);}
+.member-state.warn>b{color:var(--warning-fg);}
+.member-state-note{margin:9px 0 0;font-size:11.5px;line-height:18px;color:var(--text-3);}
+.member-proj-row.on{background:var(--primary-soft);box-shadow:inset 3px 0 0 var(--primary);}
+.member-proj-row.on:hover{background:var(--primary-soft);}
+.member-work-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.member-task-seg button>b{margin-left:4px;font-size:11px;font-weight:650;opacity:.75;font-variant-numeric:tabular-nums;}
+.member-task-seg button[aria-pressed="true"]>b{opacity:1;}
+.member-work-tools .mini-select{min-width:150px;max-width:220px;}
+.member-pri{display:inline-flex;align-items:center;padding:1px 6px;border-radius:var(--r-xs);background:var(--surface-sunken);color:var(--text-2);font-size:11px;font-weight:600;white-space:nowrap;}
+.member-pri.p0{background:var(--p0-soft);color:var(--p0-fg);}
+.member-pri.p1{background:var(--p1-soft);color:var(--p1-fg);}
+.member-pri.p2{background:var(--p2-soft);color:var(--p2-fg);}
+.member-pri.p3{background:var(--p3-soft);color:var(--p3-fg);}
+.member-due{font-size:11.5px;font-weight:600;white-space:nowrap;}
+.member-due.over{color:var(--danger-fg);}
+.member-due.today{color:var(--warning-fg);}
+.member-due.soon{color:var(--text-2);}
+.member-day.on{border-color:var(--primary-border);background:var(--primary-soft);}
+.member-day.is-today span::after{content:" · 今天";color:var(--primary-fg);}
+.member-more{display:flex;align-items:center;justify-content:center;padding:10px 0 2px;}
+.member-more .btn{min-width:220px;}
+.member-log-tbl .manager-task-title{max-width:420px;}
+@media(max-width:1279px){
+  .wl-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .wl-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));}
+}
+@media(max-width:760px){
+  .wl-filters{align-items:stretch;}
+  .wl-search{flex:1 1 100%;height:36px;font-size:16px;}
+  .wl-filters label{flex:1 1 100%;display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;gap:6px;}
+  .wl-filters select{width:100%;min-width:0;}
+  .wl-period{align-items:stretch;}
+  .wl-period .seg{flex:1 1 100%;display:flex;}
+  .wl-period .seg button{flex:1;}
+  .wl-period-dates{flex:1 1 100%;}
+  .wl-grid{grid-template-columns:1fr;}
+  .wl-group-head{flex-direction:column;align-items:flex-start;gap:2px;}
+  .wl-group-head>span{text-align:left;}
+  .member-card-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .member-page-head{padding:14px;}
+  .member-page-id{align-items:flex-start;}
+  .member-page-id h2{flex-wrap:wrap;font-size:16px;}
+  .member-state-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .member-work-tools{align-items:stretch;}
+  .member-work-tools .mini-select{min-width:0;max-width:none;width:100%;height:36px;}
+  .member-more .btn,.wl-more .btn{width:100%;min-width:0;}
 }
 .manager-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .manager-chart{display:block;width:100%;height:220px;}
@@ -13725,10 +13898,12 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                 <label for="dAccept">验收标准</label>
                 <textarea id="dAccept" maxlength="2000" placeholder="做到什么程度算完成…"></textarea>
               </div>
-              <div class="form-grid span2">
+              <div class="form-sec span2">归类</div>
+              <div class="form-grid three span2">
                 <div class="field">
                   <label for="dSource">需求来源</label>
-                  <input id="dSource" type="text" maxlength="40" placeholder="例如：财务 · 刘" autocomplete="off" />
+                  <input id="dSource" type="text" maxlength="40" placeholder="例如：财务 · 刘" list="dlDemandSource" autocomplete="off" />
+                  <datalist id="dlDemandSource"></datalist>
                 </div>
                 <div class="field">
                   <label for="dKind">需求类型</label>
@@ -13739,12 +13914,13 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                     <option value="其他">其他</option>
                   </select>
                 </div>
-              </div>
-              <div class="form-grid three span2">
                 <div class="field">
                   <label for="dCategory">模块</label>
                   <select id="dCategory"></select>
                 </div>
+              </div>
+              <div class="form-sec span2">优先级与交付</div>
+              <div class="form-grid span2">
                 <div class="field">
                   <label>优先级</label>
                   <div class="seg" id="segDemandPri">
@@ -13755,24 +13931,27 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                   </div>
                 </div>
                 <div class="field">
-                  <label for="dExpect">期望交付日期</label>
+                  <label for="dExpect">期望交付日期 <small class="tc-optional">选填</small></label>
                   <input id="dExpect" type="date" />
                 </div>
               </div>
-              <div class="field span2">
-                <label>WSJF 评分（可选）</label>
-                <div class="wsjf-grid">
-                  <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" placeholder="0-10" /></span>
-                  <span class="wsjf-item"><label for="dWsjfU">紧迫程度</label><input id="dWsjfU" type="number" min="0" max="10" placeholder="0-10" /></span>
-                  <span class="wsjf-item"><label for="dWsjfR">风险缓解</label><input id="dWsjfR" type="number" min="0" max="10" placeholder="0-10" /></span>
-                  <span class="wsjf-item"><label for="dWsjfE">工作量</label><input id="dWsjfE" type="number" min="1" max="10" placeholder="1-10" /></span>
+              <details class="wsjf-more span2" id="wsjfMore">
+                <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>WSJF 评分<span class="wsjf-more-meta" id="wsjfMeta">未评分 · 选填</span></summary>
+                <div class="wsjf-more-body">
+                  <div class="wsjf-grid">
+                    <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" placeholder="0-10" /></span>
+                    <span class="wsjf-item"><label for="dWsjfU">紧迫程度</label><input id="dWsjfU" type="number" min="0" max="10" placeholder="0-10" /></span>
+                    <span class="wsjf-item"><label for="dWsjfR">风险缓解</label><input id="dWsjfR" type="number" min="0" max="10" placeholder="0-10" /></span>
+                    <span class="wsjf-item"><label for="dWsjfE">工作量</label><input id="dWsjfE" type="number" min="1" max="10" placeholder="1-10" /></span>
+                  </div>
+                  <span class="wsjf-live" id="wsjfLive" hidden></span>
+                  <span class="hint">可不填：四项都填才自动计分 WSJF =（业务 + 紧迫 + 风险）÷ 工作量；留空不评分，列表默认按优先级排序</span>
                 </div>
-                <span class="hint">可不填：四项都填才自动计分 WSJF =（业务 + 紧迫 + 风险）÷ 工作量；留空不评分，列表默认按优先级排序</span>
-              </div>
-              <div class="row row-gap span2">
+              </details>
+              <div class="dlg-foot-row span2">
+                <p class="foot-note" id="demandFootNote">新需求进入「待评审」；仅空间主可通过、拒绝或排期</p>
                 <button class="btn primary" type="button" id="btnSaveDemand">提交评审</button>
               </div>
-              <p class="foot-note span2">新需求进入「待评审」；仅空间主可通过 / 拒绝 / 排期</p>
             </div>
           </div>
         </div></div></div>
@@ -16364,6 +16543,88 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
 
   var tasks = backlog.concat(doing, done);
 
+  /* ---------------- 成员负载（名册 + 成员工作台） ---------------- */
+  var workload = (function () {
+    var base = new Date(); base.setHours(0, 0, 0, 0);
+    var monday = new Date(base); monday.setDate(base.getDate() - ((base.getDay() + 6) % 7));
+    var lastMonday = new Date(monday); lastMonday.setDate(monday.getDate() - 7);
+    var todayIdx = (base.getDay() + 6) % 7;
+    function reqName(id) { return id === "R1" ? "流程引擎" : (id === "R2" ? "结算改造" : null); }
+    function taskOf(t) {
+      return { id: t.id, title: t.title, priority: t.priority, boardColumn: t.boardColumn,
+        processingRule: t.boardColumn === "backlog" ? "backlog" : "normal",
+        dueDate: t.dueDate, reqId: t.reqId, reqName: reqName(t.reqId),
+        estimateMinutes: t.estimateMinutes, totalMinutes: t.totalMinutes || 0,
+        blocked: !!t.blocked, itemType: t.isMilestone ? "milestone" : "task", updatedAt: t.updatedAt };
+    }
+    var openTasks = tasks.filter(function (t) { return t.boardColumn !== "done"; });
+    function ownedBy(uid) { return openTasks.filter(function (t) { return t.ownerUserId === uid; }); }
+    function dayMinutes(pairs) {
+      var out = [0, 0, 0, 0, 0, 0, 0];
+      pairs.forEach(function (p) { out[p[0]] = p[1]; });
+      return out;
+    }
+    function log(date, taskId, title, reqId, minutes, origin) {
+      return { date: date, taskId: taskId, title: title, reqId: reqId, reqName: reqName(reqId),
+        minutes: minutes, origin: origin || "timer" };
+    }
+    var lastLogDate = iso(new Date(lastMonday.getTime() + 2 * 86400000));
+    var members = [
+      { key: "U1", name: "我", companyName: "北京总部", jobTitle: "后端开发", roleTitles: ["后端开发"], secondaryRoleTitles: ["技术负责人"],
+        remainingMinutes: 3600, workdays: 5, capacityMinutes: 2400, loadPct: 150, overloaded: true,
+        weekMinutes: 390, lastWeekMinutes: 300,
+        dayMinutes: dayMinutes(todayIdx > 0 ? [[todayIdx - 1, 210], [todayIdx, 180]] : [[todayIdx, 390]]),
+        projects: [
+          { reqId: "R1", name: "流程引擎", remainingMinutes: 1800, taskCount: 4, roleTitles: ["后端开发"] },
+          { reqId: "", name: "未归类", remainingMinutes: 1800, taskCount: 9, roleTitles: ["后端开发"] }
+        ],
+        tasks: ownedBy("U1").map(taskOf),
+        weekLogs: [
+          log(todayIdx > 0 ? iso(new Date(monday.getTime() + (todayIdx - 1) * 86400000)) : shift(0), "K1", "重构权限校验中间件", "R1", 210),
+          log(shift(0), "K1", "重构权限校验中间件", "R1", 180)
+        ],
+        lastWeekLogs: [log(lastLogDate, "K2", "导出 CSV 补工时列", null, 300)] },
+      { key: "U2", name: "陈工", companyName: "北京总部", jobTitle: "后端开发", roleTitles: ["后端开发"], secondaryRoleTitles: [],
+        remainingMinutes: 1140, workdays: 5, capacityMinutes: 2400, loadPct: 48, overloaded: false,
+        weekMinutes: 240, lastWeekMinutes: 420,
+        dayMinutes: dayMinutes([[Math.max(0, todayIdx - 1), 240]]),
+        projects: [
+          { reqId: "R2", name: "结算改造", remainingMinutes: 900, taskCount: 1, roleTitles: ["后端开发"] },
+          { reqId: "", name: "未归类", remainingMinutes: 240, taskCount: 1, roleTitles: ["后端开发"] }
+        ],
+        tasks: ownedBy("U2").map(taskOf),
+        weekLogs: [log(shift(0), "G1", "结算批处理拆分（跨月）", "R2", 240)],
+        lastWeekLogs: [log(lastLogDate, "G1", "结算批处理拆分（跨月）", "R2", 420)] },
+      { key: "U3", name: "李雷", companyName: "上海研发", jobTitle: "测试", roleTitles: ["测试"], secondaryRoleTitles: ["质量保障"],
+        remainingMinutes: 600, workdays: 3, capacityMinutes: 1440, loadPct: 42, overloaded: false,
+        weekMinutes: 150, lastWeekMinutes: 90,
+        dayMinutes: dayMinutes([[todayIdx, 150]]),
+        projects: [{ reqId: "R2", name: "结算改造", remainingMinutes: 600, taskCount: 1, roleTitles: ["测试"] }],
+        tasks: ownedBy("U3").map(taskOf),
+        weekLogs: [log(shift(0), "G2", "对账差异回溯（阻塞+逾期）", "R2", 150)],
+        lastWeekLogs: [] },
+      { key: "U4", name: "王芳", companyName: "上海研发", jobTitle: "产品经理", roleTitles: ["产品经理"], secondaryRoleTitles: [],
+        remainingMinutes: 0, workdays: 0, capacityMinutes: 0, loadPct: 0, overloaded: false,
+        weekMinutes: 210, lastWeekMinutes: 180,
+        dayMinutes: dayMinutes(todayIdx > 0 ? [[todayIdx - 1, 120], [todayIdx, 90]] : [[todayIdx, 210]]),
+        projects: [{ reqId: "R1", name: "流程引擎", remainingMinutes: 0, taskCount: 0, roleTitles: ["产品经理"] }],
+        tasks: [],
+        weekLogs: [
+          log(todayIdx > 0 ? iso(new Date(monday.getTime() + (todayIdx - 1) * 86400000)) : shift(0), null, "权限矩阵接口联调", "R1", 120, "manual"),
+          log(shift(0), null, "权限矩阵接口联调", "R1", 90, "manual")
+        ],
+        lastWeekLogs: [log(lastLogDate, null, "需求澄清会", "R1", 180)] }
+    ];
+    return {
+      today: shift(0), capacityMinutesPerDay: 480, workdays: 5,
+      weekStart: iso(monday), lastWeekStart: iso(lastMonday),
+      projects: [{ id: "R1", name: "流程引擎" }, { id: "R2", name: "结算改造" }],
+      members: members,
+      filterOptions: { roleTitles: ["后端开发", "测试", "产品经理"], companyNames: ["北京总部", "上海研发"] },
+      scope: { reqId: "", roleTitle: "", companyName: "" }
+    };
+  })();
+
   /* /api/tasks/list 的筛选在预览里也照做：筛选/分组/清除的界面效果才可验证 */
   function mockTaskList(url) {
     var p = new URLSearchParams(url.split("?")[1] || "");
@@ -16613,6 +16874,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
       ],
       total: 2, hasMore: false
     },
+    "/api/manager/workload": workload,
     "/api/views": [{ id: "V1", name: "我的 P0", params: JSON.stringify({ pris: ["P0"] }) }],
     /* 设置页「看板列 / 分类」用：之前缺这两条路由，预览会显示"加载失败" */
     "/api/columns": [
@@ -16949,6 +17211,54 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
   };
   var ganttBaselineAt = ts(-2, 18, 0);
 
+  /* 区间工时演示数据：只在本周/上周之外的区间里额外出现，便于看出「近30天 / 本月」差异 */
+  var workloadExtraLogs = {
+    U1: [{ date: shift(-25), minutes: 240 }, { date: shift(-11), minutes: 150 }],
+    U2: [{ date: shift(-18), minutes: 90 }],
+    U3: [{ date: shift(-11), minutes: 45 }],
+    U4: [{ date: shift(-18), minutes: 60 }]
+  };
+  function isoAdd(isoDate, days) {
+    var p = isoDate.split("-");
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    d.setDate(d.getDate() + days);
+    return iso(d);
+  }
+  function workdaysBetween(from, to) {
+    var count = 0, p = from.split("-");
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    var end = new Date(Number(to.split("-")[0]), Number(to.split("-")[1]) - 1, Number(to.split("-")[2]));
+    while (d <= end) {
+      var dow = d.getDay();
+      if (dow !== 0 && dow !== 6) count++;
+      d.setDate(d.getDate() + 1);
+    }
+    return count;
+  }
+  function mockWorkload(u) {
+    var fm = /[?&]from=(\d{4}-\d{2}-\d{2})/.exec(u), tm = /[?&]to=(\d{4}-\d{2}-\d{2})/.exec(u);
+    if (!fm || !tm) return workload;
+    var from = fm[1], to = tm[1];
+    if (from > to) { var swap = from; from = to; to = swap; }
+    /* 与后端一致：超过 92 天从终点往前截断 */
+    if (isoAdd(to, -91) > from) from = isoAdd(to, -91);
+    var out = JSON.parse(JSON.stringify(workload));
+    out.rangeFrom = from;
+    out.rangeTo = to;
+    out.rangeWorkdays = workdaysBetween(from, to);
+    out.members.forEach(function (m) {
+      var minutes = 0;
+      (m.weekLogs || []).concat(m.lastWeekLogs || []).forEach(function (l) {
+        if (l.date >= from && l.date <= to) minutes += Number(l.minutes) || 0;
+      });
+      (workloadExtraLogs[m.key] || []).forEach(function (l) {
+        if (l.date >= from && l.date <= to) minutes += Number(l.minutes) || 0;
+      });
+      m.rangeMinutes = minutes;
+    });
+    return out;
+  }
+
   /* 任务清单分页：明细按 offset/limit 切页，统计字段按全月口径汇总（与后端一致） */
   function mockCompletions(u) {
     var off = Number((/[?&]offset=(\d+)/.exec(u) || [])[1] || 0);
@@ -17092,6 +17402,8 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
     } else if (clean === "/api/tasks/list") {
       /* 列表/甘特/未排期共用：按查询参数筛选，并保持 {items,total} 结构 */
       data = mockTaskList(u);
+    } else if (clean === "/api/manager/workload") {
+      data = mockWorkload(u);
     } else if (/^\/api\/projects\/[A-Za-z0-9_-]+\/release-policy$/.test(clean)) {
       /* 策略即时保存：写回内存，重新打开项目也保持刚才的选择 */
       if (method === "PUT") {
@@ -17208,6 +17520,17 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
       var cdel = clean.split("/").pop();
       routes["/api/categories"] = routes["/api/categories"].filter(function (c) { return c.id !== cdel; });
       data = {};
+    } else if (clean === "/api/versions/task-options") {
+      /* 工作项抽屉的「所属史诗」候选：生产由后端按项目过滤，这里给两条演示史诗 */
+      var optM = /[?&]reqId=([^&]*)/.exec(u);
+      var optReq = optM ? decodeURIComponent(optM[1]) : "";
+      var epicRows = [
+        { id: "E1", title: "权限体系重构（史诗）", itemType: "epic", reqId: "R1", epicId: null },
+        { id: "E2", title: "结算链路升级（史诗）", itemType: "epic", reqId: "R2", epicId: null }
+      ];
+      data = epicRows.concat(tasks.map(function (t) {
+        return { id: t.id, title: t.title, itemType: t.itemType || "task", epicId: t.epicId || null, reqId: t.reqId || null };
+      })).filter(function (t) { return !optReq || t.reqId === optReq; });
     } else if (clean === "/api/completions") {
       data = mockCompletions(u);
     } else if (clean === "/api/gantt") {
@@ -17691,6 +18014,14 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
           <label class="ctx-label" for="iCol" id="ctxColLabel">新建到</label>
           <select id="iCol" aria-label="新建到哪一列"></select>
         </div>
+        <!-- 史诗归属：新建时就要能直接挂，不放进「关联」页签 -->
+        <div class="ctx-item" id="ctxEpicItem">
+          <div class="ctx-label">
+            <label for="iEpic">所属史诗</label>
+            <button type="button" class="label-help" id="iEpicHelp" aria-label="查看史诗（Epic）的说明" title="史诗（Epic）是什么"></button>
+          </div>
+          <select id="iEpic" title="先选项目，候选只列出该项目的史诗"></select>
+        </div>
         <!-- 模块挂项目：常驻在归属条，随项目切换重算候选 -->
         <div class="ctx-item ctx-item-wide">
           <div class="ctx-label">模块</div>
@@ -18132,18 +18463,10 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
             <details class="assoc-more" id="assocMore">
               <summary>
                 <span>更多关联</span>
-                <span class="foot-note" id="assocMoreSummary">史诗 / 分支 / 文档</span>
+                <span class="foot-note" id="assocMoreSummary">分支 / 文档</span>
                 <span class="caret"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
               </summary>
               <div class="assoc-more-body">
-                <div class="field">
-                  <div class="field-label">
-                    <label for="iEpic">所属史诗</label>
-                    <button type="button" class="label-help" id="iEpicHelp" aria-label="查看史诗（Epic）的说明" title="史诗（Epic）是什么"></button>
-                  </div>
-                  <select id="iEpic"></select>
-                  <span class="hint" id="iEpicHint">先选项目，再挂到该项目的史诗下。</span>
-                </div>
                 <div class="field">
                   <div class="field-label">
                     <label for="iBranch">所属分支</label>
@@ -26316,6 +26639,15 @@ function syncTypeButtons(){
   group.querySelectorAll("[data-type]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.type === type ? "true" : "false");
   });
+  syncEpicField();
+}
+/* 史诗自身不能再挂史诗：隐藏归属条里的「所属史诗」并清空残留值 */
+function syncEpicField(){
+  var box = $("ctxEpicItem"), sel = $("iEpic");
+  if(!box) return;
+  var isEpic = !!(iItemType && iItemType.value === "epic");
+  box.hidden = isEpic;
+  if(isEpic && sel) sel.value = "";
 }
 function syncSeverityButtons(){
   var grid = $("sevGrid");
@@ -26690,10 +27022,9 @@ function syncAssocMore(){
   var sum = $("assocMoreSummary");
   if(!sum) return;
   var names = [];
-  if(assocText("iEpic")) names.push("史诗");
   if(assocText("iBranch")) names.push("分支");
   if(assocText("iReqDoc")) names.push("文档");
-  sum.textContent = names.length ? "已设 " + names.join("、") : "史诗 / 分支 / 文档";
+  sum.textContent = names.length ? "已设 " + names.join("、") : "分支 / 文档";
 }
 /* 只在抽屉读取需求目标，不对看板/列表逐卡请求；缓存随抽屉重开失效。 */
 var demandTargetCache = {}, demandTargetPending = {};
@@ -29353,6 +29684,7 @@ taskForm.addEventListener("submit", function(e){
       return vs && vs.getAttribute("data-ready") ? selectedVersionIds(vs) : null;
     })(),
     epicId: (function(){
+      if(itemTypeValue === "epic") return null;
       var es = $("iEpic");
       if(es && es.getAttribute("data-ready")) return es.value || "";
       return current ? (current.epicId || null) : null;
@@ -34822,6 +35154,7 @@ var NOTIFY_ICON = {
   task_updated: "edit",
   daily_digest: "clock",
   demand_status: "list",
+  demand_watch: "eye",
   doc_changed: "projects",
   branch_status: "branch",
   version_released: "tag",
@@ -39369,7 +39702,7 @@ function syncViewHash(name){
   var h = "#/" + name;
   if(window.location.hash === h) return;
   /* 分支、工作项列、需求主状态工作页、版本详情与文档深链：保留查询参数，避免 showView 抹掉下钻位置 */
-  if((name === "branches" || name === "workcolumn" || name === "demands" || name === "version" || name === "release" || name === "requirements" || name === "dochistory")
+  if((name === "branches" || name === "workcolumn" || name === "demands" || name === "version" || name === "release" || name === "requirements" || name === "dochistory" || name === "workload")
       && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }
@@ -39411,6 +39744,10 @@ window.addEventListener("popstate", function(){
     /* 文档历史：后退/前进换版本或视图，交给子页对齐 */
     var rhMod = viewModule("requirements");
     if(rhMod && rhMod.refreshDocHistoryFromHash) rhMod.refreshDocHistoryFromHash();
+  }else if(n === "workload"){
+    /* 成员负载：后退/前进在名册与成员工作台之间切换，交给子页对齐 */
+    var wlMod = viewModule("workload");
+    if(wlMod && wlMod.refreshFromHash) wlMod.refreshFromHash();
   }else if(n === "demands"){
     enterDemandRoute();
   }
@@ -47368,6 +47705,7 @@ __NS["views/demands.js"] = (function(){
 
 
 
+
 var listPrefs = __NS["core/list-preferences.js"];
 
 
@@ -47466,6 +47804,8 @@ var versionNames = {};       /* 列表模式：全空间 versionId → 名称 */
 var editingDemandId = null;
 var planDemandId = null;
 var demandDetailLayer = null;  /* 当前打开的需求详情，供动作成功后一并关闭 */
+var demandCommentReplyTo = null;   /* 当前回复的顶层评论 ID（一层回复） */
+var demandCommentMention = null;   /* 详情内发表评论的 @ 提及选择器 */
 var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null;
 var planDemandRevision = null, planAction = "plan";
 var formPri = "P2";
@@ -47487,6 +47827,8 @@ function plannedText(d){
 }
 function denyDemandReadOnly(){ toast("你对该项目只有查看权限", "warn"); }
 function writableReqs(){ return rt.reqList.filter(function(r){ return canEditReq(r.id); }); }
+/* 看板范围名：具体项目用项目名，全部项目模式统一展示「全部项目」 */
+function demScopeName(){ return rt.demandReqId ? reqNameById(rt.demandReqId) : "全部项目"; }
 function statusName(st){
   if(st === "rej") return "已关闭 · 评审不通过";
   if(st === "canceled" || st === "cancelled") return "已关闭 · 中途取消";
@@ -47538,11 +47880,10 @@ function wsjfText(d){
 function syncReqSel(){
   if(!demandReq) return;
   var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.demandReqId; });
-  demandReq.innerHTML = list.map(function(r){
+  demandReq.innerHTML = '<option value="">全部项目</option>' + list.map(function(r){
     return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
   }).join("");
-  if(!rt.demandReqId && list.length) rt.demandReqId = list[0].id;
-  if(rt.demandReqId) demandReq.value = rt.demandReqId;
+  demandReq.value = rt.demandReqId || "";
 }
 var demandLoadSeq = 0;
 function readDemandRoute(){
@@ -47618,7 +47959,7 @@ function loadDemands(opts){
   if(demWork.active){ loadDemandWorkpage(); return; }
   if(mode === "gantt"){ loadDemandGantt(silent); return; }
   if(mode === "table"){ loadAllDemands(silent); return; }
-  if(!rt.demandReqId || !rt.reqList.length){
+  if(!rt.reqList.length){
     demandBody.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
       text:"先在「项目」里创建项目，需求池按项目收纳需求。"
@@ -47628,8 +47969,9 @@ function loadDemands(opts){
   }
   var reqId = rt.demandReqId;
   var wsId = rt.currentWs && rt.currentWs.id;
-  if(demandsMeta) demandsMeta.textContent = reqNameById(rt.demandReqId);
+  if(demandsMeta) demandsMeta.textContent = demScopeName();
   if(!silent) demandBody.innerHTML = UI.skeletonRows(2);
+  /* 「全部项目」没有版本清单可拉：卡片版本名由列表行自带，排期对话框按需求所属项目现查 */
   Promise.all([
     API.get("/api/demands/board", {
       reqId: reqId, limit: DEMAND_BOARD_PAGE,
@@ -47639,7 +47981,7 @@ function loadDemands(opts){
       cats: demSmart.cats.join(","),
       deliveryStage: demBoardStage === "all" ? null : demBoardStage
     }),
-    API.get("/api/versions", { reqId: reqId })
+    reqId ? API.get("/api/versions", { reqId: reqId }) : Promise.resolve([])
   ]).then(function(rs){
     if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
@@ -47960,7 +48302,7 @@ function syncModeUI(mode){
   if(bc) bc.hidden = demWork.active || mode !== "table";
   /* 工作页自带筛选与分组，不叠加看板/列表工具条 */
   if(demSmartBar) demSmartBar.hidden = demWork.active || mode === "board";
-  if(demBoardBar) demBoardBar.hidden = demWork.active || mode !== "board" || !rt.demandReqId;
+  if(demBoardBar) demBoardBar.hidden = demWork.active || mode !== "board";
   if(demandGanttBar) demandGanttBar.hidden = demWork.active || mode !== "gantt";
   if(demandGanttHelp) demandGanttHelp.hidden = demWork.active || mode !== "gantt";
   if(demandsPage){
@@ -47970,9 +48312,11 @@ function syncModeUI(mode){
     if(vw) vw.classList.toggle("is-dem-gantt", !demWork.active && mode === "gantt");
   }
   if(demandBody) demandBody.classList.toggle("demg-body", !demWork.active && mode === "gantt");
-  /* 只读项目不显示「提需求」；列表/甘特为全空间，只要有一个可写项目即可 */
+  /* 只读项目不显示「提需求」；列表/甘特为全空间，只要有一个可写项目即可；
+     看板「全部项目」同全空间口径，聚焦到只读项目时维持隐藏 */
   var bn = $("btnDemandNew");
-  if(bn) bn.style.display = (!demWork.active && writableReqs().length && (mode !== "board" || canEditReq(rt.demandReqId))) ? "" : "none";
+  if(bn) bn.style.display = (!demWork.active && writableReqs().length
+    && (mode !== "board" || (!rt.demandReqId || canEditReq(rt.demandReqId)))) ? "" : "none";
   syncDemGanttControls();
   syncDemBoard();
 }
@@ -48012,7 +48356,7 @@ function render(){
   if(mode === "table"){ renderDemandTable(); return; }
   if(demandsMeta){
     var mt = demBoardMatchText();
-    demandsMeta.textContent = reqNameById(rt.demandReqId) + (mt ? (" · " + mt) : "");
+    demandsMeta.textContent = demScopeName() + (mt ? (" · " + mt) : "");
   }
   if(!demands.length && !versions.length && !demandBoard){
     demandBody.innerHTML = UI.emptyState({
@@ -48036,11 +48380,41 @@ function render(){
       + (status === "plan" ? demandBoardStageFilterHTML() : "")
       + '<span class="bkl-count">' + (filtered ? (col.matched || 0) + " / " + ((demandBoard.counts || {}).plan || 0) : (col.matched || 0)) + '</span></div>'
       + (status === "plan" ? demandBoardDistHTML() : "")
-      + (items.map(cardHTML).join("") || '<div class="foot-note demb-col-empty">'
+      + (demBoardCardsHTML(items) || '<div class="foot-note demb-col-empty">'
         + (filtered ? '该阶段暂无需求<br><button type="button" class="link-btn" data-demb-stage-clear>显示全部阶段</button>' : (demBoardHasCond() ? "没有匹配需求" : "暂无需求")) + '</div>')
       + more
       + '</div>';
   }).join("") + '</div>';
+}
+/* 全部项目模式下按项目分泳道，泳道头即项目名，卡片不再重复；聚焦项目时直接平铺 */
+function demBoardCardsHTML(items){
+  if(!items.length) return "";
+  if(rt.demandReqId) return items.map(cardHTML).join("");
+  return demBoardLanes(items).map(function(g){
+    return '<div class="bkl-lane"><div class="bkl-lane-head"><span class="bkl-lane-name">' + esc(g.label) + '</span>'
+      + '<span class="bkl-lane-count">' + g.rows.length + ' 条</span></div>'
+      + g.rows.map(function(d){ return cardHTML(d); }).join("") + '</div>';
+  }).join("");
+}
+/* 泳道顺序跟随项目选择器（空间 sort_order），不在 reqList 的项目兜底排最后 */
+function demBoardLanes(items){
+  var groups = {}, order = [];
+  items.forEach(function(d){
+    var key = d.reqId || "__none";
+    if(!groups[key]){ groups[key] = []; order.push(key); }
+    groups[key].push(d);
+  });
+  var rank = {};
+  rt.reqList.forEach(function(r, i){ rank[r.id] = i; });
+  order.sort(function(a, b){
+    var ai = rank[a] === undefined ? 9999 : rank[a], bi = rank[b] === undefined ? 9999 : rank[b];
+    if(ai !== bi) return ai - bi;
+    return demBoardLaneLabel(a).localeCompare(demBoardLaneLabel(b), "zh-CN");
+  });
+  return order.map(function(k){ return { key:k, label:demBoardLaneLabel(k), rows:groups[k] }; });
+}
+function demBoardLaneLabel(key){
+  return key === "__none" ? "未归类" : (reqNameById(key) || "未命名项目");
 }
 /* 行内只保留当前状态的主操作，其余动作收进“更多”，删除仍走危险色与确认 */
 function demandMenuItems(d){
@@ -48922,7 +49296,7 @@ function demViewRows(){
 function demFilterCount(){
   return demSmart.pris.length + demSmart.kinds.length + demSmart.cats.length + demSmart.reqs.length + (demSmart.q ? 1 : 0);
 }
-/* ---------- 看板紧凑搜索/筛选（范围固定为当前项目，条件与列表共用） ---------- */
+/* ---------- 看板紧凑搜索/筛选（聚焦项目搜该项目，「全部项目」搜整个空间；条件与列表共用） ---------- */
 function demBoardFilterCount(){
   return demSmart.pris.length + demSmart.kinds.length + demSmart.cats.length;
 }
@@ -48938,8 +49312,11 @@ function demBoardMatchText(){
 function syncDemBoard(){
   if(!demBoardBar) return;
   var mode = listPrefs.viewMode("demand-pool");
-  demBoardBar.hidden = demWork.active || mode !== "board" || !rt.demandReqId;
-  if(demBoardInput && demBoardInput.value !== demSmart.q) demBoardInput.value = demSmart.q;
+  demBoardBar.hidden = demWork.active || mode !== "board";
+  if(demBoardInput){
+    demBoardInput.placeholder = rt.demandReqId ? "搜索本项目需求…" : "搜索全部项目需求…";
+    if(demBoardInput.value !== demSmart.q) demBoardInput.value = demSmart.q;
+  }
   var fc = demBoardBar.querySelector("[data-demb-fcount]");
   if(fc){ var n = demBoardFilterCount(); fc.hidden = n === 0; fc.textContent = n; }
   var clr = demBoardBar.querySelector("[data-demb-clear]");
@@ -48947,7 +49324,7 @@ function syncDemBoard(){
   var mt = demBoardBar.querySelector("[data-demb-match]");
   if(mt){
     var text = demBoardMatchText();
-    mt.textContent = (text ? text + " · " : "") + "仅当前项目";
+    mt.textContent = (text ? text + " · " : "") + (rt.demandReqId ? "仅当前项目" : "全部项目");
   }
 }
 function renderDemTabs(){
@@ -49865,6 +50242,27 @@ function syncPriSeg(){
     b.setAttribute("aria-pressed", code === formPri);
   });
 }
+/* WSJF 就地计分：截断口径与保存端一致（前三项 0-10、工作量 1-10）；
+   四项齐全才显示得分，摘要行同步示值，留空回落「未评分」 */
+function syncWsjfLive(){
+  var vals = [dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value].map(function(v){
+    return String(v == null ? "" : v).trim();
+  });
+  var complete = vals.every(function(v){ return v !== ""; });
+  var score = null;
+  if(complete){
+    var nums = vals.map(function(v, i){
+      return Math.max(i === 3 ? 1 : 0, Math.min(10, Number(v) || 0));
+    });
+    score = Math.round((nums[0] + nums[1] + nums[2]) * 10 / nums[3]) / 10;
+  }
+  var live = $("wsjfLive"), meta = $("wsjfMeta");
+  if(live){
+    live.hidden = score == null;
+    if(score != null) live.textContent = "四项齐全：WSJF = " + score;
+  }
+  if(meta) meta.textContent = score == null ? "未评分 · 选填" : "已评 " + score;
+}
 function findDemand(id){
   for(var i = 0; i < demands.length; i++) if(demands[i].id === id) return demands[i];
   return null;
@@ -49925,11 +50323,22 @@ function openDemandDialog(d){
   dReq.innerHTML = opts.map(function(r){
     return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
   }).join("");
-  dReq.value = d ? d.reqId : (canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
+  dReq.value = d ? d.reqId : (rt.demandReqId && canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
   dReq.disabled = !!d;
   dTitle.value = d ? d.title : "";
   dDesc.value = d ? (d.description || "") : "";
   dAccept.value = d ? (d.acceptText || "") : "";
+  /* 来源联想：候选来自当前已加载需求的来源原值，只提示不代入 */
+  var dlSource = $("dlDemandSource");
+  if(dlSource){
+    var seen = {};
+    dlSource.innerHTML = demands.reduce(function(html, x){
+      var s = (x.source || "").trim();
+      if(!s || seen[s]) return html;
+      seen[s] = 1;
+      return html + '<option value="' + esc(s) + '"></option>';
+    }, "");
+  }
   dSource.value = d ? (d.source || "") : "";
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
   /* 模块按所选项目过滤：候选只列该项目下的模块 */
@@ -49940,9 +50349,23 @@ function openDemandDialog(d){
   dWsjfU.value = d && d.wsjfUrgency != null ? d.wsjfUrgency : "";
   dWsjfR.value = d && d.wsjfRisk != null ? d.wsjfRisk : "";
   dWsjfE.value = d && d.wsjfEffort != null ? d.wsjfEffort : "";
+  syncWsjfLive();
   fDemandTitle.classList.remove("invalid");
   demandFormTitle.textContent = d ? "编辑需求" : "提需求";
   btnSaveDemand.textContent = d ? "保存" : "提交评审";
+  /* 底部提示随模式切换：编辑态不说「新需求进入待评审」；已流转锁定态由 demandLockNote 说明，这里隐藏 */
+  var footNote = $("demandFootNote");
+  if(footNote){
+    if(!d){
+      footNote.textContent = "新需求进入「待评审」；仅空间主可通过、拒绝或排期";
+      footNote.hidden = false;
+    }else if(d.status === "review"){
+      footNote.textContent = "编辑保存不改变流转状态";
+      footNote.hidden = false;
+    }else{
+      footNote.hidden = true;
+    }
+  }
   btnSaveDemand.disabled = false;
   demandFormSeq++;
   syncPriSeg();
@@ -50007,7 +50430,8 @@ function saveDemand(){
     if(seq === demandFormSeq){
       closeDemandDialog();
       if(wasEdit) closeDemandDetailIfOpen();
-      if(body.reqId !== rt.demandReqId){
+      /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围 */
+      if(rt.demandReqId && body.reqId !== rt.demandReqId){
         rt.demandReqId = body.reqId;
         if(demandReq) demandReq.value = body.reqId;
       }
@@ -50457,6 +50881,126 @@ function loadDemandDocs(layer, id, reqId, writable){
     }
   }).catch(function(ex){
     if(layer.isConnected) box.innerHTML = '<div class="attach-empty">' + esc(ex.message || "关联文档加载失败") + '</div>';
+  });
+}
+
+/* ---------- 需求评论：一层回复、解决、@提及、转工作项 ---------- */
+
+function demandCommentThreadHTML(c){
+  var html = demandCommentItemHTML(c, false);
+  if(c.replies && c.replies.length){
+    html += '<div class="reqdoc-comment-replies">';
+    c.replies.forEach(function(r){ html += demandCommentItemHTML(r, true); });
+    html += '</div>';
+  }
+  return html;
+}
+
+function demandCommentItemHTML(c, isReply){
+  var resolvedBadge = c.resolved ? '<span class="reqdoc-resolved-badge">已解决</span>' : '';
+  var taskLink = c.taskId
+    ? '<a class="reqdoc-comment-tasklink" href="#" data-open-task="' + esc(c.taskId) + '">已转工作项</a>'
+    : '';
+  var actions = '';
+  if(c.deletable){
+    actions = '<div class="reqdoc-comment-actions-r">';
+    if(!isReply) actions += '<button class="btn sm soft" type="button" data-dem-comment-reply="' + esc(c.id) + '" data-dem-comment-user="' + esc(c.userName || "") + '">回复</button>';
+    if(!isReply) actions += '<button class="btn sm soft" type="button" data-dem-comment-resolve="' + esc(c.id) + '" data-dem-comment-resolved="' + (c.resolved ? "1" : "0") + '">' + (c.resolved ? "重新打开" : "解决") + '</button>';
+    if(!c.taskId) actions += '<button class="btn sm soft" type="button" data-dem-comment-totask="' + esc(c.id) + '">转工作项</button>';
+    actions += '<button class="btn sm danger" type="button" data-dem-comment-del="' + esc(c.id) + '">删除</button>';
+    actions += '</div>';
+  }
+  return '<div class="reqdoc-comment-item' + (isReply ? ' is-reply' : '') + (c.resolved ? ' is-resolved' : '') + '" data-dem-comment-id="' + esc(c.id) + '">'
+    + '<div class="reqdoc-comment-head">'
+    +   '<span class="reqdoc-comment-user">' + esc(c.userName || "—") + '</span>'
+    +   resolvedBadge + taskLink
+    +   '<span class="reqdoc-comment-time">' + esc(fmtTs(c.createdAt) || "—") + '</span>'
+    + '</div>'
+    + '<div class="reqdoc-comment-body">' + esc(c.content) + '</div>'
+    + actions
+    + '</div>';
+}
+
+function loadDemandComments(layer, id){
+  var list = layer.querySelector("#demCommentList");
+  if(!list) return;
+  var unresolved = layer.querySelector("#demCommentUnresolved");
+  var params = unresolved && unresolved.checked ? { unresolved: true } : {};
+  Promise.all([
+    API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/comments", params),
+    API.get("/api/demands/" + encodeURIComponent(id) + "/comments/counts")
+  ]).then(function(res){
+    if(!layer.isConnected) return;
+    var rows = res[0] || [];
+    var counts = res[1] || {};
+    var tab = layer.querySelector("#tabCommentCount");
+    if(tab) tab.textContent = counts.total ? String(counts.total) : "";
+    if(!rows.length){
+      list.innerHTML = '<div class="reqdoc-comment-empty">' + (params.unresolved ? "没有未解决的评论" : "还没有评论") + '</div>';
+      return;
+    }
+    list.innerHTML = rows.map(demandCommentThreadHTML).join("");
+  }).catch(function(ex){
+    if(layer.isConnected) list.innerHTML = '<div class="reqdoc-comment-empty">' + esc(ex.message || "评论加载失败") + '</div>';
+  });
+}
+
+function setDemandCommentReply(layer, commentId, userName){
+  demandCommentReplyTo = commentId || null;
+  var chip = layer.querySelector("#demCommentReplyChip");
+  var txt = layer.querySelector("#demCommentReplyText");
+  var ta = layer.querySelector("#demCommentInput");
+  if(chip) chip.hidden = !demandCommentReplyTo;
+  if(txt) txt.textContent = userName || "";
+  if(demandCommentReplyTo && ta) ta.focus();
+}
+
+function submitDemandComment(layer, id){
+  var ta = layer.querySelector("#demCommentInput");
+  var content = (ta && ta.value || "").trim();
+  if(!content){ toast("评论内容不能为空", "warn"); if(ta) ta.focus(); return; }
+  var btn = layer.querySelector("#demCommentSend");
+  if(btn && btn.disabled) return;
+  if(btn) btn.disabled = true;
+  var body = { content: content };
+  if(demandCommentReplyTo) body.parentId = demandCommentReplyTo;
+  var mentionIds = demandCommentMention ? demandCommentMention.idsInText(content) : [];
+  if(mentionIds.length) body.mentionUserIds = mentionIds;
+  API.post("/api/demands/" + encodeURIComponent(id) + "/comments", body).then(function(){
+    if(ta) ta.value = "";
+    if(demandCommentMention){ demandCommentMention.close(); demandCommentMention.clearPicked(); }
+    setDemandCommentReply(layer, null, "");
+    loadDemandComments(layer, id);
+  }).catch(function(ex){ toast(ex.message || "评论发表失败", "bad"); })
+  .then(function(){ if(btn) btn.disabled = false; });
+}
+
+function resolveDemandComment(layer, id, commentId, resolved){
+  API.put("/api/demands/" + encodeURIComponent(id) + "/comments/" + encodeURIComponent(commentId) + "/resolve",
+    { resolved: !resolved }).then(function(){
+    loadDemandComments(layer, id);
+    toast(resolved ? "已重新打开" : "已标记为解决", "fs");
+  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+}
+
+function demandCommentToTask(layer, id, commentId){
+  UI.showConfirm({ title: "转为工作项", msg: "将这条评论转为待办工作项？", okText: "转为工作项" }).then(function(ok){
+    if(!ok) return;
+    API.post("/api/demands/" + encodeURIComponent(id) + "/comments/" + encodeURIComponent(commentId) + "/to-task")
+      .then(function(task){
+        loadDemandComments(layer, id);
+        toast("已创建工作项「" + (task.title || "") + "」", "fs");
+      }).catch(function(ex){ toast(ex.message || "转工作项失败", "bad"); });
+  });
+}
+
+function deleteDemandComment(layer, id, commentId){
+  UI.showConfirm({ title: "删除评论", msg: "删除后不可恢复；顶层评论会连同回复一起删除。", okText: "删除评论", danger: true }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/demands/" + encodeURIComponent(id) + "/comments/" + encodeURIComponent(commentId)).then(function(){
+      loadDemandComments(layer, id);
+      toast("评论已删除", "fs");
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
 }
 
@@ -50994,6 +51538,148 @@ function openDemandFactEditor(kind, anchor, ctx){
     if(textEl) demandStartTextEdit(textEl, ctx, "source");
   }
 }
+/* ---------- 提醒人（关注） ----------
+   一个人一份名单：提交人默认接收，不占名单；项目可写者可代他人添加/移除，任何可见成员可自我关注。
+   关注后走 demand_watch 个人偏好，与提交人的 demand_status 分开，避免两边重复打扰。 */
+function updateDemandWatchButton(layer, res){
+  var btn = layer.querySelector("[data-dem-watch-btn]");
+  if(!btn) return;
+  var isCreator = !!(rt.currentUser && res && res.creatorId && rt.currentUser.id === res.creatorId);
+  var on = !isCreator && !!(res && res.watching);
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  var label = btn.querySelector("[data-dem-watch-label]");
+  if(label) label.textContent = isCreator ? "提醒人" : (on ? "已关注" : "关注");
+  var cnt = btn.querySelector("[data-dem-watch-count]");
+  if(cnt){
+    var n = res ? Number(res.count) || 0 : 0;
+    cnt.textContent = n ? String(n) : "";
+    cnt.hidden = !n;
+  }
+}
+function loadDemandWatch(layer, id){
+  /* 同一个抽屉元素会复用于不同需求，先清掉上一条的名单，避免浮层闪出别人的关注人 */
+  layer.__demWatch = null;
+  return API.get("/api/demands/" + encodeURIComponent(id) + "/watch").then(function(res){
+    if(!layer.isConnected) return;
+    layer.__demWatch = res;
+    updateDemandWatchButton(layer, res);
+  }).catch(function(){ /* 名单加载失败不影响详情主体 */ });
+}
+function openDemandWatchPop(anchor, layer, id){
+  function show(res){
+    var menu = document.createElement("div");
+    menu.className = "menu dem-watch-pop";
+    menu.style.minWidth = "300px";
+    function rowsHTML(){
+      var out = [];
+      if(res.creatorId){
+        out.push('<div class="dem-watch-row is-owner"><span class="dem-watch-name">' + esc(res.creatorName || res.creatorId)
+          + '</span><span class="dem-watch-sub">提交人 · 默认接收通知</span></div>');
+      }
+      (res.watchers || []).forEach(function(w){
+        var self = rt.currentUser && rt.currentUser.id === w.userId;
+        var canRemove = self || res.canManage;
+        out.push('<div class="dem-watch-row">'
+          + '<span class="dem-watch-name">' + esc(w.userName || w.userId) + (self ? '<span class="k">我</span>' : '') + '</span>'
+          + '<span class="dem-watch-sub">' + (w.addedByName && w.addedBy !== w.userId ? "由 " + esc(w.addedByName) + " 添加" : "已关注") + '</span>'
+          + (canRemove
+            ? '<button class="icon-btn xs" type="button" data-dem-watch-remove="' + esc(w.userId) + '" title="'
+              + (self ? "取消关注" : "移除提醒人") + '" aria-label="' + (self ? "取消关注" : "移除提醒人") + '">'
+              + icon("close", 12) + '</button>'
+            : '')
+          + '</div>');
+      });
+      if(!res.watchers || !res.watchers.length){
+        out.push('<p class="foot-note dem-watch-empty">除了提交人，还没有其他提醒人。</p>');
+      }
+      return out.join("");
+    }
+    function render(){
+      /* 提交人默认就收通知，不进名单，也不提供「关注 / 取消关注」以免名单出现两条自己 */
+      var isCreator = !!(rt.currentUser && res.creatorId && rt.currentUser.id === res.creatorId);
+      menu.innerHTML = '<div class="menu-title">提醒人</div>'
+        + '<div class="dem-watch-list">' + rowsHTML() + '</div>'
+        + (res.canManage
+          ? '<div class="dem-watch-add"><select class="input" id="demWatchPick" aria-label="选择要添加的提醒人"><option value="">加载成员…</option></select>'
+            + '<button class="btn sm soft" type="button" data-dem-watch-add>' + icon("plus", 12) + ' 添加</button></div>'
+          : '')
+        + '<div class="menu-foot">'
+        + (isCreator
+          ? '<span class="foot-note">你是提交人，状态流转、内容编辑与新评论默认通知你</span>'
+          : '<button class="btn sm ' + (res.watching ? '' : 'primary') + '" type="button" data-dem-watch-toggle>'
+            + (res.watching ? '取消关注' : '关注这个需求') + '</button>'
+            + '<span class="foot-note">关注后状态流转、内容编辑、行内优先级/期望交付调整与新评论都会通知你</span>')
+        + '</div>';
+      if(res.canManage) fillPicker();
+    }
+    function fillPicker(){
+      var sel = menu.querySelector("#demWatchPick");
+      if(!sel) return;
+      API.get("/api/demands/" + encodeURIComponent(id) + "/mention-candidates").then(function(members){
+        if(!menu.isConnected || !sel.isConnected) return;
+        var taken = {};
+        (res.watchers || []).forEach(function(w){ taken[w.userId] = 1; });
+        if(res.creatorId) taken[res.creatorId] = 1;
+        var opts = (members || []).filter(function(m){ return m.userId && !taken[m.userId]; });
+        sel.innerHTML = opts.length
+          ? '<option value="">选择成员…</option>' + opts.map(function(m){
+              return '<option value="' + esc(m.userId) + '">' + esc(m.displayName || m.username || m.userId) + '</option>';
+            }).join("")
+          : '<option value="">没有可添加的成员</option>';
+      }).catch(function(){
+        if(sel && sel.isConnected) sel.innerHTML = '<option value="">成员加载失败</option>';
+      });
+    }
+    function apply(next){
+      if(!next) return;
+      res = next;
+      layer.__demWatch = next;
+      updateDemandWatchButton(layer, next);
+      render();
+    }
+    menu.addEventListener("click", function(e){
+      var toggle = e.target.closest("[data-dem-watch-toggle]");
+      if(toggle){
+        var wasWatching = !!res.watching;
+        toggle.disabled = true;
+        var req = wasWatching
+          ? API.del("/api/demands/" + encodeURIComponent(id) + "/watch")
+          : API.post("/api/demands/" + encodeURIComponent(id) + "/watch", {});
+        req.then(function(next){ apply(next); toast(wasWatching ? "已取消关注" : "已关注，需求变更会通知你", "fs"); })
+          .catch(function(ex){ toggle.disabled = false; toast(ex.message || "操作失败", "bad"); });
+        return;
+      }
+      var rm = e.target.closest("[data-dem-watch-remove]");
+      if(rm){
+        rm.disabled = true;
+        API.del("/api/demands/" + encodeURIComponent(id) + "/watchers/" + encodeURIComponent(rm.dataset.demWatchRemove))
+          .then(function(next){ apply(next); toast("已移除提醒人", "fs"); })
+          .catch(function(ex){ rm.disabled = false; toast(ex.message || "移除失败", "bad"); });
+        return;
+      }
+      var add = e.target.closest("[data-dem-watch-add]");
+      if(add){
+        var sel = menu.querySelector("#demWatchPick");
+        var uid = sel && sel.value;
+        if(!uid){ toast("先选择要添加的成员", "warn"); return; }
+        add.disabled = true;
+        API.post("/api/demands/" + encodeURIComponent(id) + "/watchers", { userId: uid })
+          .then(function(next){ apply(next); toast("已添加提醒人", "fs"); })
+          .catch(function(ex){ add.disabled = false; toast(ex.message || "添加失败", "bad"); });
+      }
+    });
+    UI.openPop(menu, anchor, { align:"right", width:320, onClose:function(){ menu.remove(); } });
+    render();
+  }
+  if(layer.__demWatch){ show(layer.__demWatch); return; }
+  API.get("/api/demands/" + encodeURIComponent(id) + "/watch").then(function(res){
+    if(!layer.isConnected) return;
+    layer.__demWatch = res;
+    updateDemandWatchButton(layer, res);
+    show(res);
+  }).catch(function(ex){ toast(ex.message || "提醒人加载失败", "bad"); });
+}
 function renderDemandDetail(d){
   var id = d.id;
   var writable = canWriteDemand(d), canEditText = writable && !isClosedDemand(d);
@@ -51113,6 +51799,7 @@ function renderDemandDetail(d){
   }
   var layer = document.createElement("div");
   layer.className = "modal-layer demand-detail";
+  demandCommentReplyTo = null;
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
   layer.setAttribute("aria-labelledby", "demandDetailTitle");
@@ -51120,6 +51807,11 @@ function renderDemandDetail(d){
   demandDetailLayer = layer;
   layer.__uiOnClose = function(){
     if(demandDetailLayer === layer) demandDetailLayer = null;
+    if(layer.__commentMention){
+      layer.__commentMention.close();
+      if(demandCommentMention === layer.__commentMention) demandCommentMention = null;
+    }
+    demandCommentReplyTo = null;
     setTimeout(function(){ layer.remove(); }, 0);
   };
   layer.innerHTML =
@@ -51138,6 +51830,8 @@ function renderDemandDetail(d){
     +     '<div class="head-sub">' + esc(meta) + '</div>'
     +   '</div>'
     +   '<div class="head-tools">'
+    +     '<button class="btn sm ghost dem-watch-btn" type="button" data-dem-watch-btn aria-haspopup="menu" aria-expanded="false" aria-pressed="false" title="提醒人：关注后需求变更会通知你">'
+    +       icon("eye", 14) + ' <span data-dem-watch-label>关注</span><span class="dem-watch-count" data-dem-watch-count hidden></span></button>'
     +     (demandMenuItems(d).length ? '<button class="btn sm ghost" type="button" data-dem-detail-more-btn aria-haspopup="menu" aria-expanded="false" title="更多操作">' + icon("more", 14) + ' 更多</button>' : '')
     +     '<button class="icon-btn sm" type="button" data-dem-x aria-label="关闭">' + icon("close", 15) + '</button>'
     +   '</div>'
@@ -51146,6 +51840,7 @@ function renderDemandDetail(d){
     +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="overview" aria-selected="true">概览</button>'
     +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="delivery" aria-selected="false">交付 <span class="tab-cnt" id="tabDeliveryCount"></span></button>'
     +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="rel" aria-selected="false">关联</button>'
+    +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="comments" aria-selected="false">评论 <span class="tab-cnt" id="tabCommentCount"></span></button>'
     +   '<button class="drawer-tab" type="button" role="tab" data-dem-tab="records" aria-selected="false">记录 <span class="tab-cnt" id="tabRecordCount"></span></button>'
     + '</div>'
     + '<div class="drawer-body demand-body" id="demandDetailBody">'
@@ -51210,6 +51905,28 @@ function renderDemandDetail(d){
               return '<dt>' + esc(g[0]) + '</dt><dd title="' + esc(g[1]) + '">' + esc(g[1]) + '</dd>';
             }).join("") + '</dl>'
     +     '</section>'
+    +   '</div>'
+    +   '<div class="drawer-pane" data-dem-pane="comments" hidden>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>评论</h3>'
+    +         '<label class="reqdoc-unresolved-toggle"><input type="checkbox" id="demCommentUnresolved"> 只看未解决</label></div>'
+    +       '<div class="reqdoc-comment-list" id="demCommentList"><div class="reqdoc-comment-empty">加载中…</div></div>'
+    +     '</section>'
+    +     (writable
+      ? '<section class="read-card">'
+        + '<div class="reqdoc-comment-form" id="demCommentForm">'
+        +   '<div class="reqdoc-comment-quotechip" id="demCommentReplyChip" hidden>'
+        +     '<span>回复</span><span class="qc-text" id="demCommentReplyText"></span>'
+        +     '<button class="qc-x" type="button" data-dem-comment-reply-clear title="取消回复" aria-label="取消回复">×</button>'
+        +   '</div>'
+        +   '<textarea id="demCommentInput" rows="3" maxlength="1000" placeholder="写下评论，输入 @ 可提及成员"></textarea>'
+        +   '<div class="reqdoc-comment-actions">'
+        +     '<span class="foot-note">一层回复 · @成员会收到站内通知</span>'
+        +     '<button class="btn sm primary" type="button" id="demCommentSend">发表评论</button>'
+        +   '</div>'
+        + '</div>'
+        + '</section>'
+      : '<p class="foot-note">当前为只读：只有项目可写成员可以发表评论。</p>')
     +   '</div>'
     +   '<div class="drawer-pane" data-dem-pane="records" hidden>'
     +     '<section class="read-card">'
@@ -51309,6 +52026,17 @@ function renderDemandDetail(d){
     if(copyNo){ copyToClipboard(copyNo.textContent, "需求编号 " + copyNo.textContent + " 已复制到剪贴板"); return; }
     var tab = e.target.closest("[data-dem-tab]");
     if(tab){ setDemandTab(tab.dataset.demTab); return; }
+    var replyClear = e.target.closest("[data-dem-comment-reply-clear]");
+    if(replyClear){ setDemandCommentReply(layer, null, ""); return; }
+    var cReply = e.target.closest("[data-dem-comment-reply]");
+    if(cReply){ setDemandCommentReply(layer, cReply.dataset.demCommentReply, cReply.dataset.demCommentUser); return; }
+    var cResolve = e.target.closest("[data-dem-comment-resolve]");
+    if(cResolve){ resolveDemandComment(layer, id, cResolve.dataset.demCommentResolve, cResolve.dataset.demCommentResolved === "1"); return; }
+    var cToTask = e.target.closest("[data-dem-comment-totask]");
+    if(cToTask){ demandCommentToTask(layer, id, cToTask.dataset.demCommentTotask); return; }
+    var cDel = e.target.closest("[data-dem-comment-del]");
+    if(cDel){ deleteDemandComment(layer, id, cDel.dataset.demCommentDel); return; }
+    if(e.target.closest("#demCommentSend")){ submitDemandComment(layer, id); return; }
     var go = e.target.closest("[data-demand-goto]");
     if(go){ setDemandTab(go.dataset.demandGoto); return; }
     var relJump = e.target.closest("[data-dem-rel-jump]");
@@ -51336,6 +52064,8 @@ function renderDemandDetail(d){
     }
     var factEl = e.target.closest("[data-dem-fact]");
     if(factEl){ openDemandFactEditor(factEl.dataset.demFact, factEl, detailCtx); return; }
+    var watchBtn = e.target.closest("[data-dem-watch-btn]");
+    if(watchBtn){ openDemandWatchPop(watchBtn, layer, id); return; }
     var moreBtn = e.target.closest("[data-dem-detail-more-btn]");
     if(moreBtn){ openDemandDetailMore(moreBtn, d); return; }
     /* 状态动作的子层叠在详情之上：取消回到详情，成功后由动作关闭详情 */
@@ -51440,6 +52170,25 @@ function renderDemandDetail(d){
       return;
     }
   });
+  layer.addEventListener("change", function(e){
+    if(e.target && e.target.id === "demCommentUnresolved") loadDemandComments(layer, id);
+  });
+  if(writable){
+    var commentInput = layer.querySelector("#demCommentInput");
+    if(commentInput){
+      demandCommentMention = createMentionPicker(commentInput, {
+        canOpen: function(){ return layer.isConnected; },
+        excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+        loadMembers: function(){
+          return API.get("/api/demands/" + encodeURIComponent(id) + "/mention-candidates");
+        }
+      });
+      layer.__commentMention = demandCommentMention;
+      commentInput.addEventListener("keydown", function(e){
+        if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitDemandComment(layer, id);
+      });
+    }
+  }
   function uploadDemandFiles(files){
     if(!writable){ denyDemandReadOnly(); return; }
     var box = layer.querySelector("#demAtts");
@@ -51484,6 +52233,8 @@ function renderDemandDetail(d){
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
   loadDemandJudgements(layer, id);
+  loadDemandComments(layer, id);
+  loadDemandWatch(layer, id);
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
     var ul = layer.querySelector("#demLogs");
     var recent = layer.querySelector("#demandRecentLogs");
@@ -51557,6 +52308,9 @@ if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){
   if(!b) return;
   formPri = b.dataset.dpri;
   syncPriSeg();
+});
+[dWsjfB, dWsjfU, dWsjfR, dWsjfE].forEach(function(el){
+  if(el) el.addEventListener("input", syncWsjfLive);
 });
 if($("dlgDemandPlanX")) $("dlgDemandPlanX").addEventListener("click", function(){ UI.closeModal($("dlgDemandPlan")); });
 if(btnDoPlan) btnDoPlan.addEventListener("click", doPlan);
@@ -70435,17 +71189,18 @@ var NOTIFY_EVENTS = {
   task_watch: ["我关注的工作项", "关注的工作项有新评论、列流转、移入回收站或恢复"],
   task_updated: ["工作项变更与提醒", "我负责的工作项字段变更、移列、移入回收站或恢复"],
   demand_status: ["需求与版本动态", "我提交的需求、负责的文档与分支状态变化，或所在版本发布/删除"],
+  demand_watch: ["我关注的需求", "关注的需求状态流转、内容编辑、行内优先级/期望交付调整或新评论"],
   daily_digest: ["每日工作项汇总", "每天 09:00 汇总我负责的逾期/今日到期工作项（仅站内）"]
 };
 /* 展示分组：同一类打扰放在一起，用户能就近判断要不要全关 */
 var NOTIFY_GROUPS = [
   { title: "工作项", types: ["task_assigned", "task_comment", "task_watch", "task_updated"] },
-  { title: "需求与版本", types: ["demand_status"] },
+  { title: "需求与版本", types: ["demand_status", "demand_watch"] },
   { title: "每日汇总", types: ["daily_digest"] }
 ];
 /* 仅重要事件：直接指向我的（指派/评论@/关注）与低频日报保留，广播类关闭，邮件全关 */
 var NOTIFY_PRESET = {
-  inApp: ["task_assigned", "task_comment", "task_watch", "daily_digest"],
+  inApp: ["task_assigned", "task_comment", "task_watch", "demand_watch", "daily_digest"],
   email: []
 };
 function applyNotifyPreset(){
@@ -76901,7 +77656,7 @@ btnReset.addEventListener("click", function(){
     toast("正在导出备份…", "fs");
     return API.get("/api/export").then(function(data){
       triggerDownload(BACKUP_NAME, JSON.stringify(data, null, 2), "application/json");
-      return API.post("/api/import", {v:10, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[]});
+      return API.post("/api/import", {v:14, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[], demandComments:[]});
     }).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
       state.tags = []; state.types = []; state.columns = []; state.completion = ""; state.due = null; state.focus = false; state.blocked = false;
@@ -90818,7 +91573,7 @@ return {enterWorkColumn: enterWorkColumn, refreshFromHash: refreshFromHash};
 })();
 /* ---- views/workload.js ---- */
 __NS["views/workload.js"] = (function(){
-/* views/workload · 成员跨项目负载 */
+/* views/workload · 成员负载名册与成员工作台 */
 
 
 
@@ -90846,24 +91601,71 @@ registerHelp({
     rows:[
       ["怎么算", "剩余预估 ÷（剩余工作日 × 每日容量，当前按 8h），四舍五入到整数百分比。", "ok"],
       ["剩余工作日", "从今天到该成员未完成工作项的最晚截止日，只数工作日；没有截止日按 5 天，至少 1 天、最多按 30 天算。", "info"],
-      ["状态阈值", "大于 100% 为超载；85%–100% 为接近满载；低于 85% 为正常。", "warn"],
-      ["本周已计", "按计时开始日期落在本周统计，换周即清零，和负载不是同一个窗口。", "mute"]
+      ["状态阈值", "大于 100% 为超载；85%–100% 为接近满载；低于 85% 为正常；没有在手工作项时为空闲。", "warn"],
+      ["已计工时", "按计时开始日期落在所选工时区间统计；本周口径换周即清零，和负载不是同一个窗口。", "mute"],
+      ["工时区间", "顶部可选本周、上周、近30天、本月；区间只改变工时统计，负载与容量仍按剩余预估和截止日计算。", "info"]
+    ]
+  },
+  "workload.status": {
+    title:"成员当前状态",
+    rows:[
+      ["空闲 / 正常 / 接近满载 / 超载", "空闲表示当前没有未完成工作项；其余按负载阈值划分，负载按成员全部项目合并计算。", "ok"],
+      ["逾期 / 阻塞", "逾期按截止日期早于今天、且未完成也未执行结束；阻塞取工作项当前的阻塞标记，是此刻快照。", "info"],
+      ["今日已计 / 最近计时", "今日已计按计时开始日期落在今天统计；最近计时取本周或上周最后一条计时记录。", "mute"]
     ]
   }
 });
 initCaliberHelp();
 
-var cache = null, seq = 0, mode = "week", loading = false, filterWorkspace = "", activeMemberSheet = null;
+/* ==================== 页面状态 ==================== */
+
+var cache = null, seq = 0, loading = false, filterWorkspace = "";
+var viewMode = "person";
 var workloadFilter = { reqId:"", roleTitle:"", companyName:"" }, workloadOptions = {};
+var ui = { q:"", status:"", group:"none", sort:"load", shown:24 };
+var memberUi = { key:"", openedHere:false, taskFilter:"all", projectId:"", taskShown:20, logScope:"week", dayIdx:"", logShown:20, focus:"" };
+var period = "week";
+var PERIOD_OPTIONS = [["week","本周"],["last","上周"],["days30","近30天"],["month","本月"]];
+var PREF_KEY = "hourglass.workload.prefs";
+var LIST_PAGE = 24, TASK_PAGE = 20, LOG_PAGE = 20, GROUP_CAP = 100;
 var WEEK_DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+var STATUS_ORDER = ["over", "hot", "ok", "idle"];
+var STATUS_META = {
+  over: { label:"超载", cls:"over" },
+  hot:  { label:"接近满载", cls:"hot" },
+  ok:   { label:"正常", cls:"ok" },
+  idle: { label:"空闲", cls:"idle" }
+};
+var SORT_OPTIONS = [["load","负载从高到低"],["remaining","剩余工时从多到少"],["overdue","逾期工作项从多到少"],["name","姓名"]];
+var GROUP_OPTIONS = [["none","不分组"],["company","按公司"],["role","按角色"],["project","按项目"],["status","按状态"]];
+
+function loadPrefs(){
+  try{
+    var raw = localStorage.getItem(PREF_KEY);
+    if(!raw) return;
+    var pref = JSON.parse(raw) || {};
+    if(pref.mode === "person" || pref.mode === "week") viewMode = pref.mode;
+    if(GROUP_OPTIONS.some(function(o){ return o[0] === pref.group; })) ui.group = pref.group;
+    if(SORT_OPTIONS.some(function(o){ return o[0] === pref.sort; })) ui.sort = pref.sort;
+    if(PERIOD_OPTIONS.some(function(o){ return o[0] === pref.period; })) period = pref.period;
+  }catch(e){ /* 本机偏好损坏时按默认展示 */ }
+}
+function savePrefs(){
+  try{ localStorage.setItem(PREF_KEY, JSON.stringify({ mode:viewMode, group:ui.group, sort:ui.sort, period:period })); }catch(e){ /* 隐私模式忽略 */ }
+}
+loadPrefs();
+
 function workloadWorkspace(){ return rt.currentWs && rt.currentWs.id || ""; }
-function enterWorkloadView(){ if(rt.reqsLoaded) loadWorkload(); else loadReqs().then(loadWorkload); }
+function enterWorkloadView(){
+  memberUi.key = routeMemberKey();
+  memberUi.openedHere = false;
+  if(rt.reqsLoaded) loadWorkload(); else loadReqs().then(loadWorkload);
+}
 ["ds:project-roles-changed","ds:member-company-changed","ds:member-job-title-changed","ds:member-label-options-changed","ds:member-roster-changed"].forEach(function(name){
   window.addEventListener(name,function(e){
     var d = e && e.detail || {};
     if(d.workspaceId && d.workspaceId !== workloadWorkspace()) return;
     cache = null; workloadOptions = {}; seq++;
-    if(activeMemberSheet){ UI.closeModal(activeMemberSheet); activeMemberSheet = null; }
     if(document.body.dataset.view === "workload") loadWorkload({ silent:true });
   });
 });
@@ -90878,32 +91680,70 @@ function workloadScopeText(data){
     + ' · 公司：' + (scope.companyName === '__unset__' ? '未设公司' : labelFilterText(scope.companyName) || '全部公司')
     + ' · 角色：' + (scope.roleTitle === '__unset__' ? '未设角色' : labelFilterText(scope.roleTitle) || '全部角色');
 }
+
+/* ==================== 工具栏与筛选 ==================== */
+
+function periodControlHTML(){
+  var range = periodRange(period);
+  return '<div class="wl-period" role="group" aria-label="工时区间">'
+    + '<span class="wl-period-label">工时区间</span>'
+    + '<div class="seg mini">' + PERIOD_OPTIONS.map(function(o){
+        return '<button type="button" data-wl-period="' + o[0] + '" aria-pressed="' + (period === o[0]) + '">' + o[1] + '</button>';
+      }).join("") + '</div>'
+    + '<span class="wl-period-dates">' + esc(range.from) + ' ~ ' + esc(range.to) + '</span></div>';
+}
 function workloadFiltersHTML(){
-  return '<div class="manager-label-filters"><label>项目 <select class="mini-select" data-workload-filter="reqId"><option value="">全部项目</option>'
+  var html = '<div class="manager-label-filters">'
+    + '<label>项目 <select class="mini-select' + (workloadFilter.reqId ? ' is-filtered' : '') + '" data-workload-filter="reqId"><option value="">全部项目</option>'
     + rt.reqList.filter(function(p){ return (!p.workspaceId || p.workspaceId === workloadWorkspace()) && (!p.archivedAt || p.id === workloadFilter.reqId); }).map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === workloadFilter.reqId ? ' selected' : '') + '>' + esc(p.name) + (p.archivedAt ? '（已归档）' : '') + '</option>'; }).join("") + '</select></label>'
-    + '<label>公司 <select class="mini-select" data-workload-filter="companyName">' + workloadSelectOptions(workloadOptions.companyNames, workloadFilter.companyName, '全部公司', '未设公司') + '</select></label>'
-    + '<label>角色 <select class="mini-select" data-workload-filter="roleTitle">' + workloadSelectOptions(workloadOptions.roleTitles, workloadFilter.roleTitle, '全部角色', '未设角色') + '</select></label>'
-    + '<button class="btn sm soft" type="button" data-workload-clear>' + icon("close", 13) + '清除筛选</button></div><p class="roster-note">按工作项所属项目的有效主角色或兼岗筛选；负载、计时、下钻和导出均由后台按同一范围计算。</p>';
+    + '<label>公司 <select class="mini-select' + (workloadFilter.companyName ? ' is-filtered' : '') + '" data-workload-filter="companyName">' + workloadSelectOptions(workloadOptions.companyNames, workloadFilter.companyName, '全部公司', '未设公司') + '</select></label>'
+    + '<label>角色 <select class="mini-select' + (workloadFilter.roleTitle ? ' is-filtered' : '') + '" data-workload-filter="roleTitle">' + workloadSelectOptions(workloadOptions.roleTitles, workloadFilter.roleTitle, '全部角色', '未设角色') + '</select></label>'
+    + '<button class="btn sm soft" type="button" data-workload-clear>' + icon("close", 13) + '清除筛选</button></div>';
+  if(viewMode === "person"){
+    html += '<div class="wl-filters">'
+      + '<input type="search" class="wl-search" data-member-search value="' + esc(ui.q) + '" placeholder="搜索成员、公司、角色或项目…" aria-label="搜索成员">'
+      + '<label>分组 <select class="mini-select' + (ui.group !== "none" ? ' is-filtered' : '') + '" data-wl-group>' + GROUP_OPTIONS.map(function(o){ return '<option value="' + o[0] + '"' + (o[0] === ui.group ? ' selected' : '') + '>' + o[1] + '</option>'; }).join("") + '</select></label>'
+      + '<label>排序 <select class="mini-select' + (ui.sort !== "load" ? ' is-filtered' : '') + '" data-wl-sort>' + SORT_OPTIONS.map(function(o){ return '<option value="' + o[0] + '"' + (o[0] === ui.sort ? ' selected' : '') + '>' + o[1] + '</option>'; }).join("") + '</select></label>'
+      + '</div>'
+      + periodControlHTML();
+  }
+  var note = viewMode === "person"
+    ? '按工作项所属项目的有效主角色或兼岗筛选；工时区间只影响工时统计，负载仍按剩余预估与截止日计算。'
+    : '按工作项所属项目的有效主角色或兼岗筛选；本周工时换周即清零，负载仍按剩余预估与截止日计算。';
+  return html + '<p class="roster-note">' + note + '</p>';
 }
 function workloadToolbar(){
-  return '<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目工作项合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="' + (mode === 'person') + '"' + (loading || !cache ? ' disabled' : '') + '>按人</button><button type="button" data-load-mode="week" aria-pressed="' + (mode === 'week') + '"' + (loading || !cache ? ' disabled' : '') + '>按周</button></div>'
-    + '<button class="btn sm" type="button" data-load-export' + (loading || !cache ? ' disabled' : '') + '>' + icon("download", 13) + ' 导出当前范围 CSV</button>' + fullscreenButtonHTML() + '</div>' + workloadFiltersHTML();
+  return '<div class="manager-toolbar"><div><b>成员负载</b><span>按人看参与项目、在手工作项与当前状态</span></div>'
+    + '<div class="manager-actions"><div class="seg mini wl-mode">'
+    + '<button type="button" data-load-mode="person" aria-pressed="' + (viewMode === 'person') + '"' + (loading || !cache ? ' disabled' : '') + '>按人</button>'
+    + '<button type="button" data-load-mode="week" aria-pressed="' + (viewMode === 'week') + '"' + (loading || !cache ? ' disabled' : '') + '>按周</button>'
+    + '</div><button class="btn sm" type="button" data-load-export' + (loading || !cache ? ' disabled' : '') + '>' + icon("download", 13) + ' 导出当前范围 CSV</button>'
+    + fullscreenButtonHTML() + '</div></div>' + workloadFiltersHTML();
 }
 function loadWorkload(opts){
   opts = opts || {};
   var body = $("workloadBody"); if(!body) return Promise.resolve(null);
   var ws = workloadWorkspace();
-  if(filterWorkspace !== ws){ workloadFilter = { reqId:"", roleTitle:"", companyName:"" }; workloadOptions = {}; cache = null; filterWorkspace = ws; }
+  if(filterWorkspace !== ws){
+    workloadFilter = { reqId:"", roleTitle:"", companyName:"" }; workloadOptions = {}; cache = null; filterWorkspace = ws;
+    ui.shown = LIST_PAGE;
+    if(memberUi.key){ memberUi.key = ""; syncMemberHash("", false); }
+  }
   if(workloadFilter.reqId && rt.reqsLoaded && !rt.reqList.some(function(p){ return p.id === workloadFilter.reqId && (!p.workspaceId || p.workspaceId === ws); })) workloadFilter.reqId = "";
-  if(activeMemberSheet){ UI.closeModal(activeMemberSheet); activeMemberSheet = null; }
-  var current = ++seq, scope = Object.assign({}, workloadFilter);
+  var current = ++seq, scope = Object.assign({}, workloadFilter), range = periodRange(period);
+  var params = { reqId:scope.reqId || null, roleTitle:scope.roleTitle || null, companyName:scope.companyName || null };
+  if(period === "days30" || period === "month"){ params.from = range.from; params.to = range.to; }
   loading = true;
   body.innerHTML = workloadToolbar() + UI.skeletonRows(5);
   body.setAttribute("aria-busy","true");
-  return API.get("/api/manager/workload", { reqId:scope.reqId || null, roleTitle:scope.roleTitle || null, companyName:scope.companyName || null }).then(function(data){
+  return API.get("/api/manager/workload", params).then(function(data){
     if(current !== seq || ws !== workloadWorkspace()) return null;
     cache = Object.assign({}, data, { scope:data.scope || scope }); workloadOptions = data.filterOptions || {}; loading = false;
-    body.setAttribute("aria-busy","false"); renderWorkload(); return cache;
+    body.setAttribute("aria-busy","false");
+    if(memberUi.key && !memberByKey(memberUi.key)){
+      memberUi.key = ""; syncMemberHash("", false);
+    }
+    renderWorkload(); return cache;
   }).catch(function(ex){
     if(current !== seq || ws !== workloadWorkspace()) return null;
     if(scope.reqId && (ex.code === 403 || ex.code === 404)){
@@ -90913,258 +91753,639 @@ function loadWorkload(opts){
     body.innerHTML = workloadToolbar() + UI.errorState(ex.message || "加载失败，请重试"); return null;
   });
 }
-function workloadMemberLabels(m){
-  var roles = Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m);
-  return '<div class="manager-member-labels">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span class="roster-empty">空间岗位：' + esc(m.jobTitle) + '</span>' : '')
-    + roles.map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("") + (!roles.length ? '<span class="roster-empty">未设角色</span>' : '') + '</div>';
-}
-/* —— 成员抽屉：成员 → 项目 → 工作项 / 计时明细 逐层穿透 —— */
+
+/* ==================== 成员视图派生 ==================== */
+
 function memberByKey(key){
   return (cache && cache.members || []).filter(function(m){ return m.key === key; })[0];
 }
-function memberStatusTag(m){
-  return m.overloaded ? '<span class="mini-tag over">超载</span>'
-    : (m.loadPct >= 85 ? '<span class="mini-tag warn">接近满载</span>' : '<span class="mini-tag ok">正常</span>');
+function todayIso(){
+  if(rt && rt.TODAY_ISO) return rt.TODAY_ISO;
+  var d = new Date();
+  return d.getFullYear() + "-" + (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + "-" + (d.getDate() < 10 ? "0" : "") + d.getDate();
 }
-function memberTaskCount(m){ return (m.tasks || []).length; }
-function memberProject(m, reqId){
-  return (m.projects || []).filter(function(p){ return (p.reqId || "") === (reqId || ""); })[0];
+function parseDay(iso){
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN;
 }
+function addDaysISO(iso, days){
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  if(!m) return "";
+  var d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function weekTodayIndex(weekStart){
+  var today = todayIso();
+  if(!weekStart || !today) return -1;
+  var diff = Math.round((parseDay(today) - parseDay(weekStart)) / 86400000);
+  return diff >= 0 && diff < 7 ? diff : -1;
+}
+/* 工时区间只影响“已计工时”类数字；负载仍按剩余预估 ÷ 工作日容量计算 */
+function periodRange(key){
+  var today = todayIso();
+  var dow = new Date(parseDay(today)).getUTCDay();
+  var monday = addDaysISO(today, -((dow + 6) % 7));
+  if(key === "last") return { from:addDaysISO(monday, -7), to:addDaysISO(monday, -1), label:"上周" };
+  if(key === "days30") return { from:addDaysISO(today, -29), to:today, label:"近30天" };
+  if(key === "month") return { from:today.slice(0, 7) + "-01", to:today, label:"本月" };
+  return { from:monday, to:addDaysISO(monday, 6), label:"本周" };
+}
+function periodLabel(){ return periodRange(period).label; }
+function periodMinutes(m){
+  if(period === "week") return Number(m.weekMinutes) || 0;
+  if(period === "last") return Number(m.lastWeekMinutes) || 0;
+  return Number(m.rangeMinutes) || 0;
+}
+function periodHint(m){
+  if(period === "week") return '上周 ' + fmtHours(m.lastWeekMinutes);
+  if(period === "last") return '本周 ' + fmtHours(m.weekMinutes);
+  return '含 ' + (Number(cache && cache.rangeWorkdays) || 0) + ' 个工作日';
+}
+function todayMinutes(m){
+  var idx = weekTodayIndex(cache && cache.weekStart);
+  return idx < 0 ? 0 : (Number((m.dayMinutes || [])[idx]) || 0);
+}
+function lastLogDate(m){
+  var logs = (m.weekLogs || []).concat(m.lastWeekLogs || []);
+  var latest = "";
+  logs.forEach(function(l){ if(l && l.date && l.date > latest) latest = l.date; });
+  return latest;
+}
+function taskOverdue(t){ return dueState(t).kind === "over"; }
+function taskCounts(tasks){
+  var c = { open:0, doing:0, backlog:0, ended:0, overdue:0, blocked:0, unestimated:0, latestDue:"" };
+  (tasks || []).forEach(function(t){
+    var bucket = statusBucket(t);
+    if(bucket === "done") return;
+    c.open++;
+    if(bucket === "doing") c.doing++;
+    else if(bucket === "backlog") c.backlog++;
+    else if(bucket === "ended") c.ended++;
+    if(taskOverdue(t)) c.overdue++;
+    if(t.blocked) c.blocked++;
+    if(!t.estimateMinutes) c.unestimated++;
+    if(t.dueDate && t.dueDate > c.latestDue) c.latestDue = t.dueDate;
+  });
+  return c;
+}
+function memberStatus(m, counts){
+  if(!(m.tasks || []).length) return "idle";
+  var pct = Number(m.loadPct) || 0;
+  if(pct > 100 || m.overloaded) return "over";
+  if(pct >= 85) return "hot";
+  return "ok";
+}
+function memberProjectList(m){
+  var map = Object.create(null), order = [];
+  function ensure(reqId, name){
+    var key = reqId || "";
+    if(!map[key]){
+      map[key] = { reqId:reqId || "", name:name || "未归类", taskCount:0, remainingMinutes:0, logMinutes:0, roleTitles:[] };
+      order.push(key);
+    }
+    return map[key];
+  }
+  (m.projects || []).forEach(function(p){
+    var item = ensure(p.reqId, p.name);
+    item.taskCount = Number(p.taskCount) || 0;
+    item.remainingMinutes = Number(p.remainingMinutes) || 0;
+    item.roleTitles = (p.roleTitles || []).slice();
+  });
+  (m.weekLogs || []).concat(m.lastWeekLogs || []).forEach(function(l){
+    var item = ensure(l.reqId, l.reqName);
+    item.logMinutes += Number(l.minutes) || 0;
+  });
+  return order.map(function(key){ return map[key]; }).sort(function(a, b){
+    return (b.remainingMinutes - a.remainingMinutes) || String(a.name).localeCompare(String(b.name), "zh");
+  });
+}
+function memberView(m){
+  var counts = taskCounts(m.tasks);
+  return {
+    m: m,
+    key: m.key,
+    status: memberStatus(m, counts),
+    counts: counts,
+    projects: memberProjectList(m),
+    todayMinutes: todayMinutes(m),
+    lastLog: lastLogDate(m)
+  };
+}
+function allMemberViews(){
+  return (cache && cache.members || []).map(memberView);
+}
+function memberSearchText(mv){
+  var m = mv.m;
+  return [
+    m.name,
+    m.companyName,
+    m.jobTitle,
+    (Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m)).join(" "),
+    mv.projects.map(function(p){ return p.name; }).join(" ")
+  ].join(" ").toLowerCase();
+}
+function memberMatchesSearch(mv, terms){
+  if(!terms.length) return true;
+  var hay = memberSearchText(mv);
+  return terms.every(function(t){ return hay.indexOf(t) !== -1; });
+}
+function compareViews(a, b){
+  if(ui.sort === "remaining") return (Number(b.m.remainingMinutes) || 0) - (Number(a.m.remainingMinutes) || 0) || String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
+  if(ui.sort === "overdue") return b.counts.overdue - a.counts.overdue || (Number(b.m.loadPct) || 0) - (Number(a.m.loadPct) || 0);
+  if(ui.sort === "name") return String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
+  return (Number(b.m.loadPct) || 0) - (Number(a.m.loadPct) || 0) || String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
+}
+function memberStatusTag(status){
+  var meta = STATUS_META[status] || STATUS_META.ok;
+  return '<span class="member-status ' + meta.cls + '">' + meta.label + '</span>';
+}
+function memberRoleTagsHtml(list, limit){
+  var roles = Array.isArray(list) ? list : [];
+  var shown = roles.slice(0, limit || 3);
+  return shown.map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("")
+    + (roles.length > shown.length ? '<span class="roster-empty">+' + (roles.length - shown.length) + '</span>' : '')
+    + (!roles.length ? '<span class="roster-empty">未设角色</span>' : '');
+}
+
+/* ==================== 名册渲染 ==================== */
+
+function summaryHTML(){
+  var views = allMemberViews();
+  var over = 0, hot = 0, idle = 0, remaining = 0, worked = 0, overdue = 0, blocked = 0;
+  views.forEach(function(mv){
+    if(mv.status === "over") over++;
+    else if(mv.status === "hot") hot++;
+    else if(mv.status === "idle") idle++;
+    remaining += Number(mv.m.remainingMinutes) || 0;
+    worked += periodMinutes(mv.m);
+    overdue += mv.counts.overdue;
+    blocked += mv.counts.blocked;
+  });
+  return '<div class="wl-summary">'
+    + '<div class="wl-summary-item"><span>成员</span><b>' + views.length + ' 人</b><small>空闲 ' + idle + ' 人</small></div>'
+    + '<div class="wl-summary-item' + (over ? ' danger' : '') + '"><span>超载</span><b>' + over + ' 人</b><small>接近满载 ' + hot + ' 人</small></div>'
+    + '<div class="wl-summary-item"><span class="caliber-label">合计剩余' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</span><b>' + fmtHours(remaining) + '</b><small>未完成工作项 ' + views.reduce(function(n, mv){ return n + mv.counts.open; }, 0) + ' 项</small></div>'
+    + '<div class="wl-summary-item"><span>' + esc(periodLabel()) + '已计</span><b>' + fmtHours(worked) + '</b><small>逾期 ' + overdue + ' 项 · 阻塞 ' + blocked + ' 项</small></div>'
+    + '</div>';
+}
+function statusChipsHTML(views){
+  var counts = { "":views.length, over:0, hot:0, ok:0, idle:0 };
+  views.forEach(function(mv){ counts[mv.status] = (counts[mv.status] || 0) + 1; });
+  return '<div class="wl-chips" role="group" aria-label="按成员状态筛选">'
+    + chipHTML("", "全部", counts[""])
+    + STATUS_ORDER.map(function(key){ return chipHTML(key, STATUS_META[key].label, counts[key] || 0); }).join("")
+    + '</div>';
+}
+function chipHTML(key, label, count){
+  return '<button class="wl-chip" type="button" data-member-status="' + key + '" aria-pressed="' + (ui.status === key) + '">'
+    + label + '<b>' + count + '</b></button>';
+}
+function groupNoteHTML(){
+  if(ui.group === "role") return '<p class="roster-note">按成员在空间或项目中的有效主角色分组，兼岗不重复计入。</p>';
+  if(ui.group === "project") return '<p class="roster-note">同一成员参与多个项目时会出现在多个分组；卡片内的进行中 / 逾期等计数为该项目范围，负载与合计剩余仍为成员全量口径。</p>';
+  return '';
+}
+function projectScopeCounts(m, reqId){
+  return taskCounts((m.tasks || []).filter(function(t){ return (t.reqId || "") === (reqId || ""); }));
+}
+function memberCardHTML(mv, scope){
+  var m = mv.m, counts = scope ? projectScopeCounts(m, scope.reqId) : mv.counts;
+  var roles = Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m);
+  var projects = mv.projects.slice(0, 3);
+  /* 卡片脚注展示「上周 Yh」时，进工作台默认也停在上周明细，保持同一窗口 */
+  var logScopeAttr = ' data-member-scope="' + (period === "last" ? "last" : "week") + '"';
+  return '<article class="member-card" data-member-open="' + esc(m.key) + '"' + logScopeAttr + '>'
+    + '<div class="member-card-head">' + avatarHTML(m.name, "lg")
+    + '<div class="member-card-id"><b>' + esc(m.name) + '</b><div class="member-card-sub">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span>岗位：' + esc(m.jobTitle) + '</span>' : '') + '</div></div>'
+    + memberStatusTag(mv.status) + '</div>'
+    + '<div class="member-card-roles">' + memberRoleTagsHtml(roles, 3) + '</div>'
+    + '<div class="member-loadline"><span class="caliber-label">总负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</span>'
+    + loadBarHTML(m.loadPct) + '<span>剩余 ' + fmtHours(m.remainingMinutes) + ' / 容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
+    + '<div class="member-card-stats">'
+    + statHTML("进行中", counts.doing)
+    + statHTML("待处理", counts.backlog)
+    + statHTML("逾期", counts.overdue, counts.overdue ? "danger" : "mute")
+    + statHTML("阻塞", counts.blocked, counts.blocked ? "warn" : "mute")
+    + '</div>'
+    + '<div class="member-card-projects">' + (projects.length
+        ? projects.map(function(p){ return '<span class="wl-proj-chip' + (scope && (scope.reqId || "") === (p.reqId || "") ? ' on' : '') + '"><b>' + esc(p.name) + '</b><i>' + fmtHours(p.remainingMinutes) + '</i></span>'; }).join("")
+          + (mv.projects.length > projects.length ? '<span class="wl-proj-more">+' + (mv.projects.length - projects.length) + ' 个项目</span>' : '')
+        : '<span class="roster-empty">暂无参与项目</span>') + '</div>'
+    + '<div class="member-card-foot"><span>' + esc(periodLabel()) + ' ' + fmtHours(periodMinutes(m)) + ' · 今日 ' + (mv.todayMinutes ? fmtHours(mv.todayMinutes) : "—") + '</span>'
+    + (mv.lastLog ? '<span>最近计时 ' + esc(fmtDate(mv.lastLog)) + '</span>' : '')
+    + '<button class="member-link" type="button" data-member-open="' + esc(m.key) + '"' + logScopeAttr + '>工作台 →</button></div>'
+    + '</article>';
+}
+function statHTML(label, value, tone){
+  return '<div class="member-stat' + (tone ? ' ' + tone : '') + '"><i>' + label + '</i><b>' + value + '</b></div>';
+}
+function memberGridHTML(pairs){
+  return '<div class="wl-grid">' + pairs.map(function(pair){ return memberCardHTML(pair.mv, pair.scope); }).join("") + '</div>';
+}
+function groupMeta(entries){
+  var over = 0, remaining = 0, tasks = 0;
+  entries.forEach(function(pair){
+    if(pair.mv.status === "over") over++;
+    remaining += pair.scope ? (Number(pair.mv.projects.filter(function(p){ return (p.reqId || "") === (pair.scope.reqId || ""); })[0] || {}).remainingMinutes) || 0 : (Number(pair.mv.m.remainingMinutes) || 0);
+    tasks += pair.scope ? projectScopeCounts(pair.mv.m, pair.scope.reqId).open : pair.mv.counts.open;
+  });
+  return { over:over, remaining:remaining, tasks:tasks };
+}
+function groupedHTML(views){
+  var groups = [], byKey = Object.create(null);
+  function addGroup(key, label, order){
+    if(!byKey[key]){ byKey[key] = { key:key, label:label, order:order || 0, entries:[] }; groups.push(byKey[key]); }
+    return byKey[key];
+  }
+  views.forEach(function(mv){
+    if(ui.group === "project"){
+      var list = mv.projects.length ? mv.projects : [{ reqId:"", name:"未归类" }];
+      list.forEach(function(p){ addGroup(p.reqId || "", p.name || "未归类", projectOrder(p.reqId)).entries.push({ mv:mv, scope:{ reqId:p.reqId || "", name:p.name || "未归类" } }); });
+      return;
+    }
+    var label = "未分组", order = 0;
+    if(ui.group === "company") label = mv.m.companyName || "未设公司";
+    else if(ui.group === "role") label = (Array.isArray(mv.m.roleTitles) ? mv.m.roleTitles : memberRoleTitles(mv.m))[0] || "未设角色";
+    else if(ui.group === "status"){ label = STATUS_META[mv.status].label; order = STATUS_ORDER.indexOf(mv.status); }
+    addGroup(label, label, order).entries.push({ mv:mv, scope:null });
+  });
+  if(ui.group === "status") groups.sort(function(a, b){ return a.order - b.order; });
+  else if(ui.group === "project") groups.sort(function(a, b){ return a.order - b.order || String(a.label).localeCompare(String(b.label), "zh"); });
+  else groups.sort(function(a, b){ return String(a.label).localeCompare(String(b.label), "zh"); });
+  return groups.map(function(group){
+    var meta = groupMeta(group.entries);
+    return '<section class="wl-group"><div class="wl-group-head"><b>' + esc(group.label) + '<span class="roster-empty">' + group.entries.length + ' 人</span></b>'
+      + '<span>剩余 ' + fmtHours(meta.remaining) + ' · 未完成 ' + meta.tasks + ' 项' + (meta.over ? ' · 超载 ' + meta.over + ' 人' : '') + '</span></div>'
+      + memberGridHTML(group.entries) + '</section>';
+  }).join("");
+}
+function projectOrder(reqId){
+  var list = (cache && cache.projects) || [];
+  for(var i = 0; i < list.length; i++) if((list[i].id || "") === (reqId || "")) return i;
+  return list.length + 1;
+}
+function rosterHTML(){
+  var views = allMemberViews().sort(compareViews);
+  var terms = ui.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  var searched = views.filter(function(mv){ return memberMatchesSearch(mv, terms); });
+  var filtered = ui.status ? searched.filter(function(mv){ return mv.status === ui.status; }) : searched;
+  var head = summaryHTML() + statusChipsHTML(searched) + groupNoteHTML();
+  if(!filtered.length){
+    return head + '<div class="wl-empty">' + (views.length ? '当前筛选下没有成员' : '当前范围暂无成员负载数据')
+      + (ui.status || ui.q ? '<button class="btn sm soft" type="button" data-member-reset>清除成员筛选</button>' : '') + '</div>';
+  }
+  if(ui.group !== "none"){
+    var capped = filtered.slice(0, GROUP_CAP);
+    return head + groupedHTML(capped)
+      + (filtered.length > capped.length ? '<p class="roster-note">分组视图最多展示 ' + GROUP_CAP + ' 人，当前 ' + filtered.length + ' 人，请用筛选收窄范围。</p>' : '');
+  }
+  var shown = filtered.slice(0, ui.shown);
+  return head + memberGridHTML(shown.map(function(mv){ return { mv:mv, scope:null }; }))
+    + '<div class="wl-more">' + (filtered.length > shown.length
+      ? '<button class="btn sm block" type="button" data-member-more>显示更多（已显示 ' + shown.length + ' / 共 ' + filtered.length + ' 人）</button>'
+      : (filtered.length > LIST_PAGE ? '<span class="foot-note">已显示全部 ' + filtered.length + ' 人</span>' : '')) + '</div>';
+}
+function renderRosterOnly(){
+  var el = $("memberRoster");
+  if(el) el.innerHTML = rosterHTML();
+}
+
+/* ==================== 按周工时 ==================== */
+
+function weekTable(){
+  var rows = (cache.members || []).map(function(m){
+    var mv = memberView(m);
+    var hasLogs = (m.weekLogs || []).length > 0;
+    var nameHTML = '<button class="manager-person manager-cell-link" type="button" data-member-open="' + esc(m.key) + '" data-member-layer="logs" title="打开成员工作台">'
+      + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></button>' + memberStatusTag(mv.status);
+    var cells = (m.dayMinutes || []).map(function(n, i){
+      if(!n) return '<td class="num">—</td>';
+      if(!hasLogs) return '<td class="num">' + fmtHours(n) + '</td>';
+      return '<td class="num"><button class="manager-cell-link" type="button" data-member-open="' + esc(m.key) + '" data-member-layer="logs" data-member-day="' + i + '" title="查看该日计时明细">' + fmtHours(n) + '</button></td>';
+    }).join("");
+    var diff = (m.weekMinutes || 0) - (m.lastWeekMinutes || 0), cls = diff > 0 ? "tag-warning" : (diff < 0 ? "tag-success" : "tag-ghost");
+    var diffHTML = '<span class="tag ' + cls + '">' + (diff === 0 ? '持平' : ((diff > 0 ? '+' : '−') + fmtHours(Math.abs(diff)))) + '</span>';
+    if((m.lastWeekLogs || []).length){
+      diffHTML = '<button class="manager-cell-link" type="button" data-member-open="' + esc(m.key) + '" data-member-layer="logs" data-member-scope="last" title="查看上周计时明细">' + diffHTML + '</button>';
+    }
+    var totalHTML = hasLogs ? '<button class="manager-cell-link" type="button" data-member-open="' + esc(m.key) + '" data-member-layer="logs" title="查看本周计时明细"><b>' + fmtHours(m.weekMinutes) + '</b></button>' : '<b>' + fmtHours(m.weekMinutes) + '</b>';
+    return '<tr><td><div class="wl-week-who">' + nameHTML + '</div>' + '<span class="wl-week-company">' + esc(m.companyName || "未设公司") + '</span></td>' + cells + '<td class="num">' + totalHTML + '</td><td>' + diffHTML + '</td></tr>';
+  }).join("") || '<tr><td colspan="10" class="manager-empty-cell">本周暂无计时记录</td></tr>';
+  return '<section class="manager-panel"><div class="manager-panel-head"><b>本周工时</b><span>与上周同口径对比 · 点击成员或格子打开工作台</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th>' + WEEK_DAY_NAMES.map(function(d){ return '<th class="num">' + d + '</th>'; }).join("") + '<th class="num">本周合计</th><th>上周对比</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
+}
+
+/* ==================== 成员工作台 ==================== */
+
 function memberKpisHTML(m){
   return '<div class="member-sheet-kpis">'
-    + '<div class="member-sheet-kpi"><i>未完成工作项</i><b>' + memberTaskCount(m) + ' 项</b></div>'
+    + '<div class="member-sheet-kpi"><i>未完成工作项</i><b>' + (m.tasks || []).length + ' 项</b></div>'
     + '<div class="member-sheet-kpi"><i class="caliber-label">剩余预估' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</i><b>' + fmtHours(m.remainingMinutes) + '</b><span>剩余 ' + (m.workdays || 0) + ' 个工作日</span></div>'
-    + '<div class="member-sheet-kpi"><i>本周已计</i><b>' + fmtHours(m.weekMinutes) + '</b><span>上周 ' + fmtHours(m.lastWeekMinutes) + '</span></div>'
+    + '<div class="member-sheet-kpi"><i>' + esc(periodLabel()) + '已计</i><b>' + fmtHours(periodMinutes(m)) + '</b><span>' + esc(periodHint(m)) + '</span></div>'
     + '<div class="member-sheet-kpi"><i class="caliber-label">负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</i><b>' + (Number(m.loadPct) || 0) + '%</b><span>容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
     + '</div>';
 }
-function memberProjectsHTML(m){
-  var projects = (m.projects || []).slice().sort(function(a, b){ return (Number(b.remainingMinutes) || 0) - (Number(a.remainingMinutes) || 0); });
-  if(!projects.length) return '<div class="manager-empty-cell">该成员暂无未完成工作项</div>';
-  var total = Number(m.remainingMinutes) || 0;
-  var rows = projects.map(function(p){
+function statePanelHTML(mv){
+  var c = mv.counts;
+  return '<div class="manager-panel-head"><b>当前状态</b><span class="caliber-label">口径' + caliberMarkHTML("workload.status", false, "查看「成员当前状态」口径") + '</span></div>'
+    + '<div class="member-state-grid">'
+    + stateTileHTML("进行中", c.doing)
+    + stateTileHTML("待处理", c.backlog)
+    + stateTileHTML("执行结束", c.ended, c.ended ? "" : "mute")
+    + stateTileHTML("逾期", c.overdue, c.overdue ? "danger" : "mute")
+    + stateTileHTML("阻塞", c.blocked, c.blocked ? "warn" : "mute")
+    + stateTileHTML("今日已计", mv.todayMinutes ? fmtHours(mv.todayMinutes) : "—")
+    + '</div>'
+    + '<p class="member-state-note">最晚截止 ' + (c.latestDue ? esc(fmtDate(c.latestDue)) : "—")
+    + ' · 最近计时 ' + (mv.lastLog ? esc(fmtDate(mv.lastLog)) : "—")
+    + (c.unestimated ? ' · ' + c.unestimated + ' 项未填预估' : '') + '</p>';
+}
+function stateTileHTML(label, value, tone){
+  return '<div class="member-state' + (tone && tone !== "mute" ? ' ' + tone : '') + '"><i>' + label + '</i><b>' + value + '</b></div>';
+}
+function projectKey(reqId){ return reqId || "__none__"; }
+function projectsPanelHTML(mv){
+  var total = Number(mv.m.remainingMinutes) || 0;
+  var body = mv.projects.length ? mv.projects.map(function(p){
     var pct = total ? Math.round((Number(p.remainingMinutes) || 0) / total * 100) : 0;
-    return '<tr data-member-project="' + esc(p.reqId || "") + '" tabindex="0" title="查看该项目下的工作项">'
-      + '<td><b class="manager-drill-title">' + esc(p.name || "未归类") + '</b><div class="manager-member-labels">' + (Array.isArray(p.roleTitles) ? p.roleTitles : memberRoleTitles(p)).map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("") + '</div></td>'
+    var roles = memberRoleTagsHtml(p.roleTitles && p.roleTitles.length ? p.roleTitles : memberRoleTitles(p), 2);
+    return '<tr class="member-proj-row' + (memberUi.projectId === projectKey(p.reqId) ? ' on' : '') + '" data-member-project="' + esc(projectKey(p.reqId)) + '" tabindex="0" title="筛选该项目下的工作项">'
+      + '<td><b class="manager-drill-title">' + esc(p.name) + '</b><div class="manager-member-labels">' + roles + '</div></td>'
       + '<td class="num">' + (p.taskCount || 0) + '</td>'
       + '<td class="num">' + fmtHours(p.remainingMinutes) + '</td>'
       + '<td><div class="member-share"><span class="progress"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></div></td>'
       + '</tr>';
-  }).join("");
-  return '<div class="member-layer-head"><b>项目分布</b>'
-    + '<button class="member-link" type="button" data-member-all="1">查看全部工作项 →</button></div>'
+  }).join("") : '<tr><td colspan="4" class="manager-empty-cell">该成员暂无参与项目</td></tr>';
+  return '<div class="manager-panel-head"><b>参与项目</b><span>' + mv.projects.length + ' 个 · 点击行筛选下方工作项</span></div>'
     + '<div class="tbl-wrap"><table class="manager-tbl member-drill-tbl"><thead><tr>'
-    + '<th>项目</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th>剩余占比</th>'
-    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    + '<th>项目 / 我的角色</th><th class="num">未完成</th><th class="num">剩余</th><th>占比</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>';
 }
-function memberWeekHTML(m){
-  var days = m.dayMinutes || [];
-  var hasLogs = (m.weekLogs || []).length > 0;
-  var diff = (m.weekMinutes || 0) - (m.lastWeekMinutes || 0);
-  var diffCls = diff > 0 ? "tag-warning" : (diff < 0 ? "tag-success" : "tag-ghost");
-  var diffText = diff === 0 ? "持平" : ((diff > 0 ? "+" : "−") + fmtHours(Math.abs(diff)));
-  var cells = WEEK_DAY_NAMES.map(function(name, i){
-    var n = Number(days[i]) || 0;
-    return '<button class="member-day" type="button"' + (n ? ' data-member-day="' + i + '" title="查看该日计时明细"' : ' disabled') + '>'
-      + '<span>' + name + '</span><b>' + (n ? fmtHours(n) : "—") + '</b></button>';
-  }).join("");
-  var lastHTML = (m.lastWeekLogs || []).length
-    ? '<button class="member-link" type="button" data-member-logs="last" title="查看上周计时明细">上周 ' + fmtHours(m.lastWeekMinutes) + ' <span class="tag ' + diffCls + '">' + diffText + '</span></button>'
-    : '<span class="member-week-note">上周 ' + fmtHours(m.lastWeekMinutes) + ' · <span class="tag ' + diffCls + '">' + diffText + '</span></span>';
-  var weekLink = hasLogs ? '<button class="member-link" type="button" data-member-logs="week">查看明细 →</button>' : '';
-  return '<div class="member-layer-head"><b>本周工时</b>' + lastHTML + '</div>'
-    + '<div class="member-days">' + cells + '</div>'
-    + '<div class="member-week-foot">本周合计 <b>' + fmtHours(m.weekMinutes) + '</b>' + weekLink + '</div>';
+function tasksForProject(m, key){
+  var want = key === "__none__" ? "" : (key || "");
+  return (m.tasks || []).filter(function(t){ return (t.reqId || "") === want; });
 }
-function memberTasksHTML(m, layer){
-  var tasks = (m.tasks || []).filter(function(t){ return layer.all || (t.reqId || "") === (layer.reqId || ""); });
-  var rows = tasks.map(function(t){
+function filterTasks(tasks, filter){
+  return tasks.filter(function(t){
+    if(filter === "doing") return statusBucket(t) === "doing";
+    if(filter === "backlog") return statusBucket(t) === "backlog";
+    if(filter === "overdue") return taskOverdue(t);
+    if(filter === "blocked") return !!t.blocked;
+    return true;
+  });
+}
+function dueCellHTML(t){
+  if(!t.dueDate) return '<span class="roster-empty">未设</span>';
+  var state = dueState(t) || {};
+  if(state.kind === "over") return '<span class="member-due over">逾期' + (state.n ? ' ' + state.n + ' 天' : '') + '</span>';
+  if(state.kind === "today") return '<span class="member-due today">今天</span>';
+  if(state.kind === "soon") return '<span class="member-due soon">' + esc(fmtDate(t.dueDate)) + '</span>';
+  return esc(fmtDate(t.dueDate));
+}
+function taskRowsHTML(tasks){
+  return tasks.map(function(t){
     return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
       + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
-      + '<td>' + assocLinkHTML("project", t.reqId, t.reqName, {plain:"未归类"}) + '</td>'
+      + '<td>' + assocLinkHTML("project", t.reqId, t.reqName, { plain:"未归类" }) + '</td>'
       + '<td>' + esc(taskStatusName(t)) + '</td>'
-      + '<td class="num">' + esc(fmtDate(t.dueDate)) + '</td>'
+      + '<td><span class="member-pri ' + esc(String(t.priority || "P2").toLowerCase()) + '">' + esc(t.priority || "P2") + '</span></td>'
+      + '<td class="num">' + dueCellHTML(t) + '</td>'
       + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'
       + '<td class="num">' + (t.totalMinutes ? fmtMinutesShort(t.totalMinutes) : "—") + '</td></tr>';
-  }).join("") || '<tr><td colspan="6" class="manager-empty-cell">该口径下暂无工作项</td></tr>';
-  return '<button class="member-back" type="button" data-member-back>← 返回项目分布</button>'
+  }).join("");
+}
+function tasksPanelHTML(mv){
+  var m = mv.m;
+  var scoped = memberUi.projectId ? tasksForProject(m, memberUi.projectId) : (m.tasks || []);
+  var counts = taskCounts(scoped);
+  var filtered = filterTasks(scoped, memberUi.taskFilter);
+  var shown = filtered.slice(0, memberUi.taskShown);
+  var projectOptions = '<option value="">全部项目</option>' + mv.projects.map(function(p){
+    var key = projectKey(p.reqId);
+    return '<option value="' + esc(key) + '"' + (memberUi.projectId === key ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+  }).join("");
+  var filters = [["all","全部",scoped.length],["doing","进行中",counts.doing],["backlog","待处理",counts.backlog],["overdue","逾期",counts.overdue],["blocked","阻塞",counts.blocked]];
+  return '<div class="manager-panel-head"><b>手里的工作项</b><span>共 ' + filtered.length + ' 项 · 逾期 ' + counts.overdue + ' · 阻塞 ' + counts.blocked + '</span></div>'
+    + '<div class="member-work-tools"><div class="seg mini member-task-seg">'
+    + filters.map(function(f){ return '<button type="button" data-member-task-filter="' + f[0] + '" aria-pressed="' + (memberUi.taskFilter === f[0]) + '">' + f[1] + '<b>' + f[2] + '</b></button>'; }).join("")
+    + '</div><select class="mini-select' + (memberUi.projectId ? ' is-filtered' : '') + '" data-member-task-project aria-label="按项目筛选工作项">' + projectOptions + '</select>'
+    + (memberUi.projectId ? '<button class="member-link" type="button" data-member-project-clear>清除项目筛选</button>' : '') + '</div>'
     + '<div class="tbl-wrap"><table class="manager-tbl member-drill-tbl"><thead><tr>'
-    + '<th>工作项</th><th>项目</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
-    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    + '<th>工作项</th><th>项目</th><th>状态</th><th>优先级</th><th class="num">截止</th><th class="num">预估</th><th class="num">已计</th>'
+    + '</tr></thead><tbody>' + (taskRowsHTML(shown) || '<tr><td colspan="7" class="manager-empty-cell">该口径下暂无工作项</td></tr>') + '</tbody></table></div>'
+    + moreHTML("task", shown.length, filtered.length, "项");
 }
-function memberLogsData(m, scope, dayIdx){
-  var isLast = scope === "last";
-  var all = (isLast ? m.lastWeekLogs : m.weekLogs) || [];
-  var weekStart = isLast ? (cache && cache.lastWeekStart) : (cache && cache.weekStart);
-  var hasDay = dayIdx !== undefined && dayIdx !== null && dayIdx !== "";
-  var date = hasDay ? addDaysISO(weekStart, Number(dayIdx)) : "";
-  var rows = hasDay ? all.filter(function(l){ return l.date === date; }) : all;
-  var total = 0;
-  rows.forEach(function(l){ total += Number(l.minutes) || 0; });
-  var desc;
-  if(hasDay){
-    desc = WEEK_DAY_NAMES[Number(dayIdx)] + " " + fmtDate(date) + " 合计 " + fmtHours(total)
-      + " · " + (isLast ? "上周" : "本周") + "合计 " + fmtHours(isLast ? m.lastWeekMinutes : m.weekMinutes);
-  } else if(isLast){
-    var d = (m.weekMinutes || 0) - (m.lastWeekMinutes || 0);
-    desc = "上周合计 " + fmtHours(m.lastWeekMinutes) + " · 本周合计 " + fmtHours(m.weekMinutes)
-      + "（差异 " + (d === 0 ? "持平" : (d > 0 ? "+" : "−") + fmtHours(Math.abs(d))) + "）";
-  } else {
-    desc = "本周合计 " + fmtHours(m.weekMinutes);
-  }
-  return { rows: rows, total: total, desc: desc };
+function logsForScope(m){
+  var last = memberUi.logScope === "last";
+  return { logs:last ? (m.lastWeekLogs || []) : (m.weekLogs || []), start:last ? (cache && cache.lastWeekStart) : (cache && cache.weekStart), last:last };
 }
-function memberLogsHTML(m, scope, dayIdx){
-  var data = memberLogsData(m, scope, dayIdx);
-  var rows = data.rows.map(function(l){
+function logRowsHTML(logs){
+  return logs.map(function(l){
     var attrs = l.taskId ? ' data-open-task="' + esc(l.taskId) + '" tabindex="0" title="打开工作项详情"' : "";
     var origin = l.origin === "manual" ? ' <span class="tag tag-ghost">补记</span>' : "";
     return '<tr' + attrs + '><td class="num">' + esc(fmtDate(l.date)) + '</td>'
       + '<td><div class="manager-task-title">' + esc(l.title) + origin + '</div></td>'
-      + '<td>' + assocLinkHTML("project", l.reqId, l.reqName, {plain:"未归类"}) + '</td><td class="num">' + fmtHours(l.minutes) + '</td></tr>';
-  }).join("") || '<tr><td colspan="4" class="manager-empty-cell">该时段暂无计时记录</td></tr>';
-  return '<button class="member-back" type="button" data-member-back>← 返回项目分布</button>'
-    + '<div class="member-layer-head"><b>' + (scope === "last" ? "上周计时" : "本周计时") + '</b>'
-    + '<span>共 ' + data.rows.length + ' 条 · 点击记录行打开工作项</span></div>'
-    + '<div class="tbl-wrap"><table class="manager-tbl member-drill-tbl"><thead><tr>'
+      + '<td>' + assocLinkHTML("project", l.reqId, l.reqName, { plain:"未归类" }) + '</td><td class="num">' + fmtHours(l.minutes) + '</td></tr>';
+  }).join("");
+}
+function logsPanelHTML(mv){
+  var scope = logsForScope(mv.m);
+  var dayLogs = memberUi.dayIdx === "" ? scope.logs : scope.logs.filter(function(l){ return l.date === addDaysISO(scope.start, Number(memberUi.dayIdx)); });
+  var shown = dayLogs.slice(0, memberUi.logShown);
+  var dayTotals = [0,0,0,0,0,0,0];
+  scope.logs.forEach(function(l){
+    var idx = Math.round((parseDay(l.date) - parseDay(scope.start)) / 86400000);
+    if(idx >= 0 && idx < 7) dayTotals[idx] += Number(l.minutes) || 0;
+  });
+  var todayIdx = scope.last ? -1 : weekTodayIndex(scope.start);
+  var days = WEEK_DAY_NAMES.map(function(name, i){
+    var on = String(memberUi.dayIdx) === String(i);
+    return '<button class="member-day' + (i === todayIdx ? ' is-today' : '') + (on ? ' on' : '') + '" type="button" data-member-day="' + i + '" aria-pressed="' + on + '" title="只看 ' + name + ' 的计时">'
+      + '<span>' + name + '</span><b>' + (dayTotals[i] ? fmtHours(dayTotals[i]) : "—") + '</b></button>';
+  }).join("");
+  var total = dayLogs.reduce(function(n, l){ return n + (Number(l.minutes) || 0); }, 0);
+  var label = memberUi.dayIdx === "" ? (scope.last ? "上周工时" : "本周工时") : (WEEK_DAY_NAMES[Number(memberUi.dayIdx)] + " · " + fmtDate(addDaysISO(scope.start, Number(memberUi.dayIdx))));
+  return '<div class="manager-panel-head"><b>' + label + '</b><span>共 ' + dayLogs.length + ' 条 · 合计 ' + fmtHours(total) + '</span></div>'
+    + '<div class="member-work-tools"><div class="seg mini">'
+    + '<button type="button" data-member-log-scope="week" aria-pressed="' + (!scope.last) + '">本周</button>'
+    + '<button type="button" data-member-log-scope="last" aria-pressed="' + scope.last + '">上周</button></div>'
+    + (memberUi.dayIdx !== "" ? '<button class="member-link" type="button" data-member-day-clear>清除日期筛选</button>' : '')
+    + '</div>'
+    + '<div class="member-days">' + days + '</div>'
+    + '<div class="tbl-wrap member-log-tbl"><table class="manager-tbl member-drill-tbl"><thead><tr>'
     + '<th class="num">日期</th><th>工作项</th><th>项目</th><th class="num">耗时</th>'
-    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    + '</tr></thead><tbody>' + (logRowsHTML(shown) || '<tr><td colspan="4" class="manager-empty-cell">该时段暂无计时记录</td></tr>') + '</tbody></table></div>'
+    + moreHTML("log", shown.length, dayLogs.length, "条");
 }
-function memberDesc(m, layer){
-  if(layer.kind === "tasks"){
-    var p = memberProject(m, layer.reqId);
-    var tasks = (m.tasks || []).filter(function(t){ return layer.all || (t.reqId || "") === (layer.reqId || ""); });
-    var remain = layer.all ? (Number(m.remainingMinutes) || 0) : (Number(p && p.remainingMinutes) || 0);
-    return (layer.all ? "全部项目" : (p ? p.name : "未归类")) + " · " + tasks.length + " 项未完成 · 剩余 " + fmtHours(remain);
-  }
-  if(layer.kind === "logs") return memberLogsData(m, layer.logScope, layer.dayIdx).desc;
-  return "剩余 " + fmtHours(m.remainingMinutes) + " · " + memberTaskCount(m) + " 个未完成工作项 · 本周已计 " + fmtHours(m.weekMinutes);
+function moreHTML(kind, shown, total, unit){
+  if(shown >= total) return '';
+  return '<div class="member-more"><button class="btn sm" type="button" data-member-' + kind + '-more>加载更多（已显示 ' + shown + ' / 共 ' + total + ' ' + unit + '）</button></div>';
 }
-function openMemberSheet(member, opts){
-  opts = opts || {};
-  var state = {
-    kind: opts.kind === "tasks" || opts.kind === "logs" ? opts.kind : "projects",
-    reqId: opts.reqId || "",
-    all: !!opts.all,
-    logScope: opts.logScope === "last" ? "last" : "week",
-    dayIdx: opts.dayIdx === undefined || opts.dayIdx === null || opts.dayIdx === "" ? undefined : opts.dayIdx
-  };
-  var layer = document.createElement("div");
-  layer.className = "modal-layer";
-  layer.setAttribute("role", "dialog");
-  layer.setAttribute("aria-modal", "true");
-  layer.setAttribute("aria-label", "成员负载：" + member.name);
-  activeMemberSheet = layer;
-  layer.__uiOnClose = function(){ if(activeMemberSheet === layer) activeMemberSheet = null; setTimeout(function(){ layer.remove(); }, 0); };
-  function bodyHTML(){
-    if(state.kind === "tasks") return memberTasksHTML(member, state);
-    if(state.kind === "logs") return memberLogsHTML(member, state.logScope, state.dayIdx);
-    return memberProjectsHTML(member) + memberWeekHTML(member);
+function memberPageHTML(mv){
+  var m = mv.m;
+  var roles = Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m);
+  return '<div class="member-page">'
+    + '<button class="member-back" type="button" data-member-back>← 返回成员负载</button>'
+    + '<header class="member-page-head"><div class="member-page-id">' + avatarHTML(m.name, "xl")
+    + '<div><h2>' + esc(m.name) + memberStatusTag(mv.status) + '</h2>'
+    + '<div class="member-page-meta">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span>岗位：' + esc(m.jobTitle) + '</span>' : '')
+    + '<span>剩余 ' + fmtHours(m.remainingMinutes) + ' · ' + esc(periodLabel()) + ' ' + fmtHours(periodMinutes(m)) + '</span></div>'
+    + '<div class="member-card-roles">' + memberRoleTagsHtml(roles, 6) + '</div></div></div>'
+    + '<div class="member-page-actions"><button class="btn sm soft" type="button" data-member-export>' + icon("download", 13) + '导出该成员 CSV</button></div></header>'
+    + '<p class="roster-note">' + esc(workloadScopeText(cache)) + ' · 点击工作项打开详情</p>'
+    + memberKpisHTML(m)
+    + '<div class="manager-two-col"><section class="manager-panel">' + statePanelHTML(mv) + '</section>'
+    + '<section class="manager-panel">' + projectsPanelHTML(mv) + '</section></div>'
+    + '<section class="manager-panel" data-member-tasks-panel>' + tasksPanelHTML(mv) + '</section>'
+    + '<section class="manager-panel" data-member-logs-panel>' + logsPanelHTML(mv) + '</section>'
+    + '</div>';
+}
+function renderMemberPage(){
+  var body = $("workloadBody"); if(!body) return;
+  var m = memberByKey(memberUi.key);
+  if(!m){ renderWorkload(); return; }
+  var mv = memberView(m);
+  body.setAttribute("aria-busy","false");
+  body.innerHTML = memberPageHTML(mv);
+  if(memberUi.focus){
+    var focus = memberUi.focus;
+    memberUi.focus = "";
+    requestAnimationFrame(function(){
+      var el = document.querySelector(focus === "logs" ? "[data-member-logs-panel]" : "[data-member-tasks-panel]");
+      if(el && el.scrollIntoView) el.scrollIntoView({ block:"start", behavior:"smooth" });
+    });
   }
-  function render(focusBack){
-    layer.innerHTML = '<div class="sheet manager-drill-sheet member-sheet">'
-      + '<div class="sheet-head"><div class="member-sheet-id">' + avatarHTML(member.name, "lg")
-      + '<div style="min-width:0"><h2>' + esc(member.name) + ' ' + memberStatusTag(member) + '</h2>'
-      + '<div class="desc">' + esc(memberDesc(member, state)) + '</div></div></div>'
-      + '<button class="icon-btn sm" type="button" data-manager-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
-      + '<div class="sheet-body"><p class="roster-note">' + esc(workloadScopeText(cache)) + '</p>' + workloadMemberLabels(member) + memberKpisHTML(member) + bodyHTML() + '</div></div>';
-    if(focusBack){
-      var target = layer.querySelector("[data-member-back]") || layer.querySelector("[data-manager-close]");
-      if(target) target.focus();
-    }
-  }
-  function toProjects(){
-    state.kind = "projects"; state.reqId = ""; state.all = false; state.dayIdx = undefined;
-    render(true);
-  }
-  render();
-  document.body.appendChild(layer);
-  layer.addEventListener("click", function(e){
-    if(e.target.closest("[data-manager-close]")){ UI.closeModal(layer); return; }
-    if(e.target.closest("[data-member-back]")){ toProjects(); return; }
-    if(e.target.closest("[data-member-all]")){ state.kind = "tasks"; state.all = true; state.reqId = ""; render(true); return; }
-    var proj = e.target.closest("[data-member-project]");
-    if(proj){ state.kind = "tasks"; state.all = false; state.reqId = proj.dataset.memberProject || ""; render(true); return; }
-    var day = e.target.closest("[data-member-day]");
-    if(day){ state.kind = "logs"; state.dayIdx = Number(day.dataset.memberDay); render(true); return; }
-    var logs = e.target.closest("[data-member-logs]");
-    if(logs){ state.kind = "logs"; state.dayIdx = undefined; state.logScope = logs.dataset.memberLogs === "last" ? "last" : "week"; render(true); return; }
-    var task = e.target.closest("[data-open-task]");
-    if(task){ openTaskById(task.dataset.openTask); }
+}
+function paintMemberTasks(){
+  var m = memberByKey(memberUi.key); if(!m) return;
+  var el = document.querySelector("[data-member-tasks-panel]");
+  if(el) el.innerHTML = tasksPanelHTML(memberView(m));
+  document.querySelectorAll("[data-member-project]").forEach(function(row){
+    row.classList.toggle("on", !!memberUi.projectId && row.dataset.memberProject === memberUi.projectId);
   });
-  layer.addEventListener("keydown", function(e){
-    if(e.key !== "Enter" && e.key !== " ") return;
-    var row = e.target.closest("[data-member-project],[data-open-task]");
-    if(!row || e.target !== row) return;
-    e.preventDefault();
-    row.click();
-  });
-  UI.openModal(layer, state.kind === "projects" ? "" : "[data-member-back]");
+}
+function paintMemberLogs(){
+  var m = memberByKey(memberUi.key); if(!m) return;
+  var el = document.querySelector("[data-member-logs-panel]");
+  if(el) el.innerHTML = logsPanelHTML(memberView(m));
 }
 
-function matrix(){
-  var projects = (cache.projects || []).slice();
-  var hasNone = (cache.members || []).some(function(m){return (m.projects||[]).some(function(p){return !p.reqId && p.remainingMinutes>0;});});
-  if(hasNone) projects.push({id:"",name:"未归类"});
-  var head = '<tr><th>成员</th>' + projects.map(function(p){return '<th class="num">'+esc(p.name)+'</th>';}).join("")
-    + '<th class="num"><span class="caliber-label">合计剩余' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</span></th>'
-    + '<th><span class="caliber-label">总负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</span></th>'
-    + '<th>状态</th></tr>';
-  var rows = (cache.members || []).map(function(m){
-    var cells = projects.map(function(p){
-      var group=(m.projects||[]).filter(function(x){return (x.reqId||"")===(p.id||"");})[0];
-      return '<td class="num">'+(group&&group.remainingMinutes?'<button class="manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" data-member-layer="tasks" data-member-req="'+esc(p.id||"")+'" title="查看该项目下的工作项">'+fmtHours(group.remainingMinutes)+'</button>':'—')+'</td>';
-    }).join("");
-    var status=m.overloaded?'<span class="mini-tag over">超载</span>':(m.loadPct>=85?'<span class="mini-tag warn">接近满载</span>':'<span class="mini-tag ok">可承接 '+fmtHours(Math.max(0,m.capacityMinutes-m.remainingMinutes))+'</span>');
-    return '<tr><td><button class="manager-person manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" title="查看成员负载">'+avatarHTML(m.name,"sm")+'<b>'+esc(m.name)+'</b></button>'+workloadMemberLabels(m)+'</td>'+cells+'<td class="num"><b>'+fmtHours(m.remainingMinutes)+'</b></td><td>'+loadBarHTML(m.loadPct)+'</td><td>'+status+'</td></tr>';
-  }).join("") || '<tr><td colspan="20" class="manager-empty-cell">暂无成员负载数据</td></tr>';
-  return '<section class="manager-panel"><div class="manager-panel-head"><b>成员 × 项目负载矩阵</b><span>点击成员打开负载抽屉 · 点击工时穿透到项目工作项</span></div><div class="tbl-wrap"><table class="manager-tbl manager-matrix"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div></section>';
+/* ==================== 路由：名册 ⇄ 成员工作台 ==================== */
+
+function routeMemberKey(){
+  try{
+    if(!window.location) return "";
+    var raw = String(window.location.hash || "").replace(/^#\/?/, "");
+    var qi = raw.indexOf("?");
+    if((qi >= 0 ? raw.substring(0, qi) : raw) !== "workload") return "";
+    if(typeof URLSearchParams !== "function") return "";
+    return new URLSearchParams(raw.substring(qi + 1)).get("member") || "";
+  }catch(e){ return ""; }
 }
-function weekTable(){
-  var rows=(cache.members||[]).map(function(m){
-    var hasLogs=(m.weekLogs||[]).length>0;
-    var nameHTML='<button class="manager-person manager-cell-link" type="button" data-member-open="'+esc(m.key)+'"'+(hasLogs?' data-member-layer="logs"':'')+' title="查看成员负载">'+avatarHTML(m.name,"sm")+'<b>'+esc(m.name)+'</b></button>';
-    var cells=(m.dayMinutes||[]).map(function(n,i){
-      if(!n) return '<td class="num">—</td>';
-      if(!hasLogs) return '<td class="num">'+fmtHours(n)+'</td>';
-      return '<td class="num"><button class="manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" data-member-layer="logs" data-member-day="'+i+'" title="查看该日计时明细">'+fmtHours(n)+'</button></td>';
-    }).join("");
-    var diff=(m.weekMinutes||0)-(m.lastWeekMinutes||0),cls=diff>0?"tag-warning":(diff<0?"tag-success":"tag-ghost");
-    var diffHTML='<span class="tag '+cls+'">'+(diff===0?'持平':((diff>0?'+':'−')+fmtHours(Math.abs(diff))))+'</span>';
-    if((m.lastWeekLogs||[]).length){
-      diffHTML='<button class="manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" data-member-layer="logs" data-member-scope="last" title="查看上周计时明细">'+diffHTML+'</button>';
-    }
-    var totalHTML=hasLogs?'<button class="manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" data-member-layer="logs" title="查看本周计时明细"><b>'+fmtHours(m.weekMinutes)+'</b></button>':'<b>'+fmtHours(m.weekMinutes)+'</b>';
-    return '<tr><td>'+nameHTML+workloadMemberLabels(m)+'</td>'+cells+'<td class="num">'+totalHTML+'</td><td>'+diffHTML+'</td></tr>';
-  }).join("")||'<tr><td colspan="10" class="manager-empty-cell">本周暂无计时记录</td></tr>';
-  return '<section class="manager-panel"><div class="manager-panel-head"><b>本周工时沉淀</b><span>与上周同口径对比 · 点击成员打开抽屉，点击格子看当日明细</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th>'+WEEK_DAY_NAMES.map(function(d){return '<th class="num">'+d+'</th>';}).join("")+'<th class="num">本周合计</th><th>上周对比</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+function memberHash(key){ return "#/workload" + (key ? "?member=" + encodeURIComponent(key) : ""); }
+function syncMemberHash(key, push){
+  try{
+    if(!window.location) return;
+    var hash = memberHash(key);
+    if(window.location.hash === hash) return;
+    if(typeof history === "undefined"){ window.location.hash = hash; return; }
+    if(push) history.pushState(null, "", hash); else history.replaceState(null, "", hash);
+  }catch(e){ /* file:// 等环境忽略 */ }
 }
-function addDaysISO(iso, days){
-  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso||"");
-  if(!m) return "";
-  var d=new Date(Date.UTC(Number(m[1]),Number(m[2])-1,Number(m[3])));
-  d.setUTCDate(d.getUTCDate()+days);
-  return d.toISOString().slice(0,10);
+function resetMemberUi(opts){
+  opts = opts || {};
+  memberUi.taskFilter = "all";
+  memberUi.projectId = opts.projectId || "";
+  memberUi.taskShown = TASK_PAGE;
+  memberUi.logScope = opts.logScope === "last" ? "last" : "week";
+  memberUi.dayIdx = opts.dayIdx === undefined || opts.dayIdx === null ? "" : String(opts.dayIdx);
+  memberUi.logShown = LOG_PAGE;
+  memberUi.focus = opts.focus || "";
 }
+function openMemberPage(key, opts){
+  var m = memberByKey(key);
+  if(!m) return;
+  memberUi.key = key;
+  memberUi.openedHere = true;
+  resetMemberUi(opts);
+  renderMemberPage();
+  syncMemberHash(key, true);
+}
+function closeMemberPage(){
+  memberUi.key = "";
+  if(memberUi.openedHere && typeof history !== "undefined" && history.length > 1){
+    memberUi.openedHere = false;
+    history.back();
+    if(cache) renderWorkload();
+    return;
+  }
+  memberUi.openedHere = false;
+  syncMemberHash("", false);
+  if(cache) renderWorkload();
+}
+function refreshFromHash(){
+  var key = routeMemberKey();
+  if(key === memberUi.key) return;
+  if(key){
+    var m = memberByKey(key);
+    if(!m){ memberUi.key = ""; syncMemberHash("", false); if(cache) renderWorkload(); return; }
+    memberUi.key = key;
+    memberUi.openedHere = false;
+    resetMemberUi({});
+    renderMemberPage();
+    return;
+  }
+  memberUi.key = "";
+  memberUi.openedHere = false;
+  if(cache) renderWorkload();
+}
+
+/* ==================== 导出 ==================== */
+
 function exportWorkloadScope(){
   if(!cache || loading || filterWorkspace !== workloadWorkspace()) return;
-  /* 不再请求未带筛选的 mobile 月报；只导出已渲染的后台 scope 数据。 */
-  var rows = [["成员负载", workloadScopeText(cache)], ["统计日期",cache.today || "", "本周开始",cache.weekStart || ""], [],
-    ["成员","公司","空间默认岗位","项目角色（主+兼岗）","未完成工作项","剩余预估(h)","容量(h)","负载","本周工时(h)","上周工时(h)"].concat(WEEK_DAY_NAMES.map(function(d){ return d + "(h)"; }))];
+  var range = periodRange(period);
+  var rows = [["成员负载", workloadScopeText(cache)], ["统计日期", todayIso(), "工时区间", periodLabel(), range.from + " ~ " + range.to],
+    ["本周开始", cache.weekStart || ""], [],
+    ["成员","状态","公司","空间默认岗位","项目角色（主+兼岗）","未完成工作项","逾期","阻塞","剩余预估(h)","容量(h)","负载","本周工时(h)","上周工时(h)","区间工时(h)"].concat(WEEK_DAY_NAMES.map(function(d){ return d + "(h)"; }))];
   var members = cache.members || [];
   members.forEach(function(m){
-    rows.push([m.name,m.companyName || "未设公司",m.jobTitle || "",(Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m)).join(" / "),memberTaskCount(m),
-      (Number(m.remainingMinutes) || 0) / 60,(Number(m.capacityMinutes) || 0) / 60,(m.loadPct || 0) + "%",(Number(m.weekMinutes) || 0) / 60,(Number(m.lastWeekMinutes) || 0) / 60]
+    var counts = taskCounts(m.tasks);
+    rows.push([m.name,STATUS_META[memberStatus(m, counts)].label,m.companyName || "未设公司",m.jobTitle || "",(Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m)).join(" / "),counts.open,counts.overdue,counts.blocked,
+      (Number(m.remainingMinutes) || 0) / 60,(Number(m.capacityMinutes) || 0) / 60,(m.loadPct || 0) + "%",(Number(m.weekMinutes) || 0) / 60,(Number(m.lastWeekMinutes) || 0) / 60,periodMinutes(m) / 60]
       .concat(WEEK_DAY_NAMES.map(function(_,i){ return (Number((m.dayMinutes || [])[i]) || 0) / 60; })));
   });
   rows.push([], ["成员","项目","项目角色","未完成工作项","剩余预估(h)"]);
   members.forEach(function(m){ (m.projects || []).forEach(function(p){ rows.push([m.name,p.name,(Array.isArray(p.roleTitles) ? p.roleTitles : memberRoleTitles(p)).join(" / "),p.taskCount,(Number(p.remainingMinutes) || 0) / 60]); }); });
-  rows.push([], ["成员","项目","工作项","状态","截止","预估(h)","实际(h)"]);
-  members.forEach(function(m){ (m.tasks || []).forEach(function(t){ rows.push([m.name,t.reqName,t.title,taskStatusName(t),fmtDate(t.dueDate),(Number(t.estimateMinutes) || 0) / 60,(Number(t.totalMinutes) || 0) / 60]); }); });
+  rows.push([], ["成员","项目","工作项","状态","优先级","截止","预估(h)","实际(h)"]);
+  members.forEach(function(m){ (m.tasks || []).forEach(function(t){ rows.push([m.name,t.reqName,t.title,taskStatusName(t),t.priority || "",fmtDate(t.dueDate),(Number(t.estimateMinutes) || 0) / 60,(Number(t.totalMinutes) || 0) / 60]); }); });
   rows.push([], ["计时成员","项目","工作项","日期","耗时(h)","时段"]);
   members.forEach(function(m){ ["weekLogs","lastWeekLogs"].forEach(function(key){ (m[key] || []).forEach(function(l){ rows.push([m.name,l.reqName,l.title,l.date,(Number(l.minutes) || 0) / 60,key === "weekLogs" ? "本周" : "上周"]); }); }); });
-  downloadCsv("成员负载-" + (cache.today || "当前范围") + ".csv", rows); toast("已导出当前筛选范围", "fs");
+  downloadCsv("成员负载-" + todayIso() + ".csv", rows); toast("已导出当前筛选范围", "fs");
 }
+function exportMember(){
+  if(!cache || loading || filterWorkspace !== workloadWorkspace()) return;
+  var m = memberByKey(memberUi.key); if(!m) return;
+  var mv = memberView(m), counts = mv.counts, range = periodRange(period);
+  var rows = [["成员工作台", m.name], ["状态", STATUS_META[mv.status].label, "统计日期", todayIso()], ["筛选范围", workloadScopeText(cache)], [],
+    ["工时区间", periodLabel(), range.from + " ~ " + range.to],
+    ["公司", m.companyName || "未设公司", "岗位", m.jobTitle || "", "角色", (Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m)).join(" / ")],
+    ["未完成工作项", counts.open, "进行中", counts.doing, "待处理", counts.backlog],
+    ["逾期", counts.overdue, "阻塞", counts.blocked, "未填预估", counts.unestimated],
+    ["剩余预估(h)", (Number(m.remainingMinutes) || 0) / 60, "容量(h)", (Number(m.capacityMinutes) || 0) / 60, "负载", (Number(m.loadPct) || 0) + "%"],
+    ["本周工时(h)", (Number(m.weekMinutes) || 0) / 60, "上周工时(h)", (Number(m.lastWeekMinutes) || 0) / 60, "区间工时(h)", periodMinutes(m) / 60], [],
+    ["参与项目","我的角色","未完成","剩余预估(h)"]
+  ];
+  mv.projects.forEach(function(p){ rows.push([p.name, (p.roleTitles || []).join(" / "), p.taskCount, (Number(p.remainingMinutes) || 0) / 60]); });
+  rows.push([], ["工作项","项目","状态","优先级","截止","预估(h)","已计(h)"]);
+  (m.tasks || []).forEach(function(t){ rows.push([t.title,t.reqName,taskStatusName(t),t.priority || "",fmtDate(t.dueDate),(Number(t.estimateMinutes) || 0) / 60,(Number(t.totalMinutes) || 0) / 60]); });
+  rows.push([], ["计时日期","工作项","项目","耗时(h)","时段"]);
+  ["weekLogs","lastWeekLogs"].forEach(function(key){ (m[key] || []).forEach(function(l){ rows.push([l.date,l.title,l.reqName,(Number(l.minutes) || 0) / 60,key === "weekLogs" ? "本周" : "上周"]); }); });
+  downloadCsv("成员工作台-" + m.name + ".csv", rows); toast("已导出该成员的工作台数据", "fs");
+}
+
+/* ==================== 渲染与交互 ==================== */
+
 /* 每日容量以后端 capacityMinutesPerDay 为准（当前 480 分钟），避免口径文案与计算不一致 */
 function capacityHoursLabel(data){
   var perDay = Number(data && data.capacityMinutesPerDay) || 480;
@@ -91172,41 +92393,125 @@ function capacityHoursLabel(data){
 }
 function renderWorkload(){
   if(!cache || loading || filterWorkspace !== workloadWorkspace()) return;
+  if(memberUi.key){ renderMemberPage(); return; }
   var focusKey = document.activeElement && document.activeElement.dataset.workloadFilter;
   $("workloadBody").innerHTML = workloadToolbar() + '<p class="roster-note">' + esc(workloadScopeText(cache)) + '</p>'
-    + caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × '+capacityHoursLabel(cache)+'）；无截止日默认 5 个剩余工作日，容量上限按 30 天计算。')
-    + (mode==='person'?matrix():weekTable());
+    + caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × ' + capacityHoursLabel(cache) + '）；无截止日默认 5 个剩余工作日，容量上限按 30 天计算。')
+    + (viewMode === 'week'
+      ? weekTable()
+      : '<div id="memberRoster" class="member-roster">' + rosterHTML() + '</div>');
   if(focusKey){ var field = document.querySelector('[data-workload-filter="' + focusKey + '"]'); if(field) field.focus(); }
 }
-if($("workloadBody"))$("workloadBody").addEventListener("click",function(e){
-  var modeBtn=e.target.closest("[data-load-mode]");if(modeBtn && cache && !loading){mode=modeBtn.dataset.loadMode;renderWorkload();return;}
-  if(e.target.closest("[data-workload-clear]")){ workloadFilter = { reqId:"", roleTitle:"", companyName:"" }; loadWorkload(); return; }
-  if(e.target.closest("[data-load-export]")){exportWorkloadScope();return;}
-  if(e.target.closest("[data-empty-action]")){loadWorkload();return;}
-  var opener=e.target.closest("[data-member-open]");
-  if(opener && cache && !loading && filterWorkspace === workloadWorkspace()){
-    var member=memberByKey(opener.dataset.memberOpen);
-    if(member){
-      openMemberSheet(member,{
-        kind: opener.dataset.memberLayer || "projects",
-        reqId: opener.dataset.memberReq || "",
-        logScope: opener.dataset.memberScope || "week",
-        dayIdx: opener.dataset.memberDay
-      });
+function syncModeButtons(){
+  var body = $("workloadBody");
+  if(!body) return;
+  body.querySelectorAll("[data-load-mode]").forEach(function(b){ b.setAttribute("aria-pressed", b.dataset.loadMode === viewMode); });
+}
+function setViewMode(mode){
+  if(mode !== "person" && mode !== "week") return;
+  viewMode = mode; savePrefs(); renderWorkload();
+}
+function resetMemberFilters(){
+  ui.q = ""; ui.status = ""; ui.shown = LIST_PAGE;
+  workloadFilter = { reqId:"", roleTitle:"", companyName:"" };
+  loadWorkload();
+}
+
+if($("workloadBody")) $("workloadBody").addEventListener("click", function(e){
+  var back = e.target.closest("[data-member-back]");
+  if(back){ closeMemberPage(); return; }
+  var modeBtn = e.target.closest("[data-load-mode]");
+  if(modeBtn && cache && !loading){ setViewMode(modeBtn.dataset.loadMode); return; }
+  var periodBtn = e.target.closest("[data-wl-period]");
+  if(periodBtn){
+    if(periodBtn.dataset.wlPeriod !== period){
+      period = periodBtn.dataset.wlPeriod; savePrefs(); loadWorkload();
     }
+    return;
+  }
+  if(e.target.closest("[data-workload-clear]")){ resetMemberFilters(); return; }
+  if(e.target.closest("[data-member-reset]")){ ui.q = ""; ui.status = ""; ui.shown = LIST_PAGE; renderRosterOnly(); return; }
+  if(e.target.closest("[data-load-export]")){ exportWorkloadScope(); return; }
+  if(e.target.closest("[data-empty-action]")){ loadWorkload(); return; }
+  if(e.target.closest("[data-member-export]")){ exportMember(); return; }
+
+  var statusChip = e.target.closest("[data-member-status]");
+  if(statusChip){ ui.status = ui.status === statusChip.dataset.memberStatus ? "" : statusChip.dataset.memberStatus; ui.shown = LIST_PAGE; renderRosterOnly(); return; }
+  var more = e.target.closest("[data-member-more]");
+  if(more){ ui.shown += LIST_PAGE; renderRosterOnly(); return; }
+  var taskFilter = e.target.closest("[data-member-task-filter]");
+  if(taskFilter){ memberUi.taskFilter = taskFilter.dataset.memberTaskFilter; memberUi.taskShown = TASK_PAGE; paintMemberTasks(); return; }
+  var logScope = e.target.closest("[data-member-log-scope]");
+  if(logScope){ memberUi.logScope = logScope.dataset.memberLogScope === "last" ? "last" : "week"; memberUi.dayIdx = ""; memberUi.logShown = LOG_PAGE; paintMemberLogs(); return; }
+  var day = e.target.closest("[data-member-day]");
+  if(day){ memberUi.dayIdx = memberUi.dayIdx === day.dataset.memberDay ? "" : day.dataset.memberDay; memberUi.logShown = LOG_PAGE; paintMemberLogs(); return; }
+  if(e.target.closest("[data-member-day-clear]")){ memberUi.dayIdx = ""; memberUi.logShown = LOG_PAGE; paintMemberLogs(); return; }
+  var dayMore = e.target.closest("[data-member-log-more]");
+  if(dayMore){ memberUi.logShown += LOG_PAGE; paintMemberLogs(); return; }
+  var taskMore = e.target.closest("[data-member-task-more]");
+  if(taskMore){ memberUi.taskShown += TASK_PAGE; paintMemberTasks(); return; }
+  if(e.target.closest("[data-member-project-clear]")){ memberUi.projectId = ""; memberUi.taskFilter = "all"; memberUi.taskShown = TASK_PAGE; paintMemberTasks(); return; }
+
+  var proj = e.target.closest("[data-member-project]");
+  if(proj){ memberUi.projectId = proj.dataset.memberProject || ""; memberUi.taskFilter = "all"; memberUi.taskShown = TASK_PAGE; paintMemberTasks(); return; }
+  var task = e.target.closest("[data-open-task]");
+  if(task){ openTaskById(task.dataset.openTask); return; }
+
+  var opener = e.target.closest("[data-member-open]");
+  if(opener && cache && !loading && filterWorkspace === workloadWorkspace()){
+    openMemberPage(opener.dataset.memberOpen, {
+      logScope: opener.dataset.memberScope === "last" ? "last" : "week",
+      dayIdx: opener.dataset.memberDay === undefined ? "" : opener.dataset.memberDay,
+      focus: opener.dataset.memberLayer === "logs" ? "logs" : ""
+    });
   }
 });
 
-if($("workloadBody")) $("workloadBody").addEventListener("change",function(e){
+if($("workloadBody")) $("workloadBody").addEventListener("change", function(e){
   var field = e.target.closest("[data-workload-filter]");
-  if(!field) return;
-  var key = field.dataset.workloadFilter;
-  if(["reqId","companyName","roleTitle"].indexOf(key) === -1) return;
-  workloadFilter[key] = field.value; loadWorkload();
-  var next = document.querySelector('[data-workload-filter="' + key + '"]'); if(next) next.focus();
+  if(field){
+    var key = field.dataset.workloadFilter;
+    if(["reqId","companyName","roleTitle"].indexOf(key) === -1) return;
+    workloadFilter[key] = field.value; loadWorkload();
+    var next = document.querySelector('[data-workload-filter="' + key + '"]'); if(next) next.focus();
+    return;
+  }
+  if(e.target.closest("[data-wl-group]")){
+    ui.group = e.target.value; ui.shown = LIST_PAGE; savePrefs();
+    renderWorkload();
+    return;
+  }
+  if(e.target.closest("[data-wl-sort]")){
+    ui.sort = e.target.value; savePrefs();
+    renderRosterOnly();
+    return;
+  }
+  if(e.target.closest("[data-member-task-project]")){
+    memberUi.projectId = e.target.value; memberUi.taskFilter = "all"; memberUi.taskShown = TASK_PAGE;
+    paintMemberTasks();
+  }
 });
 
-return {enterWorkloadView: enterWorkloadView, loadWorkload: loadWorkload};
+if($("workloadBody")) $("workloadBody").addEventListener("input", function(e){
+  var search = e.target.closest("[data-member-search]");
+  if(!search) return;
+  ui.q = search.value; ui.shown = LIST_PAGE;
+  renderRosterOnly();
+});
+
+if($("workloadBody")) $("workloadBody").addEventListener("keydown", function(e){
+  if(e.key !== "Enter" && e.key !== " ") return;
+  var target = e.target.closest("[data-member-open],[data-open-task],[data-member-project]");
+  if(!target || e.target !== target) return;
+  e.preventDefault();
+  target.click();
+});
+
+window.addEventListener("hashchange", function(){
+  if(document.body.dataset.view === "workload") refreshFromHash();
+});
+
+return {enterWorkloadView: enterWorkloadView, loadWorkload: loadWorkload, refreshFromHash: refreshFromHash};
 })();
 window.__HG_MODULES__["gantt"] = __NS["views/gantt.js"];
 window.__HG_MODULES__["projects"] = __NS["views/projects.js"];
@@ -91233,6 +92538,6 @@ window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-17 00:49</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-17 02:46</span></div>
 </body>
 </html>

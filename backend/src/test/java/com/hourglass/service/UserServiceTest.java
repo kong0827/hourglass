@@ -30,6 +30,7 @@ class UserServiceTest {
             mock(WorkspaceMapper.class), mock(WorkspaceMemberMapper.class),
             mock(ProjectMemberMapper.class), tasks,
             mock(com.hourglass.mapper.TaskWatchMapper.class),
+            mock(com.hourglass.mapper.DemandWatchMapper.class),
             mock(RequirementMapper.class),
             mock(com.hourglass.mapper.DevBranchMapper.class),
             mock(com.hourglass.mapper.RequirementDocMapper.class),

@@ -1317,6 +1317,9 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 }
 .modal-layer.side .sheet-body{flex:1 1 auto;min-height:0;overflow:auto;}
 .modal-layer.side .sheet-foot{border-radius:0;}
+/* 侧滑弹窗占满整列高度：`.sheet.md` 在 .modal-layer 下的 100vh-80px 上限是居中弹窗的口径，
+   两者同优先级且居中规则在后，会把侧滑也压短 80px、底部留出一条空隙 */
+.modal-layer.side .sheet.md{max-height:none;}
 /* 侧滑面板只有 560 宽，原来 720 宽的双列表单会把长文本框压到 250；侧滑内改单列，短字段仍可自行分行 */
 .modal-layer.side .proj-dlg-body .stack.proj-form-grid{grid-template-columns:minmax(0,1fr);}
 @keyframes ds-slide-in-right{from{opacity:.5;transform:translateX(28px);}to{opacity:1;transform:none;}}
@@ -2748,6 +2751,27 @@ button.case-witem:hover{border-color:var(--primary-border);color:var(--text);}
 .dem-evidence-tbl .t-title{font-weight:550;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dem-evidence-tbl .t-sub{margin-top:2px;font-size:11.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dem-evidence-tbl tbody tr[data-open-task] td:first-child{color:var(--text);font-weight:inherit;}
+/* 提醒人：头部关注入口 + 浮层名单 */
+.demand-head .dem-watch-btn{gap:5px;}
+.demand-head .dem-watch-btn.is-on{color:var(--primary-fg);background:var(--primary-soft);border-color:transparent;}
+.dem-watch-count{min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--primary-soft);color:var(--primary-fg);
+  font-size:10.5px;font-weight:650;display:inline-flex;align-items:center;justify-content:center;}
+.dem-watch-btn.is-on .dem-watch-count{background:var(--primary);color:#fff;}
+.dem-watch-list{display:flex;flex-direction:column;gap:2px;max-height:220px;overflow-y:auto;padding:2px 0 4px;}
+.dem-watch-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;
+  column-gap:8px;row-gap:1px;padding:6px 10px;border-radius:var(--r-xs);}
+.dem-watch-row:hover{background:var(--surface-hover);}
+.dem-watch-name{grid-area:1/1;display:flex;align-items:center;gap:6px;min-width:0;
+  font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dem-watch-name .k{margin-left:auto;font-size:10.5px;font-weight:500;color:var(--primary-fg);}
+.dem-watch-sub{grid-area:2/1;font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dem-watch-row .icon-btn{grid-area:1/2/3/3;align-self:center;}
+.dem-watch-row.is-owner .dem-watch-name{font-weight:550;}
+.dem-watch-empty{padding:4px 10px 8px;margin:0;}
+.dem-watch-add{display:flex;align-items:center;gap:6px;padding:8px 10px;border-top:1px solid var(--border);}
+.dem-watch-add .input{flex:1 1 auto;min-width:0;height:28px;font-size:12px;}
+.dem-watch-pop .menu-foot{flex-wrap:wrap;align-items:center;gap:6px 8px;}
+.dem-watch-pop .menu-foot .foot-note{flex:1 1 100%;margin:4px 0 0;line-height:1.45;}
 
 /* ---------- 全局附件组件（core/attach-kit.js） ---------- */
 .icon-btn.xs{width:22px;height:22px;}

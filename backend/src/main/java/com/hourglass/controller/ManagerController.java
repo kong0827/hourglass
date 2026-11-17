@@ -76,10 +76,16 @@ public class ManagerController {
     }
 
     @GetMapping("/workload")
-    public ApiResult<Map<String, Object>> workload(@RequestParam(required = false) String reqId,
+    public ApiResult<Map<String, Object>> workload(@RequestParam(required = false) String from,
+                                                   @RequestParam(required = false) String to,
+                                                   @RequestParam(required = false) String reqId,
                                                    @RequestParam(required = false) String roleTitle,
                                                    @RequestParam(required = false) String companyName,
                                                    @CurrentWorkspace WorkspaceCtx ctx) {
+        if (from != null || to != null) {
+            return ApiResult.ok(managerService.workloadRange(ctx.getWsId(), ctx.getUserId(),
+                    from, to, reqId, roleTitle, companyName));
+        }
         return ApiResult.ok(managerService.workload(ctx.getWsId(), ctx.getUserId(), reqId, roleTitle, companyName));
     }
 

@@ -13,6 +13,7 @@ import com.hourglass.dto.DemandGanttPage;
 import com.hourglass.dto.DemandPage;
 import com.hourglass.dto.DemandQuery;
 import com.hourglass.dto.DemandSaveRequest;
+import com.hourglass.dto.DemandWatcherRequest;
 import com.hourglass.dto.PageResult;
 import com.hourglass.dto.ReqDocView;
 import com.hourglass.entity.Demand;
@@ -20,6 +21,7 @@ import com.hourglass.entity.DemandDeliveryJudgement;
 import com.hourglass.entity.Task;
 import com.hourglass.service.DemandDeliveryJudgementService;
 import com.hourglass.service.DemandService;
+import com.hourglass.service.DemandWatchService;
 import com.hourglass.service.RequirementDocService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,12 +43,15 @@ public class DemandController {
     private final DemandService demandService;
     private final RequirementDocService docService;
     private final DemandDeliveryJudgementService judgementService;
+    private final DemandWatchService watchService;
 
     public DemandController(DemandService demandService, RequirementDocService docService,
-                            DemandDeliveryJudgementService judgementService) {
+                            DemandDeliveryJudgementService judgementService,
+                            DemandWatchService watchService) {
         this.demandService = demandService;
         this.docService = docService;
         this.judgementService = judgementService;
+        this.watchService = watchService;
     }
 
     /** 需求池看板首屏：每个状态一列，只下发前 limit 条；搜索/优先级/类型/模块与列表同一口径 */
@@ -186,6 +191,43 @@ public class DemandController {
             @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.logs(ctx.getWsId(), ctx.getUserId(), id,
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    /** 提醒人：关注状态、关注名单与当前用户能否代为添加/移除 */
+    @GetMapping("/api/demands/{id}/watch")
+    public ApiResult<Map<String, Object>> watchStatus(@PathVariable String id,
+                                                      @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(watchService.status(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
+    /** 本人关注需求（可重复调用，幂等） */
+    @PostMapping("/api/demands/{id}/watch")
+    public ApiResult<Map<String, Object>> watch(@PathVariable String id,
+                                                @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(watchService.watch(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
+    /** 本人取消关注 */
+    @DeleteMapping("/api/demands/{id}/watch")
+    public ApiResult<Map<String, Object>> unwatch(@PathVariable String id,
+                                                  @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(watchService.unwatch(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
+    /** 项目可写者代他人加入提醒人名单 */
+    @PostMapping("/api/demands/{id}/watchers")
+    public ApiResult<Map<String, Object>> addWatcher(@PathVariable String id,
+                                                     @Valid @RequestBody DemandWatcherRequest body,
+                                                     @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(watchService.addWatcher(ctx.getUserId(), ctx.getWsId(), id, body.getUserId()));
+    }
+
+    /** 本人取消关注或项目可写者移除他人 */
+    @DeleteMapping("/api/demands/{id}/watchers/{userId}")
+    public ApiResult<Map<String, Object>> removeWatcher(@PathVariable String id,
+                                                        @PathVariable String userId,
+                                                        @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(watchService.removeWatcher(ctx.getUserId(), ctx.getWsId(), id, userId));
     }
 
     /** T2.3：需求详情「关联任务」透视 */

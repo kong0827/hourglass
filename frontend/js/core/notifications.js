@@ -19,6 +19,7 @@ var NOTIFY_ICON = {
   task_updated: "edit",
   daily_digest: "clock",
   demand_status: "list",
+  demand_watch: "eye",
   doc_changed: "projects",
   branch_status: "branch",
   version_released: "tag",

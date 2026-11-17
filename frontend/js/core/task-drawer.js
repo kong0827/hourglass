@@ -1247,6 +1247,15 @@ function syncTypeButtons(){
   group.querySelectorAll("[data-type]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.type === type ? "true" : "false");
   });
+  syncEpicField();
+}
+/* 史诗自身不能再挂史诗：隐藏归属条里的「所属史诗」并清空残留值 */
+function syncEpicField(){
+  var box = $("ctxEpicItem"), sel = $("iEpic");
+  if(!box) return;
+  var isEpic = !!(iItemType && iItemType.value === "epic");
+  box.hidden = isEpic;
+  if(isEpic && sel) sel.value = "";
 }
 function syncSeverityButtons(){
   var grid = $("sevGrid");
@@ -1621,10 +1630,9 @@ function syncAssocMore(){
   var sum = $("assocMoreSummary");
   if(!sum) return;
   var names = [];
-  if(assocText("iEpic")) names.push("史诗");
   if(assocText("iBranch")) names.push("分支");
   if(assocText("iReqDoc")) names.push("文档");
-  sum.textContent = names.length ? "已设 " + names.join("、") : "史诗 / 分支 / 文档";
+  sum.textContent = names.length ? "已设 " + names.join("、") : "分支 / 文档";
 }
 /* 只在抽屉读取需求目标，不对看板/列表逐卡请求；缓存随抽屉重开失效。 */
 var demandTargetCache = {}, demandTargetPending = {};
@@ -4284,6 +4292,7 @@ taskForm.addEventListener("submit", function(e){
       return vs && vs.getAttribute("data-ready") ? selectedVersionIds(vs) : null;
     })(),
     epicId: (function(){
+      if(itemTypeValue === "epic") return null;
       var es = $("iEpic");
       if(es && es.getAttribute("data-ready")) return es.value || "";
       return current ? (current.epicId || null) : null;

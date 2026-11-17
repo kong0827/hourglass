@@ -43,6 +43,8 @@ public class BackupData {
     private List<BackupCaseTask> caseTasks;
     /** 需求文档评论（v10；旧备份没有该字段时保留现有评论） */
     private List<BackupDocComment> docComments;
+    /** 需求池评论（v16；旧备份没有该字段时保留现有评论） */
+    private List<BackupDemandComment> demandComments;
     /** 文档模板（v15；旧备份没有该字段时保留现有模板） */
     private List<BackupDocTemplate> docTemplates;
     /** 模块字典（v11 起纳入；任务/需求按 ID 关联，导入时补齐缺失模块。旧备份没有该字段时，
@@ -308,6 +310,20 @@ public class BackupData {
     }
 
     @Data
+    public static class BackupDemandComment {
+        private String id;
+        private String demandId;
+        private String userId;
+        private String content;
+        private String parentId;
+        private String resolvedAt;
+        private String resolvedBy;
+        private String mentions;
+        private String taskId;
+        private String createdAt;
+    }
+
+    @Data
     public static class BackupDocTemplate {
         private String id;
         private String name;
@@ -390,6 +406,8 @@ public class BackupData {
         private int testCases;
         /** v10：重建的文档评论数 */
         private int docComments;
+        /** v16：重建的需求池评论数 */
+        private int demandComments;
         /** v14：重建的用例↔工作项关联数 */
         private int caseTaskLinks;
         /** v14：因用例或工作项未映射而跳过的关联数（导入不中断，但要在结果里如实报告） */

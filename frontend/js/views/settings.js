@@ -2821,7 +2821,7 @@ btnReset.addEventListener("click", function(){
     toast("正在导出备份…", "fs");
     return API.get("/api/export").then(function(data){
       triggerDownload(BACKUP_NAME, JSON.stringify(data, null, 2), "application/json");
-      return API.post("/api/import", {v:10, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[]});
+      return API.post("/api/import", {v:14, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[], demandComments:[]});
     }).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
       state.tags = []; state.types = []; state.columns = []; state.completion = ""; state.due = null; state.focus = false; state.blocked = false;

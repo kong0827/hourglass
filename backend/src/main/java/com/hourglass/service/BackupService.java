@@ -104,6 +104,7 @@ public class BackupService {
     private final VersionTaskMapper versionTaskMapper;
     private final com.hourglass.mapper.VersionCommitmentMapper commitmentMapper;
     private final DemandMapper demandMapper;
+    private final com.hourglass.mapper.DemandCommentMapper demandCommentMapper;
     private final TaskCompletionService completionService;
     /** 覆盖导入前清空任务类数据的清单统一收口在 TaskCascade */
     private final TaskCascade cascade;
@@ -136,6 +137,7 @@ public class BackupService {
                          VersionTaskMapper versionTaskMapper,
                          com.hourglass.mapper.VersionCommitmentMapper commitmentMapper,
                          DemandMapper demandMapper,
+                         com.hourglass.mapper.DemandCommentMapper demandCommentMapper,
                          TaskCompletionService completionService,
                          TaskCascade cascade,
                          ActivityService activityService,
@@ -170,6 +172,7 @@ public class BackupService {
         this.versionTaskMapper = versionTaskMapper;
         this.commitmentMapper = commitmentMapper;
         this.demandMapper = demandMapper;
+        this.demandCommentMapper = demandCommentMapper;
         this.completionService = completionService;
         this.cascade = cascade;
         this.activityService = activityService;
@@ -178,7 +181,7 @@ public class BackupService {
                 timeLogMapper, boardColumnMapper, categoryMapper, commentMapper, testCaseMapper,
                 testCaseRunMapper, caseTaskMapper, docCommentMapper, requirementDocMapper, devBranchMapper,
                 dependencyMapper, baselineMapper, versionMapper, versionTaskMapper, demandMapper, commitmentMapper,
-                docTemplateMapper);
+                docTemplateMapper, demandCommentMapper);
         this.txTemplate = new TransactionTemplate(transactionManager);
         /* 覆盖导入必须整体成功或整体回滚：外层事务包住所有阶段，批次只做语句切分 */
         this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
@@ -212,12 +215,14 @@ public class BackupService {
                 clearWorkspaceTaskData(workspaceId, data);
                 importReferenceData(data, st);
                 importDocComments(data, st);
+                importDemandComments(data, st);
                 importDocTemplates(data, st);
                 return null;
             });
             // 阶段 2：任务与子表，按批执行语句，但同属外层事务
             importTaskBatches(data, st);
             remapDocCommentTaskIds(st);
+            remapDemandCommentTaskIds(st);
             // 阶段 3：依赖/基线/循环关联/评论/测试用例
             importLinks(data, st);
             importTestCases(data, st);
@@ -236,6 +241,7 @@ public class BackupService {
             result.setDemands(st.demandCount);
             result.setTestCases(st.testCaseCount);
             result.setDocComments(st.docCommentCount);
+            result.setDemandComments(st.demandCommentCount);
             result.setCaseTaskLinks(st.caseTaskLinkCount);
             result.setSkippedCaseTaskLinks(st.skippedCaseTaskLinkCount);
             activityService.logConfig(workspaceId, userId, "导入覆盖备份（任务 " + st.taskCount
@@ -243,6 +249,7 @@ public class BackupService {
                     + " / 需求 " + st.reqDocCount + " / 分支 " + st.branchCount
                     + " / 版本 " + st.versionCount + " / 需求池 " + st.demandCount
                     + " / 用例 " + st.testCaseCount + " / 文档评论 " + st.docCommentCount
+                    + " / 需求评论 " + st.demandCommentCount
                     + " / 用例关联 " + st.caseTaskLinkCount + "（跳过 " + st.skippedCaseTaskLinkCount + "））");
             return result;
         });
@@ -259,10 +266,11 @@ public class BackupService {
         // v10：用例依赖项目、文档评论依赖文档；字段不全时保留现有数据，避免清了又恢复不回来。
         boolean withTestCases = data.getTestCases() != null && data.getReqs() != null;
         boolean withDocComments = data.getDocComments() != null && data.getReqDocs() != null;
+        boolean withDemandComments = data.getDemandComments() != null && data.getDemands() != null;
         cascade.clearWorkspaceDataForImport(workspaceId,
                 data.getReqDocs() != null, data.getBranches() != null,
                 data.getVersions() != null, data.getDemands() != null,
-                withTestCases, withDocComments);
+                withTestCases, withDocComments, withDemandComments);
         /* 版本被覆盖但需求池未随备份恢复时，旧 version_id 已指向不存在的版本 */
         if (data.getVersions() != null && data.getDemands() == null) {
             demandMapper.clearVersionRefsByWorkspace(workspaceId);
@@ -1431,6 +1439,77 @@ public class BackupService {
         }
     }
 
+    /** 阶段 1c2：需求池评论（需求 ID 可能因跨空间冲突被重映射）。
+     *  与文档评论同口径：评论 ID 全部重新生成，先顶层后回复，转项回链延迟到任务落库后补。 */
+    private void importDemandComments(BackupData data, ImportState st) {
+        if (data.getDemandComments() == null || data.getDemands() == null) {
+            return;
+        }
+        Map<String, String> commentIdMap = new HashMap<String, String>();
+        List<BackupData.BackupDemandComment> replies = new ArrayList<BackupData.BackupDemandComment>();
+        for (BackupData.BackupDemandComment b : data.getDemandComments()) {
+            if (b == null) {
+                continue;
+            }
+            if (Texts.trimToNull(b.getParentId()) != null) {
+                replies.add(b);
+                continue;
+            }
+            String newId = insertDemandComment(b, null, st);
+            if (newId != null && Texts.trimToNull(b.getId()) != null) {
+                commentIdMap.put(b.getId().trim(), newId);
+            }
+        }
+        for (BackupData.BackupDemandComment b : replies) {
+            String parentId = commentIdMap.get(b.getParentId().trim());
+            /* 父评论不在备份里（可能已被删除）：回复降级为顶层，不丢内容 */
+            insertDemandComment(b, parentId, st);
+        }
+    }
+
+    /** 落一条需求池评论，返回新 ID；正文/需求无效时返回 null。taskId 延后重映射，不在此处写入。 */
+    private String insertDemandComment(BackupData.BackupDemandComment b, String parentId, ImportState st) {
+        String content = Texts.trimToNull(b.getContent());
+        String originalDemandId = Texts.trimToNull(b.getDemandId());
+        if (content == null || originalDemandId == null) {
+            return null;
+        }
+        String demandId = st.demandIdMap.containsKey(originalDemandId)
+                ? st.demandIdMap.get(originalDemandId) : originalDemandId;
+        if (!st.demandIds.contains(demandId)) {
+            return null;
+        }
+        com.hourglass.entity.DemandComment c = new com.hourglass.entity.DemandComment();
+        c.setId(Ids.gen("DMC"));
+        c.setWorkspaceId(st.workspaceId);
+        c.setDemandId(demandId);
+        String author = Texts.trimToNull(b.getUserId());
+        c.setUserId(author == null ? st.userId : author);
+        c.setContent(content);
+        c.setCreatedAt(parseTs(b.getCreatedAt()));
+        c.setParentId(parentId);
+        c.setResolvedAt(parseTs(b.getResolvedAt()));
+        c.setResolvedBy(Texts.trimToNull(b.getResolvedBy()));
+        c.setMentions(Texts.trimToNull(b.getMentions()));
+        demandCommentMapper.insert(c);
+        st.demandCommentCount++;
+        String originalTaskId = Texts.trimToNull(b.getTaskId());
+        if (originalTaskId != null) {
+            st.demandCommentTaskLinks.add(new String[]{c.getId(), originalTaskId});
+        }
+        return c.getId();
+    }
+
+    /** 阶段 2 之后：需求池评论转工作项回链按任务 ID 映射补上；任务不在备份里的回链丢弃 */
+    private void remapDemandCommentTaskIds(ImportState st) {
+        for (String[] link : st.demandCommentTaskLinks) {
+            String taskId = st.taskIdMap.containsKey(link[1]) ? st.taskIdMap.get(link[1]) : link[1];
+            if (st.taskIds.contains(taskId)) {
+                demandCommentMapper.updateTaskId(st.workspaceId, link[0], taskId);
+            }
+        }
+    }
+
     /** 阶段 1d：文档模板（旧备份没有该字段时保留现有模板） */
     private void importDocTemplates(BackupData data, ImportState st) {
         if (data.getDocTemplates() == null) {
@@ -1555,6 +1634,8 @@ public class BackupService {
         final Map<String, String> taskIdMap = new HashMap<String, String>();
         /** v15：文档评论转工作项回链 [新评论ID, 备份任务ID]，任务落库后统一重映射 */
         final List<String[]> docCommentTaskLinks = new ArrayList<String[]>();
+        /** v16：需求池评论转工作项回链 [新评论ID, 备份任务ID] */
+        final List<String[]> demandCommentTaskLinks = new ArrayList<String[]>();
         final Map<String, String> branchIdMap = new HashMap<String, String>();
         final Map<String, String> reqDocIdMap = new HashMap<String, String>();
         /** v8：备份版本 id → 落库版本 id，以及版本所属项目 */
@@ -1579,6 +1660,7 @@ public class BackupService {
         int commentCount;
         int testCaseCount;
         int docCommentCount;
+        int demandCommentCount;
         int caseTaskLinkCount;
         int skippedCaseTaskLinkCount;
 
