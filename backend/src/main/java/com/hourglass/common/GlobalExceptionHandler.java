@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  * 全局异常处理：HTTP 状态码与业务 code 对齐（400/403/404/409/500），响应体仍是 ApiResult。
@@ -92,18 +93,28 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * SSE 心跳写到已断开的连接时，容器在异步写回线程抛出 IOException（Broken pipe）。
-     * 这不是服务端故障，降为 debug；其余 IOException 仍按未处理异常返回 500。
+     * SSE 心跳写到已断开的连接时，容器在异步写回线程抛出 IOException（Broken pipe，
+     * Windows 下也可能是「An established connection was aborted」）。
+     * event-stream 响应不能再写 JSON，否则异常处理器自己会抛 HttpMessageNotWritableException；
+     * 这里对 SSE 一律静默收尾，其余 IOException 仍按未处理异常返回 500。
      */
     @ExceptionHandler(java.io.IOException.class)
-    public Object handleIo(java.io.IOException e, HttpServletRequest request) {
+    public Object handleIo(java.io.IOException e, HttpServletRequest request, HttpServletResponse response) {
         markFailed(request);
-        if (isClientAbort(e)) {
+        if (isEventStream(response) || isClientAbort(e)) {
             log.debug("客户端已断开：{} {} - {}", request.getMethod(), request.getRequestURI(), e.getMessage());
             return null;
         }
         log.error("未处理异常：{} {}", request.getMethod(), request.getRequestURI(), e);
         return ResponseEntity.status(500).body(ApiResult.error(500, "服务内部错误"));
+    }
+
+    private static boolean isEventStream(HttpServletResponse response) {
+        if (response == null) {
+            return false;
+        }
+        String contentType = response.getContentType();
+        return contentType != null && contentType.toLowerCase().contains("text/event-stream");
     }
 
     private static boolean isClientAbort(Throwable error) {
@@ -113,8 +124,13 @@ public class GlobalExceptionHandler {
                 return true;
             }
             String message = current.getMessage();
-            if (message != null && (message.contains("Broken pipe") || message.contains("Connection reset"))) {
-                return true;
+            if (message != null) {
+                String lower = message.toLowerCase();
+                if (lower.contains("broken pipe") || lower.contains("connection reset")
+                        || lower.contains("aborted") || message.contains("中止")
+                        || message.contains("断开的管道")) {
+                    return true;
+                }
             }
             Throwable cause = current.getCause();
             if (cause == current) {

@@ -17,8 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 需求关注人（提醒人）：关注后状态流转、内容编辑、行内改优先级/期望交付、评论等事件会通知关注者。
@@ -92,15 +94,37 @@ public class DemandWatchService {
         if (target.equals(d.getCreatedBy())) {
             throw AppException.badRequest("提交人默认接收通知，无需添加为提醒人");
         }
-        WorkspaceMember member = memberMapper.selectMember(workspaceId, target);
+        requireWatchable(d, target);
+        watchMapper.insertIgnore(workspaceId, demandId, target, userId);
+        return status(userId, workspaceId, demandId);
+    }
+
+    /** 创建需求时预置提醒人：与逐个添加同一套校验；提交人、空值与重复项跳过。 */
+    @Transactional
+    public void addWatchers(Demand d, String actorId, Collection<String> targetIds) {
+        if (targetIds == null || targetIds.isEmpty()) {
+            return;
+        }
+        Set<String> seen = new LinkedHashSet<String>();
+        for (String raw : targetIds) {
+            String target = Texts.trimToNull(raw);
+            if (target == null || target.equals(actorId) || target.equals(d.getCreatedBy())
+                    || !seen.add(target)) {
+                continue;
+            }
+            requireWatchable(d, target);
+            watchMapper.insertIgnore(d.getWorkspaceId(), d.getId(), target, actorId);
+        }
+    }
+
+    private void requireWatchable(Demand d, String target) {
+        WorkspaceMember member = memberMapper.selectMember(d.getWorkspaceId(), target);
         if (member == null) {
             throw AppException.badRequest("提醒人不是当前空间成员");
         }
-        if (!projectAccess.canView(workspaceId, target, d.getReqId())) {
+        if (!projectAccess.canView(d.getWorkspaceId(), target, d.getReqId())) {
             throw AppException.badRequest("提醒人对该项目不可见，无法接收需求通知");
         }
-        watchMapper.insertIgnore(workspaceId, demandId, target, userId);
-        return status(userId, workspaceId, demandId);
     }
 
     /** 移除提醒人：本人可取消关注，项目可写者可移除他人。 */

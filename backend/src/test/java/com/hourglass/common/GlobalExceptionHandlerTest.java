@@ -3,6 +3,7 @@ package com.hourglass.common;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,12 +51,39 @@ class GlobalExceptionHandlerTest {
     @Test
     void brokenPipeIsHandledWithoutResponseBody() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/events");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setContentType("text/event-stream");
 
         Object result = new GlobalExceptionHandler()
-                .handleIo(new java.io.IOException("Broken pipe"), request);
+                .handleIo(new java.io.IOException("Broken pipe"), request, response);
 
         assertEquals(null, result);
         assertEquals(Boolean.TRUE, request.getAttribute(GlobalExceptionHandler.FAILED_ATTR));
+    }
+
+    /** 中文 JDK 的「断开的管道」同样按客户端断开处理 */
+    @Test
+    void localizedBrokenPipeIsHandledWithoutResponseBody() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/events");
+
+        Object result = new GlobalExceptionHandler()
+                .handleIo(new java.io.IOException("断开的管道"), request, new MockHttpServletResponse());
+
+        assertEquals(null, result);
+    }
+
+    /** event-stream 已定响应类型时，即使不是断连也不能再写 JSON 错误体，否则异常处理器二次报错 */
+    @Test
+    void eventStreamIoFailureDoesNotWriteJsonBody() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/events");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setContentType("text/event-stream");
+
+        Object result = new GlobalExceptionHandler()
+                .handleIo(new java.io.IOException("连接到主机失败"), request, response);
+
+        assertEquals(null, result);
+        assertEquals(0, response.getContentAsByteArray().length);
     }
 
     /** 真正的 IO 故障仍要返回 500，不能被断连分支吞掉 */
@@ -64,7 +92,7 @@ class GlobalExceptionHandlerTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/attachments/1");
 
         Object result = new GlobalExceptionHandler()
-                .handleIo(new java.io.IOException("磁盘读取失败"), request);
+                .handleIo(new java.io.IOException("磁盘读取失败"), request, new MockHttpServletResponse());
 
         assertTrue(result instanceof ResponseEntity);
         ResponseEntity<?> response = (ResponseEntity<?>) result;

@@ -22,6 +22,7 @@ import { bindRetry } from "../core/utils.js";
 import { PRIORITIES, assocLinkHTML, taskVersionIds, taskVersionLinksHTML, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML, demandNoText } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { triggerDownload } from "../lib/download.js";
+import { loadProjectMembers } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
 
 var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("demandBody"),
@@ -2592,11 +2593,57 @@ function syncDemandCatOptions(reqId, selectedId, fallbackFirst){
 var demandFormSeq = 0, demandFormBaseline = null;
 function demandFormSnapshot(){
   return JSON.stringify([dReq.value, dTitle.value, dDesc.value, dAccept.value, dSource.value, dKind.value,
-    dCategory.value, dExpect.value, formPri, dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value]);
+    dCategory.value, dExpect.value, formPri, dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value,
+    demandWatchPick.map(function(w){ return w.userId; })]);
 }
 function demandFormDirty(){
   return !!demandFormBaseline && demandFormSnapshot() !== demandFormBaseline;
 }
+/* ---------- 创建时的提醒人 ----------
+   只在新建生效：编辑态的名单在详情「提醒人」浮层里维护，表单不重复承载。
+   候选取项目花名册（已排除查看者自己），提交人默认接收通知，无需添加。 */
+var demandWatchPick = [];
+function demandWatchBox(){ var dlg = $("dlgDemand"); return dlg ? dlg.querySelector("[data-dem-form-watch]") : null; }
+function renderDemandWatchChips(){
+  var box = demandWatchBox();
+  if(!box) return;
+  var chips = box.querySelector("[data-dem-form-watch-chips]");
+  if(!chips) return;
+  chips.innerHTML = demandWatchPick.map(function(w){
+    return '<span class="dem-watch-chip">' + esc(w.name)
+      + '<button type="button" class="dem-watch-chip-x" data-dem-form-watch-remove="' + esc(w.userId)
+      + '" aria-label="移除提醒人 ' + esc(w.name) + '">' + icon("close", 10) + '</button></span>';
+  }).join("");
+}
+function syncDemandWatchPicker(){
+  var box = demandWatchBox();
+  if(!box) return;
+  var sel = box.querySelector("[data-dem-form-watch-select]");
+  var add = box.querySelector("[data-dem-form-watch-add]");
+  if(!sel) return;
+  var projectId = dReq.value;
+  if(add) add.disabled = true;
+  if(!projectId || !rt.currentWs){ sel.innerHTML = '<option value="">先选项目</option>'; return; }
+  sel.innerHTML = '<option value="">加载成员…</option>';
+  var picked = {};
+  demandWatchPick.forEach(function(w){ picked[w.userId] = 1; });
+  loadProjectMembers(rt.currentWs.id, projectId).then(function(roster){
+    if(!box.isConnected || dReq.value !== projectId || editingDemandId) return;
+    var me = rt.currentUser && rt.currentUser.id;
+    var opts = ((roster && roster.members) || []).filter(function(m){
+      return m && m.userId && m.userId !== me && !picked[m.userId];
+    });
+    sel.innerHTML = opts.length
+      ? '<option value="">选择成员…</option>' + opts.map(function(m){
+          return '<option value="' + esc(m.userId) + '">' + esc(m.displayName || m.username || m.userId) + '</option>';
+        }).join("")
+      : '<option value="">没有可添加的成员</option>';
+    if(add) add.disabled = false;
+  }).catch(function(){
+    if(sel.isConnected) sel.innerHTML = '<option value="">成员加载失败</option>';
+  });
+}
+function resetDemandWatchPick(){ demandWatchPick = []; renderDemandWatchChips(); }
 function closeDemandDialog(){
   demandFormSeq++;
   demandFormBaseline = null;
@@ -2650,6 +2697,12 @@ function openDemandDialog(d){
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
   /* 模块按所选项目过滤：候选只列该项目下的模块 */
   syncDemandCatOptions(dReq.value, d ? (d.categoryId || "") : "", !d);
+  /* 提醒人只在新建时可选；编辑态名单在详情浮层维护，避免表单与浮层两头改 */
+  resetDemandWatchPick();
+  var watchField = $("fDemandWatch"), watchSec = $("fDemandWatchSec");
+  if(watchField) watchField.hidden = !!d;
+  if(watchSec) watchSec.hidden = !!d;
+  if(!d) syncDemandWatchPicker();
   dExpect.value = d ? (d.expectDate || "") : "";
   formPri = d ? (d.priority || "P2") : "P2";
   dWsjfB.value = d && d.wsjfBusiness != null ? d.wsjfBusiness : "";
@@ -2726,6 +2779,8 @@ function saveDemand(){
     wsjfRisk: wsNum(dWsjfR, 0),
     wsjfEffort: wsNum(dWsjfE, 1)
   };
+  /* 名单只在创建时提交；编辑走详情浮层，避免保存时覆盖别人刚调整的名单 */
+  if(!editingDemandId) body.watcherIds = demandWatchPick.map(function(w){ return w.userId; });
   btnSaveDemand.disabled = true;
   var seq = demandFormSeq, wasEdit = !!editingDemandId;
   var p = editingDemandId
@@ -4608,6 +4663,33 @@ if(btnSaveDemand) btnSaveDemand.addEventListener("click", saveDemand);
 if(dReq) dReq.addEventListener("change", function(){
   /* 换项目后原模块不再可选，回落到新项目第一个模块或「未指定」 */
   syncDemandCatOptions(dReq.value, dCategory.value, true);
+  /* 提醒人候选取自项目花名册：换项目后旧选择可能已不可见，直接清空重选 */
+  if(!editingDemandId){
+    resetDemandWatchPick();
+    syncDemandWatchPicker();
+  }
+});
+if($("dlgDemand")) $("dlgDemand").addEventListener("click", function(e){
+  var rm = e.target.closest("[data-dem-form-watch-remove]");
+  if(rm){
+    var uid = rm.dataset.demFormWatchRemove;
+    demandWatchPick = demandWatchPick.filter(function(w){ return w.userId !== uid; });
+    renderDemandWatchChips();
+    syncDemandWatchPicker();
+    return;
+  }
+  var add = e.target.closest("[data-dem-form-watch-add]");
+  if(add){
+    if(add.disabled) return;
+    var sel = $("dlgDemand").querySelector("[data-dem-form-watch-select]");
+    var pickId = sel && sel.value;
+    if(!pickId){ toast("先选择要添加的成员", "warn"); return; }
+    if(demandWatchPick.some(function(w){ return w.userId === pickId; })) return;
+    var opt = sel.options[sel.selectedIndex];
+    demandWatchPick.push({ userId: pickId, name: opt ? opt.text : pickId });
+    renderDemandWatchChips();
+    syncDemandWatchPicker();
+  }
 });
 if(dTitle) dTitle.addEventListener("input", function(){ fDemandTitle.classList.remove("invalid"); });
 if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){

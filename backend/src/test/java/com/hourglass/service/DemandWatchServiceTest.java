@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -140,6 +141,38 @@ class DemandWatchServiceTest {
 
         verify(access).assertWrite(WS, ME, PROJECT);
         verify(watches).insertIgnore(WS, DEMAND, "U2", ME);
+    }
+
+    @Test
+    void createTimeWatchersSkipCreatorBlanksAndDuplicates() {
+        when(members.selectMember(WS, "U2")).thenReturn(new WorkspaceMember());
+        when(access.canView(WS, "U2", PROJECT)).thenReturn(true);
+
+        service.addWatchers(demand, ME, Arrays.asList("U2", " U2 ", CREATOR, " ", null));
+
+        verify(watches, times(1)).insertIgnore(WS, DEMAND, "U2", ME);
+        verify(watches, never()).insertIgnore(anyString(), anyString(), eq(CREATOR), anyString());
+    }
+
+    @Test
+    void createTimeWatchersRejectNonMember() {
+        when(members.selectMember(WS, "U-x")).thenReturn(null);
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.addWatchers(demand, ME, Collections.singletonList("U-x")));
+
+        assertEquals(400, ex.getCode());
+        verify(watches, never()).insertIgnore(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void createTimeWatchersRejectInvisibleMember() {
+        when(members.selectMember(WS, "U-x")).thenReturn(new WorkspaceMember());
+        when(access.canView(WS, "U-x", PROJECT)).thenReturn(false);
+
+        assertThrows(AppException.class,
+                () -> service.addWatchers(demand, ME, Collections.singletonList("U-x")));
+        verify(watches, never()).insertIgnore(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test

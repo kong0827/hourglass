@@ -8,6 +8,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.List;
 
 /** 需求池提交/编辑（T2.1）：WSJF 四分量只能填 0-10 原始分，得分由服务端计算 */
 @Data
@@ -65,4 +66,8 @@ public class DemandSaveRequest {
     @Min(value = 1, message = "工作量不能小于 1")
     @Max(value = 10, message = "工作量不能大于 10")
     private Integer wsjfEffort;
+
+    /** 创建时预置的提醒人：只在创建生效，编辑不改名单；提交人与重复项自动忽略 */
+    @Size(max = 20, message = "提醒人最多 20 人")
+    private List<String> watcherIds;
 }

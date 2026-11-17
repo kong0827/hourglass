@@ -1045,6 +1045,18 @@
                 <label for="dAccept">验收标准</label>
                 <textarea id="dAccept" maxlength="2000" placeholder="做到什么程度算完成…"></textarea>
               </div>
+              <div class="form-sec span2" id="fDemandWatchSec">通知</div>
+              <div class="field span2" id="fDemandWatch">
+                <label>提醒人 <small class="tc-optional">选填</small></label>
+                <div class="dem-watch-edit" data-dem-form-watch>
+                  <div class="dem-watch-chips" data-dem-form-watch-chips></div>
+                  <div class="dem-watch-add">
+                    <select class="input" data-dem-form-watch-select aria-label="选择提醒人"><option value="">先选项目</option></select>
+                    <button class="btn sm soft" type="button" data-dem-form-watch-add>添加</button>
+                  </div>
+                </div>
+                <span class="hint">提醒人会收到状态流转、内容编辑与新评论的通知；提交人默认接收，无需添加自己</span>
+              </div>
               <div class="form-sec span2">归类</div>
               <div class="form-grid three span2">
                 <div class="field">

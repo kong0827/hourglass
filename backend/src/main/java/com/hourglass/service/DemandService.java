@@ -833,6 +833,7 @@ public class DemandService {
         d.setRevision(0L);
         insertWithNo(d);
         logChange(d, userId, "create", null, null, null);
+        demandWatch.addWatchers(d, userId, req.getWatcherIds());
         return getVisible(workspaceId, userId, d.getId());
     }
 
