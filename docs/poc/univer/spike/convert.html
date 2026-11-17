@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Univer 转换器保真度 spike</title>
+    <style>
+      html, body { margin: 0; height: 100%; font-family: "Microsoft YaHei", Arial, sans-serif; }
+      #app { height: 100%; }
+      #spike-status {
+        position: fixed; right: 12px; bottom: 12px; z-index: 10;
+        max-width: 460px; padding: 10px 12px; border-radius: 8px;
+        background: rgba(17, 24, 39, 0.88); color: #e5e7eb;
+        font-size: 12px; line-height: 1.6; white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="spike-status">初始化…</div>
+    <script type="module" src="/src/convert.js"></script>
+  </body>
+</html>
