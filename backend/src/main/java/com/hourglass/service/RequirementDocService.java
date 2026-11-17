@@ -3,6 +3,8 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hourglass.dto.ReqDocReorderRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.dto.ReqDocShareResponse;
@@ -721,7 +723,7 @@ public class RequirementDocService {
         d.setTitle(h.getTitle());
         d.setContent(h.getContent());
         d.setFormat(h.getFormat());
-        d.setContentBrief("markdown".equals(d.getFormat()) ? excerptOfMarkdown(d.getContent()) : excerptOf(d.getContent()));
+        d.setContentBrief(briefOf(d.getFormat(), d.getContent()));
         docMapper.update(d, null);
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId,
                 "restore", "恢复到第 " + h.getVersionNo() + " 版（" + h.getTitle() + "）");
@@ -1095,7 +1097,7 @@ public class RequirementDocService {
             d.setSortOrder(0);
         }
         /* 列表摘要随正文同步维护：列表接口不再读 MEDIUMTEXT */
-        d.setContentBrief("markdown".equals(format) ? excerptOfMarkdown(d.getContent()) : excerptOf(d.getContent()));
+        d.setContentBrief(briefOf(format, d.getContent()));
         String status = Texts.trimToNull(req.getStatus());
         if (status == null) {
             status = "draft";
@@ -1268,7 +1270,7 @@ public class RequirementDocService {
         }
     }
 
-    /** 按格式落库正文：Markdown 原样保存，HTML 走白名单清洗 */
+    /** 按格式落库正文：Markdown 原样保存，Univer 快照校验结构后原样保存，HTML 走白名单清洗 */
     public static String contentOf(String format, String content) {
         if ("markdown".equals(format)) {
             if (content == null || content.trim().isEmpty()) {
@@ -1276,7 +1278,71 @@ public class RequirementDocService {
             }
             return content.length() > CONTENT_MAX ? content.substring(0, CONTENT_MAX) : content;
         }
+        if ("univer".equals(format)) {
+            /* 快照是 JSON，不能按 HTML 清洗（会把结构打散）；截断同样会毁掉 JSON，超限直接拒绝 */
+            if (content == null || content.trim().isEmpty()) {
+                return null;
+            }
+            parseUniverSnapshot(content);
+            return content;
+        }
         return sanitize(content);
+    }
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** 校验 Univer 文档快照：必须是带 body.dataStream 的 JSON 对象 */
+    public static JsonNode parseUniverSnapshot(String content) {
+        if (content == null || content.trim().isEmpty()) {
+            return null;
+        }
+        if (content.length() > CONTENT_MAX) {
+            throw AppException.badRequest("文档内容超过大小上限，请压缩或拆分图片后再保存");
+        }
+        try {
+            JsonNode root = JSON.readTree(content);
+            JsonNode stream = root == null ? null : root.path("body").path("dataStream");
+            if (stream == null || !stream.isTextual()) {
+                throw AppException.badRequest("正文格式不合法");
+            }
+            return root;
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            throw AppException.badRequest("正文格式不合法");
+        }
+    }
+
+    /** 列表摘要按格式分派：Markdown 去标记、Univer 取快照文本、HTML 抽文本 */
+    public static String briefOf(String format, String content) {
+        if ("markdown".equals(format)) {
+            return excerptOfMarkdown(content);
+        }
+        if ("univer".equals(format)) {
+            return excerptOfUniver(content);
+        }
+        return excerptOf(content);
+    }
+
+    /** 从 Univer 快照的 dataStream 抽纯文本摘要（列表与备份导入共用） */
+    public static String excerptOfUniver(String content) {
+        try {
+            JsonNode root = parseUniverSnapshot(content);
+            if (root == null) {
+                return null;
+            }
+            String text = root.path("body").path("dataStream").asText("")
+                    .replaceAll("[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]", " ")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            if (text.isEmpty()) {
+                return null;
+            }
+            return text.length() <= EXCERPT_MAX ? text : text.substring(0, EXCERPT_MAX) + "…";
+        } catch (AppException e) {
+            /* 列表/摘要不能因为一份脏数据整体失败 */
+            return null;
+        }
     }
 
     /** 归属项目解析：空 = 空间级文档（返回 null，写权限走 assertWrite 对 null 项目的「非查看者」口径）；非空须是本空间项目。 */

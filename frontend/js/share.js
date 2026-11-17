@@ -3,6 +3,8 @@ import { GS } from "./lib/gantt-shared.js";
 import { API } from "./core/api.js";
 import { DD } from "./lib/delivery-doc.js";
 import { printDeliveryPaper, registerDeliveryPrintSource } from "./lib/download.js";
+import { ensureVendor } from "./core/doc-editor.js";
+import { parseSnapshot, snapshotToHtml } from "./core/univer-doc-io.js";
 
   var LABEL_W = 260, ROW_H = 50, GROUP_H = 0, HEAD_H = 54;
   var state = {
@@ -296,9 +298,15 @@ import { printDeliveryPaper, registerDeliveryPrintSource } from "./lib/download.
       " · 只读链接，仅含文档正文";
     var body = $("docShareBody");
     body.innerHTML = '<div class="share-empty">加载正文…</div>';
-    loadMdLib().then(function () {
+    var prep = d.format === "univer"
+      ? Promise.all([loadMdLib(), ensureVendor()])
+      : loadMdLib();
+    prep.then(function () {
       var html;
-      if (d.format === "markdown") {
+      if (d.format === "univer") {
+        var snap = parseSnapshot(d.content);
+        html = snap ? snapshotToHtml(snap) : "";
+      } else if (d.format === "markdown") {
         try { html = window.marked.parse(d.content || "", { gfm: true, breaks: false }); } catch (e) { html = ""; }
       } else {
         html = d.content || "";

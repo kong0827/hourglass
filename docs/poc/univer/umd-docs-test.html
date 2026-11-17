@@ -1,0 +1,105 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Univer UMD + ESM worker 验证</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; }
+  #app { position: absolute; inset: 0 0 120px 0; }
+  #status { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; margin: 0; padding: 8px 12px;
+    font: 12px/1.5 Consolas, monospace; background: #f6f8fa; border-top: 1px solid #d0d7de; white-space: pre-wrap; overflow: auto; }
+</style>
+<div id="app"></div>
+<pre id="status">boot…</pre>
+
+<script src="../../../frontend/vendor/univer/react.min.js"></script>
+<script src="../../../frontend/vendor/univer/react-dom.min.js"></script>
+<script>
+  window.React.jsx = function (type, props, key) {
+    return React.createElement(type, key === undefined ? props : Object.assign({}, props, { key: key }));
+  };
+  window.React.jsxs = window.React.jsx;
+</script>
+<script src="../../../frontend/vendor/univer/rxjs.umd.min.js"></script>
+<script src="../../../frontend/vendor/univer/redi.js"></script>
+<script src="../../../frontend/vendor/univer/redi-react.js"></script>
+<script src="../../../frontend/vendor/univer/themes.js"></script>
+<script src="../../../frontend/vendor/univer/protocol.js"></script>
+<script src="../../../frontend/vendor/univer/core.js"></script>
+<script src="../../../frontend/vendor/univer/network.js"></script>
+<script src="../../../frontend/vendor/univer/rpc.js"></script>
+<script src="../../../frontend/vendor/univer/design.js"></script>
+<script src="../../../frontend/vendor/univer/engine-render.js"></script>
+<script src="../../../frontend/vendor/univer/drawing.js"></script>
+<script src="../../../frontend/vendor/univer/telemetry.js"></script>
+<script src="../../../frontend/vendor/univer/ui.js"></script>
+<script src="../../../frontend/vendor/univer/docs.js"></script>
+<script src="../../../frontend/vendor/univer/docs-ui.js"></script>
+<script src="../../../frontend/vendor/univer/facade/core.js"></script>
+<script src="../../../frontend/vendor/univer/facade/docs.js"></script>
+<script src="../../../frontend/vendor/univer/facade/docs-ui.js"></script>
+<script src="../../../frontend/vendor/univer/locale/design.js"></script>
+<script src="../../../frontend/vendor/univer/locale/ui.js"></script>
+<script src="../../../frontend/vendor/univer/locale/docs-ui.js"></script>
+<link rel="stylesheet" href="../../../frontend/vendor/univer/css/design.css" />
+<link rel="stylesheet" href="../../../frontend/vendor/univer/css/ui.css" />
+<link rel="stylesheet" href="../../../frontend/vendor/univer/css/docs-ui.css" />
+
+<script>
+  (function () {
+    var statusEl = document.getElementById("status");
+    function log(obj) { statusEl.textContent = JSON.stringify(obj, null, 2); }
+    window.__probe = { ready: false, error: null, snapshot: null };
+    try {
+      var U = window.UniverCore;
+      var univer = new U.Univer({
+        locale: U.LocaleType.ZH_CN,
+        locales: (function () {
+          var l = {};
+          l[U.LocaleType.ZH_CN] = U.mergeLocales(
+            window.UniverDesignZhCN, window.UniverUiZhCN, window.UniverDocsUiZhCN
+          );
+          return l;
+        })(),
+      });
+      univer.registerPlugin(window.UniverEngineRender.UniverRenderEnginePlugin);
+      univer.registerPlugin(window.UniverUi.UniverUIPlugin, { container: "app" });
+      univer.registerPlugin(window.UniverDocs.UniverDocsPlugin);
+      univer.registerPlugin(window.UniverDocsUi.UniverDocsUIPlugin);
+      univer.registerPlugin(window.UniverDocs.UniverDocsLayoutWorkerPlugin, {
+        workerFactory: function () {
+          return new Worker(new URL("../../../frontend/vendor/univer/docs-layout-worker.js", location.href), { type: "module" });
+        },
+      });
+      var api = window.UniverCoreFacade.FUniver.newAPI(univer);
+      var imported = window.UniverDocsUi.convertClipboardHtmlToDocumentData(
+        "<h1>一级标题</h1><p>普通段落，<strong>粗体</strong>与<em>斜体</em>。</p><ul><li>列表一</li><li>列表二</li></ul>",
+        "umd-doc"
+      );
+      api.createDocument(Object.assign({}, imported, { id: "umd-doc", title: "UMD 验证" }));
+      window.__univer = univer;
+      window.__api = api;
+      setTimeout(function () {
+        try {
+          var doc = api.getDocument("umd-doc");
+          var snapshot = doc.save();
+          var texts = (snapshot.body.paragraphs || []).map(function (p) { return p.startIndex; });
+          window.__probe.snapshot = {
+            paragraphs: snapshot.body.paragraphs.length,
+            dataStream: snapshot.body.dataStream.slice(0, 60),
+            namedStyles: (snapshot.body.paragraphs || []).filter(function (p) {
+              return p.paragraphStyle && p.paragraphStyle.namedStyleType;
+            }).length,
+          };
+          window.__probe.ready = true;
+          log({ ok: true, probe: window.__probe });
+        } catch (e) {
+          window.__probe.error = String(e && e.message || e);
+          log({ ok: false, error: window.__probe.error });
+        }
+      }, 1800);
+    } catch (e) {
+      window.__probe.error = String(e && e.message || e);
+      log({ ok: false, error: window.__probe.error });
+    }
+    window.addEventListener("error", function (e) { window.__probe.error = window.__probe.error || String(e.message); });
+  })();
+</script>

@@ -19,6 +19,8 @@ import { loadProjectMembers } from "../lib/member-labels.js";
 import * as textDiff from "../lib/text-diff.js";
 import { loadReqs, render } from "./board.js";
 import { openDemandDetailById } from "./demands.js";
+import { ensureVendor, openDocView } from "../core/doc-editor.js";
+import { htmlToSnapshot, parseSnapshot, snapshotHeadings, snapshotToHtml, snapshotToText } from "../core/univer-doc-io.js";
 
 var reqDocList = [];
 var reqDocDirty = false;
@@ -31,6 +33,9 @@ var reqDocReqFilter = null;
 /* setContents 会触发 SunEditor 的 onChange：灌正文期间先压住，避免刚打开就显示「有未保存的修改」 */
 var reqDocSuppressChange = false;
 var reqEditor = null;
+/* 在线文档视图（Univer）：与 SunEditor 互斥，同一时刻只挂载一个 */
+var reqUniverView = null;
+var reqUniverSeq = 0;
 var reqCollapsed = {};
 var reqDocCollapsedDocs = {};
 /* 文档分类树（独立分类表 doc_category）：扁平缓存 + 分类折叠态 + 最近一次构建的分组模型（右键菜单按 id 查节点用） */
@@ -84,6 +89,9 @@ function applyReqDocReadOnly(on){
   if(reqEditor){
     if(on) reqEditor.disable(); else reqEditor.enable();
   }
+  if(reqUniverView){
+    try{ reqUniverView.setReadOnly(on); }catch(e){ /* 视图切换中 */ }
+  }
   var saved = $("reqDocSaved");
   if(on && saved) saved.textContent = reqDocOwnerLocked ? "只读 · 仅文档负责人或空间管理员可编辑" : "只读 · 你对该项目只有查看权限";
 }
@@ -114,6 +122,22 @@ function reqDocProjectName(reqId){
 }
 function isMarkdownDoc(){
   return editingMeta.format === "markdown";
+}
+/* 在线文档（Univer 快照）：content 存快照 JSON，编辑/阅读都走 core/doc-editor 挂载 */
+function isUniverDoc(){
+  return editingMeta.format === "univer";
+}
+/* 服务端 format 归一化：未知格式一律按旧富文本（html）处理，避免历史脏数据打不开 */
+function docFormatOf(format){
+  if(format === "markdown") return "markdown";
+  if(format === "univer") return "univer";
+  return "html";
+}
+/* 列表里的格式小标：Markdown 不标（默认），在线文档与旧 HTML 分开标 */
+function fmtChipHTML(format){
+  if(format === "markdown") return "";
+  if(format === "univer") return '<span class="rs-fmt-html" title="在线文档">在线</span>';
+  return '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
 }
 function showEl(el, on){
   if(!el) return;
@@ -216,9 +240,61 @@ function setReqEditorContents(html){
   }
 }
 function setReqDocHydrating(on){
-  var body = $("reqDocRichBody");
+  var body = isUniverDoc() ? $("reqDocUniverBody") : $("reqDocRichBody");
   if(body) body.classList.toggle("is-loading", !!on);
   if($("reqDocSaved") && on) $("reqDocSaved").textContent = "编辑器加载中…";
+}
+/* 卸载在线文档：序号自增让在途的挂载结果自行丢弃 */
+function disposeReqUniver(){
+  reqUniverSeq++;
+  if(reqUniverView){
+    try{ reqUniverView.dispose(); }catch(e){ /* 已销毁 */ }
+    reqUniverView = null;
+  }
+}
+/* 挂载在线文档：有快照直接用；没有快照时按 html 现场转换（旧 html 正文 / 导入文件） */
+function mountReqUniver(snapshot, html){
+  var seq = ++reqUniverSeq;
+  if(reqUniverView){
+    try{ reqUniverView.dispose(); }catch(e){ /* 已销毁 */ }
+    reqUniverView = null;
+  }
+  var box = $("reqDocUniverBody");
+  if(!box) return Promise.resolve(null);
+  setReqDocHydrating(true);
+  return openDocView({
+    container: box,
+    snapshot: snapshot || null,
+    html: html || "",
+    title: editingMeta.title || "文档",
+    readOnly: reqDocReadOnly || reqDocOwnerLocked,
+    onDirty: function(){
+      markReqDocDirty();
+      scheduleDraftSave();
+      scheduleTocRebuild();
+    }
+  }).then(function(view){
+    if(seq !== reqUniverSeq){
+      try{ view.dispose(); }catch(e){ /* 已销毁 */ }
+      return null;
+    }
+    reqUniverView = view;
+    setReqDocHydrating(false);
+    reqDocDirty = false;
+    refreshReqDocSavedText();
+    updateReqDocCount();
+    tocActive = null;
+    rebuildToc();
+    applyReqDocReadOnly(reqDocReadOnly || reqDocOwnerLocked);
+    return view;
+  }).catch(function(ex){
+    if(seq === reqUniverSeq){
+      setReqDocHydrating(false);
+      refreshReqDocSavedText();
+      toast(ex.message || "文档编辑器加载失败", "bad");
+    }
+    return null;
+  });
 }
 var reqDocFetchSeq = 0;
 /* 搜索结果单独存放：reqDocList 保持全量（任务表单的文档下拉等消费方需要全量） */
@@ -358,7 +434,7 @@ function reqDocRowHTML(r, depth, hasChild, collapsed){
   if(r.status && r.status !== "draft") meta.push("状态：" + reqDocStatusLabel(r.status));
   if(r.taskCount) meta.push(r.doneCount + "/" + r.taskCount + " 工作项");
   /* 标题优先：MD 为默认格式不标注，仅 HTML 例外才标；拖拽/重命名收进行尾悬停浮层，不再常驻占位 */
-  var fmtTail = r.format === "markdown" ? '' : '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
+  var fmtTail = fmtChipHTML(r.format);
   var caret = hasChild
     ? '<span class="rr-caret' + (collapsed ? " collapsed" : "") + '" data-toggle-doc="' + esc(r.id) + '" title="展开/收起子文档">' + icon("down", 13) + '</span>'
     : '<span class="rr-caret"></span>';
@@ -1041,7 +1117,7 @@ function renderRdViewsMenu(){
 function reqDocKanbanCard(d){
   var editable = canEditReq(d.reqId);
   /* 标题优先：MD 为默认格式不标注，仅 HTML 例外标移到标题之后 */
-  var fmtTail = d.format === "markdown" ? '' : '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
+  var fmtTail = fmtChipHTML(d.format);
   var meta = [esc(reqDocProjectName(d.reqId)), esc(d.owner || "—") + " 创建"];
   if(d.updatedAt) meta.push("更新 " + esc(fmtTs(d.updatedAt)));
   var tasks = d.taskCount
@@ -1205,7 +1281,7 @@ function reqDocSplitNodeHTML(r, depth, hasChild, collapsed){
     : '<span class="rs-caret"></span>';
   var pub = r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published" title="已发布">已发布</span>';
   /* 标题优先：MD 为默认格式不标注，仅 HTML 例外才标；拖拽/重命名收进行尾悬停浮层，不再常驻占位 */
-  var fmtTail = r.format === "markdown" ? '' : '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
+  var fmtTail = fmtChipHTML(r.format);
   /* A 创建人保护：拖动项目可写即可；重命名仅负责人或空间管理员，非负责人换锁形提示 */
   var acts = canEditReq(r.reqId)
     ? '<span class="rs-acts">' +
@@ -1401,16 +1477,22 @@ function renderReqDocReader(doc){
   renderReqDocCrumb($("rrdCrumb"), doc.id);
   var body = $("reqDocReaderBody");
   var id = doc.id;
-  loadMarkdownLib().then(function(){
+  var prep = doc.format === "univer"
+    ? Promise.all([loadMarkdownLib(), ensureVendor()])
+    : loadMarkdownLib();
+  prep.then(function(){
     if(splitDocId !== id) return;
-    if(doc.format === "markdown"){
-      var html = "";
+    var html = "";
+    if(doc.format === "univer"){
+      var snap = parseSnapshot(doc.content);
+      html = snap ? snapshotToHtml(snap) : "";
+    }else if(doc.format === "markdown"){
       try{ html = window.marked.parse(doc.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
-      reqDocReaderFill(body, window.DOMPurify.sanitize(html));
     }else{
       /* 服务端已按白名单清洗过，这里再过一道 DOMPurify（双保险） */
-      reqDocReaderFill(body, window.DOMPurify.sanitize(doc.content || ""));
+      html = doc.content || "";
     }
+    reqDocReaderFill(body, window.DOMPurify.sanitize(html));
     reqDocReaderOpenLinks(body);
     rrdApplyHighlights();
   }).catch(function(ex){
@@ -3163,7 +3245,8 @@ function applyDocTemplateToNewDoc(){
   var tpl = docTemplatesCache.filter(function(t){ return t.id === sel.value; })[0];
   if(!tpl) return;
   if(tpl.docType && $("newReqDocType")) $("newReqDocType").value = tpl.docType;
-  if(tpl.format && $("newReqDocFormat")) $("newReqDocFormat").value = tpl.format;
+  /* 内置模板是 HTML 正文：新建落到在线文档（content 先存 HTML，首次编辑保存后成为快照） */
+  if(tpl.format && $("newReqDocFormat")) $("newReqDocFormat").value = tpl.format === "html" ? "univer" : tpl.format;
   syncNewReqDocMoreSum();
 }
 /* 按扩展名判断导入形态：word / markdown / html */
@@ -3415,10 +3498,19 @@ function submitNewReqDoc(keepList){
     return;
   }
   setNewReqDocBusy(isFile ? "导入文档…" : "新建文档…");
-  API.post("/api/req-docs", {
-    reqId: reqId || null, title: title, content: content, status: "draft",
-    format: format, docType: ($("newReqDocType") && $("newReqDocType").value) || "requirement", parentId: parentId || null,
-    categoryId: categoryId || "", visibility: visibility, memberIds: memberIds
+  /* 富文本模板正文是 HTML：建文档前先转成 Univer 快照，后端 univer 只收快照 JSON */
+  var prepare = content && format === "html" && isTemplate
+    ? ensureVendor().then(function(){
+        content = JSON.stringify(htmlToSnapshot(content, "hg-tpl-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)));
+        format = "univer";
+      })
+    : Promise.resolve();
+  prepare.then(function(){
+    return API.post("/api/req-docs", {
+      reqId: reqId || null, title: title, content: content, status: "draft",
+      format: format, docType: ($("newReqDocType") && $("newReqDocType").value) || "requirement", parentId: parentId || null,
+      categoryId: categoryId || "", visibility: visibility, memberIds: memberIds
+    });
   })
     .then(function(doc){
       if(keepList){
@@ -3470,7 +3562,7 @@ function openReqDocEditor(id){
       title: doc.title || "",
       reqId: doc.reqId || "",
       status: doc.status || "draft",
-      format: doc.format === "markdown" ? "markdown" : "html",
+      format: docFormatOf(doc.format),
       docType: doc.docType || "other",
       parentId: doc.parentId || "",
       categoryId: doc.categoryId || "",
@@ -3506,6 +3598,7 @@ function openReqDocEditor(id){
 }
 function closeReqDocEditor(){
   setReqDocHydrating(false);
+  disposeReqUniver();
   if($("reqDocEditPage")) $("reqDocEditPage").hidden = true;
   if($("reqDocListPage")) $("reqDocListPage").hidden = false;
   editingDocId = null;
@@ -4251,14 +4344,19 @@ function setMdMode(mode){
 }
 function setDocFormatUI(format){
   var md = format === "markdown";
-  showEl($("reqDocRichBody"), !md);
+  var univer = format === "univer";
+  showEl($("reqDocRichBody"), !md && !univer);
   showEl($("reqDocMdBody"), md);
+  showEl($("reqDocUniverBody"), univer);
   var badge = $("reqDocFormat");
   if(badge){
     showEl(badge, true);
     badge.textContent = md ? "Markdown" : "富文本";
     badge.className = "reqdoc-fmt " + (md ? "md" : "html");
   }
+  /* 正文缩放按钮只作用于 DOM 排版；Univer 画布自带缩放，套 CSS zoom 会错位指针坐标 */
+  var zoom = document.querySelector("#reqDocEditPage .doc-zoom");
+  if(zoom) zoom.hidden = univer;
   var imp = $("reqDocImport"), exp = $("reqDocExport");
   if(imp) imp.title = "导入 Word / Markdown / TXT / HTML 文件";
   if(exp) exp.title = md ? "导出为 Markdown 文件" : "导出为 HTML 文件";
@@ -4269,13 +4367,14 @@ function fillMarkdownEditor(doc){
   updateReqDocCount();
   renderMarkdownPreview();
 }
-function fillReqDocEditor(doc){
+function fillReqDocEditor(doc, opts){
+  var keepBody = !!(opts && opts.keepBody);
   var id = doc.id;
   editingMeta = {
     title: doc.title || "",
     reqId: doc.reqId || "",
     status: doc.status || "draft",
-    format: doc.format === "markdown" ? "markdown" : "html",
+    format: docFormatOf(doc.format),
     docType: doc.docType || "other",
     parentId: doc.parentId || "",
     categoryId: doc.categoryId || "",
@@ -4292,13 +4391,23 @@ function fillReqDocEditor(doc){
   fillDocParentSelect(doc);
   fillReqDocCategorySelect(doc);
   if(isMarkdownDoc()){
+    disposeReqUniver();
     reqEditorBaseline = null;
     fillMarkdownEditor(doc);
+  }else if(isUniverDoc()){
+    reqEditorBaseline = null;
+    /* keepBody：刚保存完且正文未变，重挂会丢光标与滚动位置 */
+    if(!keepBody){
+      var snap = parseSnapshot(doc.content);
+      mountReqUniver(snap, snap ? "" : (doc.content || ""));
+    }
   }else if(reqEditor){
+    disposeReqUniver();
     setReqEditorContents(doc.content);
     updateReqDocCount();
     rebuildToc();
   }else{
+    disposeReqUniver();
     /* 首次打开：编辑器按需下载，下载完再灌正文（期间用户切走就丢弃结果） */
     setReqDocHydrating(true);
     ensureEditor().then(function(ed){
@@ -4343,6 +4452,7 @@ function markReqDocDirty(){
 }
 function reqDocPlainText(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
+  if(isUniverDoc()) return reqUniverView ? snapshotToText(reqUniverView.getSnapshot()) : "";
   return reqEditor ? reqEditor.getText() : "";
 }
 function updateReqDocCount(){
@@ -4581,6 +4691,8 @@ function printReqDoc(){
   if(isMarkdownDoc()){
     var preview = $("reqDocMdPreview");
     bodyHtml = preview ? preview.innerHTML : "";
+  }else if(isUniverDoc()){
+    bodyHtml = reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "";
   }else{
     bodyHtml = reqEditor ? reqEditor.getContents() : "";
   }
@@ -4639,9 +4751,12 @@ function checkDraftRecovery(docId){
     var label = ago < 60 ? ago + " 分钟前" : Math.round(ago / 60) + " 小时前";
     UI.showConfirm({ title: "恢复未保存的草稿", msg: "检测到 " + label + " 的自动保存草稿，是否恢复？（放弃则删除草稿）", okText: "恢复草稿", cancelText: "放弃" }).then(function(ok){
       if(ok){
-        setEditorContent(draft.content, draft.format || editingMeta.format);
-        markReqDocDirty();
-        toast("已恢复草稿，记得保存", "fs");
+        /* 在线文档是异步挂载：要等挂载完成再置脏，否则会被 mountReqUniver 里的复位清掉 */
+        Promise.resolve(setEditorContent(draft.content, draft.format || editingMeta.format)).then(function(){
+          if(isUniverDoc() && !reqUniverView) return;
+          markReqDocDirty();
+          toast("已恢复草稿，记得保存", "fs");
+        });
       }
       localStorage.removeItem(draftKey(docId));
     });
@@ -4651,11 +4766,17 @@ function clearDraftOnSave(docId){
   try{ localStorage.removeItem(draftKey(docId)); }catch(e){ /* 忽略 */ }
 }
 function getEditorContent(){
+  if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
   if(editingMeta.format === "html" && reqEditor) return reqEditor.getContents();
   var ta = $("reqDocMdCanvas");
   return ta ? ta.value : "";
 }
 function setEditorContent(content, format){
+  if(isUniverDoc()){
+    /* 草稿恢复：快照 JSON 直接重挂；旧格式草稿按 html 重新转换 */
+    var snap = format === "univer" ? parseSnapshot(content) : null;
+    return mountReqUniver(snap, snap ? "" : (format === "univer" ? "" : content));
+  }
   if(format === "html" && reqEditor){ reqEditor.setContents(content); return; }
   var ta = $("reqDocMdCanvas");
   if(ta){ ta.value = content; renderMarkdownPreview(); }
@@ -4987,10 +5108,16 @@ function renderReqDocHistoryList(){
 }
 function renderReqDocHistoryPreview(h, box){
   if(!box) return;
-  loadMarkdownLib().then(function(){
+  var prep = h.format === "univer"
+    ? Promise.all([loadMarkdownLib(), ensureVendor()])
+    : loadMarkdownLib();
+  prep.then(function(){
     if(!box.isConnected) return;
     var html;
-    if(h.format === "markdown"){
+    if(h.format === "univer"){
+      var snap = parseSnapshot(h.content);
+      html = snap ? snapshotToHtml(snap) : "";
+    }else if(h.format === "markdown"){
       try{ html = window.marked.parse(h.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
     }else{
       html = h.content || "";
@@ -5331,12 +5458,18 @@ function restoreReqDocHistory(){
 
 function reqTocRoot(){
   if(isMarkdownDoc()) return $("reqDocMdPreview");
+  if(isUniverDoc()) return null;   // 在线文档直接从快照取标题，没有可查询的 DOM
   return document.querySelector(".reqdoc-editbody .sun-editor-editable");
 }
 function collectToc(){
   var root = reqTocRoot();
   var items = [];
-  if(root){
+  if(isUniverDoc()){
+    var heads = reqUniverView ? snapshotHeadings(reqUniverView.getSnapshot()) : [];
+    heads.forEach(function(h, i){
+      items.push({ anchor: "u" + i, level: h.level, text: h.text, depth: 0, parent: null, hasChild: false, startIndex: h.startIndex });
+    });
+  }else if(root){
     var hs = root.querySelectorAll("h1,h2,h3,h4,h5,h6");
     for(var i = 0; i < hs.length; i++){
       var el = hs[i];
@@ -5417,6 +5550,13 @@ function reqScrollRoot(){
   return null;
 }
 function scrollToToc(anchor){
+  if(isUniverDoc()){
+    var hit = null;
+    for(var i = 0; i < tocItems.length; i++) if(tocItems[i].anchor === anchor) hit = tocItems[i];
+    if(hit && reqUniverView) reqUniverView.scrollToIndex(hit.startIndex);
+    markTocActive(anchor);
+    return;
+  }
   var root = reqTocRoot();
   if(!root) return;
   var el = root.querySelector('[data-toc="' + anchor + '"]');
@@ -5485,9 +5625,9 @@ function setReqDocSaving(on){
   }
 }
 function currentReqDocContent(){
-  return isMarkdownDoc()
-    ? ($("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "")
-    : (reqEditor ? reqEditor.getContents(true) : "");
+  if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
+  if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
+  return reqEditor ? reqEditor.getContents(true) : "";
 }
 /* 409 时默认保留本地草稿；只有用户二次确认才加载服务器版本 */
 function confirmReloadReqDoc(){
@@ -5514,7 +5654,11 @@ function saveReqDoc(opts){
     return Promise.resolve(null);
   }
   var md = isMarkdownDoc();
-  if(!md && !reqEditor){
+  if(!md && isUniverDoc() && !reqUniverView){
+    toast("正文编辑器还在加载，请稍候再保存", "warn");
+    return Promise.resolve(null);
+  }
+  if(!md && !isUniverDoc() && !reqEditor){
     toast("正文编辑器还在加载，请稍候再保存", "warn");
     return Promise.resolve(null);
   }
@@ -5526,7 +5670,7 @@ function saveReqDoc(opts){
     title: title,
     content: content,
     status: editingMeta.status || "draft",
-    format: md ? "markdown" : "html",
+    format: md ? "markdown" : (isUniverDoc() ? "univer" : "html"),
     docType: $("reqDocType").value,
     parentId: parentId || null,
     categoryId: categoryId || "",
@@ -5555,7 +5699,7 @@ function saveReqDoc(opts){
     }else{
       reqDocDirty = false;
       clearDraftOnSave(doc.id);
-      fillReqDocEditor(doc);
+      fillReqDocEditor(doc, { keepBody: isUniverDoc() });
     }
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
     refreshReqDocPublishBtn();
@@ -5637,6 +5781,10 @@ function onReqDocImportFile(e){
   if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
   var kind = reqDocFileKind(f.name);
   if(!kind){ toast("暂不支持该文件格式，请导入 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
+  if(isUniverDoc()){
+    importUniverFile(f, kind);
+    return;
+  }
   if(kind === "word"){
     toast("正在解析 Word 文档…", "info");
     fetchWordImport(f).then(function(data){
@@ -5671,8 +5819,64 @@ function onReqDocImportFile(e){
     }).catch(function(ex){ toast(ex.message || "预览组件加载失败", "bad"); });
   }).catch(function(ex){ toast(ex.message || "读取文件失败", "bad"); });
 }
+/* 在线文档导入：文件统一转成 HTML 后重挂编辑器（确认写入前的预览仍走同一套弹窗） */
+function importUniverFile(f, kind){
+  var preview = function(html, label, importHtml){
+    openDocImportPreview(f, html, label, function(){ importUniverHtml(f.name, importHtml === undefined ? html : importHtml); });
+  };
+  if(kind === "word"){
+    toast("正在解析 Word 文档…", "info");
+    fetchWordImport(f).then(function(data){
+      preview(data.content || "", "Word → 富文本");
+    }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
+    return;
+  }
+  readTextFile(f).then(function(text){
+    if(kind === "html"){
+      loadMarkdownLib().then(function(){
+        preview(window.DOMPurify.sanitize(text), "HTML");
+      }).catch(function(ex){ toast(ex.message || "预览组件加载失败", "bad"); });
+      return;
+    }
+    if(reqDocFileExt(f.name) === "txt"){
+      /* 预览按白底等宽排版展示，写入正文按段落拆分（转换器不认裸 <pre>） */
+      preview("<pre>" + esc(text) + "</pre>", "纯文本", plainTextToHtml(text));
+      return;
+    }
+    loadMarkdownLib().then(function(){
+      var html = "";
+      try{ html = window.marked.parse(text, { gfm: true, breaks: false }); }catch(err){ html = ""; }
+      preview(window.DOMPurify.sanitize(html), "Markdown");
+    }).catch(function(ex){ toast(ex.message || "预览组件加载失败", "bad"); });
+  }).catch(function(ex){ toast("读取文件失败", "bad"); });
+}
+function plainTextToHtml(text){
+  return String(text || "").split(/\r?\n/).map(function(line){
+    return "<p>" + esc(line) + "</p>";
+  }).join("");
+}
+function importUniverHtml(name, html){
+  return mountReqUniver(null, html).then(function(view){
+    if(!view) return;
+    markReqDocDirty();
+    updateReqDocCount();
+    toast("已导入「" + name + "」，可直接编辑，记得保存", "fs");
+  });
+}
 /* 导入文本类文件：按文件类型切换文档格式，正文直接进入可编辑状态 */
 function applyImportedText(name, text, format){
+  if(isUniverDoc()){
+    if(format === "markdown"){
+      loadMarkdownLib().then(function(){
+        var html = "";
+        try{ html = window.marked.parse(text, { gfm: true, breaks: false }); }catch(e){ html = ""; }
+        importUniverHtml(name, html);
+      }).catch(function(ex){ toast(ex.message || "预览组件加载失败", "bad"); });
+    }else{
+      importUniverHtml(name, text);
+    }
+    return;
+  }
   if(format === "markdown"){
     if(!isMarkdownDoc()){
       editingMeta.format = "markdown";
@@ -5717,6 +5921,10 @@ function applyImportedText(name, text, format){
     .catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
 }
 function applyImportedHtml(name, html){
+  if(isUniverDoc()){
+    importUniverHtml(name, html);
+    return;
+  }
   if(editingMeta.format !== "html"){
     editingMeta.format = "html";
     setDocFormatUI("html");
@@ -5740,8 +5948,10 @@ function applyImportedHtml(name, html){
 }
 function exportReqDoc(){
   var md = isMarkdownDoc();
+  var univer = isUniverDoc();
   var text = md ? ($("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "")
-                : (reqEditor ? reqEditor.getContents(true) : "");
+                : (univer ? (reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "")
+                          : (reqEditor ? reqEditor.getContents(true) : ""));
   var ext = md ? ".md" : ".html";
   var mime = md ? "text/markdown;charset=utf-8" : "text/html;charset=utf-8";
   var name = (editingMeta.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ext;
@@ -5762,19 +5972,28 @@ function exportReqDocFromReader(docId){
   API.get("/api/req-docs/" + encodeURIComponent(docId)).then(function(full){
     if(seq !== readerExportSeq) return;
     var md = full.format === "markdown";
-    var text = full.content || "";
-    var ext = md ? ".md" : ".html";
-    var mime = md ? "text/markdown;charset=utf-8" : "text/html;charset=utf-8";
-    var name = (full.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ext;
-    var blob = new Blob([text], { type: mime });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
-    toast("已导出 " + name, "fs");
+    var toHtml = full.format === "univer"
+      ? ensureVendor().then(function(){
+          if(seq !== readerExportSeq) return null;
+          var snap = parseSnapshot(full.content);
+          return snap ? snapshotToHtml(snap) : "";
+        })
+      : Promise.resolve(full.content || "");
+    return toHtml.then(function(text){
+      if(text === null) return;
+      var ext = md ? ".md" : ".html";
+      var mime = md ? "text/markdown;charset=utf-8" : "text/html;charset=utf-8";
+      var name = (full.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ext;
+      var blob = new Blob([text], { type: mime });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
+      toast("已导出 " + name, "fs");
+    });
   }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
 }
 /* Word 导出：Markdown 先用 marked 转 HTML，再交服务端用 POI 生成真实 .docx（含内嵌图片） */
@@ -5794,6 +6013,9 @@ function reqDocExportWordHTML(){
       try{ return window.marked.parse(src, { gfm: true, breaks: false }); }
       catch(e){ return esc(src).replace(/\n/g, "<br>"); }
     });
+  }
+  if(isUniverDoc()){
+    return Promise.resolve(reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "");
   }
   return Promise.resolve(reqEditor ? reqEditor.getContents(true) : "");
 }
@@ -5834,6 +6056,11 @@ function exportReqDocWordFromReader(docId){
       htmlPromise = loadMarkdownLib().then(function(){
         try{ return window.marked.parse(full.content || "", { gfm: true, breaks: false }); }
         catch(e){ return esc(full.content || "").replace(/\n/g, "<br>"); }
+      });
+    }else if(full.format === "univer"){
+      htmlPromise = ensureVendor().then(function(){
+        var snap = parseSnapshot(full.content);
+        return snap ? snapshotToHtml(snap) : "";
       });
     }
     return htmlPromise.then(function(html){
