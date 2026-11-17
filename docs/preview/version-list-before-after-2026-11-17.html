@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>版本主页列表 · 实施前后与原型对照（2026-11-17）</title>
+<style>
+  :root{
+    --bg:#F4F6FA; --surface:#fff; --text:#1F2937; --text-2:#475467; --text-3:#8A94A6;
+    --border:#E4E8EF; --border-strong:#D5DBE5;
+    --primary:#2563EB; --primary-soft:#EEF4FF;
+    --success:#067647; --success-soft:#ECFDF3;
+    --warning:#B54708; --warning-soft:#FFFAEB;
+    --danger:#B42318; --danger-soft:#FEF3F2;
+    --neutral:#667085; --neutral-soft:#F2F4F7;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:38px 32px 56px;}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--primary);text-transform:uppercase;}
+  h1{margin:8px 0 10px;font-size:26px;line-height:1.3;letter-spacing:-.01em;}
+  .lede{margin:0;font-size:13.5px;line-height:1.8;color:var(--text-2);max-width:980px;}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+  .meta span{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;background:var(--surface);border:1px solid var(--border);font-size:11.5px;color:var(--text-2);}
+  .meta i{width:6px;height:6px;border-radius:50%;background:var(--primary);display:inline-block;}
+  .section{margin-top:30px;}
+  .section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:10px;}
+  .section-title{display:flex;align-items:center;gap:9px;font-size:15px;font-weight:650;}
+  .num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:var(--primary-soft);color:var(--primary);font-size:11.5px;font-weight:700;}
+  .section-note{font-size:11.5px;color:var(--text-3);line-height:1.6;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px -18px rgba(16,24,40,.25);}
+  .card + .card{margin-top:14px;}
+  .card-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 16px;border-bottom:1px solid var(--border);background:#FCFCFD;}
+  .tag{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font-size:11px;font-weight:650;}
+  .tag.proto{background:var(--primary-soft);color:var(--primary);border:1px solid #CFE0FF;}
+  .tag.before{background:var(--neutral-soft);color:var(--neutral);border:1px solid var(--border);}
+  .tag.after{background:var(--success-soft);color:var(--success);border:1px solid #ABEFC6;}
+  .tag.risk{background:var(--danger-soft);color:var(--danger);border:1px solid #FECDCA;}
+  .card-title{font-size:13px;font-weight:650;}
+  .card-sub{margin-left:auto;font-size:11px;color:var(--text-3);}
+  .shot{display:block;width:100%;height:auto;background:#FAFBFC;}
+  .callout{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 16px;border-top:1px solid var(--border);background:#FCFCFD;font-size:11.5px;color:var(--text-2);}
+  .callout b{font-weight:650;color:var(--text);}
+  .callout span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block;}
+  .dot.blue{background:var(--primary);} .dot.red{background:var(--danger);} .dot.green{background:#12B76A;} .dot.gray{background:#98A2B3;}
+  .table-card{margin-top:14px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.65;}
+  th{background:#FAFBFC;font-size:11px;font-weight:650;color:var(--text-3);white-space:nowrap;}
+  tr:last-child td{border-bottom:0;}
+  td:first-child{font-weight:600;white-space:nowrap;}
+  .pill{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;font-size:10.5px;font-weight:650;white-space:nowrap;}
+  .pill.ok{background:var(--success-soft);color:var(--success);}
+  .pill.pend{background:var(--warning-soft);color:var(--warning);}
+  .pill.keep{background:var(--neutral-soft);color:var(--text-2);}
+  .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;}
+  .note{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;font-size:11.5px;line-height:1.75;color:var(--text-2);}
+  .note b{display:block;font-size:12px;color:var(--text);margin-bottom:2px;}
+  .checks{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .check{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:9px;background:var(--surface);border:1px solid var(--border);font-size:11.5px;color:var(--text-2);}
+  .check::before{content:"";width:7px;height:7px;border-radius:50%;background:#12B76A;}
+  .foot{margin-top:22px;font-size:11px;color:var(--text-3);line-height:1.8;}
+  @media (max-width:900px){ .notes{grid-template-columns:1fr;} th:nth-child(3),td:nth-child(3){display:none;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Hourglass · Version list alignment</div>
+  <h1>版本主页列表：实施前后与最新原型对照</h1>
+  <p class="lede">
+    同一项目、同一演示数据（统一支付网关 v2.2 / v2.1 / v2.0）。本批只对齐列表：补「需关注」筛选与风险提示、行副标题改为工作项 / 分支 / 阻塞、进度条补阻塞段、状态命名对齐；不新增数据库字段，负责人列按确认未加。
+  </p>
+  <div class="meta">
+    <span><i></i>项目：统一支付网关</span>
+    <span><i></i>数据：v2.2 · 26 工作项 / 7 分支</span>
+    <span><i></i>原型：version-page-redesign-v2（2026-11-16）</span>
+    <span><i></i>实施：2026-11-17</span>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title"><span class="num">1</span>最新原型</div>
+      <div class="section-note">原型中的「负责人」和「2 个阻塞」为模拟数据，用于表达信息层级。</div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="tag proto">原型</span>
+        <span class="card-title">v2 版本主页 · 列表</span>
+        <span class="card-sub">进行中 / 计划中 · 需关注 1 · 2 个阻塞 · 负责人列</span>
+      </div>
+      <img class="shot" src="version-list-crop-prototype.png" alt="最新原型列表">
+      <div class="callout">
+        <span><i class="dot blue"></i>状态命名：<b>进行中 / 计划中</b></span>
+        <span><i class="dot red"></i>需关注 chip + 只看需关注勾选</span>
+        <span><i class="dot red"></i>副标题：<b>工作项 · 分支 · 阻塞</b></span>
+        <span><i class="dot green"></i>进度条：完成 + 进行中 + 阻塞</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title"><span class="num">2</span>实施前（旧列表）</div>
+      <div class="section-note">旧版：状态叫「开发中 / 待规划」，副标题展示版本说明，进度只有完成 / 进行中。</div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="tag before">实施前</span>
+        <span class="card-title">统一支付网关 · 版本列表</span>
+        <span class="card-sub">开发中 / 待规划 · 无风险筛选 · 说明作副标题</span>
+      </div>
+      <img class="shot" src="version-list-crop-before.png" alt="实施前版本列表">
+      <div class="callout">
+        <span><i class="dot gray"></i>状态：<b>开发中 / 待规划</b></span>
+        <span><i class="dot gray"></i>无「需关注」入口</span>
+        <span><i class="dot gray"></i>副标题为版本说明</span>
+        <span><i class="dot gray"></i>无阻塞进度段</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title"><span class="num">3</span>实施后（无风险数据）</div>
+      <div class="section-note">同一项目、同一数据；风险 chip 显示 0，列表其余命名与信息结构已对齐原型。</div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="tag after">实施后</span>
+        <span class="card-title">统一支付网关 · 版本列表</span>
+        <span class="card-sub">进行中 / 计划中 · 需关注 0 · 工作项 / 分支副标题</span>
+      </div>
+      <img class="shot" src="version-list-crop-after.png" alt="实施后版本列表">
+      <div class="callout">
+        <span><i class="dot blue"></i>状态：<b>进行中 / 计划中</b></span>
+        <span><i class="dot red"></i>需关注 chip（0）+ 勾选</span>
+        <span><i class="dot gray"></i>副标题：<b>工作项 · 分支</b></span>
+        <span><i class="dot gray"></i>说明收进 hover 提示</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title"><span class="num">4</span>实施后 · 阻塞态（内存探针）</div>
+      <div class="section-note">演示库没有阻塞 / 逾期数据；用内存探针补 2 个阻塞工作项（不写库），与原型同一视觉语境对照。</div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="tag risk">实施后 · 风险态</span>
+        <span class="card-title">统一支付网关 · v2.2 有 2 个阻塞</span>
+        <span class="card-sub">需关注 1 · 副标题「2 个阻塞」· 进度条红色阻塞段</span>
+      </div>
+      <img class="shot" src="version-list-crop-after-risk.png" alt="实施后阻塞态">
+      <div class="callout">
+        <span><i class="dot red"></i>v2.2：<b>26 个工作项 · 7 个分支 · 2 个阻塞</b></span>
+        <span><i class="dot red"></i>需关注计数 = 版本数 1</span>
+        <span><i class="dot red"></i>进度条追加红色阻塞段</span>
+        <span><i class="dot blue"></i>已发布行不因日期过期算风险</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title"><span class="num">5</span>差异清单</div>
+      <div class="section-note">原型 vs 实施前 vs 实施后（本批范围）</div>
+    </div>
+    <div class="card table-card">
+      <table>
+        <thead>
+          <tr><th>要点</th><th>最新原型</th><th>实施前</th><th>实施后</th><th>结论</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>状态命名</td>
+            <td>进行中 / 计划中 / 已发布 / 已关闭 / 已取消</td>
+            <td>开发中 / 待规划 / 已发布 / 已关闭 / 已取消</td>
+            <td>与原型一致</td>
+            <td><span class="pill ok">已对齐</span></td>
+          </tr>
+          <tr>
+            <td>需关注筛选</td>
+            <td>chip（红点 + 数量）+「只看需关注」</td>
+            <td>无</td>
+            <td>chip + 勾选，状态 / 搜索 / 排序可叠加</td>
+            <td><span class="pill ok">已对齐</span></td>
+          </tr>
+          <tr>
+            <td>风险口径</td>
+            <td>未完成阻塞 &gt; 0，或未结束且目标已过</td>
+            <td>无</td>
+            <td>同原型；已发布不因日期过期算风险</td>
+            <td><span class="pill ok">已对齐</span></td>
+          </tr>
+          <tr>
+            <td>行副标题</td>
+            <td>工作项 · 分支 · 风险（红点 + 文案）</td>
+            <td>版本说明（单行截断）</td>
+            <td>工作项 · 分支 · 风险；说明改为 hover 提示</td>
+            <td><span class="pill ok">已对齐</span></td>
+          </tr>
+          <tr>
+            <td>进度条</td>
+            <td>完成（绿）+ 进行中（蓝）+ 阻塞（红）</td>
+            <td>完成 + 进行中</td>
+            <td>完成 + 进行中 + 阻塞；阻塞不计入进行中</td>
+            <td><span class="pill ok">已对齐</span></td>
+          </tr>
+          <tr>
+            <td>负责人列</td>
+            <td>有（头像 + 姓名）</td>
+            <td>无，用「工作项 / 需求」列</td>
+            <td>保留「工作项 / 需求」列</td>
+            <td><span class="pill pend">按确认未加（需改表）</span></td>
+          </tr>
+          <tr>
+            <td>行密度 / 状态胶囊</td>
+            <td>66px 行高、带圆点的软胶囊</td>
+            <td>产品既有行高与 tag</td>
+            <td>沿用产品既有行高与 tag，仅改文案</td>
+            <td><span class="pill keep">保留既有视觉</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><b>数据口径</b>风险计数按「版本」计（一个版本有阻塞即 +1），不是按阻塞工作项数计；与原型 counts().risk 一致。</div>
+    <div class="note"><b>为什么用探针</b>演示库没有任何阻塞或逾期版本，正常截图无法展示风险态；探针只改浏览器内存，验证后已撤下，未写数据库。</div>
+    <div class="note"><b>范围外</b>顶栏三页签、发布日程、投入分析、全部项目分组、批量新建发布计划不在本批；版本状态文案已统一到列表、详情头、任务抽屉版本候选与项目版本下拉（进行中 / 计划中），未涉及其他旧命名。</div>
+  </div>
+
+  <div class="checks">
+    <span class="check">phase.js / version-detail.mjs 语法检查通过</span>
+    <span class="check">git diff --check 无空白错误</span>
+    <span class="check">E2E 全量通过（含风险断言、探针、390 窄屏）</span>
+    <span class="check">无数据库变更、无新增字段</span>
+    <span class="check">列表交互无脚本异常</span>
+  </div>
+
+  <p class="foot">
+    截图：1440×1000，设备像素比 1；原型截图为 v2 设计稿（模拟数据）。实施前截图拍摄于 11-16，实施后为 11-17，
+    仅「剩余天数」随日期推进少 1 天，版本与工作项数据相同。对比图与原始截图均位于 docs/preview/。
+  </p>
+</div>
+</body>
+</html>

@@ -1,0 +1,2611 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>版本页重设计原型 · 沙漏</title>
+<style>
+/* ==========================================================================
+   版本页重设计原型 · 2026-11-16
+   目标：一个列表、一个详情子页、一个主按钮；分析收进次级页签。
+   样式令牌与 frontend/css/tokens.css 对齐。
+   ========================================================================== */
+:root{
+  --bg:#F7F8FA; --surface:#FFFFFF; --sunken:#F2F4F7; --hover:#F2F4F7; --active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085; --inverse:#FFFFFF;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --ring:0 0 0 3px rgba(37,99,235,.16);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+  --dur:180ms; --ease:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:none;box-shadow:var(--ring);border-radius:var(--r-xs)}
+[hidden]{display:none!important}
+svg{display:block}
+::selection{background:var(--primary-soft)}
+
+/* ---------- shell ---------- */
+.app{display:flex;height:100vh;overflow:hidden}
+.side{
+  width:240px;flex:0 0 240px;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;min-height:0;
+}
+.brand{height:64px;display:flex;align-items:center;gap:10px;padding:0 18px;flex:0 0 auto}
+.logo{
+  width:30px;height:30px;border-radius:9px;background:linear-gradient(145deg,#3B82F6,#2563EB);
+  display:grid;place-items:center;color:#fff;box-shadow:0 4px 10px rgba(37,99,235,.22);
+}
+.brand-name{font-size:17px;font-weight:700;letter-spacing:.01em}
+.ws-switch{
+  margin:2px 12px 10px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;
+  display:flex;align-items:center;gap:9px;text-align:left;background:var(--surface);flex:0 0 auto;
+}
+.ws-switch:hover{background:var(--surface-sunken)}
+.ws-avatar{width:28px;height:28px;border-radius:8px;background:#101828;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex:0 0 auto}
+.ws-text{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;line-height:1.25}
+.ws-text b{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws-text span{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws-switch svg{color:var(--text-3);flex:0 0 auto}
+.nav{flex:1 1 auto;min-height:0;overflow:auto;padding:0 10px 8px}
+.nav-label{font-size:10.5px;font-weight:650;color:var(--text-3);padding:14px 10px 5px;letter-spacing:.02em}
+.nav-item{
+  height:34px;border-radius:7px;display:flex;align-items:center;gap:9px;padding:0 10px;
+  color:var(--text-2);font-size:12.5px;font-weight:500;text-decoration:none;
+}
+.nav-item svg{color:var(--text-3);flex:0 0 auto}
+.nav-item:hover{background:var(--surface-sunken);color:var(--text)}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.nav-item.on svg{color:var(--primary-fg)}
+.side-foot{border-top:1px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.side-user{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#1D4ED8,#7A5AF8);color:#fff;display:grid;place-items:center;font-size:10.5px;font-weight:700}
+.side-user-name{font-size:12px;color:var(--text-2);font-weight:550;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-foot .icon-btn{color:var(--text-3)}
+
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;min-height:0}
+.page-head{
+  flex:0 0 auto;background:var(--surface);border-bottom:1px solid var(--border);
+  min-height:72px;padding:12px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.head-title{min-width:0;flex:1 1 320px}
+.title-line{display:flex;align-items:center;gap:8px;min-width:0}
+h1{margin:0;font-size:20px;line-height:28px;font-weight:680;letter-spacing:-.01em;white-space:nowrap}
+.crumb{margin:2px 0 0;font-size:12px;line-height:16px;color:var(--text-3);display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0}
+.crumb b{font-weight:550;color:var(--text-2)}
+.crumb .sep{color:var(--border-strong)}
+.head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:0 0 auto}
+.search{
+  height:34px;width:240px;display:flex;align-items:center;gap:7px;padding:0 10px;
+  border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-3);
+  transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease);
+}
+.search:focus-within{border-color:var(--primary);box-shadow:var(--ring)}
+.search input{flex:1 1 auto;min-width:0;border:0;background:transparent;outline:none;font-size:12.5px;color:var(--text)}
+.search input::placeholder{color:var(--text-3)}
+.search kbd{font-size:10px;line-height:16px;padding:0 5px;border:1px solid var(--border);border-radius:4px;color:var(--text-3);background:var(--surface-sunken)}
+.btn{
+  height:34px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px;font-weight:550;color:var(--text-2);
+  white-space:nowrap;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.btn:hover{background:var(--surface-sunken);color:var(--text)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 1px 2px rgba(37,99,235,.24)}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff}
+.btn.sm{height:28px;padding:0 9px;font-size:12px;border-radius:7px}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--surface-sunken)}
+.btn.danger{color:var(--danger-fg)}
+.btn.danger:hover{background:var(--danger-soft)}
+.icon-btn{
+  width:30px;height:30px;border-radius:7px;display:inline-grid;place-items:center;color:var(--text-3);
+  transition:background var(--dur) var(--ease),color var(--dur) var(--ease);flex:0 0 auto;
+}
+.icon-btn:hover{background:var(--surface-sunken);color:var(--text)}
+.project-pick{
+  height:34px;max-width:220px;display:inline-flex;align-items:center;gap:7px;padding:0 10px;
+  border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:550;
+}
+.project-pick:hover{background:var(--surface-sunken)}
+.project-pick span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.project-pick svg{flex:0 0 auto;color:var(--text-3)}
+
+/* ---------- tabs ---------- */
+.tabs{
+  flex:0 0 auto;height:44px;background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 24px;display:flex;align-items:stretch;gap:24px;overflow-x:auto;scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  position:relative;display:inline-flex;align-items:center;gap:6px;padding:0 1px;
+  border-bottom:2px solid transparent;color:var(--text-2);font-size:12.5px;white-space:nowrap;
+}
+.tab b{font-size:10.5px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums}
+.tab:hover{color:var(--primary-fg)}
+.tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650}
+.tab.on b{color:var(--primary-fg)}
+.tab .dot{width:5px;height:5px;border-radius:50%;background:var(--danger);margin-left:-2px}
+.tabs .spacer{flex:1 1 auto}
+.tabs-note{align-self:center;font-size:11px;color:var(--text-3);white-space:nowrap}
+
+/* ---------- content ---------- */
+.content{flex:1 1 auto;min-height:0;overflow:auto;padding:20px 24px 44px}
+.wrap{max-width:1240px;margin:0 auto}
+.plan-banner{
+  display:flex;align-items:center;gap:12px;min-height:48px;padding:9px 14px;margin:0 0 12px;
+  border:1px solid var(--primary-border);border-radius:var(--r-lg);background:var(--primary-soft);color:var(--primary-fg);
+}
+.pb-icon{width:26px;height:26px;border-radius:7px;background:var(--surface);display:grid;place-items:center;flex:0 0 auto;color:var(--primary)}
+.pb-text{min-width:0;flex:1 1 auto;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;line-height:1.35}
+.pb-text b{font-size:12.5px;font-weight:650;color:var(--text)}
+.pb-text span{font-size:11.5px;color:var(--text-3)}
+.link{color:var(--primary-fg);font-size:12px;font-weight:600;white-space:nowrap}
+.link:hover{text-decoration:underline}
+.link.arrow::after{content:" →"}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+.list-toolbar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--border);
+}
+.chips{display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0;flex:1 1 auto}
+.chip{
+  height:28px;display:inline-flex;align-items:center;gap:5px;padding:0 9px;border-radius:var(--r-pill);
+  color:var(--text-2);font-size:12px;font-weight:500;border:1px solid transparent;white-space:nowrap;
+}
+.chip b{font-size:10.5px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums}
+.chip:hover{background:var(--surface-sunken);color:var(--text)}
+.chip.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:650}
+.chip.on b{color:var(--primary-fg)}
+.filter-right{display:flex;align-items:center;gap:12px;flex:0 0 auto}
+.check{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);white-space:nowrap;cursor:pointer}
+.check input{width:14px;height:14px;margin:0;accent-color:var(--primary)}
+.sort{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);white-space:nowrap}
+.sort select{
+  height:28px;border:1px solid var(--border);border-radius:7px;background:var(--surface);padding:0 24px 0 8px;
+  font-size:12px;color:var(--text-2);appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 5px center;
+}
+.sort select:hover{border-color:var(--border-strong)}
+
+.vhead,.vrow{
+  display:grid;grid-template-columns:minmax(220px,1.65fr) 86px 178px minmax(150px,1fr) 104px 104px 122px;
+  column-gap:12px;align-items:center;padding:0 14px;
+}
+.vhead{
+  height:34px;background:#FAFBFC;border-bottom:1px solid var(--border);
+  font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.01em;
+}
+.vrow{
+  min-height:66px;border-bottom:1px solid var(--border);position:relative;cursor:pointer;
+  transition:background var(--dur) var(--ease);
+}
+.vrow:last-child{border-bottom:0}
+.vrow:hover{background:#FAFBFC}
+.vrow:focus-within{background:#FAFBFC}
+.vrow .vname{min-width:0}
+.vlink{
+  display:inline-flex;align-items:center;gap:5px;max-width:100%;text-align:left;
+  font-size:13px;font-weight:650;color:var(--text);letter-spacing:-.005em;
+}
+.vlink:hover{color:var(--primary-fg)}
+.vsub{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px;font-size:11px;color:var(--text-3);min-width:0}
+.vsub .proj{color:var(--text-2);font-weight:550}
+.vsub .risk-inline{display:inline-flex;align-items:center;gap:3px;color:var(--danger-fg);font-weight:600}
+.vsub .risk-inline::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--danger)}
+.vstatus .st{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:var(--r-pill);font-size:11px;font-weight:600;white-space:nowrap}
+.st i{width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.st.active{background:var(--info-soft);color:var(--info-fg);border:1px solid var(--info-border)}
+.st.planned{background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border)}
+.st.released{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.st.closed{background:var(--surface-sunken);color:var(--text-3);border:1px solid var(--border)}
+.st.canceled{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+.vtime{font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums;line-height:1.4}
+.vtime b{font-weight:550;white-space:nowrap}
+.vtime small{display:block;font-size:11px;color:var(--text-3);white-space:nowrap;margin-top:1px}
+.vtime small.warn{color:var(--warning-fg);font-weight:550}
+.vtime small.bad{color:var(--danger-fg);font-weight:550}
+.vprogress{min-width:0;display:flex;align-items:center;gap:9px}
+.pbar{flex:1 1 auto;height:6px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;min-width:40px;display:flex}
+.pbar i{display:block;height:100%}
+.pbar .done{background:var(--success)}
+.pbar .doing{background:var(--info)}
+.pbar .blocked{background:var(--danger)}
+.pbar .todo{background:var(--border-strong)}
+.ptext{flex:0 0 auto;display:flex;flex-direction:column;line-height:1.2;min-width:50px;text-align:right}
+.ptext b{font-size:12px;font-weight:650;font-variant-numeric:tabular-nums}
+.ptext span{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.ptext.plain b{font-size:11.5px;color:var(--text-3);font-weight:550}
+.vowner{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:var(--text-2)}
+.avatar{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:9.5px;font-weight:700;color:#fff;flex:0 0 auto}
+.av1{background:#1D4ED8}.av2{background:#067647}.av3{background:#B54708}.av4{background:#B42318}.av5{background:#5B3FD1}.av6{background:#0E6E63}.av7{background:#A31A6B}
+.vrel{font-size:11.5px;color:var(--text-3);white-space:nowrap}
+.vact{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.vact .quick{opacity:0;transform:translateY(1px);transition:opacity var(--dur) var(--ease),transform var(--dur) var(--ease)}
+.vrow:hover .quick,.vrow:focus-within .quick{opacity:1;transform:none}
+.vact .kebab{opacity:0}
+.vrow:hover .kebab,.vrow:focus-within .kebab{opacity:1}
+.vrow.demo{background:#FAFBFC}
+.vrow.demo .quick{opacity:1;transform:none}
+.vrow.demo .kebab{opacity:1}
+.vrow .quick:focus-visible,.vrow .kebab:focus-visible{opacity:1}
+.vname-row{display:flex;align-items:center;gap:7px;min-width:0}
+.pick{display:inline-grid;place-items:center;width:16px;height:16px;flex:0 0 auto;cursor:pointer}
+.pick input{width:14px;height:14px;margin:0;accent-color:var(--primary);cursor:pointer}
+.vrow.picked{background:var(--primary-soft)}
+.vrow.picked:hover{background:#E7EFFF}
+.bulkbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;
+  border-bottom:1px solid var(--border);background:#FCFCFD;font-size:11.5px;color:var(--text-3);
+}
+.bulkbar .bb-count{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.bulkbar .grow{flex:1 1 auto}
+.bulkbar .link[hidden]{display:none}
+.bulkbar .btn[disabled]{opacity:.5;cursor:not-allowed}
+.group-row{
+  padding:11px 14px 8px;background:#FCFCFD;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);font-weight:650;
+}
+.group-row small{font-size:11px;color:var(--text-3);font-weight:400}
+.group-row .gdot{width:7px;height:7px;border-radius:2px;background:var(--primary);opacity:.7}
+.list-foot{
+  padding:10px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;
+  font-size:11.5px;color:var(--text-3);flex-wrap:wrap;
+}
+.list-foot b{color:var(--text-2);font-weight:550}
+.page-note{margin:10px 2px 0;font-size:11px;line-height:1.65;color:var(--text-3)}
+.empty{
+  padding:44px 20px;text-align:center;color:var(--text-3);font-size:12.5px;
+}
+.empty b{display:block;font-size:13px;color:var(--text-2);margin-bottom:4px}
+
+/* ---------- schedule ---------- */
+.sched-head{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:0 0 12px}
+.sched-title{min-width:0;flex:1 1 auto}
+.sched-title h2{margin:0;font-size:15px;font-weight:680;letter-spacing:-.01em}
+.sched-title p{margin:3px 0 0;font-size:11.5px;color:var(--text-3)}
+.sched-kpis{display:flex;gap:14px;flex-wrap:wrap}
+.skpi{display:flex;flex-direction:column;line-height:1.3;padding-left:12px;border-left:1px solid var(--border)}
+.skpi b{font-size:15px;font-weight:680;font-variant-numeric:tabular-nums}
+.skpi span{font-size:10.5px;color:var(--text-3)}
+.skpi.warn b{color:var(--warning-fg)}
+.skpi.bad b{color:var(--danger-fg)}
+.sched-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--border)}
+.sched-toolbar .grow{flex:1 1 auto}
+.mini-select{
+  height:28px;border:1px solid var(--border);border-radius:7px;background:var(--surface);padding:0 24px 0 8px;
+  font-size:12px;color:var(--text-2);appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 5px center;
+}
+.sgroup{padding:9px 14px 5px;background:#FCFCFD;border-bottom:1px solid var(--border);font-size:11px;font-weight:650;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.sgroup.bad{color:var(--danger-fg)}
+.srow{
+  display:grid;grid-template-columns:74px minmax(220px,1.6fr) 92px 74px 110px 54px 20px;
+  gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;
+}
+.srow:last-child{border-bottom:0}
+.srow:hover{background:#FAFBFC}
+.sdate{display:flex;flex-direction:column;line-height:1.15}
+.sdate b{font-size:13px;font-weight:650;font-variant-numeric:tabular-nums}
+.sdate span{font-size:10.5px;color:var(--text-3)}
+.sdate.bad b{color:var(--danger-fg)}
+.sver{min-width:0}
+.sver b{display:block;font-size:12.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sver span{display:block;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.senv{font-size:11.5px;color:var(--text-2)}
+.stag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-pill);font-size:10.5px;font-weight:600;white-space:nowrap}
+.stag.prod{background:var(--plum-soft);color:var(--plum-fg)}
+.stag.stage{background:var(--info-soft);color:var(--info-fg)}
+.stag.test{background:var(--surface-sunken);color:var(--text-2)}
+.stag.ready{background:var(--info-soft);color:var(--info-fg)}
+.stag.draft{background:var(--surface-sunken);color:var(--text-2)}
+.stag.done{background:var(--success-soft);color:var(--success-fg)}
+.stag.cancel{background:var(--surface-sunken);color:var(--text-3)}
+.sowner{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-2);min-width:0}
+.sowner span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scount{font-size:11px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums}
+.schev{color:var(--border-strong)}
+.srow:hover .schev{color:var(--primary)}
+
+/* ---------- analysis ---------- */
+.an-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+.card-pad{padding:16px}
+.card-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:13px 16px;border-bottom:1px solid var(--border)}
+.card-head h3{margin:0;font-size:13px;font-weight:650;letter-spacing:-.005em}
+.card-head .meta-right{margin-left:auto;font-size:11px;color:var(--text-3)}
+.tl{padding:18px 16px 16px}
+.tl-track{height:26px;border-radius:var(--r-sm);background:var(--surface-sunken);display:flex;overflow:hidden;position:relative}
+.tl-seg{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap;min-width:0;overflow:hidden}
+.tl-seg.mvp{background:var(--info)}
+.tl-seg.post{background:var(--plum)}
+.tl-seg span{overflow:hidden;text-overflow:ellipsis}
+.tl-legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--text-2)}
+.tl-legend span{display:inline-flex;align-items:center;gap:6px}
+.tl-legend i{width:8px;height:8px;border-radius:2px;background:var(--info)}
+.tl-legend .post i{background:var(--plum)}
+.tl-legend b{font-variant-numeric:tabular-nums;color:var(--text)}
+.phase-duo{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
+.phase-card{border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px;background:linear-gradient(180deg,#FCFCFD,#fff)}
+.phase-card.accent-blue{border-top:3px solid var(--info)}
+.phase-card.accent-plum{border-top:3px solid var(--plum)}
+.phase-title{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:650}
+.phase-title .tag{display:inline-flex;height:20px;align-items:center;padding:0 7px;border-radius:var(--r-pill);font-size:10.5px;font-weight:600;background:var(--info-soft);color:var(--info-fg)}
+.phase-card.accent-plum .tag{background:var(--plum-soft);color:var(--plum-fg)}
+.phase-sub{font-size:10.5px;color:var(--text-3);margin:3px 0 11px}
+.phase-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pk{background:var(--surface-sunken);border-radius:var(--r-sm);padding:8px 9px;min-width:0}
+.pk b{display:block;font-size:14px;font-weight:680;font-variant-numeric:tabular-nums;line-height:1.25}
+.pk span{display:block;font-size:10px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pk b.good{color:var(--success-fg)}.pk b.warn{color:var(--warning-fg)}.pk b.bad{color:var(--danger-fg)}
+.an-side{display:flex;flex-direction:column;gap:12px}
+.bars{padding:14px 16px 16px;display:flex;flex-direction:column;gap:11px}
+.bar-row{display:grid;grid-template-columns:128px 1fr 58px;gap:10px;align-items:center;font-size:11.5px}
+.bar-row .bn{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{height:7px;border-radius:var(--r-pill);background:var(--surface-sunken);display:flex;overflow:hidden}
+.bar-track i{display:block;height:100%}
+.bar-track .est{background:var(--primary-border)}
+.bar-track .act{background:var(--primary)}
+.bar-row b{font-size:11px;text-align:right;color:var(--text-3);font-variant-numeric:tabular-nums}
+.an-note{padding:14px 16px;font-size:11.5px;color:var(--text-3);line-height:1.7}
+.an-note b{color:var(--text-2)}
+.an-note ul{margin:6px 0 0;padding-left:16px}
+.an-note li{margin:3px 0}
+
+/* ---------- 版本详情页（子页面，不是抽屉） ---------- */
+.drawer-layer{display:none;flex:1 1 auto;min-height:0;flex-direction:column;background:var(--surface)}
+.drawer-layer.on{display:flex;animation:detail-in 180ms var(--ease)}
+@keyframes detail-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.app.detail-open .page-head,.app.detail-open .tabs,.app.detail-open #content{display:none}
+.drawer{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:var(--surface);outline:none}
+.dh{padding:16px 24px 0;border-bottom:1px solid var(--border);flex:0 0 auto;background:var(--surface)}
+.dh-in{max-width:1120px;margin:0 auto}
+.dh-top{display:flex;align-items:center;gap:6px;min-width:0}
+.back{
+  height:28px;display:inline-flex;align-items:center;gap:4px;padding:0 8px 0 3px;border-radius:7px;
+  color:var(--text-2);font-size:12px;font-weight:600;flex:0 0 auto;
+}
+.back:hover{background:var(--surface-sunken);color:var(--text)}
+.back svg{color:var(--text-3)}
+.back:hover svg{color:var(--text)}
+.dh-crumb{font-size:11px;color:var(--text-3);min-width:0;flex:1 1 auto;display:flex;align-items:center;gap:5px;padding-left:2px}
+.dh-crumb b{color:var(--text-2);font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dh-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:6px}
+.dh-title h2{margin:0;font-size:21px;font-weight:680;letter-spacing:-.015em;line-height:1.3;min-width:0;overflow-wrap:anywhere}
+.dh-meta{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:var(--text-3)}
+.dh-meta .item{display:inline-flex;align-items:center;gap:4px}
+.dh-meta .warn{color:var(--warning-fg);font-weight:600}
+.dh-meta .bad{color:var(--danger-fg);font-weight:600}
+.wf{display:flex;align-items:center;gap:6px;margin:14px 0 12px;flex-wrap:wrap}
+.wstep{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text-3);white-space:nowrap}
+.wstep i{width:7px;height:7px;border-radius:50%;background:var(--border-strong);display:block}
+.wstep.done{color:var(--text-2)}
+.wstep.done i{background:var(--success)}
+.wstep.on{color:var(--primary-fg);font-weight:650}
+.wstep.on i{background:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.wline{height:1px;background:var(--border);flex:1 1 16px;min-width:12px}
+.dh-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 0 12px}
+.dh-actions .spacer{flex:1 1 auto}
+.dh-actions .lock{font-size:10.5px;color:var(--text-3);white-space:nowrap}
+.dh-tools{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+.dh-tools .icon-btn{width:28px;height:28px}
+.vswitch{
+  height:26px;max-width:132px;padding:0 7px;border:1px solid var(--border);border-radius:7px;
+  display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--text-2);
+}
+.vswitch:hover{background:var(--surface-sunken)}
+.vswitch span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vswitch svg{flex:0 0 auto;color:var(--text-3)}
+.dtabs{padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface);flex:0 0 auto}
+.dtabs-in{display:flex;gap:20px;overflow-x:auto;scrollbar-width:none;max-width:1120px;margin:0 auto}
+.dtabs::-webkit-scrollbar,.dtabs-in::-webkit-scrollbar{display:none}
+.dtab{position:relative;min-height:42px;display:inline-flex;align-items:center;gap:5px;border-bottom:2px solid transparent;color:var(--text-2);font-size:12.5px;white-space:nowrap}
+.dtab b{font-size:10px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums}
+.dtab:hover{color:var(--primary-fg)}
+.dtab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650}
+.dtab.on b{color:var(--primary-fg)}
+.dbody{flex:1 1 auto;min-height:0;overflow:auto;padding:20px 24px 44px;background:var(--bg)}
+.dbody-in{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.dbody .stack{display:flex;flex-direction:column;gap:12px;max-width:100%}
+.ov-top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px}
+.progress-card{padding:14px 15px}
+.pc-top{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.pc-big{display:flex;align-items:baseline;gap:6px}
+.pc-big b{font-size:30px;line-height:1;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.pc-big span{font-size:11px;color:var(--text-3)}
+.pc-top .muted{margin-left:auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.segbar{height:9px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;display:flex;margin-top:12px}
+.segbar i{display:block;height:100%}
+.segbar .done{background:var(--success)}
+.segbar .doing{background:var(--info)}
+.segbar .blocked{background:var(--danger)}
+.segbar .todo{background:var(--border-strong)}
+.legend{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:10.5px;color:var(--text-2)}
+.lg{display:inline-flex;align-items:center;gap:5px}
+.lg i{width:6px;height:6px;border-radius:2px;background:var(--border-strong)}
+.lg.done i{background:var(--success)}.lg.doing i{background:var(--info)}.lg.blocked i{background:var(--danger)}
+.lg b{font-variant-numeric:tabular-nums;color:var(--text)}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 11px;min-width:0}
+.kpi span{display:block;font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi b{display:block;font-size:15px;font-weight:680;line-height:1.35;font-variant-numeric:tabular-nums;margin-top:1px}
+.kpi small{display:block;font-size:10px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi b.good{color:var(--success-fg)}.kpi b.warn{color:var(--warning-fg)}.kpi b.bad{color:var(--danger-fg)}
+.section-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+.section-head h3{margin:0;font-size:12px;font-weight:650}
+.section-head .meta{margin-left:auto;font-size:10.5px;color:var(--text-3)}
+.risk-card{padding:13px 15px}
+.risk-list{display:flex;flex-direction:column;gap:0}
+.risk-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--border);min-width:0}
+.risk-row:first-of-type{border-top:0}
+.risk-ico{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;background:var(--danger-soft);color:var(--danger-fg)}
+.risk-ico.warn{background:var(--warning-soft);color:var(--warning-fg)}
+.risk-main{min-width:0;flex:1 1 auto}
+.risk-main b{display:block;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.risk-main small{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-card{padding:13px 15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ms-ico{width:30px;height:30px;border-radius:8px;background:var(--plum-soft);color:var(--plum-fg);display:grid;place-items:center;flex:0 0 auto}
+.ms-main{min-width:0;flex:1 1 auto}
+.ms-main b{display:block;font-size:12px;font-weight:600}
+.ms-main small{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px}
+.desc-card{padding:13px 15px}
+.desc-card p{margin:0;font-size:11.5px;line-height:1.7;color:var(--text-2)}
+.desc-card .section-head{margin-bottom:5px}
+.people{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.people .avatar{width:24px;height:24px;font-size:10px;border:2px solid var(--surface);margin-left:-6px}
+.people .avatar:first-child{margin-left:0}
+.people .more{font-size:10.5px;color:var(--text-3);margin-left:2px}
+.more-card{padding:12px 15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.more-main{min-width:0;flex:1 1 auto}
+.more-main b{display:block;font-size:12px;font-weight:650}
+.more-main small{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px}
+.more-links{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.chain-card{padding:12px 15px}
+.chain{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px}
+.chain .cstep{display:flex;align-items:baseline;gap:4px;padding:4px 7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:10.5px;color:var(--text-3);cursor:pointer}
+.chain .cstep:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+.chain .cstep b{font-size:12px;color:var(--text);font-variant-numeric:tabular-nums}
+.chain .cstep:hover b{color:var(--primary)}
+.chain .carrow{color:var(--text-3);font-size:11px;user-select:none}
+@media (max-width:520px){
+  .chain{gap:4px}
+  .chain .cstep{padding:4px 6px}
+}
+
+/* ---------- 需求 ---------- */
+.demand-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.dhead,.drow{display:grid;grid-template-columns:minmax(0,1fr) 64px 44px 58px 66px;gap:8px;align-items:center;padding:8px 12px}
+.dhead{background:#FAFBFC;border-bottom:1px solid var(--border);font-size:10.5px;font-weight:600;color:var(--text-3)}
+.dhead .dcount .short{display:none}
+.drow{border-bottom:1px solid var(--border);font-size:11.5px;cursor:pointer}
+.drow:hover{background:#FAFBFC}
+.dcount .link{font-size:10.5px;font-variant-numeric:tabular-nums}
+.drow:last-child{border-bottom:0}
+.drow .dmain{min-width:0}
+.drow .dmain b{display:block;font-weight:550;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drow .dmain small{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drow .prio{font-size:10.5px;font-weight:600;color:var(--text-2);text-align:center}
+.drow .prio.p0{color:var(--danger-fg)}
+.drow .ddue,.drow .dcount{font-size:10.5px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dtoolbar .meta{font-size:11px;color:var(--text-3)}
+.stag.blocked{background:var(--danger-soft);color:var(--danger-fg)}
+.stag.todo{background:var(--surface-sunken);color:var(--text-2)}
+.stag.doing{background:var(--info-soft);color:var(--info-fg)}
+.dtoolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.dtoolbar .grow{flex:1 1 auto}
+.item-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.irow{display:grid;grid-template-columns:minmax(0,1fr) 82px 72px 74px;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);font-size:11.5px;cursor:pointer}
+.irow:hover{background:#FAFBFC}
+.irow:last-child{border-bottom:0}
+.irow .it{min-width:0;display:flex;align-items:center;gap:7px}
+.irow .it b{font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.irow .it .idot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;background:var(--text-3)}
+.irow .it .idot.done{background:var(--success)}
+.irow .it .idot.doing{background:var(--info)}
+.irow .it .idot.blocked{background:var(--danger)}
+.irow .it .idot.todo{background:var(--border-strong)}
+.irow .io{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.irow .idue{font-size:10.5px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums}
+.irow .idue.bad{color:var(--danger-fg);font-weight:550}
+.irow .ih{font-size:10.5px;text-align:right;color:var(--text-3);font-variant-numeric:tabular-nums}
+.ifoot{padding:8px 12px;border-top:1px solid var(--border);text-align:center;background:#FCFCFD}
+.rel-empty{padding:28px 18px;text-align:center;background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--r-md)}
+.rel-empty .ico{width:38px;height:38px;border-radius:50%;background:var(--success-soft);color:var(--success-fg);display:grid;place-items:center;margin:0 auto 9px}
+.rel-empty b{display:block;font-size:12.5px;font-weight:650}
+.rel-empty p{margin:4px auto 12px;max-width:440px;font-size:11px;line-height:1.7;color:var(--text-3);text-wrap:pretty}
+.rel-plan{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rel-plan .rp-main{min-width:0;flex:1 1 auto}
+.rel-plan b{display:block;font-size:11.5px;font-weight:600}
+.rel-plan small{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px}
+.acts{display:flex;flex-direction:column;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.act{display:flex;gap:9px;padding:10px 12px;border-bottom:1px solid var(--border);min-width:0}
+.act:last-child{border-bottom:0}
+.act .aav{width:24px;height:24px;border-radius:50%;background:var(--surface-sunken);display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--text-2);flex:0 0 auto}
+.act .amain{min-width:0;flex:1 1 auto;font-size:11px;color:var(--text-2);line-height:1.55}
+.act .amain b{font-weight:600;color:var(--text)}
+.act .atime{font-size:10px;color:var(--text-3);white-space:nowrap;flex:0 0 auto}
+
+/* ---------- 版本档案 / 计划与历史 侧板 ---------- */
+.sheet{
+  width:660px;max-width:100%;max-height:88vh;display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-xl);
+  overflow:hidden;animation:dlg 160ms var(--ease);
+}
+.sheet-head{padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start;flex:0 0 auto}
+.sheet-head h2{margin:0;font-size:15px;font-weight:680;letter-spacing:-.01em}
+.sheet-head p{margin:2px 0 0;font-size:11.5px;color:var(--text-3)}
+.sheet-head .icon-btn{margin-left:auto}
+.sheet-body{flex:1 1 auto;min-height:0;overflow:auto;padding:16px 20px;background:var(--bg);display:flex;flex-direction:column;gap:12px}
+.sheet-foot{padding:10px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;background:#FCFCFD;flex:0 0 auto}
+.sheet-foot .hint{font-size:10.5px;color:var(--text-3);margin-right:auto}
+.hist-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border);font-size:11.5px}
+.hist-row:first-of-type{border-top:0}
+.hist-main{min-width:0;flex:1 1 auto}
+.hist-main b{display:block;font-size:11.5px;font-weight:600}
+.hist-main small{display:block;font-size:10.5px;color:var(--text-3)}
+.hist-meta{font-size:10.5px;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums}
+.kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kv{background:var(--surface-sunken);border-radius:var(--r-sm);padding:9px 10px;min-width:0}
+.kv span{display:block;font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kv b{display:block;font-size:13px;font-weight:650;margin-top:1px;font-variant-numeric:tabular-nums}
+.kv b.warn{color:var(--warning-fg)}.kv b.bad{color:var(--danger-fg)}.kv b.good{color:var(--success-fg)}
+.branch-row{display:grid;grid-template-columns:minmax(0,1fr) 96px 38px;gap:8px;align-items:center;font-size:11.5px;padding:6px 0;border-top:1px solid var(--border)}
+.branch-row:first-of-type{border-top:0}
+.branch-row .bname{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2)}
+.branch-row .bbar{height:6px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;display:flex}
+.branch-row .bbar i{display:block;height:100%;background:var(--success)}
+.branch-row .bbar i.doing{background:var(--info)}
+.branch-row .bpct{font-size:10.5px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums}
+.life{display:flex;flex-direction:column}
+.life-row{display:flex;gap:9px;padding:6px 0;min-width:0}
+.life-dot{width:8px;height:8px;border-radius:50%;background:var(--border-strong);margin-top:5px;flex:0 0 auto}
+.life-row.done .life-dot{background:var(--success)}
+.life-row.on .life-dot{background:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.life-main{font-size:11.5px;color:var(--text-2);min-width:0;flex:1 1 auto}
+.life-main b{font-weight:600;color:var(--text)}
+.life-date{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.section-cap{font-size:11px;color:var(--text-3);line-height:1.6;margin:0}
+.vpick-list{display:flex;flex-direction:column;gap:6px;max-height:170px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px;background:var(--surface)}
+.vpick{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:11.5px;background:var(--surface-sunken);min-width:0}
+.vpick .gdot{width:7px;height:7px;border-radius:2px;background:var(--primary);opacity:.7;flex:0 0 auto}
+.vpick b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vpick small{margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;flex:0 0 auto}
+.cover-n{
+  display:inline-flex;align-items:center;height:16px;padding:0 5px;margin-left:5px;border-radius:4px;
+  background:var(--primary-soft);color:var(--primary-fg);font-size:9.5px;font-weight:600;vertical-align:1px;
+}
+
+/* ---------- menu / modal / toast ---------- */
+.menu{
+  position:fixed;z-index:400;min-width:184px;background:var(--surface);border:1px solid var(--border);
+  border-radius:9px;box-shadow:var(--shadow-lg);padding:4px;animation:pop 120ms var(--ease);
+}
+@keyframes pop{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.menu button{
+  width:100%;height:31px;display:flex;align-items:center;gap:8px;padding:0 9px;border-radius:6px;
+  font-size:12px;color:var(--text-2);text-align:left;white-space:nowrap;
+}
+.menu button:hover{background:var(--surface-sunken);color:var(--text)}
+.menu button.danger{color:var(--danger-fg)}
+.menu button.danger:hover{background:var(--danger-soft)}
+.menu .msep{height:1px;background:var(--border);margin:4px 3px}
+.menu .mcheck{margin-left:auto;color:var(--primary)}
+.modal{position:fixed;inset:0;z-index:300;background:rgba(16,24,40,.32);display:none;align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.dialog{
+  width:500px;max-width:100%;background:var(--surface);border-radius:14px;box-shadow:var(--shadow-xl);
+  border:1px solid var(--border);overflow:hidden;animation:dlg 160ms var(--ease);
+}
+@keyframes dlg{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
+.dlg-head{padding:18px 20px 10px;display:flex;gap:12px;align-items:flex-start}
+.dlg-head h2{margin:0;font-size:16px;font-weight:680;letter-spacing:-.01em}
+.dlg-head p{margin:3px 0 0;font-size:11.5px;line-height:1.55;color:var(--text-3)}
+.dlg-head p b{color:var(--text-2);font-weight:600}
+.dlg-head .icon-btn{margin-left:auto}
+.dlg-body{padding:6px 20px 4px;display:flex;flex-direction:column;gap:13px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field > span{font-size:11.5px;font-weight:600;color:var(--text-2)}
+.field > span i{color:var(--danger);font-style:normal}
+.field input,.field select{
+  height:36px;border:1px solid var(--border);border-radius:8px;background:var(--surface);
+  padding:0 10px;font-size:12.5px;color:var(--text);outline:none;width:100%;
+}
+.field input:focus,.field select:focus{border-color:var(--primary);box-shadow:var(--ring)}
+.field .hint{font-size:10.5px;color:var(--text-3)}
+.field .err{font-size:10.5px;color:var(--danger-fg)}
+.field.invalid input{border-color:var(--danger-border);box-shadow:0 0 0 3px var(--danger-soft)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.adv-toggle{display:inline-flex;align-items:center;gap:5px;align-self:flex-start;font-size:11.5px;color:var(--text-3);font-weight:550}
+.adv-toggle:hover{color:var(--text)}
+.adv-toggle svg{transition:transform var(--dur) var(--ease)}
+.adv-toggle.open svg{transform:rotate(180deg)}
+.adv{display:flex;flex-direction:column;gap:12px;padding:12px;border-radius:9px;background:var(--surface-sunken)}
+.dlg-foot{display:flex;align-items:center;gap:8px;padding:14px 20px;border-top:1px solid var(--border);background:#FCFCFD;margin-top:14px}
+.dlg-foot .foot-hint{font-size:10.5px;color:var(--text-3);margin-right:auto}
+.toast{
+  position:fixed;left:50%;bottom:24px;z-index:500;transform:translate(-50%,12px);
+  background:#101828;color:#fff;font-size:12px;padding:8px 14px;border-radius:8px;box-shadow:var(--shadow-lg);
+  opacity:0;pointer-events:none;transition:opacity var(--dur) var(--ease),transform var(--dur) var(--ease);
+  max-width:calc(100vw - 32px);text-align:center;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- prototype nav / annotations ---------- */
+.proto-nav{
+  position:fixed;left:16px;bottom:16px;z-index:260;display:flex;align-items:center;gap:3px;
+  background:#101828;color:#fff;border-radius:999px;padding:4px;box-shadow:var(--shadow-xl);
+}
+.proto-nav button{height:28px;padding:0 10px;border-radius:999px;font-size:11px;color:#D0D5DD;white-space:nowrap}
+.proto-nav button:hover{background:rgba(255,255,255,.1);color:#fff}
+.proto-nav button.on{background:#fff;color:#101828;font-weight:650}
+.proto-nav .psep{width:1px;height:16px;background:rgba(255,255,255,.18);margin:0 3px}
+.pin{
+  position:fixed;z-index:250;width:22px;height:22px;border-radius:50%;background:#101828;color:#fff;
+  font-size:11px;font-weight:700;display:grid;place-items:center;box-shadow:0 2px 8px rgba(16,24,40,.28);
+  border:2px solid #fff;pointer-events:none;
+}
+.annot-legend{
+  position:fixed;right:20px;bottom:20px;z-index:260;width:310px;max-width:calc(100vw - 32px);
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-xl);
+  padding:12px 14px 10px;
+}
+.annot-legend h4{margin:0 0 6px;font-size:12px;font-weight:680;display:flex;align-items:center;gap:6px}
+.annot-legend h4 .x{margin-left:auto}
+.annot-legend ol{margin:0;padding-left:17px;font-size:11px;line-height:1.75;color:var(--text-2)}
+.annot-legend li::marker{color:var(--text-3);font-weight:650}
+
+/* ---------- responsive ---------- */
+@media (max-width:1200px){
+  .vhead,.vrow{grid-template-columns:minmax(200px,1.5fr) 80px 160px minmax(130px,1fr) 96px 92px 112px;column-gap:10px}
+  .search{width:200px}
+}
+@media (max-width:1024px){
+  .side{width:64px;flex-basis:64px}
+  .brand{padding:0;justify-content:center}
+  .brand-name,.ws-text,.ws-switch svg,.nav-item .nl,.nav-label,.side-user-name,.side-foot .icon-btn,.ws-switch{display:none}
+  .ws-switch{margin:2px 10px 10px;justify-content:center;padding:6px}
+  .nav{padding:0 8px}
+  .nav-item{justify-content:center;padding:0}
+  .side-foot{justify-content:center;padding:10px 0}
+  .vhead,.vrow{grid-template-columns:minmax(190px,1.5fr) 80px 150px minmax(120px,1fr) 88px 104px}
+  .vrel{display:none}
+  .an-grid{grid-template-columns:1fr}
+}
+@media (max-width:860px){
+  .page-head{padding:12px 16px;min-height:auto}
+  .head-actions{flex:1 1 100%}
+  .search{flex:1 1 180px;width:auto}
+  .tabs{padding:0 16px;gap:18px}
+  .tabs-note{display:none}
+  .content{padding:14px 16px 40px}
+  .vhead{display:none}
+  .vrow{
+    grid-template-columns:minmax(0,1fr) auto;grid-template-areas:
+      "name status"
+      "time time"
+      "prog prog"
+      "owner act";
+    gap:6px 12px;padding:12px 14px;min-height:0;
+  }
+  .vrow .vname{grid-area:name}
+  .vrow .vstatus{grid-area:status;justify-self:end}
+  .vrow .vtime{grid-area:time}
+  .vrow .vprogress{grid-area:prog}
+  .vrow .vowner{grid-area:owner}
+  .vrow .vrel{display:none}
+  .vrow .vact{grid-area:act}
+  .vact .quick,.vact .kebab{opacity:1}
+  .vsub{font-size:10.5px}
+  .vtime small{display:inline;margin-left:6px}
+  .phase-duo{grid-template-columns:1fr}
+  .srow{grid-template-columns:58px minmax(0,1fr) 64px 18px;gap:9px}
+  .srow .senv,.srow .sowner,.srow .scount{display:none}
+  .dh{padding:14px 16px 0}
+  .dtabs{padding:0 16px}
+  .dbody{padding:16px 16px 40px}
+  .ov-top{grid-template-columns:1fr}
+  .proto-nav{left:8px;bottom:8px;max-width:calc(100vw - 16px);overflow-x:auto}
+  .proto-nav button{padding:0 8px;font-size:10.5px}
+  .annot-legend{right:8px;bottom:52px;width:calc(100vw - 16px)}
+}
+@media (max-width:520px){
+  .search kbd{display:none}
+  .head-actions{gap:6px}
+  .project-pick{max-width:150px}
+  .grid2{grid-template-columns:1fr}
+  .dh-title h2{font-size:18px}
+  .dbody{padding:14px 14px 28px}
+  .dtabs{padding:0 14px}
+  .dh{padding:12px 14px 0}
+  .irow{grid-template-columns:minmax(0,1fr) 68px 64px}
+  .irow .ih{display:none}
+  /* 手机：右侧锁定说明让位给主按钮，避免被裁切 */
+  .dh-actions .lock{display:none}
+  .dh-tools .vswitch{max-width:76px;padding:0 5px}
+  .dh-tools .icon-btn{width:26px;height:26px}
+  .dhead,.drow{grid-template-columns:minmax(0,1fr) 56px 62px}
+  .dhead .dprio,.drow .prio,.dhead .ddue,.drow .ddue{display:none}
+  .dhead .dcount .long{display:none}
+  .dhead .dcount .short{display:inline}
+  .sheet{max-height:92vh}
+  .sheet-head{padding:14px 14px 10px}
+  .sheet-body{padding:14px}
+  .sheet-foot{padding:10px 14px;flex-wrap:wrap}
+  .sheet-foot .hint{flex:1 0 100%;margin-right:0}
+  .kv-grid{grid-template-columns:1fr 1fr}
+  .bulkbar{padding:8px 12px}
+}
+@media (max-width:639px){
+  /* 子页面在小屏占满宽度，主导航让位 */
+  .app.detail-open .side{display:none}
+  .page-head{padding:10px 12px;gap:10px}
+  .head-title{flex:1 1 100%}
+  .head-actions{flex:1 1 100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+  .head-actions .search{grid-column:1/-1;width:100%}
+  .head-actions .project-pick{max-width:none;min-width:0}
+  .head-actions .btn.primary{justify-self:end}
+  .tabs{padding:0 12px;gap:16px}
+  .content{padding:12px 12px 32px}
+  .list-toolbar{padding:10px 12px}
+  .filter-right{gap:10px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:1ms!important;animation-duration:1ms!important}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" aria-label="主导航">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12M6 21h12M7 3c0 4 4 5 5 9 1-4 5-5 5-9M7 21c0-4 4-5 5-9 1 4 5 5 5 9"/></svg>
+      </span>
+      <span class="brand-name">沙漏</span>
+    </div>
+    <button class="ws-switch" type="button" title="切换空间">
+      <span class="ws-avatar">支</span>
+      <span class="ws-text"><b>支付业务部</b><span>共享 · 9 人 · 空间主</span></span>
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
+    </button>
+    <nav class="nav">
+      <div class="nav-label">我的</div>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6.1.8-4.5 4.2 1.2 6.1L12 16.8 6.6 19.7l1.2-6.1L3.3 9.4l6.1-.8L12 3z"/></svg><span class="nl">我的工作</span></a>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="18" cy="18" r="2.2"/></svg><span class="nl">周回顾</span></a>
+      <div class="nav-label">规划</div>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16l-7-4-7 4V4z"/></svg><span class="nl">需求池</span></a>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span class="nl">项目</span></a>
+      <a class="nav-item on" href="#" aria-current="page"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span class="nl">版本</span></a>
+      <div class="nav-label">交付</div>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="1.3" fill="currentColor"/></svg><span class="nl">工作项</span></a>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6V3z"/><path d="M14 3v5h4M9 13h6M9 17h6"/></svg><span class="nl">文档</span></a>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l2 2 4-5"/><path d="M5 4h14v16H5z"/></svg><span class="nl">测试</span></a>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6" r="2.2"/><circle cx="17" cy="18" r="2.2"/><path d="M7 8.2V15a3 3 0 0 0 3 3h4.8"/></svg><span class="nl">分支</span></a>
+      <div class="nav-label">洞察</div>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span class="nl">报表</span></a>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5M18 20a5 5 0 0 0-2-4"/></svg><span class="nl">成员负载</span></a>
+      <a class="nav-item" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3L12 3z"/><path d="M12 9v4M12 16h.01"/></svg><span class="nl">逾期与阻塞</span></a>
+    </nav>
+    <div class="side-foot">
+      <span class="side-user">孔</span>
+      <span class="side-user-name">孔祥金</span>
+      <button class="icon-btn" type="button" title="设置"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.3 2.3-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-3v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-2.3-2.3.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H4v-3h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.3-2.3.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V4h3v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.3 2.3-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v3h-.2a1.7 1.7 0 0 0-1.6 1z"/></svg></button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="page-head">
+      <div class="head-title">
+        <div class="title-line"><h1>版本</h1></div>
+        <p class="crumb" id="crumb">
+          <span>支付业务部</span><span class="sep">/</span><b id="crumbProject">统一支付网关</b><span class="sep">·</span><span id="crumbSummary">6 个版本 · 1 个进行中 · 2 个已发布</span>
+        </p>
+      </div>
+      <div class="head-actions">
+        <label class="search" title="搜索版本或负责人">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+          <input id="q" type="search" placeholder="搜索版本或负责人" autocomplete="off" aria-label="搜索版本或负责人">
+          <kbd>⌘ K</kbd>
+        </label>
+        <button class="project-pick" type="button" id="projectPick" aria-haspopup="menu">
+          <span id="projectPickName">统一支付网关</span>
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
+        </button>
+        <button class="btn primary" type="button" id="btnCreate">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+          新建版本
+        </button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="版本页视图">
+      <button class="tab on" type="button" data-tab="versions">版本 <b id="tabVersionCount">6</b></button>
+      <button class="tab" type="button" data-tab="schedule">发布日程 <b>5</b><i class="dot" title="有 1 份计划已过期"></i></button>
+      <button class="tab" type="button" data-tab="analysis">投入分析</button>
+      <span class="spacer"></span>
+      <span class="tabs-note">默认只看当前项目；跨项目在右上角切换</span>
+    </nav>
+
+    <div class="content" id="content">
+      <!-- 版本列表 -->
+      <section id="pane-versions" class="wrap" aria-label="版本列表">
+        <div class="plan-banner" id="planBanner">
+          <span class="pb-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
+          </span>
+          <div class="pb-text"><b><span id="unplannedCount">12</span> 个工作项还没有计划版本</b><span>未规划的工作不会计入任何版本的进度</span></div>
+          <button class="link arrow" type="button" id="goPlan">去规划</button>
+        </div>
+
+        <div class="panel">
+          <div class="list-toolbar">
+            <div class="chips" id="statusChips" role="tablist" aria-label="按状态筛选"></div>
+            <div class="filter-right">
+              <label class="check"><input type="checkbox" id="riskOnly"> 只看需关注</label>
+              <label class="sort">排序
+                <select id="sortBy" aria-label="排序方式">
+                  <option value="smart">推荐顺序</option>
+                  <option value="target">目标日期</option>
+                  <option value="name">名称</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="bulkbar" id="bulkBar" hidden></div>
+          <div class="vhead" role="row">
+            <span>版本</span><span>状态</span><span>时间</span><span>进度</span><span>负责人</span><span>最近发布</span><span></span>
+          </div>
+          <div id="versionRows"></div>
+          <div class="list-foot">
+            <span id="listFoot">共 6 个版本</span>
+            <span>·</span>
+            <span>进度按看板完成项自动计算</span>
+            <span style="margin-left:auto"><button class="link" type="button" id="toSchedule">查看发布日程 →</button></span>
+          </div>
+        </div>
+        <p class="page-note">点击任意版本进入详情页，返回时保留列表位置；行内只保留下一步动作，编辑、关闭、删除收进「⋯」。切到「全部项目」可勾选多个版本一起建发布计划。</p>
+      </section>
+
+      <!-- 发布日程 -->
+      <section id="pane-schedule" class="wrap" aria-label="发布日程" hidden>
+        <div class="sched-head">
+          <div class="sched-title">
+            <h2>发布日程</h2>
+            <p>跨项目汇总发布计划；这里只代表计划，不代表实际发布。点击任意计划打开版本。</p>
+          </div>
+          <div class="sched-kpis">
+            <div class="skpi"><b id="skTotal">5</b><span>份计划</span></div>
+            <div class="skpi warn"><b id="skOpen">3</b><span>份未完成</span></div>
+            <div class="skpi bad"><b id="skLate">1</b><span>份已过期</span></div>
+          </div>
+          <button class="btn primary" type="button" id="btnPlanFromVersion">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+            从版本创建计划
+          </button>
+        </div>
+        <div class="panel">
+          <div class="sched-toolbar">
+            <select class="mini-select" id="schedRange" aria-label="时间范围">
+              <option value="30">未来 30 天</option>
+              <option value="90">未来 90 天</option>
+              <option value="around">本周前后</option>
+              <option value="all">全部时间</option>
+            </select>
+            <select class="mini-select" id="schedEnv" aria-label="环境">
+              <option value="">全部环境</option>
+              <option value="生产">生产</option>
+              <option value="预发布">预发布</option>
+              <option value="测试">测试</option>
+            </select>
+            <select class="mini-select" id="schedStatus" aria-label="计划状态">
+              <option value="">全部状态</option>
+              <option value="open">未完成</option>
+              <option value="draft">草稿</option>
+              <option value="ready">就绪</option>
+              <option value="completed">已完成</option>
+              <option value="canceled">已取消</option>
+            </select>
+            <span class="grow"></span>
+            <span class="tabs-note" style="align-self:center">按计划时间排序</span>
+            <button class="icon-btn" type="button" id="schedRefresh" title="刷新发布日程" aria-label="刷新发布日程">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16 4v3.5h-3.5"/></svg>
+            </button>
+          </div>
+          <div id="scheduleRows"></div>
+          <div class="list-foot">
+            <span id="schedFoot">共 5 份计划</span>
+            <span style="margin-left:auto"><button class="link" type="button" data-toast="批量创建入口保留在完整发布计划页，原型未展开">批量创建说明 →</button></span>
+          </div>
+        </div>
+        <p class="page-note">计划时间已过的未完成计划会标红；发布记录在版本详情里维护，避免日程与事实混在一起。</p>
+      </section>
+
+      <!-- 投入分析 -->
+      <section id="pane-analysis" class="wrap" aria-label="投入分析" hidden>
+        <div class="an-grid">
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div class="card">
+              <div class="card-head">
+                <h3>阶段时间轴</h3>
+                <span class="meta-right">首版上线当日归首版；之后归迭代</span>
+              </div>
+              <div class="tl">
+                <div class="tl-track">
+                  <div class="tl-seg mvp" style="width:93%"><span>首版开发 · 312h · 完成 49 项</span></div>
+                  <div class="tl-seg post" style="width:7%"><span>迭代 86h</span></div>
+                </div>
+                <div class="tl-legend">
+                  <span><i></i>首版开发 <b>06-15 → 11-06</b></span>
+                  <span class="post"><i></i>迭代维护 <b>11-06 → 今</b></span>
+                  <span style="margin-left:auto">整体偏差 <b style="color:var(--success-fg)">+6%</b> · 准确</span>
+                </div>
+              </div>
+              <div class="phase-duo">
+                <div class="phase-card accent-blue">
+                  <div class="phase-title"><span class="tag">首版开发</span><span>上线前全部投入</span></div>
+                  <div class="phase-sub">06-15 → 11-06 · 由首个已发布版本倒推</div>
+                  <div class="phase-kpis">
+                    <div class="pk"><b>312h</b><span>投入工时</span></div>
+                    <div class="pk"><b>49</b><span>完成工作项</span></div>
+                    <div class="pk"><b class="warn">+6%</b><span>整体偏差 · 准确</span></div>
+                    <div class="pk"><b>61%</b><span>准时完成率</span></div>
+                  </div>
+                </div>
+                <div class="phase-card accent-plum">
+                  <div class="phase-title"><span class="tag">迭代维护</span><span>上线后新增与维护</span></div>
+                  <div class="phase-sub">11-06 → 今 · 含新增需求与缺陷</div>
+                  <div class="phase-kpis">
+                    <div class="pk"><b>86h</b><span>投入工时</span></div>
+                    <div class="pk"><b>12</b><span>完成工作项</span></div>
+                    <div class="pk"><b class="good">+4%</b><span>整体偏差 · 准确</span></div>
+                    <div class="pk"><b>73%</b><span>准时完成率</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3>版本投入对比</h3>
+                <span class="meta-right">浅色为预估，深色为实际</span>
+              </div>
+              <div class="bars" id="analysisBars"></div>
+            </div>
+          </div>
+          <div class="an-side">
+            <div class="card">
+              <div class="card-head"><h3>口径与去向</h3></div>
+              <div class="an-note">
+                <p style="margin:0">这里是原来「按阶段 / 全部项目」的收敛版，只保留结论与趋势；逐人、逐模块的透视表仍在报表里。</p>
+                <ul>
+                  <li>工时按工作项完成日归入阶段</li>
+                  <li>偏差 =（实际 − 预估）÷ 预估，±15% 内为准确</li>
+                  <li>跨项目对比见 <button class="link" type="button" data-toast="原型：跳转到报表 · 跨项目">报表 → 跨项目</button></li>
+                </ul>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>下一步</h3></div>
+              <div class="an-note">
+                <p style="margin:0 0 8px">当前项目有 <b>2 个</b>版本待发布，本周有 <b>1 份</b>计划已过期。</p>
+                <button class="btn sm" type="button" data-toast="原型：跳转到发布日程" style="border-color:var(--primary-border);color:var(--primary-fg);background:var(--primary-soft)">去发布日程 →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="page-note">分析默认收在第三个页签，不再和版本列表抢首屏；需要逐项下钻时去报表。</p>
+      </section>
+    </div>
+
+    <!-- 版本详情：主区域内的子页面，左导航保持不变 -->
+    <div class="drawer-layer" id="drawerLayer" aria-hidden="true">
+      <div class="drawer" role="region" aria-label="版本详情" tabindex="-1" id="drawer"></div>
+    </div>
+  </main>
+</div>
+
+<!-- 新建版本 -->
+<div class="modal" id="createModal" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="createTitle">
+    <div class="dlg-head">
+      <div>
+        <h2 id="createTitle">新建版本</h2>
+        <p>在「<b id="dlgProject">统一支付网关</b>」下创建；创建后直接规划工作项。</p>
+      </div>
+      <button class="icon-btn" type="button" id="createX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="dlg-body">
+      <label class="field" id="fieldName">
+        <span>版本名称 <i>*</i></span>
+        <input id="fName" type="text" maxlength="40" placeholder="例如：V1.2" autocomplete="off">
+        <small class="hint">建议与 Git 分支或发布号一致</small>
+        <small class="err" id="fNameErr" hidden>请填写版本名称</small>
+      </label>
+      <div class="grid2">
+        <label class="field">
+          <span>目标发布日期</span>
+          <input id="fTarget" type="date" value="2026-12-20">
+        </label>
+        <label class="field">
+          <span>负责人</span>
+          <select id="fOwner">
+            <option>张伟</option><option>李娜</option><option>赵磊</option><option>陈工</option>
+          </select>
+        </label>
+      </div>
+      <button class="adv-toggle" type="button" id="advToggle" aria-expanded="false">
+        更多设置
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
+      </button>
+      <div class="adv" id="advFields" hidden>
+        <label class="field">
+          <span>计划开始日期</span>
+          <input id="fStart" type="date">
+        </label>
+        <label class="check"><input type="checkbox" id="fCopy"> 复制上一版本的工作项范围（只复制范围，不带完成状态）</label>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <span class="foot-hint">创建后进入版本详情</span>
+      <button class="btn" type="button" id="btnCancelCreate">取消</button>
+      <button class="btn primary" type="button" id="btnSubmitCreate">创建并规划工作项</button>
+    </div>
+  </div>
+</div>
+
+<!-- 跨项目新建发布计划 -->
+<div class="modal" id="planModal" aria-hidden="true">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="planTitle">
+    <div class="dlg-head">
+      <div>
+        <h2 id="planTitle">新建发布计划</h2>
+        <p>一个计划可以覆盖多个版本，第一个为主版本；计划不代表实际发布。</p>
+      </div>
+      <button class="icon-btn" type="button" id="planX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="dlg-body">
+      <div class="field">
+        <span>覆盖版本</span>
+        <div class="vpick-list" id="planVersions"></div>
+      </div>
+      <div class="grid2">
+        <label class="field">
+          <span>环境</span>
+          <select id="planEnv"><option>生产</option><option>预发布</option><option>测试</option></select>
+        </label>
+        <label class="field">
+          <span>计划时间</span>
+          <input id="planAt" type="datetime-local" value="2026-11-27T20:00">
+        </label>
+      </div>
+      <label class="field">
+        <span>覆盖范围</span>
+        <select id="planCoverage"><option>全量</option><option>部分</option></select>
+      </label>
+      <p class="section-cap">发布结果仍在各版本的「发布记录」里维护；这里只排计划时间、环境与覆盖范围。</p>
+    </div>
+    <div class="dlg-foot">
+      <span class="foot-hint">已选 <b id="planCount">0</b> 个版本</span>
+      <button class="btn" type="button" id="planCancel">取消</button>
+      <button class="btn primary" type="button" id="planSubmit">创建发布计划</button>
+    </div>
+  </div>
+</div>
+
+<!-- 版本档案 / 计划与历史 / 交付说明 -->
+<div class="modal" id="infoModal" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+    <div class="sheet-head">
+      <div>
+        <h2 id="infoTitle"></h2>
+        <p id="infoSub"></p>
+      </div>
+      <button class="icon-btn" type="button" id="infoX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body" id="infoBody"></div>
+    <div class="sheet-foot" id="infoFoot"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- 原型导航：截图时用 ?clean=1 隐藏 -->
+<div class="proto-nav" id="protoNav" aria-label="原型导航">
+  <button type="button" data-screen="list" class="on">版本列表</button>
+  <button type="button" data-screen="detail">版本详情</button>
+  <button type="button" data-screen="create">新建版本</button>
+  <button type="button" data-screen="schedule">发布日程</button>
+  <button type="button" data-screen="analysis">投入分析</button>
+  <span class="psep"></span>
+  <button type="button" id="btnAnnot">设计说明</button>
+</div>
+<div class="annot-layer" id="annotLayer" hidden></div>
+
+<script>
+(function(){
+  "use strict";
+  var TODAY = new Date(2026,10,16);
+  var PROJECTS = [
+    {id:"pay", name:"统一支付网关", unplanned:12},
+    {id:"settle", name:"结算改造", unplanned:5}
+  ];
+  var P = {pay:PROJECTS[0], settle:PROJECTS[1]};
+  var STATUS = {
+    planned:{label:"计划中", cls:"planned"},
+    active:{label:"进行中", cls:"active"},
+    released:{label:"已发布", cls:"released"},
+    closed:{label:"已关闭", cls:"closed"},
+    canceled:{label:"已取消", cls:"canceled"}
+  };
+  var PEOPLE = {
+    "张伟":{ini:"张", cls:"av1"}, "李娜":{ini:"李", cls:"av3"}, "赵磊":{ini:"赵", cls:"av5"},
+    "陈工":{ini:"陈", cls:"av2"}, "王强":{ini:"王", cls:"av4"}, "我":{ini:"孔", cls:"av7"}
+  };
+  var VERSIONS = [
+    {
+      id:"v22", projectId:"pay", name:"支付网关 v2.2", status:"active",
+      start:"2026-10-26", target:"2026-11-27", owner:"张伟",
+      total:25, done:18, doing:3, blocked:2, todo:2,
+      estimateMin:6600, actualMin:6330, releasedAt:null, closedAt:null,
+      branches:3, riskCount:3,
+      desc:"支付网关 v2.2 交付范围：支付回调幂等、退款回调签名校验、渠道路由权重配置与对账文件解析优化。",
+      milestone:{title:"版本发布", date:"2026-11-27", status:"pending"},
+      plan:{env:"生产", at:"2026-11-27T20:00:00", status:"draft", coverage:"全量"},
+      items:[
+        {title:"支付回调日志脱敏", status:"done", owner:"张伟", due:"2026-11-10", est:240, act:260},
+        {title:"支付宝周期扣款签约与解约", status:"doing", owner:"赵磊", due:"2026-11-20", est:480, act:390},
+        {title:"支付渠道路由权重配置", status:"doing", owner:"李娜", due:"2026-11-22", est:360, act:210},
+        {title:"支付超时关单定时任务", status:"done", owner:"李娜", due:"2026-11-14", est:180, act:190},
+        {title:"退款回调幂等校验", status:"blocked", owner:"李娜", due:"2026-11-18", est:300, act:120},
+        {title:"退款回调签名校验", status:"blocked", owner:"赵磊", due:"2026-11-19", est:240, act:60},
+        {title:"对账文件解析优化", status:"todo", owner:"张伟", due:"2026-11-15", est:360, act:0},
+        {title:"支付网关 v2.2 交付", status:"done", owner:"张伟", due:"2026-11-27", est:120, act:100}
+      ],
+      activity:[
+        {who:"张伟", what:"记录了 2h 工时", when:"今天 10:24"},
+        {who:"李娜", what:"将「退款回调幂等校验」标记为阻塞", when:"昨天 18:02"},
+        {who:"张伟", what:"把目标日期改为 11-27", when:"11-12"},
+        {who:"系统", what:"创建里程碑「版本发布」", when:"11-02"}
+      ]
+    },
+    {
+      id:"v23", projectId:"pay", name:"支付网关 v2.3", status:"planned",
+      start:"2026-12-01", target:"2026-12-20", owner:"李娜",
+      total:12, done:0, doing:0, blocked:0, todo:12,
+      estimateMin:3840, actualMin:0, releasedAt:null, closedAt:null,
+      branches:0, riskCount:0,
+      desc:"已排入 12 个工作项，等待开始。范围以需求池中的目标版本为准。",
+      milestone:null, plan:null,
+      items:[
+        {title:"渠道对账差异看板", status:"todo", owner:"李娜", due:"2026-12-18", est:480, act:0},
+        {title:"支付结果通知重试策略", status:"todo", owner:"赵磊", due:"2026-12-19", est:360, act:0}
+      ],
+      activity:[
+        {who:"李娜", what:"从需求池排入 12 个工作项", when:"11-14"},
+        {who:"李娜", what:"创建版本", when:"11-13"}
+      ]
+    },
+    {
+      id:"v24", projectId:"pay", name:"支付网关 v2.4", status:"planned",
+      start:null, target:"2027-01-24", owner:"赵磊",
+      total:0, done:0, doing:0, blocked:0, todo:0,
+      estimateMin:0, actualMin:0, releasedAt:null, closedAt:null,
+      branches:0, riskCount:0,
+      desc:"尚未规划工作项；需求池里已排 4 项，等待拆解。",
+      milestone:null, plan:null,
+      items:[], activity:[{who:"赵磊", what:"创建版本", when:"11-12"}]
+    },
+    {
+      id:"v21", projectId:"pay", name:"支付网关 v2.1", status:"released",
+      start:"2026-09-14", target:"2026-10-23", owner:"张伟",
+      total:16, done:16, doing:0, blocked:0, todo:0,
+      estimateMin:2400, actualMin:2280, releasedAt:"2026-10-24", closedAt:null,
+      branches:2, riskCount:0,
+      desc:"支付网关 v2.1 交付范围：周期扣款签约、退款签名校验与对账文件解析。",
+      milestone:{title:"版本发布", date:"2026-10-23", status:"achieved"},
+      plan:{env:"生产", at:"2026-10-24T20:00:00", status:"completed", coverage:"全量"},
+      items:[], activity:[]
+    },
+    {
+      id:"v20", projectId:"pay", name:"支付网关 v2.0", status:"released",
+      start:"2026-07-06", target:"2026-09-11", owner:"李娜",
+      total:20, done:20, doing:0, blocked:0, todo:0,
+      estimateMin:2400, actualMin:2640, releasedAt:"2026-09-12", closedAt:null,
+      branches:2, riskCount:0,
+      desc:"首个正式版本：支付网关基础链路、渠道路由与退款。",
+      milestone:{title:"版本发布", date:"2026-09-11", status:"achieved"},
+      plan:{env:"生产", at:"2026-09-12T20:00:00", status:"completed", coverage:"全量"},
+      items:[], activity:[]
+    },
+    {
+      id:"v19", projectId:"pay", name:"支付网关 v1.9", status:"closed",
+      start:"2026-05-01", target:"2026-06-30", owner:"王强",
+      total:12, done:10, doing:0, blocked:0, todo:2,
+      estimateMin:1800, actualMin:1560, releasedAt:null, closedAt:"2026-06-28",
+      branches:1, riskCount:0,
+      desc:"历史版本，已关闭，工作项关联与记录保留。",
+      milestone:null, plan:null, items:[], activity:[]
+    },
+    {
+      id:"s14", projectId:"settle", name:"结算改造 v1.4", status:"active",
+      start:"2026-11-02", target:"2026-11-20", owner:"陈工",
+      total:18, done:8, doing:6, blocked:1, todo:3,
+      estimateMin:4800, actualMin:2160, releasedAt:null, closedAt:null,
+      branches:2, riskCount:1,
+      desc:"结算批处理拆分与差异回溯。",
+      milestone:{title:"版本发布", date:"2026-11-20", status:"pending"},
+      plan:{env:"生产", at:"2026-11-20T18:00:00", status:"draft", coverage:"部分"},
+      items:[
+        {title:"结算批处理拆分", status:"doing", owner:"陈工", due:"2026-11-18", est:1200, act:900},
+        {title:"差异回溯看板", status:"blocked", owner:"李娜", due:"2026-11-17", est:480, act:120}
+      ], activity:[]
+    },
+    {
+      id:"s13", projectId:"settle", name:"结算改造 v1.3", status:"released",
+      start:"2026-09-01", target:"2026-10-14", owner:"陈工",
+      total:14, done:14, doing:0, blocked:0, todo:0,
+      estimateMin:2400, actualMin:2280, releasedAt:"2026-10-15", closedAt:null,
+      branches:1, riskCount:0, desc:"", milestone:null,
+      plan:{env:"生产", at:"2026-10-15T18:00:00", status:"completed", coverage:"全量"}, items:[], activity:[]
+    },
+    {
+      id:"s12", projectId:"settle", name:"结算改造 v1.2", status:"closed",
+      start:"2026-05-10", target:"2026-06-18", owner:"王强",
+      total:10, done:9, doing:0, blocked:0, todo:1,
+      estimateMin:1600, actualMin:1500, releasedAt:null, closedAt:"2026-06-20",
+      branches:0, riskCount:0, desc:"", milestone:null, plan:null, items:[], activity:[]
+    }
+  ];
+  var PLANS = [
+    {id:"p1", versionId:"s14", projectId:"settle", date:"2026-11-14", time:"18:00", env:"预发布", coverage:"部分", status:"ready", owner:"陈工", tasks:6},
+    {id:"p2", versionId:"s14", projectId:"settle", date:"2026-11-20", time:"18:00", env:"生产", coverage:"部分", status:"draft", owner:"陈工", tasks:8},
+    {id:"p3", versionId:"v23", projectId:"pay", date:"2026-11-24", time:"10:00", env:"预发布", coverage:"全量", status:"ready", owner:"李娜", tasks:12},
+    {id:"p4", versionId:"v22", projectId:"pay", date:"2026-11-27", time:"20:00", env:"生产", coverage:"全量", status:"draft", owner:"张伟", tasks:25},
+    {id:"p5", versionId:"v24", projectId:"pay", date:"2026-12-20", time:"20:00", env:"生产", coverage:"全量", status:"draft", owner:"赵磊", tasks:0}
+  ];
+
+  /* 需求按「目标版本」排期，与工作项的「计划版本」是两套口径，界面上要分开说。 */
+  var DEMANDS = {
+    v22:[
+      {id:"D-118", title:"支付回调幂等与重试", status:"开发中", cls:"doing", prio:"P1", due:"2026-11-27", n:6, owner:"张伟"},
+      {id:"D-121", title:"退款回调签名校验", status:"阻塞", cls:"blocked", prio:"P0", due:"2026-11-27", n:4, owner:"赵磊"},
+      {id:"D-124", title:"渠道路由权重配置", status:"开发中", cls:"doing", prio:"P1", due:"2026-11-27", n:5, owner:"李娜"},
+      {id:"D-127", title:"对账文件解析优化", status:"待开始", cls:"todo", prio:"P2", due:"2026-11-27", n:3, owner:"张伟"}
+    ],
+    v23:[
+      {id:"D-131", title:"渠道对账差异看板", status:"已排期", cls:"todo", prio:"P1", due:"2026-12-20", n:6, owner:"李娜"},
+      {id:"D-132", title:"支付结果通知重试策略", status:"已排期", cls:"todo", prio:"P1", due:"2026-12-20", n:6, owner:"赵磊"}
+    ],
+    v24:[
+      {id:"D-140", title:"商户自助对账单下载", status:"待评审", cls:"todo", prio:"P2", due:"2027-01-24", n:0, owner:"赵磊"},
+      {id:"D-141", title:"支付方式智能排序", status:"待评审", cls:"todo", prio:"P2", due:"2027-01-24", n:0, owner:"赵磊"},
+      {id:"D-142", title:"退款时效看板", status:"待评审", cls:"todo", prio:"P3", due:"2027-01-24", n:0, owner:"李娜"}
+    ],
+    v21:[
+      {id:"D-96", title:"周期扣款签约", status:"已交付", cls:"done", prio:"P0", due:"2026-10-23", n:8, owner:"张伟"},
+      {id:"D-99", title:"退款签名校验", status:"已交付", cls:"done", prio:"P0", due:"2026-10-23", n:5, owner:"赵磊"}
+    ],
+    s14:[
+      {id:"D-151", title:"结算批处理拆分", status:"开发中", cls:"doing", prio:"P1", due:"2026-11-20", n:8, owner:"陈工"},
+      {id:"D-152", title:"差异回溯看板", status:"阻塞", cls:"blocked", prio:"P1", due:"2026-11-20", n:4, owner:"李娜"}
+    ]
+  };
+
+  /* 演示数据：把每个版本的 items 补到与 total/状态计数一致，保证抽屉里的筛选与表头不打架。 */
+  (function hydrateItems(){
+    var pools = {
+      done:["支付回调重试补偿","渠道限额校验","退款状态同步","订单查询接口优化","支付安全规则回归","对账差异处理","商户配置校验","支付链路巡检","收银台兼容性验证","退款审批流回归","优惠券分摊校验","渠道灰度切换","网关限流策略调整","错误码映射整理","支付日志归档","幂等键冲突修复","签约结果通知补发","支付方式排序优化"],
+      doing:["渠道联调与回归","支付结果页适配","退款对账联调"],
+      blocked:["依赖上游账户接口","等待测试环境就绪","第三方证书更新"],
+      todo:["异常场景补测","发布前回归","灰度观察清单"]
+    };
+    var owners = ["张伟","李娜","赵磊","王强"];
+    VERSIONS.forEach(function(v, vi){
+      if(!v.items) v.items = [];
+      var seen = {};
+      v.items.forEach(function(i){ seen[i.title] = 1; });
+      ["done","doing","blocked","todo"].forEach(function(st){
+        var have = v.items.filter(function(i){ return i.status === st; }).length;
+        for(var k = have; k < (v[st] || 0); k++){
+          var title = pools[st][(vi * 5 + k) % pools[st].length];
+          if(v.projectId === "settle") title = title.replace("支付", "结算");
+          var baseTitle = title, n = 2;
+          while(seen[title]){ title = baseTitle + " " + n; n++; }
+          seen[title] = 1;
+          var est = 120 + (k % 4) * 120;
+          var act = st === "done" ? est + (k % 3) * 30 : st === "doing" ? Math.round(est * .55) : st === "blocked" ? Math.round(est * .2) : 0;
+          var due = st === "done"
+            ? iso(addDays(parseDate(v.start || v.target || iso(TODAY)), 3 + (k * 3) % 21))
+            : iso(addDays(TODAY, 3 + (k % 10)));
+          v.items.push({title:title, status:st, owner:owners[(vi + k) % owners.length], due:due, est:est, act:act});
+        }
+      });
+    });
+  })();
+
+  var state = {
+    tab:"versions", project:"pay", status:"all", q:"", riskOnly:false, sort:"smart",
+    openId:null, drawerTab:"overview", pageScroll:0, scheduleRange:"30", scheduleEnv:"", scheduleStatus:"",
+    picked:{}, planVersions:[], infoType:null,
+    annot:false, demoHover:false
+  };
+  var $ = function(sel, root){ return (root || document).querySelector(sel); };
+  var $$ = function(sel, root){ return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+  function pad(n){ return (n < 10 ? "0" : "") + n; }
+  function parseDate(s){ var p = String(s).split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  function iso(d){ return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function addDays(d, n){ var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  function daysBetween(a, b){ return Math.round((parseDate(b) - parseDate(a)) / 86400000); }
+  function md(s){ if(!s) return "—"; var p = s.split("-"); return p[1] + "-" + p[2]; }
+  function mdFull(s){ if(!s) return "—"; var p = s.split("-"); return p[1] + "-" + p[2]; }
+  function weekday(s){
+    var d = parseDate(s); return ["周日","周一","周二","周三","周四","周五","周六"][d.getDay()];
+  }
+  function minsText(m, compact){
+    m = Math.max(0, Number(m) || 0);
+    if(!m) return "0";
+    var h = Math.floor(m / 60), mm = m % 60;
+    if(!h) return compact ? (mm + "m") : (mm + " 分钟");
+    return h + "h" + (mm ? (compact ? mm + "m" : " " + mm + "m") : "");
+  }
+  function pct(v){
+    if(!v || !v.total) return null;
+    return Math.round(v.done * 100 / v.total);
+  }
+  function statusPill(st){
+    var m = STATUS[st] || STATUS.planned;
+    return '<span class="st ' + m.cls + '"><i></i>' + m.label + '</span>';
+  }
+  function avatar(name){
+    var p = PEOPLE[name] || {ini:String(name || "?").slice(0,1), cls:"av7"};
+    return '<span class="avatar ' + p.cls + '" title="' + esc(name) + '">' + esc(p.ini) + '</span>';
+  }
+  function projectOf(v){ return P[v.projectId] || P.pay; }
+  function versionById(id){ for(var i=0;i<VERSIONS.length;i++){ if(VERSIONS[i].id === id) return VERSIONS[i]; } return null; }
+  function isEnded(v){ return v.status === "closed" || v.status === "canceled"; }
+  /* 当前模型：记录成功生产发布不会把版本改成“已发布”，只锁定内容；老数据仍可能带 released */
+  function hasReleaseFact(v){ return v.status === "released" || (v.releaseCount || 0) > 0; }
+  function releaseDate(v){ return v.releasedAt || v.lastReleaseAt || null; }
+  function contentLocked(v){ return v.status === "released" || v.locked === true; }
+  function isAtRisk(v){
+    if(v.blocked > 0) return true;
+    if(isEnded(v) || v.status === "released") return false;
+    if(v.target && daysBetween(iso(TODAY), v.target) < 0) return true;
+    return false;
+  }
+  function riskText(v){
+    var parts = [];
+    if(v.blocked > 0) parts.push(v.blocked + " 个阻塞");
+    if(v.status !== "released" && !isEnded(v) && v.target){
+      var d = daysBetween(iso(TODAY), v.target);
+      if(d < 0) parts.push("已逾期 " + Math.abs(d) + " 天");
+    }
+    return parts.join(" · ");
+  }
+  function timeInfo(v){
+    var range = (v.start ? md(v.start) : "—") + " → " + (v.target ? md(v.target) : "—");
+    var small = "", cls = "";
+    if(isEnded(v)){
+      small = v.closedAt ? (md(v.closedAt) + " 关闭") : "已结束";
+    }else if(v.status === "released"){
+      small = v.releasedAt ? (md(v.releasedAt) + " 发布") : "已发布";
+    }else if(v.target){
+      var d = daysBetween(iso(TODAY), v.target);
+      if(d < 0){ small = "已逾期 " + Math.abs(d) + " 天"; cls = "bad"; }
+      else if(d === 0){ small = "今天到期"; cls = "warn"; }
+      else if(d <= 14){ small = "剩 " + d + " 天"; cls = "warn"; }
+      else { small = d + " 天后到期"; }
+    }else{
+      small = "未设目标日期";
+    }
+    if(v.status === "planned" && v.start && !isEnded(v) && v.status !== "released"){
+      var ds = daysBetween(iso(TODAY), v.start);
+      if(ds > 0 && ds <= 30) small = "距开始 " + ds + " 天";
+    }
+    return {range:range, small:small, cls:cls};
+  }
+  function quickAction(v){
+    if(v.status === "planned") return '<button class="btn sm quick" type="button" data-quick="start" data-id="' + v.id + '">开始开发</button>';
+    if(v.status === "active") return '<button class="btn sm quick" type="button" data-quick="release" data-id="' + v.id + '">记录发布</button>';
+    if(v.status === "released") return '<button class="btn sm ghost quick" type="button" data-quick="open" data-id="' + v.id + '">查看发布</button>';
+    return "";
+  }
+  function projectVersions(){
+    return VERSIONS.filter(function(v){ return state.project === "all" || v.projectId === state.project; });
+  }
+  function counts(){
+    var list = projectVersions(), out = {all:list.length, planned:0, active:0, released:0, closed:0, canceled:0, risk:0};
+    list.forEach(function(v){ out[v.status] = (out[v.status] || 0) + 1; if(isAtRisk(v)) out.risk++; });
+    return out;
+  }
+  function visibleVersions(){
+    var list = projectVersions();
+    if(state.status !== "all") list = list.filter(function(v){ return v.status === state.status; });
+    if(state.riskOnly) list = list.filter(isAtRisk);
+    if(state.q){
+      var q = state.q.toLowerCase();
+      list = list.filter(function(v){
+        return (v.name + " " + v.owner + " " + projectOf(v).name).toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    var order = {active:0, planned:1, released:2, closed:3, canceled:4};
+    list = list.slice().sort(function(a,b){
+      if(state.sort === "name") return a.name.localeCompare(b.name, "zh-Hans-CN");
+      if(state.sort === "target"){
+        if(!a.target && !b.target) return 0;
+        if(!a.target) return 1;
+        if(!b.target) return -1;
+        return a.target.localeCompare(b.target);
+      }
+      var d = (order[a.status] == null ? 9 : order[a.status]) - (order[b.status] == null ? 9 : order[b.status]);
+      if(d) return d;
+      if(!a.target && !b.target) return 0;
+      if(!a.target) return 1;
+      if(!b.target) return -1;
+      var cmp = a.target.localeCompare(b.target);
+      // 已发布 / 已关闭按最近在前，进行中与计划中按最早到期在前
+      if(a.status === "released" || a.status === "closed") cmp = -cmp;
+      return cmp;
+    });
+    return list;
+  }
+  function pickedIds(){
+    return Object.keys(state.picked).filter(function(id){
+      var v = versionById(id);
+      return v && !isEnded(v);
+    });
+  }
+  function renderBulk(){
+    var bar = $("#bulkBar");
+    if(!bar) return;
+    if(state.project !== "all"){ bar.hidden = true; bar.innerHTML = ""; return; }
+    var ids = pickedIds();
+    var next = {};
+    ids.forEach(function(id){ next[id] = 1; });
+    state.picked = next;
+    var pickable = visibleVersions().filter(function(v){ return !isEnded(v); });
+    bar.hidden = false;
+    bar.innerHTML = '<span class="bb-count">已选 ' + ids.length + ' 个版本</span>'
+      + '<span>可跨项目；已发布可汇总，已关闭 / 已取消不参与</span>'
+      + '<span class="grow"></span>'
+      + '<button class="link" type="button" data-bulk="all">全选当前 ' + pickable.length + ' 个</button>'
+      + '<button class="link" type="button" data-bulk="clear"' + (ids.length ? "" : " hidden") + '>清空</button>'
+      + '<button class="btn sm primary" type="button" data-bulk="plan"' + (ids.length ? "" : " disabled") + '>新建发布计划</button>';
+  }
+  function rowHTML(v){
+    var p = pct(v), ti = timeInfo(v), risk = riskText(v);
+    var progress;
+    if(p === null){
+      progress = '<div class="vprogress"><div class="pbar"></div><div class="ptext plain"><b>未规划</b><span>0 项</span></div></div>';
+    }else{
+      var doingPct = v.total ? (v.doing * 100 / v.total) : 0;
+      var blockedPct = v.total ? (v.blocked * 100 / v.total) : 0;
+      progress = '<div class="vprogress"><div class="pbar" aria-label="进度 ' + p + '%">'
+        + '<i class="done" style="width:' + p + '%"></i>'
+        + '<i class="doing" style="width:' + doingPct + '%"></i>'
+        + '<i class="blocked" style="width:' + blockedPct + '%"></i></div>'
+        + '<div class="ptext"><b>' + p + '%</b><span>' + v.done + " / " + v.total + '</span></div></div>';
+    }
+    var sub = [];
+    if(state.project === "all") sub.push('<span class="proj">' + esc(projectOf(v).name) + '</span>');
+    sub.push(v.total ? (v.total + " 个工作项") : "未规划工作项");
+    if(v.branches) sub.push(v.branches + " 个分支");
+    if(risk) sub.push('<span class="risk-inline">' + esc(risk) + '</span>');
+    var rel = v.latestRelease || (v.releasedAt ? (md(v.releasedAt) + " 生产") : (v.closedAt ? (md(v.closedAt) + " 关闭") : "—"));
+    var pickable = state.project === "all" && !isEnded(v);
+    var pick = pickable
+      ? '<label class="pick" title="勾选后可一起新建发布计划"><input type="checkbox" data-pick="' + v.id + '"' + (state.picked[v.id] ? " checked" : "") + ' aria-label="勾选 ' + esc(v.name) + '"></label>'
+      : '';
+    return '<div class="vrow' + (state.demoHover && v.id === "v22" ? " demo" : "") + (state.picked[v.id] ? " picked" : "") + '" data-id="' + v.id + '" tabindex="0" role="button" aria-label="进入 ' + esc(v.name) + ' 的详情页">'
+      + '<div class="vname"><div class="vname-row">' + pick + '<button class="vlink" type="button" data-open="' + v.id + '">' + esc(v.name)
+      + '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--border-strong)"><path d="M8 5l5 5-5 5"/></svg></button></div>'
+      + '<div class="vsub">' + sub.join('<span style="color:var(--border-strong)">·</span>') + '</div></div>'
+      + '<div class="vstatus">' + statusPill(v.status) + '</div>'
+      + '<div class="vtime"><b>' + ti.range + '</b><small class="' + ti.cls + '">' + esc(ti.small) + '</small></div>'
+      + progress
+      + '<div class="vowner">' + avatar(v.owner) + '<span>' + esc(v.owner) + '</span></div>'
+      + '<div class="vrel">' + esc(rel) + '</div>'
+      + '<div class="vact">' + quickAction(v)
+      + '<button class="icon-btn kebab" type="button" data-menu="' + v.id + '" aria-label="更多操作"><svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg></button>'
+      + '</div></div>';
+  }
+  function renderVersions(){
+    var c = counts();
+    var chipDefs = [["all","全部"],["active","进行中"],["planned","计划中"],["released","已发布"],["closed","已关闭"]];
+    $("#statusChips").innerHTML = chipDefs.map(function(d){
+      return '<button class="chip' + (state.status === d[0] ? " on" : "") + '" type="button" role="tab" aria-selected="' + (state.status === d[0]) + '" data-status="' + d[0] + '">' + d[1] + ' <b>' + (c[d[0]] || 0) + '</b></button>';
+    }).join("") + '<button class="chip' + (state.riskOnly ? " on" : "") + '" type="button" data-risk-chip><span style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block"></span> 需关注 <b>' + c.risk + '</b></button>';
+
+    var list = visibleVersions();
+    var html = "";
+    if(!list.length){
+      html = '<div class="empty"><b>没有符合条件的版本</b>换一个状态，或清空搜索再试。</div>';
+    }else if(state.project === "all"){
+      PROJECTS.forEach(function(p){
+        var rows = list.filter(function(v){ return v.projectId === p.id; });
+        if(!rows.length) return;
+        var active = rows.filter(function(v){ return v.status === "active"; }).length;
+        html += '<div class="group-row"><span class="gdot"></span>' + esc(p.name) + '<small>' + rows.length + ' 个版本 · ' + active + ' 个进行中</small></div>';
+        html += rows.map(rowHTML).join("");
+      });
+    }else{
+      html = list.map(rowHTML).join("");
+    }
+    $("#versionRows").innerHTML = html;
+
+    var pname = state.project === "all" ? "全部项目" : P[state.project].name;
+    $("#crumbProject").textContent = pname;
+    $("#projectPickName").textContent = pname;
+    var active = c.active || 0, rel = c.released || 0;
+    $("#crumbSummary").textContent = c.all + " 个版本 · " + active + " 个进行中 · " + rel + " 个已发布";
+    $("#tabVersionCount").textContent = c.all;
+    var unplanned = state.project === "all" ? PROJECTS.reduce(function(a,p){ return a + p.unplanned; },0) : P[state.project].unplanned;
+    $("#unplannedCount").textContent = unplanned;
+    $("#planBanner").hidden = !unplanned;
+    $("#listFoot").textContent = "共 " + list.length + " 个版本" + (list.length !== c.all ? "（已筛选，共 " + c.all + " 个）" : "");
+    $("#riskOnly").checked = state.riskOnly;
+    renderBulk();
+  }
+
+  /* ---------- schedule ---------- */
+  function planStatus(st){
+    return {ready:['就绪','ready'], draft:['草稿','draft'], completed:['已完成','done'], canceled:['已取消','cancel']}[st] || [st||'—','draft'];
+  }
+  function envTag(env){
+    var cls = env === "生产" ? "prod" : (env === "预发布" ? "stage" : "test");
+    return '<span class="stag ' + cls + '">' + esc(env) + '</span>';
+  }
+  function scheduleRows(){
+    var min = null, max = null;
+    if(state.scheduleRange === "around"){ min = addDays(TODAY, -7); max = addDays(TODAY, 14); }
+    else if(state.scheduleRange !== "all"){ max = addDays(TODAY, Number(state.scheduleRange)); }
+    return PLANS.filter(function(p){
+      var d = parseDate(p.date);
+      if(max && d > max) return false;
+      if(min && d < min) return false;
+      if(state.scheduleEnv && p.env !== state.scheduleEnv) return false;
+      if(state.scheduleStatus === "open"){
+        if(p.status === "completed" || p.status === "canceled") return false;
+      }else if(state.scheduleStatus && p.status !== state.scheduleStatus) return false;
+      return true;
+    }).sort(function(a,b){ return (a.date + a.time).localeCompare(b.date + b.time); });
+  }
+  function renderSchedule(){
+    var rows = scheduleRows();
+    var todayIso = iso(TODAY);
+    var weekEnd = iso(addDays(TODAY, 6));
+    var nextEnd = iso(addDays(TODAY, 13));
+    var groups = [
+      {key:"done", name:"已结束", cls:"", test:function(p){ return (p.status === "completed" || p.status === "canceled") && p.date < todayIso; }},
+      {key:"late", name:"已过期", cls:"bad", test:function(p){ return p.date < todayIso && p.status !== "completed" && p.status !== "canceled"; }},
+      {key:"week", name:"本周", cls:"", test:function(p){ return p.date >= todayIso && p.date <= weekEnd; }},
+      {key:"next", name:"下周", cls:"", test:function(p){ return p.date > weekEnd && p.date <= nextEnd; }},
+      {key:"later", name:"更晚", cls:"", test:function(p){ return p.date > nextEnd; }}
+    ];
+    var html = "";
+    var used = {};
+    groups.forEach(function(g){
+      var list = rows.filter(function(p){ return !used[p.id] && g.test(p); });
+      if(!list.length) return;
+      list.forEach(function(p){ used[p.id] = true; });
+      html += '<div class="sgroup ' + g.cls + '">' + g.name + ' <span style="font-weight:400;color:var(--text-3)">' + list.length + ' 份</span></div>';
+      html += list.map(function(p){
+        var st = planStatus(p.status);
+        var late = p.date < todayIso && p.status !== "completed" && p.status !== "canceled";
+        var v = versionById(p.versionId);
+        var proj = P[p.projectId] || P.pay;
+        var coverN = p.covers ? p.covers.length : 1;
+        return '<div class="srow" data-plan="' + p.id + '" data-vid="' + p.versionId + '" tabindex="0" role="button">'
+          + '<div class="sdate' + (late ? " bad" : "") + '"><b>' + md(p.date) + '</b><span>' + weekday(p.date) + ' ' + p.time + '</span></div>'
+          + '<div class="sver"><b>' + esc(v ? v.name : "—") + (coverN > 1 ? '<span class="cover-n">等 ' + coverN + ' 个</span>' : '') + '</b><span>' + esc(proj.name) + ' · ' + esc(p.coverage) + '覆盖</span></div>'
+          + '<div class="senv">' + envTag(p.env) + '</div>'
+          + '<div><span class="stag ' + st[1] + '">' + st[0] + '</span></div>'
+          + '<div class="sowner">' + avatar(p.owner) + '<span>' + esc(p.owner) + '</span></div>'
+          + '<div class="scount">' + (p.tasks || 0) + ' 项</div>'
+          + '<div class="schev"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg></div>'
+          + '</div>';
+      }).join("");
+    });
+    $("#scheduleRows").innerHTML = html || '<div class="empty"><b>这个范围内没有发布计划</b>放宽时间范围，或把状态切回「全部状态」。</div>';
+    var open = rows.filter(function(p){ return p.status === "draft" || p.status === "ready"; }).length;
+    var late = rows.filter(function(p){ return p.date < todayIso && p.status !== "completed" && p.status !== "canceled"; }).length;
+    $("#skTotal").textContent = rows.length;
+    $("#skOpen").textContent = open;
+    $("#skLate").textContent = late;
+    $("#schedFoot").textContent = "共 " + rows.length + " 份计划";
+  }
+
+  /* ---------- analysis ---------- */
+  function renderAnalysis(){
+    var list = projectVersions().filter(function(v){ return v.actualMin > 0; });
+    var max = 1;
+    list.forEach(function(v){ max = Math.max(max, v.estimateMin, v.actualMin); });
+    $("#analysisBars").innerHTML = list.map(function(v){
+      var est = Math.round(v.estimateMin * 100 / max), act = Math.round(v.actualMin * 100 / max);
+      return '<div class="bar-row"><span class="bn" title="' + esc(v.name) + '">' + esc(v.name) + '</span>'
+        + '<span class="bar-track"><i class="est" style="width:' + est + '%"></i><i class="act" style="width:' + act + '%"></i></span>'
+        + '<b>' + minsText(v.actualMin, true) + '</b></div>';
+    }).join("") || '<div class="empty" style="padding:20px">还没有已记录工时的版本</div>';
+  }
+
+  /* ---------- drawer ---------- */
+  function stepState(v, idx){
+    if(v.status === "released" || isEnded(v)) return idx <= 3 ? "done" : "";
+    if(v.status === "active"){
+      if(hasReleaseFact(v)) return idx <= 2 ? "done" : "";
+      return idx < 1 ? "done" : (idx === 1 ? "on" : "");
+    }
+    return idx === 0 ? "on" : "";
+  }
+  function drawerPrimary(v){
+    if(v.status === "planned") return '<button class="btn primary" type="button" data-dact="start">开始开发</button>';
+    if(v.status === "active") return '<button class="btn primary" type="button" data-dact="release">记录发布</button>';
+    if(v.status === "released") return '<button class="btn" type="button" data-dact="releases">查看发布记录</button>';
+    return '<button class="btn" type="button" data-dact="activity">查看历史</button>';
+  }
+  function progressSegHTML(v){
+    var p = pct(v) || 0;
+    var dp = v.total ? (v.done * 100 / v.total) : 0;
+    var ip = v.total ? (v.doing * 100 / v.total) : 0;
+    var bp = v.total ? (v.blocked * 100 / v.total) : 0;
+    return '<div class="segbar" role="img" aria-label="完成 ' + p + '%">'
+      + '<i class="done" style="width:' + dp + '%"></i>'
+      + '<i class="doing" style="width:' + ip + '%"></i>'
+      + '<i class="blocked" style="width:' + bp + '%"></i>'
+      + '</div>'
+      + '<div class="legend"><span class="lg done"><i></i>完成 <b>' + v.done + '</b></span>'
+      + '<span class="lg doing"><i></i>进行中 <b>' + v.doing + '</b></span>'
+      + '<span class="lg blocked"><i></i>阻塞 <b>' + v.blocked + '</b></span>'
+      + '<span class="lg"><i></i>待处理 <b>' + v.todo + '</b></span></div>';
+  }
+  function overviewHTML(v){
+    var p = pct(v);
+    var spend = v.estimateMin ? Math.round(v.actualMin * 100 / v.estimateMin) : null;
+    var remain = Math.max(0, v.estimateMin - v.actualMin);
+    var riskRows = [];
+    v.items.filter(function(i){ return i.status === "blocked"; }).forEach(function(i){
+      riskRows.push({cls:"", title:i.title, meta:"阻塞 · " + i.owner + " · 计划完成 " + md(i.due)});
+    });
+    v.items.filter(function(i){ return i.status !== "done" && i.due && i.due < iso(TODAY); }).forEach(function(i){
+      riskRows.push({cls:"warn", title:i.title, meta:"已逾期 · " + i.owner + " · 计划完成 " + md(i.due)});
+    });
+    var dev = (v.deviationPct != null ? v.deviationPct : Math.round((v.actualMin - v.estimateMin) * 100 / (v.estimateMin || 1)));
+    var devCls = v.status !== "released" ? "" : (Math.abs(dev) <= 15 ? "good" : (Math.abs(dev) <= 30 ? "warn" : "bad"));
+    var kpis = [
+      {label:"预估工时", value:minsText(v.estimateMin), sub:v.estimateMin ? "全部工作项" : "未规划"},
+      {label:"已投入", value:minsText(v.actualMin), sub:spend === null ? "尚未计时" : ("占预估 " + spend + "%")},
+      {label:v.status === "released" ? "整体偏差" : "剩余预估", value:v.status === "released" ? (dev + "%") : minsText(remain), cls:devCls, sub:v.status === "released" ? (Math.abs(dev) <= 15 ? "±15% 内为准确" : "超出 ±15% 区间") : "按当前预估"},
+      {label:"目标发布日期", value:v.target ? md(v.target) : "未设置", sub:v.target ? ("剩 " + Math.max(0, daysBetween(iso(TODAY), v.target)) + " 天") : "用于提醒"}
+    ];
+    return '<div class="stack">'
+      + '<div class="ov-top">'
+      + '<div class="card progress-card"><div class="pc-top"><div class="pc-big"><b>' + (p === null ? "—" : p + "%") + '</b><span>已完成</span></div><span class="muted">' + (v.total ? (v.done + " / " + v.total + " 项") : "未规划工作项") + '</span></div>'
+      + (v.total ? progressSegHTML(v) : '<p style="margin:12px 0 0;font-size:11.5px;color:var(--text-3)">还没有工作项，先把范围拉进来。</p>')
+      + '</div>'
+      + '<div class="kpi-grid">' + kpis.map(function(k){
+          return '<div class="kpi"><span>' + k.label + '</span><b class="' + (k.cls||"") + '">' + esc(k.value) + '</b><small>' + esc(k.sub) + '</small></div>';
+        }).join("") + '</div>'
+      + '</div>'
+      + (riskRows.length ? '<div class="card risk-card"><div class="section-head"><h3>需要关注</h3><span class="meta">' + riskRows.length + ' 项</span></div><div class="risk-list">'
+          + riskRows.map(function(r){
+              return '<div class="risk-row"><span class="risk-ico ' + r.cls + '">'
+                + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg></span>'
+                + '<div class="risk-main"><b>' + esc(r.title) + '</b><small>' + esc(r.meta) + '</small></div>'
+                + '<button class="link" type="button" data-toast="原型：打开工作项">打开</button></div>';
+            }).join("") + '</div></div>' : '')
+      + (v.milestone ? '<div class="card ms-card"><span class="ms-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></span>'
+          + '<div class="ms-main"><b>' + esc(v.milestone.title) + '里程碑</b><small>目标 ' + md(v.milestone.date) + ' · ' + (v.milestone.status === "achieved" ? "已达成" : "未达成") + '</small></div>'
+          + '<span class="stag ' + (v.milestone.status === "achieved" ? "done" : "draft") + '">' + (v.milestone.status === "achieved" ? "已达成" : "未达成") + '</span>'
+          + '<button class="link" type="button" data-toast="原型：打开里程碑">查看</button></div>' : '')
+      + '<div class="card desc-card"><div class="section-head"><h3>版本说明</h3><button class="link" type="button" data-toast="原型：就地编辑版本说明" style="margin-left:auto">编辑</button></div><p>' + esc(v.desc || "还没有版本说明。") + '</p></div>'
+      + '<div class="card desc-card"><div class="section-head"><h3>参与人</h3><span class="meta">按最近操作</span></div><div class="people">'
+      + [v.owner,"李娜","赵磊"].filter(function(n,i,a){ return a.indexOf(n) === i; }).map(avatar).join("")
+      + '<span class="more">共 4 人</span></div></div>'
+      + '<div class="card chain-card"><div class="section-head"><h3>交付链路</h3><span class="meta">需求 → 工作项 → 计划 → 发布 → 说明</span></div>'
+      + '<div class="chain">'
+      + '<button class="cstep" type="button" data-dtab="demands" title="看本版本需求"><b>' + ((DEMANDS[v.id] || []).length) + '</b>需求</button><span class="carrow">→</span>'
+      + '<button class="cstep" type="button" data-dtab="items" title="看本版本工作项"><b>' + (v.total || 0) + '</b>工作项</button><span class="carrow">→</span>'
+      + '<button class="cstep" type="button" data-info="history" title="看计划与历史"><b>' + plansOf(v).length + '</b>计划</button><span class="carrow">→</span>'
+      + '<button class="cstep" type="button" data-dtab="releases" title="看发布记录"><b>' + (hasReleaseFact(v) ? (v.releaseCount || 1) : 0) + '</b>发布</button><span class="carrow">→</span>'
+      + '<button class="cstep" type="button" data-info="delivery" title="生成一页式交付说明"><b>1 页</b>交付说明</button>'
+      + '</div></div>'
+      + '<div class="card more-card"><div class="more-main"><b>更多分析</b><small>承诺基线、分支进度、阶段工时、交付事实、生命周期</small></div>'
+      + '<div class="more-links"><button class="link" type="button" data-info="archive">版本档案 →</button>'
+      + '<button class="link" type="button" data-toast="原型：跳转报表 · 跨项目">报表 · 跨项目 →</button></div></div>'
+      + '</div>';
+  }
+  function itemsHTML(v){
+    if(!v.items.length){
+      return '<div class="rel-empty"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><b>还没有工作项</b><p>从待规划或需求池里把工作项加进来，进度才会开始计算。</p><button class="btn primary" type="button" data-toast="原型：打开工作项选择器">添加工作项</button></div>';
+    }
+    var counts = {done:0, doing:0, blocked:0, todo:0};
+    v.items.forEach(function(i){ counts[i.status] = (counts[i.status]||0) + 1; });
+    var rows = v.items.slice(0, 8).map(function(i){
+      var st = {done:"已完成",doing:"进行中",blocked:"阻塞",todo:"待处理"}[i.status] || i.status;
+      var late = i.status !== "done" && i.due && i.due < iso(TODAY);
+      return '<div class="irow" data-item-open="' + esc(i.title) + '" title="打开工作项详情：需求、版本、分支与计时">'
+        + '<div class="it"><i class="idot ' + i.status + '"></i><b title="' + esc(i.title) + '">' + esc(i.title) + '</b></div>'
+        + '<div class="io">' + avatar(i.owner) + ' ' + esc(i.owner) + '</div>'
+        + '<div class="idue' + (late ? " bad" : "") + '">' + (late ? "逾期 " : "") + md(i.due) + '</div>'
+        + '<div class="ih">' + minsText(i.est, true) + ' / ' + minsText(i.act, true) + '</div></div>';
+    }).join("");
+    return '<div class="dtoolbar"><div class="chips">'
+      + '<button class="chip on" type="button">全部 <b>' + v.total + '</b></button>'
+      + '<button class="chip" type="button">待处理 <b>' + counts.todo + '</b></button>'
+      + '<button class="chip" type="button">进行中 <b>' + counts.doing + '</b></button>'
+      + '<button class="chip" type="button">阻塞 <b>' + counts.blocked + '</b></button>'
+      + '<button class="chip" type="button">已完成 <b>' + counts.done + '</b></button>'
+      + '</div><span class="grow"></span><button class="btn sm" type="button" data-toast="原型：打开工作项选择器">+ 添加工作项</button></div>'
+      + '<div class="item-list">' + rows
+      + (v.items.length > 8 ? '<div class="ifoot"><button class="link" type="button" data-toast="原型：查看全部工作项">查看全部 ' + v.total + ' 项 →</button></div>' : '')
+      + '</div>';
+  }
+  function releasesHTML(v){
+    var plan = v.plan;
+    var planHTML = plan ? '<div class="rel-plan"><div class="rp-main"><b>' + esc(plan.env) + '发布计划 · ' + (plan.status === "completed" ? "已完成" : (plan.status === "ready" ? "就绪" : "草稿")) + '</b><small>' + md(plan.at.slice(0,10)) + ' ' + plan.at.slice(11,16) + ' · ' + esc(plan.coverage) + '覆盖</small></div><button class="btn sm" type="button" data-toast="原型：打开发布计划工作台">打开计划</button></div>' : '';
+    if(hasReleaseFact(v)){
+      var date = v.releasedAt || v.lastReleaseAt;
+      var active = v.status !== "released";
+      return '<div class="stack">'
+        + '<div class="rel-plan"><div class="rp-main"><b>正式发布 · 生产 · 成功</b><small>' + (date ? (md(date) + " 20:00") : "—") + ' · 全量覆盖 · 第 ' + (v.releaseCount || 1) + ' 次记录</small></div><span class="stag done">事实</span></div>'
+        + '<div class="card desc-card"><div class="section-head"><h3>发布范围快照</h3><span class="meta">记录时冻结</span></div><p>' + v.total + ' 个工作项 · ' + minsText(v.actualMin) + ' 投入 · 内容只读。</p>'
+        + '<div class="row row-gap" style="margin-top:8px">'
+        + '<button class="btn sm" type="button" data-toast="原型：查看不可变快照明细（工作项 / 需求行可点回）">查看快照明细</button>'
+        + '<button class="btn sm" type="button" data-info="release">发布说明</button>'
+        + '<button class="btn sm primary" type="button" data-info="delivery">生成一页式交付说明</button>'
+        + '</div>'
+        + (active ? '<p class="page-note" style="margin-top:10px">版本状态仍是「进行中」，不会因为记录而变成「已发布」；变化的是内容锁定和交付证据。结束批次时再关闭版本。</p>' : '')
+        + '</div>'
+        + planHTML
+        + (active ? '<div class="card desc-card"><div class="section-head"><h3>再记录一次</h3><span class="meta">补丁 / 重部署 / 回滚</span></div><p>每次尝试都是独立事实；已完成计划不可复用，需要新计划或紧急记录。</p><button class="btn sm" type="button" data-dact="record" style="margin-top:8px">再记录一次</button></div>' : '')
+        + '<p class="page-note">本次原型记录没有引用计划，所以上面的日程计划仍是草稿。真实实现里，只有引用计划且计划覆盖的全部版本都完成成功生产发布，计划才会自动完成。</p>'
+        + '</div>';
+    }
+    return '<div class="stack">'
+      + '<div class="rel-empty"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10M8 9l4 4 4-4"/><path d="M4 15v4h16v-4"/></svg></span>'
+      + '<b>还没有发布记录</b><p>发布记录是「实际发生了什么」，和计划分开存。成功的生产记录会锁定内容，但版本仍保持进行中，直到你关闭它。</p>'
+      + '<button class="btn primary" type="button" data-dact="record" style="margin:0 auto">记录第一次发布</button></div>'
+      + planHTML
+      + '<div class="card desc-card"><div class="section-head"><h3>记录前确认</h3></div><p>环境、时间与结果会写进发布历史；未完成的工作项不会自动完成。</p></div>'
+      + '<p class="page-note">记录发布写的是事实，发布日程存的是计划。计划只在覆盖的全部版本都完成成功的生产发布后自动完成；测试、预发、回滚与部分成功都不算。</p>'
+      + '</div>';
+  }
+  function activityHTML(v){
+    if(!v.activity.length) return '<div class="empty"><b>暂无动态</b>版本开始流转后会在这里留下记录。</div>';
+    return '<div class="acts">' + v.activity.map(function(a){
+      var person = a.who === "系统" ? {ini:"系",cls:"av7"} : (PEOPLE[a.who] || {ini:a.who.slice(0,1),cls:"av7"});
+      return '<div class="act"><span class="aav ' + person.cls + '" style="color:#fff;background:' + (person.cls==="av1"?"#1D4ED8":person.cls==="av3"?"#B54708":person.cls==="av5"?"#5B3FD1":"#475467") + '">' + person.ini + '</span>'
+        + '<div class="amain"><b>' + esc(a.who) + '</b> ' + esc(a.what) + '</div><span class="atime">' + esc(a.when) + '</span></div>';
+    }).join("") + '</div>';
+  }
+
+  /* ---------- 需求 ---------- */
+  function demandsHTML(v){
+    var list = DEMANDS[v.id] || [];
+    if(!list.length){
+      return '<div class="rel-empty"><span class="ico" style="background:var(--plum-soft);color:var(--plum-fg)">'
+        + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="17" r="3"/></svg></span>'
+        + '<b>没有排到该版本的需求</b><p>在需求池里把需求的「目标版本」指向这里，就会汇总到本页；已拒绝的需求不计入。</p>'
+        + '<button class="btn" type="button" data-toast="原型：打开需求池排期">去需求池排期</button></div>';
+    }
+    var rows = list.map(function(d){
+      return '<div class="drow" data-demand-open="' + esc(d.id) + '" title="打开需求详情：阶段时间线、关联工作项与发布记录">'
+        + '<div class="dmain"><b>' + esc(d.id) + ' ' + esc(d.title) + '</b><small>' + esc(d.owner) + ' · 目标版本 ' + esc(v.name) + '</small></div>'
+        + '<span class="stag ' + d.cls + '">' + esc(d.status) + '</span>'
+        + '<span class="prio' + (d.prio === "P0" ? " p0" : "") + '">' + esc(d.prio) + '</span>'
+        + '<span class="ddue">' + md(d.due) + '</span>'
+        + '<span class="dcount">' + (d.n ? '<button class="link" type="button" data-demand-items="' + esc(d.id) + '" title="把工作项页联动到该需求">' + d.n + ' 项</button>' : "未挂") + '</span></div>';
+    }).join("");
+    return '<div class="dtoolbar"><span class="meta">共 ' + list.length + ' 项 · 目标版本指向本版本，不含已拒绝</span><span class="grow"></span>'
+      + '<button class="btn sm" type="button" data-toast="原型：打开需求池排期">+ 排入需求</button></div>'
+      + '<div class="demand-list"><div class="dhead"><span>需求</span><span>状态</span><span class="dprio" style="text-align:center">优先级</span><span class="ddue">期望</span><span class="dcount"><span class="long">本版本工作项</span><span class="short">本版工作项</span></span></div>' + rows + '</div>'
+      + '<p class="page-note">需求按「目标版本」规划，工作项按「计划版本」归组，两者口径不同。</p>';
+  }
+
+  /* ---------- 版本档案 / 计划与历史 / 交付说明 ---------- */
+  function kv(label, value, cls){
+    return '<div class="kv"><span>' + esc(label) + '</span><b' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(value) + '</b></div>';
+  }
+  function infoCard(title, meta, inner){
+    return '<div class="card desc-card"><div class="section-head"><h3>' + esc(title) + '</h3>'
+      + (meta ? '<span class="meta">' + esc(meta) + '</span>' : '') + '</div>' + inner + '</div>';
+  }
+  function plansOf(v){
+    return PLANS.filter(function(p){
+      return p.versionId === v.id || (p.covers && p.covers.indexOf(v.id) !== -1);
+    });
+  }
+  function lifecycleHTML(v){
+    var created = v.start ? iso(addDays(parseDate(v.start), -10)) : iso(addDays(parseDate(v.target || iso(TODAY)), -30));
+    var rows = [{name:"创建版本", date:created, cls:"done"}];
+    if(v.start) rows.push({name:"开始开发", date:v.start, cls:"done"});
+    if(v.target) rows.push({name:"目标发布", date:v.target, cls:(v.status === "active" || v.status === "planned") ? "on" : "done"});
+    if(releaseDate(v)) rows.push({name:"实际发布", date:releaseDate(v), cls:"done"});
+    if(v.closedAt) rows.push({name:"关闭版本", date:v.closedAt, cls:"done"});
+    return '<div class="life">' + rows.map(function(r){
+      return '<div class="life-row ' + r.cls + '"><span class="life-dot"></span><div class="life-main"><b>' + esc(r.name) + '</b></div><span class="life-date">' + esc(r.date) + '</span></div>';
+    }).join("") + '</div>';
+  }
+  function historyBody(v){
+    var plans = plansOf(v);
+    var planInner = plans.length ? plans.map(function(p){
+      var st = planStatus(p.status);
+      return '<div class="hist-row"><div class="hist-main"><b>' + esc(p.env) + ' · ' + md(p.date) + ' ' + esc(p.time) + '</b><small>'
+        + esc(p.coverage) + '覆盖 · ' + (p.covers ? p.covers.length + " 个版本" : "1 个版本") + '</small></div>'
+        + '<span class="stag ' + st[1] + '">' + st[0] + '</span></div>';
+    }).join("") : '<p class="section-cap">还没有发布计划。排期在「发布日程」里创建，或从版本列表跨项目勾选多个版本一起建。</p>';
+    var rel = hasReleaseFact(v)
+      ? '<div class="hist-row"><div class="hist-main"><b>正式发布 · 生产</b><small>' + md(releaseDate(v)) + ' 20:00 · 全量覆盖 · 结果成功</small></div><span class="stag done">已完成</span></div>'
+      : '<p class="section-cap">还没有发布记录。记录成功后版本内容会锁定。</p>';
+    return infoCard("发布计划", plans.length + " 份", planInner)
+      + infoCard("发布记录", hasReleaseFact(v) ? ((v.releaseCount || 1) + " 次") : "0 次", rel)
+      + infoCard("生命周期", "", lifecycleHTML(v));
+  }
+  function deliveryBody(v){
+    var rd = releaseDate(v);
+    var dev = rd ? Math.round((v.actualMin - v.estimateMin) * 100 / (v.estimateMin || 1)) : null;
+    var late = v.target && rd && rd > v.target;
+    var blocked = v.items.filter(function(i){ return i.status === "blocked"; });
+    return infoCard("承诺与实际", "", '<div class="kv-grid">'
+        + kv("承诺范围", (v.total || 0) + " 项") + kv("承诺工时", minsText(v.estimateMin))
+        + kv("实际交付", v.done + " / " + (v.total || 0) + " 项", v.done >= v.total ? "good" : "")
+        + kv("实际投入", minsText(v.actualMin))
+        + kv("整体偏差", dev === null ? "未发布" : ((dev > 0 ? "+" : "") + dev + "%"), dev === null ? "" : (Math.abs(dev) <= 15 ? "good" : (Math.abs(dev) <= 30 ? "warn" : "bad")))
+        + kv("准时情况", rd ? (late ? "晚于目标 " + Math.abs(daysBetween(v.target, rd)) + " 天" : "按目标发布") : "未发布", late ? "warn" : "")
+      + '</div>')
+      + (function(){
+          var ds = DEMANDS[v.id] || [];
+          var done = ds.filter(function(d){ return d.cls === "done"; }).length;
+          var body = ds.length
+            ? ds.map(function(d){
+                return '<div class="hist-row"><div class="hist-main"><b>' + esc(d.id) + ' ' + esc(d.title) + '</b><small>' + esc(d.owner) + ' · ' + d.n + ' 个工作项</small></div><span class="stag ' + d.cls + '">' + esc(d.status) + '</span></div>';
+              }).join("")
+            : '<p class="section-cap">本版本没有关联需求。</p>';
+          return infoCard("需求兑现", ds.length + " 条 · 已兑现 " + done, body
+            + '<p class="page-note">兑现按「需求下工作项是否全部纳入生产发布」判断；一行一需求，可点回需求详情。</p>');
+        })()
+      + infoCard("回归与质量", "示例数据", '<div class="kv-grid">'
+        + kv("回归用例", "42 条") + kv("通过", "41 条", "good") + kv("失败", "1 条", "warn")
+        + kv("遗留缺陷", blocked.length + " 个", blocked.length ? "bad" : "good") + '</div>')
+      + infoCard("遗留问题", blocked.length + " 项", blocked.length
+        ? blocked.map(function(i){
+            return '<div class="hist-row"><div class="hist-main"><b>' + esc(i.title) + '</b><small>' + esc(i.owner) + ' · 计划完成 ' + md(i.due) + '</small></div><span class="stag blocked">阻塞</span></div>';
+          }).join("")
+        : '<p class="section-cap">没有阻塞项。</p>');
+  }
+  function releaseNoteBody(v){
+    if(!hasReleaseFact(v)){
+      return infoCard("当前规划说明", v.plan ? (v.plan.env + " · " + md(v.plan.at.slice(0,10))) : "未排期",
+        '<p class="section-cap">' + esc(v.desc || "还没有版本说明。") + '</p>'
+        + '<div class="kv-grid" style="margin-top:10px">'
+        + kv("目标发布", v.target ? md(v.target) : "未设置") + kv("计划范围", (v.total || 0) + " 项")
+        + kv("计划工时", minsText(v.estimateMin)) + kv("里程碑", v.milestone ? md(v.milestone.date) + (v.milestone.status === "achieved" ? " · 已达成" : " · 未达成") : "未设置")
+        + '</div><p class="page-note">记录实际发布后，这里会冻结为发布说明。</p>');
+    }
+    var top = v.items.filter(function(i){ return i.status === "done"; }).slice(0, 6);
+    return infoCard("发布范围快照", "发布时冻结", '<div class="kv-grid">'
+        + kv("实际发布", md(releaseDate(v)) + " 生产") + kv("覆盖", "全量")
+        + kv("工作项", (v.total || 0) + " 项") + kv("投入工时", minsText(v.actualMin))
+      + '</div>' + (top.length ? '<div style="margin-top:10px">' + top.map(function(i){
+          return '<div class="hist-row"><div class="hist-main"><b>' + esc(i.title) + '</b><small>' + esc(i.owner) + '</small></div><span class="stag done">已交付</span></div>';
+        }).join("") + '</div>' : ""))
+      + infoCard("说明", "", '<p class="section-cap">' + esc(v.desc || "发布说明未填写。") + '</p>');
+  }
+  function archiveBody(v){
+    var dev = v.actualMin ? Math.round((v.actualMin - v.estimateMin) * 100 / (v.estimateMin || 1)) : 0;
+    var base = v.start ? iso(addDays(parseDate(v.start), 10)) : "—";
+    var names = ["feature/refund-callback", "feature/channel-routing", "release/" + (v.name.match(/v?[\d.]+/) || [""])[0]].slice(0, Math.max(0, v.branches || 0));
+    var branchRows = names.map(function(n, i){
+      var p = [72, 45, 20][i] || 30;
+      return '<div class="branch-row"><span class="bname">' + esc(n) + '</span><span class="bbar"><i class="' + (p < 100 ? "doing" : "") + '" style="width:' + p + '%"></i></span><span class="bpct">' + p + '%</span></div>';
+    }).join("");
+    var mvpAct = Math.round(v.actualMin * .8), iterAct = v.actualMin - mvpAct;
+    var mvpEst = Math.round(v.estimateMin * .78), iterEst = v.estimateMin - mvpEst;
+    return infoCard("承诺基线", "锁定后变更留痕", '<div class="kv-grid">'
+        + kv("目标发布", v.target ? md(v.target) : "未设置") + kv("承诺范围", (v.total || 0) + " 项")
+        + kv("承诺工时", minsText(v.estimateMin)) + kv("基线日期", base)
+      + '</div>')
+      + infoCard("分支进度", (v.branches || 0) + " 个分支", branchRows || '<p class="section-cap">还没有关联分支。关联后按分支展示工作项完成度。</p>')
+      + infoCard("阶段工时", "首版 / 迭代", '<div class="kv-grid">'
+        + kv("首版预估", minsText(mvpEst)) + kv("首版实际", minsText(mvpAct))
+        + kv("迭代预估", minsText(iterEst)) + kv("迭代实际", minsText(iterAct))
+        + kv("整体偏差", (dev > 0 ? "+" : "") + dev + "%", Math.abs(dev) <= 15 ? "good" : (Math.abs(dev) <= 30 ? "warn" : "bad"))
+        + kv("准时完成", v.target && releaseDate(v) ? (releaseDate(v) <= v.target ? "是" : "否") : "未发布")
+      + '</div>')
+      + infoCard("交付事实", releaseDate(v) ? "已发布" : "未发布", '<div class="kv-grid">'
+        + kv("实际发布", releaseDate(v) ? md(releaseDate(v)) + " 生产" : "—")
+        + kv("覆盖范围", releaseDate(v) ? "全量" : "—")
+        + kv("交付工作项", v.done + " / " + (v.total || 0) + " 项")
+        + kv("版本状态", STATUS[v.status].label)
+      + '</div>')
+      + infoCard("生命周期", "", lifecycleHTML(v));
+  }
+  function infoFoot(type){
+    if(type === "delivery") return '<span class="hint">摘要版；完整版含需求兑现与证据附件</span><button class="btn ghost" type="button" data-toast="原型：打开完整一页式交付说明（可分享、可导出不可变快照）">完整一页式 →</button><button class="btn" type="button" data-toast="原型：复制交付摘要">复制摘要</button><button class="btn primary" type="button" data-toast="原型：导出交付说明 PDF">导出 PDF</button>';
+    if(type === "release") return '<span class="hint">发布说明是发布时的冻结快照</span><button class="btn" type="button" data-toast="原型：导出发布说明">导出</button>';
+    if(type === "history") return '<span class="hint">计划与事实分开存，计划改动不影响发布记录</span><button class="btn" type="button" data-toast="原型：打开发布计划工作台">打开发布计划</button>';
+    return '<span class="hint">低频的完整信息收在这里，版本页首屏只留结论</span><button class="btn" type="button" data-toast="原型：跳转报表 · 跨项目">去报表 →</button>';
+  }
+  function openInfo(type, id){
+    var v = versionById(id);
+    if(!v) return;
+    state.infoType = type;
+    var meta = {
+      history:["计划与历史","排期、发布记录与生命周期放在一处，列表行不再重复"],
+      delivery:["交付说明","承诺、实际、回归与遗留问题，可导出"],
+      release:[hasReleaseFact(v) ? "发布说明" : "当前规划说明", hasReleaseFact(v) ? "发布时的范围快照，内容只读" : "发布前的目标、范围与计划"],
+      archive:["版本档案","承诺基线、分支进度、阶段工时、交付事实与生命周期"]
+    }[type] || ["版本信息",""];
+    $("#infoTitle").textContent = v.name + " · " + meta[0];
+    $("#infoSub").textContent = meta[1];
+    $("#infoBody").innerHTML = type === "history" ? historyBody(v)
+      : type === "delivery" ? deliveryBody(v)
+      : type === "release" ? releaseNoteBody(v)
+      : archiveBody(v);
+    $("#infoFoot").innerHTML = infoFoot(type);
+    var m = $("#infoModal");
+    m.classList.add("show");
+    m.setAttribute("aria-hidden","false");
+    document.body.style.overflow = "hidden";
+  }
+  function closeInfo(){
+    var m = $("#infoModal");
+    m.classList.remove("show");
+    m.setAttribute("aria-hidden","true");
+    if(!$("#createModal").classList.contains("show") && !$("#planModal").classList.contains("show")){
+      document.body.style.overflow = "";
+    }
+  }
+  function renderDrawer(){
+    var v = versionById(state.openId);
+    if(!v){ closeDrawer(); return; }
+    var p = pct(v);
+    var meta = [];
+    meta.push('<span class="item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>' + timeInfo(v).range + '</span>');
+    if(timeInfo(v).small) meta.push('<span class="' + (timeInfo(v).cls || "") + '">' + esc(timeInfo(v).small) + '</span>');
+    meta.push('<span class="item">负责人 ' + esc(v.owner) + '</span>');
+    if(v.branches) meta.push('<span class="item">' + v.branches + ' 个分支</span>');
+    var body;
+    if(state.drawerTab === "items") body = itemsHTML(v);
+    else if(state.drawerTab === "demands") body = demandsHTML(v);
+    else if(state.drawerTab === "releases") body = releasesHTML(v);
+    else if(state.drawerTab === "activity") body = activityHTML(v);
+    else body = overviewHTML(v);
+    var tabs = [
+      ["overview","概览",""],
+      ["items","工作项",v.total || 0],
+      ["demands","需求",(DEMANDS[v.id] || []).length],
+      ["releases","发布记录",hasReleaseFact(v) ? (v.releaseCount || 1) : 0],
+      ["activity","动态",""]
+    ];
+    var backLabel = state.tab === "schedule" ? "发布日程" : "版本";
+    $("#drawer").innerHTML = '<div class="dh"><div class="dh-in">'
+      + '<div class="dh-top">'
+      + '<button class="back" type="button" data-close-drawer title="返回' + backLabel + '"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l-5 5 5 5"/></svg>' + backLabel + '</button>'
+      + '<div class="dh-crumb"><span>' + esc(projectOf(v).name) + '</span><span>·</span><span>' + v.total + ' 个工作项</span></div>'
+      + '<div class="dh-tools">'
+      + '<button class="icon-btn" type="button" data-refresh aria-label="刷新" title="刷新版本数据"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16 4v3.5h-3.5"/></svg></button>'
+      + '<button class="vswitch" type="button" data-vswitch aria-haspopup="menu" title="切换同项目版本"><span>' + esc(v.name) + '</span><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></button>'
+      + '<button class="icon-btn" type="button" data-dmore="' + v.id + '" aria-label="更多操作" title="更多操作"><svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg></button>'
+      + '</div></div>'
+      + '<div class="dh-title"><h2>' + esc(v.name) + '</h2>' + statusPill(v.status) + '</div>'
+      + '<div class="dh-meta">' + meta.join('<span style="color:var(--border-strong)">·</span>') + '</div>'
+      + '<div class="wf">'
+      + '<span class="wstep ' + stepState(v,0) + '"><i></i>规划</span><span class="wline"></span>'
+      + '<span class="wstep ' + stepState(v,1) + '"><i></i>开发</span><span class="wline"></span>'
+      + '<span class="wstep ' + stepState(v,2) + '"><i></i>发布</span><span class="wline"></span>'
+      + '<span class="wstep ' + stepState(v,3) + '"><i></i>完成</span>'
+      + '</div>'
+      + '<div class="dh-actions">' + drawerPrimary(v)
+      + '<span class="spacer"></span>'
+      + '<span class="lock">' + (contentLocked(v) ? "已有成功生产发布 · 内容只读" : (isEnded(v) ? "终态版本不可编辑" : "发布前可继续调整范围")) + '</span>'
+      + '</div></div></div>'
+      + '<div class="dtabs"><div class="dtabs-in">' + tabs.map(function(t){
+          return '<button class="dtab' + (state.drawerTab === t[0] ? " on" : "") + '" type="button" data-dtab="' + t[0] + '">' + t[1] + (t[2] !== "" ? ' <b>' + t[2] + '</b>' : '') + '</button>';
+        }).join("") + '</div></div>'
+      + '<div class="dbody" id="drawerBody"><div class="dbody-in">' + body + '</div></div>';
+  }
+  function openDrawer(id, opts){
+    opts = opts || {};
+    state.openId = id;
+    state.drawerTab = opts.tab || "overview";
+    state.pageScroll = $("#content").scrollTop;
+    renderDrawer();
+    $(".app").classList.add("detail-open");
+    var layer = $("#drawerLayer");
+    layer.classList.add("on");
+    layer.setAttribute("aria-hidden","false");
+    var scroll = $("#drawerBody");
+    if(scroll) scroll.scrollTop = 0;
+    syncProtoNav();
+    setTimeout(function(){ var d = $("#drawer"); if(d) d.focus(); }, 50);
+    if(opts.push !== false) syncHash(true);
+  }
+  function closeDrawer(opts){
+    var lastId = state.openId;
+    var layer = $("#drawerLayer");
+    layer.classList.remove("on");
+    layer.setAttribute("aria-hidden","true");
+    $(".app").classList.remove("detail-open");
+    state.openId = null;
+    $("#content").scrollTop = state.pageScroll || 0;
+    syncProtoNav();
+    if(lastId && state.tab === "versions"){
+      var row = $('#versionRows .vrow[data-id="' + lastId + '"]');
+      if(row) row.focus();
+    }
+    if(!opts || opts.push !== false) syncHash(true);
+  }
+  function versionSwitchMenu(v){
+    return VERSIONS.filter(function(x){ return x.projectId === v.projectId; }).map(function(x){
+      return {
+        key:x.id,
+        label:x.name + " · " + STATUS[x.status].label,
+        check:x.id === v.id,
+        action:function(){ openDrawer(x.id); }
+      };
+    });
+  }
+
+  /* ---------- URL 深链 ---------- */
+  function hashState(){
+    var h = String(location.hash || "").replace(/^#/, "");
+    var m = h.match(/^version\/([^/]+)(?:\/([a-z]+))?$/);
+    return m ? {id:decodeURIComponent(m[1]), tab:m[2] || "overview"} : null;
+  }
+  function currentHash(){
+    if(!state.openId) return "";
+    var v = versionById(state.openId);
+    if(!v) return "";
+    return "#version/" + encodeURIComponent(v.id) + (state.drawerTab !== "overview" ? "/" + state.drawerTab : "");
+  }
+  function syncHash(push){
+    var h = currentHash();
+    var base = location.pathname + location.search;
+    var url = h ? (base + h) : base;
+    if(url === location.pathname + location.search + (location.hash || "")) return;
+    try {
+      history[push ? "pushState" : "replaceState"]({v:state.openId || null}, "", url);
+    } catch(e){
+      if(push && h){ location.hash = h.slice(1); }
+    }
+  }
+
+  /* ---------- menus ---------- */
+  var openMenuEl = null;
+  function closeMenu(){
+    if(openMenuEl){ openMenuEl.remove(); openMenuEl = null; }
+  }
+  function showMenu(anchor, items){
+    closeMenu();
+    var el = document.createElement("div");
+    el.className = "menu";
+    el.setAttribute("role","menu");
+    el.innerHTML = items.map(function(it){
+      if(it.sep) return '<div class="msep"></div>';
+      return '<button type="button" role="menuitem" class="' + (it.danger ? "danger" : "") + '" data-mitem="' + esc(it.key) + '">' + esc(it.label) + (it.check ? '<span class="mcheck">✓</span>' : '') + '</button>';
+    }).join("");
+    document.body.appendChild(el);
+    var r = anchor.getBoundingClientRect();
+    var mw = el.offsetWidth, mh = el.offsetHeight;
+    var left = Math.min(r.right - mw, window.innerWidth - mw - 8);
+    left = Math.max(8, left);
+    var top = r.bottom + 5;
+    if(top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 5);
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+    el.addEventListener("click", function(e){
+      var b = e.target.closest("[data-mitem]");
+      if(!b) return;
+      var item = items.filter(function(x){ return x.key === b.dataset.mitem; })[0];
+      closeMenu();
+      if(item && item.action) item.action();
+    });
+    openMenuEl = el;
+  }
+  function versionMenu(id, fromDrawer){
+    var v = versionById(id);
+    if(!v) return [];
+    var items = [];
+    if(!fromDrawer) items.push({key:"open", label:"打开详情", action:function(){ openDrawer(id); }});
+    if(!contentLocked(v) && !isEnded(v)) items.push({key:"edit", label:"编辑版本", action:function(){ toast("原型：编辑版本（名称、日期、说明）"); }});
+    if(!contentLocked(v) && !isEnded(v)) items.push({key:"items", label:"管理工作项", action:function(){ openDrawer(id, {tab:"items"}); }});
+    items.push({key:"history", label:"计划与历史", action:function(){ openInfo("history", id); }});
+    items.push({key:"delivery", label:"交付说明", action:function(){ openInfo("delivery", id); }});
+    items.push({key:"note", label:hasReleaseFact(v) ? "发布说明" : (isEnded(v) ? "版本说明" : "当前规划说明"), action:function(){ openInfo("release", id); }});
+    if(v.status === "planned") items.push({sep:true}, {key:"start", label:"开始开发", action:function(){ startVersion(id); }});
+    if(v.status === "active") items.push({sep:true}, {key:"release", label:"记录发布", action:function(){ openDrawer(id, {tab:"releases"}); }});
+    if(!isEnded(v)) items.push({sep:true}, {key:"close", label:"关闭版本", action:function(){ endVersion(id,"closed"); }}, {key:"cancel", label:"取消版本", danger:false, action:function(){ endVersion(id,"canceled"); }});
+    items.push({sep:true}, {key:"del", label:"删除版本", danger:true, action:function(){ toast("原型：删除版本需二次确认"); }});
+    return items;
+  }
+  function startVersion(id){
+    var v = versionById(id);
+    if(!v) return;
+    v.status = "active";
+    if(!v.start) v.start = iso(TODAY);
+    renderVersions(); renderSchedule(); renderAnalysis();
+    if(state.openId === id) renderDrawer();
+    toast("已开始开发「" + v.name + "」");
+  }
+  function endVersion(id, status){
+    var v = versionById(id);
+    if(!v) return;
+    v.status = status;
+    v.closedAt = iso(TODAY);
+    if(!v.releasedAt) v.latestRelease = md(iso(TODAY)) + " 关闭";
+    renderVersions(); renderSchedule(); renderAnalysis();
+    if(state.openId === id) renderDrawer();
+    toast("已" + (status === "closed" ? "关闭" : "取消") + "「" + v.name + "」");
+  }
+  function recordRelease(id){
+    var v = versionById(id);
+    if(!v) return;
+    /* 只写事实：版本仍保持“进行中”，不替用户完成工作项，也不改状态 */
+    v.releaseCount = (v.releaseCount || 0) + 1;
+    v.lastReleaseAt = iso(TODAY);
+    v.latestRelease = md(iso(TODAY)) + " 生产";
+    v.locked = true;
+    v.milestone = v.milestone || {title:"版本发布", date:v.target, status:"achieved"};
+    v.milestone.status = "achieved";
+    v.activity.unshift({who:"我", what:"记录了第 " + v.releaseCount + " 次生产发布（成功）", when:"刚刚"});
+    state.drawerTab = "releases";
+    renderVersions(); renderSchedule(); renderAnalysis(); renderDrawer();
+    syncHash(false);
+    toast("发布记录已保存 · 内容已锁定，版本仍进行中");
+  }
+
+  /* ---------- 跨项目发布计划 ---------- */
+  function openPlan(){
+    var ids = pickedIds();
+    if(!ids.length){ toast("先在列表里勾选要覆盖的版本"); return; }
+    state.planVersions = ids;
+    $("#planVersions").innerHTML = ids.map(function(id, i){
+      var v = versionById(id);
+      return '<div class="vpick"><span class="gdot"></span><b>' + esc(v.name) + '</b><small>'
+        + esc(projectOf(v).name) + ' · ' + (v.total || 0) + ' 项' + (i === 0 ? " · 主版本" : "") + '</small></div>';
+    }).join("");
+    $("#planCount").textContent = ids.length;
+    var main = versionById(ids[0]);
+    $("#planAt").value = (main.target || "2026-12-20") + "T20:00";
+    $("#planEnv").value = "生产";
+    $("#planCoverage").value = (ids.length > 1 ? "部分" : "全量");
+    var m = $("#planModal");
+    m.classList.add("show");
+    m.setAttribute("aria-hidden","false");
+    document.body.style.overflow = "hidden";
+  }
+  function closePlan(){
+    var m = $("#planModal");
+    m.classList.remove("show");
+    m.setAttribute("aria-hidden","true");
+    if(!$("#infoModal").classList.contains("show") && !$("#createModal").classList.contains("show")){
+      document.body.style.overflow = "";
+    }
+  }
+  function submitPlan(){
+    var ids = state.planVersions.slice();
+    if(!ids.length){ closePlan(); return; }
+    var main = versionById(ids[0]);
+    var at = $("#planAt").value || "2026-12-20T20:00";
+    var p = {
+      id:"p" + Date.now(), versionId:main.id, projectId:main.projectId,
+      date:at.slice(0,10), time:at.slice(11,16) || "20:00",
+      env:$("#planEnv").value, coverage:$("#planCoverage").value, status:"draft", owner:"我",
+      tasks:ids.reduce(function(a, id){ return a + (versionById(id).total || 0); }, 0),
+      covers:ids.slice()
+    };
+    PLANS.push(p);
+    state.picked = {};
+    closePlan();
+    renderVersions();
+    renderSchedule();
+    setTab("schedule");
+    toast("已创建发布计划：主版本「" + main.name + "」" + (ids.length > 1 ? "，共 " + ids.length + " 个版本" : ""));
+  }
+
+  /* ---------- toast ---------- */
+  var toastTimer = null;
+  function toast(msg){
+    var t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 2400);
+  }
+
+  /* ---------- tabs ---------- */
+  function syncProtoNav(){
+    $$(".proto-nav [data-screen]").forEach(function(b){
+      var s = b.dataset.screen;
+      var on = state.openId
+        ? (s === "detail" || s === "drawer")
+        : ((state.tab === "versions" && s === "list") || s === state.tab);
+      b.classList.toggle("on", !!on);
+    });
+  }
+  function setTab(tab){
+    state.tab = tab;
+    $$(".tab[data-tab]").forEach(function(b){ b.classList.toggle("on", b.dataset.tab === tab); });
+    $("#pane-versions").hidden = tab !== "versions";
+    $("#pane-schedule").hidden = tab !== "schedule";
+    $("#pane-analysis").hidden = tab !== "analysis";
+    if(tab === "schedule") renderSchedule();
+    if(tab === "analysis") renderAnalysis();
+    $("#content").scrollTop = 0;
+    syncProtoNav();
+  }
+
+  /* ---------- create ---------- */
+  function nextName(projectId){
+    var list = VERSIONS.filter(function(v){ return v.projectId === projectId; });
+    var max = {maj:0, min:0, prefix:"V"};
+    list.forEach(function(v){
+      var m = v.name.match(/(.*?)(\d+)\.(\d+)/);
+      if(m){
+        var maj = Number(m[2]), min = Number(m[3]);
+        if(maj > max.maj || (maj === max.maj && min >= max.min)){
+          max = {maj:maj, min:min, prefix:m[1]};
+        }
+      }
+    });
+    if(!max.maj) return "V1.0";
+    return max.prefix + max.maj + "." + (max.min + 1);
+  }
+  function openCreate(){
+    if(state.project === "all"){
+      toast("先选择一个项目，再新建版本");
+      var pick = $("#projectPick");
+      showMenu(pick, PROJECTS.map(function(p){ return {key:p.id, label:p.name, action:function(){ setProject(p.id); }}; }));
+      return;
+    }
+    $("#dlgProject").textContent = P[state.project].name;
+    $("#fName").value = nextName(state.project);
+    $("#fNameErr").hidden = true;
+    $("#fieldName").classList.remove("invalid");
+    $("#fStart").value = "";
+    $("#fTarget").value = "2026-12-20";
+    $("#fOwner").value = "张伟";
+    $("#fCopy").checked = false;
+    $("#advFields").hidden = true;
+    $("#advToggle").classList.remove("open");
+    $("#advToggle").setAttribute("aria-expanded","false");
+    var m = $("#createModal");
+    m.classList.add("show");
+    m.setAttribute("aria-hidden","false");
+    document.body.style.overflow = "hidden";
+    setTimeout(function(){ $("#fName").focus(); $("#fName").select(); }, 60);
+  }
+  function closeCreate(){
+    var m = $("#createModal");
+    m.classList.remove("show");
+    m.setAttribute("aria-hidden","true");
+    if(!$("#infoModal").classList.contains("show") && !$("#planModal").classList.contains("show")){
+      document.body.style.overflow = "";
+    }
+  }
+  function submitCreate(){
+    var name = $("#fName").value.trim();
+    if(!name){
+      $("#fNameErr").hidden = false;
+      $("#fieldName").classList.add("invalid");
+      $("#fName").focus();
+      return;
+    }
+    var projectId = state.project;
+    var last = VERSIONS.filter(function(v){ return v.projectId === projectId; })[0];
+    var total = $("#fCopy").checked && last ? last.total : 0;
+    var v = {
+      id:"new" + Date.now(), projectId:projectId, name:name, status:"planned",
+      start:$("#fStart").value || null, target:$("#fTarget").value || null, owner:$("#fOwner").value,
+      total:total, done:0, doing:0, blocked:0, todo:total,
+      estimateMin:0, actualMin:0, releasedAt:null, closedAt:null, branches:0, riskCount:0,
+      desc:"", milestone:null, plan:null, items:[], activity:[{who:"我", what:"创建版本", when:"刚刚"}]
+    };
+    VERSIONS.unshift(v);
+    closeCreate();
+    setTab("versions");
+    renderVersions();
+    openDrawer(v.id);
+    toast("已创建「" + v.name + "」，接下来添加工作项");
+  }
+
+  /* ---------- project ---------- */
+  function setProject(id){
+    state.project = id;
+    state.status = "all";
+    renderVersions();
+    renderAnalysis();
+    if(state.tab === "schedule") renderSchedule();
+  }
+  function projectMenu(){
+    var items = PROJECTS.map(function(p){
+      return {key:p.id, label:p.name, check:state.project === p.id, action:function(){ setProject(p.id); }};
+    });
+    items.push({sep:true});
+    items.push({key:"all", label:"全部项目（跨项目）", check:state.project === "all", action:function(){ setProject("all"); }});
+    showMenu($("#projectPick"), items);
+  }
+
+  /* ---------- annotations ---------- */
+  var ANNOTS = [
+    {target:"#btnCreate", text:"一个主入口：新建版本"},
+    {target:"#statusChips .chip", text:"状态即筛选，不再有 5 个模式"},
+    {target:"#versionRows .vrow .vname", text:"点行即详情，不需找按钮"},
+    {target:"#versionRows .vrow .vprogress", text:"进度自动算，不需要手填"},
+    {target:"#versionRows .vrow .vact", text:"行内只留下一步，其余进「⋯」"},
+    {target:"#planBanner .pb-icon", text:"待规划单独提示，不占版本卡"}
+  ];
+  function renderAnnot(){
+    var layer = $("#annotLayer");
+    if(!state.annot){
+      layer.hidden = true;
+      layer.innerHTML = "";
+      return;
+    }
+    layer.hidden = false;
+    layer.innerHTML = '<div class="annot-legend"><h4>设计说明 <button class="icon-btn x" type="button" id="annotX" aria-label="关闭"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></h4><ol>'
+      + ANNOTS.map(function(a){ return '<li>' + esc(a.text) + '</li>'; }).join("")
+      + '</ol></div>';
+    var frag = document.createDocumentFragment();
+    ANNOTS.forEach(function(a, i){
+      var target = $(a.target);
+      if(!target) return;
+      var r = target.getBoundingClientRect();
+      if(r.width === 0 || r.height === 0) return;
+      var pin = document.createElement("span");
+      pin.className = "pin";
+      pin.textContent = i + 1;
+      pin.style.left = Math.max(6, Math.min(window.innerWidth - 30, r.right - 14)) + "px";
+      pin.style.top = Math.max(6, r.top - 8) + "px";
+      frag.appendChild(pin);
+    });
+    layer.appendChild(frag);
+  }
+  function toggleAnnot(force){
+    state.annot = typeof force === "boolean" ? force : !state.annot;
+    $("#btnAnnot").classList.toggle("on", state.annot);
+    renderAnnot();
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener("click", function(e){
+    if(openMenuEl && !e.target.closest(".menu") && !e.target.closest("[data-menu]") && !e.target.closest("[data-dmore]") && !e.target.closest("[data-vswitch]") && !e.target.closest("#projectPick")) closeMenu();
+  });
+  $$(".tab[data-tab]").forEach(function(b){
+    b.addEventListener("click", function(){ setTab(b.dataset.tab); });
+  });
+  $("#q").addEventListener("input", function(e){ state.q = e.target.value.trim(); renderVersions(); });
+  $("#riskOnly").addEventListener("change", function(e){ state.riskOnly = e.target.checked; renderVersions(); });
+  $("#sortBy").addEventListener("change", function(e){ state.sort = e.target.value; renderVersions(); });
+  $("#statusChips").addEventListener("click", function(e){
+    var chip = e.target.closest("[data-status]");
+    if(chip){ state.status = chip.dataset.status; renderVersions(); return; }
+    if(e.target.closest("[data-risk-chip]")){ state.riskOnly = !state.riskOnly; renderVersions(); }
+  });
+  $("#versionRows").addEventListener("click", function(e){
+    if(e.target.closest(".pick")) return;
+    var quick = e.target.closest("[data-quick]");
+    if(quick){
+      e.stopPropagation();
+      var id = quick.dataset.id;
+      if(quick.dataset.quick === "start") startVersion(id);
+      else if(quick.dataset.quick === "release"){ openDrawer(id, {tab:"releases"}); }
+      else openDrawer(id);
+      return;
+    }
+    var menuBtn = e.target.closest("[data-menu]");
+    if(menuBtn){ e.stopPropagation(); showMenu(menuBtn, versionMenu(menuBtn.dataset.menu, false)); return; }
+    var openBtn = e.target.closest("[data-open]");
+    if(openBtn){ openDrawer(openBtn.dataset.open); return; }
+    var row = e.target.closest(".vrow");
+    if(row) openDrawer(row.dataset.id);
+  });
+  $("#versionRows").addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){
+      var row = e.target.closest(".vrow");
+      if(row && !e.target.closest("button") && !e.target.closest(".pick")){ e.preventDefault(); openDrawer(row.dataset.id); }
+    }
+  });
+  $("#versionRows").addEventListener("change", function(e){
+    var cb = e.target.closest("[data-pick]");
+    if(!cb) return;
+    if(cb.checked) state.picked[cb.dataset.pick] = 1;
+    else delete state.picked[cb.dataset.pick];
+    var row = cb.closest(".vrow");
+    if(row) row.classList.toggle("picked", cb.checked);
+    renderBulk();
+  });
+  $("#bulkBar").addEventListener("click", function(e){
+    var b = e.target.closest("[data-bulk]");
+    if(!b) return;
+    var k = b.dataset.bulk;
+    if(k === "all"){
+      visibleVersions().filter(function(v){ return !isEnded(v); }).forEach(function(v){ state.picked[v.id] = 1; });
+      renderVersions();
+    }else if(k === "clear"){
+      state.picked = {};
+      renderVersions();
+    }else if(k === "plan"){
+      openPlan();
+    }
+  });
+  $("#projectPick").addEventListener("click", function(e){ e.stopPropagation(); projectMenu(); });
+  $("#btnCreate").addEventListener("click", openCreate);
+  $("#createX").addEventListener("click", closeCreate);
+  $("#btnCancelCreate").addEventListener("click", closeCreate);
+  $("#btnSubmitCreate").addEventListener("click", submitCreate);
+  $("#createModal").addEventListener("click", function(e){ if(e.target === $("#createModal")) closeCreate(); });
+  $("#planX").addEventListener("click", closePlan);
+  $("#planCancel").addEventListener("click", closePlan);
+  $("#planSubmit").addEventListener("click", submitPlan);
+  $("#planModal").addEventListener("click", function(e){ if(e.target === $("#planModal")) closePlan(); });
+  $("#infoX").addEventListener("click", closeInfo);
+  $("#infoModal").addEventListener("click", function(e){
+    if(e.target === $("#infoModal")) closeInfo();
+    var t = e.target.closest("[data-toast]");
+    if(t) toast(t.dataset.toast);
+  });
+  window.addEventListener("popstate", function(){
+    var hs = hashState();
+    if(hs && versionById(hs.id)){
+      if(state.openId === hs.id){
+        state.drawerTab = hs.tab;
+        renderDrawer();
+      }else{
+        openDrawer(hs.id, {tab:hs.tab, push:false});
+      }
+    }else if(state.openId){
+      closeDrawer({push:false});
+    }
+  });
+  $("#advToggle").addEventListener("click", function(){
+    var adv = $("#advFields");
+    adv.hidden = !adv.hidden;
+    this.classList.toggle("open", !adv.hidden);
+    this.setAttribute("aria-expanded", String(!adv.hidden));
+  });
+  $("#fName").addEventListener("input", function(){
+    if(this.value.trim()){ $("#fNameErr").hidden = true; $("#fieldName").classList.remove("invalid"); }
+  });
+  $("#toSchedule").addEventListener("click", function(){ setTab("schedule"); });
+  $("#goPlan").addEventListener("click", function(){
+    if(state.project === "all"){ toast("先选择一个项目，再规划工作项"); return; }
+    toast("原型：打开工作项规划器，勾选后加入版本");
+  });
+  $("#btnPlanFromVersion").addEventListener("click", function(){ toast("原型：从版本批量创建发布计划"); });
+  $("#schedRange").addEventListener("change", function(e){ state.scheduleRange = e.target.value; renderSchedule(); });
+  $("#schedEnv").addEventListener("change", function(e){ state.scheduleEnv = e.target.value; renderSchedule(); });
+  $("#schedStatus").addEventListener("change", function(e){ state.scheduleStatus = e.target.value; renderSchedule(); });
+  $("#schedRefresh").addEventListener("click", function(){
+    renderSchedule();
+    toast("发布日程已刷新");
+  });
+  $("#scheduleRows").addEventListener("click", function(e){
+    var row = e.target.closest("[data-vid]");
+    if(row) openDrawer(row.dataset.vid);
+  });
+  $("#drawerLayer").addEventListener("click", function(e){
+    if(e.target.closest("[data-close-drawer]")){ closeDrawer(); return; }
+    var dtab = e.target.closest("[data-dtab]");
+    if(dtab){ state.drawerTab = dtab.dataset.dtab; renderDrawer(); syncHash(false); return; }
+    var refresh = e.target.closest("[data-refresh]");
+    if(refresh){ renderDrawer(); toast("已刷新版本数据"); return; }
+    var sw = e.target.closest("[data-vswitch]");
+    if(sw){
+      var cv = versionById(state.openId);
+      if(cv) showMenu(sw, versionSwitchMenu(cv));
+      return;
+    }
+    var more = e.target.closest("[data-dmore]");
+    if(more){ showMenu(more, versionMenu(more.dataset.dmore, true)); return; }
+    var info = e.target.closest("[data-info]");
+    if(info){ openInfo(info.dataset.info, state.openId); return; }
+    var act = e.target.closest("[data-dact]");
+    if(act){
+      var v = versionById(state.openId);
+      if(!v) return;
+      var a = act.dataset.dact;
+      if(a === "start") startVersion(v.id);
+      else if(a === "release"){ state.drawerTab = "releases"; renderDrawer(); }
+      else if(a === "releases"){ state.drawerTab = "releases"; renderDrawer(); }
+      else if(a === "activity"){ state.drawerTab = "activity"; renderDrawer(); }
+      else if(a === "record") recordRelease(v.id);
+      return;
+    }
+    var dcount = e.target.closest("[data-demand-items]");
+    if(dcount){
+      var dname = dcount.dataset.demandItems;
+      var dn = 0;
+      ((DEMANDS[state.openId] || [])).forEach(function(d){ if(d.id === dname) dn = d.n; });
+      toast("原型：工作项页联动到需求 " + dname + "（" + dn + " 项）");
+      return;
+    }
+    var drow = e.target.closest("[data-demand-open]");
+    if(drow){ toast("原型：打开需求详情（阶段时间线、关联工作项与发布记录）"); return; }
+    var irow = e.target.closest("[data-item-open]");
+    if(irow){ toast("原型：打开工作项详情（需求、版本、分支与计时）"); return; }
+    var t = e.target.closest("[data-toast]");
+    if(t){ toast(t.dataset.toast); }
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){
+      if(openMenuEl){ closeMenu(); return; }
+      if($("#infoModal").classList.contains("show")){ closeInfo(); return; }
+      if($("#planModal").classList.contains("show")){ closePlan(); return; }
+      if($("#createModal").classList.contains("show")){ closeCreate(); return; }
+      if($("#drawerLayer").classList.contains("on")){ closeDrawer(); return; }
+      if(state.annot){ toggleAnnot(false); }
+    }
+    if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){
+      e.preventDefault(); $("#q").focus();
+    }
+  });
+  $("#protoNav").addEventListener("click", function(e){
+    var b = e.target.closest("[data-screen]");
+    if(!b) return;
+    var s = b.dataset.screen;
+    if(s === "list"){ setTab("versions"); closeDrawer(); closeCreate(); }
+    else if(s === "detail" || s === "drawer"){ setTab("versions"); openDrawer("v22"); }
+    else if(s === "create"){ setTab("versions"); closeDrawer(); openCreate(); }
+    else if(s === "schedule"){ setTab("schedule"); closeDrawer(); closeCreate(); }
+    else if(s === "analysis"){ setTab("analysis"); closeDrawer(); closeCreate(); }
+  });
+  $("#btnAnnot").addEventListener("click", function(){ toggleAnnot(); });
+  $("#annotLayer").addEventListener("click", function(e){ if(e.target.closest("#annotX")) toggleAnnot(false); });
+  window.addEventListener("resize", function(){ if(state.annot) renderAnnot(); });
+  $("#content").addEventListener("scroll", function(){ if(state.annot) renderAnnot(); }, {passive:true});
+
+  /* ---------- init ---------- */
+  function bootFromQuery(){
+    var q = new URLSearchParams(location.search);
+    if(q.get("clean") === "1") $("#protoNav").hidden = true;
+    if(q.get("hover") === "1"){ state.demoHover = true; renderVersions(); }
+    var hs = hashState();
+    var hv = hs ? versionById(hs.id) : null;
+    var screen = q.get("screen");
+    if(screen === "schedule") setTab("schedule");
+    else if(screen === "analysis") setTab("analysis");
+    else setTab("versions");
+    if(hv){
+      if(!q.get("project")) setProject(hv.projectId);
+      openDrawer(hv.id, {tab:hs.tab, push:false});
+    }else if(screen === "detail" || screen === "drawer"){
+      openDrawer(q.get("id") || "v22", {tab:q.get("dtab") || "overview", push:false});
+    }
+    if(screen === "create") openCreate();
+    if(q.get("annot") === "1"){ toggleAnnot(true); }
+    if(q.get("project")) setProject(q.get("project"));
+  }
+  renderVersions();
+  renderSchedule();
+  renderAnalysis();
+  bootFromQuery();
+})();
+</script>
+</body>
+</html>
