@@ -305,6 +305,24 @@
     GROUP BY tl.user_id, DATE(COALESCE(tl.ended_at, tl.started_at))
   </select>
 
+  <!-- 项目列表：各项目首版 / 迭代工时一次聚合；阶段判定与 sumUserDayMinutesByReq / 阶段卡一致 -->
+  <select id="sumPhaseMinutesByProject" resultType="com.hourglass.dto.ReqPhaseMinutesRow">
+    SELECT t.req_id AS req_id,
+           COALESCE(SUM(CASE WHEN r.first_released_at IS NULL
+                              OR DATE(COALESCE(tl.ended_at, tl.started_at)) &lt;= r.first_released_at
+                             THEN tl.minutes ELSE 0 END), 0) AS mvp_minutes,
+           COALESCE(SUM(CASE WHEN r.first_released_at IS NOT NULL
+                              AND DATE(COALESCE(tl.ended_at, tl.started_at)) &gt; r.first_released_at
+                             THEN tl.minutes ELSE 0 END), 0) AS post_minutes
+    FROM time_log tl
+    INNER JOIN task t ON t.id = tl.task_id AND t.workspace_id = tl.workspace_id
+    INNER JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE tl.workspace_id = #{workspaceId}
+      AND tl.minutes IS NOT NULL
+      AND t.deleted_at IS NULL
+    GROUP BY t.req_id
+  </select>
+
   <!-- 成员阶段工时下钻：任务 × 阶段，阶段判定与 sumUserDayMinutesByReq / 阶段卡完全同口径 -->
   <sql id="memberTaskPhaseRows">
     SELECT t.id AS taskId,

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ProjectSetMapper">
+
+  <sql id="cols">
+    id, workspace_id, name, description, owner_user_id, status, planned_start, planned_end,
+    archived_at, color, sort_order, created_at, updated_at
+  </sql>
+
+  <select id="selectAll" resultType="ProjectSet">
+    SELECT <include refid="cols"/> FROM project_set
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY sort_order, created_at, id
+  </select>
+
+  <select id="selectById" resultType="ProjectSet">
+    SELECT <include refid="cols"/> FROM project_set
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </select>
+
+  <select id="countByName" resultType="int">
+    SELECT COUNT(*) FROM project_set
+    WHERE workspace_id = #{workspaceId} AND name = #{name}
+    <if test="excludeId != null">AND id &lt;&gt; #{excludeId}</if>
+  </select>
+
+  <select id="selectMaxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM project_set WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO project_set
+      (id, workspace_id, name, description, owner_user_id, status, planned_start, planned_end,
+       color, sort_order)
+    VALUES
+      (#{id}, #{workspaceId}, #{name}, #{description}, #{ownerUserId},
+       COALESCE(#{status}, 'active'), #{plannedStart}, #{plannedEnd},
+       COALESCE(#{color}, '#8a8578'), #{sortOrder})
+  </insert>
+
+  <update id="update">
+    UPDATE project_set SET
+      name = #{name},
+      description = #{description},
+      owner_user_id = #{ownerUserId},
+      status = #{status},
+      planned_start = #{plannedStart},
+      planned_end = #{plannedEnd},
+      color = #{color},
+      updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+    <if test="updatedAt != null">AND updated_at = #{updatedAt}</if>
+  </update>
+
+  <update id="unbindProjects">
+    UPDATE requirement SET set_id = NULL
+    WHERE workspace_id = #{workspaceId} AND set_id = #{setId}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM project_set WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM project_set WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

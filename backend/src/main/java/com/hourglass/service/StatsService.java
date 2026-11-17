@@ -33,7 +33,7 @@ public class StatsService {
 
     private static final int DRILL_MAX_LIMIT = 100;
     private static final Set<String> DRILL_KINDS = new HashSet<String>(Arrays.asList(
-            "created", "completed", "category", "owner", "column", "priority"));
+            "created", "completed", "project", "owner", "column", "priority"));
 
     private final TaskMapper taskMapper;
     private final TimeLogMapper timeLogMapper;
@@ -53,7 +53,7 @@ public class StatsService {
         this.publications = publications;
     }
 
-    /** 近 N 周：每周新增/完成；窗口内完成按模块与负责人分布；当前积压与逾期（按空间隔离，工时按"我"统计） */
+    /** 近 N 周：每周新增/完成；窗口内完成按项目与负责人分布；当前积压与逾期（按空间隔离，工时按"我"统计） */
     public StatsResponse stats(String workspaceId, String userId, Integer weeks) {
         int w = weeks == null ? 8 : Math.max(4, Math.min(26, weeks));
         LocalDate today = LocalDate.now();
@@ -85,8 +85,8 @@ public class StatsService {
             resp.getWeeks().add(stat);
         }
 
-        for (NameCountRow row : taskMapper.countCompletedByCategory(workspaceId, viewerId, rangeStart, before)) {
-            resp.getByCategory().add(new BoardResponse.NameCount(row.getName(), row.getCnt()));
+        for (NameCountRow row : taskMapper.countCompletedByProject(workspaceId, viewerId, rangeStart, before)) {
+            resp.getByProject().add(new BoardResponse.NameCount(row.getName(), row.getCnt()));
         }
         for (NameCountRow row : taskMapper.countCompletedByOwner(workspaceId, viewerId, rangeStart, before)) {
             resp.getByOwner().add(new BoardResponse.NameCount(row.getName(), row.getCnt()));
@@ -114,7 +114,7 @@ public class StatsService {
 
     /**
      * 趋势 / 分布 / 流程体检的下钻明细。kind 与上方聚合一一对应：
-     * created、completed、category、owner 需要 from / before；column、priority 取当前快照。
+     * created、completed、project、owner 需要 from / before；column、priority 取当前快照。
      */
     public PageResult<TaskDrillRow> drillTasks(String workspaceId, String userId, String kind,
                                                String from, String before, String value,
@@ -133,7 +133,7 @@ public class StatsService {
         query.setKind(k);
         query.setValue(value);
         query.setPubState("published".equals(pubState) || "unpublished".equals(pubState) ? pubState : null);
-        if ("created".equals(k) || "completed".equals(k) || "category".equals(k) || "owner".equals(k)) {
+        if ("created".equals(k) || "completed".equals(k) || "project".equals(k) || "owner".equals(k)) {
             query.setFrom(parseDate(from, "from"));
             query.setBefore(parseDate(before, "before"));
             if (query.getFrom() == null || query.getBefore() == null) {
@@ -144,8 +144,8 @@ public class StatsService {
                 && (value == null || value.trim().isEmpty())) {
             throw AppException.badRequest("该口径需要 value");
         }
-        /* 未指定模块 / 负责人在聚合里显示为「空名」，GET 会丢掉空串，这里用 __unset__ 显式带上 */
-        if (("category".equals(k) || "owner".equals(k))
+        /* 无项目 / 未指定负责人在聚合里显示为「空名」，GET 会丢掉空串，这里用 __unset__ 显式带上 */
+        if (("project".equals(k) || "owner".equals(k))
                 && (value == null || "__unset__".equals(value.trim()))) {
             query.setValue("");
         }

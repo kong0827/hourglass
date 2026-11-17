@@ -353,6 +353,34 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .proj-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start;padding-top:16px;}
 @media (max-width:1279px){.proj-layout{grid-template-columns:1fr;}}
 .req-list{display:flex;flex-direction:column;gap:12px;}
+/* 项目集分组头：只做归组与只读汇总，视觉上比项目卡更轻 */
+.req-set-head{
+  display:flex;align-items:center;gap:10px;min-height:36px;padding:8px 2px 6px;
+  border-bottom:1px dashed var(--border);margin-top:6px;
+}
+.req-set-head:first-child{margin-top:0;}
+.req-set-title{display:flex;align-items:center;gap:6px;min-width:0;font-size:13px;color:var(--text);}
+.req-set-title svg{color:var(--text-2);flex:0 0 auto;}
+.req-set-title b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.req-set-meta{font-size:12px;color:var(--text-2);white-space:nowrap;}
+.req-set-progress{width:120px;margin-left:auto;flex:0 0 auto;}
+.req-set-acts{display:flex;align-items:center;gap:2px;}
+.req-set-head.is-ungrouped .req-set-title{color:var(--text-2);}
+.req-set-toggle svg{transition:transform var(--dur-fast) var(--ease-out);}
+.req-set-toggle.on svg{transform:rotate(90deg);}
+.req-item-container{background:var(--surface-sunken);box-shadow:none;border-style:dashed;}
+.req-item-container .req-name{color:var(--text-2);}
+/* 集内项目缩进：卡片左缩进 + 短横引线，和集表头一起表达两层结构 */
+.req-item-in-set{position:relative;margin-left:18px;}
+.req-item-in-set::before{
+  content:"";position:absolute;left:-11px;top:26px;width:8px;height:1px;background:var(--border);
+}
+.project-table-body .req-set-head{padding:8px 14px 6px;margin-top:0;}
+.project-table-row.has-set .project-name-cell{padding-left:18px;position:relative;}
+.project-table-row.has-set .project-name-cell::before{
+  content:"";position:absolute;left:6px;top:50%;width:7px;height:1px;background:var(--border);
+}
+
 .req-item{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
   padding:14px;box-shadow:var(--shadow-xs);display:flex;flex-direction:column;gap:8px;
@@ -374,6 +402,24 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .req-meta{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-3);}
 .req-meta .progress{flex:0 0 auto;width:140px;}
 .req-meta .progress .bar{height:6px;}
+/* 项目集列表顶部汇总：项目 / 分组 / 首版与迭代投入 / 准时率 / 未标记首版 */
+.req-summ{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+.req-summ .stat{flex:1 1 120px;min-width:110px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
+.req-summ .stat-k{font-size:12px;color:var(--text-3);}
+.req-summ .stat-v{font-size:18px;font-weight:650;letter-spacing:-.01em;color:var(--text);margin-top:2px;}
+.req-summ .stat-v small{font-size:11px;font-weight:500;color:var(--text-3);margin-left:4px;}
+/* 项目卡：首版 / 迭代投入条（与版本页阶段口径一致） */
+.req-phase{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--text-3);flex-wrap:wrap;}
+.req-phase-bar{display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--surface-sunken);flex:1 1 120px;min-width:90px;max-width:260px;}
+.req-phase-bar i{display:block;height:100%;}
+.req-phase-bar i.m{background:var(--primary);}
+.req-phase-bar i.p{background:var(--success);}
+.req-phase-lg{display:flex;align-items:center;gap:10px;white-space:nowrap;}
+.req-phase-lg .k b{color:var(--text-2);font-weight:600;}
+.req-phase-lg .k.m::before,.req-phase-lg .k.p::before{content:"";display:inline-block;width:6px;height:6px;border-radius:99px;margin-right:4px;vertical-align:1px;}
+.req-phase-lg .k.m::before{background:var(--primary);}
+.req-phase-lg .k.p::before{background:var(--success);}
+.req-phase-ontime b{color:var(--text-2);font-weight:600;}
 .req-acts{display:flex;gap:4px;flex:0 0 auto;}
 /* 项目手动排序：抓取把手、拖拽态与落点线 */
 .req-drag{display:grid;place-items:center;width:22px;height:22px;padding:0;border:0;background:none;

@@ -10,6 +10,8 @@ rt.TODAY_ISO = iso(rt.TODAY);
 rt.OWNER_DEFAULT = "我";
 rt.categoriesCache = [];
 rt.reqList = [];
+/* 项目集（可选归组）：项目列表分组与项目表单下拉共用；只在项目视图加载 */
+rt.projectSets = [];
 rt.reqsLoaded = false;
 rt.formReqStatus = "active";
 rt.editingReqId = null;
@@ -237,6 +239,80 @@ function reqNameById(id){
   for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === id) return rt.reqList[i].name;
   return "无";
 }
+/** 项目集 ID→名称：优先项目集缓存，缓存未就绪时回退项目自带的 setName 快照 */
+function setNameById(id){
+  if(!id) return "";
+  for(var i = 0; i < (rt.projectSets || []).length; i++) if(rt.projectSets[i].id === id) return rt.projectSets[i].name;
+  for(var j = 0; j < rt.reqList.length; j++) if(rt.reqList[j].setId === id) return rt.reqList[j].setName || "";
+  return "";
+}
+/** 项目所属项目集：任务只带 reqId，分组到项目集时经项目缓存换算 */
+function reqSetId(reqId){
+  if(!reqId) return "";
+  for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === reqId) return rt.reqList[i].setId || "";
+  return "";
+}
+function setSortOf(id){
+  for(var i = 0; i < (rt.projectSets || []).length; i++){
+    if(rt.projectSets[i].id === id) return Number(rt.projectSets[i].sortOrder) || 0;
+  }
+  return 9999;
+}
+/** 项目层级：项目集在前（按 sortOrder），集内容器项目排最后，未分组垫底 */
+function projectGroups(list){
+  var rows = list || [];
+  var buckets = {};
+  rows.forEach(function(r){
+    var key = r.setId || "";
+    (buckets[key] = buckets[key] || []).push(r);
+  });
+  var sets = (rt.projectSets || []).slice().sort(function(a, b){
+    return (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0)
+      || String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN");
+  });
+  var known = {};
+  sets.forEach(function(s){ known[s.id] = 1; });
+  /* 项目已带集 ID、但项目集接口失败或迟到：按项目自带 setName 兜底成组，不能退化成平铺 */
+  Object.keys(buckets).forEach(function(key){
+    if(key && !known[key]){
+      sets.push({ id:key, name:(buckets[key][0].setName || "未命名项目集"), sortOrder:9999 });
+      known[key] = 1;
+    }
+  });
+  var groups = [];
+  sets.forEach(function(s){
+    var items = buckets[s.id] || [];
+    if(!items.length) return;
+    groups.push({ set:s, rows:items.slice().sort(function(a, b){
+      return (a.containerKind ? 1 : 0) - (b.containerKind ? 1 : 0);
+    }) });
+  });
+  var loose = buckets[""] || [];
+  if(loose.length) groups.push({ set:null, rows:loose });
+  return groups;
+}
+function projectOptionHTML(r, selected){
+  var marks = [];
+  if(r.containerKind) marks.push("公共");
+  if(r.archivedAt) marks.push("已归档");
+  return '<option value="' + esc(r.id) + '"' + (String(r.id) === String(selected || "") ? " selected" : "") +
+    ' data-level="2">　' + esc(r.name) + (marks.length ? "（" + esc(marks.join(" · ")) + "）" : "") + '</option>';
+}
+/** 项目下拉层级 HTML：集为 optgroup、项目二级缩进；调用方自行补「全部/未指定」首项 */
+function projectOptionsHTML(list, selected){
+  var groups = projectGroups(list);
+  var grouped = groups.length > 1 || (groups.length === 1 && groups[0].set);
+  if(!grouped){
+    return (list || []).map(function(r){
+      return '<option value="' + esc(r.id) + '"' + (String(r.id) === String(selected || "") ? " selected" : "") +
+        '>' + esc(r.name) + (r.containerKind ? "（公共）" : "") + (r.archivedAt ? "（已归档）" : "") + '</option>';
+    }).join("");
+  }
+  return groups.map(function(g){
+    return '<optgroup label="' + esc(g.set ? g.set.name : "未分组") + '">' +
+      g.rows.map(function(r){ return projectOptionHTML(r, selected); }).join("") + '</optgroup>';
+  }).join("");
+}
 
 /* ---- 项目级写权限：与后端 ProjectAccessService 同口径 ---- */
 function currentRole(){
@@ -304,4 +380,4 @@ function canEditDoc(d){
   return !!(me && String(owner) === String(me));
 }
 
-export { calState, canEditDoc, canEditReq, canEditTask, canManageProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canEditDoc, canEditReq, canEditTask, canManageProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, projectGroups, projectOptionsHTML, reqNameById, reqSetId, roleReadOnly, safeColor, selectedFilterCount, setNameById, setSortOf, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

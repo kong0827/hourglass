@@ -37,6 +37,10 @@ public interface RequirementMapper {
     int updateReleasePolicy(@Param("workspaceId") String workspaceId, @Param("id") String id,
                             @Param("policy") String policy);
 
+    /** 项目集归组：null=解除归组；旧客户端不带该字段时不会调用 */
+    int updateSetId(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                    @Param("setId") String setId);
+
     int setArchived(@Param("workspaceId") String workspaceId, @Param("id") String id,
                     @Param("archived") boolean archived);
 

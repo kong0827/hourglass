@@ -4,7 +4,7 @@ import { API } from "../core/api.js";
 import { loadCategories } from "../core/app.js";
 import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
-import { catNameById, dueMetaClass, dueState, dueText, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { catNameById, dueMetaClass, dueState, dueText, reqNameById, reqSetId, rt, setNameById, state, tagChip } from "../core/state.js";
 import { groupDimName, groupOptionsHTML } from "../core/group-dims.js";
 import { openTaskById } from "../core/task-actions.js";
 import { ownerOptions } from "../core/task-drawer.js";
@@ -18,7 +18,7 @@ var DONE_COL = "done";
 var DEFAULT_RANGE = "week";
 var RANGE_OPTIONS = [["week","本周"],["month","本月"],["quarter","近 90 天"],["all","全部历史"]];
 /* 一列本身就是一种状态；分组只回答「列内再怎么切一刀」，默认不分组、保持服务端风险顺序 */
-var GROUP_OPTIONS = ["none", "owner", "priority", "project", "category"];
+var GROUP_OPTIONS = ["none", "owner", "priority", "project", "set"];
 var TYPE_OPTIONS = [["story","需求"],["task","任务"],["bug","缺陷"],["epic","史诗"]];
 var PRI_OPTIONS = ["P0","P1","P2","P3"];
 var DUE_OPTIONS = [["over","已逾期"],["today","今天到期"],["soon","3 天内"],["none","未设截止"]];
@@ -787,7 +787,7 @@ function catName(t){ return catNameById(t.categoryId) || "未分类"; }
 function groupKey(t, mode){
   if(mode === "project") return t.reqName || reqNameById(t.reqId) || "未归类项目";
   if(mode === "priority") return t.priority || "P2";
-  if(mode === "category") return catName(t);
+  if(mode === "set") return setNameById(reqSetId(t.reqId)) || "未归组";
   return t.owner || "未分配";
 }
 function groupName(key, mode){
@@ -796,7 +796,7 @@ function groupName(key, mode){
 }
 function groupRank(key, mode){
   if(mode === "priority") return PRI_RANK[key] == null ? 9 : PRI_RANK[key];
-  if(key === "未分配" || key === "未归类项目" || key === "未分类") return 999;
+  if(key === "未分配" || key === "未归类项目" || key === "未归组") return 999;
   return 0;
 }
 function groupedRows(rows, mode){

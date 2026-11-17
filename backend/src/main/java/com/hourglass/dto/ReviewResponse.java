@@ -22,7 +22,6 @@ public class ReviewResponse {
     private Stats stats = new Stats();
     /** N-5：成员贡献带工时（按人归属的 time_log 合计） */
     private List<MemberStat> members = new ArrayList<MemberStat>();
-    private List<BoardResponse.NameCount> catDist = new ArrayList<BoardResponse.NameCount>();
     /** 推进中的工作：所有已填进度的任务，按进度降序 */
     private List<Task> progressTasks = new ArrayList<Task>();
     /**

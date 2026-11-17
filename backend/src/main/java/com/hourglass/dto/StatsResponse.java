@@ -9,7 +9,8 @@ import java.util.List;
 public class StatsResponse {
 
     private List<WeekStat> weeks = new ArrayList<WeekStat>();
-    private List<BoardResponse.NameCount> byCategory = new ArrayList<BoardResponse.NameCount>();
+    /** 完成分布按项目：name 为项目 ID，前端经项目缓存解析名称 */
+    private List<BoardResponse.NameCount> byProject = new ArrayList<BoardResponse.NameCount>();
     private List<BoardResponse.NameCount> byOwner = new ArrayList<BoardResponse.NameCount>();
     private Current current = new Current();
 

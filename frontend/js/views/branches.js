@@ -5,7 +5,7 @@ import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
-import { canEditReq, roleReadOnly, rt, state } from "../core/state.js";
+import { canEditReq, projectOptionsHTML, roleReadOnly, rt, state } from "../core/state.js";
 import { hashParam, openTaskById } from "../core/task-actions.js";
 import { ownerOptions, ownerPickerOptions, ownerRosterState, ensureProjectRoles, currentProjectId, syncAssocRead } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -1173,13 +1173,9 @@ function fillBranchReqOptions(sel, cur){
     });
     return;
   }
-  var html = '<option value="">空间级公共分支</option>';
-  (rt.reqList || []).forEach(function(r){
-    /* 只读项目不提供新建入口；保留当前值以免编辑已有分支时下拉变空 */
-    if(r.id !== cur && !canEditReq(r.id)) return;
-    html += '<option value="' + esc(r.id) + '"' + (r.id === cur ? " selected" : "") + '>' + esc(r.name || r.id) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-  });
-  sel.innerHTML = html;
+  /* 只读项目不提供新建入口；保留当前值以免编辑已有分支时下拉变空 */
+  var list = (rt.reqList || []).filter(function(r){ return r.id === cur || canEditReq(r.id); });
+  sel.innerHTML = '<option value="">空间级公共分支</option>' + projectOptionsHTML(list, cur);
 }
 /* 所属仓库：只列该项目的仓库；没有绑定仓库或空间级分支时整个字段收起 */
 function branchReposFor(reqId){
@@ -2057,12 +2053,8 @@ function fillRepoReqOptions(cur){
     ensureReqs(function(){ fillRepoReqOptions(cur); });
     return;
   }
-  var html = '<option value="">请选择项目</option>';
-  (rt.reqList || []).forEach(function(r){
-    if(r.archivedAt && r.id !== cur) return;
-    html += '<option value="' + esc(r.id) + '"' + (r.id === cur ? " selected" : "") + '>' + esc(r.name || r.id) + '</option>';
-  });
-  sel.innerHTML = html;
+  var list = (rt.reqList || []).filter(function(r){ return !r.archivedAt || r.id === cur; });
+  sel.innerHTML = '<option value="">请选择项目</option>' + projectOptionsHTML(list, cur);
   if(cur) sel.value = cur;
 }
 function repoStatusBadge(r){

@@ -106,7 +106,7 @@ public class EstimateService {
                         risk.add(rt);
                     }
                 }
-                /* 模块累计也只用已完成样本，避免进行中的任务把某个模块的系数压低 */
+                /* 项目累计也只用已完成样本，避免进行中的任务把某个项目的系数压低 */
                 continue;
             }
 
@@ -134,13 +134,13 @@ public class EstimateService {
                 overrun.add(brief(t, est, act, ratio));
             }
 
-            String cat = t.getCategoryId() == null ? "" : t.getCategoryId().trim();
-            long[] slot = catAgg.get(cat);
+            String reqId = t.getReqId() == null ? "" : t.getReqId().trim();
+            long[] slot = catAgg.get(reqId);
             if (slot == null) {
                 /* 必须以 0 起手：这里既做"新建"也做"累加"，初始化时放值会导致
-                   每个模块的第一个任务被算两次（分子分母同倍放大，比值看不出来，但多任务时就偏了） */
+                   每个项目的第一个任务被算两次（分子分母同倍放大，比值看不出来，但多任务时就偏了） */
                 slot = new long[]{0L, 0L, 0L};
-                catAgg.put(cat, slot);
+                catAgg.put(reqId, slot);
             }
             slot[0] += est;
             slot[1] += act;
@@ -164,17 +164,17 @@ public class EstimateService {
             if (v[0] <= 0) {
                 continue;
             }
-            EstimateStats.CatFactor cf = new EstimateStats.CatFactor();
-            cf.setCategoryId(e.getKey());
+            EstimateStats.ProjectFactor cf = new EstimateStats.ProjectFactor();
+            cf.setReqId(e.getKey());
             cf.setSampleCount((int) v[2]);
             cf.setEstimateTotal((int) v[0]);
             cf.setActualTotal((int) v[1]);
             cf.setFactor(round2((double) v[1] / v[0]));
-            s.getByCategory().add(cf);
+            s.getByProject().add(cf);
         }
-        Collections.sort(s.getByCategory(), new Comparator<EstimateStats.CatFactor>() {
+        Collections.sort(s.getByProject(), new Comparator<EstimateStats.ProjectFactor>() {
             @Override
-            public int compare(EstimateStats.CatFactor a, EstimateStats.CatFactor b) {
+            public int compare(EstimateStats.ProjectFactor a, EstimateStats.ProjectFactor b) {
                 return Double.compare(b.getFactor() == null ? 0 : b.getFactor(),
                         a.getFactor() == null ? 0 : a.getFactor());
             }

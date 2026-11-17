@@ -35,7 +35,7 @@ public class EstimateStats {
     /** > 1.15（低估了，实际比预估多） */
     private int overCount;
 
-    private List<CatFactor> byCategory = new ArrayList<CatFactor>();
+    private List<ProjectFactor> byProject = new ArrayList<ProjectFactor>();
     /** 进行中、已用掉预估 80% 以上的任务，按消耗比例降序 */
     private List<RiskTask> atRisk = new ArrayList<RiskTask>();
     /** 已完成但超预估的任务，复盘用 */
@@ -45,9 +45,9 @@ public class EstimateStats {
     private String note;
 
     @Data
-    public static class CatFactor {
-        /** 模块ID（category.id），名称由前端经模块缓存解析 */
-        private String categoryId;
+    public static class ProjectFactor {
+        /** 项目ID（requirement.id），名称由前端经项目缓存解析；空串=无项目 */
+        private String reqId;
         private int sampleCount;
         private int estimateTotal;
         private int actualTotal;

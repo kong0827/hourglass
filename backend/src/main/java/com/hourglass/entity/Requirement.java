@@ -10,6 +10,12 @@ public class Requirement {
 
     private String id;
     private String workspaceId;
+    /** 所属项目集（project_set.id），空=未分组（sql/106） */
+    private String setId;
+    /** 由哪个一级分类升格而来（sql/106，仅迁移追溯） */
+    private String originCategoryId;
+    /** 容器项目标记：split_container=拆分后的公共容器（sql/106） */
+    private String containerKind;
     private String name;
     private String description;
     /** 一句话项目目标（sql/50，驾驶舱展示） */

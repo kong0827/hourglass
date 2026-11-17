@@ -17,16 +17,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EstimateServiceTest {
 
-    private static Task done(String id, int estimate, String category) {
-        return task(id, Consts.COL_DONE, category, estimate);
+    private static Task done(String id, int estimate, String reqId) {
+        return task(id, Consts.COL_DONE, reqId, estimate);
     }
 
-    private static Task task(String id, String column, String category, Integer estimate) {
+    private static Task task(String id, String column, String reqId, Integer estimate) {
         Task t = new Task();
         t.setId(id);
         t.setTitle("任务 " + id);
         t.setBoardColumn(column);
-        t.setCategoryId(category);
+        t.setReqId(reqId);
         t.setEstimateMinutes(estimate);
         return t;
     }
@@ -34,7 +34,7 @@ class EstimateServiceTest {
     private static EstimateStats compute(int estimate, int actual) {
         EstimateService svc = new EstimateService(null, null, null);
         List<Task> tasks = new ArrayList<Task>();
-        tasks.add(done("K1", estimate, "后端"));
+        tasks.add(done("K1", estimate, "R1"));
         Map<String, Integer> actualMap = new HashMap<String, Integer>();
         actualMap.put("K1", actual);
         return svc.compute(tasks, actualMap);
@@ -61,34 +61,34 @@ class EstimateServiceTest {
         assertEquals(1, s.getNoTimeCount());
     }
 
-    /** 估时全景：预警只对进行中、backlog 不算、无预估跳过、系数 = Σ实际/Σ预估、模块只累计已完成样本 */
+    /** 估时全景：预警只对进行中、backlog 不算、无预估跳过、系数 = Σ实际/Σ预估、项目只累计已完成样本 */
     @Test
-    void fullScenarioRisksCategoryAndOverrun() {
+    void fullScenarioRisksProjectAndOverrun() {
         EstimateService svc = new EstimateService(null, null, null);
         List<Task> tasks = new ArrayList<Task>();
         Map<String, Integer> actual = new HashMap<String, Integer>();
 
-        tasks.add(done("T1", 240, "后端"));
+        tasks.add(done("T1", 240, "R1"));
         actual.put("T1", 420); // 1.75 超
-        tasks.add(done("T2", 120, "前端"));
+        tasks.add(done("T2", 120, "R2"));
         actual.put("T2", 130); // 1.08 准
-        tasks.add(done("T3", 100, "前端"));
+        tasks.add(done("T3", 100, "R2"));
         actual.put("T3", 50); // 0.50 高估
 
-        tasks.add(task("T4", Consts.COL_DOING, "后端", 240));
+        tasks.add(task("T4", Consts.COL_DOING, "R1", 240));
         actual.put("T4", 200); // 0.83 → warn
-        tasks.add(task("T5", Consts.COL_DOING, "后端", 240));
+        tasks.add(task("T5", Consts.COL_DOING, "R1", 240));
         actual.put("T5", 300); // 1.25 → danger
 
-        tasks.add(task("T6", Consts.COL_BACKLOG, "后端", 240)); // 未开工，不进预警
+        tasks.add(task("T6", Consts.COL_BACKLOG, "R1", 240)); // 未开工，不进预警
         actual.put("T6", 0);
 
-        tasks.add(task("T7", Consts.COL_DOING, "后端", null)); // 没填预估：跳过
+        tasks.add(task("T7", Consts.COL_DOING, "R1", null)); // 没填预估：跳过
         actual.put("T7", 120);
-        tasks.add(done("T8", 0, "后端")); // 预估 0 视为没填
+        tasks.add(done("T8", 0, "R1")); // 预估 0 视为没填
         actual.put("T8", 90);
 
-        tasks.add(done("T9", 240, "后端")); // 完成但从没计过时：不能当"高估"算
+        tasks.add(done("T9", 240, "R1")); // 完成但从没计过时：不能当"高估"算
         actual.put("T9", 0);
 
         EstimateStats s = svc.compute(tasks, actual);
@@ -116,14 +116,14 @@ class EstimateServiceTest {
         assertEquals("T1", s.getOverrun().get(0).getId());
         assertEquals(1.75, s.getOverrun().get(0).getRatio(), 0.011);
 
-        assertEquals(2, s.getByCategory().size());
-        assertEquals("后端", s.getByCategory().get(0).getCategoryId(), "系数最高的排第一");
-        // 模块累计只统计已完成：后端 420/240 = 1.75
-        assertEquals(1.75, s.getByCategory().get(0).getFactor(), 0.011);
-        assertEquals(240, s.getByCategory().get(0).getEstimateTotal(), "累计预估只算一次");
-        // 前端 (130+50)/(120+100) = 0.818
-        assertEquals(0.82, s.getByCategory().get(1).getFactor(), 0.011);
-        assertEquals(220, s.getByCategory().get(1).getEstimateTotal());
+        assertEquals(2, s.getByProject().size());
+        assertEquals("R1", s.getByProject().get(0).getReqId(), "系数最高的排第一");
+        // 项目累计只统计已完成：R1 420/240 = 1.75
+        assertEquals(1.75, s.getByProject().get(0).getFactor(), 0.011);
+        assertEquals(240, s.getByProject().get(0).getEstimateTotal(), "累计预估只算一次");
+        // R2 (130+50)/(120+100) = 0.818
+        assertEquals(0.82, s.getByProject().get(1).getFactor(), 0.011);
+        assertEquals(220, s.getByProject().get(1).getEstimateTotal());
 
         assertTrue(s.getSuggestion().contains("偏乐观") && s.getSuggestion().contains("1.30"),
                 "偏乐观给出乘数建议");
@@ -140,14 +140,14 @@ class EstimateServiceTest {
         assertTrue(empty.getSuggestion().contains("还没有可对比的样本"), "空空间给引导语");
 
         List<Task> onlyDoing = new ArrayList<Task>();
-        onlyDoing.add(task("X1", Consts.COL_DOING, "后端", 240));
+        onlyDoing.add(task("X1", Consts.COL_DOING, "R1", 240));
         EstimateStats noDone = svc.compute(onlyDoing, new HashMap<String, Integer>());
         assertEquals(0, noDone.getSampleCount());
         assertNull(noDone.getOverallFactor());
         assertTrue(noDone.getNote().contains("还没完成") || noDone.getSuggestion().contains("还没有可对比"));
 
         List<Task> exact = new ArrayList<Task>();
-        exact.add(done("Y1", 240, "后端"));
+        exact.add(done("Y1", 240, "R1"));
         Map<String, Integer> exactAct = new HashMap<String, Integer>();
         exactAct.put("Y1", 240);
         EstimateStats one = svc.compute(exact, exactAct);

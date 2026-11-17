@@ -10,7 +10,7 @@ import * as listPrefs from "../core/list-preferences.js";
 import { currentMode, saveMode } from "../core/mobile-rules.js";
 import { loadPrioritySpaces } from "../core/priorities.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { canEditTask, catColor, catNameById, dueDateMD, dueDateTip, dueFlag, dueState, progressOf, rt, state, statusBucket, timerAllowed } from "../core/state.js";
+import { canEditTask, catColor, catNameById, dueDateMD, dueDateTip, dueFlag, dueState, progressOf, reqSetId, rt, setNameById, setSortOf, state, statusBucket, timerAllowed } from "../core/state.js";
 import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -235,7 +235,7 @@ var MINE_GROUPS = [
 /* ---- 排序 / 分组（页内工具栏，state.mineSort / state.mineGroup） ---- */
 var MINE_SORTS = ["default", "due", "priority", "updated", "title"];
 var MINE_SORT_DESC = {updated:true};
-var MINE_GROUP_DIMS = ["due", "workspace", "priority", "status", "project", "category", "none"];
+var MINE_GROUP_DIMS = ["due", "workspace", "priority", "status", "project", "set", "none"];
 function mineSortValue(t, key){
   if(key === "title") return String(t.title || "");
   if(key === "priority"){ var pi = PRIORITIES.indexOf(t.priority); return pi < 0 ? 9 : pi; }
@@ -280,7 +280,10 @@ function mineSectionInfoBy(t, dim){
     return {key:col, label:colName(t.boardColumn) || "未设置状态", tone:mineStatusTone(col, t)};
   }
   if(dim === "project") return {key:t.reqId || "__none", label:t.reqName || (t.reqId ? "未知项目" : "无项目"), tone:"neutral"};
-  if(dim === "category") return {key:t.categoryId || "__none", label:catNameById(t.categoryId) || "未指定模块", tone:"neutral"};
+  if(dim === "set"){
+    var sid = reqSetId(t.reqId);
+    return {key:sid || "__none", label:setNameById(sid) || "未归组", tone:"neutral"};
+  }
   return null;
 }
 function mineStatusTone(col, task){
@@ -292,11 +295,9 @@ function mineStatusTone(col, task){
 }
 function mineSectionCompareBy(a, b, dim){
   if(dim === "due") return (a.order === undefined ? 99 : a.order) - (b.order === undefined ? 99 : b.order);
-  if(dim === "category"){
-    var order = {};
-    (rt.categoriesCache || []).forEach(function(c, i){ order[c.id] = i; });
-    var ai = order[a.key] === undefined ? 999 : order[a.key];
-    var bi = order[b.key] === undefined ? 999 : order[b.key];
+  if(dim === "set"){
+    var ai = a.key === "__none" ? 9999 : setSortOf(a.key);
+    var bi = b.key === "__none" ? 9999 : setSortOf(b.key);
     return ai - bi || a.label.localeCompare(b.label, "zh-Hans-CN");
   }
   if(dim === "priority"){

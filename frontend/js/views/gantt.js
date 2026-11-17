@@ -7,7 +7,7 @@ import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
+import { canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, reqNameById, reqSetId, rt, selectedFilterCount, setNameById, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -132,8 +132,8 @@ function loadGanttPrefs(){
   var dw = Number(saved.zoomDayW || saved.dayW);
   if(dw === 20 || dw === 28 || dw === 40) ganttState.zoomDayW = dw;
   if(saved.scale === "day" || saved.scale === "week" || saved.scale === "month") ganttState.scale = saved.scale;
-  if(["project", "owner", "status", "category", "priority"].indexOf(saved.groupBy) !== -1) ganttState.groupBy = saved.groupBy;
-  if(["none", "project", "owner", "status", "category", "priority"].indexOf(saved.groupBy2) !== -1) ganttState.groupBy2 = saved.groupBy2;
+  if(["project", "owner", "status", "set", "priority"].indexOf(saved.groupBy) !== -1) ganttState.groupBy = saved.groupBy;
+  if(["none", "project", "owner", "status", "set", "priority"].indexOf(saved.groupBy2) !== -1) ganttState.groupBy2 = saved.groupBy2;
   if(saved.sortBy === "start" || saved.sortBy === "due" || saved.sortBy === "priority"
     || saved.sortBy === "owner" || saved.sortBy === "progress") ganttState.sortBy = saved.sortBy;
   if(saved.collapsed && typeof saved.collapsed === "object") ganttState.collapsed = saved.collapsed;
@@ -483,7 +483,10 @@ function ganttGroupFieldValue(t, field){
     var nm = st.key === "done" ? "已完成" : st.key === "ended" ? "执行结束" : st.key === "blocked" ? "阻塞" : st.key === "overdue" ? "逾期" : "进行中";
     return { v: st.key, name: nm };
   }
-  if(field === "category") return { v: t.categoryId || "__none", name: catNameById(t.categoryId) || "未指定模块" };
+  if(field === "set"){
+    var sid = reqSetId(t.reqId);
+    return { v: sid || "__none", name: setNameById(sid) || "未归组" };
+  }
   if(field === "priority") return { v: t.priority || "P2", name: priName(t.priority || "P2") };
   return { v: "__all", name: "" };
 }
@@ -2042,7 +2045,7 @@ function renderGanttViewsMenu(){
 }
 /* ---- 保存视图：甘特布局（筛选之外的部分）随视图一起存取 ---- */
 var GANTT_VIEW_SORTS = ["start", "due", "priority", "owner", "progress"];
-var GANTT_VIEW_GROUPS = ["none", "owner", "priority", "project", "category", "status"];
+var GANTT_VIEW_GROUPS = ["none", "owner", "priority", "project", "set", "status"];
 function ganttViewParams(){
   var cols = [];
   for(var k in GANTT_DEFAULT_COLS) if(ganttState.cols[k]) cols.push(k);

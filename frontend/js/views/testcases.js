@@ -9,7 +9,7 @@ import { attachEnvDict, recordEnv } from "../core/env-dict.js";
 import { icon } from "../core/icons.js";
 import { openTaskById, taskLink } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, canManageProject, catNameById, rt, state } from "../core/state.js";
+import { canEditReq, canManageProject, catNameById, projectOptionsHTML, rt, state } from "../core/state.js";
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
@@ -257,9 +257,7 @@ function syncDefectProjectSel(){
   if(!sel) return;
   var list = defectScopeProjects();
   if(defReqId && !list.some(function(r){ return r.id === defReqId; })) defReqId = "";
-  sel.innerHTML = '<option value="">全部项目</option>' + list.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-  }).join("");
+  sel.innerHTML = '<option value="">全部项目</option>' + projectOptionsHTML(list, defReqId);
   sel.value = defReqId;
 }
 function syncDefectNewBtn(){
@@ -277,11 +275,10 @@ function syncReqSel(){
   var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === caseReqId; });
   /* 一个项目都没有时没有可选范围：留一个禁用占位，避免控件整块空白 */
   var empty = !list.length;
+  var selected = (includeAll && caseScopeAll) ? CASE_ALL_KEY : caseReqId;
   sel.innerHTML = (empty ? '<option value="">无项目</option>' : "")
     + (includeAll && !empty ? '<option value="' + CASE_ALL_KEY + '">全部项目</option>' : "")
-    + list.map(function(r){
-      return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-    }).join("");
+    + projectOptionsHTML(list, selected);
   sel.disabled = empty;
   if(!caseReqId && list.length) caseReqId = list[0].id;
   sel.value = (includeAll && caseScopeAll) ? CASE_ALL_KEY : (caseReqId || "");

@@ -5,7 +5,7 @@ export var GROUP_DIMS = [
   ["owner", "负责人"],
   ["priority", "优先级"],
   ["project", "项目"],
-  ["category", "模块"],
+  ["set", "项目集"],
   ["status", "状态"],
   ["version", "版本"]
 ];

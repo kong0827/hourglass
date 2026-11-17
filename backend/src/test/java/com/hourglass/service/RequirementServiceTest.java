@@ -51,7 +51,8 @@ class RequirementServiceTest {
             workActivity, docs, versionService, mock(ProjectMilestoneService.class), versions, demands, branches, access,
             mock(AttachmentService.class), mock(com.hourglass.mapper.MailDeliveryMapper.class),
             mock(TestCaseService.class), mock(ProjectTemplateService.class),
-            mock(com.hourglass.mapper.WorkspaceMemberMapper.class), mock(CategoryService.class));
+            mock(com.hourglass.mapper.WorkspaceMemberMapper.class), mock(CategoryService.class),
+            mock(ProjectSetService.class));
 
     @Test
     void listBatchesVersionCountsAndReadsVisibleProjects() {
@@ -66,6 +67,15 @@ class RequirementServiceTest {
         agg.setDone(1);
         agg.setProgressSum(150);
         when(tasks.countByReq(WS)).thenReturn(Collections.singletonList(agg));
+        agg.setDoneWithDue(2);
+        agg.setOnTimeDone(1);
+        com.hourglass.mapper.TimeLogMapper timeLogs = mock(com.hourglass.mapper.TimeLogMapper.class);
+        com.hourglass.dto.ReqPhaseMinutesRow phaseRow = new com.hourglass.dto.ReqPhaseMinutesRow();
+        phaseRow.setReqId("R1");
+        phaseRow.setMvpMinutes(90);
+        phaseRow.setPostMinutes(30);
+        when(timeLogs.sumPhaseMinutesByProject(WS)).thenReturn(Collections.singletonList(phaseRow));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "timeLogMapper", timeLogs);
         when(docs.countByReqMap(WS, VIEWER, false)).thenReturn(Collections.singletonMap("R1", 3));
 
         Map<String, Object> versionRow = new HashMap<String, Object>();
@@ -87,6 +97,9 @@ class RequirementServiceTest {
         assertEquals(3, progress.getDocCount());
         assertEquals(2, progress.getVersionCount());
         assertEquals(1, progress.getDemandCount());
+        assertEquals(90, progress.getMvpWorkMinutes(), "首版工时取一次聚合");
+        assertEquals(30, progress.getPostWorkMinutes(), "迭代工时取一次聚合");
+        assertEquals(50, progress.getOnTimePct(), "准时率=按时完成÷有截止日期的已完成");
 
         verify(reqs, times(1)).selectPage(WS, VIEWER, 0, 100);
         verify(reqs, never()).selectAll(WS);

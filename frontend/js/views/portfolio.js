@@ -4,7 +4,7 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { showView } from "../core/router.js";
-import { dueState, rt, statusBucket } from "../core/state.js";
+import { dueState, rt, setNameById, setSortOf, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML } from "../lib/format.js";
 import { icon } from "../core/icons.js";
@@ -51,6 +51,22 @@ function kpi(label, value, foot, kind, cls){
   return '<button class="manager-kpi ' + (cls || "") + '" type="button" data-kpi="' + kind + '">'
     + '<span>' + esc(label) + '</span><b>' + value + '</b><small>' + esc(foot) + '</small></button>';
 }
+/* 跨项目汇总按项目集归组：与项目列表同一层级，未分组固定最后 */
+function groupedBySet(projects){
+  if(!projects.some(function(p){ return p.setId; })) return null;
+  var buckets = {}, keys = [];
+  projects.forEach(function(p){
+    var k = p.setId || "";
+    if(!buckets[k]){ buckets[k] = []; keys.push(k); }
+    buckets[k].push(p);
+  });
+  keys.sort(function(a, b){
+    if(!a) return 1;
+    if(!b) return -1;
+    return setSortOf(a) - setSortOf(b) || String(setNameById(a)).localeCompare(String(setNameById(b)), "zh-CN");
+  });
+  return keys.map(function(k){ return { key:k, name:k ? (setNameById(k) || "项目集") : "未分组", rows:buckets[k] }; });
+}
 function projectCard(p){
   var healthName = p.health === "green" ? "正常" : "需关注";
   var tagCls = p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning");
@@ -61,6 +77,7 @@ function projectCard(p){
   return '<article class="manager-project-card">'
     + '<div class="manager-project-head"><i class="manager-light ' + esc(p.health) + '"></i>'
     + '<button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '">' + esc(p.name) + '</button>'
+    + (p.setId ? '<span class="tag tag-ghost" title="所属项目集">' + esc(setNameById(p.setId) || "项目集") + '</span>' : '')
     + '<span class="tag ' + tagCls + '">' + healthName + '</span></div>'
     + '<div class="manager-project-main"><button type="button" class="manager-ring ' + esc(p.health) + '" style="--p:' + p.progressPct + '" data-project-drill="' + esc(p.reqId) + '" data-metric="all" title="查看该项目全部工作项" aria-label="' + esc(p.name) + ' 完成率 ' + p.progressPct + '%，查看工作项明细"><b>' + p.progressPct + '%</b></button>'
     + '<div class="manager-project-stats">'
@@ -99,13 +116,18 @@ function pfCell(p, key){
 }
 function projectTable(projects){
   var cols = listPrefs.columns("portfolio"), labels = listPrefs.labels("portfolio");
+  var groups = groupedBySet(projects);
+  var body = groups
+    ? groups.map(function(g){
+        return '<tr class="pf-set-row"><td colspan="' + cols.length + '">' + esc(g.name) + ' · ' + g.rows.length + ' 个项目</td></tr>'
+          + g.rows.map(function(p){ return '<tr>' + cols.map(function(key){ return pfCell(p, key); }).join("") + '</tr>'; }).join("");
+      }).join("")
+    : projects.map(function(p){
+        return '<tr>' + cols.map(function(key){ return pfCell(p, key); }).join("") + '</tr>';
+      }).join("");
   return '<section class="manager-panel"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
     + cols.map(function(key){ return '<th' + (["total","backlog","doing","done","overdue","blocked","progress","weekCompleted","weekWorkMinutes"].indexOf(key) !== -1 ? ' class="num"' : "") + '>' + esc(labels[key]) + '</th>'; }).join("")
-    + '</tr></thead><tbody>'
-    + projects.map(function(p){
-        return '<tr>' + cols.map(function(key){ return pfCell(p, key); }).join("") + '</tr>';
-      }).join("")
-    + '</tbody></table></div></section>';
+    + '</tr></thead><tbody>' + body + '</tbody></table></div></section>';
 }
 function renderPortfolio(){
   var k = cache.kpis || {}, projects = cache.projects || [];

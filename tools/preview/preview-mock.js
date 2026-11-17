@@ -266,7 +266,6 @@
     completed: done,
     stats: { done: 3, withDue: 2, onTime: 2, onTimeRate: 100, members: 1, late: 0 },
     members: [{ name: "我", count: 3, minutes: 630 }],
-    catDist: [{ name: "后端", count: 3 }],
     /* 进行中：一条进度 60、一条进度 0（都因为"在进行中列"而出现） */
     progressTasks: doing,
     reqDist: [{ id: "R1", name: "流程引擎", status: "active", progressPct: 62, taskCount: 4, doneCount: 2 }],
@@ -289,7 +288,6 @@
       out.completed = done.slice(0, 2);
       out.stats = { done: 2, withDue: 1, onTime: 1, onTimeRate: 100, members: 1, late: 0 };
       out.members = [{ name: "我", count: 2, minutes: 420 }];
-      out.catDist = [{ name: "后端", count: 2 }];
       out.pendingDone = [];
       out.openP0 = 8;
     }
@@ -448,8 +446,10 @@
     /* 生产接口分页返回 {items,total,hasMore}，前端统一走 getAllPages */
     "/api/reqs": {
       items: [
-        { id: "R1", name: "流程引擎", status: "active", progressPct: 62, taskCount: 4, doneCount: 2, owner: "我" },
-        { id: "R2", name: "结算改造", status: "active", progressPct: 20, taskCount: 2, doneCount: 0, owner: "我" }
+        { id: "R1", name: "流程引擎", status: "active", setId: null, containerKind: null, firstReleasedAt: "2026-06-15",
+          progressPct: 62, taskCount: 4, doneCount: 2, mvpWorkMinutes: 960, postWorkMinutes: 240, onTimePct: 50, owner: "我" },
+        { id: "R2", name: "结算改造", status: "active", setId: null, containerKind: null, firstReleasedAt: null,
+          progressPct: 20, taskCount: 2, doneCount: 0, mvpWorkMinutes: 120, postWorkMinutes: 0, onTimePct: null, owner: "我" }
       ],
       total: 2, hasMore: false
     },
@@ -515,7 +515,7 @@
     "/api/stats": {      weeks: [-4, -3, -2, -1, 0].map(function (dy) {
         return { start: shift(dy * 7 - 6), end: shift(dy * 7), created: 3, completed: 2 };
       }),
-      byCategory: [{ name: "后端", count: 8 }],
+      byProject: [{ name: "R1", count: 8 }],
       byOwner: [{ name: "我", count: 9 }],
       current: { backlog: 8, doing: 2, done: 3, other: 0, overdue: 3, workMinutes: 1255, workMinutesWeek: 320,
                  workMinutesAll: 2410, workMinutesWeekAll: 705 }
@@ -582,10 +582,10 @@
       tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4, noTimeCount: 3,
       overallFactor: 1.42, medianFactor: 1.45,
       underCount: 0, accurateCount: 1, overCount: 3,
-      byCategory: [
-        { category: "后端", sampleCount: 2, estimateTotal: 600, actualTotal: 1000, factor: 1.67 },
-        { category: "运维", sampleCount: 1, estimateTotal: 120, actualTotal: 168, factor: 1.4 },
-        { category: "前端", sampleCount: 1, estimateTotal: 300, actualTotal: 280, factor: 0.93 }
+      byProject: [
+        { reqId: "R1", sampleCount: 2, estimateTotal: 600, actualTotal: 1000, factor: 1.67 },
+        { reqId: "", sampleCount: 1, estimateTotal: 120, actualTotal: 168, factor: 1.4 },
+        { reqId: "R2", sampleCount: 1, estimateTotal: 300, actualTotal: 280, factor: 0.93 }
       ],
       atRisk: [
         { id: "K1", title: "重构权限校验中间件", category: "后端", column: "doing",

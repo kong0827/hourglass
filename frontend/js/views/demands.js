@@ -17,7 +17,7 @@ import * as listPrefs from "../core/list-preferences.js";
 import { activeView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead, syncAssocViewBtns } from "../core/task-drawer.js";
-import { canEditReq, catNameById, catTag, reqNameById, rt } from "../core/state.js";
+import { canEditReq, catNameById, catTag, projectOptionsHTML, reqNameById, rt, setNameById } from "../core/state.js";
 import { UI, esc, toast, copyToClipboard } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { PRIORITIES, assocLinkHTML, taskDescText, taskVersionIds, taskVersionLinksHTML, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML, demandNoText } from "../lib/format.js";
@@ -229,9 +229,7 @@ function wsjfText(d){
 function syncReqSel(){
   if(!demandReq) return;
   var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.demandReqId; });
-  demandReq.innerHTML = '<option value="">全部项目</option>' + list.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-  }).join("");
+  demandReq.innerHTML = '<option value="">全部项目</option>' + projectOptionsHTML(list, rt.demandReqId);
   demandReq.value = rt.demandReqId || "";
 }
 var demandLoadSeq = 0;
@@ -1070,9 +1068,7 @@ function demWorkStageTabsHTML(){
   }).join("") + caliberMarkHTML("demands.stage", false, "查看交付阶段如何变化") + '</nav>';
 }
 function demWorkProjectOptions(){
-  return '<option value="all">全部项目</option>' + rt.reqList.map(function(r){
-    return '<option value="' + esc(r.id) + '"' + (demWork.reqId === r.id ? " selected" : "") + '>' + esc(r.name) + '</option>';
-  }).join("");
+  return '<option value="all">全部项目</option>' + projectOptionsHTML(rt.reqList, demWork.reqId);
 }
 function demWorkPriorityOptions(){
   return '<option value="all">全部优先级</option>' + PRIORITIES.map(function(p){
@@ -1582,7 +1578,7 @@ function demPutRow(d, patch, okMsg, el, revert){
 /* ---------- 列表智能视图（预置 Tab + 自定义视图，参考任务列表） ---------- */
 
 var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["done","已完成"],["closed","已关闭"]];
-var DEM_GROUPS = ["none","status","priority","project","kind","category"];
+var DEM_GROUPS = ["none","status","priority","set","project","kind"];
 var DEM_SORTS = ["default","priority","expect","wsjf","created"];
 var DEM_STATE_KEY = "ds.demandView.v1";
 var demSmart = { current:"all", preset:"all", group:"none", subgroup:"none", sort:"default", pris:[], kinds:[], cats:[], reqs:[], q:"", collapsed:{} };
@@ -1622,12 +1618,19 @@ function demSorted(rows){
   if(demandServerFiltered) return rows.slice();
   return rows.slice().sort(demCompare);
 }
+function demSetIdOfReq(reqId){
+  for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === reqId) return rt.reqList[i].setId || "";
+  return "";
+}
 function demGroupInfoBy(d, dim){
   if(dim === "status") return {key:d.status, label:statusName(d.status)};
   if(dim === "priority") return {key:d.priority || "P2", label:priName(d.priority || "P2")};
+  if(dim === "set"){
+    var setId = demSetIdOfReq(d.reqId);
+    return {key:setId || "__none", label:setNameById(setId) || "未归组"};
+  }
   if(dim === "project") return {key:d.reqId || "__none", label:d.reqId ? (reqNameById(d.reqId) || "未归类") : "未归类"};
   if(dim === "kind") return {key:d.itemKind || "其他", label:d.itemKind || "其他"};
-  if(dim === "category") return {key:d.categoryId || "__none", label:catNameById(d.categoryId) || "未指定模块"};
   return null;
 }
 /* 二级维度不能与一级重复；一级不分组时二级无意义 */
@@ -1641,12 +1644,12 @@ function demGroupCompare(dim){
       return (STATUS_ORDER[a.key] === undefined ? 9 : STATUS_ORDER[a.key]) - (STATUS_ORDER[b.key] === undefined ? 9 : STATUS_ORDER[b.key]);
     };
   if(dim === "priority") return function(a, b){ return priRank(a.key) - priRank(b.key); };
-  if(dim === "category"){
+  if(dim === "set"){
     return function(a, b){
       var order = {};
-      (rt.categoriesCache || []).forEach(function(c, i){ order[c.id] = i; });
-      var ai = order[a.key] === undefined ? 999 : order[a.key];
-      var bi = order[b.key] === undefined ? 999 : order[b.key];
+      (rt.projectSets || []).forEach(function(s, i){ order[s.id] = Number(s.sortOrder) || i; });
+      var ai = order[a.key] === undefined ? 9999 : order[a.key];
+      var bi = order[b.key] === undefined ? 9999 : order[b.key];
       return ai - bi || a.label.localeCompare(b.label, "zh-CN");
     };
   }
@@ -2032,10 +2035,10 @@ function initDemSmartBar(){
       '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 模块 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-dem-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
-        '<option value="project">按项目</option><option value="kind">按类型</option><option value="category">按模块</option></select></label>' +
+        '<option value="set">按项目集</option><option value="project">按项目</option><option value="kind">按类型</option></select></label>' +
       '<label class="smart-view-control"><span>二级</span><select class="mini-select" data-dem-subgroup aria-label="二级分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
-        '<option value="project">按项目</option><option value="kind">按类型</option><option value="category">按模块</option></select></label>' +
+        '<option value="set">按项目集</option><option value="project">按项目</option><option value="kind">按类型</option></select></label>' +
       '<label class="smart-view-control"><span>排序</span><select class="mini-select" data-dem-sort aria-label="排序方式">' +
         '<option value="default">默认顺序（状态→优先级）</option><option value="priority">按优先级</option>' +
         '<option value="expect">按期望交付</option><option value="wsjf">按 WSJF</option><option value="created">按提交时间</option></select></label>' +
@@ -2769,9 +2772,7 @@ function openDemandDialog(d){
   editingDemandStatus = d ? d.status : "review";
   editingPlannedStart = d ? d.plannedStart : null;
   editingPlannedEnd = d ? d.plannedEnd : null;
-  dReq.innerHTML = opts.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
-  }).join("");
+  dReq.innerHTML = projectOptionsHTML(opts);
   dReq.value = d ? d.reqId : (rt.demandReqId && canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
   dReq.disabled = !!d;
   dTitle.value = d ? d.title : "";

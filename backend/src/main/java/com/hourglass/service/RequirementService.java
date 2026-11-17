@@ -48,6 +48,11 @@ public class RequirementService {
     private final com.hourglass.mapper.WorkspaceMemberMapper memberMapper;
     /** 新建项目时预置默认模块（模块清单挂在项目下） */
     private final CategoryService categoryService;
+    /** 项目集归组：只做可选分组，不参与权限判定 */
+    private final ProjectSetService projectSetService;
+    /** 项目列表的首版 / 迭代工时聚合（只读，字段注入避免改既有构造签名） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.TimeLogMapper timeLogMapper;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskQueryService taskQueries;
     /** 需求随项目删除时，人工交付判定一并清理 */
@@ -80,7 +85,8 @@ public class RequirementService {
                               TestCaseService caseService,
                               ProjectTemplateService templateService,
                               com.hourglass.mapper.WorkspaceMemberMapper memberMapper,
-                              CategoryService categoryService) {
+                              CategoryService categoryService,
+                              ProjectSetService projectSetService) {
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -99,6 +105,7 @@ public class RequirementService {
         this.templateService = templateService;
         this.memberMapper = memberMapper;
         this.categoryService = categoryService;
+        this.projectSetService = projectSetService;
     }
 
     public List<ReqProgress> list(String workspaceId, String userId) {
@@ -133,6 +140,14 @@ public class RequirementService {
                 aggByReq.put(a.getReqId(), a);
             }
         }
+        /* 首版 / 迭代工时：一次聚合，口径与版本页阶段卡一致 */
+        java.util.Map<String, com.hourglass.dto.ReqPhaseMinutesRow> phaseByReq =
+                new java.util.HashMap<String, com.hourglass.dto.ReqPhaseMinutesRow>();
+        for (com.hourglass.dto.ReqPhaseMinutesRow row : timeLogMapper.sumPhaseMinutesByProject(workspaceId)) {
+            if (row.getReqId() != null) {
+                phaseByReq.put(row.getReqId(), row);
+            }
+        }
         java.util.Map<String, Integer> docCounts =
                 docService.countByReqMap(workspaceId, userId, ProjectAccessService.isPrivileged(role));
         /* 版本数供删除确认框提示：一次 GROUP BY 汇总，避免逐项目查询 */
@@ -160,10 +175,14 @@ public class RequirementService {
                 ownerNames.put(m.getUserId(), m.getDisplayName());
             }
         }
+        java.util.Map<String, String> setNames = projectSetService.nameMap(workspaceId);
         List<ReqProgress> out = new ArrayList<ReqProgress>();
         for (Requirement r : reqs) {
             ReqProgress p = new ReqProgress();
             p.setId(r.getId());
+            p.setSetId(r.getSetId());
+            p.setSetName(r.getSetId() == null ? null : setNames.get(r.getSetId()));
+            p.setContainerKind(r.getContainerKind());
             p.setName(r.getName());
             p.setDescription(r.getDescription());
             p.setObjective(r.getObjective());
@@ -183,6 +202,11 @@ public class RequirementService {
             int count = agg == null ? 0 : agg.getTotal();
             p.setTaskCount(count);
             p.setDoneCount(agg == null ? 0 : agg.getDone());
+            p.setOnTimePct(agg == null || agg.getDoneWithDue() == 0 ? null
+                    : (int) Math.round(agg.getOnTimeDone() * 100.0 / agg.getDoneWithDue()));
+            com.hourglass.dto.ReqPhaseMinutesRow phase = phaseByReq.get(r.getId());
+            p.setMvpWorkMinutes(phase == null ? 0 : phase.getMvpMinutes());
+            p.setPostWorkMinutes(phase == null ? 0 : phase.getPostMinutes());
             Integer dc = docCounts.get(r.getId());
             p.setDocCount(dc == null ? 0 : dc);
             Integer vc = versionCounts.get(r.getId());
@@ -212,6 +236,7 @@ public class RequirementService {
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
         applyProfile(workspaceId, r, req);
+        r.setSetId(projectSetService.normalizeSetId(workspaceId, req.getSetId()));
         r.setSortOrder(reqMapper.selectMaxSortOrder(workspaceId) + 1);
         reqMapper.insert(r);
         /* 新项目默认只对空间主/管理员可见：先给 assigned 成员补不可见种子，
@@ -251,6 +276,17 @@ public class RequirementService {
         r.setUpdatedAt(req.getUpdatedAt());
         if (reqMapper.update(r) == 0) {
             throw new AppException(409, "项目已被其他人修改，请刷新后重试");
+        }
+        /* 项目集归组单独写：请求里没有 setId 的旧客户端保持原归组，空串表示解除归组 */
+        if (req.isSetIdPresent()) {
+            String newSetId = projectSetService.normalizeSetId(workspaceId, req.getSetId());
+            if (!java.util.Objects.equals(old.getSetId(), newSetId)) {
+                reqMapper.updateSetId(workspaceId, id, newSetId);
+                java.util.Map<String, String> setNames = projectSetService.nameMap(workspaceId);
+                recordChange(workspaceId, id, "项目集",
+                        old.getSetId() == null ? null : setNames.get(old.getSetId()),
+                        newSetId == null ? null : setNames.get(newSetId));
+            }
         }
         recordChange(workspaceId, id, "名称", old.getName(), r.getName());
         recordChange(workspaceId, id, "描述", old.getDescription(), r.getDescription());

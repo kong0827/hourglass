@@ -77,7 +77,8 @@ class WorkspaceServiceMemberCacheTest {
                 mock(ProjectMemberMapper.class),
                 projectRoles, taskWatchMapper, mock(com.hourglass.mapper.DemandWatchMapper.class),
                 mock(TaskCascade.class),
-                activityService, memberCache, mock(WorkspaceMetaCache.class), options, labelLogs, projectAccess);
+                activityService, memberCache, mock(WorkspaceMetaCache.class), options, labelLogs, projectAccess,
+                mock(com.hourglass.mapper.ProjectSetMapper.class), mock(com.hourglass.mapper.ProjectSplitMapMapper.class));
 
         when(workspaceMapper.selectById(WS)).thenReturn(workspace());
         when(memberMapper.selectMember(WS, OWNER)).thenReturn(member(OWNER, "owner"));

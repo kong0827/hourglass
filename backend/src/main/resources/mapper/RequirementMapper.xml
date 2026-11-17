@@ -3,7 +3,7 @@
 <mapper namespace="com.hourglass.mapper.RequirementMapper">
 
   <sql id="cols">
-    id, workspace_id, name, description, objective, status, release_check_policy, owner_user_id, planned_start, planned_end,
+    id, workspace_id, set_id, origin_category_id, container_kind, name, description, objective, status, release_check_policy, owner_user_id, planned_start, planned_end,
     first_released_at, created_at, updated_at, archived_at, sort_order
   </sql>
 
@@ -47,9 +47,9 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO requirement (id, workspace_id, name, description, objective, status, release_check_policy, owner_user_id,
+    INSERT INTO requirement (id, workspace_id, set_id, name, description, objective, status, release_check_policy, owner_user_id,
       planned_start, planned_end, first_released_at, sort_order)
-    VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{objective}, #{status}, COALESCE(#{releaseCheckPolicy}, 'standard'), #{ownerUserId},
+    VALUES (#{id}, #{workspaceId}, #{setId}, #{name}, #{description}, #{objective}, #{status}, COALESCE(#{releaseCheckPolicy}, 'standard'), #{ownerUserId},
       #{plannedStart}, #{plannedEnd}, #{firstReleasedAt}, #{sortOrder})
   </insert>
 
@@ -81,6 +81,12 @@
   <!-- 发布检查策略单独写入：普通项目编辑不携带该列，避免误重置 -->
   <update id="updateReleasePolicy">
     UPDATE requirement SET release_check_policy = #{policy}, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <!-- 项目集归组单独写入：旧客户端不带 setId 时保持原归组；null 表示解除归组 -->
+  <update id="updateSetId">
+    UPDATE requirement SET set_id = #{setId}, updated_at = NOW()
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 

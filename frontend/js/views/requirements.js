@@ -5,7 +5,7 @@ import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { attachmentChipHTML, openAttachment, downloadUrl, bindFileDrop, uploadAttachment, validateFiles, reportRejected } from "../core/attach-kit.js";
 import { activeView, showView } from "../core/router.js";
-import { canEditDoc, canEditReq, currentRole, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
+import { canEditDoc, canEditReq, currentRole, projectOptionsHTML, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead, syncAssocViewBtns } from "../core/task-drawer.js";
 import { createMentionPicker } from "../core/mention-picker.js";
@@ -2923,7 +2923,7 @@ function fillNewReqDocProjectOptions(selected){
   var writable = rt.reqList.filter(function(r){ return canEditReq(r.id); });
   var opts = "";
   if(!roleReadOnly()) opts += '<option value="">空间级（不挂项目）</option>';
-  opts += writable.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; }).join("");
+  opts += projectOptionsHTML(writable);
   if(!opts) opts = '<option value="">（没有可写范围，无法新建文档）</option>';
   proj.innerHTML = opts;
   var cur = selected === undefined ? prev : selected;
@@ -4436,9 +4436,7 @@ function fillReqDocProjectSelect(selected){
   if(!sel) return;
   var cur = selected === undefined ? sel.value : selected;
   var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === cur; });
-  sel.innerHTML = '<option value="">选择项目</option>' + list.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-  }).join("");
+  sel.innerHTML = '<option value="">选择项目</option>' + projectOptionsHTML(list, cur);
   if(cur) sel.value = cur;
 }
 var reqDocCountTimer = null;

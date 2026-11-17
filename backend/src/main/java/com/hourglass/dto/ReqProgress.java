@@ -6,6 +6,11 @@ import lombok.Data;
 public class ReqProgress {
 
     private String id;
+    /** 所属项目集（空=未分组） */
+    private String setId;
+    private String setName;
+    /** 容器项目标记：split_container=拆分后的公共容器 */
+    private String containerKind;
     private String name;
     private String description;
     private String objective;
@@ -23,6 +28,12 @@ public class ReqProgress {
     private int progressPct;
     private int taskCount;
     private int doneCount;
+    /** 首版投入工时（分钟）：计时日 &lt;= 首版上线日，未标记上线时全部计入首版 */
+    private int mvpWorkMinutes;
+    /** 迭代投入工时（分钟）：计时日 &gt; 首版上线日 */
+    private int postWorkMinutes;
+    /** 准时完成率 0-100；没有带截止日期的已完成工作项时为 null */
+    private Integer onTimePct;
     /** 该项目下的需求文档数（删除项目会连带删除，确认框据此提示） */
     private int docCount;
     /** 该项目下的版本数（删除项目会连带删除，确认框据此提示） */

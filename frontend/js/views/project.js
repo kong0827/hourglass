@@ -968,8 +968,13 @@ function renderProject(){
   setPageTitle(p.name || "项目驾驶舱");
   var deviation = m.deviationPct === null || m.deviationPct === undefined ? "—" : ((m.deviationPct > 0 ? "+" : "") + m.deviationPct + "%");
   var epics = cache.epics || [];
+  var reqMeta = null;
+  for(var i = 0; i < (rt.reqList || []).length; i++) if(rt.reqList[i].id === p.id){ reqMeta = rt.reqList[i]; break; }
+  var setTag = reqMeta && reqMeta.setName
+    ? '<span class="tag tag-ghost" title="所属项目集（只读归组）">项目集 · ' + esc(reqMeta.setName) + '</span>' : '';
+  if(reqMeta && reqMeta.containerKind) setTag += '<span class="tag tag-ghost" title="拆分后的公共容器：承接版本、发布与文档">公共容器</span>';
   var toolbar = '<div class="manager-toolbar"><div>' + projectSwitchButton() + '</div>'
-    + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span>' + fullscreenButtonHTML() + '</div></div>';
+    + '<div class="toolbar-right">' + setTag + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span>' + fullscreenButtonHTML() + '</div></div>';
   var overview = caliberHTML('整体进度 = Σ工作项完成度 ÷ 工作项数；指标由工作项流转、预估与自动计时汇总，不提供手填项目进度。各指标卡右上角的 ? / ! 说明该数字的细分口径与边界。分布按看板列的处理规则归类：待处理含「等待接续」列，进行中含「正常处理」的自定义列，「执行结束」列单独计数、不计未完成。')
     + projectBrief(p, m, c, cache.members)
     + '<div class="manager-kpis">'

@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-17: full schema after migrations 01-104 (78 tables).
+-- Updated 2026-11-17: full schema after migrations 01-106 (80 tables).
 --
--- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -265,6 +265,7 @@ CREATE TABLE `demand` (
   `revision` bigint NOT NULL DEFAULT 0,
   `accept_text` varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '验收标准',
   `version_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '目标版本（project_version，排期时选择）',
+  `version_name` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '历史目标版本名快照（版本留容器后清 version_id 时保留）',
   `review_note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '评审备注（通过理由/拒绝原因/排期说明）',
   `wsjf_business` tinyint unsigned DEFAULT NULL COMMENT 'WSJF·业务价值 0-10',
   `wsjf_urgency` tinyint unsigned DEFAULT NULL COMMENT 'WSJF·时间紧迫度 0-10',
@@ -481,6 +482,45 @@ CREATE TABLE `project_repo` (
   KEY `idx_ws_req` (`workspace_id`,`req_id`),
   KEY `idx_ws_sync` (`workspace_id`,`sync_enabled`,`last_sync_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目仓库绑定（GitLab 只读同步）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `project_set`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_set` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目集ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `name` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目集名称',
+  `description` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '说明',
+  `owner_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人账号ID',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT '状态：active/done/hold',
+  `planned_start` date DEFAULT NULL COMMENT '计划开始日',
+  `planned_end` date DEFAULT NULL COMMENT '计划结束日',
+  `archived_at` datetime DEFAULT NULL COMMENT '归档时间（NULL=未归档）',
+  `color` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '#8a8578' COMMENT '标识色',
+  `sort_order` int NOT NULL DEFAULT '0' COMMENT '空间内排序',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ws_set_name` (`workspace_id`,`name`),
+  KEY `idx_ws_sort` (`workspace_id`,`sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目集';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `project_split_map`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_split_map` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `old_project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '拆分前项目ID',
+  `old_category_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '拆分来源分类ID',
+  `new_project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '新项目ID',
+  `new_category_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '新项目根分类ID（沿用原分类ID）',
+  `action` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'split / container',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_old_category` (`workspace_id`,`old_project_id`,`old_category_id`,`action`),
+  KEY `idx_new_project` (`new_project_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目拆分映射（幂等、旧链接跳转、回滚核对）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `dev_branch_alias`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -797,6 +837,9 @@ DROP TABLE IF EXISTS `requirement`;
 CREATE TABLE `requirement` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `set_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属项目集（project_set.id），空=未分组',
+  `origin_category_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '由哪个一级分类升格而来',
+  `container_kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '容器项目标记：split_container=拆分后的公共容器',
   `name` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目名称',
   `description` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '项目描述',
   `objective` varchar(400) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '项目目标（一句话，驾驶舱展示）',
@@ -813,7 +856,8 @@ CREATE TABLE `requirement` (
   PRIMARY KEY (`id`),
   KEY `idx_ws` (`workspace_id`),
   KEY `idx_ws_owner` (`workspace_id`,`owner_user_id`),
-  KEY `idx_ws_sort` (`workspace_id`,`sort_order`)
+  KEY `idx_ws_sort` (`workspace_id`,`sort_order`),
+  KEY `idx_ws_set` (`workspace_id`,`set_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目（原需求）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `requirement_doc`;

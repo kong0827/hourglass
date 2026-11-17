@@ -171,6 +171,8 @@ public class BackupData {
         private String firstReleasedAt;
         /** 发布检查策略（v14 起；旧备份缺省按 standard） */
         private String releaseCheckPolicy;
+        /** 所属项目集（v17 起；项目集本身不随备份迁移，目标空间没有同 ID 集时导入为未分组） */
+        private String setId;
     }
 
     @Data

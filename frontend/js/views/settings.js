@@ -11,7 +11,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { saveViewState } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { loadPriorities } from "../core/priorities.js";
-import { canManageProject, catTag, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
+import { canManageProject, catTag, projectOptionsHTML, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
@@ -1340,9 +1340,7 @@ function loadWsCatProjects(){
       return;
     }
     wsCatProjectSel.disabled = false;
-    wsCatProjectSel.innerHTML = wsCatProjects.map(function(r){
-      return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-    }).join("");
+    wsCatProjectSel.innerHTML = projectOptionsHTML(wsCatProjects, current);
     if(wsCatProjects.some(function(r){ return r.id === current; })) wsCatProjectSel.value = current;
     loadWsCatCfg();
   }).catch(function(ex){

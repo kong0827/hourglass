@@ -154,6 +154,10 @@ public interface TimeLogMapper {
     List<com.hourglass.dto.UserDayRow> sumUserDayMinutesByReq(
             @Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 项目列表：一次聚合各项目首版 / 迭代工时（口径同阶段卡：计时自然日 vs 首版上线日） */
+    List<com.hourglass.dto.ReqPhaseMinutesRow> sumPhaseMinutesByProject(
+            @Param("workspaceId") String workspaceId);
+
     /**
      * 成员阶段工时汇总：按「任务 × 阶段」聚合该成员自己的计时后再汇总行数与首版/迭代分钟，
      * 阶段按计时自然日 vs 首版上线日判定（与阶段卡 memberHours 同口径）。

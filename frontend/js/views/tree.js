@@ -11,7 +11,7 @@ import { groupOptionsHTML, groupDimName } from "../core/group-dims.js";
 import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
 import * as listPrefs from "../core/list-preferences.js";
-import { filterOn, progressOf, reqNameById, catNameById, rt, state } from "../core/state.js";
+import { filterOn, progressOf, reqNameById, reqSetId, rt, setNameById, setSortOf, state } from "../core/state.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { openStatusMenu } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -28,7 +28,7 @@ var treeHasMore = false, treeLoadingMore = false;
 var PAGE_SIZE = 100;
 var levels = { l1:"project", l2:"version", l3:"none" };
 /* 层级只保留结构性维度（项目/计划版本/模块）：见文件头说明 */
-var TREE_LEVEL_DIMS = ["project", "version", "category"];
+var TREE_LEVEL_DIMS = ["set", "project", "version"];
 var collapsed = {};
 var hideDone = false;
 var treeLoaded = false;
@@ -45,7 +45,10 @@ function levelInfo(t, dim){
   if(dim === "owner") return { key:t.owner || "__none", label:t.owner || "未分配" };
   if(dim === "priority") return { key:t.priority || "unknown", label:t.priority ? priName(t.priority) : "未设置优先级" };
   if(dim === "project") return { key:t.reqId || "__none", label:t.reqId ? (reqNameById(t.reqId) || "未归类") : "未归类" };
-  if(dim === "category") return { key:t.categoryId || "__none", label:catNameById(t.categoryId) || "未指定模块" };
+  if(dim === "set"){
+    var sid = reqSetId(t.reqId);
+    return { key:sid || "__none", label:setNameById(sid) || "未归组" };
+  }
   if(dim === "status") return { key:t.boardColumn || "unknown", label:colName(t.boardColumn) || "未设置状态" };
   if(dim === "version"){
     var label = taskVersionsText(t) || "待规划";
@@ -67,12 +70,11 @@ function nodeCompare(dim){
         (PRIORITIES.indexOf(b.key) < 0 ? 9 : PRIORITIES.indexOf(b.key));
     };
   }
-  if(dim === "category"){
-    var order = {};
-    (rt.categoriesCache || []).forEach(function(c, i){ order[c.id] = i; });
+  if(dim === "set"){
     return function(a, b){
-      return (order[a.key] === undefined ? 999 : order[a.key]) - (order[b.key] === undefined ? 999 : order[b.key])
-        || a.label.localeCompare(b.label, "zh-CN");
+      var ai = a.key === "__none" ? 9999 : setSortOf(a.key);
+      var bi = b.key === "__none" ? 9999 : setSortOf(b.key);
+      return ai - bi || a.label.localeCompare(b.label, "zh-CN");
     };
   }
   if(dim === "version"){

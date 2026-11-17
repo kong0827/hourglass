@@ -363,8 +363,8 @@ public interface TaskMapper {
             @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
             @Param("from") LocalDate from, @Param("before") LocalDate before);
 
-    /** 区间内完成项按模块分布（顺序与旧 selectAll 首次出现一致） */
-    List<com.hourglass.dto.NameCountRow> countCompletedByCategory(
+    /** 区间内完成项按项目分布：name 为项目 ID（空串=无项目） */
+    List<com.hourglass.dto.NameCountRow> countCompletedByProject(
             @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
             @Param("from") LocalDate from, @Param("before") LocalDate before);
 

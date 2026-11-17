@@ -91,7 +91,7 @@ class WorkActivityRecordingTest {
                 mock(ProjectAccessService.class), mock(AttachmentService.class),
                 mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(TestCaseService.class),
                 mock(ProjectTemplateService.class), mock(com.hourglass.mapper.WorkspaceMemberMapper.class),
-                mock(CategoryService.class));
+                mock(CategoryService.class), mock(ProjectSetService.class));
     }
 
     @Test

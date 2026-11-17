@@ -7,7 +7,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead } from "../core/task-drawer.js";
 import { reloadFilteredViews } from "../core/filters-ui.js";
 import { showView } from "../core/router.js";
-import { canEditReq, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
+import { canEditReq, projectOptionsHTML, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { assocLinkHTML, normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, releasePlanNoText, COLUMNS, colName, dayKey, dayDiff, parseDate, fmtMinute, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso } from "../lib/format.js";
@@ -128,9 +128,7 @@ function syncReqSel(){
   if(!phaseReq) return;
   /* 归档项目默认不出现在切换器里，但当前正在看的那一个保留，避免视图突然跳走 */
   var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.phaseReqId; });
-  phaseReq.innerHTML = list.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-  }).join("");
+  phaseReq.innerHTML = projectOptionsHTML(list, rt.phaseReqId);
   if(!rt.phaseReqId && list.length) rt.phaseReqId = list[0].id;
   if(rt.phaseReqId) phaseReq.value = rt.phaseReqId;
 }
@@ -4804,6 +4802,7 @@ function setPhaseProject(reqId, mode){
   else if(viewMode === "overview") viewMode = "phase";
   if(document.body.dataset.view === "phase"){
     syncModeSeg();
+    syncReqSel();
     loadPhaseData();
   }
 }

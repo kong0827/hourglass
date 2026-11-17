@@ -10,7 +10,7 @@ import { activeView } from "../core/router.js";
 import { GROUP_IDS, groupOptionsHTML } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
-import { canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, setSortOf, setNameById, state, tagChip } from "../core/state.js";
 import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
@@ -550,7 +550,10 @@ function groupInfoBy(t, dim){
   if(dim === "owner") return {key:t.owner || "__none", label:t.owner || "未分配"};
   if(dim === "priority") return {key:t.priority || "unknown", label:t.priority ? priName(t.priority) : "未设置优先级"};
   if(dim === "project") return {key:t.reqId || "__none", label:t.reqId ? reqNameById(t.reqId) : "未归类"};
-  if(dim === "category") return {key:t.categoryId || "__none", label:catNameById(t.categoryId) || "未指定模块"};
+  if(dim === "set"){
+    var sid = reqSetId(t.reqId);
+    return {key:sid || "__none", label:setNameById(sid) || "未归组"};
+  }
   return null;
 }
 /* 版本标签来自看板 meta：同名版本跨项目时用项目名消歧，进行中版本排前 */
@@ -596,15 +599,6 @@ function effectiveSubgroup(){
     ? "none" : smart.subgroup;
 }
 function groupCompare(dim){
-  if(dim === "category"){
-    var order = {};
-    (rt.categoriesCache || []).forEach(function(c, i){ order[c.id] = i; });
-    return function(a, b){
-      var ai = order[a.key] === undefined ? 999 : order[a.key];
-      var bi = order[b.key] === undefined ? 999 : order[b.key];
-      return ai - bi || a.label.localeCompare(b.label, "zh-CN");
-    };
-  }
   return function(a, b){
     if(dim === "status"){
       var ai = -1, bi = -1;
@@ -623,6 +617,11 @@ function groupCompare(dim){
         return m && m.status === "active" ? 0 : 1;
       };
       return rank(a.key) - rank(b.key) || a.label.localeCompare(b.label, "zh-CN");
+    }
+    if(dim === "set"){
+      var ra = a.key === "__none" ? 9999 : setSortOf(a.key);
+      var rb = b.key === "__none" ? 9999 : setSortOf(b.key);
+      return ra - rb || a.label.localeCompare(b.label, "zh-CN");
     }
     return a.label.localeCompare(b.label, "zh-CN");
   };

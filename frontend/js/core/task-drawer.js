@@ -11,7 +11,7 @@ import { openPeoplePicker, optionSubText } from "../lib/people-picker.js";
 import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, rfHoursAdd, commentAttachChips, commentAttachTip, commentCount, commentList, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeProject, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { createMentionPicker } from "./mention-picker.js";
-import { canEditReq, canEditTask, canManageProject, catNameById, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, canManageProject, catNameById, colRuleOf, projectOptionsHTML, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
@@ -2170,12 +2170,8 @@ function defaultReqId(){
 function populateReqSelect(keepId){
   if(!iReq) return;
   var cur = keepId !== undefined ? keepId : iReq.value;
-  var html = '<option value="">（无项目）</option>';
-  rt.reqList.forEach(function(r){
-    if(r.archivedAt && r.id !== cur) return;
-    html += '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-  });
-  iReq.innerHTML = html;
+  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === cur; });
+  iReq.innerHTML = '<option value="">（无项目）</option>' + projectOptionsHTML(list, cur);
   if(cur && rt.reqList.some(function(r){ return r.id === cur; })) iReq.value = cur;
   else iReq.value = "";
   /* 项目下拉重建时值可能被收回（如项目已删）：记下来，避免把这次程序化变化当成用户换项目 */

@@ -26,6 +26,21 @@ public class ReqSaveRequest {
     @Size(max = 32, message = "项目负责人不合法")
     private String ownerUserId;
 
+    /**
+     * 所属项目集：空串表示解除归组；字段不出现（旧客户端）时编辑不改归组关系。
+     * 用显式 setter 记录「请求里是否带了这个字段」，避免旧客户端整表保存时把项目集清空。
+     */
+    @Size(max = 32, message = "项目集不合法")
+    private String setId;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private boolean setIdPresent;
+
+    public void setSetId(String setId) {
+        this.setId = setId;
+        this.setIdPresent = true;
+    }
+
     private java.time.LocalDate plannedStart;
     private java.time.LocalDate plannedEnd;
 

@@ -246,6 +246,7 @@ public class BackupExportService {
             b.setCreatedAt(r.getCreatedAt() == null ? null : r.getCreatedAt().toLocalDate().toString());
             b.setFirstReleasedAt(r.getFirstReleasedAt() == null ? null : r.getFirstReleasedAt().toString());
             b.setReleaseCheckPolicy(r.getReleaseCheckPolicy());
+            b.setSetId(r.getSetId());
             reqs.add(b);
         }
         data.setReqs(reqs);

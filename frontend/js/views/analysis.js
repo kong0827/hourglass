@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, hoursNote, segWorkScope, statsHoursEl, workScopeTag } from "../core/dom.js";
-import { catNameById, catTagByName, rt, state } from "../core/state.js";
+import { catTagByName, reqNameById, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
@@ -401,10 +401,11 @@ function onStatsTrend(el){
   openStatsTasks((kind === "completed" ? "完成" : "新增") + " · " + el.dataset.drillRange,
     {kind: kind, from: from, before: before});
 }
-function onStatsCategory(el){
-  var name = el.dataset.statCat;
-  openStatsTasks(name && name !== "__unset__" ? "完成 · 模块 " + name : "完成 · 未指定模块",
-    Object.assign({kind: "category", value: name}, statsDrillWindow || {}));
+function onStatsProject(el){
+  var id = el.dataset.statProject || "";
+  var name = id && id !== "__unset__" ? (reqNameById(id) || id) : "";
+  openStatsTasks(name ? "完成 · 项目 " + name : "完成 · 未指定项目",
+    Object.assign({kind: "project", value: id}, statsDrillWindow || {}));
 }
 function onStatsOwner(el){
   var name = el.dataset.statOwner;
@@ -537,10 +538,15 @@ function renderStats(d){
   renderStatsHours(c);
   syncWorkScopeSeg();
 
-  $("statsCat").innerHTML = distHTML(d.byCategory,
+  /* 分布按项目：后端只回项目 ID，名称在这里解析，避免项目改名后报表出现旧名 */
+  var byProject = (d.byProject || []).map(function(x){
+    var id = x.name || "";
+    return {id:id, name:id ? (reqNameById(id) || id) : "未指定项目", count:x.count};
+  });
+  $("statsCat").innerHTML = distHTML(byProject,
     function(){ return "var(--primary)"; },
     function(x){ return x.count; },
-    function(x){ return 'data-stat-cat="' + esc(x.name || "__unset__") + '" title="查看该模块已完成工作项"'; });
+    function(x){ return 'data-stat-project="' + esc(x.id || "__unset__") + '" title="查看该项目已完成工作项"'; });
   $("statsOwner").innerHTML = distHTML(d.byOwner,
     function(){ return "var(--primary)"; },
     function(x){ return x.count; },
@@ -794,12 +800,12 @@ function renderFlowEstimate(d){
     }
     html += '</div>';
   }
-  /* 模块系数：只有一个模块时没有对比意义 */
-  if(d.byCategory && d.byCategory.length > 1){
-    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按模块看系数</div>';
-    d.byCategory.forEach(function(c){
+  /* 项目系数：只有一个项目时没有对比意义 */
+  if(d.byProject && d.byProject.length > 1){
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按项目看系数</div>';
+    d.byProject.forEach(function(c){
       var cf = c.factor || 0;
-      html += flowRow((catNameById(c.categoryId) || "未指定模块") + " · " + c.sampleCount + " 项", cf.toFixed(2) + "×",
+      html += flowRow((c.reqId ? (reqNameById(c.reqId) || c.reqId) : "未指定项目") + " · " + c.sampleCount + " 项", cf.toFixed(2) + "×",
         Math.min(100, cf * 50),
         cf >= 1.15 ? "var(--danger)" : (cf >= 0.87 ? "var(--info)" : "var(--success)"));
     });
@@ -826,8 +832,8 @@ if($("view-analysis")){
     if(doc){ openReqDocAndJump(doc.dataset.openReqdoc); return; }
     var trend = e.target.closest("[data-stat-drill]");
     if(trend){ onStatsTrend(trend); return; }
-    var cat = e.target.closest("[data-stat-cat]");
-    if(cat){ onStatsCategory(cat); return; }
+    var proj = e.target.closest("[data-stat-project]");
+    if(proj){ onStatsProject(proj); return; }
     var owner = e.target.closest("[data-stat-owner]");
     if(owner){ onStatsOwner(owner); return; }
     var hours = e.target.closest("[data-stat-hours]");

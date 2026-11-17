@@ -4,7 +4,7 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
-import { rt } from "../core/state.js";
+import { projectOptionsHTML, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { AIProgress, aiErrorText, aiUsageText } from "../core/ai-progress.js";
 import { labelFilterText } from "../lib/member-labels.js";
@@ -299,10 +299,7 @@ function projectOptions(){
     return (!r.workspaceId || r.workspaceId === investmentWorkspace())
       && (!r.archivedAt || r.id === filters.reqId);
   });
-  return '<option value="">全部项目</option>' + list.map(function(r){
-    return '<option value="' + esc(r.id) + '"' + (r.id === filters.reqId ? ' selected' : '') + '>'
-      + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
-  }).join("");
+  return '<option value="">全部项目</option>' + projectOptionsHTML(list, filters.reqId);
 }
 function labelOptions(values, selected, allText, unsetText){
   var seen = {}, list = [];

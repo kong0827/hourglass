@@ -1388,8 +1388,8 @@ function parseViewParams(p){
   var subgroup = (p.subgroup === undefined || p.subgroup === null) ? "none" : p.subgroup;
   var sort = (p.sort === undefined || p.sort === null) ? "default" : p.sort;
   if(["all", "mine", "doing", "over"].indexOf(preset) === -1) return null;
-  if(["none", "status", "owner", "priority", "project", "category", "version"].indexOf(group) === -1) return null;
-  if(["none", "status", "owner", "priority", "project", "category", "version"].indexOf(subgroup) === -1) return null;
+  if(["none", "status", "owner", "priority", "project", "set", "version"].indexOf(group) === -1) return null;
+  if(["none", "status", "owner", "priority", "project", "set", "version"].indexOf(subgroup) === -1) return null;
   if(p.hideDone !== undefined && p.hideDone !== null && typeof p.hideDone !== "boolean") return null;
   if(["default", "due", "priority", "estimate", "actual", "updated",
       "title", "type", "column", "owner", "progress", "project", "version",

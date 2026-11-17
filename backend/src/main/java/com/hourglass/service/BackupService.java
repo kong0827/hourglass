@@ -119,6 +119,9 @@ public class BackupService {
     private final com.hourglass.mapper.DocTemplateMapper docTemplateMapper;
     /** 备份可能带回旧的 done/plan 组合，导入后按证据重算一次 */
     private final DemandCompletionService demandCompletion;
+    /** 项目集不随备份迁移，只校验同 ID 的集是否属于目标空间 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hourglass.mapper.ProjectSetMapper projectSetMapper;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -322,6 +325,12 @@ public class BackupService {
                 req.setFirstReleasedAt(parseDate(r.getFirstReleasedAt()));
                 req.setReleaseCheckPolicy(oneOf(r.getReleaseCheckPolicy(),
                         new String[]{"strict", "standard", "loose"}, "standard"));
+                /* 项目集不随备份迁移：目标空间存在同 ID 的集才保留归组，否则回到未分组 */
+                String setId = Texts.trimToNull(r.getSetId());
+                if (setId != null && projectSetMapper != null
+                        && projectSetMapper.selectById(workspaceId, setId) != null) {
+                    req.setSetId(setId);
+                }
                 /* 按备份里的项目顺序编号，恢复后列表与下拉框保持一致 */
                 req.setSortOrder(st.reqCount);
                 reqMapper.insert(req);

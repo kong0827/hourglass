@@ -3,7 +3,7 @@
 import { API } from "../core/api.js";
 import { $, doneCountEl, pendingCount, pendingList, progCountEl, reviewHoursEl, reviewPendingBox } from "../core/dom.js";
 import { icon } from "../core/icons.js";
-import { catColor, catNameById, catTag, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { catNameById, catTag, progressOf, projectOptionsHTML, reqNameById, rt, state, tagChip } from "../core/state.js";
 import { activeView, showView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
@@ -47,9 +47,7 @@ function renderReviewReqOptions(){
   /* 项目列表还没加载完时不能把已保存的项目清掉，否则刷新后会退回「全部项目」 */
   var exists = list.some(function(r){ return String(r.id) === reviewReqId; });
   if(reviewReqId && rt.reqsLoaded && !exists) reviewReqId = "";
-  sel.innerHTML = '<option value="">全部项目</option>' + list.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
-  }).join("");
+  sel.innerHTML = '<option value="">全部项目</option>' + projectOptionsHTML(list, reviewReqId);
   if(reviewReqId && !exists){
     /* 列表里暂时没有（尚未加载完）：补一个占位项，保持选中态与请求范围一致 */
     var opt = document.createElement("option");
@@ -66,7 +64,6 @@ function setReviewLoading(){
   if(reviewHoursEl) reviewHoursEl.innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
   if(reviewPendingBox) reviewPendingBox.hidden = true;
   $("peopleBox").innerHTML = '<span class="skel skel-line" style="width:120px"></span>';
-  $("catDist").innerHTML = UI.skeletonRows(3);
   $("progList").innerHTML = UI.skeletonRows(3);
   $("reqDist").innerHTML = UI.skeletonRows(3);
   $("doneList").innerHTML = UI.skeletonRows(4);
@@ -187,14 +184,16 @@ function summaryPlain(d){
 }
 /* ==================== 完成透视 ==================== */
 var REVIEW_PIVOT_KEY = "ds.reviewPivot";
+var PIVOT_DIMS = [["owner", "成员"], ["reqId", "项目"], ["priority", "优先级"], ["column", "状态"]];
 var reviewPivot = (function(){
   try{
     var p = JSON.parse(localStorage.getItem(REVIEW_PIVOT_KEY) || "null");
-    if(p && p.row && p.col && p.row !== p.col) return {row:p.row, col:p.col};
+    var ok = {};
+    PIVOT_DIMS.forEach(function(d){ ok[d[0]] = 1; });
+    if(p && ok[p.row] && ok[p.col] && p.row !== p.col) return {row:p.row, col:p.col};
   }catch(e){ /* 受限环境忽略 */ }
   return {row:"owner", col:"reqId"};
 })();
-var PIVOT_DIMS = [["owner", "成员"], ["reqId", "项目"], ["priority", "优先级"], ["category", "模块"], ["column", "状态"]];
 var reviewPivotState = null;
 function pivotDimLabel(dim){
   for(var i = 0; i < PIVOT_DIMS.length; i++) if(PIVOT_DIMS[i][0] === dim) return PIVOT_DIMS[i][1];
@@ -204,7 +203,6 @@ function pivotValue(t, dim){
   if(dim === "owner") return t.owner || "未分配";
   if(dim === "reqId") return t.reqId ? (reqNameById(t.reqId) || "未归类") : "未归类";
   if(dim === "priority") return t.priority ? priName(t.priority) : "未设置";
-  if(dim === "category") return catNameById(t.categoryId) || "未指定模块";
   if(dim === "column") return colName(t.boardColumn) || "未设置";
   return "—";
 }
@@ -319,10 +317,6 @@ function reviewWeekText(d){
 function reviewCompleted(d){
   return (d && d.completed) || [];
 }
-/* 模块聚合行的口径：未指定模块显示固定文案，已删除模块回退原始 ID，与后端下发一致 */
-function reviewCatLabel(t){
-  return catNameById(t.categoryId) || t.categoryId || "未指定模块";
-}
 function reviewLate(t){
   return !!(t.completedAt && t.dueDate && dayKey(t.completedAt) > dayKey(t.dueDate));
 }
@@ -373,14 +367,6 @@ if($("peopleBox")) $("peopleBox").addEventListener("click", function(e){
   var name = b.dataset.reviewMember;
   openReviewTasks("周回顾 · 成员 · " + name,
     reviewCompleted(state.reviewData).filter(function(t){ return (t.owner || "未分配") === name; }),
-    "完成项");
-});
-if($("catDist")) $("catDist").addEventListener("click", function(e){
-  var row = e.target.closest("[data-review-cat]");
-  if(!row) return;
-  var name = row.dataset.reviewCat;
-  openReviewTasks("周回顾 · 模块 · " + name,
-    reviewCompleted(state.reviewData).filter(function(t){ return reviewCatLabel(t) === name; }),
     "完成项");
 });
 if($("reqDist")) $("reqDist").addEventListener("click", function(e){
@@ -488,15 +474,6 @@ function renderReview(d){
       }).join("");
     }
   }
-
-  /* 未指定模块在聚合里是空名：补成列表页同一文案，否则标签空白且点击命中不到工作项 */
-  var catDist = (d.catDist || []).map(function(c){
-    return { name: c.name || "未指定模块", count: c.count };
-  });
-  $("catDist").innerHTML = distHTML(catDist,
-    function(c){ return catColor(c.name); },
-    function(c){ return c.count; },
-    function(c){ return c.count > 0 ? 'data-review-cat="' + esc(c.name) + '"' : ""; });
 
   var members = d.members || [];
   $("peopleBox").innerHTML = members.length ? members.map(function(m){

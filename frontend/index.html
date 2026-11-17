@@ -469,7 +469,7 @@
                   <option value="priority">按优先级</option>
                   <option value="status">按状态</option>
                   <option value="project">按项目</option>
-                  <option value="category">按模块</option>
+                  <option value="set">按项目集</option>
                   <option value="none">不分组</option>
                 </select>
               </label>
@@ -482,7 +482,7 @@
                   <option value="priority">按优先级</option>
                   <option value="status">按状态</option>
                   <option value="project">按项目</option>
-                  <option value="category">按模块</option>
+                  <option value="set">按项目集</option>
                 </select>
               </label>
               <label class="row row-gap mine-hide-test" style="gap:6px">
@@ -706,7 +706,7 @@
                   <option value="owner">负责人</option>
                   <option value="priority">优先级</option>
                   <option value="project">项目</option>
-                  <option value="category">模块</option>
+                  <option value="set">项目集</option>
                   <option value="status">状态</option>
                 </select>
               </label>
@@ -717,7 +717,7 @@
                   <option value="owner">负责人</option>
                   <option value="priority">优先级</option>
                   <option value="project">项目</option>
-                  <option value="category">模块</option>
+                  <option value="set">项目集</option>
                   <option value="status">状态</option>
                 </select>
               </label>
@@ -817,8 +817,10 @@
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
+              <button class="btn sm" type="button" id="btnProjectSetNew">新建项目集</button>
               <button class="btn primary sm ml-auto" type="button" id="btnReqNew">新建项目</button>
             </div>
+            <div class="req-summ" id="reqSumm" hidden></div>
             <div class="req-list" id="reqList"></div>
           </div>
           <div class="modal-layer side" id="dlgProject" role="dialog" aria-modal="true" aria-labelledby="reqFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
@@ -843,6 +845,11 @@
                 <div class="field">
                   <label for="rOwner">项目负责人</label>
                   <select id="rOwner" aria-label="项目负责人"><option value="">未指定</option></select>
+                </div>
+                <div class="field span2">
+                  <label for="rSet">所属项目集</label>
+                  <select id="rSet" aria-label="所属项目集"><option value="">未分组</option></select>
+                  <p class="foot-note">可选归组，不改变项目权限；删除项目集只会把项目移回未分组。</p>
                 </div>
                 <div class="row row-gap">
                   <div class="field" style="flex:1">
@@ -895,6 +902,57 @@
               </div>
             </div>
           </div></div></div>
+
+          <div class="modal-layer" id="dlgProjectSet" role="dialog" aria-modal="true" aria-labelledby="projectSetFormTitle">
+            <div class="sheet sm"><div class="sheet-body">
+              <div class="panel">
+                <div class="panel-head"><h3 id="projectSetFormTitle">新建项目集</h3><button class="icon-btn sm" type="button" id="dlgProjectSetX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+                <div class="stack">
+                  <div class="field">
+                    <label for="psName">项目集名称 <span class="req">*</span></label>
+                    <input id="psName" type="text" maxlength="60" placeholder="例如：流程引擎" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label for="psDesc">说明</label>
+                    <textarea id="psDesc" maxlength="1000" placeholder="选填：这个项目集覆盖的范围"></textarea>
+                  </div>
+                  <div class="row row-gap">
+                    <div class="field" style="flex:1">
+                      <label for="psOwner">负责人</label>
+                      <select id="psOwner" aria-label="项目集负责人"><option value="">未指定</option></select>
+                    </div>
+                    <div class="field" style="width:110px">
+                      <label for="psColor">标识色</label>
+                      <input id="psColor" type="color" value="#8a8578" aria-label="项目集标识色" />
+                    </div>
+                  </div>
+                  <div class="row row-gap">
+                    <div class="field" style="flex:1">
+                      <label for="psPlanStart">计划开始</label>
+                      <input id="psPlanStart" type="date" aria-label="项目集计划开始日" />
+                    </div>
+                    <div class="field" style="flex:1">
+                      <label for="psPlanEnd">计划结束</label>
+                      <input id="psPlanEnd" type="date" aria-label="项目集计划结束日" />
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="psStatus">状态</label>
+                    <select id="psStatus" aria-label="项目集状态">
+                      <option value="active">进行中</option>
+                      <option value="done">已交付</option>
+                      <option value="hold">已搁置</option>
+                    </select>
+                  </div>
+                  <div class="row row-gap">
+                    <button class="btn primary" type="button" id="btnSaveProjectSet">新建项目集</button>
+                    <button class="btn" type="button" id="psCancel">取消</button>
+                  </div>
+                  <p class="foot-note">项目集只做归组与只读汇总，不改变项目和成员的可见、可写范围。</p>
+                </div>
+              </div>
+            </div></div>
+          </div>
         </div>
       </section>
 
@@ -2586,20 +2644,14 @@
               <div class="people" id="peopleBox"></div>
             </div>
             <div class="panel">
-              <div class="panel-head"><h3>模块分布</h3></div>
-              <div class="dist" id="catDist"></div>
-            </div>
-          </div>
-
-          <div class="duo">
-            <div class="panel">
-              <div class="panel-head"><h3>进行中</h3><span class="meta-right" id="progCount"></span></div>
-              <div class="done-list" id="progList"></div>
-            </div>
-            <div class="panel">
               <div class="panel-head"><h3>项目进展</h3></div>
               <div class="dist" id="reqDist"></div>
             </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h3>进行中</h3><span class="meta-right" id="progCount"></span></div>
+            <div class="done-list" id="progList"></div>
           </div>
 
           <div class="panel">
@@ -2655,7 +2707,7 @@
           </div>
           <div class="duo">
             <div class="panel">
-              <div class="panel-head"><h3>完成分布 · 按模块</h3><span class="meta-right" id="statsRange1">—</span></div>
+              <div class="panel-head"><h3>完成分布 · 按项目</h3><span class="meta-right" id="statsRange1">—</span></div>
               <div class="dist" id="statsCat"></div>
             </div>
             <div class="panel">

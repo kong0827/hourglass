@@ -72,7 +72,8 @@ class MemberLabelTransactionTest {
                 mock(UserListPreferenceMapper.class), mock(WorkActivityService.class), mock(InviteMapper.class),
                 mock(InviteProjectGrantMapper.class), mock(ProjectMemberMapper.class), roles, mock(TaskWatchMapper.class),
                 mock(com.hourglass.mapper.DemandWatchMapper.class), mock(TaskCascade.class), mock(ActivityService.class), cache, mock(WorkspaceMetaCache.class), options, logs,
-                access));
+                access, mock(com.hourglass.mapper.ProjectSetMapper.class),
+                mock(com.hourglass.mapper.ProjectSplitMapMapper.class)));
         project = new Requirement(); project.setId("P1"); project.setWorkspaceId("W1"); project.setName("项目");
     }
 

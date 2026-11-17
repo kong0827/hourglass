@@ -5,14 +5,14 @@
   <sql id="cols">
     id, workspace_id, req_id, demand_no, title, description, source, item_kind, category_id, priority, status, close_reason, close_stage,
     expect_date, planned_start, planned_end, revision,
-    accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort,
+    accept_text, version_id, version_name, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort,
     created_by, created_at, updated_at
   </sql>
 
   <sql id="pageCols">
     d.id, d.workspace_id, d.req_id, d.demand_no, d.title, d.description, d.source, d.item_kind, d.category_id, d.priority, d.status,
     d.close_reason, d.close_stage, d.expect_date, d.planned_start, d.planned_end, d.revision,
-    d.accept_text, d.version_id, v.name AS versionName, v.status AS versionStatus, d.review_note,
+    d.accept_text, d.version_id, COALESCE(v.name, d.version_name) AS versionName, v.status AS versionStatus, d.review_note,
     d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
   </sql>
 
@@ -480,6 +480,8 @@
       revision = revision + 1,
       accept_text = #{acceptText},
       version_id = #{versionId},
+      <!-- version_name 只作拆分迁移的历史快照：一旦重新绑定在册版本就清掉，避免撤排后旧名称复活 -->
+      version_name = CASE WHEN #{versionId} IS NULL THEN #{versionName} ELSE NULL END,
       review_note = #{reviewNote},
       wsjf_business = #{wsjfBusiness},
       wsjf_urgency = #{wsjfUrgency},

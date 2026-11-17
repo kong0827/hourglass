@@ -1360,6 +1360,7 @@ public class ManagerService {
 
         Map<String, Object> item = new LinkedHashMap<String, Object>();
         item.put("reqId", requirement.getId());
+        item.put("setId", requirement.getSetId());
         item.put("name", requirement.getName());
         item.put("status", requirement.getStatus());
         item.put("health", health);

@@ -90,6 +90,7 @@
 .manager-tbl th{height:36px;padding:0 10px;background:var(--surface-sunken);border-bottom:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-align:left;white-space:nowrap;}
 .manager-tbl td{padding:12px 10px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle;}
 .manager-tbl tbody tr:last-child td{border-bottom:none;}
+.manager-tbl tbody tr.pf-set-row td{background:var(--surface-sunken);font-weight:600;font-size:12px;color:var(--text-2);padding:8px 10px;}
 .manager-tbl tbody tr[data-open-task],.manager-tbl tbody tr[data-member-key]{cursor:pointer;}
 .manager-tbl tbody tr[data-open-task]:hover,.manager-tbl tbody tr[data-member-key]:hover{background:var(--surface-hover);}
 .manager-tbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}

@@ -10,7 +10,7 @@ import { isMobile } from "../core/layout.js";
 import { renderAlertBar } from "../core/notifications.js";
 import { activeView, showView } from "../core/router.js";
 import { loadPriorities } from "../core/priorities.js";
-import { canEditReq, canEditTask, catNameById, catTag, dueFlag, dueMetaClass, dueState, filterOn, progressOf, reqNameById, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
+import { canEditReq, canEditTask, catNameById, catTag, dueFlag, dueMetaClass, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, safeColor, setNameById, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
 import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
@@ -75,8 +75,8 @@ var COL_SORT_KEY = "ds.boardColSort.v1";
 var COL_TOP_AT = 360;
 /* 列内分组：列仍是状态，组只决定卡片怎么归堆，拖拽语义不变。
    分组偏好按「账号 + 空间」记住，与列内排序同一套做法。 */
-var BOARD_GROUPS = [["none", "不分组"], ["owner", "负责人"], ["priority", "优先级"], ["project", "项目"], ["category", "模块"]];
-var BOARD_GROUPS2 = [["none", "不分组"], ["owner", "负责人"], ["priority", "优先级"], ["project", "项目"], ["category", "模块"]];
+var BOARD_GROUPS = [["none", "不分组"], ["owner", "负责人"], ["priority", "优先级"], ["project", "项目"], ["set", "项目集"]];
+var BOARD_GROUPS2 = [["none", "不分组"], ["owner", "负责人"], ["priority", "优先级"], ["project", "项目"], ["set", "项目集"]];
 var BOARD_GROUP_KEY = "ds.boardGroup.v1";
 var BOARD_GROUP2_KEY = "ds.boardGroup2.v1";
 var BOARD_GROUP_FOLD_KEY = "ds.boardGroupFold.v1";
@@ -186,7 +186,7 @@ function groupValue(t, dim){
   if(dim === "owner") return t.owner || "";
   if(dim === "priority") return t.priority || "";
   if(dim === "project") return t.reqId || "";
-  if(dim === "category") return t.categoryId || "";
+  if(dim === "set") return reqSetId(t.reqId);
   return "";
 }
 /* 项目名优先取看板 meta（筛选器已用它出项目名单），其次取需求列表缓存 */
@@ -200,7 +200,7 @@ function groupLabel(t, dim){
   var v = groupValue(t, dim);
   if(!v) return dim === "priority" ? "未设优先级" : (dim === "project" ? "未归类" : "未指定");
   if(dim === "project") return boardReqLabel(v);
-  if(dim === "category") return catNameById(v) || v;
+  if(dim === "set") return setNameById(v) || v;
   return v;
 }
 function groupRank(key, dim){
@@ -376,9 +376,15 @@ function loadReqs(){
   if(reqsPending && reqsPendingWs === wsId) return reqsPending;
   var seq = ++reqLoadSeq;
   reqsPendingWs = wsId || "";
-  var pending = API.getAllPages("/api/reqs").then(function(list){
+  /* 项目集与项目并行取：所有项目下拉都要按集分组，不能等某个视图单独补 */
+  var pending = Promise.all([
+    API.getAllPages("/api/reqs"),
+    API.get("/api/project-sets").catch(function(){ return rt.projectSets || []; })
+  ]).then(function(res){
     if(seq !== reqLoadSeq) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
+    var list = res[0];
+    if(Array.isArray(res[1])) rt.projectSets = res[1];
     rt.reqList = list || [];
     rt.reqsLoaded = true;
     populateReqSelect();

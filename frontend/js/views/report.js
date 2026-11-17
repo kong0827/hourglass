@@ -3,7 +3,7 @@
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
-import { rt } from "../core/state.js";
+import { projectOptionsHTML, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, openTaskTable } from "./manager-shared.js";
@@ -282,7 +282,7 @@ function defectChart(d){
 }
 function projectOptions(){
   var list = rt.reqList.filter(function(r){ return (!r.workspaceId || r.workspaceId === reportWorkspace()) && (!r.archivedAt || r.id === reqId); });
-  return '<option value="">全部项目</option>' + list.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
+  return '<option value="">全部项目</option>' + projectOptionsHTML(list, reqId);
 }
 function versionOptions(){
   var list = (reportOptions.versions || []).slice();

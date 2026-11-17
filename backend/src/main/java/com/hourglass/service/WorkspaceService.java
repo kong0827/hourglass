@@ -90,6 +90,9 @@ public class WorkspaceService {
     private final MemberLabelLogService memberLabelLogs;
     /** 候选字典的可见性口径与项目读取一致，避免泄露不可见项目的角色标注 */
     private final ProjectAccessService projectAccessService;
+    /** 项目集与拆分映射：空间清空/删除时一并清理（拆分映射只是迁移台账） */
+    private final com.hourglass.mapper.ProjectSetMapper projectSetMapper;
+    private final com.hourglass.mapper.ProjectSplitMapMapper projectSplitMapMapper;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
@@ -112,7 +115,9 @@ public class WorkspaceService {
                             WorkspaceMetaCache metaCache,
                             WorkspaceMemberLabelOptionMapper memberLabelOptions,
                             MemberLabelLogService memberLabelLogs,
-                            ProjectAccessService projectAccessService) {
+                            ProjectAccessService projectAccessService,
+                            com.hourglass.mapper.ProjectSetMapper projectSetMapper,
+                            com.hourglass.mapper.ProjectSplitMapMapper projectSplitMapMapper) {
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
@@ -137,6 +142,8 @@ public class WorkspaceService {
         this.memberLabelOptions = memberLabelOptions;
         this.memberLabelLogs = memberLabelLogs;
         this.projectAccessService = projectAccessService;
+        this.projectSetMapper = projectSetMapper;
+        this.projectSplitMapMapper = projectSplitMapMapper;
     }
 
     /* ==================== 解析与校验 ==================== */
@@ -423,6 +430,8 @@ public class WorkspaceService {
         transitionMapper.deleteAllByWorkspace(workspaceId);
         projectMemberMapper.deleteAllByWorkspace(workspaceId);
         projectMemberRoleMapper.deleteAllByWorkspace(workspaceId);
+        projectSetMapper.deleteAllByWorkspace(workspaceId);
+        projectSplitMapMapper.deleteAllByWorkspace(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
     }
 
