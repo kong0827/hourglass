@@ -119,7 +119,8 @@ input:focus,select:focus{outline:2px solid var(--primary);outline-offset:1px;bor
 .tcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--stripe,var(--border-strong));}
 .tcard:hover{border-color:var(--border-strong);}
 .tcard.is-done::before{background:var(--success);}
-.tcard-head{display:flex;align-items:flex-start;gap:7px;}
+.tcard-head{display:flex;align-items:flex-start;gap:7px;padding-right:12px;}
+.tcard.is-done .tcard-head{padding-right:62px;}
 .pri{flex:0 0 auto;font-size:10.5px;font-weight:700;padding:1px 5px;border-radius:4px;line-height:16px;background:var(--surface-sunken);color:var(--text-2);}
 .pri.P0{background:var(--danger-soft);color:var(--danger-fg);}
 .pri.P1{background:var(--warning-soft);color:var(--warning-fg);}
@@ -142,6 +143,18 @@ input:focus,select:focus{outline:2px solid var(--primary);outline-offset:1px;bor
 .tag.tag-neutral{background:var(--surface-sunken);color:var(--text-2);}
 .tag.tag-ghost{background:transparent;border-color:var(--border);color:var(--text-3);font-weight:500;}
 .tag.cat{background:var(--surface-sunken);color:var(--text-3);font-weight:500;}
+/* 发布态二值气泡：贴在卡片右上角 / 标题文字右上，带小尾巴指向内容 */
+.pub-bubble{position:relative;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px 0 6px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--text-3);font-size:10.5px;font-weight:650;line-height:1;white-space:nowrap;box-shadow:0 1px 2px rgba(15,23,42,.07);}
+.pub-bubble.pin{position:absolute;top:8px;right:10px;z-index:2;}
+.pub-bubble::after{content:"";position:absolute;left:5px;bottom:-2.5px;width:5px;height:5px;background:inherit;border-right:1px solid var(--border);border-bottom:1px solid var(--border);transform:rotate(45deg);border-radius:0 0 1px 0;}
+.pub-bubble .bd{width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto;}
+.pub-bubble.is-on{background:var(--success-soft);border-color:transparent;color:var(--success-fg);}
+.pub-bubble.is-on::after{border-color:transparent;}
+.pub-bubble:not(.is-on) .bd{background:transparent;box-shadow:inset 0 0 0 1.4px var(--text-3);}
+/* 标题右上：气泡上浮到标题文字的上缘，紧跟标题、不挤占第二行 */
+.row2 .r1 > .pub-bubble,.wc-row .t > .pub-bubble{flex:0 0 auto;align-self:flex-start;margin:-1px 0 0 1px;}
+.legend .pub-bubble{position:static;box-shadow:none;}
+.legend .pub-bubble::after{display:none;}
 /* ---------- 工作页 ---------- */
 .wc-head{padding:13px 15px 0;display:flex;flex-direction:column;gap:10px;}
 .wc-head-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
@@ -179,12 +192,12 @@ input:focus,select:focus{outline:2px solid var(--primary);outline-offset:1px;bor
 .wc-group-head{display:flex;align-items:center;gap:8px;padding:8px 2px 2px;font-size:12px;font-weight:700;color:var(--text-2);}
 .wc-group-head .n{font-size:11.5px;font-weight:600;color:var(--text-3);}
 .wc-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-xs);}
-.wc-row{display:grid;grid-template-columns:minmax(0,1fr) 148px 96px 100px 128px;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid var(--border);font-size:12.5px;}
+.wc-row{display:grid;grid-template-columns:minmax(0,1fr) 148px 96px 100px;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid var(--border);font-size:12.5px;}
 .wc-row:last-child{border-bottom:0;}
 .wc-row:hover{background:var(--surface-hover);}
 .wc-row-head{background:var(--surface-sunken);font-size:11.5px;font-weight:650;color:var(--text-3);text-transform:none;}
 .wc-row .t{display:flex;align-items:center;gap:7px;min-width:0;}
-.wc-row .t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.wc-row .t > .t-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 .wc-row .muted{color:var(--text-3);font-size:12px;}
 .wc-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:46px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);color:var(--text-3);text-align:center;}
 .wc-empty h3{font-size:14px;font-weight:650;color:var(--text);}
@@ -201,6 +214,10 @@ td{padding:10px 13px;border-bottom:1px solid var(--border);vertical-align:middle
 .row2 .r1{display:flex;align-items:center;gap:7px;min-width:0;font-weight:600;color:var(--text);}
 .row2 .r1 > span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .row2 .r2{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
+.row2 .r1 > .t-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+th.col-no,td.col-no{width:46px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+td.col-no{font-weight:600;}
+.wi-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;color:var(--text-3);letter-spacing:.01em;flex:0 0 auto;}
 tbody tr:last-child td{border-bottom:0;}
 tbody tr:hover td{background:var(--surface-hover);}
 tr.grprow td{background:var(--surface-sunken);font-weight:700;font-size:12px;padding:7px 13px;}
@@ -277,7 +294,7 @@ td.muted{color:var(--text-3);}
     <main class="content">
       <div class="proto-banner">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v5"/></svg>
-        <span><b>发布态只有两档：已发布 / 未发布</b>「已发布」= 有成功正式生产发布记录（含已回滚）或人工补录，两者都没有就是未发布。看板已完成列头的快捷筛选<b>只作用于该列</b>，计数、预览与点进工作页沿用同一口径；顶部发布态与列头属<b>同一维度</b>，后设的覆盖先设的。已完成工作页<b>默认全部历史并分页加载</b>，不再只显示最近几条；明细<b>默认列表形态</b>，工具条可切卡片。</span>
+        <span><b>发布态只有两档：已发布 / 未发布</b>「已发布」= 有成功正式生产发布记录（含已回滚）或人工补录，两者都没有就是未发布。<b>只有已完成的工作项才显示发布态气泡</b>，未完成的工作项没有发布态、不占位，发布态筛选也只匹配已完成项。气泡做成小气泡贴在标题右上角（卡片上钉在卡片右上角，列表里紧跟标题文字上浮半行，带一个小尾巴指向内容），具体来源（生产生效 / 已回滚 / 曾发布 / 人工补录）放在悬停提示里，不再占标题旁的位置，也不单设「发布态」列。列表带<b>序号列 + 项目内编号</b>（序号随筛选排序变化，编号创建后不变），参照缺陷列表。看板已完成列头的快捷筛选<b>只作用于该列</b>，计数、预览与点进工作页沿用同一口径；顶部发布态与列头属<b>同一维度</b>，后设的覆盖先设的。已完成工作页<b>默认全部历史并分页加载</b>，不再只显示最近几条；明细<b>默认列表形态</b>，工具条可切卡片。</span>
       </div>
 
       <div class="view-tabs" role="tablist" aria-label="切换原型视图">
@@ -314,12 +331,10 @@ td.muted{color:var(--text-3);}
         <div class="chips" id="boardChips" hidden></div>
         <div class="board" id="boardCols"></div>
         <div class="legend">
-          <span><b>已发布</b> 的判定只有一条：正式生产发布记录（成功）或人工补录</span>
-          <span class="tag tag-success">生产生效</span>
-          <span class="tag tag-neutral">生产已回滚</span>
-          <span class="tag tag-neutral">曾生产发布</span>
-          <span class="tag tag-neutral">已发布（人工）</span>
-          <span class="tag tag-ghost">未发布</span>
+          <span>发布态只标在已完成的工作项上（气泡贴在标题右上 / 卡片右上），悬停可看来源：</span>
+          <span class="pub-bubble is-on"><i class="bd" aria-hidden="true"></i>已发布</span>
+          <span class="pub-bubble"><i class="bd" aria-hidden="true"></i>未发布</span>
+          <span><b>已发布</b> = 成功正式生产发布记录（含已回滚）、曾生产发布或人工补录</span>
         </div>
       </section>
 
@@ -478,13 +493,21 @@ var OPEN_RAW = [
 ];
 
 var TASKS = [];
+/* 项目内编号：创建后不变（与列表序号无关），同项目从 WI-001 起递增 */
+var PROJECT_NO = {};
+function nextItemNo(project){
+  PROJECT_NO[project] = (PROJECT_NO[project] || 0) + 1;
+  var s = String(PROJECT_NO[project]);
+  while(s.length < 3) s = "0" + s;
+  return "WI-" + s;
+}
 DONE_RAW.forEach(function(r, i){
-  TASKS.push({ id:"d"+(i+1), col:"done", title:r[0], type:r[1], pri:r[2], owner:r[3], project:r[4],
+  TASKS.push({ id:"d"+(i+1), no:nextItemNo(r[4]), col:"done", title:r[0], type:r[1], pri:r[2], owner:r[3], project:r[4],
     due:r[5], completed:r[6], state:r[7].state||"", ever:!!r[7].ever, manual:r[7].manual||null,
     cycle:r[7].cycle, logged:r[7].logged, est:r[7].est, progress:100 });
 });
 OPEN_RAW.forEach(function(r, i){
-  TASKS.push({ id:"o"+(i+1), col:r[0], title:r[1], type:r[2], pri:r[3], owner:r[4], project:r[5],
+  TASKS.push({ id:"o"+(i+1), no:nextItemNo(r[5]), col:r[0], title:r[1], type:r[2], pri:r[3], owner:r[4], project:r[5],
     due:r[6], completed:"", state:r[7].state||"", ever:!!r[7].ever, manual:r[7].manual||null,
     progress:r[7].progress||0, cycle:0, logged:0, est:0 });
 });
@@ -516,23 +539,24 @@ function isPublished(t){
 }
 function pubMatch(t, v){
   if(!v) return true;
+  /* 未完成的工作项没有发布态，筛选与气泡口径一致 */
+  if(t.col !== "done") return false;
   return v==="published" ? isPublished(t) : !isPublished(t);
 }
 var STATE_META = { effective:["生产生效","tag-success"], partial:["生产部分生效","tag-neutral"], rolled_back:["生产已回滚","tag-neutral"], unknown:["生产覆盖未知","tag-neutral"] };
-function badgeHTML(t){
-  var meta = STATE_META[t.state || ""];
-  var html = "";
-  if(meta) html += '<span class="tag ' + meta[1] + '" title="仅来自正式生产发布记录">' + meta[0] + '</span>';
-  if(t.ever) html += '<span class="tag tag-neutral" title="历史发布事实，不代表当前生产生效">曾生产发布</span>';
-  if(t.manual && !meta && !t.ever){
-    var m = t.manual;
-    html += '<span class="tag tag-neutral" title="人工补录的历史发布事实（' + esc(m.at + " · " + m.by + "：" + m.reason) + '）；不代表当前生产生效，也不参与需求交付统计">已发布（人工）</span>';
-  }
-  return html;
+function pubDetail(t){
+  if(t.state && STATE_META[t.state]) return STATE_META[t.state][0];
+  if(t.ever) return "曾生产发布";
+  if(t.manual) return "人工补录 · " + t.manual.at + " · " + t.manual.by;
+  return "无生效生产发布记录";
 }
-function pubTagHTML(t){
-  var b = badgeHTML(t);
-  return b || '<span class="tag tag-ghost">未发布</span>';
+/* 发布态二值气泡：只有已完成的工作项才有发布态，未完成的不显示；来源与判定放悬停提示 */
+function pubBubble(t, place){
+  if(t.col !== "done") return "";
+  var on = isPublished(t);
+  var tip = on ? "已发布 · " + pubDetail(t) : "未发布 · 无生效生产发布记录";
+  return '<span class="pub-bubble' + (on ? " is-on" : "") + (place ? " " + place : "") + '" title="' + esc(tip) + '">' +
+    '<i class="bd" aria-hidden="true"></i>' + (on ? "已发布" : "未发布") + '</span>';
 }
 function pubWord(t){ return isPublished(t) ? "已发布" : "未发布"; }
 function statusName(t){ return colMeta(t.col).name; }
@@ -700,8 +724,9 @@ function cardHTML(t){
   }
   return '<article class="tcard' + (t.col === "done" ? " is-done" : "") + '" data-task="' + t.id + '" tabindex="0" style="--stripe:' +
       (t.col === "done" ? "var(--success)" : (t.due && t.due < TODAY ? "var(--danger)" : "var(--border-strong)")) + '">' +
+    pubBubble(t, "pin") +
     '<div class="tcard-head">' + priTag(t) + '<h3 class="tcard-title">' + esc(t.title) + '</h3></div>' +
-    '<div class="tcard-tags">' + typeTag(t) + '<span class="tag cat">' + esc(t.project) + '</span>' + badgeHTML(t) + '</div>' +
+    '<div class="tcard-tags">' + typeTag(t) + '<span class="tag cat">' + esc(t.project) + '</span></div>' +
     '<div class="tcard-meta">' + meta.join("") + '</div>' +
     '<div class="tcard-foot"><div class="prog' + (p >= 100 ? " full" : "") + '"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></div>' +
       avatarOf(t.owner) + '</div>' +
@@ -842,7 +867,7 @@ function renderWorkpage(){
   }else{
     var groups = groupRows(shown);
     if(wc.layout === "list"){
-      var head = '<div class="wc-row wc-row-head"><span>工作项</span><span>项目 / 负责人</span><span>状态</span><span class="hide-sm">' + (done ? "完成" : "截止") + '</span><span>发布态</span></div>';
+      var head = '<div class="wc-row wc-row-head"><span>工作项</span><span>项目 / 负责人</span><span>状态</span><span class="hide-sm">' + (done ? "完成" : "截止") + '</span></div>';
       rowsEl.innerHTML = '<div class="wc-list">' + head + groups.map(function(g){
         return (g.key ? '<div class="wc-group-head"><span>' + esc(g.key) + '</span><span class="n">' + g.rows.length + ' 项</span></div>' : "") +
           g.rows.map(function(t){ return wcRowHTML(t); }).join("");
@@ -908,11 +933,11 @@ function groupRows(rows){
 }
 function wcRowHTML(t){
   return '<div class="wc-row">' +
-    '<div class="t">' + priTag(t) + '<span title="' + esc(t.title) + '">' + esc(t.title) + '</span></div>' +
+    '<div class="t">' + priTag(t) + '<span class="wi-no" title="项目内编号，创建后不变">' + esc(t.no) + '</span>' +
+      '<span class="t-title" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' + pubBubble(t) + '</div>' +
     '<div class="muted">' + esc(t.project) + ' · ' + esc(t.owner) + '</div>' +
     '<div class="muted">' + statusName(t) + '</div>' +
     '<div class="muted hide-sm">' + (t.col === "done" ? t.completed.slice(5) : (t.due || "—").slice(5)) + '</div>' +
-    '<div>' + pubTagHTML(t) + '</div>' +
   '</div>';
 }
 
@@ -943,19 +968,19 @@ function renderList(){
     document.getElementById("listChips").hidden = !(state.globalPub || state.list.q || state.list.status || state.list.project);
     return;
   }
-  wrap.innerHTML = '<table><thead><tr><th>工作项</th><th>状态</th><th>发布态</th><th>截止 / 完成</th><th>工时 / 进度</th></tr></thead><tbody>' +
-    rows.map(function(t){
+  wrap.innerHTML = '<table><thead><tr><th class="col-no">序号</th><th>工作项</th><th>状态</th><th>截止 / 完成</th><th>工时 / 进度</th></tr></thead><tbody>' +
+    rows.map(function(t, i){
       return '<tr>' +
+        '<td class="col-no" title="当前列表序号，随筛选和排序变化">' + (i + 1) + '</td>' +
         '<td><div class="row2"><div class="r1"><span class="pri-dot" style="background:' + (t.pri==="P0"?"var(--danger)":(t.pri==="P1"?"var(--warning)":"var(--border-strong)")) + '"></span>' +
-          '<span title="' + esc(t.title) + '">' + esc(t.title) + '</span>' + typeTag(t) + '</div>' +
-          '<div class="r2"><span>' + esc(t.project) + '</span><span>负责人 ' + esc(t.owner) + '</span></div></div></td>' +
+          '<span class="t-title" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' + pubBubble(t) + typeTag(t) + '</div>' +
+          '<div class="r2"><span class="wi-no" title="项目内编号，创建后不变">' + esc(t.no) + '</span><span>' + esc(t.project) + '</span><span>负责人 ' + esc(t.owner) + '</span></div></div></td>' +
         '<td class="muted">' + statusName(t) + '</td>' +
-        '<td>' + pubTagHTML(t) + '</td>' +
         '<td class="muted">' + (t.col === "done" ? "完成 " + t.completed.slice(5) : (t.due ? "截止 " + t.due.slice(5) : "未设置")) + '</td>' +
         '<td class="muted">' + (t.col === "done" ? "实际 " + hm(t.logged) + " / 预估 " + hm(t.est) : progressOf(t) + "% · " + (t.logged ? "累计 " + hm(t.logged) : "未计时")) + '</td>' +
       '</tr>';
     }).join("") +
-    '</tbody></table><div class="list-foot">共 ' + rows.length + ' 条 · 单次最多 100 条 · 发布态与看板、工作页同源</div>';
+    '</tbody></table><div class="list-foot">共 ' + rows.length + ' 条 · 单次最多 100 条 · 发布态只标已完成项，与看板、工作页同源 · 序号随排序变化，编号不变</div>';
 
   var bits = [];
   if(state.globalPub) bits.push(chipHTML("发布态：" + (state.globalPub==="published"?"已发布":"未发布"), "list-pub"));
@@ -1001,21 +1026,20 @@ function renderMine(){
   var done = rows.filter(function(t){ return t.col === "done"; });
   function block(label, list){
     if(!list.length) return "";
-    return '<tr class="grprow"><td colspan="4">' + label + '<span class="n">' + list.length + ' 项</span></td></tr>' +
+    return '<tr class="grprow"><td colspan="3">' + label + '<span class="n">' + list.length + ' 项</span></td></tr>' +
       list.map(function(t){
         return '<tr>' +
           '<td><div class="row2"><div class="r1"><span class="pri-dot" style="background:' + (t.pri==="P0"?"var(--danger)":(t.pri==="P1"?"var(--warning)":"var(--border-strong)")) + '"></span>' +
-            '<span title="' + esc(t.title) + '">' + esc(t.title) + '</span></div>' +
-            '<div class="r2"><span>' + esc(t.project) + '</span><span>' + statusName(t) + '</span></div></div></td>' +
-          '<td>' + pubTagHTML(t) + '</td>' +
+            '<span class="t-title" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' + pubBubble(t) + '</div>' +
+            '<div class="r2"><span class="wi-no" title="项目内编号，创建后不变">' + esc(t.no) + '</span><span>' + esc(t.project) + '</span><span>' + statusName(t) + '</span></div></div></td>' +
           '<td class="muted">' + (t.col === "done" ? "完成 " + t.completed.slice(5) : (t.due ? "截止 " + t.due.slice(5) : "未设置")) + '</td>' +
           '<td class="muted">' + (t.col === "done" ? hm(t.logged) + " / " + hm(t.est) : progressOf(t) + "%") + '</td>' +
         '</tr>';
       }).join("");
   }
-  wrap.innerHTML = '<table><thead><tr><th>工作项</th><th>发布态</th><th>截止 / 完成</th><th>工时 / 进度</th></tr></thead><tbody>' +
+  wrap.innerHTML = '<table><thead><tr><th>工作项</th><th>截止 / 完成</th><th>工时 / 进度</th></tr></thead><tbody>' +
     block("进行中", open) + block("已完成", done) +
-    '</tbody></table><div class="list-foot">共 ' + rows.length + ' 项 · 发布态筛选与看板、列表共用一套口径</div>';
+    '</tbody></table><div class="list-foot">共 ' + rows.length + ' 项 · 发布态只标已完成项 · 发布态筛选与看板、列表共用一套口径</div>';
 }
 
 /* ==================== 事件 ==================== */
