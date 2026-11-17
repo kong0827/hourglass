@@ -1,6 +1,7 @@
 package com.hourglass.service;
 
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -72,6 +73,38 @@ public class HtmlDocxServiceTest {
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
             assertEquals(0, doc.getAllPictures().size());
             assertTrue(doc.getDocument().getBody().xmlText().contains("[remote]"));
+        }
+    }
+
+    /** Univer 导出的标题是 p.UniverHeading + aria-level，不能退化成正文。 */
+    @Test
+    public void exportTreatsUniverHeadingAsHeading() throws Exception {
+        String html = "<p class=\"UniverHeading\" role=\"heading\" aria-level=\"2\"><span>二级标题</span></p>"
+                + "<p class=\"UniverNormal\"><span>正文</span></p>";
+
+        byte[] docx = new HtmlDocxService().toDocx(html);
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            XWPFRun headingRun = doc.getParagraphs().get(0).getRuns().get(0);
+            XWPFRun bodyRun = doc.getParagraphs().get(1).getRuns().get(0);
+            assertTrue(headingRun.isBold(), "标题应加粗");
+            assertTrue(headingRun.getFontSizeAsDouble() != null && headingRun.getFontSizeAsDouble() >= 28,
+                    "二级标题应为 14 磅（28 半磅）");
+            assertTrue(!bodyRun.isBold(), "正文不应被连带加粗");
+        }
+    }
+
+    /** Univer 列表项正文包在 <p> 里：符号和文字要在同一段，不能只有符号单独成段。 */
+    @Test
+    public void exportKeepsUniverListItemTextOnMarkerLine() throws Exception {
+        String html = "<ul data-doc-type=\"bullet-list\"><li><p class=\"UniverNormal\"><span>项目一</span></p></li>"
+                + "<li><p class=\"UniverNormal\"><span>项目二</span></p></li></ul>";
+
+        byte[] docx = new HtmlDocxService().toDocx(html);
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            assertEquals(2, doc.getParagraphs().size());
+            assertTrue(doc.getParagraphs().get(0).getText().startsWith("•"));
+            assertTrue(doc.getParagraphs().get(0).getText().contains("项目一"));
+            assertTrue(doc.getParagraphs().get(1).getText().contains("项目二"));
         }
     }
 }
