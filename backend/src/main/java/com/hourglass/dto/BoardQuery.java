@@ -32,6 +32,13 @@ public class BoardQuery {
     private String completion;
     /** 发布态：null=全部，published=已发布（成功生产发布记录或人工历史标记），unpublished=未发布 */
     private String pubState;
+    /**
+     * 已完成列专用发布态：null=不限，published / unpublished。
+     *
+     * <p>只作用于已完成列（预览、计数与下钻），未完成列仍按 {@link #pubState} 走；
+     * 两者同时存在时，已完成列以本字段为准。
+     */
+    private String donePubState;
     /** over/today/soon */
     private String due;
     /** 今日聚焦：逾期 + 今天到期 + 进行中的 P0 */

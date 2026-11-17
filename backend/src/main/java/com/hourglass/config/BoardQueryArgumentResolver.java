@@ -51,6 +51,7 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
                 request.getParameter("columns"),
                 request.getParameter("completion"),
                 request.getParameter("pubState"));
+        query.setDonePubState(enumValue(request.getParameter("donePubState")));
         query.setDueFrom(date(request.getParameter("dueFrom")));
         query.setDueTo(date(request.getParameter("dueTo")));
         query.setStartFrom(date(request.getParameter("startFrom")));
@@ -72,6 +73,11 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
             }
         }
         return list;
+    }
+
+    private String enumValue(String v) {
+        String value = v == null ? null : v.trim();
+        return "published".equals(value) || "unpublished".equals(value) ? value : null;
     }
 
     private LocalDate date(String v) {

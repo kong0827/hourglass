@@ -30,7 +30,7 @@ var COLUMN_RULES = {
   doing:"在制品：关注逾期、阻塞与工时消耗；同时开工过多时优先收敛队列。",
   test:"等待测试：等待时长比逾期更能说明交付缓冲是否被吃掉。",
   testing:"测试中：P0/P1 优先回归，阻塞会直接拖长本轮周期。",
-  done:"已完成长期累积：默认只看本周，完整回看可切时间窗；看板只放最近 6 条。"
+  done:"已完成长期累积：默认看全部历史，需要时再收窄时间窗；看板只预览最近 6 条。"
 };
 var DEFAULT_RULE = "当前列的队列、风险与工时消耗；统计在服务端聚合，明细分页加载。";
 
@@ -93,7 +93,9 @@ var st = {
 var refocusTab = false;
 
 function isDone(col){ return col === DONE_COL; }
-function normalizeRange(v){ return v === "month" || v === "quarter" || v === "all" ? v : DEFAULT_RANGE; }
+/* 已完成是长期累积：默认看全部历史；本周只是其中一个时间窗 */
+function defaultRange(col){ return isDone(col) ? "all" : DEFAULT_RANGE; }
+function normalizeRange(v, col){ return v === "week" || v === "month" || v === "quarter" || v === "all" ? v : defaultRange(col); }
 function rangeLabel(v){
   for(var i = 0; i < RANGE_OPTIONS.length; i++) if(RANGE_OPTIONS[i][0] === v) return RANGE_OPTIONS[i][1];
   return "本周";
@@ -177,7 +179,7 @@ function scopeQuery(s){
 
 function routeHash(){
   var h = "#/workcolumn?col=" + encodeURIComponent(st.col);
-  if(isDone(st.col) && st.range !== DEFAULT_RANGE) h += "&range=" + encodeURIComponent(st.range);
+  if(isDone(st.col) && st.range !== defaultRange(st.col)) h += "&range=" + encodeURIComponent(st.range);
   if(st.group !== "none") h += "&group=" + encodeURIComponent(st.group);
   if(st.sort !== defaultSort(st.col)) h += "&sort=" + encodeURIComponent(st.sort);
   var scope = scopeQuery(st.scope);
@@ -254,7 +256,7 @@ function load(reset, quiet){
       st.sort = normalizeSort(resolved, st.sort);
       UI.closeAllPops();
     }
-    if(isDone(resolved) && data.range) st.range = normalizeRange(data.range);
+    if(isDone(resolved) && data.range) st.range = normalizeRange(data.range, resolved);
     if(data.columns && data.columns.length) st.tabs = data.columns;
     /* 追问「加载更多」的响应不带指标，沿用首屏结果 */
     var prevMetrics = st.data && st.data.metrics;
@@ -292,7 +294,7 @@ function enterWorkColumn(){
   var route = parseRoute();
   if(!route){ st.active = false; return; }
   st.col = route.col || "backlog";
-  st.range = normalizeRange(route.range);
+  st.range = normalizeRange(route.range, st.col);
   st.group = normalizeGroup(route.group);
   st.sort = normalizeSort(st.col, route.sort);
   st.scope = route.scope;
@@ -315,7 +317,7 @@ function refreshFromHash(){
   var col = route.col || "backlog";
   var next = {
     col: col,
-    range: normalizeRange(route.range),
+    range: normalizeRange(route.range, col),
     group: normalizeGroup(route.group),
     sort: normalizeSort(col, route.sort),
     scope: route.scope
@@ -1066,7 +1068,7 @@ function resultsHTML(){
     /* 时间窗本身为空时，清筛选也还是空：直接给下一步动作 */
     if(d.done && !d.rangeTotal){
       html += '<div class="wc-empty"><h3>' + esc(rangeLabel(d.range)) + '还没有完成项</h3>' +
-        '<p>把「完成时间」切到本月、近 90 天或全部历史，再回看完成记录。</p></div>';
+        '<p>' + (d.range === "all" ? '这一列还没有完成过任何工作项。' : '把「完成时间」切到全部历史，再回看完成记录。') + '</p></div>';
     }else{
       html += '<div class="wc-empty"><h3>' + (filtered ? "没有匹配的工作项" : "这一列还没有工作项") + '</h3>' +
         '<p>' + (filtered ? "调整筛选条件后再看，或清空筛选回到整列。" : (d.done ? "换个时间窗回看历史完成项。" : "从看板新建，或把卡片拖到这一列。")) + '</p>' +
@@ -1227,7 +1229,7 @@ function fixDateRange(prefix){
 function switchCol(col){
   if(!col || col === st.col) return;
   st.col = col;
-  st.range = normalizeRange(st.range);
+  st.range = normalizeRange(st.range, col);
   st.sort = normalizeSort(col, st.sort);
   /* 已完成列不累计逾期，截止期与「今日聚焦」这两个维度带过去只会得到空结果 */
   if(isDone(col)){ st.scope.due = ""; st.scope.focus = false; }
@@ -1353,7 +1355,7 @@ if(bodyEl){
       return;
     }
     if(key === "range"){
-      st.range = normalizeRange(el.value);
+      st.range = normalizeRange(el.value, st.col);
       st.offset = 0;
       syncRoute(true);
       load(true, true);

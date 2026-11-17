@@ -4187,7 +4187,7 @@ function openUnboundTasks(){
     .slice().sort(function(a, b){ return String(a.title || "").localeCompare(String(b.title || ""), "zh-CN"); });
   if(!unbound.length || !targets.length) return;
   var firstActive = targets.find(function(v){ return v.status === "active"; });
-  var selected = {}, query = "";
+  var selected = {}, query = "", publishFilter = "";
   unbound.forEach(function(t){ selected[t.id] = true; });
   var opts = targets.map(function(v){
     return '<option value="' + esc(v.id) + '"' + (v === (firstActive || targets[0]) ? " selected" : "") + '>'
@@ -4205,6 +4205,7 @@ function openUnboundTasks(){
     + '<div class="sheet-body"><div class="version-task-tools">'
     + '<select aria-label="目标版本" data-unbound-ver>' + opts + '</select>'
     + '<input type="search" placeholder="搜索工作项标题或负责人…" aria-label="搜索待分配工作项" data-unbound-search />'
+    + '<select data-unbound-publish aria-label="按发布状态筛选"><option value="">全部发布状态</option><option value="published">已发布</option><option value="unpublished">未发布</option></select>'
     + '<span class="version-task-count"></span></div><div class="version-task-list"></div>'
     + '<label class="field version-change-reason">版本调整理由（变更关联时必填）<textarea data-task-change-reason maxlength="500" placeholder="说明新增、顺延或移出此版本的原因"></textarea></label></div>'
     + '<div class="sheet-foot"><span style="flex:1"></span><button class="btn" type="button" data-unbound-cancel>取消</button>'
@@ -4214,6 +4215,7 @@ function openUnboundTasks(){
   function renderList(){
     var list = layer.querySelector(".version-task-list");
     var visible = unbound.filter(function(t){
+      if(publishFilter && taskIsPublished(t) !== (publishFilter === "published")) return false;
       if(!query) return true;
       return (String(t.title || "") + " " + String(t.owner || "")).toLowerCase().indexOf(query) !== -1;
     });
@@ -4239,6 +4241,12 @@ function openUnboundTasks(){
   });
   layer.addEventListener("change", function(e){
     if(!guard.current() || guard.busy()) return;
+    if(e.target.closest("[data-unbound-publish]")){
+      var v = e.target.value;
+      publishFilter = v === "published" || v === "unpublished" ? v : "";
+      renderList();
+      return;
+    }
     var check = e.target.closest("[data-unbound-check]");
     if(!check) return;
     selected[check.dataset.unboundCheck] = check.checked;

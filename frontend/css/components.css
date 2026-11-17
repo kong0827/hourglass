@@ -2738,7 +2738,7 @@ button.case-witem:hover{border-color:var(--primary-border);color:var(--text);}
 .demand-overview-tasks .ra-owner{color:var(--text-3);font-size:11px;margin-left:4px;}
 .demand-overview-tasks .read-empty{cursor:default;background:none;}
 .demand-body #demTasks{margin-top:10px;}
-.dem-evidence-line{display:flex;align-items:center;gap:7px;margin:0 0 9px;font-size:12px;color:var(--text-2);}
+.dem-evidence-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 9px;font-size:12px;color:var(--text-2);}
 .dem-evidence-line .foot-note{margin-left:0;}
 .demand-sheet .dem-judgement{margin:0;}
 .demand-sheet .dem-judgement .section-title{font-size:13px;font-weight:650;color:var(--text);}

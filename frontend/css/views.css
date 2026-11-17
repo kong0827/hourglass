@@ -69,6 +69,16 @@
 /* 排序生效态要压过上面的列头 icon 规则（同权重靠后者生效） */
 .board-col-head .col-sort-btn.on{color:var(--primary-fg);background:var(--primary-soft);}
 .board-col-head .col-sort-btn.on:hover{color:var(--primary-fg);background:var(--primary-soft);}
+/* 已完成列头的发布态快捷筛选：只作用于该列，计数、预览与下钻同步 */
+.board-col-head .col-pub-filter{
+  flex:0 0 auto;width:74px;height:22px;padding:0 16px 0 5px;
+  border:1px solid var(--border);border-radius:var(--r-xs);
+  background-color:var(--surface);background-position:right 4px center;
+  color:var(--text-2);font-family:inherit;font-size:11px;line-height:1;
+}
+.board-col-head .col-pub-filter:hover{border-color:var(--border-strong);color:var(--text);}
+.board-col-head .col-pub-filter:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.board-col-head .col-pub-filter.active{color:var(--primary-fg);border-color:var(--primary-border);background-color:var(--primary-soft);}
 
 .board-col-body{
   flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
@@ -112,6 +122,7 @@
 .board-col.collapsed .col-foot,
 .board-col.collapsed .col-count-btn,
 .board-col.collapsed .col-sort-btn,
+.board-col.collapsed .col-pub-filter,
 .board-col.collapsed .col-top,
 .board-col.collapsed .card-add{display:none;}
 .board-col.collapsed .board-col-head{flex-direction:column;height:auto;gap:8px;padding:0;}

@@ -3,7 +3,7 @@
 import { API } from "../core/api.js";
 import { loadCategories, pruneStaleFilters, updateTagDatalist } from "../core/app.js";
 import { board, reqListEl } from "../core/dom.js";
-import { renderFilterChips, saveViewState } from "../core/filters-ui.js";
+import { reloadFilteredViews, renderFilterChips, saveViewState } from "../core/filters-ui.js";
 import { boardParams, updateBrand, workpageScopeQuery } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
@@ -18,7 +18,28 @@ import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
 import { taskPublicationHTML, assocLinkHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, PRIORITIES, avatarHTML, colMeta, colName, dayDiff, elapsedText, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, localDatetime, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, taskDescText, typeBadgeHTML, weekdayCN } from "../lib/format.js";
 import { loadView, viewModule } from "../core/view-loader.js";
+import { initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { taskMemberLabel, syncTaskMemberTooltips } from "../lib/member-labels.js";
+
+/* 看板页「!」：列处理规则、流转与发布徽标，口径与看板列配置 / 发布派生一致 */
+registerHelp({
+  "board.guide": {
+    title: "看板状态流转与发布徽标",
+    rows: [
+      ["待处理", "系统列：不计时，逾期照常计算。新建工作项默认落这里。", "mute"],
+      ["进行中", "系统列：正常计时，逾期照常计算。", "ok"],
+      ["待测试", "默认暂停计时、仍算逾期；处理规则可在空间设置里改。", "type-story"],
+      ["测试中", "默认正常计时；处理规则同样可改。", "type-story"],
+      ["已完成", "固定结束计时、不计逾期。拖入即写完成归档快照，并停表、接力同列下一个任务。", "ok"],
+      ["怎么流转", "拖动卡片、列表行内改状态或抽屉推进都会改列并写操作日志。拖进可计时列会自动开工（同一时刻只计一个任务），拖进不计时列会停表；从已完成拖出默认要填原因，也可在流转矩阵里改成禁止。", "mute"],
+      ["发布徽标", "不是工作项字段，由成功正式生产发布记录派生：生产生效 / 生产部分生效 / 生产已回滚 / 生产覆盖未知；另有「曾生产发布」和「已发布（人工）」。", "warn"],
+      ["回滚与人工", "回滚只撤销被回滚的那一次发布；人工标记只补「有没有发布过」，不带生效状态，也不参与需求交付统计。", "warn"],
+      ["分组与筛选", "列永远是状态，列内分组只决定卡片归堆（负责人 / 优先级 / 项目 / 模块），拖拽语义不变。发布态用顶部筛选条的「发布态」，与徽标同一口径，看板、列表、层级、日历、甘特共用。", "mute"]
+    ],
+    note: "处理规则决定能不能计时、算不算逾期；能不能拖动由流转矩阵单独控制——默认全放开，只有从「已完成」拖出要求原因。"
+  }
+});
+initCaliberHelp();
 
 /* 需求文档与分支是体积较大的低频视图：看板只用到「名称查询 + 点击跳转」，
    按需 import 即可，不再把两个模块钉进首屏静态依赖图。 */
@@ -40,6 +61,9 @@ function openReqDoc(reqDocId){
 
 /* 已完成是长期累积数据：看板只放最近 N 条，完整回看进「列状态工作页」 */
 var DONE_BOARD_PREVIEW = 6;
+/* 已完成列头的发布态快捷筛选：只作用于该列，下钻时以 pubState 带进工作页 */
+var boardDonePub = "";
+function donePubLabel(v){ return v === "published" ? "已发布" : (v === "unpublished" ? "未发布" : "全部"); }
 /* 看板一屏只铺「当前在手」的量：首批与每次加载都按 20 条。
    更长的队列交给列头进度和列底「查看全部」进状态工作页，不靠一直往下拖。 */
 var BOARD_PAGE_SIZE = 20;
@@ -292,23 +316,30 @@ function openColumnWorkpage(colId, range){
   if(!colId) return;
   /* 把看板当前筛选带进子页面：进入后看到的仍是这一批工作项，而不是整列全量 */
   var scope = workpageScopeQuery();
-  /* 已完成列的时间窗跟看板当前「本周完成 / 全部完成」一致，避免点进来就空 */
-  if(!range && colId === "done" && state.doneScope === "all") range = "all";
+  /* 已完成是长期累积：进入工作页始终按全部历史取数（单次仍分页），避免只看到本周几条 */
+  if(colId === "done") range = "all";
+  if(colId === "done" && boardDonePub){
+    /* 列头筛选只属于已完成列：去掉全局发布态，避免与它互相覆盖 */
+    scope = scope.split("&").filter(function(p){ return p.indexOf("pubState=") !== 0; }).join("&");
+  }
   var hash = "#/workcolumn?col=" + encodeURIComponent(colId);
   if(range) hash += "&range=" + encodeURIComponent(range);
   if(scope) hash += "&" + scope;
+  if(colId === "done" && boardDonePub) hash += "&pubState=" + encodeURIComponent(boardDonePub);
   try{ history.pushState(null, "", hash); }
   catch(e){ window.location.hash = hash; }
   showView("workcolumn");
 }
 function loadBoard(opts){
   opts = opts || {};
+  /* 发布态一个维度只留一个生效值：顶部全局筛选在时，以它为准 */
+  if(state.pubState) boardDonePub = "";
   var seq = ++state.loadSeq;
   if(!opts.silent){
     if(!state.board) showBoardSkeleton();
     else { board.classList.add("busy"); UI.syncBusy(true); opts._busy = true; }
   }
-  return Promise.all([API.get("/api/board", boardParams({doneLimit: DONE_BOARD_PREVIEW, openLimit: BOARD_PAGE_SIZE})), loadPriorities()]).then(function(rs){
+  return Promise.all([API.get("/api/board", boardParams({doneLimit: DONE_BOARD_PREVIEW, openLimit: BOARD_PAGE_SIZE, donePubState: boardDonePub || null})), loadPriorities()]).then(function(rs){
     var data = rs[0];
     if(opts._busy) UI.syncBusy(false);
     if(seq !== state.loadSeq) return;
@@ -620,7 +651,7 @@ function renderMobileBoard(opts){
   var active = mobileColId();
   var seg = '<div class="mob-col-seg" role="tablist" aria-label="看板列">' + COLUMNS.map(function(c){
     var cd = state.board.columns[c.id] || {};
-    var n = filterOn() ? ((cd.matched || 0) + "/" + (cd.total || 0)) : (cd.total || 0);
+    var n = (filterOn() || (c.id === "done" && boardDonePub)) ? ((cd.matched || 0) + "/" + (cd.total || 0)) : (cd.total || 0);
     return '<button class="mob-col-btn' + (c.id === active ? " on" : "") + '" type="button" role="tab" ' +
       'aria-selected="' + (c.id === active) + '" data-mob-col="' + esc(c.id) + '">' +
       '<i style="background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"></i>' +
@@ -631,8 +662,9 @@ function renderMobileBoard(opts){
   var items = sortColumnItems((cd.items || []).slice(), active);
   var listHTML;
   if(!items.length){
-    var emptyTitle = filterOn() ? "无匹配工作项" : "这一列还没有工作项";
-    var emptyDesc = filterOn() ? "调整筛选条件后再看" : "从下面新建，或把别的列拖过来";
+    var mobFiltered = filterOn() || (active === "done" && !!boardDonePub);
+    var emptyTitle = mobFiltered ? "无匹配工作项" : "这一列还没有工作项";
+    var emptyDesc = mobFiltered ? "调整筛选条件后再看" : "从下面新建，或把别的列拖过来";
     listHTML = UI.emptyState({ icon:"inbox", title:emptyTitle, text:emptyDesc, actionLabel:"新建工作项", compact:true });
   }else{
     listHTML = items.map(function(t){ return cardHTML(t, 0); }).join("");
@@ -717,13 +749,25 @@ function render(opts){
     col.dataset.col = c.id;
 
     var isCustom = (c.id !== "backlog" && c.id !== "doing" && c.id !== "done");
+    /* 已完成列头快捷筛选：只改已完成列的预览与计数；顶部已设发布态时就地回显同一值 */
+    var effDonePub = c.done ? (boardDonePub || state.pubState || "") : "";
+    var doneFiltered = !!effDonePub;
     /* 计数同时也是「查看全部」入口：进度只表达已加载多少，完整数据进状态工作页 */
     var allCount = cd.allTotal || cd.total || 0;
-    var countText = filterOn()
+    var countText = (filterOn() || doneFiltered)
       ? ((cd.matched || 0) + "/" + (cd.total || 0))
       : (c.done ? String(cd.total || 0) : (cd.hasMore ? items.length + "/" + (cd.total || 0) : String(cd.total || 0)));
-    var countTip = "查看「" + c.name + "」全部 " + allCount + " 项" + (c.done ? "（含历史）" : "");
+    var countTip = doneFiltered
+      ? "已完成 · " + donePubLabel(effDonePub) + " " + (cd.matched || 0) + " 项 / 当前时间窗 " + (cd.total || 0) + " 项，点击进入工作页"
+      : "查看「" + c.name + "」全部 " + allCount + " 项" + (c.done ? "（含历史）" : "");
     var sortMode = c.done ? "manual" : colSortOf(c.id);
+    var pubSelect = c.done
+      ? '<select class="col-pub-filter' + (effDonePub ? " active" : "") + '" data-col-pub="done"' +
+        ' aria-label="已完成列按发布状态筛选" title="发布态筛选：已发布 = 有成功正式生产发布记录或人工补录；与顶部筛选同属一个维度">' +
+        [["", "全部"], ["published", "已发布"], ["unpublished", "未发布"]].map(function(o){
+          return '<option value="' + o[0] + '"' + (effDonePub === o[0] ? " selected" : "") + '>' + o[1] + '</option>';
+        }).join("") + '</select>'
+      : "";
     var head = '<div class="board-col-head">' +
       '<span class="col-dot" style="background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"' +
         (isCustom ? ' role="button" tabindex="0" data-col-color="' + esc(c.id) + '" title="修改列颜色"' : '') + '></span>' +
@@ -731,6 +775,7 @@ function render(opts){
       '<button class="col-count-btn" type="button" data-col-open="' + esc(c.id) + '" aria-live="polite"' +
         (c.done ? ' data-col-range="all"' : '') +
         ' title="' + esc(countTip) + '" aria-label="' + esc(countTip) + '">' + esc(countText) + '</button>' +
+      pubSelect +
       '<span class="sp"></span>' +
       (c.done ? '' :
         '<button class="icon-btn sm col-sort-btn' + (sortMode !== "manual" ? " on" : "") + '" type="button" data-col-sort="' + esc(c.id) + '"' +
@@ -744,7 +789,7 @@ function render(opts){
     var body = '<div class="board-col-body" role="list">';
     if(!items.length){
       var emptyText, emptyIc;
-      if(filterOn()){ emptyText = "无匹配工作项"; emptyIc = "filterOff"; }
+      if(filterOn() || doneFiltered){ emptyText = "无匹配工作项"; emptyIc = "filterOff"; }
       else if(c.done && !cd.total && cd.allTotal){ emptyText = "本周还没有完成的工作项"; emptyIc = "checkCircle"; }
       else { emptyText = "拖动卡片到这里"; emptyIc = "inbox"; }
       body += UI.colEmpty(emptyText, emptyIc);
@@ -796,12 +841,14 @@ function render(opts){
       var scopeDone = cd.total || 0;
       var allDone = cd.allTotal || 0;
       var scopeLabel = state.doneScope === "all" ? "全部完成" : "本周完成";
-      var previewBase = filterOn() ? (cd.matched || 0) : scopeDone;
+      var previewBase = (filterOn() || doneFiltered) ? (cd.matched || 0) : scopeDone;
       var previewNote = previewBase > DONE_BOARD_PREVIEW ? ' · 仅显示前 ' + DONE_BOARD_PREVIEW + ' 条' : '';
+      var pubNote = doneFiltered ? ' · ' + donePubLabel(effDonePub) + ' ' + (cd.matched || 0) + ' 项' : '';
       foot = '<div class="col-foot col-foot-split">' +
-        '<span class="col-foot-note">' + scopeLabel + ' ' + scopeDone + ' 项' + previewNote + '</span>' +
+        '<span class="col-foot-note">' + scopeLabel + ' ' + scopeDone + ' 项' + pubNote + previewNote + '</span>' +
         topBtn +
-        '<button class="col-foot-link" type="button" data-col-open="' + esc(c.id) + '" data-col-range="all">查看全部 ' + allDone + ' 条 →</button>' +
+        '<button class="col-foot-link" type="button" data-col-open="' + esc(c.id) + '" data-col-range="all">' +
+          (doneFiltered ? '查看全部 →' : '查看全部 ' + allDone + ' 条 →') + '</button>' +
       '</div>';
     }else if(allCount > 0){
       /* 队列再长也留一个固定出口：看板负责处理，完整检索去工作页 */
@@ -1250,6 +1297,14 @@ board.addEventListener("scroll", function(e){
   var btn = colEl && colEl.querySelector(".col-top");
   if(btn) btn.classList.toggle("on", el.scrollTop > COL_TOP_AT);
 }, true);
+/* 已完成列头发布态：与顶部筛选同属发布维度，列内选择接管该维度，避免两处同维条件互相覆盖 */
+board.addEventListener("change", function(e){
+  var sel = e.target.closest("[data-col-pub]");
+  if(!sel) return;
+  boardDonePub = sel.value === "published" || sel.value === "unpublished" ? sel.value : "";
+  state.pubState = null;
+  reloadFilteredViews();
+});
 board.addEventListener("click", function(e){
   var mobTab = e.target.closest("[data-mob-col]");
   if(mobTab){ mobCol = mobTab.dataset.mobCol; render({animate:false}); return; }

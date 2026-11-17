@@ -22,6 +22,7 @@ import { bindRetry } from "../core/utils.js";
 import { PRIORITIES, assocLinkHTML, taskVersionIds, taskVersionLinksHTML, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML, demandNoText } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { triggerDownload } from "../lib/download.js";
+import { registerHelp, caliberMarkHTML, initCaliberHelp } from "../lib/caliber-help.js";
 import { loadProjectMembers } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
 
@@ -54,6 +55,34 @@ var DELIVERY_STAGES = [
 ];
 var CLOSE_REASONS = { rej:"评审不通过", cancel:"中途取消", dup:"重复需求" };
 var CLOSE_STAGES = { review:"待评审", pass:"已通过", plan:"已排期" };
+/* 页面级「!」：状态与流转、交付阶段派生边界，口径与 DemandService / DemandMapper 一致 */
+var DEMAND_FLOW_HELP = {
+  title: "需求状态与流转",
+  rows: [
+    ["待评审", "新建需求默认进入。评审通过进入「已通过」；不通过会直接关闭并记录原因，之后只能重新打开回「待评审」。", "mute"],
+    ["已通过", "等待排期。可撤回评审回到待评审，也可以直接关闭。", "ok"],
+    ["已排期", "已绑定目标版本与计划日期。调期仍停留在已排期；撤销排期回到已通过，并清空版本与计划日期。", "ok"],
+    ["交付阶段", "已排期内自动派生：待开工 → 推进中（工作项开工）→ 已完成·待发布（至少 1 个工作项且全部完成、用例全部通过，0 条用例视为通过）→ 已交付（成功生产发布且未回滚）。阶段不能手工改。", "mute"],
+    ["已关闭", "保留关闭原因与关闭前阶段。评审不通过的只能重新打开回「待评审」；其他关闭恢复后回到「已通过」，需要重新排期。", "mute"],
+    ["约束", "排期不能选已发布、已关闭或已取消的版本；人工判定只能补「已完成·待发布 / 已交付」，且绑定当前目标版本，换版本即失效。", "warn"]
+  ],
+  note: "每次流转都会写需求日志并通知相关人；关闭与撤销排期都不会修改关联工作项的日期或版本。"
+};
+/* 交付阶段「?」：只在已排期内出现，四阶段的触发与回退都来自派生条件 */
+var DEMAND_STAGE_HELP = {
+  title: "交付阶段怎么变",
+  rows: [
+    ["待开工", "排期完成后的默认阶段，还没有任何开工证据。", "mute"],
+    ["推进中", "任一关联工作项移出「待处理」即触发：看板拖动、开始计时 / 补记工时，或创建时就不在「待处理」。开工是历史事实，之后拖回「待处理」也不会退回。", "type-story"],
+    ["已完成 · 待发布", "至少 1 个工作项且全部进入「已完成」，同时该需求名下所有用例最新一次执行都是「通过」（0 条用例视为通过）。新增未完成工作项或用例会退回。", "warn"],
+    ["已交付", "发布记录里有该需求，且是成功的正式生产发布、未回滚。", "ok"],
+    ["回退", "工作项重开或用例变为失败 / 阻塞 / 跳过 → 回到「推进中」（没有开工证据时回「待开工」）；发布回滚 → 回到「已完成 · 待发布」或更早阶段。", "mute"],
+    ["人工判定", "只能补「已完成 · 待发布 / 已交付」，绑定当前目标版本；一旦检测到真实生产发布，或换了目标版本，人工判定不再生效。", "warn"]
+  ],
+  note: "四个阶段实时计算、不落库，只有「已排期」需求才有。优先级：真实发布 > 人工已交付 > 派生已完成 > 人工已完成 > 推进中 > 待开工。"
+};
+registerHelp({ "demands.flow": DEMAND_FLOW_HELP, "demands.stage": DEMAND_STAGE_HELP });
+initCaliberHelp();
 var PRI_ORDER = { P0: 0, P1: 1, P2: 2, P3: 3 };
 var STATUS_ORDER = { review: 0, pass: 1, plan: 2, closed: 3, rej: 4, canceled: 4 };
 /* P0 的排序值是 0，不能用 || 兜底，否则会被当成最低优先级 */
@@ -362,6 +391,8 @@ function openDemandsForReq(reqId){
   pendingFocusReq = reqId || null;
 }
 function enterDemandsView(){
+  var flowMark = $("demandFlowHelp");
+  if(flowMark && !flowMark.firstChild) flowMark.innerHTML = caliberMarkHTML("demands.flow", true, "查看需求状态与流转说明");
   initDemSmartBar();
   restoreDemState();
   readDemandRoute();
@@ -685,7 +716,7 @@ function render(){
     return '<div class="bkl-col" data-col="' + status + '"><div class="bkl-head">'
       + '<button class="bkl-title bkl-title-link" type="button" data-dem-open="' + status + '" title="' + esc(STATUS_HINTS[status] || "") + '">'
       + '<span class="pdot" style="background:' + c[2] + '"></span><span>' + c[1] + '</span><span class="bkl-open" aria-hidden="true">↗</span></button>'
-      + (status === "plan" ? demandBoardStageFilterHTML() : "")
+      + (status === "plan" ? caliberMarkHTML("demands.stage", false, "查看交付阶段如何变化") + demandBoardStageFilterHTML() : "")
       + '<span class="bkl-count">' + (filtered ? (col.matched || 0) + " / " + ((demandBoard.counts || {}).plan || 0) : (col.matched || 0)) + '</span></div>'
       + (status === "plan" ? demandBoardDistHTML() : "")
       + (demBoardCardsHTML(items) || '<div class="foot-note demb-col-empty">'
@@ -992,7 +1023,7 @@ function demWorkStageTabsHTML(){
   return '<nav class="dem-work-tabs dem-derived-tabs" aria-label="切换交付阶段">' + tabs.map(function(t){
     var on = demWork.stage === t[0];
     return '<button type="button" class="dem-work-tab' + (on ? " on" : "") + '" data-dem-work-stage="' + t[0] + '"' + (on ? ' aria-current="page"' : '') + '>' + esc(t[1]) + '<b>' + t[2] + '</b></button>';
-  }).join("") + '</nav>';
+  }).join("") + caliberMarkHTML("demands.stage", false, "查看交付阶段如何变化") + '</nav>';
 }
 function demWorkProjectOptions(){
   return '<option value="all">全部项目</option>' + rt.reqList.map(function(r){
@@ -4259,7 +4290,7 @@ function renderDemandDetail(d){
     ? '<p class="dem-evidence-line">当前交付阶段 <span class="tag dem-stage-tag st-' + esc(d.deliveryStage)
       + (d.deliveryStageSource === "manual" ? " manual" : "") + '">' + esc(deliveryStageName(d.deliveryStage))
       + '</span><span class="foot-note">' + (d.deliveryStageSource === "manual" ? "人工判定" : "由工作项、用例与发布记录派生")
-      + '</span></p>'
+      + '</span>' + caliberMarkHTML("demands.stage", false, "查看交付阶段如何变化") + '</p>'
     : '';
   function demandFactsHTML(){
     var pri = d.priority || "P2";

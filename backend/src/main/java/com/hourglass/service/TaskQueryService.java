@@ -212,11 +212,10 @@ public class TaskQueryService {
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
         LocalDate sunday = monday.plusDays(6);
         boolean scopeAll = "all".equals(query.getDoneScope());
-        GanttQuery doneQuery = GanttQuery.from(query, today, null, null, true);
-        doneQuery.setViewerId(viewerId);
+        GanttQuery doneQuery = buildDoneQuery(query, today, viewerId);
         int doneAll = taskMapper.countDoneAll(workspaceId, viewerId);
         int doneTotal = scopeAll ? doneAll : taskMapper.countDoneInScope(workspaceId, viewerId, monday, sunday);
-        int doneMatched = hasFilters(query)
+        int doneMatched = hasFilters(query) || query.getDonePubState() != null
                 ? taskMapper.countDoneMatched(workspaceId, doneQuery, scopeAll, monday, sunday)
                 : doneTotal;
         List<Task> doneItems = doneMatched == 0 ? new ArrayList<Task>()
@@ -291,11 +290,10 @@ public class TaskQueryService {
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
         LocalDate sunday = monday.plusDays(6);
         boolean scopeAll = "all".equals(query.getDoneScope());
-        GanttQuery doneQuery = GanttQuery.from(query, today, null, null, true);
-        doneQuery.setViewerId(viewerId);
+        GanttQuery doneQuery = buildDoneQuery(query, today, viewerId);
         int doneAll = taskMapper.countDoneAll(workspaceId, viewerId);
         int doneTotal = scopeAll ? doneAll : taskMapper.countDoneInScope(workspaceId, viewerId, monday, sunday);
-        int doneMatched = hasFilters(query)
+        int doneMatched = hasFilters(query) || query.getDonePubState() != null
                 ? taskMapper.countDoneMatched(workspaceId, doneQuery, scopeAll, monday, sunday)
                 : doneTotal;
         List<Task> items = doneMatched <= query.getDoneOffset() ? new ArrayList<Task>()
@@ -766,6 +764,16 @@ public class TaskQueryService {
             }
             t.setSearchExtra(extra.toString());
         }
+    }
+
+    /** 已完成列查询：列头发布态优先于顶部全局发布态，其余条件与未完成列同源。 */
+    private GanttQuery buildDoneQuery(BoardQuery query, LocalDate today, String viewerId) {
+        GanttQuery doneQuery = GanttQuery.from(query, today, null, null, true);
+        doneQuery.setViewerId(viewerId);
+        if (query.getDonePubState() != null) {
+            doneQuery.setPubState(query.getDonePubState());
+        }
+        return doneQuery;
     }
 
     /** 已完成列是否带筛选：无筛选时直接复用 doneScope 的计数，不再多查一次 */
