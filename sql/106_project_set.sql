@@ -24,6 +24,8 @@
 --
 -- 幂等：结构变更按 information_schema 判重；数据迁移以 project_split_map
 --       是否存在 Xkp02 的拆分行判断，重复执行全部跳过（输出 run_migration=0）。
+-- 闸门：7 个固定一级分类 ID 齐全且无第 8 个一级分类、尚未拆分、新项目 ID 未占用
+--       才执行；任务 / 需求 / 用例条数允许在决策后增长，不参与判断，避免静默跳过。
 -- 事务：DDL 在事务外（MySQL 隐式提交），数据变更统一在一个事务内，失败整体回滚。
 -- 回退：仅回退应用不能恢复数据，必须用执行前的全库备份恢复。
 -- =====================================================================
@@ -32,7 +34,7 @@
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
--- 0. 前置检查（只读）：先跑这一段，确认 7 / 300 / 164 / 13 与预期一致
+-- 0. 前置检查（只读）：核对 7 个一级分类与各表条数；条数仅供核对，不参与迁移闸门
 -- ---------------------------------------------------------------------
 SELECT 'categories' AS item, COUNT(*) AS cnt FROM category WHERE project_id = 'Xkp02' AND parent_id = ''
 UNION ALL SELECT 'tasks', COUNT(*) FROM task WHERE req_id = 'Xkp02'
@@ -118,13 +120,16 @@ PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 SET @ws := (SELECT workspace_id FROM requirement WHERE id = 'Xkp02');
 SET @set := 'PSXkp02';
 
+-- 闸门只看结构身份，不绑定决策时的任务 / 需求 / 用例条数：
+-- 这三个数在 11-17 决策到上线之间可能因正常使用增长，按条数相等判断会让迁移静默跳过。
+-- 7 个固定一级分类 ID 齐全且没有第 8 个一级分类、尚未拆分、新项目 ID 未被占用，即可安全执行。
 SET @do := (
   SELECT CASE WHEN
     @ws IS NOT NULL
     AND (SELECT COUNT(*) FROM category WHERE project_id = 'Xkp02' AND parent_id = '') = 7
-    AND (SELECT COUNT(*) FROM task WHERE req_id = 'Xkp02') = 300
-    AND (SELECT COUNT(*) FROM demand WHERE req_id = 'Xkp02') = 164
-    AND (SELECT COUNT(*) FROM test_case WHERE req_id = 'Xkp02') = 13
+    AND (SELECT COUNT(*) FROM category
+          WHERE project_id = 'Xkp02' AND parent_id = ''
+            AND id IN ('Xkc002','Xkc003','Xkc004','Xkc005','Xkc007','Gmwea8xzx0sezqyfl','Gmwiy8f7vv5jx978b')) = 7
     AND NOT EXISTS (SELECT 1 FROM project_split_map WHERE old_project_id = 'Xkp02')
     AND NOT EXISTS (SELECT 1 FROM requirement WHERE id IN ('Xkp02S1','Xkp02S2','Xkp02S3','Xkp02S4','Xkp02S5','Xkp02S6','Xkp02S7'))
   THEN 1 ELSE 0 END
