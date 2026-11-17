@@ -860,7 +860,7 @@ try{
     assert(chips.length >= 2, "版本候选至少两条（实际 " + chips.length + "）");
     const noTag = chips.filter(c => c.n !== 1 || !c.text);
     assert(noTag.length === 0, "每条版本候选都带且只带一个状态标签（缺失 " + JSON.stringify(noTag.map(c => c.title)) + "）");
-    const ST = { planned:"待规划", active:"开发中", released:"已发布", closed:"已关闭", canceled:"已取消" };
+    const ST = { planned:"计划中", active:"进行中", released:"已发布", closed:"已关闭", canceled:"已取消" };
     const badText = chips.filter(c => !ST[c.cls] || ST[c.cls] !== c.text);
     assert(badText.length === 0, "标签文案与状态口径一致（planned/active/released/closed/canceled）" +
       (badText.length ? "：" + JSON.stringify(badText) : ""));

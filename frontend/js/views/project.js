@@ -717,7 +717,7 @@ function openMilestoneCreate(){
     versionEl.innerHTML = versions.length
       ? versions.map(function(v){
         return '<option value="' + esc(v.id) + '">' + esc(v.name)
-          + '（' + esc({planned:"待规划",active:"开发中",released:"已发布"}[v.status] || v.status) + '）</option>';
+          + '（' + esc({planned:"计划中",active:"进行中",released:"已发布"}[v.status] || v.status) + '）</option>';
       }).join("")
       : '<option value="">暂无可用版本，请先创建版本</option>';
     syncRule();

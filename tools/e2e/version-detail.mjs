@@ -242,6 +242,186 @@ async function main(){
     })()`);
     assert(cardEntry.name && cardEntry.act, "版本行缺少详情页入口：" + JSON.stringify(cardEntry));
     await shot("01-版本列表入口");
+
+    /* 3.1 列表对齐原型：需关注筛选 / 风险副标题 / 阻塞进度段 / 状态命名 */
+    const listModel = await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const { parseDate, dayDiff } = await import("./js/lib/format.js");
+      const { rt } = await import("./js/core/state.js");
+      const [stats, tasks] = await Promise.all([
+        API.get("/api/versions/stats", { reqId: ${JSON.stringify(main.reqId)} }),
+        API.get("/api/versions/task-options", { reqId: ${JSON.stringify(main.reqId)} })
+      ]);
+      const ended = v => v.status === "closed" || v.status === "canceled";
+      const ids = t => Array.isArray(t.versionIds) ? t.versionIds : [];
+      const rows = (stats.versions || []).map(v => {
+        const bound = (tasks || []).filter(t => ids(t).indexOf(v.id) >= 0);
+        const total = v.taskCount || 0, done = v.doneCount || 0;
+        const blocked = bound.filter(t => t.blocked && t.boardColumn !== "done").length;
+        const doing = bound.filter(t => t.boardColumn !== "done" && !t.blocked && Number(t.totalMinutes) > 0).length;
+        let overdue = 0;
+        if(v.status !== "released" && !ended(v) && v.targetDate){
+          const d = dayDiff(parseDate(v.targetDate), rt.TODAY);
+          if(d !== null && d < 0) overdue = -d;
+        }
+        const pct = total ? Math.round(done * 100 / total) : 0;
+        const doingPct = total ? Math.max(0, Math.min(100 - pct, Math.round(doing * 100 / total))) : 0;
+        return {
+          id:v.id, status:v.status, total:total, branches:(v.branches || []).length,
+          blocked:blocked, overdue:overdue, risk:blocked > 0 || overdue > 0,
+          blockedPct:total ? Math.max(0, Math.min(100 - pct - doingPct, Math.round(blocked * 100 / total))) : 0
+        };
+      });
+      return { rows: rows };
+    })()`);
+    const listUi = await evaluate(`(() => {
+      const box = document.getElementById("verList");
+      const chips = [...box.querySelectorAll("[data-ver-chips] .vl-chip")].map(c => ({
+        text: c.textContent.replace(/\\s+/g, " ").trim(),
+        status: c.getAttribute("data-ver-status"),
+        risk: c.hasAttribute("data-ver-risk-chip"),
+        on: c.classList.contains("on")
+      }));
+      const rows = [...box.querySelectorAll(".vl-row")].map(r => {
+        const sub = r.querySelector(".vl-sub");
+        const bar = r.querySelector(".vl-bar");
+        return {
+          id: r.getAttribute("data-ver-row"),
+          sub: sub ? sub.textContent.replace(/\\s+/g, " ").trim() : "",
+          risk: !!(sub && sub.querySelector(".vl-risk-inline")),
+          blockedSeg: !!(bar && bar.querySelector("i.blocked")),
+          statusText: (r.querySelector(".vl-status .tag") || { textContent: "" }).textContent.trim()
+        };
+      });
+      const cb = box.querySelector("[data-ver-risk]");
+      return { chips: chips, rows: rows, checkbox: !!cb, checked: !!(cb && cb.checked) };
+    })()`);
+    const LABELS = { active:"进行中", planned:"计划中", released:"已发布", closed:"已关闭", canceled:"已取消" };
+    const chipName = text => text.replace(/\s*\d+$/, "");
+    const chipCount = text => Number((text.match(/(\d+)$/) || [])[1] || 0);
+    const wantedChips = ["全部", "进行中", "计划中", "已发布", "已关闭"]
+      .concat(listModel.rows.some(r => r.status === "canceled") ? ["已取消"] : []);
+    assert(listUi.chips.filter(c => !c.risk).map(c => chipName(c.text)).join(",") === wantedChips.join(","),
+      "状态筛选命名未对齐原型：" + JSON.stringify(listUi.chips.map(c => c.text)));
+    const expectedRisk = listModel.rows.filter(r => r.risk).length;
+    const riskChip = listUi.chips.find(c => c.risk);
+    assert(riskChip && chipCount(riskChip.text) === expectedRisk, `需关注计数应为 ${expectedRisk}，实际 ${riskChip && riskChip.text}`);
+    const byId = {};
+    listModel.rows.forEach(r => { byId[r.id] = r; });
+    assert(listUi.rows.length === listModel.rows.length,
+      `列表行数 ${listUi.rows.length} ≠ 版本数 ${listModel.rows.length}`);
+    const badStatus = listUi.rows.filter(r => r.statusText !== LABELS[byId[r.id].status]);
+    assert(!badStatus.length, "状态标签未对齐（进行中/计划中/已发布/已关闭/已取消）：" + JSON.stringify(badStatus.map(r => [r.id, r.statusText])));
+    const badSub = listUi.rows.filter(r => {
+      const e = byId[r.id];
+      const base = e.total ? e.total + " 个工作项" : "未规划工作项";
+      const branch = e.branches ? e.branches + " 个分支" : "";
+      return r.sub.indexOf(base) === -1 || (branch && r.sub.indexOf(branch) === -1)
+        || (e.blocked > 0 && r.sub.indexOf(e.blocked + " 个阻塞") === -1)
+        || (e.overdue > 0 && r.sub.indexOf("已逾期 " + e.overdue + " 天") === -1);
+    });
+    assert(!badSub.length, "行副标题未按「工作项 / 分支 / 阻塞」展示：" + JSON.stringify(badSub.map(r => [r.id, r.sub])));
+    const badRisk = listUi.rows.filter(r => r.risk !== byId[r.id].risk
+      || r.blockedSeg !== (byId[r.id].blockedPct > 0));
+    assert(!badRisk.length, "风险提示或阻塞进度段与数据不符：" + JSON.stringify(badRisk.map(r => [r.id, r.risk, r.blockedSeg])));
+    pass(`列表状态命名 / 风险副标题 / 阻塞段（需关注 ${expectedRisk} 个，可筛 ${listUi.rows.length} 行）`);
+    await evaluate(`document.querySelector("#verList [data-ver-risk-chip]").click()`);
+    await sleep(200);
+    const riskUi = await evaluate(`(() => {
+      const box = document.getElementById("verList");
+      const chip = box.querySelector("[data-ver-risk-chip]");
+      return {
+        rows: [...box.querySelectorAll(".vl-row")].map(r => !!r.querySelector(".vl-sub .vl-risk-inline")),
+        on: !!chip && chip.classList.contains("on"),
+        checked: !!box.querySelector("[data-ver-risk]").checked,
+        empty: !!box.querySelector(".vl-empty")
+      };
+    })()`);
+    assert(riskUi.rows.length === expectedRisk && riskUi.rows.every(Boolean), "需关注筛选结果不符（应为仅风险版本 " + expectedRisk + " 行）");
+    assert(riskUi.on && riskUi.checked, "需关注 chip 与「只看需关注」勾选状态不同步");
+    await shot("02-版本列表需关注");
+    await evaluate(`document.querySelector("#verList [data-ver-risk]").click()`);
+    await sleep(200);
+    const riskReset = await evaluate(`(() => {
+      const box = document.getElementById("verList");
+      return { rows: box.querySelectorAll(".vl-row").length, checked: !!box.querySelector("[data-ver-risk]").checked };
+    })()`);
+    assert(riskReset.rows === listModel.rows.length && !riskReset.checked, "关闭只看需关注后未恢复全部版本");
+    pass("需关注筛选与勾选联动，关闭后恢复全部");
+    /* 演示库没有阻塞/逾期版本，风险分支用内存探针补验（不写库）：给主版本挂一条阻塞工作项 */
+    await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const orig = API.get;
+      window.__e2eOrigApiGet = orig;
+      API.get = function(url, params){
+        if(String(url).indexOf("/api/versions/task-options") === 0){
+          return orig.call(API, url, params).then(function(list){
+            return Array.isArray(list) ? list.concat([{
+              id:"E2E-BLOCK-PROBE", title:"E2E 阻塞探针", reqId:${JSON.stringify(main.reqId)},
+              boardColumn:"doing", totalMinutes:60, blocked:true,
+              versionIds:[${JSON.stringify(main.versionId)}]
+            }]) : list;
+          });
+        }
+        return orig.call(API, url, params);
+      };
+      const m = await import("./js/views/phase.js");
+      m.setPhaseProject(${JSON.stringify(main.reqId)}, "version");
+      return true;
+    })()`);
+    await sleep(600);
+    const probeUi = await evaluate(`(() => {
+      const box = document.getElementById("verList");
+      const row = box.querySelector('.vl-row[data-ver-row="${main.versionId}"]');
+      const chip = box.querySelector("[data-ver-risk-chip]");
+      return {
+        riskChip: chip ? chip.textContent.replace(/\\s+/g, " ").trim() : "",
+        risk: !!(row && row.querySelector(".vl-sub .vl-risk-inline")),
+        riskText: row && row.querySelector(".vl-sub .vl-risk-inline") ? row.querySelector(".vl-sub .vl-risk-inline").textContent.trim() : "",
+        blockedSeg: !!(row && row.querySelector(".vl-bar i.blocked"))
+      };
+    })()`);
+    assert(probeUi.risk && probeUi.riskText.indexOf("1 个阻塞") === 0 && probeUi.blockedSeg,
+      "模拟阻塞任务未渲染风险提示或阻塞进度段：" + JSON.stringify(probeUi));
+    assert(chipCount(probeUi.riskChip) === expectedRisk + 1, "需关注计数未包含阻塞探针：" + probeUi.riskChip);
+    await evaluate(`document.querySelector("#verList [data-ver-risk-chip]").click()`);
+    await sleep(200);
+    const probeRows = await evaluate(`document.querySelectorAll("#verList .vl-row").length`);
+    assert(probeRows === expectedRisk + 1, `需关注筛选未包含阻塞探针（${probeRows} 行）`);
+    await shot("03-版本列表阻塞探针");
+    pass("阻塞工作项 → 风险副标题 + 红色进度段 + 需关注计数（内存探针）");
+    await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      if(window.__e2eOrigApiGet){ API.get = window.__e2eOrigApiGet; delete window.__e2eOrigApiGet; }
+      document.querySelector("#verList [data-ver-risk]").click();
+      const m = await import("./js/views/phase.js");
+      m.setPhaseProject(${JSON.stringify(main.reqId)}, "version");
+      return true;
+    })()`);
+    await sleep(500);
+    await waitFor(`!document.querySelector('#verList .vl-row[data-ver-row="${main.versionId}"] .vl-sub .vl-risk-inline')`, "探针撤下");
+    pass("撤下探针后列表恢复（不改数据库）");
+
+    /* 3.2 窄屏：筛选条与新增勾选不撑破页面 */
+    await size(390, 844, true);
+    await sleep(300);
+    const listNarrow = await evaluate(`(() => {
+      const doc = document.documentElement;
+      const box = document.getElementById("verList");
+      const cb = box.querySelector("[data-ver-risk]");
+      const chips = box.querySelector("[data-ver-chips]");
+      return {
+        sw: doc.scrollWidth, cw: doc.clientWidth,
+        cb: !!cb && cb.getBoundingClientRect().width > 0,
+        chipScroll: !!chips && getComputedStyle(chips).overflowX === "auto"
+      };
+    })()`);
+    assert(listNarrow.sw <= listNarrow.cw + 1, `窄屏版本列表横向溢出：${listNarrow.sw} > ${listNarrow.cw}`);
+    assert(listNarrow.cb && listNarrow.chipScroll, "窄屏需关注勾选不可见或筛选条不可横向滚动：" + JSON.stringify(listNarrow));
+    await shot("04-版本列表窄屏");
+    await size(1440, 900, false);
+    await sleep(300);
+    pass("窄屏 390：列表无横向溢出，勾选与筛选条可用");
     await evaluate(`document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]').click()`);
     await waitFor(`document.body.dataset.view === "version"`, "版本名跳转");
     await waitFor(`location.hash.indexOf("#/version?id=${main.versionId}") === 0`, "详情页 hash");

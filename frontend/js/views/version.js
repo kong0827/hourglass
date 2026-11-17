@@ -146,7 +146,7 @@ function ended(){ var v = st.version; return !!v && (v.status === "closed" || v.
 function readOnly(){ return contentLocked() || ended(); }
 function versionName(){ return (st.version && st.version.name) || (st.stat && st.stat.name) || "版本"; }
 function statusName(s){
-  return { released:"已发布", active:"开发中", planned:"待规划", closed:"已关闭", canceled:"已取消" }[s] || s || "—";
+  return { released:"已发布", active:"进行中", planned:"计划中", closed:"已关闭", canceled:"已取消" }[s] || s || "—";
 }
 function statusTag(s){
   var cls = s === "released" ? "tag-success" : s === "active" ? "tag-info" : "ghost";
