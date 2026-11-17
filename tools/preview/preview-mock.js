@@ -588,6 +588,15 @@
     }
     /* 文档分类是扁平数组；缺这条会落到通用兜底返回对象，文档树在 cats.forEach 处直接抛错 */
     if (clean === "/api/doc-categories") { return []; }
+    /* 用例分组同样是扁平数组：覆盖团队共享 / 指定成员 / 仅自己、可编辑与不可编辑、含子组的情况 */
+    if (clean === "/api/case-sets") {
+      return [
+        { id: "S1", name: "登录与鉴权", parentId: "", visibility: "team", editable: true, caseCount: 4, subtreeCount: 6, note: "" },
+        { id: "S1-1", name: "令牌续期", parentId: "S1", visibility: "team", editable: true, caseCount: 2, subtreeCount: 2, note: "" },
+        { id: "S2", name: "日终批处理", parentId: "", visibility: "members", editable: false, caseCount: 3, subtreeCount: 3, note: "李娜等 2 人可见" },
+        { id: "S3", name: "我的回归清单", parentId: "", visibility: "personal", editable: true, kind: "dynamic", caseCount: 2, subtreeCount: 2, note: "P0 且近 30 天改动" }
+      ];
+    }
     if (clean === "/api/req-docs") {
       /* 生产接口分页返回 {items,total,hasMore}，前端统一走 getAllPages（读 page.items）；
          这里必须给出同样的形状，否则列表/阅读树都拿不到数据 */
