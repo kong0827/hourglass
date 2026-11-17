@@ -687,9 +687,9 @@ function openDrillModal(scope, val, metric){
   UI.openModal(layer);
 }
 
-/* 版本需求下钻：已排需求/已排期需求格点击，列出排到该版本的需求（与计数同口径：不含已拒绝），行点击开需求详情 */
+/* 版本需求下钻：已排需求/已排期需求格点击，列出排到该版本的需求（与后端 demandCount 同口径：不含已关闭），行点击开需求详情 */
 function demandStatusLabel(st){
-  return st === "plan" ? "已排期" : st === "pass" ? "已通过" : st === "rej" ? "已拒绝" : (st === "canceled" || st === "cancelled") ? "已取消" : "待评审";
+  return st === "plan" ? "已排期" : st === "done" ? "已完成" : st === "pass" ? "已通过" : st === "closed" ? "已关闭" : st === "rej" ? "已拒绝" : (st === "canceled" || st === "cancelled") ? "已取消" : "待评审";
 }
 function openVersionDemandsModal(versionId){
   var v = findVersion(versionId);
@@ -709,7 +709,10 @@ function openVersionDemandsModal(versionId){
   function loadRows(){
     API.getAllPages("/api/demands", { reqId: rt.phaseReqId }).then(function(demands){
       if(!document.body.contains(layer)) return;
-      var rows = (demands || []).filter(function(d){ return d.versionId === versionId && d.status !== "rej"; });
+      var rows = (demands || []).filter(function(d){
+        return d.versionId === versionId && d.status !== "closed" && d.status !== "rej"
+          && d.status !== "canceled" && d.status !== "cancelled";
+      });
       var body = rows.map(function(d){
         var canFill = canBackfill && d.status === "plan" && d.canSchedule === true;
         return '<tr data-open-demand="' + esc(d.id) + '" title="查看需求详情">'

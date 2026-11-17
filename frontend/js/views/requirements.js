@@ -3390,6 +3390,8 @@ function loadReqDocTasks(id){
 function demandStatusName(st){
   if(st === "pass") return "已通过";
   if(st === "plan") return "已排期";
+  if(st === "done") return "已完成";
+  if(st === "closed") return "已关闭";
   if(st === "rej") return "已拒绝";
   if(st === "canceled" || st === "cancelled") return "已取消";
   return "待评审";

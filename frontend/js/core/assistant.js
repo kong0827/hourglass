@@ -505,9 +505,10 @@ var ITEM_KINDS = ["新功能", "体验优化", "缺陷", "其他"];
 var NOTE_REQUIRED = { rej: 1, replan: 1, unplan: 1, cancel: 1, restore: 1 };
 var ACTION_NAME = { pass: "通过", rej: "拒绝", plan: "排期", replan: "调期", unpass: "撤回评审",
   unplan: "撤销排期", cancel: "取消", restore: "恢复", reopen: "重新打开" };
-var STATUS_NAME = { review: "待评审", pass: "已通过", plan: "已排期", rej: "已拒绝", canceled: "已取消", cancelled: "已取消" };
-var TARGET_STATUS = { pass: "pass", rej: "rej", plan: "plan", replan: "plan", unpass: "review",
-  reopen: "review", unplan: "pass", restore: "pass", cancel: "canceled" };
+var STATUS_NAME = { review: "待评审", pass: "已通过", plan: "已排期", done: "已完成", closed: "已关闭", rej: "已拒绝", canceled: "已取消", cancelled: "已取消" };
+/* 拒绝 / 取消的落点是已关闭（关闭原因区分），重开回到待评审，恢复回到已通过 */
+var TARGET_STATUS = { pass: "pass", rej: "closed", plan: "plan", replan: "plan", unpass: "review",
+  reopen: "review", unplan: "pass", restore: "pass", cancel: "closed" };
 var CARD_TITLE = { create_task: "待确认的工作项", create_demand: "待确认的需求",
   demand_action: "待确认的需求流转", move_task: "待确认的工作项流转" };
 
@@ -535,6 +536,7 @@ function normalizeDraft(d){
     demandTitle: d.demandTitle || "",
     demandStatus: d.demandStatus || "",
     demandStatusName: d.demandStatusName || STATUS_NAME[d.demandStatus] || "",
+    demandCloseStage: d.demandCloseStage || d.closeStage || "",
     demandAction: d.demandAction || "",
     note: d.note || "",
     versionId: d.versionId || "",
@@ -685,7 +687,7 @@ function demandActionBody(){
       (draft.projectName ? '<div class="ai-target-meta">' + esc(draft.projectName) + '</div>' : "") +
       '<div class="ai-flow"><span class="ai-flow-from">' + esc(draft.demandStatusName || "") + '</span>' +
         (draft.demandAction ? icon("right", 12) + '<span class="ai-flow-to">' +
-          esc(STATUS_NAME[TARGET_STATUS[draft.demandAction]] || "") + '</span>' : "") +
+          esc(STATUS_NAME[previewTargetStatus(draft)] || "") + '</span>' : "") +
       '</div>' +
     '</div>';
   if(!draft.allowedActions.length){
@@ -814,11 +816,12 @@ function pickDemand(id){
     if(!draft || draft.action !== "demand_action") return;
     var canWrite = writableProjects().some(function(p){ return p.id === d.reqId; });
     var canManage = !!d.canSchedule;
-    var acts = previewDemandActions(d.status, canWrite, canManage);
+    var acts = previewDemandActions(d.status, d.closeReason, canWrite, canManage);
     draft.demandId = d.id;
     draft.demandTitle = d.title || (cand && cand.label) || "";
     draft.demandStatus = d.status;
     draft.demandStatusName = STATUS_NAME[d.status] || d.status || "";
+    draft.demandCloseStage = d.closeStage || "";
     draft.projectName = "";
     draft.allowedActions = acts.map(function(a){ return { value: a, label: ACTION_NAME[a] }; });
     if(acts.indexOf(draft.demandAction) < 0) draft.demandAction = "";
@@ -867,15 +870,26 @@ function pickSplitDemand(id){
   });
 }
 
-function previewDemandActions(status, canWrite, canManage){
+/* 与服务端 allowedDemandActions 同口径：done 无流转动作；closed 按关闭原因给重开 / 恢复 */
+function previewDemandActions(status, closeReason, canWrite, canManage){
   var out = [];
   if(status === "review"){ if(canWrite){ out.push("pass"); out.push("rej"); } }
   else if(status === "pass"){ if(canWrite) out.push("unpass"); if(canManage) out.push("plan"); }
   else if(status === "plan"){ if(canManage){ out.push("replan"); out.push("unplan"); } }
+  else if(status === "closed"){
+    if(canManage) out.push("restore");
+    if(canWrite && closeReason === "rej") out.push("reopen");
+  }
   else if(status === "rej"){ if(canWrite) out.push("reopen"); }
   else if(status === "canceled"){ if(canManage) out.push("restore"); }
-  if(canManage && (status === "review" || status === "pass" || status === "plan" || status === "rej")) out.push("cancel");
+  if(canManage && (status === "review" || status === "pass" || status === "plan")) out.push("cancel");
   return out;
+}
+
+/* 恢复的落点由关闭前阶段决定：评审阶段关闭回到待评审，其余回到已通过（与服务端 targetStatusFor 同口径） */
+function previewTargetStatus(d){
+  if(d.demandAction === "restore") return d.demandCloseStage === "review" ? "review" : "pass";
+  return TARGET_STATUS[d.demandAction];
 }
 
 function pickTask(id){

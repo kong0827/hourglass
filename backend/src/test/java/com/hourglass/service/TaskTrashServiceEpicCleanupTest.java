@@ -31,7 +31,7 @@ class TaskTrashServiceEpicCleanupTest {
             mock(NotificationEventService.class), mock(TaskWatchService.class),
             mock(PlatformTransactionManager.class), scopeLock,
             mock(com.hourglass.mapper.VersionTaskMapper.class), systemAudit,
-            mock(com.hourglass.mapper.UserMapper.class));
+            mock(com.hourglass.mapper.UserMapper.class), mock(DemandCompletionService.class));
 
     @Test
     void softDeletingEpicClearsChildrenEpicRefs() {

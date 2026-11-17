@@ -46,7 +46,7 @@ class TaskCommandServiceDefectValidationTest {
             mock(VersionTaskMapper.class), mock(DemandMapper.class), mock(WorkspaceMetaCache.class),
             support, mock(TaskCompletionService.class), mock(TaskWorkflowService.class), audit,
             mock(NotificationEventService.class), mock(ProjectAccessService.class), mock(TimeLogService.class), scopeLock,
-            mock(ReleasePermissionService.class));
+            mock(ReleasePermissionService.class), mock(DemandCompletionService.class));
 
     @Test
     void bugWithoutSeverityIsRejected() {

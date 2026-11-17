@@ -41,7 +41,7 @@ class TaskTrashDeliveryScopeTest {
             timeLogs, audit, access,
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(NotificationEventService.class),
             mock(TaskWatchService.class), mock(PlatformTransactionManager.class), locks, bindings,
-            systemAudit, users);
+            systemAudit, users, mock(DemandCompletionService.class));
     private Task task;
 
     @BeforeEach

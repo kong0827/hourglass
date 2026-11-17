@@ -94,6 +94,8 @@ public class TestCaseService {
     /** 关联工作项列表与覆盖矩阵都要显示「已发布」徽标：与工作项列表同一派生口径 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private TaskPublicationService publications;
+    /** 用例新增 / 改需求 / 删除 / 执行都会改变需求完成判定 */
+    private final DemandCompletionService demandCompletion;
 
     public TestCaseService(TestCaseMapper caseMapper, TestCaseRunMapper runMapper,
                            TaskCommandService taskCommandService, ProjectAccessService projectAccess,
@@ -106,7 +108,8 @@ public class TestCaseService {
                            TestCaseTaskMapper caseTaskMapper, TaskMapper taskMapper,
                            WorkspaceMemberMapper memberMapper,
                            TestModuleService moduleService,
-                           com.hourglass.mapper.CaseSetMapper setMapper) {
+                           com.hourglass.mapper.CaseSetMapper setMapper,
+                           DemandCompletionService demandCompletion) {
         this.caseMapper = caseMapper;
         this.runMapper = runMapper;
         this.taskCommandService = taskCommandService;
@@ -125,6 +128,7 @@ public class TestCaseService {
         this.memberMapper = memberMapper;
         this.moduleService = moduleService;
         this.setMapper = setMapper;
+        this.demandCompletion = demandCompletion;
     }
 
     /* ---------- 查询 ---------- */
@@ -836,10 +840,12 @@ public class TestCaseService {
         c.setCreatedBy(CurrentUser.get().getDisplayName());
         c.setCreatedByUserId(userId);
         apply(c, reqId, req);
+        assertDemandNotDone(workspaceId, c.getDemandId());
         insertWithNo(c);
         syncTaskLinks(userId, c, req.getTaskIds());
         auditService.recordCurrent(workspaceId, "test_case_create", "test_case", c.getId(), c.getTitle(), true,
                 "新建测试用例「" + caseNoText(c) + " " + c.getTitle() + "」", null);
+        demandCompletion.refreshCompletion(workspaceId, c.getDemandId());
         return caseMapper.selectById(c.getId());
     }
 
@@ -903,12 +909,16 @@ public class TestCaseService {
             }
         }
         apply(c, reqId, req);
+        boolean demandChanged = !java.util.Objects.equals(oldDemandId, c.getDemandId());
+        if (demandChanged) {
+            /* 已完成需求不再接收新的用例覆盖；已有用例的编辑与执行不受影响 */
+            assertDemandNotDone(workspaceId, c.getDemandId());
+        }
         if (moved) {
             updateMovedWithNo(c);
         } else {
             caseMapper.update(c);
         }
-        boolean demandChanged = !java.util.Objects.equals(oldDemandId, c.getDemandId());
         /* taskIds=null 表示旧客户端没带该字段：保持原关联；主需求换了则必须重算，避免跨需求残留 */
         if (req.getTaskIds() != null || demandChanged) {
             syncTaskLinks(userId, c, req.getTaskIds() == null
@@ -944,6 +954,10 @@ public class TestCaseService {
         }
         auditService.recordCurrent(workspaceId, "test_case_update", "test_case", id, c.getTitle(), true,
                 what.toString(), null);
+        if (demandChanged) {
+            demandCompletion.refreshCompletion(workspaceId, oldDemandId);
+        }
+        demandCompletion.refreshCompletion(workspaceId, c.getDemandId());
         return caseMapper.selectById(id);
     }
 
@@ -1058,6 +1072,7 @@ public class TestCaseService {
         attachmentService.deleteOrphanCaseRunAttachments(workspaceId);
         auditService.recordCurrent(workspaceId, "test_case_delete", "test_case", id, c.getTitle(), true,
                 "删除测试用例「" + c.getTitle() + "」，执行流水与计划圈选一并清理", null);
+        demandCompletion.refreshCompletion(workspaceId, c.getDemandId());
     }
 
     /* ---------- 批量维护（列表多选） ---------- */
@@ -1411,6 +1426,7 @@ public class TestCaseService {
         run.setExecutedByUserId(executorId);
         runMapper.insert(run);
         caseMapper.updateLatest(workspaceId, id, req.getStatus(), note, executorName, executorId);
+        demandCompletion.refreshCompletion(workspaceId, c.getDemandId());
         return runMapper.selectById(run.getId());
     }
 
@@ -2023,6 +2039,17 @@ public class TestCaseService {
             throw AppException.badRequest("关联需求不存在或不属于该项目：" + demandId);
         }
         return d;
+    }
+
+    /** 已完成需求不再接收新的用例覆盖；已完成状态只由完成判定服务改变。 */
+    private void assertDemandNotDone(String workspaceId, String demandId) {
+        if (demandId == null) {
+            return;
+        }
+        Demand d = demandMapper.selectById(demandId);
+        if (d != null && workspaceId.equals(d.getWorkspaceId()) && "done".equals(d.getStatus())) {
+            throw AppException.badRequest("已完成需求不能新增关联用例");
+        }
     }
 
     private String ensureProject(String workspaceId, String rawReqId) {

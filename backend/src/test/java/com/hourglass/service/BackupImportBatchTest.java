@@ -163,7 +163,7 @@ class BackupImportBatchTest {
                         mock(com.hourglass.mapper.CaseSetMapper.class)),
                 mock(ActivityService.class),
                 workActivityMapper, transactionManager, scopeLock, numberSeq,
-                mock(com.hourglass.mapper.DocTemplateMapper.class));
+                mock(com.hourglass.mapper.DocTemplateMapper.class), mock(DemandCompletionService.class));
     }
 
     @ParameterizedTest
@@ -901,11 +901,18 @@ class BackupImportBatchTest {
 
     @ParameterizedTest
     @NullAndEmptySource
-    @ValueSource(strings = {" ", "unknown", "published", "done", "CANCELED"})
+    @ValueSource(strings = {" ", "unknown", "published", "doing", "CANCELED"})
     void unknownDemandStatusStillFallsBackToReview(String status) {
         service.importData("U1", "W1", backupWithDemand(status));
 
         assertEquals("review", capturedDemand().getStatus());
+    }
+
+    @Test
+    void doneDemandStatusIsPreservedOnImport() {
+        service.importData("U1", "W1", backupWithDemand("done"));
+
+        assertEquals("done", capturedDemand().getStatus());
     }
 
     private BackupData backupWithDemand(String status) {

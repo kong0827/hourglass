@@ -578,6 +578,25 @@ class AiAssistantServiceTest {
     }
 
     @Test
+    void demandDoneAfterDraftCannotBeSplit() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
+        allow("P1", true, true);
+        Demand target = demand("D1", "P1", "plan", 1L);
+        searchReturns(target);
+        when(demandService.getVisible(WS, USER, "D1")).thenReturn(target);
+        modelSays("{\"intent\":\"create_task\",\"draft\":{\"demandQuery\":\"对账\",\"title\":\"导出接口\"}}");
+
+        AiAssistantResponse chat = service.chat(USER, WS, WS_NAME, request("把对账需求拆一个任务"));
+        assertEquals("D1", chat.getDraft().getDemandId());
+
+        target.setStatus("done");
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.confirm(USER, WS, confirmOf(chat.getRequestId()))).getCode());
+        verify(taskService, never()).create(anyString(), anyString(), any(TaskSaveRequest.class));
+    }
+
+    @Test
     void readonlyOrCanceledDemandIsNotOfferedForSplit() {
         member(USER);
         when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "可写项目"), project("P2", "只读项目")));

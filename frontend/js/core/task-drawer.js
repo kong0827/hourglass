@@ -5978,7 +5978,7 @@ function openDepSection(noScroll){
   }, 0);
 }
 /* 候选行状态标签文案：与需求池 COLS / 分支 BRANCH_STATUS 同口径，颜色见 components.css .sp-tag.* */
-var DEMAND_ST_LABEL = { review:"待评审", pass:"已通过", plan:"已排期", closed:"已关闭" };
+var DEMAND_ST_LABEL = { review:"待评审", pass:"已通过", plan:"已排期", done:"已完成", closed:"已关闭" };
 var BRANCH_ST_LABEL = { dev:"开发中", testing:"待测试", merging:"待合并", released:"已发布", arch:"已归档" };
 /* 关联就地编辑（P4）：需求 / 分支。候选取自抽屉已加载的 iDemand / iBranch 下拉，
    复用 search-picker 骨架与 factSave 整表保存；选中即写回下拉 + 自动保存，失败由表单保存回滚。
@@ -5993,7 +5993,7 @@ function openAssocFact(kind, anchor){
   var title = isDemand ? "关联需求" : "所属分支";
   var clearLabel = isDemand ? "不关联" : "未设置";
   var foot = isDemand
-    ? "候选来自当前项目；已拒绝 / 已取消需求不作为新关联。选中即保存。"
+    ? "候选来自当前项目；已关闭、已完成需求不作为新关联。选中即保存。"
     : "候选来自当前项目分支；归档分支已标注。选中即保存。";
   var query = "";
   var el = document.createElement("div");

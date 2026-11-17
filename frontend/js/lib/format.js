@@ -400,7 +400,7 @@ function versionPhaseInfoHTML(){
 /* 需求池甘特的计算口径：甘特页「?」说明弹层的文案源 */
 function demandGanttInfoHTML(){
   var stages = [
-    ["review", "评审", "需求创建 → 最后一次评审通过；待评审算到今天，已拒绝停在最后一次拒绝", "区间"],
+    ["review", "评审", "需求创建 → 最后一次评审通过；待评审算到今天，评审不通过关闭停在最后一次拒绝", "区间"],
     ["plan", "排期", "评审通过 → 最后一次排期或调期决定；撤排后这段历史仍保留", "区间或单点"],
     ["design", "设计", "关联文档最早创建 → 最晚发布；还有文档未发布就画到今天并标「+」", "区间"],
     ["dev", "开发", "工作项首次离开「待处理」或首次计时 → 最后一个工作项完成；计划开始日不参与", "区间"],
@@ -425,7 +425,7 @@ function demandGanttInfoHTML(){
       '<div class="type-help-row"><span class="mini-tag mute">天数口径</span>' +
         '<span class="type-help-desc">条形标注的是阶段首尾的自然日天数，含周末和中间缺口，不是投入工时；进行中显示「N 天+」，不随缩放或可视范围裁剪。条形太窄时不标，悬停可看完整起止与天数。</span></div>' +
       '<div class="type-help-row"><span class="mini-tag type-bug">并行与取消</span>' +
-        '<span class="type-help-desc">时间重叠的阶段自动上下分层；已取消的需求工作阶段停在取消日，不再往今天生长，既有发布事实仍保留。</span></div>' +
+        '<span class="type-help-desc">时间重叠的阶段自动上下分层；已关闭的需求工作阶段停在关闭日，不再往今天生长，既有发布事实仍保留。</span></div>' +
       '<div class="type-help-row"><span class="mini-tag type-epic">范围与计划</span>' +
         '<span class="type-help-desc">默认自动适配已加载需求并包含今天，甘特按页加载，加载越多范围越宽；跨度超过 2 年切到按月查看。左侧「计划」是计划日期，不参与阶段计算。</span></div>' +
     '</div>';

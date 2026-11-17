@@ -31,7 +31,7 @@ public class AiAssistantDraft {
     private LocalDate dueDate;
     private String severity;
     private String boardColumn;
-    /** 从需求拆分：demandId 即关联需求，项目固定为需求所在项目，确认时复核可写与未取消 */
+    /** 从需求拆分：demandId 即关联需求，项目固定为需求所在项目，确认时复核可写与未关闭、未完成 */
     private boolean fromDemand;
 
     /* ---- create_demand ---- */
@@ -59,6 +59,8 @@ public class AiAssistantDraft {
     private String demandTitle;
     private String demandStatus;
     private String demandStatusName;
+    /** 已关闭需求的关闭前阶段：恢复目标随之回到待评审或已通过 */
+    private String demandCloseStage;
     private String targetStatusName;
     private String actionName;
     private String taskTitle;

@@ -21,6 +21,27 @@
     COALESCE(ev_release.deliveredAt, CASE WHEN dj.judged_stage = 'delivered' THEN dj.effective_on END)
   </sql>
 
+  <!--
+    有效生产发布条目：只认成功、生产、deploy / redeploy、全量覆盖的发布条目。
+    失败、测试 / 预发、部分成功不算交付；回滚按工作项撤销它引用的那次发布，
+    之后重新发布同一工作项时新记录的条目再次生效。与 TaskPublicationService 的推导同口径。
+    依赖外部查询提供 version_release_item i 与 version_release vr 两个别名。
+  -->
+  <sql id="effectivePublishedItemCond">
+    vr.result = 'success' AND vr.environment = 'production' AND vr.operation &lt;&gt; 'rollback'
+    AND vr.coverage = 'full' AND i.disposition = 'published'
+    AND NOT EXISTS (
+      SELECT 1 FROM version_release rb
+      INNER JOIN version_release_item ri ON ri.workspace_id = rb.workspace_id AND ri.release_id = rb.id
+      WHERE rb.workspace_id = vr.workspace_id AND rb.related_release_id = vr.id
+        AND rb.result = 'success' AND rb.environment = 'production' AND rb.operation = 'rollback'
+        AND ri.task_id = i.task_id
+        AND (rb.occurred_at &gt; vr.occurred_at
+             OR (rb.occurred_at = vr.occurred_at AND rb.recorded_at &gt; vr.recorded_at)
+             OR (rb.occurred_at = vr.occurred_at AND rb.recorded_at = vr.recorded_at AND rb.id &gt; vr.id))
+    )
+  </sql>
+
   <sql id="deliveryEvidenceCols">
     COALESCE(ev_task.taskCount, 0) AS taskCount, COALESCE(ev_task.taskDone, 0) AS taskDone,
     COALESCE(ev_case.caseCount, 0) AS caseCount, COALESCE(ev_case.casePassed, 0) AS casePassed,
@@ -28,41 +49,42 @@
     dj.judged_stage AS manualDeliveryStage, dj.effective_on AS manualDeliveryEffectiveOn,
     dj.judge_reason AS manualDeliveryReason, dj.judged_by_name AS manualDeliveryJudgedBy,
     dj.judged_at AS manualDeliveryJudgedAt,
-    CASE WHEN d.status = 'plan' AND v.status = 'released' AND <include refid="effectiveDeliveredAt"/> IS NULL
+    CASE WHEN d.status IN ('plan', 'done') AND v.status = 'released' AND <include refid="effectiveDeliveredAt"/> IS NULL
          THEN 1 ELSE 0 END AS deliveryEvidenceMissing,
     <include refid="deliveryStageExpr"/> AS deliveryStage,
     <include refid="deliveryStageSourceExpr"/> AS deliveryStageSource
   </sql>
 
+  <!-- 交付阶段是只读派生：plan 只看真实开工，done 只看发布/人工判定；完成与交付分开表达。 -->
   <sql id="deliveryStageExpr">
     CASE
-      WHEN d.status &lt;&gt; 'plan' THEN NULL
-      WHEN ev_release.deliveredAt IS NOT NULL THEN 'delivered'
-      WHEN dj.judged_stage = 'delivered' THEN 'delivered'
-      WHEN COALESCE(ev_task.taskCount, 0) &gt; 0
-           AND COALESCE(ev_task.taskDone, 0) &gt;= ev_task.taskCount
-           AND COALESCE(ev_case.caseCount, 0) = COALESCE(ev_case.casePassed, 0) THEN 'donePending'
-      WHEN dj.judged_stage = 'donePending' THEN 'donePending'
-      WHEN ev_start.devStart IS NOT NULL THEN 'active'
-      ELSE 'waiting'
+      WHEN d.status = 'done' THEN
+        CASE
+          WHEN ev_release.deliveredAt IS NOT NULL THEN 'delivered'
+          WHEN dj.judged_stage = 'delivered' THEN 'delivered'
+          ELSE 'donePending'
+        END
+      WHEN d.status = 'plan' THEN
+        CASE WHEN ev_start.devStart IS NOT NULL THEN 'active' ELSE 'waiting' END
+      ELSE NULL
     END
   </sql>
 
   <sql id="deliveryStageSourceExpr">
     CASE
-      WHEN d.status &lt;&gt; 'plan' THEN NULL
-      WHEN ev_release.deliveredAt IS NOT NULL THEN 'release'
-      WHEN dj.judged_stage = 'delivered' THEN 'manual'
-      WHEN COALESCE(ev_task.taskCount, 0) &gt; 0
-           AND COALESCE(ev_task.taskDone, 0) &gt;= ev_task.taskCount
-           AND COALESCE(ev_case.caseCount, 0) = COALESCE(ev_case.casePassed, 0) THEN 'derived'
-      WHEN dj.judged_stage = 'donePending' THEN 'manual'
-      ELSE 'derived'
+      WHEN d.status = 'done' THEN
+        CASE
+          WHEN ev_release.deliveredAt IS NOT NULL THEN 'release'
+          WHEN dj.judged_stage = 'delivered' THEN 'manual'
+          ELSE 'derived'
+        END
+      WHEN d.status = 'plan' THEN 'derived'
+      ELSE NULL
     END
   </sql>
 
   <sql id="deliveryRiskExpr">
-    d.status = 'plan' AND <include refid="effectiveDeliveredAt"/> IS NULL AND (
+    d.status IN ('plan', 'done') AND <include refid="effectiveDeliveredAt"/> IS NULL AND (
       COALESCE(ev_task.taskCount, 0) = 0
       OR COALESCE(ev_case.casePassed, 0) &lt; COALESCE(ev_case.caseCount, 0)
       OR (d.expect_date IS NOT NULL AND d.expect_date &lt; CURRENT_DATE)
@@ -129,8 +151,7 @@
       SELECT i.demand_id, MAX(COALESCE(vr.published_on, DATE(vr.occurred_at))) AS deliveredAt
       FROM version_release_item i
       INNER JOIN version_release vr ON vr.workspace_id = i.workspace_id AND vr.id = i.release_id
-      WHERE i.workspace_id = #{q.workspaceId}
-        AND vr.result = 'success' AND vr.environment = 'production' AND i.disposition = 'published'
+      WHERE i.workspace_id = #{q.workspaceId} AND <include refid="effectivePublishedItemCond"/>
       GROUP BY i.demand_id
     ) ev_release ON ev_release.demand_id = d.id
     LEFT JOIN demand_delivery_judgement dj
@@ -148,7 +169,7 @@
   <select id="selectByReq" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
-    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'closed', 'rej', 'canceled'), created_at DESC, id
+    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'done', 'closed', 'rej', 'canceled'), created_at DESC, id
   </select>
 
   <select id="selectById" resultType="Demand">
@@ -164,6 +185,47 @@
     <include refid="deliveryEvidenceJoins"/>
     WHERE d.id = #{id}
   </select>
+
+  <!-- 完成判定证据：与交付阶段派生同一口径，只算这一条需求。 -->
+  <select id="selectCompletionEvidence" resultType="map">
+    SELECT
+      EXISTS (
+        SELECT 1 FROM version_release_item i
+        INNER JOIN version_release vr ON vr.workspace_id = i.workspace_id AND vr.id = i.release_id
+        WHERE i.workspace_id = d.workspace_id AND i.demand_id = d.id
+          AND <include refid="effectivePublishedItemCond"/>
+      ) AS releaseDelivered,
+      EXISTS (
+        SELECT 1 FROM demand_delivery_judgement dj
+        WHERE dj.workspace_id = d.workspace_id AND dj.active_demand_id = d.id
+          AND dj.judged_stage = 'delivered' AND dj.version_id &lt;=&gt; d.version_id
+      ) AS manualDelivered,
+      (SELECT COUNT(*) FROM task t
+        WHERE t.workspace_id = d.workspace_id AND t.demand_id = d.id AND t.deleted_at IS NULL) AS taskCount,
+      (SELECT COUNT(*) FROM task t
+        WHERE t.workspace_id = d.workspace_id AND t.demand_id = d.id AND t.deleted_at IS NULL
+          AND t.board_column = 'done') AS taskDone,
+      (SELECT COUNT(*) FROM test_case tc
+        WHERE tc.workspace_id = d.workspace_id AND tc.demand_id = d.id) AS caseCount,
+      (SELECT COUNT(*) FROM test_case tc
+        WHERE tc.workspace_id = d.workspace_id AND tc.demand_id = d.id
+          AND (SELECT r.status FROM test_case_run r
+                WHERE r.workspace_id = tc.workspace_id AND r.case_id = tc.id
+                ORDER BY r.created_at DESC, r.id DESC LIMIT 1) = 'passed') AS casePassed
+    FROM demand d
+    WHERE d.workspace_id = #{workspaceId} AND d.id = #{demandId}
+  </select>
+
+  <!-- 自动完成只动状态与 revision，不覆盖其他字段，也不参与列表编辑的 revision CAS。 -->
+  <update id="markDone">
+    UPDATE demand SET status = 'done', revision = revision + 1, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND status = 'plan'
+  </update>
+
+  <update id="reopenFromDone">
+    UPDATE demand SET status = 'plan', revision = revision + 1, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND status = 'done'
+  </update>
 
   <select id="selectByIdForUpdate" resultType="Demand">
     SELECT <include refid="pageCols"/> FROM demand d
@@ -182,7 +244,7 @@
   <select id="selectByWorkspace" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
     WHERE workspace_id = #{workspaceId}
-    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'closed', 'rej', 'canceled'), created_at DESC, id
+    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'done', 'closed', 'rej', 'canceled'), created_at DESC, id
   </select>
 
   <!-- 分页查询的共享 WHERE：看板单列 / 列表筛选 / 计数复用同一口径 -->
@@ -250,7 +312,7 @@
         ORDER BY d.created_at DESC, d.id
       </when>
       <otherwise>
-        ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'closed', 'rej', 'canceled'),
+        ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'done', 'closed', 'rej', 'canceled'),
                  FIELD(d.priority, 'P0', 'P1', 'P2', 'P3'), d.created_at DESC, d.id
       </otherwise>
     </choose>
@@ -292,7 +354,7 @@
            COALESCE(SUM(COALESCE(ev_case.caseCount, 0)), 0) AS caseCount,
            COALESCE(SUM(COALESCE(ev_case.casePassed, 0)), 0) AS casePassed,
            COALESCE(SUM(CASE WHEN <include refid="deliveryRiskExpr"/> THEN 1 ELSE 0 END), 0) AS risk,
-           COALESCE(SUM(CASE WHEN d.status = 'plan' AND <include refid="effectiveDeliveredAt"/> IS NULL AND EXISTS (
+           COALESCE(SUM(CASE WHEN d.status IN ('plan', 'done') AND <include refid="effectiveDeliveredAt"/> IS NULL AND EXISTS (
                                   SELECT 1 FROM project_version pv_missing
                                   WHERE pv_missing.workspace_id = d.workspace_id AND pv_missing.id = d.version_id
                                     AND pv_missing.status = 'released')
@@ -316,7 +378,7 @@
            COALESCE(SUM(CASE WHEN d.close_reason = 'rej' THEN 1 ELSE 0 END), 0) AS rej,
            COALESCE(SUM(CASE WHEN d.close_reason = 'cancel' THEN 1 ELSE 0 END), 0) AS cancel,
            COALESCE(SUM(CASE WHEN d.close_reason = 'dup' THEN 1 ELSE 0 END), 0) AS dup,
-           COALESCE(SUM(CASE WHEN d.close_stage IN ('pass', 'plan') THEN 1 ELSE 0 END), 0) AS restorePass
+           COALESCE(SUM(CASE WHEN d.close_stage IN ('pass', 'plan', 'done') THEN 1 ELSE 0 END), 0) AS restorePass
     FROM demand d
     <include refid="deliveryEvidenceJoins"/>
     <include refid="pageWhere"/>
@@ -360,7 +422,7 @@
   <select id="selectByVersion" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
     WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} AND status NOT IN ('closed', 'rej', 'canceled')
-    ORDER BY FIELD(status, 'plan', 'pass', 'review'), created_at, id
+    ORDER BY FIELD(status, 'done', 'plan', 'pass', 'review'), created_at, id
   </select>
 
   <select id="selectDemandTasks" resultType="Task">
@@ -617,9 +679,7 @@
     FROM version_release_item i
     INNER JOIN version_release vr ON vr.workspace_id = i.workspace_id AND vr.id = i.release_id
     WHERE i.workspace_id = #{workspaceId}
-      AND vr.result = 'success'
-      AND vr.environment = 'production'
-      AND i.disposition = 'published'
+      AND <include refid="effectivePublishedItemCond"/>
       AND i.demand_id IN
       <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
     GROUP BY i.demand_id

@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 需求生命周期与流转事件</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-demand-lifecycle">
+  <style>
+    #hg-demand-lifecycle {
+      --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+      --border:#E4E7EC; --border-strong:#D0D5DD;
+      --text:#101828; --text-2:#475467; --text-3:#667085;
+      --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+      --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+      --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+      --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+      --gray-soft:#F2F4F7; --gray-fg:#344054;
+      font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+      background:var(--bg-app); color:var(--text);
+      width:1680px; margin:0 auto; padding:42px 46px 34px;
+    }
+    #hg-demand-lifecycle * { box-sizing:border-box; margin:0; }
+
+    #hg-demand-lifecycle .fl-head { text-align:center; margin-bottom:26px; }
+    #hg-demand-lifecycle .fl-head h1 { font-size:32px; font-weight:700; letter-spacing:-.4px; }
+    #hg-demand-lifecycle .fl-head p { font-size:14.5px; color:var(--text-2); margin-top:8px; }
+
+    #hg-demand-lifecycle .fl-band {
+      background:var(--surface); border:1px solid var(--border); border-radius:13px;
+      padding:16px 20px 18px; box-shadow:0 1px 2px rgba(16,24,40,.05);
+    }
+    #hg-demand-lifecycle .fl-band + .fl-band { margin-top:13px; }
+    #hg-demand-lifecycle .fl-band-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+    #hg-demand-lifecycle .fl-band-head h2 { font-size:15px; font-weight:700; }
+    #hg-demand-lifecycle .fl-band-head span { font-size:12px; color:var(--text-3); }
+
+    #hg-demand-lifecycle .fl-chain { display:flex; align-items:center; flex-wrap:wrap; row-gap:14px; }
+    #hg-demand-lifecycle .fl-chip {
+      display:inline-flex; align-items:center; gap:7px;
+      border-radius:999px; border:1.5px solid; padding:6px 14px;
+      font-size:12.5px; font-weight:650; line-height:1.2; white-space:nowrap;
+    }
+    #hg-demand-lifecycle .fl-chip code {
+      font-family:"SFMono-Regular",Consolas,Menlo,monospace; font-size:10.5px; font-weight:400; opacity:.75;
+    }
+    #hg-demand-lifecycle .fl-chip .dot { width:7px; height:7px; border-radius:999px; flex:none; }
+    #hg-demand-lifecycle .c-gray { background:var(--gray-soft); border-color:var(--border-strong); color:var(--gray-fg); }
+    #hg-demand-lifecycle .c-gray .dot { background:#98A2B3; }
+    #hg-demand-lifecycle .c-primary { background:var(--primary-soft); border-color:var(--primary-border); color:var(--primary-fg); }
+    #hg-demand-lifecycle .c-primary .dot { background:var(--primary); }
+    #hg-demand-lifecycle .c-warning { background:var(--warning-soft); border-color:var(--warning-border); color:var(--warning-fg); }
+    #hg-demand-lifecycle .c-warning .dot { background:var(--warning); }
+    #hg-demand-lifecycle .c-plum { background:var(--plum-soft); border-color:var(--plum-border); color:var(--plum-fg); }
+    #hg-demand-lifecycle .c-plum .dot { background:var(--plum); }
+    #hg-demand-lifecycle .c-success { background:var(--success-soft); border-color:var(--success-border); color:var(--success-fg); }
+    #hg-demand-lifecycle .c-success .dot { background:var(--success); }
+    #hg-demand-lifecycle .c-dash {
+      background:var(--surface); border-style:dashed; border-color:var(--border-strong); color:var(--text-2);
+    }
+    #hg-demand-lifecycle .c-dash .dot { background:#98A2B3; }
+    #hg-demand-lifecycle .c-success-dash {
+      background:var(--success-soft); border-style:dashed; border-color:var(--success-border); color:var(--success-fg);
+    }
+    #hg-demand-lifecycle .c-success-dash .dot { background:var(--success); }
+
+    #hg-demand-lifecycle .fl-conn {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      width:112px; flex:none; padding:0 4px;
+    }
+    #hg-demand-lifecycle .fl-conn span {
+      font-size:10.5px; color:var(--text-3); margin-bottom:3px; white-space:normal;
+      text-align:center; line-height:1.35;
+    }
+    #hg-demand-lifecycle .fl-conn svg { display:block; flex:none; }
+    #hg-demand-lifecycle .fl-conn.sub { width:88px; }
+
+    #hg-demand-lifecycle .fl-entry { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+    #hg-demand-lifecycle .fl-entry .hint { font-size:11.5px; color:var(--text-3); line-height:1.5; }
+    #hg-demand-lifecycle .fl-sub-label {
+      font-size:11px; font-weight:650; color:var(--text-2);
+      padding:2px 8px; border-radius:6px; background:var(--surface-sunken); border:1px solid var(--border);
+    }
+    #hg-demand-lifecycle .fl-entry .hint code,
+    #hg-demand-lifecycle .fl-rule code,
+    #hg-demand-lifecycle .fl-note code {
+      font-family:"SFMono-Regular",Consolas,Menlo,monospace; font-size:10.8px;
+      background:var(--surface-sunken); border-radius:4px; padding:0 4px; color:var(--text);
+    }
+
+    #hg-demand-lifecycle .fl-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    #hg-demand-lifecycle .fl-card {
+      background:var(--surface); border:1px solid var(--border); border-radius:12px;
+      padding:15px 17px 16px; box-shadow:0 1px 2px rgba(16,24,40,.05);
+    }
+    #hg-demand-lifecycle .fl-card h3 { font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:8px; }
+    #hg-demand-lifecycle .fl-card h3 .tag {
+      font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:999px;
+      background:var(--gray-soft); border:1px solid var(--border); color:var(--text-2);
+    }
+    #hg-demand-lifecycle .fl-card .desc { font-size:11.5px; color:var(--text-3); margin:4px 0 11px; line-height:1.55; }
+    #hg-demand-lifecycle .fl-row { display:flex; align-items:center; flex-wrap:wrap; row-gap:8px; }
+    #hg-demand-lifecycle .fl-row + .fl-row { margin-top:8px; }
+    #hg-demand-lifecycle .fl-row .note { font-size:10.8px; color:var(--text-3); margin-left:4px; line-height:1.5; }
+    #hg-demand-lifecycle .fl-small { font-size:11.5px; padding:4px 10px; gap:6px; }
+    #hg-demand-lifecycle .fl-small .dot { width:6px; height:6px; }
+
+    #hg-demand-lifecycle .fl-three { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    #hg-demand-lifecycle .fl-fact {
+      background:var(--surface-sunken); border:1px solid var(--border); border-radius:9px;
+      padding:10px 12px 11px; font-size:11.8px; line-height:1.55; color:var(--text-2);
+    }
+    #hg-demand-lifecycle .fl-fact b { display:block; font-size:12px; color:var(--text); margin-bottom:3px; }
+    #hg-demand-lifecycle .fl-fact .from {
+      display:inline-block; margin-bottom:5px; padding:0 6px; border-radius:999px;
+      font-size:10px; font-weight:600; border:1px solid var(--border); background:var(--surface); color:var(--text-3);
+    }
+    #hg-demand-lifecycle .fl-fact code {
+      font-family:"SFMono-Regular",Consolas,Menlo,monospace; font-size:10.8px;
+      background:var(--surface); border-radius:4px; padding:0 4px; color:var(--text);
+    }
+    #hg-demand-lifecycle .fl-fact + .fl-fact { margin-top:0; }
+    #hg-demand-lifecycle .fl-matrix-note {
+      margin-top:10px; font-size:11.5px; color:var(--text-3); line-height:1.55;
+    }
+    #hg-demand-lifecycle .fl-matrix-note b { color:var(--text-2); }
+
+    #hg-demand-lifecycle .fl-rules { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:2px; }
+    #hg-demand-lifecycle .fl-rule {
+      background:var(--surface-sunken); border:1px solid var(--border); border-radius:9px;
+      padding:9px 12px 10px; font-size:11.8px; line-height:1.55; color:var(--text-2);
+    }
+    #hg-demand-lifecycle .fl-rule b { display:block; font-size:12px; color:var(--text); margin-bottom:3px; }
+    #hg-demand-lifecycle .fl-rule .kind {
+      display:inline-block; margin-left:4px; padding:0 6px; border-radius:999px;
+      font-size:10px; font-weight:600; border:1px solid var(--border); background:var(--surface); color:var(--text-3);
+    }
+    #hg-demand-lifecycle .fl-rule .kind.auto { background:var(--primary-soft); border-color:var(--primary-border); color:var(--primary-fg); }
+    #hg-demand-lifecycle .fl-rule .kind.manual { background:var(--warning-soft); border-color:var(--warning-border); color:var(--warning-fg); }
+
+    #hg-demand-lifecycle .fl-foot {
+      display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+      margin-top:18px; font-size:12.5px; color:var(--text-3);
+    }
+    #hg-demand-lifecycle .fl-foot b { color:var(--text-2); }
+    #hg-demand-lifecycle .fl-foot .pill {
+      display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+      background:var(--surface); border:1px solid var(--border); font-size:11.5px; color:var(--text-2);
+    }
+    #hg-demand-lifecycle .fl-foot .pill i { width:6px; height:6px; border-radius:999px; background:var(--success); }
+
+    @media (max-width:760px) {
+      #hg-demand-lifecycle { width:100%; padding:24px 16px; }
+      #hg-demand-lifecycle .fl-grid2 { grid-template-columns:1fr; }
+      #hg-demand-lifecycle .fl-rules { grid-template-columns:1fr; }
+      #hg-demand-lifecycle .fl-chain { flex-direction:column; align-items:flex-start; }
+      #hg-demand-lifecycle .fl-conn { width:auto; align-items:flex-start; margin-left:22px; }
+      #hg-demand-lifecycle .fl-conn span { display:none; }
+      #hg-demand-lifecycle .fl-conn svg { transform:rotate(90deg); }
+    }
+  </style>
+
+  <div class="fl-head">
+    <h1>沙漏 · 需求生命周期与流转事件</h1>
+    <p>主状态 5 个，展示状态 7 个；完成不等于发布，发布是「已完成」下的派生标记 · 判定只认证据与留痕</p>
+  </div>
+
+  <div class="fl-band">
+    <div class="fl-band-head">
+      <h2>正常主链</h2>
+      <span>实线为正常推进；箭头上的文字就是触发事件</span>
+    </div>
+
+    <div class="fl-entry">
+      <span class="fl-chip c-gray fl-small"><span class="dot"></span>提需求</span>
+      <span class="fl-conn sub"><span>创建</span>
+        <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="fl-chip c-gray"><span class="dot"></span>待评审<code>review</code></span>
+      <span class="fl-conn"><span>评审通过</span>
+        <svg width="72" height="12" viewBox="0 0 72 12" fill="none" aria-hidden="true"><path d="M1 6h64" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M61 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="fl-chip c-primary"><span class="dot"></span>已通过<code>pass</code></span>
+      <span class="fl-conn"><span>排期</span>
+        <svg width="72" height="12" viewBox="0 0 72 12" fill="none" aria-hidden="true"><path d="M1 6h64" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M61 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="fl-chip c-warning"><span class="dot"></span>待开工<code>plan/waiting</code></span>
+      <span class="fl-conn"><span>首次真实开工</span>
+        <svg width="72" height="12" viewBox="0 0 72 12" fill="none" aria-hidden="true"><path d="M1 6h64" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M61 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="fl-chip c-primary"><span class="dot"></span>推进中<code>plan/active</code></span>
+      <span class="fl-conn"><span>完成条件满足</span>
+        <svg width="72" height="12" viewBox="0 0 72 12" fill="none" aria-hidden="true"><path d="M1 6h64" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M61 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="fl-chip c-plum"><span class="dot"></span>已完成 · 待发布<code>donePending</code></span>
+    </div>
+
+    <div class="fl-entry">
+      <span class="fl-sub-label">已完成之后</span>
+      <span class="fl-chip c-plum fl-small"><span class="dot"></span>已完成 · 待发布</span>
+      <span class="fl-conn sub"><span>生产发布 / 人工判定</span>
+        <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="fl-chip c-success-dash fl-small"><span class="dot"></span>已完成 · 已交付</span>
+      <span class="hint">发布只是「已完成」上的派生标记，主状态仍是 <code>done</code>；没有生产发布记录时保持待发布。</span>
+    </div>
+
+    <div class="fl-entry">
+      <span class="hint">主状态只有 <code>review</code> / <code>pass</code> / <code>plan</code> / <code>done</code> / <code>closed</code> 五个；待开工、推进中、待发布、已交付都是派生展示，不能手工改。待开工 / 推进中由关联工作项的真实开工信号派生，计划开始日不算。</span>
+    </div>
+  </div>
+
+  <div class="fl-band">
+    <div class="fl-band-head">
+      <h2>终止与回退</h2>
+      <span>已关闭是未交付终止；已交付不回流，后续变更另开需求或缺陷</span>
+    </div>
+
+    <div class="fl-grid2">
+      <div class="fl-card">
+        <h3>终止路径：已关闭 <span class="tag">人工 · 原因必填</span></h3>
+        <div class="desc">关闭只收未交付终止：评审不通过、中途取消、重复需求；记录关闭前阶段，恢复时回到原阶段。</div>
+        <div class="fl-row">
+          <span class="fl-chip fl-small c-gray"><span class="dot"></span>待评审 / 已通过 / 已排期</span>
+          <span class="fl-conn sub"><span>关闭</span><svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="fl-chip fl-small c-dash"><span class="dot"></span>已关闭</span>
+          <span class="fl-conn sub"><span>恢复</span><svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="fl-chip fl-small c-gray"><span class="dot"></span>待评审 / 已通过</span>
+        </div>
+        <div class="fl-row"><span class="note">关闭原因：<code>rej</code> 评审不通过 / <code>cancel</code> 中途取消 / <code>dup</code> 重复需求；从已排期关闭，恢复回到已通过，须重新排期。</span></div>
+      </div>
+
+      <div class="fl-card">
+        <h3>回退路径：证据变化 <span class="tag">系统派生</span></h3>
+        <div class="desc">回退不靠人工改状态，而是证据变化后自动退回；每次变化写需求日志与证据表。</div>
+        <div class="fl-row">
+          <span class="fl-chip fl-small c-success"><span class="dot"></span>已完成 · 已交付</span>
+          <span class="fl-conn sub"><span>发布记录撤销</span><svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="fl-chip fl-small c-plum"><span class="dot"></span>已完成 · 待发布</span>
+          <span class="fl-conn sub"><span>工作项重开 / 用例失败</span><svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="fl-chip fl-small c-primary"><span class="dot"></span>推进中</span>
+        </div>
+        <div class="fl-row">
+          <span class="fl-chip fl-small c-warning"><span class="dot"></span>已排期</span>
+          <span class="fl-conn sub"><span>撤销排期</span><svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="fl-chip fl-small c-primary"><span class="dot"></span>已通过</span>
+          <span class="fl-conn sub"><span>撤回评审</span><svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="fl-chip fl-small c-gray"><span class="dot"></span>待评审</span>
+        </div>
+        <div class="fl-row"><span class="note">撤销排期与撤回评审是人工动作；其余回退由工作项、用例、发布记录自动触发。</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fl-band">
+    <div class="fl-band-head">
+      <h2>派生依据：看任务，但不只看“关联”</h2>
+      <span>关联了工作项不等于已开工；只有真实执行信号才进入推进中</span>
+    </div>
+
+    <div class="fl-three">
+      <div class="fl-fact">
+        <span class="from">待开工 → 推进中</span>
+        <b>看关联工作项有没有真实开工</b>
+        首次移出 backlog、首次计时、直接创建在执行列，三者取最早日期；<b>不读计划开始日</b>。所有任务都还在 backlog 且没计过时，仍然是待开工。
+      </div>
+      <div class="fl-fact">
+        <span class="from">推进中 → 已完成 · 待发布</span>
+        <b>看工作项完成 + 用例结果</b>
+        至少 1 个关联工作项，且全部关闭；最新用例结果全部通过，0 个用例按通过处理；同时没有生产发布记录。
+      </div>
+      <div class="fl-fact">
+        <span class="from">已完成 · 待发布 → 已交付</span>
+        <b>看生产发布记录</b>
+        存在 <code>result=success + environment=production + disposition=published</code> 的发布条目；没有真实记录时才允许管理者人工判定，并标记来源。
+      </div>
+    </div>
+
+    <div class="fl-matrix-note"><b>一句话：</b>任务“关联上了”只说明拆解完成；任务“动了 / 计时了 / 直接建在执行列”才算开工；任务“全关了 + 用例全过”才算完成；发布记录“成功了”才算交付。</div>
+  </div>
+
+  <div class="fl-band">
+    <div class="fl-band-head">
+      <h2>触发事件清单</h2>
+      <span>谁触发、满足什么条件、落到哪个状态</span>
+    </div>
+
+    <div class="fl-rules">
+      <div class="fl-rule"><b>评审通过 <span class="kind manual">人工</span></b>待评审 → 已通过；项目写权限成员可操作，写 <code>demand_log</code>。撤回评审则回到待评审。</div>
+      <div class="fl-rule"><b>评审不通过 <span class="kind manual">人工</span></b>待评审 → 已关闭，<code>closeReason=rej</code>；需求保留，WSJF 分数与历史不丢。</div>
+      <div class="fl-rule"><b>排期 / 调期 <span class="kind manual">人工</span></b>已通过 → 已排期；空间主、管理员或项目负责人可选目标版本与计划起止；目标版本不能是已发布。</div>
+      <div class="fl-rule"><b>撤销排期 <span class="kind manual">人工</span></b>已排期 → 已通过，须填写原因；不自动改任务版本、日期或状态。</div>
+      <div class="fl-rule"><b>首次真实开工 <span class="kind auto">系统</span></b>待开工 → 推进中；取首次移出 backlog、首次计时、直接创建在执行列的最早日期，不读计划开始日。</div>
+      <div class="fl-rule"><b>完成条件满足 <span class="kind auto">系统</span></b>推进中 → 已完成 · 待发布；至少一个关联工作项且全部关闭，最新用例结果全部通过，0 个用例按通过。</div>
+      <div class="fl-rule"><b>生产发布 <span class="kind auto">系统</span></b>已完成 · 待发布 → 已完成 · 已交付；须有 <code>success + production + published</code> 发布记录，真实证据优先。</div>
+      <div class="fl-rule"><b>人工交付判定 <span class="kind manual">例外</span></b>没有发布记录时，管理者可判定已交付并填写依据；标记来源，发布证据到位后以真实记录为准。</div>
+      <div class="fl-rule"><b>关闭 / 恢复 <span class="kind manual">人工</span></b>任意未交付态 → 已关闭，原因必填；恢复回到 <code>closeStage</code>，从已排期关闭的回到已通过，须重新排期。</div>
+      <div class="fl-rule"><b>回退 <span class="kind auto">系统</span></b>工作项重开或用例失败：已完成 → 推进中；发布记录撤销：已交付 → 待发布；不提供手工改回入口。</div>
+      <div class="fl-rule"><b>归档 <span class="kind manual">人工</span></b>已交付后从默认视图收起，不改主状态；已交付需求不回流，后续变更另开需求或缺陷。</div>
+      <div class="fl-rule"><b>看板列 <span class="kind auto">视图</span></b>展示 7 列：待评审 / 已通过 / 待开工 / 推进中 / 已完成 · 待发布 / 已完成 · 已交付 / 已关闭；派生列只读，不可拖。</div>
+    </div>
+  </div>
+
+  <div class="fl-foot">
+    <span><b>完成 ≠ 发布</b>：已交付只是已完成下的发布标记；<b>关闭 ≠ 完成</b>：已关闭只收未交付终止。</span>
+    <span class="pill"><i></i>发布事实只认成功的生产发布记录</span>
+  </div>
+</div>
+</body>
+</html>

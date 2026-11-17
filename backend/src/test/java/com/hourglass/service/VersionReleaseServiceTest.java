@@ -38,11 +38,12 @@ class VersionReleaseServiceTest {
     private final AuditService audits = mock(AuditService.class);
     private final WorkActivityService workActivities = mock(WorkActivityService.class);
     private final TaskLogMapper taskLogs = mock(TaskLogMapper.class);
+    private final DemandCompletionService demandCompletion = mock(DemandCompletionService.class);
     private final VersionReleaseService service = new VersionReleaseService(mapper, versions, reqMapper,
             mock(DemandMapper.class), users, versionTasks, members, locks, permissions, access,
             mock(TaskPublicationService.class), notifications, json, tx, numberSeq,
             planCases, caseTasks, cases, testPlans, audits, workActivities, taskLogs,
-            mock(CaseSetService.class));
+            mock(CaseSetService.class), demandCompletion);
     private final Map<String, VersionReleasePlan> plans = new HashMap<String, VersionReleasePlan>();
     private final Map<String, VersionRelease> records = new HashMap<String, VersionRelease>();
     private final Map<String, List<VersionReleaseItem>> items = new HashMap<String, List<VersionReleaseItem>>();
@@ -151,6 +152,31 @@ class VersionReleaseServiceTest {
         r.setResult("failed"); r.setFailureReason("build failed");
         confirm(r);
         verifyNoInteractions(taskLogs);
+        verifyNoInteractions(demandCompletion);
+    }
+    @Test void successfulProductionReleaseRefreshesAffectedDemandsOnce() {
+        scope.get(0).setDemandId("D1"); scope.get(1).setDemandId("D1");
+        confirm(request(plan("production"), "demand-refresh"));
+        verify(demandCompletion).refreshCompletion(eq("W"),
+                org.mockito.ArgumentMatchers.<Collection<String>>argThat(
+                        ids -> new ArrayList<String>(ids).equals(Arrays.asList("D1"))));
+    }
+    @Test void nonProductionSuccessDoesNotTouchDemandCompletion() {
+        scope.get(0).setDemandId("D1");
+        confirm(request(plan("test"), "test-refresh"));
+        verifyNoInteractions(demandCompletion);
+    }
+    @Test void rollbackRefreshesCurrentAndSnapshotDemands() {
+        scope.get(0).setDemandId("D1"); scope.get(1).setDemandId("D1");
+        VersionRelease first = confirm(request(plan("production"), "before-rollback"));
+        scope.get(0).setDemandId("D2");
+        ReleaseConfirmRequest r = request(null, "rollback-refresh"); r.setOperation("rollback"); r.setRelatedReleaseId(first.getId());
+        r.setActualTaskIds(Collections.singletonList("T1")); r.setDeviationReason("Rollback delivered work");
+        confirm(r);
+        verify(demandCompletion, times(2)).refreshCompletion(eq("W"), anyCollection());
+        verify(demandCompletion).refreshCompletion(eq("W"),
+                org.mockito.ArgumentMatchers.<Collection<String>>argThat(
+                        ids -> new ArrayList<String>(ids).equals(Arrays.asList("D2", "D1"))));
     }
     @Test void subsetIsExplicitAndOmittedPlanTaskGetsImmutableSnapshot() {
         ReleaseConfirmRequest r = request(plan("production"), "one"); r.setActualTaskIds(Collections.singletonList("T1")); r.setDeviationReason("Only first batch deployed");

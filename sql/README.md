@@ -62,6 +62,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `104_demand_watch.sql` 新增 `demand_watch`（需求提醒人）：一条需求一份共享关注名单，主键 `(demand_id, user_id)`，`added_by` 记录是本人关注还是他人添加。名单只决定通知收件人，不参与权限判定；提交人始终默认接收通知，不写入名单。名单随需求硬删除、空间清空、导入覆盖、成员退出空间或账号删除一并清理；JSON 任务备份不携带关注关系，恢复后为空。脚本只建表，不回填；执行后完整基线为 78 张表。
 
+`105_demand_done_status.sql` 为主状态机补「已完成 `done`」：`review → pass → plan → done`，`closed` 仍是异常终止；交付阶段改为在 `plan` / `done` 上的只读派生展示，完成不等于交付。脚本不新增表，只回填存量 `plan` 需求：有成功、生产、全量覆盖且未被后续回滚撤销的发布条目优先置 `done`，其次生效的人工交付判定（判定版本须等于当前目标版本），最后是「至少 1 个未删除工作项全部处于完成列且关联用例最新执行全部通过」；其余需求保持原状态。回填同时追加 `demand_log`（`action='complete'`），脚本幂等，执行后完整基线仍为 78 张表。
+
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。
 
 ## 3. 基线漂移校验

@@ -73,6 +73,8 @@ public class TaskCommandService {
     private final TimeLogService timeLogService;
     private final DeliveryScopeLock scopeLock;
     private final ReleasePermissionService releasePermissions;
+    /** 工作项变更后重算需求完成状态（需求完成 ≠ 交付） */
+    private final DemandCompletionService demandCompletion;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
 
@@ -87,9 +89,11 @@ public class TaskCommandService {
                               TaskWorkflowService workflow, TaskAuditLogger audit,
                               NotificationEventService notificationEvents, ProjectAccessService projectAccess,
                               TimeLogService timeLogService, DeliveryScopeLock scopeLock,
-                              ReleasePermissionService releasePermissions) {
+                              ReleasePermissionService releasePermissions,
+                              DemandCompletionService demandCompletion) {
         this.scopeLock = scopeLock;
         this.releasePermissions = releasePermissions;
+        this.demandCompletion = demandCompletion;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -197,6 +201,9 @@ public class TaskCommandService {
                     "新任务指派：" + t.getTitle(), "任务「" + t.getTitle() + "」已指派给你", id, t.getReqId());
         }
         notifyTestOwner(userId, workspaceId, t, "测试任务：");
+        if (t.getDemandId() != null) {
+            demandCompletion.refreshCompletion(workspaceId, t.getDemandId());
+        }
         return savedTaskResponse(userId, workspaceId, id);
     }
 
@@ -379,6 +386,11 @@ public class TaskCommandService {
         } else if (columnChanged && (Consts.COL_TEST.equals(t.getBoardColumn())
                 || Consts.COL_TESTING.equals(t.getBoardColumn()))) {
             notifyTestOwner(userId, workspaceId, t, "测试任务：");
+        }
+        /* 改列 / 换需求 / 改标题都会影响需求完成判定，旧需求与新需求各判一次 */
+        demandCompletion.refreshCompletion(workspaceId, old.getDemandId());
+        if (!Objects.equals(old.getDemandId(), t.getDemandId())) {
+            demandCompletion.refreshCompletion(workspaceId, t.getDemandId());
         }
         return savedTaskResponse(userId, workspaceId, id);
     }
@@ -869,8 +881,9 @@ public class TaskCommandService {
         }
         Demand demand = taskMapper.selectDemandForScope(workspaceId, task.getDemandId());
         if (demand != null && ("closed".equals(demand.getStatus())
+                || "done".equals(demand.getStatus())
                 || "canceled".equals(demand.getStatus()) || "rej".equals(demand.getStatus()))) {
-            throw AppException.badRequest("已关闭需求不能新建关联任务");
+            throw AppException.badRequest("已关闭或已完成的需求不能新建关联任务");
         }
     }
 

@@ -3268,7 +3268,7 @@ function cut(s, n){
 
 function demandStatusLabel(st){
   if(!st) return "";
-  return { review:"待评审", pass:"已通过", plan:"已排期", closed:"已关闭", rej:"已拒绝", canceled:"已取消", cancelled:"已取消" }[st] || "未知状态";
+  return { review:"待评审", pass:"已通过", plan:"已排期", done:"已完成", closed:"已关闭", rej:"已拒绝", canceled:"已取消", cancelled:"已取消" }[st] || "未知状态";
 }
 function demandPickLabel(d){
   var tag = demandStatusLabel(d.status);
@@ -3339,12 +3339,19 @@ function resetDemandFirstPage(){
   demandPicker.list = cached ? demandOptions.list : [];
   demandPicker.total = cached ? demandOptions.total : 0;
 }
+/* 已完成需求不再接收新用例（服务端同口径）：候选里隐藏，已关联的原需求仍保留展示 */
+function demandPickableList(selectedId){
+  return (demandPicker.list || []).filter(function(d){
+    return d.status !== "done" || d.id === selectedId;
+  });
+}
 function renderDemandPicker(){
   var el = demandPicker.el;
   if(!el) return;
   var box = el.querySelector("[data-demand-results]");
   var count = el.querySelector("[data-demand-count]");
   var selectedId = $("cDemand").value || "";
+  var pickable = demandPickableList(selectedId);
   if(demandPicker.error){
     box.innerHTML = '<div class="search-picker-error">' + esc(demandPicker.error) +
       '<br><button class="btn sm" type="button" data-demand-retry>重新加载</button></div>';
@@ -3359,22 +3366,25 @@ function renderDemandPicker(){
   if(count){
     count.textContent = demandPicker.loading
       ? "搜索中…"
-      : (demandPicker.total > demandPicker.list.length
-        ? "共 " + demandPicker.total + " 条 · 前 " + demandPicker.list.length + " 条"
-        : demandPicker.list.length + " 条");
+      : (pickable.length < demandPicker.list.length
+        ? "可关联 " + pickable.length + " 条"
+        : (demandPicker.total > demandPicker.list.length
+          ? "共 " + demandPicker.total + " 条 · 前 " + demandPicker.list.length + " 条"
+          : demandPicker.list.length + " 条"));
   }
   var html = '<button type="button" class="search-picker-clear' + (selectedId ? "" : " selected") + '"'
     + ' data-demand-clear aria-pressed="' + (selectedId ? "false" : "true") + '">'
     + icon("close", 13) + '<span>不关联需求</span></button>';
-  if(!demandPicker.list.length){
+  if(!pickable.length){
     html += '<div class="search-picker-empty">'
-      + (demandPicker.query ? "没有找到匹配的需求，换个关键词试试。" : "本项目需求池暂无需求。")
+      + (demandPicker.list.length ? "匹配到的需求都已完成，已完成需求不再接收新用例。"
+        : (demandPicker.query ? "没有找到匹配的需求，换个关键词试试。" : "本项目需求池暂无需求。"))
       + (demandPicker.query ? '<br><button class="btn sm" type="button" data-demand-reset>清除搜索</button>' : "")
       + '</div>';
     box.innerHTML = html;
     return;
   }
-  demandPicker.list.forEach(function(d){
+  pickable.forEach(function(d){
     var selected = d.id === selectedId;
     var meta = demandMetaText(d);
     html += '<button type="button" class="search-picker-option' + (selected ? " selected" : "") + '"'

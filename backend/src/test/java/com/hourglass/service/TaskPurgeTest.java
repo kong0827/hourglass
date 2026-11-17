@@ -111,7 +111,8 @@ class TaskPurgeTest {
                         new com.fasterxml.jackson.databind.ObjectMapper()), mock(ProjectAccessService.class),
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
                 mock(NotificationEventService.class), mock(TaskWatchService.class), transactionManager, scopeLock,
-                mock(VersionTaskMapper.class), mock(AuditService.class), mock(UserMapper.class));
+                mock(VersionTaskMapper.class), mock(AuditService.class), mock(UserMapper.class),
+                mock(DemandCompletionService.class));
     }
 
     private List<Task> expiredTasks(int count, String workspaceId) {

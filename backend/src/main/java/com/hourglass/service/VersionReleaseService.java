@@ -100,6 +100,8 @@ public class VersionReleaseService {
     private final com.hourglass.mapper.TaskLogMapper taskLogMapper;
     /** 团队共享用例分组的结果分布：与必测用例同口径冻结进发布证据 */
     private final CaseSetService caseSetService;
+    /** 发布证据变化后重新判定受影响需求的完成状态（成功生产发布 / 回滚） */
+    private final DemandCompletionService demandCompletion;
 
     public VersionReleaseService(ReleaseMapper mapper, ProjectVersionMapper versionMapper,
                                  RequirementMapper reqMapper, DemandMapper demandMapper, UserMapper userMapper,
@@ -116,7 +118,8 @@ public class VersionReleaseService {
                                  AuditService auditService,
                                  WorkActivityService workActivityService,
                                  com.hourglass.mapper.TaskLogMapper taskLogMapper,
-                                 CaseSetService caseSetService) {
+                                 CaseSetService caseSetService,
+                                 DemandCompletionService demandCompletion) {
         this.mapper = mapper;
         this.versionMapper = versionMapper;
         this.reqMapper = reqMapper;
@@ -139,6 +142,7 @@ public class VersionReleaseService {
         this.workActivityService = workActivityService;
         this.taskLogMapper = taskLogMapper;
         this.caseSetService = caseSetService;
+        this.demandCompletion = demandCompletion;
         this.notificationTx = new TransactionTemplate(transactionManager);
         this.notificationTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -863,6 +867,21 @@ public class VersionReleaseService {
         }
         log(userId, workspaceId, versionId, "rollback".equals(request.getOperation()) ? "release_rollback" : success ? "release_success" : "release_failed",
                 request.getDeviationReason() != null ? request.getDeviationReason() : success ? request.getNotes() : failure, null, record);
+        /* 成功生产发布 / 回滚改变交付证据：同一事务内重新判定受影响需求，完成 ≠ 交付 */
+        if (success && "production".equals(record.getEnvironment())) {
+            java.util.LinkedHashSet<String> affected = new java.util.LinkedHashSet<String>();
+            for (Task task : c.actual.values()) {
+                if (task.getDemandId() != null) affected.add(task.getDemandId());
+            }
+            if ("rollback".equals(request.getOperation())) {
+                /* 工作项可能已换需求：回滚同时按原发布条目快照的需求回判 */
+                for (String taskId : request.getActualTaskIds()) {
+                    VersionReleaseItem item = c.relatedItems.get(taskId);
+                    if (item != null && item.getDemandId() != null) affected.add(item.getDemandId());
+                }
+            }
+            demandCompletion.refreshCompletion(workspaceId, affected);
+        }
         if (success && "production".equals(record.getEnvironment()) && !"rollback".equals(record.getOperation()))
             scheduleNotifications(workspaceId, userId, version, counts);
         VersionRelease saved = mapper.selectByKeyForUpdate(workspaceId, versionId, request.getIdempotencyKey());

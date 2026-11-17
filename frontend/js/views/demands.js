@@ -1,4 +1,4 @@
-/* views/demands · 需求池：四态看板、主状态工作页与交付证据派生阶段 */
+/* views/demands · 需求池：五态看板、主状态工作页与交付证据派生阶段 */
 
 import { API } from "../core/api.js";
 import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
@@ -40,56 +40,59 @@ var COLS = [
   ["review", "待评审", "var(--text-3)"],
   ["pass", "已通过", "var(--info)"],
   ["plan", "已排期", "var(--success)"],
+  ["done", "已完成", "var(--plum)"],
   ["closed", "已关闭", "var(--text-3)"]
 ];
 var STATUS_HINTS = {
   review: "评审工作台：通过进入排期准备，不通过进入关闭归档",
   pass: "排期准备页：只处理评审通过、尚未排期的需求",
-  plan: "交付驾驶舱：交付阶段由工作项、用例和生产发布记录派生",
+  plan: "交付执行页：交付阶段由工作项开工事实派生",
+  done: "完成工作台：工作项全部完成且用例通过后自动进入，交付另行判定",
   closed: "关闭归档：保留关闭原因与关闭前阶段，可恢复到原流程"
 };
 var DELIVERY_STAGES = [
   ["waiting", "待开工"],
   ["active", "推进中"],
-  ["donePending", "已完成 · 待发布"],
+  ["donePending", "待发布"],
   ["delivered", "已交付"]
 ];
 var CLOSE_REASONS = { rej:"评审不通过", cancel:"中途取消", dup:"重复需求" };
-var CLOSE_STAGES = { review:"待评审", pass:"已通过", plan:"已排期" };
+var CLOSE_STAGES = { review:"待评审", pass:"已通过", plan:"已排期", done:"已完成" };
 /* 页面级「!」：状态与流转、交付阶段派生边界，口径与 DemandService / DemandMapper 一致 */
 var DEMAND_FLOW_HELP = {
   title: "需求状态与流转",
   rows: [
     ["待评审", "新建需求默认进入。评审通过进入「已通过」；不通过会直接关闭并记录原因，之后只能重新打开回「待评审」。", "mute"],
     ["已通过", "等待排期。可撤回评审回到待评审，也可以直接关闭。", "ok"],
-    ["已排期", "已绑定目标版本与计划日期。调期仍停留在已排期；撤销排期回到已通过，并清空版本与计划日期。", "ok"],
-    ["交付阶段", "已排期内自动派生：待开工 → 推进中（工作项开工）→ 已完成·待发布（至少 1 个工作项且全部完成、用例全部通过，0 条用例视为通过）→ 已交付（成功生产发布且未回滚）。阶段不能手工改。", "mute"],
-    ["已关闭", "保留关闭原因与关闭前阶段。评审不通过的只能重新打开回「待评审」；其他关闭恢复后回到「已通过」，需要重新排期。", "mute"],
-    ["约束", "排期不能选已发布、已关闭或已取消的版本；人工判定只能补「已完成·待发布 / 已交付」，且绑定当前目标版本，换版本即失效。", "warn"]
+    ["已排期", "已绑定目标版本与计划日期。调期仍停留在已排期；撤销排期回到已通过，并清空版本与计划日期。交付阶段在这里只读派生。", "ok"],
+    ["已完成", "至少 1 个工作项全部完成，且关联用例最新执行全部通过（0 条用例视为通过）时自动进入；有成功生产发布或人工交付判定也直接完成。工作项重开、用例执行失败或发布回滚会自动退回「已排期」，版本与计划日期不变。完成 ≠ 交付。", "type-story"],
+    ["交付阶段", "只读派生：已排期上为待开工 → 推进中（工作项真实开工）；已完成上为待发布 → 已交付（成功生产发布或人工交付判定）。阶段不能手工改。", "mute"],
+    ["已关闭", "保留关闭原因与关闭前阶段。评审不通过的只能重新打开回「待评审」；其他关闭恢复后回到「已通过」，需要重新排期。已完成需求不能直接关闭；需先撤回完成证据（工作项重开、用例失败或发布回滚）让需求退回已排期。", "mute"],
+    ["约束", "排期不能选已发布、已关闭或已取消的版本；人工交付判定只能补充已完成需求，绑定当前目标版本，换版本即失效。", "warn"]
   ],
   note: "每次流转都会写需求日志并通知相关人；关闭与撤销排期都不会修改关联工作项的日期或版本。"
 };
-/* 交付阶段「?」：只在已排期内出现，四阶段的触发与回退都来自派生条件 */
+/* 交付阶段「?」：在已排期 / 已完成内出现，阶段由派生条件决定 */
 var DEMAND_STAGE_HELP = {
   title: "交付阶段怎么变",
   rows: [
     ["待开工", "排期完成后的默认阶段，还没有任何开工证据。", "mute"],
     ["推进中", "任一关联工作项移出「待处理」即触发：看板拖动、开始计时 / 补记工时，或创建时就不在「待处理」。开工是历史事实，之后拖回「待处理」也不会退回。", "type-story"],
-    ["已完成 · 待发布", "至少 1 个工作项且全部进入「已完成」，同时该需求名下所有用例最新一次执行都是「通过」（0 条用例视为通过）。新增未完成工作项或用例会退回。", "warn"],
-    ["已交付", "发布记录里有该需求，且是成功的正式生产发布、未回滚。", "ok"],
-    ["回退", "工作项重开或用例变为失败 / 阻塞 / 跳过 → 回到「推进中」（没有开工证据时回「待开工」）；发布回滚 → 回到「已完成 · 待发布」或更早阶段。", "mute"],
-    ["人工判定", "只能补「已完成 · 待发布 / 已交付」，绑定当前目标版本；一旦检测到真实生产发布，或换了目标版本，人工判定不再生效。", "warn"]
+    ["待发布", "需求进入「已完成」后，还没有成功生产发布或人工交付判定。", "warn"],
+    ["已交付", "发布记录里有该需求，且是成功的正式生产发布、未回滚；或人工判定为已交付。", "ok"],
+    ["回退", "工作项重开或用例失败 → 需求退回「已排期」，阶段回到推进中 / 待开工；发布回滚 → 回到「待发布」。", "mute"],
+    ["人工判定", "只能补「待发布 / 已交付」，绑定当前目标版本；一旦检测到真实生产发布，或换了目标版本，人工判定不再生效。", "warn"]
   ],
-  note: "四个阶段实时计算、不落库，只有「已排期」需求才有。优先级：真实发布 > 人工已交付 > 派生已完成 > 人工已完成 > 推进中 > 待开工。"
+  note: "阶段实时计算、不落库，只在「已排期 / 已完成」上出现。优先级：真实发布 > 人工已交付 > 待发布；开工证据只决定已排期内的推进中。"
 };
 registerHelp({ "demands.flow": DEMAND_FLOW_HELP, "demands.stage": DEMAND_STAGE_HELP });
 initCaliberHelp();
 var PRI_ORDER = { P0: 0, P1: 1, P2: 2, P3: 3 };
-var STATUS_ORDER = { review: 0, pass: 1, plan: 2, closed: 3, rej: 4, canceled: 4 };
+var STATUS_ORDER = { review: 0, pass: 1, plan: 2, done: 3, closed: 4, rej: 4, canceled: 4 };
 /* P0 的排序值是 0，不能用 || 兜底，否则会被当成最低优先级 */
 function priRank(p){ return PRI_ORDER[p] === undefined ? 9 : PRI_ORDER[p]; }
 var demands = [];
-var demandBoard = null;        /* 看板：{status: {items, matched, hasMore}, counts, stageCounts, totalAll} */
+var demandBoard = null;        /* 看板：{status: {items, matched, hasMore}, counts, stageCounts, doneStageCounts, totalAll} */
 var demandColExtra = {};       /* 看板列已滚动加载的追加条目 */
 /* 三种形态查询口径不同，切回来时先用上次结果顶上，再静默补差，避免闪骨架 */
 var demandViewCache = { board: null, table: null, gantt: null };
@@ -177,6 +180,14 @@ function deliveryStageName(stage){
   for(var i = 0; i < DELIVERY_STAGES.length; i++) if(DELIVERY_STAGES[i][0] === stage) return DELIVERY_STAGES[i][1];
   return stage || "";
 }
+/* 派生阶段按主状态分组：已排期只看开工前后，已完成只看待发布/已交付 */
+var DEM_STAGE_GROUPS = { plan:["waiting", "active"], done:["donePending", "delivered"] };
+function demStageKeys(status){ return DEM_STAGE_GROUPS[status] || []; }
+function demStageCounts(status){
+  var src = status === "done" ? (demandBoard && demandBoard.doneStageCounts)
+    : status === "plan" ? (demandBoard && demandBoard.stageCounts) : null;
+  return src || {};
+}
 function closeReasonName(reason){ return CLOSE_REASONS[reason] || reason || "未记录原因"; }
 function closeStageName(stage){ return CLOSE_STAGES[stage] || "待评审"; }
 function restoreTargetName(d){ return d && d.closeStage === "review" ? "待评审" : "已通过"; }
@@ -243,19 +254,20 @@ function readDemandRoute(){
     demWork.closeReason = "all";
     demWork.closeStage = "all";
     demWork.focus = "all";
-    demWork.group = status === "plan" ? "version" : (status === "closed" ? "reason" : "project");
+    demWork.group = status === "plan" || status === "done" ? "version" : (status === "closed" ? "reason" : "project");
     demWork.sort = status === "pass" ? "wsjf" : (status === "closed" ? "created" : "expect");
   }
   demWork.active = true;
   demWork.status = status;
   var stage = params.get("stage") || "all";
-  demWork.stage = status === "plan" && (stage === "all" || DELIVERY_STAGES.some(function(s){ return s[0] === stage; })) ? stage : "all";
+  demWork.stage = demStageKeys(status).indexOf(stage) >= 0 ? stage : "all";
   demWork.items = [];
   demWork.response = null;
   return true;
 }
 function demandWorkHash(status, stage){
-  return "#/demands?status=" + encodeURIComponent(status) + (status === "plan" && stage && stage !== "all" ? "&stage=" + encodeURIComponent(stage) : "");
+  var keepStage = demStageKeys(status).indexOf(stage) >= 0;
+  return "#/demands?status=" + encodeURIComponent(status) + (keepStage ? "&stage=" + encodeURIComponent(stage) : "");
 }
 function openDemandWorkpage(status, stage){
   if(!COLS.some(function(c){ return c[0] === status; })) return;
@@ -272,10 +284,10 @@ function openDemandWorkpage(status, stage){
   demWork.closeReason = "all";
   demWork.closeStage = "all";
   demWork.focus = "all";
-  demWork.group = status === "plan" ? "version" : (status === "closed" ? "reason" : "project");
+  demWork.group = status === "plan" || status === "done" ? "version" : (status === "closed" ? "reason" : "project");
   demWork.sort = status === "pass" ? "wsjf" : (status === "closed" ? "created" : "expect");
   demWork.active = true;
-  demWork.stage = status === "plan" && stage ? stage : "all";
+  demWork.stage = demStageKeys(status).indexOf(stage) >= 0 ? stage : "all";
   demWork.items = [];
   demWork.response = null;
   try{ history.pushState(null, "", demandWorkHash(status, demWork.stage)); }
@@ -328,6 +340,7 @@ function loadDemands(opts){
     /* 计数附在列映射上，供元信息与紧凑搜索条共用；列遍历只按 COLS 取键 */
     demandBoard.counts = rs[0].counts || {};
     demandBoard.stageCounts = rs[0].stageCounts || {};
+    demandBoard.doneStageCounts = rs[0].doneStageCounts || {};
     demandBoard.totalAll = rs[0].totalAll || 0;
     demandBoard.facets = rs[0].facets || null;
     demandServerFiltered = false;
@@ -544,7 +557,7 @@ function loadMoreDemandColumn(status){
     pris: demSmart.pris.join(","),
     kinds: demSmart.kinds.join(","),
     cats: demSmart.cats.join(","),
-    deliveryStage: status === "plan" && demBoardStage !== "all" ? demBoardStage : null
+    deliveryStage: demStageKeys(status).indexOf(demBoardStage) >= 0 ? demBoardStage : null
   }).then(function(page){
     if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return false;
     var known = {};
@@ -669,24 +682,32 @@ function deliveryStageTag(stage, source){
   return '<span class="tag dem-stage-tag st-' + esc(stage) + (manual ? " manual" : "") + '" title="'
     + esc(tip) + '">' + esc(deliveryStageName(stage)) + (manual ? " · 人工" : "") + '</span>';
 }
-function demandBoardDistHTML(){
-  var counts = demandBoard && demandBoard.stageCounts || {};
-  var total = DELIVERY_STAGES.reduce(function(n, s){ return n + (Number(counts[s[0]]) || 0); }, 0);
+/* 列内阶段胶囊：已排期只放待开工/推进中，已完成只放待发布/已交付；点击进入对应工作页 */
+function demandBoardDistHTML(status){
+  var counts = demStageCounts(status);
+  var keys = demStageKeys(status);
+  var total = keys.reduce(function(n, k){ return n + (Number(counts[k]) || 0); }, 0);
   if(!total) return "";
-  return '<div class="demb-dist" role="group" aria-label="进入已排期交付阶段">' + DELIVERY_STAGES.map(function(s){
-    var n = Number(counts[s[0]]) || 0;
+  var target = status === "done" ? "完成工作台" : "交付工作台";
+  return '<div class="demb-dist" role="group" aria-label="' + esc(status === "done" ? "已完成交付阶段" : "已排期交付阶段") + '">' + keys.map(function(k){
+    var n = Number(counts[k]) || 0;
     if(!n) return "";
-    return '<button type="button" class="demb-dist-seg st-' + s[0] + (demBoardStage !== "all" && demBoardStage !== s[0] ? " dim" : "")
-      + '" style="flex:' + n + ' 1 0" data-dem-open="plan" data-dem-stage="' + s[0] + '" title="' + esc(deliveryStageName(s[0])) + ' ' + n + ' 条，点击进入驾驶舱" aria-label="' + esc(deliveryStageName(s[0])) + ' ' + n + ' 条"></button>';
+    return '<button type="button" class="demb-dist-seg st-' + k + (demBoardStage !== "all" && demBoardStage !== k ? " dim" : "")
+      + '" style="flex:' + n + ' 1 0" data-dem-open="' + status + '" data-dem-stage="' + k + '" title="' + esc(deliveryStageName(k)) + ' ' + n + ' 条，点击进入' + target + '" aria-label="' + esc(deliveryStageName(k)) + ' ' + n + ' 条"></button>';
   }).join("") + '</div>';
 }
-function demandBoardStageFilterHTML(){
-  var counts = demandBoard && demandBoard.stageCounts || {};
-  return '<select class="mini-select demb-stage-filter' + (demBoardStage !== "all" ? " active" : "") + '" data-demb-stage aria-label="只筛选已排期列的交付阶段">'
-    + '<option value="all"' + (demBoardStage === "all" ? " selected" : "") + '>全部阶段</option>'
-    + DELIVERY_STAGES.map(function(s){
-      return '<option value="' + s[0] + '"' + (demBoardStage === s[0] ? " selected" : "") + '>' + esc(deliveryStageName(s[0])) + ' ' + (Number(counts[s[0]]) || 0) + '</option>';
-    }).join("") + '</select>';
+function demBoardStageOptionsHTML(){
+  return '<option value="all"' + (demBoardStage === "all" ? " selected" : "") + '>全部阶段</option>'
+    + [["plan", "已排期"], ["done", "已完成"]].map(function(g){
+      return '<optgroup label="' + g[1] + '">' + demStageKeys(g[0]).map(function(k){
+        return '<option value="' + k + '"' + (demBoardStage === k ? " selected" : "") + '>'
+          + esc(deliveryStageName(k)) + ' ' + (Number(demStageCounts(g[0])[k]) || 0) + '</option>';
+      }).join("") + '</optgroup>';
+    }).join("");
+}
+function demBoardStageFilterHTML(){
+  return '<select class="mini-select demb-stage-filter' + (demBoardStage !== "all" ? " active" : "") + '" data-demb-stage aria-label="按交付阶段筛选已排期或已完成列">'
+    + demBoardStageOptionsHTML() + '</select>';
 }
 function render(){
   var mode = listPrefs.viewMode("demand-pool");
@@ -709,7 +730,8 @@ function render(){
     var status = c[0], col = (demandBoard && demandBoard[status]) || {items:[], matched:0, hasMore:false};
     var extra = demandColExtra[status] || [];
     var items = (col.items || []).concat(extra);
-    var filtered = status === "plan" && demBoardStage !== "all";
+    /* 阶段筛选只落在阶段所属的列：待开工/推进中筛已排期，待发布/已交付筛已完成 */
+    var filtered = demStageKeys(status).indexOf(demBoardStage) >= 0;
     var more = col.hasMore
       ? '<button class="bkl-more" type="button" data-dem-more="' + esc(status) + '">加载更多（还有 '
         + Math.max((col.matched || 0) - items.length, 0) + ' 条）</button>'
@@ -717,9 +739,9 @@ function render(){
     return '<div class="bkl-col" data-col="' + status + '"><div class="bkl-head">'
       + '<button class="bkl-title bkl-title-link" type="button" data-dem-open="' + status + '" title="' + esc(STATUS_HINTS[status] || "") + '">'
       + '<span class="pdot" style="background:' + c[2] + '"></span><span>' + c[1] + '</span><span class="bkl-open" aria-hidden="true">↗</span></button>'
-      + (status === "plan" ? caliberMarkHTML("demands.stage", false, "查看交付阶段如何变化") + demandBoardStageFilterHTML() : "")
-      + '<span class="bkl-count">' + (filtered ? (col.matched || 0) + " / " + ((demandBoard.counts || {}).plan || 0) : (col.matched || 0)) + '</span></div>'
-      + (status === "plan" ? demandBoardDistHTML() : "")
+      + (status === "plan" || status === "done" ? caliberMarkHTML("demands.stage", false, "查看交付阶段如何变化") : "")
+      + '<span class="bkl-count">' + (filtered ? (col.matched || 0) + " / " + ((demandBoard.counts || {})[status] || 0) : (col.matched || 0)) + '</span></div>'
+      + (status === "plan" || status === "done" ? demandBoardDistHTML(status) : "")
       + (demBoardCardsHTML(items) || '<div class="foot-note demb-col-empty">'
         + (filtered ? '该阶段暂无需求<br><button type="button" class="link-btn" data-demb-stage-clear>显示全部阶段</button>' : (demBoardHasCond() ? "没有匹配需求" : "暂无需求")) + '</div>')
       + more
@@ -778,7 +800,8 @@ function demandMenuItems(d){
       out.push({ act: "replan", label: "调整排期" });
       out.push({ act: "unplan", label: "撤销排期" });
     }
-    if(!isClosedDemand(d)) out.push({ act: "cancel", label: "关闭需求", danger: true });
+    /* 已完成由完成判定自动进入，不能直接关闭；确需终止交付由项目负责人另行处理 */
+    if(!isClosedDemand(d) && d.status !== "done") out.push({ act: "cancel", label: "关闭需求", danger: true });
   }
   return out;
 }
@@ -836,6 +859,7 @@ function dragHint(status, canSchedule){
     ? "可拖到「已排期」选择目标版本，或拖回「待评审」撤回"
     : "可拖回「待评审」撤回；排期由空间主、管理员或可写项目负责人操作";
   if(status === "plan") return "可拖回「已通过」撤销排期";
+  if(status === "done") return "已完成由完成判定自动进出，只可修正文、归档信息与优先级；版本与计划日期不再调整";
   return "关闭归档请使用卡片上的恢复动作";
 }
 /* 状态语义跟着卡片走：底部总注离卡片太远，窄屏与长列里都看不到 */
@@ -846,13 +870,15 @@ function demandStateNote(d){
   return note + (reason === "rej" ? " · 可重新打开" : " · 恢复至" + restoreTargetName(d));
 }
 function demandEvidenceHTML(d){
-  if(!d || d.status !== "plan") return "";
+  if(!d || (d.status !== "plan" && d.status !== "done")) return "";
   var total = Number(d.taskCount) || 0, done = Number(d.taskDone) || 0;
   var cases = Number(d.caseCount) || 0, passed = Number(d.casePassed) || 0;
   var html = "";
   if(total){
     var pct = Math.max(0, Math.min(100, Math.round(done / total * 100)));
     html += '<div class="dem-evidence-row"><span>工作项 ' + done + '/' + total + '</span><span class="dem-progress' + (done === total ? " ok" : "") + '"><i style="width:' + pct + '%"></i></span></div>';
+  }else if(d.status === "done"){
+    html += '<div class="dem-evidence-meta">无关联工作项 · 完成与交付以发布或人工判定为准</div>';
   }else{
     html += '<div class="bkl-tags"><span class="tag tag-warning">未拆工作项</span><span class="tag ghost">待补充交付证据</span></div>';
   }
@@ -871,8 +897,9 @@ function demandEvidenceHTML(d){
 }
 function cardHTML(d, opts){
   var acts = opts && opts.readOnly ? "" : demandActs(d);
-  /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动 */
-  var drag = (canReviewDemand(d) && !isClosedDemand(d) && (d.status !== "plan" || canScheduleDemand(d)) && !(opts && opts.noDrag))
+  /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动；
+     已完成只由完成判定进出，不参与拖动 */
+  var drag = (canReviewDemand(d) && !isClosedDemand(d) && d.status !== "done" && (d.status !== "plan" || canScheduleDemand(d)) && !(opts && opts.noDrag))
     ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status, canScheduleDemand(d))) + '"'
     : "";
   var reason = d.closeReason || (d.status === "rej" ? "rej" : (isClosedDemand(d) ? "cancel" : ""));
@@ -880,7 +907,7 @@ function cardHTML(d, opts){
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
     + catTag(d.categoryId)
     + priTagHTML(d.priority || "P2")
-    + (d.status === "plan" ? deliveryStageTag(d.deliveryStage, d.deliveryStageSource) : '')
+    + (d.status === "plan" || d.status === "done" ? deliveryStageTag(d.deliveryStage, d.deliveryStageSource) : '')
     + (isClosedDemand(d) ? '<span class="tag ghost">' + esc(closeReasonName(reason)) + '</span>' : '') + '</div>'
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (d.description ? '<p class="bkl-desc">' + esc(d.description) + '</p>' : '')
@@ -906,8 +933,8 @@ function demWorkParams(offset, limit){
     reqId:demWork.reqId || null,
     q:demWork.q || null,
     pris:demWork.pris.join(","),
-    deliveryStage:demWork.status === "plan" && demWork.stage !== "all" ? demWork.stage : null,
-    versionId:demWork.status === "plan" && demWork.versionId !== "all" ? demWork.versionId : null,
+    deliveryStage:demStageKeys(demWork.status).indexOf(demWork.stage) >= 0 ? demWork.stage : null,
+    versionId:demStageKeys(demWork.status).length && demWork.versionId !== "all" ? demWork.versionId : null,
     closeReason:demWork.status === "closed" && demWork.closeReason !== "all" ? demWork.closeReason : null,
     closeStage:demWork.status === "closed" && demWork.closeStage !== "all" ? demWork.closeStage : null,
     focus:demWork.focus !== "all" ? demWork.focus : null,
@@ -976,6 +1003,17 @@ function demWorkMetricsHTML(){
       + demWorkMetric("需关注需求", risk + " 条", missing ? missing + " 条缺发布证据" : "未拆解 / 用例 / 日期", risk > 0)
       + demWorkMetric(dateLabel, date ? String(date).substring(0, 10) : "—", "按真实证据与期望日期");
   }
+  if(demWork.status === "done"){
+    var dTasks = Number(m.taskCount) || 0, dTaskDone = Number(m.taskDone) || 0;
+    var dCases = Number(m.caseCount) || 0, dCasePassed = Number(m.casePassed) || 0;
+    var sc = demWork.response && demWork.response.stageCounts || {};
+    var pending = Number(sc.donePending) || 0, delivered = Number(sc.delivered) || 0;
+    return demWorkMetric("需求数", total, "当前筛选结果")
+      + demWorkMetric("工作项完成", dTasks ? Math.round(dTaskDone / dTasks * 100) + "%" : "—", dTaskDone + " / " + dTasks + " 已关闭")
+      + demWorkMetric("用例通过", dCases ? Math.round(dCasePassed / dCases * 100) + "%" : "—", dCases ? dCasePassed + " / " + dCases + " 通过" : "当前结果未登记用例")
+      + demWorkMetric("已交付", delivered + " 条", pending ? "另有 " + pending + " 条待发布" : "成功生产发布或人工判定", pending > 0)
+      + demWorkMetric("最近交付", m.lastDelivered ? String(m.lastDelivered).substring(0, 10) : "—", "按成功生产发布或人工判定");
+  }
   if(demWork.status === "review"){
     return demWorkMetric("待评审", total, "当前筛选结果")
       + demWorkMetric("高优先级", (Number(m.high) || 0) + " 条", "P0 / P1")
@@ -1001,13 +1039,17 @@ function demWorkTitle(){
   if(demWork.status === "review") return "待评审 · 评审工作台";
   if(demWork.status === "pass") return "已通过 · 排期准备";
   if(demWork.status === "closed") return "已关闭 · 关闭归档";
+  if(demWork.status === "done"){
+    return demWork.stage === "all" ? "已完成 · 完成与交付" : deliveryStageName(demWork.stage) + " · 完成与交付";
+  }
   return demWork.stage === "all" ? "已排期 · 交付驾驶舱" : deliveryStageName(demWork.stage) + " · 交付驾驶舱";
 }
 function demWorkRule(){
   if(demWork.status === "review") return "只处理评审决策；通过后进入排期准备，不通过进入关闭归档并保留原因。";
   if(demWork.status === "pass") return "这里只处理评审通过、尚未排期的需求；未产生交付证据，因此不展示交付阶段。";
   if(demWork.status === "closed") return "按关闭原因和关闭前阶段回看；恢复去向由关闭前阶段决定，交付证据与关闭原因继续保留。";
-  return "待开工、推进中、已完成·待发布与已交付均为派生只读；缺口应补工作项、用例或生产发布记录，不能手工改阶段。";
+  if(demWork.status === "done") return "工作项全部完成且用例全部通过后自动进入；完成不等于交付，交付以成功生产发布或人工判定为准，版本与计划日期不再调整。";
+  return "待开工、推进中、待发布与已交付均为派生只读；缺口应补工作项、用例或生产发布记录，不能手工改阶段。";
 }
 function demWorkStatusTabsHTML(){
   var counts = demWork.response && demWork.response.statusCounts || {};
@@ -1017,10 +1059,11 @@ function demWorkStatusTabsHTML(){
   }).join("") + '</nav>';
 }
 function demWorkStageTabsHTML(){
-  if(demWork.status !== "plan") return "";
+  var stages = demStageKeys(demWork.status);
+  if(!stages.length) return "";
   var counts = demWork.response && demWork.response.stageCounts || {};
-  var all = DELIVERY_STAGES.reduce(function(n, s){ return n + (Number(counts[s[0]]) || 0); }, 0);
-  var tabs = [["all", "全部阶段", all]].concat(DELIVERY_STAGES.map(function(s){ return [s[0], s[1], Number(counts[s[0]]) || 0]; }));
+  var all = stages.reduce(function(n, k){ return n + (Number(counts[k]) || 0); }, 0);
+  var tabs = [["all", "全部阶段", all]].concat(stages.map(function(k){ return [k, deliveryStageName(k), Number(counts[k]) || 0]; }));
   return '<nav class="dem-work-tabs dem-derived-tabs" aria-label="切换交付阶段">' + tabs.map(function(t){
     var on = demWork.stage === t[0];
     return '<button type="button" class="dem-work-tab' + (on ? " on" : "") + '" data-dem-work-stage="' + t[0] + '"' + (on ? ' aria-current="page"' : '') + '>' + esc(t[1]) + '<b>' + t[2] + '</b></button>';
@@ -1040,7 +1083,7 @@ function demWorkFiltersHTML(){
   var html = '<div class="dem-work-filters"><input class="input dem-work-search" type="search" data-dem-work-q value="' + esc(demWork.q) + '" placeholder="搜索标题、描述、来源或编号…" aria-label="搜索当前工作页需求（含需求编号）">'
     + '<select class="mini-select" data-dem-work-filter="reqId" aria-label="筛选项目">' + demWorkProjectOptions() + '</select>'
     + '<select class="mini-select" data-dem-work-filter="priority" aria-label="筛选优先级">' + demWorkPriorityOptions() + '</select>';
-  if(demWork.status === "plan"){
+  if(demWork.status === "plan" || demWork.status === "done"){
     var versions = demWork.response && demWork.response.versions || [];
     html += '<select class="mini-select" data-dem-work-filter="versionId" aria-label="筛选目标版本"><option value="all">全部版本</option>' + versions.map(function(v){
       return '<option value="' + esc(v.versionId) + '"' + (demWork.versionId === v.versionId ? " selected" : "") + '>' + esc(v.versionName) + ' · ' + (Number(v.cnt) || 0) + '</option>';
@@ -1127,6 +1170,7 @@ var DEM_WORK_COL_DEFS = {
 var DEM_WORK_SORT_DIR = { priority:"asc", expect:"asc", wsjf:"desc" };
 var DEM_WORK_STATUS_COLS = {
   plan:["title","kind","category","priority","stage","evidence","version","planned","expect","source"],
+  done:["title","kind","category","priority","stage","evidence","version","planned","expect","source"],
   review:["title","kind","category","priority","wsjf","expect","source","created"],
   pass:["title","kind","category","priority","wsjf","expect","source","created"],
   closed:["title","kind","category","priority","close","version","expect","source","created"]
@@ -1180,7 +1224,7 @@ function demWorkCell(d, key){
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
   if(key === "category") return catTag(d.categoryId) || none;
   if(key === "priority") return priTagHTML(d.priority || "P2");
-  if(key === "stage") return d.status === "plan" ? (deliveryStageTag(d.deliveryStage, d.deliveryStageSource) || none) : none;
+  if(key === "stage") return (d.status === "plan" || d.status === "done") ? (deliveryStageTag(d.deliveryStage, d.deliveryStageSource) || none) : none;
   if(key === "wsjf") return wsjfText(d) || none;
   if(key === "close") return '<span class="dwl-close" title="' + esc(demandStateNote(d)) + '"><span class="tag ghost">'
     + esc(closeReasonName(d.closeReason || (d.status === "rej" ? "rej" : "cancel"))) + '</span><i>关闭前 '
@@ -1194,12 +1238,13 @@ function demWorkCell(d, key){
   return none;
 }
 function demWorkEvidenceCell(d){
-  if(d.status !== "plan") return '<span class="dwl-none">—</span>';
+  if(d.status !== "plan" && d.status !== "done") return '<span class="dwl-none">—</span>';
   var total = Number(d.taskCount) || 0, done = Number(d.taskDone) || 0;
   var cases = Number(d.caseCount) || 0, passed = Number(d.casePassed) || 0;
   var html = [], text = [];
   function push(h, t){ html.push(h); text.push(t); }
   if(total) push('<span>工作项 ' + done + '/' + total + '</span>', '工作项 ' + done + '/' + total);
+  else if(d.status === "done") push('<span>无关联工作项</span>', '无关联工作项 · 完成与交付以发布或人工判定为准');
   else push('<span class="tag tag-warning">未拆工作项</span><span class="tag ghost">待补充交付证据</span>', '未拆工作项 · 待补充交付证据');
   if(cases) push('<span>用例 ' + passed + '/' + cases + ' 通过</span>', '用例 ' + passed + '/' + cases + ' 通过');
   if(d.deliveredAt){
@@ -1242,6 +1287,7 @@ function resetDemWorkFilters(){
 
 function statusTag(st){
   if(st === "plan") return '<span class="tag tag-success">已排期</span>';
+  if(st === "done") return '<span class="tag tag-plum">已完成</span>';
   if(st === "pass") return '<span class="tag tag-info">已通过</span>';
   if(st === "closed" || st === "rej" || st === "canceled" || st === "cancelled") return '<span class="tag ghost">已关闭</span>';
   return '<span class="tag ghost">待评审</span>';
@@ -1296,7 +1342,8 @@ function demProjectCell(d){
 }
 function demExpectCell(d){
   var text = d.expectDate ? String(d.expectDate).substring(0, 10) : "";
-  if(!demInlineWritable(d)) return esc(text || "—");
+  /* 已完成不再调整交付承诺，期望日期保持只读 */
+  if(!demInlineWritable(d) || d.status === "done") return esc(text || "—");
   return demInlineTrigger("expectDate", d,
     '<span class="dem-inline-date-t' + (text ? "" : " is-empty") + '">' + esc(text || "待评估") + '</span>',
     "修改期望交付");
@@ -1534,7 +1581,7 @@ function demPutRow(d, patch, okMsg, el, revert){
 }
 /* ---------- 列表智能视图（预置 Tab + 自定义视图，参考任务列表） ---------- */
 
-var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["closed","已关闭"]];
+var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["done","已完成"],["closed","已关闭"]];
 var DEM_GROUPS = ["none","status","priority","project","kind","category"];
 var DEM_SORTS = ["default","priority","expect","wsjf","created"];
 var DEM_STATE_KEY = "ds.demandView.v1";
@@ -1661,6 +1708,12 @@ function syncDemBoard(){
   if(fc){ var n = demBoardFilterCount(); fc.hidden = n === 0; fc.textContent = n; }
   var clr = demBoardBar.querySelector("[data-demb-clear]");
   if(clr) clr.hidden = !demBoardHasCond();
+  var stageSel = demBoardBar.querySelector("[data-demb-stage]");
+  if(stageSel){
+    stageSel.innerHTML = demBoardStageOptionsHTML();
+    stageSel.value = demBoardStage;
+    stageSel.classList.toggle("active", demBoardStage !== "all");
+  }
   var mt = demBoardBar.querySelector("[data-demb-match]");
   if(mt){
     var text = demBoardMatchText();
@@ -1999,10 +2052,18 @@ function initDemSmartBar(){
     '<input class="input demb-search" type="search" data-demb-q placeholder="搜索本项目需求…" title="在当前项目需求中搜索标题 / 描述 / 来源 / 模块 / 编号" aria-label="搜索当前项目需求" />' +
     '<button class="chip ghost" type="button" data-demb-filter aria-haspopup="true" aria-expanded="false" title="筛选当前项目需求（优先级 / 类型 / 模块）">筛选 <span class="n" data-demb-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
     '<button class="chip ghost demb-clear" type="button" data-demb-clear hidden>清除</button>' +
+    demBoardStageFilterHTML() +
     '<span class="demb-spacer"></span>' +
     '<span class="demb-match" data-demb-match></span>';
   page.insertBefore(demBoardBar, demandBody);
   demBoardInput = demBoardBar.querySelector("[data-demb-q]");
+  demBoardBar.addEventListener("change", function(e){
+    var sel = e.target.closest("[data-demb-stage]");
+    if(!sel) return;
+    demBoardStage = sel.value === "all" || DELIVERY_STAGES.some(function(s){ return s[0] === sel.value; }) ? sel.value : "all";
+    saveDemState();
+    loadDemands();
+  });
   demBoardBar.addEventListener("click", function(e){
     if(e.target.closest("[data-demb-clear]")){
       demSmart.q = "";
@@ -2764,6 +2825,10 @@ function openDemandDialog(d){
   demandFormSeq++;
   syncPriSeg();
   setDemandFormLocked(!!d && d.status !== "review");
+  var lockNote = $("demandLockNote");
+  if(lockNote) lockNote.textContent = d && d.status === "done"
+    ? "该需求已完成，这里只更新描述、验收标准、来源、模块与 WSJF；标题与优先级在详情里直接点击修改，版本与计划日期不再调整。"
+    : "该需求已进入流转，这里只更新描述、验收标准、来源、模块与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。";
   demandFormBaseline = demandFormSnapshot();
   updateDemandCheckResume();
   UI.openModal($("dlgDemand"), "input");
@@ -3425,7 +3490,8 @@ function loadDemandTasks(layer, id, targetVersionId){
   var box = layer.querySelector("#demTasks");
   var overview = layer.querySelector("#demandOverviewTasks");
   var count = layer.querySelector("#tabDeliveryCount");
-  if(!box && !overview && !count) return;
+  var progress = layer.querySelector("#demandProgressCount");
+  if(!box && !overview && !count && !progress) return;
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
     return Promise.all([
       Promise.resolve(tasks),
@@ -3439,6 +3505,7 @@ function loadDemandTasks(layer, id, targetVersionId){
     tasks = tasks || [];
     if(!tasks.length){
       if(count) count.textContent = "0/0";
+      if(progress) progress.textContent = "0 / 0 完成";
       if(overview) overview.innerHTML = '<li class="read-empty">尚未拆分工作项</li>';
       if(box) box.innerHTML = '<div class="attach-empty">还没有关联工作项；通过「拆分为工作项」把需求拆开执行。</div>';
       return;
@@ -3449,6 +3516,7 @@ function loadDemandTasks(layer, id, targetVersionId){
     var done = tasks.filter(function(t){ return t.boardColumn === "done"; }).length;
     var delivery = "当前生产全量生效 " + published + " 项，部分生效 " + partial + " 项；曾生产发布 " + historical + " 项";
     if(count) count.textContent = done + "/" + tasks.length;
+    if(progress) progress.textContent = done + " / " + tasks.length + " 完成";
     if(overview){
       overview.innerHTML = tasks.slice(0, 3).map(function(t){
         var isDone = t.boardColumn === "done";
@@ -3740,7 +3808,7 @@ function closeDemandDetailIfOpen(){
   UI.closeModal(layer);
 }
 function demandJudgementSectionHTML(d){
-  if(d.status !== "plan") return "";
+  if(d.status !== "done") return "";
   var html = '<div class="detail-section dem-judgement"><span class="section-title">人工交付判定</span>';
   if(d.manualDeliveryStage){
     html += '<div class="dem-judgement-current">'
@@ -3869,6 +3937,7 @@ var DEM_LOG_ACTIONS = {
   version:"调整目标版本", move:"变更所属项目", pass:"评审通过", rej:"评审不通过",
   plan:"排期", replan:"调期", unpass:"撤回评审", unplan:"撤销排期",
   cancel:"取消需求", restore:"恢复需求", reopen:"重新打开",
+  complete:"自动完成", auto_reopen:"自动退回已排期",
   judge_delivery:"人工判定交付阶段", revoke_delivery_judgement:"撤销人工判定"
 };
 function demandLogItemHTML(l){
@@ -3889,7 +3958,8 @@ function demandStatusDot(status){
   if(status === "review") return "var(--info)";
   if(status === "pass") return "var(--success)";
   if(status === "plan") return "var(--primary)";
-  if(status === "rej" || status === "canceled" || status === "cancelled") return "var(--danger)";
+  if(status === "done") return "var(--plum)";
+  if(status === "closed" || status === "rej" || status === "canceled" || status === "cancelled") return "var(--danger)";
   return "var(--text-3)";
 }
 function demandStatusLabel(d){
@@ -3931,7 +4001,7 @@ function demandStatusMenuItems(d){
     if(isClosedDemand(d) && d.closeReason !== "rej" && d.status !== "rej"){
       out.push({ act: "restore", label: "恢复至" + restoreTargetName(d) });
     }
-    if(!isClosedDemand(d)) out.push({ act: "cancel", label: "关闭需求…", danger: true });
+    if(!isClosedDemand(d) && d.status !== "done") out.push({ act: "cancel", label: "关闭需求…", danger: true });
   }
   return out;
 }
@@ -4509,8 +4579,9 @@ function applyDemandAiSplit(){
 function renderDemandDetail(d){
   var id = d.id;
   var writable = canWriteDemand(d), canEditText = writable && !isClosedDemand(d);
-  var canEditTitle = canEditText && d.status === "review";
-  var canSplit = canEditText;
+  var canEditTitle = canEditText && (d.status === "review" || d.status === "done");
+  /* 已完成不再拆分新工作项；已有工作项仍可正常推进与重开（会触发自动退回） */
+  var canSplit = canEditText && d.status !== "done";
   var total = Number(d.taskCount) || 0, done = Number(d.taskDone) || 0;
   var cases = Number(d.caseCount) || 0, passed = Number(d.casePassed) || 0;
   var statusLabel = demandStatusLabel(d);
@@ -4571,6 +4642,8 @@ function renderDemandDetail(d){
         "关闭前阶段", closeStageName(d.closeStage || (d.status === "rej" ? "review" : "pass"))]);
     }
     var factEdit = canEditText ? ' rf-edit' : '';
+    /* 期望交付在已完成后不再调整，优先级等文本类属性仍可修正 */
+    var expectEdit = canEditText && d.status !== "done" ? ' rf-edit' : '';
     var verEdit = d.status === "plan" && canScheduleDemand(d);
     var rc = layer.__relCounts || {};
     function relChip(kind, ico, label){
@@ -4588,7 +4661,7 @@ function renderDemandDetail(d){
       +     '<span class="rf-sub">' + (planned
               ? "计划 " + esc(demandShortDay(d.plannedStart)) + " → " + esc(demandShortDay(d.plannedEnd))
               : "尚未进入版本计划") + '</span></div>'
-      +   '<div class="rf wi-card rf-date' + (expectOverdue ? " overdue" : "") + factEdit + '"' + (canEditText ? ' data-dem-fact="expect" role="button" tabindex="0" title="点击修改期望交付"' : '') + '><span class="rf-k">期望交付</span>'
+      +   '<div class="rf wi-card rf-date' + (expectOverdue ? " overdue" : "") + expectEdit + '"' + (expectEdit ? ' data-dem-fact="expect" role="button" tabindex="0" title="点击修改期望交付"' : '') + '><span class="rf-k">期望交付</span>'
       +     '<b class="rf-v rf-v-lg" title="' + esc(d.expectDate || "待评估") + '">' + esc(d.expectDate || "待评估") + '</b>'
       +     '<span class="rf-sub">' + esc(demandExpectNote(d)) + '</span></div>'
       + '</div>'
@@ -4673,6 +4746,7 @@ function renderDemandDetail(d){
     +   '<div class="drawer-pane" data-dem-pane="overview">'
     +     demandFactsHTML()
     +     (isClosedDemand(d) ? '<p class="foot-note">历史保留；' + esc((d.closeReason === "rej" || d.status === "rej") ? "可重新打开回到「待评审」。" : "可恢复至「" + restoreTargetName(d) + "」。") + '</p>' : '')
+    +     (d.status === "done" ? '<p class="foot-note">已完成由工作项全部完成与用例全部通过自动判定；交付在「交付」页签查看，完成不等于交付。</p>' : '')
     +     (d.deliveryEvidenceMissing ? '<p class="foot-note">目标版本已发布，但没有有效生产发布记录；请人工补录真实交付证据。</p>' : '')
     +     '<p class="foot-note">需求调期、撤排与关闭不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
     +     '<section class="read-card">'
@@ -4690,7 +4764,7 @@ function renderDemandDetail(d){
     +     '</section>'
     +     '<section class="read-card">'
     +         '<div class="read-card-head dem-progress-head"><h3>交付进度</h3>'
-    +         '<span class="read-cnt">' + done + ' / ' + total + ' 完成</span>'
+    +         '<span class="read-cnt" id="demandProgressCount">' + done + ' / ' + total + ' 完成</span>'
     +         '<span class="dem-split-actions">'
     +           (canSplit ? '<button class="btn sm soft ai-action" type="button" data-dem-ai-split title="用 AI 读需求描述和验收标准，拆成工作项草稿；勾选确认后才会创建">' + icon("ai", 13) + ' AI 拆工作项</button>' : '')
     +           (canSplit ? '<button class="btn sm soft" type="button" data-dem-addtask title="手动新建一条关联到本需求的工作项">' + icon("plus", 13) + ' 新建工作项</button>' : '')
@@ -4704,7 +4778,7 @@ function renderDemandDetail(d){
     +     '</section>'
     +   '</div>'
     +   '<div class="drawer-pane" data-dem-pane="delivery" hidden>'
-    +     (d.status === "plan" ? '<section class="read-card">' + demandJudgementSectionHTML(d) + '</section>' : '')
+    +     (d.status === "done" ? '<section class="read-card">' + demandJudgementSectionHTML(d) + '</section>' : '')
     +     '<section class="read-card">'
     +       '<div class="read-card-head"><h3>交付证据</h3><span class="foot-note">任务发布不等于业务验收</span></div>'
     +       (d.deliveryStage ? stageLine : '')
@@ -4912,7 +4986,7 @@ function renderDemandDetail(d){
     if(aiSplit){ runDemandAiSplit(d, layer); return; }
     var at = e.target.closest("[data-dem-addtask]");
     if(at){
-      if(!canSplit){ toast("已关闭的需求不能新拆工作项", "warn"); return; }
+      if(!canSplit){ toast("已关闭或已完成的需求不能新拆工作项", "warn"); return; }
       /* 抽屉叠在需求详情之上；关闭抽屉回到详情，关联列表随之刷新 */
       openTaskDrawer("backlog", null, {
         reqId: d.reqId, demandId: d.id, versionIds: d.status === "plan" && d.versionId ? [d.versionId] : [],
@@ -5258,8 +5332,8 @@ if(demandBody) demandBody.addEventListener("click", function(e){
   var wst = e.target.closest("[data-dem-work-stage]");
   if(wst){
     demWork.stage = wst.dataset.demWorkStage;
-    try{ history.pushState(null, "", demandWorkHash("plan", demWork.stage)); }
-    catch(ex){ window.location.hash = demandWorkHash("plan", demWork.stage); }
+    try{ history.pushState(null, "", demandWorkHash(demWork.status, demWork.stage)); }
+    catch(ex){ window.location.hash = demandWorkHash(demWork.status, demWork.stage); }
     loadDemands();
     return;
   }
@@ -5401,7 +5475,9 @@ function markCanDrop(from, canSchedule){
 }
 /* 不合法落点给出明确文案，而不是静默吞掉 */
 function dropDenied(status, to, canSchedule){
-  if((status === "plan" || status === "pass") && to === "closed"){
+  if(to === "done"){
+    toast("「已完成」由工作项全部完成与用例全部通过自动判定，不能手动拖入；请补齐工作项与用例", "warn");
+  }else if((status === "plan" || status === "pass") && to === "closed"){
     toast("请先使用「更多 → 关闭需求」选择中途取消或重复需求并填写原因", "warn");
   }else if(to){
     toast("「" + statusName(status) + "」不能拖到「" + statusName(to) + "」：" + (dragHint(status, canSchedule) || "请按状态流转规则操作"), "warn");
@@ -5493,7 +5569,7 @@ function openDemandDetailById(id){
  * --------------------------------------------------------------------------- */
 var drawerDemandOpts = { reqId: null, list: [], total: 0, error: null };
 /* 关联需求候选排序：越接近可执行越靠前；已关闭只保留原关联 */
-var DEMAND_OPTION_RANK = { plan: 0, pass: 1, review: 2, closed: 3, rej: 4, canceled: 4 };
+var DEMAND_OPTION_RANK = { plan: 0, pass: 1, review: 2, done: 3, closed: 4, rej: 5, canceled: 5 };
 function demandOptionRank(st){
   var r = DEMAND_OPTION_RANK[st];
   return r === undefined ? 9 : r;
@@ -5528,11 +5604,11 @@ function fillDrawerDemandSelect(reqId, keep){
   });
   list.forEach(function(d){
     var on = d.id === keep;
-    // 已有关联可保留；已关闭需求不作为新任务的候选。
-    if(isClosedDemand(d) && !on) return;
+    // 已有关联可保留；已关闭、已完成需求不再作为新工作项的候选
+    if((isClosedDemand(d) || d.status === "done") && !on) return;
     if(on) matched = true;
     var tag = drawerDemandStatusLabel(d.status);
-    if(d.status === "plan" && d.versionStatus === "released") tag = tag ? tag + " · 已发布" : "已发布";
+    if((d.status === "plan" || d.status === "done") && d.versionStatus === "released") tag = tag ? tag + " · 已发布" : "已发布";
     html += '<option value="' + esc(d.id) + '" data-req="' + esc(d.reqId || "") + '" data-status="' + esc(d.status || "") + '">'
       + esc(d.title) + (tag ? "（" + esc(tag) + "）" : "") + '</option>';
   });

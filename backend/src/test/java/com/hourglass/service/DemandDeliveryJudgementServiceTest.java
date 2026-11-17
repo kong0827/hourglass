@@ -29,8 +29,9 @@ class DemandDeliveryJudgementServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final ReleasePermissionService permissions = mock(ReleasePermissionService.class);
     private final DeliveryScopeLock lock = mock(DeliveryScopeLock.class);
+    private final DemandCompletionService completion = mock(DemandCompletionService.class);
     private final DemandDeliveryJudgementService service =
-            new DemandDeliveryJudgementService(demands, judgements, users, access, permissions, lock);
+            new DemandDeliveryJudgementService(demands, judgements, users, access, permissions, lock, completion);
     private Demand demand;
 
     @BeforeEach
@@ -39,7 +40,8 @@ class DemandDeliveryJudgementServiceTest {
         demand.setId("D1");
         demand.setWorkspaceId("W1");
         demand.setReqId("R1");
-        demand.setStatus("plan");
+        /* 人工交付判定只补充已完成需求 */
+        demand.setStatus("done");
         demand.setRevision(4L);
         demand.setVersionId("V1");
         when(demands.selectById("D1")).thenReturn(demand);
@@ -82,6 +84,7 @@ class DemandDeliveryJudgementServiceTest {
         verify(lock).lockProjects("W1", "R1");
         verify(permissions).assertManageProject("U1", "W1", "R1");
         verify(permissions).assertManageProjectForUpdate("U1", "W1", "R1");
+        verify(completion).refreshCompletion("W1", "D1");
     }
 
     @Test
@@ -97,6 +100,7 @@ class DemandDeliveryJudgementServiceTest {
         verify(judgements).insert(any(DemandDeliveryJudgement.class));
         verify(demands).insertLog(eq("W1"), eq("D1"), eq("judge_delivery"),
                 contains("人工判定为已完成待发布"), eq("U1"));
+        verify(completion).refreshCompletion("W1", "D1");
     }
 
     @Test
@@ -114,6 +118,10 @@ class DemandDeliveryJudgementServiceTest {
                 body("delivered", LocalDate.of(2026, 11, 1), "原因", 4L))).getCode());
 
         demand.setStatus("plan");
+        assertEquals(400, assertThrows(AppException.class, () -> service.judge("U1", "W1", "D1",
+                body("delivered", LocalDate.of(2026, 11, 1), "原因", 4L))).getCode());
+
+        demand.setStatus("done");
         assertEquals(409, assertThrows(AppException.class, () -> service.judge("U1", "W1", "D1",
                 body("delivered", LocalDate.of(2026, 11, 1), "原因", 3L))).getCode());
         verify(judgements, never()).insert(any(DemandDeliveryJudgement.class));
@@ -133,6 +141,7 @@ class DemandDeliveryJudgementServiceTest {
         service.revoke("U1", "W1", "D1", body(null, null, "证据已补齐", 4L));
 
         verify(judgements).revoke(9L, "U1", "张三", "证据已补齐");
+        verify(completion).refreshCompletion("W1", "D1");
         verify(demands).insertLog("W1", "D1", "revoke_delivery_judgement", "撤销人工判定：证据已补齐", "U1");
         verify(judgements, never()).deleteByDemand(anyString(), anyString());
     }

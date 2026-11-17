@@ -61,7 +61,7 @@ var VIEWS = {
   version:  { title:"版本详情", sub:"单版本详情页：范围、投入、需求、发布事实与操作记录", enter:lazyEnter("version", "enterVersionView") },
   release:  { title:"发布计划", sub:"单版本发布工作台：计划、实际记录、发布历史与版本内容；页签与版本都在 URL 里", enter:lazyEnter("release", "enterReleaseView") },
   delivery: { title:"交付说明", sub:"一页式交付说明：承诺范围、实际发布、回归结果与遗留问题聚合成一份可对外提交的文档", enter:lazyEnter("delivery", "enterDeliveryView") },
-  demands:  { title:"需求池",   sub:"四态看板与主状态工作页：待评审 → 已通过 → 已排期；已关闭保留原因与恢复去向", enter:lazyEnter("demands", "enterDemandsView") },
+  demands:  { title:"需求池",   sub:"五态看板与主状态工作页：待评审 → 已通过 → 已排期 → 已完成；已关闭保留原因与恢复去向", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
   dochistory: { title:"文档历史", sub:"单文档的历史快照：左侧版本，右侧阅读与逐行对比；版本在 URL 里", enter:enterDocHistoryLazy },
   testcases: { title:"测试", sub:"一条质量链路：用例 → 缺陷 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },

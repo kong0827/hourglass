@@ -390,7 +390,11 @@ function loadSide(current, reqId){
     return API.getAllPages("/api/demands", { reqId: reqId }).then(function(rows){
       /* 整份留着做名字解析：工作项挂的需求未必把目标版本指向本版本，不能只留过滤后的那几条 */
       st.allDemands = rows || [];
-      return st.allDemands.filter(function(d){ return d.versionId === st.id && d.status !== "rej"; });
+      /* 已排需求与后端 demandCount 同口径：不含已关闭（含历史 rej/canceled），已完成照常计入 */
+      return st.allDemands.filter(function(d){
+        return d.versionId === st.id && d.status !== "closed" && d.status !== "rej"
+          && d.status !== "canceled" && d.status !== "cancelled";
+      });
     });
   });
   fetchSide("plans", current, function(){ return API.get("/api/versions/" + id + "/release-plans"); });
@@ -1406,8 +1410,8 @@ function scopeHTML(){
 /* ==================== 需求 ==================== */
 
 function demandStatusName(s){
-  return s === "plan" ? "已排期" : s === "pass" ? "已通过" : s === "rej" ? "已拒绝"
-    : (s === "canceled" || s === "cancelled") ? "已取消" : "待评审";
+  return s === "plan" ? "已排期" : s === "done" ? "已完成" : s === "pass" ? "已通过" : s === "closed" ? "已关闭"
+    : s === "rej" ? "已拒绝" : (s === "canceled" || s === "cancelled") ? "已取消" : "待评审";
 }
 function demandsHTML(){
   var slot = extra.demands;
@@ -1416,7 +1420,7 @@ function demandsHTML(){
   if(!slot.rows.length){
     return panel("已排需求", "", UI.emptyState({
       icon:"demand", title:"没有排到该版本的需求",
-      text:"在需求池里把需求的目标版本指向这里，就能在此汇总；已拒绝的需求不计入。", compact:true
+      text:"在需求池里把需求的目标版本指向这里，就能在此汇总；已关闭的需求不计入。", compact:true
     }));
   }
   var body = slot.rows.map(function(d){
@@ -1425,14 +1429,14 @@ function demandsHTML(){
       + '<td class="vd-tt"><span class="vd-no">' + esc(demandNoText(d.demandNo) || "—") + '</span>'
       + '<span class="vd-tname">' + esc(d.title) + '</span></td>'
       + '<td>' + esc(d.itemKind || "其他") + '</td>'
-      + '<td><span class="tag ' + (d.status === "plan" ? "tag-info" : "ghost") + '">' + esc(demandStatusName(d.status)) + '</span></td>'
+      + '<td><span class="tag ' + (d.status === "done" ? "tag-plum" : d.status === "plan" ? "tag-info" : "ghost") + '">' + esc(demandStatusName(d.status)) + '</span></td>'
       + '<td>' + esc(d.priority || "—") + '</td>'
       + '<td class="num">' + esc(dateText(d.expectDate) || "—") + '</td>'
       + '<td class="num vd-rel-cell">' + (linked
         ? '<span>' + linked + ' 项</span>' + linkBtn("demand", d.id, d.title)
         : '<span class="vd-muted" title="本版本的工作项还没有挂到这条需求">未挂工作项</span>') + '</td></tr>';
   }).join("");
-  return panel("已排需求", '<span class="meta-right">' + slot.rows.length + ' 项 · 目标版本指向本版本，不含已拒绝</span>',
+  return panel("已排需求", '<span class="meta-right">' + slot.rows.length + ' 项 · 目标版本指向本版本，不含已关闭</span>',
     tableWrap('<th>需求</th><th>类型</th><th>状态</th><th>优先级</th><th class="num">期望日期</th><th class="num">本版本工作项</th>', body)
     + '<p class="foot-note">点击行打开需求详情，点漏斗把「工作项」页联动到该需求；需求按「目标版本」规划，工作项按「计划版本」归组，两者口径不同。</p>');
 }

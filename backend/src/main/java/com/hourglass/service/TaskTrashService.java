@@ -52,6 +52,8 @@ public class TaskTrashService {
     private final UserMapper userMapper;
     /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
     private final TransactionTemplate purgeTx;
+    /** 工作项进回收站 / 恢复 / 彻底删除都会改变需求完成证据 */
+    private final DemandCompletionService demandCompletion;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
 
@@ -62,11 +64,13 @@ public class TaskTrashService {
                             NotificationEventService notificationEvents, TaskWatchService watchService,
                             PlatformTransactionManager transactionManager, DeliveryScopeLock scopeLock,
                             com.hourglass.mapper.VersionTaskMapper versionTaskMapper,
-                            AuditService systemAudit, UserMapper userMapper) {
+                            AuditService systemAudit, UserMapper userMapper,
+                            DemandCompletionService demandCompletion) {
         this.scopeLock = scopeLock;
         this.versionTaskMapper = versionTaskMapper;
         this.systemAudit = systemAudit;
         this.userMapper = userMapper;
+        this.demandCompletion = demandCompletion;
         this.taskMapper = taskMapper;
         this.support = support;
         this.cascade = cascade;
@@ -107,6 +111,7 @@ public class TaskTrashService {
         /* 软删除后任务已不可打开，通知不带任务引用，避免通知中心点进去 404 */
         notifyParticipants(workspaceId, userId, t, "任务移入回收站：「" + t.getTitle() + "」",
                 "任务已被移入回收站，30 天后自动清理；可由空间成员在回收站恢复", null);
+        demandCompletion.refreshCompletion(workspaceId, t.getDemandId());
     }
 
     @Transactional
@@ -124,6 +129,7 @@ public class TaskTrashService {
                 : "从回收站恢复「" + t.getTitle() + "」");
         notifyParticipants(workspaceId, userId, t, "任务已恢复：「" + t.getTitle() + "」",
                 "任务已从回收站恢复到看板", id);
+        demandCompletion.refreshCompletion(workspaceId, t.getDemandId());
     }
 
     @Transactional
@@ -138,6 +144,7 @@ public class TaskTrashService {
                         + (task.getReqId() == null ? "未归属项目" : "项目 " + task.getReqId())
                         + "；不可恢复，时间线与评论等一并清理）", null);
         cascade.purgeTasks(workspaceId, Collections.singletonList(id));
+        demandCompletion.refreshCompletion(workspaceId, task.getDemandId());
     }
 
     private Task lockTask(String workspaceId, String id, boolean deleted) {
@@ -185,6 +192,9 @@ public class TaskTrashService {
                 try {
                     purgeTx.execute(status -> {
                         cascade.purgeTasks(batch);
+                        for (Task t : batch) {
+                            demandCompletion.refreshCompletion(t.getWorkspaceId(), t.getDemandId());
+                        }
                         return null;
                     });
                     purged += batch.size();

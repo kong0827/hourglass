@@ -26,11 +26,11 @@ public class Demand {
     private String categoryId;
     /** P0/P1/P2/P3 */
     private String priority;
-    /** review待评审/pass已通过/plan已排期/closed已关闭 */
+    /** review待评审/pass已通过/plan已排期/done已完成/closed已关闭（完成≠交付） */
     private String status;
     /** 关闭原因：rej评审不通过/cancel中途取消/dup重复需求 */
     private String closeReason;
-    /** 关闭前主状态：review/pass/plan，决定恢复去向 */
+    /** 关闭前主状态：review/pass/plan/done，决定恢复去向 */
     private String closeStage;
     /** 期望交付时间 */
     private LocalDate expectDate;
@@ -64,7 +64,7 @@ public class Demand {
     /** WSJF 得分（非表字段，读取时计算：(business+urgency+risk)÷effort，保留 1 位） */
     private Double wsjfScore;
 
-    /** 已排期派生阶段（非表字段）：waiting/active/donePending/delivered */
+    /** 交付阶段派生（非表字段）：plan 上为 waiting/active，done 上为 donePending/delivered */
     private String deliveryStage;
     /** 阶段来源（非表字段）：release真实发布优先 / manual人工判定 / derived自动派生 */
     private String deliveryStageSource;

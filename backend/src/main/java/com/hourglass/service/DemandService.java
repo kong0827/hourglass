@@ -37,6 +37,7 @@ import java.util.Map;
  * M2 需求池（T2.1 / T2.4 / T2.5）：CRUD + 状态机 + WSJF。
  *
  * <p>状态机：review（待评审）→ pass（已通过）/ closed（已关闭）；pass → plan（已排期，选目标版本）；
+ * plan → done（已完成，完成条件满足时自动进入，证据失效自动退回，见 DemandCompletionService）；
  * closed 按关闭前阶段回 review/pass；pass → unpass 撤回评审；plan → unplan 退回已通过并解绑版本。
  * 评审流转仅空间主可执行；排期/调期/撤排/取消/恢复由管理角色执行，全部动作写 demand_log 留痕。
  * WSJF =（业务价值+时间紧迫度+风险降低）÷ 工作量，四分量齐全才算，禁止手填结果。
@@ -156,20 +157,27 @@ public class DemandService {
         normalizeFilters(base);
         int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, base.getLimit() <= 0 ? 50 : base.getLimit()));
         base.setLimit(safeLimit);
-        Map<String, Integer> counts = countByStatus(base);
+        /* 列头计数不随阶段筛选变化：筛选只作用于该阶段所属的列，另一列仍展示全部 */
+        DemandQuery countScope = copyOf(base);
+        countScope.setDeliveryStage(null);
+        Map<String, Integer> counts = countByStatus(countScope);
 
         DemandBoardResponse resp = new DemandBoardResponse();
         resp.setCounts(counts);
         resp.setTotalAll(boardTotalAll(base));
         resp.setFacets(boardFacets(base));
-        resp.setStageCounts(deliveryStageCounts(base));
+        resp.setStageCounts(deliveryStageCounts(base, "plan"));
+        resp.setDoneStageCounts(deliveryStageCounts(base, "done"));
         for (String status : DEMAND_STATUSES) {
             DemandQuery q = copyOf(base);
             q.setStatus(status);
             q.setOffset(0);
             q.setLimit(safeLimit);
-            // 阶段只从已排期派生，非 plan 行恒为 NULL，带进其他列会把整列清空
-            if (!"plan".equals(status)) {
+            // 阶段只从已排期 / 已完成派生；其余状态恒为 NULL，带进其他列会把整列清空。
+            // 待开工/推进中只筛已排期列，待发布/已交付只筛已完成列，避免另一列被筛成空。
+            if (!"plan".equals(status) && !"done".equals(status)) {
+                q.setDeliveryStage(null);
+            } else if (q.getDeliveryStage() != null && !stageBelongsTo(status, q.getDeliveryStage())) {
                 q.setDeliveryStage(null);
             }
             int matched = q.getDeliveryStage() != null ? demandMapper.countPage(q) : countOf(counts, status);
@@ -187,7 +195,7 @@ public class DemandService {
         return resp;
     }
 
-    private static final String[] DEMAND_STATUSES = {"review", "pass", "plan", "closed"};
+    private static final String[] DEMAND_STATUSES = {"review", "pass", "plan", "done", "closed"};
     private static final String[] DELIVERY_STAGES = {"waiting", "active", "donePending", "delivered"};
 
     /** 主状态工作页：页签总量不受当前筛选影响，指标和分页卡片响应当前筛选。 */
@@ -202,17 +210,17 @@ public class DemandService {
         DemandQuery mainScope = copyOf(query);
         clearWorkFilters(mainScope);
         Map<String, Integer> statusCounts = countByStatus(mainScope);
-        mainScope.setStatus("plan");
+        mainScope.setStatus(status);
 
         com.hourglass.dto.DemandWorkpageResponse out = new com.hourglass.dto.DemandWorkpageResponse();
         out.setPage(page);
         out.setStatusCounts(statusCounts);
-        out.setStageCounts(deliveryStageCounts(mainScope));
+        out.setStageCounts(deliveryStageCounts(mainScope, status));
         Map<String, Object> metrics = demandMapper.workpageMetrics(query);
         out.setMetrics(metrics == null ? new LinkedHashMap<String, Object>() : metrics);
 
         DemandQuery versionsQuery = copyOf(query);
-        versionsQuery.setStatus("plan");
+        versionsQuery.setStatus("done".equals(status) ? "done" : "plan");
         versionsQuery.setDeliveryStage(null);
         versionsQuery.setVersionId(null);
         List<Map<String, Object>> versions = demandMapper.selectWorkpageVersions(versionsQuery);
@@ -611,7 +619,7 @@ public class DemandService {
         query.setStatus(validStatus(query.getStatus()));
         query.setDeliveryStage(validChoice(query.getDeliveryStage(), DELIVERY_STAGES));
         query.setCloseReason(validChoice(query.getCloseReason(), new String[]{"rej", "cancel", "dup"}));
-        query.setCloseStage(validChoice(query.getCloseStage(), new String[]{"review", "pass", "plan"}));
+        query.setCloseStage(validChoice(query.getCloseStage(), new String[]{"review", "pass", "plan", "done"}));
         query.setFocus(validChoice(query.getFocus(), new String[]{"high", "dueSoon", "risk"}));
         query.setVersionId(Texts.trimToNull(query.getVersionId()));
     }
@@ -643,9 +651,19 @@ public class DemandService {
         query.setReqs(new ArrayList<String>());
     }
 
-    private Map<String, Integer> deliveryStageCounts(DemandQuery query) {
-        DemandQuery scope = copyOf(query);
-        scope.setStatus("plan");
+    /** 阶段分组：待开工/推进中属于已排期，待发布/已交付属于已完成。 */
+    private static boolean stageBelongsTo(String status, String stage) {
+        if ("plan".equals(status)) {
+            return "waiting".equals(stage) || "active".equals(stage);
+        }
+        if ("done".equals(status)) {
+            return "donePending".equals(stage) || "delivered".equals(stage);
+        }
+        return false;
+    }
+
+    private Map<String, Integer> deliveryStageCounts(DemandQuery query, String status) {        DemandQuery scope = copyOf(query);
+        scope.setStatus(status);
         scope.setDeliveryStage(null);
         Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
         for (String stage : DELIVERY_STAGES) {
@@ -658,8 +676,10 @@ public class DemandService {
             }
         }
         int all = 0;
-        for (String stage : DELIVERY_STAGES) {
-            all += countOf(counts, stage);
+        if ("plan".equals(status)) {
+            all += countOf(counts, "waiting") + countOf(counts, "active");
+        } else if ("done".equals(status)) {
+            all += countOf(counts, "donePending") + countOf(counts, "delivered");
         }
         counts.put("all", all);
         return counts;
@@ -1008,7 +1028,11 @@ public class DemandService {
         throw AppException.badRequest("需求编号生成冲突，请重试");
     }
 
-    /** 待评审可整单编辑；已通过 / 已排期只补录说明类内容，标题与排期口径仍由原动作维护；已关闭需先恢复 */
+    /**
+     * 待评审可整单编辑；已通过 / 已排期只补录说明类内容；
+     * 已完成允许补正文与优先级（标题、描述、模块、验收标准），但版本与计划日期仍由排期维护；
+     * 已关闭需先恢复。
+     */
     @Transactional
     public Demand update(String userId, String workspaceId, String id, DemandSaveRequest req) {
         Demand initial = requireDemand(workspaceId, id);
@@ -1035,11 +1059,27 @@ public class DemandService {
             applyFields(d, req);
         } else {
             applyContentFields(d, req);
+            if ("done".equals(d.getStatus())) {
+                /* 完成态只放行文本类修正：标题与优先级可改，版本、计划日期与项目不动 */
+                if (req.getTitle() != null) {
+                    String title = Texts.trimToNull(req.getTitle());
+                    if (title == null) {
+                        throw AppException.badRequest("需求标题不能为空");
+                    }
+                    d.setTitle(Texts.cut(title, 80));
+                }
+                if (req.getPriority() != null) {
+                    validatePriority(req.getPriority());
+                    d.setPriority(req.getPriority());
+                }
+            }
         }
         save(d);
         logChange(d, userId, "update", null, null, before);
         notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被编辑",
                 fullEdit ? "需求内容有更新（仍处于待评审）"
+                        : "done".equals(d.getStatus())
+                        ? "需求内容有更新（已完成，排期与交付证据未变）"
                         : "需求内容有更新（" + statusName(d.getStatus()) + "，标题与排期未变）");
         return getVisible(workspaceId, userId, id);
     }
@@ -1067,11 +1107,14 @@ public class DemandService {
         return getVisible(workspaceId, userId, id);
     }
 
-    /** 列表行内编辑：期望交付可清空，同样不推进状态。 */
+    /** 列表行内编辑：期望交付可清空，同样不推进状态；已完成需求不再调整交付承诺。 */
     @Transactional
     public Demand quickExpectDate(String userId, String workspaceId, String id, DemandActionRequest body) {
         Demand d = writableDemandForQuick(userId, workspaceId, id, body);
         requireQuickEditable(d);
+        if ("done".equals(d.getStatus())) {
+            throw AppException.badRequest("已完成需求不能直接修改期望交付");
+        }
         LocalDate expectDate = body == null ? null : body.getExpectDate();
         if (java.util.Objects.equals(expectDate, d.getExpectDate())) {
             return getVisible(workspaceId, userId, id);
@@ -1209,7 +1252,8 @@ public class DemandService {
     }
 
     private void requireQuickEditable(Demand d) {
-        if (!"review".equals(d.getStatus()) && !"pass".equals(d.getStatus()) && !"plan".equals(d.getStatus())) {
+        if (!"review".equals(d.getStatus()) && !"pass".equals(d.getStatus())
+                && !"plan".equals(d.getStatus()) && !"done".equals(d.getStatus())) {
             throw AppException.badRequest("已关闭的需求不能直接修改，请先恢复");
         }
     }
@@ -1335,10 +1379,14 @@ public class DemandService {
         return getVisible(workspaceId, userId, id);
     }
 
-    /** 关闭不级联任务；保留原目标，恢复到已通过时必须重新排期。 */
+    /** 关闭不级联任务；保留原目标，恢复到已通过时必须重新排期。已完成只能由证据失效自动退回，不能直接关闭。 */
     @Transactional
     public Demand cancel(String userId, String workspaceId, String id, DemandActionRequest body) {
         Demand d = scheduleDemand(userId, workspaceId, id, body);
+        if ("done".equals(d.getStatus())) {
+            throw AppException.badRequest("已完成需求不能直接关闭；完成状态由证据自动判定，"
+                    + "需先撤回证据（工作项重开、用例失败或发布回滚）让需求退回已排期");
+        }
         if (!"review".equals(d.getStatus()) && !"pass".equals(d.getStatus())
                 && !"plan".equals(d.getStatus()) && !"rej".equals(d.getStatus())) {
             throw AppException.badRequest("只有有效状态的需求可以关闭");
@@ -1709,6 +1757,9 @@ public class DemandService {
         if ("plan".equals(status)) {
             return "已排期";
         }
+        if ("done".equals(status)) {
+            return "已完成";
+        }
         if ("closed".equals(status)) {
             return "已关闭";
         }
@@ -1748,6 +1799,12 @@ public class DemandService {
         }
         if ("restore".equals(action)) {
             return "恢复";
+        }
+        if ("complete".equals(action)) {
+            return "自动完成";
+        }
+        if ("auto_reopen".equals(action)) {
+            return "自动退回";
         }
         return action;
     }

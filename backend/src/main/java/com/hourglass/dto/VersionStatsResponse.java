@@ -70,7 +70,7 @@ public class VersionStatsResponse {
         private Integer remainingMinutes;
         /** 关联需求数：目标版本指向该版本且未拒绝的需求 */
         private Integer demandCount;
-        /** 已排期需求数：目标版本指向该版本且状态为已排期（plan）的需求 */
+        /** 已排期需求数：目标版本指向该版本且状态为已排期或已完成（完成仍计入该版本，避免进度倒退） */
         private Integer scheduledDemandCount;
         /** 上线前未绑版本而自动归入本版本的任务数（仅首版 released 版本 &gt;0，口径见计划第 6 节） */
         private Integer preLaunchCount;

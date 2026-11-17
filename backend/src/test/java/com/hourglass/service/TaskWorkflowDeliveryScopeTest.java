@@ -45,7 +45,7 @@ class TaskWorkflowDeliveryScopeTest {
     private final TaskWorkflowService service = new TaskWorkflowService(tasks, logs,
             mock(SubtaskMapper.class), support, timeLogs, completion, mock(TaskAuditLogger.class),
             mock(NotificationEventService.class), mock(TaskWatchService.class), access,
-            transitions, workspaces, members, locks);
+            transitions, workspaces, members, locks, mock(DemandCompletionService.class));
     private Task published;
 
     @BeforeEach

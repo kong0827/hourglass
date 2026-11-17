@@ -58,6 +58,8 @@ public class TaskWorkflowService {
     private final WorkspaceService workspaceService;
     private final WorkspaceMemberMapper memberMapper;
     private final DeliveryScopeLock scopeLock;
+    /** 工作项改列后重算需求完成状态（需求完成 ≠ 交付） */
+    private final DemandCompletionService demandCompletion;
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
     @org.springframework.beans.factory.annotation.Autowired
@@ -69,8 +71,9 @@ public class TaskWorkflowService {
                                NotificationEventService notificationEvents, TaskWatchService watchService,
                                ProjectAccessService projectAccess, ColumnTransitionService transitions,
                                WorkspaceService workspaceService, WorkspaceMemberMapper memberMapper,
-                               DeliveryScopeLock scopeLock) {
+                               DeliveryScopeLock scopeLock, DemandCompletionService demandCompletion) {
         this.scopeLock = scopeLock;
+        this.demandCompletion = demandCompletion;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.subtaskMapper = subtaskMapper;
@@ -211,11 +214,11 @@ public class TaskWorkflowService {
 
     @Transactional
     public Map<String, Object> move(String userId, String workspaceId, String id, TaskMoveRequest req) {
-        return moveLocked(userId, workspaceId, id, req, lockActiveTask(workspaceId, id), true);
+        return moveLocked(userId, workspaceId, id, req, lockActiveTask(workspaceId, id), true, true);
     }
 
     private Map<String, Object> moveLocked(String userId, String workspaceId, String id, TaskMoveRequest req, Task task,
-                                           boolean returnTask) {
+                                           boolean returnTask, boolean refreshDemand) {
         projectAccess.assertViewTask(workspaceId, userId, task);
         projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
         String from = task.getBoardColumn();
@@ -321,6 +324,9 @@ public class TaskWorkflowService {
                 completionService.archive(task);
             } else if (Consts.COL_DONE.equals(from)) {
                 completionService.remove(workspaceId, id);
+            }
+            if (refreshDemand && task.getDemandId() != null) {
+                demandCompletion.refreshCompletion(workspaceId, task.getDemandId());
             }
         }
 
@@ -441,6 +447,7 @@ public class TaskWorkflowService {
             }
         }
         int moved = 0;
+        java.util.Set<String> demandIds = new java.util.LinkedHashSet<String>();
         for (String taskId : taskIds) {
             TaskMoveRequest one = new TaskMoveRequest();
             one.setColumn(req.getColumn());
@@ -449,9 +456,15 @@ public class TaskWorkflowService {
             one.setAutoClaim(Boolean.FALSE);
             one.setReason(req.getReason());
             one.setForce(req.getForce());
-            moveLocked(userId, workspaceId, taskId, one, locked.get(taskId), false);
+            Task task = locked.get(taskId);
+            if (task.getDemandId() != null) {
+                demandIds.add(task.getDemandId());
+            }
+            moveLocked(userId, workspaceId, taskId, one, task, false, false);
             moved++;
         }
+        /* 同一需求只重算一次，避免批量移动逐条判定 */
+        demandCompletion.refreshCompletion(workspaceId, demandIds);
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("moved", moved);
         res.put("column", req.getColumn());
@@ -487,7 +500,7 @@ public class TaskWorkflowService {
             req.setReason(body.getReason());
             req.setForce(body.getForce());
         }
-        return moveLocked(userId, workspaceId, id, req, task, true);
+        return moveLocked(userId, workspaceId, id, req, task, true, true);
     }
 
     /**

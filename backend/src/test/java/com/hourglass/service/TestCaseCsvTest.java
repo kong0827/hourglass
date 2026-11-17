@@ -67,7 +67,7 @@ class TestCaseCsvTest {
                     mock(WorkspaceMetaCache.class),
                     mock(com.hourglass.mapper.TestCaseMapper.class),
                     mock(com.hourglass.mapper.CaseSetMapper.class)), auditService),
-            mock(com.hourglass.mapper.CaseSetMapper.class));
+            mock(com.hourglass.mapper.CaseSetMapper.class), mock(DemandCompletionService.class));
 
     @BeforeEach
     void setUp() {

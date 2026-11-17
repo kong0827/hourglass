@@ -154,8 +154,15 @@ try{
   assert(!!dA1.id && !!dA2.id && !!dB1.id, "准备：三个需求创建成功");
 
   await navigate(BASE + "/#/demands");
-  await waitFor(`document.querySelectorAll('#demandBody .bkl-col').length === 4`, "看板四列渲染");
+  await waitFor(`document.querySelectorAll('#demandBody .bkl-col').length === 5`, "看板五列渲染（含已完成）");
   await waitFor(`document.querySelectorAll('#demandBody .bkl-card').length === 3`, "三张卡片渲染");
+  const doneColScope = await evaluate(`(() => {
+    const col = document.querySelector('#demandBody .bkl-col[data-col="done"]');
+    const head = col && col.querySelector(".bkl-title");
+    return { exists: !!col, head: head ? head.textContent.trim() : "" };
+  })()`);
+  assert(doneColScope.exists === true, "已完成列存在（由完成判定自动进出）");
+  assert(doneColScope.head.indexOf("已完成") >= 0, "已完成列标题正确（实际：" + doneColScope.head + "）");
 
   /* 1. 默认全部项目：选择器值 + meta 文案 + 泳道分组 */
   const scopeDefault = await evaluate(`(() => {

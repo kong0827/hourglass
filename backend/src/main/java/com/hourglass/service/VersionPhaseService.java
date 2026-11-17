@@ -123,7 +123,8 @@ public class VersionPhaseService {
                 demandCounts.put(d.getVersionId(), c);
             }
             c[0]++;
-            if ("plan".equals(d.getStatus())) {
+            /* 已完成仍算排期落入该版本，避免版本进度因需求完成而倒退 */
+            if ("plan".equals(d.getStatus()) || "done".equals(d.getStatus())) {
                 c[1]++;
             }
         }

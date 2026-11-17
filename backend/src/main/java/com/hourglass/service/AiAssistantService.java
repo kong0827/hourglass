@@ -294,11 +294,11 @@ public class AiAssistantService {
             return res;
         }
 
-        /* 拆分请求没有命中任何可拆的需求：不下发空卡片；不区分「不存在 / 只读 / 已取消」，避免反推 */
+        /* 拆分请求没有命中任何可拆的需求：不下发空卡片；不区分「不存在 / 只读 / 已关闭 / 已完成」，避免反推 */
         if ("create_task".equals(intent) && draft.isFromDemand() && draft.getDemandId() == null
                 && draft.getDemandCandidates().isEmpty()) {
             res.setIntent("answer");
-            res.setAnswer("没有找到你可以拆分的需求：需求要在你可写的项目里，且未被取消。换个需求标题关键词再试一次，或到需求池打开需求后点「拆分为工作项」。");
+            res.setAnswer("没有找到你可以拆分的需求：需求要在你可写的项目里，且未关闭、未完成。换个需求标题关键词再试一次，或到需求池打开需求后点「拆分为工作项」。");
             res.getLinks().clear();
             res.getLinks().add(new AiAssistantLink(LINKS.get("#/demands"), "#/demands"));
             return res;
@@ -431,9 +431,10 @@ public class AiAssistantService {
             if (demand == null) {
                 throw AppException.notFound("需求不存在或你没有访问权限");
             }
-            if ("closed".equals(demand.getStatus()) || "canceled".equals(demand.getStatus())
-                    || "rej".equals(demand.getStatus())) {
-                throw AppException.badRequest("已关闭的需求不能新拆工作项");
+            /* 与需求详情「拆分为工作项」/ AiDemandSplitService 同口径：已关闭、已完成都不再接收新工作项 */
+            if ("closed".equals(demand.getStatus()) || "done".equals(demand.getStatus())
+                    || "canceled".equals(demand.getStatus()) || "rej".equals(demand.getStatus())) {
+                throw AppException.badRequest("已关闭或已完成的需求不能新拆工作项");
             }
             String requested = Texts.trimToNull(req.getReqId());
             if (requested != null && !requested.equals(demand.getReqId())) {
@@ -720,7 +721,7 @@ public class AiAssistantService {
     }
 
     /**
-     * 拆分为工作项：只认当前用户可见、所在项目可写且未取消的需求（与需求详情按钮同口径）。
+     * 拆分为工作项：只认当前用户可见、所在项目可写且未关闭、未完成的需求（与需求详情按钮同口径）。
      * 命中后项目固定为需求所在项目，日期按需求计划/期望补齐；多条候选交给用户选。
      */
     private void linkDemand(AiAssistantDraft d, String workspaceId, String userId, List<ProjectRef> projects,
@@ -775,7 +776,8 @@ public class AiAssistantService {
     }
 
     private boolean splittable(String workspaceId, String userId, Demand demand) {
-        return !"closed".equals(demand.getStatus()) && !"canceled".equals(demand.getStatus())
+        return !"closed".equals(demand.getStatus()) && !"done".equals(demand.getStatus())
+                && !"canceled".equals(demand.getStatus())
                 && !"rej".equals(demand.getStatus()) && projectAccess.canWrite(workspaceId, userId, demand.getReqId());
     }
 
@@ -851,6 +853,7 @@ public class AiAssistantService {
             d.setDemandTitle(target.getTitle());
             d.setDemandStatus(target.getStatus());
             d.setDemandStatusName(demandStatusName(target.getStatus()));
+            d.setDemandCloseStage(target.getCloseStage());
             boolean canWrite = projectAccess.canWrite(workspaceId, userId, target.getReqId());
             boolean canManage = releasePermission.canManageProject(userId, workspaceId, target.getReqId());
             d.setCanManage(canManage);
@@ -1139,6 +1142,8 @@ public class AiAssistantService {
                 out.add("replan");
                 out.add("unplan");
             }
+        } else if ("done".equals(status)) {
+            /* 完成状态只由完成判定与人工交付判定改变，AI 助手不提供流转动作 */
         } else if ("closed".equals(status)) {
             if (canManage) {
                 out.add("restore");
@@ -1939,6 +1944,9 @@ public class AiAssistantService {
         }
         if ("plan".equals(status)) {
             return "已排期";
+        }
+        if ("done".equals(status)) {
+            return "已完成";
         }
         if ("closed".equals(status)) {
             return "已关闭";

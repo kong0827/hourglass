@@ -43,7 +43,7 @@ class TaskCommandDeliveryScopeTest {
             mock(CategoryMapper.class), users, mock(RequirementDocMapper.class), mock(DevBranchMapper.class),
             members, versions, bindings, demands, mock(WorkspaceMetaCache.class), support,
             mock(TaskCompletionService.class), workflow, audit, mock(NotificationEventService.class), access,
-            mock(TimeLogService.class), locks, permissions);
+            mock(TimeLogService.class), locks, permissions, mock(DemandCompletionService.class));
     private final ReleaseMapper records = mock(ReleaseMapper.class);
     private final TaskPublicationService publications = spy(new TaskPublicationService(tasks, records,
             mock(TaskLogMapper.class), locks, permissions, new com.fasterxml.jackson.databind.ObjectMapper(),
@@ -189,7 +189,7 @@ class TaskCommandDeliveryScopeTest {
     void closedDemandRejectsNewTask() {
         demand.setStatus("closed");
         assertTrue(assertThrows(AppException.class, () -> service.create("U1", "W1", request()))
-                .getMessage().contains("已关闭需求"));
+                .getMessage().contains("已关闭或已完成的需求"));
         verify(tasks, never()).insert(any());
     }
 
@@ -197,7 +197,7 @@ class TaskCommandDeliveryScopeTest {
     void legacyRejectedDemandRejectsNewTask() {
         demand.setStatus("rej");
         assertTrue(assertThrows(AppException.class, () -> service.create("U1", "W1", request()))
-                .getMessage().contains("已关闭需求"));
+                .getMessage().contains("已关闭或已完成的需求"));
         verify(tasks, never()).insert(any());
     }
 

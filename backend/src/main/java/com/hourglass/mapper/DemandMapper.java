@@ -47,6 +47,19 @@ public interface DemandMapper {
     /** 详情：附带交付证据、派生阶段与当前人工判定（q.workspaceId 必填）。 */
     Demand selectDetail(@Param("q") DemandQuery query, @Param("id") String id);
 
+    /**
+     * 完成判定证据：真实发布 / 人工交付判定 / 工作项与用例结果。
+     * 与交付阶段派生同一口径，单条需求使用，避免为一次判定拉全量需求。
+     */
+    Map<String, Object> selectCompletionEvidence(@Param("workspaceId") String workspaceId,
+                                                 @Param("demandId") String demandId);
+
+    /** 自动完成：只允许 已排期 → 已完成，返回 0 表示状态已被其他写路径改变。 */
+    int markDone(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
+    /** 完成条件不再成立：只允许 已完成 → 已排期，保留目标版本与计划日期。 */
+    int reopenFromDone(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
     /** 项目锁之后使用当前读，避免 REPEATABLE READ 的旧快照。 */
     Demand selectByIdForUpdate(@Param("workspaceId") String workspaceId, @Param("id") String id);
 

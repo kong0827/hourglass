@@ -117,6 +117,8 @@ public class BackupService {
     private final DeliveryScopeLock scopeLock;
     private final NumberSeqService numberSeq;
     private final com.hourglass.mapper.DocTemplateMapper docTemplateMapper;
+    /** 备份可能带回旧的 done/plan 组合，导入后按证据重算一次 */
+    private final DemandCompletionService demandCompletion;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -144,10 +146,12 @@ public class BackupService {
                          com.hourglass.mapper.WorkActivityMapper workActivityMapper,
                          PlatformTransactionManager transactionManager, DeliveryScopeLock scopeLock,
                          NumberSeqService numberSeq,
-                         com.hourglass.mapper.DocTemplateMapper docTemplateMapper) {
+                         com.hourglass.mapper.DocTemplateMapper docTemplateMapper,
+                         DemandCompletionService demandCompletion) {
         this.scopeLock = scopeLock;
         this.numberSeq = numberSeq;
         this.docTemplateMapper = docTemplateMapper;
+        this.demandCompletion = demandCompletion;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -230,6 +234,8 @@ public class BackupService {
             importComments(data, st);
             // 阶段 4：完成归档重建（读工时汇总后 upsert）
             archiveDone(st);
+            /* 备份不携带发布记录与人工判定：done 按原样保留，只把证据已齐的 plan 补齐为 done，只写日志不发通知 */
+            demandCompletion.refreshCompletionPreservingDone(workspaceId, new ArrayList<String>(st.demandIds), false);
 
             BackupData.ImportResult result = new BackupData.ImportResult();
             result.setTasks(st.taskCount);
@@ -440,14 +446,14 @@ public class BackupService {
                 demand.setCategoryId(demandCatId);
                 demand.setPriority(oneOf(bd.getPriority(), PRIORITIES, "P2"));
                 String importedStatus = oneOf(bd.getStatus(),
-                        new String[]{"review", "pass", "plan", "closed", "rej", "canceled"}, "review");
+                        new String[]{"review", "pass", "plan", "done", "closed", "rej", "canceled"}, "review");
                 demand.setStatus("rej".equals(importedStatus) || "canceled".equals(importedStatus)
                         ? "closed" : importedStatus);
                 if ("closed".equals(demand.getStatus())) {
                     demand.setCloseReason("rej".equals(importedStatus) ? "rej"
                             : oneOf(bd.getCloseReason(), new String[]{"rej", "cancel", "dup"}, "cancel"));
                     demand.setCloseStage("rej".equals(importedStatus) ? "review"
-                            : oneOf(bd.getCloseStage(), new String[]{"review", "pass", "plan"},
+                            : oneOf(bd.getCloseStage(), new String[]{"review", "pass", "plan", "done"},
                                     bd.getVersionId() == null ? "review" : "plan"));
                 }
                 demand.setExpectDate(parseDate(bd.getExpectDate()));

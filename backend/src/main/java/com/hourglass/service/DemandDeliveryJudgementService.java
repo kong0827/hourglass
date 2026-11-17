@@ -36,18 +36,22 @@ public class DemandDeliveryJudgementService {
     private final ProjectAccessService projectAccess;
     private final ReleasePermissionService releasePermission;
     private final DeliveryScopeLock deliveryLock;
+    /** 人工交付判定本身也是完成证据：写入/撤销后立即重算主状态 */
+    private final DemandCompletionService demandCompletion;
 
     public DemandDeliveryJudgementService(DemandMapper demandMapper,
                                           DemandDeliveryJudgementMapper judgementMapper,
                                           UserMapper userMapper, ProjectAccessService projectAccess,
                                           ReleasePermissionService releasePermission,
-                                          DeliveryScopeLock deliveryLock) {
+                                          DeliveryScopeLock deliveryLock,
+                                          DemandCompletionService demandCompletion) {
         this.demandMapper = demandMapper;
         this.judgementMapper = judgementMapper;
         this.userMapper = userMapper;
         this.projectAccess = projectAccess;
         this.releasePermission = releasePermission;
         this.deliveryLock = deliveryLock;
+        this.demandCompletion = demandCompletion;
     }
 
     /** 新建或替换当前判定：旧记录自动撤销，新记录追加。 */
@@ -66,8 +70,8 @@ public class DemandDeliveryJudgementService {
         }
         String reason = requireReason(body.getNote());
         Demand demand = lockManageableDemand(userId, workspaceId, id, body.getRevision());
-        if (!"plan".equals(demand.getStatus())) {
-            throw AppException.badRequest("只有已排期需求可以维护人工交付判定");
+        if (!"done".equals(demand.getStatus())) {
+            throw AppException.badRequest("只有已完成需求可以维护人工交付判定");
         }
 
         DemandDeliveryJudgement active = judgementMapper.selectActive(workspaceId, id);
@@ -89,6 +93,7 @@ public class DemandDeliveryJudgementService {
         judgementMapper.insert(judgement);
         demandMapper.insertLog(workspaceId, id, "judge_delivery",
                 "人工判定为" + stageName(stage) + "（生效 " + effectiveOn + "）：" + reason, userId);
+        demandCompletion.refreshCompletion(workspaceId, id);
     }
 
     /** 撤销当前判定：保留历史，派生态立即回落到真实证据。 */
@@ -105,6 +110,7 @@ public class DemandDeliveryJudgementService {
         }
         demandMapper.insertLog(workspaceId, id, "revoke_delivery_judgement",
                 "撤销人工判定：" + reason, userId);
+        demandCompletion.refreshCompletion(workspaceId, id);
     }
 
     public PageResult<DemandDeliveryJudgement> history(String workspaceId, String userId, String id,

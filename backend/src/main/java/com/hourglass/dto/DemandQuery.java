@@ -13,9 +13,9 @@ public class DemandQuery {
 
     private String workspaceId;
     private String reqId;
-    /** review/pass/plan/closed，null = 全部；旧 rej/canceled 输入归一为 closed */
+    /** review/pass/plan/done/closed，null = 全部；旧 rej/canceled 输入归一为 closed */
     private String status;
-    /** 已排期派生阶段：waiting/active/donePending/delivered */
+    /** 派生阶段：waiting/active（已排期）、donePending/delivered（已完成） */
     private String deliveryStage;
     /** 目标版本；__none 表示未指定版本 */
     private String versionId;

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 需求主状态机</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-demand-main-state">
+  <style>
+    #hg-demand-main-state {
+      --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+      --border:#E4E7EC; --border-strong:#D0D5DD;
+      --text:#101828; --text-2:#475467; --text-3:#667085;
+      --primary:#2563EB; --warning:#F79009; --plum:#7A5AF8; --success:#12B76A;
+      font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+      background:var(--bg-app); color:var(--text);
+      width:1680px; margin:0 auto; padding:42px 46px 30px;
+    }
+    #hg-demand-main-state * { box-sizing:border-box; margin:0; }
+
+    #hg-demand-main-state .ms-head { text-align:center; margin-bottom:22px; }
+    #hg-demand-main-state .ms-head h1 { font-size:32px; font-weight:700; letter-spacing:-.4px; }
+    #hg-demand-main-state .ms-head p { font-size:14.5px; color:var(--text-2); margin-top:8px; }
+
+    #hg-demand-main-state .ms-card {
+      background:var(--surface); border:1px solid var(--border); border-radius:13px;
+      padding:16px 22px 18px; box-shadow:0 1px 2px rgba(16,24,40,.05);
+    }
+    #hg-demand-main-state svg { display:block; width:100%; height:auto; }
+    #hg-demand-main-state svg .nm { font-size:14px; font-weight:650; }
+    #hg-demand-main-state svg .lb { font-size:11px; fill:#475467; paint-order:stroke; stroke:#FFFFFF; stroke-width:3.5; stroke-linejoin:round; }
+    #hg-demand-main-state svg .lb.back { fill:#667085; }
+    #hg-demand-main-state svg .tag { font-size:10.5px; fill:#98A2B3; letter-spacing:.5px; paint-order:stroke; stroke:#FFFFFF; stroke-width:3; }
+    #hg-demand-main-state svg .dv { font-size:9.5px; fill:#98A2B3; letter-spacing:.4px; paint-order:stroke; stroke:#FFFFFF; stroke-width:3; }
+    #hg-demand-main-state svg .dvt { font-size:11px; font-weight:600; fill:#475467; }
+    #hg-demand-main-state svg .dvl { font-size:9.5px; fill:#98A2B3; paint-order:stroke; stroke:#FFFFFF; stroke-width:3; }
+
+    #hg-demand-main-state .ms-legend {
+      display:flex; align-items:center; flex-wrap:wrap; gap:22px;
+      margin-top:4px; padding-top:14px; border-top:1px dashed var(--border);
+      font-size:11.5px; color:var(--text-2);
+    }
+    #hg-demand-main-state .ms-legend .item { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
+    #hg-demand-main-state .ms-legend .dots { display:inline-flex; gap:4px; }
+    #hg-demand-main-state .ms-legend .dots i { width:8px; height:8px; border-radius:999px; display:inline-block; }
+
+    #hg-demand-main-state .ms-note {
+      display:grid; grid-template-columns:1fr 1fr; gap:10px 26px;
+      margin-top:12px; font-size:11.5px; color:var(--text-3); line-height:1.6;
+    }
+    #hg-demand-main-state .ms-note b { color:var(--text-2); }
+    #hg-demand-main-state .ms-note code {
+      font-family:"SFMono-Regular",Consolas,Menlo,monospace; font-size:10.8px;
+      background:var(--surface-sunken); border-radius:4px; padding:0 4px; color:var(--text);
+    }
+    #hg-demand-main-state .ms-foot {
+      display:flex; justify-content:space-between; align-items:center; gap:20px;
+      margin-top:14px; font-size:11.5px; color:var(--text-3);
+    }
+    #hg-demand-main-state .ms-foot b { color:var(--text-2); }
+    #hg-demand-main-state .ms-foot .pill {
+      display:inline-flex; align-items:center; gap:7px; padding:4px 11px;
+      background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    }
+    #hg-demand-main-state .ms-foot .pill i { width:6px; height:6px; border-radius:999px; background:var(--plum); }
+
+    @media (max-width:760px) {
+      #hg-demand-main-state { width:100%; padding:24px 14px; }
+      #hg-demand-main-state .ms-note { grid-template-columns:1fr; }
+      #hg-demand-main-state .ms-foot { flex-direction:column; align-items:flex-start; }
+    }
+  </style>
+
+  <div class="ms-head">
+    <h1>沙漏 · 需求主状态机</h1>
+    <p>主状态只有 5 个；待开工、推进中、待发布、已交付是派生展示，用虚线小胶囊挂在所属主状态下</p>
+  </div>
+
+  <div class="ms-card">
+    <svg viewBox="0 0 1560 900" role="img" aria-label="沙漏需求主状态机：待评审、已通过、已排期、已完成四个主状态环形流转，已关闭为中心终止态；待开工、推进中、待发布、已交付作为派生展示">
+        <defs>
+        <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#98A2B3"/></marker>
+        </defs>
+        <path d="M 838.5 191.5 Q 1199.7 257.6 1336.9 431.8" fill="none" stroke="#98A2B3" stroke-width="1.8" marker-end="url(#arw)"/>
+        <text x="1199.7" y="261.6" text-anchor="middle" class="lb">评审通过</text>
+        <path d="M 1336.9 488.2 Q 1199.7 662.4 838.5 728.5" fill="none" stroke="#98A2B3" stroke-width="1.8" marker-end="url(#arw)"/>
+        <text x="1199.7" y="666.4" text-anchor="middle" class="lb">排期</text>
+        <path d="M 721.5 728.5 Q 360.3 662.4 223.1 488.2" fill="none" stroke="#98A2B3" stroke-width="1.8" marker-end="url(#arw)"/>
+        <text x="398" y="630" text-anchor="middle" class="lb">完成条件满足</text>
+        <path d="M 1336.9 431.8 Q 1017.6 345.4 838.5 191.5" fill="none" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arw)"/>
+        <text x="1049.3" y="334.2" text-anchor="middle" class="lb back">撤回评审</text>
+        <path d="M 838.5 728.5 Q 1017.6 574.6 1336.9 488.2" fill="none" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arw)"/>
+        <text x="1049.3" y="593.8" text-anchor="middle" class="lb back">撤销排期</text>
+        <path d="M 223.1 488.2 Q 542.4 574.6 721.5 728.5" fill="none" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arw)"/>
+        <text x="510.7" y="593.8" text-anchor="middle" class="lb back">工作项重开 / 用例失败 / 发布回滚</text>
+        <path d="M 223.1 431.8 Q 360.3 257.6 721.5 191.5" fill="none" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="2 5" marker-end="url(#arw)"/>
+        <text x="364.2" y="263.5" text-anchor="middle" class="lb back">另开需求 · 新单</text>
+        <path d="M 780 704 L 780 486" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arw)" marker-start="url(#arw)"/>
+        <text x="800" y="584" text-anchor="start" class="lb back">关闭 · 任意未完成（原因必填）</text>
+        <text x="800" y="604" text-anchor="start" class="lb back">恢复 · 评审未通过回待评审，其余回已通过</text>
+        <path d="M 780 756 L 780 806" stroke="#C4CAD3" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <path d="M 690 806 L 870 806" stroke="#C4CAD3" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <path d="M 690 806 L 690 820" stroke="#C4CAD3" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <path d="M 870 806 L 870 820" stroke="#C4CAD3" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <text x="884" y="802" text-anchor="start" class="dv">派生</text>
+        <rect x="644" y="821" width="92" height="32" rx="16" fill="#FFFFFF" stroke="#D0D5DD" stroke-width="1.3" stroke-dasharray="4 3"/>
+        <text x="690" y="841" text-anchor="middle" class="dvt">待开工</text>
+        <rect x="824" y="821" width="92" height="32" rx="16" fill="#FFFFFF" stroke="#D0D5DD" stroke-width="1.3" stroke-dasharray="4 3"/>
+        <text x="870" y="841" text-anchor="middle" class="dvt">推进中</text>
+        <path d="M 742 837 L 816 837" stroke="#C4CAD3" stroke-width="1.3" marker-end="url(#arw)"/>
+        <text x="779" y="830" text-anchor="middle" class="dvl">首次真实开工</text>
+        <path d="M 172 487 L 172 714" stroke="#C4CAD3" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <path d="M 52 714 L 296 714" stroke="#C4CAD3" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <path d="M 52 714 L 52 728" stroke="#C4CAD3" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <path d="M 296 714 L 296 728" stroke="#C4CAD3" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <text x="310" y="710" text-anchor="start" class="dv">派生</text>
+        <rect x="52" y="729" width="108" height="32" rx="16" fill="#FFFFFF" stroke="#D0D5DD" stroke-width="1.3" stroke-dasharray="4 3"/>
+        <text x="106" y="749" text-anchor="middle" class="dvt">待发布</text>
+        <rect x="188" y="729" width="108" height="32" rx="16" fill="#FFFFFF" stroke="#D0D5DD" stroke-width="1.3" stroke-dasharray="4 3"/>
+        <text x="242" y="749" text-anchor="middle" class="dvt">已交付</text>
+        <path d="M 162 745 L 186 745" stroke="#C4CAD3" stroke-width="1.3" marker-end="url(#arw)"/>
+        <text x="304" y="749" text-anchor="start" class="dvl">生产发布 / 人工判定</text>
+        <path d="M 242 763 Q 174 802 106 763" fill="none" stroke="#98A2B3" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arw)"/>
+        <text x="174" y="822" text-anchor="middle" class="dvl">发布回滚</text>
+        <text x="780" y="156" text-anchor="middle" class="tag">起始状态</text>
+        <text x="220" y="420" text-anchor="middle" class="tag">成功终态</text>
+        <text x="780" y="426" text-anchor="middle" class="tag">异常终态</text>
+        <g class="node">
+<rect x="708.0" y="163.0" width="144" height="54" rx="27" fill="#F2F4F7" stroke="#D0D5DD" stroke-width="1.6"/>
+<circle cx="738.0" cy="190.0" r="4" fill="#98A2B3"/>
+<text x="787.0" y="195.0" text-anchor="middle" class="nm" fill="#344054">待评审</text>
+</g>
+        <g class="node">
+<rect x="1268.0" y="433.0" width="144" height="54" rx="27" fill="#EFF4FF" stroke="#BFD3FE" stroke-width="1.6"/>
+<circle cx="1298.0" cy="460.0" r="4" fill="#2563EB"/>
+<text x="1347.0" y="465.0" text-anchor="middle" class="nm" fill="#1D4ED8">已通过</text>
+</g>
+        <g class="node">
+<rect x="708.0" y="703.0" width="144" height="54" rx="27" fill="#FFFAEB" stroke="#FEDF89" stroke-width="1.6"/>
+<circle cx="738.0" cy="730.0" r="4" fill="#F79009"/>
+<text x="787.0" y="735.0" text-anchor="middle" class="nm" fill="#B54708">已排期</text>
+</g>
+        <g class="node">
+<rect x="148.0" y="433.0" width="144" height="54" rx="27" fill="#F4F3FF" stroke="#D9D6FE" stroke-width="1.6"/>
+<circle cx="178.0" cy="460.0" r="4" fill="#7A5AF8"/>
+<text x="227.0" y="465.0" text-anchor="middle" class="nm" fill="#5B3FD1">已完成</text>
+</g>
+        <g class="node">
+<rect x="708.0" y="433.0" width="144" height="54" rx="27" fill="#FFFFFF" stroke="#D0D5DD" stroke-width="1.6" stroke-dasharray="5 4"/>
+<circle cx="738.0" cy="460.0" r="4" fill="#98A2B3"/>
+<text x="787.0" y="465.0" text-anchor="middle" class="nm" fill="#475467">已关闭</text>
+</g>
+    </svg>
+
+    <div class="ms-legend">
+      <span class="item"><svg width="34" height="10" viewBox="0 0 34 10"><path d="M1 5h24" stroke="#98A2B3" stroke-width="1.8"/><path d="M24 1l6 4-6 4z" fill="#98A2B3"/></svg>实线：主状态推进</span>
+      <span class="item"><svg width="34" height="10" viewBox="0 0 34 10"><path d="M1 5h24" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="5 4"/><path d="M24 1l6 4-6 4z" fill="#98A2B3"/></svg>虚线：回退 / 关闭</span>
+      <span class="item"><svg width="34" height="10" viewBox="0 0 34 10"><path d="M1 5h24" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="2 5"/><path d="M24 1l6 4-6 4z" fill="#98A2B3"/></svg>点线：另开新单</span>
+      <span class="item"><svg width="42" height="18" viewBox="0 0 42 18"><rect x="1" y="3" width="40" height="13" rx="6.5" fill="#fff" stroke="#D0D5DD" stroke-dasharray="4 3"/></svg>虚线小胶囊：派生展示，只读</span>
+    </div>
+
+    <div class="ms-note">
+      <span><b>主状态：</b>待评审 <code>review</code> → 已通过 <code>pass</code> → 已排期 <code>plan</code> → 已完成 <code>done</code>；已关闭 <code>closed</code> 是异常终态，不参与正常链。</span>
+      <span><b>派生：</b>已排期下挂 待开工 / 推进中（由工作项真实开工信号派生）；已完成下挂 待发布 / 已交付（由生产发布记录派生，人工判定仅例外）。</span>
+      <span><b>完成与交付：</b>工作项全部关闭 + 最新用例全部通过才算完成；成功生产发布才算交付。已完成 ≠ 已交付。</span>
+      <span><b>关闭与恢复：</b>关闭只收未完成终止，原因 <code>rej</code> / <code>cancel</code> / <code>dup</code>；评审不通过的恢复回待评审；从已通过或已排期关闭的恢复回已通过，须重新排期，版本与计划日期不保留。</span>
+    </div>
+  </div>
+
+  <div class="ms-foot">
+    <span><b>状态只看主状态：</b>派生阶段不进主状态判定，也不能手工拖拽；看板、日历、度量共用同一口径。</span>
+    <span class="pill"><i></i>旧图保留：demand-lifecycle.html · demand-lifecycle-v2.html · demand-state-machine.html</span>
+  </div>
+</div>
+</body>
+</html>

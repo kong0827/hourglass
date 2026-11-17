@@ -31,7 +31,8 @@ class TaskCommandServiceOwnerValidationTest {
             mock(CategoryMapper.class), users, mock(RequirementDocMapper.class), mock(DevBranchMapper.class), members,
             mock(ProjectVersionMapper.class), mock(VersionTaskMapper.class), demands,
             mock(WorkspaceMetaCache.class), support, mock(TaskCompletionService.class), mock(TaskWorkflowService.class),
-            audit, mock(NotificationEventService.class), access, mock(TimeLogService.class), locks, mock(ReleasePermissionService.class));
+            audit, mock(NotificationEventService.class), access, mock(TimeLogService.class), locks, mock(ReleasePermissionService.class),
+            mock(DemandCompletionService.class));
     private Task old;
     private WorkspaceMember owner;
 

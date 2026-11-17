@@ -43,7 +43,8 @@ class TaskCommandServiceCategoryTest {
             mock(VersionTaskMapper.class), mock(DemandMapper.class), meta,
             mock(TaskSupport.class), mock(TaskCompletionService.class), mock(TaskWorkflowService.class),
             mock(TaskAuditLogger.class), mock(NotificationEventService.class), mock(ProjectAccessService.class),
-            mock(TimeLogService.class), mock(DeliveryScopeLock.class), mock(ReleasePermissionService.class));
+            mock(TimeLogService.class), mock(DeliveryScopeLock.class), mock(ReleasePermissionService.class),
+            mock(DemandCompletionService.class));
 
     @Test
     void explicitEmptyCategoryMeansUnspecified() {

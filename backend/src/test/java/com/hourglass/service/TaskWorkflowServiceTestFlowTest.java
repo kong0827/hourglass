@@ -41,7 +41,7 @@ class TaskWorkflowServiceTestFlowTest {
             audit, mock(NotificationEventService.class),
             mock(TaskWatchService.class), projectAccess,
             mock(ColumnTransitionService.class), mock(WorkspaceService.class),
-            members, scopeLock);
+            members, scopeLock, mock(DemandCompletionService.class));
 
     TaskWorkflowServiceTestFlowTest() {
         ReflectionTestUtils.setField(service, "versionTaskMapper", mock(VersionTaskMapper.class));

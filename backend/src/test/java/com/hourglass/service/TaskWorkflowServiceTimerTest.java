@@ -31,7 +31,8 @@ class TaskWorkflowServiceTimerTest {
             mock(SubtaskMapper.class), support, timeLogs, mock(TaskCompletionService.class),
             mock(TaskAuditLogger.class), mock(NotificationEventService.class),
             mock(TaskWatchService.class), mock(ProjectAccessService.class), transitions,
-            mock(WorkspaceService.class), mock(com.hourglass.mapper.WorkspaceMemberMapper.class), scopeLock);
+            mock(WorkspaceService.class), mock(com.hourglass.mapper.WorkspaceMemberMapper.class), scopeLock,
+            mock(DemandCompletionService.class));
 
     @org.junit.jupiter.api.BeforeEach
     void setupResponse() {

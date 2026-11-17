@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 需求状态流转（方案 B · 参考 TAPD）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-demand-workflow-v2">
+  <style>
+    #hg-demand-workflow-v2 {
+      --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+      --border:#E4E7EC; --border-strong:#D0D5DD;
+      --text:#101828; --text-2:#475467; --text-3:#667085;
+      --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+      --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+      --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+      --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+      --gray-soft:#F2F4F7; --gray-fg:#344054;
+      font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+      background:var(--bg-app); color:var(--text);
+      width:1680px; margin:0 auto; padding:42px 46px 34px;
+    }
+    #hg-demand-workflow-v2 * { box-sizing:border-box; margin:0; }
+
+    #hg-demand-workflow-v2 .wf-head { text-align:center; margin-bottom:26px; }
+    #hg-demand-workflow-v2 .wf-head h1 { font-size:32px; font-weight:700; letter-spacing:-.4px; }
+    #hg-demand-workflow-v2 .wf-head p { font-size:14.5px; color:var(--text-2); margin-top:8px; }
+
+    #hg-demand-workflow-v2 .wf-band {
+      background:var(--surface); border:1px solid var(--border); border-radius:13px;
+      padding:16px 20px 18px; box-shadow:0 1px 2px rgba(16,24,40,.05);
+    }
+    #hg-demand-workflow-v2 .wf-band + .wf-band { margin-top:13px; }
+    #hg-demand-workflow-v2 .wf-band-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+    #hg-demand-workflow-v2 .wf-band-head h2 { font-size:15px; font-weight:700; }
+    #hg-demand-workflow-v2 .wf-band-head span { font-size:12px; color:var(--text-3); }
+
+    #hg-demand-workflow-v2 .wf-chain { display:flex; align-items:center; flex-wrap:wrap; row-gap:14px; gap:0 6px; }
+    #hg-demand-workflow-v2 .wf-chip {
+      display:inline-flex; align-items:center; gap:7px;
+      border-radius:999px; border:1.5px solid; padding:4px 11px;
+      font-size:11.8px; font-weight:650; line-height:1.2; white-space:nowrap;
+    }
+    #hg-demand-workflow-v2 .wf-chip code {
+      font-family:"SFMono-Regular",Consolas,Menlo,monospace; font-size:10px; font-weight:400; opacity:.7;
+    }
+    #hg-demand-workflow-v2 .wf-chip .dot { width:7px; height:7px; border-radius:999px; flex:none; }
+    #hg-demand-workflow-v2 .c-gray { background:var(--gray-soft); border-color:var(--border-strong); color:var(--gray-fg); }
+    #hg-demand-workflow-v2 .c-gray .dot { background:#98A2B3; }
+    #hg-demand-workflow-v2 .c-primary { background:var(--primary-soft); border-color:var(--primary-border); color:var(--primary-fg); }
+    #hg-demand-workflow-v2 .c-primary .dot { background:var(--primary); }
+    #hg-demand-workflow-v2 .c-warning { background:var(--warning-soft); border-color:var(--warning-border); color:var(--warning-fg); }
+    #hg-demand-workflow-v2 .c-warning .dot { background:var(--warning); }
+    #hg-demand-workflow-v2 .c-plum { background:var(--plum-soft); border-color:var(--plum-border); color:var(--plum-fg); }
+    #hg-demand-workflow-v2 .c-plum .dot { background:var(--plum); }
+    #hg-demand-workflow-v2 .c-success { background:var(--success-soft); border-color:var(--success-border); color:var(--success-fg); }
+    #hg-demand-workflow-v2 .c-success .dot { background:var(--success); }
+    #hg-demand-workflow-v2 .c-dash {
+      background:var(--surface); border-style:dashed; border-color:var(--border-strong); color:var(--text-2);
+    }
+    #hg-demand-workflow-v2 .c-dash .dot { background:#98A2B3; }
+    #hg-demand-workflow-v2 .c-success-dash {
+      background:var(--success-soft); border-style:dashed; border-color:var(--success-border); color:var(--success-fg);
+    }
+    #hg-demand-workflow-v2 .c-success-dash .dot { background:var(--success); }
+
+    #hg-demand-workflow-v2 .wf-conn {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      width:84px; flex:none; padding:0 4px;
+    }
+    #hg-demand-workflow-v2 .wf-conn span {
+      font-size:10.5px; color:var(--text-3); margin-bottom:3px; white-space:normal;
+      text-align:center; line-height:1.35;
+    }
+    #hg-demand-workflow-v2 .wf-conn svg { display:block; flex:none; }
+    #hg-demand-workflow-v2 .wf-conn.sub { width:96px; }
+    #hg-demand-workflow-v2 .wf-pair { display:inline-flex; align-items:center; }
+    #hg-demand-workflow-v2 .wf-sep { width:1px; height:18px; background:var(--border); margin:0 5px; flex:none; }
+
+    #hg-demand-workflow-v2 .wf-sub { margin-top:16px; padding-top:13px; border-top:1px dashed var(--border); }
+    #hg-demand-workflow-v2 .wf-sub-row { display:flex; align-items:center; flex-wrap:wrap; gap:9px; row-gap:8px; }
+    #hg-demand-workflow-v2 .wf-sub-row + .wf-sub-row { margin-top:11px; }
+    #hg-demand-workflow-v2 .wf-sub-label {
+      font-size:11px; font-weight:650; color:var(--text-2);
+      padding:2px 8px; border-radius:6px; background:var(--surface-sunken); border:1px solid var(--border);
+    }
+    #hg-demand-workflow-v2 .wf-small { font-size:11.5px; padding:4px 10px; gap:6px; }
+    #hg-demand-workflow-v2 .wf-small .dot { width:6px; height:6px; }
+    #hg-demand-workflow-v2 .hint { font-size:11.5px; color:var(--text-3); line-height:1.55; }
+    #hg-demand-workflow-v2 .hint code,
+    #hg-demand-workflow-v2 .ref-facts code,
+    #hg-demand-workflow-v2 .wf-tr code,
+    #hg-demand-workflow-v2 .wf-cmp code {
+      font-family:"SFMono-Regular",Consolas,Menlo,monospace; font-size:10.8px;
+      background:var(--surface-sunken); border-radius:4px; padding:0 4px; color:var(--text);
+    }
+
+    #hg-demand-workflow-v2 .ref-wrap { display:grid; grid-template-columns:1.1fr 1fr; gap:26px; align-items:start; }
+    #hg-demand-workflow-v2 .ref-flow {
+      background:var(--surface-sunken); border:1px solid var(--border); border-radius:10px;
+      padding:13px 15px; display:flex; flex-direction:column; gap:11px;
+    }
+    #hg-demand-workflow-v2 .ref-flow .wf-chip { background:var(--surface); }
+    #hg-demand-workflow-v2 .ref-row { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+    #hg-demand-workflow-v2 .ref-row + .ref-row { padding-top:10px; border-top:1px dashed var(--border-strong); }
+    #hg-demand-workflow-v2 .ref-arrow { display:flex; align-items:center; gap:7px; }
+    #hg-demand-workflow-v2 .ref-arrow span { font-size:10.5px; color:var(--text-3); white-space:nowrap; }
+    #hg-demand-workflow-v2 .ref-arrow svg { display:block; }
+    #hg-demand-workflow-v2 .ref-facts { list-style:none; padding:0; }
+    #hg-demand-workflow-v2 .ref-facts li {
+      position:relative; padding-left:15px; font-size:11.8px; line-height:1.6; color:var(--text-2);
+    }
+    #hg-demand-workflow-v2 .ref-facts li + li { margin-top:6px; }
+    #hg-demand-workflow-v2 .ref-facts li::before {
+      content:""; position:absolute; left:2px; top:8px; width:5px; height:5px; border-radius:999px; background:var(--primary);
+    }
+    #hg-demand-workflow-v2 .ref-src {
+      margin-top:12px; padding-top:9px; border-top:1px dashed var(--border);
+      font-size:10.5px; color:var(--text-3); line-height:1.55;
+    }
+
+    #hg-demand-workflow-v2 .wf-rules2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+    #hg-demand-workflow-v2 .wf-rule-col h4 {
+      font-size:12.5px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:7px;
+    }
+    #hg-demand-workflow-v2 .wf-rule-col h4 i {
+      width:7px; height:7px; border-radius:999px; background:var(--primary); display:inline-block;
+    }
+    #hg-demand-workflow-v2 .wf-rule-col.alt h4 i { background:var(--warning); }
+    #hg-demand-workflow-v2 .wf-tr {
+      display:grid; grid-template-columns:1.15fr .82fr 1.35fr .95fr; gap:10px;
+      padding:5px 8px; font-size:11.2px; line-height:1.45; border-top:1px solid var(--surface-sunken);
+      align-items:start;
+    }
+    #hg-demand-workflow-v2 .wf-tr.head {
+      background:var(--surface-sunken); border-top:none; border-radius:7px;
+      font-size:10.5px; font-weight:600; color:var(--text-3); padding:6px 8px;
+    }
+    #hg-demand-workflow-v2 .wf-tr .t { font-weight:650; color:var(--text); }
+    #hg-demand-workflow-v2 .wf-tr .role { color:var(--text-2); }
+    #hg-demand-workflow-v2 .wf-tr .req { color:var(--text-2); }
+    #hg-demand-workflow-v2 .wf-tr .log {
+      font-family:"SFMono-Regular",Consolas,Menlo,monospace; font-size:10.2px; color:var(--text-3);
+    }
+
+    #hg-demand-workflow-v2 .wf-cmp { border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    #hg-demand-workflow-v2 .wf-cmp-row {
+      display:grid; grid-template-columns:1.15fr 1.35fr 1.35fr; gap:0;
+    }
+    #hg-demand-workflow-v2 .wf-cmp-row > span {
+      padding:6px 12px; font-size:11.3px; line-height:1.5; color:var(--text-2);
+      border-top:1px solid var(--border);
+    }
+    #hg-demand-workflow-v2 .wf-cmp-row > span:first-child { color:var(--text); font-weight:650; background:var(--surface-sunken); }
+    #hg-demand-workflow-v2 .wf-cmp-row > span + span { border-left:1px solid var(--border); }
+    #hg-demand-workflow-v2 .wf-cmp-row.head > span {
+      border-top:none; font-size:10.5px; font-weight:600; color:var(--text-3); background:var(--surface); padding:7px 12px;
+    }
+    #hg-demand-workflow-v2 .wf-cmp-row.head > span:nth-child(2) { color:var(--primary-fg); }
+    #hg-demand-workflow-v2 .wf-cmp-row.head > span:nth-child(3) { color:var(--warning-fg); }
+    #hg-demand-workflow-v2 .wf-cmp-note { margin-top:10px; font-size:11.3px; color:var(--text-3); line-height:1.6; }
+    #hg-demand-workflow-v2 .wf-cmp-note b { color:var(--text-2); }
+
+    #hg-demand-workflow-v2 .wf-foot {
+      display:flex; align-items:center; justify-content:space-between; gap:20px;
+      margin-top:16px; font-size:12px; color:var(--text-3);
+    }
+    #hg-demand-workflow-v2 .wf-foot b { color:var(--text-2); }
+    #hg-demand-workflow-v2 .wf-foot .pill {
+      display:inline-flex; align-items:center; gap:7px; padding:4px 11px;
+      background:var(--surface); border:1px solid var(--border); border-radius:999px; font-size:11.5px;
+    }
+    #hg-demand-workflow-v2 .wf-foot .pill i { width:6px; height:6px; border-radius:999px; background:var(--success); }
+
+    @media (max-width:760px) {
+      #hg-demand-workflow-v2 { width:100%; padding:24px 16px; }
+      #hg-demand-workflow-v2 .ref-wrap { grid-template-columns:1fr; }
+      #hg-demand-workflow-v2 .wf-rules2 { grid-template-columns:1fr; }
+      #hg-demand-workflow-v2 .wf-chain { flex-direction:column; align-items:flex-start; }
+      #hg-demand-workflow-v2 .wf-conn { width:auto; align-items:flex-start; margin-left:22px; }
+      #hg-demand-workflow-v2 .wf-conn span { display:none; }
+      #hg-demand-workflow-v2 .wf-conn svg { transform:rotate(90deg); }
+      #hg-demand-workflow-v2 .wf-tr { grid-template-columns:1fr; gap:2px; }
+      #hg-demand-workflow-v2 .wf-cmp-row { grid-template-columns:1fr; }
+      #hg-demand-workflow-v2 .wf-cmp-row > span + span { border-left:none; }
+      #hg-demand-workflow-v2 .wf-foot { flex-direction:column; align-items:flex-start; }
+    }
+  </style>
+
+  <div class="wf-head">
+    <h1>沙漏 · 需求状态流转</h1>
+    <p>方案 B · 显式工作流（参考 TAPD 状态流转图）｜与 demand-lifecycle.html 的方案 A 并存，供比较，不替换</p>
+  </div>
+
+  <div class="wf-band">
+    <div class="wf-band-head">
+      <h2>参考对象：TAPD 默认需求工作流</h2>
+      <span>状态即流程节点，拖拽即流转；默认 4 个系统状态，项目可扩展到 31 个</span>
+    </div>
+    <div class="ref-wrap">
+      <div class="ref-flow">
+        <div class="ref-row">
+          <span class="wf-chip c-gray wf-small"><span class="dot"></span>规划中<code>planning</code></span>
+          <span class="ref-arrow"><span>开始实现</span><svg width="44" height="12" viewBox="0 0 44 12" fill="none" aria-hidden="true"><path d="M1 6h36" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M34 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="wf-chip c-primary wf-small"><span class="dot"></span>实现中<code>developing</code></span>
+          <span class="ref-arrow"><span>开发完成</span><svg width="44" height="12" viewBox="0 0 44 12" fill="none" aria-hidden="true"><path d="M1 6h36" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M34 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="wf-chip c-success wf-small"><span class="dot"></span>已实现<code>resolved</code></span>
+        </div>
+        <div class="ref-row">
+          <span class="wf-chip c-success wf-small"><span class="dot"></span>已实现</span>
+          <span class="ref-arrow"><span>退回</span><svg width="44" height="12" viewBox="0 0 44 12" fill="none" aria-hidden="true"><path d="M1 6h36" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M34 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="wf-chip c-gray wf-small"><span class="dot"></span>规划中</span>
+          <span class="ref-arrow"><span>拒绝</span><svg width="44" height="12" viewBox="0 0 44 12" fill="none" aria-hidden="true"><path d="M1 6h36" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M34 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="wf-chip c-dash wf-small"><span class="dot"></span>已拒绝<code>rejected</code></span>
+          <span class="hint">旁路；可回到规划中</span>
+        </div>
+      </div>
+      <ul class="ref-facts">
+        <li>最多 31 个状态：16 个系统状态 + 15 个自定义状态；起始状态与结束状态可指定。</li>
+        <li>状态之间是否可流转要逐对勾选，形成有向流程；已实现可退回规划中，已拒绝可回到规划中。</li>
+        <li>每条流转可配附加字段（如从已实现转测试时必填「提测说明」）与授权用户组。</li>
+        <li>发布计划、发布评审是独立对象；需求上的「已发布」若存在，也是项目自定义状态。</li>
+      </ul>
+    </div>
+    <div class="ref-src">依据：TAPD 敏捷项目管理专业版 · 自定义工作流设置（状态 / 流转条件 / 附加字段 / 授权用户，第 54–58 页）；TAPD 开放平台需求字段 status 候选值：planning 规划中 / developing 实现中 / resolved 已实现 / rejected 已拒绝。</div>
+  </div>
+
+  <div class="wf-band">
+    <div class="wf-band-head">
+      <h2>方案 B：9 个显式状态</h2>
+      <span>状态由人按角色推进；箭头上的文字就是流转动作</span>
+    </div>
+
+    <div class="wf-chain">
+      <span class="wf-chip c-gray"><span class="dot"></span>待评审</span>
+      <span class="wf-conn"><span>评审通过</span>
+        <svg width="64" height="12" viewBox="0 0 64 12" fill="none" aria-hidden="true"><path d="M1 6h56" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M54 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="wf-chip c-primary"><span class="dot"></span>已通过</span>
+      <span class="wf-conn"><span>排期</span>
+        <svg width="64" height="12" viewBox="0 0 64 12" fill="none" aria-hidden="true"><path d="M1 6h56" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M54 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="wf-chip c-warning"><span class="dot"></span>已排期</span>
+      <span class="wf-conn"><span>开始开发</span>
+        <svg width="64" height="12" viewBox="0 0 64 12" fill="none" aria-hidden="true"><path d="M1 6h56" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M54 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="wf-chip c-plum"><span class="dot"></span>开发中</span>
+      <span class="wf-conn"><span>提测</span>
+        <svg width="64" height="12" viewBox="0 0 64 12" fill="none" aria-hidden="true"><path d="M1 6h56" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M54 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="wf-chip c-warning"><span class="dot"></span>待测试</span>
+      <span class="wf-conn"><span>开始测试</span>
+        <svg width="64" height="12" viewBox="0 0 64 12" fill="none" aria-hidden="true"><path d="M1 6h56" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M54 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="wf-chip c-plum"><span class="dot"></span>测试中</span>
+      <span class="wf-conn"><span>测试通过</span>
+        <svg width="64" height="12" viewBox="0 0 64 12" fill="none" aria-hidden="true"><path d="M1 6h56" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M54 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="wf-chip c-primary"><span class="dot"></span>待发布</span>
+      <span class="wf-conn"><span>发布上线</span>
+        <svg width="64" height="12" viewBox="0 0 64 12" fill="none" aria-hidden="true"><path d="M1 6h56" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M54 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="wf-chip c-success"><span class="dot"></span>已发布</span>
+    </div>
+
+    <div class="wf-sub">
+      <div class="wf-sub-row">
+        <span class="wf-sub-label">旁路</span>
+        <span class="wf-chip wf-small c-gray"><span class="dot"></span>任意未发布状态</span>
+        <span class="wf-conn sub"><span>关闭 · 必填</span>
+          <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="wf-chip wf-small c-dash"><span class="dot"></span>已关闭 · 结束</span>
+        <span class="wf-conn sub"><span>恢复</span>
+          <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="wf-chip wf-small c-gray"><span class="dot"></span>关闭前状态</span>
+        <span class="hint">关闭原因 <code>rej</code> 评审不通过 / <code>cancel</code> 中途取消 / <code>dup</code> 重复；已发布不提供关闭，后续变更另开需求或缺陷。</span>
+      </div>
+      <div class="wf-sub-row">
+        <span class="wf-sub-label">回退</span>
+        <span class="wf-pair">
+          <span class="wf-chip wf-small c-plum"><span class="dot"></span>测试中</span>
+          <span class="wf-conn sub"><span>测试不通过</span>
+            <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="wf-chip wf-small c-plum"><span class="dot"></span>开发中</span>
+        </span>
+        <span class="wf-sep"></span>
+        <span class="wf-pair">
+          <span class="wf-chip wf-small c-success"><span class="dot"></span>已发布</span>
+          <span class="wf-conn sub"><span>撤销发布记录</span>
+            <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="wf-chip wf-small c-primary"><span class="dot"></span>待发布</span>
+        </span>
+        <span class="wf-sep"></span>
+        <span class="wf-pair">
+          <span class="wf-chip wf-small c-warning"><span class="dot"></span>已排期</span>
+          <span class="wf-conn sub"><span>撤销排期</span>
+            <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="wf-chip wf-small c-primary"><span class="dot"></span>已通过</span>
+        </span>
+        <span class="wf-sep"></span>
+        <span class="wf-pair">
+          <span class="wf-chip wf-small c-primary"><span class="dot"></span>已通过</span>
+          <span class="wf-conn sub"><span>撤回评审</span>
+            <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-dasharray="3 3" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="wf-chip wf-small c-gray"><span class="dot"></span>待评审</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="wf-sub-row" style="margin-top:12px">
+      <span class="hint">起始状态：<code>review</code>；结束状态：<code>released</code> / <code>closed</code>。状态不再从工作项、用例或发布记录自动推导——为防虚报，<code>released</code> 与 <code>readyRelease</code> 的流转仍强制填写发布记录号。</span>
+      <span class="hint">状态码：<code>review</code> · <code>pass</code> · <code>plan</code> · <code>doing</code> · <code>readyTest</code> · <code>testing</code> · <code>readyRelease</code> · <code>released</code> · <code>closed</code></span>
+    </div>
+  </div>
+
+  <div class="wf-band">
+    <div class="wf-band-head">
+      <h2>流转规则与留痕</h2>
+      <span>沿用 TAPD 的四列口径：从哪到哪 / 谁能做 / 必填什么 / 留下什么</span>
+    </div>
+
+    <div class="wf-rules2">
+      <div class="wf-rule-col">
+        <h4><i></i>主链推进</h4>
+        <div class="wf-tr head"><span>流转</span><span>谁</span><span>必填 / 附加字段</span><span>留痕</span></div>
+        <div class="wf-tr"><span class="t">待评审 → 已通过</span><span class="role">空间主 / 评审人</span><span class="req">评审结论、WSJF 分</span><span class="log">demand_log</span></div>
+        <div class="wf-tr"><span class="t">已通过 → 已排期</span><span class="role">空间主 / 项目负责人</span><span class="req">目标版本、计划起止</span><span class="log">demand_log + 版本范围</span></div>
+        <div class="wf-tr"><span class="t">已排期 → 开发中</span><span class="role">需求负责人</span><span class="req">开发负责人</span><span class="log">demand_log</span></div>
+        <div class="wf-tr"><span class="t">开发中 → 待测试</span><span class="role">开发</span><span class="req">提测说明、自测结论</span><span class="log">test_started_at</span></div>
+        <div class="wf-tr"><span class="t">待测试 → 测试中</span><span class="role">测试</span><span class="req">测试负责人、用例范围</span><span class="log">用例执行记录</span></div>
+        <div class="wf-tr"><span class="t">测试中 → 待发布</span><span class="role">测试</span><span class="req">测试结论、遗留缺陷</span><span class="log">用例结果汇总</span></div>
+        <div class="wf-tr"><span class="t">待发布 → 已发布</span><span class="role">发布负责人</span><span class="req">生产发布记录号、发布时间</span><span class="log">release 记录</span></div>
+      </div>
+
+      <div class="wf-rule-col alt">
+        <h4><i></i>回退 · 撤销 · 终止</h4>
+        <div class="wf-tr head"><span>流转</span><span>谁</span><span>必填 / 附加字段</span><span>留痕</span></div>
+        <div class="wf-tr"><span class="t">测试中 → 开发中</span><span class="role">测试</span><span class="req">失败原因、关联缺陷</span><span class="log">缺陷回链</span></div>
+        <div class="wf-tr"><span class="t">待发布 → 测试中</span><span class="role">测试 / 发布负责人</span><span class="req">回退原因</span><span class="log">demand_log</span></div>
+        <div class="wf-tr"><span class="t">已发布 → 待发布</span><span class="role">发布负责人</span><span class="req">撤销原因（仅撤销发布记录）</span><span class="log">release 撤销</span></div>
+        <div class="wf-tr"><span class="t">已排期 → 已通过</span><span class="role">管理者</span><span class="req">撤排原因</span><span class="log">demand_log</span></div>
+        <div class="wf-tr"><span class="t">已通过 → 待评审</span><span class="role">空间主</span><span class="req">撤回原因</span><span class="log">demand_log</span></div>
+        <div class="wf-tr"><span class="t">任意未发布 → 已关闭</span><span class="role">管理角色</span><span class="req">关闭原因 rej / cancel / dup</span><span class="log">demand_log + closeStage</span></div>
+        <div class="wf-tr"><span class="t">已关闭 → 关闭前状态</span><span class="role">管理角色</span><span class="req">恢复原因</span><span class="log">demand_log</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wf-band">
+    <div class="wf-band-head">
+      <h2>与方案 A 的取舍</h2>
+      <span>同一块看板，两种维护方式；二选一，不建议混用</span>
+    </div>
+
+    <div class="wf-cmp">
+      <div class="wf-cmp-row head"><span>维度</span><span>方案 A · 主状态 + 派生展示</span><span>方案 B · 显式工作流（本图）</span></div>
+      <div class="wf-cmp-row"><span>状态数量</span><span>主状态 5 个，展示 7 个</span><span>状态 9 个（8 个主链 + 已关闭）</span></div>
+      <div class="wf-cmp-row"><span>看板列</span><span>7 列；派生列只读，只能拖主状态</span><span>9 列；全部可拖，拖拽即流转</span></div>
+      <div class="wf-cmp-row"><span>谁改状态</span><span>系统按证据派生，人只改主状态</span><span>全部由人按角色推进</span></div>
+      <div class="wf-cmp-row"><span>完成判定</span><span>工作项全关 + 最新用例全过</span><span>测试通过后人工移到待发布</span></div>
+      <div class="wf-cmp-row"><span>发布判定</span><span>生产发布记录自动点亮</span><span>填发布记录号后人工移到已发布</span></div>
+      <div class="wf-cmp-row"><span>状态与事实</span><span>不会漂移，但可能滞后于实际</span><span>直观、可审计，但可能虚报</span></div>
+      <div class="wf-cmp-row"><span>维护成本</span><span>低，日常只需拖主状态</span><span>高，每次流转都要填字段</span></div>
+      <div class="wf-cmp-row"><span>适合</span><span>轻量团队，测试 / 发布角色不固定</span><span>角色齐全、流程审计要求高</span></div>
+    </div>
+
+    <div class="wf-cmp-note"><b>不混用的原因：</b>同一张看板上既有「系统自动推进的列」又有「人工拖拽的列」，用户无法判断一条需求当前的状态是事实还是结论。若采用 B，应把 A 的派生列全部收起；若保留 A，B 的测试中 / 待发布只作为工作项列存在，不上升到需求状态。</div>
+  </div>
+
+  <div class="wf-foot">
+    <span><b>方案 B 更接近 TAPD：</b>状态直观、每条流转有角色与必填项；代价是状态靠人维护，容易和工作项、发布记录脱节。</span>
+    <span class="pill"><i></i>旧版方案 A：demand-lifecycle.html · 保留不动</span>
+  </div>
+</div>
+</body>
+</html>

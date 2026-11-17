@@ -256,9 +256,9 @@ CREATE TABLE `demand` (
   `item_kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '新功能' COMMENT '类型：新功能/体验优化/缺陷/其他',
   `category_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '模块ID（category.id，空=未指定）',
   `priority` varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'P2' COMMENT '优先级 P0/P1/P2/P3',
-  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'review' COMMENT '状态机：review待评审/pass已通过/plan已排期/closed已关闭',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'review' COMMENT '主状态机：review待评审/pass已通过/plan已排期/done已完成/closed已关闭（完成≠交付）',
   `close_reason` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关闭原因：rej评审不通过/cancel中途取消/dup重复需求',
-  `close_stage` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关闭前主状态：review/pass/plan',
+  `close_stage` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关闭前主状态：review/pass/plan/done',
   `expect_date` date DEFAULT NULL COMMENT '期望交付时间',
   `planned_start` date DEFAULT NULL,
   `planned_end` date DEFAULT NULL,
@@ -279,7 +279,7 @@ CREATE TABLE `demand` (
   KEY `idx_ws_req` (`workspace_id`,`req_id`),
   KEY `idx_ws_category_id` (`workspace_id`,`category_id`),
   KEY `idx_version` (`version_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求池（评审状态机）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求池（主状态机：评审/通过/排期/完成，关闭为异常终止）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `demand_comment`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -373,7 +373,7 @@ CREATE TABLE `demand_log` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `demand_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求ID',
-  `action` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '动作：create/pass/rej/plan/reopen/update',
+  `action` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '动作：create/pass/rej/plan/replan/unplan/cancel/restore/reopen/complete/auto_reopen/judge_delivery/revoke_delivery_judgement/update',
   `note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注（拒绝原因/排期说明等）',
   `change_data` json DEFAULT NULL,
   `operator` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人账号ID',

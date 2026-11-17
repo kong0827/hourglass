@@ -1721,7 +1721,7 @@ var ACT_LABEL = {
   /* demand_log */
   priority:"优先级", expect:"期望时间", version:"关联版本", status:"状态流转",
   pass:"通过", rej:"驳回", plan:"排期", replan:"调期", unpass:"取消通过", unplan:"取消排期",
-  cancel:"取消", reopen:"重开",
+  cancel:"取消", reopen:"重开", complete:"自动完成", auto_reopen:"自动退回已排期",
   /* version_log */
   version_create:"新建", version_update:"修改", version_start:"开始", version_close:"关闭",
   version_cancel:"取消", version_scope:"范围调整", release_plan:"发布计划",
@@ -1741,7 +1741,7 @@ var ACT_ENTITY = {task:"工作项", demand:"需求", project:"项目", doc:"文�
 /* 各来源真实写过的动作名（与后端 log 调用一一对应），筛选下拉只给这些值 */
 var ACT_ACTIONS = {
   task:["create","update","move","delete","restore","nudge","release"],
-  demand:["create","update","priority","expect","version","status","move","pass","rej","plan","replan","unpass","unplan","cancel","restore","reopen"],
+  demand:["create","update","priority","expect","version","status","move","pass","rej","plan","replan","unpass","unplan","cancel","restore","reopen","complete","auto_reopen"],
   project:["create","update","archive","first_release","release_policy_update"],
   doc:["create","update","restore","share"],
   branch:["create","update","status"],
