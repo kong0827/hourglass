@@ -957,19 +957,32 @@ function taskTable(mode){
       + '<td>' + (isDone(t) ? '<span class="tag tag-success">已完成</span>' : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
       + '</tr>';
   }).join("") || '<tr><td colspan="10" class="foot-note tbl-empty">该项目还没有工作项</td></tr>';
-  var segOpts;
+  var seg = "";
   if(mode === "phase"){
-    segOpts = [["all", "全部"], ["mvp", "首版开发"], ["post", "迭代维护"]];
-  }else{
-    segOpts = [["all", "全部"]].concat(cache.versions.map(function(v){ return [v.id, v.name]; }))
-      .concat(cache.tasks.some(function(t){ return !taskVersionIds(t).length; }) ? [["", "待规划"]] : []);
+    seg = '<div class="seg mini">' + [["all", "全部"], ["mvp", "首版开发"], ["post", "迭代维护"]].map(function(o, i){
+      return '<button type="button" data-filter="' + esc(o[0]) + '"' + (i === 0 ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + esc(o[1]) + '</button>';
+    }).join("") + '</div>';
   }
-  var seg = '<div class="seg mini">' + segOpts.map(function(o, i){
-    return '<button type="button" data-filter="' + esc(o[0]) + '"' + (i === 0 ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + esc(o[1]) + '</button>';
-  }).join("") + '</div>';
   var head = mode === "phase" ? "工作项明细 · 按阶段" : "工作项明细 · 按计划版本";
+  /* 版本改用下拉：选项带上状态 / 目标日期 / 工作项数，十几个版本不再把表头顶成两行 */
+  var verSel = "";
+  if(mode === "version"){
+    var verOpts = cache.versions.map(function(v){
+      var meta = [versionStatusName(v.status)];
+      if(v.status === "released" && v.releasedAt) meta.push("上线 " + dateShort(v.releasedAt));
+      else if(v.targetDate) meta.push("目标 " + dateShort(v.targetDate));
+      if(v.taskCount != null) meta.push(v.taskCount + " 项");
+      return [v.id, v.name + "（" + meta.join(" · ") + "）"];
+    });
+    if(cache.tasks.some(function(t){ return !taskVersionIds(t).length; })) verOpts.push(["", "待规划"]);
+    verSel = '<label class="phase-filter"><span>版本</span>'
+      + '<select class="mini-select ver-select" data-tbl-version aria-label="按版本筛选">'
+      + '<option value="all">全部版本</option>'
+      + verOpts.map(function(o){ return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join("")
+      + '</select></label>';
+  }
 
-  /* 维度筛选：状态 / 负责人 / 类型 / 标题关键字，与阶段-版本分段叠加生效 */
+  /* 维度筛选：状态 / 负责人 / 类型 / 标题关键字，与版本下拉（或阶段分段）叠加生效 */
   var statusSet = {}, ownerSet = {}, typeSet = {};
   cache.tasks.forEach(function(t){
     if(t.boardColumn) statusSet[t.boardColumn] = 1;
@@ -998,6 +1011,7 @@ function taskTable(mode){
   }
   var tools = cache.tasks.length
     ? '<div class="phase-tbl-tools">'
+      + verSel
       + filterSelect("data-tbl-status", "状态", statusOpts, "全部状态")
       + filterSelect("data-tbl-owner", "负责人", ownerOpts, "全部负责人")
       + filterSelect("data-tbl-type", "类型", typeOpts, "全部类型")
@@ -1009,7 +1023,7 @@ function taskTable(mode){
   var emptyRow = cache.tasks.length
     ? '<tr data-tbl-empty hidden><td colspan="10" class="foot-note tbl-empty">没有符合筛选条件的工作项</td></tr>'
     : "";
-  return '<div class="panel"><div class="panel-head"><h3>' + head + '</h3>'
+  return '<div class="panel"><div class="panel-head phase-tbl-head"><h3>' + head + '</h3>'
     + '<span class="meta-right">计划起止 · 预估 / 实际 · 偏差 · 点击行打开工作项</span>' + seg + '</div>'
     + tools
     + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr><th>工作项</th>'
@@ -1024,6 +1038,7 @@ function applyPhaseTblFilters(){
   if(!body) return;
   var panel = body.closest(".panel");
   if(!panel) return;
+  var verEl = panel.querySelector("[data-tbl-version]");
   var statusEl = panel.querySelector("[data-tbl-status]");
   var ownerEl = panel.querySelector("[data-tbl-owner]");
   var typeEl = panel.querySelector("[data-tbl-type]");
@@ -1033,7 +1048,7 @@ function applyPhaseTblFilters(){
   var type = typeEl ? typeEl.value : "";
   var kw = kwEl ? kwEl.value.trim().toLowerCase() : "";
   var segBtn = panel.querySelector(".seg.mini button[aria-pressed='true']");
-  var group = segBtn ? segBtn.dataset.filter : "all";
+  var group = verEl ? verEl.value : (segBtn ? segBtn.dataset.filter : "all");
   var shown = 0, total = 0;
   body.querySelectorAll("tr[data-open-task]").forEach(function(tr){
     total++;
@@ -4447,8 +4462,8 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(rst){
     var panel = rst.closest(".panel");
     if(panel){
-      panel.querySelectorAll("[data-tbl-status],[data-tbl-owner],[data-tbl-type]").forEach(function(s){
-        s.value = "";
+      panel.querySelectorAll("[data-tbl-version],[data-tbl-status],[data-tbl-owner],[data-tbl-type]").forEach(function(s){
+        s.value = s.hasAttribute("data-tbl-version") ? "all" : "";
       });
       var kw = panel.querySelector("[data-tbl-kw]");
       if(kw) kw.value = "";
@@ -4544,7 +4559,7 @@ if(phaseBody) phaseBody.addEventListener("change", function(e){
     if(again) again.focus();
     return;
   }
-  if(e.target.closest("[data-tbl-status],[data-tbl-owner],[data-tbl-type]")) applyPhaseTblFilters();
+  if(e.target.closest("[data-tbl-version],[data-tbl-status],[data-tbl-owner],[data-tbl-type]")) applyPhaseTblFilters();
 });
 if(phaseBody) phaseBody.addEventListener("keydown", function(e){
   /* 内联编辑：Enter 保存、Esc 取消；不把回车冒泡成行级跳转 */

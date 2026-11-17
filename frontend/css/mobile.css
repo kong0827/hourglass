@@ -878,6 +878,10 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .phase-tl{flex-wrap:wrap;gap:6px;padding:6px 0 2px;}
 [data-layout="mobile"] .phase-tl-head{flex-wrap:wrap;align-items:flex-start;}
 [data-layout="mobile"] .phase-tl-head .meta-right{flex:1 0 100%;margin-left:0;line-height:1.5;}
+[data-layout="mobile"] .phase-tbl-head h3,
+[data-layout="mobile"] .phase-tbl-head .meta-right{white-space:normal;}
+[data-layout="mobile"] .phase-tbl-head .meta-right{flex:1 0 100%;margin-left:0;line-height:1.5;}
+[data-layout="mobile"] .phase-filter .mini-select.ver-select{flex:1 1 auto;min-width:0;width:auto;max-width:none;}
 [data-layout="mobile"] .phase-bar{flex:1 0 100%;flex-direction:column;height:auto;margin:0;gap:6px;}
 [data-layout="mobile"] .phase-bar > *{width:100% !important;flex:0 0 auto;min-height:34px;}
 [data-layout="mobile"] .pseg{white-space:normal;text-align:center;line-height:1.35;padding:6px 8px;border-radius:var(--r-sm) !important;}
