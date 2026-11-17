@@ -17,7 +17,7 @@ import { loadView } from "../core/view-loader.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { openMilestoneDetail } from "../lib/milestone-ui.js";
 import {
-  colName, dayKey, demandNoText, fmtMinutesShort, fmtReleaseTime,
+  colName, dayKey, demandNoText, fmtMinutesShort, fmtReleaseTime, itemNoText,
   releaseEnvironmentName, releasePlanNoText, releaseSnapshotHTML, taskVersionIds, typeBadgeHTML
 } from "../lib/format.js";
 import { openBranchById } from "./branches.js";
@@ -62,6 +62,14 @@ registerHelp({
       ["边界", "「完成」指工作项流转到完成列，不等于该版本实际发布。", "warn"]
     ]
   },
+  "version.avgTask": {
+    title:"工作项均耗时",
+    rows:[
+      ["怎么算", "已完成工作项自身的实际工时合计 ÷ 已完成工作项数。", "ok"],
+      ["只算已完成", "未完成工作项不参与分子，也不进分母；没有完成项时显示 —。", "info"],
+      ["不是总工时", "它回答「平均做一项花了多久」，不能拿它乘项数去反推版本总投入。", "warn"]
+    ]
+  },
   "version.commit.scope": {
     title:"冻结范围",
     rows:[
@@ -91,16 +99,6 @@ registerHelp({
       ["预估取值", "显示的是冻结时的预估快照，不是这些工作项现在的预估。", "info"],
       ["影响", "移出项仍占基线分母，但不再计入完成数，属于范围收缩。", "warn"]
     ]
-  },
-  "version.workSplit": {
-    title:"工时拆分",
-    rows:[
-      ["合计", "所有绑定工作项的已结束计时 + 手工补记，未完成的工作项也计入。", "ok"],
-      ["测试窗口内", "计时日期落在该工作项「提测 → 测试结束」窗口内的分钟，且不超过它的实际工时。", "info"],
-      ["测试窗口外", "合计 − 窗口内：包含需求评审、设计、开发、联调、会议、运维等窗口外的全部计时，不只是写代码。", "info"],
-      ["按当前归属分组", "模块 / 负责人按工作项此刻的归属汇总，中途改模块或换负责人会把整段历史工时挪到新分组。", "warn"],
-      ["条形与百分比", "条形按最大项归一便于比长短，右侧百分比才是占合计的比例。", "mute"]
-    ]
   }
 });
 initCaliberHelp();
@@ -117,7 +115,6 @@ var SORTS = [["default","风险优先"],["actual","实际工时"],["estimate","�
 var SORT_KEYS = SORTS.map(function(s){ return s[0]; });
 var STATUS_FILTERS = [["","全部状态"],["done","已完成"],["moving","进行中"],["idle","未开始"],["open","未完成"],["over","已逾期"],["pre","上线前归入"]];
 var TYPE_FILTERS = [["","全部类型"],["story","需求"],["task","任务"],["bug","缺陷"],["epic","史诗"]];
-var ROLL_DIMS = [["module","模块"],["owner","负责人"],["stage","计时窗口"]];
 var NONE = "__none__";
 /* 联动筛选：从关联实体（模块 / 分支 / 需求 / 阶段 / 负责人）点进来时落在这些字段上，
    与手工筛选共用同一份状态和同一串 hash，分享出去的链接能还原同一份明细 */
@@ -135,8 +132,7 @@ var st = {
   versions:[], version:null, stat:null, phase:null,
   tasks:[], milestones:[], cats:[], allDemands:[],
   filters:blankFilters(),
-  relFilters:{ result:"", environment:"", operation:"" },
-  rollDim:"module"
+  relFilters:{ result:"", environment:"", operation:"" }
 };
 /* 侧栏数据各自独立到位：任一份失败只影响自己那块，不拖垮整页 */
 function side(){ return { rows:null, loading:false, error:"" }; }
@@ -272,6 +268,7 @@ function adopt(route){
   st.tab = route.tab;
   st.filters = route.filters;
   if(changed){
+    closeHoursSheet();
     st.version = null; st.stat = null; st.phase = null;
     st.tasks = []; st.versions = []; st.milestones = []; st.cats = []; st.allDemands = [];
     st.relFilters = { result:"", environment:"", operation:"" };
@@ -416,6 +413,7 @@ function sideArrived(key){
   if(st.tab === SIDE_TAB[key] || (key === "demands" && st.tab === "scope")) renderAll();
 }
 function reload(){
+  closeHoursSheet();
   if(!st.id){ renderPicker(); return; }
   extra = { demands:side(), plans:side(), records:side(), log:side() };
   load();
@@ -459,6 +457,7 @@ function renderAll(){
   var mark = focusedKey();
   host.innerHTML = headHTML() + '<div class="vd-body">' + bodyHTML() + '</div>';
   syncTabCounts();
+  syncDescToggle();
   restoreFocus(mark);
 }
 function headSkeleton(){
@@ -474,6 +473,23 @@ function tabCount(key){
   if(key === "releases") return extra.records.rows ? extra.records.rows.length : null;
   if(key === "log") return extra.log.rows ? extra.log.rows.length : null;
   return null;
+}
+/* 版本说明只在页头展示两行，溢出时才给展开入口；与版本卡此前的「展开说明」保持同一交互 */
+function descHTML(text){
+  if(!text) return "";
+  return '<div class="vd-desc-wrap">'
+    + '<p class="vd-desc" data-vd-desc>' + esc(text) + '</p>'
+    + '<button class="vd-desc-toggle" type="button" data-vd-desc-toggle hidden>展开说明</button>'
+    + '</div>';
+}
+function syncDescToggle(){
+  if(!host) return;
+  var p = host.querySelector("[data-vd-desc]");
+  var btn = host.querySelector("[data-vd-desc-toggle]");
+  if(!p || !btn) return;
+  var open = p.classList.contains("open");
+  btn.hidden = !open && p.scrollHeight <= p.clientHeight + 1;
+  btn.textContent = open ? "收起说明" : "展开说明";
 }
 function headHTML(){
   var v = st.version || st.stat || {};
@@ -503,6 +519,7 @@ function headHTML(){
     + (v.releasedAt ? '<span class="vd-dot">·</span><span>发布于 ' + esc(dateText(v.releasedAt)) + '</span>' : "")
     + (v.revision ? '<span class="vd-dot">·</span><span class="vd-rev">修订 ' + esc(v.revision) + '</span>' : "")
     + '</div>'
+    + descHTML(v.description)
     + (actions.length ? '<div class="vd-acts">' + actions.join("") + '</div>' : "")
     + '<nav class="vd-tabs" aria-label="版本详情分区">' + TABS.map(function(t){
       var on = t.key === st.tab;
@@ -568,14 +585,12 @@ function cell(value, label, tone, drill, help){
     + caliberMarkHTML(help.key, !!help.warn, "查看「" + label + "」口径") + '</div>';
 }
 function overviewHTML(){
-  var s = st.stat || {}, v = st.version || {};
+  var s = st.stat || {};
+  var moving = st.tasks.filter(function(t){ return !isDone(t) && actOf(t) > 0; }).length;
   var cells = [
     cell(st.tasks.length, "版本工作项", "", "all"),
     cell(num(s.doneCount), "已完成", "ok", "done"),
-    cell(num(s.doingCount), "未完成", "", "open"),
-    cell(hours(s.workMinutes), "已投入工时", "", "logged", { key:"version.actual" }),
-    cell(hours(s.estimateMinutes), "预估工时", "", "", { key:"version.estimate" }),
-    cell(hours(s.remainingMinutes), "剩余预估", "", "open", { key:"version.remaining", warn:true }),
+    cell(num(moving), "进行中", "", "moving"),
     cell(pctText(s.deviationPct), "整体偏差", devTone(s.deviationPct), "deviation", { key:"version.variance", warn:true }),
     cell(s.onTimePct === null || s.onTimePct === undefined ? "—" : s.onTimePct + "%", "准时完成率", "", "ontime", { key:"version.onTime" })
   ];
@@ -583,15 +598,14 @@ function overviewHTML(){
   cells.push('<button type="button" class="pcell drillable" data-vd-tab="demands" title="查看排到该版本的需求">'
     + '<b>' + demandCount + '</b><span>已排需求</span></button>');
   var kpis = '<div class="pgrid vd-kpis">' + cells.join("") + '</div>'
-    + '<p class="foot-note vd-caliber">范围 = 该版本绑定的工作项'
-    + (st.tasks.some(function(t){ return t._pre; }) ? "，含首版上线前未绑版本的折算项（行内标注）" : "")
-    + '。整体偏差只算已完成且有预估的工作项：偏差 =（这些工作项的实际 − 预估）÷ 预估，±15% 内视为准确；'
-    + '剩余预估是未完成工作项的预估之和，不扣已投入；完成不等于实际发布。</p>';
+    + (st.tasks.some(function(t){ return t._pre; })
+      ? '<p class="foot-note vd-caliber">范围 = 该版本绑定的工作项，含首版上线前未绑版本的折算项（行内标注）。</p>'
+      : "");
   return kpis
+    + hoursCardHTML()
     + progressPanel()
     + commitmentPanel()
     + milestonePanel()
-    + rollupPanel()
     + branchPanel()
     + deliveryPanel()
     + lifecyclePanel();
@@ -669,35 +683,6 @@ function milestonePanel(){
   return panel("里程碑", '<span class="meta-right">点击行看达成证据</span>',
     tableWrap('<th>里程碑</th><th>状态</th><th class="num">目标日</th><th class="num">达成日</th><th class="num">生产成功</th>', body));
 }
-function rollupRows(){
-  var tasks = st.tasks;
-  if(st.rollDim === "stage"){
-    var dev = tasks.filter(function(t){ return devOf(t) > 0; });
-    var test = tasks.filter(function(t){ return testOf(t) > 0; });
-    return [
-      { key:"dev", kind:"stage", name:"测试窗口外", note:"预估 + 窗口外计时", color:"var(--info)", items:dev.length,
-        minutes:dev.reduce(function(a, t){ return a + devOf(t); }, 0) },
-      { key:"test", kind:"stage", name:"测试窗口内", note:"窗口内计时", color:"var(--plum)", items:test.length,
-        minutes:test.reduce(function(a, t){ return a + testOf(t); }, 0) }
-    ];
-  }
-  var groups = {}, order = [];
-  var dim = st.rollDim;
-  tasks.forEach(function(t){
-    var key = dim === "module" ? (t.categoryId || "") : (t.owner || "").trim();
-    if(!groups[key]){
-      groups[key] = {
-        key: key || NONE, kind: dim === "module" ? "cat" : "owner",
-        name: dim === "module" ? catName(key) : (key || "未指派"),
-        color: dim === "module" ? catColor(key) : "var(--primary)", items:0, minutes:0
-      };
-      order.push(key);
-    }
-    groups[key].items++;
-    groups[key].minutes += actOf(t);
-  });
-  return order.map(function(k){ return groups[k]; }).sort(function(a, b){ return b.minutes - a.minutes; });
-}
 function catName(id){
   if(!id) return "未指定模块";
   var hit = st.cats.filter(function(c){ return c.id === id; })[0];
@@ -707,6 +692,497 @@ function catColor(id){
   var hit = st.cats.filter(function(c){ return c.id === id; })[0];
   return (hit && hit.color) || "var(--palette-8)";
 }
+
+/* ==================== 工时卡与工时构成 ====================
+   顶层只保留「预估 / 实际」两侧，构成收进弹层：预估按现有字段拆类型 / 模块 / 负责人 / 需求 / 工作项，
+   实际拆成员 / 类型 / 模块 / 工作项 / 计时窗口。类型只是阶段的近似观察，不新增字段。 */
+
+var TYPE_PROXY = {
+  story:{ label:"需求", proxy:"设计 / 分析", color:"var(--plum)" },
+  task:{ label:"任务", proxy:"开发", color:"var(--primary)" },
+  bug:{ label:"缺陷", proxy:"测试 / 修复", color:"var(--danger)" },
+  epic:{ label:"史诗", proxy:"规划 / 拆解", color:"var(--palette-3)" },
+  other:{ label:"其他", proxy:"未分类", color:"var(--palette-8)" }
+};
+var TYPE_ORDER = ["story","task","bug","epic"];
+var HOUR_TABS = {
+  estimate:[["type","类型"],["cat","模块"],["owner","负责人"],["demand","需求"],["items","工作项"]],
+  actual:[["owner","成员"],["type","类型"],["cat","模块"],["items","工作项"],["window","计时窗口"]]
+};
+var UNLINKED_DEMAND = "__unlinked__";
+var hourSheet = null;
+
+function hourText(v){ var m = num(v); return m ? fmtMinutesShort(m) : "0h"; }
+function hourPct(v, total){ return total ? Math.round(v * 1000 / total) / 10 : 0; }
+function hourPctText(v, total){
+  var p = hourPct(v, total);
+  return (p % 1 ? p.toFixed(1) : String(p)) + "%";
+}
+function estTotal(){ return st.tasks.reduce(function(a, t){ return a + estOf(t); }, 0); }
+function actTotal(){ return st.tasks.reduce(function(a, t){ return a + actOf(t); }, 0); }
+function avgDoneText(){
+  var v = (st.stat || {}).avgTaskMinutes;
+  return (v === null || v === undefined) ? "—" : fmtMinutesShort(v);
+}
+function hourTagHTML(type){
+  var p = TYPE_PROXY[type] || TYPE_PROXY.other;
+  return '<span class="vd-h-tag ' + esc(type || "other") + '">' + esc(p.label) + '</span>';
+}
+
+function hoursCardHTML(){
+  var s = st.stat || {};
+  var total = st.tasks.length;
+  var est = num(s.estimateMinutes) || estTotal();
+  var act = num(s.workMinutes) || actTotal();
+  var remaining = num(s.remainingMinutes);
+  var estItems = st.tasks.filter(function(t){ return estOf(t) > 0; }).length;
+  var actItems = st.tasks.filter(function(t){ return actOf(t) > 0; }).length;
+  var unest = total - estItems;
+  var burn = hourPct(act, est);
+  var burnText = est ? hourPctText(act, est) : "—";
+  return '<section class="panel vd-panel vd-hours-card" aria-labelledby="vdHoursTitle">'
+    + '<div class="panel-head"><h3 id="vdHoursTitle">工时</h3>'
+    + '<span class="meta-right"><span class="vd-hours-badge primary">现有字段</span><span class="vd-hours-badge">预估 / 实际</span></span></div>'
+    + '<div class="vd-hours-grid">'
+    + '<div class="vd-hour-side">'
+      + '<button class="vd-hour-main" type="button" data-vd-hours="estimate" aria-haspopup="dialog" title="查看预估工时构成">'
+      + '<span class="vd-hour-label"><i style="background:var(--primary)"></i>预估</span>'
+      + '<span class="vd-hour-value">' + hourText(est) + '<small>' + (estItems ? estItems + ' 项合计' : '还没有预估') + '</small></span>'
+      + '<span class="vd-hour-sub' + (unest ? " warn" : "") + '">'
+      + (total ? estItems + " / " + total + " 项已估" + (unest ? " · " + unest + " 项未估" : "") : "该版本还没有工作项")
+      + '</span>'
+      + '<span class="vd-hour-cta">查看构成' + icon("chevronRight", 11) + '</span>'
+      + '</button>'
+      + caliberMarkHTML("version.estimate", false, "查看「预估」口径")
+    + '</div>'
+    + '<span class="vd-hour-sep" aria-hidden="true"></span>'
+    + '<div class="vd-hour-side">'
+      + '<button class="vd-hour-main" type="button" data-vd-hours="actual" aria-haspopup="dialog" title="查看实际工时构成">'
+      + '<span class="vd-hour-label"><i style="background:var(--success)"></i>实际</span>'
+      + '<span class="vd-hour-value">' + hourText(act) + '<small>' + (actItems ? actItems + ' 项有计时' : '还没有计时') + '</small></span>'
+      + '<span class="vd-hour-sub">' + (total ? actItems + " / " + total + " 项有计时" : "该版本还没有工作项") + '</span>'
+      + '<span class="vd-hour-cta">查看构成' + icon("chevronRight", 11) + '</span>'
+      + '</button>'
+      + '<span class="vd-hour-avgrow"><button class="vd-hour-avg" type="button" data-vd-drill="avg" title="在工作项页查看已完成、按实际工时排序的明细">已完成项均耗时 ' + esc(avgDoneText()) + ' · 只算已完成</button>'
+      + caliberMarkHTML("version.avgTask", false, "查看「工作项均耗时」口径") + '</span>'
+      + caliberMarkHTML("version.actual", false, "查看「实际」口径")
+    + '</div>'
+    + '</div>'
+    + '<div class="vd-burn">'
+      + '<div class="vd-burn-head"><span>实际 / 预估</span><b>' + burnText + '</b></div>'
+      + '<span class="vd-burn-track" role="img" aria-label="' + esc("实际 " + hourText(act) + "，为预估 " + hourText(est) + " 的 " + burnText) + '">'
+      + '<i style="width:' + Math.min(100, burn) + '%"></i></span>'
+      + '<div class="vd-burn-foot"><span>已记 ' + hourText(act) + '</span>'
+      + '<span class="mid">剩余预估 ' + hourText(remaining) + caliberMarkHTML("version.remaining", true, "查看「剩余预估」口径") + '</span>'
+      + '<span>预估 ' + hourText(est) + '</span></div>'
+    + '</div>'
+    + '<p class="foot-note vd-hours-note">预估按工作项合计，实际按工作项累计计时；未计时的工作项不计入实际。'
+    + '剩余预估是未完成工作项的预估之和，不扣已投入。测试窗口只是实际工时的筛选口径，收进「计时窗口」，不再单列指标。</p>'
+    + '</section>';
+}
+
+function hourKey(kind, t){
+  if(kind === "type") return t.itemType || "other";
+  if(kind === "cat") return t.categoryId || NONE;
+  if(kind === "owner") return (t.owner || "").trim() || NONE;
+  return t.demandId || UNLINKED_DEMAND;
+}
+function hourLabel(kind, key){
+  if(kind === "type") return (TYPE_PROXY[key] || TYPE_PROXY.other).label;
+  if(kind === "cat") return catName(key === NONE ? "" : key);
+  if(kind === "owner") return key === NONE ? "未指派" : key;
+  if(key === UNLINKED_DEMAND) return "未关联需求";
+  var d = demandHit(key);
+  return (d && d.title) || "已删除需求";
+}
+/* 颜色保证同一张表里彼此可分：模块用分类色，未配色时按行序走调色板；
+   负责人 / 需求没有配色字段，同样按行序取调色板，未指派 / 未关联固定灰色 */
+function hourColor(kind, key, i){
+  if(kind === "type") return (TYPE_PROXY[key] || TYPE_PROXY.other).color;
+  if(kind === "owner" && key === NONE) return "var(--palette-8)";
+  if(kind === "demand" && key === UNLINKED_DEMAND) return "var(--palette-8)";
+  if(kind === "cat"){
+    var c = catColor(key === NONE ? "" : key);
+    if(c !== "var(--palette-8)") return c;
+  }
+  return "var(--palette-" + (i % 7 + 1) + ")";
+}
+function hourGroupRows(kind, mode){
+  var list = mode === "actual" ? st.tasks.filter(function(t){ return actOf(t) > 0; }) : st.tasks;
+  var map = {}, order = [];
+  list.forEach(function(t){
+    var key = hourKey(kind, t);
+    if(!map[key]){
+      map[key] = { key:key, est:0, act:0, items:0, estItems:0 };
+      order.push(key);
+    }
+    var g = map[key];
+    g.est += estOf(t);
+    g.act += actOf(t);
+    g.items++;
+    if(estOf(t) > 0) g.estItems++;
+  });
+  var rows;
+  if(kind === "type"){
+    var keys = TYPE_ORDER.filter(function(k){ return map[k]; });
+    if(map.other) keys.push("other");
+    rows = keys.map(function(k){ return map[k]; });
+  }else{
+    var vk = mode === "estimate" ? "est" : "act";
+    rows = order.map(function(k){ return map[k]; }).sort(function(a, b){ return b[vk] - a[vk] || b.items - a.items; });
+  }
+  rows.forEach(function(r, i){
+    r.label = hourLabel(kind, r.key);
+    r.color = hourColor(kind, r.key, i);
+  });
+  return rows;
+}
+function hoursShareHTML(v, total, color){
+  return '<span class="vd-h-share"><span class="vd-h-track">'
+    + '<i style="width:' + (total ? v * 100 / total : 0) + '%;background:' + esc(color) + '"></i></span>'
+    + '<b>' + hourPctText(v, total) + '</b></span>';
+}
+function hoursStackHTML(rows, total, valueKey, labelPrefix){
+  var visible = rows.filter(function(r){ return r[valueKey] > 0; });
+  var aria = visible.map(function(r){
+    return r.label + " " + hourText(r[valueKey]) + " " + hourPctText(r[valueKey], total);
+  }).join("，");
+  return '<div class="vd-h-stack" role="img" aria-label="' + esc(labelPrefix + "：" + (aria || "暂无计时")) + '">'
+    + visible.map(function(r){
+      return '<i style="width:' + (r[valueKey] * 100 / total).toFixed(2) + '%;background:' + esc(r.color) + '" title="'
+        + esc(r.label + " " + hourText(r[valueKey]) + " " + hourPctText(r[valueKey], total)) + '"></i>';
+    }).join("") + '</div>';
+}
+function hoursLegendHTML(rows, total, valueKey, kind){
+  return '<div class="vd-h-legend">' + rows.map(function(r){
+    var v = r[valueKey];
+    return '<button type="button" data-vd-hfilter="' + esc(kind) + '" data-vd-hvalue="' + esc(r.key) + '" data-vd-hlabel="' + esc(r.label) + '" title="查看该分组的工作项">'
+      + '<i style="background:' + esc(r.color) + '"></i>' + esc(r.label) + ' <b>' + hourText(v) + '</b>'
+      + '<span class="muted">' + hourPctText(v, total) + '</span></button>';
+  }).join("") + '</div>';
+}
+function hoursProxyHTML(mode){
+  var rows = hourGroupRows("type", mode);
+  var map = {};
+  rows.forEach(function(r){ map[r.key] = r; });
+  var keys = ["story","task","bug"].concat(map.epic ? ["epic"] : []);
+  var total = rows.reduce(function(a, r){ return a + (mode === "estimate" ? r.est : r.act); }, 0);
+  var cards = keys.map(function(k){
+    var r = map[k] || { key:k, est:0, act:0, items:0, estItems:0 };
+    var v = mode === "estimate" ? r.est : r.act;
+    var meta = mode === "estimate"
+      ? r.items + " 项 · 占 " + hourPctText(v, total)
+      : r.items + " 项 · 预估 " + hourText(r.est);
+    return '<div class="vd-h-proxy-card">'
+      + '<div class="vd-h-proxy-type"><i style="background:' + TYPE_PROXY[k].color + '"></i>' + esc(TYPE_PROXY[k].label) + '</div>'
+      + '<div class="vd-h-proxy-map">≈ <b>' + esc(TYPE_PROXY[k].proxy) + '</b></div>'
+      + '<b>' + hourText(v) + '</b><small>' + esc(meta) + '</small></div>';
+  }).join("");
+  return '<div class="vd-h-proxy-head"><b>按类型近似看阶段</b><span>现有字段 · 不需要新增</span></div>'
+    + '<div class="vd-h-proxy-grid">' + cards + '</div>';
+}
+function hoursExtraHead(kind, mode){
+  if(kind === "type") return "近似阶段";
+  if(mode === "actual" && kind === "owner") return "名下预估";
+  if(mode === "actual") return "预估";
+  return "实际";
+}
+function hoursExtraCell(kind, mode, r){
+  if(kind === "type") return '<span class="muted">' + esc((TYPE_PROXY[r.key] || TYPE_PROXY.other).proxy) + '</span>';
+  return hourText(mode === "actual" ? r.est : r.act);
+}
+function hoursExtraTotal(kind, mode){
+  if(kind === "type") return "—";
+  return hourText(mode === "estimate" ? actTotal() : estTotal());
+}
+function hoursNoticeHTML(kind, mode, rows, total){
+  if(kind === "type"){
+    return '<div class="vd-h-notice info">' + icon("info", 13)
+      + '<span><b>类型是现有数据里最接近阶段的观察口径。</b>需求 ≈ 设计 / 分析，任务 ≈ 开发，缺陷 ≈ 测试 / 修复。'
+      + '一个工作项仍可能跨多个阶段，因此它是代理口径，不是真实阶段工时。</span></div>';
+  }
+  if(kind === "demand" && mode === "estimate"){
+    var un = rows.filter(function(r){ return r.key === UNLINKED_DEMAND; })[0];
+    if(un && un.est > 0){
+      return '<div class="vd-h-notice info">' + icon("info", 13)
+        + '<span><b>未关联需求 ' + un.items + ' 项、' + hourText(un.est) + '，占 ' + hourPctText(un.est, total) + '。</b>'
+        + '需求维度目前只覆盖 ' + hourText(total - un.est) + '；补齐工作项的需求关联后，这个维度才完整。 '
+        + '<button class="link-btn" type="button" data-vd-hfilter="demand" data-vd-hvalue="' + esc(UNLINKED_DEMAND) + '" data-vd-hlabel="未关联需求">只看未关联</button></span></div>';
+    }
+  }
+  return "";
+}
+function hoursGroupHTML(kind, mode){
+  var rows = hourGroupRows(kind, mode);
+  var valueKey = mode === "estimate" ? "est" : "act";
+  var total = rows.reduce(function(a, r){ return a + r[valueKey]; }, 0);
+  var firstHead = kind === "type" ? "类型"
+    : kind === "cat" ? "模块"
+    : kind === "owner" ? (mode === "actual" ? "成员" : "负责人")
+    : "需求";
+  var body = rows.map(function(r){
+    var v = r[valueKey];
+    return '<tr class="vd-h-row" tabindex="0" data-vd-hfilter="' + esc(kind) + '" data-vd-hvalue="' + esc(r.key) + '" data-vd-hlabel="' + esc(r.label) + '"'
+      + ' title="查看「' + esc(r.label) + '」的工作项">'
+      + '<td><span class="vd-h-name"><i style="background:' + esc(r.color) + '"></i><span>' + esc(r.label) + '</span></span></td>'
+      + '<td class="num strong">' + hourText(v) + '</td>'
+      + '<td class="num">' + hoursShareHTML(v, total, r.color) + '</td>'
+      + '<td class="num">' + r.items + ' 项</td>'
+      + '<td class="num vd-h-hide">' + (mode === "estimate" ? r.estItems + " / " + r.items + " 项" : r.items + " 项") + '</td>'
+      + '<td class="num vd-h-hide">' + hoursExtraCell(kind, mode, r) + '</td></tr>';
+  }).join("");
+  var totalItems = rows.reduce(function(a, r){ return a + r.items; }, 0);
+  var totalEstItems = rows.reduce(function(a, r){ return a + r.estItems; }, 0);
+  var totalRow = '<tr class="vd-h-total"><td>合计</td><td class="num">' + hourText(total) + '</td>'
+    + '<td class="num">' + (total ? "100%" : "—") + '</td><td class="num">' + totalItems + ' 项</td>'
+    + '<td class="num vd-h-hide">' + (mode === "estimate" ? totalEstItems + " / " + totalItems + " 项" : totalItems + " 项") + '</td>'
+    + '<td class="num vd-h-hide">' + hoursExtraTotal(kind, mode) + '</td></tr>';
+  var foot;
+  if(kind === "type"){
+    foot = "类型来自工作项；近似阶段只用于快速判断投入结构，不作为阶段工时。占比保留一位小数。";
+  }else if(kind === "demand"){
+    foot = "需求来自工作项关联，需求名与工作项名不一定一致；已关闭需求仍保留在构成里。未关联的工作项也计入合计。";
+  }else if(kind === "cat"){
+    foot = "模块来自工作项分类，可直接使用；实际按工作项累计计时归集。";
+  }else if(mode === "actual"){
+    foot = "实际按工作项负责人归集（计时未拆到具体记录）；名下预估按工作项负责人归集。";
+  }else{
+    foot = "负责人来自工作项；实际按工作项累计计时归集，两者可能不同。";
+  }
+  var estT = estTotal(), actT = actTotal();
+  var compare = kind === "type"
+    ? '<div class="vd-h-compare"><span>实际 <b>' + hourText(actT) + '</b> · 预估 <b>' + hourText(estT) + '</b></span>'
+      + '<span class="vd-h-compare-bar" aria-hidden="true"><i style="width:' + Math.min(100, hourPct(actT, estT)) + '%"></i></span>'
+      + '<span>实际 / 预估 <b>' + (estT ? hourPctText(actT, estT) : "—") + '</b></span></div>'
+    : "";
+  return hoursNoticeHTML(kind, mode, rows, total)
+    + (kind === "type" ? hoursProxyHTML(mode) : "")
+    + hoursStackHTML(rows, total, valueKey, mode === "estimate" ? "预估构成" : "实际构成")
+    + hoursLegendHTML(rows, total, valueKey, kind)
+    + '<div class="vd-h-tablewrap"><table class="vd-h-table"><thead><tr>'
+    + '<th>' + firstHead + '</th><th class="num">' + (mode === "estimate" ? "预估" : "实际") + '</th><th class="num">占比</th><th class="num">工作项</th>'
+    + '<th class="num vd-h-hide">' + (mode === "estimate" ? "已估" : "计时") + '</th>'
+    + '<th class="num vd-h-hide">' + hoursExtraHead(kind, mode) + '</th>'
+    + '</tr></thead><tbody>' + body + totalRow + '</tbody></table></div>'
+    + '<p class="foot-note">' + foot + '</p>' + compare;
+}
+
+function hoursDeltaHTML(t){
+  var est = estOf(t), act = actOf(t);
+  if(!est) return '<span class="muted">未估</span>';
+  var d = act - est;
+  if(!d) return '<span class="muted">持平</span>';
+  return '<span class="vd-h-delta ' + (d > 0 ? "up" : "down") + '">' + (d > 0 ? "+" : "−") + fmtMinutesShort(Math.abs(d)) + '</span>';
+}
+function hoursItemTitle(t){
+  return '<span class="vd-h-item"><b>' + esc(t.title) + '</b><small>' + esc(itemNoText(t.itemNo) || "WI")
+    + (t.categoryId ? " · " + esc(catName(t.categoryId)) : "") + '</small></span>';
+}
+function hoursItemRowHTML(t, mode){
+  var title = '<td>' + hoursItemTitle(t) + '</td>';
+  var type = '<td class="vd-h-hide">' + hourTagHTML(t.itemType) + '</td>';
+  var owner = '<td class="vd-h-hide vd-muted">' + esc(t.owner || "未指派") + '</td>';
+  if(mode === "actual"){
+    return '<tr class="vd-h-task" tabindex="0" data-vd-htask="' + esc(t.id) + '" title="打开工作项详情">' + title + type + owner
+      + '<td class="num vd-h-hide">' + (estOf(t) ? hours(estOf(t)) : '<span class="muted">未估</span>') + '</td>'
+      + '<td class="num strong">' + hours(actOf(t)) + '</td>'
+      + '<td class="num">' + hoursDeltaHTML(t) + '</td></tr>';
+  }
+  var demand = t.demandId ? demandLabel(t.demandId) : "未关联需求";
+  return '<tr class="vd-h-task" tabindex="0" data-vd-htask="' + esc(t.id) + '" title="打开工作项详情">' + title + type + owner
+    + '<td class="vd-h-hide"><span class="vd-h-demand" title="' + esc(demand) + '">' + esc(demand) + '</span></td>'
+    + '<td class="num">' + (estOf(t) ? hours(estOf(t)) : '<span class="muted">未估</span>') + '</td>'
+    + '<td class="num">' + (actOf(t) ? hours(actOf(t)) : '<span class="muted">—</span>') + '</td></tr>';
+}
+function hoursItemsHTML(mode){
+  var f = hourSheet.filter;
+  var rows = st.tasks.filter(function(t){
+    if(f) return f.kind === "unestimated" ? estOf(t) <= 0 : hourKey(f.kind, t) === f.value;
+    return true;
+  });
+  if(mode === "actual") rows = rows.filter(function(t){ return actOf(t) > 0; });
+  rows.sort(function(a, b){
+    if(mode === "actual") return actOf(b) - actOf(a);
+    var ae = estOf(a) > 0, be = estOf(b) > 0;
+    if(ae !== be) return ae ? -1 : 1;
+    return estOf(b) - estOf(a);
+  });
+  var unest = st.tasks.filter(function(t){ return estOf(t) <= 0; });
+  var over = st.tasks.filter(function(t){ return estOf(t) > 0 && actOf(t) > estOf(t); })
+    .sort(function(a, b){ return (actOf(b) - estOf(b)) - (actOf(a) - estOf(a)); });
+  var callout = "";
+  if(!f){
+    if(mode === "estimate" && unest.length){
+      callout = '<div class="vd-h-callout">' + icon("alert", 13)
+        + '<span><b>' + unest.length + ' 项还没有预估，' + hourText(estTotal()) + ' 可能偏低。</b>'
+        + esc(unest.slice(0, 4).map(function(t){ return t.title; }).join("、")) + (unest.length > 4 ? " 等" : "")
+        + ' <button class="link-btn" type="button" data-vd-hunest>去补预估</button></span></div>';
+    }else if(mode === "actual" && over.length){
+      var top = over[0];
+      callout = '<div class="vd-h-callout">' + icon("alert", 13)
+        + '<span><b>' + over.length + ' 项超出预估，最大的是 ' + esc(top.title) + ' '
+        + hours(estOf(top)) + ' → ' + hours(actOf(top)) + '（+' + fmtMinutesShort(actOf(top) - estOf(top)) + '）。</b>'
+        + '确认是估算偏低还是范围变化。</span></div>';
+    }
+  }
+  var chip = f ? '<div class="vd-h-filter-bar"><span>筛选</span>'
+    + '<button class="vd-h-chip" type="button" data-vd-hclear>' + esc(f.label) + icon("close", 11) + '</button>'
+    + '<button class="vd-h-clear" type="button" data-vd-hclear>清除</button></div>' : "";
+  var head = mode === "actual"
+    ? '<th>工作项</th><th class="vd-h-hide">类型</th><th class="vd-h-hide">负责人</th><th class="num vd-h-hide">预估</th><th class="num">实际</th><th class="num">偏差</th>'
+    : '<th>工作项</th><th class="vd-h-hide">类型</th><th class="vd-h-hide">负责人</th><th class="vd-h-hide">需求</th><th class="num">预估</th><th class="num">实际</th>';
+  var body = rows.map(function(t){ return hoursItemRowHTML(t, mode); }).join("")
+    || '<tr><td colspan="6" class="vd-h-empty">没有符合条件的工作项</td></tr>';
+  var sumEst = rows.reduce(function(a, t){ return a + estOf(t); }, 0);
+  var sumAct = rows.reduce(function(a, t){ return a + actOf(t); }, 0);
+  var totalRow = mode === "actual"
+    ? '<tr class="vd-h-total"><td>当前列表 · ' + rows.length + ' 项</td><td class="vd-h-hide"></td><td class="vd-h-hide"></td>'
+      + '<td class="num vd-h-hide">' + hourText(sumEst) + '</td><td class="num">' + hourText(sumAct) + '</td><td class="num"></td></tr>'
+    : '<tr class="vd-h-total"><td>当前列表 · ' + rows.length + ' 项</td><td class="vd-h-hide"></td><td class="vd-h-hide"></td><td class="vd-h-hide"></td>'
+      + '<td class="num">' + hourText(sumEst) + '</td><td class="num">' + hourText(sumAct) + '</td></tr>';
+  return callout + chip
+    + '<div class="vd-h-tablewrap"><table class="vd-h-table"><thead><tr>' + head + '</tr></thead><tbody>' + body + totalRow + '</tbody></table></div>'
+    + '<p class="foot-note">' + (mode === "estimate"
+      ? "预估来自工作项；未估工作项排在最后。点类型 / 模块 / 负责人 / 需求分组可快速筛选。"
+      : "实际来自工作项累计计时；偏差 = 实际 − 预估，红色为超出。未计时的工作项不在此列表。") + '</p>';
+}
+function hoursWindowHTML(){
+  var list = st.tasks.filter(function(t){ return actOf(t) > 0; }).sort(function(a, b){ return actOf(b) - actOf(a); });
+  var out = list.reduce(function(a, t){ return a + devOf(t); }, 0);
+  var inn = list.reduce(function(a, t){ return a + testOf(t); }, 0);
+  var act = list.reduce(function(a, t){ return a + actOf(t); }, 0);
+  var complete = list.filter(function(t){ return t.testStartedAt && t.testFinishedAt; }).length;
+  var notice = complete
+    ? '<div class="vd-h-notice info">' + icon("info", 13)
+      + '<span><b>' + complete + ' 个有计时的工作项填齐了开测 / 结束时间。</b>窗口内计时为 ' + hourText(inn)
+      + '，其余 ' + hourText(out) + ' 记为窗口外；窗口外含设计、开发、评审、运维，不能当作开发工时。</span></div>'
+    : '<div class="vd-h-notice warn">' + icon("alert", 13)
+      + '<span><b>测试窗口只能区分「窗口内 / 窗口外」。</b>本版本 ' + list.length + ' 个有计时的工作项都缺少完整的开测 / 结束时间，'
+      + hourText(act) + ' 全部记为窗口外。窗口外含设计、开发、评审、运维，不能当作开发工时。'
+      + '补齐这两个时间后，窗口口径即可生效，不需要新增字段。</span></div>';
+  var body = list.map(function(t){
+    var tIn = testOf(t), tOut = devOf(t);
+    var judge = tIn > 0 && tOut > 0 ? "混合" : tIn > 0 ? "窗口内" : "窗口外";
+    var tone = judge === "窗口内" ? "in" : judge === "混合" ? "mix" : "out";
+    return '<tr class="vd-h-task" tabindex="0" data-vd-htask="' + esc(t.id) + '" title="打开工作项详情">'
+      + '<td>' + hoursItemTitle(t) + '</td>'
+      + '<td class="num strong">' + hours(actOf(t)) + '</td>'
+      + '<td class="num vd-h-hide">' + hours(tOut) + '</td>'
+      + '<td class="num vd-h-hide">' + (tIn ? hours(tIn) : '<span class="muted">—</span>') + '</td>'
+      + '<td class="num"><span class="vd-h-tag ' + tone + '">' + judge + '</span></td></tr>';
+  }).join("") || '<tr><td colspan="5" class="vd-h-empty">还没有已记录计时的工作项</td></tr>';
+  return notice
+    + '<div class="vd-h-stages">'
+    + '<div class="vd-h-stage out"><small><i style="background:var(--info)"></i>测试窗口外</small><b>' + hourText(out) + '</b>'
+    + '<span>' + list.filter(function(t){ return devOf(t) > 0; }).length + ' 项 · 含设计、开发、评审、运维</span></div>'
+    + '<div class="vd-h-stage in"><small><i style="background:var(--plum)"></i>测试窗口内</small><b>' + hourText(inn) + '</b>'
+    + '<span>' + list.filter(function(t){ return testOf(t) > 0; }).length + ' 项 · 开测到结束之间的计时</span></div>'
+    + '</div>'
+    + '<div class="vd-h-flow" aria-label="测试窗口口径"><span>工作项计时</span><span class="arr">→</span>'
+    + '<span>是否落在开测 / 测试结束之间</span><span class="arr">→</span><span>窗口内 / 窗口外</span></div>'
+    + '<details class="vd-h-why"><summary>为什么窗口外不等于开发？</summary>'
+    + '<p>测试窗口只是由工作项的开测、测试结束时间推导出的时间区间。窗口外的计时既可能是设计、开发，也可能是评审、联调、运维。'
+    + '它适合回答「有多少计时发生在测试期间」，不适合回答「开发用了多少小时」。</p></details>'
+    + '<div class="vd-h-tablewrap" style="margin-top:12px"><table class="vd-h-table"><thead><tr>'
+    + '<th>有计时的工作项</th><th class="num">实际</th><th class="num vd-h-hide">窗口外</th>'
+    + '<th class="num vd-h-hide">窗口内</th><th class="num">窗口判定</th></tr></thead><tbody>'
+    + body
+    + '<tr class="vd-h-total"><td>合计 · ' + list.length + ' 项</td><td class="num">' + hourText(act) + '</td>'
+    + '<td class="num vd-h-hide">' + hourText(out) + '</td><td class="num vd-h-hide">' + hourText(inn) + '</td>'
+    + '<td class="num">' + (act ? "窗口外 " + hourPctText(out, act) : "—") + '</td></tr>'
+    + '</tbody></table></div>'
+    + '<div class="vd-h-suggest"><b>用现有数据可以怎么改善</b>'
+    + '<p>补齐工作项的开测时间与测试结束时间，窗口内 / 外会自动区分；不需要新增字段。</p>'
+    + '<div class="vd-h-chips"><span>开测时间</span><span>测试结束时间</span></div></div>'
+    + '<p class="foot-note">测试窗口由工作项的「开测时间 / 测试结束时间」推导；两者齐全才可能计入窗口内。</p>';
+}
+function renderHoursSheet(){
+  var hs = hourSheet;
+  if(!hs || !hs.layer) return;
+  var layer = hs.layer;
+  var s = st.stat || {};
+  var total = st.tasks.length;
+  var est = num(s.estimateMinutes) || estTotal();
+  var act = num(s.workMinutes) || actTotal();
+  var estItems = st.tasks.filter(function(t){ return estOf(t) > 0; }).length;
+  var actItems = st.tasks.filter(function(t){ return actOf(t) > 0; }).length;
+  var titleEl = layer.querySelector("[data-vd-htitle]");
+  var subEl = layer.querySelector("[data-vd-hsub]");
+  if(hs.mode === "estimate"){
+    titleEl.innerHTML = "预估 " + esc(hourText(est)) + '<span class="unit"> · ' + estItems + ' / ' + total + ' 项</span>';
+    var avg = estItems ? fmtMinutesShort(Math.round(est / estItems)) : "—";
+    subEl.textContent = "平均 " + avg + " / 项"
+      + (total - estItems ? " · " + (total - estItems) + " 项未估" : "")
+      + " · 实际 / 预估 " + (est ? hourPctText(act, est) : "—");
+  }else{
+    titleEl.innerHTML = "实际 " + esc(hourText(act)) + '<span class="unit"> · ' + actItems + ' / ' + total + ' 项</span>';
+    subEl.textContent = actItems + " 项有计时 · 覆盖 " + hourPctText(actItems, total)
+      + " · 已完成项均耗时 " + avgDoneText() + " · 测试窗口见「计时窗口」";
+  }
+  layer.querySelector("[data-vd-htabs]").innerHTML = (HOUR_TABS[hs.mode] || []).map(function(t){
+    var on = hs.tab === t[0];
+    return '<button class="vd-h-tab" type="button" role="tab" aria-selected="' + (on ? "true" : "false") + '"'
+      + ' data-vd-htab="' + t[0] + '">' + esc(t[1]) + '</button>';
+  }).join("");
+  var bodyEl = layer.querySelector("[data-vd-hbody]");
+  bodyEl.innerHTML = hs.tab === "items" ? hoursItemsHTML(hs.mode)
+    : hs.tab === "window" ? hoursWindowHTML()
+    : hoursGroupHTML(hs.tab, hs.mode);
+  bodyEl.scrollTop = 0;
+}
+function closeHoursSheet(){
+  if(hourSheet && hourSheet.layer) UI.closeModal(hourSheet.layer);
+}
+function openHoursSheet(mode, tab){
+  if(mode !== "estimate" && mode !== "actual") return;
+  closeHoursSheet();
+  var hs = { mode:mode, tab:tab || (mode === "estimate" ? "type" : "owner"), filter:null, layer:null };
+  var layer = document.createElement("div");
+  layer.className = "modal-layer vd-h-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.innerHTML = '<div class="sheet vd-h-sheet">'
+    + '<header class="vd-h-head"><div class="vd-h-top"><div class="vd-h-titlewrap">'
+    + '<div class="vd-h-eyebrow">工时构成</div>'
+    + '<h2 class="vd-h-title" data-vd-htitle></h2>'
+    + '<div class="vd-h-sub" data-vd-hsub></div></div>'
+    + '<button class="icon-btn sm" type="button" data-vd-hclose aria-label="关闭工时构成">' + icon("close", 15) + '</button></div>'
+    + '<div class="vd-h-tabs" role="tablist" aria-label="工时构成维度" data-vd-htabs></div></header>'
+    + '<div class="sheet-body vd-h-body" data-vd-hbody></div></div>';
+  document.body.appendChild(layer);
+  hs.layer = layer;
+  hourSheet = hs;
+  layer.__uiOnClose = function(){ if(hourSheet === hs) hourSheet = null; layer.remove(); };
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-vd-hclose]")){ UI.closeModal(layer); return; }
+    var tabBtn = e.target.closest("[data-vd-htab]");
+    if(tabBtn){ hs.tab = tabBtn.getAttribute("data-vd-htab"); hs.filter = null; renderHoursSheet(); return; }
+    if(e.target.closest("[data-vd-hclear]")){ hs.filter = null; renderHoursSheet(); return; }
+    if(e.target.closest("[data-vd-hunest]")){
+      hs.filter = { kind:"unestimated", value:"", label:"未估工作项" };
+      hs.tab = "items";
+      renderHoursSheet();
+      return;
+    }
+    var f = e.target.closest("[data-vd-hfilter]");
+    if(f){
+      hs.filter = { kind:f.getAttribute("data-vd-hfilter"), value:f.getAttribute("data-vd-hvalue") || "", label:f.getAttribute("data-vd-hlabel") || "" };
+      hs.tab = "items";
+      renderHoursSheet();
+      return;
+    }
+    var task = e.target.closest("[data-vd-htask]");
+    if(task){ openTaskById(task.getAttribute("data-vd-htask")); return; }
+  });
+  layer.addEventListener("keydown", function(e){
+    if(e.key !== "Enter" && e.key !== " ") return;
+    var row = e.target.closest ? e.target.closest("tr[data-vd-hfilter]") : null;
+    if(row && row === e.target){ e.preventDefault(); row.click(); }
+  });
+  renderHoursSheet();
+  UI.openModal(layer);
+}
+
 
 /* ==================== 关联实体：名字、联动条、行内入口 ==================== */
 
@@ -762,36 +1238,6 @@ function linkBtn(kind, value, label){
   return '<button class="vd-funnel" type="button" data-vd-link="' + esc(kind + ":" + value) + '"'
     + ' title="把本页工作项联动到该' + esc(LINK_LABEL[kind]) + '：' + esc(label) + '" aria-label="按' + esc(label) + '联动筛选工作项">'
     + icon("filter", 12) + '</button>';
-}
-function rollupPanel(){
-  var rows = rollupRows();
-  var max = rows.reduce(function(a, r){ return Math.max(a, r.minutes); }, 0);
-  var total = st.tasks.reduce(function(a, t){ return a + actOf(t); }, 0);
-  var seg = '<div class="seg mini" role="group" aria-label="工时分组维度">' + ROLL_DIMS.map(function(d){
-    return '<button type="button" data-vd-roll="' + d[0] + '" aria-pressed="' + (st.rollDim === d[0]) + '">' + esc(d[1]) + '</button>';
-  }).join("") + '</div>';
-  var body = rows.length
-    ? '<div class="vd-dist">' + rows.map(function(r){
-      var pct = max ? Math.round(r.minutes * 100 / max) : 0;
-      var share = total ? Math.round(r.minutes * 100 / total) : 0;
-      return '<div class="vd-dist-row"><span class="vd-dist-name">'
-        + '<i style="background:' + esc(r.color) + '"></i>'
-        + '<button class="vd-dist-open" type="button" data-vd-link="' + esc(r.kind + ":" + r.key) + '"'
-        + ' title="看该' + esc(r.kind === "cat" ? "模块" : r.kind === "owner" ? "负责人" : "计时窗口") + '下的工作项明细">'
-        + '<span>' + esc(r.name) + '</span>' + icon("chevronRight", 11) + '</button>'
-        + (r.note ? '<small>' + esc(r.note) + '</small>' : "") + '</span>'
-        + '<span class="vd-dist-bar" title="' + esc(r.name + " " + hours(r.minutes) + "，占合计 " + share + "%") + '">'
-        + '<i style="width:' + pct + '%;background:' + esc(r.color) + '"></i></span>'
-        + '<b>' + hours(r.minutes) + '</b><small class="vd-dist-share">' + share + '% · ' + r.items + ' 项</small>'
-        + linkBtn(r.kind, r.key, r.name) + '</div>';
-    }).join("") + '</div>'
-    : '<p class="hint">还没有已记工时，工时分布会在成员计时后出现。</p>';
-  var s = st.stat || {};
-  /* 条形按最大项归一便于横向比长短，右侧百分比是占合计：两个分母不同，脚注说清楚 */
-  var split = '<p class="foot-note">合计 ' + hours(s.workMinutes) + '（窗口外 ' + hours(s.devMinutes) + ' / 窗口内 ' + hours(s.testMinutes) + '）'
-    + caliberMarkHTML("version.workSplit", true, "查看工时拆分口径")
-    + (rows.length ? ' · 条形按最大项归一，百分比为占合计' : "") + '</p>';
-  return panel("工时分布", seg, body + split);
 }
 function branchPanel(){
   var brs = (st.stat || {}).branches || [];
@@ -1201,6 +1647,7 @@ function drill(kind){
   else if(kind === "logged") f.sort = "actual";
   else if(kind === "deviation"){ f.status = "done"; f.sort = "estimate"; }
   else if(kind === "ontime"){ f.status = "done"; f.sort = "due"; }
+  else if(kind === "avg"){ f.status = "done"; f.sort = "actual"; }
   st.filters = f;
   st.tab = "scope";
   syncRoute(true);
@@ -1224,10 +1671,20 @@ function wire(){
   host.addEventListener("click", function(e){
     if(e.target.closest("[data-vd-back]")){ backToVersions(); return; }
     if(e.target.closest("[data-vd-refresh]")){ reload(); return; }
+    if(e.target.closest("[data-vd-desc-toggle]")){
+      var desc = host.querySelector("[data-vd-desc]");
+      if(desc){
+        desc.classList.toggle("open");
+        syncDescToggle();
+      }
+      return;
+    }
     var pick = e.target.closest("[data-vd-pick]");
     if(pick){ openVersionDetail(pick.getAttribute("data-vd-pick-req"), pick.getAttribute("data-vd-pick")); return; }
     var tab = e.target.closest("[data-vd-tab]");
     if(tab){ setTab(tab.dataset.vdTab); return; }
+    var hoursBtn = e.target.closest("[data-vd-hours]");
+    if(hoursBtn){ openHoursSheet(hoursBtn.getAttribute("data-vd-hours")); return; }
     var drillEl = e.target.closest("[data-vd-drill]");
     if(drillEl){ drill(drillEl.dataset.vdDrill); return; }
     /* 联动入口要先于行级判断：漏斗按钮就长在需求行 / 工作项行里面 */
@@ -1239,8 +1696,6 @@ function wire(){
       if(meta){ st.filters[meta.field] = ""; applyFilters(); }
       return;
     }
-    var roll = e.target.closest("[data-vd-roll]");
-    if(roll){ st.rollDim = roll.dataset.vdRoll; renderAll(); return; }
     var tool = e.target.closest("[data-vd-tool]");
     if(tool){ runTool(tool.dataset.vdTool); return; }
     if(e.target.closest("[data-vd-delivery]")){ openDelivery(); return; }
