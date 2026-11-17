@@ -368,12 +368,28 @@ public class AiReqDocService {
 
     // ==================== 工具 ====================
 
-    /** Markdown 正文本身就是纯文本，直接给模型；HTML 文档先抽纯文本 */
+    /** Markdown 正文本身就是纯文本，直接给模型；Univer 快照取 dataStream；HTML 文档先抽纯文本 */
     static String docText(RequirementDoc doc) {
         String content = doc.getContent();
-        return "markdown".equals(doc.getFormat())
-                ? (content == null ? "" : content)
-                : htmlToText(content);
+        if ("markdown".equals(doc.getFormat())) {
+            return content == null ? "" : content;
+        }
+        if ("univer".equals(doc.getFormat())) {
+            try {
+                JsonNode root = RequirementDocService.parseUniverSnapshot(content);
+                if (root == null) {
+                    return "";
+                }
+                return root.path("body").path("dataStream").asText("")
+                        .replaceAll("[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]", " ")
+                        .replace('\r', '\n')
+                        .replaceAll("\n{3,}", "\n\n")
+                        .trim();
+            } catch (AppException e) {
+                return "";
+            }
+        }
+        return htmlToText(content);
     }
 
     /**

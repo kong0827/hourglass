@@ -1278,6 +1278,8 @@
             <div class="reqdoc-editbody" id="reqDocRichBody">
               <textarea id="reqDocCanvas" aria-label="文档正文"></textarea>
             </div>
+            <!-- 在线文档正文：Univer 挂载点（工具栏/画布由编辑器自己渲染） -->
+            <div class="reqdoc-univerwrap" id="reqDocUniverBody" hidden></div>
             <!-- Markdown 正文：源码 / 分屏 / 预览三种视图，预览在浏览器本地渲染 -->
             <div class="reqdoc-mdwrap" id="reqDocMdBody" hidden>
               <div class="reqdoc-mdtoolbar">
@@ -1423,7 +1425,7 @@
                     <span>正文格式</span>
                     <select id="newReqDocFormat">
                       <option value="markdown">Markdown（默认，可导入导出）</option>
-                      <option value="html">富文本</option>
+                      <option value="univer">富文本</option>
                     </select>
                   </label>
                 </div>

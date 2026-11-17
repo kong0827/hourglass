@@ -3,6 +3,8 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hourglass.dto.ReqDocReorderRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.dto.ReqDocShareResponse;
@@ -29,10 +31,16 @@ import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
 import org.jsoup.safety.Safelist;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -93,6 +101,13 @@ public class RequirementDocService {
     /** 属性值只允许颜色与对齐这类字面量，挡掉 url(...) / expression(...) */
     private static final java.util.regex.Pattern STYLE_VALUE =
             java.util.regex.Pattern.compile("^[#a-zA-Z0-9(),.%\\s-]{1,60}$");
+
+    /** xdocreport 用样式 id 作 class：英文 Word 是 Heading1，中文 Word 内置标题 id 是 1~6 */
+    private static final java.util.regex.Pattern WORD_HEADING_TOKEN =
+            java.util.regex.Pattern.compile("^(?:heading|标题)[\\s_-]?([1-6])$");
+    /** Word 列表符号是正文文字（“• ”“1. ”），转成 ul/ol 时要去掉 */
+    private static final java.util.regex.Pattern WORD_LIST_MARKER =
+            java.util.regex.Pattern.compile("^\\s*(?:[•·▪◦]|\\d{1,3}[.、)])\\s*");
 
     private final RequirementDocMapper docMapper;
     private final RequirementDocHistoryMapper historyMapper;
@@ -721,7 +736,7 @@ public class RequirementDocService {
         d.setTitle(h.getTitle());
         d.setContent(h.getContent());
         d.setFormat(h.getFormat());
-        d.setContentBrief("markdown".equals(d.getFormat()) ? excerptOfMarkdown(d.getContent()) : excerptOf(d.getContent()));
+        d.setContentBrief(briefOf(d.getFormat(), d.getContent()));
         docMapper.update(d, null);
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId,
                 "restore", "恢复到第 " + h.getVersionNo() + " 版（" + h.getTitle() + "）");
@@ -972,6 +987,185 @@ public class RequirementDocService {
     }
 
     /**
+     * Word 导入的语义还原：xdocreport 把标题、列表和行内格式压成 class 与 span style，
+     * 而白名单只放行颜色与对齐；不先还原成 hN / ul / strong 等标签，样式会在清洗时整段丢失。
+     */
+    static String promoteWordStyles(String html) {
+        if (html == null || html.trim().isEmpty()) {
+            return html;
+        }
+        Document doc = Jsoup.parseBodyFragment(html);
+        doc.outputSettings().prettyPrint(false);
+        Element body = doc.body();
+        promoteWordHeadings(body);
+        promoteWordLists(body);
+        promoteWordInlineStyles(body);
+        return body.html();
+    }
+
+    private static void promoteWordHeadings(Element body) {
+        for (Element p : body.select("p")) {
+            int level = wordHeadingLevel(p);
+            if (level > 0) {
+                p.tagName("h" + level);
+            }
+        }
+    }
+
+    /** 只看段落样式：Heading1 / Heading 1 / 标题1 / 中文 Word 的内置 id 1~6 */
+    private static int wordHeadingLevel(Element p) {
+        for (String cls : p.classNames()) {
+            String token = cls.toLowerCase(java.util.Locale.ROOT);
+            if (token.matches("[1-6]")) {
+                return Integer.parseInt(token);
+            }
+            java.util.regex.Matcher m = WORD_HEADING_TOKEN.matcher(token);
+            if (m.matches()) {
+                return Integer.parseInt(m.group(1));
+            }
+        }
+        return 0;
+    }
+
+    /** 连续的 ListBullet / ListNumber 段落合并成真正的 ul / ol */
+    private static void promoteWordLists(Element body) {
+        List<Element> candidates = new ArrayList<Element>(body.select("p"));
+        for (Element p : candidates) {
+            if (p.parent() == null) {
+                continue;
+            }
+            boolean ordered = p.hasClass("ListNumber");
+            if (!ordered && !p.hasClass("ListBullet")) {
+                continue;
+            }
+            String cls = ordered ? "ListNumber" : "ListBullet";
+            Element list = new Element(ordered ? "ol" : "ul");
+            p.before(list);
+            Element cursor = p;
+            while (cursor != null && "p".equals(cursor.tagName()) && cursor.hasClass(cls)) {
+                Element next = cursor.nextElementSibling();
+                Element li = new Element("li");
+                for (Node child : new ArrayList<Node>(cursor.childNodes())) {
+                    li.appendChild(child);
+                }
+                stripWordListMarker(li);
+                list.appendChild(li);
+                cursor.remove();
+                cursor = next;
+            }
+        }
+    }
+
+    private static void stripWordListMarker(Element li) {
+        Node node = firstTextNode(li);
+        if (node == null) {
+            return;
+        }
+        TextNode textNode = (TextNode) node;
+        String text = textNode.getWholeText();
+        String stripped = WORD_LIST_MARKER.matcher(text).replaceFirst("");
+        if (stripped.equals(text)) {
+            return;
+        }
+        if (!stripped.isEmpty()) {
+            textNode.text(stripped);
+            return;
+        }
+        Node cursor = node;
+        while (cursor != null && cursor != li) {
+            Node parent = cursor.parent();
+            cursor.remove();
+            if (parent == null || parent == li || ((Element) parent).childNodeSize() > 0) {
+                break;
+            }
+            cursor = parent;
+        }
+    }
+
+    private static Node firstTextNode(Node root) {
+        for (Node child : root.childNodes()) {
+            if (child instanceof TextNode && !((TextNode) child).isBlank()) {
+                return child;
+            }
+            if (child instanceof Element) {
+                Node found = firstTextNode(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** font-weight / font-style / text-decoration 在白名单里会被剥掉，先转成行内语义标签 */
+    private static void promoteWordInlineStyles(Element body) {
+        List<Element> spans = new ArrayList<Element>(body.select("span[style]"));
+        Collections.reverse(spans);
+        for (Element span : spans) {
+            Map<String, String> style = parseStyle(span.attr("style"));
+            String fontStyle = style.get("font-style");
+            String decoration = style.get("text-decoration");
+            String deco = decoration == null ? "" : decoration.toLowerCase(java.util.Locale.ROOT);
+            boolean bold = isBoldWeight(style.get("font-weight"));
+            boolean italic = "italic".equalsIgnoreCase(fontStyle) || "oblique".equalsIgnoreCase(fontStyle);
+            boolean underline = deco.contains("underline");
+            boolean strike = deco.contains("line-through");
+            if (!bold && !italic && !underline && !strike) {
+                continue;
+            }
+            List<Node> children = new ArrayList<Node>(span.childNodes());
+            for (Node child : children) {
+                child.remove();
+            }
+            Element host = span;
+            host = wrap(host, bold, "strong");
+            host = wrap(host, italic, "em");
+            host = wrap(host, underline, "u");
+            host = wrap(host, strike, "s");
+            for (Node child : children) {
+                host.appendChild(child);
+            }
+            span.unwrap();
+        }
+    }
+
+    private static Element wrap(Element host, boolean on, String tag) {
+        if (!on) {
+            return host;
+        }
+        Element wrapper = new Element(tag);
+        host.appendChild(wrapper);
+        return wrapper;
+    }
+
+    private static Map<String, String> parseStyle(String style) {
+        Map<String, String> out = new LinkedHashMap<String, String>();
+        for (String part : style.split(";")) {
+            int i = part.indexOf(':');
+            if (i <= 0) {
+                continue;
+            }
+            out.put(part.substring(0, i).trim().toLowerCase(java.util.Locale.ROOT), part.substring(i + 1).trim());
+        }
+        return out;
+    }
+
+    private static boolean isBoldWeight(String weight) {
+        if (weight == null) {
+            return false;
+        }
+        String v = weight.trim().toLowerCase(java.util.Locale.ROOT);
+        if ("bold".equals(v) || "bolder".equals(v)) {
+            return true;
+        }
+        try {
+            return Integer.parseInt(v) >= 600;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
      * 将 Word 文档导入为清洗后的 HTML 正文（docx 保留排版，doc 提取文本）。
      * 复用 DocPreviewService 的转换能力，再经白名单清洗。
      * 图片以 base64 data URL 内联在 HTML 中；不提取为独立附件。
@@ -987,7 +1181,7 @@ public class RequirementDocService {
         if (html == null || html.trim().isEmpty()) {
             throw AppException.badRequest("文档内容为空或无法识别");
         }
-        String clean = sanitize(html);
+        String clean = sanitize(promoteWordStyles(html));
         if (clean == null) {
             throw AppException.badRequest("文档内容为空或无法识别");
         }
@@ -1095,7 +1289,7 @@ public class RequirementDocService {
             d.setSortOrder(0);
         }
         /* 列表摘要随正文同步维护：列表接口不再读 MEDIUMTEXT */
-        d.setContentBrief("markdown".equals(format) ? excerptOfMarkdown(d.getContent()) : excerptOf(d.getContent()));
+        d.setContentBrief(briefOf(format, d.getContent()));
         String status = Texts.trimToNull(req.getStatus());
         if (status == null) {
             status = "draft";
@@ -1268,7 +1462,7 @@ public class RequirementDocService {
         }
     }
 
-    /** 按格式落库正文：Markdown 原样保存，HTML 走白名单清洗 */
+    /** 按格式落库正文：Markdown 原样保存，Univer 快照校验结构后原样保存，HTML 走白名单清洗 */
     public static String contentOf(String format, String content) {
         if ("markdown".equals(format)) {
             if (content == null || content.trim().isEmpty()) {
@@ -1276,7 +1470,71 @@ public class RequirementDocService {
             }
             return content.length() > CONTENT_MAX ? content.substring(0, CONTENT_MAX) : content;
         }
+        if ("univer".equals(format)) {
+            /* 快照是 JSON，不能按 HTML 清洗（会把结构打散）；截断同样会毁掉 JSON，超限直接拒绝 */
+            if (content == null || content.trim().isEmpty()) {
+                return null;
+            }
+            parseUniverSnapshot(content);
+            return content;
+        }
         return sanitize(content);
+    }
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** 校验 Univer 文档快照：必须是带 body.dataStream 的 JSON 对象 */
+    public static JsonNode parseUniverSnapshot(String content) {
+        if (content == null || content.trim().isEmpty()) {
+            return null;
+        }
+        if (content.length() > CONTENT_MAX) {
+            throw AppException.badRequest("文档内容超过大小上限，请压缩或拆分图片后再保存");
+        }
+        try {
+            JsonNode root = JSON.readTree(content);
+            JsonNode stream = root == null ? null : root.path("body").path("dataStream");
+            if (stream == null || !stream.isTextual()) {
+                throw AppException.badRequest("正文格式不合法");
+            }
+            return root;
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            throw AppException.badRequest("正文格式不合法");
+        }
+    }
+
+    /** 列表摘要按格式分派：Markdown 去标记、Univer 取快照文本、HTML 抽文本 */
+    public static String briefOf(String format, String content) {
+        if ("markdown".equals(format)) {
+            return excerptOfMarkdown(content);
+        }
+        if ("univer".equals(format)) {
+            return excerptOfUniver(content);
+        }
+        return excerptOf(content);
+    }
+
+    /** 从 Univer 快照的 dataStream 抽纯文本摘要（列表与备份导入共用） */
+    public static String excerptOfUniver(String content) {
+        try {
+            JsonNode root = parseUniverSnapshot(content);
+            if (root == null) {
+                return null;
+            }
+            String text = root.path("body").path("dataStream").asText("")
+                    .replaceAll("[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]", " ")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            if (text.isEmpty()) {
+                return null;
+            }
+            return text.length() <= EXCERPT_MAX ? text : text.substring(0, EXCERPT_MAX) + "…";
+        } catch (AppException e) {
+            /* 列表/摘要不能因为一份脏数据整体失败 */
+            return null;
+        }
     }
 
     /** 归属项目解析：空 = 空间级文档（返回 null，写权限走 assertWrite 对 null 项目的「非查看者」口径）；非空须是本空间项目。 */

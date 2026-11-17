@@ -129,6 +129,13 @@ public class HtmlDocxService {
         }
         Element el = (Element) node;
         String tag = el.tagName().toLowerCase(Locale.ROOT);
+        if ("p".equals(tag) && el.hasClass("UniverHeading")) {
+            int level = univerHeadingLevel(el.attr("aria-level"));
+            if (level > 0) {
+                heading(body, el, level, ctx);
+                return;
+            }
+        }
         if ("h1".equals(tag) || "h2".equals(tag) || "h3".equals(tag)
                 || "h4".equals(tag) || "h5".equals(tag) || "h6".equals(tag)) {
             heading(body, el, tag.charAt(1) - '0', ctx);
@@ -219,6 +226,12 @@ public class HtmlDocxService {
         inline(el, p, c, halfPoints);
     }
 
+    /** Univer 导出的标题是 p.UniverHeading + aria-level，没有 hN 标签 */
+    private int univerHeadingLevel(String ariaLevel) {
+        String v = ariaLevel == null ? "" : ariaLevel.trim();
+        return v.matches("[1-6]") ? Integer.parseInt(v) : 0;
+    }
+
     private void quote(Sink body, Element el, int depth, Ctx ctx) {
         boolean hasBlock = false;
         for (Node child : el.childNodes()) {
@@ -268,10 +281,24 @@ public class HtmlDocxService {
                     }
                 }
                 inline(inlineOnly, p, ctx);
+                boolean wrote = !inlineOnly.text().trim().isEmpty();
                 for (Node child : li.childNodes()) {
-                    if (child instanceof Element && isBlockTag(((Element) child).tagName())) {
-                        block(body, child, depth, ctx);
+                    if (!(child instanceof Element)) {
+                        continue;
                     }
+                    Element ce = (Element) child;
+                    String ct = ce.tagName().toLowerCase(Locale.ROOT);
+                    if ("ul".equals(ct) || "ol".equals(ct) || "table".equals(ct)
+                            || "blockquote".equals(ct) || "pre".equals(ct) || "hr".equals(ct)) {
+                        block(body, ce, depth, ctx);
+                        continue;
+                    }
+                    /* Univer 列表项的正文包在 <p> 里：并入同一行，避免项目符号单独成段 */
+                    if (wrote) {
+                        p.createRun().setText(" ");
+                    }
+                    inline(ce, p, ctx);
+                    wrote = true;
                 }
                 continue;
             }

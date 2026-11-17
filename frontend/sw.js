@@ -40,6 +40,8 @@ var SHELL = [
   "js/core/assistant.js",
   "js/core/combo.js",
   "js/core/date-picker.js",
+  "js/core/doc-editor.js",
+  "js/core/univer-doc-io.js",
   "js/core/dom.js",
   "js/core/env-dict.js",
   "js/core/select-picker.js",

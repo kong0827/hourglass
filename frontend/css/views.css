@@ -1555,6 +1555,19 @@ body.proj-reordering{cursor:grabbing;}
   border-color:var(--border);border-radius:var(--r-md);padding:18px 20px;background:var(--surface);
 }
 
+/* ---------------- 在线文档：Univer 画布 ---------------- */
+/* 容器必须有确定高度：Univer 按宿主尺寸排版，高度为 0 时正文不渲染 */
+.reqdoc-univerwrap{
+  position:relative;flex:1;min-width:0;height:calc(100vh - 236px);min-height:520px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;
+}
+.reqdoc-univerwrap.is-loading::before{
+  content:"";position:absolute;inset:14px 0 auto;height:360px;border-radius:8px;
+  background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 37%,var(--surface-2) 63%);
+  background-size:400% 100%;animation:reqdoc-skel 1.2s ease infinite;z-index:1;
+}
+@media (prefers-reduced-motion: reduce){.reqdoc-univerwrap.is-loading::before{animation:none}}
+
 /* Markdown 预览排版：跟 HTML 正文的阅读节奏保持一致 */
 .markdown-body{font-size:14px;line-height:1.85;color:var(--text);word-wrap:break-word;}
 .markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4{

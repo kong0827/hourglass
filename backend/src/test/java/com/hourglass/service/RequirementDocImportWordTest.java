@@ -78,6 +78,44 @@ class RequirementDocImportWordTest {
         assertEquals(400, ex.getCode());
     }
 
+    /** xdocreport 把标题压成 p.Heading1，白名单又不保留 font-weight/style，导入时要还原成 hN 与行内标签。 */
+    @Test
+    void wordHeadingsAndInlineStylesArePromotedBeforeSanitize() {
+        String wordHtml = "<html><body><div>"
+                + "<p class=\"Normal Heading1\"><span class=\"Normal Heading1\">一级标题</span></p>"
+                + "<p><span style=\"font-weight:bold;white-space:pre-wrap;\">加粗</span>"
+                + "<span style=\"font-style:italic;\">斜体</span>"
+                + "<span style=\"text-decoration:underline;\">下划线</span>"
+                + "<span style=\"text-decoration:line-through;\">删除线</span></p>"
+                + "</div></body></html>";
+        when(previewService.preview(any(File.class), eq("docx"))).thenReturn(previewResult(wordHtml));
+
+        String html = docService.importWord(mock(File.class));
+
+        assertTrue(html.contains("<h1"), "标题应还原成 h1：" + html);
+        assertTrue(html.contains("<strong>加粗</strong>"), html);
+        assertTrue(html.contains("<em>斜体</em>"), html);
+        assertTrue(html.contains("<u>下划线</u>"), html);
+        assertTrue(html.contains("<s>删除线</s>"), html);
+    }
+
+    /** Word 列表符号是正文文字：导入后应是真正的 ul/ol，且不再带“• ”前缀。 */
+    @Test
+    void wordListsBecomeRealLists() {
+        String wordHtml = "<p class=\"Normal ListBullet\"><span class=\"Normal ListBullet\">&bull; </span><span class=\"Normal ListBullet\">项目一</span></p>"
+                + "<p class=\"Normal ListBullet\"><span class=\"Normal ListBullet\">&bull; </span><span class=\"Normal ListBullet\">项目二</span></p>"
+                + "<p class=\"Normal ListNumber\"><span class=\"Normal ListNumber\">1. </span><span class=\"Normal ListNumber\">第一步</span></p>";
+        when(previewService.preview(any(File.class), eq("docx"))).thenReturn(previewResult(wordHtml));
+
+        String html = docService.importWord(mock(File.class));
+
+        assertTrue(html.contains("<ul"), html);
+        assertTrue(html.contains("<ol"), html);
+        assertTrue(html.contains("项目一"));
+        assertTrue(html.contains("第一步"));
+        assertTrue(!html.contains("•"), "列表符号应被移除：" + html);
+    }
+
     /** docx 内嵌图片必须转成带 MIME 的 data URL 并穿过正文白名单，否则导入后只剩文字。 */
     @Test
     void docxEmbeddedImageSurvivesConversionAndSanitize() throws Exception {

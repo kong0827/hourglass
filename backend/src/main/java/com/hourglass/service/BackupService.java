@@ -592,7 +592,7 @@ public class BackupService {
                 } else {
                     id = original;
                 }
-                String format = oneOf(bd.getFormat(), new String[]{"html", "markdown"}, "html");
+                String format = oneOf(bd.getFormat(), new String[]{"html", "markdown", "univer"}, "html");
                 RequirementDoc doc = new RequirementDoc();
                 doc.setId(id);
                 doc.setWorkspaceId(workspaceId);
@@ -601,9 +601,7 @@ public class BackupService {
                 doc.setDocType(DocumentType.parseOrOther(bd.getDocType()).getCode());
                 doc.setFormat(format);
                 doc.setContent(RequirementDocService.contentOf(format, bd.getContent()));
-                doc.setContentBrief("markdown".equals(format)
-                        ? RequirementDocService.excerptOfMarkdown(doc.getContent())
-                        : RequirementDocService.excerptOf(doc.getContent()));
+                doc.setContentBrief(RequirementDocService.briefOf(format, doc.getContent()));
                 doc.setStatus(oneOf(bd.getStatus(), new String[]{"draft", "active", "done"}, "draft"));
                 /* 旧备份没有可见范围：按团队共享回填，保持升级前行为；成员按现存账号过滤 */
                 String visibility = oneOf(bd.getVisibility(),

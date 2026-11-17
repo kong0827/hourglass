@@ -36,8 +36,10 @@
   <select id="searchVisible" resultType="com.hourglass.dto.SearchHit">
     SELECT 'doc' AS type, d.id, d.title, d.req_id AS reqId, r.name AS reqName,
            d.status, d.doc_type AS extra,
-           <!-- brief 未命中时回退正文：服务端 snippetAround 再围绕关键词截 ±30 字窗口 -->
-           CASE WHEN LOCATE(LOWER(#{keyword}), LOWER(d.content_brief)) > 0
+           <!-- brief 未命中时回退正文：服务端 snippetAround 再围绕关键词截 ±30 字窗口。
+                在线文档正文是快照 JSON，回退会露出 JSON 片段，因此始终用 brief。 -->
+           CASE WHEN d.format = 'univer' THEN d.content_brief
+                WHEN LOCATE(LOWER(#{keyword}), LOWER(d.content_brief)) > 0
                 THEN d.content_brief ELSE d.content END AS snippet,
            d.updated_at AS updatedAt
     FROM requirement_doc d
