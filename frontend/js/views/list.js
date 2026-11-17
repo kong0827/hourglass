@@ -211,7 +211,7 @@ function initSmartTable(){
     '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +
     '<option value="updated">按更新时间</option>' +
     [["title", "按标题"], ["type", "按类型"], ["column", "按状态"], ["owner", "按负责人"],
-     ["progress", "按进度"], ["project", "按项目"], ["version", "按计划版本"], ["category", "按模块"],
+     ["progress", "按进度"], ["project", "按项目"], ["version", "按计划版本"], ["category", "按分类"],
      ["startDate", "按开始日期"], ["tags", "按标签"], ["subtasks", "按子任务"], ["comments", "按评论数"]
     ].map(function(o){
       return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>';

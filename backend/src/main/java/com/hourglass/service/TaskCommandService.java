@@ -472,10 +472,10 @@ public class TaskCommandService {
             } else {
                 Category cat = categoryMapper.selectById(workspaceId, categoryId);
                 if (cat == null) {
-                    throw AppException.badRequest("模块不存在：" + categoryId);
+                    throw AppException.badRequest("分类不存在：" + categoryId);
                 }
                 if (reqId == null || !reqId.equals(cat.getProjectId())) {
-                    throw AppException.badRequest("模块不属于该项目");
+                    throw AppException.badRequest("分类不属于该项目");
                 }
                 t.setCategoryId(categoryId);
             }

@@ -6,7 +6,7 @@ import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
-import { dueState, rt, statusBucket } from "../core/state.js";
+import { canEditReq, canManageProject, dueState, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadCategories } from "../core/app.js";
 import { assocLinkHTML, avatarHTML, fmtMinutesShort, typeBadgeHTML, taskPublicationHTML } from "../lib/format.js";
@@ -809,8 +809,8 @@ function moduleDeleteRow(row, colspan){
     return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>';
   }).join("");
   var hint = taskCount
-    ? taskCount + ' 个工作项及其需求将迁到目标模块，历史工时随工作项一起迁移，无法恢复。'
-    : '该模块暂无工作项，删除后不可恢复。';
+    ? taskCount + ' 个工作项及其需求将迁到目标分类，历史工时随工作项一起迁移，无法恢复。'
+    : '该分类暂无工作项，删除后不可恢复。';
   return '<tr class="project-module-editor"><td colspan="' + colspan + '"><div class="project-module-del">'
     + '<span class="project-module-del-icon" aria-hidden="true">' + icon("trash", 14) + '</span>'
     + '<span class="project-module-del-text"><b>删除「' + esc(row.name) + '」？</b><small>' + hint + '</small></span>'
@@ -820,24 +820,24 @@ function moduleDeleteRow(row, colspan){
 }
 function moduleRowHTML(row, canManage, moduleCount){
   var ops = canManage
-    ? '<td class="project-module-ops" data-label="操作"><button class="icon-btn sm danger" type="button" data-module-del="' + esc(row.id) + '" title="删除模块" aria-label="删除模块"' + (moduleCount <= 1 ? " disabled" : "") + '>' + icon("trash", 14) + '</button></td>'
+    ? '<td class="project-module-ops" data-label="操作"><button class="icon-btn sm danger" type="button" data-module-del="' + esc(row.id) + '" title="删除分类" aria-label="删除分类"' + (moduleCount <= 1 ? " disabled" : "") + '>' + icon("trash", 14) + '</button></td>'
     : "";
-  return '<tr class="project-module-row' + (moduleUi.deleting === row.id ? ' is-deleting' : '') + '" data-module-open="' + esc(row.id) + '" tabindex="0" title="查看该模块的工作项">'
+  return '<tr class="project-module-row' + (moduleUi.deleting === row.id ? ' is-deleting' : '') + '" data-module-open="' + esc(row.id) + '" tabindex="0" title="查看该分类的工作项">'
     + '<td class="project-module-name"><i class="project-module-dot" style="background:' + esc(row.color || "#8a8578") + '"></i><span>' + esc(row.name) + '</span></td>'
     + moduleMetricCells(row)
     + '<td data-label="风险">' + moduleRisk(row) + '</td>' + ops + '</tr>'
     + (moduleUi.deleting === row.id ? moduleDeleteRow(row, canManage ? 11 : 10) : "");
 }
 function moduleEmptyRow(colspan, canManage){
-  return '<tr><td colspan="' + colspan + '" class="manager-empty-cell">该项目还没有模块'
-    + (canManage ? '，点右上角「添加模块」添加第一个' : '') + '</td></tr>';
+  return '<tr><td colspan="' + colspan + '" class="manager-empty-cell">该项目还没有分类'
+    + (canManage ? '，点右上角「添加分类」添加第一个' : '') + '</td></tr>';
 }
-function moduleUnassignedRow(row){
-  return '<tr class="project-module-row is-unassigned" data-module-open="__none" tabindex="0" title="查看未归属模块的工作项">'
-    + '<td class="project-module-name"><i class="project-module-dot"></i><span>未指定</span><span class="mini-tag">未归类</span></td>'
+function moduleUnassignedRow(row, canManage){
+  return '<tr class="project-module-row is-unassigned" data-module-open="__none" tabindex="0" title="查看未归属分类的工作项">'
+    + '<td class="project-module-name"><i class="project-module-dot"></i><span>未分类</span><span class="mini-tag">未归类</span></td>'
     + moduleMetricCells(row)
     + '<td data-label="风险">' + moduleRisk(row) + '</td>'
-    + (cache.canManageModules ? '<td class="project-module-ops"></td>' : '') + '</tr>';
+    + (canManage ? '<td class="project-module-ops"></td>' : '') + '</tr>';
 }
 function moduleTotalRow(m, c, total, canManage){
   var pct = Math.max(0, Math.min(100, Math.round(Number(m.progressPct) || 0)));
@@ -856,49 +856,52 @@ function moduleTotalRow(m, c, total, canManage){
 function modulePanel(p, m, c){
   var modules = cache.modules || [];
   var unassigned = cache.unassigned || {};
-  var canManage = !!cache.canManageModules;
+  var projectId = cache.id || p.id;
+  /* 写成员可添加分类；删除仍限空间主 / 管理员 / 项目负责人 */
+  var canWrite = canEditReq(projectId);
+  var canManage = canManageProject(projectId);
   var colspan = canManage ? 11 : 10;
   var total = (cache.tasks || []).length;
   var body = modules.map(function(row){ return moduleRowHTML(row, canManage, modules.length); }).join("");
-  if(!modules.length) body = moduleEmptyRow(colspan, canManage);
-  if(Number(unassigned.total)) body += moduleUnassignedRow(unassigned);
+  if(!modules.length) body = moduleEmptyRow(colspan, canWrite);
+  if(Number(unassigned.total)) body += moduleUnassignedRow(unassigned, canManage);
   body += moduleTotalRow(m, c, total, canManage);
-  if(canManage && moduleUi.adding){
+  if(canWrite && moduleUi.adding){
     body += '<tr class="project-module-editor"><td colspan="' + colspan + '"><div class="project-module-inline">'
-      + '<b>添加模块</b>'
-      + '<input type="color" data-module-new-color value="#8a8578" aria-label="模块颜色" />'
-      + '<input type="text" data-module-new-name maxlength="12" placeholder="模块名称，最多 12 个字" aria-label="模块名称" />'
+      + '<b>添加分类</b>'
+      + '<input type="color" data-module-new-color value="#8a8578" aria-label="分类颜色" />'
+      + '<input type="text" data-module-new-name maxlength="12" placeholder="分类名称，最多 12 个字" aria-label="分类名称" />'
       + '<button class="btn sm primary" type="button" data-module-save>添加</button>'
       + '<button class="btn sm ghost" type="button" data-module-cancel>取消</button>'
-      + '<span class="foot-note">名称不可与现有模块重复，新模块排在最后。</span></div></td></tr>';
+      + '<span class="foot-note">名称不可与现有分类重复，新分类排在最后。</span></div></td></tr>';
   }
   return '<section class="manager-panel project-modules">'
-    + '<div class="manager-panel-head project-modules-head"><div class="project-modules-title"><b>模块</b><span>'
-    + modules.length + ' 个模块 · ' + total + ' 个工作项</span></div>'
+    + '<div class="manager-panel-head project-modules-head"><div class="project-modules-title"><b>分类</b><span>'
+    + modules.length + ' 个分类 · ' + total + ' 个工作项</span></div>'
     + '<div class="project-modules-tools">'
     + '<details class="manager-caliber project-modules-caliber"><summary>口径</summary><div>'
-    + '模块指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；窗口内 / 外按测试窗口（提测 → 测试结束）内的计时拆分，窗口外含评审、设计、开发、运维等全部其余计时，窗口内 + 外 = 实际工时；偏差只取已完成且填了预估的工作项。'
-    + 'Σ模块 + 未指定 = 项目合计；项目整体进度仍按全部工作项计算，不是模块百分比的平均。</div></details>'
-    + (canManage ? '<button class="btn sm primary" type="button" data-module-add>+ 添加模块</button>' : '')
+    + '分类指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；窗口内 / 外按测试窗口（提测 → 测试结束）内的计时拆分，窗口外含评审、设计、开发、运维等全部其余计时，窗口内 + 外 = 实际工时；偏差只取已完成且填了预估的工作项。'
+    + 'Σ分类 + 未分类 = 项目合计；项目整体进度仍按全部工作项计算，不是分类百分比的平均。</div></details>'
+    + (canWrite ? '<button class="btn sm primary" type="button" data-module-add>+ 添加分类</button>' : '')
     + '</div></div>'
-    + '<p class="project-modules-note">像项目一样看每个模块的进度、预估与实际；删除模块时，其下工作项与需求迁到目标模块。</p>'
+    + '<p class="project-modules-note">像项目一样看每个分类的进度、预估与实际；删除分类时，其下工作项与需求迁到目标分类。</p>'
     + '<div class="tbl-wrap"><table class="manager-tbl project-modules-tbl"><thead><tr>'
-    + '<th>模块</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">窗口外</th><th class="num">窗口内</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
+    + '<th>分类</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">窗口外</th><th class="num">窗口内</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
     + (canManage ? '<th class="num" aria-label="操作"></th>' : '') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
     + '<p class="project-modules-foot-note"><span class="project-modules-foot-main"><i class="project-modules-foot-info" aria-hidden="true">' + icon("infoCircle", 13) + '</i>'
-    + '<span>未指定为没有模块归属的工作项，单独统计；模块合计 + 未指定 = 项目合计。项目整体进度仍按全部工作项计算，不是模块百分比的平均。</span></span>'
-    + (canManage ? "" : "<span>仅空间主、管理员或项目负责人可维护模块。</span>") + '</p>'
+    + '<span>未分类为没有分类归属的工作项，单独统计；分类合计 + 未分类 = 项目合计。项目整体进度仍按全部工作项计算，不是分类百分比的平均。</span></span>'
+    + (canManage ? "" : (canWrite ? "<span>写成员可添加分类；删除仅空间主、管理员或项目负责人可操作。</span>" : "<span>仅项目写成员可维护分类。</span>")) + '</p>'
     + '</section>';
 }
 function saveModule(){
   var nameEl = document.querySelector("[data-module-new-name]");
   var colorEl = document.querySelector("[data-module-new-color]");
   var name = nameEl ? nameEl.value.trim() : "";
-  if(!name){ toast("请填写模块名称", "warn"); if(nameEl) nameEl.focus(); return; }
+  if(!name){ toast("请填写分类名称", "warn"); if(nameEl) nameEl.focus(); return; }
   var pid = cache && cache.project && cache.project.id;
   if(!pid) return;
   API.post("/api/categories?project=" + encodeURIComponent(pid), { name: name, color: colorEl ? colorEl.value : "" }).then(function(){
-    toast("已添加模块「" + name + "」", "fs");
+    toast("已添加分类「" + name + "」", "fs");
     moduleUi.adding = false;
     loadCategories(true);
     loadProject({ silent:true });
@@ -909,7 +912,7 @@ function deleteModule(id){
   var target = targetEl ? targetEl.value : "";
   var query = target ? "?targetId=" + encodeURIComponent(target) : "";
   API.del("/api/categories/" + encodeURIComponent(id) + query).then(function(){
-    toast(target ? "模块已删除，工作项与需求已迁移" : "模块已删除", "fs");
+    toast(target ? "分类已删除，工作项与需求已迁移" : "分类已删除", "fs");
     moduleUi.deleting = "";
     loadCategories(true);
     loadProject({ silent:true });
@@ -1319,7 +1322,7 @@ function onClick(e){
   if(e.target.closest("[data-module-save]")){ saveModule(); return; }
   var moduleDel = e.target.closest("[data-module-del]");
   if(moduleDel){
-    if((cache.modules || []).length <= 1){ toast("至少需要保留一个模块", "warn"); return; }
+    if((cache.modules || []).length <= 1){ toast("至少需要保留一个分类", "warn"); return; }
     moduleUi.deleting = moduleDel.dataset.moduleDel;
     moduleUi.adding = false;
     renderProject();
@@ -1332,7 +1335,7 @@ function onClick(e){
   if(moduleRow){
     var moduleId = moduleRow.dataset.moduleOpen;
     var moduleHit = moduleId === "__none" ? null : (cache.modules || []).filter(function(x){ return x.id === moduleId; })[0];
-    openTaskTable((cache.project.name || "项目") + " · " + (moduleHit ? moduleHit.name : "未指定"), moduleTasksOf(moduleId), null, null, { split:true });
+    openTaskTable((cache.project.name || "项目") + " · " + (moduleHit ? moduleHit.name : "未分类"), moduleTasksOf(moduleId), null, null, { split:true });
     return;
   }
   var pvMode = e.target.closest("[data-pv-mode]");

@@ -69,14 +69,14 @@ function catColor(id){
   }
   return CAT_DEFAULT_COLOR;
 }
-/** 模块ID→名称（实时实体只存 ID，展示前先查缓存） */
+/** 分类ID→名称（实时实体只存 ID，展示前先查缓存） */
 function catNameById(id){
   for(var i = 0; i < rt.categoriesCache.length; i++){
     if(rt.categoriesCache[i].id === id) return rt.categoriesCache[i].name;
   }
   return "";
 }
-/** 模块ID→彩色标签；未指定/已删模块返回空串。
+/** 分类ID→彩色标签；未分类/已删分类返回空串。
     颜色通过 CSS 变量交给样式层派生，浅/深主题各自保证对比度，避免在 JS 里压暗成脏色 */
 function catTag(id){
   var name = catNameById(id);
@@ -345,7 +345,7 @@ function projectAccess(reqId){
 function canEditReq(reqId){
   return projectAccess(reqId) === "write";
 }
-/** 项目设置类操作（模块维护等）：空间主/管理员，或项目负责人；仍需具备项目写权限 */
+/** 项目设置类操作（分类维护等）：空间主/管理员，或项目负责人；仍需具备项目写权限 */
 function canManageProject(reqId, ownerUserId){
   if(projectAccess(reqId) !== "write") return false;
   var role = currentRole();

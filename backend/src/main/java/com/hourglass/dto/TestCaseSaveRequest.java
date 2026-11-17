@@ -30,7 +30,7 @@ public class TestCaseSaveRequest {
     @Size(max = 1000, message = "测试数据最多 1000 字")
     private String testData;
 
-    @Size(max = 50, message = "功能模块最多 50 字")
+    @Size(max = 50, message = "分类最多 50 字")
     private String module;
 
     /** 目录节点（单归属）：给了就以节点为准，module 文本只作为旧客户端 / CSV 的兜底 */

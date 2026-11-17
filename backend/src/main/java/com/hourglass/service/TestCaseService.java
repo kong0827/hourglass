@@ -937,7 +937,7 @@ public class TestCaseService {
             what.append(oldDemandId == null ? "，补充主需求" : (c.getDemandId() == null ? "，解除主需求" : "，更换主需求"));
         }
         if (!java.util.Objects.equals(oldModule, c.getModule())) {
-            what.append("，模块由「").append(textOrDash(oldModule)).append("」改为「")
+            what.append("，分类由「").append(textOrDash(oldModule)).append("」改为「")
                     .append(textOrDash(c.getModule())).append("」");
         }
         if (!java.util.Objects.equals(oldPriority, c.getPriority())) {
@@ -1101,7 +1101,7 @@ public class TestCaseService {
             moduleText = Texts.cut(Texts.trimToNull(req.getModule()), 50);
             moduleNodeId = Texts.trimToNull(req.getModuleId());
             if (moduleText == null && moduleNodeId == null) {
-                throw AppException.badRequest("请选择目录节点或填写功能模块，或勾选「清空模块」");
+                throw AppException.badRequest("请选择分类节点或填写分类名称，或勾选「清空分类」");
             }
         }
         String priority = null;
@@ -1132,10 +1132,10 @@ public class TestCaseService {
         }
         StringBuilder what = new StringBuilder();
         if (moduleSet) {
-            what.append("模块=「").append(moduleLabel).append("」");
+            what.append("分类=「").append(moduleLabel).append("」");
         }
         if (moduleClear) {
-            what.append(what.length() > 0 ? "、" : "").append("清空模块");
+            what.append(what.length() > 0 ? "、" : "").append("清空分类");
         }
         if (prioritySet) {
             what.append(what.length() > 0 ? "、" : "").append("优先级=").append(priority);
@@ -1509,7 +1509,7 @@ public class TestCaseService {
 
     /* ---------- CSV 导入导出（A3：存量测试资产迁移入口） ---------- */
 
-    private static final String CSV_HEADER = "用例编号,标题,模块,优先级,前置条件,测试数据,步骤（每行：操作 => 预期）";
+    private static final String CSV_HEADER = "用例编号,标题,分类,优先级,前置条件,测试数据,步骤（每行：操作 => 预期）";
     private static final int IMPORT_MAX_ROWS = 1000;
 
     /** 模板：表头 + 一行示例（示例行导入前请删除或直接当第一条用例改） */
@@ -1790,7 +1790,7 @@ public class TestCaseService {
                 || "名称".equals(s) || "title".equals(s) || "name".equals(s)) {
             return "title";
         }
-        if (s.contains("模块") || s.contains("需求对应")) {
+        if (s.contains("模块") || s.contains("分类") || s.contains("需求对应")) {
             return "module";
         }
         if (s.contains("优先级") || "级别".equals(s) || "pri".equals(s) || "priority".equals(s)) {

@@ -1893,14 +1893,26 @@ function ganttFilterOwners(){
   });
   return out;
 }
+/* 分类按项目隔离：只有筛到单个项目时才给出候选，全局仅保留已选旧条件 */
+function ganttCatScope(){
+  return state.reqs.length === 1 && state.reqs[0] !== "__none" ? state.reqs[0] : "";
+}
 function ganttFilterCats(){
   var out = [], seen = {};
+  var scope = ganttCatScope();
   var meta = state.board && state.board.meta;
   if(meta && meta.cats){
-    meta.cats.forEach(function(c){ if(c && c.id && !seen[c.id]){ seen[c.id] = 1; out.push({id:c.id, name:c.name}); } });
+    meta.cats.forEach(function(c){
+      if(!c || !c.id || seen[c.id]) return;
+      if(scope && !(rt.categoriesCache || []).some(function(x){ return x.id === c.id && x.projectId === scope; })) return;
+      if(!scope && state.cats.indexOf(c.id) === -1) return;
+      seen[c.id] = 1; out.push({id:c.id, name:c.name});
+    });
   }
   ganttFilterSourceTasks().forEach(function(t){
     if(t.categoryId && !seen[t.categoryId]){
+      if(scope && t.reqId !== scope) return;
+      if(!scope && state.cats.indexOf(t.categoryId) === -1) return;
       seen[t.categoryId] = 1;
       out.push({id:t.categoryId, name:catNameById(t.categoryId)});
     }
@@ -1965,7 +1977,7 @@ function renderGanttFilterMenu(){
     projHTML += ganttFilterChip("data-gantt-req", "__none", "未归类", true);
   }
   var catHTML = ganttFilterCats().map(function(c){
-    return ganttFilterChip("data-gantt-cat", c.id, esc(c.name || "未指定模块"), state.cats.indexOf(c.id) !== -1);
+    return ganttFilterChip("data-gantt-cat", c.id, esc(c.name || "未分类"), state.cats.indexOf(c.id) !== -1);
   }).join("");
   var tagHTML = ganttFilterTags().map(function(n){
     return ganttFilterChip("data-gantt-tag", n, esc(n), state.tags.indexOf(n) !== -1);
@@ -1991,7 +2003,7 @@ function renderGanttFilterMenu(){
     ganttFilterSection("类型", typeHTML) +
     (verHTML ? ganttFilterSection("版本", verHTML) : "") +
     ganttFilterSection("项目", projHTML || '<span class="foot-note">还没有项目，可到「项目」页新建</span>') +
-    (catHTML ? ganttFilterSection("模块", catHTML) : "") +
+    (catHTML ? ganttFilterSection("分类", catHTML) : "") +
     (tagHTML ? ganttFilterSection("标签", tagHTML) : "") +
     ganttFilterSection("到期", dueHTML) +
     ganttFilterSection("完成情况", completionHTML) +

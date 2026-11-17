@@ -387,7 +387,7 @@
         </div>
 
         <div class="fgroup" id="fgMore" style="position:relative">
-          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="moreFilterMenu" title="更多筛选：模块、标签、类型、版本、截止与开始日期、完成情况、发布态">
+          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="moreFilterMenu" title="更多筛选：分类（单项目）、标签、类型、版本、截止与开始日期、完成情况、发布态">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
             更多筛选 <span class="n" id="moreFilterCount" hidden>0</span>
           </button>
@@ -873,7 +873,7 @@
                 <div class="field span2" id="fReqTemplate">
                   <label for="rTemplate">项目模板 <small class="tc-optional">仅新建时生效</small></label>
                   <select id="rTemplate" aria-label="选择项目模板"></select>
-                  <p class="foot-note" id="rTemplateHint">只补充缺失的列、文档骨架、测试模块与默认版本，不覆盖已有内容</p>
+                  <p class="foot-note" id="rTemplateHint">只补充缺失的列、文档骨架、测试分类与默认版本，不覆盖已有内容</p>
                 </div>
                 <div class="field span2" id="projReleasePolicy" hidden>
                   <label for="rReleasePolicy">发布检查策略</label>
@@ -885,14 +885,14 @@
                   <p class="foot-note">发布时按此判断测试证据：标准＝发布必测失败 / 阻塞才阻断，必测未执行只提醒；严格＝必测未执行、任意用例失败或未执行都阻断；宽松＝只提醒，不阻断。修改后立即生效；已确认的发布记录保留当时的策略和结论。</p>
                 </div>
                 <div class="field span2" id="projCatCfg" hidden>
-                  <label>模块 <small class="tc-optional">按项目配置</small></label>
+                  <label>分类 <small class="tc-optional">按项目配置</small></label>
                   <div class="cfg-list" id="projCatList"></div>
                   <div class="cfg-add">
-                    <input type="color" id="projCatNewColor" value="#98A2B3" title="新模块颜色" aria-label="新模块颜色" />
-                    <input type="text" id="projCatNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
-                    <button class="btn sm" type="button" id="btnProjCatAdd">添加模块</button>
+                    <input type="color" id="projCatNewColor" value="#98A2B3" title="新分类颜色" aria-label="新分类颜色" />
+                    <input type="text" id="projCatNewName" maxlength="12" placeholder="新分类名，如：客户跟进" />
+                    <button class="btn sm" type="button" id="btnProjCatAdd">添加分类</button>
                   </div>
-                  <p class="foot-note" id="projCatHint" hidden>仅空间主、管理员或项目负责人可维护模块；其他成员只能查看。</p>
+                  <p class="foot-note" id="projCatHint" hidden>项目写成员可添加、改名与排序；删除分类仅空间主、管理员或项目负责人可操作。</p>
                 </div>
                 <div class="row row-gap span2">
                   <button class="btn primary" type="button" id="btnSaveReq">新建项目</button>
@@ -1095,7 +1095,7 @@
           <div class="panel">
             <div class="panel-head"><h3 id="demandFormTitle">提需求</h3><button class="icon-btn sm" type="button" id="dlgDemandX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack proj-form-grid">
-              <p class="foot-note span2" id="demandLockNote" hidden>该需求已进入流转，这里只更新描述、验收标准、来源、模块与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。</p>
+              <p class="foot-note span2" id="demandLockNote" hidden>该需求已进入流转，这里只更新描述、验收标准、来源、分类与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。</p>
               <div class="field">
                 <label for="dReq">所属项目 <span class="req">*</span></label>
                 <select id="dReq"></select>
@@ -1142,7 +1142,7 @@
                   </select>
                 </div>
                 <div class="field">
-                  <label for="dCategory">模块</label>
+                  <label for="dCategory">分类</label>
                   <select id="dCategory"></select>
                 </div>
               </div>
@@ -1829,7 +1829,7 @@
             </span>
             <span class="toolbar-meta" id="tcMeta"></span>
             <span class="toolbar-right">
-              <button type="button" class="label-help" id="tcHelp" aria-label="查看用例、计划、矩阵与报告的关系说明" title="测试模块使用说明"></button>
+              <button type="button" class="label-help" id="tcHelp" aria-label="查看用例、计划、矩阵与报告的关系说明" title="测试分类使用说明"></button>
               <select id="tcReq" class="mini-select" aria-label="选择项目范围"></select>
               <span class="tc-actionbar">
                 <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选<span class="n" id="tcFilterCount" hidden>0</span></button>
@@ -1913,10 +1913,10 @@
             </select>
             <select id="tcDefVersion" class="mini-select" aria-label="按发现版本筛选缺陷"></select>
             <select id="tcDefPub" class="mini-select" aria-label="按发布状态筛选缺陷"></select>
-            <select id="tcDefCat" class="mini-select" aria-label="按模块筛选缺陷"></select>
+            <select id="tcDefCat" class="mini-select" aria-label="按分类筛选缺陷"></select>
             <select id="tcDefTag" class="mini-select" aria-label="按标签筛选缺陷"></select>
-            <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索本项目缺陷…" title="在所选项目内搜索缺陷 / 编号 / 用例 / 模块 / 标签" aria-label="在所选项目内搜索缺陷" />
-            <button class="btn sm soft" type="button" id="tcDefReset" title="恢复默认：全部项目 · 未关闭，并清除严重度、优先级、负责人、发现版本、模块、标签与搜索"><span data-icon="refresh"></span>&nbsp;恢复默认</button>
+            <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索本项目缺陷…" title="在所选项目内搜索缺陷 / 编号 / 用例 / 分类 / 标签" aria-label="在所选项目内搜索缺陷" />
+            <button class="btn sm soft" type="button" id="tcDefReset" title="恢复默认：全部项目 · 未关闭，并清除严重度、优先级、负责人、发现版本、分类、标签与搜索"><span data-icon="refresh"></span>&nbsp;恢复默认</button>
             <span class="views-menu-wrap">
               <button class="btn sm ghost" type="button" id="tcDefViewsBtn" aria-haspopup="true" aria-expanded="false" title="缺陷视图：保存当前项目、状态与筛选条件">视图</button>
               <div class="menu popover" id="tcDefViewsMenu" hidden></div>
@@ -1973,7 +1973,7 @@
                 </div>
                 <div class="tc-bulkbar" id="tcBulkBar" hidden>
                   <span class="tc-bulk-acts">
-                    <button class="btn sm soft" type="button" id="btnTcBatchEdit">改模块</button>
+                    <button class="btn sm soft" type="button" id="btnTcBatchEdit">改分类</button>
                     <button class="btn sm soft" type="button" id="btnTcBatchPri">改优先级</button>
                     <button class="btn sm ghost" type="button" id="btnTcBatchSet">加入分组</button>
                     <button class="btn sm ghost" type="button" id="btnTcBatchUnset" hidden>移出分组</button>
@@ -2044,14 +2044,14 @@
                 </div>
                 <div class="cf-nest">
                   <div class="cf-nest-row">
-                    <span class="cf-nest-label">模块</span>
+                    <span class="cf-nest-label">分类</span>
                     <div class="cf-nest-val">
-                      <select id="cModule" aria-label="选择模块（项目目录节点）"></select>
+                      <select id="cModule" aria-label="选择分类（项目目录节点）"></select>
                       <span class="cf-tag" id="cModuleTag" hidden></span>
                       <button class="cf-link" type="button" id="cModuleInherit" hidden>恢复继承</button>
                       <button class="cf-link" type="button" id="cModuleNew">＋ 子目录</button>
                       <p class="cf-help cf-pathline" id="cModulePath" hidden></p>
-                      <p class="cf-help cf-modnote">模块是项目内的目录，只影响归类；选它不会改变所属项目。</p>
+                      <p class="cf-help cf-modnote">分类是项目内的目录，只影响归类；选它不会改变所属项目。</p>
                     </div>
                   </div>
                   <div class="cf-nest-row">
@@ -2121,16 +2121,16 @@
           </div>
         </div></div></div>
 
-        <!-- 批量设置模块与优先级 -->
+        <!-- 批量设置分类与优先级 -->
         <div class="modal-layer" id="dlgCaseBatch" role="dialog" aria-modal="true" aria-labelledby="caseBatchTitle"><div class="sheet xs"><div class="sheet-body">
           <div class="panel">
             <div class="panel-head"><h3 id="caseBatchTitle">批量设置</h3><button class="icon-btn sm" type="button" id="dlgCaseBatchX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
               <p class="foot-note" id="caseBatchSub"></p>
               <div class="field">
-                <label for="bModule">模块 <small class="tc-optional">默认保持原值</small></label>
-                <select id="bModule" aria-label="批量设置模块"></select>
-                <p class="foot-note">模块是单归属：设为新节点即从原节点移出，编号与执行历史不变。</p>
+                <label for="bModule">分类 <small class="tc-optional">默认保持原值</small></label>
+                <select id="bModule" aria-label="批量设置分类"></select>
+                <p class="foot-note">分类是单归属：设为新节点即从原节点移出，编号与执行历史不变。</p>
               </div>
               <div class="field">
                 <label for="bPri">优先级 <small class="tc-optional">选择后统一覆盖</small></label>
@@ -2380,7 +2380,7 @@
           </div>
         </div></div></div>
 
-        <!-- AI 用例草稿：可改标题/优先级/模块，步骤只读核对 -->
+        <!-- AI 用例草稿：可改标题/优先级/分类，步骤只读核对 -->
         <div class="modal-layer side" id="dlgAiCaseResult" role="dialog" aria-modal="true" aria-labelledby="aiCaseResultTitle">
           <div class="sheet ai-dlg">
             <div class="panel-head">
@@ -2621,7 +2621,7 @@
               </span>
             </div>
             <div class="tbl-wrap" id="reviewPivot"></div>
-            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的工作项；切换行/列维度可交叉查看成员、项目、优先级与模块。</p>
+            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的工作项；切换行/列维度可交叉查看成员、项目、优先级与分类。</p>
           </div>
 
           <div class="panel">
@@ -3118,21 +3118,21 @@
 
             <div class="panel" data-set-pane="workflow" id="set-categories" hidden>
               <div class="panel-head">
-                <h3>模块</h3>
+                <h3>分类</h3>
                 <span class="meta-right" id="wsCatCount"></span>
               </div>
-              <p class="set-hint">模块挂在项目下，用于筛选与统计。先选择项目，再添加、改名、改色或排序；删除模块时，其工作项与需求会迁到同项目的另一个模块。</p>
+              <p class="set-hint">分类挂在项目下，用于筛选与统计。先选择项目，再添加、改名、改色或排序；项目写成员即可维护，删除分类仅空间主、管理员或项目负责人可操作，删除时其工作项与需求会迁到同项目的另一个分类。</p>
               <div class="cfg-pick">
                 <label for="wsCatProject">项目</label>
-                <select id="wsCatProject" class="mini-select" aria-label="选择要配置模块的项目"></select>
+                <select id="wsCatProject" class="mini-select" aria-label="选择要配置分类的项目"></select>
               </div>
               <div class="cfg-list" id="wsCatList"></div>
               <div class="cfg-add">
-                <input type="color" id="wsCatNewColor" value="#98A2B3" title="新模块颜色" aria-label="新模块颜色" />
-                <input type="text" id="wsCatNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
-                <button class="btn sm" type="button" id="btnWsCatAdd">添加模块</button>
+                <input type="color" id="wsCatNewColor" value="#98A2B3" title="新分类颜色" aria-label="新分类颜色" />
+                <input type="text" id="wsCatNewName" maxlength="12" placeholder="新分类名，如：客户跟进" />
+                <button class="btn sm" type="button" id="btnWsCatAdd">添加分类</button>
               </div>
-              <p class="foot-note" id="wsCatHint" hidden>仅空间主、管理员或项目负责人可维护模块；其他成员只能查看。</p>
+              <p class="foot-note" id="wsCatHint" hidden>项目写成员可添加、改名与排序；删除分类仅空间主、管理员或项目负责人可操作。</p>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-data" hidden>
@@ -3161,8 +3161,8 @@
                 <input type="file" id="fileImport" accept=".json,application/json" hidden />
               </div>
               <p class="foot-note" style="margin-top:12px">导航使用记录只保存在当前浏览器（localStorage），记录视图进入次数与停留时长，供团队判断哪些入口真正被使用；不会上传。</p>
-              <p class="foot-note" style="margin-top:12px">任务备份包含：工作项（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按工作项与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/模块/优先级显示设置。</p>
-              <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/模块、清空任务数据、导入覆盖仅空间主可操作</p>
+              <p class="foot-note" style="margin-top:12px">任务备份包含：工作项（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按工作项与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/分类/优先级显示设置。</p>
+              <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-activity" hidden>
@@ -3174,7 +3174,7 @@
                 <button class="btn sm" type="button" id="actExportBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="actExportMenu">导出</button>
                 <div class="menu" id="actExportMenu" role="menu" aria-label="导出活动记录" hidden></div>
               </div>
-              <p class="set-hint">空间内的项目、需求、文档、分支、版本、工作项与配置变更，按时间倒序合并展示，每次加载 50 条。删除列/模块/项目这类破坏性操作也会出现在这里；配置变更仅空间主与管理员可见。导出按当前类型筛选取全部记录（最多 5000 条），支持 Markdown、Word 与 PDF。</p>
+              <p class="set-hint">空间内的项目、需求、文档、分支、版本、工作项与配置变更，按时间倒序合并展示，每次加载 50 条。删除列/分类/项目这类破坏性操作也会出现在这里；配置变更仅空间主与管理员可见。导出按当前类型筛选取全部记录（最多 5000 条），支持 Markdown、Word 与 PDF。</p>
               <div class="act-types" id="actTypes" role="group" aria-label="活动类型筛选"></div>
               <div class="act-list" id="actList"></div>
             </div>

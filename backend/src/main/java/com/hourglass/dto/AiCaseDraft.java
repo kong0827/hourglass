@@ -18,7 +18,7 @@ public class AiCaseDraft {
     @Size(max = 1000, message = "前置条件最多 1000 字")
     private String precondition;
 
-    @Size(max = 50, message = "功能模块最多 50 字")
+    @Size(max = 50, message = "分类最多 50 字")
     private String module;
 
     @Pattern(regexp = "P0|P1|P2|P3", message = "优先级不合法")

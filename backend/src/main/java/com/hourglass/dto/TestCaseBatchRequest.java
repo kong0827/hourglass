@@ -26,7 +26,7 @@ public class TestCaseBatchRequest {
     /** keep（默认）/ clear / set */
     private String moduleAction;
 
-    @Size(max = 50, message = "功能模块最多 50 字")
+    @Size(max = 50, message = "分类最多 50 字")
     private String module;
 
     /** set 时按目录节点归类（与 module 文本二选一，节点优先）；空串 = 移出目录 */

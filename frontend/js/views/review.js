@@ -310,7 +310,7 @@ if($("reviewPivot")) $("reviewPivot").addEventListener("click", function(e){
     reviewPivotState.rowDim + " × " + reviewPivotState.colDim + " · 共 " + tasks.length + " 项 · 点击工作项行打开详情");
 });
 
-/* 下钻：统计卡 / 成员 / 模块 / 项目都打开同一份明细表，行再进详情 */
+/* 下钻：统计卡 / 成员 / 分类 / 项目都打开同一份明细表，行再进详情 */
 function reviewWeekText(d){
   return fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
 }

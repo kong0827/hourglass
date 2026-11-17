@@ -247,11 +247,11 @@ try{
   s = await state();
   ok(s.tab === "scope" && s.rows === dist.items && !s.empty,
     "漏斗联动：工作项页 " + s.rows + " 行 = 分布行「" + dist.items + " 项」");
-  ok(s.chips.length === 1 && s.chips[0].k === "模块" && s.chips[0].v === dist.name && s.chips[0].x,
-    "联动条出现可单独摘掉的模块条件：" + s.chips[0].v);
+  ok(s.chips.length === 1 && s.chips[0].k === "分类" && s.chips[0].v === dist.name && s.chips[0].x,
+    "联动条出现可单独摘掉的分类条件：" + s.chips[0].v);
   ok(/cat=/.test(s.hash) && /sort=actual/.test(s.hash) && /tab=scope/.test(s.hash),
     "分享链接带筛选：" + s.hash);
-  ok(s.sel.cat === dist.openLink.split(":")[1] && s.sel.sort === "actual", "下拉与联动条同步（模块 / 实际工时）");
+  ok(s.sel.cat === dist.openLink.split(":")[1] && s.sel.sort === "actual", "下拉与联动条同步（分类 / 实际工时）");
   await shot("drill-cat-1440", true);
   await click(".vd-linked .vd-link-x");
   s = await state();

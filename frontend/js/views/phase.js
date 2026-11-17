@@ -186,7 +186,7 @@ function loadPhaseData(){
     API.get("/api/versions/task-options", { reqId: reqId }),
     /* 里程碑只读展示：失败不影响版本页主体 */
     API.get("/api/milestones", { reqId: reqId }).catch(function(){ return []; }),
-    /* 版本工时汇总的模块维度：模块名与颜色，失败只影响模块分组标题 */
+    /* 版本工时汇总的分类维度：分类名与颜色，失败只影响分类分组标题 */
     API.get("/api/categories", { project: reqId }).catch(function(){ return []; })
   ]).then(function(rs){
     if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions") return;
@@ -1866,9 +1866,9 @@ function rollupSummary(tasks){
   return s;
 }
 function rollupCatName(id){
-  if(!id) return "未指定";
+  if(!id) return "未分类";
   var hit = (rollupUi.cats || []).filter(function(c){ return c.id === id; })[0];
-  return hit ? hit.name : "未指定";
+  return hit ? hit.name : "未分类";
 }
 /* 「没关联」和「关联了但找不到」是两种情况：并成一个词会让多行同名，看起来像分组重复 */
 function rollupDemandHit(id){
@@ -1965,7 +1965,7 @@ function rollupDeltaHTML(act, est){
 function rollupPivotHTML(tasks, s){
   var dim = rollupUi.dim, rows = rollupRows(tasks, dim);
   var stage = dim === "stage";
-  var head = '<thead><tr><th>' + (stage ? "阶段" : dim === "module" ? "模块" : dim === "owner" ? "负责人" : "需求") + '</th>'
+  var head = '<thead><tr><th>' + (stage ? "阶段" : dim === "module" ? "分类" : dim === "owner" ? "负责人" : "需求") + '</th>'
     + (stage ? '<th>数据来源</th>' : '')
     + '<th class="num">条目</th><th class="num">预估</th><th class="num">实际</th>'
     + (stage ? '' : '<th class="num">窗口外</th><th class="num">窗口内</th>')
@@ -2034,7 +2034,7 @@ function rollupPanelHTML(){
   var all = rollupUi.verId === "__all";
   var v = all ? null : rollupCurrentVersion();
   if(!v && !all) return "";
-  var dims = [["stage", "阶段"], ["module", "模块"], ["owner", "负责人"], ["demand", "需求"]];
+  var dims = [["stage", "阶段"], ["module", "分类"], ["owner", "负责人"], ["demand", "需求"]];
   var ctl = '<div class="ver-rollup-ctl">' + rollupVersionSelectHTML()
     + (all ? '' : '<span class="seg mini" role="group" aria-label="汇总维度">' + dims.map(function(d){
         return '<button type="button" data-rollup-dim="' + d[0] + '" aria-pressed="' + (rollupUi.dim === d[0]) + '">' + d[1] + '</button>';

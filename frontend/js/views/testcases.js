@@ -27,7 +27,7 @@ var caseTotal = 0;        /* 当前筛选下的总数（服务端） */
 var caseHasMore = false;
 var caseSel = {};          /* 批量维护：勾选的用例 id → true，加载/筛选变化后清空 */
 var caseBatchSaving = false;
-var caseModules = [];     /* 模块名候选（自由文本口径，CSV 与旧数据仍可能出现） */
+var caseModules = [];     /* 分类名候选（自由文本口径，CSV 与旧数据仍可能出现） */
 var caseOwners = [];
 var caseFacetCounts = { module:{}, owner:{}, priority:{} };
 var caseModuleNodes = [];  /* 项目目录树：服务端 DFS 扁平列表，带层级与计数 */
@@ -35,7 +35,7 @@ var caseModuleIdCounts = {};
 var casePageSize = 100;    /* 每页条数：50 / 100 / 200 */
 var caseSort = "created";
 var caseSortDir = "desc";
-var caseSearchWide = false; /* false 只搜标题/编号/模块，true 才搜前置、数据与步骤 */
+var caseSearchWide = false; /* false 只搜标题/编号/分类，true 才搜前置、数据与步骤 */
 var caseGroupBy = "";       /* ""=不分组；module / priority / status / owner / demand / set */
 var caseGroupSegs = [];     /* 分组段头（当前筛选范围内的计数与结果分布） */
 var caseGroupRows = {};     /* 段内已加载的行：key -> [case] */
@@ -351,11 +351,11 @@ var GROUP_PAGE = 20;   /* 段内一次取多少行 */
 var GROUP_SHOW = 6;    /* 段内首屏显示多少行，其余点「段内加载更多」展开 */
 var CASE_SORTS = [
   ["created", "创建时间"], ["updated", "更新时间"], ["executed", "最近执行"],
-  ["no", "用例编号"], ["pri", "优先级"], ["module", "模块"], ["status", "执行结果"],
+  ["no", "用例编号"], ["pri", "优先级"], ["module", "分类"], ["status", "执行结果"],
   ["manual", "手动排序"]
 ];
 var CASE_GROUP_DIMS = [
-  ["", "不分组"], ["module", "模块"], ["priority", "优先级"], ["status", "执行结果"],
+  ["", "不分组"], ["module", "分类"], ["priority", "优先级"], ["status", "执行结果"],
   ["owner", "执行人"], ["demand", "主需求"], ["set", "自定义分组"]
 ];
 function caseGroupQuery(){
@@ -548,7 +548,7 @@ function loadCases(){
   });
 }
 /* 全部项目：按项目分组各自加载、各自分页；不合并排序，避免跨项目分页失真。
-   模块只在项目内有意，因此全部项目下不传模块条件，筛选入口也一并隐藏。 */
+   分类只在项目内有意，因此全部项目下不传分类条件，筛选入口也一并隐藏。 */
 function loadCasesAll(seq){
   var projects = caseScopeVisibleProjects();
   if(!rt.reqList.length || !projects.length){
@@ -729,8 +729,8 @@ function defectOwnerList(){
   return list;
 }
 function defectCatName(id){
-  if(!id) return "未指定模块";
-  return catNameById(id) || "已删除模块";
+  if(!id) return "未分类";
+  return catNameById(id) || "已删除分类（原节点不存在）";
 }
 function defectMatches(t, skip){
   var st = defectStatus(t);
@@ -890,9 +890,9 @@ function syncDefectFilters(){
       catCounts[defCat] = 0;
     }
     catKeys.sort(function(a, b){ return defectCatName(a).localeCompare(defectCatName(b), "zh-Hans-CN"); });
-    catSel.innerHTML = facetOpt("all", "模块：全部", defectFacet("cat").length, defCat)
+    catSel.innerHTML = facetOpt("all", "分类：全部", defectFacet("cat").length, defCat)
       + catKeys.map(function(k){ return facetOpt(k, defectCatName(k), catCounts[k] || 0, defCat); }).join("")
-      + facetOpt("__none", "未指定模块", catCounts.__none || 0, defCat);
+      + facetOpt("__none", "未分类", catCounts.__none || 0, defCat);
     catSel.value = ["all", "__none"].indexOf(defCat) !== -1 || catKeys.indexOf(defCat) !== -1 ? defCat : "all";
     if(catSel.value !== defCat) defCat = "all";
   }
@@ -925,8 +925,8 @@ function syncDefectFilters(){
   if(defSearchEl){
     defSearchEl.placeholder = defReqId ? "搜索本项目缺陷…" : "搜索全部项目缺陷…";
     defSearchEl.title = defReqId
-      ? "在所选项目内搜索缺陷 / 编号 / 用例 / 模块 / 标签"
-      : "在全部项目中搜索缺陷 / 编号 / 用例 / 模块 / 标签";
+      ? "在所选项目内搜索缺陷 / 编号 / 用例 / 分类 / 标签"
+      : "在全部项目中搜索缺陷 / 编号 / 用例 / 分类 / 标签";
     defSearchEl.setAttribute("aria-label", defReqId ? "在所选项目内搜索缺陷" : "在全部项目中搜索缺陷");
   }
   /* 「未关闭」是缺陷页默认口径，算中性；其余偏离默认才高亮 */
@@ -1094,7 +1094,7 @@ function renderDefects(){
   else if(defStatus === "all") meta += " · 含已关闭";
   else meta += " · " + (DEFECT_STATUSES[defStatus] ? DEFECT_STATUSES[defStatus].label : "");
   if(defPriority !== "all") meta += " · 优先级 " + (defPriority === "__none" ? "未设置" : priName(defPriority));
-  if(defCat !== "all") meta += " · 模块 " + (defCat === "__none" ? "未指定模块" : defectCatName(defCat));
+  if(defCat !== "all") meta += " · 分类 " + (defCat === "__none" ? "未分类" : defectCatName(defCat));
   if(defTag !== "all") meta += " · 标签 " + (defTag === "__none" ? "无标签" : defTag);
   footEl.textContent = meta;
 }
@@ -1891,7 +1891,7 @@ function reportPlainRows(){
       });
     });
   }
-  rows.push([], ["失败用例", "编号", "模块", "优先级", "最近执行", "备注", "证据数", "缺陷"]);
+  rows.push([], ["失败用例", "编号", "分类", "优先级", "最近执行", "备注", "证据数", "缺陷"]);
   (reportData.failed || []).forEach(function(c){
     rows.push([c.title, caseNoText(c), c.module || "", c.priority || "", (c.latestBy || "") + (c.latestAt ? " " + fmtTs(c.latestAt) : ""),
       c.latestNote || "", c.latestEvidenceCount || 0, c.latestBugTaskTitle || c.latestBugTaskId || ""]);
@@ -1947,7 +1947,7 @@ function exportTestReportDoc(){
         + '</table>';
     });
   }
-  var caseHead = '<tr>' + th("结果") + th("编号") + th("用例") + th("模块") + th("优先级") + th("最近执行") + th("备注") + th("证据") + th("缺陷") + '</tr>';
+  var caseHead = '<tr>' + th("结果") + th("编号") + th("用例") + th("分类") + th("优先级") + th("最近执行") + th("备注") + th("证据") + th("缺陷") + '</tr>';
   function caseRows(list){
     return list.map(function(c){
       return '<tr>'
@@ -2535,7 +2535,7 @@ function fillModuleSelect(sel, nodes, selected, withKeep){
   sel.value = selected || "";
   if(sel.value !== (selected || "")) sel.value = "";
 }
-/* 模块是项目内结构，筛选只在左树里表达；这里只做校验：目录被删或切换项目后回落到全部 */
+/* 分类是项目内结构，筛选只在左树里表达；这里只做校验：目录被删或切换项目后回落到全部 */
 function normalizeModuleFilter(){
   var nodes = caseModuleNodes || [];
   var valid = moduleFilter === "all" || moduleFilter === "__none"
@@ -2627,7 +2627,7 @@ function syncQueryBar(){
 function syncFilterOptions(){
   /* 候选值来自服务端 facets，不受当前筛选与已加载条数影响 */
   var owners = caseOwners;
-  /* 模块只在项目内有意：全部项目下不提供模块筛选，避免跨项目同名模块被误读为同一范围 */
+  /* 分类只在项目内有意：全部项目下不提供分类筛选，避免跨项目同名分类被误读为同一范围 */
   normalizeModuleFilter();
   fillFilterSelect("tcOwner", "执行人：全部", owners, "未指定执行人", function(v){
     if(v === undefined) return ownerFilter;
@@ -2644,8 +2644,8 @@ function syncFilterOptions(){
   if(caseSearchEl){
     var scopeText = caseScopeAll ? "全部项目" : "本项目";
     var fields = caseSearchWide
-      ? "标题 / 编号 / 模块 / 前置 / 测试数据 / 步骤 / 最近备注 / 需求与缺陷标题"
-      : "标题 / 编号 / 模块";
+      ? "标题 / 编号 / 分类 / 前置 / 测试数据 / 步骤 / 最近备注 / 需求与缺陷标题"
+      : "标题 / 编号 / 分类";
     caseSearchEl.placeholder = "搜索" + scopeText + "用例…";
     caseSearchEl.title = "在" + scopeText + "内搜索：" + fields + "（编号如 TC-001）";
     caseSearchEl.setAttribute("aria-label", "在" + scopeText + "内按" + fields + "搜索测试用例");
@@ -2654,8 +2654,8 @@ function syncFilterOptions(){
   if(scopeSel){
     scopeSel.value = caseSearchWide ? "all" : "title";
     scopeSel.title = caseSearchWide
-      ? "当前搜索范围：标题、编号、模块 + 前置、测试数据与步骤（大字段，较慢）"
-      : "当前只搜标题、编号与模块；切到「含步骤与前置」才搜大字段";
+      ? "当前搜索范围：标题、编号、分类 + 前置、测试数据与步骤（大字段，较慢）"
+      : "当前只搜标题、编号与分类；切到「含步骤与前置」才搜大字段";
   }
   $("tcBug").classList.toggle("soft", bugOnly);
   $("tcBug").setAttribute("aria-pressed", bugOnly ? "true" : "false");
@@ -2726,7 +2726,7 @@ function tcViewMeaningful(p){
     || p.groupBy || p.sort !== "created" || p.sortDir !== "desc" || p.pageSize !== 100
     || p.mode === "coverage" || p.mode === "report" || p.mode === "plans");
 }
-/* 旧视图存的是模块自由文本：按节点名解析回目录节点，解析不到就明示忽略，不静默当成「全部」 */
+/* 旧视图存的是分类自由文本：按节点名解析回目录节点，解析不到就明示忽略，不静默当成「全部」 */
 function resolveModuleName(reqId, name){
   var hit = null;
   caseModuleNodes.forEach(function(n){ if(n.name === name) hit = n.id; });
@@ -2794,7 +2794,7 @@ function applyTcView(v){
     moduleFilter = "all";
     resolveModuleName(caseReqId, legacy).then(function(id){
       if(id) moduleFilter = id;
-      else toast("视图里的模块「" + legacy + "」已不是目录节点，该条件已忽略", "warn");
+      else toast("视图里的分类「" + legacy + "」已不是目录节点，该条件已忽略", "warn");
       go();
     });
     return;
@@ -3079,7 +3079,7 @@ function syncBulkBar(){
     if(row) row.classList.toggle("is-selected", on);
   });
 }
-/* 批量改模块 / 改优先级共用一个弹框：只改填写的项，其余保持原值 */
+/* 批量改分类 / 改优先级共用一个弹框：只改填写的项，其余保持原值 */
 function openBatchDialog(focus){
   if(!caseHasSel()){ toast("请先勾选用例", "warn"); return; }
   var n = caseSelCount();
@@ -3446,8 +3446,8 @@ function chooseDemand(id){
   }
 }
 
-/* ---------- 目录继承：需求上的模块作为用例目录的默认值 ---------- */
-var caseModuleInherited = ""; /* 需求带出的目录；空表示这条需求没有指定模块 */
+/* ---------- 目录继承：需求上的分类作为用例目录的默认值 ---------- */
+var caseModuleInherited = ""; /* 需求带出的目录；空表示这条需求没有指定分类 */
 
 function setModuleValue(id){
   var sel = $("cModule");
@@ -3493,7 +3493,7 @@ function renderModuleTag(){
   if(inherit) inherit.hidden = !(caseModuleInherited && v && v !== caseModuleInherited);
   syncModulePath();
 }
-/* 模块是项目内的目录：把「项目 › 目录 › 子目录」摊开，避免同名节点看不出归属 */
+/* 分类是项目内的目录：把「项目 › 目录 › 子目录」摊开，避免同名节点看不出归属 */
 function syncModulePath(){
   var el = $("cModulePath");
   if(!el) return;
@@ -3968,7 +3968,7 @@ function syncCaseDetailCounts(){
 /* ---------- 抽屉字段说明：默认只留 ?，点开看口径 ---------- */
 var CASE_HINTS = {
   priority: { t: "优先级口径", b: "P0 阻塞主流程、必须回归；P1 核心功能；P2 一般功能；P3 边缘场景。不设置表示暂不区分，不影响保存与执行。" },
-  module: { t: "模块取自哪里", b: "模块就是项目目录节点：一条用例只归一个模块，用于筛选、分组与统计。需求带了目录时新建会默认继承，之后可单独调整。" },
+  module: { t: "分类取自哪里", b: "分类就是项目目录节点：一条用例只归一个分类，用于筛选、分组与统计。需求带了目录时新建会默认继承，之后可单独调整。" },
   demand: { t: "关联需求能带出什么", b: "候选只列本项目需求。关联后可从该需求下挑验证工作项，覆盖会同时记到需求与工作项。" },
   step: { t: "步骤怎么写", b: "操作写做了什么，预期写看到什么；预期可留空，表示只记录操作。最多 30 行。" }
 };
@@ -4155,8 +4155,8 @@ function caseDetailOverview(c, writable){
       + caseAffilRowHTML("验证工作项", caseWorkValueHTML(tasks, writable, false)),
       writable ? '未挂工作项时按<b>需求级</b>统计覆盖；挂上后可按工作项追溯。' : '')
     + caseSecHTML("归类", "放在哪、归谁管", "可选",
-      caseAffilRowHTML("模块", caseModuleText(c),
-        { act: writable ? "module" : "", title: "修改模块" })
+      caseAffilRowHTML("分类", caseModuleText(c),
+        { act: writable ? "module" : "", title: "修改分类" })
       + caseAffilRowHTML("分组", caseSetChipsHTML(c, writable)))
     + caseReadBlock("前置条件", c.precondition, "未设置前置条件", "pre", writable)
     + caseReadBlock("测试数据", c.testData, "未设置测试数据", "testData", writable)
@@ -4364,7 +4364,7 @@ function caseDraftModuleOptions(d){
       + esc(pad + (n.name || "")) + '</option>';
   });
   if(d.moduleId && !list.some(function(n){ return n.id === d.moduleId; })){
-    html += '<option value="' + esc(d.moduleId) + '" selected>' + esc(d.module || "当前模块") + '</option>';
+    html += '<option value="' + esc(d.moduleId) + '" selected>' + esc(d.module || "当前分类") + '</option>';
   }
   return html;
 }
@@ -4407,11 +4407,11 @@ function caseDetailEditHTML(c, writable){
       + '<span class="case-dtag">' + icon("lock", 11) + ' 只读</span>'
       + '<span class="case-ro-note">由创建入口决定，不能在详情里改</span>',
       { ro: true })
-    + caseAffilRowHTML("模块",
-      '<select class="case-select" data-case-draft="moduleId" aria-label="模块">'
+    + caseAffilRowHTML("分类",
+      '<select class="case-select" data-case-draft="moduleId" aria-label="分类">'
       + caseDraftModuleOptions(d) + '</select>')
     + caseAffilRowHTML("分组", caseSetChipsHTML(c, true)),
-    '<b>模块是项目内的目录</b>：只能选「' + esc(reqNameOf(c.reqId)) + '」下的节点，选它不会改变所属项目。');
+    '<b>分类是项目内的目录</b>：只能选「' + esc(reqNameOf(c.reqId)) + '」下的节点，选它不会改变所属项目。');
   var steps = d.steps.length
     ? caseDraftStepRowsHTML(d)
     : '<div class="case-step-empty">还没有步骤；点下方「添加步骤」补充操作与预期。</div>';
@@ -4506,7 +4506,7 @@ function loadCaseDetailModules(reqId){
     if(caseDetailModules.reqId !== reqId) return caseDetailModules.list;
     caseDetailModules.list = nodes || [];
     caseDetailModules.loading = null;
-    /* 模块名以目录树为准：加载完成后补一次渲染，免得先显示「未归类」 */
+    /* 分类名以目录树为准：加载完成后补一次渲染，免得先显示「未归类」 */
     if(caseDetailId && !$("caseDetailView").hidden) renderCaseDetail();
     return caseDetailModules.list;
   }).catch(function(){
@@ -4738,7 +4738,7 @@ function mutateCaseSteps(fn, msg){
   saveCasePatch(c, { steps: steps.slice(0, 30) }, msg);
 }
 
-/* ---------- 字段浮层：优先级 / 模块 / 关联需求 / 验证工作项 ---------- */
+/* ---------- 字段浮层：优先级 / 分类 / 关联需求 / 验证工作项 ---------- */
 function casePickTarget(){
   return caseDetailEditing ? caseDetailDraft : caseById(caseDetailId);
 }
@@ -4795,7 +4795,7 @@ function openCaseModulePop(anchor, c){
   var list = caseDetailModules.reqId === c.reqId ? caseDetailModules.list : [];
   var el = document.createElement("div");
   el.className = "menu case-module-pop";
-  el.innerHTML = '<div class="menu-title">模块 <span class="case-pop-note">项目目录节点</span></div>'
+  el.innerHTML = '<div class="menu-title">分类 <span class="case-pop-note">项目目录节点</span></div>'
     + '<button class="menu-item' + (cur ? "" : " on") + '" type="button" data-pick=""><span>未归类（不选目录）</span>'
     + (cur ? "" : icon("check", 14)) + '</button>'
     + (list.length ? list.map(function(n){
@@ -4803,13 +4803,13 @@ function openCaseModulePop(anchor, c){
       for(var i = 1; i < Math.min(n.level || 1, 7); i++) pad += "　";
       return '<button class="menu-item' + (cur === n.id ? " on" : "") + '" type="button" data-pick="' + esc(n.id) + '">'
         + '<span>' + esc(pad + (n.name || "")) + '</span>' + (cur === n.id ? icon("check", 14) : "") + '</button>';
-    }).join("") : '<div class="menu-empty">' + (caseDetailModules.loading ? "模块加载中…" : "该项目还没有目录节点") + '</div>');
+    }).join("") : '<div class="menu-empty">' + (caseDetailModules.loading ? "分类加载中…" : "该项目还没有目录节点") + '</div>');
   UI.openPop(el, anchor, { width: 260 });
   el.addEventListener("click", function(e){
     var b = e.target.closest("[data-pick]");
     if(!b) return;
     var id = b.getAttribute("data-pick") || "";
-    applyCasePick({ moduleId: id || null, module: id ? moduleNameById(list, id) : "" }, id ? "模块已更新" : "已移出模块");
+    applyCasePick({ moduleId: id || null, module: id ? moduleNameById(list, id) : "" }, id ? "分类已更新" : "已移出分类");
   });
 }
 function openCaseDemandPop(anchor, c){
@@ -5307,7 +5307,7 @@ function submitCase(again){
     toast(ex.message || "保存失败", "bad");
   });
 }
-/* 再建一条：保留需求 / 模块 / 工作项 / 优先级，只清本条的标题、步骤与更多字段 */
+/* 再建一条：保留需求 / 分类 / 工作项 / 优先级，只清本条的标题、步骤与更多字段 */
 function resetCaseFormForNext(){
   $("cTitle").value = "";
   $("cPrecondition").value = "";
@@ -5448,7 +5448,7 @@ function aiCasePriOptions(selected){
 function renderAiCaseResult(d){
   $("aiCaseResultTitle").textContent = "AI 生成用例 · " + (d.sourceTitle || "");
   var msg = "从「" + (d.sourceTitle || "所选来源") + "」生成 " + aiCaseDrafts.length + " 条草稿"
-    + (aiCaseDemandId ? "，创建后关联该需求" : "") + "。标题可直接改，优先级和模块也能调；没勾的不会创建。";
+    + (aiCaseDemandId ? "，创建后关联该需求" : "") + "。标题可直接改，优先级和分类也能调；没勾的不会创建。";
   if(d.truncated) msg += " 来源共 " + (d.sourceChars || 0) + " 字，AI 只读取了前 12000 字。";
   $("aiCaseResultMsg").textContent = msg;
   $("aiCaseList").innerHTML = aiCaseDrafts.map(function(c, i){
@@ -5459,7 +5459,7 @@ function renderAiCaseResult(d){
         '<input class="ai-title" type="text" maxlength="100" value="' + esc(c.title) + '" data-title="' + i + '" aria-label="用例标题">' +
         '<div class="ai-meta">' +
           '<select class="ai-case-pri" data-pri="' + i + '" aria-label="优先级">' + aiCasePriOptions(c.priority) + '</select>' +
-          '<input class="ai-case-module" type="text" maxlength="50" value="' + esc(c.module || "") + '" data-module="' + i + '" placeholder="功能模块" aria-label="功能模块">' +
+          '<input class="ai-case-module" type="text" maxlength="50" value="' + esc(c.module || "") + '" data-module="' + i + '" placeholder="分类名称" aria-label="分类名称">' +
           (c.precondition ? '<span>前置：' + esc(cut(c.precondition, 36)) + '</span>' : "") +
           (c.reason ? '<span class="ai-reason">' + esc(c.reason) + '</span>' : "") +
         '</div>' +
@@ -5603,7 +5603,7 @@ function renderRunContext(c, last){
     + '<span class="rc-round">' + (runRoundNo > 1 ? "本次为第 " + runRoundNo + " 轮执行" : "首次执行") + '</span></div>';
   var facts = [];
   if(c.createdBy) facts.push("创建人：" + esc(c.createdBy));
-  if(c.module) facts.push("模块：" + esc(c.module));
+  if(c.module) facts.push("分类：" + esc(c.module));
   if(c.priority) facts.push("优先级：" + esc(c.priority));
   var prev = "";
   if(last){
@@ -6330,7 +6330,7 @@ function planStatusTo(status){
 function exportPlanCsv(){
   var d = planDetail;
   if(!d) return;
-  var rows = [["编号", "标题", "需求", "工作项", "发布必测", "模块", "优先级", "计划结果", "执行人", "执行时间", "备注"]];
+  var rows = [["编号", "标题", "需求", "工作项", "发布必测", "分类", "优先级", "计划结果", "执行人", "执行时间", "备注"]];
   (d.cases || []).forEach(function(c){
     var tasks = (c.tasks || []).map(function(t){ return (itemNoText(t) || "WI") + " " + t.taskTitle; }).join("、");
     rows.push([caseNoText(c), c.title, c.demandTitle || "", tasks || "需求级覆盖", c.required ? "是" : "",
@@ -7478,7 +7478,7 @@ function renderRuleBuilder(rule){
     + '<div class="cs-rule-grid">'
     + field("csRuleStatus", "执行结果", [["all", "全部"], ["passed", "通过"], ["failed", "失败"], ["blocked", "阻塞"], ["skipped", "跳过"], ["__untested", "未执行"]], r.status)
     + field("csRulePri", "优先级", [["all", "全部"]].concat(PRIORITIES.map(function(p){ return [p, p + " · " + priName(p)]; })).concat([["__none", "未设置"]]), r.pri)
-    + field("csRuleModule", "模块", modOpts, r.moduleId)
+    + field("csRuleModule", "分类", modOpts, r.moduleId)
     + field("csRuleDemand", "主需求", demandOpts, r.demandId)
     + field("csRuleOwner", "最近执行人", ownerOpts, r.owner)
     + '<div class="field"><label for="csRuleQ">关键词</label>'
@@ -7486,7 +7486,7 @@ function renderRuleBuilder(rule){
     + '</div>'
     + '<div class="cs-rule-flags">'
     + flag("csRuleSub", "含子目录", r.moduleSub !== false, "目录条件是否连同子目录用例一起收录")
-    + flag("csRuleWide", "关键词含步骤与前置", !!r.searchWide, "默认只搜标题 / 编号 / 模块；开启后才搜前置、测试数据与步骤")
+    + flag("csRuleWide", "关键词含步骤与前置", !!r.searchWide, "默认只搜标题 / 编号 / 分类；开启后才搜前置、测试数据与步骤")
     + flag("csRuleBug", "只看有缺陷", !!r.bugOnly, "关联缺陷仍未完成（未删除、未进入完成列）")
     + flag("csRuleRegression", "回归口径：失败 / 阻塞 或 有未关闭缺陷", !!r.regression, "与其他条件同时生效（AND），不是替换")
     + '</div>'
@@ -8652,7 +8652,7 @@ if($("tcSearchScope")){
     caseSearchWide = wide;
     if(searchText){ loadCases(); return; }
     syncFilterOptions(); syncQueryBar();
-    toast(caseSearchWide ? "搜索已包含前置、测试数据与步骤（大字段，较慢）" : "搜索已收敛为标题 / 编号 / 模块", "fs");
+    toast(caseSearchWide ? "搜索已包含前置、测试数据与步骤（大字段，较慢）" : "搜索已收敛为标题 / 编号 / 分类", "fs");
   });
 }
 /* 查询条：排序 / 分组 / 每页 / 全选筛选结果 */
@@ -8857,11 +8857,11 @@ function tcHelpHTML(){
     return '<div class="type-help-row"><span class="mini-tag">' + tag + '</span>' +
       '<span class="type-help-desc">' + text + '</span></div>';
   }
-  return '<div class="menu-title">测试模块使用说明</div>' +
+  return '<div class="menu-title">测试分类目录使用说明</div>' +
     '<div class="type-help-list">' +
       row("用例", "最小验证单元，挂在项目下；记录步骤与预期，最新一次执行结果（未执行/通过/失败/阻塞）决定统计口径。项目范围可切「全部项目」：按项目分组逐段加载，段内翻页；目录筛选、分组显示与拖拽归类只在单个项目下提供。") +
       row("目录 / 分组", "项目目录是单归属：一个用例只属一个节点（层级不限、只禁止成环），拖到节点＝移动归属，计数不重叠并进覆盖矩阵。分组是多归属：拖到分组＝加入，原分组保留，删分组不删用例；动态分组按规则自动收录（可一键存成回归集），成员不能手工增删。可见范围分团队共享 / 指定成员 / 仅自己可见，只有团队共享分组进交付说明与发布证据。") +
-      row("查询", "排序字段与升降序、每页 50/100/200 条、按维度分组显示（段头带计数与结果分布，可折叠、可段内翻页、可整组全选）。统计条上的执行结果计数可直接点按筛选，计数始终是全项目口径、不随当前筛选变化。「全选筛选结果」按条件生效、含未加载的行；明确勾选只覆盖已加载的行。搜索默认只匹配标题 / 编号 / 模块，勾选「含步骤与前置」才搜大字段（较慢）。") +
+      row("查询", "排序字段与升降序、每页 50/100/200 条、按维度分组显示（段头带计数与结果分布，可折叠、可段内翻页、可整组全选）。统计条上的执行结果计数可直接点按筛选，计数始终是全项目口径、不随当前筛选变化。「全选筛选结果」按条件生效、含未加载的行；明确勾选只覆盖已加载的行。搜索默认只匹配标题 / 编号 / 分类，勾选「含步骤与前置」才搜大字段（较慢）。") +
       row("缺陷", "按缺陷（工作项类型=缺陷）逐行汇总当前项目范围，可切换「全部项目」或单个项目；默认只看未关闭并按严重度排序，跨项目时每行标明所属项目。待修复、修复中、待回归都算未关闭，进入完成列且回归通过才算关闭。") +
       row("测试计划", "从用例库圈选一批组成一轮测试：在计划详情里逐条勾选，或在用例页按筛选整批加入（一次最多 2000 条，已在计划内的自动跳过）。批量记录结果时同时写回用例最近结果并追加执行流水，按版本留痕，完成后锁定为快照。项目范围同样支持全部/单选，全部项目下按项目分组，新建计划需先选一个项目。") +
       row("覆盖矩阵", "按需求统计用例覆盖：哪些需求已有用例、覆盖多少、通过率如何；按项目全量计算，不受用例列表分页影响。只提供单个项目，不汇总跨项目。") +

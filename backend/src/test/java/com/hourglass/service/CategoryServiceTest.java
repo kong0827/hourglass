@@ -23,7 +23,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 目录增删改的破坏性行为：子目录守卫、同项目迁移、权限与审计文案。 */
+/** 分类增删改的破坏性行为：子分类守卫、同项目迁移、权限与审计文案。 */
 class CategoryServiceTest {
 
     private static final String WS = "W1";
@@ -78,9 +78,9 @@ class CategoryServiceTest {
         verify(caseMapper).moveCasesToModule(WS, "G1", "G2", "后端");
         verify(categoryMapper).deleteById(WS, "G1");
         verify(deletionTrace).logTaskCascade(WS, USER, Arrays.asList("K1", "K2", "K3"),
-                "因删除目录「前端」，自动改到「后端」");
+                "因删除分类「前端」，自动改到「后端」");
         verify(activityService).logConfig(WS,
-                "项目「项目一」删除目录「前端」，其下 3 个工作项、1 个需求、2 条用例已改到「后端」");
+                "项目「项目一」删除分类「前端」，其下 3 个工作项、1 个需求、2 条用例已改到「后端」");
     }
 
     @Test
@@ -130,7 +130,7 @@ class CategoryServiceTest {
 
         service.delete(WS, USER, "G1", null);
 
-        verify(activityService).logConfig(WS, "项目「项目一」删除目录「前端」，该目录没有工作项、需求与用例");
+        verify(activityService).logConfig(WS, "项目「项目一」删除分类「前端」，该分类没有工作项、需求与用例");
     }
 
     @Test

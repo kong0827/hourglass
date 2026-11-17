@@ -140,8 +140,8 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <div class="rf rf-edit rf-meta" data-fact-edit="type" role="button" tabindex="0" title="点击修改工作项类型">
                 <span class="rf-k"><span class="rf-meta-ico rf-type-ico" id="rfTypeIco" aria-hidden="true"></span>类型</span><b class="rf-v" id="rfType">—</b>
               </div>
-              <div class="rf rf-edit rf-meta" data-fact-edit="category" role="button" tabindex="0" title="点击修改模块">
-                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="3.4" width="5.6" height="5.6" rx="1.4"/><rect x="11" y="3.4" width="5.6" height="5.6" rx="1.4"/><rect x="3.4" y="11" width="5.6" height="5.6" rx="1.4"/><rect x="11" y="11" width="5.6" height="5.6" rx="1.4"/></svg></span>模块</span><b class="rf-v" id="rfCategory">—</b>
+              <div class="rf rf-edit rf-meta" data-fact-edit="category" role="button" tabindex="0" title="点击修改分类">
+                <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="3.4" width="5.6" height="5.6" rx="1.4"/><rect x="11" y="3.4" width="5.6" height="5.6" rx="1.4"/><rect x="3.4" y="11" width="5.6" height="5.6" rx="1.4"/><rect x="11" y="11" width="5.6" height="5.6" rx="1.4"/></svg></span>分类</span><b class="rf-v" id="rfCategory">—</b>
               </div>
               <div class="rf rf-edit rf-jump rf-meta" data-fact-jump="version" role="button" tabindex="0" title="点击编辑计划版本">
                 <span class="rf-k"><span class="rf-meta-ico" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 3.4v13.2"/><path d="M5.2 4.4h9.4l-2 3.2 2 3.2H5.2z"/></svg></span>计划版本</span><b class="rf-v" id="rfVersion">—</b>
@@ -323,12 +323,12 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           </div>
           <select id="iEpic" title="先选项目，候选只列出该项目的史诗"></select>
         </div>
-        <!-- 模块挂项目：常驻在归属条，随项目切换重算候选 -->
+        <!-- 分类挂项目：常驻在归属条，随项目切换重算候选 -->
         <div class="ctx-item ctx-item-wide">
-          <div class="ctx-label">模块</div>
-          <div class="seg" id="segCat" role="group" aria-label="模块"></div>
+          <div class="ctx-label">分类</div>
+          <div class="seg" id="segCat" role="group" aria-label="分类"></div>
           <p class="ctx-path" id="catPathLine" hidden></p>
-          <p class="ctx-note" id="catNote" hidden>模块是项目内的目录，只影响归类；选它不会改变所属项目。</p>
+          <p class="ctx-note" id="catNote" hidden>分类是项目内的归类目录，只影响归类；选它不会改变所属项目。</p>
         </div>
       </div>
 

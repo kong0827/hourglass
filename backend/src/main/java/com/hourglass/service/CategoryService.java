@@ -23,7 +23,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 项目目录树：任务、需求、用例共用同一棵树（单归属，不限层级，仅防环）。
+ * 项目分类树：任务、需求、用例共用同一棵树（单归属，不限层级，仅防环）。
  * 用例通过 test_case.module_id 挂在唯一节点上，计数不重复；多归属的「自定义分组」由
  * CaseSetService 承载，两者语义不同，不共用一张表。
  */
@@ -32,21 +32,21 @@ public class CategoryService {
 
     private static final Pattern COLOR = Pattern.compile("^#[0-9a-fA-F]{6}$");
     private static final String DEFAULT_COLOR = "#8a8578";
-    /** 新建项目时预置的默认目录名，保证项目从一开始就能按目录归类工作项 */
+    /** 新建项目时预置的默认分类名，保证项目从一开始就能按分类归类工作项 */
     public static final String DEFAULT_MODULE_NAME = "其他";
 
     private final CategoryMapper categoryMapper;
     private final RequirementMapper requirementMapper;
     private final ActivityService activityService;
-    /** 删目录会批量改任务所属目录：为受影响任务补时间线 */
+    /** 删分类会批量改任务所属分类：为受影响任务补时间线 */
     private final DeletionTraceService deletionTrace;
     private final ProjectAccessService projectAccess;
     private final ReleasePermissionService releasePermission;
-    /** 树节点计数与删除前守卫：用例是目录的主要使用者 */
+    /** 树节点计数与删除前守卫：用例是分类的主要使用者 */
     private final com.hourglass.mapper.TestCaseMapper caseMapper;
-    /** 动态分组规则会引用目录节点：删除前必须拦住，否则规则读取时失效 */
+    /** 动态分组规则会引用分类节点：删除前必须拦住，否则规则读取时失效 */
     private final com.hourglass.mapper.CaseSetMapper setMapper;
-    /** 目录列表缓存（空间全量，按项目内存过滤）：读列表/删除时选目标节点共用，写入口负责失效 */
+    /** 分类列表缓存（空间全量，按项目内存过滤）：读列表/删除时选目标节点共用，写入口负责失效 */
     private final WorkspaceMetaCache metaCache;
 
     public CategoryService(CategoryMapper categoryMapper, RequirementMapper requirementMapper,
@@ -66,7 +66,7 @@ public class CategoryService {
         this.setMapper = setMapper;
     }
 
-    /** projectId 为空返回空间内全部项目的目录（跨项目展示/筛选），否则只返回该项目清单 */
+    /** projectId 为空返回空间内全部项目的分类（跨项目展示/筛选），否则只返回该项目清单 */
     public List<Category> list(String workspaceId, String projectId) {
         List<Category> all = metaCache.categories(workspaceId);
         if (projectId == null || projectId.trim().isEmpty()) {
@@ -81,7 +81,7 @@ public class CategoryService {
         return out;
     }
 
-    /** 目录树：DFS 顺序的扁平列表，带层级、直接挂载数与子树合计（用例计数） */
+    /** 分类树：DFS 顺序的扁平列表，带层级、直接挂载数与子树合计（用例计数） */
     public List<CaseModuleNode> tree(String workspaceId, String userId, String projectId) {
         Requirement project = requireProject(workspaceId, projectId);
         projectAccess.assertView(workspaceId, userId, project.getId());
@@ -124,7 +124,7 @@ public class CategoryService {
     public Category requireNodeById(String workspaceId, String categoryId) {
         Category c = categoryMapper.selectById(workspaceId, categoryId);
         if (c == null) {
-            throw AppException.notFound("目录不存在：" + categoryId);
+            throw AppException.notFound("分类不存在：" + categoryId);
         }
         return c;
     }
@@ -133,16 +133,16 @@ public class CategoryService {
     public Category requireNode(String workspaceId, String projectId, String categoryId) {
         String id = Texts.trimToNull(categoryId);
         if (id == null) {
-            throw AppException.badRequest("请选择目录节点");
+            throw AppException.badRequest("请选择分类节点");
         }
         Category c = categoryMapper.selectById(workspaceId, id);
         if (c == null || !workspaceId.equals(c.getWorkspaceId()) || !projectId.equals(c.getProjectId())) {
-            throw AppException.badRequest("目录节点不存在或不属于该项目：" + id);
+            throw AppException.badRequest("分类节点不存在或不属于该项目：" + id);
         }
         return c;
     }
 
-    /** 目录筛选范围：本节点 +（可选）全部子节点 */
+    /** 分类筛选范围：本节点 +（可选）全部子节点 */
     public List<String> scopeIds(String workspaceId, String projectId, String categoryId, boolean includeSub) {
         Category node = requireNode(workspaceId, projectId, categoryId);
         List<String> ids = new ArrayList<String>();
@@ -221,7 +221,7 @@ public class CategoryService {
         }
         String name = cleanName(req.getName());
         if (categoryMapper.selectByName(workspaceId, project.getId(), parentId, name) != null) {
-            throw new AppException(409, "同级下已有目录：" + name);
+            throw new AppException(409, "同级下已有分类：" + name);
         }
         Category c = new Category();
         c.setId(Ids.gen("G"));
@@ -233,13 +233,13 @@ public class CategoryService {
         c.setSortOrder(categoryMapper.maxSortOrder(workspaceId, project.getId(), parentId) + 1);
         categoryMapper.insert(c);
         evictCategories(workspaceId);
-        activityService.logConfig(workspaceId, "新建项目「" + project.getName() + "」目录「" + c.getName() + "」"
+        activityService.logConfig(workspaceId, "新建项目「" + project.getName() + "」分类「" + c.getName() + "」"
                 + (parentId.isEmpty() ? "（顶级）" : "（上级："
                 + requireNode(workspaceId, project.getId(), parentId).getName() + "）"));
         return categoryMapper.selectById(workspaceId, c.getId());
     }
 
-    /** 新建项目时预置默认目录（系统行为，不记审计） */
+    /** 新建项目时预置默认分类（系统行为，不记审计） */
     @Transactional
     public void createDefault(String workspaceId, String projectId) {
         Category c = new Category();
@@ -262,14 +262,14 @@ public class CategoryService {
     public Category update(String workspaceId, String userId, String id, CategoryRequest req) {
         Category c = categoryMapper.selectById(workspaceId, id);
         if (c == null) {
-            throw AppException.notFound("目录不存在：" + id);
+            throw AppException.notFound("分类不存在：" + id);
         }
         projectAccess.assertWrite(workspaceId, userId, c.getProjectId());
         String name = cleanName(req.getName());
         /* 旧客户端只提交名称 / 颜色：parentId 缺省表示保持原父级 */
         String parentId = req.getParentId() == null ? rootKey(c.getParentId()) : rootKey(req.getParentId());
         if (parentId.equals(c.getId())) {
-            throw AppException.badRequest("目录不能挂到自己下面");
+            throw AppException.badRequest("分类不能挂到自己下面");
         }
         if (!parentId.isEmpty()) {
             requireNode(workspaceId, c.getProjectId(), parentId);
@@ -278,7 +278,7 @@ public class CategoryService {
         if (!name.equals(c.getName()) || !parentId.equals(rootKey(c.getParentId()))) {
             Category other = categoryMapper.selectByName(workspaceId, c.getProjectId(), parentId, name);
             if (other != null && !other.getId().equals(id)) {
-                throw new AppException(409, "同级下已有目录：" + name);
+                throw new AppException(409, "同级下已有分类：" + name);
             }
         }
         String oldName = c.getName();
@@ -300,36 +300,36 @@ public class CategoryService {
         }
         evictCategories(workspaceId);
         StringBuilder what = new StringBuilder("项目「" + projectName(workspaceId, c.getProjectId())
-                + "」目录「" + oldName + "」");
+                + "」分类「" + oldName + "」");
         if (!oldName.equals(name)) {
             what.append("改名为「").append(name).append("」");
         }
         if (moved) {
-            what.append(what.toString().endsWith("」") ? "，" : "").append("调整了上级目录");
+            what.append(what.toString().endsWith("」") ? "，" : "").append("调整了上级分类");
         }
         activityService.logConfig(workspaceId, what.toString());
         return categoryMapper.selectById(workspaceId, id);
     }
 
     /**
-     * 删除目录：空间主 / 管理员 / 项目负责人。仍有子目录或动态规则引用时拒绝；
+     * 删除分类：空间主 / 管理员 / 项目负责人。仍有子分类或动态规则引用时拒绝；
      * 有任务 / 需求 / 用例时迁到 targetId（缺省取项目内其他节点），避免归类与证据孤立。
      */
     @Transactional
     public void delete(String workspaceId, String userId, String id, String targetId) {
         Category c = categoryMapper.selectById(workspaceId, id);
         if (c == null) {
-            throw AppException.notFound("目录不存在：" + id);
+            throw AppException.notFound("分类不存在：" + id);
         }
         assertManage(workspaceId, userId, c.getProjectId());
         int kids = categoryMapper.countChildren(workspaceId, c.getProjectId(), c.getId());
         if (kids > 0) {
-            throw AppException.badRequest("目录「" + c.getName() + "」下还有 " + kids
-                    + " 个子目录，请先移走或删除子目录");
+            throw AppException.badRequest("分类「" + c.getName() + "」下还有 " + kids
+                    + " 个子分类，请先移走或删除子分类");
         }
         List<String> rules = setMapper.selectDynamicNamesByModule(workspaceId, c.getProjectId(), c.getId());
         if (!rules.isEmpty()) {
-            throw AppException.badRequest("目录「" + c.getName() + "」被动态分组「" + rules.get(0)
+            throw AppException.badRequest("分类「" + c.getName() + "」被动态分组「" + rules.get(0)
                     + "」的收录规则引用，请先编辑该分组规则");
         }
         int cases = caseMapper.countByModuleId(workspaceId, c.getId());
@@ -340,7 +340,7 @@ public class CategoryService {
         if (targetId != null) {
             target = categoryMapper.selectById(workspaceId, targetId);
             if (target == null || !c.getProjectId().equals(target.getProjectId()) || id.equals(targetId)) {
-                throw AppException.badRequest("迁移目标目录不存在或不属于该项目：" + targetId);
+                throw AppException.badRequest("迁移目标分类不存在或不属于该项目：" + targetId);
             }
         } else if (hasContent) {
             for (Category other : metaCache.categories(workspaceId)) {
@@ -350,7 +350,7 @@ public class CategoryService {
                 }
             }
             if (target == null) {
-                throw AppException.badRequest("请先选择迁移目标目录");
+                throw AppException.badRequest("请先选择迁移目标分类");
             }
         }
         String targetName = target == null ? null : target.getName();
@@ -365,18 +365,18 @@ public class CategoryService {
         categoryMapper.deleteById(workspaceId, id);
         if (target != null) {
             deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
-                    "因删除目录「" + c.getName() + "」，自动改到「" + targetName + "」");
+                    "因删除分类「" + c.getName() + "」，自动改到「" + targetName + "」");
         }
         evictCategories(workspaceId);
         String migration = target == null
-                ? "，该目录没有工作项、需求与用例"
+                ? "，该分类没有工作项、需求与用例"
                 : "，其下 " + movedTasks + " 个工作项、" + movedDemands + " 个需求、"
                 + movedCases + " 条用例已改到「" + targetName + "」";
         activityService.logConfig(workspaceId, "项目「" + projectName(workspaceId, c.getProjectId())
-                + "」删除目录「" + c.getName() + "」" + migration);
+                + "」删除分类「" + c.getName() + "」" + migration);
     }
 
-    /** 项目删除时随项目清理：清空其下任务的目录引用并删除目录树（需求已随项目删除） */
+    /** 项目删除时随项目清理：清空其下任务的分类引用并删除分类树（需求已随项目删除） */
     @Transactional
     public void purgeProject(String workspaceId, String projectId) {
         categoryMapper.clearTasksCategory(workspaceId, projectId);
@@ -393,7 +393,7 @@ public class CategoryService {
         Requirement project = requireProject(workspaceId, projectId);
         projectAccess.assertWrite(workspaceId, userId, projectId);
         List<Category> all = categoryMapper.selectByProject(workspaceId, projectId);
-        /* parentId 缺省（null）= 旧调用按整项目排序；显式传空串才是「顶级目录」同级排序 */
+        /* parentId 缺省（null）= 旧调用按整项目排序；显式传空串才是「顶级分类」同级排序 */
         String parentKey = parentId == null ? null : rootKey(parentId);
         Set<String> known = new HashSet<String>();
         for (Category c : all) {
@@ -404,20 +404,20 @@ public class CategoryService {
         Set<String> unique = new HashSet<String>(ids);
         if (unique.size() != ids.size() || ids.size() != known.size() || !known.containsAll(ids)) {
             throw AppException.badRequest(parentKey == null
-                    ? "排序列表与现有目录不一致" : "排序列表与同级目录不一致");
+                    ? "排序列表与现有分类不一致" : "排序列表与同级分类不一致");
         }
         for (int i = 0; i < ids.size(); i++) {
             categoryMapper.updateSortOrder(workspaceId, ids.get(i), i);
         }
         evictCategories(workspaceId);
-        activityService.logConfig(workspaceId, "调整项目「" + project.getName() + "」的目录顺序");
+        activityService.logConfig(workspaceId, "调整项目「" + project.getName() + "」的分类顺序");
     }
 
     /** 删除口径：空间主 / 管理员，或该项目负责人；写成员可建、改名、换父级与排序 */
     public void assertManage(String workspaceId, String userId, String projectId) {
         projectAccess.assertView(workspaceId, userId, projectId);
         if (!releasePermission.canManageProject(userId, workspaceId, projectId)) {
-            throw new AppException(403, "仅空间主、管理员或项目负责人可删除项目目录");
+            throw new AppException(403, "仅空间主、管理员或项目负责人可删除项目分类");
         }
     }
 
@@ -427,7 +427,7 @@ public class CategoryService {
         int guard = 0;
         while (!cursor.isEmpty() && guard++ <= rows.size()) {
             if (cursor.equals(node.getId())) {
-                throw AppException.badRequest("目录不能挂到自己的子目录下");
+                throw AppException.badRequest("分类不能挂到自己的子分类下");
             }
             Category up = byId.get(cursor);
             cursor = up == null ? "" : rootKey(up.getParentId());
@@ -453,12 +453,12 @@ public class CategoryService {
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evictCategories(workspaceId));
     }
 
-    /** 目录名会拼接进筛选参数（逗号分隔），不允许含逗号 */
+    /** 分类名会拼接进筛选参数（逗号分隔），不允许含逗号 */
     private String cleanName(String raw) {
         String name = raw == null ? "" : raw.replace(',', ' ').replace('，', ' ').trim();
         name = Texts.cut(name, 50);
         if (name.isEmpty()) {
-            throw AppException.badRequest("目录名称不能为空");
+            throw AppException.badRequest("分类名称不能为空");
         }
         return name;
     }
@@ -468,7 +468,7 @@ public class CategoryService {
         return c != null && COLOR.matcher(c).matches() ? c : DEFAULT_COLOR;
     }
 
-    /* ---------- 内部：目录规模小，一次取回后在内存里算层级 ---------- */
+    /* ---------- 内部：分类规模小，一次取回后在内存里算层级 ---------- */
 
     private static Map<String, Category> byIdOf(List<Category> rows) {
         Map<String, Category> byId = new LinkedHashMap<String, Category>();

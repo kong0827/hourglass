@@ -311,7 +311,7 @@ try{
     return ids.map(id => [...bar.children].findIndex(x => x.id === id));
   })()`);
   assert(defBar.every((v, i) => v >= 0 && (i === 0 || v > defBar[i - 1])),
-    "缺陷筛选顺序：项目 → 状态 → 负责人 → 优先级 → 严重度 → 版本 → 模块 → 标签 → 搜索");
+    "缺陷筛选顺序：项目 → 状态 → 负责人 → 优先级 → 严重度 → 版本 → 分类 → 标签 → 搜索");
 
   const baseCount = await evaluate(`document.querySelectorAll("#tcDefRows .tc-def-row").length`);
   const catInfo = await evaluate(`(() => {
@@ -319,8 +319,8 @@ try{
     const opts = [...sel.options].slice(1).map(o => ({ value: o.value, text: o.textContent.trim() }));
     return { count: opts.length, zero: opts.filter(o => /（0）$/.test(o.text)), sample: opts.slice(0, 4) };
   })()`);
-  assert(catInfo.count > 0, "缺陷模块下拉有候选（" + catInfo.sample.map(x => x.text).join(" / ") + "）");
-  assert(catInfo.zero.length === 0, "缺陷模块零结果不出现");
+  assert(catInfo.count > 0, "缺陷分类下拉有候选（" + catInfo.sample.map(x => x.text).join(" / ") + "）");
+  assert(catInfo.zero.length === 0, "缺陷分类零结果不出现");
 
   const catPick = await evaluate(`(() => {
     const sel = document.getElementById("tcDefCat");
@@ -338,11 +338,11 @@ try{
       foot: document.getElementById("tcDefFoot").textContent,
       marked: document.getElementById("tcDefCat").classList.contains("is-filtered")
     }))()`);
-    assert(catState.rows > 0 || catState.foot.indexOf("共 0 条") === 0, "缺陷按模块筛选生效（" + baseCount + " → " + catState.rows + " 条）");
-    assert(catState.marked, "缺陷模块筛选生效态高亮");
-    assert(catState.foot.indexOf("模块 ") !== -1, "缺陷页脚反映模块条件（" + catState.foot.slice(0, 60) + "…）");
+    assert(catState.rows > 0 || catState.foot.indexOf("共 0 条") === 0, "缺陷按分类筛选生效（" + baseCount + " → " + catState.rows + " 条）");
+    assert(catState.marked, "缺陷分类筛选生效态高亮");
+    assert(catState.foot.indexOf("模块 ") !== -1, "缺陷页脚反映分类条件（" + catState.foot.slice(0, 60) + "…）");
   }else{
-    skip("缺陷没有带模块的数据，跳过模块结果断言");
+    skip("缺陷没有带分类的数据，跳过分类结果断言");
   }
 
   await click("#tcDefReset");
@@ -376,7 +376,7 @@ try{
   }else{
     skip("缺陷没有带标签的数据，跳过标签结果断言");
   }
-  /* 零组合视图：模块 + 该模块内没有缺陷的负责人；应用后两个条件都要保住，不能被静默重置。
+  /* 零组合视图：分类 + 该分类内没有缺陷的负责人；应用后两个条件都要保住，不能被静默重置。
      交互上凑不出这个组合（零计数候选本就不展示），按真实路径造一个已保存视图再应用。 */
   await click("#tcDefReset");
   await sleep(700);
@@ -436,7 +436,7 @@ try{
       foot: document.getElementById("tcDefFoot").textContent
     }))()`);
     assert(zeroApplied.cat === zeroCombo.cat && zeroApplied.owner === zeroCombo.owner,
-      "应用零组合视图后模块与负责人均保留（" + zeroApplied.cat + " / " + zeroApplied.owner + "）");
+      "应用零组合视图后分类与负责人均保留（" + zeroApplied.cat + " / " + zeroApplied.owner + "）");
     assert(/（0）$/.test(zeroApplied.ownerOpt.trim()),
       "应用零组合视图后负责人显示（0）而不是回落全部（" + zeroApplied.ownerOpt.trim() + "）");
     assert(zeroApplied.rows === 0 || zeroApplied.foot.indexOf("共 0 条") !== -1,
@@ -456,7 +456,7 @@ try{
         return true;
       })()`).catch(() => {});
     }
-    skip("演示数据凑不出「模块 + 零缺陷负责人」组合，跳过零组合视图断言");
+    skip("演示数据凑不出「分类 + 零缺陷负责人」组合，跳过零组合视图断言");
   }
 
   await click("#tcDefReset");
@@ -478,7 +478,7 @@ try{
   })()`);
   assert(caseOrder.pos.every((v, i) => v >= 0 && (i === 0 || v > caseOrder.pos[i - 1])),
     "用例筛选顺序：搜索（含范围）→ 执行人 → 优先级");
-  assert(!caseOrder.hasModule, "模块筛选下拉已下线（模块只在目录面板中） ");
+  assert(!caseOrder.hasModule, "分类筛选下拉已下线（分类只在目录面板中） ");
   assert(caseOrder.sameCard, "统计 chips 与筛选条件同处一张卡");
 
   const caseFacets = await evaluate(`(() => {

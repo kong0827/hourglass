@@ -79,7 +79,7 @@ class TaskCommandServiceCategoryTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
 
-        assertTrue(ex.getMessage().contains("模块不属于该项目"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("分类不属于该项目"), ex.getMessage());
     }
 
     private Task savedTask() {

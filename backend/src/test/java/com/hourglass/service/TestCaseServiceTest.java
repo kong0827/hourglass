@@ -606,7 +606,7 @@ class TestCaseServiceTest {
         verify(auditService).recordCurrent(eq(WS), eq("test_case_update"), eq("test_case"), eq("C1"),
                 any(), eq(true), detail.capture(), isNull());
         String text = detail.getValue();
-        assertTrue(text.contains("模块由「登录」改为「认证」"));
+        assertTrue(text.contains("分类由「登录」改为「认证」"));
         assertTrue(text.contains("优先级 P2 → P1"));
         assertTrue(text.contains("修改前置条件"));
         assertTrue(text.contains("修改执行步骤"));

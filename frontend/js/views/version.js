@@ -697,9 +697,9 @@ function milestonePanel(){
     tableWrap('<th>里程碑</th><th>状态</th><th class="num">目标日</th><th class="num">达成日</th><th class="num">生产成功</th>', body));
 }
 function catName(id){
-  if(!id) return "未指定模块";
+  if(!id) return "未分类";
   var hit = st.cats.filter(function(c){ return c.id === id; })[0];
-  return hit ? hit.name : "未指定模块";
+  return hit ? hit.name : "未分类";
 }
 function catColor(id){
   var hit = st.cats.filter(function(c){ return c.id === id; })[0];
@@ -719,8 +719,8 @@ var TYPE_PROXY = {
 };
 var TYPE_ORDER = ["story","task","bug","epic"];
 var HOUR_TABS = {
-  estimate:[["type","类型"],["cat","模块"],["owner","负责人"],["demand","需求"],["items","工作项"]],
-  actual:[["owner","成员"],["type","类型"],["cat","模块"],["items","工作项"],["window","计时窗口"]]
+  estimate:[["type","类型"],["cat","分类"],["owner","负责人"],["demand","需求"],["items","工作项"]],
+  actual:[["owner","成员"],["type","类型"],["cat","分类"],["items","工作项"],["window","计时窗口"]]
 };
 var UNLINKED_DEMAND = "__unlinked__";
 var hourSheet = null;
@@ -930,7 +930,7 @@ function hoursGroupHTML(kind, mode){
   var valueKey = mode === "estimate" ? "est" : "act";
   var total = rows.reduce(function(a, r){ return a + r[valueKey]; }, 0);
   var firstHead = kind === "type" ? "类型"
-    : kind === "cat" ? "模块"
+    : kind === "cat" ? "分类"
     : kind === "owner" ? (mode === "actual" ? "成员" : "负责人")
     : "需求";
   var body = rows.map(function(r){
@@ -956,7 +956,7 @@ function hoursGroupHTML(kind, mode){
   }else if(kind === "demand"){
     foot = "需求来自工作项关联，需求名与工作项名不一定一致；已关闭需求仍保留在构成里。未关联的工作项也计入合计。";
   }else if(kind === "cat"){
-    foot = "模块来自工作项分类，可直接使用；实际按工作项累计计时归集。";
+    foot = "分类来自工作项归类，可直接使用；实际按工作项累计计时归集。";
   }else if(mode === "actual"){
     foot = "实际按工作项负责人归集（计时未拆到具体记录）；名下预估按工作项负责人归集。";
   }else{
@@ -1056,7 +1056,7 @@ function hoursItemsHTML(mode){
   return callout + chip
     + '<div class="vd-h-tablewrap"><table class="vd-h-table"><thead><tr>' + head + '</tr></thead><tbody>' + body + totalRow + '</tbody></table></div>'
     + '<p class="foot-note">' + (mode === "estimate"
-      ? "预估来自工作项；未估工作项排在最后。点类型 / 模块 / 负责人 / 需求分组可快速筛选。"
+      ? "预估来自工作项；未估工作项排在最后。点类型 / 分类 / 负责人 / 需求分组可快速筛选。"
       : "实际来自工作项累计计时；偏差 = 实际 − 预估，红色为超出。未计时的工作项不在此列表。") + '</p>';
 }
 function hoursWindowHTML(){
@@ -1212,7 +1212,7 @@ function demandLabel(id){
 }
 /* 联动筛选的四种来源共用一份描述：条上显示什么、清除时清哪个字段，都在这里对齐 */
 var LINK_META = {
-  cat:{ field:"cat", icon:"tag", label:"模块", name:function(v){ return catName(v === NONE ? "" : v); } },
+  cat:{ field:"cat", icon:"tag", label:"分类", name:function(v){ return catName(v === NONE ? "" : v); } },
   branch:{ field:"branch", icon:"branch", label:"分支", name:branchName },
   demand:{ field:"demand", icon:"demand", label:"需求", name:demandLabel },
   stage:{ field:"stage", icon:"clock", label:"计时窗口", name:function(v){ return v === "test" ? "窗口内计时" : "窗口外计时"; } }
@@ -1246,7 +1246,7 @@ function entityChip(kind, id, label){
     + icon(m.icon, 11) + '<span>' + esc(label) + '</span></button>';
 }
 /* 负责人已经是筛选行里的下拉，不再重复做成联动 chip；其余四种来源才上联动条 */
-var LINK_LABEL = { cat:"模块", branch:"分支", demand:"需求", stage:"计时窗口", owner:"负责人" };
+var LINK_LABEL = { cat:"分类", branch:"分支", demand:"需求", stage:"计时窗口", owner:"负责人" };
 function linkBtn(kind, value, label){
   return '<button class="vd-funnel" type="button" data-vd-link="' + esc(kind + ":" + value) + '"'
     + ' title="把本页工作项联动到该' + esc(LINK_LABEL[kind]) + '：' + esc(label) + '" aria-label="按' + esc(label) + '联动筛选工作项">'
@@ -1359,12 +1359,12 @@ function selectHTML(attr, pairs, chosen, label){
 function scopeFiltersHTML(){
   var f = st.filters;
   var ownerPairs = [["","全部负责人"],["__none__","未指派"]].concat(owners().map(function(o){ return [o, o]; }));
-  var catPairs = [["","全部模块"],["__none__","未指定模块"]].concat(st.cats.map(function(c){ return [c.id, c.name]; }));
+  var catPairs = [["","全部分类"],["__none__","未分类"]].concat(st.cats.map(function(c){ return [c.id, c.name]; }));
   return '<div class="vd-filters">'
     + '<label class="vd-search">' + icon("search", 13)
     + '<input type="search" data-vd-filter="q" value="' + esc(f.q) + '" placeholder="搜索标题或负责人" aria-label="搜索版本工作项"></label>'
     + selectHTML("status", STATUS_FILTERS, f.status, "按状态筛选")
-    + selectHTML("cat", catPairs, f.cat, "按模块筛选")
+    + selectHTML("cat", catPairs, f.cat, "按分类筛选")
     + selectHTML("owner", ownerPairs, f.owner, "按负责人筛选")
     + selectHTML("type", TYPE_FILTERS, f.type, "按类型筛选")
     + selectHTML("pub", PUB_FILTERS, f.pub, "按发布状态筛选")
@@ -1617,14 +1617,14 @@ function jumpBoard(){
   state.q = f.q || ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = [];
   if(f.q){ carried.push("关键词"); }
   if(f.owner && f.owner !== NONE){ state.owners = [f.owner]; carried.push("负责人"); }
-  if(f.cat && f.cat !== NONE){ state.cats = [f.cat]; carried.push("模块"); }
+  if(f.cat && f.cat !== NONE){ state.cats = [f.cat]; carried.push("分类"); }
   if(f.type){ state.types = [f.type]; carried.push("类型"); }
   if(f.branch) left.push("分支");
   if(f.demand) left.push("需求");
   if(f.stage) left.push("计时窗口");
   if(f.status) left.push("状态");
   if(f.owner === NONE) left.push("未指派");
-  if(f.cat === NONE) left.push("未指定模块");
+  if(f.cat === NONE) left.push("未分类");
   state.versions = [st.id]; state.columns = []; state.completion = ""; state.due = null;
   state.focus = false; state.blocked = false; state.doneScope = "all";
   state.reqs = [st.reqId];

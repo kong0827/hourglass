@@ -88,7 +88,7 @@ public class AiTestCaseService {
                 + "3. 步骤 2~8 条，action 写具体操作（带关键输入/数据），expected 写可观察的结果；两者一一对应。\n"
                 + "4. 需求里有约束、异常分支、权限或边界条件时，补相应的负向/边界用例；没有就不编。\n"
                 + "5. priority：P0 阻塞主流程，P1 核心功能，P2 常规，P3 边缘场景。\n"
-                + "6. module 优先复用给定模块名；没有合适的再给一个不超过 10 字的短模块名。\n"
+                + "6. module 优先复用给定分类名；没有合适的再给一个不超过 10 字的短分类名。\n"
                 + "7. precondition 写执行前必须满足的条件；不需要就留空字符串。\n"
                 + "8. reason 用一句话指出这条用例对应来源里的哪条要求，便于人工核对。\n"
                 + "9. 生成 " + MIN_CASES + "~" + cap + " 条，宁少勿滥；已有用例已经覆盖的行为不要重复生成。\n"
@@ -101,7 +101,7 @@ public class AiTestCaseService {
         }
         u.append("\n需求内容：\n---\n").append(body).append("\n---\n");
         if (!modules.isEmpty()) {
-            u.append("\n项目里已有的测试模块（优先复用）：").append(String.join("、", modules)).append("\n");
+            u.append("\n项目里已有的测试分类（优先复用）：").append(String.join("、", modules)).append("\n");
         }
         if (!existingTitles.isEmpty()) {
             u.append("\n项目里已有的用例标题（不要重复生成）：\n");

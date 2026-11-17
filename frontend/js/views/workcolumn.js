@@ -36,7 +36,7 @@ var DEFAULT_RULE = "当前列的队列、风险与工时消耗；统计在服务
 
 var SCOPE_LIST_KEYS = ["owners", "pris", "cats", "reqs", "tags", "types", "versions"];
 var SCOPE_DATE_KEYS = ["dueFrom", "dueTo", "startFrom", "startTo"];
-var DIM_TITLES = { reqs:"项目", owners:"负责人", pris:"优先级", types:"类型", cats:"模块", tags:"标签", versions:"版本" };
+var DIM_TITLES = { reqs:"项目", owners:"负责人", pris:"优先级", types:"类型", cats:"分类", tags:"标签", versions:"版本" };
 
 var WC_LAYOUTS = ["card", "list"];
 var wcLayout = wcLayoutPref();
@@ -445,21 +445,39 @@ function typeItems(){
   });
   return out;
 }
+/* 分类只在筛选到单个项目时可选；全局仅保留已选旧条件，便于清除 */
+function catScopeReqWc(){
+  var r = st.scope.reqs;
+  return r.length === 1 && r[0] !== "__none" ? r[0] : "";
+}
+function catProjectOfWc(id){
+  for(var i = 0; i < rt.categoriesCache.length; i++){
+    if(rt.categoriesCache[i].id === id) return rt.categoriesCache[i].projectId || "";
+  }
+  return "";
+}
 function catItems(){
   var m = boardMeta(), out = [], seen = {};
+  var scope = catScopeReqWc();
   (m.cats || []).forEach(function(c){
     if(!c || !c.id || seen[c.id]) return;
+    if(scope && catProjectOfWc(c.id) !== scope) return;
+    if(!scope && st.scope.cats.indexOf(c.id) === -1) return;
     seen[c.id] = 1;
     out.push({ id:c.id, name:c.name || c.id, count:c.count });
   });
   if(!out.length){
     (rt.categoriesCache || []).forEach(function(c){
       if(!c || !c.id || seen[c.id]) return;
+      if(scope && c.projectId !== scope) return;
+      if(!scope && st.scope.cats.indexOf(c.id) === -1) return;
       seen[c.id] = 1;
       out.push({ id:c.id, name:c.name || c.id, count:null });
     });
   }
-  out.push({ id:"__none", name:"未指定模块", count:out.length ? (m.catUnassigned || 0) : null });
+  if(out.length || st.scope.cats.indexOf("__none") !== -1){
+    out.push({ id:"__none", name:"未分类", count:out.length ? (m.catUnassigned || 0) : null });
+  }
   return out;
 }
 function tagItems(){
@@ -494,7 +512,7 @@ function labelOf(dim, value){
   if(dim === "pris") return priName(value) + " · " + value;
   if(dim === "types") return typeLabel(value);
   if(dim === "owners") return value === "__none" ? "未指派" : value;
-  if(dim === "cats") return value === "__none" ? "未指定模块" : (catNameById(value) || metaName(boardMeta().cats, value) || value);
+  if(dim === "cats") return value === "__none" ? "未分类" : (catNameById(value) || metaName(boardMeta().cats, value) || value);
   if(dim === "reqs") return value === "__none" ? "未归类" : (reqNameById(value) || metaName(boardMeta().reqs, value) || value);
   if(dim === "versions") return versionLabel(value);
   return value;
@@ -656,7 +674,7 @@ function chipsInnerHTML(){
   if(s.dueFrom || s.dueTo) out.push(chipHTML("截止 " + dateSpan(s.dueFrom, s.dueTo), "dueRange"));
   if(s.startFrom || s.startTo) out.push(chipHTML("开始 " + dateSpan(s.startFrom, s.startTo), "startRange"));
   if(s.types.length) out.push(chipHTML("类型 · " + shortJoin(s.types.map(typeLabel)), "types"));
-  if(s.cats.length) out.push(chipHTML("模块 · " + (s.cats.length === 1 ? labelOf("cats", s.cats[0]) : s.cats.length + " 项"), "cats"));
+  if(s.cats.length) out.push(chipHTML("分类 · " + (s.cats.length === 1 ? labelOf("cats", s.cats[0]) : s.cats.length + " 项"), "cats"));
   if(s.tags.length) out.push(chipHTML("标签 · " + shortJoin(s.tags), "tags"));
   if(s.versions.length) out.push(chipHTML("版本 · " + (s.versions.length === 1 ? labelOf("versions", s.versions[0]) : s.versions.length + " 项"), "versions"));
   return out.join("");
@@ -734,7 +752,7 @@ function morePanelHTML(){
   return '<div class="wc-filter-more' + (st.moreOpen ? " is-open" : "") + '" id="wcMore">' +
     '<div class="wc-more-grid">' +
       '<div class="wc-field"><span>类型</span>' + dimButtonHTML("types") + '</div>' +
-      '<div class="wc-field"><span>模块</span>' + dimButtonHTML("cats") + '</div>' +
+      ((catScopeReqWc() || s.cats.length) ? '<div class="wc-field"><span>分类</span>' + dimButtonHTML("cats") + '</div>' : '') +
       '<div class="wc-field"><span>标签</span>' + dimButtonHTML("tags") + '</div>' +
       '<div class="wc-field"><span>版本</span>' + dimButtonHTML("versions") + '</div>' +
       '<div class="wc-field wc-field-wide"><span>截止日期</span><div class="wc-dates">' +

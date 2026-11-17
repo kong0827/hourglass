@@ -1133,7 +1133,7 @@ try{
     await shot("i-project-menu");
     await evaluate(`(() => { const b = document.querySelector('.menu-item[data-fact-req="${PROJ_ALT}"]'); if(b) b.click(); return true; })()`);
     const cmsg = await confirmOk();
-    assert(/重载模块、计划版本与负责人候选/.test(cmsg), "换项目前二次确认并说明连带重载（" + cmsg.slice(0, 30) + "…）");
+    assert(/重载分类、计划版本与负责人候选/.test(cmsg), "换项目前二次确认并说明连带重载（" + cmsg.slice(0, 30) + "…）");
     await fillPromptIfAsked("E2E：换项目导致计划版本清空");
     await waitPersist(fixtureId, "reqId", PROJ_ALT, "换项目 → 统一支付网关");
     pass("换项目后服务端 reqId 持久化为目标项目");

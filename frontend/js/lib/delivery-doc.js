@@ -16,7 +16,7 @@ import { icon } from "../core/icons.js";
   function nz(v) { return Number(v) || 0; }
   function arr(v) { return Array.isArray(v) ? v : []; }
   function txt(v) { return v == null ? "" : String(v).trim(); }
-  /* 项目内编号：未取号回退原 ID，不编造编号。渲染器保持自包含，分享页不额外引模块 */
+  /* 项目内编号：未取号回退原 ID，不编造编号。渲染器保持自包含，分享页不额外引分类 */
   function noText(prefix, no, fallback) {
     var n = Number(no) || 0;
     if (n <= 0) return txt(fallback);
@@ -55,7 +55,7 @@ import { icon } from "../core/icons.js";
   function signed(v) { var n = Number(v) || 0; return (n > 0 ? "+" : "") + num(n); }
 
   var TONES = { customer: "客户版", manager: "管理版", internal: "内部复盘版" };
-  var GRANULARITY = { brief: "按模块汇总", module: "按模块分组", items: "逐条列出" };
+  var GRANULARITY = { brief: "按分类汇总", module: "按分类分组", items: "逐条列出" };
   var EVIDENCE_NAMES = ["仅关键依据", "含完整依据", "含制品校验值"];
   var VERBOSITY_NAMES = ["精简", "标准", "详细"];
   var OPERATION_NAMES = { deploy: "部署", redeploy: "重部署", rollback: "回滚" };
@@ -433,7 +433,7 @@ import { icon } from "../core/icons.js";
   }
   function scopeRowHTML(x, isBlocked) {
     var sub = [x.ref, x.owner, x.targetVersionName ? "去向 " + x.targetVersionName : ""].filter(Boolean).join(" · ");
-    return '<div class="dl-row body"><span class="dl-mod">' + esc(x.module || "未分模块") + "</span>"
+    return '<div class="dl-row body"><span class="dl-mod">' + esc(x.module || "未分分类") + "</span>"
       + '<span class="tt"><b>' + esc(x.title) + "</b><span>" + esc(sub) + "</span></span>"
       + '<span class="ty">' + esc(x.itemTypeName || "任务") + "</span>"
       + "<span>" + stateBadge(x.state, isBlocked) + "</span></div>";
@@ -470,13 +470,13 @@ import { icon } from "../core/icons.js";
     } else if (o.granularity === "brief") {
       var mods = {};
       rows.forEach(function (x) {
-        var m = x.module || "未分模块";
+        var m = x.module || "未分分类";
         mods[m] = mods[m] || { t: 0, r: 0, o: 0, sample: [] };
         mods[m].t++;
         if (x.state === "released") mods[m].r++; else mods[m].o++;
         if (mods[m].sample.length < 2) mods[m].sample.push(x.title);
       });
-      body = '<div class="dl-rows"><div class="dl-row head"><span>模块</span><span>交付内容</span><span>已发布</span><span>状态</span></div>'
+      body = '<div class="dl-rows"><div class="dl-row head"><span>分类</span><span>交付内容</span><span>已发布</span><span>状态</span></div>'
         + Object.keys(mods).map(function (m) {
           var s = mods[m];
           return '<div class="dl-row body"><span class="dl-mod">' + esc(m) + "</span>"
@@ -487,7 +487,7 @@ import { icon } from "../core/icons.js";
     } else if (o.granularity === "module") {
       var groups = {};
       rows.forEach(function (x) {
-        var m = x.module || "未分模块";
+        var m = x.module || "未分分类";
         (groups[m] = groups[m] || []).push(x);
       });
       body = Object.keys(groups).map(function (m) {
@@ -496,7 +496,7 @@ import { icon } from "../core/icons.js";
           + '<div class="dl-rows">' + groups[m].map(function (x) { return scopeRowHTML(x, g.blocked); }).join("") + "</div></div>";
       }).join("");
     } else {
-      body = '<div class="dl-rows"><div class="dl-row head"><span>模块</span><span>工作项</span><span>类型</span><span>状态</span></div>'
+      body = '<div class="dl-rows"><div class="dl-row head"><span>分类</span><span>工作项</span><span>类型</span><span>状态</span></div>'
         + rows.map(function (x) { return scopeRowHTML(x, g.blocked); }).join("") + "</div>";
     }
     var more = (o.granularity !== "items" && rows.length && !view.readonly)
@@ -521,12 +521,12 @@ import { icon } from "../core/icons.js";
       + metric("demands", nz(ds.fulfilled) + "/" + nz(ds.total), "", "已兑现需求", "部分兑现 " + nz(ds.partial) + " 条", "ok")
       + metric("demands", nz(ds.deferred) + nz(ds.pending), "条", "未兑现需求", "延后 " + nz(ds.deferred) + " · 未兑现 " + nz(ds.pending), "warn")
       + "</div>" + bar(segs, nz(ds.total)) + legend(segs) + gap()
-      + '<div class="dl-rows"><div class="dl-row head"><span>模块</span><span>需求</span><span>工作项</span><span>兑现</span></div>'
+      + '<div class="dl-rows"><div class="dl-row head"><span>分类</span><span>需求</span><span>工作项</span><span>兑现</span></div>'
       + rows.map(function (x) {
         var sub = [demandNo(x), x.priority, x.targetVersionName ? "去向 " + x.targetVersionName : "", x.deliveredAt ? "交付 " + dateText(x.deliveredAt) : ""]
           .filter(Boolean).join(" · ");
         var cls = x.state === "fulfilled" ? "ok" : x.state === "deferred" ? "warn" : x.state === "partial" ? "pri" : "";
-        return '<div class="dl-row body"><span class="dl-mod">' + esc(x.module || "未分模块") + "</span>"
+        return '<div class="dl-row body"><span class="dl-mod">' + esc(x.module || "未分分类") + "</span>"
           + '<span class="tt"><b>' + esc(x.title) + "</b><span>" + esc(sub) + "</span></span>"
           + '<span class="ty">' + nz(x.releasedCount) + " / " + nz(x.taskCount) + "</span>"
           + "<span>" + badge(cls, STATE_NAMES[x.state] || "未兑现") + "</span></div>";
@@ -671,7 +671,7 @@ import { icon } from "../core/icons.js";
             + '<span class="ht"><i style="width:' + (nz(x.minutes) / max * 100) + "%;background:" + colors[i % colors.length] + '"></i></span>'
             + '<span class="hv">' + hours(x.minutes) + "h · " + nz(x.pct) + "%</span></div>";
         }).join("") + "</div>"
-        : missing("有工时合计但没有可分组的明细，按" + (o.effortDim === "member" ? "成员" : "模块") + "拆分不可用。"))
+        : missing("有工时合计但没有可分组的明细，按" + (o.effortDim === "member" ? "成员" : "分类") + "拆分不可用。"))
       + '<div class="dl-effort-foot"><span>口径：版本范围内工作项的<b>计时 + 补记</b>，不用于计费结算</span>'
       + "<span>参与 <b>" + nz(e.memberCount) + "</b> 人</span>"
       + (o.tone === "customer" ? "<span>不含成员明细</span>" : "<span>点击数字可看来源</span>") + "</div>";
@@ -1124,7 +1124,7 @@ import { icon } from "../core/icons.js";
     heading("scope", "交付范围");
     scopeRows(d).forEach(function (x) {
       L.push("- [" + (STATE_NAMES[x.state] || (x.state === "released" ? "已发布" : x.state === "done" ? "已完成" : x.state === "deferred" ? "延后" : "未完成")) + "] "
-        + (x.module || "未分模块") + " · " + x.title + "（" + [x.ref, x.itemTypeName, x.targetVersionName].filter(Boolean).join(" · ") + "）");
+        + (x.module || "未分分类") + " · " + x.title + "（" + [x.ref, x.itemTypeName, x.targetVersionName].filter(Boolean).join(" · ") + "）");
     });
     if (idx.demands) {
       heading("demands", "需求兑现");

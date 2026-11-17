@@ -506,7 +506,7 @@ function renderReadAssoc(){
     '<button type="button" class="ev-link" data-ev-goto="deps" title="展开依赖编辑（即时生效，联动甘特）">' + esc(depText) + '</button>' + depEdit + '</dd>';
   dl.innerHTML = [
     projRow,
-    evRow("模块", catNameById(t.categoryId || rt.formCat) || "未指定", "", ""),
+    evRow("分类", catNameById(t.categoryId || rt.formCat) || "未分类", "", ""),
     evRow("负责人", ownerNameNow() || "未分配", "", ""),
     versionRow,
     evAssocRow("关联需求", "demand", demandId, demandId ? (demandNameNow() || "未关联") : "未关联", "打开需求详情"),
@@ -797,7 +797,7 @@ function formFieldsDirty(){
 }
 /* 409 冲突：列出服务器相对本次打开时已变化的字段，供用户选择重载或覆盖 */
 var CONFLICT_FIELDS = [
-  ["title", "标题"], ["description", "描述"], ["priority", "优先级"], ["categoryId", "模块"],
+  ["title", "标题"], ["description", "描述"], ["priority", "优先级"], ["categoryId", "分类"],
   ["owner", "负责人"], ["boardColumn", "状态"], ["startDate", "开始日期"], ["dueDate", "截止日期"],
   ["reqId", "所属项目"], ["itemType", "类型"], ["severity", "严重度"], ["environment", "环境"],
   ["progress", "进度"], ["estimateMinutes", "预计耗时"], ["note", "备注"], ["branchId", "分支"],
@@ -1462,8 +1462,8 @@ function syncDrawerFacts(){
   }
   if($("rfCategory")){
     var catName = catNameById(rt.formCat) || "";
-    $("rfCategory").innerHTML = catName ? esc(catName) : '<span class="rf-empty">未指定</span>';
-    $("rfCategory").title = catName || "点击指定模块";
+    $("rfCategory").innerHTML = catName ? esc(catName) : '<span class="rf-empty">未分类</span>';
+    $("rfCategory").title = catName || "点击指定分类";
   }
   var versionText = versionNamesNow();
   if($("rfVersion")){
@@ -1902,7 +1902,7 @@ function syncAutoProject(){
   var want = opt ? (opt.getAttribute("data-req") || "") : "";
   badge.hidden = !(want && reqSel && reqSel.value === want);
 }
-/* 「更多设置」收起时也要看得见已选值；模块已常驻归属条，不再重复展示 */
+/* 「更多设置」收起时也要看得见已选值；分类已常驻归属条，不再重复展示 */
 var RECUR_LABELS = { daily:"每天", weekly:"每周", monthly:"每月" };
 function syncMoreSummary(){
   var el = $("drawerMoreSummary");
@@ -2077,7 +2077,7 @@ function buildFormControls(){
   syncCatSeg();
   populateColSelect();
 }
-/* 模块已降到项目级：候选只列指定项目的模块；未挂项目无模块可选（提交后为「未指定」） */
+/* 分类已降到项目级：候选只列指定项目的分类；未挂项目无分类可选（提交后为「未分类」） */
 function projCats(reqId){
   if(!reqId) return [];
   return rt.categoriesCache.filter(function(c){ return c.projectId === reqId; });
@@ -2086,26 +2086,27 @@ function syncCatSeg(){
   if(!segCat) return;
   var reqId = currentReqId();
   if(!reqId){
-    segCat.innerHTML = '<span class="foot-note">未挂项目，模块为「未指定」</span>';
+    segCat.innerHTML = '<span class="foot-note">未挂项目，分类为「未分类」</span>';
     syncCatPath();
     return;
   }
   var cats = projCats(reqId);
   if(!cats.length){
-    var cfg = canManageProject(reqId)
+    /* 项目写成员即可建分类，删除才要求管理员或项目负责人 */
+    var cfg = canEditReq(reqId)
       ? '<button class="chip" type="button" data-cat-cfg="1">去项目设置添加</button>'
       : "";
-    segCat.innerHTML = '<span class="foot-note">该项目还没有模块</span>' + cfg;
+    segCat.innerHTML = '<span class="foot-note">该项目还没有分类</span>' + cfg;
     syncCatPath();
     return;
   }
-  segCat.innerHTML = '<button type="button" data-fcat="" aria-pressed="' + (rt.formCat === "") + '">未指定</button>' +
+  segCat.innerHTML = '<button type="button" data-fcat="" aria-pressed="' + (rt.formCat === "") + '">未分类</button>' +
     cats.map(function(c){
       return '<button type="button" data-fcat="' + esc(c.id) + '" aria-pressed="' + (c.id === rt.formCat) + '">' + esc(c.name) + '</button>';
     }).join("");
   syncCatPath();
 }
-/* 模块路径：选中后回显完整层级，避免同名节点选错 */
+/* 分类路径：选中后回显完整层级，避免同名节点选错 */
 function syncCatPath(){
   var line = $("catPathLine"), note = $("catNote");
   if(!line) return;
@@ -2127,7 +2128,7 @@ function syncCatPath(){
   }
   if(note) note.hidden = !(reqId && cats.length);
 }
-/* 切换项目后校准模块选中：原模块不属于新项目则回到「未指定」，空值本身合法不再回落第一项 */
+/* 切换项目后校准分类选中：原分类不属于新项目则回到「未分类」，空值本身合法不再回落第一项 */
 function ensureCatForProject(reqId){
   if(rt.formCat && !projCats(reqId).some(function(c){ return c.id === rt.formCat; })){
     rt.formCat = "";
@@ -2605,7 +2606,7 @@ function openTaskDrawer(colId, task, defaults){
     if(iEstimate) iEstimate.value = task.estimateMinutes ? (task.estimateMinutes / 60) : "";
     renderActualEstimate(task.totalMinutes, task.estimateMinutes);
     rt.formPri = task.priority || "P2";
-    /* 模块已删/不属于当前项目则视为「未指定」 */
+    /* 分类已删/不属于当前项目则视为「未分类」 */
     var taskCats = projCats(task.reqId || "");
     rt.formCat = taskCats.some(function(c){ return c.id === task.categoryId; }) ? task.categoryId : "";
     populateColSelect();
@@ -2673,7 +2674,7 @@ function openTaskDrawer(colId, task, defaults){
     if(iEstimate) iEstimate.value = "";
     renderActualEstimate(0, null);
     rt.formPri = (defaults && defaults.priority) || "P2";
-    /* 从需求拆解时沿用需求模块；显式传入（含空串=未指定）优先，只在没传时回落到该项目第一个 */
+    /* 从需求拆解时沿用需求分类；显式传入（含空串=未分类）优先，只在没传时回落到该项目第一个 */
     var presetCat = defaults && defaults.categoryId;
     var catExplicit = defaults && defaults.categoryId !== undefined;
     var catCands = projCats(initialReqId);
@@ -3725,7 +3726,7 @@ if(iReq) iReq.addEventListener("change", function(){
   if(demandSel) demandSel.value = "";
   rt.formDemandId = null;
   ensureDemand("");
-  /* 模块随项目走：原项目模块不再可选，回落到新项目第一个模块或「未指定」 */
+  /* 分类随项目走：原项目分类不再可选，回落到新项目第一个分类或「未分类」 */
   ensureCatForProject(iReq.value);
   syncAssocViewBtns();
   syncDrawerHead();
@@ -4496,7 +4497,7 @@ taskForm.addEventListener("submit", function(e){
         /* 新建时暂存的依赖要等工作项拿到 id 后才能落库；先记数量再关抽屉 */
         var pendingDepCount = createdId ? depState.pending.length : 0;
         if(createdId && saveAgain){
-          /* 保存并再建一条：保留项目 / 类型 / 优先级 / 模块 / 列，清空内容后重开同一抽屉 */
+          /* 保存并再建一条：保留项目 / 类型 / 优先级 / 分类 / 列，清空内容后重开同一抽屉 */
           var nextDefaults = {
             keepBackStack: true,
             reqId: payload.reqId || "",
@@ -5840,19 +5841,19 @@ function openTypeFact(anchor){
 function openCategoryFact(anchor){
   var reqId = currentReqId();
   var cats = projCats(reqId);
-  if(!reqId){ toast("先选择所属项目，再指定模块", "warn"); return; }
+  if(!reqId){ toast("先选择所属项目，再指定分类", "warn"); return; }
   if(!cats.length){
-    toast(canManageProject(reqId) ? "该项目还没有模块，可在项目设置里添加" : "该项目还没有模块，请联系项目负责人添加", "warn");
+    toast(canEditReq(reqId) ? "该项目还没有分类，可在项目设置里添加" : "该项目还没有分类，请联系项目负责人添加", "warn");
     return;
   }
   var items = '<button class="menu-item" type="button" data-fact-cat="">' +
-    '未指定' + (!rt.formCat ? '<span class="k">当前</span>' : '') + '</button>' +
+    '未分类' + (!rt.formCat ? '<span class="k">当前</span>' : '') + '</button>' +
     cats.map(function(c){
       return '<button class="menu-item" type="button" data-fact-cat="' + esc(c.id) + '">' +
         '<span style="width:8px;height:8px;border-radius:2px;background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"></span>' +
         esc(c.name) + (rt.formCat === c.id ? '<span class="k">当前</span>' : '') + '</button>';
     }).join("");
-  var el = factMenu("模块", items);
+  var el = factMenu("分类", items);
   el.addEventListener("click", function(e){
     var b = e.target.closest("[data-fact-cat]");
     if(!b) return;
@@ -5890,8 +5891,8 @@ function openProjectFact(anchor){
     UI.showConfirm({
       title: "切换所属项目？",
       msg: hasDemand
-        ? "切换后会解除当前需求关联，并按新项目重载模块、计划版本与负责人候选。"
-        : "切换后会按新项目重载模块、计划版本与负责人候选。",
+        ? "切换后会解除当前需求关联，并按新项目重载分类、计划版本与负责人候选。"
+        : "切换后会按新项目重载分类、计划版本与负责人候选。",
       okText: "切换项目"
     }).then(function(ok){
       if(!ok || !rt.editingId) return;

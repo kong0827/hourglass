@@ -45,7 +45,7 @@ public class TaskSaveRequest {
     private String testOwner;
 
     /** 模块ID（category.id；不填则用空间第一个模块） */
-    @Size(max = 32, message = "模块ID不合法")
+    @Size(max = 32, message = "分类ID不合法")
     private String categoryId;
 
     /** 看板列 id：内置 backlog/doing/test/testing/done 或自定义列（C 开头）；存在性由服务层校验 */

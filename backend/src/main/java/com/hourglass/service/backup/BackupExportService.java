@@ -575,7 +575,7 @@ public class BackupExportService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("ID,标题,描述,优先级,模块,标签,负责人,看板列,截止日期,所属项目,进度%,进度备注,完成时间,创建时间,"
+        sb.append("ID,标题,描述,优先级,分类,标签,负责人,看板列,截止日期,所属项目,进度%,进度备注,完成时间,创建时间,"
                 + "是否阻塞,卡点原因,累计工时(分钟),提醒时间,规划版本\r\n");
         for (Task t : tasks) {
             List<String> tags = tagMap.get(t.getId());

@@ -419,7 +419,7 @@ function enterDemandsView(){
   /* 浏览器可能无视 autocomplete，把上次搜索词直接写回输入框；以 demSmart.q 为准清理 */
   [0, 300, 1000, 2000, 4000].forEach(function(ms){ setTimeout(reconcileDemSearchInputs, ms); });
   loadViews().then(renderDemTabs);
-  /* 模块字典平时由看板加载；直接进需求池时这里补一次，否则模块列与模块筛选都拿不到候选 */
+  /* 分类字典平时由看板加载；直接进需求池时这里补一次，否则分类列与分类筛选都拿不到候选 */
   var catSig = JSON.stringify(rt.categoriesCache || []);
   loadCategories().then(function(){
     if(activeView !== "demands" || !demands.length) return;
@@ -1149,7 +1149,7 @@ function demWorkLanesHTML(){
 var DEM_WORK_COL_DEFS = {
   title:{ label:"需求", w:"minmax(180px,2.2fr)", min:180 },
   kind:{ label:"类型", w:"76px", min:76 },
-  category:{ label:"模块", w:"104px", min:104 },
+  category:{ label:"分类", w:"104px", min:104 },
   priority:{ label:"优先级", w:"72px", min:72, sort:"priority" },
   stage:{ label:"交付阶段", w:"112px", min:112 },
   wsjf:{ label:"WSJF", w:"72px", min:72, sort:"wsjf", align:"right" },
@@ -1303,10 +1303,10 @@ function demandCell(d, key){
   return "—";
 }
 
-/* ---------- 列表行内编辑：优先级 / 状态 / 所属项目 / 期望交付 / 目标版本 / 模块 / 来源 ----------
+/* ---------- 列表行内编辑：优先级 / 状态 / 所属项目 / 期望交付 / 目标版本 / 分类 / 来源 ----------
    只改列表表格；看板卡片继续用拖拽与行内主按钮。状态沿用原状态机动作，
    需要原因或版本的仍打开原弹窗，避免绕过流转规则。
-   模块与来源没有专用端点，走整单 PUT：列表行已含 description/acceptText/wsjf 等全部字段，
+   分类与来源没有专用端点，走整单 PUT：列表行已含 description/acceptText/wsjf 等全部字段，
    按 demandSaveBody 回填后只覆盖目标字段，不会把说明类内容清空。 */
 function demInlineWritable(d){
   return !!d && !isClosedDemand(d) && canWriteDemand(d);
@@ -1344,13 +1344,13 @@ function demExpectCell(d){
     '<span class="dem-inline-date-t' + (text ? "" : " is-empty") + '">' + esc(text || "待评估") + '</span>',
     "修改期望交付");
 }
-/* 模块候选按需求所属项目过滤；缓存未加载时保留原值，避免一次保存把模块悄悄改掉 */
+/* 分类候选按需求所属项目过滤；缓存未加载时保留原值，避免一次保存把分类悄悄改掉 */
 function demCategoryCell(d){
   if(!demInlineWritable(d)) return catTag(d.categoryId) || "—";
   var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === d.reqId; });
   if(!cats.length) return catTag(d.categoryId) || "—";
   return demInlineTrigger("category", d,
-    catTag(d.categoryId) || '<span class="dem-inline-date-t is-empty">未指定</span>', "修改模块");
+    catTag(d.categoryId) || '<span class="dem-inline-date-t is-empty">未分类</span>', "修改分类");
 }
 /* 单元格统一触发器：读态就是普通文本或标签，悬停/聚焦才露出箭头与底色，点开才出现选项 */
 function demInlineTrigger(kind, d, inner, title, extraCls){
@@ -1479,12 +1479,12 @@ function openDemInlineMenu(btn){
   if(kind === "category"){
     var curCat = d.categoryId || "";
     var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === d.reqId; });
-    demInlineMenu(btn, "模块", [{ value:"", current:!curCat, html:"未指定模块" }].concat(cats.map(function(c){
+    demInlineMenu(btn, "分类", [{ value:"", current:!curCat, html:"未分类" }].concat(cats.map(function(c){
       return { value:c.id, current:c.id === curCat, html:esc(c.name) };
     })), function(next){
       if(next === curCat) return;
       demPutRow(d, { categoryId:next || null },
-        next ? ("模块已改为「" + catNameById(next) + "」") : "已清除模块", btn);
+        next ? ("分类已改为「" + catNameById(next) + "」") : "已清除分类", btn);
     });
   }
 }
@@ -1560,7 +1560,7 @@ function demQuickUpdate(el, d, action, payload, okMsg, revert){
     if(ex.code === 409) refreshDemandsInline();
   });
 }
-/* 模块 / 来源走整单 PUT：列表行字段齐全，回填后只覆盖目标字段 */
+/* 分类 / 来源走整单 PUT：列表行字段齐全，回填后只覆盖目标字段 */
 function demPutRow(d, patch, okMsg, el, revert){
   if(el) el.disabled = true;
   var body = demandSaveBody(d);
@@ -1946,9 +1946,15 @@ function demFilterMenuHTML(boardOnly){
     return '<button class="chip" type="button" data-dem-f="kinds" data-dem-fv="' + esc(k) + '" aria-pressed="' + on + '">' +
       esc(k) + ' <span class="n">' + (counts.kinds[k] || 0) + '</span></button>';
   }).join("");
-  /* 模块按字典顺序展示；模块删除会级联迁移需求，不存在悬空 ID，字典未加载时暂不展示 */
-  var catOptions = (rt.categoriesCache || []).map(function(c){ return {id:c.id, name:c.name}; });
-  /* 空模块只用于分组呈现，不放进筛选项：服务端筛选按模块ID传参，空值无法与"未传"区分 */
+  /* 分类只在单项目范围内有意义：看板取当前项目；列表要求恰好选中一个项目。
+     跨项目不再下发分类 chip，避免把不同项目的同名分类混在一起筛。 */
+  var catScopeReq = boardOnly
+    ? (rt.demandReqId || "")
+    : (demSmart.reqs.length === 1 ? demSmart.reqs[0] : "");
+  var catOptions = catScopeReq
+    ? (rt.categoriesCache || []).filter(function(c){ return c.projectId === catScopeReq; })
+    : [];
+  /* 空分类只用于分组呈现，不放进筛选项：服务端筛选按分类ID传参，空值无法与"未传"区分 */
   var catInner = catOptions.filter(function(o){ return o.id !== ""; }).map(function(o){
     var on = demSmart.cats.indexOf(o.id) !== -1;
     if(!(counts.cats[o.id] > 0) && !on) return "";
@@ -1962,10 +1968,13 @@ function demFilterMenuHTML(boardOnly){
       esc(r.name) + ' <span class="n">' + (counts.reqs[r.id] || 0) + '</span></button>';
   }).join("");
   var html = '<div class="menu-title">筛选需求</div>' +
-    section("优先级", priInner) + section("类型", kindInner) + section("模块", catInner)
+    section("优先级", priInner) + section("类型", kindInner) + section("分类", catInner)
     + (boardOnly ? "" : section("项目", reqInner));
   if(!priInner && !kindInner && !catInner && (boardOnly || !reqInner)){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前条件下没有可筛选的选项。</p></div>';
+  }
+  if(!boardOnly && demSmart.reqs.length !== 1){
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">分类按项目隔离，选中单个项目后可筛选分类。</p></div>';
   }
   html += '<div class="menu-foot"><button class="btn sm" type="button" data-dem-f-reset>清空筛选</button></div>';
   return html;
@@ -1983,8 +1992,14 @@ function openDemFilterPop(anchor, boardOnly){
     }
     var b = e.target.closest("[data-dem-f]");
     if(!b) return;
+    var prevCatScope = demSmart.reqs.length === 1 ? demSmart.reqs[0] : "";
     var arr = demSmart[b.dataset.demF], i = arr.indexOf(b.dataset.demFv);
     if(i === -1) arr.push(b.dataset.demFv); else arr.splice(i, 1);
+    /* 分类候选只属于一个项目：项目范围一变就清空已选分类，避免筛出空结果 */
+    if(b.dataset.demF === "reqs"){
+      var nextCatScope = demSmart.reqs.length === 1 ? demSmart.reqs[0] : "";
+      if(nextCatScope !== prevCatScope) demSmart.cats = [];
+    }
     el.innerHTML = demFilterMenuHTML(boardOnly);
     demStateChanged();
   });
@@ -2031,8 +2046,8 @@ function initDemSmartBar(){
   demSmartBar.innerHTML =
     '<div class="smart-view-tabs" role="tablist" aria-label="需求视图"></div>' +
     '<div class="smart-view-tools">' +
-      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索全部需求…" title="在当前空间需求池中搜索需求 / 描述 / 来源 / 模块 / 编号" aria-label="搜索当前空间全部需求" />' +
-      '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 模块 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
+      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索全部需求…" title="在当前空间需求池中搜索需求 / 描述 / 来源 / 分类 / 编号" aria-label="搜索当前空间全部需求" />' +
+      '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 分类 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-dem-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
         '<option value="set">按项目集</option><option value="project">按项目</option><option value="kind">按类型</option></select></label>' +
@@ -2052,8 +2067,8 @@ function initDemSmartBar(){
   demBoardBar.className = "dem-board-bar";
   demBoardBar.hidden = true;
   demBoardBar.innerHTML =
-    '<input class="input demb-search" type="search" data-demb-q placeholder="搜索本项目需求…" title="在当前项目需求中搜索标题 / 描述 / 来源 / 模块 / 编号" aria-label="搜索当前项目需求" />' +
-    '<button class="chip ghost" type="button" data-demb-filter aria-haspopup="true" aria-expanded="false" title="筛选当前项目需求（优先级 / 类型 / 模块）">筛选 <span class="n" data-demb-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
+    '<input class="input demb-search" type="search" data-demb-q placeholder="搜索本项目需求…" title="在当前项目需求中搜索标题 / 描述 / 来源 / 分类 / 编号" aria-label="搜索当前项目需求" />' +
+    '<button class="chip ghost" type="button" data-demb-filter aria-haspopup="true" aria-expanded="false" title="筛选当前项目需求（优先级 / 类型 / 分类）">筛选 <span class="n" data-demb-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
     '<button class="chip ghost demb-clear" type="button" data-demb-clear hidden>清除</button>' +
     demBoardStageFilterHTML() +
     '<span class="demb-spacer"></span>' +
@@ -2671,16 +2686,16 @@ function findDemand(id){
   for(var i = 0; i < demands.length; i++) if(demands[i].id === id) return demands[i];
   return null;
 }
-/* 模块候选按所选项目过滤。新建/换项目时（fallbackFirst）选中值不可用才回落到第一个模块；
-   编辑已有需求时必须保留原值：「未指定模块」不能被悄悄改成第一个模块，
-   模块缓存过期找不到原模块时也保留原 id，避免一次普通保存把模块改掉。 */
+/* 分类候选按所选项目过滤。新建/换项目时（fallbackFirst）选中值不可用才回落到第一个分类；
+   编辑已有需求时必须保留原值：「未分类」不能被悄悄改成第一个分类，
+   分类缓存过期找不到原分类时也保留原 id，避免一次普通保存把分类改掉。 */
 function syncDemandCatOptions(reqId, selectedId, fallbackFirst){
   var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === reqId; });
   var known = !!selectedId && cats.some(function(c){ return c.id === selectedId; });
   var keepUnknown = !fallbackFirst && !!selectedId && !known;
-  dCategory.innerHTML = '<option value="">未指定模块</option>' + cats.map(function(c){
+  dCategory.innerHTML = '<option value="">未分类</option>' + cats.map(function(c){
     return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>';
-  }).join("") + (keepUnknown ? '<option value="' + esc(selectedId) + '">当前模块（列表未加载）</option>' : "");
+  }).join("") + (keepUnknown ? '<option value="' + esc(selectedId) + '">当前分类（列表未加载）</option>' : "");
   var val = (known || keepUnknown) ? selectedId : (fallbackFirst && cats.length ? cats[0].id : "");
   dCategory.value = val;
   return val;
@@ -2791,7 +2806,7 @@ function openDemandDialog(d){
   }
   dSource.value = d ? (d.source || "") : "";
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
-  /* 模块按所选项目过滤：候选只列该项目下的模块 */
+  /* 分类按所选项目过滤：候选只列该项目下的分类 */
   syncDemandCatOptions(dReq.value, d ? (d.categoryId || "") : "", !d);
   /* 提醒人只在新建时可选；编辑态名单在详情浮层维护，避免表单与浮层两头改 */
   resetDemandWatchPick();
@@ -2828,8 +2843,8 @@ function openDemandDialog(d){
   setDemandFormLocked(!!d && d.status !== "review");
   var lockNote = $("demandLockNote");
   if(lockNote) lockNote.textContent = d && d.status === "done"
-    ? "该需求已完成，这里只更新描述、验收标准、来源、模块与 WSJF；标题与优先级在详情里直接点击修改，版本与计划日期不再调整。"
-    : "该需求已进入流转，这里只更新描述、验收标准、来源、模块与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。";
+    ? "该需求已完成，这里只更新描述、验收标准、来源、分类与 WSJF；标题与优先级在详情里直接点击修改，版本与计划日期不再调整。"
+    : "该需求已进入流转，这里只更新描述、验收标准、来源、分类与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。";
   demandFormBaseline = demandFormSnapshot();
   updateDemandCheckResume();
   UI.openModal($("dlgDemand"), "input");
@@ -4065,7 +4080,7 @@ function demandDetailPlain(text){
 }
 /* ---------- 需求详情就地编辑 ----------
    文案（标题/描述/验收）点开即改，失焦或 ⌘/Ctrl+Enter 保存、Esc 还原；
-   属性（优先级/期望交付/目标版本/模块/来源）点开弹层选择后直接保存。
+   属性（优先级/期望交付/目标版本/分类/来源）点开弹层选择后直接保存。
    保存后只刷新当前详情，不再关闭重开；同一详情内的写操作串行，避免 revision 互相覆盖。 */
 function demandSaveQueued(layer, work){
   var prev = layer.__demSaveQueue || Promise.resolve();
@@ -4288,14 +4303,14 @@ function openDemandModuleFact(anchor, ctx){
   var menu = document.createElement("div");
   menu.className = "menu";
   menu.style.minWidth = "200px";
-  menu.innerHTML = '<div class="menu-title">模块</div>'
-    + '<button class="menu-item" type="button" data-dem-fact-cat="">未指定模块'
+  menu.innerHTML = '<div class="menu-title">分类</div>'
+    + '<button class="menu-item" type="button" data-dem-fact-cat="">未分类'
     + (!cur ? '<span class="k">当前</span>' : '') + '</button>'
     + cats.map(function(c){
         return '<button class="menu-item" type="button" data-dem-fact-cat="' + esc(c.id) + '">' + esc(c.name)
           + (c.id === cur ? '<span class="k">当前</span>' : '') + '</button>';
       }).join("")
-    + (cats.length ? "" : '<p class="foot-note" style="padding:8px 10px;margin:0">该项目还没有模块，可在项目设置里添加</p>');
+    + (cats.length ? "" : '<p class="foot-note" style="padding:8px 10px;margin:0">该项目还没有分类，可在项目设置里添加</p>');
   UI.openPop(menu, anchor, { align:"left", width:220, onClose:function(){ menu.remove(); } });
   menu.addEventListener("click", function(e){
     var b = e.target.closest("[data-dem-fact-cat]");
@@ -4304,7 +4319,7 @@ function openDemandModuleFact(anchor, ctx){
     var next = b.dataset.demFactCat || "";
     if(next === cur) return;
     demandPutField(ctx, { categoryId:next || null },
-      next ? ("模块已改为「" + catNameById(next) + "」") : "已清除模块");
+      next ? ("分类已改为「" + catNameById(next) + "」") : "已清除分类");
   });
   var first = menu.querySelector(".menu-item");
   if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
@@ -4601,7 +4616,7 @@ function renderDemandDetail(d){
   var relFacts = [
     ["目标版本", demandVersionName(d) || "待规划"],
     ["所属项目", reqNameById(d.reqId) || "未归属项目"],
-    ["模块", catNameById(d.categoryId) || "未指定模块"],
+    ["分类", catNameById(d.categoryId) || "未分类"],
     ["来源", d.source || "—"]
   ];
   var wsjf = (d.wsjfBusiness != null)
@@ -4632,7 +4647,7 @@ function renderDemandDetail(d){
       ["type", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>',
         "需求类型", d.itemKind || "其他", false],
       ["module", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="3.2" y="11" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="11" width="5.8" height="5.8" rx="1.3"/></svg>',
-        "模块", catNameById(d.categoryId) || "未指定模块", true],
+        "分类", catNameById(d.categoryId) || "未分类", true],
       ["source", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 11.2 5 4.6h10l1.6 6.6v4.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M3.6 11.4h3.6l.9 1.7h3.8l.9-1.7h3.6"/></svg>',
         "来源", d.source || "未填写", true]
     ];
@@ -5163,7 +5178,7 @@ function demandLogChange(log){
     var before = data.before || {}, after = data.after || {}, parts = [];
     /* 快照里同一空值可能是 null / undefined / 空串，直接比较会渲染出「未设置 → 未设置」这种假变更 */
     var norm = function(v){ return (v === null || v === undefined || v === "") ? "" : String(v); };
-    [["reqId", "所属项目"], ["categoryId", "模块"], ["versionName", "目标版本"], ["plannedStart", "计划开始"],
+    [["reqId", "所属项目"], ["categoryId", "分类"], ["versionName", "目标版本"], ["plannedStart", "计划开始"],
       ["plannedEnd", "计划结束"], ["expectDate", "期望交付"], ["priority", "优先级"], ["status", "状态"]].forEach(function(field){
       var key = field[0], a = norm(before[key]), b = norm(after[key]);
       if(a === b) return;
@@ -5179,7 +5194,9 @@ function demandLogChange(log){
 /* ---------- 事件 ---------- */
 
 if(demandReq) demandReq.addEventListener("change", function(){
-  rt.demandReqId = demandReq.value || null;
+  var nextReq = demandReq.value || null;
+  if(nextReq !== rt.demandReqId) demSmart.cats = [];
+  rt.demandReqId = nextReq;
   loadDemands();
 });
 if($("btnDemandNew")) $("btnDemandNew").addEventListener("click", function(){
@@ -5210,7 +5227,7 @@ if($("demandCheckResume")) $("demandCheckResume").addEventListener("click", func
 });
 bindDemandCheckDialog();
 if(dReq) dReq.addEventListener("change", function(){
-  /* 换项目后原模块不再可选，回落到新项目第一个模块或「未指定」 */
+  /* 换项目后原分类不再可选，回落到新项目第一个分类或「未分类」 */
   syncDemandCatOptions(dReq.value, dCategory.value, true);
   /* 提醒人候选取自项目花名册：换项目后旧选择可能已不可见，直接清空重选 */
   if(!editingDemandId){

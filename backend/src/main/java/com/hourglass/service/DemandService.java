@@ -1237,7 +1237,7 @@ public class DemandService {
         }
         d.setRevision(oldRevision + 1);
         logChange(d, userId, "move", "所属项目：" + oldName + " → " + targetName
-                + (categoryCleared ? "；原模块不属于目标项目，已清空" : ""), null, before);
+                + (categoryCleared ? "；原分类不属于目标项目，已清空" : ""), null, before);
         notifyCreator(d, userId, "需求「" + d.getTitle() + "」所属项目已变更",
                 "从「" + oldName + "」移至「" + targetName + "」");
         return getVisible(workspaceId, userId, id);
@@ -1666,10 +1666,10 @@ public class DemandService {
         }
         Category cat = categoryMapper.selectById(workspaceId, categoryId);
         if (cat == null) {
-            throw AppException.badRequest("模块不存在：" + categoryId);
+            throw AppException.badRequest("分类不存在：" + categoryId);
         }
         if (!projectId.equals(cat.getProjectId())) {
-            throw AppException.badRequest("模块不属于该项目");
+            throw AppException.badRequest("分类不属于该项目");
         }
         return categoryId;
     }

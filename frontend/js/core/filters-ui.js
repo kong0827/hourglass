@@ -113,7 +113,7 @@ function pubStateLabel(v){
   return "全部";
 }
 function itemVal(o){ return o.id !== undefined ? o.id : o.name; }
-/* 项目 / 模块：与其它维度一样带计数，「未指定」作为空值项保留在末位 */
+/* 项目 / 分类：与其它维度一样带计数，「未分类」作为空值项保留在末位 */
 function reqItems(meta){
   var items = [];
   (meta.reqs || []).forEach(function(r){
@@ -126,16 +126,31 @@ function reqItems(meta){
   if(noneCount > 0 || noneOn) items.push({id:"__none", name:"未归类", count:noneCount, on:noneOn});
   return items;
 }
+/* 分类只在单项目范围可选：恰好选中一个项目时返回其 ID，否则返回空。
+   全局范围不再提供跨项目分类，已保存的旧条件仍保留在 state.cats 里以便清除。 */
+function catScopeReq(){
+  return state.reqs.length === 1 && state.reqs[0] !== "__none" ? state.reqs[0] : "";
+}
+function catProjectOf(id){
+  for(var i = 0; i < rt.categoriesCache.length; i++){
+    if(rt.categoriesCache[i].id === id) return rt.categoriesCache[i].projectId || "";
+  }
+  return "";
+}
 function catItems(meta){
   var items = [];
+  var scope = catScopeReq();
   (meta.cats || []).forEach(function(c){
     var on = state.cats.indexOf(c.id) !== -1;
+    /* 全局只保留已选中的旧条件，避免把不同项目的同名分类混在一起筛 */
+    if(!scope && !on) return;
+    if(scope && catProjectOf(c.id) !== scope) return;
     if(c.count === 0 && !on) return;
     items.push({id:c.id, name:c.name, count:c.count, on:on});
   });
   var noneOn = state.cats.indexOf("__none") !== -1;
   var noneCount = meta.catUnassigned || 0;
-  if(noneCount > 0 || noneOn) items.push({id:"__none", name:"未指定模块", count:noneCount, on:noneOn});
+  if(noneCount > 0 || noneOn) items.push({id:"__none", name:"未分类", count:noneCount, on:noneOn});
   return items;
 }
 function tagItems(meta){
@@ -150,7 +165,7 @@ function tagItems(meta){
 /* 已选维度在筛选栏里只留一枚可清除的 chip；可选值统一收进下拉 Popover */
 function dimTitle(kind){
   return kind === "owner" ? "负责人" : (kind === "type" ? "类型" : (kind === "version" ? "版本"
-    : (kind === "pri" ? "优先级" : (kind === "req" ? "项目" : (kind === "cat" ? "模块" : "标签")))));
+    : (kind === "pri" ? "优先级" : (kind === "req" ? "项目" : (kind === "cat" ? "分类" : "标签")))));
 }
 function dimValueLabel(kind, value, items){
   if(kind === "pri") return priName(value);
@@ -461,7 +476,7 @@ function dateInput(key, label){
 /* 剩余 8 个维度不再纵向平铺：左栏一屏列出，右栏只渲染当前维度的取值。
    顶部搜索同时匹配维度名与取值；选中即生效，不引入「应用」按钮。 */
 var MF_DIMS = [
-  { key:"cats", title:"模块", icon:"folder" },
+  { key:"cats", title:"分类", icon:"folder" },
   { key:"tags", title:"标签", icon:"tag" },
   { key:"types", title:"类型", icon:"checklist" },
   { key:"versions", title:"版本", icon:"branch" },
@@ -662,17 +677,24 @@ function applyMfValSearch(){
   var empty = box.querySelector(".mf-opt-empty");
   if(empty) empty.hidden = shown > 0;
 }
+/* 分类维度只在单项目范围或已有旧条件时出现；其余维度常驻 */
+function mfDims(){
+  return MF_DIMS.filter(function(d){
+    return d.key !== "cats" || catScopeReq() || state.cats.length;
+  });
+}
 function mfTotal(){
   var n = 0;
-  MF_DIMS.forEach(function(d){ n += mfSelectedCount(d.key); });
+  mfDims().forEach(function(d){ n += mfSelectedCount(d.key); });
   return n;
 }
 function renderMoreFilter(meta){
   mfMeta = meta;
-  if(!mfDef(mfDim)) mfDim = "cats";
+  var dims = mfDims();
+  if(!mfDef(mfDim) || dims.indexOf(mfDef(mfDim)) === -1) mfDim = dims[0] ? dims[0].key : "";
   var q = String(mfQ || "").trim().toLowerCase();
   var visible = [];
-  var dimHTML = MF_DIMS.map(function(d){
+  var dimHTML = dims.map(function(d){
     var hit = !q || mfDimHasQuery(d.key, q);
     if(hit) visible.push(d.key);
     var n = mfSelectedCount(d.key);
@@ -706,7 +728,9 @@ function renderMoreFilter(meta){
   moreFilterCount.textContent = n;
 }
 function openMoreFilter(dimKey, focusSearch){
-  mfDim = mfDef(dimKey) ? dimKey : (mfDef(mfDim) ? mfDim : "cats");
+  var dims = mfDims();
+  var allowed = function(k){ return dims.some(function(d){ return d.key === k; }); };
+  mfDim = mfDef(dimKey) && allowed(dimKey) ? dimKey : (allowed(mfDim) ? mfDim : (dims[0] ? dims[0].key : ""));
   mfQ = "";
   mfValQ = "";
   renderMoreFilter(state.board ? state.board.meta : null);
@@ -1424,8 +1448,8 @@ function hasGanttLayout(p){
     return p[k] !== undefined && p[k] !== null;
   });
 }
-/* 应用视图时剔除字典中已不存在的模块：模块删除不会回刷已保存视图，旧 ID 会筛出空结果。
-   模块缓存尚未加载（空）时无法校验，保持原样，避免把有效筛选误删。 */
+/* 应用视图时剔除字典中已不存在的分类：分类删除不会回刷已保存视图，旧 ID 会筛出空结果。
+   分类缓存尚未加载（空）时无法校验，保持原样，避免把有效筛选误删。 */
 function pruneUnknownCats(cats){
   var cache = rt.categoriesCache || [];
   if(!cache.length || !cats.length) return cats;

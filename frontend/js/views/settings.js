@@ -11,7 +11,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { saveViewState } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { loadPriorities } from "../core/priorities.js";
-import { canManageProject, catTag, projectOptionsHTML, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
+import { canEditReq, canManageProject, catTag, projectOptionsHTML, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
@@ -178,7 +178,8 @@ function openRoleGuide(){
     roleGuideRow(["彻底删除回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["添加 / 编辑 / 排序看板列", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
     roleGuideRow(["删除看板列", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["维护项目模块（添加 / 改名 / 排序 / 删除）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "仅项目负责人", ROLE_GUIDE_NO]),
+    roleGuideRow(["维护项目分类（添加 / 改名 / 排序）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
+    roleGuideRow(["删除项目分类", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "仅项目负责人", ROLE_GUIDE_NO]),
     roleGuideRow(["新建 / 编辑 / 改状态分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
     roleGuideRow(["删除分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
     roleGuideRow(["甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -1302,7 +1303,7 @@ $("btnColAdd").addEventListener("click", function(){
     loadBoard({silent:true});
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
 });
-/* 模块配置：模块挂在项目下，设置页提供统一入口（项目页编辑项目里也有同一份配置） */
+/* 分类配置：分类挂在项目下，设置页提供统一入口（项目页编辑项目里也有同一份配置） */
 var wsCatProjectSel = $("wsCatProject"), wsCatList = $("wsCatList"),
     wsCatNewName = $("wsCatNewName"), wsCatNewColor = $("wsCatNewColor"), btnWsCatAdd = $("btnWsCatAdd");
 var wsCatProjects = [], wsCatCache = [], wsCatSeq = 0;
@@ -1334,7 +1335,7 @@ function loadWsCatProjects(){
       if($("wsCatCount")) $("wsCatCount").textContent = "";
       wsCatList.innerHTML = UI.emptyState({
         icon:"folder", title:"还没有项目",
-        text:"模块按项目配置，请先在「项目」中新建项目，再回来添加模块。"
+        text:"分类按项目配置，请先在「项目」中新建项目，再回来添加分类。"
       });
       renderWsCatCfg();
       return;
@@ -1366,27 +1367,29 @@ function loadWsCatCfg(){
 }
 function renderWsCatCfg(){
   if(!wsCatList) return;
-  var canManage = !!wsCatProjectId() && canManageProject(wsCatProjectId(), wsCatProjectOwner());
-  var readOnly = !canManage;
-  var canDel = canManage;
+  /* 写成员可添加 / 改名 / 排序；删除仍限空间主、管理员或项目负责人 */
+  var canWrite = !!wsCatProjectId() && canEditReq(wsCatProjectId());
+  var readOnly = !canWrite;
+  var canDel = !!wsCatProjectId() && canManageProject(wsCatProjectId(), wsCatProjectOwner());
   if($("wsCatCount")) $("wsCatCount").textContent = wsCatCache.length ? "共 " + wsCatCache.length + " 个" : "";
   if(!wsCatCache.length){
-    if(wsCatProjectId()) wsCatList.innerHTML = UI.colEmpty("该项目还没有模块，用下方输入框添加第一个");
+    if(wsCatProjectId()) wsCatList.innerHTML = UI.colEmpty("该项目还没有分类，用下方输入框添加第一个");
   }
   if(wsCatCache.length){
     wsCatList.innerHTML = wsCatCache.map(function(c, idx){
       return '<div class="cfg-row" data-wscat-id="' + esc(c.id) + '">' +
         '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-        '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-wscat-color aria-label="模块颜色"' + (readOnly ? " disabled" : "") + ' />' +
-        '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-wscat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
+        '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-wscat-color aria-label="分类颜色"' + (readOnly ? " disabled" : "") + ' />' +
+        '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-wscat-name aria-label="分类名称"' + (readOnly ? " disabled" : "") + ' />' +
         '<button class="cc-act" type="button" data-wscat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
         '<button class="cc-act" type="button" data-wscat-down title="下移"' + (readOnly || idx === wsCatCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-        '<button class="cc-act dan" type="button" data-wscat-del title="' + (canDel ? "删除模块" : "仅空间主、管理员或项目负责人可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+        '<button class="cc-act dan" type="button" data-wscat-del title="' + (canDel ? "删除分类" : "仅空间主、管理员或项目负责人可删除分类") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
       '</div>';
     }).join("");
   }
   [wsCatNewColor, wsCatNewName, btnWsCatAdd].forEach(function(el){ if(el) el.disabled = readOnly; });
-  if($("wsCatHint")) $("wsCatHint").hidden = !readOnly || !wsCatProjectId();
+  /* 能写但不能删时也说明删除权限边界 */
+  if($("wsCatHint")) $("wsCatHint").hidden = canDel || !wsCatProjectId();
   UI.wireTooltips(wsCatList);
 }
 function saveWsCatRow(id){
@@ -1395,9 +1398,9 @@ function saveWsCatRow(id){
   if(!row) return;
   var name = row.querySelector("[data-wscat-name]").value.trim();
   var color = row.querySelector("[data-wscat-color]").value;
-  if(!name){ toast("模块名不能为空", "warn"); loadWsCatCfg(); return; }
+  if(!name){ toast("分类名不能为空", "warn"); loadWsCatCfg(); return; }
   API.put("/api/categories/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
-    toast("已更新模块「" + name + "」", "fs");
+    toast("已更新分类「" + name + "」", "fs");
     loadWsCatCfg();
     wsCatRefreshDependents();
   }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); loadWsCatCfg(); });
@@ -1432,7 +1435,7 @@ if(wsCatList) wsCatList.addEventListener("click", function(e){
     for(var j = 0; j < wsCatCache.length; j++) if(wsCatCache[j].id === id) cat = wsCatCache[j];
     if(!cat) return;
     var others = wsCatCache.filter(function(c){ return c.id !== id; });
-    if(!others.length){ toast("至少需要保留一个模块", "warn"); return; }
+    if(!others.length){ toast("至少需要保留一个分类", "warn"); return; }
     var menu = document.createElement("div");
     menu.className = "menu";
     menu.style.minWidth = "200px";
@@ -1448,13 +1451,13 @@ if(wsCatList) wsCatList.addEventListener("click", function(e){
       if(!target) return;
       UI.closeAllPops();
       UI.showConfirm({
-        title:"删除模块",
-        msg:"删除模块「" + esc(cat.name) + "」？其下工作项与需求将改到「" + esc(target.name) + "」。",
-        okText:"删除模块"
+        title:"删除分类",
+        msg:"删除分类「" + esc(cat.name) + "」？其下工作项与需求将改到「" + esc(target.name) + "」。",
+        okText:"删除分类"
       }).then(function(ok){
         if(!ok) return;
         API.del("/api/categories/" + encodeURIComponent(id) + "?targetId=" + encodeURIComponent(target.id)).then(function(){
-          toast("已删除模块「" + cat.name + "」，工作项与需求已迁到「" + target.name + "」", "fs");
+          toast("已删除分类「" + cat.name + "」，工作项与需求已迁到「" + target.name + "」", "fs");
           loadWsCatCfg();
           wsCatRefreshDependents();
         }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
@@ -1467,9 +1470,9 @@ if(btnWsCatAdd) btnWsCatAdd.addEventListener("click", function(){
   var pid = wsCatProjectId();
   if(!pid){ toast("请先选择项目", "warn"); return; }
   var name = wsCatNewName.value.trim();
-  if(!name){ toast("请填写模块名称", "warn"); return; }
+  if(!name){ toast("请填写分类名称", "warn"); return; }
   API.post("/api/categories?project=" + encodeURIComponent(pid), { name: name, color: wsCatNewColor.value }).then(function(){
-    toast("已添加模块「" + name + "」", "fs");
+    toast("已添加分类「" + name + "」", "fs");
     wsCatNewName.value = "";
     loadWsCatCfg();
     wsCatRefreshDependents();
@@ -2741,7 +2744,7 @@ $("fileImport").addEventListener("change", function(e){
   UI.showConfirm({
     title:"导入任务备份",
     msg:"导入会覆盖当前空间的工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖与基线，并按工作项重建完成归档；同时清空工作项通知。已选文件：<b>" +
-      esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/模块<b>不会被导入或删除</b>。" +
+      esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/分类<b>不会被导入或删除</b>。" +
       "<br><br>v6 备份会连同<b>文档与分支</b>一起覆盖恢复，v8 备份还会恢复<b>项目版本、版本工作项绑定、需求池与首版上线日</b>，v10 备份还会恢复<b>测试用例、执行流水与文档评论</b>；旧备份不含这些数据时保留现状。旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
     okText:"继续导入"
   }).then(function(ok){
@@ -2799,10 +2802,10 @@ if(btnNavTelemetry) btnNavTelemetry.addEventListener("click", function(){
 });
 var btnReset = $("btnReset"), resetLabel = $("resetLabel");
 if(resetLabel) resetLabel.textContent = "清空任务数据";
-if(btnReset) btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与模块保留";
+if(btnReset) btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与分类保留";
 btnReset.addEventListener("click", function(){
   var n = totalTaskCount(), m = rt.reqList.length;
-  var desc = "将删除当前空间的 " + n + " 项工作项与 " + m + " 个项目，以及评论、依赖/基线、文档、文档评论、测试用例、版本与需求池、工作项通知和完成归档；分支、附件、时间线、视图、看板列与模块保留。"
+  var desc = "将删除当前空间的 " + n + " 项工作项与 " + m + " 个项目，以及评论、依赖/基线、文档、文档评论、测试用例、版本与需求池、工作项通知和完成归档；分支、附件、时间线、视图、看板列与分类保留。"
     + "执行前会自动导出当前空间的完整备份。此操作不可撤销。";
   UI.showPrompt({
     title:"清空任务数据",

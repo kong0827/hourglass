@@ -123,7 +123,7 @@ function renderCompletions(rows, month){
   }
   /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成时间），
      计时的首次/最后时间属于内部数据，不展示；测试证据独立两列，与开发窗口对照 */
-  var head = "<tr><th>工作项</th><th>项目</th><th>文档</th><th>负责人</th><th>模块</th>" +
+  var head = "<tr><th>工作项</th><th>项目</th><th>文档</th><th>负责人</th><th>分类</th>" +
     "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th><th>测试负责人</th><th>测试窗口</th></tr>";
   var body = rows.map(function(r){
     return "<tr>" +
@@ -201,7 +201,7 @@ function exportCompCSV(){
   API.getAllPages("/api/completions", {month: month, pub: compPub}).then(function(all){
     var rows = all || [];
     if(!rows.length){ toast(compPub ? "没有符合发布状态筛选的完成记录" : "这个月还没有完成记录", "warn"); return; }
-    var lines = [["工作项名称","详情","归属项目","关联文档","负责人","模块","优先级","发布状态",
+    var lines = [["工作项名称","详情","归属项目","关联文档","负责人","分类","优先级","发布状态",
       "开始时间","结束时间","总耗时(分钟)","总耗时","测试负责人","提测时间","测试开始","测试结束"]];
     rows.forEach(function(r){
       lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,

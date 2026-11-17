@@ -837,7 +837,7 @@ class DemandServiceScheduleTest {
         assertEquals("R2", log.path("after").path("reqId").asText());
         assertTrue(log.path("after").path("categoryId").isNull());
         verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("move"),
-                eq("所属项目：R1 → 目标项目；原模块不属于目标项目，已清空"), eq("U1"), anyString());
+                eq("所属项目：R1 → 目标项目；原分类不属于目标项目，已清空"), eq("U1"), anyString());
         verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
                 eq("需求「需求」所属项目已变更"), eq("从「R1」移至「目标项目」"),
                 eq("demand"), eq("D1"), eq("R2"));

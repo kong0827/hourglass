@@ -334,7 +334,7 @@ function syncTemplateHint(){
   var parts = [];
   if(hit && hit.columns && hit.columns.length) parts.push("列：" + hit.columns.join(" / "));
   if(hit && hit.docs && hit.docs.length) parts.push("文档：" + hit.docs.join(" / "));
-  if(hit && hit.modules && hit.modules.length) parts.push("测试模块：" + hit.modules.join(" / "));
+  if(hit && hit.modules && hit.modules.length) parts.push("测试分类：" + hit.modules.join(" / "));
   if(hit && hit.versionName) parts.push("默认版本：" + hit.versionName);
   rTemplateHint.textContent = parts.length
     ? "将补充 " + parts.join("；") + "。只补缺失项，不覆盖已有内容。"
@@ -730,7 +730,7 @@ function saveReq(){
   p.then(function(){
     toast(editing ? ("已更新项目「" + name + "」") : ("已新建项目「" + name + "」"), "fs");
     if(seq === projectFormSeq) resetReqForm();
-    /* 新建项目后端会预置默认模块，模块字典要立即刷新，否则任务抽屉/筛选举不到 */
+    /* 新建项目后端会预置默认分类，分类字典要立即刷新，否则任务抽屉/筛选举不到 */
     if(!editing) loadCategories(true);
     loadReqs().then(function(){
       renderReqList();
@@ -821,7 +821,7 @@ function deleteReq(id){
           (extras.length ? "；同时删除 " + extras.join("、") : ""), "fs");
         if(rt.editingReqId === id) resetReqForm();
         loadReqDocs(true);
-        /* 项目的模块清单随删除一并清理，模块字典要立即刷新 */
+        /* 项目的分类清单随删除一并清理，分类字典要立即刷新 */
         loadCategories(true);
         loadReqs().then(function(){
           renderReqList();
@@ -832,7 +832,7 @@ function deleteReq(id){
     });
   });
 }
-/* ---------- 项目抽屉 · 模块配置（模块按项目配置，仅编辑已有项目时展示） ---------- */
+/* ---------- 项目抽屉 · 分类配置（分类按项目配置，仅编辑已有项目时展示） ---------- */
 var projCatCache = [];
 var projCatReqId = "";
 function loadProjCats(reqId){
@@ -840,7 +840,7 @@ function loadProjCats(reqId){
   projCatReqId = forReq;
   if(projCatList) projCatList.innerHTML = UI.skeletonRows(2);
   return API.get("/api/categories?project=" + encodeURIComponent(forReq)).then(function(list){
-    /* 已切到另一个项目：旧项目的模块不能填进新弹窗（否则排序/新增会写错项目） */
+    /* 已切到另一个项目：旧项目的分类不能填进新弹窗（否则排序/新增会写错项目） */
     if(projCatReqId !== forReq) return;
     projCatCache = list || [];
     renderProjCats();
@@ -851,24 +851,26 @@ function loadProjCats(reqId){
 }
 function renderProjCats(){
   if(!projCatList) return;
-  var canManage = !!projCatReqId && canManageProject(projCatReqId);
-  var readOnly = !canManage;
-  var canDel = canManage;
+  /* 写成员即可建、改名、排序；删除仍限空间主 / 管理员 / 项目负责人 */
+  var canWrite = !!projCatReqId && canEditReq(projCatReqId);
+  var readOnly = !canWrite;
+  var canDel = !!projCatReqId && canManageProject(projCatReqId);
   projCatList.innerHTML = projCatCache.map(function(c, idx){
     return '<div class="cfg-row" data-proj-cat-id="' + esc(c.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-pcat-color aria-label="模块颜色"' + (readOnly ? " disabled" : "") + ' />' +
-      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-pcat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-pcat-color aria-label="分类颜色"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-pcat-name aria-label="分类名称"' + (readOnly ? " disabled" : "") + ' />' +
       '<button class="cc-act" type="button" data-pcat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
       '<button class="cc-act" type="button" data-pcat-down title="下移"' + (readOnly || idx === projCatCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-pcat-del title="' + (canDel ? "删除模块" : "仅空间主、管理员或项目负责人可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+      '<button class="cc-act dan" type="button" data-pcat-del title="' + (canDel ? "删除分类" : "仅空间主、管理员或项目负责人可删除分类") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
   ["projCatNewColor", "projCatNewName", "btnProjCatAdd"].forEach(function(id){
     var el = $(id);
     if(el) el.disabled = readOnly;
   });
-  if($("projCatHint")) $("projCatHint").hidden = !readOnly;
+  /* 能写但不能删时也给出提示，说明删除权限的边界 */
+  if($("projCatHint")) $("projCatHint").hidden = canDel;
   UI.wireTooltips(projCatList);
 }
 function refreshCatDependents(){
@@ -882,7 +884,7 @@ function saveProjCatRow(id){
   var name = row.querySelector("[data-pcat-name]").value.trim();
   var color = row.querySelector("[data-pcat-color]").value;
   if(!name){
-    toast("模块名不能为空", "warn");
+    toast("分类名不能为空", "warn");
     /* 只回填旧值，不整段重绘：重绘会拆掉行，紧接其后的点击（删除/排序）随按钮一起丢失 */
     var old = null;
     for(var i = 0; i < projCatCache.length; i++) if(projCatCache[i].id === id) old = projCatCache[i];
@@ -890,7 +892,7 @@ function saveProjCatRow(id){
     return;
   }
   API.put("/api/categories/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
-    toast("已更新模块「" + name + "」", "fs");
+    toast("已更新分类「" + name + "」", "fs");
     loadProjCats(projCatReqId);
     refreshCatDependents();
   }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); loadProjCats(projCatReqId); });
@@ -923,7 +925,7 @@ projCatList.addEventListener("click", function(e){
     for(var j = 0; j < projCatCache.length; j++) if(projCatCache[j].id === id) cat = projCatCache[j];
     if(!cat) return;
     var others = projCatCache.filter(function(c){ return c.id !== id; });
-    if(!others.length){ toast("至少需要保留一个模块", "warn"); return; }
+    if(!others.length){ toast("至少需要保留一个分类", "warn"); return; }
     var menu = document.createElement("div");
     menu.className = "menu";
     menu.style.minWidth = "200px";
@@ -939,13 +941,13 @@ projCatList.addEventListener("click", function(e){
       if(!target) return;
       UI.closeAllPops();
       UI.showConfirm({
-        title:"删除模块",
-        msg:"删除模块「" + esc(cat.name) + "」？其下工作项与需求将改到「" + esc(target.name) + "」。",
-        okText:"删除模块"
+        title:"删除分类",
+        msg:"删除分类「" + esc(cat.name) + "」？其下工作项与需求将改到「" + esc(target.name) + "」。",
+        okText:"删除分类"
       }).then(function(ok){
         if(!ok) return;
         API.del("/api/categories/" + encodeURIComponent(id) + "?targetId=" + encodeURIComponent(target.id)).then(function(){
-          toast("已删除模块「" + cat.name + "」，工作项与需求已迁到「" + target.name + "」", "fs");
+          toast("已删除分类「" + cat.name + "」，工作项与需求已迁到「" + target.name + "」", "fs");
           loadProjCats(projCatReqId);
           refreshCatDependents();
         }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
@@ -956,9 +958,9 @@ projCatList.addEventListener("click", function(e){
 $("btnProjCatAdd").addEventListener("click", function(){
   if(roleReadOnly()) return;
   var name = projCatNewName.value.trim();
-  if(!name){ toast("请填写模块名称", "warn"); return; }
+  if(!name){ toast("请填写分类名称", "warn"); return; }
   API.post("/api/categories?project=" + encodeURIComponent(projCatReqId), { name: name, color: projCatNewColor.value }).then(function(){
-    toast("已添加模块「" + name + "」", "fs");
+    toast("已添加分类「" + name + "」", "fs");
     projCatNewName.value = "";
     loadProjCats(projCatReqId);
     refreshCatDependents();
@@ -1093,7 +1095,7 @@ function openProjectDialog(id){
   reqFormTitle.textContent = id ? "编辑项目" : "新建项目";
   btnSaveReq.textContent = id ? "保存" : "新建项目";
   btnCancelReqEdit.hidden = !id;
-  /* 模块按项目配置：新建时项目尚不存在（首建后后端预置「其他」），仅编辑态展示 */
+  /* 分类按项目配置：新建时项目尚不存在（首建后后端预置「其他」），仅编辑态展示 */
   if(projCatCfg) projCatCfg.hidden = !id;
   if(id) loadProjCats(id);
   /* 发布检查策略只看项目负责人/管理员；新建时没有可写对象 */

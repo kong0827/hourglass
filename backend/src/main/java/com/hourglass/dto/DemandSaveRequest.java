@@ -34,7 +34,7 @@ public class DemandSaveRequest {
     private String itemKind;
 
     /** 模块ID（category.id；不填=未指定） */
-    @Size(max = 32, message = "模块ID不合法")
+    @Size(max = 32, message = "分类ID不合法")
     private String categoryId;
 
     @Pattern(regexp = "P0|P1|P2|P3", message = "优先级不合法")

@@ -52,7 +52,7 @@ var VIEWS = {
   board:    { title:"工作项", sub:"看板视图：按列流转；同组可切到列表、层级、影响链、日历与甘特", enter:null },
   workcolumn: { title:"工作项", sub:"列状态工作页：当前列的时间窗、聚合指标与分页明细", enter:lazyEnter("workcolumn", "enterWorkColumn") },
   list:     { title:"工作项", sub:"列表视图：沿用当前筛选，点击行打开详情抽屉", enter:enterListView },
-  tree:     { title:"工作项", sub:"层级视图：按项目/计划版本/模块缩进分组，父级进度自动聚合", enter:lazyEnter("tree", "enterTreeView") },
+  tree:     { title:"工作项", sub:"层级视图：按项目/计划版本/分类缩进分组，父级进度自动聚合", enter:lazyEnter("tree", "enterTreeView") },
   chain:    { title:"工作项", sub:"依赖影响链：选定中心工作项，沿前置/后继依赖看「动它牵动谁、它被谁卡住」", enter:lazyEnter("chain", "enterChainView") },
   calendar: { title:"工作项", sub:"日历视图：按 [开始日期, 实际结束日] 逐日铺开", enter:enterCalendarView },
   gantt:    { title:"工作项", sub:"甘特视图：按开始/截止日期排布；拖动条改期", enter:lazyEnter("gantt", "enterGanttView") },
@@ -99,7 +99,7 @@ var SUBNAV = {
   workitems: [
     { view:"board", label:"看板", title:"按状态分列，拖拽流转" },
     { view:"list", label:"列表", title:"表格字段、分组排序与批量操作" },
-    { view:"tree", label:"层级", title:"按项目/版本/模块缩进，父级进度自动聚合" },
+    { view:"tree", label:"层级", title:"按项目/版本/分类缩进，父级进度自动聚合" },
     { view:"chain", label:"影响链", title:"沿前置/后继依赖展开，动一个看一串" },
     { view:"calendar", label:"日历", title:"按日期铺开，格子可新建" },
     { view:"gantt", label:"甘特", title:"依赖、里程碑与基线" }

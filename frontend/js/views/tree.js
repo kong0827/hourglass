@@ -1,4 +1,4 @@
-/* views/tree · 层级视图：把当前筛选下的工作项按可配层级（项目/计划版本/模块）缩进成树，节点可折叠。
+/* views/tree · 层级视图：把当前筛选下的工作项按可配层级（项目/计划版本/分类）缩进成树，节点可折叠。
    只留结构性维度：状态/优先级/负责人是流动属性，作层级会让树结构随手流转抖动，留给筛选与列表分组。
    叶行渲染与列设置复用列表视图（taskCell / 显示字段 / 密度），
    父级行显示聚合：项数、最早截止、平均进度、子任务合计 —— 口径与列表的子任务计数列一致。
@@ -27,7 +27,7 @@ var lastItems = [], lastTree = [];
 var treeHasMore = false, treeLoadingMore = false;
 var PAGE_SIZE = 100;
 var levels = { l1:"project", l2:"version", l3:"none" };
-/* 层级只保留结构性维度（项目/计划版本/模块）：见文件头说明 */
+/* 层级只保留结构性维度（项目/计划版本/分类）：见文件头说明 */
 var TREE_LEVEL_DIMS = ["set", "project", "version"];
 var collapsed = {};
 var hideDone = false;
@@ -166,7 +166,7 @@ function indentHTML(depth, row){
   }
   return html;
 }
-/* 父级行只填有聚合口径的列；状态/优先级/模块/项目/版本是叶子自身的属性，分组没有单一取值，
+/* 父级行只填有聚合口径的列；状态/优先级/分类/项目/版本是叶子自身的属性，分组没有单一取值，
    留空占位（不能整列不输出，否则网格列会左移错位）。 */
 function aggCell(key, agg){
   if(key === "dueDate") return agg.due ? '<span class="cell" title="组内最早截止">' + esc(fmtShortMD(parseDate(agg.due))) + '</span>' : "<span></span>";

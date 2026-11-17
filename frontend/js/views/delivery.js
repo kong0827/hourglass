@@ -427,7 +427,7 @@ function railHTML() {
     + '<div class="dl-rgroup"><div class="dl-rg-lab">' + icon("stats", 12) + "投入与证据</div>"
     + switchRow("showEffort", "投入与负载", "客户版默认不含成员明细", o.showEffort, readOnly)
     + rfield("投入维度", '<select class="select" data-dl-opt-select="effortDim"' + (readOnly || !o.showEffort ? " disabled" : "")
-      + ' aria-label="投入维度"><option value="module"' + (o.effortDim === "module" ? " selected" : "") + ">按模块</option>"
+      + ' aria-label="投入维度"><option value="module"' + (o.effortDim === "module" ? " selected" : "") + ">按分类</option>"
       + '<option value="member"' + (o.effortDim === "member" ? " selected" : "") + ">按成员</option></select>")
     + rfield("证据详细度", seg("evidence", [[0, "关键"], [1, "完整"], [2, "校验值"]], o.evidence, "证据详细度"))
     + switchRow("showRelease", "发布与运行信息", "环境、目标、制品与执行人", o.showRelease, readOnly)
@@ -750,7 +750,7 @@ function leanOptions() {
   Object.assign(data.options, DD.leanPatch());
   markDirty();
   renderAll();
-  toast("已压到最简：精简叙述 + 紧凑排版 + 模块汇总", "fs");
+  toast("已压到最简：精简叙述 + 紧凑排版 + 分类汇总", "fs");
 }
 function gotoView(name, refId) {
   if (!name) { toast("该证据没有可跳转的原始记录", "warn"); return; }

@@ -1781,7 +1781,7 @@ public class DeliveryNoteService {
 
     private static String moduleName(Map<String, String> modules, String categoryId) {
         String name = categoryId == null ? null : modules.get(categoryId);
-        return name == null ? "未分模块" : name;
+        return name == null ? "未分类" : name;
     }
 
     private static String toneOf(Map<String, Object> options) {

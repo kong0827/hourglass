@@ -155,7 +155,7 @@ try{
   await evaluate(`(() => { const b = document.querySelector('#demandsPage [data-dem-mode="table"]'); if(b) b.click(); return !!b; })()`);
   await waitFor(`!!document.querySelector("#demandBody table.manager-tbl")`, "列表表格渲染", 20000);
 
-  /* 模块与来源不在默认显示列里，走真实「显示字段」弹层勾选，顺带验证入口可达 */
+  /* 分类与来源不在默认显示列里，走真实「显示字段」弹层勾选，顺带验证入口可达 */
   await evaluate(`(() => { const b = document.getElementById("btnDemandColumns"); if(b) b.click(); return !!b; })()`);
   await waitFor(`!!document.querySelector(".column-pref-modal")`, "显示字段弹层");
   await evaluate(`(() => {
@@ -167,9 +167,9 @@ try{
     return true;
   })()`);
   await waitFor(`!document.querySelector(".column-pref-modal")`, "显示字段保存");
-  await waitFor(`[...document.querySelectorAll("#demandBody thead th")].some(t => t.textContent.trim() === "模块")`, "模块列出现", 20000);
+  await waitFor(`[...document.querySelectorAll("#demandBody thead th")].some(t => t.textContent.trim() === "分类")`, "分类列出现", 20000);
   const heads = await evaluate(`[...document.querySelectorAll("#demandBody thead th")].map(t => t.textContent.trim())`);
-  assert(heads.includes("模块") && heads.includes("来源"), "表头含模块与来源（" + heads.join("/") + "）");
+  assert(heads.includes("分类") && heads.includes("来源"), "表头含分类与来源（" + heads.join("/") + "）");
 
   /* 记录写请求与骨架插入，用于验证「同值不保存」「不闪骨架」 */
   await evaluate(`(() => {
@@ -224,8 +224,8 @@ try{
     };
   })()`);
   assert(ctl.rows > 0, `列表有 ${ctl.rows} 行需求`);
-  assert(ctl.cats > 0, `模块字典已加载（${ctl.cats} 个模块，直接进需求池也要有候选）`);
-  assert(ctl.category > 0, `模块触发器 ${ctl.category} 个`);
+  assert(ctl.cats > 0, `分类字典已加载（${ctl.cats} 个分类，直接进需求池也要有候选）`);
+  assert(ctl.category > 0, `分类触发器 ${ctl.category} 个`);
   assert(ctl.source > 0, `来源行内按钮 ${ctl.source} 个`);
   assert(ctl.nativeSelects === 0 && ctl.nativeDates === 0,
     `列表里不再有常显的原生下拉/日期框（select ${ctl.nativeSelects}，date ${ctl.nativeDates}）`);
@@ -340,7 +340,7 @@ try{
     assert(await evaluate(`!document.querySelector(".menu [data-dem-inline-pick]")`), "Esc 关闭所属项目菜单");
   }
 
-  /* 3. 改模块：菜单选择后落库 + 不闪骨架 */
+  /* 3. 改分类：菜单选择后落库 + 不闪骨架 */
   const catOpen = await evaluate(`(() => {
     const b = document.querySelector('#demandBody [data-dem-inline-menu="category"]');
     if(!b) return null;
@@ -349,7 +349,7 @@ try{
   })()`);
   let catPick = null;
   if(catOpen){
-    await waitFor(`!!document.querySelector(".menu [data-dem-inline-pick]")`, "模块菜单");
+    await waitFor(`!!document.querySelector(".menu [data-dem-inline-pick]")`, "分类菜单");
     catPick = await evaluate(`(async () => {
       const id = ${JSON.stringify(catOpen.id)};
       const r = await fetch("api/demands/" + id); const j = await r.json(); const d = j.data || j;
@@ -361,11 +361,11 @@ try{
   }
   if(!catPick){
     await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); true`);
-    skip("没有可切换的模块候选（项目模块字典为空或只有当前值）");
+    skip("没有可切换的分类候选（项目分类字典为空或只有当前值）");
   }else{
     await evaluate(`(() => { window.__writes = []; window.__skel = 0; return true; })()`);
     await evaluate(`document.querySelector('.menu [data-dem-inline-pick="${catPick.to}"]').click(); true`);
-    await waitFor(`window.__writes.some(w => w.method === "PUT" && /\\/api\\/demands\\//.test(w.url))`, "模块 PUT 发出");
+    await waitFor(`window.__writes.some(w => w.method === "PUT" && /\\/api\\/demands\\//.test(w.url))`, "分类 PUT 发出");
     await sleep(1200);
     const catAfter = await evaluate(`(async () => {
       const r = await fetch("api/demands/${catPick.id}", { headers: { "Accept": "application/json" } });
@@ -375,9 +375,9 @@ try{
       return { server: d.categoryId, cell: cell ? cell.textContent.trim() : null, skel: window.__skel,
                body: window.__writes.map(w => w.method + " " + w.url) };
     })()`);
-    assert(catAfter.server === catPick.to, `模块已落库（${catPick.from || "未指定"} → ${catAfter.server}）`);
-    assert(catAfter.cell === catPick.toName, "刷新后单元格停在新模块");
-    assert(catAfter.skel === 0, "模块保存后没有插入骨架");
+    assert(catAfter.server === catPick.to, `分类已落库（${catPick.from || "未分类"} → ${catAfter.server}）`);
+    assert(catAfter.cell === catPick.toName, "刷新后单元格停在新分类");
+    assert(catAfter.skel === 0, "分类保存后没有插入骨架");
     const putBody = await evaluate(`(window.__writes.find(w => w.method === "PUT") || {}).body || ""`);
     const kept = await evaluate(`(async () => {
       const r = await fetch("api/demands/${catPick.id}"); const j = await r.json(); const d = j.data || j;
