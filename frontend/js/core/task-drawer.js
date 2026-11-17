@@ -2245,7 +2245,34 @@ function ownerOptionHTML(o, selected){
   var label = o.name + (shared ? " · " + (o.role || "未设角色") + " · " + (o.company || "未标注公司") : "");
   return '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (selected ? " selected" : "") + '>' + esc(label) + '</option>';
 }
-function ownerRosterHint(pending, error, unavailable){
+/* 负责人花名册提示：保留但不可指派的状态收成标签旁一个感叹号，避免在窄列里撑出两行；
+   候选项文案里已有「（当前不可选）」，长句只放在悬浮提示里。加载中/加载失败仍用下方提示条。 */
+function ownerRosterHint(error, unavailable){
+  var item = iOwner && iOwner.closest ? iOwner.closest(".ctx-item") : null;
+  var label = item ? item.querySelector(".ctx-label") : null;
+  var mark = $("ownerRosterMark");
+  if(!mark && label){
+    mark = document.createElement("span");
+    mark.id = "ownerRosterMark";
+    mark.className = "ctx-warn";
+    mark.tabIndex = 0;
+    mark.setAttribute("role", "img");
+    label.appendChild(mark);
+  }
+  if(mark){
+    var show = !!unavailable && !error;
+    mark.hidden = !show;
+    if(show){
+      mark.innerHTML = icon("alertCircle", 13);
+      mark.title = "该负责人已不在本项目候选范围：保留不影响保存，重新指派请另选成员";
+      mark.setAttribute("aria-label", mark.title);
+    } else {
+      mark.innerHTML = "";
+      mark.removeAttribute("title");
+      mark.removeAttribute("aria-label");
+    }
+  }
+
   var hint = $("ownerRosterHint");
   if(!hint && iOwner && iOwner.parentNode){
     hint = document.createElement("div"); hint.id = "ownerRosterHint"; hint.className = "foot-note";
@@ -2253,9 +2280,8 @@ function ownerRosterHint(pending, error, unavailable){
     hint.addEventListener("click", function(e){ if(e.target.closest("[data-owner-retry]")){ ensureProjectRoles(currentProjectId(), true); refreshOwnerSelect(); } });
   }
   if(!hint) return;
-  hint.hidden = !pending && !error && !unavailable;
-  hint.innerHTML = error ? '候选加载失败：' + esc(error.message || "网络异常") + ' <button class="btn sm" type="button" data-owner-retry>重试</button>'
-    : pending ? "正在确认本项目可指派成员…" : unavailable ? "保留当前负责人；该账号已不在本项目候选范围，重新指派请另选成员。" : "";
+  hint.hidden = !error;
+  hint.innerHTML = error ? '候选加载失败：' + esc(error.message || "网络异常") + ' <button class="btn sm" type="button" data-owner-retry>重试</button>' : "";
 }
 function populateOwnerSelect(currentName, currentUserId){
   if(!iOwner || iOwner.tagName !== "SELECT") return;
@@ -2287,7 +2313,7 @@ function populateOwnerSelect(currentName, currentUserId){
   }
   iOwner.innerHTML = html;
   iOwner.disabled = !!pending || !!error || !!rt.drawerReadOnly;
-  ownerRosterHint(pending, error, !!curId && !matched && !pending && !error);
+  ownerRosterHint(error, !!curId && !matched && !pending && !error);
   if(pending) ensureProjectRoles(pid);
 }
 function refreshOwnerSelect(){

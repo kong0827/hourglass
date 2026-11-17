@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 新建任务归属区背景改版（2026-11-17）</title>
+<style>
+:root{
+  --bg-app:#F7F8FA;--surface:#FFFFFF;--surface-sunken:#F2F4F7;--surface-hover:#F2F4F7;--surface-active:#E9ECF1;
+  --border:#E4E7EC;--border-strong:#D0D5DD;--text:#101828;--text-2:#475467;--text-3:#667085;
+  --primary:#2563EB;--primary-hover:#1D4ED8;--primary-soft:#EFF4FF;--primary-border:#BFD3FE;--primary-fg:#1D4ED8;
+  --success-fg:#067647;--warning:#F79009;--warning-fg:#B54708;--danger-fg:#B42318;--danger-soft:#FEF3F2;
+  --p0:#F04438;--p1:#F79009;--p2:#2E90FA;--p3:#667085;
+  --r-xs:6px;--r-sm:8px;--r-md:10px;--r-lg:12px;--r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);--shadow-lg:0 18px 48px -12px rgba(16,24,40,.16);
+  --ring:0 0 0 3px rgba(37,99,235,.16);--dur:.18s;--ease:cubic-bezier(.2,.8,.2,1);
+  --select-chevron:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219;--surface:#151B24;--surface-sunken:#1A222D;--surface-hover:#1F2937;--surface-active:#26313F;
+  --border:#25303D;--border-strong:#334153;--text:#E7ECF3;--text-2:#A9B4C2;--text-3:#7B8798;
+  --primary:#4C8DFF;--primary-hover:#6BA1FF;--primary-soft:#16243C;--primary-border:#2B4772;--primary-fg:#8FB4FF;
+  --success-fg:#75E0A7;--warning:#FDB022;--warning-fg:#FEC84B;--danger-fg:#FDA29B;--danger-soft:#2B1615;
+  --p0:#F97066;--p1:#FDB022;--p2:#53B1FD;--p3:#7B8798;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);--shadow-lg:0 22px 54px -12px rgba(0,0,0,.6);
+  --ring:0 0 0 3px rgba(76,141,255,.28);
+  --select-chevron:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%237B8798' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg-app);color:var(--text);
+  font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue","Microsoft YaHei",Arial,sans-serif;
+  transition:background var(--dur),color var(--dur)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+h1,h2,h3,p{margin:0}
+svg{flex:0 0 auto}
+:focus-visible{outline:none;box-shadow:var(--ring)}
+
+/* ============ 页面头部 ============ */
+.app-head{position:sticky;top:0;z-index:60;background:var(--surface);border-bottom:1px solid var(--border);padding:13px 22px 11px}
+.head-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;max-width:1360px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:32px;height:32px;border-radius:9px;background:var(--surface-sunken);border:1px solid var(--border);display:grid;place-items:center;color:var(--text-2)}
+.brand h1{font-size:15px;font-weight:680;letter-spacing:.2px}
+.brand p{font-size:11.5px;color:var(--text-3);margin-top:1px}
+.tools{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.seg-toggle{display:inline-flex;padding:3px;gap:2px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:9px}
+.seg-toggle button{height:26px;padding:0 11px;border-radius:6px;font-size:12px;font-weight:550;color:var(--text-2);white-space:nowrap;transition:background var(--dur),color var(--dur)}
+.seg-toggle button:hover{color:var(--text)}
+.seg-toggle button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:650;box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border)}
+.toggle{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-2);font-size:12px;font-weight:550;transition:border-color var(--dur),color var(--dur)}
+.toggle:hover{border-color:var(--border-strong);color:var(--text)}
+.switch{position:relative;width:26px;height:14px;border-radius:8px;background:var(--border-strong);transition:background var(--dur)}
+.switch i{position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:#fff;transition:transform var(--dur)}
+.toggle[aria-pressed="true"] .switch{background:var(--primary)}
+.toggle[aria-pressed="true"] .switch i{transform:translateX(12px)}
+
+/* ============ 说明 ============ */
+.hint{max-width:1360px;margin:10px auto 0;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-sunken);color:var(--text-2);font-size:12px;line-height:1.7}
+.hint b{color:var(--text);font-weight:650}
+.wrap{max-width:1360px;margin:0 auto;padding:16px 22px 56px}
+.compare{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+body[data-compare="on"] .compare{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+@media(max-width:1080px){body[data-compare="on"] .compare{grid-template-columns:minmax(0,1fr)}}
+body[data-compare="off"][data-variant="a"] #colBefore,
+body[data-compare="off"][data-variant="b"] #colBefore,
+body[data-compare="off"][data-variant="c"] #colBefore,
+body[data-variant="before"] #colAfter{display:none}
+body[data-compare="off"] .stage{max-width:1040px;margin:0 auto}
+.col{min-width:0}
+.col-head{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:0 2px 9px}
+.col-head h2{font-size:13px;font-weight:680}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:11px;font-weight:600;background:var(--surface);border:1px solid var(--border-strong);color:var(--text-2)}
+.tag.is-after{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+.col-head .sub{font-size:11.5px;color:var(--text-3)}
+
+/* ============ 抽屉舞台 ============ */
+.stage{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px 20px;box-shadow:var(--shadow-xs);container-type:inline-size}
+.top-title{display:flex;align-items:center;gap:9px;padding-bottom:13px;border-bottom:1px solid var(--border)}
+.top-title .tk{width:28px;height:28px;border-radius:8px;background:var(--surface-sunken);display:grid;place-items:center;color:var(--text-2)}
+.top-title .tx b{display:block;font-size:14px;font-weight:680}
+.top-title .tx span{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);margin-top:1px;flex-wrap:wrap}
+.pill-note{display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:var(--r-pill);background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:10.5px;font-weight:600}
+.top-title .acts{margin-left:auto;display:flex;align-items:center;gap:4px}
+.icon-btn{width:28px;height:28px;display:grid;place-items:center;border-radius:7px;color:var(--text-3)}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text-2)}
+
+/* 标题输入 */
+.title-card{margin-top:13px;border:1px solid var(--primary-border);border-radius:var(--r-lg);background:var(--surface);padding:10px 12px 8px;transition:box-shadow var(--dur),border-color var(--dur)}
+.title-card:focus-within{border-color:var(--primary);box-shadow:var(--ring)}
+.title-card input{width:100%;border:0;background:none;font-size:15px;font-weight:500;padding:2px 0 6px;outline:none}
+.title-card input::placeholder{color:var(--text-3);font-weight:400}
+.title-foot{display:flex;align-items:center;gap:8px}
+.enter-hint{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-3)}
+.enter-hint kbd{font:inherit;font-size:10.5px;padding:1px 5px;border-radius:4px;border:1px solid var(--border);background:var(--surface-sunken);color:var(--text-2)}
+.title-foot .grow{flex:1}
+.req-badge{display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:var(--r-pill);background:var(--danger-soft);border:1px solid rgba(240,68,56,.35);color:var(--danger-fg);font-size:10.5px;font-weight:600}
+.counter{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+
+/* 类型 + 优先级 */
+.classify{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+.seg-label{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--text-3)}
+.label-help{width:14px;height:14px;border-radius:50%;border:1px solid var(--border-strong);color:var(--text-3);font-size:9.5px;font-weight:700;display:inline-grid;place-items:center;line-height:1}
+.type-group{display:inline-flex;gap:2px;padding:2px;border-radius:var(--r-sm);background:var(--surface-sunken);flex-wrap:wrap}
+.type-btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:var(--r-xs);font-size:12.5px;font-weight:550;color:var(--text-2);transition:background var(--dur),color var(--dur)}
+.type-btn:hover{background:var(--surface-active);color:var(--text)}
+.type-btn[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:650;box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border)}
+.vdiv{width:1px;height:18px;background:var(--border)}
+.pri-group{display:inline-flex;gap:2px;padding:2px;border-radius:var(--r-sm);background:var(--surface-sunken)}
+.pri-btn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:var(--r-xs);font-size:12px;font-weight:600;color:var(--text-2)}
+.pri-btn .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.pri-btn.p0{color:var(--p0)}.pri-btn.p1{color:var(--p1)}.pri-btn.p2{color:var(--p2)}.pri-btn.p3{color:var(--p3)}
+.pri-btn[aria-pressed="true"]{background:var(--surface);box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border)}
+
+/* ============ 归属区（本次改版对象） ============ */
+.ctx{
+  display:grid;grid-template-columns:1.2fr 1fr .9fr;gap:10px;
+  margin-top:13px;padding:11px 13px 12px;
+  border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);
+  transition:background var(--dur),border-color var(--dur),padding var(--dur);
+}
+.ctx-item{display:flex;flex-direction:column;gap:5px;min-width:0}
+.ctx-item-wide{grid-column:1/-1}
+.ctx-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--text-2);transition:color var(--dur)}
+.ctx-label .label-help{width:13px;height:13px}
+.ctx select{
+  height:34px;padding:0 30px 0 10px;border:1px solid var(--border);border-radius:8px;
+  background-color:var(--surface);background-image:var(--select-chevron);background-repeat:no-repeat;background-position:right 9px center;
+  font-size:13px;appearance:none;
+}
+.ctx select:focus-visible{border-color:var(--primary);box-shadow:var(--ring)}
+.ctx-path{margin:0;font-size:11px;line-height:16px;color:var(--text-2)}
+.ctx-path b{font-weight:600;color:var(--text)}
+.ctx-note{margin:0;font-size:10.5px;line-height:15px;color:var(--text-3)}
+.modseg{display:inline-flex;gap:2px;padding:2px;border-radius:var(--r-sm);background:var(--surface-sunken);flex-wrap:wrap;transition:background var(--dur)}
+.modseg button{height:27px;padding:0 10px;border-radius:var(--r-xs);font-size:12.5px;font-weight:550;color:var(--text-2);white-space:nowrap}
+.modseg button:hover{background:var(--surface-active);color:var(--text)}
+.modseg button[aria-pressed="true"]{background:var(--primary);color:#fff;font-weight:600;box-shadow:none}
+
+/* —— 现状：主色浅底 + 主色边框 + 主色标签 —— */
+[data-variant="before"] .ctx{border-color:var(--primary-border);background:var(--primary-soft);box-shadow:var(--shadow-xs)}
+[data-variant="before"] .ctx-label{color:var(--primary-fg);font-weight:650;letter-spacing:.04em}
+
+/* —— 方案A：中性分组卡（推荐）—— */
+[data-variant="a"] .ctx{background:var(--surface-sunken);border-color:var(--border);box-shadow:none}
+[data-variant="a"] .modseg{background:transparent}
+
+/* —— 方案B：与内容卡同款白卡 —— */
+[data-variant="b"] .ctx{background:var(--surface);border-color:var(--border);box-shadow:none}
+
+/* —— 方案C：去容器，仅留分隔线与留白 —— */
+[data-variant="c"] .ctx{
+  background:transparent;border:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  border-radius:0;padding:12px 2px 13px;margin-top:15px;
+}
+[data-variant="c"] .modseg{background:transparent}
+[data-variant="c"] .ctx select{border-color:var(--border)}
+
+/* 内容卡（下方上下文） */
+.card{margin-top:13px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);padding:12px 14px;box-shadow:var(--shadow-xs)}
+.card-head{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.card-head h3{font-size:12.5px;font-weight:650}
+.card-head span{margin-left:auto;font-size:10.5px;color:var(--text-3)}
+.field-label{font-size:11px;font-weight:600;color:var(--text-3)}
+.skel{margin-top:7px;height:70px;border:1px solid var(--border);border-radius:8px;background:
+  repeating-linear-gradient(180deg,var(--surface-sunken) 0 1px,transparent 1px 8px),
+  var(--surface);}
+
+@container (max-width:660px){
+  .ctx{grid-template-columns:1fr 1fr}
+  .ctx-item-wide{grid-column:1/-1}
+}
+@container (max-width:460px){
+  .ctx{grid-template-columns:1fr}
+}
+
+/* ============ 方案说明 ============ */
+.notes{margin-top:20px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.notes-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border)}
+.notes-head h2{font-size:13px;font-weight:680}
+.notes-head span{font-size:11.5px;color:var(--text-3)}
+.notes table{width:100%;border-collapse:collapse;font-size:12px}
+.notes th,.notes td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+.notes th{font-size:11px;font-weight:650;color:var(--text-3);background:var(--surface-sunken);white-space:nowrap}
+.notes tr:last-child td{border-bottom:0}
+.notes td b{font-weight:650}
+.swatch{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono,Consolas,monospace);font-size:11px;color:var(--text-2)}
+.swatch i{width:11px;height:11px;border-radius:3px;border:1px solid var(--border)}
+.rec{display:flex;gap:8px;align-items:flex-start;padding:12px 16px;background:var(--surface-sunken);border-top:1px solid var(--border);font-size:12px;line-height:1.7;color:var(--text-2)}
+.rec b{color:var(--text)}
+.rec .ico{color:var(--success-fg);margin-top:1px}
+</style>
+</head>
+<body data-variant="a" data-compare="off">
+
+<header class="app-head">
+  <div class="head-row">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3.2h9.2M5.4 16.8h9.2M6.4 3.2c0 3 3.6 3.6 3.6 6.8 0 3.2-3.6 3.8-3.6 6.8M13.6 3.2c0 3-3.6 3.6-3.6 6.8 0 3.2 3.6 3.8 3.6 6.8"/></svg>
+      </span>
+      <div>
+        <h1>新建任务 · 归属区背景改版</h1>
+        <p>只调整容器视觉层级，字段与顺序不动 · 2026-11-17</p>
+      </div>
+    </div>
+    <div class="tools">
+      <div class="seg-toggle" role="group" aria-label="方案切换">
+        <button type="button" data-v="before" aria-pressed="false">现状</button>
+        <button type="button" data-v="a" aria-pressed="true">方案A</button>
+        <button type="button" data-v="b" aria-pressed="false">方案B</button>
+        <button type="button" data-v="c" aria-pressed="false">方案C</button>
+      </div>
+      <button type="button" class="toggle" id="cmpBtn" aria-pressed="false">
+        <span class="switch" aria-hidden="true"><i></i></span>并排对照
+      </button>
+      <button type="button" class="toggle" id="themeBtn" aria-pressed="false">
+        <span class="switch" aria-hidden="true"><i></i></span>深色
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <p class="hint"><b>问题</b>：归属区整块铺 <b>--primary-soft 浅蓝底</b> + 主色边框 + 主色标签，在抽屉里形成第二个"提示条"焦点，和下方白色内容卡、蓝色选中模块互相争抢。<b>改法</b>：容器退成中性，主色只留给唯一选中项；分组靠底色/边框/间距表达，而不是靠强调色。</p>
+
+  <div class="compare" style="margin-top:16px">
+    <section class="col" id="colBefore">
+      <div class="col-head">
+        <h2>现状</h2>
+        <span class="tag">Before</span>
+        <span class="sub">浅蓝底 + 蓝边框 + 蓝标签</span>
+      </div>
+      <div class="stage" data-variant="before" data-stage>
+        <!-- 抽屉内容由脚本注入 -->
+      </div>
+    </section>
+    <section class="col" id="colAfter">
+      <div class="col-head">
+        <h2 id="afterTitle">方案A · 中性分组卡</h2>
+        <span class="tag is-after">After</span>
+        <span class="sub" id="afterSub">浅灰底 + 中性边框，标签回到二级灰</span>
+      </div>
+      <div class="stage" data-variant="a" id="afterStage" data-stage></div>
+    </section>
+  </div>
+
+  <section class="notes">
+    <div class="notes-head">
+      <h2>三种收敛方式</h2>
+      <span>信息结构一致，只改容器；深浅两套令牌都随之适配</span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>方案</th><th>底色 / 边框</th><th>标签颜色</th><th>观感</th><th>风险</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>现状</b></td>
+          <td><span class="swatch"><i style="background:#EFF4FF"></i>--primary-soft</span> / <span class="swatch"><i style="background:#BFD3FE"></i>--primary-border</span></td>
+          <td>--primary-fg（11px 650）</td>
+          <td>像一条提示横幅，整块先于内容被看到</td>
+          <td>与选中模块同为蓝色，层级打架；深色下更闷</td>
+        </tr>
+        <tr>
+          <td><b>A · 中性分组卡</b><br><span class="sub">推荐</span></td>
+          <td><span class="swatch"><i style="background:#F2F4F7"></i>--surface-sunken</span> / <span class="swatch"><i style="background:#E4E7EC"></i>--border</span></td>
+          <td>--text-2</td>
+          <td>安静的一块"归属岛"，仍与正文内容卡区分</td>
+          <td>浅灰底上白色下拉框边界略弱，靠 1px 边框兜底</td>
+        </tr>
+        <tr>
+          <td><b>B · 与内容卡同款</b></td>
+          <td><span class="swatch"><i style="background:#FFFFFF"></i>--surface</span> / <span class="swatch"><i style="background:#E4E7EC"></i>--border</span></td>
+          <td>--text-2</td>
+          <td>整只抽屉只剩一种卡片语言，最统一</td>
+          <td>归属区和下方内容卡之间少了层级差，扫读要慢一点</td>
+        </tr>
+        <tr>
+          <td><b>C · 去容器</b></td>
+          <td>透明 / 上下一根 <span class="swatch"><i style="background:#E4E7EC"></i>--border</span></td>
+          <td>--text-2</td>
+          <td>最轻，像表单里的一个普通分组段</td>
+          <td>模块 chips 悬空，窄屏下分组感依赖间距</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="rec">
+      <span class="ico" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="m6.8 10.2 2.2 2.2 4.2-4.4"/></svg>
+      </span>
+      <p><b>建议采用 A</b>：它保留了"归属与分配是一个独立区块"的语义（这点在改版里是有意设计），但把强调色收回。主色在整屏只出现在两处——标题输入框聚焦态和唯一选中的模块，视线落点更明确；深色主题下也不会出现整块发亮的蓝。若你更希望抽屉只保留一种卡片语言，选 B；若想彻底弱化这层容器，选 C。</p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var VARIANTS = {
+    before: {title:"现状", sub:"浅蓝底 + 蓝边框 + 蓝标签"},
+    a: {title:"方案A · 中性分组卡", sub:"浅灰底 + 中性边框，标签回到二级灰"},
+    b: {title:"方案B · 与内容卡同款", sub:"白底 + 边框，抽屉只保留一种卡片语言"},
+    c: {title:"方案C · 去容器", sub:"无底无边，仅用上下分隔线和留白分组"}
+  };
+
+  var CATS = ["未指定","外接","主机托管","程序化报备","流程引擎基础功能","合规管理","提高出金比例","中金所套保额度申请"];
+
+  function icon(name, size){
+    var s = size || 13;
+    var paths = {
+      task:'<rect x="4.4" y="3.8" width="11.2" height="12.8" rx="2"/><path d="M7.6 3.8V2.6h4.8v1.2M7.4 8.2h5.2M7.4 11.2h3.6"/>',
+      story:'<path d="M5.2 3.4h9.6v13.2L10 13.6l-4.8 3z"/>',
+      bug:'<circle cx="10" cy="10.6" r="4.6"/><path d="M10 6V3.4M6.2 7.6 4.4 5.8M13.8 7.6l1.8-1.8M5.4 10.6H2.8M17.2 10.6h-2.6M6.2 13.6l-1.8 1.8M13.8 13.6l1.8 1.8"/>',
+      epic:'<path d="M10 3 3.6 6.4 10 9.8l6.4-3.4z"/><path d="m3.6 10 6.4 3.4L16.4 10"/><path d="m3.6 13.4 6.4 3.4 6.4-3.4"/>'
+    };
+    return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths[name]+'</svg>';
+  }
+
+  function drawerHTML(){
+    var types = [["task","任务"],["story","用户故事"],["bug","缺陷"],["epic","史诗"]];
+    var pris = [["p0","P0"],["p1","P1"],["p2","P2"],["p3","P3"]];
+    return '' +
+      '<div class="top-title">' +
+        '<span class="tk" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.4" y="3.8" width="11.2" height="12.8" rx="2"/><path d="M7.6 3.8V2.6h4.8v1.2M7.4 8.2h5.2M7.4 11.2h3.6"/></svg></span>' +
+        '<div class="tx"><b>新建任务</b><span>流程引擎 · 保存后自动编号<span class="pill-note">只有标题必填</span></span></div>' +
+        '<div class="acts">' +
+          '<button type="button" class="icon-btn" aria-label="更多操作"><svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><circle cx="4.5" cy="10" r="1.3"/><circle cx="10" cy="10" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/></svg></button>' +
+          '<button type="button" class="icon-btn" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m5 5 10 10M15 5 5 15"/></svg></button>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="title-card">' +
+        '<input id="__ttl" type="text" maxlength="60" placeholder="一句话说清要做什么，例如：重构权限校验中间件" aria-label="标题">' +
+        '<div class="title-foot">' +
+          '<span class="enter-hint"><kbd>Enter</kbd>保存</span>' +
+          '<span class="grow"></span>' +
+          '<span class="req-badge">必填</span>' +
+          '<span class="counter"><span data-count>0</span>/60</span>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="classify">' +
+        '<span class="seg-label">类型<span class="label-help" title="各类型的区别">i</span></span>' +
+        '<div class="type-group" role="group" aria-label="工作项类型">' +
+          types.map(function(t,i){ return '<button type="button" class="type-btn" data-type="'+t[0]+'" aria-pressed="'+(i===0)+'">'+icon(t[0])+t[1]+'</button>'; }).join('') +
+        '</div>' +
+        '<span class="vdiv" aria-hidden="true"></span>' +
+        '<span class="seg-label">优先级</span>' +
+        '<div class="pri-group" role="group" aria-label="优先级">' +
+          pris.map(function(p,i){ return '<button type="button" class="pri-btn '+p[0]+'" data-pri="'+p[0]+'" aria-pressed="'+(i===2)+'"><span class="dot"></span>'+p[1]+'</button>'; }).join('') +
+        '</div>' +
+      '</div>' +
+
+      '<div class="ctx" aria-label="归属与分配">' +
+        '<div class="ctx-item">' +
+          '<label class="ctx-label" for="__proj">所属项目</label>' +
+          '<select id="__proj"><option>流程引擎</option><option>交易网关</option><option>资金清算</option></select>' +
+        '</div>' +
+        '<div class="ctx-item">' +
+          '<label class="ctx-label" for="__owner">负责人</label>' +
+          '<select id="__owner"><option>admin · 未设角色 · 东证期货</option><option>孔祥劲 · 研发 · 东证期货</option></select>' +
+        '</div>' +
+        '<div class="ctx-item">' +
+          '<label class="ctx-label" for="__tester">测试负责人</label>' +
+          '<select id="__tester"><option>待领取（不指定）</option><option>李测试 · 测试 · 东证期货</option></select>' +
+        '</div>' +
+        '<div class="ctx-item">' +
+          '<label class="ctx-label" for="__col">新建到</label>' +
+          '<select id="__col"><option>待处理</option><option>进行中</option><option>待测试</option></select>' +
+        '</div>' +
+        '<div class="ctx-item">' +
+          '<div class="ctx-label"><label for="__epic">所属史诗</label><span class="label-help" title="史诗（Epic）是什么">i</span></div>' +
+          '<select id="__epic"><option>史诗加载中…</option></select>' +
+        '</div>' +
+        '<div class="ctx-item ctx-item-wide">' +
+          '<div class="ctx-label">模块</div>' +
+          '<div class="modseg" role="group" aria-label="模块">' +
+            CATS.map(function(c,i){ return '<button type="button" data-cat="'+c+'" aria-pressed="'+(i===1)+'">'+c+'</button>'; }).join('') +
+          '</div>' +
+          '<p class="ctx-path">位置：<b>流程引擎 › 外接</b></p>' +
+          '<p class="ctx-note">模块是项目内的目录，只影响归类；选它不会改变所属项目。</p>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="card">' +
+        '<div class="card-head"><h3>内容</h3><span>描述与标签均为选填</span></div>' +
+        '<div class="field-label">描述</div>' +
+        '<div class="skel" aria-hidden="true"></div>' +
+      '</div>';
+  }
+
+  function initStage(stage){
+    stage.innerHTML = drawerHTML();
+    var input = stage.querySelector('#__ttl');
+    var counter = stage.querySelector('[data-count]');
+    input.addEventListener('input', function(){ counter.textContent = input.value.length; });
+
+    stage.querySelectorAll('.type-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        stage.querySelectorAll('.type-btn').forEach(function(b){ b.setAttribute('aria-pressed', String(b===btn)); });
+      });
+    });
+    stage.querySelectorAll('.pri-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        stage.querySelectorAll('.pri-btn').forEach(function(b){ b.setAttribute('aria-pressed', String(b===btn)); });
+      });
+    });
+    stage.querySelectorAll('.modseg button').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        stage.querySelectorAll('.modseg button').forEach(function(b){ b.setAttribute('aria-pressed', String(b===btn)); });
+        var path = stage.querySelector('.ctx-path b');
+        if(path) path.textContent = '流程引擎 › ' + (btn.dataset.cat === '未指定' ? '（未设置）' : btn.dataset.cat);
+      });
+    });
+  }
+
+  var afterStage = document.getElementById('afterStage');
+  initStage(document.querySelector('#colBefore .stage'));
+  initStage(afterStage);
+
+  var afterTitle = document.getElementById('afterTitle');
+  var afterSub = document.getElementById('afterSub');
+  var cmpBtn = document.getElementById('cmpBtn');
+  var cmpOn = false;
+
+  function applyVariant(v){
+    document.querySelectorAll('.seg-toggle button').forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.dataset.v === v));
+    });
+    document.body.dataset.variant = v;
+    afterStage.dataset.variant = v;
+    afterTitle.textContent = VARIANTS[v].title;
+    afterSub.textContent = VARIANTS[v].sub;
+    var isBefore = v === 'before';
+    document.body.dataset.compare = (isBefore || !cmpOn) ? 'off' : 'on';
+    cmpBtn.setAttribute('aria-pressed', String(!isBefore && cmpOn));
+  }
+
+  document.querySelectorAll('.seg-toggle button').forEach(function(btn){
+    btn.addEventListener('click', function(){ applyVariant(btn.dataset.v); });
+  });
+
+  cmpBtn.addEventListener('click', function(){
+    cmpOn = !cmpOn;
+    applyVariant(document.body.dataset.variant);
+  });
+
+  var q = new URLSearchParams(location.search);
+  if(q.get('theme') === 'dark'){
+    document.documentElement.dataset.theme = 'dark';
+    document.getElementById('themeBtn').setAttribute('aria-pressed', 'true');
+  }
+  if(q.get('compare') === 'on') cmpOn = true;
+  if(q.get('compare') === 'off') cmpOn = false;
+  if(VARIANTS[q.get('v')]) applyVariant(q.get('v'));
+  else applyVariant('a');
+
+  document.getElementById('themeBtn').addEventListener('click', function(){
+    var dark = document.documentElement.dataset.theme !== 'dark';
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    this.setAttribute('aria-pressed', String(dark));
+  });
+})();
+</script>
+</body>
+</html>
