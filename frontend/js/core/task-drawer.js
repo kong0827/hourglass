@@ -6124,7 +6124,7 @@ function openVersionAssocPicker(anchor){
   var results = el.querySelector(".search-picker-results"), count = el.querySelector(".pp-count");
   var saveBtn = el.querySelector("[data-ver-save]");
   function ready(){ return sel.getAttribute("data-ready") === "1"; }
-  var STATUS_TEXT = { planned:"待规划", active:"开发中", released:"已发布", closed:"已关闭", canceled:"已取消" };
+  var STATUS_TEXT = { planned:"计划中", active:"进行中", released:"已发布", closed:"已关闭", canceled:"已取消" };
   function options(){
     return Array.prototype.slice.call(sel.options).filter(function(o){ return o.value; })
       .map(function(o){ return { id:o.value, label:(o.textContent || "").trim(), locked:!!o.disabled, status:o.getAttribute("data-vstatus") || "" }; });

@@ -231,23 +231,205 @@ async function main(){
       m.setPhaseProject(${JSON.stringify(main.reqId)}, "version");
       return true;
     })()`);
-    await waitFor(`document.querySelectorAll("#phaseBody .phase-card").length > 0`, "版本卡");
+    await waitFor(`document.querySelectorAll("#phaseBody .vl-row").length > 0`, "版本列表");
     const cardEntry = await evaluate(`(() => {
-      const nameBtn = document.querySelector('#phaseBody .phase-card [data-ver-open="${main.versionId}"].ver-open');
-      const actBtn = [...document.querySelectorAll('#phaseBody .phase-acts [data-ver-open]')]
-        .find(b => b.getAttribute("data-ver-open") === ${JSON.stringify(main.versionId)});
+      const row = document.querySelector('#phaseBody .vl-row[data-ver-row="${main.versionId}"]');
+      const nameBtn = row && row.querySelector('.vl-name-link[data-ver-open="${main.versionId}"]');
+      const actBtn = row && [...row.querySelectorAll('.vl-acts button')]
+        .find(b => b.hasAttribute("data-ver-open") || b.hasAttribute("data-ver-open-tab")
+          || b.hasAttribute("data-ver-release") || b.hasAttribute("data-ver-menu"));
       return { name: !!nameBtn, nameText: nameBtn && nameBtn.textContent.trim(), act: !!actBtn, actText: actBtn && actBtn.textContent.trim() };
     })()`);
-    assert(cardEntry.name && cardEntry.act, "版本卡缺少详情页入口：" + JSON.stringify(cardEntry));
-    await shot("01-版本卡入口");
-    await evaluate(`document.querySelector('#phaseBody .phase-card [data-ver-open="${main.versionId}"].ver-open').click()`);
+    assert(cardEntry.name && cardEntry.act, "版本行缺少详情页入口：" + JSON.stringify(cardEntry));
+    await shot("01-版本列表入口");
+
+    /* 3.1 列表对齐原型：需关注筛选 / 风险副标题 / 阻塞进度段 / 状态命名 */
+    const listModel = await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const { parseDate, dayDiff } = await import("./js/lib/format.js");
+      const { rt } = await import("./js/core/state.js");
+      const [stats, tasks] = await Promise.all([
+        API.get("/api/versions/stats", { reqId: ${JSON.stringify(main.reqId)} }),
+        API.get("/api/versions/task-options", { reqId: ${JSON.stringify(main.reqId)} })
+      ]);
+      const ended = v => v.status === "closed" || v.status === "canceled";
+      const ids = t => Array.isArray(t.versionIds) ? t.versionIds : [];
+      const rows = (stats.versions || []).map(v => {
+        const bound = (tasks || []).filter(t => ids(t).indexOf(v.id) >= 0);
+        const total = v.taskCount || 0, done = v.doneCount || 0;
+        const blocked = bound.filter(t => t.blocked && t.boardColumn !== "done").length;
+        const doing = bound.filter(t => t.boardColumn !== "done" && !t.blocked && Number(t.totalMinutes) > 0).length;
+        let overdue = 0;
+        if(v.status !== "released" && !ended(v) && v.targetDate){
+          const d = dayDiff(parseDate(v.targetDate), rt.TODAY);
+          if(d !== null && d < 0) overdue = -d;
+        }
+        const pct = total ? Math.round(done * 100 / total) : 0;
+        const doingPct = total ? Math.max(0, Math.min(100 - pct, Math.round(doing * 100 / total))) : 0;
+        return {
+          id:v.id, status:v.status, total:total, branches:(v.branches || []).length,
+          blocked:blocked, overdue:overdue, risk:blocked > 0 || overdue > 0,
+          blockedPct:total ? Math.max(0, Math.min(100 - pct - doingPct, Math.round(blocked * 100 / total))) : 0
+        };
+      });
+      return { rows: rows };
+    })()`);
+    const listUi = await evaluate(`(() => {
+      const box = document.getElementById("verList");
+      const chips = [...box.querySelectorAll("[data-ver-chips] .vl-chip")].map(c => ({
+        text: c.textContent.replace(/\\s+/g, " ").trim(),
+        status: c.getAttribute("data-ver-status"),
+        risk: c.hasAttribute("data-ver-risk-chip"),
+        on: c.classList.contains("on")
+      }));
+      const rows = [...box.querySelectorAll(".vl-row")].map(r => {
+        const sub = r.querySelector(".vl-sub");
+        const bar = r.querySelector(".vl-bar");
+        return {
+          id: r.getAttribute("data-ver-row"),
+          sub: sub ? sub.textContent.replace(/\\s+/g, " ").trim() : "",
+          risk: !!(sub && sub.querySelector(".vl-risk-inline")),
+          blockedSeg: !!(bar && bar.querySelector("i.blocked")),
+          statusText: (r.querySelector(".vl-status .tag") || { textContent: "" }).textContent.trim()
+        };
+      });
+      const cb = box.querySelector("[data-ver-risk]");
+      return { chips: chips, rows: rows, checkbox: !!cb, checked: !!(cb && cb.checked) };
+    })()`);
+    const LABELS = { active:"进行中", planned:"计划中", released:"已发布", closed:"已关闭", canceled:"已取消" };
+    const chipName = text => text.replace(/\s*\d+$/, "");
+    const chipCount = text => Number((text.match(/(\d+)$/) || [])[1] || 0);
+    const wantedChips = ["全部", "进行中", "计划中", "已发布", "已关闭"]
+      .concat(listModel.rows.some(r => r.status === "canceled") ? ["已取消"] : []);
+    assert(listUi.chips.filter(c => !c.risk).map(c => chipName(c.text)).join(",") === wantedChips.join(","),
+      "状态筛选命名未对齐原型：" + JSON.stringify(listUi.chips.map(c => c.text)));
+    const expectedRisk = listModel.rows.filter(r => r.risk).length;
+    const riskChip = listUi.chips.find(c => c.risk);
+    assert(riskChip && chipCount(riskChip.text) === expectedRisk, `需关注计数应为 ${expectedRisk}，实际 ${riskChip && riskChip.text}`);
+    const byId = {};
+    listModel.rows.forEach(r => { byId[r.id] = r; });
+    assert(listUi.rows.length === listModel.rows.length,
+      `列表行数 ${listUi.rows.length} ≠ 版本数 ${listModel.rows.length}`);
+    const badStatus = listUi.rows.filter(r => r.statusText !== LABELS[byId[r.id].status]);
+    assert(!badStatus.length, "状态标签未对齐（进行中/计划中/已发布/已关闭/已取消）：" + JSON.stringify(badStatus.map(r => [r.id, r.statusText])));
+    const badSub = listUi.rows.filter(r => {
+      const e = byId[r.id];
+      const base = e.total ? e.total + " 个工作项" : "未规划工作项";
+      const branch = e.branches ? e.branches + " 个分支" : "";
+      return r.sub.indexOf(base) === -1 || (branch && r.sub.indexOf(branch) === -1)
+        || (e.blocked > 0 && r.sub.indexOf(e.blocked + " 个阻塞") === -1)
+        || (e.overdue > 0 && r.sub.indexOf("已逾期 " + e.overdue + " 天") === -1);
+    });
+    assert(!badSub.length, "行副标题未按「工作项 / 分支 / 阻塞」展示：" + JSON.stringify(badSub.map(r => [r.id, r.sub])));
+    const badRisk = listUi.rows.filter(r => r.risk !== byId[r.id].risk
+      || r.blockedSeg !== (byId[r.id].blockedPct > 0));
+    assert(!badRisk.length, "风险提示或阻塞进度段与数据不符：" + JSON.stringify(badRisk.map(r => [r.id, r.risk, r.blockedSeg])));
+    pass(`列表状态命名 / 风险副标题 / 阻塞段（需关注 ${expectedRisk} 个，可筛 ${listUi.rows.length} 行）`);
+    await evaluate(`document.querySelector("#verList [data-ver-risk-chip]").click()`);
+    await sleep(200);
+    const riskUi = await evaluate(`(() => {
+      const box = document.getElementById("verList");
+      const chip = box.querySelector("[data-ver-risk-chip]");
+      return {
+        rows: [...box.querySelectorAll(".vl-row")].map(r => !!r.querySelector(".vl-sub .vl-risk-inline")),
+        on: !!chip && chip.classList.contains("on"),
+        checked: !!box.querySelector("[data-ver-risk]").checked,
+        empty: !!box.querySelector(".vl-empty")
+      };
+    })()`);
+    assert(riskUi.rows.length === expectedRisk && riskUi.rows.every(Boolean), "需关注筛选结果不符（应为仅风险版本 " + expectedRisk + " 行）");
+    assert(riskUi.on && riskUi.checked, "需关注 chip 与「只看需关注」勾选状态不同步");
+    await shot("02-版本列表需关注");
+    await evaluate(`document.querySelector("#verList [data-ver-risk]").click()`);
+    await sleep(200);
+    const riskReset = await evaluate(`(() => {
+      const box = document.getElementById("verList");
+      return { rows: box.querySelectorAll(".vl-row").length, checked: !!box.querySelector("[data-ver-risk]").checked };
+    })()`);
+    assert(riskReset.rows === listModel.rows.length && !riskReset.checked, "关闭只看需关注后未恢复全部版本");
+    pass("需关注筛选与勾选联动，关闭后恢复全部");
+    /* 演示库没有阻塞/逾期版本，风险分支用内存探针补验（不写库）：给主版本挂一条阻塞工作项 */
+    await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const orig = API.get;
+      window.__e2eOrigApiGet = orig;
+      API.get = function(url, params){
+        if(String(url).indexOf("/api/versions/task-options") === 0){
+          return orig.call(API, url, params).then(function(list){
+            return Array.isArray(list) ? list.concat([{
+              id:"E2E-BLOCK-PROBE", title:"E2E 阻塞探针", reqId:${JSON.stringify(main.reqId)},
+              boardColumn:"doing", totalMinutes:60, blocked:true,
+              versionIds:[${JSON.stringify(main.versionId)}]
+            }]) : list;
+          });
+        }
+        return orig.call(API, url, params);
+      };
+      const m = await import("./js/views/phase.js");
+      m.setPhaseProject(${JSON.stringify(main.reqId)}, "version");
+      return true;
+    })()`);
+    await sleep(600);
+    const probeUi = await evaluate(`(() => {
+      const box = document.getElementById("verList");
+      const row = box.querySelector('.vl-row[data-ver-row="${main.versionId}"]');
+      const chip = box.querySelector("[data-ver-risk-chip]");
+      return {
+        riskChip: chip ? chip.textContent.replace(/\\s+/g, " ").trim() : "",
+        risk: !!(row && row.querySelector(".vl-sub .vl-risk-inline")),
+        riskText: row && row.querySelector(".vl-sub .vl-risk-inline") ? row.querySelector(".vl-sub .vl-risk-inline").textContent.trim() : "",
+        blockedSeg: !!(row && row.querySelector(".vl-bar i.blocked"))
+      };
+    })()`);
+    assert(probeUi.risk && probeUi.riskText.indexOf("1 个阻塞") === 0 && probeUi.blockedSeg,
+      "模拟阻塞任务未渲染风险提示或阻塞进度段：" + JSON.stringify(probeUi));
+    assert(chipCount(probeUi.riskChip) === expectedRisk + 1, "需关注计数未包含阻塞探针：" + probeUi.riskChip);
+    await evaluate(`document.querySelector("#verList [data-ver-risk-chip]").click()`);
+    await sleep(200);
+    const probeRows = await evaluate(`document.querySelectorAll("#verList .vl-row").length`);
+    assert(probeRows === expectedRisk + 1, `需关注筛选未包含阻塞探针（${probeRows} 行）`);
+    await shot("03-版本列表阻塞探针");
+    pass("阻塞工作项 → 风险副标题 + 红色进度段 + 需关注计数（内存探针）");
+    await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      if(window.__e2eOrigApiGet){ API.get = window.__e2eOrigApiGet; delete window.__e2eOrigApiGet; }
+      document.querySelector("#verList [data-ver-risk]").click();
+      const m = await import("./js/views/phase.js");
+      m.setPhaseProject(${JSON.stringify(main.reqId)}, "version");
+      return true;
+    })()`);
+    await sleep(500);
+    await waitFor(`!document.querySelector('#verList .vl-row[data-ver-row="${main.versionId}"] .vl-sub .vl-risk-inline')`, "探针撤下");
+    pass("撤下探针后列表恢复（不改数据库）");
+
+    /* 3.2 窄屏：筛选条与新增勾选不撑破页面 */
+    await size(390, 844, true);
+    await sleep(300);
+    const listNarrow = await evaluate(`(() => {
+      const doc = document.documentElement;
+      const box = document.getElementById("verList");
+      const cb = box.querySelector("[data-ver-risk]");
+      const chips = box.querySelector("[data-ver-chips]");
+      return {
+        sw: doc.scrollWidth, cw: doc.clientWidth,
+        cb: !!cb && cb.getBoundingClientRect().width > 0,
+        chipScroll: !!chips && getComputedStyle(chips).overflowX === "auto"
+      };
+    })()`);
+    assert(listNarrow.sw <= listNarrow.cw + 1, `窄屏版本列表横向溢出：${listNarrow.sw} > ${listNarrow.cw}`);
+    assert(listNarrow.cb && listNarrow.chipScroll, "窄屏需关注勾选不可见或筛选条不可横向滚动：" + JSON.stringify(listNarrow));
+    await shot("04-版本列表窄屏");
+    await size(1440, 900, false);
+    await sleep(300);
+    pass("窄屏 390：列表无横向溢出，勾选与筛选条可用");
+    await evaluate(`document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]').click()`);
     await waitFor(`document.body.dataset.view === "version"`, "版本名跳转");
     await waitFor(`location.hash.indexOf("#/version?id=${main.versionId}") === 0`, "详情页 hash");
     await waitFor(`(() => {
       const h = document.querySelector("#versionBody .vd-title");
       return !!h && h.textContent.trim() === ${JSON.stringify(main.versionName)};
     })()`, "详情页标题落到版本名");
-    await waitFor(`document.querySelectorAll("#versionBody .vd-kpis .pcell").length === 9`, "概览指标格");
+    await waitFor(`document.querySelectorAll("#versionBody .vd-kpis .pcell").length === 6`, "概览指标格");
     const head = await evaluate(`(() => ({
       title: document.querySelector("#versionBody .vd-title").textContent.trim(),
       barTitle: document.getElementById("viewTitle").textContent.trim(),
@@ -261,7 +443,77 @@ async function main(){
     assert(head.barTitle === "版本详情", `顶栏不该重复版本名，实际「${head.barTitle}」`);
     assert(head.docTitle.indexOf(main.versionName) === 0, "浏览器标题未带版本名：" + head.docTitle);
     assert(head.crumb.indexOf("版本") === 0 && head.crumb.indexOf("详情") > 0, "面包屑不对：" + head.crumb);
-    assert(head.kpis.length === 9, "概览指标格应为 9 个，实际 " + head.kpis.length);
+    assert(head.kpis.length === 6, "概览指标格应为 6 个，实际 " + head.kpis.length);
+    /* 工作项均耗时挪进工时卡：口径、下钻都必须在实际一侧 */
+    const avg = await evaluate(`(() => {
+      const side = [...document.querySelectorAll("#versionBody .vd-hours-card .vd-hour-side")]
+        .find(w => w.textContent.indexOf("已完成项均耗时") >= 0);
+      if(!side) return null;
+      const btn = side.querySelector(".vd-hour-avg");
+      return {
+        value: btn ? btn.textContent.trim() : "",
+        drill: btn ? btn.getAttribute("data-vd-drill") : "",
+        help: !!side.querySelector('.caliber-mark[data-caliber-help="version.avgTask"]')
+      };
+    })()`);
+    assert(avg && avg.drill === "avg" && avg.help, "工时卡缺少可下钻、可看口径的「工作项均耗时」：" + JSON.stringify(avg));
+    await evaluate(`document.querySelector('#versionBody .caliber-mark[data-caliber-help="version.avgTask"]').click()`);
+    await waitFor(`!!document.querySelector(".caliber-pop")`, "均耗时口径弹层");
+    const avgHelp = await evaluate(`document.querySelector(".caliber-pop").textContent.replace(/\\s+/g, " ").trim()`);
+    assert(avgHelp.indexOf("已完成") >= 0 && avgHelp.indexOf("没有完成项") >= 0, "均耗时口径文案不对：" + avgHelp);
+    await evaluate(`document.querySelector("#versionBody .vd-title").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))`);
+    await waitFor(`!document.querySelector(".caliber-pop")`, "均耗时口径弹层关闭");
+    const doneCount = await evaluate(`(() => {
+      const c = [...document.querySelectorAll("#versionBody .vd-kpis .pcell")].find(x => {
+        const s = x.querySelector("span");
+        return s && s.textContent.trim() === "已完成";
+      });
+      return c ? Number(c.querySelector("b").textContent.trim()) : NaN;
+    })()`);
+    await evaluate(`document.querySelector('#versionBody .vd-hour-avg[data-vd-drill="avg"]').click()`);
+    await waitFor(`(() => {
+      const st = document.querySelector('#versionBody [data-vd-filter="status"]');
+      const so = document.querySelector('#versionBody [data-vd-filter="sort"]');
+      return !!st && st.value === "done" && !!so && so.value === "actual";
+    })()`, "均耗时下钻", 25000);
+    const avgRows = await evaluate(`document.querySelectorAll("#versionBody tbody tr[data-open-task]").length`);
+    assert(avgRows === doneCount, "均耗时下钻应只含已完成项：" + avgRows + " 行 vs 已完成 " + doneCount);
+    await evaluate(`document.querySelector('#versionBody [data-vd-filter-reset]').click()`);
+    await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').click()`);
+    await waitFor(`document.querySelector('#versionBody [data-vd-tab="overview"]').classList.contains("on")`, "回到概览");
+    pass("工作项均耗时：口径可读、下钻已完成且按实际工时排序（" + avg.value + "，" + avgRows + " 行）");
+    const descNow = await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const data = await API.get("/api/versions/stats", { reqId: ${JSON.stringify(main.reqId)} });
+      const row = ((data && data.versions) || []).find(v => v.id === ${JSON.stringify(main.versionId)});
+      const p = document.querySelector("#versionBody [data-vd-desc]");
+      const btn = document.querySelector("#versionBody [data-vd-desc-toggle]");
+      return {
+        api: (row && row.description) || "",
+        dom: p ? p.textContent.trim() : "",
+        toggle: btn ? !btn.hidden : false,
+        clamp: p ? getComputedStyle(p).webkitLineClamp : ""
+      };
+    })()`);
+    assert(descNow.api, "主用例版本没有说明，无法验证说明区");
+    assert(descNow.dom === descNow.api.trim(), "版本说明未按数据渲染：" + JSON.stringify({ api: descNow.api, dom: descNow.dom }));
+    assert(descNow.clamp === "2", "版本说明默认不是两行折叠：" + descNow.clamp);
+    if(descNow.toggle){
+      const before = await evaluate(`document.querySelector("#versionBody [data-vd-desc]").getBoundingClientRect().height`);
+      await evaluate(`document.querySelector("#versionBody [data-vd-desc-toggle]").click()`);
+      await sleep(120);
+      const opened = await evaluate(`(() => {
+        const p = document.querySelector("#versionBody [data-vd-desc]");
+        const b = document.querySelector("#versionBody [data-vd-desc-toggle]");
+        return { open: p.classList.contains("open"), text: b.textContent.trim(), h: p.getBoundingClientRect().height };
+      })()`);
+      assert(opened.open && opened.text === "收起说明" && opened.h > before + 2, "版本说明展开失败：" + JSON.stringify(opened));
+      await evaluate(`document.querySelector("#versionBody [data-vd-desc-toggle]").click()`);
+      await sleep(120);
+      pass("版本说明两行折叠，可展开 / 收起（" + descNow.dom.length + " 字）");
+    } else {
+      pass("版本说明按数据渲染，未超出两行不显示展开入口（" + descNow.dom.length + " 字）");
+    }
     /* 偏差色调用 -text 后缀：裸 vd-warn 是错误横幅的类，会把数字渲染成带边框的小方块。
        当前版本偏差不一定落在 warn 档，所以直接造探针量计算样式，与数据无关。 */
     const toneProbe = await evaluate(`(() => {
@@ -438,8 +690,8 @@ async function main(){
     await navigate(BASE + "/index.html#/phase");
     await waitFor(`document.body.dataset.view === "phase"`, "回到版本页");
     await evaluate(`(async () => { const m = await import("./js/views/phase.js"); m.setPhaseProject(${JSON.stringify(main.reqId)}, "version"); return true; })()`);
-    await waitFor(`!!document.querySelector('#phaseBody .phase-card [data-ver-open="${main.versionId}"]')`, "版本卡入口");
-    await evaluate(`document.querySelector('#phaseBody .phase-card [data-ver-open="${main.versionId}"]').click()`);
+    await waitFor(`!!document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]')`, "版本行入口");
+    await evaluate(`document.querySelector('#phaseBody .vl-row .vl-name-link[data-ver-open="${main.versionId}"]').click()`);
     await waitFor(`document.body.dataset.view === "version"`, "再次进入详情");
     await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(main.versionName)}`, "详情渲染");
     await evaluate(`history.back()`);
@@ -468,14 +720,22 @@ async function main(){
       pass("同项目只有一个版本，切换器按设计隐藏");
     }
 
-    /* 10b. 承诺基线与已发布版本的交付事实必须落到真实数字，而不是占位 */
+    /* 10b. 承诺基线与已发布版本的交付事实必须落到真实数字，而不是占位；
+       未开始开发 / 尚未冻结基线的版本只允许出现明确的空态说明 */
     const commitment = await evaluate(`(() => {
       const panel = [...document.querySelectorAll("#versionBody .vd-panel")].find(p => p.querySelector("h3") && p.querySelector("h3").textContent.trim() === "承诺基线");
       if(!panel) return null;
-      return [...panel.querySelectorAll(".vd-cmp-cell")].map(c => c.textContent.replace(/\\s+/g, " ").trim());
+      return {
+        cells: [...panel.querySelectorAll(".vd-cmp-cell")].map(c => c.textContent.replace(/\\s+/g, " ").trim()),
+        hint: (panel.querySelector(".hint") || {}).textContent || ""
+      };
     })()`);
-    assert(commitment && commitment.length === 4, "承诺基线缺少四格：" + JSON.stringify(commitment));
-    pass("承诺基线：" + commitment.join(" / "));
+    assert(commitment, "承诺基线面板缺失");
+    assert(commitment.cells.length === 4 || /还没有基线/.test(commitment.hint),
+      "承诺基线既没有四格、也没有空态说明：" + JSON.stringify(commitment));
+    pass(commitment.cells.length
+      ? "承诺基线：" + commitment.cells.join(" / ")
+      : "承诺基线：尚未冻结（空态说明已展示）");
     if(pick.released){
       await navigate(BASE + "/index.html#/version?id=" + pick.released.versionId + "&reqId=" + pick.released.reqId + "&tab=releases");
       await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(pick.released.versionName)}`, "已发布版本详情", 25000);
@@ -544,8 +804,13 @@ async function main(){
         const p = [...document.querySelectorAll("#versionBody .vd-panel")].find(x => x.querySelector("h3") && x.querySelector("h3").textContent.trim() === "实际交付事实");
         return !!p && p.querySelectorAll(".vd-cmp-cell").length === 4;
       })()`, "实际交付事实四格");
+      const releasedAvg = await evaluate(`(() => {
+        const btn = document.querySelector('#versionBody .vd-hour-avg[data-vd-drill="avg"]');
+        return btn ? btn.textContent.trim() : "";
+      })()`);
+      assert(releasedAvg && releasedAvg !== "—" && /[0-9]/.test(releasedAvg), "已发布版本的工作项均耗时没有数值：" + releasedAvg);
       await shot("02c-实际交付事实");
-      pass(`已发布版本 ${pick.released.versionName}：${facts.records} 条不可变快照 + 交付事实四格`);
+      pass(`已发布版本 ${pick.released.versionName}：${facts.records} 条不可变快照 + 交付事实四格（均耗时 ${releasedAvg}）`);
       noExceptions("已发布版本");
     }
 
@@ -710,115 +975,214 @@ async function main(){
     };
     await navigate(BASE + "/index.html#/version?id=" + main.versionId + "&reqId=" + main.reqId);
     await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(main.versionName)}`, "联动用例版本", 25000);
-    await waitFor(`document.querySelectorAll("#versionBody .vd-dist-row").length > 0`, "工时分布行", 25000);
+    await waitFor(`document.querySelectorAll("#versionBody .vd-hours-card .vd-hour-side").length === 2`, "工时卡", 25000);
 
-    /* 分布条的颜色必须彼此可分，也不能和空槽底色撞：未配色模块走调色板兜底而不是灰 */
-    const hues = await evaluate(`(() => {
-      const track = getComputedStyle(document.querySelector("#versionBody .vd-dist-bar")).backgroundColor;
-      const rows = [...document.querySelectorAll("#versionBody .vd-dist-row")].map(r => ({
-        name: r.querySelector(".vd-dist-open span").textContent.trim(),
-        bar: getComputedStyle(r.querySelector(".vd-dist-bar > i")).backgroundColor,
-        dot: getComputedStyle(r.querySelector(".vd-dist-name > i")).backgroundColor
-      }));
-      return { track, rows };
-    })()`);
-    const named = hues.rows.filter(r => r.name !== "未指定模块");
-    const seenHue = {};
-    let hueBad = [];
-    named.forEach(r => {
-      if(r.bar !== r.dot) hueBad.push(r.name + " 条色与图例色不一致");
-      if(r.bar === hues.track) hueBad.push(r.name + " 条色与空槽底色相同（看着像没数据）");
-      if(seenHue[r.bar]) hueBad.push(r.name + " 与 " + seenHue[r.bar] + " 撞色 " + r.bar);
-      seenHue[r.bar] = r.name;
-    });
-    assert(hueBad.length === 0, "工时分布配色不可分：" + hueBad.join("；"));
-    pass(`工时分布 ${named.length} 个模块配色互不相同、图例与条一致、均区别于空槽底色`);
-
-    /* 13b-1 工时分布：模块行的漏斗与行名都能下钻，行数必须等于该行的「N 项」 */
-    const dist = await evaluate(`(() => {
-      const row = document.querySelector("#versionBody .vd-dist-row");
-      const f = row.querySelector(".vd-funnel");
-      const open = row.querySelector(".vd-dist-open");
+    /* 13b-1 工时卡：预估 / 实际都能打开构成；比例、剩余预估与口径入口必须落到真实数字 */
+    const card = await evaluate(`(() => {
+      const card = document.querySelector("#versionBody .vd-hours-card");
+      const sides = [...card.querySelectorAll(".vd-hour-side")];
+      const txt = el => el ? el.textContent.replace(/\\s+/g, " ").trim() : "";
       return {
-        link: f && f.getAttribute("data-vd-link"), openLink: open && open.getAttribute("data-vd-link"),
-        name: open && open.querySelector("span").textContent.trim(),
-        items: Number((row.querySelector(".vd-dist-share").textContent.match(/(\\d+) 项/) || [])[1]) || 0
+        estimate: txt(sides[0]), actual: txt(sides[1]),
+        estOpen: !!sides[0].querySelector('.vd-hour-main[data-vd-hours="estimate"]'),
+        actOpen: !!sides[1].querySelector('.vd-hour-main[data-vd-hours="actual"]'),
+        burn: txt(card.querySelector(".vd-burn-head b")),
+        remaining: txt(card.querySelector(".vd-burn-foot .mid")),
+        width: card.querySelector(".vd-burn-track i").style.width,
+        helps: ["version.estimate", "version.actual", "version.remaining"]
+          .every(k => !!card.querySelector('.caliber-mark[data-caliber-help="' + k + '"]'))
       };
     })()`);
-    assert(dist.link && dist.link === dist.openLink, "工时分布行缺少联动入口或两处入口不一致：" + JSON.stringify(dist));
-    const dimKind = dist.link.split(":")[0], dimVal = dist.link.slice(dist.link.indexOf(":") + 1);
-    await evaluate(`document.querySelector("#versionBody .vd-dist-row .vd-funnel").click()`);
-    await waitFor(`(() => {
-      const p = new URLSearchParams(location.hash.split("?")[1] || "");
-      return p.get("tab") === "scope" && !!p.get(${JSON.stringify(dimKind === "cat" ? "cat" : "ow")});
-    })()`, "工时分布下钻写 hash");
-    const drilledDist = await scopeState();
-    assert(drilledDist.rows === dist.items, `工时分布下钻行数 ${drilledDist.rows} 与「${dist.name} ${dist.items} 项」不一致`);
-    assert(drilledDist.sort === "actual", "关联下钻未按实际工时排序：" + drilledDist.sort);
-    assert(drilledDist.chips.length === (dimKind === "cat" ? 1 : 0),
-      "联动条 chip 数量不对（负责人走筛选下拉，不重复上条）：" + JSON.stringify(drilledDist.chips));
-    if(dimKind === "cat"){
-      assert(drilledDist.cat === dimVal, "模块筛选下拉未与联动同步：" + drilledDist.cat);
-      assert(drilledDist.chips[0].indexOf("模块") === 0 && drilledDist.chips[0].indexOf(dist.name) > 0,
-        "联动条未标出模块名：" + drilledDist.chips[0]);
-    }else{
-      assert(drilledDist.owner === dimVal && drilledDist.owners.every(o => o === dist.name),
-        "负责人下钻后行内容不一致：" + JSON.stringify(drilledDist.owners));
-    }
-    await shot("10-联动-工时分布");
-    pass(`工时分布「${dist.name}」漏斗下钻 → ${drilledDist.rows} 行，与分布口径一致`);
-    /* 单条联动可单独取消，取消后回到全量 */
-    if(dimKind === "cat"){
-      await evaluate(`document.querySelector("#versionBody .vd-link-x").click()`);
-      await waitFor(`!new URLSearchParams(location.hash.split("?")[1] || "").get("cat")`, "取消模块联动");
-      const cleared = await scopeState();
-      assert(!cleared.chips.length && cleared.rows > drilledDist.rows, "取消联动后未回到全量：" + JSON.stringify(cleared.chips) + " / " + cleared.rows);
-      pass("联动条单条取消 → 回到全量明细");
-    }else{
-      await clearFilters();
-    }
+    assert(card.estOpen && card.actOpen, "工时卡两侧不是「查看构成」入口：" + JSON.stringify(card));
+    assert(/预估\s*[0-9]/.test(card.estimate) && /实际\s*[0-9]/.test(card.actual),
+      "工时卡预估 / 实际没有数值：" + JSON.stringify(card));
+    assert(card.remaining.indexOf("剩余预估") >= 0 && card.helps, "剩余预估或口径入口缺失：" + JSON.stringify(card));
+    assert(card.width && parseFloat(card.width) >= 0 && parseFloat(card.width) <= 100, "实际 / 预估比例条越界：" + card.width);
+    await shot("10-工时卡");
+    pass(`工时卡：${card.estimate.split("查看构成")[0]} ｜ ${card.actual.split("查看构成")[0]} ｜ 实际 / 预估 ${card.burn}`);
 
-    /* 13b-2 阶段维度：测试计时行下钻只留测试窗口内有计时的工作项 */
-    const stageProbe = async () => {
-      await waitFor(`!!document.querySelector('#versionBody [data-vd-roll="stage"]')`, "阶段维度切换");
-      await evaluate(`document.querySelector('#versionBody [data-vd-roll="stage"]').click()`);
-      await waitFor(`[...document.querySelectorAll("#versionBody .vd-dist-row .vd-funnel")].some(f => f.getAttribute("data-vd-link").indexOf("stage:") === 0)`, "阶段分布行");
-      return evaluate(`(() => {
-        const row = [...document.querySelectorAll("#versionBody .vd-dist-row")]
-          .find(r => (r.querySelector(".vd-funnel") || {}).getAttribute && r.querySelector(".vd-funnel").getAttribute("data-vd-link") === "stage:test");
-        if(!row) return null;
-        return { items: Number((row.querySelector(".vd-dist-share").textContent.match(/(\\d+) 项/) || [])[1]) || 0 };
-      })()`);
-    };
-    await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').click()`);
-    let stageRow = await stageProbe();
-    let stageVer = main;
-    /* 未发布版本往往还没有测试窗口计时，换已发布版本验证同一条下钻路径 */
-    if((!stageRow || !stageRow.items) && pick.released){
-      await navigate(BASE + "/index.html#/version?id=" + pick.released.versionId + "&reqId=" + pick.released.reqId);
-      await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(pick.released.versionName)}`, "已发布版本阶段用例", 25000);
-      stageRow = await stageProbe();
-      stageVer = pick.released;
-    }
-    assert(stageRow && stageRow.items > 0, "找不到有测试计时的版本，阶段下钻无法验证");
-    await evaluate(`[...document.querySelectorAll("#versionBody .vd-dist-row .vd-funnel")].find(f => f.getAttribute("data-vd-link") === "stage:test").click()`);
-    await waitFor(`new URLSearchParams(location.hash.split("?")[1] || "").get("sg") === "test"`, "阶段下钻写 hash");
-    const stageState = await scopeState();
-    assert(stageState.rows === stageRow.items, `测试阶段下钻行数 ${stageState.rows} 与分布 ${stageRow.items} 不一致`);
-    assert(stageState.chips.length === 1 && stageState.chips[0].indexOf("阶段") === 0 && stageState.chips[0].indexOf("测试") > 0,
-      "阶段联动条缺失或名字不对：" + JSON.stringify(stageState.chips));
-    await shot("10b-联动-测试阶段");
-    pass(`阶段「测试」下钻（${stageVer.versionName}）→ ${stageState.rows} 行`);
-    await clearFilters();
-    if(stageVer !== main){
-      await navigate(BASE + "/index.html#/version?id=" + main.versionId + "&reqId=" + main.reqId);
-      await waitFor(`document.querySelector("#versionBody .vd-title").textContent.trim() === ${JSON.stringify(main.versionName)}`, "回到主用例版本", 25000);
-    }
+    /* 13b-2 预估构成：五个维度，类型页用于近似阶段，分类行点击必须收窄到该组的工作项 */
+    await evaluate(`document.querySelector('#versionBody [data-vd-hours="estimate"]').click()`);
+    await waitFor(`!!document.querySelector(".vd-h-layer.open .vd-h-sheet")`, "预估构成弹层");
+    const estSheet = await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      return {
+        title: layer.querySelector("[data-vd-htitle]").textContent.replace(/\\s+/g, " ").trim(),
+        sub: layer.querySelector("[data-vd-hsub]").textContent.replace(/\\s+/g, " ").trim(),
+        tabs: [...layer.querySelectorAll("[data-vd-htab]")].map(t => t.textContent.trim()),
+        proxy: layer.querySelectorAll(".vd-h-proxy-card").length,
+        stack: layer.querySelectorAll(".vd-h-stack i").length,
+        legend: layer.querySelectorAll(".vd-h-legend button").length,
+        rows: [...layer.querySelectorAll("tr[data-vd-hfilter]")].map(r => ({
+          kind: r.getAttribute("data-vd-hfilter"), value: r.getAttribute("data-vd-hvalue"),
+          name: r.children[0].textContent.trim(),
+          items: Number((r.children[3].textContent.match(/(\\d+)/) || [])[0]) || 0
+        })),
+        total: layer.querySelector(".vd-h-total").textContent.replace(/\\s+/g, " ").trim(),
+        z: getComputedStyle(layer).zIndex
+      };
+    })()`);
+    assert(estSheet.tabs.join("/") === "类型/模块/负责人/需求/工作项", "预估构成页签不对：" + estSheet.tabs.join("/"));
+    assert(/^预估\s/.test(estSheet.title) && estSheet.sub.indexOf("平均") >= 0, "预估构成标题 / 摘要不对：" + JSON.stringify(estSheet));
+    assert(estSheet.proxy >= 4, "类型页缺少阶段近似卡：" + estSheet.proxy);
+    assert(estSheet.rows.length >= 2 && estSheet.legend === estSheet.rows.length,
+      "构成图例与分组行不一致：" + JSON.stringify({ rows: estSheet.rows.length, legend: estSheet.legend }));
+    assert(estSheet.stack > 0, "构成条没有分段：" + estSheet.stack);
+    assert(Number(estSheet.z) > 0, "构成弹层没有进叠放层级：" + estSheet.z);
+    const firstGroup = estSheet.rows[0];
+    /* 未预估 / 超支提示只在不筛选时出现，先看全量工作项 */
+    await evaluate(`document.querySelector('.vd-h-layer.open [data-vd-htab="items"]').click()`);
+    await waitFor(`!!document.querySelector('.vd-h-layer.open [data-vd-htab="items"][aria-selected="true"]')`, "预估工作项页");
+    const allEst = await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      return {
+        rows: layer.querySelectorAll("tr[data-vd-htask]").length,
+        callout: (layer.querySelector(".vd-h-callout") || {}).textContent || "",
+        total: layer.querySelector(".vd-h-total").textContent.replace(/\\s+/g, " ").trim()
+      };
+    })()`);
+    assert(allEst.callout.indexOf("还没有预估") >= 0 || allEst.callout.indexOf("超出预估") >= 0,
+      "全量工作项页缺少未估 / 超支提示：" + JSON.stringify(allEst));
+    assert(allEst.total.indexOf("当前列表") === 0, "工作项页合计行不对：" + allEst.total);
+    await evaluate(`document.querySelector('.vd-h-layer.open [data-vd-htab="type"]').click()`);
+    await waitFor(`!!document.querySelector('.vd-h-layer.open [data-vd-htab="type"][aria-selected="true"]')`, "回到类型页");
+    await evaluate(`(() => {
+      const row = document.querySelector('.vd-h-layer.open tr[data-vd-hfilter="${firstGroup.kind}"][data-vd-hvalue="${firstGroup.value}"]');
+      row.click(); return true;
+    })()`);
+    await waitFor(`!!document.querySelector('.vd-h-layer.open [data-vd-htab="items"]')`, "分组下钻切到工作项");
+    const itemsState = await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      return {
+        tab: (layer.querySelector('[data-vd-htab][aria-selected="true"]') || {}).textContent || "",
+        chip: (layer.querySelector(".vd-h-chip") || {}).textContent || "",
+        rows: layer.querySelectorAll("tr[data-vd-htask]").length,
+        total: layer.querySelector(".vd-h-total").textContent.replace(/\\s+/g, " ").trim(),
+        callout: (layer.querySelector(".vd-h-callout") || {}).textContent || ""
+      };
+    })()`);
+    assert(itemsState.tab === "工作项" && itemsState.chip.indexOf(firstGroup.name) >= 0,
+      "分类行没有带出筛选：" + JSON.stringify(itemsState));
+    assert(itemsState.rows === firstGroup.items,
+      `分类「${firstGroup.name}」下钻行数 ${itemsState.rows} 与分组 ${firstGroup.items} 项不一致`);
+    assert(itemsState.callout === "", "筛选后不该再堆全量提示：" + itemsState.callout);
+    await shot("10b-预估构成-下钻");
+    pass(`预估构成「${firstGroup.name}」分组 → ${itemsState.rows} 项（${itemsState.total}）`);
 
-    /* 13b-3 分支：漏斗联动本版本工作项，名字开分支抽屉 */
-    await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').click()`);
-    await waitFor(`!!document.querySelector('#versionBody [data-vd-roll="module"]')`, "回到模块维度");
-    await evaluate(`document.querySelector('#versionBody [data-vd-roll="module"]').click()`);
+    /* 未预估提示：筛选态下按设计隐藏，清除筛选后回到全量才出现；点后列表必须只剩未估项 */
+    await evaluate(`document.querySelector('.vd-h-layer.open [data-vd-hclear]').click()`);
+    await waitFor(`!document.querySelector('.vd-h-layer.open .vd-h-chip')`, "清除分类筛选");
+    const cleared = await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      const btn = layer.querySelector("[data-vd-hunest]");
+      const side = document.querySelector("#versionBody .vd-hours-card .vd-hour-side");
+      const m = side.textContent.match(/(\\d+) 项未估/);
+      return {
+        has: !!btn,
+        count: m ? Number(m[1]) : 0,
+        rows: layer.querySelectorAll("tr[data-vd-htask]").length,
+        callout: (layer.querySelector(".vd-h-callout") || {}).textContent || ""
+      };
+    })()`);
+    assert(cleared.rows > firstGroup.items, "清除筛选后没有回到全部工作项：" + cleared.rows);
+    if(cleared.has){
+      assert(cleared.callout.indexOf("还没有预估") >= 0, "未估提示没有随全量列表出现：" + cleared.callout);
+      assert(cleared.count > 0, "卡片有未估提示却没标出项数：" + cleared.count);
+      await evaluate(`document.querySelector('.vd-h-layer.open [data-vd-hunest]').click()`);
+      await waitFor(`(document.querySelector('.vd-h-layer.open .vd-h-chip') || {}).textContent === "未估工作项"`, "未估筛选");
+      const unestRows = await evaluate(`document.querySelectorAll('.vd-h-layer.open tr[data-vd-htask]').length`);
+      assert(unestRows === cleared.count, `未估筛选 ${unestRows} 行与卡片「${cleared.count} 项未估」不一致`);
+      pass(`未预估提示 → 只留 ${unestRows} 项未估工作项`);
+      await evaluate(`document.querySelector('.vd-h-layer.open [data-vd-hclear]').click()`);
+      await waitFor(`!document.querySelector('.vd-h-layer.open .vd-h-chip')`, "清除未估筛选");
+    }else{
+      assert(cleared.count === 0, "卡片有未估项但提示按钮缺失：" + cleared.count);
+      pass("该版本没有未预估工作项，未估提示按设计不出现");
+    }
+    const totalItems = await evaluate(`document.querySelectorAll('#versionBody .vd-hour-main[data-vd-hours]').length`);
+    assert(totalItems === 2, "工时卡入口数量异常：" + totalItems);
+
+    /* 13b-3 实际构成：成员归集、计时窗口拆分；点工作项开详情，关掉详情回到构成 */
+    await evaluate(`document.querySelector('.vd-h-layer.open [data-vd-hclose]').click()`);
+    await waitFor(`!document.querySelector(".vd-h-layer.open")`, "预估构成关闭");
+    await evaluate(`document.querySelector('#versionBody [data-vd-hours="actual"]').click()`);
+    await waitFor(`!!document.querySelector(".vd-h-layer.open [data-vd-htab]")`, "实际构成弹层");
+    const actSheet = await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      return {
+        tabs: [...layer.querySelectorAll("[data-vd-htab]")].map(t => t.textContent.trim()),
+        title: layer.querySelector("[data-vd-htitle]").textContent.replace(/\\s+/g, " ").trim(),
+        rows: [...layer.querySelectorAll("tr[data-vd-hfilter]")].map(r => ({
+          name: r.children[0].textContent.trim(),
+          items: Number((r.children[3].textContent.match(/(\\d+)/) || [])[0]) || 0
+        }))
+      };
+    })()`);
+    assert(actSheet.tabs.join("/") === "成员/类型/模块/工作项/计时窗口", "实际构成页签不对：" + actSheet.tabs.join("/"));
+    assert(/^实际\s/.test(actSheet.title) && actSheet.rows.length > 0, "实际构成没有成员分组：" + JSON.stringify(actSheet));
+    const actGroup = actSheet.rows[0];
+    await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      const row = [...layer.querySelectorAll("tr[data-vd-hfilter]")][0];
+      row.click(); return true;
+    })()`);
+    await waitFor(`document.querySelectorAll('.vd-h-layer.open tr[data-vd-htask]').length === ${actGroup.items}`, "成员下钻行数");
+    const actItems = await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      const rows = [...layer.querySelectorAll("tr[data-vd-htask]")];
+      return {
+        chip: (layer.querySelector(".vd-h-chip") || {}).textContent || "",
+        owners: rows.map(r => r.children[2].textContent.trim()),
+        deltas: layer.querySelectorAll(".vd-h-delta").length,
+        title: (layer.querySelector("[data-vd-htitle]") || {}).textContent || ""
+      };
+    })()`);
+    assert(actItems.chip.indexOf(actGroup.name) >= 0 && actItems.owners.every(o => o === actGroup.name),
+      "成员下钻后混入其他成员：" + JSON.stringify(actItems));
+    assert(actItems.title.indexOf("实际") >= 0, "实际构成标题被改坏：" + actItems.title);
+    await evaluate(`document.querySelector('.vd-h-layer.open tr[data-vd-htask]').click()`);
+    await waitFor(`!!document.querySelector("#taskDrawer.on")`, "构成里的工作项详情", 20000);
+    const fromSheet = await evaluate(`(() => ({
+      open: !!document.querySelector(".vd-h-layer.open"),
+      title: document.getElementById("taskDrawerTitle").textContent.trim()
+    }))()`);
+    assert(fromSheet.open, "打开工作项详情后构成弹层被顶掉了");
+    await evaluate(`document.getElementById("btnCloseTask").click()`);
+    await waitFor(`!document.querySelector("#taskDrawer.on") && !!document.querySelector(".vd-h-layer.open")`, "关详情回到构成");
+    pass(`实际构成「${actGroup.name}」→ ${actGroup.items} 项；工作项详情可开可回（${fromSheet.title}）`);
+
+    /* 计时窗口：窗口内 + 窗口外必须等于实际合计，并说明缺时间时的退化口径 */
+    await evaluate(`document.querySelector('.vd-h-layer.open [data-vd-htab="window"]').click()`);
+    await waitFor(`!!document.querySelector(".vd-h-layer.open .vd-h-stage")`, "计时窗口页");
+    const win = await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      const stages = [...layer.querySelectorAll(".vd-h-stage")];
+      const num = t => { const m = t.replace(/\\s+/g, " ").match(/([0-9]+(?:\\.[0-9]+)?h(?:[0-9]+m)?)/); return m ? m[1] : ""; };
+      return {
+        out: num(stages[0].textContent), inn: num(stages[1].textContent),
+        notice: (layer.querySelector(".vd-h-notice") || {}).textContent || "",
+        flow: !!layer.querySelector(".vd-h-flow"),
+        rows: layer.querySelectorAll("tr[data-vd-htask]").length,
+        total: layer.querySelector(".vd-h-total").textContent.replace(/\\s+/g, " ").trim()
+      };
+    })()`);
+    assert(win.flow && win.rows > 0, "计时窗口页缺少口径说明或明细：" + JSON.stringify(win));
+    assert(win.out || win.inn, "计时窗口两侧都没有数值：" + JSON.stringify(win));
+    assert(win.notice.indexOf("窗口外") >= 0 && win.notice.indexOf("不能当作开发工时") >= 0,
+      "计时窗口缺少边界说明：" + win.notice);
+    await shot("10c-实际构成-计时窗口");
+    const cardAct = (card.actual.match(/实际\s*([0-9]+h(?:[0-9]+m)?)/) || [])[1];
+    assert(!cardAct || win.total.indexOf(cardAct) >= 0, `计时窗口合计 ${win.total} 与工时卡实际 ${cardAct} 不一致`);
+    pass(`计时窗口：窗口外 ${win.out} ＋ 窗口内 ${win.inn}，${win.rows} 项有计时`);
+
+    /* Esc 关弹层，页面仍停在概览 */
+    await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+    await waitFor(`!document.querySelector(".vd-h-layer.open")`, "Esc 关闭构成弹层");
+    assert(await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').classList.contains("on")`),
+      "关闭构成弹层后离开了概览页");
+    pass("Esc 关闭构成弹层，返回概览");
+
+    /* 13b-4 分支：漏斗联动本版本工作项，名字开分支抽屉 */
     const brInfo = await evaluate(`(() => {
       const wrap = document.querySelector("#versionBody .vd-branch-wrap");
       if(!wrap) return null;
@@ -853,7 +1217,7 @@ async function main(){
       pass("该版本工作项未挂分支，分支联动按设计不出现");
     }
 
-    /* 13b-4 需求页：本版本工作项数列的漏斗联动，行名开需求详情 */
+    /* 13b-5 需求页：本版本工作项数列的漏斗联动，行名开需求详情 */
     await evaluate(`document.querySelector('#versionBody [data-vd-tab="demands"]').click()`);
     await waitFor(`document.querySelectorAll("#versionBody tr[data-vd-demand]").length > 0`, "已排需求行", 25000);
     const dmInfo = await evaluate(`(() => {
@@ -894,7 +1258,7 @@ async function main(){
       pass("该版本没有已挂工作项的排期需求，需求联动按设计不出现");
     }
 
-    /* 13b-5 工作项行内关联 chip：需求 / 分支都是详情入口，且不误触发行本身 */
+    /* 13b-6 工作项行内关联 chip：需求 / 分支都是详情入口，且不误触发行本身 */
     await clearFilters();
     const relChip = await evaluate(`(() => {
       const d = document.querySelector("#versionBody tbody tr[data-open-task] .vd-rel[data-vd-demand]");
@@ -930,7 +1294,7 @@ async function main(){
     pass("工作项行主点击仍开工作项详情：" + taskTitle);
     noExceptions("行内关联");
 
-    /* 13b-6 四种联动一起写进 hash：整页重载后明细与联动条都要还原 */
+    /* 13b-7 四种联动一起写进 hash：整页重载后明细与联动条都要还原 */
     const combo = await evaluate(`(() => {
       const rows = [...document.querySelectorAll("#versionBody tbody tr[data-open-task]")];
       const r = rows.find(x => x.querySelector(".vd-rel[data-vd-demand]")) || rows[0];
@@ -948,7 +1312,7 @@ async function main(){
     const comboState = await scopeState();
     const comboHashNow = await hashOf();
     assert(comboHashNow.sg === "dev" && comboHashNow.sort === "actual", "联动深链参数丢失：" + JSON.stringify(comboHashNow));
-    assert(comboState.chips.some(c => c.indexOf("阶段") === 0), "联动深链未还原阶段 chip：" + JSON.stringify(comboState.chips));
+    assert(comboState.chips.some(c => c.indexOf("计时窗口") === 0), "联动深链未还原计时窗口 chip：" + JSON.stringify(comboState.chips));
     if(combo.dm){
       assert(comboHashNow.dm === combo.dm && comboState.demands.every(d => d === combo.dm),
         "联动深链未还原需求约束：" + JSON.stringify(comboState.demands));
@@ -975,7 +1339,7 @@ async function main(){
     await evaluate(`document.querySelector("#versionBody [data-vd-board]").click()`);
     await waitFor(`document.body.dataset.view === "board"`, "跳看板", 25000);
     const boardToast = await evaluate(`[...document.querySelectorAll(".toast, #toast, .toast-item")].map(t => t.textContent.replace(/\\s+/g, " ").trim()).join(" | ")`);
-    assert(boardToast.indexOf("阶段") >= 0, "看板无法承载阶段筛选却没有如实提示：" + boardToast);
+    assert(boardToast.indexOf("计时窗口") >= 0, "看板无法承载计时窗口筛选却没有如实提示：" + boardToast);
     pass("在看板中查看：带不走的筛选如实提示（" + boardToast.slice(0, 60) + "）");
     noExceptions("联动收尾");
 
@@ -1014,18 +1378,105 @@ async function main(){
     assert(!relReach.length, "手机上联动控件小到点不中：" + JSON.stringify(relReach.slice(0, 5)));
     await shot("08-手机-联动");
     await evaluate(`document.querySelector('#versionBody [data-vd-tab="overview"]').click()`);
-    await waitFor(`document.querySelectorAll("#versionBody .vd-dist-row").length > 0`, "手机工时分布");
-    await layout("手机 分布联动");
-    const distReach = await evaluate(`(() => {
-      const els = [...document.querySelectorAll("#versionBody .vd-dist-open, #versionBody .vd-funnel, #versionBody .vd-branch")];
+    await waitFor(`document.querySelectorAll("#versionBody .vd-hours-card .vd-hour-side").length === 2`, "手机工时卡");
+    await layout("手机 工时卡");
+    const hourReach = await evaluate(`(() => {
+      const els = [...document.querySelectorAll("#versionBody .vd-hour-main, #versionBody .vd-hour-avg, #versionBody .vd-branch")];
       return els.map(el => { const r = el.getBoundingClientRect(); return { c: el.className, w: Math.round(r.width), h: Math.round(r.height) }; })
         .filter(x => x.w > 0 && (x.h < 28 || x.w < 28));
     })()`);
-    assert(!distReach.length, "手机上概览联动控件小到点不中：" + JSON.stringify(distReach.slice(0, 5)));
-    await shot("08-手机-分布联动");
-    pass("手机 390×844：联动条 / 行内关联 chip / 漏斗均可点，无横向溢出");
+    assert(!hourReach.length, "手机上工时卡控件小到点不中：" + JSON.stringify(hourReach.slice(0, 5)));
+    await shot("08-手机-工时卡");
+    /* 窄屏构成改为整屏：宽度必须贴合视口，表格不能把页面撑出横向滚动 */
+    await evaluate(`document.querySelector('#versionBody [data-vd-hours="estimate"]').click()`);
+    await waitFor(`!!document.querySelector(".vd-h-layer.open")`, "手机构成弹层");
+    /* 等弹层入场动画结束后再量尺寸，否则量到缩放中的中间帧 */
+    await sleep(450);
+    const mobileSheet = await evaluate(`(() => {
+      const layer = document.querySelector(".vd-h-layer.open");
+      const sheet = layer.querySelector(".vd-h-sheet");
+      const r = sheet.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), layerW: layer.clientWidth,
+        overflow: sheet.scrollWidth - sheet.clientWidth,
+        tabs: layer.querySelectorAll("[data-vd-htab]").length };
+    })()`);
+    assert(Math.abs(mobileSheet.w - mobileSheet.layerW) <= 1, "手机构成弹层没有占满宽度：" + JSON.stringify(mobileSheet));
+    assert(mobileSheet.overflow <= 1, "手机构成弹层出现横向滚动：" + mobileSheet.overflow);
+    assert(mobileSheet.tabs === 5, "手机构成弹层页签缺失：" + mobileSheet.tabs);
+    await shot("08-手机-构成");
+    await evaluate(`document.querySelector('.vd-h-layer.open [data-vd-hclose]').click()`);
+    await waitFor(`!document.querySelector(".vd-h-layer.open")`, "手机构成关闭");
+    pass("手机 390×844：工时卡可点、构成整屏无横向溢出");
     noExceptions("手机联动");
     await call("Emulation.clearDeviceMetricsOverride");
+
+    /* 14c. 长版本说明：超过两行才出展开入口，展开后不被截断 */
+    const longDesc = await evaluate(`(async () => {
+      const { API } = await import("./js/core/api.js");
+      const rows = await API.get("/api/versions/cross-project");
+      const reqIds = [...new Set((rows || []).map(r => r.reqId))].slice(0, 8);
+      for(const reqId of reqIds){
+        const data = await API.get("/api/versions/stats", { reqId: reqId });
+        const hit = ((data && data.versions) || []).find(v => (v.description || "").length > 120 && v.name);
+        if(hit) return { id: hit.id, reqId: reqId, name: hit.name, len: hit.description.length };
+      }
+      return null;
+    })()`);
+    if(longDesc){
+      await navigate(BASE + "/index.html#/version?id=" + longDesc.id + "&reqId=" + longDesc.reqId);
+      await waitFor(`(() => {
+        const p = document.querySelector("#versionBody [data-vd-desc]");
+        const b = document.querySelector("#versionBody [data-vd-desc-toggle]");
+        return !!p && !!b && !b.hidden;
+      })()`, "长说明展开入口", 25000);
+      const descBefore = await evaluate(`(() => {
+        const p = document.querySelector("#versionBody [data-vd-desc]");
+        return { h: p.getBoundingClientRect().height, clamp: getComputedStyle(p).webkitLineClamp };
+      })()`);
+      await evaluate(`document.querySelector("#versionBody [data-vd-desc-toggle]").click()`);
+      await sleep(150);
+      const descAfter = await evaluate(`(() => {
+        const p = document.querySelector("#versionBody [data-vd-desc]");
+        const b = document.querySelector("#versionBody [data-vd-desc-toggle]");
+        return { open: p.classList.contains("open"), text: b.textContent.trim(), h: p.getBoundingClientRect().height };
+      })()`);
+      assert(descBefore.clamp === "2", "长说明默认不是两行折叠：" + descBefore.clamp);
+      assert(descAfter.open && descAfter.text === "收起说明" && descAfter.h > descBefore.h + 2,
+        "长说明展开失败：" + JSON.stringify({ descBefore, descAfter }));
+      await shot("10-长说明展开");
+      await evaluate(`document.querySelector("#versionBody [data-vd-desc-toggle]").click()`);
+      await sleep(150);
+      const descClosed = await evaluate(`(() => {
+        const p = document.querySelector("#versionBody [data-vd-desc]");
+        const b = document.querySelector("#versionBody [data-vd-desc-toggle]");
+        return { open: p.classList.contains("open"), text: b.textContent.trim(), h: p.getBoundingClientRect().height };
+      })()`);
+      assert(!descClosed.open && descClosed.text === "展开说明" && descClosed.h <= descBefore.h + 1,
+        "长说明收起失败：" + JSON.stringify(descClosed));
+      pass("长版本说明两行折叠，可展开 / 收起：" + longDesc.name + "（" + longDesc.len + " 字）");
+    } else {
+      /* 演示库没有超长说明：注入探针，验证折叠态下展开 / 收起的代码路径 */
+      const descProbe = await evaluate(`(() => {
+        const p = document.querySelector("#versionBody [data-vd-desc]");
+        const btn = document.querySelector("#versionBody [data-vd-desc-toggle]");
+        if(!p || !btn) return null;
+        p.textContent = "超长说明探针：" + "支付网关退款与对账链路收口，涉及回调幂等、差错处理与按渠道汇总。".repeat(20);
+        p.style.maxWidth = "300px";
+        const before = { h: p.getBoundingClientRect().height, clamp: getComputedStyle(p).webkitLineClamp };
+        btn.click();
+        const after = { h: p.getBoundingClientRect().height, open: p.classList.contains("open"), text: btn.textContent.trim() };
+        btn.click();
+        const closed = { h: p.getBoundingClientRect().height, open: p.classList.contains("open"), text: btn.textContent.trim() };
+        return { before, after, closed };
+      })()`);
+      assert(descProbe, "版本说明区或展开按钮缺失");
+      assert(descProbe.before.clamp === "2", "说明默认不是两行折叠：" + descProbe.before.clamp);
+      assert(descProbe.after.open && descProbe.after.text === "收起说明" && descProbe.after.h > descProbe.before.h + 2,
+        "说明展开失败：" + JSON.stringify(descProbe));
+      assert(!descProbe.closed.open && descProbe.closed.text === "展开说明" && descProbe.closed.h <= descProbe.before.h + 1,
+        "说明收起失败：" + JSON.stringify(descProbe));
+      pass("演示库没有超长版本说明，注入探针验证展开 / 收起（" + descProbe.before.h + "px → " + descProbe.after.h + "px）");
+    }
 
     /* 15. 不存在的版本：给可解释的空态而不是白屏 */
     await navigate(BASE + "/index.html#/version?id=__not_exist__&reqId=" + main.reqId);
