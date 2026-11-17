@@ -603,6 +603,16 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             </div>
           </section>
 
+          <!-- 新建态没有页签：关联与依赖的同一份 DOM 借住到这里，编辑态再搬回各自页签 -->
+          <details class="drawer-more" id="createExtras" hidden>
+            <summary>
+              <span>关联与依赖</span>
+              <span class="foot-note" id="createExtrasSummary">· 未设置</span>
+              <span class="caret"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+            </summary>
+            <div class="drawer-more-body" id="createExtrasBody"></div>
+          </details>
+
           <!-- 低频设置收进折叠区 -->
           <details class="drawer-more drawer-settings" id="drawerMore">
             <summary>

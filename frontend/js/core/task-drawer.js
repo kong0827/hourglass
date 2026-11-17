@@ -95,6 +95,25 @@ function relocateDrawerSections(){
   if(aside && !aside.children.length) aside.remove();
 }
 relocateDrawerSections();
+/* 新建态页签是收起的：把「关联」「依赖」两张卡搬进概览折叠区，编辑态再按原路搬回。
+   依赖卡被就地编辑借住时不动它，免得把打开中的编辑器拆散。 */
+function setCreateExtras(isCreate){
+  var box = $("createExtras"), host = $("createExtrasBody");
+  if(!box || !host) return;
+  if(isCreate){
+    [$("drawerSource"), $("assocEditBox"), $("fDeps")].forEach(function(el){ if(el) host.appendChild(el); });
+    box.hidden = false;
+    return;
+  }
+  box.hidden = true;
+  var rel = $("paneRel"), exec = $("paneExec");
+  var relBox = rel ? (rel.querySelector(".stack") || rel) : null;
+  var execBox = exec ? (exec.querySelector(".stack") || exec) : null;
+  if(relBox){
+    [$("drawerSource"), $("assocEditBox"), $("taskPublication")].forEach(function(el){ if(el) relBox.appendChild(el); });
+  }
+  if(execBox && !depInlineOpen && $("fDeps")) execBox.appendChild($("fDeps"));
+}
 function expandDrawerSects(root){
   if(!root) return;
   root.querySelectorAll(".drawer-sect").forEach(function(s){
@@ -1609,6 +1628,7 @@ function syncDrawerSource(){
   if(meta) meta.textContent = (project ? project + " · " : "") + "关联需求";
   syncAutoProject();
   renderReadView();
+  syncCreateExtrasSummary();
 }
 /* 折叠的次要关联：只报「设了哪几类」，不把具体长文本塞进首屏 */
 function assocText(id){
@@ -1633,6 +1653,19 @@ function syncAssocMore(){
   if(assocText("iBranch")) names.push("分支");
   if(assocText("iReqDoc")) names.push("文档");
   sum.textContent = names.length ? "已设 " + names.join("、") : "分支 / 文档";
+  syncCreateExtrasSummary();
+}
+/* 收起时摘要要报实际值，否则新建态看不出关联区里已经带了东西 */
+function syncCreateExtrasSummary(){
+  var el = $("createExtrasSummary");
+  if(!el) return;
+  var parts = [];
+  if(versionNamesNow()) parts.push("版本");
+  if(demandNameNow()) parts.push("需求");
+  if(assocText("iBranch")) parts.push("分支");
+  if(assocText("iReqDoc")) parts.push("文档");
+  if(depState && depState.pending.length) parts.push("依赖 " + depState.pending.length);
+  el.textContent = parts.length ? "· 已设 " + parts.join("、") : "· 未设置";
 }
 /* 只在抽屉读取需求目标，不对看板/列表逐卡请求；缓存随抽屉重开失效。 */
 var demandTargetCache = {}, demandTargetPending = {};
@@ -1852,8 +1885,9 @@ if(versionSel){
     lastVersionKey = key;
     if(!rt.editingId) newVersionExplicit = true;
     syncVersionReason();
+    syncCreateExtrasSummary();
   });
-  if(window.MutationObserver) new MutationObserver(function(){ syncVersionReason(); }).observe(versionSel, {childList:true, attributes:true, attributeFilter:["data-ready"]});
+  if(window.MutationObserver) new MutationObserver(function(){ syncVersionReason(); syncCreateExtrasSummary(); }).observe(versionSel, {childList:true, attributes:true, attributeFilter:["data-ready"]});
 }
 ["iEpic", "iBranch", "iReqDoc"].forEach(function(id){
   var el = $(id);
@@ -2697,6 +2731,10 @@ function openTaskDrawer(colId, task, defaults){
   resetFormBaseline();
   /* 已有工作项打开先读、再编辑；新建直接进编辑态，页签收起 */
   setDrawerMode(task ? "read" : "edit");
+  /* 新建没有页签入口：关联与依赖改由概览折叠区承载；已带出需求时直接展开，别把来源卡藏起来 */
+  setCreateExtras(!rt.editingId);
+  var extrasBox = $("createExtras");
+  if(extrasBox && !rt.editingId) extrasBox.open = !!rt.formDemandId;
   openDrawer();
   loadTaskReleaseRecords(task);
   UI.wireTooltips(taskDrawer);
@@ -2920,6 +2958,7 @@ function renderDeps(){
   var note = $("depScopeNote");
   if(note) note.textContent = rt.editingId ? "影响甘特连线，不自动改日期" : "保存后建立";
   syncDepControls();
+  syncCreateExtrasSummary();
   /* 关联卡的依赖汇总跟着同一份 depState 走：增删改都在此收口，避免读态摘要停在旧条数 */
   if(drawerMode === "read") renderReadAssoc();
 }

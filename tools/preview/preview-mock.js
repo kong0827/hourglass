@@ -942,6 +942,25 @@
     } else if (clean === "/api/tasks/list") {
       /* 列表/甘特/未排期共用：按查询参数筛选，并保持 {items,total} 结构 */
       data = mockTaskList(u);
+    } else if (clean === "/api/demands/page") {
+      /* 工作项抽屉的「关联需求」候选：生产分页返回，这里给两条可关联 + 一条待评审 */
+      var dpM = /[?&]reqId=([^&]*)/.exec(u);
+      var dpReq = dpM ? decodeURIComponent(dpM[1]) : "";
+      var demoDemands = [
+        { id: "D1", title: "权限中台统一鉴权", status: "plan", reqId: "R1", versionStatus: "planned" },
+        { id: "D2", title: "结算对账异常治理", status: "review", reqId: "R2", versionStatus: "" },
+        { id: "D3", title: "导出能力增强", status: "pass", reqId: "R1", versionStatus: "" }
+      ];
+      var dpRows = demoDemands.filter(function (d) { return !dpReq || d.reqId === dpReq; });
+      data = { items: dpRows, total: dpRows.length, hasMore: false };
+    } else if (clean === "/api/branches/options") {
+      /* 工作项抽屉的分支候选：生产按项目返回分页结果，这里给可演示的三档状态 */
+      var bpoM = /[?&]project=([^&]*)/.exec(u);
+      var bpoProject = bpoM ? decodeURIComponent(bpoM[1]) : "";
+      var bpoRows = branches.map(function (b, i) {
+        return { id: b.id, name: b.name, status: b.status, targetBranch: b.targetBranch, reqId: i === 2 ? "R2" : "R1" };
+      }).filter(function (b) { return !bpoProject || b.reqId === bpoProject; });
+      data = { items: bpoRows, total: bpoRows.length, hasMore: false };
     } else if (clean === "/api/manager/workload") {
       data = mockWorkload(u);
     } else if (/^\/api\/projects\/[A-Za-z0-9_-]+\/release-policy$/.test(clean)) {
@@ -1060,6 +1079,16 @@
       var cdel = clean.split("/").pop();
       routes["/api/categories"] = routes["/api/categories"].filter(function (c) { return c.id !== cdel; });
       data = {};
+    } else if (clean === "/api/versions" && method === "GET") {
+      /* 工作项抽屉的「计划版本」候选：生产按项目过滤，这里给两档可编辑状态 */
+      var vqM = /[?&]reqId=([^&]*)/.exec(u);
+      var vqReq = vqM ? decodeURIComponent(vqM[1]) : "";
+      var versionRows = [
+        { id: "V1", reqId: "R1", name: "1.2 权限改造", status: "active" },
+        { id: "V2", reqId: "R1", name: "1.3 权限收官", status: "planned" },
+        { id: "V3", reqId: "R2", name: "2.0 结算升级", status: "planned" }
+      ];
+      data = versionRows.filter(function (v) { return !vqReq || v.reqId === vqReq; });
     } else if (clean === "/api/versions/task-options") {
       /* 工作项抽屉的「所属史诗」候选：生产由后端按项目过滤，这里给两条演示史诗 */
       var optM = /[?&]reqId=([^&]*)/.exec(u);

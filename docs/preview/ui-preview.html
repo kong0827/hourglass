@@ -17402,6 +17402,25 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
     } else if (clean === "/api/tasks/list") {
       /* 列表/甘特/未排期共用：按查询参数筛选，并保持 {items,total} 结构 */
       data = mockTaskList(u);
+    } else if (clean === "/api/demands/page") {
+      /* 工作项抽屉的「关联需求」候选：生产分页返回，这里给两条可关联 + 一条待评审 */
+      var dpM = /[?&]reqId=([^&]*)/.exec(u);
+      var dpReq = dpM ? decodeURIComponent(dpM[1]) : "";
+      var demoDemands = [
+        { id: "D1", title: "权限中台统一鉴权", status: "plan", reqId: "R1", versionStatus: "planned" },
+        { id: "D2", title: "结算对账异常治理", status: "review", reqId: "R2", versionStatus: "" },
+        { id: "D3", title: "导出能力增强", status: "pass", reqId: "R1", versionStatus: "" }
+      ];
+      var dpRows = demoDemands.filter(function (d) { return !dpReq || d.reqId === dpReq; });
+      data = { items: dpRows, total: dpRows.length, hasMore: false };
+    } else if (clean === "/api/branches/options") {
+      /* 工作项抽屉的分支候选：生产按项目返回分页结果，这里给可演示的三档状态 */
+      var bpoM = /[?&]project=([^&]*)/.exec(u);
+      var bpoProject = bpoM ? decodeURIComponent(bpoM[1]) : "";
+      var bpoRows = branches.map(function (b, i) {
+        return { id: b.id, name: b.name, status: b.status, targetBranch: b.targetBranch, reqId: i === 2 ? "R2" : "R1" };
+      }).filter(function (b) { return !bpoProject || b.reqId === bpoProject; });
+      data = { items: bpoRows, total: bpoRows.length, hasMore: false };
     } else if (clean === "/api/manager/workload") {
       data = mockWorkload(u);
     } else if (/^\/api\/projects\/[A-Za-z0-9_-]+\/release-policy$/.test(clean)) {
@@ -17520,6 +17539,16 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
       var cdel = clean.split("/").pop();
       routes["/api/categories"] = routes["/api/categories"].filter(function (c) { return c.id !== cdel; });
       data = {};
+    } else if (clean === "/api/versions" && method === "GET") {
+      /* 工作项抽屉的「计划版本」候选：生产按项目过滤，这里给两档可编辑状态 */
+      var vqM = /[?&]reqId=([^&]*)/.exec(u);
+      var vqReq = vqM ? decodeURIComponent(vqM[1]) : "";
+      var versionRows = [
+        { id: "V1", reqId: "R1", name: "1.2 权限改造", status: "active" },
+        { id: "V2", reqId: "R1", name: "1.3 权限收官", status: "planned" },
+        { id: "V3", reqId: "R2", name: "2.0 结算升级", status: "planned" }
+      ];
+      data = versionRows.filter(function (v) { return !vqReq || v.reqId === vqReq; });
     } else if (clean === "/api/versions/task-options") {
       /* 工作项抽屉的「所属史诗」候选：生产由后端按项目过滤，这里给两条演示史诗 */
       var optM = /[?&]reqId=([^&]*)/.exec(u);
@@ -18301,6 +18330,16 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
               <span class="hint">进入待测试 / 测试中自动记为待回归；标记已完成自动记为回归通过，退回待处理 / 进行中自动记为回归失败</span>
             </div>
           </section>
+
+          <!-- 新建态没有页签：关联与依赖的同一份 DOM 借住到这里，编辑态再搬回各自页签 -->
+          <details class="drawer-more" id="createExtras" hidden>
+            <summary>
+              <span>关联与依赖</span>
+              <span class="foot-note" id="createExtrasSummary">· 未设置</span>
+              <span class="caret"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+            </summary>
+            <div class="drawer-more-body" id="createExtrasBody"></div>
+          </details>
 
           <!-- 低频设置收进折叠区 -->
           <details class="drawer-more drawer-settings" id="drawerMore">
@@ -25487,6 +25526,25 @@ function relocateDrawerSections(){
   if(aside && !aside.children.length) aside.remove();
 }
 relocateDrawerSections();
+/* 新建态页签是收起的：把「关联」「依赖」两张卡搬进概览折叠区，编辑态再按原路搬回。
+   依赖卡被就地编辑借住时不动它，免得把打开中的编辑器拆散。 */
+function setCreateExtras(isCreate){
+  var box = $("createExtras"), host = $("createExtrasBody");
+  if(!box || !host) return;
+  if(isCreate){
+    [$("drawerSource"), $("assocEditBox"), $("fDeps")].forEach(function(el){ if(el) host.appendChild(el); });
+    box.hidden = false;
+    return;
+  }
+  box.hidden = true;
+  var rel = $("paneRel"), exec = $("paneExec");
+  var relBox = rel ? (rel.querySelector(".stack") || rel) : null;
+  var execBox = exec ? (exec.querySelector(".stack") || exec) : null;
+  if(relBox){
+    [$("drawerSource"), $("assocEditBox"), $("taskPublication")].forEach(function(el){ if(el) relBox.appendChild(el); });
+  }
+  if(execBox && !depInlineOpen && $("fDeps")) execBox.appendChild($("fDeps"));
+}
 function expandDrawerSects(root){
   if(!root) return;
   root.querySelectorAll(".drawer-sect").forEach(function(s){
@@ -27001,6 +27059,7 @@ function syncDrawerSource(){
   if(meta) meta.textContent = (project ? project + " · " : "") + "关联需求";
   syncAutoProject();
   renderReadView();
+  syncCreateExtrasSummary();
 }
 /* 折叠的次要关联：只报「设了哪几类」，不把具体长文本塞进首屏 */
 function assocText(id){
@@ -27025,6 +27084,19 @@ function syncAssocMore(){
   if(assocText("iBranch")) names.push("分支");
   if(assocText("iReqDoc")) names.push("文档");
   sum.textContent = names.length ? "已设 " + names.join("、") : "分支 / 文档";
+  syncCreateExtrasSummary();
+}
+/* 收起时摘要要报实际值，否则新建态看不出关联区里已经带了东西 */
+function syncCreateExtrasSummary(){
+  var el = $("createExtrasSummary");
+  if(!el) return;
+  var parts = [];
+  if(versionNamesNow()) parts.push("版本");
+  if(demandNameNow()) parts.push("需求");
+  if(assocText("iBranch")) parts.push("分支");
+  if(assocText("iReqDoc")) parts.push("文档");
+  if(depState && depState.pending.length) parts.push("依赖 " + depState.pending.length);
+  el.textContent = parts.length ? "· 已设 " + parts.join("、") : "· 未设置";
 }
 /* 只在抽屉读取需求目标，不对看板/列表逐卡请求；缓存随抽屉重开失效。 */
 var demandTargetCache = {}, demandTargetPending = {};
@@ -27244,8 +27316,9 @@ if(versionSel){
     lastVersionKey = key;
     if(!rt.editingId) newVersionExplicit = true;
     syncVersionReason();
+    syncCreateExtrasSummary();
   });
-  if(window.MutationObserver) new MutationObserver(function(){ syncVersionReason(); }).observe(versionSel, {childList:true, attributes:true, attributeFilter:["data-ready"]});
+  if(window.MutationObserver) new MutationObserver(function(){ syncVersionReason(); syncCreateExtrasSummary(); }).observe(versionSel, {childList:true, attributes:true, attributeFilter:["data-ready"]});
 }
 ["iEpic", "iBranch", "iReqDoc"].forEach(function(id){
   var el = $(id);
@@ -28089,6 +28162,10 @@ function openTaskDrawer(colId, task, defaults){
   resetFormBaseline();
   /* 已有工作项打开先读、再编辑；新建直接进编辑态，页签收起 */
   setDrawerMode(task ? "read" : "edit");
+  /* 新建没有页签入口：关联与依赖改由概览折叠区承载；已带出需求时直接展开，别把来源卡藏起来 */
+  setCreateExtras(!rt.editingId);
+  var extrasBox = $("createExtras");
+  if(extrasBox && !rt.editingId) extrasBox.open = !!rt.formDemandId;
   openDrawer();
   loadTaskReleaseRecords(task);
   UI.wireTooltips(taskDrawer);
@@ -28312,6 +28389,7 @@ function renderDeps(){
   var note = $("depScopeNote");
   if(note) note.textContent = rt.editingId ? "影响甘特连线，不自动改日期" : "保存后建立";
   syncDepControls();
+  syncCreateExtrasSummary();
   /* 关联卡的依赖汇总跟着同一份 depState 走：增删改都在此收口，避免读态摘要停在旧条数 */
   if(drawerMode === "read") renderReadAssoc();
 }
@@ -92538,6 +92616,6 @@ window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-17 02:46</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-17 02:59</span></div>
 </body>
 </html>
