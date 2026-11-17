@@ -42,8 +42,8 @@ var WC_LAYOUTS = ["card", "list"];
 var wcLayout = wcLayoutPref();
 function wcLayoutPref(){
   var v = "";
-  try{ v = localStorage.getItem("ds.wc.layout"); }catch(e){ return "card"; }
-  return WC_LAYOUTS.indexOf(v) >= 0 ? v : "card";
+  try{ v = localStorage.getItem("ds.wc.layout"); }catch(e){ return "list"; }
+  return WC_LAYOUTS.indexOf(v) >= 0 ? v : "list";
 }
 function setWcLayout(v){
   if(WC_LAYOUTS.indexOf(v) === -1 || wcLayout === v) return;

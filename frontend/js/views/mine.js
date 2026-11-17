@@ -1,8 +1,8 @@
 /* views/mine · 我的工作（分页 + 分组 + 行内操作） */
 
 import { API } from "../core/api.js";
-import { btnMineFields, btnMineFold, btnMineRefresh, mineBody, mineGroup, mineMeta, mineSort, mineSpaceFilter, mineStats, mineSubgroup } from "../core/dom.js";
-import { clearFilters, syncDimButtons } from "../core/filters-ui.js";
+import { btnMineFields, btnMineFold, btnMineRefresh, mineBody, mineGroup, mineMeta, minePub, mineSort, mineSpaceFilter, mineStats, mineSubgroup } from "../core/dom.js";
+import { clearFilters, reloadFilteredViews, syncDimButtons } from "../core/filters-ui.js";
 import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
@@ -119,11 +119,12 @@ function syncMineFilters(){
     mineSubgroup.disabled = state.mineGroup === "none";
   }
   if(mineSort) mineSort.value = MINE_SORTS.indexOf(state.mineSort) !== -1 ? state.mineSort : "default";
+  if(minePub) minePub.value = state.pubState === "published" || state.pubState === "unpublished" ? state.pubState : "";
   syncMineFilterMarks();
 }
 /* 筛选生效态：偏离默认值才标记，默认值与 state.js 首屏一致、不发光 */
 function syncMineFilterMarks(){
-  [[mineGroup, "due"], [mineSubgroup, "none"], [mineSort, "default"], [mineSpaceFilter, ""]]
+  [[mineGroup, "due"], [mineSubgroup, "none"], [mineSort, "default"], [mineSpaceFilter, ""], [minePub, ""]]
     .forEach(function(pair){
       var el = pair[0];
       if(el) UI.markFiltered(el, el.value === pair[1]);
@@ -169,6 +170,9 @@ function loadMine(opts){
   var append = !!opts.append;
   /* 只有「加载更多」需要排队；筛选/搜索变化必须作废在途请求（seq 丢弃旧响应），否则新条件被吞掉 */
   if(mineLoading && append) return;
+  /* 发布态是全局维度：筛选条清空/应用视图时也同步回页内控件 */
+  if(minePub) minePub.value = state.pubState || "";
+  syncMineFilterMarks();
   mineLoading = true;
   var seq = ++mineSeq;
   var offset = append ? mineAll.length : 0;
@@ -1474,6 +1478,14 @@ if(mineSpaceFilter){
     state.mineSpace = mineSpaceFilter.value || "";
     syncMineFilterMarks();
     rerenderMine();
+  });
+}
+if(minePub){
+  minePub.addEventListener("change", function(){
+    /* 发布态是全局维度：与看板共用 state.pubState，切换后联动重载其它可见视图 */
+    state.pubState = minePub.value === "published" || minePub.value === "unpublished" ? minePub.value : null;
+    syncMineFilterMarks();
+    reloadFilteredViews();
   });
 }
 if(mineGroup){
