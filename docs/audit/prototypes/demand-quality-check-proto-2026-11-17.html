@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 需求提交前体检 · 原型 · 2026-11-17</title>
+<style>
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --scrim:rgba(16,24,40,.32);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);font-size:13px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+button{font-family:inherit}
+
+/* ============ 应用背景（压暗底层） ============ */
+.app{display:flex;height:100vh;background:#fff}
+.side{width:196px;flex:none;border-right:1px solid var(--border);padding:14px 10px;display:flex;flex-direction:column;gap:3px;background:#fff}
+.brand{display:flex;align-items:center;gap:9px;padding:0 8px 12px;font-weight:750;font-size:14px}
+.brand .mark{width:24px;height:24px;border-radius:7px;background:linear-gradient(155deg,#2563EB,#7A5AF8);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800}
+.ws{display:flex;align-items:center;gap:7px;padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:11.5px;color:var(--text-2);margin-bottom:8px}
+.ws i{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.ws b{color:var(--text);font-weight:600}
+.navlab{font-size:10px;color:var(--text-3);padding:8px 9px 3px;letter-spacing:.06em}
+.nav{display:flex;align-items:center;gap:8px;height:29px;padding:0 9px;border-radius:6px;color:var(--text-2);font-size:12px}
+.nav .ic{width:13px;height:13px;border-radius:4px;background:var(--surface-sunken);border:1px solid var(--border);flex:none}
+.nav.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.nav.on .ic{background:var(--primary);border-color:var(--primary)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-app)}
+.top{height:48px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 18px;flex:none}
+.crumb{font-size:12px;color:var(--text-3);display:flex;gap:6px;align-items:center}
+.crumb b{color:var(--text);font-weight:600}
+.crumb .sep{color:var(--border-strong)}
+.top .grow{flex:1}
+.btn{height:30px;padding:0 12px;border:1px solid var(--border-strong);background:#fff;border-radius:var(--r-sm);font-size:12px;color:var(--text-2);display:inline-flex;align-items:center;gap:5px}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:650}
+.avatar{width:26px;height:26px;border-radius:50%;background:#E0EAFF;color:#1D4ED8;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+.board{padding:18px 22px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;align-items:start}
+.col{background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-md);padding:9px;min-height:520px}
+.col-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;color:var(--text-2);padding:2px 3px 9px}
+.col-head .n{color:var(--text-3);font-weight:500;font-size:11px}
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 10px;margin-bottom:7px;box-shadow:var(--shadow-xs)}
+.card b{display:block;font-size:12px;font-weight:600;line-height:1.5}
+.card .meta{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-xs);font-size:10.5px;color:var(--text-2);background:var(--surface-sunken);border:1px solid var(--border);white-space:nowrap}
+.tag.blue{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+.tag.plum{background:var(--plum-soft);border-color:var(--plum-border);color:var(--plum-fg)}
+.tag.green{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg)}
+.tag.amber{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+
+/* ============ 侧滑：提需求 ============ */
+.layer{position:fixed;inset:0;display:flex}
+.layer.form-layer{justify-content:flex-end;background:var(--scrim);z-index:10}
+.form-sheet{width:min(560px,100vw);height:100%;background:#fff;border-left:1px solid var(--border);
+  display:flex;flex-direction:column;box-shadow:var(--shadow-xl)}
+.form-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.form-head h2{margin:0;font-size:16px;font-weight:650;flex:1;letter-spacing:-.01em}
+.icon-x{width:26px;height:26px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--text-3);display:grid;place-items:center}
+.form-body{padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow:auto;flex:1}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:5px}
+.field label .req{color:var(--danger)}
+.inp{width:100%;height:34px;border:1px solid var(--border-strong);border-radius:var(--r-sm);padding:0 10px;font-family:inherit;font-size:13px;color:var(--text);background:#fff}
+textarea.inp{height:64px;padding:8px 10px;resize:none;line-height:1.6}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sec{font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.05em;padding-top:4px;border-top:1px solid var(--border);margin-top:2px}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden}
+.seg span{height:32px;min-width:46px;display:grid;place-items:center;font-size:12px;color:var(--text-2);border-right:1px solid var(--border)}
+.seg span:last-child{border-right:0}
+.seg span.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.form-foot{margin-top:auto;padding:14px 20px;border-top:1px solid var(--border);background:var(--surface-sunken);display:flex;align-items:center;gap:10px}
+.form-foot .note{flex:1;font-size:11.5px;color:var(--text-3);line-height:1.5}
+.form-foot .btn.primary{height:34px;padding:0 16px;font-size:13px}
+
+/* ============ 体检弹窗 ============ */
+.layer.qc-layer{z-index:20;justify-content:center;align-items:flex-start;padding:40px 20px;
+  background:rgba(16,24,40,.12);overflow:auto}
+.sheet{width:100%;max-width:480px;background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-xl);overflow:hidden;animation:none}
+.qc-head{display:flex;align-items:flex-start;gap:12px;padding:17px 20px 12px}
+.qc-head .ico{width:32px;height:32px;border-radius:9px;background:var(--primary-soft);color:var(--primary-fg);
+  display:grid;place-items:center;flex:none;border:1px solid var(--primary-border)}
+.qc-head .tt{flex:1;min-width:0}
+.qc-head h3{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+.qc-head p{margin:3px 0 0;font-size:12.5px;color:var(--text-2);line-height:1.55}
+.qc-body{padding:4px 20px 18px;display:flex;flex-direction:column;gap:14px}
+.qc-sec{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.04em;margin-bottom:-4px}
+.qc-sec .n{font-weight:600;color:var(--text-3)}
+.qc-list{display:flex;flex-direction:column;gap:8px}
+.qc-item{display:flex;gap:9px;padding:10px 11px;border:1px solid var(--border);border-radius:var(--r-md);background:#fff}
+.qc-item .dot{width:7px;height:7px;border-radius:50%;flex:none;margin-top:6px}
+.qc-item.warn .dot{background:var(--warning)}
+.qc-item.info .dot{background:var(--primary)}
+.qc-item .tx{flex:1;min-width:0}
+.qc-item b{display:block;font-size:12.5px;font-weight:650;line-height:1.5}
+.qc-item p{margin:2px 0 0;font-size:11.8px;color:var(--text-3);line-height:1.55}
+.qc-item .fix{flex:none;align-self:center;font-size:12px;color:var(--primary-fg);font-weight:600;white-space:nowrap}
+.sim{padding:10px 11px;border:1px solid var(--border);border-radius:var(--r-md);display:flex;gap:10px;align-items:flex-start}
+.sim .tx{flex:1;min-width:0}
+.sim .t1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sim .no{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.sim b{font-size:12.5px;font-weight:650;line-height:1.5}
+.sim .meta{display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;font-size:11px;color:var(--text-3)}
+.sim .why{font-size:11px;color:var(--text-3);margin-top:4px}
+.sim .go{flex:none;font-size:12px;color:var(--primary-fg);font-weight:600;align-self:center;white-space:nowrap}
+.qc-foot{border-top:1px solid var(--border);background:var(--surface-sunken);padding:12px 20px;display:flex;align-items:center;gap:8px}
+.qc-foot .skip{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);margin-right:auto;white-space:nowrap}
+.qc-foot .skip input{width:13px;height:13px;accent-color:var(--primary);margin:0}
+.qc-foot .btn{height:32px;padding:0 13px;font-size:12.5px}
+.qc-foot .btn.primary{font-weight:650}
+.hint-line{font-size:11.5px;color:var(--text-3);line-height:1.55;padding:2px 0 0}
+@media (max-width:560px){
+  .layer.qc-layer{padding:24px 14px}
+  .qc-item{flex-wrap:wrap}
+  .qc-item .fix{width:100%;text-align:left;padding-left:16px}
+  .qc-foot{flex-wrap:wrap;row-gap:8px}
+  .qc-foot .skip{flex:1 1 100%;}
+  .qc-foot .btn{flex:1 1 0;justify-content:center}
+}
+</style>
+</head>
+<body>
+
+<div class="app" aria-hidden="true">
+  <aside class="side">
+    <div class="brand"><span class="mark">沙</span>沙漏</div>
+    <div class="ws"><i></i><b>星云工作空间</b></div>
+    <div class="navlab">工作</div>
+    <div class="nav"><span class="ic"></span>工作台</div>
+    <div class="nav on"><span class="ic"></span>需求池</div>
+    <div class="nav"><span class="ic"></span>版本与发布</div>
+    <div class="nav"><span class="ic"></span>测试</div>
+    <div class="nav"><span class="ic"></span>文档</div>
+    <div class="navlab">洞察</div>
+    <div class="nav"><span class="ic"></span>交付驾驶舱</div>
+    <div class="nav"><span class="ic"></span>活动</div>
+  </aside>
+  <main class="main">
+    <div class="top">
+      <div class="crumb"><span>需求池</span><span class="sep">/</span><b>全部需求</b></div>
+      <span class="grow"></span>
+      <button class="btn">列表</button>
+      <button class="btn primary">+ 提需求</button>
+      <span class="avatar">孔</span>
+    </div>
+    <div class="board">
+      <div class="col">
+        <div class="col-head">待评审 <span class="n">3</span></div>
+        <div class="card"><b>支持按项目导出工时报表</b><div class="meta"><span class="tag blue">P1</span><span class="tag">新功能</span></div></div>
+        <div class="card"><b>成员负载按测试角色拆分</b><div class="meta"><span class="tag blue">P2</span><span class="tag">体验优化</span></div></div>
+        <div class="card"><b>版本详情增加交付说明导出</b><div class="meta"><span class="tag blue">P2</span><span class="tag">新功能</span></div></div>
+      </div>
+      <div class="col">
+        <div class="col-head">已通过 <span class="n">2</span></div>
+        <div class="card"><b>文档支持按分类批量移动</b><div class="meta"><span class="tag blue">P1</span><span class="tag">新功能</span></div></div>
+        <div class="card"><b>缺陷列表增加回归状态列</b><div class="meta"><span class="tag blue">P2</span><span class="tag">体验优化</span></div></div>
+      </div>
+      <div class="col">
+        <div class="col-head">已排期 <span class="n">2</span></div>
+        <div class="card"><b>按项目导出工时明细</b><div class="meta"><span class="tag plum">P1</span><span class="tag">v2.8</span></div></div>
+        <div class="card"><b>需求详情 AI 拆工作项</b><div class="meta"><span class="tag plum">P1</span><span class="tag">v2.8</span></div></div>
+      </div>
+      <div class="col">
+        <div class="col-head">已完成 <span class="n">1</span></div>
+        <div class="card"><b>版本列表统一「进行中」命名</b><div class="meta"><span class="tag green">已完成</span><span class="tag">v2.7</span></div></div>
+      </div>
+      <div class="col">
+        <div class="col-head">已关闭 <span class="n">1</span></div>
+        <div class="card"><b>仪表盘自定义卡片排序</b><div class="meta"><span class="tag">评审不通过</span></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 底层：提需求侧滑表单 -->
+<div class="layer form-layer">
+  <div class="form-sheet">
+    <div class="form-head"><h2>提需求</h2><button class="icon-x">✕</button></div>
+    <div class="form-body">
+      <div class="field"><label>所属项目 <span class="req">*</span></label><input class="inp" value="沙漏 · 项目管理" readonly></div>
+      <div class="field"><label>需求标题 <span class="req">*</span></label><input class="inp" value="支持按项目导出工时报表" readonly></div>
+      <div class="field"><label>需求描述</label><textarea class="inp" readonly>财务每月要报表。</textarea></div>
+      <div class="field"><label>验收标准</label><textarea class="inp" placeholder="做到什么程度算完成…" readonly></textarea></div>
+      <div class="sec">归类</div>
+      <div class="form-grid">
+        <div class="field"><label>需求来源</label><input class="inp" value="财务 · 刘" readonly></div>
+        <div class="field"><label>需求类型</label><input class="inp" value="新功能" readonly></div>
+      </div>
+      <div class="sec">优先级与交付</div>
+      <div class="form-grid">
+        <div class="field"><label>优先级</label><div class="seg"><span>P0</span><span class="on">P1</span><span>P2</span><span>P3</span></div></div>
+        <div class="field"><label>期望交付日期</label><input class="inp" value="" placeholder="选填" readonly></div>
+      </div>
+    </div>
+    <div class="form-foot">
+      <p class="note">新需求进入「待评审」；仅空间主可通过、拒绝或排期</p>
+      <button class="btn primary">提交评审</button>
+    </div>
+  </div>
+</div>
+
+<!-- 顶层：提交前体检 -->
+<div class="layer qc-layer">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="qcTitle">
+    <div class="qc-head">
+      <span class="ico" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h6M7 3.5a1.5 1.5 0 0 0-1.5 1.5v.5h9V5A1.5 1.5 0 0 0 13 3.5"/><rect x="4.5" y="5.5" width="11" height="11" rx="1.6"/><path d="M7.5 10.2l1.6 1.6 3.4-3.4"/></svg>
+      </span>
+      <div class="tt">
+        <h3 id="qcTitle">提交前体检</h3>
+        <p>「支持按项目导出工时报表」可以再补 3 处，发现 1 条相似需求。</p>
+      </div>
+      <button class="icon-x">✕</button>
+    </div>
+    <div class="qc-body">
+      <div>
+        <div class="qc-sec">建议补充 <span class="n">3</span></div>
+        <div class="qc-list">
+          <div class="qc-item warn">
+            <span class="dot"></span>
+            <div class="tx">
+              <b>没有验收标准</b>
+              <p>评审和验收都缺依据，建议写清「做到什么程度算完成」，例如导出范围、字段与格式。</p>
+            </div>
+            <span class="fix">去填写</span>
+          </div>
+          <div class="qc-item info">
+            <span class="dot"></span>
+            <div class="tx">
+              <b>需求描述只有 8 个字</b>
+              <p>评审时还要反复问背景，建议补充使用场景、数据口径和要解决的问题。</p>
+            </div>
+            <span class="fix">去填写</span>
+          </div>
+          <div class="qc-item info">
+            <span class="dot"></span>
+            <div class="tx">
+              <b>P1 需求还没有期望交付日期</b>
+              <p>评审通过后排期还要补；先给一个目标日期，能提前发现和已有承诺的冲突。</p>
+            </div>
+            <span class="fix">去填写</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="qc-sec">相似需求 <span class="n">1</span></div>
+        <div class="qc-list">
+          <div class="sim">
+            <div class="tx">
+              <div class="t1"><span class="no">DM-012</span><b>按项目导出工时明细</b></div>
+              <div class="meta"><span class="tag plum">已排期</span><span class="tag blue">P1</span><span>v2.8</span></div>
+              <div class="why">标题关键词重合 64%；如果范围一致，可以补到这条需求下，避免重复排期。</div>
+            </div>
+            <span class="go">查看</span>
+          </div>
+        </div>
+      </div>
+      <p class="hint-line">按验收标准、描述完整度和同项目标题关键词自动检查；不调用 AI、不修改内容，提交仍由你决定。</p>
+    </div>
+    <div class="qc-foot">
+      <label class="skip"><input type="checkbox">以后不再提示</label>
+      <button class="btn">仍然提交</button>
+      <button class="btn primary">返回修改</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

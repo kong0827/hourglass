@@ -1119,11 +1119,46 @@
               </details>
               <div class="dlg-foot-row span2">
                 <p class="foot-note" id="demandFootNote">新需求进入「待评审」；仅空间主可通过、拒绝或排期</p>
+                <button class="link-btn" type="button" id="demandCheckResume" hidden title="重新开启提交前体检">恢复体检</button>
                 <button class="btn primary" type="button" id="btnSaveDemand">提交评审</button>
               </div>
             </div>
           </div>
         </div></div></div>
+
+        <!-- 提交前体检：只提示不拦截，仍然提交由用户决定 -->
+        <div class="modal-layer" id="dlgDemandCheck" role="dialog" aria-modal="true" aria-labelledby="dqTitle">
+          <div class="sheet sm dq-sheet">
+            <div class="sheet-head dq-head">
+              <span class="dq-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h6M7 3.5a1.5 1.5 0 0 0-1.5 1.5v.5h9V5A1.5 1.5 0 0 0 13 3.5"/><rect x="4.5" y="5.5" width="11" height="11" rx="1.6"/><path d="M7.5 10.2l1.6 1.6 3.4-3.4"/></svg>
+              </span>
+              <div class="dq-head-txt">
+                <h2 id="dqTitle">提交前体检</h2>
+                <p class="desc" id="dqSummary"></p>
+              </div>
+              <button class="icon-btn sm" type="button" id="dqX" aria-label="关闭">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+              </button>
+            </div>
+            <div class="sheet-body dq-body">
+              <div id="dqIssueSec" hidden>
+                <div class="dq-sec">建议补充 <span class="dq-sec-n" id="dqIssueCount"></span></div>
+                <div class="dq-list" id="dqIssueList"></div>
+              </div>
+              <div id="dqSimSec" hidden>
+                <div class="dq-sec">相似需求 <span class="dq-sec-n" id="dqSimCount"></span></div>
+                <div class="dq-list" id="dqSimList"></div>
+              </div>
+              <p class="foot-note" id="dqHint">按验收标准、描述完整度和同项目标题关键词自动检查；不调用 AI、不修改内容，提交仍由你决定。</p>
+            </div>
+            <div class="sheet-foot dq-foot">
+              <label class="dq-skip"><input type="checkbox" id="dqSkip">以后不再提示</label>
+              <button class="btn ghost" type="button" id="dqStill">仍然提交</button>
+              <button class="btn primary" type="button" id="dqBack">返回修改</button>
+            </div>
+          </div>
+        </div>
 
         <!-- 排期进入版本 -->
         <div class="modal-layer" id="dlgDemandPlan" role="dialog" aria-modal="true" aria-labelledby="demandPlanTitle"><div class="sheet xs"><div class="sheet-body">
@@ -1575,6 +1610,25 @@
             <div class="reqdoc-dlg-foot">
               <button class="btn ghost" type="button" id="dlgAiSplitCancel">取消</button>
               <button class="btn primary" type="button" id="dlgAiSplitOk">新建选中工作项</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 拆需求：需求详情里的一键拆分，草稿勾选确认后才创建工作项 -->
+        <div class="modal-layer side" id="dlgDemandAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgDemandAiSplitTitle">
+          <div class="sheet ai-dlg">
+            <div class="panel-head">
+              <h3 id="dlgDemandAiSplitTitle">AI 拆出的工作项</h3>
+              <button class="icon-btn sm" type="button" id="dlgDemandAiSplitX" aria-label="关闭">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+              </button>
+            </div>
+            <p class="reqdoc-dlg-msg" id="dlgDemandAiSplitMsg">勾选要创建的工作项，标题和优先级可以直接改；没勾的不会创建。</p>
+            <div class="ai-list" id="demandAiSplitList"></div>
+            <div class="ai-usage" id="demandAiSplitUsage"></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn ghost" type="button" id="dlgDemandAiSplitCancel">取消</button>
+              <button class="btn primary" type="button" id="dlgDemandAiSplitOk">新建选中工作项</button>
             </div>
           </div>
         </div>

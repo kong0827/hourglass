@@ -7,6 +7,8 @@ import com.hourglass.common.RequireRole;
 import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.DemandActionRequest;
 import com.hourglass.dto.DemandBoardResponse;
+import com.hourglass.dto.DemandCheckRequest;
+import com.hourglass.dto.DemandCheckResponse;
 import com.hourglass.dto.DemandDeliveryJudgementRequest;
 import com.hourglass.dto.DemandDocLinkRequest;
 import com.hourglass.dto.DemandGanttPage;
@@ -21,6 +23,7 @@ import com.hourglass.entity.Demand;
 import com.hourglass.entity.DemandDeliveryJudgement;
 import com.hourglass.entity.Task;
 import com.hourglass.service.DemandDeliveryJudgementService;
+import com.hourglass.service.DemandQualityService;
 import com.hourglass.service.DemandService;
 import com.hourglass.service.DemandWatchService;
 import com.hourglass.service.RequirementDocService;
@@ -45,14 +48,17 @@ public class DemandController {
     private final RequirementDocService docService;
     private final DemandDeliveryJudgementService judgementService;
     private final DemandWatchService watchService;
+    private final DemandQualityService qualityService;
 
     public DemandController(DemandService demandService, RequirementDocService docService,
                             DemandDeliveryJudgementService judgementService,
-                            DemandWatchService watchService) {
+                            DemandWatchService watchService,
+                            DemandQualityService qualityService) {
         this.demandService = demandService;
         this.docService = docService;
         this.judgementService = judgementService;
         this.watchService = watchService;
+        this.qualityService = qualityService;
     }
 
     /** 需求池看板首屏：每个状态一列，只下发前 limit 条；搜索/优先级/类型/模块与列表同一口径 */
@@ -177,6 +183,13 @@ public class DemandController {
             }
         }
         return list;
+    }
+
+    /** 提交前体检：只读，返回可补项与同项目相似需求；不拦截提交 */
+    @PostMapping("/api/demands/quality-check")
+    public ApiResult<DemandCheckResponse> qualityCheck(@Valid @RequestBody DemandCheckRequest body,
+                                                       @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(qualityService.check(ctx.getWsId(), ctx.getUserId(), body));
     }
 
     @GetMapping("/api/demands/{id}")

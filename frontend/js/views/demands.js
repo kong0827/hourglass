@@ -1,6 +1,7 @@
 /* views/demands · 需求池：四态看板、主状态工作页与交付证据派生阶段 */
 
 import { API } from "../core/api.js";
+import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
 import { loadCategories } from "../core/app.js";
 import { openAttPreview, previewable } from "../core/att-preview.js";
 import { bindFileDrop, uploadAttachment, validateFiles, reportRejected, ACCEPT } from "../core/attach-kit.js";
@@ -19,7 +20,7 @@ import { openTaskDrawer, syncAssocRead, syncAssocViewBtns } from "../core/task-d
 import { canEditReq, catNameById, catTag, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast, copyToClipboard } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { PRIORITIES, assocLinkHTML, taskVersionIds, taskVersionLinksHTML, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML, demandNoText } from "../lib/format.js";
+import { PRIORITIES, assocLinkHTML, taskDescText, taskVersionIds, taskVersionLinksHTML, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML, demandNoText } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { triggerDownload } from "../lib/download.js";
 import { registerHelp, caliberMarkHTML, initCaliberHelp } from "../lib/caliber-help.js";
@@ -143,7 +144,7 @@ var planDemandId = null;
 var demandDetailLayer = null;  /* 当前打开的需求详情，供动作成功后一并关闭 */
 var demandCommentReplyTo = null;   /* 当前回复的顶层评论 ID（一层回复） */
 var demandCommentMention = null;   /* 详情内发表评论的 @ 提及选择器 */
-var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null;
+var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null, editingDemandStatus = null;
 var planDemandRevision = null, planAction = "plan";
 var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status, canSchedule } */
@@ -2679,6 +2680,7 @@ function closeDemandDialog(){
   demandFormSeq++;
   demandFormBaseline = null;
   editingDemandId = null;
+  editingDemandStatus = null;
   btnSaveDemand.disabled = false;
   UI.closeModal($("dlgDemand"));
 }
@@ -2703,6 +2705,7 @@ function openDemandDialog(d){
   if(!opts.length){ toast("你在当前空间没有可写项目，无法提需求", "warn"); return; }
   editingDemandId = d ? d.id : null;
   editingDemandRevision = d ? d.revision : null;
+  editingDemandStatus = d ? d.status : "review";
   editingPlannedStart = d ? d.plannedStart : null;
   editingPlannedEnd = d ? d.plannedEnd : null;
   dReq.innerHTML = opts.map(function(r){
@@ -2762,6 +2765,7 @@ function openDemandDialog(d){
   syncPriSeg();
   setDemandFormLocked(!!d && d.status !== "review");
   demandFormBaseline = demandFormSnapshot();
+  updateDemandCheckResume();
   UI.openModal($("dlgDemand"), "input");
 }
 /* 已进入流转的需求只放开说明类字段；标题与类型锁住而不是提交后静默丢弃。
@@ -2812,6 +2816,16 @@ function saveDemand(){
   };
   /* 名单只在创建时提交；编辑走详情浮层，避免保存时覆盖别人刚调整的名单 */
   if(!editingDemandId) body.watcherIds = demandWatchPick.map(function(w){ return w.userId; });
+  /* 只在新建或待评审编辑时体检；已经流转的需求编辑描述时不打断保存 */
+  var checkable = !editingDemandId || editingDemandStatus === "review";
+  if(checkable && !demandCheckOff()){
+    runDemandCheck(body);
+    return;
+  }
+  doSaveDemand(body);
+}
+function doSaveDemand(body){
+  var title = body.title;
   btnSaveDemand.disabled = true;
   var seq = demandFormSeq, wasEdit = !!editingDemandId;
   var p = editingDemandId
@@ -2834,6 +2848,136 @@ function saveDemand(){
     if(seq === demandFormSeq) btnSaveDemand.disabled = false;
     toast(ex.message || "保存失败", "bad");
   });
+}
+
+/* ---------- 提交前体检 ----------
+   只读检查，不调用 AI、不改内容：缺验收标准、描述过短、P0/P1 缺期望交付、同项目相似需求。
+   任何一项都只提示，用户仍可「仍然提交」；关闭后可在表单底部「恢复体检」。 */
+var DEMAND_CHECK_OFF_KEY = "hg.demandCheckOff";
+var demandCheckCtx = null;
+function demandCheckOff(){
+  try{ return localStorage.getItem(DEMAND_CHECK_OFF_KEY) === "1"; }catch(e){ return false; }
+}
+function updateDemandCheckResume(){
+  var btn = $("demandCheckResume");
+  if(btn) btn.hidden = !demandCheckOff();
+}
+function setDemandCheckOff(on){
+  try{
+    if(on) localStorage.setItem(DEMAND_CHECK_OFF_KEY, "1");
+    else localStorage.removeItem(DEMAND_CHECK_OFF_KEY);
+  }catch(e){ /* 隐私模式写不了就只影响本次会话 */ }
+  updateDemandCheckResume();
+}
+function runDemandCheck(body){
+  var seq = demandFormSeq;
+  var excludeId = editingDemandId;
+  btnSaveDemand.disabled = true;
+  API.post("/api/demands/quality-check", {
+    reqId: body.reqId,
+    title: body.title,
+    description: body.description,
+    acceptText: body.acceptText,
+    priority: body.priority,
+    expectDate: body.expectDate,
+    excludeId: excludeId
+  }).then(function(res){
+    if(seq !== demandFormSeq) return;
+    btnSaveDemand.disabled = false;
+    var issues = (res && res.issues) || [], similar = (res && res.similar) || [];
+    if(!issues.length && !similar.length){ doSaveDemand(body); return; }
+    openDemandCheck(res, body);
+  }).catch(function(ex){
+    if(seq !== demandFormSeq) return;
+    btnSaveDemand.disabled = false;
+    /* 体检是只读增强，失败不拦提交；无权限是真正的写前错误，直接提示 */
+    if(ex && ex.code === 403){ toast(ex.message || "没有该项目的访问权限", "bad"); return; }
+    toast("提交前体检没跑成，已直接提交", "warn");
+    doSaveDemand(body);
+  });
+}
+function openDemandCheck(res, body){
+  demandCheckCtx = { res: res, body: body };
+  var issues = res.issues || [], similar = res.similar || [];
+  var bits = [];
+  if(issues.length) bits.push("可以再补 " + issues.length + " 处");
+  if(similar.length) bits.push("发现 " + similar.length + " 条相似需求");
+  $("dqSummary").textContent = "「" + body.title + "」" + (bits.length ? bits.join("，") + "。" : "没有发现需要提醒的问题。");
+  $("dqIssueSec").hidden = !issues.length;
+  $("dqIssueCount").textContent = issues.length ? String(issues.length) : "";
+  $("dqIssueList").innerHTML = issues.map(function(it){
+    return '<div class="dq-item ' + (it.level === "warn" ? "warn" : "info") + '">'
+      + '<span class="dq-dot" aria-hidden="true"></span>'
+      + '<div class="dq-item-tx"><b>' + esc(it.title) + '</b><p>' + esc(it.detail) + '</p></div>'
+      + '<button class="dq-fix" type="button" data-dq-fix="' + esc(it.field) + '">去填写</button>'
+      + '</div>';
+  }).join("");
+  $("dqSimSec").hidden = !similar.length;
+  $("dqSimCount").textContent = similar.length ? String(similar.length) : "";
+  $("dqSimList").innerHTML = similar.map(function(s){
+    var cls = s.status === "plan" ? "plum" : s.status === "done" ? "green" : s.status === "pass" ? "blue" : "";
+    var no = demandNoText(s.demandNo);
+    return '<div class="dq-sim"><div class="dq-sim-tx">'
+      + '<div class="dq-sim-t1">' + (no ? '<span class="dq-sim-no">' + esc(no) + '</span>' : '')
+      +   '<b>' + esc(s.title) + '</b></div>'
+      + '<div class="dq-sim-meta"><span class="tag ' + cls + '">' + esc(statusName(s.status)) + '</span>'
+      +   (s.priority ? '<span class="tag">' + esc(s.priority) + '</span>' : '')
+      +   (s.versionName ? '<span>' + esc(s.versionName) + '</span>' : '')
+      + '</div>'
+      + '<div class="dq-sim-why">标题关键词重合 ' + (Number(s.score) || 0)
+      +   '%；如果范围一致，可以补到这条需求下，避免重复排期。</div>'
+      + '</div><button class="dq-go" type="button" data-dq-view="' + esc(s.id) + '">查看</button></div>';
+  }).join("");
+  $("dqSkip").checked = false;
+  UI.openModal($("dlgDemandCheck"), "#dqBack");
+}
+function focusDemandCheckField(field){
+  var el = field === "acceptText" ? dAccept : field === "description" ? dDesc : field === "expectDate" ? dExpect : null;
+  if(!el || el.disabled) return;
+  setTimeout(function(){
+    try{ el.focus(); }catch(e){ /* noop */ }
+    if(el.scrollIntoView) el.scrollIntoView({ block:"center" });
+  }, 60);
+}
+function closeDemandCheck(focusField){
+  var ctx = demandCheckCtx;
+  demandCheckCtx = null;
+  var dlg = $("dlgDemandCheck");
+  if(dlg) UI.closeModal(dlg);
+  if(focusField && ctx && ctx.res && ctx.res.issues && ctx.res.issues.length){
+    focusDemandCheckField(ctx.res.issues[0].field);
+  }
+}
+function bindDemandCheckDialog(){
+  var dlg = $("dlgDemandCheck");
+  if(!dlg) return;
+  /* Esc / 遮罩关闭也清掉上下文，避免下一次打开复用旧的提交内容 */
+  dlg.__uiOnClose = function(){ demandCheckCtx = null; };
+  if($("dqX")) $("dqX").addEventListener("click", function(){ closeDemandCheck(false); });
+  if($("dqBack")) $("dqBack").addEventListener("click", function(){ closeDemandCheck(true); });
+  if($("dqStill")) $("dqStill").addEventListener("click", function(){
+    if($("dqSkip") && $("dqSkip").checked) setDemandCheckOff(true);
+    var ctx = demandCheckCtx;
+    demandCheckCtx = null;
+    UI.closeModal(dlg);
+    if(ctx && ctx.body) doSaveDemand(ctx.body);
+  });
+  if($("dqIssueList")) $("dqIssueList").addEventListener("click", function(e){
+    var btn = e.target.closest("[data-dq-fix]");
+    if(!btn) return;
+    demandCheckCtx = null;
+    UI.closeModal(dlg);
+    focusDemandCheckField(btn.dataset.dqFix);
+  });
+  if($("dqSimList")) $("dqSimList").addEventListener("click", function(e){
+    var btn = e.target.closest("[data-dq-view]");
+    if(!btn) return;
+    var id = btn.dataset.dqView;
+    demandCheckCtx = null;
+    UI.closeModal(dlg);
+    showDemandDetail(id);
+  });
+  updateDemandCheckResume();
 }
 function deleteDemand(id){
   var d = findDemand(id);
@@ -4255,6 +4399,113 @@ function openDemandWatchPop(anchor, layer, id){
     show(res);
   }).catch(function(ex){ toast(ex.message || "提醒人加载失败", "bad"); });
 }
+var demandAiDrafts = [];
+var demandAiCtx = null;
+var demandAiBusy = false;
+/* 需求详情里的 AI 一键拆分：只出草稿，勾选确认后才创建；创建口径与手动「新建工作项」一致 */
+function runDemandAiSplit(d, layer){
+  if(demandAiBusy) return;
+  if(!d.description && !d.acceptText){
+    toast("需求描述和验收标准都是空的，先补充内容再拆", "warn");
+    return;
+  }
+  var btn = layer.querySelector("[data-dem-ai-split]");
+  demandAiBusy = true;
+  if(btn) btn.disabled = true;
+  AIProgress.run({
+    title: "AI 拆需求工作项",
+    desc: "正在读「" + d.title + "」，结合描述、验收标准和已有工作项拆成可执行工作项…",
+    hint: "通常需要 20–60 秒，可以随时取消",
+    errorText: aiErrMsg,
+    request: function(signal){
+      return API.postWithSignal("/api/ai/demands/" + encodeURIComponent(d.id) + "/split", {}, signal);
+    },
+    onSuccess: function(res){
+      demandAiDrafts = res.tasks || [];
+      demandAiCtx = { demand: d, layer: layer };
+      renderDemandAiSplit(res);
+      UI.openModal($("dlgDemandAiSplit"));
+    }
+  }).then(function(){
+    demandAiBusy = false;
+    if(btn) btn.disabled = false;
+  });
+}
+function renderDemandAiSplit(res){
+  var d = (demandAiCtx && demandAiCtx.demand) || {};
+  var proj = d.reqId ? reqNameById(d.reqId) : "";
+  var hasDep = demandAiDrafts.some(function(t){ return t.dependsOnIndex >= 0; });
+  var dup = demandAiDrafts.filter(function(t){ return t.duplicate; }).length;
+  var msg = "「" + (res.demandTitle || d.title || "") + "」描述与验收共 " + (res.demandChars || 0)
+    + " 字，AI 拆出 " + demandAiDrafts.length + " 条"
+    + (dup ? "，其中 " + dup + " 条已有同名工作项（默认不勾选）" : "")
+    + "。勾选的会创建到" + (proj ? "「" + proj + "」" : "本项目") + "的待处理列并关联本需求，标题和优先级可直接改"
+    + (hasDep ? "；有依赖的两条都勾选时会自动连上依赖" : "") + "。";
+  if(res.summary) msg += " " + res.summary;
+  $("dlgDemandAiSplitMsg").textContent = msg;
+  $("demandAiSplitList").innerHTML = demandAiDrafts.map(function(t, i){
+    var p = String(t.priority || "P2").toUpperCase();
+    var opts = PRIORITIES.map(function(x){
+      return '<option value="' + x + '"' + (x === p ? " selected" : "") + '>' + x + ' · ' + esc(priName(x)) + '</option>';
+    }).join("");
+    var on = t.selected !== false;
+    return '<div class="ai-item' + (on ? " on" : "") + '" data-i="' + i + '">'
+      + '<input type="checkbox"' + (on ? " checked" : "") + ' data-pick="' + i + '" aria-label="选择工作项">'
+      + '<div class="ai-main">'
+      +   '<input class="ai-title" type="text" maxlength="60" value="' + esc(t.title || "") + '" data-title="' + i + '" aria-label="工作项标题">'
+      +   (t.description ? '<div class="ai-desc">' + esc(taskDescText(t.description, 200)) + '</div>' : '')
+      +   '<div class="ai-meta">'
+      +     '<select class="ai-pri" data-pri="' + i + '" aria-label="优先级">' + opts + '</select>'
+      +     (t.duplicate ? '<span class="ai-tag p1" title="' + esc(t.duplicateOf || "") + '">已有同名</span>' : '')
+      +     (t.dependsOnIndex >= 0 ? '<span>依赖第 ' + (t.dependsOnIndex + 1) + ' 条</span>' : '')
+      +     (t.reason ? '<span class="ai-reason">' + esc(t.reason) + '</span>' : '')
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+  }).join("");
+  $("demandAiSplitUsage").textContent = aiUsageText(res.usage);
+}
+function applyDemandAiSplit(){
+  var ctx = demandAiCtx;
+  if(!ctx || !ctx.demand) return;
+  var picked = [];
+  var nodes = document.querySelectorAll("#demandAiSplitList .ai-item");
+  for(var i = 0; i < nodes.length; i++){
+    var cb = nodes[i].querySelector("input[type=checkbox]");
+    if(!cb || !cb.checked) continue;
+    var idx = Number(nodes[i].dataset.i);
+    var src = demandAiDrafts[idx] || {};
+    var titleEl = nodes[i].querySelector(".ai-title");
+    var title = (titleEl ? titleEl.value : src.title || "").trim();
+    if(!title) continue;
+    var priEl = nodes[i].querySelector("[data-pri]");
+    picked.push({
+      title: title,
+      description: src.description || "",
+      priority: priEl ? priEl.value : (src.priority || "P2"),
+      dependsOnIndex: src.dependsOnIndex == null ? -1 : src.dependsOnIndex,
+      draftIndex: src.draftIndex == null ? idx : src.draftIndex
+    });
+  }
+  if(!picked.length){ toast("至少选一条要创建的工作项", "warn"); return; }
+
+  var btn = $("dlgDemandAiSplitOk");
+  btn.disabled = true;
+  API.post("/api/ai/demands/" + encodeURIComponent(ctx.demand.id) + "/tasks", { tasks: picked }).then(function(r){
+    btn.disabled = false;
+    UI.closeModal($("dlgDemandAiSplit"));
+    var msg = "已创建 " + r.created + " 个工作项";
+    if(r.linked) msg += "，连上 " + r.linked + " 条依赖";
+    if(r.skipped) msg += "，跳过 " + r.skipped + " 个已有的同名项";
+    msg += aiApplyFailText(r.failed, "个");
+    toast(msg, r.failed && r.failed.length ? "warn" : "fs");
+    loadDemandTasks(ctx.layer, ctx.demand.id, ctx.demand.versionId);
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(aiErrMsg(ex && ex.message), "bad");
+  });
+}
+
 function renderDemandDetail(d){
   var id = d.id;
   var writable = canWriteDemand(d), canEditText = writable && !isClosedDemand(d);
@@ -4438,9 +4689,12 @@ function renderDemandDetail(d){
     +       wsjf
     +     '</section>'
     +     '<section class="read-card">'
-    +       '<div class="read-card-head"><h3>交付进度</h3>'
+    +         '<div class="read-card-head dem-progress-head"><h3>交付进度</h3>'
     +         '<span class="read-cnt">' + done + ' / ' + total + ' 完成</span>'
-    +         (canSplit ? '<button class="btn sm soft" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button>' : '')
+    +         '<span class="dem-split-actions">'
+    +           (canSplit ? '<button class="btn sm soft ai-action" type="button" data-dem-ai-split title="用 AI 读需求描述和验收标准，拆成工作项草稿；勾选确认后才会创建">' + icon("ai", 13) + ' AI 拆工作项</button>' : '')
+    +           (canSplit ? '<button class="btn sm soft" type="button" data-dem-addtask title="手动新建一条关联到本需求的工作项">' + icon("plus", 13) + ' 新建工作项</button>' : '')
+    +         '</span>'
     +         '<button class="link-btn" type="button" data-demand-goto="delivery">查看交付证据</button></div>'
     +       '<ul class="read-activity demand-overview-tasks" id="demandOverviewTasks"><li class="read-empty">加载关联工作项…</li></ul>'
     +     '</section>'
@@ -4654,6 +4908,8 @@ function renderDemandDetail(d){
     if(ed){ closeDemandDetailIfOpen(); setTimeout(function(){ openDemandDialog(d); }, 40); return; }
     var judge = e.target.closest("[data-dem-judge]"); if(judge){ openJudgementDialog(id); return; }
     var judgeRevoke = e.target.closest("[data-dem-judge-revoke]"); if(judgeRevoke){ revokeJudgement(id); return; }
+    var aiSplit = e.target.closest("[data-dem-ai-split]");
+    if(aiSplit){ runDemandAiSplit(d, layer); return; }
     var at = e.target.closest("[data-dem-addtask]");
     if(at){
       if(!canSplit){ toast("已关闭的需求不能新拆工作项", "warn"); return; }
@@ -4873,6 +5129,11 @@ window.addEventListener("ds:before-route", function(e){
   });
 });
 if(btnSaveDemand) btnSaveDemand.addEventListener("click", saveDemand);
+if($("demandCheckResume")) $("demandCheckResume").addEventListener("click", function(){
+  setDemandCheckOff(false);
+  toast("已恢复提交前体检", "fs");
+});
+bindDemandCheckDialog();
 if(dReq) dReq.addEventListener("change", function(){
   /* 换项目后原模块不再可选，回落到新项目第一个模块或「未指定」 */
   syncDemandCatOptions(dReq.value, dCategory.value, true);
@@ -5324,5 +5585,21 @@ function ensureDemandOptions(keep, reqId){
     if(request.formSeq === rt.taskFormSeq) fillDrawerDemandSelect(want, request.keep);
   });
 }
+
+/* AI 拆需求：弹窗是常驻骨架，按钮只绑一次 */
+function bindDemandAiDialog(){
+  var dlg = $("dlgDemandAiSplit");
+  if(!dlg) return;
+  $("dlgDemandAiSplitX").addEventListener("click", function(){ UI.closeModal(dlg); });
+  $("dlgDemandAiSplitCancel").addEventListener("click", function(){ UI.closeModal(dlg); });
+  $("dlgDemandAiSplitOk").addEventListener("click", applyDemandAiSplit);
+  $("demandAiSplitList").addEventListener("change", function(e){
+    var cb = e.target.closest("input[type=checkbox]");
+    if(!cb) return;
+    var item = cb.closest(".ai-item");
+    if(item) item.classList.toggle("on", cb.checked);
+  });
+}
+bindDemandAiDialog();
 
 export { enterDemandsView, ensureDemandOptions, loadDemands, openDemandById, openDemandDetailById, openDemandVersionBackfill, openDemandsForReq, render };

@@ -1,0 +1,1448 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · AI 场景全景与优先级 · 2026-11-17</title>
+<style>
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,Menlo,monospace;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}
+button{font-family:inherit}
+[hidden]{display:none!important}
+
+/* ============ 页头 ============ */
+.page-head{max-width:1360px;margin:0 auto;padding:28px 32px 0}
+.kicker{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--primary-fg);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:var(--r-pill);padding:4px 11px;margin-bottom:12px}
+.kicker i{width:6px;height:6px;border-radius:50%;background:var(--primary)}
+.page-head h1{font-size:24px;margin:0 0 7px;letter-spacing:.2px;font-weight:750}
+.page-head h1 span{font-weight:400;color:var(--text-3);font-size:14px;margin-left:9px}
+.page-desc{margin:0;max-width:1080px;font-size:13px;line-height:1.8;color:var(--text-3)}
+.page-desc b{color:var(--text-2);font-weight:600}
+.legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:11.5px;color:var(--text-3)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot.p0{background:var(--primary)} .dot.p1{background:var(--warning)} .dot.p2{background:var(--text-3)} .dot.no{background:#fff;border:1px dashed var(--border-strong)}
+
+/* ============ 页签 ============ */
+.tabs{max-width:1360px;margin:18px auto 0;padding:0 32px;display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{appearance:none;border:1px solid var(--border-strong);background:#fff;color:var(--text-2);font-size:12.5px;height:33px;padding:0 13px;border-radius:var(--r-sm);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.15s}
+.tabs button:hover{background:var(--surface-hover);color:var(--text)}
+.tabs button.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:650;box-shadow:0 2px 6px rgba(37,99,235,.18)}
+.tabs .n{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--surface-sunken);color:var(--text-3);font-size:10px;font-weight:700}
+.tabs button.on .n{background:rgba(255,255,255,.18);color:#fff}
+
+/* ============ 通用容器 ============ */
+.wrap{max-width:1360px;margin:14px auto 40px;padding:0 32px}
+.panel{background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)}
+.panel-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.panel-head h2{margin:0;font-size:14.5px;font-weight:700}
+.panel-head p{margin:0;font-size:12px;color:var(--text-3)}
+.panel-head .grow{flex:1}
+.panel-body{padding:20px}
+
+/* 优先级徽标 */
+.pb{display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 7px;border-radius:var(--r-xs);font-size:10.5px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.pb.p0{background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border)}
+.pb.p1{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+.pb.p2{background:var(--surface-sunken);color:var(--text-3);border:1px solid var(--border)}
+.pb.no{background:#fff;color:var(--text-3);border:1px dashed var(--border-strong);font-weight:600}
+.pb.done{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.tag{display:inline-flex;align-items:center;height:19px;padding:0 7px;border-radius:var(--r-xs);font-size:10.5px;color:var(--text-2);background:var(--surface-sunken);border:1px solid var(--border);white-space:nowrap}
+.tag.blue{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+.tag.green{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg)}
+.tag.amber{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+.tag.red{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg)}
+.tag.plum{background:var(--plum-soft);border-color:var(--plum-border);color:var(--plum-fg)}
+
+/* ============ Tab1 场景地图 ============ */
+.intro-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.example{background:#fff;border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px}
+.example .ex-q{font-size:11.5px;color:var(--text-3);margin-bottom:5px}
+.example .ex-a{font-size:12.5px;font-weight:650;color:var(--text);line-height:1.5}
+.example .ex-note{font-size:11.5px;color:var(--text-3);margin-top:6px;line-height:1.55}
+.example .pb{margin-top:8px}
+
+.map{display:flex;flex-direction:column;gap:10px}
+.stage{display:grid;grid-template-columns:210px 1fr;gap:16px;padding:15px 18px;background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+.stage-head{display:flex;gap:10px;align-items:flex-start}
+.stage-no{width:22px;height:22px;border-radius:7px;background:var(--surface-sunken);color:var(--text-3);font-size:11px;font-weight:700;display:grid;place-items:center;flex:none;margin-top:1px}
+.stage-head b{display:block;font-size:13px;font-weight:700;margin-bottom:2px}
+.stage-head p{margin:0;font-size:11.5px;color:var(--text-3);line-height:1.55}
+.caps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.cap{border:1px solid var(--border);border-radius:var(--r-md);padding:10px 11px;background:#fff;display:flex;flex-direction:column;gap:5px;min-height:96px}
+.cap:hover{border-color:var(--border-strong);box-shadow:var(--shadow-xs)}
+.cap .cap-top{display:flex;align-items:flex-start;gap:6px}
+.cap .cap-title{font-size:12.3px;font-weight:650;line-height:1.4;flex:1}
+.cap .cap-desc{font-size:11.3px;color:var(--text-3);line-height:1.5;margin:0}
+.cap .cap-foot{margin-top:auto;font-size:10.8px;color:var(--text-3);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.cap .cap-foot b{color:var(--text-2);font-weight:600}
+.cap.p0cap{background:linear-gradient(180deg,#FBFDFF,#fff)}
+.cap.nocap{background:var(--surface-sunken);border-style:dashed}
+
+/* ============ 应用外壳（原型） ============ */
+.app{display:flex;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:#fff;min-height:660px;box-shadow:var(--shadow-md)}
+.side{width:196px;flex:none;border-right:1px solid var(--border);padding:14px 10px;display:flex;flex-direction:column;gap:3px;background:#fff}
+.brand{display:flex;align-items:center;gap:9px;padding:0 8px 12px;font-weight:750;font-size:14px}
+.brand .mark{width:24px;height:24px;border-radius:7px;background:linear-gradient(155deg,#2563EB,#7A5AF8);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800}
+.ws{display:flex;align-items:center;gap:7px;padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:11.5px;color:var(--text-2);margin-bottom:8px}
+.ws i{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.ws b{color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.navlab{font-size:10px;color:var(--text-3);padding:8px 9px 3px;letter-spacing:.06em}
+.nav{display:flex;align-items:center;gap:8px;height:29px;padding:0 9px;border-radius:6px;color:var(--text-2);font-size:12px;cursor:default}
+.nav .ic{width:13px;height:13px;border-radius:4px;background:var(--surface-sunken);border:1px solid var(--border);flex:none}
+.nav.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.nav.on .ic{background:var(--primary);border-color:var(--primary)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-app)}
+.top{height:48px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;flex:none}
+.crumb{font-size:12px;color:var(--text-3);display:flex;gap:6px;align-items:center;min-width:0}
+.crumb b{color:var(--text);font-weight:600}
+.crumb .sep{color:var(--border-strong)}
+.top .grow{flex:1}
+.chipbtn{height:26px;padding:0 9px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:11.5px;color:var(--text-2);display:inline-flex;align-items:center;gap:5px}
+.avatar{width:26px;height:26px;border-radius:50%;background:#E0EAFF;color:#1D4ED8;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:28px;padding:0 12px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:#fff;color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--surface-hover)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-hover)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--text-2)}
+.btn.sm{height:24px;padding:0 9px;font-size:11.3px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* 通用内容区 */
+.content{padding:16px;flex:1;min-height:0;overflow:visible}
+.section-title{font-size:12px;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:7px;margin:0 0 9px}
+.section-title .line{flex:1;height:1px;background:var(--border)}
+.muted{color:var(--text-3)}
+.mini{font-size:11px}
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px}
+.row{display:flex;align-items:center;gap:8px}
+.row.wrap{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.divider{height:1px;background:var(--border);margin:12px 0}
+
+/* ============ Tab2 文档改写 ============ */
+.doc-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:0;min-height:660px}
+.doc-pane{padding:22px 32px;background:#fff;border-right:1px solid var(--border);position:relative}
+.doc-crumb{font-size:11.5px;color:var(--text-3);display:flex;gap:6px;align-items:center;margin-bottom:12px}
+.doc-title{font-size:20px;font-weight:750;margin:0 0 4px}
+.doc-meta{font-size:11.5px;color:var(--text-3);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.doc h3{font-size:14px;margin:20px 0 7px}
+.doc p{margin:0 0 10px;font-size:13px;line-height:1.9;color:var(--text-2)}
+.doc .sel{background:#EFF4FF;outline:1.5px solid #BFD3FE;border-radius:3px;padding:2px 0;color:var(--text)}
+.doc .missing{color:var(--text-3);font-style:italic;border-bottom:1px dashed var(--border-strong);display:inline-block;padding-bottom:1px}
+.sel-tools{display:flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--border-strong);border-radius:var(--r-sm);box-shadow:var(--shadow-md);padding:4px;width:max-content;margin:2px 0 14px}
+.sel-tools button{border:0;background:transparent;height:24px;padding:0 8px;border-radius:5px;font-size:11.5px;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.sel-tools button:hover{background:var(--primary-soft);color:var(--primary-fg)}
+.sel-tools .sp{width:1px;height:14px;background:var(--border);margin:0 2px}
+.sel-tools .ai{color:var(--plum-fg);font-weight:650}
+.ai-pane{background:#FCFCFD;display:flex;flex-direction:column;min-width:0}
+.ai-head{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:#fff}
+.ai-head b{font-size:12.5px}
+.ai-head .tag{margin-left:auto}
+.ai-body{padding:14px;overflow:visible;flex:1}
+.diff-label{font-size:10.5px;color:var(--text-3);letter-spacing:.04em;margin:0 0 5px;font-weight:600}
+.diff-box{border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;padding:11px 12px;font-size:12.3px;line-height:1.8;color:var(--text-2);margin-bottom:12px}
+.diff-box .ins{background:var(--success-soft);color:var(--success-fg);border-bottom:1px solid var(--success-border);padding:0 1px}
+.diff-box .del{background:var(--danger-soft);color:var(--danger-fg);text-decoration:line-through;padding:0 1px}
+.why{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px}
+.why .tag{font-size:10.3px}
+.ai-actions{display:flex;gap:6px}
+.ai-actions .btn{flex:1}
+.ai-note{font-size:11px;color:var(--text-3);line-height:1.6;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.format-card{background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 12px;margin-top:4px}
+.fmt-row{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--text-2);padding:5px 0}
+.fmt-row .ic{width:15px;height:15px;border-radius:4px;background:var(--warning-soft);color:var(--warning-fg);display:grid;place-items:center;font-size:9px;font-weight:800;flex:none;margin-top:1px}
+.fmt-row .grow{line-height:1.55}
+.fmt-row .link{color:var(--primary-fg);cursor:pointer;white-space:nowrap;font-weight:600;font-size:11px}
+
+/* ============ Tab3 纪要提取 ============ */
+.split2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:14px}
+.textarea{width:100%;min-height:210px;border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 12px;font-family:var(--font-sans);font-size:12.3px;line-height:1.8;color:var(--text-2);resize:vertical;background:#fff}
+.textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.extract-item{border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 11px;background:#fff;margin-bottom:8px}
+.extract-item.sel{border-color:var(--primary-border);background:#FBFDFF}
+.extract-item.dupe{border-color:var(--warning-border);background:var(--warning-soft)}
+.extract-top{display:flex;align-items:flex-start;gap:8px}
+.check{width:15px;height:15px;border:1.5px solid var(--border-strong);border-radius:4px;background:#fff;flex:none;margin-top:2px;display:grid;place-items:center;cursor:pointer;color:#fff;font-size:9px;font-weight:800}
+.check.on{background:var(--primary);border-color:var(--primary)}
+.extract-title{font-size:12.3px;font-weight:600;flex:1;line-height:1.45}
+.extract-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;padding-left:23px;font-size:11px;color:var(--text-3)}
+.extract-warn{margin:7px 0 0 23px;font-size:11px;color:var(--warning-fg);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.extract-warn .btn{height:21px;padding:0 7px;font-size:10.5px}
+.batchbar{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface-sunken);border-radius:var(--r-sm);margin-top:10px}
+.batchbar .grow{font-size:11.5px;color:var(--text-3)}
+.paste-tip{display:flex;gap:8px;align-items:flex-start;background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:var(--r-sm);padding:9px 11px;font-size:11.5px;color:var(--primary-fg);line-height:1.6;margin-bottom:10px}
+.paste-tip b{font-weight:700}
+
+/* ============ Tab4 需求体检 ============ */
+.form-row{margin-bottom:13px}
+.form-row label{display:block;font-size:11.5px;color:var(--text-2);font-weight:600;margin-bottom:5px}
+.input,.select{width:100%;height:31px;border:1px solid var(--border-strong);border-radius:var(--r-sm);padding:0 10px;font-size:12.3px;color:var(--text);background:#fff}
+.input:focus,.select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.checklist .chk{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--border);font-size:12px}
+.checklist .chk:last-child{border-bottom:0}
+.checklist .ic{width:16px;height:16px;border-radius:5px;display:grid;place-items:center;font-size:9px;font-weight:800;flex:none;margin-top:1px}
+.checklist .ic.red{background:var(--danger-soft);color:var(--danger-fg)}
+.checklist .ic.amber{background:var(--warning-soft);color:var(--warning-fg)}
+.checklist .ic.blue{background:var(--primary-soft);color:var(--primary-fg)}
+.checklist b{font-weight:650}
+.checklist p{margin:2px 0 0;font-size:11px;color:var(--text-3);line-height:1.55}
+.similar{border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 10px;margin-top:8px;background:#fff}
+.similar .t{font-size:12px;font-weight:600;display:flex;gap:6px;align-items:center}
+.similar .m{font-size:10.8px;color:var(--text-3);margin-top:3px}
+.similar .acts{display:flex;gap:6px;margin-top:7px}
+
+/* ============ Tab5 需求拆分 ============ */
+.demand-head{background:#fff;border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:12px}
+.demand-head h3{margin:0 0 4px;font-size:15px}
+.demand-meta{display:flex;gap:5px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--text-3)}
+.split-item{display:flex;gap:9px;align-items:flex-start;padding:9px 0;border-bottom:1px dashed var(--border)}
+.split-item:last-child{border-bottom:0}
+.split-item .check{margin-top:1px}
+.split-item .t{font-size:12.3px;font-weight:600;line-height:1.45}
+.split-item .m{font-size:11px;color:var(--text-3);margin-top:3px;display:flex;gap:5px;flex-wrap:wrap}
+.cover{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.cover .tag{font-size:10.3px}
+.ledger{background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 11px;font-size:11.3px;color:var(--text-3);line-height:1.6;margin-bottom:10px}
+
+/* ============ Tab6 问答 ============ */
+.assistant{width:430px;margin-left:auto;background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;min-height:560px}
+.as-head{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.as-head b{font-size:12.8px}
+.as-head .st{font-size:10.5px;color:var(--text-3);margin-left:auto;display:flex;align-items:center;gap:5px}
+.as-head .st i{width:6px;height:6px;border-radius:50%;background:var(--success)}
+.as-body{padding:14px;flex:1;background:#FCFCFD}
+.msg{background:#fff;border:1px solid var(--border);border-radius:var(--r-md);padding:11px 12px;font-size:12.2px;line-height:1.75;color:var(--text-2);margin-bottom:10px}
+.msg.user{background:var(--primary);border-color:var(--primary);color:#fff;margin-left:56px;border-bottom-right-radius:4px}
+.msg.ai{border-bottom-left-radius:4px}
+.msg.ai b{color:var(--text)}
+.fact{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed var(--border);font-size:12px}
+.fact:last-child{border-bottom:0}
+.fact .k{width:46px;flex:none;color:var(--text-3);font-size:11px;padding-top:1px}
+.fact .v{flex:1;line-height:1.6}
+.src{display:inline-flex;align-items:center;gap:3px;height:17px;padding:0 5px;border-radius:4px;background:var(--primary-soft);color:var(--primary-fg);font-size:9.8px;font-weight:650;margin-left:4px;cursor:pointer;vertical-align:1px}
+.gaps{margin-top:10px;background:var(--warning-soft);border:1px solid var(--warning-border);border-radius:var(--r-sm);padding:9px 10px}
+.gaps .gt{font-size:11px;font-weight:700;color:var(--warning-fg);margin-bottom:5px}
+.gaps ul{margin:0;padding-left:16px;font-size:11.3px;color:var(--text-2);line-height:1.7}
+.gaps a{color:var(--primary-fg);text-decoration:none;font-weight:600}
+.as-foot{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:7px;align-items:center;background:#fff}
+.as-input{flex:1;height:32px;border:1px solid var(--border-strong);border-radius:var(--r-sm);padding:0 10px;font-size:12px;color:var(--text-3)}
+.as-meta{font-size:10.5px;color:var(--text-3);display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.ver-page{flex:1;padding:16px;min-width:0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 11px}
+.kpi .n{font-size:19px;font-weight:750;line-height:1.2}
+.kpi .n small{font-size:11px;color:var(--text-3);font-weight:500}
+.kpi .l{font-size:10.8px;color:var(--text-3);margin-top:2px}
+.bar{height:5px;border-radius:99px;background:var(--surface-sunken);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--primary);border-radius:99px}
+.list-card{background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 12px}
+.list-card .li{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--border);font-size:11.8px;color:var(--text-2)}
+.list-card .li:last-child{border-bottom:0}
+
+/* ============ Tab7 优先级 ============ */
+.matrix{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quad{border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;background:#fff;min-height:108px}
+.quad.hot{background:linear-gradient(180deg,#FBFDFF,#fff);border-color:var(--primary-border)}
+.quad .qt{font-size:11px;color:var(--text-3);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.quad .qt b{color:var(--text-2);font-size:12px}
+.quad .items{display:flex;flex-wrap:wrap;gap:5px}
+.quad .items span{font-size:11px;padding:3px 7px;border-radius:5px;background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border)}
+.prio-table{width:100%;border-collapse:collapse;font-size:11.8px}
+.prio-table th{text-align:left;font-size:10.8px;color:var(--text-3);font-weight:600;padding:7px 9px;border-bottom:1px solid var(--border);background:var(--surface-sunken);white-space:nowrap}
+.prio-table td{padding:9px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text-2);line-height:1.55}
+.prio-table tr:last-child td{border-bottom:0}
+.prio-table td b{color:var(--text);font-weight:650}
+.prio-table .batch{font-weight:750;color:var(--text);white-space:nowrap}
+.prio-table .batch small{display:block;font-weight:500;color:var(--text-3);font-size:10.5px;margin-top:2px}
+.callout{display:flex;gap:10px;background:var(--plum-soft);border:1px solid var(--plum-border);border-radius:var(--r-md);padding:12px 14px;font-size:12px;color:var(--plum-fg);line-height:1.7}
+.callout b{font-weight:750}
+.callout.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+.callout .ic{width:20px;height:20px;border-radius:6px;background:#fff;display:grid;place-items:center;font-size:11px;font-weight:800;flex:none;margin-top:1px}
+.decisions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.decision{border:1px solid var(--border);border-radius:var(--r-md);padding:12px 13px;background:#fff}
+.decision .q{font-size:12px;font-weight:650;margin-bottom:4px}
+.decision .o{font-size:11.4px;color:var(--text-3);line-height:1.65}
+.decision .o b{color:var(--primary-fg);font-weight:650}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(12px);background:#101828;color:#fff;font-size:12px;padding:9px 14px;border-radius:var(--r-sm);box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.2s;z-index:90}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:1180px){
+  .intro-grid{grid-template-columns:1fr 1fr}
+  .caps{grid-template-columns:1fr 1fr}
+  .doc-layout{grid-template-columns:1fr}
+  .ai-pane{border-top:1px solid var(--border)}
+  .split2{grid-template-columns:1fr}
+  .assistant{width:100%}
+  .matrix{grid-template-columns:1fr}
+  .decisions{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  .page-head,.tabs,.wrap{padding-left:14px;padding-right:14px}
+  .page-head h1{font-size:20px}
+  .page-head h1 span{display:block;margin:4px 0 0}
+  .stage{grid-template-columns:1fr;gap:10px}
+  .caps{grid-template-columns:1fr}
+  .intro-grid{grid-template-columns:1fr}
+  .app{min-height:0}
+  .side{display:none}
+  .kpis{grid-template-columns:1fr 1fr}
+  .doc-pane{padding:16px}
+  .prio-table{font-size:11px}
+  .prio-table th:nth-child(4),.prio-table td:nth-child(4){display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <div class="kicker"><i></i>AI 场景规划 · 2026-11-17 · 原型稿</div>
+  <h1>沙漏 AI 能做什么 <span>按「记录进来 → 拆解 → 写作 → 执行 → 出证」找位置</span></h1>
+  <p class="page-desc">
+    你提的四个例子——改文档、格式化文档、建任务、需求自动拆工作项——都落在这张图的<b>前三段</b>。
+    这份原型先把场景铺全，再按<b>「现在做 / 跟随 Gate 1 / Gate 2」</b>排序；所有写操作统一为
+    <b>草稿 → 差异预览 → 人工确认 → 服务端执行</b>，模型不直接动数据。
+  </p>
+  <div class="legend">
+    <span><i class="dot p0"></i>P0 现在做（1–3 周）</span>
+    <span><i class="dot p1"></i>P1 跟随 Gate 1</span>
+    <span><i class="dot p2"></i>P2 出证阶段</span>
+    <span><i class="dot no"></i>明确不做</span>
+    <span>既有 G1–G14 / D1–D8 编号沿用，不重复立项</span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs" aria-label="原型页签">
+  <button type="button" class="on" data-tab="map"><span class="n">1</span>场景全景</button>
+  <button type="button" data-tab="doc"><span class="n">2</span>文档改写</button>
+  <button type="button" data-tab="notes"><span class="n">3</span>纪要转草稿</button>
+  <button type="button" data-tab="demand"><span class="n">4</span>需求体检</button>
+  <button type="button" data-tab="split"><span class="n">5</span>需求拆工作项</button>
+  <button type="button" data-tab="ask"><span class="n">6</span>版本问答</button>
+  <button type="button" data-tab="prio"><span class="n">7</span>优先级</button>
+</nav>
+
+<div class="wrap">
+
+<!-- ==================== 1 场景全景 ==================== -->
+<section id="tab-map">
+  <div class="intro-grid">
+    <div class="example">
+      <div class="ex-q">你的例子 1</div>
+      <div class="ex-a">自动修改文档</div>
+      <div class="ex-note">先做「选区改写」：只改选中的一段，给 diff，逐段接受。不整篇重写。</div>
+      <span class="pb p0">P0</span>
+    </div>
+    <div class="example">
+      <div class="ex-q">你的例子 2</div>
+      <div class="ex-a">格式化文档</div>
+      <div class="ex-note">按模板统一标题层级、术语、验收表格；全文 diff 后一次确认。规则要可配置。</div>
+      <span class="pb p1">P1</span>
+    </div>
+    <div class="example">
+      <div class="ex-q">你的例子 3</div>
+      <div class="ex-a">自动创建任务 / 需求</div>
+      <div class="ex-note">单条建单已可用；下一步是「会议纪要 / 聊天记录 → 多条草稿」，勾选后创建。</div>
+      <span class="pb p0">P0</span>
+      <span class="pb p1">P1</span>
+    </div>
+    <div class="example">
+      <div class="ex-q">你的例子 4</div>
+      <div class="ex-a">需求自动拆工作项</div>
+      <div class="ex-note">已有拆分；缺的是拆分台账、相似项标记和覆盖缺口，否则会重复建。</div>
+      <span class="pb p0">P0</span>
+    </div>
+  </div>
+
+  <div class="map">
+    <div class="stage">
+      <div class="stage-head">
+        <span class="stage-no">1</span>
+        <div><b>记录进来</b><p>把散落在会议、聊天、Word、截图里的东西，变成可确认的条目</p></div>
+      </div>
+      <div class="caps">
+        <div class="cap p0cap">
+          <div class="cap-top"><span class="cap-title">自然语言建任务 / 提需求</span><span class="pb p0">P0</span></div>
+          <p class="cap-desc">已有单条能力；补齐验收标准、目标版本、模块等字段。</p>
+          <div class="cap-foot"><b>已实现</b> · 确认后落库</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">会议纪要 / 聊天 → 多条草稿</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">一次抽取 5–10 条，逐条勾选；相似项先标出来。</p>
+          <div class="cap-foot"><b>不接 IM</b> · 只支持粘贴</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">Word / PRD 导入 → 需求 + 任务 + 用例</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">分节抽取，三件套各生成草稿；依赖 Word 导入方案。</p>
+          <div class="cap-foot"><b>前置</b> · Word 解析</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">截图 / 日志 → 缺陷草稿</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">补环境、严重度、复现步骤；无视觉模型时降级为文本。</p>
+          <div class="cap-foot"><b>确认点</b> · 严重度必填</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">需求相似 / 重复提示</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">提交前提示「同项目已有相似需求」，给对比与关联入口。</p>
+          <div class="cap-foot"><b>不判定</b> · 不自动合并</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">粘贴表格 → 批量工作项</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">Excel / Markdown 表格按列映射，预览后批量创建。</p>
+          <div class="cap-foot"><b>分批</b> · 每次 ≤ 30 条</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">自动监听群消息 / 邮件建单</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">需要 IM 接入与常驻权限，出站与误建风险都高。</p>
+          <div class="cap-foot">用粘贴替代</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">自动补全需求内容</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">模型编出的背景和客户原话没有来源，会污染评审依据。</p>
+          <div class="cap-foot">只列缺口</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="stage-no">2</span>
+        <div><b>评审与拆解</b><p>把一条需求变成能开工、能验收、不重复的工作项</p></div>
+      </div>
+      <div class="caps">
+        <div class="cap p0cap">
+          <div class="cap-top"><span class="cap-title">需求质量体检</span><span class="pb p0">P0</span></div>
+          <p class="cap-desc">提交前列出缺验收标准、缺背景、负责人未定；只提示不评分。</p>
+          <div class="cap-foot"><b>只读</b> · 可仍然提交</div>
+        </div>
+        <div class="cap p0cap">
+          <div class="cap-top"><span class="cap-title">需求 → 工作项拆分（增强）</span><span class="pb p0">P0</span></div>
+          <p class="cap-desc">已有拆分；补拆分台账、相似/重复标记、功能点覆盖缺口。</p>
+          <div class="cap-foot"><b>已实现</b> · 增量改造</div>
+        </div>
+        <div class="cap p0cap">
+          <div class="cap-top"><span class="cap-title">文档 → 任务 / 用例</span><span class="pb p0">P0</span></div>
+          <p class="cap-desc">已有；与拆分台账合流，预览阶段就标「已存在」。</p>
+          <div class="cap-foot"><b>已实现</b> · 去重前移</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">评审问题清单</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">按模板列出「要问的 5 个问题」，不替评审下结论。</p>
+          <div class="cap-foot"><b>低优先</b> · 场景窄</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">需求变更摘要</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">调期 / 换版本后，把「改了什么、影响哪些任务」写给相关人。</p>
+          <div class="cap-foot"><b>事实</b> · 来自 revision</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">需求与交付物缺口</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">已通过但没文档、没工作项、没测试：列出缺哪一环，给补录入口。</p>
+          <div class="cap-foot"><b>只读</b> · 不补全</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">跨项目相似需求</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">不同项目重复造轮子时，提示可复用或关联，不自动合并。</p>
+          <div class="cap-foot"><b>P2</b> · 先做同项目</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">自动通过评审 / 自动排期</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">评审与排期是责任动作，AI 只能准备材料。</p>
+          <div class="cap-foot">人确认</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="stage-no">3</span>
+        <div><b>文档写作</b><p>卡住的不是「没有生成按钮」，是写不全、改不动</p></div>
+      </div>
+      <div class="caps">
+        <div class="cap p0cap">
+          <div class="cap-top"><span class="cap-title">选区改写</span><span class="pb p0">P0</span></div>
+          <p class="cap-desc">润色、精简、扩写、补验收标准；只改选中段落，给 diff。</p>
+          <div class="cap-foot"><b>确认点</b> · 逐段接受</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">按模板 / 术语统一格式</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">标题层级、术语表、验收表格统一；全文 diff 后一次确认。</p>
+          <div class="cap-foot"><b>规则先行</b> · 可配置</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">补验收标准</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">按功能点生成验收项，标为「待确认假设」，不直接写正文。</p>
+          <div class="cap-foot"><b>标注</b> · 假设而非事实</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">章节问答</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">「这份 PRD 的导出规则是什么？」按章节检索后回答并引用。</p>
+          <div class="cap-foot"><b>前置</b> · 稳定章节索引</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">文档变更摘要</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">v1.2 → v1.3 改了什么，给评审和发布说明引用。</p>
+          <div class="cap-foot"><b>依赖</b> · 版本对比</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">文档覆盖缺口</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">需求功能点在文档、工作项、用例里各覆盖了多少，缺哪一段。</p>
+          <div class="cap-foot"><b>只读</b> · 复用已有覆盖视图</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">写不出来时给三个开头</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">只给方向和结构，不替用户写整段，避免文风与事实都失真。</p>
+          <div class="cap-foot"><b>低优先</b> · 场景窄</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">整篇自动重写 / 直接保存</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">文风与责任都不可控；用户看不出改了哪里，就不会信任。</p>
+          <div class="cap-foot">只做选区 + diff</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="stage-no">4</span>
+        <div><b>排期与执行</b><p>少问一句「我现在该干什么」，少一次翻列表</p></div>
+      </div>
+      <div class="caps">
+        <div class="cap p0cap">
+          <div class="cap-top"><span class="cap-title">我的逾期 / 今日到期 / 阻塞</span><span class="pb p0">P0</span></div>
+          <p class="cap-desc">已有五个固定模板；补「本周变化」和「需要我确认的」。</p>
+          <div class="cap-foot"><b>已实现</b> · 只读</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">任务拆子任务</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">按验收点拆 2–5 条子任务，继承项目、版本与依赖。</p>
+          <div class="cap-foot"><b>确认点</b> · 继承规则</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">依赖识别建议</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">从描述里发现「要先等接口」，提示确认后再连线。</p>
+          <div class="cap-foot"><b>只建议</b> · 不自动连线</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">排期 / 负载建议</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">基于剩余工时与依赖给候选，不评价个人、不自动改日期。</p>
+          <div class="cap-foot"><b>敏感</b> · 只给候选</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">工时 / 记录缺口提醒</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">完成未计时、进行中停滞、日期倒置；点一下去补，不自动填。</p>
+          <div class="cap-foot"><b>D8</b> · 正向飞轮</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">站会 / 周会摘要</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">按人汇总昨日完成、今日计划、阻塞；事实来自记录，不评价。</p>
+          <div class="cap-foot"><b>只读</b> · 不生成任务</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">催办文案草稿</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">逾期 / 阻塞项生成一段站内催办话术，发送前人工改。</p>
+          <div class="cap-foot"><b>确认</b> · 不自动发送</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">AI 自动改状态 / 自动流转</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">工作项状态是执行事实，自动改会破坏审计与看板可信度。</p>
+          <div class="cap-foot">最多给「建议移列」</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="stage-no">5</span>
+        <div><b>测试与缺陷</b><p>从「写完用例」到「知道这次该测什么」</p></div>
+      </div>
+      <div class="caps">
+        <div class="cap p0cap">
+          <div class="cap-top"><span class="cap-title">用例生成（增强去重）</span><span class="pb p0">P0</span></div>
+          <p class="cap-desc">已有；补已有用例全量对照与「本文档已生成过」台账。</p>
+          <div class="cap-foot"><b>已实现</b> · 去重前移</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">失败用例 → 缺陷草稿</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">带用例步骤、实际结果、环境；严重度由人确认。</p>
+          <div class="cap-foot"><b>确认点</b> · 严重度 / 复现</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">缺陷相似 / 重复提示</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">提交前提示可能重复，给合并或关联选项。</p>
+          <div class="cap-foot"><b>不自动合并</b></div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">回归范围建议</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">按本次变更关联的需求、用例与历史缺陷给候选集。</p>
+          <div class="cap-foot"><b>候选</b> · 人勾选</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">测试报告草稿</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">执行率、通过率、失败分布、阻塞项；数字由系统查。</p>
+          <div class="cap-foot"><b>引用</b> · 计划快照</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">缺陷聚类</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">按模块、现象、版本聚合相似缺陷，给排查顺序；不判定根因。</p>
+          <div class="cap-foot"><b>只建议</b> · 不改状态</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">边界值 / 测试数据建议</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">从需求规则生成边界与异常输入清单，补进用例草稿。</p>
+          <div class="cap-foot"><b>草稿</b> · 人确认</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">AI 判定「测试通过可以发」</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">发布判断要有人签字；AI 只列证据缺口。</p>
+          <div class="cap-foot">人决定</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="stage-no">6</span>
+        <div><b>发布、汇报与复盘</b><p>沙漏真正的差异不在「会聊天」，在能出证</p></div>
+      </div>
+      <div class="caps">
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">版本追踪链问答</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">「这个承诺到哪了」：需求 → 任务 → 测试 → 分支 → 发布，带缺口。</p>
+          <div class="cap-foot"><b>固定模板</b> · 事实注入</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">发布就绪体检</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">范围、质量、代码、发布、口径五类缺口；不是发布门禁。</p>
+          <div class="cap-foot"><b>规则先行</b> · AI 解释</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">周报 / 发布说明草稿</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">从完成、进行中、阻塞与工时事实生成；完成 ≠ 发布。</p>
+          <div class="cap-foot"><b>引用</b> · 可点回记录</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">交付说明 / 变更台账</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">承诺、实际、变更、证据、未完成、下期建议六段；revision 是现成证据。</p>
+          <div class="cap-foot"><b>差异化</b> · 可导出</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">客户简报 / 证据包</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">脱敏、可外发；预览后人工确认，不自动发送。</p>
+          <div class="cap-foot"><b>外部版</b> · 显式导出</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">复盘事实底稿</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">时间线、计划 vs 实际、阻塞与返工；不评价个人。</p>
+          <div class="cap-foot"><b>事实</b> · 不归因</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">AI 自动定稿 / 自动发客户</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">对外内容必须人工看过；一键发送会把风险外包给模型。</p>
+          <div class="cap-foot">导出前确认</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">AI 健康度评分 / 个人排名</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">评分会被当成考核依据，和数据口径冲突。</p>
+          <div class="cap-foot">只叙述事实</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="stage-no">7</span>
+        <div><b>空间与管理</b><p>回答「为什么我看不到 / 谁改了什么 / 两个数为什么不同」</p></div>
+      </div>
+      <div class="caps">
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">权限与可见性解释</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">「为什么我看不到这个项目」按角色、项目授权、文档可见范围解释。</p>
+          <div class="cap-foot"><b>只读</b> · 给配置入口</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">谁改了什么</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">按审计与操作记录回答某条需求/任务的状态、负责人、日期变更。</p>
+          <div class="cap-foot"><b>只读</b> · 引用审计</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">口径解释</span><span class="pb p1">P1</span></div>
+          <p class="cap-desc">「报表和发布说明为什么对不上」：说明统计口径与快照差异。</p>
+          <div class="cap-foot"><b>D8</b> · 不调数据</div>
+        </div>
+        <div class="cap">
+          <div class="cap-top"><span class="cap-title">项目集 / 跨项目周报</span><span class="pb p2">P2</span></div>
+          <p class="cap-desc">按项目集汇总风险、里程碑与交付；依赖项目集能力。</p>
+          <div class="cap-foot"><b>依赖</b> · 项目集</div>
+        </div>
+        <div class="cap nocap">
+          <div class="cap-top"><span class="cap-title">任意 SQL / 自由查库</span><span class="pb no">不做</span></div>
+          <p class="cap-desc">权限与稳定性都不可控；只走服务端预定义模板。</p>
+          <div class="cap-foot">模板查询</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 2 文档改写 ==================== -->
+<section id="tab-doc" hidden>
+  <div class="panel" style="margin-bottom:12px">
+    <div class="panel-head">
+      <h2>场景 A · 文档选区改写</h2>
+      <p>只改选中的一段；右侧给 diff、修改理由与影响范围。格式化是另一个独立动作。</p>
+      <div class="grow"></div>
+      <span class="pb p0">P0</span>
+    </div>
+  </div>
+
+  <div class="app">
+    <aside class="side">
+      <div class="brand"><span class="mark">沙</span>沙漏</div>
+      <div class="ws"><i></i><b>支付网关</b></div>
+      <div class="navlab">规划</div>
+      <div class="nav"><span class="ic"></span>需求池</div>
+      <div class="nav"><span class="ic"></span>项目</div>
+      <div class="nav"><span class="ic"></span>版本</div>
+      <div class="navlab">交付</div>
+      <div class="nav on"><span class="ic"></span>文档</div>
+      <div class="nav"><span class="ic"></span>工作项</div>
+      <div class="nav"><span class="ic"></span>测试</div>
+      <div class="nav"><span class="ic"></span>分支</div>
+    </aside>
+    <div class="main">
+      <div class="top">
+        <div class="crumb"><span>支付网关</span><span class="sep">/</span><span>文档</span><span class="sep">/</span><b>对账中心导出 PRD</b></div>
+        <div class="grow"></div>
+        <span class="chipbtn">v1.3 · 已保存</span>
+        <span class="avatar">张</span>
+      </div>
+      <div class="doc-layout">
+        <div class="doc-pane">
+          <div class="doc-crumb"><span>文档</span><span class="sep">/</span><span>对账中心</span><span class="sep">/</span><span>导出 PRD</span></div>
+          <h2 class="doc-title">对账中心导出</h2>
+          <div class="doc-meta"><span class="tag blue">PRD</span><span>v1.3</span><span>·</span><span>张三 更新于 11-16</span><span>·</span><span>关联项目 支付网关</span></div>
+
+          <div class="doc">
+            <h3>3. 导出能力</h3>
+            <p>支持按日、按周导出对账文件，格式为 CSV 与 XLSX。导出任务在后台执行，完成后在通知中心提醒。</p>
+            <p class="sel">按月导出需要在每月 1 日自动生成上月对账单，支持邮件推送与下载链接，链接有效期 7 天。</p>
+            <div class="sel-tools">
+              <button type="button" class="ai">AI 改写</button>
+              <span class="sp"></span>
+              <button type="button">润色</button>
+              <button type="button">精简</button>
+              <button type="button">扩写</button>
+              <button type="button">补验收标准</button>
+              <span class="sp"></span>
+              <button type="button">更正式</button>
+            </div>
+            <h3>4. 验收标准</h3>
+            <p><span class="missing">（本章节未填写）</span></p>
+            <h3>5. 异常与边界</h3>
+            <p>超过 100 万行时提示分批导出；导出失败时在任务列表显示失败原因。</p>
+          </div>
+        </div>
+
+        <aside class="ai-pane">
+          <div class="ai-head">
+            <b>改写建议</b>
+            <span class="tag plum">AI 生成</span>
+          </div>
+          <div class="ai-body">
+            <p class="diff-label">原文 · 第 3 段</p>
+            <div class="diff-box">按月导出需要在每月 1 日自动生成上月对账单，支持邮件推送与下载链接，链接有效期 7 天。</div>
+
+            <p class="diff-label">建议 · 补验收口径</p>
+            <div class="diff-box">
+              按月导出：<span class="ins">每月 1 日 08:00 前</span>生成<span class="ins">上月 1 日至月末</span>的对账单，支持邮件推送与站内下载链接，链接有效期 7 天；<span class="ins">生成失败时自动重试 3 次，仍失败则通知空间管理员。</span>
+            </div>
+
+            <div class="why">
+              <span class="tag amber">补时间口径</span>
+              <span class="tag amber">补失败处理</span>
+              <span class="tag">来源：导出类需求模板</span>
+              <span class="tag">未新增功能范围</span>
+            </div>
+
+            <div class="ai-actions">
+              <button class="btn primary sm" type="button" onclick="toast('已接受第 3 段改写；其他段落未变')">接受本段</button>
+              <button class="btn sm" type="button" onclick="toast('已换一版建议（示例）')">换一版</button>
+              <button class="btn ghost sm" type="button" onclick="toast('已忽略本次建议')">拒绝</button>
+            </div>
+
+            <div class="ai-note">
+              本次只影响第 3 段。接受后可 Ctrl/⌘+Z 撤销；不会自动保存到其他版本，也不会改动关联工作项。
+            </div>
+
+            <div class="divider"></div>
+
+            <p class="section-title">格式统一 <span class="pb p1">P1</span></p>
+            <div class="format-card">
+              <div class="fmt-row">
+                <span class="ic">H</span>
+                <div class="grow">标题层级：「3.1 导出范围」与「3.2 权限」之间缺一级标题<br><span class="muted">建议按模板调整为 3 / 3.1 / 3.1.1</span></div>
+                <span class="link">查看</span>
+              </div>
+              <div class="fmt-row">
+                <span class="ic">T</span>
+                <div class="grow">术语不一致：正文混用「对账单」「对账单据」共 3 处<br><span class="muted">术语表指定：对账单</span></div>
+                <span class="link">统一</span>
+              </div>
+              <div class="fmt-row">
+                <span class="ic">▦</span>
+                <div class="grow">验收标准未使用模板表格（当前为空）<br><span class="muted">将生成 4 行验收项，标为待确认</span></div>
+                <span class="link">生成</span>
+              </div>
+              <div class="fmt-row" style="border-top:1px dashed var(--border);margin-top:4px;padding-top:8px">
+                <div class="grow" style="font-size:11.3px">全文格式整理会改动 6 处，先看差异再确认。</div>
+                <button class="btn sm" type="button" onclick="toast('已打开全文差异预览（示例）')">全文差异</button>
+              </div>
+            </div>
+
+            <div class="ai-note" style="margin-top:12px">
+              规则来源：空间术语表 + PRD 模板 v2。没有规则依据的地方不会「顺手美化」。
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 3 纪要转草稿 ==================== -->
+<section id="tab-notes" hidden>
+  <div class="panel" style="margin-bottom:12px">
+    <div class="panel-head">
+      <h2>场景 B · 会议纪要 / 聊天记录 → 多条草稿</h2>
+      <p>粘贴即可，不接 IM。抽取后逐条勾选；相似项先标出，不自动合并。</p>
+      <div class="grow"></div>
+      <span class="pb p1">P1</span>
+    </div>
+  </div>
+
+  <div class="split2">
+    <div class="panel">
+      <div class="panel-head"><h2>粘贴原文</h2><p>支持会议纪要、群聊记录、邮件片段</p></div>
+      <div class="panel-body">
+        <div class="paste-tip">
+          <span style="font-weight:800">i</span>
+          <div><b>只会发送你粘贴的文本</b>，不会读取聊天工具或邮箱。抽取结果先做草稿，确认后才创建。</div>
+        </div>
+        <textarea class="textarea" spellcheck="false">11-17 对账需求评审会
+- 按月导出的邮件模板要先给财务确认，周五前。
+- 导出失败要能重试，别让用户自己找运维。
+- 会员中心也要复用这套导出，下个版本再说。
+- 上次 Safari 白屏的问题还没修，顺手记一下。
+- 测试要补 7 天链接过期的用例，回归时一起跑。</textarea>
+        <div class="row wrap" style="margin-top:10px">
+          <button class="btn primary" type="button" onclick="toast('已抽取 5 条，其中 2 条可能重复')">提取条目</button>
+          <button class="btn" type="button">选择目标项目</button>
+          <span class="mini muted">默认当前项目：支付网关</span>
+        </div>
+        <div class="divider"></div>
+        <p class="mini muted" style="margin:0">
+          边界：无法识别归属的句子会标「待定」，不会猜项目；日期按服务端今天解析成绝对值后再确认。
+        </p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>抽取结果</h2><p>5 条 · 3 条可直接创建 · 2 条需处理</p></div>
+      <div class="panel-body" style="padding-top:14px">
+        <div class="extract-item sel">
+          <div class="extract-top">
+            <span class="check on" onclick="toggleCheck(this)">✓</span>
+            <span class="extract-title">财务确认按月导出邮件模板</span>
+            <span class="tag blue">任务</span>
+          </div>
+          <div class="extract-meta"><span>支付网关</span><span>·</span><span>负责人 张三</span><span>·</span><span>截止 11-21（周五）</span></div>
+        </div>
+
+        <div class="extract-item sel">
+          <div class="extract-top">
+            <span class="check on" onclick="toggleCheck(this)">✓</span>
+            <span class="extract-title">导出失败自动重试并告警</span>
+            <span class="tag blue">任务</span>
+          </div>
+          <div class="extract-meta"><span>支付网关</span><span>·</span><span>负责人 李四</span><span>·</span><span>截止 11-28</span></div>
+        </div>
+
+        <div class="extract-item sel">
+          <div class="extract-top">
+            <span class="check on" onclick="toggleCheck(this)">✓</span>
+            <span class="extract-title">会员中心复用对账导出能力</span>
+            <span class="tag plum">需求</span>
+          </div>
+          <div class="extract-meta"><span>会员中心</span><span>·</span><span>待评审</span><span>·</span><span>目标版本 未定</span></div>
+        </div>
+
+        <div class="extract-item dupe">
+          <div class="extract-top">
+            <span class="check" onclick="toggleCheck(this)"></span>
+            <span class="extract-title">Safari 下对账导出页白屏</span>
+            <span class="tag red">缺陷</span>
+          </div>
+          <div class="extract-meta"><span>支付网关</span><span>·</span><span>严重度 待定</span><span>·</span><span>复现步骤 未提供</span></div>
+          <div class="extract-warn">
+            可能重复：已有「Safari 导出白屏 · 11-03 已关闭」
+            <button class="btn sm" type="button" onclick="toast('已打开对比（示例）')">对比</button>
+            <button class="btn sm" type="button" onclick="toast('将作为新缺陷创建（示例）')">仍然创建</button>
+          </div>
+        </div>
+
+        <div class="extract-item dupe">
+          <div class="extract-top">
+            <span class="check" onclick="toggleCheck(this)"></span>
+            <span class="extract-title">补 7 天链接过期用例</span>
+            <span class="tag green">测试用例</span>
+          </div>
+          <div class="extract-meta"><span>支付网关</span><span>·</span><span>关联需求 按月导出</span><span>·</span><span>负责人 王五</span></div>
+          <div class="extract-warn">
+            可能重复：已有「导出链接有效期 7 天」用例
+            <button class="btn sm" type="button" onclick="toast('已打开对比（示例）')">对比</button>
+            <button class="btn sm" type="button" onclick="toast('将作为新用例创建（示例）')">仍然创建</button>
+          </div>
+        </div>
+
+        <div class="batchbar">
+          <div class="grow">已选 3 条 · 2 条待处理 · 未确认前不会创建</div>
+          <button class="btn" type="button" onclick="toast('已聚焦到待处理项（示例）')">处理重复</button>
+          <button class="btn primary" type="button" onclick="toast('已创建 3 条草稿对应记录（示例）')">创建选中 3 条</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 4 需求体检 ==================== -->
+<section id="tab-demand" hidden>
+  <div class="panel" style="margin-bottom:12px">
+    <div class="panel-head">
+      <h2>场景 C · 需求提交前体检</h2>
+      <p>只列缺口与相似项，不评分、不判定好坏；用户可以仍然提交。</p>
+      <div class="grow"></div>
+      <span class="pb p0">P0</span>
+    </div>
+  </div>
+
+  <div class="split2">
+    <div class="panel">
+      <div class="panel-head"><h2>新建需求</h2><p>结构保持不变，右侧是辅助信息</p></div>
+      <div class="panel-body">
+        <div class="form-row">
+          <label>标题</label>
+          <input class="input" value="对账中心支持按月导出">
+        </div>
+        <div class="form-row">
+          <label>所属项目</label>
+          <input class="input" value="支付网关">
+        </div>
+        <div class="form-row">
+          <label>描述</label>
+          <textarea class="textarea" style="min-height:120px">财务希望每月初自动拿到上个月的对账单，最好能直接发到邮箱，找不到时再登录下载。客户提到现在的按日导出太碎，月底要合很多次。</textarea>
+        </div>
+        <div class="form-row">
+          <label>验收标准</label>
+          <textarea class="textarea" style="min-height:70px" placeholder="未填写"></textarea>
+        </div>
+        <div class="row wrap" style="margin-top:14px">
+          <button class="btn" type="button" onclick="toast('已保存草稿（示例）')">保存草稿</button>
+          <button class="btn primary" type="button" onclick="toast('已提交到待评审（示例）')">提交评审</button>
+          <span class="mini muted">AI 不会阻止提交</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>提交前检查</h2><p>3 项缺口 · 1 条相似需求</p></div>
+      <div class="panel-body">
+        <div class="checklist">
+          <div class="chk">
+            <span class="ic red">!</span>
+            <div><b>缺验收标准</b><p>评审时无法判断「做到什么算完成」。建议至少写清时间口径、失败处理、权限范围。</p></div>
+          </div>
+          <div class="chk">
+            <span class="ic amber">!</span>
+            <div><b>缺目标版本</b><p>不是必填；如果希望本迭代排期，需要先和版本负责人对齐。</p></div>
+          </div>
+          <div class="chk">
+            <span class="ic amber">!</span>
+            <div><b>负责人未定</b><p>描述里出现「财务确认」，但没有记录对接人。</p></div>
+          </div>
+          <div class="chk">
+            <span class="ic blue">≈</span>
+            <div>
+              <b>同项目有相似需求</b>
+              <p>按标题与描述关键词匹配，不是重复判定。</p>
+              <div class="similar">
+                <div class="t">对账中心批量导出 <span class="tag blue">已排期</span><span class="tag">v2.2</span></div>
+                <div class="m">关键词重合：对账 · 导出 · 按月；描述都提到财务对账</div>
+                <div class="acts">
+                  <button class="btn sm" type="button" onclick="toast('已打开两侧对比（示例）')">并排对比</button>
+                  <button class="btn sm" type="button" onclick="toast('已标记为关联需求（示例）')">关联</button>
+                  <button class="btn ghost sm" type="button" onclick="toast('已忽略相似提示')">不是重复</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout warn" style="margin-top:14px">
+          <span class="ic">!</span>
+          <div><b>不做需求评分。</b>「完整度 62 分」这类数字会被当成评审依据，但没有统一口径；只列缺什么、和谁相似。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 5 需求拆工作项 ==================== -->
+<section id="tab-split" hidden>
+  <div class="panel" style="margin-bottom:12px">
+    <div class="panel-head">
+      <h2>场景 D · 需求 → 工作项拆分（增强）</h2>
+      <p>已有拆分能力；本次补「拆分台账 + 相似标记 + 功能点覆盖」，把重复挡在预览阶段。</p>
+      <div class="grow"></div>
+      <span class="pb p0">P0</span>
+    </div>
+  </div>
+
+  <div class="split2">
+    <div class="panel" style="padding:16px">
+      <div class="demand-head">
+        <h3>对账中心按月导出</h3>
+        <div class="demand-meta">
+          <span class="tag green">已通过</span>
+          <span class="tag">支付网关</span>
+          <span>·</span><span>目标版本 v2.3</span>
+          <span>·</span><span>提交人 张三</span>
+          <span>·</span><span>rev 3</span>
+        </div>
+        <div class="divider"></div>
+        <p style="margin:0;font-size:12.2px;color:var(--text-2);line-height:1.8">
+          财务每月初需要上月对账单，支持邮件推送与站内下载；失败可重试；链接 7 天有效。验收时间：每月 1 日 08:00 前。
+        </p>
+        <div class="cover">
+          <span class="tag">功能点 1 · 月账单生成</span>
+          <span class="tag">功能点 2 · 邮件推送</span>
+          <span class="tag">功能点 3 · 下载链接</span>
+          <span class="tag">功能点 4 · 失败重试</span>
+        </div>
+      </div>
+
+      <p class="section-title">拆分台账 <span class="mini muted">新增</span></p>
+      <div class="ledger">
+        11-12 已从本需求拆过 3 条：月账单生成、下载链接、失败重试。本次为<b>增量</b>，已存在项默认不勾选。
+      </div>
+
+      <p class="section-title">历史拆分记录</p>
+      <div class="list-card">
+        <div class="li"><span class="tag">工作项</span><span class="grow">月账单生成定时任务</span><span class="mini muted">11-12 · 李四</span></div>
+        <div class="li"><span class="tag">工作项</span><span class="grow">下载链接与过期校验</span><span class="mini muted">11-12 · 李四</span></div>
+        <div class="li"><span class="tag">工作项</span><span class="grow">生成失败重试</span><span class="mini muted">11-12 · 王五</span></div>
+      </div>
+
+      <p class="section-title" style="margin-top:14px">验收与边界</p>
+      <div class="card" style="font-size:11.8px;color:var(--text-3);line-height:1.7">
+        拆分只覆盖需求正文与验收标准；不会把「技术方案」自行补成任务。超过 8 条建议分批创建，避免一次确认太多。
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>AI 拆解建议</h2><p>4 项 · 1 项可能重复 · 覆盖 4/4 功能点</p></div>
+      <div class="panel-body">
+        <div class="split-item">
+          <span class="check" onclick="toggleCheck(this)"></span>
+          <div class="grow">
+            <div class="t">月账单生成定时任务</div>
+            <div class="m"><span>开发</span><span>·</span><span>负责人 李四</span><span>·</span><span>v2.3</span><span class="tag amber">已有相似：月账单生成 · 11-12</span></div>
+          </div>
+        </div>
+        <div class="split-item">
+          <span class="check" onclick="toggleCheck(this)"></span>
+          <div class="grow">
+            <div class="t">邮件推送与模板对接</div>
+            <div class="m"><span>开发</span><span>·</span><span>负责人 张三</span><span>·</span><span>v2.3</span><span class="tag amber">已有相似：导出邮件通知</span></div>
+          </div>
+        </div>
+        <div class="split-item">
+          <span class="check on" onclick="toggleCheck(this)">✓</span>
+          <div class="grow">
+            <div class="t">下载链接与 7 天过期校验</div>
+            <div class="m"><span>开发</span><span>·</span><span>负责人 李四</span><span>·</span><span>v2.3</span><span class="tag green">覆盖功能点 3</span></div>
+          </div>
+        </div>
+        <div class="split-item">
+          <span class="check on" onclick="toggleCheck(this)">✓</span>
+          <div class="grow">
+            <div class="t">生成失败重试 3 次并告警</div>
+            <div class="m"><span>开发</span><span>·</span><span>负责人 王五</span><span>·</span><span>v2.3</span><span class="tag green">覆盖功能点 4</span></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="row wrap" style="gap:6px">
+          <span class="tag green">功能点覆盖 4/4</span>
+          <span class="tag amber">2 项待判定是否重复</span>
+          <span class="tag">本次只新增 2 条</span>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" type="button" onclick="toast('已创建 2 条工作项，并写入拆分台账（示例）')">创建勾选 2 条</button>
+          <button class="btn" type="button" onclick="toast('已打开重复项对比（示例）')">处理重复</button>
+          <span class="mini muted">全部确认后才落库</span>
+        </div>
+
+        <div class="callout" style="margin-top:14px">
+          <span class="ic">i</span>
+          <div><b>拆分不是越多越好。</b>建议一次 3–6 条；超过 8 条先分批。模型只按需求正文与验收标准拆，不替人补技术方案。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 6 版本问答 ==================== -->
+<section id="tab-ask" hidden>
+  <div class="panel" style="margin-bottom:12px">
+    <div class="panel-head">
+      <h2>场景 E · 版本追踪链问答</h2>
+      <p>数字和状态由服务端查询注入，模型只组织语言；每条结论可点回源记录。</p>
+      <div class="grow"></div>
+      <span class="pb p1">P1</span>
+    </div>
+  </div>
+
+  <div class="app" style="background:var(--bg-app)">
+    <aside class="side">
+      <div class="brand"><span class="mark">沙</span>沙漏</div>
+      <div class="ws"><i></i><b>支付网关</b></div>
+      <div class="navlab">规划</div>
+      <div class="nav"><span class="ic"></span>需求池</div>
+      <div class="nav"><span class="ic"></span>项目</div>
+      <div class="nav on"><span class="ic"></span>版本</div>
+      <div class="navlab">交付</div>
+      <div class="nav"><span class="ic"></span>文档</div>
+      <div class="nav"><span class="ic"></span>工作项</div>
+      <div class="nav"><span class="ic"></span>测试</div>
+      <div class="nav"><span class="ic"></span>分支</div>
+    </aside>
+    <div class="main">
+      <div class="top">
+        <div class="crumb"><span>支付网关</span><span class="sep">/</span><span>版本</span><span class="sep">/</span><b>v2.3</b></div>
+        <div class="grow"></div>
+        <span class="chipbtn">状态：进行中</span>
+        <span class="avatar">张</span>
+      </div>
+      <div class="row" style="align-items:stretch;gap:0;flex:1">
+        <div class="ver-page">
+          <div class="kpis">
+            <div class="kpi"><div class="n">10 <small>个需求</small></div><div class="l">8 已完成 · 1 已排期 · 1 待评审</div><div class="bar"><i style="width:80%"></i></div></div>
+            <div class="kpi"><div class="n">28 <small>个工作项</small></div><div class="l">24 完成 · 3 进行中 · 1 阻塞</div><div class="bar"><i style="width:86%;background:var(--warning)"></i></div></div>
+            <div class="kpi"><div class="n">15 <small>条用例</small></div><div class="l">12 通过 · 2 未执行 · 1 失败</div><div class="bar"><i style="width:80%;background:var(--success)"></i></div></div>
+            <div class="kpi"><div class="n">0 <small>条发布记录</small></div><div class="l">尚无生产发布</div><div class="bar"><i style="width:0%"></i></div></div>
+          </div>
+          <div class="list-card">
+            <div class="row" style="margin-bottom:8px"><b style="font-size:12.5px">范围与风险</b><span class="tag amber" style="margin-left:auto">3 项待处理</span></div>
+            <div class="li"><span class="tag red">缺口</span><span class="grow">失败用例「链接过期后仍可下载」未转缺陷</span><span class="mini muted">测试</span></div>
+            <div class="li"><span class="tag amber">缺口</span><span class="grow">「对账导出重试」已完成但未绑定版本</span><span class="mini muted">工作项</span></div>
+            <div class="li"><span class="tag amber">缺口</span><span class="grow">v2.3 无生产发布记录，只有测试环境</span><span class="mini muted">版本</span></div>
+          </div>
+        </div>
+
+        <div style="width:470px;flex:none;padding:16px 16px 16px 0">
+          <div class="assistant">
+            <div class="as-head">
+              <b>沙漏助手</b>
+              <span class="st"><i></i>已连接：版本 v2.3</span>
+            </div>
+            <div class="as-body">
+              <div class="msg user">v2.3 现在到哪了？能发了吗？</div>
+              <div class="msg ai">
+                <b>还没到可发布的状态。</b>范围基本完成，但有三处证据缺口。
+                <div class="fact"><span class="k">范围</span><span class="v">10 个需求，8 已完成、1 已排期、1 待评审<span class="src">需求池</span></span></div>
+                <div class="fact"><span class="k">工作项</span><span class="v">28 个，24 完成、3 进行中、1 阻塞<span class="src">工作项</span></span></div>
+                <div class="fact"><span class="k">测试</span><span class="v">15 条用例，12 通过、2 未执行、1 失败<span class="src">测试计划</span></span></div>
+                <div class="fact"><span class="k">分支</span><span class="v">1 条已合并，无未合并分支<span class="src">分支</span></span></div>
+                <div class="fact"><span class="k">发布</span><span class="v">无生产发布记录<span class="src">发布记录</span></span></div>
+
+                <div class="gaps">
+                  <div class="gt">发布就绪缺口（3）</div>
+                  <ul>
+                    <li>失败用例未转缺陷 <a href="#" onclick="return false">去创建</a></li>
+                    <li>1 个已完成工作项未绑定版本 <a href="#" onclick="return false">去绑定</a></li>
+                    <li>无成功生产发布记录 <a href="#" onclick="return false">去登记</a></li>
+                  </ul>
+                </div>
+
+                <div class="as-meta">
+                  <span class="tag">来自记录</span>
+                  <span class="tag">未推断原因</span>
+                  <span>3 次查询 · 1.2k tokens</span>
+                </div>
+              </div>
+            </div>
+            <div class="as-foot">
+              <div class="as-input">继续问：哪个需求卡住了？</div>
+              <button class="btn primary" type="button">发送</button>
+            </div>
+          </div>
+          <p class="mini muted" style="margin:8px 2px 0;line-height:1.6">
+            边界：不预测发布日期、不评价个人；「完成」与「已发布」分开表述。查不到就显示「未记录」，不补全。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 7 优先级 ==================== -->
+<section id="tab-prio" hidden>
+  <div class="panel" style="margin-bottom:12px">
+    <div class="panel-head">
+      <h2>优先级 · 按「价值 × 风险」与现有数据就绪度排</h2>
+      <p>高频低风险做薄做顺；低频高价值才投人。与既有 AI 能力规划的 Gate 对齐，不另起路线。</p>
+    </div>
+  </div>
+
+  <div class="matrix" style="margin-bottom:14px">
+    <div class="quad hot">
+      <div class="qt"><b>高频 · 低风险</b><span>做薄、做顺，作为入口</span></div>
+      <div class="items">
+        <span>单条建任务 / 提需求</span>
+        <span>我的逾期 / 今日到期</span>
+        <span>文档选区改写</span>
+        <span>需求体检</span>
+        <span>版本追踪问答（固定问题）</span>
+        <span>权限解释</span>
+      </div>
+    </div>
+    <div class="quad">
+      <div class="qt"><b>高频 · 高风险</b><span>只做确认式，不急</span></div>
+      <div class="items">
+        <span>纪要 → 多条草稿</span>
+        <span>批量改负责人 / 日期</span>
+        <span>批量移列</span>
+        <span>任务拆子任务</span>
+      </div>
+    </div>
+    <div class="quad">
+      <div class="qt"><b>低频 · 低风险</b><span>能用即可，少投入</span></div>
+      <div class="items">
+        <span>润色 / 翻译</span>
+        <span>术语统一</span>
+        <span>格式整理</span>
+        <span>帮助问答</span>
+      </div>
+    </div>
+    <div class="quad" style="background:linear-gradient(180deg,#FBFDFF,#fff);border-color:var(--primary-border)">
+      <div class="qt"><b>低频 · 高价值</b><span>差异化重点，人工确认</span></div>
+      <div class="items">
+        <span>交付说明</span>
+        <span>变更台账</span>
+        <span>发布就绪体检</span>
+        <span>客户简报</span>
+        <span>复盘底稿</span>
+        <span>证据包</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>分批落地</h2><p>P0 只做「能用 + 可信」，不追场景数量</p></div>
+    <div class="panel-body" style="padding:0">
+      <table class="prio-table">
+        <thead>
+          <tr><th style="width:110px">批次</th><th>能力</th><th style="width:250px">为什么排这里</th><th style="width:170px">复用 / 前置</th><th style="width:150px">主要风险</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="batch" rowspan="5">P0 地基<small>现在–3 周</small></td>
+            <td><b>统一写操作协议</b><br>草稿卡、差异预览、幂等、撤销、AI 标识</td>
+            <td>所有后续场景的公共底座；现在每种动作各写一套，越加越乱。</td>
+            <td>AssistantService、审计、requestId</td>
+            <td>改造成本分散在多处</td>
+          </tr>
+          <tr>
+            <td><b>文档选区改写</b><br>润色 / 精简 / 扩写 / 补验收标准</td>
+            <td>直接回应「自动改文档」，但只改一段、给 diff，第一次用就能判断准不准。</td>
+            <td>文档编辑器、AiClient</td>
+            <td>模型改出事实错误 → 必须逐段确认</td>
+          </tr>
+          <tr>
+            <td><b>需求拆工作项增强</b><br>台账 + 相似标记 + 覆盖缺口</td>
+            <td>已有拆分，重复创建是当前最大体验问题；改造面小、收益直接。</td>
+            <td>已有 split / applyTasks</td>
+            <td>相似判定误报 → 只提示不拦截</td>
+          </tr>
+          <tr>
+            <td><b>需求提交前体检</b><br>缺验收标准、缺版本、相似需求</td>
+            <td>评审前把话说清楚，减少返工；只读、无落库风险。</td>
+            <td>需求表单、关键词匹配</td>
+            <td>用户嫌烦 → 允许「不再提示」</td>
+          </tr>
+          <tr>
+            <td><b>只读查询扩展</b><br>版本进度、需求状态、谁改了什么</td>
+            <td>已有五个固定模板，同一套路由可继续加；对「老板问进度」最实用。</td>
+            <td>TaskQueryService、审计</td>
+            <td>口径错 → 模板与报表同源</td>
+          </tr>
+
+          <tr>
+            <td class="batch" rowspan="5">P1 钩子<small>至 Gate 1</small></td>
+            <td><b>纪要 / 聊天 → 多条草稿</b></td>
+            <td>建单的下一步；粘贴即可，风险可控，价值在「会后 2 分钟录完」。</td>
+            <td>复用建单 + 确认卡</td>
+            <td>一次抽太多 → 上限 10 条</td>
+          </tr>
+          <tr>
+            <td><b>文档格式统一</b><br>标题层级、术语表、验收表格</td>
+            <td>回应「格式化文档」；但依赖规则配置，放 P1 更稳。</td>
+            <td>模板、术语表、diff</td>
+            <td>规则不明 → 先只做术语与标题</td>
+          </tr>
+          <tr>
+            <td><b>Word / PRD 导入 → 三件套</b></td>
+            <td>产品团队本来就写 Word；这是最自然的录入路径，但依赖解析质量。</td>
+            <td>Word 导入方案</td>
+            <td>表格/图片解析不稳 → 先分节</td>
+          </tr>
+          <tr>
+            <td><b>测试侧：失败转缺陷、缺陷去重、测试报告</b></td>
+            <td>测试域记录最全，但 AI 渗透最低；先做三个闭环动作。</td>
+            <td>测试计划、用例、缺陷</td>
+            <td>严重度不能由模型定</td>
+          </tr>
+          <tr>
+            <td><b>追踪链问答 + 发布体检（只读）</b></td>
+            <td>差异化的第一层；规则先行，AI 只解释与排序。</td>
+            <td>版本、快照、发布记录</td>
+            <td>数据不全 → 显示「未记录」</td>
+          </tr>
+
+          <tr>
+            <td class="batch" rowspan="3">P2 出证<small>至 Gate 2</small></td>
+            <td><b>交付说明 / 变更台账 / 客户简报</b></td>
+            <td>护城河所在：承诺、变更、证据的对照，通用工具没有这套数据。</td>
+            <td>revision、发布快照</td>
+            <td>对外内容必须人工确认</td>
+          </tr>
+          <tr>
+            <td><b>排期 / 回归范围 / 依赖建议</b></td>
+            <td>价值有，但一旦像「考核建议」就会引发抵触；只给候选集。</td>
+            <td>工时、依赖、历史数据</td>
+            <td>被当成评分 → 不展示个人对比</td>
+          </tr>
+          <tr>
+            <td><b>语义搜索、项目集周报、证据包</b></td>
+            <td>提升找东西和跨项目汇报的效率，但依赖索引与项目集能力。</td>
+            <td>搜索、项目集</td>
+            <td>运维成本 → 先关键词</td>
+          </tr>
+
+          <tr>
+            <td class="batch">不做<small>边界</small></td>
+            <td colspan="4">
+              自动改状态 / 自动发布 / 自动替人定稿 / AI 评分排名 / 无人确认批量写 / 自动监听 IM / 任意 SQL / Agent 市场。
+              这些要么破坏审计，要么把责任从人转给模型。
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="decisions" style="margin-top:14px">
+    <div class="decision">
+      <div class="q">决策 1 · 文档改写做到哪一步</div>
+      <div class="o">建议：<b>P0 只做选区 + diff</b>；整篇「按模板整理」放 P1，先看到全文差异再确认。原因：整篇重写用户无法判断改了哪。</div>
+    </div>
+    <div class="decision">
+      <div class="q">决策 2 · 相似需求怎么判</div>
+      <div class="o">建议：<b>P0 用标题 + 关键词重合</b>，只提示；P2 再评估向量检索。不要一上来引入向量库，2 人维护不起。</div>
+    </div>
+    <div class="decision">
+      <div class="q">决策 3 · 批量创建确认颗粒度</div>
+      <div class="o">建议：<b>逐条勾选 + 整批一次确认</b>；重复项默认不勾选，必须单独处理。不做「全自动创建」。</div>
+    </div>
+    <div class="decision">
+      <div class="q">决策 4 · 入口形态</div>
+      <div class="o">建议：<b>场景按钮优先，助手兜底</b>。文档页的「AI 改写」、需求页的「拆解」比一个常驻聊天框更符合沙漏用户。</div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var tabs = document.getElementById('tabs');
+  var sections = {
+    map: document.getElementById('tab-map'),
+    doc: document.getElementById('tab-doc'),
+    notes: document.getElementById('tab-notes'),
+    demand: document.getElementById('tab-demand'),
+    split: document.getElementById('tab-split'),
+    ask: document.getElementById('tab-ask'),
+    prio: document.getElementById('tab-prio')
+  };
+  function show(name){
+    if(!sections[name]) name = 'map';
+    Object.keys(sections).forEach(function(k){ sections[k].hidden = (k !== name); });
+    tabs.querySelectorAll('button').forEach(function(b){
+      b.classList.toggle('on', b.getAttribute('data-tab') === name);
+    });
+    if(location.hash !== '#' + name){ history.replaceState(null, '', '#' + name); }
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+  tabs.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-tab]');
+    if(b) show(b.getAttribute('data-tab'));
+  });
+  window.addEventListener('hashchange', function(){ show(location.hash.replace('#','')); });
+  placeholders();
+
+  function placeholders(){
+    document.querySelectorAll('.check').forEach(function(c){
+      if(!c.textContent.trim()) c.textContent = '';
+    });
+  }
+  window.toggleCheck = function(el){
+    el.classList.toggle('on');
+    el.textContent = el.classList.contains('on') ? '✓' : '';
+  };
+  var tid;
+  window.toast = function(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('on');
+    clearTimeout(tid);
+    tid = setTimeout(function(){ t.classList.remove('on'); }, 2200);
+  };
+  show(location.hash.replace('#','') || 'map');
+})();
+</script>
+</body>
+</html>

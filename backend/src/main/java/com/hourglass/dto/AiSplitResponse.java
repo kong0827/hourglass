@@ -16,6 +16,13 @@ public class AiSplitResponse {
     private String reqDocTitle;
     /** 正文长度（字数），用于在界面提示"这次喂了多少字" */
     private int docChars;
+    /** 需求池来源（从需求详情拆分时填写，文档来源为空） */
+    private String demandId;
+    private String demandTitle;
+    /** 需求描述 + 验收标准的字数，口径同 docChars */
+    private int demandChars;
+    /** 一句话说明这次怎么拆的 / 是否覆盖验收标准，不给模型打分 */
+    private String summary;
     private List<DraftTask> tasks = new ArrayList<DraftTask>();
     private AiUsage usage;
 
@@ -31,6 +38,10 @@ public class AiSplitResponse {
         private Integer draftIndex;
         /** 模型给出的拆分理由，界面上折叠展示，方便判断拆得对不对 */
         private String reason;
+        /** 需求下已有同名工作项：默认不勾选，避免重复创建 */
+        private boolean duplicate;
+        /** 命中的已有工作项标题（仅 duplicate=true 时有值） */
+        private String duplicateOf;
         /** 默认勾选（前端可改） */
         private boolean selected = true;
     }

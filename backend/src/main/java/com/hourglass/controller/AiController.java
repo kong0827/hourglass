@@ -19,6 +19,7 @@ import com.hourglass.dto.AiTestCaseRequest;
 import com.hourglass.dto.AiTestCaseResponse;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.AiConfigService;
+import com.hourglass.service.AiDemandSplitService;
 import com.hourglass.service.AiInvestmentService;
 import com.hourglass.service.AiReqDocService;
 import com.hourglass.service.AiReviewService;
@@ -50,6 +51,7 @@ public class AiController {
 
     private final AiConfigService configService;
     private final AiReqDocService reqDocService;
+    private final AiDemandSplitService demandSplitService;
     private final AiReviewService reviewService;
     private final AiTestCaseService testCaseService;
     private final AiInvestmentService investmentService;
@@ -57,11 +59,13 @@ public class AiController {
     private final WorkspaceService workspaceService;
 
     public AiController(AiConfigService configService, AiReqDocService reqDocService,
+                        AiDemandSplitService demandSplitService,
                         AiReviewService reviewService, AiTestCaseService testCaseService,
                         AiInvestmentService investmentService, AiSelectionService selectionService,
                         WorkspaceService workspaceService) {
         this.configService = configService;
         this.reqDocService = reqDocService;
+        this.demandSplitService = demandSplitService;
         this.reviewService = reviewService;
         this.testCaseService = testCaseService;
         this.investmentService = investmentService;
@@ -101,6 +105,26 @@ public class AiController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(reqDocService.split(userId, ws.getId(), id, maxTasks));
+    }
+
+    /** 把需求池需求拆成工作项草稿（不落库）；来源是需求描述 + 验收标准 */
+    @PostMapping("/api/ai/demands/{id}/split")
+    public ApiResult<AiSplitResponse> splitDemand(@PathVariable String id,
+                                                  @RequestParam(required = false) Integer maxTasks,
+                                                  @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(demandSplitService.split(userId, ws.getId(), id, maxTasks));
+    }
+
+    /** 把勾选的需求拆分草稿创建成工作项（逐条处理，单条失败不影响其它） */
+    @PostMapping("/api/ai/demands/{id}/tasks")
+    public ApiResult<AiApplyResult> applyDemandTasks(@PathVariable String id,
+                                                     @Valid @RequestBody AiApplyRequest req,
+                                                     @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(demandSplitService.applyTasks(userId, ws.getId(), id, req.getTasks()));
     }
 
     /** 体检这个需求做完了没有 */
