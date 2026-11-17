@@ -202,10 +202,17 @@ function localDatetime(s){
   if(isNaN(d.getTime())) return "";
   return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate()) + "T" + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
 }
+var PUB_STATE_META = {effective:["生产生效", "tag-success"], partial:["生产部分生效", "tag-neutral"], rolled_back:["生产已回滚", "tag-neutral"], unknown:["生产覆盖未知", "tag-neutral"]};
+/* 各列表筛选与徽标同源的「已发布」判定：任一正式记录事实或人工补录都算 */
+function taskIsPublished(task){
+  if(!task) return false;
+  return !!(task.publishedAt || task.everPublished === true || task.manualPublished === true
+    || (task.publicationState && task.publicationState !== "unpublished")
+    || (Array.isArray(task.publicationTargets) && task.publicationTargets.length));
+}
 function taskPublicationHTML(task){
   if(!task) return "";
-  var state = task.publicationState || "unpublished";
-  var meta = {effective:["生产生效", "tag-success"], partial:["生产部分生效", "tag-neutral"], rolled_back:["生产已回滚", "tag-neutral"], unknown:["生产覆盖未知", "tag-neutral"]}[state];
+  var meta = PUB_STATE_META[task.publicationState || "unpublished"];
   var html = meta ? '<span class="tag task-published-badge ' + meta[1] + '" title="仅来自正式生产发布记录">' + meta[0] + '</span>' : "";
   if(task.everPublished === true) html += '<span class="tag tag-neutral" title="历史发布事实，不代表当前生产生效">曾生产发布</span>';
   /* 人工标记只补录「有没有发布过」，不提供生产生效证据：正式记录存在时不重复出徽标 */
@@ -217,6 +224,15 @@ function taskPublicationHTML(task){
     html += '<span class="tag tag-neutral" title="' + tip + '">已发布（人工）</span>';
   }
   return html;
+}
+/* 纯文本版：导出/复制到表格时用，口径与徽标完全一致 */
+function taskPublicationText(task){
+  if(!task) return "未发布";
+  var meta = PUB_STATE_META[task.publicationState || "unpublished"];
+  if(meta) return meta[0];
+  if(task.everPublished === true) return "曾生产发布";
+  if(task.manualPublished === true) return "已发布（人工）";
+  return "未发布";
 }
 function releaseEnvironmentName(env){ return {production:"生产", staging:"预发布", test:"测试"}[env] || env || "未记录环境"; }
 function releaseOperationName(op){ return {deploy:"部署", redeploy:"重部署", rollback:"回滚"}[op] || op || "未记录操作"; }
@@ -483,4 +499,4 @@ function taskDescText(desc, maxLen){
   return text;
 }
 
-export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, assocLinkHTML, taskVersionLinksHTML, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, dayKey, duePresetDate, elapsedText, spanText, fmtElapsed, fmtFull, fmtMD, fmtMinute, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };
+export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, assocLinkHTML, taskVersionLinksHTML, sameIds, selectedVersionIds, taskPublicationHTML, taskPublicationText, taskIsPublished, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, dayKey, duePresetDate, elapsedText, spanText, fmtElapsed, fmtFull, fmtMD, fmtMinute, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };

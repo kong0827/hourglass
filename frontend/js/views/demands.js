@@ -3031,17 +3031,179 @@ function doPlan(){
     note: dpNote.value.trim() || null
   }).then(function(){
     btnDoPlan.disabled = false;
+    var demandId = planDemandId, action = planAction;
     UI.closeModal($("dlgDemandPlan"));
     closeDemandDetailIfOpen();
-    toast("已" + (planAction === "replan" ? "调期" : "排期") + (verId ? "到「" + versionName(verId) + "」" : "，暂不指定目标版本") + "，关联任务不变", "fs");
+    toast("已" + (action === "replan" ? "调期" : "排期") + (verId ? "到「" + versionName(verId) + "」" : "，暂不指定目标版本")
+      + (action === "plan" && verId ? "，关联任务默认不变" : "，关联任务不变"), "fs");
     planDemandId = null;
     drawerDemandOpts.reqId = null;
     loadDemands();
+    /* 首次排期到版本才提示带入；调期不批量迁移，避免把已手工摆放的成员再抄一遍 */
+    if(action === "plan" && verId){
+      openDemandVersionBackfill(demandId, verId, versionName(verId) || verId, { fromPlan:true });
+    }
   }).catch(function(ex){
     btnDoPlan.disabled = false;
     toast(ex.message || "排期失败", "bad");
     if(ex.code === 409){ UI.closeModal($("dlgDemandPlan")); planDemandId = null; closeDemandDetailIfOpen(); loadDemands(); }
   });
+}
+
+/* 排期带入工作项：只新增目标版本关联，不改工作项计划日期；版本页「补录工作项」复用同一入口 */
+function openDemandVersionBackfill(demandId, versionId, label, opts){
+  opts = opts || {};
+  var versionLabel = label || versionName(versionId) || versionId;
+  function refreshHost(){
+    if(opts.onDone){ opts.onDone({}); return; }
+    closeDemandDetailIfOpen();
+    loadDemands();
+  }
+  API.get("/api/demands/" + encodeURIComponent(demandId) + "/version-task-candidates", {
+    versionId: versionId, offset: 0, limit: 100
+  }).then(function(page){
+    page = page || {};
+    var items = page.items || [], total = Number(page.total) || 0;
+    if(!total){
+      if(!opts.fromPlan) toast(opts.emptyText || "没有可带入的工作项（可能已全部在版本中）", "fs");
+      return;
+    }
+    renderBackfill(items, total);
+  }).catch(function(ex){
+    toast(ex.message || "候选工作项加载失败", "bad");
+    /* 候选端 400/409 表示需求排期或版本前提已过期：刷新宿主，避免继续操作旧数据 */
+    if(ex.code === 409 || ex.code === 400) refreshHost();
+  });
+
+  function renderBackfill(items, total){
+    var selected = {}, query = "", busy = false;
+    /* 默认勾选未完成项：已完成工作项通常已随历史版本交付，由用户自己决定是否回填 */
+    items.forEach(function(t){ if(t.boardColumn !== "done") selected[t.id] = true; });
+    var layer = document.createElement("div");
+    layer.className = "modal-layer";
+    layer.setAttribute("role", "dialog");
+    layer.setAttribute("aria-modal", "true");
+    layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+    UI.setModalCloseGuard(layer, function(){ if(!busy) UI.closeModal(layer); });
+    layer.innerHTML = '<div class="sheet version-task-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
+      + '<h2>把工作项带入「' + esc(versionLabel) + '」？</h2>'
+      + '<div class="desc">需求已排期到此版本，关联任务默认不变。勾选后只新增版本关联，不改工作项的计划日期；默认勾选未完成项。</div></div>'
+      + '<button class="icon-btn sm" type="button" data-backfill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
+      + '<div class="sheet-body"><div class="version-task-tools">'
+      + '<input type="search" placeholder="搜索工作项标题或负责人…" aria-label="搜索候选工作项" data-backfill-search autocomplete="off" />'
+      + '<span class="version-task-count" role="status"></span></div>'
+      + '<div class="version-task-list"></div>'
+      + '<p class="hint" data-backfill-empty hidden>没有匹配的工作项</p>'
+      + '<p class="foot-note" data-backfill-cap' + (total > items.length ? "" : " hidden") + '>共 ' + total + ' 项，此处列出前 ' + items.length + ' 项；其余可在版本页「管理工作项」中补录。</p></div>'
+      + '<div class="sheet-foot"><button class="btn" type="button" data-backfill-later>稍后再说</button>'
+      + '<span style="flex:1"></span><button class="btn primary" type="button" data-backfill-save></button></div></div>';
+    var list = layer.querySelector(".version-task-list");
+    var countEl = layer.querySelector(".version-task-count");
+    var saveBtn = layer.querySelector("[data-backfill-save]");
+    function selectedIds(){
+      return items.filter(function(t){ return selected[t.id]; }).map(function(t){ return t.id; });
+    }
+    /* 搜索只隐藏行、不改勾选：明确提示筛选外仍会一并加入，避免误以为只提交可见项 */
+    function hiddenSelectedCount(){
+      if(!query.trim()) return 0;
+      var n = 0;
+      list.querySelectorAll("[data-backfill-row]").forEach(function(row){
+        if(!row.hidden) return;
+        var cb = row.querySelector("[data-backfill-check]");
+        if(cb && cb.checked) n++;
+      });
+      return n;
+    }
+    function syncCount(){
+      var n = selectedIds().length, hidden = hiddenSelectedCount();
+      countEl.textContent = "已选 " + n + " / 共 " + total + " 项"
+        + (hidden ? "（筛选外 " + hidden + " 项也会加入）" : "");
+      saveBtn.disabled = n === 0 || busy;
+      saveBtn.textContent = n ? "加入版本（" + n + "）" : "加入版本";
+    }
+    function rowHTML(t){
+      var ids = taskVersionIds(t);
+      var others = ids.filter(function(vid){ return vid !== versionId; });
+      var bits = [];
+      var typeTag = typeBadgeHTML(t.itemType);
+      if(typeTag) bits.push(typeTag);
+      bits.push(esc(t.owner || "未指派"));
+      bits.push(t.boardColumn === "done" ? '<span class="tag tag-success">已完成</span>'
+        : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>');
+      if(others.length){
+        bits.push("其他关联：" + esc(others.map(function(vid){
+          var name = t.versionNames && t.versionNames[ids.indexOf(vid)];
+          return name || vid;
+        }).join("、")));
+      }
+      return '<label class="version-task-row" data-backfill-row data-task-title="' + esc(String((t.title || "") + " " + (t.owner || "")).toLowerCase()) + '">'
+        + '<input type="checkbox" data-backfill-check="' + esc(t.id) + '"' + (selected[t.id] ? " checked" : "") + ' />'
+        + '<span class="version-task-main"><span class="version-task-title"><b>' + esc(t.title) + '</b></span>'
+        + '<small>' + bits.join(" · ") + '</small></span></label>';
+    }
+    function filterRows(){
+      var q = query.trim().toLowerCase(), shown = 0;
+      list.querySelectorAll("[data-backfill-row]").forEach(function(row){
+        var match = !q || (row.getAttribute("data-task-title") || "").indexOf(q) !== -1;
+        row.hidden = !match;
+        if(match) shown++;
+      });
+      layer.querySelector("[data-backfill-empty]").hidden = shown !== 0;
+    }
+    list.innerHTML = items.map(rowHTML).join("");
+    document.body.appendChild(layer);
+    filterRows();
+    syncCount();
+    layer.addEventListener("input", function(e){
+      if(busy || !e.target.closest("[data-backfill-search]")) return;
+      query = e.target.value;
+      filterRows();
+      syncCount();
+    });
+    layer.addEventListener("change", function(e){
+      if(busy) return;
+      var check = e.target.closest("[data-backfill-check]");
+      if(!check) return;
+      selected[check.getAttribute("data-backfill-check")] = check.checked;
+      syncCount();
+    });
+    layer.addEventListener("click", function(e){
+      if(e.target.closest("[data-backfill-x], [data-backfill-later]")){
+        if(busy) return;
+        UI.closeModal(layer);
+        return;
+      }
+      var save = e.target.closest("[data-backfill-save]");
+      if(!save || save.disabled || busy) return;
+      var taskIds = selectedIds();
+      if(!taskIds.length) return;
+      busy = true;
+      syncCount();
+      API.post("/api/demands/" + encodeURIComponent(demandId) + "/version-tasks", {
+        versionId: versionId, taskIds: taskIds
+      }).then(function(res){
+        UI.closeModal(layer);
+        var added = Number(res && res.added) || 0, skipped = Number(res && res.skipped) || 0;
+        toast(added
+          ? "已把 " + added + " 项工作项加入「" + versionLabel + "」" + (skipped ? "，" + skipped + " 项已存在跳过" : "")
+          : "所选工作项均已在「" + versionLabel + "」中", "fs");
+        if(opts.onDone) opts.onDone(res || {});
+        else refreshHost();
+      }).catch(function(ex){
+        busy = false;
+        syncCount();
+        /* 该端点的 400/409 都是前提已变化（版本冻结、排期变更、任务被删/移走）：关窗并刷新宿主 */
+        if(ex.code === 409 || ex.code === 400){
+          UI.closeModal(layer);
+          toast(ex.message || "带入工作项失败", "bad");
+          refreshHost();
+          return;
+        }
+        toast(ex.message || "带入工作项失败", "bad");
+      });
+    });
+    UI.openModal(layer);
+  }
 }
 
 /* ---------- 详情（动态弹窗） ---------- */
@@ -3059,6 +3221,12 @@ function extOfName(filename){
   return idx >= 0 ? String(filename).substring(idx + 1) : "";
 }
 /* 交付表只展示一个生产发布结论；历史发布压成一行小字，避免 5 列里塞两枚胶囊把表格撑宽 */
+/* 有发布事实即算已发布：正式记录的当前生效/部分/回滚/覆盖未知，或人工补录 */
+function demandTaskPublished(task){
+  return !!(task.publishedAt || task.everPublished === true || task.manualPublished === true
+    || (task.publicationState && task.publicationState !== "unpublished")
+    || (Array.isArray(task.publicationTargets) && task.publicationTargets.length));
+}
 function demandPublicationCell(task){
   if(!task) return '<span class="tag ghost">未发布</span>';
   var state = task.publicationState || "unpublished";
@@ -3070,7 +3238,9 @@ function demandPublicationCell(task){
   }[state];
   var html = meta
     ? '<span class="tag ' + meta[1] + '" title="仅来自正式生产发布记录">' + meta[0] + '</span>'
-    : '<span class="tag ghost">未发布</span>';
+    : (task.manualPublished === true
+      ? '<span class="tag tag-neutral" title="人工补录的历史发布事实，不代表当前生产生效">已发布（人工）</span>'
+      : '<span class="tag ghost">未发布</span>');
   if(task.everPublished === true && state !== "effective"){
     html += '<span class="t-sub">曾生产发布</span>';
   }
@@ -3109,13 +3279,17 @@ function loadDemandTasks(layer, id, targetVersionId){
         var isDone = t.boardColumn === "done";
         return '<li data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
           + '<span class="ra-time">' + (isDone ? "已完成" : esc(colName(t.boardColumn))) + '</span>'
-          + '<span class="ra-txt">' + esc(t.title)
+          + '<span class="ra-txt">' + esc(t.title) + taskPublicationHTML(t)
           + (t.owner ? ' <span class="ra-owner">' + esc(t.owner) + '</span>' : '') + '</span></li>';
       }).join("") + (tasks.length > 3 ? '<li class="read-empty">另有 ' + (tasks.length - 3) + ' 项，可在「交付」页签查看</li>' : "");
     }
     if(!box) return;
     box.innerHTML = '<p class="foot-note">' + esc(delivery) + '（' + published + '/' + tasks.length
       + '）。任务发布不等于需求业务验收；版本为当前计划，实际交付以工作项详情中的版本发布记录为准。</p>'
+      + '<div class="dem-evidence-tools"><label class="phase-filter"><span>发布</span>'
+      + '<select class="mini-select" data-dem-task-pub aria-label="按发布状态筛选">'
+      + '<option value="">全部发布状态</option><option value="published">已发布</option><option value="unpublished">未发布</option>'
+      + '</select></label></div>'
       + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl dem-evidence-tbl"><thead><tr>'
       + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th>验证用例</th><th>生产发布</th></tr></thead><tbody>'
       + tasks.map(function(t){
@@ -3129,7 +3303,7 @@ function loadDemandTasks(layer, id, targetVersionId){
           : '<span class="tag ' + (cov.failed > 0 ? "tag-danger" : "tag-success") + '" title="工作项级覆盖：' + cov.caseTotal + ' 条用例">'
             + cov.caseTotal + ' 条' + (cov.failed > 0 ? " · " + cov.failed + " 失败" : "")
             + (cov.untested > 0 ? " · " + cov.untested + " 未执行" : "") + '</span>';
-        return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
+        return '<tr data-open-task="' + esc(t.id) + '" data-published="' + (demandTaskPublished(t) ? "1" : "0") + '" title="打开工作项详情">'
           + '<td class="t-title-cell"><div class="t-title">' + esc(t.title) + '</div>'
             + '<div class="t-sub">' + (t.estimateMinutes ? esc(fmtMinutesShort(t.estimateMinutes)) + " · " : "") + verHTML
             + (mismatch ? ' · <span class="tag ghost">未关联目标版本</span>' : '') + '</div></td>'
@@ -3142,6 +3316,14 @@ function loadDemandTasks(layer, id, targetVersionId){
           + '</tr>';
       }).join("")
       + '</tbody></table></div>';
+    var pubSel = box.querySelector("[data-dem-task-pub]");
+    if(pubSel) pubSel.addEventListener("change", function(){
+      var v = pubSel.value;
+      box.querySelectorAll("tbody tr[data-open-task]").forEach(function(tr){
+        var isPub = tr.getAttribute("data-published") === "1";
+        tr.hidden = !!v && (v === "published" ? !isPub : isPub);
+      });
+    });
   }).catch(function(){
     if(!layer.isConnected) return;
     if(box) box.innerHTML = '<div class="attach-empty">关联工作项加载失败</div>';
@@ -5112,4 +5294,4 @@ function ensureDemandOptions(keep, reqId){
   });
 }
 
-export { enterDemandsView, ensureDemandOptions, loadDemands, openDemandById, openDemandDetailById, openDemandsForReq, render };
+export { enterDemandsView, ensureDemandOptions, loadDemands, openDemandById, openDemandDetailById, openDemandVersionBackfill, openDemandsForReq, render };

@@ -14,4 +14,6 @@ public class TaskDrillQuery {
     private LocalDate before;
     /** 模块名（未指定为空白）、负责人名（未指定为空白）、列 ID 或优先级 */
     private String value;
+    /** published / unpublished；空表示不筛发布态 */
+    private String pubState;
 }

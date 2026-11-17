@@ -15,7 +15,7 @@ import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, assocLinkHTML, avatarHTML, colMeta, colName, duePresetDate, elapsedText, fmtFull, fmtMinutesShort, fmtShortMD, fmtTs, iso, parseDate, priColor, priName, priTagHTML, syncColumns, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, assocLinkHTML, avatarHTML, colMeta, colName, duePresetDate, elapsedText, fmtFull, fmtMinutesShort, fmtShortMD, fmtTs, iso, parseDate, priColor, priName, priTagHTML, syncColumns, taskPublicationHTML, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { loadBoard } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
@@ -453,6 +453,8 @@ function mineTaskCell(t, cols){
     sub.push('<span class="mine-r-tag">' + esc(n) + '</span>');
   });
   if(t.blocked) sub.push('<span class="mine-r-blocked">被阻塞</span>');
+  var pub = taskPublicationHTML(t);
+  if(pub) sub.push(pub);
   return '<span class="mine-tc-main">' +
     '<span class="mine-tc-title" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
     (sub.length ? '<span class="mine-tc-sub">' + sub.join("") + '</span>' : '') +
@@ -665,7 +667,11 @@ function openTeamTaskTable(title, params, errMsg){
       "团队视图 · 点击工作项行打开详情", {
         total: (page && page.total) || 0,
         hasMore: !!(page && page.hasMore),
-        fetch: function(offset){ return teamTaskPage(params, offset); }
+        pub: true,
+        fetch: function(offset, pub){
+          return teamTaskPage(Object.assign({}, params,
+            { pubState: (pub === "published" || pub === "unpublished") ? pub : "" }), offset);
+        }
       });
   }).catch(function(err){ toast(err && err.message ? err.message : errMsg, "bad"); });
 }
@@ -839,6 +845,7 @@ function mobileMineCardHTML(t){
       priTagHTML(pri, t.workspaceId) +
       '<span class="mtc-chip" style="--c:' + esc(colColor) + '"><i></i>' + esc(colName(t.boardColumn)) + '</span>' +
       (t.blocked ? '<span class="blocked-tag">' + icon("alert", 12) + '被阻塞</span>' : '') +
+      taskPublicationHTML(t) +
       '<span class="sp"></span>' +
       '<button class="mtc-ico' + (running ? " on" : "") + '" type="button" data-mine-timer' +
         ((!running && !tAllowed) ? " disabled" : "") +
@@ -1147,6 +1154,7 @@ function mobileMineTestCardHTML(t){
       mineTestStatusHTML(t) +
       '<span class="sp"></span>' +
       '<span class="mtc-path">' + esc(path || "—") + '</span>' +
+      taskPublicationHTML(t) +
     '</div>' +
     '<h3 class="mtc-title">' + esc(t.title) + '</h3>' +
     '<div class="mtc-meta">' +

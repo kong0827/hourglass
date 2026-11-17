@@ -33,11 +33,12 @@ public class CompletionController {
     @GetMapping("/api/completions")
     public ApiResult<CompletionPageResponse> list(@RequestParam(required = false) String month,
                                                   @RequestParam(required = false) String workspace,
+                                                  @RequestParam(required = false) String pub,
                                                   @RequestParam(required = false) Integer offset,
                                                   @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(completionService.page(ws.getId(), userId, parseMonth(month),
+        return ApiResult.ok(completionService.page(ws.getId(), userId, parseMonth(month), pub,
                 offset == null ? 0 : offset, limit == null ? 0 : limit));
     }
 

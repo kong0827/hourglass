@@ -7,14 +7,22 @@ import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
-import { assocLinkHTML, axisTicks, fmtMinute, fmtMinutesShort, pad2, priColor, priName, priTagHTML, taskDescText } from "../lib/format.js";
+import { assocLinkHTML, axisTicks, fmtMinute, fmtMinutesShort, pad2, priColor, priName, priTagHTML, taskDescText, taskPublicationHTML, taskPublicationText } from "../lib/format.js";
 import { ganttCsvCell } from "./gantt.js";
 import { openLogTable, openTaskTable } from "./manager-shared.js";
 import { openReqDocAndJump, reqDocList, reqDocNameById } from "./requirements.js";
 import { distHTML } from "./review.js";
 
 var compSeq = 0, compRowsCache = [], compSummary = null, compHasMore = false, compLoading = false;
-function enterCompletionsView(){ loadCompletions(); }
+/* 发布态筛选只在本清单内生效，不写进全局筛选（完成记录是历史归档，口径单独） */
+var compPub = "";
+function enterCompletionsView(){ syncCompPub(); loadCompletions(); }
+function syncCompPub(){
+  var el = $("compPub");
+  if(!el) return;
+  el.value = compPub;
+  UI.markFiltered(el, !compPub);
+}
 function currentCompMonth(){
   if(!state.compMonth){
     var d = new Date();
@@ -43,7 +51,7 @@ function loadCompletions(opts){
     $("compStats").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
       '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
   }
-  API.get("/api/completions", {month: month, offset: 0, limit: 100}).then(function(page){
+  API.get("/api/completions", {month: month, offset: 0, limit: 100, pub: compPub}).then(function(page){
     if(seq !== compSeq) return;
     compRowsCache = (page && page.items) || [];
     compSummary = page || null;
@@ -63,7 +71,7 @@ function loadMoreCompletions(){
   var seq = compSeq;
   compLoading = true;
   renderCompletions(compRowsCache, month);
-  API.get("/api/completions", {month: month, offset: compRowsCache.length, limit: 100}).then(function(page){
+  API.get("/api/completions", {month: month, offset: compRowsCache.length, limit: 100, pub: compPub}).then(function(page){
     if(seq !== compSeq) return;
     compLoading = false;
     var known = {};
@@ -108,7 +116,9 @@ function renderCompletions(rows, month){
   }).join("");
 
   if(!n){
-    $("compWrap").innerHTML = UI.colEmpty(month + " 还没有完成记录。把工作项拖进「已完成」列就会自动归档到这里。");
+    $("compWrap").innerHTML = UI.colEmpty(compPub
+      ? (month + " 没有" + (compPub === "published" ? "已发布" : "未发布") + "的完成记录。换个发布状态或选「全部发布状态」看看。")
+      : (month + " 还没有完成记录。把工作项拖进「已完成」列就会自动归档到这里。"));
     return;
   }
   /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成时间），
@@ -117,9 +127,10 @@ function renderCompletions(rows, month){
     "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th><th>测试负责人</th><th>测试窗口</th></tr>";
   var body = rows.map(function(r){
     return "<tr>" +
-      "<td>" + (r.taskId
+      "<td><div class=\"comp-title\">" + (r.taskId
         ? '<button class="comp-t comp-link" type="button" data-open-task="' + esc(r.taskId) + '" title="打开工作项详情">' + esc(r.title) + "</button>"
         : '<span class="comp-t">' + esc(r.title) + "</span>") +
+        taskPublicationHTML(r) + "</div>" +
         (r.description ? '<span class="comp-d">' + esc(taskDescText(r.description, 120)) + "</span>" : "") + "</td>" +
       "<td>" + assocLinkHTML("project", r.reqId, r.reqName, {plain:'<span class="comp-dim">—</span>'}) + "</td>" +
       "<td>" + compDocCell(r) + "</td>" +
@@ -187,13 +198,14 @@ function testSpanText(a, b){
 function exportCompCSV(){
   var month = currentCompMonth();
   /* 列表只加载了前几页，导出按同样口径把所有分页取齐后再写文件 */
-  API.getAllPages("/api/completions", {month: month}).then(function(all){
+  API.getAllPages("/api/completions", {month: month, pub: compPub}).then(function(all){
     var rows = all || [];
-    if(!rows.length){ toast("这个月还没有完成记录", "warn"); return; }
-    var lines = [["工作项名称","详情","归属项目","关联文档","负责人","模块","优先级",
+    if(!rows.length){ toast(compPub ? "没有符合发布状态筛选的完成记录" : "这个月还没有完成记录", "warn"); return; }
+    var lines = [["工作项名称","详情","归属项目","关联文档","负责人","模块","优先级","发布状态",
       "开始时间","结束时间","总耗时(分钟)","总耗时","测试负责人","提测时间","测试开始","测试结束"]];
     rows.forEach(function(r){
       lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,
+        taskPublicationText(r),
         r.startDate, fmtMinute(r.completedAt), r.totalMinutes || 0, fmtMinutesShort(r.totalMinutes),
         r.testOwner || (r.testRequestedAt ? "待领取" : ""), fmtMinute(r.testRequestedAt),
         fmtMinute(r.testStartedAt), fmtMinute(r.testFinishedAt)]);
@@ -218,6 +230,11 @@ if($("compWrap")) $("compWrap").addEventListener("click", function(e){
 $("compPrev").addEventListener("click", function(){ shiftCompMonth(-1); });
 $("compNext").addEventListener("click", function(){ shiftCompMonth(1); });
 $("btnCompExport").addEventListener("click", exportCompCSV);
+if($("compPub")) $("compPub").addEventListener("change", function(){
+  compPub = this.value === "published" || this.value === "unpublished" ? this.value : "";
+  UI.markFiltered(this, !compPub);
+  loadCompletions();
+});
 function initAnalysisTabs(){
   var box = $("analysisTabs");
   if(box && !box.__wired){
@@ -349,8 +366,9 @@ function openStatsTasks(title, params){
     openTaskTable(title, rows, "共 " + page.total + " 项 · 点击工作项行打开详情", {
       total: page.total,
       hasMore: page.hasMore,
-      fetch: function(offset){
-        return API.get("/api/stats/tasks", Object.assign({}, base, {offset: offset}));
+      pub: true,
+      fetch: function(offset, pub){
+        return API.get("/api/stats/tasks", Object.assign({}, base, {offset: offset, pub: (pub === "published" || pub === "unpublished") ? pub : ""}));
       }
     });
   }).catch(function(ex){ toast(ex && ex.message ? ex.message : "明细加载失败", "bad"); });
@@ -757,6 +775,7 @@ function renderFlowEstimate(d){
           '<span class="ai-tag ' + (hi ? "risk-hi" : "risk-lo") + '">' + (hi ? "已超预估" : "接近预估") + '</span>' +
           '<span>实际 ' + fmtMinutesShort(t.actualMinutes) + ' / 预估 ' + fmtMinutesShort(t.estimateMinutes)
             + '（' + Math.round(t.ratio * 100) + '%）</span>' +
+          taskPublicationHTML(t) +
         '</div></div></div>';
     }
     html += '</div>';
@@ -769,7 +788,8 @@ function renderFlowEstimate(d){
       html += '<div class="done-item clickable" data-open-task="' + esc(o.id) + '" title="打开工作项详情"><div class="di-main">' +
         '<div class="di-t">' + esc(o.title) + '</div>' +
         '<div class="di-m"><span>实际 ' + fmtMinutesShort(o.actualMinutes) + ' / 预估 '
-          + fmtMinutesShort(o.estimateMinutes) + '（' + Math.round(o.ratio * 100) + '%）</span></div>' +
+          + fmtMinutesShort(o.estimateMinutes) + '（' + Math.round(o.ratio * 100) + '%）</span>'
+          + taskPublicationHTML(o) + '</div>' +
       '</div></div>';
     }
     html += '</div>';

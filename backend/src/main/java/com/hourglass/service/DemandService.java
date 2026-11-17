@@ -65,6 +65,9 @@ public class DemandService {
     private final DemandWatchService demandWatch;
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
+    /** 排期带入版本与手工调整同一份任务审计格式 */
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskAuditLogger taskAudit;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
     @org.springframework.beans.factory.annotation.Autowired
@@ -817,6 +820,153 @@ public class DemandService {
         versionTaskMapper.enrichTasks(workspaceId, items);
         publications.enrichTasks(workspaceId, items);
         return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
+    }
+
+    /** 排期后二次确认的候选：需求名下、尚未绑定目标版本的工作项；只读，权限同需求详情。 */
+    public com.hourglass.dto.PageResult<Task> versionTaskCandidates(String workspaceId, String userId, String id,
+                                                                     String versionIdRaw, int offset, int limit) {
+        Demand d = requireDemand(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        String versionId = Texts.trimToNull(versionIdRaw);
+        if (versionId == null) {
+            throw AppException.badRequest("请指定目标版本");
+        }
+        /* 只读路径不取写锁；前提与写入同口径，过期页面尽早失败 */
+        if (!"plan".equals(d.getStatus())) {
+            throw AppException.badRequest("只有已排期需求可以带入工作项");
+        }
+        if (!versionId.equals(d.getVersionId())) {
+            throw AppException.conflict("目标版本与需求当前排期不一致，请刷新后重试");
+        }
+        ProjectVersion v = versionMapper.selectById(versionId);
+        if (v == null || !workspaceId.equals(v.getWorkspaceId()) || !d.getReqId().equals(v.getReqId())) {
+            throw AppException.badRequest("目标版本不存在或不属于该需求所在项目：" + versionId);
+        }
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, limit));
+        /* 内容冻结与写入拒绝同口径：有成功正式发布即无可带入项，避免弹窗勾选后才报错 */
+        if (taskMapper.hasVersionFormalRelease(workspaceId, versionId)) {
+            return com.hourglass.dto.PageResult.of(new ArrayList<Task>(), 0, safeOffset, safeLimit);
+        }
+        int total = demandMapper.countVersionCandidates(workspaceId, id, versionId);
+        List<Task> items = total <= safeOffset ? new ArrayList<Task>()
+                : demandMapper.selectVersionCandidates(workspaceId, id, versionId, safeOffset, safeLimit);
+        versionTaskMapper.enrichTasks(workspaceId, items);
+        publications.enrichTasks(workspaceId, items);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
+    }
+
+    /**
+     * 排期带入：只允许写入需求当前目标版本，任务必须属于该需求；已绑定项跳过。
+     * 批量操作仍逐条写 task_log，任何一项状态变化都会回滚整批。
+     */
+    @Transactional
+    public Map<String, Object> bindVersionTasks(String userId, String workspaceId, String id,
+                                                com.hourglass.dto.DemandVersionTaskRequest body) {
+        Demand initial = requireDemand(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, initial.getReqId());
+        releasePermission.assertManageProject(userId, workspaceId, initial.getReqId());
+        deliveryLock.lockProjects(workspaceId, initial.getReqId());
+        Demand d = requireDemandForUpdate(workspaceId, id);
+        if (!java.util.Objects.equals(initial.getReqId(), d.getReqId())) {
+            throw AppException.conflict("需求所属项目已变更，请刷新后重试");
+        }
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        releasePermission.assertManageProjectForUpdate(userId, workspaceId, d.getReqId());
+        if (!"plan".equals(d.getStatus())) {
+            throw AppException.badRequest("只有已排期需求可以带入工作项");
+        }
+        String versionId = Texts.trimToNull(body == null ? null : body.getVersionId());
+        if (versionId == null || !versionId.equals(d.getVersionId())) {
+            throw AppException.conflict("目标版本与需求当前排期不一致，请刷新后重试");
+        }
+        ProjectVersion version = versionMapper.selectByIdForUpdate(workspaceId, versionId);
+        if (version == null || !d.getReqId().equals(version.getReqId())) {
+            throw AppException.badRequest("目标版本不存在或不属于该需求所在项目：" + versionId);
+        }
+        if ("released".equals(version.getStatus()) || version.getReleasedAt() != null
+                || "closed".equals(version.getStatus()) || "canceled".equals(version.getStatus())) {
+            throw AppException.badRequest("不能把工作项加入已发布、已关闭或已取消的版本");
+        }
+        if (!taskMapper.selectVersionFormalSuccessIdsForScope(workspaceId, versionId).isEmpty()) {
+            throw AppException.badRequest("版本已有成功正式发布记录，内容成员关系已冻结");
+        }
+        java.util.LinkedHashSet<String> selected = new java.util.LinkedHashSet<String>();
+        if (body != null && body.getTaskIds() != null) {
+            for (String raw : body.getTaskIds()) {
+                String taskId = Texts.trimToNull(raw);
+                if (taskId != null) {
+                    selected.add(taskId);
+                }
+            }
+        }
+        if (selected.isEmpty()) {
+            throw AppException.badRequest("请选择要加入版本的工作项");
+        }
+        if (selected.size() > 500) {
+            throw AppException.badRequest("单个版本最多关联 500 个工作项");
+        }
+        String reason = "需求「" + d.getTitle() + "」排期带入版本";
+        /* 同批任务的版本集合高度重复：版本名只查一次，避免逐条审计放大查询 */
+        Map<String, String> versionNameCache = new java.util.HashMap<String, String>();
+        versionNameCache.put(versionId, version.getName());
+        int added = 0;
+        int skipped = 0;
+        for (String taskId : selected) {
+            Task task = deliveryLock.lockTask(workspaceId, taskId);
+            if (task.getDeletedAt() != null || !d.getReqId().equals(task.getReqId())
+                    || !id.equals(task.getDemandId())) {
+                throw AppException.badRequest("工作项不存在、已删除或不属于该需求：" + taskId);
+            }
+            List<String> current = taskMapper.selectTaskVersionsForScope(workspaceId, taskId);
+            if (current.contains(versionId)) {
+                skipped++;
+                continue;
+            }
+            if (versionTaskMapper.insertBatch(workspaceId, versionId,
+                    java.util.Collections.singletonList(taskId)) != 1
+                    || taskMapper.touchDeliveryRevision(workspaceId, taskId) != 1) {
+                throw new AppException(409, "任务版本关系已变化，请刷新后重试");
+            }
+            List<String> after = new ArrayList<String>(current);
+            after.add(versionId);
+            java.util.Collections.sort(after);
+            Map<String, Object> afterState = versionState(workspaceId, after, versionNameCache);
+            afterState.put("inheritanceSource", "demand-batch");
+            afterState.put("demandId", id);
+            taskAudit.logChange(userId, workspaceId, taskId, "version_change",
+                    "需求排期带入版本：" + version.getName(),
+                    versionState(workspaceId, current, versionNameCache), afterState, reason);
+            added++;
+        }
+        if (added > 0) {
+            versionMapper.touchRevision(workspaceId, versionId);
+        }
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("versionId", versionId);
+        out.put("versionName", version.getName());
+        out.put("added", added);
+        out.put("skipped", skipped);
+        return out;
+    }
+
+    private Map<String, Object> versionState(String workspaceId, List<String> versionIds,
+                                             Map<String, String> nameCache) {
+        java.util.TreeSet<String> sorted = new java.util.TreeSet<String>(versionIds);
+        List<String> names = new ArrayList<String>();
+        for (String versionId : sorted) {
+            String name = nameCache.get(versionId);
+            if (name == null) {
+                ProjectVersion v = versionMapper.selectById(versionId);
+                name = v == null ? versionId : v.getName();
+                nameCache.put(versionId, name);
+            }
+            names.add(name);
+        }
+        Map<String, Object> state = new LinkedHashMap<String, Object>();
+        state.put("versionIds", new ArrayList<String>(sorted));
+        state.put("versionNames", names);
+        return state;
     }
 
     @Transactional

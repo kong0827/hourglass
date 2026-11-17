@@ -13,12 +13,19 @@ import { bindRetry } from "../core/utils.js";
 import { assocLinkHTML, normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, releasePlanNoText, COLUMNS, colName, dayKey, dayDiff, parseDate, fmtMinute, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 import { branchMetaById, branchNameById, loadBranches, openBranchById, requestBranchStatus } from "./branches.js";
-import { openDemandDetailById } from "./demands.js";
+import { openDemandDetailById, openDemandVersionBackfill } from "./demands.js";
 import { openMilestoneDetail } from "../lib/milestone-ui.js";
 import { openPeoplePicker, peopleFieldHTML, memberToOption } from "../lib/people-picker.js";
 
 /* datetime-local 按分钟记录：秒级差异既不可读，也会让未改动的计划被误判为有草稿 */
 function localMinute(s){ var text = localDatetime(s); return text ? text.slice(0, 16) : text; }
+
+/* 有发布事实即算已发布：正式记录的当前生效/部分/回滚/覆盖未知，或人工补录 */
+function taskIsPublished(t){
+  return !!(t.publishedAt || t.everPublished === true || t.manualPublished === true
+    || (t.publicationState && t.publicationState !== "unpublished")
+    || (Array.isArray(t.publicationTargets) && t.publicationTargets.length));
+}
 
 var phaseReq = $("phaseReq"), phaseMeta = $("phaseMeta"), phaseBody = $("phaseBody"),
     vName = $("vName"), vStart = $("vStart"), vTarget = $("vTarget"), vDesc = $("vDesc"),
@@ -29,7 +36,9 @@ var editingVerId = null;
 var editingVerRevision = null, editingVerStatus = null;
 var viewMode = "phase";            /* phase | version | allversions | schedule | overview */
 /* 版本列表：筛选 / 排序 / 行内编辑互不干扰；编辑草稿只存在内存，失焦不自动提交 */
-var verListUi = { status:"all", sort:"smart", q:"", riskOnly:false };
+var verListUi = { sort:"smart", q:"", riskOnly:false };
+/* 队列按状态分组：进行中 / 计划中默认展开，已发布与已关闭默认只露 3 行 */
+var verGroupUi = { open:{ released:false, closed:false, canceled:false } };
 var verInline = null;              /* { id, field:"name"|"dates", busy } */
 var cache = null;                  /* { phase, vstats, versions, tasks } */
 var overviewCache = null;
@@ -166,7 +175,8 @@ function loadPhaseData(){
   verInline = null;
   if(rollupUi.reqId !== reqId){
     rollupUi.reqId = reqId;
-    rollupUi.verId = "";
+    rollupUi.verId = "__all";
+    rollupUi.more = false;
     rollupUi.demands = null;
     rollupUi.demandsReqId = "";
   }
@@ -557,7 +567,11 @@ function syncModeSeg(){
   /* 总览、发布日程与全部版本都是跨项目口径：隐藏单项目选择、新建版本与单项目发布入口 */
   var allProjects = viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions";
   if(phaseReq) phaseReq.style.display = allProjects ? "none" : "";
-  if($("btnVerNew")) $("btnVerNew").style.display = (allProjects || !canWritePhase()) ? "none" : "";
+  /* 版本页的主按钮是焦点卡的「排入工作项」，头部新建版本降为描边，避免两个实心按钮打架 */
+  if($("btnVerNew")){
+    $("btnVerNew").style.display = (allProjects || !canWritePhase()) ? "none" : "";
+    $("btnVerNew").classList.toggle("primary", viewMode !== "version");
+  }
   if($("btnReleasePlan")) $("btnReleasePlan").style.display = (viewMode === "schedule" || viewMode === "allversions") ? "none" : "";
 }
 function metricCells(cells, drill){
@@ -622,7 +636,7 @@ function openDrillModal(scope, val, metric){
   var body = rows.map(function(t){
     var est = t.estimateMinutes || 0, act = t.totalMinutes || 0;
     return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
-      + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(t.title) + '</td>'
+      + '<td class="phase-task-cell"><span class="tbl-task"><span class="tbl-task-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' + taskPublicationHTML(t) + '</span></td>'
       + '<td>' + esc(typeName(t.itemType)) + '</td>'
       + '<td>' + esc(t.owner || "—") + '</td>'
       + '<td class="num">' + dateShort(t.startDate) + '</td>'
@@ -680,6 +694,7 @@ function demandStatusLabel(st){
 function openVersionDemandsModal(versionId){
   var v = findVersion(versionId);
   var name = v ? v.name : "版本";
+  var canBackfill = canWritePhase() && !versionReadOnly(v);
   var layer = document.createElement("div");
   layer.className = "modal-layer";
   layer.setAttribute("role", "dialog");
@@ -691,30 +706,48 @@ function openVersionDemandsModal(versionId){
     + '<button class="icon-btn sm" type="button" data-drill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"></div></div></div>';
   document.body.appendChild(layer);
+  function loadRows(){
+    API.getAllPages("/api/demands", { reqId: rt.phaseReqId }).then(function(demands){
+      if(!document.body.contains(layer)) return;
+      var rows = (demands || []).filter(function(d){ return d.versionId === versionId && d.status !== "rej"; });
+      var body = rows.map(function(d){
+        var canFill = canBackfill && d.status === "plan" && d.canSchedule === true;
+        return '<tr data-open-demand="' + esc(d.id) + '" title="查看需求详情">'
+          + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(d.title) + '</td>'
+          + '<td>' + esc(d.itemKind || "其他") + '</td>'
+          + '<td><span class="tag ghost">' + esc(demandStatusLabel(d.status)) + '</span></td>'
+          + '<td>' + esc(d.priority || "—") + '</td>'
+          + '<td>' + (canFill
+            ? '<button class="btn sm" type="button" title="把该需求名下未加入本版本的工作项补录进来" data-backfill-demand="' + esc(d.id) + '">补录工作项</button>'
+            : '<span class="t-sub">—</span>') + '</td></tr>';
+      }).join("") || '<tr><td colspan="5" class="foot-note tbl-empty">该版本没有已排需求</td></tr>';
+      layer.querySelector(".desc").textContent = "共 " + rows.length + " 项 · 点击需求行打开详情"
+        + (canBackfill ? "；已排期需求可把名下未加入本版本的工作项补录进来" : "");
+      layer.querySelector(".tbl-wrap").innerHTML = '<table class="phase-tbl"><thead><tr>'
+        + '<th>需求</th><th>类型</th><th>状态</th><th>优先级</th><th>操作</th>'
+        + '</tr></thead><tbody>' + body + '</tbody></table>';
+    }).catch(function(ex){
+      if(!document.body.contains(layer)) return;
+      layer.querySelector(".tbl-wrap").innerHTML = UI.errorState(ex.message || "已排需求加载失败");
+    });
+  }
+  loadRows();
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-drill-x]")){ UI.closeModal(layer); return; }
+    var fill = e.target.closest("[data-backfill-demand]");
+    if(fill){
+      if(!canWritePhase()){ denyPhaseReadOnly(); return; }
+      if(versionReadOnly(v)){ toast("该版本内容只读，不能补录工作项", "warn"); return; }
+      openDemandVersionBackfill(fill.dataset.backfillDemand, versionId, name, {
+        emptyText: "没有可带入的工作项（可能已全部在版本中）",
+        onDone: function(){ loadRows(); reloadView(); }
+      });
+      return;
+    }
     var d = e.target.closest("[data-open-demand]");
     if(d){ openDemandDetailById(d.dataset.openDemand); }
   });
   UI.openModal(layer);
-  API.getAllPages("/api/demands", { reqId: rt.phaseReqId }).then(function(demands){
-    if(!document.body.contains(layer)) return;
-    var rows = (demands || []).filter(function(d){ return d.versionId === versionId && d.status !== "rej"; });
-    var body = rows.map(function(d){
-      return '<tr data-open-demand="' + esc(d.id) + '" title="查看需求详情">'
-        + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(d.title) + '</td>'
-        + '<td>' + esc(d.itemKind || "其他") + '</td>'
-        + '<td><span class="tag ghost">' + esc(demandStatusLabel(d.status)) + '</span></td>'
-        + '<td>' + esc(d.priority || "—") + '</td></tr>';
-    }).join("") || '<tr><td colspan="4" class="foot-note tbl-empty">该版本没有已排需求</td></tr>';
-    layer.querySelector(".desc").textContent = "共 " + rows.length + " 项 · 点击需求行打开详情";
-    layer.querySelector(".tbl-wrap").innerHTML = '<table class="phase-tbl"><thead><tr>'
-      + '<th>需求</th><th>类型</th><th>状态</th><th>优先级</th>'
-      + '</tr></thead><tbody>' + body + '</tbody></table>';
-  }).catch(function(ex){
-    if(!document.body.contains(layer)) return;
-    layer.querySelector(".tbl-wrap").innerHTML = UI.errorState(ex.message || "已排需求加载失败");
-  });
 }
 
 /* 成员阶段工时下钻：按该成员自己的计时记录列出「任务 × 阶段」，合计与阶段卡一致 */
@@ -722,7 +755,7 @@ var memberDrillSeq = 0;
 function memberDrillRowHTML(r){
   var est = r.estimateMinutes || 0, act = r.minutes || 0;
   return '<tr data-open-task="' + esc(r.taskId) + '" title="打开工作项详情">'
-    + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(r.title) + '</td>'
+    + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(r.title) + taskPublicationHTML(r) + '</td>'
     + '<td>' + (r.phase === "mvp" ? '<span class="tag tag-info">首版</span>' : '<span class="tag tag-plum">迭代</span>') + '</td>'
     + '<td>' + esc(typeName(r.itemType)) + '</td>'
     + '<td class="num">' + dateShort(r.startDate) + '</td>'
@@ -943,9 +976,10 @@ function taskTable(mode){
       + ' data-status="' + esc(t.boardColumn || "") + '"'
       + ' data-owner="' + esc(t.owner || "") + '"'
       + ' data-type="' + esc(t.itemType || "task") + '"'
+      + ' data-published="' + (taskIsPublished(t) ? "1" : "0") + '"'
       + ' data-search="' + esc(String(t.title || "").toLowerCase()) + '"'
       + ' title="打开工作项详情">'
-      + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(t.title) + '</td>'
+      + '<td class="phase-task-cell"><span class="tbl-task"><span class="tbl-task-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' + taskPublicationHTML(t) + '</span></td>'
       + '<td>' + groupCell + '</td>'
       + '<td>' + esc(typeName(t.itemType)) + '</td>'
       + '<td class="phase-owner">' + (t.owner ? esc(t.owner) : '<span class="muted">未指派</span>') + '</td>'
@@ -1015,6 +1049,7 @@ function taskTable(mode){
       + filterSelect("data-tbl-status", "状态", statusOpts, "全部状态")
       + filterSelect("data-tbl-owner", "负责人", ownerOpts, "全部负责人")
       + filterSelect("data-tbl-type", "类型", typeOpts, "全部类型")
+      + filterSelect("data-tbl-publish", "发布", [["published", "已发布"], ["unpublished", "未发布"]], "全部发布状态")
       + '<label class="phase-filter"><span>关键字</span><input type="search" class="phase-filter-input" data-tbl-kw placeholder="搜索工作项标题" aria-label="搜索工作项标题"></label>'
       + '<span class="phase-tbl-count" data-tbl-count></span>'
       + '<button class="btn sm" type="button" data-tbl-reset disabled>清空筛选</button>'
@@ -1032,7 +1067,7 @@ function taskTable(mode){
     + '<tbody id="phaseTblBody">' + rows + emptyRow + '</tbody></table></div></div>';
 }
 
-/* 阶段/版本分段、状态、负责人、类型、关键字任一变化都按交集重算可见行 */
+/* 阶段/版本分段、状态、负责人、类型、发布、关键字任一变化都按交集重算可见行 */
 function applyPhaseTblFilters(){
   var body = $("phaseTblBody");
   if(!body) return;
@@ -1042,10 +1077,12 @@ function applyPhaseTblFilters(){
   var statusEl = panel.querySelector("[data-tbl-status]");
   var ownerEl = panel.querySelector("[data-tbl-owner]");
   var typeEl = panel.querySelector("[data-tbl-type]");
+  var publishEl = panel.querySelector("[data-tbl-publish]");
   var kwEl = panel.querySelector("[data-tbl-kw]");
   var status = statusEl ? statusEl.value : "";
   var owner = ownerEl ? ownerEl.value : "";
   var type = typeEl ? typeEl.value : "";
+  var publish = publishEl ? publishEl.value : "";
   var kw = kwEl ? kwEl.value.trim().toLowerCase() : "";
   var segBtn = panel.querySelector(".seg.mini button[aria-pressed='true']");
   var group = verEl ? verEl.value : (segBtn ? segBtn.dataset.filter : "all");
@@ -1056,6 +1093,7 @@ function applyPhaseTblFilters(){
       && (!status || tr.dataset.status === status)
       && (!owner || tr.dataset.owner === owner)
       && (!type || tr.dataset.type === type)
+      && (!publish || (publish === "published" ? tr.dataset.published === "1" : tr.dataset.published !== "1"))
       && (!kw || (tr.dataset.search || "").indexOf(kw) >= 0);
     tr.style.display = ok ? "" : "none";
     if(ok) shown++;
@@ -1065,7 +1103,7 @@ function applyPhaseTblFilters(){
   var count = panel.querySelector("[data-tbl-count]");
   if(count) count.textContent = "显示 " + shown + " / " + total;
   var reset = panel.querySelector("[data-tbl-reset]");
-  if(reset) reset.disabled = !(status || owner || type || kw || group !== "all");
+  if(reset) reset.disabled = !(status || owner || type || publish || kw || group !== "all");
 }
 function renderPhaseMode(){
   var p = cache.phase;
@@ -1115,9 +1153,6 @@ function verStatusTag(st){
   if(st === "canceled") return '<span class="tag tag-neutral">已取消</span>';
   return '<span class="tag ghost">计划中</span>';
 }
-function verStatusRank(st){
-  return ({ active:0, planned:1, released:2, closed:3, canceled:4 })[st] == null ? 9 : ({ active:0, planned:1, released:2, closed:3, canceled:4 })[st];
-}
 function statsVersionFor(id){
   var rows = (cache && cache.vstats && cache.vstats.versions) || [];
   for(var i = 0; i < rows.length; i++){ if(rows[i].id === id) return rows[i]; }
@@ -1155,13 +1190,13 @@ function verRiskText(r){
 function versionListRows(){
   var q = (verListUi.q || "").trim().toLowerCase();
   var rows = ((cache && cache.vstats && cache.vstats.versions) || []).map(mergedVersionRow).filter(function(v){
-    if(verListUi.status !== "all" && v.status !== verListUi.status) return false;
     if(verListUi.riskOnly && !verRisk(v).atRisk) return false;
     if(!q) return true;
     return (v.name || "").toLowerCase().indexOf(q) !== -1
       || (v.description || "").toLowerCase().indexOf(q) !== -1;
   });
   function targetKey(v){ return v.targetDate || "9999-12-31"; }
+  var ended = function(v){ return v.status === "released" || v.status === "closed" || v.status === "canceled"; };
   if(verListUi.sort === "name"){
     rows.sort(function(a, b){ return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN"); });
   }else if(verListUi.sort === "target"){
@@ -1170,14 +1205,11 @@ function versionListRows(){
       return x === y ? String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN") : (x < y ? -1 : 1);
     });
   }else{
+    /* 分组标题已承载状态，组内只按时序：未结束按最早到期在前，已结束按最近在前 */
     rows.sort(function(a, b){
-      var d = verStatusRank(a.status) - verStatusRank(b.status);
-      if(d) return d;
       var x = targetKey(a), y = targetKey(b);
       if(x === y) return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN");
-      /* 已发布 / 已关闭按最近在前，进行中与待规划按最早到期在前 */
-      var ended = a.status === "released" || a.status === "closed" || a.status === "canceled";
-      return (x < y ? -1 : 1) * (ended ? -1 : 1);
+      return (x < y ? -1 : 1) * (ended(a) ? -1 : 1);
     });
   }
   return rows;
@@ -1239,12 +1271,98 @@ function inlineDateEditor(v){
     + inlineErrorHTML()
     + '</div>';
 }
+/* 焦点版本：优先当前进行中，其次最近要开始的计划版本，最后退回最近已发布 */
+function verFocusVersion(){
+  var rows = ((cache && cache.vstats && cache.vstats.versions) || []).map(mergedVersionRow);
+  var active = rows.filter(function(v){ return v.status === "active"; })[0];
+  if(active) return active;
+  var planned = rows.filter(function(v){ return v.status === "planned"; }).sort(function(a, b){
+    return String(a.targetDate || "9999-12-31").localeCompare(String(b.targetDate || "9999-12-31"));
+  })[0];
+  if(planned) return planned;
+  var released = rows.filter(function(v){ return v.status === "released"; }).sort(function(a, b){
+    return String(b.releasedAt || b.targetDate || "").localeCompare(String(a.releasedAt || a.targetDate || ""));
+  })[0];
+  return released || null;
+}
+function verFocusLabel(v){
+  if(v.status === "active") return "当前版本";
+  if(v.status === "planned") return "下一版";
+  return "最近发布";
+}
+function verFocusPlanText(v){
+  if(v.status === "released") return "上线 " + (v.releasedAt ? dateShort(v.releasedAt) : "已发布");
+  if(!v.targetDate) return "发布计划：未安排";
+  var d = dayDiff(parseDate(v.targetDate), rt.TODAY);
+  if(d === null || d === undefined) return "发布计划：" + dateShort(v.targetDate);
+  var tail = d < 0 ? "已逾期 " + (-d) + " 天" : (d === 0 ? "今天到期" : "还剩 " + d + " 天");
+  return "发布计划：" + dateShort(v.targetDate) + " · " + tail;
+}
+function versionFocusHTML(){
+  var v = verFocusVersion();
+  if(!v) return "";
+  var id = v.id, req = v.reqId || rt.phaseReqId;
+  var flags = verRowFlags(v);
+  var total = Number(v.taskCount) || 0, done = Number(v.doneCount) || 0;
+  var demands = Number(v.demandCount) || 0;
+  var risk = verRisk(v);
+  /* 与列表行同口径：已完成 + 进行中（未完成且已有计时）+ 阻塞 */
+  var doing = ((cache && cache.tasks) || []).filter(function(t){
+    return taskVersionIds(t).indexOf(id) >= 0 && t.boardColumn !== "done" && !t.blocked && Number(t.totalMinutes) > 0;
+  }).length;
+  var pct = total ? Math.round(done * 100 / total) : 0;
+  var doingPct = total ? Math.max(0, Math.min(100 - pct, Math.round(doing * 100 / total))) : 0;
+  var blockedPct = total ? Math.max(0, Math.min(100 - pct - doingPct, Math.round(risk.blocked * 100 / total))) : 0;
+  var dotCls = v.status === "active" ? "info" : (v.status === "released" ? "success" : "");
+  var descBits = [cycleWindow(v) || "未设周期", total ? total + " 个工作项" : "还没有排入工作项"];
+  if(demands) descBits.push(demands + " 个需求");
+  if(flags.locked) descBits.push("内容已锁定");
+  var acts;
+  if(flags.editable){
+    acts = '<button class="btn sm primary" type="button" data-ver-tasks="' + esc(id) + '">排入工作项</button>'
+      + '<button class="btn sm" type="button" data-ver-edit="' + esc(id) + '">设置目标日期</button>';
+  }else if(v.status === "released"){
+    acts = '<button class="btn sm primary" type="button" data-ver-open-tab="scope" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '">查看工作项</button>'
+      + '<button class="btn sm" type="button" data-ver-open-tab="releases" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '">发布记录</button>';
+  }else{
+    acts = '<button class="btn sm primary" type="button" data-ver-open="' + esc(id) + '" data-ver-req="' + esc(req) + '">版本详情</button>';
+  }
+  return '<section class="ver-focus" aria-labelledby="verFocusTitle">'
+    + '<div class="vf-top">'
+      + '<span class="vf-eyebrow"><i class="vf-dot ' + dotCls + '"></i>' + esc(verFocusLabel(v)) + '</span>'
+      + verStatusTag(v.status)
+      + '<span class="vf-goal">' + esc(verFocusPlanText(v)) + '</span>'
+    + '</div>'
+    + '<div class="vf-body">'
+      + '<div class="vf-left">'
+        + '<h2 id="verFocusTitle">' + esc(v.name) + '</h2>'
+        + '<p class="vf-desc">' + descBits.map(esc).join('<span class="vf-sep" aria-hidden="true"></span>')
+          + (verRisk(v).atRisk ? '<span class="vl-risk-inline">' + esc(verRiskText(risk)) + '</span>' : '') + '</p>'
+        + '<div class="vf-bar">'
+          + '<span class="vl-bar" role="img" aria-label="进度 ' + pct + '%"><i class="done" style="width:' + pct + '%"></i>'
+          + (doingPct ? '<i class="doing" style="width:' + doingPct + '%"></i>' : '')
+          + (blockedPct ? '<i class="blocked" style="width:' + blockedPct + '%"></i>' : '') + '</span>'
+          + '<b>' + pct + '%</b><small>' + (total ? done + ' / ' + total + ' 工作项' : '未规划') + '</small>'
+        + '</div>'
+      + '</div>'
+      + '<div class="vf-kpis">'
+        + '<div><b>' + demands + '</b><span>已排需求</span></div>'
+        + '<div><b>' + total + '</b><span>工作项</span></div>'
+        + '<div><b>' + (Number(v.estimateMinutes) ? fmtMinutesShort(v.estimateMinutes) : "—") + '</b><span>预估工时</span></div>'
+      + '</div>'
+      + '<div class="vf-acts">' + acts
+        + '<button class="link" type="button" data-ver-open="' + esc(id) + '" data-ver-req="' + esc(req) + '">版本详情 →</button>'
+      + '</div>'
+    + '</div>'
+    + '</section>';
+}
 function versionRowHTML(v){
   var id = v.id, req = v.reqId || rt.phaseReqId;
   var flags = verRowFlags(v);
   var editingName = !!verInline && verInline.id === id && verInline.field === "name";
   var editingDates = !!verInline && verInline.id === id && verInline.field === "dates";
   var total = Number(v.taskCount) || 0, done = Number(v.doneCount) || 0;
+  var demands = Number(v.demandCount) || 0;
   var risk = verRisk(v);
   var riskText = verRiskText(risk);
   /* stats 里的 doingCount 是「未完成」而非「进行中」：真正在做 = 未完成、已有计时且未被阻塞 */
@@ -1254,10 +1372,13 @@ function versionRowHTML(v){
   var pct = total ? Math.round(done * 100 / total) : 0;
   var doingPct = total ? Math.max(0, Math.min(100 - pct, Math.round(doing * 100 / total))) : 0;
   var blockedPct = total ? Math.max(0, Math.min(100 - pct - doingPct, Math.round(risk.blocked * 100 / total))) : 0;
-  var subBits = [total ? total + " 个工作项" : "未规划工作项"];
-  if((v.branches || []).length) subBits.push(v.branches.length + " 个分支");
-  var sub = subBits.join('<span class="vl-sep" aria-hidden="true">·</span>')
-    + (riskText ? '<span class="vl-risk-inline">' + esc(riskText) + '</span>' : '');
+  /* 状态由分组标题承载，行内只保留可下钻的范围链接与风险 / 锁定提示 */
+  var sub = '<button type="button" class="vl-scope-link" data-ver-open-tab="scope" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="查看工作项">工作项 ' + total + '</button>'
+    + '<span class="vl-sep" aria-hidden="true">·</span>'
+    + '<button type="button" class="vl-scope-link" data-ver-open-tab="demands" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="查看排到该版本的需求">需求 ' + demands + '</button>';
+  if((v.branches || []).length) sub += '<span class="vl-sep" aria-hidden="true">·</span><span>' + v.branches.length + ' 个分支</span>';
+  if(riskText) sub += '<span class="vl-risk-inline">' + esc(riskText) + '</span>';
+  if(flags.locked && v.status !== "released") sub += '<span class="vl-lock" title="已有成功的生产发布记录，版本内容只读">内容已锁定</span>';
   var nameCell = '<div class="vl-name">'
     + (editingName ? inlineNameEditor(v)
       : '<div class="vl-name-row"><button class="vl-name-link" type="button" data-ver-open="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="打开「' + esc(v.name) + '」的版本详情页">' + esc(v.name) + '</button>'
@@ -1265,10 +1386,6 @@ function versionRowHTML(v){
         + (flags.editable ? '<button class="vl-pencil" type="button" data-ver-inline="name" data-ver-id="' + esc(id) + '" title="直接编辑版本名称" aria-label="直接编辑版本名称">' + icon("edit", 12) + '</button>' : '')
         + '</div><div class="vl-sub"' + (v.description ? ' title="' + esc(v.description) + '"' : '') + '>' + sub + '</div>')
     + '</div>';
-  var fact = "";
-  if(v.status !== "released" && flags.locked){
-    fact = '<span class="vl-fact" title="已有成功的生产发布记录，版本内容只读">已锁定' + ((v.successfulReleaseEventCount || 0) > 0 ? ' · 成功 ' + v.successfulReleaseEventCount + ' 次' : '') + '</span>';
-  }
   var timeCell = editingDates ? inlineDateEditor(v)
     : (flags.editable
       ? '<button class="vl-cell vl-time" type="button" data-ver-inline="dates" data-ver-id="' + esc(id) + '" title="点击直接编辑计划开始与目标日期">'
@@ -1280,10 +1397,6 @@ function versionRowHTML(v){
         + '<span class="vl-ptext"><b>' + pct + '%</b><small>' + done + ' / ' + total + '</small></span>'
       : '<span class="vl-bar empty"></span><span class="vl-ptext"><b>未规划</b><small>0 项</small></span>')
     + '</button>';
-  var scopeCell = '<div class="vl-scope">'
-    + '<button type="button" class="vl-scope-link" data-ver-open-tab="scope" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="查看工作项">工作项 ' + total + '</button>'
-    + '<button type="button" class="vl-scope-link" data-ver-open-tab="demands" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="查看排到该版本的需求">需求 ' + (Number(v.demandCount) || 0) + '</button>'
-    + '</div>';
   var relCell = '<button type="button" class="vl-cell vl-rel" data-ver-open-tab="releases" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="查看发布计划与实际发布记录">' + esc(verLatestReleaseText(v)) + '</button>';
   var quick;
   if(flags.editable && v.status === "planned"){
@@ -1300,15 +1413,13 @@ function versionRowHTML(v){
     + '</div>';
   return '<div class="vl-row" data-ver-row="' + esc(id) + '" data-ver-req="' + esc(req) + '" tabindex="0" role="button" aria-label="进入「' + esc(v.name) + '」的版本详情页">'
     + nameCell
-    + '<div class="vl-status">' + verStatusTag(v.status) + fact + '</div>'
     + timeCell
     + progressCell
-    + scopeCell
     + relCell
     + acts
     + '</div>';
 }
-/* 与原型一致：未规划工作项用列表上方的提示条承接，不混进版本行，避免把「待规划」误读成一个版本 */
+/* 未规划工作项用一条轻提示承接，不混进版本队列，避免把「待规划」误读成一个版本 */
 function versionUnboundBannerHTML(){
   var u = (cache && cache.vstats && cache.vstats.unbound) || {};
   var taskCount = Number(u.taskCount) || 0;
@@ -1317,45 +1428,89 @@ function versionUnboundBannerHTML(){
   var writableVer = (cache.versions || []).some(function(v){ return !versionReadOnly(v); });
   var canAssign = canWritePhase() && unboundTasks.length && writableVer;
   return '<div class="vl-unbound-banner">'
-    + '<span class="vl-ub-icon" aria-hidden="true">' + icon("infoCircle", 15) + '</span>'
-    + '<div class="vl-ub-text"><b>' + taskCount + ' 个工作项还没有计划版本</b>'
-    + '<span>未规划的工作项不计入任何版本的进度' + (Number(u.doneCount) ? '，其中 ' + u.doneCount + ' 项已完成' : '') + '</span></div>'
-    + (canAssign ? '<button class="link-cell" type="button" data-unbound-assign>去规划 →</button>' : '')
+    + '<span class="vl-ub-icon" aria-hidden="true">' + icon("alertCircle", 15) + '</span>'
+    + '<span class="vl-ub-text"><b>' + taskCount + ' 个工作项</b>还没有排版本'
+      + (Number(u.doneCount) ? '，其中 ' + u.doneCount + ' 项已完成' : '') + '</span>'
+    + (canAssign ? '<button class="btn sm soft vl-ub-go" type="button" data-unbound-assign>去规划 →</button>' : '')
     + '</div>';
 }
-function versionListChipsHTML(){
-  var c = versionListCounts();
-  var defs = [["all","全部"],["active","进行中"],["planned","计划中"],["released","已发布"],["closed","已关闭"]];
-  if(c.canceled) defs.push(["canceled","已取消"]);
-  return defs.map(function(d){
-    return '<button class="vl-chip' + (verListUi.status === d[0] ? " on" : "") + '" type="button" data-ver-status="' + d[0] + '" aria-pressed="' + (verListUi.status === d[0]) + '">'
-      + d[1] + ' <b>' + (c[d[0]] || 0) + '</b></button>';
-  }).join("")
-    + '<button class="vl-chip vl-chip-risk' + (verListUi.riskOnly ? " on" : "") + '" type="button" data-ver-risk-chip aria-pressed="' + (!!verListUi.riskOnly) + '">'
-    + '<span class="vl-risk-dot" aria-hidden="true"></span>需关注 <b>' + (c.risk || 0) + '</b></button>';
+/* 分组标题承载状态：进行中 / 计划中常开，已结束的组默认只露最近 3 行 */
+var VER_GROUP_DEFS = [["active","进行中"],["planned","计划中"],["released","已发布"],["closed","已关闭"],["canceled","已取消"]];
+function verGroupOpen(status){
+  if(verListUi.q || verListUi.riskOnly) return true;
+  if(status === "released" || status === "closed" || status === "canceled") return !!verGroupUi.open[status];
+  return true;
+}
+function verGroupNote(status, rows){
+  if(status === "released"){
+    var latest = rows.filter(function(v){ return v.releasedAt; }).sort(function(a, b){
+      return String(b.releasedAt).localeCompare(String(a.releasedAt));
+    })[0];
+    return latest ? "最近上线 " + dateShort(latest.releasedAt) : "";
+  }
+  if(status === "active" || status === "planned"){
+    var next = rows.filter(function(v){ return v.targetDate; }).sort(function(a, b){
+      return String(a.targetDate).localeCompare(String(b.targetDate));
+    })[0];
+    return next ? "最近目标 " + dateShort(next.targetDate) : "未设目标日期";
+  }
+  return "";
+}
+function versionQueueGroups(){
+  var focus = verFocusVersion();
+  var rows = versionListRows().filter(function(v){ return !focus || v.id !== focus.id; });
+  return VER_GROUP_DEFS.map(function(d){
+    return { status:d[0], label:d[1], rows:rows.filter(function(v){ return v.status === d[0]; }) };
+  }).filter(function(g){ return g.rows.length; });
+}
+function versionGroupsHTML(){
+  var groups = versionQueueGroups();
+  var filtered = !!(verListUi.q || verListUi.riskOnly);
+  if(!groups.length){
+    return '<div class="vl-empty">' + icon(filtered ? "search" : "folder", 16)
+      + '<b>' + (filtered ? "没有符合条件的版本" : "还没有其他版本") + '</b>'
+      + '<span>' + (filtered ? "清空搜索或取消「只看需关注」再试。" : "焦点卡之外还没有版本，新建后会排进这里。") + '</span></div>';
+  }
+  return groups.map(function(g){
+    var open = verGroupOpen(g.status);
+    var visible = open ? g.rows : g.rows.slice(0, 3);
+    var note = verGroupNote(g.status, g.rows);
+    var more = (!verListUi.q && !verListUi.riskOnly && g.rows.length > 3)
+      ? '<button class="vl-group-more" type="button" data-ver-group-more="' + g.status + '">'
+        + (open ? '收起，只看最近 3 个' : '展开其余 ' + (g.rows.length - 3) + ' 个' + esc(g.label) + '版本')
+        + icon(open ? "chevronUp" : "chevronRight", 13) + '</button>'
+      : "";
+    return '<div class="vl-group">'
+      + '<button class="vl-group-head" type="button" data-ver-group="' + g.status + '" aria-expanded="' + (open ? "true" : "false") + '">'
+      + '<span class="vl-group-chev" aria-hidden="true">' + icon("chevronRight", 14) + '</span>'
+      + '<b>' + esc(g.label) + '</b><span class="vl-group-count">' + g.rows.length + '</span>'
+      + (note ? '<span class="vl-group-note">' + esc(note) + '</span>' : '')
+      + '</button>'
+      + visible.map(versionRowHTML).join("")
+      + more
+      + '</div>';
+  }).join("");
 }
 function paintVersionList(){
   var box = document.getElementById("verList");
   if(!box) return;
   var rows = versionListRows();
-  var chips = box.querySelector("[data-ver-chips]");
-  if(chips) chips.innerHTML = versionListChipsHTML();
+  var focus = verFocusVersion();
   var riskBox = box.querySelector("[data-ver-risk]");
   if(riskBox) riskBox.checked = !!verListUi.riskOnly;
-  var body = rows.map(versionRowHTML).join("");
-  if(!body) body = '<div class="vl-empty">' + icon("search", 16) + '<b>没有符合条件的版本</b><span>换一个状态，或清空搜索与筛选再试。</span></div>';
   var rowsBox = box.querySelector("[data-ver-rows]");
-  if(rowsBox) rowsBox.innerHTML = body;
+  if(rowsBox) rowsBox.innerHTML = versionGroupsHTML();
   var count = box.querySelector("[data-ver-count]");
   if(count){
-    var all = versionListCounts().all;
-    count.textContent = "共 " + rows.length + " 个版本" + (rows.length !== all ? "（已筛选，共 " + all + " 个）" : "");
+    var other = focus ? rows.filter(function(v){ return v.id !== focus.id; }) : rows;
+    var allOther = Math.max(0, versionListCounts().all - (focus ? 1 : 0));
+    count.textContent = other.length + " 个" + ((verListUi.q || verListUi.riskOnly) ? "（已筛选，共 " + allOther + " 个）" : "");
   }
 }
 function versionListShellHTML(){
   return '<div class="panel ver-list" id="verList">'
     + '<div class="vl-toolbar">'
-    + '<div class="vl-chips" data-ver-chips role="tablist" aria-label="按版本状态筛选"></div>'
+    + '<h2 class="vl-title">其他版本 <span class="vl-count" data-ver-count></span></h2>'
     + '<div class="vl-tools">'
     + '<label class="vl-check"><input type="checkbox" data-ver-risk' + (verListUi.riskOnly ? " checked" : "") + '> 只看需关注</label>'
     + '<div class="vl-search">' + icon("search", 14) + '<input type="search" data-ver-q placeholder="搜索版本名或说明" value="' + esc(verListUi.q) + '" aria-label="搜索版本"></div>'
@@ -1365,9 +1520,9 @@ function versionListShellHTML(){
     + '<option value="name"' + (verListUi.sort === "name" ? " selected" : "") + '>名称</option>'
     + '</select></label>'
     + '</div></div>'
-    + '<div class="vl-head" aria-hidden="true"><span>版本</span><span>状态</span><span>时间</span><span>进度</span><span>工作项 / 需求</span><span>最近发布</span><span></span></div>'
+    + '<div class="vl-head" aria-hidden="true"><span>版本</span><span>时间</span><span>进度</span><span>最近发布</span><span></span></div>'
     + '<div data-ver-rows></div>'
-    + '<div class="vl-foot"><span data-ver-count></span><span class="vl-foot-note">点击行进入详情 · 悬停字段可编辑名称与日期 · 进度按工作项自动计算</span>'
+    + '<div class="vl-foot"><span class="vl-foot-note">点击版本进入详情 · 悬停字段可编辑名称与日期 · 进度按工作项自动计算</span>'
     + '<button class="link-cell vl-foot-link" type="button" data-ver-schedule-link>查看发布日程 →</button></div>'
     + '</div>';
 }
@@ -1670,7 +1825,8 @@ function syncVersionDescToggles(){
 }
 /* ---------- 版本阶段工时汇总（向上抽象一层的只读聚合） ---------- */
 
-var rollupUi = { reqId:"", verId:"", dim:"stage", cats:[], demands:null, demandsReqId:"", demandLoading:false };
+/* 列表页默认跨版本对比；单版本视角再从下拉切进去 */
+var rollupUi = { reqId:"", verId:"__all", dim:"stage", more:false, cats:[], demands:null, demandsReqId:"", demandLoading:false };
 
 function rollupH(m){
   var n = Number(m) || 0;
@@ -1762,10 +1918,10 @@ function rollupRows(tasks, dim){
 function rollupVersionSelectHTML(){
   var versions = cache.versions || [];
   return '<select class="mini-select" data-rollup-ver aria-label="汇总版本">'
+    + '<option value="__all"' + (rollupUi.verId === "__all" ? " selected" : "") + '>全部版本（跨版本对比）</option>'
     + versions.map(function(v){
       return '<option value="' + esc(v.id) + '"' + (v.id === rollupUi.verId ? " selected" : "") + '>' + esc(v.name) + '</option>';
     }).join("")
-    + '<option value="__all"' + (rollupUi.verId === "__all" ? " selected" : "") + '>全部版本（跨版本对比）</option>'
     + '</select>';
 }
 function rollupCurrentVersion(){
@@ -1773,7 +1929,7 @@ function rollupCurrentVersion(){
   var hit = versions.filter(function(v){ return v.id === rollupUi.verId; })[0];
   if(hit) return hit;
   hit = versions.filter(function(v){ return v.status === "active"; })[0] || versions[0] || null;
-  rollupUi.verId = hit ? hit.id : "";
+  rollupUi.verId = hit ? hit.id : "__all";
   return hit;
 }
 function rollupKpisHTML(s){
@@ -1838,30 +1994,38 @@ function rollupPivotHTML(tasks, s){
     + (stage ? '' : rollupDeltaHTML(s.act, s.est)) + '</tr>';
   return head + '<tbody>' + body + total + '</tbody>';
 }
+/* 跨版本默认只露 6 行：先给结论，需要时再展开全量 */
+var ROLLUP_ALL_ROWS = 6;
 function rollupAllVersionsHTML(){
   var versions = cache.vstats.versions || [];
-  var body = versions.map(function(v){
+  var rows = versions.map(function(v){
     return '<tr class="roll-row" tabindex="0" data-rollup-group="version" data-rollup-ver="' + esc(v.id) + '" title="下钻该版本的工作项">'
       + '<td>' + assocLinkHTML("version", v.id, v.name, {req:rt.phaseReqId}) + '</td><td>' + versionStatusTag(v.status) + '</td>'
       + '<td class="num">' + (v.doneCount || 0) + ' / ' + (v.taskCount || 0) + '</td>'
       + '<td class="num">' + rollupH(v.estimateMinutes) + '</td><td class="num">' + rollupH(v.workMinutes) + '</td>'
       + '<td class="num">' + rollupH(v.devMinutes) + '</td><td class="num">' + rollupH(v.testMinutes) + '</td>'
       + rollupDeltaHTML(v.workMinutes || 0, v.estimateMinutes) + '</tr>';
-  }).join("");
+  });
   var u = cache.vstats.unbound || {};
   if(Number(u.taskCount)){
-    body += '<tr class="roll-row" tabindex="0" data-rollup-group="version" data-rollup-ver="" title="下钻未绑定版本的工作项">'
+    rows.push('<tr class="roll-row" tabindex="0" data-rollup-group="version" data-rollup-ver="" title="下钻未绑定版本的工作项">'
       + '<td><span class="tag ghost">待规划</span></td><td class="muted">未绑定版本</td>'
       + '<td class="num">' + (u.doneCount || 0) + ' / ' + u.taskCount + '</td>'
       + '<td class="num">' + rollupH(u.estimateMinutes) + '</td><td class="num">' + rollupH(u.workMinutes) + '</td>'
       + '<td class="num">' + rollupH(u.devMinutes) + '</td><td class="num">' + rollupH(u.testMinutes) + '</td>'
-      + '<td class="num muted">—</td></tr>';
+      + '<td class="num muted">—</td></tr>');
   }
-  var notes = '<p class="foot-note roll-foot">版本之间只比较总量与拆分，不做逐项对齐；一个工作项绑定多个版本时会在多个版本里各计一次，跨版本合计不等于项目合计。</p>';
-  return '<div class="tbl-wrap"><table class="phase-tbl roll-tbl"><thead><tr>'
+  var shown = rollupUi.more ? rows : rows.slice(0, ROLLUP_ALL_ROWS);
+  var table = '<div class="tbl-wrap"><table class="phase-tbl roll-tbl"><thead><tr>'
     + '<th>版本</th><th>状态</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际</th>'
     + '<th class="num">窗口外</th><th class="num">窗口内</th><th class="num">偏差</th>'
-    + '</tr></thead><tbody>' + (body || '<tr><td colspan="8" class="tbl-empty foot-note">还没有版本</td></tr>') + '</tbody></table></div>' + notes;
+    + '</tr></thead><tbody>' + (shown.join("") || '<tr><td colspan="8" class="tbl-empty foot-note">还没有版本</td></tr>') + '</tbody></table></div>';
+  var more = rows.length > ROLLUP_ALL_ROWS
+    ? '<button class="link ver-rollup-more" type="button" data-rollup-more>'
+      + (rollupUi.more ? '收起，只看最近 ' + ROLLUP_ALL_ROWS + ' 行' : '展开全部 ' + rows.length + ' 行')
+      + icon(rollupUi.more ? "chevronUp" : "chevronRight", 12) + '</button>'
+    : "";
+  return table + '<div class="ver-rollup-foot"><span>版本之间只比较总量与拆分，不做逐项对齐；一个工作项绑定多个版本时会在多个版本里各计一次，跨版本合计不等于项目合计。</span>' + more + '</div>';
 }
 function rollupPanelHTML(){
   var versions = cache.versions || [];
@@ -1882,7 +2046,9 @@ function rollupPanelHTML(){
     + '阶段不是新数据，只是同一批工作项的另一种分组：预估全部计入测试窗口外；实际工时里，测试窗口（提测 → 测试结束）内的计时计入窗口内，其余计入窗口外（含需求评审、设计、开发、运维等），所以窗口内 + 窗口外始终等于版本累计实际工时。'
     + '实际占比以版本累计实际为分母，预估占比以版本累计预估为分母，两个分母不同，不能互相比大小；阶段表只有实际占比。'
     + '评审 / 排期属于需求池阶段、不产生工作项工时，这里不重复统计；发布以版本卡的发布证据为准。'
-    + '阶段表里的完成 / 未开始只计条目，不与工时相加。点任意行下钻到工作项，再点行打开详情。</div></details>';
+    + '阶段表里的完成 / 未开始只计条目，不与工时相加。点任意行下钻到工作项，再点行打开详情。'
+    + '工作项按「计划版本」归组，需求按「目标版本」规划；首版上线前未绑版本的工作项在统计中归入最早已发布版本（不代表实际交付），其余未绑工作项归「未绑定版本」。'
+    + '偏差 =（实际 − 预估）÷ 预估，±15% 内为准确。</div></details>';
   var body;
   if(all){
     body = rollupAllVersionsHTML();
@@ -1890,8 +2056,8 @@ function rollupPanelHTML(){
     var tasks = rollupVersionTasks(v.id);
     var s = rollupSummary(tasks);
     var table = '<div class="tbl-wrap"><table class="phase-tbl roll-tbl">' + rollupPivotHTML(tasks, s) + '</table></div>';
-    var foot = '<p class="foot-note roll-foot">' + esc(v.name) + ' · ' + tasks.length + ' 个工作项 · 预估 ' + rollupH(s.est)
-      + ' · 实际 ' + rollupH(s.act) + ' = 窗口外 ' + rollupH(s.dev) + ' + 窗口内 ' + rollupH(s.test) + '</p>';
+    var foot = '<div class="ver-rollup-foot"><span>' + esc(v.name) + ' · ' + tasks.length + ' 个工作项 · 预估 ' + rollupH(s.est)
+      + ' · 实际 ' + rollupH(s.act) + ' = 窗口外 ' + rollupH(s.dev) + ' + 窗口内 ' + rollupH(s.test) + '</span></div>';
     body = rollupKpisHTML(s) + rollupSplitHTML(s) + table + foot;
   }
   return '<section class="ver-rollup" data-rollup>' + head + notes + body + '</section>';
@@ -1963,7 +2129,7 @@ function openRollupDrill(group, key, versionId){
     : reqNameById(rt.phaseReqId) + " · " + versionName + " · " + scope.name;
   var body = tasks.map(function(t){
     return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
-      + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(t.title) + '</td>'
+      + '<td class="phase-task-cell"><span class="tbl-task"><span class="tbl-task-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' + taskPublicationHTML(t) + '</span></td>'
       + '<td>' + esc(typeName(t.itemType)) + '</td>'
       + '<td>' + esc(t.owner || "—") + '</td>'
       + '<td>' + (t.boardColumn === "done" ? '<span class="tag tag-success">已完成</span>' : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
@@ -1995,14 +2161,11 @@ function openRollupDrill(group, key, versionId){
 }
 
 function renderVersionMode(){
-  var p = cache.phase;
   if(phaseMeta){
-    phaseMeta.textContent = reqNameById(rt.phaseReqId) + " · 按版本分组 · 共 " + cache.versions.length + " 个版本";
+    var c = versionListCounts();
+    phaseMeta.textContent = reqNameById(rt.phaseReqId) + " · 按版本分组 · 共 " + cache.versions.length + " 个版本"
+      + (c.planned ? " · " + c.planned + " 个计划中" : "") + (c.active ? " · " + c.active + " 个进行中" : "");
   }
-  var relCount = cache.versions.filter(function(v){ return v.status === "released"; }).length;
-  var caliber = '<p class="foot-note" style="margin:0">工作项按「计划版本」归组，需求按「目标版本」规划；'
-    + '首版上线前未绑版本的工作项在统计中归入最早已发布版本（不代表实际交付），其余未绑工作项归「待规划」；已发布 '
-    + relCount + ' 个版本 · 偏差 =（实际 − 预估）÷ 预估，±15% 内为准确</p>';
   if(!cache.versions.length && !cache.tasks.length){
     phaseBody.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有版本",
@@ -2010,9 +2173,9 @@ function renderVersionMode(){
     });
     return;
   }
-  phaseBody.innerHTML = versionUnboundBannerHTML() + versionListShellHTML() + caliber + rollupPanelHTML() + taskTable("version");
+  /* 列表页只承载「下一版 + 其他版本队列 + 阶段汇总」；工作项明细收进版本详情页签 */
+  phaseBody.innerHTML = versionFocusHTML() + versionUnboundBannerHTML() + versionListShellHTML() + rollupPanelHTML();
   paintVersionList();
-  applyPhaseTblFilters();
 }
 
 /* ---------- 版本弹窗 ---------- */
@@ -2548,8 +2711,8 @@ export function mountReleaseWorkspace(pageHost, opts){
   /* 工作项清单：分组 / 范围筛选 / 折叠 / 放大。勾选状态始终留在 layer DOM 里，
      checks() 与事件委托不用改；「放大」只是同一个节点的定位变化，不会被挪出表单。 */
   var pickerState = {
-    plan:{ q:"", state:"", scope:"", group:"version", expanded:false, collapsed:{} },
-    actual:{ q:"", state:"", scope:"", group:"version", expanded:false, collapsed:{} }
+    plan:{ q:"", state:"", pub:"", scope:"", group:"version", expanded:false, collapsed:{} },
+    actual:{ q:"", state:"", pub:"", scope:"", group:"version", expanded:false, collapsed:{} }
   };
   function pickerSt(prefix){ return pickerState[prefix] || pickerState.plan; }
   function pickerVersionIds(prefix){ return prefix === "plan" ? planVersionSelection() : [id]; }
@@ -2616,7 +2779,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       var sel = g.rows.filter(function(t){ return ids.indexOf(t.id) !== -1; }).length;
       var rows = g.rows.map(function(t){
         var allowed = prefix !== "actual" || actualDraft.operation !== "rollback" || (ref && recordTaskIds(ref).indexOf(t.id) !== -1);
-        return '<label class="version-task-row release-task-row" data-task-row data-task-id="' + esc(t.id) + '" data-task-title="' + esc(String(t.title || "").toLowerCase()) + '" data-task-state="' + (t.boardColumn === "done" ? "done" : "open") + '"><input type="checkbox" data-' + prefix + '-task="' + esc(t.id) + '"' + (ids.indexOf(t.id) !== -1 ? ' checked' : '') + (disabled || !allowed ? ' disabled' : '') + '><span><b>' + esc(t.title) + '</b><small>' + esc(colName(t.boardColumn)) + ' · 完成 ' + esc(fmtReleaseTime(t.completedAt)) + ' · 版本 ' + esc(taskVersionsText(t) || "待规划") + '</small></span></label>';
+        return '<label class="version-task-row release-task-row" data-task-row data-task-id="' + esc(t.id) + '" data-task-title="' + esc(String(t.title || "").toLowerCase()) + '" data-task-state="' + (t.boardColumn === "done" ? "done" : "open") + '" data-task-published="' + (taskIsPublished(t) ? "1" : "0") + '"><input type="checkbox" data-' + prefix + '-task="' + esc(t.id) + '"' + (ids.indexOf(t.id) !== -1 ? ' checked' : '') + (disabled || !allowed ? ' disabled' : '') + '><span><span class="version-task-title"><b>' + esc(t.title) + '</b>' + taskPublicationHTML(t) + '</span><small>' + esc(colName(t.boardColumn)) + ' · 完成 ' + esc(fmtReleaseTime(t.completedAt)) + ' · 版本 ' + esc(taskVersionsText(t) || "待规划") + '</small></span></label>';
       }).join("");
       return '<section class="release-task-group' + (g.key ? "" : " is-flat") + (collapsed ? " is-collapsed" : "") + '" data-task-group="' + esc(g.key) + '">'
         + (g.key ? '<div class="release-task-group-head">'
@@ -2631,6 +2794,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       + '<div class="release-picker-tools">'
       + '<input type="search" data-' + prefix + '-search value="' + esc(st.q) + '" placeholder="搜索标题或 ID" aria-label="搜索工作项">'
       + '<select data-' + prefix + '-filter aria-label="按状态筛选">' + options([["", "全部状态"], ["done", "仅已完成"], ["open", "仅未完成"]], st.state) + '</select>'
+      + '<select data-' + prefix + '-pub aria-label="按发布状态筛选">' + options([["", "全部发布状态"], ["published", "已发布"], ["unpublished", "未发布"]], st.pub) + '</select>'
       + '<select data-' + prefix + '-scope aria-label="按选择状态筛选">' + options([["", "全部"], ["selected", "已选"], ["unselected", "未选"]], st.scope) + '</select>'
       + '<select data-' + prefix + '-group aria-label="工作项分组方式">' + options(groupOpts, groupChosen) + '</select>'
       + '<button class="btn sm" type="button" data-' + prefix + '-all' + (disabled ? ' disabled' : '') + '>全选可见</button>'
@@ -2890,13 +3054,14 @@ export function mountReleaseWorkspace(pageHost, opts){
   function filterPicker(prefix){
     var box = pickerBox(prefix); if(!box) return;
     var st = pickerSt(prefix);
-    var q = String(st.q || "").trim().toLowerCase(), f = st.state, scope = st.scope, shown = 0;
+    var q = String(st.q || "").trim().toLowerCase(), f = st.state, pf = st.pub, scope = st.scope, shown = 0;
     box.querySelectorAll("[data-task-row]").forEach(function(row){
-      var state = row.getAttribute("data-task-state");
+      var state = row.getAttribute("data-task-state"), published = row.getAttribute("data-task-published") === "1";
       var cb = row.querySelector('input[data-' + prefix + '-task]');
       var chosen = !!(cb && cb.checked);
       var match = (!q || (row.getAttribute("data-task-title") || "").toLowerCase().indexOf(q) !== -1 || (row.getAttribute("data-task-id") || "").toLowerCase().indexOf(q) !== -1)
         && (!f || (f === "done" ? state === "done" : state !== "done"))
+        && (!pf || (pf === "published" ? published : !published))
         && (!scope || (scope === "selected" ? chosen : !chosen));
       row.hidden = !match; if(match) shown++;
     });
@@ -3485,11 +3650,12 @@ export function mountReleaseWorkspace(pageHost, opts){
       groupPick(allPrefix, e.target.getAttribute("data-" + allPrefix + "-group-all"), e.target.checked);
       return;
     }
-    if(e.target.matches('[data-plan-search], [data-plan-filter], [data-plan-scope], [data-actual-search], [data-actual-filter], [data-actual-scope]')){
-      var pickPrefix = e.target.matches('[data-plan-search], [data-plan-filter], [data-plan-scope]') ? "plan" : "actual";
+    if(e.target.matches('[data-plan-search], [data-plan-filter], [data-plan-pub], [data-plan-scope], [data-actual-search], [data-actual-filter], [data-actual-pub], [data-actual-scope]')){
+      var pickPrefix = e.target.matches('[data-plan-search], [data-plan-filter], [data-plan-pub], [data-plan-scope]') ? "plan" : "actual";
       var pst = pickerSt(pickPrefix);
       if(e.target.matches('[data-plan-search], [data-actual-search]')) pst.q = e.target.value;
       else if(e.target.matches('[data-plan-filter], [data-actual-filter]')) pst.state = e.target.value;
+      else if(e.target.matches('[data-plan-pub], [data-actual-pub]')) pst.pub = e.target.value;
       else pst.scope = e.target.value;
       filterPicker(pickPrefix);
       return;
@@ -3775,7 +3941,7 @@ function openVersionTasks(id, fresh, preset){
     return;
   }
   if(versionContentLocked(v)){ toast("已有成功正式发布，版本内容范围只读", "warn"); return; }
-  var selected = {}, query = "", stateFilter = "", scopeFilter = "", groupMode = "none", collapsed = {};
+  var selected = {}, query = "", stateFilter = "", publishFilter = "", scopeFilter = "", groupMode = "none", collapsed = {};
   cache.tasks.forEach(function(t){ if(taskVersionIds(t).indexOf(id) !== -1) selected[t.id] = true; });
   /* 新建工作项会先收起本弹框：回来时还原用户勾选（新建项按数据里的真实关联决定，不被旧快照覆盖） */
   if(preset){
@@ -3784,6 +3950,8 @@ function openVersionTasks(id, fresh, preset){
   }
   var versionNames = {};
   cache.versions.forEach(function(item){ versionNames[item.id] = item.name; });
+  var demandTitles = {};
+  cache.tasks.forEach(function(t){ if(t.demandId && t.demandTitle) demandTitles[t.demandId] = t.demandTitle; });
   var rows = cache.tasks.slice().sort(function(a, b){
     var av = taskVersionIds(a).indexOf(id) !== -1 ? 0 : 1, bv = taskVersionIds(b).indexOf(id) !== -1 ? 0 : 1;
     return av - bv || String(a.title || "").localeCompare(String(b.title || ""), "zh-CN");
@@ -3800,8 +3968,9 @@ function openVersionTasks(id, fresh, preset){
     + '<div class="sheet-body"><div class="version-task-tools release-picker-tools">'
     + '<input type="search" placeholder="搜索工作项标题或负责人…" aria-label="搜索版本工作项" data-version-task-search autocomplete="off" />'
     + '<select data-version-task-state aria-label="按状态筛选"><option value="">全部状态</option><option value="done">仅已完成</option><option value="open">仅未完成</option></select>'
+    + '<select data-version-task-publish aria-label="按发布状态筛选"><option value="">全部发布状态</option><option value="published">已发布</option><option value="unpublished">未发布</option></select>'
     + '<select data-version-task-scope aria-label="按勾选状态筛选"><option value="">全部</option><option value="selected">已选</option><option value="unselected">未选</option></select>'
-    + '<select data-version-task-group aria-label="工作项分组方式"><option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option></select>'
+    + '<select data-version-task-group aria-label="工作项分组方式"><option value="none">不分组</option><option value="status">按状态</option><option value="demand">按需求</option><option value="publish">按发布状态</option><option value="owner">按负责人</option></select>'
     + '<span class="version-task-count release-picker-count" role="status"></span>'
     + '<button class="btn sm release-picker-expand" type="button" data-version-task-expand aria-expanded="false" title="放大或收起工作项列表">' + icon("expand", 13) + '<span>放大</span></button>'
     + '</div><div class="version-task-list"></div>'
@@ -3814,11 +3983,18 @@ function openVersionTasks(id, fresh, preset){
   function rowState(t){ return t.boardColumn === "done" ? "done" : "open"; }
   function groupKeyOf(t){
     if(groupMode === "status") return t.boardColumn === "done" ? "s:done" : "s:open";
+    if(groupMode === "demand") return "q:" + (t.demandId || "");
+    if(groupMode === "publish") return taskIsPublished(t) ? "p:1" : "p:0";
     if(groupMode === "owner") return "o:" + (t.owner || "");
     return "";
   }
   function groupLabelOf(key){
     if(groupMode === "status") return key === "s:done" ? "已完成" : "未完成";
+    if(groupMode === "demand"){
+      if(key === "q:") return "未关联需求";
+      return demandTitles[key.slice(2)] || key.slice(2);
+    }
+    if(groupMode === "publish") return key === "p:1" ? "已发布" : "未发布";
     return key === "o:" ? "未指派" : key.slice(2);
   }
   function rowHTML(t){
@@ -3828,9 +4004,11 @@ function openVersionTasks(id, fresh, preset){
       + (t.boardColumn === "done" ? "已完成" : colName(t.boardColumn))
       + (brName ? " · 分支 " + brName : "");
     return '<label class="version-task-row" data-version-task-row data-task-state="' + rowState(t) + '"'
+      + ' data-task-published="' + (taskIsPublished(t) ? "1" : "0") + '"'
       + ' data-task-title="' + esc(String(t.title || "").toLowerCase()) + '" data-task-meta="' + esc(String(t.owner || "").toLowerCase()) + '">'
       + '<input type="checkbox" data-version-task-check="' + esc(t.id) + '"' + (selected[t.id] ? " checked" : "") + ' />'
-      + '<span class="version-task-main"><b>' + esc(t.title) + '</b><small>' + esc(meta)
+      + '<span class="version-task-main"><span class="version-task-title"><b>' + esc(t.title) + '</b>' + taskPublicationHTML(t) + '</span>'
+      + '<small>' + esc(meta)
       + (bound.length ? ' · 其他关联：' + esc(bound.map(function(vid){ return versionNames[vid] || vid; }).join('、')) : "") + '</small></span></label>';
   }
   function renderRows(){
@@ -3879,6 +4057,7 @@ function openVersionTasks(id, fresh, preset){
       var chosen = !!(cb && cb.checked);
       var match = (!q || (row.getAttribute("data-task-title") || "").indexOf(q) !== -1 || (row.getAttribute("data-task-meta") || "").indexOf(q) !== -1)
         && (!stateFilter || (stateFilter === "done" ? row.getAttribute("data-task-state") === "done" : row.getAttribute("data-task-state") !== "done"))
+        && (!publishFilter || (publishFilter === "published" ? row.getAttribute("data-task-published") === "1" : row.getAttribute("data-task-published") !== "1"))
         && (!scopeFilter || (scopeFilter === "selected" ? chosen : !chosen));
       row.hidden = !match; if(match) shown++;
     });
@@ -3923,6 +4102,7 @@ function openVersionTasks(id, fresh, preset){
       return;
     }
     if(e.target.closest("[data-version-task-state]")){ stateFilter = e.target.value; filterRows(); return; }
+    if(e.target.closest("[data-version-task-publish]")){ publishFilter = e.target.value; filterRows(); return; }
     if(e.target.closest("[data-version-task-scope]")){ scopeFilter = e.target.value; filterRows(); return; }
     if(e.target.closest("[data-version-task-group]")){ groupMode = e.target.value; renderRows(); return; }
     var check = e.target.closest("[data-version-task-check]");
@@ -4044,7 +4224,7 @@ function openUnboundTasks(){
         + (t.boardColumn === "done" ? "已完成" : colName(t.boardColumn))
         + (brName ? " · 分支 " + brName : "");
       return '<label class="version-task-row"><input type="checkbox" data-unbound-check="' + esc(t.id) + '"'
-        + (selected[t.id] ? " checked" : "") + ' /><span class="version-task-main"><b>' + esc(t.title) + '</b>'
+        + (selected[t.id] ? " checked" : "") + ' /><span class="version-task-main"><span class="version-task-title"><b>' + esc(t.title) + '</b>' + taskPublicationHTML(t) + '</span>'
         + '<small>' + esc(meta) + '</small></span></label>';
     }).join("") : '<div class="tl-empty">没有匹配的工作项</div>';
   }
@@ -4393,10 +4573,22 @@ if($("dlgVersionX")) $("dlgVersionX").addEventListener("click", function(){ UI.c
 if(btnSaveVer) btnSaveVer.addEventListener("click", saveVersion);
 if(vName) vName.addEventListener("input", function(){ fVerName.classList.remove("invalid"); });
 if(phaseBody) phaseBody.addEventListener("click", function(e){
-  /* 列表工具栏 / 内联编辑：这些控件都长在可点击的版本行里，必须先于行级下钻处理 */
-  var chip = e.target.closest("[data-ver-status]");
-  if(chip){ verListUi.status = chip.getAttribute("data-ver-status"); paintVersionList(); return; }
-  if(e.target.closest("[data-ver-risk-chip]")){ verListUi.riskOnly = !verListUi.riskOnly; paintVersionList(); return; }
+  /* 列表工具栏 / 分组折叠 / 内联编辑：这些控件都长在可点击的版本行里，必须先于行级下钻处理 */
+  var grp = e.target.closest("[data-ver-group]");
+  if(grp){
+    var gs = grp.getAttribute("data-ver-group");
+    verGroupUi.open[gs] = !verGroupOpen(gs);
+    paintVersionList();
+    return;
+  }
+  var grpMore = e.target.closest("[data-ver-group-more]");
+  if(grpMore){
+    var gs2 = grpMore.getAttribute("data-ver-group-more");
+    verGroupUi.open[gs2] = !verGroupOpen(gs2);
+    paintVersionList();
+    return;
+  }
+  if(e.target.closest("[data-rollup-more]")){ rollupUi.more = !rollupUi.more; paintRollup(); return; }
   if(e.target.closest("[data-ver-schedule-link]")){ viewMode = "schedule"; syncModeSeg(); loadSchedule(); return; }
   var inlineBtn = e.target.closest("[data-ver-inline]");
   if(inlineBtn){ startVersionInlineEdit(inlineBtn.getAttribute("data-ver-id"), inlineBtn.getAttribute("data-ver-inline")); return; }
@@ -4462,7 +4654,7 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(rst){
     var panel = rst.closest(".panel");
     if(panel){
-      panel.querySelectorAll("[data-tbl-version],[data-tbl-status],[data-tbl-owner],[data-tbl-type]").forEach(function(s){
+      panel.querySelectorAll("[data-tbl-version],[data-tbl-status],[data-tbl-owner],[data-tbl-type],[data-tbl-publish]").forEach(function(s){
         s.value = s.hasAttribute("data-tbl-version") ? "all" : "";
       });
       var kw = panel.querySelector("[data-tbl-kw]");
@@ -4559,7 +4751,7 @@ if(phaseBody) phaseBody.addEventListener("change", function(e){
     if(again) again.focus();
     return;
   }
-  if(e.target.closest("[data-tbl-version],[data-tbl-status],[data-tbl-owner],[data-tbl-type]")) applyPhaseTblFilters();
+  if(e.target.closest("[data-tbl-version],[data-tbl-status],[data-tbl-owner],[data-tbl-type],[data-tbl-publish]")) applyPhaseTblFilters();
 });
 if(phaseBody) phaseBody.addEventListener("keydown", function(e){
   /* 内联编辑：Enter 保存、Esc 取消；不把回车冒泡成行级跳转 */

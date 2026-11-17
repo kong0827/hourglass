@@ -91,6 +91,9 @@ public class TestCaseService {
     private final TestModuleService moduleService;
     /** 用例集成员引用：用例 / 项目删除时一并摘除，只依赖 mapper 避免与 CaseSetService 循环 */
     private final com.hourglass.mapper.CaseSetMapper setMapper;
+    /** 关联工作项列表与覆盖矩阵都要显示「已发布」徽标：与工作项列表同一派生口径 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TaskPublicationService publications;
 
     public TestCaseService(TestCaseMapper caseMapper, TestCaseRunMapper runMapper,
                            TaskCommandService taskCommandService, ProjectAccessService projectAccess,
@@ -528,8 +531,10 @@ public class TestCaseService {
             }
         }
         Integer itemNo = key != null && key.matches("^\\d{1,9}$") ? Integer.valueOf(key) : null;
-        return caseTaskMapper.selectOptions(workspaceId, rid, did,
+        List<com.hourglass.dto.CaseTaskLink> links = caseTaskMapper.selectOptions(workspaceId, rid, did,
                 key == null ? null : Texts.cut(key, 50), itemNo, 200);
+        applyLinkPublication(workspaceId, links);
+        return links;
     }
 
     /** 需求详情的工作项级覆盖：每项工作项被多少条用例验证、结果分布。 */
@@ -543,7 +548,59 @@ public class TestCaseService {
             throw AppException.notFound("需求不存在：" + did);
         }
         projectAccess.assertView(workspaceId, userId, d.getReqId());
-        return caseTaskMapper.selectCoverageByDemand(workspaceId, did);
+        List<com.hourglass.dto.TaskCoverageRow> rows = caseTaskMapper.selectCoverageByDemand(workspaceId, did);
+        applyTaskRowPublication(workspaceId, rows);
+        return rows;
+    }
+
+    private void applyLinkPublication(String workspaceId, List<com.hourglass.dto.CaseTaskLink> links) {
+        if (publications == null || links == null || links.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<String>();
+        for (com.hourglass.dto.CaseTaskLink link : links) {
+            if (link.getTaskId() != null && !ids.contains(link.getTaskId())) {
+                ids.add(link.getTaskId());
+            }
+        }
+        TaskPublicationService.PublicationFacts facts = publications.facts(workspaceId, ids);
+        for (com.hourglass.dto.CaseTaskLink link : links) {
+            TaskPublicationService.PublicationSummary summary = facts.summary(link.getTaskId());
+            link.setPublicationState(summary.getPublicationState());
+            link.setEverPublished(summary.isEverPublished());
+            link.setPublicationTargets(summary.getPublicationTargets());
+            link.setPublishedAt(summary.getPublishedAt());
+            com.hourglass.entity.TaskPublicationJudgement judgement = facts.judgement(link.getTaskId());
+            link.setManualPublished(judgement != null);
+            link.setManualPublishedAt(judgement == null ? null : judgement.getEffectiveOn());
+            link.setManualJudgeName(judgement == null ? null : judgement.getJudgedByName());
+            link.setManualJudgeReason(judgement == null ? null : judgement.getJudgeReason());
+        }
+    }
+
+    private void applyTaskRowPublication(String workspaceId, List<com.hourglass.dto.TaskCoverageRow> rows) {
+        if (publications == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<String>();
+        for (com.hourglass.dto.TaskCoverageRow row : rows) {
+            if (row.getTaskId() != null && !ids.contains(row.getTaskId())) {
+                ids.add(row.getTaskId());
+            }
+        }
+        TaskPublicationService.PublicationFacts facts = publications.facts(workspaceId, ids);
+        for (com.hourglass.dto.TaskCoverageRow row : rows) {
+            TaskPublicationService.PublicationSummary summary = facts.summary(row.getTaskId());
+            row.setPublicationState(summary.getPublicationState());
+            row.setEverPublished(summary.isEverPublished());
+            row.setPublicationTargets(summary.getPublicationTargets());
+            row.setPublishedAt(summary.getPublishedAt());
+            com.hourglass.entity.TaskPublicationJudgement judgement = facts.judgement(row.getTaskId());
+            row.setManualPublished(judgement != null);
+            row.setManualPublishedAt(judgement == null ? null : judgement.getEffectiveOn());
+            row.setManualJudgeName(judgement == null ? null : judgement.getJudgedByName());
+            row.setManualJudgeReason(judgement == null ? null : judgement.getJudgeReason());
+        }
     }
 
     /** 空字符串统一映射为 __none，供前端「未指定模块 / 未设置 / 未执行」计数使用 */

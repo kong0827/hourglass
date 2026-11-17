@@ -41,18 +41,21 @@ public class ReviewService {
     private final ProjectAccessService projectAccess;
     /** 模块ID → 名称解析（catDist 展示名） */
     private final WorkspaceMetaCache metaCache;
+    /** 发布事实投影：回顾页的工作项行要与管理页同源显示「已发布」徽标 */
+    private final TaskPublicationService publications;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskQueryService taskQueries;
 
     public ReviewService(TaskMapper taskMapper, RequirementService requirementService, TimeLogMapper timeLogMapper,
                          WorkspaceMemberMapper memberMapper, ProjectAccessService projectAccess,
-                         WorkspaceMetaCache metaCache) {
+                         WorkspaceMetaCache metaCache, TaskPublicationService publications) {
         this.taskMapper = taskMapper;
         this.requirementService = requirementService;
         this.timeLogMapper = timeLogMapper;
         this.memberMapper = memberMapper;
         this.projectAccess = projectAccess;
         this.metaCache = metaCache;
+        this.publications = publications;
     }
 
     /** 成员显示名（成员查询已 JOIN 出 display_name，缺省回退登录名/ID） */
@@ -103,6 +106,7 @@ public class ReviewService {
 
         /* 本周完成：一次查询取回列表，统计量由这份小结果集在内存里汇总 */
         List<Task> completed = taskMapper.selectCompletedBetween(workspaceId, viewerId, scopeReq, start, before);
+        publications.enrichTasks(workspaceId, completed);
         resp.setCompleted(completed);
 
         int done = completed.size();
@@ -223,11 +227,15 @@ public class ReviewService {
         }
 
         /* O-10：进度 100% 但未入已完成列 → 单独成组，不静默漏统计 */
-        resp.setPendingDone(taskMapper.selectPendingDone(workspaceId, viewerId, scopeReq));
+        List<Task> pendingDone = taskMapper.selectPendingDone(workspaceId, viewerId, scopeReq);
+        publications.enrichTasks(workspaceId, pendingDone);
+        resp.setPendingDone(pendingDone);
 
         /* 「进行中」= 已经开工、还没做完的任务 —— 按所在列判断（非「已完成」、非「待处理」）。
            历史周期由 SQL 收敛到「该周期内有日志活动」且「周期结束时已存在」。 */
-        resp.setProgressTasks(taskMapper.selectProgressTasks(workspaceId, viewerId, scopeReq, start, before, offset < 0));
+        List<Task> progressTasks = taskMapper.selectProgressTasks(workspaceId, viewerId, scopeReq, start, before, offset < 0);
+        publications.enrichTasks(workspaceId, progressTasks);
+        resp.setProgressTasks(progressTasks);
 
         /* 项目维度回顾只展示当前项目；全空间回顾展示全部可见项目 */
         if (scopedReq != null) {

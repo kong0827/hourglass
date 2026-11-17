@@ -13,7 +13,7 @@ import { UI, esc, toast } from "../core/ui.js";
 import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
 import * as activityUI from "../core/activity-ui.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
-import { DOC_TYPES, PRIORITIES, assocLinkHTML, avatarHTML, colName, docTypeName, fmtTs, pad2, priName, taskDescText, typeBadgeHTML } from "../lib/format.js";
+import { DOC_TYPES, PRIORITIES, assocLinkHTML, avatarHTML, colName, docTypeName, fmtTs, pad2, priName, taskDescText, taskPublicationHTML, typeBadgeHTML } from "../lib/format.js";
 import { memberToOption, optionSubText } from "../lib/people-picker.js";
 import { loadProjectMembers } from "../lib/member-labels.js";
 import * as textDiff from "../lib/text-diff.js";
@@ -3379,7 +3379,7 @@ function loadReqDocTasks(id){
     list.innerHTML = tasks.length ? tasks.map(function(t){
       var status = t.boardColumn === "done" ? "已完成" : colName(t.boardColumn);
       return '<button class="req-expand-doc" type="button" data-reqdoc-task="' + esc(t.id) + '">'
-        + '<span class="rd-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</span>'
+        + '<span class="rd-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + taskPublicationHTML(t) + '</span>'
         + '<span class="rd-meta">' + esc(status) + ' · ' + esc(t.owner || "未指派")
         + (t.dueDate ? ' · 截止 ' + esc(String(t.dueDate).substring(0, 10)) : '') + '</span></button>';
     }).join("") : '<div class="tl-empty">还没有关联工作项，可从当前文档直接新建。</div>';

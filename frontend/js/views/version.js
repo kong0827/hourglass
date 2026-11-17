@@ -18,7 +18,7 @@ import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-h
 import { openMilestoneDetail } from "../lib/milestone-ui.js";
 import {
   colName, dayKey, demandNoText, fmtMinutesShort, fmtReleaseTime, itemNoText,
-  releaseEnvironmentName, releasePlanNoText, releaseSnapshotHTML, taskVersionIds, typeBadgeHTML
+  releaseEnvironmentName, releasePlanNoText, releaseSnapshotHTML, taskPublicationHTML, taskVersionIds, typeBadgeHTML
 } from "../lib/format.js";
 import { openBranchById } from "./branches.js";
 
@@ -115,10 +115,17 @@ var SORTS = [["default","风险优先"],["actual","实际工时"],["estimate","�
 var SORT_KEYS = SORTS.map(function(s){ return s[0]; });
 var STATUS_FILTERS = [["","全部状态"],["done","已完成"],["moving","进行中"],["idle","未开始"],["open","未完成"],["over","已逾期"],["pre","上线前归入"]];
 var TYPE_FILTERS = [["","全部类型"],["story","需求"],["task","任务"],["bug","缺陷"],["epic","史诗"]];
+var PUB_FILTERS = [["","全部发布状态"],["published","已发布"],["unpublished","未发布"]];
 var NONE = "__none__";
 /* 联动筛选：从关联实体（模块 / 分支 / 需求 / 阶段 / 负责人）点进来时落在这些字段上，
    与手工筛选共用同一份状态和同一串 hash，分享出去的链接能还原同一份明细 */
-function blankFilters(){ return { q:"", status:"", owner:"", type:"", sort:"default", cat:"", branch:"", demand:"", stage:"" }; }
+function blankFilters(){ return { q:"", status:"", owner:"", type:"", pub:"", sort:"default", cat:"", branch:"", demand:"", stage:"" }; }
+/* 有发布事实即算已发布：正式记录的当前生效/部分/回滚/覆盖未知，或人工补录 */
+function isPublishedTask(t){
+  return !!(t.publishedAt || t.everPublished === true || t.manualPublished === true
+    || (t.publicationState && t.publicationState !== "unpublished")
+    || (Array.isArray(t.publicationTargets) && t.publicationTargets.length));
+}
 var LOG_NAME = {
   version_create:"创建版本", version_update:"编辑版本", version_start:"开始开发",
   version_close:"关闭版本", version_cancel:"取消版本", version_scope:"调整版本范围",
@@ -185,6 +192,7 @@ function filterQuery(){
   if(f.status) parts.push("st=" + encodeURIComponent(f.status));
   if(f.owner) parts.push("ow=" + encodeURIComponent(f.owner));
   if(f.type) parts.push("ty=" + encodeURIComponent(f.type));
+  if(f.pub) parts.push("pb=" + encodeURIComponent(f.pub));
   if(f.cat) parts.push("cat=" + encodeURIComponent(f.cat));
   if(f.branch) parts.push("br=" + encodeURIComponent(f.branch));
   if(f.demand) parts.push("dm=" + encodeURIComponent(f.demand));
@@ -219,6 +227,7 @@ function parseRoute(){
       status: p.get("st") || "",
       owner: p.get("ow") || "",
       type: p.get("ty") || "",
+      pub: p.get("pb") === "published" || p.get("pb") === "unpublished" ? p.get("pb") : "",
       cat: p.get("cat") || "",
       branch: p.get("br") || "",
       demand: p.get("dm") || "",
@@ -975,7 +984,7 @@ function hoursDeltaHTML(t){
   return '<span class="vd-h-delta ' + (d > 0 ? "up" : "down") + '">' + (d > 0 ? "+" : "−") + fmtMinutesShort(Math.abs(d)) + '</span>';
 }
 function hoursItemTitle(t){
-  return '<span class="vd-h-item"><b>' + esc(t.title) + '</b><small>' + esc(itemNoText(t.itemNo) || "WI")
+  return '<span class="vd-h-item"><b>' + esc(t.title) + '</b>' + taskPublicationHTML(t) + '<small>' + esc(itemNoText(t.itemNo) || "WI")
     + (t.categoryId ? " · " + esc(catName(t.categoryId)) : "") + '</small></span>';
 }
 function hoursItemRowHTML(t, mode){
@@ -1315,6 +1324,7 @@ function filteredTasks(){
     if(f.status === "pre" && !t._pre) return false;
     if(f.owner && (f.owner === NONE ? (t.owner || "").trim() !== "" : (t.owner || "").trim() !== f.owner)) return false;
     if(f.type && t.itemType !== f.type) return false;
+    if(f.pub && (f.pub === "published" ? !isPublishedTask(t) : isPublishedTask(t))) return false;
     if(f.cat && (f.cat === NONE ? !!t.categoryId : t.categoryId !== f.cat)) return false;
     if(f.branch && t.branchId !== f.branch) return false;
     if(f.demand && t.demandId !== f.demand) return false;
@@ -1353,6 +1363,7 @@ function scopeFiltersHTML(){
     + selectHTML("cat", catPairs, f.cat, "按模块筛选")
     + selectHTML("owner", ownerPairs, f.owner, "按负责人筛选")
     + selectHTML("type", TYPE_FILTERS, f.type, "按类型筛选")
+    + selectHTML("pub", PUB_FILTERS, f.pub, "按发布状态筛选")
     + selectHTML("sort", SORTS, f.sort, "排序方式")
     + '<span class="sp"></span>'
     + '<button class="btn sm ghost" type="button" data-vd-filter-reset>清空筛选</button>'
@@ -1368,6 +1379,7 @@ function scopeHTML(){
     return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
       + '<td class="vd-tt vd-tt-stack"><span class="vd-tt-line"><span class="vd-tname">' + esc(t.title) + '</span>'
       + (t._pre ? '<span class="tag ghost vd-pre" title="首版上线前未绑版本，统计上折算进本版本">上线前归入</span>' : "")
+      + taskPublicationHTML(t)
       + '</span>'
       + (t.demandId || t.branchId
         ? '<span class="vd-rels">' + entityChip("demand", t.demandId, demandLabel(t.demandId))

@@ -9,7 +9,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { dueState, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadCategories } from "../core/app.js";
-import { assocLinkHTML, avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, fmtMinutesShort, typeBadgeHTML, taskPublicationHTML } from "../lib/format.js";
 import { companyChipHTML } from "../lib/company.js";
 import { DEFAULT_ROLE_TITLES, loadMemberLabelOptions, effectiveMemberRole, memberRoleTitles, labelFilterOption, labelFilterText } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
@@ -642,7 +642,7 @@ function openMilestoneCreate(){
       ? tasks.map(function(t){
         var done = t.boardColumn === "done";
         return '<label class="ms-task-opt" data-ms-task-row data-task-state="' + (done ? "done" : "open") + '" data-task-title="' + esc(String(t.title || "").toLowerCase()) + '"><input type="checkbox" value="' + esc(t.id) + '" data-ms-task>'
-          + '<span>' + esc(t.title) + '</span>' + (done ? '<small>已完成</small>' : '') + '</label>';
+          + '<span>' + esc(t.title) + '</span>' + taskPublicationHTML(t) + (done ? '<small>已完成</small>' : '') + '</label>';
       }).join("")
       : '<p class="foot-note">该项目还没有可关联的工作项。</p>') + '</div>'
     + '<p class="foot-note" data-ms-task-empty hidden>没有匹配的工作项，试试清空搜索或切换筛选。</p>'
@@ -1097,7 +1097,7 @@ function emptyCols(n){
 }
 function drillTaskRow(t){
   return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
-    + drillName(2, caretPlaceholder() + '<div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div>')
+    + drillName(2, caretPlaceholder() + '<div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + taskPublicationHTML(t) + '</div>')
     + '<td>' + esc(taskStatusName(t)) + '</td>'
     + '<td class="num">' + taskPct(t) + '%</td>'
     + emptyCols(4)

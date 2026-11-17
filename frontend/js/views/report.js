@@ -389,10 +389,10 @@ function openReportTasks(title, params){
     openTaskTable(title, rows, reportScopeText(cache) + " · 共 " + page.total + " 项 · 点击工作项行打开详情", {
       total: page.total,
       hasMore: page.hasMore,
-      fetch: function(offset){
-        return API.get("/api/manager/reports/tasks", Object.assign({}, base, {offset: offset}));
+      fetch: function(offset, pub){
+        return API.get("/api/manager/reports/tasks", Object.assign({}, base, {offset: offset, pub: (pub === "published" || pub === "unpublished") ? pub : ""}));
       }
-    });
+    }, { pub: true });
   }).catch(function(ex){ toast(ex && ex.message ? ex.message : "明细加载失败", "bad"); });
 }
 function onReportDrill(el){

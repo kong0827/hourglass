@@ -13,7 +13,7 @@ import { canEditReq, canManageProject, catNameById, rt, state } from "../core/st
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
-import { PRIORITIES, assocLinkHTML, avatarHTML, fmtTs, priName, priTagHTML, severityBadgeHTML, colName, typeName, itemNoText } from "../lib/format.js";
+import { PRIORITIES, assocLinkHTML, avatarHTML, fmtTs, priName, priTagHTML, severityBadgeHTML, colName, typeName, itemNoText, taskPublicationHTML } from "../lib/format.js";
 import { loadProjectMembers } from "../lib/member-labels.js";
 import { memberToOption, optionSubText } from "../lib/people-picker.js";
 import { loadReqs } from "./board.js";
@@ -161,9 +161,16 @@ var defPriority = "all";
 var defStatus = "open";
 var defOwner = "all";
 var defVersion = "all";
+var defPub = "all";
 var defCat = "all";
 var defTag = "all";
 var defSearch = "";
+/* 有发布事实即算已发布：正式记录的当前生效/部分/回滚/覆盖未知，或人工补录 */
+function taskPublished(t){
+  return !!(t.publishedAt || t.everPublished === true || t.manualPublished === true
+    || (t.publicationState && t.publicationState !== "unpublished")
+    || (Array.isArray(t.publicationTargets) && t.publicationTargets.length));
+}
 var defSearchTimer = null;
 var defReqId = "";              /* "" = 全部项目；否则只看一个项目 */
 var DEFECT_ALL_KEY = "__all__";
@@ -747,6 +754,11 @@ function defectMatches(t, skip){
     if(defVersion === "__none"){ if(t.foundVersionId) return false; }
     else if(defVersion !== "all" && t.foundVersionId !== defVersion) return false;
   }
+  if(skip !== "pub"){
+    var isPub = taskPublished(t);
+    if(defPub === "published" && !isPub) return false;
+    if(defPub === "unpublished" && isPub) return false;
+  }
   if(skip !== "cat"){
     if(defCat === "__none"){ if(t.categoryId) return false; }
     else if(defCat !== "all" && t.categoryId !== defCat) return false;
@@ -815,6 +827,15 @@ function syncDefectFilters(){
       }).join("")
       + facetOpt("__none", "未填写", verCounts.__none || 0, defVersion);
     verSel.value = defVersion;
+  }
+  var pubCounts = { published: 0, unpublished: 0 };
+  defectFacet("pub").forEach(function(t){ pubCounts[taskPublished(t) ? "published" : "unpublished"]++; });
+  var pubSel = $("tcDefPub");
+  if(pubSel){
+    pubSel.innerHTML = facetOpt("all", "发布：全部", defectFacet("pub").length, defPub)
+      + facetOpt("published", "已发布", pubCounts.published, defPub)
+      + facetOpt("unpublished", "未发布", pubCounts.unpublished, defPub);
+    pubSel.value = defPub;
   }
   var priCounts = {};
   defectFacet("priority").forEach(function(t){
@@ -918,6 +939,7 @@ function syncDefectFilters(){
   UI.markFiltered($("tcDefStatus"), defStatus === "open");
   UI.markFiltered($("tcDefOwner"), defOwner === "all");
   UI.markFiltered($("tcDefVersion"), defVersion === "all");
+  UI.markFiltered($("tcDefPub"), defPub === "all");
   UI.markFiltered($("tcDefCat"), defCat === "all");
   UI.markFiltered($("tcDefTag"), defTag === "all");
 }
@@ -996,7 +1018,7 @@ function defectRowHTML(t, no){
     + '<div class="tc-def-main">'
     +   '<div class="tc-def-title">' + esc(t.title || "（无标题）") + '</div>'
     +   '<div class="tc-def-sub">' + projHTML + '<span class="tc-def-id">' + esc(t.id) + '</span>'
-    +     '<span>' + esc(cases.length ? "测试发现" : "手工创建") + '</span></div>'
+    +     '<span>' + esc(cases.length ? "测试发现" : "手工创建") + '</span>' + taskPublicationHTML(t) + '</div>'
     + '</div>'
     + '<div>' + defectStatusHTML(st) + '</div>'
     + '<div>' + ownerHTML + '</div>'
@@ -1053,7 +1075,7 @@ function renderDefects(){
   var list = filteredDefects();
   if(!list.length){
     var anyFilter = defStatus !== "open" || defSeverity !== "all" || defPriority !== "all"
-      || defOwner !== "all" || defVersion !== "all" || defCat !== "all" || defTag !== "all" || !!defSearch;
+      || defOwner !== "all" || defVersion !== "all" || defPub !== "all" || defCat !== "all" || defTag !== "all" || !!defSearch;
     rowsEl.innerHTML = UI.emptyState({
       icon: anyFilter ? "filterOff" : "check",
       title: defSearch ? "没有匹配的缺陷" : (anyFilter ? "没有符合条件的缺陷"
@@ -1196,6 +1218,7 @@ function resetDefectFilters(){
   defPriority = "all";
   defOwner = "all";
   defVersion = "all";
+  defPub = "all";
   defCat = "all";
   defTag = "all";
   defSearch = "";
@@ -1212,13 +1235,13 @@ var defViewsMenuEl = $("tcDefViewsMenu");
 function defectViewParams(){
   return {
     scope: "defect", reqId: defReqId || "", severity: defSeverity, priority: defPriority,
-    status: defStatus, owner: defOwner, version: defVersion,
+    status: defStatus, owner: defOwner, version: defVersion, pub: defPub,
     cat: defCat, tag: defTag, q: defSearch || ""
   };
 }
 function defectViewMeaningful(p){
   return !!(p.reqId || p.severity !== "all" || p.priority !== "all" || p.status !== "open"
-    || p.owner !== "all" || p.version !== "all" || p.cat !== "all" || p.tag !== "all" || p.q);
+    || p.owner !== "all" || p.version !== "all" || p.pub !== "all" || p.cat !== "all" || p.tag !== "all" || p.q);
 }
 function applyDefectView(v){
   var p;
@@ -1234,6 +1257,7 @@ function applyDefectView(v){
   defStatus = typeof p.status === "string" && p.status ? p.status : "open";
   defOwner = typeof p.owner === "string" && p.owner ? p.owner : "all";
   defVersion = typeof p.version === "string" && p.version ? p.version : "all";
+  defPub = p.pub === "published" || p.pub === "unpublished" ? p.pub : "all";
   defCat = typeof p.cat === "string" && p.cat ? p.cat : "all";
   defTag = typeof p.tag === "string" && p.tag ? p.tag : "all";
   defSearch = typeof p.q === "string" ? p.q.toLowerCase() : "";
@@ -1416,7 +1440,8 @@ function covTaskChildrenHTML(r){
     html += '<div class="cov-wi-block">'
       + '<div class="cov-wi-head">'
       +   '<span class="cov-wi-name"><span class="cov-wi-no">' + esc(itemNoText(t) || "WI") + '</span>'
-      +     '<span class="cov-wi-title">' + assocLinkHTML("task", t.taskId, t.taskTitle || "未命名工作项") + '</span></span>'
+      +     '<span class="cov-wi-title">' + assocLinkHTML("task", t.taskId, t.taskTitle || "未命名工作项") + '</span>'
+      +     taskPublicationHTML(t) + '</span>'
       +   '<span class="cov-wi-count">' + (covered
             ? (t.caseTotal || 0) + ' 条用例 · ' + (t.passed || 0) + ' 通过 · ' + (t.failed || 0) + ' 失败'
               + ((t.untested || 0) ? ' · ' + t.untested + ' 未执行' : "")
@@ -3579,7 +3604,7 @@ function renderCaseTaskPicker(){
       + '<input type="checkbox" data-case-task="' + esc(t.taskId) + '"'
       + (caseTaskSel[t.taskId] ? " checked" : "") + (ro ? " disabled" : "") + ' />'
       + '<span class="case-task-option-main">'
-      +   '<span class="case-task-option-title">' + esc(t.taskTitle || t.taskId) + '</span>'
+      +   '<span class="case-task-option-title">' + esc(t.taskTitle || t.taskId) + taskPublicationHTML(t) + '</span>'
       +   '<span class="case-task-option-meta">' + esc(meta.filter(Boolean).join(" · ")) + '</span>'
       + '</span></label>';
   }).join("");
@@ -8725,13 +8750,14 @@ $("tcDefSearch").addEventListener("input", function(){
     renderDefects();
   }, 300);
 });
-["tcDefSeverity", "tcDefPriority", "tcDefStatus", "tcDefOwner", "tcDefVersion", "tcDefCat", "tcDefTag"].forEach(function(id){
+["tcDefSeverity", "tcDefPriority", "tcDefStatus", "tcDefOwner", "tcDefVersion", "tcDefPub", "tcDefCat", "tcDefTag"].forEach(function(id){
   $(id).addEventListener("change", function(){
     defSeverity = $("tcDefSeverity").value;
     defPriority = $("tcDefPriority").value;
     defStatus = $("tcDefStatus").value;
     defOwner = $("tcDefOwner").value;
     defVersion = $("tcDefVersion").value;
+    defPub = $("tcDefPub").value;
     defCat = $("tcDefCat").value;
     defTag = $("tcDefTag").value;
     defectShown = DEFECT_PAGE;

@@ -17,4 +17,13 @@ public class TaskCoverageRow {
     private Integer failed;
     private Integer blocked;
     private Integer untested;
+    /* ---- 发布事实：仅用于列表徽标，与其它工作项列表同源 ---- */
+    private String publicationState = "unpublished";
+    private boolean everPublished;
+    private java.util.List<String> publicationTargets = new java.util.ArrayList<String>();
+    private java.time.LocalDate publishedAt;
+    private boolean manualPublished;
+    private java.time.LocalDate manualPublishedAt;
+    private String manualJudgeName;
+    private String manualJudgeReason;
 }

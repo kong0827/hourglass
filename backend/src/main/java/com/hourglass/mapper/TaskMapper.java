@@ -164,6 +164,9 @@ public interface TaskMapper {
     /** 版本内容冻结：成功的生产部署 / 重部署记录（加锁读） */
     List<String> selectVersionFormalSuccessIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
 
+    /** 版本内容冻结（只读判断，供候选列表等读路径使用） */
+    boolean hasVersionFormalRelease(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+
     /** 项目下已有正式交付（成功生产部署 / 重部署）的版本 ID */
     List<String> selectFormalSuccessVersionIdsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
     List<String> selectVersionPlanIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);

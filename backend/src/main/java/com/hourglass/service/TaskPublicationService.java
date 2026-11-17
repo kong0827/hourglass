@@ -34,20 +34,10 @@ public class TaskPublicationService {
     /** Read-only projection; callers must have already applied task/project visibility. */
     public void enrichTasks(String workspaceId, List<Task> tasks) {
         java.util.List<String> ids = new java.util.ArrayList<String>();
-        for (Task task : tasks) if (workspaceId.equals(task.getWorkspaceId()) && !ids.contains(task.getId())) ids.add(task.getId());
-        java.util.Map<String, PublicationSummary> summaries = new java.util.HashMap<String, PublicationSummary>();
-        java.util.Map<String, TaskPublicationJudgement> judgements = new java.util.HashMap<String, TaskPublicationJudgement>();
-        for (int start = 0; start < ids.size(); start += 500) {
-            List<String> batch = ids.subList(start, Math.min(start + 500, ids.size()));
-            List<VersionRelease> records = releaseMapper.selectPublicationRecords(workspaceId, batch);
-            for (String id : batch) summaries.put(id, project(id, records));
-            for (TaskPublicationJudgement judgement : judgementMapper.selectActiveByTasks(workspaceId, batch)) {
-                judgements.put(judgement.getTaskId(), judgement);
-            }
-        }
+        for (Task task : tasks) if (workspaceId.equals(task.getWorkspaceId()) && task.getId() != null && !ids.contains(task.getId())) ids.add(task.getId());
+        PublicationFacts facts = facts(workspaceId, ids);
         for (Task task : tasks) {
-            PublicationSummary summary = summaries.get(task.getId());
-            if (summary == null) summary = new PublicationSummary();
+            PublicationSummary summary = facts.summary(task.getId());
             task.setPublishedAt(summary.getPublishedAt());
             task.setPublishSource(summary.getLatestEffectiveRecord() == null ? null : "record");
             task.setPublishedReleaseId(summary.getLatestEffectiveRecord() == null ? null : summary.getLatestEffectiveRecord().getId());
@@ -55,11 +45,40 @@ public class TaskPublicationService {
             task.setEverPublished(summary.isEverPublished()); task.setPublicationState(summary.getPublicationState());
             task.setPublicationTargets(summary.getPublicationTargets());
             /* 人工标记与正式记录并列投影，输出层优先正式记录；它不改变 publicationState。 */
-            TaskPublicationJudgement judgement = judgements.get(task.getId());
+            TaskPublicationJudgement judgement = facts.judgement(task.getId());
             task.setManualPublished(judgement != null);
             task.setManualPublishedAt(judgement == null ? null : judgement.getEffectiveOn());
             task.setManualJudgeName(judgement == null ? null : judgement.getJudgedByName());
             task.setManualJudgeReason(judgement == null ? null : judgement.getJudgeReason());
+        }
+    }
+
+    /** 快照/聚合 DTO 不是 Task 实体，用同一份派生结果自行投影，避免各列表口径漂移。 */
+    public PublicationFacts facts(String workspaceId, List<String> taskIds) {
+        PublicationFacts facts = new PublicationFacts();
+        for (int start = 0; start < taskIds.size(); start += 500) {
+            List<String> batch = taskIds.subList(start, Math.min(start + 500, taskIds.size()));
+            List<VersionRelease> records = releaseMapper.selectPublicationRecords(workspaceId, batch);
+            for (String id : batch) facts.getSummaries().put(id, project(id, records));
+            for (TaskPublicationJudgement judgement : judgementMapper.selectActiveByTasks(workspaceId, batch)) {
+                facts.getJudgements().put(judgement.getTaskId(), judgement);
+            }
+        }
+        return facts;
+    }
+
+    @lombok.Data
+    public static class PublicationFacts {
+        private java.util.Map<String, PublicationSummary> summaries = new java.util.HashMap<String, PublicationSummary>();
+        private java.util.Map<String, TaskPublicationJudgement> judgements = new java.util.HashMap<String, TaskPublicationJudgement>();
+
+        public PublicationSummary summary(String taskId) {
+            PublicationSummary summary = summaries.get(taskId);
+            return summary == null ? new PublicationSummary() : summary;
+        }
+
+        public TaskPublicationJudgement judgement(String taskId) {
+            return judgements.get(taskId);
         }
     }
 

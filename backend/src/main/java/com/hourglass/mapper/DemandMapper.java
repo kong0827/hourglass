@@ -59,6 +59,14 @@ public interface DemandMapper {
     List<com.hourglass.entity.Task> selectDemandTasks(@Param("workspaceId") String workspaceId,
             @Param("demandId") String demandId, @Param("offset") int offset, @Param("limit") int limit);
 
+    /** 排期带入候选：需求名下尚未绑定该版本的工作项（已删除不计）。 */
+    List<com.hourglass.entity.Task> selectVersionCandidates(@Param("workspaceId") String workspaceId,
+            @Param("demandId") String demandId, @Param("versionId") String versionId,
+            @Param("offset") int offset, @Param("limit") int limit);
+
+    int countVersionCandidates(@Param("workspaceId") String workspaceId,
+            @Param("demandId") String demandId, @Param("versionId") String versionId);
+
     int insert(Demand demand);
 
 

@@ -41,16 +41,21 @@ public class EstimateService {
 
     private final TaskMapper taskMapper;
     private final ProjectAccessService projectAccess;
+    /** 预警清单也是工作项列表：发布事实与其它列表同源 */
+    private final TaskPublicationService publications;
 
-    public EstimateService(TaskMapper taskMapper, ProjectAccessService projectAccess) {
+    public EstimateService(TaskMapper taskMapper, ProjectAccessService projectAccess,
+                           TaskPublicationService publications) {
         this.taskMapper = taskMapper;
         this.projectAccess = projectAccess;
+        this.publications = publications;
     }
 
     public EstimateStats stats(String workspaceId, String userId) {
         /* 只取填了预估的任务（窄列）并一次 JOIN 出各自工时，不再加载全部历史任务 */
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         List<Task> tasks = taskMapper.selectEstimateTasks(workspaceId, viewerId);
+        publications.enrichTasks(workspaceId, tasks);
         Map<String, Integer> actual = new HashMap<String, Integer>();
         for (Task t : tasks) {
             actual.put(t.getId(), t.getTotalMinutes() == null ? 0 : t.getTotalMinutes());
@@ -244,6 +249,14 @@ public class EstimateService {
         rt.setEstimateMinutes(est);
         rt.setActualMinutes(act);
         rt.setRatio(round2(ratio));
+        rt.setPublicationState(t.getPublicationState());
+        rt.setEverPublished(Boolean.TRUE.equals(t.getEverPublished()));
+        rt.setPublicationTargets(t.getPublicationTargets());
+        rt.setPublishedAt(t.getPublishedAt());
+        rt.setManualPublished(Boolean.TRUE.equals(t.getManualPublished()));
+        rt.setManualPublishedAt(t.getManualPublishedAt());
+        rt.setManualJudgeName(t.getManualJudgeName());
+        rt.setManualJudgeReason(t.getManualJudgeReason());
         return rt;
     }
 

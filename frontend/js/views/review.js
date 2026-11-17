@@ -8,7 +8,7 @@ import { activeView, showView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
-import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, dayKey, fmtMD, fmtMinute, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
+import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, dayKey, fmtMD, fmtMinute, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, taskPublicationHTML, weekdayCN } from "../lib/format.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { loadReqs, pending } from "./board.js";
 import { openLogTable, openTaskTable } from "./manager-shared.js";
@@ -481,7 +481,7 @@ function renderReview(d){
           '<span class="di-main">' +
             '<span class="di-t">' + esc(t.title) + '</span>' +
             '<span class="di-m">' + priTagHTML(t.priority) + '' +
-              catTag(t.categoryId) + '<span>' + esc(t.owner) + '</span></span>' +
+              catTag(t.categoryId) + '<span>' + esc(t.owner) + '</span>' + taskPublicationHTML(t) + '</span>' +
           '</span>' +
           '<span class="di-d">' + esc(colName(t.boardColumn)) + ' · 进度 ' + progressOf(t) + '%</span>' +
         '</div>';
@@ -522,7 +522,7 @@ function renderReview(d){
       '<span class="di-main">' +
         '<span class="di-t">' + esc(t.title) + '</span>' +
         '<span class="di-m">' + priTagHTML(t.priority) + '' +
-          catTag(t.categoryId) + '<span>' + esc(t.owner) + '</span></span>' +
+          catTag(t.categoryId) + '<span>' + esc(t.owner) + '</span>' + taskPublicationHTML(t) + '</span>' +
       '</span>' +
       '<span class="di-d">' + (doneAt ? (esc(fmtShortMD(doneAt)) + " " + weekdayCN(doneAt)) : "完成时间未记录") + '</span>' +
       '<span class="tag tag-' + badgeKind + '">' + badge + '</span>' +
@@ -537,7 +537,7 @@ function renderReview(d){
         '<span class="di-t">' + esc(t.title) + '</span>' +
         '<span class="di-m">' + priTagHTML(t.priority) + '' +
           catTag(t.categoryId) + (t.reqId ? tagChip(reqNameById(t.reqId)) : '') +
-          '<span>进度 ' + progressOf(t) + '%</span></span>' +
+          '<span>进度 ' + progressOf(t) + '%</span>' + taskPublicationHTML(t) + '</span>' +
         (t.note ? '<span class="di-note">备注：' + esc(t.note) + '</span>' : '') +
       '</span>' +
       '<span class="di-d">' + esc(colName(t.boardColumn)) + '</span>' +

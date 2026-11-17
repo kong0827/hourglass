@@ -22,4 +22,14 @@ public class PhaseMemberTask {
     /** mvp / post */
     private String phase;
     private Integer minutes;
+
+    /* ---- 发布事实：按 taskId 现查，仅用于列表徽标 ---- */
+    private String publicationState = "unpublished";
+    private boolean everPublished;
+    private java.util.List<String> publicationTargets = new java.util.ArrayList<String>();
+    private LocalDate publishedAt;
+    private boolean manualPublished;
+    private LocalDate manualPublishedAt;
+    private String manualJudgeName;
+    private String manualJudgeReason;
 }

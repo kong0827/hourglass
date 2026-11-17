@@ -11,7 +11,7 @@ import { ownerOptions } from "../core/task-drawer.js";
 import { isMobile } from "../core/layout.js";
 import { listDensitySegHTML } from "../core/list-density.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { COLUMNS, assocLinkHTML, avatarHTML, colName, dayDiff, dayKey, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, typeBadgeHTML, typeName } from "../lib/format.js";
+import { COLUMNS, assocLinkHTML, avatarHTML, colName, dayDiff, dayKey, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, taskPublicationHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 
 var PAGE_SIZE = 100;
 var DONE_COL = "done";
@@ -65,7 +65,7 @@ function wcLayoutSegHTML(){
 function emptyScope(){
   return {
     q:"", owners:[], pris:[], cats:[], reqs:[], tags:[], types:[], versions:[],
-    due:"", noDue:false, focus:false, blocked:false,
+    due:"", noDue:false, focus:false, blocked:false, pubState:"",
     dueFrom:"", dueTo:"", startFrom:"", startTo:""
   };
 }
@@ -139,6 +139,8 @@ function parseScope(params){
   });
   var due = params.get("due") || "";
   s.due = due === "over" || due === "today" || due === "soon" ? due : "";
+  var pub = params.get("pubState") || "";
+  s.pubState = pub === "published" || pub === "unpublished" ? pub : "";
   s.noDue = params.get("noDue") === "1";
   s.focus = params.get("focus") === "1";
   s.blocked = params.get("blocked") === "1";
@@ -147,14 +149,14 @@ function parseScope(params){
   return s;
 }
 function scopeActive(s){
-  return !!(s.q || s.due || s.noDue || s.focus || s.blocked ||
+  return !!(s.q || s.due || s.noDue || s.focus || s.blocked || s.pubState ||
     s.dueFrom || s.dueTo || s.startFrom || s.startTo ||
     s.owners.length || s.pris.length || s.cats.length || s.reqs.length ||
     s.tags.length || s.types.length || s.versions.length);
 }
 function scopeSig(s){
   return JSON.stringify([s.q, s.owners, s.pris, s.cats, s.reqs, s.tags, s.types, s.versions,
-    s.due, s.noDue, s.focus, s.blocked, s.dueFrom, s.dueTo, s.startFrom, s.startTo]);
+    s.due, s.noDue, s.focus, s.blocked, s.pubState, s.dueFrom, s.dueTo, s.startFrom, s.startTo]);
 }
 function scopeQuery(s){
   var parts = [];
@@ -163,6 +165,7 @@ function scopeQuery(s){
     if(s[k] && s[k].length) parts.push(k + "=" + encodeURIComponent(s[k].join(",")));
   });
   if(s.due) parts.push("due=" + encodeURIComponent(s.due));
+  if(s.pubState) parts.push("pubState=" + encodeURIComponent(s.pubState));
   if(s.noDue) parts.push("noDue=1");
   if(s.blocked) parts.push("blocked=1");
   if(s.focus) parts.push("focus=1");
@@ -211,6 +214,7 @@ function queryParams(offset){
     if(s[k] && s[k].length) p[k] = s[k].join(",");
   });
   if(s.due) p.due = s.due;
+  if(s.pubState) p.pubState = s.pubState;
   if(s.noDue) p.noDue = 1;
   if(s.blocked) p.blocked = 1;
   if(s.focus) p.focus = 1;
@@ -643,6 +647,7 @@ function chipsInnerHTML(){
   if(s.pris.length) out.push(chipHTML("优先级 · " + shortJoin(s.pris.map(function(v){ return labelOf("pris", v); })), "pris"));
   if(s.owners.length) out.push(chipHTML("负责人 · " + shortJoin(s.owners.map(function(v){ return labelOf("owners", v); })), "owners"));
   if(s.due) out.push(chipHTML("到期 · " + dueLabel(s.due), "due"));
+  if(s.pubState) out.push(chipHTML("发布 · " + pubStateLabel(s.pubState), "pubState"));
   if(s.noDue) out.push(chipHTML("未设截止", "noDue"));
   if(s.focus) out.push(chipHTML("今日聚焦", "focus"));
   if(s.blocked) out.push(chipHTML("只看被阻塞", "blocked"));
@@ -704,8 +709,14 @@ function dueSelectHTML(){
     return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>';
   }).join("");
 }
-function sortSelectHTML(){
-  var list = SORTS[isDone(st.col) ? "done" : "open"];
+function pubStateLabel(v){ return v === "published" ? "已发布" : (v === "unpublished" ? "未发布" : ""); }
+function pubStateSelectHTML(){
+  var cur = st.scope.pubState || "";
+  return [["","全部发布状态"],["published","已发布"],["unpublished","未发布"]].map(function(o){
+    return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+  }).join("");
+}
+function sortSelectHTML(){  var list = SORTS[isDone(st.col) ? "done" : "open"];
   return list.map(function(k){
     return '<option value="' + k + '"' + (st.sort === k ? " selected" : "") + '>' + esc(SORT_LABELS[k]) + '</option>';
   }).join("");
@@ -756,6 +767,7 @@ function filtersHTML(){
       '</div>' +
       dimButtonHTML("reqs") + dimButtonHTML("owners") + dimButtonHTML("pris") +
       '<label class="wc-inline"><span>到期</span><select data-wc-filter="due">' + dueSelectHTML() + '</select></label>' +
+      '<label class="wc-inline"><span>发布</span><select data-wc-filter="pubState">' + pubStateSelectHTML() + '</select></label>' +
       '<button class="wc-more-btn' + (moreCount(s) ? " is-on" : "") + '" type="button" data-wc-more' +
         ' aria-expanded="' + (st.moreOpen ? "true" : "false") + '" aria-controls="wcMore">' + moreButtonHTML() + '</button>' +
       '<span class="wc-viewopts">' +
@@ -831,7 +843,7 @@ function cardHTML(t, done){
   var s = dueState(t);
   var project = t.reqName || reqNameById(t.reqId) || "未归类项目";
   var module = catName(t);
-  var tags = typeBadgeHTML(t.itemType);
+  var tags = typeBadgeHTML(t.itemType) + taskPublicationHTML(t);
   if(t.blocked) tags += '<span class="tag tag-warning" title="' + esc(t.blockedReason || "被阻塞") + '">被阻塞</span>';
   if(done && t.completedAt && t.dueDate && dayKey(t.completedAt) > dayKey(t.dueDate)) tags += '<span class="tag tag-warning">逾期完成</span>';
   if(!done && s.kind === "over") tags += '<span class="tag tag-danger">' + esc(dueText(t)) + '</span>';
@@ -920,9 +932,9 @@ function wcCell(t, key, done, mode){
   /* 无值就留白，不用「—」占位 */
   var none = "";
   if(key === "title"){
-    var sub = wcSubHTML(t, mode);
+    var sub = wcSubHTML(t, mode), pub = taskPublicationHTML(t);
     return '<span class="wcl-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
-      (sub ? '<span class="wcl-sub">' + sub + '</span>' : '');
+      (sub || pub ? '<span class="wcl-sub">' + sub + (pub ? (sub ? " " : "") + pub : "") + '</span>' : '');
   }
   if(key === "type") return typeBadgeHTML(t.itemType) || '<span class="mini-tag mute">' + esc(typeName(t.itemType)) + '</span>';
   if(key === "priority") return priTagHTML(t.priority || "P2");
@@ -1188,6 +1200,7 @@ function applyScopeChange(opts){
 function clearScopeKey(key){
   if(key === "q") st.scope.q = "";
   else if(key === "due"){ st.scope.due = ""; st.scope.noDue = false; }
+  else if(key === "pubState") st.scope.pubState = "";
   else if(key === "noDue") st.scope.noDue = false;
   else if(key === "focus") st.scope.focus = false;
   else if(key === "blocked") st.scope.blocked = false;
@@ -1349,6 +1362,11 @@ if(bodyEl){
     if(key === "due"){
       if(el.value === "none"){ st.scope.noDue = true; st.scope.due = ""; }
       else { st.scope.noDue = false; st.scope.due = DUE_OPTIONS.some(function(o){ return o[0] === el.value; }) ? el.value : ""; }
+      applyScopeChange();
+      return;
+    }
+    if(key === "pubState"){
+      st.scope.pubState = el.value === "published" || el.value === "unpublished" ? el.value : "";
       applyScopeChange();
       return;
     }

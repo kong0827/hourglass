@@ -1356,6 +1356,11 @@ body.proj-reordering{cursor:grabbing;}
 .comp-table td.comp-more-cell{padding:8px;border-bottom:none;}
 .comp-table td.nowrap{white-space:nowrap;color:var(--text-2);font-variant-numeric:tabular-nums;}
 .comp-t{display:block;font-weight:500;color:var(--text);}
+/* 标题与发布徽标同排；标题按剩余宽度截断，徽标不被挤压 */
+.comp-title{display:flex;align-items:center;gap:6px;}
+.comp-title .comp-link{width:auto;min-width:0;flex:1 1 auto;}
+.comp-title .comp-t{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.comp-title .tag{flex:none;}
 .comp-link{
   width:100%;max-width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;
   font:inherit;font-weight:500;color:var(--text);font-size:13px;
@@ -3040,6 +3045,7 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .bt-title{flex:1 1 auto;min-width:0;font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .bt-title.done{color:var(--text-3);text-decoration:line-through;}
 .bt-pri{font-size:10.5px;font-weight:700;color:var(--text-3);}
+.br-task>.tag{flex:0 0 auto;}
 .br-drawer-foot{display:flex;align-items:center;gap:8px;margin-top:22px;padding-top:14px;border-top:1px solid var(--border);}
 .danger-text{color:var(--danger-fg);}
 
@@ -3469,7 +3475,12 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .roll-name{display:inline-flex;align-items:center;gap:6px;font-weight:600;}
 .roll-dot{width:8px;height:8px;border-radius:2px;flex:0 0 auto;}
 .roll-total td{background:var(--surface-sunken);border-top:1px solid var(--border);}
-.roll-foot{margin:0;}
+.ver-rollup .tbl-wrap{overflow-x:auto;}
+.ver-rollup .roll-tbl{min-width:640px;}
+.ver-rollup-foot{display:flex;align-items:center;gap:12px;justify-content:space-between;font-size:11.5px;line-height:1.6;color:var(--text-3);}
+.ver-rollup-foot span{min-width:0;flex:1;}
+.ver-rollup-more{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;white-space:nowrap;font-size:11.5px;}
+.ver-rollup-more svg{width:12px;height:12px;}
 /* 版本卡限高：长说明与交付摘要默认截断，不再把整行卡片撑到一屏高；极端内容才在卡内滚动 */
 .ver-grid .phase-card{max-height:520px;overflow-y:auto;}
 .ver-desc-wrap{display:flex;flex-direction:column;gap:2px;min-width:0;}
@@ -3544,6 +3555,11 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .phase-tbl tbody tr[data-open-task]{cursor:pointer;}
 .phase-tbl tbody tr[data-open-task]:hover{background:var(--surface-hover);}
 .phase-tbl td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--text-2);}
+/* 工作项列：标题截断、发布徽标不压缩（徽标跟在标题后，窄屏也不挤掉标题首字） */
+.phase-tbl td.phase-task-cell{max-width:300px;}
+.phase-tbl .tbl-task{display:flex;align-items:center;gap:6px;min-width:0;}
+.phase-tbl .tbl-task>.tbl-task-t{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.phase-tbl .tbl-task>.tag{flex:0 0 auto;}
 /* 成员阶段工时：列少数值短，固定列宽并给数值列右侧留白，避免"合计"贴住"阶段重心" */
 .phase-tbl.member-tbl{table-layout:fixed;}
 .phase-tbl.member-tbl th,.phase-tbl.member-tbl td{padding:10px 14px;}
@@ -3599,8 +3615,8 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .phase-note ul{margin:0;padding-left:18px;list-style:disc;}
 .phase-note li{font-size:13px;line-height:24px;}
 .version-task-sheet{max-width:720px;}
-.version-task-tools{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
-.version-task-tools input{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:13px;}
+.version-task-tools{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:10px;}
+.version-task-tools input{flex:1 1 180px;min-width:0;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:13px;}
 .version-task-count{flex:0 0 auto;font-size:12px;color:var(--text-3);}
 .version-task-list{max-height:430px;overflow:auto;border:1px solid var(--border);border-radius:var(--r-sm);}
 /* 分组渲染：清单保留原有边框与滚动，组头吸顶 */
@@ -3617,6 +3633,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .version-task-row input{margin-top:3px;}
 .version-task-main{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px;}
 .version-task-main b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:550;color:var(--text);}
+.version-task-title{display:flex;align-items:center;gap:6px;min-width:0;}
+.version-task-title b{min-width:0;}
+.version-task-title .tag{flex:0 0 auto;}
 .version-task-main small{font-size:12px;line-height:1.5;color:var(--text-3);}
 .version-change-reason{margin-top:12px;}
 .release-sheet{max-width:960px;max-height:calc(100dvh - 80px);display:flex;flex-direction:column;}
@@ -5175,20 +5194,58 @@ button.col-name:hover{color:var(--primary-fg);text-decoration:underline;text-und
 button.col-name:focus-visible{outline:none;border-radius:var(--r-xs);box-shadow:var(--ring-focus);}
 .board-col.collapsed button.col-name{text-decoration:none;}
 
-/* ===== 版本列表：v2 原型落地的可筛选列表 + 行内编辑 + 行级下钻 ===== */
-.ver-list{padding:0;overflow:hidden;}
-.vl-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;}
-.vl-chips{display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0;}
-.vl-chip{
-  display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;
-  border:1px solid transparent;border-radius:999px;background:transparent;
-  color:var(--text-2);font:inherit;font-size:12px;font-weight:550;cursor:pointer;white-space:nowrap;
+/* ===== 版本页焦点卡：一屏只留一个主线 ===== */
+.ver-focus{
+  position:relative;margin-bottom:10px;padding:0;overflow:hidden;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);
 }
-.vl-chip:hover{background:var(--surface-hover);color:var(--text);}
-.vl-chip.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
-.vl-chip b{font-size:11px;font-weight:650;color:var(--text-3);font-variant-numeric:tabular-nums;}
-.vl-chip.on b{color:var(--primary-fg);}
-.vl-risk-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--danger);flex:0 0 auto;}
+.ver-focus::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--primary);}
+.vf-top{display:flex;align-items:center;gap:10px;padding:12px 16px 0 18px;}
+.vf-eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--primary-fg);letter-spacing:.02em;}
+.vf-dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);flex:0 0 auto;}
+.vf-dot.info{background:var(--info);}
+.vf-dot.success{background:var(--success);}
+.vf-top .tag{display:inline-flex;align-items:center;gap:5px;}
+.vf-top .tag::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.8;flex:0 0 auto;}
+.vf-goal{margin-left:auto;font-size:11.5px;color:var(--text-3);}
+.vf-body{display:flex;align-items:center;gap:26px;padding:6px 16px 14px 18px;}
+.vf-left{min-width:0;flex:1 1 auto;}
+.vf-left h2{margin:2px 0 0;font-size:19px;font-weight:700;line-height:1.25;letter-spacing:.005em;}
+.vf-desc{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:3px 0 9px;font-size:12px;color:var(--text-3);}
+.vf-sep{width:1px;height:11px;background:var(--border-strong);}
+.vf-bar{display:flex;align-items:center;gap:9px;max-width:560px;}
+.vf-bar .vl-bar{flex:1;}
+.vf-bar b{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;}
+.vf-bar small{font-size:11px;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums;}
+.vf-kpis{display:flex;gap:22px;flex:0 0 auto;padding:0 4px;}
+.vf-kpis>div{display:flex;flex-direction:column;gap:1px;min-width:52px;}
+.vf-kpis b{font-size:17px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums;}
+.vf-kpis span{font-size:11px;color:var(--text-3);}
+.vf-acts{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:0 0 132px;}
+.vf-acts .link{justify-content:center;margin-top:1px;font-size:11.5px;}
+
+/* ===== 版本列表：状态分组队列 + 行内编辑 + 行级下钻 ===== */
+.ver-list{padding:0;overflow:hidden;}
+.vl-group-head{
+  display:flex;align-items:center;gap:8px;width:100%;height:40px;padding:0 14px;
+  border:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface);
+  font:inherit;text-align:left;cursor:pointer;
+}
+.vl-group-head:hover{background:var(--surface-hover);}
+.vl-group-head b{font-size:12px;font-weight:700;}
+.vl-group-chev{display:inline-flex;align-items:center;color:var(--text-3);transition:transform .15s ease;}
+.vl-group-head[aria-expanded="true"] .vl-group-chev{transform:rotate(90deg);}
+.vl-group-count{font-size:11px;font-weight:700;color:var(--text-3);background:var(--surface-sunken);padding:1px 6px;border-radius:999px;font-variant-numeric:tabular-nums;}
+.vl-group-note{font-size:11px;color:var(--text-3);}
+.vl-group-more{
+  display:flex;align-items:center;justify-content:center;gap:5px;width:100%;height:36px;
+  border:0;border-bottom:1px solid var(--border);background:var(--surface);
+  color:var(--primary-fg);font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;
+}
+.vl-group-more:hover{background:var(--surface-hover);}
+.vl-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;}
+.vl-title{display:flex;align-items:center;gap:7px;margin:0;font-size:14px;font-weight:700;}
+.vl-count{font-size:11px;font-weight:700;color:var(--text-3);background:var(--surface-sunken);padding:1px 6px;border-radius:999px;font-variant-numeric:tabular-nums;}
 .vl-tools{display:flex;align-items:center;gap:10px;margin-left:auto;}
 .vl-check{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);white-space:nowrap;cursor:pointer;}
 .vl-check input{width:14px;height:14px;margin:0;accent-color:var(--primary);cursor:pointer;}
@@ -5202,8 +5259,8 @@ button.col-name:focus-visible{outline:none;border-radius:var(--r-xs);box-shadow:
 .vl-search input::placeholder{color:var(--text-3);}
 .vl-sort{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);white-space:nowrap;}
 .vl-head,.vl-row{
-  display:grid;grid-template-columns:minmax(200px,1.6fr) 94px 160px minmax(130px,1fr) 122px 108px 136px;
-  column-gap:12px;align-items:center;padding:10px 14px;
+  display:grid;grid-template-columns:minmax(220px,1.7fr) 160px minmax(150px,1.2fr) 128px 136px;
+  column-gap:16px;align-items:center;padding:10px 14px;
 }
 .vl-head{font-size:11px;font-weight:600;color:var(--text-3);background:var(--surface-sunken);border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
 .vl-row{border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s ease;}
@@ -5219,9 +5276,6 @@ button.col-name:focus-visible{outline:none;border-radius:var(--r-xs);box-shadow:
 .vl-name-link:hover{color:var(--primary-fg);}
 .vl-chev{display:inline-flex;align-items:center;color:var(--text-3);opacity:.5;flex:0 0 auto;}
 .vl-name-row:hover .vl-chev{color:var(--primary-fg);opacity:1;}
-/* 状态标签补一枚圆点，和原型的状态胶囊一致；只作用于版本列表，不影响其他页的 tag */
-.vl-status>.tag{display:inline-flex;align-items:center;gap:5px;}
-.vl-status>.tag::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.8;flex:0 0 auto;}
 .vl-pencil{
   flex:0 0 auto;width:22px;height:22px;display:inline-grid;place-items:center;border:0;border-radius:var(--r-xs);
   background:transparent;color:var(--text-3);cursor:pointer;opacity:0;transition:opacity .12s ease,background .12s ease;
@@ -5232,8 +5286,7 @@ button.col-name:focus-visible{outline:none;border-radius:var(--r-xs);box-shadow:
 .vl-sep{color:var(--border-strong);}
 .vl-risk-inline{display:inline-flex;align-items:center;gap:4px;color:var(--danger-fg);font-weight:600;}
 .vl-risk-inline::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--danger);flex:0 0 auto;}
-.vl-status{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;}
-.vl-fact{font-size:10px;font-weight:600;color:var(--success-fg);white-space:nowrap;}
+.vl-lock{color:var(--success-fg);font-weight:600;}
 .vl-time{border:0;background:transparent;padding:2px 4px;margin:-2px -4px;border-radius:var(--r-xs);font:inherit;text-align:left;color:var(--text-2);}
 button.vl-time{cursor:pointer;}
 button.vl-time:hover{background:var(--surface-sunken);color:var(--primary-fg);}
@@ -5252,7 +5305,6 @@ button.vl-time:hover{background:var(--surface-sunken);color:var(--primary-fg);}
 .vl-ptext b{font-size:12px;font-weight:650;}
 .vl-ptext small{font-size:10.5px;color:var(--text-3);}
 .vl-progress:hover .vl-ptext b{color:var(--primary-fg);}
-.vl-scope{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .vl-scope-link{
   border:0;background:transparent;padding:0;font:inherit;font-size:11.5px;color:var(--text-2);
   text-align:left;cursor:pointer;white-space:nowrap;
@@ -5269,16 +5321,16 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
 .vl-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 14px;font-size:11.5px;color:var(--text-3);}
 .vl-foot-note{margin-left:auto;}
 .vl-foot-link{font-size:11.5px;white-space:nowrap;}
+/* 未排版本只是提示，不是待办：中性底 + 警示图标，避免抢走焦点卡的主色 */
 .vl-unbound-banner{
-  display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 13px;
-  border:1px solid var(--primary-border);border-radius:var(--r-md);background:var(--primary-soft);
+  display:flex;align-items:center;gap:9px;margin-bottom:10px;padding:9px 13px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);
   font-size:12px;color:var(--text-2);
 }
-.vl-ub-icon{display:inline-flex;align-items:center;justify-content:center;color:var(--primary-fg);flex:0 0 auto;}
-.vl-ub-text{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1;}
-.vl-ub-text b{font-size:12.5px;font-weight:650;color:var(--text);}
-.vl-ub-text span{font-size:11.5px;color:var(--text-3);}
-.vl-unbound-banner .link-cell{flex:0 0 auto;white-space:nowrap;}
+.vl-ub-icon{display:inline-flex;align-items:center;justify-content:center;color:var(--warning-fg);flex:0 0 auto;}
+.vl-ub-text{min-width:0;flex:1;}
+.vl-ub-text b{font-weight:650;color:var(--text);}
+.vl-ub-go{flex:0 0 auto;white-space:nowrap;}
 .vl-edit{display:flex;flex-direction:column;gap:4px;min-width:0;}
 .vl-edit-row{display:flex;align-items:center;gap:4px;min-width:0;}
 .vl-input{
@@ -5296,34 +5348,39 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
 .ver-row-menu .menu-title{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 @media (max-width:1180px){
-  .vl-head,.vl-row{grid-template-columns:minmax(180px,1.5fr) 88px 150px minmax(120px,1fr) 112px 96px 122px;column-gap:10px;}
+  .vl-head,.vl-row{grid-template-columns:minmax(190px,1.6fr) 150px minmax(140px,1.1fr) 118px 126px;column-gap:10px;}
 }
 @media (max-width:980px){
   .vl-head{display:none;}
   .vl-row{
-    grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name status" "time time" "prog scope" "rel acts";
+    grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name name" "time rel" "prog acts";
     row-gap:7px;padding:12px 14px;
   }
   .vl-name{grid-area:name;}
-  .vl-status{grid-area:status;justify-self:end;align-items:flex-end;}
   .vl-time{grid-area:time;}
   .vl-progress{grid-area:prog;}
-  .vl-scope{grid-area:scope;flex-direction:row;justify-self:end;gap:10px;}
-  .vl-rel{grid-area:rel;}
+  .vl-rel{grid-area:rel;justify-self:end;}
   .vl-acts{grid-area:acts;justify-self:end;}
   .vl-toolbar{align-items:stretch;flex-direction:column;}
-  .vl-chips{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px;}
+  .vl-title{width:100%;}
   .vl-tools{width:100%;margin-left:0;}
   .vl-search{flex:1;}
   .vl-search input{width:100%;}
   .vl-foot-note{display:none;}
   .vl-kebab,.vl-pencil{opacity:1;}
+  .vf-body{flex-wrap:wrap;gap:18px;}
+  .vf-kpis{order:3;width:100%;padding:0;}
 }
 @media (max-width:700px){
-  .vl-row{grid-template-areas:"name status" "time time" "prog prog" "scope acts";}
-  .vl-rel{display:none;}
-  .vl-scope{justify-self:start;flex-direction:row;gap:12px;}
-  .vl-acts{justify-self:end;}
+  .vl-row{grid-template-areas:"name name" "time time" "prog prog" "rel acts";}
+  .vl-rel{justify-self:start;}
   .vl-date-edit .vl-input{width:104px;}
   .vl-tools .vl-sort{display:none;}
+  .vf-top{flex-wrap:wrap;}
+  .vf-goal{width:100%;margin-left:0;order:3;}
+  .vf-acts{flex:1;flex-direction:row;}
+  .vf-acts .btn{flex:1;justify-content:center;}
+  .vf-acts .link{display:none;}
+  .vf-kpis{display:none;}
+  .ver-rollup-foot{flex-direction:column;align-items:flex-start;}
 }

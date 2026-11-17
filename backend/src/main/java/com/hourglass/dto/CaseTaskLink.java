@@ -16,4 +16,13 @@ public class CaseTaskLink {
     private String demandId;
     /** 项目内工作项编号（WI-001 的数字部分），空=未取号 */
     private Integer itemNo;
+    /* ---- 发布事实：仅用于列表徽标，与其它工作项列表同源 ---- */
+    private String publicationState = "unpublished";
+    private boolean everPublished;
+    private java.util.List<String> publicationTargets = new java.util.ArrayList<String>();
+    private java.time.LocalDate publishedAt;
+    private boolean manualPublished;
+    private java.time.LocalDate manualPublishedAt;
+    private String manualJudgeName;
+    private String manualJudgeReason;
 }

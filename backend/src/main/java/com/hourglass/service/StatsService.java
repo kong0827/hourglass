@@ -12,6 +12,7 @@ import com.hourglass.dto.TaskDrillQuery;
 import com.hourglass.dto.TaskDrillRow;
 import com.hourglass.dto.WeekCountRow;
 import com.hourglass.dto.WorkSumRow;
+import com.hourglass.entity.TaskPublicationJudgement;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TimeLogMapper;
 import org.springframework.stereotype.Service;
@@ -39,13 +40,17 @@ public class StatsService {
     /** IA-1：列计数与工时统一走 MetricsService，避免报表/回头看板各算一套 */
     private final MetricsService metrics;
     private final ProjectAccessService projectAccess;
+    /** 下钻明细与其它工作项列表共用发布事实，避免徽标口径漂移 */
+    private final TaskPublicationService publications;
 
     public StatsService(TaskMapper taskMapper, TimeLogMapper timeLogMapper,
-                        MetricsService metrics, ProjectAccessService projectAccess) {
+                        MetricsService metrics, ProjectAccessService projectAccess,
+                        TaskPublicationService publications) {
         this.taskMapper = taskMapper;
         this.timeLogMapper = timeLogMapper;
         this.metrics = metrics;
         this.projectAccess = projectAccess;
+        this.publications = publications;
     }
 
     /** 近 N 周：每周新增/完成；窗口内完成按模块与负责人分布；当前积压与逾期（按空间隔离，工时按"我"统计） */
@@ -114,6 +119,12 @@ public class StatsService {
     public PageResult<TaskDrillRow> drillTasks(String workspaceId, String userId, String kind,
                                                String from, String before, String value,
                                                Integer offset, Integer limit) {
+        return drillTasks(workspaceId, userId, kind, from, before, value, null, offset, limit);
+    }
+
+    public PageResult<TaskDrillRow> drillTasks(String workspaceId, String userId, String kind,
+                                               String from, String before, String value,
+                                               String pubState, Integer offset, Integer limit) {
         String k = kind == null ? "" : kind.trim();
         if (!DRILL_KINDS.contains(k)) {
             throw AppException.badRequest("不支持的下钻口径");
@@ -121,6 +132,7 @@ public class StatsService {
         TaskDrillQuery query = new TaskDrillQuery();
         query.setKind(k);
         query.setValue(value);
+        query.setPubState("published".equals(pubState) || "unpublished".equals(pubState) ? pubState : null);
         if ("created".equals(k) || "completed".equals(k) || "category".equals(k) || "owner".equals(k)) {
             query.setFrom(parseDate(from, "from"));
             query.setBefore(parseDate(before, "before"));
@@ -145,7 +157,32 @@ public class StatsService {
         List<TaskDrillRow> items = total <= safeOffset
                 ? new ArrayList<TaskDrillRow>()
                 : taskMapper.selectDrillTasks(workspaceId, viewerId, query, safeOffset, safeLimit);
+        applyPublication(workspaceId, items);
         return PageResult.of(items, total, safeOffset, safeLimit);
+    }
+
+    /** DTO 行不是 Task 实体，按同一份发布事实自行投影；分页每页最多 100 条，批量查询成本可控。 */
+    private void applyPublication(String workspaceId, List<TaskDrillRow> rows) {
+        if (rows.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<String>();
+        for (TaskDrillRow row : rows) {
+            if (row.getId() != null && !ids.contains(row.getId())) {
+                ids.add(row.getId());
+            }
+        }
+        TaskPublicationService.PublicationFacts facts = publications.facts(workspaceId, ids);
+        for (TaskDrillRow row : rows) {
+            TaskPublicationService.PublicationSummary summary = facts.summary(row.getId());
+            row.setPublishedAt(summary.getPublishedAt());
+            row.setEverPublished(summary.isEverPublished());
+            row.setPublicationState(summary.getPublicationState());
+            row.setPublicationTargets(summary.getPublicationTargets());
+            TaskPublicationJudgement judgement = facts.judgement(row.getId());
+            row.setManualPublished(judgement != null);
+            row.setManualPublishedAt(judgement == null ? null : judgement.getEffectiveOn());
+        }
     }
 
     /**

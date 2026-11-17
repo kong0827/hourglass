@@ -36,16 +36,20 @@ public class TaskCompletionService {
     /** 模块ID → 名称解析（快照存完成当时的模块名） */
     private final WorkspaceMetaCache metaCache;
     private final ProjectAccessService projectAccess;
+    /** 发布事实：快照行不是 Task，按 task_id 现查同一套派生口径 */
+    private final TaskPublicationService publications;
 
     public TaskCompletionService(TaskCompletionRecordMapper recordMapper, TimeLogMapper timeLogMapper,
                                  RequirementMapper reqMapper, RequirementDocMapper requirementDocMapper,
-                                 WorkspaceMetaCache metaCache, ProjectAccessService projectAccess) {
+                                 WorkspaceMetaCache metaCache, ProjectAccessService projectAccess,
+                                 TaskPublicationService publications) {
         this.recordMapper = recordMapper;
         this.timeLogMapper = timeLogMapper;
         this.reqMapper = reqMapper;
         this.requirementDocMapper = requirementDocMapper;
         this.metaCache = metaCache;
         this.projectAccess = projectAccess;
+        this.publications = publications;
     }
 
     /**
@@ -140,20 +144,28 @@ public class TaskCompletionService {
     /** 按月分页（month 为 null 时取当月）；不可见项目的快照在 SQL 层直接排除，汇总与明细同口径 */
     public com.hourglass.dto.CompletionPageResponse page(String workspaceId, String userId,
                                                         YearMonth month, int offset, int limit) {
+        return page(workspaceId, userId, month, null, offset, limit);
+    }
+
+    /** pubState=published/unpublished 时，明细、汇总与「完成最多的人」同口径收窄 */
+    public com.hourglass.dto.CompletionPageResponse page(String workspaceId, String userId,
+                                                        YearMonth month, String pubState, int offset, int limit) {
         YearMonth ym = month == null ? YearMonth.now() : month;
         LocalDate from = ym.atDay(1);
         LocalDate to = from.plusMonths(1);
         int safeOffset = Math.max(0, offset);
         int safeLimit = limit <= 0 ? 100 : Math.min(limit, 100);
+        String pub = "published".equals(pubState) || "unpublished".equals(pubState) ? pubState : null;
         /* owner/admin/viewer 返回 null（全量可见），只有普通成员按项目级「不可见」过滤 */
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
 
         com.hourglass.dto.CompletionSummary summary =
-                recordMapper.summaryByRange(workspaceId, from, to, viewerId);
+                recordMapper.summaryByRange(workspaceId, from, to, viewerId, pub);
         List<TaskCompletionRecord> items = summary.getTotal() <= safeOffset ? new ArrayList<TaskCompletionRecord>()
-                : recordMapper.selectPageByRange(workspaceId, from, to, viewerId, safeOffset, safeLimit);
+                : recordMapper.selectPageByRange(workspaceId, from, to, viewerId, pub, safeOffset, safeLimit);
         com.hourglass.dto.CompletionOwnerCount top =
-                summary.getTotal() == 0 ? null : recordMapper.topOwnerByRange(workspaceId, from, to, viewerId);
+                summary.getTotal() == 0 ? null : recordMapper.topOwnerByRange(workspaceId, from, to, viewerId, pub);
+        applyPublication(workspaceId, items);
 
         com.hourglass.dto.CompletionPageResponse resp = new com.hourglass.dto.CompletionPageResponse();
         resp.setTotal(summary.getTotal());
@@ -168,6 +180,31 @@ public class TaskCompletionService {
             resp.setTopOwnerCount(top.getOwnerCount());
         }
         return resp;
+    }
+
+    private void applyPublication(String workspaceId, List<TaskCompletionRecord> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<String>();
+        for (TaskCompletionRecord item : items) {
+            if (item.getTaskId() != null && !ids.contains(item.getTaskId())) {
+                ids.add(item.getTaskId());
+            }
+        }
+        TaskPublicationService.PublicationFacts facts = publications.facts(workspaceId, ids);
+        for (TaskCompletionRecord item : items) {
+            TaskPublicationService.PublicationSummary summary = facts.summary(item.getTaskId());
+            item.setPublicationState(summary.getPublicationState());
+            item.setEverPublished(summary.isEverPublished());
+            item.setPublicationTargets(summary.getPublicationTargets());
+            item.setPublishedAt(summary.getPublishedAt());
+            com.hourglass.entity.TaskPublicationJudgement judgement = facts.judgement(item.getTaskId());
+            item.setManualPublished(judgement != null);
+            item.setManualPublishedAt(judgement == null ? null : judgement.getEffectiveOn());
+            item.setManualJudgeName(judgement == null ? null : judgement.getJudgedByName());
+            item.setManualJudgeReason(judgement == null ? null : judgement.getJudgeReason());
+        }
     }
 
     /** 清空空间 / 覆盖导入前清空完成归档，避免旧快照挂在新任务上 */

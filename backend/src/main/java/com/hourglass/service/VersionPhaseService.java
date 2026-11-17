@@ -873,6 +873,7 @@ public class VersionPhaseService {
         List<PhaseMemberTask> items = summary.getTotal() <= safeOffset
                 ? new ArrayList<PhaseMemberTask>()
                 : timeLogMapper.selectMemberTaskPhasePageByReq(workspaceId, reqId, target, safeOffset, safeLimit);
+        applyMemberTaskPublication(workspaceId, items);
 
         PhaseMemberTaskPage page = new PhaseMemberTaskPage();
         page.setTotal(summary.getTotal());
@@ -885,8 +886,32 @@ public class VersionPhaseService {
         return page;
     }
 
-    /** 百分比（四舍五入取整）；分母为 0 时返回 null 表示"无数据" */
-    private Integer pct(int numerator, int denominator) {
+    private void applyMemberTaskPublication(String workspaceId, List<PhaseMemberTask> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<String>();
+        for (PhaseMemberTask item : items) {
+            if (item.getTaskId() != null && !ids.contains(item.getTaskId())) {
+                ids.add(item.getTaskId());
+            }
+        }
+        TaskPublicationService.PublicationFacts facts = publications.facts(workspaceId, ids);
+        for (PhaseMemberTask item : items) {
+            TaskPublicationService.PublicationSummary summary = facts.summary(item.getTaskId());
+            item.setPublicationState(summary.getPublicationState());
+            item.setEverPublished(summary.isEverPublished());
+            item.setPublicationTargets(summary.getPublicationTargets());
+            item.setPublishedAt(summary.getPublishedAt());
+            com.hourglass.entity.TaskPublicationJudgement judgement = facts.judgement(item.getTaskId());
+            item.setManualPublished(judgement != null);
+            item.setManualPublishedAt(judgement == null ? null : judgement.getEffectiveOn());
+            item.setManualJudgeName(judgement == null ? null : judgement.getJudgedByName());
+            item.setManualJudgeReason(judgement == null ? null : judgement.getJudgeReason());
+        }
+    }
+
+    /** 百分比（四舍五入取整）；分母为 0 时返回 null 表示"无数据" */    private Integer pct(int numerator, int denominator) {
         if (denominator <= 0) {
             return null;
         }

@@ -81,6 +81,22 @@
     </if>
   </sql>
 
+  <!-- 口径与 TaskMapper.taskPublishedExists 一致：成功正式生产记录（含已回滚）或人工补录 -->
+  <sql id="publishedExists">
+    (EXISTS (SELECT 1 FROM version_release_item ri
+             JOIN version_release vr ON vr.id = ri.release_id AND vr.workspace_id = ri.workspace_id
+             WHERE ri.workspace_id = r.workspace_id AND ri.task_id = r.task_id
+               AND vr.environment = 'production' AND vr.result = 'success'
+               AND ri.disposition IN ('published', 'rolled_back'))
+     OR EXISTS (SELECT 1 FROM task_publication_judgement tj
+                WHERE tj.workspace_id = r.workspace_id AND tj.task_id = r.task_id AND tj.revoked_at IS NULL))
+  </sql>
+
+  <sql id="publishedFilter">
+    <if test="pubState == 'published'"> AND <include refid="publishedExists"/> </if>
+    <if test="pubState == 'unpublished'"> AND NOT <include refid="publishedExists"/> </if>
+  </sql>
+
   <select id="summaryByRange" resultType="com.hourglass.dto.CompletionSummary">
     SELECT COUNT(*) AS total,
            COALESCE(SUM(r.total_minutes), 0) AS total_minutes,
@@ -90,6 +106,7 @@
       AND r.completed_at &gt;= #{from}
       AND r.completed_at &lt; #{to}
     <include refid="visibleToViewer"/>
+    <include refid="publishedFilter"/>
   </select>
 
   <select id="topOwnerByRange" resultType="com.hourglass.dto.CompletionOwnerCount">
@@ -99,6 +116,7 @@
       AND r.completed_at &gt;= #{from}
       AND r.completed_at &lt; #{to}
     <include refid="visibleToViewer"/>
+    <include refid="publishedFilter"/>
     GROUP BY COALESCE(r.owner, '未指派')
     ORDER BY owner_count DESC, MAX(r.completed_at) DESC, owner ASC
     LIMIT 1
@@ -115,6 +133,7 @@
       AND r.completed_at &gt;= #{from}
       AND r.completed_at &lt; #{to}
     <include refid="visibleToViewer"/>
+    <include refid="publishedFilter"/>
     ORDER BY r.completed_at DESC, r.id DESC
     LIMIT #{limit} OFFSET #{offset}
   </select>

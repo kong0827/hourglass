@@ -498,6 +498,7 @@ public class VersionReleaseService {
         }
         List<Task> tasks = mapper.selectScopeForVersions(workspaceId, ids);
         versionTaskMapper.enrichTasks(workspaceId, tasks);
+        taskPublication.enrichTasks(workspaceId, tasks);
         for (Task task : tasks) task.setReqName(projectNames.get(task.getReqId()));
         return tasks;
     }

@@ -1790,6 +1790,7 @@
               <option value="minor">轻微</option>
             </select>
             <select id="tcDefVersion" class="mini-select" aria-label="按发现版本筛选缺陷"></select>
+            <select id="tcDefPub" class="mini-select" aria-label="按发布状态筛选缺陷"></select>
             <select id="tcDefCat" class="mini-select" aria-label="按模块筛选缺陷"></select>
             <select id="tcDefTag" class="mini-select" aria-label="按标签筛选缺陷"></select>
             <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索本项目缺陷…" title="在所选项目内搜索缺陷 / 编号 / 用例 / 模块 / 标签" aria-label="在所选项目内搜索缺陷" />
@@ -2606,6 +2607,11 @@
           <div class="page-toolbar">
             <span class="toolbar-title">工作项清单</span>
             <span class="toolbar-right">
+              <select id="compPub" class="mini-select" aria-label="发布状态">
+                <option value="">全部发布状态</option>
+                <option value="published">已发布</option>
+                <option value="unpublished">未发布</option>
+              </select>
               <span class="row row-gap" style="gap:4px">
                 <button class="icon-btn sm" type="button" id="compPrev" aria-label="上一月">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3 4.6 7l4 4"/></svg>

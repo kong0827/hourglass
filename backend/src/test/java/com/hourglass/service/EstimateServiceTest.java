@@ -32,7 +32,7 @@ class EstimateServiceTest {
     }
 
     private static EstimateStats compute(int estimate, int actual) {
-        EstimateService svc = new EstimateService(null, null);
+        EstimateService svc = new EstimateService(null, null, null);
         List<Task> tasks = new ArrayList<Task>();
         tasks.add(done("K1", estimate, "后端"));
         Map<String, Integer> actualMap = new HashMap<String, Integer>();
@@ -64,7 +64,7 @@ class EstimateServiceTest {
     /** 估时全景：预警只对进行中、backlog 不算、无预估跳过、系数 = Σ实际/Σ预估、模块只累计已完成样本 */
     @Test
     void fullScenarioRisksCategoryAndOverrun() {
-        EstimateService svc = new EstimateService(null, null);
+        EstimateService svc = new EstimateService(null, null, null);
         List<Task> tasks = new ArrayList<Task>();
         Map<String, Integer> actual = new HashMap<String, Integer>();
 
@@ -132,7 +132,7 @@ class EstimateServiceTest {
 
     @Test
     void boundaries() {
-        EstimateService svc = new EstimateService(null, null);
+        EstimateService svc = new EstimateService(null, null, null);
 
         EstimateStats empty = svc.compute(new ArrayList<Task>(), new HashMap<String, Integer>());
         assertEquals(0, empty.getSampleCount(), "空空间不炸");

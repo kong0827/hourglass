@@ -164,6 +164,12 @@
       AND result = 'success' AND environment = 'production' AND operation IN ('deploy', 'redeploy')
     ORDER BY id FOR UPDATE
   </select>
+  <!-- 只读判断，不加锁；写路径仍用上面的加锁读 -->
+  <select id="hasVersionFormalRelease" resultType="boolean">
+    SELECT EXISTS(SELECT 1 FROM version_release
+      WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+        AND result = 'success' AND environment = 'production' AND operation IN ('deploy', 'redeploy'))
+  </select>
   <select id="selectFormalSuccessVersionIdsByReq" resultType="string">
     SELECT DISTINCT r.version_id FROM version_release r
     JOIN project_version v ON v.workspace_id = r.workspace_id AND v.id = r.version_id
@@ -872,6 +878,12 @@
     <if test="query.completion == 'done'">
       AND t.board_column = 'done'
     </if>
+    <if test="query.pubState == 'published'">
+      AND <include refid="taskPublishedExists"/>
+    </if>
+    <if test="query.pubState == 'unpublished'">
+      AND NOT <include refid="taskPublishedExists"/>
+    </if>
     <if test="query.q != null">
       AND (
         LOCATE(LOWER(#{query.q}), LOWER(t.title)) > 0
@@ -1409,6 +1421,12 @@
     </if>
     <if test="q.kind == 'column'">AND t.board_column = #{q.value}</if>
     <if test="q.kind == 'priority'">AND t.priority = #{q.value}</if>
+    <if test="q.pubState == 'published'">
+      AND <include refid="taskPublishedExists"/>
+    </if>
+    <if test="q.pubState == 'unpublished'">
+      AND NOT <include refid="taskPublishedExists"/>
+    </if>
   </sql>
 
   <select id="countDrillTasks" resultType="int">

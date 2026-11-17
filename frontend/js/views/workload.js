@@ -10,7 +10,7 @@ import { loadReqs } from "./board.js";
 import { companyChipHTML } from "../lib/company.js";
 import { memberRoleTitles, labelFilterText } from "../lib/member-labels.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { assocLinkHTML, avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, fmtMinutesShort, taskIsPublished, taskPublicationHTML, taskPublicationText } from "../lib/format.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, taskStatusName } from "./manager-shared.js";
 
@@ -50,7 +50,7 @@ var cache = null, seq = 0, loading = false, filterWorkspace = "";
 var viewMode = "person";
 var workloadFilter = { reqId:"", roleTitle:"", companyName:"" }, workloadOptions = {};
 var ui = { q:"", status:"", group:"none", sort:"load", shown:24 };
-var memberUi = { key:"", openedHere:false, taskFilter:"all", projectId:"", taskShown:20, logScope:"week", dayIdx:"", logShown:20, focus:"" };
+var memberUi = { key:"", openedHere:false, taskFilter:"all", projectId:"", pub:"all", taskShown:20, logScope:"week", dayIdx:"", logShown:20, focus:"" };
 var period = "week";
 var PERIOD_OPTIONS = [["week","本周"],["last","上周"],["days30","近30天"],["month","本月"]];
 var PREF_KEY = "hourglass.workload.prefs";
@@ -572,7 +572,7 @@ function dueCellHTML(t){
 function taskRowsHTML(tasks){
   return tasks.map(function(t){
     return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
-      + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
+      + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + taskPublicationHTML(t) + '</div></td>'
       + '<td>' + assocLinkHTML("project", t.reqId, t.reqName, { plain:"未归类" }) + '</td>'
       + '<td>' + esc(taskStatusName(t)) + '</td>'
       + '<td><span class="member-pri ' + esc(String(t.priority || "P2").toLowerCase()) + '">' + esc(t.priority || "P2") + '</span></td>'
@@ -584,6 +584,9 @@ function taskRowsHTML(tasks){
 function tasksPanelHTML(mv){
   var m = mv.m;
   var scoped = memberUi.projectId ? tasksForProject(m, memberUi.projectId) : (m.tasks || []);
+  if(memberUi.pub !== "all"){
+    scoped = scoped.filter(function(t){ return taskIsPublished(t) === (memberUi.pub === "published"); });
+  }
   var counts = taskCounts(scoped);
   var filtered = filterTasks(scoped, memberUi.taskFilter);
   var shown = filtered.slice(0, memberUi.taskShown);
@@ -596,6 +599,11 @@ function tasksPanelHTML(mv){
     + '<div class="member-work-tools"><div class="seg mini member-task-seg">'
     + filters.map(function(f){ return '<button type="button" data-member-task-filter="' + f[0] + '" aria-pressed="' + (memberUi.taskFilter === f[0]) + '">' + f[1] + '<b>' + f[2] + '</b></button>'; }).join("")
     + '</div><select class="mini-select' + (memberUi.projectId ? ' is-filtered' : '') + '" data-member-task-project aria-label="按项目筛选工作项">' + projectOptions + '</select>'
+    + '<select class="mini-select' + (memberUi.pub !== "all" ? ' is-filtered' : '') + '" data-member-task-pub aria-label="按发布状态筛选工作项">'
+    + [["all","全部发布状态"],["published","已发布"],["unpublished","未发布"]].map(function(o){
+        return '<option value="' + o[0] + '"' + (memberUi.pub === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join("")
+    + '</select>'
     + (memberUi.projectId ? '<button class="member-link" type="button" data-member-project-clear>清除项目筛选</button>' : '') + '</div>'
     + '<div class="tbl-wrap"><table class="manager-tbl member-drill-tbl"><thead><tr>'
     + '<th>工作项</th><th>项目</th><th>状态</th><th>优先级</th><th class="num">截止</th><th class="num">预估</th><th class="num">已计</th>'
@@ -723,6 +731,7 @@ function resetMemberUi(opts){
   opts = opts || {};
   memberUi.taskFilter = "all";
   memberUi.projectId = opts.projectId || "";
+  memberUi.pub = "all";
   memberUi.taskShown = TASK_PAGE;
   memberUi.logScope = opts.logScope === "last" ? "last" : "week";
   memberUi.dayIdx = opts.dayIdx === undefined || opts.dayIdx === null ? "" : String(opts.dayIdx);
@@ -804,8 +813,8 @@ function exportMember(){
     ["参与项目","我的角色","未完成","剩余预估(h)"]
   ];
   mv.projects.forEach(function(p){ rows.push([p.name, (p.roleTitles || []).join(" / "), p.taskCount, (Number(p.remainingMinutes) || 0) / 60]); });
-  rows.push([], ["工作项","项目","状态","优先级","截止","预估(h)","已计(h)"]);
-  (m.tasks || []).forEach(function(t){ rows.push([t.title,t.reqName,taskStatusName(t),t.priority || "",fmtDate(t.dueDate),(Number(t.estimateMinutes) || 0) / 60,(Number(t.totalMinutes) || 0) / 60]); });
+  rows.push([], ["工作项","项目","状态","优先级","发布","截止","预估(h)","已计(h)"]);
+  (m.tasks || []).forEach(function(t){ rows.push([t.title,t.reqName,taskStatusName(t),t.priority || "",taskPublicationText(t),fmtDate(t.dueDate),(Number(t.estimateMinutes) || 0) / 60,(Number(t.totalMinutes) || 0) / 60]); });
   rows.push([], ["计时日期","工作项","项目","耗时(h)","时段"]);
   ["weekLogs","lastWeekLogs"].forEach(function(key){ (m[key] || []).forEach(function(l){ rows.push([l.date,l.title,l.reqName,(Number(l.minutes) || 0) / 60,key === "weekLogs" ? "本周" : "上周"]); }); });
   downloadCsv("成员工作台-" + m.name + ".csv", rows); toast("已导出该成员的工作台数据", "fs");
@@ -915,6 +924,13 @@ if($("workloadBody")) $("workloadBody").addEventListener("change", function(e){
   }
   if(e.target.closest("[data-member-task-project]")){
     memberUi.projectId = e.target.value; memberUi.taskFilter = "all"; memberUi.taskShown = TASK_PAGE;
+    paintMemberTasks();
+    return;
+  }
+  if(e.target.closest("[data-member-task-pub]")){
+    var pub = e.target.value;
+    memberUi.pub = pub === "published" || pub === "unpublished" ? pub : "all";
+    memberUi.taskShown = TASK_PAGE;
     paintMemberTasks();
   }
 });

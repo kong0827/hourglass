@@ -39,19 +39,22 @@ public interface TaskCompletionRecordMapper {
     com.hourglass.dto.CompletionSummary summaryByRange(@Param("workspaceId") String workspaceId,
                                                        @Param("from") LocalDate from,
                                                        @Param("to") LocalDate to,
-                                                       @Param("viewerId") String viewerId);
+                                                       @Param("viewerId") String viewerId,
+                                                       @Param("pubState") String pubState);
 
     /** 完成条数最多的人（并列时取最近有完成记录者） */
     com.hourglass.dto.CompletionOwnerCount topOwnerByRange(@Param("workspaceId") String workspaceId,
                                                            @Param("from") LocalDate from,
                                                            @Param("to") LocalDate to,
-                                                           @Param("viewerId") String viewerId);
+                                                           @Param("viewerId") String viewerId,
+                                                           @Param("pubState") String pubState);
 
     /** 按月分页（completed_at 在 [from, to) 区间内），按完成日倒序 */
     List<TaskCompletionRecord> selectPageByRange(@Param("workspaceId") String workspaceId,
                                                  @Param("from") LocalDate from,
                                                  @Param("to") LocalDate to,
                                                  @Param("viewerId") String viewerId,
+                                                 @Param("pubState") String pubState,
                                                  @Param("offset") int offset,
                                                  @Param("limit") int limit);
 }

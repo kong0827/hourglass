@@ -50,4 +50,14 @@ public class TaskCompletionRecord {
     /** 总耗时（分钟，已按「每天 8 小时 / 跳过周末」裁剪） */
     private Integer totalMinutes;
     private LocalDateTime createdAt;
+
+    /* ---- 发布事实：不是快照列，输出前按 task_id 现查，仅用于列表徽标 ---- */
+    private String publicationState = "unpublished";
+    private Boolean everPublished;
+    private java.util.List<String> publicationTargets;
+    private LocalDate publishedAt;
+    private Boolean manualPublished;
+    private LocalDate manualPublishedAt;
+    private String manualJudgeName;
+    private String manualJudgeReason;
 }

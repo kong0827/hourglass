@@ -371,6 +371,24 @@
     LIMIT #{limit} OFFSET #{offset}
   </select>
 
+  <!-- 排期带入候选：名下工作项里排除已绑定该版本的，已完成排后面 -->
+  <select id="selectVersionCandidates" resultType="Task">
+    SELECT <include refid="com.hourglass.mapper.TaskMapper.cols"/>
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.demand_id = #{demandId} AND t.deleted_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM version_task vt
+                      WHERE vt.workspace_id = t.workspace_id AND vt.task_id = t.id AND vt.version_id = #{versionId})
+    ORDER BY (t.board_column = 'done'), FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.sort_order, t.created_at, t.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countVersionCandidates" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.demand_id = #{demandId} AND t.deleted_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM version_task vt
+                      WHERE vt.workspace_id = t.workspace_id AND vt.task_id = t.id AND vt.version_id = #{versionId})
+  </select>
+
   <insert id="insert">
     INSERT INTO demand (id, workspace_id, req_id, demand_no, title, description, source, item_kind, category_id, priority, status,
                         expect_date, planned_start, planned_end, revision, accept_text, version_id, review_note,

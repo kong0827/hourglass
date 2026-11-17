@@ -97,6 +97,10 @@ public class ManagerService {
     @Autowired(required = false)
     private VersionTaskMapper versionTaskMapper;
 
+    /** 任务行的「已发布」事实；测试与旧调用方可不注入。 */
+    @Autowired(required = false)
+    private TaskPublicationService publications;
+
     @Autowired
     public ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
                           TimeLogMapper timeLogMapper, WorkspaceMemberMapper memberMapper,
@@ -300,6 +304,15 @@ public class ManagerService {
                                                        String chart, String weekStart, String state,
                                                        String bucket, String date, String versionId,
                                                        Integer offset, Integer limit) {
+        return reportTasks(workspaceId, userId, reqId, roleTitle, companyName, chart, weekStart,
+                state, bucket, date, versionId, offset, limit, null);
+    }
+
+    public PageResult<Map<String, Object>> reportTasks(String workspaceId, String userId,
+                                                       String reqId, String roleTitle, String companyName,
+                                                       String chart, String weekStart, String state,
+                                                       String bucket, String date, String versionId,
+                                                       Integer offset, Integer limit, String pubState) {
         DisplayFilter filter = displayFilter(reqId, roleTitle, companyName, versionId);
         Snapshot snapshot = load(workspaceId, null, null, userId);
         List<Requirement> requirements = scopedRequirements(snapshot, filter.reqId);
@@ -383,6 +396,7 @@ public class ManagerService {
 
         int safeOffset = Math.max(0, offset == null ? 0 : offset);
         int safeLimit = limit == null || limit <= 0 ? DRILL_MAX_LIMIT : Math.min(limit, DRILL_MAX_LIMIT);
+        matched = filterByPublication(matched, pubState);
         int total = matched.size();
         List<Task> pageTasks = safeOffset >= total ? Collections.<Task>emptyList()
                 : matched.subList(safeOffset, Math.min(total, safeOffset + safeLimit));
@@ -486,6 +500,16 @@ public class ManagerService {
                                                            String dimension, String key,
                                                            Integer offset, Integer limit,
                                                            List<String> memberUserIds) {
+        return investmentTasks(workspaceId, userId, fromValue, toValue, reqId, roleTitle, companyName,
+                dimension, key, offset, limit, memberUserIds, null);
+    }
+
+    public PageResult<Map<String, Object>> investmentTasks(String workspaceId, String userId,
+                                                           String fromValue, String toValue,
+                                                           String reqId, String roleTitle, String companyName,
+                                                           String dimension, String key,
+                                                           Integer offset, Integer limit,
+                                                           List<String> memberUserIds, String pubState) {
         String dim = trimmed(dimension);
         String target = trimmed(key);
         /* 不传维度时按整个区间下钻（趋势柱按月点开用），传维度则必须带分组键 */
@@ -539,6 +563,7 @@ public class ManagerService {
                 return compareNullable(left.task.getTitle(), right.task.getTitle());
             }
         });
+        rows = filterTaskRowsByPublication(rows, pubState);
 
         int safeOffset = Math.max(0, offset == null ? 0 : offset);
         int safeLimit = limit == null || limit <= 0 ? DRILL_MAX_LIMIT : Math.min(limit, DRILL_MAX_LIMIT);
@@ -1913,6 +1938,9 @@ public class ManagerService {
             }
         }
         snapshot.tasks = tasks;
+        if (publications != null) {
+            publications.enrichTasks(workspaceId, tasks);
+        }
         List<Requirement> requirements = new ArrayList<Requirement>();
         for (Requirement requirement : emptyIfNull(requirementMapper.selectAll(workspaceId))) {
             if (!hiddenReqs.contains(requirement.getId())) {
@@ -2554,11 +2582,62 @@ public class ManagerService {
         item.put("epicId", task.getEpicId());
         item.put("isMilestone", task.getIsMilestone());
         item.put("note", task.getNote());
+        /* 发布事实：与管理页各表行的「已发布」徽标同源 */
+        item.put("publishedAt", task.getPublishedAt());
+        item.put("everPublished", task.getEverPublished());
+        item.put("publicationState", task.getPublicationState());
+        item.put("publicationTargets", task.getPublicationTargets());
+        item.put("manualPublished", task.getManualPublished());
+        item.put("manualPublishedAt", task.getManualPublishedAt());
         return item;
     }
 
-    private Map<String, String> requirementNames(List<Requirement> requirements) {
-        Map<String, String> result = new LinkedHashMap<String, String>();
+    /** 与管理页徽标同源：正式发布事实派生或人工补录都算已发布 */
+    private static boolean published(Task task) {
+        if (task == null) {
+            return false;
+        }
+        if (task.getPublishedAt() != null || Boolean.TRUE.equals(task.getEverPublished())
+                || Boolean.TRUE.equals(task.getManualPublished())) {
+            return true;
+        }
+        String state = task.getPublicationState();
+        if (state != null && !"unpublished".equals(state)) {
+            return true;
+        }
+        List<String> targets = task.getPublicationTargets();
+        return targets != null && !targets.isEmpty();
+    }
+
+    private static List<Task> filterByPublication(List<Task> tasks, String pubState) {
+        boolean wantPublished = "published".equals(pubState);
+        if (!wantPublished && !"unpublished".equals(pubState)) {
+            return tasks;
+        }
+        List<Task> kept = new ArrayList<Task>();
+        for (Task task : tasks) {
+            if (published(task) == wantPublished) {
+                kept.add(task);
+            }
+        }
+        return kept;
+    }
+
+    private static List<InvestmentTaskRow> filterTaskRowsByPublication(List<InvestmentTaskRow> rows, String pubState) {
+        boolean wantPublished = "published".equals(pubState);
+        if (!wantPublished && !"unpublished".equals(pubState)) {
+            return rows;
+        }
+        List<InvestmentTaskRow> kept = new ArrayList<InvestmentTaskRow>();
+        for (InvestmentTaskRow row : rows) {
+            if (published(row.task) == wantPublished) {
+                kept.add(row);
+            }
+        }
+        return kept;
+    }
+
+    private Map<String, String> requirementNames(List<Requirement> requirements) {        Map<String, String> result = new LinkedHashMap<String, String>();
         for (Requirement requirement : requirements) {
             result.put(requirement.getId(), requirement.getName());
         }

@@ -9,7 +9,7 @@ import { canEditReq, roleReadOnly, rt, state } from "../core/state.js";
 import { hashParam, openTaskById } from "../core/task-actions.js";
 import { ownerOptions, ownerPickerOptions, ownerRosterState, ensureProjectRoles, currentProjectId, syncAssocRead } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { assocLinkHTML, avatarHTML, fmtTs, priColor, priName } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, fmtTs, priColor, priName, taskPublicationHTML } from "../lib/format.js";
 import { openPeoplePicker, peopleFieldHTML } from "../lib/people-picker.js";
 import { loadProjectMembers } from "../lib/member-labels.js";
 import { loadReqs, render } from "./board.js";
@@ -1647,6 +1647,7 @@ function loadBranchTasks(id){
       return '<button class="br-task" type="button" data-br-task="' + esc(t.id) + '">' +
         '<span class="bt-dot' + (done ? " done" : "") + '"></span>' +
         '<span class="bt-title' + (done ? " done" : "") + '">' + esc(t.title) + '</span>' +
+        taskPublicationHTML(t) +
         '<span class="bt-pri ' + esc(t.priority || "") + '" style="color:' + esc(priColor(t.priority)) + '">' + esc(priName(t.priority)) + '</span>' +
       '</button>';
     }).join("");

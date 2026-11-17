@@ -13,6 +13,7 @@ import com.hourglass.dto.DemandGanttPage;
 import com.hourglass.dto.DemandPage;
 import com.hourglass.dto.DemandQuery;
 import com.hourglass.dto.DemandSaveRequest;
+import com.hourglass.dto.DemandVersionTaskRequest;
 import com.hourglass.dto.DemandWatcherRequest;
 import com.hourglass.dto.PageResult;
 import com.hourglass.dto.ReqDocView;
@@ -238,6 +239,26 @@ public class DemandController {
                                                                @RequestParam(required = false) Integer limit) {
         return ApiResult.ok(demandService.tasks(ctx.getWsId(), ctx.getUserId(), id,
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    /** 排期带入候选：需求名下尚未绑定目标版本的工作项，供二次确认弹窗展示。 */
+    @GetMapping("/api/demands/{id}/version-task-candidates")
+    public ApiResult<com.hourglass.dto.PageResult<Task>> versionTaskCandidates(
+            @PathVariable String id,
+            @RequestParam String versionId,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit,
+            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.versionTaskCandidates(ctx.getWsId(), ctx.getUserId(), id, versionId,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    /** 排期带入：把所选工作项加入需求当前目标版本；已关联项跳过并返回数量。 */
+    @PostMapping("/api/demands/{id}/version-tasks")
+    public ApiResult<Map<String, Object>> bindVersionTasks(@PathVariable String id,
+                                                           @Valid @RequestBody DemandVersionTaskRequest body,
+                                                           @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.bindVersionTasks(ctx.getUserId(), ctx.getWsId(), id, body));
     }
 
     /** 人工交付判定历史：追加式记录，最多返回 100 条。 */

@@ -2745,6 +2745,7 @@ button.case-witem:hover{border-color:var(--primary-border);color:var(--text);}
 .demand-foot{display:none;}
 .demand-foot-acts{display:flex;align-items:center;gap:8px;margin-left:auto;}
 .dem-evidence-tbl{table-layout:fixed;}
+.dem-evidence-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 10px;}
 .dem-evidence-tbl th:nth-child(1){width:41%;}
 .dem-evidence-tbl th:nth-child(2){width:12%;}
 .dem-evidence-tbl th:nth-child(3){width:14%;}

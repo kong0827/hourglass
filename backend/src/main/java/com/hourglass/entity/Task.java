@@ -145,6 +145,9 @@ public class Task {
     /** 关联需求池需求ID（sql/24，demand 表；基于需求创建任务时写入） */
     private String demandId;
 
+    /** 关联需求标题（非表字段，版本成员选择器按需求分组时读取） */
+    private String demandTitle;
+
     /** Planning memberships, batch-enriched from version_task; not publication authority. */
     private List<String> versionIds = new ArrayList<String>();
     private List<String> versionNames = new ArrayList<String>();

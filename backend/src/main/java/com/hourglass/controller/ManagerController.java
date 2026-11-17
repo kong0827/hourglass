@@ -65,10 +65,11 @@ public class ManagerController {
             @RequestParam(required = false) String versionId,
             @RequestParam(required = false) Integer offset,
             @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String pub,
             @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(managerService.reportTasks(ctx.getWsId(), ctx.getUserId(),
                 reqId, roleTitle, companyName, chart, weekStart, state, bucket, date,
-                versionId, offset, limit));
+                versionId, offset, limit, pub));
     }
 
     public ApiResult<Map<String, Object>> workload(WorkspaceCtx ctx) {
@@ -118,9 +119,10 @@ public class ManagerController {
             @RequestParam(required = false) Integer offset,
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false) List<String> memberUserIds,
+            @RequestParam(required = false) String pub,
             @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(managerService.investmentTasks(ctx.getWsId(), ctx.getUserId(),
-                from, to, reqId, roleTitle, companyName, dimension, key, offset, limit, memberUserIds));
+                from, to, reqId, roleTitle, companyName, dimension, key, offset, limit, memberUserIds, pub));
     }
 
     @PostMapping("/nudges")

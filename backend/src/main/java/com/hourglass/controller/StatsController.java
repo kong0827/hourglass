@@ -40,11 +40,12 @@ public class StatsController {
                                                      @RequestParam(required = false) String from,
                                                      @RequestParam(required = false) String before,
                                                      @RequestParam(required = false) String value,
+                                                     @RequestParam(required = false) String pub,
                                                      @RequestParam(required = false) Integer offset,
                                                      @RequestParam(required = false) Integer limit) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         return ApiResult.ok(statsService.drillTasks(ws.getId(), CurrentUser.id(),
-                kind, from, before, value, offset, limit));
+                kind, from, before, value, pub, offset, limit));
     }
 
     /** 工时卡下钻：period=week/total，scope=mine/all；分页最多 100 条 */

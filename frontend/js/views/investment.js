@@ -696,10 +696,10 @@ function openDrill(row, dim){
       periodLabel() + " · " + scopeText() + " · 共 " + page.total + " 项 · 实际与预估按同一周期归集", {
         total:page.total,
         hasMore:page.hasMore,
-        fetch:function(offset){
-          return API.get("/api/manager/investment/tasks", Object.assign({}, base, { offset:offset }));
+        fetch:function(offset, pub){
+          return API.get("/api/manager/investment/tasks", Object.assign({}, base, { offset:offset, pub:(pub === "published" || pub === "unpublished") ? pub : "" }));
         }
-      }, { split:true });
+      }, { split:true, pub:true });
   }).catch(function(ex){
     toast(ex && ex.message ? ex.message : "明细加载失败", "bad");
   });
@@ -793,10 +793,10 @@ function openMonthDrill(key){
         + " 项 · 实际按计时发生日、预估按计划开始日归入该月", {
         total:page.total,
         hasMore:page.hasMore,
-        fetch:function(offset){
-          return API.get("/api/manager/investment/tasks", Object.assign({}, base, { offset:offset }));
+        fetch:function(offset, pub){
+          return API.get("/api/manager/investment/tasks", Object.assign({}, base, { offset:offset, pub:(pub === "published" || pub === "unpublished") ? pub : "" }));
         }
-      }, { split:true });
+      }, { split:true, pub:true });
   }).catch(function(ex){
     toast(ex && ex.message ? ex.message : "明细加载失败", "bad");
   });

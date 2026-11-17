@@ -13,7 +13,7 @@ import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { registerViewParams } from "../core/view-params.js";
 import { bindRetry } from "../core/utils.js";
-import { COLUMNS, PRIORITIES, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, typeName } from "../lib/format.js";
+import { COLUMNS, PRIORITIES, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, taskPublicationHTML, typeName } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { milestoneEvidence, milestoneStatusMeta, openMilestoneDetail } from "../lib/milestone-ui.js";
@@ -1499,7 +1499,7 @@ function renderGanttUnplanned(list, openIt){
       priTagHTML(t.priority) +
       '<span class="gantt-unplanned-main">' +
         '<span class="gantt-unplanned-t">' + esc(t.title) + '</span>' +
-        '<span class="gantt-unplanned-m">' + (cat ? cat + ' · ' : '') + meta.join(" · ") + '</span>' +
+        '<span class="gantt-unplanned-m">' + (cat ? cat + ' · ' : '') + meta.join(" · ") + taskPublicationHTML(t) + '</span>' +
       '</span>' +
       '<span class="tag tag-ghost">未排期</span>' +
     '</button>';

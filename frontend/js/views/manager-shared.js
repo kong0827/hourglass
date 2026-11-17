@@ -4,7 +4,7 @@ import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc } from "../core/ui.js";
 import { triggerDownload } from "../lib/download.js";
-import { assocLinkHTML, avatarHTML, colName, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, colName, fmtMinutesShort, taskIsPublished, typeBadgeHTML, taskPublicationHTML } from "../lib/format.js";
 
 /* 口径说明默认收起，避免每条管理视图顶部都出现一整块提示条 */
 function caliberHTML(text){
@@ -53,7 +53,7 @@ function managerTaskRowHTML(t, split){
       + '<td class="num">' + (t.testMinutes ? fmtMinutesShort(t.testMinutes) : "—") + '</td>'
     : "";
   return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
-    + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
+    + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + taskPublicationHTML(t) + '</div></td>'
     + '<td>' + esc(t.reqName || "未归类") + '</td>'
     + '<td><span class="manager-person">' + avatarHTML(t.owner || "未", "sm") + esc(t.owner || "未指派") + '</span></td>'
     + '<td>' + esc(taskStatusName(t)) + '</td>'
@@ -62,19 +62,25 @@ function managerTaskRowHTML(t, split){
     + '<td class="num">' + (t.totalMinutes ? fmtMinutesShort(t.totalMinutes) : "—") + '</td>'
     + splitCells + '</tr>';
 }
-/* pager（可选）：{total, hasMore, fetch(offset) -> Promise<page>}，用于服务端分页的钻取表 */
+/* pager（可选）：{total, hasMore, fetch(offset, pub) -> Promise<page>}，用于服务端分页的钻取表；
+   opts.pub=true 表示后端分页接口支持 pub=published/unpublished */
 function openTaskTable(title, tasks, description, pager, opts){
   var split = !!(opts && opts.split);
+  /* 服务端分页表要显式声明后端支持发布筛选，才显示下拉；客户端表数据完整，直接用前端判定 */
+  var serverPub = !!(opts && opts.pub);
   var cols = split ? 9 : 7;
   var all = (tasks || []).slice();
   var total = pager && typeof pager.total === "number" ? pager.total : all.length;
   var hasMore = !!(pager && pager.hasMore && pager.fetch);
   var loading = false;
   var filterText = "";
+  var filterPub = "all";
   var filtered = all.slice();
   var searchTimer = null;
-  var searchable = !pager; /* 服务端分页时数据不完整，不提供前端搜索，避免误导 */
+  var searchable = !pager; /* 服务端分页时数据不完整，不提供前端搜索与发布筛选，避免误导 */
+  var pubFilterable = searchable || serverPub;
   function matchesFilter(t){
+    if(searchable && filterPub !== "all" && taskIsPublished(t) !== (filterPub === "published")) return false;
     if(!filterText.trim()) return true;
     var terms = filterText.trim().toLowerCase().split(/\s+/).filter(Boolean);
     var hay = [
@@ -90,12 +96,13 @@ function openTaskTable(title, tasks, description, pager, opts){
   }
   function descText(){
     var base = description || ("共 " + total + " 项 · 点击工作项行打开详情");
+    if(filterPub !== "all") base += " · 发布筛选后 " + (searchable ? filtered.length : total) + " 项";
     if(searchable && filterText.trim()) base += " · 搜索匹配 " + filtered.length + " 项";
     return base;
   }
   function rowsHTML(){
     if(!filtered.length) return '<tr><td colspan="' + cols + '" class="manager-empty-cell">' +
-      (filterText.trim() ? "没有匹配的工作项" : "该口径下暂无工作项") + '</td></tr>';
+      (loading ? "加载中…" : ((filterText.trim() || filterPub !== "all") ? "没有匹配的工作项" : "该口径下暂无工作项")) + '</td></tr>';
     return filtered.map(function(t){ return managerTaskRowHTML(t, split); }).join("")
       + (hasMore
         ? '<tr><td colspan="' + cols + '" class="manager-more-cell"><button class="btn sm block" type="button" data-manager-more'
@@ -109,8 +116,14 @@ function openTaskTable(title, tasks, description, pager, opts){
     var desc = layer && layer.querySelector(".desc");
     if(desc) desc.textContent = descText();
   }
-  var searchBarHTML = searchable
-    ? '<div class="manager-search-bar"><input type="search" class="manager-search" placeholder="搜索工作项、负责人、项目或状态…" aria-label="搜索工作项" /></div>'
+  var searchBarHTML = pubFilterable
+    ? '<div class="manager-search-bar">'
+      + (searchable
+        ? '<input type="search" class="manager-search" placeholder="搜索工作项、负责人、项目或状态…" aria-label="搜索工作项" />'
+        : "")
+      + '<select class="mini-select" data-manager-pub aria-label="按发布状态筛选">'
+      + '<option value="all">全部发布状态</option><option value="published">已发布</option><option value="unpublished">未发布</option>'
+      + '</select></div>'
     : "";
   var layer = document.createElement("div");
   layer.className = "modal-layer";
@@ -139,13 +152,46 @@ function openTaskTable(title, tasks, description, pager, opts){
       }, 200);
     });
   }
+  var pubSelect = layer.querySelector("[data-manager-pub]");
+  if(pubSelect){
+    pubSelect.addEventListener("change", function(){
+      filterPub = pubSelect.value === "published" || pubSelect.value === "unpublished" ? pubSelect.value : "all";
+      UI.markFiltered(pubSelect, filterPub === "all");
+      if(searchable){
+        applyFilter();
+        renderBody();
+        return;
+      }
+      /* 服务端分页：口径在 SQL/内存里收窄，从第一页重新拉，避免前端只筛当前页 */
+      loading = true;
+      all = [];
+      filtered = [];
+      hasMore = false;
+      total = 0;
+      renderBody();
+      pager.fetch(0, filterPub).then(function(page){
+        loading = false;
+        if(!layer.isConnected) return;
+        all = ((page && page.items) || []).slice();
+        filtered = all;
+        if(page && typeof page.total === "number") total = page.total;
+        hasMore = !!(page && page.hasMore) && all.length > 0;
+        renderBody();
+      }).catch(function(ex){
+        loading = false;
+        if(!layer.isConnected) return;
+        renderBody();
+        UI.toast(ex && ex.message ? ex.message : "发布筛选失败", "bad");
+      });
+    });
+  }
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-manager-close]")){ UI.closeModal(layer); return; }
     if(e.target.closest("[data-manager-more]")){
       if(loading || !hasMore) return;
       loading = true;
       renderBody();
-      pager.fetch(all.length).then(function(page){
+      pager.fetch(all.length, filterPub).then(function(page){
         loading = false;
         if(!layer.isConnected) return;
         var known = {};

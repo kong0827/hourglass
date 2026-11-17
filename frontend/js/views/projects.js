@@ -11,7 +11,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, populateReqSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
-import { CAT_DEFAULT_COLOR, colName, docTypeName, fmtTs, reqStatusName, typeBadgeHTML } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, colName, docTypeName, fmtTs, reqStatusName, typeBadgeHTML, taskPublicationHTML } from "../lib/format.js";
 import * as activityUI from "../core/activity-ui.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { loadBoard, loadReqs } from "./board.js";
@@ -255,10 +255,12 @@ function projectTasksHTML(reqId){
   if(!rows.length) return '<p class="foot-note" style="margin:4px 0">该项目还没有工作项。</p>';
   return rows.map(function(t){
     var status = t.boardColumn === "done" ? "已完成" : colName(t.boardColumn);
+    var pub = taskPublicationHTML(t);
     return '<button class="req-expand-doc" type="button" data-project-task-open="' + esc(t.id) + '">'
       + '<span class="rd-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</span>'
       + '<span class="rd-meta">' + esc(status) + ' · ' + esc(t.owner || "未指派")
-      + (t.dueDate ? ' · 截止 ' + esc(String(t.dueDate).substring(0, 10)) : '') + '</span></button>';
+      + (t.dueDate ? ' · 截止 ' + esc(String(t.dueDate).substring(0, 10)) : '')
+      + (pub ? ' ' + pub : '') + '</span></button>';
   }).join("");
 }
 function refreshExpandedProjectTasks(){

@@ -66,5 +66,14 @@ public class EstimateStats {
         private double ratio;
         /** danger（已超）/ warn（接近） */
         private String level;
+        /** 发布事实：与技术平台各列表的「已发布」徽标同源 */
+        private String publicationState = "unpublished";
+        private boolean everPublished;
+        private java.util.List<String> publicationTargets = new java.util.ArrayList<String>();
+        private java.time.LocalDate publishedAt;
+        private boolean manualPublished;
+        private java.time.LocalDate manualPublishedAt;
+        private String manualJudgeName;
+        private String manualJudgeReason;
     }
 }
