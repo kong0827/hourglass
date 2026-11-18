@@ -298,6 +298,28 @@ public class RequirementService {
         return reqMapper.selectById(id);
     }
 
+    /**
+     * 换项目集：只改归组，不触碰项目权限、工作项与版本。
+     * 空串 / null 表示移出项目集（未分组）。
+     */
+    @Transactional
+    public Requirement moveToSet(String workspaceId, String userId, String id, String rawSetId) {
+        Requirement old = reqMapper.selectById(id);
+        if (old == null || !workspaceId.equals(old.getWorkspaceId())) {
+            throw AppException.notFound("项目不存在：" + id);
+        }
+        projectAccess.assertWrite(workspaceId, userId, id);
+        String newSetId = projectSetService.normalizeSetId(workspaceId, rawSetId);
+        if (!java.util.Objects.equals(old.getSetId(), newSetId)) {
+            reqMapper.updateSetId(workspaceId, id, newSetId);
+            java.util.Map<String, String> setNames = projectSetService.nameMap(workspaceId);
+            recordChange(workspaceId, id, "项目集",
+                    old.getSetId() == null ? null : setNames.get(old.getSetId()),
+                    newSetId == null ? null : setNames.get(newSetId));
+        }
+        return reqMapper.selectById(id);
+    }
+
     private void applyProfile(String workspaceId, Requirement r, ReqSaveRequest req) {
         r.setObjective(Texts.trimToNull(req.getObjective()));
         String ownerId = Texts.trimToNull(req.getOwnerUserId());

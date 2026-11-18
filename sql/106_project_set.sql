@@ -80,50 +80,60 @@ CREATE TABLE IF NOT EXISTS `project_split_map` (
   KEY `idx_new_project` (`new_project_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目拆分映射（幂等、旧链接跳转、回滚核对）';
 
-SET @s := (SELECT IF(COUNT(*) = 0,
+SET @s = (SELECT IF(COUNT(*) = 0,
   'ALTER TABLE `requirement`
      ADD COLUMN `set_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT ''所属项目集（project_set.id），空=未分组'' AFTER `workspace_id`',
   'DO 0') FROM information_schema.columns
   WHERE table_schema = DATABASE() AND table_name = 'requirement' AND column_name = 'set_id');
-PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+PREPARE st FROM @s;
+EXECUTE st;
+DEALLOCATE PREPARE st;
 
-SET @s := (SELECT IF(COUNT(*) = 0,
+SET @s = (SELECT IF(COUNT(*) = 0,
   'ALTER TABLE `requirement`
      ADD COLUMN `origin_category_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT ''由哪个一级分类升格而来'' AFTER `set_id`',
   'DO 0') FROM information_schema.columns
   WHERE table_schema = DATABASE() AND table_name = 'requirement' AND column_name = 'origin_category_id');
-PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+PREPARE st FROM @s;
+EXECUTE st;
+DEALLOCATE PREPARE st;
 
-SET @s := (SELECT IF(COUNT(*) = 0,
+SET @s = (SELECT IF(COUNT(*) = 0,
   'ALTER TABLE `requirement`
      ADD COLUMN `container_kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT ''容器项目标记：split_container=拆分后的公共容器'' AFTER `origin_category_id`',
   'DO 0') FROM information_schema.columns
   WHERE table_schema = DATABASE() AND table_name = 'requirement' AND column_name = 'container_kind');
-PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+PREPARE st FROM @s;
+EXECUTE st;
+DEALLOCATE PREPARE st;
 
-SET @s := (SELECT IF(COUNT(*) = 0,
+SET @s = (SELECT IF(COUNT(*) = 0,
   'ALTER TABLE `demand`
      ADD COLUMN `version_name` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT ''历史目标版本名快照（版本留容器后清 version_id 时保留）'' AFTER `version_id`',
   'DO 0') FROM information_schema.columns
   WHERE table_schema = DATABASE() AND table_name = 'demand' AND column_name = 'version_name');
-PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+PREPARE st FROM @s;
+EXECUTE st;
+DEALLOCATE PREPARE st;
 
-SET @s := (SELECT IF(COUNT(*) = 0,
+SET @s = (SELECT IF(COUNT(*) = 0,
   'ALTER TABLE `requirement` ADD KEY `idx_ws_set` (`workspace_id`,`set_id`)',
   'DO 0') FROM information_schema.statistics
   WHERE table_schema = DATABASE() AND table_name = 'requirement' AND index_name = 'idx_ws_set');
-PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+PREPARE st FROM @s;
+EXECUTE st;
+DEALLOCATE PREPARE st;
 
 -- ---------------------------------------------------------------------
 -- 2. 迁移闸门：只在原始数据形态且尚未拆分时执行
 -- ---------------------------------------------------------------------
-SET @ws := (SELECT workspace_id FROM requirement WHERE id = 'Xkp02');
-SET @set := 'PSXkp02';
+SET @ws = (SELECT workspace_id FROM requirement WHERE id = 'Xkp02');
+SET @set_id = 'PSXkp02';
 
 -- 闸门只看结构身份，不绑定决策时的任务 / 需求 / 用例条数：
 -- 这三个数在 11-17 决策到上线之间可能因正常使用增长，按条数相等判断会让迁移静默跳过。
 -- 7 个固定一级分类 ID 齐全且没有第 8 个一级分类、尚未拆分、新项目 ID 未被占用，即可安全执行。
-SET @do := (
+SET @do = (
   SELECT CASE WHEN
     @ws IS NOT NULL
     AND (SELECT COUNT(*) FROM category WHERE project_id = 'Xkp02' AND parent_id = '') = 7
@@ -143,7 +153,7 @@ START TRANSACTION;
 -- 3. 项目集
 -- ---------------------------------------------------------------------
 INSERT INTO project_set (id, workspace_id, name, description, owner_user_id, status, planned_start, planned_end, sort_order)
-SELECT @set, r.workspace_id, '流程引擎', r.description, r.owner_user_id, r.status, r.planned_start, r.planned_end, 0
+SELECT @set_id, r.workspace_id, '流程引擎', r.description, r.owner_user_id, r.status, r.planned_start, r.planned_end, 0
 FROM requirement r
 WHERE r.id = 'Xkp02' AND @do = 1;
 
@@ -169,7 +179,7 @@ SELECT m.new_project_id, r.workspace_id, c.name,
        CONCAT('由「', r.name, '」项目的「', c.name, '」分类拆分'),
        r.status, r.release_check_policy, r.owner_user_id,
        r.planned_start, r.planned_end, r.first_released_at,
-       100 + c.sort_order, @set, c.id
+       100 + c.sort_order, @set_id, c.id
 FROM project_split_map m
 JOIN category c ON c.id = m.old_category_id
 JOIN requirement r ON r.id = 'Xkp02'
@@ -177,7 +187,7 @@ WHERE m.old_project_id = 'Xkp02' AND @do = 1;
 
 -- 容器项目：改名、挂到项目集、标记容器、排在集内最后
 UPDATE requirement
-SET name = '流程引擎-公共', set_id = @set, container_kind = 'split_container', sort_order = 199
+SET name = '流程引擎-公共', set_id = @set_id, container_kind = 'split_container', sort_order = 199
 WHERE id = 'Xkp02' AND @do = 1;
 
 -- ---------------------------------------------------------------------
@@ -306,7 +316,7 @@ COMMIT;
 -- ---------------------------------------------------------------------
 -- 15. 迁移后校验（只读）
 -- ---------------------------------------------------------------------
-SELECT 'set' AS item, id, name FROM project_set WHERE id = @set
+SELECT 'set' AS item, id, name FROM project_set WHERE id = @set_id
 UNION ALL SELECT 'container', id, CONCAT(name, ' / ', IFNULL(container_kind, '')) FROM requirement WHERE id = 'Xkp02';
 
 SELECT r.id, r.name, r.set_id, r.container_kind,
@@ -319,7 +329,7 @@ SELECT r.id, r.name, r.set_id, r.container_kind,
        (SELECT COUNT(*) FROM dev_branch b WHERE b.req_id = r.id) AS branches,
        (SELECT COUNT(*) FROM task_completion_record cr WHERE cr.req_id = r.id) AS completions
 FROM requirement r
-WHERE r.id = 'Xkp02' OR r.set_id = @set
+WHERE r.id = 'Xkp02' OR r.set_id = @set_id
 ORDER BY r.sort_order, r.id;
 
 SELECT 'unassigned_tasks' AS item, COUNT(*) AS cnt FROM task WHERE req_id = 'Xkp02'

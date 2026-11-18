@@ -35,6 +35,31 @@ class GlobalExceptionHandlerTest {
         assertEquals(Boolean.TRUE, request.getAttribute(GlobalExceptionHandler.FAILED_ATTR));
     }
 
+    /** 业务 4xx 不抛栈，必须主动留痕：否则线上只能靠前端截图才看得见原因 */
+    @Test
+    void businessRejectionIsLoggedWithCodeAndPath() {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest("PUT", "/api/tasks/K299");
+            new GlobalExceptionHandler().handleAppException(
+                    AppException.badRequest("所选需求池需求不属于该项目"), request);
+
+            String logged = appender.list.stream()
+                    .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+                    .reduce("", (a, b) -> a + "\n" + b);
+            assertTrue(logged.contains("code=400"));
+            assertTrue(logged.contains("/api/tasks/K299"));
+            assertTrue(logged.contains("所选需求池需求不属于该项目"));
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
     @Test
     void unrelatedExceptionStillReturnsServerErrorBody() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/boom");

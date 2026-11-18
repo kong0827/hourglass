@@ -112,7 +112,9 @@ public class AiClient {
         messages.add(msg("user", userPrompt));
 
         try {
-            return doCall(cfg, url, messages, wantJson);
+            Reply reply = doCall(cfg, url, messages, wantJson);
+            logReply(cfg, url, reply, false, System.currentTimeMillis() - startedAt);
+            return reply;
         } catch (HttpStatusCodeException e) {
             String detail = upstreamMessage(e.getResponseBodyAsString(StandardCharsets.UTF_8));
             log.warn("AI 上游返回 {}：model={} detail={}", e.getRawStatusCode(), cfg.getModel(), brief(detail));
@@ -125,6 +127,7 @@ public class AiClient {
                 }
                 Reply r = doCall(cfg, url, messages, false);
                 r.jsonFallback = true;
+                logReply(cfg, url, r, true, System.currentTimeMillis() - startedAt);
                 return r;
             }
             throw new AppException(502, errorMessage(e.getRawStatusCode(),
@@ -141,6 +144,21 @@ public class AiClient {
             /* baseUrl 写错等底层异常可能把完整地址（含内部主机名）带到界面：统一包装成可读提示 */
             throw new AppException(502, "AI 请求失败（" + e.getClass().getSimpleName()
                     + "）：请检查接口地址格式与网络连通性", e);
+        }
+    }
+
+    /** 外部调用留痕：只记模型、目标主机、耗时与 token，不落 Key 和完整地址 */
+    private static void logReply(AiConfig cfg, String url, Reply r, boolean fallback, long elapsedMs) {
+        log.info("AI 调用完成：model={} host={} json={}{} 耗时={}ms tokens={}+{}",
+                cfg.getModel(), host(url), r.jsonModeUsed,
+                fallback ? "（JSON 模式降级重试）" : "", elapsedMs, r.promptTokens, r.completionTokens);
+    }
+
+    private static String host(String url) {
+        try {
+            return String.valueOf(java.net.URI.create(url).getHost());
+        } catch (RuntimeException ignored) {
+            return "-";
         }
     }
 

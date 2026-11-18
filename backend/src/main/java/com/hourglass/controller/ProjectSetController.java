@@ -2,6 +2,7 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.ProjectSetOrderRequest;
 import com.hourglass.dto.ProjectSetSaveRequest;
 import com.hourglass.entity.ProjectSet;
 import com.hourglass.entity.Workspace;
@@ -53,6 +54,15 @@ public class ProjectSetController {
                                         @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         return ApiResult.ok(projectSetService.update(ws.getId(), CurrentUser.id(), id, req));
+    }
+
+    /** 项目集手动排序：ids 为空间内全部项目集的新顺序 */
+    @PutMapping("/api/project-sets/order")
+    public ApiResult<Void> reorder(@Valid @RequestBody ProjectSetOrderRequest body,
+                                   @RequestParam(required = false) String workspace) {
+        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        projectSetService.reorder(ws.getId(), CurrentUser.id(), body.getIds());
+        return ApiResult.ok();
     }
 
     /** 删除只解绑项目；项目本身与工作项、需求、权限全部保留。 */

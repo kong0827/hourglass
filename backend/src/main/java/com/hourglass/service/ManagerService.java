@@ -6,12 +6,14 @@ import com.hourglass.common.TaskCalc;
 import com.hourglass.common.WorkTime;
 import com.hourglass.dto.PageResult;
 import com.hourglass.entity.Category;
+import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectMemberRole;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TimeAgg;
 import com.hourglass.entity.TimeLog;
 import com.hourglass.entity.WorkspaceMember;
+import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
@@ -101,6 +103,10 @@ public class ManagerService {
     @Autowired(required = false)
     private TaskPublicationService publications;
 
+    /** 驾驶舱工作项清单的「关联需求」标题；测试与旧调用方可不注入。 */
+    @Autowired(required = false)
+    private DemandMapper demandMapper;
+
     @Autowired
     public ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
                           TimeLogMapper timeLogMapper, WorkspaceMemberMapper memberMapper,
@@ -174,6 +180,8 @@ public class ManagerService {
         Snapshot snapshot = load(workspaceId, weekStart, weekStart.plusWeeks(1), userId);
         Requirement requirement = requireProject(snapshot.requirements, reqId);
         List<Task> tasks = tasksForReq(snapshot.tasks, requirement.getId());
+        enrichVersions(workspaceId, tasks);
+        enrichDemandTitles(workspaceId, requirement.getId(), tasks);
         Counts counts = countTasks(tasks, today);
 
         Map<String, Object> project = new LinkedHashMap<String, Object>();
@@ -2005,6 +2013,34 @@ public class ManagerService {
         }
     }
 
+    /** 项目需求一次取回后给工作项补「关联需求」标题，避免清单逐条查库。 */
+    private void enrichDemandTitles(String workspaceId, String reqId, List<Task> tasks) {
+        if (demandMapper == null || tasks.isEmpty()) {
+            return;
+        }
+        boolean anyDemand = false;
+        for (Task task : tasks) {
+            if (hasText(task.getDemandId())) {
+                anyDemand = true;
+                break;
+            }
+        }
+        if (!anyDemand) {
+            return;
+        }
+        Map<String, String> titles = new HashMap<String, String>();
+        for (Demand demand : emptyIfNull(demandMapper.selectByReq(workspaceId, reqId))) {
+            if (demand != null && hasText(demand.getId())) {
+                titles.put(demand.getId(), demand.getTitle());
+            }
+        }
+        for (Task task : tasks) {
+            if (hasText(task.getDemandId()) && task.getDemandTitle() == null) {
+                task.setDemandTitle(titles.get(task.getDemandId().trim()));
+            }
+        }
+    }
+
     private String filterValue(String value, int maxLength, String name) {
         String normalized = trimmed(value);
         if (normalized != null && normalized.startsWith("__label__:")) normalized = normalized.substring(10);
@@ -2580,7 +2616,13 @@ public class ManagerService {
         item.put("blockedReason", task.getBlockedReason());
         item.put("blockedByTaskId", task.getBlockedByTaskId());
         item.put("itemType", task.getItemType());
+        item.put("itemNo", task.getItemNo());
         item.put("epicId", task.getEpicId());
+        item.put("demandId", task.getDemandId());
+        item.put("demandTitle", task.getDemandTitle());
+        item.put("severity", task.getSeverity());
+        item.put("versionIds", task.getVersionIds());
+        item.put("versionNames", task.getVersionNames());
         item.put("isMilestone", task.getIsMilestone());
         item.put("note", task.getNote());
         /* 发布事实：与管理页各表行的「已发布」徽标同源 */

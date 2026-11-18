@@ -220,6 +220,47 @@ class TaskCommandDeliveryScopeTest {
         verify(tasks, never()).update(any());
     }
 
+    /* 项目集拆分遗留：工作项与需求被分到不同项目，编辑时原关联要能原样保存且不被解绑 */
+    @Test
+    void legacyCrossProjectDemandLinkSurvivesOrdinaryEdit() {
+        old.setDemandId("D1");
+        demand.setReqId("R2");
+        update(request());
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).update(saved.capture());
+        assertEquals("D1", saved.getValue().getDemandId());
+    }
+
+    @Test
+    void legacyCrossProjectDemandIsNotUnboundWhenFieldOmitted() {
+        old.setDemandId("D1");
+        demand.setReqId("R2");
+        TaskSaveRequest req = request();
+        req.setDemandId(null);
+        update(req);
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).update(saved.capture());
+        assertEquals("D1", saved.getValue().getDemandId());
+    }
+
+    @Test
+    void editStillRejectsNewlySelectedCrossProjectDemand() {
+        old.setDemandId("D1");
+        Demand other = new Demand();
+        other.setId("D2");
+        other.setWorkspaceId("W1");
+        other.setReqId("R2");
+        other.setTitle("另一个项目的需求");
+        other.setStatus("plan");
+        when(demands.selectById("D2")).thenReturn(other);
+        when(tasks.selectDemandForScope("W1", "D2")).thenReturn(other);
+        TaskSaveRequest req = request();
+        req.setDemandId("D2");
+        assertTrue(assertThrows(AppException.class, () -> update(req))
+                .getMessage().contains("不属于该项目"));
+        verify(tasks, never()).update(any());
+    }
+
     @Test
     void releasedTargetCannotReceiveNewBindingsIncludingInheritance() {
         version("V1", "active", "R1");

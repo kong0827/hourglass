@@ -81,6 +81,15 @@ public class RequirementController {
         return ApiResult.ok();
     }
 
+    /** 项目换项目集：只改归组；setId 为空表示移出项目集（未分组） */
+    @PutMapping({"/api/reqs/{id}/set", "/api/projects/{id}/set"})
+    public ApiResult<Requirement> moveToSet(@PathVariable String id,
+                                            @RequestParam(required = false) String setId,
+                                            @RequestParam(required = false) String workspace) {
+        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        return ApiResult.ok(requirementService.moveToSet(ws.getId(), CurrentUser.id(), id, setId));
+    }
+
     /** 项目活动轨迹：沿用空间成员权限，并校验项目属于该空间。 */
     @GetMapping({"/api/reqs/{id}/activities", "/api/projects/{id}/activities"})
     public ApiResult<PageResult<WorkActivity>> activities(@PathVariable String id,

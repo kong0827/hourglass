@@ -64,6 +64,8 @@ public class NotificationService {
     private static final AtomicInteger SEND_THREAD_SEQ = new AtomicInteger();
     /** pushplus 官方端点：统一 token 只发这里，绝不发给空间自填地址 */
     private static final String PUSHPLUS_ENDPOINT = "https://www.pushplus.plus/send";
+    /** 无到期待办时的静默原因：日志按它降噪，文案改动必须同步这里 */
+    private static final String QUIET_DIGEST_REASON = "当前无逾期或今日到期任务，静默跳过";
     /** 未启用推送时的统一说明（设置页与测试推送共用，避免"测试通过但定时不发"） */
     public static final String DISABLED_REASON =
             "外部推送未启用（app.notify.enabled 未打开），本次不发送外部消息；站内提醒/汇总不受影响";
@@ -195,6 +197,9 @@ public class NotificationService {
             log.warn("每日提醒：读取空间列表失败", e);
             return;
         }
+        int scanned = 0;
+        int delivered = 0;
+        int inAppTotal = 0;
         for (Workspace ws : all) {
             /* R-3：汇总现在也写应用内通知，因此不再只遍历"配了 webhook 的空间"；
                R-4：按空间隔离异常，一个空间失败不影响其它空间的当日汇总。 */
@@ -202,12 +207,27 @@ public class NotificationService {
                 if (!effectiveEnabled(ws) && !effectiveInAppEnabled(ws)) {
                     continue; // 外部推送与站内通知都关闭：定时汇总不发送
                 }
+                scanned++;
                 Map<String, Object> result = pushDigest(ws, false);
-                log.info("每日提醒检查（{}）：{}", ws.getName(), result);
+                int inApp = result.get("inApp") instanceof Number ? ((Number) result.get("inApp")).intValue() : 0;
+                boolean sent = Boolean.TRUE.equals(result.get("sent"));
+                if (sent || inApp > 0) {
+                    delivered++;
+                    inAppTotal += inApp;
+                }
+                if (!sent && inApp == 0 && QUIET_DIGEST_REASON.equals(String.valueOf(result.get("reason")))) {
+                    /* 「当前无到期待办」是预期结果：逐空间降为 DEBUG，避免每天刷十几条相同内容 */
+                    log.debug("每日提醒检查（{}）：{}", ws.getName(), result);
+                } else {
+                    /* 送达、失败、渠道未确认都要留 INFO，汇总日志只做整体计数 */
+                    log.info("每日提醒检查（{}）：{}", ws.getName(), result);
+                }
             } catch (Exception e) {
                 log.warn("每日提醒推送异常（空间 {}），已跳过该空间", ws.getId(), e);
             }
         }
+        /* 汇总日志才是诊断信号：一轮到底扫了几个空间、有没有真的送达 */
+        log.info("每日提醒检查完成：扫描空间 {} 个，送达 {} 个，站内送达 {} 人", scanned, delivered, inAppTotal);
     }
 
     @Scheduled(cron = "0 */5 * * * *")
@@ -289,7 +309,7 @@ public class NotificationService {
                 } else {
                     // 外部未配置且站内关闭：标记已处理，避免永久重试；只写应用日志，不污染任务时间线
                     taskMapper.markRemindSent(t.getId());
-                    log.info("提醒未送达：外部推送与站内通知均已关闭（task={}，空间 {}）", t.getId(), ws.getId());
+                    log.debug("提醒未送达：外部推送与站内通知均已关闭（task={}，空间 {}）", t.getId(), ws.getId());
                 }
             } catch (Exception e) {
                 log.warn("单条任务提醒处理失败（task={}），已跳过", t.getId(), e);
@@ -298,7 +318,7 @@ public class NotificationService {
         for (Task t : expired) {
             try {
                 taskMapper.markRemindSent(t.getId());
-                log.info("提醒时间已过（task={}，空间 {}），标记为已处理，未推送", t.getId(), ws.getId());
+                log.debug("提醒时间已过（task={}，空间 {}），标记为已处理，未推送", t.getId(), ws.getId());
             } catch (Exception e) {
                 log.warn("过期提醒标记失败（task={}），已跳过", t.getId(), e);
             }
@@ -515,7 +535,7 @@ public class NotificationService {
 
         if (!force && over.isEmpty() && todayDue.isEmpty()) {
             res.put("sent", false);
-            res.put("reason", "当前无逾期或今日到期任务，静默跳过");
+            res.put("reason", QUIET_DIGEST_REASON);
             return res;
         }
 
@@ -739,18 +759,29 @@ public class NotificationService {
             String resp = restTemplate.postForObject(hook, payload, String.class);
             if (!channelAccepted(channel, resp)) {
                 // 未解析出渠道成功码（HTML 错误页/空响应/跳转页等）一律视为失败：提醒会保留待重试，不误标已发送
-                log.warn("推送结果无法确认为成功（渠道 {}）：{}", channel,
+                log.warn("推送结果无法确认为成功（空间 {}，渠道 {}）：{}", ws.getId(), channel,
                         Texts.cut(resp == null ? "<空响应>" : resp, 200));
                 recordResult(ws, "failed:渠道未返回明确成功码");
                 return false;
             }
+            log.info("推送发送成功：空间={} 渠道={} 目标={}", ws.getId(), channel, safeHost(hook));
             recordResult(ws, "success");
             return true;
         } catch (Exception e) {
-            log.warn("推送请求失败：{}", safeError(e));
+            log.warn("推送请求失败（空间 {}，渠道 {}）：{}", ws.getId(), channel, safeError(e));
             /* 异常文本可能带完整 webhook（serverchan 的 URL 里就有 token），回写到设置页前先脱敏 */
             recordResult(ws, "failed:" + Texts.cut(safeError(e), 120));
             return false;
+        }
+    }
+
+    /** 推送地址可能把 token 放在 path/query（serverchan 即如此），日志只留主机名 */
+    private static String safeHost(String url) {
+        try {
+            java.net.URI u = java.net.URI.create(url);
+            return u.getScheme() + "://" + u.getHost() + (u.getPort() > 0 ? ":" + u.getPort() : "");
+        } catch (RuntimeException ignored) {
+            return "<url>";
         }
     }
 

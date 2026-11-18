@@ -22,6 +22,10 @@ public interface ProjectSetMapper {
 
     int update(ProjectSet set);
 
+    /** 手动排序：只改 sort_order，不动 updated_at */
+    int updateSortOrder(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                        @Param("sortOrder") int sortOrder);
+
     /** 解绑：项目集删除后项目回到「未分组」，不删除任何项目或数据 */
     int unbindProjects(@Param("workspaceId") String workspaceId, @Param("setId") String setId);
 

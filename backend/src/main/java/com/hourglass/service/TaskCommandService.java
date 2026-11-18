@@ -47,6 +47,8 @@ import java.util.List;
 @Service
 public class TaskCommandService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TaskCommandService.class);
+
     /** 列内排序的稀疏步长（与 {@link TaskWorkflowService} 同一口径） */
     private static final int SORT_STEP = 1024;
 
@@ -141,7 +143,7 @@ public class TaskCommandService {
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
-        applyRequest(userId, workspaceId, t, req, null);
+        applyRequest(userId, workspaceId, t, req, null, null);
         applyTestOwner(workspaceId, t, req, null);
         assertDemandProjectUnchanged(workspaceId, t.getDemandId(), demandProject);
         validateNewDemandLink(workspaceId, null, t);
@@ -195,6 +197,8 @@ public class TaskCommandService {
         audit.log(userId, workspaceId, id, "create", subCount > 0
                 ? ("恢复任务「" + t.getTitle() + "」（含 " + subCount + " 项子任务）" + (versionNote == null ? "" : "，" + versionNote))
                 : ("创建任务「" + t.getTitle() + "」" + (versionNote == null ? "" : "（" + versionNote + "）")));
+        log.info("创建工作项：id={} 项目={} 列={} 标题={}", id, t.getReqId(), t.getBoardColumn(),
+                Texts.cut(t.getTitle(), 60));
         if (t.getOwnerUserId() != null && !t.getOwnerUserId().equals(userId)) {
             notificationEvents.notify(t.getOwnerUserId(), workspaceId,
                     UserNotificationPreferenceService.TASK_ASSIGNED,
@@ -229,7 +233,7 @@ public class TaskCommandService {
         t.setTestOwnerUserId(old.getTestOwnerUserId());
         t.setTestOwner(old.getTestOwner());
         t.setTestRequestedAt(old.getTestRequestedAt());
-        applyRequest(userId, workspaceId, t, req, old.getOwnerUserId());
+        applyRequest(userId, workspaceId, t, req, old.getOwnerUserId(), old.getDemandId());
         applyTestOwner(workspaceId, t, req, old);
         projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
         /* 旧客户端 / 快捷编辑没传里程碑时保留原值，避免被默认值清掉 */
@@ -269,10 +273,13 @@ public class TaskCommandService {
         if (req.getDemandId() == null) {
             t.setDemandId(old.getDemandId());
         }
+        /* 任务换项目才让旧需求失效；项目没变时，存量跨项目关联（项目集拆分遗留）原样保留，
+           不能因为需求项目与任务项目不同就在普通保存里被悄悄解绑 */
         if (t.getDemandId() != null) {
             Demand demand = taskMapper.selectDemandForScope(workspaceId, t.getDemandId());
+            boolean projectChanged = !Objects.equals(old.getReqId(), t.getReqId());
             if (demand == null || !workspaceId.equals(demand.getWorkspaceId())
-                    || !Objects.equals(demand.getReqId(), t.getReqId())) {
+                    || (projectChanged && !Objects.equals(demand.getReqId(), t.getReqId()))) {
                 t.setDemandId(null);
             }
         }
@@ -338,6 +345,9 @@ public class TaskCommandService {
         int updatedRows = renumber ? TaskSupport.updateWithNo(taskMapper, t) : taskMapper.update(t);
         if (updatedRows != 1) {
             throw new AppException(409, "任务已被其他人修改，请刷新后重新编辑");
+        }
+        if (!Objects.equals(old.getReqId(), t.getReqId())) {
+            log.info("工作项换项目：id={} {}→{}（操作人 {}）", id, old.getReqId(), t.getReqId(), userId);
         }
         if (renumber) {
             String before = Nos.workItem(old.getItemNo());
@@ -408,7 +418,7 @@ public class TaskCommandService {
     }
 
     private void applyRequest(String userId, String workspaceId, Task t, TaskSaveRequest req,
-                              String oldOwnerUserId) {
+                              String oldOwnerUserId, String oldDemandId) {
         String oldProjectId = t.getReqId();
         t.setTitle(req.getTitle().trim());
         t.setDescription(HtmlSanitizer.taskDescription(Texts.trimToNull(req.getDescription())));
@@ -547,7 +557,15 @@ public class TaskCommandService {
                 }
                 t.setReqId(reqId);
             } else if (!reqId.equals(demand.getReqId())) {
-                throw AppException.badRequest("所选需求池需求不属于该项目");
+                /* 存量跨项目关联（项目集拆分遗留）：保持原关联、且任务项目没变时放行；
+                   新建关联、改选需求或同时换项目，仍要求需求属于任务所选项目 */
+                boolean keepLegacyLink = oldDemandId != null && oldDemandId.equals(demandId)
+                        && Objects.equals(reqId, oldProjectId);
+                if (!keepLegacyLink) {
+                    throw AppException.badRequest("所选需求池需求不属于该项目");
+                }
+                log.debug("保留存量跨项目需求关联：task={} demand={} 任务项目={} 需求项目={}",
+                        t.getId(), demandId, reqId, demand.getReqId());
             }
             t.setDemandId(demandId);
         } else {
@@ -892,6 +910,8 @@ public class TaskCommandService {
         if (!Objects.equals(beforeId, task.getDemandId())) {
             audit.logChange(userId, workspaceId, task.getId(), "demand_change", "关联需求变更",
                     demandState(workspaceId, beforeId), demandState(workspaceId, task.getDemandId()), null);
+            /* 关联变更属于关键修改：审计表之外在应用日志留一行，便于与请求 traceId 对齐 */
+            log.info("关联需求变更：task={} {}→{}（操作人 {}）", task.getId(), beforeId, task.getDemandId(), userId);
         }
     }
 

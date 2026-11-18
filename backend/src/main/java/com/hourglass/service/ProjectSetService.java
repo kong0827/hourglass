@@ -147,6 +147,34 @@ public class ProjectSetService {
         return setMapper.selectById(workspaceId, id);
     }
 
+    /**
+     * 项目集手动排序：ids 必须是空间内全部项目集的新顺序。
+     * 期间有集被增删（数量或成员对不上）时回 409，让前端刷新后重试。
+     */
+    @Transactional
+    public void reorder(String workspaceId, String userId, List<String> ids) {
+        requireManage(workspaceId, userId);
+        if (ids == null || ids.isEmpty()) {
+            throw new AppException(400, "项目集顺序不能为空");
+        }
+        Set<String> existing = new HashSet<String>();
+        for (ProjectSet set : setMapper.selectAll(workspaceId)) {
+            existing.add(set.getId());
+        }
+        Set<String> seen = new HashSet<String>();
+        for (String id : ids) {
+            if (id == null || !existing.contains(id) || !seen.add(id)) {
+                throw new AppException(409, "项目集顺序已变化，请刷新后重试");
+            }
+        }
+        if (seen.size() != existing.size()) {
+            throw new AppException(409, "项目集顺序已变化，请刷新后重试");
+        }
+        for (int i = 0; i < ids.size(); i++) {
+            setMapper.updateSortOrder(workspaceId, ids.get(i), i);
+        }
+    }
+
     /** 删除只解散归组：项目回到「未分组」，项目、工作项、需求与权限一律不动。 */
     @Transactional
     public void delete(String workspaceId, String userId, String id) {

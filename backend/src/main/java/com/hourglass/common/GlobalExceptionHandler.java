@@ -34,10 +34,19 @@ public class GlobalExceptionHandler {
         }
     }
 
+    /**
+     * 业务拒绝必须留痕：这类 4xx 不抛栈，若不主动记日志，线上只能靠前端截图猜原因。
+     * 只记方法、路径、错误码与业务文案（含请求参数会把用户输入写进日志，不做）。
+     */
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResult<Void>> handleAppException(AppException e, HttpServletRequest request) {
         markFailed(request);
         int status = e.getCode() >= 400 && e.getCode() <= 599 ? e.getCode() : 400;
+        if (status >= 500) {
+            log.error("业务处理失败：{} {} - code={} {}", method(request), uri(request), e.getCode(), e.getMessage());
+        } else {
+            log.warn("业务请求被拒绝：{} {} - code={} {}", method(request), uri(request), e.getCode(), e.getMessage());
+        }
         return ResponseEntity.status(status).body(ApiResult.error(e.getCode(), e.getMessage()));
     }
 
@@ -46,12 +55,14 @@ public class GlobalExceptionHandler {
         markFailed(request);
         FieldError fieldError = e.getBindingResult().getFieldError();
         String message = fieldError == null ? "参数不合法" : fieldError.getDefaultMessage();
+        log.debug("参数校验失败：{} {} - {}", method(request), uri(request), message);
         return ResponseEntity.badRequest().body(ApiResult.error(400, message));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResult<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e, HttpServletRequest request) {
         markFailed(request);
+        log.debug("参数类型不匹配：{} {} - {}", method(request), uri(request), e.getName());
         return ResponseEntity.badRequest().body(ApiResult.error(400, "参数不合法：" + e.getName()));
     }
 
@@ -59,12 +70,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResult<Void>> handleMissingParameter(
             org.springframework.web.bind.MissingServletRequestParameterException e, HttpServletRequest request) {
         markFailed(request);
+        log.debug("缺少必要参数：{} {} - {}", method(request), uri(request), e.getParameterName());
         return ResponseEntity.badRequest().body(ApiResult.error(400, "缺少必要参数：" + e.getParameterName()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResult<Void>> handleUnreadable(HttpMessageNotReadableException e, HttpServletRequest request) {
         markFailed(request);
+        log.debug("请求体无法解析：{} {} - {}", method(request), uri(request), e.getMessage());
         return ResponseEntity.badRequest()
                 .body(ApiResult.error(400, "请求体格式不正确（JSON 解析失败或日期格式非法）"));
     }
@@ -73,6 +86,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResult<Void>> handleUploadTooLarge(
             org.springframework.web.multipart.MaxUploadSizeExceededException e, HttpServletRequest request) {
         markFailed(request);
+        log.debug("上传文件超过大小上限：{} {}", method(request), uri(request));
         return ResponseEntity.badRequest().body(ApiResult.error(400, "文件不能超过 10MB"));
     }
 
@@ -107,6 +121,14 @@ public class GlobalExceptionHandler {
         }
         log.error("未处理异常：{} {}", request.getMethod(), request.getRequestURI(), e);
         return ResponseEntity.status(500).body(ApiResult.error(500, "服务内部错误"));
+    }
+
+    private static String method(HttpServletRequest request) {
+        return request == null ? "-" : request.getMethod();
+    }
+
+    private static String uri(HttpServletRequest request) {
+        return request == null ? "-" : request.getRequestURI();
     }
 
     private static boolean isEventStream(HttpServletResponse response) {

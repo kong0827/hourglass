@@ -31,6 +31,8 @@ import java.util.List;
 @Component
 public class GitLabClient {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GitLabClient.class);
+
     private static final int PER_PAGE = 100;
     /** 防御异常响应：单类资源最多翻 100 页（1 万条） */
     private static final int MAX_PAGES = 100;
@@ -105,6 +107,7 @@ public class GitLabClient {
         }
         String base = trimSlash(repoUrl) + "/api/v4/projects/" + encode(projectRef);
         List<T> all = new ArrayList<T>();
+        long startedAt = System.currentTimeMillis();
         for (int page = 1; page <= MAX_PAGES; page++) {
             URI uri = URI.create(base + path + (path.contains("?") ? "&" : "?")
                     + "per_page=" + PER_PAGE + "&page=" + page);
@@ -112,8 +115,12 @@ public class GitLabClient {
             try {
                 resp = restTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<Void>(headers(token)), type);
             } catch (RestClientResponseException ex) {
+                log.warn("GitLab 请求失败：project={} path={} status={} 耗时={}ms",
+                        projectRef, Texts.cut(path, 40), ex.getRawStatusCode(), System.currentTimeMillis() - startedAt);
                 throw AppException.badRequest(gitErrorMessage(ex.getRawStatusCode(), ex.getStatusText()));
             } catch (Exception ex) {
+                log.warn("GitLab 请求异常：project={} path={} 耗时={}ms - {}",
+                        projectRef, Texts.cut(path, 40), System.currentTimeMillis() - startedAt, safeMessage(ex));
                 throw AppException.badRequest("无法访问 GitLab：" + safeMessage(ex));
             }
             List<T> body = resp.getBody();
@@ -126,6 +133,8 @@ public class GitLabClient {
                 break;
             }
         }
+        log.info("GitLab 拉取完成：project={} path={} 条数={} 耗时={}ms",
+                projectRef, Texts.cut(path, 40), all.size(), System.currentTimeMillis() - startedAt);
         return all;
     }
 

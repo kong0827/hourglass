@@ -52,6 +52,11 @@
     <if test="updatedAt != null">AND updated_at = #{updatedAt}</if>
   </update>
 
+  <update id="updateSortOrder">
+    UPDATE project_set SET sort_order = #{sortOrder}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
   <update id="unbindProjects">
     UPDATE requirement SET set_id = NULL
     WHERE workspace_id = #{workspaceId} AND set_id = #{setId}

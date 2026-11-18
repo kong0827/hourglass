@@ -20,6 +20,8 @@ import java.util.Properties;
 @Service
 public class SmtpMailService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SmtpMailService.class);
+
     private final MailSettingService settingService;
     private final AiCrypto crypto;
     /** 只影响收件人看到的名称，MAIL FROM 仍是配置里的发件邮箱，不改变企业邮的账号一致性要求。 */
@@ -54,7 +56,32 @@ public class SmtpMailService {
             }
         }
         JavaMailSenderImpl sender = createSender(s, password);
-        sender.send(buildMessage(sender, s.getFromEmail(), recipient, subject, body));
+        /* 报文组装属于参数校验，放到计时区外：地址格式错误不该记成 SMTP 发送失败 */
+        MimeMessage message = buildMessage(sender, s.getFromEmail(), recipient, subject, body);
+        long startedAt = System.currentTimeMillis();
+        try {
+            sender.send(message);
+            log.info("SMTP 发送成功：host={} port={} to={} 耗时={}ms",
+                    s.getHost(), sender.getPort(), maskEmail(recipient), System.currentTimeMillis() - startedAt);
+        } catch (RuntimeException e) {
+            log.warn("SMTP 发送失败：host={} port={} to={} 耗时={}ms - {}",
+                    s.getHost(), sender.getPort(), maskEmail(recipient),
+                    System.currentTimeMillis() - startedAt, errorMessage(e));
+            throw e;
+        }
+    }
+
+    /** 日志只留域名与首字母，不把完整收件人写进文件 */
+    static String maskEmail(String email) {
+        String value = Texts.trimToNull(email);
+        if (value == null) {
+            return "-";
+        }
+        int at = value.indexOf('@');
+        if (at <= 0) {
+            return value.length() <= 2 ? "**" : value.charAt(0) + "***";
+        }
+        return value.charAt(0) + "***" + value.substring(at);
     }
 
     /** 独立成方法便于针对性测试报文头，不连接真实 SMTP。 */

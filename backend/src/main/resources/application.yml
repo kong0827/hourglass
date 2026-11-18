@@ -48,6 +48,10 @@ mybatis:
 logging:
   level:
     com.hourglass: info
+  pattern:
+    # traceId 由 TraceIdFilter 写入 MDC；定时任务、启动阶段等无请求上下文时显示 -
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{50} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{50} - %msg%n"
   file:
     # 相对工作目录解析：生产 WorkingDirectory=/opt/hourglass，即 /opt/hourglass/logs/hourglass.log
     name: ${LOG_FILE:logs/hourglass.log}
