@@ -779,6 +779,7 @@ public class NotificationService {
     private static String safeHost(String url) {
         try {
             java.net.URI u = java.net.URI.create(url);
+            if (u.getHost() == null) return "<url>";
             return u.getScheme() + "://" + u.getHost() + (u.getPort() > 0 ? ":" + u.getPort() : "");
         } catch (RuntimeException ignored) {
             return "<url>";

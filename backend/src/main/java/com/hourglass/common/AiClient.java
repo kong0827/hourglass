@@ -156,7 +156,8 @@ public class AiClient {
 
     private static String host(String url) {
         try {
-            return String.valueOf(java.net.URI.create(url).getHost());
+            String host = java.net.URI.create(url).getHost();
+            return host == null ? "-" : host;
         } catch (RuntimeException ignored) {
             return "-";
         }
