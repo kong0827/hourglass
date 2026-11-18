@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 工作项终态（已取消 / 恢复）原型（2026-11-18）</title>
+<style>
+:root{
+  --bg-app:#F7F8FA;--surface:#FFFFFF;--surface-sunken:#F2F4F7;--surface-hover:#F2F4F7;--surface-active:#E9ECF1;
+  --border:#E4E7EC;--border-strong:#D0D5DD;--text:#101828;--text-2:#475467;--text-3:#667085;--text-inverse:#FFFFFF;
+  --primary:#2563EB;--primary-hover:#1D4ED8;--primary-active:#1E40AF;--primary-soft:#EFF4FF;--primary-border:#BFD3FE;--primary-fg:#1D4ED8;
+  --success:#12B76A;--success-soft:#ECFDF3;--success-border:#A6F4C5;--success-fg:#067647;
+  --danger:#F04438;--danger-soft:#FEF3F2;--danger-border:#FDA29B;--danger-fg:#B42318;
+  --warning:#F79009;--warning-soft:#FFFAEB;--warning-border:#FEDF89;--warning-fg:#B54708;
+  --plum:#7A5AF8;--plum-soft:#F4F3FF;--plum-border:#D9D6FE;--plum-fg:#5B3FD1;
+  --r-xs:6px;--r-sm:8px;--r-md:10px;--r-lg:12px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.22);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.22);
+  --dur:.15s;--ease:cubic-bezier(.2,.8,.2,1);
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219;--surface:#151B24;--surface-sunken:#1A222D;--surface-hover:#1F2937;--surface-active:#26313F;
+  --border:#25303D;--border-strong:#334153;--text:#E7ECF3;--text-2:#A9B4C2;--text-3:#7B8798;--text-inverse:#0D1219;
+  --primary:#4C8DFF;--primary-hover:#6BA1FF;--primary-active:#3B76DE;--primary-soft:#16243C;--primary-border:#2B4772;--primary-fg:#8FB4FF;
+  --success:#32D583;--success-soft:#0E2A1D;--success-border:#1F5C3E;--success-fg:#75E0A7;
+  --danger:#F97066;--danger-soft:#2B1615;--danger-border:#5C2A26;--danger-fg:#FDA29B;
+  --warning:#FDB022;--warning-soft:#2A2110;--warning-border:#5C4A1E;--warning-fg:#FEC84B;
+  --plum:#9B8AFB;--plum-soft:#211D38;--plum-border:#3F3870;--plum-fg:#BDB4FE;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --shadow-xl:0 24px 48px -12px rgba(0,0,0,.7);
+  --ring-focus:0 0 0 3px rgba(76,141,255,.28);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg-app);color:var(--text);
+  font:13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+h1,h2,h3,h4,p{margin:0}
+svg{flex:0 0 auto}
+:focus-visible{outline:none;box-shadow:var(--ring-focus)}
+
+/* ---------- 外壳 ---------- */
+.app-head{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--border);padding:13px 24px 11px}
+.head-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;max-width:1560px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--primary-soft);border:1px solid var(--primary-border);display:grid;place-items:center;color:var(--primary-fg)}
+.brand h1{font-size:15.5px;font-weight:680;letter-spacing:.2px}
+.brand p{font-size:11.5px;color:var(--text-3);margin-top:1px}
+.tools{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hint{max-width:1560px;margin:10px auto 0;padding:8px 12px;border:1px solid var(--border);border-radius:8px;
+  background:var(--surface-sunken);color:var(--text-2);font-size:12px;line-height:1.65}
+.hint b{color:var(--text);font-weight:650}
+.hint code{font-family:"SFMono-Regular",Consolas,Menlo,monospace;font-size:11px;padding:1px 5px;border-radius:4px;
+  background:var(--surface);border:1px solid var(--border)}
+
+/* ---------- 按钮 ---------- */
+.btn{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px;font-weight:550;white-space:nowrap;flex:0 0 auto;
+  line-height:1;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease)}
+.btn:hover{background:var(--surface-hover);border-color:var(--border-strong)}
+.btn:active{background:var(--surface-active)}
+.btn.sm{height:26px;padding:0 9px;font-size:12px;border-radius:var(--r-xs)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600}
+.btn.soft:hover{border-color:var(--primary)}
+.btn.danger{color:var(--danger-fg);border-color:var(--danger-border);background:var(--surface)}
+.btn.danger:hover{background:var(--danger-soft);border-color:var(--danger)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--text-2)}
+.btn.ghost:hover{background:var(--surface-hover);color:var(--text)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.primary[disabled]{background:var(--primary);border-color:var(--primary)}
+.icon-btn{width:30px;height:30px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2)}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text)}
+.icon-btn.outlined{border:1px solid var(--border);background:var(--surface)}
+.icon-btn.outlined:hover{border-color:var(--border-strong)}
+
+/* ---------- 分段 ---------- */
+.seg{display:inline-flex;align-items:center;gap:2px;padding:2px;height:28px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface-sunken)}
+.seg button{height:22px;padding:0 9px;border-radius:4px;font-size:12px;font-weight:550;color:var(--text-2);line-height:1}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:650;box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border)}
+html[data-theme="dark"] .seg button[aria-pressed="true"]{background:var(--surface-active);box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border-strong)}
+.seg button .n{color:var(--text-3);font-weight:500;margin-left:4px}
+.seg button[aria-pressed="true"] .n{color:var(--primary-fg)}
+
+/* ---------- 页面 ---------- */
+.wrap{max-width:1560px;margin:0 auto;padding:16px 24px 56px}
+.scene{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px 18px}
+.subnav{display:flex;align-items:center;gap:2px;margin:-2px 0 12px;border-bottom:1px solid var(--border)}
+.sn{position:relative;height:34px;padding:0 10px;font-size:13px;font-weight:550;color:var(--text-2)}
+.sn:hover{color:var(--text)}
+.sn.on{color:var(--primary-fg)}
+.sn.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;border-radius:2px;background:var(--primary)}
+.sn .n{margin-left:5px;font-size:11.5px;color:var(--text-3)}
+
+/* ---------- 工具条 ---------- */
+.tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:28px;margin-bottom:12px}
+.tb-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.divider{width:1px;height:16px;background:var(--border);margin:0 2px;flex:0 0 auto}
+.chip-filter{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-pill,999px);background:var(--surface);
+  font-size:12px;color:var(--text-2);display:inline-flex;align-items:center;gap:5px}
+.chip-filter:hover{background:var(--surface-hover);border-color:var(--border-strong);color:var(--text)}
+.chip-filter .v{color:var(--text-3)}
+.chip-filter.strong{background:var(--surface-sunken);border-color:var(--border-strong);color:var(--text)}
+.muted{color:var(--text-3);font-size:12px}
+.group-label{font-size:12px;color:var(--text-3);display:inline-flex;align-items:center;gap:6px}
+
+/* ---------- 看板 ---------- */
+.board{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:6px}
+.col{width:286px;flex:0 0 286px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-lg);
+  display:flex;flex-direction:column;max-height:min(70vh,660px)}
+.col-h{display:flex;align-items:center;gap:7px;padding:10px 10px 8px;border-bottom:1px solid var(--border-soft,var(--border))}
+.dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.col-h .name{font-size:13px;font-weight:650}
+.col-h .cnt{font-size:12px;color:var(--text-3);font-weight:500}
+.col-h .sp{flex:1}
+.col-tools{display:flex;align-items:center;gap:2px;color:var(--text-3)}
+.col-tools button{width:24px;height:24px;border-radius:5px;display:grid;place-items:center;color:var(--text-3)}
+.col-tools button:hover{background:var(--surface-active);color:var(--text)}
+.col-sub{padding:6px 10px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.done-seg button{height:22px;padding:0 7px;font-size:11.5px}
+.col-body{padding:8px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:60px}
+
+.card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 10px 8px;
+  cursor:pointer;transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease),transform var(--dur) var(--ease)}
+.card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-lg)}
+.card:active{transform:translateY(1px)}
+.card.blocked{border-left:3px solid var(--warning);padding-left:8px}
+.card.overdue .due{color:var(--danger-fg);font-weight:600}
+.card-h{display:flex;align-items:flex-start;gap:6px}
+.type{width:18px;height:18px;border-radius:4px;display:grid;place-items:center;font-size:10.5px;font-weight:700;flex:0 0 auto;margin-top:1px}
+.type.story{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.type.task{background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border)}
+.type.bug{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border)}
+.card-h h4{font-size:12.5px;font-weight:600;line-height:1.45;flex:1;min-width:0;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.kebab{width:20px;height:20px;border-radius:4px;color:var(--text-3);display:grid;place-items:center;flex:0 0 auto;margin:-2px -2px 0 0}
+.kebab:hover{background:var(--surface-hover);color:var(--text)}
+.card-sub{font-size:11.5px;color:var(--text-3);margin-top:4px;line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:999px;font-size:11px;
+  background:var(--surface-sunken);color:var(--text-2);border:1px solid transparent;white-space:nowrap}
+.chip.engine{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border)}
+.chip.compliance{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border)}
+.chip.host{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border)}
+.chip.ext{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border)}
+.chip.pub{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border)}
+.chip.unpub{background:var(--surface-sunken);color:var(--text-2);border-color:var(--border)}
+.chip.rollback{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border)}
+.card-meta{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:11.5px;color:var(--text-3);flex-wrap:wrap}
+.card-meta svg{opacity:.75}
+.bar{height:4px;border-radius:2px;background:var(--surface-active);margin-top:7px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:2px;background:var(--primary)}
+.card-foot{display:flex;align-items:center;gap:6px;margin-top:6px}
+.card-foot .who{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:650;
+  background:var(--plum-soft);color:var(--plum-fg);border:1px solid var(--plum-border);margin-left:auto}
+.card-foot .pct{margin-left:auto;font-size:11px;color:var(--text-3)}
+.card-foot .pct + .who{margin-left:6px}
+
+/* 空列 */
+.empty{color:var(--text-3);font-size:12px;text-align:center;padding:22px 8px;border:1px dashed var(--border);border-radius:var(--r-md)}
+
+/* ---------- 已取消页 ---------- */
+.list-wrap{border:1px solid var(--border);border-radius:var(--r-lg);overflow:auto}
+.l-row{display:grid;grid-template-columns:minmax(280px,2.2fr) 108px 108px 132px 96px 88px;gap:12px;align-items:center;
+  padding:0 14px;min-width:880px;border-bottom:1px solid var(--border)}
+.l-row:last-child{border-bottom:0}
+.l-head{height:36px;background:var(--surface-sunken);font-size:12px;color:var(--text-3);font-weight:600}
+.l-body{height:56px;font-size:12.5px}
+.l-body:hover{background:var(--surface-hover)}
+.l-title{min-width:0;display:flex;align-items:center;gap:8px}
+.l-title b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.l-title .no{font-size:11px;color:var(--text-3);font-weight:500;flex:0 0 auto}
+.l-cell{font-size:12px;color:var(--text-2)}
+.l-actions{display:flex;justify-content:flex-end;gap:6px}
+.reason{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:600}
+.reason.not_do{background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border)}
+.reason.dup{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+.reason.deferred{background:var(--plum-soft);color:var(--plum-fg);border:1px solid var(--plum-border)}
+.reason.design{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border)}
+
+/* ---------- 关键指标条 ---------- */
+.kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.kpi{flex:1 1 160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface)}
+.kpi .k{font-size:11.5px;color:var(--text-3)}
+.kpi .v{font-size:17px;font-weight:680;letter-spacing:-.01em;margin-top:1px}
+.kpi .v small{font-size:11px;font-weight:500;color:var(--text-3);margin-left:4px}
+.kpi .v.warn{color:var(--warning-fg)}
+.kpi .v.ok{color:var(--success-fg)}
+
+/* ---------- 抽屉 ---------- */
+.scrim{position:fixed;inset:0;background:rgba(16,24,40,.32);z-index:60;opacity:0;pointer-events:none;transition:opacity var(--dur) var(--ease)}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100%;width:min(520px,100%);background:var(--surface);z-index:70;
+  box-shadow:var(--shadow-xl);border-left:1px solid var(--border);display:flex;flex-direction:column;
+  transform:translateX(102%);transition:transform .2s var(--ease)}
+.drawer.on{transform:none}
+.dw-head{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px}
+.dw-head .no{font-size:11.5px;color:var(--text-3);font-weight:600;letter-spacing:.02em}
+.dw-head h3{font-size:15px;font-weight:650;line-height:1.45;margin-top:2px}
+.dw-body{flex:1;overflow-y:auto;padding:14px 16px 24px}
+.dw-sec{border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 13px;margin-bottom:12px}
+.dw-sec h4{font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.04em;margin-bottom:10px}
+.state-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.state-now{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:650}
+.state-now.cur{background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg)}
+.state-now.cancel{background:var(--surface-sunken);border:1px solid var(--border-strong);color:var(--text-2)}
+.state-now.done{background:var(--success-soft);border:1px solid var(--success-border);color:var(--success-fg)}
+.path{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.path span{font-size:11px;color:var(--text-3);padding:2px 6px;border-radius:5px}
+.path span.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.path span.passed{color:var(--text-2)}
+.path i{font-style:normal;color:var(--border-strong);font-size:11px}
+.dw-actions{display:flex;gap:8px;flex-wrap:wrap}
+.fields{display:grid;grid-template-columns:96px 1fr;gap:8px 10px;font-size:12.5px}
+.fields dt{color:var(--text-3);font-size:12px;line-height:22px}
+.fields dd{margin:0;color:var(--text);line-height:22px}
+.timeline{display:flex;flex-direction:column;gap:10px}
+.tl{display:grid;grid-template-columns:54px 1fr;gap:9px;font-size:12px}
+.tl .t{color:var(--text-3);font-size:11.5px}
+.tl .c{color:var(--text-2);line-height:1.55}
+.tl .c b{color:var(--text);font-weight:600}
+.tl .c .why{display:block;margin-top:2px;color:var(--text-3);font-size:11.5px}
+.dw-tip{padding:9px 11px;border-radius:var(--r-sm);background:var(--surface-sunken);color:var(--text-2);font-size:11.5px;line-height:1.6}
+.dw-tip b{color:var(--text)}
+
+/* ---------- 弹层菜单 ---------- */
+.menu{position:fixed;z-index:90;min-width:168px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-lg);padding:4px;display:none}
+.menu.on{display:block}
+.menu button{display:flex;align-items:center;gap:8px;width:100%;height:30px;padding:0 9px;border-radius:6px;font-size:12.5px;color:var(--text)}
+.menu button:hover{background:var(--surface-hover)}
+.menu button.danger{color:var(--danger-fg)}
+.menu .sep{height:1px;background:var(--border);margin:4px 2px}
+
+/* ---------- 对话框 ---------- */
+.dialog-wrap{position:fixed;inset:0;z-index:80;display:none;place-items:center;background:rgba(16,24,40,.4);padding:20px}
+.dialog-wrap.on{display:grid}
+.dialog{width:min(440px,100%);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xl)}
+.dialog-h{padding:14px 16px 10px;display:flex;align-items:center;gap:8px}
+.dialog-h h3{font-size:14.5px;font-weight:680}
+.dialog-b{padding:0 16px 4px}
+.dialog-f{padding:12px 16px 14px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);margin-top:12px}
+.field{margin-bottom:12px}
+.field > label{display:block;font-size:12px;color:var(--text-2);font-weight:600;margin-bottom:6px}
+.radios{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.radio{display:flex;align-items:flex-start;gap:7px;padding:8px 9px;border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;
+  transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease)}
+.radio:hover{border-color:var(--border-strong);background:var(--surface-hover)}
+.radio input{margin:2px 0 0}
+.radio .rt{display:block;font-size:12.5px;font-weight:600;line-height:1.35}
+.radio .rd{display:block;font-size:11px;color:var(--text-3);line-height:1.45;margin-top:1px}
+.radio:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
+textarea,input[type=text]{width:100%;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+  color:var(--text);font:inherit;font-size:12.5px;padding:7px 9px;resize:vertical;min-height:64px}
+textarea:focus,input[type=text]:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus)}
+textarea[aria-invalid="true"]{border-color:var(--danger)}
+.err{display:block;color:var(--danger-fg);font-size:11.5px;margin-top:5px}
+.counter{display:flex;justify-content:space-between;margin-top:4px;font-size:11px;color:var(--text-3)}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,12px);z-index:95;opacity:0;pointer-events:none;
+  background:#101828;color:#fff;font-size:12.5px;padding:9px 14px;border-radius:9px;box-shadow:var(--shadow-lg);
+  transition:opacity .18s var(--ease),transform .18s var(--ease);max-width:min(560px,90vw)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+html[data-theme="dark"] .toast{background:#E7ECF3;color:#101828}
+
+/* ---------- 说明 ---------- */
+.notes{margin-top:16px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);padding:14px 16px}
+.notes h3{font-size:13px;font-weight:680;margin-bottom:10px}
+.notes table{width:100%;border-collapse:collapse;font-size:12px}
+.notes th,.notes td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.6}
+.notes th{color:var(--text-3);font-weight:600;background:var(--surface-sunken)}
+.notes td:first-child{font-weight:600;white-space:nowrap;width:120px}
+.notes .foot{margin-top:9px;font-size:11.5px;color:var(--text-3)}
+
+@media (max-width:900px){
+  .wrap{padding:12px}
+  .col{width:264px;flex-basis:264px}
+  .l-row{grid-template-columns:minmax(200px,2fr) 92px 92px 108px;min-width:620px}
+  .l-row .opt{display:none}
+  .radios{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="app-head">
+  <div class="head-row">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M6 3h12M6 21h12M7 3c0 5 5 7 5 9s-5 4-5 9M17 3c0 5-5 7-5 9s5 4 5 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </span>
+      <div>
+        <h1>工作项终态 · 交互原型</h1>
+        <p>已取消 / 恢复 · 已完成列阶段筛选 · 逾期与完成率口径</p>
+      </div>
+    </div>
+    <div class="tools">
+      <div class="seg" role="group" aria-label="视图切换">
+        <button id="segBoard" aria-pressed="true" data-view="board">看板</button>
+        <button id="segCanceled" aria-pressed="false" data-view="canceled">已取消<span class="n" id="segCanceledN">3</span></button>
+      </div>
+      <button class="icon-btn outlined" id="themeBtn" title="切换主题" aria-label="切换主题">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 13.5A8 8 0 0 1 10.5 4a8.2 8.2 0 1 0 9.5 9.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="hint">
+    <b>这一版只改终态，不改列模型。</b>
+    <code>canceled</code> 是系统列，不在看板横排显示，入口在卡片菜单与「已取消」页；
+    取消后<b>不计逾期</b>、从<b>完成率分母剔除</b>、<b>不写完成快照</b>；恢复回到取消前所在列，必须填原因。
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="scene">
+    <nav class="subnav" aria-label="工作项视图">
+      <button class="sn on">看板</button>
+      <button class="sn">列表</button>
+      <button class="sn">层级</button>
+      <button class="sn">日历</button>
+      <button class="sn">甘特</button>
+    </nav>
+
+    <!-- 看板视图 -->
+    <div id="boardView">
+      <div class="tb">
+        <div class="tb-left">
+          <span class="group-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M7 12h10M10 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            分组
+          </span>
+          <div class="seg" role="group" aria-label="分组方式">
+            <button aria-pressed="true">项目集</button>
+            <button aria-pressed="false">二级</button>
+            <button aria-pressed="false">不分组</button>
+          </div>
+          <span class="divider"></span>
+          <button class="chip-filter">到期</button>
+          <button class="chip-filter">项目 <span class="v">全部</span></button>
+          <button class="chip-filter">状态 <span class="v">未关闭</span></button>
+          <button class="chip-filter">负责人</button>
+          <button class="chip-filter">优先级</button>
+          <button class="chip-filter strong">更多筛选 <span class="v">2</span></button>
+        </div>
+        <div class="tb-right">
+          <button class="btn" id="btnOpenCanceled">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            已取消 <span class="muted" id="btnCanceledN">3</span>
+          </button>
+          <button class="btn ghost" title="视图设置">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            视图
+          </button>
+        </div>
+      </div>
+
+      <div class="board" id="board"></div>
+    </div>
+
+    <!-- 已取消页 -->
+    <div id="canceledView" hidden>
+      <div class="tb">
+        <div class="tb-left">
+          <h3 style="font-size:15px;font-weight:680">已取消 <span class="muted" id="canceledTotal">3</span></h3>
+          <span class="divider"></span>
+          <div class="seg" role="group" aria-label="取消原因筛选" id="cancelReasonSeg">
+            <button data-reason="all" aria-pressed="true">全部<span class="n" id="rzAll">3</span></button>
+            <button data-reason="not_do" aria-pressed="false">不做<span class="n" id="rzNotDo">1</span></button>
+            <button data-reason="dup" aria-pressed="false">重复<span class="n" id="rzDup">1</span></button>
+            <button data-reason="deferred" aria-pressed="false">延期<span class="n" id="rzDeferred">1</span></button>
+            <button data-reason="design" aria-pressed="false">设计如此<span class="n" id="rzDesign">0</span></button>
+          </div>
+        </div>
+        <div class="tb-right">
+          <span class="muted">已取消不计逾期，也不进完成率分母</span>
+        </div>
+      </div>
+
+      <div class="list-wrap">
+        <div class="l-row l-head">
+          <span>工作项</span><span>取消前状态</span><span>取消原因</span><span>取消时间 / 操作人</span><span class="opt">说明</span><span style="text-align:right">操作</span>
+        </div>
+        <div id="canceledList"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="notes">
+    <h3>口径与交互说明</h3>
+    <table>
+      <thead><tr><th>项</th><th>改后口径</th><th>原型里怎么看</th></tr></thead>
+      <tbody>
+        <tr><td>终态</td><td><code>done</code> 与 <code>canceled</code> 并列为终态；取消只能从非终态进入，已完成需先重开。</td><td>已完成卡片菜单只有「重开」，没有「取消」。</td></tr>
+        <tr><td>逾期</td><td>终态与「执行结束」列不计逾期；取消后红色逾期标记消失。</td><td>取消「报备提醒」后再看，逾期计数 −1。</td></tr>
+        <tr><td>完成率</td><td>分母剔除已取消，取消数单列；避免团队为了不拉低完成率而改用删除。</td><td>看板顶部 KPI 条。</td></tr>
+        <tr><td>需求完成</td><td>未删除工作项全部终态 <b>且至少 1 个已完成</b> 才算完成；全取消不算完成。</td><td>已取消页顶部提示。</td></tr>
+        <tr><td>留痕</td><td>取消/恢复写 <code>task_log</code>，带 <code>reason</code> 与前后快照；不拼进文案。</td><td>抽屉底部时间轴：原因单独一行。</td></tr>
+        <tr><td>恢复</td><td>回到取消前所在列；列已删除则回第一个开列；必须填原因。</td><td>已取消页点「恢复」。</td></tr>
+        <tr><td>看板</td><td>不新增第 6 列，避免常年空列；用工具条「已取消 N」与卡片菜单进入。</td><td>取消后卡片从列内移除，toast 指明去向。</td></tr>
+        <tr><td>已完成列</td><td>列内胶囊按发布态筛选，列头计数不随筛选变化，另示「匹配 M / 4」。</td><td>点「已发布 / 未发布 / 已回滚」。</td></tr>
+      </tbody>
+    </table>
+    <p class="foot">原型为静态数据演示：取消、恢复、阶段筛选、抽屉、主题与视图切换均可点；其余筛选项为展示态。2026-11-18。</p>
+  </section>
+</main>
+
+<div class="scrim" id="scrim"></div>
+
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="工作项详情">
+  <div class="dw-head">
+    <div style="flex:1;min-width:0">
+      <span class="no" id="dwNo">WI-1024</span>
+      <h3 id="dwTitle">工作项标题</h3>
+    </div>
+    <button class="icon-btn" id="dwClose" aria-label="关闭">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="dw-body" id="dwBody"></div>
+</aside>
+
+<div class="menu" id="menu" role="menu"></div>
+
+<div class="dialog-wrap" id="dialogWrap" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+  <div class="dialog">
+    <div class="dialog-h">
+      <h3 id="dlgTitle">取消工作项</h3>
+    </div>
+    <div class="dialog-b" id="dlgBody"></div>
+    <div class="dialog-f">
+      <button class="btn" id="dlgCancel">再想想</button>
+      <button class="btn primary" id="dlgOk">确认取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  var COLUMNS = [
+    { id:'backlog', name:'待处理', color:'#98A2B3' },
+    { id:'doing',   name:'进行中', color:'#2563EB' },
+    { id:'test',    name:'待测试', color:'#F79009' },
+    { id:'testing', name:'测试中', color:'#7A5AF8' },
+    { id:'done',    name:'已完成', color:'#12B76A' }
+  ];
+  var COL_NAME = {};
+  COLUMNS.forEach(function(c){ COL_NAME[c.id] = c.name; });
+
+  var REASONS = {
+    not_do:  { name:'不做',     desc:'需求方向调整或价值不足，决定不排期' },
+    dup:     { name:'重复',     desc:'与其他工作项重复，已合并处理' },
+    deferred:{ name:'延期',     desc:'暂缓，后续可能重新提出' },
+    design:  { name:'设计如此', desc:'缺陷判定为非缺陷，按设计行为处理' }
+  };
+  var NEXT_ACTION = { backlog:'开始处理', doing:'提测', test:'开始验证', testing:'验证通过' };
+
+  var tasks = [
+    { id:'t1',  no:'WI-1012', type:'task',  col:'backlog', title:'流程引擎数据分析', sub:'分析出流程流转过程总耗时，分阶段耗时等', mod:'流程引擎基础功能', modKind:'engine', due:'03-05', est:'7h', spent:'—', pct:0,  who:'孔', owner:'孔祥劲' },
+    { id:'t2',  no:'WI-1013', type:'task',  col:'backlog', title:'客户综合看板', sub:'客户综合看板', mod:'流程引擎基础功能', modKind:'engine', due:'02-12', est:'30h', spent:'—', pct:0, who:'施', owner:'施然', blocked:'等待数据源接入' },
+    { id:'t3',  no:'WI-1014', type:'story', col:'backlog', title:'季度报告流程查询及导出', sub:'流程查询及导出', mod:'合规管理', modKind:'compliance', due:'03-19', est:'8h', spent:'—', pct:0, who:'张', owner:'张屿' },
+    { id:'t4',  no:'WI-1018', type:'task',  col:'doing',   title:'外接客户季度报告', sub:'https://page.weixin.qq.com/smartpage/p/b1ApSu1TV4', mod:'合规管理', modKind:'compliance', due:'02-18', est:'152h', spent:'64h', pct:40, who:'张', owner:'张屿' },
+    { id:'t5',  no:'WI-1019', type:'task',  col:'doing',   title:'报备提醒', sub:'提醒登记维护、模板导入、外部名单定时任务、关联申请与通知（含监听器承载）、提醒…', mod:'程序化报备', modKind:'compliance', due:'01-28', est:'24h', spent:'43h', pct:0, who:'程', owner:'程一', overdue:true },
+    { id:'t6',  no:'WI-1020', type:'task',  col:'doing',   title:'提高出金比例', sub:'提高出金比例', mod:'提高出金比例', modKind:'', due:'02-04', est:'12h', spent:'12h', pct:20, who:'孔', owner:'孔祥劲' },
+    { id:'t7',  no:'WI-1021', type:'task',  col:'test',    title:'客户未注销提醒', sub:'在途主机托管流程显示「在途」，当客户发起注销时，若存在在途的主机托管流程，需进行…', mod:'主机托管', modKind:'host', due:'12-31', est:'11h30', spent:'4h30', pct:75, who:'庄', owner:'庄蕴' },
+    { id:'t8',  no:'WI-1022', type:'task',  col:'test',    title:'主机托管台账新增一级部门筛选', sub:'主机托管台账新增一级部门筛选', mod:'外接', modKind:'ext', due:'12-25', est:'9h', spent:'3h30', pct:75, who:'庄', owner:'庄蕴' },
+    { id:'t9',  no:'WI-1023', type:'task',  col:'testing', title:'注销账号存在在途流程定时通知运维', sub:'注销账号存在在途流程定时通知运维', mod:'流程引擎基础功能', modKind:'engine', due:'12-23', est:'8h30', spent:'4h30', pct:80, who:'施', owner:'施然' },
+    { id:'t10', no:'WI-1024', type:'task',  col:'testing', title:'主机托管台账历史业务负责人完善', sub:'主机托管台账历史业务负责人完善', mod:'主机托管', modKind:'host', due:'12-24', est:'7h30', spent:'3h30', pct:80, who:'施', owner:'施然' },
+    { id:'t11', no:'WI-1008', type:'task',  col:'done',    title:'部门映射配置', sub:'建立 CAP-OA 的部门映射', mod:'流程引擎基础功能', modKind:'engine', due:'12-02', est:'17h', spent:'15h14', pct:100, who:'肖', owner:'肖意', pub:'published' },
+    { id:'t12', no:'WI-1009', type:'task',  col:'done',    title:'指定角色可见业务类型配置', sub:'现在是无界面，代码中进行配置，修改为可通过界面进行配置', mod:'流程引擎基础功能', modKind:'engine', due:'12-02', est:'8h', spent:'14h21', pct:100, who:'肖', owner:'肖意', pub:'published' },
+    { id:'t13', no:'WI-1010', type:'task',  col:'done',    title:'台账更新逻辑补充平台表名字覆盖配置', sub:'次席柜台配置更新时，根据柜台系统 id 判断，若配置信息已存在，且平台表柜台名称与配置…', mod:'资金监控', modKind:'', due:'01-01', est:'8h', spent:'4h', pct:100, who:'罗', owner:'罗琪', pub:'unpublished' },
+    { id:'t14', no:'WI-1011', type:'task',  col:'done',    title:'主机托管客户信息添加支持自定义字段', sub:'参考外接，支持可手动输入信息，而不去客户信息表中查', mod:'主机托管', modKind:'host', due:'12-28', est:'6h', spent:'6h', pct:100, who:'施', owner:'施然', pub:'rolledback' },
+    { id:'t15', no:'WI-0994', type:'task',  col:'canceled', title:'交易所结果与正式记录', sub:'结果按导出口径核对，第三方与内部记录存在差异', mod:'合规管理', modKind:'compliance', due:'11-20', est:'16h', spent:'5h', pct:35, who:'孔', owner:'孔祥劲',
+      cancel:{ reason:'not_do', note:'交易所口径变更，本条并入下一期的对账改造，不再单独开发', at:'11-16 10:24', by:'孔祥劲', from:'doing' } },
+    { id:'t16', no:'WI-0988', type:'task',  col:'canceled', title:'报表导出增加 Excel 水印', sub:'导出文件加部门与操作人水印', mod:'合规管理', modKind:'compliance', due:'11-18', est:'8h', spent:'—', pct:0, who:'张', owner:'张屿',
+      cancel:{ reason:'deferred', note:'等统一的导出中心落地后一起做', at:'11-12 16:40', by:'张屿', from:'backlog' } },
+    { id:'t17', no:'WI-0981', type:'task',  col:'canceled', title:'登录页暗色适配', sub:'登录页跟随系统主题', mod:'流程引擎基础功能', modKind:'engine', due:'11-10', est:'4h', spent:'2h', pct:50, who:'施', owner:'施然',
+      cancel:{ reason:'dup', note:'与「全局主题切换」重复，合并到该工作项验收', at:'11-08 09:12', by:'施然', from:'testing' } }
+  ];
+
+  // 演示用：一条逾期，取消后逾期计数减少
+  var state = {
+    view:'board',
+    doneFilter:'all',
+    cancelFilter:'all',
+    drawerId:null,
+    dialog:null,
+    theme:'light'
+  };
+
+  var $ = function(s, r){ return (r||document).querySelector(s); };
+  var $$ = function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+
+  function byId(id){ return tasks.filter(function(t){ return t.id === id; })[0]; }
+  function inCol(col){ return tasks.filter(function(t){ return t.col === col; }); }
+  function canceled(){ return tasks.filter(function(t){ return t.col === 'canceled'; }); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+
+  function toast(msg){
+    var el = $('#toast');
+    el.textContent = msg;
+    el.classList.add('on');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function(){ el.classList.remove('on'); }, 2600);
+  }
+
+  /* ---------------- 看板 ---------------- */
+  function cardHTML(t){
+    var typeChar = t.type === 'bug' ? '缺' : (t.type === 'story' ? '故' : '任');
+    var modChip = t.mod ? '<span class="chip ' + (t.modKind||'') + '">' + esc(t.mod) + '</span>' : '';
+    var pubChip = '';
+    if (t.col === 'done') {
+      pubChip = t.pub === 'published' ? '<span class="chip pub">已发布</span>'
+        : t.pub === 'rolledback' ? '<span class="chip rollback">已回滚</span>'
+        : '<span class="chip unpub">未发布</span>';
+    }
+    var blockChip = t.blocked ? '<span class="chip host">阻塞</span>' : '';
+    return '' +
+      '<article class="card' + (t.blocked?' blocked':'') + (t.overdue?' overdue':'') + '" data-id="' + t.id + '" tabindex="0" role="button" aria-label="打开 ' + esc(t.title) + '">' +
+        '<div class="card-h">' +
+          '<span class="type ' + t.type + '">' + typeChar + '</span>' +
+          '<h4>' + esc(t.title) + '</h4>' +
+          '<button class="kebab" data-menu="' + t.id + '" aria-label="更多操作">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<p class="card-sub">' + esc(t.sub) + '</p>' +
+        '<div class="chips">' + modChip + pubChip + blockChip + '</div>' +
+        '<div class="card-meta">' +
+          '<span class="due">' + svgCal() + esc(t.due) + '</span>' +
+          '<span>' + svgClock() + esc(t.spent) + '/' + esc(t.est) + '</span>' +
+        '</div>' +
+        '<div class="bar"><i style="width:' + (t.pct||0) + '%"></i></div>' +
+        '<div class="card-foot">' +
+          '<span class="pct">' + (t.pct||0) + '%</span>' +
+          '<span class="who" title="' + esc(t.owner) + '">' + esc(t.who) + '</span>' +
+        '</div>' +
+      '</article>';
+  }
+  function svgCal(){ return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="margin-right:4px;vertical-align:-1px"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'; }
+  function svgClock(){ return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="margin-right:4px;vertical-align:-1px"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M12 8v4.5l3 1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'; }
+
+  function renderBoard(){
+    var host = $('#board');
+    var html = '';
+    COLUMNS.forEach(function(c){
+      var list = inCol(c.id);
+      var body = '';
+      if (c.id === 'done') {
+        var shown = list.filter(function(t){
+          return state.doneFilter === 'all' || t.pub === state.doneFilter;
+        });
+        body = shown.length ? shown.map(cardHTML).join('') : '<div class="empty">没有符合阶段的已完成工作项</div>';
+        var sub = '' +
+          '<div class="col-sub">' +
+            '<div class="seg done-seg" role="group" aria-label="发布阶段筛选">' +
+              doneBtn('all','全部',list.length) +
+              doneBtn('unpublished','未发布',list.filter(function(t){return t.pub==='unpublished';}).length) +
+              doneBtn('published','已发布',list.filter(function(t){return t.pub==='published';}).length) +
+              doneBtn('rolledback','已回滚',list.filter(function(t){return t.pub==='rolledback';}).length) +
+            '</div>' +
+            '<span class="muted" style="font-size:11px">匹配 ' + shown.length + ' / ' + list.length + '</span>' +
+          '</div>';
+        html += colShell(c, list.length, body, sub);
+        return;
+      }
+      body = list.length ? list.map(cardHTML).join('') : '<div class="empty">暂无工作项</div>';
+      html += colShell(c, list.length, body, '');
+    });
+
+    host.innerHTML = html;
+    var cs = canceled();
+
+    $('#btnCanceledN').textContent = cs.length;
+    $('#segCanceledN').textContent = cs.length;
+    refreshKpis();
+  }
+
+  function doneBtn(v, label, n){
+    return '<button data-done="' + v + '" aria-pressed="' + (state.doneFilter===v?'true':'false') + '">' +
+      label + '<span class="n">' + n + '</span></button>';
+  }
+
+  function colShell(c, count, body, sub){
+    return '' +
+      '<section class="col" data-col="' + c.id + '">' +
+        '<div class="col-h">' +
+          '<span class="dot" style="background:' + c.color + '"></span>' +
+          '<span class="name">' + c.name + '</span>' +
+          '<span class="cnt">' + count + '</span>' +
+          '<span class="sp"></span>' +
+          '<div class="col-tools">' +
+            '<button title="列内排序" aria-label="列内排序"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M8 5v14M8 19l-3-3M8 19l3-3M16 19V5M16 5l-3 3M16 5l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+            '<button title="新建到此列" aria-label="新建到此列"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' +
+            '<button title="列设置" aria-label="列设置"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></button>' +
+          '</div>' +
+        '</div>' + sub +
+        '<div class="col-body">' + body + '</div>' +
+      '</section>';
+  }
+
+  function refreshKpis(){
+    var open = tasks.filter(function(t){ return t.col !== 'done' && t.col !== 'canceled'; });
+    var done = tasks.filter(function(t){ return t.col === 'done'; });
+    var cancel = canceled();
+    var overdue = open.filter(function(t){ return t.overdue; }).length;
+    var denom = tasks.length - cancel.length;
+    var rate = denom ? Math.round(done.length / denom * 100) : 0;
+    var host = $('#boardView .kpis');
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'kpis';
+      $('#boardView .tb').insertAdjacentElement('afterend', host);
+    }
+    host.innerHTML = '' +
+      '<div class="kpi"><div class="k">未完成工作项</div><div class="v">' + open.length + '</div></div>' +
+      '<div class="kpi"><div class="k">逾期</div><div class="v ' + (overdue ? 'warn' : '') + '">' + overdue + '<small>取消后不再计入</small></div></div>' +
+      '<div class="kpi"><div class="k">完成率</div><div class="v ok">' + rate + '%<small>分母已剔除已取消 ' + cancel.length + ' 项</small></div></div>' +
+      '<div class="kpi"><div class="k">已取消</div><div class="v">' + cancel.length + '<small>不计入逾期与完成率</small></div></div>';
+  }
+
+  /* ---------------- 已取消页 ---------------- */
+  function renderCanceled(){
+    var all = canceled();
+    var counts = { all: all.length, not_do:0, dup:0, deferred:0, design:0 };
+    all.forEach(function(t){ counts[t.cancel.reason] = (counts[t.cancel.reason]||0) + 1; });
+    $('#canceledTotal').textContent = all.length;
+    $('#rzAll').textContent = counts.all;
+    $('#rzNotDo').textContent = counts.not_do;
+    $('#rzDup').textContent = counts.dup;
+    $('#rzDeferred').textContent = counts.deferred;
+    $('#rzDesign').textContent = counts.design;
+
+    var list = all.filter(function(t){
+      return state.cancelFilter === 'all' || t.cancel.reason === state.cancelFilter;
+    });
+    var host = $('#canceledList');
+    if (!list.length) {
+      host.innerHTML = '<div class="empty" style="margin:12px">没有符合条件的工作项</div>';
+      return;
+    }
+    host.innerHTML = list.map(function(t){
+      var r = REASONS[t.cancel.reason];
+      return '' +
+        '<div class="l-row l-body">' +
+          '<div class="l-title"><b>' + esc(t.title) + '</b><span class="no">' + esc(t.no) + '</span></div>' +
+          '<div class="l-cell">' + esc(COL_NAME[t.cancel.from] || t.cancel.from) + '</div>' +
+          '<div class="l-cell"><span class="reason ' + t.cancel.reason + '">' + r.name + '</span></div>' +
+          '<div class="l-cell">' + esc(t.cancel.at) + '<br><span class="muted">' + esc(t.cancel.by) + '</span></div>' +
+          '<div class="l-cell opt" title="' + esc(t.cancel.note) + '"><span style="display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden">' + esc(t.cancel.note) + '</span></div>' +
+          '<div class="l-actions"><button class="btn sm soft" data-restore="' + t.id + '">恢复</button></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  /* ---------------- 抽屉 ---------------- */
+  function pathHTML(t){
+    var idx = COLUMNS.findIndex(function(c){ return c.id === (t.col === 'canceled' ? t.cancel.from : t.col); });
+    return '<div class="path">' + COLUMNS.map(function(c, i){
+      var cls = i === idx ? 'on' : (i < idx ? 'passed' : '');
+      return '<span class="' + cls + '">' + c.name + '</span>' + (i < COLUMNS.length-1 ? '<i>›</i>' : '');
+    }).join('') + '</div>';
+  }
+
+  function renderDrawer(){
+    var t = byId(state.drawerId);
+    if (!t) return;
+    $('#dwNo').textContent = t.no;
+    $('#dwTitle').textContent = t.title;
+
+    var host = $('#dwBody');
+    var isCanceled = t.col === 'canceled';
+    var isDone = t.col === 'done';
+
+    var stateHTML = '';
+    if (isCanceled) {
+      stateHTML = '<div class="state-line"><span class="state-now cancel">' +
+        '<span class="dot" style="background:#98A2B3"></span>已取消</span>' +
+        '<span class="muted">取消前在「' + esc(COL_NAME[t.cancel.from]) + '」</span></div>';
+    } else if (isDone) {
+      stateHTML = '<div class="state-line"><span class="state-now done"><span class="dot" style="background:var(--success)"></span>已完成</span>' +
+        (t.pub === 'published' ? '<span class="chip pub">已发布</span>'
+          : t.pub === 'rolledback' ? '<span class="chip rollback">已回滚</span>' : '<span class="chip unpub">未发布</span>') +
+        '</div>';
+    } else {
+      stateHTML = '<div class="state-line"><span class="state-now cur"><span class="dot" style="background:var(--primary)"></span>' +
+        esc(COL_NAME[t.col]) + '</span>' +
+        (t.overdue ? '<span class="chip compliance">逾期</span>' : '') +
+        (t.blocked ? '<span class="chip host">阻塞</span>' : '') +
+        '</div>';
+    }
+
+    var actions = '';
+    if (isCanceled) {
+      actions = '<div class="dw-actions">' +
+        '<button class="btn primary" id="dwRestore">恢复到「' + esc(COL_NAME[t.cancel.from]) + '」</button>' +
+        '<button class="btn" id="dwDeleteHint">删除（进回收站）</button>' +
+      '</div>';
+    } else if (isDone) {
+      actions = '<div class="dw-actions">' +
+        '<button class="btn" id="dwReopen">重开（需原因）</button>' +
+        '<button class="btn ghost" disabled title="已完成是终态，需先重开">取消工作项</button>' +
+      '</div>';
+    } else {
+      actions = '<div class="dw-actions">' +
+        '<button class="btn primary" id="dwAdvance">' + (NEXT_ACTION[t.col] || '推进') + '</button>' +
+        '<button class="btn danger" id="dwCancel">取消工作项</button>' +
+      '</div>';
+    }
+
+    var cancelInfo = '';
+    if (isCanceled) {
+      var r = REASONS[t.cancel.reason];
+      cancelInfo = '' +
+        '<section class="dw-sec">' +
+          '<h4>取消信息</h4>' +
+          '<dl class="fields">' +
+            '<dt>取消原因</dt><dd><span class="reason ' + t.cancel.reason + '">' + r.name + '</span></dd>' +
+            '<dt>说明</dt><dd>' + esc(t.cancel.note) + '</dd>' +
+            '<dt>时间 / 人</dt><dd>' + esc(t.cancel.at) + ' · ' + esc(t.cancel.by) + '</dd>' +
+            '<dt>取消前位置</dt><dd>' + esc(COL_NAME[t.cancel.from]) + '</dd>' +
+          '</dl>' +
+        '</section>';
+    }
+
+    var pubNote = isDone
+      ? '<div class="dw-tip" style="margin-top:-2px">发布态由正式发布记录派生，不受取消/恢复影响。人工标记只补历史，不作为发布证据。</div>'
+      : '';
+
+    var log = [
+      { t:'今天 14:20', who: t.owner, act: isCanceled ? '取消工作项' : (isDone ? '验证通过' : '停留在「' + COL_NAME[t.col] + '」'),
+        why: isCanceled ? (REASONS[t.cancel.reason].name + '：' + t.cancel.note) : (isDone ? '' : '') },
+      { t:'昨天 09:41', who: t.owner, act:'从「' + (t.cancel ? t.cancel.from : (isDone ? '测试中' : '待测试')) + '」移动到「' + (isCanceled ? COL_NAME[t.cancel.from] : COL_NAME[t.col]) + '」', why:'原因：等待第三方接口联调' },
+      { t:'11-10 16:08', who: t.owner, act:'从「待处理」移动到「' + (isDone ? '进行中' : (isCanceled ? t.cancel.from : '进行中')) + '」', why:'自动开始计时' }
+    ];
+    var logHTML = log.map(function(l){
+      return '<div class="tl"><div class="t">' + esc(l.t) + '</div><div class="c"><b>' + esc(l.who) + '</b> · ' + esc(l.act) +
+        (l.why ? '<span class="why">' + esc(l.why) + '</span>' : '') + '</div></div>';
+    }).join('');
+
+    host.innerHTML = '' +
+      '<section class="dw-sec">' +
+        '<h4>状态</h4>' +
+        stateHTML + pathHTML(t) +
+        actions +
+        pubNote +
+      '</section>' +
+      cancelInfo +
+      '<section class="dw-sec">' +
+        '<h4>基本信息</h4>' +
+        '<dl class="fields">' +
+          '<dt>负责人</dt><dd>' + esc(t.owner) + '</dd>' +
+          '<dt>模块</dt><dd>' + (t.mod ? esc(t.mod) : '未指定') + '</dd>' +
+          '<dt>截止 / 预估</dt><dd>' + esc(t.due) + ' · ' + esc(t.est) + '</dd>' +
+          '<dt>实际投入</dt><dd>' + esc(t.spent) + '</dd>' +
+        '</dl>' +
+      '</section>' +
+      '<section class="dw-sec">' +
+        '<h4>操作记录</h4>' +
+        '<div class="timeline">' + logHTML + '</div>' +
+      '</section>';
+  }
+
+  function openDrawer(id){
+    state.drawerId = id;
+    renderDrawer();
+    $('#drawer').classList.add('on');
+    $('#drawer').setAttribute('aria-hidden', 'false');
+    $('#scrim').classList.add('on');
+  }
+  function closeDrawer(){
+    state.drawerId = null;
+    $('#drawer').classList.remove('on');
+    $('#drawer').setAttribute('aria-hidden', 'true');
+    if (!state.dialog) $('#scrim').classList.remove('on');
+  }
+
+  /* ---------------- 弹窗 ---------------- */
+  function openDialog(type, id){
+    state.dialog = { type: type, id: id, reason:'not_do', note:'' };
+    renderDialog();
+    $('#dialogWrap').classList.add('on');
+    $('#scrim').classList.add('on');
+  }
+  function closeDialog(){
+    state.dialog = null;
+    $('#dialogWrap').classList.remove('on');
+    if (!state.drawerId) $('#scrim').classList.remove('on');
+  }
+
+  function renderDialog(){
+    var d = state.dialog;
+    if (!d) return;
+    var t = byId(d.id);
+    var title = d.type === 'cancel' ? '取消工作项' : '恢复工作项';
+    $('#dlgTitle').textContent = title;
+    $('#dlgOk').textContent = d.type === 'cancel' ? '确认取消' : '确认恢复';
+    $('#dlgOk').className = 'btn primary';
+
+    if (d.type === 'cancel') {
+      var radios = Object.keys(REASONS).map(function(k){
+        var r = REASONS[k];
+        return '<label class="radio"><input type="radio" name="cancelReason" value="' + k + '"' +
+          (d.reason === k ? ' checked' : '') + '><span><span class="rt">' + r.name + '</span><span class="rd">' + r.desc + '</span></span></label>';
+      }).join('');
+      $('#dlgBody').innerHTML = '' +
+        '<p class="muted" style="margin-bottom:10px">' + esc(t.title) + ' · 当前在「' + esc(COL_NAME[t.col]) + '」</p>' +
+        '<div class="field"><label>取消原因</label><div class="radios">' + radios + '</div></div>' +
+        '<div class="field"><label for="noteInput">说明（必填）</label>' +
+          '<textarea id="noteInput" placeholder="写清楚为什么不做，恢复时会作为依据" aria-invalid="' + (d.err ? 'true' : 'false') + '">' + esc(d.note) + '</textarea>' +
+          '<div class="counter"><span>' + (d.err ? '<span class="err">请填写取消说明</span>' : '取消后不计逾期与完成率分母') + '</span><span id="noteCount">' + d.note.length + '/200</span></div>' +
+        '</div>' +
+        '<div class="dw-tip">取消不是删除：工作项保留在原项目的「已取消」里，可随时恢复到「' + esc(COL_NAME[t.col]) + '」。</div>';
+    } else {
+      var from = t.cancel.from;
+      $('#dlgBody').innerHTML = '' +
+        '<p class="muted" style="margin-bottom:10px">' + esc(t.title) + ' · 取消于 ' + esc(t.cancel.at) + '</p>' +
+        '<div class="field"><label>恢复后位置</label>' +
+          '<div class="state-line"><span class="state-now cur"><span class="dot" style="background:var(--primary)"></span>' + esc(COL_NAME[from]) + '</span>' +
+          '<span class="muted">原列已删除时回退到第一个开列</span></div></div>' +
+        '<div class="field"><label for="noteInput">恢复原因（必填）</label>' +
+          '<textarea id="noteInput" placeholder="例如：需求重新启动、口径变更后需要继续" aria-invalid="' + (d.err ? 'true' : 'false') + '">' + esc(d.note) + '</textarea>' +
+          '<div class="counter"><span>' + (d.err ? '<span class="err">请填写恢复原因</span>' : '恢复后重新计入逾期与完成率分母') + '</span><span id="noteCount">' + d.note.length + '/200</span></div>' +
+        '</div>' +
+        '<div class="dw-tip">恢复不自动开始计时，也不会撤销已有的工时记录。</div>';
+    }
+  }
+
+  /* ---------------- 动作 ---------------- */
+  function doCancel(){
+    var d = state.dialog;
+    var t = byId(d.id);
+    if (!d.note.trim()) { d.err = true; renderDialog(); return; }
+    var from = t.col;
+    t.col = 'canceled';
+    t.cancel = {
+      reason: d.reason,
+      note: d.note.trim(),
+      at: '今天 ' + nowHM(),
+      by: '孔祥劲',
+      from: from
+    };
+    closeDialog();
+    renderAll();
+    if (state.drawerId === t.id) renderDrawer();
+    toast('已取消「' + t.title + '」，可在「已取消」页恢复');
+  }
+
+  function doRestore(){
+    var d = state.dialog;
+    var t = byId(d.id);
+    if (!d.note.trim()) { d.err = true; renderDialog(); return; }
+    var target = t.cancel.from;
+    var exists = COLUMNS.some(function(c){ return c.id === target; });
+    if (!exists) target = 'backlog';
+    t.col = target;
+    delete t.cancel;
+    closeDialog();
+    renderAll();
+    if (state.drawerId === t.id) renderDrawer();
+    toast('已恢复到「' + COL_NAME[target] + '」');
+  }
+
+  function advance(id){
+    var t = byId(id);
+    var order = ['backlog','doing','test','testing','done'];
+    var i = order.indexOf(t.col);
+    if (i < 0 || i >= order.length - 1) return;
+    var to = order[i+1];
+    t.col = to;
+    if (to === 'done' && !t.pub) t.pub = 'unpublished';
+    renderAll();
+    renderDrawer();
+    toast('已移动到「' + COL_NAME[to] + '」');
+  }
+
+  function nowHM(){
+    var d = new Date();
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  function renderAll(){
+    renderBoard();
+    renderCanceled();
+  }
+
+  /* ---------------- 菜单 ---------------- */
+  function openMenu(id, x, y){
+    var t = byId(id);
+    var m = $('#menu');
+    var items = '<button data-act="open" data-id="' + id + '">打开详情</button>';
+    if (t.col !== 'canceled' && t.col !== 'done') {
+      items += '<button data-act="advance" data-id="' + id + '">' + (NEXT_ACTION[t.col] || '推进') + '</button>' +
+        '<div class="sep"></div><button class="danger" data-act="cancel" data-id="' + id + '">取消工作项</button>';
+    } else if (t.col === 'canceled') {
+      items += '<div class="sep"></div><button data-act="restore" data-id="' + id + '">恢复到「' + esc(COL_NAME[t.cancel.from]) + '」</button>';
+    } else {
+      items += '<button data-act="reopen" data-id="' + id + '">重开</button>';
+    }
+    m.innerHTML = items;
+    m.classList.add('on');
+    var w = 176;
+    m.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+    m.style.top = Math.min(y, window.innerHeight - 140) + 'px';
+  }
+  function closeMenu(){ $('#menu').classList.remove('on'); }
+
+  /* ---------------- 事件 ---------------- */
+  document.addEventListener('click', function(e){
+    // 主题
+    if (e.target.closest('#themeBtn')) {
+      state.theme = state.theme === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', state.theme);
+      return;
+    }
+    // 视图切换
+    var vb = e.target.closest('[data-view]');
+    if (vb) { switchView(vb.getAttribute('data-view')); return; }
+    if (e.target.closest('#btnOpenCanceled') || e.target.closest('#colOpenCanceled') || e.target.closest('#colOpenCanceled2')) {
+      switchView('canceled'); return;
+    }
+    // 已完成阶段筛选
+    var db = e.target.closest('[data-done]');
+    if (db) {
+      state.doneFilter = db.getAttribute('data-done');
+      renderBoard();
+      return;
+    }
+    // 取消原因筛选
+    var rb = e.target.closest('#cancelReasonSeg [data-reason]');
+    if (rb) {
+      state.cancelFilter = rb.getAttribute('data-reason');
+      $$('#cancelReasonSeg button').forEach(function(b){
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-reason') === state.cancelFilter));
+      });
+      renderCanceled();
+      return;
+    }
+    // 恢复
+    var rs = e.target.closest('[data-restore]');
+    if (rs) { openDialog('restore', rs.getAttribute('data-restore')); return; }
+    // 卡片打开 / 菜单
+    var kb = e.target.closest('[data-menu]');
+    if (kb) {
+      e.stopPropagation();
+      var r = kb.getBoundingClientRect();
+      openMenu(kb.getAttribute('data-menu'), r.right - 176, r.bottom + 4);
+      return;
+    }
+    var card = e.target.closest('.card');
+    if (card) { openDrawer(card.getAttribute('data-id')); return; }
+
+    // 菜单项
+    var mi = e.target.closest('#menu [data-act]');
+    if (mi) {
+      var id = mi.getAttribute('data-id');
+      var act = mi.getAttribute('data-act');
+      closeMenu();
+      if (act === 'open') openDrawer(id);
+      else if (act === 'cancel') openDialog('cancel', id);
+      else if (act === 'restore') openDialog('restore', id);
+      else if (act === 'advance') advance(id);
+      else if (act === 'reopen') {
+        var t = byId(id);
+        t.col = 'testing'; t.pub = null;
+        renderAll(); toast('已重开，回到「测试中」');
+      }
+      return;
+    }
+
+    // 抽屉动作
+    if (e.target.closest('#dwClose')) { closeDrawer(); return; }
+    if (e.target.closest('#dwCancel')) { openDialog('cancel', state.drawerId); return; }
+    if (e.target.closest('#dwRestore')) { openDialog('restore', state.drawerId); return; }
+    if (e.target.closest('#dwAdvance')) { advance(state.drawerId); return; }
+    if (e.target.closest('#dwReopen')) {
+      var dt = byId(state.drawerId);
+      dt.col = 'testing'; dt.pub = null;
+      renderAll(); renderDrawer(); toast('已重开，回到「测试中」');
+      return;
+    }
+    if (e.target.closest('#dwDeleteHint')) { toast('删除进回收站，和取消是两回事'); return; }
+
+    // 对话框
+    if (e.target.closest('#dlgCancel')) { closeDialog(); return; }
+    if (e.target.closest('#dlgOk')) {
+      if (state.dialog.type === 'cancel') doCancel(); else doRestore();
+      return;
+    }
+    if (e.target === $('#dialogWrap')) { closeDialog(); return; }
+
+    // 点空白关菜单
+    if (!e.target.closest('#menu')) closeMenu();
+    // 点遮罩关抽屉
+    if (e.target === $('#scrim')) { closeDrawer(); }
+  });
+
+  document.addEventListener('input', function(e){
+    if (!e.target.closest('#noteInput')) return;
+    var d = state.dialog;
+    d.note = e.target.value;
+    if (d.note.length > 200) { d.note = d.note.slice(0, 200); e.target.value = d.note; }
+    if (d.err && d.note.trim()) {
+      d.err = false;
+      e.target.setAttribute('aria-invalid', 'false');
+      var err = $('.err');
+      if (err) err.remove();
+    }
+    var c = $('#noteCount');
+    if (c) c.textContent = d.note.length + '/200';
+  });
+
+  document.addEventListener('change', function(e){
+    if (e.target.name === 'cancelReason' && state.dialog) {
+      state.dialog.reason = e.target.value;
+    }
+  });
+
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+      if (state.dialog) { closeDialog(); return; }
+      if ($('#menu').classList.contains('on')) { closeMenu(); return; }
+      if (state.drawerId) closeDrawer();
+      return;
+    }
+    if ((e.key === 'Enter' || e.key === ' ') && document.activeElement.classList.contains('card')) {
+      e.preventDefault();
+      openDrawer(document.activeElement.getAttribute('data-id'));
+    }
+  });
+
+  function switchView(v){
+    state.view = v;
+    $('#boardView').hidden = v !== 'board';
+    $('#canceledView').hidden = v !== 'canceled';
+    $('#segBoard').setAttribute('aria-pressed', String(v === 'board'));
+    $('#segCanceled').setAttribute('aria-pressed', String(v === 'canceled'));
+    $$('.subnav .sn').forEach(function(b, i){ b.classList.toggle('on', i === 0); });
+  }
+
+  /* ---------------- 深链：评审时直接打开某一屏 ---------------- */
+  function applyHash(){
+    var raw = (location.hash || '').replace(/^#/, '');
+    if (!raw) return;
+    var map = {};
+    raw.split('&').forEach(function(kv){
+      var p = kv.split('=');
+      if (p[0]) map[p[0]] = p[1] || '1';
+    });
+    if (map.theme === 'dark' || map.theme === 'light') {
+      state.theme = map.theme;
+      document.documentElement.setAttribute('data-theme', state.theme);
+    }
+    if (map.view === 'canceled') switchView('canceled');
+    if (map.view === 'board') switchView('board');
+    if (map.done && ['all','unpub','pub','rollback'].indexOf(map.done) >= 0) {
+      state.doneFilter = map.done;
+      renderBoard();
+    }
+    if (map.reason && REASONS[map.reason]) {
+      state.cancelFilter = map.reason;
+      renderCanceled();
+    }
+    if (map.drawer && byId(map.drawer)) openDrawer(map.drawer);
+    if (map.menu && byId(map.menu)) openMenu(map.menu, 780, 320);
+    if (map.cancel && byId(map.cancel)) openDialog('cancel', map.cancel);
+    if (map.restore && byId(map.restore)) openDialog('restore', map.restore);
+  }
+
+  renderAll();
+  switchView('board');
+  applyHash();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 项目列表工具条改版原型（2026-11-18）</title>
+<style>
+:root{
+  --bg-app:#F7F8FA;--surface:#FFFFFF;--surface-sunken:#F2F4F7;--surface-hover:#F2F4F7;--surface-active:#E9ECF1;
+  --border:#E4E7EC;--border-strong:#D0D5DD;--text:#101828;--text-2:#475467;--text-3:#667085;--text-inverse:#FFFFFF;
+  --primary:#2563EB;--primary-hover:#1D4ED8;--primary-active:#1E40AF;--primary-soft:#EFF4FF;--primary-border:#BFD3FE;--primary-fg:#1D4ED8;
+  --success:#12B76A;--success-soft:#ECFDF3;--success-border:#A6F4C5;--success-fg:#067647;
+  --danger:#F04438;--danger-soft:#FEF3F2;--danger-border:#FDA29B;--danger-fg:#B42318;
+  --warning-soft:#FFFAEB;--warning-border:#FEDF89;--warning-fg:#B54708;
+  --r-xs:6px;--r-sm:8px;--r-md:10px;--r-lg:12px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.22);
+  --dur:.15s;--ease:cubic-bezier(.2,.8,.2,1);
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219;--surface:#151B24;--surface-sunken:#1A222D;--surface-hover:#1F2937;--surface-active:#26313F;
+  --border:#25303D;--border-strong:#334153;--text:#E7ECF3;--text-2:#A9B4C2;--text-3:#7B8798;--text-inverse:#0D1219;
+  --primary:#4C8DFF;--primary-hover:#6BA1FF;--primary-active:#3B76DE;--primary-soft:#16243C;--primary-border:#2B4772;--primary-fg:#8FB4FF;
+  --success:#32D583;--success-soft:#0E2A1D;--success-border:#1F5C3E;--success-fg:#75E0A7;
+  --danger:#F97066;--danger-soft:#2B1615;--danger-border:#5C2A26;--danger-fg:#FDA29B;
+  --warning-soft:#2A2110;--warning-border:#5C4A1E;--warning-fg:#FEC84B;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --ring-focus:0 0 0 3px rgba(76,141,255,.28);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg-app);color:var(--text);
+  font:13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+h1,h2,h3,h4,p{margin:0}
+svg{flex:0 0 auto}
+:focus-visible{outline:none;box-shadow:var(--ring-focus)}
+
+/* ---------- 原型外壳 ---------- */
+.app-head{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px 12px}
+.head-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;max-width:1180px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--primary-soft);border:1px solid var(--primary-border);display:grid;place-items:center;color:var(--primary-fg)}
+.brand h1{font-size:15.5px;font-weight:680;letter-spacing:.2px}
+.brand p{font-size:11.5px;color:var(--text-3);margin-top:1px}
+.tools{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hint{max-width:1180px;margin:10px auto 0;padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+  background:var(--surface-sunken);color:var(--text-2);font-size:12px;line-height:1.65}
+.hint b{color:var(--text);font-weight:650}
+
+/* ---------- 按钮体系（复刻 components.css） ---------- */
+.btn{height:34px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13.5px;font-weight:550;white-space:nowrap;flex:0 0 auto;
+  line-height:1;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease)}
+.btn:hover{background:var(--surface-hover);border-color:var(--border-strong)}
+.btn:active{background:var(--surface-active)}
+.btn.sm{height:28px;padding:0 10px;font-size:12.5px;border-radius:var(--r-xs)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--text-inverse)}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.btn.primary:active{background:var(--primary-active);border-color:var(--primary-active)}
+.btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600}
+.btn.soft:hover{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-fg)}
+.icon-btn{width:32px;height:32px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2);
+  transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease)}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text)}
+.icon-btn.sm{width:28px;height:28px;border-radius:var(--r-xs)}
+/* 分隔后的图标按钮：与文字按钮同高、同描边，只是宽度收成方形 */
+.icon-btn.outlined{border:1px solid var(--border);background:var(--surface);color:var(--text-2)}
+.icon-btn.outlined:hover{background:var(--surface-hover);border-color:var(--border-strong);color:var(--text)}
+.icon-btn.outlined[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+
+/* ---------- 分段控件（与 28px sm 按钮等高） ---------- */
+.seg{display:inline-flex;align-items:center;gap:2px;padding:2px;height:28px;flex:0 0 auto;
+  border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface-sunken)}
+.seg button{height:22px;padding:0 9px;border-radius:4px;font-size:12.5px;font-weight:550;color:var(--text-2);
+  line-height:1;transition:background var(--dur) var(--ease),color var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:650;
+  box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border)}
+html[data-theme="dark"] .seg button[aria-pressed="true"]{background:var(--surface-active);box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border-strong)}
+.seg button:focus-visible{outline:none;box-shadow:0 0 0 2px var(--primary-border)}
+.seg.mini{height:28px}
+
+/* ---------- 页面与面板 ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:18px 24px 56px}
+.scene{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px}
+.subnav{display:flex;align-items:center;gap:4px;margin:-4px 0 14px;border-bottom:1px solid var(--border)}
+.sn{position:relative;height:36px;padding:0 10px;font-size:13px;font-weight:550;color:var(--text-2)}
+.sn:hover{color:var(--text)}
+.sn.on{color:var(--primary-fg)}
+.sn.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;border-radius:2px;background:var(--primary)}
+.panel{position:relative}
+
+/* ---------- 工具条 ---------- */
+.tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:28px;margin-bottom:12px}
+.tb h3{font-size:16px;font-weight:650;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px;line-height:28px}
+.tb .cnt{font-size:12px;font-weight:500;color:var(--text-3)}
+.tb-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tb-divider{width:1px;height:16px;background:var(--border);margin:0 4px;flex:0 0 auto}
+
+/* 现状对照：完全复刻 index.html 当前的类名与自动外边距 */
+.tb-before{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:28px;margin-bottom:12px}
+.tb-before h3{font-size:16px;font-weight:650;letter-spacing:-.01em;line-height:28px}
+.tb-before .meta-right{margin-left:auto;font-size:12px;color:var(--text-3)}
+.tb-before .project-view-actions{display:flex;align-items:center;gap:6px;margin-left:auto}
+.tb-before #btnNewReq{margin-left:auto}
+
+/* ---------- 汇总卡 ---------- */
+.req-summ{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.req-summ .stat{flex:1 1 120px;min-width:110px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface)}
+.req-summ .stat-k{font-size:12px;color:var(--text-3)}
+.req-summ .stat-v{font-size:18px;font-weight:650;letter-spacing:-.01em;color:var(--text);margin-top:2px}
+.req-summ .stat-v small{font-size:11px;font-weight:500;color:var(--text-3);margin-left:4px}
+
+/* ---------- 表格 ---------- */
+.table-wrap{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);overflow:auto}
+.t-row{display:grid;align-items:center;gap:12px;padding:0 14px;min-width:max-content}
+.t-head{height:36px;background:var(--surface-sunken);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-2)}
+.t-head > span,.t-row > span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-body .t-row{min-height:56px;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text-2)}
+.t-body .t-row:last-child{border-bottom:none}
+.t-body .t-row:hover{background:var(--surface-hover)}
+.p-name{font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text)}
+.p-acts{display:flex;align-items:center;gap:2px;justify-content:flex-end}
+.chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:99px;border:1px solid transparent;font-size:11.5px;font-weight:550}
+.chip.run{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+.chip.done{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg)}
+.chip.risk{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg)}
+.p-bar{display:flex;align-items:center;gap:8px}
+.p-bar .track{flex:1 1 auto;height:6px;border-radius:99px;background:var(--surface-sunken);overflow:hidden}
+.p-bar .track i{display:block;height:100%;border-radius:99px;background:var(--primary)}
+.p-bar .track i.done{background:var(--success)}
+.p-bar .track i.risk{background:var(--danger)}
+.p-bar b{font-weight:600;color:var(--text-2);font-size:11.5px;font-variant-numeric:tabular-nums}
+.link-btn{display:inline-flex;align-items:center;gap:4px;padding:0 3px;border-radius:4px;color:var(--primary-fg);font-size:13px;font-weight:550}
+.link-btn:hover{background:var(--primary-soft);text-decoration:underline}
+
+/* ---------- 卡片态 ---------- */
+.card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.p-card{border:1px solid var(--border);border-radius:var(--r-md);padding:14px;background:var(--surface);min-width:0}
+.p-card:hover{background:var(--surface-hover)}
+.p-card-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.p-card-top .p-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-card-top .chip{margin-left:auto}
+.p-card p{font-size:12.5px;color:var(--text-2);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:10px}
+.p-card-meta{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-3);margin-bottom:10px}
+.p-card .p-bar{margin-bottom:10px}
+
+/* ---------- 字段浮层 ---------- */
+.pop{position:absolute;z-index:30;min-width:196px;padding:8px;border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface);box-shadow:var(--shadow-lg)}
+.pop .p-h{font-size:11.5px;color:var(--text-3);padding:2px 8px 6px}
+.pop label{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:6px;font-size:12.5px;color:var(--text-2);cursor:pointer}
+.pop label:hover{background:var(--surface-hover)}
+.pop input{accent-color:var(--primary);width:14px;height:14px;margin:0}
+.pop .p-f{display:flex;justify-content:flex-end;gap:6px;margin-top:6px;padding:6px 2px 0;border-top:1px solid var(--border)}
+
+/* ---------- 对齐参考线 ---------- */
+.guide-layer{position:absolute;inset:0;pointer-events:none;z-index:25}
+.g-line{position:absolute;left:0;right:0;border-top:1px dashed rgba(37,99,235,.55)}
+html[data-theme="dark"] .g-line{border-top-color:rgba(76,141,255,.6)}
+.g-box{position:absolute;border:1px solid rgba(37,99,235,.55);border-radius:5px}
+html[data-theme="dark"] .g-box{border-color:rgba(76,141,255,.6)}
+.g-tag{position:absolute;left:50%;top:-17px;transform:translateX(-50%);padding:0 4px;border-radius:3px;
+  background:var(--primary);color:var(--text-inverse);font-size:10px;font-weight:650;line-height:14px;white-space:nowrap}
+html[data-theme="dark"] .g-tag{color:#0D1219}
+
+/* ---------- 说明区 ---------- */
+.spec-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;min-width:0}
+.card h2{font-size:13.5px;font-weight:650;margin-bottom:10px}
+.kv{width:100%;border-collapse:collapse;font-size:12px}
+.kv th{text-align:left;font-weight:600;color:var(--text-3);padding:6px 8px;border-bottom:1px solid var(--border)}
+.kv td{padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:top}
+.kv tr:last-child td{border-bottom:none}
+.kv code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;background:var(--surface-sunken);border-radius:4px;padding:0 4px}
+.note{margin-top:12px;padding:9px 11px;border:1px dashed var(--border-strong);border-radius:7px;background:var(--surface-sunken);
+  font-size:11.5px;line-height:1.65;color:var(--text-2)}
+.note b{color:var(--text)}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(8px);z-index:60;
+  padding:9px 14px;border-radius:8px;background:var(--text);color:var(--text-inverse);font-size:12.5px;
+  box-shadow:var(--shadow-lg);opacity:0;transition:opacity .18s var(--ease),transform .18s var(--ease);pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:900px){
+  .spec-grid{grid-template-columns:minmax(0,1fr)}
+  .card-grid{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<header class="app-head">
+  <div class="head-row">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2.8h8M6 17.2h8M6.6 2.8v2.4c0 1 .5 1.8 1.3 2.4l2.1 1.5 2.1-1.5c.8-.6 1.3-1.4 1.3-2.4V2.8M6.6 17.2v-2.4c0-1 .5-1.8 1.3-2.4l2.1-1.5 2.1 1.5c.8.6 1.3 1.4 1.3 2.4v2.4"/>
+        </svg>
+      </span>
+      <div>
+        <h1>项目列表工具条 · 改版原型</h1>
+        <p>2026-11-18 · 单文件可交互 · 未改源码</p>
+      </div>
+    </div>
+    <div class="tools">
+      <div class="seg" id="variantSeg" role="group" aria-label="方案切换">
+        <button type="button" data-variant="before" aria-pressed="false">现状对照</button>
+        <button type="button" data-variant="a" aria-pressed="true">方案 A</button>
+        <button type="button" data-variant="b" aria-pressed="false">方案 B</button>
+      </div>
+      <button class="btn sm" id="btnGuides" type="button" aria-pressed="false">对齐参考线</button>
+      <button class="btn sm" id="btnTheme" type="button">深色</button>
+    </div>
+  </div>
+  <div class="hint" id="variantHint"></div>
+</header>
+
+<main class="wrap">
+  <section class="scene">
+    <div class="subnav" role="tablist" aria-label="项目视图">
+      <button class="sn on" type="button" role="tab" aria-selected="true">项目列表</button>
+      <button class="sn" type="button" role="tab" aria-selected="false" data-soon>全局健康度</button>
+    </div>
+    <div class="panel" id="panel">
+      <div id="toolbarHost"></div>
+      <div class="req-summ" id="summHost"></div>
+      <div id="bodyHost"></div>
+      <div class="guide-layer" id="guideLayer" hidden></div>
+    </div>
+  </section>
+
+  <section class="spec-grid">
+    <div class="card">
+      <h2>统一规格（直接对应现有令牌）</h2>
+      <table class="kv">
+        <thead><tr><th>项</th><th>值</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>控件高度</td><td><code>28px</code></td><td>文字按钮、分段控件、图标按钮完全同高</td></tr>
+          <tr><td>字号</td><td><code>12.5px</code></td><td>沿用 <code>.btn.sm</code>，不加粗不放大</td></tr>
+          <tr><td>圆角</td><td><code>6px</code></td><td><code>--r-xs</code>，与全站 sm 控件一致</td></tr>
+          <tr><td>描边</td><td><code>1px</code></td><td><code>--border</code>；图标按钮不再无边框</td></tr>
+          <tr><td>图标</td><td><code>14px</code></td><td>描边 1.6，统一线宽</td></tr>
+          <tr><td>间距</td><td><code>8px / 12px</code></td><td>组内 8px；创建组前用 1×16px 分隔线 + 12px</td></tr>
+        </tbody>
+      </table>
+      <div class="note">
+        <b>为什么不是 30/32px：</b>工具条要和列表、筛选区的 <code>.btn.sm</code> 保持同一密度；
+        只把“视图切换”从两个实心按钮改成同高的分段控件，就能在不动全局令牌的前提下消除大小差异。
+      </div>
+    </div>
+    <div class="card">
+      <h2>改前 → 改后</h2>
+      <table class="kv">
+        <thead><tr><th>位置</th><th>改前</th><th>改后</th></tr></thead>
+        <tbody>
+          <tr><td>计数「共 17 个」</td><td>被自动外边距推到工具条中部</td><td>贴回标题右侧，作为元信息</td></tr>
+          <tr><td>卡片 / 表格</td><td>两个独立按钮，选中项实心蓝</td><td>A：同高分段控件；B：浅蓝描边选中</td></tr>
+          <tr><td>全屏按钮</td><td>无边框，视觉上小一圈</td><td>28×28 描边方形，与按钮同高</td></tr>
+          <tr><td>新建项目集</td><td>被自动外边距甩到中部，与主按钮断开</td><td>紧贴主操作，形成创建组</td></tr>
+          <tr><td>唯一实心蓝</td><td>视图选中 + 新建项目，两处抢焦点</td><td>只保留「新建项目」</td></tr>
+        </tbody>
+      </table>
+      <div class="note">
+        切换上方「现状对照 / 方案 A / 方案 B」，再打开<b>对齐参考线</b>：所有控件的框高都会标成 <b>28px</b>，并共用同一条水平中心线。
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  var state = {
+    variant:"a",
+    view:"table",
+    archived:false,
+    archivedCount:1,
+    full:false,
+    fieldsOpen:false,
+    guides:false,
+    fields:{
+      status:true, owner:true, due:true, tasks:true, done:true,
+      progress:true, docs:true, release:true
+    }
+  };
+
+  var HINTS = {
+    before:"现状对照：计数和「新建项目集」被自动外边距推向中部；视图选中态与主操作同为实心蓝；全屏按钮无边框，视觉上比其他控件小一圈。",
+    a:"方案 A（推荐）：控件统一 28px，视图切换改为分段控件，选中态用浅蓝；创建组独立，主操作只保留一个实心蓝。",
+    b:"方案 B（最小改动）：保留两个独立视图按钮，仅把选中态改为浅蓝描边；高度、间距、图标与主操作分组和 A 一致。"
+  };
+
+  var FIELD_DEFS = [
+    ["status","状态"],["owner","负责人"],["due","计划结束"],["tasks","工作项数"],
+    ["done","完成数"],["progress","进度"],["docs","文档数"],["release","首版上线日"]
+  ];
+
+  var PROJECTS = [
+    {name:"资金上场小程序", desc:"面向资金条线的移动端申请与审批入口，覆盖额度、放款与还款提醒。",
+     status:["进行中","run"], owner:"孔祥劲", due:"2026-12-31", tasks:32, done:18, pct:56, docs:6, release:"2026-11-20"},
+    {name:"柜面系统升级", desc:"柜面交易链路改造与组件库替换，先做高频交易与新员工引导。",
+     status:["进行中","run"], owner:"陈墨", due:"2026-11-30", tasks:24, done:21, pct:88, docs:4, release:"2026-10-28"},
+    {name:"客户画像平台", desc:"统一客户标签与行为视图，给营销和风控共用一套口径。",
+     status:["已完成","done"], owner:"林知远", due:"2026-11-15", tasks:18, done:18, pct:100, docs:9, release:"2026-11-14"},
+    {name:"数据中台一期", desc:"指标口径治理与实时同步链路，当前受上游接口变更影响。",
+     status:["风险","risk"], owner:"周牧", due:"2026-12-12", tasks:41, done:9, pct:22, docs:2, release:"—"}
+  ];
+
+  function $(id){ return document.getElementById(id); }
+
+  function iconFull(){
+    return '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+
+      '<path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>';
+  }
+  function iconDots(){
+    return '<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">'+
+      '<circle cx="5" cy="10" r="1.4"/><circle cx="10" cy="10" r="1.4"/><circle cx="15" cy="10" r="1.4"/></svg>';
+  }
+
+  function archLabel(){
+    return state.archived ? "隐藏已归档" : "显示已归档（" + state.archivedCount + "）";
+  }
+
+  function toolbarBefore(){
+    var h = '<div class="tb-before" id="toolbar">'+
+      '<h3>项目列表</h3>'+
+      '<span class="meta-right" id="tbCount">共 17 个</span>'+
+      '<span class="project-view-actions">'+
+        '<button class="btn sm'+(state.view==="card"?" primary":"")+'" type="button" data-mode="card" aria-pressed="'+(state.view==="card")+'">卡片</button>'+
+        '<button class="btn sm'+(state.view==="table"?" primary":"")+'" type="button" data-mode="table" aria-pressed="'+(state.view==="table")+'">表格</button>'+
+        '<button class="btn sm" type="button" data-act="fields"'+(state.view==="table"?"":" hidden")+'>显示字段</button>'+
+        '<button class="btn sm" type="button" data-act="arch" aria-pressed="'+state.archived+'">'+archLabel()+'</button>'+
+      '</span>'+
+      '<button class="icon-btn sm" type="button" data-act="full" aria-label="全屏查看" title="全屏查看" aria-pressed="'+state.full+'">'+iconFull()+'</button>'+
+      '<button class="btn sm" type="button" data-act="setnew">新建项目集</button>'+
+      '<button class="btn primary sm" type="button" id="btnNewReq" data-act="new">新建项目</button>'+
+    '</div>';
+    return h;
+  }
+
+  function toolbarUnified(variant){
+    var mode = variant === "a"
+      ? '<div class="seg mini" role="group" aria-label="视图切换">'+
+          '<button type="button" data-mode="card" aria-pressed="'+(state.view==="card")+'">卡片</button>'+
+          '<button type="button" data-mode="table" aria-pressed="'+(state.view==="table")+'">表格</button>'+
+        '</div>'
+      : '<button class="btn sm'+(state.view==="card"?" soft":"")+'" type="button" data-mode="card" aria-pressed="'+(state.view==="card")+'">卡片</button>'+
+        '<button class="btn sm'+(state.view==="table"?" soft":"")+'" type="button" data-mode="table" aria-pressed="'+(state.view==="table")+'">表格</button>';
+
+    return '<div class="tb" id="toolbar">'+
+      '<h3>项目列表 <span class="cnt">共 17 个</span></h3>'+
+      '<div class="tb-actions">'+
+        mode+
+        '<button class="btn sm" type="button" data-act="fields"'+(state.view==="table"?"":" hidden")+'>显示字段</button>'+
+        '<button class="btn sm'+(state.archived?" soft":"")+'" type="button" data-act="arch" aria-pressed="'+state.archived+'">'+archLabel()+'</button>'+
+        '<button class="icon-btn sm outlined" type="button" data-act="full" aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="'+state.full+'">'+iconFull()+'</button>'+
+        '<span class="tb-divider" aria-hidden="true"></span>'+
+        '<button class="btn sm" type="button" data-act="setnew">新建项目集</button>'+
+        '<button class="btn primary sm" type="button" data-act="new">新建项目</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function renderToolbar(){
+    $("toolbarHost").innerHTML = state.variant === "before" ? toolbarBefore() : toolbarUnified(state.variant);
+    document.querySelectorAll("[data-variant]").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.variant === state.variant));
+    });
+    $("variantHint").innerHTML = "<b>" + (state.variant === "before" ? "现状" : state.variant === "a" ? "方案 A" : "方案 B") + "：</b>" + HINTS[state.variant];
+  }
+
+  function renderSummary(){
+    var items = [["项目","17","个"],["分组","2","个"],["首版投入","3210h39m",""],["迭代投入","120h47m",""],["准时完成率","90","%"],["未标记首版","13","个"]];
+    $("summHost").innerHTML = items.map(function(it){
+      return '<div class="stat"><div class="stat-k">'+it[0]+'</div><div class="stat-v">'+it[1]+(it[2]?'<small>'+it[2]+'</small>':'')+'</div></div>';
+    }).join("");
+  }
+
+  function visibleCols(){
+    return FIELD_DEFS.filter(function(f){ return state.fields[f[0]]; });
+  }
+
+  function renderTable(){
+    var cols = visibleCols();
+    var widths = {
+      name:"minmax(220px,1.6fr)", status:"76px", owner:"72px", due:"96px", tasks:"68px",
+      done:"60px", progress:"128px", docs:"56px", release:"100px", acts:"64px"
+    };
+    var tpl = "minmax(220px,1.6fr) " + cols.map(function(f){ return widths[f[0]]; }).join(" ") + " 64px";
+    var head = '<div class="t-row t-head" style="grid-template-columns:'+tpl+'">'+
+      '<span>项目名称</span>'+
+      cols.map(function(f){
+        return f[0]==="progress"
+          ? '<span>进度 <b style="font-weight:600;color:var(--text-3)">?</b></span>'
+          : '<span>'+f[1]+'</span>';
+      }).join("")+
+      '<span style="text-align:right">操作</span></div>';
+
+    var rows = PROJECTS.map(function(p){
+      var cells = cols.map(function(f){
+        switch(f[0]){
+          case "status": return '<span><span class="chip '+p.status[1]+'">'+p.status[0]+'</span></span>';
+          case "owner": return '<span>'+p.owner+'</span>';
+          case "due": return '<span style="font-variant-numeric:tabular-nums">'+p.due+'</span>';
+          case "tasks": return '<span style="font-variant-numeric:tabular-nums">'+p.tasks+'</span>';
+          case "done": return '<span style="font-variant-numeric:tabular-nums">'+p.done+'</span>';
+          case "progress":
+            return '<span class="p-bar"><span class="track"><i class="'+(p.pct===100?"done":p.status[1]==="risk"?"risk":"")+'" style="width:'+p.pct+'%"></i></span><b>'+p.pct+'%</b></span>';
+          case "docs": return '<span style="font-variant-numeric:tabular-nums">'+p.docs+'</span>';
+          case "release": return '<span style="font-variant-numeric:tabular-nums">'+p.release+'</span>';
+        }
+        return "";
+      }).join("");
+      return '<div class="t-row" style="grid-template-columns:'+tpl+'">'+
+        '<span class="p-name" title="'+p.name+'">'+p.name+'</span>'+cells+
+        '<span class="p-acts"><button class="btn sm" type="button" data-row-act>'+iconDots()+'</button></span></div>';
+    }).join("");
+
+    return '<div class="table-wrap"><div class="t-body">'+head+rows+'</div></div>';
+  }
+
+  function renderCards(){
+    return '<div class="card-grid">'+PROJECTS.map(function(p){
+      return '<article class="p-card">'+
+        '<div class="p-card-top"><span class="p-name">'+p.name+'</span><span class="chip '+p.status[1]+'">'+p.status[0]+'</span></div>'+
+        '<p>'+p.desc+'</p>'+
+        '<div class="p-card-meta"><span>'+p.owner+'</span><span>计划结束 '+p.due+'</span><span>'+p.tasks+' 个工作项</span></div>'+
+        '<div class="p-bar"><span class="track"><i class="'+(p.pct===100?"done":p.status[1]==="risk"?"risk":"")+'" style="width:'+p.pct+'%"></i></span><b>'+p.pct+'%</b></div>'+
+        '<div class="p-acts" style="justify-content:flex-start"><button class="link-btn" type="button" data-row-act>进入项目</button></div>'+
+      '</article>';
+    }).join("")+'</div>';
+  }
+
+  function renderBody(){
+    $("bodyHost").innerHTML = state.view === "table" ? renderTable() : renderCards();
+  }
+
+  function fieldsPopHTML(){
+    return '<div class="p-h">显示字段</div>'+
+      FIELD_DEFS.map(function(f){
+        return '<label><input type="checkbox" data-field="'+f[0]+'"'+(state.fields[f[0]]?" checked":"")+'>'+f[1]+'</label>';
+      }).join("")+
+      '<div class="p-f"><button class="btn sm" type="button" data-act="fields-reset">恢复默认</button><button class="btn sm primary" type="button" data-act="fields-close">完成</button></div>';
+  }
+
+  function positionPop(){
+    var pop = $("fieldsPop");
+    if(!pop || pop.hidden) return;
+    var btn = document.querySelector('[data-act="fields"]');
+    if(!btn){ pop.hidden = true; return; }
+    var panel = $("panel");
+    var pr = panel.getBoundingClientRect();
+    var br = btn.getBoundingClientRect();
+    var left = br.left - pr.left;
+    left = Math.min(left, panel.clientWidth - 212);
+    pop.style.left = Math.max(8, left) + "px";
+    pop.style.top = (br.bottom - pr.top + 6) + "px";
+  }
+
+  function syncPop(){
+    var pop = $("fieldsPop");
+    if(!pop){
+      pop = document.createElement("div");
+      pop.className = "pop";
+      pop.id = "fieldsPop";
+      $("panel").appendChild(pop);
+    }
+    pop.hidden = !(state.fieldsOpen && state.view === "table");
+    if(!pop.hidden){ pop.innerHTML = fieldsPopHTML(); positionPop(); }
+  }
+
+  function drawGuides(){
+    var layer = $("guideLayer");
+    layer.innerHTML = "";
+    if(!state.guides){ layer.hidden = true; return; }
+    layer.hidden = false;
+    var panel = $("panel");
+    var pr = panel.getBoundingClientRect();
+    var tb = $("toolbar");
+    if(!tb) return;
+    var tr = tb.getBoundingClientRect();
+    var mid = Math.round(tr.top - pr.top + tr.height / 2) + .5;
+    layer.innerHTML = '<div class="g-line" style="top:'+mid+'px"></div>';
+    var nodes = tb.querySelectorAll(".tb-actions > *:not(.tb-divider), .tb-before > .btn, .tb-before > .icon-btn, .tb-before .project-view-actions > *");
+    Array.prototype.forEach.call(nodes, function(el){
+      var r = el.getBoundingClientRect();
+      if(!r.width) return;
+      var box = document.createElement("div");
+      box.className = "g-box";
+      box.style.left = (r.left - pr.left) + "px";
+      box.style.top = (r.top - pr.top) + "px";
+      box.style.width = r.width + "px";
+      box.style.height = r.height + "px";
+      var tag = document.createElement("span");
+      tag.className = "g-tag";
+      tag.textContent = Math.round(r.height) + "px";
+      box.appendChild(tag);
+      layer.appendChild(box);
+    });
+  }
+
+  var toastTimer = null;
+  function toast(msg){
+    var t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 2000);
+  }
+
+  function render(){
+    renderToolbar();
+    renderSummary();
+    renderBody();
+    syncPop();
+    requestAnimationFrame(drawGuides);
+  }
+
+  document.addEventListener("click", function(e){
+    var variant = e.target.closest("[data-variant]");
+    if(variant){
+      state.variant = variant.dataset.variant;
+      state.fieldsOpen = false;
+      render();
+      return;
+    }
+    var mode = e.target.closest("[data-mode]");
+    if(mode){
+      if(state.view !== mode.dataset.mode){
+        state.view = mode.dataset.mode;
+        state.fieldsOpen = false;
+        render();
+      }
+      return;
+    }
+    var act = e.target.closest("[data-act]");
+    if(act){
+      var a = act.dataset.act;
+      if(a === "fields"){
+        state.fieldsOpen = !state.fieldsOpen;
+        syncPop();
+      } else if(a === "fields-close"){
+        state.fieldsOpen = false;
+        syncPop();
+      } else if(a === "fields-reset"){
+        Object.keys(state.fields).forEach(function(k){ state.fields[k] = true; });
+        syncPop(); renderBody(); requestAnimationFrame(drawGuides);
+      } else if(a === "arch"){
+        state.archived = !state.archived;
+        renderToolbar(); requestAnimationFrame(drawGuides);
+        toast(state.archived ? "已显示 1 个已归档项目" : "已隐藏归档项目");
+      } else if(a === "full"){
+        state.full = !state.full;
+        renderToolbar(); requestAnimationFrame(drawGuides);
+        toast(state.full ? "全屏示意：按 Esc 退出" : "已退出全屏");
+      } else if(a === "new"){
+        toast("打开「新建项目」抽屉（原型示意）");
+      } else if(a === "setnew"){
+        toast("打开「新建项目集」抽屉（原型示意）");
+      }
+      return;
+    }
+    if(e.target.closest("[data-row-act]")){
+      toast("进入项目驾驶舱（原型示意）");
+      return;
+    }
+    if(e.target.closest("[data-soon]")){
+      toast("全局健康度不在本次改版范围");
+      return;
+    }
+    if(e.target.closest("#btnGuides")){
+      state.guides = !state.guides;
+      e.target.closest("#btnGuides").setAttribute("aria-pressed", String(state.guides));
+      e.target.closest("#btnGuides").classList.toggle("soft", state.guides);
+      drawGuides();
+      return;
+    }
+    if(e.target.closest("#btnTheme")){
+      var dark = document.documentElement.getAttribute("data-theme") === "dark";
+      document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+      e.target.closest("#btnTheme").textContent = dark ? "深色" : "浅色";
+      return;
+    }
+    if(!e.target.closest("#fieldsPop") && !e.target.closest('[data-act="fields"]')){
+      if(state.fieldsOpen){ state.fieldsOpen = false; syncPop(); }
+    }
+  });
+
+  document.addEventListener("change", function(e){
+    var f = e.target.closest("[data-field]");
+    if(!f) return;
+    var key = f.dataset.field;
+    var checked = Array.prototype.filter.call(document.querySelectorAll("[data-field]"), function(x){ return x.checked; });
+    if(!checked.length){ f.checked = true; toast("至少保留一个字段"); return; }
+    state.fields[key] = f.checked;
+    renderBody();
+    requestAnimationFrame(drawGuides);
+  });
+
+  window.addEventListener("resize", function(){ drawGuides(); positionPop(); });
+
+  render();
+})();
+</script>
+</body>
+</html>
