@@ -339,7 +339,7 @@ function openReviewHours(kind){
   API.get("/api/review/hour-logs", params).then(function(page){
     var rows = (page && page.items) || [];
     if(!rows.length){ toast(mine ? "该周期你没有任何计时记录" : "该周期暂无计时记录", "warn"); return; }
-    var scopeText = (d.reqName ? "项目「" + d.reqName + "」" : "全空间") + (mine ? " · 我的" : "");
+    var scopeText = (d.reqName ? "项目「" + d.reqName + "」" : (mine ? "全部项目" : "全空间")) + (mine ? " · 我的" : "");
     var pager = {
       total: page.total,
       hasMore: page.hasMore,
