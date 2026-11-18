@@ -414,6 +414,7 @@ public class BackupExportService {
             bd.setPlannedEnd(d.getPlannedEnd() == null ? null : d.getPlannedEnd().toString());
             bd.setAcceptText(d.getAcceptText());
             bd.setVersionId(d.getVersionId());
+            bd.setVersionName(d.getVersionName());
             bd.setReviewNote(d.getReviewNote());
             bd.setWsjfBusiness(d.getWsjfBusiness());
             bd.setWsjfUrgency(d.getWsjfUrgency());

@@ -915,6 +915,61 @@ class BackupImportBatchTest {
         assertEquals("done", capturedDemand().getStatus());
     }
 
+    @Test
+    void crossProjectDemandLinkSurvivesImportInsteadOfBeingSilentlyDropped() {
+        /* sql/106 口径 7：拆分后保留的跨项目任务—需求关联，备份的校验与恢复都不能断链 */
+        BackupData data = backup(1);
+        BackupData.BackupReq tasksProject = new BackupData.BackupReq();
+        tasksProject.setId("R1");
+        tasksProject.setName("任务项目");
+        BackupData.BackupReq demandProject = new BackupData.BackupReq();
+        demandProject.setId("R2");
+        demandProject.setName("需求项目");
+        data.setReqs(Arrays.asList(tasksProject, demandProject));
+        BackupData.BackupDemand demand = new BackupData.BackupDemand();
+        demand.setId("D1");
+        demand.setReqId("R2");
+        demand.setTitle("跨项目需求");
+        demand.setStatus("review");
+        data.setDemands(Collections.singletonList(demand));
+        data.getTasks().get(0).setReqId("R1");
+        data.getTasks().get(0).setDemandId("D1");
+
+        service.importData("U1", "W1", data);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Task>> imported = ArgumentCaptor.forClass(List.class);
+        verify(taskMapper).insertBatch(imported.capture());
+        assertEquals("D1", imported.getValue().get(0).getDemandId());
+    }
+
+    @Test
+    void historicalVersionNameSnapshotSurvivesImportWhenVersionIdIsCleared() {
+        /* sql/106：目标版本留在原项目后清 version_id，只保留版本名快照，备份往返不能丢 */
+        BackupData data = backupWithDemand("plan");
+        BackupData.BackupDemand demand = data.getDemands().get(0);
+        demand.setVersionId(null);
+        demand.setVersionName("1.0-legacy");
+
+        service.importData("U1", "W1", data);
+
+        Demand saved = capturedDemand();
+        assertNull(saved.getVersionId());
+        assertEquals("1.0-legacy", saved.getVersionName());
+    }
+
+    @Test
+    void historicalVersionNameIsDroppedOnceDemandBindsLiveVersion() {
+        BackupData data = backupWithDemand("plan");
+        data.getDemands().get(0).setVersionName("1.0-legacy");
+
+        service.importData("U1", "W1", data);
+
+        Demand saved = capturedDemand();
+        assertEquals("V1", saved.getVersionId());
+        assertNull(saved.getVersionName(), "重新绑定在册版本后旧名称快照不再保留");
+    }
+
     private BackupData backupWithDemand(String status) {
         BackupData data = backup(0);
         BackupData.BackupReq project = new BackupData.BackupReq();

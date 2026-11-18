@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
+import com.hourglass.common.Texts;
 import com.hourglass.dto.CrossProjectVersionRow;
 import com.hourglass.dto.PhaseMemberTask;
 import com.hourglass.dto.PhaseMemberTaskPage;
@@ -27,6 +28,8 @@ import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TimeLogMapper;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.VersionTaskMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -49,6 +52,8 @@ import java.util.Set;
  */
 @Service
 public class VersionPhaseService {
+
+    private static final Logger log = LoggerFactory.getLogger(VersionPhaseService.class);
 
     private final ProjectVersionMapper versionMapper;
     private final VersionTaskMapper versionTaskMapper;
@@ -453,7 +458,31 @@ public class VersionPhaseService {
                 done++;
             }
         }
-        resp.setDemands(demandMapper.selectByVersion(workspaceId, versionId));
+        List<Demand> versionDemands = new ArrayList<Demand>(demandMapper.selectByVersion(workspaceId, versionId));
+        /* 存量跨项目关联（sql/106 口径 7）：需求随任务进了本版本，但 version_id 已清、且可能属于其他项目，
+           规划说明的目标需求要按任务引用补齐，否则只剩缺失占位；只读展示，不改关联本身 */
+        Map<String, Demand> knownDemands = new HashMap<String, Demand>();
+        for (Demand demand : versionDemands) {
+            knownDemands.put(demand.getId(), demand);
+        }
+        List<String> legacyDemandIds = new ArrayList<String>();
+        for (Task task : resp.getTasks()) {
+            String demandId = Texts.trimToNull(task.getDemandId());
+            if (demandId != null && !knownDemands.containsKey(demandId) && !legacyDemandIds.contains(demandId)) {
+                legacyDemandIds.add(demandId);
+            }
+        }
+        if (!legacyDemandIds.isEmpty()) {
+            int filled = 0;
+            for (Demand demand : demandMapper.selectByIds(workspaceId, legacyDemandIds)) {
+                if (demand != null && demand.getId() != null) {
+                    versionDemands.add(demand);
+                    filled++;
+                }
+            }
+            log.debug("规划说明回填跨项目关联需求：version={} 请求={} 回填={}", versionId, legacyDemandIds.size(), filled);
+        }
+        resp.setDemands(versionDemands);
         resp.setTotalCount(resp.getTasks().size());
         resp.setDoneCount(done);
         resp.setWorkMinutes(workMinutes);

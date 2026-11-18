@@ -39,8 +39,9 @@ class VersionReleaseServiceTest {
     private final WorkActivityService workActivities = mock(WorkActivityService.class);
     private final TaskLogMapper taskLogs = mock(TaskLogMapper.class);
     private final DemandCompletionService demandCompletion = mock(DemandCompletionService.class);
+    private final DemandMapper demands = mock(DemandMapper.class);
     private final VersionReleaseService service = new VersionReleaseService(mapper, versions, reqMapper,
-            mock(DemandMapper.class), users, versionTasks, members, locks, permissions, access,
+            demands, users, versionTasks, members, locks, permissions, access,
             mock(TaskPublicationService.class), notifications, json, tx, numberSeq,
             planCases, caseTasks, cases, testPlans, audits, workActivities, taskLogs,
             mock(CaseSetService.class), demandCompletion);
@@ -177,6 +178,25 @@ class VersionReleaseServiceTest {
         verify(demandCompletion).refreshCompletion(eq("W"),
                 org.mockito.ArgumentMatchers.<Collection<String>>argThat(
                         ids -> new ArrayList<String>(ids).equals(Arrays.asList("D2", "D1"))));
+    }
+    @Test void legacyCrossProjectDemandIsSnapshottedWithoutBlockingOrForcingDeviation() {
+        /* sql/106 口径 7：任务与需求的跨项目关联只读保留，快照仍要留下需求编号与标题，
+           且不能因为需求目标版本属于原项目就要求每次发布填写偏离原因 */
+        scope.get(0).setDemandId("D9");
+        Demand legacy = new Demand();
+        legacy.setId("D9"); legacy.setWorkspaceId("W"); legacy.setReqId("OTHER");
+        legacy.setDemandNo(9); legacy.setTitle("跨项目需求"); legacy.setVersionName("1.0-legacy");
+        when(demands.selectByIds("W", Arrays.asList("D9"))).thenReturn(Collections.singletonList(legacy));
+
+        VersionRelease saved = confirm(request(plan("production"), "legacy-demand"));
+
+        VersionReleaseItem item = saved.getItems().stream()
+                .filter(i -> "T1".equals(i.getTaskId())).findFirst().orElseThrow(AssertionError::new);
+        assertEquals(Integer.valueOf(9), item.getDemandNo());
+        assertEquals("跨项目需求", item.getDemandTitle());
+        assertNull(item.getTargetVersionId(), "历史版本已清 version_id，只保留名称快照");
+        assertEquals("1.0-legacy", item.getTargetVersionName());
+        assertNull(saved.getDeviationReason(), "存量跨项目关联不应产生警告");
     }
     @Test void subsetIsExplicitAndOmittedPlanTaskGetsImmutableSnapshot() {
         ReleaseConfirmRequest r = request(plan("production"), "one"); r.setActualTaskIds(Collections.singletonList("T1")); r.setDeviationReason("Only first batch deployed");

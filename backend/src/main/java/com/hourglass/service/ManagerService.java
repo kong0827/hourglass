@@ -2034,6 +2034,24 @@ public class ManagerService {
                 titles.put(demand.getId(), demand.getTitle());
             }
         }
+        /* 存量跨项目关联（sql/106 口径 7）：需求不在本项目范围内，
+           按空间批量补齐标题，避免驾驶舱只剩「关联需求」占位；只读，不改任何关联 */
+        List<String> missing = new ArrayList<String>();
+        for (Task task : tasks) {
+            String demandId = hasText(task.getDemandId()) ? task.getDemandId().trim() : null;
+            if (demandId != null && task.getDemandTitle() == null && !titles.containsKey(demandId)
+                    && !missing.contains(demandId)) {
+                missing.add(demandId);
+            }
+        }
+        if (!missing.isEmpty()) {
+            for (Demand demand : emptyIfNull(demandMapper.selectByIds(workspaceId, missing))) {
+                if (demand != null && hasText(demand.getId())) {
+                    titles.put(demand.getId(), demand.getTitle());
+                }
+            }
+            log.debug("跨项目关联需求标题回填：project={} 需求数={}", reqId, missing.size());
+        }
         for (Task task : tasks) {
             if (hasText(task.getDemandId()) && task.getDemandTitle() == null) {
                 task.setDemandTitle(titles.get(task.getDemandId().trim()));

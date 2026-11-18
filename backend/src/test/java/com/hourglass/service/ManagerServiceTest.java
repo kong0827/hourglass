@@ -4,12 +4,14 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.dto.PageResult;
 import com.hourglass.entity.Category;
+import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectMemberRole;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TimeAgg;
 import com.hourglass.entity.TimeLog;
 import com.hourglass.entity.WorkspaceMember;
+import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
@@ -59,6 +61,7 @@ class ManagerServiceTest {
     private final CategoryService categoryService = mock(CategoryService.class);
     private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
     private final ProjectMemberRoleMapper roleMapper = mock(ProjectMemberRoleMapper.class);
+    private final DemandMapper demandMapper = mock(DemandMapper.class);
     private final TaskAuditLogger taskAuditLogger = mock(TaskAuditLogger.class);
     private final AuditService auditService = mock(AuditService.class);
 
@@ -514,6 +517,32 @@ class ManagerServiceTest {
 
         when(releasePermission.canManageProject(VIEWER, WORKSPACE, "R1")).thenReturn(true);
         assertTrue((Boolean) service.project(WORKSPACE, "R1", VIEWER).get("canManageModules"));
+    }
+
+    @Test
+    void projectTasksFillLegacyCrossProjectDemandTitle() {
+        /* sql/106 口径 7 保留的跨项目关联：驾驶舱清单仍要显示需求标题，由空间范围批量补齐 */
+        Requirement req = requirement("R1", "项目一");
+        Task linked = openTask("T1", "R1", Consts.COL_DOING, 60);
+        linked.setDemandId("D2");
+        Task plain = openTask("T2", "R1", Consts.COL_DOING, 60);
+        when(demandMapper.selectByReq(WORKSPACE, "R1")).thenReturn(Collections.<Demand>emptyList());
+        Demand legacy = new Demand();
+        legacy.setId("D2");
+        legacy.setWorkspaceId(WORKSPACE);
+        legacy.setReqId("R2");
+        legacy.setTitle("跨项目需求");
+        when(demandMapper.selectByIds(WORKSPACE, Collections.singletonList("D2")))
+                .thenReturn(Collections.singletonList(legacy));
+
+        ManagerService service = service(Arrays.asList(linked, plain), Collections.singletonList(req),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(),
+                Collections.<WorkspaceMember>emptyList());
+        List<Map<String, Object>> tasks = castList(service.project(WORKSPACE, "R1", VIEWER).get("tasks"));
+
+        assertEquals("跨项目需求", task(tasks, "T1").get("demandTitle"));
+        assertNull(task(tasks, "T2").get("demandTitle"));
+        verify(demandMapper).selectByIds(WORKSPACE, Collections.singletonList("D2"));
     }
 
     @Test
@@ -1232,6 +1261,7 @@ class ManagerServiceTest {
                 notificationService, access, categoryService, releasePermission,
                 auditService, taskAuditLogger, CLOCK);
         ReflectionTestUtils.setField(service, "roleMapper", roleMapper);
+        ReflectionTestUtils.setField(service, "demandMapper", demandMapper);
         return service;
     }
 
@@ -1296,6 +1326,15 @@ class ManagerServiceTest {
             }
         }
         throw new AssertionError("项目不存在：" + reqId);
+    }
+
+    private Map<String, Object> task(List<Map<String, Object>> tasks, String id) {
+        for (Map<String, Object> task : tasks) {
+            if (id.equals(task.get("id"))) {
+                return task;
+            }
+        }
+        throw new AssertionError("工作项不存在：" + id);
     }
 
     private Map<String, Object> week(List<Map<String, Object>> weeks, LocalDate start) {

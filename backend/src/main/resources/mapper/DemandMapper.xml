@@ -178,6 +178,14 @@
     WHERE d.id = #{id}
   </select>
 
+  <!-- 存量跨项目关联的只读展示回填：限定空间按 id 批量取，版本名沿用 COALESCE 口径 -->
+  <select id="selectByIds" resultType="Demand">
+    SELECT <include refid="pageCols"/> FROM demand d
+    LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
+    WHERE d.workspace_id = #{workspaceId} AND d.id IN
+    <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
   <!-- 详情：在基础字段外带回交付证据、派生阶段与当前人工判定；q 只需 workspaceId。 -->
   <select id="selectDetail" resultType="Demand">
     SELECT <include refid="pageCols"/>, <include refid="deliveryEvidenceCols"/> FROM demand d
@@ -453,11 +461,13 @@
 
   <insert id="insert">
     INSERT INTO demand (id, workspace_id, req_id, demand_no, title, description, source, item_kind, category_id, priority, status,
-                        expect_date, planned_start, planned_end, revision, accept_text, version_id, review_note,
+                        expect_date, planned_start, planned_end, revision, accept_text, version_id, version_name, review_note,
                         wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort, created_by,
                         created_at, updated_at)
     VALUES (#{id}, #{workspaceId}, #{reqId}, #{demandNo}, #{title}, #{description}, #{source}, #{itemKind}, #{categoryId}, #{priority}, #{status},
-            #{expectDate}, #{plannedStart}, #{plannedEnd}, #{revision}, #{acceptText}, #{versionId}, #{reviewNote},
+            #{expectDate}, #{plannedStart}, #{plannedEnd}, #{revision}, #{acceptText}, #{versionId},
+            <!-- 与 update 同口径：version_name 只是拆分迁移的历史快照，绑了在册版本就不落名 -->
+            CASE WHEN #{versionId} IS NULL THEN #{versionName} ELSE NULL END, #{reviewNote},
             #{wsjfBusiness}, #{wsjfUrgency}, #{wsjfRisk}, #{wsjfEffort}, #{createdBy},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>

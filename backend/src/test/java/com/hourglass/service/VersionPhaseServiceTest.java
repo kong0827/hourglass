@@ -515,6 +515,29 @@ class VersionPhaseServiceTest {
     }
 
     @Test
+    void plannedScopeNoteListsLegacyCrossProjectDemandReferencedByVersionTask() {
+        /* sql/106 口径 7：任务在版本内、需求属于其他项目且 version_id 已清，规划说明仍要列出需求 */
+        when(versions.selectById("V2")).thenReturn(version("V2", "V2", "active", null));
+        Task task = open("T1", FIRST_RELEASE.plusDays(1), 60, 120);
+        task.setDemandId("D9");
+        bind(task, "V2");
+        when(versionTasks.selectStatsByReq(WS, REQ)).thenReturn(Collections.singletonList(task));
+        Demand legacy = new Demand();
+        legacy.setId("D9");
+        legacy.setWorkspaceId(WS);
+        legacy.setReqId("OTHER");
+        legacy.setTitle("跨项目需求");
+        when(demands.selectByIds(WS, Collections.singletonList("D9")))
+                .thenReturn(Collections.singletonList(legacy));
+
+        ReleaseNoteResponse response = service.releaseNote(WS, "V2", "U9");
+
+        assertEquals(1, response.getDemands().size());
+        assertEquals("D9", response.getDemands().get(0).getId());
+        assertEquals("跨项目需求", response.getDemands().get(0).getTitle());
+    }
+
+    @Test
     void versionPermissionsUseRealScopeStrictIdentityAndWritableAccess() {
         Requirement project = requirement(REQ, FIRST_RELEASE);
         project.setOwnerUserId("PM");

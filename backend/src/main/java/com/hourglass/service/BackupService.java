@@ -48,6 +48,8 @@ import com.hourglass.mapper.TimeLogMapper;
 import com.hourglass.mapper.VersionTaskMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import com.hourglass.service.backup.BackupExportService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -79,6 +81,7 @@ public class BackupService {
     private static final int IMPORT_BATCH_SIZE = 500;
     /** 完成归档每批条数：每条要读工时汇总再 upsert，单独切小 */
     private static final int ARCHIVE_BATCH_SIZE = 100;
+    private static final Logger log = LoggerFactory.getLogger(BackupService.class);
 
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
@@ -260,6 +263,9 @@ public class BackupService {
                     + " / 用例 " + st.testCaseCount + " / 文档评论 " + st.docCommentCount
                     + " / 需求评论 " + st.demandCommentCount
                     + " / 用例关联 " + st.caseTaskLinkCount + "（跳过 " + st.skippedCaseTaskLinkCount + "））");
+            if (st.crossProjectDemandLinks > 0) {
+                log.info("导入保留跨项目任务—需求关联：{} 条（sql/106 口径 7，只读关系）", st.crossProjectDemandLinks);
+            }
             return result;
         });
     }
@@ -477,6 +483,8 @@ public class BackupService {
                     throw AppException.badRequest("需求目标版本映射失效，已回滚导入：" + bd.getId());
                 }
                 demand.setVersionId(versionId);
+                /* 拆分迁移留下的历史版本名快照：只在没有在册版本时保留，与需求更新的 CASE 口径一致 */
+                demand.setVersionName(versionId == null ? Texts.cut(Texts.trimToNull(bd.getVersionName()), 40) : null);
                 demand.setReviewNote(Texts.cut(Texts.trimToNull(bd.getReviewNote()), 500));
                 demand.setWsjfBusiness(clampWsjf(bd.getWsjfBusiness()));
                 demand.setWsjfUrgency(clampWsjf(bd.getWsjfUrgency()));
@@ -863,9 +871,13 @@ public class BackupService {
             if (demandId != null && st.demandIdMap.containsKey(demandId)) {
                 demandId = st.demandIdMap.get(demandId);
             }
-            if (demandId != null && (!st.demandIds.contains(demandId) || t.getReqId() == null
-                    || !t.getReqId().equals(st.demandReqId.get(demandId)))) {
+            /* 需求必须随备份一起恢复；存量跨项目关联（sql/106 口径 7）原样保留，
+               不能因为需求属于别的项目就在恢复时静默断链。无项目任务仍不挂需求。 */
+            if (demandId != null && (!st.demandIds.contains(demandId) || t.getReqId() == null)) {
                 demandId = null;
+            }
+            if (demandId != null && !t.getReqId().equals(st.demandReqId.get(demandId))) {
+                st.crossProjectDemandLinks++;
             }
             t.setDemandId(demandId);
             for (String originalVersion : new java.util.TreeSet<String>(b.getVersionIds())) {
@@ -1676,6 +1688,8 @@ public class BackupService {
         int demandCommentCount;
         int caseTaskLinkCount;
         int skippedCaseTaskLinkCount;
+        /** 恢复时原样保留的跨项目任务—需求关联数（sql/106 口径 7） */
+        int crossProjectDemandLinks;
 
         ImportState(String userId, String workspaceId) {
             this.userId = userId;
@@ -1944,8 +1958,9 @@ public class BackupService {
             if (task.getFoundVersionId() != null && (versions.get(task.getFoundVersionId()) == null
                     || !java.util.Objects.equals(task.getReqId(), versions.get(task.getFoundVersionId()).getReqId())))
                 throw AppException.badRequest("缺陷发现版本引用不合法：" + task.getId());
-            if (task.getDemandId() != null && (demands.get(task.getDemandId()) == null
-                    || !java.util.Objects.equals(task.getReqId(), demands.get(task.getDemandId()).getReqId())))
+            /* 只校验需求随文件一起迁移；存量跨项目关联（sql/106 口径 7）允许保留，
+               否则包含这类历史数据的备份会被整份拒绝 */
+            if (task.getDemandId() != null && demands.get(task.getDemandId()) == null)
                 throw AppException.badRequest("任务需求引用不合法：" + task.getId());
         }
         for (BackupData.BackupTask task : data.getTasks()) {

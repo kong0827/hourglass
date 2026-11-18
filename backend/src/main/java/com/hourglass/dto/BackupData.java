@@ -233,6 +233,8 @@ public class BackupData {
         private String plannedEnd;
         private String acceptText;
         private String versionId;
+        /** 历史目标版本名快照（sql/106：版本留在容器后清 version_id 时保留）；旧备份没有该字段 */
+        private String versionName;
         private String reviewNote;
         private Integer wsjfBusiness;
         private Integer wsjfUrgency;

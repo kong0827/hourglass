@@ -1095,6 +1095,23 @@ public class VersionReleaseService {
                     || !new HashSet<String>(c.plan.getTargetKeys()).equals(new HashSet<String>(r.getTargetKeys()))) c.warnings.add("实际环境或目标范围偏离计划");
         }
         for (Demand demand : mapper.selectDemandsByProjectForUpdate(workspaceId, version.getReqId())) c.demands.put(demand.getId(), demand);
+        /* 存量跨项目关联（sql/106 口径 7）：任务的需求可能属于其他项目，
+           快照仍要留下需求编号与标题；按空间批量补齐，只读展示，不改关联本身 */
+        List<String> legacyDemandIds = new ArrayList<String>();
+        List<Task> demandRefTasks = new ArrayList<Task>(c.scope);
+        if (c.plannedScope != null) demandRefTasks.addAll(c.plannedScope);
+        demandRefTasks.addAll(c.planned.values());
+        for (Task task : demandRefTasks) {
+            String demandId = Texts.trimToNull(task.getDemandId());
+            if (demandId != null && !c.demands.containsKey(demandId) && !legacyDemandIds.contains(demandId))
+                legacyDemandIds.add(demandId);
+        }
+        if (!legacyDemandIds.isEmpty()) {
+            for (Demand demand : demandMapper.selectByIds(workspaceId, legacyDemandIds)) {
+                if (demand != null && demand.getId() != null) c.demands.put(demand.getId(), demand);
+            }
+            log.debug("发布快照回填跨项目关联需求：version={} 需求数={}", version.getId(), legacyDemandIds.size());
+        }
         if (r.getRelatedReleaseId() != null) {
             c.related = mapper.selectRecordForUpdate(workspaceId, r.getRelatedReleaseId());
             if (c.related == null || !version.getReqId().equals(c.related.getReqId())) throw AppException.badRequest("关联事件必须属于同一项目");
@@ -1119,7 +1136,10 @@ public class VersionReleaseService {
             if (!Consts.COL_DONE.equals(task.getBoardColumn()) || task.getCompletedAt() == null || task.getCompletedAt().toLocalDate().isAfter(r.getOccurredAt().atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()))
                 c.warnings.add("任务 " + id + " 未完成或完成日晚于实际时间");
             Demand demand = (task.getDemandId() == null ? null : c.demands.get(task.getDemandId()));
-            if (demand != null && (("closed".equals(demand.getStatus()) || "canceled".equals(demand.getStatus()))
+            /* 存量跨项目关联（sql/106 口径 7）只读保留：目标版本属于需求原项目，
+               不拿本版本对比，否则每次发布都会被强制填写偏离原因 */
+            if (demand != null && version.getReqId().equals(demand.getReqId())
+                    && (("closed".equals(demand.getStatus()) || "canceled".equals(demand.getStatus()))
                     || !Objects.equals(version.getId(), demand.getVersionId()))) c.warnings.add("任务 " + id + " 的需求已关闭或目标版本不同");
         }
         if (c.plan != null) {

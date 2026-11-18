@@ -44,6 +44,13 @@ public interface DemandMapper {
 
     Demand selectById(String id);
 
+    /**
+     * 按 id 批量取需求（限定空间）。用于存量跨项目关联的只读展示回填：
+     * sql/106 口径 7 保留工作项与需求的跨项目关系，这些需求不在当前项目范围内。
+     * 调用方需保证 ids 非空，IN 不成立时不要调用。
+     */
+    List<Demand> selectByIds(@Param("workspaceId") String workspaceId, @Param("ids") List<String> ids);
+
     /** 详情：附带交付证据、派生阶段与当前人工判定（q.workspaceId 必填）。 */
     Demand selectDetail(@Param("q") DemandQuery query, @Param("id") String id);
 
