@@ -1,7 +1,7 @@
 /* core/task-drawer · 任务详情抽屉、评论、检查清单、附件、工时 */
 
 import { API, csrfCookie } from "./api.js";
-import { openAttPreview, previewable } from "./att-preview.js";
+import { openAttPreview, previewable, kindOf } from "./att-preview.js";
 import { bindFileDrop, validateFiles, reportRejected, uploadAttachment } from "./attach-kit.js";
 import { attachCombo } from "./combo.js";
 import { attachEnvDict, recordEnv } from "./env-dict.js";
@@ -3942,22 +3942,44 @@ function renderComments(list){
           (mine && !rt.drawerReadOnly ? '<button class="ci-del" type="button" data-comment-del="' + esc(c.id) + '">删除</button>' : '') +
         '</span>' +
         (c.content ? '<span class="ci-body">' + esc(c.content) + '</span>' : '') +
-        (files.length ? '<span class="ci-files">' + files.map(function(a){
-          /* 与附件区一致：可预览的开弹框，表格开 Univer，其余仍走新标签 */
-          var canPrev = previewable(a.filename);
-          var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
-          var openKey = canPrev ? ' data-att-prev="' + esc(a.id) + '"'
-            : (isSheet ? ' data-att-sheet="' + esc(a.id) + '"' : "");
-          var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "预览 / 下载");
-          return '<a class="ci-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + openTitle + '"' + openKey + '>' +
-            icon("clip", 12) +
-            '<span class="cf-name">' + esc(a.filename) + '</span>' +
-            '<span class="cf-size">' + esc(fmtSize(a.size)) + '</span>' +
-          '</a>';
-        }).join("") + '</span>' : '') +
+        commentAttsHTML(files) +
       '</span>' +
     '</div>';
   }).join("");
+}
+/* 评论附件：图片按正文内嵌图的用法给固定比例缩略图，点开进灯箱；
+   其它类型仍是带图标的小 chip，可预览的同样进弹层，不另开标签页 */
+function isImageAtt(a){
+  return kindOf(a && a.filename) === "image";
+}
+function commentAttsHTML(files){
+  if(!files || !files.length) return "";
+  var imgs = files.filter(isImageAtt);
+  var docs = files.filter(function(a){ return !isImageAtt(a); });
+  var out = "";
+  if(imgs.length){
+    out += '<span class="ci-imgs">' + imgs.map(function(a){
+      var name = a.filename || "图片";
+      return '<a class="ci-img" href="' + attUrl(a.id) + '" target="_blank" rel="noopener"'
+        + ' data-att-prev="' + esc(a.id) + '" title="' + esc(name) + ' · 点击查看大图">'
+        + '<img src="' + attThumbUrl(a.id) + '" alt="' + esc(name) + '" loading="lazy"></a>';
+    }).join("") + '</span>';
+  }
+  if(docs.length){
+    out += '<span class="ci-files">' + docs.map(function(a){
+      var canPrev = previewable(a.filename);
+      var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
+      var openKey = canPrev ? ' data-att-prev="' + esc(a.id) + '"'
+        : (isSheet ? ' data-att-sheet="' + esc(a.id) + '"' : "");
+      var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "下载");
+      return '<a class="ci-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + openTitle + '"' + openKey + '>' +
+        icon("clip", 12) +
+        '<span class="cf-name">' + esc(a.filename) + '</span>' +
+        '<span class="cf-size">' + esc(fmtSize(a.size)) + '</span>' +
+      '</a>';
+    }).join("") + '</span>';
+  }
+  return out;
 }
 /* 评论附件按 id 找回对象：预览/表格弹层都需要文件名与大小 */
 function findCommentAtt(attId){
@@ -3992,15 +4014,38 @@ function restoreCommentDraft(taskId){
   lastCommentDraftId = taskId || null;
 }
 function discardCommentDraft(taskId){
+  var draft = taskId ? commentDrafts[taskId] : null;
+  if(draft && draft.files) draft.files.forEach(revokePendingThumb);
   if(taskId) delete commentDrafts[taskId];
   if(lastCommentDraftId === taskId) lastCommentDraftId = null;
+}
+
+/* 待发送截图先给本地缩略图：粘贴后立刻能确认拿到的是哪张图，同时避免大图撑开输入区 */
+function isPendingImage(f){
+  return /^image\//.test((f && f.type) || "")
+    || /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test((f && f.name) || "");
+}
+function pendingThumbUrl(f){
+  if(!isPendingImage(f)) return "";
+  if(!f.__thumbUrl){
+    try{ f.__thumbUrl = window.URL.createObjectURL(f); }catch(e){ return ""; }
+  }
+  return f.__thumbUrl;
+}
+function revokePendingThumb(f){
+  if(f && f.__thumbUrl){
+    try{ window.URL.revokeObjectURL(f.__thumbUrl); }catch(e){ /* 已释放或浏览器不支持 */ }
+    f.__thumbUrl = null;
+  }
 }
 
 function renderPendingCommentFiles(){
   if(!commentAttachChips || !commentAttachTip) return;
   commentAttachChips.hidden = !pendingCommentFiles.length;
   commentAttachChips.innerHTML = pendingCommentFiles.map(function(f, i){
-    return '<span class="comment-attach-chip">' +
+    var thumb = pendingThumbUrl(f);
+    return '<span class="comment-attach-chip' + (thumb ? " is-img" : "") + '">' +
+      (thumb ? '<img class="ca-thumb" src="' + esc(thumb) + '" alt="">' : '') +
       '<span class="ca-name" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
       '<span class="ca-size">' + esc(fmtSize(f.size)) + '</span>' +
       '<button type="button" data-comment-file-remove="' + i + '" title="移除" aria-label="移除附件">×</button>' +
@@ -4010,6 +4055,7 @@ function renderPendingCommentFiles(){
     ? ("待上传 " + pendingCommentFiles.length + " 个") : "";
 }
 function clearPendingCommentFiles(){
+  pendingCommentFiles.forEach(revokePendingThumb);
   pendingCommentFiles = [];
   if(iCommentFiles) iCommentFiles.value = "";
   renderPendingCommentFiles();
@@ -4110,7 +4156,9 @@ if(iCommentFiles) iCommentFiles.addEventListener("change", function(){
 if(commentAttachChips) commentAttachChips.addEventListener("click", function(e){
   var btn = e.target.closest("[data-comment-file-remove]");
   if(!btn) return;
-  pendingCommentFiles.splice(Number(btn.dataset.commentFileRemove), 1);
+  var at = Number(btn.dataset.commentFileRemove);
+  revokePendingThumb(pendingCommentFiles[at]);
+  pendingCommentFiles.splice(at, 1);
   renderPendingCommentFiles();
   rt.formDirty = true;
 });

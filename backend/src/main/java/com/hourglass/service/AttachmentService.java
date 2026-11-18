@@ -45,11 +45,12 @@ public class AttachmentService {
             Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip", "xlsx",
                     "doc", "docx", "xls", "ppt", "pptx"));
 
-    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 / 用例执行记录（失败证据）/ 任务评论 / 需求文档 */
+    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 / 用例执行记录（失败证据）/ 任务评论 / 需求评论 / 需求文档 */
     public static final String KIND_TASK = "task";
     public static final String KIND_DEMAND = "demand";
     public static final String KIND_CASE_RUN = "case_run";
     public static final String KIND_COMMENT = "comment";
+    public static final String KIND_DEMAND_COMMENT = "demand_comment";
     public static final String KIND_DOC = "doc";
 
     private final AttachmentMapper attachmentMapper;
@@ -59,6 +60,7 @@ public class AttachmentService {
     private final TestCaseMapper caseMapper;
     private final TestCaseRunMapper caseRunMapper;
     private final com.hourglass.mapper.TaskCommentMapper commentMapper;
+    private final com.hourglass.mapper.DemandCommentMapper demandCommentMapper;
     private final RequirementDocMapper docMapper;
     private final ProjectAccessService projectAccess;
 
@@ -69,6 +71,7 @@ public class AttachmentService {
                              TaskLogMapper logMapper, DemandMapper demandMapper,
                              TestCaseMapper caseMapper, TestCaseRunMapper caseRunMapper,
                              com.hourglass.mapper.TaskCommentMapper commentMapper,
+                             com.hourglass.mapper.DemandCommentMapper demandCommentMapper,
                              RequirementDocMapper docMapper,
                              ProjectAccessService projectAccess) {
         this.attachmentMapper = attachmentMapper;
@@ -78,6 +81,7 @@ public class AttachmentService {
         this.caseMapper = caseMapper;
         this.caseRunMapper = caseRunMapper;
         this.commentMapper = commentMapper;
+        this.demandCommentMapper = demandCommentMapper;
         this.docMapper = docMapper;
         this.projectAccess = projectAccess;
     }
@@ -88,6 +92,14 @@ public class AttachmentService {
             return Collections.emptyList();
         }
         return attachmentMapper.selectByTargets(workspaceId, KIND_COMMENT, commentIds);
+    }
+
+    /** 需求池评论附件：与任务评论同口径，列表一次批量取齐 */
+    public List<Attachment> demandCommentsAttachments(String workspaceId, List<String> commentIds) {
+        if (commentIds == null || commentIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return attachmentMapper.selectByTargets(workspaceId, KIND_DEMAND_COMMENT, commentIds);
     }
 
     public com.hourglass.dto.PageResult<Attachment> list(
@@ -131,6 +143,12 @@ public class AttachmentService {
                 throw AppException.notFound("附件所属评论或任务不存在");
             }
             projectId = t.getReqId();
+        } else if (KIND_DEMAND_COMMENT.equals(a.getTargetKind())) {
+            Demand demand = demandOfComment(workspaceId, a.getTargetId());
+            if (demand == null) {
+                throw AppException.notFound("附件所属评论或需求不存在");
+            }
+            projectId = demand.getReqId();
         } else if (KIND_DOC.equals(a.getTargetKind())) {
             RequirementDoc doc = docMapper.selectById(a.getTargetId());
             if (doc == null || !workspaceId.equals(doc.getWorkspaceId())) {
@@ -358,6 +376,17 @@ public class AttachmentService {
         deleteFilesAfterCommit(list);
     }
 
+    /** 需求评论（含其回复）删除时，评论上的附件一并清理 */
+    @Transactional
+    public void deleteByDemandComments(String workspaceId, List<String> commentIds) {
+        if (commentIds == null || commentIds.isEmpty()) {
+            return;
+        }
+        List<Attachment> list = attachmentMapper.selectByTargets(workspaceId, KIND_DEMAND_COMMENT, commentIds);
+        attachmentMapper.deleteByTargets(workspaceId, KIND_DEMAND_COMMENT, commentIds);
+        deleteFilesAfterCommit(list);
+    }
+
     /** 导入覆盖/清空空间数据时调用 */
     public void deleteAllWithFiles(String workspaceId) {
         List<Attachment> list = attachmentMapper.selectAllByWorkspace(workspaceId);
@@ -455,6 +484,13 @@ public class AttachmentService {
             }
             return t.getReqId();
         }
+        if (KIND_DEMAND_COMMENT.equals(kind)) {
+            Demand demand = demandOfComment(workspaceId, targetId);
+            if (demand == null) {
+                throw AppException.notFound("评论不存在：" + targetId);
+            }
+            return demand.getReqId();
+        }
         if (KIND_DOC.equals(kind)) {
             RequirementDoc doc = docMapper.selectById(targetId);
             if (doc == null || !workspaceId.equals(doc.getWorkspaceId())) {
@@ -500,6 +536,19 @@ public class AttachmentService {
         return t;
     }
 
+    /** 需求评论 → 所属需求；评论或需求不存在/不同空间返回 null */
+    private Demand demandOfComment(String workspaceId, String commentId) {
+        com.hourglass.entity.DemandComment c = demandCommentMapper.selectById(commentId);
+        if (c == null || !workspaceId.equals(c.getWorkspaceId())) {
+            return null;
+        }
+        Demand d = demandMapper.selectById(c.getDemandId());
+        if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
+            return null;
+        }
+        return d;
+    }
+
     /** 附件目标是否仍存在（任务在回收站中仍算存在）；未归类任务 reqId 为空但目标存在，需与孤儿区分 */
     private boolean targetExists(String workspaceId, String targetId, String kind) {
         if (KIND_DEMAND.equals(kind)) {
@@ -511,6 +560,9 @@ public class AttachmentService {
         }
         if (KIND_COMMENT.equals(kind)) {
             return taskOfComment(workspaceId, targetId) != null;
+        }
+        if (KIND_DEMAND_COMMENT.equals(kind)) {
+            return demandOfComment(workspaceId, targetId) != null;
         }
         if (KIND_DOC.equals(kind)) {
             RequirementDoc doc = docMapper.selectById(targetId);
@@ -533,6 +585,10 @@ public class AttachmentService {
         if (KIND_COMMENT.equals(kind)) {
             Task ct = taskOfComment(workspaceId, targetId);
             return ct == null ? null : ct.getReqId();
+        }
+        if (KIND_DEMAND_COMMENT.equals(kind)) {
+            Demand cd = demandOfComment(workspaceId, targetId);
+            return cd == null ? null : cd.getReqId();
         }
         if (KIND_DOC.equals(kind)) {
             RequirementDoc doc = docMapper.selectById(targetId);
@@ -563,6 +619,17 @@ public class AttachmentService {
         deleteFilesAfterCommit(list);
     }
 
+    /** 需求或项目删除后，评论行已清空：清理失主的需求评论附件 */
+    @Transactional
+    public void deleteOrphanDemandCommentAttachments(String workspaceId) {
+        List<Attachment> list = attachmentMapper.selectOrphanDemandComments(workspaceId);
+        if (list.isEmpty()) {
+            return;
+        }
+        attachmentMapper.deleteOrphanDemandComments(workspaceId);
+        deleteFilesAfterCommit(list);
+    }
+
     private String extOf(String filename) {
         int idx = filename.lastIndexOf('.');
         if (idx < 0 || idx == filename.length() - 1) {
@@ -584,6 +651,14 @@ public class AttachmentService {
     private void logAction(String userId, String workspaceId, String targetId, String kind, String detail) {
         if (KIND_DEMAND.equals(kind)) {
             demandMapper.insertLog(workspaceId, targetId, "update", detail, userId);
+            return;
+        }
+        if (KIND_DEMAND_COMMENT.equals(kind)) {
+            /* 需求评论附件记到需求流转日志：评论本身不承载操作流水 */
+            Demand d = demandOfComment(workspaceId, targetId);
+            if (d != null) {
+                demandMapper.insertLog(workspaceId, d.getId(), "update", detail, userId);
+            }
             return;
         }
         if (KIND_CASE_RUN.equals(kind) || KIND_DOC.equals(kind)) {

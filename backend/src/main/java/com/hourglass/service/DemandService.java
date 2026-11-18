@@ -82,6 +82,9 @@ public class DemandService {
     /** 评论区强归属需求：需求硬删除时一起清理，评论转出的工作项保留 */
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.DemandCommentMapper demandCommentMapper;
+    /** 列表/详情回填提交人显示名：只按 createdBy 查名，不做任何推断 */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.UserMapper userMapper;
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public DemandService(DemandMapper demandMapper, RequirementMapper reqMapper,
@@ -128,6 +131,7 @@ public class DemandService {
             fillWsjf(d);
             d.setCanSchedule(releasePermission.canManageProject(userId, workspaceId, d.getReqId()));
         }
+        fillCreatorNames(items);
 
         DemandPage page = new DemandPage();
         page.setTotal(total);
@@ -186,6 +190,7 @@ public class DemandService {
                 fillWsjf(d);
                 d.setCanSchedule(releasePermission.canManageProject(userId, workspaceId, d.getReqId()));
             }
+            fillCreatorNames(items);
             DemandBoardResponse.Column col = new DemandBoardResponse.Column();
             col.setItems(items);
             col.setMatched(matched);
@@ -803,6 +808,7 @@ public class DemandService {
             throw AppException.notFound("需求不存在：" + id);
         }
         fillWsjf(d);
+        fillCreatorNames(java.util.Collections.singletonList(d));
         return d;
     }
 
@@ -1494,6 +1500,8 @@ public class DemandService {
         demandMapper.deleteLogsByDemand(workspaceId, id);
         judgementMapper.deleteByDemand(workspaceId, id);
         demandCommentMapper.deleteByDemand(workspaceId, id);
+        /* 评论行已清空，评论上的附件失去宿主：按失主清理（记录随事务，文件提交后删） */
+        attachmentService.deleteOrphanDemandCommentAttachments(workspaceId);
         demandWatch.clear(workspaceId, id);
         demandMapper.deleteById(workspaceId, id);
         /* 需求已硬删除：通知不带详情深链，避免通知中心点开一片空白 */
@@ -1744,6 +1752,32 @@ public class DemandService {
         } else {
             /* 字段被清空时同步清分，避免旧分数残留 */
             d.setWsjfScore(null);
+        }
+    }
+
+    /** 批量回填提交人显示名：一次查齐当前页涉及的用户，避免逐行查库 */
+    private void fillCreatorNames(List<Demand> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        java.util.Set<String> ids = new java.util.LinkedHashSet<String>();
+        for (Demand d : items) {
+            if (Texts.trimToNull(d.getCreatedBy()) != null) {
+                ids.add(d.getCreatedBy());
+            }
+        }
+        if (ids.isEmpty() || userMapper == null) {
+            return;
+        }
+        Map<String, String> names = new java.util.HashMap<String, String>();
+        for (com.hourglass.entity.AppUser user : userMapper.selectByIds(new ArrayList<String>(ids))) {
+            if (user != null && user.getId() != null) {
+                names.put(user.getId(), user.getDisplayName());
+            }
+        }
+        for (Demand d : items) {
+            String name = names.get(d.getCreatedBy());
+            d.setCreatedByName(name == null ? null : Texts.cut(name, 32));
         }
     }
 

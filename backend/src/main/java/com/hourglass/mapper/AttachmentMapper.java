@@ -56,5 +56,14 @@ public interface AttachmentMapper {
     int deleteByTarget(@Param("workspaceId") String workspaceId,
                        @Param("targetId") String targetId, @Param("targetKind") String targetKind);
 
+    /** 按目标类型批量删除（需求评论连同回复删除时用） */
+    int deleteByTargets(@Param("workspaceId") String workspaceId,
+                        @Param("targetKind") String targetKind, @Param("targetIds") List<String> targetIds);
+
+    /** 需求/评论删除后遗留的需求评论附件（评论行已不存在） */
+    List<Attachment> selectOrphanDemandComments(@Param("workspaceId") String workspaceId);
+
+    int deleteOrphanDemandComments(@Param("workspaceId") String workspaceId);
+
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

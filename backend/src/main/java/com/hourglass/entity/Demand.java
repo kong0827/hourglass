@@ -58,6 +58,8 @@ public class Demand {
     private Integer wsjfEffort;
     /** 提交人账号ID */
     private String createdBy;
+    /** 提交人显示名（非表字段，列表/详情读取时按 createdBy 回填；查不到时保持 null，前端显示“—”） */
+    private String createdByName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

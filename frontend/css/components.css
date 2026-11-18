@@ -2855,6 +2855,21 @@ button.case-witem:hover{border-color:var(--primary-border);color:var(--text);}
   border-radius:var(--r-sm);background:var(--surface);outline:none;
 }
 .demand-copy.inline-edit-field:focus{box-shadow:0 0 0 3px var(--primary-soft);}
+/* 描述内嵌图片：与文字同段排版，限高防撑破抽屉；只读态可点开大图 */
+.demand-copy .dem-inline-img{
+  display:inline-block;max-width:100%;max-height:280px;margin:6px 4px 2px 0;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);
+  object-fit:contain;vertical-align:top;cursor:zoom-in;
+}
+.demand-copy.inline-edit-field .dem-inline-img{cursor:default;margin:4px 2px;}
+/* 描述卡片右侧的「插入图片」与提示：单独一簇，和标题左对齐分开 */
+.dem-desc-tools{display:inline-flex;align-items:center;gap:8px;min-width:0;margin-left:auto;flex:0 0 auto;}
+.dem-desc-tools .foot-note{margin:0;}
+.dem-comment-file{display:none;}
+@media (max-width:620px){
+  /* 窄屏标题行放不下按钮 + 提示：先保住按钮，提示文字让位 */
+  .dem-desc-tools .foot-note{display:none;}
+}
 /* 概览里的来源也走就地编辑：编辑态把只读的 flex+省略号换成普通输入框外观 */
 .rf-meta .rf-v[data-dem-text]{cursor:text;}
 .rf-meta .rf-v.inline-edit-field{

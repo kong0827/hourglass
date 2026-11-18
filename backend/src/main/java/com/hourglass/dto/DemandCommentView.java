@@ -1,11 +1,12 @@
 package com.hourglass.dto;
 
+import com.hourglass.entity.Attachment;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** 需求池评论列表项（含评论人显示名、回复与解决状态） */
+/** 需求池评论列表项（含评论人显示名、回复、解决状态与附件） */
 @Data
 public class DemandCommentView {
 
@@ -23,4 +24,6 @@ public class DemandCommentView {
     private List<String> mentionUserIds;
     private String taskId;
     private List<DemandCommentView> replies;
+    /** 评论附件（图片、PDF 等，走通用 attachment 表 target_kind=demand_comment） */
+    private List<Attachment> attachments;
 }

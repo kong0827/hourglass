@@ -53,6 +53,7 @@ public class DemandCommentService {
     private final NotificationEventService notificationEvents;
     private final TaskCommandService taskCommandService;
     private final DemandWatchService demandWatch;
+    private final AttachmentService attachmentService;
 
     public DemandCommentService(DemandCommentMapper commentMapper,
                                 DemandMapper demandMapper,
@@ -62,7 +63,8 @@ public class DemandCommentService {
                                 AuditService auditService,
                                 NotificationEventService notificationEvents,
                                 TaskCommandService taskCommandService,
-                                DemandWatchService demandWatch) {
+                                DemandWatchService demandWatch,
+                                AttachmentService attachmentService) {
         this.commentMapper = commentMapper;
         this.demandMapper = demandMapper;
         this.userMapper = userMapper;
@@ -72,6 +74,7 @@ public class DemandCommentService {
         this.notificationEvents = notificationEvents;
         this.taskCommandService = taskCommandService;
         this.demandWatch = demandWatch;
+        this.attachmentService = attachmentService;
     }
 
     public com.hourglass.dto.PageResult<DemandCommentView> list(String workspaceId, String userId, String demandId,
@@ -109,6 +112,7 @@ public class DemandCommentService {
             v.setReplies(replyMap.get(t.getId()));
             views.add(v);
         }
+        fillAttachments(workspaceId, views);
         return com.hourglass.dto.PageResult.of(views, total, safeOffset, safeLimit);
     }
 
@@ -215,10 +219,18 @@ public class DemandCommentService {
         Demand demand = requireVisibleDemand(workspaceId, userId, demandId);
         DemandComment c = requireComment(workspaceId, demandId, commentId);
         projectAccess.assertWrite(workspaceId, userId, demand.getReqId());
+        List<String> deletedIds = new ArrayList<String>();
+        deletedIds.add(commentId);
         if (c.getParentId() == null) {
+            /* 顶层评论连同回复一起删：回复上的附件也要清理，先收集 id 再删行 */
+            for (DemandComment r : commentMapper.selectRepliesByParents(
+                    workspaceId, demandId, Collections.singletonList(commentId))) {
+                deletedIds.add(r.getId());
+            }
             commentMapper.deleteByParent(workspaceId, demandId, commentId);
         }
         commentMapper.delete(workspaceId, commentId);
+        attachmentService.deleteByDemandComments(workspaceId, deletedIds);
         auditService.recordCurrent(workspaceId, "comment_delete", "demand_comment", commentId,
                 demand.getTitle(), true, "删除需求「" + demand.getTitle() + "」下的一条评论", null);
     }
@@ -325,6 +337,40 @@ public class DemandCommentService {
         return names;
     }
 
+    /** 顶层与回复一次批量取附件，避免逐条评论查询 */
+    private void fillAttachments(String workspaceId, List<DemandCommentView> views) {
+        if (views == null || views.isEmpty()) {
+            return;
+        }
+        List<DemandCommentView> flat = new ArrayList<DemandCommentView>();
+        List<String> ids = new ArrayList<String>();
+        for (DemandCommentView v : views) {
+            flat.add(v);
+            ids.add(v.getId());
+            if (v.getReplies() != null) {
+                flat.addAll(v.getReplies());
+                for (DemandCommentView r : v.getReplies()) {
+                    ids.add(r.getId());
+                }
+            }
+        }
+        Map<String, List<com.hourglass.entity.Attachment>> byComment =
+                new HashMap<String, List<com.hourglass.entity.Attachment>>();
+        for (com.hourglass.entity.Attachment a : attachmentService.demandCommentsAttachments(workspaceId, ids)) {
+            List<com.hourglass.entity.Attachment> bucket = byComment.get(a.getTargetId());
+            if (bucket == null) {
+                bucket = new ArrayList<com.hourglass.entity.Attachment>();
+                byComment.put(a.getTargetId(), bucket);
+            }
+            bucket.add(a);
+        }
+        for (DemandCommentView v : flat) {
+            List<com.hourglass.entity.Attachment> list = byComment.get(v.getId());
+            v.setAttachments(list == null
+                    ? Collections.<com.hourglass.entity.Attachment>emptyList() : list);
+        }
+    }
+
     private DemandCommentView toView(DemandComment c, String workspaceId, String actorId, String demandReqId) {
         Map<String, String> names = namesOf(Collections.singletonList(c));
         return toView(c, names, projectAccess.canWrite(workspaceId, actorId, demandReqId));
@@ -345,6 +391,8 @@ public class DemandCommentService {
         v.setResolvedByName(c.getResolvedBy() == null ? null : displayName(c.getResolvedBy(), names));
         v.setMentionUserIds(fromJson(c.getMentions()));
         v.setTaskId(c.getTaskId());
+        /* 附件在提交后单独上传；单条返回时给空数组，前端无需区分 null/[] */
+        v.setAttachments(Collections.<com.hourglass.entity.Attachment>emptyList());
         return v;
     }
 

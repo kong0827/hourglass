@@ -143,6 +143,17 @@ public class AttachmentController {
         return ApiResult.ok(attachmentService.upload(userId, ws.getId(), demandId, AttachmentService.KIND_DEMAND, file));
     }
 
+    /** 需求池评论附件：评论先创建、附件随后上传（列表通过评论视图一并返回） */
+    @PostMapping("/api/demand-comments/{commentId}/attachments")
+    public ApiResult<Attachment> uploadDemandComment(@PathVariable String commentId,
+                                                     @RequestParam("file") MultipartFile file,
+                                                     @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(attachmentService.upload(userId, ws.getId(), commentId,
+                AttachmentService.KIND_DEMAND_COMMENT, file));
+    }
+
     /* ---------------- 需求文档附件 ---------------- */
 
     @GetMapping("/api/req-docs/{docId}/attachments")

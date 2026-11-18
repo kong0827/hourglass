@@ -102,6 +102,25 @@
     WHERE workspace_id = #{workspaceId} AND target_kind = #{targetKind} AND target_id = #{targetId}
   </delete>
 
+  <delete id="deleteByTargets">
+    DELETE FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_kind = #{targetKind}
+      AND target_id IN
+      <foreach collection="targetIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+  </delete>
+
+  <select id="selectOrphanDemandComments" resultType="Attachment">
+    SELECT <include refid="cols"/> FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_kind = 'demand_comment'
+      AND NOT EXISTS (SELECT 1 FROM demand_comment c WHERE c.id = attachment.target_id)
+  </select>
+
+  <delete id="deleteOrphanDemandComments">
+    DELETE FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_kind = 'demand_comment'
+      AND NOT EXISTS (SELECT 1 FROM demand_comment c WHERE c.id = attachment.target_id)
+  </delete>
+
   <delete id="deleteAllByWorkspace">
     DELETE FROM attachment WHERE workspace_id = #{workspaceId}
   </delete>

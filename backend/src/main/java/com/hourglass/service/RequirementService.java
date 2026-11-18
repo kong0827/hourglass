@@ -507,6 +507,8 @@ public class RequirementService {
         demandMapper.deleteLogsByReq(workspaceId, id);
         demandJudgementMapper.deleteByReq(workspaceId, id);
         demandCommentMapper.deleteByWorkspaceReq(workspaceId, id);
+        /* 评论行随项目清空后，评论附件失去宿主：按失主统一清理 */
+        attachmentService.deleteOrphanDemandCommentAttachments(workspaceId);
         demandWatchMapper.deleteByWorkspaceReq(workspaceId, id);
         demandMapper.deleteByReq(workspaceId, id);
         projectAccess.clearProject(workspaceId, id);

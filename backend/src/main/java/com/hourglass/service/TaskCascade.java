@@ -519,6 +519,8 @@ public class TaskCascade {
             /* 评论随需求整体替换；旧备份没有评论字段时保留现有评论 */
             if (clearDemandComments) {
                 demandCommentMapper.deleteByWorkspace(workspaceId);
+                /* 导入不清附件，评论清空后其附件按失主清理，避免残留无主文件 */
+                attachmentService.deleteOrphanDemandCommentAttachments(workspaceId);
             }
             /* 关注名单随需求整体替换：备份格式不含关注人，旧名单不能套到同 ID 重建的新需求上 */
             demandWatchMapper.deleteByWorkspace(workspaceId);

@@ -1229,9 +1229,23 @@ html[data-theme="dark"] .project-toolbar .seg button[aria-pressed="true"]{backgr
 .comment-item .ci-file:hover{border-color:var(--primary-border);color:var(--primary-fg);}
 .comment-item .ci-file .cf-name{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .comment-item .ci-file .cf-size{color:var(--text-3);font-variant-numeric:tabular-nums;}
+/* 图片评论：正文下按固定比例平铺，点图进灯箱；非图片附件仍是小 chip */
+.comment-item .ci-imgs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.comment-item .ci-img{display:block;width:132px;height:96px;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;background:var(--surface-sunken);}
+.comment-item .ci-img img{display:block;width:100%;height:100%;object-fit:cover;transition:transform var(--dur-fast) var(--ease-out);}
+.comment-item .ci-img:hover{border-color:var(--border-strong);}
+.comment-item .ci-img:hover img{transform:scale(1.03);}
+/* 待发送的截图先给本地缩略图，粘贴后立刻能确认拿到的是哪张图 */
+.comment-attach-chip.is-img{padding-left:3px;}
+.comment-attach-chip .ca-thumb{width:22px;height:22px;object-fit:cover;border-radius:50%;display:block;flex:0 0 auto;}
+@media (max-width:620px){
+  .comment-item .ci-img{width:104px;height:78px;}
+}
 /* @ 候选浮层：挂在 body 上并用 fixed 定位，避免被抽屉 / 侧栏的滚动容器裁剪 */
+/* 候选框挂 body 且常出现在抽屉/弹窗内的输入框旁：层级必须高于 modal-layer（UI.openModal 从 201 起），
+   取与 .combo-options 相同的 1100，避免 @ 候选被详情抽屉盖住看起来「没反应」 */
 .mention-pop{
-  position:fixed;z-index:150;padding:4px;overflow-y:auto;overscroll-behavior:contain;
+  position:fixed;z-index:1100;padding:4px;overflow-y:auto;overscroll-behavior:contain;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
   box-shadow:var(--shadow-md);
 }
@@ -1857,6 +1871,43 @@ html[data-theme="dark"] .project-toolbar .seg button[aria-pressed="true"]{backgr
 .reqdoc-comment-quotechip .qc-text{flex:1;max-height:64px;overflow-y:auto;word-break:break-word;white-space:pre-wrap;}
 .reqdoc-comment-quotechip .qc-x{flex:none;width:20px;height:20px;padding:0;border:none;background:transparent;color:var(--text-3);font-size:15px;line-height:1;cursor:pointer;border-radius:4px;}
 .reqdoc-comment-quotechip .qc-x:hover{background:var(--surface-hover);color:var(--text);}
+/* 需求评论附件：图片按正文平铺缩略图，非图片给扩展名 + 文件名；点击走预览、表格或下载 */
+.dem-comment-imgs{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+.dem-comment-img{display:block;width:132px;height:96px;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;background:var(--surface-sunken);}
+.dem-comment-img img{display:block;width:100%;height:100%;object-fit:cover;transition:transform var(--dur-fast) var(--ease-out);}
+.dem-comment-img:hover{border-color:var(--border-strong);}
+.dem-comment-img:hover img{transform:scale(1.03);}
+@media (max-width:620px){
+  .dem-comment-img{width:104px;height:78px;}
+}
+.dem-comment-atts{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+.dem-comment-att{
+  display:flex;align-items:center;gap:8px;max-width:280px;padding:4px 10px 4px 4px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);
+  color:var(--text-2);text-decoration:none;font-size:12px;min-width:0;
+}
+.dem-comment-att:hover{border-color:var(--primary-border);color:var(--primary-fg);}
+.dem-comment-att .dem-att-ext{
+  width:32px;height:32px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:6px;background:var(--surface);border:1px solid var(--border);
+  font-size:10px;font-weight:650;color:var(--text-3);letter-spacing:.02em;
+}
+.dem-comment-att .dem-att-meta{display:flex;flex-direction:column;min-width:0;gap:1px;}
+.dem-comment-att .dem-att-name{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dem-comment-att .dem-att-size{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+/* 评论输入区左侧：附件按钮 + 待传计数，与右侧发表按钮分开 */
+.reqdoc-comment-actions .dem-comment-actions-l{display:flex;align-items:center;gap:8px;min-width:0;}
+.reqdoc-comment-actions .dem-comment-actions-l .foot-note{margin:0;}
+/* 概览「讨论」：只放最近几条，完整列表与操作回评论页签 */
+.dem-discuss-list{max-height:none;margin-bottom:8px;}
+.dem-discuss-form{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding-top:10px;border-top:1px dashed var(--border);}
+.dem-discuss-form textarea{
+  width:100%;min-height:38px;max-height:120px;padding:8px 10px;resize:vertical;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);
+  font:inherit;font-size:12.5px;line-height:19px;
+}
+.dem-discuss-form textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+.dem-discuss-form .reqdoc-comment-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .reqdoc-tasks{margin-top:22px;border-top:1px solid var(--border);padding-top:12px;}
 .reqdoc-tasks-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;}
 .reqdoc-tasks-head h3{margin:0;font-size:13px;font-weight:650;color:var(--text-2);}
@@ -4023,6 +4074,15 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .bkl-tags .tag{height:20px;font-size:12px;}
 .bkl-desc{margin:0;font-size:12.5px;line-height:19px;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .bkl-src{font-size:12px;color:var(--text-3);}
+/* 列表/卡片标题下的提交人行：只读展示，避免为它再加一列挤掉已有列宽 */
+.dem-title-sub{
+  display:block;margin-top:2px;font-size:11.5px;line-height:16px;font-weight:400;color:var(--text-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+/* 管理表把 .link-title 压成行内，标题下要另起一行放提交人：这一列单独恢复块级 */
+.manager-tbl .link-title.dem-link-title{display:block;line-height:18px;}
+.dwl-main .dem-title-sub{margin-top:1px;}
+.bkl-src.dem-creator{font-size:11.5px;color:var(--text-3);}
 .bkl-why{font-size:12px;line-height:18px;color:var(--danger-fg);background:var(--danger-soft);border-radius:var(--r-sm);padding:6px 8px;}
 /* 取消不是失败：原因沿用中性底色，与「评审不通过」的危险色区分 */
 .bkl-why.is-canceled{color:var(--text-2);background:var(--surface-sunken);}
