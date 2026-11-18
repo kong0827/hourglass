@@ -1702,11 +1702,20 @@ function syncDemandOptionLabel(id, d){
   var sel = $("iDemand"), reqSel = $("iReq");
   if(!sel || !d || !d.title || !sel.getAttribute("data-ready") || (sel.value || "") !== id) return;
   var opt = sel.options[sel.selectedIndex];
-  if(!opt || opt.value !== id || opt.getAttribute("data-status")) return;
+  /* 真实候选带 data-status（即使状态为空串）；只有占位项没有这个属性，才允许补标题 */
+  if(!opt || opt.value !== id || opt.hasAttribute("data-status")) return;
   var cross = !!(d.reqId && reqSel && reqSel.value && d.reqId !== reqSel.value);
   opt.textContent = d.title + (cross ? "（跨项目原关联）" : "（未在当前候选列表）");
   var titleEl = $("drawerSourceTitle");
   if(titleEl) titleEl.textContent = d.title;
+}
+/* 需求目标可能先于候选列表返回，那时补标题会被 data-ready 拦住；
+   候选灌完后由 demands.js 回调这里，用缓存补一次，避免一直停在占位文案 */
+function syncDemandLabelFromCache(){
+  var id = drawerDemandId();
+  if(!id) return;
+  var d = demandTargetCache[id];
+  if(d) syncDemandOptionLabel(id, d);
 }
 function syncDemandTarget(){
   var el = $("iDemandTarget"), id = drawerDemandId();
@@ -6559,4 +6568,4 @@ if(drawerBodyEl){
   drawerBodyEl.addEventListener("keydown", pubActivate);
 }
 
-export { buildFormControls, currentProjectId, deleteTask, openTaskDrawer, ownerOptions, ownerPickerOptions, ownerRosterState, ensureProjectRoles, populateReqSelect, refreshOwnerSelect, renderTagChips, resetFormBaseline, showDrawerNotice, syncAssocRead, syncAssocViewBtns, syncCatSeg, syncDateBounds, syncFormSegs, syncProgVal, tryCloseTaskDrawer };
+export { buildFormControls, currentProjectId, deleteTask, openTaskDrawer, ownerOptions, ownerPickerOptions, ownerRosterState, ensureProjectRoles, populateReqSelect, refreshOwnerSelect, renderTagChips, resetFormBaseline, showDrawerNotice, syncAssocRead, syncAssocViewBtns, syncCatSeg, syncDateBounds, syncDemandLabelFromCache, syncFormSegs, syncProgVal, tryCloseTaskDrawer };

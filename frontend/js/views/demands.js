@@ -16,7 +16,7 @@ import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { activeView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
-import { openTaskDrawer, syncAssocRead, syncAssocViewBtns } from "../core/task-drawer.js";
+import { openTaskDrawer, syncAssocRead, syncAssocViewBtns, syncDemandLabelFromCache } from "../core/task-drawer.js";
 import { canEditReq, catNameById, catTag, projectGroups, projectOptionsHTML, reqNameById, rt, setNameById } from "../core/state.js";
 import { UI, esc, toast, copyToClipboard } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
@@ -5657,6 +5657,8 @@ function fillDrawerDemandSelect(reqId, keep){
   sel.innerHTML = html;
   sel.value = keep || "";
   sel.setAttribute("data-ready", "1");
+  /* 需求目标常先于本列表返回：就绪后补一次真实标题，替换占位选项 */
+  syncDemandLabelFromCache();
   syncAssocViewBtns();
   syncAssocRead();
 }
