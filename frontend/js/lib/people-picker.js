@@ -99,6 +99,8 @@ export function openPeoplePicker(cfg){
     var on = cur.currentId === o.id;
     var meta = '<span class="role' + (o.role ? "" : " unset") + '">' + esc(roleText(o)) + '</span>';
     (o.secondary || []).forEach(function(s){ meta += '<span class="pp-side">兼 ' + esc(s) + '</span>'; });
+    /* 负责人浮层带项目负载（驾驶舱同源）；测试负责人等共用候选时不传 loadText */
+    if(o.loadText) meta += '<span class="pp-load' + (o.overloaded ? " over" : "") + '">' + esc(o.loadText) + '</span>';
     return '<button class="pp-opt' + (on ? " selected" : "") + '" type="button" role="option" aria-selected="' + on + '" data-pick="' + esc(o.id) + '">' +
       avatarHTML(o.name) +
       '<span class="pp-opt-main"><span class="pp-opt-name"><span class="nm">' + esc(o.name) + '</span></span>' +

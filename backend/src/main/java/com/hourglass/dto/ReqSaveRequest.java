@@ -64,6 +64,7 @@ public class ReqSaveRequest {
      * 复用 project_member，不新增表结构；未出现的成员仍按空间默认范围处理。
      */
     @Valid
+    @Size(max = 200, message = "一次最多指定 200 名项目成员")
     private List<MemberGrant> members;
 
     @Data

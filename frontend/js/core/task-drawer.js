@@ -416,7 +416,7 @@ function renderReadTestCard(){
     whoCell.classList.toggle("is-empty", !tester);
     var canPick = editable && (col === "test" || col === "testing");
     var whoInfo = tester
-      ? ownerPickerOptions().filter(function(o){ return t.testOwnerUserId ? o.id === t.testOwnerUserId : o.name === tester; })[0]
+      ? ownerPickerOptions(false).filter(function(o){ return t.testOwnerUserId ? o.id === t.testOwnerUserId : o.name === tester; })[0]
       : null;
     var whoTip = whoInfo ? optionSubText(whoInfo) : "";
     whoCell.classList.toggle("is-clickable", canPick);
@@ -1528,10 +1528,14 @@ function syncDrawerFacts(){
     var ownerSub = $("rfOwnerSub");
     if(ownerSub){
       var ownerLabel = ownerName ? taskMemberLabel(readTask()) : "";
-      if(ownerLabel){
-        var ownerCompany = ownerLabel.split(" · ")[0];
+      var ownerIdNow = (iOwner && iOwner.value && iOwner.value !== "__none__" && iOwner.value !== "__text__")
+        ? iOwner.value : ((readTask() || {}).ownerUserId || "");
+      var loadText = ownerName ? ownerLoadText(ownerLoadFor(currentProjectId(), ownerIdNow)) : "";
+      var parts = [ownerLabel, loadText].filter(function(x){ return !!x; });
+      if(parts.length){
+        var ownerCompany = ownerLabel ? ownerLabel.split(" · ")[0] : "";
         var ownerDot = ownerCompany && ownerCompany !== "未标注公司" ? companyColor(ownerCompany) : "transparent";
-        ownerSub.innerHTML = '<i style="background:' + ownerDot + '"></i>' + esc(ownerLabel);
+        ownerSub.innerHTML = '<i style="background:' + ownerDot + '"></i>' + esc(parts.join(" · "));
         ownerSub.hidden = false;
       }else{
         ownerSub.innerHTML = ""; ownerSub.hidden = true;
@@ -2274,16 +2278,29 @@ function ensureProjectRoles(projectId, force){
     refreshWatchPicker();
   });
 });
+function ownerLoadText(load){
+  if(!load) return "";
+  return "负载 " + load.loadPct + "%"
+    + (load.remainingMinutes > 0 ? " · 余 " + fmtMinutesShort(load.remainingMinutes) : "")
+    + (load.overloaded ? " · 超载" : "");
+}
+/* 取某成员在某项目的负载缓存：没有加载过或没这人时返回 null，界面不标注 */
+function ownerLoadFor(pid, userId){
+  var ws = rt.currentWs;
+  if(!ws || !pid || !userId) return null;
+  var hit = ownerLoadCache[ws.id + ":" + pid];
+  return hit && hit.byUser ? (hit.byUser[userId] || null) : null;
+}
 function ownerOptions(projectId){
   var opts = [], seen = Object.create(null), ws = rt.currentWs, pid = projectId === undefined ? currentProjectId() : projectId;
-  var loads = ws && pid ? ownerLoadCache[ws.id + ":" + pid] : null;
   function push(userId, name, m){
     if(!userId || seen[userId]) return;
     seen[userId] = true;
     var titles = memberRoleTitles(m), primary = effectiveMemberRole(m);
+    var load = ownerLoadFor(pid, userId);
     opts.push({ id:userId, name:name, company:companyNameOf(m), role:titles.join(" / "),
       primaryRole:primary, secondary:titles.filter(function(t){ return t !== primary; }),
-      load:loads && loads.byUser ? loads.byUser[userId] : null });
+      load:load, loadText:ownerLoadText(load) });
   }
   if(ws && ws.type === "shared"){
     var roster = pid ? peekProjectMembers(ws.id, pid) : null;
@@ -2317,7 +2334,12 @@ function ensureOwnerLoad(pid){
       };
     });
     ownerLoadCache[key] = { at: Date.now(), byUser: byUser };
-    if(rt.currentWs && rt.currentWs.id === ws.id && currentProjectId() === pid) refreshOwnerSelect();
+    if(rt.currentWs && rt.currentWs.id === ws.id && currentProjectId() === pid){
+      refreshOwnerSelect();
+      /* 浮层可能正开着：负载属于选人决策信息，到了就原地补上 */
+      refreshOwnerPicker();
+      if(rt.editingId) syncDrawerFacts();
+    }
   }).catch(function(){
     /* 没有驾驶舱权限或接口失败：不标注负载，不影响负责人选择 */
     ownerLoadCache[key] = { at: Date.now(), byUser: Object.create(null) };
@@ -2328,15 +2350,12 @@ function companyOfUser(userId){
   var hit = (rt.wsMembersCache || []).filter(function(m){ return m.userId === userId; })[0];
   return hit ? companyNameOf(hit) : "";
 }
-function ownerOptionHTML(o, selected){
+function ownerOptionHTML(o, selected, withLoad){
   var shared = rt.currentWs && rt.currentWs.type === "shared";
   var label = o.name + (shared ? " · " + (o.role || "未设角色") + " · " + (o.company || "未标注公司") : "");
-  /* 负载用驾驶舱同一口径：剩余预估 / 可用工作日；超载直接写在候选里，避免选完才发现 */
-  if(shared && o.load){
-    label += " · 负载 " + o.load.loadPct + "%"
-      + (o.load.remainingMinutes > 0 ? " · 余 " + fmtMinutesShort(o.load.remainingMinutes) : "")
-      + (o.load.overloaded ? " 超载" : "");
-  }
+  /* 负载用驾驶舱同一口径：剩余预估 / 可用工作日；超载直接写在候选里，避免选完才发现。
+     测试负责人候选不叠加负载：那边关心的是测试窗口，不是本项目的开发剩余量。 */
+  if(withLoad && shared && o.loadText) label += " · " + o.loadText;
   return '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (selected ? " selected" : "") + '>' + esc(label) + '</option>';
 }
 /* 负责人花名册提示：保留但不可指派的状态收成标签旁一个感叹号，避免在窄列里撑出两行；
@@ -2390,14 +2409,14 @@ function populateOwnerSelect(currentName, currentUserId){
   opts.forEach(function(o){
     var on = (curId && o.id === curId) || (!curId && uniqueName && o.name === curName);
     if(on) matched = true;
-    if(!hasCompany){ html += ownerOptionHTML(o, on); return; }
+    if(!hasCompany){ html += ownerOptionHTML(o, on, true); return; }
     var label = o.company || "未标注公司", g = groupIndex[label];
     if(!g){ g = groupIndex[label] = {label:label, items:[]}; groups.push(g); }
     g.items.push({o:o, on:on});
   });
   if(hasCompany){
     groups.sort(function(a, b){ if(a.label === b.label) return 0; if(a.label === "未标注公司") return 1; if(b.label === "未标注公司") return -1; return a.label.localeCompare(b.label, "zh"); });
-    groups.forEach(function(g){ html += '<optgroup label="' + esc(g.label) + '">' + g.items.map(function(x){ return ownerOptionHTML(x.o, x.on); }).join("") + '</optgroup>'; });
+    groups.forEach(function(g){ html += '<optgroup label="' + esc(g.label) + '">' + g.items.map(function(x){ return ownerOptionHTML(x.o, x.on, true); }).join("") + '</optgroup>'; });
   }
   if((curName || curId) && !matched){
     /* 历史账号绑定不能退化成纯文本，否则无关保存会清掉 owner_user_id。 */
@@ -4187,7 +4206,7 @@ function sendComment(){
   var text = iComment.value.trim();
   var files = pendingCommentFiles.slice();
   if(!text && !files.length) return;
-  if(text.length > 500){ toast("评论最多 500 字", "warn"); return; }
+  if(text.length > 2000){ toast("评论最多 2000 字", "warn"); return; }
   var id = rt.editingId;
   rt.commentSending = true;
   btnCommentSend.disabled = true;
@@ -6005,9 +6024,14 @@ function factMenu(title, items){
   el.innerHTML = '<div class="menu-title">' + esc(title) + '</div>' + items;
   return el;
 }
-/* 浮层候选：把 ownerOptions 的合并角色拆成主岗位 + 兼岗（仅展示，不改候选口径）。 */
-function ownerPickerOptions(){
-  return ownerOptions().map(function(o){ return { id:o.id, name:o.name, company:o.company, role:o.primaryRole, secondary:o.secondary }; });
+/* 浮层候选：把 ownerOptions 的合并角色拆成主岗位 + 兼岗（仅展示，不改候选口径）。
+   withLoad 只在负责人浮层开：测试负责人共用候选，但负载口径不同，不叠加。 */
+function ownerPickerOptions(withLoad){
+  return ownerOptions().map(function(o){
+    var item = { id:o.id, name:o.name, company:o.company, role:o.primaryRole, secondary:o.secondary };
+    if(withLoad && o.loadText){ item.loadText = o.loadText; item.overloaded = !!(o.load && o.load.overloaded); }
+    return item;
+  });
 }
 function ownerRosterState(){
   var ws = rt.currentWs, pid = currentProjectId(), key = ownerRosterKey();
@@ -6028,10 +6052,10 @@ function buildOwnerPickerCfg(anchor){
   var st = ownerRosterState(), cur = selectedOwnerInfo(iOwner);
   return {
     anchor:anchor, title:"负责人",
-    options:st.pending || st.error ? [] : ownerPickerOptions(),
+    options:st.pending || st.error ? [] : ownerPickerOptions(true),
     currentId:cur.id, currentName:cur.name, unavailable:cur.unavailable,
     allowClear:true, clearLabel:"未分配",
-    foot:"负责人只有一个：按谁推进到完成来选，不按岗位选；产品、运维同样可以做负责人。",
+    foot:"负责人只有一个：按谁推进到完成来选，不按岗位选；产品、运维同样可以做负责人。负载按本项目剩余预估 ÷ 可用工作日估算。",
     loading:st.pending, error:st.error ? (st.error.message || "网络异常") : "",
     onRetry:function(){ ensureProjectRoles(currentProjectId(), true); refreshOwnerPicker(); },
     onPick:function(o){

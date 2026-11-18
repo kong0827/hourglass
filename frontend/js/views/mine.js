@@ -43,7 +43,7 @@ registerHelp({
     title:"统计条",
     rows:[
       ["范围", "只统计当前已载入的「我的工作」项；继续滚动会补载，数字随之变化，不是整个空间的全量。", "warn"],
-      ["已载入 / 共", "已载入是列表当前累计的条数；共是本轮筛选后的全部条数，继续加载会向「共」靠近。", "ok"],
+      ["已载入 / 共", "已载入是列表当前累计的条数；共是服务端本轮筛选后的全部条数，继续加载会向「共」靠近。按空间二次筛选时空间条件只在前端生效，不显示共，改为报「筛选出 / 已载入」。", "ok"],
       ["逾期 / 7 天内到期", "逾期按截止日期早于今天计算；7 天内到期含今天与之后 6 天。已完成、已取消、执行结束的项都不计入。", "info"],
       ["被阻塞", "当前标记为阻塞的项，是此刻的快照。", "mute"],
       ["未设截止", "未完成、执行未结束且没有截止日期的项。", "mute"]
@@ -1385,7 +1385,8 @@ function renderMineStats(items){
     var finished = t.boardColumn === "done" || t.boardColumn === "canceled" || s.kind === "ended";
     if(s.kind === "over") over++;
     if(s.kind === "today" || s.kind === "soon" || (s.kind === "ok" && s.n <= 6)) week++;
-    if(t.blocked) blocked++;
+    /* 已完成 / 已取消的项即使残留阻塞标记也不再算当前卡点：与风险页同一取舍 */
+    if(t.blocked && !finished) blocked++;
     if(!t.dueDate && !finished) noDue++;
     /* 未完成项才计入个人剩余：已完成 / 已取消 / 执行结束不再产生剩余工作量 */
     if(finished) return;

@@ -208,6 +208,8 @@ function syncOwnerOptions(){
 /* ---------- 新建项目：初始成员（只复用 project_member，不新增字段） ---------- */
 var projMemberSeq = 0;
 var projMemberSel = {};
+/* ready / loading / error：空列表要区分「正在加载」「加载失败」和「空间里确实没有其他人」 */
+var projMemberState = "ready";
 function memberLabel(m){
   return m.displayName || m.username || m.userId;
 }
@@ -218,15 +220,22 @@ function syncProjectMembers(createMode){
   if(projMemberSec) projMemberSec.hidden = !show;
   if(projMemberCfg) projMemberCfg.hidden = !show;
   if(!projMemberList) return;
-  if(!show){ projMemberList.innerHTML = ""; return; }
+  if(!show){ projMemberList.innerHTML = ""; projMemberState = "ready"; return; }
+  var cached = (rt.wsMembersCache || []).length > 0;
+  projMemberState = cached ? "ready" : "loading";
   renderProjectMembers();
-  if((rt.wsMembersCache || []).length) return;
+  if(cached) return;
   var seq = projMemberSeq, wsId = rt.currentWs.id;
   API.get("/api/workspaces/" + encodeURIComponent(wsId) + "/members").then(function(list){
     if(seq !== projMemberSeq || !rt.currentWs || rt.currentWs.id !== wsId) return;
     rt.wsMembersCache = list || [];
+    projMemberState = "ready";
     renderProjectMembers();
-  }).catch(function(){ /* 成员列表拿不到时保持空白，不影响建项目 */ });
+  }).catch(function(){
+    if(seq !== projMemberSeq) return;
+    projMemberState = "error";
+    renderProjectMembers();
+  });
 }
 function projectMemberRows(){
   var meId = rt.currentUser && rt.currentUser.id;
@@ -238,7 +247,11 @@ function renderProjectMembers(){
   if(!projMemberList) return;
   var rows = projectMemberRows();
   if(!rows.length){
-    projMemberList.innerHTML = '<p class="foot-note">空间里还没有其他成员；创建后也可在成员名册里按项目分配。</p>';
+    projMemberList.innerHTML = projMemberState === "loading"
+      ? '<p class="foot-note">正在加载空间成员…</p>'
+      : '<p class="foot-note">' + (projMemberState === "error"
+          ? '成员列表加载失败，可关闭后重试；创建后也可在成员名册里按项目分配。'
+          : '空间里还没有其他成员；创建后也可在成员名册里按项目分配。') + '</p>';
     return;
   }
   projMemberList.innerHTML = rows.map(function(m){
