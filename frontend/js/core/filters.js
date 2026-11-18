@@ -81,20 +81,24 @@ function updateBrand(){
   if(!brandSub) return;
   var wsName = rt.currentWs ? rt.currentWs.name : "";
   var viewMeta = VIEWS[activeView] || {};
-  /* 驾驶舱：面包屑只表示位置，项目名由页面标题承载 */
-  if(activeView === "project"){
+  /* 深页统一面包屑「空间 / 组 / 当前页」：组段可点回对应列表页，页面名由页面标题承载。
+     版本详情 / 项目驾驶舱 / 发布工作台 / 交付说明 / 文档历史五个深页共用一套格式 */
+  var CRUMB_OF = {
+    project:    { group:"项目", view:"projects",     page:"驾驶舱" },
+    version:    { group:"版本", view:"phase",        page:"详情" },
+    release:    { group:"版本", view:"phase",        page:"发布工作台" },
+    delivery:   { group:"版本", view:"phase",        page:"交付说明" },
+    dochistory: { group:"文档", view:"requirements", page:"历史" }
+  };
+  var crumb = CRUMB_OF[activeView];
+  if(crumb){
+    var segs = [];
+    if(wsName) segs.push('<span title="' + esc(wsName) + '">' + esc(wsName) + '</span>');
+    segs.push('<button type="button" class="crumb-link" data-crumb-view="' + crumb.view + '" title="返回' + esc(crumb.group) + '列表">' + esc(crumb.group) + '</button>');
+    segs.push('<span>' + esc(crumb.page) + '</span>');
     brandSub.classList.add("breadcrumb");
-    brandSub.title = "项目 / 驾驶舱";
-    brandSub.innerHTML = '<button type="button" class="crumb-link" data-crumb-view="projects" title="返回项目列表">项目</button>'
-      + '<span class="sep">/</span><span>驾驶舱</span>';
-    return;
-  }
-  /* 版本详情：面包屑只表示位置，版本名由页面标题承载 */
-  if(activeView === "version"){
-    brandSub.classList.add("breadcrumb");
-    brandSub.title = "版本 / 详情";
-    brandSub.innerHTML = '<button type="button" class="crumb-link" data-crumb-view="phase" title="返回版本列表">版本</button>'
-      + '<span class="sep">/</span><span>详情</span>';
+    brandSub.title = (wsName ? wsName + " / " : "") + crumb.group + " / " + crumb.page;
+    brandSub.innerHTML = segs.join('<span class="sep">/</span>');
     return;
   }
   var parts = [];

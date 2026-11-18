@@ -121,12 +121,12 @@
       <span class="uj-role">成员 · 执行者</span>
       <span class="uj-quote">「待办更清楚，少重复整理，做完核对记录」</span>
     </div>
-    <div class="uj-steps">
+    <div class="uj-steps" style="grid-template-columns: repeat(7, 1fr);">
       <div class="uj-step">
         <div class="uj-when">每天开始</div>
         <div class="uj-what">打开「我的工作」</div>
-        <div class="uj-how">跨空间汇总所有分给我的待办，按截止日期分组、分批加载。</div>
-        <span class="uj-chip">我的工作 · 跨空间待办</span>
+        <div class="uj-how">跨空间汇总所有分给我的待办，按截止日期分组、分批加载；个人风险快照：逾期 / 7 天内到期 / 被阻塞，剩余预估对比 40h。</div>
+        <span class="uj-chip">我的工作 · 跨空间待办与个人风险</span>
       </div>
       <div class="uj-step">
         <div class="uj-when">开始干活</div>
@@ -153,9 +153,15 @@
         <span class="uj-chip">工时补记 · 作废重算</span>
       </div>
       <div class="uj-step">
+        <div class="uj-when">遇到不再做</div>
+        <div class="uj-what">取消归档工作项</div>
+        <div class="uj-how">任意非终态列可取消（原因必填），归入「已取消」；需要时按原因逐条恢复到取消前所在列。</div>
+        <span class="uj-chip">已取消 · 取消与恢复</span>
+      </div>
+      <div class="uj-step">
         <div class="uj-when">每周收尾</div>
         <div class="uj-what">确认周回顾</div>
-        <div class="uj-how">自动总结完成、待确认、进行中，AI 可起周报草稿。</div>
+        <div class="uj-how">个人口径：只统计我负责的工作项——完成、按期率、延期、逾期与进行中；AI 可起周报草稿。</div>
         <span class="uj-chip">周回顾 · AI 草稿</span>
       </div>
     </div>

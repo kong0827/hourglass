@@ -32,7 +32,7 @@
 
 .ai-head{
   display:flex;align-items:center;gap:10px;flex:0 0 auto;
-  padding:12px 12px 12px 14px;border-bottom:1px solid var(--border);
+  padding:var(--space-3) 12px 12px 14px;border-bottom:1px solid var(--border);
   background:var(--surface);
 }
 .ai-head-ic{
@@ -108,7 +108,7 @@
   font-family:var(--font-mono);font-size:12px;
 }
 .ai-md pre{
-  margin:7px 0 0;padding:8px 10px;border-radius:var(--r-sm);
+  margin:7px 0 0;padding:var(--space-2) 10px;border-radius:var(--r-sm);
   background:var(--surface-active);overflow-x:auto;
 }
 .ai-md pre code{padding:0;background:transparent;}
@@ -118,8 +118,8 @@
 /* ---------- 入口 chips ---------- */
 .ai-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
 .ai-link{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:4px 9px;border:1px solid var(--primary-border);border-radius:var(--r-pill);
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  padding:var(--space-1) 9px;border:1px solid var(--primary-border);border-radius:var(--r-pill);
   background:var(--primary-soft);color:var(--primary-fg);
   font-size:12px;line-height:17px;font-weight:600;
   transition:background var(--dur-fast);
@@ -128,7 +128,7 @@
 .ai-link svg{flex:0 0 auto;opacity:.8;}
 
 /* ---------- 查询结果 ---------- */
-.ai-results{display:flex;flex-direction:column;gap:4px;margin-top:9px;}
+.ai-results{display:flex;flex-direction:column;gap:var(--space-1);margin-top:9px;}
 .ai-result{
   display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;
   padding:6px 9px;border:1px solid var(--border);border-radius:var(--r-sm);
@@ -159,7 +159,7 @@
   font-size:12px;font-weight:650;color:var(--primary-fg);
 }
 .ai-draft-head .ai-icon-btn{margin-left:auto;}
-.ai-field{display:flex;flex-direction:column;gap:4px;margin-top:8px;min-width:0;}
+.ai-field{display:flex;flex-direction:column;gap:var(--space-1);margin-top:8px;min-width:0;}
 .ai-field > span{font-size:12px;font-weight:600;color:var(--text-3);}
 .ai-field input,.ai-field select,.ai-field textarea{
   width:100%;height:34px;padding:0 9px;border:1px solid var(--border);
@@ -181,7 +181,7 @@
 .ai-flow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:12px;}
 .ai-flow-from{color:var(--text-2);}
 .ai-flow-to{color:var(--primary-fg);font-weight:650;}
-.ai-field-row{display:flex;gap:8px;}
+.ai-field-row{display:flex;gap:var(--space-2);}
 .ai-field-row .ai-field{flex:1 1 0;}
 .ai-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
 .ai-chip{
@@ -196,12 +196,12 @@
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
 }
 .ai-draft-note{margin-top:8px;font-size:12px;line-height:17px;color:var(--text-3);}
-.ai-draft-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
+.ai-draft-foot{display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:10px;}
 .ai-draft-foot .btn[disabled]{opacity:.55;cursor:not-allowed;}
 
 /* ---------- 输入区 ---------- */
 .ai-compose{
-  flex:0 0 auto;display:flex;align-items:flex-end;gap:8px;
+  flex:0 0 auto;display:flex;align-items:flex-end;gap:var(--space-2);
   padding:10px 12px 8px;border-top:1px solid var(--border);background:var(--surface);
 }
 .ai-compose textarea{
@@ -228,20 +228,11 @@
 }
 
 /* ---------- 手机：底部面板 ---------- */
-[data-layout="mobile"] .ai-fab{
-  right:16px;bottom:calc(var(--tabbar-h) + var(--safe-b) + 92px);
-  width:46px;height:46px;
-  transition:transform .2s var(--ease-out),opacity .2s var(--ease-out);
-}
+/* 移动端不再单独悬浮 AI 钮：入口收进顶栏「新建」菜单，避免与「+」FAB 叠放争抢拇指区 */
+[data-layout="mobile"] .ai-fab{display:none;}
 /* 与「新建」FAB 同步：滚动时收起、停稳后恢复 */
 [data-layout="mobile"] body.fab-away .ai-fab{
   transform:translateY(14px) scale(.92);opacity:0;pointer-events:none;
-}
-/* 两个 FAB 叠放时底部多留一层，末条内容的右侧不被助手按钮盖住 */
-[data-layout="mobile"] body:has(#aiFab:not([hidden])):not([data-view="board"]):not([data-view="settings"]):not([data-view="profile"]):not([data-view="messages"]) .view,
-[data-layout="mobile"] body:has(#aiFab:not([hidden]))[data-view="board"] .mob-board,
-[data-layout="mobile"] body:has(#aiFab:not([hidden])) #view-calendar{
-  padding-bottom:calc(var(--tabbar-space) + 112px);
 }
 [data-layout="mobile"] .ai-panel{
   left:0;right:0;bottom:0;width:100%;

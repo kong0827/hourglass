@@ -476,6 +476,30 @@ function reqStatusName(id){
   for(var i = 0; i < REQ_STATUS.length; i++) if(REQ_STATUS[i].id === id) return REQ_STATUS[i].name;
   return "进行中";
 }
+/* ---------- 状态 → 名称与色调的单一映射（P2-11） ----------
+   版本与发布计划的状态色此前散落在 phase.js / version.js 多处：phase.js 用了未定义的
+   tag-neutral（回落到基础 .tag 灰底），version.js 用 ghost（描边）——同名状态两种观感。
+   统一收敛到这里：安静 / 终态（计划中 / 已关闭 / 已取消 / 草稿）用 ghost，进行中 / 就绪用
+   tag-info，已发布 / 已完成用 tag-success。各视图只调这里的 helper，不再各自维护映射。 */
+var VERSION_STATUS_META = {
+  planned:  { name:"计划中", tone:"ghost" },
+  active:   { name:"进行中", tone:"tag-info" },
+  released: { name:"已发布", tone:"tag-success" },
+  closed:   { name:"已关闭", tone:"ghost" },
+  canceled: { name:"已取消", tone:"ghost" }
+};
+var PLAN_STATUS_META = {
+  draft:     { name:"草稿",   tone:"ghost" },
+  ready:     { name:"就绪",   tone:"tag-info" },
+  completed: { name:"已完成", tone:"tag-success" },
+  canceled:  { name:"已取消", tone:"ghost" }
+};
+function versionStatusName(st){ return (VERSION_STATUS_META[st] || {}).name || st || "—"; }
+function versionStatusTone(st){ return (VERSION_STATUS_META[st] || {}).tone || "ghost"; }
+function versionStatusTagHTML(st){ return '<span class="tag ' + versionStatusTone(st) + '">' + esc(versionStatusName(st)) + '</span>'; }
+function planStatusName(st){ return (PLAN_STATUS_META[st] || {}).name || st || "—"; }
+function planStatusTone(st){ return (PLAN_STATUS_META[st] || {}).tone || "ghost"; }
+function planStatusTagHTML(st){ return '<span class="tag ' + planStatusTone(st) + '">' + esc(planStatusName(st)) + '</span>'; }
 function hexToRgb(hex){
   var h = String(hex || "").replace("#","");
   if(h.length === 3) h = h.charAt(0)+h.charAt(0)+h.charAt(1)+h.charAt(1)+h.charAt(2)+h.charAt(2);
@@ -502,4 +526,4 @@ function taskDescText(desc, maxLen){
   return text;
 }
 
-export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, assocLinkHTML, taskVersionLinksHTML, sameIds, selectedVersionIds, taskPublicationHTML, taskPublicationText, taskIsPublished, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, dayKey, duePresetDate, elapsedText, spanText, fmtElapsed, fmtFull, fmtMD, fmtMinute, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };
+export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, assocLinkHTML, taskVersionLinksHTML, sameIds, selectedVersionIds, taskPublicationHTML, taskPublicationText, taskIsPublished, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, VERSION_STATUS_META, PLAN_STATUS_META, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, dayKey, duePresetDate, elapsedText, spanText, fmtElapsed, fmtFull, fmtMD, fmtMinute, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, planStatusName, planStatusTagHTML, planStatusTone, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, versionStatusName, versionStatusTagHTML, versionStatusTone, weekdayCN };

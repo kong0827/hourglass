@@ -206,6 +206,10 @@
             <div class="ta-item-name">GitLab 只读同步</div>
             <div class="ta-item-desc">按仓库拉取分支与提交，待确认队列人工核对，不回写</div>
           </div>
+          <div class="ta-item">
+            <div class="ta-item-name">可观测性</div>
+            <div class="ta-item-desc">traceId 贯穿请求日志（<code>X-Trace-Id</code> 响应头）；AI / GitLab 外呼留痕只记模型 / 主机 / 耗时 / token，不落 Key</div>
+          </div>
         </div>
       </div>
 
@@ -214,11 +218,11 @@
       <div class="ta-layer">
         <div class="ta-layer-head">
           <span class="ta-tag tag-warn"><span class="dot"></span>数据层</span>
-          <span class="ta-layer-note">MySQL 8 · utf8mb4 · 75 张表</span>
+          <span class="ta-layer-note">MySQL 8 · utf8mb4 · 80 张表</span>
         </div>
         <div class="ta-items">
           <div class="ta-item">
-            <div class="ta-item-name">75 张表</div>
+            <div class="ta-item-name">80 张表</div>
             <div class="ta-item-desc">工时、流转与发布事实直读；每个统计数字可回溯</div>
           </div>
           <div class="ta-item">

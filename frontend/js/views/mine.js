@@ -12,6 +12,8 @@ import { loadPrioritySpaces } from "../core/priorities.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { canEditTask, catColor, catNameById, dueDateMD, dueDateTip, dueFlag, dueState, progressOf, reqSetId, rt, setNameById, setSortOf, state, statusBucket, timerAllowed } from "../core/state.js";
 import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
+import { openTaskDrawer } from "../core/task-drawer.js";
+import { loadView } from "../core/view-loader.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
@@ -187,7 +189,9 @@ function askSwitchWorkspace(wsId, wsName, opts){
     });
   });
 }
+var mineGuideBound = false;
 function enterMineView(){
+  if(!mineGuideBound){ mineGuideBound = true; bindMineGuide(); }
   syncMineFilters();
   if(isMobile() && currentMineMode() === "team"){ renderTeam(); return; }
   loadMine();
@@ -204,7 +208,9 @@ function syncMineFilters(){
   if(mineGroup) mineGroup.value = MINE_GROUP_DIMS.indexOf(state.mineGroup) !== -1 ? state.mineGroup : "due";
   if(mineSubgroup){
     mineSubgroup.value = MINE_GROUP_DIMS.indexOf(state.mineSubgroup) !== -1 ? state.mineSubgroup : "none";
-    mineSubgroup.disabled = state.mineGroup === "none";
+    /* 不分组时二级分组不适用：整个控件隐藏，而不是外置置灰占位（工具栏降噪） */
+    var subWrap = mineSubgroup.closest("label");
+    if(subWrap) subWrap.hidden = state.mineGroup === "none";
   }
   if(mineSort) mineSort.value = MINE_SORTS.indexOf(state.mineSort) !== -1 ? state.mineSort : "default";
   if(minePub) minePub.value = state.pubState === "published" || state.pubState === "unpublished" ? state.pubState : "";
@@ -852,7 +858,7 @@ function renderTeam(opts){
     var delta = Math.round((Number(h.deltaWeek) || 0) * 100);
     var html = '<div class="team-panel">' + teamRangeBarHTML(range) +
       '<section class="team-hero">' +
-        '<div class="th-main"><b>' + rate + '%</b><span class="caliber-label">' + range.label + '完成率' + caliberMarkHTML("mine.doneRate", false, "查看「完成率」口径") + '</span>' +
+        '<div class="th-main" style="--done-rate:' + rate + '%"><b>' + rate + '%</b><span class="caliber-label">' + range.label + '完成率' + caliberMarkHTML("mine.doneRate", false, "查看「完成率」口径") + '</span>' +
           '<em class="' + (delta >= 0 ? "up" : "down") + '" title="与前一等长周期比较">' +
             (delta >= 0 ? "↑ +" + delta : "↓ " + Math.abs(delta)) + '%</em></div>' +
         '<div class="th-grid">' +
@@ -1157,9 +1163,9 @@ function renderMine(d, append){
   renderMineStats(items);
   syncMineViewUI();
   /* 看板只在桌面「我的」模式出现：手机端保持卡片列表，拖拽不是移动端目标 */
-  if(mineViewMode === "board" && !isMobile() && currentMineMode() === "mine"){ renderMineBoard(items); return; }
+  if(mineViewMode === "board" && !isMobile() && currentMineMode() === "mine"){ renderMineBoard(items); prependMineGuide(); return; }
   var sections = mineSections(items);
-  if(isMobile()){ renderMobileMine(sections); return; }
+  if(isMobile()){ renderMobileMine(sections); prependMineGuide(); return; }
   var cols = mineVisibleCols(mineListWidth());
   /* 表头只出现一次，分组以内嵌可折叠行区分，避免每组各带一个卡片与表头 */
   var html = '<div class="mine-groups"><div class="list-scroll mine-list">' +
@@ -1204,9 +1210,37 @@ function renderMine(d, append){
   });
   html += '</div></div></div>' + mineMoreHTML();
   mineBody.innerHTML = html;
+  prependMineGuide();
   var scroller = mineBody.querySelector(".mine-list");
   if(scroller) scroller.style.setProperty("--mine-cols", cols.map(function(c){ return c.w; }).concat(MINE_OPS_W).join(" "));
   mineSyncFoldBtn(sections);
+}
+/* ---- 首屏引导：已加载工作项 <3 条的新空间，把「下一步」递到手里 ---- */
+function mineGuideHTML(){
+  if(mineTestMode() || mineFiltering()) return "";
+  if(!mineAll.length || mineAll.length > 2) return "";
+  return UI.guideCard();
+}
+function prependMineGuide(){
+  var h = mineGuideHTML();
+  if(h) mineBody.insertAdjacentHTML("afterbegin", h);
+}
+function bindMineGuide(){
+  mineBody.addEventListener("click", function(e){
+    var g = e.target.closest("[data-guide]");
+    if(!g) return;
+    var kind = g.getAttribute("data-guide");
+    if(kind === "task") openTaskDrawer("backlog");
+    else if(kind === "project"){
+      window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:"projects" } }));
+      setTimeout(function(){ loadView("projects").then(function(m){ m.openProjectDialog(null); }); }, 80);
+    }
+    else if(kind === "demand"){
+      /* 先写入带 ?new=1 的 hash（syncViewHash 保留名单会保住参数），再走统一路由；demands enter 时消费参数开提需求弹窗 */
+      window.location.hash = "#/demands?new=1";
+      window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:"demands" } }));
+    }
+  });
 }
 /* ---- 待我测试：同事移入「待测试」后，测试同学在这里承接 ---- */
 function mineTestStatusHTML(t){

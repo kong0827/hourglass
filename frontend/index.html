@@ -22,7 +22,13 @@
 <link rel="stylesheet" href="css/base.css" />
 <link rel="stylesheet" href="css/layout.css" />
 <link rel="stylesheet" href="css/components.css" />
-<link rel="stylesheet" href="css/views.css" />
+<link rel="stylesheet" href="css/views-workitems.css" />
+<link rel="stylesheet" href="css/views-projects-settings.css" />
+<link rel="stylesheet" href="css/views-drawer-blocks.css" />
+<link rel="stylesheet" href="css/views-req-docs.css" />
+<link rel="stylesheet" href="css/views-analysis-branches.css" />
+<link rel="stylesheet" href="css/views-phase-demands.css" />
+<link rel="stylesheet" href="css/views-testcases.css" />
 <link rel="stylesheet" href="css/workcolumn.css" />
 <link rel="stylesheet" href="css/version.css" />
 <link rel="stylesheet" href="css/gantt.css" />
@@ -285,6 +291,30 @@
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.4A1.6 1.6 0 0 1 5.6 3.8h7.2l3.2 3.2v8.4a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 15.4Z"/></svg>
               新建项目
             </button>
+            <button class="menu-item" type="button" data-new="version">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 16.4V4a.8.8 0 0 1 .8-.8h7.2a.8.8 0 0 1 .8.8v12.4L10 13.6Z"/></svg>
+              新建版本
+            </button>
+            <button class="menu-item" type="button" data-new="demand">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.4a4.3 4.3 0 0 0-2.5 7.8c.5.4.8.9.8 1.5v.4h3.4v-.4c0-.6.3-1.1.8-1.5A4.3 4.3 0 0 0 10 3.4Z"/><path d="M8.5 15.8h3"/></svg>
+              提需求
+            </button>
+            <button class="menu-item" type="button" data-new="case">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3.8 5.6 1.6 1.6 2.4-2.4M3.8 12.6l1.6 1.6 2.4-2.4M10.4 6h5.8M10.4 13h5.8"/></svg>
+              新建用例
+            </button>
+            <button class="menu-item" type="button" data-new="doc">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 4.6A1.2 1.2 0 0 1 6.4 3.4h4.2L14.8 7.6v7.8a1.2 1.2 0 0 1-1.2 1.2H6.4a1.2 1.2 0 0 1-1.2-1.2Z"/><path d="M10.4 3.6v4h4.2M7.4 11h5M7.4 13.4h5"/></svg>
+              新建文档
+            </button>
+            <button class="menu-item" type="button" data-new="branch">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.2" cy="5.2" r="1.7"/><circle cx="6.2" cy="14.8" r="1.7"/><circle cx="13.8" cy="8.2" r="1.7"/><path d="M6.2 6.9v6.2M13.8 9.9c0 2.2-2 3-4.2 3h-1.6"/></svg>
+              新建分支
+            </button>
+            <button class="menu-item mob-only" type="button" data-new="ai" id="newMenuAi" hidden>
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2 11.6 8l4.8 1.6-4.8 1.6L10 16l-1.6-4.8L3.6 9.6 8.4 8Z"/></svg>
+              AI 助手
+            </button>
           </div>
         </div>
 
@@ -425,7 +455,7 @@
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
         </button>
         <div class="fgroup" id="viewGroup">
-          <button class="chip" id="btnViewsMenu" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="viewsMenu" title="保存的视图：应用、删除或保存当前筛选">视图 <span class="n" id="viewsBadge" hidden>0</span></button>
+          <button class="chip" id="btnViewsMenu" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="viewsMenu" title="保存的视图：应用、删除或保存当前筛选">视图列表 <span class="n" id="viewsBadge" hidden>0</span></button>
           <div class="menu popover" id="viewsMenu" hidden style="top:calc(100% + 6px)"></div>
         </div>
       </div>
@@ -527,12 +557,23 @@
                   <option value="unpublished">未发布</option>
                 </select>
               </label>
-              <div class="seg mini mine-listonly" id="mineDensity" role="group" aria-label="列表密度">
-                <button type="button" data-list-density="standard" aria-pressed="true">标准</button>
-                <button type="button" data-list-density="relaxed" aria-pressed="false">宽松</button>
-              </div>
-              <button class="btn sm mine-hide-test mine-listonly" type="button" id="btnMineFields">显示字段</button>
-              <button class="btn sm mine-hide-test mine-listonly" type="button" id="btnMineFold">折叠全部</button>
+              <details class="gantt-more mine-display-more mine-listonly" id="mineMore">
+                <summary class="btn sm ghost" title="列表密度、显示字段与折叠">显示设置</summary>
+                <div class="menu popover gantt-more-menu mine-display-menu">
+                  <div class="gantt-more-row">
+                    <span class="gantt-more-label">密度</span>
+                    <div class="seg mini" id="mineDensity" role="group" aria-label="列表密度">
+                      <button type="button" data-list-density="standard" aria-pressed="true">标准</button>
+                      <button type="button" data-list-density="relaxed" aria-pressed="false">宽松</button>
+                    </div>
+                  </div>
+                  <div class="gantt-more-row">
+                    <span class="gantt-more-label">列</span>
+                    <button class="btn sm ghost mine-hide-test" type="button" id="btnMineFields">显示字段</button>
+                    <button class="btn sm ghost mine-hide-test" type="button" id="btnMineFold">折叠全部</button>
+                  </div>
+                </div>
+              </details>
               <button class="btn sm" type="button" id="btnMineRefresh">
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/></svg>
                 刷新
@@ -680,26 +721,6 @@
             <span class="toolbar-title">甘特图</span>
             <span class="toolbar-meta" id="ganttMeta">—</span>
             <span class="toolbar-right">
-              <label class="row row-gap" style="gap:6px">
-                <input type="checkbox" class="cbx" id="ganttShowDone" />
-                <span class="toolbar-meta is-strong">显示已完成</span>
-              </label>
-              <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta is-strong">密度</span>
-                <select id="ganttDensity" class="mini-select" aria-label="行密度">
-                  <option value="comfortable">舒适</option>
-                  <option value="compact">紧凑</option>
-                  <option value="minimal">极简</option>
-                </select>
-              </label>
-              <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta is-strong">缩放</span>
-                <select id="ganttZoom" class="mini-select" aria-label="时间轴缩放">
-                  <option value="20">紧凑</option>
-                  <option value="28" selected>标准</option>
-                  <option value="40">宽松</option>
-                </select>
-              </label>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
@@ -741,26 +762,50 @@
               </label>
               <button class="btn sm ghost" type="button" id="ganttUndo" disabled title="撤销上一次改期（Ctrl+Z）">撤销</button>
               <div class="gantt-filter-wrap">
-                <button class="btn sm ghost" type="button" id="ganttViewsBtn" aria-haspopup="true" aria-expanded="false">视图</button>
+                <button class="btn sm ghost" type="button" id="ganttViewsBtn" aria-haspopup="true" aria-expanded="false">视图列表</button>
                 <div class="menu popover" id="ganttViewsMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
               </div>
             </div>
             <div class="gantt-tools-right">
-              <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta is-strong">刻度</span>
-                <select id="ganttScale" class="mini-select" aria-label="时间刻度">
-                  <option value="day">日</option>
-                  <option value="week">周</option>
-                  <option value="month">月</option>
-                </select>
-              </label>
               <button class="btn sm ghost gantt-range-btn" type="button" id="ganttPrevMonth" aria-label="上一月" title="上一月（自动切到月视图）">‹</button>
               <span class="gantt-range-label" id="ganttRangeLabel" aria-live="polite">自动范围</span>
               <button class="btn sm ghost gantt-range-btn" type="button" id="ganttNextMonth" aria-label="下一月" title="下一月（自动切到月视图）">›</button>
               <button class="btn sm" type="button" id="ganttToday">今天</button>
               <details class="gantt-more" id="ganttMore">
-                <summary class="btn sm ghost">更多</summary>
+                <summary class="btn sm ghost" title="显示与视图偏好：密度、缩放、刻度、显示已完成；分析工具与导出">更多</summary>
                 <div class="menu popover gantt-more-menu">
+                  <!-- 视图偏好类控件收进「更多」：工具栏只留高频操作（筛选/分组/撤销/视图/导航） -->
+                  <div class="gantt-more-row">
+                    <span class="gantt-more-label">显示</span>
+                    <label class="row row-gap" style="gap:6px">
+                      <input type="checkbox" class="cbx" id="ganttShowDone" />
+                      <span class="toolbar-meta is-strong">显示已完成</span>
+                    </label>
+                  </div>
+                  <div class="gantt-more-row">
+                    <span class="gantt-more-label">密度</span>
+                    <select id="ganttDensity" class="mini-select" aria-label="行密度">
+                      <option value="comfortable">舒适</option>
+                      <option value="compact">紧凑</option>
+                      <option value="minimal">极简</option>
+                    </select>
+                  </div>
+                  <div class="gantt-more-row">
+                    <span class="gantt-more-label">缩放</span>
+                    <select id="ganttZoom" class="mini-select" aria-label="时间轴缩放">
+                      <option value="20">紧凑</option>
+                      <option value="28" selected>标准</option>
+                      <option value="40">宽松</option>
+                    </select>
+                  </div>
+                  <div class="gantt-more-row">
+                    <span class="gantt-more-label">刻度</span>
+                    <select id="ganttScale" class="mini-select" aria-label="时间刻度">
+                      <option value="day">日</option>
+                      <option value="week">周</option>
+                      <option value="month">月</option>
+                    </select>
+                  </div>
                   <div class="gantt-more-row">
                     <span class="gantt-more-label">范围</span>
                     <div class="seg mini gantt-range-mode" id="ganttRangeMode" role="group" aria-label="时间范围模式">
@@ -872,13 +917,15 @@
                   <p class="foot-note">可选归组，不改变项目权限；删除项目集只会把项目移回未分组。</p>
                 </div>
                 <div class="row row-gap">
-                  <div class="field" style="flex:1">
+                  <div class="field" style="flex:1" id="fReqPlanStart">
                     <label for="rPlanStart">计划开始</label>
                     <input id="rPlanStart" type="date" aria-label="计划开始日" />
+                    <span class="err">开始日不能晚于结束日</span>
                   </div>
-                  <div class="field" style="flex:1">
+                  <div class="field" style="flex:1" id="fReqPlanEnd">
                     <label for="rPlanEnd">计划结束</label>
                     <input id="rPlanEnd" type="date" aria-label="计划结束日" />
+                    <span class="err">结束日不能早于开始日</span>
                   </div>
                 </div>
                 <div class="field span2">
@@ -1287,16 +1334,17 @@
               <span class="rpf-label">项目：</span><span id="reqDocProjFilterName"></span>
               <button class="rpf-clear" type="button" id="reqDocProjFilterClear" aria-label="清除项目筛选" title="清除项目筛选">&times;</button>
             </span>
-            <span class="reqdoc-modes" role="tablist" aria-label="文档展示方式">
-              <button class="rm-btn" type="button" role="tab" data-rdmode="read" aria-selected="true">阅读</button>
-              <button class="rm-btn" type="button" role="tab" data-rdmode="tree" aria-selected="false">列表</button>
-              <button class="rm-btn" type="button" role="tab" data-rdmode="kanban" aria-selected="false">看板</button>
-              <button class="rm-btn" type="button" role="tab" data-rdmode="feed" aria-selected="false">动态</button>
-            </span>
             <span class="toolbar-right">
+              <!-- 视图切换分段统一放标题行右侧（与需求池/项目页同位置） -->
+              <span class="reqdoc-modes" role="tablist" aria-label="文档展示方式">
+                <button class="rm-btn" type="button" role="tab" data-rdmode="read" aria-selected="true">阅读</button>
+                <button class="rm-btn" type="button" role="tab" data-rdmode="tree" aria-selected="false">列表</button>
+                <button class="rm-btn" type="button" role="tab" data-rdmode="kanban" aria-selected="false">看板</button>
+                <button class="rm-btn" type="button" role="tab" data-rdmode="feed" aria-selected="false">动态</button>
+              </span>
               <button class="btn sm ghost" type="button" id="reqDocTplBtn" aria-haspopup="dialog" title="文档模板管理：查看、新建与删除模板">模板</button>
               <span class="views-menu-wrap">
-                <button class="btn sm ghost" type="button" id="rdViewsBtn" aria-haspopup="true" aria-expanded="false" title="文档视图：保存当前搜索、项目范围与展示方式">视图</button>
+                <button class="btn sm ghost" type="button" id="rdViewsBtn" aria-haspopup="true" aria-expanded="false" title="文档视图：保存当前搜索、项目范围与展示方式">视图列表</button>
                 <div class="menu popover" id="rdViewsMenu" hidden></div>
               </span>
               <span class="reqdoc-search">
@@ -1914,7 +1962,7 @@
               <button class="btn sm soft" type="button" id="tcClearFilter" hidden title="清空当前项目的全部筛选条件"><span data-icon="close"></span><span id="tcClearFilterLabel">&nbsp;清空筛选</span></button>
               <span class="tc-fbar-end">
                 <span class="views-menu-wrap">
-                  <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
+                  <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图列表</button>
                   <div class="menu popover" id="tcViewsMenu" hidden></div>
                 </span>
               </span>
@@ -1946,7 +1994,7 @@
             <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索本项目缺陷…" title="在所选项目内搜索缺陷 / 编号 / 用例 / 分类 / 标签" aria-label="在所选项目内搜索缺陷" />
             <button class="btn sm soft" type="button" id="tcDefReset" title="恢复默认：全部项目 · 未关闭，并清除严重度、优先级、负责人、发现版本、分类、标签与搜索"><span data-icon="refresh"></span>&nbsp;恢复默认</button>
             <span class="views-menu-wrap">
-              <button class="btn sm ghost" type="button" id="tcDefViewsBtn" aria-haspopup="true" aria-expanded="false" title="缺陷视图：保存当前项目、状态与筛选条件">视图</button>
+              <button class="btn sm ghost" type="button" id="tcDefViewsBtn" aria-haspopup="true" aria-expanded="false" title="缺陷视图：保存当前项目、状态与筛选条件">视图列表</button>
               <div class="menu popover" id="tcDefViewsMenu" hidden></div>
             </span>
           </div>
@@ -2490,48 +2538,14 @@
       <section class="view" id="view-branches" aria-label="分支">
         <div class="view-page br-page">
           <div class="page-toolbar">
-            <span class="seg mini" id="branchModeSeg" role="group" aria-label="分支视图">
-              <button type="button" data-br-mode="board" aria-pressed="true">看板</button>
-              <button type="button" data-br-mode="list" aria-pressed="false">列表</button>
-            </span>
             <span class="toolbar-meta" id="branchMeta"></span>
             <span class="toolbar-right">
-              <button class="btn sm ghost tc-filter-toggle" type="button" id="branchFilterBtn" aria-expanded="false" aria-controls="branchFilterBar">筛选<span class="n" id="branchFilterCount" hidden>0</span></button>
-              <span class="br-filterbar" id="branchFilterBar">
-                <span class="br-search">
-                  <select id="branchProjectFilter" aria-label="按项目筛选">
-                    <option value="">全部项目</option>
-                  </select>
-                </span>
-                <span class="br-search">
-                  <select id="branchRepoFilter" aria-label="按仓库筛选">
-                    <option value="">全部仓库</option>
-                  </select>
-                </span>
-                <span class="br-search">
-                  <select id="branchStatusFilter" aria-label="按状态筛选">
-                    <option value="">全部状态</option>
-                    <option value="dev">开发中</option>
-                    <option value="testing">待测试</option>
-                    <option value="merging">待合并</option>
-                    <option value="released">已发布</option>
-                  </select>
-                </span>
-                <span class="br-search">
-                  <select id="branchOwnerFilter" aria-label="按负责人筛选">
-                    <option value="">全部负责人</option>
-                  </select>
-                </span>
-                <span class="br-search">
-                  <select id="branchVersionFilter" aria-label="按版本筛选">
-                    <option value="">全部版本</option>
-                  </select>
-                </span>
-                <span class="br-search">
-                  <input type="search" id="branchSearch" placeholder="搜索全部分支…" title="在全部项目中搜索分支名 / 目标分支" aria-label="搜索全部分支" autocomplete="off" />
-                </span>
-                <button class="btn sm soft" type="button" id="branchClearFilter" hidden title="清空筛选：状态、负责人、版本、搜索与深链来源；保留当前项目"><span data-icon="close"></span>&nbsp;清空筛选</button>
+              <!-- 视图切换分段统一放标题行右侧（与需求池/项目页同位置），主操作「新建分支」保持本行最右 -->
+              <span class="seg mini" id="branchModeSeg" role="group" aria-label="分支视图">
+                <button type="button" data-br-mode="board" aria-pressed="true">看板</button>
+                <button type="button" data-br-mode="list" aria-pressed="false">列表</button>
               </span>
+              <button class="btn sm ghost tc-filter-toggle" type="button" id="branchFilterBtn" aria-expanded="false" aria-controls="branchFilterBar">筛选<span class="n" id="branchFilterCount" hidden>0</span></button>
               <span class="br-search">
                 <select id="branchListGroup" aria-label="列表分组方式" hidden>
                   <option value="none">不分组</option>
@@ -2543,7 +2557,7 @@
               </span>
               <button class="btn sm" type="button" id="branchGroupToggle" data-mode="status">按项目分组</button>
               <span class="views-menu-wrap">
-                <button class="btn sm ghost" type="button" id="branchViewsBtn" aria-haspopup="true" aria-expanded="false" title="分支视图：保存当前项目、状态与筛选条件">视图</button>
+                <button class="btn sm ghost" type="button" id="branchViewsBtn" aria-haspopup="true" aria-expanded="false" title="分支视图：保存当前项目、状态与筛选条件">视图列表</button>
                 <div class="menu popover" id="branchViewsMenu" hidden></div>
               </span>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
@@ -2553,6 +2567,42 @@
               <button class="btn primary sm" type="button" id="branchNew">
                 <span data-icon="plus"></span>&nbsp;新建分支
               </button>
+            </span>
+            <!-- 筛选条独占工具栏下一整行：主操作「新建分支」留在首行最右，与其他视图主操作位置一致 -->
+            <span class="br-filterbar" id="branchFilterBar">
+              <span class="br-search">
+                <select id="branchProjectFilter" aria-label="按项目筛选">
+                  <option value="">全部项目</option>
+                </select>
+              </span>
+              <span class="br-search">
+                <select id="branchRepoFilter" aria-label="按仓库筛选">
+                  <option value="">全部仓库</option>
+                </select>
+              </span>
+              <span class="br-search">
+                <select id="branchStatusFilter" aria-label="按状态筛选">
+                  <option value="">全部状态</option>
+                  <option value="dev">开发中</option>
+                  <option value="testing">待测试</option>
+                  <option value="merging">待合并</option>
+                  <option value="released">已发布</option>
+                </select>
+              </span>
+              <span class="br-search">
+                <select id="branchOwnerFilter" aria-label="按负责人筛选">
+                  <option value="">全部负责人</option>
+                </select>
+              </span>
+              <span class="br-search">
+                <select id="branchVersionFilter" aria-label="按版本筛选">
+                  <option value="">全部版本</option>
+                </select>
+              </span>
+              <span class="br-search">
+                <input type="search" id="branchSearch" placeholder="搜索全部分支…" title="在全部项目中搜索分支名 / 目标分支" aria-label="搜索全部分支" autocomplete="off" />
+              </span>
+              <button class="btn sm soft" type="button" id="branchClearFilter" hidden title="清空筛选：状态、负责人、版本、搜索与深链来源；保留当前项目"><span data-icon="close"></span>&nbsp;清空筛选</button>
             </span>
           </div>
 

@@ -681,6 +681,8 @@ function resetReqForm(){
   if(rSet) rSet.value = "";
   rt.formReqStatus = "active";
   fReqName.classList.remove("invalid");
+  if($("fReqPlanStart")) $("fReqPlanStart").classList.remove("invalid");
+  if($("fReqPlanEnd")) $("fReqPlanEnd").classList.remove("invalid");
   syncReqStatusSeg();
   reqFormTitle.textContent = "新建项目";
   btnSaveReq.textContent = "新建项目";
@@ -715,7 +717,7 @@ function emptyProjectsState(){
   });
 }
 /* 项目卡：首版上线标记 + 首版 / 迭代投入条，口径与版本页阶段卡一致
-   工时构成用阶段色（首版 info / 迭代 plum）并带「工时」标签，与上面主色的进度条分开，
+   工时构成用阶段色（首版 primary / 迭代 info，蓝色两档）并带「工时」标签，与上面主色的进度条分开，
    避免两条同色细条被读成「两个进度」；某阶段为 0 时图例点收成描边，不占阶段色。 */
 function reqReleaseBadgeHTML(r){
   if(!r.firstReleasedAt) return '<span class="tag tag-ghost" title="在版本页标记首版上线后，可查看首版 / 迭代拆分">未标记首版</span>';
@@ -1024,6 +1026,10 @@ function saveReq(){
   if(!name){
     fReqName.classList.add("invalid");
     try{ rName.focus(); }catch(e){ /* noop */ }
+    return;
+  }
+  if(!validateReqPlanDates()){
+    try{ (rPlanEnd || rPlanStart).focus(); }catch(e){ /* noop */ }
     return;
   }
   var body = {
@@ -1388,6 +1394,8 @@ function openProjectDialog(id){
   syncOwnerOptions();
   syncProjectSetOptions();
   fReqName.classList.remove("invalid");
+  if($("fReqPlanStart")) $("fReqPlanStart").classList.remove("invalid");
+  if($("fReqPlanEnd")) $("fReqPlanEnd").classList.remove("invalid");
   syncTemplateField();
   if(!id){
     loadProjectTemplates().then(function(){
@@ -1462,6 +1470,20 @@ if($("dlgProjectX")) $("dlgProjectX").addEventListener("click", function(){ tryC
 btnSaveReq.addEventListener("click", saveReq);
 btnCancelReqEdit.addEventListener("click", function(){ tryCloseProjectDialog(); });
 rName.addEventListener("input", function(){ fReqName.classList.remove("invalid"); });
+/* 失焦即时校验（P-FB-2）：必填项失焦即提示；日期区间在变更 / 失焦时校验，避免长表单填完才报错。
+   日期为 ISO YYYY-MM-DD，可直接按字符串比较先后。 */
+rName.addEventListener("blur", function(){ fReqName.classList.toggle("invalid", !rName.value.trim()); });
+function validateReqPlanDates(){
+  var fs = $("fReqPlanStart"), fe = $("fReqPlanEnd");
+  var s = rPlanStart && rPlanStart.value ? rPlanStart.value : "";
+  var e = rPlanEnd && rPlanEnd.value ? rPlanEnd.value : "";
+  var bad = !!(s && e && e < s);
+  if(fs) fs.classList.toggle("invalid", bad);
+  if(fe) fe.classList.toggle("invalid", bad);
+  return !bad;
+}
+if(rPlanStart){ rPlanStart.addEventListener("change", validateReqPlanDates); rPlanStart.addEventListener("blur", validateReqPlanDates); }
+if(rPlanEnd){ rPlanEnd.addEventListener("change", validateReqPlanDates); rPlanEnd.addEventListener("blur", validateReqPlanDates); }
 /* 单行输入 Enter 直接提交；CJK 输入法组合期间不触发 */
 rName.addEventListener("keydown", function(e){
   if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;

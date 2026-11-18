@@ -6,7 +6,7 @@
 }
 #view-list .smart-view-tabs,
 #view-demands .smart-view-tabs{
-  display:flex;align-items:center;gap:4px;min-height:44px;padding:6px 8px;
+  display:flex;align-items:center;gap:var(--space-1);min-height:44px;padding:6px 8px;
   overflow-x:auto;border-bottom:1px solid var(--border);
 }
 #view-list .smart-view-tab,
@@ -37,7 +37,7 @@
 [data-layout="mobile"] #view-list .smart-view-meta{display:none;}
 #view-list .smart-view-tools,
 #view-demands .smart-view-tools{
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:var(--space-2) 10px;
 }
 #view-list .smart-view-control,
 #view-demands .smart-view-control{display:inline-flex;align-items:center;gap:6px;color:var(--text-2);font-size:12px;}
@@ -45,12 +45,15 @@
 #view-demands .smart-view-control .mini-select{min-width:112px;}
 #view-list .smart-view-spacer,
 #view-demands .smart-view-spacer{flex:1 1 auto;}
-#view-list .list-group-row{background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+/* 分组带与列头 .list-head 同为 --surface-sunken 时层级会消失：改浅蓝底 + 左侧主色条 */
+#view-list .list-group-row{background:var(--group-band);border-bottom:1px solid var(--border);}
 #view-list .list-group-row > button{
-  display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:7px 12px;border:0;
+  display:flex;align-items:center;gap:var(--space-2);width:100%;min-height:36px;padding:7px 12px;border:0;
   background:transparent;color:var(--text-2);font:inherit;text-align:left;cursor:pointer;
+  /* 色条挂在按钮上：整宽按钮 hover 会盖住父行的 inset 阴影 */
+  box-shadow:inset 3px 0 0 0 var(--group-band-bar);
 }
-#view-list .list-group-row > button:hover{background:var(--surface-hover);}
+#view-list .list-group-row > button:hover{background:var(--group-band-hover);}
 #view-list .list-group-caret{display:inline-block;color:var(--text-3);font-size:var(--fs-micro);transition:transform var(--dur-fast) var(--ease-out);}
 #view-list .list-group-caret.open{transform:rotate(90deg);}
 #view-list .list-group-name{font-size:13px;font-weight:600;color:var(--text);}
@@ -63,7 +66,7 @@
 /* 二级分组：缩进一级，弱化底色，仍可折叠 */
 #view-list .list-subgroup-row{background:var(--surface);border-bottom:1px solid var(--border);}
 #view-list .list-subgroup-row > button{
-  display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:6px 12px 6px 28px;border:0;
+  display:flex;align-items:center;gap:var(--space-2);width:100%;min-height:32px;padding:6px 12px 6px 28px;border:0;
   background:transparent;color:var(--text-2);font:inherit;text-align:left;cursor:pointer;
 }
 #view-list .list-subgroup-row > button:hover{background:var(--surface-hover);}
@@ -81,7 +84,7 @@
 /* 需求池看板：紧凑搜索/筛选条，范围固定为当前项目 */
 #view-demands .dem-board-bar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  margin-bottom:10px;padding:8px 10px;
+  margin-bottom:10px;padding:var(--space-2) 10px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
 }
 #view-demands .demb-search{
@@ -96,10 +99,12 @@
   font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;
 }
 #view-demands .demb-col-empty{padding:10px 2px;}
-#view-demands .dem-group-row{background:var(--surface-sunken);border-bottom:1px solid var(--border);}
-#view-demands .dem-group-row > td{padding:6px 10px;}
+/* 需求池表格分组行：与 .manager-tbl th 列头同色的问题同 list-group-row，统一改分组带 */
+#view-demands .dem-group-row{background:var(--group-band);border-bottom:1px solid var(--border);}
+#view-demands .dem-group-row > td{padding:6px 10px;box-shadow:inset 3px 0 0 0 var(--group-band-bar);}
+#view-demands .dem-group-row:hover{background:var(--group-band-hover);}
 #view-demands .dem-group-toggle{
-  display:inline-flex;align-items:center;gap:8px;padding:2px 4px;border:0;
+  display:inline-flex;align-items:center;gap:var(--space-2);padding:2px 4px;border:0;
   background:transparent;color:var(--text-2);font:inherit;font-size:13px;cursor:pointer;
 }
 #view-demands .dem-group-toggle:hover{color:var(--text);}
@@ -118,9 +123,9 @@
 #view-demands .dem-subgroup-row .dem-group-name{font-size:12px;font-weight:600;color:var(--text-2);}
 @media (max-width:767px){
   #view-list .smart-view-tabs,
-  #view-demands .smart-view-tabs{min-height:40px;padding:4px 6px;}
+  #view-demands .smart-view-tabs{min-height:40px;padding:var(--space-1) 6px;}
   #view-list .smart-view-tools,
-  #view-demands .smart-view-tools{align-items:stretch;padding:6px 8px;gap:8px;}
+  #view-demands .smart-view-tools{align-items:stretch;padding:6px 8px;gap:var(--space-2);}
   #view-list .smart-view-spacer,
   #view-demands .smart-view-spacer{display:none;}
   #view-list .smart-view-tools > .btn,

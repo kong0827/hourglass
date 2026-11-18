@@ -167,7 +167,7 @@
     <div class="ms-note">
       <span><b>主状态：</b>待评审 <code>review</code> → 已通过 <code>pass</code> → 已排期 <code>plan</code> → 已完成 <code>done</code>；已关闭 <code>closed</code> 是异常终态，不参与正常链。</span>
       <span><b>派生：</b>已排期下挂 待开工 / 推进中（由工作项真实开工信号派生）；已完成下挂 待发布 / 已交付（由生产发布记录派生，人工判定仅例外）。</span>
-      <span><b>完成与交付：</b>工作项全部关闭 + 最新用例全部通过才算完成；成功生产发布才算交付。已完成 ≠ 已交付。</span>
+      <span><b>完成与交付：</b>工作项全部关闭 + 最新用例全部通过才算完成，已取消工作项不计入分母；成功生产发布才算交付。已完成 ≠ 已交付。</span>
       <span><b>关闭与恢复：</b>关闭只收未完成终止，原因 <code>rej</code> / <code>cancel</code> / <code>dup</code>；评审不通过的恢复回待评审；从已通过或已排期关闭的恢复回已通过，须重新排期，版本与计划日期不保留。</span>
     </div>
   </div>

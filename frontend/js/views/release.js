@@ -60,6 +60,69 @@ function emptyState(msg){
   if(btn) btn.addEventListener("click", function(){ showView("phase"); });
 }
 
+/* #/release 无参数：不再是死胡同卡，列出跨项目最近的未完成发布计划，点任意一条进对应工作台 */
+function enterNoParamView(){
+  destroy();
+  host.innerHTML = '<div class="release-page">' + UI.skeletonRows(3) + '</div>';
+  API.get("/api/release-plans", { status:"open" }).then(function(rows){
+    if(document.body.dataset.view !== "release") return;
+    renderRecentPlans(rows || []);
+  }).catch(function(ex){
+    if(document.body.dataset.view !== "release") return;
+    emptyState((ex.message || "发布计划加载失败") + "；也可从版本卡或「发布日程」进入。");
+  });
+}
+function fmtPlanTime(iso){
+  if(!iso) return "未定时间";
+  var d = new Date(iso);
+  if(isNaN(d.getTime())) return "未定时间";
+  function p(n){ return (n < 10 ? "0" : "") + n; }
+  return (d.getMonth() + 1) + "月" + d.getDate() + "日 " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+function planStatusText(st){
+  return { ready:"就绪", completed:"已完成", canceled:"已取消", draft:"草稿" }[st] || st || "—";
+}
+function renderRecentPlans(rows){
+  var now = Date.now();
+  /* 「最近」= 离当前时间最近（已过期与即将到来的都算）；未定时间的排最后 */
+  rows = rows.slice().sort(function(a, b){
+    var ta = a.plannedAt ? new Date(a.plannedAt).getTime() : Infinity;
+    var tb = b.plannedAt ? new Date(b.plannedAt).getTime() : Infinity;
+    if(ta === tb) return 0;
+    if(ta === Infinity) return 1;
+    if(tb === Infinity) return -1;
+    return Math.abs(ta - now) - Math.abs(tb - now);
+  });
+  var top = rows.slice(0, 8);
+  var list = top.map(function(r){
+    var late = r.plannedAt && new Date(r.plannedAt).getTime() < now;
+    var go = !!(r.versionId && r.reqId);
+    return '<button class="rel-plan-row" type="button"'
+      + (go ? ' data-rel-plan="' + esc(r.versionId) + '" data-rel-req="' + esc(r.reqId) + '"' : ' disabled')
+      + ' title="' + (go ? "打开该版本的发布工作台" : "该计划缺少版本关联，请到发布日程查看") + '">'
+      + '<span class="rp-t">' + esc(fmtPlanTime(r.plannedAt)) + (late ? ' <span class="tag tag-warning">已过期</span>' : '') + '</span>'
+      + '<span class="rp-p" title="' + esc(r.projectNames || r.projectName || "") + '">' + esc(r.projectNames || r.projectName || "—") + '</span>'
+      + '<span class="rp-v" title="' + esc(r.versionNames || r.versionName || "") + '">' + esc(r.versionNames || r.versionName || "—") + '</span>'
+      + '<span class="rp-s">' + esc(planStatusText(r.status)) + '</span>'
+      + '</button>';
+  }).join("");
+  host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>最近发布计划</h3>'
+    + '<span class="meta-right">' + rows.length + ' 份未完成</span></div>'
+    + (top.length
+      ? '<div class="rel-plan-list">' + list + '</div>'
+      : '<div class="stack"><p class="hint">还没有未完成的发布计划。</p></div>')
+    + '<div class="stack" style="padding:10px 12px 12px"><p class="hint">计划按版本创建：到「版本 → 发布日程」看跨项目全量，或在版本详情页新建计划。</p>'
+    + '<div><button class="btn sm" type="button" data-release-empty-back>去版本页</button></div></div>'
+    + '</div></div>';
+  host.querySelectorAll("[data-rel-plan]").forEach(function(b){
+    b.addEventListener("click", function(){
+      openReleasePage({ id: b.getAttribute("data-rel-plan"), reqId: b.getAttribute("data-rel-req") });
+    });
+  });
+  var back = host.querySelector("[data-release-empty-back]");
+  if(back) back.addEventListener("click", function(){ showView("phase"); });
+}
+
 function mount(route, version, intent){
   destroy();
   /* 工作区按 rt.phaseReqId 校验迟到的响应；直接打开链接时先把它对齐到当前版本 */
@@ -82,7 +145,7 @@ export function enterReleaseView(){
   if(!host) return;
   var route = parseRoute();
   var intent = takeReleaseIntent();
-  if(!route || !route.id){ emptyState("没有指定版本；从版本卡或「发布计划」入口进入。"); return; }
+  if(!route || !route.id){ enterNoParamView(); return; }
   if(intent && intent.id !== route.id) intent = null;
   if(intent && intent.version){ mount(route, intent.version, intent); return; }
   var reqId = (intent && intent.reqId) || route.reqId;

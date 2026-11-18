@@ -6,7 +6,13 @@
 @import url("base.css");
 @import url("layout.css");
 @import url("components.css");
-@import url("views.css");
+@import url("views-workitems.css");
+@import url("views-projects-settings.css");
+@import url("views-drawer-blocks.css");
+@import url("views-req-docs.css");
+@import url("views-analysis-branches.css");
+@import url("views-phase-demands.css");
+@import url("views-testcases.css");
 @import url("gantt.css");
 @import url("auth.css");
 @import url("mobile.css");

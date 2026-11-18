@@ -319,8 +319,9 @@ function syncViewHash(name){
   if(suppressHashSync) return;
   var h = "#/" + name;
   if(window.location.hash === h) return;
-  /* 分支、工作项列、需求主状态工作页、版本详情与文档深链：保留查询参数，避免 showView 抹掉下钻位置 */
-  if((name === "branches" || name === "workcolumn" || name === "canceled" || name === "demands" || name === "version" || name === "release" || name === "requirements" || name === "dochistory" || name === "workload")
+  /* 分支、工作项列、需求主状态工作页、版本详情与文档深链：保留查询参数，避免 showView 抹掉下钻位置；
+     phase/testcases/requirements/branches/demands 还承载全局「新建」菜单的 ?new=1 跨视图创建参数 */
+  if((name === "branches" || name === "workcolumn" || name === "canceled" || name === "demands" || name === "version" || name === "release" || name === "requirements" || name === "dochistory" || name === "workload" || name === "phase" || name === "testcases")
       && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }

@@ -423,6 +423,11 @@ function enterDemandsView(){
   /* 浏览器可能无视 autocomplete，把上次搜索词直接写回输入框；以 demSmart.q 为准清理 */
   [0, 300, 1000, 2000, 4000].forEach(function(ms){ setTimeout(reconcileDemSearchInputs, ms); });
   loadViews().then(renderDemTabs);
+  /* 全局「新建」菜单 / 首屏引导的跨视图创建：#/demands?new=1 进入即开提需求弹窗 */
+  if(/[?&]new=1(&|$)/.test(String(window.location.hash || ""))){
+    try{ window.history.replaceState(null, "", window.location.pathname + window.location.search + "#/demands"); }catch(e){ /* noop */ }
+    loadViews().then(function(){ if(activeView === "demands") openDemandDialog(null); });
+  }
   /* 分类字典平时由看板加载；直接进需求池时这里补一次，否则分类列与分类筛选都拿不到候选 */
   var catSig = JSON.stringify(rt.categoriesCache || []);
   loadCategories().then(function(){
@@ -898,7 +903,7 @@ function demandEvidenceHTML(d){
   return html;
 }
 function cardHTML(d, opts){
-  var acts = opts && opts.readOnly ? "" : demandActs(d);
+  var acts = opts && opts.readOnly ? "" : demandActs(d, { subtle: true });
   /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动；
      已完成只由完成判定进出，不参与拖动 */
   var drag = (canReviewDemand(d) && !isClosedDemand(d) && d.status !== "done" && (d.status !== "plan" || canScheduleDemand(d)) && !(opts && opts.noDrag))
@@ -4188,10 +4193,11 @@ function demandStatusLabel(d){
 function demandFootActs(d){
   var acts = "";
   if(canReviewDemand(d) && d.status === "review"){
+    /* 卡内主操作降为浅蓝底：实心蓝只留给页头 CTA，避免满屏蓝块 */
     acts += '<button class="btn sm" type="button" data-dem-rej="' + esc(d.id) + '">不通过</button>'
-      + '<button class="btn sm primary" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
+      + '<button class="btn sm soft" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
   }else if(canScheduleDemand(d) && d.status === "pass"){
-    acts += '<button class="btn sm primary" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
+    acts += '<button class="btn sm soft" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
   }else if(canReviewDemand(d) && isClosedDemand(d) && (d.closeReason === "rej" || d.status === "rej")){
     acts += '<button class="btn sm" type="button" data-dem-reopen="' + esc(d.id) + '">重新打开</button>';
   }else if(canScheduleDemand(d) && isClosedDemand(d) && d.closeReason !== "rej" && d.status !== "rej"){

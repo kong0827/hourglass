@@ -166,6 +166,8 @@
         <div class="er-thead th-primary"><code>demand</code><span>需求池 · 评审状态机</span></div>
         <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>所属项目</em></div>
         <div class="er-row"><code>status</code><em>review/pass/plan/done/closed</em></div>
+        <div class="er-row"><code><span class="fk">created_by</span></code><em>提交人 · 展示与通知</em></div>
+        <div class="er-row"><code>close_reason · close_stage</code><em>已关闭徽标按原因细分</em></div>
         <div class="er-row"><code>wsjf_business / urgency / risk / effort</code><em>自动打分</em></div>
       </div>
 
@@ -205,6 +207,7 @@
         <div class="er-row"><code>item_type</code><em>story / task / bug / epic</em></div>
         <div class="er-row"><code><span class="fk">demand_id</span> · <span class="fk">req_id</span> · <span class="fk">req_doc_id</span></code><em>四向挂接</em></div>
         <div class="er-row"><code><span class="fk">branch_id</span> · <span class="fk">blocked_by_task_id</span></code><em>分支 / 阻塞</em></div>
+        <div class="er-row"><code>cancel_reason · cancel_from · canceled_at</code><em>取消元数据 · 恢复回取消前列</em></div>
         <div class="er-row"><code><span class="fk">published_release_id</span></code><em>徽标只读派生</em></div>
       </div>
 

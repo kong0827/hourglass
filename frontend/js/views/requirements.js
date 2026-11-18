@@ -334,6 +334,13 @@ function loadReqDocs(force){
   return fetchReqDocs(reqDocKeyword, !!force);
 }
 function enterRequirementsView(){
+  /* 全局「新建」菜单跨视图创建：#/requirements?new=1 进入即开新建文档弹窗（参数消费一次即清） */
+  if(/[?&]new=1(&|$)/.test(String(window.location.hash || ""))){
+    try{ window.history.replaceState(null, "", window.location.pathname + window.location.search + "#/requirements"); }catch(e){ /* noop */ }
+    loadReqs().then(function(){
+      if(activeView === "requirements" && !isReqDocEditing()) openNewReqDocDialog(null);
+    });
+  }
   fillReqDocProjectSelect();
   loadDocCategories(true);
   loadReqs().then(function(){
@@ -613,7 +620,7 @@ function renderReqDocTree(){
   var kw = (($("reqDocSearch") || {}).value || "").trim().toLowerCase();
   var rows = reqDocVisibleRows();   // 关键字过滤由服务端完成，结果单独缓存
   if(kw && !rows.length){
-    box.innerHTML = '<div class="reqdoc-empty2">没有找到匹配的文档</div>';
+    box.innerHTML = UI.emptyState({ icon:"inbox", compact:true, title:"没有找到匹配的文档", text:"换个关键词，或清空搜索看看全部文档。" });
     return;
   }
   var groups = reqDocBuildTree(rows, !!kw);
@@ -1007,10 +1014,10 @@ function syncReqDocLoadError(){
 }
 function reqDocEmptyHTML(){
   var kw = (($("reqDocSearch") || {}).value || "").trim();
-  if(kw) return '<div class="reqdoc-empty2">没有找到匹配的文档</div>';
-  if(reqDocsError) return '<div class="reqdoc-empty2">暂时无法加载文档，请点上方的「重试」</div>';
-  if(reqDocReqFilter) return '<div class="reqdoc-empty2">这个项目还没有文档。点右上角「新建文档」并选择该项目即可创建。</div>';
-  return '<div class="reqdoc-empty2">还没有文档。点右上角「新建文档」，先选项目再填文档名称。</div>';
+  if(kw) return UI.emptyState({ icon:"inbox", compact:true, title:"没有找到匹配的文档", text:"换个关键词，或清空搜索看看全部文档。" });
+  if(reqDocsError) return UI.emptyState({ icon:"alertCircle", compact:true, title:"暂时无法加载文档", text:"请点上方的「重试」重新加载。" });
+  if(reqDocReqFilter) return UI.emptyState({ icon:"folder", compact:true, title:"这个项目还没有文档", text:"点右上角「新建文档」并选择该项目即可创建。" });
+  return UI.emptyState({ icon:"inbox", compact:true, title:"还没有文档", text:"点右上角「新建文档」，先选项目再填文档名称。" });
 }
 function reqDocFilterName(id){
   for(var i = 0; i < rt.reqList.length; i++){
@@ -1157,7 +1164,7 @@ function renderReqDocKanban(){
       '<div class="rk-col-head"><span class="rk-dot" aria-hidden="true"></span>' + col.name +
         '<span class="rk-count">' + cards.length + '</span></div>' +
       '<div class="rk-col-body">' +
-        (cards.length ? cards.map(reqDocKanbanCard).join("") : '<div class="rk-empty">暂无文档</div>') +
+        (cards.length ? cards.map(reqDocKanbanCard).join("") : UI.colEmpty("暂无文档", "inbox")) +
       '</div>' +
     '</div>';
   }).join("");
@@ -1333,7 +1340,7 @@ function renderReqDocSplit(){
   var kw = (($("reqDocSearch") || {}).value || "").trim().toLowerCase();
   var rows = reqDocVisibleRows();
   if(kw && !rows.length){
-    box.innerHTML = '<div class="reqdoc-empty2">没有找到匹配的文档</div>';
+    box.innerHTML = UI.emptyState({ icon:"inbox", compact:true, title:"没有找到匹配的文档", text:"换个关键词，或清空搜索看看全部文档。" });
     return;
   }
   var groups = reqDocBuildTree(rows, !!kw);
@@ -2246,7 +2253,7 @@ function loadRrdComments(){
     var title = $("rrdCommentsTitle");
     if(title) title.textContent = rrdComments.length ? "评论（" + rrdComments.length + "）" : "评论";
     if(!rrdComments.length){
-      list.innerHTML = '<div class="reqdoc-comment-empty">还没有评论，选中正文即可划线评论</div>';
+      list.innerHTML = UI.colEmpty("还没有评论", "inbox", "选中正文即可划线评论");
     }else{
       list.innerHTML = rrdComments.map(function(c){
         return '<div class="reqdoc-comment-item" data-rrd-comment-id="' + esc(c.id) + '">'
@@ -2794,7 +2801,7 @@ function renderReqDocFeed(){
     if(seq !== feedSeq) return;
     rows = rows || [];
     if(!rows.length){
-      box.innerHTML = '<div class="reqdoc-empty2">还没有文档动态：创建、编辑或流转文档后，这里会按时间汇总展示。</div>';
+      box.innerHTML = UI.emptyState({ icon:"inbox", compact:true, title:"还没有文档动态", text:"创建、编辑或流转文档后，这里会按时间汇总展示。" });
       return;
     }
     var groups = [], byDay = {};
@@ -3382,7 +3389,7 @@ function loadReqDocTasks(id){
         + '<span class="rd-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + taskPublicationHTML(t) + '</span>'
         + '<span class="rd-meta">' + esc(status) + ' · ' + esc(t.owner || "未指派")
         + (t.dueDate ? ' · 截止 ' + esc(String(t.dueDate).substring(0, 10)) : '') + '</span></button>';
-    }).join("") : '<div class="tl-empty">还没有关联工作项，可从当前文档直接新建。</div>';
+    }).join("") : UI.colEmpty("还没有关联工作项", "inbox", "可从当前文档直接新建");
   }).catch(function(ex){
     if(editingDocId === id) list.innerHTML = UI.errorState(ex.message || "关联工作项加载失败");
   });
@@ -3406,7 +3413,7 @@ function loadReqDocDemands(id){
     rows = rows || [];
     if($("reqDocDemandCount")) $("reqDocDemandCount").textContent = rows.length ? "（" + rows.length + "）" : "";
     if(!rows.length){
-      list.innerHTML = '<div class="tl-empty">还没有关联需求；到需求池打开需求详情，在「关联文档」里挑这份文档。</div>';
+      list.innerHTML = UI.colEmpty("还没有关联需求", "inbox", "到需求池打开需求详情，在「关联文档」里挑这份文档");
       return;
     }
     list.innerHTML = rows.map(function(d){
@@ -4530,7 +4537,7 @@ function loadReqDocComments(docId){
     rows = rows || [];
     if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
     if(!rows.length){
-      list.innerHTML = '<div class="reqdoc-comment-empty">' + (unresolvedOnly ? '没有未解决的评论' : '还没有评论') + '</div>';
+      list.innerHTML = UI.colEmpty(unresolvedOnly ? "没有未解决的评论" : "还没有评论", "inbox");
       return;
     }
     list.innerHTML = rows.map(function(c){ return renderCommentThread(c); }).join("");
@@ -4646,11 +4653,11 @@ function loadReqDocAttachments(docId){
     rows = rows || [];
     list.__attList = rows;
     if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
-    if(!rows.length){ list.innerHTML = '<div class="tl-empty">暂无附件</div>'; return; }
+    if(!rows.length){ list.innerHTML = UI.colEmpty("暂无附件", "inbox"); return; }
     list.innerHTML = '<div class="att-chips">' + rows.map(function(a){
       return attachmentChipHTML(a, { removable: !roleReadOnly() });
     }).join("") + '</div>';
-  }).catch(function(){ if(editingDocId === docId) list.innerHTML = '<div class="tl-empty">附件加载失败</div>'; });
+  }).catch(function(){ if(editingDocId === docId) list.innerHTML = UI.colEmpty("附件加载失败", "alertCircle"); });
 }
 function uploadReqDocAttachments(files){
   if(!editingDocId || roleReadOnly() || !files || !files.length) return;
@@ -5091,7 +5098,7 @@ function renderReqDocHistoryList(){
   var count = $("reqDocHistoryCount");
   if(!list) return;
   if(!reqDocHistories.length){
-    list.innerHTML = '<div class="rh-empty">还没有历史快照<br>保存正文后自动生成</div>';
+    list.innerHTML = UI.colEmpty("还没有历史快照", "inbox", "保存正文后自动生成");
     if(count) count.textContent = "";
     return;
   }

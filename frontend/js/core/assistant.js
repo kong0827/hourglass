@@ -60,9 +60,18 @@ function setAssistantEnabled(on){
 }
 
 function applyEnabled(){
+  /* 移动端 AI 入口收进顶栏「新建」菜单（#newMenuAi），与桌面 FAB 共用开关 */
+  var mi = document.getElementById("newMenuAi");
+  if (mi) mi.hidden = !enabled;
   if(!els) return;
   els.fab.hidden = !enabled;
   if(!enabled && open) closePanel();
+}
+
+/* 供顶栏「新建」菜单（移动端 AI 入口）调用 */
+function toggleAssistant(){
+  if(!enabled) return;
+  if(open) closePanel(); else openPanel();
 }
 
 /* ==================== 初始化 ==================== */
@@ -1074,4 +1083,4 @@ function goHref(href){
   showView(view).then(function(){ closePanel(); });
 }
 
-export { initAssistant, isAssistantEnabled, setAssistantEnabled };
+export { initAssistant, isAssistantEnabled, setAssistantEnabled, toggleAssistant };

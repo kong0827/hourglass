@@ -18,7 +18,8 @@ import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-h
 import { openMilestoneDetail } from "../lib/milestone-ui.js";
 import {
   colName, dayKey, demandNoText, fmtMinutesShort, fmtReleaseTime, itemNoText,
-  releaseEnvironmentName, releasePlanNoText, releaseSnapshotHTML, taskPublicationHTML, taskVersionIds, typeBadgeHTML
+  releaseEnvironmentName, releasePlanNoText, releaseSnapshotHTML, taskPublicationHTML, taskVersionIds, typeBadgeHTML,
+  VERSION_STATUS_META, PLAN_STATUS_META, versionStatusTagHTML, planStatusTone
 } from "../lib/format.js";
 import { openBranchById } from "./branches.js";
 
@@ -153,11 +154,11 @@ function ended(){ var v = st.version; return !!v && (v.status === "closed" || v.
 function readOnly(){ return contentLocked() || ended(); }
 function versionName(){ return (st.version && st.version.name) || (st.stat && st.stat.name) || "版本"; }
 function statusName(s){
-  return { released:"已发布", active:"进行中", planned:"计划中", closed:"已关闭", canceled:"已取消" }[s] || s || "—";
+  /* 收敛到 lib/format 的 VERSION_STATUS_META（P2-11）：版本状态名称与色调全站单一来源 */
+  return (VERSION_STATUS_META[s] || {}).name || s || "—";
 }
 function statusTag(s){
-  var cls = s === "released" ? "tag-success" : s === "active" ? "tag-info" : "ghost";
-  return '<span class="tag ' + cls + '">' + esc(statusName(s)) + '</span>';
+  return versionStatusTagHTML(s);
 }
 function dateText(s){ return s ? String(s).substring(0, 10) : ""; }
 function pctText(v){ return (v === null || v === undefined) ? "—" : ((v > 0 ? "+" : "") + v + "%"); }
@@ -507,11 +508,21 @@ function syncDescToggle(){
 function headHTML(){
   var v = st.version || st.stat || {};
   var actions = [];
-  if(writable() && !readOnly()){
-    actions.push('<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑版本</button>');
-    actions.push('<button class="btn sm" type="button" data-vd-tool="tasks">管理范围</button>');
+  var canEdit = writable() && !readOnly();
+  var isPlanned = !!(st.version && st.version.status === "planned");
+  var canPublish = st.version && st.version.canPublish === true;
+  /* 主按钮随状态切换（P2-14）：计划中先圈定范围 →「管理范围」为实心主按钮；
+     进行中且可发布 →「记录实际发布」为实心主按钮。同一时刻只保留一个实心按钮，避免两个 primary 打架。 */
+  if(canEdit){
+    if(isPlanned && !canPublish){
+      actions.push('<button class="btn sm primary" type="button" data-vd-tool="tasks">管理范围</button>');
+      actions.push('<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑版本</button>');
+    }else{
+      actions.push('<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑版本</button>');
+      actions.push('<button class="btn sm" type="button" data-vd-tool="tasks">管理范围</button>');
+    }
   }
-  if(st.version && st.version.canPublish === true){
+  if(canPublish){
     actions.push('<button class="btn sm primary" type="button" data-vd-tool="actual">记录实际发布</button>');
   }
   actions.push('<button class="btn sm ghost" type="button" data-vd-tool="plan">计划与历史</button>');
@@ -597,8 +608,30 @@ function cell(value, label, tone, drill, help){
   return '<div class="vd-cell-wrap">' + inner
     + caliberMarkHTML(help.key, !!help.warn, "查看「" + label + "」口径") + '</div>';
 }
+/* 空版本引导卡（P2-14）：版本还没排入工作项时，用一张引导卡替代全是 0 的空仪表，
+   把「下一步该做什么」直接递到手里。按钮复用 data-vd-tool 委托，与页头操作同源。 */
+function emptyVersionGuideHTML(){
+  var canEdit = writable() && !readOnly();
+  var acts = canEdit
+    ? '<div class="gc-acts">'
+      + '<button class="btn sm primary" type="button" data-vd-tool="tasks">管理范围</button>'
+      + '<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑版本</button>'
+      + '</div>'
+    : "";
+  return '<div class="guide-card vd-empty-guide">'
+    + '<span class="gc-ic">' + icon("layers", 18) + '</span>'
+    + '<div class="gc-tx"><b>这个版本还没有工作项</b>'
+    + (canEdit
+      ? '先在「管理范围」里把要交付的工作项圈进来；需要的话再设置目标日期与需求。'
+      : '该版本尚未排入工作项，暂无可展示的进度与工时。')
+    + '</div>'
+    + acts
+    + '</div>';
+}
 function overviewHTML(){
   var s = st.stat || {};
+  /* 空版本（还没排入任何工作项）：不铺开 6 KPI + 多面板的空仪表，折叠为单引导卡（P2-14） */
+  if(!st.tasks.length) return emptyVersionGuideHTML();
   var moving = st.tasks.filter(function(t){ return !isDone(t) && actOf(t) > 0; }).length;
   var cells = [
     cell(st.tasks.length, "版本工作项", "", "all"),
@@ -1444,7 +1477,8 @@ function demandsHTML(){
 /* ==================== 发布 ==================== */
 
 function planStatusName(s){
-  return { draft:"草稿", ready:"就绪", completed:"已完成", canceled:"已取消" }[s] || s || "未创建";
+  /* 收敛到 PLAN_STATUS_META（P2-11）；未保存计划仍显示「未创建」 */
+  return (PLAN_STATUS_META[s] || {}).name || s || "未创建";
 }
 function coverageName(c){ return { full:"全量", partial:"部分", unknown:"覆盖未知" }[c] || c || "—"; }
 function releasesHTML(){
@@ -1462,7 +1496,7 @@ function plansPanel(){
     return panel("发布计划", "", '<p class="hint">还没有发布计划。计划只描述打算怎么发，不改变实际交付事实。</p>' + acts);
   }
   var body = slot.rows.map(function(p){
-    var tone = p.status === "completed" ? "tag-success" : p.status === "ready" ? "tag-info" : p.status === "canceled" ? "ghost" : "tag-warning";
+    var tone = planStatusTone(p.status);
     return '<tr data-vd-tool="plan" tabindex="0" title="在发布工作区里查看与编辑该计划">'
       + '<td>' + esc(releasePlanNoText(p.planNo) || ("#" + p.id)) + '</td>'
       + '<td><span class="tag ' + tone + '">' + esc(planStatusName(p.status)) + '</span></td>'

@@ -685,10 +685,12 @@ function renderMobileBoard(opts){
       Math.max((cd.matched || 0) - items.length, 0) + ' 项）</button>';
   }
   var activeCol = colMeta(active) || {};
+  /* 移动端列入口文案：直接给数量与去向，不用「进入…状态工作页」的绕口说法 */
+  var mobCount = (filterOn() || (active === "done" && boardDonePub)) ? (cd.matched || 0) : (cd.total || 0);
   var stageLink = '<button class="btn mob-stage-link" type="button" data-col-open="' + esc(active) + '"' +
     (active === "done" ? ' data-col-range="all"' : '') + '>' +
-    '进入「' + esc(activeCol.name || active) + '」状态工作页' +
-    (active === "done" ? '（共 ' + (cd.allTotal || 0) + ' 条）' : '') + '</button>';
+    esc(activeCol.name || active) + ' ' + mobCount + ' 项 →' +
+    '</button>';
 
   board.innerHTML = '<div class="mob-board">' + seg + stageLink +
     '<div class="mob-board-list" role="list">' + listHTML + cardAddHTML(active) + '</div></div>';
@@ -712,6 +714,7 @@ function renderMobileBoard(opts){
   renderFilterChips();
   UI.wireTooltips(board);
   syncBoardMemberTooltips();
+  syncBoardGuide();
 }
 function render(opts){
   if(isMobile()) return renderMobileBoard(opts);
@@ -890,7 +893,41 @@ function render(opts){
   renderFilterChips();
   UI.wireTooltips(board);
   syncBoardMemberTooltips();
+  syncBoardGuide();
 }
+/* ---- 首屏引导：工作项 <3 条的新空间，在看板上方递出「下一步」 ---- */
+function syncBoardGuide(){
+  var parent = board.parentNode;
+  if(!parent) return;
+  var old = parent.querySelector(".guide-card");
+  if(old) old.remove();
+  var n = totalTaskCount();
+  if(!n || n > 2 || filterOn()) return;
+  board.insertAdjacentHTML("beforebegin", UI.guideCard());
+}
+var boardGuideBound = false;
+function bindBoardGuide(){
+  if(boardGuideBound) return;
+  boardGuideBound = true;
+  var parent = board.parentNode;
+  if(!parent) return;
+  parent.addEventListener("click", function(e){
+    var g = e.target.closest("[data-guide]");
+    if(!g) return;
+    var kind = g.getAttribute("data-guide");
+    if(kind === "task") openTaskDrawer("backlog");
+    else if(kind === "project"){
+      showView("projects");
+      setTimeout(function(){ loadView("projects").then(function(m){ m.openProjectDialog(null); }); }, 80);
+    }
+    else if(kind === "demand"){
+      /* 先写入带 ?new=1 的 hash（syncViewHash 保留名单会保住参数），再切视图；demands enter 时消费参数开提需求弹窗 */
+      window.location.hash = "#/demands?new=1";
+      showView("demands");
+    }
+  });
+}
+bindBoardGuide();
 function openInlineAdd(colId, preset, focusIt){
   /* 手机单列模式没有 .board-col 容器，直接开抽屉，复用同一套新建表单 */
   if(isMobile()){ state.inlineAdd = null; openTaskDrawer(colId); return; }

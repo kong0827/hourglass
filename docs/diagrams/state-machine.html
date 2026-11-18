@@ -175,6 +175,11 @@
       <span class="hint">进度 100% 但尚未归入完成列 → 进入周回顾「待确认完成」分区；完成时写一条 <code>task_completion_record</code> 快照用于月度统计</span>
     </div>
 
+    <div class="sm-derived">
+      <span class="sm-chip c-dash"><span class="dot"></span>已取消 canceled · 系统终态</span>
+      <span class="hint">不占看板列、不进列配置与流转矩阵；任意非终态列可取消（原因四选一 <code>not_do</code> 不做 / <code>dup</code> 重复 / <code>deferred</code> 延期 / <code>design</code> 设计如此 + 说明必填）；已完成不能直接取消，须先取消完成；恢复回 <code>cancel_from</code> 列，列已删除则回第一个开列</span>
+    </div>
+
     <div class="sm-rules">
       <div class="sm-rule"><b>计时</b>拖入「进行中」自动开表；一人同一时刻只计一个任务，开始新的会自动停掉旧的。</div>
       <div class="sm-rule"><b>接力</b>计时中的任务完成后，若原列还有任务，自动接上第一个；仅本人无运行中计时时生效。</div>
@@ -183,28 +188,33 @@
       <div class="sm-rule"><b>阻塞</b>任意状态可标记阻塞，填原因与可选等待任务；集中出现在「逾期与阻塞」视图。</div>
       <div class="sm-rule"><b>逾期</b>判定只看截止日与当前列：未进完成列且已过截止日即逾期，看板 / 日历 / 度量同一口径。</div>
       <div class="sm-rule"><b>删除</b>软删除进回收站（<code>deleted_at</code>），可恢复；完成快照不随任务删除而丢失。</div>
+      <div class="sm-rule"><b>已取消 · 操作</b>已取消不可拖拽，只能「恢复」回取消前所在列；恢复后照常计入逾期与完成率分母。</div>
+      <div class="sm-rule"><b>已取消 · 口径</b>已取消不计逾期、退出完成率分母、退出需求完成分母、不进发布候选。</div>
       <div class="sm-rule"><b>不改口径</b>自定义列不参与语义判定；工作项类型（故事 / 任务 / 缺陷 / 史诗）与列状态相互独立。</div>
     </div>
   </div>
 
   <div class="sm-compare">
     <div class="sm-card">
-      <h3>需求池状态机 <span class="tag">空间主评审</span></h3>
-      <div class="desc">评审流转仅空间主可执行；排期 / 调期 / 撤排 / 关闭 / 恢复由管理角色执行，关闭须填原因并记录阶段，全部动作写 <code>demand_log</code>。</div>
+      <h3>需求池状态机 <span class="tag">评审仅需写权限</span></h3>
+      <div class="desc">评审（通过 / 拒绝 / 撤回 / 重开）只需项目写权限（owner / admin / 可写成员）；排期 / 调期 / 撤排 / 关闭 / 恢复由管理角色执行，关闭须填原因并记录阶段，全部动作写 <code>demand_log</code>。</div>
       <div class="sm-row">
         <span class="sm-chip sm-small c-gray"><span class="dot"></span>待评审</span>
         <span class="sm-conn sub"><span>通过</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="sm-chip sm-small c-primary"><span class="dot"></span>已通过</span>
         <span class="sm-conn sub"><span>排期</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="sm-chip sm-small c-success"><span class="dot"></span>已排期</span>
-        <span class="sm-conn sub"><span>拆解</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="sm-chip sm-small c-primary"><span class="dot"></span>工作项</span>
+        <span class="sm-chip sm-small c-warning"><span class="dot"></span>已排期</span>
+        <span class="sm-conn sub"><span>完成条件满足</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-success"><span class="dot"></span>已完成</span>
+      </div>
+      <div class="sm-row">
+        <span class="note">已排期可拆解工作项；已完成判定 = 关联工作项全部关闭且最新用例全部通过，已取消工作项不计入分母；已完成不能直接关闭，须证据失效自动退回。</span>
       </div>
       <div class="sm-row">
         <span class="sm-chip sm-small c-dash"><span class="dot"></span>已关闭</span>
         <span class="sm-conn sub"><span>恢复</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="sm-chip sm-small c-gray"><span class="dot"></span>待评审 / 已通过</span>
-        <span class="note">拒绝 / 取消 / 重复同属关闭；恢复回关闭前的阶段，回到已通过须重新排期</span>
+        <span class="note">拒绝 / 取消 / 重复同属关闭；关闭阶段为待评审的恢复回待评审，其余一律回已通过并清排期，须重新排期</span>
       </div>
       <div class="sm-row">
         <span class="sm-chip sm-small c-dash"><span class="dot"></span>关闭·评审拒绝</span>

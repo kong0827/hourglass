@@ -525,9 +525,12 @@ import { icon } from "./icons.js";
     }
     return h + '</div>';
   }
-  function colEmpty(text, iconName) {
+  /* 列内空态：短标题走 <b>，可选补充说明走 <p>（复用 .col-empty p 样式槽），
+     避免把长指引整句塞进加粗标题里显得笨重。 */
+  function colEmpty(text, iconName, hint) {
     var ic = iconName ? '<span class="ce-ic">' + icon(iconName, 18) + '</span>' : "";
-    return '<div class="col-empty">' + ic + '<b>' + esc2(text || "暂无数据") + '</b></div>';
+    var h = hint ? '<p>' + esc2(hint) + '</p>' : "";
+    return '<div class="col-empty">' + ic + '<b>' + esc2(text || "暂无数据") + '</b>' + h + '</div>';
   }
   function skeletonCards(n) {
     var h = "";
@@ -538,6 +541,20 @@ import { icon } from "./icons.js";
     var h = "";
     for (var i = 0; i < (n || 8); i++) h += '<div class="skel skel-row"></div>';
     return h;
+  }
+
+  /* ==================== 首屏引导卡 ====================
+     数据稀少（<3 条）的新空间首屏：把「下一步该做什么」直接递到手里。
+     按钮走 data-guide 委托，由宿主视图接线（新建工作项/新建项目/提需求）。 */
+  function guideCard() {
+    return '<div class="guide-card">' +
+      '<span class="gc-ic">' + icon("star", 18) + '</span>' +
+      '<div class="gc-tx"><b>开始使用沙漏</b>先建第一条工作项，或从项目与需求池把团队任务攒起来。</div>' +
+      '<div class="gc-acts">' +
+      '<button class="btn sm primary" type="button" data-guide="task">新建工作项</button>' +
+      '<button class="btn sm" type="button" data-guide="project">新建项目</button>' +
+      '<button class="btn sm" type="button" data-guide="demand">需求池提需求</button>' +
+      '</div></div>';
   }
 
   /* ==================== 刷新进度条 ==================== */
@@ -642,6 +659,7 @@ import { icon } from "./icons.js";
     hideTip: hideTip,
     wireTooltips: wireTooltips,
     emptyState: emptyState,
+    guideCard: guideCard,
     errorState: errorState,
     noPermState: noPermState,
     colEmpty: colEmpty,

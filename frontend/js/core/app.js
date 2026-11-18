@@ -2,6 +2,7 @@
 
 import { API } from "./api.js";
 import { $ } from "./dom.js";
+import { toggleAssistant } from "./assistant.js";
 import { reloadFilteredViews, restoreViewState } from "./filters-ui.js";
 import { updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
@@ -221,12 +222,21 @@ $("btnNew").addEventListener("click", function(){
   if(UI.popOpen($("newMenu"))){ UI.closeAllPops(); return; }
   UI.openPop($("newMenu"), $("btnNew"), {align:"left"});
 });
+/* 跨视图创建：先写入带 ?new=1 的目标 hash（syncViewHash 的保留名单会保住参数），
+   再走统一路由；目标视图 enter 时消费参数打开对应新建弹窗（消费一次即清掉） */
+var NEW_ROUTE = { version:"phase", demand:"demands", case:"testcases", doc:"requirements", branch:"branches" };
 $("newMenu").addEventListener("click", function(e){
   var b = e.target.closest("[data-new]");
   if(!b) return;
   UI.closeAllPops();
-  if(b.dataset.new === "task"){ openTaskDrawer("backlog"); }
-  else { showView("projects"); setTimeout(function(){ loadView("projects").then(function(m){ m.openProjectDialog(null); }); }, 60); }
+  var kind = b.dataset.new;
+  if(kind === "task"){ openTaskDrawer("backlog"); return; }
+  if(kind === "ai"){ toggleAssistant(); return; }
+  if(kind === "req"){ showView("projects"); setTimeout(function(){ loadView("projects").then(function(m){ m.openProjectDialog(null); }); }, 60); return; }
+  var target = NEW_ROUTE[kind];
+  if(!target) return;
+  window.location.hash = "#/" + target + "?new=1";
+  window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view: target } }));
 });
 $("btnAlert").addEventListener("click", function(){
   if(UI.popOpen($("alertPanel"))){ UI.closeAllPops(); return; }

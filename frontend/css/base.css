@@ -25,7 +25,7 @@ a:hover{text-decoration:underline;}
 :focus:not(:focus-visible){outline:none;}
 
 /* ---------- 字号阶梯 ---------- */
-.t-display{font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.01em;}
+.t-display{font-size:var(--fs-display);line-height:32px;font-weight:700;letter-spacing:-.01em;}
 .t-h1{font-size:20px;line-height:28px;font-weight:650;letter-spacing:-.01em;}
 .t-h2{font-size:16px;line-height:24px;font-weight:650;letter-spacing:-.01em;}
 .t-h3{font-size:14px;line-height:22px;font-weight:600;}
@@ -36,7 +36,7 @@ a:hover{text-decoration:underline;}
 
 /* ---------- 工具类（附录 A） ---------- */
 .row{display:flex;align-items:center;}
-.row-gap{gap:8px;}
+.row-gap{gap:var(--space-2);}
 .col{display:flex;flex-direction:column;}
 .grow{flex:1 1 auto;min-width:0;}
 .ml-auto{margin-left:auto;}

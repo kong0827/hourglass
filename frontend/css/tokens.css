@@ -13,6 +13,16 @@
   --surface-active:#E9ECF1;
   --border:#E4E7EC;
   --border-strong:#D0D5DD;
+  /* ---- 列表分组带 ----
+     列头用 --surface-sunken；分组行若同色，「列头 / 分组 / 数据行」三级层级会塌成两级。
+     分组带改用带主色倾向的浅底 + 左侧 3px 主色条，未分组一类的中性分组用灰底灰条。 */
+  --group-band:#F4F8FE;
+  --group-band-hover:#E9F1FE;
+  --group-band-bar:var(--primary);
+  --group-band-neutral:#F6F7F9;
+  --group-band-neutral-bar:var(--border-strong);
+  /* 列头下边框：比普通边框深一档，把列头与其下第一条分组带分开 */
+  --head-border:#D7DCE4;
   --text:#101828;
   --text-2:#475467;
   --text-3:#667085;
@@ -49,7 +59,7 @@
   --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
 
   /* ---- 圆角 ---- */
-  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --r-micro:4px; --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
 
   /* ---- 阴影（仅浮层使用） ---- */
   --shadow-xs:0 1px 2px rgba(16,24,40,.05);
@@ -58,6 +68,7 @@
   --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
   --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
   --shadow-up-md:0 -6px 16px -6px rgba(16,24,40,.08); /* 吸底条向上的投影 */
+  --focus-ring:0 0 0 3px var(--primary-soft); --focus-ring-sm:0 0 0 2px var(--primary-soft); /* 聚焦/选中环：彩色阴影唯一允许形态 */
   --ring-focus:0 0 0 3px rgba(37,99,235,.16);
 
   /* ---- 动效 ---- */
@@ -76,15 +87,20 @@
   --drawer-w-lg:800px;
   --board-col-w:300px;
 
+  /* ---- 间距档位：单值 padding / gap 只认这七档，复合值就近取档 ---- */
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-5:20px; --space-6:24px; --space-8:32px;
+
   /* ---- 版式骨架（场景 5）：页头 / 工具条 / 页签 / 表内空态 ----
      同名控件只认这一组值；页面文件不再自带字号与内边距。
      字号档位收敛为 11 / 12 / 13 / 14 / 16 / 20 六档，
-     展示档仅两枚：--fs-stat（KPI 大数字）与 --fs-micro（固定高度小件内的微标签），
-     登录页 / 封面大标题允许 24 以上.hero 级字号，其余位置禁止裸写 font-size。
+     展示档三枚：--fs-stat（KPI 大数字）/ --fs-display（登录·封面·文档标题）/ --fs-micro（固定高度小件微标签），
+     其余位置禁止裸写 font-size；移动端英雄数字为唯一例外（mobile.css 自成一套）。
      断点沿用 639 / 900 / 1024 / 1280（媒体查询无法读变量，改断点时按此清单搜）。 */
   --fs-page-title:20px;
   --fs-page-title-sm:16px;
   --fs-stat:22px;   /* KPI 大数字展示档 */
+  --fs-display:24px;  /* 登录 / 封面 / 文档标题展示档 */
   --fs-micro:10px;  /* 头像首字 / 角标 / 甘特微标签等固定高度小件专用 */
   --head-pad-y:16px;
   --head-pad-x:22px;
@@ -110,9 +126,11 @@
   --palette-1:#2563EB; --palette-2:#12B76A; --palette-3:#F79009; --palette-4:#F04438;
   --palette-5:#7A5AF8; --palette-6:#0E9384; --palette-7:#DD2590; --palette-8:#98A2B3;
 
-  /* ---- 头像色板：8 色，白字对比度均 ≥4.5:1 ---- */
-  --avatar-1:#1D4ED8; --avatar-2:#067647; --avatar-3:#B54708; --avatar-4:#B42318;
-  --avatar-5:#5B3FD1; --avatar-6:#0E6E63; --avatar-7:#A31A6B; --avatar-8:#475467;
+  /* ---- 头像色板：8 色，白字对比度均 ≥4.5:1 ----
+     饱和度下调到语义色同档（P2-15）：头像作为身份标识应低于状态徽标的视觉权重，
+     随机高饱和色会与状态色争抢注意力。降饱和后白字对比度仍 ≥5.2:1。 */
+  --avatar-1:#4762AE; --avatar-2:#1F5D43; --avatar-3:#8E522F; --avatar-4:#91413B;
+  --avatar-5:#6F60B0; --avatar-6:#235953; --avatar-7:#843965; --avatar-8:#465468;
 
   /* ---- 下拉选择：各系统原生箭头粗细不一，统一用同一枚 chevron ---- */
   --select-chevron:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
@@ -156,6 +174,12 @@ html[data-theme="dark"]{
   --surface-active:#26313F;
   --border:#25303D;
   --border-strong:#334153;
+  --group-band:#16233A;
+  --group-band-hover:#1C2E4A;
+  --group-band-bar:var(--primary);
+  --group-band-neutral:#1B222C;
+  --group-band-neutral-bar:var(--border-strong);
+  --head-border:#33414F;
   --text:#E7ECF3;
   --text-2:#A9B4C2;
   --text-3:#7B8798;

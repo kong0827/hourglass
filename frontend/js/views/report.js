@@ -311,6 +311,27 @@ function reportScopeText(data){
     + ' · 公司：' + (scope.companyName === '__unset__' ? '未设公司' : labelFilterText(scope.companyName) || '全部公司')
     + ' · 角色：' + (scope.roleTitle === '__unset__' ? '未设角色' : labelFilterText(scope.roleTitle) || '全部角色');
 }
+/* 复述行（P2-16）：默认范围（全部项目/版本/公司/角色）时不占版面，仅在有筛选生效时以 chip 复述当前范围。
+   导出 CSV 仍走 reportScopeText 全量复述，保证离线文件自带范围说明。 */
+function reportScopeChipsHTML(data){
+  var scope = (data && data.scope) || {};
+  var project = (rt.reqList || []).filter(function(p){ return p.id === scope.reqId; })[0];
+  var version = (reportOptions.versions || []).filter(function(v){ return v.id === scope.versionId; })[0];
+  var chips = [];
+  if(scope.reqId){
+    var scopeName = project ? project.name : scope.reqId;
+    var setName = project ? setNameById(reqSetId(scope.reqId)) : "";
+    if(setName) scopeName = setName + " › " + scopeName;
+    chips.push(["项目", scopeName]);
+  }
+  if(scope.versionId) chips.push(["版本", version ? version.name : scope.versionId]);
+  if(scope.companyName) chips.push(["公司", scope.companyName === "__unset__" ? "未设公司" : (labelFilterText(scope.companyName) || scope.companyName)]);
+  if(scope.roleTitle) chips.push(["角色", scope.roleTitle === "__unset__" ? "未设角色" : (labelFilterText(scope.roleTitle) || scope.roleTitle)]);
+  if(!chips.length) return "";
+  return '<div class="report-scope-chips" role="status" aria-label="当前筛选范围">' + chips.map(function(c){
+    return '<span class="report-scope-chip"><b>' + esc(c[0]) + '</b>' + esc(c[1]) + '</span>';
+  }).join("") + '</div>';
+}
 function reportToolbar(){
   var disabled = loading || !cache ? ' disabled' : '';
   return '<div class="manager-toolbar"><div><b>交付图表</b></div><div class="manager-actions"><button class="btn sm" type="button" data-report-csv' + disabled + '>导出 CSV</button><button class="btn sm" type="button" data-report-png' + disabled + '>导出 PNG</button>' + fullscreenButtonHTML() + '</div></div>'
@@ -323,7 +344,7 @@ function reportToolbar(){
 function renderReport(){
   if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
   var focused = document.activeElement && document.activeElement.id;
-  $("reportBody").innerHTML = reportToolbar() + '<p class="roster-note">' + esc(reportScopeText(cache)) + '</p>'
+  $("reportBody").innerHTML = reportToolbar() + reportScopeChipsHTML(cache)
     + caliberHTML('燃尽：近 14 天，剩余 = 范围内全部工作项的总预估 − 截至当日已完成工作项的实际工时（不是剩余预估）；理想线从总预估线性降到 0，窗口之前完成的工作项也会扣减，因此首日剩余可能低于理想线。范围 =「全部项目」时含已归档项目，选中单个项目时只含该项目。速度：近 4 个自然周，按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与工作项、计时数据同源。')
     + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + defectChart(cache.defects || {}) + '</div>';
   wireReportTooltip($("reportBody"));

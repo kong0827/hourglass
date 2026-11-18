@@ -216,7 +216,9 @@ function syncGanttGroup2Options(){
     o.disabled = o.value !== "none" && o.value === ganttState.groupBy;
   });
   ganttGroup2El.value = ganttState.groupBy2;
-  ganttGroup2El.disabled = ganttState.groupBy === "none";
+  /* 一级不分组时二级不适用：整个控件隐藏，而不是外置置灰占位（工具栏降噪） */
+  var groupWrap = ganttGroup2El.closest("label");
+  if(groupWrap) groupWrap.hidden = ganttState.groupBy === "none";
 }
 function syncGanttControls(){
   if(ganttShowDoneEl) ganttShowDoneEl.checked = ganttState.showDone;

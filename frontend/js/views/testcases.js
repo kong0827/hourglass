@@ -1394,8 +1394,14 @@ function openDefectDrawer(id){
 
 function enterTestCasesView(){
   syncModeUI();
+  /* 全局「新建」菜单跨视图创建：#/testcases?new=1 进入即开新建用例弹窗（参数消费一次即清） */
+  var wantNew = /[?&]new=1(&|$)/.test(String(window.location.hash || ""));
+  if(wantNew){
+    try{ window.history.replaceState(null, "", window.location.pathname + window.location.search + "#/testcases"); }catch(e){ /* noop */ }
+  }
   var run = function(){
     syncReqSel();
+    if(wantNew) openCaseCreate();
     /* 缺陷徽标要在任何模式的首屏都能看到，非缺陷页也并行拉一次；进入缺陷页时下面会再拉最新 */
     if(tcMode !== "defects") loadDefects({ badgeOnly: true });
     if(tcMode === "coverage") loadCoverage();
@@ -7414,14 +7420,33 @@ function renderSetPanel(){
   if(foot){
     var sel = setFilter !== "all" && setFilter !== "__none" ? setById(setFilter) : null;
     var kids = !!(sel && setHasKids(sel.id));
+    /* 长段落收进「?」popover（P2-13 / P-UC-1）：侧栏只留一行触发，规则全文点开看，降低常驻压迫感 */
     foot.innerHTML = (kids
       ? '<button class="tc-side-switch' + (caseSetSub ? " on" : "") + '" type="button" id="tcSetSub"'
         + ' role="switch" aria-checked="' + (caseSetSub ? "true" : "false") + '">'
         + '<span class="sw-box">' + (caseSetSub ? icon("check", 11) : "") + '</span>显示子分组用例</button>'
       : "")
-      + '<p class="tc-side-note">多归属：一条用例可进多个分组，分组间计数可重叠、不能相加当总数；<b>删除分组不删用例</b>。分组可嵌套，<b>子组继承父组可见范围</b>，父组计数按子树去重。只有<b>团队共享</b>分组进交付说明与发布证据；转团队需创建人操作。</p>';
+      + '<button class="tc-side-rule" type="button" id="tcSetRuleBtn" aria-haspopup="dialog">分组计数规则' + icon("helpCircle", 12) + '</button>';
+    var ruleBtn = $("tcSetRuleBtn");
+    if(ruleBtn) ruleBtn.addEventListener("click", function(){ openSetRulePop(ruleBtn); });
   }
   renderSetDetail();
+}
+/* 分组计数规则 popover（P2-13 / P-UC-1）：原常驻侧栏的 6 行长段落收进这里，按需展开 */
+var setRulePop = null;
+function openSetRulePop(anchor){
+  if(UI.popOpen(setRulePop)){ UI.closeAllPops(); return; }
+  var el = document.createElement("div");
+  el.className = "menu tc-help-pop tc-set-rule-pop";
+  el.innerHTML = '<div class="menu-title">分组计数规则</div>'
+    + '<div class="type-help-list">'
+    + '<p class="tc-rule-line">多归属：一条用例可进多个分组，分组间计数可重叠、<b>不能相加当总数</b>。</p>'
+    + '<p class="tc-rule-line"><b>删除分组不删用例</b>，也不影响已加入的测试计划。</p>'
+    + '<p class="tc-rule-line">分组可嵌套，<b>子组继承父组可见范围</b>，父组计数按子树去重。</p>'
+    + '<p class="tc-rule-line">只有<b>团队共享</b>分组进交付说明与发布证据；转团队需创建人操作。</p>'
+    + '</div>';
+  setRulePop = el;
+  UI.openPop(el, anchor, { align: "left", width: 320, onClose: function(){ el.remove(); setRulePop = null; } });
 }
 function setVisTagHTML(s, full){
   var vis = s.visibility === "members" ? "members" : (s.visibility === "personal" ? "personal" : "team");

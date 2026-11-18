@@ -325,6 +325,11 @@ function renderBranchSource(box){
   };
 }
 function enterBranchesView(){
+  /* 全局「新建」菜单跨视图创建：#/branches?new=1 进入即开新建分支弹窗（参数消费一次即清） */
+  var wantNew = /[?&]new=1(&|$)/.test(String(window.location.hash || ""));
+  if(wantNew){
+    try{ window.history.replaceState(null, "", window.location.pathname + window.location.search + "#/branches"); }catch(e){ /* noop */ }
+  }
   var resetScope = applyBranchDeepLink();
   updateBranchModeUI();
   populateOwnerFilter();
@@ -332,6 +337,8 @@ function enterBranchesView(){
   renderBranches();                       // 先用缓存出一版，避免空白
   loadBranches(resetScope).then(function(){ renderBranches(); });
   if(branchViewMode === "list") loadBranchRows();
+  /* 项目下拉依赖 reqList，等它就位再开弹窗；openBranchDialog 内部自带仓库/负责人异步补全 */
+  if(wantNew) loadReqs().then(function(){ if(activeView === "branches") openBranchDialog(null); });
 }
 /* 列表模式按 100 条续页取完整结果，保留现有本地排序与分组。
    快照只下推项目/负责人/版本这三个「改动必重拉」的条件；状态与关键词在本地过滤——
