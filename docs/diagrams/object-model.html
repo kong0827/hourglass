@@ -82,6 +82,7 @@
       padding: 14px 16px;
     }
     .node.ws { width: 300px; border-color: var(--primary-border); background: var(--primary-soft); }
+    .node.set { width: 210px; border-style: dashed; border-color: var(--primary-border); background: #fff; }
     .node.proj { width: 200px; border-color: var(--primary-border); }
     .node-name { font-size: 15px; font-weight: 700; color: var(--text); }
     .node-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
@@ -156,7 +157,7 @@
       #hg-object { width: 100%; padding: 28px 20px; }
       .tree, .flow, .om-foot { flex-wrap: wrap; }
       .children, .relations { grid-template-columns: 1fr; }
-      .node.ws, .node.proj { width: 100%; }
+      .node.ws, .node.set, .node.proj { width: 100%; }
       .om-sub { font-size: 15px; }
     }
   </style>
@@ -180,8 +181,13 @@
         <div class="node-name">空间</div>
         <div class="node-sub">协作与数据隔离边界</div>
         <div class="chips">
-          <span>成员与角色</span><span>看板列</span><span>标签字典</span><span>公共分支</span><span>空间文档与分类</span><span>通知与共享 AI</span>
+          <span>成员与角色</span><span>看板列</span><span>标签字典</span><span>公共分支</span><span>项目集归组</span><span>空间文档与分类</span><span>通知与共享 AI</span>
         </div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node set">
+        <div class="node-name">项目集</div>
+        <div class="node-sub">空间级归组<br>不授权 · 可折叠汇总</div>
       </div>
       <div class="arrow">→</div>
       <div class="node proj">
@@ -190,7 +196,7 @@
       </div>
       <div class="arrow">→</div>
       <div class="children">
-        <div class="child"><b>模块（目录树）</b><span>任务 / 需求 / 用例共用，可分层</span></div>
+        <div class="child"><b>分类（目录树）</b><span>任务 / 需求 / 用例共用，可分层</span></div>
         <div class="child"><b>版本</b><span>交付批次，可关闭或取消</span></div>
         <div class="child"><b>文档</b><span>项目或空间级，三档可见范围</span></div>
         <div class="child"><b>测试用例 / 测试计划</b><span>用例目录与用例集，质量资产与执行容器</span></div>
