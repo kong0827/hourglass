@@ -6,10 +6,11 @@ import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
-import { canEditReq, canManageProject, dueState, rt, statusBucket } from "../core/state.js";
+import { canEditReq, canManageProject, catNameById, dueState, projectOptionsHTML, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadCategories } from "../core/app.js";
-import { assocLinkHTML, avatarHTML, fmtMinutesShort, typeBadgeHTML, taskPublicationHTML } from "../lib/format.js";
+import { PRIORITIES, assocLinkHTML, avatarHTML, demandNoText, fmtMinutesShort, itemNoText, priName, priTagHTML,
+  severityBadgeHTML, taskDescText, taskPublicationHTML, taskVersionIds, typeBadgeHTML } from "../lib/format.js";
 import { companyChipHTML } from "../lib/company.js";
 import { DEFAULT_ROLE_TITLES, loadMemberLabelOptions, effectiveMemberRole, memberRoleTitles, labelFilterOption, labelFilterText } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
@@ -56,6 +57,36 @@ var VIEW_KEY = "project-view";
 var cache = null, seq = 0;
 var pfCache = null, expanded = {};
 var moduleUi = { adding:false, deleting:"" };
+/* 驾驶舱「需求与工作项」：需求走需求池分页接口（单次 ≤100），工作项随驾驶舱一次载入、前端分页 50 */
+var PC_DEMAND_PAGE = 100, PC_TASK_PAGE = 50;
+var PC_DEMAND_STATUS = [["review","待评审"],["pass","已通过"],["plan","已排期"],["done","已完成"],["closed","已关闭"]];
+var PC_DEMAND_STATUS_ORDER = { review:0, pass:1, plan:2, done:3, closed:4 };
+var PC_DEMAND_STATUS_TAG = { review:"tag-ghost", pass:"tag-info", plan:"tag-success", done:"tag-plum", closed:"tag-ghost" };
+var PC_DELIVERY_STAGES = { waiting:"待开工", active:"推进中", donePending:"待发布", delivered:"已交付" };
+var PC_CLOSE_REASONS = { rej:"评审不通过", cancel:"中途取消", dup:"重复需求" };
+var PC_CLOSE_STAGES = { review:"待评审", pass:"已通过", plan:"已排期", done:"已完成" };
+var PC_KINDS = ["新功能","体验优化","缺陷","其他"];
+var PC_TASK_STATUS = [["backlog","待处理"],["doing","进行中"],["ended","执行结束"],["done","已完成"]];
+var PC_TASK_STATUS_ORDER = { backlog:0, doing:1, ended:2, done:3 };
+var PC_TASK_STATUS_TAG = { backlog:"tag-ghost", doing:"tag-info", ended:"tag-warning", done:"tag-success" };
+var PC_ITEM_TYPES = [["story","用户故事"],["task","任务"],["bug","缺陷"],["epic","史诗"]];
+var PC_ITEM_TYPE_ORDER = { epic:0, story:1, task:2, bug:3 };
+var projectContent = projectContentDefaults();
+var projectContentGen = 0;
+function projectContentDefaults(){
+  return {
+    tab:"demands",
+    dem:freshDemandState(""),
+    task:freshTaskState()
+  };
+}
+function freshDemandState(reqId){
+  return { reqId:reqId, versions:[], versionsReqId:"", loading:false, loaded:false, error:"", items:[], total:0,
+    hasMore:false, counts:{}, seq:0, q:"", status:"all", pri:"all", kind:"all", cat:"all", version:"all", group:"none" };
+}
+function freshTaskState(){
+  return { q:"", status:"all", type:"all", owner:"all", category:"all", epic:"all", pri:"all", risk:"all", group:"none", page:1 };
+}
 var deliveryCache = Object.create(null);
 /* 版本 / 发布记录有变更时清掉交付资源缓存，避免项目驾驶舱继续显示旧数量 */
 window.addEventListener("ds:delivery-changed", function(e){
@@ -117,6 +148,7 @@ function loadProject(opts){
   var selected = selectedProject();
   if(!selected){
     seq++; cache = null; rosterCache.seq++; rosterCache.key = ""; rosterCache.data = null;
+    projectContent = projectContentDefaults(); projectContentGen++;
     setPageTitle("项目驾驶舱");
     body.innerHTML = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
     return;
@@ -129,6 +161,8 @@ function loadProject(opts){
     rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
     milestoneState = { reqId:"", loading:false, error:"", data:null };
     milestoneSeq++;
+    projectContent = projectContentDefaults();
+    projectContentGen++;
   }
   projectWorkspaceId = wsId;
   var current = ++seq;
@@ -361,7 +395,7 @@ function openRosterCopy(){
   layer.innerHTML = '<form class="sheet roster-copy-sheet"><div class="sheet-head"><h2>从其他项目复制角色</h2><button class="icon-btn sm" type="button" data-copy-close aria-label="关闭">' + icon("close",15) + '</button></div>'
     + '<div class="sheet-body"><p class="roster-note">仅复制同空间、双方都有的成员的有效主角色（含空间继承）与兼岗，形成本项目覆盖快照；不修改公司、空间默认岗位或权限。默认跳过目标已有主角色覆盖或兼岗的成员；来源未设角色的不复制。</p>'
     + '<label for="rosterCopyProject">来源项目</label><select id="rosterCopyProject" class="mini-select"' + (!projects.length ? ' disabled' : '') + '>'
-    + projects.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.name) + (p.archivedAt ? '（已归档）' : '') + '</option>'; }).join("") + '</select>'
+    + projectOptionsHTML(projects) + '</select>'
     + (!projects.length ? '<p class="roster-note">当前没有可见的同空间其他项目。</p>' : '')
     + '<label class="roster-copy-overwrite"><input type="checkbox" data-copy-overwrite>覆盖目标已有主角色与兼岗（需再次确认）</label>'
     + '<p data-copy-status role="status" aria-live="polite"></p></div><div class="sheet-foot"><button class="btn" type="button" data-copy-close>取消</button><button class="btn primary" type="submit"' + (!projects.length ? ' disabled' : '') + '>复制角色</button></div></form>';
@@ -965,6 +999,667 @@ function loadProjectDelivery(p){  if(!p || !p.id || deliveryCache[p.id]) return;
     deliveryCache[id].versions = (rows || []).length; paint();
   }).catch(function(ex){ fail("versions", ex); });
 }
+/* ---------- 需求与工作项：项目驾驶舱内嵌明细区 ---------- */
+var projectContentSearchTimer = null;
+function projectReqId(){
+  return (cache && cache.project && (cache.project.reqId || cache.project.id)) || rt.managerProjectId || "";
+}
+function pcTaskOwnerName(t){ return t.owner || t.ownerUserId || ""; }
+function pcOwnerKey(t){ return pcTaskOwnerName(t) || "unassigned"; }
+function pcOwnerLabel(key){ return key === "unassigned" ? "未指派" : key; }
+function pcPriorityOrder(code){
+  var i = PRIORITIES.indexOf(code || "P2");
+  return i < 0 ? 90 : i;
+}
+function pcModuleOrder(id){
+  if(!id) return 999;
+  var modules = (cache && cache.modules) || [];
+  for(var i = 0; i < modules.length; i++) if(modules[i].id === id) return i;
+  return 900;
+}
+function pcCategoryName(id){
+  if(!id) return "";
+  var modules = (cache && cache.modules) || [];
+  for(var i = 0; i < modules.length; i++) if(modules[i].id === id) return modules[i].name;
+  return catNameById(id);
+}
+function pcEpicTitle(id){
+  var tasks = (cache && cache.tasks) || [];
+  for(var i = 0; i < tasks.length; i++) if(tasks[i].itemType === "epic" && tasks[i].id === id) return tasks[i].title;
+  return "";
+}
+function pcEpicOrder(id){
+  var epics = (cache && cache.epics) || [];
+  for(var i = 0; i < epics.length; i++) if(epics[i].id === id) return i;
+  return 900;
+}
+function pcItemTypeName(type){
+  var key = type || "task";
+  for(var i = 0; i < PC_ITEM_TYPES.length; i++) if(PC_ITEM_TYPES[i][0] === key) return PC_ITEM_TYPES[i][1];
+  return key;
+}
+function pcTaskStatusName(bucket){
+  for(var i = 0; i < PC_TASK_STATUS.length; i++) if(PC_TASK_STATUS[i][0] === bucket) return PC_TASK_STATUS[i][1];
+  return bucket || "";
+}
+function pcDemandKey(d){
+  var st = d.status;
+  if(st === "closed" || st === "rej" || st === "canceled" || st === "cancelled") return "closed";
+  return PC_DEMAND_STATUS_ORDER[st] === undefined ? "review" : st;
+}
+function pcDemandStatusName(key){
+  for(var i = 0; i < PC_DEMAND_STATUS.length; i++) if(PC_DEMAND_STATUS[i][0] === key) return PC_DEMAND_STATUS[i][1];
+  return key || "待评审";
+}
+function pcDemandVersionName(d){
+  if(d.versionName) return d.versionName;
+  var list = projectContent.dem.versions || [];
+  for(var i = 0; i < list.length; i++) if(list[i].id === d.versionId) return list[i].name;
+  return "";
+}
+/* 分组：同一维度内按业务顺序，未知键排最后，再按名称排序 */
+function pcGroupItems(items, specOf){
+  var map = {}, groups = [];
+  items.forEach(function(item){
+    var spec = specOf(item), key = spec.key || "";
+    if(!map[key]){
+      map[key] = { key:key, label:spec.label || "", order:spec.order || 0, items:[] };
+      groups.push(map[key]);
+    }
+    map[key].items.push(item);
+  });
+  groups.sort(function(a, b){ return (a.order - b.order) || String(a.label).localeCompare(String(b.label), "zh-CN"); });
+  return groups;
+}
+function pcDemandGroupOf(d){
+  var g = projectContent.dem.group;
+  if(g === "status"){
+    var key = pcDemandKey(d);
+    return { key:key, label:pcDemandStatusName(key), order:PC_DEMAND_STATUS_ORDER[key] };
+  }
+  if(g === "priority"){
+    var p = d.priority || "P2";
+    return { key:p, label:p + " · " + priName(p), order:pcPriorityOrder(p) };
+  }
+  if(g === "kind"){
+    var kind = d.itemKind || "__none";
+    return { key:kind, label:kind === "__none" ? "未填类型" : kind, order:kind === "__none" ? 99 : PC_KINDS.indexOf(kind) };
+  }
+  if(g === "category"){
+    var cid = d.categoryId || "__none";
+    return { key:cid, label:cid === "__none" ? "未指定分类" : (pcCategoryName(d.categoryId) || "—"), order:pcModuleOrder(d.categoryId) };
+  }
+  if(g === "version"){
+    var vid = d.versionId || "__none";
+    return { key:vid, label:vid === "__none" ? "未关联版本" : (pcDemandVersionName(d) || "—"), order:0 };
+  }
+  return { key:"", label:"", order:0 };
+}
+function pcTaskGroupOf(t){
+  var g = projectContent.task.group;
+  if(g === "status"){
+    var bucket = statusBucket(t);
+    return { key:bucket, label:pcTaskStatusName(bucket), order:PC_TASK_STATUS_ORDER[bucket] };
+  }
+  if(g === "type"){
+    var type = t.itemType || "task";
+    return { key:type, label:pcItemTypeName(type), order:PC_ITEM_TYPE_ORDER[type] === undefined ? 99 : PC_ITEM_TYPE_ORDER[type] };
+  }
+  if(g === "owner"){
+    var owner = pcOwnerKey(t);
+    return { key:owner, label:pcOwnerLabel(owner), order:owner === "unassigned" ? 999 : 0 };
+  }
+  if(g === "category"){
+    var cid = t.categoryId || "__none";
+    return { key:cid, label:cid === "__none" ? "未分类" : (pcCategoryName(t.categoryId) || "—"), order:pcModuleOrder(t.categoryId) };
+  }
+  if(g === "priority"){
+    var p = t.priority || "P2";
+    return { key:p, label:p + " · " + priName(p), order:pcPriorityOrder(p) };
+  }
+  if(g === "epic"){
+    if(t.itemType === "epic") return { key:"__epic", label:"史诗（本级）", order:-1 };
+    var eid = t.epicId || "__none";
+    return { key:eid, label:eid === "__none" ? "未挂史诗" : (pcEpicTitle(eid) || "史诗详情"), order:eid === "__none" ? 998 : pcEpicOrder(eid) };
+  }
+  return { key:"", label:"", order:0 };
+}
+function pcDemandGroupMeta(items){
+  var tasks = 0, done = 0, delivered = 0;
+  items.forEach(function(d){
+    tasks += Number(d.taskCount) || 0;
+    done += Number(d.taskDone) || 0;
+    if(d.deliveryStage === "delivered") delivered++;
+  });
+  var bits = [];
+  if(tasks) bits.push("工作项 " + done + "/" + tasks);
+  if(delivered) bits.push("已交付 " + delivered);
+  return bits.join(" · ");
+}
+function pcTaskGroupMeta(items){
+  var done = 0, estimate = 0, actual = 0;
+  items.forEach(function(t){
+    if(statusBucket(t) === "done") done++;
+    estimate += Number(t.estimateMinutes) || 0;
+    actual += Number(t.totalMinutes) || 0;
+  });
+  return "完成 " + done + " · 预估 " + fmtHours(estimate) + " · 实际 " + fmtHours(actual);
+}
+function pcGroupRowHTML(label, count, meta, colspan){
+  return '<tr class="pc-group"><td colspan="' + colspan + '"><span class="pc-group-name">' + esc(label) + '</span>'
+    + '<span class="pc-group-count">' + count + ' 条</span>'
+    + (meta ? '<span class="pc-group-meta">' + esc(meta) + '</span>' : '') + '</td></tr>';
+}
+function pcSelectHTML(spec, label, options, current, focus){
+  return '<label>' + esc(label) + '<select class="mini-select" data-pc-filter="' + esc(spec) + '" data-pc-focus="' + esc(focus) + '">'
+    + options.map(function(o){
+      return '<option value="' + esc(o[0]) + '"' + (String(current) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+    }).join("") + '</select></label>';
+}
+function pcGroupSelectHTML(tab, options, current){
+  return '<label>分组<select class="mini-select" data-pc-group="' + esc(tab) + '" data-pc-focus="' + esc(tab + ":group") + '">'
+    + options.map(function(o){
+      return '<option value="' + esc(o[0]) + '"' + (String(current) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+    }).join("") + '</select></label>';
+}
+function pcDemandFiltersHTML(){
+  var d = projectContent.dem, modules = (cache && cache.modules) || [];
+  var statusOptions = [["all","全部状态"]].concat(PC_DEMAND_STATUS);
+  var priOptions = [["all","全部优先级"]].concat(PRIORITIES.map(function(p){ return [p, p + " · " + priName(p)]; }));
+  var kindOptions = [["all","全部类型"]].concat(PC_KINDS.map(function(k){ return [k, k]; }));
+  var catOptions = [["all","全部分类"]].concat(modules.map(function(m){ return [m.id, m.name]; }));
+  var versionOptions = [["all","全部版本"]].concat((d.versions || []).map(function(v){ return [v.id, v.name]; }), [["__none","未关联版本"]]);
+  var groupOptions = [["none","不分组"],["status","按状态"],["priority","按优先级"],["kind","按类型"],["category","按分类"],["version","按版本"]];
+  return '<div class="pc-filters">'
+    + '<input class="pc-search" type="search" data-pc-search="demand" data-pc-focus="demand:q" value="' + esc(d.q)
+    + '" placeholder="搜索 DM 编号、标题或来源" aria-label="搜索需求" autocomplete="off">'
+    + pcSelectHTML("demand.status", "状态", statusOptions, d.status, "demand:status")
+    + pcSelectHTML("demand.pri", "优先级", priOptions, d.pri, "demand:pri")
+    + pcSelectHTML("demand.kind", "类型", kindOptions, d.kind, "demand:kind")
+    + pcSelectHTML("demand.cat", "分类", catOptions, d.cat, "demand:cat")
+    + pcSelectHTML("demand.version", "版本", versionOptions, d.version, "demand:version")
+    + pcGroupSelectHTML("demand", groupOptions, d.group)
+    + '<button class="btn sm ghost pc-reset" type="button" data-pc-reset="demand">清除筛选</button>'
+    + '</div>';
+}
+function pcTaskFiltersHTML(){
+  var f = projectContent.task;
+  var statusOptions = [["all","全部状态"]].concat(PC_TASK_STATUS);
+  var typeOptions = [["all","全部类型"]].concat(PC_ITEM_TYPES);
+  var ownerSeen = {}, ownerOptions = [["all","全部负责人"]];
+  (cache && cache.tasks || []).forEach(function(t){
+    var key = pcOwnerKey(t);
+    if(!ownerSeen[key]){ ownerSeen[key] = true; ownerOptions.push([key, pcOwnerLabel(key)]); }
+  });
+  ownerOptions = [ownerOptions[0]].concat(ownerOptions.slice(1).sort(function(a, b){
+    if(a[0] === "unassigned") return 1;
+    if(b[0] === "unassigned") return -1;
+    return a[1].localeCompare(b[1], "zh-CN");
+  }));
+  var catOptions = [["all","全部分类"]].concat(((cache && cache.modules) || []).map(function(m){ return [m.id, m.name]; }), [["__none","未分类"]]);
+  var epicSeen = {}, epicOptions = [["all","全部 Epic"]];
+  (cache && cache.tasks || []).forEach(function(t){
+    if(t.itemType === "epic" && !epicSeen[t.id]){ epicSeen[t.id] = true; epicOptions.push([t.id, t.title]); }
+  });
+  epicOptions.push(["__none","未挂史诗"]);
+  var priOptions = [["all","全部优先级"]].concat(PRIORITIES.map(function(p){ return [p, p + " · " + priName(p)]; }));
+  var riskOptions = [["all","全部风险"],["overdue","仅逾期"],["blocked","仅阻塞"]];
+  var groupOptions = [["none","不分组"],["status","按状态"],["type","按类型"],["owner","按负责人"],["category","按分类"],["priority","按优先级"],["epic","按 Epic"]];
+  return '<div class="pc-filters">'
+    + '<input class="pc-search" type="search" data-pc-search="task" data-pc-focus="task:q" value="' + esc(f.q)
+    + '" placeholder="搜索 WI 编号、标题、需求或负责人" aria-label="搜索工作项" autocomplete="off">'
+    + pcSelectHTML("task.status", "状态", statusOptions, f.status, "task:status")
+    + pcSelectHTML("task.type", "类型", typeOptions, f.type, "task:type")
+    + pcSelectHTML("task.owner", "负责人", ownerOptions, f.owner, "task:owner")
+    + pcSelectHTML("task.category", "分类", catOptions, f.category, "task:category")
+    + pcSelectHTML("task.epic", "Epic", epicOptions, f.epic, "task:epic")
+    + pcSelectHTML("task.pri", "优先级", priOptions, f.pri, "task:pri")
+    + pcSelectHTML("task.risk", "风险", riskOptions, f.risk, "task:risk")
+    + pcGroupSelectHTML("task", groupOptions, f.group)
+    + '<button class="btn sm ghost pc-reset" type="button" data-pc-reset="task">清除筛选</button>'
+    + '</div>';
+}
+function pcDemandSummaryHTML(){
+  var d = projectContent.dem, counts = d.counts || {};
+  var total = counts.all === undefined ? d.total : (Number(counts.all) || 0);
+  var chips = PC_DEMAND_STATUS.map(function(s){
+    return '<span class="pc-count' + (d.status === s[0] ? " on" : "") + '"><i>' + esc(s[1]) + '</i><b>' + (Number(counts[s[0]]) || 0) + '</b></span>';
+  }).join("");
+  var regroup = d.group !== "none" && d.hasMore ? '<span class="pc-summary-note">分组基于已加载条目</span>' : "";
+  return '<div class="pc-summary" role="status"><span class="pc-summary-total">共 <b>' + total + '</b> 条</span>'
+    + chips + '<span class="pc-summary-loaded">已加载 ' + d.items.length + ' / ' + total + ' 条</span>' + regroup + '</div>';
+}
+function pcTaskSummaryHTML(total, list, pageRows, page){
+  var done = 0, epics = 0, estimate = 0, actual = 0;
+  list.forEach(function(t){
+    if(statusBucket(t) === "done") done++;
+    if(t.itemType === "epic") epics++;
+    estimate += Number(t.estimateMinutes) || 0;
+    actual += Number(t.totalMinutes) || 0;
+  });
+  return '<div class="pc-summary" role="status"><span class="pc-summary-total">共 <b>' + total + '</b> 项</span>'
+    + '<span class="pc-count"><i>已完成</i><b>' + done + '</b></span>'
+    + '<span class="pc-count"><i>史诗</i><b>' + epics + '</b></span>'
+    + '<span class="pc-count"><i>预估</i><b>' + fmtHours(estimate) + '</b></span>'
+    + '<span class="pc-count"><i>实际</i><b>' + fmtHours(actual) + '</b></span>'
+    + '<span class="pc-summary-loaded">本页 ' + pageRows + ' 项 · 第 ' + page + ' 页</span>'
+    + '<span class="pc-summary-note">全部工作项随驾驶舱载入，筛选与分组在前端完成</span></div>';
+}
+function pcDemandSubHTML(d){
+  var bits = [];
+  if(d.source) bits.push("来源 " + d.source);
+  if(d.plannedStart || d.plannedEnd) bits.push("计划 " + (d.plannedStart || "未定") + " → " + (d.plannedEnd || "未定"));
+  if(d.wsjfScore !== null && d.wsjfScore !== undefined) bits.push("WSJF " + (Math.round(d.wsjfScore * 10) / 10));
+  return bits.map(function(x){ return '<span>' + esc(x) + '</span>'; }).join('<i class="pc-sep" aria-hidden="true">·</i>');
+}
+function pcTaskSubHTML(t){
+  var bits = [];
+  if(t.demandId) bits.push('<span>需求 ' + assocLinkHTML("demand", t.demandId, t.demandTitle || "关联需求") + '</span>');
+  if(t.itemType === "bug" && t.severity) bits.push(severityBadgeHTML(t.severity));
+  var desc = taskDescText(t.description, 72);
+  if(desc) bits.push('<span class="pc-desc">' + esc(desc) + '</span>');
+  return bits.join('<i class="pc-sep" aria-hidden="true">·</i>');
+}
+function pcDemandStatusHTML(d){
+  var key = pcDemandKey(d);
+  var html = '<span class="tag ' + (PC_DEMAND_STATUS_TAG[key] || "tag-ghost") + '">' + esc(pcDemandStatusName(key)) + '</span>';
+  if(key === "closed"){
+    var reason = PC_CLOSE_REASONS[d.closeReason || (d.status === "rej" ? "rej" : "cancel")] || "已关闭";
+    var stage = PC_CLOSE_STAGES[d.closeStage || (d.status === "rej" ? "review" : "pass")] || "待评审";
+    html += '<small class="pc-note">' + esc(reason) + ' · 关闭前 ' + esc(stage) + '</small>';
+  }
+  return html;
+}
+function pcDemandCategoryHTML(d){
+  if(!d.categoryId) return '<span class="pc-none">未指定</span>';
+  var name = pcCategoryName(d.categoryId);
+  return name ? '<span class="tag tag-ghost">' + esc(name) + '</span>' : '<span class="pc-none" title="' + esc(d.categoryId) + '">—</span>';
+}
+function pcDemandVersionHTML(d){
+  var name = pcDemandVersionName(d);
+  if(!name) return '<span class="pc-none">未关联</span>';
+  return d.versionId ? assocLinkHTML("version", d.versionId, name, { req:d.reqId }) : esc(name);
+}
+function pcDemandExpectHTML(d){
+  if(!d.expectDate) return '<span class="pc-none">未评估</span>';
+  var date = String(d.expectDate).substring(0, 10);
+  var late = pcDemandKey(d) !== "closed" && d.status !== "done" && cache && cache.today && date < String(cache.today);
+  return '<span' + (late ? ' class="pc-warn"' : '') + '>' + esc(fmtDate(date)) + '</span>'
+    + (late ? '<small class="pc-note pc-warn">已逾期</small>' : "");
+}
+function pcDemandEvidenceHTML(d){
+  var key = pcDemandKey(d);
+  if(key !== "plan" && key !== "done") return '<span class="pc-none">—</span>';
+  var total = Number(d.taskCount) || 0, done = Number(d.taskDone) || 0;
+  var cases = Number(d.caseCount) || 0, passed = Number(d.casePassed) || 0;
+  var line = total ? ("工作项 " + done + "/" + total) : (key === "done" ? "无关联工作项" : "未拆工作项");
+  if(cases) line += " · 用例 " + passed + "/" + cases;
+  var stage = d.deliveryStage
+    ? '<span class="pc-stage st-' + esc(d.deliveryStage) + '" title="' + esc(d.deliveryStageSource === "manual" ? "人工判定；真实发布证据优先" : "由工作项、用例与发布记录派生") + '">'
+      + esc(PC_DELIVERY_STAGES[d.deliveryStage] || d.deliveryStage) + '</span>'
+    : "";
+  return '<div class="pc-ev">' + (stage ? '<span class="pc-ev-stage">' + stage + '</span>' : '')
+    + '<span class="pc-ev-line">' + esc(line) + '</span>'
+    + (d.deliveryEvidenceMissing ? '<small class="pc-warn">缺发布记录</small>' : '') + '</div>';
+}
+function pcDemandRowHTML(d){
+  var no = d.demandNo ? demandNoText(d.demandNo) : "";
+  var sub = pcDemandSubHTML(d);
+  return '<tr class="pc-row" data-pc-demand="' + esc(d.id) + '" tabindex="0" title="打开需求详情">'
+    + '<td class="pc-main"><div class="pc-title-row">'
+    + (no ? '<span class="pc-no">' + esc(no) + '</span>' : '')
+    + '<button class="link-title pc-title-btn" type="button" title="打开需求详情">' + esc(d.title) + '</button>'
+    + '</div>' + (sub ? '<div class="pc-sub">' + sub + '</div>' : '') + '</td>'
+    + '<td>' + pcDemandStatusHTML(d) + '</td>'
+    + '<td><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span></td>'
+    + '<td>' + priTagHTML(d.priority || "P2") + '</td>'
+    + '<td>' + pcDemandCategoryHTML(d) + '</td>'
+    + '<td>' + pcDemandVersionHTML(d) + '</td>'
+    + '<td class="num">' + pcDemandExpectHTML(d) + '</td>'
+    + '<td>' + pcDemandEvidenceHTML(d) + '</td></tr>';
+}
+function pcDemandTableHTML(){
+  var d = projectContent.dem;
+  var groups = d.group === "none" ? [{ key:"", label:"", items:d.items }] : pcGroupItems(d.items, pcDemandGroupOf);
+  var rows = "";
+  groups.forEach(function(g){
+    if(d.group !== "none") rows += pcGroupRowHTML(g.label, g.items.length, pcDemandGroupMeta(g.items), 8);
+    rows += g.items.map(pcDemandRowHTML).join("");
+  });
+  return '<div class="tbl-wrap"><table class="manager-tbl pc-tbl pc-tbl-demand"><thead><tr>'
+    + '<th>需求</th><th>状态</th><th>类型</th><th>优先级</th><th>分类</th><th>目标版本</th><th class="num">期望交付</th><th>交付证据</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function pcTaskStatusHTML(t){
+  var bucket = statusBucket(t);
+  var blocked = t.boardColumn !== "done" && t.blocked;
+  return '<span class="tag ' + (PC_TASK_STATUS_TAG[bucket] || "tag-ghost") + '">' + esc(pcTaskStatusName(bucket)) + '</span>'
+    + (blocked ? '<small class="pc-note pc-warn">阻塞' + (t.blockedReason ? "：" + esc(t.blockedReason) : "") + '</small>' : "");
+}
+function pcTaskOwnerHTML(t){
+  var name = pcTaskOwnerName(t);
+  if(!name) return '<span class="pc-none">未指派</span>';
+  return '<span class="manager-person">' + avatarHTML(name, "sm") + esc(name) + '</span>';
+}
+function pcTaskCategoryHTML(t){
+  var name = pcCategoryName(t.categoryId);
+  return name ? '<span class="tag tag-ghost">' + esc(name) + '</span>' : '<span class="pc-none">未分类</span>';
+}
+function pcTaskEpicHTML(t){
+  if(t.itemType === "epic") return '<span class="pc-none">—</span>';
+  if(!t.epicId) return '<span class="pc-none">未挂史诗</span>';
+  return assocLinkHTML("task", t.epicId, pcEpicTitle(t.epicId) || "史诗详情", { req:t.reqId });
+}
+function pcTaskVersionsHTML(t){
+  var ids = taskVersionIds(t);
+  if(!ids.length) return '<span class="pc-none">待规划</span>';
+  var names = Array.isArray(t.versionNames) ? t.versionNames : [];
+  return ids.map(function(id, i){ return assocLinkHTML("version", id, names[i] || id, { req:t.reqId }); }).join("、");
+}
+function pcTaskDueHTML(t){
+  if(!t.dueDate) return '<span class="pc-none">未设截止</span>';
+  var st = dueState(t), note = "", warn = false;
+  if(st.kind === "over"){ note = "逾期 " + st.n + " 天"; warn = true; }
+  else if(st.kind === "today"){ note = "今天到期"; warn = true; }
+  else if(st.kind === "soon"){ note = st.n + " 天后"; }
+  return '<span' + (warn ? ' class="pc-warn"' : '') + '>' + esc(fmtDate(t.dueDate)) + '</span>'
+    + (note ? '<small class="pc-note' + (warn ? " pc-warn" : "") + '">' + esc(note) + '</small>' : "");
+}
+function pcTaskRowHTML(t){
+  var no = t.itemNo != null ? itemNoText(t.itemNo) : "";
+  var sub = pcTaskSubHTML(t);
+  return '<tr class="pc-row" data-pc-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
+    + '<td class="pc-main"><div class="pc-title-row">'
+    + (no ? '<span class="pc-no">' + esc(no) + '</span>' : '')
+    + typeBadgeHTML(t.itemType)
+    + '<button class="link-title pc-title-btn" type="button" title="打开工作项详情">' + esc(t.title) + '</button>'
+    + taskPublicationHTML(t)
+    + '</div>' + (sub ? '<div class="pc-sub">' + sub + '</div>' : '') + '</td>'
+    + '<td>' + pcTaskStatusHTML(t) + '</td>'
+    + '<td>' + priTagHTML(t.priority || "P2") + '</td>'
+    + '<td>' + pcTaskOwnerHTML(t) + '</td>'
+    + '<td>' + pcTaskCategoryHTML(t) + '</td>'
+    + '<td>' + pcTaskEpicHTML(t) + '</td>'
+    + '<td>' + pcTaskVersionsHTML(t) + '</td>'
+    + '<td class="num">' + pcTaskDueHTML(t) + '</td>'
+    + '<td>' + miniBar(taskPct(t)) + '</td>'
+    + '<td class="num">' + (Number(t.estimateMinutes) ? fmtHours(t.estimateMinutes) : "—") + '</td>'
+    + '<td class="num">' + (Number(t.totalMinutes) ? fmtHours(t.totalMinutes) : "—") + '</td></tr>';
+}
+function pcTaskCompare(a, b){
+  var ad = a.dueDate ? String(a.dueDate) : "9999-99-99", bd = b.dueDate ? String(b.dueDate) : "9999-99-99";
+  if(ad !== bd) return ad < bd ? -1 : 1;
+  var ap = pcPriorityOrder(a.priority), bp = pcPriorityOrder(b.priority);
+  if(ap !== bp) return ap - bp;
+  var an = a.itemNo == null ? 1e9 : a.itemNo, bn = b.itemNo == null ? 1e9 : b.itemNo;
+  return an - bn;
+}
+function pcTaskMatches(t){
+  var f = projectContent.task;
+  if(f.status !== "all" && statusBucket(t) !== f.status) return false;
+  if(f.type !== "all" && (t.itemType || "task") !== f.type) return false;
+  if(f.owner !== "all" && pcOwnerKey(t) !== f.owner) return false;
+  if(f.category !== "all"){
+    if(f.category === "__none"){ if(pcCategoryName(t.categoryId)) return false; }
+    else if(t.categoryId !== f.category) return false;
+  }
+  if(f.epic !== "all"){
+    if(f.epic === "__none"){ if(t.epicId || t.itemType === "epic") return false; }
+    else if(t.epicId !== f.epic) return false;
+  }
+  if(f.pri !== "all" && (t.priority || "P2") !== f.pri) return false;
+  if(f.risk === "overdue" && dueState(t).kind !== "over") return false;
+  if(f.risk === "blocked" && !(t.boardColumn !== "done" && t.blocked)) return false;
+  if(f.q){
+    var terms = f.q.toLowerCase().split(/\s+/).filter(Boolean);
+    var hay = [t.title, itemNoText(t.itemNo), pcItemTypeName(t.itemType || "task"), pcTaskOwnerName(t),
+      t.demandTitle || "", pcCategoryName(t.categoryId), taskDescText(t.description)].join(" ").toLowerCase();
+    for(var i = 0; i < terms.length; i++) if(hay.indexOf(terms[i]) === -1) return false;
+  }
+  return true;
+}
+function pcTaskTableHTML(rows, allList){
+  var group = projectContent.task.group;
+  var groupTotals = {};
+  if(group !== "none"){
+    pcGroupItems(allList, pcTaskGroupOf).forEach(function(g){
+      groupTotals[g.key] = { count:g.items.length, meta:pcTaskGroupMeta(g.items) };
+    });
+  }
+  var groups = group === "none" ? [{ key:"", label:"", items:rows }] : pcGroupItems(rows, pcTaskGroupOf);
+  var html = "";
+  groups.forEach(function(g){
+    if(group !== "none"){
+      var all = groupTotals[g.key] || { count:g.items.length, meta:pcTaskGroupMeta(g.items) };
+      var meta = all.meta + (all.count > g.items.length ? " · 本页 " + g.items.length + " 条" : "");
+      html += pcGroupRowHTML(g.label, all.count, meta, 11);
+    }
+    html += g.items.map(pcTaskRowHTML).join("");
+  });
+  return '<div class="tbl-wrap"><table class="manager-tbl pc-tbl pc-tbl-task"><thead><tr>'
+    + '<th>工作项</th><th>状态</th><th>优先级</th><th>负责人</th><th>分类</th><th>Epic</th><th>计划版本</th>'
+    + '<th class="num">截止</th><th>进度</th><th class="num">预估</th><th class="num">实际</th>'
+    + '</tr></thead><tbody>' + html + '</tbody></table></div>';
+}
+function pcDemandEmptyHTML(){
+  var d = projectContent.dem;
+  var filtered = d.q || d.status !== "all" || d.pri !== "all" || d.kind !== "all" || d.cat !== "all" || d.version !== "all";
+  return '<div class="pc-empty manager-empty-cell">' + (filtered ? "没有匹配的需求，试试调整筛选。" : "本项目还没有需求池需求。")
+    + (filtered ? ' <button class="btn sm ghost" type="button" data-pc-reset="demand">清除筛选</button>' : "")
+    + '</div>';
+}
+function pcTaskEmptyHTML(){
+  var f = projectContent.task;
+  var filtered = f.q || f.status !== "all" || f.type !== "all" || f.owner !== "all" || f.category !== "all"
+    || f.epic !== "all" || f.pri !== "all" || f.risk !== "all";
+  return '<div class="pc-empty manager-empty-cell">' + (filtered ? "没有匹配的工作项，试试调整筛选。" : "本项目还没有工作项。")
+    + (filtered ? ' <button class="btn sm ghost" type="button" data-pc-reset="task">清除筛选</button>' : "")
+    + '</div>';
+}
+function pcDemandMoreHTML(){
+  var d = projectContent.dem;
+  if(d.loading) return '<div class="pc-more"><span class="pc-loading">加载中…</span></div>';
+  if(d.hasMore) return '<div class="pc-more"><button class="bkl-more" type="button" data-pc-more>加载更多（已加载 ' + d.items.length + ' / 共 ' + d.total + ' 条）</button></div>';
+  if(d.total > PC_DEMAND_PAGE) return '<div class="pc-more"><span class="pc-more-note">已全部加载 ' + d.items.length + ' 条</span></div>';
+  return "";
+}
+function pcDemandInner(){
+  var d = projectContent.dem, reqId = projectReqId();
+  if(!reqId) return '<div class="manager-empty-cell">请先选择项目</div>';
+  if(d.reqId !== reqId) return '<div class="pc-loading">加载中…</div>';
+  var body;
+  if(d.error){
+    body = '<div class="pc-empty manager-empty-cell">需求加载失败：' + esc(d.error)
+      + ' <button class="btn sm ghost" type="button" data-pc-retry="demand">重试</button></div>';
+  }else if(d.loading && !d.items.length){
+    body = '<div class="pc-loading">加载中…</div>';
+  }else if(!d.items.length){
+    body = pcDemandEmptyHTML();
+  }else{
+    body = pcDemandTableHTML() + pcDemandMoreHTML();
+  }
+  return pcDemandFiltersHTML() + (d.loaded ? pcDemandSummaryHTML() : "") + body;
+}
+function pcTaskInner(){
+  var all = (cache && cache.tasks || []).filter(pcTaskMatches).sort(pcTaskCompare);
+  var pages = Math.max(1, Math.ceil(all.length / PC_TASK_PAGE));
+  var page = Math.min(Math.max(1, projectContent.task.page), pages);
+  projectContent.task.page = page;
+  var rows = all.slice((page - 1) * PC_TASK_PAGE, page * PC_TASK_PAGE);
+  var body = all.length ? pcTaskTableHTML(rows, all) + pcTaskPagerHTML(page, pages, all.length) : pcTaskEmptyHTML();
+  return pcTaskFiltersHTML() + pcTaskSummaryHTML(all.length, all, rows.length, page) + body;
+}
+function pcTaskPagerHTML(page, pages, total){
+  if(pages <= 1) return "";
+  return '<div class="pc-pager"><button class="btn sm" type="button" data-pc-page="prev"' + (page <= 1 ? " disabled" : "") + '>上一页</button>'
+    + '<span>第 <b>' + page + '</b> / ' + pages + ' 页 · 共 ' + total + ' 项</span>'
+    + '<button class="btn sm" type="button" data-pc-page="next"' + (page >= pages ? " disabled" : "") + '>下一页</button></div>';
+}
+function projectContentInner(){
+  var d = projectContent.dem;
+  var demTotal = d.reqId === projectReqId() && d.loaded ? (d.counts.all === undefined ? d.total : (Number(d.counts.all) || 0)) : null;
+  var taskTotal = (cache && cache.tasks || []).length;
+  var demandOn = projectContent.tab === "demands";
+  return '<div class="pc-top"><div class="seg mini pc-tabs">'
+    + '<button type="button" data-pc-tab="demands" data-pc-focus="tab:demands" aria-pressed="' + demandOn + '">需求'
+    + (demTotal === null ? "" : ' <span class="pc-tab-n">' + demTotal + '</span>') + '</button>'
+    + '<button type="button" data-pc-tab="tasks" data-pc-focus="tab:tasks" aria-pressed="' + (!demandOn) + '">工作项 <span class="pc-tab-n">' + taskTotal + '</span></button>'
+    + '</div><button class="btn sm ghost" type="button" data-pc-open-demands>打开需求池</button></div>'
+    + (demandOn ? pcDemandInner() : pcTaskInner());
+}
+function projectContentPanel(){
+  return '<section class="manager-panel project-content" id="projectContent">'
+    + '<div class="manager-panel-head project-content-head"><div class="project-content-title"><b>需求与工作项</b>'
+    + '<span>本项目需求池需求与全部工作项（含史诗）；点行查看详情</span></div></div>'
+    + '<div id="projectContentBody">' + projectContentInner() + '</div></section>';
+}
+function paintProjectContent(focusKey){
+  var box = $("projectContentBody");
+  if(!box) return;
+  var active = document.activeElement, key = focusKey || "", start = null, end = null;
+  if(!key && active && box.contains(active)){
+    key = active.getAttribute("data-pc-focus") || "";
+    if(active.matches && active.matches("[data-pc-search]")){
+      try{ start = active.selectionStart; end = active.selectionEnd; }catch(ex){ start = end = null; }
+    }
+  }
+  box.innerHTML = projectContentInner();
+  if(key){
+    var next = box.querySelector('[data-pc-focus="' + key + '"]');
+    if(next){
+      next.focus();
+      if(start !== null && next.setSelectionRange){ try{ next.setSelectionRange(start, end); }catch(ex){ /* 非文本控件 */ } }
+    }
+  }
+}
+function ensureProjectDemands(){
+  var reqId = projectReqId();
+  if(!reqId) return;
+  if(projectContent.dem.reqId !== reqId){
+    projectContent.dem = freshDemandState(reqId);
+    projectContentGen++;
+  }
+  var d = projectContent.dem;
+  if(!d.loaded && !d.loading && !d.error) loadDemandPage(false);
+}
+function loadProjectVersionOptions(reqId){
+  var d = projectContent.dem;
+  if(!reqId || d.versionsReqId === reqId) return;
+  d.versionsReqId = reqId;
+  var gen = projectContentGen;
+  API.get("/api/versions", { reqId:reqId }).then(function(rows){
+    if(gen !== projectContentGen || d.reqId !== reqId) return;
+    d.versions = rows || [];
+    paintProjectContent();
+  }).catch(function(){ /* 版本只影响筛选项，失败不阻塞清单 */ });
+}
+function loadDemandPage(append){
+  var d = projectContent.dem, reqId = d.reqId, gen = projectContentGen;
+  if(!reqId) return;
+  var offset = append ? d.items.length : 0;
+  if(!append){ d.items = []; d.total = 0; d.hasMore = false; d.loaded = false; d.counts = {}; }
+  d.loading = true; d.error = "";
+  var current = ++d.seq;
+  paintProjectContent();
+  var params = { reqId:reqId, offset:offset, limit:PC_DEMAND_PAGE, sort:"default" };
+  if(d.q) params.q = d.q;
+  if(d.status !== "all") params.status = d.status;
+  if(d.pri !== "all") params.pris = d.pri;
+  if(d.kind !== "all") params.kinds = d.kind;
+  if(d.cat !== "all") params.cats = d.cat;
+  if(d.version !== "all") params.versionId = d.version;
+  API.get("/api/demands", params).then(function(page){
+    if(gen !== projectContentGen || current !== d.seq || d.reqId !== reqId) return;
+    d.items = append ? d.items.concat(page.items || []) : (page.items || []);
+    d.total = Number(page.total) || 0;
+    d.hasMore = !!page.hasMore;
+    d.counts = page.counts || {};
+    d.loading = false; d.loaded = true;
+    paintProjectContent();
+  }).catch(function(ex){
+    if(gen !== projectContentGen || current !== d.seq) return;
+    d.loading = false;
+    d.error = ex.message || "需求加载失败";
+    paintProjectContent();
+  });
+}
+function loadProjectContent(){
+  var reqId = projectReqId();
+  if(!reqId) return;
+  if(projectContent.tab !== "demands") return;
+  if(projectContent.dem.reqId !== reqId){
+    projectContent.dem = freshDemandState(reqId);
+    projectContentGen++;
+  }
+  loadProjectVersionOptions(reqId);
+  ensureProjectDemands();
+}
+function switchProjectContentTab(tab){
+  if((tab !== "demands" && tab !== "tasks") || projectContent.tab === tab) return;
+  projectContent.tab = tab;
+  paintProjectContent("tab:" + tab);
+  if(tab === "demands") loadProjectContent();
+}
+function setProjectContentFilter(spec, value){
+  var parts = String(spec || "").split("."), tab = parts[0], field = parts[1];
+  if(!field) return;
+  if(tab === "demand"){
+    if(projectContent.dem[field] === value) return;
+    projectContent.dem[field] = value;
+    loadDemandPage(false);
+    return;
+  }
+  if(projectContent.task[field] === value) return;
+  projectContent.task[field] = value;
+  projectContent.task.page = 1;
+  paintProjectContent();
+}
+function resetProjectContentFilters(tab){
+  if(tab === "demand"){
+    var keep = {
+      reqId:projectContent.dem.reqId,
+      versions:projectContent.dem.versions,
+      versionsReqId:projectContent.dem.versionsReqId,
+      group:projectContent.dem.group
+    };
+    projectContent.dem = Object.assign(freshDemandState(keep.reqId), keep);
+    projectContentGen++;
+    loadDemandPage(false);
+    return;
+  }
+  var group = projectContent.task.group;
+  projectContent.task = freshTaskState();
+  projectContent.task.group = group;
+  paintProjectContent("task:q");
+}
+function openProjectDemands(){
+  var pid = (cache && cache.project && cache.project.id) || rt.managerProjectId;
+  if(!pid) return;
+  import("./demands.js").then(function(m){ m.openDemandsForReq(pid); }).catch(function(ex){ toast(ex.message || "打开需求池失败", "bad"); });
+}
+function openProjectDemand(id){
+  if(!id) return;
+  import("./demands.js").then(function(m){ m.openDemandDetailById(id); }).catch(function(ex){ toast(ex.message || "打开需求失败", "bad"); });
+}
+function onProjectContentInput(e){
+  var input = e.target.closest ? e.target.closest("[data-pc-search]") : null;
+  if(!input) return;
+  var tab = input.getAttribute("data-pc-search"), value = input.value.trim();
+  clearTimeout(projectContentSearchTimer);
+  projectContentSearchTimer = setTimeout(function(){
+    if(tab === "demand"){
+      if(projectContent.dem.q === value) return;
+      projectContent.dem.q = value;
+      loadDemandPage(false);
+    }else{
+      if(projectContent.task.q === value) return;
+      projectContent.task.q = value;
+      projectContent.task.page = 1;
+      paintProjectContent();
+    }
+  }, 220);
+}
+
 function renderProject(){
   var p = cache.project || {}, m = cache.metrics || {}, c = cache.counts || {}, tasks = cache.tasks || [];
   var total = tasks.length, done = c.done || 0, progress = m.progressPct || 0;
@@ -986,6 +1681,7 @@ function renderProject(){
     + metric("实际投入", fmtHours(m.actualMinutes), "窗口外 " + fmtHours(m.devMinutes) + " · 窗口内 " + fmtHours(m.testMinutes), "actual", {key:"project.actual"})
     + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance", {key:"project.variance", warn:true}) + '</div>'
     + modulePanel(p, m, c)
+    + projectContentPanel()
     + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>工作项分布</b><span>' + total + ' 个工作项</span></div>'
     + distRow("待处理", c.backlog || 0, total, "backlog") + distRow("进行中", c.doing || 0, total, "doing", "info")
     + (c.ended ? distRow("执行结束", c.ended, total, "ended") : "")
@@ -1009,6 +1705,7 @@ function renderProject(){
   $("projectBody").innerHTML = toolbar + overview + epicsPanel + membersPanel + rosterPanel();
   loadProjectDelivery(p);
   loadMilestones(p.reqId || p.id);
+  loadProjectContent();
   var moduleInput = document.querySelector("[data-module-new-name]");
   if(moduleUi.adding && moduleInput) moduleInput.focus();
   loadRoster(p.reqId || p.id);
@@ -1267,6 +1964,25 @@ function onClick(e){
   var switchBtn = e.target.closest("#btnProjectSwitch");
   if(switchBtn){ openProjectSwitch(switchBtn); return; }
   if(e.target.closest("[data-empty-action]")){ loadProject(); return; }
+  var pcTabBtn = e.target.closest("[data-pc-tab]");
+  if(pcTabBtn){ switchProjectContentTab(pcTabBtn.dataset.pcTab); return; }
+  if(e.target.closest("[data-pc-open-demands]")){ openProjectDemands(); return; }
+  var pcMore = e.target.closest("[data-pc-more]");
+  if(pcMore){ loadDemandPage(true); return; }
+  var pcRetry = e.target.closest("[data-pc-retry]");
+  if(pcRetry){ if(pcRetry.dataset.pcRetry === "demand") loadDemandPage(false); return; }
+  var pcReset = e.target.closest("[data-pc-reset]");
+  if(pcReset){ resetProjectContentFilters(pcReset.dataset.pcReset); return; }
+  var pcPage = e.target.closest("[data-pc-page]");
+  if(pcPage){
+    projectContent.task.page = Math.max(1, projectContent.task.page + (pcPage.dataset.pcPage === "next" ? 1 : -1));
+    paintProjectContent();
+    return;
+  }
+  var pcDemandRow = e.target.closest("[data-pc-demand]");
+  if(pcDemandRow){ openProjectDemand(pcDemandRow.dataset.pcDemand); return; }
+  var pcTaskRow = e.target.closest("[data-pc-task]");
+  if(pcTaskRow){ openTaskById(pcTaskRow.dataset.pcTask); return; }
   var openRes = e.target.closest("[data-project-open]");
   if(openRes){
     var kind = openRes.dataset.projectOpen;
@@ -1417,6 +2133,15 @@ function renderAfterModeSwitch(){
 }
 function onChange(e){
   if(e.target.id === "drillSort"){ drillSort = e.target.value; renderDrill(); }
+  var pcGroupSel = e.target.closest("[data-pc-group]");
+  if(pcGroupSel){
+    if(pcGroupSel.dataset.pcGroup === "demand") projectContent.dem.group = pcGroupSel.value;
+    else { projectContent.task.group = pcGroupSel.value; projectContent.task.page = 1; }
+    paintProjectContent();
+    return;
+  }
+  var pcFilterSel = e.target.closest("[data-pc-filter]");
+  if(pcFilterSel){ setProjectContentFilter(pcFilterSel.dataset.pcFilter, pcFilterSel.value); return; }
   var roleSel = e.target.closest("[data-roster-role]");
   if(roleSel){ saveRosterRole(roleSel); return; }
   var check = e.target.closest("[data-roster-check]"), all = e.target.closest("[data-roster-all]");
@@ -1450,11 +2175,16 @@ function onKeydown(e){
   var moduleRow = e.target.closest ? e.target.closest("tr[data-module-open]") : null;
   if(moduleRow && moduleRow === e.target){ e.preventDefault(); moduleRow.click(); return; }
   var msRow = e.target.closest ? e.target.closest("tr[data-ms-open]") : null;
-  if(msRow && msRow === e.target){ e.preventDefault(); openMilestoneDetailById(msRow.dataset.msOpen); }
+  if(msRow && msRow === e.target){ e.preventDefault(); openMilestoneDetailById(msRow.dataset.msOpen); return; }
+  var pcDemandRow = e.target.closest ? e.target.closest("tr[data-pc-demand]") : null;
+  if(pcDemandRow && pcDemandRow === e.target){ e.preventDefault(); openProjectDemand(pcDemandRow.dataset.pcDemand); return; }
+  var pcTaskRow = e.target.closest ? e.target.closest("tr[data-pc-task]") : null;
+  if(pcTaskRow && pcTaskRow === e.target){ e.preventDefault(); openTaskById(pcTaskRow.dataset.pcTask); }
 }
 if($("projectBody")){
   $("projectBody").addEventListener("click", onClick);
   $("projectBody").addEventListener("change", onChange);
+  $("projectBody").addEventListener("input", onProjectContentInput);
   $("projectBody").addEventListener("keydown", onKeydown);
 }
 
