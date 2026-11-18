@@ -1338,8 +1338,14 @@ function demPriorityCell(d){
   return demInlineTrigger("priority", d, priTagHTML(d.priority || "P2"), "修改优先级", "dem-inline-pri");
 }
 function demStatusCell(d){
-  /* 已关闭的行保持只读：恢复入口在「更多」菜单里，避免关闭行看起来还能直接流转 */
-  if(isClosedDemand(d) || !demandStatusMenuItems(d).length) return statusTag(d.status);
+  /* 已关闭的行保持只读：恢复入口在「更多」菜单里，避免关闭行看起来还能直接流转。
+     关闭原因直接写在徽标上，列表不用展开就能区分被否、撤回与重复单 */
+  if(isClosedDemand(d)){
+    var reason = d.closeReason || (d.status === "rej" ? "rej" : "cancel");
+    var stage = closeStageName(d.closeStage || (d.status === "rej" ? "review" : "pass"));
+    return '<span class="tag ghost" title="已关闭 · 关闭前 ' + esc(stage) + '">' + esc(closeReasonName(reason)) + '</span>';
+  }
+  if(!demandStatusMenuItems(d).length) return statusTag(d.status);
   return demInlineTrigger("status", d, statusTag(d.status), "修改状态");
 }
 function demProjectCell(d){

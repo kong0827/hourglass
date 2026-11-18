@@ -3909,8 +3909,9 @@ a.att-chip-main:hover{color:var(--primary-fg);}
 .board-toolbar-hint{margin-left:2px;}
 /* 右侧一组：已取消入口 + 口径「!」，与左侧分组控件分开 */
 .board-toolbar-end{margin-left:auto;display:inline-flex;align-items:center;gap:8px;}
-.board-toolbar-end .btn.sm{height:28px;padding:0 10px;font-size:12px;}
-.board-toolbar-end .btn.sm .n{color:var(--text-3);font-variant-numeric:tabular-nums;}
+/* 已取消入口按原型做成标准按钮：图标 + 文案 + 常显计数，而不是只在有数时才出现的小 chip */
+.board-toolbar-end .btn{height:32px;padding:0 11px;font-size:12.5px;}
+.board-toolbar-end .btn .n{color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums;}
 #view-board .board{flex:1 1 auto;min-height:0;height:auto;}
 .board-group-head{
   position:sticky;top:0;z-index:2;flex:0 0 auto;
@@ -9939,9 +9940,10 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
 .cn-body{width:100%;max-width:1600px;margin:0 auto;padding:14px var(--content-pad) 32px;}
 .cn-count{font-size:13px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .cn-filters{
-  display:flex;flex-wrap:wrap;gap:8px;padding:10px;
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
 }
+.cn-hint{margin-left:auto;font-size:12px;color:var(--text-3);}
 .cn-list-wrap{margin-top:12px;}
 .cn-list-wrap .wc-list{margin-top:0;}
 .cn-more{display:flex;justify-content:center;margin-top:12px;}
@@ -14323,7 +14325,10 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
           </label>
           <span class="foot-note board-toolbar-hint">列仍是状态，组只决定卡片归堆</span>
           <span class="board-toolbar-end">
-            <button class="btn sm" id="btnCanceled" type="button" title="已取消：终态工作项归档，可逐条恢复">已取消 <span class="n" id="canceledBadge" hidden>0</span></button>
+            <button class="btn" id="btnCanceled" type="button" title="已取消：终态工作项归档，可逐条恢复">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              已取消 <span class="n" id="canceledBadge">0</span>
+            </button>
             <button class="caliber-mark warn" type="button" data-caliber-help="board.guide" aria-label="查看看板状态流转与发布徽标说明" title="查看看板状态流转与发布徽标说明">!</button>
           </span>
         </div>
@@ -16961,6 +16966,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                 </div>
               </div>
               <p class="set-hint">看板固定 5 个系统列，均不可删除；前四个可改名，「已完成」不可改名。待处理、进行中、已完成的处理规则固定，待测试、测试中与自定义列可调整。规则变更只影响之后的计时与逾期判断，不会停止已运行的计时；删除自定义列时，其工作项移入最靠前的列。</p>
+              <p class="set-hint">「已取消」是系统终态，不是看板列：不出现在上面的列配置和下面的状态流转矩阵里，也不能通过状态下拉选中。取消只能从非终态发起（已完成需先重开），入口在工作项卡片菜单与详情抽屉；归档与恢复在看板工具条的「已取消」入口。</p>
               <div class="colcfg-head" aria-hidden="true">
                 <span></span><span></span><span>列名</span><span>处理规则</span><span>类型</span><span class="right">顺序 / 删除</span>
               </div>
@@ -16991,6 +16997,7 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                 <span><i class="trans-dot reason"></i>需填原因</span>
                 <span><i class="trans-dot deny"></i>禁止</span>
                 <span class="foot-note">空间主 / 管理员可强制越过「禁止」</span>
+                <span class="foot-note">「已取消」是系统终态，不在矩阵内</span>
               </div>
               <div class="set-actions">
                 <button class="btn" type="button" id="btnTransReset">恢复默认</button>
@@ -35355,7 +35362,9 @@ function openCardMenu(anchor, taskId){
   }
   if(editable){
     html += '<div class="menu-sep"></div>';
-    if(!isCanceled){
+    /* 与原型一致：已完成卡片只留「取消完成（重开）」，取消入口不出现；
+       已取消卡片只能恢复，不能再取消 */
+    if(!isCanceled && !isDone){
       html += '<button class="menu-item" type="button" data-cm="cancel">' + icon("close", 14) + '取消工作项…</button>';
     }
     html += '<button class="menu-item danger" type="button" data-cm="del">' + icon("trash", 14) + '移到回收站</button>';
@@ -39786,8 +39795,8 @@ function syncCanceledBadge(){
   var badge = document.getElementById("canceledBadge");
   if(!badge) return;
   var n = state.board && state.board.counts ? (state.board.counts.canceled || 0) : 0;
+  /* 入口常显，0 也显示：否则「已取消」看起来像一条普通说明，用户以为没有这个状态 */
   badge.textContent = n > 99 ? "99+" : String(n);
-  badge.hidden = n <= 0;
 }
 /* 列内滚过一屏后露出「回到顶部」；scroll 不冒泡，用捕获阶段接住 */
 board.addEventListener("scroll", function(e){
@@ -52262,8 +52271,14 @@ function demPriorityCell(d){
   return demInlineTrigger("priority", d, priTagHTML(d.priority || "P2"), "修改优先级", "dem-inline-pri");
 }
 function demStatusCell(d){
-  /* 已关闭的行保持只读：恢复入口在「更多」菜单里，避免关闭行看起来还能直接流转 */
-  if(isClosedDemand(d) || !demandStatusMenuItems(d).length) return statusTag(d.status);
+  /* 已关闭的行保持只读：恢复入口在「更多」菜单里，避免关闭行看起来还能直接流转。
+     关闭原因直接写在徽标上，列表不用展开就能区分被否、撤回与重复单 */
+  if(isClosedDemand(d)){
+    var reason = d.closeReason || (d.status === "rej" ? "rej" : "cancel");
+    var stage = closeStageName(d.closeStage || (d.status === "rej" ? "review" : "pass"));
+    return '<span class="tag ghost" title="已关闭 · 关闭前 ' + esc(stage) + '">' + esc(closeReasonName(reason)) + '</span>';
+  }
+  if(!demandStatusMenuItems(d).length) return statusTag(d.status);
   return demInlineTrigger("status", d, statusTag(d.status), "修改状态");
 }
 function demProjectCell(d){
@@ -68447,18 +68462,17 @@ function chipsHTML(){
 
 function rowHTML(t){
   var project = t.reqName || "";
-  var from = t.cancelFrom ? colName(t.cancelFrom) : "";
-  var sub = [project, from ? "取消前：" + from : ""].filter(Boolean).join(" · ");
   var editable = canEditTask(t);
   return '<div class="list-row wc-row" data-cn-task="' + esc(t.id) + '" tabindex="0" role="listitem"' +
       ' aria-label="' + esc(t.title) + '">' +
     '<span class="cell wcl-title"><span class="wcl-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
-      (sub ? '<span class="wcl-sub">' + esc(sub) + '</span>' : '') + '</span>' +
+      (project ? '<span class="wcl-sub">' + esc(project) + '</span>' : '') + '</span>' +
+    '<span class="cell">' + (t.cancelFrom ? esc(colName(t.cancelFrom)) : '<span class="muted">—</span>') + '</span>' +
     '<span class="cell"><span class="tag">' + esc(reasonName(t.cancelReason)) + '</span></span>' +
     '<span class="cell">' + esc(t.owner || "未分配") + '</span>' +
     '<span class="cell">' + esc(fmtTs(t.canceledAt)) + '</span>' +
     '<span class="cell ta-r">' +
-      (editable ? '<button class="btn sm" type="button" data-cn-restore="' + esc(t.id) + '">恢复</button>'
+      (editable ? '<button class="btn sm soft" type="button" data-cn-restore="' + esc(t.id) + '">恢复</button>'
                 : '<span class="mini-tag mute" title="你对该项目只有查看权限">只读</span>') +
     '</span>' +
   '</div>';
@@ -68471,8 +68485,8 @@ function listHTML(){
       text: st.reason ? "切到「全部」看看其他原因。" : "工作项取消后会归档到这里，不计逾期，也不进完成率分母。"
     });
   }
-  return '<div class="wc-list cn-list" style="--wc-cols:minmax(260px,3fr) 96px 120px 108px 84px;--wc-min:668px">' +
-    '<div class="list-head"><span>工作项</span><span>取消原因</span><span>负责人</span><span>取消时间</span><span class="ta-r">操作</span></div>' +
+  return '<div class="wc-list cn-list" style="--wc-cols:minmax(260px,3fr) 96px 96px 120px 108px 84px;--wc-min:764px">' +
+    '<div class="list-head"><span>工作项</span><span>取消前状态</span><span>取消原因</span><span>负责人</span><span>取消时间</span><span class="ta-r">操作</span></div>' +
     '<div class="wc-lane wc-flat"><div class="wc-lane-rows" role="list">' +
       st.items.map(rowHTML).join("") +
     '</div></div>' +
@@ -68496,7 +68510,8 @@ function render(){
       '<span class="wc-total">' + esc(scope) + '</span>' +
     '</div></header>' +
     '<div class="cn-body">' +
-      '<div class="cn-filters">' + chipsHTML() + '</div>' +
+      '<div class="cn-filters">' + chipsHTML() +
+        '<span class="cn-hint">已取消不计逾期，也不进完成率分母</span></div>' +
       '<div class="cn-list-wrap">' + listHTML() + '</div>' +
     '</div>';
 }
@@ -100587,6 +100602,6 @@ window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-18 09:09</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-18 12:06</span></div>
 </body>
 </html>

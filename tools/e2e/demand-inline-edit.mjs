@@ -200,11 +200,17 @@ try{
     const t = document.querySelector("#demandBody table");
     const count = sel => t.querySelectorAll(sel).length;
     const rows = [...t.querySelectorAll("tbody tr")].filter(r => r.querySelector("[data-dem-detail]"));
-    /* 状态列渲染成 span.tag 才是真关闭；菜单里的「关闭需求…」是动作文案，不能当状态 */
+    /* 状态列渲染成 span.tag 才是真关闭；关闭徽标直接写原因，靠 title 前缀识别；
+       菜单里的「关闭需求…」是动作文案，不能当状态 */
+    const CLOSE_LABELS = ["评审不通过", "中途取消", "重复需求"];
     const closed = rows.filter(r => {
       const td = r.children[si];
       if(!td || td.querySelector("[data-dem-inline-menu]")) return false;
-      return [...td.querySelectorAll("span.tag")].some(s => s.textContent.trim() === "已关闭");
+      return [...td.querySelectorAll("span.tag")].some(s => (s.title || "").indexOf("已关闭") === 0);
+    });
+    const closedLabels = closed.map(r => {
+      const s = [...r.children[si].querySelectorAll("span.tag")].find(x => (x.title || "").indexOf("已关闭") === 0);
+      return s ? s.textContent.trim() : "";
     });
     const pri = t.querySelector('[data-dem-inline-menu="priority"]');
     const priSvg = pri && pri.querySelector("svg");
@@ -220,6 +226,7 @@ try{
       priBorder: pri ? getComputedStyle(pri).borderTopColor : null,
       priArrow: priSvg ? getComputedStyle(priSvg).opacity : null,
       closed: closed.length,
+      closedLabels: closedLabels,
       closedWithCtl: closed.filter(r => r.querySelector("[data-dem-inline-menu],[data-dem-source-btn]")).length
     };
   })()`);
@@ -232,7 +239,11 @@ try{
   assert(ctl.priBorder === "rgba(0, 0, 0, 0)" && ctl.priArrow === "0",
     `读态像普通文本：无边框、箭头隐藏（border ${ctl.priBorder}，箭头透明度 ${ctl.priArrow}）`);
   if(!ctl.closed) skip("当前筛选下没有已关闭需求，无法验证只读行");
-  else assert(ctl.closedWithCtl === 0, `已关闭需求不出行内控件（${ctl.closed} 行）`);
+  else {
+    assert(ctl.closedWithCtl === 0, `已关闭需求不出行内控件（${ctl.closed} 行）`);
+    assert(ctl.closedLabels.every(t => ["评审不通过", "中途取消", "重复需求"].indexOf(t) !== -1),
+      `已关闭徽标直接写原因（${ctl.closedLabels.join(" / ")}）`);
+  }
   await shot("dem-inline-01-table.png");
 
   /* 2b. 悬停才露箭头与底色；点开才出现选项；Esc 关闭回到读态 */
