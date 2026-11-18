@@ -259,6 +259,13 @@ html[data-theme="dark"] .dl-export-wrap{
 .dl-row .ty{font-size:10.5px;color:var(--text-3);}
 .dl-row .cell{font-size:11.5px;color:var(--text-2);line-height:1.55;}
 .dl-modgroup{margin-bottom:9px;}
+/* 版本选取器三层结构：项目集 > 项目 > 版本 */
+.dl-setgroup{margin:16px 0 6px;}
+.dl-setgroup:first-of-type{margin-top:8px;}
+.dl-setgroup-head{display:flex;align-items:center;gap:7px;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.dl-setgroup-head .cdot{width:8px;height:8px;border-radius:2px;flex:0 0 auto;}
+.dl-setname{font-size:12px;font-weight:650;color:var(--text-2);}
+.dl-setgroup-head .cnt{font-size:10.5px;color:var(--text-3);margin-left:auto;}
 .dl-modgroup-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
 .dl-modgroup-head .cnt{font-size:10.5px;color:var(--text-3);}
 .dl-more-row{display:flex;align-items:center;justify-content:center;padding:8px;background:var(--surface-sunken);border-top:1px solid var(--border);}

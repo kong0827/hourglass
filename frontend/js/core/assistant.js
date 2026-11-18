@@ -12,7 +12,7 @@ import { API } from "./api.js";
 import { icon } from "./icons.js";
 import { VIEWS, activeView, showView } from "./router.js";
 import { UI, esc, toast } from "./ui.js";
-import { rt } from "./state.js";
+import { projectOptionsHTML, projectRefsEnriched, rt } from "./state.js";
 import { loadView, viewModule } from "./view-loader.js";
 import { openTaskById } from "./task-actions.js";
 import { openTaskDrawer } from "./task-drawer.js";
@@ -583,16 +583,12 @@ function projectOptions(){
     draft.reqId = "";
     return '<option value="">没有可写项目</option>';
   }
-  var found = false;
-  var html = ['<option value="">请选择项目</option>'];
-  projects.forEach(function(p){
-    var on = p.id === draft.reqId;
-    if(on) found = true;
-    html.push('<option value="' + esc(p.id) + '"' + (on ? " selected" : "") + '>' + esc(p.name) + '</option>');
-  });
+  /* 候选仍只来自服务端下发的可写项目；层级字段按 ID 从项目缓存补齐，不新增候选 */
+  var list = projectRefsEnriched(projects);
+  var found = list.some(function(p){ return p.id === draft.reqId; });
   /* 服务端草稿里的项目不在可写集合中时，宁可清空也不展示 */
   if(!found) draft.reqId = "";
-  return html.join("");
+  return '<option value="">请选择项目</option>' + projectOptionsHTML(list, draft.reqId);
 }
 
 function optionsHTML(options, selected, placeholder){

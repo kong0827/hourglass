@@ -5,7 +5,7 @@ import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import { openTaskById } from "../core/task-actions.js";
-import { dueState, rt, statusBucket } from "../core/state.js";
+import { dueState, projectOptionsHTML, rt, statusBucket } from "../core/state.js";
 import { loadReqs } from "./board.js";
 import { companyChipHTML } from "../lib/company.js";
 import { memberRoleTitles, labelFilterText } from "../lib/member-labels.js";
@@ -120,9 +120,10 @@ function periodControlHTML(){
     + '<span class="wl-period-dates">' + esc(range.from) + ' ~ ' + esc(range.to) + '</span></div>';
 }
 function workloadFiltersHTML(){
+  var projectList = rt.reqList.filter(function(p){ return (!p.workspaceId || p.workspaceId === workloadWorkspace()) && (!p.archivedAt || p.id === workloadFilter.reqId); });
   var html = '<div class="manager-label-filters">'
     + '<label>项目 <select class="mini-select' + (workloadFilter.reqId ? ' is-filtered' : '') + '" data-workload-filter="reqId"><option value="">全部项目</option>'
-    + rt.reqList.filter(function(p){ return (!p.workspaceId || p.workspaceId === workloadWorkspace()) && (!p.archivedAt || p.id === workloadFilter.reqId); }).map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === workloadFilter.reqId ? ' selected' : '') + '>' + esc(p.name) + (p.archivedAt ? '（已归档）' : '') + '</option>'; }).join("") + '</select></label>'
+    + projectOptionsHTML(projectList, workloadFilter.reqId) + '</select></label>'
     + '<label>公司 <select class="mini-select' + (workloadFilter.companyName ? ' is-filtered' : '') + '" data-workload-filter="companyName">' + workloadSelectOptions(workloadOptions.companyNames, workloadFilter.companyName, '全部公司', '未设公司') + '</select></label>'
     + '<label>角色 <select class="mini-select' + (workloadFilter.roleTitle ? ' is-filtered' : '') + '" data-workload-filter="roleTitle">' + workloadSelectOptions(workloadOptions.roleTitles, workloadFilter.roleTitle, '全部角色', '未设角色') + '</select></label>'
     + '<button class="btn sm soft" type="button" data-workload-clear>' + icon("close", 13) + '清除筛选</button></div>';

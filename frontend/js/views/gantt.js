@@ -7,7 +7,7 @@ import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, reqNameById, reqSetId, rt, selectedFilterCount, setNameById, state, taskById, taskCacheExtra } from "../core/state.js";
+import { canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, projectGroups, reqNameById, reqSetId, rt, selectedFilterCount, setNameById, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -1970,9 +1970,20 @@ function renderGanttFilterMenu(){
   var verHTML = ganttFilterVersions().map(function(v){
     return ganttFilterChip("data-gantt-version", v.id, esc(v.label), state.versions.indexOf(v.id) !== -1);
   }).join("");
-  var projHTML = rt.reqList.map(function(r){
-    return ganttFilterChip("data-gantt-req", r.id, esc(r.name) + (r.archivedAt ? "（已归档）" : ""), state.reqs.indexOf(r.id) !== -1);
-  }).join("");
+  /* 项目 chip 按项目集分组：组头带「全选」，与筛选栏、原生下拉的层级口径一致 */
+  var projHTML = "";
+  projectGroups(rt.reqList).forEach(function(g){
+    var ids = g.rows.map(function(r){ return r.id; });
+    var all = ids.length && ids.every(function(id){ return state.reqs.indexOf(id) !== -1; });
+    projHTML += '<div class="gf-grp"><span>' + esc(g.set ? g.set.name : "未分组") + '</span>'
+      + '<span class="n">' + g.rows.length + ' 个项目</span>'
+      + '<button class="gf-all" type="button" data-gantt-reqset="' + esc(g.set ? g.set.id : "__loose") + '">'
+      + (all ? "取消全选" : "全选") + '</button></div>';
+    projHTML += g.rows.map(function(r){
+      return ganttFilterChip("data-gantt-req", r.id, esc(r.name)
+        + (r.containerKind ? "（公共）" : "") + (r.archivedAt ? "（已归档）" : ""), state.reqs.indexOf(r.id) !== -1);
+    }).join("");
+  });
   if(state.reqs.indexOf("__none") !== -1){
     projHTML += ganttFilterChip("data-gantt-req", "__none", "未归类", true);
   }
@@ -2775,6 +2786,20 @@ if(ganttFilterMenu){
     if(gcp){ state.completion = gcp.getAttribute("data-gantt-completion") || ""; afterGanttFilterChange(); return; }
     var vr = e.target.closest("[data-gantt-version]");
     if(vr){ toggleFilterValue("versions", vr.getAttribute("data-gantt-version")); afterGanttFilterChange(); return; }
+    var rs = e.target.closest("[data-gantt-reqset]");
+    if(rs){
+      var sid = rs.getAttribute("data-gantt-reqset");
+      var ids = rt.reqList.filter(function(r){ return sid === "__loose" ? !r.setId : r.setId === sid; })
+        .map(function(r){ return r.id; });
+      var allOn = ids.length && ids.every(function(id){ return state.reqs.indexOf(id) !== -1; });
+      ids.forEach(function(id){
+        var i = state.reqs.indexOf(id);
+        if(allOn){ if(i !== -1) state.reqs.splice(i, 1); }
+        else if(i === -1) state.reqs.push(id);
+      });
+      afterGanttFilterChange();
+      return;
+    }
     var r = e.target.closest("[data-gantt-req]");
     if(r){ toggleFilterValue("reqs", r.getAttribute("data-gantt-req")); afterGanttFilterChange(); return; }
     var c = e.target.closest("[data-gantt-cat]");

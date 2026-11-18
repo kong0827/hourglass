@@ -589,6 +589,49 @@ html[data-theme="dark"] .tag.tag-cat{
 .dim-opt[aria-pressed="true"]{background:var(--primary-soft);}
 .dim-opt[aria-pressed="true"] .dim-name{color:var(--primary-fg);font-weight:600;}
 .dim-opt .k{flex:0 0 auto;margin-left:8px;}
+/* 项目维度：项目集分组头 + 二级项目行。
+   组头一行放折叠、三态框、集色、集名与「N 个项目 · 合计」；项目行缩进对齐集名。 */
+.dim-groups{max-height:min(372px,calc(70vh - 96px));overflow-y:auto;overscroll-behavior:contain;}
+.dim-set{border-top:1px solid var(--border);margin-top:2px;padding-top:2px;}
+.dim-set:first-child{border-top:0;margin-top:0;padding-top:0;}
+.dim-set-head{
+  display:flex;align-items:center;gap:6px;height:28px;padding:0 8px 0 4px;border-radius:var(--r-xs);
+  cursor:pointer;user-select:none;
+}
+.dim-set-head:hover,.dim-set-head:focus-visible{background:var(--surface-hover);outline:none;}
+.dim-set-head[aria-pressed="true"]{background:var(--primary-soft);}
+.dim-set-head[aria-pressed="true"] .dim-set-name{color:var(--primary-fg);}
+.dim-fold{
+  display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 auto;
+  border-radius:4px;color:var(--text-3);
+}
+.dim-fold:hover{background:var(--surface-active);color:var(--text);}
+.dim-fold svg{transition:transform var(--dur-fast) var(--ease-out);}
+.dim-set.collapsed .dim-fold svg{transform:rotate(-90deg);}
+.dim-set.collapsed:not(.searching) .dim-set-body{display:none;}
+.dim-set .dim-set-ck{
+  display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;flex:0 0 auto;
+  color:var(--primary-fg);
+}
+.dim-set-head .cdot{width:7px;height:7px;border-radius:2px;flex:0 0 auto;}
+.dim-set-name{
+  flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:12px;font-weight:650;color:var(--text-2);
+}
+.dim-set-meta{
+  flex:0 0 auto;margin-left:auto;font-size:11px;color:var(--text-3);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.dim-opt.dim-sub{padding-left:30px;height:30px;}
+.dim-tag{
+  flex:0 0 auto;margin-left:6px;padding:0 4px;border:1px solid var(--border);border-radius:4px;
+  font-size:10.5px;line-height:15px;color:var(--text-3);
+}
+.dim-opt.is-zero .dim-name{color:var(--text-3);}
+.dim-none{border-top:1px solid var(--border);margin-top:2px;padding-top:2px;}
+/* 行内快捷菜单里的项目集分组：标题行与二级缩进 */
+.fact-sec{padding:8px 10px 3px;}
+.menu-item.fact-sub{padding-left:22px;}
 /* 截止期下拉：与维度下拉同一套菜单样式，圆点只做紧急度提示 */
 #dueMenu .cdot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;}
 #dueMenu .cdot.over{background:var(--danger);}
@@ -1621,6 +1664,12 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 }
 /* 筛选下拉（负责人 / 优先级）：可勾选的纵向列表，选项多时滚动 */
 .filter-dd{width:236px;}
+/* 需求筛选弹层里的项目集分组头（chip 区按行换行） */
+.fdd-grp{
+  flex:1 0 100%;display:flex;align-items:center;gap:6px;margin-top:2px;
+  font-size:11px;font-weight:650;color:var(--text-3);
+}
+.fdd-grp .n{font-weight:400;}
 .dd-list{max-height:288px;overflow:auto;padding:2px 6px 6px;display:flex;flex-direction:column;gap:2px;}
 .dd-row{
   display:flex;align-items:center;gap:7px;width:100%;padding:6px 8px;border:none;border-radius:var(--r-sm);
@@ -2153,6 +2202,19 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .read-card-head .dem-split-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;}
 .read-card-head .dem-split-actions .btn{white-space:nowrap;}
 .read-card-head .dem-split-actions + .link-btn{margin-left:8px;}
+/* 交付进度卡头：动作按钮比通用 sm 再收一档，底/描边降到极浅主色，避免窄卡片里抢过正文；
+   保留浅底+描边的可点击感，不做透明 ghost */
+.read-card-head.dem-progress-head .dem-split-actions .btn{
+  height:26px;padding:0 9px;gap:4px;font-size:12px;font-weight:550;
+  background:color-mix(in srgb,var(--primary) 5%,var(--surface));
+  border-color:color-mix(in srgb,var(--primary) 17%,var(--border));
+  color:var(--primary-fg);
+}
+.read-card-head.dem-progress-head .dem-split-actions .btn svg{width:12px;height:12px;}
+.read-card-head.dem-progress-head .dem-split-actions .btn:hover{
+  background:var(--primary-soft);border-color:var(--primary-border);
+}
+.read-card-head.dem-progress-head .dem-split-actions + .link-btn{font-size:12.5px;}
 /* 需求详情「交付进度」：窄屏下标题/计数留一行，两个动作换一行平分，避免标题被挤成竖排 */
 @media (max-width:700px){
   .read-card-head.dem-progress-head{flex-wrap:wrap;row-gap:8px;}

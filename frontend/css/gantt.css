@@ -276,6 +276,17 @@
   position:sticky;bottom:-4px;background:var(--surface);
   box-shadow:0 -1px 0 var(--border);
 }
+/* 项目 chip 的项目集分组头：整行占位，右侧「全选 / 取消全选」 */
+.gf-grp{
+  flex:1 0 100%;display:flex;align-items:center;gap:6px;margin:2px 0 0;
+  font-size:11px;font-weight:650;color:var(--text-3);
+}
+.gf-grp .n{font-weight:400;}
+.gf-all{
+  margin-left:auto;font-size:11px;font-weight:500;color:var(--text-2);
+  padding:0 4px;border-radius:4px;height:18px;
+}
+.gf-all:hover{background:var(--surface-active);color:var(--text);}
 
 /* 拖动日期提示 */
 .gantt-tip{

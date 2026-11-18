@@ -291,12 +291,35 @@ function projectGroups(list){
   if(loose.length) groups.push({ set:null, rows:loose });
   return groups;
 }
+/* 外部清单（助手可写项目、看板 meta、版本清单）只带 ID 与名称：
+   按 ID 从项目缓存补齐 setId / setName / 容器与归档标记，才能参与项目集分组。
+   不新增、不删减候选，只补字段。 */
+function projectRefsEnriched(list){
+  var byId = {};
+  (rt.reqList || []).forEach(function(r){ byId[r.id] = r; });
+  return (list || []).map(function(p){
+    var src = byId[p.id];
+    if(!src) return p;
+    var out = {};
+    for(var k in p) out[k] = p[k];
+    if(out.setId == null) out.setId = src.setId || "";
+    if(out.setName == null) out.setName = src.setName || "";
+    if(out.containerKind == null) out.containerKind = src.containerKind;
+    if(out.archivedAt == null) out.archivedAt = src.archivedAt;
+    return out;
+  });
+}
 function projectOptionHTML(r, selected){
   var marks = [];
   if(r.containerKind) marks.push("公共");
   if(r.archivedAt) marks.push("已归档");
   return '<option value="' + esc(r.id) + '"' + (String(r.id) === String(selected || "") ? " selected" : "") +
     ' data-level="2">　' + esc(r.name) + (marks.length ? "（" + esc(marks.join(" · ")) + "）" : "") + '</option>';
+}
+/** 项目集分组标题：带上组内项目数，原生下拉与自定义菜单共用同一口径 */
+function projectGroupLabel(g){
+  if(!g.set) return "未分组";
+  return g.set.name + "（" + g.rows.length + " 个项目）";
 }
 /** 项目下拉层级 HTML：集为 optgroup、项目二级缩进；调用方自行补「全部/未指定」首项 */
 function projectOptionsHTML(list, selected){
@@ -309,7 +332,7 @@ function projectOptionsHTML(list, selected){
     }).join("");
   }
   return groups.map(function(g){
-    return '<optgroup label="' + esc(g.set ? g.set.name : "未分组") + '">' +
+    return '<optgroup label="' + esc(projectGroupLabel(g)) + '">' +
       g.rows.map(function(r){ return projectOptionHTML(r, selected); }).join("") + '</optgroup>';
   }).join("");
 }
@@ -380,4 +403,4 @@ function canEditDoc(d){
   return !!(me && String(owner) === String(me));
 }
 
-export { calState, canEditDoc, canEditReq, canEditTask, canManageProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, projectGroups, projectOptionsHTML, reqNameById, reqSetId, roleReadOnly, safeColor, selectedFilterCount, setNameById, setSortOf, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canEditDoc, canEditReq, canEditTask, canManageProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, projectGroupLabel, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, reqSetId, roleReadOnly, safeColor, selectedFilterCount, setNameById, setSortOf, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

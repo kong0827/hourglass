@@ -11,7 +11,7 @@ import { openPeoplePicker, optionSubText } from "../lib/people-picker.js";
 import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, rfHoursAdd, commentAttachChips, commentAttachTip, commentCount, commentList, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeProject, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { createMentionPicker } from "./mention-picker.js";
-import { canEditReq, canEditTask, canManageProject, catNameById, colRuleOf, projectOptionsHTML, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, canManageProject, catNameById, colRuleOf, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
@@ -983,15 +983,12 @@ function renderReqDocPickerScope(el){
     projects[doc.reqId] = { id:doc.reqId, name:reqDocPickerProjectName(doc) };
     ids.push(doc.reqId);
   });
-  ids.sort(function(a, b){
-    if(a === current) return -1;
-    if(b === current) return 1;
-    return projects[a].name.localeCompare(projects[b].name, "zh-CN");
-  });
   var previous = scope.value;
-  scope.innerHTML = '<option value="">全部项目</option>' + ids.map(function(id){
-    return '<option value="' + esc(id) + '">' + esc(projects[id].name) + (id === current ? "（当前）" : "") + '</option>';
-  }).join("");
+  /* 候选仍是本组关联文档涉及的项目；按项目集分组，当前项目打标（组顺序优先于当前置顶） */
+  var list = projectRefsEnriched(ids.map(function(id){
+    return { id:id, name:projects[id].name + (id === current ? "（当前）" : "") };
+  }));
+  scope.innerHTML = '<option value="">全部项目</option>' + projectOptionsHTML(list, previous);
   scope.value = ids.indexOf(previous) >= 0 ? previous : "";
 }
 function renderReqDocPickerResults(el){
@@ -1700,6 +1697,17 @@ function syncVersionReason(){
   var field = $("fVersionChangeReason");
   if(field) field.hidden = !versionReasonNeeded(d);
 }
+/* 原关联不在本项目候选里时（跨项目存量关联 / 超出候选页），用需求真实标题补回下拉与来源卡 */
+function syncDemandOptionLabel(id, d){
+  var sel = $("iDemand"), reqSel = $("iReq");
+  if(!sel || !d || !d.title || !sel.getAttribute("data-ready") || (sel.value || "") !== id) return;
+  var opt = sel.options[sel.selectedIndex];
+  if(!opt || opt.value !== id || opt.getAttribute("data-status")) return;
+  var cross = !!(d.reqId && reqSel && reqSel.value && d.reqId !== reqSel.value);
+  opt.textContent = d.title + (cross ? "（跨项目原关联）" : "（未在当前候选列表）");
+  var titleEl = $("drawerSourceTitle");
+  if(titleEl) titleEl.textContent = d.title;
+}
 function syncDemandTarget(){
   var el = $("iDemandTarget"), id = drawerDemandId();
   if(!el) return;
@@ -1721,6 +1729,7 @@ function syncDemandTarget(){
       if(sel) Array.prototype.forEach.call(sel.options, function(o){ if(o.value === target) name = o.textContent; });
     }
     el.textContent = target ? "需求目标版本：" + (name || target) + "（只读，任务计划可按理由调整）" : "需求尚未设置目标版本";
+    syncDemandOptionLabel(id, d);
     syncVersionReason();
   }).catch(function(ex){
     if(assocStillCurrent(seq, taskId, reqId) && drawerDemandId() === id) el.textContent = "需求目标加载失败：" + (ex.message || "请重开抽屉重试");
@@ -3721,7 +3730,7 @@ if(iReq) iReq.addEventListener("change", function(){
   if(!rt.editingId){ newVersionExplicit = false; newInheritedTarget = null; }
   ensureVersion([]); ensureFoundVersion(""); ensureEpic("");
   ensureBranch(($("iBranch") || {}).value, iReq.value);
-  /* 换项目后原需求池关联失效：立即清空下拉并按新项目重载候选（后端同口径静默解绑） */
+  /* 换项目后原需求池关联失效：立即清空下拉并按新项目重载候选（保存时按「解除关联」提交） */
   var demandSel = $("iDemand");
   if(demandSel) demandSel.value = "";
   rt.formDemandId = null;
@@ -5876,10 +5885,20 @@ function openProjectFact(anchor){
     toast("任务已有正式发布记录，不能改变项目；执行状态仍可独立调整", "warn");
     return;
   }
-  var el = factMenu("所属项目", Array.prototype.map.call(iReq.options, function(o){
-    return '<button class="menu-item" type="button" data-fact-req="' + esc(o.value) + '">' +
-      esc(o.textContent || "未归属") + (iReq.value === o.value ? '<span class="k">当前</span>' : '') + '</button>';
-  }).join(""));
+  var cur = iReq.value || "";
+  /* 与抽屉里的原生下拉同一份候选：未归档项目 + 当前（可能已归档）项目，按项目集分组 */
+  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === cur; });
+  var items = '<button class="menu-item" type="button" data-fact-req="">（无项目）' +
+    (!cur ? '<span class="k">当前</span>' : '') + '</button>';
+  projectGroups(list).forEach(function(g){
+    items += '<div class="menu-sec fact-sec">' + esc(g.set ? g.set.name : "未分组") + '</div>';
+    items += g.rows.map(function(r){
+      return '<button class="menu-item fact-sub" type="button" data-fact-req="' + esc(r.id) + '">' +
+        esc(r.name) + (r.containerKind ? "（公共）" : "") + (r.archivedAt ? "（已归档）" : "") +
+        (cur === r.id ? '<span class="k">当前</span>' : '') + '</button>';
+    }).join("");
+  });
+  var el = factMenu("所属项目", items);
   el.addEventListener("click", function(e){
     var b = e.target.closest("[data-fact-req]");
     if(!b) return;

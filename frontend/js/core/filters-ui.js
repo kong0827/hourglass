@@ -7,7 +7,7 @@ import { icon } from "./icons.js";
 import { isMobile } from "./layout.js";
 import { currentMode } from "./mobile-rules.js";
 import { activeView, showView } from "./router.js";
-import { catNameById, filterOn, rt, selectedFilterCount, state } from "./state.js";
+import { catNameById, filterOn, projectGroups, projectRefsEnriched, rt, selectedFilterCount, state } from "./state.js";
 import { UI, esc, toast, toastAction } from "./ui.js";
 import { COLUMNS, PRIORITIES, colName, iso, priName, typeName } from "../lib/format.js";
 import { loadBoard } from "../views/board.js";
@@ -354,8 +354,16 @@ function syncDimButtons(){
       labelEl.className = "fb-dim-label";
       btn.appendChild(labelEl);
     }
-    /* 单选直接把值回显在按钮上；多选留给角标显示数量，避免按钮被长名单撑开 */
-    labelEl.textContent = DIM_ORDER[kind] + (n === 1 && values ? "：" + (values.length > 10 ? values.slice(0, 10) + "…" : values) : "");
+    /* 单选直接把值回显在按钮上；整集选中报项目集名；其余多选留给角标显示数量 */
+    var label = DIM_ORDER[kind];
+    if(kind === "reqs"){
+      var setName = n > 1 ? reqFullSetName(state.board && state.board.meta) : "";
+      if(setName) label = "项目集：" + setName;
+      else if(n === 1 && values) label += "：" + (values.length > 10 ? values.slice(0, 10) + "…" : values);
+    }else if(n === 1 && values){
+      label += "：" + (values.length > 10 ? values.slice(0, 10) + "…" : values);
+    }
+    labelEl.textContent = label;
     btn.setAttribute("aria-pressed", n > 0 ? "true" : "false");
     if(n > 0){
       btn.title = "已按" + DIM_ORDER[kind] + "筛选：" + values + "（点击修改）";
@@ -373,12 +381,142 @@ function syncDimButtons(){
     }
   });
 }
+/* 项目维度按项目集分组：看板 meta 只给 id / name / count，层级从项目缓存补齐。
+   0 计数的项目默认不铺陈，搜索时才以禁选行出现，避免整份清单被空项目拉长。 */
+var dimSetFold = {};
+function reqGroups(meta){
+  var rows = (meta.reqs || []).map(function(r){
+    return { id:r.id, name:r.name, count:r.count, on:state.reqs.indexOf(r.id) !== -1 };
+  });
+  return projectGroups(projectRefsEnriched(rows));
+}
+function reqSetKey(g){ return g.set ? g.set.id : "__loose"; }
+/* 参与整集选择与三态判定的行：本视图有数据的项目 + 已选中的项目。
+   0 计数且未选中的行浏览态不露出，也不该把集头拉成「半选」。 */
+function reqSetIds(g){
+  return g.rows.filter(function(r){ return r.on || (Number(r.count) || 0) > 0; })
+    .map(function(r){ return r.id; });
+}
+/* 集头复选框三态：全选 / 半选 / 未选；只有 0 计数的项目不参与「整集选择」 */
+function reqSetState(g){
+  var ids = reqSetIds(g), hit = 0;
+  ids.forEach(function(id){ if(state.reqs.indexOf(id) !== -1) hit++; });
+  if(!ids.length || !hit) return "none";
+  return hit === ids.length ? "all" : "mixed";
+}
+function toggleReqSet(g){
+  var all = reqSetState(g) === "all";
+  var changed = false;
+  g.rows.forEach(function(r){
+    if(!all && !((Number(r.count) || 0) > 0) && !r.on) return;
+    var i = state.reqs.indexOf(r.id);
+    if(all){ if(i !== -1){ state.reqs.splice(i, 1); changed = true; } }
+    else if(i === -1){ state.reqs.push(r.id); changed = true; }
+  });
+  if(changed) reloadFilteredViews(); else syncDimMenu();
+}
+/* 整集选中时按钮直接报项目集名；只选了一部分仍回落到「项目 + 角标数量」。
+   判定范围与集头三态一致（reqSetIds），这样整集点选只写有数据的行也能报出集名。 */
+function reqFullSetName(meta){
+  var sel = state.reqs;
+  if(!meta || sel.length < 2 || sel.indexOf("__none") !== -1) return "";
+  var groups = reqGroups(meta);
+  for(var i = 0; i < groups.length; i++){
+    var g = groups[i];
+    if(!g.set) continue;
+    var ids = reqSetIds(g);
+    if(!ids.length) continue;
+    var all = ids.every(function(id){ return sel.indexOf(id) !== -1; });
+    var setIds = g.rows.map(function(r){ return r.id; });
+    var only = sel.every(function(id){ return setIds.indexOf(id) !== -1; });
+    if(all && only) return g.set.name;
+  }
+  return "";
+}
+function reqRowHTML(r, extraTag, extraCls){
+  var zero = !((Number(r.count) || 0) > 0) && !r.on;
+  var tags = [];
+  if(extraTag) tags.push(extraTag);
+  if(r.containerKind) tags.push("公共");
+  if(r.archivedAt) tags.push("已归档");
+  /* 0 计数项目浏览时收进组里，搜索时才以禁选行露出；已选中的不受影响 */
+  return '<button class="menu-item dim-opt' + (extraCls ? " " + extraCls : "") + (zero ? " is-zero" : "") +
+    '" type="button" data-req="' + esc(r.id) + '" data-label="' + esc((r.name + " " + r.id).toLowerCase()) + '"' +
+    (zero ? ' data-zero="1" hidden' : "") + ' aria-pressed="' + (r.on ? "true" : "false") + '">' +
+    '<span class="ck" aria-hidden="true">' + (r.on ? icon("check", 13) : "") + '</span>' +
+    '<span class="dim-name">' + esc(r.name) + '</span>' +
+    (tags.length ? '<span class="dim-tag">' + esc(tags.join(" · ")) + '</span>' : "") +
+    '<span class="k">' + (r.count == null ? "" : r.count) + '</span>' +
+    '</button>';
+}
+function reqSetHTML(g){
+  var key = reqSetKey(g);
+  var folded = !!dimSetFold[key];
+  var st = reqSetState(g);
+  var ids = reqSetIds(g);
+  var total = g.rows.reduce(function(n, r){ return n + (Number(r.count) || 0); }, 0);
+  var name = g.set ? g.set.name : "未分组";
+  var meta = ids.length + " 个项目" + (total ? " · 合计 " + total : "");
+  return '<div class="dim-set' + (folded ? " collapsed" : "") + '" data-dim-set-wrap="' + esc(key) + '">' +
+    '<div class="dim-set-head" role="button" tabindex="0" data-dim-set="' + esc(key) + '" data-label="' + esc(name.toLowerCase()) +
+      '" aria-pressed="' + st + '" title="选择整个' + (g.set ? "项目集" : "分组") + '：' + esc(name) + '">' +
+      '<button class="dim-fold" type="button" data-dim-fold="' + esc(key) + '" aria-expanded="' + (folded ? "false" : "true") +
+        '" aria-label="' + (folded ? "展开" : "收起") + esc(name) + '">' + icon("down", 12) + '</button>' +
+      '<span class="ck dim-set-ck" aria-hidden="true">' +
+        (st === "all" ? icon("check", 13) : (st === "mixed" ? icon("minus", 13) : "")) + '</span>' +
+      (g.set && g.set.color ? '<i class="cdot" style="background:' + esc(g.set.color) + '"></i>' : "") +
+      '<span class="dim-set-name">' + esc(name) + '</span>' +
+      '<span class="dim-set-meta">' + esc(meta) + '</span>' +
+    '</div>' +
+    '<div class="dim-set-body">' + g.rows.map(function(r){ return reqRowHTML(r, "", "dim-sub"); }).join("") + '</div>' +
+    '</div>';
+}
+/* 未归类是「没有项目的任务」这一个空值项，不单列分组头 */
+function reqNoneHTML(meta){
+  var on = state.reqs.indexOf("__none") !== -1;
+  var n = meta.unassigned || 0;
+  if(!(n > 0) && !on) return "";
+  return '<div class="dim-set dim-none" data-dim-set-wrap="__none">' +
+    reqRowHTML({ id:"__none", name:"未归类", count:n, on:on }, "无项目", "") + '</div>';
+}
+function toggleReqFold(btn){
+  var key = btn.dataset.dimFold;
+  var box = btn.closest(".dim-set");
+  if(!box) return;
+  var collapsed = !dimSetFold[key];
+  dimSetFold[key] = collapsed;
+  box.classList.toggle("collapsed", collapsed);
+  btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  var nameEl = box.querySelector(".dim-set-name");
+  btn.setAttribute("aria-label", (collapsed ? "展开" : "收起") + (nameEl ? nameEl.textContent : ""));
+}
+function renderReqDimMenu(meta){
+  var groups = reqGroups(meta);
+  var hasNone = (meta.unassigned || 0) > 0 || state.reqs.indexOf("__none") !== -1;
+  var totalRows = groups.reduce(function(n, g){ return n + g.rows.length; }, 0) + (hasNone ? 1 : 0);
+  var body = groups.map(reqSetHTML).join("") + reqNoneHTML(meta);
+  if(!body) body = '<p class="foot-note dim-empty">当前空间还没有可选的' + DIM_ORDER.reqs + '。</p>';
+  var search = totalRows > 8
+    ? '<div class="menu-field dim-search"><input type="search" data-dim-q value="' + esc(dimQ) +
+      '" placeholder="搜索项目或项目集…（共 ' + totalRows + ' 个）" aria-label="搜索项目" autocomplete="off"></div>'
+    : "";
+  dimMenu.dataset.grouped = "1";
+  dimMenu.innerHTML = '<div class="menu-title">' + DIM_ORDER.reqs + '</div>' + search +
+    '<div class="dim-list dim-groups">' + body + '<p class="foot-note dim-empty" data-dim-empty hidden>没有匹配的项目</p></div>' +
+    '<div class="menu-foot"><button class="btn sm" type="button" data-dim-clear="reqs"' +
+      (state.reqs.length ? "" : " disabled") + '>清空项目</button></div>';
+  /* 没有搜索框（项目不多）时也要按浏览态把空项目收起来 */
+  applyReqDimSearch();
+  if(search) applyDimSearch();
+}
 function renderDimMenu(kind){
   var meta = state.board && state.board.meta;
   if(!meta){
     dimMenu.innerHTML = '<div class="menu-field"><p class="foot-note" style="margin:0">筛选数据尚未加载，请稍候。</p></div>';
     return;
   }
+  if(kind === "reqs"){ renderReqDimMenu(meta); return; }
+  dimMenu.dataset.grouped = "";
   var items = dimItemsOf(kind, meta);
   var rows = items.map(function(o){
     var val = itemVal(o);
@@ -407,12 +545,39 @@ function applyDimSearch(){
   var input = dimMenu.querySelector("[data-dim-q]");
   if(!input) return;
   dimQ = String(input.value || "").toLowerCase();
+  if(dimMenu.dataset.grouped === "1"){ applyReqDimSearch(); return; }
   var shown = 0;
   dimMenu.querySelectorAll(".dim-opt").forEach(function(btn){
     var hit = !dimQ || btn.getAttribute("aria-pressed") === "true"
       || String(btn.dataset.label || "").indexOf(dimQ) !== -1;
     btn.hidden = !hit;
     if(hit) shown++;
+  });
+  var empty = dimMenu.querySelector("[data-dim-empty]");
+  if(empty) empty.hidden = shown > 0;
+}
+/* 项目分组搜索：命中项目集名时整组项目一起露出；0 计数项目只在搜索态出现且禁选。
+   已选中的项目不因搜索隐藏，否则用户看不到自己刚勾了什么。 */
+function applyReqDimSearch(){
+  var shown = 0;
+  dimMenu.querySelectorAll(".dim-set[data-dim-set-wrap]").forEach(function(box){
+    var head = box.querySelector("[data-dim-set]");
+    var setHit = !!dimQ && head && String(head.dataset.label || "").indexOf(dimQ) !== -1;
+    var hitRows = 0;
+    box.querySelectorAll(".dim-opt").forEach(function(btn){
+      var on = btn.getAttribute("aria-pressed") === "true";
+      var zero = btn.dataset.zero === "1";
+      /* 浏览态只列有数据的项目；搜到时才把 0 计数项目以禁选行摆出来 */
+      var hit = dimQ
+        ? (on || setHit || String(btn.dataset.label || "").indexOf(dimQ) !== -1)
+        : (on || !zero);
+      btn.disabled = !!dimQ && zero;
+      btn.hidden = !hit;
+      if(hit) hitRows++;
+    });
+    box.hidden = hitRows === 0;
+    box.classList.toggle("searching", !!dimQ);
+    shown += hitRows;
   });
   var empty = dimMenu.querySelector("[data-dim-empty]");
   if(empty) empty.hidden = shown > 0;
@@ -430,8 +595,26 @@ function syncDimMenu(){
     var ck = btn.querySelector(".ck");
     if(ck) ck.innerHTML = on ? icon("check", 13) : "";
   });
+  if(kind === "reqs" && dimMenu.dataset.grouped === "1") syncReqSetHeads();
   var clear = dimMenu.querySelector("[data-dim-clear]");
   if(clear) clear.disabled = selected.length === 0;
+}
+/* 集头三态随勾选刷新；组内项目计数来自打开菜单时的 meta，重排留给下次打开 */
+function syncReqSetHeads(){
+  var meta = state.board && state.board.meta;
+  if(!meta) return;
+  var groups = reqGroups(meta);
+  dimMenu.querySelectorAll("[data-dim-set-wrap]").forEach(function(box){
+    var key = box.dataset.dimSetWrap;
+    var g = null;
+    for(var i = 0; i < groups.length; i++) if(reqSetKey(groups[i]) === key){ g = groups[i]; break; }
+    if(!g) return;
+    var st = reqSetState(g);
+    var head = box.querySelector("[data-dim-set]");
+    if(head) head.setAttribute("aria-pressed", st);
+    var ck = box.querySelector(".dim-set-ck");
+    if(ck) ck.innerHTML = st === "all" ? icon("check", 13) : (st === "mixed" ? icon("minus", 13) : "");
+  });
 }
 function openDimMenu(kind, anchor){
   if(UI.popOpen(dimMenu) && dimMenu.dataset.kind === kind){ UI.closeAllPops(); return; }
@@ -1219,6 +1402,16 @@ function handleFilterClick(e){
   }
   var dimBtn = e.target.closest("[data-dim-open]");
   if(dimBtn){ openDimMenu(dimBtn.dataset.dimOpen, dimBtn); return; }
+  /* 项目分组头：折叠箭头只收回组，点其余位置整集勾选 / 取消；先判箭头避免误选 */
+  var fold = e.target.closest("[data-dim-fold]");
+  if(fold){ toggleReqFold(fold); return; }
+  var setHead = e.target.closest("[data-dim-set]");
+  if(setHead){
+    var meta = state.board && state.board.meta;
+    var hitGroup = meta ? reqGroups(meta).filter(function(g){ return reqSetKey(g) === setHead.dataset.dimSet; })[0] : null;
+    if(hitGroup) toggleReqSet(hitGroup);
+    return;
+  }
   var edit = e.target.closest("[data-edit-dim]");
   if(edit){ editFilterDim(edit.dataset.editDim); return; }
   var mfDimBtn = e.target.closest("[data-mf-dim]");
@@ -1340,6 +1533,15 @@ moreFilterMenu.addEventListener("change", function(e){
   reloadFilteredViews();
 });
 dimMenu.addEventListener("click", handleFilterClick);
+/* 组头是 div[role=button]：回车 / 空格等同点击；折叠按钮自己处理 */
+dimMenu.addEventListener("keydown", function(e){
+  if(e.key !== "Enter" && e.key !== " ") return;
+  if(e.target.closest("[data-dim-fold]")) return;
+  var head = e.target.closest("[data-dim-set]");
+  if(!head) return;
+  e.preventDefault();
+  head.click();
+});
 var dueMenuEl = $("dueMenu");
 if(dueMenuEl) dueMenuEl.addEventListener("click", handleFilterClick);
 /* 浮层打开后会挂到 body 上，点击不再经过筛选栏：菜单自身也要接管点击 */

@@ -17,7 +17,7 @@ import * as listPrefs from "../core/list-preferences.js";
 import { activeView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead, syncAssocViewBtns } from "../core/task-drawer.js";
-import { canEditReq, catNameById, catTag, projectOptionsHTML, reqNameById, rt, setNameById } from "../core/state.js";
+import { canEditReq, catNameById, catTag, projectGroups, projectOptionsHTML, reqNameById, rt, setNameById } from "../core/state.js";
 import { UI, esc, toast, copyToClipboard } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { PRIORITIES, assocLinkHTML, taskDescText, taskVersionIds, taskVersionLinksHTML, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML, demandNoText } from "../lib/format.js";
@@ -1420,7 +1420,8 @@ function demInlineMenu(anchor, title, items, onPick){
   menu.style.minWidth = "196px";
   menu.innerHTML = '<div class="menu-title">' + esc(title) + '</div>'
     + items.map(function(it){
-        return '<button class="menu-item" type="button" data-dem-inline-pick="' + esc(it.value) + '">'
+        if(it.header) return '<div class="menu-sec fact-sec">' + it.header + '</div>';
+        return '<button class="menu-item' + (it.sub ? " fact-sub" : "") + '" type="button" data-dem-inline-pick="' + esc(it.value) + '">'
           + it.html + (it.current ? '<span class="k">当前</span>' : '') + '</button>';
       }).join("");
   UI.openPop(menu, anchor, { align:"left", width:210, onClose:function(){ menu.remove(); } });
@@ -1467,10 +1468,16 @@ function openDemInlineMenu(btn){
     var list = rt.reqList.filter(function(req){
       return req.id === d.reqId || (!req.archivedAt && canEditReq(req.id));
     });
-    demInlineMenu(btn, "所属项目", list.map(function(req){
-      return { value:req.id, current:req.id === d.reqId,
-        html:esc(req.name) + (req.archivedAt ? '<span class="k">已归档</span>' : '') };
-    }), function(reqId){
+    /* 层级与筛选栏同口径：项目集标题 + 二级项目；当前项目可能已归档，保留在组内 */
+    var items = [];
+    projectGroups(list).forEach(function(g){
+      items.push({ header: esc(g.set ? g.set.name : "未分组") });
+      g.rows.forEach(function(req){
+        items.push({ value:req.id, current:req.id === d.reqId, sub:true,
+          html:esc(req.name) + (req.containerKind ? "（公共）" : "") + (req.archivedAt ? "（已归档）" : "") });
+      });
+    });
+    demInlineMenu(btn, "所属项目", items, function(reqId){
       if(reqId === d.reqId) return;
       demQuickUpdate(btn, d, "move", { reqId:reqId }, "已移至「" + reqNameById(reqId) + "」");
     });
@@ -1961,12 +1968,19 @@ function demFilterMenuHTML(boardOnly){
     return '<button class="chip" type="button" data-dem-f="cats" data-dem-fv="' + esc(o.id) + '" aria-pressed="' + on + '">' +
       esc(o.name) + ' <span class="n">' + (counts.cats[o.id] || 0) + '</span></button>';
   }).join("");
-  var reqInner = rt.reqList.map(function(r){
-    var on = demSmart.reqs.indexOf(r.id) !== -1;
-    if(!(counts.reqs[r.id] > 0) && !on) return "";
-    return '<button class="chip" type="button" data-dem-f="reqs" data-dem-fv="' + esc(r.id) + '" aria-pressed="' + on + '">' +
-      esc(r.name) + ' <span class="n">' + (counts.reqs[r.id] || 0) + '</span></button>';
-  }).join("");
+  var reqInner = "";
+  projectGroups(rt.reqList).forEach(function(g){
+    var chips = g.rows.map(function(r){
+      var on = demSmart.reqs.indexOf(r.id) !== -1;
+      if(!(counts.reqs[r.id] > 0) && !on) return "";
+      return '<button class="chip" type="button" data-dem-f="reqs" data-dem-fv="' + esc(r.id) + '" aria-pressed="' + on + '">' +
+        esc(r.name) + (r.containerKind ? "（公共）" : "") + ' <span class="n">' + (counts.reqs[r.id] || 0) + '</span></button>';
+    }).filter(Boolean);
+    if(!chips.length) return;
+    /* 组头项目数按实际露出的 chip 计，避免与 0 计数被隐藏的行对不上 */
+    reqInner += '<div class="fdd-grp"><span>' + esc(g.set ? g.set.name : "未分组") + '</span>'
+      + '<span class="n">' + chips.length + ' 个项目</span></div>' + chips.join("");
+  });
   var html = '<div class="menu-title">筛选需求</div>' +
     section("优先级", priInner) + section("类型", kindInner) + section("分类", catInner)
     + (boardOnly ? "" : section("项目", reqInner));
@@ -5630,9 +5644,11 @@ function fillDrawerDemandSelect(reqId, keep){
     html += '<option value="' + esc(d.id) + '" data-req="' + esc(d.reqId || "") + '" data-status="' + esc(d.status || "") + '">'
       + esc(d.title) + (tag ? "（" + esc(tag) + "）" : "") + '</option>';
   });
-  /* 编辑时原关联已被删除/失效：保留原值展示，保存时后端会静默解绑 */
+  /* 编辑时原关联可能不在本项目候选里（已删除 / 跨项目存量关联 / 超出候选页）：
+     保留原值展示，保存时按原关联提交。跨项目存量关联后端已放宽，不再静默解绑。
+     这里不能伪造 data-req，否则切换项目会自动跟随一个并不存在的归属。 */
   if(keep && !matched){
-    html += '<option value="' + esc(keep) + '" data-req="' + esc(reqId) + '">原关联需求（已不在当前候选页）</option>';
+    html += '<option value="' + esc(keep) + '">原关联需求（未在当前候选列表，保留原关联）</option>';
     matched = true;
   }
   if(drawerDemandOpts.total > drawerDemandOpts.list.length){

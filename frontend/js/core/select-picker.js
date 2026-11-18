@@ -30,14 +30,20 @@ function closeActive() {
   try { rec.close(true); } catch (e) { /* noop */ }
 }
 
-/* 把 option / optgroup 摊平成渲染描述，保留分组顺序 */
+/* 把 option / optgroup 摊平成渲染描述，保留分组顺序。
+   分组名（项目集）并入选项搜索键：搜「流程引擎」能直接筛出组内全部项目。 */
 function collectRows(sel) {
   var rows = [];
   Array.prototype.forEach.call(sel.children, function (node) {
     if (node.tagName === "OPTGROUP") {
-      rows.push({ kind: "group", label: node.label || "" });
+      var glabel = node.label || "";
+      rows.push({ kind: "group", label: glabel });
       Array.prototype.forEach.call(node.children, function (o) {
-        if (o.tagName === "OPTION") rows.push(optRow(o));
+        if (o.tagName !== "OPTION") return;
+        var row = optRow(o);
+        row.group = glabel;
+        row.searchKey = searchKey(row.label + " " + row.path + " " + glabel);
+        rows.push(row);
       });
     } else if (node.tagName === "OPTION") {
       rows.push(optRow(node));

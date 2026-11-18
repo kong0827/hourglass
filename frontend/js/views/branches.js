@@ -1718,16 +1718,11 @@ function populateProjectFilter(){
     return;
   }
   var cur = branchProjectFilter || "";
-  /* 归档项目默认不进候选（与用例 / 缺陷一致）；已选中时保留，避免筛选被动丢失 */
-  var opts = (rt.reqList || []).filter(function(r){ return !r.archivedAt || r.id === cur; })
-    .map(function(r){ return { id: r.id, name: (r.name || r.id) + (r.archivedAt ? "（已归档）" : "") }; });
-  opts.sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "zh-CN"); });
-  var html = '<option value="">全部项目</option>';
-  opts.forEach(function(o){
-    html += '<option value="' + esc(o.id) + '">' + esc(o.name) + '</option>';
-  });
-  sel.innerHTML = html;
-  var hasCur = opts.some(function(o){ return o.id === cur; });
+  /* 归档项目默认不进候选（与用例 / 缺陷一致）；已选中时保留，避免筛选被动丢失。
+     分组与排序交给 projectOptionsHTML：集按 sortOrder、容器垫在集尾、未分组最后 */
+  var list = (rt.reqList || []).filter(function(r){ return !r.archivedAt || r.id === cur; });
+  sel.innerHTML = '<option value="">全部项目</option>' + projectOptionsHTML(list, cur);
+  var hasCur = list.some(function(r){ return r.id === cur; });
   sel.value = hasCur ? cur : "";
   if(!hasCur && branchProjectFilter) branchProjectFilter = "";
 }

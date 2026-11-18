@@ -7,7 +7,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead } from "../core/task-drawer.js";
 import { reloadFilteredViews } from "../core/filters-ui.js";
 import { showView } from "../core/router.js";
-import { canEditReq, projectOptionsHTML, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
+import { canEditReq, projectOptionsHTML, projectRefsEnriched, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { assocLinkHTML, normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, releasePlanNoText, COLUMNS, colName, dayKey, dayDiff, parseDate, fmtMinute, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso } from "../lib/format.js";
@@ -414,7 +414,10 @@ function renderAllVersions(){
   }
   phaseBody.innerHTML = '<div class="panel allv-panel">'
     + '<div class="phase-tbl-tools allv-tools">'
-    + '<label class="phase-filter">项目' + allVersionsSelect("project", [["", "全部项目"]].concat(projectIds.map(function(id){ return [id, projectNames[id]]; })), allVersionsFilters.project, "按项目筛选") + '</label>'
+    + '<label class="phase-filter">项目<select class="mini-select" data-allv-filter="project" aria-label="按项目筛选">'
+    + '<option value="">全部项目</option>'
+    + projectOptionsHTML(projectRefsEnriched(projectIds.map(function(id){ return { id:id, name:projectNames[id] }; })), allVersionsFilters.project)
+    + '</select></label>'
     + '<label class="phase-filter">状态' + allVersionsSelect("status", [["", "全部状态"], ["active", "进行中"], ["planned", "计划中"], ["released", "已发布"], ["closed", "已关闭"], ["canceled", "已取消"]], allVersionsFilters.status, "按状态筛选") + '</label>'
     + '<input class="phase-filter-input" type="search" data-allv-kw value="' + esc(allVersionsFilters.q) + '" placeholder="搜索版本或项目" aria-label="搜索版本或项目">'
     + '<span class="phase-tbl-count">' + filtered.length + ' 个版本 · ' + manageCount + ' 个可管理项目</span>'
@@ -528,7 +531,9 @@ function renderSchedule(){
   phaseBody.innerHTML = '<div class="panel"><div class="panel-head"><h3>跨项目发布日程</h3>'
     + '<span class="meta-right">' + rows.length + ' 份计划 · 未完成 ' + openCount + ' · 已过期 ' + overdueCount + '</span></div>'
     + '<div class="row row-gap schedule-filters">'
-    + select("project", [["", "全部项目"]].concat(projects.map(function(r){ return [r.id, r.name]; })), f.project, "项目")
+    + '<label class="phase-filter"><span>项目</span>'
+    + '<select class="mini-select" data-schedule-filter="project" aria-label="按项目筛选">'
+    + '<option value="">全部项目</option>' + projectOptionsHTML(projects, f.project) + '</select></label>'
     + select("env", [["", "全部环境"], ["production", "生产"], ["staging", "预发布"], ["test", "测试"]], f.env, "环境")
     + select("status", [["open", "未完成"], ["all", "全部状态"], ["ready", "仅就绪"], ["draft", "仅草稿"], ["completed", "已完成"], ["canceled", "已取消"]], f.status, "状态")
     + select("range", [["30", "未来 30 天"], ["90", "未来 90 天"], ["around", "前后 3 个月"], ["all", "全部时间"]], f.range, "时间范围")

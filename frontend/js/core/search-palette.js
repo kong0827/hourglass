@@ -3,7 +3,7 @@
 import { API } from "./api.js";
 import { $ } from "./dom.js";
 import { showView } from "./router.js";
-import { rt } from "./state.js";
+import { reqSetId, rt, setNameById } from "./state.js";
 import { openTaskById } from "./task-actions.js";
 import { UI, esc, toast } from "./ui.js";
 
@@ -70,13 +70,16 @@ function branchMeta(h){
 
 function metaText(h){
   if(h.type === "branch") return branchMeta(h);
+  if(h.type === "project"){
+    /* 项目命中带上项目集，跨项目同名时能分清归属 */
+    return [setNameById(reqSetId(h.id)), PROJECT_STATUS[h.status] || "项目"].filter(Boolean).join(" · ");
+  }
   var parts = [];
   if(h.reqName) parts.push(h.reqName);
   if(h.type === "doc" && h.extra) parts.push(DOC_TYPE[h.extra] || h.extra);
   if(h.type === "case" && h.extra) parts.push(h.extra);
   if(h.type === "task" && h.extra) parts.push(h.extra);
   if(h.type === "demand" && h.extra) parts.push(h.extra);
-  if(h.type === "project") parts.push(PROJECT_STATUS[h.status] || "项目");
   if(h.type === "demand") parts.push(DEMAND_STATUS[h.status] || "");
   if(h.type === "case") parts.push(CASE_STATUS[h.status] || "未执行");
   if(h.type === "doc") parts.push(h.status === "published" ? "已发布" : "草稿");

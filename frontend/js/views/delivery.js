@@ -7,7 +7,7 @@
 import { API } from "../core/api.js";
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
-import { rt } from "../core/state.js";
+import { reqSetId, rt, setSortOf, setNameById } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { DD } from "../lib/delivery-doc.js";
 import { assocLinkHTML } from "../lib/format.js";
@@ -64,12 +64,22 @@ function renderPicker() {
     if (box) box.innerHTML = UI.errorState(ex.message || "版本清单加载失败");
   });
 }
+function pickerSetOf(reqId){
+  var sid = reqSetId(reqId);
+  var color = "";
+  for(var i = 0; sid && i < (rt.projectSets || []).length; i++){
+    if(rt.projectSets[i].id === sid) color = rt.projectSets[i].color || "";
+  }
+  return { id:sid || "", name:sid ? setNameById(sid) : "", sort:sid ? setSortOf(sid) : 9999, color:color };
+}
 function paintPicker() {
   var box = document.getElementById("dlPickerList");
   if (!box) return;
   var q = pickerQuery.trim().toLowerCase();
-  var rows = (pickerRows || []).filter(function (r) {
-    return !q || (r.projectName + " " + r.versionName).toLowerCase().indexOf(q) !== -1;
+  var rows = (pickerRows || []).map(function (r) {
+    return { row:r, set:pickerSetOf(r.reqId) };
+  }).filter(function (it) {
+    return !q || (it.row.projectName + " " + it.row.versionName + " " + it.set.name).toLowerCase().indexOf(q) !== -1;
   });
   if (!rows.length) {
     box.innerHTML = UI.emptyState({
@@ -78,25 +88,46 @@ function paintPicker() {
     });
     return;
   }
-  var groups = {};
-  rows.forEach(function (r) { (groups[r.reqId] = groups[r.reqId] || { name: r.projectName, list: [] }).list.push(r); });
-  var body = Object.keys(groups).map(function (reqId) {
-    var g = groups[reqId];
-    return '<div class="dl-modgroup"><div class="dl-modgroup-head"><span class="dl-mod">' + esc(g.name)
-      + '</span><span class="cnt">' + g.list.length + " 个版本</span></div>"
-      + '<div class="dl-rows">' + g.list.map(function (r) {
-        var released = r.versionStatus === "released" || !!r.latestReleaseDate;
-        var sub = [r.versionId, r.targetDate ? "目标 " + DD.dateText(r.targetDate) : "未设目标日",
-          r.latestReleaseDate ? "最近生产发布 " + DD.dateText(r.latestReleaseDate) : "无生产发布记录"].join(" · ");
-        return '<div class="dl-row body" style="grid-template-columns:96px minmax(0,1fr) 120px">'
-          + "<span>" + (released ? '<span class="dl-badge ok">有发布记录</span>' : '<span class="dl-badge warn">未确认发布</span>') + "</span>"
-          + '<span class="tt"><b>' + assocLinkHTML("version", r.versionId, r.versionName, { req:reqId }) + "</b><span>" + esc(sub) + "</span></span>"
-          + '<span><button class="btn sm primary" type="button" data-dl-open="' + esc(r.versionId) + '">'
-          + icon("note", 13) + "生成说明</button></span></div>";
-      }).join("") + "</div></div>";
+  /* 三层：项目集 → 项目 → 版本；项目集按 sortOrder，未分组垫底 */
+  var setMap = {}, setIds = [];
+  rows.forEach(function (it) {
+    var sid = it.set.id || "";
+    if (!setMap[sid]) {
+      setMap[sid] = { info:it.set, projects:{}, projectIds:[] };
+      setIds.push(sid);
+    }
+    var sm = setMap[sid], pid = it.row.reqId;
+    if (!sm.projects[pid]) {
+      sm.projects[pid] = { name: it.row.projectName, list: [] };
+      sm.projectIds.push(pid);
+    }
+    sm.projects[pid].list.push(it.row);
+  });
+  setIds.sort(function (a, b) { return setMap[a].info.sort - setMap[b].info.sort; });
+  var body = setIds.map(function (sid) {
+    var sm = setMap[sid];
+    var projectHTML = sm.projectIds.map(function (pid) {
+      var g = sm.projects[pid];
+      return '<div class="dl-modgroup"><div class="dl-modgroup-head"><span class="dl-mod">' + esc(g.name)
+        + '</span><span class="cnt">' + g.list.length + " 个版本</span></div>"
+        + '<div class="dl-rows">' + g.list.map(function (r) {
+          var released = r.versionStatus === "released" || !!r.latestReleaseDate;
+          var sub = [r.versionId, r.targetDate ? "目标 " + DD.dateText(r.targetDate) : "未设目标日",
+            r.latestReleaseDate ? "最近生产发布 " + DD.dateText(r.latestReleaseDate) : "无生产发布记录"].join(" · ");
+          return '<div class="dl-row body" style="grid-template-columns:96px minmax(0,1fr) 120px">'
+            + "<span>" + (released ? '<span class="dl-badge ok">有发布记录</span>' : '<span class="dl-badge warn">未确认发布</span>') + "</span>"
+            + '<span class="tt"><b>' + assocLinkHTML("version", r.versionId, r.versionName, { req:pid }) + "</b><span>" + esc(sub) + "</span></span>"
+            + '<span><button class="btn sm primary" type="button" data-dl-open="' + esc(r.versionId) + '">'
+            + icon("note", 13) + "生成说明</button></span></div>";
+        }).join("") + "</div></div>";
+    }).join("");
+    return '<div class="dl-setgroup"><div class="dl-setgroup-head">'
+      + (sm.info.color ? '<i class="cdot" style="background:' + esc(sm.info.color) + '"></i>' : "")
+      + '<span class="dl-setname">' + esc(sm.info.name || "未分组") + '</span>'
+      + '<span class="cnt">' + sm.projectIds.length + " 个项目</span></div>" + projectHTML + "</div>";
   }).join("");
   box.innerHTML = '<div class="dl-rfield" style="max-width:340px;margin:12px 0">'
-    + '<input class="input" type="search" id="dlPickerQuery" placeholder="搜索项目或版本" value="' + esc(pickerQuery) + '" aria-label="搜索版本">'
+    + '<input class="input" type="search" id="dlPickerQuery" placeholder="搜索项目集、项目或版本" value="' + esc(pickerQuery) + '" aria-label="搜索版本">'
     + "</div>" + body;
   var input = document.getElementById("dlPickerQuery");
   if (input) input.addEventListener("input", function () {
