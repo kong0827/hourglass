@@ -366,6 +366,8 @@
       out.members = [{ name: "我", count: 2, minutes: 420 }];
       out.pendingDone = [];
       out.openP0 = 8;
+      /* 历史周的工时跟着周走，否则工时卡与下钻明细对不上 */
+      out.workMinutes = { mine: 1255, mineWeek: 420 };
     }
     return out;
   }
@@ -1380,6 +1382,27 @@
       /* 带上 weekOffset：翻上一周要看到不同的数据，否则测不出「AI 周报跟着周走」 */
       var wM = /[?&]weekOffset=(-?\d+)/.exec(u);
       data = reviewAt(wM ? Number(wM[1]) : 0);
+    } else if (clean === "/api/review/hour-logs") {
+      /* 工时卡下钻：分钟数与 review 的 workMinutes 对齐（本周 705 = 11h45m，上周 420） */
+      var hM = /[?&]weekOffset=(-?\d+)/.exec(u);
+      var hOff = hM ? Number(hM[1]) : 0;
+      var hItems = hOff === 0
+        ? [
+            { id: 1, date: shift(-5), member: "我", taskId: "K1", title: "重构权限校验中间件", reqId: "R1", reqName: "流程引擎", minutes: 240, origin: "auto" },
+            { id: 2, date: shift(-3), member: "我", taskId: "K2", title: "导出 CSV 补工时列", reqId: "R1", reqName: "流程引擎", minutes: 120, origin: "auto" },
+            { id: 3, date: shift(-2), member: "我", taskId: "K8", title: "代理登录权限修正", reqId: null, reqName: null, minutes: 225, origin: "manual" },
+            { id: 4, date: shift(-1), member: "我", taskId: "K7", title: "登录重构与验证码", reqId: null, reqName: null, minutes: 120, origin: "auto" }
+          ]
+        : [
+            { id: 5, date: shift(hOff * 7 - 1), member: "我", taskId: "K7", title: "登录重构与验证码", reqId: null, reqName: null, minutes: 240, origin: "auto" },
+            { id: 6, date: shift(hOff * 7 - 3), member: "我", taskId: "K8", title: "代理登录权限修正", reqId: null, reqName: null, minutes: 180, origin: "auto" }
+          ];
+      data = {
+        weekOffset: hOff, weekStart: shift(-6 + hOff * 7), weekEnd: shift(hOff * 7),
+        total: hItems.length, offset: 0, limit: 100, hasMore: false,
+        totalMinutes: hItems.reduce(function (sum, x) { return sum + x.minutes; }, 0),
+        items: hItems
+      };
     } else if (clean === "/api/ai/review/polish") {
       /* 周报接口的返回值跟着请求里的 weekOffset 走（预览稿里没有真模型，body 里就是刚填的补充说明） */
       var off = reqBody && typeof reqBody.weekOffset === "number" ? reqBody.weekOffset : 0;

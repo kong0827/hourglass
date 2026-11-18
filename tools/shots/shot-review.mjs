@@ -51,6 +51,9 @@ function js(code) {
 const dropBanner = `(() => {
   const els = [...document.querySelectorAll('body > div')].filter(d => (d.getAttribute('style') || '').includes('99999'))
   els.forEach(e => e.remove())
+  /* 未读通知气泡与 toast 是浮层，截图里会挡住页面内容 */
+  const ub = document.getElementById('unreadBubble'); if (ub) ub.remove()
+  document.querySelectorAll('#toastWrap > *, .toast-layer > *, .toast').forEach(e => e.remove())
   return els.length
 })()`
 const ready = `(() => {
@@ -58,7 +61,7 @@ const ready = `(() => {
   return {
     ready: !!h && h.children.length > 0,
     cards: h ? h.children.length : 0,
-    stats: [...document.querySelectorAll('#reviewStats .stat, #reviewStats > *')].map(e => e.textContent.trim().replace(/\\s+/g, ' ')).slice(0, 8),
+    stats: [...document.querySelectorAll('#statGrid > *')].map(e => e.textContent.trim().replace(/\\s+/g, ' ')).slice(0, 8),
     scope: (document.getElementById('reviewHoursScope') || {}).textContent || '',
     members: document.querySelectorAll('[data-review-member]').length,
     dist: [...document.querySelectorAll('#reqDist > *')].map(e => e.textContent.trim().replace(/\\s+/g, ' ')).slice(0, 5)
