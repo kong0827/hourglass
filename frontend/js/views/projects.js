@@ -642,7 +642,9 @@ function projectFormSnapshot(){
     rPlanStart ? rPlanStart.value : "",
     rPlanEnd ? rPlanEnd.value : "",
     rSet ? rSet.value : "",
-    rTemplate ? rTemplate.value : "",
+    /* 模板列表异步到达后会把空值自动落成 blank；把「未加载」和「默认模板」归一，
+       否则打开侧板后模板晚到会被误判成已修改，关闭时莫名弹「放弃修改」 */
+    (rTemplate && rTemplate.value) || "blank",
     rt.formReqStatus,
     projectMemberPayload().map(function(g){ return g.userId + ":" + g.access; }).sort().join(",")
   ]);

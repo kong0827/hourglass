@@ -119,7 +119,7 @@ try{
   await call("Page.navigate", { url: BASE + "/" });
   await waitFor(`import("./js/core/state.js").then(({rt}) => rt.currentWs && rt.currentWs.id === ${JSON.stringify(WS)} && rt.reqsLoaded)`, "切换空间", 25000);
 
-  /* 1. 桌面：编辑项目 → 右侧 680 侧板（与工作项抽屉同宽），列表仍在左侧 */
+  /* 1. 桌面：编辑项目 → 右侧 640 侧板，列表仍在左侧 */
   await ev(`import("./js/core/router.js").then(m => { m.showView("projects"); return true; })`);
   await openProjectEdit();
   const proj = await ev(`(() => {
@@ -140,7 +140,7 @@ try{
     };
   })()`);
   assert(proj.side, "编辑项目走右侧侧板（.modal-layer.side）");
-  assert(proj.width >= 640 && proj.width <= 720, "侧板宽度 680（实测 " + proj.width + "）");
+  assert(proj.width >= 600 && proj.width <= 680, "侧板宽度 640（实测 " + proj.width + "）");
   assert(proj.right >= proj.vw - 2, "侧板贴右，列表留在左侧（面板右缘 " + proj.right + "/" + proj.vw + "）");
   assert(proj.listWidth > 200 && proj.left >= 400, "项目列表仍可见（宽 " + proj.listWidth + "，面板左缘 " + proj.left + "）");
   assert(proj.secs.join("|") === "基本信息|计划与负责人|项目成员|高级设置", "字段分组：" + proj.secs.join(" / "));
