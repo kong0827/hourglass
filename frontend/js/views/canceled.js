@@ -106,18 +106,17 @@ function chipsHTML(){
 
 function rowHTML(t){
   var project = t.reqName || "";
-  var from = t.cancelFrom ? colName(t.cancelFrom) : "";
-  var sub = [project, from ? "取消前：" + from : ""].filter(Boolean).join(" · ");
   var editable = canEditTask(t);
   return '<div class="list-row wc-row" data-cn-task="' + esc(t.id) + '" tabindex="0" role="listitem"' +
       ' aria-label="' + esc(t.title) + '">' +
     '<span class="cell wcl-title"><span class="wcl-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
-      (sub ? '<span class="wcl-sub">' + esc(sub) + '</span>' : '') + '</span>' +
+      (project ? '<span class="wcl-sub">' + esc(project) + '</span>' : '') + '</span>' +
+    '<span class="cell">' + (t.cancelFrom ? esc(colName(t.cancelFrom)) : '<span class="muted">—</span>') + '</span>' +
     '<span class="cell"><span class="tag">' + esc(reasonName(t.cancelReason)) + '</span></span>' +
     '<span class="cell">' + esc(t.owner || "未分配") + '</span>' +
     '<span class="cell">' + esc(fmtTs(t.canceledAt)) + '</span>' +
     '<span class="cell ta-r">' +
-      (editable ? '<button class="btn sm" type="button" data-cn-restore="' + esc(t.id) + '">恢复</button>'
+      (editable ? '<button class="btn sm soft" type="button" data-cn-restore="' + esc(t.id) + '">恢复</button>'
                 : '<span class="mini-tag mute" title="你对该项目只有查看权限">只读</span>') +
     '</span>' +
   '</div>';
@@ -130,8 +129,8 @@ function listHTML(){
       text: st.reason ? "切到「全部」看看其他原因。" : "工作项取消后会归档到这里，不计逾期，也不进完成率分母。"
     });
   }
-  return '<div class="wc-list cn-list" style="--wc-cols:minmax(260px,3fr) 96px 120px 108px 84px;--wc-min:668px">' +
-    '<div class="list-head"><span>工作项</span><span>取消原因</span><span>负责人</span><span>取消时间</span><span class="ta-r">操作</span></div>' +
+  return '<div class="wc-list cn-list" style="--wc-cols:minmax(260px,3fr) 96px 96px 120px 108px 84px;--wc-min:764px">' +
+    '<div class="list-head"><span>工作项</span><span>取消前状态</span><span>取消原因</span><span>负责人</span><span>取消时间</span><span class="ta-r">操作</span></div>' +
     '<div class="wc-lane wc-flat"><div class="wc-lane-rows" role="list">' +
       st.items.map(rowHTML).join("") +
     '</div></div>' +
@@ -155,7 +154,8 @@ function render(){
       '<span class="wc-total">' + esc(scope) + '</span>' +
     '</div></header>' +
     '<div class="cn-body">' +
-      '<div class="cn-filters">' + chipsHTML() + '</div>' +
+      '<div class="cn-filters">' + chipsHTML() +
+        '<span class="cn-hint">已取消不计逾期，也不进完成率分母</span></div>' +
       '<div class="cn-list-wrap">' + listHTML() + '</div>' +
     '</div>';
 }

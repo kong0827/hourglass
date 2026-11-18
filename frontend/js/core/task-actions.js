@@ -429,7 +429,9 @@ function openCardMenu(anchor, taskId){
   }
   if(editable){
     html += '<div class="menu-sep"></div>';
-    if(!isCanceled){
+    /* 与原型一致：已完成卡片只留「取消完成（重开）」，取消入口不出现；
+       已取消卡片只能恢复，不能再取消 */
+    if(!isCanceled && !isDone){
       html += '<button class="menu-item" type="button" data-cm="cancel">' + icon("close", 14) + '取消工作项…</button>';
     }
     html += '<button class="menu-item danger" type="button" data-cm="del">' + icon("trash", 14) + '移到回收站</button>';

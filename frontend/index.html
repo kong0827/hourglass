@@ -444,7 +444,10 @@
           </label>
           <span class="foot-note board-toolbar-hint">列仍是状态，组只决定卡片归堆</span>
           <span class="board-toolbar-end">
-            <button class="btn sm" id="btnCanceled" type="button" title="已取消：终态工作项归档，可逐条恢复">已取消 <span class="n" id="canceledBadge" hidden>0</span></button>
+            <button class="btn" id="btnCanceled" type="button" title="已取消：终态工作项归档，可逐条恢复">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              已取消 <span class="n" id="canceledBadge">0</span>
+            </button>
             <button class="caliber-mark warn" type="button" data-caliber-help="board.guide" aria-label="查看看板状态流转与发布徽标说明" title="查看看板状态流转与发布徽标说明">!</button>
           </span>
         </div>
@@ -3082,6 +3085,7 @@
                 </div>
               </div>
               <p class="set-hint">看板固定 5 个系统列，均不可删除；前四个可改名，「已完成」不可改名。待处理、进行中、已完成的处理规则固定，待测试、测试中与自定义列可调整。规则变更只影响之后的计时与逾期判断，不会停止已运行的计时；删除自定义列时，其工作项移入最靠前的列。</p>
+              <p class="set-hint">「已取消」是系统终态，不是看板列：不出现在上面的列配置和下面的状态流转矩阵里，也不能通过状态下拉选中。取消只能从非终态发起（已完成需先重开），入口在工作项卡片菜单与详情抽屉；归档与恢复在看板工具条的「已取消」入口。</p>
               <div class="colcfg-head" aria-hidden="true">
                 <span></span><span></span><span>列名</span><span>处理规则</span><span>类型</span><span class="right">顺序 / 删除</span>
               </div>
@@ -3112,6 +3116,7 @@
                 <span><i class="trans-dot reason"></i>需填原因</span>
                 <span><i class="trans-dot deny"></i>禁止</span>
                 <span class="foot-note">空间主 / 管理员可强制越过「禁止」</span>
+                <span class="foot-note">「已取消」是系统终态，不在矩阵内</span>
               </div>
               <div class="set-actions">
                 <button class="btn" type="button" id="btnTransReset">恢复默认</button>

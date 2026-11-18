@@ -370,9 +370,10 @@
 .cn-body{width:100%;max-width:1600px;margin:0 auto;padding:14px var(--content-pad) 32px;}
 .cn-count{font-size:13px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .cn-filters{
-  display:flex;flex-wrap:wrap;gap:8px;padding:10px;
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
 }
+.cn-hint{margin-left:auto;font-size:12px;color:var(--text-3);}
 .cn-list-wrap{margin-top:12px;}
 .cn-list-wrap .wc-list{margin-top:0;}
 .cn-more{display:flex;justify-content:center;margin-top:12px;}

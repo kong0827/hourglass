@@ -15,8 +15,9 @@
 .board-toolbar-hint{margin-left:2px;}
 /* 右侧一组：已取消入口 + 口径「!」，与左侧分组控件分开 */
 .board-toolbar-end{margin-left:auto;display:inline-flex;align-items:center;gap:8px;}
-.board-toolbar-end .btn.sm{height:28px;padding:0 10px;font-size:12px;}
-.board-toolbar-end .btn.sm .n{color:var(--text-3);font-variant-numeric:tabular-nums;}
+/* 已取消入口按原型做成标准按钮：图标 + 文案 + 常显计数，而不是只在有数时才出现的小 chip */
+.board-toolbar-end .btn{height:32px;padding:0 11px;font-size:12.5px;}
+.board-toolbar-end .btn .n{color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums;}
 #view-board .board{flex:1 1 auto;min-height:0;height:auto;}
 .board-group-head{
   position:sticky;top:0;z-index:2;flex:0 0 auto;

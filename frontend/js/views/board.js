@@ -1303,8 +1303,8 @@ function syncCanceledBadge(){
   var badge = document.getElementById("canceledBadge");
   if(!badge) return;
   var n = state.board && state.board.counts ? (state.board.counts.canceled || 0) : 0;
+  /* 入口常显，0 也显示：否则「已取消」看起来像一条普通说明，用户以为没有这个状态 */
   badge.textContent = n > 99 ? "99+" : String(n);
-  badge.hidden = n <= 0;
 }
 /* 列内滚过一屏后露出「回到顶部」；scroll 不冒泡，用捕获阶段接住 */
 board.addEventListener("scroll", function(e){
