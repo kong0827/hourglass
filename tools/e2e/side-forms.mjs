@@ -119,7 +119,7 @@ try{
   await call("Page.navigate", { url: BASE + "/" });
   await waitFor(`import("./js/core/state.js").then(({rt}) => rt.currentWs && rt.currentWs.id === ${JSON.stringify(WS)} && rt.reqsLoaded)`, "切换空间", 25000);
 
-  /* 1. 桌面：编辑项目 → 右侧 560 侧板，列表仍在左侧 */
+  /* 1. 桌面：编辑项目 → 右侧 680 侧板（与工作项抽屉同宽），列表仍在左侧 */
   await ev(`import("./js/core/router.js").then(m => { m.showView("projects"); return true; })`);
   await openProjectEdit();
   const proj = await ev(`(() => {
@@ -140,16 +140,17 @@ try{
     };
   })()`);
   assert(proj.side, "编辑项目走右侧侧板（.modal-layer.side）");
-  assert(proj.width >= 520 && proj.width <= 600, "侧板宽度 560（实测 " + proj.width + "）");
+  assert(proj.width >= 640 && proj.width <= 720, "侧板宽度 680（实测 " + proj.width + "）");
   assert(proj.right >= proj.vw - 2, "侧板贴右，列表留在左侧（面板右缘 " + proj.right + "/" + proj.vw + "）");
   assert(proj.listWidth > 200 && proj.left >= 400, "项目列表仍可见（宽 " + proj.listWidth + "，面板左缘 " + proj.left + "）");
-  assert(proj.secs.join("|") === "基本信息|计划与负责人|高级设置", "字段分组：" + proj.secs.join(" / "));
+  assert(proj.secs.join("|") === "基本信息|计划与负责人|项目成员|高级设置", "字段分组：" + proj.secs.join(" / "));
   assert(proj.stacked, "侧板内长文本字段改为单列堆叠");
   assert(proj.fields >= 9, "表单字段完整（" + proj.fields + "）");
   await shot("project-1440");
   await ev(`document.getElementById("dlgProjectX").click(); true`);
   await sleep(400);
-  assert(await ev(`document.querySelectorAll(".modal-layer.open").length === 0`), "关闭侧板后无残留浮层");
+  const openIds = await ev(`[...document.querySelectorAll(".modal-layer.open")].map(m => m.id)`);
+  assert(openIds.length === 0, "关闭侧板后无残留浮层（实测 " + JSON.stringify(openIds) + "）");
 
   /* 1b. 关闭守卫：改过字段先确认，「继续编辑」留在侧板，还原后才能直接关 */
   await openProjectEdit();
@@ -191,7 +192,7 @@ try{
     };
   })()`);
   assert(doc.side, "新建文档走右侧侧板");
-  assert(doc.width >= 520 && doc.width <= 600 && doc.right >= doc.vw - 2, "文档侧板同样 560 且贴右（实测 " + doc.width + "）");
+  assert(doc.width >= 700 && doc.width <= 740 && doc.right >= doc.vw - 2, "文档侧板 720 且贴右（实测 " + doc.width + "）");
   assert(doc.hasHead && doc.hasX, "文档侧板有标题栏与关闭按钮");
   assert(doc.fields >= 6 && doc.visInside, "文档字段完整，可见范围注入仍在表单内（" + doc.fields + " 项）");
   await shot("new-doc-1440");
