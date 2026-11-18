@@ -548,7 +548,11 @@ public class TaskCommandService {
                 throw AppException.badRequest("关联需求不存在：" + demandId);
             }
             if (reqId == null) {
-                reqId = demand.getReqId();
+                /* 调用方漏传项目（候选未就绪就保存、快捷编辑）时不能按需求所属项目搬动任务：
+                   原关联未变且任务已有项目，保持任务原项目；只有新建关联才自动带出需求项目 */
+                boolean keepOldProject = oldProjectId != null && oldDemandId != null
+                        && oldDemandId.equals(demandId);
+                reqId = keepOldProject ? oldProjectId : demand.getReqId();
                 if (reqId != null) {
                     Requirement targetProject = reqMapper.selectById(reqId);
                     if (targetProject == null || !workspaceId.equals(targetProject.getWorkspaceId())) {
@@ -556,6 +560,9 @@ public class TaskCommandService {
                     }
                 }
                 t.setReqId(reqId);
+                if (keepOldProject) {
+                    log.debug("需求关联未变且未传项目：保持任务原项目 task={} project={}", t.getId(), reqId);
+                }
             } else if (!reqId.equals(demand.getReqId())) {
                 /* 存量跨项目关联（项目集拆分遗留）：保持原关联、且任务项目没变时放行；
                    新建关联、改选需求或同时换项目，仍要求需求属于任务所选项目 */

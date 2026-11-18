@@ -243,6 +243,37 @@ class TaskCommandDeliveryScopeTest {
         assertEquals("D1", saved.getValue().getDemandId());
     }
 
+    /* 保存时漏传项目（候选未就绪 / 快捷编辑）：存量跨项目关联不能顺手把任务搬到需求所属项目 */
+    @Test
+    void legacyCrossProjectLinkDoesNotMoveTaskWhenProjectOmitted() {
+        old.setDemandId("D1");
+        demand.setReqId("R2");
+        TaskSaveRequest req = request();
+        req.setReqId(null);
+        update(req);
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).update(saved.capture());
+        assertEquals("R1", saved.getValue().getReqId());
+        assertEquals("D1", saved.getValue().getDemandId());
+    }
+
+    @Test
+    void newDemandLinkStillAdoptsItsProjectWhenProjectOmitted() {
+        old.setDemandId(null);
+        demand.setReqId("R2");
+        Requirement r2 = new Requirement();
+        r2.setId("R2");
+        r2.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(r2);
+        TaskSaveRequest req = request();
+        req.setReqId(null);
+        update(req);
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).update(saved.capture());
+        assertEquals("R2", saved.getValue().getReqId());
+        assertEquals("D1", saved.getValue().getDemandId());
+    }
+
     @Test
     void editStillRejectsNewlySelectedCrossProjectDemand() {
         old.setDemandId("D1");
