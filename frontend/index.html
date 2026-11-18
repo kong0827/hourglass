@@ -805,20 +805,22 @@
       <section class="view" id="view-projects" aria-label="项目">
         <div class="proj-layout">
           <div>
-            <div class="panel-head" style="margin-bottom:12px">
-              <h3>项目列表</h3>
-              <span class="meta-right" id="reqCount"></span>
-              <span class="project-view-actions">
-                <button class="btn sm" type="button" data-project-mode="card" aria-pressed="true">卡片</button>
-                <button class="btn sm" type="button" data-project-mode="table" aria-pressed="false">表格</button>
+            <div class="panel-head proj-list-head" style="margin-bottom:12px">
+              <h3>项目列表 <span class="proj-list-count" id="reqCount"></span></h3>
+              <div class="project-toolbar">
+                <span class="seg mini" role="group" aria-label="视图切换">
+                  <button type="button" data-project-mode="card" aria-pressed="true">卡片</button>
+                  <button type="button" data-project-mode="table" aria-pressed="false">表格</button>
+                </span>
                 <button class="btn sm" type="button" id="btnProjectColumns" hidden>显示字段</button>
                 <button class="btn sm" type="button" id="btnShowArchived" aria-pressed="false">显示已归档</button>
-              </span>
-              <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
-                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
-              </button>
-              <button class="btn sm" type="button" id="btnProjectSetNew">新建项目集</button>
-              <button class="btn primary sm ml-auto" type="button" id="btnReqNew">新建项目</button>
+                <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+                </button>
+                <span class="tb-divider" aria-hidden="true"></span>
+                <button class="btn sm" type="button" id="btnProjectSetNew">新建项目集</button>
+                <button class="btn primary sm" type="button" id="btnReqNew">新建项目</button>
+              </div>
             </div>
             <div class="req-summ" id="reqSumm" hidden></div>
             <div class="req-list" id="reqList"></div>

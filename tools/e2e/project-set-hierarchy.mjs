@@ -202,12 +202,21 @@ async function main(){
       const targetPhase = target ? (target.querySelector(".req-phase") || {}).textContent || "" : "";
       return {
         heads, items:items.length, inSet:inSet.length, ml, containers, loose, summ, phaseBars, badges, targetPhase,
+        setHandles: document.querySelectorAll("#reqList [data-set-drag]").length,
+        setHeadKeys: [...document.querySelectorAll("#reqList .req-set-head")].map(h => h.dataset.setKey || ""),
+        rowSetIds: items.map(el => el.dataset.setId || ""),
+        dropZone: !!document.querySelector("#reqList [data-set-drop-ungrouped]"),
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
       };
     })()`);
     assert(proj.heads.length >= 2, "项目列表没有按项目集分组：" + JSON.stringify(proj.heads));
     assert(proj.inSet > 0, "没有任何项目带集内缩进");
-    assert(proj.ml === "18px", "集内项目缩进不是 18px：" + proj.ml);
+    assert(proj.ml === "26px", "集内项目缩进不是 26px：" + proj.ml);
+    assert(proj.setHeadKeys.length === proj.heads.length && proj.setHeadKeys.every(k => !!k),
+      "项目集表头缺少 data-set-key：" + JSON.stringify(proj.setHeadKeys));
+    assert(proj.setHandles >= 1, "项目集表头没有拖动把手（空间主 / 管理员应可排序）");
+    assert(proj.rowSetIds.every(v => v === "" || proj.setHeadKeys.indexOf(v) !== -1), "项目行缺少所属项目集标识：" + JSON.stringify(proj.rowSetIds));
+    assert(proj.dropZone, "项目列表缺少「移出项目集」落点");
     assert(proj.containers.length > 0, "没有识别到公共容器项目");
     assert(proj.containers.every(c => c.tags.indexOf("公共") !== -1), "容器项目缺「公共」标识：" + JSON.stringify(proj.containers));
     assert(proj.overflow <= 1, "项目页横向溢出：" + proj.overflow);

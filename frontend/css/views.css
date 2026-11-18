@@ -360,7 +360,6 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 }
 .req-set-head:first-child{margin-top:0;}
 .req-set-title{display:flex;align-items:center;gap:6px;min-width:0;font-size:13px;color:var(--text);}
-.req-set-title svg{color:var(--text-2);flex:0 0 auto;}
 .req-set-title b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .req-set-meta{font-size:12px;color:var(--text-2);white-space:nowrap;}
 .req-set-progress{width:120px;margin-left:auto;flex:0 0 auto;}
@@ -370,16 +369,32 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .req-set-toggle.on svg{transform:rotate(90deg);}
 .req-item-container{background:var(--surface-sunken);box-shadow:none;border-style:dashed;}
 .req-item-container .req-name{color:var(--text-2);}
-/* 集内项目缩进：卡片左缩进 + 短横引线，和集表头一起表达两层结构 */
-.req-item-in-set{position:relative;margin-left:18px;}
+/* 集内项目缩进：卡片整体右移，竖线 + 短横引线表达「项目集 → 项目」两层结构 */
+.req-item-in-set{position:relative;margin-left:26px;}
 .req-item-in-set::before{
-  content:"";position:absolute;left:-11px;top:26px;width:8px;height:1px;background:var(--border);
+  content:"";position:absolute;left:-14px;top:-6px;bottom:-6px;width:1px;background:var(--border);
+}
+.req-item-in-set::after{
+  content:"";position:absolute;left:-14px;top:25px;width:12px;height:1px;background:var(--border);
 }
 .project-table-body .req-set-head{padding:8px 14px 6px;margin-top:0;}
-.project-table-row.has-set .project-name-cell{padding-left:18px;position:relative;}
+/* 表格模式对齐列宽不能动：只缩进名称列内部，用竖线 + 短横表达层级 */
+.project-table-row.has-set .project-name-cell{padding-left:34px;position:relative;}
 .project-table-row.has-set .project-name-cell::before{
-  content:"";position:absolute;left:6px;top:50%;width:7px;height:1px;background:var(--border);
+  content:"";position:absolute;left:16px;top:50%;width:11px;height:1px;background:var(--border);
 }
+.project-table-row.has-set .project-name-cell::after{
+  content:"";position:absolute;left:16px;top:0;bottom:0;width:1px;background:var(--border);
+}
+/* 表格模式的项目集行：与项目行共用列网格，集行展示集自身字段与集内只读汇总 */
+.project-table-row.project-set-row{background:var(--surface-sunken);}
+.project-set-row .set-name-cell{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;}
+.project-set-row .set-name-line{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;}
+.project-set-row .set-name-line .req-set-title{min-width:0;}
+.project-set-row .req-set-meta{padding-left:28px;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.project-set-row.is-ungrouped .req-set-title{color:var(--text-2);}
+.project-table-row.project-set-row:hover{background:var(--surface-hover);}
+.project-table-row.project-set-row.drop-into{background:var(--primary-soft);}
 
 .req-item{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
@@ -435,10 +450,35 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .project-table-row.dragging{opacity:.55;}
 .project-table-row.drop-before{box-shadow:inset 0 2px 0 0 var(--primary);}
 .project-table-row.drop-after{box-shadow:inset 0 -2px 0 0 var(--primary);}
+/* 项目集表头也可以拖：把手只对管理者显示；拖入集内时整行高亮 */
+.req-set-head.dragging{opacity:.55;}
+.req-set-head.drop-before{box-shadow:inset 0 2px 0 0 var(--primary);}
+.req-set-head.drop-after{box-shadow:inset 0 -2px 0 0 var(--primary);}
+.req-set-head.drop-into{background:var(--primary-soft);border-bottom-color:var(--primary-border);}
+/* 拖动中的「移出项目集」落点 */
+.proj-set-drop-end{
+  display:none;align-items:center;justify-content:center;gap:6px;min-height:44px;margin-top:4px;
+  border:1px dashed var(--border);border-radius:var(--r-lg);
+  background:var(--surface-sunken);color:var(--text-3);font-size:12px;
+}
+/* 拖动项目时的「移出项目集」落点：拖项目集顺序时不需要 */
+body.proj-drag-project .proj-set-drop-end{display:flex;}
+.proj-set-drop-end.drop-into{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);}
 body.proj-reordering{cursor:grabbing;}
 .proj-form{position:sticky;top:16px;}
 .proj-form .panel-head{margin-bottom:14px;}
-.project-view-actions{display:flex;align-items:center;gap:6px;margin-left:auto;}
+/* 项目列表工具条：标题与计数同组，控件统一 28px 高，创建组单独分隔 */
+.proj-list-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.proj-list-head h3{display:flex;align-items:baseline;gap:8px;line-height:28px;}
+.proj-list-count{font-size:12px;font-weight:500;color:var(--text-3);}
+.project-toolbar{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.project-toolbar .seg{height:28px;padding:1px 2px;border:1px solid var(--border);border-radius:var(--r-xs);}
+.project-toolbar .seg button{height:24px;padding:0 9px;font-size:12.5px;border-radius:4px;}
+html[data-theme="dark"] .project-toolbar .seg button[aria-pressed="true"]{background:var(--surface-active);box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border-strong);}
+.project-toolbar .icon-btn{border:1px solid var(--border);background:var(--surface);border-radius:var(--r-xs);}
+.project-toolbar .icon-btn:hover{background:var(--surface-hover);border-color:var(--border-strong);color:var(--text);}
+.project-toolbar .icon-btn[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.project-toolbar .tb-divider{width:1px;height:16px;margin:0 4px;background:var(--border);flex:0 0 auto;}
 .project-table-wrap{display:block;overflow:auto;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
 .project-table{min-width:max-content;width:100%;}
 .project-table-head,.project-table-row{display:grid;align-items:center;gap:12px;padding:0 14px;}
@@ -4117,8 +4157,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .dem-work-list{display:flex;flex-direction:column;gap:10px;overflow-x:auto;}
 .dem-work-list > *{min-width:var(--dem-work-min,0);}
 .dem-work-list .list-head{position:static;grid-template-columns:var(--dem-work-cols);gap:8px;padding:0 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);}
-.dem-work-lane-list{padding:0 0 2px;}
-.dem-work-row{grid-template-columns:var(--dem-work-cols);gap:8px;min-height:var(--list-row-h);padding:8px 14px;background:transparent;border-bottom:1px solid var(--border);}
+/* 行必须自带白底：泳道底色是 sunken，透明行会连成一片浅灰，1px 分隔线在同色底上几乎看不出来 */
+.dem-work-lane-list{padding:0;}
+.dem-work-row{grid-template-columns:var(--dem-work-cols);gap:8px;min-height:var(--list-row-h);padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);}
 .dem-work-row:last-child{border-bottom:none;}
 .dem-work-row .cell{min-width:0;font-size:12px;}
 .dem-work-row .dwl-none{color:var(--text-3);}

@@ -115,20 +115,25 @@ function reqDragHTML(id){
   return '<button class="req-drag" type="button" draggable="true" data-req-drag="' + esc(id) +
     '" title="拖动调整项目顺序" aria-label="拖动调整项目顺序">' + icon("grip", 14) + '</button>';
 }
-var dragReqState = null, orderSaving = false;
+function setDragHTML(id){
+  return '<button class="req-drag set-drag" type="button" draggable="true" data-set-drag="' + esc(id) +
+    '" title="拖动调整项目集顺序" aria-label="拖动调整项目集顺序">' + icon("grip", 14) + '</button>';
+}
+var dragState = null, orderSaving = false;
 function listedReqs(){
   return rt.reqList.filter(function(r){ return showArchived || !r.archivedAt; });
 }
 function clearDropMarks(){
-  reqListEl.querySelectorAll(".drop-before,.drop-after").forEach(function(el){
-    el.classList.remove("drop-before", "drop-after");
+  reqListEl.querySelectorAll(".drop-before,.drop-after,.drop-into").forEach(function(el){
+    el.classList.remove("drop-before", "drop-after", "drop-into");
   });
 }
 function endProjectDrag(){
-  dragReqState = null;
+  dragState = null;
   clearDropMarks();
   reqListEl.querySelectorAll(".dragging").forEach(function(el){ el.classList.remove("dragging"); });
   document.body.classList.remove("proj-reordering");
+  document.body.classList.remove("proj-drag-project");
 }
 /* 只把可见项目按新顺序回填，已归档（当前未显示）的项目保持原位置 */
 function mergeVisibleOrder(all, visibleIds){
@@ -189,7 +194,7 @@ function syncArchivedToggle(){
   btn.hidden = !n && !showArchived;
   btn.textContent = showArchived ? "隐藏已归档" : "显示已归档" + (n ? "（" + n + "）" : "");
   btn.setAttribute("aria-pressed", showArchived ? "true" : "false");
-  btn.classList.toggle("primary", showArchived);
+  btn.classList.toggle("soft", showArchived);
 }
 function syncOwnerOptions(){
   if(!rOwner) return;
@@ -203,6 +208,12 @@ function ownerLabelOf(r){
   if(!r.ownerUserId) return "";
   var hit = (rt.wsMembersCache || []).filter(function(m){ return m.userId === r.ownerUserId; })[0];
   return hit ? (hit.displayName || hit.username || r.ownerUserId) : (r.ownerName || r.ownerUserId);
+}
+/* 项目集负责人只用于展示：优先成员名，查不到时回退后端给的原值 */
+function setOwnerLabel(set){
+  if(!set || !set.ownerUserId) return "";
+  var hit = (rt.wsMembersCache || []).filter(function(m){ return m.userId === set.ownerUserId; })[0];
+  return hit ? (hit.displayName || hit.username || set.ownerUserId) : (set.ownerName || set.ownerUserId);
 }
 function planRange(r){
   if(!r.plannedStart && !r.plannedEnd) return "";
@@ -248,8 +259,15 @@ function projectSetById(id){
   for(var i = 0; i < (rt.projectSets || []).length; i++) if(rt.projectSets[i].id === id) return rt.projectSets[i];
   return null;
 }
+/* 项目集展示顺序：sortOrder 为主，同名兜底，和列表分组、下拉分组保持一致 */
+function orderedSets(){
+  return (rt.projectSets || []).slice().sort(function(a, b){
+    return (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0)
+      || String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN");
+  });
+}
 function projectSetSummary(rows){
-  var tasks = 0, done = 0, weighted = 0, mvp = 0, post = 0, onTimeSum = 0, onTimeN = 0;
+  var tasks = 0, done = 0, weighted = 0, mvp = 0, post = 0, onTimeSum = 0, onTimeN = 0, docs = 0, released = null;
   rows.forEach(function(r){
     var t = Number(r.taskCount) || 0;
     tasks += t;
@@ -257,11 +275,18 @@ function projectSetSummary(rows){
     weighted += (Number(r.progressPct) || 0) * t;
     mvp += Number(r.mvpWorkMinutes) || 0;
     post += Number(r.postWorkMinutes) || 0;
+    docs += Number(r.docCount) || 0;
+    /* 集不生成发布记录：首版上线日取集内项目最早的一次，仅作只读汇总 */
+    if(r.firstReleasedAt){
+      var d = String(r.firstReleasedAt).slice(0, 10);
+      if(!released || d < released) released = d;
+    }
     if(r.onTimePct !== null && r.onTimePct !== undefined){ onTimeSum += Number(r.onTimePct); onTimeN++; }
   });
   return {
     tasks:tasks, done:done, pct: tasks ? Math.round(weighted / tasks) : 0,
-    mvp:mvp, post:post, onTimePct: onTimeN ? Math.round(onTimeSum / onTimeN) : null
+    mvp:mvp, post:post, docs:docs, firstReleasedAt:released,
+    onTimePct: onTimeN ? Math.round(onTimeSum / onTimeN) : null
   };
 }
 /* 集内顺序沿用全局顺序，但容器项目（拆分后的公共项目）固定排最后并弱化 */
@@ -280,10 +305,7 @@ function groupedProjects(list){
     (buckets[key] = buckets[key] || []).push(r);
   });
   var groups = [];
-  (rt.projectSets || []).slice().sort(function(a, b){
-    return (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0)
-      || String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN");
-  }).forEach(function(s){
+  orderedSets().forEach(function(s){
     var rows = buckets[s.id] || [];
     /* 空集也渲染表头：管理员新建后要能马上看到并编辑/删除；非管理员的空集后端已过滤 */
     if(rows.length || canManageSets()) groups.push({ set:s, rows:sortSetRows(rows), ungrouped:false, header:true });
@@ -298,9 +320,10 @@ function projectSetHeadHTML(group){
   var title = set ? esc(set.name) : "未分组";
   var key = set ? set.id : "__un";
   var collapsed = !!setCollapsed[key];
-  return '<div class="req-set-head' + (set ? "" : " is-ungrouped") + '">' +
+  return '<div class="req-set-head' + (set ? "" : " is-ungrouped") + '"' +
+      ' data-set-key="' + esc(key) + '"' + (set ? ' data-set-id="' + esc(set.id) + '"' : '') + '>' +
     '<button class="icon-btn sm req-set-toggle' + (collapsed ? "" : " on") + '" type="button" data-set-toggle="' + esc(key) + '" aria-expanded="' + (!collapsed) + '" title="' + (collapsed ? "展开" : "收起") + '">' + icon("chevronRight", 14) + '</button>' +
-    '<span class="req-set-title">' + icon("projects", 15) + '<b>' + title + '</b></span>' +
+    '<span class="req-set-title"><b>' + title + '</b></span>' +
     (set && set.status && set.status !== "active"
       ? '<span class="tag tag-ghost">' + esc(reqStatusName(set.status)) + '</span>' : '') +
     '<span class="req-set-meta">' + rows.length + ' 个项目 · ' + agg.tasks + ' 工作项 · ' + agg.done + ' 完成'
@@ -308,9 +331,71 @@ function projectSetHeadHTML(group){
       + '</span>' +
     '<span class="progress mini req-set-progress"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>' +
     (manage ? '<span class="req-set-acts">' +
+      (canReorderSets() ? setDragHTML(set.id) : "") +
       '<button class="icon-btn sm" type="button" data-set-edit="' + esc(set.id) + '" title="编辑项目集" aria-label="编辑项目集">' + icon("edit", 14) + '</button>' +
       '<button class="icon-btn sm danger" type="button" data-set-del="' + esc(set.id) + '" title="删除项目集（项目移回未分组）" aria-label="删除项目集">' + icon("trash", 14) + '</button>' +
     '</span>' : '') +
+  '</div>';
+}
+/* 表格视图：项目集行与项目行共用同一套列网格。
+   集自身只存状态、负责人、计划起止；工作项数 / 完成数 / 文档数 / 首版上线日
+   是集内项目的只读汇总（首版取最早一次），不生成集级发布记录。 */
+function projectSetNameCell(group, agg){
+  var set = group.set;
+  var key = set ? set.id : "__un";
+  var collapsed = !!setCollapsed[key];
+  return '<span class="project-name-wrap set-name-cell">' +
+    '<span class="set-name-line">' +
+      '<button class="icon-btn sm req-set-toggle' + (collapsed ? "" : " on") + '" type="button" data-set-toggle="' + esc(key) + '" aria-expanded="' + (!collapsed) + '" title="' + (collapsed ? "展开" : "收起") + '">' + icon("chevronRight", 14) + '</button>' +
+      '<span class="req-set-title"><b>' + (set ? esc(set.name) : "未分组") + '</b></span>' +
+    '</span>' +
+    '<span class="req-set-meta">' + group.rows.length + ' 个项目'
+      + (agg.mvp + agg.post ? ' · 首版 ' + fmtMinutesShort(agg.mvp) + ' · 迭代 ' + fmtMinutesShort(agg.post) : '')
+      + '</span>' +
+  '</span>';
+}
+function projectSetCell(group, key, agg){
+  var set = group.set;
+  if(key === "name") return projectSetNameCell(group, agg);
+  if(key === "description") return '<span class="project-cell" title="' + esc((set && set.description) || "") + '">' + esc((set && set.description) || "—") + '</span>';
+  if(key === "status"){
+    return set
+      ? '<span><span class="tag tag-' + (set.status === "done" ? "success" : (set.status === "hold" ? "ghost" : "info")) + '">' + esc(reqStatusName(set.status || "active")) + '</span></span>'
+      : '<span class="project-cell">—</span>';
+  }
+  if(key === "ownerName"){
+    var owner = setOwnerLabel(set);
+    return '<span class="project-cell" title="' + esc(owner || "集负责人只用于展示，不据此获得维护权") + '">' + esc(owner || "—") + '</span>';
+  }
+  if(key === "plannedEnd"){
+    var ps = set && set.plannedStart ? String(set.plannedStart).slice(0, 10) : "";
+    var pe = set && set.plannedEnd ? String(set.plannedEnd).slice(0, 10) : "";
+    var range = (ps || pe) ? (ps || "未定") + " → " + (pe || "未定") : "";
+    return '<span class="project-cell"' + (range ? ' title="集计划 ' + esc(range) + '"' : '') + '>' + esc(pe || "—") + '</span>';
+  }
+  if(key === "taskCount") return '<span class="project-cell">' + agg.tasks + '</span>';
+  if(key === "doneCount") return '<span class="project-cell">' + agg.done + '</span>';
+  if(key === "progress") return '<span class="progress mini" title="集内项目按工作项数加权的完成度"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>';
+  if(key === "docCount") return '<span class="project-cell" title="集内项目文档合计">' + agg.docs + '</span>';
+  if(key === "firstReleasedAt") return '<span class="project-cell" title="' + (agg.firstReleasedAt ? "集内项目最早的首版上线日" : "集内项目都还没有首版上线") + '">' + esc(agg.firstReleasedAt || "—") + '</span>';
+  if(key === "createdAt" || key === "updatedAt") return '<span class="project-cell">' + (set && set[key] ? esc(fmtTs(set[key])) : "—") + '</span>';
+  return '<span class="project-cell">—</span>';
+}
+function projectSetActions(group){
+  var set = group.set;
+  if(!set || !canManageSets()) return '<span class="project-row-acts"></span>';
+  return '<span class="project-row-acts">' +
+    (canReorderSets() ? setDragHTML(set.id) : "") +
+    '<button class="icon-btn sm" type="button" data-set-edit="' + esc(set.id) + '" title="编辑项目集" aria-label="编辑项目集">' + icon("edit", 14) + '</button>' +
+    '<button class="icon-btn sm danger" type="button" data-set-del="' + esc(set.id) + '" title="删除项目集（项目移回未分组）" aria-label="删除项目集">' + icon("trash", 14) + '</button>' +
+  '</span>';
+}
+function projectSetRowHTML(group, cols){
+  var set = group.set, agg = projectSetSummary(group.rows);
+  return '<div class="project-table-row project-set-row' + (set ? "" : " is-ungrouped") + '"' +
+      ' data-set-key="' + esc(set ? set.id : "__un") + '"' + (set ? ' data-set-id="' + esc(set.id) + '"' : '') + '>' +
+    cols.map(function(key){ return projectSetCell(group, key, agg); }).join("") +
+    projectSetActions(group) +
   '</div>';
 }
 var projectTemplates = null;
@@ -513,6 +598,12 @@ function renderReqSumm(list){
       '<div class="stat-v"' + (s[2] ? ' title="' + esc(s[2]) + '"' : '') + '>' + esc(s[1]) + '</div></div>';
   }).join("");
 }
+/* 拖拽中的「移出项目集」落点：平时隐藏，开始拖动后才出现 */
+function ungroupedDropZoneHTML(){
+  if(!reorderEnabled() || !(rt.projectSets || []).length) return "";
+  return '<div class="proj-set-drop-end" data-set-drop-ungrouped>' +
+    icon("folder", 14) + '<span>拖到这里移出项目集（未分组）</span></div>';
+}
 function renderReqList(){
   var list = sortedProjects(visibleReqs());
   var countEl = $("reqCount");
@@ -521,7 +612,6 @@ function renderReqList(){
   syncArchivedToggle();
   document.querySelectorAll("[data-project-mode]").forEach(function(b){
     var on = b.dataset.projectMode === listPrefs.viewMode("project-list");
-    b.classList.toggle("primary", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
   if($("btnProjectColumns")) $("btnProjectColumns").hidden = listPrefs.viewMode("project-list") !== "table";
@@ -551,7 +641,7 @@ function renderReqList(){
     }).join("") : '<p class="foot-note" style="margin:4px 0">还没有文档。</p>';
     return '<div class="req-item' + (rt.editingReqId === r.id ? " editing" : "") +
         (r.setId ? " req-item-in-set" : "") +
-        (r.containerKind ? " req-item-container" : "") + '" data-req-id="' + esc(r.id) + '"' +
+        (r.containerKind ? " req-item-container" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '"' +
         (r.containerKind ? ' title="拆分后的公共容器：承接版本、发布与文档"' : '') + '>' +
       '<div class="req-top">' +
         (reorderEnabled() ? reqDragHTML(r.id) : "") +
@@ -619,7 +709,7 @@ function renderReqList(){
   reqListEl.innerHTML = groups.map(function(g){
     var collapsed = g.header && setCollapsed[g.set ? g.set.id : "__un"];
     return (g.header ? projectSetHeadHTML(g) : "") + (collapsed ? "" : g.rows.map(reqItemHTML).join(""));
-  }).join("");
+  }).join("") + ungroupedDropZoneHTML();
 }
 var PROJECT_WIDTHS = { name:"minmax(180px,1fr)", status:"90px", description:"minmax(180px,1.2fr)", ownerName:"110px", plannedEnd:"120px", taskCount:"76px", doneCount:"76px", progress:"140px", docCount:"76px", firstReleasedAt:"120px", createdAt:"140px", updatedAt:"140px" };
 function projectGrid(el){
@@ -682,10 +772,10 @@ function renderProjectTable(list){
     }).join("") + '<span>操作</span></div>' +
     '<div class="project-table-body">' + groupedProjects(list).map(function(g){
       var collapsed = g.header && setCollapsed[g.set ? g.set.id : "__un"];
-      return (g.header ? projectSetHeadHTML(g) : "") + (collapsed ? "" : g.rows.map(function(r){
-        return '<div class="project-table-row' + (r.setId ? " has-set" : "") + '" data-req-id="' + esc(r.id) + '">' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';
+      return (g.header ? projectSetRowHTML(g, cols) : "") + (collapsed ? "" : g.rows.map(function(r){
+        return '<div class="project-table-row' + (r.setId ? " has-set" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '">' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';
       }).join(""));
-    }).join("") + '</div></div>';
+    }).join("") + ungroupedDropZoneHTML() + '</div></div>';
   var head = reqListEl.querySelector(".project-table-head");
   if(head) projectGrid(head);
   reqListEl.querySelectorAll(".project-table-row").forEach(projectGrid);
@@ -1281,57 +1371,206 @@ reqListEl.addEventListener("click", function(e){
   var dl = e.target.closest("[data-del-req]");
   if(dl) deleteReq(dl.dataset.delReq);
 });
-/* 项目拖拽排序：只有把手可拖，避免误触按钮/文本选择 */
-reqListEl.addEventListener("dragstart", function(e){
-  var handle = e.target.closest("[data-req-drag]");
-  var row = handle && handle.closest("[data-req-id]");
-  if(!handle || !row || !reorderEnabled() || orderSaving){
-    e.preventDefault();
+/* 项目拖拽排序：只有把手可拖，避免误触按钮/文本选择。
+   项目除了同集排序，还可以拖到其他项目集表头 / 集内任意位置换集；
+   项目集表头的把手用于调整项目集之间的顺序。 */
+function canReorderSets(){
+  return canManageSets() && (rt.projectSets || []).length > 1;
+}
+function projectDragTarget(e){
+  var row = e.target.closest("[data-req-id]");
+  if(row) return { kind:"row", row:row };
+  var head = e.target.closest("[data-set-key]");
+  if(head) return { kind:"head", head:head };
+  var end = e.target.closest("[data-set-drop-ungrouped]");
+  if(end) return { kind:"ungrouped", end:end };
+  return null;
+}
+/* 换集后的可见顺序：按项目集分组重建，再做回填，已归档项目保持原位置 */
+function regroupVisibleIds(list, dragId, targetSetId, anchorId, after){
+  var seq = [];
+  groupedProjects(list).forEach(function(g){
+    var key = g.set ? g.set.id : "";
+    var ids = g.rows.map(function(r){ return r.id; }).filter(function(id){ return id !== dragId; });
+    if(key === targetSetId){
+      var at = anchorId ? ids.indexOf(anchorId) : -1;
+      if(at >= 0) ids.splice(at + (after ? 1 : 0), 0, dragId);
+      else ids.push(dragId);
+    }
+    seq = seq.concat(ids);
+  });
+  if(seq.indexOf(dragId) < 0) seq.push(dragId);
+  return seq;
+}
+function applyProjectMove(drag, targetSetId, anchorId, after){
+  if(orderSaving) return;
+  var moved = (drag.fromSet || "") !== (targetSetId || "");
+  if(!moved){
+    if(anchorId) applyProjectDrop(drag, anchorId, after);
     return;
   }
-  dragReqState = { id: row.dataset.reqId, order: listedReqs().map(function(r){ return r.id; }) };
-  row.classList.add("dragging");
+  var before = rt.reqList.slice();
+  var seq = regroupVisibleIds(listedReqs(), drag.id, targetSetId, anchorId, after);
+  var next = mergeVisibleOrder(before, seq);
+  next.forEach(function(r){ if(r.id === drag.id) r.setId = targetSetId || null; });
+  rt.reqList = next;
+  var collapsedKey = targetSetId || "__un";
+  if(setCollapsed[collapsedKey]){
+    setCollapsed[collapsedKey] = false;
+    saveSetCollapsed();
+  }
+  renderReqList();
+  orderSaving = true;
+  var setSaved = false;
+  API.put("/api/reqs/" + encodeURIComponent(drag.id) + "/set?setId=" + encodeURIComponent(targetSetId || ""))
+    .then(function(){
+      setSaved = true;
+      return API.put("/api/reqs/order", { ids: next.map(function(r){ return r.id; }) });
+    })
+    .then(function(){
+      orderSaving = false;
+      populateReqSelect();
+      /* 集表头上的项目数 / 工作项汇总是服务端算的，换集后要重新拉一次 */
+      return loadProjectSets();
+    })
+    .then(function(){
+      var set = projectSetById(targetSetId);
+      toast(set ? ("已移入项目集「" + set.name + "」") : "已移出项目集", "fs");
+    })
+    .catch(function(ex){
+      orderSaving = false;
+      var msg = (ex && ex.message) || "网络异常";
+      toast(setSaved ? ("项目已换集，但顺序保存失败：" + msg) : ("换项目集失败：" + msg),
+        setSaved ? "warn" : "bad");
+      /* 服务端可能已完成换集：以服务端为准重新拉一次，避免列表停在错误归属上 */
+      loadReqs().then(function(){
+        renderReqList();
+        loadProjectSets();
+      }).catch(function(){
+        rt.reqList = before;
+        renderReqList();
+      });
+    });
+}
+function applySetDrop(drag, targetSetId, after){
+  if(orderSaving || !drag || drag.id === targetSetId) return;
+  var ids = drag.order.slice();
+  var from = ids.indexOf(drag.id);
+  if(from < 0) return;
+  ids.splice(from, 1);
+  var to = ids.indexOf(targetSetId);
+  if(to < 0) return;
+  ids.splice(after ? to + 1 : to, 0, drag.id);
+  var before = (rt.projectSets || []).map(function(s){ return { id:s.id, sortOrder:s.sortOrder }; });
+  ids.forEach(function(id, i){
+    var s = projectSetById(id);
+    if(s) s.sortOrder = i;
+  });
+  renderReqList();
+  orderSaving = true;
+  API.put("/api/project-sets/order", { ids: ids }).then(function(){
+    orderSaving = false;
+    /* 编辑弹窗的项目集下拉与工作项抽屉的分组都按数组顺序渲染，重新拉一次保持一致 */
+    return loadProjectSets().then(function(){
+      populateReqSelect();
+      toast("项目集顺序已保存", "fs");
+    });
+  }).catch(function(ex){
+    orderSaving = false;
+    (rt.projectSets || []).forEach(function(s){
+      before.forEach(function(b){ if(b.id === s.id) s.sortOrder = b.sortOrder; });
+    });
+    renderReqList();
+    toast("项目集顺序保存失败：" + ((ex && ex.message) || "网络异常"), "bad");
+  });
+}
+reqListEl.addEventListener("dragstart", function(e){
+  var projectHandle = e.target.closest("[data-req-drag]");
+  var setHandle = !projectHandle && e.target.closest("[data-set-drag]");
+  if(!projectHandle && !setHandle){ e.preventDefault(); return; }
+  if(orderSaving){ e.preventDefault(); return; }
+  var row, head;
+  if(projectHandle){
+    if(!reorderEnabled()){ e.preventDefault(); return; }
+    row = projectHandle.closest("[data-req-id]");
+    if(!row){ e.preventDefault(); return; }
+    dragState = {
+      kind:"project",
+      id:row.dataset.reqId,
+      fromSet:row.dataset.setId || "",
+      order:listedReqs().map(function(r){ return r.id; })
+    };
+    row.classList.add("dragging");
+  }else{
+    if(!canReorderSets()){ e.preventDefault(); return; }
+    head = setHandle.closest("[data-set-key]");
+    if(!head){ e.preventDefault(); return; }
+    dragState = { kind:"set", id:setHandle.dataset.setDrag, order:orderedSets().map(function(s){ return s.id; }) };
+    head.classList.add("dragging");
+  }
   document.body.classList.add("proj-reordering");
+  document.body.classList.toggle("proj-drag-project", !!projectHandle);
   if(e.dataTransfer){
     e.dataTransfer.effectAllowed = "move";
-    try{ e.dataTransfer.setData("text/plain", dragReqState.id); }catch(err){ /* 老浏览器 */ }
-    try{ e.dataTransfer.setDragImage(row, 20, 20); }catch(err){ /* 老浏览器 */ }
+    try{ e.dataTransfer.setData("text/plain", dragState.id); }catch(err){ /* 老浏览器 */ }
+    try{ e.dataTransfer.setDragImage(row || head, 20, 20); }catch(err){ /* 老浏览器 */ }
   }
 });
 reqListEl.addEventListener("dragover", function(e){
-  if(!dragReqState) return;
-  var row = e.target.closest("[data-req-id]");
-  if(!row || row.classList.contains("dragging")) return;
+  if(!dragState) return;
+  var t = projectDragTarget(e);
+  if(dragState.kind === "set"){
+    if(!t || t.kind !== "head" || !t.head.dataset.setId || t.head.classList.contains("dragging")) return;
+    e.preventDefault();
+    if(e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    clearDropMarks();
+    var hb = t.head.getBoundingClientRect();
+    t.head.classList.add((e.clientY - hb.top) > hb.height / 2 ? "drop-after" : "drop-before");
+    return;
+  }
+  if(!t) return;
+  if(t.kind === "row" && t.row.classList.contains("dragging")) return;
   e.preventDefault();
   if(e.dataTransfer) e.dataTransfer.dropEffect = "move";
   clearDropMarks();
-  var box = row.getBoundingClientRect();
-  row.classList.add((e.clientY - box.top) > box.height / 2 ? "drop-after" : "drop-before");
+  if(t.kind === "head"){ t.head.classList.add("drop-into"); return; }
+  if(t.kind === "ungrouped"){ t.end.classList.add("drop-into"); return; }
+  var box = t.row.getBoundingClientRect();
+  t.row.classList.add((e.clientY - box.top) > box.height / 2 ? "drop-after" : "drop-before");
 });
 reqListEl.addEventListener("dragleave", function(e){
   var row = e.target.closest("[data-req-id]");
   if(row && !row.contains(e.relatedTarget)) row.classList.remove("drop-before", "drop-after");
+  /* 集表头：拖项目集时是 before/after，拖项目时是 into，离开都要清掉 */
+  var head = e.target.closest("[data-set-key]");
+  if(head && !head.contains(e.relatedTarget)) head.classList.remove("drop-into", "drop-before", "drop-after");
 });
 reqListEl.addEventListener("drop", function(e){
-  if(!dragReqState) return;
-  e.preventDefault();
-  var row = e.target.closest("[data-req-id]");
-  var drag = dragReqState;
-  var ontoSelf = !row || row.classList.contains("dragging");
-  endProjectDrag();
-  if(ontoSelf) return;
-  /* 分组后只允许同组内拖动：跨组拖动不会改变项目集归属，容易造成误解 */
-  var dragged = null, dropped = null;
-  for(var i = 0; i < rt.reqList.length; i++){
-    if(rt.reqList[i].id === drag.id) dragged = rt.reqList[i];
-    if(rt.reqList[i].id === row.dataset.reqId) dropped = rt.reqList[i];
-  }
-  if(dragged && dropped && (dragged.setId || "") !== (dropped.setId || "")){
-    toast("只能在同一项目集内拖动排序；改归组请编辑项目里的「所属项目集」", "warn");
+  if(!dragState) return;
+  var drag = dragState;
+  var t = projectDragTarget(e);
+  if(drag.kind === "set"){
+    if(!t || t.kind !== "head" || !t.head.dataset.setId){ endProjectDrag(); return; }
+    e.preventDefault();
+    var hb = t.head.getBoundingClientRect();
+    var setAfter = (e.clientY - hb.top) > hb.height / 2;
+    endProjectDrag();
+    applySetDrop(drag, t.head.dataset.setId, setAfter);
     return;
   }
-  var box = row.getBoundingClientRect();
-  applyProjectDrop(drag, row.dataset.reqId, (e.clientY - box.top) > box.height / 2);
+  e.preventDefault();
+  if(!t || (t.kind === "row" && t.row.classList.contains("dragging"))){ endProjectDrag(); return; }
+  var targetSetId = "", anchorId = null, after = false;
+  if(t.kind === "row"){
+    targetSetId = t.row.dataset.setId || "";
+    var box = t.row.getBoundingClientRect();
+    anchorId = t.row.dataset.reqId;
+    after = (e.clientY - box.top) > box.height / 2;
+  }else if(t.kind === "head"){
+    targetSetId = t.head.dataset.setId || "";
+  }
+  endProjectDrag();
+  applyProjectMove(drag, targetSetId, anchorId, after);
 });
 reqListEl.addEventListener("dragend", endProjectDrag);
 reqListEl.addEventListener("keydown", function(e){
