@@ -580,6 +580,33 @@ function mineListWidth(){
   return mineMeasuredWidth || window.innerWidth;
 }
 var mineModeEl = document.getElementById("mineMode");
+var mineViewSeg = document.getElementById("mineViewSeg");
+/* 列表 / 看板：看板按状态列展示，可拖拽改状态；偏好存本机，手机端固定列表 */
+var MINE_VIEW_KEY = "ds.mineView";
+var mineViewMode = (function(){
+  try{ return localStorage.getItem(MINE_VIEW_KEY) === "board" ? "board" : "list"; }catch(e){ return "list"; }
+})();
+function setMineView(v){
+  if(v !== "board" && v !== "list") return;
+  /* 团队是成员面板、待我测试是卡片队列，都不接受列表/看板切换 */
+  if(currentMineMode() !== "mine") return;
+  if(mineViewMode === v) return;
+  mineViewMode = v;
+  try{ localStorage.setItem(MINE_VIEW_KEY, v); }catch(e){ /* 受限环境只在本次生效 */ }
+  syncMineViewUI();
+  rerenderMine();
+}
+function syncMineViewUI(){
+  /* 看板只属于「我的」：待我测试是卡片队列，团队是成员面板，都不套看板壳 */
+  var board = mineViewMode === "board" && !isMobile() && currentMineMode() === "mine";
+  var view = document.getElementById("view-mine");
+  if(view) view.classList.toggle("is-board", board);
+  if(mineViewSeg){
+    mineViewSeg.querySelectorAll("[data-mine-view]").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.mineView === (mineViewMode === "board" ? "board" : "list")));
+    });
+  }
+}
 var teamSeq = 0;
 var teamLoading = false;
 var teamQueued = false;
@@ -608,6 +635,8 @@ function setMineMode(mode){
     mineAll = []; mineSpaces = []; mineTotal = 0; mineHasMore = false; mineCache = {};
   }
   syncMineModeUI();
+  /* 「待我测试」固定卡片列表，切模式时同步列表/看板分段状态 */
+  syncMineViewUI();
   /* 测试负责人维度只在「待我测试」摆出来，切模式后筛选栏立即重排 */
   syncDimButtons();
   if(mode === "team"){ renderTeam(); return; }
@@ -902,6 +931,64 @@ function renderMobileMine(sections, cardFn){
   html += '</div>' + mineMoreHTML();
   mineBody.innerHTML = html;
 }
+/* ---- 我的工作 · 看板：按状态列铺开，拖拽卡片即改状态（走流转矩阵） ---- */
+var MINE_BOARD_COL_LIMIT = 100;
+/* 列以当前空间列定义为主；跨空间的旧列 id 兜底补一列，避免卡片无处安放 */
+function mineBoardColumns(items){
+  var cols = COLUMNS.slice(), seen = {};
+  cols.forEach(function(c){ seen[c.id] = true; });
+  (items || []).forEach(function(t){
+    var id = t.boardColumn || "";
+    if(!id || seen[id]) return;
+    seen[id] = true;
+    cols.push({ id:id, name:colName(id) || id, color:"#98A2B3" });
+  });
+  return cols;
+}
+function mineBoardCardHTML(t){
+  var canMove = canEditTask(t);
+  var pri = t.priority || "P2";
+  var f = dueFlag(t);
+  var setName = t.reqId ? setNameById(reqSetId(t.reqId)) : "";
+  var path = [t.workspaceName || wsNameById(t.workspaceId), setName, t.reqName || "未归类"]
+    .filter(function(s){ return !!s; }).join(" › ");
+  return '<article class="mb-card' + (f && f.kind === "over" ? " is-over" : "") + '"'
+    + ' draggable="' + (canMove ? "true" : "false") + '"'
+    + ' data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '" data-mine-board-card'
+    + ' tabindex="0" role="listitem"'
+    + ' title="' + (canMove ? "拖动到其他列可改状态；点击打开详情" : "只读项目：可查看，不能拖拽改状态") + '"'
+    + ' aria-label="' + esc(t.title + " · " + colName(t.boardColumn)) + '">'
+    + '<div class="mb-top">' + priTagHTML(pri, t.workspaceId)
+      + (t.blocked ? '<span class="mb-blocked">' + icon("alert", 11) + '被阻塞</span>' : "")
+      + taskPublicationHTML(t)
+      + '<button class="icon-btn xs mb-menu" type="button" data-mine-board-menu aria-label="更改状态" title="更改状态">' + icon("more", 14) + '</button>'
+    + '</div>'
+    + '<h4 class="mb-title">' + esc(t.title) + '</h4>'
+    + '<p class="mb-path" title="' + esc(path) + '">' + esc(path) + '</p>'
+    + '<div class="mb-meta">'
+      + '<span class="mb-due' + (f && f.kind === "over" ? " over" : (f && f.kind === "today" ? " today" : "")) + '">'
+        + (t.dueDate ? esc(dueDateMD(t)) : "未设截止") + '</span>'
+      + (f ? '<span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : '')
+    + '</div></article>';
+}
+function renderMineBoard(items){
+  var cols = mineBoardColumns(items);
+  var html = '<div class="mine-board" role="group" aria-label="我的工作看板">';
+  cols.forEach(function(c){
+    var list = items.filter(function(t){ return (t.boardColumn || "") === c.id; });
+    var shown = list.slice(0, MINE_BOARD_COL_LIMIT);
+    html += '<section class="mb-col" data-mine-bcol="' + esc(c.id) + '">' +
+      '<div class="mb-col-head"><span class="mb-col-dot" style="--c:' + esc(c.color || "#98A2B3") + '"></span>' +
+        '<b>' + esc(c.name) + '</b><span class="mb-col-n">' + list.length + '</span></div>' +
+      '<div class="mb-col-body" data-mine-col-drop="' + esc(c.id) + '">' +
+        (shown.length ? shown.map(mineBoardCardHTML).join("") : '<p class="mb-empty">暂无</p>') +
+        (list.length > shown.length
+          ? '<p class="mb-more">仅显示前 ' + MINE_BOARD_COL_LIMIT + ' 项 · 共 ' + list.length + ' 项</p>' : '') +
+      '</div></section>';
+  });
+  html += '</div>' + mineMoreHTML();
+  mineBody.innerHTML = html;
+}
 function renderMine(d, append){
   if(isMobile() && currentMineMode() === "team"){ syncMineModeUI(); return; }
   var incoming = d.items || [];
@@ -939,8 +1026,10 @@ function renderMine(d, append){
     var countTxt = filtering
       ? ("筛选出 " + items.length + " / " + loaded + " 项（已加载）")
       : ("已加载 " + loaded + (mineTotal > loaded ? (" / " + mineTotal) : "") + " 项");
+    var boardHint = !testMode && mineViewMode === "board" && !isMobile() && currentMineMode() === "mine"
+      ? " · 拖动卡片可改状态" : "";
     mineMeta.textContent = (testMode ? "待我测试 · " : "") + countTxt + " · 覆盖 " + spaces.length + " 个空间" +
-      (mineHasMore ? " · 还有更多，可继续加载" : "") +
+      (mineHasMore ? " · 还有更多，可继续加载" : "") + boardHint +
       (!testMode && nameOnly > 0 ? (" · 其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
   }
   if(!mineAll.length){
@@ -978,6 +1067,9 @@ function renderMine(d, append){
   }
   if(testMode){ renderMineTest(items); return; }
   renderMineStats(items);
+  syncMineViewUI();
+  /* 看板只在桌面「我的」模式出现：手机端保持卡片列表，拖拽不是移动端目标 */
+  if(mineViewMode === "board" && !isMobile() && currentMineMode() === "mine"){ renderMineBoard(items); return; }
   var sections = mineSections(items);
   if(isMobile()){ renderMobileMine(sections); return; }
   var cols = mineVisibleCols(mineListWidth());
@@ -1435,6 +1527,14 @@ if(mineBody){
       return;
     }
     if(e.target.closest("[data-mine-more]")){ e.stopPropagation(); loadMine({append:true}); return; }
+    var boardMenu = e.target.closest("[data-mine-board-menu]");
+    if(boardMenu){
+      e.stopPropagation();
+      var bCard = boardMenu.closest("[data-mine-id]");
+      var bTask = bCard ? mineTaskFromRow(bCard) : null;
+      if(bTask) openMineStatusMenu(boardMenu, bTask);
+      return;
+    }
     var row = e.target.closest("[data-mine-id]");
     if(!row) return;
     /* 行内字段控件自己处理点击，不能顺带打开详情抽屉 */
@@ -1472,6 +1572,62 @@ if(mineBody){
     if(!row) return;
     e.preventDefault();
     row.click();
+  });
+  /* 看板拖拽：桌面专用，改状态统一走 mineChangeColumn（流转矩阵 + 原因/强推弹窗） */
+  var mineDragTask = null;
+  function clearMineDrop(){
+    mineBody.querySelectorAll(".mb-col.is-drop").forEach(function(c){ c.classList.remove("is-drop"); });
+    mineBody.querySelectorAll(".mb-card.is-dragging").forEach(function(c){ c.classList.remove("is-dragging"); });
+  }
+  mineBody.addEventListener("dragstart", function(e){
+    if(mineViewMode !== "board" || isMobile()) return;
+    var card = e.target.closest("[data-mine-board-card]");
+    if(!card) return;
+    var t = mineTaskFromRow(card);
+    if(!t || !canEditTask(t)){ e.preventDefault(); return; }
+    mineDragTask = t;
+    card.classList.add("is-dragging");
+    try{
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", t.id);
+    }catch(e2){ /* 老浏览器没有 dataTransfer 也允许拖 */ }
+  });
+  mineBody.addEventListener("dragover", function(e){
+    if(!mineDragTask) return;
+    var body = e.target.closest("[data-mine-col-drop]");
+    if(!body) return;
+    if((mineDragTask.boardColumn || "") === body.getAttribute("data-mine-col-drop")){
+      try{ e.dataTransfer.dropEffect = "none"; }catch(e2){ /* noop */ }
+      return;
+    }
+    e.preventDefault();
+    try{ e.dataTransfer.dropEffect = "move"; }catch(e2){ /* noop */ }
+    var col = body.closest(".mb-col");
+    if(col) col.classList.add("is-drop");
+    /* 相邻列同时高亮会误导落点：只保留当前悬停列 */
+    mineBody.querySelectorAll(".mb-col.is-drop").forEach(function(c){ if(c !== col) c.classList.remove("is-drop"); });
+  });
+  mineBody.addEventListener("dragleave", function(e){
+    var body = e.target.closest("[data-mine-col-drop]");
+    if(!body) return;
+    /* dragleave 会在子元素之间冒泡，只有真正离开整列时才撤高亮 */
+    if(e.relatedTarget && body.contains(e.relatedTarget)) return;
+    var col = body.closest(".mb-col");
+    if(col) col.classList.remove("is-drop");
+  });
+  mineBody.addEventListener("drop", function(e){
+    var body = e.target.closest("[data-mine-col-drop]");
+    if(!mineDragTask || !body) return;
+    e.preventDefault();
+    var t = mineDragTask, col = body.getAttribute("data-mine-col-drop");
+    mineDragTask = null;
+    clearMineDrop();
+    if(!col || mineViewMode !== "board" || isMobile()) return;
+    mineChangeColumn(t, col, "移动失败");
+  });
+  mineBody.addEventListener("dragend", function(){
+    mineDragTask = null;
+    clearMineDrop();
   });
 }
 if(mineSpaceFilter){
@@ -1525,10 +1681,17 @@ if(mineModeEl){
     if(b) setMineMode(b.dataset.mineMode);
   });
 }
+if(mineViewSeg){
+  mineViewSeg.addEventListener("click", function(e){
+    var b = e.target.closest("[data-mine-view]");
+    if(b) setMineView(b.dataset.mineView);
+  });
+}
 /* 跨断点重排：手机卡片 / 桌面表格共用同一份数据 */
 window.addEventListener("ds:layout", function(){
   if(!rt.currentWs || document.body.dataset.view !== "mine") return;
   syncMineModeUI();
+  syncMineViewUI();
   if(isMobile() && currentMineMode() === "team"){ renderTeam(); return; }
   /* 从手机团队模式切回桌面时，我的任务可能从未加载过 */
   if(mineAll.length) rerenderMine(); else loadMine();
@@ -1561,5 +1724,6 @@ window.addEventListener("ds:running-timer", function(){
   if(mineAll.length) rerenderMine();
 });
 syncMineModeUI();
+syncMineViewUI();
 
 export { askSwitchWorkspace, enterMineView, loadMine, wsNameById };

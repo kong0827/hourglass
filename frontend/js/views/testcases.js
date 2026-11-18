@@ -9,7 +9,7 @@ import { attachEnvDict, recordEnv } from "../core/env-dict.js";
 import { icon } from "../core/icons.js";
 import { openTaskById, taskLink } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, canManageProject, catNameById, projectOptionsHTML, rt, state } from "../core/state.js";
+import { canEditReq, canManageProject, catNameById, projectOptionsHTML, reqSetId, rt, setNameById, state } from "../core/state.js";
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
@@ -482,10 +482,11 @@ function selectSegment(key){
   syncBulkBar();
   render();
 }
-function loadCases(){
+function loadCases(opts){
+  opts = opts || {};
   var seq = ++loadSeq;
   resetCaseSel();
-  if(caseScopeAll) return loadCasesAll(seq);
+  if(caseScopeAll) return loadCasesAll(seq, opts);
   if(!caseReqId || !rt.reqList.length){
     cases = [];
     caseGroups = [];
@@ -503,7 +504,7 @@ function loadCases(){
   }
   var reqId = caseReqId;
   var grouped = !!caseGroupBy;
-  $("tcList").innerHTML = UI.skeletonRows(3);
+  if(!opts.quiet) $("tcList").innerHTML = UI.skeletonRows(3);
   /* 分组视图：列表请求只取 1 行，用来拿总数与 facets（含目录树），段内行逐段单独取，
      这样多归属的用例集也能按段正确分页，不依赖「全局前缀按段切分」的隐含假设。 */
   var reqs = [
@@ -530,7 +531,8 @@ function loadCases(){
       caseGroupSegs = rs[2] || [];
       resetGroupRows();
       render();
-      loadExpandedSegments(seq);
+      /* 返回分段加载完成时刻：登记完成、批量改状态后据此恢复滚动位置 */
+      return loadExpandedSegments().then(function(){ return true; });
     }else{
       cases = (page.items || []).slice();
       caseHasMore = !!page.hasMore;
@@ -549,7 +551,8 @@ function loadCases(){
 }
 /* 全部项目：按项目分组各自加载、各自分页；不合并排序，避免跨项目分页失真。
    分类只在项目内有意，因此全部项目下不传分类条件，筛选入口也一并隐藏。 */
-function loadCasesAll(seq){
+function loadCasesAll(seq, opts){
+  opts = opts || {};
   var projects = caseScopeVisibleProjects();
   if(!rt.reqList.length || !projects.length){
     cases = [];
@@ -571,7 +574,7 @@ function loadCasesAll(seq){
     syncCaseBars();
     return Promise.resolve(false);
   }
-  $("tcList").innerHTML = UI.skeletonRows(3);
+  if(!opts.quiet) $("tcList").innerHTML = UI.skeletonRows(3);
   return Promise.all(projects.map(function(p){
     return API.get("/api/test-cases", caseQueryParams(0, p.id)).then(function(page){
       return { reqId: p.id, name: p.name, page: page || {} };
@@ -2458,7 +2461,10 @@ function caseGroupHTML(g){
   var anyFilter = statusFilter !== "all" || priFilter !== "all"
     || ownerFilter !== "all" || bugOnly || !!searchText;
   var count = g.items.length < g.total ? (g.items.length + " / " + g.total) : String(g.total);
+  /* 全部项目分段头带上项目集，避免同名或近似项目分不清是哪个集下的 */
+  var setName = setNameById(reqSetId(g.reqId));
   var head = '<div class="tc-group-head">'
+    + (setName ? '<span class="tc-group-set" title="' + esc("项目集：" + setName) + '">' + esc(setName) + '</span>' : "")
     + '<span class="tc-group-name">' + esc(g.name) + '</span>'
     + '<span class="tc-group-count">' + count + ' 条用例</span>'
     + '<span class="tc-group-bar" aria-hidden="true"></span>'
@@ -2865,8 +2871,18 @@ function syncTcDomain(){
   if(!cur) return;
   var name = tcMode === "defects" ? defectScopeName()
     : (caseScopeAll || !caseReqId ? "全部项目" : reqNameOf(caseReqId));
+  /* 项目集引入后，面包屑补一级「项目集」：项目归属不再只靠选项目时的分组猜 */
+  var scopeId = tcDomainScopeId();
+  var setName = scopeId ? setNameById(reqSetId(scopeId)) : "";
+  var setEl = $("tcCrumbSet"), setSep = $("tcCrumbSetSep");
+  if(setEl){
+    setEl.hidden = !setName;
+    setEl.textContent = setName;
+    setEl.title = setName;
+  }
+  if(setSep) setSep.hidden = !setName;
   cur.textContent = name;
-  cur.title = name;
+  cur.title = setName ? (setName + " › " + name) : name;
 }
 function setTcMode(mode){
   if(mode !== "cases" && mode !== "defects" && mode !== "plans" && mode !== "coverage" && mode !== "report") return;
@@ -5663,7 +5679,13 @@ function doRun(){
     if(res.uploaded) msg += "，已上传 " + res.uploaded + " 个证据";
     if(res.failed) msg += "，" + res.failed + " 个证据上传失败（可在「记录」里补传）";
     toast(msg, res.failed ? "warn" : "fs");
-    loadCases().then(function(){
+    /* 连续执行时页面停回原位置：不在刷新中出骨架屏，渲染后把视图滚动位置放回去 */
+    var viewEl = document.getElementById("view-testcases");
+    var keepTop = viewEl ? viewEl.scrollTop : 0;
+    function restoreCaseScroll(){ if(viewEl && viewEl.isConnected) viewEl.scrollTop = keepTop; }
+    loadCases({ quiet: true }).then(function(){
+      restoreCaseScroll();
+      requestAnimationFrame(restoreCaseScroll);
       if(caseDetailId === caseId){
         renderCaseDetail();
         loadCaseDetailRuns(caseId);
@@ -6837,9 +6859,10 @@ function syncDirBtn(){
   var path = moduleFilter === "__none" ? "未归类" : (modulePathOf(moduleFilter) || "未归类");
   var leaf = path.split(" / ").pop();
   if(label) label.textContent = on ? "目录：" + cut(leaf, 14) : "目录：全部";
+  var projName = caseReqId ? reqNameOf(caseReqId) : "";
   btn.title = on
-    ? "当前只显示「" + path + "」下的用例；点击更换或清除目录，并可维护目录"
-    : "按项目目录筛选用例；新建、改名与删除目录也在弹层里";
+    ? "当前只显示「" + projName + "」下「" + path + "」的用例；点击更换或清除目录，并可维护目录"
+    : "按「" + projName + "」的项目目录筛选用例；新建、改名与删除目录也在弹层里";
   btn.setAttribute("aria-expanded", UI.popOpen($("tcDirMenu")) ? "true" : "false");
 }
 function renderDirPanel(){

@@ -3,7 +3,7 @@
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
-import { projectOptionsHTML, rt } from "../core/state.js";
+import { projectOptionsHTML, reqSetId, rt, setNameById } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, openTaskTable } from "./manager-shared.js";
@@ -301,7 +301,12 @@ function reportLabelOptions(values, selected, all, unset){
 function reportScopeText(data){
   var scope = data.scope || {}, project = (rt.reqList || []).filter(function(p){ return p.id === scope.reqId; })[0];
   var version = (reportOptions.versions || []).filter(function(v){ return v.id === scope.versionId; })[0];
-  return '项目：' + (scope.reqId ? (project ? project.name : scope.reqId) : '全部项目')
+  var scopeName = scope.reqId ? (project ? project.name : scope.reqId) : "全部项目";
+  if(scope.reqId && project){
+    var setName = setNameById(reqSetId(scope.reqId));
+    if(setName) scopeName = setName + " › " + scopeName;
+  }
+  return '项目：' + scopeName
     + ' · 版本：' + (scope.versionId ? (version ? version.name : scope.versionId) : '全部版本')
     + ' · 公司：' + (scope.companyName === '__unset__' ? '未设公司' : labelFilterText(scope.companyName) || '全部公司')
     + ' · 角色：' + (scope.roleTitle === '__unset__' ? '未设角色' : labelFilterText(scope.roleTitle) || '全部角色');

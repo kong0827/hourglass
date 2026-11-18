@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, hoursNote, segWorkScope, statsHoursEl, workScopeTag } from "../core/dom.js";
-import { catTagByName, reqNameById, rt, state } from "../core/state.js";
+import { catTagByName, reqNameById, reqSetId, rt, setNameById, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
@@ -404,7 +404,8 @@ function onStatsTrend(el){
 function onStatsProject(el){
   var id = el.dataset.statProject || "";
   var name = id && id !== "__unset__" ? (reqNameById(id) || id) : "";
-  openStatsTasks(name ? "完成 · 项目 " + name : "完成 · 未指定项目",
+  var setName = id && id !== "__unset__" ? setNameById(reqSetId(id)) : "";
+  openStatsTasks(name ? "完成 · 项目 " + (setName ? setName + " › " : "") + name : "完成 · 未指定项目",
     Object.assign({kind: "project", value: id}, statsDrillWindow || {}));
 }
 function onStatsOwner(el){
@@ -541,12 +542,14 @@ function renderStats(d){
   /* 分布按项目：后端只回项目 ID，名称在这里解析，避免项目改名后报表出现旧名 */
   var byProject = (d.byProject || []).map(function(x){
     var id = x.name || "";
-    return {id:id, name:id ? (reqNameById(id) || id) : "未指定项目", count:x.count};
+    var setName = id ? setNameById(reqSetId(id)) : "";
+    var name = id ? (reqNameById(id) || id) : "未指定项目";
+    return {id:id, name:(setName ? setName + " › " : "") + name, count:x.count};
   });
   $("statsCat").innerHTML = distHTML(byProject,
     function(){ return "var(--primary)"; },
     function(x){ return x.count; },
-    function(x){ return 'data-stat-project="' + esc(x.id || "__unset__") + '" title="查看该项目已完成工作项"'; });
+    function(x){ return 'data-stat-project="' + esc(x.id || "__unset__") + '" title="' + esc("查看该项目已完成工作项：" + x.name) + '"'; });
   $("statsOwner").innerHTML = distHTML(d.byOwner,
     function(){ return "var(--primary)"; },
     function(x){ return x.count; },

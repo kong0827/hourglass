@@ -242,7 +242,9 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .mob-sheet .fb-actions{
   flex-wrap:wrap;padding-left:0;border-left:0;gap:8px;
 }
-[data-layout="mobile"] .mob-sheet .fb-actions .btn{flex:1 1 auto;}
+/* 「清空」现在是 xs 小按钮，别再拉满整行（整行空白也会变成可点区域）；顺带抬到 28px 便于点按 */
+[data-layout="mobile"] .mob-sheet .fb-actions .btn{flex:0 0 auto;height:28px;padding:0 10px;}
+[data-layout="mobile"] .mob-sheet .fb-spacer{display:none;}
 /* 移动端筛选面板里不再需要横向滚动 */
 [data-layout="mobile"] .mob-sheet .filterbar::-webkit-scrollbar{display:none;}
 
@@ -432,6 +434,8 @@ body.mob-sheet-open{overflow:hidden;}
 
 /* 我的任务页头 */
 [data-layout="mobile"] .mob-groups .mine-more{padding-top:8px;}
+/* 看板拖拽不是移动端目标：列表/看板切换只留桌面 */
+[data-layout="mobile"] #mineViewSeg{display:none;}
 [data-layout="mobile"] #view-mine .page-toolbar,
 [data-layout="mobile"] #view-list .list-toolbar{
   flex-wrap:wrap;gap:8px;padding-top:0;
@@ -800,6 +804,10 @@ body.mob-sheet-open{overflow:hidden;}
   font-size:12px;font-weight:600;color:var(--primary-fg);
 }
 [data-layout="mobile"] .tc-crumb-sep{flex:0 0 auto;color:var(--border-strong);}
+[data-layout="mobile"] .tc-crumb-set{
+  flex:0 1 auto;min-width:0;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-weight:600;color:var(--text-3);
+}
 [data-layout="mobile"] .tc-crumb-cur{
   min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-weight:600;color:var(--text-2);

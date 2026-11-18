@@ -40,8 +40,10 @@
 .btn.sm{height:28px;padding:0 10px;font-size:12.5px;border-radius:var(--r-xs);}
 /* 这几处「清空筛选 / 恢复默认」是静态 data-icon（默认 16px），与 JS 生成的同款按钮（13px）对齐；
    用例页窄屏只剩图标时由 views.css 的媒体查询放大到 14px（那个文件在后面加载） */
-#btnClearFilter svg,#ganttClearFilter svg,#tcPlanClearFilter svg,#branchClearFilter svg,
+#tcPlanClearFilter svg,#branchClearFilter svg,
 #tcClearFilter svg,#tcDefReset svg{width:13px;height:13px;}
+/* 工作项的「清空」用 xs 档，图标跟着降到 11px，避免小按钮里图标显大 */
+#btnClearFilter svg,#ganttClearFilter svg{width:11px;height:11px;}
 /* 超小档：图标翻页 / 行内极紧凑位置，24px 与 chip、seg 对齐 */
 .btn.xs{height:24px;padding:0 7px;font-size:11.5px;border-radius:var(--r-xs);gap:4px;}
 .btn.lg{height:40px;padding:0 18px;font-size:14px;}
@@ -2004,7 +2006,7 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
    头部只保留一个状态入口；概览一屏读完，执行/关联/动态分区承载长内容。 */
 .drawer#taskForm{width:1000px;}
 .head-title-line{display:flex;align-items:center;gap:10px;min-width:0;}
-.head-title-line h2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.head-title-line h2{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .head-title-line h2.task-title-edit{cursor:text;border-radius:var(--r-xs);outline-offset:2px;
   transition:background var(--dur-fast) var(--ease-out);}
 .drawer.read-mode .head-title-line h2.task-title-edit:hover{background:var(--surface-hover);}
@@ -2367,6 +2369,8 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .sp-ico{flex:0 0 auto;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:7px;background:var(--surface-sunken);color:var(--text-3);}
 .sp-ico.branch{background:var(--info-soft);color:var(--info-fg);}
 .sp-ico.demand{background:var(--plum-soft);color:var(--plum-fg);}
+.sp-ico.epic{background:var(--primary-soft);color:var(--primary);}
+.sp-ico.doc{background:var(--p3-soft);color:var(--p3-fg);}
 .assoc-picker .sp-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px;color:var(--text);font-weight:600;}
 .assoc-picker .search-picker-option.selected .sp-title{color:var(--primary-fg);}
 .sp-meta{display:flex;align-items:center;gap:5px;margin-top:1px;font-size:11.5px;line-height:16px;color:var(--text-3);min-width:0;}

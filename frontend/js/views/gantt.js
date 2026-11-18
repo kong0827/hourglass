@@ -1819,7 +1819,7 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
     UI.emptyState({ icon: "calendar", title: title, text: text, actionLabel: action }) + '</div>';
   var btn = ganttScroll.querySelector(".empty-state .btn");
   if(btn) btn.addEventListener("click", function(){
-    if(actionKind === "clear") clearFilters({keepReqs:true});
+    if(actionKind === "clear") clearFilters();
     else if(actionKind === "new") openTaskDrawer("backlog");
     else showView("list");
   });
@@ -2771,7 +2771,7 @@ if(ganttFilterBtn){
 if(ganttFilterMenu){
   ganttFilterMenu.addEventListener("click", function(e){
     var reset = e.target.closest("[data-gantt-filter-reset]");
-    if(reset){ clearFilters({keepReqs:true}); renderGanttFilterMenu(); return; }
+    if(reset){ clearFilters(); renderGanttFilterMenu(); return; }
     var save = e.target.closest("[data-gantt-filter-save]");
     if(save){ UI.closeAllPops(); promptSaveView(); return; }
     var o = e.target.closest("[data-gantt-owner]");
@@ -2883,7 +2883,7 @@ if(ganttExportMenu){
     if(e.target.closest("[data-gantt-print]")){ UI.closeAllPops(); window.print(); }
   });
 }
-if(ganttClearFilterEl) ganttClearFilterEl.addEventListener("click", function(){ clearFilters({keepReqs:true}); });
+if(ganttClearFilterEl) ganttClearFilterEl.addEventListener("click", function(){ clearFilters(); });
 if($("ganttToday")) $("ganttToday").addEventListener("click", ganttGoToday);
 if($("ganttRefresh")) $("ganttRefresh").addEventListener("click", function(){ loadGantt(); });
 if(ganttAnalysisBtn){

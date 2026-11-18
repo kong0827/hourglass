@@ -293,12 +293,15 @@ body[data-view="calendar"] .filterbar{display:flex;}
 .fb-main{display:flex;align-items:center;gap:12px;min-width:0;flex:0 1 auto;overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;scrollbar-width:none;}
 .fb-main::-webkit-scrollbar{display:none;}
 .fb-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto;flex-wrap:nowrap;}
+/* 弹性空白：把右侧的全屏 / 视图推到边上，清空动作留在筛选条件旁边 */
+.fb-spacer{flex:1 1 auto;min-width:0;}
 .filterbar .chip{white-space:nowrap;}
-.fb-actions{display:flex;align-items:center;gap:6px;padding-left:12px;border-left:1px solid var(--border);}
+/* 动作区跟着已选条件走，不再贴在最右侧；与条件之间用间距区分，不加分隔线 */
+.fb-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;}
 .fgroup{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto;}
 .fgroup .group-label{white-space:nowrap;}
-/* 已选条件固定一行：超出时只滚动本区，左右入口保持可见 */
-.fb-active{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding-left:12px;border-left:1px solid var(--border);}
+/* 已选条件固定一行：超出时只滚动本区，动作区与右侧工具保持可见 */
+.fb-active{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding-left:12px;border-left:1px solid var(--border);}
 .fb-active:empty{display:none;}
 .fb-active[hidden]{display:none;}
 .fb-active::-webkit-scrollbar{display:none;}
@@ -420,6 +423,7 @@ body.side-rail .side-foot{flex-direction:column;height:auto;padding:8px 0;gap:6p
   .filterbar{flex-wrap:wrap;height:auto;min-height:var(--filterbar-h);row-gap:6px;padding-block:8px;overflow:visible;}
   .fb-main{flex:1 1 auto;}
   .fb-active{flex:1 1 auto;overflow:visible;flex-wrap:wrap;border-left:0;padding-left:0;}
+  .fb-spacer{display:none;}
   /* 手机面板里全屏没有意义：收起后也占不满，反而多出一行孤立图标 */
   #mobFilterSheet [data-view-fullscreen]{display:none;}
 }

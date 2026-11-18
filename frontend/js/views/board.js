@@ -767,13 +767,8 @@ function render(opts){
       ? "已完成 · " + donePubLabel(effDonePub) + " " + (cd.matched || 0) + " 项 / 当前时间窗 " + (cd.total || 0) + " 项，点击进入工作页"
       : "查看「" + c.name + "」全部 " + allCount + " 项" + (c.done ? "（含历史）" : "");
     var sortMode = c.done ? "manual" : colSortOf(c.id);
-    var pubSelect = c.done
-      ? '<select class="col-pub-filter' + (effDonePub ? " active" : "") + '" data-col-pub="done"' +
-        ' aria-label="已完成列按发布状态筛选" title="发布态筛选：已发布 = 有成功正式生产发布记录或人工补录；与顶部筛选同属一个维度">' +
-        [["", "全部"], ["published", "已发布"], ["unpublished", "未发布"]].map(function(o){
-          return '<option value="' + o[0] + '"' + (effDonePub === o[0] ? " selected" : "") + '>' + o[1] + '</option>';
-        }).join("") + '</select>'
-      : "";
+    /* 已完成列的发布态筛选不再常驻列头：常驻下拉会把列名挤成「已..」。
+       筛选收进「列设置」菜单，生效时列设置按钮提色，计数用 matched/total 表达范围。 */
     var head = '<div class="board-col-head">' +
       '<span class="col-dot" style="background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"' +
         (isCustom ? ' role="button" tabindex="0" data-col-color="' + esc(c.id) + '" title="修改列颜色"' : '') + '></span>' +
@@ -781,13 +776,12 @@ function render(opts){
       '<button class="col-count-btn" type="button" data-col-open="' + esc(c.id) + '" aria-live="polite"' +
         (c.done ? ' data-col-range="all"' : '') +
         ' title="' + esc(countTip) + '" aria-label="' + esc(countTip) + '">' + esc(countText) + '</button>' +
-      pubSelect +
       '<span class="sp"></span>' +
       (c.done ? '' :
         '<button class="icon-btn sm col-sort-btn' + (sortMode !== "manual" ? " on" : "") + '" type="button" data-col-sort="' + esc(c.id) + '"' +
           ' title="列内排序：' + COL_SORT_LABEL[sortMode] + '" aria-label="列内排序：' + COL_SORT_LABEL[sortMode] + '">' + icon("sort", 14) + '</button>') +
       '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新建工作项" aria-label="在「' + esc(c.name) + '」新建工作项">' + icon("plus", 14) + '</button>' +
-      '<button class="icon-btn sm" type="button" data-col-menu="' + esc(c.id) + '" title="「' + esc(c.name) + '」列设置" aria-label="「' + esc(c.name) + '」列设置" aria-haspopup="menu" aria-expanded="false">' + icon("more", 14) + '</button>' +
+      '<button class="icon-btn sm' + (doneFiltered ? " on" : "") + '" type="button" data-col-menu="' + esc(c.id) + '" title="' + (doneFiltered ? "「" + esc(c.name) + "」列设置 · 发布态：" + donePubLabel(effDonePub) : "「" + esc(c.name) + "」列设置") + '" aria-label="「" + esc(c.name) + "」列设置" aria-haspopup="menu" aria-expanded="false">' + icon("more", 14) + '</button>' +
       '<button class="icon-btn sm" type="button" data-col-fold="' + esc(c.id) + '" title="' + (collapsed ? "展开" : "折叠") + '列" aria-label="' + (collapsed ? "展开" : "折叠") + '列" aria-expanded="' + (!collapsed) + '">' +
         icon(collapsed ? "right" : "caretDown", 14) + '</button>' +
     '</div>';
@@ -1303,14 +1297,14 @@ board.addEventListener("scroll", function(e){
   var btn = colEl && colEl.querySelector(".col-top");
   if(btn) btn.classList.toggle("on", el.scrollTop > COL_TOP_AT);
 }, true);
-/* 已完成列头发布态：与顶部筛选同属发布维度，列内选择接管该维度，避免两处同维条件互相覆盖 */
-board.addEventListener("change", function(e){
-  var sel = e.target.closest("[data-col-pub]");
-  if(!sel) return;
-  boardDonePub = sel.value === "published" || sel.value === "unpublished" ? sel.value : "";
+/* 已完成列发布态：与顶部筛选同属发布维度，列内选择接管该维度，避免两处同维条件互相覆盖 */
+function setDonePubFilter(value){
+  var next = value === "published" || value === "unpublished" ? value : "";
+  if(next === (boardDonePub || "") && !state.pubState) return;
+  boardDonePub = next;
   state.pubState = null;
   reloadFilteredViews();
-});
+}
 board.addEventListener("click", function(e){
   var mobTab = e.target.closest("[data-mob-col]");
   if(mobTab){ mobCol = mobTab.dataset.mobCol; render({animate:false}); return; }
@@ -1450,12 +1444,23 @@ function openColMenu(anchor, colId){
     (isCustom
       ? '<button class="menu-item" type="button" data-col-menu-color="' + esc(colId) + '"><span>设置列颜色</span></button>'
       : '');
+  if(col.done){
+    var effPub = boardDonePub || state.pubState || "";
+    html += '<div class="menu-sep"></div><div class="menu-title">发布态筛选</div>' +
+      [["", "全部"], ["published", "已发布"], ["unpublished", "未发布"]].map(function(o){
+        var on = effPub === o[0];
+        return '<button class="menu-item' + (on ? " on" : "") + '" type="button" role="menuitemradio" aria-checked="' + on + '" data-col-pub-set="' + o[0] + '">' +
+          '<span>' + o[1] + '</span>' + (on ? icon("check", 14) : '') + '</button>';
+      }).join("");
+  }
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = html;
   el.addEventListener("click", function(e){
     var open = e.target.closest("[data-col-menu-open]");
     if(open){ UI.closeAllPops(); openColumnWorkpage(open.dataset.colMenuOpen); return; }
+    var pub = e.target.closest("[data-col-pub-set]");
+    if(pub){ UI.closeAllPops(); setDonePubFilter(pub.dataset.colPubSet); return; }
     var rename = e.target.closest("[data-col-menu-rename]");
     if(rename){
       UI.closeAllPops();

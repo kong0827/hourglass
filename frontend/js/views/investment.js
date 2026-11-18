@@ -4,7 +4,7 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
-import { projectOptionsHTML, rt } from "../core/state.js";
+import { projectOptionsHTML, reqSetId, rt, setNameById } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { AIProgress, aiErrorText, aiUsageText } from "../core/ai-progress.js";
 import { labelFilterText } from "../lib/member-labels.js";
@@ -544,7 +544,12 @@ function rowMeta(row){
     return (row.companyName || "未设公司") + " · " + (row.roleTitle || "未设角色")
       + " · 参与 " + (row.projects || 0) + " 个项目 · " + (row.tasks || 0) + " 个工作项";
   }
-  if(state.dim === "project") return (row.users || 0) + " 人 · " + (row.tasks || 0) + " 个工作项";
+  if(state.dim === "project"){
+    /* 项目集不是统计维度，只补归属提示：同一个「项目」名到底属于哪个集 */
+    var setName = row.key ? setNameById(reqSetId(row.key)) : "";
+    return (setName ? "项目集 " + setName : "未归入项目集")
+      + " · " + (row.users || 0) + " 人 · " + (row.tasks || 0) + " 个工作项";
+  }
   return (row.users || 0) + " 人 · " + (row.projects || 0) + " 个项目";
 }
 function pivotHTML(){
@@ -689,7 +694,12 @@ function openDrill(row, dim){
   API.get("/api/manager/investment/tasks", Object.assign({}, base, { offset:0 })).then(function(page){
     var rows = (page && page.items) || [];
     if(!rows.length){ toast("该分组下本期暂无投入记录", "warn"); return; }
-    openTaskTable(DIM_LABEL[dimension] + " · " + (row.name || "未命名"), rows,
+    var rowName = row.name || "未命名";
+    if(dimension === "project" && row.key){
+      var setName = setNameById(reqSetId(row.key));
+      if(setName) rowName = setName + " › " + rowName;
+    }
+    openTaskTable(DIM_LABEL[dimension] + " · " + rowName, rows,
       periodLabel() + " · " + scopeText() + " · 共 " + page.total + " 项 · 实际与预估按同一周期归集", {
         total:page.total,
         hasMore:page.hasMore,

@@ -518,19 +518,38 @@ function renderReadAssoc(){
     evRow("负责人", ownerNameNow() || "未分配", "", ""),
     versionRow,
     evAssocRow("关联需求", "demand", demandId, demandId ? (demandNameNow() || "未关联") : "未关联", "打开需求详情"),
-    epicId
-      ? evRow("所属史诗", assocText("iEpic") || epicLabelFallback(epicSel, epicId), 'data-ev-task="' + esc(epicId) + '"', "打开史诗工作项")
-      : evRow("所属史诗", "未设置", "", ""),
+    epicRowHTML(t, epicSel, epicId, assocEditable),
     evAssocRow("所属分支", "branch", branchId, branchId ? (assocText("iBranch") || "加载中…") : "未设置", "打开分支详情"),
     depRow,
-    docId
-      ? evRow("关联文档", assocText("iReqDoc") || (docSel && !docSel.getAttribute("data-ready") ? "加载中…" : "未设置"), 'data-ev-doc="' + esc(docId) + '"', "在新标签页打开关联文档")
-      : evRow("关联文档", "未设置", "", ""),
+    docRowHTML(docSel, docId, assocEditable),
     t.itemType === "bug"
       ? '<dt>来源用例</dt><dd id="readSourceCase" class="ev-case-cell"><span class="ev-case-empty">加载中…</span></dd>'
       : ""
   ].join("");
   if(t.itemType === "bug") loadReadSourceCases(t);
+}
+/* 所属史诗：史诗自身不能再挂史诗，所以只有非史诗工作项才给铅笔；值仍可点开史诗详情 */
+function epicRowHTML(t, epicSel, epicId, assocEditable){
+  var editable = assocEditable && (!t || t.itemType !== "epic");
+  var edit = editable
+    ? '<button type="button" class="assoc-edit" data-assoc-edit="epic" aria-label="就地编辑所属史诗" title="设置 / 更换所属史诗">' + icon("edit", 13) + '</button>'
+    : "";
+  var val = epicId
+    ? '<button type="button" class="ev-link" data-ev-task="' + esc(epicId) + '" title="打开史诗工作项">' +
+        esc(assocText("iEpic") || epicLabelFallback(epicSel, epicId)) + '</button>'
+    : '<span class="ev-empty">未设置</span>';
+  return '<dt>所属史诗</dt><dd class="ev-assoc">' + val + edit + '</dd>';
+}
+/* 关联文档：没关联时也保留铅笔，就地补关联；值仍可点开文档 */
+function docRowHTML(docSel, docId, assocEditable){
+  var edit = assocEditable
+    ? '<button type="button" class="assoc-edit" data-assoc-edit="doc" aria-label="就地编辑关联文档" title="设置 / 更换关联文档">' + icon("edit", 13) + '</button>'
+    : "";
+  var text = assocText("iReqDoc") || (docSel && !docSel.getAttribute("data-ready") ? "加载中…" : "未设置");
+  var val = docId
+    ? '<button type="button" class="ev-link" data-ev-doc="' + esc(docId) + '" title="在新标签页打开关联文档">' + esc(text) + '</button>'
+    : '<span class="ev-empty">' + esc(text) + '</span>';
+  return '<dt>关联文档</dt><dd class="ev-assoc">' + val + edit + '</dd>';
 }
 /* 缺陷反查来源用例：执行流水里把本缺陷记为 bug_task_id 的用例，可点回用例详情 */
 var readSourceCaseSeq = 0;
@@ -6187,6 +6206,7 @@ function openAssocFact(kind, anchor){
   if(rt.drawerReadOnly || !rt.editingId){ toast("你对该项目只有查看权限", "warn"); return; }
   if(kind === "project"){ openProjectFact(anchor); return; }
   if(kind === "deps"){ if(depInlineOpen) closeDepInline(); else openDepSection(); return; }
+  if(kind === "epic" || kind === "doc"){ openEpicDocAssocPicker(kind, anchor); return; }
   var isDemand = kind === "demand";
   var sel = $(isDemand ? "iDemand" : "iBranch");
   if(!sel) return;
@@ -6308,6 +6328,136 @@ function openAssocFact(kind, anchor){
   if(!ready()){
     if(isDemand) ensureDemand(rt.formDemandId || "");
     else ensureBranch(sel.value || "", currentReqId());
+    if(window.MutationObserver){
+      mo = new MutationObserver(function(){ if(ready()){ render(); if(mo){ mo.disconnect(); mo = null; } } });
+      mo.observe(sel, { attributes:true, attributeFilter:["data-ready"], childList:true });
+    }
+  }
+  UI.openPop(el, anchor, {
+    align:"left", width:Math.min(344, window.innerWidth - 24), sheet:true,
+    onClose:function(){ if(mo) mo.disconnect(); el.remove(); }
+  });
+  render();
+  setTimeout(function(){ if(UI.popOpen(el)) input.focus(); }, 40);
+}
+/* 所属史诗 / 关联文档就地编辑（读态）：候选复用抽屉里的 iEpic / iReqDoc，
+   只列当前项目范围，避免顺手把工作项搬到其他项目；已关联的跨项目项仍在列表里并可保留。
+   选中即写回下拉 + 整表保存，与需求 / 分支的就地编辑同一套流程。 */
+function openEpicDocAssocPicker(kind, anchor){
+  if(rt.drawerReadOnly || !rt.editingId){ toast("你对该项目只有查看权限", "warn"); return; }
+  var isEpic = kind === "epic";
+  var sel = $(isEpic ? "iEpic" : "iReqDoc");
+  if(!sel) return;
+  var title = isEpic ? "所属史诗" : "关联文档";
+  var clearLabel = isEpic ? "无所属史诗" : "不关联";
+  var foot = isEpic
+    ? "候选为当前项目的史诗（不含本工作项）；选中即保存。"
+    : "候选为当前项目的文档；跨项目文档请到编辑态再改，避免工作项被搬动。选中即保存。";
+  var projId = currentReqId();
+  var query = "";
+  var el = document.createElement("div");
+  el.className = "menu search-picker assoc-picker";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", title);
+  el.innerHTML =
+    '<div class="search-picker-head">' +
+      '<div class="search-picker-search">' + icon("search", 15) +
+        '<input type="text" placeholder="' + (isEpic ? "搜索史诗标题…" : "搜索文档标题…") + '" aria-label="' + esc(title) + '" role="combobox" aria-expanded="true" autocomplete="off" spellcheck="false">' +
+        '<button class="pp-clear-search" type="button" aria-label="清除搜索" hidden>' + icon("close", 12) + '</button>' +
+      '</div>' +
+      '<div class="search-picker-tools"><span class="pp-count" aria-live="polite"></span></div>' +
+    '</div>' +
+    '<div class="search-picker-results" role="listbox" aria-label="' + esc(title) + '"></div>' +
+    '<div class="search-picker-foot">' + esc(foot) + '</div>';
+  var input = el.querySelector("input"), clearSearch = el.querySelector(".pp-clear-search");
+  var results = el.querySelector(".search-picker-results"), count = el.querySelector(".pp-count");
+
+  function ready(){ return sel.getAttribute("data-ready") === "1"; }
+  function options(){
+    var out = [];
+    Array.prototype.forEach.call(sel.options, function(o){
+      if(o.value === "") return;
+      var docProj = o.getAttribute("data-req") || "";
+      var cross = !isEpic && docProj && docProj !== projId && o.value !== (sel.value || "");
+      if(cross) return;   // 非当前项目且非当前已关联：读态不提供，避免连带搬动工作项
+      var label = (o.textContent || "").trim();
+      out.push({ id:o.value, label:label, other:!isEpic && !!docProj && docProj !== projId });
+    });
+    return out;
+  }
+  function matches(o){
+    var q = query.trim().toLowerCase();
+    return !q || o.label.toLowerCase().indexOf(q) !== -1;
+  }
+  function optHTML(o, curId){
+    var on = curId === o.id;
+    var titleText = isEpic ? o.label : (o.label.split(" · ").pop() || o.label);
+    var meta = o.other ? '<span class="sp-tag">其他项目</span>' : "";
+    return '<button class="search-picker-option' + (on ? " selected" : "") + '" type="button" role="option" aria-selected="' + on + '" data-pick="' + esc(o.id) + '">' +
+      '<span class="sp-ico ' + (isEpic ? "epic" : "doc") + '" aria-hidden="true">' + icon(isEpic ? "layers" : "docW", 15) + '</span>' +
+      '<span class="search-picker-option-main"><span class="sp-title">' + esc(titleText) + '</span>' +
+        (meta ? '<span class="sp-meta">' + meta + '</span>' : '') + '</span>' +
+      (on ? '<span class="pp-check">' + icon("check", 14) + '当前</span>' : '') + '</button>';
+  }
+  function render(){
+    clearSearch.hidden = !query;
+    var curId = sel.value || "";
+    if(!ready()){
+      count.innerHTML = '<span class="pp-title">' + esc(title) + '</span>候选加载中…';
+      results.innerHTML = '<div class="search-picker-empty">正在加载' + esc(title) + '候选…</div>';
+      return;
+    }
+    var opts = options(), filtered = opts.filter(matches), html = "";
+    if(!query.trim()){
+      var noneOn = !curId;
+      html += '<button class="search-picker-clear' + (noneOn ? " selected" : "") + '" type="button" role="option" aria-selected="' + noneOn + '" data-pick="">' +
+        '<span class="ci" aria-hidden="true">' + icon("ban", 14) + '</span><span>' + esc(clearLabel) + '</span>' +
+        (noneOn ? '<span class="pp-check" style="margin-left:auto">' + icon("check", 14) + '当前</span>' : '') + '</button>';
+    }
+    filtered.forEach(function(o){ html += optHTML(o, curId); });
+    if(!filtered.length){
+      html = '<div class="search-picker-empty">没有匹配「' + esc(query.trim()) + '」的' + (isEpic ? "史诗" : "文档") +
+        '<br><button class="btn sm" type="button" data-clearq>清除搜索</button></div>';
+    }
+    results.innerHTML = html;
+    count.innerHTML = '<span class="pp-title">' + esc(title) + '</span>' +
+      (query.trim() ? ("匹配 " + filtered.length + " 条") : (opts.length + " 条候选"));
+  }
+  function commit(id){
+    var next = id || "";
+    if((sel.value || "") === next){ UI.closeAllPops(); return; }
+    sel.value = next;
+    sel.dispatchEvent(new Event("change", { bubbles:true }));
+    UI.closeAllPops();
+    var hit = options().filter(function(o){ return o.id === next; })[0];
+    var name = hit ? (isEpic ? hit.label : (hit.label.split(" · ").pop() || hit.label)) : clearLabel;
+    factSave("已更新" + title + "：" + name);
+  }
+  input.addEventListener("input", function(){ query = input.value; render(); });
+  clearSearch.addEventListener("click", function(){ input.value = ""; query = ""; render(); input.focus(); });
+  results.addEventListener("click", function(e){
+    if(e.target.closest("[data-clearq]")){ input.value = ""; query = ""; render(); input.focus(); return; }
+    var b = e.target.closest("[data-pick]");
+    if(b && !b.disabled) commit(b.dataset.pick);
+  });
+  el.addEventListener("keydown", function(e){
+    if(e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End"){
+      var btns = Array.prototype.slice.call(results.querySelectorAll(".search-picker-option,.search-picker-clear"));
+      if(!btns.length) return;
+      e.preventDefault();
+      var i = btns.indexOf(document.activeElement), next;
+      if(e.key === "Home") next = 0;
+      else if(e.key === "End") next = btns.length - 1;
+      else if(e.key === "ArrowDown") next = i < 0 ? 0 : (i + 1) % btns.length;
+      else next = i <= 0 ? btns.length - 1 : i - 1;
+      btns[next].focus();
+    }
+  });
+  /* 候选异步就绪后就地刷新（读态打开抽屉时通常已加载，兜底见 ensureEpic / ensureReqDoc） */
+  var mo = null;
+  if(!ready()){
+    if(isEpic) ensureEpic(sel.value || "", rt.editingId);
+    else ensureReqDoc(sel.value || "");
     if(window.MutationObserver){
       mo = new MutationObserver(function(){ if(ready()){ render(); if(mo){ mo.disconnect(); mo = null; } } });
       mo.observe(sel, { attributes:true, attributeFilter:["data-ready"], childList:true });

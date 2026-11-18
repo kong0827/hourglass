@@ -301,7 +301,7 @@ function renderTreeItems(){
     bindRetry(treeBody, function(){
       if(!hasConditions){ openTaskDrawer("backlog"); return; }
       hideDone = false; syncHideDoneBtn();
-      /* 「查看全部工作项」= 回到无筛选结果：点筛选栏的清空按钮，与它同一口径（保留项目范围、联动全部视图刷新） */
+      /* 「查看全部工作项」= 回到无筛选结果：点筛选栏的清空按钮，与它同一口径（清空全部条件、联动全部视图刷新） */
       if(filterOn()) $("btnClearFilter").click();
       else renderTreeItems();
     });

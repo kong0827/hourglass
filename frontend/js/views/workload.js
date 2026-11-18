@@ -5,7 +5,7 @@ import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import { openTaskById } from "../core/task-actions.js";
-import { dueState, projectOptionsHTML, rt, statusBucket } from "../core/state.js";
+import { dueState, projectOptionsHTML, reqSetId, rt, setNameById, statusBucket } from "../core/state.js";
 import { loadReqs } from "./board.js";
 import { companyChipHTML } from "../lib/company.js";
 import { memberRoleTitles, labelFilterText } from "../lib/member-labels.js";
@@ -103,7 +103,12 @@ function workloadSelectOptions(values, selected, all, unset){
 }
 function workloadScopeText(data){
   var scope = data.scope || {}, project = (rt.reqList || []).filter(function(p){ return p.id === scope.reqId; })[0];
-  return '项目：' + (scope.reqId ? (project ? project.name : scope.reqId) : '全部项目')
+  var scopeName = scope.reqId ? (project ? project.name : scope.reqId) : '全部项目';
+  if(scope.reqId && project){
+    var setName = setNameById(reqSetId(scope.reqId));
+    if(setName) scopeName = setName + " › " + scopeName;
+  }
+  return '项目：' + scopeName
     + ' · 公司：' + (scope.companyName === '__unset__' ? '未设公司' : labelFilterText(scope.companyName) || '全部公司')
     + ' · 角色：' + (scope.roleTitle === '__unset__' ? '未设角色' : labelFilterText(scope.roleTitle) || '全部角色');
 }
@@ -397,7 +402,12 @@ function memberCardHTML(mv, scope){
     + statHTML("阻塞", counts.blocked, counts.blocked ? "warn" : "mute")
     + '</div>'
     + '<div class="member-card-projects">' + (projects.length
-        ? projects.map(function(p){ return '<span class="wl-proj-chip' + (scope && (scope.reqId || "") === (p.reqId || "") ? ' on' : '') + '"><b>' + esc(p.name) + '</b><i>' + fmtHours(p.remainingMinutes) + '</i></span>'; }).join("")
+        ? projects.map(function(p){
+            var setName = p.reqId ? setNameById(reqSetId(p.reqId)) : "";
+            return '<span class="wl-proj-chip' + (scope && (scope.reqId || "") === (p.reqId || "") ? ' on' : '') + '"'
+              + (setName ? ' title="' + esc("项目集 " + setName + " › " + p.name) + '"' : '')
+              + '><b>' + esc(p.name) + '</b><i>' + fmtHours(p.remainingMinutes) + '</i></span>';
+          }).join("")
           + (mv.projects.length > projects.length ? '<span class="wl-proj-more">+' + (mv.projects.length - projects.length) + ' 个项目</span>' : '')
         : '<span class="roster-empty">暂无参与项目</span>') + '</div>'
     + '<div class="member-card-foot"><span>' + esc(periodLabel()) + ' ' + fmtHours(periodMinutes(m)) + ' · 今日 ' + (mv.todayMinutes ? fmtHours(mv.todayMinutes) : "—") + '</span>'
@@ -429,7 +439,12 @@ function groupedHTML(views){
   views.forEach(function(mv){
     if(ui.group === "project"){
       var list = mv.projects.length ? mv.projects : [{ reqId:"", name:"未归类" }];
-      list.forEach(function(p){ addGroup(p.reqId || "", p.name || "未归类", projectOrder(p.reqId)).entries.push({ mv:mv, scope:{ reqId:p.reqId || "", name:p.name || "未归类" } }); });
+      list.forEach(function(p){
+        var label = p.name || "未归类";
+        var setName = p.reqId ? setNameById(reqSetId(p.reqId)) : "";
+        if(setName) label = setName + " › " + label;
+        addGroup(p.reqId || "", label, projectOrder(p.reqId)).entries.push({ mv:mv, scope:{ reqId:p.reqId || "", name:p.name || "未归类" } });
+      });
       return;
     }
     var label = "未分组", order = 0;

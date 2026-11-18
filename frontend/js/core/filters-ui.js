@@ -1444,11 +1444,11 @@ $("chipFocus").addEventListener("click", function(){
   UI.closeAllPops();
   reloadFilteredViews();
 });
-/* opts.keepReqs：用户点「清空筛选」时保留项目范围；列表预置、我的工作等内部重置仍用全量清空 */
-function clearFilters(opts){
-  var keepReqs = !!(opts && opts.keepReqs);
+/* 「清空筛选」= 全部条件一起清，项目也算一条。用例 / 分支那类把项目当页面范围的入口有自己的清空逻辑，
+   不走这里；工作项这组（看板 / 列表 / 层级 / 甘特 / 日历）和我的工作如果保留项目，只选项目时按钮会看起来毫无反应。 */
+function clearFilters(){
   state.q = ""; state.owners = []; state.testOwners = []; state.pris = []; state.cats = [];
-  if(!keepReqs) state.reqs = [];
+  state.reqs = [];
   state.tags = []; state.types = []; state.versions = []; state.columns = []; state.completion = "";
   state.pubState = null;
   state.due = null; state.focus = false; state.blocked = false;
@@ -1458,19 +1458,19 @@ function clearFilters(opts){
   searchWrap.classList.remove("has");
   reloadFilteredViews();
 }
-$("btnClearFilter").addEventListener("click", function(){ clearFilters({keepReqs:true}); });
+$("btnClearFilter").addEventListener("click", function(){ clearFilters(); });
 selectedSummary.addEventListener("click", function(){
   var n = selectedFilterCount();
   if(n >= 3){
     UI.showConfirm({
       title:"清空筛选",
-      msg:"当前有 <b>" + n + "</b> 项筛选条件，确定全部清空？项目范围会保留。",
+      msg:"当前有 <b>" + n + "</b> 项筛选条件，确定全部清空？",
       okText:"清空",
       danger:false
-    }).then(function(ok){ if(ok) clearFilters({keepReqs:true}); });
+    }).then(function(ok){ if(ok) clearFilters(); });
     return;
   }
-  clearFilters({keepReqs:true});
+  clearFilters();
 });
 function handleFilterClick(e){
   var dueBtn = e.target.closest("[data-due-open]");
@@ -1566,8 +1566,8 @@ function handleFilterClick(e){
   var t = e.target.closest("[data-tag]");
   if(t){ toggleFilterValue("tags", t.dataset.tag); return; }
   if(e.target.closest("[data-mf-reset]")){
-    /* 与筛选栏的「清空筛选」同义：清掉搜索、截止期与各维度，保留当前项目范围 */
-    clearFilters({keepReqs:true});
+    /* 与筛选栏的「清空筛选」同义：搜索、截止期、各维度与项目一起清掉 */
+    clearFilters();
     return;
   }
   if(e.target.closest("[data-blocked-filter]")){

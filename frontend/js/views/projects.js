@@ -323,13 +323,13 @@ function projectSetHeadHTML(group){
   return '<div class="req-set-head' + (set ? "" : " is-ungrouped") + '"' +
       ' data-set-key="' + esc(key) + '"' + (set ? ' data-set-id="' + esc(set.id) + '"' : '') + '>' +
     '<button class="icon-btn sm req-set-toggle' + (collapsed ? "" : " on") + '" type="button" data-set-toggle="' + esc(key) + '" aria-expanded="' + (!collapsed) + '" title="' + (collapsed ? "展开" : "收起") + '">' + icon("chevronRight", 14) + '</button>' +
-    '<span class="req-set-title"><b>' + title + '</b></span>' +
+    '<span class="req-set-title"><span class="req-set-ico" aria-hidden="true">' + icon("folder", 14) + '</span><b>' + title + '</b></span>' +
     (set && set.status && set.status !== "active"
       ? '<span class="tag tag-ghost">' + esc(reqStatusName(set.status)) + '</span>' : '') +
     '<span class="req-set-meta">' + rows.length + ' 个项目 · ' + agg.tasks + ' 工作项 · ' + agg.done + ' 完成'
       + (agg.mvp + agg.post ? ' · 首版 ' + fmtMinutesShort(agg.mvp) + ' · 迭代 ' + fmtMinutesShort(agg.post) : '')
       + '</span>' +
-    '<span class="progress mini req-set-progress"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>' +
+    '<span class="progress mini req-set-progress" title="集内项目按工作项数加权的完成度"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>' +
     (manage ? '<span class="req-set-acts">' +
       (canReorderSets() ? setDragHTML(set.id) : "") +
       '<button class="icon-btn sm" type="button" data-set-edit="' + esc(set.id) + '" title="编辑项目集" aria-label="编辑项目集">' + icon("edit", 14) + '</button>' +
@@ -347,7 +347,7 @@ function projectSetNameCell(group, agg){
   return '<span class="project-name-wrap set-name-cell">' +
     '<span class="set-name-line">' +
       '<button class="icon-btn sm req-set-toggle' + (collapsed ? "" : " on") + '" type="button" data-set-toggle="' + esc(key) + '" aria-expanded="' + (!collapsed) + '" title="' + (collapsed ? "展开" : "收起") + '">' + icon("chevronRight", 14) + '</button>' +
-      '<span class="req-set-title"><b>' + (set ? esc(set.name) : "未分组") + '</b></span>' +
+      '<span class="req-set-title"><span class="req-set-ico" aria-hidden="true">' + icon("folder", 14) + '</span><b>' + (set ? esc(set.name) : "未分组") + '</b></span>' +
     '</span>' +
     '<span class="req-set-meta">' + group.rows.length + ' 个项目'
       + (agg.mvp + agg.post ? ' · 首版 ' + fmtMinutesShort(agg.mvp) + ' · 迭代 ' + fmtMinutesShort(agg.post) : '')
@@ -554,7 +554,9 @@ function emptyProjectsState(){
     text:"点右上角「新建项目」创建第一个；展开项目可以查看文档与工作项进度。"
   });
 }
-/* 项目卡：首版上线标记 + 首版 / 迭代投入条，口径与版本页阶段卡一致 */
+/* 项目卡：首版上线标记 + 首版 / 迭代投入条，口径与版本页阶段卡一致
+   工时构成用阶段色（首版 info / 迭代 plum）并带「工时」标签，与上面主色的进度条分开，
+   避免两条同色细条被读成「两个进度」；某阶段为 0 时图例点收成描边，不占阶段色。 */
 function reqReleaseBadgeHTML(r){
   if(!r.firstReleasedAt) return '<span class="tag tag-ghost" title="在版本页标记首版上线后，可查看首版 / 迭代拆分">未标记首版</span>';
   return '<span class="tag tag-info" title="首版上线日">首版 ' + esc(String(r.firstReleasedAt).slice(5, 10).replace("-", "/")) + '</span>';
@@ -562,16 +564,21 @@ function reqReleaseBadgeHTML(r){
 function reqPhaseHTML(r){
   var mvp = Number(r.mvpWorkMinutes) || 0, post = Number(r.postWorkMinutes) || 0, total = mvp + post;
   var onTime = (r.onTimePct === null || r.onTimePct === undefined)
-    ? "" : '<span class="req-phase-ontime">准时 <b>' + Number(r.onTimePct) + '%</b></span>';
-  if(!total) return onTime ? '<div class="req-phase"><span class="req-phase-lg">' + onTime + '</span></div>' : "";
+    ? "" : '<span class="req-phase-ontime" title="按带截止日期的已完成工作项统计">准时 <b>' + Number(r.onTimePct) + '%</b></span>';
+  if(!total) return onTime ? '<div class="req-phase"><span class="req-phase-k">工时</span><span class="req-phase-none">暂无计时</span>' + onTime + '</div>' : "";
+  /* 两段都有工时就让两段都留出像素，否则 1% 的迭代会被四舍五入成 0 而整条是首版色 */
+  var mvpPct = Math.min(100 - (post ? 1 : 0), Math.max(mvp ? 1 : 0, Math.round(mvp / total * 100)));
+  var postPct = 100 - mvpPct;
+  var mvpText = fmtMinutesShort(mvp), postText = post ? fmtMinutesShort(post) : "—";
   return '<div class="req-phase">' +
-    '<span class="req-phase-bar" title="首版 ' + esc(fmtMinutesShort(mvp)) + ' · 迭代 ' + esc(fmtMinutesShort(post)) + '">' +
-      '<i class="m" style="width:' + Math.round(mvp / total * 100) + '%"></i>' +
-      '<i class="p" style="width:' + Math.round(post / total * 100) + '%"></i>' +
+    '<span class="req-phase-k">工时</span>' +
+    '<span class="req-phase-bar" role="img" aria-label="工时构成：首版 ' + esc(mvpText) + '，迭代 ' + esc(postText) + '" title="工时构成 · 首版 ' + esc(mvpText) + ' · 迭代 ' + esc(postText) + '">' +
+      '<i class="m" style="width:' + mvpPct + '%"></i>' +
+      (post ? '<i class="p" style="width:' + postPct + '%"></i>' : '') +
     '</span>' +
     '<span class="req-phase-lg">' +
-      '<span class="k m">首版 <b>' + esc(fmtMinutesShort(mvp)) + '</b></span>' +
-      '<span class="k p">迭代 <b>' + esc(fmtMinutesShort(post)) + '</b></span>' + onTime +
+      '<span class="k m">首版 <b>' + esc(mvpText) + '</b></span>' +
+      '<span class="k p' + (post ? '' : ' zero') + '">迭代 <b>' + esc(postText) + '</b></span>' + onTime +
     '</span>' +
   '</div>';
 }
@@ -665,6 +672,7 @@ function renderReqList(){
       '</div>' +
       (r.description ? '<div class="req-desc">' + esc(r.description) + '</div>' : '') +
       '<div class="req-meta">' +
+        '<span class="req-meta-k">进度</span>' +
         '<span class="progress" style="width:140px"><span class="bar"><i style="width:' + r.progressPct +
           '%;background:' + (r.status === "done" ? "var(--success)" : "var(--primary)") + '"></i></span></span>' +
         '<span style="font-weight:600;color:var(--text-2)">' + r.progressPct + '%</span>' +
@@ -714,7 +722,7 @@ function renderReqList(){
 var PROJECT_WIDTHS = { name:"minmax(180px,1fr)", status:"90px", description:"minmax(180px,1.2fr)", ownerName:"110px", plannedEnd:"120px", taskCount:"76px", doneCount:"76px", progress:"140px", docCount:"76px", firstReleasedAt:"120px", createdAt:"140px", updatedAt:"140px" };
 function projectGrid(el){
   var widths = listPrefs.columns("project-list").map(function(key){ return PROJECT_WIDTHS[key] || "120px"; });
-  el.style.gridTemplateColumns = widths.concat(["224px"]).join(" ");
+  el.style.gridTemplateColumns = widths.concat(["132px"]).join(" ");
 }
 function projectCell(r, key){
   if(key === "name"){
@@ -728,28 +736,84 @@ function projectCell(r, key){
   if(key === "plannedEnd") return '<span class="project-cell">' + (r.plannedEnd ? esc(String(r.plannedEnd).slice(0, 10)) : "—") + '</span>';
   if(key === "taskCount") return '<span class="project-cell">' + (Number(r.taskCount) || 0) + '</span>';
   if(key === "doneCount") return '<span class="project-cell">' + (Number(r.doneCount) || 0) + '</span>';
-  if(key === "progress") return '<span class="progress mini"><span class="bar"><i style="width:' + Math.max(0, Math.min(100, Number(r.progressPct) || 0)) + '%"></i></span><span class="pv">' + (Number(r.progressPct) || 0) + '%</span></span>';
+  if(key === "progress") return '<span class="progress mini" title="工作项完成度：已完成记 100%，其余取记录进度"><span class="bar"><i style="width:' + Math.max(0, Math.min(100, Number(r.progressPct) || 0)) + '%"></i></span><span class="pv">' + (Number(r.progressPct) || 0) + '%</span></span>';
   if(key === "docCount") return '<span class="project-cell">' + (Number(r.docCount) || 0) + '</span>';
   if(key === "firstReleasedAt") return '<span class="project-cell">' + (r.firstReleasedAt ? esc(String(r.firstReleasedAt).slice(0, 10)) : "—") + '</span>';
   if(key === "createdAt" || key === "updatedAt") return '<span class="project-cell">' + (r[key] ? esc(fmtTs(r[key])) : "—") + '</span>';
   return '<span class="project-cell">—</span>';
 }
+/* 行操作只留三个入口：新建工作项（主）、在看板中查看、更多。
+   其余动作收进「更多」菜单并带文字，避免一排图标需要逐个悬停才知道作用。 */
 function projectActions(r){
   var readOnly = r.access === "read";
   return '<span class="project-row-acts">' +
     (readOnly ? '' :
-      '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="新建工作项" aria-label="新建工作项">' + icon("plus", 14) + '</button>' +
-      '<button class="icon-btn sm" type="button" data-doc-new="' + esc(r.id) + '" title="新建文档" aria-label="新建文档">' + icon("projects", 14) + '</button>') +
+      '<button class="icon-btn sm proj-act-primary" type="button" data-req-open="' + esc(r.id) + '" title="新建工作项" aria-label="新建工作项">' + icon("plus", 14) + '</button>') +
     '<button class="icon-btn sm" type="button" data-req-board="' + esc(r.id) + '" title="在看板中查看" aria-label="在看板中查看">' + icon("board", 14) + '</button>' +
-    '<button class="icon-btn sm" type="button" data-req-demands="' + esc(r.id) + '" title="查看需求池" aria-label="查看需求池">' + icon("demand", 14) + '</button>' +
-    '<button class="icon-btn sm" type="button" data-req-docs="' + esc(r.id) + '" title="管理文档" aria-label="管理文档">' + icon("folder", 14) + '</button>' +
-    '<button class="icon-btn sm" type="button" data-req-activity="' + esc(r.id) + '" title="活动轨迹" aria-label="活动轨迹">' + icon("clock", 14) + '</button>' +
-    (readOnly ? '' :
-      '<button class="icon-btn sm" type="button" data-archive-req="' + esc(r.id) + '" title="' + (r.archivedAt ? "取消归档" : "归档项目") + '" aria-label="' + (r.archivedAt ? "取消归档" : "归档项目") + '">' + icon("inbox", 14) + '</button>') +
-    (readOnly ? '' :
-      '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>') +
-    (rt.currentWs && rt.currentWs.myRole === "owner" ? '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>' : '') +
+    '<button class="icon-btn sm" type="button" data-project-more="' + esc(r.id) + '" title="更多操作" aria-label="更多操作" aria-haspopup="menu" aria-expanded="false">' + icon("more", 14) + '</button>' +
   '</span>';
+}
+function closeProjectRowMenu(menu){
+  if(menu && menu.parentNode) menu.remove();
+  var open = document.querySelector('[data-project-more][aria-expanded="true"]');
+  if(open) open.setAttribute("aria-expanded", "false");
+}
+function openProjectRowMenu(anchor, reqId){
+  if(anchor.getAttribute("aria-expanded") === "true"){ UI.closeAllPops(); return; }
+  var r = rt.reqList.filter(function(x){ return x.id === reqId; })[0];
+  if(!r || !anchor) return;
+  var readOnly = r.access === "read", isOwner = rt.currentWs && rt.currentWs.myRole === "owner";
+  var menu = document.createElement("div");
+  menu.className = "menu proj-row-menu";
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", "项目操作");
+  menu.innerHTML = [
+    '<button class="menu-item" type="button" role="menuitem" data-proj-act="board">' + icon("board", 14) + '在看板中查看</button>',
+    '<button class="menu-item" type="button" role="menuitem" data-proj-act="demands">' + icon("demand", 14) + '查看需求池</button>',
+    '<button class="menu-item" type="button" role="menuitem" data-proj-act="docs">' + icon("folder", 14) + '管理文档</button>',
+    readOnly ? '' : '<button class="menu-item" type="button" role="menuitem" data-proj-act="doc-new">' + icon("projects", 14) + '新建文档</button>',
+    '<button class="menu-item" type="button" role="menuitem" data-proj-act="activity">' + icon("clock", 14) + '活动轨迹</button>',
+    '<div class="menu-sep"></div>',
+    readOnly ? '' : '<button class="menu-item" type="button" role="menuitem" data-proj-act="archive">' + icon("inbox", 14) + (r.archivedAt ? "取消归档" : "归档项目") + '</button>',
+    readOnly ? '' : '<button class="menu-item" type="button" role="menuitem" data-proj-act="edit">' + icon("edit", 14) + '编辑项目</button>',
+    isOwner ? '<button class="menu-item danger" type="button" role="menuitem" data-proj-act="delete">' + icon("trash", 14) + '删除项目</button>' : ''
+  ].join("");
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-proj-act]");
+    if(!b) return;
+    e.stopPropagation();
+    var act = b.dataset.projAct;
+    UI.closeAllPops();
+    if(act === "board"){ toBoardForProject(reqId); return; }
+    if(act === "demands"){ openDemandsForReq(reqId); showView("demands"); toast("已按项目筛选需求池：" + reqNameById(reqId)); return; }
+    if(act === "docs"){ setReqDocProjectFilter(reqId); showView("requirements"); return; }
+    if(act === "doc-new"){
+      if(!canEditReq(reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+      openNewReqDocDialog(reqId); return;
+    }
+    if(act === "activity"){
+      activityUI.openDialog(r.name || "项目", "/api/projects/" + encodeURIComponent(reqId) + "/activities");
+      return;
+    }
+    if(act === "archive"){ toggleArchive(reqId); return; }
+    if(act === "edit"){
+      if(!canEditReq(reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+      openProjectDialog(reqId); return;
+    }
+    if(act === "delete") deleteReq(reqId);
+  });
+  document.body.appendChild(menu);
+  anchor.setAttribute("aria-expanded", "true");
+  UI.openPop(menu, anchor, { align:"right", width:176, onClose: function(){ closeProjectRowMenu(menu); } });
+}
+function toBoardForProject(reqId){
+  state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = []; state.columns = []; state.completion = ""; state.due = null; state.focus = false; state.blocked = false;
+  searchInput.value = "";
+  searchWrap.classList.remove("has");
+  state.reqs = [reqId];
+  showView("board");
+  reloadFilteredViews();
+  toast("已按项目筛选看板：" + reqNameById(reqId));
 }
 function renderProjectTable(list){
   list = list || visibleReqs();
@@ -1285,6 +1349,8 @@ reqListEl.addEventListener("click", function(e){
   }
   var sort = e.target.closest("[data-project-sort]");
   if(sort){ setProjectSort(sort.dataset.projectSort); return; }
+  var projMore = e.target.closest("[data-project-more]");
+  if(projMore){ openProjectRowMenu(projMore, projMore.dataset.projectMore); return; }
   var setToggle = e.target.closest("[data-set-toggle]");
   if(setToggle){
     var tk = setToggle.dataset.setToggle;
@@ -1344,17 +1410,7 @@ reqListEl.addEventListener("click", function(e){
   var docOpen = e.target.closest("[data-reqdoc-open]");
   if(docOpen){ openReqDocAndJump(docOpen.dataset.reqdocOpen); return; }
   var toBoard = e.target.closest("[data-req-board]");
-  if(toBoard){
-    var rid1 = toBoard.dataset.reqBoard;
-    state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = []; state.columns = []; state.completion = ""; state.due = null; state.focus = false; state.blocked = false;
-    searchInput.value = "";
-    searchWrap.classList.remove("has");
-    state.reqs = [rid1];
-    showView("board");
-    reloadFilteredViews();
-    toast("已按项目筛选看板：" + reqNameById(rid1));
-    return;
-  }
+  if(toBoard){ toBoardForProject(toBoard.dataset.reqBoard); return; }
   var manage = e.target.closest("[data-req-docs]");
   if(manage){
     setReqDocProjectFilter(manage.dataset.reqDocs);
