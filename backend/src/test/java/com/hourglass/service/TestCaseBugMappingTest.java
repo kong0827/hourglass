@@ -33,7 +33,9 @@ class TestCaseBugMappingTest {
     private static void assertOpenBugOnly(String sql, String label) {
         assertTrue(sql.contains("bt.id = c.latest_bug_task_id"), label + "：按缺陷工作项关联");
         assertTrue(sql.contains("bt.deleted_at IS NULL"), label + "：回收站中的缺陷不计");
-        assertTrue(sql.contains("bt.board_column <> 'done'"), label + "：已完成的缺陷不计");
+        /* 已取消是终态：与已完成一样不再算作未关闭缺陷 */
+        assertTrue(sql.contains("bt.board_column NOT IN ('done', 'canceled')"),
+                label + "：已完成 / 已取消的缺陷不计");
     }
 
     @Test

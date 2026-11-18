@@ -12,7 +12,7 @@
 #view-list .smart-view-tab,
 #view-demands .smart-view-tab{
   flex:0 0 auto;min-height:30px;padding:5px 11px;border:0;border-radius:var(--r-md);
-  background:transparent;color:var(--text-2);font:inherit;font-size:12.5px;cursor:pointer;
+  background:transparent;color:var(--text-2);font:inherit;font-size:13px;cursor:pointer;
   white-space:nowrap;transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
 }
 #view-list .smart-view-tab:hover,
@@ -51,9 +51,9 @@
   background:transparent;color:var(--text-2);font:inherit;text-align:left;cursor:pointer;
 }
 #view-list .list-group-row > button:hover{background:var(--surface-hover);}
-#view-list .list-group-caret{display:inline-block;color:var(--text-3);font-size:10px;transition:transform var(--dur-fast) var(--ease-out);}
+#view-list .list-group-caret{display:inline-block;color:var(--text-3);font-size:var(--fs-micro);transition:transform var(--dur-fast) var(--ease-out);}
 #view-list .list-group-caret.open{transform:rotate(90deg);}
-#view-list .list-group-name{font-size:12.5px;font-weight:600;color:var(--text);}
+#view-list .list-group-name{font-size:13px;font-weight:600;color:var(--text);}
 /* 分组计数与「我的工作」同款胶囊，避免纯文字数字被底色吞掉 */
 #view-list .list-group-count{
   min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);
@@ -67,17 +67,17 @@
   background:transparent;color:var(--text-2);font:inherit;text-align:left;cursor:pointer;
 }
 #view-list .list-subgroup-row > button:hover{background:var(--surface-hover);}
-#view-list .list-subgroup-caret{display:inline-block;color:var(--text-3);font-size:9px;transition:transform var(--dur-fast) var(--ease-out);}
+#view-list .list-subgroup-caret{display:inline-block;color:var(--text-3);font-size:var(--fs-micro);transition:transform var(--dur-fast) var(--ease-out);}
 #view-list .list-subgroup-caret.open{transform:rotate(90deg);}
 #view-list .list-subgroup-name{font-size:12px;font-weight:600;color:var(--text-2);}
 #view-list .list-subgroup-count{font-size:12px;color:var(--text-3);}
 #view-list .list-hide-done.on{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft);}
 /* 透视表：行/列维度选择 + 合计行 */
-.pivot-x{color:var(--text-3);font-size:11.5px;}
+.pivot-x{color:var(--text-3);font-size:12px;}
 .pivot-tbl td:first-child{white-space:nowrap;}
 .pivot-tbl tbody tr:last-child{background:var(--surface-sunken);}
 /* 需求池列表：搜索框 + 表格内分组行 */
-#view-demands .dem-search{min-width:170px;max-width:230px;padding:5px 10px;font-size:12.5px;}
+#view-demands .dem-search{min-width:170px;max-width:230px;padding:5px 10px;font-size:13px;}
 /* 需求池看板：紧凑搜索/筛选条，范围固定为当前项目 */
 #view-demands .dem-board-bar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -86,7 +86,7 @@
 }
 #view-demands .demb-search{
   flex:1 1 260px;min-width:180px;max-width:420px;
-  padding:5px 10px;font-size:12.5px;
+  padding:5px 10px;font-size:13px;
 }
 #view-demands .demb-clear{min-height:28px;}
 /* 阶段筛选在工具条里作用于已排期/已完成两列，不再挤在列头 */
@@ -100,10 +100,10 @@
 #view-demands .dem-group-row > td{padding:6px 10px;}
 #view-demands .dem-group-toggle{
   display:inline-flex;align-items:center;gap:8px;padding:2px 4px;border:0;
-  background:transparent;color:var(--text-2);font:inherit;font-size:12.5px;cursor:pointer;
+  background:transparent;color:var(--text-2);font:inherit;font-size:13px;cursor:pointer;
 }
 #view-demands .dem-group-toggle:hover{color:var(--text);}
-#view-demands .dem-group-caret{display:inline-block;color:var(--text-3);font-size:10px;transition:transform var(--dur-fast) var(--ease-out);}
+#view-demands .dem-group-caret{display:inline-block;color:var(--text-3);font-size:var(--fs-micro);transition:transform var(--dur-fast) var(--ease-out);}
 #view-demands .dem-group-caret.open{transform:rotate(90deg);}
 #view-demands .dem-group-name{font-weight:600;color:var(--text);}
 #view-demands .dem-group-count{font-size:12px;color:var(--text-3);}

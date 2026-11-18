@@ -23,6 +23,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -47,11 +48,13 @@ class RequirementServiceTest {
     private final DemandMapper demands = mock(DemandMapper.class);
     private final DevBranchMapper branches = mock(DevBranchMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
+    private final com.hourglass.mapper.WorkspaceMemberMapper memberMapper =
+            mock(com.hourglass.mapper.WorkspaceMemberMapper.class);
     private final RequirementService service = new RequirementService(reqs, tasks, logs, activity,
             workActivity, docs, versionService, mock(ProjectMilestoneService.class), versions, demands, branches, access,
             mock(AttachmentService.class), mock(com.hourglass.mapper.MailDeliveryMapper.class),
             mock(TestCaseService.class), mock(ProjectTemplateService.class),
-            mock(com.hourglass.mapper.WorkspaceMemberMapper.class), mock(CategoryService.class),
+            memberMapper, mock(CategoryService.class),
             mock(ProjectSetService.class));
 
     @Test
@@ -179,6 +182,51 @@ class RequirementServiceTest {
         assertThrows(com.hourglass.common.AppException.class, () -> service.deleteImpact(WS, VIEWER, "R1"));
 
         verify(tasks, never()).countTasksByReq(anyString(), anyString());
+    }
+
+    @Test
+    void createGrantsSelectedMembersAndDowngradesViewerToRead() {
+        com.hourglass.entity.WorkspaceMember creator = member("U1", "owner");
+        com.hourglass.entity.WorkspaceMember writer = member("U2", "member");
+        com.hourglass.entity.WorkspaceMember viewer = member("U3", "viewer");
+        when(memberMapper.selectMember(WS, "U1")).thenReturn(creator);
+        when(memberMapper.selectMember(WS, "U2")).thenReturn(writer);
+        when(memberMapper.selectMember(WS, "U3")).thenReturn(viewer);
+
+        com.hourglass.dto.ReqSaveRequest req = new com.hourglass.dto.ReqSaveRequest();
+        req.setName("新项目");
+        req.setMembers(Arrays.asList(
+                grant("U2", "write"),
+                /* 查看者即使提交 write，也只能落只读 */
+                grant("U3", "write"),
+                /* 创建者自己由创建流程负责，不从成员列表重复授权 */
+                grant("U1", "write"),
+                /* 非空间成员静默跳过 */
+                grant("U9", "write")));
+
+        service.create(WS, "U1", req);
+
+        verify(access, never()).saveGrant(eq(WS), eq("U1"), anyString(), anyString());
+        verify(access).saveGrant(eq(WS), eq("U2"), anyString(), eq(ProjectAccessService.ACCESS_WRITE));
+        verify(access).saveGrant(eq(WS), eq("U3"), anyString(), eq(ProjectAccessService.ACCESS_READ));
+        verify(access, never()).saveGrant(eq(WS), eq("U9"), anyString(), anyString());
+        verify(workActivity).recordCurrent(eq(WS), eq(WorkActivityService.PROJECT), anyString(),
+                eq("member"), org.mockito.ArgumentMatchers.contains("2 名项目成员"));
+    }
+
+    private com.hourglass.entity.WorkspaceMember member(String userId, String role) {
+        com.hourglass.entity.WorkspaceMember m = new com.hourglass.entity.WorkspaceMember();
+        m.setUserId(userId);
+        m.setRole(role);
+        m.setDisplayName(userId);
+        return m;
+    }
+
+    private com.hourglass.dto.ReqSaveRequest.MemberGrant grant(String userId, String access) {
+        com.hourglass.dto.ReqSaveRequest.MemberGrant g = new com.hourglass.dto.ReqSaveRequest.MemberGrant();
+        g.setUserId(userId);
+        g.setAccess(access);
+        return g;
     }
 
     private Requirement requirement(String id, String name) {

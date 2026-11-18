@@ -25,7 +25,7 @@
   display:grid;place-items:center;
 }
 .brand-mark svg{display:block;}
-.side-brand-name{font-size:15px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;}
+.side-brand-name{font-size:16px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;}
 
 /* 空间切换 44px */
 .side-ws{position:relative;padding:0 12px 10px;flex:0 0 auto;}
@@ -91,7 +91,7 @@
 .nav-item{
   display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;
   border-radius:var(--r-sm);width:100%;flex:0 0 auto;position:relative;
-  color:var(--text-2);font-size:13.5px;font-weight:550;
+  color:var(--text-2);font-size:14px;font-weight:550;
   transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
 }
 .nav-item svg{flex:0 0 auto;color:var(--text-3);transition:color var(--dur-fast) var(--ease-out);}
@@ -117,10 +117,10 @@
 .side-user:hover,.side-user:focus-visible{background:var(--surface-hover);}
 .side-user:focus-visible{outline:none;box-shadow:var(--ring-focus);}
 .side-user .avatar{width:26px;height:26px;font-size:11px;border-radius:var(--r-sm);}
-.side-user-n{font-size:12.5px;font-weight:550;color:var(--text-2);min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.side-user-n{font-size:13px;font-weight:550;color:var(--text-2);min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .side-logout{
   display:flex;align-items:center;justify-content:center;gap:6px;width:28px;height:28px;padding:0;border-radius:var(--r-sm);
-  color:var(--text-3);font-size:12.5px;font-weight:550;flex:0 0 auto;
+  color:var(--text-3);font-size:13px;font-weight:550;flex:0 0 auto;
 }
 .side-logout:hover{background:var(--danger-soft);color:var(--danger-fg);}
 .side-logout:focus-visible{outline:none;box-shadow:var(--ring-focus);}
@@ -139,12 +139,13 @@
 }
 .tb-left{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;}
 .tb-title{font-size:var(--fs-page-title);line-height:26px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.tb-sub{font-size:12px;line-height:16px;font-weight:500;color:var(--text-3);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tb-sub{font-size:12px;line-height:16px;font-weight:500;color:var(--text-3);margin:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;}
 .tb-sub.breadcrumb{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;}
 .tb-sub.breadcrumb span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;max-width:100%;}
 /* 第一段（空间名）限宽，最后一段（页面说明）吃掉剩余宽度，避免统一 180px 截断 */
 .tb-sub.breadcrumb span:first-child{max-width:220px;}
-.tb-sub.breadcrumb span:last-child{max-width:none;flex:1 1 auto;}
+/* 页面说明是降理解成本的关键文案：允许换行两行，不截断状态链 */
+.tb-sub.breadcrumb span:last-child{max-width:none;flex:1 1 auto;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-overflow:clip;}
 .tb-sub.breadcrumb .sep{color:var(--border-strong);font-weight:400;flex:0 0 auto;max-width:none;}
 .tb-sub.breadcrumb .crumb-link{
   flex:0 0 auto;padding:0;border:0;background:none;color:inherit;font:inherit;line-height:inherit;
@@ -185,7 +186,7 @@ body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 /* 顶栏计时胶囊：计时是跨空间的，离开看板也要能看见并一键停止 */
 .timer-pill{
   display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 5px 0 10px;
-  border:1px solid var(--success-border);border-radius:999px;background:var(--success-soft);
+  border:1px solid var(--success-border);border-radius:var(--r-pill);background:var(--success-soft);
   color:var(--text);font-size:12px;font-weight:600;flex:0 0 auto;max-width:280px;
 }
 .timer-pill[hidden]{display:none;}
@@ -195,8 +196,8 @@ body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 .timer-pill .tp-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;color:var(--text-2);}
 .timer-pill b{font-variant-numeric:tabular-nums;color:var(--success-fg);}
 .timer-pill .tp-stop{
-  margin-left:2px;padding:3px 8px;border-radius:999px;background:var(--surface);
-  border:1px solid var(--success-border);color:var(--success-fg);font-size:11.5px;cursor:pointer;
+  margin-left:2px;padding:3px 8px;border-radius:var(--r-pill);background:var(--surface);
+  border:1px solid var(--success-border);color:var(--success-fg);font-size:12px;cursor:pointer;
 }
 .timer-pill .tp-stop:hover{background:var(--success);color:var(--text-inverse);}
 @media (max-width:1279px){.timer-pill{max-width:200px;}.timer-pill .tp-name{max-width:90px;}}
@@ -219,7 +220,7 @@ body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 .global-search input{
   width:240px;height:34px;padding:0 32px 0 32px;
   background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);
-  font-size:13.5px;color:var(--text);
+  font-size:14px;color:var(--text);
   transition:width var(--dur-base) var(--ease-out),background var(--dur-fast) var(--ease-out),
              border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
 }
@@ -231,7 +232,7 @@ input[type="search"]:-webkit-autofill{animation:ds-autofill-start 1ms 1;}
 .gs-kbd kbd{
   min-width:18px;height:18px;padding:0 4px;border-radius:var(--r-xs);
   border:1px solid var(--border-strong);background:var(--surface);
-  font-size:10.5px;font-weight:600;color:var(--text-3);
+  font-size:11px;font-weight:600;color:var(--text-3);
   display:inline-grid;place-items:center;font-family:var(--font-sans);
 }
 .global-search .gs-clear{
@@ -246,7 +247,7 @@ input[type="search"]:-webkit-autofill{animation:ds-autofill-start 1ms 1;}
 .bell:hover{background:var(--surface-hover);color:var(--text);}
 .bell .badge-dot{
   position:absolute;top:1px;right:1px;min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);
-  background:var(--danger-soft);color:var(--danger-fg);font-size:10px;font-weight:700;
+  background:var(--danger-soft);color:var(--danger-fg);font-size:var(--fs-micro);font-weight:700;
   display:inline-grid;place-items:center;font-variant-numeric:tabular-nums;
   border:2px solid var(--surface);box-sizing:content-box;
 }
@@ -261,7 +262,7 @@ input[type="search"]:-webkit-autofill{animation:ds-autofill-start 1ms 1;}
   flex:0 0 auto;display:flex;align-items:center;gap:8px;
   height:28px;padding:0 10px;border-radius:var(--r-sm);
   background:var(--warning-soft);border:1px solid var(--warning-border);
-  color:var(--warning-fg);font-size:12.5px;font-weight:600;
+  color:var(--warning-fg);font-size:13px;font-weight:600;
 }
 
 /* 全局刷新进度条（2px，顶部） */
@@ -305,7 +306,7 @@ body[data-view="calendar"] .filterbar{display:flex;}
 .fb-active:empty{display:none;}
 .fb-active[hidden]{display:none;}
 .fb-active::-webkit-scrollbar{display:none;}
-.fb-section-label{color:var(--text-3);font-size:11.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;}
+.fb-section-label{color:var(--text-3);font-size:12px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;}
 /* 列表视图：Smart Bar 已承载「视图」概念，筛选栏不再重复显示保存视图入口；
    我的工作是跨空间个人待办，工作项列表的视图带列表布局（预置/分组/排序），在这里只能部分生效 */
 body[data-view="list"] #viewGroup,
@@ -337,14 +338,14 @@ body.fs-view .narrow-hint{display:none !important;}
 .fs-exit{
   position:fixed;right:max(24px, env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom, 0px));
   z-index:80;display:none;align-items:center;gap:6px;
-  height:32px;padding:0 12px;border:1px solid var(--border);border-radius:999px;
+  height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-pill);
   background:var(--surface);color:var(--text-2);font-size:12px;font-weight:600;
   box-shadow:var(--shadow-md);
 }
 .fs-exit:hover{background:var(--surface-hover);color:var(--text);}
 .fs-exit span{
   padding:1px 5px;border:1px solid var(--border);border-radius:4px;
-  background:var(--surface-sunken);font-size:10.5px;font-weight:650;color:var(--text-3);
+  background:var(--surface-sunken);font-size:11px;font-weight:650;color:var(--text-3);
 }
 body.fs-view .fs-exit{display:inline-flex;}
 
@@ -370,7 +371,7 @@ body.fs-view .fs-exit{display:inline-flex;}
   display:flex;align-items:center;justify-content:center;gap:8px;
   padding:0 var(--content-pad);
   background:var(--surface);border-top:1px solid var(--border);
-  font-size:11.5px;line-height:1;font-weight:500;
+  font-size:12px;line-height:1;font-weight:500;
   color:var(--text-3);letter-spacing:.2px;
   white-space:nowrap;overflow:hidden;
 }
@@ -432,7 +433,7 @@ body.side-rail .side-foot{flex-direction:column;height:auto;padding:8px 0;gap:6p
   display:none;align-items:center;gap:8px;
   margin:12px var(--content-pad) 0;padding:8px 12px;
   border:1px solid var(--warning-border);background:var(--warning-soft);color:var(--warning-fg);
-  border-radius:var(--r-sm);font-size:12.5px;font-weight:600;
+  border-radius:var(--r-sm);font-size:13px;font-weight:600;
 }
 @media (max-width:1279px){.narrow-hint{display:flex;}}
 
@@ -475,10 +476,10 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 .palette-input svg{flex:none;color:var(--text-3);}
 .palette-input input{
   flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text);
-  font-size:15px;line-height:1.5;
+  font-size:16px;line-height:1.5;
 }
 .palette-scope{
-  flex:none;max-width:46%;padding:3px 8px;border:1px solid var(--primary-border);border-radius:999px;
+  flex:none;max-width:46%;padding:3px 8px;border:1px solid var(--primary-border);border-radius:var(--r-pill);
   background:var(--primary-soft);color:var(--primary-fg);font-size:11px;font-weight:600;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
@@ -499,9 +500,9 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 }
 .palette-item.on .palette-ic{background:var(--surface);color:var(--primary-fg);}
 .palette-body{min-width:0;display:flex;flex-direction:column;gap:1px;}
-.palette-title{font-size:13.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.palette-meta{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.palette-snippet{font-size:11.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.palette-title{font-size:14px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.palette-meta{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.palette-snippet{font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
 .palette-snippet mark{background:var(--warning-soft);color:var(--warning-fg);border-radius:3px;padding:0 2px;font-weight:600;}
 .palette-empty{padding:28px 12px;text-align:center;color:var(--text-3);font-size:13px;}
 .palette-recent-head{
@@ -510,7 +511,7 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 }
 .palette-clear{
   padding:2px 5px;border:0;border-radius:var(--r-xs);background:transparent;
-  color:var(--text-3);font-size:11.5px;cursor:pointer;
+  color:var(--text-3);font-size:12px;cursor:pointer;
 }
 .palette-clear:hover{background:var(--primary-soft);color:var(--primary-fg);}
 .palette-recent{
@@ -525,10 +526,10 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 .palette-recent .palette-title{font-weight:600;}
 .palette-scope-note{
   margin:6px 8px 2px;padding:10px 2px 2px;border-top:1px solid var(--border);
-  color:var(--text-3);font-size:11.5px;line-height:1.5;
+  color:var(--text-3);font-size:12px;line-height:1.5;
 }
 .palette-foot{
   display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--border);
-  color:var(--text-3);font-size:11.5px;background:var(--surface-sunken);
+  color:var(--text-3);font-size:12px;background:var(--surface-sunken);
 }
 .palette-foot span{display:inline-flex;align-items:center;gap:3px;}

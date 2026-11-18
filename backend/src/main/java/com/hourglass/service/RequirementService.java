@@ -12,6 +12,7 @@ import com.hourglass.dto.RequirementDeleteResult;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkActivity;
+import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.DevBranchMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskLogMapper;
@@ -246,6 +247,13 @@ public class RequirementService {
         if (ProjectAccessService.isAssigned(creator)) {
             projectAccess.saveGrant(workspaceId, userId, id, ProjectAccessService.ACCESS_WRITE);
         }
+        /* 建项目时一并授权的成员：只写 project_member，不新增字段；
+           查看者即使被勾选也只授予只读，避免绕过空间级只读。 */
+        int granted = grantMembers(workspaceId, userId, id, req.getMembers());
+        if (granted > 0) {
+            workActivityService.recordCurrent(workspaceId, WorkActivityService.PROJECT, id,
+                    "member", "创建时指定了 " + granted + " 名项目成员");
+        }
         /* 项目自带模块清单：预置「其他」，保证一开始就能按模块归类工作项 */
         categoryService.createDefault(workspaceId, r.getId());
         /* 模板只做增量补齐：列按空间共享、文档/测试模块/版本归属本项目 */
@@ -318,6 +326,36 @@ public class RequirementService {
                     newSetId == null ? null : setNames.get(newSetId));
         }
         return reqMapper.selectById(id);
+    }
+
+    /** 创建项目时的成员授权：返回实际处理的成员数；不存在的成员静默跳过。 */
+    private int grantMembers(String workspaceId, String creatorId, String projectId,
+                             List<ReqSaveRequest.MemberGrant> members) {
+        if (members == null || members.isEmpty()) {
+            return 0;
+        }
+        Set<String> seen = new HashSet<String>();
+        int count = 0;
+        for (ReqSaveRequest.MemberGrant grant : members) {
+            if (grant == null) {
+                continue;
+            }
+            String memberId = Texts.trimToNull(grant.getUserId());
+            if (memberId == null || memberId.equals(creatorId) || !seen.add(memberId)) {
+                continue;
+            }
+            WorkspaceMember member = memberMapper.selectMember(workspaceId, memberId);
+            if (member == null) {
+                continue;
+            }
+            String access = ProjectAccessService.ACCESS_READ.equals(grant.getAccess())
+                    || "viewer".equals(member.getRole())
+                    ? ProjectAccessService.ACCESS_READ
+                    : ProjectAccessService.ACCESS_WRITE;
+            projectAccess.saveGrant(workspaceId, memberId, projectId, access);
+            count++;
+        }
+        return count;
     }
 
     private void applyProfile(String workspaceId, Requirement r, ReqSaveRequest req) {

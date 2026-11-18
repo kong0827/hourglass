@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { btnMineFields, btnMineFold, btnMineRefresh, mineBody, mineGroup, mineMeta, minePub, mineSort, mineSpaceFilter, mineStats, mineSubgroup } from "../core/dom.js";
-import { clearFilters, reloadFilteredViews, syncDimButtons } from "../core/filters-ui.js";
+import { clearFilters, reloadFilteredViews, renderFilterChips, syncDimButtons } from "../core/filters-ui.js";
 import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
@@ -43,10 +43,19 @@ registerHelp({
     title:"统计条",
     rows:[
       ["范围", "只统计当前已载入的「我的工作」项；继续滚动会补载，数字随之变化，不是整个空间的全量。", "warn"],
-      ["共", "当前筛选后的全部项，含已完成和执行结束的项。", "ok"],
-      ["逾期 / 今天到期", "按截止日期与今天比较；已完成、执行结束的项不计入逾期，没有截止日期的项也不计入今天到期。", "info"],
+      ["已载入 / 共", "已载入是列表当前累计的条数；共是本轮筛选后的全部条数，继续加载会向「共」靠近。", "ok"],
+      ["逾期 / 7 天内到期", "逾期按截止日期早于今天计算；7 天内到期含今天与之后 6 天。已完成、已取消、执行结束的项都不计入。", "info"],
       ["被阻塞", "当前标记为阻塞的项，是此刻的快照。", "mute"],
       ["未设截止", "未完成、执行未结束且没有截止日期的项。", "mute"]
+    ]
+  },
+  "mine.personalLoad": {
+    title:"个人剩余与负载",
+    rows:[
+      ["怎么算", "已载入、未完成工作项的（预估工时 − 已用工时）之和；负数按 0 计。", "ok"],
+      ["容量", "按 5 个工作日 × 每天 8h = 40h 折算负载百分比，不区分请假、兼职或你另外安排的时间。", "info"],
+      ["不含哪些", "已完成、已取消、执行结束的项不计；未填预估的项单独显示「未估时」，不进入剩余工时。", "mute"],
+      ["和成员负载的区别", "成员负载按所选区间内的实际计时 ÷ 区间容量；这里看的是你手上剩余预估工作量的粗口径。", "warn"]
     ]
   },
   "mine.testQueue": {
@@ -65,17 +74,93 @@ function wsNameById(id){
   for(var i = 0; i < rt.allWorkspaces.length; i++) if(rt.allWorkspaces[i].id === id) return rt.allWorkspaces[i].name;
   return "该空间";
 }
+var WS_HANDOFF_KEY = "ds.wsHandoff.v1";
+/* 切空间要整页重载：把空间无关的筛选和「我的工作」分组偏好带过去。
+   项目 / 分类 / 负责人 / 标签 / 版本都是空间内实体，跨空间没有意义，不带。 */
+function saveWorkspaceHandoff(targetId){
+  try{
+    sessionStorage.setItem(WS_HANDOFF_KEY, JSON.stringify({
+      wsId: targetId,
+      filters: {
+        pris: state.pris.slice(), types: state.types.slice(),
+        completion: state.completion, pubState: state.pubState, due: state.due,
+        focus: !!state.focus, blocked: !!state.blocked, doneScope: state.doneScope,
+        noDue: !!state.noDue, dueFrom: state.dueFrom, dueTo: state.dueTo,
+        startFrom: state.startFrom, startTo: state.startTo
+      },
+      mine: { group: state.mineGroup, subgroup: state.mineSubgroup, sort: state.mineSort, view: mineViewMode }
+    }));
+  }catch(e){ /* 受限环境：保持原来的「重载后回默认」 */ }
+}
+/**
+ * 空间加载完成后调用：目标空间匹配时恢复通勤筛选和分组偏好。
+ * 返回是否有变化，调用方据此决定要不要重拉筛选视图。
+ */
+function restoreWorkspaceHandoff(){
+  var raw = null;
+  try{
+    raw = sessionStorage.getItem(WS_HANDOFF_KEY);
+    sessionStorage.removeItem(WS_HANDOFF_KEY);
+  }catch(e){ return false; }
+  if(!raw || !rt.currentWs) return false;
+  var snap = null;
+  try{ snap = JSON.parse(raw); }catch(e){ return false; }
+  if(!snap || snap.wsId !== rt.currentWs.id) return false;
+  var changed = false, f = snap.filters || {};
+  ["pris", "types"].forEach(function(k){
+    var arr = Array.isArray(f[k]) ? f[k].slice() : [];
+    if(arr.length !== state[k].length || arr.some(function(v, i){ return v !== state[k][i]; })){ state[k] = arr; changed = true; }
+  });
+  var completion = typeof f.completion === "string" ? f.completion : "";
+  if(completion !== state.completion){ state.completion = completion; changed = true; }
+  var pubState = f.pubState === "published" || f.pubState === "unpublished" ? f.pubState : null;
+  if(pubState !== state.pubState){ state.pubState = pubState; changed = true; }
+  var due = f.due || null;
+  if(due !== state.due){ state.due = due; changed = true; }
+  var focus = !!f.focus;
+  if(focus !== state.focus){ state.focus = focus; changed = true; }
+  var blocked = !!f.blocked;
+  if(blocked !== state.blocked){ state.blocked = blocked; changed = true; }
+  var doneScope = f.doneScope || "week";
+  if(doneScope !== state.doneScope){ state.doneScope = doneScope; changed = true; }
+  var noDue = !!f.noDue;
+  if(noDue !== state.noDue){ state.noDue = noDue; changed = true; }
+  ["dueFrom", "dueTo", "startFrom", "startTo"].forEach(function(k){
+    var nv = typeof f[k] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f[k]) ? f[k] : null;
+    if(nv !== state[k]){ state[k] = nv; changed = true; }
+  });
+  var m = snap.mine || {};
+  /* 空间筛选不跨空间带：目标是另一个空间，保留旧空间筛选会把刚打开的工作项藏起来 */
+  if(state.mineSpace){ state.mineSpace = ""; changed = true; }
+  if(MINE_GROUP_DIMS.indexOf(m.group) !== -1 && m.group !== state.mineGroup){ state.mineGroup = m.group; changed = true; }
+  if(MINE_GROUP_DIMS.indexOf(m.subgroup) !== -1 && m.subgroup !== state.mineSubgroup){ state.mineSubgroup = m.subgroup; changed = true; }
+  if(MINE_SORTS.indexOf(m.sort) !== -1 && m.sort !== state.mineSort){ state.mineSort = m.sort; changed = true; }
+  if((m.view === "board" || m.view === "list") && m.view !== mineViewMode){
+    mineViewMode = m.view;
+    try{ localStorage.setItem(MINE_VIEW_KEY, m.view); }catch(e){ /* noop */ }
+    changed = true;
+  }
+  if(changed){
+    renderFilterChips();
+    syncMineFilters();
+    syncMineViewUI();
+  }
+  return changed;
+}
+function clearWorkspaceHandoff(){
+  try{ sessionStorage.removeItem(WS_HANDOFF_KEY); }catch(e){ /* 受限环境忽略 */ }
+}
 function askSwitchWorkspace(wsId, wsName, opts){
   opts = opts || {};
   var target = wsName || wsNameById(wsId);
   var msg = opts.taskTitle
     ? ('即将切换到「' + esc(target) + '」并打开工作项「' + esc(opts.taskTitle) + '」。<br><br>' +
-       '当前空间的筛选条件、抽屉里未保存的编辑都不会保留。')
+       '当前空间的项目、分类、负责人等空间专属条件会清空；通用的优先级、完成情况、截止条件与「我的工作」分组会带过去。抽屉里未保存的编辑不会保留。')
     : opts.linkTitle
       ? ('即将切换到「' + esc(target) + '」并打开通知关联内容「' + esc(opts.linkTitle) + '」。<br><br>' +
-         '当前空间的筛选条件、抽屉里未保存的编辑都不会保留。')
+         '当前空间的项目、分类、负责人等空间专属条件会清空；通用的优先级、完成情况、截止条件与「我的工作」分组会带过去。抽屉里未保存的编辑不会保留。')
       : ('切换到「' + esc(target) + '」会重新加载页面。<br><br>' +
-         '当前空间的筛选条件、抽屉里未保存的编辑都不会保留。');
+         '当前空间的项目、分类、负责人等空间专属条件会清空；通用的优先级、完成情况、截止条件与「我的工作」分组会带过去。抽屉里未保存的编辑不会保留。');
   return UI.showConfirm({
     title: opts.title || "切换空间",
     msg: msg,
@@ -84,6 +169,7 @@ function askSwitchWorkspace(wsId, wsName, opts){
     danger: false
   }).then(function(ok){
     if(!ok) return false;
+    saveWorkspaceHandoff(wsId);
     return API.post("/api/workspaces/" + encodeURIComponent(wsId) + "/select", {}).then(function(){
       if(opts.openTaskId){
         try{ sessionStorage.setItem("ds.openTask", opts.openTaskId); }catch(e){ /* noop */ }
@@ -94,6 +180,8 @@ function askSwitchWorkspace(wsId, wsName, opts){
       window.location.reload();
       return true;
     }).catch(function(ex){
+      /* 切换没成功：清掉刚存的快照，避免下次进入该空间时套用一份过期条件 */
+      clearWorkspaceHandoff();
       toast(ex.message || "切换空间失败", "bad");
       return false;
     });
@@ -1288,22 +1376,40 @@ function mineTestReject(t){
 function renderMineStats(items){
   if(!mineStats) return;
   if(isMobile()){ mineStats.innerHTML = ""; return; }
-  var over = 0, today = 0, blocked = 0, noDue = 0;
+  var over = 0, week = 0, blocked = 0, noDue = 0, missingEst = 0, remainingMinutes = 0;
+  var filtering = mineFiltering();
+  var capacity = 5 * 8 * 60;   // 5 个工作日 × 8h，仅用于个人剩余负载粗算
   items.forEach(function(t){
     var s = dueState(t);
+    /* 终态看列本身：没有截止日期的已完成项 dueState 是 none，不能当成未设截止 */
+    var finished = t.boardColumn === "done" || t.boardColumn === "canceled" || s.kind === "ended";
     if(s.kind === "over") over++;
-    else if(s.kind === "today") today++;
+    if(s.kind === "today" || s.kind === "soon" || (s.kind === "ok" && s.n <= 6)) week++;
     if(t.blocked) blocked++;
-    if(!t.dueDate && s.kind !== "done" && s.kind !== "ended") noDue++;
+    if(!t.dueDate && !finished) noDue++;
+    /* 未完成项才计入个人剩余：已完成 / 已取消 / 执行结束不再产生剩余工作量 */
+    if(finished) return;
+    var est = Number(t.estimateMinutes) || 0;
+    if(est > 0) remainingMinutes += Math.max(0, est - (Number(t.totalMinutes) || 0));
+    else missingEst++;
   });
+  var loadPct = Math.round(remainingMinutes / capacity * 100);
+  /* 空间筛选是前端二次过滤，服务端「共」不随它变化：筛选时只报本页累计，避免两个口径混排 */
+  var loadedTxt = filtering
+    ? ('筛选出 <b>' + items.length + '</b> 项 · 已载入 <b>' + mineAll.length + '</b>')
+    : ('已载入 <b>' + items.length + '</b> 项' + (mineTotal > mineAll.length ? ' · 共 <b>' + mineTotal + '</b>' : ''));
   mineStats.innerHTML =
-    '<span class="mine-stat">共 <b>' + items.length + '</b> 项</span>' +
+    '<span class="mine-stat">' + loadedTxt + '</span>' +
     '<span class="mine-stat over">逾期 <b>' + over + '</b></span>' +
-    '<span class="mine-stat today">今天到期 <b>' + today + '</b></span>' +
+    '<span class="mine-stat today">7 天内到期 <b>' + week + '</b></span>' +
     '<span class="mine-stat blocked">被阻塞 <b>' + blocked + '</b></span>' +
     '<span class="mine-stat">未设截止 <b>' + noDue + '</b></span>' +
+    '<span class="mine-stat personal' + (loadPct > 100 ? " over" : "") + '" title="已载入未完成项的剩余预估，对比 5 个工作日 40h">' +
+      '个人剩余 <b>' + fmtMinutesShort(remainingMinutes) + '</b> · <b>' + loadPct + '%</b></span>' +
+    (missingEst ? '<span class="mine-stat" title="未填预估的工作项不进入个人剩余计算">未估时 <b>' + missingEst + '</b></span>' : '') +
     '<span class="mine-stat-hint">统计基于已载入项 · 悬停行显示快捷操作'
-      + caliberMarkHTML("mine.stats", false, "查看统计条口径") + '</span>';
+      + caliberMarkHTML("mine.stats", false, "查看统计条口径")
+      + caliberMarkHTML("mine.personalLoad", false, "查看个人负载口径") + '</span>';
 }
 function mineAnyGroupOpen(sections){
   if(state.mineGroup === "none") return false;
@@ -1726,4 +1832,4 @@ window.addEventListener("ds:running-timer", function(){
 syncMineModeUI();
 syncMineViewUI();
 
-export { askSwitchWorkspace, enterMineView, loadMine, wsNameById };
+export { askSwitchWorkspace, clearWorkspaceHandoff, enterMineView, loadMine, restoreWorkspaceHandoff, saveWorkspaceHandoff, wsNameById };

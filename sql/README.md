@@ -70,6 +70,10 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `108_demand_done_backfill.sql` 是「已完成 done」的回填与历史修复（纯数据，无结构变更），应在 105、106 之后执行：106 迁移了工作项 / 需求的所属项目并清空拆分需求的 `version_id`，完成证据随之变化。判定与 `DemandCompletionService.selectCompletionEvidence` 完全一致——成功生产发布条目、绑定当前目标版本的人工交付判定、或「至少 1 个未删除工作项全部完成且关联用例最新执行全部通过」——满足任一即 `plan → done`；`done` 但证据已全部失效则退回 `plan`（`done` 没有人工入口，与后端自动退回一致）；缺完成日志的历史数据补齐 `demand_log`。状态更新带原状态条件、日志只在同类动作缺失时补写，脚本幂等，执行后基线表数量不变。
 
+`109_task_canceled.sql` 为工作项新增终态「已取消」。
+
+`110_task_comment_content_length.sql` 只把 `task_comment.content` 从 `VARCHAR(500)` 放宽到 `VARCHAR(2000)`，让工作项评论能贴下错误日志与会议结论；不新增字段、不回填、不改权限与通知口径。后端截断上限与抽屉输入框 `maxlength` 同步为 2000。脚本按 `information_schema` 判断当前长度，已达标即跳过，可重复执行；执行后表数量不变。
+
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。
 
 ## 3. 基线漂移校验

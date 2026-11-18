@@ -4,9 +4,10 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { showView } from "../core/router.js";
-import { dueState, rt, setNameById, setSortOf, statusBucket } from "../core/state.js";
+import { dueState, dueText, rt, setNameById, setSortOf, statusBucket } from "../core/state.js";
+import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { avatarHTML } from "../lib/format.js";
+import { avatarHTML, fmtShortMD, parseDate } from "../lib/format.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import { caliberHTML, downloadCsv, fmtHours, openTaskTable } from "./manager-shared.js";
@@ -36,6 +37,13 @@ function mondayIso(today){
   function pad(n){ return n < 10 ? "0" + n : String(n); }
   return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
 }
+function shiftDays(iso, days){
+  var parts = String(iso || "").substring(0, 10).split("-").map(Number);
+  var d = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
+  d.setDate(d.getDate() + days);
+  function pad(n){ return n < 10 ? "0" + n : String(n); }
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
 function tasksFor(reqId, metric){
   var rows = (cache.tasks || []).filter(function(t){ return !reqId || t.reqId === reqId; });
   if(metric === "backlog" || metric === "doing" || metric === "ended" || metric === "done") return rows.filter(function(t){ return statusBucket(t) === metric; });
@@ -47,9 +55,28 @@ function tasksFor(reqId, metric){
   }
   return rows;
 }
-function kpi(label, value, foot, kind, cls){
+function kpi(label, value, foot, kind, cls, delta){
   return '<button class="manager-kpi ' + (cls || "") + '" type="button" data-kpi="' + kind + '">'
-    + '<span>' + esc(label) + '</span><b>' + value + '</b><small>' + esc(foot) + '</small></button>';
+    + '<span>' + esc(label) + '</span>'
+    + '<span class="manager-kpi-main"><b>' + value + '</b>' + (delta || "") + '</span>'
+    + '<small>' + esc(foot) + '</small></button>';
+}
+/* 借卡片式报表的写法：数字旁边给一个「较上周」的方向，避免只看孤立数字看不出变好还是变差 */
+function completedBetween(fromIso, beforeIso){
+  var n = 0;
+  (cache.tasks || []).forEach(function(t){
+    if(t.boardColumn !== "done" || !t.completedAt) return;
+    var day = String(t.completedAt).substring(0, 10);
+    if(day >= fromIso && day < beforeIso) n++;
+  });
+  return n;
+}
+function kpiDelta(cur, prev){
+  var diff = cur - prev;
+  if(!diff) return '<span class="manager-kpi-delta flat">与上周持平</span>';
+  var up = diff > 0;
+  return '<span class="manager-kpi-delta ' + (up ? "up" : "down") + '" title="上周完成 ' + prev + ' 项">'
+    + (up ? "↑ +" : "↓ −") + Math.abs(diff) + '</span>';
 }
 /* 跨项目汇总按项目集归组：与项目列表同一层级，未分组固定最后 */
 function groupedBySet(projects){
@@ -66,6 +93,36 @@ function groupedBySet(projects){
     return setSortOf(a) - setSortOf(b) || String(setNameById(a)).localeCompare(String(setNameById(b)), "zh-CN");
   });
   return keys.map(function(k){ return { key:k, name:k ? (setNameById(k) || "项目集") : "未分组", rows:buckets[k] }; });
+}
+/* 项目卡固定一行「下一步」：谁、做什么、何时到期。
+   借用卡片式报表的固定槽位——每张卡都直接回答同一个问题，不用逐个项目点进去找。 */
+function nextStepFor(reqId){
+  var best = null, bestDue = "";
+  (cache.tasks || []).forEach(function(t){
+    if(t.reqId !== reqId || t.boardColumn === "done" || t.boardColumn === "canceled") return;
+    var due = t.dueDate ? String(t.dueDate).substring(0, 10) : "";
+    if(!best){ best = t; bestDue = due; return; }
+    if(due && (!bestDue || due < bestDue)){ best = t; bestDue = due; return; }
+    if(!due && !bestDue && t.boardColumn === "doing" && best.boardColumn !== "doing"){ best = t; bestDue = due; }
+  });
+  return best;
+}
+function nextStepHTML(p){
+  var t = nextStepFor(p.reqId);
+  if(!t){
+    return '<div class="manager-project-next"><span class="next-lab">下一步</span>'
+      + '<span class="next-empty">暂无未完成工作项</span></div>';
+  }
+  var s = dueState(t);
+  var dueCls = s.kind === "over" ? "over" : (s.kind === "today" || s.kind === "soon" ? "warn" : "mute");
+  var dueHTML = t.dueDate
+    ? '<span class="mini-tag ' + dueCls + '" title="' + esc(dueText(t)) + '">' + esc(fmtShortMD(parseDate(t.dueDate))) + '</span>'
+    : '<span class="mini-tag mute">未排期</span>';
+  return '<div class="manager-project-next">'
+    + '<span class="next-lab">下一步</span>'
+    + '<button class="next-title" type="button" data-open-task="' + esc(t.id) + '" title="打开工作项：' + esc(t.title) + '">' + esc(t.title) + '</button>'
+    + (t.blocked ? '<span class="mini-tag warn" title="' + esc(t.blockedReason || "被阻塞") + '">阻塞</span>' : "")
+    + '<span class="next-owner" title="负责人：' + esc(t.owner || "未指派") + '">' + avatarHTML(t.owner || "—", "sm") + dueHTML + '</span></div>';
 }
 function projectCard(p){
   var healthName = p.health === "green" ? "正常" : "需关注";
@@ -84,6 +141,7 @@ function projectCard(p){
     + [["backlog","待处理",p.backlog],["doing","进行中",p.doing]].concat(p.ended ? [["ended","执行结束",p.ended]] : [], [["done","已完成",p.done],["overdue","逾期",p.overdue]]).map(function(x){
       return '<button type="button" class="' + (x[0] === "overdue" && x[2] ? "over" : "") + '" data-project-drill="' + esc(p.reqId) + '" data-metric="' + x[0] + '"><span>' + x[1] + '</span><b>' + x[2] + '</b></button>';
     }).join("") + '</div></div>'
+    + nextStepHTML(p)
     + '<div class="manager-project-foot"><span class="manager-avatars">' + people + '</span>' + foot + '</div></article>';
 }
 function statusName(st){
@@ -132,6 +190,9 @@ function projectTable(projects){
 function renderPortfolio(){
   var k = cache.kpis || {}, projects = cache.projects || [];
   var active = projects.filter(function(p){ return p.status === "active"; }).length;
+  /* 上周完成：快照里带全部在册工作项的完成时间，前端按同一个自然周口径回算即可 */
+  var weekStart = mondayIso(cache.today);
+  var lastWeekDone = completedBetween(shiftDays(weekStart, -7), weekStart);
   var mode = listPrefs.viewMode("portfolio");
   var seg = '<div class="seg mini">'
     + '<button type="button" data-pf-mode="card" aria-pressed="' + (mode === "card") + '">卡片</button>'
@@ -145,7 +206,7 @@ function renderPortfolio(){
     + '<div class="manager-kpis">'
     + kpi("进行中项目", active + '<small> / ' + projects.length + '</small>', "共 " + projects.length + " 个项目", "projects")
     + kpi("逾期工作项", k.overdueTasks || 0, "未完成工作项", "overdue", k.overdueTasks ? "danger" : "")
-    + kpi("本周完成", k.weekCompleted || 0, "按完成时间归周", "weekDone")
+    + kpi("本周完成", k.weekCompleted || 0, "按完成时间归周", "weekDone", "", kpiDelta(k.weekCompleted || 0, lastWeekDone))
     + kpi("本周团队工时", fmtHours(k.weekWorkMinutes), "自动计时汇总", "hours") + '</div>'
     + (mode === "table"
       ? (projects.length ? projectTable(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"}))
@@ -211,6 +272,8 @@ function onClick(e){
   }
   if(e.target.closest("[data-portfolio-export]")){ exportPortfolio(); return; }
   if(e.target.closest("[data-empty-action]")){ loadPortfolio(); return; }
+  var step = e.target.closest("[data-open-task]");
+  if(step){ openTaskById(step.dataset.openTask); return; }
   var open = e.target.closest("[data-open-project]");
   if(open){ rt.managerProjectId = open.dataset.openProject; showView("project"); return; }
   var drill = e.target.closest("[data-project-drill]");

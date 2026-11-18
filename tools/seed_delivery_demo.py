@@ -190,7 +190,8 @@ class Demo:
                                       'description': '独立模拟项目；需求、执行、版本规划和正式发布事实分工演示'})
                 row = {'id': project['id'], 'name': label, 'tasks': [], 'demands': [], 'versions': [], 'records': []}
                 entry['projects'].append(row)
-                for index, access in [(5, 'read'), (6, 'none')]:
+                # 新成员默认不参与任何项目：写入成员后按角色逐项目授权，否则任务负责人看不到项目
+                for index, access in [(0, 'write'), (1, 'write'), (2, 'write'), (3, 'write'), (5, 'read'), (6, 'none')]:
                     self.client.ok('PUT', '/api/workspaces/' + ws['id'] + '/project-access',
                                    {'userId': self.data['users'][index]['id'], 'projectId': project['id'], 'access': access})
                 categories = self.client.ok('GET', '/api/categories', params={'project': project['id']})
@@ -211,13 +212,16 @@ class Demo:
                                                  plannedEnd=(dt.date.today() + dt.timedelta(days=10)).isoformat())
                     demands.append(demand)
                 row['demands'] = demands
+                # 需求会自动完成：先建未完成工作项，最后再建已完成工作项，
+                # 避免某需求名下工作项短暂全部完成而自动置 done、阻塞后续建单
+                row['demands'][4] = self.action(demands[4], 'cancel')
                 branch = self.create('branches', '/api/branches', {'name': 'feature/' + secrets.token_hex(4), 'reqId': project['id'],
                                      'ownerUserId': self.data['users'][1]['id'], 'owner': '开发成员', 'note': '分支状态不是实际部署证据'})
                 epic = self.create('tasks', '/api/tasks', {'title': label + ' · 交付史诗', 'reqId': project['id'], 'categoryId': category,
                                    'itemType': 'epic', 'boardColumn': 'backlog', 'ownerUserId': self.data['users'][0]['id'], 'versionIds': []})
                 tasks = []
                 for index in range(24 if not small else 12):
-                    done = index < 12 if not small else index < 6
+                    done = index >= (24 - 12 if not small else 12 - 6)
                     body = {'title': label + ' · ' + ['接口实现', '异常测试', '性能优化', '可观测性'][index % 4] + ' ' + str(index + 1),
                             'reqId': project['id'], 'categoryId': category, 'description': '独立模拟工作项，发布徽标来自正式事件。',
                             'priority': 'P' + str(index % 4), 'ownerUserId': self.data['users'][1 + index % 3]['id'],
@@ -229,7 +233,8 @@ class Demo:
                             'dueDate': (dt.date.today() + dt.timedelta(days=3 + index % 10)).isoformat()}
                     if body['itemType'] == 'bug':
                         body.update({'severity': 'major', 'environment': '测试环境', 'reproduceSteps': '模拟请求超时，观察错误处理',
-                                     'foundVersionId': versions[0]['id'], 'regressionStatus': 'pending'})
+                                     'foundVersionId': versions[0]['id'],
+                                     'regressionStatus': 'passed' if done else 'pending'})
                     task = self.create('tasks', '/api/tasks', body)
                     tasks.append(task)
                     for subindex in range(2):
@@ -275,8 +280,8 @@ class Demo:
                 rollback = self.release(versions[0], None, done_tasks[2:3], operation='rollback', related=gray,
                                         coverage='partial', targets=['cluster-east'])
                 row['records'] = [test_event, failed, successful, gray, redeploy, rollback]
-                self.plan(versions[1], tasks[-3:])
-                row['demands'][3] = self.action(demands[3], 'cancel')
+                open_tasks = [task for task in tasks if task['boardColumn'] != 'done']
+                self.plan(versions[1], open_tasks[:3])
                 self.save()
                 print('SEEDED {} / {}'.format(department, label), flush=True)
         self.data['complete'] = True

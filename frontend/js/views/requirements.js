@@ -4071,8 +4071,8 @@ function rdaOpenCard(action, d, err){
 
   if(err){
     rdaCard.innerHTML = head + '<div class="rda-body"><div class="rda-err">' + esc(err) + '</div></div>'
-      + '<div class="rda-foot"><button type="button" data-rda="retry">重试</button>'
-      + '<button type="button" class="sm primary" data-rda="close">关闭</button></div>';
+      + '<div class="rda-foot"><button type="button" class="btn sm" data-rda="retry">重试</button>'
+      + '<button type="button" class="btn sm primary" data-rda="close">关闭</button></div>';
     rdaPlaceCard();
     return;
   }
@@ -4083,7 +4083,7 @@ function rdaOpenCard(action, d, err){
       + '<span class="rda-dots" aria-hidden="true"><i></i><i></i><i></i></span>'
       + busyText + '</div></div>'
       + '<div class="rda-foot"><span class="rda-hint">通常需要 5–30 秒</span>'
-      + '<button type="button" data-rda="cancel">取消</button></div>';
+      + '<button type="button" class="btn sm" data-rda="cancel">取消</button></div>';
     rdaPlaceCard();
     return;
   }
@@ -4112,10 +4112,10 @@ function rdaOpenCard(action, d, err){
   var foot = '<div class="rda-foot">'
     + (action === "explain" ? "" : '<span class="rda-delta">' + esc(rdaDelta(d)) + '</span>')
     + '<span class="rda-spacer"></span>'
-    + '<button type="button" data-rda="retry">重新生成</button>'
-    + '<button type="button" data-rda="copy">复制</button>';
+    + '<button type="button" class="btn sm" data-rda="retry">重新生成</button>'
+    + '<button type="button" class="btn sm" data-rda="copy">复制</button>';
   if(action !== "explain"){
-    foot += '<button type="button" class="primary" data-rda="replace">替换</button>';
+    foot += '<button type="button" class="btn sm primary" data-rda="replace">替换</button>';
   }
   foot += '</div>';
   rdaCard.innerHTML = head + '<div class="rda-body">' + body + '</div>' + foot;

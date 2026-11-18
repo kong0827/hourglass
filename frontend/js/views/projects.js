@@ -36,6 +36,7 @@ var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
     btnCancelReqEdit = $("btnCancelReqEdit"), reqFormTitle = $("reqFormTitle"),
     rTemplate = $("rTemplate"), rTemplateHint = $("rTemplateHint"), fReqTemplate = $("fReqTemplate"),
     rSet = $("rSet"),
+    projMemberSec = $("projMemberSec"), projMemberCfg = $("projMemberCfg"), projMemberList = $("projMemberList"),
     projCatCfg = $("projCatCfg"), projCatList = $("projCatList"),
     projReleasePolicy = $("projReleasePolicy"), rReleasePolicy = $("rReleasePolicy"),
     projCatNewName = $("projCatNewName"), projCatNewColor = $("projCatNewColor"),
@@ -204,6 +205,97 @@ function syncOwnerOptions(){
   }).join("");
   rOwner.value = current || "";
 }
+/* ---------- 新建项目：初始成员（只复用 project_member，不新增字段） ---------- */
+var projMemberSeq = 0;
+var projMemberSel = {};
+function memberLabel(m){
+  return m.displayName || m.username || m.userId;
+}
+function syncProjectMembers(createMode){
+  projMemberSeq++;
+  projMemberSel = {};
+  var show = !!createMode && !!(rt.currentWs && rt.currentWs.type === "shared");
+  if(projMemberSec) projMemberSec.hidden = !show;
+  if(projMemberCfg) projMemberCfg.hidden = !show;
+  if(!projMemberList) return;
+  if(!show){ projMemberList.innerHTML = ""; return; }
+  renderProjectMembers();
+  if((rt.wsMembersCache || []).length) return;
+  var seq = projMemberSeq, wsId = rt.currentWs.id;
+  API.get("/api/workspaces/" + encodeURIComponent(wsId) + "/members").then(function(list){
+    if(seq !== projMemberSeq || !rt.currentWs || rt.currentWs.id !== wsId) return;
+    rt.wsMembersCache = list || [];
+    renderProjectMembers();
+  }).catch(function(){ /* 成员列表拿不到时保持空白，不影响建项目 */ });
+}
+function projectMemberRows(){
+  var meId = rt.currentUser && rt.currentUser.id;
+  return (rt.wsMembersCache || []).filter(function(m){
+    return m && m.userId && m.userId !== meId;
+  });
+}
+function renderProjectMembers(){
+  if(!projMemberList) return;
+  var rows = projectMemberRows();
+  if(!rows.length){
+    projMemberList.innerHTML = '<p class="foot-note">空间里还没有其他成员；创建后也可在成员名册里按项目分配。</p>';
+    return;
+  }
+  projMemberList.innerHTML = rows.map(function(m){
+    var viewer = m.role === "viewer";
+    var picked = Object.prototype.hasOwnProperty.call(projMemberSel, m.userId);
+    /* 查看者只能只读：服务端也会把越权提交收敛为 read，这里直接锁死选项，避免界面与保存结果不一致 */
+    var access = picked ? (viewer ? "read" : projMemberSel[m.userId]) : (viewer ? "read" : "write");
+    return '<div class="proj-member-row" data-member-id="' + esc(m.userId) + '">' +
+      '<label class="proj-member-pick">' +
+        '<input type="checkbox" data-member-toggle' + (picked ? " checked" : "") + ' />' +
+        '<span class="proj-member-name">' + esc(memberLabel(m)) + '</span>' +
+        (viewer ? '<span class="proj-member-role">查看者</span>' : '') +
+      '</label>' +
+      '<select data-member-access aria-label="' + esc(memberLabel(m)) + ' 的项目权限"' +
+        (picked && !viewer ? "" : " disabled") + '>' +
+        (viewer ? '<option value="read" selected>只读</option>'
+                : '<option value="write"' + (access === "write" ? " selected" : "") + '>可参与</option>' +
+                  '<option value="read"' + (access === "read" ? " selected" : "") + '>只读</option>') +
+      '</select>' +
+    '</div>';
+  }).join("");
+}
+function projectMemberPayload(){
+  return Object.keys(projMemberSel).map(function(id){
+    return { userId: id, access: projMemberSel[id] };
+  });
+}
+function focusMemberToggle(id){
+  if(!projMemberList) return;
+  var rows = projMemberList.querySelectorAll("[data-member-id]");
+  for(var i = 0; i < rows.length; i++){
+    if(rows[i].dataset.memberId === id){
+      var cb = rows[i].querySelector("[data-member-toggle]");
+      if(cb) cb.focus();
+      return;
+    }
+  }
+}
+if(projMemberList){
+  projMemberList.addEventListener("change", function(e){
+    var row = e.target.closest("[data-member-id]");
+    if(!row) return;
+    var id = row.dataset.memberId;
+    var hit = projectMemberRows().filter(function(m){ return m.userId === id; })[0];
+    if(e.target.matches("[data-member-toggle]")){
+      if(e.target.checked) projMemberSel[id] = hit && hit.role === "viewer" ? "read" : "write";
+      else delete projMemberSel[id];
+      renderProjectMembers();
+      /* 勾选会整块重绘：把焦点还给同一行，键盘连续勾选不丢位置 */
+      focusMemberToggle(id);
+      return;
+    }
+    if(e.target.matches("[data-member-access]") && Object.prototype.hasOwnProperty.call(projMemberSel, id)){
+      projMemberSel[id] = (!hit || hit.role !== "viewer") && e.target.value === "write" ? "write" : "read";
+    }
+  });
+}
 function ownerLabelOf(r){
   if(!r.ownerUserId) return "";
   var hit = (rt.wsMembersCache || []).filter(function(m){ return m.userId === r.ownerUserId; })[0];
@@ -268,6 +360,7 @@ function orderedSets(){
 }
 function projectSetSummary(rows){
   var tasks = 0, done = 0, weighted = 0, mvp = 0, post = 0, onTimeSum = 0, onTimeN = 0, docs = 0, released = null;
+  var risk = { overdue:0, blocked:0, stagnant:0 };
   rows.forEach(function(r){
     var t = Number(r.taskCount) || 0;
     tasks += t;
@@ -276,6 +369,12 @@ function projectSetSummary(rows){
     mvp += Number(r.mvpWorkMinutes) || 0;
     post += Number(r.postWorkMinutes) || 0;
     docs += Number(r.docCount) || 0;
+    var rk = projectRiskByReq[r.id];
+    if(rk){
+      risk.overdue += rk.overdue || 0;
+      risk.blocked += rk.blocked || 0;
+      risk.stagnant += rk.stagnant || 0;
+    }
     /* 集不生成发布记录：首版上线日取集内项目最早的一次，仅作只读汇总 */
     if(r.firstReleasedAt){
       var d = String(r.firstReleasedAt).slice(0, 10);
@@ -286,8 +385,50 @@ function projectSetSummary(rows){
   return {
     tasks:tasks, done:done, pct: tasks ? Math.round(weighted / tasks) : 0,
     mvp:mvp, post:post, docs:docs, firstReleasedAt:released,
-    onTimePct: onTimeN ? Math.round(onTimeSum / onTimeN) : null
+    onTimePct: onTimeN ? Math.round(onTimeSum / onTimeN) : null,
+    risk:risk
   };
+}
+/* 项目集风险条：与「逾期与阻塞」页同源，只做集级汇总，不改变任何项目状态 */
+var projectRiskByReq = {};
+var projectRiskWs = "";
+var projectRiskAt = 0;
+var projectRiskLoading = false;
+function loadProjectRisks(){
+  var ws = rt.currentWs;
+  if(!ws || ws.type !== "shared") return;
+  var wsId = ws.id, stale = projectRiskWs !== wsId || Date.now() - projectRiskAt > 60000;
+  if(!stale || projectRiskLoading) return;
+  projectRiskLoading = true;
+  API.get("/api/manager/risks").then(function(data){
+    if(!rt.currentWs || rt.currentWs.id !== wsId) return;
+    var map = {}, fields = ["overdue", "blocked", "stagnant"];
+    fields.forEach(function(kind){
+      (data && data[kind] || []).forEach(function(t){
+        if(!t || !t.reqId) return;
+        var row = map[t.reqId] || (map[t.reqId] = { overdue:0, blocked:0, stagnant:0 });
+        row[kind]++;
+      });
+    });
+    projectRiskByReq = map;
+    projectRiskWs = wsId;
+    projectRiskAt = Date.now();
+    renderReqList();
+  }).catch(function(){
+    /* 无权限或接口异常：不显示风险条，不影响项目列表 */
+    projectRiskByReq = {};
+    projectRiskWs = wsId;
+    projectRiskAt = Date.now();
+  }).then(function(){ projectRiskLoading = false; });
+}
+function riskStripHTML(risk){
+  if(!risk || (!risk.overdue && !risk.blocked && !risk.stagnant)) return "";
+  var tip = "集内未完成工作项的风险，点击查看逾期与阻塞明细";
+  return '<button class="req-set-risk" type="button" data-set-risk title="' + tip + '" aria-label="' + tip + '">' +
+    (risk.overdue ? '<span class="risk-chip overdue">逾期 ' + risk.overdue + '</span>' : '') +
+    (risk.blocked ? '<span class="risk-chip blocked">阻塞 ' + risk.blocked + '</span>' : '') +
+    (risk.stagnant ? '<span class="risk-chip stagnant">停滞 ' + risk.stagnant + '</span>' : '') +
+  '</button>';
 }
 /* 集内顺序沿用全局顺序，但容器项目（拆分后的公共项目）固定排最后并弱化 */
 function sortSetRows(rows){
@@ -329,6 +470,7 @@ function projectSetHeadHTML(group){
     '<span class="req-set-meta">' + rows.length + ' 个项目 · ' + agg.tasks + ' 工作项 · ' + agg.done + ' 完成'
       + (agg.mvp + agg.post ? ' · 首版 ' + fmtMinutesShort(agg.mvp) + ' · 迭代 ' + fmtMinutesShort(agg.post) : '')
       + '</span>' +
+    riskStripHTML(agg.risk) +
     '<span class="progress mini req-set-progress" title="集内项目按工作项数加权的完成度"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>' +
     (manage ? '<span class="req-set-acts">' +
       (canReorderSets() ? setDragHTML(set.id) : "") +
@@ -352,6 +494,7 @@ function projectSetNameCell(group, agg){
     '<span class="req-set-meta">' + group.rows.length + ' 个项目'
       + (agg.mvp + agg.post ? ' · 首版 ' + fmtMinutesShort(agg.mvp) + ' · 迭代 ' + fmtMinutesShort(agg.post) : '')
       + '</span>' +
+    riskStripHTML(agg.risk) +
   '</span>';
 }
 function projectSetCell(group, key, agg){
@@ -487,7 +630,8 @@ function projectFormSnapshot(){
     rPlanEnd ? rPlanEnd.value : "",
     rSet ? rSet.value : "",
     rTemplate ? rTemplate.value : "",
-    rt.formReqStatus
+    rt.formReqStatus,
+    projectMemberPayload().map(function(g){ return g.userId + ":" + g.access; }).sort().join(",")
   ]);
 }
 function projectFormDirty(){
@@ -527,6 +671,7 @@ function resetReqForm(){
   btnSaveReq.textContent = "新建项目";
   btnCancelReqEdit.hidden = true;
   syncTemplateField();
+  syncProjectMembers(false);
   if($("dlgProject")) UI.closeModal($("dlgProject"));
   if(projReleasePolicy) projReleasePolicy.hidden = true;
   policySeq++;
@@ -853,6 +998,7 @@ function enterProjectsView(){
   else reqListEl.innerHTML = UI.skeletonRows(3);
   listPrefs.load("project-list").then(renderReqList);
   loadReqs();
+  loadProjectRisks();
   /* IA-2：项目行展开要显示文档与任务进度 */
   loadReqDocs().then(function(){ renderReqList(); });
   refreshExpandedProjectTasks();
@@ -876,7 +1022,11 @@ function saveReq(){
     status: rt.formReqStatus
   };
   var editing = !!rt.editingReqId;
-  if(!editing) body.template = (rTemplate && rTemplate.value) || "blank";
+  if(!editing){
+    body.template = (rTemplate && rTemplate.value) || "blank";
+    /* 初始成员只在新建时提交；编辑项目的成员范围仍走成员名册 */
+    body.members = projectMemberPayload();
+  }
   else if(editingReqUpdatedAt) body.updatedAt = editingReqUpdatedAt;
   var seq = projectFormSeq;
   var p = editing ? API.put("/api/reqs/" + encodeURIComponent(rt.editingReqId), body) : API.post("/api/reqs", body);
@@ -1246,6 +1396,7 @@ function openProjectDialog(id){
     }
   }
   syncReqStatusSeg();
+  syncProjectMembers(!id);
   reqFormTitle.textContent = id ? "编辑项目" : "新建项目";
   btnSaveReq.textContent = id ? "保存" : "新建项目";
   btnCancelReqEdit.hidden = !id;
@@ -1351,6 +1502,8 @@ reqListEl.addEventListener("click", function(e){
   if(sort){ setProjectSort(sort.dataset.projectSort); return; }
   var projMore = e.target.closest("[data-project-more]");
   if(projMore){ openProjectRowMenu(projMore, projMore.dataset.projectMore); return; }
+  var setRisk = e.target.closest("[data-set-risk]");
+  if(setRisk){ showView("risks"); return; }
   var setToggle = e.target.closest("[data-set-toggle]");
   if(setToggle){
     var tk = setToggle.dataset.setToggle;

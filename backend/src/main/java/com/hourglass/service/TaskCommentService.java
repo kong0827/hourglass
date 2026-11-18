@@ -37,7 +37,9 @@ import java.util.Set;
 public class TaskCommentService {
 
     private static final Logger log = LoggerFactory.getLogger(TaskCommentService.class);
-    private static final int MAX_LEN = 500;
+    /* 与 task_comment.content VARCHAR(2000) 对齐：过长按上限截断，不静默丢评论。
+       备份导入复用同一常量，避免导入路径仍停在旧上限。 */
+    public static final int MAX_LEN = 2000;
     private static final int PREVIEW_LEN = 160;
 
     private final TaskCommentMapper commentMapper;

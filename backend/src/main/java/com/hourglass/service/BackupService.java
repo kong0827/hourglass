@@ -1601,7 +1601,7 @@ public class BackupService {
             if (mappedTaskId == null) {
                 continue;
             }
-            String content = Texts.cut(Texts.trimToNull(c.getContent()), 500);
+            String content = Texts.cut(Texts.trimToNull(c.getContent()), TaskCommentService.MAX_LEN);
             if (content == null) {
                 continue;
             }

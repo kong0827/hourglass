@@ -831,7 +831,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <div class="comment-list" id="commentList"></div>
               <div class="comment-form">
                 <div class="comment-compose">
-                  <textarea id="iComment" maxlength="500" placeholder="写下讨论、结论或卡点…（输入 @ 可提及成员，Ctrl/⌘ + Enter 发送）"></textarea>
+                  <textarea id="iComment" maxlength="2000" placeholder="写下讨论、结论或卡点…（输入 @ 可提及成员，Ctrl/⌘ + Enter 发送）"></textarea>
                   <div class="comment-attach-chips" id="commentAttachChips" hidden></div>
                   <div class="comment-compose-actions">
                     <button class="btn sm soft" type="button" id="btnCommentAttach" title="添加附件（图片、PDF、Office、txt、md、zip，单个 ≤10MB）">

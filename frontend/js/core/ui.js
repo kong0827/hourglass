@@ -542,10 +542,19 @@ import { icon } from "./icons.js";
 
   /* ==================== 刷新进度条 ==================== */
   var syncCount = 0;
+  var chunkCount = 0;
+  function syncBarSync() {
+    var bar = document.getElementById("syncBar");
+    if (bar) bar.classList.toggle("on", syncCount + chunkCount > 0);
+  }
   function syncBusy(on) {
     syncCount = Math.max(0, syncCount + (on ? 1 : -1));
-    var bar = document.getElementById("syncBar");
-    if (bar) bar.classList.toggle("on", syncCount > 0);
+    syncBarSync();
+  }
+  /* 视图 chunk 懒加载期间的全局指示：慢网下点侧栏不再"像没反应" */
+  function chunkBusy(on) {
+    chunkCount = Math.max(0, chunkCount + (on ? 1 : -1));
+    syncBarSync();
   }
 
   /* ==================== 筛选生效态 ====================
@@ -639,6 +648,7 @@ import { icon } from "./icons.js";
     skeletonCards: skeletonCards,
     skeletonRows: skeletonRows,
     syncBusy: syncBusy,
+    chunkBusy: chunkBusy,
     markFiltered: markFiltered,
     copyText: copyText
 };

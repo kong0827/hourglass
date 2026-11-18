@@ -18,10 +18,17 @@ var activeView = "board";
 var settingsTabPending = null;
 function lazyEnter(name, method){
   return function(isCurrent){
+    /* 模块尚未在内存中时才给全局进度指示；已加载的切换保持零延迟观感 */
+    var pending = !viewModule(name);
+    if (pending) UI.chunkBusy(true);
     return loadView(name).then(function(m){
+      if (pending) UI.chunkBusy(false);
       if(isCurrent && !isCurrent()) return m;
       m[method]();
       return m;
+    }, function(err){
+      if (pending) UI.chunkBusy(false);
+      throw err;
     });
   };
 }

@@ -14,7 +14,7 @@ import { openTaskDrawer, refreshOwnerSelect, syncCatSeg } from "./task-drawer.js
 import { UI, esc, toast } from "./ui.js";
 import { avatarColor, avatarColorIndex, initial } from "../lib/format.js";
 import { loadBoard, loadReqs, render } from "../views/board.js";
-import { askSwitchWorkspace, wsNameById } from "../views/mine.js";
+import { askSwitchWorkspace, restoreWorkspaceHandoff, wsNameById } from "../views/mine.js";
 import { loadView } from "./view-loader.js";
 
 var wsMenuEl = $("wsMenu"), wsListEl = $("wsList"), wsSwitchBtn = $("wsSwitch");
@@ -49,7 +49,9 @@ function loadWorkspaces(meUser){
     applyWsRoleGating();
     loadWsMembers();
     updateBrand();
-    if(restoreViewState()) reloadFilteredViews();
+    var restored = restoreViewState();
+    if(restoreWorkspaceHandoff()) restored = true;
+    if(restored) reloadFilteredViews();
     /* 深链直达甘特图时，空间在首屏之后才确定：偏好与请求都要按新空间补跑一次 */
     if(activeView === "gantt"){
       loadView("gantt").then(function(m){ m.loadGanttPrefs(); m.syncGanttControls(); m.loadGantt(); });

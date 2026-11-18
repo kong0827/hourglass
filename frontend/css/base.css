@@ -62,7 +62,7 @@ a:hover{text-decoration:underline;}
 *:hover{scrollbar-color:rgba(120,130,145,.38) transparent;}
 ::-webkit-scrollbar{width:6px;height:6px;}
 ::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent;}
-::-webkit-scrollbar-thumb{background:transparent;border-radius:999px;background-clip:content-box;}
+::-webkit-scrollbar-thumb{background:transparent;border-radius:var(--r-pill);background-clip:content-box;}
 :hover::-webkit-scrollbar-thumb{background:rgba(120,130,145,.32);background-clip:content-box;}
 ::-webkit-scrollbar-thumb:hover{background:rgba(120,130,145,.58);background-clip:content-box;}
 

@@ -20,7 +20,7 @@
 .gantt-tools .cnt{
   min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);
   display:inline-grid;place-items:center;margin-left:5px;
-  background:var(--primary);color:var(--text-inverse);font-size:10px;font-weight:700;
+  background:var(--primary);color:var(--text-inverse);font-size:var(--fs-micro);font-weight:700;
   font-variant-numeric:tabular-nums;
 }
 .gantt-tools .cnt[hidden]{display:none;}
@@ -28,7 +28,7 @@
 .gantt-range-btn{width:26px;padding:0;font-size:16px;line-height:1;color:var(--text-2);}
 .gantt-range-btn:disabled{opacity:.35;cursor:default;}
 .gantt-range-label{
-  min-width:104px;text-align:center;font-size:12.5px;font-weight:600;
+  min-width:104px;text-align:center;font-size:13px;font-weight:600;
   color:var(--text-2);font-variant-numeric:tabular-nums;
 }
 /* 低频操作收进「更多」，保持第二行只有常用控件 */
@@ -63,24 +63,24 @@
 /* 行密度：舒适（默认）/ 紧凑 / 极简 */
 .gantt-grid.density-comfortable{
   --gantt-row-h:54px;--gantt-group-h:32px;
-  --gantt-title-size:12.5px;--gantt-meta-size:10.5px;--gantt-info-size:10px;--gantt-group-head-size:12px;
+  --gantt-title-size:13px;--gantt-meta-size:11px;--gantt-info-size:10px;--gantt-group-head-size:12px;
 }
 .gantt-grid.density-compact{
   --gantt-row-h:40px;--gantt-group-h:28px;
-  --gantt-title-size:12px;--gantt-meta-size:10px;--gantt-info-size:0px;--gantt-group-head-size:11.5px;
+  --gantt-title-size:12px;--gantt-meta-size:10px;--gantt-info-size:0px;--gantt-group-head-size:12px;
 }
 .gantt-grid.density-compact .gantt-info{display:none;}
 .gantt-grid.density-compact .gantt-row .gantt-label{padding-top:3px;padding-bottom:3px;}
 .gantt-grid.density-minimal{
   --gantt-row-h:30px;--gantt-group-h:24px;
-  --gantt-title-size:11.5px;--gantt-meta-size:0px;--gantt-info-size:0px;--gantt-group-head-size:11px;
+  --gantt-title-size:12px;--gantt-meta-size:0px;--gantt-info-size:0px;--gantt-group-head-size:11px;
 }
 .gantt-grid.density-minimal .gantt-meta,
 .gantt-grid.density-minimal .gantt-info{display:none;}
 .gantt-grid.density-minimal .gantt-row .gantt-label{padding-top:2px;padding-bottom:2px;}
 .gantt-grid.density-minimal .gantt-bar{height:18px;top:6px;}
 .gantt-grid.density-minimal .gantt-bar-inner{padding:0 5px;}
-.gantt-grid.density-minimal .gantt-bar-label{font-size:10px;}
+.gantt-grid.density-minimal .gantt-bar-label{font-size:var(--fs-micro);}
 .gantt-grid.density-minimal .gantt-milestone-wrap{top:6px;}
 
 /* 表头 */
@@ -91,7 +91,7 @@
   background:var(--surface-sunken);border-right:1px solid var(--border);
   font-size:12px;font-weight:650;color:var(--text-2);
 }
-.gantt-corner-meta{font-size:10.5px;font-weight:500;color:var(--text-3);}
+.gantt-corner-meta{font-size:11px;font-weight:500;color:var(--text-3);}
 .gantt-resizer{
   position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;z-index:23;
   display:flex;align-items:center;justify-content:center;
@@ -109,12 +109,12 @@
   font-size:11px;font-weight:650;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 /* 轴末尾的月格只有几天宽：缩字号和内边距，保住「1月」而不是裁成半个字 */
-.gantt-month.is-compact{padding:0 2px;font-size:10px;letter-spacing:-.02em;}
+.gantt-month.is-compact{padding:0 2px;font-size:var(--fs-micro);letter-spacing:-.02em;}
 .gantt-days{display:flex;height:26px;background:var(--surface);}
 .gantt-day{
   flex:0 0 auto;display:grid;place-items:center;
   border-right:1px solid var(--border);
-  font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;
+  font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;
 }
 .gantt-day.weekend{background:var(--surface-sunken);}
 .gantt-day.today{color:var(--primary-fg);font-weight:700;background:var(--primary-soft);}
@@ -164,9 +164,9 @@
 }
 .gantt-group-head:hover{background:var(--surface-hover);}
 .gantt-group-head:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
-.gantt-group-caret{flex:0 0 auto;width:12px;font-size:10px;color:var(--text-3);}
+.gantt-group-caret{flex:0 0 auto;width:12px;font-size:var(--fs-micro);color:var(--text-3);}
 .gantt-group-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.gantt-group-cnt{margin-left:auto;font-size:10.5px;font-weight:500;color:var(--text-3);}
+.gantt-group-cnt{margin-left:auto;font-size:11px;font-weight:500;color:var(--text-3);}
 
 /* 时间轴 */
 .gantt-track{
@@ -209,17 +209,17 @@
   font-size:11px;font-weight:600;color:var(--text-2);
 }
 .gantt-bar-stat{
-  flex:0 0 auto;font-size:10.5px;font-weight:650;color:var(--text-2);
+  flex:0 0 auto;font-size:11px;font-weight:650;color:var(--text-2);
   font-variant-numeric:tabular-nums;
 }
 .gantt-bar-pct{
-  flex:0 0 auto;font-size:10.5px;font-weight:600;color:var(--text-3);
+  flex:0 0 auto;font-size:11px;font-weight:600;color:var(--text-3);
   font-variant-numeric:tabular-nums;
 }
 .gantt-bar-flag{
   position:absolute;right:3px;top:4px;z-index:2;width:12px;height:12px;border-radius:50%;
   display:grid;place-items:center;background:var(--danger);color:var(--text-inverse);
-  font-size:9px;font-weight:700;line-height:1;pointer-events:none;
+  font-size:var(--fs-micro);font-weight:700;line-height:1;pointer-events:none;
 }
 .gantt-bar.is-blocked .gantt-bar-flag{background:var(--warning);}
 .gantt-bar.is-done .gantt-bar-flag{background:var(--success);}
@@ -257,7 +257,7 @@
 .gantt-month-empty{
   position:relative;z-index:2;
   padding:28px 20px 28px calc(var(--gantt-label-w,280px) + 24px);
-  font-size:12.5px;color:var(--text-3);
+  font-size:13px;color:var(--text-3);
 }
 
 /* 依赖线（只读）：前驱 → 后继 */
@@ -304,15 +304,15 @@
 .gantt-unplanned-row:hover{background:var(--surface-hover);}
 .gantt-unplanned-row.dragging{opacity:.6;cursor:grabbing;}
 .gantt-unplanned-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
-.gantt-unplanned-t{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.gantt-unplanned-m{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gantt-unplanned-t{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gantt-unplanned-m{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gantt-unplanned-more{padding:6px 8px;border-top:1px solid var(--border);}
 .gantt-empty-note{font-size:12px;color:var(--text-3);}
 
 /* 图例 */
 .gantt-legend{
   flex:0 0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
-  padding:0 2px;font-size:11.5px;color:var(--text-3);
+  padding:0 2px;font-size:12px;color:var(--text-3);
 }
 .gantt-legend .gl-item{display:inline-flex;align-items:center;gap:5px;}
 .gantt-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
@@ -350,7 +350,7 @@
 .gantt-week{
   flex:0 0 auto;display:flex;align-items:center;padding:0 6px;
   border-right:1px solid var(--border);border-bottom:1px solid var(--border);
-  font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;
+  font-size:var(--fs-micro);color:var(--text-3);white-space:nowrap;overflow:hidden;
   font-variant-numeric:tabular-nums;
 }
 .gantt-week.today{color:var(--primary-fg);background:var(--primary-soft);font-weight:700;}
@@ -410,7 +410,7 @@
 .gantt-analysis-check{width:14px;flex:0 0 auto;color:var(--primary-fg);font-weight:700;}
 .gantt-group-head.depth-2{padding-left:26px;font-weight:600;}
 .gantt-dep-badge{
-  font-size:9px;fill:var(--text-3);font-weight:650;
+  font-size:var(--fs-micro);fill:var(--text-3);font-weight:650;
   paint-order:stroke;stroke:var(--surface);stroke-width:3px;
 }
 
@@ -420,11 +420,11 @@
   background:var(--surface);padding:10px 12px;max-height:250px;overflow:auto;
 }
 .gantt-load[hidden]{display:none;}
-.gantt-load-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;}
+.gantt-load-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:13px;}
 .gantt-load-head .icon-btn{margin-left:auto;}
-.gantt-load-grid{display:grid;grid-template-columns:120px repeat(var(--load-weeks,6),minmax(96px,1fr));gap:4px 6px;font-size:10.5px;align-items:center;}
+.gantt-load-grid{display:grid;grid-template-columns:120px repeat(var(--load-weeks,6),minmax(96px,1fr));gap:4px 6px;font-size:11px;align-items:center;}
 .gantt-load-grid .lh{color:var(--text-3);font-weight:650;text-align:center;padding-bottom:4px;border-bottom:1px solid var(--border);}
-.gantt-load-grid .lm{font-size:11.5px;font-weight:600;color:var(--text-2);padding-right:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gantt-load-grid .lm{font-size:12px;font-weight:600;color:var(--text-2);padding-right:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gantt-load-cell{border:1px solid var(--border);border-radius:var(--r-xs);padding:3px 6px;line-height:1.35;background:var(--surface-sunken);font-variant-numeric:tabular-nums;}
 .gantt-load-cell b{display:block;font-weight:650;color:var(--text-2);}
 .gantt-load-cell span{color:var(--text-3);}
@@ -441,7 +441,7 @@
   #ganttUndo,#ganttNew,.gantt-legend-hint{display:none !important;}
   .gantt-page{padding-top:8px;}
   .gantt-title{font-size:12px;}
-  .gantt-meta,.gantt-info{font-size:10px;}
+  .gantt-meta,.gantt-info{font-size:var(--fs-micro);}
   .gantt-load{max-height:200px;}
   .gantt-load-grid{grid-template-columns:96px repeat(var(--load-weeks,6),minmax(84px,1fr));}
 }

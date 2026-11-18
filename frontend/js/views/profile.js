@@ -15,6 +15,7 @@ import { UI, esc, toast } from "../core/ui.js";
 import { avatarColor, avatarColorIndex, initial, pad2 } from "../lib/format.js";
 import { loadMemberLabelOptions } from "../lib/member-labels.js";
 import { loadBoard } from "./board.js";
+import { saveWorkspaceHandoff, clearWorkspaceHandoff } from "./mine.js";
 
 var meReadyCbs = [];function afterMeReady(fn){
   if(rt.currentUser){ fn(); return; }
@@ -635,14 +636,18 @@ function openSpacePicker(anchor){
     UI.showConfirm({
       title: "切换空间",
       msg: "切换到「" + esc(target ? (target.name || target.id) : b.dataset.mobWs) +
-        "」会重新加载页面，当前未保存的改动不会保留。",
+        "」会重新加载页面。空间专属的项目、分类、负责人条件会清空，通用筛选与「我的工作」分组会带过去；未保存的改动不会保留。",
       okText: "切换",
       cancelText: "取消"
     }).then(function(ok){
       if(!ok) return;
+      saveWorkspaceHandoff(b.dataset.mobWs);
       API.post("/api/workspaces/" + encodeURIComponent(b.dataset.mobWs) + "/select", {}).then(function(){
         window.location.reload();
-      }).catch(function(ex){ toast(ex.message || "切换空间失败", "bad"); });
+      }).catch(function(ex){
+        clearWorkspaceHandoff();
+        toast(ex.message || "切换空间失败", "bad");
+      });
     });
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});

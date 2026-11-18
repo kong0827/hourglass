@@ -2276,12 +2276,14 @@ function ensureProjectRoles(projectId, force){
 });
 function ownerOptions(projectId){
   var opts = [], seen = Object.create(null), ws = rt.currentWs, pid = projectId === undefined ? currentProjectId() : projectId;
+  var loads = ws && pid ? ownerLoadCache[ws.id + ":" + pid] : null;
   function push(userId, name, m){
     if(!userId || seen[userId]) return;
     seen[userId] = true;
     var titles = memberRoleTitles(m), primary = effectiveMemberRole(m);
     opts.push({ id:userId, name:name, company:companyNameOf(m), role:titles.join(" / "),
-      primaryRole:primary, secondary:titles.filter(function(t){ return t !== primary; }) });
+      primaryRole:primary, secondary:titles.filter(function(t){ return t !== primary; }),
+      load:loads && loads.byUser ? loads.byUser[userId] : null });
   }
   if(ws && ws.type === "shared"){
     var roster = pid ? peekProjectMembers(ws.id, pid) : null;
@@ -2293,6 +2295,34 @@ function ownerOptions(projectId){
   }
   return opts;
 }
+/* 负责人候选旁标注当前负载：按项目取一次驾驶舱同源口径，短时缓存，失败静默不挡选人 */
+var OWNER_LOAD_TTL = 60000;
+var ownerLoadCache = Object.create(null);
+var ownerLoadInflight = Object.create(null);
+function ensureOwnerLoad(pid){
+  var ws = rt.currentWs;
+  if(!ws || ws.type !== "shared" || !pid) return;
+  var key = ws.id + ":" + pid, hit = ownerLoadCache[key];
+  if(hit && Date.now() - hit.at < OWNER_LOAD_TTL) return;
+  if(ownerLoadInflight[key]) return;
+  ownerLoadInflight[key] = true;
+  API.get("/api/manager/workload", {reqId: pid}).then(function(data){
+    var byUser = Object.create(null);
+    (data && data.members || []).forEach(function(m){
+      if(!m || !m.key) return;
+      byUser[m.key] = {
+        remainingMinutes: Number(m.remainingMinutes) || 0,
+        loadPct: Number(m.loadPct) || 0,
+        overloaded: !!m.overloaded
+      };
+    });
+    ownerLoadCache[key] = { at: Date.now(), byUser: byUser };
+    if(rt.currentWs && rt.currentWs.id === ws.id && currentProjectId() === pid) refreshOwnerSelect();
+  }).catch(function(){
+    /* 没有驾驶舱权限或接口失败：不标注负载，不影响负责人选择 */
+    ownerLoadCache[key] = { at: Date.now(), byUser: Object.create(null) };
+  }).then(function(){ delete ownerLoadInflight[key]; });
+}
 function companyOfUser(userId){
   if(!userId) return "";
   var hit = (rt.wsMembersCache || []).filter(function(m){ return m.userId === userId; })[0];
@@ -2301,6 +2331,12 @@ function companyOfUser(userId){
 function ownerOptionHTML(o, selected){
   var shared = rt.currentWs && rt.currentWs.type === "shared";
   var label = o.name + (shared ? " · " + (o.role || "未设角色") + " · " + (o.company || "未标注公司") : "");
+  /* 负载用驾驶舱同一口径：剩余预估 / 可用工作日；超载直接写在候选里，避免选完才发现 */
+  if(shared && o.load){
+    label += " · 负载 " + o.load.loadPct + "%"
+      + (o.load.remainingMinutes > 0 ? " · 余 " + fmtMinutesShort(o.load.remainingMinutes) : "")
+      + (o.load.overloaded ? " 超载" : "");
+  }
   return '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (selected ? " selected" : "") + '>' + esc(label) + '</option>';
 }
 /* 负责人花名册提示：保留但不可指派的状态收成标签旁一个感叹号，避免在窄列里撑出两行；
@@ -2373,6 +2409,7 @@ function populateOwnerSelect(currentName, currentUserId){
   iOwner.disabled = !!pending || !!error || !!rt.drawerReadOnly;
   ownerRosterHint(error, !!curId && !matched && !pending && !error);
   if(pending) ensureProjectRoles(pid);
+  if(!pending && !error) ensureOwnerLoad(pid);
 }
 function refreshOwnerSelect(){
   if(!iOwner || iOwner.tagName !== "SELECT") return;

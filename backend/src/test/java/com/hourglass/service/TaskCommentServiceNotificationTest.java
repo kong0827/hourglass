@@ -222,6 +222,38 @@ class TaskCommentServiceNotificationTest {
         verify(access, never()).canView(anyString(), anyString(), anyString());
     }
 
+    @Test
+    void commentKeepsTextBeyondOldFiveHundredLimit() {
+        prepare("U-owner", "U-author");
+        StringBuilder body = new StringBuilder();
+        for (int i = 0; i < 900; i++) {
+            body.append('错');
+        }
+
+        service.create("U-author", "W1", "K1", body.toString());
+
+        org.mockito.ArgumentCaptor<TaskComment> captor =
+                org.mockito.ArgumentCaptor.forClass(TaskComment.class);
+        verify(comments).insert(captor.capture());
+        assertEquals(900, captor.getValue().getContent().length());
+    }
+
+    @Test
+    void commentIsCutAtNewUpperLimit() {
+        prepare("U-owner", "U-author");
+        StringBuilder body = new StringBuilder();
+        for (int i = 0; i < 2100; i++) {
+            body.append('错');
+        }
+
+        service.create("U-author", "W1", "K1", body.toString());
+
+        org.mockito.ArgumentCaptor<TaskComment> captor =
+                org.mockito.ArgumentCaptor.forClass(TaskComment.class);
+        verify(comments).insert(captor.capture());
+        assertEquals(TaskCommentService.MAX_LEN, captor.getValue().getContent().length());
+    }
+
     private WorkspaceMember member(String userId, String displayName) {
         WorkspaceMember m = new WorkspaceMember();
         m.setUserId(userId);
