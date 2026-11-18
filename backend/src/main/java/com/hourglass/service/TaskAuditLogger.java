@@ -64,6 +64,15 @@ public class TaskAuditLogger {
     /** 结构数据完整保存；序列化失败使业务事务回滚，不降级丢失证据。 */
     public void logChange(String userId, String workspaceId, String taskId, String action, String detail,
                           Object before, Object after, String reason) {
+        logChange(userId, workspaceId, taskId, action, detail, before, after, reason, null, null);
+    }
+
+    /**
+     * 带列信息的结构化日志：取消 / 恢复既是状态流转（from/to 必须留痕，流程体检才不断链），
+     * 又需要前后快照与说明（change_data），此前两者只能分两条写。
+     */
+    public void logChange(String userId, String workspaceId, String taskId, String action, String detail,
+                          Object before, Object after, String reason, String fromColumn, String toColumn) {
         java.util.Map<String, Object> data = new java.util.LinkedHashMap<String, Object>();
         data.put("before", before);
         data.put("after", after);
@@ -74,6 +83,8 @@ public class TaskAuditLogger {
         taskLog.setActorId(userId);
         taskLog.setAction(action);
         taskLog.setDetail(Texts.cut(detail, 250));
+        taskLog.setFromColumn(fromColumn);
+        taskLog.setToColumn(toColumn);
         try {
             taskLog.setChangeData(objectMapper.writeValueAsString(data));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {

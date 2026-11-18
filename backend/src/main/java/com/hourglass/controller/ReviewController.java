@@ -22,14 +22,19 @@ public class ReviewController {
         this.workspaceService = workspaceService;
     }
 
-    /** 工作回顾：weekOffset 不传时自动选最近一个有完成记录的周；reqId 非空时只看该项目 */
+    /**
+     * 工作回顾：weekOffset 不传时自动选最近一个有完成记录的周；reqId 非空时只看该项目。
+     * mine 默认 true（个人回顾，只算我负责的工作项）；显式传 false 才回到空间口径。
+     */
     @GetMapping("/api/review")
     public ApiResult<ReviewResponse> review(@RequestParam(required = false) String workspace,
                                             @RequestParam(required = false) Integer weekOffset,
-                                            @RequestParam(required = false) String reqId) {
+                                            @RequestParam(required = false) String reqId,
+                                            @RequestParam(required = false) Boolean mine) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(reviewService.review(ws.getId(), userId, reqId, weekOffset));
+        boolean personal = !Boolean.FALSE.equals(mine);
+        return ApiResult.ok(reviewService.review(ws.getId(), userId, reqId, weekOffset, personal));
     }
 
     /** 工时下钻：与 /api/review 的 workMinutes 同口径；mine=true 只看自己，分页最多 100 条 */

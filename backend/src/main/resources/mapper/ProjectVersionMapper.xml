@@ -49,7 +49,8 @@
       (SELECT COUNT(DISTINCT vt.task_id) FROM version_task vt
         INNER JOIN task t ON t.workspace_id = vt.workspace_id AND t.id = vt.task_id
        WHERE vt.workspace_id = v.workspace_id AND vt.version_id = v.id
-         AND t.req_id = v.req_id AND t.deleted_at IS NULL) AS taskCount,
+         AND t.req_id = v.req_id AND t.deleted_at IS NULL
+         AND t.board_column &lt;&gt; 'canceled') AS taskCount,
       (SELECT MAX(COALESCE(vr.published_on, DATE(vr.occurred_at))) FROM version_release vr
        WHERE vr.workspace_id = v.workspace_id AND vr.version_id = v.id
          AND vr.result = 'success' AND vr.environment = 'production'

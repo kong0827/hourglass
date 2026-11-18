@@ -31,12 +31,16 @@ registerHelp({
       ["待测试", "默认暂停计时、仍算逾期；处理规则可在空间设置里改。", "type-story"],
       ["测试中", "默认正常计时；处理规则同样可改。", "type-story"],
       ["已完成", "固定结束计时、不计逾期。拖入即写完成归档快照，并停表、接力同列下一个任务。", "ok"],
+      ["已取消", "终态，与已完成并列，不占看板列。任意非终态列都能取消（原因四选一 + 说明必填），只能恢复到取消前所在列；已完成要先取消完成。不计逾期、退出完成率与需求完成分母，进度保留原值。", "mute"],
       ["怎么流转", "拖动卡片、列表行内改状态或抽屉推进都会改列并写操作日志。拖进可计时列会自动开工（同一时刻只计一个任务），拖进不计时列会停表；从已完成拖出默认要填原因，也可在流转矩阵里改成禁止。", "mute"],
       ["发布徽标", "不是工作项字段，由成功正式生产发布记录派生：生产生效 / 生产部分生效 / 生产已回滚 / 生产覆盖未知；另有「曾生产发布」和「已发布（人工）」。", "warn"],
       ["回滚与人工", "回滚只撤销被回滚的那一次发布；人工标记只补「有没有发布过」，不带生效状态，也不参与需求交付统计。", "warn"],
       ["分组与筛选", "列永远是状态，列内分组只决定卡片归堆（负责人 / 优先级 / 项目 / 分类），拖拽语义不变。发布态用顶部筛选条的「发布态」，与徽标同一口径，看板、列表、层级、日历、甘特共用。", "mute"]
     ],
-    note: "处理规则决定能不能计时、算不算逾期；能不能拖动由流转矩阵单独控制——默认全放开，只有从「已完成」拖出要求原因。"
+    note: "处理规则决定能不能计时、算不算逾期；能不能拖动由流转矩阵单独控制——默认全放开，只有从「已完成」拖出要求原因。",
+    image: "diagrams/workitem-terminal-state.png",
+    imageAlt: "沙漏·工作项终态机：主链五列，任意非终态列可取消进入已取消，已取消只能恢复到取消前所在列",
+    imageCaption: "工作项终态机（点击图放大）：实线是现有列间推进，虚线是取消 / 恢复 / 重开。"
   }
 });
 initCaliberHelp();
@@ -345,6 +349,7 @@ function loadBoard(opts){
     if(seq !== state.loadSeq) return;
     state.board = data;
     state.boardGen++;
+    syncCanceledBadge();
     syncColumns(data.columnDefs);
     buildFormControls();
     syncFormSegs();
@@ -1288,6 +1293,18 @@ if(boardToolbarEl){
     if(e.target.id === "boardGroupSelect") setBoardGroup(e.target.value);
     else if(e.target.id === "boardGroup2Select") setBoardGroup2(e.target.value);
   });
+}
+/* 已取消是终态，不占看板列：只在工具条留一个入口，点进去看归档与恢复 */
+var canceledBtn = document.getElementById("btnCanceled");
+if(canceledBtn){
+  canceledBtn.addEventListener("click", function(){ showView("canceled"); });
+}
+function syncCanceledBadge(){
+  var badge = document.getElementById("canceledBadge");
+  if(!badge) return;
+  var n = state.board && state.board.counts ? (state.board.counts.canceled || 0) : 0;
+  badge.textContent = n > 99 ? "99+" : String(n);
+  badge.hidden = n <= 0;
 }
 /* 列内滚过一屏后露出「回到顶部」；scroll 不冒泡，用捕获阶段接住 */
 board.addEventListener("scroll", function(e){

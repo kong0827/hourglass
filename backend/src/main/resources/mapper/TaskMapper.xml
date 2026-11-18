@@ -5,6 +5,7 @@
   <sql id="cols">
     id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
     progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+    canceled_at, cancel_reason, cancel_from,
     test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at,
     item_type AS itemType, item_no AS itemNo, epic_id AS epicId, demand_id AS demandId,
@@ -22,6 +23,21 @@
                         AND pm.project_id = t.req_id
                         AND pm.user_id = #{viewerId}
                         AND pm.access = 'none')
+    </if>
+  </sql>
+
+  <!--
+    周回顾个人口径：只算「我」负责的工作项。
+    负责人账号（owner_user_id）为权威；历史数据未回填账号时回落负责人显示名文本。
+    ownerUserId 为空 = 不收敛（保留空间口径）。
+  -->
+  <sql id="reviewOwnerScope">
+    <if test="ownerUserId != null">
+      AND (t.owner_user_id = #{ownerUserId}
+      <if test="ownerName != null and ownerName != ''">
+        OR (t.owner_user_id IS NULL AND t.owner = #{ownerName})
+      </if>
+      )
     </if>
   </sql>
 
@@ -64,6 +80,7 @@
   <select id="countOpenColumn" resultType="int">
     SELECT COUNT(*) FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column &lt;&gt; 'done'
+      AND t.board_column &lt;&gt; 'canceled'
     <include refid="visibleProject"/>
     <include refid="openColumnScope"/>
   </select>
@@ -288,13 +305,16 @@
                             AND pm.project_id = t.req_id
                             AND pm.user_id = #{userId}
                             AND pm.access = 'none'))
-      <if test="openOnly"> AND t.board_column != 'done' </if>
+      <if test="openOnly"> AND t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled' </if>
       <if test="columns != null and columns.size() > 0">
         AND t.board_column IN
         <foreach collection="columns" item="bc" open="(" separator="," close=")">#{bc}</foreach>
       </if>
-      <if test="completion == 'open'"> AND t.board_column != 'done' </if>
+      <if test="completion == 'open'"> AND t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled' </if>
       <if test="completion == 'done'"> AND t.board_column = 'done' </if>
+      <!-- 终态默认不进「我的工作」；当前 UI 只走看板「已取消」入口，这里保留 completion=canceled 供接口显式查询 -->
+      <if test="completion == 'canceled'"> AND t.board_column = 'canceled' </if>
+      <if test="completion != 'canceled'"> AND t.board_column &lt;&gt; 'canceled' </if>
       <if test="q != null">
         <!-- 口径与 ganttWhere 一致：标题/描述/备注/模块 + 项目名 + 标签名 + 附件名 + 工作项编号 -->
         AND (t.title LIKE CONCAT('%', #{q}, '%')
@@ -446,12 +466,13 @@
   <insert id="insert">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      canceled_at, cancel_reason, cancel_from,
                       test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, item_no, epic_id, demand_id,
                       severity, environment, reproduce_steps, found_version_id, regression_status, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{categoryId},
             #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
-            #{note}, #{completedAt}, #{testOwnerUserId}, #{testOwner}, #{testRequestedAt}, #{testStartedAt}, #{testFinishedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{itemNo}, #{epicId}, #{demandId},
+            #{note}, #{completedAt}, #{canceledAt}, #{cancelReason}, #{cancelFrom}, #{testOwnerUserId}, #{testOwner}, #{testRequestedAt}, #{testStartedAt}, #{testFinishedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{itemNo}, #{epicId}, #{demandId},
             #{severity}, #{environment}, #{reproduceSteps}, #{foundVersionId}, #{regressionStatus},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -461,6 +482,7 @@
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes,
                       is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      canceled_at, cancel_reason, cancel_from,
                       test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
                       recur_type, remind_at,
                       remind_target, remind_sent, sort_order, item_type, item_no, epic_id, demand_id,
@@ -470,7 +492,7 @@
       (#{t.id}, #{t.workspaceId}, #{t.title}, #{t.description}, #{t.priority}, #{t.owner}, #{t.ownerUserId},
        #{t.categoryId}, #{t.boardColumn}, #{t.startDate}, #{t.dueDate}, #{t.reqId}, #{t.reqDocId}, #{t.branchId},
        #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
-       #{t.note}, #{t.completedAt}, #{t.testOwnerUserId}, #{t.testOwner}, #{t.testRequestedAt}, #{t.testStartedAt}, #{t.testFinishedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
+       #{t.note}, #{t.completedAt}, #{t.canceledAt}, #{t.cancelReason}, #{t.cancelFrom}, #{t.testOwnerUserId}, #{t.testOwner}, #{t.testRequestedAt}, #{t.testStartedAt}, #{t.testFinishedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
        #{t.sortOrder}, COALESCE(#{t.itemType}, 'task'), #{t.itemNo}, #{t.epicId}, #{t.demandId},
        #{t.severity}, #{t.environment}, #{t.reproduceSteps}, #{t.foundVersionId}, #{t.regressionStatus},
        COALESCE(#{t.createdAt}, CURRENT_TIMESTAMP), #{t.deletedAt})
@@ -499,6 +521,9 @@
       blocked_by_task_id = #{blockedByTaskId},
       note = #{note},
       completed_at = #{completedAt},
+      canceled_at = #{canceledAt},
+      cancel_reason = #{cancelReason},
+      cancel_from = #{cancelFrom},
       test_owner_user_id = #{testOwnerUserId},
       test_owner = #{testOwner},
       test_requested_at = #{testRequestedAt},
@@ -592,7 +617,7 @@
   <select id="selectRemindDueAll" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE deleted_at IS NULL
-      AND board_column != 'done'
+      AND board_column NOT IN ('done', 'canceled')
       AND remind_sent = 0
       AND remind_at IS NOT NULL
       AND remind_at &lt;= #{now}
@@ -603,7 +628,7 @@
   <select id="selectRemindExpiredAll" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE deleted_at IS NULL
-      AND board_column != 'done'
+      AND board_column NOT IN ('done', 'canceled')
       AND remind_sent = 0
       AND remind_at IS NOT NULL
       AND remind_at &lt; #{before}
@@ -763,15 +788,19 @@
     ORDER BY (board_column = 'done'), FIELD(priority, 'P0', 'P1', 'P2', 'P3'), sort_order, created_at
   </select>
 
+  <!-- 项目 / 需求 / 分支 / 文档下的任务清单与计数：终态「已取消」只从看板已取消入口看，
+       这里连同 total 一起剔除，避免列表里还在、进度分母却已减掉的口径分裂 -->
   <select id="selectByReq" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND deleted_at IS NULL
+      AND board_column &lt;&gt; 'canceled'
     ORDER BY (board_column = 'done'), board_column, sort_order, id
   </select>
 
   <select id="selectByReqPage" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND deleted_at IS NULL
+      AND board_column &lt;&gt; 'canceled'
     ORDER BY (board_column = 'done'), board_column, sort_order, id
     LIMIT #{limit} OFFSET #{offset}
   </select>
@@ -779,11 +808,13 @@
   <select id="countActiveByReq" resultType="int">
     SELECT COUNT(*) FROM task
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND deleted_at IS NULL
+      AND board_column &lt;&gt; 'canceled'
   </select>
 
   <select id="selectByDemandPage" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND deleted_at IS NULL
+      AND board_column &lt;&gt; 'canceled'
     ORDER BY (board_column = 'done'), FIELD(priority, 'P0', 'P1', 'P2', 'P3'), sort_order, created_at, id
     LIMIT #{limit} OFFSET #{offset}
   </select>
@@ -791,11 +822,13 @@
   <select id="countActiveByDemand" resultType="int">
     SELECT COUNT(*) FROM task
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND deleted_at IS NULL
+      AND board_column &lt;&gt; 'canceled'
   </select>
 
   <select id="selectByBranchPage" resultType="Task">
     SELECT <include refid="cols"/> FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.branch_id = #{branchId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     <include refid="visibleProject"/>
     ORDER BY (t.board_column = 'done'), FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.sort_order, t.created_at, t.id
     LIMIT #{limit} OFFSET #{offset}
@@ -804,6 +837,7 @@
   <select id="countActiveByBranch" resultType="int">
     SELECT COUNT(*) FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.branch_id = #{branchId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     <include refid="visibleProject"/>
   </select>
 
@@ -858,6 +892,8 @@
   <!-- 口径与 TaskService.match() 对齐；区间用生成列 gantt_start/gantt_end（见 sql/16） -->
   <sql id="ganttWhere">
     t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <!-- 终态「已取消」不参与甘特 / 清单 / 看板开口列；已取消视图走独立查询（见 selectCanceledPage） -->
+    AND t.board_column &lt;&gt; 'canceled'
     <if test="query.viewerId != null">
       AND NOT EXISTS (SELECT 1 FROM project_member pm
                       WHERE pm.workspace_id = t.workspace_id
@@ -1312,6 +1348,7 @@
   <select id="selectCalendar" resultType="Task">
     SELECT <include refid="cols"/> FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
       AND t.due_date IS NOT NULL
       AND t.due_date &gt;= #{first}
       AND (t.due_date &lt;= #{last} OR t.start_date &lt;= #{last} OR DATE(t.completed_at) &lt;= #{last})
@@ -1325,8 +1362,35 @@
     FROM task t
     LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     <include refid="visibleProject"/>
     ORDER BY t.board_column, t.sort_order, t.id
+  </select>
+
+  <!-- 已取消视图：终态只出现在这里，按取消时间倒序；原因计数供筛选 chip 直接展示。
+       与看板 / 清单口径分离，避免把终态混进「未完成」。 -->
+  <select id="countCanceled" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'canceled'
+    <include refid="visibleProject"/>
+  </select>
+
+  <select id="countCanceledReasons" resultType="com.hourglass.dto.NameCountRow">
+    SELECT COALESCE(t.cancel_reason, '') AS name, COUNT(*) AS cnt
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'canceled'
+    <include refid="visibleProject"/>
+    GROUP BY t.cancel_reason
+    ORDER BY cnt DESC
+  </select>
+
+  <select id="selectCanceledPage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'canceled'
+    <include refid="visibleProject"/>
+    <if test="reason != null">AND t.cancel_reason = #{reason}</if>
+    ORDER BY COALESCE(t.canceled_at, t.updated_at) DESC, t.id
+    LIMIT #{limit} OFFSET #{offset}
   </select>
 
   <!-- ==================== BE-Q-3：统计类服务 SQL 聚合 ==================== -->
@@ -1382,16 +1446,17 @@
   </select>
 
   <select id="countBuckets" resultType="com.hourglass.dto.TaskBucketRow">
-    SELECT COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
+    SELECT COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled'
                               AND (t.board_column = 'backlog' OR bc.processing_rule = 'waiting')
                               THEN 1 ELSE 0 END), 0) AS backlog,
-           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'backlog'
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled' AND t.board_column &lt;&gt; 'backlog'
                               AND (bc.processing_rule IS NULL OR bc.processing_rule NOT IN ('waiting', 'ended'))
                               THEN 1 ELSE 0 END), 0) AS doing,
            COALESCE(SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END), 0) AS done,
-           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'backlog'
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled' AND t.board_column &lt;&gt; 'backlog'
                               AND bc.processing_rule = 'ended' THEN 1 ELSE 0 END), 0) AS other,
-           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
+           COALESCE(SUM(CASE WHEN t.board_column = 'canceled' THEN 1 ELSE 0 END), 0) AS canceled,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled'
                               AND t.due_date IS NOT NULL AND t.due_date &lt; #{today}
                               AND (bc.processing_rule IS NULL OR bc.processing_rule &lt;&gt; 'ended') THEN 1 ELSE 0 END), 0) AS overdue
     FROM task t
@@ -1457,6 +1522,7 @@
     SELECT MAX(t.completed_at) FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
     <include refid="visibleProject"/>
+    <include refid="reviewOwnerScope"/>
     <if test="reqId != null">AND t.req_id = #{reqId}</if>
   </select>
 
@@ -1464,6 +1530,7 @@
     SELECT <include refid="cols"/> FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
       <include refid="visibleProject"/>
+      <include refid="reviewOwnerScope"/>
       <if test="reqId != null">AND t.req_id = #{reqId}</if>
       AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
     ORDER BY t.completed_at DESC, BINARY t.id
@@ -1473,8 +1540,9 @@
     SELECT <include refid="cols"/> FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
       <include refid="visibleProject"/>
+      <include refid="reviewOwnerScope"/>
       <if test="reqId != null">AND t.req_id = #{reqId}</if>
-      AND t.board_column &lt;&gt; 'done' AND t.progress &gt;= 100
+      AND t.board_column NOT IN ('done', 'canceled') AND t.progress &gt;= 100
     ORDER BY t.board_column, t.sort_order, t.id
   </select>
 
@@ -1482,8 +1550,9 @@
     SELECT <include refid="cols"/> FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
       <include refid="visibleProject"/>
+      <include refid="reviewOwnerScope"/>
       <if test="reqId != null">AND t.req_id = #{reqId}</if>
-      AND t.board_column NOT IN ('backlog', 'done')
+      AND t.board_column NOT IN ('backlog', 'done', 'canceled')
       AND (t.progress IS NULL OR t.progress &lt; 100)
     <if test="history">
       AND (t.created_at IS NULL OR t.created_at &lt; #{before})
@@ -1516,13 +1585,17 @@
     FROM task t
     LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     <include refid="visibleProject"/>
+    <include refid="reviewOwnerScope"/>
     <if test="reqId != null">AND t.req_id = #{reqId}</if>
   </select>
 
+  <!-- 在册工作项（估时覆盖率分母）：终态已取消不占分母，否则取消越多覆盖率越显得低 -->
   <select id="countLive" resultType="int">
     SELECT COUNT(*) FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     <include refid="visibleProject"/>
   </select>
 
@@ -1535,6 +1608,7 @@
            ON l.workspace_id = t.workspace_id AND l.task_id = t.id AND l.ended_at IS NOT NULL
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
       <include refid="visibleProject"/>
+      AND t.board_column &lt;&gt; 'canceled'
       AND t.estimate_minutes &gt; 0
     GROUP BY t.id, t.title, t.req_id, t.category_id, t.board_column, t.estimate_minutes, t.sort_order
     ORDER BY t.board_column, t.sort_order, t.id
@@ -1553,12 +1627,14 @@
     SELECT <include refid="cols"/>
     FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id = #{reqDocId}
+      AND board_column &lt;&gt; 'canceled'
     ORDER BY board_column, sort_order, id
   </select>
 
   <select id="selectByReqDocPage" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id = #{reqDocId}
+      AND board_column &lt;&gt; 'canceled'
     ORDER BY board_column, sort_order, id
     LIMIT #{limit} OFFSET #{offset}
   </select>
@@ -1566,6 +1642,7 @@
   <select id="countActiveByReqDoc" resultType="int">
     SELECT COUNT(*) FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id = #{reqDocId}
+      AND board_column &lt;&gt; 'canceled'
   </select>
 
   <select id="selectTitles" resultType="string">
@@ -1585,6 +1662,7 @@
                               AND DATE(completed_at) &lt;= due_date THEN 1 ELSE 0 END), 0) AS on_time_done
     FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_id IS NOT NULL
+      AND board_column &lt;&gt; 'canceled'
     GROUP BY req_id
   </select>
 

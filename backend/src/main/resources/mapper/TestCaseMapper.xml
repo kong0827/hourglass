@@ -108,16 +108,16 @@
   </select>
 
   <!-- 分页列表的共享 WHERE（与旧 selectViewByReq 保持同样的关联与排序口径） -->
-  <!-- 有效未关闭缺陷：latest_bug_task_id 保留为历史关联，统计与筛选只认未删除、未完成的缺陷工作项 -->
+  <!-- 有效未关闭缺陷：latest_bug_task_id 保留为历史关联，统计与筛选只认未删除、未完成、未取消的缺陷工作项 -->
   <sql id="openBugExists">
     EXISTS (SELECT 1 FROM task bt
             WHERE bt.id = c.latest_bug_task_id AND bt.workspace_id = c.workspace_id
-              AND bt.deleted_at IS NULL AND bt.board_column &lt;&gt; 'done')
+              AND bt.deleted_at IS NULL AND bt.board_column NOT IN ('done', 'canceled'))
   </sql>
   <sql id="openBugJoin">
     LEFT JOIN task bt
       ON bt.id = c.latest_bug_task_id AND bt.workspace_id = c.workspace_id
-     AND bt.deleted_at IS NULL AND bt.board_column &lt;&gt; 'done'
+     AND bt.deleted_at IS NULL AND bt.board_column NOT IN ('done', 'canceled')
   </sql>
 
   <sql id="pageWhere">

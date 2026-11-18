@@ -55,7 +55,8 @@ public class AiReviewService {
     public AiReviewResponse polish(String userId, String workspaceId, Integer weekOffset, String reqId, String note) {
         AiConfig cfg = configService.resolve(userId, workspaceId);
         int off = weekOffset == null ? 0 : Math.max(-52, Math.min(0, weekOffset));
-        ReviewResponse d = reviewService.review(workspaceId, userId, reqId, off);
+        /* 与周回顾页同口径：只写我负责的工作项，不带出团队数据 */
+        ReviewResponse d = reviewService.review(workspaceId, userId, reqId, off, true);
 
         List<Task> done = d.getCompleted();
         List<Task> progress = d.getProgressTasks();
@@ -138,7 +139,6 @@ public class AiReviewService {
         } else {
             sb.append("；完成项都没有设截止日期，不计按期率");
         }
-        sb.append("；参与成员 ").append(s.getMembers()).append(" 人");
         sb.append("；当前进行中 ").append(d.getDoing()).append(" 项、待处理 ").append(d.getBacklog()).append(" 项");
         if (d.getCounts() != null) {
             sb.append("；逾期 ").append(d.getCounts().getOver()).append(" 项")
@@ -147,8 +147,8 @@ public class AiReviewService {
         sb.append("；P0 未关闭 ").append(d.getOpenP0()).append(" 项\n");
 
         ReviewResponse.WorkMinutes w = d.getWorkMinutes();
-        if (w != null && (w.getSpaceWeek() > 0 || w.getMine() > 0)) {
-            sb.append("工时：本周期全空间 ").append(hours(w.getSpaceWeek()))
+        if (w != null && (w.getMineWeek() > 0 || w.getMine() > 0)) {
+            sb.append("工时：我的本周期 ").append(hours(w.getMineWeek()))
                     .append("；我的累计 ").append(hours(w.getMine())).append("\n");
         }
 

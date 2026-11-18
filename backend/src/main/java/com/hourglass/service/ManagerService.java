@@ -371,6 +371,10 @@ public class ManagerService {
                 if (!"bug".equals(task.getItemType())) {
                     continue;
                 }
+                /* 已取消缺陷不再视为未关闭存量：否则会永远挂在「未关闭」上 */
+                if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn())) {
+                    continue;
+                }
                 LocalDate created = date(task.getCreatedAt());
                 LocalDate completed = date(task.getCompletedAt());
                 if ("opened".equals(expected) && created != null
@@ -1247,6 +1251,9 @@ public class ManagerService {
             if (task == null) {
                 throw AppException.badRequest("任务不存在或不属于当前空间：" + taskId);
             }
+            if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn())) {
+                throw AppException.badRequest("不能催办已取消的工作项：" + taskId);
+            }
             if (isDone(task)) {
                 throw AppException.badRequest("只能催办未完成任务：" + taskId);
             }
@@ -1682,6 +1689,15 @@ public class ManagerService {
         if (isDone(task) && (task.getCompletedAt() == null || !date(task.getCompletedAt()).isAfter(weekEnd))) {
             return "done";
         }
+        /* 终态：取消所在周及之后不再计入未完成存量；更早的周仍按取消前所在列还原，
+           否则取消一次会把历史每周的存量一起改掉。 */
+        if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn())) {
+            LocalDate canceled = date(task.getCanceledAt());
+            if (canceled != null && !canceled.isAfter(weekEnd)) {
+                return null;
+            }
+            return com.hourglass.common.Consts.COL_BACKLOG.equals(task.getCancelFrom()) ? "backlog" : "doing";
+        }
         /* 完成日晚于该周的任务沿用原口径计待处理；其余只有当前列状态，按处理规则归类 */
         String bucket = isDone(task) ? "backlog"
                 : TaskCalc.statusBucket(task.getBoardColumn(), task.getProcessingRule());
@@ -1706,6 +1722,10 @@ public class ManagerService {
             int open = 0;
             for (Task task : tasks) {
                 if (!"bug".equals(task.getItemType())) {
+                    continue;
+                }
+                /* 已取消缺陷不再视为未关闭存量：否则会永远挂在「未关闭」上 */
+                if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn())) {
                     continue;
                 }
                 LocalDate created = date(task.getCreatedAt());
@@ -1940,6 +1960,10 @@ public class ManagerService {
         List<Task> tasks = new ArrayList<Task>();
         for (Task task : emptyIfNull(taskMapper.selectAll(workspaceId))) {
             if (task.getDeletedAt() != null) {
+                continue;
+            }
+            /* 终态「已取消」不进管理端快照：在册任务、负载、按项目/史诗的进度都只看在走的工作项 */
+            if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn())) {
                 continue;
             }
             if (task.getReqId() == null || !hiddenReqs.contains(task.getReqId())) {
@@ -2305,6 +2329,10 @@ public class ManagerService {
     private List<Task> openTasks(List<Task> tasks) {
         List<Task> result = new ArrayList<Task>();
         for (Task task : tasks) {
+            /* 终态「已取消」不占在手工作量：既不排负载，也不进成员剩余工时 */
+            if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn())) {
+                continue;
+            }
             if (!isDone(task)) {
                 result.add(task);
             }
@@ -2314,8 +2342,12 @@ public class ManagerService {
 
     private Counts countTasks(List<Task> tasks, LocalDate today) {
         Counts counts = new Counts();
-        counts.total = tasks.size();
         for (Task task : tasks) {
+            /* 终态退出完成率分母与全部未完成桶，也不计逾期 / 阻塞 */
+            if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn())) {
+                continue;
+            }
+            counts.total++;
             if (isDone(task)) {
                 counts.done++;
             } else {

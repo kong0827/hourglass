@@ -35,7 +35,8 @@ var reviewReqId = (function(){
   try{ return localStorage.getItem(REVIEW_REQ_KEY) || ""; }catch(e){ return ""; }
 })();
 function reviewParams(off){
-  var p = {};
+  /* 个人口径：周回顾只算「我负责的工作项」，由服务端按负责人收敛 */
+  var p = { mine:1 };
   if(off !== undefined && off !== null) p.weekOffset = off;
   if(reviewReqId) p.reqId = reviewReqId;
   return p;
@@ -63,7 +64,6 @@ function setReviewLoading(){
     '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
   if(reviewHoursEl) reviewHoursEl.innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
   if(reviewPendingBox) reviewPendingBox.hidden = true;
-  $("peopleBox").innerHTML = '<span class="skel skel-line" style="width:120px"></span>';
   $("progList").innerHTML = UI.skeletonRows(3);
   $("reqDist").innerHTML = UI.skeletonRows(3);
   $("doneList").innerHTML = UI.skeletonRows(4);
@@ -130,7 +130,7 @@ function buildSummary(d){
   var rangeTxt = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
   var progTasks = d.progressTasks || [];
   if(!n && !progTasks.length && !d.doing && !d.backlog && !d.ended){
-    return scope + label + "（" + rangeTxt + "）暂无工作记录。把卡片拖入「已完成」列会自动记录完成时间；在工作项里填上进度，回顾里就能看到这一周你做了什么。";
+    return scope + label + "（" + rangeTxt + "）你暂无工作记录。把卡片拖入「已完成」列会自动记录完成时间；在工作项里填上进度，回顾里就能看到这一周你做了什么。";
   }
   var parts = [];
   if(n){
@@ -140,10 +140,10 @@ function buildSummary(d){
     var rateTxt = (withDue === 0)
       ? "，完成项均未设置截止日期"
       : "，按期完成率 <b>" + rate + "%</b>" + (rate < 100 ? "（延期 " + d.stats.late + " 项）" : "，全部按期完成");
-    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>共完成 <b>" + n + "</b> 项工作项" + rateTxt +
+    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>你完成 <b>" + n + "</b> 项工作项" + rateTxt +
       (p0 ? "，其中" + esc(priName("P0")) + " <b>" + p0 + "</b> 项。" : "。"));
   }else{
-    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>没有已完成的工作项记录。");
+    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>你没有已完成的工作项记录。");
   }
   if(n){
     var items = list.slice(0, 12).map(function(t){
@@ -184,7 +184,8 @@ function summaryPlain(d){
 }
 /* ==================== 完成透视 ==================== */
 var REVIEW_PIVOT_KEY = "ds.reviewPivot";
-var PIVOT_DIMS = [["owner", "成员"], ["reqId", "项目"], ["priority", "优先级"], ["column", "状态"]];
+/* 个人回顾只统计我负责的工作项，「成员」维度恒为一行，不再提供 */
+var PIVOT_DIMS = [["reqId", "项目"], ["priority", "优先级"], ["column", "状态"]];
 var reviewPivot = (function(){
   try{
     var p = JSON.parse(localStorage.getItem(REVIEW_PIVOT_KEY) || "null");
@@ -192,7 +193,7 @@ var reviewPivot = (function(){
     PIVOT_DIMS.forEach(function(d){ ok[d[0]] = 1; });
     if(p && ok[p.row] && ok[p.col] && p.row !== p.col) return {row:p.row, col:p.col};
   }catch(e){ /* 受限环境忽略 */ }
-  return {row:"owner", col:"reqId"};
+  return {row:"reqId", col:"priority"};
 })();
 var reviewPivotState = null;
 function pivotDimLabel(dim){
@@ -200,7 +201,6 @@ function pivotDimLabel(dim){
   return dim;
 }
 function pivotValue(t, dim){
-  if(dim === "owner") return t.owner || "未分配";
   if(dim === "reqId") return t.reqId ? (reqNameById(t.reqId) || "未归类") : "未归类";
   if(dim === "priority") return t.priority ? priName(t.priority) : "未设置";
   if(dim === "column") return colName(t.boardColumn) || "未设置";
@@ -361,14 +361,6 @@ if(reviewHoursEl) reviewHoursEl.addEventListener("click", function(e){
 if($("doneList")) $("doneList").addEventListener("click", onReviewTaskRow);
 if($("progList")) $("progList").addEventListener("click", onReviewTaskRow);
 if($("pendingList")) $("pendingList").addEventListener("click", onReviewTaskRow);
-if($("peopleBox")) $("peopleBox").addEventListener("click", function(e){
-  var b = e.target.closest("[data-review-member]");
-  if(!b) return;
-  var name = b.dataset.reviewMember;
-  openReviewTasks("周回顾 · 成员 · " + name,
-    reviewCompleted(state.reviewData).filter(function(t){ return (t.owner || "未分配") === name; }),
-    "完成项");
-});
 if($("reqDist")) $("reqDist").addEventListener("click", function(e){
   var row = e.target.closest("[data-review-req]");
   if(!row) return;
@@ -382,17 +374,11 @@ if($("statGrid")) $("statGrid").addEventListener("click", function(e){
   if(!d) return;
   var list = reviewCompleted(d);
   var kind = b.dataset.reviewStat;
-  if(kind === "over"){ showView("risks"); return; }
   if(kind === "doing"){ openReviewTasks("周回顾 · 进行中", d.progressTasks || [], "本周期内已开工未完成"); return; }
   if(kind === "late"){ openReviewTasks("周回顾 · 延期完成", list.filter(reviewLate), "完成时间晚于截止日期"); return; }
   if(kind === "rate"){
     openReviewTasks("周回顾 · 按期率", list.filter(function(t){ return !!t.dueDate; }),
       "分母为设置截止日期的完成项");
-    return;
-  }
-  if(kind === "members"){
-    openReviewTasks("周回顾 · 参与成员完成项", list,
-      "本周有完成记录的成员 " + ((d.members || []).filter(function(m){ return m.count > 0; }).length) + " 人");
     return;
   }
   openReviewTasks("周回顾 · 完成", list);
@@ -419,12 +405,12 @@ function renderReview(d){
 
   var s = d.stats;
   var overN = (d.counts && d.counts.over) || 0;
+  /* 个人回顾：所有卡片都只算我负责的工作项；「逾期」明细在「逾期与阻塞」，这里只报数不跳转 */
   var stats = [
     {k:"完成", v:s.done, u:"项", cls:"", drill:"done"},
     {k:"按期率", v:s.onTimeRate, u:"%", cls:(s.onTimeRate < 60 ? "warn" : "good"), drill:"rate", help:"review.onTime"},
     {k:"延期", v:s.late, u:"项", cls:(s.late > 0 ? "warn" : ""), drill:"late"},
-    {k:"参与成员", v:s.members, u:"人", cls:"", drill:"members"},
-    {k:"逾期", v:overN, u:"项", cls:(overN > 0 ? "bad" : ""), drill:"over"},
+    {k:"逾期", v:overN, u:"项", cls:(overN > 0 ? "bad" : "")},
     {k:"进行中", v:(d.progressTasks || []).length, u:"项", cls:"info", drill:"doing"}
   ];
   $("statGrid").innerHTML = stats.map(function(x){
@@ -439,22 +425,19 @@ function renderReview(d){
 
   renderReviewPivot(d);
 
-  /* N-5：工时区（全空间 / 我的） */
+  /* N-5：工时区；个人回顾只展示「我的」本周计时（累计工时在分析页） */
   if(reviewHoursEl){
     var w = d.workMinutes || {};
     var weekWord = d.weekOffset === 0 ? "本周" : (d.weekOffset === -1 ? "上周" : "该周期");
-    /* IA-7：只保留本周期两个口径；累计工时挪到分析页 */
-    var hcards = [
-      {k:weekWord + "·我的", v:fmtMinutesShort(w.mineWeek || 0), min:(w.mineWeek || 0), scope:"mine"},
-      {k:weekWord + (d.reqName ? "·项目" : "·全空间"), v:fmtMinutesShort(w.spaceWeek || 0), min:(w.spaceWeek || 0), scope:"space"}
-    ];
-    if($("reviewHoursScope")) $("reviewHoursScope").textContent = weekWord + " · " + (d.reqName ? ("项目「" + d.reqName + "」/ 我的") : "我的 / 全空间");
-    reviewHoursEl.innerHTML = hcards.map(function(x){
+    if($("reviewHoursScope")) $("reviewHoursScope").textContent = weekWord + " · 我的";
+    (function(){
+      var x = {k:weekWord + "·我的", v:fmtMinutesShort(w.mineWeek || 0), min:(w.mineWeek || 0), scope:"mine"};
       var inner = '<div class="k">' + x.k + '</div><div class="v">' + x.v + '</div>';
       /* 该周期没有计时时点开必然是空表，不做入口 */
-      if(!x.min) return '<div class="stat" title="' + weekWord + '暂无计时记录">' + inner + '</div>';
-      return '<button class="stat clickable" type="button" data-review-hours="' + x.scope + '" title="查看' + weekWord + '计时明细">' + inner + '</button>';
-    }).join("");
+      reviewHoursEl.innerHTML = !x.min
+        ? '<div class="stat" title="' + weekWord + '暂无计时记录">' + inner + '</div>'
+        : '<button class="stat clickable" type="button" data-review-hours="' + x.scope + '" title="查看' + weekWord + '计时明细">' + inner + '</button>';
+    })();
   }
   /* O-10：进度 100% 但未入已完成列的任务单独成组，不静默漏统计 */
   var pending = d.pendingDone || [];
@@ -474,16 +457,6 @@ function renderReview(d){
       }).join("");
     }
   }
-
-  var members = d.members || [];
-  $("peopleBox").innerHTML = members.length ? members.map(function(m){
-    var inner = avatarHTML(m.name) + '<span class="pn">' + esc(m.name) + '</span>' +
-      '<span class="pc">' + m.count + ' 项' + (m.minutes ? (' · ' + fmtMinutesShort(m.minutes)) : '') + '</span>';
-    /* 只有完成过工作项的成员才有明细可看；已离开成员只有工时，不做入口 */
-    return m.count > 0
-      ? '<button class="person clickable" type="button" data-review-member="' + esc(m.name) + '" title="查看该成员本周期完成的工作项">' + inner + '</button>'
-      : '<span class="person" title="该成员本周期没有完成记录，无明细可看">' + inner + '</span>';
-  }).join("") : '<span class="foot-note">该周期暂无成员完成记录</span>';
 
   var list = d.completed || [];
   $("doneList").innerHTML = list.length ? list.map(function(t){

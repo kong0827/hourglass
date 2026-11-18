@@ -831,6 +831,9 @@ public class BackupService {
                 }
             }
             t.setCompletedAt(parseDateTime(b.getCompletedAt()));
+            t.setCancelReason(Texts.trimToNull(b.getCancelReason()));
+            t.setCancelFrom(Texts.trimToNull(b.getCancelFrom()));
+            t.setCanceledAt(parseDateTime(b.getCanceledAt()));
             t.setTestOwnerUserId(Texts.trimToNull(b.getTestOwnerUserId()));
             t.setTestOwner(Texts.trimToNull(b.getTestOwner()));
             t.setTestRequestedAt(parseDateTime(b.getTestRequestedAt()));
@@ -1838,7 +1841,7 @@ public class BackupService {
         if ("review".equals(c)) {
             return Consts.COL_DOING;
         }
-        if (Consts.COL_DONE.equals(c) || colIds.contains(c)) {
+        if (Consts.COL_DONE.equals(c) || Consts.COL_CANCELED.equals(c) || colIds.contains(c)) {
             return c;
         }
         String byName = colNameToId.get(c);

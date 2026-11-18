@@ -461,7 +461,10 @@ function avatarHTML(name, cls){
   return '<span class="avatar avatar-c' + idx + (cls ? " " + cls : "") + '" aria-hidden="true">' +
     esc(initial(name)) + '</span>';
 }
+/* 终态「已取消」不落 board_column 配置表，但抽屉状态胶囊、卡片菜单与操作日志仍要显示它的名称与颜色 */
+var CANCELED_COL = { id:"canceled", name:"已取消", color:"#8a8f98", processingRule:"canceled", terminal:true };
 function colMeta(id){
+  if(id === "canceled") return CANCELED_COL;
   for(var i = 0; i < COLUMNS.length; i++) if(COLUMNS[i].id === id) return COLUMNS[i];
   return null;
 }

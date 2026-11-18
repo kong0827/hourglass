@@ -19,6 +19,7 @@ public final class TaskCalc {
         if (Consts.COL_DONE.equals(t.getBoardColumn())) {
             return 100;
         }
+        /* 已取消保留取消时的进度，不冒充 100%：终止不等于做完 */
         return t.getProgress() == null ? 0 : t.getProgress();
     }
 
@@ -32,10 +33,13 @@ public final class TaskCalc {
         return dueKind(boardColumn, null, dueDate, today);
     }
 
-    /** 带处理规则的到期判断：ended 列不计执行逾期 */
+    /** 带处理规则的到期判断：ended 列不计执行逾期，终态「已取消」一律不计 */
     public static String dueKind(String boardColumn, String processingRule, LocalDate dueDate, LocalDate today) {
         if (dueDate == null) {
             return "none";
+        }
+        if (Consts.COL_CANCELED.equals(boardColumn)) {
+            return "canceled";
         }
         if (Consts.COL_DONE.equals(boardColumn) || "ended".equals(processingRule)) {
             return Consts.COL_DONE.equals(boardColumn) ? "done" : "ended";
@@ -61,6 +65,10 @@ public final class TaskCalc {
     public static String statusBucket(String boardColumn, String processingRule) {
         if (Consts.COL_DONE.equals(boardColumn)) {
             return "done";
+        }
+        /* 终态单独成桶：调用方要么单独统计，要么跳过；不能折进 doing / backlog */
+        if (Consts.COL_CANCELED.equals(boardColumn)) {
+            return "canceled";
         }
         if (Consts.COL_BACKLOG.equals(boardColumn) || "waiting".equals(processingRule)) {
             return "backlog";

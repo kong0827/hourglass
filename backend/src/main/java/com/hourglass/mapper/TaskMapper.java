@@ -55,6 +55,21 @@ public interface TaskMapper {
     int countDoneSince(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
                        @Param("since") LocalDate since);
 
+    /* ---- 终态「已取消」：独立视图查询，不进看板开口列 ---- */
+
+    /** 已取消总数（受项目可见范围限制） */
+    int countCanceled(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
+
+    /** 已取消按原因计数（name=原因码，空串表示历史无原因数据） */
+    List<com.hourglass.dto.NameCountRow> countCanceledReasons(
+            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
+
+    /** 已取消明细：取消时间倒序；reason 非空时只取该原因 */
+    List<Task> selectCanceledPage(@Param("workspaceId") String workspaceId,
+                                  @Param("viewerId") String viewerId,
+                                  @Param("reason") String reason,
+                                  @Param("offset") int offset, @Param("limit") int limit);
+
     /* ---- 列状态工作页：列计数 / 明细 / 聚合（单次明细 ≤100） ---- */
 
     /** 工作页列计数：filtered=false 只算列范围，true 叠加筛选 */
@@ -387,21 +402,31 @@ public interface TaskMapper {
             @Param("q") com.hourglass.dto.TaskDrillQuery q,
             @Param("offset") int offset, @Param("limit") int limit);
 
+    /**
+     * 周回顾的负责人收敛参数：ownerUserId 非空时只看该用户负责的工作项；
+     * ownerName 是显示名，用于未回填 owner_user_id 的历史数据兜底。
+     */
     /** 最近一个完成日（周回顾 autoOffset 用；没有完成记录时为 null） */
     LocalDateTime selectLatestCompletedAt(@Param("workspaceId") String workspaceId,
                                       @Param("viewerId") String viewerId,
-                                      @Param("reqId") String reqId);
+                                      @Param("reqId") String reqId,
+                                      @Param("ownerUserId") String ownerUserId,
+                                      @Param("ownerName") String ownerName);
 
     /** 指定周内的已完成任务（按完成时间倒序）；reqId 非空时只看该项目 */
     List<Task> selectCompletedBetween(@Param("workspaceId") String workspaceId,
                                       @Param("viewerId") String viewerId,
                                       @Param("reqId") String reqId,
+                                      @Param("ownerUserId") String ownerUserId,
+                                      @Param("ownerName") String ownerName,
                                       @Param("from") LocalDate from, @Param("before") LocalDate before);
 
     /** 进度 100% 但不在已完成列的任务 */
     List<Task> selectPendingDone(@Param("workspaceId") String workspaceId,
                                  @Param("viewerId") String viewerId,
-                                 @Param("reqId") String reqId);
+                                 @Param("reqId") String reqId,
+                                 @Param("ownerUserId") String ownerUserId,
+                                 @Param("ownerName") String ownerName);
 
     /**
      * 周回顾「进行中」：非待处理 / 非已完成且进度 &lt; 100。
@@ -410,6 +435,8 @@ public interface TaskMapper {
     List<Task> selectProgressTasks(@Param("workspaceId") String workspaceId,
                                    @Param("viewerId") String viewerId,
                                    @Param("reqId") String reqId,
+                                   @Param("ownerUserId") String ownerUserId,
+                                   @Param("ownerName") String ownerName,
                                    @Param("from") LocalDate from, @Param("before") LocalDate before,
                                    @Param("history") boolean history);
 
@@ -417,6 +444,8 @@ public interface TaskMapper {
     com.hourglass.dto.ReviewCountRow countReviewStatus(@Param("workspaceId") String workspaceId,
                                                        @Param("viewerId") String viewerId,
                                                        @Param("reqId") String reqId,
+                                                       @Param("ownerUserId") String ownerUserId,
+                                                       @Param("ownerName") String ownerName,
                                                        @Param("today") LocalDate today);
 
     /** 未删除任务总数（估时统计的分母） */

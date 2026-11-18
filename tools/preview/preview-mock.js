@@ -187,6 +187,8 @@
     }
     var todayIso = shift(0);
     var items = tasks.filter(function (t) {
+      /* 终态「已取消」不进口径默认列表：与生产一致，只在已取消入口里看 */
+      if (t.boardColumn === "canceled") return false;
       if (kw && (t.title || "").indexOf(kw) === -1 && (t.description || "").indexOf(kw) === -1) return false;
       if (owners.length && owners.indexOf(t.owner) === -1) return false;
       if (pris.length && pris.indexOf(t.priority) === -1) return false;
@@ -207,6 +209,76 @@
       return true;
     });
     return { items: items, total: items.length };
+  }
+
+  /* 已取消分页：原因筛选、总数与计数随恢复 / 取消动作实时变化，保证预览里的 chip 真的会筛 */
+  function canceledRoute(u) {
+    var p = new URLSearchParams(u.split("?")[1] || "");
+    var reason = p.get("reason") || "";
+    var offset = Number(p.get("offset") || 0);
+    var limit = Number(p.get("limit") || 100);
+    var all = routes["/api/tasks/canceled"].items;
+    var counts = {};
+    all.forEach(function (t) { var k = t.cancelReason || ""; counts[k] = (counts[k] || 0) + 1; });
+    var matched = reason ? all.filter(function (t) { return (t.cancelReason || "") === reason; }) : all;
+    var page = matched.slice(offset, offset + limit);
+    return {
+      items: page,
+      total: all.length,
+      matched: matched.length,
+      hasMore: offset + page.length < matched.length,
+      reasons: Object.keys(counts).sort().map(function (k) { return { name: k, count: counts[k] }; })
+    };
+  }
+  function mockUncancel(taskId) {
+    var bucket = routes["/api/tasks/canceled"].items;
+    for (var i = 0; i < bucket.length; i++) {
+      if (bucket[i].id !== taskId) continue;
+      var t = bucket.splice(i, 1)[0];
+      var to = t.cancelFrom || "backlog";
+      /* 预览看板只有三列：取消前列不在其中时按待处理回填，保证回看板能看到 */
+      if (to !== "doing" && to !== "done") to = "backlog";
+      t.boardColumn = to;
+      t.cancelFrom = null;
+      t.cancelReason = null;
+      t.canceledAt = null;
+      (to === "doing" ? doing : (to === "done" ? done : backlog)).push(t);
+      var col = board.columns[to];
+      if (col) {
+        col.total = (col.total || 0) + 1;
+        col.matched = (col.matched || 0) + 1;
+        col.allTotal = (col.allTotal || 0) + 1;
+      }
+      tasks.push(t);
+      board.counts.canceled = bucket.length;
+      return { task: t, from: "canceled", to: to };
+    }
+    return {};
+  }
+  function mockCancel(taskId, body) {
+    var cols = [backlog, doing, done];
+    for (var c = 0; c < cols.length; c++) {
+      var arr = cols[c];
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i].id !== taskId) continue;
+        var t = arr.splice(i, 1)[0];
+        var from = t.boardColumn || "backlog";
+        t.cancelFrom = from;
+        t.cancelReason = (body && body.reason) || "not_do";
+        t.canceledAt = ts(0, 12, 0);
+        t.boardColumn = "canceled";
+        routes["/api/tasks/canceled"].items.unshift(t);
+        var data = board.columns[from] || board.columns.backlog;
+        if (data) {
+          data.total = Math.max(0, (data.total || 0) - 1);
+          data.matched = Math.max(0, (data.matched || 0) - 1);
+          data.allTotal = Math.max(0, (data.allTotal || 0) - 1);
+        }
+        board.counts.canceled = routes["/api/tasks/canceled"].items.length;
+        return { task: t, from: from, to: "canceled" };
+      }
+    }
+    return {};
   }
 
   /* ---------------- 分支（空间级分支池） ---------------- */
@@ -252,7 +324,7 @@
       { id: "doing", name: "进行中", color: "#5b83ad", done: false },
       { id: "done", name: "已完成", color: "#5f7a4a", done: true }
     ],
-    counts: { over: 3, today: 1, soon: 4 },
+    counts: { over: 3, today: 1, soon: 4, canceled: 2 },
     meta: {
       owners: [{ name: "我", count: 12 }, { name: "陈工", count: 1 }],
       testOwners: [{ name: "李雷", count: 1 }],
@@ -274,7 +346,8 @@
     reqDist: [{ id: "R1", name: "流程引擎", status: "active", progressPct: 62, taskCount: 4, doneCount: 2 }],
     pendingDone: [],
     counts: { over: 3, today: 1, soon: 4 },
-    workMinutes: { space: 2410, mine: 1255, spaceWeek: 705 },
+    /* 个人口径只回传「我的」工时；space / spaceWeek 不再在页面展示 */
+    workMinutes: { mine: 1255, mineWeek: 705 },
     openP0: 10, doing: 2, backlog: 8
   };
 
@@ -446,6 +519,17 @@
     "/api/phase/stats": { firstReleasedAt: null, mvp: {}, post: {} },
     "/api/board": board,
     "/api/tasks/list": { items: tasks, total: tasks.length },
+    /* 终态「已取消」：不占看板列，只在工具条入口进去看归档与恢复 */
+    "/api/tasks/canceled": {
+      items: [
+        T({ id: "C1", title: "旧版导出脚本下线", owner: "我", reqId: "R1", reqName: "流程引擎",
+            boardColumn: "canceled", cancelReason: "deferred", cancelFrom: "doing", canceledAt: ts(-1, 15, 20) }),
+        T({ id: "C2", title: "通知模板迁移（并入新模板）", owner: "陈工", reqId: "R1", reqName: "流程引擎",
+            boardColumn: "canceled", cancelReason: "dup", cancelFrom: "backlog", canceledAt: ts(-4, 11, 5) })
+      ],
+      total: 2, matched: 2, hasMore: false,
+      reasons: [{ name: "dup", count: 1 }, { name: "deferred", count: 1 }]
+    },
     /* 生产接口分页返回 {items,total,hasMore}，前端统一走 getAllPages */
     "/api/reqs": {
       items: [
@@ -656,6 +740,12 @@
 
   function pick(clean) {
     if (Object.prototype.hasOwnProperty.call(routes, clean)) return routes[clean];
+    /* 单条工作项：已取消列表的行不在看板缓存里，打开详情要靠这条按 id 回查 */
+    var taskM = clean.match(/^\/api\/task\/([A-Za-z0-9_-]+)$/);
+    if (taskM) {
+      var all = tasks.concat((routes["/api/tasks/canceled"] || {}).items || []);
+      for (var ti = 0; ti < all.length; ti++) if (all[ti].id === taskM[1]) return all[ti];
+    }
     /* AI 的三次交互都是 POST，且路径带需求 id —— 用正则匹配 */
     if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/split$/.test(clean)) {
       return {
@@ -1045,6 +1135,12 @@
     } else if (clean === "/api/tasks/list") {
       /* 列表/甘特/未排期共用：按查询参数筛选，并保持 {items,total} 结构 */
       data = mockTaskList(u);
+    } else if (clean === "/api/tasks/canceled") {
+      data = canceledRoute(u);
+    } else if (method === "POST" && /^\/api\/tasks\/[A-Za-z0-9_-]+\/cancel$/.test(clean)) {
+      data = mockCancel(clean.split("/")[3], reqBody);
+    } else if (method === "POST" && /^\/api\/tasks\/[A-Za-z0-9_-]+\/uncancel$/.test(clean)) {
+      data = mockUncancel(clean.split("/")[3]);
     } else if (/^\/api\/tasks\/[A-Za-z0-9_-]+\/watch$/.test(clean)) {
       /* 本人的关注开关：GET 读状态，POST/DELETE 切关注态 */
       data = mockTaskWatch(clean.split("/")[3], method);

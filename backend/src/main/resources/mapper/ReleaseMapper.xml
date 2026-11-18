@@ -42,6 +42,7 @@
     INNER JOIN project_version pv ON pv.workspace_id = vt.workspace_id AND pv.id = vt.version_id
     WHERE vt.workspace_id = #{workspaceId} AND vt.version_id = #{versionId}
       AND t.req_id = pv.req_id AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     ORDER BY t.id FOR UPDATE
   </select>
   <!-- 发布检查只读版本范围：不加锁，避免检查请求占住发布事务 -->
@@ -52,6 +53,7 @@
     INNER JOIN project_version pv ON pv.workspace_id = vt.workspace_id AND pv.id = vt.version_id
     WHERE vt.workspace_id = #{workspaceId} AND vt.version_id = #{versionId}
       AND t.req_id = pv.req_id AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     ORDER BY t.id
   </select>
   <select id="selectDemandIdsByVersion" resultType="string">
@@ -68,6 +70,7 @@
     WHERE vt.workspace_id = #{workspaceId} AND vt.version_id IN
     <foreach collection="versionIds" item="versionId" open="(" separator="," close=")">#{versionId}</foreach>
       AND t.req_id = pv.req_id AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     ORDER BY t.id
   </select>
   <select id="selectPlanVersions" resultType="com.hourglass.dto.PlanVersionRow">

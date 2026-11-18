@@ -60,6 +60,8 @@ public class BoardResponse {
         private int over;
         private int today;
         private int soon;
+        /** 终态「已取消」条数：看板工具条的入口计数，不计逾期 */
+        private int canceled;
     }
 
     @Data

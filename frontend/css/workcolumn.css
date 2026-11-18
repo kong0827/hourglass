@@ -364,3 +364,16 @@
   .wc-dim-opt{height:40px;}
   .wc-dim-list{max-height:48vh;}
 }
+
+/* ---------- 已取消：工作项终态归档（#/canceled?reason=） ---------- */
+#view-canceled{padding:0;overflow:auto;}
+.cn-body{width:100%;max-width:1600px;margin:0 auto;padding:14px var(--content-pad) 32px;}
+.cn-count{font-size:13px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.cn-filters{
+  display:flex;flex-wrap:wrap;gap:8px;padding:10px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+}
+.cn-list-wrap{margin-top:12px;}
+.cn-list-wrap .wc-list{margin-top:0;}
+.cn-more{display:flex;justify-content:center;margin-top:12px;}
+.cn-more .btn{min-width:160px;justify-content:center;}

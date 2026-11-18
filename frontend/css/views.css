@@ -13,6 +13,10 @@
 .board-toolbar-field{display:inline-flex;align-items:center;gap:6px;}
 .board-toolbar-field .mini-select{height:28px;font-size:12px;}
 .board-toolbar-hint{margin-left:2px;}
+/* 右侧一组：已取消入口 + 口径「!」，与左侧分组控件分开 */
+.board-toolbar-end{margin-left:auto;display:inline-flex;align-items:center;gap:8px;}
+.board-toolbar-end .btn.sm{height:28px;padding:0 10px;font-size:12px;}
+.board-toolbar-end .btn.sm .n{color:var(--text-3);font-variant-numeric:tabular-nums;}
 #view-board .board{flex:1 1 auto;min-height:0;height:auto;}
 .board-group-head{
   position:sticky;top:0;z-index:2;flex:0 0 auto;
@@ -4490,6 +4494,8 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .tc-lh-tools .mini-select{height:28px;}
 .tc-bulk-all{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-2);white-space:nowrap;}
 .tc-bulk-count{font-size:12px;font-variant-numeric:tabular-nums;color:var(--text-3);white-space:nowrap;}
+/* 概览只读：可编辑数在跨项目口径下没有意义，改成一句状态而不是数字 */
+.tc-bulk-ro{font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.02em;}
 .tc-bulk-hint{flex:0 1 auto;min-width:0;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--text-3);}
 .tc-selall{height:26px;font-size:11.5px;}
 .tc-sortdir{width:30px;padding:0;justify-content:center;font-size:13px;font-weight:700;}
@@ -4513,6 +4519,57 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .tc-group-rows{display:flex;flex-direction:column;gap:6px;}
 .tc-group-empty{margin:0;padding:10px 12px;border:1px dashed var(--border);border-radius:var(--r-md);color:var(--text-3);font-size:12px;}
 .tc-group .tc-load-more{margin-top:0;}
+/* 段头吸顶：长列表滚过项目边界后仍能看清当前是哪个项目；上沿多铺 6px 盖住列表间隙 */
+.tc-group-head{
+  position:sticky;top:0;z-index:5;flex-wrap:wrap;row-gap:4px;
+  background:var(--bg);box-shadow:0 -6px 0 var(--bg);
+}
+/* 段头里的分组快捷 chip：点一下就地收窄到该分组，计数不做相加 */
+.tc-gchips{display:inline-flex;align-items:center;gap:4px;flex:0 1 auto;min-width:0;flex-wrap:wrap;row-gap:4px;}
+.tc-gchips-label{flex:0 0 auto;font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--text-3);}
+.tc-gchip{
+  display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;max-width:150px;
+  border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);
+  font:inherit;font-size:11px;line-height:1;color:var(--text-2);cursor:pointer;white-space:nowrap;
+}
+.tc-gchip:hover{border-color:var(--border-strong);color:var(--text);}
+.tc-gchip:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.tc-gchip b{margin-left:1px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.tc-gchip.on{border-color:var(--primary);background:var(--primary-soft);color:var(--primary-fg);}
+.tc-gchip.on b{color:var(--primary-fg);}
+.tc-gchip.more{cursor:default;border-style:dashed;color:var(--text-3);}
+.tc-group-enter{
+  flex:0 0 auto;height:22px;padding:0 8px;font-size:11px;
+  border-color:var(--primary-border);color:var(--primary-fg);
+}
+.tc-group-enter:hover{border-color:var(--primary);background:var(--primary-soft);color:var(--primary-fg);}
+/* 全部项目概览：行首项目 pill。编号只在项目内唯一，不标项目会认错用例。
+   定宽是为了让同一列表里的 TC 编号左沿对齐，不随项目名长短抖动 */
+.tc-proj-pill{
+  flex:0 0 76px;width:76px;margin-top:1px;padding:0 6px;line-height:20px;
+  border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface-sunken);
+  font-size:10.5px;color:var(--text-3);text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* 全部项目收窄后的范围条：只交代「现在看的是哪块」与退出方式 */
+.tc-scope{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:6px;min-height:36px;
+  margin:0 0 8px;padding:4px 10px;
+  border:1px solid var(--primary-border);border-radius:var(--r-md);background:var(--primary-soft);
+}
+.tc-scope-label{flex:0 0 auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;color:var(--primary-fg);}
+.tc-scope-chip{
+  display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;max-width:260px;
+  border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);
+  font:inherit;font-size:12px;color:var(--text-2);cursor:pointer;white-space:nowrap;
+}
+.tc-scope-chip b{font-weight:650;color:var(--text);overflow:hidden;text-overflow:ellipsis;}
+.tc-scope-chip:hover{border-color:var(--primary);}
+.tc-scope-chip:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.tc-scope-x{flex:0 0 auto;font-size:13px;line-height:1;color:var(--text-3);}
+.tc-scope-chip:hover .tc-scope-x{color:var(--primary-fg);}
+.tc-scope-reset,.tc-scope-enter{height:26px;font-size:11.5px;}
+.tc-scope-enter{color:var(--primary-fg);}
 /* 覆盖矩阵：需求 × 用例 × 缺陷 */
 .view.cov-mode #tcFilterBar .tc-search,
 .view.cov-mode #tcPri,
@@ -5021,6 +5078,19 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
   color:var(--primary-fg);font-size:10px;font-weight:600;line-height:1;white-space:nowrap;
 }
 .tc-vis-tag.personal{border-color:var(--border);background:var(--surface-sunken);color:var(--text-3);}
+
+/* 全部项目的两级树：项目行 + 其下分组；只读导航，进入项目才能写入 */
+.tc-all-hint{margin:0 2px 6px;font-size:11px;line-height:1.55;color:var(--text-3);}
+.tc-all-proj{margin:0 0 1px;}
+.tc-all-proj + .tc-all-proj{margin-top:1px;}
+.tc-all-proj-ico{flex:0 0 auto;display:inline-flex;color:var(--text-3);}
+.tc-all-proj > .tc-dir-node .tc-dir-name{font-weight:600;color:var(--text-2);}
+.tc-all-proj > .tc-dir-node.on .tc-dir-name{color:var(--primary-fg);}
+.tc-all-proj .tc-set-list{gap:1px;}
+.tc-all-loading,.tc-all-error{margin:1px 0 5px 22px;font-size:11.5px;}
+.tc-all-error{color:var(--danger-fg);}
+.tc-all-error .btn{height:22px;font-size:11px;padding:0 6px;}
+.tc-all-enter{width:100%;justify-content:center;margin:0 0 6px;}
 
 /* ---------------- 分组段：段头计数 + 结果分布 + 段内翻页 ---------------- */
 .tc-seg{display:flex;flex-direction:column;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;}

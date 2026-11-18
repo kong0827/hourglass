@@ -143,7 +143,7 @@ public class TaskCommandService {
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
-        applyRequest(userId, workspaceId, t, req, null, null);
+        applyRequest(userId, workspaceId, t, req, null, null, null);
         applyTestOwner(workspaceId, t, req, null);
         assertDemandProjectUnchanged(workspaceId, t.getDemandId(), demandProject);
         validateNewDemandLink(workspaceId, null, t);
@@ -233,7 +233,13 @@ public class TaskCommandService {
         t.setTestOwnerUserId(old.getTestOwnerUserId());
         t.setTestOwner(old.getTestOwner());
         t.setTestRequestedAt(old.getTestRequestedAt());
-        applyRequest(userId, workspaceId, t, req, old.getOwnerUserId(), old.getDemandId());
+        /* 已取消的工作项仍可编辑标题 / 负责人等字段：客户端没传列时保持在终态，
+           否则会回落待处理、把一张取消卡悄悄复活 */
+        if (Consts.COL_CANCELED.equals(old.getBoardColumn()) && req.getBoardColumn() == null) {
+            req.setBoardColumn(Consts.COL_CANCELED);
+        }
+        applyRequest(userId, workspaceId, t, req, old.getOwnerUserId(), old.getDemandId(),
+                old.getBoardColumn());
         applyTestOwner(workspaceId, t, req, old);
         projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
         /* 旧客户端 / 快捷编辑没传里程碑时保留原值，避免被默认值清掉 */
@@ -418,7 +424,7 @@ public class TaskCommandService {
     }
 
     private void applyRequest(String userId, String workspaceId, Task t, TaskSaveRequest req,
-                              String oldOwnerUserId, String oldDemandId) {
+                              String oldOwnerUserId, String oldDemandId, String oldColumn) {
         String oldProjectId = t.getReqId();
         t.setTitle(req.getTitle().trim());
         t.setDescription(HtmlSanitizer.taskDescription(Texts.trimToNull(req.getDescription())));
@@ -445,7 +451,13 @@ public class TaskCommandService {
         }
         t.setOwner(owner == null || owner.isEmpty() ? defaultOwner(userId) : Texts.cut(owner, 32));
         t.setBoardColumn(req.getBoardColumn() == null ? Consts.COL_BACKLOG : req.getBoardColumn());
-        support.validateColumn(workspaceId, t.getBoardColumn());
+        /* 终态「已取消」不能由表单写入：唯一合法情形是原列也是 canceled（编辑已取消卡的字段），
+           其余一律拒绝，避免绕过取消动作直接造出没有原因 / 说明的终态 */
+        boolean keepCanceled = Consts.COL_CANCELED.equals(t.getBoardColumn())
+                && Consts.COL_CANCELED.equals(oldColumn);
+        if (!keepCanceled) {
+            support.validateColumn(workspaceId, t.getBoardColumn());
+        }
         /* 开始日期：日历按 [startDate, dueDate] 区间逐日展示；为空则只在截止日出现 */
         if (req.getStartDate() != null && req.getDueDate() != null
                 && req.getStartDate().isAfter(req.getDueDate())) {

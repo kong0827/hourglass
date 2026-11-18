@@ -65,28 +65,39 @@ public class ReviewService {
 
     /** 兼容旧调用（不带用户时工作区工时的"我的"部分按 0 计） */
     public ReviewResponse review(String workspaceId, Integer weekOffset) {
-        return review(workspaceId, null, null, weekOffset);
+        return review(workspaceId, null, null, weekOffset, false);
     }
 
     public ReviewResponse review(String workspaceId, String userId, Integer weekOffset) {
-        return review(workspaceId, userId, null, weekOffset);
+        return review(workspaceId, userId, null, weekOffset, false);
+    }
+
+    /** 空间口径（团队周回顾）：完成、进行中与工时覆盖整个空间 */
+    public ReviewResponse review(String workspaceId, String userId, String reqId, Integer weekOffset) {
+        return review(workspaceId, userId, reqId, weekOffset, false);
     }
 
     /**
      * 周回顾。reqId 非空时只看该项目（项目维度回顾），否则看整个空间。
+     * mine=true 时只算当前用户负责的工作项（页面「我的 → 周回顾」的个人口径）。
      * 项目不在当前用户可见范围内时按"不存在"处理。
      */
-    public ReviewResponse review(String workspaceId, String userId, String reqId, Integer weekOffset) {
+    public ReviewResponse review(String workspaceId, String userId, String reqId, Integer weekOffset, boolean mine) {
         String scopeReq = normalizeReqId(reqId);
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         List<ReqProgress> reqs = requirementService.list(workspaceId, userId);
         ReqProgress scopedReq = scopedRequirement(reqs, scopeReq);
+        /* 负责人收敛：账号ID为权威，显示名只兜底未回填账号的历史数据 */
+        boolean personal = mine && userId != null;
+        String ownerUserId = personal ? userId : null;
+        String ownerName = personal ? myDisplayName(workspaceId, userId) : null;
+        String meName = personal ? (ownerName == null ? "我" : ownerName) : null;
 
         LocalDate today = LocalDate.now();
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
 
         /* 只允许回看过去 52 周：正向偏移会翻到未来（永远是空周），无上限还会让 LocalDate 溢出 */
-        int offset = weekOffset == null ? autoOffset(workspaceId, viewerId, scopeReq, monday)
+        int offset = weekOffset == null ? autoOffset(workspaceId, viewerId, scopeReq, monday, ownerUserId, ownerName)
                 : Math.max(-52, Math.min(0, weekOffset));
         LocalDate start = monday.plusWeeks(offset);
         LocalDate end = start.plusDays(6);
@@ -101,7 +112,8 @@ public class ReviewService {
         resp.setReqName(scopedReq == null ? null : scopedReq.getName());
 
         /* 本周完成：一次查询取回列表，统计量由这份小结果集在内存里汇总 */
-        List<Task> completed = taskMapper.selectCompletedBetween(workspaceId, viewerId, scopeReq, start, before);
+        List<Task> completed = taskMapper.selectCompletedBetween(workspaceId, viewerId, scopeReq,
+                ownerUserId, ownerName, start, before);
         publications.enrichTasks(workspaceId, completed);
         resp.setCompleted(completed);
 
@@ -125,7 +137,7 @@ public class ReviewService {
         // 口径：按期率分母=设置有截止日期的完成项；无截止日期的完成项不计入延期
         stats.setLate(withDue - onTime);
         stats.setOnTimeRate(withDue == 0 ? 0 : (int) Math.round(onTime * 100.0 / withDue));
-        stats.setMembers(memberCount.size());
+        stats.setMembers(personal ? 1 : memberCount.size());
         resp.setStats(stats);
 
         /* N-5：成员贡献以空间成员全集为准，工时只取本周期。
@@ -150,38 +162,48 @@ public class ReviewService {
                 nonMemberMinutes += mm;
             }
         }
-        Map<String, Integer> nameMinutes = new HashMap<String, Integer>();
-        for (WorkspaceMember m : members) {
-            Integer mm = weekUserMinutes.get(m.getUserId());
-            if (mm != null) {
-                String name = memberDisplayName(m);
-                Integer old = nameMinutes.get(name);
-                nameMinutes.put(name, (old == null ? 0 : old) + mm);
-            }
-        }
-        Map<String, Integer> doneLeft = new LinkedHashMap<String, Integer>(memberCount);
-        Set<String> seenNames = new HashSet<String>();
         List<ReviewResponse.MemberStat> memberStats = new ArrayList<ReviewResponse.MemberStat>();
-        for (WorkspaceMember m : members) {
-            String name = memberDisplayName(m);
-            if (!seenNames.add(name)) {
-                continue; // 同名成员合并成一行，避免出现两条一样的名字
+        if (personal) {
+            /* 个人口径只返回我自己一行：页面不展示他人，AI 周报也不会把团队数据带出去 */
+            ReviewResponse.MemberStat me = new ReviewResponse.MemberStat();
+            me.setName(meName);
+            me.setCount(done);
+            Integer myMinutes = weekUserMinutes.get(userId);
+            me.setMinutes(myMinutes == null ? 0 : myMinutes);
+            memberStats.add(me);
+        } else {
+            Map<String, Integer> nameMinutes = new HashMap<String, Integer>();
+            for (WorkspaceMember m : members) {
+                Integer mm = weekUserMinutes.get(m.getUserId());
+                if (mm != null) {
+                    String name = memberDisplayName(m);
+                    Integer old = nameMinutes.get(name);
+                    nameMinutes.put(name, (old == null ? 0 : old) + mm);
+                }
             }
-            ReviewResponse.MemberStat ms = new ReviewResponse.MemberStat();
-            ms.setName(name);
-            Integer c = doneLeft.remove(name);
-            ms.setCount(c == null ? 0 : c);
-            Integer mm = nameMinutes.get(name);
-            ms.setMinutes(mm == null ? 0 : mm);
-            memberStats.add(ms);
-        }
-        /* 负责人只存了文本（历史值 / 非成员）的任务：保留完成数，工时归不到账号 */
-        for (Map.Entry<String, Integer> e : doneLeft.entrySet()) {
-            ReviewResponse.MemberStat ms = new ReviewResponse.MemberStat();
-            ms.setName(e.getKey());
-            ms.setCount(e.getValue());
-            ms.setMinutes(0);
-            memberStats.add(ms);
+            Map<String, Integer> doneLeft = new LinkedHashMap<String, Integer>(memberCount);
+            Set<String> seenNames = new HashSet<String>();
+            for (WorkspaceMember m : members) {
+                String name = memberDisplayName(m);
+                if (!seenNames.add(name)) {
+                    continue; // 同名成员合并成一行，避免出现两条一样的名字
+                }
+                ReviewResponse.MemberStat ms = new ReviewResponse.MemberStat();
+                ms.setName(name);
+                Integer c = doneLeft.remove(name);
+                ms.setCount(c == null ? 0 : c);
+                Integer mm = nameMinutes.get(name);
+                ms.setMinutes(mm == null ? 0 : mm);
+                memberStats.add(ms);
+            }
+            /* 负责人只存了文本（历史值 / 非成员）的任务：保留完成数，工时归不到账号 */
+            for (Map.Entry<String, Integer> e : doneLeft.entrySet()) {
+                ReviewResponse.MemberStat ms = new ReviewResponse.MemberStat();
+                ms.setName(e.getKey());
+                ms.setCount(e.getValue());
+                ms.setMinutes(0);
+                memberStats.add(ms);
+            }
         }
         resp.setMembers(memberStats);
 
@@ -190,8 +212,11 @@ public class ReviewService {
                 start.atStartOfDay(), before.atStartOfDay(), viewerId, scopeReq);
         ReviewResponse.WorkMinutes wm = new ReviewResponse.WorkMinutes();
         if (work != null) {
-            wm.setSpace(work.getTotalAll());
-            wm.setSpaceWeek(work.getWeekAll());
+            /* 个人口径不回传空间总额，避免个人页面带着团队数据 */
+            if (!personal) {
+                wm.setSpace(work.getTotalAll());
+                wm.setSpaceWeek(work.getWeekAll());
+            }
             wm.setMine(work.getTotalMine());
             wm.setMineWeek(work.getWeekMine());
         }
@@ -199,7 +224,7 @@ public class ReviewService {
 
         /* 成员退出空间（或被删号）后，其工时仍留在空间总额里：本周期内无法归到在册成员的
            部分单独成行，让"成员贡献合计"与"本周全空间"能对上。 */
-        if (nonMemberMinutes > 0) {
+        if (!personal && nonMemberMinutes > 0) {
             ReviewResponse.MemberStat ms = new ReviewResponse.MemberStat();
             ms.setName("已离开成员 / 未在册");
             ms.setCount(0);
@@ -208,17 +233,19 @@ public class ReviewService {
         }
 
         /* O-10：进度 100% 但未入已完成列 → 单独成组，不静默漏统计 */
-        List<Task> pendingDone = taskMapper.selectPendingDone(workspaceId, viewerId, scopeReq);
+        List<Task> pendingDone = taskMapper.selectPendingDone(workspaceId, viewerId, scopeReq,
+                ownerUserId, ownerName);
         publications.enrichTasks(workspaceId, pendingDone);
         resp.setPendingDone(pendingDone);
 
         /* 「进行中」= 已经开工、还没做完的任务 —— 按所在列判断（非「已完成」、非「待处理」）。
            历史周期由 SQL 收敛到「该周期内有日志活动」且「周期结束时已存在」。 */
-        List<Task> progressTasks = taskMapper.selectProgressTasks(workspaceId, viewerId, scopeReq, start, before, offset < 0);
+        List<Task> progressTasks = taskMapper.selectProgressTasks(workspaceId, viewerId, scopeReq,
+                ownerUserId, ownerName, start, before, offset < 0);
         publications.enrichTasks(workspaceId, progressTasks);
         resp.setProgressTasks(progressTasks);
 
-        /* 项目维度回顾只展示当前项目；全空间回顾展示全部可见项目 */
+        /* 项目维度回顾只展示当前项目；个人回顾只展示本周有我做的工作的项目；空间回顾展示全部可见项目 */
         if (scopedReq != null) {
             List<ReqProgress> only = new ArrayList<ReqProgress>();
             only.add(scopedReq);
@@ -230,12 +257,37 @@ public class ReviewService {
                     memberStats.remove(i);
                 }
             }
+        } else if (personal) {
+            Set<String> touchedReqIds = new HashSet<String>();
+            for (Task t : completed) {
+                if (t.getReqId() != null) {
+                    touchedReqIds.add(t.getReqId());
+                }
+            }
+            for (Task t : pendingDone) {
+                if (t.getReqId() != null) {
+                    touchedReqIds.add(t.getReqId());
+                }
+            }
+            for (Task t : progressTasks) {
+                if (t.getReqId() != null) {
+                    touchedReqIds.add(t.getReqId());
+                }
+            }
+            List<ReqProgress> mineReqs = new ArrayList<ReqProgress>();
+            for (ReqProgress r : reqs) {
+                if (touchedReqIds.contains(r.getId())) {
+                    mineReqs.add(r);
+                }
+            }
+            resp.setReqDist(mineReqs);
         } else {
             resp.setReqDist(reqs);
         }
 
         /* 未完成任务的计数与到期分布：一次条件 SUM，替代对全部任务的三次遍历 */
-        ReviewCountRow rc = taskMapper.countReviewStatus(workspaceId, viewerId, scopeReq, today);
+        ReviewCountRow rc = taskMapper.countReviewStatus(workspaceId, viewerId, scopeReq,
+                ownerUserId, ownerName, today);
         BoardResponse.Counts counts = new BoardResponse.Counts();
         if (rc != null) {
             counts.setOver(rc.getOver());
@@ -267,8 +319,10 @@ public class ReviewService {
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         LocalDate today = LocalDate.now();
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
-        /* 未指定周时与 /api/review 取同一个默认周，避免两个接口对不上 */
-        int off = weekOffset == null ? autoOffset(workspaceId, viewerId, scopeReq, monday)
+        String ownerUserId = mine ? userId : null;
+        String ownerName = mine ? myDisplayName(workspaceId, userId) : null;
+        /* 未指定周时与 /api/review 取同一个默认周，避免两个接口对不上（个人口径按我的完成记录定位） */
+        int off = weekOffset == null ? autoOffset(workspaceId, viewerId, scopeReq, monday, ownerUserId, ownerName)
                 : Math.max(-52, Math.min(0, weekOffset));
         LocalDate start = monday.plusWeeks(off);
         LocalDate before = start.plusDays(7);
@@ -308,15 +362,29 @@ public class ReviewService {
         throw AppException.notFound("项目不存在或你没有访问权限：" + scopeReq);
     }
 
-    /** 未指定周时：从本周往前找最近一个有完成记录的周，都没有则返回上周 */
-    private int autoOffset(String workspaceId, String viewerId, String reqId, LocalDate monday) {
-        java.time.LocalDateTime latest = taskMapper.selectLatestCompletedAt(workspaceId, viewerId, reqId);
+    /**
+     * 未指定周时：从本周往前找最近一个有完成记录的周，都没有则返回上周。
+     * ownerUserId 非空时按该用户的完成记录定位（个人回顾不能因为同事完成过就停在本周）。
+     */
+    private int autoOffset(String workspaceId, String viewerId, String reqId, LocalDate monday,
+                           String ownerUserId, String ownerName) {
+        java.time.LocalDateTime latest = taskMapper.selectLatestCompletedAt(workspaceId, viewerId, reqId,
+                ownerUserId, ownerName);
         if (latest == null) {
             return -1;
         }
         LocalDate weekStart = latest.toLocalDate().minusDays(latest.getDayOfWeek().getValue() - 1);
         int offset = (int) ChronoUnit.WEEKS.between(monday, weekStart);
         return Math.max(-12, Math.min(0, offset));
+    }
+
+    /** 当前用户在空间里的显示名（历史任务 owner_user_id 为空时用它兜底）；不在册返回 null */
+    private String myDisplayName(String workspaceId, String userId) {
+        if (userId == null) {
+            return null;
+        }
+        WorkspaceMember me = memberMapper.selectMember(workspaceId, userId);
+        return me == null ? null : memberDisplayName(me);
     }
 
     private static String normalizeReqId(String reqId) {

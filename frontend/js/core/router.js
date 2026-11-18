@@ -51,6 +51,7 @@ var VIEWS = {
   mine:     { title:"我的工作", sub:"跨空间汇总「分派给我」的待办（按账号归属）", enter:enterMineView },
   board:    { title:"工作项", sub:"看板视图：按列流转；同组可切到列表、层级、影响链、日历与甘特", enter:null },
   workcolumn: { title:"工作项", sub:"列状态工作页：当前列的时间窗、聚合指标与分页明细", enter:lazyEnter("workcolumn", "enterWorkColumn") },
+  canceled: { title:"工作项", sub:"已取消：终态工作项按原因归档，可逐条恢复到取消前所在列", enter:lazyEnter("canceled", "enterCanceledView") },
   list:     { title:"工作项", sub:"列表视图：沿用当前筛选，点击行打开详情抽屉", enter:enterListView },
   tree:     { title:"工作项", sub:"层级视图：按项目/计划版本/分类缩进分组，父级进度自动聚合", enter:lazyEnter("tree", "enterTreeView") },
   chain:    { title:"工作项", sub:"依赖影响链：选定中心工作项，沿前置/后继依赖看「动它牵动谁、它被谁卡住」", enter:lazyEnter("chain", "enterChainView") },
@@ -66,7 +67,7 @@ var VIEWS = {
   dochistory: { title:"文档历史", sub:"单文档的历史快照：左侧版本，右侧阅读与逐行对比；版本在 URL 里", enter:enterDocHistoryLazy },
   testcases: { title:"测试", sub:"一条质量链路：用例 → 缺陷 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:lazyEnter("branches", "enterBranchesView") },
-  review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
+  review:   { title:"周回顾", sub:"我的每周回顾：完成、进行中、工时与逾期，只统计我负责的工作项", enter:lazyEnter("review", "enterReviewView") },
   analysis: { title:"报表", sub:"团队节奏与质量体检：趋势、完成记录、流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
   portfolio: { title:"项目", sub:"一屏看全部项目：健康度、逾期与本周投入；点项目名进入驾驶舱", enter:lazyEnter("portfolio", "enterPortfolioView") },
   project: { title:"项目驾驶舱", sub:"单项目首页：进度、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
@@ -82,7 +83,7 @@ var VIEWS = {
 var NAV_OF = {
   mine:"mine", review:"review",
   demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", version:"phase", release:"phase", delivery:"phase",
-  board:"workitems", list:"workitems", tree:"workitems", chain:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems",
+  board:"workitems", list:"workitems", tree:"workitems", chain:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems", canceled:"workitems",
   requirements:"requirements", dochistory:"requirements", testcases:"testcases", branches:"branches",
   analysis:"insight", report:"insight", investment:"insight",
   workload:"workload", risks:"risks"
@@ -124,7 +125,7 @@ var SUBNAV = {
   ]
 };
 /* 详情页归属的父级子导航项：驾驶舱从项目列表进入，用父项标出所在分区 */
-var SUBNAV_PARENT = { project:"projects", workcolumn:"board" };
+var SUBNAV_PARENT = { project:"projects", workcolumn:"board", canceled:"board" };
 /* 移动端「更多视图」的分组顺序，与侧栏保持一致 */
 var NAV_GROUPS = [
   { title:"我的", items:[["review","周回顾"]] },
@@ -135,7 +136,7 @@ var NAV_GROUPS = [
 ];
 var TAB_OF = {
   mine: "mine", review: "mine",
-  board: "board", list: "board", calendar: "board", gantt: "board", branches: "board", workcolumn: "board",
+  board: "board", list: "board", calendar: "board", gantt: "board", branches: "board", workcolumn: "board", canceled: "board",
   projects: "projects", requirements: "projects", dochistory: "projects", demands: "projects", testcases: "projects",
   portfolio: "projects", project: "projects", phase: "projects", version: "projects", delivery: "projects",
   messages: "messages",
@@ -312,7 +313,7 @@ function syncViewHash(name){
   var h = "#/" + name;
   if(window.location.hash === h) return;
   /* 分支、工作项列、需求主状态工作页、版本详情与文档深链：保留查询参数，避免 showView 抹掉下钻位置 */
-  if((name === "branches" || name === "workcolumn" || name === "demands" || name === "version" || name === "release" || name === "requirements" || name === "dochistory" || name === "workload")
+  if((name === "branches" || name === "workcolumn" || name === "canceled" || name === "demands" || name === "version" || name === "release" || name === "requirements" || name === "dochistory" || name === "workload")
       && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }
@@ -342,6 +343,10 @@ window.addEventListener("popstate", function(){
     /* 同一视图内只改了 ?col=&range=：把 hash 变化交给工作页自己处理 */
     var wcMod = viewModule("workcolumn");
     if(wcMod && wcMod.refreshFromHash) wcMod.refreshFromHash();
+  }else if(n === "canceled"){
+    /* 已取消页只按 ?reason= 切原因：交给页面自己重取，不整页重进 */
+    var cnMod = viewModule("canceled");
+    if(cnMod && cnMod.refreshFromHash) cnMod.refreshFromHash();
   }else if(n === "version"){
     /* 同一版本内换页签 / 改筛选，或后退到另一个版本：都交给详情页对齐 */
     var vdMod = viewModule("version");

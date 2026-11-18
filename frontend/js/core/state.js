@@ -113,6 +113,8 @@ function progressOf(t){
 function colRuleOf(id, task){
   if(task && task.processingRule && (!task.boardColumn || !id || task.boardColumn === id)) return task.processingRule;
   if(!id) return "normal";
+  /* 终态「已取消」不落列配置：固定为 canceled，计时与逾期都按不生效处理 */
+  if(id === "canceled") return "canceled";
   for(var i = 0; i < COLUMNS.length; i++){
     var c = COLUMNS[i];
     if(c.id === id && c.processingRule) return c.processingRule;
@@ -138,13 +140,15 @@ function timerAllowed(t){
   /* 阻塞任务停表不换列 */
   if(t.blocked) return false;
   var col = t.boardColumn;
-  if(col === "backlog" || col === "done") return false;
+  if(col === "backlog" || col === "done" || col === "canceled") return false;
   /* 只有「正常计时」列可计时；暂停/结束计时列由后端同样拒绝，前端不再显示计时入口 */
   return colRuleOf(col, t) === "normal";
 }
 function dueState(t){
   if(!t.dueDate) return {kind:"none"};
   if(t.boardColumn === "done") return {kind:"done"};
+  /* 终态不计逾期：已取消只显示取消事实，不再倒计时 */
+  if(t.boardColumn === "canceled") return {kind:"canceled"};
   if(colRuleOf(t.boardColumn, t) === "ended") return {kind:"ended"};
   var d = dayDiff(parseDate(t.dueDate), rt.TODAY);
   if(d < 0)   return {kind:"over", n:Math.abs(d)};
@@ -157,6 +161,7 @@ function dueText(t){
   if(s.kind === "none")  return "未设截止";
   if(s.kind === "done")  return "已完成 " + fmtShortMD(parseDate(t.completedAt || t.dueDate));
   if(s.kind === "ended") return "执行结束";
+  if(s.kind === "canceled") return "已取消（不计逾期）";
   if(s.kind === "over")  return "逾期 " + s.n + " 天";
   if(s.kind === "today") return "今天到期";
   if(s.kind === "soon")  return "剩余 " + s.n + " 天";
@@ -179,7 +184,7 @@ function dueDateTip(t){
 function dueFlag(t){
   if(!t || !t.dueDate) return null;
   var s = dueState(t);
-  if(s.kind === "done" || s.kind === "ended" || s.kind === "none") return null;
+  if(s.kind === "done" || s.kind === "ended" || s.kind === "canceled" || s.kind === "none") return null;
   var d = dayDiff(parseDate(t.dueDate), rt.TODAY);
   if(d < 0) return { kind:"over", text:"逾期 " + Math.abs(d) + " 天" };
   if(d === 0) return { kind:"today", text:"今天到期" };

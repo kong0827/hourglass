@@ -100,6 +100,10 @@ public class BackupData {
         private String ownerUserId;
         private String remindTarget;
         private String completedAt;
+        /** 终态「已取消」（v13 起）：原因码 / 取消前所在列 / 取消时间；旧备份没有该组字段 */
+        private String cancelReason;
+        private String cancelFrom;
+        private String canceledAt;
         /** 测试负责人账号与显示名快照 */
         private String testOwnerUserId;
         private String testOwner;

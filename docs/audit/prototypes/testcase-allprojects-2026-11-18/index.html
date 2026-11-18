@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>用例 · 全部项目分组导航 · 原型 2026-11-18</title>
+<style>
+  :root{
+    --page:#e9ecf1; --panel:#fff; --bg:#f5f6f8; --sunken:#f2f3f5; --hover:#f7f8fa;
+    --line:#e5e6eb; --line-soft:#eef0f3;
+    --t1:#1d2129; --t2:#4e5969; --t3:#86909c; --t4:#c9cdd4;
+    --blue:#3370ff; --blue-h:#2b62e0; --blue-soft:#e8f0ff; --blue-line:#bed3ff;
+    --green:#389e0d; --green-soft:#f6ffed; --green-line:#c6e8b3;
+    --orange:#d48806; --orange-soft:#fffbe6; --orange-line:#f5dfb8;
+    --red:#cf1322; --red-soft:#fff1f0; --red-line:#f7c6cb;
+    --purple:#722ed1; --purple-soft:#f6f0fd; --purple-line:#e0cff7;
+    --shadow:0 12px 32px -12px rgba(16,24,40,.18),0 2px 6px rgba(16,24,40,.06);
+    --r:8px;
+    --font:"PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none!important}
+  body{font-family:var(--font);font-size:13px;line-height:20px;color:var(--t1);background:var(--page);padding:22px 24px 40px}
+  button{font-family:inherit}
+  svg{display:block;flex:none}
+
+  /* ---------- 原型外壳 ---------- */
+  .pbar{width:1440px;max-width:100%;margin:0 auto 12px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+  .pt{font-size:16px;font-weight:650;letter-spacing:.01em}
+  .pd{margin-top:3px;font-size:12px;color:var(--t2)}
+  .pctl{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pl{font-size:11.5px;color:var(--t3)}
+  .pseg{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:8px;padding:2px}
+  .pseg button{height:26px;padding:0 10px;border:0;background:transparent;border-radius:6px;font-size:12px;color:var(--t2);cursor:pointer}
+  .pseg button.on{background:var(--blue);color:#fff;font-weight:600}
+  .chk{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--t2);cursor:pointer}
+  .chk input{accent-color:var(--blue);margin:0}
+
+  /* ---------- 应用框 ---------- */
+  .app{position:relative;width:1440px;max-width:100%;min-width:1180px;height:900px;margin:0 auto;display:flex;flex-direction:column;
+       background:var(--bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);
+       --page:#f5f6f8}
+  .app.dark{
+    --panel:#1e2026;--bg:#16181d;--sunken:#252830;--hover:#2a2e37;
+    --line:#33363d;--line-soft:#2a2d34;
+    --t1:#e8e9eb;--t2:#b6bac3;--t3:#8f95a0;--t4:#5f6571;
+    --blue:#5b8cff;--blue-h:#7aa0ff;--blue-soft:#1e2c4a;--blue-line:#2d4372;
+    --green:#73d13d;--green-soft:#1b2f17;--green-line:#2f5227;
+    --orange:#ffc53d;--orange-soft:#33270f;--orange-line:#5b461a;
+    --red:#ff7875;--red-soft:#3a1d1f;--red-line:#5f2a2e;
+    --purple:#b37feb;--purple-soft:#2a2140;--purple-line:#463365;
+  }
+
+  .hd{flex:none;background:var(--panel);border-bottom:1px solid var(--line);padding:0 20px}
+  .tabs{display:flex;align-items:flex-end;gap:26px;height:44px}
+  .tab{height:44px;border:0;background:transparent;color:var(--t2);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:5px}
+  .tab:hover{color:var(--t1)}
+  .tab.on{color:var(--t1);font-weight:650;border-bottom-color:var(--blue)}
+  .tab .cnt{height:16px;min-width:17px;padding:0 5px;border-radius:8px;background:var(--red-soft);color:var(--red);font-size:10px;font-weight:650;display:inline-flex;align-items:center;justify-content:center}
+  .hd-row{height:50px;display:flex;align-items:center;gap:8px}
+  .total{font-size:12px;color:var(--t3);white-space:nowrap}
+  .grow{flex:1}
+  .scope{position:relative;flex:none}
+  .scope select{appearance:none;height:32px;min-width:172px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--t1);font-size:12.5px;padding:0 28px 0 10px;cursor:pointer}
+  .scope .chev{position:absolute;right:9px;top:11px;color:var(--t3);pointer-events:none}
+  .btn{height:32px;padding:0 11px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--t1);font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .btn:hover{background:var(--hover)}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--t2)}
+  .btn.ghost:hover{background:var(--hover);border-color:var(--line)}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:550}
+  .btn.primary:hover{background:var(--blue-h);border-color:var(--blue-h)}
+  .btn.sm{height:26px;padding:0 8px;font-size:11.5px;border-radius:6px}
+  .hide{display:none!important}
+
+  /* ---------- 统计 chips ---------- */
+  .stats{flex:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--panel);padding:0 20px 10px;border-bottom:1px solid var(--line-soft)}
+  .stat{height:26px;padding:0 10px;border:1px solid var(--line);border-radius:13px;background:var(--panel);color:var(--t2);font-size:11.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .stat b{font-weight:650;color:var(--t1);font-variant-numeric:tabular-nums}
+  .stat:hover{background:var(--hover)}
+  .stat.on{background:var(--blue-soft);border-color:var(--blue-line);color:var(--blue-h)}
+  .stat.on b{color:var(--blue-h)}
+  .stat .sdot{width:6px;height:6px;border-radius:50%;background:var(--t4)}
+  .stat .sdot.ok{background:var(--green)} .stat .sdot.bad{background:var(--red)}
+  .stat .sdot.warn{background:var(--orange)} .stat .sdot.mute{background:var(--t4)}
+  .stat.mute{color:var(--t3)}
+
+  /* ---------- 筛选行 ---------- */
+  .filters{flex:none;display:flex;align-items:center;gap:8px;padding:10px 20px 8px;flex-wrap:wrap}
+  .search{position:relative;width:270px;flex:none}
+  .search input{width:100%;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--t1);font-size:12.5px;padding:0 56px 0 28px;outline:none}
+  .search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
+  .search .sic{position:absolute;left:9px;top:10px;color:var(--t3)}
+  .search .sbtn{position:absolute;right:4px;top:4px;height:24px;border:0;border-radius:5px;background:var(--sunken);color:var(--t2);font-size:11px;padding:0 6px;cursor:pointer}
+  .fsel{height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--t2);font-size:12px;padding:0 9px;cursor:pointer;max-width:170px}
+  .toggle{height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--t2);font-size:12px;padding:0 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .toggle .sw{width:24px;height:14px;border-radius:7px;background:var(--line);position:relative;transition:.15s}
+  .toggle .sw::after{content:"";position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;transition:.15s}
+  .toggle.on{background:var(--blue-soft);border-color:var(--blue-line);color:var(--blue-h)}
+  .toggle.on .sw{background:var(--blue)}
+  .toggle.on .sw::after{left:12px}
+
+  /* ---------- 范围 chips ---------- */
+  .chips{flex:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 20px 8px}
+  .clabel{font-size:11.5px;color:var(--t3)}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 7px;border-radius:12px;background:var(--blue-soft);border:1px solid var(--blue-line);color:var(--blue-h);font-size:11.5px}
+  .chip b{font-weight:600;opacity:.72}
+  .chip button{border:0;background:transparent;color:var(--blue-h);cursor:pointer;display:inline-flex;padding:0;opacity:.7}
+  .chip button:hover{opacity:1}
+  .clink{border:0;background:transparent;color:var(--t3);font-size:11.5px;cursor:pointer;padding:0 4px}
+  .clink:hover{color:var(--blue-h)}
+
+  /* ---------- 主体 ---------- */
+  .body{flex:1;min-height:0;display:flex;gap:12px;padding:0 20px 16px}
+  .side{width:266px;flex:none;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden}
+  .content{flex:1;min-width:0;display:flex;flex-direction:column}
+
+  /* 左栏 */
+  .shead-side{flex:none;display:flex;align-items:center;gap:6px;padding:11px 10px 6px}
+  .stitle{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:650;color:var(--t1)}
+  .scount{font-size:11px;color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .shead-side .btn{margin-left:auto}
+  .btn.dim{color:var(--t4);cursor:not-allowed}
+  .btn.dim:hover{background:transparent;border-color:transparent}
+  .ssearch{position:relative;flex:none;margin:0 10px 6px}
+  .ssearch input{width:100%;height:30px;border:1px solid var(--line-soft);border-radius:6px;background:var(--sunken);color:var(--t1);font-size:12px;padding:0 8px 0 26px;outline:none}
+  .ssearch input:focus{border-color:var(--blue);background:var(--panel)}
+  .ssearch .sic{position:absolute;left:8px;top:9px;color:var(--t3)}
+  .side-hint{flex:none;margin:0 10px 4px;padding:5px 7px;border-radius:5px;background:var(--sunken);color:var(--t3);font-size:10.5px;line-height:16px;display:flex;gap:5px;align-items:flex-start}
+  .side-hint svg{margin-top:2px}
+  .side-body{flex:1;min-height:0;overflow:auto;padding:4px 6px 8px}
+  .side-foot{flex:none;border-top:1px solid var(--line-soft);padding:7px 10px;color:var(--t3);font-size:10.5px;line-height:16px;background:var(--panel)}
+  .trow{display:flex;align-items:center;gap:6px;min-height:30px;padding:0 7px;border-radius:6px;color:var(--t2);font-size:12.5px;cursor:pointer;border:0;background:transparent;width:100%;text-align:left}
+  .trow:hover{background:var(--hover)}
+  .trow.on{background:var(--blue-soft);color:var(--blue-h);font-weight:600}
+  .trow.on .n{color:var(--blue-h)}
+  .trow.root{margin-bottom:2px;font-weight:600;color:var(--t1)}
+  .trow.proj{margin-top:2px}
+  .trow .tw{width:13px;display:inline-flex;justify-content:center;color:var(--t3);flex:none;transition:transform .12s}
+  .trow .tw.open{transform:rotate(90deg)}
+  .trow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trow .n{font-size:11px;color:var(--t3);font-variant-numeric:tabular-nums;flex:none}
+  .trow .pset{flex:none;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--t3);background:var(--sunken);border-radius:4px;padding:0 4px}
+  .trow.grp{padding-left:23px;min-height:29px;font-size:12px}
+  .trow.grp .tw{width:0}
+  .trow.grp.none{color:var(--t3)}
+  .vtag{flex:none;font-size:9.5px;line-height:14px;border-radius:3px;padding:0 4px;background:var(--sunken);color:var(--t3)}
+  .vtag.team{background:var(--blue-soft);color:var(--blue-h)}
+  .vtag.members{background:var(--purple-soft);color:var(--purple)}
+  .vtag.personal{background:var(--sunken);color:var(--t3)}
+  .sep{height:1px;background:var(--line-soft);margin:6px 4px}
+  .bucket{margin:8px 6px 3px;font-size:10.5px;color:var(--t3);line-height:15px}
+  .side-empty{padding:18px 10px;text-align:center;color:var(--t3);font-size:12px}
+  .side-foot.long{font-size:10px;line-height:15px}
+
+  /* 列表工具条 */
+  .qbar{flex:none;height:38px;display:flex;align-items:center;gap:8px}
+  .cbx{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;white-space:nowrap}
+  .cbx input{accent-color:var(--blue);width:14px;height:14px;margin:0}
+  .qmeta{font-size:11.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qsel{height:28px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--t2);font-size:11.5px;padding:0 7px;cursor:pointer}
+  .qsel:disabled{color:var(--t3);background:var(--sunken)}
+  .iconbtn{width:28px;height:28px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--t2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+  .iconbtn:hover{background:var(--hover)}
+
+  /* 列表 */
+  .list{flex:1;min-height:0;overflow:auto;padding:0 4px 12px 0;scroll-behavior:smooth}
+  .sect{margin-bottom:6px}
+  .shead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 4px 8px}
+  .shead.sticky{position:sticky;top:0;z-index:6;background:var(--bg)}
+  .shead .sset{flex:none;font-size:10.5px;color:var(--t2);background:var(--sunken);border-radius:10px;padding:1px 7px}
+  .shead .sname{border:0;background:transparent;padding:0;font-size:14.5px;font-weight:650;color:var(--t1);cursor:pointer}
+  .shead .sname:hover{color:var(--blue-h)}
+  .shead .scount{font-size:11.5px;color:var(--t3);font-variant-numeric:tabular-nums}
+  .gchips{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;margin-left:4px;padding-left:8px;border-left:1px solid var(--line-soft)}
+  .glabel{font-size:10.5px;color:var(--t3);margin-right:1px}
+  .gchip{height:22px;padding:0 8px;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--t2);font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .gchip:hover{border-color:var(--blue-line);color:var(--blue-h)}
+  .gchip b{font-weight:600;color:var(--t3);font-variant-numeric:tabular-nums}
+  .gchip.on{background:var(--blue-soft);border-color:var(--blue-line);color:var(--blue-h)}
+  .gchip.on b{color:var(--blue-h)}
+  .gchip.none{color:var(--t3);border-style:dashed}
+  .gmore{font-size:10.5px;color:var(--t3)}
+  .enter{border:0;background:transparent;color:var(--blue-h);font-size:11.5px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;padding:0}
+  .enter:hover{text-decoration:underline}
+
+  .case{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:7px}
+  .case:hover{border-color:var(--blue-line)}
+  .case .cbx{padding-top:2px}
+  .ppill{flex:none;margin-top:1px;height:19px;padding:0 6px;border-radius:4px;background:var(--sunken);color:var(--t2);font-size:10.5px;line-height:19px;white-space:nowrap}
+  .cno{flex:none;margin-top:1px;font-size:11.5px;color:var(--t3);font-variant-numeric:tabular-nums;min-width:48px;line-height:19px}
+  .badge{flex:none;margin-top:0;height:19px;padding:0 6px;border-radius:4px;font-size:10.5px;line-height:19px;white-space:nowrap;border:1px solid transparent}
+  .badge.ok{background:var(--green-soft);color:var(--green);border-color:var(--green-line)}
+  .badge.bad{background:var(--red-soft);color:var(--red);border-color:var(--red-line)}
+  .badge.warn{background:var(--orange-soft);color:var(--orange);border-color:var(--orange-line)}
+  .badge.mute{background:var(--sunken);color:var(--t3);border-color:var(--line)}
+  .cmain{flex:1;min-width:0}
+  .ctitle{font-size:13px;color:var(--t1);line-height:19px;font-weight:500}
+  .cmeta{margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--t3);line-height:17px}
+  .rel{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rel i{font-style:normal;flex:none;height:16px;line-height:16px;padding:0 4px;border-radius:3px;font-size:9.5px;background:var(--sunken);color:var(--t3)}
+  .rel.req i{background:var(--purple-soft);color:var(--purple)}
+  .rel.task i{background:var(--blue-soft);color:var(--blue-h)}
+  .rel.bug i{background:var(--red-soft);color:var(--red)}
+  .sepdot{color:var(--t4)}
+  .cacts{margin-left:auto;flex:none;display:flex;align-items:center;gap:5px;padding-top:1px}
+  .act{height:27px;padding:0 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--t2);font-size:11.5px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .act:hover{background:var(--hover);border-color:var(--line)}
+  .act.solid{border-color:var(--line);background:var(--panel);color:var(--t1)}
+  .act.icon{width:27px;padding:0;justify-content:center}
+  .more{display:block;width:100%;height:32px;border:1px dashed var(--line);border-radius:7px;background:transparent;color:var(--t3);font-size:11.5px;cursor:pointer;margin:2px 0 10px}
+  .more:hover{color:var(--blue-h);border-color:var(--blue-line);background:var(--blue-soft)}
+
+  .empty{padding:26px 16px;text-align:center;color:var(--t3);background:var(--panel);border:1px dashed var(--line);border-radius:var(--r);margin-bottom:8px}
+  .empty .et{font-size:12.5px;color:var(--t2);font-weight:600}
+  .empty .es{margin-top:3px;font-size:11.5px}
+  .empty.big{margin-top:60px;border:0;background:transparent}
+  .empty.big .eico{width:38px;height:38px;border-radius:50%;background:var(--sunken);display:grid;place-items:center;margin:0 auto 10px;color:var(--t3)}
+
+  /* 标注 */
+  .anno{display:inline-flex;flex:none;width:16px;height:16px;border-radius:50%;background:#ff7d00;color:#fff;font-size:10px;font-weight:700;align-items:center;justify-content:center;cursor:help;line-height:1}
+  .app.no-anno .anno{display:none!important}
+
+  /* 新建目标项目浮层 */
+  .pop{position:absolute;right:20px;top:92px;z-index:30;width:230px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:6px}
+  .pop-t{font-size:11px;color:var(--t3);padding:4px 7px 6px}
+  .pop button{display:flex;width:100%;align-items:center;gap:6px;height:32px;border:0;border-radius:5px;background:transparent;color:var(--t1);font-size:12px;padding:0 7px;cursor:pointer;text-align:left}
+  .pop button:hover{background:var(--hover)}
+  .pop button span{margin-left:auto;font-size:10.5px;color:var(--t3)}
+
+  /* Toast */
+  .toast{position:absolute;left:50%;bottom:26px;transform:translateX(-50%) translateY(8px);z-index:40;background:#1d2129;color:#fff;font-size:12px;padding:8px 14px;border-radius:7px;opacity:0;pointer-events:none;transition:.18s}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .app.dark .toast{background:#3a3f4a}
+
+  /* 说明卡 */
+  .notes{width:1440px;max-width:100%;margin:18px auto 0;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .ncard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:12px;line-height:19px;color:var(--t2)}
+  .ncard h5{font-size:12.5px;color:var(--t1);margin:0 0 7px;display:flex;align-items:center;gap:6px}
+  .ncard h5 .num{width:18px;height:18px;border-radius:50%;background:var(--blue-soft);color:var(--blue-h);font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+  .ncard ol,.ncard ul{margin:0;padding-left:16px}
+  .ncard li{margin-bottom:4px}
+  .ncard b{color:var(--t1);font-weight:600}
+  @media (max-width:1500px){ .pbar,.notes{width:100%} }
+  @media (max-width:1100px){ .notes{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div class="pbar">
+  <div>
+    <div class="pt">用例 · 全部项目分组导航</div>
+    <div class="pd">2026-11-18 · 交互原型：左栏「项目 &gt; 分组」两级导航，段头吸顶 / 分组 chip / 行内项目标识；切「现状」对照当前行为</div>
+  </div>
+  <div class="pctl">
+    <span class="pl">视图</span>
+    <div class="pseg" id="viewSeg">
+      <button type="button" data-view="new" class="on">改版</button>
+      <button type="button" data-view="old">现状</button>
+    </div>
+    <span class="pl">主题</span>
+    <div class="pseg" id="themeSeg">
+      <button type="button" data-theme="light" class="on">浅色</button>
+      <button type="button" data-theme="dark">深色</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="annoChk" checked /> 标注</label>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <div class="hd">
+    <div class="tabs">
+      <button class="tab on" type="button">用例</button>
+      <button class="tab" type="button">缺陷 <span class="cnt">12</span></button>
+      <button class="tab" type="button">测试计划</button>
+      <button class="tab" type="button">覆盖矩阵</button>
+      <button class="tab" type="button">测试报告</button>
+    </div>
+    <div class="hd-row">
+      <span class="total" id="totalText">共 4 个项目 · 153 条用例</span>
+      <span class="grow"></span>
+      <label class="scope">
+        <select id="scopeSel" aria-label="项目范围">
+          <option value="all">全部项目</option>
+          <option value="msg">消息中心</option>
+          <option value="pay">支付网关</option>
+          <option value="wb">工作台</option>
+          <option value="doc">文档中心</option>
+        </select>
+        <span class="chev" id="scopeChev"></span>
+      </label>
+      <button class="btn ghost only-single hide" type="button" data-todo="AI 生成用例">✦ AI 生成用例</button>
+      <button class="btn ghost only-single only-io hide" type="button" data-todo="导出">导出</button>
+      <button class="btn ghost only-single only-io hide" type="button" data-todo="导入">导入</button>
+      <button class="btn primary" type="button" id="newCaseBtn">＋ 新建用例</button>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="filters">
+    <div class="search">
+      <span class="sic" id="searchIcon"></span>
+      <input id="searchIn" type="search" placeholder="搜索全部项目用例…" autocomplete="off" />
+      <button class="sbtn" type="button" title="当前搜索标题 / 编号 / 分类">标题</button>
+    </div>
+    <select class="fsel only-single hide" id="dirSel" aria-label="目录筛选">
+      <option>目录：全部</option>
+      <option>目录：消息通知</option>
+      <option>目录：权限</option>
+    </select>
+    <select class="fsel" aria-label="执行人筛选">
+      <option>执行人：全部</option>
+      <option>执行人：周劲松</option>
+      <option>执行人：陈工</option>
+      <option>执行人：未指定</option>
+    </select>
+    <select class="fsel" aria-label="优先级筛选">
+      <option>优先级：全部</option>
+      <option>P0</option><option>P1</option><option>P2</option><option>未设置</option>
+    </select>
+    <button class="toggle" type="button" id="bugTgl"><span class="sw"></span>未关闭缺陷</button>
+    <span class="grow"></span>
+    <button class="btn ghost" type="button" id="viewBtn">▥ 视图</button>
+  </div>
+
+  <div class="chips" id="scopeChips" hidden></div>
+
+  <div class="body">
+    <aside class="side" id="side" aria-label="分组导航"></aside>
+    <section class="content" id="content">
+      <div class="qbar">
+        <label class="cbx"><input type="checkbox" id="selAll" /><span>全选已加载</span></label>
+        <span class="qmeta" id="selInfo">共 153 条 · 仅覆盖已加载的行</span>
+        <span class="grow"></span>
+        <select class="qsel" id="groupBySel" aria-label="分组维度"><option>按项目</option></select>
+        <select class="qsel" aria-label="排序"><option>创建时间</option><option>最近更新</option><option>手工排序</option></select>
+        <button class="iconbtn" type="button" title="切换升序 / 降序" data-dir>↓</button>
+        <select class="qsel" aria-label="每页条数"><option>每页 100 条</option><option>每页 50 条</option><option>每页 200 条</option></select>
+      </div>
+      <div class="list" id="list"></div>
+    </section>
+  </div>
+
+  <div class="pop" id="projPop" hidden>
+    <div class="pop-t">在哪个项目新建用例？</div>
+    <button type="button" data-pick="msg">消息中心 <span>客服域 · 可写</span></button>
+    <button type="button" data-pick="pay">支付网关 <span>支付域 · 可写</span></button>
+    <button type="button" data-pick="wb">工作台 <span>基础平台 · 可写</span></button>
+    <button type="button" data-pick="doc">文档中心 <span>基础平台 · 可写</span></button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<div class="notes">
+  <div class="ncard">
+    <h5><span class="num">1</span>这次改了什么</h5>
+    <ol>
+      <li>全部项目仍在列表里按项目分段，但左栏不再整块收起：改成 <b>项目 &gt; 分组</b> 两级导航，只做浏览与跳转。</li>
+      <li>项目段头 <b>吸顶</b>，滚动时不丢项目；段头直接列出该项目的主要分组，点 chip 即筛到「项目 + 分组」。</li>
+      <li>跨项目浏览时每行带 <b>项目标识</b>：TC 编号是项目内编号，每个项目都有 TC-001、TC-066。</li>
+      <li>写操作仍要求单项目：全部项目下「新建分组」「新建用例」先选目标项目。</li>
+    </ol>
+  </div>
+  <div class="ncard">
+    <h5><span class="num">2</span>交互规则</h5>
+    <ul>
+      <li>项目下拉选「全部项目」→ 左栏是两级树；选具体项目 → 回到现有分组面板（团队共享 / 指定成员 / 仅自己），行为不变。</li>
+      <li>点项目节点：只看该项目；点分组节点：项目 + 分组；根节点「全部项目」或范围 chip 的 × 退回。</li>
+      <li>左栏搜索会保留命中的项目节点；空项目不占位；分组计数可重叠，不做相加。</li>
+      <li>段头 chip 与左栏节点是同一范围，选中态同步；「进入项目 →」等于切到单项目模式。</li>
+    </ul>
+  </div>
+  <div class="ncard">
+    <h5><span class="num">3</span>边界与未做</h5>
+    <ul>
+      <li>不做跨项目合并分组：同名「回归 / 冒烟」很常见，合并后无法判断筛的是哪个项目。</li>
+      <li>全部项目下不开放拖拽归类、改可见范围、改名删除；这些都先进入项目。</li>
+      <li>目录仍是项目内单归属结构，全部项目下继续收在单项目；移动端左栏默认收起。</li>
+      <li>原型数据为演示样例，计数与接口沿用现有口径，不是真实数据。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---------- 演示数据 ---------- */
+  var DATA = [
+    {
+      id:'msg', name:'消息中心', set:'客服域', total:66,
+      stats:{passed:62,failed:3,blocked:0,skipped:0,untested:1},
+      ungrouped:0,
+      groups:[
+        {id:'msg-notify', name:'客服部消息通知…', vis:'team', count:66},
+        {id:'msg-perm', name:'权限回归', vis:'team', count:12},
+        {id:'msg-smoke', name:'冒烟', vis:'members', count:8},
+        {id:'msg-draft', name:'我的草稿', vis:'personal', count:3}
+      ],
+      cases:[
+        {no:66, st:'passed', g:'msg-notify', title:'验证菜单权限勾选业务类型配置修改，对应角色的用户可查看该按钮',
+         rel:[['需求','掌厅业务未通过等3类通知','req'],['工作项','WI-003 掌厅未通过消息推送','task']], step:'步骤 3 · 执行 周劲松 · 11-16 17:32'},
+        {no:65, st:'passed', g:'msg-notify', title:'验证菜单权限勾选业务类型配置新增，对应角色的用户可查看该按钮',
+         rel:[['需求','掌厅业务未通过等3类通知','req'],['工作项','WI-003 掌厅未通过消息推送','task']], step:'步骤 3 · 执行 周劲松 · 11-16 17:32'},
+        {no:64, st:'passed', g:'msg-notify', title:'验证菜单权限勾选接收人删除，对应角色的用户可查看该按钮',
+         rel:[['需求','掌厅业务未通过等3类通知','req'],['工作项','WI-003 掌厅未通过消息推送','task']], step:'步骤 3 · 执行 周劲松 · 11-16 17:32'},
+        {no:63, st:'passed', g:'msg-notify', title:'验证菜单权限勾选接收人修改，对应角色的用户可查看该按钮',
+         rel:[['需求','掌厅业务未通过等3类通知','req'],['工作项','WI-003 掌厅未通过消息推送','task']], step:'步骤 3 · 执行 周劲松 · 11-16 17:32'},
+        {no:62, st:'passed', g:'msg-perm', title:'验证菜单权限勾选接收人查询，对应角色的用户可查看该按钮',
+         rel:[['需求','菜单权限矩阵升级','req'],['工作项','WI-018 角色按钮级权限','task']], step:'步骤 2 · 执行 周劲松 · 11-16 16:08'},
+        {no:61, st:'passed', g:'msg-perm', title:'验证菜单权限取消勾选后，对应角色的按钮立即隐藏',
+         rel:[['需求','菜单权限矩阵升级','req'],['工作项','WI-018 角色按钮级权限','task']], step:'步骤 2 · 执行 周劲松 · 11-16 16:05'},
+        {no:12, st:'failed', g:'msg-smoke', title:'短信通知模板变量替换后发送内容正确',
+         rel:[['需求','消息模板变量治理','req'],['缺陷','#2481 变量未替换','bug']], step:'步骤 4 · 执行 李雷 · 11-15 09:40'},
+        {no:11, st:'untested', g:'msg-draft', title:'静默时段内不推送营销通知',
+         rel:[['需求','通知频率治理','req']], step:'未执行'}
+      ]
+    },
+    {
+      id:'pay', name:'支付网关', set:'支付域', total:42,
+      stats:{passed:36,failed:4,blocked:1,skipped:1,untested:0},
+      ungrouped:6,
+      groups:[
+        {id:'pay-cb', name:'支付回调', vis:'team', count:18},
+        {id:'pay-recon', name:'对账', vis:'team', count:9},
+        {id:'pay-smoke', name:'冒烟', vis:'members', count:6}
+      ],
+      cases:[
+        {no:18, st:'passed', g:'pay-cb', title:'回调幂等：重复通知只入账一次',
+         rel:[['需求','支付回调幂等改造','req'],['工作项','WI-012 回调去重','task']], step:'步骤 5 · 执行 陈工 · 11-15 10:20'},
+        {no:17, st:'failed', g:'pay-cb', title:'回调失败重试：最多 5 次且间隔递增',
+         rel:[['需求','支付回调幂等改造','req'],['缺陷','#2490 第 6 次仍重试','bug']], step:'步骤 4 · 执行 陈工 · 11-14 18:02'},
+        {no:16, st:'passed', g:'pay-recon', title:'对账差异：T+1 自动补单',
+         rel:[['需求','对账差异补单','req']], step:'步骤 6 · 执行 王芳 · 11-14 15:30'},
+        {no:15, st:'passed', g:'pay-recon', title:'退款冲正：部分退款金额校验',
+         rel:[['需求','退款链路重构','req']], step:'步骤 3 · 执行 王芳 · 11-13 11:05'}
+      ]
+    },
+    {
+      id:'wb', name:'工作台', set:'基础平台', total:28,
+      stats:{passed:24,failed:2,blocked:1,skipped:1,untested:0},
+      ungrouped:13,
+      groups:[
+        {id:'wb-home', name:'首页改版', vis:'team', count:10},
+        {id:'wb-login', name:'登录回归', vis:'personal', count:5}
+      ],
+      cases:[
+        {no:9, st:'passed', g:'wb-home', title:'首页卡片拖拽排序后刷新保持',
+         rel:[['需求','工作台首页改版','req']], step:'步骤 3 · 执行 赵敏 · 11-14 14:12'},
+        {no:8, st:'blocked', g:'wb-home', title:'快捷入口为空时显示引导与推荐',
+         rel:[['需求','工作台首页改版','req'],['缺陷','#2488 空态缺引导','bug']], step:'步骤 2 · 执行 赵敏 · 11-14 14:05'},
+        {no:7, st:'passed', g:'wb-login', title:'登录过期跳转后保留来源页',
+         rel:[['需求','统一登录改造','req']], step:'步骤 3 · 执行 周劲松 · 11-13 09:30'}
+      ]
+    },
+    {
+      id:'doc', name:'文档中心', set:'基础平台', total:17,
+      stats:{passed:12,failed:3,blocked:1,skipped:1,untested:0},
+      ungrouped:6,
+      groups:[
+        {id:'doc-io', name:'导入导出', vis:'team', count:7},
+        {id:'doc-quick', name:'快速验证', vis:'personal', count:4}
+      ],
+      cases:[
+        {no:4, st:'passed', g:'doc-io', title:'导入 Word 标题层级还原',
+         rel:[['需求','文档导入导出','req']], step:'步骤 4 · 执行 周劲松 · 11-12 16:10'},
+        {no:3, st:'failed', g:'doc-io', title:'导出 PDF 目录与页码一致',
+         rel:[['需求','文档导入导出','req'],['缺陷','#2479 页码偏移','bug']], step:'步骤 5 · 执行 周劲松 · 11-12 16:01'},
+        {no:2, st:'passed', g:'doc-io', title:'大文件上传断点续传',
+         rel:[['需求','附件能力升级','req']], step:'步骤 3 · 执行 李雷 · 11-11 10:22'},
+        {no:1, st:'passed', g:'', title:'空目录首次进入显示新建引导',
+         rel:[['需求','文档中心引导','req']], step:'步骤 2 · 执行 周劲松 · 11-10 17:40'}
+      ]
+    }
+  ];
+
+  var STATUS = {
+    passed:{label:'通过', cls:'ok'},
+    failed:{label:'失败', cls:'bad'},
+    blocked:{label:'阻塞', cls:'warn'},
+    skipped:{label:'跳过', cls:'mute'},
+    untested:{label:'未执行', cls:'mute'}
+  };
+
+  var state = {
+    view:'new', theme:'light', anno:true,
+    scope:'all',          /* 'all' | 项目 id */
+    treeProject:null,     /* 全部项目下，当前收窄到的项目 */
+    group:null,           /* 项目 / 全部分组下的分组 id，__none 表示未分组 */
+    open:{}, q:'', listQ:'', status:'', sel:{}
+  };
+
+  /* ---------- 图标 ---------- */
+  var I = {
+    chev:'<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M4.2 2.2 8 6l-3.8 3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    chevDown:'<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2.2 4.2 6 8l3.8-3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    search:'<svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m9.2 9.2 2.6 2.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    plus:'<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    layers:'<svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true"><path d="m7 2 5 2.5L7 7 2 4.5 7 2Zm-5 5 5 2.5L12 7M2 9.5 7 12l5-2.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+    play:'<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M4 2.5 9 6l-5 3.5v-7Z" fill="currentColor"/></svg>',
+    clock:'<svg viewBox="0 0 14 14" width="11" height="11" aria-hidden="true"><circle cx="7" cy="7" r="4.8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M7 4.3V7l2 1.2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    more:'<svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true"><circle cx="3" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="11" cy="7" r="1" fill="currentColor"/></svg>',
+    close:'<svg viewBox="0 0 12 12" width="9" height="9" aria-hidden="true"><path d="m3 3 6 6M9 3 3 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    arrow:'<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 6h7M6 3l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    inbox:'<svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true"><path d="M2.5 3h9l1 5v3h-11V8l1-5Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M2 8h3l.8 1.4h2.4L9 8h3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>'
+  };
+
+  function $(id){ return document.getElementById(id); }
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function proj(id){
+    for(var i = 0; i < DATA.length; i++) if(DATA[i].id === id) return DATA[i];
+    return null;
+  }
+  function grpOf(p, id){
+    if(!p) return null;
+    for(var i = 0; i < p.groups.length; i++) if(p.groups[i].id === id) return p.groups[i];
+    return null;
+  }
+  function totalAll(){
+    return DATA.reduce(function(a, p){ return a + p.total; }, 0);
+  }
+  function pad(n){
+    var s = String(n);
+    while(s.length < 3) s = '0' + s;
+    return s;
+  }
+  function cut(s, n){
+    s = String(s || '');
+    return s.length > n ? s.slice(0, n) + '…' : s;
+  }
+  function visName(v){
+    return v === 'team' ? '共享' : v === 'members' ? '成员' : '自己';
+  }
+  function anno(n, tip){
+    if(!state.anno) return '';
+    return '<span class="anno" title="' + esc(tip) + '">' + n + '</span>';
+  }
+  function groupName(p, gid){
+    if(!p) return '';
+    if(gid === '__none') return '未加入任何分组';
+    var g = grpOf(p, gid);
+    return g ? g.name : '已删除的分组';
+  }
+  function scopeProject(){
+    if(state.scope !== 'all') return proj(state.scope);
+    if(state.treeProject) return proj(state.treeProject);
+    return null;
+  }
+  function scopedProjects(){
+    if(state.scope !== 'all') return DATA.filter(function(p){ return p.id === state.scope; });
+    if(state.treeProject) return DATA.filter(function(p){ return p.id === state.treeProject; });
+    return DATA;
+  }
+  function countFor(p){
+    if(!state.group) return p.total;
+    if(state.group === '__none') return p.ungrouped;
+    var g = grpOf(p, state.group);
+    return g ? g.count : 0;
+  }
+  function rowsFor(p){
+    var rows = p.cases.slice();
+    if(state.group){
+      rows = state.group === '__none'
+        ? rows.filter(function(c){ return !c.g; })
+        : rows.filter(function(c){ return c.g === state.group; });
+    }
+    if(state.status){
+      rows = rows.filter(function(c){ return c.st === state.status; });
+    }
+    var q = state.listQ.trim().toLowerCase();
+    if(q){
+      rows = rows.filter(function(c){
+        return (c.title + ' TC-' + pad(c.no) + ' ' + p.name).toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    return rows;
+  }
+
+  /* ---------- 顶部 / 统计 / 范围 chip ---------- */
+  function renderHeader(){
+    var isAll = state.scope === 'all';
+    var txt;
+    if(!isAll){
+      txt = '共 ' + proj(state.scope).total + ' 条用例';
+    }else if(state.treeProject){
+      var p = proj(state.treeProject);
+      txt = '全部项目 · ' + p.name + (state.group ? ' / ' + groupName(p, state.group) : '')
+        + ' · ' + (state.status ? '筛选 ' : '') + countFor(p) + ' 条';
+    }else{
+      txt = '共 ' + DATA.length + ' 个项目 · ' + totalAll() + ' 条用例';
+    }
+    $('totalText').textContent = txt;
+    $('scopeSel').value = state.scope;
+    document.querySelectorAll('.only-single').forEach(function(el){
+      /* 收窄到项目后列表已是单项目口径：导入导出与批量修改一起可用；AI 生成仍留在进入项目后 */
+      var io = el.classList.contains('only-io');
+      el.classList.toggle('hide', io ? (isAll && !state.treeProject) : isAll);
+    });
+    var ph = '搜索' + (isAll ? (state.treeProject ? '本项目' : '全部项目') : '本项目') + '用例…';
+    $('searchIn').placeholder = ph;
+  }
+
+  function renderStats(){
+    var box = $('statsRow');
+    if(state.scope === 'all'){
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    box.hidden = false;
+    var p = proj(state.scope);
+    var items = [
+      ['', '全部', p.total, ''],
+      ['passed', '通过', p.stats.passed, 'ok'],
+      ['failed', '失败', p.stats.failed, 'bad'],
+      ['blocked', '阻塞', p.stats.blocked, 'warn'],
+      ['skipped', '跳过', p.stats.skipped, 'mute'],
+      ['untested', '未执行', p.stats.untested, 'mute']
+    ];
+    box.innerHTML = items.map(function(it){
+      var on = (state.status || '') === it[0];
+      var off = it[2] === 0 && !on;
+      return '<button type="button" class="stat' + (on ? ' on' : '') + (off ? ' mute' : '') + '"'
+        + ' data-stat="' + it[0] + '" aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' title="' + it[1] + ' · ' + it[2] + ' 条（项目全量口径）">'
+        + (it[3] ? '<span class="sdot ' + it[3] + '"></span>' : '')
+        + it[1] + ' <b>' + it[2] + '</b></button>';
+    }).join('');
+  }
+
+  function renderChips(){
+    var box = $('scopeChips');
+    var parts = [];
+    var p = scopeProject();
+    if(state.scope === 'all' && state.treeProject && p){
+      parts.push('<span class="chip"><b>项目</b>' + esc(p.name)
+        + '<button type="button" data-clear="proj" aria-label="清除项目范围">' + I.close + '</button></span>');
+    }
+    if(state.group && p){
+      parts.push('<span class="chip"><b>分组</b>' + esc(groupName(p, state.group))
+        + '<button type="button" data-clear="grp" aria-label="清除分组范围">' + I.close + '</button></span>');
+    }
+    if(!parts.length){
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    box.hidden = false;
+    box.innerHTML = '<span class="clabel">范围</span>' + parts.join('')
+      + '<button class="clink" type="button" data-clear="all">清空范围</button>';
+  }
+
+  /* ---------- 左栏 ---------- */
+  function renderSide(){
+    var side = $('side');
+    var show = state.scope !== 'all' ? true : state.view === 'new';
+    side.hidden = !show;
+    if(!show){ side.innerHTML = ''; return; }
+    side.innerHTML = state.scope === 'all' ? treeHTML() : projectPanelHTML();
+  }
+
+  function treeHTML(){
+    var q = state.q.trim().toLowerCase();
+    var html = '<div class="shead-side">'
+      + '<span class="stitle">' + I.layers + ' 分组'
+      + anno(1, '项目 > 分组两级导航：分组只做浏览与跳转，写操作先进入项目') + '</span>'
+      + '<span class="scount" title="' + DATA.length + ' 个项目 · ' + totalAll() + ' 条用例">' + DATA.length + ' 个项目</span>'
+      + '<button class="btn sm ghost dim" type="button" data-newset title="先进入项目再新建分组">'
+      + I.plus + ' 新建分组</button>'
+      + '</div>'
+      + '<label class="ssearch"><span class="sic">' + I.search + '</span>'
+      + '<input id="treeSearch" type="search" placeholder="搜索项目 / 分组…" value="' + esc(state.q) + '" autocomplete="off" /></label>'
+      + '<div class="side-hint">' + I.layers + anno(4, '新建 / 拖动 / 改名仍需单项目权限；全部项目下先进入项目')
+      + '<span>跨项目导航；写入先进入项目</span></div>'
+      + '<div class="side-body">';
+
+    if(!q){
+      var rootOn = !state.treeProject && !state.group;
+      html += '<button class="trow root' + (rootOn ? ' on' : '') + '" type="button" data-root>'
+        + I.layers + '<span class="nm">全部项目</span><span class="n">' + totalAll() + '</span></button>';
+    }
+
+    var matched = 0;
+    DATA.forEach(function(p){
+      var pm = !q || p.name.toLowerCase().indexOf(q) >= 0 || p.set.toLowerCase().indexOf(q) >= 0;
+      var gs = p.groups.filter(function(g){
+        return pm || g.name.toLowerCase().indexOf(q) >= 0;
+      });
+      var ungroupedMatch = !q || pm || '未加入任何分组'.indexOf(q) >= 0;
+      if(q && !pm && !gs.length && !(ungroupedMatch && p.ungrouped)) return;
+      matched++;
+
+      var open = !!q || state.open[p.id] !== false;
+      var pOn = state.treeProject === p.id && !state.group;
+      html += '<div class="pnode">'
+        + '<div class="trow proj' + (pOn ? ' on' : '') + '" data-proj="' + p.id + '" role="button" tabindex="0">'
+        + '<span class="tw' + (open ? ' open' : '') + '" data-tw="' + p.id + '" title="' + (open ? '折叠' : '展开') + '">' + I.chev + '</span>'
+        + '<span class="nm">' + esc(p.name) + '</span>'
+        + '<span class="pset">' + esc(p.set) + '</span>'
+        + '<span class="n">' + p.total + '</span>'
+        + '</div>';
+
+      if(open){
+        gs.forEach(function(g){
+          var on = state.treeProject === p.id && state.group === g.id;
+          html += '<div class="trow grp' + (on ? ' on' : '') + '" data-proj="' + p.id + '" data-group="' + g.id + '" role="button" tabindex="0">'
+            + '<span class="tw"></span>'
+            + '<span class="nm">' + esc(g.name) + '</span>'
+            + '<span class="vtag ' + g.vis + '">' + visName(g.vis) + '</span>'
+            + '<span class="n">' + g.count + '</span>'
+            + '</div>';
+        });
+        if(p.ungrouped && ungroupedMatch){
+          var onU = state.treeProject === p.id && state.group === '__none';
+          html += '<div class="trow grp none' + (onU ? ' on' : '') + '" data-proj="' + p.id + '" data-group="__none" role="button" tabindex="0">'
+            + '<span class="tw"></span><span class="nm">未加入任何分组</span><span class="n">' + p.ungrouped + '</span></div>';
+        }
+      }
+      html += '</div>';
+    });
+
+    if(!matched) html += '<div class="side-empty">没有匹配的项目或分组</div>';
+    html += '</div><div class="side-foot">分组可多归属，计数可重叠、不能相加</div>';
+    return html;
+  }
+
+  function projectPanelHTML(){
+    var p = proj(state.scope);
+    if(!p) return '';
+    var q = state.q.trim().toLowerCase();
+    var html = '<div class="shead-side">'
+      + '<span class="stitle">' + I.layers + ' 分组</span>'
+      + '<span class="scount">' + p.total + '</span>'
+      + '<button class="btn sm ghost" type="button" data-newset>' + I.plus + ' 新建分组</button>'
+      + '</div>'
+      + '<label class="ssearch"><span class="sic">' + I.search + '</span>'
+      + '<input id="sideSearch" type="search" placeholder="搜索分组…" value="' + esc(state.q) + '" autocomplete="off" /></label>'
+      + '<div class="side-body">'
+      + '<button class="trow' + (!state.group ? ' on' : '') + '" type="button" data-sgroup="__all">'
+      + I.checklist + '<span class="nm">全部用例</span><span class="n">' + p.total + '</span></button>'
+      + '<button class="trow' + (state.group === '__none' ? ' on' : '') + '" type="button" data-sgroup="__none">'
+      + I.inbox + '<span class="nm">未加入任何分组</span><span class="n">' + p.ungrouped + '</span></button>'
+      + '<div class="sep"></div>';
+
+    var buckets = [
+      ['team', '团队共享', '进交付说明与发布证据'],
+      ['members', '指定成员可见', '不进证据'],
+      ['personal', '仅自己可见', '不进证据']
+    ];
+    var shownAny = false;
+    buckets.forEach(function(b){
+      var rows = p.groups.filter(function(g){
+        return g.vis === b[0] && (!q || g.name.toLowerCase().indexOf(q) >= 0);
+      });
+      if(q && !rows.length) return;
+      shownAny = shownAny || rows.length > 0;
+      html += '<div class="bucket">' + b[1] + ' · ' + b[2] + '（' + rows.length + '）</div>';
+      rows.forEach(function(g){
+        html += '<div class="trow grp' + (state.group === g.id ? ' on' : '') + '" data-sgroup="' + g.id + '" role="button" tabindex="0">'
+          + '<span class="tw"></span><span class="nm">' + esc(g.name) + '</span>'
+          + '<span class="n">' + g.count + '</span></div>';
+      });
+    });
+    if(q && !shownAny) html += '<div class="side-empty">没有匹配的分组</div>';
+    html += '</div>'
+      + '<div class="side-foot long">多归属：一条用例可进多个分组，分组间计数可重叠、不能相加当总数；删除分组不删用例。分组可嵌套，子组继承父组可见范围，父组计数按子树去重。只有团队共享分组进交付说明与发布证据；转团队需创建人操作。</div>';
+    return html;
+  }
+
+  /* ---------- 列表 ---------- */
+  function relHTML(rel){
+    return (rel || []).map(function(r){
+      return '<span class="rel ' + (r[2] || '') + '"><i>' + esc(r[0]) + '</i>' + esc(r[1]) + '</span>';
+    }).join('');
+  }
+
+  function rowHTML(c, p, first){
+    var key = p.id + ':' + c.no;
+    var checked = state.sel[key] ? ' checked' : '';
+    var showPill = state.view === 'new' && state.scope === 'all' && !state.treeProject;
+    var st = STATUS[c.st] || STATUS.untested;
+    return '<div class="case">'
+      + '<label class="cbx"><input type="checkbox" class="rowChk" data-key="' + key + '"' + checked + ' /></label>'
+      + (showPill ? '<span class="ppill">' + esc(p.name) + '</span>' + (first ? anno(3, 'TC 编号按项目重号；跨项目浏览时补项目标识，截图与复制单行也能看出属于哪个项目') : '') : '')
+      + '<span class="cno">TC-' + pad(c.no) + '</span>'
+      + '<span class="badge ' + st.cls + '">' + st.label + '</span>'
+      + '<div class="cmain">'
+      + '<div class="ctitle">' + esc(c.title) + '</div>'
+      + '<div class="cmeta">' + relHTML(c.rel)
+      + '<span class="sepdot">·</span><span>' + esc(c.step) + '</span></div>'
+      + '</div>'
+      + '<div class="cacts">'
+      + '<button class="act" type="button" data-act="记录">' + I.clock + '记录</button>'
+      + '<button class="act solid" type="button" data-act="重新执行">' + I.play + '重新执行</button>'
+      + '<button class="act icon" type="button" data-act="更多操作" title="更多">' + I.more + '</button>'
+      + '</div>'
+      + '</div>';
+  }
+
+  function headHTML(p, total, shown){
+    if(state.scope !== 'all') return '';
+    var sticky = state.view === 'new';
+    var html = '<div class="shead' + (sticky ? ' sticky' : '') + '">'
+      + '<span class="sset">' + esc(p.set) + '</span>'
+      + '<button class="sname" type="button" data-enter="' + p.id + '" title="只看「' + esc(p.name) + '」">' + esc(p.name) + '</button>'
+      + '<span class="scount">' + (shown < total ? shown + ' / ' + total : total) + ' 条用例</span>';
+
+    if(state.view === 'new'){
+      var gs = p.groups.slice();
+      var cur = grpOf(p, state.group);
+      if(cur){
+        gs = [cur].concat(gs.filter(function(g){ return g.id !== cur.id; }));
+      }
+      html += '<span class="gchips"><span class="glabel">分组</span>';
+      gs.slice(0, 3).forEach(function(g){
+        var on = state.treeProject === p.id && state.group === g.id;
+        html += '<button class="gchip' + (on ? ' on' : '') + '" type="button"'
+          + ' data-gchip="' + p.id + ':' + g.id + '" title="只看「' + esc(p.name) + ' / ' + esc(g.name) + '」">'
+          + esc(cut(g.name, 12)) + ' <b>' + g.count + '</b></button>';
+      });
+      if(gs.length > 3) html += '<span class="gmore">+' + (gs.length - 3) + '</span>';
+      if(p.ungrouped){
+        var onU = state.treeProject === p.id && state.group === '__none';
+        html += '<button class="gchip none' + (onU ? ' on' : '') + '" type="button" data-gchip="' + p.id + ':__none">'
+          + '未分组 <b>' + p.ungrouped + '</b></button>';
+      }
+      html += '</span>' + anno(2, '段头直接列出本项目主要分组；点 chip 即筛到「项目 + 分组」，与左栏节点同一范围。');
+    }
+
+    html += '<span class="grow"></span>';
+    if(state.view === 'new'){
+      html += '<button class="enter" type="button" data-enter="' + p.id + '">进入项目 ' + I.arrow + '</button>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function emptyHTML(text, sub){
+    return '<div class="empty"><div class="et">' + esc(text) + '</div>'
+      + '<div class="es">' + esc(sub) + '</div></div>';
+  }
+
+  function renderList(){
+    var list = $('list');
+    var projects = scopedProjects();
+    var q = state.listQ.trim();
+    if(!projects.length){
+      list.innerHTML = '<div class="empty big"><div class="eico">' + I.search + '</div>'
+        + '<div class="et">没有可看的用例</div><div class="es">切换到「全部项目」或其他项目再试。</div></div>';
+      updateSelInfo();
+      return;
+    }
+
+    var html = '';
+    var anyRows = false;
+    projects.forEach(function(p){
+      var rows = rowsFor(p);
+      var total = countFor(p);
+      anyRows = anyRows || rows.length > 0;
+      html += '<section class="sect">';
+      html += headHTML(p, total, rows.length);
+
+      if(!rows.length){
+        if(q){
+          html += emptyHTML('没有匹配的用例', '换个关键词，或清空搜索后再试。');
+        }else if(state.group){
+          html += emptyHTML('该分组下没有用例', '换一个分组，或用「全部项目」根节点回到总览。');
+        }else{
+          html += emptyHTML('还没有测试用例', '点右上角「新建用例」录入第一条。');
+        }
+      }else{
+        rows.forEach(function(c, i){ html += rowHTML(c, p, i === 0); });
+      }
+
+      if(!q && !state.status && rows.length && rows.length < total){
+        html += '<button class="more" type="button" data-more>加载更多（已加载 ' + rows.length + ' / 共 ' + total + ' 条）</button>';
+      }
+      html += '</section>';
+    });
+
+    if(!anyRows && !q && !state.group && state.scope === 'all'){
+      /* 空项目不占版面：有项目但都没有样例行时给总空态 */
+      list.innerHTML = '<div class="empty big"><div class="eico">' + I.checklist + '</div>'
+        + '<div class="et">全部项目下还没有测试用例</div>'
+        + '<div class="es">点右上角「新建用例」，选择目标项目后录入第一条。</div></div>';
+      updateSelInfo();
+      return;
+    }
+
+    list.innerHTML = html;
+    updateSelInfo();
+  }
+
+  /* ---------- 工具条 / 全选 ---------- */
+  function renderToolbar(){
+    var isAll = state.scope === 'all';
+    var gb = $('groupBySel');
+    if(isAll){
+      gb.innerHTML = '<option>按项目</option>';
+      gb.disabled = true;
+      gb.value = '按项目';
+      gb.title = '全部项目按项目分段；切到单个项目后可按执行结果等维度分段';
+    }else{
+      gb.innerHTML = '<option>不分组</option>';
+      gb.disabled = false;
+      gb.value = '不分组';
+      gb.title = '原型聚焦全部项目导航；单项目分组维度沿用现状';
+    }
+
+    var p = scopeProject();
+    var total = p ? countFor(p) : totalAll();
+    $('selInfo').textContent = (state.listQ ? '搜索「' + state.listQ + '」 · ' : '')
+      + (state.status ? '筛选 ' + STATUS[state.status].label + ' · ' : '')
+      + '共 ' + total + ' 条 · 仅覆盖已加载的行';
+    updateSelInfo();
+  }
+
+  function updateSelInfo(){
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.rowChk'));
+    var checked = boxes.filter(function(b){ return b.checked; }).length;
+    var master = $('selAll');
+    if(master){
+      master.checked = boxes.length > 0 && checked === boxes.length;
+      master.indeterminate = checked > 0 && checked < boxes.length;
+      master.disabled = boxes.length === 0;
+    }
+    if(checked){
+      var info = $('selInfo');
+      info.textContent = '已选 ' + checked + ' 条 · 仅覆盖已加载的行';
+    }
+  }
+
+  /* ---------- 总渲染 ---------- */
+  function render(){
+    renderHeader();
+    renderSide();
+    renderChips();
+    renderStats();
+    renderToolbar();
+    renderList();
+  }
+
+  function resetScope(keepProject){
+    state.status = '';
+    state.sel = {};
+    if(!keepProject){
+      state.treeProject = null;
+      state.group = null;
+    }
+  }
+
+  /* ---------- Toast ---------- */
+  var toastTimer = null;
+  function toast(msg){
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ el.classList.remove('on'); }, 1900);
+  }
+
+  /* ---------- 事件 ---------- */
+  function bind(){
+    $('searchIcon').innerHTML = I.search;
+    $('scopeChev').innerHTML = I.chevDown;
+
+    document.querySelectorAll('[data-view]').forEach(function(b){
+      b.addEventListener('click', function(){
+        state.view = this.getAttribute('data-view');
+        document.querySelectorAll('[data-view]').forEach(function(x){ x.classList.toggle('on', x === b); });
+        if(state.view === 'old'){
+          state.scope = 'all';
+          state.treeProject = null;
+          state.group = null;
+          state.q = '';
+          state.listQ = '';
+          $('searchIn').value = '';
+        }
+        resetScope(false);
+        render();
+        toast(state.view === 'old' ? '现状：全部项目下左栏与分组入口整体收起' : '改版：全部项目下用「项目 > 分组」两级导航');
+      });
+    });
+
+    document.querySelectorAll('[data-theme]').forEach(function(b){
+      b.addEventListener('click', function(){
+        state.theme = this.getAttribute('data-theme');
+        $('app').classList.toggle('dark', state.theme === 'dark');
+        document.querySelectorAll('[data-theme]').forEach(function(x){ x.classList.toggle('on', x === b); });
+      });
+    });
+
+    $('annoChk').addEventListener('change', function(){
+      state.anno = this.checked;
+      $('app').classList.toggle('no-anno', !state.anno);
+      render();
+    });
+
+    $('scopeSel').addEventListener('change', function(){
+      state.scope = this.value;
+      resetScope(false);
+      state.q = '';
+      $('scopeSel').blur();
+      render();
+    });
+
+    $('searchIn').addEventListener('input', function(){
+      state.listQ = this.value;
+      state.sel = {};
+      renderList();
+      renderToolbar();
+    });
+
+    $('bugTgl').addEventListener('click', function(){
+      this.classList.toggle('on');
+      toast(this.classList.contains('on') ? '已打开「未关闭缺陷」筛选（原型）' : '已关闭「未关闭缺陷」筛选');
+    });
+
+    $('viewBtn').addEventListener('click', function(){
+      toast('视图与保存视图沿用现有交互（原型未展开）');
+    });
+
+    $('newCaseBtn').addEventListener('click', function(){
+      if(state.scope === 'all'){
+        var pop = $('projPop');
+        pop.hidden = !pop.hidden;
+      }else{
+        toast('打开「新建用例」抽屉（原型）');
+      }
+    });
+
+    $('projPop').addEventListener('click', function(e){
+      var b = e.target.closest('[data-pick]');
+      if(!b) return;
+      var id = b.getAttribute('data-pick');
+      state.scope = id;
+      resetScope(false);
+      render();
+      $('projPop').hidden = true;
+      toast('已选目标项目「' + proj(id).name + '」，继续新建用例（原型）');
+    });
+
+    $('side').addEventListener('input', function(e){
+      if(e.target.id !== 'treeSearch' && e.target.id !== 'sideSearch') return;
+      state.q = e.target.value;
+      renderSide();
+      var n = $('treeSearch') || $('sideSearch');
+      if(n){
+        n.focus();
+        var v = n.value;
+        try{ n.setSelectionRange(v.length, v.length); }catch(err){}
+      }
+    });
+
+    $('selAll').addEventListener('change', function(){
+      var on = this.checked;
+      document.querySelectorAll('.rowChk').forEach(function(b){
+        b.checked = on;
+        if(on) state.sel[b.getAttribute('data-key')] = true;
+        else delete state.sel[b.getAttribute('data-key')];
+      });
+      updateSelInfo();
+    });
+
+    $('list').addEventListener('change', function(e){
+      if(!e.target.classList.contains('rowChk')) return;
+      var k = e.target.getAttribute('data-key');
+      if(e.target.checked) state.sel[k] = true;
+      else delete state.sel[k];
+      updateSelInfo();
+    });
+
+    document.addEventListener('click', function(e){
+      var t;
+
+      /* 折叠箭头优先于项目行 */
+      t = e.target.closest('[data-tw]');
+      if(t){
+        var pid = t.getAttribute('data-tw');
+        state.open[pid] = state.open[pid] === false;
+        renderSide();
+        return;
+      }
+
+      t = e.target.closest('[data-root]');
+      if(t){
+        state.treeProject = null;
+        state.group = null;
+        state.status = '';
+        state.sel = {};
+        render();
+        return;
+      }
+
+      t = e.target.closest('[data-group]');
+      if(t){
+        var gp = t.getAttribute('data-proj');
+        var gid = t.getAttribute('data-group');
+        state.scope = 'all';
+        state.treeProject = gp;
+        state.group = gid;
+        state.open[gp] = true;
+        state.status = '';
+        state.sel = {};
+        render();
+        return;
+      }
+
+      t = e.target.closest('[data-proj]');
+      if(t){
+        var pp = t.getAttribute('data-proj');
+        state.scope = 'all';
+        state.treeProject = pp;
+        state.group = null;
+        state.open[pp] = true;
+        state.status = '';
+        state.sel = {};
+        render();
+        return;
+      }
+
+      t = e.target.closest('[data-enter]');
+      if(t){
+        var ep = t.getAttribute('data-enter');
+        state.scope = ep;
+        state.treeProject = null;
+        if(state.group && !grpOf(proj(ep), state.group)) state.group = null;
+        state.status = '';
+        state.sel = {};
+        render();
+        toast('已进入「' + proj(ep).name + '」，恢复单项目视图');
+        return;
+      }
+
+      t = e.target.closest('[data-gchip]');
+      if(t){
+        var pair = t.getAttribute('data-gchip').split(':');
+        state.scope = 'all';
+        state.treeProject = pair[0];
+        state.group = pair[1];
+        state.open[pair[0]] = true;
+        state.status = '';
+        state.sel = {};
+        render();
+        return;
+      }
+
+      t = e.target.closest('[data-clear]');
+      if(t){
+        var what = t.getAttribute('data-clear');
+        if(what === 'proj' || what === 'all'){
+          state.treeProject = null;
+          state.group = null;
+        }else{
+          state.group = null;
+        }
+        state.status = '';
+        state.sel = {};
+        render();
+        return;
+      }
+
+      t = e.target.closest('[data-sgroup]');
+      if(t){
+        var sg = t.getAttribute('data-sgroup');
+        state.group = sg === '__all' ? null : sg;
+        state.status = '';
+        state.sel = {};
+        render();
+        return;
+      }
+
+      t = e.target.closest('[data-stat]');
+      if(t){
+        var st = t.getAttribute('data-stat');
+        state.status = (!st || state.status === st) ? '' : st;
+        state.sel = {};
+        renderStats();
+        renderList();
+        renderToolbar();
+        return;
+      }
+
+      t = e.target.closest('[data-newset]');
+      if(t){
+        toast(state.scope === 'all' ? '先进入项目，再新建分组' : '打开「新建分组」弹窗（原型）');
+        return;
+      }
+
+      t = e.target.closest('[data-more]');
+      if(t){
+        toast('原型未接入分页；实际按当前范围继续加载');
+        return;
+      }
+
+      t = e.target.closest('[data-act]');
+      if(t){
+        toast('「' + t.getAttribute('data-act') + '」沿用现有交互（原型）');
+        return;
+      }
+
+      t = e.target.closest('[data-dir]');
+      if(t){
+        t.textContent = t.textContent === '↓' ? '↑' : '↓';
+        return;
+      }
+
+      t = e.target.closest('[data-todo]');
+      if(t){
+        toast('「' + t.getAttribute('data-todo') + '」只在单项目下提供');
+        return;
+      }
+
+      if(!e.target.closest('#projPop') && !e.target.closest('#newCaseBtn')){
+        $('projPop').hidden = true;
+      }
+    });
+  }
+
+  /* 空态用的图标（脚本里补，避免外部依赖） */
+  I.checklist = '<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m5.5 8 2 2 3.5-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  bind();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -30,6 +30,7 @@
              SUM(CASE WHEN board_column = 'done' THEN 1 ELSE 0 END) AS done_count
       FROM task
       WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND branch_id IS NOT NULL
+        AND board_column &lt;&gt; 'canceled'
       GROUP BY branch_id
     ) tc ON tc.branch_id = b.id
     WHERE b.workspace_id = #{workspaceId}
@@ -52,6 +53,7 @@
              SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS done_count
       FROM task t
       WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.branch_id IS NOT NULL
+        AND t.board_column &lt;&gt; 'canceled'
         AND NOT EXISTS (SELECT 1 FROM project_member pm
                         WHERE pm.workspace_id = t.workspace_id
                           AND pm.project_id = t.req_id
@@ -243,6 +245,7 @@
            COALESCE(SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END), 0) AS done_count
     FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.branch_id = #{branchId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'canceled'
     <if test="viewerId != null and viewerId != ''">
       AND NOT EXISTS (SELECT 1 FROM project_member pm
                       WHERE pm.workspace_id = t.workspace_id

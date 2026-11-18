@@ -67,7 +67,8 @@ var drawerMode = "edit", drawerTab = "overview", timelineCache = [];
 var drawerBackStack = [];
 var drawerTabsEl = $("drawerTabs"), drawerBodyEl = $("drawerBody"),
     drawerStatusPill = $("drawerStatusPill"), btnDrawerEdit = $("btnDrawerEdit"),
-    btnFootStatus = $("btnFootStatus"), btnFootWatch = $("btnFootWatch");
+    btnFootStatus = $("btnFootStatus"), btnFootWatch = $("btnFootWatch"),
+    btnCancelItem = $("btnCancelItem"), btnRestoreItem = $("btnRestoreItem");
 function drawerColMeta(id){
   var m = colMeta(id);
   if(m) return m;
@@ -2046,6 +2047,20 @@ function applyDrawerReadOnly(readOnly){
   for(var c = 0; c < chipBtns.length; c++) chipBtns[c].disabled = !!readOnly;
   if(drawerStatusPill) drawerStatusPill.disabled = !!readOnly;
   if(btnFootStatus) btnFootStatus.disabled = !!readOnly;
+  /* 终态「已取消」：状态下拉与切换入口都锁死，只能走「恢复工作项」，避免把卡片悄悄复活 */
+  var termTask = rt.editingId ? (taskById(rt.editingId) || taskCacheExtra[rt.editingId]) : null;
+  var isCanceledTask = !!(termTask && termTask.boardColumn === "canceled");
+  if(isCanceledTask && iCol) iCol.disabled = true;
+  /* 换到普通任务时要把提示复位，否则会沿用上一张已取消卡的「恢复」文案 */
+  var statusTitle = isCanceledTask ? "已取消是终态，用「恢复工作项」回到取消前所在列" : "切换工作项状态";
+  if(drawerStatusPill){
+    if(isCanceledTask) drawerStatusPill.disabled = true;
+    drawerStatusPill.title = statusTitle;
+  }
+  if(btnFootStatus){
+    if(isCanceledTask) btnFootStatus.disabled = true;
+    btnFootStatus.title = statusTitle;
+  }
   if(reqDocPickerBtn) reqDocPickerBtn.disabled = !!readOnly;
   /* 就地新建分支属于写操作：只读项目里连同入口一起收起，提示也不能再引导去点它 */
   var branchNewBtn = $("iBranchNew");
@@ -2679,6 +2694,10 @@ function openTaskDrawer(colId, task, defaults){
     startedDone = isDone;
     taskDrawerTitle.textContent = task.title || "工作项详情";
     btnDeleteTask.hidden = false;
+    /* 终态「已取消」：不能改列、不能计时，只能恢复；已完成则先取消完成再取消 */
+    var isCanceled = task.boardColumn === "canceled";
+    if(btnCancelItem) btnCancelItem.hidden = readOnly || isCanceled || isDone;
+    if(btnRestoreItem) btnRestoreItem.hidden = readOnly || !isCanceled;
     if(btnTaskNew) btnTaskNew.hidden = false;
     iTitle.value = task.title || "";
     setTaskDescContent(task.description || "");
@@ -2694,6 +2713,11 @@ function openTaskDrawer(colId, task, defaults){
     rt.formCat = taskCats.some(function(c){ return c.id === task.categoryId; }) ? task.categoryId : "";
     populateColSelect();
     iCol.value = task.boardColumn || "backlog";
+    /* 终态不落列配置：补一个只读选项，状态胶囊与表单值都能显示「已取消」 */
+    if(isCanceled){
+      iCol.insertAdjacentHTML("beforeend", '<option value="canceled">已取消</option>');
+      iCol.value = "canceled";
+    }
     populateReqSelect(task.reqId || "");
     iReq.value = task.reqId || "";
     if(iItemType) iItemType.value = task.itemType || "task";
@@ -2747,6 +2771,8 @@ function openTaskDrawer(colId, task, defaults){
   }else{
     taskDrawerTitle.textContent = "新建工作项";
     btnDeleteTask.hidden = true;
+    if(btnCancelItem) btnCancelItem.hidden = true;
+    if(btnRestoreItem) btnRestoreItem.hidden = true;
     if(btnTaskNew) btnTaskNew.hidden = true;
     startedDone = false;
     iTitle.value = ""; setTaskDescContent("");
@@ -4428,6 +4454,21 @@ function toggleTaskWatch(btn){
 }
 if(btnTaskWatch) btnTaskWatch.addEventListener("click", function(){ toggleTaskWatch(btnTaskWatch); });
 if(btnFootWatch) btnFootWatch.addEventListener("click", function(){ toggleTaskWatch(btnFootWatch); });
+/* 终态动作：取消 / 恢复复用卡片菜单里的同一套弹层，成功后收起抽屉，避免停留在旧列事实 */
+if(btnCancelItem) btnCancelItem.addEventListener("click", function(){
+  if(!rt.editingId) return;
+  var id = rt.editingId;
+  import("./task-actions.js").then(function(m){
+    m.openCancelDialog(id, function(){ forceCloseTaskDrawer(); });
+  }).catch(function(){ /* 加载失败不改状态 */ });
+});
+if(btnRestoreItem) btnRestoreItem.addEventListener("click", function(){
+  if(!rt.editingId) return;
+  var id = rt.editingId;
+  import("./task-actions.js").then(function(m){
+    m.restoreCanceled(id, function(){ forceCloseTaskDrawer(); });
+  }).catch(function(){ /* 加载失败不改状态 */ });
+});
 /* 任务详情内新建任务：沿用当前任务的项目/版本/史诗，抽屉切换为新建模式 */
 if(btnTaskNew) btnTaskNew.addEventListener("click", function(){
   if(!rt.editingId) return;

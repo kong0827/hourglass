@@ -396,16 +396,21 @@ function openCardMenu(anchor, taskId){
   var t = taskById(taskId);
   if(!t) return;
   var isDone = t.boardColumn === "done";
+  var isCanceled = t.boardColumn === "canceled";
   var editable = canEditTask(t);
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   var html = '<button class="menu-item" type="button" data-cm="open">' + icon("edit", 14) + '打开详情</button>';
-  if(editable){
+  if(editable && isCanceled){
+    html += '<button class="menu-item" type="button" data-cm="restore">' + icon("undo", 14) +
+      '恢复到「' + esc(t.cancelFrom ? colName(t.cancelFrom) : "第一个开列") + '」</button>';
+  }
+  if(editable && !isCanceled){
     html +=
       '<button class="menu-item" type="button" data-cm="due">' + icon("calSmall", 14) + '改期<span class="k">D</span></button>' +
       '<button class="menu-item" type="button" data-cm="done">' + icon(isDone ? "undo" : "check", 14) +
         (isDone ? "取消完成" : "标记完成") + '<span class="k">X</span></button>';
   }
-  if(editable || running){
+  if((editable && !isCanceled) || running){
     /* 停止自己已开始的计时不受只读限制（与后端口径一致） */
     html += '<button class="menu-item" type="button" data-cm="timer">' + icon(running ? "pause" : "timer", 14) +
       (running ? "停止计时" : "开始计时") + '</button>';
@@ -413,7 +418,7 @@ function openCardMenu(anchor, taskId){
   html +=
     '<button class="menu-item" type="button" data-cm="copy">' + icon("copy", 14) + '复制标题</button>' +
     '<button class="menu-item" type="button" data-cm="link">' + icon("extlink", 14) + '复制工作项链接</button>';
-  var others = editable ? COLUMNS.filter(function(c){ return c.id !== t.boardColumn; }) : [];
+  var others = editable && !isCanceled ? COLUMNS.filter(function(c){ return c.id !== t.boardColumn; }) : [];
   if(others.length){
     html += '<div class="menu-sep"></div><div class="menu-title">移动到</div>';
     others.forEach(function(c){
@@ -423,8 +428,11 @@ function openCardMenu(anchor, taskId){
     });
   }
   if(editable){
-    html += '<div class="menu-sep"></div>' +
-      '<button class="menu-item danger" type="button" data-cm="del">' + icon("trash", 14) + '移到回收站</button>';
+    html += '<div class="menu-sep"></div>';
+    if(!isCanceled){
+      html += '<button class="menu-item" type="button" data-cm="cancel">' + icon("close", 14) + '取消工作项…</button>';
+    }
+    html += '<button class="menu-item danger" type="button" data-cm="del">' + icon("trash", 14) + '移到回收站</button>';
   }
   var el = document.createElement("div");
   el.className = "menu";
@@ -445,6 +453,8 @@ function openCardMenu(anchor, taskId){
       else if(k === "timer") toggleTaskTimer(t.id);
       else if(k === "copy") copyToClipboard(t.title, "标题已复制到剪贴板");
       else if(k === "link") copyToClipboard(taskLink(t.id), "工作项链接已复制（可直接定位到该工作项）");
+      else if(k === "cancel") openCancelDialog(t.id);
+      else if(k === "restore") restoreCanceled(t.id);
       else if(k === "del") deleteTask(t.id);
       return;
     }
@@ -454,6 +464,132 @@ function openCardMenu(anchor, taskId){
     }
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
+}
+
+/* ===== 终态「已取消」：卡片菜单 / 抽屉 footer 共用同一套取消与恢复 ===== */
+var CANCEL_REASONS = [
+  ["not_do", "不做", "写清楚为什么不做，恢复时作为依据"],
+  ["dup", "重复", "指向合并到哪一条"],
+  ["deferred", "延期", "写清暂缓到什么时候、等什么"],
+  ["design", "设计如此", "写清按哪条设计行为处理"]
+];
+/* 取消 / 恢复后各视图统一刷新：看板、列表、日历、甘特与已取消页 */
+function refreshAfterTerminal(taskId){
+  loadBoard({silent:true});
+  loadReqs();
+  refreshListIfOpen();
+  refreshCalendarIfOpen();
+  refreshGanttIfOpen();
+  try{ window.dispatchEvent(new CustomEvent("ds:task-saved", { detail:{ id:taskId, created:false } })); }catch(e){ /* noop */ }
+  import("../views/canceled.js").then(function(m){ if(m.refreshCanceledIfOpen) m.refreshCanceledIfOpen(); }).catch(function(){});
+}
+function findTask(taskId){
+  return taskById(taskId) || rt.listCache[taskId] || taskCacheExtra[taskId] || null;
+}
+/** 取消工作项：原因四选一 + 说明必填；已完成要先取消完成，已取消直接转恢复 */
+function openCancelDialog(taskId, onDone){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(t.boardColumn === "canceled"){ restoreCanceled(t.id, onDone); return; }
+  if(t.boardColumn === "done"){ toast("已完成的工作项不能直接取消，请先取消完成", "warn"); return; }
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  var titleId = "cancelTaskTitle" + Date.now();
+  layer.setAttribute("aria-labelledby", titleId);
+  layer.innerHTML =
+    '<form class="sheet xs" novalidate>' +
+      '<div class="sheet-head"><div style="flex:1 1 auto;min-width:0">' +
+        '<h2 id="' + titleId + '">取消「' + esc(t.title) + '」</h2>' +
+        '<div class="desc">取消后进入终态「已取消」：不计逾期、退出完成率分母，恢复时回到「' +
+          esc(t.boardColumn ? colName(t.boardColumn) : "当前列") + '」。</div>' +
+      '</div><button class="icon-btn sm" type="button" data-cn-x aria-label="关闭">' + icon("close", 15) + '</button></div>' +
+      '<div class="sheet-body"><div class="stack">' +
+        '<div class="field"><label for="' + titleId + 'Reason">取消原因</label>' +
+          '<select id="' + titleId + 'Reason">' + CANCEL_REASONS.map(function(r){
+            return '<option value="' + r[0] + '">' + r[1] + ' — ' + r[2] + '</option>';
+          }).join("") + '</select></div>' +
+        '<div class="field"><label for="' + titleId + 'Note">取消说明</label>' +
+          '<textarea id="' + titleId + 'Note" rows="4" maxlength="250" placeholder="必填：写清为什么不做、后续怎么处理"></textarea>' +
+          '<span class="foot-note">原因只用于解释与筛选，不参与状态判定。</span></div>' +
+      '</div></div>' +
+      '<div class="sheet-foot"><span class="hint">取消会通知负责人与关注者</span>' +
+        '<button class="btn" type="button" data-cn-cancel>再想想</button>' +
+        '<button class="btn danger" type="submit">确认取消</button>' +
+      '</div>' +
+    '</form>';
+  document.body.appendChild(layer);
+  var form = layer.querySelector("form");
+  var sel = layer.querySelector("select");
+  var note = layer.querySelector("textarea");
+  var busy = false;
+  function close(){
+    UI.closeModal(layer);
+    setTimeout(function(){ if(layer.parentNode) layer.parentNode.removeChild(layer); }, 220);
+  }
+  layer.__uiOnClose = close;
+  layer.querySelector("[data-cn-x]").addEventListener("click", close);
+  layer.querySelector("[data-cn-cancel]").addEventListener("click", close);
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    if(busy) return;
+    var text = (note.value || "").trim();
+    if(!text){
+      toast("请填写取消说明", "warn");
+      try{ note.focus(); }catch(err){ /* noop */ }
+      return;
+    }
+    var reason = sel.value;
+    var reasonName = (CANCEL_REASONS.filter(function(r){ return r[0] === reason; })[0] || [])[1] || reason;
+    busy = true;
+    var submit = form.querySelector('[type="submit"]');
+    submit.disabled = true;
+    submit.textContent = "取消中…";
+    API.post("/api/tasks/" + encodeURIComponent(t.id) + "/cancel", { reason: reason, note: text }).then(function(res){
+      busy = false;
+      if(res && res.task && res.task.id) taskCacheExtra[res.task.id] = res.task;
+      close();
+      toast("已取消「" + t.title + "」（" + reasonName + "）", "warn");
+      if(onDone) onDone(t);
+      refreshAfterTerminal(t.id);
+    }).catch(function(ex){
+      busy = false;
+      submit.disabled = false;
+      submit.textContent = "确认取消";
+      toast(ex.message || "取消失败", "bad");
+    });
+  });
+  UI.openModal(layer, "textarea");
+}
+
+/** 恢复已取消：说明必填；onDone 由已取消页用来就地扣减列表与计数。
+    task 供已取消页等「行数据不在看板缓存」的入口直接传入，避免查不到而静默返回 */
+function restoreCanceled(taskId, onDone, task){
+  var t = task || findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var target = t.cancelFrom ? colName(t.cancelFrom) : "第一个开列";
+  UI.showPrompt({
+    title: "恢复工作项",
+    desc: "「" + t.title + "」将回到「" + target + "」。",
+    label: "恢复说明",
+    placeholder: "写清为什么捡回来（必填，会写进操作日志）",
+    multiline: true,
+    required: true,
+    maxLength: 250,
+    okText: "恢复"
+  }).then(function(note){
+    if(!note) return;
+    return API.post("/api/tasks/" + encodeURIComponent(taskId) + "/uncancel", { note: note }).then(function(res){
+      if(res && res.task && res.task.id) taskCacheExtra[res.task.id] = res.task;
+      var landed = res && res.to ? colName(res.to) : target;
+      toast("已恢复「" + t.title + "」到「" + landed + "」", "fs");
+      if(onDone) onDone(res, t);
+      refreshAfterTerminal(taskId);
+    });
+  }).catch(function(ex){ toast(ex.message || "恢复失败", "bad"); });
 }
 
 /* 发布快照里的只读实体引用（工作项 / 需求）：全局委托一次，version/phase/抽屉等宿主无需各接一遍。
@@ -502,4 +638,4 @@ document.addEventListener("click", function(e){
   e.stopPropagation();
 }, true);
 
-export { handleDeepLink, hashParam, loadRunningTimer, moveTaskToColumn, openCardMenu, openDuePopover, openStatusMenu, openTaskById, taskLink, toggleTaskDone, toggleTaskTimer };
+export { handleDeepLink, hashParam, loadRunningTimer, moveTaskToColumn, openCancelDialog, openCardMenu, openDuePopover, openStatusMenu, openTaskById, restoreCanceled, taskLink, toggleTaskDone, toggleTaskTimer };

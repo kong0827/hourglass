@@ -114,7 +114,7 @@ const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "
   /* 这些也是 router 里的懒加载视图，必须各自包一层作用域：delivery 顶层有 function $(sel,root)
      （querySelector 版），平铺会覆盖 core/dom 的 $(id)（getElementById 版），整包按 id 取元素全变 null；
      investment 顶层的 state / cache 也会与别的平铺模块重名。真实 ESM 各文件独立作用域，没有这个问题。 */
-  "delivery", "investment", "workcolumn", "tree", "chain"];
+  "delivery", "investment", "workcolumn", "canceled", "tree", "chain"];
 const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js"; })
   .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js",
     /* view-loader 的 const cache 与 transitions.js 的 var cache 同名：
@@ -234,6 +234,14 @@ html = html.replace(/<script[^>]*type="module"[^>]*src="js\/main\.js"[^>]*><\/sc
     return "<script>\n" + MOCK + "\n</" + "script>\n" + mdLibs +
       "\n<script>\n(function(){\"use strict\";\n" + bundle + "\n})();\n</" + "script>";
   });
+
+/* 口径弹层里的状态机图：预览稿落在 docs/preview 下，相对路径 diagrams/… 会 404，
+   这里把 frontend/diagrams 下被引用的 PNG 转成 data URI 内联；产品代码仍走相对路径。 */
+html = html.replace(/(["'])diagrams\/([A-Za-z0-9._-]+\.png)\1/g, function (m, q, file) {
+  var p = path.join(STATIC, "diagrams", file);
+  if (!fs.existsSync(p)) return m;
+  return q + "data:image/png;base64," + fs.readFileSync(p).toString("base64") + q;
+});
 
 /* 3) 底部说明条
    ⚠️ 不能用 html.replace("</body>", …)：replace 只换第一个匹配，而 SunEditor 的

@@ -105,6 +105,7 @@
              SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS taskDone
       FROM task t
       WHERE t.workspace_id = #{q.workspaceId} AND t.deleted_at IS NULL AND t.demand_id IS NOT NULL
+        AND t.board_column &lt;&gt; 'canceled'
       GROUP BY t.demand_id
     ) ev_task ON ev_task.demand_id = d.id
     LEFT JOIN (
@@ -209,7 +210,8 @@
           AND dj.judged_stage = 'delivered' AND dj.version_id &lt;=&gt; d.version_id
       ) AS manualDelivered,
       (SELECT COUNT(*) FROM task t
-        WHERE t.workspace_id = d.workspace_id AND t.demand_id = d.id AND t.deleted_at IS NULL) AS taskCount,
+        WHERE t.workspace_id = d.workspace_id AND t.demand_id = d.id AND t.deleted_at IS NULL
+          AND t.board_column &lt;&gt; 'canceled') AS taskCount,
       (SELECT COUNT(*) FROM task t
         WHERE t.workspace_id = d.workspace_id AND t.demand_id = d.id AND t.deleted_at IS NULL
           AND t.board_column = 'done') AS taskDone,
@@ -595,9 +597,9 @@
 
   <select id="selectTaskTimeline" resultType="map">
     SELECT t.demand_id AS demandId,
-           COUNT(*) AS taskCount,
+           SUM(CASE WHEN t.board_column &lt;&gt; 'canceled' THEN 1 ELSE 0 END) AS taskCount,
            SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS taskDone,
-           SUM(CASE WHEN t.board_column &lt;&gt; 'done' THEN 1 ELSE 0 END) AS taskOpen,
+           SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled' THEN 1 ELSE 0 END) AS taskOpen,
            MAX(CASE WHEN t.board_column = 'done'
                     THEN DATE(COALESCE(t.completed_at, t.updated_at)) END) AS devEnd,
            MIN(DATE(t.test_started_at)) AS testStart,

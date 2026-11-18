@@ -22,6 +22,7 @@
     FROM task
     WHERE workspace_id = #{workspaceId}
       AND deleted_at IS NULL
+      AND board_column &lt;&gt; 'canceled'
   </select>
 
   <!-- 需求 → 首个任务的间隔。LEFT JOIN 保证「一份任务都没有的需求」也能出现（那正是要暴露的盲区） -->
@@ -38,6 +39,7 @@
            ON t.req_doc_id = d.id
           AND t.workspace_id = d.workspace_id
           AND t.deleted_at IS NULL
+          AND t.board_column &lt;&gt; 'canceled'
     WHERE d.workspace_id = #{workspaceId}
     GROUP BY d.id, d.req_id, d.title, d.status, d.created_at
   </select>

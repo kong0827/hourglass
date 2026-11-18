@@ -11,9 +11,12 @@ import com.hourglass.dto.BoardResponse;
 import com.hourglass.dto.CalendarResponse;
 import com.hourglass.dto.PageResult;
 import com.hourglass.dto.TaskBulkMoveRequest;
+import com.hourglass.dto.TaskCancelRequest;
+import com.hourglass.dto.TaskCanceledPage;
 import com.hourglass.dto.TaskListResponse;
 import com.hourglass.dto.TaskMoveRequest;
 import com.hourglass.dto.TaskReopenRequest;
+import com.hourglass.dto.TaskRestoreRequest;
 import com.hourglass.dto.TaskSaveRequest;
 import com.hourglass.dto.TaskWatcherRequest;
 import com.hourglass.entity.Task;
@@ -92,9 +95,19 @@ public class TaskController {
         return ApiResult.ok(queryService.donePage(ctx.getWsId(), ctx.getUserId(), query));
     }
 
+    /** 已取消终态：按原因筛选、分页；默认视图不显示已取消，只从这个入口进 */
+    @GetMapping("/api/tasks/canceled")
+    public ApiResult<TaskCanceledPage> canceled(@CurrentWorkspace WorkspaceCtx ctx,
+                                                @RequestParam(required = false) String reason,
+                                                @RequestParam(required = false) Integer offset,
+                                                @RequestParam(required = false) Integer limit) {
+        /* 省略 limit 时给一页的默认量；服务层再夹到 1..100，避免默认值落成「只返回 1 条」 */
+        return ApiResult.ok(queryService.canceledPage(ctx.getWsId(), ctx.getUserId(), reason,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
     /** 未完成列分页（「加载更多」）：col 为看板列 id */
-    @GetMapping("/api/tasks/column")
-    public ApiResult<BoardResponse.ColumnData> column(@CurrentWorkspace WorkspaceCtx ctx,
+    @GetMapping("/api/tasks/column")    public ApiResult<BoardResponse.ColumnData> column(@CurrentWorkspace WorkspaceCtx ctx,
                                                       @BoardFilter BoardQuery query,
                                                       @RequestParam String col,
                                                       @RequestParam(required = false) Integer offset,
@@ -195,6 +208,25 @@ public class TaskController {
     public ApiResult<Map<String, Object>> move(@PathVariable String id, @Valid @RequestBody TaskMoveRequest req,
                                                @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(workflowService.move(ctx.getUserId(), ctx.getWsId(), id, req));
+    }
+
+    /**
+     * 取消工作项：进入终态「已取消」，原因 + 说明必填。
+     * 路径用 /cancel 与 /uncancel，避免与回收站的 /restore 混淆。
+     */
+    @PostMapping("/api/tasks/{id}/cancel")
+    public ApiResult<Map<String, Object>> cancel(@PathVariable String id,
+                                                 @RequestBody(required = false) TaskCancelRequest body,
+                                                 @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(workflowService.cancel(ctx.getUserId(), ctx.getWsId(), id, body));
+    }
+
+    /** 恢复已取消的工作项：回到取消前所在列，说明必填 */
+    @PostMapping("/api/tasks/{id}/uncancel")
+    public ApiResult<Map<String, Object>> uncancel(@PathVariable String id,
+                                                   @RequestBody(required = false) TaskRestoreRequest body,
+                                                   @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(workflowService.restore(ctx.getUserId(), ctx.getWsId(), id, body));
     }
 
     /** 认领测试负责人：批量移入「测试中」后仍待领取的工作项 */

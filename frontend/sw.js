@@ -94,6 +94,7 @@ var SHELL = [
   "js/views/board.js",
   "js/views/branches.js",
   "js/views/calendar.js",
+  "js/views/canceled.js",
   "js/views/chain.js",
   "js/views/demands.js",
   "js/views/delivery.js",

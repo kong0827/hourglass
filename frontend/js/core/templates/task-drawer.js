@@ -886,6 +886,8 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
       </button>
       <span class="foot-sp" aria-hidden="true"></span>
       <span class="hint" id="taskFormHint">保存后可拖动卡片调整状态与顺序</span>
+      <button class="btn" type="button" id="btnCancelItem" hidden>取消工作项…</button>
+      <button class="btn" type="button" id="btnRestoreItem" hidden>恢复工作项…</button>
       <button class="btn danger" type="button" id="btnDeleteTask" hidden>删除</button>
       <button class="btn" type="button" id="btnCancelTask">取消</button>
       <button class="btn" type="submit" id="btnSaveTaskAgain" hidden>保存并再建一条</button>

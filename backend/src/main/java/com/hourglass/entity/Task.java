@@ -39,6 +39,13 @@ public class Task {
     private Integer estimateMinutes;
     private String note;
     private LocalDateTime completedAt;
+    /* ---- 终态「已取消」（board_column='canceled'，sql/109）：原因与来源列只服务于筛选与恢复 ---- */
+    /** 取消时间；恢复时清空 */
+    private LocalDateTime canceledAt;
+    /** 取消原因码：not_do / dup / deferred / design */
+    private String cancelReason;
+    /** 取消前所在列 id；恢复时回到该列，列已删除则回第一个开列 */
+    private String cancelFrom;
     /** 测试负责人账号ID；为空表示「待领取」，与开发负责人相互独立 */
     private String testOwnerUserId;
     /** 测试负责人显示名快照；账号ID是权威绑定 */

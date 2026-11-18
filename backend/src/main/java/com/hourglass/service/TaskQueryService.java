@@ -11,6 +11,7 @@ import com.hourglass.dto.MyTaskWorkspace;
 import com.hourglass.dto.MyTasksPage;
 import com.hourglass.dto.MyTasksQuery;
 import com.hourglass.dto.TaskListResponse;
+import com.hourglass.dto.TaskCanceledPage;
 import com.hourglass.dto.TaskWorkMetricsRow;
 import com.hourglass.dto.TaskWorkpageResponse;
 import com.hourglass.dto.WorkColumnQuery;
@@ -192,6 +193,8 @@ public class TaskQueryService {
             knownColumns.add(c.getId());
         }
         knownColumns.add(Consts.COL_DONE);
+        /* 终态不是看板列：加进已知列，只为了让「未知列折进首个开列」的兜底跳过它 */
+        knownColumns.add(Consts.COL_CANCELED);
         if (openColumns.isEmpty()) {
             openColumns.add(fallbackCol);
         }
@@ -232,7 +235,44 @@ public class TaskQueryService {
 
         List<TaskFacetRow> facets = taskMapper.selectBoardFacets(workspaceId, viewerId);
         resp.setCounts(countDue(facets, today));
+        /* 终态入口计数：已取消不占列，也不进逾期，单独给工具条上的「已取消」入口用 */
+        resp.getCounts().setCanceled(taskMapper.countCanceled(workspaceId, viewerId));
         resp.setMeta(buildMeta(workspaceId, facets, viewerId));
+        return resp;
+    }
+
+    /**
+     * 已取消视图：终态独立成页，不复用看板列（否则会混进「未完成」计数）。
+     * 原因计数随页下发，筛选后计数不随分页变化。
+     */
+    public TaskCanceledPage canceledPage(String workspaceId, String userId, String reason, int offset, int limit) {
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        String safeReason = Texts.trimToNull(reason);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        List<com.hourglass.dto.NameCountRow> reasons = taskMapper.countCanceledReasons(workspaceId, viewerId);
+        TaskCanceledPage resp = new TaskCanceledPage();
+        resp.setTotal(taskMapper.countCanceled(workspaceId, viewerId));
+        int matched = resp.getTotal();
+        if (safeReason != null) {
+            matched = 0;
+            for (com.hourglass.dto.NameCountRow row : reasons) {
+                if (safeReason.equals(row.getName())) {
+                    matched = row.getCnt();
+                    break;
+                }
+            }
+        }
+        resp.setMatched(matched);
+        List<Task> items = matched <= safeOffset ? new ArrayList<Task>()
+                : taskMapper.selectCanceledPage(workspaceId, viewerId, safeReason, safeOffset, safeLimit);
+        mergeTaskExtras(workspaceId, items);
+        resp.setItems(items);
+        resp.setHasMore(safeOffset + items.size() < matched);
+        for (com.hourglass.dto.NameCountRow row : reasons) {
+            resp.getReasons().add(new BoardResponse.NameCount(row.getName() == null ? "" : row.getName(),
+                    row.getCnt()));
+        }
         return resp;
     }
 
@@ -278,6 +318,8 @@ public class TaskQueryService {
             knownColumns.add(c.getId());
         }
         knownColumns.add(Consts.COL_DONE);
+        /* 终态不是看板列：加进已知列，只为了让「未知列折进首个开列」的兜底跳过它 */
+        knownColumns.add(Consts.COL_CANCELED);
         GanttQuery openQuery = GanttQuery.from(query, today, null, null, false);
         openQuery.setViewerId(viewerId);
         return openPage(workspaceId, viewerId, openQuery, query, col, offset, limit <= 0 ? 60 : limit,
@@ -329,9 +371,11 @@ public class TaskQueryService {
             knownColumns.add(c.getId());
         }
         knownColumns.add(Consts.COL_DONE);
+        /* 终态不是看板列：加进已知列，只为了让「未知列折进首个开列」的兜底跳过它 */
+        knownColumns.add(Consts.COL_CANCELED);
 
         String col = Texts.trimToNull(column);
-        if (col == null || !knownColumns.contains(col)) {
+        if (col == null || !knownColumns.contains(col) || Consts.COL_CANCELED.equals(col)) {
             col = fallbackCol;
         }
         boolean done = Consts.COL_DONE.equals(col);
@@ -514,10 +558,11 @@ public class TaskQueryService {
         List<Task> all = viewerId == null
                 ? taskMapper.selectAll(workspaceId)
                 : taskMapper.selectAllVisible(workspaceId, viewerId);
-        /* selectAll 含回收站；公开分享/甘特数据源不能把软删除任务带出去 */
+        /* selectAll 含回收站与终态：公开分享/甘特数据源不能把软删除任务带出去，
+           已取消同样不进共享甘特（与站内甘特同一口径） */
         List<Task> active = new ArrayList<Task>(all.size());
         for (Task t : all) {
-            if (t.getDeletedAt() == null) {
+            if (t.getDeletedAt() == null && !Consts.COL_CANCELED.equals(t.getBoardColumn())) {
                 active.add(t);
             }
         }

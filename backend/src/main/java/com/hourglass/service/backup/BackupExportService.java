@@ -184,6 +184,9 @@ public class BackupExportService {
             b.setOwnerUserId(t.getOwnerUserId());
             b.setRemindTarget(t.getRemindTarget());
             b.setCompletedAt(t.getCompletedAt() == null ? null : t.getCompletedAt().toString());
+            b.setCancelReason(t.getCancelReason());
+            b.setCancelFrom(t.getCancelFrom());
+            b.setCanceledAt(t.getCanceledAt() == null ? null : t.getCanceledAt().toString());
             b.setTestOwnerUserId(t.getTestOwnerUserId());
             b.setTestOwner(t.getTestOwner());
             b.setTestRequestedAt(t.getTestRequestedAt() == null ? null : t.getTestRequestedAt().toString());

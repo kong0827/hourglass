@@ -6,8 +6,10 @@ import com.hourglass.common.DefectMeta;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.TaskBulkMoveRequest;
+import com.hourglass.dto.TaskCancelRequest;
 import com.hourglass.dto.TaskMoveRequest;
 import com.hourglass.dto.TaskReopenRequest;
+import com.hourglass.dto.TaskRestoreRequest;
 import com.hourglass.entity.Subtask;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkspaceMember;
@@ -223,6 +225,10 @@ public class TaskWorkflowService {
         projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
         String from = task.getBoardColumn();
         String to = req.getColumn();
+        /* 已取消是终态：只能恢复到取消前所在列（restore），不接受拖拽改列 */
+        if (Consts.COL_CANCELED.equals(from)) {
+            throw AppException.badRequest("已取消的工作项只能恢复到取消前所在列，请使用「恢复」操作");
+        }
         support.validateColumn(workspaceId, to);
         boolean force = Boolean.TRUE.equals(req.getForce());
         ColumnTransitionService.Decision decision = transitions.check(workspaceId, from, to,
@@ -440,6 +446,9 @@ public class TaskWorkflowService {
             projectAccess.assertViewTask(workspaceId, userId, task);
             projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
             try {
+                if (Consts.COL_CANCELED.equals(task.getBoardColumn())) {
+                    throw AppException.badRequest("已取消的工作项只能恢复到取消前所在列，请使用「恢复」操作");
+                }
                 transitions.check(workspaceId, task.getBoardColumn(), req.getColumn(),
                         req.getReason(), force, canForce);
             } catch (AppException e) {
@@ -504,6 +513,141 @@ public class TaskWorkflowService {
     }
 
     /**
+     * 取消工作项：进入终态「已取消」，原因四选一 + 必填说明。
+     *
+     * <p>终态不是看板列，所以这里不复用 move：不参与排序、不走流转矩阵，
+     * 但要复用移动的计时联动（停表 + 接力）、审计（from/to + 快照）与通知。
+     * 取消后不计逾期、退出完成率分母、退出需求完成分母，进度保留原值。
+     */
+    @Transactional
+    public Map<String, Object> cancel(String userId, String workspaceId, String id, TaskCancelRequest body) {
+        Task task = lockActiveTask(workspaceId, id);
+        projectAccess.assertViewTask(workspaceId, userId, task);
+        projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
+        String from = task.getBoardColumn();
+        if (Consts.COL_DONE.equals(from)) {
+            throw AppException.badRequest("已完成的工作项不能直接取消，请先取消完成");
+        }
+        if (Consts.COL_CANCELED.equals(from)) {
+            throw AppException.badRequest("工作项已是已取消状态，无需重复取消");
+        }
+        String reason = Texts.trimToNull(body == null ? null : body.getReason());
+        if (reason == null || !Consts.CANCEL_REASON_NAMES.containsKey(reason)) {
+            throw AppException.badRequest("请选择取消原因：不做 / 重复 / 延期 / 设计如此");
+        }
+        String note = Texts.trimToNull(body == null ? null : body.getNote());
+        if (note == null) {
+            throw AppException.badRequest("取消必须填写说明，恢复时要靠它判断该不该捡回来");
+        }
+        note = Texts.cut(note, 250);
+
+        Map<String, Object> before = cancelSnapshot(task);
+        timeLogService.closeRunningForTask(workspaceId, id, userId, "工作项已取消");
+        /* 从可计时列取消与移列同一口径：接力同列下一个任务，避免「进行中」整列没人计时 */
+        if (support.canTime(workspaceId, from)) {
+            timeLogService.resumeInColumn(userId, workspaceId, from, id);
+        }
+        task.setBoardColumn(Consts.COL_CANCELED);
+        task.setCancelFrom(from);
+        task.setCancelReason(reason);
+        task.setCanceledAt(minuteNow());
+        task.setCompletedAt(null);
+        if (task.getUpdatedAt() != null) {
+            task.setVersionCheck(Boolean.TRUE);
+        }
+        int updatedRows = taskMapper.update(task);
+        if (Boolean.TRUE.equals(task.getVersionCheck()) && updatedRows == 0) {
+            throw new com.hourglass.common.AppException(409, "任务已被其他人修改，请刷新后重试");
+        }
+
+        String reasonName = Consts.cancelReasonName(reason);
+        String detail = "取消工作项（" + reasonName + "）：" + note;
+        audit.logChange(userId, workspaceId, id, "cancel", detail,
+                before, cancelSnapshot(task), note, from, Consts.COL_CANCELED);
+        notifyColumnMove(workspaceId, userId, task, detail, true);
+        if (task.getDemandId() != null) {
+            demandCompletion.refreshCompletion(workspaceId, task.getDemandId());
+        }
+        Map<String, Object> res = new LinkedHashMap<String, Object>();
+        Task result = taskMapper.selectById(id);
+        List<Task> batch = Collections.singletonList(result);
+        versionTaskMapper.enrichTasks(workspaceId, batch);
+        publications.enrichTasks(workspaceId, batch);
+        res.put("task", result);
+        res.put("from", from);
+        res.put("to", Consts.COL_CANCELED);
+        return res;
+    }
+
+    /**
+     * 恢复已取消工作项：回到取消前所在列（列已删除则回第一个开列）。
+     *
+     * <p>清空取消三字段并重新取列内排序号；取消期间可能有人改过该卡的其他字段，
+     * 仍然保留。恢复后照常计入逾期 / 完成率分母，需求完成判定重新刷新。
+     */
+    @Transactional
+    public Map<String, Object> restore(String userId, String workspaceId, String id, TaskRestoreRequest body) {
+        Task task = lockActiveTask(workspaceId, id);
+        projectAccess.assertViewTask(workspaceId, userId, task);
+        projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
+        if (!Consts.COL_CANCELED.equals(task.getBoardColumn())) {
+            throw AppException.badRequest("只有已取消的工作项可以恢复");
+        }
+        String note = Texts.trimToNull(body == null ? null : body.getNote());
+        if (note == null) {
+            throw AppException.badRequest("恢复必须填写说明，写清为什么捡回来");
+        }
+        note = Texts.cut(note, 250);
+        String target = Texts.trimToNull(task.getCancelFrom());
+        if (target == null || Consts.COL_CANCELED.equals(target) || Consts.COL_DONE.equals(target)
+                || !support.columnExists(workspaceId, target)) {
+            target = support.firstOpenColumn(workspaceId);
+        }
+
+        Map<String, Object> before = cancelSnapshot(task);
+        task.setBoardColumn(target);
+        task.setCancelFrom(null);
+        task.setCancelReason(null);
+        task.setCanceledAt(null);
+        task.setCompletedAt(null);
+        task.setSortOrder(taskMapper.maxSortOrder(workspaceId, target) + SORT_STEP);
+        if (task.getUpdatedAt() != null) {
+            task.setVersionCheck(Boolean.TRUE);
+        }
+        int updatedRows = taskMapper.update(task);
+        if (Boolean.TRUE.equals(task.getVersionCheck()) && updatedRows == 0) {
+            throw new com.hourglass.common.AppException(409, "任务已被其他人修改，请刷新后重试");
+        }
+
+        String detail = "恢复工作项到「" + support.columnName(workspaceId, target) + "」：" + note;
+        audit.logChange(userId, workspaceId, id, "restore", detail,
+                before, cancelSnapshot(task), note, Consts.COL_CANCELED, target);
+        notifyColumnMove(workspaceId, userId, task, detail, true);
+        if (task.getDemandId() != null) {
+            demandCompletion.refreshCompletion(workspaceId, task.getDemandId());
+        }
+        Map<String, Object> res = new LinkedHashMap<String, Object>();
+        Task result = taskMapper.selectById(id);
+        List<Task> batch = Collections.singletonList(result);
+        versionTaskMapper.enrichTasks(workspaceId, batch);
+        publications.enrichTasks(workspaceId, batch);
+        res.put("task", result);
+        res.put("from", Consts.COL_CANCELED);
+        res.put("to", target);
+        return res;
+    }
+
+    /** 取消 / 恢复的审计快照：只记与终态相关的列字段，不把整张任务序列化进 change_data */
+    private static Map<String, Object> cancelSnapshot(Task t) {
+        Map<String, Object> snap = new LinkedHashMap<String, Object>();
+        snap.put("boardColumn", t.getBoardColumn());
+        snap.put("cancelFrom", t.getCancelFrom());
+        snap.put("cancelReason", t.getCancelReason());
+        snap.put("canceledAt", t.getCanceledAt());
+        return snap;
+    }
+
+    /**
      * 抽屉里编辑导致的改列：计时联动（完成停表+接力 / 进入可计时列开表 / 进入不可计时列停表）。
      * 由 {@link TaskCommandService#update} 在落库前调用，保持与拖拽 move 相同的计时口径。
      *
@@ -515,6 +659,10 @@ public class TaskWorkflowService {
                                          boolean blocked) {
         if (from == null || from.equals(to)) {
             return null;
+        }
+        /* 终态进出都不走表单改列：取消 / 恢复各有专门动作，各自留痕与通知 */
+        if (Consts.COL_CANCELED.equals(from) || Consts.COL_CANCELED.equals(to)) {
+            throw AppException.badRequest("「已取消」是终态，请在卡片菜单里取消或恢复工作项");
         }
         Task task = lockActiveTask(workspaceId, id);
         projectAccess.assertViewTask(workspaceId, userId, task);

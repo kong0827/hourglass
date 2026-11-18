@@ -180,6 +180,10 @@ class TaskSupport {
         if (Consts.COL_DONE.equals(column)) {
             return;
         }
+        /* 终态只能由取消动作进入，不接受拖拽 / 表单直接写；恢复走 restore */
+        if (Consts.COL_CANCELED.equals(column)) {
+            throw AppException.badRequest("「已取消」是终态，不能作为目标列；请在卡片菜单里取消工作项");
+        }
         if (metaCache.column(workspaceId, column) == null) {
             throw AppException.badRequest("看板列不存在：" + column);
         }
@@ -210,6 +214,9 @@ class TaskSupport {
         if (Consts.COL_DONE.equals(column)) {
             return "已完成";
         }
+        if (Consts.COL_CANCELED.equals(column)) {
+            return "已取消";
+        }
         BoardColumn c = metaCache.column(workspaceId, column);
         return c == null ? column : c.getName();
     }
@@ -224,6 +231,10 @@ class TaskSupport {
         }
         if (Consts.COL_DONE.equals(column)) {
             return "done";
+        }
+        /* 终态：不计时、不计逾期 */
+        if (Consts.COL_CANCELED.equals(column)) {
+            return "canceled";
         }
         BoardColumn c = metaCache.column(workspaceId, column);
         String rule = c == null ? null : c.getProcessingRule();

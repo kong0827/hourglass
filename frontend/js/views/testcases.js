@@ -56,6 +56,15 @@ var caseSetNoneTotal = 0;   /* 未加入任何可见分组的用例数（项目�
 var caseSets = [];
 var caseSetSeq = 0;
 var caseSetOpen = {};       /* 分组折叠态：分组 id -> false 表示折叠，缺省即展开 */
+/* 全部项目壳内的收窄态：空=概览；有项目=只看该项目；再有分组=项目 + 分组。
+   只负责浏览与筛选，写操作仍要求进入项目。 */
+var caseAllProj = "";
+var caseAllSet = "";
+var caseAllSets = {};       /* reqId -> {list, noneTotal, loading, error}：全部项目树的分组缓存 */
+var caseAllSetSeq = 0;
+var caseAllOpen = {};       /* 项目展开态：reqId -> false 表示折叠，缺省即展开 */
+var caseAllQuery = "";      /* 全部项目树搜索词 */
+var caseProjTotals = {};    /* reqId -> 项目用例总数（无筛选时记录，供树与段头展示） */
 var caseSetSub = true;      /* 选中父分组时是否显示子分组用例（服务端按子树去重） */
 var caseDirOpen = {};       /* 目录折叠态：节点 id -> false 表示折叠，缺省即展开 */
 var caseDirQuery = "";
@@ -210,9 +219,48 @@ function caseFormWritable(){ return !!caseFormReqId && canEditReq(caseFormReqId)
 function caseScopeVisibleProjects(){
   return (rt.reqList || []).filter(function(r){ return !r.archivedAt; });
 }
+/* 全部项目壳内是否已收窄到某个项目 / 分组 */
+function caseAllNarrow(){ return !!(caseScopeAll && caseAllProj); }
+/* 列表与查询的生效项目：概览为空（逐项目拉取），收窄后只取该项目 */
+function caseAllEffectiveReq(){ return caseScopeAll ? (caseAllProj || "") : (caseReqId || ""); }
+/* 全部项目树里某项目的分组缓存 */
+function caseAllEntry(reqId){
+  return caseAllSets[reqId] || null;
+}
+function caseAllSetById(reqId, id){
+  var ent = caseAllEntry(reqId);
+  var list = (ent && ent.list) || [];
+  for(var i = 0; i < list.length; i++) if(list[i].id === id) return list[i];
+  return null;
+}
+function caseAllSetName(reqId, id){
+  if(!id) return "";
+  if(id === "__none") return "未加入任何分组";
+  var s = caseAllSetById(reqId, id);
+  return s ? s.name : "已删除的分组";
+}
+/* 段头只放顶层分组：子分组通过侧栏进入，避免一行里塞满缩进后的路径 */
+function caseAllTopSets(reqId){
+  var ent = caseAllEntry(reqId);
+  return ((ent && ent.list) || []).filter(function(s){ return !s.parentId; });
+}
+/* 顶层分组按子树计数（收窄时服务端也按子树去重），与段头 chip 的数字同源 */
+function allTopSetCount(s){
+  return s.parentId ? (s.caseCount || 0) : (s.subtreeCount || s.caseCount || 0);
+}
+function allSetOn(reqId, id){
+  return !!(caseAllNarrow() && caseAllProj === reqId && caseAllSet === id);
+}
+function allProjOn(reqId){
+  return !!(caseAllNarrow() && caseAllProj === reqId && !caseAllSet);
+}
 function caseCreateTargets(){
   var scope = caseScopeVisibleProjects();
-  if(caseScopeAll) return scope.filter(function(r){ return canEditReq(r.id); }).map(function(r){ return r.id; });
+  if(caseScopeAll){
+    /* 收窄到某个项目后，新建默认落回该项目，不再每次都弹目标项目菜单 */
+    if(caseAllProj) return canEditReq(caseAllProj) ? [caseAllProj] : [];
+    return scope.filter(function(r){ return canEditReq(r.id); }).map(function(r){ return r.id; });
+  }
   return caseReqId && canEditReq(caseReqId) ? [caseReqId] : [];
 }
 /* 有没有可看的用例目标：全部项目看可见项目，单项目看项目列表本身 */
@@ -288,17 +336,24 @@ function syncReqSel(){
 /* 当前筛选条件（不含分页）：列表、分组段头、批量动作、按筛选加入计划与导出共用同一份口径。
    空值口径与服务端 CaseQuery 对齐：未执行=__untested、未归类/未设置=__none、缺陷开关=bugOnly。 */
 function caseFilterQuery(reqId){
-  var single = !caseScopeAll;
+  /* 全部项目概览不传任何项目内结构；收窄到项目 / 分组后按单项目口径生效 */
+  var single = !caseScopeAll || caseAllNarrow();
+  var setCond = caseScopeAll
+    ? (caseAllNarrow() && caseAllSet ? caseAllSet : null)
+    : (setFilter !== "all" ? setFilter : null);
   return {
-    reqId: reqId || caseReqId,
+    reqId: reqId || caseAllEffectiveReq(),
     status: statusFilter === "all" ? null : (statusFilter === "untested" ? "__untested" : statusFilter),
-    moduleId: single && moduleFilter !== "all" ? moduleFilter : null,
-    moduleSub: single && caseModuleSub ? true : null,
+    moduleId: single && !caseScopeAll && moduleFilter !== "all" ? moduleFilter : null,
+    moduleSub: single && !caseScopeAll && caseModuleSub ? true : null,
     pri: priFilter === "all" ? null : priFilter,
     owner: ownerFilter === "all" ? null : ownerFilter,
-    demandId: single && demandFilter !== "all" ? demandFilter : null,
-    setId: single && setFilter !== "all" ? setFilter : null,
-    setSub: single && setFilter !== "all" && caseSetSub ? true : null,
+    demandId: single && !caseScopeAll && demandFilter !== "all" ? demandFilter : null,
+    setId: setCond,
+    /* 全部项目下分组 chip / 树上的计数都是整组口径：收窄分组时固定带子分组，避免「显示 2 条却只来 1 条」 */
+    setSub: setCond && setCond !== "__none"
+      ? (caseScopeAll ? true : (caseSetSub ? true : null))
+      : null,
     bugOnly: bugOnly ? true : null,
     q: searchText || null,
     searchWide: caseSearchWide ? true : null,
@@ -554,6 +609,14 @@ function loadCases(opts){
 function loadCasesAll(seq, opts){
   opts = opts || {};
   var projects = caseScopeVisibleProjects();
+  /* 收窄后只取该项目：分组也是项目内结构，不跨项目合并 */
+  if(caseAllProj) projects = projects.filter(function(p){ return p.id === caseAllProj; });
+  /* 收窄的项目已不可见：先退回概览再重新取数，别停在「该项目已不可用」的空态 */
+  if(caseAllProj && !projects.length){
+    clearAllScope(true);
+    loadCases();
+    return Promise.resolve(false);
+  }
   if(!rt.reqList.length || !projects.length){
     cases = [];
     caseGroups = [];
@@ -568,21 +631,31 @@ function loadCasesAll(seq, opts){
     $("tcStats").innerHTML = "";
     $("tcMeta").textContent = "全部项目";
     $("tcList").innerHTML = UI.emptyState({
-      icon: "folder", title: "没有可用项目",
-      text: rt.reqList.length ? "项目都已归档，暂无用例可看。" : "先在「项目」里创建项目，测试用例按项目收纳。"
+      icon: "folder", title: caseAllProj ? "该项目已不可用" : "没有可用项目",
+      text: caseAllProj
+        ? "项目可能已归档或失去查看权限；点上方「清空范围」回到全部项目。"
+        : (rt.reqList.length ? "项目都已归档，暂无用例可看。" : "先在「项目」里创建项目，测试用例按项目收纳。")
     });
     syncCaseBars();
     return Promise.resolve(false);
   }
   if(!opts.quiet) $("tcList").innerHTML = UI.skeletonRows(3);
-  return Promise.all(projects.map(function(p){
+  var reqs = projects.map(function(p){
     return API.get("/api/test-cases", caseQueryParams(0, p.id)).then(function(page){
       return { reqId: p.id, name: p.name, page: page || {} };
     }).catch(function(){
       return { reqId: p.id, name: p.name, page: null };
     });
-  })).then(function(rs){
+  });
+  /* 收窄到项目后按单项目口径给执行结果统计：概览下各项目计数不可相加，保持隐藏 */
+  if(caseAllProj) reqs.push(API.get("/api/test-cases/stats", { reqId: caseAllProj }).catch(function(){ return null; }));
+  return Promise.all(reqs).then(function(rs){
     if(seq !== loadSeq || !caseScopeAll) return false;
+    var statPage = caseAllProj ? rs.pop() : null;
+    if(caseAllProj){
+      stats = statPage || null;
+      if(statPage) caseProjTotals[caseAllProj] = Number(statPage.total) || 0;
+    }
     caseGroups = rs.map(function(g){
       var page = g.page || {};
       return {
@@ -594,6 +667,9 @@ function loadCasesAll(seq, opts){
         error: !g.page
       };
     });
+    /* 树与段头的项目总数只在「无筛选、无分组收窄」时记录：否则 total 是命中数，不能当项目总量。
+       加载失败的项目保留上一次的已知总数：失败不等于项目里有 0 条用例 */
+    if(!caseFilterCount() && !caseAllSet) caseGroups.forEach(function(g){ if(!g.error) caseProjTotals[g.reqId] = g.total; });
     cases = [];
     caseGroups.forEach(function(g){ cases = cases.concat(g.items); });
     caseTotal = caseGroups.reduce(function(a, g){ return a + g.total; }, 0);
@@ -2257,7 +2333,7 @@ function render(){
   $("tcReport").hidden = true;
   $("tcPlans").hidden = true;
   $("tcDefects").hidden = true;
-  $("tcStats").hidden = caseScopeAll;
+  $("tcStats").hidden = caseScopeAll && (!caseAllProj || !stats);
   syncQueryBar();
   syncCaseBars();
   syncSidePanel();
@@ -2267,28 +2343,47 @@ function render(){
   var anyFilter = caseFilterCount() > 0;
   if(caseScopeAll){
     var projects = caseScopeVisibleProjects();
-    var metaAll = "全部项目 · " + projects.length + " 个项目";
-    if(anyFilter) metaAll += " · 筛选出 " + caseTotal + " 条";
-    else metaAll += " · 共 " + caseTotal + " 条";
+    var metaAll;
+    if(caseAllNarrow()){
+      var setLabel = caseAllSet
+        ? (caseAllSet === "__none" ? "未加入任何分组" : "分组「" + cut(caseAllSetName(caseAllProj, caseAllSet), 16) + "」")
+        : "";
+      metaAll = reqNameOf(caseAllProj) + (setLabel ? " · " + setLabel : "");
+      if(anyFilter) metaAll += " · 筛选出 " + caseTotal + " 条";
+      else metaAll += " · 共 " + caseTotal + " 条";
+    }else{
+      metaAll = "全部项目 · " + projects.length + " 个项目";
+      if(anyFilter) metaAll += " · 筛选出 " + caseTotal + " 条";
+      else metaAll += " · 共 " + caseTotal + " 条";
+    }
     if(cases.length < caseTotal) metaAll += " · 已加载 " + cases.length + " 条";
+    var errCount = caseGroups.filter(function(g){ return g.error; }).length;
+    /* 有项目没取到时，条数只覆盖成功的项目：在标题里点明，别让「共 N 条」被当成全部 */
+    if(errCount) metaAll += " · " + errCount + " 个项目加载失败";
     $("tcMeta").textContent = metaAll;
     if(!caseGroups.length){
       $("tcList").innerHTML = UI.emptyState({
-        icon: "folder", title: "没有可用项目",
-        text: "项目都已归档，暂无用例可看。"
+        icon: "folder", title: caseAllProj ? "该项目已不可用" : "没有可用项目",
+        text: caseAllProj ? "项目可能已归档或失去查看权限；点上方「清空范围」回到全部项目。" : "项目都已归档，暂无用例可看。"
       });
       return;
     }
     /* 空项目不占版面：全部项目下只列有内容或加载失败的项目，避免一屏都是空标题 */
     var visibleGroups = caseGroups.filter(function(g){ return g.items.length || g.error; });
     if(!visibleGroups.length){
+      var emptyTitle = searchText ? "没有匹配的用例"
+        : (anyFilter ? "没有符合条件的用例"
+          : (caseAllProj ? "该项目还没有测试用例" : "全部项目下还没有测试用例"));
       $("tcList").innerHTML = UI.emptyState({
         icon: anyFilter ? "filterOff" : "checklist",
-        title: searchText ? "没有匹配的用例" : (anyFilter ? "没有符合条件的用例" : "全部项目下还没有测试用例"),
-        text: searchText ? "换个关键词，或点「清空筛选」再试。" : (anyFilter ? "换个筛选条件，或点「清空筛选」再试。"
-          : (caseCreateTargets().length
-            ? "点右上角「新建用例」，选择目标项目后录入第一条。"
-            : "当前没有可写的项目；获得写权限后即可新建用例。"))
+        title: emptyTitle,
+        text: searchText ? "换个关键词，或点「清空筛选」再试。"
+          : (anyFilter ? "换个筛选条件，或点「清空筛选」再试。"
+            : (caseAllProj
+              ? "点上方「清空范围」看其它项目，或进入项目后新建用例。"
+              : (caseCreateTargets().length
+                ? "点右上角「新建用例」，选择目标项目后录入第一条。"
+                : "当前没有可写的项目；获得写权限后即可新建用例。")))
       });
       return;
     }
@@ -2460,21 +2555,54 @@ function caseSegmentHTML(s){
 function caseGroupHTML(g){
   var anyFilter = statusFilter !== "all" || priFilter !== "all"
     || ownerFilter !== "all" || bugOnly || !!searchText;
-  var count = g.items.length < g.total ? (g.items.length + " / " + g.total) : String(g.total);
-  /* 全部项目分段头带上项目集，避免同名或近似项目分不清是哪个集下的 */
+  var count = g.items.length < g.total ? (g.items.length + " / " + g.total) : String(g.total);  /* 全部项目分段头带上项目集，避免同名或近似项目分不清是哪个集下的 */
   var setName = setNameById(reqSetId(g.reqId));
+  var chips = "";
+  if(caseScopeAll){
+    /* 计数为 0 的分组不占 chip 位：点进去也只有空列表，留给左侧树 */
+    var tops = caseAllTopSets(g.reqId).filter(function(s){ return allTopSetCount(s) > 0; });
+    var ent = caseAllEntry(g.reqId);
+    if(tops.length || (ent && ent.noneTotal > 0)){
+      var show = tops.slice(0, 3);
+      chips = '<span class="tc-gchips" aria-label="该项目的主要分组">'
+        + '<span class="tc-gchips-label">分组</span>'
+        + show.map(function(s){
+          var on = allSetOn(g.reqId, s.id);
+          var n = allTopSetCount(s);
+          return '<button class="tc-gchip' + (on ? " on" : "") + '" type="button"'
+            + ' data-tc-all-set-chip="' + esc(s.id) + '" data-tc-all-proj="' + esc(g.reqId) + '"'
+            + ' aria-pressed="' + (on ? "true" : "false") + '" title="只看「' + esc(s.name) + '」（' + n + ' 条）">'
+            + esc(cut(s.name, 12)) + '<b>' + n + '</b></button>';
+        }).join("")
+        + (tops.length > show.length ? '<span class="tc-gchip more" title="其余 ' + (tops.length - show.length) + ' 个分组在左侧树里">+' + (tops.length - show.length) + '</span>' : "")
+        + (ent && ent.noneTotal > 0
+          ? '<button class="tc-gchip' + (allSetOn(g.reqId, "__none") ? " on" : "") + '" type="button"'
+            + ' data-tc-all-none-chip="' + esc(g.reqId) + '" aria-pressed="' + (allSetOn(g.reqId, "__none") ? "true" : "false") + '"'
+            + ' title="只看没有加入任何可见分组的用例">未分组<b>' + ent.noneTotal + '</b></button>'
+          : "")
+        + '</span>';
+    }
+  }
   var head = '<div class="tc-group-head">'
     + (setName ? '<span class="tc-group-set" title="' + esc("项目集：" + setName) + '">' + esc(setName) + '</span>' : "")
     + '<span class="tc-group-name">' + esc(g.name) + '</span>'
-    + '<span class="tc-group-count">' + count + ' 条用例</span>'
+    /* 失败时 total 是 0（没拿到），写成「0 条用例」会把故障说成空项目 */
+    + (g.error ? "" : '<span class="tc-group-count">' + count + ' 条用例</span>')
+    + chips
     + '<span class="tc-group-bar" aria-hidden="true"></span>'
     + (g.error ? '<span class="mini-tag over">加载失败</span>' : "")
+    + (caseScopeAll && !caseAllNarrow()
+      ? '<button class="btn sm ghost tc-group-enter" type="button" data-tc-all-enter="' + esc(g.reqId) + '"'
+        + ' title="进入该项目：可新建用例、维护分组与拖拽归类">进入项目 →</button>'
+      : "")
     + '</div>';
   var body;
   if(g.error){
-    body = '<p class="tc-group-empty">该项目用例加载失败；可切到单个项目重试。</p>';
+    body = '<p class="tc-group-empty">该项目用例加载失败 <button class="btn sm ghost" type="button"'
+      + ' data-tc-group-retry="' + esc(g.reqId) + '">重试</button></p>';
   }else if(!g.items.length){
-    body = '<p class="tc-group-empty">' + (anyFilter ? "没有符合条件的用例" : "还没有测试用例") + '</p>';
+    body = '<p class="tc-group-empty">' + (anyFilter ? "没有符合条件的用例"
+      : (caseAllSet ? "该分组还没有用例" : "还没有测试用例")) + '</p>';
   }else{
     body = g.items.map(function(c){ return caseRowHTML(c); }).join("");
   }
@@ -2517,6 +2645,8 @@ function caseFilterCount(){
   if(priFilter !== "all") n++;
   if(ownerFilter !== "all") n++;
   if(!caseScopeAll && demandFilter !== "all") n++;
+  /* 全部项目下的「分组」是浏览范围（由范围条管理），不是筛选条件：
+     计进来会让「清空筛选」看起来能取消分组，实际只清条件 */
   if(!caseScopeAll && setFilter !== "all") n++;
   if(bugOnly) n++;
   if(searchText) n++;
@@ -2603,14 +2733,17 @@ function syncQueryBar(){
   }
   var pb = $("tcPanelBtn");
   if(pb){
-    pb.hidden = caseScopeAll;
+    /* 全部项目也保留分组面板：树在这里承担「先看哪个项目」的导航 */
+    pb.hidden = false;
     pb.setAttribute("aria-expanded", caseSide ? "true" : "false");
     pb.classList.toggle("soft", !!caseSide);
     var lb = $("tcPanelBtnLabel");
-    if(lb) lb.textContent = "分组";
-    pb.title = caseSide
-      ? "收起左侧分组"
-      : "展开左侧分组：把用例拖到分组＝加入分组（可多归属），删分组不删用例";
+    if(lb) lb.textContent = caseScopeAll ? "项目与分组" : "分组";
+    pb.title = caseScopeAll
+      ? (caseSide ? "收起项目与分组" : "展开项目与分组：在全部项目里就地查看某个项目或分组；写操作需进入项目")
+      : (caseSide
+        ? "收起左侧分组"
+        : "展开左侧分组：把用例拖到分组＝加入分组（可多归属），删分组不删用例");
   }
   syncDirBtn();
   var gt = $("tcGrpToggleAll");
@@ -2623,7 +2756,8 @@ function syncQueryBar(){
   var sa = $("tcSelFiltered");
   if(sa){
     var on = caseSelAll && !caseSelScope;
-    sa.hidden = caseScopeAll;
+    /* 全部项目概览没有单一项目口径；收窄到项目后按该项目生效 */
+    sa.hidden = caseScopeAll && !caseAllProj;
     sa.disabled = !caseTotal;
     sa.classList.toggle("soft", on);
     sa.textContent = (on ? "取消全选（" : "全选筛选结果（") + caseTotal + " 条）";
@@ -2648,7 +2782,7 @@ function syncFilterOptions(){
   /* 搜索范围内置到搜索框：不再单独占一个开关按钮 */
   var caseSearchEl = $("tcSearch");
   if(caseSearchEl){
-    var scopeText = caseScopeAll ? "全部项目" : "本项目";
+    var scopeText = caseScopeAll ? (caseAllProj ? "本项目" : "全部项目") : "本项目";
     var fields = caseSearchWide
       ? "标题 / 编号 / 分类 / 前置 / 测试数据 / 步骤 / 最近备注 / 需求与缺陷标题"
       : "标题 / 编号 / 分类";
@@ -2718,6 +2852,7 @@ attachEnvDict($("defectEnvironment"));
 function tcViewParams(){
   return {
     scope: "testcase", reqId: caseReqId || "", all: caseScopeAll ? 1 : 0,
+    allProj: caseAllProj || "", allSet: caseAllSet || "",
     status: statusFilter, moduleId: moduleFilter, moduleSub: caseModuleSub ? 1 : 0,
     pri: priFilter, owner: ownerFilter, demandId: demandFilter, setId: setFilter,
     setSub: caseSetSub ? 1 : 0,
@@ -2782,11 +2917,19 @@ function applyTcView(v){
   /* 视图里保存的是「全部项目」时，只有用例与计划能恢复；覆盖矩阵与报告始终是单项目 */
   caseScopeAll = !!((p.all === 1 || p.all === true) && (tcMode === "cases" || tcMode === "plans"));
   if(caseScopeAll){ moduleFilter = "all"; demandFilter = "all"; setFilter = "all"; caseGroupBy = ""; }
+  /* 全部项目壳内的收窄目标随视图保存；不合法时回到概览，避免落在一个不存在的项目上 */
+  caseAllProj = caseScopeAll && typeof p.allProj === "string" && p.allProj
+    && rt.reqList.some(function(r){ return r.id === p.allProj; }) ? p.allProj : "";
+  caseAllSet = caseAllProj && typeof p.allSet === "string" ? p.allSet : "";
+  if(caseAllProj){ caseReqId = caseAllProj; }
+  /* 视图可能落在另一个项目上：先清掉旧项目的执行结果计数，等列表回来再填 */
+  if(caseScopeAll) stats = null;
   if(UI.popOpen($("tcDirMenu"))) UI.closeAllPops();
   if(caseSide === "set" && !caseScopeAll) loadCaseSets();
   if($("tcSearch")) $("tcSearch").value = searchText;
   syncReqSel();
   syncModeUI();
+  caseScrollTop();
   function go(){
     if(tcMode === "coverage") loadCoverage();
     else if(tcMode === "report") loadTestReport();
@@ -2864,13 +3007,13 @@ function syncTcSubnav(){
 /* 手机端项目域导航：面包屑显示当前项目，子页负责跨域跳转 */
 function tcDomainScopeId(){
   if(tcMode === "defects") return defReqId || "";
-  return caseScopeAll ? "" : (caseReqId || "");
+  return caseScopeAll ? (caseAllProj || "") : (caseReqId || "");
 }
 function syncTcDomain(){
   var cur = $("tcCrumbProj");
   if(!cur) return;
   var name = tcMode === "defects" ? defectScopeName()
-    : (caseScopeAll || !caseReqId ? "全部项目" : reqNameOf(caseReqId));
+    : (caseScopeAll ? (caseAllProj ? reqNameOf(caseAllProj) : "全部项目") : (caseReqId ? reqNameOf(caseReqId) : "全部项目"));
   /* 项目集引入后，面包屑补一级「项目集」：项目归属不再只靠选项目时的分组猜 */
   var scopeId = tcDomainScopeId();
   var setName = scopeId ? setNameById(reqSetId(scopeId)) : "";
@@ -2916,6 +3059,7 @@ function syncModeUI(){
   syncTcSubnav();
   syncTcDomain();
   syncQueryBar();
+  syncScopeBar();
   var bn = $("btnCaseNew");
   if(bn) bn.style.display = !cov && !rep && !plan && !def && caseCreateTargets().length ? "" : "none";
   var bulkBar = $("tcBulkBar");
@@ -2936,11 +3080,14 @@ function syncModeUI(){
   var csvOut = $("btnCaseCsvOut"), csvIn = $("btnCaseCsvIn"), planNew = $("btnPlanNew");
   var importWrap = $("tcImportWrap");
   var aiBtn = $("btnCaseAi"), defNew = $("btnDefectNew");
-  /* 导出、导入、AI 生成都只针对一个具体项目，全部项目下先收起，避免把范围写成模糊的全量 */
+  /* 导出、导入、AI 生成都只针对一个具体项目，全部项目概览下收起，避免把范围写成模糊的全量。
+     收窄到项目后 caseReqId 已指向该项目：导入导出按单项目口径可用，与批量修改一致；
+     AI 生成仍只在真正进入项目后开放 */
   var singleScope = !caseScopeAll;
-  if(csvOut) csvOut.style.display = tcMode === "cases" && singleScope && caseReqId ? "" : "none";
-  if(csvIn) csvIn.style.display = tcMode === "cases" && singleScope && isWritable() ? "" : "none";
-  if(importWrap) importWrap.style.display = tcMode === "cases" && singleScope && isWritable() ? "" : "none";
+  var ioScope = singleScope || !!caseAllProj;
+  if(csvOut) csvOut.style.display = tcMode === "cases" && ioScope && caseReqId ? "" : "none";
+  if(csvIn) csvIn.style.display = tcMode === "cases" && ioScope && isWritable() ? "" : "none";
+  if(importWrap) importWrap.style.display = tcMode === "cases" && ioScope && isWritable() ? "" : "none";
   if(aiBtn) aiBtn.style.display = tcMode === "cases" && singleScope && isWritable() ? "" : "none";
   /* 该按钮初始带 hidden 属性，而全局 [hidden]{display:none!important} 优先级高于行内 display，
      必须切 hidden 本身，改 style.display 永远显示不出来。
@@ -3014,8 +3161,8 @@ function toggleCaseSel(id, on, segKey){
 }
 /* 全选筛选结果：范围是当前筛选（或某一组），服务端按条件生效，不受分页限制 */
 function selectAllFiltered(){
-  if(caseScopeAll){ toast("「全选筛选结果」需要先切到单个项目", "warn"); return; }
-  if(!caseReqId){ toast("先选择项目", "warn"); return; }
+  if(caseScopeAll && !caseAllProj){ toast("「全选筛选结果」需要先切到单个项目，或先在左侧选中一个项目", "warn"); return; }
+  if(!caseAllEffectiveReq()){ toast("先选择项目", "warn"); return; }
   if(!caseTotal){ toast("当前筛选没有命中用例", "warn"); return; }
   if(caseSelAll && !caseSelScope){ clearCaseSel(); render(); return; }
   if(caseTotal > 2000){
@@ -3039,31 +3186,38 @@ function syncBulkBar(){
   if(!show) return;
   var writable = caseWritableLoaded();
   var n = caseSelCount();
+  var overview = caseScopeAll && !caseAllProj;
   var loadedSel = writable.filter(function(c){ return caseRowSelected(c, null); }).length;
   var allOn = writable.length > 0 && loadedSel === writable.length;
   var allBox = $("tcBulkAll");
   allBox.checked = allOn;
   allBox.indeterminate = !allOn && loadedSel > 0;
-  allBox.disabled = !writable.length || !!(caseSelAll && caseSelScope);
-  allBox.title = allBox.disabled
-    ? (writable.length
-      ? "已全选「" + caseSelScope.label + "」组；要改选其他行请先取消全选本组"
-      : "当前筛选下没有可编辑的用例")
-    : "勾选当前已加载的可编辑行（最多 200 条）";
+  allBox.disabled = overview || !writable.length || !!(caseSelAll && caseSelScope);
+  allBox.title = overview
+    ? "全部项目概览只读浏览；批量修改需先在左侧选中一个项目"
+    : (allBox.disabled
+      ? (writable.length
+        ? "已全选「" + caseSelScope.label + "」组；要改选其他行请先取消全选本组"
+        : "当前筛选下没有可编辑的用例")
+      : "勾选当前已加载的可编辑行（最多 200 条）");
   $("tcBulkAllLabel").textContent = caseSelAll ? "全选已加载（按条件生效）" : "全选已加载";
-  $("tcBulkCount").innerHTML = n
-    ? ('已选 <b>' + n + '</b> 条')
-    : ("共 " + writable.length + " 条可编辑");
+  $("tcBulkCount").innerHTML = overview
+    ? '<span class="tc-bulk-ro">全部项目概览 · 只读</span>'
+    : (n
+      ? ('已选 <b>' + n + '</b> 条')
+      : ("共 " + writable.length + " 条可编辑"));
   var loaded = writable.length;
   var hintEl = $("tcBulkHint");
-  hintEl.textContent = !loaded
-    ? "当前筛选下没有可编辑的用例"
-    : caseSelAll
-      ? (caseSelScope
-        ? "范围：「" + caseSelScope.label + "」组内全部 " + caseSelTotal() + " 条（含未加载的行）"
-        : "当前页已加载 " + loaded + " 条，其余 " + Math.max(0, n - loaded) + " 条按筛选条件匹配（未加载也生效）")
-      : "仅覆盖已加载的行";
-  hintEl.title = caseSelAll
+  hintEl.textContent = overview
+    ? "概览只读：批量修改需先在左侧选中一个项目"
+    : (!loaded
+      ? "当前筛选下没有可编辑的用例"
+      : caseSelAll
+        ? (caseSelScope
+          ? "范围：「" + caseSelScope.label + "」组内全部 " + caseSelTotal() + " 条（含未加载的行）"
+          : "当前页已加载 " + loaded + " 条，其余 " + Math.max(0, n - loaded) + " 条按筛选条件匹配（未加载也生效）")
+        : "仅覆盖已加载的行");
+  hintEl.title = (overview || caseSelAll)
     ? hintEl.textContent
     : "勾选只作用于当前已加载的 " + loaded + " 条；要覆盖未加载的行，请用「全选筛选结果」";
   /* 结果都在已加载的行里时，「全选筛选结果」与「全选已加载」等价，弱化掉免得两条路选同一批 */
@@ -3078,12 +3232,16 @@ function syncBulkBar(){
     var b = $(id);
     if(b) b.disabled = !n;
   });
-  /* 移出分组只在「按某个分组筛选」或「全选本组（分组维度）」时有明确对象 */
+  /* 移出分组只在「按某个分组筛选」或「全选本组（分组维度）」时有明确对象；
+     全部项目收窄时分组在 caseAllSet 上，不在 setFilter 里 */
   var unset = $("btnTcBatchUnset");
   if(unset){
     var scopeSet = caseSelScope && caseSelScope.dim === "set" ? caseSelScope.key
-      : (setFilter !== "all" && setFilter !== "__none" ? setFilter : "");
-    if(scopeSet && setDynamic(setById(scopeSet))) scopeSet = "";
+      : (caseScopeAll
+        ? (caseAllSet && caseAllSet !== "__none" ? caseAllSet : "")
+        : (setFilter !== "all" && setFilter !== "__none" ? setFilter : ""));
+    var scopeSetObj = caseScopeAll ? caseAllSetById(caseReqId, scopeSet) : setById(scopeSet);
+    if(scopeSet && setDynamic(scopeSetObj)) scopeSet = "";
     unset.hidden = !scopeSet;
     unset.dataset.setId = scopeSet;
   }
@@ -3103,6 +3261,16 @@ function openBatchDialog(focus){
     ? "已选 " + n + " 条（按筛选条件生效，含未加载的行）；只修改选择的项，「保持原值」不变。"
     : "已选 " + n + " 条用例；只修改选择的项，「保持原值」不变。";
   fillModuleSelect($("bModule"), caseModuleNodes, "", true);
+  /* 全部项目收窄后首次打开批量弹窗：目录树还没跟列表一起取，单独补一次。
+     记下发起时的项目：弹窗开着切了范围，回来的目录不能贴到新项目上 */
+  var batchReq = caseAllProj;
+  if(caseScopeAll && batchReq && !caseModuleNodes.length){
+    API.get("/api/test-modules", { reqId: batchReq }).then(function(nodes){
+      if(!caseAllNarrow() || caseAllProj !== batchReq) return;
+      caseModuleNodes = nodes || [];
+      fillModuleSelect($("bModule"), caseModuleNodes, "", true);
+    }).catch(function(){ /* 目录加载失败时仍可改优先级 */ });
+  }
   $("bPri").value = "";
   $("btnBatchSave").disabled = false;
   UI.openModal($("dlgCaseBatch"), "select");
@@ -3249,7 +3417,8 @@ function caseRowHTML(c, segKey){
   }
   var sel = caseRowSelected(c, segKey);
   var dragging = !!(caseDrag && (caseDrag.anchor === c.id || caseRowSelected(c, segKey)));
-  var pick = w
+  /* 全部项目概览只读：跨项目批量没有确定的项目口径（目录、分组都按项目算），不提供勾选 */
+  var pick = w && !(caseScopeAll && !caseAllProj)
     ? '<input type="checkbox" class="tc-pick" data-tc-pick="' + esc(c.id) + '"'
       + (segKey ? ' data-tc-pick-seg="' + esc(segKey) + '"' : "")
       + (sel ? " checked" : "") + ' aria-label="选择用例 ' + esc(c.title) + '" />'
@@ -3260,6 +3429,9 @@ function caseRowHTML(c, segKey){
     + (w && !caseScopeAll ? ' draggable="true" data-tc-drag="' + esc(c.id) + '"' : "")
     + '>'
     + pick
+    + (caseScopeAll && !caseAllProj
+      ? '<span class="tc-proj-pill" title="所属项目：' + esc(reqNameOf(c.reqId)) + '">' + esc(cut(reqNameOf(c.reqId), 8)) + '</span>'
+      : "")
     + '<span class="tc-no" title="' + (caseNoText(c) ? "用例编号（项目内固定，可用于缺陷与评审引用）" : "该用例暂无编号") + '">'
     + esc(caseNoText(c)) + '</span>'
     + statusBadgeHTML(c.latestStatus)
@@ -6657,12 +6829,12 @@ function downloadCasesFile(path, params, filename){
   }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
 }
 function exportCases(scope){
-  if(caseScopeAll){ toast("导出需要先切到单个项目", "warn"); return; }
-  if(!caseReqId){ toast("先选择项目", "warn"); return; }
+  if(caseScopeAll && !caseAllProj){ toast("导出需要先切到单个项目，或先在左侧选中一个项目", "warn"); return; }
+  if(!caseAllEffectiveReq()){ toast("先选择项目", "warn"); return; }
   scope = scope || "all";
   var ext = tcExportExt(tcExportFmt);
   var base = "/api/test-cases/export" + ext;
-  var proj = reqNameOf(caseReqId);
+  var proj = reqNameOf(caseAllEffectiveReq());
   if(scope === "ids"){
     if(!caseHasSel()){ toast("请先勾选要导出的用例", "warn"); return; }
     /* 全选筛选结果时没有明确 ID 列表，改用「筛选 + 排除」口径，与批量动作一致 */
@@ -6682,7 +6854,7 @@ function exportCases(scope){
     downloadCasesFile(base, f, "测试用例-" + proj + "-筛选结果" + ext);
     return;
   }
-  downloadCasesFile(base, { reqId: caseReqId }, "测试用例-" + proj + ext);
+  downloadCasesFile(base, { reqId: caseAllEffectiveReq() }, "测试用例-" + proj + ext);
 }
 /* Excel 在中文 Windows 上默认导出的 CSV 是 GBK：先按 UTF-8 严格解码，失败再退 GBK */
 function readCsvFile(file){
@@ -6740,7 +6912,8 @@ function showImportResult(r){
   loadCases();
 }
 function importCasesFile(file){
-  if(caseScopeAll){ toast("导入需要先切到单个项目", "warn"); return; }
+  /* 概览下没有唯一项目；收窄到项目后按该项目导入 */
+  if(caseScopeAll && !caseAllProj){ toast("导入需要先切到单个项目", "warn"); return; }
   if(!caseReqId){ toast("先选择项目", "warn"); return; }
   var excel = /\.(xlsx|xls)$/i.test(file.name || "");
   var limit = (excel ? 8 : 2) * 1024 * 1024;
@@ -6787,17 +6960,23 @@ var reorderBusy = false;
    目录是单归属的功能域归类，已收进顶部筛选，不再占左栏。 */
 function toggleSidePanel(show){
   caseSide = show ? "set" : "";
-  if(caseSide) loadCaseSets();
+  if(caseSide){ if(caseScopeAll) ensureCaseAllSets(); else loadCaseSets(); }
   syncSidePanel();
   syncQueryBar();
 }
 function syncSidePanel(){
   var panel = $("tcSidePanel"), wrap = $("tcCasesWrap");
   if(!panel || !wrap) return;
-  var show = tcMode === "cases" && !caseScopeAll && !!caseReqId && !!caseSide;
+  var show = tcMode === "cases" && !!caseSide && (caseScopeAll || !!caseReqId);
   panel.hidden = !show;
   wrap.classList.toggle("has-side", show);
   if(!show){ closeTcSetCtx(); return; }
+  if(caseScopeAll){
+    /* 全部项目：项目 > 分组两级树，按项目缓存分组；只读导航 */
+    ensureCaseAllSets();
+    renderAllSetPanel();
+    return;
+  }
   /* 左栏默认展开：首次进入项目就取分组，不用等用户再点一次 */
   if(caseSetsReq !== caseReqId) loadCaseSets();
   renderSetPanel();
@@ -6805,6 +6984,12 @@ function syncSidePanel(){
 /* 目录 / 分组变更后统一刷新：目录计数随列表回来，分组计数要单独再取一次 */
 function afterStructureChange(){
   var sets = caseSetsReq === caseReqId ? loadCaseSets(true) : Promise.resolve(caseSets);
+  /* 收窄态下改了分组 / 成员：该项目在全部项目树里的缓存要失效，
+     否则切回侧栏看到的还是旧的分组与计数 */
+  if(caseScopeAll && caseReqId){
+    delete caseAllSets[caseReqId];
+    loadCaseSetsAll(false);
+  }
   loadCases();
   return sets;
 }
@@ -6815,7 +7000,7 @@ function afterStructureChange(){
 function dirNoneCount(){
   var used = 0;
   (caseModuleNodes || []).forEach(function(n){ used += n.caseCount || 0; });
-  return Math.max(0, (stats.total || 0) - used);
+  return Math.max(0, ((stats && stats.total) || 0) - used);
 }
 function dirNodeOpen(n){ return caseDirOpen[n.id] !== false; }
 function dirHasKids(id){
@@ -6879,7 +7064,7 @@ function renderDirList(){
   var list = $("tcDirList");
   if(!list) return;
   var q = (caseDirQuery || "").trim();
-  var html = dirSpecialRowHTML("all", "全部用例", stats.total || 0, false, "不限目录：显示项目内全部用例");
+  var html = dirSpecialRowHTML("all", "全部用例", (stats && stats.total) || 0, false, "不限目录：显示项目内全部用例");
   var nodes = dirVisibleNodes();
   if(!caseModuleNodes.length){
     html += '<p class="tc-side-empty">' + (isWritable() ? "还没有目录节点，点上方「新建」建第一个。" : "该项目还没有目录节点。") + '</p>';
@@ -7060,6 +7245,74 @@ function loadCaseSetNoneTotal(reqId, seq){
     caseSetNoneTotal = 0;
   });
 }
+/* 全部项目树：逐项目取分组清单与「未加入任何分组」计数。
+   并发 4 个项目一批，单项目失败只降级该分支；失败不自动重试，避免渲染循环。 */
+function loadCaseSetsAll(force){
+  if(!caseScopeAll) return Promise.resolve(false);
+  var projects = caseScopeVisibleProjects();
+  var todo = projects.filter(function(p){
+    var e = caseAllSets[p.id];
+    return force || !e || (!e.loaded && !e.loading && !e.error);
+  });
+  /* 没有新活可干时不要推进序号：重渲染会把在途结果判成过期，条目永远停在「加载中」 */
+  if(!todo.length) return Promise.resolve(true);
+  var seq = ++caseAllSetSeq;
+  todo.forEach(function(p){
+    var e = caseAllSets[p.id] || (caseAllSets[p.id] = { list: [], noneTotal: 0, loaded: false, error: "" });
+    e.loading = true;
+    e.error = "";
+  });
+  if(caseScopeAll && caseSide === "set") renderAllSetPanel();
+  var i = 0;
+  function step(){
+    if(seq !== caseAllSetSeq || !caseScopeAll) return Promise.resolve(false);
+    var batch = todo.slice(i, i + 4);
+    i += 4;
+    if(!batch.length){
+      if(caseScopeAll && caseSide === "set") renderAllSetPanel();
+      /* 分组名 / 计数回来了：范围条上的分组 chip 可能还在显示「已删除的分组」，同步一次 */
+      if(caseAllNarrow()) syncScopeBar();
+      /* 段头的分组 chip 依赖这份缓存：树比列表晚回来时补一次渲染，避免首屏没有 chip。
+         列表还在路上时不抢渲染，等 loadCasesAll 自己的 render 带上缓存即可 */
+      if(tcMode === "cases" && caseGroups.length) render();
+      return Promise.resolve(true);
+    }
+    return Promise.all(batch.map(function(p){ return loadProjectSetsAll(p.id, seq); })).then(function(){
+      if(!caseScopeAll) return Promise.resolve(false);
+      if(seq === caseAllSetSeq && caseSide === "set") renderAllSetPanel();
+      if(caseAllNarrow()) syncScopeBar();
+      return step();
+    });
+  }
+  return step();
+}
+function loadProjectSetsAll(reqId, seq){
+  var e = caseAllSets[reqId] || (caseAllSets[reqId] = { list: [], noneTotal: 0, loaded: false, error: "" });
+  e.loading = true;
+  e.error = "";
+  return Promise.all([
+    API.get("/api/case-sets", { reqId: reqId }),
+    API.get("/api/test-cases", { reqId: reqId, setId: "__none", limit: 1 })
+  ]).then(function(rs){
+    if(seq !== caseAllSetSeq) return;
+    e.list = rs[0] || [];
+    e.noneTotal = (rs[1] && rs[1].total) || 0;
+    e.loading = false;
+    e.loaded = true;
+  }).catch(function(ex){
+    if(seq !== caseAllSetSeq) return;
+    e.loading = false;
+    e.error = (ex && ex.message) || "分组加载失败";
+  });
+}
+function ensureCaseAllSets(){
+  var projects = caseScopeVisibleProjects();
+  var missing = projects.some(function(p){
+    var e = caseAllSets[p.id];
+    return !e || (!e.loaded && !e.loading && !e.error);
+  });
+  if(missing) loadCaseSetsAll(false);
+}
 function setHasKids(id){
   for(var i = 0; i < caseSets.length; i++) if((caseSets[i].parentId || "") === id) return true;
   return false;
@@ -7121,7 +7374,7 @@ function renderSetPanel(){
   var keep = setMatchKeep(q);
   var html = '<div class="tc-side-tools">'
     + '<span class="tc-side-title">' + icon("layers", 13) + ' 分组</span>'
-    + '<span class="tc-side-count" title="项目内用例总数；分组计数可重叠，不能相加当总数">' + (stats.total || 0) + '</span>'
+    + '<span class="tc-side-count" title="项目内用例总数；分组计数可重叠，不能相加当总数">' + ((stats && stats.total) || 0) + '</span>'
     + (isWritable() ? '<button class="btn sm ghost" type="button" data-tc-set-new title="新建分组（多归属，删分组不删用例）">' + icon("plus", 13) + ' 新建分组</button>' : "")
     + '</div>'
     + '<label class="tc-dir-search tc-set-search">' + icon("search", 13)
@@ -7133,7 +7386,7 @@ function renderSetPanel(){
     html += '<p class="tc-side-empty">分组加载失败：' + esc(caseSetsError)
       + ' <button class="btn sm ghost" type="button" data-tc-set-retry>重试</button></p>';
   }else{
-    html += setSpecialRowHTML("all", "全部用例", "checklist", stats.total || 0, "不限分组：显示项目内全部用例");
+    html += setSpecialRowHTML("all", "全部用例", "checklist", (stats && stats.total) || 0, "不限分组：显示项目内全部用例");
     html += setSpecialRowHTML("__none", "未加入任何分组", "inbox", caseSetNoneTotal, "只看没有加入任何可见分组的用例");
     html += '<div class="tc-set-sep" aria-hidden="true"></div>';
     var any = 0;
@@ -7277,6 +7530,243 @@ function pickSetNode(id){
   }
   if(caseSide === "set") renderSetPanel();
   loadCases();
+}
+/* ---------- 全部项目：项目 > 分组两级树（只读导航） ---------- */
+function allSetFlat(projId, q){
+  var ent = caseAllEntry(projId);
+  var list = (ent && ent.list) || [];
+  var keep = null;
+  if(q){
+    var byId = {};
+    list.forEach(function(s){ byId[s.id] = s; });
+    keep = {};
+    list.forEach(function(s){
+      if(String(s.name || "").toLowerCase().indexOf(q) < 0) return;
+      keep[s.id] = true;
+      var p = s.parentId, guard = 0;
+      while(p && byId[p] && guard++ <= list.length){ keep[p] = true; p = byId[p].parentId; }
+    });
+  }
+  var out = [];
+  function walk(parentId, level){
+    list.forEach(function(s){
+      if((s.parentId || "") !== parentId) return;
+      if(keep && !keep[s.id]) return;
+      out.push({ s: s, level: level });
+      if(!keep || caseSetOpen[s.id] !== false) walk(s.id, level + 1);
+    });
+  }
+  walk("", 1);
+  return out;
+}
+function allSetRowHTML(projId, s, level){
+  var on = allSetOn(projId, s.id);
+  var kids = setHasKidsIn(s.id);
+  var dyn = setDynamic(s);
+  var count = kids ? (s.subtreeCount || 0) : (s.caseCount || 0);
+  var open = caseSetOpen[s.id] !== false;
+  var title = s.name + " · " + count + " 条" + (kids ? "（含子分组，去重）" : "");
+  return '<div class="tc-set-item tc-all-set lv' + level + (on ? " on" : "") + (dyn ? " is-dyn" : "") + '"'
+    + ' style="margin-left:' + dirIndentPx(level + 1) + 'px" data-tc-all-set-row="' + esc(s.id) + '" data-tc-all-proj="' + esc(projId) + '">'
+    + (kids
+      ? '<button class="tc-dir-toggle" type="button" data-tc-all-set-toggle="' + esc(s.id) + '"'
+        + ' aria-expanded="' + (open ? "true" : "false") + '" aria-label="' + (open ? "折叠 " : "展开 ") + esc(s.name) + '">'
+        + icon("chevronRight", 12) + '</button>'
+      : '<span class="tc-dir-toggle ph"></span>')
+    + '<button class="tc-set-pick" type="button" data-tc-all-set-pick="' + esc(s.id) + '" data-tc-all-proj="' + esc(projId) + '"'
+    + ' aria-pressed="' + (on ? "true" : "false") + '" title="' + esc(title + "；点击在该项目内只看此分组") + '">'
+    + '<span class="tc-set-ico">' + icon(dyn ? "refresh" : "layers", 13) + '</span>'
+    + '<span class="tc-set-main"><span class="tc-set-name">' + esc(s.name)
+    + setVisTagHTML(s) + (dyn ? '<span class="tc-vis-tag dyn">动态</span>' : "") + '</span></span>'
+    + '<span class="tc-set-n">' + count + '</span></button>'
+    + '</div>';
+}
+function setHasKidsIn(id){
+  var keys = Object.keys(caseAllSets);
+  for(var i = 0; i < keys.length; i++){
+    var list = caseAllSets[keys[i]].list || [];
+    for(var j = 0; j < list.length; j++) if((list[j].parentId || "") === id) return true;
+  }
+  return false;
+}
+/* 搜索命中：项目名命中显示其全部分组；否则保留命中分组及其祖先链 */
+function allProjMatches(p, q){
+  if(!q) return true;
+  if(String(p.name || "").toLowerCase().indexOf(q) >= 0) return true;
+  return allSetFlat(p.id, q).length > 0;
+}
+function renderAllSetPanel(){
+  var body = $("tcSideBody"), foot = $("tcSideFoot");
+  if(!body || !caseScopeAll) return;
+  var prev = $("tcAllSetSearch");
+  var focused = !!prev && prev === document.activeElement;
+  var caret = focused ? prev.selectionStart : 0;
+  var projects = caseScopeVisibleProjects();
+  var q = (caseAllQuery || "").trim().toLowerCase();
+  var shown = projects.filter(function(p){ return allProjMatches(p, q); });
+  var html = '<div class="tc-side-tools">'
+    + '<span class="tc-side-title">' + icon("layers", 13) + ' 项目 / 分组</span>'
+    + '<span class="tc-side-count" title="当前有 ' + projects.length + ' 个可查看项目">' + projects.length + ' 个项目</span>'
+    + '</div>'
+    + '<label class="tc-dir-search tc-set-search">' + icon("search", 13)
+    + '<input type="search" id="tcAllSetSearch" placeholder="搜索项目 / 分组…" aria-label="搜索项目或分组" autocomplete="off" value="' + esc(caseAllQuery) + '" /></label>'
+    + '<p class="tc-all-hint">跨项目导航；写操作先进入项目。</p>'
+    + '<div class="tc-set-list">';
+  var totalOn = caseScopeAll && !caseAllProj;
+  var grand = projects.reduce(function(a, p){ var n = Number(caseProjTotals[p.id]); return a + (isNaN(n) ? 0 : n); }, 0);
+  html += '<div class="tc-dir-node special' + (totalOn ? " on" : "") + '">'
+    + '<span class="tc-dir-toggle ph"></span>'
+    + '<button class="tc-dir-pick" type="button" data-tc-all-root aria-pressed="' + (totalOn ? "true" : "false") + '" title="回到全部项目概览">'
+    + '<span class="tc-set-ico">' + icon("layers", 13) + '</span>'
+    + '<span class="tc-dir-name">全部项目</span>'
+    + '<span class="tc-dir-n">' + grand + '</span></button></div>';
+  html += '<div class="tc-set-sep" aria-hidden="true"></div>';
+  if(!shown.length){
+    html += '<p class="tc-side-empty">' + (q ? "没有匹配「" + esc(caseAllQuery.trim()) + "」的项目或分组。" : "暂无可查看的项目。") + '</p>';
+  }
+  shown.forEach(function(p){
+    var ent = caseAllEntry(p.id);
+    var projOn = allProjOn(p.id);
+    var open = caseAllOpen[p.id] !== false;
+    var total = Number(caseProjTotals[p.id]);
+    var sets = allSetFlat(p.id, q);
+    var nameHit = q && String(p.name || "").toLowerCase().indexOf(q) >= 0;
+    if(nameHit) sets = allSetFlat(p.id, "");
+    /* 在途 / 失败也要占位：分组数还没回来时项目行不能看起来像「没有分组」 */
+    var kids = ent ? (ent.loading || !!ent.error || sets.length > 0 || (ent.noneTotal || 0) > 0) : false;
+    html += '<div class="tc-all-proj">'
+      + '<div class="tc-dir-node' + (projOn ? " on" : "") + '">'
+      + (kids
+        ? '<button class="tc-dir-toggle" type="button" data-tc-all-toggle="' + esc(p.id) + '" aria-expanded="' + (open ? "true" : "false") + '" aria-label="' + (open ? "折叠 " : "展开 ") + esc(p.name) + '">' + icon("chevronRight", 12) + '</button>'
+        : '<span class="tc-dir-toggle ph"></span>')
+      + '<button class="tc-dir-pick" type="button" data-tc-all-proj-pick="' + esc(p.id) + '" aria-pressed="' + (projOn ? "true" : "false") + '" title="只看「' + esc(p.name) + '」的用例">'
+      + '<span class="tc-all-proj-ico">' + icon("folder", 13) + '</span>'
+      + '<span class="tc-dir-name">' + esc(p.name) + '</span>'
+      + '<span class="tc-dir-n">' + (isNaN(total) ? "" : total) + '</span></button></div>';
+    if(open && kids){
+      if(ent && ent.loading && !ent.loaded){
+        html += '<p class="tc-side-empty tc-all-loading">加载分组…</p>';
+      }else if(ent && ent.error){
+        html += '<p class="tc-side-empty tc-all-error">分组加载失败：' + esc(ent.error)
+          + ' <button class="btn sm ghost" type="button" data-tc-all-retry="' + esc(p.id) + '">重试</button></p>';
+      }else{
+        html += sets.map(function(r){ return allSetRowHTML(p.id, r.s, r.level); }).join("");
+        if((ent && ent.noneTotal) > 0){
+          var noneOn = allSetOn(p.id, "__none");
+          html += '<div class="tc-set-item' + (noneOn ? " on" : "") + '" data-tc-all-proj="' + esc(p.id) + '">'
+            + '<span class="tc-dir-toggle ph"></span>'
+            + '<button class="tc-set-pick" type="button" data-tc-all-none="' + esc(p.id) + '" aria-pressed="' + (noneOn ? "true" : "false") + '"'
+            + ' title="只看没有加入任何可见分组的用例">'
+            + '<span class="tc-set-ico">' + icon("inbox", 13) + '</span>'
+            + '<span class="tc-set-main"><span class="tc-set-name">未加入任何分组</span></span>'
+            + '<span class="tc-set-n">' + ent.noneTotal + '</span></button></div>';
+        }
+      }
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  body.innerHTML = html;
+  if(focused){
+    var now = $("tcAllSetSearch");
+    if(now){ now.focus(); try{ now.setSelectionRange(caret, caret); }catch(err){ /* 搜索框不支持光标定位时忽略 */ } }
+  }
+  if(foot){
+    foot.innerHTML = caseAllNarrow()
+      ? '<button class="btn sm soft tc-all-enter" type="button" data-tc-all-enter>进入「' + esc(cut(reqNameOf(caseAllProj), 12)) + '」管理</button>'
+        + '<p class="tc-side-note">全部项目下只读：可切换范围、搜索与查看；分组维护、拖拽归类与用例写入要进入项目。</p>'
+      : '<p class="tc-side-note">点项目或分组就地查看；全部项目下只读，进入项目后可维护分组、拖拽归类与写入用例。分组计数可重叠，不能相加当总数。</p>';
+  }
+}
+/* 侧栏 / 范围条 / 段头共用的收窄入口 */
+function setAllScope(proj, set){
+  if(!caseScopeAll) return;
+  proj = proj || "";
+  set = proj ? (set || "") : "";
+  caseAllProj = proj;
+  caseAllSet = set;
+  if(proj){
+    caseAllOpen[proj] = true;
+    /* 镜像到 caseReqId：批量改分类 / 加入计划 / 导出等单项目语义直接可用 */
+    caseReqId = proj;
+    if(set) caseSetOpen[set] = true;
+  }
+  resetCaseSel();
+  closeTcSetCtx();
+  /* 执行结果统计是项目口径：切范围先把旧项目的计数清掉，避免加载期间挂错数 */
+  stats = null;
+  syncReqSel();
+  syncModeUI();
+  renderAllSetPanel();
+  loadCases();
+  syncTcDomain();
+  caseScrollTop();
+}
+function clearAllScope(silent){
+  if(!caseAllProj && !caseAllSet) return;
+  caseAllProj = "";
+  caseAllSet = "";
+  resetCaseSel();
+  stats = null;
+  syncModeUI();
+  renderAllSetPanel();
+  if(!silent) loadCases();
+  syncTcDomain();
+  caseScrollTop();
+}
+function enterAllProject(projId){
+  var proj = projId || caseAllProj;
+  if(!proj) return;
+  var sid = projId ? "" : caseAllSet;
+  var sidName = sid ? caseAllSetName(proj, sid) : "";
+  caseAllProj = "";
+  caseAllSet = "";
+  /* 收窄时取的就是该项目的执行结果统计，进入后沿用即可：置空会让左栏计数在列表回来前闪 0 */
+  /* 左栏从「全部项目树」切回单项目分组树：旧的单项目缓存可能属于别的项目，先清掉 */
+  caseSetsReq = null;
+  caseSets = [];
+  caseSetsError = "";
+  /* 先把项目与分组落成单项目口径，再走统一入口，避免二次重置筛选 */
+  caseReqId = proj;
+  setFilter = sid || "all";
+  setTcProject(proj);
+  if(sid) loadCaseSets().then(function(){ renderSetPanel(); });
+  syncScopeBar();
+  caseScrollTop();
+  if(sid){
+    toast(sid === "__none"
+      ? "已进入项目，按「未加入任何分组」筛选"
+      : "已进入项目，按分组「" + sidName + "」筛选", "fs");
+  }
+}
+/* 切范围后列表高度会变：停在原来的滚动位置会看到一片空白，直接回到顶部 */
+function caseScrollTop(){
+  var view = $("view-testcases");
+  if(view) view.scrollTop = 0;
+}
+/* 列表上方的范围条：只显示收窄事实与退出入口，不再重复项目下拉 */
+function syncScopeBar(){
+  var bar = $("tcScopeBar");
+  if(!bar) return;
+  var show = tcMode === "cases" && caseAllNarrow();
+  bar.hidden = !show;
+  if(!show){ bar.innerHTML = ""; return; }
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", "当前浏览范围");
+  /* 从已存视图直接落到某个分组时，分组清单可能还没取：先补上，chip 才不会是「已删除的分组」 */
+  if(caseAllSet && !caseAllEntry(caseAllProj)) ensureCaseAllSets();
+  var pname = reqNameOf(caseAllProj);
+  var setName = caseAllSet ? caseAllSetName(caseAllProj, caseAllSet) : "";
+  bar.innerHTML = '<span class="tc-scope-label">范围</span>'
+    + '<button class="tc-scope-chip" type="button" data-tc-scope-proj title="回到全部项目概览">'
+    + '项目 <b>' + esc(cut(pname, 18)) + '</b><span class="tc-scope-x" aria-hidden="true">×</span></button>'
+    + (caseAllSet
+      ? '<button class="tc-scope-chip" type="button" data-tc-scope-set title="取消分组，只看整个项目">'
+        + '分组 <b>' + esc(cut(setName, 18)) + '</b><span class="tc-scope-x" aria-hidden="true">×</span></button>'
+      : "")
+    + '<button class="btn sm ghost tc-scope-reset" type="button" data-tc-scope-reset>清空范围</button>'
+    + '<span class="tc-lh-grow"></span>'
+    + '<button class="btn sm ghost tc-scope-enter" type="button" data-tc-all-enter>进入项目 →</button>';
 }
 /* ---------- 分组右键菜单：与文档分类树同款；只读项目只留「只看该分组」 ---------- */
 var tcSetCtxEl = null;
@@ -7885,7 +8375,8 @@ function joinSet(setId, selection, count){
 function leaveSet(setId){
   var n = caseSelCount();
   if(!n){ toast("请先勾选用例", "warn"); return; }
-  var s = setById(setId);
+  /* 全部项目收窄时单项目分组缓存可能没取过，名称与动态判定改读全量树缓存 */
+  var s = setById(setId) || (caseScopeAll ? caseAllSetById(caseReqId, setId) : null);
   var label = s ? s.name : "所选分组";
   if(setDynamic(s)){
     toast("「" + label + "」是动态分组，成员由规则自动收录，不能手工移出；请改规则或改为手工挑选", "warn");
@@ -8292,8 +8783,9 @@ var pbf = {
 var PBF_STATUS = { draft: "草稿", running: "执行中", done: "已完成" };
 
 function openPlanByFilter(){
-  if(!caseReqId || caseScopeAll){ toast("先选择一个项目，再加入测试计划", "warn"); return; }
-  if(!canEditReq(caseReqId)){ toast("当前项目只读，无法圈选用例", "warn"); return; }
+  if(caseScopeAll && !caseAllProj){ toast("先在左侧选中一个项目，再加入测试计划", "warn"); return; }
+  if(!caseAllEffectiveReq()){ toast("先选择一个项目，再加入测试计划", "warn"); return; }
+  if(!canEditReq(caseAllEffectiveReq())){ toast("当前项目只读，无法圈选用例", "warn"); return; }
   var sel = caseHasSel();
   pbf.byFilter = !sel || caseSelAll;
   pbf.filter = pbf.byFilter ? (sel ? caseSelectionFilter() : caseFilterQuery()) : null;
@@ -8607,12 +9099,21 @@ $("tcReq").addEventListener("change", function(){
     /* 覆盖矩阵/报告的项目下拉不提供全部，切回时必须仍是具体项目 */
     if(tcMode !== "cases" && tcMode !== "plans"){ syncReqSel(); return; }
     caseScopeAll = true;
+    caseAllProj = "";
+    caseAllSet = "";
+    /* 全部项目树的分组与「未分组」计数重取：离开期间可能在某个项目里改过分组 / 成员 */
+    caseAllSets = {};
+    caseAllSetSeq++;
+    stats = null;
     moduleFilter = "all";
     demandFilter = "all";
     setFilter = "all";
     caseGroupBy = "";
   }else{
     caseScopeAll = false;
+    caseAllProj = "";
+    caseAllSet = "";
+    stats = null;
     caseReqId = v;
     /* 目录节点 / 分组 / 需求都是项目内结构，切项目后条件不能带过去 */
     moduleFilter = "all";
@@ -8624,6 +9125,7 @@ $("tcReq").addEventListener("change", function(){
   caseSetNoneTotal = 0;
   if(UI.popOpen($("tcDirMenu"))) UI.closeAllPops();
   syncModeUI();
+  caseScrollTop();
   if(tcMode === "coverage") loadCoverage();
   else if(tcMode === "report") loadTestReport();
   else if(tcMode === "plans") loadPlans();
@@ -9121,6 +9623,26 @@ $("btnPlanPickAll").addEventListener("click", function(){
 });
 UI.setModalSubmit($("dlgPlanPick"), function(){ if(!pickingPlan) doPlanPick(); });
 $("tcList").addEventListener("click", function(e){
+  /* 某个项目段加载失败：就地重试，不用先切到单项目 */
+  var gRetry = e.target.closest("[data-tc-group-retry]");
+  if(gRetry){ loadCases(); return; }
+  /* 段头分组 chip：在全部项目里就地收窄 / 取消该分组 */
+  var gchip = e.target.closest("[data-tc-all-set-chip]");
+  if(gchip){
+    var gp = gchip.dataset.tcAllProj, gs = gchip.dataset.tcAllSetChip;
+    if(allSetOn(gp, gs)) setAllScope(gp, "");
+    else setAllScope(gp, gs);
+    return;
+  }
+  var noneChip = e.target.closest("[data-tc-all-none-chip]");
+  if(noneChip){
+    var np = noneChip.dataset.tcAllNoneChip;
+    if(allSetOn(np, "__none")) setAllScope(np, "");
+    else setAllScope(np, "__none");
+    return;
+  }
+  var enterBtn = e.target.closest("[data-tc-all-enter]");
+  if(enterBtn){ enterAllProject(enterBtn.dataset.tcAllEnter || ""); return; }
   var segToggle = e.target.closest("[data-tc-seg-toggle]");
   if(segToggle){ toggleSegment(segToggle.dataset.tcSegToggle); return; }
   var segMore = e.target.closest("[data-tc-seg-more]");
@@ -9215,11 +9737,61 @@ if($("tcSetDetail")){
     if(b) openSetDialog(b.dataset.tcSetEdit);
   });
 }
+/* 全部项目的范围条：取消项目 / 取消分组 / 清空 / 进入项目 */
+if($("tcScopeBar")){
+  $("tcScopeBar").addEventListener("click", function(e){
+    if(e.target.closest("[data-tc-all-enter]")){ enterAllProject(); return; }
+    if(e.target.closest("[data-tc-scope-reset]")){ clearAllScope(); return; }
+    if(e.target.closest("[data-tc-scope-set]")){ setAllScope(caseAllProj, ""); return; }
+    if(e.target.closest("[data-tc-scope-proj]")){ clearAllScope(); return; }
+  });
+}
 
 /* 左侧分组面板：内容每次重渲染，点击与搜索都走委托，不用重新绑定 */
 if($("tcSidePanel")){
   $("tcSidePanel").addEventListener("click", function(e){
     var b;
+    if(caseScopeAll){
+      if((b = e.target.closest("[data-tc-all-root]"))){ clearAllScope(); return; }
+      if((b = e.target.closest("[data-tc-all-toggle]"))){
+        var pid = b.dataset.tcAllToggle;
+        caseAllOpen[pid] = !(caseAllOpen[pid] !== false);
+        renderAllSetPanel();
+        return;
+      }
+      if((b = e.target.closest("[data-tc-all-proj-pick]"))){
+        var proj = b.dataset.tcAllProjPick;
+        if(allProjOn(proj)) clearAllScope();
+        else setAllScope(proj, "");
+        return;
+      }
+      if((b = e.target.closest("[data-tc-all-set-toggle]"))){
+        var sid = b.dataset.tcAllSetToggle;
+        caseSetOpen[sid] = !(caseSetOpen[sid] !== false);
+        renderAllSetPanel();
+        return;
+      }
+      if((b = e.target.closest("[data-tc-all-set-pick]"))){
+        var sp = b.dataset.tcAllProj, ss = b.dataset.tcAllSetPick;
+        if(allSetOn(sp, ss)) setAllScope(sp, "");
+        else setAllScope(sp, ss);
+        return;
+      }
+      if((b = e.target.closest("[data-tc-all-none]"))){
+        var np = b.dataset.tcAllNone;
+        if(allSetOn(np, "__none")) setAllScope(np, "");
+        else setAllScope(np, "__none");
+        return;
+      }
+      if((b = e.target.closest("[data-tc-all-retry]"))){
+        delete caseAllSets[b.dataset.tcAllRetry];
+        loadCaseSetsAll(false);
+        renderAllSetPanel();
+        return;
+      }
+      if((b = e.target.closest("[data-tc-all-enter]"))){ enterAllProject(); return; }
+      return;
+    }
     if((b = e.target.closest("[data-tc-set-new]"))){ openSetDialog(null); return; }
     if((b = e.target.closest("[data-tc-set-toggle]"))){
       caseSetOpen[b.dataset.tcSetToggle] = !setNodeOpen({ id: b.dataset.tcSetToggle });
@@ -9234,10 +9806,12 @@ if($("tcSidePanel")){
     if(e.target.closest("#tcSetSub")){ caseSetSub = !caseSetSub; renderSetPanel(); loadCases(); return; }
   });
   $("tcSidePanel").addEventListener("input", function(e){
+    if(e.target.id === "tcAllSetSearch"){ caseAllQuery = e.target.value; renderAllSetPanel(); return; }
     if(e.target.id === "tcSetSearch"){ caseSetQuery = e.target.value; renderSetPanel(); }
   });
   /* 右键分组行＝对该分组新建子组 / 编辑 / 删除；右键空白处＝新建顶级分组 */
   $("tcSidePanel").addEventListener("contextmenu", function(e){
+    if(caseScopeAll) return;
     var row = e.target.closest("[data-tc-set]");
     if(row){
       if(openTcSetCtx(e.clientX, e.clientY, row.dataset.tcSet)) e.preventDefault();
@@ -10023,6 +10597,8 @@ function openDemandCoverage(reqId, demandId){
   if(!reqId){ toast("该需求未关联项目，无法查看用例覆盖", "warn"); return; }
   caseReqId = reqId;
   caseScopeAll = false;
+  caseAllProj = "";
+  caseAllSet = "";
   covPendingExpand = demandId || null;
   tcMode = "coverage";
   syncReqSel();
@@ -10037,6 +10613,10 @@ function openCaseInProject(reqId, id){
   var wasAll = caseScopeAll;
   if(reqId) caseReqId = reqId;
   caseScopeAll = false;
+  caseAllProj = "";
+  caseAllSet = "";
+  /* 从全部项目跳进某个项目：执行结果计数要按目标项目重取，别挂着上一个项目的数 */
+  stats = null;
   syncReqSel();
   syncModeUI();
   var hit = wasAll ? null : caseById(id);
@@ -10064,7 +10644,11 @@ function setTcProject(reqId){
     moduleFilter = "all";
     demandFilter = "all";
     setFilter = "all";
+    /* 换项目才清计数：同一项目从「全部项目」进入时，收窄期间取的统计可直接沿用 */
+    stats = null;
   }
+  caseAllProj = "";
+  caseAllSet = "";
   caseReqId = reqId;
   caseScopeAll = false;
   if(tcMode === "defects") defReqId = reqId;

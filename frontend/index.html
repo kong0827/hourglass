@@ -443,7 +443,10 @@
             <select id="boardGroup2Select" class="mini-select" aria-label="看板列内二级分组方式"></select>
           </label>
           <span class="foot-note board-toolbar-hint">列仍是状态，组只决定卡片归堆</span>
-          <button class="caliber-mark warn" type="button" data-caliber-help="board.guide" aria-label="查看看板状态流转与发布徽标说明" title="查看看板状态流转与发布徽标说明">!</button>
+          <span class="board-toolbar-end">
+            <button class="btn sm" id="btnCanceled" type="button" title="已取消：终态工作项归档，可逐条恢复">已取消 <span class="n" id="canceledBadge" hidden>0</span></button>
+            <button class="caliber-mark warn" type="button" data-caliber-help="board.guide" aria-label="查看看板状态流转与发布徽标说明" title="查看看板状态流转与发布徽标说明">!</button>
+          </span>
         </div>
         <div class="board" id="board"></div>
       </section>
@@ -451,6 +454,11 @@
       <!-- ===== 工作项：列状态工作页（看板列头下钻） ===== -->
       <section class="view" id="view-workcolumn" aria-label="工作项状态工作页">
         <div id="workcolumnBody"></div>
+      </section>
+
+      <!-- ===== 工作项：已取消终态（看板工具条入口） ===== -->
+      <section class="view" id="view-canceled" aria-label="已取消的工作项">
+        <div id="canceledBody"></div>
       </section>
 
       <!-- ===== 我的工作（跨空间聚合，N-3） ===== -->
@@ -1964,6 +1972,7 @@
             <div class="tc-cases-main">
               <div class="tc-drop-banner" id="tcDropBanner" hidden></div>
               <div class="tc-setd" id="tcSetDetail" hidden></div>
+              <div class="tc-scope" id="tcScopeBar" hidden></div>
               <div class="tc-listhead" id="tcQueryBar" hidden>
                 <label class="tc-bulk-all"><input type="checkbox" id="tcBulkAll" /> <span id="tcBulkAllLabel">全选已加载</span></label>
                 <span class="tc-bulk-count" id="tcBulkCount"></span>
@@ -2632,13 +2641,13 @@
               </span>
             </div>
             <div class="tbl-wrap" id="reviewPivot"></div>
-            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的工作项；切换行/列维度可交叉查看成员、项目、优先级与分类。</p>
+            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内我负责并移入「已完成」的工作项；切换行/列维度可交叉查看项目、优先级与状态。</p>
           </div>
 
           <div class="panel">
             <div class="panel-head">
               <h3>工时</h3>
-              <span class="meta-right" id="reviewHoursScope">本周 · 我的 / 全空间</span>
+              <span class="meta-right" id="reviewHoursScope">本周 · 我的</span>
             </div>
             <div class="stat-grid" id="reviewHours"></div>
           </div>
@@ -2649,15 +2658,12 @@
             <div class="done-list" id="pendingList"></div>
           </div>
 
-          <div class="duo">
-            <div class="panel">
-              <div class="panel-head"><h3>成员贡献</h3></div>
-              <div class="people" id="peopleBox"></div>
+          <div class="panel">
+            <div class="panel-head">
+              <h3>项目进展</h3>
+              <span class="meta-right">只列本周有我做的工作的项目</span>
             </div>
-            <div class="panel">
-              <div class="panel-head"><h3>项目进展</h3></div>
-              <div class="dist" id="reqDist"></div>
-            </div>
+            <div class="dist" id="reqDist"></div>
           </div>
 
           <div class="panel">
