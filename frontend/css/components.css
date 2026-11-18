@@ -639,6 +639,11 @@ html[data-theme="dark"] .tag.tag-cat{
 #dueMenu .cdot.soon{background:var(--info);}
 #dueMenu .dim-opt[aria-pressed="true"] .ck{font-weight:700;}
 .dim-empty{padding:6px 10px;margin:0;}
+/* 负责人入口合并测试负责人：两组共用一份列表，组头只做身份提示，不抢选项的视觉权重 */
+.dim-group{display:flex;align-items:baseline;gap:6px;padding:8px 8px 3px;margin:0;
+  font-size:10.5px;font-weight:700;letter-spacing:.3px;color:var(--text-3);}
+.dim-group span{font-weight:500;letter-spacing:0;}
+.dim-group-box + .dim-group-box .dim-group{border-top:1px dashed var(--border);margin-top:5px;padding-top:9px;}
 /* 日期区间：起止两格并排，快捷区间作为次级按钮 */
 .dim-dates .mf-date-row{display:flex;align-items:center;gap:6px;}
 .dim-dates .mf-date-unit{display:flex;flex-direction:column;gap:2px;flex:1 1 0;min-width:0;}
@@ -2463,6 +2468,22 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   background:var(--warning-soft);color:var(--warning-fg);font-size:12px;line-height:1.5;}
 .test-acts{display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);}
 .test-hint{flex:1;min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-3);}
+/* 测试交接固定口径：说明测试负责人承接范围；缺陷语境下即验证人 */
+.test-policy{margin:8px 0 0;font-size:11.5px;line-height:1.55;color:var(--text-3);}
+/* 关注与协作：名单用轻量胶囊承载头像与姓名；移除按钮只在悬停/聚焦时提色，避免一排叉号抢视线 */
+.watch-list{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:22px;}
+.watch-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 4px 2px 3px;
+  border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface-sunken);font-size:12px;color:var(--text);}
+.watch-chip .avatar{width:18px;height:18px;font-size:9px;border-radius:50%;flex:0 0 auto;}
+.watch-chip.is-self{background:var(--primary-soft);border-color:var(--primary-border);}
+.watch-name{min-width:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.watch-chip .k{font-size:10px;font-weight:600;color:var(--primary-fg);}
+.watch-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;
+  border:0;border-radius:50%;background:transparent;color:var(--text-3);cursor:pointer;}
+.watch-x:hover{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger-fg);}
+.watch-x:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.watch-empty{font-size:12px;color:var(--text-3);}
+.watch-note{margin:8px 0 0;font-size:11.5px;line-height:1.55;color:var(--text-3);}
 /* 测试历史轮次：默认收起，仅在操作记录能推出 ≥2 轮时出现 */
 .tf-history{margin-top:7px;padding-top:8px;border-top:1px dashed var(--border);}
 .tf-rounds{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}

@@ -1,5 +1,6 @@
 package com.hourglass.mapper;
 
+import com.hourglass.dto.TaskWatcherView;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -21,6 +22,9 @@ public interface TaskWatchMapper {
 
     List<String> selectUserIdsByTask(@Param("workspaceId") String workspaceId,
                                      @Param("taskId") String taskId);
+
+    List<TaskWatcherView> selectWatchers(@Param("workspaceId") String workspaceId,
+                                         @Param("taskId") String taskId);
 
     int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 

@@ -27,7 +27,9 @@ function ensure() {
   $("aiProgressRetry").addEventListener("click", retry);
 }
 
-function elapsedText(sec) {
+/* 本地秒数文案：不与 lib/format 的 elapsedText（传时间戳、算时长）同名，
+   否则预览稿平铺拼接时同名函数互相覆盖，抽屉里的测试历时会被算成秒数 */
+function waitedText(sec) {
   return sec < 1 ? "刚刚开始" : ("已等待 " + sec + " 秒");
 }
 
@@ -42,7 +44,7 @@ function tick(my) {
   timer = setInterval(function () {
     if (my !== seq || !dlg) return;
     var sec = Math.floor((Date.now() - startedAt) / 1000);
-    $("aiProgressElapsed").textContent = elapsedText(sec);
+    $("aiProgressElapsed").textContent = waitedText(sec);
     var hint = hintFor(sec, active && active.opts.hint);
     if ($("aiProgressHint").textContent !== hint) $("aiProgressHint").textContent = hint;
   }, 500);

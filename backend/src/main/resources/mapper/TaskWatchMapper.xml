@@ -27,6 +27,18 @@
     WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
   </select>
 
+  <!-- 关注名单：姓名随行返回，避免前端为每个关注人再查一次成员；
+       账号已注销时 userName 为空，前端回退显示 userId。 -->
+  <select id="selectWatchers" resultType="com.hourglass.dto.TaskWatcherView">
+    SELECT w.user_id AS userId,
+           u.display_name AS userName,
+           w.created_at AS createdAt
+    FROM task_watch w
+    LEFT JOIN app_user u ON u.id = w.user_id
+    WHERE w.workspace_id = #{workspaceId} AND w.task_id = #{taskId}
+    ORDER BY w.created_at ASC, w.user_id ASC
+  </select>
+
   <delete id="deleteByTaskIds">
     DELETE FROM task_watch
     WHERE workspace_id = #{workspaceId}

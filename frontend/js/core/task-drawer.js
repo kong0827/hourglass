@@ -444,6 +444,14 @@ function renderReadTestCard(){
     note.hidden = !((col === "test" || col === "testing") && !t.testOwnerUserId);
     note.textContent = "尚未指派测试负责人。可以直接通过，但卡片会持续提示「未指派测试」；建议先认领或改派。";
   }
+  /* 测试负责人的固定口径：缺陷语境下就是验证人，非缺陷只承接测试窗口 */
+  var policy = $("readTestPolicy");
+  if(policy){
+    policy.hidden = false;
+    policy.textContent = t.itemType === "bug"
+      ? "缺陷的测试负责人即验证人：测试通过后修复流转到「已完成」。"
+      : "测试负责人只承接「待测试 / 测试中」这一段，不改变负责人。";
+  }
   var acts = $("readTestActs");
   if(acts) acts.hidden = !(editable && (col === "test" || col === "testing"));
   var claimable = col === "test" || (col === "testing" && !t.testOwnerUserId);
@@ -2210,11 +2218,11 @@ function ensureProjectRoles(projectId, force){
   request.then(function(){
     if(projectRoleLoading[key] !== request) return;
     delete projectRoleLoading[key];
-    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId){ refreshOwnerSelect(); refreshTestOwnerSelect(); refreshDepCreateOwners(); refreshOwnerPicker(); refreshTestPicker(); }
+    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId){ refreshOwnerSelect(); refreshTestOwnerSelect(); refreshDepCreateOwners(); refreshOwnerPicker(); refreshTestPicker(); refreshWatchPicker(); }
   }).catch(function(ex){
     if(projectRoleLoading[key] !== request) return;
     delete projectRoleLoading[key]; projectRoleErrors[key] = ex;
-    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId){ refreshOwnerSelect(); refreshTestOwnerSelect(); refreshDepCreateOwners(); refreshOwnerPicker(); refreshTestPicker(); }
+    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId){ refreshOwnerSelect(); refreshTestOwnerSelect(); refreshDepCreateOwners(); refreshOwnerPicker(); refreshTestPicker(); refreshWatchPicker(); }
   });
 }
 ["ds:project-roles-changed", "ds:member-company-changed", "ds:member-job-title-changed", "ds:member-label-options-changed", "ds:member-roster-changed"].forEach(function(eventName){
@@ -2229,6 +2237,7 @@ function ensureProjectRoles(projectId, force){
     refreshDepCreateOwners();
     refreshOwnerPicker();
     refreshTestPicker();
+    refreshWatchPicker();
   });
 });
 function ownerOptions(projectId){
@@ -2483,8 +2492,10 @@ function renderActualEstimate(actualMinutes, estimateMinutes){
   iActual.innerHTML = html;
   syncDrawerFacts();
 }
-/* 关注人：抽屉头部的开关只负责本任务，状态由后端按（任务, 当前用户）返回 */
-var watchTaskId = null;
+/* 关注人：抽屉头部的开关只负责本任务，状态由后端按（任务, 当前用户）返回；
+   状态里同时带回关注名单与 canManage，卡片与开关共用这一份数据，增删后整份重绘。 */
+var watchTaskId = null, watchState = null;
+function watchSelfId(){ return (rt.currentUser && rt.currentUser.id) || ""; }
 function renderWatchButton(res){
   if(!btnTaskWatch && !btnFootWatch) return;
   var watching = !!(res && res.watching);
@@ -2492,8 +2503,8 @@ function renderWatchButton(res){
     btnTaskWatch.hidden = !watchTaskId;
     btnTaskWatch.setAttribute("aria-pressed", watching ? "true" : "false");
     btnTaskWatch.title = watching
-      ? "已关注：新评论、移入回收站或恢复时会通知你（点击取消）"
-      : "关注后，该工作项的新评论、移入回收站或恢复会通知你";
+      ? "已关注：新评论、状态流转、移入回收站或恢复时会通知你（点击取消）"
+      : "关注后，该工作项的新评论、状态流转、移入回收站或恢复会通知你";
   }
   if(taskWatchLabel) taskWatchLabel.textContent = watching ? "已关注" : "关注";
   if(btnFootWatch){
@@ -2503,17 +2514,52 @@ function renderWatchButton(res){
   }
   if($("footWatchLabel")) $("footWatchLabel").textContent = watching ? "已关注" : "关注";
 }
+/* 关注与协作卡：谁在跟进展。只影响通知与可见性，不参与流转、不提升权限 */
+function renderWatchCard(res){
+  watchState = res || null;
+  var card = $("readWatchCard");
+  if(!card) return;
+  card.hidden = !res;
+  if(!res) return;
+  var list = res.watchers || [];
+  var canManage = !!res.canManage;
+  var cnt = $("readWatchCnt");
+  if(cnt) cnt.textContent = list.length ? String(list.length) : "";
+  var add = $("readWatchAdd");
+  if(add) add.hidden = !canManage;
+  var box = $("readWatchList");
+  if(!box) return;
+  var selfId = watchSelfId();
+  box.innerHTML = list.length ? list.map(function(w){
+    var name = w.userName || w.userId || "成员";
+    var self = w.userId === selfId;
+    var removable = self || canManage;
+    return '<span class="watch-chip' + (self ? " is-self" : "") + '">' +
+      avatarHTML(name, "sm") +
+      '<span class="watch-name">' + esc(name) + '</span>' +
+      (self ? '<span class="k">我</span>' : '') +
+      (removable
+        ? '<button class="watch-x" type="button" data-watch-remove="' + esc(w.userId) + '" aria-label="' + esc((self ? "取消关注" : "移除关注人") + "：" + name) + '" title="' + (self ? "取消关注" : "移除关注人") + '">' + icon("close", 11) + '</button>'
+        : '') +
+      '</span>';
+  }).join("") : '<span class="watch-empty">还没有人关注：关注后新评论、状态流转与回收站操作会通知到人。</span>';
+}
+function renderWatchStatus(res){
+  renderWatchButton(res);
+  renderWatchCard(res);
+}
 function loadWatchStatus(taskId){
   watchTaskId = taskId || null;
-  renderWatchButton(null);
+  renderWatchStatus(null);
   if(!watchTaskId) return;
   API.get("/api/tasks/" + encodeURIComponent(watchTaskId) + "/watch").then(function(res){
-    if(watchTaskId === taskId) renderWatchButton(res);
+    if(watchTaskId === taskId) renderWatchStatus(res);
   }).catch(function(){
-    /* 读不到状态时隐藏开关，避免展示错误的关注态 */
+    /* 读不到状态时隐藏开关与卡片，避免展示错误的关注态 */
     if(watchTaskId === taskId){
       if(btnTaskWatch) btnTaskWatch.hidden = true;
       if(btnFootWatch) btnFootWatch.hidden = true;
+      renderWatchCard(null);
     }
   });
 }
@@ -4207,6 +4253,86 @@ $("btnTaskMore").addEventListener("click", function(){
   if(UI.popOpen($("taskMoreMenu"))){ UI.closeAllPops(); return; }
   UI.openPop($("taskMoreMenu"), $("btnTaskMore"), {align:"left"});
 });
+/* 可添加为关注人的候选：项目/空间成员里对项目可见的人，查看者也可关注；
+   与负责人候选分开，因为负责人要求可推进，关注只要看得见。 */
+function watchCandidates(){
+  var ws = rt.currentWs, pid = currentProjectId(), out = [];
+  if(ws && ws.type === "shared"){
+    var roster = pid ? peekProjectMembers(ws.id, pid) : null;
+    var members = pid ? (roster && roster.members || []) : (rt.wsMembersCache || []);
+    members.forEach(function(m){
+      if(m.access === "none") return;
+      var primary = effectiveMemberRole(m);
+      out.push({ id:m.userId, name:m.displayName || m.username || m.userId,
+        company:companyNameOf(m), role:primary,
+        secondary:memberRoleTitles(m).filter(function(t){ return t !== primary; }) });
+    });
+  } else if(rt.currentUser){
+    out.push({ id:rt.currentUser.id, name:rt.currentUser.displayName || rt.currentUser.username || rt.currentUser.id,
+      company:"", role:"", secondary:[] });
+  }
+  return out;
+}
+var watchPickerRef = null;
+function buildWatchPickerCfg(anchor){
+  var taken = Object.create(null), selfId = watchSelfId();
+  ((watchState && watchState.watchers) || []).forEach(function(w){ taken[w.userId] = 1; });
+  var st = ownerRosterState();
+  /* 自己走抽屉头的关注开关，不进「添加」候选，避免查看权限的人被 403 */
+  var options = watchCandidates().filter(function(o){ return o.id && o.id !== selfId && !taken[o.id]; });
+  return {
+    anchor:anchor, title:"添加关注人",
+    options:st.pending || st.error ? [] : options,
+    currentId:"", allowClear:false,
+    loading:st.pending, error:st.error ? (st.error.message || "网络异常") : "",
+    onRetry:function(){ ensureProjectRoles(currentProjectId(), true); refreshWatchPicker(); },
+    foot:"<b>关注</b>只决定通知与可见性：新评论、状态流转、回收站操作会通知到人；不参与状态推进，也不提升权限。",
+    onPick:function(o){
+      if(!o) return;
+      var taskId = watchTaskId;
+      API.post("/api/tasks/" + encodeURIComponent(taskId) + "/watchers", { userId:o.id }).then(function(res){
+        if(watchTaskId !== taskId) return;
+        renderWatchStatus(res);
+        toast("已添加关注人：" + o.name);
+      }, function(e){
+        if(!e || !e.silent) toast((e && e.message) || "添加关注人失败", "bad");
+      });
+    }
+  };
+}
+function refreshWatchPicker(){
+  if(watchPickerRef && UI.popOpen(watchPickerRef.el)){
+    var cfg = buildWatchPickerCfg(watchPickerRef.anchor);
+    watchPickerRef.refresh({ options:cfg.options, loading:cfg.loading, error:cfg.error });
+  }
+}
+function openWatchPicker(anchor){
+  if(!watchTaskId || !anchor) return;
+  var cfg = buildWatchPickerCfg(anchor);
+  watchPickerRef = openPeoplePicker(cfg);
+  if(watchPickerRef) watchPickerRef.anchor = anchor;
+  if(cfg.loading) ensureProjectRoles(currentProjectId());
+}
+var watchListEl = $("readWatchList");
+if(watchListEl){
+  watchListEl.addEventListener("click", function(e){
+    var b = e.target.closest("[data-watch-remove]");
+    if(!b || b.disabled) return;
+    var taskId = watchTaskId, uid = b.dataset.watchRemove;
+    if(!taskId || !uid) return;
+    b.disabled = true;
+    API.del("/api/tasks/" + encodeURIComponent(taskId) + "/watchers/" + encodeURIComponent(uid)).then(function(res){
+      if(watchTaskId !== taskId) return;
+      renderWatchStatus(res);
+      toast(uid === watchSelfId() ? "已取消关注" : "已移除关注人");
+    }, function(e){
+      b.disabled = false;
+      if(!e || !e.silent) toast((e && e.message) || "移除关注人失败", "bad");
+    });
+  });
+}
+var watchAddBtn = $("readWatchAdd");
+if(watchAddBtn) watchAddBtn.addEventListener("click", function(){ openWatchPicker(watchAddBtn); });
 function toggleTaskWatch(btn){
   var taskId = watchTaskId;
   if(!taskId || (btn && btn.disabled)) return;
@@ -4224,8 +4350,8 @@ function toggleTaskWatch(btn){
     if(btnTaskWatch) btnTaskWatch.disabled = false;
     if(btnFootWatch) btnFootWatch.disabled = false;
     if(watchTaskId !== taskId) return;
-    renderWatchButton(res);
-    toast(watching ? "已取消关注" : "已关注：该工作项的评论与回收站操作会通知你");
+    renderWatchStatus(res);
+    toast(watching ? "已取消关注" : "已关注：该工作项的评论、状态流转与回收站操作会通知你");
   }, function(e){
     if(btn) btn.disabled = false;
     if(btnTaskWatch) btnTaskWatch.disabled = false;
@@ -5760,6 +5886,7 @@ function buildOwnerPickerCfg(anchor){
     options:st.pending || st.error ? [] : ownerPickerOptions(),
     currentId:cur.id, currentName:cur.name, unavailable:cur.unavailable,
     allowClear:true, clearLabel:"未分配",
+    foot:"负责人只有一个：按谁推进到完成来选，不按岗位选；产品、运维同样可以做负责人。",
     loading:st.pending, error:st.error ? (st.error.message || "网络异常") : "",
     onRetry:function(){ ensureProjectRoles(currentProjectId(), true); refreshOwnerPicker(); },
     onPick:function(o){
@@ -5789,7 +5916,7 @@ function buildTestPickerCfg(anchor){
     options:st.pending || st.error ? [] : ownerPickerOptions(),
     currentId:cur.id, currentName:cur.name, unavailable:cur.unavailable,
     allowClear:true, clearLabel:"待领取（不指定）",
-    foot:"<b>岗位</b> = 本项目有效岗位；测试负责人与开发负责人共用候选。仅展示，不改变权限。",
+    foot:"<b>岗位</b> = 本项目有效岗位；测试负责人与开发负责人共用候选，只承接测试窗口，不改变负责人。",
     loading:st.pending, error:st.error ? (st.error.message || "网络异常") : "",
     onRetry:function(){ ensureProjectRoles(currentProjectId(), true); refreshTestPicker(); },
     onPick:function(o){

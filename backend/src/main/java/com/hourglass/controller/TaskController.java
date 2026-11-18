@@ -15,6 +15,7 @@ import com.hourglass.dto.TaskListResponse;
 import com.hourglass.dto.TaskMoveRequest;
 import com.hourglass.dto.TaskReopenRequest;
 import com.hourglass.dto.TaskSaveRequest;
+import com.hourglass.dto.TaskWatcherRequest;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskLog;
 import com.hourglass.service.TaskCommandService;
@@ -241,6 +242,22 @@ public class TaskController {
     public ApiResult<Map<String, Object>> unwatch(@CurrentWorkspace WorkspaceCtx ctx,
                                                   @PathVariable String id) {
         return ApiResult.ok(watchService.unwatch(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
+    /** 项目可写者代他人加入关注人名单 */
+    @PostMapping("/api/tasks/{id}/watchers")
+    public ApiResult<Map<String, Object>> addWatcher(@PathVariable String id,
+                                                     @Valid @RequestBody TaskWatcherRequest body,
+                                                     @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(watchService.addWatcher(ctx.getUserId(), ctx.getWsId(), id, body.getUserId()));
+    }
+
+    /** 本人取消关注或项目可写者移除他人 */
+    @DeleteMapping("/api/tasks/{id}/watchers/{userId}")
+    public ApiResult<Map<String, Object>> removeWatcher(@PathVariable String id,
+                                                        @PathVariable String userId,
+                                                        @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(watchService.removeWatcher(ctx.getUserId(), ctx.getWsId(), id, userId));
     }
 
     /** 任务操作时间线（含操作人） */

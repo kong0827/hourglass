@@ -171,6 +171,17 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             <p class="foot-note">阻塞期间该工作项上的计时已停止；看板卡片显示橙色条纹。</p>
           </section>
 
+          <!-- 关注与协作：产品、运维、设计等需要跟进展的人落在这里；只决定通知与可见性 -->
+          <section class="read-card watch-card" id="readWatchCard" hidden>
+            <div class="read-card-head">
+              <h3>关注与协作</h3>
+              <span class="read-cnt" id="readWatchCnt"></span>
+              <button class="link-btn" type="button" id="readWatchAdd" hidden>+ 添加关注人</button>
+            </div>
+            <div class="watch-list" id="readWatchList"></div>
+            <p class="watch-note" id="readWatchNote">关注只决定通知与可见性：新评论、状态流转、移入回收站或恢复会通知关注人；不参与状态推进，也不提升权限。</p>
+          </section>
+
           <!-- 测试交接：提测时间 / 测试负责人 / 测试时间窗；未指派时显式提示 -->
           <section class="read-card test-card" id="readTestCard" hidden>
             <div class="read-card-head">
@@ -195,6 +206,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               </ol>
               <div class="tf-sum"><b id="readTestDur">—</b><span id="readTestDurSub"></span></div>
             </div>
+            <p class="test-policy" id="readTestPolicy" hidden></p>
             <div class="tf-history" id="readTestHistory" hidden>
               <ol class="tf-rounds" id="readTestRounds"></ol>
               <p class="tf-hist-note">历史来自操作记录；更早的测试流转可能缺失。</p>

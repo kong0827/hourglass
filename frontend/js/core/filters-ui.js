@@ -311,6 +311,34 @@ function dimSelectedText(kind){
   var singular = kind === "pris" ? "pri" : kind.slice(0, -1);
   return vals.map(function(v){ return dimValueLabel(singular, v, items); }).join("、");
 }
+/* 负责人与测试负责人共用一个筛选入口：两组取值仍分别落在 state.owners / state.testOwners，
+   接口参数与保存视图都按两个值理解，这里只合并展示、计数与清空。 */
+function peopleCount(){
+  return dimSelected("owners").length + dimSelected("testOwners").length;
+}
+/* 测试身份一律带「（测试）」后缀，避免和同名的负责人条件混淆 */
+function peopleLabelParts(){
+  var owners = dimSelected("owners");
+  var testers = dimSelected("testOwners");
+  if(!owners.length && !testers.length) return [];
+  var meta = state.board && state.board.meta;
+  if(!meta) return owners.concat(testers.map(function(v){ return v + "（测试）"; }));
+  var ownerOpts = ownerItems(meta);
+  var testerOpts = testOwnerItems(meta);
+  var parts = owners.map(function(v){ return dimValueLabel("owner", v, ownerOpts); });
+  testers.forEach(function(v){
+    var name = v === "__none" ? "待领取" : dimValueLabel("owner", v, testerOpts);
+    parts.push(name + "（测试）");
+  });
+  return parts;
+}
+/* 两个以内直接列名；更多时保留前两位并提示余量，避免按钮被撑满整条筛选栏 */
+function peopleLabelText(){
+  var parts = peopleLabelParts();
+  if(!parts.length) return "";
+  if(parts.length <= 2) return parts.join("、");
+  return parts.slice(0, 2).join("、") + " +" + (parts.length - 2);
+}
 function syncDueButton(){
   var btn = $("btnDueFilter");
   if(!btn) return;
@@ -341,12 +369,11 @@ function syncDimButtons(){
     && currentMode(rt.currentWs.id, rt.currentWs.myRole) === "test";
   dimGroup.querySelectorAll("[data-dim-open]").forEach(function(btn){
     var kind = btn.dataset.dimOpen;
-    /* 我的工作天然只含本人任务，负责人维度没有意义；测试负责人只在「待我测试」有意义，
-       普通模式下不摆出来制造「点了没反应」。已选条件仍保留按钮，筛选不会隐身到清不掉。 */
-    btn.hidden = inMine && (kind === "owners"
-      || (kind === "testOwners" && !mineTest && !dimSelected(kind).length));
-    var n = dimSelected(kind).length;
-    var values = dimSelectedText(kind);
+    var n = kind === "owners" ? peopleCount() : dimSelected(kind).length;
+    var values = kind === "owners" ? peopleLabelParts().join("、") : dimSelectedText(kind);
+    /* 我的工作天然只含本人任务，负责人维度没有意义；「待我测试」下仍可筛测试组。
+       已选条件保留按钮，筛选不会隐身到清不掉。 */
+    btn.hidden = inMine && !mineTest && !n;
     var labelEl = btn.querySelector(".fb-dim-label");
     if(!labelEl){
       btn.textContent = "";
@@ -356,7 +383,10 @@ function syncDimButtons(){
     }
     /* 单选直接把值回显在按钮上；整集选中报项目集名；其余多选留给角标显示数量 */
     var label = DIM_ORDER[kind];
-    if(kind === "reqs"){
+    if(kind === "owners"){
+      /* 两种身份共用一段文字：测试身份带「（测试）」，多个只留前两位 + 余量 */
+      if(n > 0) label += "：" + peopleLabelText();
+    }else if(kind === "reqs"){
       var setName = n > 1 ? reqFullSetName(state.board && state.board.meta) : "";
       if(setName) label = "项目集：" + setName;
       else if(n === 1 && values) label += "：" + (values.length > 10 ? values.slice(0, 10) + "…" : values);
@@ -509,6 +539,43 @@ function renderReqDimMenu(meta){
   applyReqDimSearch();
   if(search) applyDimSearch();
 }
+function peopleRowHTML(kind, o){
+  var val = itemVal(o);
+  var label = String(o.name);
+  return '<button class="menu-item dim-opt" type="button" data-' + dimDataKey(kind) + '="' + esc(val) +
+    '" data-label="' + esc((label + " " + val).toLowerCase()) + '" aria-pressed="' + (o.on ? "true" : "false") + '">' +
+    '<span class="ck" aria-hidden="true">' + (o.on ? icon("check", 13) : "") + '</span>' +
+    '<span class="dim-name">' + esc(label) + '</span>' +
+    '<span class="k">' + (o.count == null ? "" : o.count) + '</span>' +
+    '</button>';
+}
+/* 一个入口两种身份：同一浮层里分「负责人」「测试负责人」两组，待领取落在测试组。
+   组内多选 OR、组间 AND，和接口的 owners / testOwners 两个参数一一对应。 */
+function renderPeopleDimMenu(meta){
+  var ownerOpts = ownerItems(meta);
+  var testerOpts = testOwnerItems(meta);
+  var groups = [
+    { key:"owners", title:"负责人", note:"谁推进到完成", items:ownerOpts },
+    { key:"testOwners", title:"测试负责人", note:"待测试 / 测试中承接", items:testerOpts }
+  ];
+  var total = ownerOpts.length + testerOpts.length;
+  var body = groups.map(function(g){
+    var rows = g.items.map(function(o){ return peopleRowHTML(g.key, o); }).join("");
+    if(!rows) rows = '<p class="foot-note dim-empty">暂无可选的' + g.title + '</p>';
+    return '<div class="dim-group-box" data-dim-group="' + g.key + '">' +
+      '<p class="dim-group">' + g.title + '<span>' + g.note + '</span></p>' + rows + '</div>';
+  }).join("");
+  var search = total > 8
+    ? '<div class="menu-field dim-search"><input type="search" data-dim-q value="' + esc(dimQ) +
+      '" placeholder="搜索姓名…（共 ' + total + ' 个）" aria-label="搜索负责人" autocomplete="off"></div>'
+    : "";
+  dimMenu.dataset.grouped = "";
+  dimMenu.innerHTML = '<div class="menu-title">负责人</div>' + search +
+    '<div class="dim-list">' + body + '<p class="foot-note dim-empty" data-dim-empty hidden>没有匹配的选项</p></div>' +
+    '<div class="menu-foot"><button class="btn sm" type="button" data-dim-clear="owners" title="同时清空负责人与测试负责人"' +
+      (peopleCount() ? "" : " disabled") + '>清空</button></div>';
+  applyDimSearch();
+}
 function renderDimMenu(kind){
   var meta = state.board && state.board.meta;
   if(!meta){
@@ -516,6 +583,7 @@ function renderDimMenu(kind){
     return;
   }
   if(kind === "reqs"){ renderReqDimMenu(meta); return; }
+  if(kind === "owners"){ renderPeopleDimMenu(meta); return; }
   dimMenu.dataset.grouped = "";
   var items = dimItemsOf(kind, meta);
   var rows = items.map(function(o){
@@ -553,6 +621,13 @@ function applyDimSearch(){
     btn.hidden = !hit;
     if(hit) shown++;
   });
+  /* 负责人浮层按组陈列：一组全被搜索过滤掉时收起该组，不留空标题 */
+  dimMenu.querySelectorAll(".dim-group-box").forEach(function(box){
+    var opts = box.querySelectorAll(".dim-opt");
+    if(!opts.length) return;
+    var any = Array.prototype.some.call(opts, function(b){ return !b.hidden; });
+    box.hidden = !any;
+  });
   var empty = dimMenu.querySelector("[data-dim-empty]");
   if(empty) empty.hidden = shown > 0;
 }
@@ -582,22 +657,33 @@ function applyReqDimSearch(){
   var empty = dimMenu.querySelector("[data-dim-empty]");
   if(empty) empty.hidden = shown > 0;
 }
+function paintDimOpt(btn, on){
+  if((btn.getAttribute("aria-pressed") === "true") === on) return;
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  var ck = btn.querySelector(".ck");
+  if(ck) ck.innerHTML = on ? icon("check", 13) : "";
+}
 /* 勾选即时生效、菜单保持打开：只刷新选中态与计数，不重排列表，避免输入焦点和滚动位置丢失 */
 function syncDimMenu(){
   if(!dimMenu) return;
   var kind = dimMenu.dataset.kind;
   if(!kind) return;
-  var selected = dimSelected(kind);
-  dimMenu.querySelectorAll(".dim-opt").forEach(function(btn){
-    var on = selected.indexOf(btn.dataset[dimDataKey(kind)]) !== -1;
-    if((btn.getAttribute("aria-pressed") === "true") === on) return;
-    btn.setAttribute("aria-pressed", on ? "true" : "false");
-    var ck = btn.querySelector(".ck");
-    if(ck) ck.innerHTML = on ? icon("check", 13) : "";
-  });
-  if(kind === "reqs" && dimMenu.dataset.grouped === "1") syncReqSetHeads();
+  if(kind === "owners"){
+    /* 同一浮层混放两组取值：按行自带属性回查各自数组，不能按 kind 截断 */
+    dimMenu.querySelectorAll(".dim-opt").forEach(function(btn){
+      var isTester = btn.dataset.testowner !== undefined;
+      var val = isTester ? btn.dataset.testowner : btn.dataset.owner;
+      paintDimOpt(btn, (isTester ? dimSelected("testOwners") : dimSelected("owners")).indexOf(val) !== -1);
+    });
+  }else{
+    var selected = dimSelected(kind);
+    dimMenu.querySelectorAll(".dim-opt").forEach(function(btn){
+      paintDimOpt(btn, selected.indexOf(btn.dataset[dimDataKey(kind)]) !== -1);
+    });
+    if(kind === "reqs" && dimMenu.dataset.grouped === "1") syncReqSetHeads();
+  }
   var clear = dimMenu.querySelector("[data-dim-clear]");
-  if(clear) clear.disabled = selected.length === 0;
+  if(clear) clear.disabled = (kind === "owners" ? peopleCount() : dimSelected(kind).length) === 0;
 }
 /* 集头三态随勾选刷新；组内项目计数来自打开菜单时的 meta，重排留给下次打开 */
 function syncReqSetHeads(){
@@ -1422,7 +1508,14 @@ function handleFilterClick(e){
   if(clear){ clearMfDim(clear.dataset.clearDim); return; }
   var dimClear = e.target.closest("[data-dim-clear]");
   if(dimClear){
-    state[dimClear.dataset.dimClear] = [];
+    var clearKind = dimClear.dataset.dimClear;
+    /* 负责人入口含两种身份：清空时两组一起清，按钮不会只剩半截条件 */
+    if(clearKind === "owners"){
+      state.owners = [];
+      state.testOwners = [];
+    }else{
+      state[clearKind] = [];
+    }
     reloadFilteredViews();
     return;
   }

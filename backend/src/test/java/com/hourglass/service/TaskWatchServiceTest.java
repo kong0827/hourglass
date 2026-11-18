@@ -1,9 +1,11 @@
 package com.hourglass.service;
 
 import com.hourglass.common.AppException;
+import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TaskWatchMapper;
+import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -30,9 +32,10 @@ class TaskWatchServiceTest {
 
     private final TaskWatchMapper watches = mock(TaskWatchMapper.class);
     private final TaskMapper tasks = mock(TaskMapper.class);
+    private final WorkspaceMemberMapper members = mock(WorkspaceMemberMapper.class);
+    private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
-    private final TaskWatchService service = new TaskWatchService(watches, tasks,
-            mock(ProjectAccessService.class), events);
+    private final TaskWatchService service = new TaskWatchService(watches, tasks, members, access, events);
 
     @BeforeEach
     void setUp() {
@@ -93,6 +96,43 @@ class TaskWatchServiceTest {
                 anyString(), anyString(), anyString());
         verify(events).notify(eq("U-watch"), eq(WS), eq(UserNotificationPreferenceService.TASK_UPDATED),
                 eq("任务更新"), eq("detail"), eq(TASK), eq("R1"));
+    }
+
+    @Test
+    void addWatcherRejectsMemberWhoCannotViewProject() {
+        WorkspaceMember m = new WorkspaceMember();
+        m.setUserId("U2");
+        when(members.selectMember(WS, "U2")).thenReturn(m);
+        when(access.canView(WS, "U2", null)).thenReturn(false);
+
+        AppException ex = assertThrows(AppException.class, () -> service.addWatcher(ME, WS, TASK, "U2"));
+
+        assertEquals(400, ex.getCode());
+        verify(watches, never()).insertIgnore(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void removeSelfDoesNotRequireWritePermission() {
+        service.removeWatcher(ME, WS, TASK, ME);
+
+        verify(watches).delete(WS, TASK, ME);
+        verify(access, never()).assertWrite(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void statusReturnsWatcherNamesAndManageFlag() {
+        when(watches.countMine(WS, TASK, ME)).thenReturn(1);
+        when(watches.countByTask(WS, TASK)).thenReturn(1);
+        when(access.canWrite(WS, ME, null)).thenReturn(true);
+        com.hourglass.dto.TaskWatcherView view = new com.hourglass.dto.TaskWatcherView();
+        view.setUserId(ME);
+        view.setUserName("我");
+        when(watches.selectWatchers(WS, TASK)).thenReturn(Collections.singletonList(view));
+
+        Map<String, Object> res = service.status(ME, WS, TASK);
+
+        assertEquals(Boolean.TRUE, res.get("canManage"));
+        assertEquals(Collections.singletonList(view), res.get("watchers"));
     }
 
     @Test

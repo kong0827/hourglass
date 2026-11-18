@@ -47,7 +47,8 @@
   var doing = [
     T({ id: "K1", title: "重构权限校验中间件", priority: "P0", boardColumn: "doing", progress: 60, reqId: "R1", reqDocId: "D1",
         branchId: "BR1", startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2,
-        totalMinutes: 520, estimateMinutes: 480 }),
+        totalMinutes: 520, estimateMinutes: 480,
+        testOwner: "李雷", testOwnerUserId: "U3", testRequestedAt: ts(-2, 10, 0), testStartedAt: ts(-1, 14, 0) }),
     T({ id: "K2", title: "导出 CSV 补工时列", priority: "P1", boardColumn: "doing", progress: 0,
         branchId: "BR2", startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径",
         blockedByTaskId: "B1", totalMinutes: 200, estimateMinutes: 240 })
@@ -253,7 +254,9 @@
     ],
     counts: { over: 3, today: 1, soon: 4 },
     meta: {
-      owners: [{ name: "我", count: 12 }],
+      owners: [{ name: "我", count: 12 }, { name: "陈工", count: 1 }],
+      testOwners: [{ name: "李雷", count: 1 }],
+      testOwnerUnassigned: 2,
       pris: [{ name: "P0", count: 10 }, { name: "P1", count: 1 }, { name: "P2", count: 2 }, { name: "P3", count: 1 }],
       cats: [{ name: "后端", count: 9 }, { name: "工作", count: 8 }],
       tags: [{ name: "工作", count: 8 }, { name: "权限", count: 1 }],
@@ -771,7 +774,16 @@
     }
     if (/\/api\/tasks\/[A-Za-z0-9_-]+\/(subtasks|attachments)$/.test(clean)) return [];
     if (clean.indexOf("/api/workspaces/") === 0 && clean.indexOf("/members") > 0) {
-      return [{ userId: "U1", displayName: "我", username: "me", role: "owner" }];
+      /* 项目花名册返回 {members}；空间成员返回数组 —— 两条路由共用这段判断，按路径区分 */
+      var roster = [
+        { userId: "U1", displayName: "我", username: "me", role: "owner", access: "write",
+          companyName: "北京总部", jobTitle: "前端开发", effectiveRoleTitle: "前端开发", secondaryRoleTitles: [] },
+        { userId: "U2", displayName: "陈工", username: "chen", role: "member", access: "write",
+          companyName: "北京总部", jobTitle: "后端开发", effectiveRoleTitle: "后端开发", secondaryRoleTitles: [] },
+        { userId: "U3", displayName: "李雷", username: "lilei", role: "member", access: "write",
+          companyName: "上海研发", jobTitle: "测试", effectiveRoleTitle: "测试", secondaryRoleTitles: ["质量保障"] }
+      ];
+      return /\/projects\/[A-Za-z0-9_-]+\/members$/.test(clean) ? { members: roster } : roster;
     }
     return {};
   }
@@ -977,6 +989,46 @@
     return check;
   }
 
+  /* 关注与协作：预览稿在内存里维护名单，关注/取消/代他人增删都能看到回流 */
+  var watchDemo = {};
+  var WATCH_NAMES = { U1: "我", U2: "陈工", U3: "李雷" };
+  function watchBox(taskId) {
+    if (!watchDemo[taskId]) {
+      watchDemo[taskId] = { self: false, list: [{ userId: "U2", userName: "陈工", createdAt: ts(-3, 9, 30) }] };
+    }
+    return watchDemo[taskId];
+  }
+  function watchResult(taskId) {
+    var box = watchBox(taskId);
+    return { watching: box.self, count: box.list.length, canManage: true, watchers: box.list };
+  }
+  function mockTaskWatch(taskId, method) {
+    var box = watchBox(taskId);
+    if (method === "POST") {
+      box.self = true;
+      if (!box.list.some(function (w) { return w.userId === "U1"; })) {
+        box.list.unshift({ userId: "U1", userName: "我", createdAt: ts(0, 10, 0) });
+      }
+    } else if (method === "DELETE") {
+      box.self = false;
+      box.list = box.list.filter(function (w) { return w.userId !== "U1"; });
+    }
+    return watchResult(taskId);
+  }
+  function mockTaskWatcher(taskId, method, userId, body) {
+    var box = watchBox(taskId);
+    if (method === "POST") {
+      var uid = body && body.userId;
+      if (uid && !box.list.some(function (w) { return w.userId === uid; })) {
+        box.list.push({ userId: uid, userName: WATCH_NAMES[uid] || uid, createdAt: ts(0, 10, 0) });
+      }
+    } else if (method === "DELETE" && userId) {
+      box.list = box.list.filter(function (w) { return w.userId !== userId; });
+      if (userId === "U1") box.self = false;
+    }
+    return watchResult(taskId);
+  }
+
   window.fetch = function (url, opts) {
     var method = (opts && opts.method) || "GET";
     var u = String(url), clean = u.split("?")[0];
@@ -993,6 +1045,12 @@
     } else if (clean === "/api/tasks/list") {
       /* 列表/甘特/未排期共用：按查询参数筛选，并保持 {items,total} 结构 */
       data = mockTaskList(u);
+    } else if (/^\/api\/tasks\/[A-Za-z0-9_-]+\/watch$/.test(clean)) {
+      /* 本人的关注开关：GET 读状态，POST/DELETE 切关注态 */
+      data = mockTaskWatch(clean.split("/")[3], method);
+    } else if (/^\/api\/tasks\/[A-Za-z0-9_-]+\/watchers(\/[A-Za-z0-9_-]+)?$/.test(clean)) {
+      /* 代他人添加/移除关注人 */
+      data = mockTaskWatcher(clean.split("/")[3], method, clean.split("/")[5], reqBody);
     } else if (clean === "/api/demands/page") {
       /* 工作项抽屉的「关联需求」候选：生产分页返回，这里给两条可关联 + 一条待评审 */
       var dpM = /[?&]reqId=([^&]*)/.exec(u);
