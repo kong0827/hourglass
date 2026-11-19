@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 成员负载「本周已计 / 本周容量」并列原型 · 方案 C</title>
+<style>
+/* ==========================================================================
+   成员负载「本周饱和度」原型 · 2026-11-19
+   方案 C：负载口径（剩余预估 ÷ 剩余工作日容量）完全不动，
+   只在成员卡片与成员工作台上，把「已发生工时 ÷ 该区间产能」并列出来。
+   目的：解决「负载 61% 但本周其实已经排满」的观感落差，零口径风险。
+   ========================================================================== */
+:root{
+  /* 中性 */
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --head-border:#D7DCE4;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  /* 品牌 */
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF;
+  --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  /* 语义 */
+  --success:#12B76A; --success-soft:#ECFDF3; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-fg:#B54708; --warning-border:#FEDF89;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318; --danger-border:#FDA29B;
+  /* 饱和度条中性档：正常态不抢主色 */
+  --sat:#98A2B3;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --r-micro:4px; --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --focus-ring-sm:0 0 0 2px var(--primary-soft);
+  --ease-out:cubic-bezier(.2,.8,.2,1); --dur-fast:120ms;
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D; --surface-hover:#1F2937;
+  --border:#25303D; --border-strong:#334153; --head-border:#33414F;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C;
+  --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-fg:#FEC84B; --warning-border:#5C4A1E;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-fg:#FDA29B; --danger-border:#5C2A26;
+  --sat:#5C6A7C;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --focus-ring-sm:0 0 0 2px rgba(76,141,255,.28);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:var(--font-sans);font-size:13px;color:var(--text);background:var(--bg-app);
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;}
+button:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+a{color:var(--primary-fg);}
+
+/* ---------- 原型控制条（不属于产品界面） ---------- */
+.proto-bar{
+  position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:10px 24px;background:var(--surface);border-bottom:1px dashed var(--border-strong);
+}
+.proto-title{display:flex;flex-direction:column;gap:2px;margin-right:auto;min-width:0;}
+.proto-title b{font-size:13px;font-weight:650;}
+.proto-title span{font-size:12px;color:var(--text-3);}
+.proto-ctl{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);}
+.proto-ctl>span{white-space:nowrap;}
+.proto-note{font-size:11px;color:var(--text-3);padding-left:2px;}
+
+/* ---------- 分段控件（与产品 seg.mini 同形） ---------- */
+.seg{display:inline-flex;padding:2px;background:var(--surface-sunken);border-radius:var(--r-sm);}
+.seg button{
+  height:26px;padding:0 10px;border-radius:var(--r-xs);font-size:12px;color:var(--text-2);
+  transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+}
+.seg button:hover{color:var(--text);}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow-xs);}
+.seg.mini button{height:24px;padding:0 8px;font-size:11.5px;}
+
+/* ---------- 页面骨架 ---------- */
+.page{max-width:1440px;margin:0 auto;padding:20px 24px 40px;}
+.page-title{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.page-title h1{font-size:20px;line-height:26px;font-weight:650;letter-spacing:-.01em;}
+.page-title p{font-size:12px;color:var(--text-3);padding-bottom:2px;}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.toolbar-id{display:flex;align-items:baseline;gap:8px;min-width:0;}
+.toolbar-id b{font-size:14px;font-weight:650;}
+.toolbar-id span{font-size:12px;color:var(--text-3);}
+.toolbar-actions{display:flex;align-items:center;gap:8px;}
+.btn{
+  display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:var(--r-xs);
+  border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:550;
+}
+.btn:hover{background:var(--surface-hover);color:var(--text);}
+.btn.soft{border-color:var(--border);background:var(--surface);}
+.filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.filters label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);}
+select.mini-select{
+  height:30px;padding:0 26px 0 9px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text-2);font:inherit;font-size:12.5px;appearance:none;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 6px center;
+}
+select.mini-select:focus{border-color:var(--primary);box-shadow:var(--focus-ring-sm);outline:none;}
+.filters label>select{min-width:118px;}
+.wl-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.wl-search{
+  flex:1 1 240px;min-width:180px;height:30px;padding:0 10px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;outline:none;
+}
+.wl-search:focus{border-color:var(--primary);box-shadow:var(--focus-ring-sm);}
+.wl-search::placeholder{color:var(--text-3);}
+.wl-filters label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);}
+.wl-period{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.wl-period-label{font-size:12px;color:var(--text-2);}
+.wl-period-dates{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.roster-note{font-size:12px;color:var(--text-3);margin-bottom:10px;}
+.caliber-line{font-size:12px;line-height:18px;color:var(--text-3);margin:0 0 12px;padding:8px 10px;background:var(--surface-sunken);border-radius:var(--r-sm);}
+.caliber-line b{color:var(--text-2);font-weight:600;}
+
+/* ---------- 口径浮层 ---------- */
+.caliber-mark{
+  display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;flex:0 0 auto;
+  border-radius:50%;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-3);
+  font-size:11px;font-weight:700;line-height:1;cursor:pointer;font-family:inherit;
+}
+.caliber-mark:hover{color:var(--text);background:var(--surface-hover);border-color:var(--text-3);}
+.caliber-mark.warn{color:var(--warning-fg);border-color:var(--warning-border);background:var(--warning-soft);}
+.pop{
+  position:fixed;z-index:200;width:340px;max-width:88vw;padding:12px 14px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-lg);
+}
+.pop-title{font-size:13px;font-weight:650;margin-bottom:8px;}
+.pop-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;padding:5px 0;font-size:12px;line-height:18px;align-items:start;}
+.pop-row>span{color:var(--text-3);}
+.pop-tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-xs);font-size:11px;font-weight:600;white-space:nowrap;}
+.pop-tag.ok{background:var(--success-soft);color:var(--success-fg);}
+.pop-tag.info{background:var(--primary-soft);color:var(--primary-fg);}
+.pop-tag.warn{background:var(--warning-soft);color:var(--warning-fg);}
+.pop-tag.mute{background:var(--surface-sunken);color:var(--text-2);}
+
+/* ---------- 汇总条 ---------- */
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px;}
+.summary-item{
+  display:flex;flex-direction:column;gap:3px;min-width:0;padding:12px 14px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);
+}
+.summary-item>span{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-2);}
+.summary-item>b{font-size:24px;line-height:28px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+.summary-item>small{font-size:12px;color:var(--text-3);}
+
+/* ---------- 卡片网格 ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start;}
+.card{
+  display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
+  text-align:left;
+}
+.card:hover{border-color:var(--primary-border);box-shadow:var(--shadow-md);}
+.card-head{display:flex;align-items:center;gap:10px;min-width:0;}
+.avatar{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:50%;
+  background:var(--primary-soft);color:var(--primary-fg);font-weight:650;
+}
+.avatar.lg{width:36px;height:36px;font-size:14px;}
+.avatar.xl{width:52px;height:52px;font-size:19px;}
+.card-id{flex:1;min-width:0;}
+.card-id>b{display:block;font-size:14px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:var(--text-3);}
+.company-chip{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;background:var(--surface-sunken);border-radius:var(--r-micro);font-size:11px;color:var(--text-2);}
+.status{display:inline-flex;align-items:center;flex:0 0 auto;height:22px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;font-weight:600;white-space:nowrap;}
+.status.ok{background:var(--success-soft);color:var(--success-fg);}
+.status.hot{background:var(--warning-soft);color:var(--warning-fg);}
+.status.over{background:var(--danger-soft);color:var(--danger-fg);}
+.status.idle{background:var(--surface-sunken);color:var(--text-3);}
+.card-roles{display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-height:20px;}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-micro);background:var(--surface-sunken);color:var(--text-2);font-size:11px;}
+.tag.role{background:var(--primary-soft);color:var(--primary-fg);}
+.tag.role.extra{background:var(--surface-sunken);color:var(--text-2);}
+
+/* 总负载行（现有布局） */
+.loadline{display:grid;grid-template-columns:auto minmax(90px,1fr) auto;align-items:center;gap:4px 8px;font-size:12px;color:var(--text-3);}
+.loadline>span:last-child{grid-column:1/-1;}
+.progress{position:relative;height:6px;border-radius:var(--r-xs);background:var(--surface-sunken);overflow:hidden;}
+.progress>i{display:block;height:100%;border-radius:inherit;background:var(--primary);}
+.loadline .progress>i{background:var(--primary);}
+.loadline.hot .progress>i{background:var(--warning);}
+.loadline.over .progress>i{background:var(--danger);}
+.loadline b{min-width:38px;font-size:12px;text-align:right;color:var(--text-2);font-variant-numeric:tabular-nums;}
+
+/* 新增：区间饱和度行 */
+.satline{
+  display:grid;grid-template-columns:auto minmax(90px,1fr) auto;align-items:center;gap:4px 8px;
+  font-size:12px;color:var(--text-3);padding-top:2px;
+}
+.satline>span:last-child{grid-column:1/-1;}
+.satline .label{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.sat-bar{position:relative;height:4px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;}
+.sat-bar>i{display:block;height:100%;border-radius:inherit;background:var(--sat);}
+.satline.hot .sat-bar>i{background:var(--warning);}
+.satline.over .sat-bar>i{background:var(--danger);}
+.satline b{min-width:38px;font-size:12px;text-align:right;color:var(--text-2);font-variant-numeric:tabular-nums;font-weight:650;}
+.satline.hot b{color:var(--warning-fg);}
+.satline.over b{color:var(--danger-fg);}
+.satline.idle b{color:var(--text-3);font-weight:550;}
+.satline .sat-note{color:var(--text-3);}
+
+.card-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.stat{padding:7px 8px;background:var(--surface-sunken);border-radius:var(--r-md);text-align:center;min-width:0;}
+.stat>i{display:block;font-style:normal;font-size:11px;color:var(--text-3);}
+.stat>b{display:block;margin-top:2px;font-size:14px;font-weight:650;line-height:19px;color:var(--text);font-variant-numeric:tabular-nums;}
+.stat.danger{background:var(--danger-soft);}
+.stat.danger>b{color:var(--danger-fg);}
+.stat.warn{background:var(--warning-soft);}
+.stat.warn>b{color:var(--warning-fg);}
+
+.card-tests{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text-3);}
+.test-label{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--text-2);}
+.card-tests>span:not(.test-label){display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;background:var(--surface-sunken);border-radius:var(--r-pill);}
+.card-tests b{font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+
+.card-projects{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:22px;}
+.proj-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 8px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-pill);font-size:12px;color:var(--text-2);}
+.proj-chip>b{min-width:0;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.proj-chip>i{font-style:normal;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.proj-more{font-size:12px;color:var(--text-3);}
+
+.card-foot{display:flex;align-items:center;gap:10px;padding-top:8px;margin-top:auto;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);}
+.member-link{padding:0;border:0;background:none;font:inherit;font-size:12px;color:var(--primary-fg);cursor:pointer;margin-left:auto;}
+.member-link:hover{text-decoration:underline;}
+
+/* ---------- 成员工作台 ---------- */
+.member-page{display:flex;flex-direction:column;gap:14px;min-width:0;}
+.member-back{align-self:flex-start;padding:2px 6px;border-radius:var(--r-xs);font-size:13px;color:var(--primary-fg);}
+.member-back:hover{background:var(--surface-hover);text-decoration:none;}
+.member-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+.member-id{display:flex;align-items:center;gap:14px;min-width:0;}
+.member-id h2{display:flex;align-items:center;gap:8px;font-size:20px;line-height:24px;font-weight:650;}
+.member-meta{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-top:5px;font-size:12px;color:var(--text-3);}
+.member-head .card-roles{margin-top:6px;}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.kpi{padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
+.kpi>i{display:block;font-style:normal;font-size:12px;color:var(--text-3);}
+.kpi>i.caliber-label{display:inline-flex;align-items:center;gap:4px;}
+.kpi>b{display:block;margin-top:3px;font-size:16px;line-height:22px;color:var(--text);font-variant-numeric:tabular-nums;}
+.kpi>span{display:block;margin-top:2px;font-size:12px;color:var(--text-3);}
+.kpi>span.hot{color:var(--warning-fg);}
+.kpi>span.over{color:var(--danger-fg);}
+.two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;}
+.panel{padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);min-width:0;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}
+.panel-head>b{font-size:13px;font-weight:650;}
+.panel-head>span{font-size:12px;color:var(--text-3);}
+.state-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.state{padding:10px 8px;background:var(--surface-sunken);border-radius:var(--r-md);text-align:center;min-width:0;}
+.state>i{display:block;font-style:normal;font-size:12px;color:var(--text-3);}
+.state>b{display:block;margin-top:3px;font-size:16px;line-height:21px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+.state.danger{background:var(--danger-soft);}
+.state.danger>b{color:var(--danger-fg);}
+.state.warn{background:var(--warning-soft);}
+.state.warn>b{color:var(--warning-fg);}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.tbl th{height:36px;padding:0 10px;background:var(--surface-sunken);border-bottom:1px solid var(--head-border);color:var(--text-2);font-size:12px;font-weight:600;text-align:left;white-space:nowrap;}
+.tbl td{padding:12px 10px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle;}
+.tbl tbody tr:last-child td{border-bottom:none;}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.share{display:flex;align-items:center;gap:8px;min-width:120px;}
+.share .progress{flex:1;display:block;}
+.share b{min-width:34px;font-size:12px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums;}
+
+/* ---------- 底部说明（原型自带，不属于产品） ---------- */
+.notes{margin-top:26px;padding:16px 18px;background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--r-lg);}
+.notes h2{font-size:14px;font-weight:650;margin-bottom:10px;}
+.notes h3{font-size:13px;font-weight:650;margin:14px 0 6px;}
+.notes table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.notes th,.notes td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;line-height:19px;}
+.notes th{background:var(--surface-sunken);color:var(--text-2);font-weight:600;font-size:12px;white-space:nowrap;}
+.notes td{color:var(--text-2);}
+.notes ul{font-size:12.5px;color:var(--text-2);line-height:21px;padding-left:18px;}
+.notes code{font-family:Consolas,Menlo,monospace;font-size:12px;background:var(--surface-sunken);padding:1px 5px;border-radius:var(--r-micro);}
+
+@media(max-width:1279px){
+  .summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));}
+}
+@media(max-width:760px){
+  .page{padding:16px;}
+  .grid{grid-template-columns:1fr;}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .two-col{grid-template-columns:1fr;}
+  .card-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .summary{grid-template-columns:1fr;}
+  .state-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+</style>
+</head>
+<body>
+
+<header class="proto-bar">
+  <div class="proto-title">
+    <b>原型 · 成员负载并列「区间已计 / 区间容量」</b>
+    <span>方案 C：负载口径不动，只补「已发生工时」视角 · 演示数据对齐 SXk01 空间（2026-11-19）</span>
+  </div>
+  <div class="proto-ctl">
+    <span>视图</span>
+    <div class="seg mini" role="group" aria-label="切换视图">
+      <button type="button" data-proto-view="roster">名册</button>
+      <button type="button" data-proto-view="member">工作台</button>
+    </div>
+  </div>
+  <div class="proto-ctl">
+    <span>每日容量</span>
+    <div class="seg mini" role="group" aria-label="切换每日容量">
+      <button type="button" data-proto-perday="8">8h</button>
+      <button type="button" data-proto-perday="9">9h</button>
+    </div>
+    <span class="proto-note">演示用：线上按各人计时设置</span>
+  </div>
+  <div class="proto-ctl">
+    <span>新增行</span>
+    <div class="seg mini" role="group" aria-label="切换新增行">
+      <button type="button" data-proto-sat="1">显示</button>
+      <button type="button" data-proto-sat="0">隐藏（改前）</button>
+    </div>
+  </div>
+  <button class="btn soft" type="button" data-proto-theme>切换深色</button>
+</header>
+
+<main class="page">
+  <div class="page-title">
+    <h1>人员负载</h1>
+    <p>按人看参与项目、在手工作项与当前状态</p>
+  </div>
+
+  <div id="app"></div>
+
+  <section class="notes">
+    <h2>原型说明</h2>
+    <table>
+      <thead><tr><th>要点</th><th>做法</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>新指标是什么</td>
+          <td>「区间已计」÷（区间内已发生的工作日 × 每日容量）。本周口径下就是：本周已计 ÷（周一至今天的工作日 × 每人每日容量）。</td>
+          <td>回答「这周他忙不忙」。顶部工时区间切到上周 / 近30天 / 本月时，标签与分母同步换窗口。</td>
+        </tr>
+        <tr>
+          <td>不动负载公式</td>
+          <td>总负载仍是「剩余预估 ÷（剩余工作日 × 每日容量）」，分母上限 30 天。新行只做展示，可一键隐藏。</td>
+          <td>零口径风险：不触发告警阈值、排期判断、CSV 导出等任何既有逻辑。</td>
+        </tr>
+        <tr>
+          <td>两行怎么区分</td>
+          <td>总负载 = 主色实心条（未来口径）；区间已计 = 4px 中性细条（过去口径），仅 ≥85% 转橙、>100% 转红。</td>
+          <td>一屏不出现两条抢色的进度条；颜色只在需要关注时出现，符合「颜色承载语义」。</td>
+        </tr>
+        <tr>
+          <td>没有计时</td>
+          <td>显示「本周未计时」，不显示 0%，条为空。</td>
+          <td>0% 会被读成「很闲」，未计时是「没有数据」或「没排活」，语义不同。</td>
+        </tr>
+        <tr>
+          <td>和工作台的关系</td>
+          <td>工作台不新增第 5 块 KPI，把现有「本周已计」卡片补一行「本周容量 36.0h · 已用 103%」。</td>
+          <td>保持 4 列栅格；「本周已计」本来就与容量同源，补注比另起一卡更省空间。</td>
+        </tr>
+        <tr>
+          <td>卡片脚注</td>
+          <td>「本周已计」从脚注移到新行后，脚注只留「今日已计 · 最近计时」。</td>
+          <td>避免同一数字在卡上出现两次。</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>本次未覆盖（待定，不在方案 C 内）</h3>
+    <ul>
+      <li>汇总条：仍只有「区间已计 95.2h」，未加全员容量占比——加不加需要先定「全员容量是否含空闲成员」。</li>
+      <li>状态筹码（超载 / 接近满载 / 正常 / 空闲）仍按总负载计；是否新增「按区间饱和度筛」另议。</li>
+      <li>「按周」视图的周表未加列；如需要，建议放在表尾而非行内。</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- 演示数据：与 SXk01 空间量级一致（合计剩余 485.7h、本周已计 95.2h） ---------- */
+  var MEMBERS = [
+    {
+      key:"u-zhou", name:"周劲松", initial:"周", company:"东证自研", jobTitle:"测试",
+      roles:["测试负责人","测试"],
+      remaining:165.6, workdays:30,
+      counts:{ doing:9, backlog:11, overdue:2, blocked:1 },
+      tests:{ waiting:3, doing:2, week:6.5 },
+      projects:[{name:"技术平台",hours:96},{name:"客户门户",hours:45.6},{name:"数据中台",hours:24}],
+      logs:{ week:37.2, last:41.0, days30:152.0, month:108.0 },
+      today:6.0, lastLog:"11-19"
+    },
+    {
+      key:"u-li", name:"李伟", initial:"李", company:"东证自研", jobTitle:"前端开发",
+      roles:["前端开发"],
+      remaining:137.7, workdays:30,
+      counts:{ doing:7, backlog:6, overdue:1, blocked:0 },
+      tests:null,
+      projects:[{name:"客户门户",hours:80},{name:"技术平台",hours:57.7}],
+      logs:{ week:24.0, last:36.5, days30:140.0, month:96.0 },
+      today:4.0, lastLog:"11-19"
+    },
+    {
+      key:"u-wang", name:"王芳", initial:"王", company:"恒信咨询", jobTitle:"后端开发",
+      roles:["后端开发","技术负责人"],
+      remaining:100.8, workdays:30,
+      counts:{ doing:7, backlog:6, overdue:1, blocked:1 },
+      tests:null,
+      projects:[{name:"数据中台",hours:62.8},{name:"技术平台",hours:38}],
+      logs:{ week:18.0, last:28.0, days30:112.0, month:78.0 },
+      today:3.0, lastLog:"11-18"
+    },
+    {
+      key:"u-chen", name:"陈明", initial:"陈", company:"恒信咨询", jobTitle:"实施顾问",
+      roles:["实施顾问"],
+      remaining:81.6, workdays:30,
+      counts:{ doing:4, backlog:4, overdue:0, blocked:0 },
+      tests:null,
+      projects:[{name:"支付网关重构",hours:55.6},{name:"运维平台",hours:26}],
+      logs:{ week:16.0, last:24.0, days30:96.0, month:66.0 },
+      today:2.0, lastLog:"11-17"
+    },
+    {
+      key:"u-zhao", name:"赵磊", initial:"赵", company:"东证自研", jobTitle:"运维",
+      roles:["运维"],
+      remaining:0, workdays:30,
+      counts:{ doing:0, backlog:0, overdue:0, blocked:0 },
+      tests:null,
+      projects:[],
+      logs:{ week:0, last:6.0, days30:40.0, month:18.0 },
+      today:0, lastLog:"11-12"
+    }
+  ];
+
+  /* 区间：标签 / 起止 / 区间内「已发生」的工作日数（今天 2026-11-19 周四） */
+  var PERIODS = {
+    week:   { label:"本周",   from:"11-16", to:"11-22", elapsedWorkdays:4 },
+    last:   { label:"上周",   from:"11-09", to:"11-15", elapsedWorkdays:5 },
+    days30: { label:"近30天", from:"10-21", to:"11-19", elapsedWorkdays:22 },
+    month:  { label:"本月",   from:"11-01", to:"11-30", elapsedWorkdays:14 }
+  };
+
+  var state = {
+    view:"roster",       /* roster | member */
+    memberKey:"u-zhou",
+    period:"week",
+    perDay:9,            /* 演示各成员计时设置（线上逐人读取） */
+    showSat:true,
+    theme:"light"
+  };
+
+  /* ---------- 派生 ---------- */
+  function fmtH(minutesOrHours){ return (Math.round(minutesOrHours * 10) / 10).toFixed(1) + "h"; }
+  function pctOf(part, whole){ return whole > 0 ? Math.round(part * 100 / whole) : 0; }
+  function periodLabel(){ return PERIODS[state.period].label; }
+  function periodHours(m){ return m.logs[state.period]; }
+  function periodCapacity(){ return PERIODS[state.period].elapsedWorkdays * state.perDay; }
+  function loadPct(m){ return pctOf(m.remaining, m.workdays * state.perDay); }
+  function satPct(m){
+    var logged = periodHours(m);
+    if(!logged) return null;
+    return pctOf(logged, periodCapacity());
+  }
+  function loadState(m){
+    if(!m.counts.doing && !m.counts.backlog && !m.counts.overdue && !m.counts.blocked) return "idle";
+    var pct = loadPct(m);
+    if(pct > 100) return "over";
+    if(pct >= 85) return "hot";
+    return "ok";
+  }
+  var STATUS_TEXT = { ok:"正常", hot:"接近满载", over:"超载", idle:"空闲" };
+  function satState(pct){
+    if(pct === null) return "idle";
+    if(pct > 100) return "over";
+    if(pct >= 85) return "hot";
+    return "ok";
+  }
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function roleTags(roles){
+    return roles.map(function(r, i){
+      return '<span class="tag role' + (i ? " extra" : "") + '">' + esc(r) + '</span>';
+    }).join("");
+  }
+  function caliberMark(title){
+    return '<button class="caliber-mark" type="button" aria-label="查看「' + esc(title) + '」口径" data-caliber="' + esc(title) + '">?</button>';
+  }
+
+  /* ---------- 名册 ---------- */
+  function summaryHTML(){
+    var over = MEMBERS.filter(function(m){ return loadState(m) === "over"; }).length;
+    var hot = MEMBERS.filter(function(m){ return loadState(m) === "hot"; }).length;
+    var idle = MEMBERS.filter(function(m){ return loadState(m) === "idle"; }).length;
+    var remaining = MEMBERS.reduce(function(n, m){ return n + m.remaining; }, 0);
+    var open = MEMBERS.reduce(function(n, m){ return n + m.counts.doing + m.counts.backlog; }, 0);
+    var worked = MEMBERS.reduce(function(n, m){ return n + periodHours(m); }, 0);
+    var overdue = MEMBERS.reduce(function(n, m){ return n + m.counts.overdue; }, 0);
+    var blocked = MEMBERS.reduce(function(n, m){ return n + m.counts.blocked; }, 0);
+    return '<div class="summary">'
+      + '<div class="summary-item"><span>成员</span><b>' + MEMBERS.length + ' 人</b><small>空闲 ' + idle + ' 人</small></div>'
+      + '<div class="summary-item' + (over ? ' danger' : '') + '"><span>超载</span><b>' + over + ' 人</b><small>接近满载 ' + hot + ' 人</small></div>'
+      + '<div class="summary-item"><span class="caliber-label">合计剩余' + caliberMark("剩余预估") + '</span><b>' + fmtH(remaining) + '</b><small>未完成工作项 ' + open + ' 项</small></div>'
+      + '<div class="summary-item"><span>' + esc(periodLabel()) + '已计</span><b>' + fmtH(worked) + '</b><small>逾期 ' + overdue + ' 项 · 阻塞 ' + blocked + ' 项</small></div>'
+      + '</div>';
+  }
+
+  function cardHTML(m){
+    var status = loadState(m);
+    var load = loadPct(m);
+    var sat = satPct(m);
+    var satCls = satState(sat);
+    var projects = m.projects.slice(0, 3);
+    var tests = m.tests;
+    var satHTML = "";
+    if(state.showSat){
+      var barWidth = sat === null ? 0 : Math.min(100, sat);
+      var satText = sat === null ? "未计时" : sat + "%";
+      var note = sat === null
+        ? esc(periodLabel()) + "没有计时记录"
+        : "已计 " + fmtH(periodHours(m)) + " / 容量 " + fmtH(periodCapacity());
+      satHTML = '<div class="satline ' + satCls + '" data-satline>'
+        + '<span class="label">' + esc(periodLabel()) + '已计' + caliberMark("区间饱和度") + '</span>'
+        + '<div class="sat-bar" role="img" aria-label="' + esc(periodLabel() + "已计占区间容量 " + (sat === null ? "未计时" : sat + "%")) + '"><i style="width:' + barWidth + '%"></i></div>'
+        + '<b>' + satText + '</b>'
+        + '<span class="sat-note">' + note + '</span></div>';
+    }
+    var footLeft = state.showSat
+      ? '<span>今日 ' + (m.today ? fmtH(m.today) : "—") + '</span>'
+      : '<span>' + esc(periodLabel()) + ' ' + fmtH(periodHours(m)) + ' · 今日 ' + (m.today ? fmtH(m.today) : "—") + '</span>';
+    return '<article class="card" data-open-member="' + esc(m.key) + '" tabindex="0" role="button" aria-label="打开 ' + esc(m.name) + ' 的成员工作台">'
+      + '<div class="card-head"><span class="avatar lg">' + esc(m.initial) + '</span>'
+      + '<div class="card-id"><b>' + esc(m.name) + '</b>'
+      + '<div class="card-sub"><span class="company-chip">' + esc(m.company) + '</span><span>岗位：' + esc(m.jobTitle) + '</span></div></div>'
+      + '<span class="status ' + status + '">' + STATUS_TEXT[status] + '</span></div>'
+      + '<div class="card-roles">' + roleTags(m.roles) + '</div>'
+      + '<div class="loadline ' + (load > 100 ? "over" : load >= 85 ? "hot" : "") + '">'
+      + '<span class="label">总负载' + caliberMark("负载") + '</span>'
+      + '<div class="progress"><i style="width:' + Math.min(100, load) + '%"></i></div>'
+      + '<b>' + load + '%</b>'
+      + '<span>剩余 ' + fmtH(m.remaining) + ' / 容量 ' + fmtH(m.workdays * state.perDay) + '</span></div>'
+      + satHTML
+      + '<div class="card-stats">'
+      + statHTML("进行中", m.counts.doing)
+      + statHTML("待处理", m.counts.backlog)
+      + statHTML("逾期", m.counts.overdue, m.counts.overdue ? "danger" : "")
+      + statHTML("阻塞", m.counts.blocked, m.counts.blocked ? "warn" : "")
+      + '</div>'
+      + (tests
+          ? '<div class="card-tests"><span class="test-label">测试' + caliberMark("测试身份") + '</span>'
+            + '<span>待测试 <b>' + tests.waiting + '</b></span>'
+            + '<span>测试中 <b>' + tests.doing + '</b></span>'
+            + '<span>本周测试 <b>' + fmtH(tests.week) + '</b></span></div>'
+          : '')
+      + '<div class="card-projects">' + (projects.length
+          ? projects.map(function(p){
+              return '<span class="proj-chip"><b>' + esc(p.name) + '</b><i>' + fmtH(p.hours) + '</i></span>';
+            }).join("")
+            + (m.projects.length > projects.length ? '<span class="proj-more">+' + (m.projects.length - projects.length) + ' 个项目</span>' : '')
+          : '<span class="proj-more">暂无参与项目</span>') + '</div>'
+      + '<div class="card-foot">' + footLeft
+      + (m.lastLog ? '<span>最近计时 ' + esc(m.lastLog) + '</span>' : '')
+      + '<button class="member-link" type="button" data-open-member="' + esc(m.key) + '">工作台 →</button></div>'
+      + '</article>';
+  }
+  function statHTML(label, value, tone){
+    return '<div class="stat' + (tone ? ' ' + tone : '') + '"><i>' + label + '</i><b>' + value + '</b></div>';
+  }
+
+  function rosterHTML(){
+    return pageChromeHTML()
+      + summaryHTML()
+      + '<div class="grid">' + MEMBERS.map(cardHTML).join("") + '</div>';
+  }
+
+  /* 页头 + 工具条 + 筛选 + 区间（与线上结构一致，静态演示） */
+  function pageChromeHTML(){
+    var p = PERIODS[state.period];
+    return '<div class="toolbar"><div class="toolbar-id"><b>成员负载</b><span>按人看参与项目、在手工作项与当前状态</span></div>'
+      + '<div class="toolbar-actions"><div class="seg mini" role="group" aria-label="视图模式">'
+      + '<button type="button" aria-pressed="true">按人</button><button type="button" aria-pressed="false">按周</button></div>'
+      + '<button class="btn" type="button">导出当前范围 CSV</button></div></div>'
+      + '<div class="filters">'
+      + '<label>项目 <select class="mini-select"><option>全部项目</option><option>技术平台</option><option>客户门户</option><option>数据中台</option><option>支付网关重构</option><option>运维平台</option></select></label>'
+      + '<label>公司 <select class="mini-select"><option>全部公司</option><option>东证自研</option><option>恒信咨询</option><option>未设公司</option></select></label>'
+      + '<label>角色 <select class="mini-select"><option>全部角色</option><option>测试负责人</option><option>前端开发</option><option>后端开发</option><option>实施顾问</option><option>运维</option></select></label>'
+      + '<button class="btn soft" type="button">清除筛选</button></div>'
+      + '<div class="wl-filters">'
+      + '<input type="search" class="wl-search" placeholder="搜索成员、公司、角色或项目…" aria-label="搜索成员">'
+      + '<label>分组 <select class="mini-select"><option>不分组</option><option>按公司</option><option>按角色</option><option>按项目</option><option>按状态</option></select></label>'
+      + '<label>排序 <select class="mini-select"><option>负载从高到低</option><option>剩余工时从多到少</option><option>逾期工作项从多到少</option><option>姓名</option></select></label></div>'
+      + '<div class="wl-period" role="group" aria-label="工时区间">'
+      + '<span class="wl-period-label">工时区间</span><div class="seg mini">'
+      + Object.keys(PERIODS).map(function(k){
+          return '<button type="button" data-period="' + k + '" aria-pressed="' + (state.period === k) + '">' + PERIODS[k].label + '</button>';
+        }).join("")
+      + '</div><span class="wl-period-dates">' + p.from + ' ~ ' + p.to + '</span></div>'
+      + '<p class="roster-note">项目：全部项目 · 公司：全部公司 · 角色：全部角色</p>'
+      + '<p class="caliber-line"><b>负载</b> = 剩余预估工时 ÷（剩余工作日 × 每日容量），每日容量取成员自己的计时设置（当前演示 ' + state.perDay + 'h）。'
+      + '<b>' + esc(periodLabel()) + '已计</b> = 区间内已计时长 ÷（区间内已发生的工作日 × 每日容量）；它只描述「已发生」，不影响负载。</p>';
+  }
+
+  /* ---------- 成员工作台 ---------- */
+  function memberHTML(m){
+    var status = loadState(m);
+    var load = loadPct(m);
+    var sat = satPct(m);
+    var satCls = satState(sat);
+    var open = m.counts.doing + m.counts.backlog;
+    var totalHours = m.projects.reduce(function(n, p){ return n + p.hours; }, 0) || 1;
+    var satNote = sat === null
+      ? '<span>' + esc(periodLabel()) + '没有计时记录</span>'
+      : '<span class="' + (sat > 100 ? "over" : sat >= 85 ? "hot" : "") + '">' + esc(periodLabel()) + '容量 ' + fmtH(periodCapacity()) + ' · 已用 ' + sat + '%</span>';
+    return '<div class="member-page">'
+      + '<button class="member-back" type="button" data-back>← 返回成员负载</button>'
+      + '<header class="member-head"><div class="member-id"><span class="avatar xl">' + esc(m.initial) + '</span>'
+      + '<div><h2>' + esc(m.name) + '<span class="status ' + status + '">' + STATUS_TEXT[status] + '</span></h2>'
+      + '<div class="member-meta"><span class="company-chip">' + esc(m.company) + '</span><span>岗位：' + esc(m.jobTitle) + '</span>'
+      + '<span>剩余 ' + fmtH(m.remaining) + ' · ' + esc(periodLabel()) + ' ' + fmtH(periodHours(m)) + '</span></div>'
+      + '<div class="card-roles">' + roleTags(m.roles) + '</div></div></div>'
+      + '<div class="toolbar-actions"><button class="btn soft" type="button">导出该成员 CSV</button></div></header>'
+      + '<p class="roster-note">项目：全部项目 · 公司：全部公司 · 角色：全部角色 · 点击工作项打开详情</p>'
+      + '<div class="kpis">'
+      + '<div class="kpi"><i>未完成工作项</i><b>' + open + ' 项</b><span>进行中 ' + m.counts.doing + ' · 待处理 ' + m.counts.backlog + '</span></div>'
+      + '<div class="kpi"><i class="caliber-label">剩余预估' + caliberMark("剩余预估") + '</i><b>' + fmtH(m.remaining) + '</b><span>剩余 ' + m.workdays + ' 个工作日</span></div>'
+      + '<div class="kpi"><i class="caliber-label">' + esc(periodLabel()) + '已计' + caliberMark("区间饱和度") + '</i><b>' + fmtH(periodHours(m)) + '</b>' + satNote + '</div>'
+      + '<div class="kpi"><i class="caliber-label">负载' + caliberMark("负载") + '</i><b>' + load + '%</b><span>容量 ' + fmtH(m.workdays * state.perDay) + '（每日 ' + state.perDay + 'h）</span></div>'
+      + '</div>'
+      + '<div class="two-col">'
+      + '<section class="panel"><div class="panel-head"><b>当前状态</b><span>此刻快照</span></div>'
+      + '<div class="state-grid">'
+      + '<div class="state"><i>进行中</i><b>' + m.counts.doing + '</b></div>'
+      + '<div class="state"><i>待处理</i><b>' + m.counts.backlog + '</b></div>'
+      + '<div class="state' + (m.counts.overdue ? " danger" : "") + '"><i>逾期</i><b>' + m.counts.overdue + '</b></div>'
+      + '<div class="state' + (m.counts.blocked ? " warn" : "") + '"><i>阻塞</i><b>' + m.counts.blocked + '</b></div>'
+      + '<div class="state"><i>今日已计</i><b>' + (m.today ? fmtH(m.today) : "—") + '</b></div>'
+      + '<div class="state' + (sat !== null && sat > 100 ? " danger" : "") + '"><i>' + esc(periodLabel()) + '饱和度</i><b>' + (sat === null ? "—" : sat + "%") + '</b></div>'
+      + '</div></section>'
+      + '<section class="panel"><div class="panel-head"><b>参与项目</b><span>' + m.projects.length + ' 个</span></div>'
+      + (m.projects.length
+          ? '<table class="tbl"><thead><tr><th>项目</th><th class="num">剩余</th><th>占比</th></tr></thead><tbody>'
+            + m.projects.map(function(p){
+                var share = Math.round(p.hours * 100 / totalHours);
+                return '<tr><td>' + esc(p.name) + '</td><td class="num">' + fmtH(p.hours) + '</td>'
+                  + '<td><div class="share"><div class="progress"><i style="width:' + share + '%"></i></div><b>' + share + '%</b></div></td></tr>';
+              }).join("")
+            + '</tbody></table>'
+          : '<p class="roster-note">暂无参与项目</p>')
+      + '</section></div>'
+      + '</div>';
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render(){
+    document.documentElement.setAttribute("data-theme", state.theme);
+    document.querySelectorAll("[data-proto-view]").forEach(function(b){
+      b.setAttribute("aria-pressed", b.dataset.protoView === state.view);
+    });
+    document.querySelectorAll("[data-proto-perday]").forEach(function(b){
+      b.setAttribute("aria-pressed", Number(b.dataset.protoPerday) === state.perDay);
+    });
+    document.querySelectorAll("[data-proto-sat]").forEach(function(b){
+      b.setAttribute("aria-pressed", (b.dataset.protoSat === "1") === state.showSat);
+    });
+    var themeBtn = document.querySelector("[data-proto-theme]");
+    themeBtn.textContent = state.theme === "dark" ? "切换浅色" : "切换深色";
+    var member = MEMBERS.filter(function(m){ return m.key === state.memberKey; })[0] || MEMBERS[0];
+    document.getElementById("app").innerHTML = state.view === "member" ? memberHTML(member) : rosterHTML();
+    closePop();
+  }
+
+  /* ---------- 口径浮层 ---------- */
+  var pop = null, popAnchor = null;
+  var TIPS = {
+    "负载": {
+      rows:[
+        ["怎么算", "剩余预估 ÷（剩余工作日 × 每日容量），每日容量取本人计时设置。", "ok"],
+        ["剩余工作日", "今天到最晚截止日，只数工作日；无截止日按 5 天，最多按 30 天。", "info"],
+        ["和饱和度不同", "负载看「未来还剩多少」，区间饱和度看「这段时间实际投入了多少」。", "warn"]
+      ]
+    },
+    "剩余预估": {
+      rows:[
+        ["怎么算", "每个未完成工作项按 max(0, 预估 − 已计) 求和。", "ok"],
+        ["注意", "未填预估的未完成项按 0 计，可能低估剩余。", "mute"]
+      ]
+    },
+    "区间饱和度": {
+      rows:[
+        ["怎么算", "区间内已计工时 ÷（区间内已发生的工作日 × 每日容量）。", "ok"],
+        ["本周口径", "周一至今天的工作日；上周按整周 5 天；近30天/本月按区间内已过的工作日。", "info"],
+        ["阈值", "≥85% 转橙、>100% 转红；未计时显示「未计时」而不是 0%。", "warn"],
+        ["不影响负载", "它是展示值，不参与超载告警、排期与导出计算。", "mute"]
+      ]
+    },
+    "测试身份": {
+      rows:[
+        ["怎么算", "按工作项「测试负责人」统计待测试 / 测试中的项数。", "ok"],
+        ["和手里的工作项不同", "状态计数只含本人负责开发的工作项，测试项另行统计。", "warn"]
+      ]
+    }
+  };
+  function closePop(){
+    if(pop && pop.parentNode) pop.parentNode.removeChild(pop);
+    pop = null; popAnchor = null;
+  }
+  function openPop(anchor, title){
+    closePop();
+    var def = TIPS[title]; if(!def) return;
+    popAnchor = anchor;
+    pop = document.createElement("div");
+    pop.className = "pop";
+    pop.setAttribute("role", "dialog");
+    pop.innerHTML = '<div class="pop-title">' + esc(title) + '</div>'
+      + def.rows.map(function(r){
+          return '<div class="pop-row"><span class="pop-tag ' + esc(r[2] || "mute") + '">' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>';
+        }).join("");
+    document.body.appendChild(pop);
+    var rect = anchor.getBoundingClientRect();
+    var left = Math.min(rect.left, window.innerWidth - pop.offsetWidth - 12);
+    var top = rect.bottom + 6;
+    if(top + pop.offsetHeight > window.innerHeight - 12) top = rect.top - pop.offsetHeight - 6;
+    pop.style.left = Math.max(12, left) + "px";
+    pop.style.top = Math.max(12, top) + "px";
+  }
+
+  /* ---------- 事件 ---------- */
+  document.addEventListener("click", function(e){
+    var t = e.target;
+    var viewBtn = t.closest("[data-proto-view]");
+    if(viewBtn){
+      state.view = viewBtn.dataset.protoView;
+      if(state.view === "member" && !state.memberKey) state.memberKey = MEMBERS[0].key;
+      render(); return;
+    }
+    var perDayBtn = t.closest("[data-proto-perday]");
+    if(perDayBtn){ state.perDay = Number(perDayBtn.dataset.protoPerday); render(); return; }
+    var satBtn = t.closest("[data-proto-sat]");
+    if(satBtn){ state.showSat = satBtn.dataset.protoSat === "1"; render(); return; }
+    if(t.closest("[data-proto-theme]")){
+      state.theme = state.theme === "dark" ? "light" : "dark";
+      render(); return;
+    }
+    var periodBtn = t.closest("[data-period]");
+    if(periodBtn){ state.period = periodBtn.dataset.period; render(); return; }
+    var caliber = t.closest("[data-caliber]");
+    if(caliber){ openPop(caliber, caliber.dataset.caliber); return; }
+    if(pop && !t.closest(".pop")) closePop();
+    var open = t.closest("[data-open-member]");
+    if(open){
+      state.memberKey = open.dataset.openMember;
+      state.view = "member";
+      render();
+      window.scrollTo({ top:0, behavior:"instant" });
+      return;
+    }
+    if(t.closest("[data-back]")){ state.view = "roster"; render(); return; }
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape") closePop();
+    if((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("card")){
+      e.preventDefault();
+      state.memberKey = e.target.dataset.openMember;
+      state.view = "member";
+      render();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
