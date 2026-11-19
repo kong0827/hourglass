@@ -88,6 +88,11 @@ function renderBellBadge(){
   }
   var tabDot = document.getElementById("tabMsgDot");
   if(tabDot) tabDot.hidden = n <= 0;
+  var navCnt = document.getElementById("navMsgCount");
+  if(navCnt){
+    navCnt.hidden = n <= 0;
+    navCnt.textContent = n > 99 ? "99+" : n;
+  }
   syncDocTitle();
 }
 /* 标题栏未读计数：切到别的标签页也能扫到；导航换标题后由 router 重新同步 */

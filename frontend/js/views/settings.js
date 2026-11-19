@@ -113,7 +113,7 @@ trashList.addEventListener("click", function(e){
     });
   }
 });
-var wsNameInput = $("wsNameInput"), wsWebhook = $("wsWebhook"),
+var wsNameInput = $("wsNameInput"), wsWebhook = $("wsWebhook"), wsIdInput = $("wsIdInput"),
     wsMemberList = $("wsMemberList"), wsMemberName = $("wsMemberName"),
     colCfgList = $("colCfgList"), colNewName = $("colNewName"), colNewColor = $("colNewColor"), colNewRule = $("colNewRule");
 var transMatrix = $("colTransMatrix"), transSummary = $("colTransSummary"),
@@ -250,6 +250,51 @@ if(btnRoleGuide){
   btnRoleGuide.innerHTML = icon("infoCircle", 14) + "<span>角色权限说明</span>";
   btnRoleGuide.addEventListener("click", openRoleGuide);
 }
+/* SET-1：空间概况只回答「我在改哪个空间」，数字全部来自已加载的真实数据，缺失时显示 — */
+function updateWsOverview(){
+  if(!rt.currentWs) return;
+  var ws = rt.currentWs;
+  var isPersonal = ws.type === "personal";
+  var members = rt.wsMembersCache || [];
+  var roles = {owner:0, admin:0, member:0, viewer:0};
+  members.forEach(function(m){ var r = m.role || "member"; if(roles[r] != null) roles[r]++; });
+  var memberEl = $("ovMembers");
+  if(memberEl){
+    var count = isPersonal ? (members.length || 1) : (ws.memberCount || members.length || 0);
+    memberEl.textContent = count ? count + " 人" : "—";
+    var parts = [];
+    if(roles.owner) parts.push(roles.owner + " 空间主");
+    if(roles.admin) parts.push(roles.admin + " 管理员");
+    if(roles.member) parts.push(roles.member + " 成员");
+    if(roles.viewer) parts.push(roles.viewer + " 查看者");
+    $("ovMembersSub").textContent = parts.length ? parts.join(" · ") : "成员";
+  }
+  var projEl = $("ovProjects");
+  if(projEl){
+    if(isPersonal){
+      projEl.textContent = "—";
+      $("ovProjectsSub").textContent = "个人空间不区分项目";
+    }else if(rt.reqsLoaded){
+      projEl.textContent = rt.reqList.length + " 个";
+      $("ovProjectsSub").textContent = "项目";
+    }else{
+      projEl.textContent = "—";
+      $("ovProjectsSub").textContent = "项目";
+    }
+  }
+  var ownerEl = $("ovOwner");
+  if(ownerEl){
+    var owner = null;
+    for(var i = 0; i < members.length; i++) if(members[i].role === "owner"){ owner = members[i]; break; }
+    var self = rt.currentUser && ws.myRole === "owner" ? rt.currentUser : null;
+    ownerEl.textContent = owner ? owner.displayName : (self ? (self.displayName || self.username) : "—");
+  }
+  var scopeEl = $("ovScope");
+  if(scopeEl){
+    scopeEl.textContent = isPersonal ? "个人空间" : "共享空间";
+    $("ovScopeSub").textContent = isPersonal ? "仅自己可见" : "成员按项目授权可见";
+  }
+}
 function enterSettingsView(){
   if(!rt.currentWs || !wsNameInput) return;
   rt.settingsReady = true;
@@ -289,6 +334,18 @@ function enterSettingsView(){
     "把链接发给已有账号的同事：对方登录后打开链接即可加入。生成时可先分配项目权限；未分配的项目加入后不可见，之后可随时调整。";
   updateInviteAccountHint(isAdmin);
   if($("setTabPlatform")) $("setTabPlatform").hidden = !isAdmin;
+  if($("navSetPlatform")) $("navSetPlatform").hidden = !isAdmin;
+  var canSeeAccess = isManager && !isPersonal;
+  if($("setTabVisibility")) $("setTabVisibility").hidden = !canSeeAccess;
+  if($("navSetVisibility")) $("navSetVisibility").hidden = !canSeeAccess;
+  if(wsIdInput) wsIdInput.value = rt.currentWs.id == null ? "" : String(rt.currentWs.id);
+  updateWsOverview();
+  if(!rt.reqsLoaded) loadReqs().then(updateWsOverview);
+  var dangerHint = $("wsDangerHint");
+  if(dangerHint) dangerHint.textContent = isPersonal
+    ? "个人空间没有其他成员，也不可删除。"
+    : (isOwner ? "退出后你将失去这里的全部访问权限；删除空间会连同其数据一起删除。"
+               : "退出后你将失去这里的全部访问权限；需要重新加入时请联系空间管理员。");
   if(isPersonal){
     wsMemberList.innerHTML = '<div class="foot-note">个人空间没有其他成员。</div>';
     $("wsMemberCount").textContent = "";
@@ -331,9 +388,10 @@ function setSettingsTab(tab){
     legacyPlatformTab = tab;
     tab = "platform";
   }
-  if(tab === "access") tab = "members";
+  if(tab === "access") tab = (isManager && !isPersonal) ? "visibility" : "members";
   if(tab === "activity") tab = "data";
   if(tab === "platform" && !isAdmin) tab = "space";
+  if(tab === "visibility" && !(isManager && !isPersonal)) tab = "space";
   if(legacyPlatformTab) platformTab = legacyPlatformTab;
   settingsTab = tab;
   document.querySelectorAll("#setTabs [data-set-tab]").forEach(function(b){
@@ -344,8 +402,6 @@ function setSettingsTab(tab){
   document.querySelectorAll("#view-settings [data-set-pane]").forEach(function(p){
     p.hidden = p.dataset.setPane !== tab;
   });
-  /* 项目可见范围与成员同属权限域，但只对管理者可见 */
-  if($("set-access")) $("set-access").hidden = !(tab === "members" && isManager && !isPersonal);
   /* SMTP 与团队 AI 配置在「通知与集成」页里，仅平台管理员可见 */
   if($("set-mail")) $("set-mail").hidden = tab !== "integration" || !isAdmin;
   if($("set-team-ai")) $("set-team-ai").hidden = tab !== "integration" || !isAdmin;
@@ -353,9 +409,10 @@ function setSettingsTab(tab){
   if(tab === "workflow") loadWsCatProjects();
   /* 切换页签时清掉成员搜索残留：避免上一次选中的账号在下一次打开时仍留在输入框里 */
   if(prevTab !== tab && (prevTab === "members" || tab === "members")) resetMemberPicker();
-  if(tab === "members" && isManager && !isPersonal) loadProjectAccess();
+  if(tab === "visibility" && isManager && !isPersonal) loadProjectAccess();
   if(tab === "integration" && isAdmin){ loadMailSettings(); loadTeamAiSettings(); }
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
+  try{ window.dispatchEvent(new CustomEvent("ds:settings-tab", {detail:tab})); }catch(e){ /* 非浏览器环境 */ }
 }
 function initSetTabs(){
   var box = $("setTabs");
@@ -411,6 +468,7 @@ function loadWsMemberList(){
   var isManager = isOwner || myRole === "admin";
   var render = function(){
     $("wsMemberCount").textContent = "共 " + rt.wsMembersCache.length + " 人";
+    updateWsOverview();
     var ownerCount = rt.wsMembersCache.reduce(function(n, m){ return n + (m.role === "owner" ? 1 : 0); }, 0);
     /* 多空间主等权：owner 之间可互相管理；最后一位空间主不可降级或移除 */
     $("btnWsLeave").hidden = isOwner && ownerCount <= 1;

@@ -104,6 +104,31 @@
 /* 选中态加左侧指示条：折叠成图标栏时也能定位当前页 */
 .nav-item.on::before{content:"";position:absolute;left:-4px;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--primary);}
 
+/* SHELL-1：侧栏父项可展开，子项只在当前业务域展开 */
+.nav-group{position:relative;display:flex;flex-direction:column;flex:0 0 auto;}
+.nav-group > .nav-item{padding-right:30px;}
+.nav-exp{
+  position:absolute;right:2px;top:5px;width:24px;height:24px;border-radius:var(--r-xs);
+  display:grid;place-items:center;color:var(--text-3);
+  transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+}
+.nav-exp:hover{background:var(--surface-active);color:var(--text-2);}
+.nav-exp:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.nav-exp svg{transition:transform .15s var(--ease-out);}
+.nav-group.open .nav-exp svg{transform:rotate(180deg);}
+.nav-sub{display:none;flex-direction:column;gap:1px;padding:1px 0 4px;}
+.nav-group.open .nav-sub{display:flex;}
+.nav-sub-item{
+  height:28px;display:flex;align-items:center;padding:0 10px 0 36px;
+  border-radius:var(--r-xs);color:var(--text-3);font-size:13px;font-weight:520;text-align:left;position:relative;
+}
+.nav-sub-item:hover{background:var(--surface-hover);color:var(--text-2);}
+.nav-sub-item:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.nav-sub-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.nav-sub-item.on::before{content:"";position:absolute;left:22px;width:4px;height:4px;border-radius:50%;background:var(--primary);}
+.nav-cnt{margin-left:auto;font-size:11px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.nav-item.on .nav-cnt{color:var(--primary-fg);}
+
 /* 底部 52px：用户信息靠左，设置/退出收成右侧图标组 */
 .side-foot{
   flex:0 0 auto;height:52px;display:flex;align-items:center;gap:2px;
@@ -204,15 +229,16 @@ body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 
 /* 顶栏统一搜索入口：打开全局搜索组件（⌘K），与看板筛选框职责分离 */
 .gs-open{
-  display:inline-flex;align-items:center;gap:8px;height:34px;width:300px;padding:0 10px;flex:0 0 auto;
+  display:inline-flex;align-items:center;gap:6px;height:34px;width:auto;padding:0 8px 0 9px;flex:0 0 auto;
   border:1px solid var(--border);border-radius:var(--r-sm);
   background:var(--surface-sunken);color:var(--text-3);font-size:12.5px;font-weight:400;
   justify-content:flex-start;
   transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out),
              border-color var(--dur-fast) var(--ease-out);
 }
-.gs-open > span:not(.gs-kbd){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto;}
-.gs-open .gs-kbd{margin-left:auto;}
+/* SHELL-2：全局搜索收为顶栏图标 + ⌘K，页码内搜索保留范围 chip */
+.gs-open > span:not(.gs-kbd){display:none;}
+.gs-open .gs-kbd{margin-left:0;}
 .gs-open:hover{background:var(--surface-hover);color:var(--text-2);}
 .gs-open > svg{color:var(--text-3);}
 .gs-open .gs-kbd{display:inline-flex;gap:2px;pointer-events:none;}
@@ -432,6 +458,9 @@ body.side-rail .nav-item .nl{display:none;}
 body.side-rail .nav-sec{display:block;height:1px;padding:0;margin:8px 10px;background:var(--border);border-top:none;}
 body.side-rail .nav-sec:first-child{display:none;}
 body.side-rail .nav-item.on::before{left:1px;}
+body.side-rail .nav-exp{display:none;}
+body.side-rail .nav-group > .nav-item{padding-right:0;}
+body.side-rail .nav-sub{display:none !important;}
 body.side-rail .side-foot{flex-direction:column;height:auto;padding:var(--space-2) 0;gap:6px;}
 
 @media (max-width:1439px){

@@ -19,6 +19,16 @@
 .board-toolbar-field .mini-select{height:28px;font-size:12px;}
 /* 右侧一组：已取消入口 + 口径「!」，与左侧分组控件分开 */
 .board-toolbar-end{margin-left:auto;display:inline-flex;align-items:center;gap:var(--space-2);}
+/* 显示浮层：分组、二级与已取消归档收进一个入口 */
+.board-display-menu{width:auto;min-width:264px;padding:10px 12px;}
+.board-display-menu .gantt-more-row{gap:8px;min-height:34px;}
+.board-display-menu .gantt-more-label{flex:0 0 auto;margin-right:auto;color:var(--text-3);}
+.board-display-menu .mini-select{min-width:140px;}
+.board-display-foot{display:flex;align-items:center;gap:8px;padding-top:8px;margin-top:6px;border-top:1px solid var(--border);}
+.board-display-foot .btn{height:30px;padding:0 10px;font-size:12px;}
+.board-display-foot .btn .n{color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums;}
+/* BOARD-1：分类标签在看板卡片上降为中性 chip，颜色只留给状态与风险 */
+.card .tag-cat{--tag-c:var(--text-3);color:var(--text-2);background:var(--surface-sunken);border-color:var(--border);}
 /* 已取消入口按原型做成标准按钮：图标 + 文案 + 常显计数，而不是只在有数时才出现的小 chip */
 .board-toolbar-end .btn{height:32px;padding:0 11px;font-size:13px;}
 .board-toolbar-end .btn .n{color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums;}

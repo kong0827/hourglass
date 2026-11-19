@@ -185,6 +185,11 @@ function renderBoardGroupControls(){
   sel.value = cur;
   sel2.value = cur2;
   sel2.disabled = cur === "none";
+  var echo = document.getElementById("boardDisplayEcho");
+  if(echo){
+    var hit = BOARD_GROUPS.filter(function(g){ return g[0] === cur; })[0];
+    echo.textContent = hit ? hit[1] : "不分组";
+  }
 }
 function groupValue(t, dim){
   if(dim === "owner") return t.owner || "";
@@ -555,8 +560,11 @@ function cardHTML(t, idx){
   }
 
   var p = progressOf(t);
-  var progHTML = '<div class="progress' + (p >= 100 ? " full" : "") + (s.kind === "over" && p < 100 ? " over" : "") +
-    '" title="当前进度 ' + p + '%"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></div>';
+  /* BOARD-4：0% 不占行，只有真实进度或完成态才画进度条 */
+  var progHTML = p > 0
+    ? '<div class="progress' + (p >= 100 ? " full" : "") + (s.kind === "over" && p < 100 ? " over" : "") +
+      '" title="当前进度 ' + p + '%"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></div>'
+    : '';
   var owner = t.owner || "—";
 
   return '<article class="card' + (isDone ? " is-done" : "") + (blocked ? " is-blocked" : "") +
@@ -769,8 +777,8 @@ function render(opts){
     /* 计数同时也是「查看全部」入口：进度只表达已加载多少，完整数据进状态工作页 */
     var allCount = cd.allTotal || cd.total || 0;
     var countText = (filterOn() || doneFiltered)
-      ? ((cd.matched || 0) + "/" + (cd.total || 0))
-      : (c.done ? String(cd.total || 0) : (cd.hasMore ? items.length + "/" + (cd.total || 0) : String(cd.total || 0)));
+      ? ((cd.matched || 0) + " / " + (cd.total || 0))
+      : (c.done ? String(cd.total || 0) : (cd.hasMore ? items.length + " / " + (cd.total || 0) : String(cd.total || 0)));
     var countTip = doneFiltered
       ? "已完成 · " + donePubLabel(effDonePub) + " " + (cd.matched || 0) + " 项 / 当前时间窗 " + (cd.total || 0) + " 项，点击进入工作页"
       : "查看「" + c.name + "」全部 " + allCount + " 项" + (c.done ? "（含历史）" : "");
@@ -785,13 +793,9 @@ function render(opts){
         (c.done ? ' data-col-range="all"' : '') +
         ' title="' + esc(countTip) + '" aria-label="' + esc(countTip) + '">' + esc(countText) + '</button>' +
       '<span class="sp"></span>' +
-      (c.done ? '' :
-        '<button class="icon-btn sm col-sort-btn' + (sortMode !== "manual" ? " on" : "") + '" type="button" data-col-sort="' + esc(c.id) + '"' +
-          ' title="列内排序：' + COL_SORT_LABEL[sortMode] + '" aria-label="列内排序：' + COL_SORT_LABEL[sortMode] + '">' + icon("sort", 14) + '</button>') +
+      /* 列头只留「+」与「⋯」：排序、折叠、发布态筛选取值都收进列设置菜单 */
       '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新建工作项" aria-label="在「' + esc(c.name) + '」新建工作项">' + icon("plus", 14) + '</button>' +
       '<button class="icon-btn sm' + (doneFiltered ? " on" : "") + '" type="button" data-col-menu="' + esc(c.id) + '" title="' + (doneFiltered ? "「" + esc(c.name) + "」列设置 · 发布态：" + donePubLabel(effDonePub) : "「" + esc(c.name) + "」列设置") + '" aria-label="「" + esc(c.name) + "」列设置" aria-haspopup="menu" aria-expanded="false">' + icon("more", 14) + '</button>' +
-      '<button class="icon-btn sm" type="button" data-col-fold="' + esc(c.id) + '" title="' + (collapsed ? "展开" : "折叠") + '列" aria-label="' + (collapsed ? "展开" : "折叠") + '列" aria-expanded="' + (!collapsed) + '">' +
-        icon(collapsed ? "right" : "caretDown", 14) + '</button>' +
     '</div>';
 
     var body = '<div class="board-col-body" role="list">';
@@ -1498,6 +1502,12 @@ function openColMenu(anchor, colId){
     (isCustom
       ? '<button class="menu-item" type="button" data-col-menu-color="' + esc(colId) + '"><span>设置列颜色</span></button>'
       : '');
+  if(!col.done){
+    html += '<button class="menu-item" type="button" data-col-menu-sort="' + esc(colId) + '">' +
+      '<span>列内排序：' + COL_SORT_LABEL[colSortOf(colId)] + '</span></button>';
+  }
+  html += '<button class="menu-item" type="button" data-col-menu-fold="' + esc(colId) + '">' +
+    '<span>' + (state.collapsedCols[colId] ? "展开列" : "折叠列") + '</span></button>';
   if(col.done){
     var effPub = boardDonePub || state.pubState || "";
     html += '<div class="menu-sep"></div><div class="menu-title">发布态筛选</div>' +
@@ -1523,7 +1533,17 @@ function openColMenu(anchor, colId){
       return;
     }
     var color = e.target.closest("[data-col-menu-color]");
-    if(color){ UI.closeAllPops(); openColColorPop(anchor, color.dataset.colMenuColor); }
+    if(color){ UI.closeAllPops(); openColColorPop(anchor, color.dataset.colMenuColor); return; }
+    var sortItem = e.target.closest("[data-col-menu-sort]");
+    if(sortItem){ UI.closeAllPops(); openColSortMenu(anchor, sortItem.dataset.colMenuSort); return; }
+    var foldItem = e.target.closest("[data-col-menu-fold]");
+    if(foldItem){
+      UI.closeAllPops();
+      var fid = foldItem.dataset.colMenuFold;
+      state.collapsedCols[fid] = !state.collapsedCols[fid];
+      render({animate:false});
+      return;
+    }
   });
   UI.openPop(el, anchor, {align:"right", onClose: function(){
     anchor.setAttribute("aria-expanded", "false");

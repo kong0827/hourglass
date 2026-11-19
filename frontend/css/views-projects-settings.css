@@ -369,6 +369,22 @@ html[data-theme="dark"] .project-toolbar .seg button[aria-pressed="true"]{backgr
 @media (max-width:1279px){.set-grid{grid-template-columns:1fr;}}
 .set-actions,.data-actions{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;margin-top:16px;}
 .set-actions .spacer{flex:1 1 auto;}
+/* SET-1：空间概况四格，只读；数字用同一套 tabular-nums，避免与表单混在一起 */
+.set-overview-grid{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;
+  border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;
+}
+.ov-cell{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-left:1px solid var(--border);min-width:0;}
+.ov-cell:first-child{border-left:0;}
+.ov-cell b{font-size:18px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ov-cell span{font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+@media (max-width:1100px){.set-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .ov-cell:nth-child(3){border-left:0;border-top:1px solid var(--border);}
+  .ov-cell:nth-child(4){border-top:1px solid var(--border);}}
+/* SET-1b：危险区与保存分离，用独立红边框卡片，不与基本信息共用保存按钮 */
+.set-danger-zone{border-color:var(--danger-border,var(--border));}
+.set-danger-zone .panel-head h3{color:var(--danger-fg);}
+.set-danger-zone .set-actions{margin-top:12px;}
 
 /* 个人设置：身份卡 + 口径预览 */
 .me-idcard{display:flex;align-items:center;gap:14px;margin:2px 0 18px;}

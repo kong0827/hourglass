@@ -214,6 +214,11 @@ function syncMineFilters(){
   }
   if(mineSort) mineSort.value = MINE_SORTS.indexOf(state.mineSort) !== -1 ? state.mineSort : "default";
   if(minePub) minePub.value = state.pubState === "published" || state.pubState === "unpublished" ? state.pubState : "";
+  var echo = document.getElementById("mineDisplayEcho");
+  if(echo){
+    var groupName = {due:"按截止",workspace:"按空间",priority:"按优先级",status:"按状态",project:"按项目",set:"按项目集",none:"不分组"};
+    echo.textContent = groupName[state.mineGroup] || "按截止";
+  }
   syncMineFilterMarks();
 }
 /* 筛选生效态：偏离默认值才标记，默认值与 state.js 首屏一致、不发光 */
@@ -497,10 +502,10 @@ function mineSubKey(dim, gkey, sdim, skey){ return "s|" + dim + "|" + gkey + "|"
 /* 与分组维度相同的列自动隐藏，避免同一信息出现两次 */
 function mineDimUsed(dim){ return state.mineGroup === dim || mineSubDim() === dim; }
 function mineWidthHidden(k, w){
-  if(k === "project") return w < 1180;
-  if(k === "startDate") return w < 1080;
-  if(k === "work") return w < 1000;
-  if(k === "updatedAt") return w < 1000;
+  if(k === "project") return w < 1000;
+  if(k === "startDate") return w < 1000;
+  if(k === "work") return w < 920;
+  if(k === "updatedAt") return w < 980;
   if(k === "progress") return w < 840;
   return false;
 }
@@ -512,7 +517,6 @@ function mineVisibleCols(w){
   return prefs.filter(function(k){ return byKey[k]; }).map(function(k){ return byKey[k]; }).filter(function(c){
     if(c.k === "priority" && mineDimUsed("priority")) return false;
     if(c.k === "status" && mineDimUsed("status")) return false;
-    if(c.k === "dueDate" && mineDimUsed("due")) return false;
     if(c.k === "project" && mineDimUsed("project")) return false;
     return !mineWidthHidden(c.k, w);
   });
@@ -662,7 +666,9 @@ function mineRowCells(t, dueCls, p, cols, acts){
     }
     if(c.k === "work") return '<span class="cell">' + esc(fmtMinutesShort(t.totalMinutes)) + '</span>';
     if(c.k === "project"){
-      return '<span class="cell">' + assocLinkHTML("project", t.reqId, t.reqName, {plain:"—"}) + '</span>';
+      var vn = Array.isArray(t.versionNames) && t.versionNames.length ? t.versionNames[0] : "";
+      return '<span class="cell">' + assocLinkHTML("project", t.reqId, t.reqName, {plain:"—"}) +
+        (vn ? ' <span class="muted">/ ' + esc(vn) + '</span>' : '') + '</span>';
     }
     if(c.k === "updatedAt"){
       var rel = mineRelText(t.updatedAt);
@@ -1129,11 +1135,8 @@ function renderMine(d, append){
     var countTxt = filtering ? ("筛选出 " + items.length + " / " + loaded + " 项（已加载）") : "";
     var boardHint = !testMode && mineViewMode === "board" && !isMobile() && currentMineMode() === "mine"
       ? "拖动卡片可改状态" : "";
-    var groupSel = document.getElementById("mineGroup");
-    var groupTxt = (!filtering && !testMode && mineViewMode === "list" && groupSel && groupSel.value !== "none")
-      ? groupSel.options[groupSel.selectedIndex].textContent : "";
     var spaceTxt = spaces.length > 1 ? ("覆盖 " + spaces.length + " 个空间") : "";
-    mineMeta.textContent = [testMode ? "待我测试" : "", countTxt, groupTxt, spaceTxt,
+    mineMeta.textContent = [testMode ? "待我测试" : "", countTxt, spaceTxt,
       mineHasMore ? "还有更多，可继续加载" : "", boardHint,
       !testMode && nameOnly > 0 ? ("其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : ""]
       .filter(Boolean).join(" · ");
@@ -1451,9 +1454,9 @@ function renderMineStats(items){
     : ('今天 ' + fmtShortMD(rt.TODAY) + ' · <b>' + items.length + '</b> 项在办');
   mineStats.innerHTML =
     '<span class="mine-stat">' + loadedTxt + '</span>' +
-    '<span class="mine-stat over">逾期 <b>' + over + '</b></span>' +
+    '<span class="mine-stat' + (over > 0 ? ' over' : '') + '">逾期 <b>' + over + '</b></span>' +
     '<span class="mine-stat">7 天内到期 <b>' + week + '</b></span>' +
-    '<span class="mine-stat">阻塞 <b>' + blocked + '</b></span>' +
+    '<span class="mine-stat' + (blocked > 0 ? ' blocked' : '') + '">阻塞 <b>' + blocked + '</b></span>' +
     '<span class="mine-stat">未设截止 <b>' + noDue + '</b></span>' +
     '<span class="mine-stat personal' + (loadPct > 100 ? " over" : "") + '" title="已载入未完成项的剩余预估，对比 5 个工作日 40h">' +
       '个人剩余 <b>' + fmtMinutesShort(remainingMinutes) + '</b> · <b>' + loadPct + '%</b>' +
@@ -1497,11 +1500,11 @@ function mineToggleFoldAll(){
 }
 function mineMoreHTML(){
   if(mineHasMore){
-    return '<div class="mine-more"><button class="btn sm" type="button" data-mine-more>加载更多（已显示 ' +
-      mineAll.length + ' / ' + mineTotal + '）</button></div>';
+    return '<div class="mine-more"><span class="foot-note">已显示 ' + mineAll.length + ' / 共 ' + mineTotal + ' 项</span>' +
+      '<button class="btn sm ghost" type="button" data-mine-more>加载更多</button></div>';
   }
-  if(mineTotal > MINE_PAGE_SIZE){
-    return '<div class="mine-more"><span class="foot-note">已显示全部 ' + mineTotal + ' 项</span></div>';
+  if(mineAll.length){
+    return '<div class="mine-more"><span class="foot-note">已显示 ' + mineAll.length + ' / 共 ' + Math.max(mineTotal, mineAll.length) + ' 项</span></div>';
   }
   return "";
 }

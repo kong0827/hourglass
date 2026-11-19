@@ -16,6 +16,11 @@ import { enterMineView } from "../views/mine.js";
 var activeView = "board";
 /* 低频视图：第一次进入时才拉取模块（视图代码已按 views/*.js 拆分） */
 var settingsTabPending = null;
+var settingsTabActive = "space";
+window.addEventListener("ds:settings-tab", function(e){
+  settingsTabActive = (e.detail || "space");
+  if(activeView === "settings") syncNavState("settings");
+});
 function lazyEnter(name, method){
   return function(isCurrent){
     /* 模块尚未在内存中时才给全局进度指示；已加载的切换保持零延迟观感 */
@@ -88,18 +93,18 @@ var VIEWS = {
 };
 /* 视图 → 侧栏一级入口。多个视图共用一个入口时，靠页内子导航切换 */
 var NAV_OF = {
-  mine:"mine", review:"review",
-  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", version:"phase", release:"phase", delivery:"phase",
+  mine:"mine", review:"review", messages:"messages",
+  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase", version:"phase", release:"phase", delivery:"delivery",
   board:"workitems", list:"workitems", tree:"workitems", chain:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems", canceled:"workitems",
   requirements:"requirements", dochistory:"requirements", testcases:"testcases", branches:"branches",
   analysis:"insight", report:"insight", investment:"insight",
-  workload:"workload", risks:"risks"
+  workload:"workload", risks:"risks", settings:"settings"
 };
 /* 点击一级入口落到的默认视图；workitems / insight 记住上次用过的视图 */
 var NAV_HOME = {
-  mine:"mine", review:"review", demands:"demands", projects:"projects", phase:"phase",
+  mine:"mine", review:"review", messages:"messages", demands:"demands", projects:"projects", phase:"phase",
   workitems:"board", requirements:"requirements", testcases:"testcases", branches:"branches",
-  insight:"analysis", workload:"workload", risks:"risks"
+  insight:"analysis", workload:"workload", risks:"risks", delivery:"delivery", settings:"settings"
 };
 var navMemo = { workitems:"board", insight:"analysis" };
 /* 同一业务域内的视图切换：放页内子导航，不占一级菜单 */
@@ -219,6 +224,32 @@ function restoreScroll(name){
   el.scrollTop = scrollMemo["view-" + name] || 0;
   requestAnimationFrame(function(){ el.scrollTop = scrollMemo["view-" + name] || 0; });
 }
+function syncNavState(name){
+  var nav = $("sideNav");
+  if(!nav) return;
+  var navKey = NAV_OF[name] || "";
+  nav.querySelectorAll(".nav-item[data-view]").forEach(function(b){
+    var on = b.dataset.view === navKey;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+  nav.querySelectorAll(".nav-sub-item").forEach(function(b){
+    var on = b.dataset.view === name;
+    if(on && b.dataset.subTab){
+      if(name === "testcases") on = b.dataset.subTab === subnavCurrentTab("testcases");
+      else if(name === "analysis") on = b.dataset.subTab === rt.analysisTab;
+    }
+    if(on && b.dataset.setNav) on = name === "settings" && b.dataset.setNav === settingsTabActive;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+  nav.querySelectorAll(".nav-group").forEach(function(g){
+    var open = !!g.querySelector(".nav-item.on");
+    g.classList.toggle("open", open);
+    var exp = g.querySelector(".nav-exp");
+    if(exp) exp.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+}
 function showView(name){
   /* 兼容旧入口：回收站→数据与审计、用户管理→平台 */
   if(name === "trash"){ settingsTabPending = "data"; showView("settings"); return; }
@@ -249,13 +280,7 @@ function showView(name){
   /* 记住多视图业务域上次查看的视图，再点一级入口时回到那里 */
   if(navKey === "workitems" || navKey === "insight") navMemo[navKey] = name;
   var nav = $("sideNav");
-  if(nav){
-    nav.querySelectorAll("[data-view]").forEach(function(b){
-      var on = b.dataset.view === navKey;
-      b.classList.toggle("on", on);
-      if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
-    });
-  }
+  if(nav) syncNavState(name);
   renderSubnav(name);
   var sideSet = $("sideSettings");
   if(sideSet) sideSet.classList.toggle("on", name === "settings");
@@ -342,11 +367,11 @@ if(subNavEl) subNavEl.addEventListener("click", function(e){
   var view = b.dataset.subView, tab = b.dataset.subTab;
   if(view === "analysis" && tab) rt.analysisTab = tab;
   if(view === "testcases" && tab){
-    loadView("testcases").then(function(m){ m.setTcMode(tab); updateSubnavState(); });
+    loadView("testcases").then(function(m){ m.setTcMode(tab); updateSubnavState(); syncNavState("testcases"); });
     return;
   }
   if(view === activeView){
-    if(view === "analysis" && tab) loadView("analysis").then(function(m){ m.setAnalysisTab(tab); });
+    if(view === "analysis" && tab){ loadView("analysis").then(function(m){ m.setAnalysisTab(tab); }); syncNavState("analysis"); }
     updateSubnavState();
     return;
   }
@@ -475,9 +500,49 @@ function refreshActiveView(opts){
 $("sideNav").addEventListener("click", function(e){
   /* MOB-1：底部 tab 的「更多」 */
   if(e.target.closest("#mobMore")){ openMobMore(); return; }
+  /* SHELL-1：父项展开/收起，不触发页面跳转 */
+  var exp = e.target.closest("[data-nav-exp]");
+  if(exp){
+    var group = exp.closest(".nav-group");
+    if(group){
+      var open = group.classList.toggle("open");
+      exp.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    return;
+  }
   var b = e.target.closest("[data-view]");
   if(!b) return;
   var key = b.dataset.view;
+  /* 子项页签：测试/报表在业务域内切换页签，不重复进栈 */
+  if(b.dataset.subTab){
+    if(key === "testcases"){
+      var tab = b.dataset.subTab;
+      function applyTab(){ loadView("testcases").then(function(m){ m.setTcMode(tab); updateSubnavState(); syncNavState("testcases"); }); }
+      if(activeView === "testcases") applyTab();
+      else showView("testcases").then(applyTab);
+      return;
+    }
+    if(key === "analysis"){
+      rt.analysisTab = b.dataset.subTab;
+      if(activeView === "analysis"){
+        loadView("analysis").then(function(m){ m.setAnalysisTab(rt.analysisTab); });
+        updateSubnavState();
+        syncNavState("analysis");
+        return;
+      }
+    }
+  }
+  /* 设置子项：同一视图内切换分区，不重复进栈 */
+  if(b.dataset.setNav){
+    var setTab = b.dataset.setNav;
+    settingsTabPending = setTab;
+    if(activeView === "settings"){
+      loadView("settings").then(function(m){ m.setSettingsTab(setTab); settingsTabPending = null; });
+    }else{
+      showView("settings");
+    }
+    return;
+  }
   /* 一级入口就是视图本身 */
   if(VIEWS[key]){ showView(key); return; }
   /* 已在本业务域内：单独点击不打断当前视图（子导航负责切换） */

@@ -18,7 +18,7 @@ var DEFS = {
     modes: ["table"],
     required: "title",
     labels: { title:"工作项", type:"类型", priority:"优先级", status:"状态", dueDate:"截止", startDate:"开始日期", progress:"进度", work:"工时", project:"项目", updatedAt:"更新时间" },
-    defaults: ["title","priority","status","dueDate","progress","updatedAt"]
+    defaults: ["title","status","priority","dueDate","project"]
   },
   "project-list": {
     mode: "card",

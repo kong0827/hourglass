@@ -670,24 +670,23 @@
   .br-source-clear{margin-left:auto;}
 }
 
-/* IA-5：设置页 tabs（原长页锚点导航改为分区切换） */
-#view-settings .set-layout{grid-template-columns:1fr;gap:0;}
-.set-tabs{
-  display:flex;gap:var(--space-1);flex-wrap:wrap;align-items:center;
-  border-bottom:1px solid var(--border);margin:0 0 16px;padding-top:8px;
-  position:sticky;top:0;z-index:3;background:var(--bg);
+/* SET-1b：设置页左侧同级子导航，右侧分区内容（原型 11-19） */
+#view-settings .set-layout{grid-template-columns:176px minmax(0,1fr);gap:var(--space-6);align-items:start;}
+#view-settings .set-tabs{
+  display:flex;flex-direction:column;gap:2px;align-items:stretch;
+  border-bottom:0;margin:0;padding:0;position:sticky;top:16px;z-index:3;background:none;
 }
 .set-tab{
-  height:36px;padding:0 13px;border-radius:var(--r-sm) var(--r-sm) 0 0;border:none;background:none;
-  font-size:13px;font-weight:600;color:var(--text-2);cursor:pointer;
-  border-bottom:2px solid transparent;margin-bottom:-1px;
+  height:32px;padding:0 10px;border-radius:var(--r-sm);border:none;background:none;
+  font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;text-align:left;
 }
 .set-tab:hover{color:var(--text);background:var(--surface-hover);}
-.set-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650;}
-@media (max-width:780px){
-  /* 窄屏改为可换行的胶囊页签：5–6 个分区平铺会超出屏幕，横滑又看不出还有内容 */
-  .set-tabs{flex-wrap:wrap;overflow:visible;gap:6px;border-bottom:none;padding:var(--space-2) 0 6px;}
-  .set-tab{flex:0 0 auto;height:32px;padding:0 12px;border-radius:var(--r-pill);background:var(--surface-sunken);border-bottom:none;}
+.set-tab.on{color:var(--primary-fg);background:var(--primary-soft);font-weight:650;border-bottom-color:transparent;}
+.set-tab[hidden]{display:none;}
+@media (max-width:1279px){
+  #view-settings .set-layout{grid-template-columns:1fr;gap:0;}
+  #view-settings .set-tabs{position:static;flex-direction:row;flex-wrap:wrap;gap:6px;padding:var(--space-2) 0 10px;}
+  .set-tab{flex:0 0 auto;height:32px;padding:0 12px;border-radius:var(--r-pill);background:var(--surface-sunken);text-align:center;}
   .set-tab.on{background:var(--primary-soft);color:var(--primary-fg);}
 }
 #view-settings [data-set-pane][hidden]{display:none;}
@@ -729,27 +728,38 @@
 #view-mine.is-team .mine-stats{display:none;}
 
 /* 统计胶囊：沿用缺陷列表 */
-.mine-stats{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;margin:-4px 0 0;font-size:12px;color:var(--text-3);}
+.mine-stats{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 2px;padding:0 2px;font-size:12px;color:var(--text-3);}
 .mine-stats:empty{display:none;}
+/* MINE-2/MINE-3：统计只在工具栏出现一次，0 值保持中性，不描边不上色 */
 .mine-stat{
-  display:inline-flex;align-items:baseline;gap:5px;padding:3px 9px;border-radius:var(--r-pill);
-  border:1px solid var(--border);background:var(--surface);
+  display:inline-flex;align-items:baseline;gap:5px;padding:0;border:0;background:none;
 }
+.mine-stat + .mine-stat::before{content:"·";margin-right:8px;color:var(--border-strong);}
 .mine-stat b{font-size:12px;font-weight:700;color:var(--text-2);font-variant-numeric:tabular-nums;}
-.mine-stat.over{border-color:var(--danger-border);background:var(--danger-soft);color:var(--danger-fg);}
+.mine-stat.over{border:0;background:none;color:var(--danger-fg);}
 .mine-stat.over b{color:var(--danger-fg);}
-.mine-stat.today{border-color:var(--warning-border);background:var(--warning-soft);color:var(--warning-fg);}
+.mine-stat.today{border:0;background:none;color:var(--warning-fg);}
 .mine-stat.today b{color:var(--warning-fg);}
-.mine-stat.blocked{border-color:var(--danger-border);background:var(--surface);color:var(--danger-fg);}
+.mine-stat.blocked{border:0;background:none;color:var(--danger-fg);}
 .mine-stat.blocked b{color:var(--danger-fg);}
 .mine-stat-hint{margin-left:auto;}
 
 /* 我的工作 · 看板：按状态列铺开，拖卡改状态；分组/排序/密度/字段这些列表专用控件在看板下收起 */
 #view-mine.is-board .mine-listonly{display:none;}
 /* 显示设置弹层：密度 / 字段 / 折叠属低频展示偏好，收进「显示设置」，工具条只留常用筛选 */
-.mine-display-menu{width:auto;min-width:224px;}
-.mine-display-menu .gantt-more-row{gap:var(--space-2);min-height:30px;}
-.mine-display-menu .gantt-more-label{flex:0 0 auto;margin-right:auto;}
+.mine-display-menu{width:auto;min-width:264px;padding:10px 12px;}
+.mine-display-menu .gantt-more-row{gap:var(--space-2);min-height:34px;}
+.mine-display-menu .gantt-more-label{flex:0 0 auto;margin-right:auto;color:var(--text-3);}
+.mine-display-menu .mini-select{min-width:132px;}
+.mine-display-head{
+  display:flex;align-items:baseline;gap:8px;padding:0 0 8px;margin-bottom:6px;
+  border-bottom:1px solid var(--border);font-size:12.5px;font-weight:650;color:var(--text);
+}
+.mine-display-head span{margin-left:auto;font-size:11px;font-weight:500;color:var(--text-3);}
+.mine-display-note{padding-top:8px;margin-top:4px;border-top:1px solid var(--border);font-size:11px;line-height:1.5;color:var(--text-3);}
+.mine-display-summary{gap:5px;font-weight:500;}
+.mine-display-summary > svg:first-child{color:var(--text-3);}
+.mine-display-summary > svg:last-child{color:var(--text-3);}
 #view-mine.is-team #mineViewSeg{display:none;}
 .mine-board{display:flex;align-items:flex-start;gap:var(--space-3);padding:var(--space-1) 0 24px;overflow-x:auto;}
 .mb-col{
@@ -993,8 +1003,8 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13.5px;--title-lh:1.5;--
 .mine-test-dev .avatar{width:20px;height:20px;font-size:var(--fs-micro);}
 
 /* TOP-6：我的任务分页「加载更多」 */
-.mine-more{display:flex;justify-content:center;padding:var(--space-1) 0 28px;}
-.mine-more .btn{min-width:180px;justify-content:center;}
+.mine-more{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 2px 24px;}
+.mine-more .btn{min-width:0;justify-content:center;}
 .mine-more .foot-note{color:var(--text-3);font-size:12px;}
 
 /* 手机端走卡片流，密度/字段/折叠/统计不参与 */

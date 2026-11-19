@@ -628,7 +628,10 @@ body.mob-sheet-open{overflow:hidden;}
 
 /* ===================== 我的 / 团队模式 ===================== */
 [data-layout="mobile"] .mine-mode{display:inline-flex;}
-.mine-mode{display:none !important;}
+/* 桌面把模式收进「范围」段：团队面板仍只在移动端提供 */
+.mine-mode{display:inline-flex !important;}
+.mine-mode .mine-mode-team-tab{display:none;}
+[data-layout="mobile"] .mine-mode .mine-mode-team-tab{display:inline-flex;}
 [data-layout="mobile"] .mine-mode{
   display:inline-flex !important;
   height:32px;
