@@ -60,4 +60,13 @@ public interface TestCaseTaskMapper {
 
     /** 用例是否与给定工作项已关联（保存时校验，避免重复插入） */
     List<String> selectTaskIdsByCase(@Param("caseId") String caseId);
+
+    /** 需求迁移前按工作项取关联行：带用例主需求，用于区分随迁用例与留在原项目的用例 */
+    List<CaseTaskLink> selectLinksByTaskIds(@Param("workspaceId") String workspaceId,
+                                            @Param("taskIds") List<String> taskIds);
+
+    /** 需求迁移：只解除留在原项目的用例与本需求工作项的关联；随迁用例的关联保持不变 */
+    int deleteLinksByTaskIdsExcludingDemand(@Param("workspaceId") String workspaceId,
+                                            @Param("taskIds") List<String> taskIds,
+                                            @Param("demandId") String demandId);
 }

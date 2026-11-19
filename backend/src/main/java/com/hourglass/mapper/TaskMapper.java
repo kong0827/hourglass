@@ -198,8 +198,8 @@ public interface TaskMapper {
                                          @Param("demandId") String demandId);
 
     /**
-     * 需求迁移前的工作项执行证据：版本绑定 / 用例关联 / 工时 / 人工发布标记。
-     * 只查有证据的任务，返回 (taskId, reason) 行；同一任务多条时由调用方按优先级取第一条。
+     * 需求迁移前不可回退的交付事实：发布记录（含人工标记）与已关闭/已取消版本的冻结成员关系。
+     * 版本绑定、用例关联与工时随工作项级联处理，不再阻断。只查命中的任务，返回 (taskId, reason) 行。
      */
     List<com.hourglass.dto.TaskMoveBlocker> selectMoveBlockers(@Param("workspaceId") String workspaceId,
                                                               @Param("taskIds") List<String> taskIds);

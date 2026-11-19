@@ -10,6 +10,7 @@ import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
+import com.hourglass.entity.TestCase;
 import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.ProjectVersionMapper;
 import com.hourglass.mapper.RequirementMapper;
@@ -59,6 +60,8 @@ class DemandServiceScheduleTest {
             deletionTrace, numberSeq, mock(DemandWatchService.class));
     private final com.hourglass.mapper.ReleaseMapper releases = mock(com.hourglass.mapper.ReleaseMapper.class);
     private final com.hourglass.mapper.VersionTaskMapper bindings = mock(com.hourglass.mapper.VersionTaskMapper.class);
+    private final com.hourglass.mapper.TestCaseTaskMapper caseTasks =
+            mock(com.hourglass.mapper.TestCaseTaskMapper.class);
     private final TaskAuditLogger taskAudit = mock(TaskAuditLogger.class);
     private final TaskPublicationService publications = new TaskPublicationService(tasks, releases,
             mock(com.hourglass.mapper.TaskLogMapper.class), lock, permissions, new ObjectMapper(),
@@ -73,8 +76,7 @@ class DemandServiceScheduleTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", publications);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "judgementMapper",
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class));
-        org.springframework.test.util.ReflectionTestUtils.setField(service, "caseTaskMapper",
-                mock(com.hourglass.mapper.TestCaseTaskMapper.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "caseTaskMapper", caseTasks);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "demandCommentMapper", demandComments);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "taskAudit", taskAudit);
         lenient().when(demands.selectDetail(any(), anyString()))
@@ -526,14 +528,18 @@ class DemandServiceScheduleTest {
     }
 
     @Test
-    void updateRejectsMoveWhenDemandHasExecutionEvidence() {
+    void updateRejectsMoveWhenDemandHasIrreversibleTaskEvidence() {
         demand.setStatus("pass");
         Requirement target = new Requirement();
         target.setId("R2");
         target.setWorkspaceId("W1");
         when(projects.selectById("R2")).thenReturn(target);
         when(tasks.selectTasksByDemandForScope("W1", "D1"))
-                .thenReturn(Collections.singletonList(new Task()));
+                .thenReturn(Collections.singletonList(movableTask("T1", "")));
+        com.hourglass.dto.TaskMoveBlocker blocker = new com.hourglass.dto.TaskMoveBlocker();
+        blocker.setTaskId("T1");
+        blocker.setReason(com.hourglass.dto.TaskMoveBlocker.PUBLISH);
+        when(tasks.selectMoveBlockers(eq("W1"), anyList())).thenReturn(Collections.singletonList(blocker));
         DemandSaveRequest body = new DemandSaveRequest();
         body.setReqId("R2");
         body.setTitle("需求");
@@ -575,22 +581,25 @@ class DemandServiceScheduleTest {
     }
 
     @Test
-    void updateRejectsMoveWhenDemandAlreadyHasTargetVersion() {
-        demand.setStatus("plan");
-        demand.setVersionId("V-old");
+    void updateMoveUnplansDemandAlreadyScheduled() {
+        planned();
         Requirement target = new Requirement();
         target.setId("R2");
         target.setWorkspaceId("W1");
         when(projects.selectById("R2")).thenReturn(target);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(5);
         DemandSaveRequest body = new DemandSaveRequest();
         body.setReqId("R2");
         body.setTitle("需求");
         body.setRevision(4L);
 
-        assertEquals(400, assertThrows(AppException.class,
-                () -> service.update("U1", "W1", "D1", body)).getCode());
-        verify(demands, never()).update(any());
-        verify(numberSeq, never()).nextDemand(anyString(), anyString());
+        Demand out = service.update("U1", "W1", "D1", body);
+
+        assertEquals("R2", out.getReqId());
+        assertEquals("pass", out.getStatus());
+        assertNull(out.getVersionId());
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("move"), contains("原排期已撤销"), eq("U1"),
+                any());
     }
 
     @Test
@@ -1052,34 +1061,45 @@ class DemandServiceScheduleTest {
         verify(demands, never()).updateProject(any());
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"tasks", "docs", "cases", "releases"})
-    void moveRejectsDemandWithExecutionEvidence(String evidence) {
+    @Test
+    void moveCascadesCasesButKeepsDocsAndReleasesInSourceProject() {
         demand.setStatus("review");
         Requirement target = new Requirement();
         target.setId("R2");
         target.setWorkspaceId("W1");
         when(projects.selectById("R2")).thenReturn(target);
-        if ("tasks".equals(evidence)) {
-            when(tasks.selectTasksByDemandForScope("W1", "D1")).thenReturn(Collections.singletonList(new Task()));
-        }
-        if ("docs".equals(evidence)) {
-            when(docs.countLinksByDemand("W1", "D1")).thenReturn(1);
-        }
-        if ("cases".equals(evidence)) {
-            when(cases.countByDemandRef("W1", "D1")).thenReturn(1);
-        }
-        if ("releases".equals(evidence)) {
-            when(releases.selectDemandRecords("W1", "D1"))
-                    .thenReturn(Collections.singletonList(new com.hourglass.entity.VersionRelease()));
-        }
+        when(demands.updateProject(any(Demand.class))).thenReturn(1);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(9);
+        when(docs.countLinksByDemand("W1", "D1")).thenReturn(2);
+        when(releases.selectDemandRecords("W1", "D1"))
+                .thenReturn(Collections.singletonList(new com.hourglass.entity.VersionRelease()));
+        TestCase c = new TestCase();
+        c.setId("C1");
+        c.setWorkspaceId("W1");
+        c.setReqId("R1");
+        c.setDemandId("D1");
+        c.setCaseNo(4);
+        c.setTitle("登录用例");
+        when(cases.selectByDemandForUpdate("W1", "D1")).thenReturn(Collections.singletonList(c));
+        when(numberSeq.nextCase("W1", "R2")).thenReturn(11);
+        when(cases.update(any(TestCase.class))).thenReturn(1);
+        when(cases.deletePlanCasesByCaseIds(anyList())).thenReturn(2);
         DemandActionRequest body = new DemandActionRequest();
         body.setRevision(4L);
         body.setReqId("R2");
 
-        assertEquals(400, assertThrows(AppException.class,
-                () -> service.move("U1", "W1", "D1", body)).getCode());
-        verify(demands, never()).updateProject(any());
+        service.move("U1", "W1", "D1", body);
+
+        ArgumentCaptor<TestCase> savedCase = ArgumentCaptor.forClass(TestCase.class);
+        verify(cases).update(savedCase.capture());
+        assertEquals("R2", savedCase.getValue().getReqId());
+        assertEquals(11, savedCase.getValue().getCaseNo());
+        verify(cases).deletePlanCasesByCaseIds(Collections.singletonList("C1"));
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("move"), argThat(m ->
+                m.contains("随迁 1 条用例并重新取号")
+                        && m.contains("解除 2 条测试计划圈选")
+                        && m.contains("关联文档 2 份留在原项目")
+                        && m.contains("历史发布记录 1 条保留在原项目")), eq("U1"), anyString());
     }
 
     @Test
@@ -1134,40 +1154,152 @@ class DemandServiceScheduleTest {
     }
 
     @Test
-    void moveRejectsStartedTaskWithSpecificReason() {
+    void moveCascadesStartedTaskAndDetachesProjectScopedLinks() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(demands.updateProject(any(Demand.class))).thenReturn(1);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(9);
+        Task started = movableTask("T1", "");
+        started.setTitle("接口改造");
+        started.setBoardColumn("doing");
+        started.setTestRequestedAt(LocalDateTime.of(2026, 11, 2, 9, 0));
+        started.setFoundVersionId("V9");
+        when(tasks.selectTasksByDemandForScope("W1", "D1")).thenReturn(Collections.singletonList(started));
+        when(tasks.selectMoveBlockers(eq("W1"), anyList())).thenReturn(Collections.emptyList());
+        com.hourglass.dto.TaskVersionBinding binding = new com.hourglass.dto.TaskVersionBinding();
+        binding.setTaskId("T1");
+        binding.setVersionId("V1");
+        binding.setVersionName("1.0");
+        when(bindings.selectVersionRowsByTaskIds(eq("W1"), anyList()))
+                .thenReturn(Collections.singletonList(binding));
+        com.hourglass.dto.CaseTaskLink case1 = new com.hourglass.dto.CaseTaskLink();
+        case1.setTaskId("T1");
+        case1.setCaseId("TC1");
+        com.hourglass.dto.CaseTaskLink case2 = new com.hourglass.dto.CaseTaskLink();
+        case2.setTaskId("T1");
+        case2.setCaseId("TC2");
+        when(caseTasks.selectLinksByTaskIds(eq("W1"), anyList()))
+                .thenReturn(java.util.Arrays.asList(case1, case2));
+        ProjectVersion found = new ProjectVersion();
+        found.setId("V9");
+        found.setName("0.9");
+        when(versions.selectById("V9")).thenReturn(found);
+        when(tasks.selectNextItemNo("W1", "R2")).thenReturn(7);
+        when(tasks.update(any(Task.class))).thenReturn(1);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        service.move("U1", "W1", "D1", body);
+
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).update(saved.capture());
+        assertEquals("R2", saved.getValue().getReqId());
+        /* 发现版本指向源项目版本，迁移时清空；提测等过程事实保留 */
+        assertNull(saved.getValue().getFoundVersionId());
+        verify(bindings).deleteByTaskIds("W1", Collections.singletonList("T1"));
+        /* 用例没有随迁（主需求不是本需求）：验证关联解除 */
+        verify(caseTasks).deleteLinksByTaskIdsExcludingDemand("W1", Collections.singletonList("T1"), "D1");
+        ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+        verify(taskAudit).log(eq("U1"), eq("W1"), eq("T1"), eq("update"), detail.capture());
+        assertTrue(detail.getValue().contains("解除版本关联：1.0"));
+        assertTrue(detail.getValue().contains("解除原项目用例关联 2 条"));
+        assertTrue(detail.getValue().contains("清空缺陷发现版本「0.9」"));
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("move"), contains("解除 1 条版本关联"),
+                eq("U1"), anyString());
+    }
+
+    @Test
+    void moveKeepsCaseLinksThatMoveWithTheDemand() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(demands.updateProject(any(Demand.class))).thenReturn(1);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(9);
+        Task t = movableTask("T1", "");
+        when(tasks.selectTasksByDemandForScope("W1", "D1")).thenReturn(Collections.singletonList(t));
+        com.hourglass.dto.CaseTaskLink link = new com.hourglass.dto.CaseTaskLink();
+        link.setTaskId("T1");
+        link.setCaseId("TC1");
+        link.setDemandId("D1");
+        when(caseTasks.selectLinksByTaskIds(eq("W1"), anyList())).thenReturn(Collections.singletonList(link));
+        TestCase c = new TestCase();
+        c.setId("TC1");
+        c.setWorkspaceId("W1");
+        c.setReqId("R1");
+        c.setDemandId("D1");
+        c.setCaseNo(1);
+        c.setTitle("用例");
+        when(cases.selectByDemandForUpdate("W1", "D1")).thenReturn(Collections.singletonList(c));
+        when(numberSeq.nextCase("W1", "R2")).thenReturn(1);
+        when(cases.update(any(TestCase.class))).thenReturn(1);
+        when(tasks.selectNextItemNo("W1", "R2")).thenReturn(7);
+        when(tasks.update(any(Task.class))).thenReturn(1);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        service.move("U1", "W1", "D1", body);
+
+        /* 用例与工作项一起迁走，验证关联仍同项目同需求，不得解除 */
+        verify(caseTasks, never()).deleteLinksByTaskIdsExcludingDemand(anyString(), anyList(), anyString());
+        verify(taskAudit).log(eq("U1"), eq("W1"), eq("T1"), eq("update"),
+                argThat(d -> !d.contains("用例关联")));
+    }
+
+    @Test
+    void previewMoveReportsCascadeCounts() {
+        planned();
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        target.setName("目标项目");
+        when(projects.selectById("R2")).thenReturn(target);
+        Task open = movableTask("T1", "");
+        open.setBoardColumn("doing");
+        Task trashed = movableTask("T2", "");
+        trashed.setDeletedAt(LocalDateTime.of(2026, 11, 1, 9, 0));
+        when(tasks.selectTasksByDemandForScope("W1", "D1"))
+                .thenReturn(java.util.Arrays.asList(open, trashed));
+        when(cases.countByDemandRef("W1", "D1")).thenReturn(2);
+        when(cases.countPlanCasesByDemand("W1", "D1")).thenReturn(3);
+        when(docs.countLinksByDemand("W1", "D1")).thenReturn(1);
+        when(releases.selectDemandRecords("W1", "D1"))
+                .thenReturn(Collections.singletonList(new com.hourglass.entity.VersionRelease()));
+
+        com.hourglass.dto.DemandMovePreview p = service.previewMove("U1", "W1", "D1", "R2");
+
+        assertEquals("目标项目", p.getTargetName());
+        assertEquals(1, p.getTasks());
+        assertEquals(1, p.getStartedTasks());
+        assertEquals(1, p.getTrashedTasks());
+        assertEquals(2, p.getCases());
+        assertEquals(3, p.getPlanLinks());
+        assertEquals(1, p.getDocLinks());
+        assertEquals(1, p.getReleases());
+        assertEquals("Old", p.getVersionName());
+        assertTrue(p.getBlockers().isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"publish", "frozen"})
+    void moveRejectsTaskWithIrreversibleEvidence(String reason) {
         demand.setStatus("review");
         Requirement target = new Requirement();
         target.setId("R2");
         target.setWorkspaceId("W1");
         when(projects.selectById("R2")).thenReturn(target);
         Task started = movableTask("T1", "");
-        started.setTitle("接口改造");
-        started.setBoardColumn("doing");
+        started.setTitle("支付回调");
         when(tasks.selectTasksByDemandForScope("W1", "D1")).thenReturn(Collections.singletonList(started));
-        DemandActionRequest body = new DemandActionRequest();
-        body.setRevision(4L);
-        body.setReqId("R2");
-
-        AppException ex = assertThrows(AppException.class, () -> service.move("U1", "W1", "D1", body));
-
-        assertEquals(400, ex.getCode());
-        assertTrue(ex.getMessage().contains("接口改造"));
-        assertTrue(ex.getMessage().contains("已进入执行"));
-        verify(demands, never()).updateProject(any());
-    }
-
-    @Test
-    void moveRejectsTaskWithVersionBinding() {
-        demand.setStatus("review");
-        Requirement target = new Requirement();
-        target.setId("R2");
-        target.setWorkspaceId("W1");
-        when(projects.selectById("R2")).thenReturn(target);
-        when(tasks.selectTasksByDemandForScope("W1", "D1"))
-                .thenReturn(Collections.singletonList(movableTask("T1", "")));
         com.hourglass.dto.TaskMoveBlocker blocker = new com.hourglass.dto.TaskMoveBlocker();
         blocker.setTaskId("T1");
-        blocker.setReason(com.hourglass.dto.TaskMoveBlocker.VERSION);
+        blocker.setReason(reason);
         when(tasks.selectMoveBlockers(eq("W1"), anyList())).thenReturn(Collections.singletonList(blocker));
         DemandActionRequest body = new DemandActionRequest();
         body.setRevision(4L);
@@ -1175,7 +1307,10 @@ class DemandServiceScheduleTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.move("U1", "W1", "D1", body));
 
-        assertTrue(ex.getMessage().contains("已绑定版本"));
+        assertEquals(400, ex.getCode());
+        assertTrue(ex.getMessage().contains("支付回调"));
+        assertTrue(ex.getMessage().contains("publish".equals(reason) ? "发布记录" : "已关闭或已取消的版本"));
+        verify(demands, never()).updateProject(any());
         verify(tasks, never()).update(any(Task.class));
     }
 
@@ -1295,20 +1430,30 @@ class DemandServiceScheduleTest {
     }
 
     @Test
-    void moveRejectsDemandThatAlreadyHasTargetVersion() {
-        demand.setStatus("review");
-        demand.setVersionId("V-old");
+    void moveUnplansDemandWhoseTargetVersionBelongsToSourceProject() {
+        planned();
         Requirement target = new Requirement();
         target.setId("R2");
         target.setWorkspaceId("W1");
         when(projects.selectById("R2")).thenReturn(target);
+        when(demands.updateProject(any(Demand.class))).thenReturn(1);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(9);
         DemandActionRequest body = new DemandActionRequest();
         body.setRevision(4L);
         body.setReqId("R2");
 
-        assertEquals(400, assertThrows(AppException.class,
-                () -> service.move("U1", "W1", "D1", body)).getCode());
-        verify(demands, never()).updateProject(any());
+        Demand out = service.move("U1", "W1", "D1", body);
+
+        assertEquals("R2", out.getReqId());
+        ArgumentCaptor<Demand> saved = ArgumentCaptor.forClass(Demand.class);
+        verify(demands).updateProject(saved.capture());
+        /* 目标版本属于源项目：按撤销排期处理，回已通过并清掉版本与计划日期 */
+        assertEquals("pass", saved.getValue().getStatus());
+        assertNull(saved.getValue().getVersionId());
+        assertNull(saved.getValue().getPlannedStart());
+        assertNull(saved.getValue().getPlannedEnd());
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("move"), contains("原排期已撤销"), eq("U1"),
+                anyString());
     }
 
     private void planned() {

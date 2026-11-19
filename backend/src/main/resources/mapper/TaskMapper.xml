@@ -224,28 +224,21 @@
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} ORDER BY id FOR UPDATE
   </select>
 
-  <!-- 需求迁移前的工作项执行证据：一条 UNION 行 = 某工作项存在某类证据；优先级在 Java 侧取 -->
+  <!-- 需求迁移前的不可回退交付事实：版本绑定 / 用例关联 / 工时都随工作项级联处理，
+       只有发布记录（含人工标记）和已关闭、已取消版本的冻结成员关系不能随迁移解除。 -->
   <select id="selectMoveBlockers" resultType="com.hourglass.dto.TaskMoveBlocker">
-    SELECT task_id AS taskId, 'version' AS reason FROM version_task
-    WHERE workspace_id = #{workspaceId} AND task_id IN
+    SELECT t.id AS taskId, 'publish' AS reason FROM task t
+    WHERE t.workspace_id = #{workspaceId}
+      AND (t.published_release_id IS NOT NULL OR t.publish_source IS NOT NULL OR t.published_at IS NOT NULL
+           OR EXISTS (SELECT 1 FROM version_release_item i
+                      WHERE i.workspace_id = t.workspace_id AND i.task_id = t.id))
+      AND t.id IN
     <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     UNION ALL
-    SELECT task_id AS taskId, 'version' AS reason FROM version_commitment_task
-    WHERE workspace_id = #{workspaceId} AND task_id IN
-    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-    UNION ALL
-    SELECT task_id AS taskId, 'case' AS reason FROM test_case_task
-    WHERE workspace_id = #{workspaceId} AND task_id IN
-    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-    UNION ALL
-    SELECT task_id AS taskId, 'time' AS reason FROM time_log
-    WHERE workspace_id = #{workspaceId} AND task_id IN
-    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-    UNION ALL
-    SELECT id AS taskId, 'publish' AS reason FROM task
-    WHERE workspace_id = #{workspaceId}
-      AND (published_release_id IS NOT NULL OR publish_source IS NOT NULL OR published_at IS NOT NULL)
-      AND id IN
+    SELECT vt.task_id AS taskId, 'frozen' AS reason FROM version_task vt
+    INNER JOIN project_version pv ON pv.workspace_id = vt.workspace_id AND pv.id = vt.version_id
+    WHERE vt.workspace_id = #{workspaceId} AND pv.status IN ('closed', 'canceled')
+      AND vt.task_id IN
     <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
   </select>
 

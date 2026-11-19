@@ -364,7 +364,16 @@ public class DemandController {
         return ApiResult.ok(demandService.quickVersion(CurrentUser.id(), ctx.getWsId(), id, body));
     }
 
-    /** 列表行内编辑：更换所属项目，仅待评审且无执行证据时允许 */
+    /** 更换所属项目前的迁移预览：随迁工作项 / 用例数量与不可回退的阻断项（前端第二道确认用） */
+    @GetMapping("/api/demands/{id}/move-preview")
+    public ApiResult<com.hourglass.dto.DemandMovePreview> movePreview(
+            @PathVariable String id,
+            @RequestParam(required = false) String reqId,
+            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.previewMove(CurrentUser.id(), ctx.getWsId(), id, reqId));
+    }
+
+    /** 列表行内编辑：更换所属项目，工作项与用例级联迁移；发布记录与冻结版本成员关系仍阻断 */
     @PostMapping("/api/demands/{id}/move")
     public ApiResult<Demand> move(@PathVariable String id,
                                   @Valid @RequestBody(required = false) DemandActionRequest body,

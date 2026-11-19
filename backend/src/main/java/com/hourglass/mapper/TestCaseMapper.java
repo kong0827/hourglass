@@ -124,6 +124,17 @@ public interface TestCaseMapper {
     /** 更换需求所属项目前检查：该需求是否已关联用例 */
     int countByDemandRef(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
 
+    /** 需求迁移：该需求主归口的全部用例，按 ID 顺序行锁 */
+    List<TestCase> selectByDemandForUpdate(@Param("workspaceId") String workspaceId,
+                                           @Param("demandId") String demandId);
+
+    /** 需求迁移预览：这些用例在原项目测试计划里的圈选条数 */
+    int countPlanCasesByDemand(@Param("workspaceId") String workspaceId,
+                               @Param("demandId") String demandId);
+
+    /** 需求迁移：测试计划属于原项目，圈选关系随用例迁出整体解除 */
+    int deletePlanCasesByCaseIds(@Param("caseIds") List<String> caseIds);
+
     int delete(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
     /** 项目删除级联：用例数（确认提示用）与整项目用例清理 */

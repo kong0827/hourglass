@@ -1332,10 +1332,10 @@ function demandCell(d, key){
 function demInlineWritable(d){
   return !!d && !isClosedDemand(d) && canWriteDemand(d);
 }
-/* 换项目：待评审 / 已通过 / 已排期可迁移；已排版本的先撤销排期，
-   工作项 / 文档 / 用例 / 发布记录等执行证据由服务端最终校验 */
+/* 换项目：待评审 / 已通过 / 已排期整单迁移（含已排版本的，原排期随迁移撤销）。
+   发布记录、冻结版本成员关系与跨项目 Epic 子项仍由服务端最终校验 */
 function demandProjectMovable(d){
-  if(!d || !canWriteDemand(d) || d.versionId) return false;
+  if(!d || !canWriteDemand(d)) return false;
   return d.status === "review" || d.status === "pass" || d.status === "plan";
 }
 /* 候选与层级同口径：保留当前项目（可能已归档）以便标出「当前」，其余只列未归档且可写的项目 */
@@ -1515,7 +1515,12 @@ function openDemInlineMenu(btn){
     });
     demInlineMenu(btn, "所属项目", items, function(reqId){
       if(reqId === d.reqId) return;
-      demQuickUpdate(btn, d, "move", { reqId:reqId }, "已移至「" + reqNameById(reqId) + "」");
+      confirmDemandMove(d, reqId).then(function(ok){
+        if(!ok) return;
+        demQuickUpdate(btn, d, "move", { reqId:reqId }, "已移至「" + reqNameById(reqId) + "」");
+      }).catch(function(ex){
+        toast(ex && ex.message ? ex.message : "读取迁移范围失败", "bad");
+      });
     });
     return;
   }
@@ -1617,6 +1622,63 @@ function demPutRow(d, patch, okMsg, el, revert){
     toast(ex.message || "修改失败", "bad");
     if(ex.code === 409) refreshDemandsInline();
   });
+}
+/* 换项目是整单迁移：先取服务端预览（随迁范围与不可回退的阻断项），再连续两道确认。
+   第一道讲清权限、分类与统计口径的后果；第二道列出随迁和解除的关系。只有两道都确认才返回 true。 */
+function confirmDemandMove(d, reqId){
+  var targetName = reqNameById(reqId) || reqId;
+  var srcName = reqNameById(d.reqId) || "原项目";
+  return API.get("/api/demands/" + encodeURIComponent(d.id) + "/move-preview", { reqId:reqId }).then(function(pv){
+    pv = pv || {};
+    var blockers = (pv.blockers || []).filter(Boolean);
+    if(blockers.length){
+      return UI.showConfirm({
+        title:"不能更换所属项目",
+        msg:'「' + esc(d.title) + '」还有不能随迁的内容：<br>'
+          + blockers.map(function(b){ return "· " + esc(b); }).join("<br>"),
+        okText:"知道了", cancelText:"关闭", danger:true
+      }).then(function(){ return false; });
+    }
+    return UI.showConfirm({
+      title:"更换所属项目？",
+      msg:'把「' + esc(d.title) + '」从「' + esc(srcName) + '」移到「' + esc(targetName) + '」。<br>'
+        + '项目决定成员权限、分类与统计口径：迁移后没有目标项目权限的成员将看不到这条需求，'
+        + '工作项与用例也会跟着换项目并重新取号。',
+      okText:"继续", cancelText:"再想想", danger:false
+    }).then(function(ok){
+      if(!ok) return false;
+      return UI.showConfirm({
+        title:"确认级联迁移",
+        msg:demandMoveDetailHTML(pv, d, targetName),
+        okText:"确认迁移", cancelText:"取消", danger:true
+      });
+    });
+  });
+}
+function demandMoveDetailHTML(pv, d, targetName){
+  var rows = [];
+  var tasks = Number(pv.tasks) || 0;
+  if(tasks){
+    var extra = [];
+    if(pv.startedTasks) extra.push("已开工 " + pv.startedTasks + " 项");
+    if(pv.trashedTasks) extra.push("回收站 " + pv.trashedTasks + " 项");
+    rows.push("工作项 " + tasks + " 项" + (extra.length ? "（" + extra.join("、") + "）" : "")
+      + "：按目标项目重新取号；版本绑定、原项目用例关联与不属于目标项目的分类会解除");
+  }
+  if(pv.cases){
+    rows.push("用例 " + pv.cases + " 条：按目标项目重新取号"
+      + (pv.planLinks ? "，并从原项目测试计划移出 " + pv.planLinks + " 处圈选" : ""));
+  }
+  if(pv.versionName){
+    rows.push("原排期（版本「" + pv.versionName + "」）不属于目标项目，将一并撤销");
+  }
+  var stays = [];
+  if(pv.docLinks) stays.push("关联文档 " + pv.docLinks + " 份");
+  if(pv.releases) stays.push("历史发布记录 " + pv.releases + " 条");
+  return '将要迁移到「' + esc(targetName) + '」：<br>'
+    + (rows.length ? rows.map(function(r){ return "· " + esc(r); }).join("<br>") : "· 没有工作项或用例随迁")
+    + (stays.length ? "<br><br>留在原项目（只解除引用）：" + esc(stays.join("、")) : "")
+    + "<br><br>迁移立即生效，不能一键撤回。";
 }
 /* ---------- 列表智能视图（预置 Tab + 自定义视图，参考任务列表） ---------- */
 
@@ -2842,7 +2904,7 @@ function openDemandDialog(d){
   /* 编辑态候选与列表行内切换同口径：当前项目 + 其他未归档且可写的项目 */
   dReq.innerHTML = projectOptionsHTML(d ? demandMoveTargets(d.reqId) : opts);
   dReq.value = d ? d.reqId : (rt.demandReqId && canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
-  /* 编辑态可换项目：仅在还有第二个可写项目且需求尚未排期时放开，限制原因就地说明 */
+  /* 编辑态可换项目：仅在还有第二个可写项目时放开；迁移范围在提交前二次确认 */
   var canMove = !!d && demandProjectMovable(d) && demandMoveTargets(d.reqId).length > 1;
   dReq.disabled = !!d && !canMove;
   var reqHint = $("dReqHint");
@@ -2850,10 +2912,7 @@ function openDemandDialog(d){
     reqHint.hidden = true;
     if(d && canMove){
       reqHint.hidden = false;
-      reqHint.textContent = "更换后按目标项目重排需求编号；未开工的工作项会一并迁移，已开工或关联文档、用例、发布记录的需求不能迁移";
-    }else if(d && d.versionId){
-      reqHint.hidden = false;
-      reqHint.textContent = "该需求已排入版本，撤销排期后才能更换所属项目";
+      reqHint.textContent = "更换后按目标项目重排编号：工作项与用例一并迁移并重新取号，原排期、版本绑定与测试计划圈选自动解除；关联文档与历史发布记录留在原项目，保存前会再次确认迁移范围";
     }else if(d && d.status !== "done" && !isClosedDemand(d) && !canMove){
       reqHint.hidden = false;
       reqHint.textContent = "没有其他可写项目可迁移";
@@ -2980,29 +3039,43 @@ function doSaveDemand(body){
   btnSaveDemand.disabled = true;
   var seq = demandFormSeq, wasEdit = !!editingDemandId;
   var moved = wasEdit && !!editingDemandReqId && body.reqId !== editingDemandReqId;
-  var p = editingDemandId
-    ? API.put("/api/demands/" + encodeURIComponent(editingDemandId), body)
-    : API.post("/api/demands", body);
-  p.then(function(){
-    toast(!wasEdit ? "已提交评审「" + title + "」"
-      : moved ? "已移至「" + reqNameById(body.reqId) + "」并保存"
-      : "已更新需求「" + title + "」", "fs");
-    /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
-    if(seq === demandFormSeq){
-      closeDemandDialog();
-      if(wasEdit) closeDemandDetailIfOpen();
-      /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围。
-         编辑迁移则保持原筛选，让这条需求从当前列表里消失即可 */
-      if(!wasEdit && rt.demandReqId && body.reqId !== rt.demandReqId){
-        rt.demandReqId = body.reqId;
-        if(demandReq) demandReq.value = body.reqId;
-      }
-    }
-    loadDemands();
-  }).catch(function(ex){
+  var fail = function(ex){
     if(seq === demandFormSeq) btnSaveDemand.disabled = false;
-    toast(ex.message || "保存失败", "bad");
-  });
+    toast(ex && ex.message ? ex.message : "保存失败", "bad");
+  };
+  var save = function(){
+    var p = editingDemandId
+      ? API.put("/api/demands/" + encodeURIComponent(editingDemandId), body)
+      : API.post("/api/demands", body);
+    return p.then(function(){
+      toast(!wasEdit ? "已提交评审「" + title + "」"
+        : moved ? "已移至「" + reqNameById(body.reqId) + "」并保存"
+        : "已更新需求「" + title + "」", "fs");
+      /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
+      if(seq === demandFormSeq){
+        closeDemandDialog();
+        if(wasEdit) closeDemandDetailIfOpen();
+        /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围。
+           编辑迁移则保持原筛选，让这条需求从当前列表里消失即可 */
+        if(!wasEdit && rt.demandReqId && body.reqId !== rt.demandReqId){
+          rt.demandReqId = body.reqId;
+          if(demandReq) demandReq.value = body.reqId;
+        }
+      }
+      loadDemands();
+    }).catch(fail);
+  };
+  /* 换了项目先走两道确认；取消时恢复保存按钮，表单内容保持原样 */
+  var gate = moved
+    ? confirmDemandMove({ id:editingDemandId, reqId:editingDemandReqId, title:title }, body.reqId).then(function(ok){
+        if(!ok){
+          if(seq === demandFormSeq) btnSaveDemand.disabled = false;
+          return null;
+        }
+        return save();
+      })
+    : save();
+  return gate.catch(fail);
 }
 
 /* ---------- 提交前体检 ----------

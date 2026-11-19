@@ -540,6 +540,23 @@
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
   </select>
 
+  <select id="selectByDemandForUpdate" resultType="com.hourglass.entity.TestCase">
+    SELECT * FROM test_case
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+    ORDER BY id FOR UPDATE
+  </select>
+
+  <select id="countPlanCasesByDemand" resultType="int">
+    SELECT COUNT(*) FROM test_plan_case pc
+    INNER JOIN test_case c ON c.id = pc.case_id AND c.workspace_id = #{workspaceId}
+    WHERE c.workspace_id = #{workspaceId} AND c.demand_id = #{demandId}
+  </select>
+
+  <delete id="deletePlanCasesByCaseIds">
+    DELETE FROM test_plan_case WHERE case_id IN
+    <foreach collection="caseIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </delete>
+
   <delete id="delete">
     DELETE FROM test_case WHERE id = #{id} AND workspace_id = #{workspaceId}
   </delete>
