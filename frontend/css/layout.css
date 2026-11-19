@@ -202,7 +202,8 @@ body[data-view="review"] .page-toolbar,
 body[data-view="requirements"] .page-toolbar,
 body[data-view="branches"] .page-toolbar,
 body[data-view="phase"] .page-toolbar,
-body[data-view="delivery"] .page-toolbar{
+body[data-view="delivery"] .page-toolbar,
+body[data-view="calendar"] .page-toolbar{
   min-height:44px;padding:6px 9px;background:var(--surface);
   border:1px solid var(--border);border-radius:11px;
 }

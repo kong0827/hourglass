@@ -644,6 +644,17 @@ body.mob-sheet-open{overflow:hidden;}
 }
 [data-layout="mobile"] .mine-mode button{min-width:52px;height:28px;}
 [data-layout="mobile"] .mine-mode button[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-fg);box-shadow:none;}
+/* 手机端工具条只留模式与显示设置：元信息在下方统计区已有，刷新/全屏入口收起 */
+[data-layout="mobile"] .mine-toolbar .toolbar-meta{display:none;}
+[data-layout="mobile"] .mine-toolbar [data-view-fullscreen],
+[data-layout="mobile"] .mine-toolbar #btnMineRefresh{display:none;}
+/* 团队模式由团队面板自己承接筛选，工具条只留模式切换 */
+[data-layout="mobile"] body.mine-team #view-mine .mine-toolbar .mine-display-more{display:none;}
+/* 项目列表工具条：手机端允许换行，计数占一行，避免横向溢出 */
+[data-layout="mobile"] .proj-list-head{height:auto;min-height:48px;flex-wrap:wrap;padding:6px 9px;gap:6px;}
+[data-layout="mobile"] .proj-list-count{width:100%;}
+[data-layout="mobile"] .project-toolbar{margin-left:0;flex-wrap:wrap;}
+[data-layout="mobile"] .proj-list-head [data-view-fullscreen]{display:none;}
 
 [data-layout="mobile"] .team-panel{display:flex;flex-direction:column;gap:var(--space-3);padding-bottom:24px;}
 /* 英雄卡改白卡 + 蓝色大数字：大面积渐变蓝块收敛为普通卡片，完成率用进度条表达 */
