@@ -424,6 +424,9 @@ input[type="week"]::-webkit-calendar-picker-indicator:hover{opacity:.85;}
   max-width:100%;white-space:nowrap;
 }
 .tag .dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto;}
+/* 分类名可能很长（如「流程引擎基础功能」）：标签已限宽，文字需在内部省略，
+   否则会溢出标签进入相邻列（完成记录表的分类/优先级两列曾经叠字） */
+.tag .tag-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .tag.tag-primary{background:var(--primary-soft);color:var(--primary-fg);}
 .tag.tag-success{background:var(--success-soft);color:var(--success-fg);}
 .tag.tag-warning{background:var(--warning-soft);color:var(--warning-fg);}
@@ -1776,8 +1779,9 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .apn.unread{background:var(--primary-soft);border-left-color:var(--primary);}
 .apn.unread:hover{background:var(--primary-soft);filter:brightness(.985);}
 .apn-ic{
-  flex:0 0 auto;width:22px;height:22px;margin-top:1px;border-radius:var(--r-xs);
-  display:grid;place-items:center;background:var(--surface-active);color:var(--text-3);
+  flex:0 0 auto;width:20px;height:20px;margin-top:1px;border-radius:50%;
+  display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-2);
+  font-size:11px;font-weight:600;line-height:1;
 }
 .apn.unread .apn-ic{background:var(--surface);color:var(--primary-fg);}
 .apn-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}

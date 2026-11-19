@@ -94,8 +94,20 @@ function scopeMessage(){
     : "只在当前空间内搜索；切换空间后在对应空间内查找";
 }
 
+/* 文档 brief 来自 Markdown：表格片段会带出「| --- |」这类结构符号，
+   摘要里只保留可读文字，分隔符换成间隔点 */
+function readableSnippet(snippet){
+  if(String(snippet).indexOf("|") < 0) return snippet;
+  return snippet.replace(/\s*\|\s*/g, " · ")
+    .replace(/(?:·\s*)?-{3,}(?:\s*·)?/g, " ")
+    .replace(/(\s*·\s*)+/g, " · ")
+    .replace(/^\s*·\s*|\s*·\s*$/g, "")
+    .replace(/\s{2,}/g, " ").trim();
+}
+
 /* 先分段转义再包 mark：关键词含 & < > 等字符时也不会破坏转义或注入标签 */
 function snippetHTML(snippet, q){
+  snippet = readableSnippet(snippet);
   var kw = String(q || "").trim();
   if(!kw) return esc(snippet);
   var lower = snippet.toLowerCase(), needle = kw.toLowerCase();

@@ -154,8 +154,8 @@ function workloadFiltersHTML(){
   return html;
 }
 function workloadToolbar(){
-  return '<div class="manager-toolbar"><div><b>成员负载</b></div>'
-    + '<div class="manager-actions"><div class="seg mini wl-mode">'
+  /* 页头 h1 已经是「成员负载」：面板里不再重复一次同名标题 */
+  return '<div class="manager-toolbar"><div class="manager-actions"><div class="seg mini wl-mode">'
     + '<button type="button" data-load-mode="person" aria-pressed="' + (viewMode === 'person') + '"' + (loading || !cache ? ' disabled' : '') + '>按人</button>'
     + '<button type="button" data-load-mode="week" aria-pressed="' + (viewMode === 'week') + '"' + (loading || !cache ? ' disabled' : '') + '>按周</button>'
     + '</div><button class="btn sm" type="button" data-load-export' + (loading || !cache ? ' disabled' : '') + '>' + icon("download", 13) + ' 导出当前范围 CSV</button>'

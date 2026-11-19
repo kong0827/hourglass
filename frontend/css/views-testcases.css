@@ -53,7 +53,7 @@
 #tcStats .tc-stat-info{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:4px;color:var(--text-3);cursor:help;flex:none;}
 #tcStats .tc-stat-info:hover{color:var(--text-2);}
 /* 搜索框内置范围选择：默认只搜标题 / 编号 / 模块 */
-.tc-searchwrap{display:flex;align-items:center;gap:6px;flex:1 1 200px;min-width:170px;max-width:250px;height:30px;padding:0 4px 0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.tc-searchwrap{display:flex;align-items:center;gap:6px;flex:1 1 220px;min-width:180px;max-width:300px;height:30px;padding:0 4px 0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
 .tc-searchwrap:focus-within{border-color:var(--primary);box-shadow:var(--ring-focus);}
 .tc-searchwrap .tc-search-ic{display:inline-flex;flex:0 0 auto;color:var(--text-3);}
 .tc-searchwrap .tc-search-ic svg{width:14px;height:14px;}
@@ -69,7 +69,7 @@
   /* chips 与搜索必须同行：统计组内部不再换行，宽度压力交给可伸缩的搜索框 */
   #tcStats{gap:0;flex-wrap:nowrap;}
   #tcStats .tc-stat{padding:0 7px;}
-  .tc-searchwrap{min-width:150px;max-width:230px;}
+  .tc-searchwrap{min-width:180px;max-width:300px;}
 }
 /* 筛选卡放不下整句「清空筛选」时只留图标，把宽度让给搜索框（左侧栏展开时内容区更窄）
    只留图标时按钮同步收成 28×28 方形、图标降到 14px：否则 16px 的 × 在无文字按钮里显大，

@@ -1473,12 +1473,14 @@ function startDemSourceEdit(btn){
   el.addEventListener("blur", function(){ finish(true); });
 }
 function demVersionCell(d){
-  var text = esc(demandVersionName(d) || "—")
-    + (plannedText(d) ? '<div class="foot-note">计划 ' + esc(plannedText(d)) + '</div>' : '');
-  if(!demInlineVersionEditable(d)) return text;
-  return demInlineTrigger("version", d,
-    '<span class="dem-inline-txt">' + esc(demandVersionName(d) || "未指定") + '</span>', "调整目标版本")
-    + (plannedText(d) ? '<div class="foot-note">计划 ' + esc(plannedText(d)) + '</div>' : '');
+  /* 版本名与计划区间都按单行省略：列宽固定，日期串按连字符折断会读不出区间 */
+  var name = esc(demandVersionName(d) || "—");
+  var planned = plannedText(d);
+  var note = planned ? '<span class="foot-note dem-ver-plan" title="计划 ' + esc(planned) + '">计划 ' + esc(planned) + '</span>' : '';
+  var head = demInlineVersionEditable(d)
+    ? demInlineTrigger("version", d, '<span class="dem-inline-txt">' + esc(demandVersionName(d) || "未指定") + '</span>', "调整目标版本")
+    : '<span class="dem-ver-name" title="' + name + '">' + name + '</span>';
+  return '<span class="dem-ver-cell">' + head + note + '</span>';
 }
 /* 点开才出现选项：菜单项统一带「当前」标记，选中即保存；需要原因或版本的仍交给原弹窗 */
 function demInlineMenu(anchor, title, items, onPick){

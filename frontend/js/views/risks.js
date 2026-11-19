@@ -162,7 +162,8 @@ function renderRisks(){
     : '';
   var owners = riskOwners();
   $("risksBody").innerHTML =
-    '<div class="manager-toolbar risk-toolbar"><div><h2 class="risk-title">逾期与阻塞</h2>' +
+    /* 页头 h1 已经是「逾期与阻塞」：这里只留快照时间，不重复同名标题 */
+    '<div class="manager-toolbar risk-toolbar"><div>' +
       '<span class="risk-sub">当前快照 · 更新于 ' + esc(fmtDate(today)) + '</span></div>' +
       '<div class="manager-actions">' +
         '<button class="btn sm" type="button" data-risk-export>导出清单</button>' +

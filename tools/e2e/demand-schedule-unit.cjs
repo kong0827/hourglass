@@ -64,6 +64,18 @@ const context = vm.createContext({
   esc: value => String(value == null ? "" : value),
   icon:() => "",
   syncAssocViewBtns:() => {},
+  registerHelp(){}, initCaliberHelp(){}, caliberMarkHTML:() => "",
+  loadProjectMembers:() => Promise.resolve(null), memberRoleTitles:() => [], taskMemberLabel:() => "",
+  taskPublicationHTML:() => "",
+  taskVersionsText:t => (t.versionNames || []).join(" / "),
+  taskVersionIds:t => t.versionIds || [],
+  taskVersionLinksHTML:t => (t.versionNames || []).join(" / "),
+  reqNameById:() => "项目一", assocLinkHTML:(type, id, name) => name,
+  demandTaskPublished:t => t.publicationState === "effective",
+  demandPublicationCell:() => '<span class="tag tag-success">生产生效</span>',
+  syncDemandLabelFromCache:() => {},
+  projectOptionsHTML:() => '<option value="R1">项目一</option>',
+  memberRoleTitles:() => [],
   PRIORITIES:["P0","P1","P2","P3"], priName:code => ({P0:"紧急",P1:"高",P2:"中",P3:"低"}[code] || code)
 });
 const formatSource = fs.readFileSync(path.join(root, "frontend/js/lib/format.js"), "utf8");
@@ -129,7 +141,7 @@ async function flush() { for (let i = 0; i < 10; i++) await Promise.resolve(); }
   await flush();
   assert.equal(requests[2].url, "/api/demands/D1/restore");
 
-  const taskBox = { innerHTML:"" }, layer = { isConnected:true, querySelector:() => taskBox };
+  const taskBox = { innerHTML:"", querySelector:() => null, querySelectorAll:() => [] }, layer = { isConnected:true, querySelector:() => taskBox };
   context.API.getAllPages = () => Promise.resolve([
     { id:"T1", title:"已交付", boardColumn:"done", versionIds:["V1", "V3"], versionNames:["任务版本", "附加版本"], publicationState:"effective", everPublished:true, publishedAt:"2026-11-09T12:00:00Z", publishSource:"record" },
     { id:"T2", title:"未发布", boardColumn:"done", versionIds:["V2"], versionNames:["另一版本"], publicationState:"unpublished", everPublished:false }
@@ -259,7 +271,8 @@ async function flush() { for (let i = 0; i < 10; i++) await Promise.resolve(); }
   assert.equal(elements.dCategory.value, "C1", "新建需求仍默认第一个模块");
   let saveResolve, closes = 0;
   context.UI.closeModal = () => { closes++; };
-  context.API.put = () => new Promise(resolve => { saveResolve = resolve; });
+  /* 新建走 POST、编辑走 PUT：两个入口都要能挂起，才能验证迟到响应 */
+  context.API.put = context.API.post = () => new Promise(resolve => { saveResolve = resolve; });
   context.openDemandDialog({ ...demand("review"), categoryId:null });
   elements.dTitle.value = "需求 A";
   context.saveDemand();

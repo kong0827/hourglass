@@ -410,9 +410,10 @@
    结束时间已是分钟级（16 字符），列宽必须放得下，否则会压到相邻列 */
 .comp-table th:nth-child(1),.comp-table td:nth-child(1){width:16%;}
 .comp-table th:nth-child(2),.comp-table td:nth-child(2){width:8%;}
-.comp-table th:nth-child(3),.comp-table td:nth-child(3){width:9%;}
+.comp-table th:nth-child(3),.comp-table td:nth-child(3){width:7%;}
 .comp-table th:nth-child(4),.comp-table td:nth-child(4){width:6%;}
-.comp-table th:nth-child(5),.comp-table td:nth-child(5){width:7%;}
+/* 分类名比文档列信息量更大：两边各让 2%，分类名不至于只剩一个字 */
+.comp-table th:nth-child(5),.comp-table td:nth-child(5){width:9%;}
 .comp-table th:nth-child(6),.comp-table td:nth-child(6){width:6%;}
 .comp-table th:nth-child(7),.comp-table td:nth-child(7){width:7%;}
 .comp-table th:nth-child(8),.comp-table td:nth-child(8){width:12%;}

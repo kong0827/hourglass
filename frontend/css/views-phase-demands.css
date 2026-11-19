@@ -855,3 +855,9 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
   .demg-scroll{min-height:320px;}
   .demg-foot .btn{margin-left:0;width:100%;}
 }
+
+/* 需求表「目标版本」列：版本名与计划区间各占一行并省略，避免日期按连字符折成多行 */
+.dem-ver-cell{display:block;min-width:0;max-width:100%;}
+.dem-ver-cell .dem-ver-name,
+.dem-ver-cell .dem-ver-plan{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.dem-ver-cell .dem-inline-trigger{max-width:100%;}

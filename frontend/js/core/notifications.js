@@ -476,11 +476,21 @@ function clockOf(v){
   var now = new Date();
   return d.toDateString() === now.toDateString() ? p(d.getHours()) + ":" + p(d.getMinutes()) : (p(d.getMonth() + 1) + "-" + p(d.getDate()));
 }
+/* 列表徽标用类型字而非线图标：一列消息扫下来能直接分辨「提及 / 评论 / 文档 / 发布」 */
+var NOTIFY_CHAR = {
+  task_mention:"提", task_comment:"评", task_remind:"提", task_due:"期",
+  task_assigned:"派", task_watch:"关", task_updated:"改", manager_nudge:"催",
+  doc_changed:"文", demand_status:"需", demand_watch:"需",
+  version_released:"发", version_deleted:"发", branch_status:"支",
+  project_access:"权", member_role:"人", member_removed:"人"
+};
+function notifyChar(type){
+  return NOTIFY_CHAR[type] || (String(type || "").indexOf("test") === 0 ? "测" : "通");
+}
 function noticeItemHTML(g){
   var x = g.lead;
   var count = g.items.length;
   var ids = g.items.map(function(n){ return n.id; }).join(",");
-  var ic = NOTIFY_ICON[x.type] || "bell";
   return '<button class="apn' + (x.readAt ? "" : " unread") + '" type="button"' +
     ' data-apn="' + esc(x.id) + '" data-apn-ids="' + esc(ids) + '"' +
     (isTaskRef(x.type) && x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
@@ -489,7 +499,7 @@ function noticeItemHTML(g){
       ? ' data-apn-kind="' + esc(x.refKind) + '" data-apn-ref="' + esc(x.refId) + '"' : "") +
     (x.workspaceId ? ' data-apn-ws="' + esc(x.workspaceId) + '"' : "") +
     ' title="' + esc(x.title) + '">' +
-    '<span class="apn-ic">' + icon(ic, 13) + '</span>' +
+    '<span class="apn-ic">' + esc(notifyChar(x.type)) + '</span>' +
     '<span class="apn-main">' +
       '<span class="apn-title">' + esc(x.title) +
         (count > 1 ? ' <span class="apn-count">×' + count + '</span>' : "") + '</span>' +

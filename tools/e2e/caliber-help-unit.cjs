@@ -122,7 +122,8 @@ function collectDefs(){
     'frontend/js/views/projects.js':['registerHelp({', '\n});'],
     'frontend/js/views/workload.js':['registerHelp({', '\n});'],
     'frontend/js/views/mine.js':['registerHelp({', '\n});'],
-    'frontend/js/views/list.js':['registerHelp({', '\n});']
+    'frontend/js/views/list.js':['registerHelp({', '\n});'],
+    'frontend/js/views/board.js':['registerHelp({', '\n});']
   };
   for(const [file, [marker, closer]] of Object.entries(sources)){
     const src = read(file);
@@ -136,13 +137,19 @@ function collectDefs(){
       keys.add(match[1] || match[2]);
     }
   }
+  /* demands.js 用共享常量登记：键在单行 registerHelp 调用里 */
+  const demandLine = read('frontend/js/views/demands.js').split('\n')
+    .find(line => line.indexOf('registerHelp({') > -1 && line.indexOf('});') > -1);
+  assert.ok(demandLine, 'demands.js 应有单行 registerHelp 调用');
+  for(const match of demandLine.matchAll(/"([\w.]+)"\s*:/g)) keys.add(match[1]);
   return keys;
 }
 const defs = collectDefs();
 for(const key of ['project.span','project.estimate','project.actual','project.variance','review.onTime','gantt.load','drawer.actual',
   'crossPeriod','headcount','actual','dev','test','estimate','days','compose','trend','pivot','versionWarn',
   'version.actual','version.estimate','version.remaining','version.variance','version.onTime',
-  'version.commit.scope','version.commit.done','version.commit.added','version.commit.removed','version.workSplit',
+  /* version.workSplit 随 c05ed7c 工时分布收进构成浮层一并移除，不再登记 */
+  'version.commit.scope','version.commit.done','version.commit.added','version.commit.removed',
   'projects.progress','workload.remaining','workload.load','mine.doneRate','mine.load','mine.stats','mine.testQueue',
   'list.progress','list.work','share']){
   assert.ok(defs.has(key), '未登记口径 ' + key);
@@ -210,12 +217,15 @@ assert.match(read('frontend/js/core/task-drawer.js'), /"drawer\.actual": \{[\s\S
 const version = read('frontend/js/views/version.js');
 assert.match(version, /function cell\(value, label, tone, drill, help\)/);
 assert.match(version, /'<div class="vd-cell-wrap">' \+ inner\s*\+ caliberMarkHTML\(help\.key, !!help\.warn, "查看「" \+ label \+ "」口径"\)/);
-assert.match(version, /cell\(hours\(s\.workMinutes\), "已投入工时", "", "logged", \{ key:"version\.actual" \}\)/);
-assert.match(version, /cell\(hours\(s\.estimateMinutes\), "预估工时", "", "", \{ key:"version\.estimate" \}\)/);
-assert.match(version, /cell\(hours\(s\.remainingMinutes\), "剩余预估", "", "open", \{ key:"version\.remaining", warn:true \}\)/);
+/* c05ed7c 起工时入口收进工时卡：预估 / 实际各一个构成按钮，剩余与均耗时在读数带 */
+assert.match(version, /data-vd-hours="estimate"[\s\S]{0,600}?caliberMarkHTML\("version\.estimate"/);
+assert.match(version, /data-vd-hours="actual"[\s\S]{0,900}?caliberMarkHTML\("version\.actual"/);
+assert.match(version, /caliberMarkHTML\("version\.remaining"/);
+assert.match(version, /caliberMarkHTML\("version\.avgTask"/);
 assert.match(version, /cell\(pctText\(s\.deviationPct\), "整体偏差", devTone\(s\.deviationPct\), "deviation", \{ key:"version\.variance", warn:true \}\)/);
 assert.match(version, /"准时完成率", "", "ontime", \{ key:"version\.onTime" \}\)/);
-assert.match(version, /剩余预估是未完成工作项的预估之和，不扣已投入/);
+assert.match(version, /只累加未完成工作项的预估原值/);
+assert.match(version, /不扣已投入/);
 assert.match(read('frontend/css/version.css'), /\.vd-cell-wrap>\.caliber-mark\{position:absolute/);
 
 /* 项目列表：卡片进度与表头进度列各一处，表头不能被 ellipsis 裁掉 */
@@ -223,7 +233,7 @@ const projects = read('frontend/js/views/projects.js');
 assert.match(projects, /<span style="font-weight:600;color:var\(--text-2\)">' \+ r\.progressPct \+ '%<\/span>' \+\s*caliberMarkHTML\("projects\.progress", false, "查看「项目进度」口径"\)/);
 assert.match(projects, /key === "progress" \? caliberMarkHTML\("projects\.progress", false, "查看「项目进度」口径"\) : ""/);
 assert.match(projects, /' class="th-help-wrap"'/);
-assert.match(read('frontend/css/views.css'), /\.project-table-head > \.th-help-wrap\{display:flex;[^}]*overflow:visible;\}/);
+assert.match(read('frontend/css/views-projects-settings.css'), /\.project-table-head > \.th-help-wrap\{display:flex;[^}]*overflow:visible;\}/);
 
 /* 成员负载页：矩阵表头 + 抽屉 KPI */
 const workload = read('frontend/js/views/workload.js');
@@ -239,18 +249,20 @@ const mine = read('frontend/js/views/mine.js');
 assert.match(mine, /<span class="caliber-label">' \+ range\.label \+ '完成率' \+ caliberMarkHTML\("mine\.doneRate", false, "查看「完成率」口径"\)/);
 assert.match(mine, /<h3>成员负载<\/h3>' \+ caliberMarkHTML\("mine\.load", false, "查看「成员负载」口径"\)/);
 assert.match(mine, /不是按未完成工作项的预估任务量算/);
-assert.match(mine, /统计基于已载入项 · 悬停行显示快捷操作'\s*\+ caliberMarkHTML\("mine\.stats", false, "查看统计条口径"\)/);
+assert.match(mine, /统计基于已载入项'\s*\+ caliberMarkHTML\("mine\.stats", false, "查看统计条口径"\)/);
 assert.match(mine, /含项目内尚未认领的待测队列 · 先到先得'\s*\+ caliberMarkHTML\("mine\.testQueue", false, "查看测试队列口径"\)/);
-assert.match(read('frontend/css/mobile.css'), /\.team-hero \.caliber-mark\{border-color:rgba\(255,255,255,\.4\)/);
+/* 英雄卡改白卡后口径标记回到默认浅底，不再需要半透明白覆写 */
+assert.match(read('frontend/css/mobile.css'), /\[data-layout="mobile"\] \.team-hero\{\s*background:var\(--surface\)/);
+assert.equal(read('frontend/css/mobile.css').includes('.team-hero .caliber-mark'), false);
 
 /* 工作项列表：进度 / 工时列头（标记与排序按钮平级，不能嵌套 button） */
 const list = read('frontend/js/views/list.js');
 assert.match(list, /var LIST_HEAD_HELP = \{ progress:"list\.progress", work:"list\.work" \};/);
 assert.match(list, /var help = LIST_HEAD_HELP\[key\]\s*\? caliberMarkHTML\(LIST_HEAD_HELP\[key\], false, "查看「" \+ labels\[key\] \+ "」口径"\) : "";/);
-assert.match(list, /'<span' \+ \(help \? ' class="th-help-wrap"' : ""\)/);
+assert.match(list, /var cls = \[help \? "th-help-wrap" : "", key === "updatedAt" \? "ta-r" : ""\]\.filter\(Boolean\)\.join\(" "\);/);
 assert.match(list, /不按检查项换算，同一工作项两处可能不一致/);
 assert.match(list, /预估工时、进行中和暂停中的计时都不计入/);
-assert.match(read('frontend/css/views.css'), /\.list-head > \.th-help-wrap\{display:flex;[^}]*overflow:visible;\}/);
+assert.match(read('frontend/css/views-workitems.css'), /\.list-head > \.th-help-wrap\{display:flex;[^}]*overflow:visible;\}/);
 
 /* 版本承诺基线：四行各带 key；工时拆分脚注一个 */
 assert.match(version, /\["冻结范围",[^\]]*"version\.commit\.scope", false\]/);
@@ -258,7 +270,7 @@ assert.match(version, /\["基线完成",[^\]]*"version\.commit\.done", true\]/);
 assert.match(version, /\["启动后新增",[^\]]*"version\.commit\.added", false\]/);
 assert.match(version, /\["基线移出",[^\]]*"version\.commit\.removed", true\]/);
 assert.match(version, /<span class="caliber-label">' \+ esc\(r\[0\]\)\s*\+ caliberMarkHTML\(r\[3\], r\[4\], "查看「" \+ r\[0\] \+ "」口径"\)/);
-assert.match(version, /caliberMarkHTML\("version\.workSplit", true, "查看工时拆分口径"\)/);
+/* 工时拆分脚注随构成浮层取消，改为工时卡上的预估 / 实际口径（见上） */
 assert.match(version, /分母是冻结时的全部项，后来移出的仍在分母里/);
 
 /* 投资页已迁到共享模块，不应残留旧实现 */
@@ -281,11 +293,12 @@ assert.doesNotMatch(investmentCss, /tr\.row\{/);
 assert.match(read('frontend/css/components.css'), /\.caliber-mark\{/);
 assert.match(read('frontend/css/components.css'), /\.caliber-mark\.warn/);
 assert.match(read('frontend/css/components.css'), /\.stat-wrap\{position:relative;display:flex/);
-assert.match(read('frontend/css/components.css'), /\.caliber-label\{display:inline-flex;align-items:center;gap:4px;\}/);
+assert.match(read('frontend/css/components.css'), /\.caliber-label\{display:inline-flex;align-items:center;gap:var\(--space-1\);\}/);
 assert.match(read('frontend/css/manager.css'), /\.manager-kpi-wrap\{position:relative;display:flex/);
 assert.match(read('frontend/css/manager.css'), /\.manager-kpi-wrap>\.caliber-mark\{position:absolute/);
 const sw = read('frontend/sw.js');
-assert.match(sw, /CACHE_NAME\s*=\s*"hourglass-shell-v247"/);
+/* 版本号由 tools/stamp-sw.js 按壳内容哈希改写，只校验命名形态 */
+assert.match(sw, /CACHE_NAME\s*=\s*"hourglass-shell-v\d+"/);
 assert.match(sw, /"js\/lib\/caliber-help\.js"/);
 
 console.log('PASS caliber-help: 模块行为 + 39 个口径登记 + 页面接线 + 样式/离线壳');

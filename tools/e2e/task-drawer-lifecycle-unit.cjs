@@ -55,7 +55,7 @@ function harness() {
     setTimeout:() => 0, clearTimeout() {},
     window:{ SUNEDITOR:{ create:() => ({ setContents(){}, getContents(){ return ""; }, disable(){}, enable(){} }) }, CURRENT_WORKSPACE:"" },
     SUNEDITOR:{ create:() => ({ setContents(){}, getContents(){ return ""; }, disable(){}, enable(){} }) },
-    document:{ body:{}, documentElement:{}, activeElement:null, createElement:tag => element(tag), querySelector:() => null },
+    document:{ body:{}, documentElement:{}, activeElement:null, createElement:tag => element(tag), createTextNode:text => ({ textContent:text }), querySelector:() => null },
     rt:{ taskFormSeq:0, editingId:null, formDirty:false, drawerReadOnly:false, colDefsCache:[], currentWs:{ id:"W1" }, reqList:[] },
     state:{ runningTimer:null }, taskCacheExtra:{}, COLUMNS:[],
     normalizedIds:ids => Array.isArray(ids) ? [...new Set(ids.filter(Boolean))] : [],
@@ -120,7 +120,7 @@ function harness() {
     slice(drawerSource, "function syncDrawerHead(", "function isoDate("),
     slice(drawerSource, 'taskForm.addEventListener("submit",', '$("btnCloseTask").addEventListener(')
   ];
-  vm.runInContext("var origProgress = 0, startedDone = false, commentsCache = []; var demandTargetCache = {}, demandTargetPending = {}; var lastCommentDraftId = null, pendingCommentFiles = []; var depInlineOpen = false; var depState = { taskId:null, seq:0, edges:[], pending:[], loading:false, error:'', pickerItems:[], pickerLoading:false, mode:'', alignOnce:false }; var inlineText = null, factSaveView = null, factSaveQueued = false, factSaveMsg = '';", context);
+  vm.runInContext("var origProgress = 0, startedDone = false, commentsCache = []; var demandTargetCache = {}, demandTargetPending = {}; var lastCommentDraftId = null, pendingCommentFiles = []; var depInlineOpen = false; var depState = { taskId:null, seq:0, edges:[], pending:[], loading:false, error:'', pickerItems:[], pickerLoading:false, mode:'', alignOnce:false }; var inlineText = null, factSaveView = null, factSaveQueued = false, factSaveMsg = ''; var commentMentionPicker = null; function syncCreateExtrasSummary(){} function showTaskErrors(){} function renderReadBlocked(){} function renderReadView(){} function taskById(){ return null; } function canManageProject(){ return false; } function assocText(){ return ''; } function canEditAssoc(){ return false; } function assocTypeName(){ return ''; }", context);
   for (const section of sections) vm.runInContext(section, context, { filename:"task-drawer.js (real source)" });
   function open({ edit = false, demand = false, readOnly = false } = {}) {
     const task = edit ? { id:"T1", reqId:readOnly ? "READONLY" : "R1", title:"原任务", boardColumn:"backlog", versionIds:[], canEdit:!readOnly } : null;
@@ -226,7 +226,7 @@ async function versionRace({ failOld = false, readOnly = false } = {}) {
     API:{ get() { const d = deferred(); pending.push(d); return d.promise; } },
     normalizedIds:ids => ids, versionContentLocked:() => false, esc:String,
     versionReadOnly:() => false, versionEnded:() => false,
-    document:{ createElement:tag => element(tag) }
+    document:{ createElement:tag => element(tag), createTextNode:text => ({ textContent:text }) }
   });
   vm.runInContext(slice(phaseSource, "function fetchVersions(", "/* 「发现版本」"), context, { filename:"phase.js (real source)" });
   context.ensureVersionOptions([]); // 打开时尚未继承需求目标

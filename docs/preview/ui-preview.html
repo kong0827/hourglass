@@ -1405,6 +1405,9 @@ input[type="week"]::-webkit-calendar-picker-indicator:hover{opacity:.85;}
   max-width:100%;white-space:nowrap;
 }
 .tag .dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto;}
+/* 分类名可能很长（如「流程引擎基础功能」）：标签已限宽，文字需在内部省略，
+   否则会溢出标签进入相邻列（完成记录表的分类/优先级两列曾经叠字） */
+.tag .tag-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .tag.tag-primary{background:var(--primary-soft);color:var(--primary-fg);}
 .tag.tag-success{background:var(--success-soft);color:var(--success-fg);}
 .tag.tag-warning{background:var(--warning-soft);color:var(--warning-fg);}
@@ -2757,8 +2760,9 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .apn.unread{background:var(--primary-soft);border-left-color:var(--primary);}
 .apn.unread:hover{background:var(--primary-soft);filter:brightness(.985);}
 .apn-ic{
-  flex:0 0 auto;width:22px;height:22px;margin-top:1px;border-radius:var(--r-xs);
-  display:grid;place-items:center;background:var(--surface-active);color:var(--text-3);
+  flex:0 0 auto;width:20px;height:20px;margin-top:1px;border-radius:50%;
+  display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-2);
+  font-size:11px;font-weight:600;line-height:1;
 }
 .apn.unread .apn-ic{background:var(--surface);color:var(--primary-fg);}
 .apn-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
@@ -4717,7 +4721,8 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .proj-act-primary{color:var(--primary-fg);background:var(--primary-soft);}
 .proj-act-primary:hover{color:var(--primary-fg);background:var(--primary-soft);border-color:var(--primary-border);}
 .proj-row-menu{min-width:176px;}
-.demand-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;}
+/* 行操作并排：换行会让两枚操作叠成两行、把行高撑到 87px，与其他行错位 */
+.demand-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:nowrap;white-space:nowrap;}
 /* 需求池列表行内编辑：读态就是普通文本/标签，箭头与底色悬停或聚焦才显形，点开才出现选项 */
 .dem-inline-menu{
   display:inline-flex;align-items:center;gap:var(--space-1);max-width:190px;
@@ -5230,7 +5235,17 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .user-space-row .nm{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .user-space-current{font-size:11px;font-weight:500;color:var(--text-3);}
 /* 项目可见范围矩阵 */
+.access-matrix-shell{position:relative;}
 .access-matrix-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r-lg);}
+/* 项目多时矩阵宽于面板：macOS 覆盖式滚动条静止时不显示，最后一列看起来像被裁切。
+   滚动条之外再给一层右缘渐隐，滚到底后由 JS 收起 */
+.access-matrix-wrap::-webkit-scrollbar{height:9px;}
+.access-matrix-wrap::-webkit-scrollbar-thumb{background:color-mix(in srgb, var(--text-3) 38%, transparent);border-radius:999px;}
+.access-matrix-wrap::-webkit-scrollbar-track{background:transparent;}
+.access-matrix-fade{position:absolute;top:1px;right:1px;bottom:10px;width:30px;pointer-events:none;
+  opacity:0;transition:opacity .15s;border-radius:0 var(--r-lg) var(--r-lg) 0;
+  background:linear-gradient(to right,transparent,var(--surface));}
+.access-matrix-shell.is-more .access-matrix-fade{opacity:1;}
 .access-matrix{min-width:640px;}
 .access-matrix th,.access-matrix td{white-space:nowrap;}
 .access-matrix .access-sticky{position:sticky;left:0;z-index:1;background:var(--surface);}
@@ -5686,9 +5701,10 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
    结束时间已是分钟级（16 字符），列宽必须放得下，否则会压到相邻列 */
 .comp-table th:nth-child(1),.comp-table td:nth-child(1){width:16%;}
 .comp-table th:nth-child(2),.comp-table td:nth-child(2){width:8%;}
-.comp-table th:nth-child(3),.comp-table td:nth-child(3){width:9%;}
+.comp-table th:nth-child(3),.comp-table td:nth-child(3){width:7%;}
 .comp-table th:nth-child(4),.comp-table td:nth-child(4){width:6%;}
-.comp-table th:nth-child(5),.comp-table td:nth-child(5){width:7%;}
+/* 分类名比文档列信息量更大：两边各让 2%，分类名不至于只剩一个字 */
+.comp-table th:nth-child(5),.comp-table td:nth-child(5){width:9%;}
 .comp-table th:nth-child(6),.comp-table td:nth-child(6){width:6%;}
 .comp-table th:nth-child(7),.comp-table td:nth-child(7){width:7%;}
 .comp-table th:nth-child(8),.comp-table td:nth-child(8){width:12%;}
@@ -8745,6 +8761,12 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
   .demg-foot .btn{margin-left:0;width:100%;}
 }
 
+/* 需求表「目标版本」列：版本名与计划区间各占一行并省略，避免日期按连字符折成多行 */
+.dem-ver-cell{display:block;min-width:0;max-width:100%;}
+.dem-ver-cell .dem-ver-name,
+.dem-ver-cell .dem-ver-plan{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.dem-ver-cell .dem-inline-trigger{max-width:100%;}
+
 </style>
 <style>
 /* ==========================================================================
@@ -8802,7 +8824,7 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 #tcStats .tc-stat-info{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:4px;color:var(--text-3);cursor:help;flex:none;}
 #tcStats .tc-stat-info:hover{color:var(--text-2);}
 /* 搜索框内置范围选择：默认只搜标题 / 编号 / 模块 */
-.tc-searchwrap{display:flex;align-items:center;gap:6px;flex:1 1 200px;min-width:170px;max-width:250px;height:30px;padding:0 4px 0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.tc-searchwrap{display:flex;align-items:center;gap:6px;flex:1 1 220px;min-width:180px;max-width:300px;height:30px;padding:0 4px 0 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
 .tc-searchwrap:focus-within{border-color:var(--primary);box-shadow:var(--ring-focus);}
 .tc-searchwrap .tc-search-ic{display:inline-flex;flex:0 0 auto;color:var(--text-3);}
 .tc-searchwrap .tc-search-ic svg{width:14px;height:14px;}
@@ -8818,7 +8840,7 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
   /* chips 与搜索必须同行：统计组内部不再换行，宽度压力交给可伸缩的搜索框 */
   #tcStats{gap:0;flex-wrap:nowrap;}
   #tcStats .tc-stat{padding:0 7px;}
-  .tc-searchwrap{min-width:150px;max-width:230px;}
+  .tc-searchwrap{min-width:180px;max-width:300px;}
 }
 /* 筛选卡放不下整句「清空筛选」时只留图标，把宽度让给搜索框（左侧栏展开时内容区更窄）
    只留图标时按钮同步收成 28×28 方形、图标降到 14px：否则 16px 的 × 在无文字按钮里显大，
@@ -17598,8 +17620,11 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
                 <span class="meta-right" id="accessSummary"></span>
               </div>
               <p class="set-hint">按「成员 × 项目」配置：可参与可读写；只读只能查看；不可见时该项目在项目、工作项、看板、报表中都不出现。新成员默认不参与任何项目，可用成员行的「分配项目」或邀请时先分配；早期加入的成员沿用「默认全部可参与」，只需把不该看到的项目设为不可见。空间主与管理员天然拥有全部项目，查看者为全局只读，均无需配置。</p>
-              <div class="tbl-wrap access-matrix-wrap" id="projectAccessWrap">
-                <div class="foot-note">加载中…</div>
+              <div class="access-matrix-shell">
+                <div class="tbl-wrap access-matrix-wrap" id="projectAccessWrap">
+                  <div class="foot-note">加载中…</div>
+                </div>
+                <span class="access-matrix-fade" aria-hidden="true"></span>
               </div>
             </div>
 
@@ -23438,7 +23463,7 @@ function catTag(id){
   var name = catNameById(id);
   if(!name) return "";
   return '<span class="tag tag-cat" style="--tag-c:' + catColor(id) + '">' +
-    '<i class="dot"></i>' + esc(name) + '</span>';
+    '<i class="dot"></i><span class="tag-txt">' + esc(name) + '</span></span>';
 }
 /** 直接吃名称的标签：完成快照等历史值没有 ID，只有完成当时的名称 */
 function catTagByName(name){
@@ -23448,7 +23473,7 @@ function catTagByName(name){
     if(rt.categoriesCache[i].name === name){ color = safeColor(rt.categoriesCache[i].color); break; }
   }
   return '<span class="tag tag-cat" style="--tag-c:' + color + '">' +
-    '<i class="dot"></i>' + esc(name) + '</span>';
+    '<i class="dot"></i><span class="tag-txt">' + esc(name) + '</span></span>';
 }
 function tagChip(name){
   return '<span class="tag tag-ghost">' + esc(name) + '</span>';
@@ -35122,8 +35147,20 @@ function scopeMessage(){
     : "只在当前空间内搜索；切换空间后在对应空间内查找";
 }
 
+/* 文档 brief 来自 Markdown：表格片段会带出「| --- |」这类结构符号，
+   摘要里只保留可读文字，分隔符换成间隔点 */
+function readableSnippet(snippet){
+  if(String(snippet).indexOf("|") < 0) return snippet;
+  return snippet.replace(/\s*\|\s*/g, " · ")
+    .replace(/(?:·\s*)?-{3,}(?:\s*·)?/g, " ")
+    .replace(/(\s*·\s*)+/g, " · ")
+    .replace(/^\s*·\s*|\s*·\s*$/g, "")
+    .replace(/\s{2,}/g, " ").trim();
+}
+
 /* 先分段转义再包 mark：关键词含 & < > 等字符时也不会破坏转义或注入标签 */
 function snippetHTML(snippet, q){
+  snippet = readableSnippet(snippet);
   var kw = String(q || "").trim();
   if(!kw) return esc(snippet);
   var lower = snippet.toLowerCase(), needle = kw.toLowerCase();
@@ -38506,7 +38543,7 @@ var MINE_COLS = [
   {k:"startDate", label:"开始", w:"88px"},
   {k:"progress", label:"进度", w:"96px"},
   {k:"work", label:"工时", w:"76px"},
-  {k:"project", label:"项目", w:"minmax(140px,1fr)"},
+  {k:"project", label:"项目 / 版本", w:"minmax(140px,1fr)"},
   {k:"updatedAt", label:"更新", w:"76px", align:"right"}
 ];
 var MINE_OPS_W = "76px";
@@ -40395,11 +40432,21 @@ function clockOf(v){
   var now = new Date();
   return d.toDateString() === now.toDateString() ? p(d.getHours()) + ":" + p(d.getMinutes()) : (p(d.getMonth() + 1) + "-" + p(d.getDate()));
 }
+/* 列表徽标用类型字而非线图标：一列消息扫下来能直接分辨「提及 / 评论 / 文档 / 发布」 */
+var NOTIFY_CHAR = {
+  task_mention:"提", task_comment:"评", task_remind:"提", task_due:"期",
+  task_assigned:"派", task_watch:"关", task_updated:"改", manager_nudge:"催",
+  doc_changed:"文", demand_status:"需", demand_watch:"需",
+  version_released:"发", version_deleted:"发", branch_status:"支",
+  project_access:"权", member_role:"人", member_removed:"人"
+};
+function notifyChar(type){
+  return NOTIFY_CHAR[type] || (String(type || "").indexOf("test") === 0 ? "测" : "通");
+}
 function noticeItemHTML(g){
   var x = g.lead;
   var count = g.items.length;
   var ids = g.items.map(function(n){ return n.id; }).join(",");
-  var ic = NOTIFY_ICON[x.type] || "bell";
   return '<button class="apn' + (x.readAt ? "" : " unread") + '" type="button"' +
     ' data-apn="' + esc(x.id) + '" data-apn-ids="' + esc(ids) + '"' +
     (isTaskRef(x.type) && x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
@@ -40408,7 +40455,7 @@ function noticeItemHTML(g){
       ? ' data-apn-kind="' + esc(x.refKind) + '" data-apn-ref="' + esc(x.refId) + '"' : "") +
     (x.workspaceId ? ' data-apn-ws="' + esc(x.workspaceId) + '"' : "") +
     ' title="' + esc(x.title) + '">' +
-    '<span class="apn-ic">' + icon(ic, 13) + '</span>' +
+    '<span class="apn-ic">' + esc(notifyChar(x.type)) + '</span>' +
     '<span class="apn-main">' +
       '<span class="apn-title">' + esc(x.title) +
         (count > 1 ? ' <span class="apn-count">×' + count + '</span>' : "") + '</span>' +
@@ -54162,12 +54209,14 @@ function startDemSourceEdit(btn){
   el.addEventListener("blur", function(){ finish(true); });
 }
 function demVersionCell(d){
-  var text = esc(demandVersionName(d) || "—")
-    + (plannedText(d) ? '<div class="foot-note">计划 ' + esc(plannedText(d)) + '</div>' : '');
-  if(!demInlineVersionEditable(d)) return text;
-  return demInlineTrigger("version", d,
-    '<span class="dem-inline-txt">' + esc(demandVersionName(d) || "未指定") + '</span>', "调整目标版本")
-    + (plannedText(d) ? '<div class="foot-note">计划 ' + esc(plannedText(d)) + '</div>' : '');
+  /* 版本名与计划区间都按单行省略：列宽固定，日期串按连字符折断会读不出区间 */
+  var name = esc(demandVersionName(d) || "—");
+  var planned = plannedText(d);
+  var note = planned ? '<span class="foot-note dem-ver-plan" title="计划 ' + esc(planned) + '">计划 ' + esc(planned) + '</span>' : '';
+  var head = demInlineVersionEditable(d)
+    ? demInlineTrigger("version", d, '<span class="dem-inline-txt">' + esc(demandVersionName(d) || "未指定") + '</span>', "调整目标版本")
+    : '<span class="dem-ver-name" title="' + name + '">' + name + '</span>';
+  return '<span class="dem-ver-cell">' + head + note + '</span>';
 }
 /* 点开才出现选项：菜单项统一带「当前」标记，选中即保存；需要原因或版本的仍交给原弹窗 */
 function demInlineMenu(anchor, title, items, onPick){
@@ -84596,7 +84645,8 @@ function renderRisks(){
     : '';
   var owners = riskOwners();
   $("risksBody").innerHTML =
-    '<div class="manager-toolbar risk-toolbar"><div><h2 class="risk-title">逾期与阻塞</h2>' +
+    /* 页头 h1 已经是「逾期与阻塞」：这里只留快照时间，不重复同名标题 */
+    '<div class="manager-toolbar risk-toolbar"><div>' +
       '<span class="risk-sub">当前快照 · 更新于 ' + esc(fmtDate(today)) + '</span></div>' +
       '<div class="manager-actions">' +
         '<button class="btn sm" type="button" data-risk-export>导出清单</button>' +
@@ -85487,6 +85537,7 @@ function renderProjectAccess(){
     box.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目", text:"先在项目中创建项目，再回来配置成员的可见范围。"
     });
+    syncAccessFade();
     return;
   }
   var grantMap = {};
@@ -85518,7 +85569,17 @@ function renderProjectAccess(){
       cells + '</tr>';
   }).join("");
   box.innerHTML = '<table class="manager-tbl access-matrix">' + head + '<tbody>' + body + '</tbody></table>';
+  syncAccessFade();
 }
+/* 矩阵宽于面板时右侧渐隐，提示还能横向滚动；滚到底收起 */
+function syncAccessFade(){
+  var shell = document.querySelector(".access-matrix-shell");
+  var box = $("projectAccessWrap");
+  if(!shell || !box) return;
+  shell.classList.toggle("is-more", box.scrollWidth - box.clientWidth - box.scrollLeft > 1);
+}
+$("projectAccessWrap").addEventListener("scroll", syncAccessFade);
+window.addEventListener("resize", syncAccessFade);
 $("projectAccessWrap").addEventListener("change", function(e){
   var sel = e.target.closest("[data-access-user]");
   if(!sel) return;
@@ -103033,8 +103094,8 @@ function workloadFiltersHTML(){
   return html;
 }
 function workloadToolbar(){
-  return '<div class="manager-toolbar"><div><b>成员负载</b></div>'
-    + '<div class="manager-actions"><div class="seg mini wl-mode">'
+  /* 页头 h1 已经是「成员负载」：面板里不再重复一次同名标题 */
+  return '<div class="manager-toolbar"><div class="manager-actions"><div class="seg mini wl-mode">'
     + '<button type="button" data-load-mode="person" aria-pressed="' + (viewMode === 'person') + '"' + (loading || !cache ? ' disabled' : '') + '>按人</button>'
     + '<button type="button" data-load-mode="week" aria-pressed="' + (viewMode === 'week') + '"' + (loading || !cache ? ' disabled' : '') + '>按周</button>'
     + '</div><button class="btn sm" type="button" data-load-export' + (loading || !cache ? ' disabled' : '') + '>' + icon("download", 13) + ' 导出当前范围 CSV</button>'
@@ -103965,6 +104026,6 @@ window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-19 17:55</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-19 19:00</span></div>
 </body>
 </html>

@@ -812,6 +812,7 @@ function renderProjectAccess(){
     box.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目", text:"先在项目中创建项目，再回来配置成员的可见范围。"
     });
+    syncAccessFade();
     return;
   }
   var grantMap = {};
@@ -843,7 +844,17 @@ function renderProjectAccess(){
       cells + '</tr>';
   }).join("");
   box.innerHTML = '<table class="manager-tbl access-matrix">' + head + '<tbody>' + body + '</tbody></table>';
+  syncAccessFade();
 }
+/* 矩阵宽于面板时右侧渐隐，提示还能横向滚动；滚到底收起 */
+function syncAccessFade(){
+  var shell = document.querySelector(".access-matrix-shell");
+  var box = $("projectAccessWrap");
+  if(!shell || !box) return;
+  shell.classList.toggle("is-more", box.scrollWidth - box.clientWidth - box.scrollLeft > 1);
+}
+$("projectAccessWrap").addEventListener("scroll", syncAccessFade);
+window.addEventListener("resize", syncAccessFade);
 $("projectAccessWrap").addEventListener("change", function(e){
   var sel = e.target.closest("[data-access-user]");
   if(!sel) return;

@@ -41,13 +41,15 @@ function setup(view){
     avatarHTML:()=>'',icon:()=>'',fullscreenButtonHTML:()=>'',loadBarHTML:n=>String(n),
     fmtHours:n=>String(n||0)+'m',fmtDate:v=>v||'—',fmtMinutesShort:n=>n,typeBadgeHTML:()=>'',
     taskStatusName:t=>t.boardColumn,caliberHTML:s=>s,downloadCsv:(name,rows)=>downloads.push({name,rows:plain(rows)}),
+    projectOptionsHTML:()=>'<option value="P2">项目二</option>',setNameById:()=>'',reqSetId:()=>'',
     registerHelp(){},initCaliberHelp(){},caliberMarkHTML:(key,warn)=>'<mark data-caliber-help="'+key+'">'+(warn?'!':'?')+'</mark>',
     statusBucket:t=>t.boardColumn,dueState:()=>({kind:'normal'}),openTaskTable(){},openTaskById(){},loadCategories(){},
     loadReqs:()=>Promise.resolve(),listPrefs:{viewMode:()=> 'board',load:()=>Promise.resolve(),setViewMode:()=>Promise.resolve()},
     DEFAULT_ROLE_TITLES:['后端开发','产品经理','全栈工程师'],loadMemberLabelOptions:()=>Promise.resolve({roleTitles:['后端开发','测试'],companyNames:['公司甲']})});
   const helpers=read('frontend/js/lib/member-labels.js');
   vm.runInContext(helpers.slice(helpers.indexOf('function uniqueTitles('),helpers.indexOf('export function loadMemberLabelOptions(')).replaceAll('export ',''),context);
-  const source=read('frontend/js/views/'+view+'.js').replace(/^import .*;\s*$/gm,'').replace(/^export \{[^\n]+\};\s*$/gm,'');
+  /* import 可能跨多行：从 import 起一直吃到首个分号，再剥掉具名导出 */
+  const source=read('frontend/js/views/'+view+'.js').replace(/^import\b[^;]*;\s*/gm,'').replace(/^export \{[^\n]+\};\s*$/gm,'');
   vm.runInContext(source,context);
   return {context,elements,requests,downloads,notices,layers,events,listeners,UI,API,source};
 }
@@ -66,7 +68,7 @@ async function rosterTests(){
   c.paintRoster();
   assert.match(h.elements.rosterBody.innerHTML,/空间默认 · 后端开发/);
   assert.match(h.elements.rosterBody.innerHTML,/本项目覆盖 · 旧自定义/);
-  assert.match(h.elements.rosterBody.innerHTML,/未设职能（空间与项目均未设置）/);
+  assert.match(h.elements.rosterBody.innerHTML,/未设岗位（空间与项目均未设置）/);
   assert.match(h.elements.rosterBody.innerHTML,/只读/);assert.match(h.elements.rosterBody.innerHTML,/项目授权/);
   assert.match(c.roleOptions('旧自定义'),/旧自定义/);assert.match(c.roleOptions(''),/全栈工程师/);assert.match(c.roleOptions(''),/产品经理/);
   assert.match(c.roleOptions(''),/__custom__/);

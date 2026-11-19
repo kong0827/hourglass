@@ -474,7 +474,7 @@ var MINE_COLS = [
   {k:"startDate", label:"开始", w:"88px"},
   {k:"progress", label:"进度", w:"96px"},
   {k:"work", label:"工时", w:"76px"},
-  {k:"project", label:"项目", w:"minmax(140px,1fr)"},
+  {k:"project", label:"项目 / 版本", w:"minmax(140px,1fr)"},
   {k:"updatedAt", label:"更新", w:"76px", align:"right"}
 ];
 var MINE_OPS_W = "76px";

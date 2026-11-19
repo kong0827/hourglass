@@ -6,8 +6,10 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "../..");
 const source = fs.readFileSync(path.join(root, "frontend/js/lib/text-diff.js"), "utf8")
+  .replace(/^import .*;\s*$/m, "")
   .replace(/export \{[\s\S]*?\};\s*$/m, "");
-const context = vm.createContext({ console });
+/* docLines 依赖在线文档快照解析；本单测只覆盖纯文本算法，给空实现即可 */
+const context = vm.createContext({ console, parseSnapshot: () => null, snapshotToText: () => "" });
 vm.runInContext(source, context, { filename: "text-diff.js" });
 
 const splitLines = context.splitLines;

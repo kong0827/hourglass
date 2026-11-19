@@ -241,7 +241,8 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .proj-act-primary{color:var(--primary-fg);background:var(--primary-soft);}
 .proj-act-primary:hover{color:var(--primary-fg);background:var(--primary-soft);border-color:var(--primary-border);}
 .proj-row-menu{min-width:176px;}
-.demand-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;}
+/* 行操作并排：换行会让两枚操作叠成两行、把行高撑到 87px，与其他行错位 */
+.demand-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:nowrap;white-space:nowrap;}
 /* 需求池列表行内编辑：读态就是普通文本/标签，箭头与底色悬停或聚焦才显形，点开才出现选项 */
 .dem-inline-menu{
   display:inline-flex;align-items:center;gap:var(--space-1);max-width:190px;
@@ -754,7 +755,17 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .user-space-row .nm{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .user-space-current{font-size:11px;font-weight:500;color:var(--text-3);}
 /* 项目可见范围矩阵 */
+.access-matrix-shell{position:relative;}
 .access-matrix-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r-lg);}
+/* 项目多时矩阵宽于面板：macOS 覆盖式滚动条静止时不显示，最后一列看起来像被裁切。
+   滚动条之外再给一层右缘渐隐，滚到底后由 JS 收起 */
+.access-matrix-wrap::-webkit-scrollbar{height:9px;}
+.access-matrix-wrap::-webkit-scrollbar-thumb{background:color-mix(in srgb, var(--text-3) 38%, transparent);border-radius:999px;}
+.access-matrix-wrap::-webkit-scrollbar-track{background:transparent;}
+.access-matrix-fade{position:absolute;top:1px;right:1px;bottom:10px;width:30px;pointer-events:none;
+  opacity:0;transition:opacity .15s;border-radius:0 var(--r-lg) var(--r-lg) 0;
+  background:linear-gradient(to right,transparent,var(--surface));}
+.access-matrix-shell.is-more .access-matrix-fade{opacity:1;}
 .access-matrix{min-width:640px;}
 .access-matrix th,.access-matrix td{white-space:nowrap;}
 .access-matrix .access-sticky{position:sticky;left:0;z-index:1;background:var(--surface);}
