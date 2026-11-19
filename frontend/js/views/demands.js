@@ -270,6 +270,43 @@ function demandWorkHash(status, stage){
   var keepStage = demStageKeys(status).indexOf(stage) >= 0;
   return "#/demands?status=" + encodeURIComponent(status) + (keepStage ? "&stage=" + encodeURIComponent(stage) : "");
 }
+/* 视图 = 同一批需求的展示形态（看板/列表/甘特），走地址栏而不是二级菜单：
+   ?view= 可分享，也避免「子导航高亮」和「分段选中」两套状态各说各话 */
+var DEM_MODES = ["board", "table", "gantt"];
+function readDemandViewParam(){
+  var raw = String(window.location.hash || "").replace(/^#\/?/, "");
+  var q = raw.indexOf("?");
+  var name = q >= 0 ? raw.substring(0, q) : raw;
+  if(name !== "demands" || q < 0) return null;
+  var view = new URLSearchParams(raw.substring(q + 1)).get("view");
+  return DEM_MODES.indexOf(view) !== -1 ? view : null;
+}
+function demandViewHash(mode){ return "#/demands?view=" + encodeURIComponent(mode); }
+/* 看板只有「全部 / 单个项目」，列表与甘特用多项目筛选。
+   以 demSmart.reqs 为准对齐看板聚焦：0 个或 2 个以上都回到全部，1 个则聚焦该项目。 */
+function syncBoardScopeFromReqs(){
+  rt.demandReqId = demSmart.reqs.length === 1 ? demSmart.reqs[0] : null;
+  return rt.demandReqId;
+}
+function switchDemandMode(m){
+  if(DEM_MODES.indexOf(m) === -1 || m === listPrefs.viewMode("demand-pool")) return;
+  if(m === "board" && !demWork.active){
+    syncBoardScopeFromReqs();
+    if(rt.reqsLoaded) syncReqSel();
+    if(demSmart.reqs.length > 1){
+      toast("看板一次展示一个项目，已回到「全部项目」；列表与甘特的项目筛选仍保留", "warn");
+    }
+  }
+  /* 先本机生效再后台保存：网络慢或保存失败时，视图切换不应卡住或回退 */
+  listPrefs.setViewModeLocal("demand-pool", m);
+  try{ history.replaceState(null, "", demandViewHash(m)); }
+  catch(e){ /* 受限环境保留原 hash，视图仍可切换 */ }
+  if(applyDemandCache(m)) loadDemands({ silent: true });
+  else loadDemands();
+  listPrefs.setViewMode("demand-pool", m).catch(function(ex){
+    toast("视图偏好未保存，本次切换仍生效：" + (ex.message || "网络异常"), "warn");
+  });
+}
 function openDemandWorkpage(status, stage){
   if(!COLS.some(function(c){ return c[0] === status; })) return;
   var fromWork = demWork.active;
@@ -298,8 +335,9 @@ function openDemandWorkpage(status, stage){
 function returnDemandBoard(){
   demWork.active = false;
   demWork.seq++;
-  try{ history.pushState(null, "", "#/demands"); }
-  catch(e){ window.location.hash = "#/demands"; }
+  var h = demandViewHash(listPrefs.viewMode("demand-pool"));
+  try{ history.pushState(null, "", h); }
+  catch(e){ window.location.hash = h; }
   loadDemands();
 }
 function loadDemands(opts){
@@ -409,6 +447,7 @@ function enterDemandsView(){
   if(flowMark && !flowMark.firstChild) flowMark.innerHTML = caliberMarkHTML("demands.flow", false, "查看需求状态与流转说明");
   initDemSmartBar();
   restoreDemState();
+  syncBoardScopeFromReqs();
   readDemandRoute();
   /* 项目页「查看需求池」携带的项目定位：恢复本地视图状态后应用，避免被快照覆盖 */
   if(pendingFocusReq){
@@ -417,6 +456,8 @@ function enterDemandsView(){
     saveDemState();
     pendingFocusReq = null;
   }
+  /* ?view= 只覆盖本次会话，在 listPrefs.load 之后应用，免得被服务端偏好盖回去 */
+  var routeMode = readDemandViewParam();
   syncDemControls();
   /* 浏览器可能无视 autocomplete，把上次搜索词直接写回输入框；以 demSmart.q 为准清理 */
   [0, 300, 1000, 2000, 4000].forEach(function(ms){ setTimeout(reconcileDemSearchInputs, ms); });
@@ -433,6 +474,7 @@ function enterDemandsView(){
     if(JSON.stringify(rt.categoriesCache || []) !== catSig) render();
   });
   listPrefs.load("demand-pool").then(function(){
+    if(routeMode) listPrefs.setViewModeLocal("demand-pool", routeMode);
     if(rt.reqsLoaded){
       syncReqSel();
       loadDemands();
@@ -5847,6 +5889,9 @@ if(demandReq) demandReq.addEventListener("change", function(){
   var nextReq = demandReq.value || null;
   if(nextReq !== rt.demandReqId) demSmart.cats = [];
   rt.demandReqId = nextReq;
+  /* 看板选中的项目同步进列表/甘特的项目筛选，切过去时不丢范围；也随本地快照恢复 */
+  demSmart.reqs = nextReq ? [nextReq] : [];
+  saveDemState();
   loadDemands();
 });
 if($("btnDemandNew")) $("btnDemandNew").addEventListener("click", function(){
@@ -5925,13 +5970,7 @@ if(btnDoPlan) btnDoPlan.addEventListener("click", doPlan);
 if($("demandModeSeg")) $("demandModeSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-dem-mode]");
   if(!b) return;
-  var m = b.dataset.demMode;
-  if(m === listPrefs.viewMode("demand-pool")) return;
-  listPrefs.setViewMode("demand-pool", m).then(function(){
-    /* 有同一筛选下的上次结果就直接渲染，后台再静默补差，不闪骨架 */
-    if(applyDemandCache(m)) loadDemands({ silent: true });
-    else loadDemands();
-  }).catch(function(ex){ toast(ex.message || "切换失败", "bad"); });
+  switchDemandMode(b.dataset.demMode);
 });
 /* 甘特「?」：解释七个阶段的口径、缺口与时间范围；工具条与图例两个入口共用 */
 var demandGanttHelpPop = null;

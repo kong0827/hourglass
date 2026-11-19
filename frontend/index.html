@@ -605,7 +605,6 @@
       <section class="view" id="view-mine" aria-label="我的工作">
         <div class="view-page wide">
           <div class="page-toolbar mine-toolbar">
-            <span class="sv-seg-label">范围</span>
             <div class="seg mini mine-mode" id="mineMode" role="group" aria-label="分派给我 / 待我测试 / 团队">
               <button type="button" data-mine-mode="mine" aria-pressed="true">分派给我</button>
               <button type="button" data-mine-mode="test" aria-pressed="false">待我测试</button>
@@ -983,8 +982,8 @@
       <section class="view" id="view-projects" aria-label="项目">
         <div class="proj-layout">
           <div>
-            <div class="panel-head proj-list-head" style="margin-bottom:12px">
-              <h3>项目列表 <span class="proj-list-count" id="reqCount"></span></h3>
+            <div class="panel-head proj-list-head">
+              <span class="proj-list-count" id="reqCount"></span>
               <div class="project-toolbar">
                 <span class="seg mini" role="group" aria-label="视图切换">
                   <button type="button" data-project-mode="card" aria-pressed="true">卡片</button>
@@ -997,7 +996,7 @@
                 </button>
                 <span class="tb-divider" aria-hidden="true"></span>
                 <button class="btn sm" type="button" id="btnProjectSetNew">新建项目集</button>
-                <button class="btn primary sm" type="button" id="btnReqNew">新建项目</button>
+                <button class="btn primary sm is-dup-action" type="button" id="btnReqNew">新建项目</button>
               </div>
             </div>
             <div class="proj-banner" id="projNoRelBanner" hidden>
@@ -1229,18 +1228,19 @@
             <span class="toolbar-meta" id="demandsMeta"></span>
             <span id="demandFlowHelp"></span>
             <span class="toolbar-right">
-              <div class="seg mini" id="demandModeSeg" role="group" aria-label="需求池展示形式">
+              <span class="sv-seg-label">视图</span>
+              <div class="seg" id="demandModeSeg" role="group" aria-label="需求池视图">
                 <button type="button" data-dem-mode="board" aria-pressed="true">看板</button>
                 <button type="button" data-dem-mode="table" aria-pressed="false">列表</button>
                 <button type="button" data-dem-mode="gantt" aria-pressed="false">甘特</button>
               </div>
-              <button type="button" class="label-help" id="demandGanttHelp" aria-label="查看需求池甘特的计算逻辑" title="甘特怎么画" hidden></button>
-              <button class="btn sm" type="button" id="btnDemandColumns" hidden>显示字段</button>
               <select id="demandReq" class="mini-select" aria-label="选择项目"></select>
+              <button class="btn sm" type="button" id="btnDemandColumns" hidden>显示字段</button>
+              <button type="button" class="label-help" id="demandGanttHelp" aria-label="查看需求池甘特的计算逻辑" title="甘特怎么画" hidden></button>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
-              <button class="btn sm primary" type="button" id="btnDemandNew">+ 提需求</button>
+              <button class="btn sm primary is-dup-action" type="button" id="btnDemandNew">+ 提需求</button>
             </span>
           </div>
           <div class="gantt-tools demg-tools" id="demandGanttBar" hidden>
@@ -1843,7 +1843,7 @@
                 <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
                 </button>
-                <button class="btn sm primary" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新建用例</button>
+                <button class="btn sm primary is-dup-action" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新建用例</button>
               </span>
             </span>
           </div>

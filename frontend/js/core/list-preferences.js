@@ -107,6 +107,14 @@ function setViewMode(viewKey, mode){
     return save(viewKey, { viewMode: mode, columns: current.columns });
   });
 }
+/* URL 带来的临时视图（如需求池 ?view=gantt）：只改本次会话，不覆盖服务端偏好。
+   必须在 load() 之后再调用，否则会被服务端返回值覆盖。 */
+function setViewModeLocal(viewKey, mode){
+  var def = DEFS[viewKey];
+  if(!def || def.modes.indexOf(mode) === -1) return false;
+  stateFor(viewKey).viewMode = mode;
+  return true;
+}
 function openColumnSettings(viewKey, onChange){
   var key = wsKey(viewKey);
   if(pending[key]){
@@ -183,4 +191,4 @@ function openColumnSettings(viewKey, onChange){
   UI.openModal(layer);
 }
 
-export { columns, labels, load, openColumnSettings, setViewMode, viewMode };
+export { columns, labels, load, openColumnSettings, setViewMode, setViewModeLocal, viewMode };

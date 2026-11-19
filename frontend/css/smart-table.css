@@ -1,3 +1,13 @@
+/* 列表：筛选栏与智能表头合成一张两行卡片（与「我的工作」同构） */
+body[data-view="list"] #view-list{padding-top:0;}
+body[data-view="list"] .filterbar{border-radius:11px 11px 0 0;border-bottom-color:transparent;}
+#view-list .smart-list-bar{
+  margin-top:0;border-radius:0 0 11px 11px;border-top:1px solid var(--border);
+}
+/* 需求池列表模式：接在页面工具条下方，同属一张卡片 */
+#view-demands .smart-list-bar{
+  margin-top:0;border-radius:0 0 11px 11px;border-top:1px solid var(--border);
+}
 /* 列表智能表格：视图、分组与排序（任务列表 + 需求池列表共用） */
 #view-list .smart-list-bar,
 #view-demands .smart-list-bar{
@@ -6,14 +16,14 @@
 }
 #view-list .smart-view-tabs,
 #view-demands .smart-view-tabs{
-  display:flex;align-items:center;gap:var(--space-1);min-height:44px;padding:6px 8px;
+  display:flex;align-items:center;gap:var(--space-1);min-height:36px;padding:3px 8px;
   overflow-x:auto;border-bottom:1px solid var(--border);
 }
 #view-demands .smart-view-tabs .smart-view-save{margin-left:auto;flex:0 0 auto;}
 #view-list .smart-view-tab,
 #view-demands .smart-view-tab{
-  flex:0 0 auto;min-height:30px;padding:5px 11px;border:0;border-radius:var(--r-md);
-  background:transparent;color:var(--text-2);font:inherit;font-size:13px;cursor:pointer;
+  flex:0 0 auto;min-height:28px;padding:4px 9px;border:0;border-radius:6px;
+  background:transparent;color:var(--text-2);font:inherit;font-size:12.5px;cursor:pointer;
   white-space:nowrap;transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
 }
 #view-list .smart-view-tab:hover,
@@ -38,7 +48,7 @@
 [data-layout="mobile"] #view-list .smart-view-meta{display:none;}
 #view-list .smart-view-tools,
 #view-demands .smart-view-tools{
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:var(--space-2) 10px;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px;
 }
 /* 工具行分段标签：显示（分组/排序/字段）与操作（导出/保存）各成一簇 */
 #view-list .sv-seg-label,
@@ -90,17 +100,31 @@
 .pivot-tbl tbody tr:last-child{background:var(--surface-sunken);}
 /* 需求池列表：搜索框 + 表格内分组行 */
 #view-demands .dem-search{min-width:150px;max-width:200px;padding:5px 10px;font-size:13px;}
+/* 需求池：页内工具条与看板/列表工具条合成一张两行卡片（与「我的工作」同构） */
+#view-demands .page-toolbar{
+  min-height:48px;margin:0;padding:0 9px;gap:8px;
+  background:var(--surface);border:1px solid var(--border);border-bottom-color:transparent;
+  border-radius:11px 11px 0 0;
+}
+#view-demands .page-toolbar .toolbar-meta{font-size:11.5px;color:var(--text-3);}
 /* 需求池看板：紧凑搜索/筛选条，范围固定为当前项目 */
 #view-demands .dem-board-bar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  margin-bottom:10px;padding:var(--space-2) 10px;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  margin:0 0 10px;padding:6px 9px;min-height:44px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:0 0 11px 11px;
 }
 #view-demands .demb-search{
   flex:1 1 260px;min-width:180px;max-width:420px;
   padding:5px 10px;font-size:13px;
 }
 #view-demands .demb-clear{min-height:28px;}
+/* 需求池甘特：工具条与页内工具条同属一张卡片 */
+#view-demands .demg-tools{
+  margin:0 0 10px;padding:6px 9px;gap:8px 12px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:0 0 11px 11px;
+}
 /* 阶段筛选在工具条里作用于已排期/已完成两列，不再挤在列头 */
 #view-demands .dem-board-bar .demb-stage-filter{margin-left:0;flex:0 0 auto;}
 #view-demands .demb-spacer{flex:1 1 auto;}

@@ -728,8 +728,20 @@
 #view-mine.is-team #btnMineFold,
 #view-mine.is-team .mine-stats{display:none;}
 
+/* 我的工作工具条：与上方筛选卡连成一张两行卡片（原型 toolbar + 视图工具条） */
+body[data-view="mine"] #view-mine{padding-top:0;}
+body[data-view="mine"]{--list-row-h:48px;}
+body[data-view="mine"] .filterbar{border-radius:11px 11px 0 0;border-bottom-color:transparent;}
+.mine-toolbar{
+  margin:0;padding:0 9px;min-height:42px;gap:8px;
+  background:var(--surface);border:1px solid var(--border);border-top:1px solid var(--border);
+  border-radius:0 0 11px 11px;
+}
+.mine-toolbar .sv-seg-label{font-size:10.5px;font-weight:600;color:#98A2B3;}
+.mine-toolbar .toolbar-meta{font-size:11.5px;color:var(--text-3);}
+
 /* 统计胶囊：沿用缺陷列表 */
-.mine-stats{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 2px;padding:0 2px;font-size:12px;color:var(--text-3);}
+.mine-stats{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 2px;padding:0 2px;font-size:11.5px;color:var(--text-3);}
 .mine-stats:empty{display:none;}
 /* MINE-2/MINE-3：统计只在工具栏出现一次，0 值保持中性，不描边不上色 */
 .mine-stat{
@@ -809,13 +821,13 @@
 
 .mine-groups{padding-bottom:24px;}
 /* 单卡承载全部分组：表头只出现一次，分组用内嵌可折叠行区分 */
-/* 标准档：标题 18.6 + 间距 4 + 副行 18 + 上下 7 ≈ 55px，由 --list-row-h 兜到 56px，与另两处列表形态同一行高 */
+/* 标准档：标题 17.5 + 间距 3 + 副行 16 + 上下 6 ≈ 49px（原型表格行 44，两行结构略高） */
 .mine-list{
-  --mine-head-h:33px;--mine-grp-h:34px;--mine-sub-h:28px;
+  --mine-head-h:34px;--mine-grp-h:30px;--mine-sub-h:26px;
   --mine-cols:minmax(300px,2fr) 64px 128px 96px 96px 76px 76px;
-  --row-pad:7px;--title-fs:12.8px;--title-lh:1.45;--sub-lh:18px;--title-gap:var(--space-1);--sub-chip-h:18px;--sub-chip-px:8px;
+  --row-pad:6px;--title-fs:12.5px;--title-lh:1.4;--sub-lh:16px;--title-gap:3px;--sub-chip-h:16px;--sub-chip-px:6px;
 }
-body[data-list-density="relaxed"] .mine-list{--title-fs:13.5px;--title-lh:1.5;--sub-lh:20px;--title-gap:6px;--sub-chip-h:20px;}
+body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--sub-lh:18px;--title-gap:5px;--sub-chip-h:18px;}
 /* 吸顶表头/分组行以视图滚动容器为参照：列表本身不再单独滚动，否则 sticky 不生效 */
 [data-layout="desktop"] .mine-list,
 [data-layout="tablet"] .mine-list{overflow:visible;}

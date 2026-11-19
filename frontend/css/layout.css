@@ -203,6 +203,8 @@ body[data-view="messages"] #btnNew{display:none !important;}
 /* 查看者全局只读：新建入口不展示（抽屉入口另有拦截提示） */
 body[data-ws-role="viewer"] #btnNew,
 body[data-ws-role="viewer"] #ganttNew{display:none !important;}
+/* 页内重复的创建主按钮：统一由页头「新建」承接，保留节点供脚本绑定 */
+.is-dup-action{display:none !important;}
 
 /* ===================== 子导航：页头右侧的分段切换（原型 subtabs） ===================== */
 .subnav{
