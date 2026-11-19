@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 项目集配色原型（明亮版）</title>
+<style>
+/* ==========================================================================
+   项目集配色原型 · 2026-11-19
+   目的：验证「项目列表」从统一浅蓝灰分组带，改为按项目集身份色识别。
+   只演示展示层，不改状态色、进度色与统计口径。
+   ========================================================================== */
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F6F8FB; --surface-3:#EAEFF7;
+  --border:#E4E9F2; --border-strong:#CBD5E6;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF;
+  --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318;
+  --head:#F8FAFD; --head-border:#E4E9F2;
+  --current-band:#F4F8FE; --current-band-hover:#E9F1FE;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 10px 24px -10px rgba(16,24,40,.16);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.22);
+  --sidebar-w:216px; --topbar-h:56px;
+  --tint:3%;
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0B1220; --surface:#141C2A; --surface-2:#1A2435; --surface-3:#223049;
+  --border:#26334A; --border-strong:#3A4A66;
+  --text:#EDF2FA; --text-2:#B6C2D4; --text-3:#8494AC;
+  --primary:#5B8CFF; --primary-hover:#7DA5FF; --primary-soft:#172A4D;
+  --primary-border:#2F4C82; --primary-fg:#9DBBFF;
+  --info:#53B1FD; --info-soft:#102335; --info-border:#234866; --info-fg:#84CAFF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-fg:#FEC84B;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-fg:#FDA29B;
+  --head:#182335; --head-border:#2D3D58;
+  --current-band:#182A44; --current-band-hover:#1D3354;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.35);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:0 10px 24px -10px rgba(0,0,0,.5);
+  --shadow-xl:0 24px 48px -12px rgba(0,0,0,.65);
+}
+
+/* ---------- 8 个项目集身份色：整体用淡色，避免"深色彩+高透明"发灰 ---------- */
+[data-color="1"]{--set:#7A85D2; --set-soft:#F4F6FE;}
+[data-color="2"]{--set:#54A096; --set-soft:#F1F8F6;}
+[data-color="3"]{--set:#9780D6; --set-soft:#F6F3FE;}
+[data-color="4"]{--set:#5B97B7; --set-soft:#F0F7FA;}
+[data-color="5"]{--set:#BC8849; --set-soft:#FAF4EC;}
+[data-color="6"]{--set:#C2749C; --set-soft:#FCF2F7;}
+[data-color="7"]{--set:#8F9B55; --set-soft:#F5F7EE;}
+[data-color="8"]{--set:#8793A4; --set-soft:#F3F5F8;}
+/* 深色主题用同色相提亮档，保证图标与色条在深底上可辨 */
+html[data-theme="dark"] [data-color="1"]{--set:#98A4FF; --set-soft:#2A3147;}
+html[data-theme="dark"] [data-color="2"]{--set:#4FD1C5; --set-soft:#1E383E;}
+html[data-theme="dark"] [data-color="3"]{--set:#BCA9FF; --set-soft:#303247;}
+html[data-theme="dark"] [data-color="4"]{--set:#63C6E6; --set-soft:#213643;}
+html[data-theme="dark"] [data-color="5"]{--set:#F5B35A; --set-soft:#39332D;}
+html[data-theme="dark"] [data-color="6"]{--set:#F27AB8; --set-soft:#382A3C;}
+html[data-theme="dark"] [data-color="7"]{--set:#C9D96E; --set-soft:#323930;}
+html[data-theme="dark"] [data-color="8"]{--set:#A9B4C2; --set-soft:#2D333D;}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:var(--font-sans);font-size:13px;color:var(--text);background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select{font:inherit;color:inherit;}
+button{border:0;background:none;cursor:pointer;}
+input,select{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);height:30px;padding:0 9px;font-size:12.5px;}
+input:focus,select:focus{outline:2px solid var(--primary);outline-offset:1px;border-color:var(--primary);}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:6px;}
+.app{display:flex;min-height:100vh;}
+
+/* ---------- 侧栏 ---------- */
+.sidebar{width:var(--sidebar-w);flex:0 0 auto;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);position:sticky;top:0;height:100vh;}
+.side-brand{display:flex;align-items:center;gap:10px;height:52px;padding:0 16px;}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--primary);display:grid;place-items:center;color:#fff;flex:0 0 auto;}
+.side-brand-name{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.side-nav{flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column;gap:1px;padding:10px 12px 12px;}
+.nav-sec{padding:10px 10px 4px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-3);}
+.nav-item{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--r-sm);color:var(--text-2);font-size:13px;font-weight:550;width:100%;text-align:left;}
+.nav-item svg{flex:0 0 auto;opacity:.8;}
+.nav-item:hover{background:var(--surface-2);color:var(--text);}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650;}
+.side-foot{border-top:1px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:9px;}
+.avatar{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--primary);flex:0 0 auto;}
+.side-user-n{font-size:12.5px;font-weight:600;line-height:1.25;}
+.side-user-r{font-size:11px;color:var(--text-3);}
+
+/* ---------- 顶栏 / 内容 ---------- */
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;}
+.topbar{height:var(--topbar-h);display:flex;align-items:center;gap:14px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border);}
+.tb-title{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.tb-sub{font-size:12px;color:var(--text-3);margin-top:1px;}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.content{flex:1 1 auto;padding:18px 24px 56px;display:flex;flex-direction:column;gap:14px;min-width:0;}
+.icon-btn{width:28px;height:28px;border-radius:var(--r-xs);display:grid;place-items:center;color:var(--text-3);border:1px solid transparent;background:transparent;}
+.icon-btn:hover{background:var(--surface-2);color:var(--text);border-color:var(--border);}
+.icon-btn.bordered{border-color:var(--border);background:var(--surface);}
+.icon-btn.bordered:hover{border-color:var(--border-strong);}
+.icon-btn.danger:hover{color:var(--danger-fg);background:var(--danger-soft);}
+.btn{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text-2);white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{background:var(--surface-2);color:var(--text);border-color:var(--border-strong);}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+
+/* ---------- 原型控制条 ---------- */
+.proto-bar{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 14px;
+  border:1px dashed var(--primary-border);border-radius:var(--r-lg);background:var(--primary-soft);
+}
+.proto-id{display:inline-flex;align-items:center;gap:8px;min-width:0;}
+.proto-pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill);background:var(--surface);color:var(--primary-fg);border:1px solid var(--primary-border);white-space:nowrap;}
+.proto-title{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;}
+.proto-note{font-size:12px;line-height:1.55;color:var(--text-2);flex:1 1 300px;min-width:220px;}
+.proto-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.seg{display:inline-flex;align-items:center;padding:3px;background:var(--surface-2);border-radius:var(--r-sm);gap:2px;}
+.seg button{height:26px;padding:0 11px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.seg button:hover{color:var(--text);}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.seg button[disabled]{opacity:.45;cursor:not-allowed;}
+.tint-ctrl{display:none;align-items:center;gap:6px;font-size:12px;color:var(--text-2);}
+body[data-scheme="a"] .tint-ctrl{display:inline-flex;}
+.legend{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:0 2px;}
+/* 现状页签回到旧版中性灰，便于和 A / B 直接对比 */
+body[data-scheme="current"]{--bg:#F7F8FA;--head:#F2F4F7;--head-border:#D7DCE4;}
+html[data-theme="dark"] body[data-scheme="current"]{--bg:#0D1219;--head:#1A222D;--head-border:#33414F;}
+.legend-k{font-size:11.5px;font-weight:600;color:var(--text-3);white-space:nowrap;}
+.lg-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:12px;font-weight:600;color:var(--text-2);}
+.lg-chip:hover{border-color:var(--set);color:var(--text);}
+.lg-chip i{width:9px;height:9px;border-radius:50%;background:var(--set);flex:0 0 auto;box-shadow:inset 0 0 0 1px rgba(16,24,40,.08);}
+body[data-scheme="current"] .lg-chip i{background:var(--border-strong);}
+body[data-scheme="current"] .acts [data-palette],
+body[data-scheme="current"] .gcard-head [data-palette]{display:none;}
+
+/* ---------- 页头 ---------- */
+.page-head{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-top:2px;}
+.page-head .titles{min-width:0;flex:1 1 320px;}
+.page-title{display:flex;align-items:center;gap:9px;font-size:20px;font-weight:700;letter-spacing:-.01em;}
+.count-pill{min-width:22px;height:20px;padding:0 7px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--border);display:inline-grid;place-items:center;font-size:11.5px;font-weight:650;color:var(--text-2);}
+.page-sub{margin-top:4px;font-size:12.5px;color:var(--text-3);line-height:1.5;}
+.page-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+
+/* ---------- 表格 ---------- */
+.table-card{overflow:hidden;}
+.table-scroll{overflow:auto;}
+.table{min-width:1160px;}
+.row{
+  display:grid;
+  grid-template-columns:minmax(300px,1.55fr) 92px 100px 118px 78px 78px 148px 74px 118px 96px;
+  gap:12px;align-items:center;padding:0 16px;
+}
+.thead{height:38px;background:var(--head);border-bottom:1px solid var(--head-border);font-size:12px;font-weight:650;color:var(--text-2);}
+.thead .th{display:inline-flex;align-items:center;gap:4px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.thead .th:hover{color:var(--text);}
+.group{position:relative;}
+.set-row{
+  min-height:63px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-2);
+  transition:background var(--dur,160ms) ease;
+}
+.project-row{min-height:52px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-2);background:var(--surface);}
+.project-row:last-child{border-bottom:1px solid var(--border);}
+.set-row:hover .acts{opacity:1;}
+.group:last-child .project-row:last-child{border-bottom:0;}
+
+/* 现状：所有集共用一条浅蓝灰底 + 同一条主色左条 */
+body[data-scheme="current"] .set-row{background:var(--current-band);box-shadow:inset 3px 0 0 0 var(--primary);}
+body[data-scheme="current"] .set-row:hover{background:var(--current-band-hover);}
+/* 方案 A：直接用淡色，不再用深色低透明度；集行自左向右渐隐回白 */
+body[data-scheme="a"] .set-row,
+body[data-scheme="a"] .gcard-head{--wash:var(--set-soft);}
+body[data-scheme="a"][data-tint="2"] .set-row,
+body[data-scheme="a"][data-tint="2"] .gcard-head{--wash:color-mix(in srgb, var(--set-soft) 62%, var(--surface));}
+body[data-scheme="a"][data-tint="5"] .set-row,
+body[data-scheme="a"][data-tint="5"] .gcard-head{--wash:color-mix(in srgb, var(--set-soft) 88%, var(--set) 12%);}
+body[data-scheme="a"] .set-row{
+  background:linear-gradient(90deg, var(--wash) 0%, var(--wash) 26%, var(--surface) 96%);
+  box-shadow:inset 3px 0 0 0 var(--set);
+}
+body[data-scheme="a"] .set-row:hover{
+  background:linear-gradient(90deg, color-mix(in srgb, var(--wash) 84%, var(--set) 16%) 0%, var(--wash) 44%, var(--surface) 100%);
+}
+/* 深色底需要更高一点浓度才看得出同一层雾 */
+html[data-theme="dark"] body[data-scheme="a"] .set-row,
+html[data-theme="dark"] body[data-scheme="a"] .gcard-head{--wash:color-mix(in srgb, var(--set) 10%, var(--surface));}
+html[data-theme="dark"] body[data-scheme="a"][data-tint="2"] .set-row,
+html[data-theme="dark"] body[data-scheme="a"][data-tint="2"] .gcard-head{--wash:color-mix(in srgb, var(--set) 7%, var(--surface));}
+html[data-theme="dark"] body[data-scheme="a"][data-tint="5"] .set-row,
+html[data-theme="dark"] body[data-scheme="a"][data-tint="5"] .gcard-head{--wash:color-mix(in srgb, var(--set) 14%, var(--surface));}
+html[data-theme="dark"] body[data-scheme="a"] .set-row{
+  background:linear-gradient(90deg, var(--wash) 0%, var(--wash) 26%, var(--surface) 96%);
+}
+html[data-theme="dark"] body[data-scheme="a"] .set-row:hover{
+  background:linear-gradient(90deg, color-mix(in srgb, var(--wash) 80%, var(--set) 20%) 0%, var(--wash) 44%, var(--surface) 100%);
+}
+/* 方案 B：白底 + 3px 身份色左条 + 色标图标，最克制 */
+body[data-scheme="b"] .set-row{background:var(--surface);box-shadow:inset 3px 0 0 0 var(--set);}
+body[data-scheme="b"] .set-row:hover{background:var(--surface-2);}
+
+.name-cell{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.name-line{display:flex;align-items:center;gap:7px;min-width:0;}
+.chev{width:22px;height:22px;display:grid;place-items:center;color:var(--text-3);border-radius:5px;flex:0 0 auto;}
+.chev:hover{background:rgba(16,24,40,.06);color:var(--text);}
+html[data-theme="dark"] .chev:hover{background:rgba(255,255,255,.08);}
+.chev svg{transition:transform 150ms ease;transform:rotate(90deg);}
+.group.collapsed .chev svg{transform:rotate(0deg);}
+.set-ico{width:20px;height:20px;display:grid;place-items:center;color:var(--set);flex:0 0 auto;}
+body[data-scheme="current"] .set-ico{color:var(--text-3);}
+body[data-scheme="b"] .set-ico{
+  width:26px;height:26px;border-radius:7px;
+  background:color-mix(in srgb, var(--set) 14%, var(--surface));
+}
+.set-name{font-size:16px;font-weight:700;letter-spacing:-.015em;color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.set-meta{padding-left:29px;font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+body[data-scheme="b"] .set-meta{padding-left:35px;}
+body[data-scheme="current"] .set-name{font-size:16px;}
+
+.project-row .name-cell{padding-left:40px;position:relative;}
+.project-row .name-cell::before{
+  content:"";position:absolute;left:22px;top:-1px;bottom:-1px;width:1px;
+  background:var(--border);
+  background:color-mix(in srgb, var(--set) 18%, var(--border));
+}
+.project-row .name-cell::after{
+  content:"";position:absolute;left:22px;top:50%;width:11px;height:1px;
+  background:var(--border);
+  background:color-mix(in srgb, var(--set) 18%, var(--border));
+}
+body[data-scheme="current"] .project-row .name-cell::before,
+body[data-scheme="current"] .project-row .name-cell::after{background:var(--border);}
+.project-name{font-size:13.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.project-name:hover{color:var(--primary-fg);}
+.project-name .container-tag{margin-left:6px;}
+.project-sub{font-size:11.5px;color:var(--text-3);}
+
+.cell{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.num{font-variant-numeric:tabular-nums;color:var(--text-2);}
+.date{font-variant-numeric:tabular-nums;color:var(--text-2);}
+.dash{color:var(--text-3);}
+.owner{color:var(--text-2);}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:var(--r-pill);font-size:11.5px;font-weight:650;white-space:nowrap;background:var(--info-soft);color:var(--info-fg);border:1px solid transparent;}
+.tag.success{background:var(--success-soft);color:var(--success-fg);}
+.tag.ghost{background:var(--surface-2);color:var(--text-3);}
+.container-tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;font-size:10.5px;font-weight:600;background:var(--surface-2);color:var(--text-3);border:1px solid var(--border);vertical-align:1px;}
+
+.prog{display:flex;align-items:center;gap:7px;min-width:0;}
+.prog .bar{width:92px;height:6px;border-radius:var(--r-pill);background:var(--surface-3);overflow:hidden;flex:0 0 auto;}
+.prog .bar i{display:block;height:100%;border-radius:var(--r-pill);background:var(--primary);}
+.prog .pv{font-size:12px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;min-width:32px;text-align:right;}
+.prog.mini .bar{width:78px;height:5px;}
+
+.acts{display:flex;align-items:center;justify-content:flex-end;gap:1px;opacity:.78;transition:opacity 150ms ease;}
+.set-row:hover .acts{opacity:1;}
+.acts .icon-btn[data-palette]:hover{color:var(--set);border-color:var(--set);background:var(--set-soft);}
+
+/* ---------- 卡片视图 ---------- */
+.cards{display:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+body[data-view="card"] .table-card{display:none;}
+body[data-view="card"] .cards{display:grid;}
+.gcard{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--shadow-xs);overflow:hidden;display:flex;flex-direction:column;min-width:0;}
+.gcard-head{
+  display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--border);min-height:48px;
+  background:var(--surface);
+}
+body[data-scheme="a"] .gcard-head{
+  background:linear-gradient(90deg, var(--wash) 0%, var(--wash) 40%, var(--surface) 100%);
+  box-shadow:inset 3px 0 0 0 var(--set);
+}
+body[data-scheme="b"] .gcard-head{background:var(--surface);box-shadow:inset 3px 0 0 0 var(--set);}
+body[data-scheme="current"] .gcard-head{background:var(--current-band);box-shadow:inset 3px 0 0 0 var(--primary);}
+.gcard-title{font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.gcard-meta{font-size:11.5px;color:var(--text-3);white-space:nowrap;}
+.gcard-body{padding:2px 13px 6px;flex:1 1 auto;}
+.gcard.collapsed .gcard-body, .gcard.collapsed .gcard-foot{display:none;}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) 66px 122px 38px;gap:10px;align-items:center;min-height:38px;border-bottom:1px solid var(--border);font-size:12.5px;}
+.prow:last-child{border-bottom:0;}
+.prow .pname{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prow .powner{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prow .pdoc{font-size:11.5px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums;}
+.gcard-foot{display:flex;align-items:center;gap:10px;padding:8px 13px;border-top:1px solid var(--border);background:var(--surface-2);font-size:11.5px;color:var(--text-3);}
+.gcard-foot b{color:var(--text-2);font-weight:650;font-variant-numeric:tabular-nums;}
+
+/* ---------- 调色浮层 ---------- */
+.palette{
+  position:fixed;z-index:80;display:none;width:196px;padding:10px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-xl);
+}
+.palette.show{display:block;}
+.palette-t{font-size:11px;font-weight:650;color:var(--text-3);margin-bottom:8px;letter-spacing:.02em;}
+.palette-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.palette-grid button{width:32px;height:32px;border-radius:8px;background:var(--pc);border:2px solid transparent;position:relative;display:grid;place-items:center;color:#101828;}
+.palette-grid button:hover{transform:scale(1.06);}
+html[data-theme="dark"] .palette-grid button{color:#0B1220;}
+.palette-grid button.on{border-color:var(--text);}
+.palette-grid button svg{opacity:0;}
+.palette-grid button.on svg{opacity:1;}
+.palette-hint{margin-top:8px;font-size:11px;color:var(--text-3);line-height:1.45;}
+
+/* ---------- 对照弹窗 ---------- */
+.modal{position:fixed;inset:0;z-index:70;display:none;place-items:center;padding:20px;background:rgba(16,24,40,.42);}
+.modal.show{display:grid;}
+.modal-card{width:min(880px,94vw);max-height:88vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-xl);}
+.modal-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;}
+.modal-title{font-size:16px;font-weight:700;}
+.modal-sub{font-size:12px;color:var(--text-3);margin-top:3px;line-height:1.5;}
+.modal-body{padding:14px 18px 18px;}
+.compare{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;}
+.compare th{background:var(--surface-2);color:var(--text-2);font-size:11.5px;font-weight:650;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);}
+.compare td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.55;}
+.compare tr:last-child td{border-bottom:0;}
+.compare .now{background:#FFF7F6;}
+.compare .next{background:#F4FBF7;}
+html[data-theme="dark"] .compare .now{background:#2A1B1B;}
+html[data-theme="dark"] .compare .next{background:#12261C;}
+.compare b{font-weight:650;color:var(--text);}
+.sw{display:inline-block;width:13px;height:13px;border-radius:4px;vertical-align:-2px;margin-right:5px;box-shadow:inset 0 0 0 1px rgba(16,24,40,.08);}
+.verdict{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-pill);font-size:10.5px;font-weight:700;white-space:nowrap;}
+.verdict.warn{background:var(--warning-soft);color:var(--warning-fg);}
+.verdict.good{background:var(--success-soft);color:var(--success-fg);}
+.verdict.keep{background:var(--surface-2);color:var(--text-3);}
+.note-box{margin-top:14px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-2);font-size:12px;line-height:1.7;color:var(--text-2);}
+.note-box b{color:var(--text);}
+.note-box ul{margin:6px 0 0 18px;}
+.modal-foot{display:flex;justify-content:flex-end;gap:9px;padding:12px 18px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface);}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,14px);background:var(--text);color:var(--surface);font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:var(--r-md);box-shadow:var(--shadow-xl);opacity:0;pointer-events:none;transition:opacity 180ms ease,transform 180ms ease;z-index:90;max-width:80vw;}
+.toast.show{opacity:1;transform:translate(-50%,0);}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+@media (max-width:1180px){
+  .cards{grid-template-columns:1fr;}
+}
+@media (max-width:900px){
+  .sidebar{display:none;}
+  .content{padding:12px 14px 40px;}
+  .topbar{padding:0 14px;}
+  .proto-note{flex-basis:100%;}
+  .page-tools{justify-content:flex-start;}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition-duration:.001ms !important;animation-duration:.001ms !important;}
+}
+</style>
+</head>
+<body data-scheme="b" data-view="table">
+<div class="app">
+  <!-- ===== 侧栏（仅提供页面语境） ===== -->
+  <aside class="sidebar" aria-label="主导航">
+    <div class="side-brand">
+      <span class="brand-mark"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 2h12M6 22h12M7 2v4l5 6 5-6V2M7 22v-4l5-6 5 6v4"/></svg></span>
+      <span class="side-brand-name">沙漏</span>
+    </div>
+    <nav class="side-nav">
+      <div class="nav-sec">工作</div>
+      <button class="nav-item" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>工作台</button>
+      <button class="nav-item" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>需求池</button>
+      <button class="nav-item" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>工作项</button>
+      <button class="nav-item" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>我的</button>
+      <div class="nav-sec">规划</div>
+      <button class="nav-item on" type="button" aria-current="page"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l7-5 7 5v13"/><path d="M9 21v-4h6v4"/></svg>项目</button>
+      <button class="nav-item" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg>版本</button>
+      <button class="nav-item" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20l-5-2V4l5 2 6-2 5 2v14l-5-2-6 2z"/><path d="M9 6v14M15 4v14"/></svg>里程碑</button>
+      <div class="nav-sec">洞察</div>
+      <button class="nav-item" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx=".8"/><rect x="12" y="8" width="3" height="10" rx=".8"/><rect x="17" y="4" width="3" height="14" rx=".8"/></svg>报表</button>
+      <div class="nav-sec">空间</div>
+      <button class="nav-item" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5A7 7 0 0 0 19 12z"/></svg>设置</button>
+    </nav>
+    <div class="side-foot">
+      <span class="avatar">孔</span>
+      <div><div class="side-user-n">孔祥劲</div><div class="side-user-r">空间主</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="tb-title">项目</div>
+        <div class="tb-sub" id="tbSub">19 个项目 · 8 个项目集</div>
+      </div>
+      <div class="tb-right">
+        <span class="proto-pill" style="display:none">原型</span>
+        <button class="icon-btn bordered" type="button" id="themeBtn" title="切换明暗主题" aria-label="切换明暗主题">
+          <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <span class="avatar" style="width:30px;height:30px;">孔</span>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- ===== 原型控制 ===== -->
+      <section class="proto-bar" aria-label="原型配色控制">
+        <div class="proto-id">
+          <span class="proto-pill">原型</span>
+          <span class="proto-title">项目集配色</span>
+        </div>
+        <p class="proto-note" id="protoNote"></p>
+        <div class="proto-acts">
+          <div class="seg" role="group" aria-label="配色方案">
+            <button type="button" data-scheme="current">现状</button>
+            <button type="button" data-scheme="a">A · 轻彩行</button>
+            <button type="button" data-scheme="b" class="on">B · 色标白底（采用）</button>
+          </div>
+          <div class="tint-ctrl">
+            <span>底色浓度</span>
+            <div class="seg" role="group" aria-label="底色浓度">
+              <button type="button" data-tint="2">极淡</button>
+              <button type="button" data-tint="3" class="on">淡</button>
+              <button type="button" data-tint="5">标准</button>
+            </div>
+          </div>
+          <button class="btn sm" type="button" id="btnCompare">对照说明</button>
+          <button class="btn sm" type="button" id="btnReset">恢复默认配色</button>
+        </div>
+      </section>
+
+      <div class="legend" id="legend" aria-label="项目集标识色"></div>
+
+      <!-- ===== 页头 ===== -->
+      <div class="page-head">
+        <div class="titles">
+          <h1 class="page-title">项目列表 <span class="count-pill">19</span></h1>
+          <p class="page-sub">按项目集组织交付；颜色只标识归属，不改变状态、进度与统计口径。</p>
+        </div>
+        <div class="page-tools">
+          <div class="seg" role="group" aria-label="视图切换">
+            <button type="button" data-view="table" class="on">表格</button>
+            <button type="button" data-view="card">卡片</button>
+          </div>
+          <button class="btn sm" type="button">显示已归档</button>
+          <button class="btn sm" type="button">新建项目集</button>
+          <button class="btn primary sm" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            新建项目
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== 表格视图 ===== -->
+      <section class="card table-card" aria-label="项目列表表格">
+        <div class="table-scroll">
+          <div class="table" role="table" aria-label="项目集与项目">
+            <div class="row thead" role="row">
+              <span class="th" role="columnheader">项目名称</span>
+              <span class="th" role="columnheader">状态</span>
+              <span class="th" role="columnheader">负责人</span>
+              <span class="th" role="columnheader">计划结束</span>
+              <span class="th" role="columnheader">工作项数</span>
+              <span class="th" role="columnheader">完成数</span>
+              <span class="th" role="columnheader">进度</span>
+              <span class="th" role="columnheader">文档数</span>
+              <span class="th" role="columnheader">首版上线日</span>
+              <span class="th" role="columnheader" style="justify-content:flex-end">操作</span>
+            </div>
+            <div id="tableBody"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 卡片视图 ===== -->
+      <section class="cards" id="cards" aria-label="项目集卡片"></section>
+    </main>
+  </div>
+</div>
+
+<!-- 调色浮层 -->
+<div class="palette" id="palette" role="dialog" aria-label="选择项目集标识色">
+  <div class="palette-t">项目集标识色</div>
+  <div class="palette-grid" id="paletteGrid"></div>
+  <div class="palette-hint">只用于左条、文件夹与集行浅底；状态与进度仍按语义色。</div>
+</div>
+
+<!-- 对照弹窗 -->
+<div class="modal" id="compareModal" role="dialog" aria-modal="true" aria-labelledby="cmpTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div style="flex:1">
+        <div class="modal-title" id="cmpTitle">现状 vs 建议</div>
+        <div class="modal-sub">项目列表在 1440px 下的配色差异；颜色值可直接落到 tokens。</div>
+      </div>
+      <button class="icon-btn bordered" type="button" data-close-modal aria-label="关闭对照说明">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <table class="compare">
+        <thead>
+          <tr><th style="width:18%">项</th><th style="width:31%">现状</th><th style="width:35%">建议</th><th style="width:16%">判断</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>页面底色</b></td>
+            <td class="now"><span class="sw" style="background:#F7F8FA"></span>#F7F8FA 中性灰</td>
+            <td class="next"><span class="sw" style="background:#FFFFFF;box-shadow:inset 0 0 0 1px #D0D5DD"></span>#FFFFFF 纯白</td>
+            <td><span class="verdict warn">偏灰</span> <span class="verdict good">更干净</span></td>
+          </tr>
+          <tr>
+            <td><b>集行底色</b></td>
+            <td class="now"><span class="sw" style="background:#F4F8FE"></span>#F4F8FE，8 个集完全相同</td>
+            <td class="next"><span class="sw" style="background:#FFFFFF;box-shadow:inset 0 0 0 1px #D0D5DD"></span>保持纯白，悬停走中性灰</td>
+            <td><span class="verdict warn">难区分</span> <span class="verdict good">最干净</span></td>
+          </tr>
+          <tr>
+            <td><b>集色条</b></td>
+            <td class="now">统一主色蓝 3px</td>
+            <td class="next">每个集自己的 3px 身份色（对白约 2.9–3.4:1）</td>
+            <td><span class="verdict good">归属明确</span></td>
+          </tr>
+          <tr>
+            <td><b>文件夹图标</b></td>
+            <td class="now">--text-3 灰</td>
+            <td class="next">26px 色标块（14% 集色）+ 身份色文件夹</td>
+            <td><span class="verdict warn">无信息</span> <span class="verdict good">可识别</span></td>
+          </tr>
+          <tr>
+            <td><b>项目集 color 字段</b></td>
+            <td class="now">库里有 color，编辑弹窗可选色，列表未使用</td>
+            <td class="next">进入列表：色条 / 色标图标两处使用，不做底色</td>
+            <td><span class="verdict warn">未启用</span> <span class="verdict good">已启用</span></td>
+          </tr>
+          <tr>
+            <td><b>状态 / 风险 / 进度</b></td>
+            <td class="now">蓝 / 橙 / 红 / 绿语义色</td>
+            <td class="next">保持原语义色，不被集色替换</td>
+            <td><span class="verdict keep">保持</span></td>
+          </tr>
+          <tr>
+            <td><b>正文对比度</b></td>
+            <td class="now">#101828 on #F4F8FE ≈ 16.1:1</td>
+            <td class="next">#101828 on #FFFFFF ≈ 16.9:1；色标块对白 ≥ 3:1</td>
+            <td><span class="verdict good">WCAG AA</span></td>
+          </tr>
+          <tr>
+            <td><b>色盲可辨</b></td>
+            <td class="now">只能靠集名</td>
+            <td class="next">集名 + 色标图标 + 左条三重线索，不只靠颜色</td>
+            <td><span class="verdict good">不单靠色</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note-box">
+        <b>为什么选 B（色标白底）而不是集行铺淡彩：</b>
+        <ul>
+          <li>8 个集就是 8 种底色，相邻行色相来回跳，页面读起来是分段色块，不是白底表格；底色会先于名称抢走注意力。</li>
+          <li>淡彩自左向右渐隐，在宽表里正好断在中段，像渲染残留；hover 也只是同色加深，低彩度集几乎看不出悬停。</li>
+          <li>集色淡底会与「进行中」的蓝、阻塞/逾期的橙红抢语义；B 把颜色收紧到左条和色标图标，语义色不受干扰。</li>
+          <li>层级仍由结构表达：集行有缩进、树线、16px 粗标题和 meta 行，底色不是必需的归属线索。</li>
+          <li>颜色不是唯一线索：集名、文件夹图标、缩进连接线始终可见，色觉差异用户也能读。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" type="button" data-close-modal>继续看看</button>
+      <button class="btn primary" type="button" id="btnUseB">采用方案 B</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="sr-only" id="live"></div>
+
+<script>
+/* ==========================================================================
+   演示数据（取自 2026-11-19 项目列表截图；子项目为示例拆分，仅用于展示层级）
+   ========================================================================== */
+var SETS = [
+  {id:"s1", name:"流程引擎", color:1, owner:"—", end:"2027-04-08", tasks:299, done:253, pct:87, docs:3, first:"2026-06-15", meta:"9 个项目 · 首版 2485h7m · 迭代 —",
+    projects:[
+      {name:"流程设计器", owner:"孔祥劲", end:"2026-05-30", tasks:160, done:140, pct:88, docs:2, first:"2026-06-15"},
+      {name:"流程运行引擎", owner:"王一帆", end:"2026-04-18", tasks:139, done:113, pct:81, docs:1, first:"2026-06-15"}
+    ]},
+  {id:"s2", name:"资金通", color:2, owner:"孔祥劲", end:"2026-11-30", tasks:77, done:77, pct:100, docs:0, first:"2026-10-22", meta:"1 个项目 · 首版 494h · 迭代 95h",
+    projects:[
+      {name:"资金通", owner:"孔祥劲", end:"2026-11-30", tasks:77, done:77, pct:100, docs:0, first:"2026-10-22"}
+    ]},
+  {id:"s3", name:"风控管理", color:3, owner:"孔祥劲", end:"2027-11-30", tasks:21, done:20, pct:95, docs:0, first:"2026-10-22", meta:"2 个项目 · 首版 198h · 迭代 9h30m",
+    projects:[
+      {name:"风控规则", owner:"孔祥劲", end:"2026-09-30", tasks:13, done:13, pct:100, docs:0, first:"2026-10-22"},
+      {name:"风控报表", owner:"李婷", end:"2027-11-30", tasks:8, done:7, pct:88, docs:0, first:"2026-10-22"}
+    ]},
+  {id:"s4", name:"API开放平台", color:4, owner:"孔祥劲", end:"2027-11-30", tasks:16, done:4, pct:25, docs:0, first:"2026-10-22", meta:"1 个项目 · 首版 8h · 迭代 16h17m",
+    projects:[
+      {name:"API 网关", owner:"孔祥劲", end:"2027-11-30", tasks:16, done:4, pct:25, docs:0, first:"2026-10-22"}
+    ]},
+  {id:"s5", name:"技术平台", color:5, owner:"孔祥劲", end:"2026-12-31", tasks:8, done:6, pct:75, docs:0, first:"", meta:"2 个项目 · 首版 64h19m · 迭代 —",
+    projects:[
+      {name:"基础组件库", owner:"孔祥劲", end:"2026-12-31", tasks:6, done:5, pct:83, docs:0, first:""},
+      {name:"技术平台门户", owner:"陈晓", end:"2026-11-30", tasks:2, done:1, pct:50, docs:0, first:""}
+    ]},
+  {id:"s6", name:"项目管理平台", color:6, owner:"孔祥劲", end:"2027-01-31", tasks:5, done:3, pct:60, docs:0, first:"", meta:"1 个项目 · 首版 6h17m · 迭代 —",
+    projects:[
+      {name:"项目管理", owner:"孔祥劲", end:"2027-01-31", tasks:5, done:3, pct:60, docs:0, first:""}
+    ]},
+  {id:"s7", name:"报表", color:7, owner:"—", end:"2027-11-30", tasks:5, done:3, pct:92, docs:0, first:"", meta:"1 个项目 · 首版 28h30m · 迭代 —",
+    projects:[
+      {name:"报表中心", owner:"—", end:"2027-11-30", tasks:5, done:3, pct:92, docs:0, first:""}
+    ]},
+  {id:"s8", name:"其他项目", color:8, owner:"—", end:"", tasks:0, done:0, pct:0, docs:0, first:"", meta:"2 个项目",
+    projects:[
+      {name:"内部工具", owner:"—", end:"", tasks:0, done:0, pct:0, docs:0, first:""},
+      {name:"试点项目", owner:"—", end:"", tasks:0, done:0, pct:0, docs:0, first:""}
+    ]}
+];
+var COLOR_NAMES = {1:"靛蓝",2:"青绿",3:"紫罗兰",4:"天青",5:"琥珀",6:"玫红",7:"橄榄",8:"石板灰"};
+var DEFAULT_COLORS = {};
+SETS.forEach(function(s){ DEFAULT_COLORS[s.id] = s.color; });
+
+/* ==========================================================================
+   图标
+   ========================================================================== */
+var ICON = {
+  chev:'<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 5 5 5-5 5"/></svg>',
+  folder:'<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.2c0-.9.7-1.6 1.6-1.6h3.1l1.6 1.7h5.1c.9 0 1.6.7 1.6 1.6v6.5c0 .9-.7 1.6-1.6 1.6H4.6c-.9 0-1.6-.7-1.6-1.6V6.2Z"/></svg>',
+  grip:'<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="7.4" cy="5.2" r="1.15"/><circle cx="12.6" cy="5.2" r="1.15"/><circle cx="7.4" cy="10" r="1.15"/><circle cx="12.6" cy="10" r="1.15"/><circle cx="7.4" cy="14.8" r="1.15"/><circle cx="12.6" cy="14.8" r="1.15"/></svg>',
+  edit:'<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.8l3.4 3.4M4 16l1-4.2L13.9 2.9a1.2 1.2 0 0 1 1.7 0l1.5 1.5a1.2 1.2 0 0 1 0 1.7L8.2 15 4 16Z"/></svg>',
+  trash:'<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13M8 3h4M5.5 5.5l.7 10.1c0 .8.7 1.4 1.5 1.4h4.6c.8 0 1.5-.6 1.5-1.4l.7-10.1M8.3 8.5v5M11.7 8.5v5"/></svg>',
+  palette:'<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5h8M14.5 6.5H17M3 13.5h2.5M9 13.5h8"/><circle cx="12.5" cy="6.5" r="1.8"/><circle cx="7" cy="13.5" r="1.8"/></svg>',
+  plus:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  check:'<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 10 3.4 3.4 7.6-7.6"/></svg>'
+};
+
+/* ==========================================================================
+   小工具
+   ========================================================================== */
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function dash(v){ return v ? esc(v) : '<span class="dash">—</span>'; }
+function progress(pct, mini){
+  var v = Math.max(0, Math.min(100, Number(pct) || 0));
+  return '<span class="prog' + (mini ? " mini" : "") + '"><span class="bar"><i style="width:' + v + '%"></i></span><span class="pv">' + v + '%</span></span>';
+}
+function tag(){ return '<span class="tag">进行中</span>'; }
+function toast(msg){
+  var el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  document.getElementById("live").textContent = msg;
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.classList.remove("show"); }, 2400);
+}
+
+/* ==========================================================================
+   渲染：表格
+   ========================================================================== */
+function setRow(s){
+  return '<div class="row set-row" data-set="' + s.id + '" data-color="' + s.color + '" role="row">'
+    + '<div class="name-cell"><div class="name-line">'
+      + '<button class="chev" type="button" data-toggle aria-expanded="true" aria-label="收起「' + esc(s.name) + '」">' + ICON.chev + '</button>'
+      + '<span class="set-ico" aria-hidden="true">' + ICON.folder + '</span>'
+      + '<span class="set-name">' + esc(s.name) + '</span>'
+    + '</div><span class="set-meta">' + esc(s.meta) + '</span></div>'
+    + '<span class="cell" role="cell">' + tag() + '</span>'
+    + '<span class="cell owner" role="cell">' + dash(s.owner) + '</span>'
+    + '<span class="cell date" role="cell">' + dash(s.end) + '</span>'
+    + '<span class="cell num" role="cell">' + s.tasks + '</span>'
+    + '<span class="cell num" role="cell">' + s.done + '</span>'
+    + '<span class="cell" role="cell">' + progress(s.pct) + '</span>'
+    + '<span class="cell num" role="cell">' + s.docs + '</span>'
+    + '<span class="cell date" role="cell">' + dash(s.first) + '</span>'
+    + '<span class="acts" role="cell">'
+      + '<button class="icon-btn" type="button" data-palette="' + s.id + '" title="更换标识色" aria-label="更换「' + esc(s.name) + '」的标识色">' + ICON.palette + '</button>'
+      + '<button class="icon-btn" type="button" title="拖动调整项目集顺序" aria-label="拖动调整项目集顺序">' + ICON.grip + '</button>'
+      + '<button class="icon-btn" type="button" title="编辑项目集" aria-label="编辑项目集">' + ICON.edit + '</button>'
+      + '<button class="icon-btn danger" type="button" title="删除项目集" aria-label="删除项目集">' + ICON.trash + '</button>'
+    + '</span>'
+  + '</div>';
+}
+function projectRow(p, s){
+  return '<div class="row project-row" data-set="' + s.id + '" data-color="' + s.color + '" role="row">'
+    + '<div class="name-cell"><span class="project-name" title="打开项目驾驶舱">' + esc(p.name) + '</span></div>'
+    + '<span class="cell" role="cell">' + tag() + '</span>'
+    + '<span class="cell owner" role="cell">' + dash(p.owner) + '</span>'
+    + '<span class="cell date" role="cell">' + dash(p.end) + '</span>'
+    + '<span class="cell num" role="cell">' + p.tasks + '</span>'
+    + '<span class="cell num" role="cell">' + p.done + '</span>'
+    + '<span class="cell" role="cell">' + progress(p.pct) + '</span>'
+    + '<span class="cell num" role="cell">' + p.docs + '</span>'
+    + '<span class="cell date" role="cell">' + dash(p.first) + '</span>'
+    + '<span class="acts" role="cell"></span>'
+  + '</div>';
+}
+function renderTable(){
+  document.getElementById("tableBody").innerHTML = SETS.map(function(s){
+    return '<div class="group" data-set="' + s.id + '" data-color="' + s.color + '" role="rowgroup">'
+      + setRow(s)
+      + s.projects.map(function(p){ return projectRow(p, s); }).join("")
+    + '</div>';
+  }).join("");
+}
+
+/* ==========================================================================
+   渲染：卡片
+   ========================================================================== */
+function renderCards(){
+  document.getElementById("cards").innerHTML = SETS.map(function(s){
+    return '<article class="gcard" data-set="' + s.id + '" data-color="' + s.color + '">'
+      + '<div class="gcard-head">'
+        + '<button class="chev" type="button" data-toggle aria-expanded="true" aria-label="收起「' + esc(s.name) + '」">' + ICON.chev + '</button>'
+        + '<span class="set-ico" aria-hidden="true">' + ICON.folder + '</span>'
+        + '<span class="gcard-title">' + esc(s.name) + '</span>'
+        + tag()
+        + '<span class="gcard-meta">' + s.projects.length + ' 个项目</span>'
+        + '<span style="flex:1"></span>'
+        + '<button class="icon-btn" type="button" data-palette="' + s.id + '" title="更换标识色" aria-label="更换「' + esc(s.name) + '」的标识色">' + ICON.palette + '</button>'
+      + '</div>'
+      + '<div class="gcard-body">'
+        + s.projects.map(function(p){
+            return '<div class="prow">'
+              + '<span class="pname" title="' + esc(p.name) + '">' + esc(p.name) + '</span>'
+              + '<span class="powner">' + dash(p.owner) + '</span>'
+              + progress(p.pct, true)
+              + '<span class="pdoc" title="文档数">' + p.docs + ' 文档</span>'
+            + '</div>';
+          }).join("")
+      + '</div>'
+      + '<div class="gcard-foot"><span>集内汇总</span><span><b>' + s.tasks + '</b> 工作项</span><span><b>' + s.done + '</b> 完成</span><span><b>' + s.pct + '%</b> 加权进度</span></div>'
+    + '</article>';
+  }).join("");
+}
+
+/* ==========================================================================
+   渲染：标识色图例
+   ========================================================================== */
+function renderLegend(){
+  document.getElementById("legend").innerHTML = '<span class="legend-k">项目集标识色</span>'
+    + SETS.map(function(s){
+        return '<button class="lg-chip" type="button" data-set="' + s.id + '" data-color="' + s.color + '" data-palette="' + s.id + '" title="更换「' + esc(s.name) + '」的标识色"><i></i>' + esc(s.name) + '</button>';
+      }).join("");
+}
+
+/* ==========================================================================
+   配色控制
+   ========================================================================== */
+var scheme = "b", tint = 3, view = "table";
+var NOTES = {
+  current:"现状：8 个项目集共用 #F4F8FE 浅蓝灰底和同一条主色左条；库里的项目集 color 字段没有进入列表，集与集之间只能靠名称区分。",
+  a:"方案 A · 白底淡彩行：8 个集改用明度更高、饱和度更低的淡色；页面纯白，集行铺一段淡彩并自左向右渐隐，配 3px 淡色左条与同色文件夹。",
+  b:"方案 B · 色标白底（已采用）：集行保持白底，用 26px 色标图标 + 3px 身份色左条识别；悬停走中性灰，颜色只留给归属标识，不参与状态语义。"
+};
+function applyScheme(){
+  document.body.dataset.scheme = scheme;
+  document.getElementById("protoNote").textContent = NOTES[scheme];
+  document.querySelectorAll(".proto-acts [data-scheme]").forEach(function(b){
+    b.classList.toggle("on", b.dataset.scheme === scheme);
+  });
+  closePalette();
+}
+function applyTint(){
+  document.documentElement.style.setProperty("--tint", tint + "%");
+  document.body.dataset.tint = String(tint);
+  document.querySelectorAll(".tint-ctrl [data-tint]").forEach(function(b){ b.classList.toggle("on", Number(b.dataset.tint) === tint); });
+}
+function applyView(){
+  document.body.dataset.view = view;
+  document.querySelectorAll(".page-tools [data-view]").forEach(function(b){ b.classList.toggle("on", b.dataset.view === view); });
+}
+function applyTheme(dark){
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.getElementById("iconSun").style.display = dark ? "none" : "";
+  document.getElementById("iconMoon").style.display = dark ? "" : "none";
+}
+
+/* ==========================================================================
+   调色浮层
+   ========================================================================== */
+var paletteFor = null;
+function openPalette(anchor, setId){
+  var s = SETS.filter(function(x){ return x.id === setId; })[0];
+  if(!s) return;
+  paletteFor = setId;
+  var grid = document.getElementById("paletteGrid");
+  grid.innerHTML = Object.keys(COLOR_NAMES).map(function(k){
+    var n = Number(k);
+    return '<button type="button" data-pick="' + n + '" class="' + (s.color === n ? "on" : "") + '" style="--pc:var(--set)" data-color="' + n + '" title="' + COLOR_NAMES[n] + '" aria-label="' + COLOR_NAMES[n] + '" aria-pressed="' + (s.color === n) + '">' + ICON.check + '</button>';
+  }).join("");
+  var pal = document.getElementById("palette");
+  pal.classList.add("show");
+  var r = anchor.getBoundingClientRect();
+  var w = 196, h = pal.offsetHeight || 178;
+  var left = Math.min(r.left, window.innerWidth - w - 12);
+  var top = r.bottom + 6;
+  if(top + h > window.innerHeight - 12) top = Math.max(12, r.top - h - 6);
+  pal.style.left = Math.max(12, left) + "px";
+  pal.style.top = top + "px";
+  var first = grid.querySelector("button.on") || grid.querySelector("button");
+  if(first) first.focus({preventScroll:true});
+}
+function closePalette(){
+  document.getElementById("palette").classList.remove("show");
+  paletteFor = null;
+}
+function setColor(setId, n){
+  var s = SETS.filter(function(x){ return x.id === setId; })[0];
+  if(!s) return;
+  s.color = n;
+  document.querySelectorAll('[data-set="' + setId + '"]').forEach(function(el){ el.dataset.color = n; });
+  closePalette();
+  toast("已将「" + s.name + "」标识色改为" + COLOR_NAMES[n]);
+}
+
+/* ==========================================================================
+   事件
+   ========================================================================== */
+document.querySelectorAll(".proto-acts [data-scheme]").forEach(function(b){
+  b.addEventListener("click", function(){ scheme = b.dataset.scheme; applyScheme(); });
+});
+document.querySelectorAll(".tint-ctrl [data-tint]").forEach(function(b){
+  b.addEventListener("click", function(){ tint = Number(b.dataset.tint); applyTint(); });
+});
+document.querySelectorAll(".page-tools [data-view]").forEach(function(b){
+  b.addEventListener("click", function(){ view = b.dataset.view; applyView(); });
+});
+document.getElementById("themeBtn").addEventListener("click", function(){
+  applyTheme(document.documentElement.dataset.theme !== "dark");
+});
+document.getElementById("btnCompare").addEventListener("click", function(){
+  document.getElementById("compareModal").classList.add("show");
+  document.querySelector("#compareModal [data-close-modal]").focus({preventScroll:true});
+});
+document.querySelectorAll("[data-close-modal]").forEach(function(b){
+  b.addEventListener("click", function(){ document.getElementById("compareModal").classList.remove("show"); });
+});
+document.getElementById("compareModal").addEventListener("click", function(e){
+  if(e.target === this) this.classList.remove("show");
+});
+document.getElementById("btnUseB").addEventListener("click", function(){
+  scheme = "b"; applyScheme();
+  document.getElementById("compareModal").classList.remove("show");
+  toast("已采用方案 B：色标白底");
+});
+document.getElementById("btnReset").addEventListener("click", function(){
+  SETS.forEach(function(s){ s.color = DEFAULT_COLORS[s.id]; });
+  renderTable(); renderCards(); renderLegend(); closePalette();
+  toast("已恢复默认 8 色分配");
+});
+document.addEventListener("click", function(e){
+  var palBtn = e.target.closest("[data-palette]");
+  if(palBtn){
+    e.preventDefault(); e.stopPropagation();
+    if(scheme === "current"){
+      toast("现状方案没有启用集色；切到方案 A 或 B 再改色");
+      return;
+    }
+    openPalette(palBtn, palBtn.dataset.palette);
+    return;
+  }
+  var picked = e.target.closest("[data-pick]");
+  if(picked && paletteFor){
+    setColor(paletteFor, Number(picked.dataset.pick));
+    return;
+  }
+  if(paletteFor && !e.target.closest("#palette")) closePalette();
+});
+document.getElementById("palette").addEventListener("keydown", function(e){
+  if(e.key === "Escape"){ closePalette(); }
+});
+document.addEventListener("keydown", function(e){
+  if(e.key === "Escape"){
+    if(document.getElementById("compareModal").classList.contains("show")){
+      document.getElementById("compareModal").classList.remove("show");
+    } else if(paletteFor){
+      closePalette();
+    }
+  }
+});
+document.addEventListener("click", function(e){
+  var t = e.target.closest("[data-toggle]");
+  if(!t) return;
+  var group = t.closest(".group, .gcard");
+  if(!group) return;
+  var collapsed = group.classList.toggle("collapsed");
+  t.setAttribute("aria-expanded", String(!collapsed));
+  var title = t.getAttribute("aria-label") || "";
+  t.setAttribute("aria-label", title.replace(collapsed ? "收起" : "展开", collapsed ? "展开" : "收起"));
+});
+window.addEventListener("resize", closePalette);
+
+/* ==========================================================================
+   初始化（支持 ?scheme=a&view=card&theme=dark&tint=18 直接截状态）
+   ========================================================================== */
+(function init(){
+  var q = new URLSearchParams(location.search);
+  var qs = q.get("scheme"), qv = q.get("view"), qt = q.get("theme"), qn = Number(q.get("tint"));
+  if(qs === "current" || qs === "b" || qs === "a") scheme = qs;
+  if(qv === "card" || qv === "table") view = qv;
+  if(qn === 2 || qn === 3 || qn === 5) tint = qn;
+  renderTable(); renderCards(); renderLegend();
+  applyTheme(qt === "dark");
+  applyTint(); applyScheme(); applyView();
+  if(q.get("compare") === "1") document.getElementById("compareModal").classList.add("show");
+})();
+</script>
+</body>
+</html>

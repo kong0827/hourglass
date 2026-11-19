@@ -364,6 +364,18 @@ function projectSetById(id){
   for(var i = 0; i < (rt.projectSets || []).length; i++) if(rt.projectSets[i].id === id) return rt.projectSets[i];
   return null;
 }
+var SET_COLOR_RE = /^#[0-9a-f]{6}$/i;
+function projectSetColor(set){
+  return set && SET_COLOR_RE.test(String(set.color || "")) ? String(set.color) : "";
+}
+/* 方案 B：身份色只投到左条 / 色标图标 / 树线，不铺整行底色 */
+function projectSetColorStyle(set){
+  var c = projectSetColor(set);
+  return c ? ' style="--set:' + c + '"' : "";
+}
+function projectSetColorStyleOf(setId){
+  return projectSetColorStyle(projectSetById(setId));
+}
 /* 项目集展示顺序：sortOrder 为主，同名兜底，和列表分组、下拉分组保持一致 */
 function orderedSets(){
   return (rt.projectSets || []).slice().sort(function(a, b){
@@ -474,7 +486,7 @@ function projectSetHeadHTML(group){
   var title = set ? esc(set.name) : "未分组";
   var key = set ? set.id : "__un";
   var collapsed = !!setCollapsed[key];
-  return '<div class="req-set-head' + (set ? "" : " is-ungrouped") + '"' +
+  return '<div class="req-set-head proj-set-head' + (set ? "" : " is-ungrouped") + '"' + projectSetColorStyle(set) +
       ' data-set-key="' + esc(key) + '"' + (set ? ' data-set-id="' + esc(set.id) + '"' : '') + '>' +
     '<button class="icon-btn sm req-set-toggle' + (collapsed ? "" : " on") + '" type="button" data-set-toggle="' + esc(key) + '" aria-expanded="' + (!collapsed) + '" title="' + (collapsed ? "展开" : "收起") + '">' + icon("chevronRight", 14) + '</button>' +
     '<span class="req-set-title"><span class="req-set-ico" aria-hidden="true">' + icon("folder", 14) + '</span><b>' + title + '</b></span>' +
@@ -548,7 +560,7 @@ function projectSetActions(group){
 }
 function projectSetRowHTML(group, cols){
   var set = group.set, agg = projectSetSummary(group.rows);
-  return '<div class="project-table-row project-set-row' + (set ? "" : " is-ungrouped") + '"' +
+  return '<div class="project-table-row project-set-row' + (set ? "" : " is-ungrouped") + '"' + projectSetColorStyle(set) +
       ' data-set-key="' + esc(set ? set.id : "__un") + '"' + (set ? ' data-set-id="' + esc(set.id) + '"' : '') + '>' +
     cols.map(function(key){ return projectSetCell(group, key, agg); }).join("") +
     projectSetActions(group) +
@@ -811,6 +823,7 @@ function renderReqList(){
     return '<div class="req-item' + (rt.editingReqId === r.id ? " editing" : "") +
         (r.setId ? " req-item-in-set" : "") +
         (r.containerKind ? " req-item-container" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '"' +
+        projectSetColorStyleOf(r.setId) +
         (r.containerKind ? ' title="拆分后的公共容器：承接版本、发布与文档"' : '') + '>' +
       '<div class="req-top">' +
         (reorderEnabled() ? reqDragHTML(r.id) : "") +
@@ -999,7 +1012,7 @@ function renderProjectTable(list){
     '<div class="project-table-body">' + groupedProjects(list).map(function(g){
       var collapsed = g.header && setCollapsed[g.set ? g.set.id : "__un"];
       return (g.header ? projectSetRowHTML(g, cols) : "") + (collapsed ? "" : g.rows.map(function(r){
-        return '<div class="project-table-row' + (r.setId ? " has-set" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '">' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';
+        return '<div class="project-table-row' + (r.setId ? " has-set" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '"' + projectSetColorStyleOf(r.setId) + '>' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';
       }).join(""));
     }).join("") + ungroupedDropZoneHTML() + '</div></div>';
   var head = reqListEl.querySelector(".project-table-head");

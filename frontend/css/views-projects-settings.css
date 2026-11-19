@@ -14,6 +14,11 @@
   border-bottom:1px dashed var(--border);margin-top:6px;
 }
 .req-set-head:first-child{margin-top:0;}
+/* 项目集身份色（列表视图）：集头只把身份色投到文件夹图标，不铺底色；
+   深色主题把身份色向白色提亮，避免深色值在深底上看不见 */
+.req-set-head.proj-set-head{--set-ink:var(--set, var(--text-3));}
+html[data-theme="dark"] .req-set-head.proj-set-head{--set-ink:color-mix(in srgb, var(--set, var(--text-3)) 62%, #fff);}
+.req-set-head.proj-set-head .req-set-ico{color:var(--set-ink);}
 .req-set-title{display:flex;align-items:center;gap:6px;min-width:0;font-size:14px;color:var(--text);}
 .req-set-title b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .req-set-ico{display:inline-flex;align-items:center;color:var(--text-3);flex:0 0 auto;}
@@ -28,44 +33,58 @@
 .risk-chip.blocked{color:var(--warning-fg);background:var(--warning-soft);border-color:var(--warning-border);}
 .risk-chip.stagnant{color:var(--text-2);background:var(--surface-sunken);border-color:var(--border);}
 .req-set-risk:hover .risk-chip{filter:brightness(.96);}
-.project-set-row .req-set-risk{padding-left:28px;}
+.project-set-row .req-set-risk{padding-left:35px;}
 .req-set-acts{display:flex;align-items:center;gap:2px;}
 .req-set-head.is-ungrouped .req-set-title{color:var(--text-2);}
 .req-set-toggle svg{transition:transform var(--dur-fast) var(--ease-out);}
 .req-set-toggle.on svg{transform:rotate(90deg);}
 .req-item-container{background:var(--surface-sunken);box-shadow:none;border-style:dashed;}
 .req-item-container .req-name{color:var(--text-2);}
-/* 集内项目缩进：卡片整体右移，竖线 + 短横引线表达「项目集 → 项目」两层结构 */
-.req-item-in-set{position:relative;margin-left:26px;}
+/* 集内项目缩进：卡片整体右移，竖线 + 短横引线表达「项目集 → 项目」两层结构；
+   引线混入 18% 集身份色，跨行时能看出归属 */
+.req-item-in-set{position:relative;margin-left:26px;--set-ink:var(--set, var(--border));}
+html[data-theme="dark"] .req-item-in-set{--set-ink:color-mix(in srgb, var(--set, var(--border)) 62%, #fff);}
 .req-item-in-set::before{
-  content:"";position:absolute;left:-14px;top:-6px;bottom:-6px;width:1px;background:var(--border);
+  content:"";position:absolute;left:-14px;top:-6px;bottom:-6px;width:1px;
+  background:color-mix(in srgb, var(--set-ink) 18%, var(--border));
 }
 .req-item-in-set::after{
-  content:"";position:absolute;left:-14px;top:25px;width:12px;height:1px;background:var(--border);
+  content:"";position:absolute;left:-14px;top:25px;width:12px;height:1px;
+  background:color-mix(in srgb, var(--set-ink) 18%, var(--border));
 }
 .project-table-body .req-set-head{padding:var(--space-2) 14px 6px;margin-top:0;}
-/* 表格模式对齐列宽不能动：只缩进名称列内部，用竖线 + 短横表达层级 */
+/* 表格模式对齐列宽不能动：只缩进名称列内部，用竖线 + 短横表达层级；
+   引线混入 18% 集身份色，与列表视图一致 */
+.project-table-row.has-set{--set-ink:var(--set, var(--border));}
+html[data-theme="dark"] .project-table-row.has-set{--set-ink:color-mix(in srgb, var(--set, var(--border)) 62%, #fff);}
 .project-table-row.has-set .project-name-cell{padding-left:34px;position:relative;}
 .project-table-row.has-set .project-name-cell::before{
-  content:"";position:absolute;left:16px;top:50%;width:11px;height:1px;background:var(--border);
+  content:"";position:absolute;left:16px;top:50%;width:11px;height:1px;
+  background:color-mix(in srgb, var(--set-ink) 18%, var(--border));
 }
 .project-table-row.has-set .project-name-cell::after{
-  content:"";position:absolute;left:16px;top:0;bottom:0;width:1px;background:var(--border);
+  content:"";position:absolute;left:16px;top:0;bottom:0;width:1px;
+  background:color-mix(in srgb, var(--set-ink) 18%, var(--border));
 }
-/* 表格模式的项目集行：与项目行共用列网格，集行展示集自身字段与集内只读汇总。
-   底色用分组带令牌而不是列头的 --surface-sunken，否则「列头 / 项目集 / 项目」三级会塌成两级；
-   左侧 3px 主色条标明这是承接项目的分组行。 */
-.project-table-row.project-set-row{background:var(--group-band);box-shadow:inset 3px 0 0 0 var(--group-band-bar);}
-.project-table-row.project-set-row.is-ungrouped{background:var(--group-band-neutral);box-shadow:inset 3px 0 0 0 var(--group-band-neutral-bar);}
+/* 表格模式的项目集行（方案 B 色标白底）：与项目行共用列网格，集行展示集自身字段与集内只读汇总。
+   集行保持白底，只用 3px 身份色左条 + 26px 色标图标标识归属；身份色不铺底色，
+   避免 8 种底色与「进行中」的蓝、逾期阻塞的橙红抢语义。 */
+.project-table-row.project-set-row{
+  --set-ink:var(--set, var(--border-strong));
+  background:var(--surface);
+  box-shadow:inset 3px 0 0 0 var(--set-ink);
+}
+html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(in srgb, var(--set, var(--border-strong)) 62%, #fff);}
 .project-set-row .set-name-cell{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;}
 .project-set-row .set-name-line{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;}
 .project-set-row .set-name-line .req-set-title{min-width:0;font-size:16px;}
 .project-set-row .req-set-title b{font-weight:700;}
-.project-set-row .req-set-meta{padding-left:28px;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.project-set-row .req-set-ico{
+  justify-content:center;width:26px;height:26px;border-radius:7px;flex:0 0 auto;
+  background:color-mix(in srgb, var(--set-ink) 14%, var(--surface));color:var(--set-ink);
+}
+.project-set-row .req-set-meta{padding-left:35px;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
 .project-set-row.is-ungrouped .req-set-title{color:var(--text-2);}
-/* 原来 hover 用 --surface-hover，与 --surface-sunken 同值，分组行悬停没有任何反馈 */
-.project-table-row.project-set-row:hover{background:var(--group-band-hover);}
-.project-table-row.project-set-row.is-ungrouped:hover{background:var(--surface-active);}
 .project-table-row.project-set-row.drop-into{background:var(--primary-soft);}
 
 .req-item{
