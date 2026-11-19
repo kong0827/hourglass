@@ -30,9 +30,13 @@
 .board-more-pill.on{display:inline-flex;}
 .board-more-pill:hover{color:var(--text);border-color:var(--border-strong);}
 .board-more-pill:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+/* 看板工具条：与筛选卡连成一张两行卡片，下面留 10px 再进列区 */
+body[data-view="board"] .filterbar{border-radius:11px 11px 0 0;border-bottom-color:transparent;}
 .board-toolbar{
   flex:0 0 auto;display:flex;align-items:center;gap:var(--space-2);
-  height:36px;padding:0 var(--content-pad);
+  height:40px;margin:0 var(--content-pad) 10px;padding:0 9px;
+  background:var(--surface);border:1px solid var(--border);border-top:1px solid var(--border);
+  border-radius:0 0 11px 11px;
 }
 /* 工具条右端对齐：显示设置靠右，和原型一致 */
 .board-toolbar .spacer,.mine-toolbar .spacer{flex:1 1 auto;}
@@ -192,9 +196,9 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
   align-items:center;gap:var(--space-2);
 }
 .list-head{
-  height:36px;padding:0 12px;background:var(--surface-sunken);
-  border-bottom:1px solid var(--head-border);
-  font-size:12px;font-weight:600;color:var(--text-2);
+  height:34px;padding:0 12px;background:#F9FAFB;
+  border-bottom:1px solid var(--border);
+  font-size:11px;font-weight:550;color:var(--text-3);
   position:sticky;top:0;z-index:5;
 }
 .list-head > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -214,16 +218,16 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .smart-sort-dir{min-width:28px;padding:0 6px;}
 .list-body{display:flex;flex-direction:column;}
 .list-row{
-  min-height:44px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;
+  min-height:44px;padding:8px 12px;border-bottom:1px solid #F2F4F7;cursor:pointer;
   transition:background var(--dur-fast) var(--ease-out);
 }
 .list-row:last-child{border-bottom:none;}
 .list-row:hover{background:var(--surface-hover);}
 .list-row:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--primary);}
 .list-row .lr-task{min-width:0;display:flex;flex-direction:column;gap:var(--space-1);}
-.list-row .lr-t{font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.list-row .lr-t{font-size:12.5px;font-weight:600;letter-spacing:-.01em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .list-row .lr-tags{display:flex;align-items:center;gap:var(--space-1);flex-wrap:wrap;}
-.list-row .cell{font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums;
+.list-row .cell{font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .list-row .cell.over{color:var(--danger-fg);font-weight:500;}
 .list-row .cell.today{color:var(--warning-fg);font-weight:600;}
@@ -245,7 +249,7 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 /* ===================== 6.4.1 树形大纲 ===================== */
 /* 行结构复用 .list-row 的单元格样式（.lr-t / .cell / .progress），树形只补缩进与节点样式 */
 .tree-head,.tree-row{gap:var(--space-2)}
-.tree-head{display:grid;align-items:center;height:36px;padding:0 12px;background:var(--surface-sunken);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-2);position:sticky;top:0;z-index:5}
+.tree-head{display:grid;align-items:center;height:34px;padding:0 12px;background:#F9FAFB;border-bottom:1px solid var(--border);font-size:11px;font-weight:550;color:var(--text-3);position:sticky;top:0;z-index:5}
 .tree-head>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 列表的 .lr-task 是纵向双行布局（标题+副行），树形里缩进与节点徽标要与标题同行：强制横向 */
 .tree-row .lr-task{flex-direction:row;align-items:center;gap:var(--space-2);min-width:0}
@@ -260,7 +264,7 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .tree-indent::before{content:"";position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--border)}
 .tree-indent.end::before{bottom:50%}
 .tree-indent.elbow::after{content:"";position:absolute;left:0;top:50%;width:8px;border-top:1px solid var(--border)}
-.tree-node{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0}
+.tree-node{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0}
 .tree-count{flex:0 0 auto;font-size:11px;color:var(--text-3);background:var(--surface-active);border-radius:var(--r-md);padding:1px 8px}
 #view-tree #btnTreeHideDone.on{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft)}
 /* 手机：桌面网格在窄屏会被裁掉右侧列，树改为卡片式紧凑行，层级用左缩进表达 */

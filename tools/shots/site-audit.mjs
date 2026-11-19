@@ -64,7 +64,7 @@ const STEPS = [
   { k:"docs-draft", go:"#/requirements", click:'[data-rdmode="tree"]', click2:'[data-rdscope="draft"]' },
   { k:"docs-kanban", go:"#/requirements", click:'[data-rdmode="kanban"]' },
   { k:"docs-feed", go:"#/requirements", click:'[data-rdmode="feed"]' },
-  { k:"testcases-cases", go:"#/testcases" },
+  { k:"testcases-cases", go:"#/testcases", ready:'!!document.querySelector("#tcList .tc-row, #tcList .tc-group, #tcList .empty-state")' },
   { k:"testcases-project", go:"#/testcases",
     eval:'const sel=document.querySelector("#tcReq"); if(sel){ const opt=Array.from(sel.options).filter(o=>o.value && /消息中心/.test(o.textContent))[0]; if(opt){ sel.value=opt.value; sel.dispatchEvent(new Event("change",{bubbles:true})); } }' },
   { k:"testcases-defects", go:"#/testcases", click:'#subNav [data-sub-tab="defects"]' },
@@ -158,6 +158,16 @@ for(const s of steps){
       await sleep(600);
     }
     if(s.eval){ const v = await evaluate(`(async () => { ${s.eval} })()`); if(v !== undefined) console.log("eval " + s.k + " :: " + JSON.stringify(v)); await sleep(900); }
+    /* 骨架屏还没退场就截图会把「加载中」当终态留在验收图里；等可见骨架消失（最多 5s） */
+    try{
+      const dl = Date.now() + 5000;
+      while(Date.now() < dl){
+        const busy = await evaluate(`Array.from(document.querySelectorAll(".skel")).some(el => el.getClientRects().length > 0)`);
+        if(!busy) break;
+        await sleep(150);
+      }
+    }catch(e){ /* 轮询失败按原样截图 */ }
+    if(s.ready){ try{ await waitFor(s.ready, "内容就绪", 8000); }catch(e){ console.log("warn " + s.k + " :: " + e.message); } }
     await shot("current-" + s.k + ".png");
     report.push({ k:s.k, ok:true, errors:[...errors] });
     console.log("ok  " + s.k);

@@ -60,36 +60,36 @@ function enterSettingsLazy(isCurrent){
   });
 }
 var VIEWS = {
-  mine:     { title:"我的工作", enter:enterMineView },
-  board:    { title:"工作项", enter:null },
-  workcolumn: { title:"工作项", enter:lazyEnter("workcolumn", "enterWorkColumn") },
-  canceled: { title:"工作项", enter:lazyEnter("canceled", "enterCanceledView") },
-  list:     { title:"工作项", enter:enterListView },
-  tree:     { title:"工作项", enter:lazyEnter("tree", "enterTreeView") },
-  chain:    { title:"工作项", enter:lazyEnter("chain", "enterChainView") },
-  calendar: { title:"工作项", enter:enterCalendarView },
-  gantt:    { title:"工作项", enter:lazyEnter("gantt", "enterGanttView") },
-  projects: { title:"项目", enter:lazyEnter("projects", "enterProjectsView") },
-  phase:    { title:"版本", enter:lazyEnter("phase", "enterPhaseView") },
-  version:  { title:"版本详情", enter:lazyEnter("version", "enterVersionView") },
-  release:  { title:"发布计划", enter:lazyEnter("release", "enterReleaseView") },
-  delivery: { title:"交付说明", enter:lazyEnter("delivery", "enterDeliveryView") },
-  demands:  { title:"需求池", enter:lazyEnter("demands", "enterDemandsView") },
-  requirements: { title:"文档", enter:enterRequirementsLazy },
-  dochistory: { title:"文档历史", enter:enterDocHistoryLazy },
-  testcases: { title:"测试", enter:lazyEnter("testcases", "enterTestCasesView") },
-  branches: { title:"分支", enter:lazyEnter("branches", "enterBranchesView") },
-  review:   { title:"周回顾", enter:lazyEnter("review", "enterReviewView") },
-  analysis: { title:"报表", enter:lazyEnter("analysis", "enterAnalysisView") },
-  portfolio: { title:"项目", enter:lazyEnter("portfolio", "enterPortfolioView") },
-  project: { title:"项目驾驶舱", enter:lazyEnter("project", "enterProjectView") },
-  workload: { title:"成员负载", enter:lazyEnter("workload", "enterWorkloadView") },
-  risks: { title:"逾期与阻塞", enter:lazyEnter("risks", "enterRisksView") },
-  report: { title:"报表", enter:lazyEnter("report", "enterReportView") },
-  investment: { title:"报表", enter:lazyEnter("investment", "enterInvestmentView") },
-  messages: { title:"消息中心", enter:lazyEnter("messages", "enterMessagesView") },
-  settings: { title:"设置", enter:enterSettingsLazy },
-  profile:  { title:"个人设置", enter:lazyEnter("profile", "enterProfileView") }
+  mine:     { title:"我的工作", sub:"分派给我与参与中的工作项，按截止时间排列", enter:enterMineView },
+  board:    { title:"工作项", sub:"按状态分列，拖拽卡片流转", enter:null },
+  workcolumn: { title:"工作项", sub:"单列聚焦，逐条推进状态", enter:lazyEnter("workcolumn", "enterWorkColumn") },
+  canceled: { title:"工作项", sub:"已取消的终态工作项归档", enter:lazyEnter("canceled", "enterCanceledView") },
+  list:     { title:"工作项", sub:"表格字段、分组排序与批量操作", enter:enterListView },
+  tree:     { title:"工作项", sub:"按项目 / 版本 / 分类缩进查看层级", enter:lazyEnter("tree", "enterTreeView") },
+  chain:    { title:"工作项", sub:"沿依赖关系查看影响链", enter:lazyEnter("chain", "enterChainView") },
+  calendar: { title:"工作项", sub:"按截止日期查看排期", enter:enterCalendarView },
+  gantt:    { title:"工作项", sub:"时间轴与依赖关系总览", enter:lazyEnter("gantt", "enterGanttView") },
+  projects: { title:"项目", sub:"项目集下的项目与全局健康度", enter:lazyEnter("projects", "enterProjectsView") },
+  phase:    { title:"版本", sub:"版本计划、工作项范围与交付情况", enter:lazyEnter("phase", "enterPhaseView") },
+  version:  { title:"版本详情", sub:"计划与实际、工时构成与发布记录", enter:lazyEnter("version", "enterVersionView") },
+  release:  { title:"发布计划", sub:"跨版本的发布窗口与执行记录", enter:lazyEnter("release", "enterReleaseView") },
+  delivery: { title:"交付说明", sub:"面向使用方的变更说明", enter:lazyEnter("delivery", "enterDeliveryView") },
+  demands:  { title:"需求池", sub:"未进入版本的需求与来源", enter:lazyEnter("demands", "enterDemandsView") },
+  requirements: { title:"文档", sub:"空间文档、分类与协作记录", enter:enterRequirementsLazy },
+  dochistory: { title:"文档历史", sub:"历史版本的正文与修订", enter:enterDocHistoryLazy },
+  testcases: { title:"测试", sub:"用例、计划与执行结果", enter:lazyEnter("testcases", "enterTestCasesView") },
+  branches: { title:"分支", sub:"分支与工作项的关联", enter:lazyEnter("branches", "enterBranchesView") },
+  review:   { title:"周回顾", sub:"本周完成、进行中与风险", enter:lazyEnter("review", "enterReviewView") },
+  analysis: { title:"报表", sub:"交付与投入的统计口径", enter:lazyEnter("analysis", "enterAnalysisView") },
+  portfolio: { title:"项目", sub:"项目集与项目的全局视图", enter:lazyEnter("portfolio", "enterPortfolioView") },
+  project: { title:"项目驾驶舱", sub:"项目范围、排期与风险一览", enter:lazyEnter("project", "enterProjectView") },
+  workload: { title:"成员负载", sub:"成员在计划窗口内外的工时", enter:lazyEnter("workload", "enterWorkloadView") },
+  risks: { title:"逾期与阻塞", sub:"需要关注的工作项与原因", enter:lazyEnter("risks", "enterRisksView") },
+  report: { title:"报表", sub:"交付与投入的统计口径", enter:lazyEnter("report", "enterReportView") },
+  investment: { title:"报表", sub:"交付与投入的统计口径", enter:lazyEnter("investment", "enterInvestmentView") },
+  messages: { title:"消息中心", sub:"通知与 @ 提醒", enter:lazyEnter("messages", "enterMessagesView") },
+  settings: { title:"设置", sub:"空间配置、成员与可见范围", enter:enterSettingsLazy },
+  profile:  { title:"个人设置", sub:"账号、计时与密码", enter:lazyEnter("profile", "enterProfileView") }
 };
 /* 视图 → 侧栏一级入口。多个视图共用一个入口时，靠页内子导航切换 */
 var NAV_OF = {
@@ -289,6 +289,9 @@ function showView(name){
   });
   restoreScroll(name);
   if(viewTitle) viewTitle.textContent = VIEWS[name].title;
+  var phTitle = $("pageTitle"), phSub = $("pageSub");
+  if(phTitle) phTitle.textContent = VIEWS[name].title;
+  if(phSub) phSub.textContent = VIEWS[name].sub || "";
   document.title = VIEWS[name].title + " · 沙漏";
   syncDocTitle();
   updateBrand();

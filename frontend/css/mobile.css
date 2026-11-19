@@ -77,9 +77,15 @@
 [data-layout="mobile"] #btnTheme{display:none !important;}
 [data-layout="mobile"] .tb-left{flex:1 1 auto;min-width:0;max-width:none;}
 [data-layout="mobile"] .tb-title{
+  display:block;
   font-size:var(--fs-page-title-sm);line-height:22px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+/* 桌面 pagehead 在手机上收起：标题留在顶栏，主操作仍是右下 FAB（fixed 不受零高容器影响） */
+[data-layout="mobile"] .pagehead{display:block;height:0;min-height:0;padding:0;margin:0;overflow:visible;}
+[data-layout="mobile"] .ph-main{display:none;}
+[data-layout="mobile"] .ph-acts{height:0;overflow:visible;}
+[data-layout="mobile"] .pagehead .subnav{display:none !important;}
 [data-layout="mobile"] .tb-right{flex:0 0 auto;justify-content:flex-end;gap:6px;min-width:0;}
 /* 顶栏不再放当前视图搜索框：改由按钮打开全局搜索，视图内关键词在筛选面板里 */
 [data-layout="mobile"] .topbar .global-search{display:none !important;}

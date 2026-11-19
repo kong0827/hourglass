@@ -77,12 +77,12 @@
   --dur-fast:120ms; --dur-base:180ms; --dur-slow:240ms;
 
   /* ---- 布局尺寸 ---- */
-  --sidebar-w:240px;
+  --sidebar-w:216px;
   --sidebar-w-rail:64px;
-  --topbar-h:68px;
+  --topbar-h:46px;
   --filterbar-h:48px;
   --app-foot-h:26px;
-  --content-pad:24px;
+  --content-pad:20px;
   /* 右下角 AI 助手球的避让带：球 48px + 底边距 24px，再留 8px 呼吸。
      可滚内容与列脚按这个高度预留，避免悬浮球压住最后一行操作或「查看全部」 */
   --fab-safe:80px;
@@ -100,7 +100,7 @@
      展示档三枚：--fs-stat（KPI 大数字）/ --fs-display（登录·封面·文档标题）/ --fs-micro（固定高度小件微标签），
      其余位置禁止裸写 font-size；移动端英雄数字为唯一例外（mobile.css 自成一套）。
      断点沿用 639 / 900 / 1024 / 1280（媒体查询无法读变量，改断点时按此清单搜）。 */
-  --fs-page-title:20px;
+  --fs-page-title:19px;
   --fs-page-title-sm:16px;
   --fs-stat:22px;   /* KPI 大数字展示档 */
   --fs-display:24px;  /* 登录 / 封面 / 文档标题展示档 */

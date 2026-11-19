@@ -4,17 +4,17 @@
 
 /* ===================== 4.1 Button ===================== */
 .btn{
-  height:34px;padding:0 14px;border-radius:var(--r-sm);
+  height:32px;padding:0 11px;border-radius:8px;
   display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  border:1px solid var(--border);background:var(--surface);color:var(--text);
-  font-size:14px;font-weight:550;white-space:nowrap;flex:0 0 auto;
+  border:1px solid var(--border);background:var(--surface);color:var(--text-2);
+  font-size:12.5px;font-weight:600;white-space:nowrap;flex:0 0 auto;
   transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),
              color var(--dur-fast) var(--ease-out);
 }
 .btn svg{flex:0 0 auto;}
 .btn:not(.primary):not(.danger):not(.danger-solid):hover{background:var(--surface-hover);border-color:var(--border-strong);}
 .btn:not(.primary):not(.danger):not(.danger-solid):active{background:var(--surface-active);}
-.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--text-inverse);}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--text-inverse);box-shadow:0 1px 2px rgba(37,99,235,.22);}
 .btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);}
 .btn.primary:active{background:var(--primary-active);border-color:var(--primary-active);}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--text-2);}
@@ -37,7 +37,7 @@
 .btn.danger:hover{background:var(--danger-soft);}
 .btn.danger-solid{background:var(--danger-solid);border-color:var(--danger-solid);color:#fff;}
 .btn.danger-solid:hover{background:var(--danger-solid-hover);border-color:var(--danger-solid-hover);}
-.btn.sm{height:28px;padding:0 10px;font-size:13px;border-radius:var(--r-xs);}
+.btn.sm{height:28px;padding:0 9px;font-size:11.5px;border-radius:8px;}
 /* 这几处「清空筛选 / 恢复默认」是静态 data-icon（默认 16px），与 JS 生成的同款按钮（13px）对齐；
    用例页窄屏只剩图标时由 views.css 的媒体查询放大到 14px（那个文件在后面加载） */
 #tcPlanClearFilter svg,#branchClearFilter svg,
@@ -45,7 +45,7 @@
 /* 工作项的「清空」用 xs 档，图标跟着降到 11px，避免小按钮里图标显大 */
 #btnClearFilter svg,#ganttClearFilter svg{width:11px;height:11px;}
 /* 超小档：图标翻页 / 行内极紧凑位置，24px 与 chip、seg 对齐 */
-.btn.xs{height:24px;padding:0 7px;font-size:12px;border-radius:var(--r-xs);gap:var(--space-1);}
+.btn.xs{height:24px;padding:0 7px;font-size:11px;border-radius:6px;gap:var(--space-1);}
 .btn.lg{height:40px;padding:0 18px;font-size:14px;}
 .btn.block{width:100%;}
 .btn:disabled,.btn[aria-disabled="true"]{opacity:.45;cursor:not-allowed;}
@@ -78,13 +78,13 @@
 }
 
 .icon-btn{
-  width:32px;height:32px;border-radius:var(--r-sm);flex:0 0 auto;
+  width:30px;height:30px;border-radius:7px;flex:0 0 auto;
   display:grid;place-items:center;color:var(--text-2);
   transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
 }
 .icon-btn:hover{background:var(--surface-hover);color:var(--text);}
 .icon-btn:disabled{opacity:.35;cursor:not-allowed;}
-.icon-btn.sm{width:28px;height:28px;}
+.icon-btn.sm{width:26px;height:26px;}
 .icon-btn.danger:hover{background:var(--danger-soft);color:var(--danger-fg);}
 
 /* 行内文本按钮 */
@@ -151,9 +151,9 @@
 .input,.textarea,.select,
 .field input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"])),
 .field textarea,.field select{
-  width:100%;height:34px;padding:0 10px;
-  background-color:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
-  font-size:14px;color:var(--text);
+  width:100%;height:32px;padding:0 9px;
+  background-color:var(--surface);border:1px solid var(--border);border-radius:7px;
+  font-size:12.5px;color:var(--text);
   transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
 }
 .field textarea,.textarea{height:auto;min-height:72px;padding:var(--space-2) 10px;line-height:1.6;resize:vertical;}
@@ -220,11 +220,12 @@ select[multiple] option,select[size] option{padding:5px 8px;border-radius:var(--
 
 .mini-select{
   appearance:none;-webkit-appearance:none;
-  height:28px;padding:0 28px 0 10px;border-radius:var(--r-sm);
+  height:30px;padding:0 26px 0 9px;border-radius:7px;
   border:1px solid var(--border);background-color:var(--surface);color:var(--text-2);
-  font-size:13px;font-weight:550;
+  font-size:12px;font-weight:500;
   background-image:var(--select-chevron);
-  background-repeat:no-repeat;background-position:right 8px center;
+  background-repeat:no-repeat;background-position:right 7px center;
+  background-size:14px;
 }
 .mini-select:hover{border-color:var(--border-strong);color:var(--text);}
 .mini-select:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
@@ -394,17 +395,17 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover,
 input[type="week"]::-webkit-calendar-picker-indicator:hover{opacity:.85;}
 
 /* ===================== 4.3 Segmented ===================== */
-.seg{display:inline-flex;gap:2px;padding:2px;border-radius:var(--r-sm);background:var(--surface-sunken);flex-wrap:wrap;}
+.seg{display:inline-flex;gap:1px;height:30px;padding:2px;border-radius:7px;background:var(--surface-sunken);flex-wrap:nowrap;}
 .seg button{
-  height:28px;padding:0 10px;border-radius:var(--r-xs);
-  font-size:13px;font-weight:550;color:var(--text-2);white-space:nowrap;
+  height:26px;padding:0 9px;border-radius:5px;
+  font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap;
   transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
 }
 .seg button:hover,.seg button:focus-visible{background:var(--surface-active);color:var(--text);}
 .seg button:focus-visible{outline:none;box-shadow:0 0 0 2px var(--primary-border);}
 .seg button[aria-pressed="true"]{
-  background:var(--surface);color:var(--text);font-weight:650;
-  box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border);
+  background:var(--surface);color:var(--text);font-weight:600;
+  box-shadow:0 1px 2px rgba(16,24,40,.08);
 }
 .seg.grid4{display:grid;grid-template-columns:repeat(4,1fr);width:100%;}
 .seg.grid4 button{width:100%;padding:0 6px;overflow:hidden;text-overflow:ellipsis;}
@@ -418,8 +419,8 @@ input[type="week"]::-webkit-calendar-picker-indicator:hover{opacity:.85;}
 
 /* ===================== 4.4 / 4.5 Chip · Tag · Badge ===================== */
 .tag{
-  display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;
-  border-radius:var(--r-xs);font-size:12px;font-weight:600;
+  display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;
+  border-radius:5px;font-size:11px;font-weight:600;
   background:var(--surface-sunken);color:var(--text-2);border:1px solid transparent;
   max-width:100%;white-space:nowrap;
 }
@@ -462,7 +463,7 @@ html[data-theme="dark"] .tag.tag-cat{
 }
 /* 列表行状态：点开即改，省去「打开详情→编辑→选列→保存」 */
 .tag.row-status{
-  gap:3px;padding-right:5px;font-family:inherit;font-size:12px;font-weight:600;
+  gap:3px;padding-right:5px;font-family:inherit;font-size:11.5px;font-weight:600;
   appearance:none;cursor:pointer;
   transition:border-color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out);
 }
@@ -477,15 +478,15 @@ html[data-theme="dark"] .tag.tag-cat{
 .status-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
 
 .chip{
-  display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;
-  border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);
-  font-size:13px;font-weight:550;color:var(--text-2);flex:0 0 auto;
+  display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;
+  border-radius:7px;border:1px solid var(--border);background:var(--surface);
+  font-size:12px;font-weight:500;color:var(--text-2);flex:0 0 auto;
   transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),
              color var(--dur-fast) var(--ease-out);
 }
 .chip:hover,.chip:focus-visible{background:var(--surface-hover);border-color:var(--border-strong);color:var(--text);}
 .chip:focus-visible{outline:none;box-shadow:var(--ring-focus);}
-.chip .n{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;font-weight:600;}
+.chip .n{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;font-weight:600;}
 .chip[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
 .chip[aria-pressed="true"] .n{color:var(--primary-fg);}
 .chip.ghost{background:transparent;border-color:var(--border);color:var(--text-3);}
@@ -708,7 +709,7 @@ html[data-theme="dark"] .tag.tag-cat{
 .badge,.badge-dot{
   display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;
   border-radius:var(--r-pill);background:var(--danger-soft);color:var(--danger-fg);
-  font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
+  font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;
 }
 
 /* PriorityDot */
@@ -729,7 +730,7 @@ html[data-theme="dark"] .tag.tag-cat{
 /* ===================== 4.6 Avatar ===================== */
 .avatar{
   display:inline-grid;place-items:center;flex:0 0 auto;text-align:center;line-height:1;
-  width:24px;height:24px;border-radius:var(--r-sm);
+  width:24px;height:24px;border-radius:50%;
   background:var(--a,var(--avatar-8));color:#fff;font-size:11px;font-weight:700;
   letter-spacing:0;overflow:hidden;
 }
@@ -1570,8 +1571,8 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .menu-sec:first-child{padding-top:4px;}
 .menu-sec:not(:first-child){border-top:1px solid var(--border);margin-top:4px;}
 .menu-item{
-  display:flex;align-items:center;gap:var(--space-2);width:100%;height:32px;padding:0 10px;
-  border-radius:var(--r-xs);font-size:13px;color:var(--text);text-align:left;
+  display:flex;align-items:center;gap:var(--space-2);width:100%;height:30px;padding:0 9px;
+  border-radius:6px;font-size:12.5px;color:var(--text);text-align:left;
 }
 .menu-item svg{flex:0 0 auto;color:var(--text-3);}
 .menu-item:hover,.menu-item:focus-visible{background:var(--surface-hover);}
