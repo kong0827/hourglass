@@ -210,8 +210,8 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 }
 /* 缺陷严重度：与类型徽标并排，颜色按阻断/严重/一般/轻微递减 */
 .mini-tag.sev-blocker{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border);}
-.mini-tag.sev-critical{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
-.mini-tag.sev-major{background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border);}
+.mini-tag.sev-critical{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border);}
+.mini-tag.sev-major{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
 .mini-tag.sev-minor{background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border);}
 .card-title .mini-tag,.lr-t .mini-tag{margin-right:4px;vertical-align:0;}
 /* 看板密度：标题 / 类型徽标 / 描述统一收紧，避免用户故事卡被类型徽标撑高 */

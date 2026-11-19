@@ -275,7 +275,7 @@
 .notify-status.on .dotp{background:var(--success);}
 .notify-status.off .dotp{background:var(--warning);}
 .notify-status .sep{color:var(--border-strong);}
-.channel-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.channel-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
 @media (max-width:1279px){.channel-cards{grid-template-columns:1fr;}}
 .channel-card{
   text-align:left;padding:var(--space-3);border-radius:var(--r-md);

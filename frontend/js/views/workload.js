@@ -395,17 +395,16 @@ function summaryHTML(){
     + '<div class="wl-summary-item"><span>' + esc(periodLabel()) + '已计</span><b>' + fmtHours(worked) + '</b><small>逾期 ' + overdue + ' 项 · 阻塞 ' + blocked + ' 项</small></div>'
     + '</div>';
 }
-function statusChipsHTML(views){
-  var counts = { "":views.length, over:0, hot:0, ok:0, idle:0 };
-  views.forEach(function(mv){ counts[mv.status] = (counts[mv.status] || 0) + 1; });
+function statusChipsHTML(){
+  /* WL-3：人数只在 KPI 卡里出现，状态筛选不再重复同一个计数 */
   return '<div class="wl-chips" role="group" aria-label="按成员状态筛选">'
-    + chipHTML("", "全部", counts[""])
-    + STATUS_ORDER.map(function(key){ return chipHTML(key, STATUS_META[key].label, counts[key] || 0); }).join("")
+    + chipHTML("", "全部")
+    + STATUS_ORDER.map(function(key){ return chipHTML(key, STATUS_META[key].label); }).join("")
     + '</div>';
 }
-function chipHTML(key, label, count){
+function chipHTML(key, label){
   return '<button class="wl-chip" type="button" data-member-status="' + key + '" aria-pressed="' + (ui.status === key) + '">'
-    + label + '<b>' + count + '</b></button>';
+    + label + '</button>';
 }
 function groupNoteHTML(){
   if(ui.group === "role") return '<p class="roster-note">按成员在空间或项目中的有效主角色分组，兼岗不重复计入。</p>';

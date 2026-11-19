@@ -217,12 +217,12 @@ function msgTypeChips(){
   MSG_TYPE_META.forEach(function(m){
     var n = counts[m.key] || 0;
     if(!n && msgType !== m.key) return;
+    /* 类型计数留在左栏一处，顶部只看类型名，避免同一数字出现两遍 */
     html += '<button class="msg-chip' + (msgType === m.key ? " on" : "") + '" type="button" data-msg-type="' + m.key + '" aria-pressed="' + (msgType === m.key) + '">'
-      + esc(m.label) + (n ? ' <span class="n">' + n + '</span>' : '') + '</button>';
+      + esc(m.label) + '</button>';
   });
   if(counts.other || msgType === "other"){
-    html += '<button class="msg-chip' + (msgType === "other" ? " on" : "") + '" type="button" data-msg-type="other" aria-pressed="' + (msgType === "other") + '">其他'
-      + (counts.other ? ' <span class="n">' + counts.other + '</span>' : '') + '</button>';
+    html += '<button class="msg-chip' + (msgType === "other" ? " on" : "") + '" type="button" data-msg-type="other" aria-pressed="' + (msgType === "other") + '">其他</button>';
   }
   return html;
 }

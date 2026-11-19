@@ -9,7 +9,15 @@
 
 /* ===================== 6.3 看板 ===================== */
 /* 看板工具条：列内分组。列仍是状态，组只决定卡片在列内怎么归堆 */
-#view-board.on{display:flex;flex-direction:column;}
+#view-board.on{display:flex;flex-direction:column;position:relative;}
+/* 右侧还有列没露出时，右缘渐隐提示可继续横向翻看 */
+.board-edge-fade{
+  position:absolute;top:36px;right:0;bottom:0;width:56px;
+  pointer-events:none;opacity:0;
+  background:linear-gradient(to right,rgba(247,248,250,0),var(--bg-app) 82%);
+  transition:opacity var(--dur-fast) var(--ease-out);
+}
+#view-board.board-more-right .board-edge-fade{opacity:1;}
 /* 右侧还有列没露出时，在工具条右端给「还有 N 列」提示；点一下右翻一屏 */
 .board-more-pill{
   display:none;align-items:center;
@@ -26,6 +34,8 @@
   flex:0 0 auto;display:flex;align-items:center;gap:var(--space-2);
   height:36px;padding:0 var(--content-pad);
 }
+/* 工具条右端对齐：显示设置靠右，和原型一致 */
+.board-toolbar .spacer,.mine-toolbar .spacer{flex:1 1 auto;}
 .board-toolbar-label{font-size:12px;color:var(--text-3);font-weight:600;}
 .board-toolbar-field{display:inline-flex;align-items:center;gap:6px;}
 .board-toolbar-field .mini-select{height:28px;font-size:12px;}

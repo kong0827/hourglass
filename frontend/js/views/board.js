@@ -146,6 +146,8 @@ function updateBoardOverflow(){
   }
   pill.classList.toggle("on", hidden > 0);
   if(hidden) pill.textContent = "还有 " + hidden + " 列 →";
+  var section = document.getElementById("view-board");
+  if(section) section.classList.toggle("board-more-right", hidden > 0);
 }
 function readGroupFolds(){
   try{ return JSON.parse(localStorage.getItem(boardPrefKey(BOARD_GROUP_FOLD_KEY)) || "{}") || {}; }
