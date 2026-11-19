@@ -37,6 +37,8 @@ public class Task {
     private Boolean isMilestone = Boolean.FALSE;
     /** 预估耗时（分钟，空=没估过）。和 totalMinutes（实际投入）相除就是估时偏差 */
     private Integer estimateMinutes;
+    /** 测试预估（分钟，空=没估过）：只用于测试身份负载的剩余，不参与整体预估与实际偏差 */
+    private Integer testEstimateMinutes;
     private String note;
     private LocalDateTime completedAt;
     /* ---- 终态「已取消」（board_column='canceled'，sql/109）：原因与来源列只服务于筛选与恢复 ---- */

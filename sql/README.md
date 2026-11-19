@@ -72,6 +72,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `109_task_canceled.sql` 为工作项新增终态「已取消」。
 
+`112_task_test_estimate.sql` 给 `task` 增加 `test_estimate_minutes`（测试预估，分钟，空=没估过）：成员负载的测试剩余 = max(0, 测试预估 − 测试窗口内已计工时)，只对测试负责人身份下的「待测试 / 测试中」项累加并并入该成员总负载；整体预估的含义与开发剩余不变，两者各自独立。只增可空列，不回填历史数据，执行后表数量不变。
+
 `110_task_comment_content_length.sql` 只把 `task_comment.content` 从 `VARCHAR(500)` 放宽到 `VARCHAR(2000)`，让工作项评论能贴下错误日志与会议结论；不新增字段、不回填、不改权限与通知口径。后端截断上限与抽屉输入框 `maxlength` 同步为 2000。脚本按 `information_schema` 判断当前长度，已达标即跳过，可重复执行；执行后表数量不变。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。

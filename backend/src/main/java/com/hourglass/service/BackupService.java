@@ -936,6 +936,8 @@ public class BackupService {
             t.setBranchId(branchId);
             Integer est = b.getEstimateMinutes();
             t.setEstimateMinutes(est == null || est <= 0 ? null : Math.min(10080, est));
+            Integer testEst = b.getTestEstimateMinutes();
+            t.setTestEstimateMinutes(testEst == null || testEst <= 0 ? null : Math.min(10080, testEst));
             t.setBlocked(Boolean.TRUE.equals(b.getBlocked()));
             t.setBlockedReason(Boolean.TRUE.equals(b.getBlocked())
                     ? Texts.cut(Texts.trimToNull(b.getBlockedReason()), 120) : null);

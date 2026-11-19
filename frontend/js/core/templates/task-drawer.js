@@ -401,6 +401,14 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 <span class="hint" id="iEstimateHint">填了才能和实际计时比出你的估时系数</span>
               </div>
               <div class="field">
+                <label class="field-label" for="iTestEstimate">测试预估 <span class="foot-note">可选</span></label>
+                <div class="est-wrap">
+                  <input id="iTestEstimate" type="number" min="0" max="168" step="0.5" placeholder="例如 2" />
+                  <span class="est-unit">小时</span>
+                </div>
+                <span class="hint">只计入测试负责人剩余负载；不填按 0 计</span>
+              </div>
+              <div class="field">
                 <div class="field-label">节点</div>
                 <label class="row row-gap" style="gap:8px;height:32px">
                   <input type="checkbox" class="cbx" id="iMilestone" />

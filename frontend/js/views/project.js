@@ -210,7 +210,7 @@ function memberRows(members){
   if(!members.length) return '<tr><td colspan="6" class="manager-empty-cell">暂无未完成工作项</td></tr>';
   return members.map(function(m){
     return '<tr data-member-key="' + esc(m.key) + '" tabindex="0" title="查看该成员的项目工作项"><td><span class="manager-person">' + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></span><div class="manager-member-labels">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span class="roster-empty">空间岗位：' + esc(m.jobTitle) + '</span>' : '') + memberRoleTitles(m).map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("") + '</div></td>'
-      + '<td class="num">' + m.taskCount + '</td><td class="num">' + fmtHours(m.remainingMinutes) + '</td>'
+      + '<td class="num">' + m.taskCount + '</td><td class="num"' + (m.testRemainingMinutes ? ' title="' + esc('含测试剩余 ' + fmtHours(m.testRemainingMinutes)) + '"' : '') + '>' + fmtHours(m.remainingMinutes) + '</td>'
       + '<td class="num">' + fmtHours(m.actualWeekMinutes) + '</td><td>' + loadBarHTML(m.loadPct) + '</td>'
       + '<td>' + (m.overloaded ? '<span class="mini-tag over">超载</span>' : (m.loadPct >= 85 ? '<span class="mini-tag warn">接近满载</span>' : '<span class="mini-tag ok">正常</span>')) + '</td></tr>';
   }).join("");
@@ -443,9 +443,9 @@ function projectMemberTasks(key){
 function exportProjectMembers(){
   if(!cache) return;
   var rows = [["项目成员负载", cache.project.name], ["公司", memberFilter.companyName === "__unset__" ? "未设公司" : labelFilterText(memberFilter.companyName) || "全部公司", "角色", memberFilter.roleTitle === "__unset__" ? "未设角色" : labelFilterText(memberFilter.roleTitle) || "全部角色"], [],
-    ["成员","公司","空间默认岗位","项目有效角色（主+兼岗）","未完成工作项","剩余预估(小时)","本周已计(小时)","负载"]];
+    ["成员","公司","空间默认岗位","项目有效角色（主+兼岗）","未完成工作项","剩余预估(小时)","测试剩余(小时)","本周已计(小时)","负载"]];
   var members = filteredProjectMembers();
-  members.forEach(function(m){ rows.push([m.name,m.companyName || "未设公司",m.jobTitle || "",memberRoleTitles(m).join(" / "),m.taskCount,hoursNum(m.remainingMinutes),hoursNum(m.actualWeekMinutes),m.loadPct + "%"]); });
+  members.forEach(function(m){ rows.push([m.name,m.companyName || "未设公司",m.jobTitle || "",memberRoleTitles(m).join(" / "),m.taskCount,hoursNum(m.remainingMinutes),hoursNum(m.testRemainingMinutes),hoursNum(m.actualWeekMinutes),m.loadPct + "%"]); });
   rows.push([], ["成员","工作项","状态","截止","预估(小时)","实际(小时)"]);
   members.forEach(function(m){ projectMemberTasks(m.key).forEach(function(t){ rows.push([m.name,t.title,taskStatusName(t),fmtDate(t.dueDate),hoursNum(t.estimateMinutes),hoursNum(t.totalMinutes)]); }); });
   downloadCsv("项目成员负载.csv", rows); toast("已导出当前筛选成员与工作项", "fs");
@@ -1779,7 +1779,7 @@ function renderProject(){
         + '<span class="progress"><i style="width:' + ep.progressPct + '%"></i></span>'
         + '<button class="manager-epic-sub" type="button" data-epic="' + esc(ep.id) + '" title="查看该史诗的子项">' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</button></div>';
     }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
-  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（容量窗口工作日 × 各成员每日容量，未设置按 ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
+  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>（开发剩余 + 测试剩余）÷（容量窗口工作日 × 各成员每日容量，未设置按 ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
     + memberLabelFilters(cache.members || [], memberFilter, "project-member")
     + '<p class="roster-note">角色匹配本项目有效主角色或兼岗；下钻与导出使用相同成员范围。</p><button class="btn sm" type="button" data-project-member-export>导出当前成员负载</button>'
     + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'

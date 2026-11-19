@@ -10,7 +10,7 @@ import { loadReqs } from "./board.js";
 import { companyChipHTML } from "../lib/company.js";
 import { memberRoleTitles, labelFilterText } from "../lib/member-labels.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { assocLinkHTML, avatarHTML, fmtMinutesShort, taskIsPublished, taskPublicationHTML, taskPublicationText } from "../lib/format.js";
+import { assocLinkHTML, avatarHTML, fmtMinutesShort, taskIsPublished, taskPublicationHTML, taskPublicationText, typeBadgeHTML } from "../lib/format.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, taskStatusName } from "./manager-shared.js";
 
@@ -20,14 +20,16 @@ registerHelp({
     rows:[
       ["怎么算", "每个未完成工作项按 max(0, 预估 − 已计工时) 计算后求和；已超出预估的工作项按 0 计。", "ok"],
       ["只算未完成", "已完成工作项不参与；未填预估的未完成项按 0 计，可能低估实际剩余，成员工作台的「手里的工作项」会标出未填预估的项数。", "mute"],
+      ["不含测试剩余", "这里只算开发负责人的剩余；测试负责人名下的测试剩余单列，并计入该成员的总负载。名册顶部的「合计剩余」沿用本口径，避免同一项工时被开发与测试重复累加。", "warn"],
       ["和版本页不同", "版本详情的「剩余预估」直接累加未完成项预估、不扣已投入；这里扣了已计工时，两处数字会不一样。", "warn"]
     ]
   },
   "workload.load": {
     title:"负载",
     rows:[
-      ["怎么算", "剩余预估 ÷（容量窗口工作日 × 每日容量），四舍五入到整数百分比；每日容量取各成员自己的计时设置（每天最多计入几小时），未设置按 8h。", "ok"],
-      ["容量窗口", "从今天到该成员未完成工作项的最晚截止日，只数工作日；没有截止日按 5 天，至少 1 天、最多按一个月（默认 22 个工作日，可在配置文件调整）算。窗口只折算容量，不代表工作项必须在该截止日前做完。", "info"],
+      ["怎么算", "（开发剩余 + 测试剩余）÷（容量窗口工作日 × 每日容量），四舍五入到整数百分比；每日容量取各成员自己的计时设置（每天最多计入几小时），未设置按 8h。", "ok"],
+      ["测试剩余", "测试负责人名下的待测试 / 测试中工作项，按 max(0, 测试预估 − 测试窗口内已计工时) 计算；没填测试预估按 0 计。测试窗口从开始测试到测试结束，进行中的一轮暂不结算。", "info"],
+      ["容量窗口", "从今天到该成员未完成工作项（含待测试 / 测试中）的最晚截止日，只数工作日；没有截止日按 5 天，至少 1 天、最多按一个月（默认 22 个工作日，可在配置文件调整）算。窗口只折算容量，不代表工作项必须在该截止日前做完。", "info"],
       ["状态阈值", "大于 100% 为超载；85%–100% 为接近满载；低于 85% 为正常；没有在手工作项时为空闲。", "warn"],
       ["已计工时", "按计时开始日期落在所选工时区间统计；本周口径换周即清零，和负载不是同一个窗口。", "mute"],
       ["工时区间", "顶部可选本周、上周、近30天、本月；区间只改变工时统计，负载与容量仍按剩余预估和截止日计算。", "info"]
@@ -44,9 +46,10 @@ registerHelp({
   "workload.test": {
     title:"测试身份",
     rows:[
-      ["怎么算", "按工作项的「测试负责人」统计处于待测试 / 测试中的项数；负载、剩余预估与容量仍只按负责人计算。", "ok"],
+      ["怎么算", "按工作项的「测试负责人」统计处于待测试 / 测试中的项数；测试剩余 = max(0, 测试预估 − 测试窗口内已计工时)，并入该成员的总负载。", "ok"],
+      ["已计测试", "测试窗口内（开始测试 → 测试结束）自己在这个工作项上的计时合计；窗口还开着的一轮暂不结算，所以测试剩余会保持到整轮结束。", "info"],
       ["本周测试", "他在本周对自己负责测试的工作项上的计时合计，含已完成的那部分工作项。", "info"],
-      ["和手里的工作项不同", "「手里的工作项」与状态计数只含他负责开发的工作项，测试项只在测试行里另行统计。", "warn"]
+      ["和手里的工作项不同", "「手里的工作项」与状态计数只含他负责开发的工作项；测试项只在测试行与测试剩余里另行统计，再并入总负载。", "warn"]
     ]
   }
 });
@@ -293,7 +296,7 @@ function memberProjectList(m){
   function ensure(reqId, name){
     var key = reqId || "";
     if(!map[key]){
-      map[key] = { reqId:reqId || "", name:name || "未归类", taskCount:0, remainingMinutes:0, logMinutes:0, roleTitles:[] };
+      map[key] = { reqId:reqId || "", name:name || "未归类", taskCount:0, testTaskCount:0, remainingMinutes:0, testRemainingMinutes:0, logMinutes:0, roleTitles:[] };
       order.push(key);
     }
     return map[key];
@@ -301,7 +304,9 @@ function memberProjectList(m){
   (m.projects || []).forEach(function(p){
     var item = ensure(p.reqId, p.name);
     item.taskCount = Number(p.taskCount) || 0;
+    item.testTaskCount = Number(p.testTaskCount) || 0;
     item.remainingMinutes = Number(p.remainingMinutes) || 0;
+    item.testRemainingMinutes = Number(p.testRemainingMinutes) || 0;
     item.roleTitles = (p.roleTitles || []).slice();
   });
   (m.weekLogs || []).concat(m.lastWeekLogs || []).forEach(function(l){
@@ -344,7 +349,7 @@ function memberMatchesSearch(mv, terms){
   return terms.every(function(t){ return hay.indexOf(t) !== -1; });
 }
 function compareViews(a, b){
-  if(ui.sort === "remaining") return (Number(b.m.remainingMinutes) || 0) - (Number(a.m.remainingMinutes) || 0) || String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
+  if(ui.sort === "remaining") return (Number(b.m.loadRemainingMinutes) || 0) - (Number(a.m.loadRemainingMinutes) || 0) || String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
   if(ui.sort === "overdue") return b.counts.overdue - a.counts.overdue || (Number(b.m.loadPct) || 0) - (Number(a.m.loadPct) || 0);
   if(ui.sort === "name") return String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
   return (Number(b.m.loadPct) || 0) - (Number(a.m.loadPct) || 0) || String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
@@ -405,6 +410,9 @@ function projectScopeCounts(m, reqId){
 function memberCardHTML(mv, scope){
   var m = mv.m, counts = scope ? projectScopeCounts(m, scope.reqId) : mv.counts;
   var tests = scope ? testRefCounts(m.testTaskRefs, scope.reqId) : mv.tests;
+  var testRemainingMinutes = scope
+    ? Number((mv.projects.filter(function(p){ return (p.reqId || "") === (scope.reqId || ""); })[0] || {}).testRemainingMinutes) || 0
+    : Number(m.testRemainingMinutes) || 0;
   var roles = Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m);
   var projects = mv.projects.slice(0, 3);
   /* 卡片脚注展示「上周 Yh」时，进工作台默认也停在上周明细，保持同一窗口 */
@@ -415,7 +423,7 @@ function memberCardHTML(mv, scope){
     + memberStatusTag(mv.status) + '</div>'
     + '<div class="member-card-roles">' + memberRoleTagsHtml(roles, 3) + '</div>'
     + '<div class="member-loadline"><span class="caliber-label">总负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</span>'
-    + loadBarHTML(m.loadPct) + '<span>剩余 ' + fmtHours(m.remainingMinutes) + ' / 容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
+    + loadBarHTML(m.loadPct) + '<span' + (m.testRemainingMinutes ? ' title="' + esc('开发剩余 ' + fmtHours(m.remainingMinutes) + ' · 测试剩余 ' + fmtHours(m.testRemainingMinutes)) + '"' : '') + '>剩余 ' + fmtHours(m.loadRemainingMinutes) + ' / 容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
     + '<div class="member-card-stats">'
     + statHTML("进行中", counts.doing)
     + statHTML("待处理", counts.backlog)
@@ -426,6 +434,7 @@ function memberCardHTML(mv, scope){
         ? '<div class="member-card-tests"><span class="member-test-label">测试' + caliberMarkHTML("workload.test", false, "查看「测试身份」口径") + '</span>'
           + '<span>待测试 <b>' + tests.waiting + '</b></span>'
           + '<span>测试中 <b>' + tests.doing + '</b></span>'
+          + (testRemainingMinutes ? '<span>测试剩余 <b>' + fmtHours(testRemainingMinutes) + '</b></span>' : '')
           + (!scope && m.testWeekMinutes ? '<span>本周测试 <b>' + fmtHours(m.testWeekMinutes) + '</b></span>' : '')
           + '</div>'
         : '')
@@ -453,7 +462,7 @@ function groupMeta(entries){
   var over = 0, remaining = 0, tasks = 0;
   entries.forEach(function(pair){
     if(pair.mv.status === "over") over++;
-    remaining += pair.scope ? (Number(pair.mv.projects.filter(function(p){ return (p.reqId || "") === (pair.scope.reqId || ""); })[0] || {}).remainingMinutes) || 0 : (Number(pair.mv.m.remainingMinutes) || 0);
+    remaining += pair.scope ? (Number(pair.mv.projects.filter(function(p){ return (p.reqId || "") === (pair.scope.reqId || ""); })[0] || {}).remainingMinutes) || 0 : (Number(pair.mv.m.loadRemainingMinutes) || 0);
     tasks += pair.scope ? projectScopeCounts(pair.mv.m, pair.scope.reqId).open : pair.mv.counts.open;
   });
   return { over:over, remaining:remaining, tasks:tasks };
@@ -557,7 +566,7 @@ function memberKpisHTML(mv){
   var m = mv.m;
   return '<div class="member-sheet-kpis">'
     + '<div class="member-sheet-kpi"><i>未完成工作项</i><b>' + (m.tasks || []).length + ' 项</b></div>'
-    + '<div class="member-sheet-kpi"><i class="caliber-label">剩余预估' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</i><b>' + fmtHours(m.remainingMinutes) + '</b><span>按 ' + (m.workdays || 0) + ' 个工作日容量计</span></div>'
+    + '<div class="member-sheet-kpi"><i class="caliber-label">剩余预估' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</i><b>' + fmtHours(m.loadRemainingMinutes) + '</b><span>' + (m.testRemainingMinutes ? '含测试 ' + fmtHours(m.testRemainingMinutes) + ' · ' : '') + '按 ' + (m.workdays || 0) + ' 个工作日容量计</span></div>'
     + '<div class="member-sheet-kpi"><i>' + esc(periodLabel()) + '已计</i><b>' + fmtHours(periodMinutes(m)) + '</b><span>' + esc(periodHint(m)) + '</span></div>'
     + '<div class="member-sheet-kpi"><i class="caliber-label">负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</i><b>' + (Number(m.loadPct) || 0) + '%</b><span>容量 ' + fmtHours(m.capacityMinutes) + (perDaySuffix(m)) + '</span></div>'
     + '</div>';
@@ -575,27 +584,28 @@ function statePanelHTML(mv){
     + (mv.tests.total || Number(mv.m.testWeekMinutes)
         ? stateTileHTML("待测试", mv.tests.waiting, mv.tests.waiting ? "" : "mute")
           + stateTileHTML("测试中", mv.tests.doing, mv.tests.doing ? "" : "mute")
+          + stateTileHTML("测试剩余", mv.m.testRemainingMinutes ? fmtHours(mv.m.testRemainingMinutes) : "—", mv.m.testRemainingMinutes ? "" : "mute")
           + stateTileHTML("本周测试", mv.m.testWeekMinutes ? fmtHours(mv.m.testWeekMinutes) : "—")
         : '')
     + '</div>'
     + '<p class="member-state-note">最晚截止 ' + (c.latestDue ? esc(fmtDate(c.latestDue)) : "—")
     + ' · 最近计时 ' + (mv.lastLog ? esc(fmtDate(mv.lastLog)) : "—")
     + (c.unestimated ? ' · ' + c.unestimated + ' 项未填预估' : '')
-    + (mv.tests.total ? ' · 测试项 ' + mv.tests.total + ' 项另计' : '') + '</p>';
+    + (mv.tests.total ? ' · 测试项 ' + mv.tests.total + ' 项已计入负载' : '') + '</p>';
 }
 function stateTileHTML(label, value, tone){
   return '<div class="member-state' + (tone && tone !== "mute" ? ' ' + tone : '') + '"><i>' + label + '</i><b>' + value + '</b></div>';
 }
 function projectKey(reqId){ return reqId || "__none__"; }
 function projectsPanelHTML(mv){
-  var total = Number(mv.m.remainingMinutes) || 0;
+  var total = Number(mv.m.loadRemainingMinutes) || 0;
   var body = mv.projects.length ? mv.projects.map(function(p){
     var pct = total ? Math.round((Number(p.remainingMinutes) || 0) / total * 100) : 0;
     var roles = memberRoleTagsHtml(p.roleTitles && p.roleTitles.length ? p.roleTitles : memberRoleTitles(p), 2);
     return '<tr class="member-proj-row' + (memberUi.projectId === projectKey(p.reqId) ? ' on' : '') + '" data-member-project="' + esc(projectKey(p.reqId)) + '" tabindex="0" title="筛选该项目下的工作项">'
       + '<td><b class="manager-drill-title">' + esc(p.name) + '</b><div class="manager-member-labels">' + roles + '</div></td>'
-      + '<td class="num">' + (p.taskCount || 0) + '</td>'
-      + '<td class="num">' + fmtHours(p.remainingMinutes) + '</td>'
+      + '<td class="num">' + (p.taskCount || 0) + (p.testTaskCount ? ' <span class="roster-empty">+' + p.testTaskCount + ' 测试</span>' : '') + '</td>'
+      + '<td class="num"' + (p.testRemainingMinutes ? ' title="' + esc('含测试剩余 ' + fmtHours(p.testRemainingMinutes)) + '"' : '') + '>' + fmtHours(p.remainingMinutes) + '</td>'
       + '<td><div class="member-share"><span class="progress"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></div></td>'
       + '</tr>';
   }).join("") : '<tr><td colspan="4" class="manager-empty-cell">该成员暂无参与项目</td></tr>';
@@ -721,7 +731,7 @@ function memberPageHTML(mv){
     + '<header class="member-page-head"><div class="member-page-id">' + avatarHTML(m.name, "xl")
     + '<div><h2>' + esc(m.name) + memberStatusTag(mv.status) + '</h2>'
     + '<div class="member-page-meta">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span>岗位：' + esc(m.jobTitle) + '</span>' : '')
-    + '<span>剩余 ' + fmtHours(m.remainingMinutes) + ' · ' + esc(periodLabel()) + ' ' + fmtHours(periodMinutes(m)) + '</span></div>'
+    + '<span>剩余 ' + fmtHours(m.loadRemainingMinutes) + (m.testRemainingMinutes ? '（含测试 ' + fmtHours(m.testRemainingMinutes) + '）' : '') + ' · ' + esc(periodLabel()) + ' ' + fmtHours(periodMinutes(m)) + '</span></div>'
     + '<div class="member-card-roles">' + memberRoleTagsHtml(roles, 6) + '</div></div></div>'
     + '<div class="member-page-actions"><button class="btn sm soft" type="button" data-member-export>' + icon("download", 13) + '导出该成员 CSV</button></div></header>'
     + '<p class="roster-note">' + esc(workloadScopeText(cache)) + ' · 点击工作项打开详情</p>'
@@ -840,16 +850,16 @@ function exportWorkloadScope(){
   var range = periodRange(period);
   var rows = [["成员负载", workloadScopeText(cache)], ["统计日期", todayIso(), "工时区间", periodLabel(), range.from + " ~ " + range.to],
     ["本周开始", cache.weekStart || ""], [],
-    ["成员","状态","公司","空间默认岗位","项目角色（主+兼岗）","未完成工作项","逾期","阻塞","剩余预估(h)","容量(h)","负载","本周工时(h)","上周工时(h)","区间工时(h)"].concat(WEEK_DAY_NAMES.map(function(d){ return d + "(h)"; }))];
+    ["成员","状态","公司","空间默认岗位","项目角色（主+兼岗）","未完成工作项","逾期","阻塞","剩余预估(h)","测试剩余(h)","容量(h)","负载","本周工时(h)","上周工时(h)","区间工时(h)"].concat(WEEK_DAY_NAMES.map(function(d){ return d + "(h)"; }))];
   var members = cache.members || [];
   members.forEach(function(m){
     var counts = taskCounts(m.tasks);
     rows.push([m.name,STATUS_META[memberStatus(m, counts)].label,m.companyName || "未设公司",m.jobTitle || "",(Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m)).join(" / "),counts.open,counts.overdue,counts.blocked,
-      (Number(m.remainingMinutes) || 0) / 60,(Number(m.capacityMinutes) || 0) / 60,(m.loadPct || 0) + "%",(Number(m.weekMinutes) || 0) / 60,(Number(m.lastWeekMinutes) || 0) / 60,periodMinutes(m) / 60]
+      (Number(m.remainingMinutes) || 0) / 60,(Number(m.testRemainingMinutes) || 0) / 60,(Number(m.capacityMinutes) || 0) / 60,(m.loadPct || 0) + "%",(Number(m.weekMinutes) || 0) / 60,(Number(m.lastWeekMinutes) || 0) / 60,periodMinutes(m) / 60]
       .concat(WEEK_DAY_NAMES.map(function(_,i){ return (Number((m.dayMinutes || [])[i]) || 0) / 60; })));
   });
-  rows.push([], ["成员","项目","项目角色","未完成工作项","剩余预估(h)"]);
-  members.forEach(function(m){ (m.projects || []).forEach(function(p){ rows.push([m.name,p.name,(Array.isArray(p.roleTitles) ? p.roleTitles : memberRoleTitles(p)).join(" / "),p.taskCount,(Number(p.remainingMinutes) || 0) / 60]); }); });
+  rows.push([], ["成员","项目","项目角色","未完成工作项","剩余预估(h)","测试剩余(h)"]);
+  members.forEach(function(m){ (m.projects || []).forEach(function(p){ rows.push([m.name,p.name,(Array.isArray(p.roleTitles) ? p.roleTitles : memberRoleTitles(p)).join(" / "),p.taskCount,(Number(p.remainingMinutes) || 0) / 60,(Number(p.testRemainingMinutes) || 0) / 60]); }); });
   rows.push([], ["成员","项目","工作项","状态","优先级","截止","预估(h)","实际(h)"]);
   members.forEach(function(m){ (m.tasks || []).forEach(function(t){ rows.push([m.name,t.reqName,t.title,taskStatusName(t),t.priority || "",fmtDate(t.dueDate),(Number(t.estimateMinutes) || 0) / 60,(Number(t.totalMinutes) || 0) / 60]); }); });
   rows.push([], ["计时成员","项目","工作项","日期","耗时(h)","时段"]);
@@ -865,11 +875,11 @@ function exportMember(){
     ["公司", m.companyName || "未设公司", "岗位", m.jobTitle || "", "角色", (Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m)).join(" / ")],
     ["未完成工作项", counts.open, "进行中", counts.doing, "待处理", counts.backlog],
     ["逾期", counts.overdue, "阻塞", counts.blocked, "未填预估", counts.unestimated],
-    ["剩余预估(h)", (Number(m.remainingMinutes) || 0) / 60, "容量(h)", (Number(m.capacityMinutes) || 0) / 60, "负载", (Number(m.loadPct) || 0) + "%"],
+    ["剩余预估(h)", (Number(m.remainingMinutes) || 0) / 60, "测试剩余(h)", (Number(m.testRemainingMinutes) || 0) / 60, "容量(h)", (Number(m.capacityMinutes) || 0) / 60, "负载", (Number(m.loadPct) || 0) + "%"],
     ["本周工时(h)", (Number(m.weekMinutes) || 0) / 60, "上周工时(h)", (Number(m.lastWeekMinutes) || 0) / 60, "区间工时(h)", periodMinutes(m) / 60], [],
-    ["参与项目","我的角色","未完成","剩余预估(h)"]
+    ["参与项目","我的角色","未完成","剩余预估(h)","测试剩余(h)"]
   ];
-  mv.projects.forEach(function(p){ rows.push([p.name, (p.roleTitles || []).join(" / "), p.taskCount, (Number(p.remainingMinutes) || 0) / 60]); });
+  mv.projects.forEach(function(p){ rows.push([p.name, (p.roleTitles || []).join(" / "), p.taskCount, (Number(p.remainingMinutes) || 0) / 60, (Number(p.testRemainingMinutes) || 0) / 60]); });
   rows.push([], ["工作项","项目","状态","优先级","发布","截止","预估(h)","已计(h)"]);
   (m.tasks || []).forEach(function(t){ rows.push([t.title,t.reqName,taskStatusName(t),t.priority || "",taskPublicationText(t),fmtDate(t.dueDate),(Number(t.estimateMinutes) || 0) / 60,(Number(t.totalMinutes) || 0) / 60]); });
   rows.push([], ["计时日期","工作项","项目","耗时(h)","时段"]);
@@ -892,7 +902,7 @@ function renderWorkload(){
   if(memberUi.key){ renderMemberPage(); return; }
   var focusKey = document.activeElement && document.activeElement.dataset.workloadFilter;
   $("workloadBody").innerHTML = workloadToolbar() + '<p class="roster-note">' + esc(workloadScopeText(cache)) + '</p>'
-    + caliberHTML('负载 = 剩余预估工时 ÷（容量窗口工作日 × 每日容量）；每日容量取成员自己的计时设置（未设置按 ' + capacityHoursLabel(cache) + '），无截止日按 5 个工作日计，窗口上限 ' + maxWorkdaysLabel(cache) + ' 个工作日（约一个月）。窗口只决定容量，与实际截止日分开看。')
+    + caliberHTML('负载 =（开发剩余 + 测试剩余）÷（容量窗口工作日 × 每日容量）；测试剩余 = max(0, 测试预估 − 测试窗口内已计工时)，并入成员总负载。每日容量取成员自己的计时设置（未设置按 ' + capacityHoursLabel(cache) + '），无截止日按 5 个工作日计，窗口上限 ' + maxWorkdaysLabel(cache) + ' 个工作日（约一个月）。窗口只决定容量，与实际截止日分开看。')
     + (viewMode === 'week'
       ? weekTable()
       : '<div id="memberRoster" class="member-roster">' + rosterHTML() + '</div>');

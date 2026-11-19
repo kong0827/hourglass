@@ -4,7 +4,7 @@
 
   <sql id="cols">
     id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
-    progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+    progress, is_milestone, estimate_minutes, test_estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at,
     canceled_at, cancel_reason, cancel_from,
     test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at,
@@ -434,7 +434,7 @@
            t.test_owner_user_id, t.test_owner, t.test_requested_at, t.test_started_at, t.test_finished_at,
            t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
-           t.estimate_minutes, bc.processing_rule, w.name AS workspace_name
+           t.estimate_minutes, t.test_estimate_minutes, bc.processing_rule, w.name AS workspace_name
     FROM task t
     JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
     LEFT JOIN workspace w ON w.id = t.workspace_id
@@ -465,13 +465,13 @@
 
   <insert id="insert">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
-                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, test_estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       canceled_at, cancel_reason, cancel_from,
                       test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, item_no, epic_id, demand_id,
                       severity, environment, reproduce_steps, found_version_id, regression_status, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{categoryId},
-            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
+            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{testEstimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
             #{note}, #{completedAt}, #{canceledAt}, #{cancelReason}, #{cancelFrom}, #{testOwnerUserId}, #{testOwner}, #{testRequestedAt}, #{testStartedAt}, #{testFinishedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{itemNo}, #{epicId}, #{demandId},
             #{severity}, #{environment}, #{reproduceSteps}, #{foundVersionId}, #{regressionStatus},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
@@ -480,7 +480,7 @@
   <!-- 备份导入：多值写入，含回收站任务的 deleted_at（省掉逐行更新） -->
   <insert id="insertBatch">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
-                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes,
+                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, test_estimate_minutes,
                       is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       canceled_at, cancel_reason, cancel_from,
                       test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
@@ -491,7 +491,7 @@
     <foreach collection="list" item="t" separator=",">
       (#{t.id}, #{t.workspaceId}, #{t.title}, #{t.description}, #{t.priority}, #{t.owner}, #{t.ownerUserId},
        #{t.categoryId}, #{t.boardColumn}, #{t.startDate}, #{t.dueDate}, #{t.reqId}, #{t.reqDocId}, #{t.branchId},
-       #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
+       #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.testEstimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
        #{t.note}, #{t.completedAt}, #{t.canceledAt}, #{t.cancelReason}, #{t.cancelFrom}, #{t.testOwnerUserId}, #{t.testOwner}, #{t.testRequestedAt}, #{t.testStartedAt}, #{t.testFinishedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
        #{t.sortOrder}, COALESCE(#{t.itemType}, 'task'), #{t.itemNo}, #{t.epicId}, #{t.demandId},
        #{t.severity}, #{t.environment}, #{t.reproduceSteps}, #{t.foundVersionId}, #{t.regressionStatus},
@@ -516,6 +516,7 @@
       progress = #{progress},
       is_milestone = #{isMilestone},
       estimate_minutes = #{estimateMinutes},
+      test_estimate_minutes = #{testEstimateMinutes},
       is_blocked = #{blocked},
       blocked_reason = #{blockedReason},
       blocked_by_task_id = #{blockedByTaskId},

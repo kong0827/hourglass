@@ -529,6 +529,9 @@ public class TaskCommandService {
         /* 预估耗时：0 与空等价，都表示"没估过"，不要存 0 去污染系数计算 */
         Integer est = req.getEstimateMinutes();
         t.setEstimateMinutes(est == null || est <= 0 ? null : est);
+        /* 测试预估：同一套"0 与空等价"规则，只服务测试身份负载 */
+        Integer testEst = req.getTestEstimateMinutes();
+        t.setTestEstimateMinutes(testEst == null || testEst <= 0 ? null : testEst);
         t.setNote(Texts.trimToNull(req.getNote()));
         t.setRemindAt(req.getRemindAt());
         /* N-1：提醒谁（默认仅负责人；未知值归一，避免脏数据进入通知链路） */

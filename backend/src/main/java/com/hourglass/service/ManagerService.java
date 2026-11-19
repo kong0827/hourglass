@@ -1209,16 +1209,23 @@ public class ManagerService {
 
         List<Map<String, Object>> overloaded = new ArrayList<Map<String, Object>>();
         LinkedHashMap<String, MemberAccumulator> members = memberAccumulators(openTasks(snapshot.tasks), snapshot.members);
+        LinkedHashMap<String, List<Task>> testTasksByMember = testTasksByMember(snapshot.tasks, snapshot.members);
+        includeTestMembers(members, testTasksByMember, snapshot.members);
         for (MemberAccumulator member : members.values()) {
+            List<Task> testTasks = testTasksByMember.containsKey(member.key)
+                    ? testTasksByMember.get(member.key) : Collections.<Task>emptyList();
+            int testRemainingMinutes = testRemaining(testTasks);
             int remainingMinutes = remaining(member.tasks);
-            int workdays = workdays(member.latestDue, today);
-            int loadPct = loadPct(remainingMinutes, workdays * dailyCapacityMinutes(member.userId, users));
+            int workdays = workdays(latestDueFor(member.latestDue, testTasks), today);
+            int loadPct = loadPct(remainingMinutes + testRemainingMinutes,
+                    workdays * dailyCapacityMinutes(member.userId, users));
             if (loadPct > PERCENT) {
                 Map<String, Object> item = new LinkedHashMap<String, Object>();
                 item.put("key", member.key);
                 item.put("name", member.name);
                 item.put("loadPct", loadPct);
-                item.put("remainingMinutes", remainingMinutes);
+                item.put("remainingMinutes", remainingMinutes + testRemainingMinutes);
+                item.put("testRemainingMinutes", testRemainingMinutes);
                 overloaded.add(item);
             }
         }
@@ -1425,16 +1432,22 @@ public class ManagerService {
                                                      List<TimeLog> logs, LocalDate today,
                                                      Map<String, AppUser> users) {
         LinkedHashMap<String, MemberAccumulator> members = memberAccumulators(openTasks(tasks), workspaceMembers);
+        LinkedHashMap<String, List<Task>> testTasksByMember = testTasksByMember(tasks, workspaceMembers);
         Set<String> projectTaskIds = taskIds(tasks);
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         for (MemberAccumulator member : members.values()) {
+            List<Task> testTasks = testTasksByMember.containsKey(member.key)
+                    ? testTasksByMember.get(member.key) : Collections.<Task>emptyList();
+            int testRemainingMinutes = testRemaining(testTasks);
             int remainingMinutes = remaining(member.tasks);
-            int workdays = workdays(member.latestDue, today);
-            int loadPct = loadPct(remainingMinutes, workdays * dailyCapacityMinutes(member.userId, users));
+            int workdays = workdays(latestDueFor(member.latestDue, testTasks), today);
+            int loadPct = loadPct(remainingMinutes + testRemainingMinutes,
+                    workdays * dailyCapacityMinutes(member.userId, users));
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("key", member.key);
             item.put("name", member.name);
-            item.put("remainingMinutes", remainingMinutes);
+            item.put("remainingMinutes", remainingMinutes + testRemainingMinutes);
+            item.put("testRemainingMinutes", testRemainingMinutes);
             item.put("actualWeekMinutes", actualMinutes(member.userId, projectTaskIds, logs));
             item.put("taskCount", member.tasks.size());
             item.put("loadPct", loadPct);
@@ -1450,9 +1463,10 @@ public class ManagerService {
                                                Map<String, Task> tasksById, Map<String, AppUser> users) {
         int dailyCapacityMinutes = dailyCapacityMinutes(member.userId, users);
         int remainingMinutes = remaining(member.tasks);
-        int workdays = workdays(member.latestDue, today);
+        int testRemainingMinutes = testRemaining(testTasks);
+        int workdays = workdays(latestDueFor(member.latestDue, testTasks), today);
         int capacityMinutes = workdays * dailyCapacityMinutes;
-        int loadPct = loadPct(remainingMinutes, capacityMinutes);
+        int loadPct = loadPct(remainingMinutes + testRemainingMinutes, capacityMinutes);
         int weekMinutes = 0;
         int lastWeekMinutes = 0;
         int testWeekMinutes = 0;
@@ -1503,17 +1517,19 @@ public class ManagerService {
 
         LinkedHashMap<String, MemberProject> projectGroups = new LinkedHashMap<String, MemberProject>();
         for (Task task : member.tasks) {
-            String reqId = task.getReqId();
-            String key = reqId == null ? "" : reqId;
-            MemberProject group = projectGroups.get(key);
-            if (group == null) {
-                group = new MemberProject();
-                group.reqId = reqId;
-                group.name = reqNames.containsKey(reqId) ? reqNames.get(reqId) : UNCATEGORIZED_NAME;
-                projectGroups.put(key, group);
-            }
+            MemberProject group = projectGroup(projectGroups, task.getReqId(), reqNames);
             group.taskCount++;
             group.remainingMinutes += remaining(task);
+        }
+        /* 测试身份的项目归属：待测试 / 测试中的项也要能显示参与项目，剩余只算测试预估 */
+        for (Task task : testTasks) {
+            if (!Consts.COL_TEST.equals(task.getBoardColumn()) && !Consts.COL_TESTING.equals(task.getBoardColumn())) {
+                continue;
+            }
+            MemberProject group = projectGroup(projectGroups, task.getReqId(), reqNames);
+            group.testTaskCount++;
+            group.testRemainingMinutes += testRemaining(task);
+            group.remainingMinutes += testRemaining(task);
         }
         List<Map<String, Object>> projects = new ArrayList<Map<String, Object>>();
         for (MemberProject group : projectGroups.values()) {
@@ -1522,6 +1538,8 @@ public class ManagerService {
             item.put("name", group.name);
             item.put("remainingMinutes", group.remainingMinutes);
             item.put("taskCount", group.taskCount);
+            item.put("testTaskCount", group.testTaskCount);
+            item.put("testRemainingMinutes", group.testRemainingMinutes);
             projects.add(item);
         }
 
@@ -1529,6 +1547,8 @@ public class ManagerService {
         result.put("key", member.key);
         result.put("name", member.name);
         result.put("remainingMinutes", remainingMinutes);
+        result.put("testRemainingMinutes", testRemainingMinutes);
+        result.put("loadRemainingMinutes", remainingMinutes + testRemainingMinutes);
         result.put("workdays", workdays);
         result.put("capacityMinutes", capacityMinutes);
         result.put("capacityMinutesPerDay", dailyCapacityMinutes);
@@ -2645,6 +2665,57 @@ public class ManagerService {
         return Math.max(0, estimate - actual(task));
     }
 
+    /** 测试剩余：只算「待测试 / 测试中」的测试预估扣掉已结算的测试窗口工时，未填按 0 计。 */
+    private int testRemaining(List<Task> testTasks) {
+        int result = 0;
+        if (testTasks == null) {
+            return result;
+        }
+        for (Task task : testTasks) {
+            if (Consts.COL_TEST.equals(task.getBoardColumn()) || Consts.COL_TESTING.equals(task.getBoardColumn())) {
+                result += testRemaining(task);
+            }
+        }
+        return result;
+    }
+
+    private int testRemaining(Task task) {
+        int estimate = task.getTestEstimateMinutes() == null ? 0 : Math.max(0, task.getTestEstimateMinutes());
+        int tested = Math.max(0, minutes(task.getTestMinutes()));
+        return Math.max(0, estimate - Math.min(tested, estimate));
+    }
+
+    /** 容量窗口按成员全部在手任务（负责 + 待测试 / 测试中）的最晚截止日折算。 */
+    private LocalDate latestDueFor(LocalDate ownerDue, List<Task> testTasks) {
+        LocalDate latest = ownerDue;
+        if (testTasks == null) {
+            return latest;
+        }
+        for (Task task : testTasks) {
+            if (!Consts.COL_TEST.equals(task.getBoardColumn()) && !Consts.COL_TESTING.equals(task.getBoardColumn())) {
+                continue;
+            }
+            LocalDate due = task.getDueDate();
+            if (due != null && (latest == null || due.isAfter(latest))) {
+                latest = due;
+            }
+        }
+        return latest;
+    }
+
+    private MemberProject projectGroup(LinkedHashMap<String, MemberProject> groups, String reqId,
+                                       Map<String, String> reqNames) {
+        String key = reqId == null ? "" : reqId;
+        MemberProject group = groups.get(key);
+        if (group == null) {
+            group = new MemberProject();
+            group.reqId = reqId;
+            group.name = reqNames.containsKey(reqId) ? reqNames.get(reqId) : UNCATEGORIZED_NAME;
+            groups.put(key, group);
+        }
+        return group;
+    }
+
     private int actual(Task task) {
         return minutes(task.getTotalMinutes());
     }
@@ -3258,5 +3329,7 @@ public class ManagerService {
         private String name;
         private int remainingMinutes;
         private int taskCount;
+        private int testTaskCount;
+        private int testRemainingMinutes;
     }
 }

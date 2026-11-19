@@ -8,7 +8,7 @@ import { attachEnvDict, recordEnv } from "./env-dict.js";
 import { companyChipHTML, companyNameOf, companyColor } from "../lib/company.js";
 import { loadProjectMembers, peekProjectMembers, memberRoleTitles, effectiveMemberRole, taskMemberLabel } from "../lib/member-labels.js";
 import { openPeoplePicker, optionSubText } from "../lib/people-picker.js";
-import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, rfHoursAdd, commentAttachChips, commentAttachTip, commentCount, commentList, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeProject, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
+import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, rfHoursAdd, commentAttachChips, commentAttachTip, commentCount, commentList, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iTestEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeProject, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { createMentionPicker } from "./mention-picker.js";
 import { canEditReq, canEditTask, canManageProject, catNameById, colRuleOf, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
@@ -51,9 +51,10 @@ function syncDrawerDirty(){
   var dirty = !!rt.formDirty;
   var drawerEl = taskDrawer.querySelector(".drawer");
   if(drawerEl) drawerEl.classList.toggle("dirty", dirty);
-  if(taskFormHint){
-    taskFormHint.classList.toggle("dirty", dirty);
-    taskFormHint.textContent = dirty ? "有未保存的改动"
+  var hint = $("taskFormHint");
+  if(hint){
+    hint.classList.toggle("dirty", dirty);
+    hint.textContent = dirty ? "有未保存的改动"
       : (rt.drawerReadOnly ? "你对该项目只有查看权限，可查看但不能修改"
         : (drawerMode === "read" ? "点标题、描述或概览事实即可改，失焦自动保存；完整字段用「编辑」" : "保存后可拖动卡片调整状态与顺序"));
   }
@@ -164,8 +165,9 @@ function setDrawerMode(mode){
   if(btnDeleteTask) btnDeleteTask.hidden = rt.drawerReadOnly || !rt.editingId;
   var cancelBtn = $("btnCancelTask");
   if(cancelBtn) cancelBtn.textContent = isRead ? "关闭" : "取消";
-  if(taskFormHint && !rt.formDirty){
-    taskFormHint.textContent = rt.drawerReadOnly
+  var hint = $("taskFormHint");
+  if(hint && !rt.formDirty){
+    hint.textContent = rt.drawerReadOnly
       ? "你对该项目只有查看权限，可查看但不能修改"
       : (isRead ? "点标题、描述或概览事实即可改，失焦自动保存；完整字段用「编辑」" : "保存后可拖动卡片调整状态与顺序");
   }
@@ -437,6 +439,11 @@ function renderReadTestCard(){
   if(end){ dur = "历时 " + spanText(start || requested, end); durSub = (start ? "开始" : "提测") + " → 结束"; }
   else if(start){ dur = "已测 " + elapsedText(start); durSub = "开始 → 现在"; }
   else if(requested){ dur = "已等待 " + elapsedText(requested); durSub = "提测 → 现在"; }
+  var testEst = Math.max(0, Number(t.testEstimateMinutes) || 0);
+  if(testEst){
+    var estText = "测试预估 " + fmtMinutesShort(testEst);
+    durSub = durSub ? durSub + " · " + estText : estText;
+  }
   if($("readTestDur")) $("readTestDur").textContent = dur || "—";
   if($("readTestDurSub")) $("readTestDurSub").textContent = durSub;
   if($("readTestReassign")) $("readTestReassign").hidden = !editable || (col !== "test" && col !== "testing");
@@ -770,6 +777,7 @@ function formSnapshot(){
     start: iStart.value || "",
     due: iDue.value || "",
     estimate: (function(){ var h = iEstimate ? Number(iEstimate.value) : 0; return h > 0 ? Math.round(h * 60) : 0; })(),
+    testEstimate: (function(){ var h = iTestEstimate ? Number(iTestEstimate.value) : 0; return h > 0 ? Math.round(h * 60) : 0; })(),
     pri: rt.formPri || "",
     cat: rt.formCat || "",
     col: (iCol && iCol.value) || "",
@@ -828,7 +836,7 @@ var CONFLICT_FIELDS = [
   ["title", "标题"], ["description", "描述"], ["priority", "优先级"], ["categoryId", "分类"],
   ["owner", "负责人"], ["boardColumn", "状态"], ["startDate", "开始日期"], ["dueDate", "截止日期"],
   ["reqId", "所属项目"], ["itemType", "类型"], ["severity", "严重度"], ["environment", "环境"],
-  ["progress", "进度"], ["estimateMinutes", "预计耗时"], ["note", "备注"], ["branchId", "分支"],
+  ["progress", "进度"], ["estimateMinutes", "预计耗时"], ["testEstimateMinutes", "测试预估"], ["note", "备注"], ["branchId", "分支"],
   ["epicId", "史诗"], ["demandId", "需求"], ["versionIds", "版本"], ["tags", "标签"]
 ];
 function conflictValue(v){
@@ -2073,7 +2081,8 @@ function applyDrawerReadOnly(readOnly){
   if(branchHint) branchHint.textContent = readOnly
     ? "当前项目为只读项目，不能新建分支；可查看已有分支。"
     : "找不到合适的分支？点「新建分支」就地创建，建好自动选中，保存后生效。";
-  if(btnAttach) btnAttach.hidden = !!readOnly;
+  var attachBtn = $("btnAttach");
+  if(attachBtn) attachBtn.hidden = !!readOnly;
   if(btnSaveTask) btnSaveTask.hidden = !!readOnly;
   /* 只读项目：概览事实降级为纯文本，不再提示可点编辑 */
   var factsEl = $("readFacts");
@@ -2353,8 +2362,8 @@ function companyOfUser(userId){
 function ownerOptionHTML(o, selected, withLoad){
   var shared = rt.currentWs && rt.currentWs.type === "shared";
   var label = o.name + (shared ? " · " + (o.role || "未设角色") + " · " + (o.company || "未标注公司") : "");
-  /* 负载用驾驶舱同一口径：剩余预估 / 可用工作日；超载直接写在候选里，避免选完才发现。
-     测试负责人候选不叠加负载：那边关心的是测试窗口，不是本项目的开发剩余量。 */
+  /* 负载用驾驶舱同一口径：（开发剩余 + 测试剩余）/ 可用工作日；超载直接写在候选里，避免选完才发现。
+     测试负责人候选不叠加负载：那边关心的是测试窗口，不是本项目的剩余量。 */
   if(withLoad && shared && o.loadText) label += " · " + o.loadText;
   return '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (selected ? " selected" : "") + '>' + esc(label) + '</option>';
 }
@@ -2762,6 +2771,7 @@ function openTaskDrawer(colId, task, defaults){
     syncDateBounds();
     /* 预估耗时：库里存分钟，表单用小时（0.5 步进） */
     if(iEstimate) iEstimate.value = task.estimateMinutes ? (task.estimateMinutes / 60) : "";
+    if(iTestEstimate) iTestEstimate.value = task.testEstimateMinutes ? (task.testEstimateMinutes / 60) : "";
     renderActualEstimate(task.totalMinutes, task.estimateMinutes);
     rt.formPri = task.priority || "P2";
     /* 分类已删/不属于当前项目则视为「未分类」 */
@@ -2837,6 +2847,7 @@ function openTaskDrawer(colId, task, defaults){
     iDue.value = (defaults && defaults.dueDate) || "";
     syncDateBounds();
     if(iEstimate) iEstimate.value = "";
+    if(iTestEstimate) iTestEstimate.value = "";
     renderActualEstimate(0, null);
     rt.formPri = (defaults && defaults.priority) || "P2";
     /* 从需求拆解时沿用需求分类；显式传入（含空串=未分类）优先，只在没传时回落到该项目第一个 */
@@ -3775,6 +3786,7 @@ if(iEstimate) iEstimate.addEventListener("input", function(){
   var h = Number(this.value);
   renderActualEstimate(act, h > 0 ? Math.round(h * 60) : 0);
 });
+if(iTestEstimate) iTestEstimate.addEventListener("input", function(){ rt.formDirty = true; });
 if(iDue) iDue.addEventListener("change", function(){ syncDateBounds(); rt.formDirty = true; });
 if(segStart) segStart.addEventListener("click", function(e){
   var b = e.target.closest("[data-start]");
@@ -4679,6 +4691,12 @@ taskForm.addEventListener("submit", function(e){
     /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
     estimateMinutes: (function(){
       var h = iEstimate ? Number(iEstimate.value) : 0;
+      if(!h || h <= 0) return null;
+      return Math.min(10080, Math.round(h * 60));
+    })(),
+    /* 测试预估只服务测试负责人的剩余负载，同理空/0 视为没估 */
+    testEstimateMinutes: (function(){
+      var h = iTestEstimate ? Number(iTestEstimate.value) : 0;
       if(!h || h <= 0) return null;
       return Math.min(10080, Math.round(h * 60));
     })(),

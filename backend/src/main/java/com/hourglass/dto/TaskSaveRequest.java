@@ -123,6 +123,14 @@ public class TaskSaveRequest {
     @Max(value = 10080, message = "预估耗时不能超过 168 小时")
     private Integer estimateMinutes;
 
+    /**
+     * 测试预估（分钟，空=没估）。0 与空等价，都表示"没填"。
+     * 上限同整体预估 10080 分钟。只进测试身份的剩余与负载，不改开发剩余。
+     */
+    @Min(value = 0, message = "测试预估不能为负")
+    @Max(value = 10080, message = "测试预估不能超过 168 小时")
+    private Integer testEstimateMinutes;
+
     @Size(max = 80, message = "进度备注不能超过 80 字")
     private String note;
 

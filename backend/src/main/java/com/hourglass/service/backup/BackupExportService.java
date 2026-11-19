@@ -179,6 +179,7 @@ public class BackupExportService {
             b.setReqDocId(t.getReqDocId());
             b.setBranchId(t.getBranchId());
             b.setEstimateMinutes(t.getEstimateMinutes());
+            b.setTestEstimateMinutes(t.getTestEstimateMinutes());
             b.setBlocked(Boolean.TRUE.equals(t.getBlocked()));
             b.setBlockedReason(t.getBlockedReason());
             b.setOwnerUserId(t.getOwnerUserId());

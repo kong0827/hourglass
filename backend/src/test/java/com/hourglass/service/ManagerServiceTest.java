@@ -229,16 +229,24 @@ class ManagerServiceTest {
     }
 
     @Test
-    void workloadCountsTestOwnersWithoutChangingLoad() {
+    void workloadMergesTestEstimateIntoTestOwnerLoad() {
         Requirement requirement = requirement("R1", "项目一");
         Task waiting = openTask("T1", "R1", Consts.COL_TEST, 0);
         waiting.setTestOwnerUserId("U9");
+        waiting.setTestEstimateMinutes(240);
         Task testing = openTask("T2", "R1", Consts.COL_TESTING, 0);
         testing.setTestOwnerUserId("U9");
+        testing.setTestEstimateMinutes(180);
+        /* 已完成测试项：只计本周测试工时，不进测试剩余 */
         Task finished = openTask("T3", "R1", Consts.COL_DONE, 0);
         finished.setTestOwnerUserId("U9");
+        finished.setTestEstimateMinutes(300);
+        /* 既是开发负责人又兼测试：开发剩余与测试剩余合并进同一负载 */
         Task owned = openTask("T4", "R1", Consts.COL_DOING, 480);
         owned.setOwnerUserId("U1");
+        Task ownedTesting = openTask("T5", "R1", Consts.COL_TEST, 0);
+        ownedTesting.setTestOwnerUserId("U1");
+        ownedTesting.setTestEstimateMinutes(60);
 
         WorkspaceMember developer = new WorkspaceMember();
         developer.setUserId("U1");
@@ -247,21 +255,31 @@ class ManagerServiceTest {
         tester.setUserId("U9");
         tester.setDisplayName("Tess");
         TimeLog testLog = timeLog("U9", "T2", TODAY.atTime(9, 0), 54);
+        TimeAgg tested = actual("T2", 54);
+        tested.setTestMinutes(54);
 
-        ManagerService service = service(Arrays.asList(waiting, testing, finished, owned),
-                Arrays.asList(requirement), Collections.<TimeAgg>emptyList(),
+        ManagerService service = service(Arrays.asList(waiting, testing, finished, owned, ownedTesting),
+                Arrays.asList(requirement), Arrays.asList(tested),
                 Arrays.asList(testLog), Arrays.asList(developer, tester));
         List<Map<String, Object>> members = castList(service.workload(WORKSPACE, VIEWER).get("members"));
         Map<String, Object> testerRow = member(members, "U9");
 
         assertTrue(testerRow != null, "只有测试在手项的成员也要出现在负载名册");
-        assertEquals(0, testerRow.get("remainingMinutes"), "测试项不进剩余预估");
-        assertEquals(0, testerRow.get("loadPct"), "测试项不改负载百分比");
-        assertEquals(2400, testerRow.get("capacityMinutes"), "没有负责人的任务按默认 5 个工作日折算容量");
+        assertEquals(0, testerRow.get("remainingMinutes"), "测试项不进开发剩余（名册合计去重口径）");
+        assertEquals(366, testerRow.get("testRemainingMinutes"), "测试剩余 = 测试预估 − 测试窗口内已计工时");
+        assertEquals(366, testerRow.get("loadRemainingMinutes"), "测试剩余并入成员总负载的剩余");
+        assertEquals(2400, testerRow.get("capacityMinutes"), "没有截止日的测试项按默认 5 个工作日折算容量");
+        assertEquals(15, testerRow.get("loadPct"), "测试剩余计入负载百分比");
         assertEquals(1, testerRow.get("testWaiting"));
         assertEquals(1, testerRow.get("testDoing"));
         assertEquals(54, testerRow.get("testWeekMinutes"), "本周测试工时按测试负责人的计时统计");
         assertEquals(2, castList(testerRow.get("testTaskRefs")).size(), "已完成测试项只计工时，不进在手计数");
+
+        Map<String, Object> devRow = member(members, "U1");
+        assertEquals(480, devRow.get("remainingMinutes"), "开发剩余保持 owner 口径");
+        assertEquals(60, devRow.get("testRemainingMinutes"));
+        assertEquals(540, devRow.get("loadRemainingMinutes"), "兼测试的成员负载按开发 + 测试剩余合并");
+        assertEquals(23, devRow.get("loadPct"));
     }
 
     @Test

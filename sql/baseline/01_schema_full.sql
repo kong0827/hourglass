@@ -995,6 +995,7 @@ CREATE TABLE `task` (
   `test_requested_at` datetime DEFAULT NULL COMMENT '进入待测试 / 新一轮直接开始测试的提测时间',
   `test_started_at` datetime DEFAULT NULL COMMENT '进入测试中的时间（新一轮测试重新记录）',
   `test_finished_at` datetime DEFAULT NULL COMMENT '离开测试中的时间：测试通过或退回',
+  `test_estimate_minutes` int DEFAULT NULL COMMENT '测试预估（分钟，空=没估过）',
   `published_at` date DEFAULT NULL,
   `publish_source` varchar(16) DEFAULT NULL,
   `published_release_id` varchar(32) DEFAULT NULL,

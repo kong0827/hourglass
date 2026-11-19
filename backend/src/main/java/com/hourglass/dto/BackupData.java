@@ -95,6 +95,8 @@ public class BackupData {
         private String reqDocId;
         private String branchId;
         private Integer estimateMinutes;
+        /** 测试预估（分钟）：只服务测试身份负载；旧备份没有该字段 */
+        private Integer testEstimateMinutes;
         private Boolean blocked;
         private String blockedReason;
         private String ownerUserId;

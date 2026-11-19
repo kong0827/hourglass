@@ -324,6 +324,7 @@ function taskPayloadWith(t, patch){
     progress: Number(t.progress) || 0,
     isMilestone: !!t.isMilestone,
     estimateMinutes: t.estimateMinutes == null ? null : Number(t.estimateMinutes),
+    testEstimateMinutes: t.testEstimateMinutes == null ? null : Number(t.testEstimateMinutes),
     note: t.note || "",
     recurType: t.recurType || "",
     remindAt: t.remindAt || null,

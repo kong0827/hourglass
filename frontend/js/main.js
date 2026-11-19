@@ -17,7 +17,7 @@ import { loadUnread, routeNotificationLink } from "./core/notifications.js";
 import { initSSE } from "./core/realtime.js";
 import { VIEWS, showView, viewFromHash } from "./core/router.js";
 import { handleDeepLink, hashParam, openTaskById } from "./core/task-actions.js";
-import { buildFormControls, renderTagChips, syncFormSegs, syncProgVal } from "./core/task-drawer.js";
+import { buildFormControls, openTaskDrawer, renderTagChips, syncFormSegs, syncProgVal } from "./core/task-drawer.js";
 import { UI } from "./core/ui.js";
 import { rt } from "./core/state.js";
 import { loadBoard, loadReqs, showBoardSkeleton } from "./views/board.js";

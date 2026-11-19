@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 测试身份负载原型 · 测试预估并入个人总负载</title>
+<style>
+/* ==========================================================================
+   测试身份负载原型 · 2026-11-19
+   已落地口径：工作项新增「测试预估」（独立字段），
+   测试剩余 = max(0, 测试预估 − 测试窗口内已计)，
+   只统计「待测试 / 测试中」且本人为测试负责人的项，并入个人总负载。
+   ========================================================================== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --head-border:#D7DCE4;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF;
+  --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-fg:#B54708; --warning-border:#FEDF89;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318; --danger-border:#FDA29B;
+  --sat:#98A2B3;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --r-micro:4px; --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --focus-ring-sm:0 0 0 2px var(--primary-soft);
+  --ease-out:cubic-bezier(.2,.8,.2,1); --dur-fast:120ms;
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D; --surface-hover:#1F2937;
+  --border:#25303D; --border-strong:#334153; --head-border:#33414F;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C;
+  --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-fg:#FEC84B; --warning-border:#5C4A1E;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-fg:#FDA29B; --danger-border:#5C2A26;
+  --sat:#5C6A7C;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --focus-ring-sm:0 0 0 2px rgba(76,141,255,.28);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:var(--font-sans);font-size:13px;color:var(--text);background:var(--bg-app);
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;}
+button:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+
+/* ---------- 原型控制条 ---------- */
+.proto-bar{
+  position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:10px 24px;background:var(--surface);border-bottom:1px dashed var(--border-strong);
+}
+.proto-title{display:flex;flex-direction:column;gap:2px;margin-right:auto;min-width:0;}
+.proto-title b{font-size:13px;font-weight:650;}
+.proto-title span{font-size:12px;color:var(--text-3);}
+.proto-ctl{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);}
+.proto-ctl>span{white-space:nowrap;}
+.proto-note{font-size:11px;color:var(--text-3);padding-left:2px;}
+
+/* ---------- 分段控件 ---------- */
+.seg{display:inline-flex;padding:2px;background:var(--surface-sunken);border-radius:var(--r-sm);}
+.seg button{
+  height:26px;padding:0 10px;border-radius:var(--r-xs);font-size:12px;color:var(--text-2);
+  transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+}
+.seg button:hover{color:var(--text);}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow-xs);}
+.seg.mini button{height:24px;padding:0 8px;font-size:11.5px;}
+
+/* ---------- 页面骨架 ---------- */
+.page{max-width:1440px;margin:0 auto;padding:20px 24px 40px;}
+.page-title{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.page-title h1{font-size:20px;line-height:26px;font-weight:650;letter-spacing:-.01em;}
+.page-title p{font-size:12px;color:var(--text-3);padding-bottom:2px;}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.toolbar-id{display:flex;align-items:baseline;gap:8px;min-width:0;}
+.toolbar-id b{font-size:14px;font-weight:650;}
+.toolbar-id span{font-size:12px;color:var(--text-3);}
+.toolbar-actions{display:flex;align-items:center;gap:8px;}
+.btn{
+  display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:var(--r-xs);
+  border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:550;
+}
+.btn:hover{background:var(--surface-hover);color:var(--text);}
+.btn.soft{border-color:var(--border);background:var(--surface);}
+.filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.filters label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);}
+select.mini-select{
+  height:30px;padding:0 26px 0 9px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text-2);font:inherit;font-size:12.5px;appearance:none;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 6px center;
+}
+select.mini-select:focus{border-color:var(--primary);box-shadow:var(--focus-ring-sm);outline:none;}
+.wl-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.wl-search{
+  flex:1 1 240px;min-width:180px;height:30px;padding:0 10px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;outline:none;
+}
+.wl-search:focus{border-color:var(--primary);box-shadow:var(--focus-ring-sm);}
+.wl-search::placeholder{color:var(--text-3);}
+.roster-note{font-size:12px;color:var(--text-3);margin-bottom:10px;}
+.caliber-line{font-size:12px;line-height:19px;color:var(--text-3);margin:0 0 12px;padding:8px 10px;background:var(--surface-sunken);border-radius:var(--r-sm);}
+.caliber-line b{color:var(--text-2);font-weight:600;}
+.caliber-line code{font-family:Consolas,Menlo,monospace;font-size:11.5px;background:var(--surface);padding:1px 5px;border-radius:var(--r-micro);}
+
+/* ---------- 口径浮层 ---------- */
+.caliber-mark{
+  display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;flex:0 0 auto;
+  border-radius:50%;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-3);
+  font-size:11px;font-weight:700;line-height:1;cursor:pointer;font-family:inherit;
+}
+.caliber-mark:hover{color:var(--text);background:var(--surface-hover);border-color:var(--text-3);}
+.pop{
+  position:fixed;z-index:200;width:360px;max-width:88vw;padding:12px 14px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-lg);
+}
+.pop-title{font-size:13px;font-weight:650;margin-bottom:8px;}
+.pop-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;padding:5px 0;font-size:12px;line-height:18px;align-items:start;}
+.pop-row>span{color:var(--text-3);}
+.pop-tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-xs);font-size:11px;font-weight:600;white-space:nowrap;}
+.pop-tag.ok{background:var(--success-soft);color:var(--success-fg);}
+.pop-tag.info{background:var(--primary-soft);color:var(--primary-fg);}
+.pop-tag.warn{background:var(--warning-soft);color:var(--warning-fg);}
+.pop-tag.mute{background:var(--surface-sunken);color:var(--text-2);}
+
+/* ---------- 汇总条 ---------- */
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px;}
+.summary-item{
+  display:flex;flex-direction:column;gap:3px;min-width:0;padding:12px 14px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);
+}
+.summary-item>span{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-2);}
+.summary-item>b{font-size:24px;line-height:28px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+.summary-item>small{font-size:12px;color:var(--text-3);}
+
+/* ---------- 卡片网格 ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;align-items:start;}
+.card{
+  display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
+  text-align:left;
+}
+.card:hover{border-color:var(--primary-border);box-shadow:var(--shadow-md);}
+.card-head{display:flex;align-items:center;gap:10px;min-width:0;}
+.avatar{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:50%;
+  background:var(--primary-soft);color:var(--primary-fg);font-weight:650;
+}
+.avatar.lg{width:36px;height:36px;font-size:14px;}
+.avatar.xl{width:52px;height:52px;font-size:19px;}
+.card-id{flex:1;min-width:0;}
+.card-id>b{display:block;font-size:14px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:var(--text-3);}
+.company-chip{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;background:var(--surface-sunken);border-radius:var(--r-micro);font-size:11px;color:var(--text-2);}
+.status{display:inline-flex;align-items:center;flex:0 0 auto;height:22px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;font-weight:600;white-space:nowrap;}
+.status.ok{background:var(--success-soft);color:var(--success-fg);}
+.status.hot{background:var(--warning-soft);color:var(--warning-fg);}
+.status.over{background:var(--danger-soft);color:var(--danger-fg);}
+.status.idle{background:var(--surface-sunken);color:var(--text-3);}
+.card-roles{display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-height:20px;}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-micro);background:var(--surface-sunken);color:var(--text-2);font-size:11px;}
+.tag.role{background:var(--primary-soft);color:var(--primary-fg);}
+.tag.role.extra{background:var(--surface-sunken);color:var(--text-2);}
+.tag.test{background:var(--warning-soft);color:var(--warning-fg);}
+
+.loadline{display:grid;grid-template-columns:auto minmax(90px,1fr) auto;align-items:center;gap:4px 8px;font-size:12px;color:var(--text-3);}
+.loadline>span:last-child{grid-column:1/-1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.progress{position:relative;height:6px;border-radius:var(--r-xs);background:var(--surface-sunken);overflow:hidden;}
+.progress>i{display:block;height:100%;border-radius:inherit;background:var(--primary);}
+.loadline.hot .progress>i{background:var(--warning);}
+.loadline.over .progress>i{background:var(--danger);}
+.loadline b{min-width:38px;font-size:12px;text-align:right;color:var(--text-2);font-variant-numeric:tabular-nums;}
+.split-chip{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-micro);background:var(--warning-soft);color:var(--warning-fg);font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;}
+
+.card-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.stat{padding:7px 8px;background:var(--surface-sunken);border-radius:var(--r-md);text-align:center;min-width:0;}
+.stat>i{display:block;font-style:normal;font-size:11px;color:var(--text-3);}
+.stat>b{display:block;margin-top:2px;font-size:14px;font-weight:650;line-height:19px;color:var(--text);font-variant-numeric:tabular-nums;}
+.stat.danger{background:var(--danger-soft);}
+.stat.danger>b{color:var(--danger-fg);}
+.stat.warn{background:var(--warning-soft);}
+.stat.warn>b{color:var(--warning-fg);}
+
+.card-tests{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text-3);}
+.test-label{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--text-2);}
+.card-tests>span:not(.test-label){display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;background:var(--surface-sunken);border-radius:var(--r-pill);}
+.card-tests>span.rem{background:var(--warning-soft);color:var(--warning-fg);}
+.card-tests b{font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+.card-tests>span.rem b{color:var(--warning-fg);}
+
+.card-projects{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:22px;}
+.proj-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 8px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-pill);font-size:12px;color:var(--text-2);}
+.proj-chip>b{min-width:0;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.proj-chip>i{font-style:normal;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.proj-more{font-size:12px;color:var(--text-3);}
+.card-foot{display:flex;align-items:center;gap:10px;padding-top:8px;margin-top:auto;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);}
+.member-link{padding:0;border:0;background:none;font:inherit;font-size:12px;color:var(--primary-fg);cursor:pointer;margin-left:auto;}
+.member-link:hover{text-decoration:underline;}
+
+/* ---------- 成员工作台 ---------- */
+.member-page{display:flex;flex-direction:column;gap:14px;min-width:0;}
+.member-back{align-self:flex-start;padding:2px 6px;border-radius:var(--r-xs);font-size:13px;color:var(--primary-fg);}
+.member-back:hover{background:var(--surface-hover);}
+.member-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+.member-id{display:flex;align-items:center;gap:14px;min-width:0;}
+.member-id h2{display:flex;align-items:center;gap:8px;font-size:20px;line-height:24px;font-weight:650;}
+.member-meta{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-top:5px;font-size:12px;color:var(--text-3);}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.kpi{padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
+.kpi>i{display:block;font-style:normal;font-size:12px;color:var(--text-3);}
+.kpi>i.caliber-label{display:inline-flex;align-items:center;gap:4px;}
+.kpi>b{display:block;margin-top:3px;font-size:16px;line-height:22px;color:var(--text);font-variant-numeric:tabular-nums;}
+.kpi>span{display:block;margin-top:2px;font-size:12px;color:var(--text-3);}
+.two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;}
+.panel{padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);min-width:0;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}
+.panel-head>b{font-size:13px;font-weight:650;}
+.panel-head>span{font-size:12px;color:var(--text-3);}
+.state-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.state{padding:10px 8px;background:var(--surface-sunken);border-radius:var(--r-md);text-align:center;min-width:0;}
+.state>i{display:block;font-style:normal;font-size:12px;color:var(--text-3);}
+.state>b{display:block;margin-top:3px;font-size:16px;line-height:21px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+.state.test{background:var(--warning-soft);}
+.state.test>b{color:var(--warning-fg);}
+.state.danger{background:var(--danger-soft);}
+.state.danger>b{color:var(--danger-fg);}
+
+/* ---------- 表格 ---------- */
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.tbl th{height:36px;padding:0 10px;background:var(--surface-sunken);border-bottom:1px solid var(--head-border);color:var(--text-2);font-size:12px;font-weight:600;text-align:left;white-space:nowrap;}
+.tbl td{padding:11px 10px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle;}
+.tbl tbody tr:last-child td{border-bottom:none;}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.tbl .hl td{background:var(--primary-soft);}
+.tbl .hl td:first-child{box-shadow:inset 3px 0 0 var(--primary);}
+.tip{position:relative;cursor:help;border-bottom:1px dotted var(--border-strong);}
+.tip:hover::after{
+  content:attr(data-tip);position:absolute;right:0;bottom:calc(100% + 6px);z-index:30;
+  width:max-content;max-width:220px;padding:6px 9px;background:var(--text);color:var(--surface);
+  border-radius:var(--r-xs);box-shadow:var(--shadow-md);font-size:11.5px;font-weight:500;white-space:nowrap;
+}
+.tbl .muted{color:var(--text-3);}
+.cell-title{display:block;font-weight:600;color:var(--text);}
+.cell-sub{display:block;margin-top:2px;font-size:11.5px;color:var(--text-3);font-weight:400;}
+.pill{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-pill);font-size:11px;font-weight:600;white-space:nowrap;}
+.pill.testing{background:var(--primary-soft);color:var(--primary-fg);}
+.pill.waiting{background:var(--surface-sunken);color:var(--text-2);}
+.pill.p1{background:var(--danger-soft);color:var(--danger-fg);}
+.pill.p2{background:var(--warning-soft);color:var(--warning-fg);}
+.share{display:flex;align-items:center;gap:8px;min-width:130px;}
+.share .progress{flex:1;display:block;}
+.share b{min-width:34px;font-size:12px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums;}
+
+/* ---------- 工作项抽屉 ---------- */
+.drawer-wrap{
+  display:grid;grid-template-columns:minmax(0,1fr) 380px;max-width:1160px;margin:0 auto;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-lg);overflow:hidden;
+}
+.d-head{
+  grid-column:1/-1;display:flex;align-items:flex-start;gap:12px;padding:16px 18px;
+  border-bottom:1px solid var(--border);
+}
+.d-head-id{flex:1;min-width:0;}
+.d-head-id h2{display:flex;align-items:center;gap:8px;font-size:17px;line-height:24px;font-weight:650;flex-wrap:wrap;}
+.d-head-id h2 .code{font-size:13px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.d-meta{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-3);}
+.d-main{padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0;border-right:1px solid var(--border);}
+.d-side{padding:18px;background:var(--surface-sunken);display:flex;flex-direction:column;gap:12px;min-width:0;}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}
+.sec-head>b{font-size:13px;font-weight:650;}
+.sec-head>span{font-size:12px;color:var(--text-3);}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0;}
+.field-label{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text-2);}
+.foot-note{font-size:11px;font-weight:400;color:var(--text-3);}
+.input{
+  height:34px;width:100%;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text);font-size:13px;outline:none;
+}
+.input:hover{border-color:var(--text-3);}
+.input:focus{border-color:var(--primary);box-shadow:var(--focus-ring-sm);}
+.input[disabled]{background:var(--surface-sunken);color:var(--text-3);cursor:not-allowed;}
+.input.small{height:28px;width:84px;text-align:right;font-variant-numeric:tabular-nums;}
+.readonly-value{
+  display:flex;align-items:center;height:34px;padding:0 10px;border:1px solid var(--border);
+  border-radius:var(--r-xs);background:var(--surface-sunken);color:var(--text-2);font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+.hint{font-size:11px;color:var(--text-3);line-height:16px;}
+.test-card{border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;display:flex;flex-direction:column;gap:9px;background:var(--surface);}
+.tc-title{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;font-weight:600;color:var(--text-2);}
+.tc-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;font-size:12.5px;color:var(--text-3);}
+.tc-row>span:first-child{color:var(--text-2);}
+.tc-row>b{font-variant-numeric:tabular-nums;text-align:right;color:var(--text);}
+.tc-row>.bar{height:5px;}
+.tc-row>em{font-style:normal;font-size:11px;color:var(--text-3);}
+.tc-foot{padding-top:8px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--text-3);line-height:17px;}
+
+.side-card{padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);display:flex;flex-direction:column;gap:10px;}
+.side-title{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;font-weight:650;}
+.side-title span{font-size:11.5px;font-weight:400;color:var(--text-3);}
+.side-item{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.side-item>div{min-width:0;}
+.side-item b{display:block;font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.side-item small{display:block;margin-top:2px;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.side-item .rem{font-size:12px;font-variant-numeric:tabular-nums;color:var(--warning-fg);font-weight:650;white-space:nowrap;}
+.side-total{padding-top:9px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:6px;}
+.side-total .row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--text-3);}
+.side-total .row b{color:var(--text);font-variant-numeric:tabular-nums;}
+.side-total .row b.warn{color:var(--warning-fg);}
+.load-preview{display:flex;flex-direction:column;gap:8px;}
+.load-preview .nums{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.load-preview .nums b{font-size:26px;line-height:30px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+.load-preview .nums .was{font-size:12px;color:var(--text-3);text-decoration:line-through;font-variant-numeric:tabular-nums;}
+.load-preview .nums .tagline{font-size:11px;color:var(--text-3);}
+.load-preview .cap{font-size:11.5px;color:var(--text-3);line-height:17px;}
+.side-note{font-size:11.5px;line-height:17px;color:var(--text-3);}
+
+/* ---------- 驾驶舱成员表 ---------- */
+.cockpit{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);overflow:hidden;}
+.cockpit-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--border);}
+.cockpit-head b{font-size:13px;font-weight:650;}
+.cockpit-head span{font-size:12px;color:var(--text-3);}
+.cockpit .tbl th:first-child,.cockpit .tbl td:first-child{padding-left:14px;}
+.cockpit .tbl th:last-child,.cockpit .tbl td:last-child{padding-right:14px;}
+
+/* ---------- 底部说明 ---------- */
+.notes{margin-top:26px;padding:16px 18px;background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--r-lg);}
+.notes h2{font-size:14px;font-weight:650;margin-bottom:10px;}
+.notes h3{font-size:13px;font-weight:650;margin:14px 0 6px;}
+.notes table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.notes th,.notes td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;line-height:19px;}
+.notes th{background:var(--surface-sunken);color:var(--text-2);font-weight:600;font-size:12px;white-space:nowrap;}
+.notes td{color:var(--text-2);}
+.notes ul{font-size:12.5px;color:var(--text-2);line-height:21px;padding-left:18px;}
+.notes code{font-family:Consolas,Menlo,monospace;font-size:12px;background:var(--surface-sunken);padding:1px 5px;border-radius:var(--r-micro);}
+
+@media(max-width:1279px){
+  .summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));}
+}
+@media(max-width:980px){
+  .drawer-wrap{grid-template-columns:1fr;}
+  .d-main{border-right:none;border-bottom:1px solid var(--border);}
+}
+@media(max-width:760px){
+  .page{padding:16px;}
+  .grid{grid-template-columns:1fr;}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .two-col{grid-template-columns:1fr;}
+  .card-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .summary{grid-template-columns:1fr;}
+  .state-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .form-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<header class="proto-bar">
+  <div class="proto-title">
+    <b>原型 · 测试身份体现工作量（测试预估 → 测试剩余 → 总负载）</b>
+    <span>已落地口径 · 演示数据对齐 SXk01 诊断场景（周劲松：待测试 2 / 测试中 1 / 本周测试 0.9h）</span>
+  </div>
+  <div class="proto-ctl">
+    <span>视图</span>
+    <div class="seg mini" role="group" aria-label="切换视图">
+      <button type="button" data-proto-view="roster">名册</button>
+      <button type="button" data-proto-view="member">工作台</button>
+      <button type="button" data-proto-view="drawer">工作项抽屉</button>
+      <button type="button" data-proto-view="cockpit">驾驶舱成员表</button>
+    </div>
+  </div>
+  <div class="proto-ctl">
+    <span>口径</span>
+    <div class="seg mini" role="group" aria-label="切换口径">
+      <button type="button" data-merge="1">合并测试剩余</button>
+      <button type="button" data-merge="0">改前（仅开发）</button>
+    </div>
+  </div>
+  <div class="proto-ctl">
+    <span>每日容量</span>
+    <div class="seg mini" role="group" aria-label="切换每日容量">
+      <button type="button" data-perday="8">8h</button>
+      <button type="button" data-perday="9">9h</button>
+    </div>
+  </div>
+  <button class="btn soft" type="button" data-proto-theme>切换深色</button>
+</header>
+
+<main class="page">
+  <div class="page-title">
+    <h1>人员负载</h1>
+    <p id="page-sub">按人看参与项目、在手工作项与当前状态</p>
+  </div>
+
+  <div id="app"></div>
+
+  <section class="notes">
+    <h2>原型说明（与已落地实现一致）</h2>
+    <table>
+      <thead><tr><th>要点</th><th>做法</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>测试预估是独立字段</td>
+          <td>工作项「计划」区新增「测试预估（小时，可选）」，与开发「预计耗时」并存；不填按 0 计。</td>
+          <td>测试投入和开发投入是两笔账。混填会让开发剩余虚高，也说不清是谁的活。</td>
+        </tr>
+        <tr>
+          <td>只有测试身份有这份数字</td>
+          <td>测试剩余只统计「待测试 / 测试中」且本人为测试负责人的工作项；已完成、已取消的测试不再占用未来时间。</td>
+          <td>口径对齐「他接下来还要干什么」，而不是「他历史上测过什么」。</td>
+        </tr>
+        <tr>
+          <td>保守结算</td>
+          <td>测试剩余 = Σ max(0, 测试预估 − 测试窗口内已计)；窗口未开始的项已计按 0，进行中未收口的轮次也只用已计结算。</td>
+          <td>宁可把剩余算高，也不把还没发生的测试工时算成已完成，避免排期被低估。</td>
+        </tr>
+        <tr>
+          <td>并入个人总负载</td>
+          <td>总负载 =（开发剩余 + 测试剩余）÷（容量窗口工作日 × 每日容量），每日容量取本人计时设置。</td>
+          <td>一个人一周能投入的时间是一个池子，开发活和测试活共用同一份容量。</td>
+        </tr>
+        <tr>
+          <td>容量窗口纳入测试截止</td>
+          <td>窗口从今天算到在手工作项（含待测 / 在测）的最晚截止日，最少 5 个工作日、最多 22 个。</td>
+          <td>只有测试任务的人也有截止日，不能因为开发侧没活就按最短窗口算容量。</td>
+        </tr>
+        <tr>
+          <td>合计不重复计数</td>
+          <td>名册顶部「合计剩余」仍只算开发剩余，测试剩余在旁单独标注。</td>
+          <td>团队总量保持稳定可比；测试部分可在成员行与驾驶舱单独核对。</td>
+        </tr>
+        <tr>
+          <td>可追溯</td>
+          <td>成员工作台单列测试剩余与测试工作项；驾驶舱剩余列悬停显示「含测试剩余」，CSV 单列「测试剩余(小时)」。</td>
+          <td>合并成一个总负载后，仍要能拆开解释「为什么是这个数」。</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>已知边界（本方案不覆盖）</h3>
+    <ul>
+      <li>测试预估未填按 0，不按开发预估比例折算——口径可解释优先。</li>
+      <li>「测试窗口内已计」取计时记录；测试过程没有计时时，测试剩余会偏高。</li>
+      <li>测试计划 / 用例执行工时不在本链路内，后续若接入需要另定折算口径。</li>
+      <li>不新增「仅测试身份」的独立名册视图，测试身份并入成员行展示。</li>
+      <li>驾驶舱成员表仍只列有开发工作项的成员，纯测试身份需从「成员负载」名册的成员卡片查看。</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- 演示数据（对齐 SXk01 诊断场景） ---------- */
+  /* 周劲松的测试工作项：测试剩余由此实时计算 */
+  var TEST_TASKS = [
+    { id:"K-1008", title:"数据中台导出性能验证", col:"testing", colText:"测试中", pri:"P1",
+      project:"数据中台", owner:"李伟", est:1.5, logged:0.9, due:"11-25", window:"11-18 ~ 11-25" },
+    { id:"K-1024", title:"支付回调对账规则回归", col:"waiting", colText:"待测试", pri:"P1",
+      project:"支付网关重构", owner:"王芳", est:2.0, logged:0, due:"11-24", window:"未开始" },
+    { id:"K-1031", title:"客户门户登录改造验收", col:"waiting", colText:"待测试", pri:"P2",
+      project:"客户门户", owner:"陈明", est:3.0, logged:0, due:"11-21", window:"未开始" }
+  ];
+
+  var MEMBERS = [
+    {
+      key:"u-zhou", name:"周劲松", initial:"周", company:"东证自研", jobTitle:"测试",
+      roles:["测试负责人","测试"],
+      dev:0, devCount:0, workdays:5,
+      tests:{ waiting:2, doing:1, week:0.9 },
+      testFixed:0,          /* 周劲松的测试剩余由 TEST_TASKS 实时计算 */
+      today:0.3, lastLog:"11-19",
+      projects:[
+        { name:"数据中台", hours:0.6 },
+        { name:"支付网关重构", hours:2.0 },
+        { name:"客户门户", hours:3.0 }
+      ]
+    },
+    {
+      key:"u-li", name:"李伟", initial:"李", company:"东证自研", jobTitle:"前端开发",
+      roles:["前端开发"],
+      dev:137.7, devCount:13, week:24.0, workdays:30,
+      tests:null, testFixed:0,
+      today:4.0, lastLog:"11-19",
+      projects:[{ name:"客户门户", hours:80.0 },{ name:"技术平台", hours:57.7 }]
+    },
+    {
+      key:"u-wang", name:"王芳", initial:"王", company:"恒信咨询", jobTitle:"后端开发",
+      roles:["后端开发","测试负责人"],
+      dev:100.8, devCount:13, week:18.0, workdays:30,
+      tests:{ waiting:1, doing:0, week:1.6 },
+      testFixed:2.4,
+      today:3.0, lastLog:"11-18",
+      projects:[{ name:"数据中台", hours:62.8 },{ name:"技术平台", hours:38.0 }]
+    },
+    {
+      key:"u-chen", name:"陈明", initial:"陈", company:"恒信咨询", jobTitle:"实施顾问",
+      roles:["实施顾问"],
+      dev:81.6, devCount:8, week:16.0, workdays:30,
+      tests:null, testFixed:0,
+      today:2.0, lastLog:"11-17",
+      projects:[{ name:"支付网关重构", hours:55.6 },{ name:"运维平台", hours:26.0 }]
+    },
+    {
+      key:"u-zhao", name:"赵磊", initial:"赵", company:"东证自研", jobTitle:"运维",
+      roles:["运维"],
+      dev:0, devCount:0, week:0, workdays:30,
+      tests:null, testFixed:0,
+      today:0, lastLog:"11-12",
+      projects:[]
+    }
+  ];
+
+  var state = {
+    view:"roster",
+    memberKey:"u-zhou",
+    merge:true,
+    perDay:9,
+    theme:"light"
+  };
+
+  /* ---------- 工具 ---------- */
+  function fmtH(h){ return (Math.round(h * 10) / 10).toFixed(1) + "h"; }
+  function fmtEst(h){ return h > 0 ? (Math.round(h * 10) / 10).toFixed(1) + "h" : "未填"; }
+  function pctOf(part, whole){ return whole > 0 ? Math.round(part * 100 / whole) : 0; }
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function roleTags(roles){
+    return roles.map(function(r, i){
+      var isTest = r.indexOf("测试") === 0;
+      return '<span class="tag ' + (isTest ? "test" : (i ? "role extra" : "role")) + '">' + esc(r) + '</span>';
+    }).join("");
+  }
+  function caliberMark(title){
+    return '<button class="caliber-mark" type="button" aria-label="查看「' + esc(title) + '」口径" data-caliber="' + esc(title) + '">?</button>';
+  }
+  function findTask(id){
+    for(var i = 0; i < TEST_TASKS.length; i++) if(TEST_TASKS[i].id === id) return TEST_TASKS[i];
+    return null;
+  }
+  function taskRemaining(t){ return Math.max(0, t.est - t.logged); }
+  function zhouTestRemaining(){
+    return TEST_TASKS.reduce(function(n, t){ return n + taskRemaining(t); }, 0);
+  }
+
+  /* ---------- 派生口径 ---------- */
+  function testRemainingOf(m){
+    if(!state.merge) return 0;
+    if(m.key === "u-zhou") return zhouTestRemaining();
+    return m.testFixed || 0;
+  }
+  function devRemainingOf(m){ return m.dev; }
+  function totalRemainingOf(m){ return m.dev + testRemainingOf(m); }
+  function capacityOf(m){ return m.workdays * state.perDay; }
+  function loadPct(m){ return pctOf(totalRemainingOf(m), capacityOf(m)); }
+  function loadState(m){
+    if(!m.dev && !testRemainingOf(m) && !(m.tests && (m.tests.waiting || m.tests.doing))) return "idle";
+    var pct = loadPct(m);
+    if(pct > 100) return "over";
+    if(pct >= 85) return "hot";
+    return "ok";
+  }
+  var STATUS_TEXT = { ok:"正常", hot:"接近满载", over:"超载", idle:"空闲" };
+
+  /* ---------- 名册 ---------- */
+  function summaryHTML(){
+    var over = MEMBERS.filter(function(m){ return loadState(m) === "over"; }).length;
+    var dev = MEMBERS.reduce(function(n, m){ return n + m.dev; }, 0);
+    var test = MEMBERS.reduce(function(n, m){ return n + testRemainingOf(m); }, 0);
+    var open = MEMBERS.reduce(function(n, m){
+      return n + (m.tests ? (m.tests.waiting + m.tests.doing) : 0) + (m.key === "u-zhou" ? 0 : 0);
+    }, 0);
+    var worked = MEMBERS.reduce(function(n, m){ return n + (m.tests ? m.tests.week : 0); }, 0);
+    return '<div class="summary">'
+      + '<div class="summary-item"><span>成员</span><b>' + MEMBERS.length + ' 人</b><small>超载 ' + over + ' 人</small></div>'
+      + '<div class="summary-item"><span class="caliber-label">合计剩余（开发）' + caliberMark("合计剩余") + '</span><b>' + fmtH(dev) + '</b>'
+      + '<small>' + (state.merge ? "另计测试剩余 " + fmtH(test) : "改前口径：测试剩余不计入") + '</small></div>'
+      + '<div class="summary-item"><span>测试在办</span><b>' + open + ' 项</b><small>待测试 / 测试中（测试负责人）</small></div>'
+      + '<div class="summary-item"><span>本周测试已计</span><b>' + fmtH(worked) + '</b><small>只统计测试窗口内的计时</small></div>'
+      + '</div>';
+  }
+
+  function cardHTML(m){
+    var status = loadState(m);
+    var load = loadPct(m);
+    var testRem = testRemainingOf(m);
+    var projects = m.projects.slice(0, 3);
+    var split = "";
+    if(state.merge && m.tests){
+      split = '<span class="split-chip" title="开发剩余 ' + fmtH(m.dev) + ' · 测试剩余 ' + fmtH(testRem >= 0 ? testRem : 0) + '">测试 ' + fmtH(testRem >= 0 ? testRem : 0) + '</span>';
+    }
+    var title = "开发剩余 " + fmtH(m.dev) + " · 测试剩余 " + fmtH(state.merge ? (m.key === "u-zhou" ? zhouTestRemaining() : (m.testFixed || 0)) : 0)
+      + (state.merge ? "" : "（改前不计入负载）");
+    return '<article class="card" data-open-member="' + esc(m.key) + '" tabindex="0" role="button" aria-label="打开 ' + esc(m.name) + ' 的成员工作台">'
+      + '<div class="card-head"><span class="avatar lg">' + esc(m.initial) + '</span>'
+      + '<div class="card-id"><b>' + esc(m.name) + '</b>'
+      + '<div class="card-sub"><span class="company-chip">' + esc(m.company) + '</span><span>岗位：' + esc(m.jobTitle) + '</span></div></div>'
+      + '<span class="status ' + status + '">' + STATUS_TEXT[status] + '</span></div>'
+      + '<div class="card-roles">' + roleTags(m.roles) + '</div>'
+      + '<div class="loadline ' + (load > 100 ? "over" : load >= 85 ? "hot" : "") + '">'
+      + '<span class="label">总负载' + caliberMark("负载") + '</span>'
+      + '<div class="progress"><i style="width:' + Math.min(100, load) + '%"></i></div>'
+      + '<b>' + load + '%</b>'
+      + '<span title="' + esc(title) + '">剩余 ' + fmtH(totalRemainingOf(m)) + ' / 容量 ' + fmtH(capacityOf(m))
+      + '（' + m.workdays + ' 个工作日 × ' + state.perDay + 'h）' + split + '</span></div>'
+      + '<div class="card-stats">'
+      + statHTML("开发剩余", fmtH(m.dev))
+      + statHTML("测试剩余", state.merge ? (m.tests ? fmtH(m.key === "u-zhou" ? zhouTestRemaining() : (m.testFixed || 0)) : "—") : "未计入", state.merge && m.tests ? "warn" : "")
+      + statHTML("待测试", m.tests ? m.tests.waiting : "—")
+      + statHTML("测试中", m.tests ? m.tests.doing : "—")
+      + '</div>'
+      + (m.tests
+          ? '<div class="card-tests"><span class="test-label">测试' + caliberMark("测试身份") + '</span>'
+            + '<span>待测试 <b>' + m.tests.waiting + '</b></span>'
+            + '<span>测试中 <b>' + m.tests.doing + '</b></span>'
+            + '<span>本周测试 <b>' + fmtH(m.tests.week) + '</b></span>'
+            + (state.merge ? '<span class="rem">测试剩余 <b>' + fmtH(m.key === "u-zhou" ? zhouTestRemaining() : (m.testFixed || 0)) + '</b></span>' : '')
+            + '</div>'
+          : '')
+      + '<div class="card-projects">' + (projects.length
+          ? projects.map(function(p){
+              return '<span class="proj-chip"><b>' + esc(p.name) + '</b><i>' + fmtH(p.hours) + '</i></span>';
+            }).join("")
+            + (m.projects.length > projects.length ? '<span class="proj-more">+' + (m.projects.length - projects.length) + ' 个项目</span>' : '')
+          : '<span class="proj-more">暂无参与项目</span>') + '</div>'
+      + '<div class="card-foot"><span>今日 ' + (m.today ? fmtH(m.today) : "—") + '</span>'
+      + (m.lastLog ? '<span>最近计时 ' + esc(m.lastLog) + '</span>' : '')
+      + '<button class="member-link" type="button" data-open-member="' + esc(m.key) + '">工作台 →</button></div>'
+      + '</article>';
+  }
+  function statHTML(label, value, tone){
+    return '<div class="stat' + (tone ? ' ' + tone : '') + '"><i>' + label + '</i><b>' + value + '</b></div>';
+  }
+
+  function rosterHTML(){
+    return pageChromeHTML()
+      + summaryHTML()
+      + '<div class="grid">' + MEMBERS.map(cardHTML).join("") + '</div>';
+  }
+
+  function pageChromeHTML(){
+    return '<div class="toolbar"><div class="toolbar-id"><b>成员负载</b><span>按人看参与项目、在手工作项与当前状态</span></div>'
+      + '<div class="toolbar-actions"><div class="seg mini" role="group" aria-label="视图模式">'
+      + '<button type="button" aria-pressed="true">按人</button><button type="button" aria-pressed="false">按周</button></div>'
+      + '<button class="btn" type="button">导出当前范围 CSV</button></div></div>'
+      + '<div class="filters">'
+      + '<label>项目 <select class="mini-select"><option>全部项目</option><option>数据中台</option><option>支付网关重构</option><option>客户门户</option></select></label>'
+      + '<label>公司 <select class="mini-select"><option>全部公司</option><option>东证自研</option><option>恒信咨询</option></select></label>'
+      + '<label>角色 <select class="mini-select"><option>全部角色</option><option>测试负责人</option><option>前端开发</option><option>后端开发</option><option>实施顾问</option></select></label>'
+      + '<button class="btn soft" type="button">清除筛选</button></div>'
+      + '<div class="wl-filters">'
+      + '<input type="search" class="wl-search" placeholder="搜索成员、公司、角色或项目…" aria-label="搜索成员">'
+      + '<label>分组 <select class="mini-select"><option>不分组</option><option>按公司</option><option>按角色</option></select></label>'
+      + '<label>排序 <select class="mini-select"><option>负载从高到低</option><option>剩余工时从多到少</option><option>姓名</option></select></label></div>'
+      + '<p class="roster-note">项目：全部项目 · 公司：全部公司 · 角色：全部角色</p>'
+      + '<p class="caliber-line"><b>负载</b> =（开发剩余 + 测试剩余）÷（容量窗口工作日 × 每日容量）；'
+      + '<b>测试剩余</b> = max(0, 测试预估 − 测试窗口内已计)，只统计待测试 / 测试中且本人为测试负责人的项，并入成员总负载。'
+      + '当前演示每日容量 ' + state.perDay + 'h，线上逐人读取计时设置。</p>';
+  }
+
+  /* ---------- 成员工作台 ---------- */
+  function memberHTML(m){
+    var status = loadState(m);
+    var load = loadPct(m);
+    var testRem = testRemainingOf(m);
+    var hasTests = !!(m.tests && (m.tests.waiting || m.tests.doing || m.testFixed || m.key === "u-zhou"));
+    var totalHours = m.projects.reduce(function(n, p){ return n + p.hours; }, 0) || 1;
+    var tasksOfMember = m.key === "u-zhou" ? TEST_TASKS : [];
+    return '<div class="member-page">'
+      + '<button class="member-back" type="button" data-back>← 返回成员负载</button>'
+      + '<header class="member-head"><div class="member-id"><span class="avatar xl">' + esc(m.initial) + '</span>'
+      + '<div><h2>' + esc(m.name) + '<span class="status ' + status + '">' + STATUS_TEXT[status] + '</span></h2>'
+      + '<div class="member-meta"><span class="company-chip">' + esc(m.company) + '</span><span>岗位：' + esc(m.jobTitle) + '</span>'
+      + '<span>剩余 ' + fmtH(totalRemainingOf(m)) + '（开发 ' + fmtH(m.dev) + (state.merge && hasTests ? ' · 测试 ' + fmtH(testRem) : '') + '）</span></div>'
+      + '<div class="card-roles">' + roleTags(m.roles) + '</div></div></div>'
+      + '<div class="toolbar-actions"><button class="btn soft" type="button">导出该成员 CSV</button></div></header>'
+      + '<p class="roster-note">项目：全部项目 · 公司：全部公司 · 角色：全部角色 · 点击工作项打开详情</p>'
+      + '<div class="kpis">'
+      + '<div class="kpi"><i>未完成工作项</i><b>' + (hasTests ? (m.tests ? m.tests.waiting + m.tests.doing : 0) : 0) + ' 项</b><span>'
+      + (hasTests ? '待测试 ' + m.tests.waiting + ' · 测试中 ' + m.tests.doing : '无在办测试项') + '</span></div>'
+      + '<div class="kpi"><i class="caliber-label">剩余预估（含测试）' + caliberMark("剩余预估") + '</i><b>' + fmtH(totalRemainingOf(m)) + '</b><span>'
+      + (state.merge && hasTests ? '开发 ' + fmtH(m.dev) + ' · 测试 ' + fmtH(testRem) : '仅开发剩余 ' + fmtH(m.dev)) + '</span></div>'
+      + '<div class="kpi"><i class="caliber-label">负载' + caliberMark("负载") + '</i><b>' + load + '%</b><span>容量 ' + fmtH(capacityOf(m)) + '（' + m.workdays + ' 个工作日 × ' + state.perDay + 'h）</span></div>'
+      + '<div class="kpi"><i>本周测试已计</i><b>' + fmtH(m.tests ? m.tests.week : 0) + '</b><span>今日 ' + (m.today ? fmtH(m.today) : "—") + ' · 最近计时 ' + esc(m.lastLog || "—") + '</span></div>'
+      + '</div>'
+      + '<div class="two-col">'
+      + '<section class="panel"><div class="panel-head"><b>当前状态</b><span>此刻快照</span></div>'
+      + '<div class="state-grid">'
+      + (hasTests
+          ? '<div class="state"><i>待测试</i><b>' + (m.tests ? m.tests.waiting : 0) + '</b></div>'
+            + '<div class="state"><i>测试中</i><b>' + (m.tests ? m.tests.doing : 0) + '</b></div>'
+            + '<div class="state test"><i>测试剩余</i><b>' + fmtH(state.merge ? testRem : 0) + '</b></div>'
+            + '<div class="state"><i>本周测试已计</i><b>' + fmtH(m.tests ? m.tests.week : 0) + '</b></div>'
+            + '<div class="state"><i>今日已计</i><b>' + (m.today ? fmtH(m.today) : "—") + '</b></div>'
+            + '<div class="state"><i>总负载</i><b>' + load + '%</b></div>'
+          : '<div class="state"><i>开发剩余</i><b>' + fmtH(m.dev) + '</b></div>'
+            + '<div class="state"><i>总负载</i><b>' + load + '%</b></div>'
+            + '<div class="state"><i>今日已计</i><b>' + (m.today ? fmtH(m.today) : "—") + '</b></div>')
+      + '</div></section>'
+      + '<section class="panel"><div class="panel-head"><b>' + (m.key === "u-zhou" ? "测试工作项" : "参与项目") + '</b><span>'
+      + (m.key === "u-zhou" ? tasksOfMember.length + ' 项 · 测试负责人是我' : m.projects.length + ' 个') + '</span></div>'
+      + (m.key === "u-zhou"
+          ? '<table class="tbl"><thead><tr><th>编号 / 标题</th><th>状态</th><th class="num">测试预估</th><th class="num">窗口已计</th><th class="num">剩余</th></tr></thead><tbody>'
+            + TEST_TASKS.map(function(t){
+                return '<tr><td><span class="cell-title">' + esc(t.title) + '</span><span class="cell-sub">' + esc(t.id) + ' · 截止 ' + esc(t.due) + '</span></td>'
+                  + '<td><span class="pill ' + t.col + '">' + t.colText + '</span></td>'
+                  + '<td class="num">' + fmtH(t.est) + '</td>'
+                  + '<td class="num">' + (t.logged ? fmtH(t.logged) : "—") + '</td>'
+                  + '<td class="num"><b data-task-rem="' + esc(t.id) + '">' + fmtH(taskRemaining(t)) + '</b></td></tr>';
+              }).join("")
+            + '</tbody></table>'
+          : (m.projects.length
+              ? '<table class="tbl"><thead><tr><th>项目</th><th class="num">剩余</th><th>占比</th></tr></thead><tbody>'
+                + m.projects.map(function(p){
+                    var share = Math.round(p.hours * 100 / totalHours);
+                    return '<tr><td>' + esc(p.name) + '</td><td class="num">' + fmtH(p.hours) + '</td>'
+                      + '<td><div class="share"><div class="progress"><i style="width:' + share + '%"></i></div><b>' + share + '%</b></div></td></tr>';
+                  }).join("")
+                + '</tbody></table>'
+              : '<p class="roster-note">暂无参与项目</p>'))
+      + '</section></div>'
+      + '</div>';
+  }
+
+  /* ---------- 工作项抽屉 ---------- */
+  function drawerHTML(){
+    var m = MEMBERS[0];
+    var task = findTask("K-1008");
+    var canEdit = state.merge;
+    var testRem = state.merge ? zhouTestRemaining() : 0;
+    var load = pctOf((m.dev + testRem), capacityOf(m));
+    var before = pctOf(m.dev, capacityOf(m));
+    return '<div class="drawer-wrap">'
+      + '<div class="d-head"><div class="d-head-id">'
+      + '<h2><span class="code">K-1008</span>' + esc(task.title) + '<span class="pill testing">测试中</span><span class="pill p1">P1</span></h2>'
+      + '<div class="d-meta"><span>所属项目：' + esc(task.project) + '</span><span>负责人：' + esc(task.owner) + '</span>'
+      + '<span>测试负责人：周劲松</span><span>截止：' + esc(task.due) + '</span></div></div>'
+      + '<button class="btn soft" type="button">关闭</button></div>'
+      + '<div class="d-main">'
+      + '<section><div class="sec-head"><b>计划</b><span>测试预估只影响测试负责人的剩余负载</span></div>'
+      + '<div class="form-grid">'
+      + '<div class="field"><label class="field-label" for="zEstimate">预计耗时 <span class="foot-note">开发侧</span></label>'
+      + '<div class="readonly-value" id="zEstimate">0h（开发已于 11-17 完成）</div>'
+      + '<span class="hint">开发剩余按「预估 − 开发计时」计，与本字段互不影响</span></div>'
+      + '<div class="field"><label class="field-label" for="zTestEstimate">测试预估 <span class="foot-note">可选</span></label>'
+      + '<input class="input" id="zTestEstimate" data-est="K-1008" type="number" min="0" max="168" step="0.5" value="' + task.est + '"' + (canEdit ? '' : ' disabled') + ' />'
+      + '<span class="hint">' + (canEdit ? '只计入测试负责人剩余负载；不填按 0 计' : '改前版本没有该字段') + '</span></div>'
+      + '<div class="field"><label class="field-label">截止</label><div class="readonly-value">' + esc(task.due) + '</div></div>'
+      + '<div class="field"><label class="field-label">测试窗口</label><div class="readonly-value">' + esc(task.window) + '</div></div>'
+      + '</div></section>'
+      + '<section class="test-card"><div class="tc-title"><span>测试</span><span class="pill testing">测试中</span></div>'
+      + '<div class="tc-row"><span>测试窗口</span><span>' + esc(task.window) + ' · 已计 <b data-drawer-logged>' + fmtH(task.logged) + '</b></span><b></b></div>'
+      + '<div class="tc-row"><span>测试预估</span><div class="progress bar"><i data-drawer-bar style="width:' + Math.min(100, Math.round(task.logged * 100 / Math.max(0.1, task.est))) + '%"></i></div><b data-drawer-est>' + (task.est ? fmtH(task.est) : "未填") + '</b></div>'
+      + '<div class="tc-row"><span>测试剩余</span><span></span><b data-drawer-rem>' + (canEdit ? fmtH(taskRemaining(task)) : "不计入") + '</b></div>'
+      + '<div class="tc-foot">测试剩余 = max(0, 测试预估 − 测试窗口内已计)；窗口未结束的轮次只用已计结算，剩余不会凭空减少。</div>'
+      + '</section>'
+      + '<section><div class="sec-head"><b>其他测试项（周劲松）</b><span>用于对照负载联动</span></div>'
+      + '<table class="tbl"><thead><tr><th>编号 / 标题</th><th>状态</th><th class="num">测试预估</th><th class="num">测试剩余</th></tr></thead><tbody>'
+      + TEST_TASKS.map(function(t){
+          return '<tr' + (t.id === "K-1008" ? ' class="hl"' : '') + '><td><span class="cell-title">' + esc(t.title) + '</span><span class="cell-sub">' + esc(t.id) + ' · 截止 ' + esc(t.due) + '</span></td>'
+            + '<td><span class="pill ' + t.col + '">' + t.colText + '</span></td>'
+            + '<td class="num">' + fmtH(t.est) + '</td>'
+            + '<td class="num"><b data-task-rem="' + esc(t.id) + '">' + (canEdit ? fmtH(taskRemaining(t)) : "—") + '</b></td></tr>';
+        }).join("")
+      + '</tbody></table></section>'
+      + '</div>'
+      + '<aside class="d-side">'
+      + '<div class="side-card"><div class="side-title">测试负责人 · 周劲松<span>就地改测试预估</span></div>'
+      + TEST_TASKS.map(function(t){
+          return '<div class="side-item"><div><b>' + esc(t.title) + '</b><small>' + esc(t.id) + ' · 已计 ' + fmtH(t.logged) + '</small></div>'
+            + '<input class="input small" type="number" min="0" max="168" step="0.5" data-est="' + esc(t.id) + '" value="' + t.est + '"' + (canEdit ? '' : ' disabled') + ' aria-label="' + esc(t.title) + ' 测试预估（小时）" />'
+            + '<span class="rem" data-side-rem="' + esc(t.id) + '">' + (canEdit ? fmtH(taskRemaining(t)) : "—") + '</span></div>';
+        }).join("")
+      + '<div class="side-total">'
+      + '<div class="row"><span>开发剩余</span><b data-total-dev>' + fmtH(m.dev) + '</b></div>'
+      + '<div class="row"><span>测试剩余（3 项）</span><b class="warn" data-total-test>' + fmtH(testRem) + '</b></div>'
+      + '<div class="row"><span>容量（' + m.workdays + ' 个工作日 × ' + state.perDay + 'h）</span><b>' + fmtH(capacityOf(m)) + '</b></div>'
+      + '</div></div>'
+      + '<div class="side-card load-preview"><div class="side-title">周劲松 · 总负载</div>'
+      + '<div class="nums"><b data-total-load>' + load + '%</b><span class="was">改前 ' + before + '%</span><span class="tagline">' + (load > before ? "测试剩余已计入" : "尚未计入测试剩余") + '</span></div>'
+      + '<div class="progress"><i data-load-bar style="width:' + Math.min(100, load) + '%"></i></div>'
+      + '<div class="cap">剩余 ' + fmtH(m.dev + testRem) + ' / 容量 ' + fmtH(capacityOf(m)) + '；改前只显示开发剩余 ' + fmtH(m.dev) + '，所以是 0%。</div></div>'
+      + '<p class="side-note">试试改上面的测试预估：测试剩余、总负载会实时重算。清空表示不填，按 0 计。</p>'
+      + '</aside>'
+      + '</div>';
+  }
+
+  /* ---------- 驾驶舱成员表 ---------- */
+  function cockpitHTML(){
+    /* 驾驶舱成员表只列有开发工作项的成员；纯测试身份在「成员负载」名册里看 */
+    var rows = MEMBERS.filter(function(m){ return m.devCount > 0; }).map(function(m){
+      var testRem = state.merge ? (m.key === "u-zhou" ? zhouTestRemaining() : (m.testFixed || 0)) : 0;
+      var load = loadPct(m);
+      var status = loadState(m);
+      return '<tr' + (testRem ? ' class="hl"' : '') + '>'
+        + '<td><span class="cell-title">' + esc(m.name) + '</span>'
+        + '<span class="cell-sub">' + esc(m.company) + ' · ' + esc(m.roles.join(" / ")) + '</span></td>'
+        + '<td class="num">' + m.devCount + '</td>'
+        + '<td class="num">' + (testRem
+            ? '<span class="tip" data-tip="含测试剩余 ' + fmtH(testRem) + '">' + fmtH(totalRemainingOf(m)) + '</span>'
+            : fmtH(totalRemainingOf(m))) + '</td>'
+        + '<td class="num">' + fmtH(m.week) + '</td>'
+        + '<td><div class="share"><div class="progress"><i style="width:' + Math.min(100, load) + '%"></i></div><b>' + load + '%</b></div></td>'
+        + '<td><span class="pill ' + (status === "over" ? "p1" : status === "hot" ? "p2" : "waiting") + '">'
+        + (status === "over" ? "超载" : status === "hot" ? "接近满载" : "正常") + '</span></td>'
+        + '</tr>';
+    }).join("");
+    return '<div class="cockpit">'
+      + '<div class="cockpit-head"><div><b>项目驾驶舱 · 成员负载</b> <span>'
+      + (state.merge
+          ? '（开发剩余 + 测试剩余）÷（容量窗口工作日 × 各成员每日容量，未设置按 ' + state.perDay + 'h）；剩余列悬停可看含测试剩余'
+          : '（仅开发剩余 ÷ 容量，改前口径）')
+      + '</span></div>'
+      + '<button class="btn soft" type="button">导出当前成员负载</button></div>'
+      + '<table class="tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table>'
+      + '<p class="roster-note" style="padding:10px 14px 12px;margin:0">角色匹配本项目有效主角色或兼岗；下钻与导出使用相同成员范围，导出 CSV 单列「测试剩余(小时)」。'
+      + '纯测试身份（如周劲松）没有开发工作项，不在本表出现，测试剩余请看「成员负载」名册的成员卡片。</p>'
+      + '</div>';
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render(){
+    document.documentElement.setAttribute("data-theme", state.theme);
+    document.querySelectorAll("[data-proto-view]").forEach(function(b){
+      b.setAttribute("aria-pressed", b.dataset.protoView === state.view);
+    });
+    document.querySelectorAll("[data-merge]").forEach(function(b){
+      b.setAttribute("aria-pressed", (b.dataset.merge === "1") === state.merge);
+    });
+    document.querySelectorAll("[data-perday]").forEach(function(b){
+      b.setAttribute("aria-pressed", Number(b.dataset.protoPerday) === state.perDay);
+    });
+    var themeBtn = document.querySelector("[data-proto-theme]");
+    themeBtn.textContent = state.theme === "dark" ? "切换浅色" : "切换深色";
+    var sub = document.getElementById("page-sub");
+    var m = MEMBERS.filter(function(x){ return x.key === state.memberKey; })[0] || MEMBERS[0];
+    if(state.view === "drawer") sub.textContent = "工作项抽屉 · 计划区新增「测试预估」，右侧实时显示测试负责人的负载变化";
+    else if(state.view === "cockpit") sub.textContent = "驾驶舱成员表 · 剩余预估已含测试剩余，悬停可看拆分；纯测试身份不在此表出现";
+    else sub.textContent = "按人看参与项目、在手工作项与当前状态";
+    var html;
+    if(state.view === "member") html = memberHTML(m);
+    else if(state.view === "drawer") html = drawerHTML();
+    else if(state.view === "cockpit") html = cockpitHTML();
+    else html = rosterHTML();
+    document.getElementById("app").innerHTML = html;
+    closePop();
+  }
+
+  /* ---------- 实时重算（不重渲染，保留输入焦点） ---------- */
+  function refreshNumbers(){
+    var m = MEMBERS[0];
+    var canEdit = state.merge;
+    TEST_TASKS.forEach(function(t){
+      var rem = canEdit ? taskRemaining(t) : null;
+      document.querySelectorAll('[data-task-rem="' + t.id + '"]').forEach(function(el){
+        el.textContent = canEdit ? fmtH(rem) : "—";
+      });
+      document.querySelectorAll('[data-side-rem="' + t.id + '"]').forEach(function(el){
+        el.textContent = canEdit ? fmtH(rem) : "—";
+      });
+    });
+    var task = findTask("K-1008");
+    var drawerEst = document.querySelector("[data-drawer-est]");
+    if(drawerEst) drawerEst.textContent = task.est ? fmtH(task.est) : "未填";
+    var drawerRem = document.querySelector("[data-drawer-rem]");
+    if(drawerRem) drawerRem.textContent = canEdit ? fmtH(taskRemaining(task)) : "不计入";
+    var drawerBar = document.querySelector("[data-drawer-bar]");
+    if(drawerBar) drawerBar.style.width = Math.min(100, Math.round(task.logged * 100 / Math.max(0.1, task.est))) + "%";
+    var testTotal = canEdit ? zhouTestRemaining() : 0;
+    var load = pctOf(m.dev + testTotal, capacityOf(m));
+    document.querySelectorAll("[data-total-test]").forEach(function(el){ el.textContent = fmtH(testTotal); });
+    document.querySelectorAll("[data-total-load]").forEach(function(el){ el.textContent = load + "%"; });
+    document.querySelectorAll("[data-load-bar]").forEach(function(el){ el.style.width = Math.min(100, load) + "%"; });
+  }
+
+  /* ---------- 口径浮层 ---------- */
+  var pop = null;
+  var TIPS = {
+    "负载": {
+      rows:[
+        ["怎么算", "（开发剩余 + 测试剩余）÷（容量窗口工作日 × 每日容量），每日容量取本人计时设置。", "ok"],
+        ["容量窗口", "今天 → 在手工作项（含待测 / 在测）最晚截止日，最少 5 个工作日、最多 22 个。", "info"],
+        ["改前", "只有开发剩余参与计算，纯测试身份会显示 0%。", "warn"]
+      ]
+    },
+    "剩余预估": {
+      rows:[
+        ["开发剩余", "每个未完成开发工作项 max(0, 预估 − 已计) 求和。", "ok"],
+        ["测试剩余", "每个待测试 / 测试中项 max(0, 测试预估 − 测试窗口内已计) 求和，只算本人为测试负责人的项。", "info"],
+        ["未填", "测试预估未填按 0 计，所以「测试剩余 0」不代表没测试活。", "warn"]
+      ]
+    },
+    "合计剩余": {
+      rows:[
+        ["口径", "名册顶部合计仍只累加开发剩余，保持团队总量稳定可比。", "ok"],
+        ["测试部分", "测试剩余在各成员卡片与驾驶舱单独标注，可逐项核对。", "info"]
+      ]
+    },
+    "测试身份": {
+      rows:[
+        ["怎么算", "待测试 / 测试中按工作项的「测试负责人」统计；测试剩余按测试预估与测试窗口内已计结算。", "ok"],
+        ["和开发不同", "状态计数只含本人负责测试的项，测试剩余并入个人总负载。", "warn"],
+        ["不重复", "已完成 / 已取消的测试项不再产生测试剩余。", "mute"]
+      ]
+    }
+  };
+  function closePop(){
+    if(pop && pop.parentNode) pop.parentNode.removeChild(pop);
+    pop = null;
+  }
+  function openPop(anchor, title){
+    closePop();
+    var def = TIPS[title]; if(!def) return;
+    pop = document.createElement("div");
+    pop.className = "pop";
+    pop.setAttribute("role", "dialog");
+    pop.innerHTML = '<div class="pop-title">' + esc(title) + '</div>'
+      + def.rows.map(function(r){
+          return '<div class="pop-row"><span class="pop-tag ' + esc(r[2] || "mute") + '">' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>';
+        }).join("");
+    document.body.appendChild(pop);
+    var rect = anchor.getBoundingClientRect();
+    var left = Math.min(rect.left, window.innerWidth - pop.offsetWidth - 12);
+    var top = rect.bottom + 6;
+    if(top + pop.offsetHeight > window.innerHeight - 12) top = rect.top - pop.offsetHeight - 6;
+    pop.style.left = Math.max(12, left) + "px";
+    pop.style.top = Math.max(12, top) + "px";
+  }
+
+  /* ---------- 事件 ---------- */
+  document.addEventListener("click", function(e){
+    var t = e.target;
+    var viewBtn = t.closest("[data-proto-view]");
+    if(viewBtn){ state.view = viewBtn.dataset.protoView; render(); return; }
+    var mergeBtn = t.closest("[data-merge]");
+    if(mergeBtn){ state.merge = mergeBtn.dataset.merge === "1"; render(); return; }
+    var perDayBtn = t.closest("[data-perday]");
+    if(perDayBtn){ state.perDay = Number(perDayBtn.dataset.protoPerday); render(); return; }
+    if(t.closest("[data-proto-theme]")){
+      state.theme = state.theme === "dark" ? "light" : "dark";
+      render(); return;
+    }
+    var caliber = t.closest("[data-caliber]");
+    if(caliber){ openPop(caliber, caliber.dataset.caliber); return; }
+    if(pop && !t.closest(".pop")) closePop();
+    var open = t.closest("[data-open-member]");
+    if(open){
+      state.memberKey = open.dataset.openMember;
+      state.view = "member";
+      render();
+      window.scrollTo({ top:0, behavior:"instant" });
+      return;
+    }
+    if(t.closest("[data-back]")){ state.view = "roster"; render(); return; }
+  });
+
+  document.addEventListener("input", function(e){
+    var inp = e.target.closest ? e.target.closest("[data-est]") : null;
+    if(!inp || !state.merge) return;
+    var id = inp.dataset.est;
+    var t = findTask(id);
+    if(!t) return;
+    var v = Number(inp.value);
+    if(!isFinite(v) || v < 0) v = 0;
+    v = Math.min(168, v);
+    t.est = Math.round(v * 10) / 10;
+    document.querySelectorAll('[data-est="' + id + '"]').forEach(function(other){
+      if(other !== inp) other.value = t.est ? String(t.est) : "";
+    });
+    refreshNumbers();
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape") closePop();
+    if((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("card")){
+      e.preventDefault();
+      state.memberKey = e.target.dataset.openMember;
+      state.view = "member";
+      render();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
