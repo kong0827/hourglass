@@ -81,7 +81,7 @@ function catNameById(id){
 function catTag(id){
   var name = catNameById(id);
   if(!name) return "";
-  return '<span class="tag tag-cat" style="--tag-c:' + catColor(id) + '">' +
+  return '<span class="tag tag-cat" title="' + esc(name) + '" style="--tag-c:' + catColor(id) + '">' +
     '<i class="dot"></i><span class="tag-txt">' + esc(name) + '</span></span>';
 }
 /** 直接吃名称的标签：完成快照等历史值没有 ID，只有完成当时的名称 */
@@ -91,7 +91,7 @@ function catTagByName(name){
   for(var i = 0; i < rt.categoriesCache.length; i++){
     if(rt.categoriesCache[i].name === name){ color = safeColor(rt.categoriesCache[i].color); break; }
   }
-  return '<span class="tag tag-cat" style="--tag-c:' + color + '">' +
+  return '<span class="tag tag-cat" title="' + esc(name) + '" style="--tag-c:' + color + '">' +
     '<i class="dot"></i><span class="tag-txt">' + esc(name) + '</span></span>';
 }
 function tagChip(name){

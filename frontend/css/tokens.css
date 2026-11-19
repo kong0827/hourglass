@@ -83,6 +83,9 @@
   --filterbar-h:48px;
   --app-foot-h:26px;
   --content-pad:24px;
+  /* 右下角 AI 助手球的避让带：球 48px + 底边距 24px，再留 8px 呼吸。
+     可滚内容与列脚按这个高度预留，避免悬浮球压住最后一行操作或「查看全部」 */
+  --fab-safe:80px;
   --drawer-w:680px;
   --drawer-w-lg:800px;
   --board-col-w:300px;

@@ -1325,7 +1325,7 @@ function reqDocSplitNodeHTML(r, depth, hasChild, collapsed){
           : '<span class="rs-lock" title="仅文档负责人或空间管理员可编辑 / 删除">' + icon("lock", 11) + '</span>') +
       '</span>'
     : '';
-  return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-rs-doc="' + esc(r.id) + '"' +
+  return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-rs-doc="' + esc(r.id) + '" title="' + esc(r.title) + '"' +
     ' data-rs-reqid="' + esc(r.reqId || "") + '"' +
     ' data-rs-depth="' + depth + '">' +
     caret +

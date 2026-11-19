@@ -6153,7 +6153,7 @@ function planRowHTML(p){
       + '<button class="icon-btn sm" type="button" data-plan-del="' + esc(p.id) + '" aria-label="删除计划">' + icon("trash", 14) + '</button>'
       + '</span>';
   }
-  return '<div class="tc-row" data-plan-open="' + esc(p.id) + '">'
+  return '<div class="tc-row plan-row" data-plan-open="' + esc(p.id) + '">'
     + planBadgeHTML(p.status)
     + '<div class="tc-main">'
     +   '<div class="tc-title">' + esc(p.name) + '</div>'

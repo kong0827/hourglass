@@ -188,6 +188,10 @@
 .view.cov-mode #tcFilterBar,
 .view.plans-mode #tcFilterBar{display:none;}
 .tc-plans{display:flex;flex-direction:column;gap:6px;}
+/* 计划行只有四格：状态 / 主体 / 结果计数 / 操作。用例行的九列网格不适用计划行，
+   否则主体会被压到 50px、计数被顶到最右，文字逐字换行 */
+.tc-row.plan-row{grid-template-columns:auto minmax(0,1fr) auto minmax(120px,auto);}
+.tc-row.plan-row .plan-counts{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:4px;}
 .plan-bar{height:4px;border-radius:2px;background:var(--surface-sunken);margin-top:6px;overflow:hidden;}
 .plan-bar i{display:block;height:100%;background:var(--primary);border-radius:2px;transition:width .2s;}
 .plan-counts{display:flex;flex-direction:column;gap:3px;align-items:flex-end;white-space:nowrap;}
