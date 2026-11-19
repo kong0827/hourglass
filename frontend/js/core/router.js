@@ -159,6 +159,54 @@ function syncTab(name){
     if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
   });
 }
+/* ---------- 跨视图返回：从详情跳到文档 / 用例等页面后，左下角留一条回到来源的入口 ---------- */
+var returnOrigin = null;
+function returnPillEl(){
+  var el = document.getElementById("returnOrigin");
+  if(el) return el;
+  el = document.createElement("div");
+  el.id = "returnOrigin";
+  el.className = "return-origin";
+  el.hidden = true;
+  el.innerHTML =
+    '<button class="return-origin-go" type="button" title="回到来源页面">'
+    + '<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10H4"/><path d="m9 5-5 5 5 5"/></svg>'
+    + '<span>返回</span><b data-return-label></b></button>'
+    + '<button class="return-origin-x" type="button" aria-label="关闭返回入口" title="关闭">'
+    + '<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>'
+    + '</button>';
+  el.addEventListener("click", function(e){
+    if(e.target.closest(".return-origin-x")){ setReturnOrigin(null); return; }
+    if(!e.target.closest(".return-origin-go")) return;
+    var origin = returnOrigin;
+    if(!origin) return;
+    var entered = showView(origin.view);
+    Promise.resolve(entered).then(function(){
+      /* 被「未保存改动」守卫拦下时仍停在目标页，保留入口，别丢掉原来的返回位置 */
+      if(activeView !== origin.view) return;
+      setReturnOrigin(null);
+      if(origin.restore) origin.restore();
+    });
+  });
+  document.body.appendChild(el);
+  return el;
+}
+function syncReturnPill(){
+  var el = returnPillEl();
+  if(!returnOrigin || activeView === returnOrigin.view){ el.hidden = true; return; }
+  var label = el.querySelector("[data-return-label]");
+  if(label){
+    label.textContent = returnOrigin.label
+      || (VIEWS[returnOrigin.view] && VIEWS[returnOrigin.view].title) || "上一页";
+  }
+  el.hidden = false;
+}
+/* origin: { view, label, restore? }；restore 在回到来源视图后执行，用来重开原抽屉 */
+function setReturnOrigin(origin){
+  returnOrigin = origin || null;
+  syncReturnPill();
+}
+
 var routeSeq = 0;
 var scrollMemo = Object.create(null);
 function saveScroll(){
@@ -185,6 +233,7 @@ function showView(name){
     var guard = new CustomEvent("ds:before-route", {cancelable:true, detail:{from:activeView, to:name}});
     if(!window.dispatchEvent(guard)){
       try{ history.replaceState(null, "", "#/" + activeView); }catch(e){ /* noop */ }
+      /* 跳转被拦下：保留返回入口，处理完未保存改动后还能再点一次 */
       return Promise.resolve(null);
     }
   }
@@ -220,6 +269,9 @@ function showView(name){
   updateBrand();
   window.dispatchEvent(new CustomEvent("ds:view-change", { detail: { view: name } }));
   UI.closeAllPops();
+  /* 已经回到来源视图（手动导航或胶囊返回）就结束这次返回上下文，别让胶囊跟到后续页面 */
+  if(returnOrigin && activeView === returnOrigin.view) setReturnOrigin(null);
+  else syncReturnPill();
   syncViewHash(name);
   var entered = loadPriorities().then(function(){
     if(!isCurrent()) return null;
@@ -491,4 +543,4 @@ window.addEventListener("ds:route-go", function(e){
   if(to && VIEWS[to]) showView(to);
 });
 
-export { VIEWS, activeView, refreshActiveView, showView, viewFromHash };
+export { VIEWS, activeView, refreshActiveView, showView, viewFromHash, setReturnOrigin };

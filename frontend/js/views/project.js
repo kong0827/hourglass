@@ -5,6 +5,7 @@ import { $, viewTitle } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
+import { setReturnOrigin } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { canEditReq, canManageProject, catNameById, dueState, projectOptionsHTML, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -57,8 +58,19 @@ var VIEW_KEY = "project-view";
 var cache = null, seq = 0;
 var pfCache = null, expanded = {};
 var moduleUi = { adding:false, deleting:"" };
-/* 驾驶舱「需求与工作项」：需求走需求池分页接口（单次 ≤100），工作项随驾驶舱一次载入、前端分页 50 */
-var PC_DEMAND_PAGE = 100, PC_TASK_PAGE = 50;
+/* 驾驶舱「需求与工作项」：需求走需求池分页接口（服务端 offset/limit），工作项随驾驶舱一次载入、前端分页 */
+var PC_PAGE_SIZES = [10, 20, 50, 100];
+var PC_PAGE_SIZE_DEFAULT = 10;
+var PC_PAGE_SIZE_KEY = "ds.pcPageSize";
+function pcPageSize(){
+  try{
+    var n = Number(localStorage.getItem(PC_PAGE_SIZE_KEY));
+    return PC_PAGE_SIZES.indexOf(n) >= 0 ? n : PC_PAGE_SIZE_DEFAULT;
+  }catch(e){ return PC_PAGE_SIZE_DEFAULT; }
+}
+function savePcPageSize(n){
+  try{ localStorage.setItem(PC_PAGE_SIZE_KEY, String(n)); }catch(e){ /* 受限环境不记忆 */ }
+}
 var PC_DEMAND_STATUS = [["review","待评审"],["pass","已通过"],["plan","已排期"],["done","已完成"],["closed","已关闭"]];
 var PC_DEMAND_STATUS_ORDER = { review:0, pass:1, plan:2, done:3, closed:4 };
 var PC_DEMAND_STATUS_TAG = { review:"tag-ghost", pass:"tag-info", plan:"tag-success", done:"tag-plum", closed:"tag-ghost" };
@@ -82,10 +94,12 @@ function projectContentDefaults(){
 }
 function freshDemandState(reqId){
   return { reqId:reqId, versions:[], versionsReqId:"", loading:false, loaded:false, error:"", items:[], total:0,
-    hasMore:false, counts:{}, seq:0, q:"", status:"all", pri:"all", kind:"all", cat:"all", version:"all", group:"none" };
+    page:1, size:pcPageSize(), counts:{}, seq:0,
+    q:"", status:"all", pri:"all", kind:"all", cat:"all", version:"all", group:"none" };
 }
 function freshTaskState(){
-  return { q:"", status:"all", type:"all", owner:"all", category:"all", epic:"all", pri:"all", risk:"all", group:"none", page:1 };
+  return { q:"", status:"all", type:"all", owner:"all", category:"all", epic:"all", pri:"all", risk:"all",
+    group:"none", page:1, size:pcPageSize() };
 }
 var deliveryCache = Object.create(null);
 /* 版本 / 发布记录有变更时清掉交付资源缓存，避免项目驾驶舱继续显示旧数量 */
@@ -202,7 +216,7 @@ function memberRows(members){
   }).join("");
 }
 /* ---------- 成员与角色：空间默认岗位 + 项目主角色覆盖 + 兼岗 ---------- */
-var rosterCache = { key:"", data:null, loading:false, error:null, seq:0, options:{} };
+var rosterCache = { key:"", data:null, loading:false, error:null, seq:0, options:{}, promise:null };
 var rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
 var rosterWrites = new Set();
 function uniqueLabels(values){ return Array.from(new Set(values.filter(Boolean))).sort(function(a,b){ return a.localeCompare(b,"zh-CN"); }); }
@@ -307,12 +321,12 @@ function loadRoster(reqId, force){
   var ws = workspaceId();
   if(!reqId || !ws) return Promise.resolve(null);
   var key = ws + ":" + reqId;
-  if(!force && rosterCache.key === key){ paintRoster(); return Promise.resolve(rosterCache.data); }
+  if(!force && rosterCache.key === key){ paintRoster(); return rosterCache.promise || Promise.resolve(rosterCache.data); }
   if(rosterCache.key && rosterCache.key !== key) rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
-  rosterCache = { key:key, data:null, loading:true, error:null, seq:rosterCache.seq + 1, options:{} };
+  rosterCache = { key:key, data:null, loading:true, error:null, seq:rosterCache.seq + 1, options:{}, promise:null };
   var my = rosterCache.seq;
   paintRoster();
-  return Promise.all([
+  var request = Promise.all([
     API.get("/api/workspaces/" + encodeURIComponent(ws) + "/projects/" + encodeURIComponent(reqId) + "/members"),
     loadMemberLabelOptions(ws, !!force).catch(function(){ return { roleTitles:DEFAULT_ROLE_TITLES }; })
   ]).then(function(values){
@@ -323,6 +337,8 @@ function loadRoster(reqId, force){
     if(my !== rosterCache.seq || ws !== workspaceId() || reqId !== rt.managerProjectId) return null;
     rosterCache.loading = false; rosterCache.error = ex; paintRoster(); return null;
   });
+  rosterCache.promise = request;
+  return request;
 }
 function startRosterWrite(ctx){
   if(!editableRoster(ctx) || rosterWrites.has(ctx.key)) return false;
@@ -641,12 +657,53 @@ function defaultMilestoneDate(offsetDays){
   d.setDate(d.getDate() + offsetDays);
   return d.toISOString().slice(0, 10);
 }
+/* 负责人候选取项目花名册：没有未完成工作项的成员也要能指派，
+   不能用「成员负载」口径的 cache.members（只含有在办工作项的人）。 */
+function milestoneOwnerCandidates(pid){
+  var ws = workspaceId();
+  if(!ws || !pid) return null;
+  if(rosterCache.key !== ws + ":" + pid || !rosterCache.data) return null;
+  return (rosterCache.data.members || []).filter(function(m){ return m.userId; }).map(function(m){
+    return { id:m.userId, name:m.displayName || m.username || m.userId };
+  });
+}
+function paintMilestoneOwner(sel, preferredId){
+  if(!sel) return;
+  var pid = rt.managerProjectId, key = workspaceId() + ":" + pid;
+  var opts = milestoneOwnerCandidates(pid);
+  if(opts === null){
+    var project = cache && cache.project || {};
+    if(rosterCache.key === key && rosterCache.error){
+      /* 花名册失败时只保留后端兜底的那一个默认值，不假装成完整候选 */
+      sel.innerHTML = project.ownerUserId
+        ? '<option value="' + esc(project.ownerUserId) + '">' + esc(project.ownerName || project.ownerUserId) + '（项目负责人）</option>'
+        : '<option value="">成员加载失败</option>';
+      sel.disabled = !project.ownerUserId;
+      return;
+    }
+    sel.innerHTML = '<option value="">加载成员…</option>';
+    sel.disabled = true;
+    return;
+  }
+  if(!opts.length){
+    sel.innerHTML = '<option value="">暂无项目成员</option>';
+    sel.disabled = true;
+    return;
+  }
+  var ids = Object.create(null);
+  opts.forEach(function(o){ ids[o.id] = true; });
+  var current = sel.value || preferredId || "";
+  if(!ids[current]) current = ids[preferredId] ? preferredId : opts[0].id;
+  sel.innerHTML = opts.map(function(o){
+    return '<option value="' + esc(o.id) + '"' + (o.id === current ? " selected" : "") + '>' + esc(o.name) + '</option>';
+  }).join("");
+  sel.disabled = false;
+}
 function openMilestoneCreate(){
   var reqId = rt.managerProjectId;
   if(!reqId) return;
   if(!(cache && cache.canWriteProject)){ toast("没有该项目的写权限，不能新建里程碑", "warn"); return; }
   var tasks = (cache.tasks || []).filter(function(t){ return t.itemType !== "epic"; });
-  var members = cache.members || [];
   var ownerDefault = cache.project.ownerUserId || "";
   var layer = document.createElement("div");
   layer.className = "modal-layer";
@@ -662,9 +719,7 @@ function openMilestoneCreate(){
     + '</select></label>'
     + '<label>名称<input class="input" data-ms-name maxlength="120" placeholder="留空自动生成"></label>'
     + '<label>目标日期<input class="input" type="date" data-ms-date value="' + esc(defaultMilestoneDate(14)) + '"></label>'
-    + '<label>负责人<select class="mini-select" data-ms-owner>'
-    + members.map(function(m){ return '<option value="' + esc(m.key) + '"' + (m.key === ownerDefault ? " selected" : "") + '>' + esc(m.name) + '</option>'; }).join("")
-    + (members.length ? "" : '<option value="">项目负责人</option>') + '</select></label>'
+    + '<label>负责人<select class="mini-select" data-ms-owner></select></label>'
     + '<div data-ms-cond="version"><label>关联版本<select class="mini-select" data-ms-version><option value="">加载中…</option></select></label></div>'
     + '<div data-ms-cond="tasks" hidden><label>关联工作项</label>'
     + '<div class="ms-task-tools">'
@@ -693,7 +748,12 @@ function openMilestoneCreate(){
   var kindEl = layer.querySelector("[data-ms-kind]");
   var dateEl = layer.querySelector("[data-ms-date]");
   var versionEl = layer.querySelector("[data-ms-version]");
+  var ownerEl = layer.querySelector("[data-ms-owner]");
   var saveBtn = layer.querySelector("[data-ms-save]");
+  paintMilestoneOwner(ownerEl, ownerDefault);
+  if(milestoneOwnerCandidates(reqId) === null){
+    loadRoster(reqId).then(function(){ if(layer.isConnected) paintMilestoneOwner(ownerEl, ownerDefault); });
+  }
   var versions = [];
   function selectedTasks(){
     return Array.prototype.slice.call(layer.querySelectorAll("[data-ms-task]")).filter(function(x){ return x.checked; });
@@ -780,6 +840,8 @@ function openMilestoneCreate(){
   layer.addEventListener("click", function(e){
     if(e.target === layer || e.target.closest("[data-ms-close]")){ UI.closeModal(layer); return; }
     if(!e.target.closest("[data-ms-save]")) return;
+    /* 花名册未就绪时下拉是禁用态，此时保存会把空值当「用项目负责人」提交 */
+    if(ownerEl.disabled){ toast("负责人候选未就绪，请稍候再试", "warn"); return; }
     var kind = kindEl.value;
     var taskIds = selectedTasks().map(function(x){ return x.value; });
     if(kind === "tasks" && !taskIds.length){ toast("至少选择 1 个工作项", "warn"); return; }
@@ -1225,11 +1287,11 @@ function pcDemandSummaryHTML(){
   var chips = PC_DEMAND_STATUS.map(function(s){
     return '<span class="pc-count' + (d.status === s[0] ? " on" : "") + '"><i>' + esc(s[1]) + '</i><b>' + (Number(counts[s[0]]) || 0) + '</b></span>';
   }).join("");
-  var regroup = d.group !== "none" && d.hasMore ? '<span class="pc-summary-note">分组基于已加载条目</span>' : "";
+  var regroup = d.group !== "none" ? '<span class="pc-summary-note">分组与组内统计基于本页</span>' : "";
   return '<div class="pc-summary" role="status"><span class="pc-summary-total">共 <b>' + total + '</b> 条</span>'
-    + chips + '<span class="pc-summary-loaded">已加载 ' + d.items.length + ' / ' + total + ' 条</span>' + regroup + '</div>';
+    + chips + regroup + '</div>';
 }
-function pcTaskSummaryHTML(total, list, pageRows, page){
+function pcTaskSummaryHTML(total, list){
   var done = 0, epics = 0, estimate = 0, actual = 0;
   list.forEach(function(t){
     if(statusBucket(t) === "done") done++;
@@ -1242,7 +1304,6 @@ function pcTaskSummaryHTML(total, list, pageRows, page){
     + '<span class="pc-count"><i>史诗</i><b>' + epics + '</b></span>'
     + '<span class="pc-count"><i>预估</i><b>' + fmtHours(estimate) + '</b></span>'
     + '<span class="pc-count"><i>实际</i><b>' + fmtHours(actual) + '</b></span>'
-    + '<span class="pc-summary-loaded">本页 ' + pageRows + ' 项 · 第 ' + page + ' 页</span>'
     + '<span class="pc-summary-note">全部工作项随驾驶舱载入，筛选与分组在前端完成</span></div>';
 }
 function pcDemandSubHTML(d){
@@ -1441,6 +1502,32 @@ function pcTaskTableHTML(rows, allList){
     + '<th class="num">截止</th><th>进度</th><th class="num">预估</th><th class="num">实际</th>'
     + '</tr></thead><tbody>' + html + '</tbody></table></div>';
 }
+function pcPageSizeSelectHTML(size){
+  return '<label>每页<select class="mini-select" data-pc-size data-pc-focus="pc:size">'
+    + PC_PAGE_SIZES.map(function(n){
+      return '<option value="' + n + '"' + (n === size ? " selected" : "") + '>' + n + ' 条</option>';
+    }).join("") + '</select></label>';
+}
+function pcPageNums(page, pages){
+  var nums = [], from = Math.max(1, page - 2), to = Math.min(pages, page + 2);
+  if(from > 1){ nums.push(1); if(from > 2) nums.push(0); }
+  for(var i = from; i <= to; i++) nums.push(i);
+  if(to < pages){ if(to < pages - 1) nums.push(0); nums.push(pages); }
+  return nums;
+}
+function pcPagerHTML(page, pages, total, size){
+  if(!total) return "";
+  var nums = pages > 1 ? pcPageNums(page, pages).map(function(n){
+    if(!n) return '<span class="pc-page-gap" aria-hidden="true">…</span>';
+    return '<button class="btn sm pc-page-num' + (n === page ? " on" : "") + '" type="button" data-pc-page="' + n + '"'
+      + (n === page ? ' aria-current="page"' : "") + '>' + n + '</button>';
+  }).join("") : "";
+  return '<div class="pc-pager"><span class="pc-pager-pos">第 <b>' + page + '</b> / ' + pages + ' 页</span>'
+    + pcPageSizeSelectHTML(size)
+    + '<button class="btn sm" type="button" data-pc-page="' + (page - 1) + '"' + (page <= 1 ? " disabled" : "") + '>上一页</button>'
+    + nums
+    + '<button class="btn sm" type="button" data-pc-page="' + (page + 1) + '"' + (page >= pages ? " disabled" : "") + '>下一页</button></div>';
+}
 function pcDemandEmptyHTML(){
   var d = projectContent.dem;
   var filtered = d.q || d.status !== "all" || d.pri !== "all" || d.kind !== "all" || d.cat !== "all" || d.version !== "all";
@@ -1456,17 +1543,13 @@ function pcTaskEmptyHTML(){
     + (filtered ? ' <button class="btn sm ghost" type="button" data-pc-reset="task">清除筛选</button>' : "")
     + '</div>';
 }
-function pcDemandMoreHTML(){
-  var d = projectContent.dem;
-  if(d.loading) return '<div class="pc-more"><span class="pc-loading">加载中…</span></div>';
-  if(d.hasMore) return '<div class="pc-more"><button class="bkl-more" type="button" data-pc-more>加载更多（已加载 ' + d.items.length + ' / 共 ' + d.total + ' 条）</button></div>';
-  if(d.total > PC_DEMAND_PAGE) return '<div class="pc-more"><span class="pc-more-note">已全部加载 ' + d.items.length + ' 条</span></div>';
-  return "";
-}
 function pcDemandInner(){
   var d = projectContent.dem, reqId = projectReqId();
   if(!reqId) return '<div class="manager-empty-cell">请先选择项目</div>';
   if(d.reqId !== reqId) return '<div class="pc-loading">加载中…</div>';
+  var size = d.size || PC_PAGE_SIZE_DEFAULT;
+  var pages = Math.max(1, Math.ceil((Number(d.total) || 0) / size));
+  var page = Math.min(Math.max(1, d.page || 1), pages);
   var body;
   if(d.error){
     body = '<div class="pc-empty manager-empty-cell">需求加载失败：' + esc(d.error)
@@ -1476,24 +1559,19 @@ function pcDemandInner(){
   }else if(!d.items.length){
     body = pcDemandEmptyHTML();
   }else{
-    body = pcDemandTableHTML() + pcDemandMoreHTML();
+    body = pcDemandTableHTML() + pcPagerHTML(page, pages, d.total, size);
   }
   return pcDemandFiltersHTML() + (d.loaded ? pcDemandSummaryHTML() : "") + body;
 }
 function pcTaskInner(){
   var all = (cache && cache.tasks || []).filter(pcTaskMatches).sort(pcTaskCompare);
-  var pages = Math.max(1, Math.ceil(all.length / PC_TASK_PAGE));
+  var size = projectContent.task.size || PC_PAGE_SIZE_DEFAULT;
+  var pages = Math.max(1, Math.ceil(all.length / size));
   var page = Math.min(Math.max(1, projectContent.task.page), pages);
   projectContent.task.page = page;
-  var rows = all.slice((page - 1) * PC_TASK_PAGE, page * PC_TASK_PAGE);
-  var body = all.length ? pcTaskTableHTML(rows, all) + pcTaskPagerHTML(page, pages, all.length) : pcTaskEmptyHTML();
-  return pcTaskFiltersHTML() + pcTaskSummaryHTML(all.length, all, rows.length, page) + body;
-}
-function pcTaskPagerHTML(page, pages, total){
-  if(pages <= 1) return "";
-  return '<div class="pc-pager"><button class="btn sm" type="button" data-pc-page="prev"' + (page <= 1 ? " disabled" : "") + '>上一页</button>'
-    + '<span>第 <b>' + page + '</b> / ' + pages + ' 页 · 共 ' + total + ' 项</span>'
-    + '<button class="btn sm" type="button" data-pc-page="next"' + (page >= pages ? " disabled" : "") + '>下一页</button></div>';
+  var rows = all.slice((page - 1) * size, page * size);
+  var body = all.length ? pcTaskTableHTML(rows, all) + pcPagerHTML(page, pages, all.length, size) : pcTaskEmptyHTML();
+  return pcTaskFiltersHTML() + pcTaskSummaryHTML(all.length, all) + body;
 }
 function projectContentInner(){
   var d = projectContent.dem;
@@ -1540,7 +1618,7 @@ function ensureProjectDemands(){
     projectContentGen++;
   }
   var d = projectContent.dem;
-  if(!d.loaded && !d.loading && !d.error) loadDemandPage(false);
+  if(!d.loaded && !d.loading && !d.error) loadDemandPage(1, true);
 }
 function loadProjectVersionOptions(reqId){
   var d = projectContent.dem;
@@ -1553,29 +1631,34 @@ function loadProjectVersionOptions(reqId){
     paintProjectContent();
   }).catch(function(){ /* 版本只影响筛选项，失败不阻塞清单 */ });
 }
-function loadDemandPage(append){
+function loadDemandPage(page, reset, focusKey){
   var d = projectContent.dem, reqId = d.reqId, gen = projectContentGen;
   if(!reqId) return;
-  var offset = append ? d.items.length : 0;
-  if(!append){ d.items = []; d.total = 0; d.hasMore = false; d.loaded = false; d.counts = {}; }
+  var size = d.size || PC_PAGE_SIZE_DEFAULT;
+  var wanted = Math.max(1, Math.round(Number(page) || 1));
+  d.items = [];
+  if(reset){ d.total = 0; d.loaded = false; d.counts = {}; }
+  d.page = wanted;
   d.loading = true; d.error = "";
   var current = ++d.seq;
   paintProjectContent();
-  var params = { reqId:reqId, offset:offset, limit:PC_DEMAND_PAGE, sort:"default" };
+  var params = { reqId:reqId, offset:(wanted - 1) * size, limit:size, sort:"default" };
   if(d.q) params.q = d.q;
   if(d.status !== "all") params.status = d.status;
   if(d.pri !== "all") params.pris = d.pri;
   if(d.kind !== "all") params.kinds = d.kind;
   if(d.cat !== "all") params.cats = d.cat;
   if(d.version !== "all") params.versionId = d.version;
-  API.get("/api/demands", params).then(function(page){
+  API.get("/api/demands", params).then(function(pageData){
     if(gen !== projectContentGen || current !== d.seq || d.reqId !== reqId) return;
-    d.items = append ? d.items.concat(page.items || []) : (page.items || []);
-    d.total = Number(page.total) || 0;
-    d.hasMore = !!page.hasMore;
-    d.counts = page.counts || {};
+    var total = Number(pageData.total) || 0;
+    var pages = Math.max(1, Math.ceil(total / size));
+    if(wanted > pages){ d.loading = false; d.total = total; loadDemandPage(pages, false, focusKey); return; }
+    d.items = pageData.items || [];
+    d.total = total;
+    d.counts = pageData.counts || {};
     d.loading = false; d.loaded = true;
-    paintProjectContent();
+    paintProjectContent(focusKey);
   }).catch(function(ex){
     if(gen !== projectContentGen || current !== d.seq) return;
     d.loading = false;
@@ -1606,7 +1689,7 @@ function setProjectContentFilter(spec, value){
   if(tab === "demand"){
     if(projectContent.dem[field] === value) return;
     projectContent.dem[field] = value;
-    loadDemandPage(false);
+    loadDemandPage(1, true);
     return;
   }
   if(projectContent.task[field] === value) return;
@@ -1624,7 +1707,7 @@ function resetProjectContentFilters(tab){
     };
     projectContent.dem = Object.assign(freshDemandState(keep.reqId), keep);
     projectContentGen++;
-    loadDemandPage(false);
+    loadDemandPage(1, true);
     return;
   }
   var group = projectContent.task.group;
@@ -1650,7 +1733,7 @@ function onProjectContentInput(e){
     if(tab === "demand"){
       if(projectContent.dem.q === value) return;
       projectContent.dem.q = value;
-      loadDemandPage(false);
+      loadDemandPage(1, true);
     }else{
       if(projectContent.task.q === value) return;
       projectContent.task.q = value;
@@ -1696,7 +1779,7 @@ function renderProject(){
         + '<span class="progress"><i style="width:' + ep.progressPct + '%"></i></span>'
         + '<button class="manager-epic-sub" type="button" data-epic="' + esc(ep.id) + '" title="查看该史诗的子项">' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</button></div>';
     }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
-  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
+  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（容量窗口工作日 × 各成员每日容量，未设置按 ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
     + memberLabelFilters(cache.members || [], memberFilter, "project-member")
     + '<p class="roster-note">角色匹配本项目有效主角色或兼岗；下钻与导出使用相同成员范围。</p><button class="btn sm" type="button" data-project-member-export>导出当前成员负载</button>'
     + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
@@ -1967,16 +2050,15 @@ function onClick(e){
   var pcTabBtn = e.target.closest("[data-pc-tab]");
   if(pcTabBtn){ switchProjectContentTab(pcTabBtn.dataset.pcTab); return; }
   if(e.target.closest("[data-pc-open-demands]")){ openProjectDemands(); return; }
-  var pcMore = e.target.closest("[data-pc-more]");
-  if(pcMore){ loadDemandPage(true); return; }
   var pcRetry = e.target.closest("[data-pc-retry]");
-  if(pcRetry){ if(pcRetry.dataset.pcRetry === "demand") loadDemandPage(false); return; }
+  if(pcRetry){ if(pcRetry.dataset.pcRetry === "demand") loadDemandPage(projectContent.dem.page || 1, true); return; }
   var pcReset = e.target.closest("[data-pc-reset]");
   if(pcReset){ resetProjectContentFilters(pcReset.dataset.pcReset); return; }
   var pcPage = e.target.closest("[data-pc-page]");
   if(pcPage){
-    projectContent.task.page = Math.max(1, projectContent.task.page + (pcPage.dataset.pcPage === "next" ? 1 : -1));
-    paintProjectContent();
+    var targetPage = Math.max(1, Number(pcPage.dataset.pcPage) || 1);
+    if(projectContent.tab === "demands") loadDemandPage(targetPage);
+    else { projectContent.task.page = targetPage; paintProjectContent(); }
     return;
   }
   var pcDemandRow = e.target.closest("[data-pc-demand]");
@@ -1988,7 +2070,11 @@ function onClick(e){
     var kind = openRes.dataset.projectOpen;
     var pid = (cache && cache.project && cache.project.id) || rt.managerProjectId;
     if(!pid) return;
-    var go = function(view){ window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:view } })); };
+    var go = function(view){
+      var pname = (cache && cache.project && cache.project.name) || "";
+      setReturnOrigin({ view:"project", label: pname ? "项目 " + pname : "项目详情" });
+      window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:view } }));
+    };
     import("../core/view-loader.js").then(function(m){
       if(kind === "versions"){
         return m.loadView("phase").then(function(mod){
@@ -2133,6 +2219,22 @@ function renderAfterModeSwitch(){
 }
 function onChange(e){
   if(e.target.id === "drillSort"){ drillSort = e.target.value; renderDrill(); }
+  var pcSizeSel = e.target.closest("[data-pc-size]");
+  if(pcSizeSel){
+    var size = Number(pcSizeSel.value);
+    if(PC_PAGE_SIZES.indexOf(size) < 0) size = PC_PAGE_SIZE_DEFAULT;
+    savePcPageSize(size);
+    var dem = projectContent.dem;
+    dem.size = size;
+    dem.page = 1;
+    projectContent.task.size = size;
+    projectContent.task.page = 1;
+    if(projectContent.tab === "demands"){ loadDemandPage(1, true, "pc:size"); return; }
+    /* 尺寸改了，需求页签按旧尺寸取回的这一页已不成立：作废并丢弃在途请求，切回时重取第一页 */
+    dem.loaded = false; dem.loading = false; dem.error = ""; dem.items = []; dem.total = 0; dem.counts = {}; dem.seq++;
+    paintProjectContent("pc:size");
+    return;
+  }
   var pcGroupSel = e.target.closest("[data-pc-group]");
   if(pcGroupSel){
     if(pcGroupSel.dataset.pcGroup === "demand") projectContent.dem.group = pcGroupSel.value;

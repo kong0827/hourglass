@@ -19,6 +19,9 @@ public interface RequirementMapper {
 
     Requirement selectById(String id);
 
+    /** 项目行锁 + 当前读：抢到锁后复查归档状态，避免用加锁前的快照判断 */
+    Requirement selectByIdForUpdate(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
     /** 按 id 批量取项目名称（只取 id/name） */
     List<Requirement> selectNamesByIds(@Param("workspaceId") String workspaceId,
                                        @Param("ids") List<String> ids);

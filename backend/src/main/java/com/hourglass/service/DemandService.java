@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
+import com.hourglass.common.Nos;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.DemandGanttItem;
 import com.hourglass.dto.DemandGanttPage;
@@ -1038,6 +1039,7 @@ public class DemandService {
      * 待评审可整单编辑；已通过 / 已排期只补录说明类内容；
      * 已完成允许补正文与优先级（标题、描述、模块、验收标准），但版本与计划日期仍由排期维护；
      * 已关闭需先恢复。
+     * 编辑时可同时更换所属项目：与列表行内迁移同一套守卫（双方写权限、无版本与执行证据、编号按目标项目重排）。
      */
     @Transactional
     public Demand update(String userId, String workspaceId, String id, DemandSaveRequest req) {
@@ -1045,22 +1047,40 @@ public class DemandService {
         projectAccess.assertView(workspaceId, userId, initial.getReqId());
         projectAccess.assertWrite(workspaceId, userId, initial.getReqId());
         String projectId = reqIdOf(req);
-        requireProject(workspaceId, projectId);
-        if (!projectId.equals(initial.getReqId())) {
-            throw AppException.badRequest("需求所属项目不能直接修改");
+        Requirement targetProject = projectId.equals(initial.getReqId())
+                ? null : requireMoveTarget(workspaceId, userId, projectId);
+        if (targetProject == null) {
+            requireProject(workspaceId, projectId);
+            deliveryLock.lockProjects(workspaceId, initial.getReqId());
+        } else {
+            deliveryLock.lockProjects(workspaceId, initial.getReqId(), projectId);
+            requireTargetOpenForUpdate(workspaceId, projectId);
         }
-        deliveryLock.lockProjects(workspaceId, initial.getReqId());
         Demand d = requireDemandForUpdate(workspaceId, id);
         projectAccess.assertWriteForUpdate(workspaceId, userId, d.getReqId());
+        if (targetProject != null) {
+            projectAccess.assertWriteForUpdate(workspaceId, userId, projectId);
+        }
         requireRevision(d, req.getRevision(), true);
         boolean fullEdit = "review".equals(d.getStatus());
         if (!fullEdit) {
             requireQuickEditable(d);
         }
+        if (targetProject != null) {
+            assertProjectMigratable(d, workspaceId, id);
+        }
         if (!initial.getReqId().equals(d.getReqId())) {
             throw AppException.conflict("需求所属项目已变更，请刷新后重试");
         }
         Map<String, Object> before = snapshot(d);
+        String moveNote = null, oldProjectName = null, newProjectName = null;
+        if (targetProject != null) {
+            oldProjectName = projectName(d.getReqId());
+            newProjectName = projectName(projectId);
+            boolean categoryCleared = dropStaleCategory(req, workspaceId, projectId);
+            moveNote = moveToProject(d, projectId, oldProjectName, newProjectName)
+                    + (categoryCleared ? "；原分类不属于目标项目，已清空" : "");
+        }
         if (fullEdit) {
             applyFields(d, req);
         } else {
@@ -1081,13 +1101,90 @@ public class DemandService {
             }
         }
         save(d);
-        logChange(d, userId, "update", null, null, before);
-        notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被编辑",
-                fullEdit ? "需求内容有更新（仍处于待评审）"
-                        : "done".equals(d.getStatus())
-                        ? "需求内容有更新（已完成，排期与交付证据未变）"
-                        : "需求内容有更新（" + statusName(d.getStatus()) + "，标题与排期未变）");
+        /* 迁移与列表行内同一动作码，时间线不再出现「更新 / 变更所属项目」两种标签 */
+        logChange(d, userId, targetProject != null ? "move" : "update", moveNote, null, before);
+        if (targetProject != null) {
+            notifyCreator(d, userId, "需求「" + d.getTitle() + "」所属项目已变更",
+                    "从「" + oldProjectName + "」移至「" + newProjectName + "」");
+        } else {
+            notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被编辑",
+                    fullEdit ? "需求内容有更新（仍处于待评审）"
+                            : "done".equals(d.getStatus())
+                            ? "需求内容有更新（已完成，排期与交付证据未变）"
+                            : "需求内容有更新（" + statusName(d.getStatus()) + "，标题与排期未变）");
+        }
         return getVisible(workspaceId, userId, id);
+    }
+
+    /** 换项目：改归属并按目标项目重排项目内编号，返回时间线备注 */
+    private String moveToProject(Demand d, String targetReqId, String oldName, String targetName) {
+        Integer oldNo = d.getDemandNo();
+        d.setReqId(targetReqId);
+        d.setDemandNo(numberSeq.nextDemand(d.getWorkspaceId(), targetReqId));
+        return "所属项目：" + oldName + " → " + targetName
+                + (oldNo != null && oldNo > 0
+                ? "；编号：" + Nos.demand(oldNo) + " → " + Nos.demand(d.getDemandNo()) : "");
+    }
+
+    /**
+     * 迁移时整单保存会带上来旧项目的分类：直接置空并留一句说明，
+     * 与列表行内迁移同口径，避免客户端拿到「分类不属于该项目」这种实现细节。
+     */
+    private boolean dropStaleCategory(DemandSaveRequest req, String workspaceId, String targetReqId) {
+        String categoryId = Texts.trimToNull(req.getCategoryId());
+        if (categoryId == null) {
+            return false;
+        }
+        Category cat = categoryMapper.selectById(workspaceId, categoryId);
+        if (cat != null && targetReqId.equals(cat.getProjectId())) {
+            return false;
+        }
+        req.setCategoryId(null);
+        return true;
+    }
+
+    private String projectName(String reqId) {
+        Requirement r = reqMapper.selectById(reqId);
+        return r == null || r.getName() == null ? reqId : r.getName();
+    }
+
+    /** 目标项目必须存在、未归档且当前用户可写；迁移前后都要做，避免越权把需求搬进只读项目 */
+    private Requirement requireMoveTarget(String workspaceId, String userId, String targetReqId) {
+        Requirement target = requireProject(workspaceId, targetReqId);
+        if (target.getArchivedAt() != null) {
+            throw AppException.badRequest("不能移入已归档项目");
+        }
+        projectAccess.assertView(workspaceId, userId, targetReqId);
+        projectAccess.assertWrite(workspaceId, userId, targetReqId);
+        return target;
+    }
+
+    /** 归档不抢交付锁：预检读可能早于并发归档提交，持锁后用当前读复查一次 */
+    private void requireTargetOpenForUpdate(String workspaceId, String targetReqId) {
+        Requirement target = reqMapper.selectByIdForUpdate(workspaceId, targetReqId);
+        if (target == null) {
+            throw AppException.notFound("项目不存在：" + targetReqId);
+        }
+        if (target.getArchivedAt() != null) {
+            throw AppException.badRequest("不能移入已归档项目");
+        }
+    }
+
+    /** 项目归属决定权限、模块和统计口径：已拆工作项 / 关联文档用例 / 有目标版本或发布记录时不允许直接迁移 */
+    private void assertProjectMigratable(Demand d, String workspaceId, String id) {
+        if (!"review".equals(d.getStatus()) && !"pass".equals(d.getStatus())
+                && !"plan".equals(d.getStatus())) {
+            throw AppException.badRequest("只有待评审、已通过或已排期的需求可以更换所属项目");
+        }
+        if (d.getVersionId() != null) {
+            throw AppException.badRequest("需求已有目标版本，请先撤销排期再更换项目");
+        }
+        if (!taskMapper.selectTasksByDemandForScope(workspaceId, id).isEmpty()
+                || docMapper.countLinksByDemand(workspaceId, id) > 0
+                || caseMapper.countByDemandRef(workspaceId, id) > 0
+                || !releases.selectDemandRecords(workspaceId, id).isEmpty()) {
+            throw AppException.badRequest("需求已关联工作项、文档、用例或发布记录，不能更换所属项目；请先解除关联");
+        }
     }
 
     /** 列表行内编辑：优先级不推进状态，未关闭且仍有项目写权限即可改。 */
@@ -1185,7 +1282,7 @@ public class DemandService {
     }
 
     /**
-     * 列表行内更换所属项目：只放行待评审且尚无执行证据的需求。
+     * 列表行内更换所属项目：待评审 / 已通过 / 已排期且尚无执行证据的需求可迁移。
      * 项目归属决定权限、模块和统计口径，已拆工作项 / 关联文档用例 / 有目标版本或发布记录时不允许直接迁移。
      */
     @Transactional
@@ -1200,13 +1297,9 @@ public class DemandService {
         if (targetReqId.equals(initial.getReqId())) {
             return getVisible(workspaceId, userId, id);
         }
-        Requirement targetProject = requireProject(workspaceId, targetReqId);
-        if (targetProject.getArchivedAt() != null) {
-            throw AppException.badRequest("不能移入已归档项目");
-        }
-        projectAccess.assertView(workspaceId, userId, targetReqId);
-        projectAccess.assertWrite(workspaceId, userId, targetReqId);
+        requireMoveTarget(workspaceId, userId, targetReqId);
         deliveryLock.lockProjects(workspaceId, initial.getReqId(), targetReqId);
+        requireTargetOpenForUpdate(workspaceId, targetReqId);
         Demand d = requireDemandForUpdate(workspaceId, id);
         if (!java.util.Objects.equals(initial.getReqId(), d.getReqId())) {
             throw AppException.conflict("需求所属项目已变更，请刷新后重试");
@@ -1214,26 +1307,17 @@ public class DemandService {
         projectAccess.assertWriteForUpdate(workspaceId, userId, d.getReqId());
         projectAccess.assertWriteForUpdate(workspaceId, userId, targetReqId);
         requireRevision(d, body == null ? null : body.getRevision(), true);
-        if (!"review".equals(d.getStatus())) {
-            throw AppException.badRequest("只有待评审需求可以更换所属项目");
-        }
-        if (d.getVersionId() != null) {
-            throw AppException.badRequest("需求已有目标版本，请先撤销排期再更换项目");
-        }
-        if (!taskMapper.selectTasksByDemandForScope(workspaceId, id).isEmpty()
-                || docMapper.countLinksByDemand(workspaceId, id) > 0
-                || caseMapper.countByDemandRef(workspaceId, id) > 0
-                || !releases.selectDemandRecords(workspaceId, id).isEmpty()) {
-            throw AppException.badRequest("需求已关联工作项、文档、用例或发布记录，不能更换所属项目；请先解除关联");
-        }
+        assertProjectMigratable(d, workspaceId, id);
         Category category = d.getCategoryId() == null ? null : categoryMapper.selectById(workspaceId, d.getCategoryId());
         boolean categoryCleared = d.getCategoryId() != null
                 && (category == null || !targetReqId.equals(category.getProjectId()));
         Requirement oldProject = reqMapper.selectById(d.getReqId());
         String oldName = oldProject == null || oldProject.getName() == null ? d.getReqId() : oldProject.getName();
-        String targetName = targetProject.getName() == null ? targetReqId : targetProject.getName();
+        String targetName = projectName(targetReqId);
+        Integer oldNo = d.getDemandNo();
         Map<String, Object> before = snapshot(d);
         d.setReqId(targetReqId);
+        d.setDemandNo(numberSeq.nextDemand(workspaceId, targetReqId));
         if (categoryCleared) {
             d.setCategoryId(null);
         }
@@ -1243,7 +1327,9 @@ public class DemandService {
         }
         d.setRevision(oldRevision + 1);
         logChange(d, userId, "move", "所属项目：" + oldName + " → " + targetName
-                + (categoryCleared ? "；原分类不属于目标项目，已清空" : ""), null, before);
+                + (categoryCleared ? "；原分类不属于目标项目，已清空" : "")
+                + (oldNo != null && oldNo > 0
+                ? "；编号：" + Nos.demand(oldNo) + " → " + Nos.demand(d.getDemandNo()) : ""), null, before);
         notifyCreator(d, userId, "需求「" + d.getTitle() + "」所属项目已变更",
                 "从「" + oldName + "」移至「" + targetName + "」");
         return getVisible(workspaceId, userId, id);

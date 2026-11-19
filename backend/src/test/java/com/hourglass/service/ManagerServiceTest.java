@@ -3,6 +3,7 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.dto.PageResult;
+import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Category;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectMemberRole;
@@ -16,6 +17,7 @@ import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TimeLogMapper;
+import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -62,6 +64,7 @@ class ManagerServiceTest {
     private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
     private final ProjectMemberRoleMapper roleMapper = mock(ProjectMemberRoleMapper.class);
     private final DemandMapper demandMapper = mock(DemandMapper.class);
+    private final UserMapper userMapper = mock(UserMapper.class);
     private final TaskAuditLogger taskAuditLogger = mock(TaskAuditLogger.class);
     private final AuditService auditService = mock(AuditService.class);
 
@@ -226,6 +229,101 @@ class ManagerServiceTest {
     }
 
     @Test
+    void workloadCountsTestOwnersWithoutChangingLoad() {
+        Requirement requirement = requirement("R1", "项目一");
+        Task waiting = openTask("T1", "R1", Consts.COL_TEST, 0);
+        waiting.setTestOwnerUserId("U9");
+        Task testing = openTask("T2", "R1", Consts.COL_TESTING, 0);
+        testing.setTestOwnerUserId("U9");
+        Task finished = openTask("T3", "R1", Consts.COL_DONE, 0);
+        finished.setTestOwnerUserId("U9");
+        Task owned = openTask("T4", "R1", Consts.COL_DOING, 480);
+        owned.setOwnerUserId("U1");
+
+        WorkspaceMember developer = new WorkspaceMember();
+        developer.setUserId("U1");
+        developer.setDisplayName("Alice");
+        WorkspaceMember tester = new WorkspaceMember();
+        tester.setUserId("U9");
+        tester.setDisplayName("Tess");
+        TimeLog testLog = timeLog("U9", "T2", TODAY.atTime(9, 0), 54);
+
+        ManagerService service = service(Arrays.asList(waiting, testing, finished, owned),
+                Arrays.asList(requirement), Collections.<TimeAgg>emptyList(),
+                Arrays.asList(testLog), Arrays.asList(developer, tester));
+        List<Map<String, Object>> members = castList(service.workload(WORKSPACE, VIEWER).get("members"));
+        Map<String, Object> testerRow = member(members, "U9");
+
+        assertTrue(testerRow != null, "只有测试在手项的成员也要出现在负载名册");
+        assertEquals(0, testerRow.get("remainingMinutes"), "测试项不进剩余预估");
+        assertEquals(0, testerRow.get("loadPct"), "测试项不改负载百分比");
+        assertEquals(2400, testerRow.get("capacityMinutes"), "没有负责人的任务按默认 5 个工作日折算容量");
+        assertEquals(1, testerRow.get("testWaiting"));
+        assertEquals(1, testerRow.get("testDoing"));
+        assertEquals(54, testerRow.get("testWeekMinutes"), "本周测试工时按测试负责人的计时统计");
+        assertEquals(2, castList(testerRow.get("testTaskRefs")).size(), "已完成测试项只计工时，不进在手计数");
+    }
+
+    @Test
+    void workloadRosterKeepsEveryMemberExceptSystemAdminAndUsesOwnDailyCapacity() {
+        Task aliceTask = openTask("T1", "R1", Consts.COL_DOING, 1400);
+        aliceTask.setOwnerUserId("U1");
+        aliceTask.setDueDate(TODAY);
+        Task adminTask = openTask("T2", "R1", Consts.COL_DOING, 600);
+        adminTask.setOwnerUserId("U9");
+        adminTask.setDueDate(TODAY);
+
+        AppUser aliceUser = new AppUser();
+        aliceUser.setId("U1");
+        aliceUser.setWorkMaxHours(7);
+        AppUser adminUser = new AppUser();
+        adminUser.setId("U9");
+        adminUser.setRole("admin");
+        when(userMapper.selectByIds(any())).thenReturn(Arrays.asList(aliceUser, adminUser));
+
+        ManagerService service = service(Arrays.asList(aliceTask, adminTask),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(),
+                Arrays.asList(workspaceMember("U1", "Alice", "A", "开发"),
+                        workspaceMember("U2", "Idle", "A", "开发"),
+                        workspaceMember("U9", "管理员", "A", "开发")));
+        List<Map<String, Object>> members = castList(service.workload(WORKSPACE, VIEWER).get("members"));
+
+        Map<String, Object> alice = member(members, "U1");
+        assertEquals(420, alice.get("capacityMinutes"), "容量按本人计时上限 7h × 1 个工作日");
+        assertEquals(420, alice.get("capacityMinutesPerDay"), "每日容量按本人计时上限 7h");
+        assertEquals(333, alice.get("loadPct"), "1400 ÷ 420 四舍五入");
+        assertTrue(member(members, "U2") != null, "没有在途项的成员也要留在名册里");
+        assertEquals(0, member(members, "U2").get("remainingMinutes"));
+        assertEquals(2400, member(members, "U2").get("capacityMinutes"), "未设置计时上限按 8h × 默认 5 天");
+        assertNull(member(members, "U9"), "系统管理员账号不占负载行");
+    }
+
+    @Test
+    void workloadCapacityWindowIsCappedByConfigurableMaxWorkdays() {
+        Task task = openTask("T1", "R1", Consts.COL_DOING, 100);
+        task.setOwnerUserId("U1");
+        task.setDueDate(TODAY.plusDays(60));
+
+        ManagerService service = service(Collections.singletonList(task),
+                Collections.singletonList(requirement("R1", "项目一")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(),
+                Collections.singletonList(workspaceMember("U1", "Alice", "A", "开发")));
+        Map<String, Object> workload = service.workload(WORKSPACE, VIEWER);
+        Map<String, Object> alice = member(castList(workload.get("members")), "U1");
+
+        assertEquals(22, workload.get("maxWorkdays"), "窗口上限默认 22 个工作日");
+        assertEquals(22, alice.get("workdays"), "截止日再远也只按窗口上限折算");
+        assertEquals(22 * 480, alice.get("capacityMinutes"));
+
+        ReflectionTestUtils.setField(service, "maxWorkdays", 10);
+        Map<String, Object> narrowed = service.workload(WORKSPACE, VIEWER);
+        assertEquals(10, narrowed.get("maxWorkdays"));
+        assertEquals(10 * 480, member(castList(narrowed.get("members")), "U1").get("capacityMinutes"),
+                "配置调小后容量窗口随之收紧");
+    }
+
+    @Test
     void projectUsesAverageTaskProgressAndCompletedTaskDeviation() {
         Task doing = openTask("T1", "R1", Consts.COL_DOING, 100);
         doing.setProgress(40);
@@ -325,7 +423,10 @@ class ManagerServiceTest {
         Map<String, Object> workload = service.workload(WORKSPACE, VIEWER);
         List<Map<String, Object>> members = castList(workload.get("members"));
         assertEquals(90, member(members, "U1").get("weekMinutes"));
-        assertNull(member(members, "U2"), "仅有隐藏项目计时的成员不应进入工作量视图");
+        Map<String, Object> bobRow = member(members, "U2");
+        assertTrue(bobRow != null, "名册不做过滤：没有可见在途项的成员仍占一行");
+        assertEquals(0, bobRow.get("weekMinutes"), "隐藏项目的计时不能进入成员工时");
+        assertEquals(0, bobRow.get("remainingMinutes"));
     }
 
     @Test
@@ -1262,6 +1363,7 @@ class ManagerServiceTest {
                 auditService, taskAuditLogger, CLOCK);
         ReflectionTestUtils.setField(service, "roleMapper", roleMapper);
         ReflectionTestUtils.setField(service, "demandMapper", demandMapper);
+        ReflectionTestUtils.setField(service, "userMapper", userMapper);
         return service;
     }
 

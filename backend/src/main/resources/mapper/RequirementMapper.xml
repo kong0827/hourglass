@@ -38,6 +38,11 @@
     SELECT <include refid="cols"/> FROM requirement WHERE id = #{id}
   </select>
 
+  <select id="selectByIdForUpdate" resultType="Requirement">
+    SELECT <include refid="cols"/> FROM requirement
+    WHERE workspace_id = #{workspaceId} AND id = #{id} FOR UPDATE
+  </select>
+
   <!-- 只按任务里出现的项目 id 取名称（搜索字段 / 甘特展示用） -->
   <select id="selectNamesByIds" resultType="Requirement">
     SELECT id, name FROM requirement

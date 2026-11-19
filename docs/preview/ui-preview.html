@@ -4328,6 +4328,11 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
   border-bottom:1px dashed var(--border);margin-top:6px;
 }
 .req-set-head:first-child{margin-top:0;}
+/* 项目集身份色（列表视图）：集头只把身份色投到文件夹图标，不铺底色；
+   深色主题把身份色向白色提亮，避免深色值在深底上看不见 */
+.req-set-head.proj-set-head{--set-ink:var(--set, var(--text-3));}
+html[data-theme="dark"] .req-set-head.proj-set-head{--set-ink:color-mix(in srgb, var(--set, var(--text-3)) 62%, #fff);}
+.req-set-head.proj-set-head .req-set-ico{color:var(--set-ink);}
 .req-set-title{display:flex;align-items:center;gap:6px;min-width:0;font-size:14px;color:var(--text);}
 .req-set-title b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .req-set-ico{display:inline-flex;align-items:center;color:var(--text-3);flex:0 0 auto;}
@@ -4342,44 +4347,58 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .risk-chip.blocked{color:var(--warning-fg);background:var(--warning-soft);border-color:var(--warning-border);}
 .risk-chip.stagnant{color:var(--text-2);background:var(--surface-sunken);border-color:var(--border);}
 .req-set-risk:hover .risk-chip{filter:brightness(.96);}
-.project-set-row .req-set-risk{padding-left:28px;}
+.project-set-row .req-set-risk{padding-left:35px;}
 .req-set-acts{display:flex;align-items:center;gap:2px;}
 .req-set-head.is-ungrouped .req-set-title{color:var(--text-2);}
 .req-set-toggle svg{transition:transform var(--dur-fast) var(--ease-out);}
 .req-set-toggle.on svg{transform:rotate(90deg);}
 .req-item-container{background:var(--surface-sunken);box-shadow:none;border-style:dashed;}
 .req-item-container .req-name{color:var(--text-2);}
-/* 集内项目缩进：卡片整体右移，竖线 + 短横引线表达「项目集 → 项目」两层结构 */
-.req-item-in-set{position:relative;margin-left:26px;}
+/* 集内项目缩进：卡片整体右移，竖线 + 短横引线表达「项目集 → 项目」两层结构；
+   引线混入 18% 集身份色，跨行时能看出归属 */
+.req-item-in-set{position:relative;margin-left:26px;--set-ink:var(--set, var(--border));}
+html[data-theme="dark"] .req-item-in-set{--set-ink:color-mix(in srgb, var(--set, var(--border)) 62%, #fff);}
 .req-item-in-set::before{
-  content:"";position:absolute;left:-14px;top:-6px;bottom:-6px;width:1px;background:var(--border);
+  content:"";position:absolute;left:-14px;top:-6px;bottom:-6px;width:1px;
+  background:color-mix(in srgb, var(--set-ink) 18%, var(--border));
 }
 .req-item-in-set::after{
-  content:"";position:absolute;left:-14px;top:25px;width:12px;height:1px;background:var(--border);
+  content:"";position:absolute;left:-14px;top:25px;width:12px;height:1px;
+  background:color-mix(in srgb, var(--set-ink) 18%, var(--border));
 }
 .project-table-body .req-set-head{padding:var(--space-2) 14px 6px;margin-top:0;}
-/* 表格模式对齐列宽不能动：只缩进名称列内部，用竖线 + 短横表达层级 */
+/* 表格模式对齐列宽不能动：只缩进名称列内部，用竖线 + 短横表达层级；
+   引线混入 18% 集身份色，与列表视图一致 */
+.project-table-row.has-set{--set-ink:var(--set, var(--border));}
+html[data-theme="dark"] .project-table-row.has-set{--set-ink:color-mix(in srgb, var(--set, var(--border)) 62%, #fff);}
 .project-table-row.has-set .project-name-cell{padding-left:34px;position:relative;}
 .project-table-row.has-set .project-name-cell::before{
-  content:"";position:absolute;left:16px;top:50%;width:11px;height:1px;background:var(--border);
+  content:"";position:absolute;left:16px;top:50%;width:11px;height:1px;
+  background:color-mix(in srgb, var(--set-ink) 18%, var(--border));
 }
 .project-table-row.has-set .project-name-cell::after{
-  content:"";position:absolute;left:16px;top:0;bottom:0;width:1px;background:var(--border);
+  content:"";position:absolute;left:16px;top:0;bottom:0;width:1px;
+  background:color-mix(in srgb, var(--set-ink) 18%, var(--border));
 }
-/* 表格模式的项目集行：与项目行共用列网格，集行展示集自身字段与集内只读汇总。
-   底色用分组带令牌而不是列头的 --surface-sunken，否则「列头 / 项目集 / 项目」三级会塌成两级；
-   左侧 3px 主色条标明这是承接项目的分组行。 */
-.project-table-row.project-set-row{background:var(--group-band);box-shadow:inset 3px 0 0 0 var(--group-band-bar);}
-.project-table-row.project-set-row.is-ungrouped{background:var(--group-band-neutral);box-shadow:inset 3px 0 0 0 var(--group-band-neutral-bar);}
+/* 表格模式的项目集行（方案 B 色标白底）：与项目行共用列网格，集行展示集自身字段与集内只读汇总。
+   集行保持白底，只用 3px 身份色左条 + 26px 色标图标标识归属；身份色不铺底色，
+   避免 8 种底色与「进行中」的蓝、逾期阻塞的橙红抢语义。 */
+.project-table-row.project-set-row{
+  --set-ink:var(--set, var(--border-strong));
+  background:var(--surface);
+  box-shadow:inset 3px 0 0 0 var(--set-ink);
+}
+html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(in srgb, var(--set, var(--border-strong)) 62%, #fff);}
 .project-set-row .set-name-cell{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;}
 .project-set-row .set-name-line{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;}
 .project-set-row .set-name-line .req-set-title{min-width:0;font-size:16px;}
 .project-set-row .req-set-title b{font-weight:700;}
-.project-set-row .req-set-meta{padding-left:28px;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.project-set-row .req-set-ico{
+  justify-content:center;width:26px;height:26px;border-radius:7px;flex:0 0 auto;
+  background:color-mix(in srgb, var(--set-ink) 14%, var(--surface));color:var(--set-ink);
+}
+.project-set-row .req-set-meta{padding-left:35px;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
 .project-set-row.is-ungrouped .req-set-title{color:var(--text-2);}
-/* 原来 hover 用 --surface-hover，与 --surface-sunken 同值，分组行悬停没有任何反馈 */
-.project-table-row.project-set-row:hover{background:var(--group-band-hover);}
-.project-table-row.project-set-row.is-ungrouped:hover{background:var(--surface-active);}
 .project-table-row.project-set-row.drop-into{background:var(--primary-soft);}
 
 .req-item{
@@ -7572,6 +7591,7 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13.5px;--title-lh:1.5;--
 .req-expand-doc .rd-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;}
 .req-expand-doc .rd-meta{font-size:12px;color:var(--text-3);}
 .req-expand-section{margin-top:14px;}
+.req-expand-docs{max-height:240px;overflow:auto;}
 .req-expand-tasks{max-height:320px;overflow:auto;}
 .req-expand-tasks .req-expand-doc{border:1px solid var(--border);margin-bottom:6px;background:var(--surface);}
 .req-expand-tasks .req-expand-doc:hover{border-color:var(--border-strong);}
@@ -10688,8 +10708,25 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 }
 .gantt-notice[hidden]{display:none;}
 
+/* 上下分区：甘特画布（含图例）+ 可拖分隔条 + 未排期区
+   未排期区高度由 --gantt-unplanned-h 控制，甘特画布吃掉剩余高度 */
+.gantt-split{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
+.gantt-stage{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;}
+.gantt-split-bar{
+  flex:0 0 auto;height:12px;margin:2px 0 0;display:flex;align-items:center;justify-content:center;
+  cursor:row-resize;touch-action:none;position:relative;
+}
+.gantt-split-bar[hidden]{display:none;}
+.gantt-split-grip{
+  width:44px;height:4px;border-radius:var(--r-pill);background:var(--border-strong);
+  opacity:.6;transition:background var(--dur-fast) var(--ease-out),opacity var(--dur-fast) var(--ease-out);
+}
+.gantt-split-bar:hover .gantt-split-grip,
+.gantt-split-bar.dragging .gantt-split-grip{background:var(--primary);opacity:1;}
+.gantt-split-bar:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;border-radius:var(--r-xs);}
+
 .gantt-scroll{
-  flex:1 1 auto;min-height:240px;position:relative;overflow:auto;overscroll-behavior:contain;
+  flex:1 1 auto;min-height:180px;position:relative;overflow:auto;overscroll-behavior:contain;
   border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);
 }
 .gantt-grid{position:relative;min-width:max-content;width:100%;}
@@ -10929,18 +10966,49 @@ button.vd-link-v:hover{color:var(--primary-fg);}
   line-height:1.4;white-space:nowrap;pointer-events:none;box-shadow:var(--shadow-md);
 }
 
-/* 未排期列表 */
-.gantt-unplanned-row{
-  display:flex;align-items:center;gap:var(--space-2);width:100%;padding:var(--space-2) 10px;
-  border-bottom:1px solid var(--border);text-align:left;cursor:grab;
+/* 未排期面板：头部常驻，卡片网格内部滚动（不把甘特画布挤扁） */
+#ganttUnplannedBox{
+  flex:0 0 auto;margin:0;display:flex;flex-direction:column;min-height:0;
+  height:var(--gantt-unplanned-h,224px);
+  border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);
+  overflow:hidden;
 }
-.gantt-unplanned-row:last-child{border-bottom:none;}
-.gantt-unplanned-row:hover{background:var(--surface-hover);}
+#ganttUnplannedBox[hidden]{display:none;}
+#ganttUnplannedBox.is-collapsed{height:auto;}
+#ganttUnplannedBox.is-collapsed #ganttUnplannedList{display:none;}
+.unplanned-head{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;width:100%;
+  padding:8px 12px;text-align:left;
+  background:var(--surface-sunken);border-bottom:1px solid var(--border);
+  font-size:13px;font-weight:600;color:var(--text-2);
+}
+#ganttUnplannedBox.is-collapsed .unplanned-head{border-bottom:none;}
+.unplanned-head:hover{background:var(--surface-hover);}
+.unplanned-head:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.unplanned-head .caret{display:inline-flex;color:var(--text-3);transition:transform var(--dur-base) var(--ease-out);}
+#ganttUnplannedBox.is-collapsed .unplanned-head .caret{transform:rotate(-90deg);}
+.unplanned-head .cnt{font-size:12px;font-weight:650;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.unplanned-head-hint{min-width:0;font-size:12px;font-weight:400;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.unplanned-head-toggle{flex:0 0 auto;margin-left:auto;font-size:12px;font-weight:500;color:var(--text-3);}
+.unplanned-head:hover .unplanned-head-toggle{color:var(--text-2);}
+#ganttUnplannedList{
+  flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  align-content:start;gap:6px;padding:8px 10px;
+}
+.gantt-unplanned-row{
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+  text-align:left;cursor:grab;min-width:0;
+  transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
+}
+.gantt-unplanned-row:hover{background:var(--surface-hover);border-color:var(--border-strong);box-shadow:var(--shadow-xs);}
+.gantt-unplanned-row:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
 .gantt-unplanned-row.dragging{opacity:.6;cursor:grabbing;}
-.gantt-unplanned-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.gantt-unplanned-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px;}
 .gantt-unplanned-t{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gantt-unplanned-m{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.gantt-unplanned-more{padding:6px 8px;border-top:1px solid var(--border);}
+.gantt-unplanned-more{grid-column:1 / -1;padding:2px 0;border-top:1px solid var(--border);}
 .gantt-empty-note{font-size:12px;color:var(--text-3);}
 
 /* 图例 */
@@ -10964,9 +11032,10 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 
 /* 打印：只打当前甘特图，A3 横向 */
 @media print{
-  .sidebar,.topbar,.page-toolbar,.gantt-tools,.gantt-legend,.unplanned-box,.gantt-load,
+  .sidebar,.topbar,.page-toolbar,.gantt-tools,.gantt-legend,.gantt-split-bar,.unplanned-box,.gantt-load,
   .drawer-layer,.modal-layer,.toast-layer,.offline-badge{display:none !important;}
-  .main,.view,.gantt-page{height:auto !important;padding:0 !important;overflow:visible !important;}
+  .main,.view,.gantt-page,.gantt-split,.gantt-stage{height:auto !important;padding:0 !important;overflow:visible !important;}
+  .gantt-split,.gantt-stage{display:block !important;}
   .gantt-scroll{overflow:visible !important;border:0 !important;height:auto !important;min-height:0 !important;}
   .gantt-grid{width:max-content !important;}
   .gantt-head,.gantt-corner,.gantt-label,.gantt-group-head{position:static !important;}
@@ -11144,6 +11213,10 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 .manager-light.orange{background:var(--warning);}
 .manager-light.red{background:var(--danger);}
 .manager-project-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:var(--space-3);scroll-margin-top:16px;}
+/* 全局健康度卡片视图：按项目集分块，集头复用项目列表的 .req-set-head，只补块间距 */
+.pf-set-groups{display:flex;flex-direction:column;gap:var(--space-4);}
+.pf-set-block{display:flex;flex-direction:column;gap:var(--space-3);}
+.pf-set-block>.req-set-head{padding-top:0;}
 .manager-project-card{padding:15px;display:flex;flex-direction:column;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
 .manager-project-card:hover{box-shadow:var(--shadow-md);}
 .manager-project-head{display:flex;align-items:center;gap:var(--space-2);min-width:0;}
@@ -11325,6 +11398,10 @@ button.vd-link-v:hover{color:var(--primary-fg);}
 .member-stat.danger>b{color:var(--danger-fg);}
 .member-stat.warn{background:var(--warning-soft);}
 .member-stat.warn>b{color:var(--warning-fg);}
+.member-card-tests{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text-3);}
+.member-test-label{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--text-2);}
+.member-card-tests>span:not(.member-test-label){display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;background:var(--surface-sunken);border-radius:var(--r-pill);}
+.member-card-tests b{font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
 .member-card-projects{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:22px;}
 .wl-proj-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 8px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-pill);font-size:12px;color:var(--text-2);}
 .wl-proj-chip>b{min-width:0;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -11613,7 +11690,6 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .pc-count i{font-style:normal;color:var(--text-3);}
 .pc-count b{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;}
 .pc-count.on i,.pc-count.on b{color:var(--primary-fg);}
-.pc-summary-loaded{margin-left:auto;color:var(--text-2);font-variant-numeric:tabular-nums;}
 .pc-summary-note{color:var(--text-3);}
 .pc-tbl{min-width:1000px;}
 .pc-tbl-task{min-width:1180px;}
@@ -11644,10 +11720,14 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .pc-group-name{font-weight:600;color:var(--text-2);}
 .pc-group-count{margin-left:8px;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .pc-group-meta{margin-left:12px;font-size:12px;color:var(--text-3);}
-.pc-more{display:flex;justify-content:center;padding:10px 0 2px;}
-.pc-more-note{font-size:12px;color:var(--text-3);}
-.pc-pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 0 2px;font-size:12px;color:var(--text-3);}
+.pc-pager{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;padding:10px 0 2px;font-size:12px;color:var(--text-3);}
+.pc-pager-pos{margin-right:auto;}
 .pc-pager b{color:var(--text);font-variant-numeric:tabular-nums;}
+.pc-pager label{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.pc-pager .mini-select{height:28px;}
+.pc-page-num{min-width:30px;padding:0 6px;font-variant-numeric:tabular-nums;}
+.pc-page-num.on{border-color:var(--primary);background:var(--primary-soft);color:var(--primary-fg);}
+.pc-page-gap{padding:0 2px;}
 .pc-loading{padding:var(--space-6) 0;text-align:center;font-size:13px;color:var(--text-3);}
 .pc-empty{padding:var(--space-5) 0 !important;}
 @media(max-width:760px){
@@ -11656,7 +11736,8 @@ button.manager-overload-note:hover{border-color:var(--warning);}
   .pc-filters label{flex:1 1 calc(50% - 5px);justify-content:space-between;}
   .pc-filters select{width:100%;}
   .pc-reset{width:100%;}
-  .pc-summary-loaded{margin-left:0;}
+  .pc-pager{justify-content:flex-start;}
+  .pc-pager-pos{margin-right:0;}
   .pc-tabs{padding:1px;}
 }
 
@@ -14922,25 +15003,34 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
           </section>
           <div class="menu popover" id="ganttDepMenu" hidden style="left:0;top:0"></div>
           <div class="gantt-notice" id="ganttNotice" hidden></div>
-          <div class="gantt-scroll" id="ganttScroll"></div>
-          <div class="gantt-legend" aria-label="甘特图图例">
-            <span class="gl-item"><i style="background:var(--primary)"></i>进行中</span>
-            <span class="gl-item"><i style="background:var(--danger)"></i>逾期</span>
-            <span class="gl-item"><i class="dashed"></i>阻塞</span>
-            <span class="gl-item"><i style="background:var(--success)"></i>已完成</span>
-            <span class="gl-item"><i class="ms"></i>里程碑</span>
-            <span class="gl-item"><i class="dep"></i>等待依赖</span>
-            <span class="gantt-legend-hint">拖动改期 · 拖两端调起止 · Ctrl 点选后批量拖动 · 拖条尾圆点连依赖 · 双击空白新建 · Ctrl+Z 撤销 · Esc 取消</span>
+          <div class="gantt-split" id="ganttSplit">
+            <div class="gantt-stage" id="ganttStage">
+              <div class="gantt-scroll" id="ganttScroll"></div>
+              <div class="gantt-legend" aria-label="甘特图图例">
+                <span class="gl-item"><i style="background:var(--primary)"></i>进行中</span>
+                <span class="gl-item"><i style="background:var(--danger)"></i>逾期</span>
+                <span class="gl-item"><i class="dashed"></i>阻塞</span>
+                <span class="gl-item"><i style="background:var(--success)"></i>已完成</span>
+                <span class="gl-item"><i class="ms"></i>里程碑</span>
+                <span class="gl-item"><i class="dep"></i>等待依赖</span>
+                <span class="gantt-legend-hint">拖动改期 · 拖两端调起止 · Ctrl 点选后批量拖动 · 拖条尾圆点连依赖 · 双击空白新建 · Ctrl+Z 撤销 · Esc 取消</span>
+              </div>
+            </div>
+            <div class="gantt-split-bar" id="ganttSplitBar" role="separator" tabindex="0" hidden
+                 aria-orientation="horizontal" aria-label="拖动调整甘特图与未排期区域的高度，双击恢复默认"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="32"
+                 title="拖动调整上下区域高度 · 双击恢复默认"><span class="gantt-split-grip" aria-hidden="true"></span></div>
+            <section class="unplanned-box" id="ganttUnplannedBox" aria-label="未排期工作项" hidden>
+              <button class="unplanned-head" type="button" id="ganttUnplannedToggle" aria-expanded="true" aria-controls="ganttUnplannedList">
+                <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+                <span class="unplanned-head-title">未排期</span>
+                <span class="cnt" id="ganttUnplannedCount">0</span>
+                <span class="unplanned-head-hint">没有开始/截止日期 · 拖到时间轴即可排期</span>
+                <span class="unplanned-head-toggle">收起</span>
+              </button>
+              <div class="unplanned-list" id="ganttUnplannedList"></div>
+            </section>
           </div>
-          <details class="unplanned-box" id="ganttUnplannedBox" hidden>
-            <summary>
-              <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-              未排期
-              <span class="cnt" id="ganttUnplannedCount">0</span>
-              <span class="foot-note" style="font-weight:400">（没有开始/截止日期；拖到时间轴即可排期）</span>
-            </summary>
-            <div class="unplanned-list" id="ganttUnplannedList"></div>
-          </details>
         </div>
       </section>
 
@@ -15243,167 +15333,6 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
           <div id="demandBody"></div>
         </div>
 
-        <!-- 提需求 / 编辑需求 -->
-        <div class="modal-layer side" id="dlgDemand" role="dialog" aria-modal="true" aria-labelledby="demandFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
-          <div class="panel">
-            <div class="panel-head"><h3 id="demandFormTitle">提需求</h3><button class="icon-btn sm" type="button" id="dlgDemandX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
-            <div class="stack proj-form-grid">
-              <p class="foot-note span2" id="demandLockNote" hidden>该需求已进入流转，这里只更新描述、验收标准、来源、分类与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。</p>
-              <div class="field">
-                <label for="dReq">所属项目 <span class="req">*</span></label>
-                <select id="dReq"></select>
-              </div>
-              <div class="field" id="fDemandTitle">
-                <label for="dTitle">需求标题 <span class="req">*</span></label>
-                <input id="dTitle" type="text" maxlength="80" placeholder="一句话说清要什么" autocomplete="off" />
-                <span class="err">请填写需求标题</span>
-              </div>
-              <div class="field">
-                <label for="dDesc">需求描述</label>
-                <textarea id="dDesc" maxlength="2000" placeholder="背景、场景、要解决什么问题…"></textarea>
-              </div>
-              <div class="field">
-                <label for="dAccept">验收标准</label>
-                <textarea id="dAccept" maxlength="2000" placeholder="做到什么程度算完成…"></textarea>
-              </div>
-              <div class="form-sec span2" id="fDemandWatchSec">通知</div>
-              <div class="field span2" id="fDemandWatch">
-                <label>提醒人 <small class="tc-optional">选填</small></label>
-                <div class="dem-watch-edit" data-dem-form-watch>
-                  <div class="dem-watch-chips" data-dem-form-watch-chips></div>
-                  <div class="dem-watch-add">
-                    <select class="input" data-dem-form-watch-select aria-label="选择提醒人"><option value="">先选项目</option></select>
-                    <button class="btn sm soft" type="button" data-dem-form-watch-add>添加</button>
-                  </div>
-                </div>
-                <span class="hint">提醒人会收到状态流转、内容编辑与新评论的通知；提交人默认接收，无需添加自己</span>
-              </div>
-              <div class="form-sec span2">归类</div>
-              <div class="form-grid three span2">
-                <div class="field">
-                  <label for="dSource">需求来源</label>
-                  <input id="dSource" type="text" maxlength="40" placeholder="例如：财务 · 刘" list="dlDemandSource" autocomplete="off" />
-                  <datalist id="dlDemandSource"></datalist>
-                </div>
-                <div class="field">
-                  <label for="dKind">需求类型</label>
-                  <select id="dKind">
-                    <option value="新功能">新功能</option>
-                    <option value="体验优化">体验优化</option>
-                    <option value="缺陷">缺陷</option>
-                    <option value="其他">其他</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="dCategory">分类</label>
-                  <select id="dCategory"></select>
-                </div>
-              </div>
-              <div class="form-sec span2">优先级与交付</div>
-              <div class="form-grid span2">
-                <div class="field">
-                  <label>优先级</label>
-                  <div class="seg" id="segDemandPri">
-                    <button type="button" data-dpri="P0">P0</button>
-                    <button type="button" data-dpri="P1">P1</button>
-                    <button type="button" data-dpri="P2">P2</button>
-                    <button type="button" data-dpri="P3">P3</button>
-                  </div>
-                </div>
-                <div class="field">
-                  <label for="dExpect">期望交付日期 <small class="tc-optional">选填</small></label>
-                  <input id="dExpect" type="date" />
-                </div>
-              </div>
-              <details class="wsjf-more span2" id="wsjfMore">
-                <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>WSJF 评分<span class="wsjf-more-meta" id="wsjfMeta">未评分 · 选填</span></summary>
-                <div class="wsjf-more-body">
-                  <div class="wsjf-grid">
-                    <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" placeholder="0-10" /></span>
-                    <span class="wsjf-item"><label for="dWsjfU">紧迫程度</label><input id="dWsjfU" type="number" min="0" max="10" placeholder="0-10" /></span>
-                    <span class="wsjf-item"><label for="dWsjfR">风险缓解</label><input id="dWsjfR" type="number" min="0" max="10" placeholder="0-10" /></span>
-                    <span class="wsjf-item"><label for="dWsjfE">工作量</label><input id="dWsjfE" type="number" min="1" max="10" placeholder="1-10" /></span>
-                  </div>
-                  <span class="wsjf-live" id="wsjfLive" hidden></span>
-                  <span class="hint">可不填：四项都填才自动计分 WSJF =（业务 + 紧迫 + 风险）÷ 工作量；留空不评分，列表默认按优先级排序</span>
-                </div>
-              </details>
-              <div class="dlg-foot-row span2">
-                <p class="foot-note" id="demandFootNote">新需求进入「待评审」；仅空间主可通过、拒绝或排期</p>
-                <button class="link-btn" type="button" id="demandCheckResume" hidden title="重新开启提交前体检">恢复体检</button>
-                <button class="btn primary" type="button" id="btnSaveDemand">提交评审</button>
-              </div>
-            </div>
-          </div>
-        </div></div></div>
-
-        <!-- 提交前体检：只提示不拦截，仍然提交由用户决定 -->
-        <div class="modal-layer" id="dlgDemandCheck" role="dialog" aria-modal="true" aria-labelledby="dqTitle">
-          <div class="sheet sm dq-sheet">
-            <div class="sheet-head dq-head">
-              <span class="dq-ico" aria-hidden="true">
-                <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h6M7 3.5a1.5 1.5 0 0 0-1.5 1.5v.5h9V5A1.5 1.5 0 0 0 13 3.5"/><rect x="4.5" y="5.5" width="11" height="11" rx="1.6"/><path d="M7.5 10.2l1.6 1.6 3.4-3.4"/></svg>
-              </span>
-              <div class="dq-head-txt">
-                <h2 id="dqTitle">提交前体检</h2>
-                <p class="desc" id="dqSummary"></p>
-              </div>
-              <button class="icon-btn sm" type="button" id="dqX" aria-label="关闭">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
-              </button>
-            </div>
-            <div class="sheet-body dq-body">
-              <div id="dqIssueSec" hidden>
-                <div class="dq-sec">建议补充 <span class="dq-sec-n" id="dqIssueCount"></span></div>
-                <div class="dq-list" id="dqIssueList"></div>
-              </div>
-              <div id="dqSimSec" hidden>
-                <div class="dq-sec">相似需求 <span class="dq-sec-n" id="dqSimCount"></span></div>
-                <div class="dq-list" id="dqSimList"></div>
-              </div>
-              <p class="foot-note" id="dqHint">按验收标准、描述完整度和同项目标题关键词自动检查；不调用 AI、不修改内容，提交仍由你决定。</p>
-            </div>
-            <div class="sheet-foot dq-foot">
-              <label class="dq-skip"><input type="checkbox" id="dqSkip">以后不再提示</label>
-              <button class="btn ghost" type="button" id="dqStill">仍然提交</button>
-              <button class="btn primary" type="button" id="dqBack">返回修改</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 排期进入版本 -->
-        <div class="modal-layer" id="dlgDemandPlan" role="dialog" aria-modal="true" aria-labelledby="demandPlanTitle"><div class="sheet xs"><div class="sheet-body">
-          <div class="panel">
-            <div class="panel-head"><h3 id="demandPlanTitle">排期进入版本</h3><button class="icon-btn sm" type="button" id="dlgDemandPlanX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
-            <div class="stack">
-              <div class="field" id="fDemandPlanVer">
-                <label for="dpVersion">目标版本（选填）</label>
-                <select id="dpVersion"></select>
-              </div>
-              <div class="form-grid">
-                <div class="field">
-                  <label for="dpPlannedStart">计划开始</label>
-                  <input id="dpPlannedStart" type="date" />
-                </div>
-                <div class="field">
-                  <label for="dpPlannedEnd">计划结束</label>
-                  <input id="dpPlannedEnd" type="date" />
-                </div>
-              </div>
-              <div class="field">
-                <label for="dpPriority">排期优先级</label>
-                <select id="dpPriority"><option value="P0">P0 · 紧急</option><option value="P1">P1 · 高</option><option value="P2" selected>P2 · 中</option><option value="P3">P3 · 低</option></select>
-              </div>
-              <div class="field">
-                <label for="dpNote">排期备注</label>
-                <input id="dpNote" type="text" maxlength="120" placeholder="选填：排期说明…" autocomplete="off" />
-              </div>
-              <div class="row row-gap">
-                <button class="btn primary" type="button" id="btnDoPlan">排期</button>
-              </div>
-            </div>
-          </div>
-        </div></div></div>
       </section>
 
       <section class="view" id="view-requirements" aria-label="文档">
@@ -15826,25 +15755,6 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
           </div>
         </div>
 
-        <!-- AI 拆需求：需求详情里的一键拆分，草稿勾选确认后才创建工作项 -->
-        <div class="modal-layer side" id="dlgDemandAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgDemandAiSplitTitle">
-          <div class="sheet ai-dlg">
-            <div class="panel-head">
-              <h3 id="dlgDemandAiSplitTitle">AI 拆出的工作项</h3>
-              <button class="icon-btn sm" type="button" id="dlgDemandAiSplitX" aria-label="关闭">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
-              </button>
-            </div>
-            <p class="reqdoc-dlg-msg" id="dlgDemandAiSplitMsg">勾选要创建的工作项，标题和优先级可以直接改；没勾的不会创建。</p>
-            <div class="ai-list" id="demandAiSplitList"></div>
-            <div class="ai-usage" id="demandAiSplitUsage"></div>
-            <div class="reqdoc-dlg-foot">
-              <button class="btn ghost" type="button" id="dlgDemandAiSplitCancel">取消</button>
-              <button class="btn primary" type="button" id="dlgDemandAiSplitOk">新建选中工作项</button>
-            </div>
-          </div>
-        </div>
-
         <!-- AI 完成度检查 -->
         <div class="modal-layer side" id="dlgAiAudit" role="dialog" aria-modal="true" aria-labelledby="dlgAiAuditTitle">
           <div class="sheet ai-dlg">
@@ -15860,24 +15770,6 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
             <div class="ai-usage" id="aiAuditUsage"></div>
             <div class="reqdoc-dlg-foot">
               <button class="btn" type="button" id="dlgAiAuditClose">关闭</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- AI 长请求：统一等待、计时、取消与重试 -->
-        <div class="modal-layer" id="dlgAiProgress" role="dialog" aria-modal="true" aria-labelledby="aiProgressTitle">
-          <div class="sheet xs ai-progress-dlg">
-            <h3 id="aiProgressTitle">AI 处理中</h3>
-            <p class="ai-progress-desc" id="aiProgressDesc">正在连接模型…</p>
-            <div class="ai-progress-track" aria-hidden="true"><i></i></div>
-            <div class="ai-progress-meta">
-              <span id="aiProgressElapsed">0 秒</span>
-              <span id="aiProgressHint"></span>
-            </div>
-            <div class="ai-progress-error" id="aiProgressError" role="alert" hidden></div>
-            <div class="reqdoc-dlg-foot">
-              <button class="btn ghost" type="button" id="aiProgressCancel">取消</button>
-              <button class="btn primary" type="button" id="aiProgressRetry" hidden>重试</button>
             </div>
           </div>
         </div>
@@ -17825,6 +17717,210 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
         <button class="btn" type="button" id="repoDetailCancel">取消</button>
         <button class="btn primary" type="button" id="dlgRepoOk">保存修改</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 需求编辑 / 提交前体检 / 排期 / AI 拆分：放在视图外，需求详情抽屉可从驾驶舱、项目、文档、用例等视图打开；
+     留在 #view-demands 里时非激活视图 display:none，弹窗会被一起藏起来 -->
+<!-- 提需求 / 编辑需求 -->
+<div class="modal-layer side" id="dlgDemand" role="dialog" aria-modal="true" aria-labelledby="demandFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
+  <div class="panel">
+    <div class="panel-head"><h3 id="demandFormTitle">提需求</h3><button class="icon-btn sm" type="button" id="dlgDemandX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+    <div class="stack proj-form-grid">
+      <p class="foot-note span2" id="demandLockNote" hidden>该需求已进入流转，这里只更新描述、验收标准、来源、分类与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。</p>
+      <div class="field">
+        <label for="dReq">所属项目 <span class="req">*</span></label>
+        <select id="dReq"></select>
+        <span class="hint" id="dReqHint" hidden></span>
+      </div>
+      <div class="field" id="fDemandTitle">
+        <label for="dTitle">需求标题 <span class="req">*</span></label>
+        <input id="dTitle" type="text" maxlength="80" placeholder="一句话说清要什么" autocomplete="off" />
+        <span class="err">请填写需求标题</span>
+      </div>
+      <div class="field">
+        <label for="dDesc">需求描述</label>
+        <textarea id="dDesc" maxlength="2000" placeholder="背景、场景、要解决什么问题…"></textarea>
+      </div>
+      <div class="field">
+        <label for="dAccept">验收标准</label>
+        <textarea id="dAccept" maxlength="2000" placeholder="做到什么程度算完成…"></textarea>
+      </div>
+      <div class="form-sec span2" id="fDemandWatchSec">通知</div>
+      <div class="field span2" id="fDemandWatch">
+        <label>提醒人 <small class="tc-optional">选填</small></label>
+        <div class="dem-watch-edit" data-dem-form-watch>
+          <div class="dem-watch-chips" data-dem-form-watch-chips></div>
+          <div class="dem-watch-add">
+            <select class="input" data-dem-form-watch-select aria-label="选择提醒人"><option value="">先选项目</option></select>
+            <button class="btn sm soft" type="button" data-dem-form-watch-add>添加</button>
+          </div>
+        </div>
+        <span class="hint">提醒人会收到状态流转、内容编辑与新评论的通知；提交人默认接收，无需添加自己</span>
+      </div>
+      <div class="form-sec span2">归类</div>
+      <div class="form-grid three span2">
+        <div class="field">
+          <label for="dSource">需求来源</label>
+          <input id="dSource" type="text" maxlength="40" placeholder="例如：财务 · 刘" list="dlDemandSource" autocomplete="off" />
+          <datalist id="dlDemandSource"></datalist>
+        </div>
+        <div class="field">
+          <label for="dKind">需求类型</label>
+          <select id="dKind">
+            <option value="新功能">新功能</option>
+            <option value="体验优化">体验优化</option>
+            <option value="缺陷">缺陷</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="dCategory">分类</label>
+          <select id="dCategory"></select>
+        </div>
+      </div>
+      <div class="form-sec span2">优先级与交付</div>
+      <div class="form-grid span2">
+        <div class="field">
+          <label>优先级</label>
+          <div class="seg" id="segDemandPri">
+            <button type="button" data-dpri="P0">P0</button>
+            <button type="button" data-dpri="P1">P1</button>
+            <button type="button" data-dpri="P2">P2</button>
+            <button type="button" data-dpri="P3">P3</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="dExpect">期望交付日期 <small class="tc-optional">选填</small></label>
+          <input id="dExpect" type="date" />
+        </div>
+      </div>
+      <details class="wsjf-more span2" id="wsjfMore">
+        <summary><span class="cf-chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 2.4 8 6l-3.4 3.6"/></svg></span>WSJF 评分<span class="wsjf-more-meta" id="wsjfMeta">未评分 · 选填</span></summary>
+        <div class="wsjf-more-body">
+          <div class="wsjf-grid">
+            <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" placeholder="0-10" /></span>
+            <span class="wsjf-item"><label for="dWsjfU">紧迫程度</label><input id="dWsjfU" type="number" min="0" max="10" placeholder="0-10" /></span>
+            <span class="wsjf-item"><label for="dWsjfR">风险缓解</label><input id="dWsjfR" type="number" min="0" max="10" placeholder="0-10" /></span>
+            <span class="wsjf-item"><label for="dWsjfE">工作量</label><input id="dWsjfE" type="number" min="1" max="10" placeholder="1-10" /></span>
+          </div>
+          <span class="wsjf-live" id="wsjfLive" hidden></span>
+          <span class="hint">可不填：四项都填才自动计分 WSJF =（业务 + 紧迫 + 风险）÷ 工作量；留空不评分，列表默认按优先级排序</span>
+        </div>
+      </details>
+      <div class="dlg-foot-row span2">
+        <p class="foot-note" id="demandFootNote">新需求进入「待评审」；仅空间主可通过、拒绝或排期</p>
+        <button class="link-btn" type="button" id="demandCheckResume" hidden title="重新开启提交前体检">恢复体检</button>
+        <button class="btn primary" type="button" id="btnSaveDemand">提交评审</button>
+      </div>
+    </div>
+  </div>
+</div></div></div>
+
+
+<!-- 提交前体检：只提示不拦截，仍然提交由用户决定 -->
+<div class="modal-layer" id="dlgDemandCheck" role="dialog" aria-modal="true" aria-labelledby="dqTitle">
+  <div class="sheet sm dq-sheet">
+    <div class="sheet-head dq-head">
+      <span class="dq-ico" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h6M7 3.5a1.5 1.5 0 0 0-1.5 1.5v.5h9V5A1.5 1.5 0 0 0 13 3.5"/><rect x="4.5" y="5.5" width="11" height="11" rx="1.6"/><path d="M7.5 10.2l1.6 1.6 3.4-3.4"/></svg>
+      </span>
+      <div class="dq-head-txt">
+        <h2 id="dqTitle">提交前体检</h2>
+        <p class="desc" id="dqSummary"></p>
+      </div>
+      <button class="icon-btn sm" type="button" id="dqX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body dq-body">
+      <div id="dqIssueSec" hidden>
+        <div class="dq-sec">建议补充 <span class="dq-sec-n" id="dqIssueCount"></span></div>
+        <div class="dq-list" id="dqIssueList"></div>
+      </div>
+      <div id="dqSimSec" hidden>
+        <div class="dq-sec">相似需求 <span class="dq-sec-n" id="dqSimCount"></span></div>
+        <div class="dq-list" id="dqSimList"></div>
+      </div>
+      <p class="foot-note" id="dqHint">按验收标准、描述完整度和同项目标题关键词自动检查；不调用 AI、不修改内容，提交仍由你决定。</p>
+    </div>
+    <div class="sheet-foot dq-foot">
+      <label class="dq-skip"><input type="checkbox" id="dqSkip">以后不再提示</label>
+      <button class="btn ghost" type="button" id="dqStill">仍然提交</button>
+      <button class="btn primary" type="button" id="dqBack">返回修改</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- 排期进入版本 -->
+<div class="modal-layer" id="dlgDemandPlan" role="dialog" aria-modal="true" aria-labelledby="demandPlanTitle"><div class="sheet xs"><div class="sheet-body">
+  <div class="panel">
+    <div class="panel-head"><h3 id="demandPlanTitle">排期进入版本</h3><button class="icon-btn sm" type="button" id="dlgDemandPlanX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+    <div class="stack">
+      <div class="field" id="fDemandPlanVer">
+        <label for="dpVersion">目标版本（选填）</label>
+        <select id="dpVersion"></select>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="dpPlannedStart">计划开始</label>
+          <input id="dpPlannedStart" type="date" />
+        </div>
+        <div class="field">
+          <label for="dpPlannedEnd">计划结束</label>
+          <input id="dpPlannedEnd" type="date" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="dpPriority">排期优先级</label>
+        <select id="dpPriority"><option value="P0">P0 · 紧急</option><option value="P1">P1 · 高</option><option value="P2" selected>P2 · 中</option><option value="P3">P3 · 低</option></select>
+      </div>
+      <div class="field">
+        <label for="dpNote">排期备注</label>
+        <input id="dpNote" type="text" maxlength="120" placeholder="选填：排期说明…" autocomplete="off" />
+      </div>
+      <div class="row row-gap">
+        <button class="btn primary" type="button" id="btnDoPlan">排期</button>
+      </div>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- AI 拆需求：需求详情里的一键拆分，草稿勾选确认后才创建工作项 -->
+<div class="modal-layer side" id="dlgDemandAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgDemandAiSplitTitle">
+  <div class="sheet ai-dlg">
+    <div class="panel-head">
+      <h3 id="dlgDemandAiSplitTitle">AI 拆出的工作项</h3>
+      <button class="icon-btn sm" type="button" id="dlgDemandAiSplitX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <p class="reqdoc-dlg-msg" id="dlgDemandAiSplitMsg">勾选要创建的工作项，标题和优先级可以直接改；没勾的不会创建。</p>
+    <div class="ai-list" id="demandAiSplitList"></div>
+    <div class="ai-usage" id="demandAiSplitUsage"></div>
+    <div class="reqdoc-dlg-foot">
+      <button class="btn ghost" type="button" id="dlgDemandAiSplitCancel">取消</button>
+      <button class="btn primary" type="button" id="dlgDemandAiSplitOk">新建选中工作项</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI 长请求：统一等待、计时、取消与重试 -->
+<div class="modal-layer" id="dlgAiProgress" role="dialog" aria-modal="true" aria-labelledby="aiProgressTitle">
+  <div class="sheet xs ai-progress-dlg">
+    <h3 id="aiProgressTitle">AI 处理中</h3>
+    <p class="ai-progress-desc" id="aiProgressDesc">正在连接模型…</p>
+    <div class="ai-progress-track" aria-hidden="true"><i></i></div>
+    <div class="ai-progress-meta">
+      <span id="aiProgressElapsed">0 秒</span>
+      <span id="aiProgressHint"></span>
+    </div>
+    <div class="ai-progress-error" id="aiProgressError" role="alert" hidden></div>
+    <div class="reqdoc-dlg-foot">
+      <button class="btn ghost" type="button" id="aiProgressCancel">取消</button>
+      <button class="btn primary" type="button" id="aiProgressRetry" hidden>重试</button>
     </div>
   </div>
 </div>
@@ -48570,7 +48666,9 @@ var ganttScroll = $("ganttScroll"), ganttMeta = $("ganttMeta"),
     ganttScaleEl = $("ganttScale"), ganttAnalysisBtn = $("ganttAnalysisBtn"),
     ganttAnalysisMenu = $("ganttAnalysisMenu"), ganttDepMenu = $("ganttDepMenu"),
     ganttLoadBox = $("ganttLoad"), ganttLoadBody = $("ganttLoadBody"),
-    ganttLoadRangeEl = $("ganttLoadRange"), ganttLoadCloseEl = $("ganttLoadClose");
+    ganttLoadRangeEl = $("ganttLoadRange"), ganttLoadCloseEl = $("ganttLoadClose"),
+    ganttSplitEl = $("ganttSplit"), ganttSplitBar = $("ganttSplitBar"),
+    ganttUnplannedToggle = $("ganttUnplannedToggle");
 var GANTT_LABEL_W = 280;
 var GANTT_ROW_H = 54, GANTT_GROUP_H = 32, GANTT_HEAD_H = 54;
 var GANTT_LABEL_W_NARROW = 170;
@@ -48583,6 +48681,7 @@ var GANTT_BLOCKED = {c:"var(--warning)", soft:"var(--warning-soft)", bd:"var(--w
 var GANTT_OVERDUE = {c:"var(--danger)",  soft:"var(--danger-soft)",  bd:"var(--danger-border)"};
 var GANTT_DOING   = {c:"var(--primary)", soft:"var(--primary-soft)", bd:"var(--primary-border)"};
 var ganttTipEl = null, ganttDropEl = null;
+var ganttBodyRaf = 0;
 var ganttSuppressUnplannedClick = 0;
 var ganttState = {
   tasks: [], byId: {}, dayW: 28, showDone: false, range: null, seq: 0, drag: null,
@@ -48617,7 +48716,10 @@ var ganttState = {
   /* ---- V1.4.1 显示密度与左列宽度 ---- */
   density: "comfortable", // comfortable | compact | minimal
   labelW: GANTT_LABEL_W,  // 左列工作项列表像素宽度
-  labelDrag: null         // 拖拽调整左列宽度时的状态
+  labelDrag: null,        // 拖拽调整左列宽度时的状态
+  /* ---- 上下分区（甘特画布 / 未排期区） ---- */
+  unplannedH: null,       // 未排期区高度（px）；null=按可用高度自动
+  splitDrag: null         // 拖拽上下分隔条时的状态
 };
 var GANTT_DEFAULT_COLS = { project: true, owner: true, dates: true, work: true, subtask: true, tags: false, comments: false };
 function ganttPrefsKey(){
@@ -48641,6 +48743,7 @@ function loadGanttPrefs(){
   ganttState.showLoad = false;
   ganttState.density = "comfortable";
   ganttState.labelW = GANTT_LABEL_W;
+  ganttState.unplannedH = null;
 
   var key = ganttPrefsKey();
   if(!key) return;   // 没有空间 id：保持内存状态，不写/不读错误 key
@@ -48670,6 +48773,9 @@ function loadGanttPrefs(){
   if(saved.density === "comfortable" || saved.density === "compact" || saved.density === "minimal") ganttState.density = saved.density;
   var lw = Number(saved.labelW);
   if(lw >= GANTT_LABEL_W_NARROW && lw <= 500) ganttState.labelW = lw;
+  var uh = Number(saved.unplannedH);
+  /* 运行时会按当前窗口再夹一次，这里只拦明显异常值；高屏上可拖到 1000+ */
+  if(uh >= 96 && uh <= 4000) ganttState.unplannedH = uh;
 }
 function saveGanttPrefs(){
   var key = ganttPrefsKey();
@@ -48688,7 +48794,8 @@ function saveGanttPrefs(){
       showCritical: ganttState.showCritical,
       showLoad: ganttState.showLoad,
       density: ganttState.density,
-      labelW: ganttState.labelW
+      labelW: ganttState.labelW,
+      unplannedH: ganttState.unplannedH
     }));
   }catch(e){ /* 隐私模式 / 配额满：偏好只是增强，不打断使用 */ }
 }
@@ -48707,6 +48814,85 @@ function ganttLabelW(){
 }
 function ganttReadOnly(){
   return window.matchMedia("(max-width: 900px)").matches;
+}
+
+/* ===== 上下分区：未排期区高度可拖动 =====
+   甘特画布吃掉剩余高度；未排期区高度存像素值，窗口变矮时按上限收缩。
+   列表内部滚动，不再把甘特画布挤到只剩几行。 */
+var GANTT_SPLIT_MIN = 96;      // 未排期区最小高度（头部 + 一行卡片）
+var GANTT_SPLIT_STAGE_MIN = 260; // 甘特画布最小高度（表头 + 若干行）
+function ganttSplitLimits(){
+  var total = (ganttSplitEl && ganttSplitEl.clientHeight) || 640;
+  var min = GANTT_SPLIT_MIN;
+  var max = Math.max(min + 40, total - GANTT_SPLIT_STAGE_MIN);
+  return { total: total, min: min, max: max };
+}
+function ganttSplitDefault(){
+  var lim = ganttSplitLimits();
+  /* 默认约 1/3 给未排期：常见 6~10 条能两行铺完，甘特主体不再被压扁 */
+  return Math.round(Math.min(lim.max, Math.max(lim.min, lim.total * 0.34)));
+}
+/* 自动模式：未排期区贴着内容高度，最多到默认上限——只有几条时不白占甘特画布 */
+function ganttSplitAutoHeight(){
+  var lim = ganttSplitLimits();
+  var cap = ganttSplitDefault();
+  var rows = ganttUnplannedList ? ganttUnplannedList.children : [];
+  if(!rows.length) return cap;
+  var cs = getComputedStyle(ganttUnplannedList);
+  var padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  /* scrollHeight 在内容不足时等于可视高度，量首尾卡片的间距才拿得到真实内容高度 */
+  var rowsH = rows[rows.length - 1].getBoundingClientRect().bottom
+    - rows[0].getBoundingClientRect().top;
+  var headerH = Math.max(0, ganttUnplannedBox.offsetHeight - ganttUnplannedList.offsetHeight);
+  var content = rowsH + padV + headerH;
+  return Math.round(Math.min(cap, Math.max(lim.min, content)));
+}
+function ganttUnplannedExpanded(){
+  return !!(ganttUnplannedBox && !ganttUnplannedBox.hidden
+    && !ganttUnplannedBox.classList.contains("is-collapsed"));
+}
+function ganttSplitHeight(){
+  if(!ganttUnplannedExpanded()) return 0;
+  var lim = ganttSplitLimits();
+  /* 记住的高度在窗口变矮时会被夹到上限，但不回写，窗口再拉高时恢复原值 */
+  var h = ganttState.unplannedH;
+  if(!h) h = (ganttSplitEl && ganttSplitEl.classList.contains("is-gantt-empty")) ? lim.max : ganttSplitAutoHeight();
+  return Math.round(Math.max(lim.min, Math.min(lim.max, h)));
+}
+function syncGanttSplit(){
+  if(!ganttSplitEl) return;
+  var expanded = ganttUnplannedExpanded();
+  if(ganttSplitBar) ganttSplitBar.hidden = !ganttUnplannedBox || ganttUnplannedBox.hidden || !expanded;
+  if(ganttUnplannedToggle){
+    ganttUnplannedToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    var label = ganttUnplannedToggle.querySelector(".unplanned-head-toggle");
+    if(label) label.textContent = expanded ? "收起" : "展开";
+  }
+  if(!expanded){
+    ganttSplitEl.style.removeProperty("--gantt-unplanned-h");
+    if(ganttSplitBar) ganttSplitBar.setAttribute("aria-valuenow", "0");
+    return;
+  }
+  var h = Math.round(ganttSplitHeight());
+  ganttSplitEl.style.setProperty("--gantt-unplanned-h", h + "px");
+  if(ganttSplitBar){
+    var pct = Math.max(0, Math.min(100, Math.round(h / Math.max(1, ganttSplitLimits().total) * 100)));
+    ganttSplitBar.setAttribute("aria-valuenow", String(pct));
+    ganttSplitBar.setAttribute("aria-valuetext", "未排期区域约占 " + pct + "%，拖动调整");
+  }
+}
+function ganttApplySplitHeight(h){
+  var lim = ganttSplitLimits();
+  ganttState.unplannedH = Math.round(Math.max(lim.min, Math.min(lim.max, h)));
+  syncGanttSplit();
+  scheduleGanttBodyRefresh();
+}
+function scheduleGanttBodyRefresh(){
+  if(ganttBodyRaf) return;
+  ganttBodyRaf = requestAnimationFrame(function(){
+    ganttBodyRaf = 0;
+    if(activeView === "gantt") ganttRenderBody(false);
+  });
 }
 function enterGanttView(){
   /* 切换工作空间时重新定位到今天，同一空间内保留滚动位置 */
@@ -50005,11 +50191,12 @@ function renderGanttUnplanned(list, openIt){
   if(!list.length && !ganttState.unplannedHasMore){
     ganttUnplannedList.innerHTML = "";
     ganttUnplannedCount.textContent = String(list.length);
+    syncGanttSplit();
     return;
   }
   ganttUnplannedCount.textContent = String(list.length);
   if(openIt && !ganttState.unplannedAuto){
-    ganttUnplannedBox.open = true;
+    ganttUnplannedBox.classList.remove("is-collapsed");
     ganttState.unplannedAuto = true;
   }
   ganttUnplannedList.innerHTML = list.map(function(t){
@@ -50026,7 +50213,6 @@ function renderGanttUnplanned(list, openIt){
         '<span class="gantt-unplanned-t">' + esc(t.title) + '</span>' +
         '<span class="gantt-unplanned-m">' + (cat ? cat + ' · ' : '') + meta.join(" · ") + taskPublicationHTML(t) + '</span>' +
       '</span>' +
-      '<span class="tag tag-ghost">未排期</span>' +
     '</button>';
   }).join("") +
   (ganttState.unplannedHasMore
@@ -50137,7 +50323,9 @@ function renderGantt(){
     undated = upVisible;
   }
   ganttState.undated = undated;
+  if(ganttSplitEl) ganttSplitEl.classList.toggle("is-gantt-empty", !dated.length);
   renderGanttUnplanned(undated, dated.length === 0);
+  syncGanttSplit();
   ganttState.notice = ganttState.pendingNotice || "";
   ganttState.pendingNotice = "";
 
@@ -50352,6 +50540,7 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
     total: ganttState.total, allCount: all.length, scale: ganttState.scale
   }) + ganttUnplannedSuffix();
   syncGanttUndoUI();
+  syncGanttSplit();
 }
 function updateGanttRangeUI(){
   var monthMode = ganttState.rangeMode === "month";
@@ -50802,6 +50991,72 @@ function onGanttLabelDragKey(e){
   e.preventDefault();
   onGanttLabelDragCancel();
 }
+
+/* ---- 上下分隔条：拖动 / 键盘 / 双击复位 ---- */
+function cleanupGanttSplitDrag(){
+  var d = ganttState.splitDrag;
+  ganttState.splitDrag = null;
+  if(ganttSplitBar) ganttSplitBar.classList.remove("dragging");
+  document.removeEventListener("pointermove", onGanttSplitDragMove);
+  document.removeEventListener("pointerup", onGanttSplitDragEnd);
+  document.removeEventListener("pointercancel", onGanttSplitDragCancel);
+  document.removeEventListener("keydown", onGanttSplitDragKey);
+  return d;
+}
+function onGanttSplitDown(e){
+  if(!ganttSplitBar || !ganttUnplannedExpanded()) return;
+  if(e.pointerType === "mouse" && e.button !== 0) return;
+  e.preventDefault();
+  ganttSplitBar.classList.add("dragging");
+  ganttState.splitDrag = { startY: e.clientY, startH: ganttSplitHeight() };
+  document.addEventListener("pointermove", onGanttSplitDragMove);
+  document.addEventListener("pointerup", onGanttSplitDragEnd);
+  document.addEventListener("pointercancel", onGanttSplitDragCancel);
+  document.addEventListener("keydown", onGanttSplitDragKey);
+}
+function onGanttSplitDragMove(e){
+  var d = ganttState.splitDrag;
+  if(!d) return;
+  /* 往上拖 → 未排期区变高 */
+  ganttApplySplitHeight(d.startH + (d.startY - e.clientY));
+}
+function onGanttSplitDragEnd(){
+  if(!ganttState.splitDrag) return;
+  cleanupGanttSplitDrag();
+  saveGanttPrefs();
+  if(activeView === "gantt") renderGantt();
+}
+function onGanttSplitDragCancel(){
+  var d = cleanupGanttSplitDrag();
+  if(!d) return;
+  ganttApplySplitHeight(d.startH);
+}
+function onGanttSplitDragKey(e){
+  if(e.key !== "Escape") return;
+  e.preventDefault();
+  onGanttSplitDragCancel();
+}
+function onGanttSplitBarKey(e){
+  var step = e.shiftKey ? 48 : 16;
+  if(e.key === "ArrowUp") ganttApplySplitHeight(ganttSplitHeight() + step);
+  else if(e.key === "ArrowDown") ganttApplySplitHeight(ganttSplitHeight() - step);
+  else if(e.key === "Home"){ resetGanttSplit(); return; }
+  else return;
+  e.preventDefault();
+  saveGanttPrefs();
+}
+function resetGanttSplit(){
+  ganttState.unplannedH = null;
+  syncGanttSplit();
+  scheduleGanttBodyRefresh();
+  saveGanttPrefs();
+}
+function toggleGanttUnplanned(){
+  if(!ganttUnplannedBox) return;
+  ganttUnplannedBox.classList.toggle("is-collapsed");
+  syncGanttSplit();
+  scheduleGanttBodyRefresh();
+}
 function onGanttPointerDown(e){
   /* 左列宽度调整条 */
   var resizer = e.target.closest ? e.target.closest(".gantt-resizer") : null;
@@ -51193,6 +51448,14 @@ if(ganttScroll){
   });
   ganttScroll.addEventListener("pointerdown", onGanttPointerDown);
 }
+if(ganttSplitBar){
+  ganttSplitBar.addEventListener("pointerdown", onGanttSplitDown);
+  ganttSplitBar.addEventListener("keydown", onGanttSplitBarKey);
+  ganttSplitBar.addEventListener("dblclick", resetGanttSplit);
+}
+if(ganttUnplannedToggle){
+  ganttUnplannedToggle.addEventListener("click", toggleGanttUnplanned);
+}
 if(ganttUnplannedList){
   ganttUnplannedList.addEventListener("click", function(e){
     if(e.target.closest("[data-gantt-unplanned-more]")){
@@ -51499,7 +51762,10 @@ window.addEventListener("resize", function(){
   if(ganttResizeTimer) clearTimeout(ganttResizeTimer);
   ganttResizeTimer = setTimeout(function(){
     ganttResizeTimer = 0;
-    if(activeView === "gantt" && !ganttState.drag) renderGantt();
+    if(activeView === "gantt" && !ganttState.drag && !ganttState.splitDrag){
+      syncGanttSplit();
+      renderGantt();
+    }
   }, 180);
 });
 
@@ -51668,6 +51934,7 @@ var demandCommentReplyTo = null;   /* 当前回复的顶层评论 ID（一层回
 var demandCommentMention = null;   /* 详情内发表评论的 @ 提及选择器 */
 var demandOverviewMention = null;  /* 概览「讨论」里快速记录的 @ 提及选择器 */
 var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null, editingDemandStatus = null;
+var editingDemandReqId = null;  /* 打开编辑时的所属项目，保存成功据此判断是否发生了迁移 */
 var planDemandRevision = null, planAction = "plan";
 var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status, canSchedule } */
@@ -52847,9 +53114,25 @@ function demandCell(d, key){
 function demInlineWritable(d){
   return !!d && !isClosedDemand(d) && canWriteDemand(d);
 }
+/* 换项目：待评审 / 已通过 / 已排期可迁移；已排版本的先撤销排期，
+   工作项 / 文档 / 用例 / 发布记录等执行证据由服务端最终校验 */
+function demandProjectMovable(d){
+  if(!d || !canWriteDemand(d) || d.versionId) return false;
+  return d.status === "review" || d.status === "pass" || d.status === "plan";
+}
+/* 候选与层级同口径：保留当前项目（可能已归档）以便标出「当前」，其余只列未归档且可写的项目 */
+function demandMoveTargets(reqId){
+  var list = rt.reqList.filter(function(r){
+    return r.id === reqId || (!r.archivedAt && canEditReq(r.id));
+  });
+  /* 项目清单尚未加载到当前项目时补一条，避免下拉回落到第一个项目把归属悄悄改掉 */
+  if(reqId && !list.some(function(r){ return r.id === reqId; })){
+    list.unshift({ id:reqId, name:reqNameById(reqId) || reqId });
+  }
+  return list;
+}
 function demInlineProjectEditable(d){
-  /* 仅待评审可换项目；工作项/文档/用例/发布记录等证据由服务端最终校验 */
-  return !!d && d.status === "review" && canWriteDemand(d);
+  return demandProjectMovable(d) && demandMoveTargets(d.reqId).length > 1;
 }
 function demInlineVersionEditable(d){
   return !!d && d.status === "plan" && canScheduleDemand(d);
@@ -52871,10 +53154,6 @@ function demStatusCell(d){
 }
 function demProjectCell(d){
   if(!demInlineProjectEditable(d)) return esc(reqNameById(d.reqId) || "—");
-  var list = rt.reqList.filter(function(r){
-    return r.id === d.reqId || (!r.archivedAt && canEditReq(r.id));
-  });
-  if(list.length <= 1) return esc(reqNameById(d.reqId) || "—");
   return demInlineTrigger("project", d,
     '<span class="dem-inline-txt">' + esc(reqNameById(d.reqId) || "—") + '</span>', "更换所属项目");
 }
@@ -53007,12 +53286,9 @@ function openDemInlineMenu(btn){
     return;
   }
   if(kind === "project"){
-    var list = rt.reqList.filter(function(req){
-      return req.id === d.reqId || (!req.archivedAt && canEditReq(req.id));
-    });
     /* 层级与筛选栏同口径：项目集标题 + 二级项目；当前项目可能已归档，保留在组内 */
     var items = [];
-    projectGroups(list).forEach(function(g){
+    projectGroups(demandMoveTargets(d.reqId)).forEach(function(g){
       items.push({ header: esc(g.set ? g.set.name : "未分组") });
       g.rows.forEach(function(req){
         items.push({ value:req.id, current:req.id === d.reqId, sub:true,
@@ -54316,6 +54592,7 @@ function closeDemandDialog(){
   demandFormBaseline = null;
   editingDemandId = null;
   editingDemandStatus = null;
+  editingDemandReqId = null;
   btnSaveDemand.disabled = false;
   UI.closeModal($("dlgDemand"));
 }
@@ -54341,11 +54618,29 @@ function openDemandDialog(d){
   editingDemandId = d ? d.id : null;
   editingDemandRevision = d ? d.revision : null;
   editingDemandStatus = d ? d.status : "review";
+  editingDemandReqId = d ? d.reqId : null;
   editingPlannedStart = d ? d.plannedStart : null;
   editingPlannedEnd = d ? d.plannedEnd : null;
-  dReq.innerHTML = projectOptionsHTML(opts);
+  /* 编辑态候选与列表行内切换同口径：当前项目 + 其他未归档且可写的项目 */
+  dReq.innerHTML = projectOptionsHTML(d ? demandMoveTargets(d.reqId) : opts);
   dReq.value = d ? d.reqId : (rt.demandReqId && canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
-  dReq.disabled = !!d;
+  /* 编辑态可换项目：仅在还有第二个可写项目且需求尚未排期时放开，限制原因就地说明 */
+  var canMove = !!d && demandProjectMovable(d) && demandMoveTargets(d.reqId).length > 1;
+  dReq.disabled = !!d && !canMove;
+  var reqHint = $("dReqHint");
+  if(reqHint){
+    reqHint.hidden = true;
+    if(d && canMove){
+      reqHint.hidden = false;
+      reqHint.textContent = "更换后按目标项目重排需求编号；已关联工作项、文档、用例或发布记录的需求不能迁移";
+    }else if(d && d.versionId){
+      reqHint.hidden = false;
+      reqHint.textContent = "该需求已排入版本，撤销排期后才能更换所属项目";
+    }else if(d && d.status !== "done" && !isClosedDemand(d) && !canMove){
+      reqHint.hidden = false;
+      reqHint.textContent = "没有其他可写项目可迁移";
+    }
+  }
   dTitle.value = d ? d.title : "";
   dDesc.value = d ? (d.description || "") : "";
   dAccept.value = d ? (d.acceptText || "") : "";
@@ -54399,8 +54694,9 @@ function openDemandDialog(d){
   setDemandFormLocked(!!d && d.status !== "review");
   var lockNote = $("demandLockNote");
   if(lockNote) lockNote.textContent = d && d.status === "done"
-    ? "该需求已完成，这里只更新描述、验收标准、来源、分类与 WSJF；标题与优先级在详情里直接点击修改，版本与计划日期不再调整。"
-    : "该需求已进入流转，这里只更新描述、验收标准、来源、分类与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。";
+    ? "该需求已完成，这里只更新描述、验收标准、来源、分类与 WSJF；标题与优先级在详情里直接点击修改，所属项目、版本与计划日期不再调整。"
+    : "该需求已进入流转，这里只更新描述、验收标准、来源、分类" + (canMove ? "、所属项目" : "")
+      + "与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。";
   demandFormBaseline = demandFormSnapshot();
   updateDemandCheckResume();
   UI.openModal($("dlgDemand"), "input");
@@ -54465,17 +54761,21 @@ function doSaveDemand(body){
   var title = body.title;
   btnSaveDemand.disabled = true;
   var seq = demandFormSeq, wasEdit = !!editingDemandId;
+  var moved = wasEdit && !!editingDemandReqId && body.reqId !== editingDemandReqId;
   var p = editingDemandId
     ? API.put("/api/demands/" + encodeURIComponent(editingDemandId), body)
     : API.post("/api/demands", body);
   p.then(function(){
-    toast(wasEdit ? "已更新需求「" + title + "」" : "已提交评审「" + title + "」", "fs");
+    toast(!wasEdit ? "已提交评审「" + title + "」"
+      : moved ? "已移至「" + reqNameById(body.reqId) + "」并保存"
+      : "已更新需求「" + title + "」", "fs");
     /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
     if(seq === demandFormSeq){
       closeDemandDialog();
       if(wasEdit) closeDemandDetailIfOpen();
-      /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围 */
-      if(rt.demandReqId && body.reqId !== rt.demandReqId){
+      /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围。
+         编辑迁移则保持原筛选，让这条需求从当前列表里消失即可 */
+      if(!wasEdit && rt.demandReqId && body.reqId !== rt.demandReqId){
         rt.demandReqId = body.reqId;
         if(demandReq) demandReq.value = body.reqId;
       }
@@ -57214,13 +57514,16 @@ if($("demandCheckResume")) $("demandCheckResume").addEventListener("click", func
 });
 bindDemandCheckDialog();
 if(dReq) dReq.addEventListener("change", function(){
+  if(editingDemandId){
+    /* 编辑态换项目：原分类属于旧项目，直接回到「未分类」，由用户按新项目重选 */
+    syncDemandCatOptions(dReq.value, "", false);
+    return;
+  }
   /* 换项目后原分类不再可选，回落到新项目第一个分类或「未分类」 */
   syncDemandCatOptions(dReq.value, dCategory.value, true);
   /* 提醒人候选取自项目花名册：换项目后旧选择可能已不可见，直接清空重选 */
-  if(!editingDemandId){
-    resetDemandWatchPick();
-    syncDemandWatchPicker();
-  }
+  resetDemandWatchPick();
+  syncDemandWatchPicker();
 });
 if($("dlgDemand")) $("dlgDemand").addEventListener("click", function(e){
   var rm = e.target.closest("[data-dem-form-watch-remove]");
@@ -77212,6 +77515,38 @@ function groupedBySet(projects){
   });
   return keys.map(function(k){ return { key:k, name:k ? (setNameById(k) || "项目集") : "未分组", rows:buckets[k] }; });
 }
+function setObjById(id){
+  if(!id) return null;
+  var sets = rt.projectSets || [];
+  for(var i = 0; i < sets.length; i++) if(sets[i].id === id) return sets[i];
+  return null;
+}
+function setGroupSummary(rows){
+  var total = 0, done = 0, overdue = 0, weighted = 0, attention = 0;
+  rows.forEach(function(p){
+    var t = Number(p.total) || 0;
+    total += t;
+    done += Number(p.done) || 0;
+    overdue += Number(p.overdue) || 0;
+    weighted += (Number(p.progressPct) || 0) * t;
+    if(p.health && p.health !== "green") attention++;
+  });
+  return { total:total, done:done, overdue:overdue, attention:attention, pct: total ? Math.round(weighted / total) : 0 };
+}
+/* 卡片视图的集分组头：与项目列表同款集头，身份色只投到文件夹图标；
+   汇总按工作项数加权，逾期 / 需关注一眼可见，不用逐张卡去数 */
+function setGroupHeadHTML(group){
+  var set = setObjById(group.key);
+  var agg = setGroupSummary(group.rows);
+  var color = set && /^#[0-9a-f]{6}$/i.test(String(set.color || "")) ? String(set.color) : "";
+  return '<div class="req-set-head proj-set-head pf-set-group' + (group.key ? "" : " is-ungrouped") + '"' + (color ? ' style="--set:' + color + '"' : "") + '>'
+    + '<span class="req-set-title"><span class="req-set-ico" aria-hidden="true">' + icon("folder", 14) + '</span><b>' + esc(group.name) + '</b></span>'
+    + '<span class="req-set-meta">' + group.rows.length + ' 个项目 · ' + agg.total + ' 工作项 · ' + agg.done + ' 完成</span>'
+    + (agg.overdue ? '<span class="risk-chip overdue">逾期 ' + agg.overdue + '</span>' : "")
+    + (agg.attention ? '<span class="tag tag-warning">' + agg.attention + ' 需关注</span>' : "")
+    + '<span class="progress mini req-set-progress" title="集内项目按工作项数加权的完成度"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>'
+    + '</div>';
+}
 /* 项目卡固定一行「下一步」：谁、做什么、何时到期。
    借用卡片式报表的固定槽位——每张卡都直接回答同一个问题，不用逐个项目点进去找。 */
 function nextStepFor(reqId){
@@ -77242,7 +77577,7 @@ function nextStepHTML(p){
     + (t.blocked ? '<span class="mini-tag warn" title="' + esc(t.blockedReason || "被阻塞") + '">阻塞</span>' : "")
     + '<span class="next-owner" title="负责人：' + esc(t.owner || "未指派") + '">' + avatarHTML(t.owner || "—", "sm") + dueHTML + '</span></div>';
 }
-function projectCard(p){
+function projectCard(p, grouped){
   var healthName = p.health === "green" ? "正常" : "需关注";
   var tagCls = p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning");
   var people = (p.members || []).slice(0, 4).map(function(name){ return avatarHTML(name, "sm"); }).join("");
@@ -77252,7 +77587,7 @@ function projectCard(p){
   return '<article class="manager-project-card">'
     + '<div class="manager-project-head"><i class="manager-light ' + esc(p.health) + '"></i>'
     + '<button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '">' + esc(p.name) + '</button>'
-    + (p.setId ? '<span class="tag tag-ghost" title="所属项目集">' + esc(setNameById(p.setId) || "项目集") + '</span>' : '')
+    + (!grouped && p.setId ? '<span class="tag tag-ghost" title="所属项目集">' + esc(setNameById(p.setId) || "项目集") + '</span>' : '')
     + '<span class="tag ' + tagCls + '">' + healthName + '</span></div>'
     + '<div class="manager-project-main"><button type="button" class="manager-ring ' + esc(p.health) + '" style="--p:' + p.progressPct + '" data-project-drill="' + esc(p.reqId) + '" data-metric="all" title="查看该项目全部工作项" aria-label="' + esc(p.name) + ' 完成率 ' + p.progressPct + '%，查看工作项明细"><b>' + p.progressPct + '%</b></button>'
     + '<div class="manager-project-stats">'
@@ -77329,8 +77664,16 @@ function renderPortfolio(){
     + (mode === "table"
       ? (projects.length ? projectTable(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"}))
       : '<div class="manager-legend"><span><i class="manager-light green"></i>正常</span><span><i class="manager-light orange"></i>有逾期或超载</span><span><i class="manager-light red"></i>逾期与停滞叠加</span></div>'
-        + (projects.length ? '<div class="manager-project-grid" id="portfolioProjects">' + projects.map(projectCard).join("") + '</div>'
-          : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"})));
+        + (projects.length ? cardAreaHTML(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"})));
+}
+/* 卡片视图按项目集分块：集头汇总 + 集内项目网格；没有项目集时保持原来的平铺 */
+function cardAreaHTML(projects){
+  var groups = groupedBySet(projects);
+  if(!groups) return '<div class="manager-project-grid" id="portfolioProjects">' + projects.map(function(p){ return projectCard(p, false); }).join("") + '</div>';
+  return '<div class="pf-set-groups">' + groups.map(function(g){
+    return '<section class="pf-set-block">' + setGroupHeadHTML(g)
+      + '<div class="manager-project-grid">' + g.rows.map(function(p){ return projectCard(p, true); }).join("") + '</div></section>';
+  }).join("") + '</div>';
 }
 function exportPortfolio(){
   if(!cache) return;
@@ -77418,6 +77761,11 @@ function onClick(e){
   }
 }
 if($("portfolioBody")) $("portfolioBody").addEventListener("click", onClick);
+/* 项目集与项目列表并行加载：若本页先渲染，集名 / 身份色取不到，等列表落地后再补一次 */
+window.addEventListener("ds:reqs-loaded", function(){
+  if(document.body.dataset.view !== "portfolio" || !cache) return;
+  renderPortfolio();
+});
 
 return {enterPortfolioView: enterPortfolioView, loadPortfolio: loadPortfolio};
 })();
@@ -78154,8 +78502,19 @@ var VIEW_KEY = "project-view";
 var cache = null, seq = 0;
 var pfCache = null, expanded = {};
 var moduleUi = { adding:false, deleting:"" };
-/* 驾驶舱「需求与工作项」：需求走需求池分页接口（单次 ≤100），工作项随驾驶舱一次载入、前端分页 50 */
-var PC_DEMAND_PAGE = 100, PC_TASK_PAGE = 50;
+/* 驾驶舱「需求与工作项」：需求走需求池分页接口（服务端 offset/limit），工作项随驾驶舱一次载入、前端分页 */
+var PC_PAGE_SIZES = [10, 20, 50, 100];
+var PC_PAGE_SIZE_DEFAULT = 10;
+var PC_PAGE_SIZE_KEY = "ds.pcPageSize";
+function pcPageSize(){
+  try{
+    var n = Number(localStorage.getItem(PC_PAGE_SIZE_KEY));
+    return PC_PAGE_SIZES.indexOf(n) >= 0 ? n : PC_PAGE_SIZE_DEFAULT;
+  }catch(e){ return PC_PAGE_SIZE_DEFAULT; }
+}
+function savePcPageSize(n){
+  try{ localStorage.setItem(PC_PAGE_SIZE_KEY, String(n)); }catch(e){ /* 受限环境不记忆 */ }
+}
 var PC_DEMAND_STATUS = [["review","待评审"],["pass","已通过"],["plan","已排期"],["done","已完成"],["closed","已关闭"]];
 var PC_DEMAND_STATUS_ORDER = { review:0, pass:1, plan:2, done:3, closed:4 };
 var PC_DEMAND_STATUS_TAG = { review:"tag-ghost", pass:"tag-info", plan:"tag-success", done:"tag-plum", closed:"tag-ghost" };
@@ -78179,10 +78538,12 @@ function projectContentDefaults(){
 }
 function freshDemandState(reqId){
   return { reqId:reqId, versions:[], versionsReqId:"", loading:false, loaded:false, error:"", items:[], total:0,
-    hasMore:false, counts:{}, seq:0, q:"", status:"all", pri:"all", kind:"all", cat:"all", version:"all", group:"none" };
+    page:1, size:pcPageSize(), counts:{}, seq:0,
+    q:"", status:"all", pri:"all", kind:"all", cat:"all", version:"all", group:"none" };
 }
 function freshTaskState(){
-  return { q:"", status:"all", type:"all", owner:"all", category:"all", epic:"all", pri:"all", risk:"all", group:"none", page:1 };
+  return { q:"", status:"all", type:"all", owner:"all", category:"all", epic:"all", pri:"all", risk:"all",
+    group:"none", page:1, size:pcPageSize() };
 }
 var deliveryCache = Object.create(null);
 /* 版本 / 发布记录有变更时清掉交付资源缓存，避免项目驾驶舱继续显示旧数量 */
@@ -78299,7 +78660,7 @@ function memberRows(members){
   }).join("");
 }
 /* ---------- 成员与角色：空间默认岗位 + 项目主角色覆盖 + 兼岗 ---------- */
-var rosterCache = { key:"", data:null, loading:false, error:null, seq:0, options:{} };
+var rosterCache = { key:"", data:null, loading:false, error:null, seq:0, options:{}, promise:null };
 var rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
 var rosterWrites = new Set();
 function uniqueLabels(values){ return Array.from(new Set(values.filter(Boolean))).sort(function(a,b){ return a.localeCompare(b,"zh-CN"); }); }
@@ -78404,12 +78765,12 @@ function loadRoster(reqId, force){
   var ws = workspaceId();
   if(!reqId || !ws) return Promise.resolve(null);
   var key = ws + ":" + reqId;
-  if(!force && rosterCache.key === key){ paintRoster(); return Promise.resolve(rosterCache.data); }
+  if(!force && rosterCache.key === key){ paintRoster(); return rosterCache.promise || Promise.resolve(rosterCache.data); }
   if(rosterCache.key && rosterCache.key !== key) rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
-  rosterCache = { key:key, data:null, loading:true, error:null, seq:rosterCache.seq + 1, options:{} };
+  rosterCache = { key:key, data:null, loading:true, error:null, seq:rosterCache.seq + 1, options:{}, promise:null };
   var my = rosterCache.seq;
   paintRoster();
-  return Promise.all([
+  var request = Promise.all([
     API.get("/api/workspaces/" + encodeURIComponent(ws) + "/projects/" + encodeURIComponent(reqId) + "/members"),
     loadMemberLabelOptions(ws, !!force).catch(function(){ return { roleTitles:DEFAULT_ROLE_TITLES }; })
   ]).then(function(values){
@@ -78420,6 +78781,8 @@ function loadRoster(reqId, force){
     if(my !== rosterCache.seq || ws !== workspaceId() || reqId !== rt.managerProjectId) return null;
     rosterCache.loading = false; rosterCache.error = ex; paintRoster(); return null;
   });
+  rosterCache.promise = request;
+  return request;
 }
 function startRosterWrite(ctx){
   if(!editableRoster(ctx) || rosterWrites.has(ctx.key)) return false;
@@ -78738,12 +79101,53 @@ function defaultMilestoneDate(offsetDays){
   d.setDate(d.getDate() + offsetDays);
   return d.toISOString().slice(0, 10);
 }
+/* 负责人候选取项目花名册：没有未完成工作项的成员也要能指派，
+   不能用「成员负载」口径的 cache.members（只含有在办工作项的人）。 */
+function milestoneOwnerCandidates(pid){
+  var ws = workspaceId();
+  if(!ws || !pid) return null;
+  if(rosterCache.key !== ws + ":" + pid || !rosterCache.data) return null;
+  return (rosterCache.data.members || []).filter(function(m){ return m.userId; }).map(function(m){
+    return { id:m.userId, name:m.displayName || m.username || m.userId };
+  });
+}
+function paintMilestoneOwner(sel, preferredId){
+  if(!sel) return;
+  var pid = rt.managerProjectId, key = workspaceId() + ":" + pid;
+  var opts = milestoneOwnerCandidates(pid);
+  if(opts === null){
+    var project = cache && cache.project || {};
+    if(rosterCache.key === key && rosterCache.error){
+      /* 花名册失败时只保留后端兜底的那一个默认值，不假装成完整候选 */
+      sel.innerHTML = project.ownerUserId
+        ? '<option value="' + esc(project.ownerUserId) + '">' + esc(project.ownerName || project.ownerUserId) + '（项目负责人）</option>'
+        : '<option value="">成员加载失败</option>';
+      sel.disabled = !project.ownerUserId;
+      return;
+    }
+    sel.innerHTML = '<option value="">加载成员…</option>';
+    sel.disabled = true;
+    return;
+  }
+  if(!opts.length){
+    sel.innerHTML = '<option value="">暂无项目成员</option>';
+    sel.disabled = true;
+    return;
+  }
+  var ids = Object.create(null);
+  opts.forEach(function(o){ ids[o.id] = true; });
+  var current = sel.value || preferredId || "";
+  if(!ids[current]) current = ids[preferredId] ? preferredId : opts[0].id;
+  sel.innerHTML = opts.map(function(o){
+    return '<option value="' + esc(o.id) + '"' + (o.id === current ? " selected" : "") + '>' + esc(o.name) + '</option>';
+  }).join("");
+  sel.disabled = false;
+}
 function openMilestoneCreate(){
   var reqId = rt.managerProjectId;
   if(!reqId) return;
   if(!(cache && cache.canWriteProject)){ toast("没有该项目的写权限，不能新建里程碑", "warn"); return; }
   var tasks = (cache.tasks || []).filter(function(t){ return t.itemType !== "epic"; });
-  var members = cache.members || [];
   var ownerDefault = cache.project.ownerUserId || "";
   var layer = document.createElement("div");
   layer.className = "modal-layer";
@@ -78759,9 +79163,7 @@ function openMilestoneCreate(){
     + '</select></label>'
     + '<label>名称<input class="input" data-ms-name maxlength="120" placeholder="留空自动生成"></label>'
     + '<label>目标日期<input class="input" type="date" data-ms-date value="' + esc(defaultMilestoneDate(14)) + '"></label>'
-    + '<label>负责人<select class="mini-select" data-ms-owner>'
-    + members.map(function(m){ return '<option value="' + esc(m.key) + '"' + (m.key === ownerDefault ? " selected" : "") + '>' + esc(m.name) + '</option>'; }).join("")
-    + (members.length ? "" : '<option value="">项目负责人</option>') + '</select></label>'
+    + '<label>负责人<select class="mini-select" data-ms-owner></select></label>'
     + '<div data-ms-cond="version"><label>关联版本<select class="mini-select" data-ms-version><option value="">加载中…</option></select></label></div>'
     + '<div data-ms-cond="tasks" hidden><label>关联工作项</label>'
     + '<div class="ms-task-tools">'
@@ -78790,7 +79192,12 @@ function openMilestoneCreate(){
   var kindEl = layer.querySelector("[data-ms-kind]");
   var dateEl = layer.querySelector("[data-ms-date]");
   var versionEl = layer.querySelector("[data-ms-version]");
+  var ownerEl = layer.querySelector("[data-ms-owner]");
   var saveBtn = layer.querySelector("[data-ms-save]");
+  paintMilestoneOwner(ownerEl, ownerDefault);
+  if(milestoneOwnerCandidates(reqId) === null){
+    loadRoster(reqId).then(function(){ if(layer.isConnected) paintMilestoneOwner(ownerEl, ownerDefault); });
+  }
   var versions = [];
   function selectedTasks(){
     return Array.prototype.slice.call(layer.querySelectorAll("[data-ms-task]")).filter(function(x){ return x.checked; });
@@ -78877,6 +79284,8 @@ function openMilestoneCreate(){
   layer.addEventListener("click", function(e){
     if(e.target === layer || e.target.closest("[data-ms-close]")){ UI.closeModal(layer); return; }
     if(!e.target.closest("[data-ms-save]")) return;
+    /* 花名册未就绪时下拉是禁用态，此时保存会把空值当「用项目负责人」提交 */
+    if(ownerEl.disabled){ toast("负责人候选未就绪，请稍候再试", "warn"); return; }
     var kind = kindEl.value;
     var taskIds = selectedTasks().map(function(x){ return x.value; });
     if(kind === "tasks" && !taskIds.length){ toast("至少选择 1 个工作项", "warn"); return; }
@@ -79322,11 +79731,11 @@ function pcDemandSummaryHTML(){
   var chips = PC_DEMAND_STATUS.map(function(s){
     return '<span class="pc-count' + (d.status === s[0] ? " on" : "") + '"><i>' + esc(s[1]) + '</i><b>' + (Number(counts[s[0]]) || 0) + '</b></span>';
   }).join("");
-  var regroup = d.group !== "none" && d.hasMore ? '<span class="pc-summary-note">分组基于已加载条目</span>' : "";
+  var regroup = d.group !== "none" ? '<span class="pc-summary-note">分组与组内统计基于本页</span>' : "";
   return '<div class="pc-summary" role="status"><span class="pc-summary-total">共 <b>' + total + '</b> 条</span>'
-    + chips + '<span class="pc-summary-loaded">已加载 ' + d.items.length + ' / ' + total + ' 条</span>' + regroup + '</div>';
+    + chips + regroup + '</div>';
 }
-function pcTaskSummaryHTML(total, list, pageRows, page){
+function pcTaskSummaryHTML(total, list){
   var done = 0, epics = 0, estimate = 0, actual = 0;
   list.forEach(function(t){
     if(statusBucket(t) === "done") done++;
@@ -79339,7 +79748,6 @@ function pcTaskSummaryHTML(total, list, pageRows, page){
     + '<span class="pc-count"><i>史诗</i><b>' + epics + '</b></span>'
     + '<span class="pc-count"><i>预估</i><b>' + fmtHours(estimate) + '</b></span>'
     + '<span class="pc-count"><i>实际</i><b>' + fmtHours(actual) + '</b></span>'
-    + '<span class="pc-summary-loaded">本页 ' + pageRows + ' 项 · 第 ' + page + ' 页</span>'
     + '<span class="pc-summary-note">全部工作项随驾驶舱载入，筛选与分组在前端完成</span></div>';
 }
 function pcDemandSubHTML(d){
@@ -79538,6 +79946,32 @@ function pcTaskTableHTML(rows, allList){
     + '<th class="num">截止</th><th>进度</th><th class="num">预估</th><th class="num">实际</th>'
     + '</tr></thead><tbody>' + html + '</tbody></table></div>';
 }
+function pcPageSizeSelectHTML(size){
+  return '<label>每页<select class="mini-select" data-pc-size data-pc-focus="pc:size">'
+    + PC_PAGE_SIZES.map(function(n){
+      return '<option value="' + n + '"' + (n === size ? " selected" : "") + '>' + n + ' 条</option>';
+    }).join("") + '</select></label>';
+}
+function pcPageNums(page, pages){
+  var nums = [], from = Math.max(1, page - 2), to = Math.min(pages, page + 2);
+  if(from > 1){ nums.push(1); if(from > 2) nums.push(0); }
+  for(var i = from; i <= to; i++) nums.push(i);
+  if(to < pages){ if(to < pages - 1) nums.push(0); nums.push(pages); }
+  return nums;
+}
+function pcPagerHTML(page, pages, total, size){
+  if(!total) return "";
+  var nums = pages > 1 ? pcPageNums(page, pages).map(function(n){
+    if(!n) return '<span class="pc-page-gap" aria-hidden="true">…</span>';
+    return '<button class="btn sm pc-page-num' + (n === page ? " on" : "") + '" type="button" data-pc-page="' + n + '"'
+      + (n === page ? ' aria-current="page"' : "") + '>' + n + '</button>';
+  }).join("") : "";
+  return '<div class="pc-pager"><span class="pc-pager-pos">第 <b>' + page + '</b> / ' + pages + ' 页</span>'
+    + pcPageSizeSelectHTML(size)
+    + '<button class="btn sm" type="button" data-pc-page="' + (page - 1) + '"' + (page <= 1 ? " disabled" : "") + '>上一页</button>'
+    + nums
+    + '<button class="btn sm" type="button" data-pc-page="' + (page + 1) + '"' + (page >= pages ? " disabled" : "") + '>下一页</button></div>';
+}
 function pcDemandEmptyHTML(){
   var d = projectContent.dem;
   var filtered = d.q || d.status !== "all" || d.pri !== "all" || d.kind !== "all" || d.cat !== "all" || d.version !== "all";
@@ -79553,17 +79987,13 @@ function pcTaskEmptyHTML(){
     + (filtered ? ' <button class="btn sm ghost" type="button" data-pc-reset="task">清除筛选</button>' : "")
     + '</div>';
 }
-function pcDemandMoreHTML(){
-  var d = projectContent.dem;
-  if(d.loading) return '<div class="pc-more"><span class="pc-loading">加载中…</span></div>';
-  if(d.hasMore) return '<div class="pc-more"><button class="bkl-more" type="button" data-pc-more>加载更多（已加载 ' + d.items.length + ' / 共 ' + d.total + ' 条）</button></div>';
-  if(d.total > PC_DEMAND_PAGE) return '<div class="pc-more"><span class="pc-more-note">已全部加载 ' + d.items.length + ' 条</span></div>';
-  return "";
-}
 function pcDemandInner(){
   var d = projectContent.dem, reqId = projectReqId();
   if(!reqId) return '<div class="manager-empty-cell">请先选择项目</div>';
   if(d.reqId !== reqId) return '<div class="pc-loading">加载中…</div>';
+  var size = d.size || PC_PAGE_SIZE_DEFAULT;
+  var pages = Math.max(1, Math.ceil((Number(d.total) || 0) / size));
+  var page = Math.min(Math.max(1, d.page || 1), pages);
   var body;
   if(d.error){
     body = '<div class="pc-empty manager-empty-cell">需求加载失败：' + esc(d.error)
@@ -79573,24 +80003,19 @@ function pcDemandInner(){
   }else if(!d.items.length){
     body = pcDemandEmptyHTML();
   }else{
-    body = pcDemandTableHTML() + pcDemandMoreHTML();
+    body = pcDemandTableHTML() + pcPagerHTML(page, pages, d.total, size);
   }
   return pcDemandFiltersHTML() + (d.loaded ? pcDemandSummaryHTML() : "") + body;
 }
 function pcTaskInner(){
   var all = (cache && cache.tasks || []).filter(pcTaskMatches).sort(pcTaskCompare);
-  var pages = Math.max(1, Math.ceil(all.length / PC_TASK_PAGE));
+  var size = projectContent.task.size || PC_PAGE_SIZE_DEFAULT;
+  var pages = Math.max(1, Math.ceil(all.length / size));
   var page = Math.min(Math.max(1, projectContent.task.page), pages);
   projectContent.task.page = page;
-  var rows = all.slice((page - 1) * PC_TASK_PAGE, page * PC_TASK_PAGE);
-  var body = all.length ? pcTaskTableHTML(rows, all) + pcTaskPagerHTML(page, pages, all.length) : pcTaskEmptyHTML();
-  return pcTaskFiltersHTML() + pcTaskSummaryHTML(all.length, all, rows.length, page) + body;
-}
-function pcTaskPagerHTML(page, pages, total){
-  if(pages <= 1) return "";
-  return '<div class="pc-pager"><button class="btn sm" type="button" data-pc-page="prev"' + (page <= 1 ? " disabled" : "") + '>上一页</button>'
-    + '<span>第 <b>' + page + '</b> / ' + pages + ' 页 · 共 ' + total + ' 项</span>'
-    + '<button class="btn sm" type="button" data-pc-page="next"' + (page >= pages ? " disabled" : "") + '>下一页</button></div>';
+  var rows = all.slice((page - 1) * size, page * size);
+  var body = all.length ? pcTaskTableHTML(rows, all) + pcPagerHTML(page, pages, all.length, size) : pcTaskEmptyHTML();
+  return pcTaskFiltersHTML() + pcTaskSummaryHTML(all.length, all) + body;
 }
 function projectContentInner(){
   var d = projectContent.dem;
@@ -79637,7 +80062,7 @@ function ensureProjectDemands(){
     projectContentGen++;
   }
   var d = projectContent.dem;
-  if(!d.loaded && !d.loading && !d.error) loadDemandPage(false);
+  if(!d.loaded && !d.loading && !d.error) loadDemandPage(1, true);
 }
 function loadProjectVersionOptions(reqId){
   var d = projectContent.dem;
@@ -79650,29 +80075,34 @@ function loadProjectVersionOptions(reqId){
     paintProjectContent();
   }).catch(function(){ /* 版本只影响筛选项，失败不阻塞清单 */ });
 }
-function loadDemandPage(append){
+function loadDemandPage(page, reset, focusKey){
   var d = projectContent.dem, reqId = d.reqId, gen = projectContentGen;
   if(!reqId) return;
-  var offset = append ? d.items.length : 0;
-  if(!append){ d.items = []; d.total = 0; d.hasMore = false; d.loaded = false; d.counts = {}; }
+  var size = d.size || PC_PAGE_SIZE_DEFAULT;
+  var wanted = Math.max(1, Math.round(Number(page) || 1));
+  d.items = [];
+  if(reset){ d.total = 0; d.loaded = false; d.counts = {}; }
+  d.page = wanted;
   d.loading = true; d.error = "";
   var current = ++d.seq;
   paintProjectContent();
-  var params = { reqId:reqId, offset:offset, limit:PC_DEMAND_PAGE, sort:"default" };
+  var params = { reqId:reqId, offset:(wanted - 1) * size, limit:size, sort:"default" };
   if(d.q) params.q = d.q;
   if(d.status !== "all") params.status = d.status;
   if(d.pri !== "all") params.pris = d.pri;
   if(d.kind !== "all") params.kinds = d.kind;
   if(d.cat !== "all") params.cats = d.cat;
   if(d.version !== "all") params.versionId = d.version;
-  API.get("/api/demands", params).then(function(page){
+  API.get("/api/demands", params).then(function(pageData){
     if(gen !== projectContentGen || current !== d.seq || d.reqId !== reqId) return;
-    d.items = append ? d.items.concat(page.items || []) : (page.items || []);
-    d.total = Number(page.total) || 0;
-    d.hasMore = !!page.hasMore;
-    d.counts = page.counts || {};
+    var total = Number(pageData.total) || 0;
+    var pages = Math.max(1, Math.ceil(total / size));
+    if(wanted > pages){ d.loading = false; d.total = total; loadDemandPage(pages, false, focusKey); return; }
+    d.items = pageData.items || [];
+    d.total = total;
+    d.counts = pageData.counts || {};
     d.loading = false; d.loaded = true;
-    paintProjectContent();
+    paintProjectContent(focusKey);
   }).catch(function(ex){
     if(gen !== projectContentGen || current !== d.seq) return;
     d.loading = false;
@@ -79703,7 +80133,7 @@ function setProjectContentFilter(spec, value){
   if(tab === "demand"){
     if(projectContent.dem[field] === value) return;
     projectContent.dem[field] = value;
-    loadDemandPage(false);
+    loadDemandPage(1, true);
     return;
   }
   if(projectContent.task[field] === value) return;
@@ -79721,7 +80151,7 @@ function resetProjectContentFilters(tab){
     };
     projectContent.dem = Object.assign(freshDemandState(keep.reqId), keep);
     projectContentGen++;
-    loadDemandPage(false);
+    loadDemandPage(1, true);
     return;
   }
   var group = projectContent.task.group;
@@ -79747,7 +80177,7 @@ function onProjectContentInput(e){
     if(tab === "demand"){
       if(projectContent.dem.q === value) return;
       projectContent.dem.q = value;
-      loadDemandPage(false);
+      loadDemandPage(1, true);
     }else{
       if(projectContent.task.q === value) return;
       projectContent.task.q = value;
@@ -79793,7 +80223,7 @@ function renderProject(){
         + '<span class="progress"><i style="width:' + ep.progressPct + '%"></i></span>'
         + '<button class="manager-epic-sub" type="button" data-epic="' + esc(ep.id) + '" title="查看该史诗的子项">' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</button></div>';
     }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
-  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
+  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × 各成员每日容量，未设置按 ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
     + memberLabelFilters(cache.members || [], memberFilter, "project-member")
     + '<p class="roster-note">角色匹配本项目有效主角色或兼岗；下钻与导出使用相同成员范围。</p><button class="btn sm" type="button" data-project-member-export>导出当前成员负载</button>'
     + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
@@ -80064,16 +80494,15 @@ function onClick(e){
   var pcTabBtn = e.target.closest("[data-pc-tab]");
   if(pcTabBtn){ switchProjectContentTab(pcTabBtn.dataset.pcTab); return; }
   if(e.target.closest("[data-pc-open-demands]")){ openProjectDemands(); return; }
-  var pcMore = e.target.closest("[data-pc-more]");
-  if(pcMore){ loadDemandPage(true); return; }
   var pcRetry = e.target.closest("[data-pc-retry]");
-  if(pcRetry){ if(pcRetry.dataset.pcRetry === "demand") loadDemandPage(false); return; }
+  if(pcRetry){ if(pcRetry.dataset.pcRetry === "demand") loadDemandPage(projectContent.dem.page || 1, true); return; }
   var pcReset = e.target.closest("[data-pc-reset]");
   if(pcReset){ resetProjectContentFilters(pcReset.dataset.pcReset); return; }
   var pcPage = e.target.closest("[data-pc-page]");
   if(pcPage){
-    projectContent.task.page = Math.max(1, projectContent.task.page + (pcPage.dataset.pcPage === "next" ? 1 : -1));
-    paintProjectContent();
+    var targetPage = Math.max(1, Number(pcPage.dataset.pcPage) || 1);
+    if(projectContent.tab === "demands") loadDemandPage(targetPage);
+    else { projectContent.task.page = targetPage; paintProjectContent(); }
     return;
   }
   var pcDemandRow = e.target.closest("[data-pc-demand]");
@@ -80230,6 +80659,22 @@ function renderAfterModeSwitch(){
 }
 function onChange(e){
   if(e.target.id === "drillSort"){ drillSort = e.target.value; renderDrill(); }
+  var pcSizeSel = e.target.closest("[data-pc-size]");
+  if(pcSizeSel){
+    var size = Number(pcSizeSel.value);
+    if(PC_PAGE_SIZES.indexOf(size) < 0) size = PC_PAGE_SIZE_DEFAULT;
+    savePcPageSize(size);
+    var dem = projectContent.dem;
+    dem.size = size;
+    dem.page = 1;
+    projectContent.task.size = size;
+    projectContent.task.page = 1;
+    if(projectContent.tab === "demands"){ loadDemandPage(1, true, "pc:size"); return; }
+    /* 尺寸改了，需求页签按旧尺寸取回的这一页已不成立：作废并丢弃在途请求，切回时重取第一页 */
+    dem.loaded = false; dem.loading = false; dem.error = ""; dem.items = []; dem.total = 0; dem.counts = {}; dem.seq++;
+    paintProjectContent("pc:size");
+    return;
+  }
   var pcGroupSel = e.target.closest("[data-pc-group]");
   if(pcGroupSel){
     if(pcGroupSel.dataset.pcGroup === "demand") projectContent.dem.group = pcGroupSel.value;
@@ -80653,6 +81098,18 @@ function projectSetById(id){
   for(var i = 0; i < (rt.projectSets || []).length; i++) if(rt.projectSets[i].id === id) return rt.projectSets[i];
   return null;
 }
+var SET_COLOR_RE = /^#[0-9a-f]{6}$/i;
+function projectSetColor(set){
+  return set && SET_COLOR_RE.test(String(set.color || "")) ? String(set.color) : "";
+}
+/* 方案 B：身份色只投到左条 / 色标图标 / 树线，不铺整行底色 */
+function projectSetColorStyle(set){
+  var c = projectSetColor(set);
+  return c ? ' style="--set:' + c + '"' : "";
+}
+function projectSetColorStyleOf(setId){
+  return projectSetColorStyle(projectSetById(setId));
+}
 /* 项目集展示顺序：sortOrder 为主，同名兜底，和列表分组、下拉分组保持一致 */
 function orderedSets(){
   return (rt.projectSets || []).slice().sort(function(a, b){
@@ -80763,7 +81220,7 @@ function projectSetHeadHTML(group){
   var title = set ? esc(set.name) : "未分组";
   var key = set ? set.id : "__un";
   var collapsed = !!setCollapsed[key];
-  return '<div class="req-set-head' + (set ? "" : " is-ungrouped") + '"' +
+  return '<div class="req-set-head proj-set-head' + (set ? "" : " is-ungrouped") + '"' + projectSetColorStyle(set) +
       ' data-set-key="' + esc(key) + '"' + (set ? ' data-set-id="' + esc(set.id) + '"' : '') + '>' +
     '<button class="icon-btn sm req-set-toggle' + (collapsed ? "" : " on") + '" type="button" data-set-toggle="' + esc(key) + '" aria-expanded="' + (!collapsed) + '" title="' + (collapsed ? "展开" : "收起") + '">' + icon("chevronRight", 14) + '</button>' +
     '<span class="req-set-title"><span class="req-set-ico" aria-hidden="true">' + icon("folder", 14) + '</span><b>' + title + '</b></span>' +
@@ -80837,7 +81294,7 @@ function projectSetActions(group){
 }
 function projectSetRowHTML(group, cols){
   var set = group.set, agg = projectSetSummary(group.rows);
-  return '<div class="project-table-row project-set-row' + (set ? "" : " is-ungrouped") + '"' +
+  return '<div class="project-table-row project-set-row' + (set ? "" : " is-ungrouped") + '"' + projectSetColorStyle(set) +
       ' data-set-key="' + esc(set ? set.id : "__un") + '"' + (set ? ' data-set-id="' + esc(set.id) + '"' : '') + '>' +
     cols.map(function(key){ return projectSetCell(group, key, agg); }).join("") +
     projectSetActions(group) +
@@ -81100,6 +81557,7 @@ function renderReqList(){
     return '<div class="req-item' + (rt.editingReqId === r.id ? " editing" : "") +
         (r.setId ? " req-item-in-set" : "") +
         (r.containerKind ? " req-item-container" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '"' +
+        projectSetColorStyleOf(r.setId) +
         (r.containerKind ? ' title="拆分后的公共容器：承接版本、发布与文档"' : '') + '>' +
       '<div class="req-top">' +
         (reorderEnabled() ? reqDragHTML(r.id) : "") +
@@ -81149,7 +81607,7 @@ function renderReqList(){
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>文档</span>' +
             (readOnly ? '' : '<button class="btn sm add" type="button" data-doc-new="' + esc(r.id) + '">+ 新建文档</button>') + '</div>' +
-          docHTML +
+          '<div class="req-expand-docs">' + docHTML + '</div>' +
         '</section>' +
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>工作项</span>' +
@@ -81288,7 +81746,7 @@ function renderProjectTable(list){
     '<div class="project-table-body">' + groupedProjects(list).map(function(g){
       var collapsed = g.header && setCollapsed[g.set ? g.set.id : "__un"];
       return (g.header ? projectSetRowHTML(g, cols) : "") + (collapsed ? "" : g.rows.map(function(r){
-        return '<div class="project-table-row' + (r.setId ? " has-set" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '">' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';
+        return '<div class="project-table-row' + (r.setId ? " has-set" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '"' + projectSetColorStyleOf(r.setId) + '>' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';
       }).join(""));
     }).join("") + ungroupedDropZoneHTML() + '</div></div>';
   var head = reqListEl.querySelector(".project-table-head");
@@ -100840,7 +101298,7 @@ registerHelp({
   "workload.load": {
     title:"负载",
     rows:[
-      ["怎么算", "剩余预估 ÷（剩余工作日 × 每日容量，当前按 8h），四舍五入到整数百分比。", "ok"],
+      ["怎么算", "剩余预估 ÷（剩余工作日 × 每日容量），四舍五入到整数百分比；每日容量取各成员自己的计时设置（每天最多计入几小时），未设置按 8h。", "ok"],
       ["剩余工作日", "从今天到该成员未完成工作项的最晚截止日，只数工作日；没有截止日按 5 天，至少 1 天、最多按 30 天算。", "info"],
       ["状态阈值", "大于 100% 为超载；85%–100% 为接近满载；低于 85% 为正常；没有在手工作项时为空闲。", "warn"],
       ["已计工时", "按计时开始日期落在所选工时区间统计；本周口径换周即清零，和负载不是同一个窗口。", "mute"],
@@ -100853,6 +101311,14 @@ registerHelp({
       ["空闲 / 正常 / 接近满载 / 超载", "空闲表示当前没有未完成工作项；其余按负载阈值划分，负载按成员全部项目合并计算。", "ok"],
       ["逾期 / 阻塞", "逾期按截止日期早于今天、且未完成也未执行结束；阻塞取工作项当前的阻塞标记，是此刻快照。", "info"],
       ["今日已计 / 最近计时", "今日已计按计时开始日期落在今天统计；最近计时取本周或上周最后一条计时记录。", "mute"]
+    ]
+  },
+  "workload.test": {
+    title:"测试身份",
+    rows:[
+      ["怎么算", "按工作项的「测试负责人」统计处于待测试 / 测试中的项数；负载、剩余预估与容量仍只按负责人计算。", "ok"],
+      ["本周测试", "他在本周对自己负责测试的工作项上的计时合计，含已完成的那部分工作项。", "info"],
+      ["和手里的工作项不同", "「手里的工作项」与状态计数只含他负责开发的工作项，测试项只在测试行里另行统计。", "warn"]
     ]
   }
 });
@@ -101076,8 +101542,19 @@ function taskCounts(tasks){
   });
   return c;
 }
+/* 测试项只统计「测试负责人」身份下的待测试 / 测试中，不并入负责人口径 */
+function testRefCounts(refs, reqId){
+  var c = { waiting:0, doing:0, total:0 };
+  (refs || []).forEach(function(t){
+    if(reqId !== undefined && (t.reqId || "") !== (reqId || "")) return;
+    c.total++;
+    if(t.column === "test") c.waiting++;
+    else if(t.column === "testing") c.doing++;
+  });
+  return c;
+}
 function memberStatus(m, counts){
-  if(!(m.tasks || []).length) return "idle";
+  if(!(m.tasks || []).length && !(m.testTaskRefs || []).length) return "idle";
   var pct = Number(m.loadPct) || 0;
   if(pct > 100 || m.overloaded) return "over";
   if(pct >= 85) return "hot";
@@ -101114,6 +101591,7 @@ function memberView(m){
     key: m.key,
     status: memberStatus(m, counts),
     counts: counts,
+    tests: testRefCounts(m.testTaskRefs),
     projects: memberProjectList(m),
     todayMinutes: todayMinutes(m),
     lastLog: lastLogDate(m)
@@ -101198,6 +101676,7 @@ function projectScopeCounts(m, reqId){
 }
 function memberCardHTML(mv, scope){
   var m = mv.m, counts = scope ? projectScopeCounts(m, scope.reqId) : mv.counts;
+  var tests = scope ? testRefCounts(m.testTaskRefs, scope.reqId) : mv.tests;
   var roles = Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m);
   var projects = mv.projects.slice(0, 3);
   /* 卡片脚注展示「上周 Yh」时，进工作台默认也停在上周明细，保持同一窗口 */
@@ -101215,6 +101694,13 @@ function memberCardHTML(mv, scope){
     + statHTML("逾期", counts.overdue, counts.overdue ? "danger" : "mute")
     + statHTML("阻塞", counts.blocked, counts.blocked ? "warn" : "mute")
     + '</div>'
+    + (tests.total
+        ? '<div class="member-card-tests"><span class="member-test-label">测试' + caliberMarkHTML("workload.test", false, "查看「测试身份」口径") + '</span>'
+          + '<span>待测试 <b>' + tests.waiting + '</b></span>'
+          + '<span>测试中 <b>' + tests.doing + '</b></span>'
+          + (!scope && m.testWeekMinutes ? '<span>本周测试 <b>' + fmtHours(m.testWeekMinutes) + '</b></span>' : '')
+          + '</div>'
+        : '')
     + '<div class="member-card-projects">' + (projects.length
         ? projects.map(function(p){
             var setName = p.reqId ? setNameById(reqSetId(p.reqId)) : "";
@@ -101334,12 +101820,17 @@ function weekTable(){
 
 /* ==================== 成员工作台 ==================== */
 
+/* 每日容量与默认 8h 不同时补一行，避免「容量 240h」看着像按 8h 折算 */
+function perDaySuffix(m){
+  var perDay = Number(m && m.capacityMinutesPerDay) || 480;
+  return perDay === 480 ? "" : '（每日 ' + fmtHours(perDay) + '）';
+}
 function memberKpisHTML(m){
   return '<div class="member-sheet-kpis">'
     + '<div class="member-sheet-kpi"><i>未完成工作项</i><b>' + (m.tasks || []).length + ' 项</b></div>'
     + '<div class="member-sheet-kpi"><i class="caliber-label">剩余预估' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</i><b>' + fmtHours(m.remainingMinutes) + '</b><span>剩余 ' + (m.workdays || 0) + ' 个工作日</span></div>'
     + '<div class="member-sheet-kpi"><i>' + esc(periodLabel()) + '已计</i><b>' + fmtHours(periodMinutes(m)) + '</b><span>' + esc(periodHint(m)) + '</span></div>'
-    + '<div class="member-sheet-kpi"><i class="caliber-label">负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</i><b>' + (Number(m.loadPct) || 0) + '%</b><span>容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
+    + '<div class="member-sheet-kpi"><i class="caliber-label">负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</i><b>' + (Number(m.loadPct) || 0) + '%</b><span>容量 ' + fmtHours(m.capacityMinutes) + (perDaySuffix(m)) + '</span></div>'
     + '</div>';
 }
 function statePanelHTML(mv){
@@ -101352,10 +101843,16 @@ function statePanelHTML(mv){
     + stateTileHTML("逾期", c.overdue, c.overdue ? "danger" : "mute")
     + stateTileHTML("阻塞", c.blocked, c.blocked ? "warn" : "mute")
     + stateTileHTML("今日已计", mv.todayMinutes ? fmtHours(mv.todayMinutes) : "—")
+    + (mv.tests.total || Number(mv.m.testWeekMinutes)
+        ? stateTileHTML("待测试", mv.tests.waiting, mv.tests.waiting ? "" : "mute")
+          + stateTileHTML("测试中", mv.tests.doing, mv.tests.doing ? "" : "mute")
+          + stateTileHTML("本周测试", mv.m.testWeekMinutes ? fmtHours(mv.m.testWeekMinutes) : "—")
+        : '')
     + '</div>'
     + '<p class="member-state-note">最晚截止 ' + (c.latestDue ? esc(fmtDate(c.latestDue)) : "—")
     + ' · 最近计时 ' + (mv.lastLog ? esc(fmtDate(mv.lastLog)) : "—")
-    + (c.unestimated ? ' · ' + c.unestimated + ' 项未填预估' : '') + '</p>';
+    + (c.unestimated ? ' · ' + c.unestimated + ' 项未填预估' : '')
+    + (mv.tests.total ? ' · 测试项 ' + mv.tests.total + ' 项另计' : '') + '</p>';
 }
 function stateTileHTML(label, value, tone){
   return '<div class="member-state' + (tone && tone !== "mute" ? ' ' + tone : '') + '"><i>' + label + '</i><b>' + value + '</b></div>';
@@ -101652,7 +102149,7 @@ function exportMember(){
 
 /* ==================== 渲染与交互 ==================== */
 
-/* 每日容量以后端 capacityMinutesPerDay 为准（当前 480 分钟），避免口径文案与计算不一致 */
+/* 每日容量按成员自己的计时设置折算，顶层 capacityMinutesPerDay 只是未设置时的默认值 */
 function capacityHoursLabel(data){
   var perDay = Number(data && data.capacityMinutesPerDay) || 480;
   return (Math.round(perDay / 6) / 10) + "h";
@@ -101662,7 +102159,7 @@ function renderWorkload(){
   if(memberUi.key){ renderMemberPage(); return; }
   var focusKey = document.activeElement && document.activeElement.dataset.workloadFilter;
   $("workloadBody").innerHTML = workloadToolbar() + '<p class="roster-note">' + esc(workloadScopeText(cache)) + '</p>'
-    + caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × ' + capacityHoursLabel(cache) + '）；无截止日默认 5 个剩余工作日，容量上限按 30 天计算。')
+    + caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × 每日容量）；每日容量取成员自己的计时设置（未设置按 ' + capacityHoursLabel(cache) + '），无截止日默认 5 个剩余工作日，容量上限按 30 天计算。')
     + (viewMode === 'week'
       ? weekTable()
       : '<div id="memberRoster" class="member-roster">' + rosterHTML() + '</div>');
@@ -101813,6 +102310,6 @@ window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-19 01:06</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-19 03:56</span></div>
 </body>
 </html>

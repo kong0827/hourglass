@@ -94,6 +94,38 @@ function groupedBySet(projects){
   });
   return keys.map(function(k){ return { key:k, name:k ? (setNameById(k) || "项目集") : "未分组", rows:buckets[k] }; });
 }
+function setObjById(id){
+  if(!id) return null;
+  var sets = rt.projectSets || [];
+  for(var i = 0; i < sets.length; i++) if(sets[i].id === id) return sets[i];
+  return null;
+}
+function setGroupSummary(rows){
+  var total = 0, done = 0, overdue = 0, weighted = 0, attention = 0;
+  rows.forEach(function(p){
+    var t = Number(p.total) || 0;
+    total += t;
+    done += Number(p.done) || 0;
+    overdue += Number(p.overdue) || 0;
+    weighted += (Number(p.progressPct) || 0) * t;
+    if(p.health && p.health !== "green") attention++;
+  });
+  return { total:total, done:done, overdue:overdue, attention:attention, pct: total ? Math.round(weighted / total) : 0 };
+}
+/* 卡片视图的集分组头：与项目列表同款集头，身份色只投到文件夹图标；
+   汇总按工作项数加权，逾期 / 需关注一眼可见，不用逐张卡去数 */
+function setGroupHeadHTML(group){
+  var set = setObjById(group.key);
+  var agg = setGroupSummary(group.rows);
+  var color = set && /^#[0-9a-f]{6}$/i.test(String(set.color || "")) ? String(set.color) : "";
+  return '<div class="req-set-head proj-set-head pf-set-group' + (group.key ? "" : " is-ungrouped") + '"' + (color ? ' style="--set:' + color + '"' : "") + '>'
+    + '<span class="req-set-title"><span class="req-set-ico" aria-hidden="true">' + icon("folder", 14) + '</span><b>' + esc(group.name) + '</b></span>'
+    + '<span class="req-set-meta">' + group.rows.length + ' 个项目 · ' + agg.total + ' 工作项 · ' + agg.done + ' 完成</span>'
+    + (agg.overdue ? '<span class="risk-chip overdue">逾期 ' + agg.overdue + '</span>' : "")
+    + (agg.attention ? '<span class="tag tag-warning">' + agg.attention + ' 需关注</span>' : "")
+    + '<span class="progress mini req-set-progress" title="集内项目按工作项数加权的完成度"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>'
+    + '</div>';
+}
 /* 项目卡固定一行「下一步」：谁、做什么、何时到期。
    借用卡片式报表的固定槽位——每张卡都直接回答同一个问题，不用逐个项目点进去找。 */
 function nextStepFor(reqId){
@@ -124,7 +156,7 @@ function nextStepHTML(p){
     + (t.blocked ? '<span class="mini-tag warn" title="' + esc(t.blockedReason || "被阻塞") + '">阻塞</span>' : "")
     + '<span class="next-owner" title="负责人：' + esc(t.owner || "未指派") + '">' + avatarHTML(t.owner || "—", "sm") + dueHTML + '</span></div>';
 }
-function projectCard(p){
+function projectCard(p, grouped){
   var healthName = p.health === "green" ? "正常" : "需关注";
   var tagCls = p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning");
   var people = (p.members || []).slice(0, 4).map(function(name){ return avatarHTML(name, "sm"); }).join("");
@@ -134,7 +166,7 @@ function projectCard(p){
   return '<article class="manager-project-card">'
     + '<div class="manager-project-head"><i class="manager-light ' + esc(p.health) + '"></i>'
     + '<button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '">' + esc(p.name) + '</button>'
-    + (p.setId ? '<span class="tag tag-ghost" title="所属项目集">' + esc(setNameById(p.setId) || "项目集") + '</span>' : '')
+    + (!grouped && p.setId ? '<span class="tag tag-ghost" title="所属项目集">' + esc(setNameById(p.setId) || "项目集") + '</span>' : '')
     + '<span class="tag ' + tagCls + '">' + healthName + '</span></div>'
     + '<div class="manager-project-main"><button type="button" class="manager-ring ' + esc(p.health) + '" style="--p:' + p.progressPct + '" data-project-drill="' + esc(p.reqId) + '" data-metric="all" title="查看该项目全部工作项" aria-label="' + esc(p.name) + ' 完成率 ' + p.progressPct + '%，查看工作项明细"><b>' + p.progressPct + '%</b></button>'
     + '<div class="manager-project-stats">'
@@ -211,8 +243,16 @@ function renderPortfolio(){
     + (mode === "table"
       ? (projects.length ? projectTable(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"}))
       : '<div class="manager-legend"><span><i class="manager-light green"></i>正常</span><span><i class="manager-light orange"></i>有逾期或超载</span><span><i class="manager-light red"></i>逾期与停滞叠加</span></div>'
-        + (projects.length ? '<div class="manager-project-grid" id="portfolioProjects">' + projects.map(projectCard).join("") + '</div>'
-          : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"})));
+        + (projects.length ? cardAreaHTML(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"})));
+}
+/* 卡片视图按项目集分块：集头汇总 + 集内项目网格；没有项目集时保持原来的平铺 */
+function cardAreaHTML(projects){
+  var groups = groupedBySet(projects);
+  if(!groups) return '<div class="manager-project-grid" id="portfolioProjects">' + projects.map(function(p){ return projectCard(p, false); }).join("") + '</div>';
+  return '<div class="pf-set-groups">' + groups.map(function(g){
+    return '<section class="pf-set-block">' + setGroupHeadHTML(g)
+      + '<div class="manager-project-grid">' + g.rows.map(function(p){ return projectCard(p, true); }).join("") + '</div></section>';
+  }).join("") + '</div>';
 }
 function exportPortfolio(){
   if(!cache) return;
@@ -300,5 +340,10 @@ function onClick(e){
   }
 }
 if($("portfolioBody")) $("portfolioBody").addEventListener("click", onClick);
+/* 项目集与项目列表并行加载：若本页先渲染，集名 / 身份色取不到，等列表落地后再补一次 */
+window.addEventListener("ds:reqs-loaded", function(){
+  if(document.body.dataset.view !== "portfolio" || !cache) return;
+  renderPortfolio();
+});
 
 export { enterPortfolioView, loadPortfolio };

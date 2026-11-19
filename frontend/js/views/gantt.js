@@ -50,7 +50,9 @@ var ganttScroll = $("ganttScroll"), ganttMeta = $("ganttMeta"),
     ganttScaleEl = $("ganttScale"), ganttAnalysisBtn = $("ganttAnalysisBtn"),
     ganttAnalysisMenu = $("ganttAnalysisMenu"), ganttDepMenu = $("ganttDepMenu"),
     ganttLoadBox = $("ganttLoad"), ganttLoadBody = $("ganttLoadBody"),
-    ganttLoadRangeEl = $("ganttLoadRange"), ganttLoadCloseEl = $("ganttLoadClose");
+    ganttLoadRangeEl = $("ganttLoadRange"), ganttLoadCloseEl = $("ganttLoadClose"),
+    ganttSplitEl = $("ganttSplit"), ganttSplitBar = $("ganttSplitBar"),
+    ganttUnplannedToggle = $("ganttUnplannedToggle");
 var GANTT_LABEL_W = 280;
 var GANTT_ROW_H = 54, GANTT_GROUP_H = 32, GANTT_HEAD_H = 54;
 var GANTT_LABEL_W_NARROW = 170;
@@ -63,6 +65,7 @@ var GANTT_BLOCKED = {c:"var(--warning)", soft:"var(--warning-soft)", bd:"var(--w
 var GANTT_OVERDUE = {c:"var(--danger)",  soft:"var(--danger-soft)",  bd:"var(--danger-border)"};
 var GANTT_DOING   = {c:"var(--primary)", soft:"var(--primary-soft)", bd:"var(--primary-border)"};
 var ganttTipEl = null, ganttDropEl = null;
+var ganttBodyRaf = 0;
 var ganttSuppressUnplannedClick = 0;
 var ganttState = {
   tasks: [], byId: {}, dayW: 28, showDone: false, range: null, seq: 0, drag: null,
@@ -97,7 +100,10 @@ var ganttState = {
   /* ---- V1.4.1 显示密度与左列宽度 ---- */
   density: "comfortable", // comfortable | compact | minimal
   labelW: GANTT_LABEL_W,  // 左列工作项列表像素宽度
-  labelDrag: null         // 拖拽调整左列宽度时的状态
+  labelDrag: null,        // 拖拽调整左列宽度时的状态
+  /* ---- 上下分区（甘特画布 / 未排期区） ---- */
+  unplannedH: null,       // 未排期区高度（px）；null=按可用高度自动
+  splitDrag: null         // 拖拽上下分隔条时的状态
 };
 var GANTT_DEFAULT_COLS = { project: true, owner: true, dates: true, work: true, subtask: true, tags: false, comments: false };
 function ganttPrefsKey(){
@@ -121,6 +127,7 @@ function loadGanttPrefs(){
   ganttState.showLoad = false;
   ganttState.density = "comfortable";
   ganttState.labelW = GANTT_LABEL_W;
+  ganttState.unplannedH = null;
 
   var key = ganttPrefsKey();
   if(!key) return;   // 没有空间 id：保持内存状态，不写/不读错误 key
@@ -150,6 +157,9 @@ function loadGanttPrefs(){
   if(saved.density === "comfortable" || saved.density === "compact" || saved.density === "minimal") ganttState.density = saved.density;
   var lw = Number(saved.labelW);
   if(lw >= GANTT_LABEL_W_NARROW && lw <= 500) ganttState.labelW = lw;
+  var uh = Number(saved.unplannedH);
+  /* 运行时会按当前窗口再夹一次，这里只拦明显异常值；高屏上可拖到 1000+ */
+  if(uh >= 96 && uh <= 4000) ganttState.unplannedH = uh;
 }
 function saveGanttPrefs(){
   var key = ganttPrefsKey();
@@ -168,7 +178,8 @@ function saveGanttPrefs(){
       showCritical: ganttState.showCritical,
       showLoad: ganttState.showLoad,
       density: ganttState.density,
-      labelW: ganttState.labelW
+      labelW: ganttState.labelW,
+      unplannedH: ganttState.unplannedH
     }));
   }catch(e){ /* 隐私模式 / 配额满：偏好只是增强，不打断使用 */ }
 }
@@ -187,6 +198,85 @@ function ganttLabelW(){
 }
 function ganttReadOnly(){
   return window.matchMedia("(max-width: 900px)").matches;
+}
+
+/* ===== 上下分区：未排期区高度可拖动 =====
+   甘特画布吃掉剩余高度；未排期区高度存像素值，窗口变矮时按上限收缩。
+   列表内部滚动，不再把甘特画布挤到只剩几行。 */
+var GANTT_SPLIT_MIN = 96;      // 未排期区最小高度（头部 + 一行卡片）
+var GANTT_SPLIT_STAGE_MIN = 260; // 甘特画布最小高度（表头 + 若干行）
+function ganttSplitLimits(){
+  var total = (ganttSplitEl && ganttSplitEl.clientHeight) || 640;
+  var min = GANTT_SPLIT_MIN;
+  var max = Math.max(min + 40, total - GANTT_SPLIT_STAGE_MIN);
+  return { total: total, min: min, max: max };
+}
+function ganttSplitDefault(){
+  var lim = ganttSplitLimits();
+  /* 默认约 1/3 给未排期：常见 6~10 条能两行铺完，甘特主体不再被压扁 */
+  return Math.round(Math.min(lim.max, Math.max(lim.min, lim.total * 0.34)));
+}
+/* 自动模式：未排期区贴着内容高度，最多到默认上限——只有几条时不白占甘特画布 */
+function ganttSplitAutoHeight(){
+  var lim = ganttSplitLimits();
+  var cap = ganttSplitDefault();
+  var rows = ganttUnplannedList ? ganttUnplannedList.children : [];
+  if(!rows.length) return cap;
+  var cs = getComputedStyle(ganttUnplannedList);
+  var padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  /* scrollHeight 在内容不足时等于可视高度，量首尾卡片的间距才拿得到真实内容高度 */
+  var rowsH = rows[rows.length - 1].getBoundingClientRect().bottom
+    - rows[0].getBoundingClientRect().top;
+  var headerH = Math.max(0, ganttUnplannedBox.offsetHeight - ganttUnplannedList.offsetHeight);
+  var content = rowsH + padV + headerH;
+  return Math.round(Math.min(cap, Math.max(lim.min, content)));
+}
+function ganttUnplannedExpanded(){
+  return !!(ganttUnplannedBox && !ganttUnplannedBox.hidden
+    && !ganttUnplannedBox.classList.contains("is-collapsed"));
+}
+function ganttSplitHeight(){
+  if(!ganttUnplannedExpanded()) return 0;
+  var lim = ganttSplitLimits();
+  /* 记住的高度在窗口变矮时会被夹到上限，但不回写，窗口再拉高时恢复原值 */
+  var h = ganttState.unplannedH;
+  if(!h) h = (ganttSplitEl && ganttSplitEl.classList.contains("is-gantt-empty")) ? lim.max : ganttSplitAutoHeight();
+  return Math.round(Math.max(lim.min, Math.min(lim.max, h)));
+}
+function syncGanttSplit(){
+  if(!ganttSplitEl) return;
+  var expanded = ganttUnplannedExpanded();
+  if(ganttSplitBar) ganttSplitBar.hidden = !ganttUnplannedBox || ganttUnplannedBox.hidden || !expanded;
+  if(ganttUnplannedToggle){
+    ganttUnplannedToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    var label = ganttUnplannedToggle.querySelector(".unplanned-head-toggle");
+    if(label) label.textContent = expanded ? "收起" : "展开";
+  }
+  if(!expanded){
+    ganttSplitEl.style.removeProperty("--gantt-unplanned-h");
+    if(ganttSplitBar) ganttSplitBar.setAttribute("aria-valuenow", "0");
+    return;
+  }
+  var h = Math.round(ganttSplitHeight());
+  ganttSplitEl.style.setProperty("--gantt-unplanned-h", h + "px");
+  if(ganttSplitBar){
+    var pct = Math.max(0, Math.min(100, Math.round(h / Math.max(1, ganttSplitLimits().total) * 100)));
+    ganttSplitBar.setAttribute("aria-valuenow", String(pct));
+    ganttSplitBar.setAttribute("aria-valuetext", "未排期区域约占 " + pct + "%，拖动调整");
+  }
+}
+function ganttApplySplitHeight(h){
+  var lim = ganttSplitLimits();
+  ganttState.unplannedH = Math.round(Math.max(lim.min, Math.min(lim.max, h)));
+  syncGanttSplit();
+  scheduleGanttBodyRefresh();
+}
+function scheduleGanttBodyRefresh(){
+  if(ganttBodyRaf) return;
+  ganttBodyRaf = requestAnimationFrame(function(){
+    ganttBodyRaf = 0;
+    if(activeView === "gantt") ganttRenderBody(false);
+  });
 }
 function enterGanttView(){
   /* 切换工作空间时重新定位到今天，同一空间内保留滚动位置 */
@@ -1485,11 +1575,12 @@ function renderGanttUnplanned(list, openIt){
   if(!list.length && !ganttState.unplannedHasMore){
     ganttUnplannedList.innerHTML = "";
     ganttUnplannedCount.textContent = String(list.length);
+    syncGanttSplit();
     return;
   }
   ganttUnplannedCount.textContent = String(list.length);
   if(openIt && !ganttState.unplannedAuto){
-    ganttUnplannedBox.open = true;
+    ganttUnplannedBox.classList.remove("is-collapsed");
     ganttState.unplannedAuto = true;
   }
   ganttUnplannedList.innerHTML = list.map(function(t){
@@ -1506,7 +1597,6 @@ function renderGanttUnplanned(list, openIt){
         '<span class="gantt-unplanned-t">' + esc(t.title) + '</span>' +
         '<span class="gantt-unplanned-m">' + (cat ? cat + ' · ' : '') + meta.join(" · ") + taskPublicationHTML(t) + '</span>' +
       '</span>' +
-      '<span class="tag tag-ghost">未排期</span>' +
     '</button>';
   }).join("") +
   (ganttState.unplannedHasMore
@@ -1617,7 +1707,9 @@ function renderGantt(){
     undated = upVisible;
   }
   ganttState.undated = undated;
+  if(ganttSplitEl) ganttSplitEl.classList.toggle("is-gantt-empty", !dated.length);
   renderGanttUnplanned(undated, dated.length === 0);
+  syncGanttSplit();
   ganttState.notice = ganttState.pendingNotice || "";
   ganttState.pendingNotice = "";
 
@@ -1832,6 +1924,7 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
     total: ganttState.total, allCount: all.length, scale: ganttState.scale
   }) + ganttUnplannedSuffix();
   syncGanttUndoUI();
+  syncGanttSplit();
 }
 function updateGanttRangeUI(){
   var monthMode = ganttState.rangeMode === "month";
@@ -2282,6 +2375,72 @@ function onGanttLabelDragKey(e){
   e.preventDefault();
   onGanttLabelDragCancel();
 }
+
+/* ---- 上下分隔条：拖动 / 键盘 / 双击复位 ---- */
+function cleanupGanttSplitDrag(){
+  var d = ganttState.splitDrag;
+  ganttState.splitDrag = null;
+  if(ganttSplitBar) ganttSplitBar.classList.remove("dragging");
+  document.removeEventListener("pointermove", onGanttSplitDragMove);
+  document.removeEventListener("pointerup", onGanttSplitDragEnd);
+  document.removeEventListener("pointercancel", onGanttSplitDragCancel);
+  document.removeEventListener("keydown", onGanttSplitDragKey);
+  return d;
+}
+function onGanttSplitDown(e){
+  if(!ganttSplitBar || !ganttUnplannedExpanded()) return;
+  if(e.pointerType === "mouse" && e.button !== 0) return;
+  e.preventDefault();
+  ganttSplitBar.classList.add("dragging");
+  ganttState.splitDrag = { startY: e.clientY, startH: ganttSplitHeight() };
+  document.addEventListener("pointermove", onGanttSplitDragMove);
+  document.addEventListener("pointerup", onGanttSplitDragEnd);
+  document.addEventListener("pointercancel", onGanttSplitDragCancel);
+  document.addEventListener("keydown", onGanttSplitDragKey);
+}
+function onGanttSplitDragMove(e){
+  var d = ganttState.splitDrag;
+  if(!d) return;
+  /* 往上拖 → 未排期区变高 */
+  ganttApplySplitHeight(d.startH + (d.startY - e.clientY));
+}
+function onGanttSplitDragEnd(){
+  if(!ganttState.splitDrag) return;
+  cleanupGanttSplitDrag();
+  saveGanttPrefs();
+  if(activeView === "gantt") renderGantt();
+}
+function onGanttSplitDragCancel(){
+  var d = cleanupGanttSplitDrag();
+  if(!d) return;
+  ganttApplySplitHeight(d.startH);
+}
+function onGanttSplitDragKey(e){
+  if(e.key !== "Escape") return;
+  e.preventDefault();
+  onGanttSplitDragCancel();
+}
+function onGanttSplitBarKey(e){
+  var step = e.shiftKey ? 48 : 16;
+  if(e.key === "ArrowUp") ganttApplySplitHeight(ganttSplitHeight() + step);
+  else if(e.key === "ArrowDown") ganttApplySplitHeight(ganttSplitHeight() - step);
+  else if(e.key === "Home"){ resetGanttSplit(); return; }
+  else return;
+  e.preventDefault();
+  saveGanttPrefs();
+}
+function resetGanttSplit(){
+  ganttState.unplannedH = null;
+  syncGanttSplit();
+  scheduleGanttBodyRefresh();
+  saveGanttPrefs();
+}
+function toggleGanttUnplanned(){
+  if(!ganttUnplannedBox) return;
+  ganttUnplannedBox.classList.toggle("is-collapsed");
+  syncGanttSplit();
+  scheduleGanttBodyRefresh();
+}
 function onGanttPointerDown(e){
   /* 左列宽度调整条 */
   var resizer = e.target.closest ? e.target.closest(".gantt-resizer") : null;
@@ -2673,6 +2832,14 @@ if(ganttScroll){
   });
   ganttScroll.addEventListener("pointerdown", onGanttPointerDown);
 }
+if(ganttSplitBar){
+  ganttSplitBar.addEventListener("pointerdown", onGanttSplitDown);
+  ganttSplitBar.addEventListener("keydown", onGanttSplitBarKey);
+  ganttSplitBar.addEventListener("dblclick", resetGanttSplit);
+}
+if(ganttUnplannedToggle){
+  ganttUnplannedToggle.addEventListener("click", toggleGanttUnplanned);
+}
 if(ganttUnplannedList){
   ganttUnplannedList.addEventListener("click", function(e){
     if(e.target.closest("[data-gantt-unplanned-more]")){
@@ -2979,7 +3146,10 @@ window.addEventListener("resize", function(){
   if(ganttResizeTimer) clearTimeout(ganttResizeTimer);
   ganttResizeTimer = setTimeout(function(){
     ganttResizeTimer = 0;
-    if(activeView === "gantt" && !ganttState.drag) renderGantt();
+    if(activeView === "gantt" && !ganttState.drag && !ganttState.splitDrag){
+      syncGanttSplit();
+      renderGantt();
+    }
   }, 180);
 });
 

@@ -5,6 +5,7 @@ import com.hourglass.common.Consts;
 import com.hourglass.common.TaskCalc;
 import com.hourglass.common.WorkTime;
 import com.hourglass.dto.PageResult;
+import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Category;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectMemberRole;
@@ -18,11 +19,13 @@ import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TimeLogMapper;
+import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.VersionTaskMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -50,9 +53,11 @@ public class ManagerService {
 
     private static final int DEFAULT_WORKDAYS = 5;
     private static final int MIN_WORKDAYS = 1;
-    /* 负载容量按“今天到最晚截止日”的工作日折算，最多算 30 个工作日（约 6 周）：
-       再远的截止日不再摊薄负载，避免长排期被永久判成低负载。 */
-    private static final int MAX_WORKDAYS = 30;
+    /* 负载容量按“今天到最晚截止日”的工作日折算，最多算一个月（默认 22 个工作日）：
+       再远的截止日不再摊薄负载，避免长排期被永久判成低负载。
+       可改配置文件 app.workload.max-workdays；字段初始值保证测试直接 new 时也是 22。 */
+    @Value("${app.workload.max-workdays:22}")
+    private int maxWorkdays = 22;
     private static final int BURNDOWN_DAYS = 14;
     private static final int VELOCITY_WEEKS = 4;
     private static final int FLOW_WEEKS = 8;
@@ -107,6 +112,10 @@ public class ManagerService {
     @Autowired(required = false)
     private DemandMapper demandMapper;
 
+    /** 个人计时上限与系统管理员标记：负载容量按各成员自己的设置折算；测试与旧调用方可不注入。 */
+    @Autowired(required = false)
+    private UserMapper userMapper;
+
     @Autowired
     public ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
                           TimeLogMapper timeLogMapper, WorkspaceMemberMapper memberMapper,
@@ -141,6 +150,8 @@ public class ManagerService {
         LocalDate weekStart = mondayOf(today);
         Snapshot snapshot = load(workspaceId, weekStart, weekStart.plusWeeks(1), userId);
         Map<String, String> reqNames = requirementNames(snapshot.requirements);
+        /* 成员负载容量按个人计时上限折算，项目卡片一次取回账号设置 */
+        Map<String, AppUser> users = workloadUsers(snapshot.members);
 
         List<Map<String, Object>> projects = new ArrayList<Map<String, Object>>();
         int activeProjects = 0;
@@ -149,7 +160,7 @@ public class ManagerService {
                 activeProjects++;
             }
             List<Task> projectTasks = tasksForReq(snapshot.tasks, requirement.getId());
-            projects.add(projectCard(requirement, projectTasks, snapshot, today));
+            projects.add(projectCard(requirement, projectTasks, snapshot, today, users));
         }
 
         Map<String, Object> kpis = new LinkedHashMap<String, Object>();
@@ -251,7 +262,8 @@ public class ManagerService {
         result.put("weekly", weekly(tasks, today));
         result.put("epics", epics(tasks));
         RoleContext roles = roleContext(workspaceId, Collections.singletonList(requirement), snapshot.members);
-        List<Map<String, Object>> members = projectMembers(tasks, snapshot.members, snapshot.logs, today);
+        List<Map<String, Object>> members = projectMembers(tasks, snapshot.members, snapshot.logs, today,
+                workloadUsers(snapshot.members));
         Map<String, MemberAccumulator> owners = memberAccumulators(openTasks(tasks), snapshot.members);
         for (Map<String, Object> row : members) {
             MemberAccumulator owner = owners.get(row.get("key"));
@@ -1087,6 +1099,11 @@ public class ManagerService {
         Map<String, String> reqNames = requirementNames(requirements);
         LinkedHashMap<String, MemberAccumulator> accumulators = memberAccumulators(openTasks(tasks), snapshot.members);
         includeLoggedMembers(accumulators, logs, snapshot.members);
+        LinkedHashMap<String, List<Task>> testTasksByMember = testTasksByMember(tasks, snapshot.members);
+        includeTestMembers(accumulators, testTasksByMember, snapshot.members);
+        Map<String, AppUser> users = workloadUsers(snapshot.members);
+        removeSystemAdmins(accumulators, users);
+        includeWorkspaceMembers(accumulators, snapshot.members, users, roles, filter);
 
         List<Map<String, Object>> projects = new ArrayList<Map<String, Object>>();
         for (Requirement requirement : requirements) {
@@ -1103,8 +1120,11 @@ public class ManagerService {
 
         List<Map<String, Object>> members = new ArrayList<Map<String, Object>>();
         for (MemberAccumulator member : accumulators.values()) {
-            Map<String, Object> item = workloadMember(member, logs, weekStart, today, reqNames, tasksById);
-            putWorkloadLabels(item, member, roles, filter.reqId, logs, tasksById);
+            List<Task> testTasks = testTasksByMember.containsKey(member.key)
+                    ? testTasksByMember.get(member.key) : Collections.<Task>emptyList();
+            Map<String, Object> item = workloadMember(member, testTasks, logs, weekStart, today,
+                    reqNames, tasksById, users);
+            putWorkloadLabels(item, member, testTasks, roles, filter.reqId, logs, tasksById);
             if (range != null) {
                 item.put("rangeMinutes", minutesInRange(member.userId, logs, range[0], range[1]));
             }
@@ -1114,6 +1134,7 @@ public class ManagerService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("capacityMinutesPerDay", DAILY_CAPACITY_MINUTES);
         result.put("workdays", DEFAULT_WORKDAYS);
+        result.put("maxWorkdays", Math.max(MIN_WORKDAYS, maxWorkdays));
         result.put("weekStart", weekStart.toString());
         result.put("lastWeekStart", weekStart.minusWeeks(1).toString());
         if (range != null) {
@@ -1128,7 +1149,8 @@ public class ManagerService {
     }
 
     public Map<String, Object> risks(String workspaceId, String userId) {
-        return risksFromSnapshot(load(workspaceId, null, null, userId), today());
+        Snapshot snapshot = load(workspaceId, null, null, userId);
+        return risksFromSnapshot(snapshot, today(), workloadUsers(snapshot.members));
     }
 
     /** 手机团队页一次加载任务与风险，避免同一请求内重复全量查询。 */
@@ -1136,11 +1158,12 @@ public class ManagerService {
         Snapshot snapshot = load(workspaceId, null, null, userId);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("tasks", snapshot.tasks);
-        result.put("risks", risksFromSnapshot(snapshot, today()));
+        result.put("risks", risksFromSnapshot(snapshot, today(), workloadUsers(snapshot.members)));
         return result;
     }
 
-    private Map<String, Object> risksFromSnapshot(Snapshot snapshot, LocalDate today) {
+    private Map<String, Object> risksFromSnapshot(Snapshot snapshot, LocalDate today,
+                                                  Map<String, AppUser> users) {
         Map<String, String> reqNames = requirementNames(snapshot.requirements);
         List<Task> overdue = new ArrayList<Task>();
         List<Task> blocked = new ArrayList<Task>();
@@ -1189,7 +1212,7 @@ public class ManagerService {
         for (MemberAccumulator member : members.values()) {
             int remainingMinutes = remaining(member.tasks);
             int workdays = workdays(member.latestDue, today);
-            int loadPct = loadPct(remainingMinutes, workdays);
+            int loadPct = loadPct(remainingMinutes, workdays * dailyCapacityMinutes(member.userId, users));
             if (loadPct > PERCENT) {
                 Map<String, Object> item = new LinkedHashMap<String, Object>();
                 item.put("key", member.key);
@@ -1341,11 +1364,11 @@ public class ManagerService {
     }
 
     private Map<String, Object> projectCard(Requirement requirement, List<Task> tasks,
-                                            Snapshot snapshot, LocalDate today) {
+                                            Snapshot snapshot, LocalDate today, Map<String, AppUser> users) {
         Counts counts = countTasks(tasks, today);
         LocalDate lastCompletedAt = lastCompletedAt(tasks);
         int stagnantDays = stagnantDays(tasks, lastCompletedAt, today);
-        List<Map<String, Object>> members = projectMembers(tasks, snapshot.members, snapshot.logs, today);
+        List<Map<String, Object>> members = projectMembers(tasks, snapshot.members, snapshot.logs, today, users);
         int overloadedMembers = 0;
         LinkedHashSet<String> ownerNames = new LinkedHashSet<String>();
         Map<String, WorkspaceMember> membersById = membersById(snapshot.members);
@@ -1399,14 +1422,15 @@ public class ManagerService {
     }
 
     private List<Map<String, Object>> projectMembers(List<Task> tasks, List<WorkspaceMember> workspaceMembers,
-                                                     List<TimeLog> logs, LocalDate today) {
+                                                     List<TimeLog> logs, LocalDate today,
+                                                     Map<String, AppUser> users) {
         LinkedHashMap<String, MemberAccumulator> members = memberAccumulators(openTasks(tasks), workspaceMembers);
         Set<String> projectTaskIds = taskIds(tasks);
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         for (MemberAccumulator member : members.values()) {
             int remainingMinutes = remaining(member.tasks);
             int workdays = workdays(member.latestDue, today);
-            int loadPct = loadPct(remainingMinutes, workdays);
+            int loadPct = loadPct(remainingMinutes, workdays * dailyCapacityMinutes(member.userId, users));
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("key", member.key);
             item.put("name", member.name);
@@ -1420,16 +1444,38 @@ public class ManagerService {
         return result;
     }
 
-    private Map<String, Object> workloadMember(MemberAccumulator member, List<TimeLog> logs,
-                                               LocalDate weekStart, LocalDate today,
+    private Map<String, Object> workloadMember(MemberAccumulator member, List<Task> testTasks,
+                                               List<TimeLog> logs, LocalDate weekStart, LocalDate today,
                                                Map<String, String> reqNames,
-                                               Map<String, Task> tasksById) {
+                                               Map<String, Task> tasksById, Map<String, AppUser> users) {
+        int dailyCapacityMinutes = dailyCapacityMinutes(member.userId, users);
         int remainingMinutes = remaining(member.tasks);
         int workdays = workdays(member.latestDue, today);
-        int loadPct = loadPct(remainingMinutes, workdays);
+        int capacityMinutes = workdays * dailyCapacityMinutes;
+        int loadPct = loadPct(remainingMinutes, capacityMinutes);
         int weekMinutes = 0;
         int lastWeekMinutes = 0;
+        int testWeekMinutes = 0;
         int[] dayMinutes = new int[WEEK_DAYS];
+        Set<String> testTaskIds = new HashSet<String>();
+        int testWaiting = 0;
+        int testDoing = 0;
+        List<Map<String, Object>> testTaskRefs = new ArrayList<Map<String, Object>>();
+        for (Task task : testTasks) {
+            testTaskIds.add(task.getId());
+            String column = task.getBoardColumn();
+            if (Consts.COL_TEST.equals(column)) {
+                testWaiting++;
+            } else if (Consts.COL_TESTING.equals(column)) {
+                testDoing++;
+            } else {
+                continue;
+            }
+            Map<String, Object> ref = new LinkedHashMap<String, Object>();
+            ref.put("reqId", task.getReqId());
+            ref.put("column", column);
+            testTaskRefs.add(ref);
+        }
         List<Map<String, Object>> weekLogs = new ArrayList<Map<String, Object>>();
         List<Map<String, Object>> lastWeekLogs = new ArrayList<Map<String, Object>>();
         if (member.userId != null) {
@@ -1443,6 +1489,9 @@ public class ManagerService {
                     weekMinutes += value;
                     dayMinutes[date.getDayOfWeek().getValue() - 1] += value;
                     weekLogs.add(weekLogRow(log, tasksById, reqNames));
+                    if (testTaskIds.contains(log.getTaskId())) {
+                        testWeekMinutes += value;
+                    }
                 } else if (!date.isBefore(weekStart.minusWeeks(1)) && date.isBefore(weekStart)) {
                     lastWeekMinutes += value;
                     lastWeekLogs.add(weekLogRow(log, tasksById, reqNames));
@@ -1481,11 +1530,16 @@ public class ManagerService {
         result.put("name", member.name);
         result.put("remainingMinutes", remainingMinutes);
         result.put("workdays", workdays);
-        result.put("capacityMinutes", workdays * DAILY_CAPACITY_MINUTES);
+        result.put("capacityMinutes", capacityMinutes);
+        result.put("capacityMinutesPerDay", dailyCapacityMinutes);
         result.put("loadPct", loadPct);
         result.put("overloaded", loadPct > PERCENT);
         result.put("weekMinutes", weekMinutes);
         result.put("lastWeekMinutes", lastWeekMinutes);
+        result.put("testWaiting", testWaiting);
+        result.put("testDoing", testDoing);
+        result.put("testWeekMinutes", testWeekMinutes);
+        result.put("testTaskRefs", testTaskRefs);
         List<Integer> days = new ArrayList<Integer>(WEEK_DAYS);
         for (int value : dayMinutes) {
             days.add(value);
@@ -1568,6 +1622,63 @@ public class ManagerService {
             }
         }
         return result;
+    }
+
+    /** 按「测试负责人」归集工作项：与负责人一样，账号优先、历史姓名唯一时才解析账号 */
+    private LinkedHashMap<String, List<Task>> testTasksByMember(List<Task> tasks,
+                                                                List<WorkspaceMember> workspaceMembers) {
+        Map<String, String> userIdsByName = userIdsByName(workspaceMembers);
+        LinkedHashMap<String, List<Task>> result = new LinkedHashMap<String, List<Task>>();
+        for (Task task : tasks) {
+            String key;
+            if (hasText(task.getTestOwnerUserId())) {
+                key = task.getTestOwnerUserId().trim();
+            } else if (hasText(task.getTestOwner())) {
+                String name = task.getTestOwner().trim();
+                String resolved = userIdsByName.get(name);
+                key = resolved == null ? name : resolved;
+            } else {
+                continue;
+            }
+            List<Task> list = result.get(key);
+            if (list == null) {
+                list = new ArrayList<Task>();
+                result.put(key, list);
+            }
+            list.add(task);
+        }
+        return result;
+    }
+
+    /** 只有「待测试 / 测试中」有在手项的测试负责人才补进名册；已完成的不单独占一行 */
+    private void includeTestMembers(LinkedHashMap<String, MemberAccumulator> accumulators,
+                                    LinkedHashMap<String, List<Task>> testTasksByMember,
+                                    List<WorkspaceMember> workspaceMembers) {
+        Map<String, WorkspaceMember> membersById = membersById(workspaceMembers);
+        for (Map.Entry<String, List<Task>> entry : testTasksByMember.entrySet()) {
+            if (accumulators.containsKey(entry.getKey())) {
+                continue;
+            }
+            boolean hasOpenTest = false;
+            for (Task task : entry.getValue()) {
+                String column = task.getBoardColumn();
+                if (Consts.COL_TEST.equals(column) || Consts.COL_TESTING.equals(column)) {
+                    hasOpenTest = true;
+                    break;
+                }
+            }
+            if (!hasOpenTest) {
+                continue;
+            }
+            String key = entry.getKey();
+            WorkspaceMember workspaceMember = membersById.get(key);
+            MemberAccumulator member = new MemberAccumulator();
+            member.key = key;
+            member.name = workspaceMember != null && hasText(workspaceMember.getDisplayName())
+                    ? workspaceMember.getDisplayName() : key;
+            member.userId = workspaceMember == null ? null : key;
+            accumulators.put(key, member);
+        }
     }
 
     private void includeLoggedMembers(LinkedHashMap<String, MemberAccumulator> accumulators,
@@ -2274,14 +2385,17 @@ public class ManagerService {
     }
 
     @SuppressWarnings("unchecked")
-    private void putWorkloadLabels(Map<String, Object> row, MemberAccumulator member, RoleContext roles,
-                                    String reqId, List<TimeLog> logs, Map<String, Task> tasksById) {
+    private void putWorkloadLabels(Map<String, Object> row, MemberAccumulator member, List<Task> testTasks,
+                                    RoleContext roles, String reqId, List<TimeLog> logs, Map<String, Task> tasksById) {
         String userId = memberUserId(member, roles);
         // 跨项目没有单一有效主角色：保留空间职能，项目职能通过 roleTitles 与项目行展示。
         MemberLabels labels = memberLabels(roles, reqId, userId);
         putMemberLabels(row, labels);
         Set<String> projectIds = new LinkedHashSet<String>();
         for (Task task : member.tasks) {
+            projectIds.add(task.getReqId());
+        }
+        for (Task task : testTasks) {
             projectIds.add(task.getReqId());
         }
         for (TimeLog log : logs) {
@@ -2296,6 +2410,10 @@ public class ManagerService {
             MemberLabels projectLabels = memberLabels(roles, projectId, userId);
             titles.addAll(roleTitles(projectLabels));
             secondary.addAll(projectLabels.secondaryRoleTitles);
+        }
+        /* 没有任何参与项目（或项目未设角色）时回落空间岗位，否则名册里会显示成「未设角色」 */
+        if (titles.isEmpty() && labels.effectiveRoleTitle != null) {
+            titles.add(labels.effectiveRoleTitle);
         }
         row.put("roleTitles", sorted(titles));
         row.put("secondaryRoleTitles", sorted(secondary));
@@ -2582,18 +2700,100 @@ public class ManagerService {
         if (latestDue == null) {
             return DEFAULT_WORKDAYS;
         }
+        int cap = Math.max(MIN_WORKDAYS, maxWorkdays);
         int days = 0;
-        for (LocalDate date = today; !date.isAfter(latestDue) && days < MAX_WORKDAYS; date = date.plusDays(1)) {
+        for (LocalDate date = today; !date.isAfter(latestDue) && days < cap; date = date.plusDays(1)) {
             if (WorkTime.isWorkday(date)) {
                 days++;
             }
         }
-        return Math.max(MIN_WORKDAYS, Math.min(MAX_WORKDAYS, days));
+        return Math.max(MIN_WORKDAYS, Math.min(cap, days));
     }
 
-    private int loadPct(int remainingMinutes, int workdays) {
-        int capacity = workdays * DAILY_CAPACITY_MINUTES;
-        return capacity == 0 ? 0 : (int) Math.round(remainingMinutes * (double) PERCENT / capacity);
+    private int loadPct(int remainingMinutes, int capacityMinutes) {
+        return capacityMinutes <= 0 ? 0
+                : (int) Math.round(remainingMinutes * (double) PERCENT / capacityMinutes);
+    }
+
+    /** 负载容量按成员自己的计时设置（每天最多计入几小时）折算，未设置或测试环境按默认 8h */
+    private int dailyCapacityMinutes(String userId, Map<String, AppUser> users) {
+        AppUser user = userId == null ? null : users.get(userId);
+        Integer maxHours = user == null ? null : user.getWorkMaxHours();
+        if (maxHours == null) {
+            return DAILY_CAPACITY_MINUTES;
+        }
+        return Math.max(60, Math.min(24 * 60, maxHours * 60));
+    }
+
+    /** 只取当前空间成员的账号设置，一次批量查询；未注入时返回空表，全部按默认容量 */
+    private Map<String, AppUser> workloadUsers(List<WorkspaceMember> members) {
+        if (userMapper == null) {
+            return Collections.emptyMap();
+        }
+        List<String> ids = new ArrayList<String>();
+        for (WorkspaceMember member : members) {
+            if (member != null && hasText(member.getUserId())) {
+                ids.add(member.getUserId());
+            }
+        }
+        if (ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, AppUser> result = new HashMap<String, AppUser>();
+        for (AppUser user : emptyIfNull(userMapper.selectByIds(ids))) {
+            if (user != null && hasText(user.getId())) {
+                result.put(user.getId(), user);
+            }
+        }
+        return result;
+    }
+
+    /** 系统管理员账号（app_user.role=admin）不占成员负载行；空间管理员是业务成员，照常展示 */
+    private boolean isSystemAdmin(AppUser user) {
+        return user != null && "admin".equalsIgnoreCase(trimmed(user.getRole()));
+    }
+
+    private void removeSystemAdmins(LinkedHashMap<String, MemberAccumulator> accumulators,
+                                    Map<String, AppUser> users) {
+        for (Map.Entry<String, AppUser> entry : users.entrySet()) {
+            if (isSystemAdmin(entry.getValue())) {
+                accumulators.remove(entry.getKey());
+            }
+        }
+    }
+
+    /** 名册不按“有没有工作”收口：除系统管理员外，空间成员都占一行，未填预估 / 没有在途项也展示 */
+    private void includeWorkspaceMembers(LinkedHashMap<String, MemberAccumulator> accumulators,
+                                         List<WorkspaceMember> workspaceMembers,
+                                         Map<String, AppUser> users, RoleContext roles, DisplayFilter filter) {
+        for (WorkspaceMember workspaceMember : workspaceMembers) {
+            if (workspaceMember == null || !hasText(workspaceMember.getUserId())) {
+                continue;
+            }
+            String userId = workspaceMember.getUserId().trim();
+            if (accumulators.containsKey(userId) || isSystemAdmin(users.get(userId))) {
+                continue;
+            }
+            if (filter.hasMemberFilter() && !matchesMemberFilter(roles, filter, userId)) {
+                continue;
+            }
+            MemberAccumulator member = new MemberAccumulator();
+            member.key = userId;
+            member.userId = userId;
+            member.name = hasText(workspaceMember.getDisplayName())
+                    ? workspaceMember.getDisplayName() : userId;
+            accumulators.put(userId, member);
+        }
+    }
+
+    private boolean matchesMemberFilter(RoleContext roles, DisplayFilter filter, String userId) {
+        MemberLabels labels = memberLabels(roles, filter.reqId, userId);
+        Set<String> titles = roleTitles(labels);
+        boolean roleMatches = filter.roleTitle == null || (filter.roleUnset
+                ? titles.isEmpty() : titles.contains(filter.roleTitle));
+        boolean companyMatches = filter.companyName == null || (filter.companyUnset
+                ? labels.companyName == null : filter.companyName.equals(labels.companyName));
+        return roleMatches && companyMatches;
     }
 
     private int actualMinutes(String userId, Set<String> taskIds, List<TimeLog> logs) {

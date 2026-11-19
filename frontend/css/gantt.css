@@ -54,8 +54,25 @@
 }
 .gantt-notice[hidden]{display:none;}
 
+/* 上下分区：甘特画布（含图例）+ 可拖分隔条 + 未排期区
+   未排期区高度由 --gantt-unplanned-h 控制，甘特画布吃掉剩余高度 */
+.gantt-split{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
+.gantt-stage{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;}
+.gantt-split-bar{
+  flex:0 0 auto;height:12px;margin:2px 0 0;display:flex;align-items:center;justify-content:center;
+  cursor:row-resize;touch-action:none;position:relative;
+}
+.gantt-split-bar[hidden]{display:none;}
+.gantt-split-grip{
+  width:44px;height:4px;border-radius:var(--r-pill);background:var(--border-strong);
+  opacity:.6;transition:background var(--dur-fast) var(--ease-out),opacity var(--dur-fast) var(--ease-out);
+}
+.gantt-split-bar:hover .gantt-split-grip,
+.gantt-split-bar.dragging .gantt-split-grip{background:var(--primary);opacity:1;}
+.gantt-split-bar:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;border-radius:var(--r-xs);}
+
 .gantt-scroll{
-  flex:1 1 auto;min-height:240px;position:relative;overflow:auto;overscroll-behavior:contain;
+  flex:1 1 auto;min-height:180px;position:relative;overflow:auto;overscroll-behavior:contain;
   border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);
 }
 .gantt-grid{position:relative;min-width:max-content;width:100%;}
@@ -295,18 +312,49 @@
   line-height:1.4;white-space:nowrap;pointer-events:none;box-shadow:var(--shadow-md);
 }
 
-/* 未排期列表 */
-.gantt-unplanned-row{
-  display:flex;align-items:center;gap:var(--space-2);width:100%;padding:var(--space-2) 10px;
-  border-bottom:1px solid var(--border);text-align:left;cursor:grab;
+/* 未排期面板：头部常驻，卡片网格内部滚动（不把甘特画布挤扁） */
+#ganttUnplannedBox{
+  flex:0 0 auto;margin:0;display:flex;flex-direction:column;min-height:0;
+  height:var(--gantt-unplanned-h,224px);
+  border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);
+  overflow:hidden;
 }
-.gantt-unplanned-row:last-child{border-bottom:none;}
-.gantt-unplanned-row:hover{background:var(--surface-hover);}
+#ganttUnplannedBox[hidden]{display:none;}
+#ganttUnplannedBox.is-collapsed{height:auto;}
+#ganttUnplannedBox.is-collapsed #ganttUnplannedList{display:none;}
+.unplanned-head{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;width:100%;
+  padding:8px 12px;text-align:left;
+  background:var(--surface-sunken);border-bottom:1px solid var(--border);
+  font-size:13px;font-weight:600;color:var(--text-2);
+}
+#ganttUnplannedBox.is-collapsed .unplanned-head{border-bottom:none;}
+.unplanned-head:hover{background:var(--surface-hover);}
+.unplanned-head:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.unplanned-head .caret{display:inline-flex;color:var(--text-3);transition:transform var(--dur-base) var(--ease-out);}
+#ganttUnplannedBox.is-collapsed .unplanned-head .caret{transform:rotate(-90deg);}
+.unplanned-head .cnt{font-size:12px;font-weight:650;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.unplanned-head-hint{min-width:0;font-size:12px;font-weight:400;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.unplanned-head-toggle{flex:0 0 auto;margin-left:auto;font-size:12px;font-weight:500;color:var(--text-3);}
+.unplanned-head:hover .unplanned-head-toggle{color:var(--text-2);}
+#ganttUnplannedList{
+  flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  align-content:start;gap:6px;padding:8px 10px;
+}
+.gantt-unplanned-row{
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+  text-align:left;cursor:grab;min-width:0;
+  transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
+}
+.gantt-unplanned-row:hover{background:var(--surface-hover);border-color:var(--border-strong);box-shadow:var(--shadow-xs);}
+.gantt-unplanned-row:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
 .gantt-unplanned-row.dragging{opacity:.6;cursor:grabbing;}
-.gantt-unplanned-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.gantt-unplanned-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px;}
 .gantt-unplanned-t{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gantt-unplanned-m{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.gantt-unplanned-more{padding:6px 8px;border-top:1px solid var(--border);}
+.gantt-unplanned-more{grid-column:1 / -1;padding:2px 0;border-top:1px solid var(--border);}
 .gantt-empty-note{font-size:12px;color:var(--text-3);}
 
 /* 图例 */
@@ -330,9 +378,10 @@
 
 /* 打印：只打当前甘特图，A3 横向 */
 @media print{
-  .sidebar,.topbar,.page-toolbar,.gantt-tools,.gantt-legend,.unplanned-box,.gantt-load,
+  .sidebar,.topbar,.page-toolbar,.gantt-tools,.gantt-legend,.gantt-split-bar,.unplanned-box,.gantt-load,
   .drawer-layer,.modal-layer,.toast-layer,.offline-badge{display:none !important;}
-  .main,.view,.gantt-page{height:auto !important;padding:0 !important;overflow:visible !important;}
+  .main,.view,.gantt-page,.gantt-split,.gantt-stage{height:auto !important;padding:0 !important;overflow:visible !important;}
+  .gantt-split,.gantt-stage{display:block !important;}
   .gantt-scroll{overflow:visible !important;border:0 !important;height:auto !important;min-height:0 !important;}
   .gantt-grid{width:max-content !important;}
   .gantt-head,.gantt-corner,.gantt-label,.gantt-group-head{position:static !important;}

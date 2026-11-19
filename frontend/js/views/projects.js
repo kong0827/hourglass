@@ -873,7 +873,7 @@ function renderReqList(){
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>文档</span>' +
             (readOnly ? '' : '<button class="btn sm add" type="button" data-doc-new="' + esc(r.id) + '">+ 新建文档</button>') + '</div>' +
-          docHTML +
+          '<div class="req-expand-docs">' + docHTML + '</div>' +
         '</section>' +
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>工作项</span>' +

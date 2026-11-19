@@ -191,8 +191,11 @@ public class MobileService {
                 row.put("userId", canonicalId);
                 row.put("name", display);
                 row.put("role", member == null || member.getRole() == null ? "" : member.getRole());
-                row.put("plannedMinutes", rangeCapacity > 0
-                        ? rangeCapacity : intValue(item.get("capacityMinutes")));
+                /* 每日容量按成员自己的计时上限，缺失时退回空间默认值 */
+                int memberPerDay = intValue(item.get("capacityMinutesPerDay"));
+                int memberCapacity = memberPerDay > 0 ? memberPerDay * rangeWorkdays : rangeCapacity;
+                row.put("plannedMinutes", memberCapacity > 0
+                        ? memberCapacity : intValue(item.get("capacityMinutes")));
                 row.put("actualMinutes", 0);
                 merged.put(canonicalId, row);
             }

@@ -477,6 +477,9 @@
 
   <update id="update">
     UPDATE demand SET
+      <!-- 整单保存也承载编辑弹窗内的迁移：req_id / demand_no 必须一起落库，否则守卫与时间线会与事实不符 -->
+      req_id = #{reqId},
+      demand_no = #{demandNo},
       title = #{title},
       description = #{description},
       source = #{source},
@@ -506,6 +509,7 @@
   <update id="updateProject">
     UPDATE demand SET
       req_id = #{reqId},
+      demand_no = #{demandNo},
       category_id = #{categoryId},
       revision = revision + 1,
       updated_at = NOW()

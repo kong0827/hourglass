@@ -1493,6 +1493,30 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .toast .tclose:hover{opacity:1;background:rgba(255,255,255,.18);}
 .toast .tbar{position:absolute;left:0;top:0;height:2px;background:currentColor;opacity:.5;width:100%;}
 
+/* 跨视图返回：从需求 / 项目详情跳到文档、用例等页面后，左下角一键回到来源 */
+.return-origin{
+  position:fixed;left:20px;bottom:calc(20px + var(--app-foot-h));z-index:var(--z-return);
+  display:flex;align-items:center;gap:2px;padding:3px 5px 3px 10px;border-radius:var(--r-pill);
+  background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-lg);
+  animation:return-in var(--dur-base) var(--ease-out) both;
+}
+.return-origin[hidden]{display:none;}
+@keyframes return-in{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+.return-origin-go{
+  display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-radius:var(--r-pill);
+  color:var(--primary-fg);font-size:13px;font-weight:600;
+  max-width:min(320px,calc(100vw - 120px));
+}
+.return-origin-go:hover{background:var(--primary-soft);}
+.return-origin-go b{
+  min-width:0;font-weight:650;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.return-origin-x{
+  display:grid;place-items:center;width:22px;height:22px;border-radius:50%;color:var(--text-3);
+}
+.return-origin-x:hover{background:var(--surface-2);color:var(--text);}
+
 /* UnreadBubble：新站内信到达的轻提醒，点击进通知中心 */
 .unread-bubble{
   position:fixed;top:calc(var(--topbar-h) + 12px);right:16px;z-index:295;

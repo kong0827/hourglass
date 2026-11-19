@@ -14,7 +14,7 @@ import { listDensitySegHTML } from "../core/list-density.js";
 import { createMentionPicker } from "../core/mention-picker.js";
 import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
-import { activeView } from "../core/router.js";
+import { activeView, setReturnOrigin } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead, syncAssocViewBtns, syncDemandLabelFromCache } from "../core/task-drawer.js";
 import { canEditReq, catNameById, catTag, projectGroups, projectOptionsHTML, reqNameById, rt, setNameById } from "../core/state.js";
@@ -152,6 +152,7 @@ var demandCommentReplyTo = null;   /* 当前回复的顶层评论 ID（一层回
 var demandCommentMention = null;   /* 详情内发表评论的 @ 提及选择器 */
 var demandOverviewMention = null;  /* 概览「讨论」里快速记录的 @ 提及选择器 */
 var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null, editingDemandStatus = null;
+var editingDemandReqId = null;  /* 打开编辑时的所属项目，保存成功据此判断是否发生了迁移 */
 var planDemandRevision = null, planAction = "plan";
 var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status, canSchedule } */
@@ -1331,9 +1332,25 @@ function demandCell(d, key){
 function demInlineWritable(d){
   return !!d && !isClosedDemand(d) && canWriteDemand(d);
 }
+/* 换项目：待评审 / 已通过 / 已排期可迁移；已排版本的先撤销排期，
+   工作项 / 文档 / 用例 / 发布记录等执行证据由服务端最终校验 */
+function demandProjectMovable(d){
+  if(!d || !canWriteDemand(d) || d.versionId) return false;
+  return d.status === "review" || d.status === "pass" || d.status === "plan";
+}
+/* 候选与层级同口径：保留当前项目（可能已归档）以便标出「当前」，其余只列未归档且可写的项目 */
+function demandMoveTargets(reqId){
+  var list = rt.reqList.filter(function(r){
+    return r.id === reqId || (!r.archivedAt && canEditReq(r.id));
+  });
+  /* 项目清单尚未加载到当前项目时补一条，避免下拉回落到第一个项目把归属悄悄改掉 */
+  if(reqId && !list.some(function(r){ return r.id === reqId; })){
+    list.unshift({ id:reqId, name:reqNameById(reqId) || reqId });
+  }
+  return list;
+}
 function demInlineProjectEditable(d){
-  /* 仅待评审可换项目；工作项/文档/用例/发布记录等证据由服务端最终校验 */
-  return !!d && d.status === "review" && canWriteDemand(d);
+  return demandProjectMovable(d) && demandMoveTargets(d.reqId).length > 1;
 }
 function demInlineVersionEditable(d){
   return !!d && d.status === "plan" && canScheduleDemand(d);
@@ -1355,10 +1372,6 @@ function demStatusCell(d){
 }
 function demProjectCell(d){
   if(!demInlineProjectEditable(d)) return esc(reqNameById(d.reqId) || "—");
-  var list = rt.reqList.filter(function(r){
-    return r.id === d.reqId || (!r.archivedAt && canEditReq(r.id));
-  });
-  if(list.length <= 1) return esc(reqNameById(d.reqId) || "—");
   return demInlineTrigger("project", d,
     '<span class="dem-inline-txt">' + esc(reqNameById(d.reqId) || "—") + '</span>', "更换所属项目");
 }
@@ -1491,12 +1504,9 @@ function openDemInlineMenu(btn){
     return;
   }
   if(kind === "project"){
-    var list = rt.reqList.filter(function(req){
-      return req.id === d.reqId || (!req.archivedAt && canEditReq(req.id));
-    });
     /* 层级与筛选栏同口径：项目集标题 + 二级项目；当前项目可能已归档，保留在组内 */
     var items = [];
-    projectGroups(list).forEach(function(g){
+    projectGroups(demandMoveTargets(d.reqId)).forEach(function(g){
       items.push({ header: esc(g.set ? g.set.name : "未分组") });
       g.rows.forEach(function(req){
         items.push({ value:req.id, current:req.id === d.reqId, sub:true,
@@ -2800,6 +2810,7 @@ function closeDemandDialog(){
   demandFormBaseline = null;
   editingDemandId = null;
   editingDemandStatus = null;
+  editingDemandReqId = null;
   btnSaveDemand.disabled = false;
   UI.closeModal($("dlgDemand"));
 }
@@ -2825,11 +2836,29 @@ function openDemandDialog(d){
   editingDemandId = d ? d.id : null;
   editingDemandRevision = d ? d.revision : null;
   editingDemandStatus = d ? d.status : "review";
+  editingDemandReqId = d ? d.reqId : null;
   editingPlannedStart = d ? d.plannedStart : null;
   editingPlannedEnd = d ? d.plannedEnd : null;
-  dReq.innerHTML = projectOptionsHTML(opts);
+  /* 编辑态候选与列表行内切换同口径：当前项目 + 其他未归档且可写的项目 */
+  dReq.innerHTML = projectOptionsHTML(d ? demandMoveTargets(d.reqId) : opts);
   dReq.value = d ? d.reqId : (rt.demandReqId && canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
-  dReq.disabled = !!d;
+  /* 编辑态可换项目：仅在还有第二个可写项目且需求尚未排期时放开，限制原因就地说明 */
+  var canMove = !!d && demandProjectMovable(d) && demandMoveTargets(d.reqId).length > 1;
+  dReq.disabled = !!d && !canMove;
+  var reqHint = $("dReqHint");
+  if(reqHint){
+    reqHint.hidden = true;
+    if(d && canMove){
+      reqHint.hidden = false;
+      reqHint.textContent = "更换后按目标项目重排需求编号；已关联工作项、文档、用例或发布记录的需求不能迁移";
+    }else if(d && d.versionId){
+      reqHint.hidden = false;
+      reqHint.textContent = "该需求已排入版本，撤销排期后才能更换所属项目";
+    }else if(d && d.status !== "done" && !isClosedDemand(d) && !canMove){
+      reqHint.hidden = false;
+      reqHint.textContent = "没有其他可写项目可迁移";
+    }
+  }
   dTitle.value = d ? d.title : "";
   dDesc.value = d ? (d.description || "") : "";
   dAccept.value = d ? (d.acceptText || "") : "";
@@ -2883,8 +2912,9 @@ function openDemandDialog(d){
   setDemandFormLocked(!!d && d.status !== "review");
   var lockNote = $("demandLockNote");
   if(lockNote) lockNote.textContent = d && d.status === "done"
-    ? "该需求已完成，这里只更新描述、验收标准、来源、分类与 WSJF；标题与优先级在详情里直接点击修改，版本与计划日期不再调整。"
-    : "该需求已进入流转，这里只更新描述、验收标准、来源、分类与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。";
+    ? "该需求已完成，这里只更新描述、验收标准、来源、分类与 WSJF；标题与优先级在详情里直接点击修改，所属项目、版本与计划日期不再调整。"
+    : "该需求已进入流转，这里只更新描述、验收标准、来源、分类" + (canMove ? "、所属项目" : "")
+      + "与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。";
   demandFormBaseline = demandFormSnapshot();
   updateDemandCheckResume();
   UI.openModal($("dlgDemand"), "input");
@@ -2949,17 +2979,21 @@ function doSaveDemand(body){
   var title = body.title;
   btnSaveDemand.disabled = true;
   var seq = demandFormSeq, wasEdit = !!editingDemandId;
+  var moved = wasEdit && !!editingDemandReqId && body.reqId !== editingDemandReqId;
   var p = editingDemandId
     ? API.put("/api/demands/" + encodeURIComponent(editingDemandId), body)
     : API.post("/api/demands", body);
   p.then(function(){
-    toast(wasEdit ? "已更新需求「" + title + "」" : "已提交评审「" + title + "」", "fs");
+    toast(!wasEdit ? "已提交评审「" + title + "」"
+      : moved ? "已移至「" + reqNameById(body.reqId) + "」并保存"
+      : "已更新需求「" + title + "」", "fs");
     /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
     if(seq === demandFormSeq){
       closeDemandDialog();
       if(wasEdit) closeDemandDetailIfOpen();
-      /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围 */
-      if(rt.demandReqId && body.reqId !== rt.demandReqId){
+      /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围。
+         编辑迁移则保持原筛选，让这条需求从当前列表里消失即可 */
+      if(!wasEdit && rt.demandReqId && body.reqId !== rt.demandReqId){
         rt.demandReqId = body.reqId;
         if(demandReq) demandReq.value = body.reqId;
       }
@@ -4022,15 +4056,23 @@ function deleteDemandComment(layer, id, commentId){
   });
 }
 
-function showDemandDetail(id){
+function showDemandDetail(id, opts){
   var wsId = rt.currentWs && rt.currentWs.id;
   return API.get("/api/demands/" + encodeURIComponent(id)).then(function(d){
     if(wsId && (!rt.currentWs || wsId !== rt.currentWs.id)) return false;
     var cached = findDemand(id);
     if(cached) Object.assign(cached, d); else demands.push(d);
-    renderDemandDetail(d);
+    renderDemandDetail(d, opts);
     return true;
   }).catch(function(ex){ toast(ex.message || "需求不存在或无权查看", "warn"); return false; });
+}
+/* 跳去文档 / 用例页时记下来源，返回后重开这条需求并停在「关联」页签 */
+function setDemandReturnOrigin(d, id){
+  setReturnOrigin({
+    view: "demands",
+    label: "需求 " + (demandNoText(d.demandNo) || d.title),
+    restore: function(){ showDemandDetail(id, { tab: "rel" }); }
+  });
 }
 function closeDemandDetailIfOpen(){
   var layer = demandDetailLayer;
@@ -4875,7 +4917,7 @@ function applyDemandAiSplit(){
   });
 }
 
-function renderDemandDetail(d){
+function renderDemandDetail(d, opts){
   var id = d.id;
   var writable = canWriteDemand(d), canEditText = writable && !isClosedDemand(d);
   var canEditTitle = canEditText && (d.status === "review" || d.status === "done");
@@ -5403,6 +5445,7 @@ function renderDemandDetail(d){
     }
     var casesGo = e.target.closest("[data-dem-cases]");
     if(casesGo){
+      setDemandReturnOrigin(d, id);
       UI.closeModal(layer);
       import("./testcases.js").then(function(m){ m.openDemandCoverage(d.reqId, d.id); });
       return;
@@ -5473,6 +5516,7 @@ function renderDemandDetail(d){
     var dop = e.target.closest("[data-dem-doc-open]");
     if(dop){
       var docIdOpen = dop.dataset.demDocOpen;
+      setDemandReturnOrigin(d, id);
       UI.closeModal(layer);
       import("./requirements.js").then(function(m){ m.openReqDocAndJump(docIdOpen); });
       return;
@@ -5620,6 +5664,7 @@ function renderDemandDetail(d){
     bindFileDrop(drop, uploadDemandFiles);
   }
   UI.openModal(layer, "[data-dem-x]");
+  if(opts && opts.tab && layer.querySelector('[data-dem-tab="' + opts.tab + '"]')) setDemandTab(opts.tab);
   loadDemandTasks(layer, id, d.versionId);
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
@@ -5698,13 +5743,16 @@ if($("demandCheckResume")) $("demandCheckResume").addEventListener("click", func
 });
 bindDemandCheckDialog();
 if(dReq) dReq.addEventListener("change", function(){
+  if(editingDemandId){
+    /* 编辑态换项目：原分类属于旧项目，直接回到「未分类」，由用户按新项目重选 */
+    syncDemandCatOptions(dReq.value, "", false);
+    return;
+  }
   /* 换项目后原分类不再可选，回落到新项目第一个分类或「未分类」 */
   syncDemandCatOptions(dReq.value, dCategory.value, true);
   /* 提醒人候选取自项目花名册：换项目后旧选择可能已不可见，直接清空重选 */
-  if(!editingDemandId){
-    resetDemandWatchPick();
-    syncDemandWatchPicker();
-  }
+  resetDemandWatchPick();
+  syncDemandWatchPicker();
 });
 if($("dlgDemand")) $("dlgDemand").addEventListener("click", function(e){
   var rm = e.target.closest("[data-dem-form-watch-remove]");

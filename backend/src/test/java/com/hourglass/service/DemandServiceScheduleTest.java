@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hourglass.common.AppException;
 import com.hourglass.dto.DemandActionRequest;
 import com.hourglass.dto.DemandSaveRequest;
+import com.hourglass.entity.Category;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
 import com.hourglass.entity.Requirement;
@@ -50,10 +51,12 @@ class DemandServiceScheduleTest {
     private final com.hourglass.mapper.DemandCommentMapper demandComments =
             mock(com.hourglass.mapper.DemandCommentMapper.class);
     private final DeletionTraceService deletionTrace = mock(DeletionTraceService.class);
+    private final NumberSeqService numberSeq = mock(NumberSeqService.class);
+    private final com.hourglass.mapper.CategoryMapper categories =
+            mock(com.hourglass.mapper.CategoryMapper.class);
     private final DemandService service = new DemandService(demands, projects, versions, tasks, events,
-            docs, access, attachments, mail, cases,
-            mock(com.hourglass.mapper.CategoryMapper.class), lock, permissions,
-            deletionTrace, mock(NumberSeqService.class), mock(DemandWatchService.class));
+            docs, access, attachments, mail, cases, categories, lock, permissions,
+            deletionTrace, numberSeq, mock(DemandWatchService.class));
     private final com.hourglass.mapper.ReleaseMapper releases = mock(com.hourglass.mapper.ReleaseMapper.class);
     private final com.hourglass.mapper.VersionTaskMapper bindings = mock(com.hourglass.mapper.VersionTaskMapper.class);
     private final TaskPublicationService publications = new TaskPublicationService(tasks, releases,
@@ -74,6 +77,8 @@ class DemandServiceScheduleTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "demandCommentMapper", demandComments);
         lenient().when(demands.selectDetail(any(), anyString()))
                 .thenAnswer(inv -> demands.selectById(inv.getArgument(1)));
+        lenient().when(projects.selectByIdForUpdate(anyString(), anyString()))
+                .thenAnswer(inv -> projects.selectById(inv.getArgument(1)));
         doCallRealMethod().when(bindings).enrichTasks(anyString(), anyList());
         demand = new Demand();
         demand.setId("D1");
@@ -482,6 +487,148 @@ class DemandServiceScheduleTest {
     }
 
     @Test
+    void updateMovesPassDemandAndReassignsProjectScopedNumber() throws Exception {
+        demand.setStatus("pass");
+        demand.setDemandNo(12);
+        demand.setCreatedBy("U-submit");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        target.setName("目标项目");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(5);
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R2");
+        body.setTitle("需求");
+        body.setRevision(4L);
+        body.setDescription("补充描述");
+
+        Demand out = service.update("U1", "W1", "D1", body);
+
+        assertEquals("R2", out.getReqId());
+        assertEquals(5, out.getDemandNo());
+        assertEquals("补充描述", out.getDescription());
+        verify(access).assertWrite("W1", "U1", "R2");
+        verify(access).assertWriteForUpdate("W1", "U1", "R2");
+        verify(lock).lockProjects("W1", "R1", "R2");
+        ArgumentCaptor<Demand> saved = ArgumentCaptor.forClass(Demand.class);
+        verify(demands).update(saved.capture());
+        assertEquals("R2", saved.getValue().getReqId());
+        assertEquals(5, saved.getValue().getDemandNo());
+        JsonNode log = changeLog("move");
+        assertEquals("R1", log.path("before").path("reqId").asText());
+        assertEquals("R2", log.path("after").path("reqId").asText());
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「需求」所属项目已变更"), eq("从「R1」移至「目标项目」"),
+                eq("demand"), eq("D1"), eq("R2"));
+    }
+
+    @Test
+    void updateRejectsMoveWhenDemandHasExecutionEvidence() {
+        demand.setStatus("pass");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(tasks.selectTasksByDemandForScope("W1", "D1"))
+                .thenReturn(Collections.singletonList(new Task()));
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R2");
+        body.setTitle("需求");
+        body.setRevision(4L);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.update("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).update(any());
+    }
+
+    @Test
+    void updateMoveDropsCategoryThatBelongsToPreviousProject() {
+        demand.setStatus("pass");
+        demand.setDemandNo(12);
+        demand.setCategoryId("C1");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        target.setName("目标项目");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(5);
+        Category oldCategory = new Category();
+        oldCategory.setId("C1");
+        oldCategory.setWorkspaceId("W1");
+        oldCategory.setProjectId("R1");
+        when(categories.selectById("W1", "C1")).thenReturn(oldCategory);
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R2");
+        body.setTitle("需求");
+        body.setRevision(4L);
+        body.setCategoryId("C1");
+
+        Demand out = service.update("U1", "W1", "D1", body);
+
+        assertNull(out.getCategoryId());
+        ArgumentCaptor<String> note = ArgumentCaptor.forClass(String.class);
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("move"), note.capture(), eq("U1"), any());
+        assertTrue(note.getValue().contains("原分类不属于目标项目，已清空"));
+    }
+
+    @Test
+    void updateRejectsMoveWhenDemandAlreadyHasTargetVersion() {
+        demand.setStatus("plan");
+        demand.setVersionId("V-old");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R2");
+        body.setTitle("需求");
+        body.setRevision(4L);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.update("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).update(any());
+        verify(numberSeq, never()).nextDemand(anyString(), anyString());
+    }
+
+    @Test
+    void updateRejectsMoveIntoProjectArchivedBetweenCheckAndLock() {
+        demand.setStatus("pass");
+        Requirement open = new Requirement();
+        open.setId("R2");
+        open.setWorkspaceId("W1");
+        Requirement archived = new Requirement();
+        archived.setId("R2");
+        archived.setWorkspaceId("W1");
+        archived.setArchivedAt(LocalDateTime.now());
+        when(projects.selectById("R2")).thenReturn(open);
+        when(projects.selectByIdForUpdate("W1", "R2")).thenReturn(archived);
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R2");
+        body.setTitle("需求");
+        body.setRevision(4L);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.update("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).update(any());
+    }
+
+    @Test
+    void updateKeepsProjectWhenRequestTargetsSameProject() {
+        demand.setStatus("pass");
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R1");
+        body.setTitle("需求");
+        body.setRevision(4L);
+
+        Demand out = service.update("U1", "W1", "D1", body);
+
+        assertEquals("R1", out.getReqId());
+        verify(lock).lockProjects("W1", "R1");
+        verify(numberSeq, never()).nextDemand(anyString(), anyString());
+    }
+
+    @Test
     void closedDemandCannotBeEditedBeforeRestore() {
         demand.setStatus("closed");
         DemandSaveRequest body = new DemandSaveRequest();
@@ -667,9 +814,13 @@ class DemandServiceScheduleTest {
         assertTrue(update.contains("revision = revision + 1"));
         assertTrue(update.contains("AND revision = ?"));
         assertTrue(update.contains("planned_start = ?"));
+        /* 编辑弹窗的迁移也走整单 update，不写归属就等于没迁 */
+        assertTrue(update.contains("req_id = ?"));
+        assertTrue(update.contains("demand_no = ?"));
         String updateProject = configuration.getMappedStatement("com.hourglass.mapper.DemandMapper.updateProject")
                 .getBoundSql(demand).getSql().replaceAll("\\s+", " ");
         assertTrue(updateProject.contains("req_id = ?"));
+        assertTrue(updateProject.contains("demand_no = ?"));
         assertTrue(updateProject.contains("revision = revision + 1"));
         assertTrue(updateProject.contains("AND revision = ?"));
         Map<String, Object> params = new HashMap<String, Object>();
@@ -861,8 +1012,30 @@ class DemandServiceScheduleTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"pass", "plan", "closed"})
-    void moveRejectsDemandThatLeftReview(String status) {
+    @ValueSource(strings = {"pass", "plan"})
+    void moveAllowsDemandThatLeftReviewWithoutEvidence(String status) {
+        demand.setStatus(status);
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        target.setName("目标项目");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(demands.updateProject(any(Demand.class))).thenReturn(1);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(9);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        Demand result = service.move("U1", "W1", "D1", body);
+
+        assertEquals("R2", result.getReqId());
+        assertEquals(9, result.getDemandNo());
+        verify(demands).updateProject(any(Demand.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"done", "closed"})
+    void moveRejectsFinishedDemand(String status) {
         demand.setStatus(status);
         Requirement target = new Requirement();
         target.setId("R2");
@@ -940,6 +1113,27 @@ class DemandServiceScheduleTest {
         assertEquals(400, assertThrows(AppException.class,
                 () -> service.move("U1", "W1", "D1", body)).getCode());
         verifyNoInteractions(lock);
+        verify(demands, never()).updateProject(any());
+    }
+
+    @Test
+    void moveRejectsTargetArchivedBetweenCheckAndLock() {
+        demand.setStatus("review");
+        Requirement open = new Requirement();
+        open.setId("R2");
+        open.setWorkspaceId("W1");
+        Requirement archived = new Requirement();
+        archived.setId("R2");
+        archived.setWorkspaceId("W1");
+        archived.setArchivedAt(LocalDateTime.now());
+        when(projects.selectById("R2")).thenReturn(open);
+        when(projects.selectByIdForUpdate("W1", "R2")).thenReturn(archived);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.move("U1", "W1", "D1", body)).getCode());
         verify(demands, never()).updateProject(any());
     }
 
