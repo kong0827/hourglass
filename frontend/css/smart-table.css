@@ -14,6 +14,9 @@ body[data-view="list"] .filterbar{border-radius:11px 11px 0 0;border-bottom-colo
   display:flex;flex-direction:column;flex:0 0 auto;margin-bottom:10px;overflow:hidden;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
 }
+/* 拼在上方卡片下方：只留下圆角；需求池还要吃掉 .view-page 的 12px 行距 */
+#view-list .smart-list-bar{border-radius:0 0 11px 11px;margin-top:0;}
+#view-demands .smart-list-bar{border-radius:0 0 11px 11px;margin-top:-12px;}
 #view-list .smart-view-tabs,
 #view-demands .smart-view-tabs{
   display:flex;align-items:center;gap:var(--space-1);min-height:36px;padding:3px 8px;
@@ -110,7 +113,7 @@ body[data-view="list"] .filterbar{border-radius:11px 11px 0 0;border-bottom-colo
 /* 需求池看板：紧凑搜索/筛选条，范围固定为当前项目 */
 #view-demands .dem-board-bar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  margin:0 0 10px;padding:6px 9px;min-height:44px;
+  margin:-12px 0 10px;padding:6px 9px;min-height:44px;
   background:var(--surface);border:1px solid var(--border);
   border-radius:0 0 11px 11px;
 }
@@ -121,7 +124,7 @@ body[data-view="list"] .filterbar{border-radius:11px 11px 0 0;border-bottom-colo
 #view-demands .demb-clear{min-height:28px;}
 /* 需求池甘特：工具条与页内工具条同属一张卡片 */
 #view-demands .demg-tools{
-  margin:0 0 10px;padding:6px 9px;gap:8px 12px;
+  margin:-12px 0 10px;padding:6px 9px;gap:8px 12px;
   background:var(--surface);border:1px solid var(--border);
   border-radius:0 0 11px 11px;
 }

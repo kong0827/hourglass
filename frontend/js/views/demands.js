@@ -294,7 +294,7 @@ function switchDemandMode(m){
     syncBoardScopeFromReqs();
     if(rt.reqsLoaded) syncReqSel();
     if(demSmart.reqs.length > 1){
-      toast("看板一次展示一个项目，已回到「全部项目」；列表与甘特的项目筛选仍保留", "warn");
+      toast("看板只能看全部或单个项目，已回到「全部项目」；列表与甘特的项目筛选仍保留", "warn");
     }
   }
   /* 先本机生效再后台保存：网络慢或保存失败时，视图切换不应卡住或回退 */

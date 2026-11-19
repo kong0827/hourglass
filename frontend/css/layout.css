@@ -196,6 +196,32 @@
 .ph-acts{margin-left:auto;display:flex;align-items:center;gap:6px;flex:0 0 auto;}
 /* 页头主操作：全页唯一实心按钮，32px（原型 btn） */
 .pagehead .btn{height:32px;padding:0 11px;border-radius:8px;font-size:12.5px;font-weight:600;}
+/* 原型 toolbar：页内工具条统一为单张卡片，不再裸奔在背景上 */
+body[data-view="chain"] .page-toolbar,
+body[data-view="review"] .page-toolbar,
+body[data-view="requirements"] .page-toolbar,
+body[data-view="branches"] .page-toolbar,
+body[data-view="phase"] .page-toolbar,
+body[data-view="delivery"] .page-toolbar{
+  min-height:44px;padding:6px 9px;background:var(--surface);
+  border:1px solid var(--border);border-radius:11px;
+}
+/* 层级：工具条接在筛选栏下方，同一张两行卡片 */
+body[data-view="tree"] #view-tree{padding-top:0;}
+body[data-view="tree"] .filterbar{border-radius:11px 11px 0 0;border-bottom-color:transparent;}
+body[data-view="tree"] #view-tree > .view-page > .page-toolbar{
+  min-height:40px;padding:4px 9px;background:var(--surface);
+  border:1px solid var(--border);border-radius:0 0 11px 11px;
+}
+/* 甘特：标题行与筛选行合成一张两行卡片 */
+body[data-view="gantt"] #view-gantt > .view-page > .page-toolbar{
+  min-height:44px;padding:6px 9px;background:var(--surface);
+  border:1px solid var(--border);border-bottom-color:transparent;border-radius:11px 11px 0 0;
+}
+body[data-view="gantt"] #view-gantt > .view-page > .gantt-tools{
+  margin:-10px 0 10px;padding:6px 9px;background:var(--surface);
+  border:1px solid var(--border);border-radius:0 0 11px 11px;
+}
 /* 设置、个人设置与消息页没有可新建对象，隐藏全局「新建」与手机 FAB */
 body[data-view="settings"] #btnNew,
 body[data-view="profile"] #btnNew,

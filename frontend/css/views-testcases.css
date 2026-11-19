@@ -36,7 +36,7 @@
   border-radius:11px 11px 0 0;
 }
 #view-testcases .tc-page > .page-toolbar .toolbar-meta{font-size:11.5px;color:var(--text-3);}
-.tc-filtercard{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 12px;padding:6px 9px;border:1px solid var(--border);border-radius:0 0 11px 11px;background:var(--surface);}
+.tc-filtercard{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-10px 0 12px;padding:6px 9px;border:1px solid var(--border);border-radius:0 0 11px 11px;background:var(--surface);}
 .tc-vsep{flex:0 0 auto;width:1px;height:22px;background:var(--border);}
 #tcStats{align-items:center;gap:1px;margin:0;padding:0;border:0;background:none;box-shadow:none;flex-wrap:wrap;}
 /* 无项目 / 计划模式下内容被清空：空元素不该还带着外框和内边距占一整行 */

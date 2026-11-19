@@ -1076,9 +1076,9 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
 /* IA-1：分析页（趋势 / 完成记录 / 流程体检） */
 #view-analysis{overflow-y:auto;}
 .analysis-bar{
-  display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;
-  padding:var(--space-2) 20px 0;border-bottom:1px solid var(--border);background:var(--bg);
-  position:sticky;top:0;z-index:3;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  min-height:44px;margin:0 0 12px;padding:6px 9px;
+  background:var(--surface);border:1px solid var(--border);border-radius:11px;
 }
 .analysis-bar .set-tabs{border-bottom:none;margin:0;padding:0;background:none;position:static;}
 /* 报表的三个页签已提升到全局子导航，页内不再重复一行（周期选择仍留在本行） */

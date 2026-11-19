@@ -75,7 +75,9 @@ function load(viewKey){
   pending[key] = API.get("/api/list-preferences/" + viewKey).then(function(d){
     var current = stateFor(viewKey);
     if(d && Array.isArray(d.columns) && d.columns.length) current.columns = sanitize(viewKey, d.columns);
-    if(d && DEFS[viewKey].modes.indexOf(d.viewMode) !== -1) current.viewMode = d.viewMode;
+    /* 服务端偏好晚到不能覆盖本次会话里用户已经选过的视图：
+       否则先点「列表」再收到「看板」的返回，界面会停在骨架屏上 */
+    if(d && !current.modeTouched && DEFS[viewKey].modes.indexOf(d.viewMode) !== -1) current.viewMode = d.viewMode;
     current.loaded = true;
     delete pending[key];
     return current;
@@ -91,7 +93,8 @@ function labels(viewKey){ return DEFS[viewKey].labels; }
 function save(viewKey, next){
   var key = wsKey(viewKey);
   var old = cache[key];
-  cache[key] = { viewMode: next.viewMode, columns: sanitize(viewKey, next.columns), loaded: true };
+  cache[key] = { viewMode: next.viewMode, columns: sanitize(viewKey, next.columns), loaded: true,
+    modeTouched: !!(old && old.modeTouched) };
   return API.put("/api/list-preferences/" + viewKey, { viewMode: next.viewMode, columns: cache[key].columns }).then(function(d){
     if(d && Array.isArray(d.columns)) cache[key].columns = sanitize(viewKey, d.columns);
     return cache[key];
@@ -108,11 +111,14 @@ function setViewMode(viewKey, mode){
   });
 }
 /* URL 带来的临时视图（如需求池 ?view=gantt）：只改本次会话，不覆盖服务端偏好。
-   必须在 load() 之后再调用，否则会被服务端返回值覆盖。 */
+   与 load() 的先后不再敏感：设置后会用 modeTouched 挡住晚到的服务端返回值。 */
 function setViewModeLocal(viewKey, mode){
   var def = DEFS[viewKey];
   if(!def || def.modes.indexOf(mode) === -1) return false;
-  stateFor(viewKey).viewMode = mode;
+  var current = stateFor(viewKey);
+  current.viewMode = mode;
+  /* 标记本次会话已明确选过视图，防止还在路上的服务端偏好把它覆盖回去 */
+  current.modeTouched = true;
   return true;
 }
 function openColumnSettings(viewKey, onChange){
