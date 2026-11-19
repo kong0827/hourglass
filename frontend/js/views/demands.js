@@ -3590,12 +3590,18 @@ function loadDemandTasks(layer, id, targetVersionId){
       + '<option value="">全部发布状态</option><option value="published">已发布</option><option value="unpublished">未发布</option>'
       + '</select></label></div>'
       + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl dem-evidence-tbl"><thead><tr>'
-      + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th>验证用例</th><th>生产发布</th></tr></thead><tbody>'
+      + '<th>工作项</th><th>项目</th><th>类型</th><th>负责人</th><th>状态</th><th>验证用例</th><th>生产发布</th></tr></thead><tbody>'
       + tasks.map(function(t){
         var isDone = t.boardColumn === "done";
         var verText = taskVersionsText(t) || "未绑版本";
         var verHTML = taskVersionIds(t).length ? taskVersionLinksHTML(t, t.reqId) : esc(verText);
         var mismatch = targetVersionId && taskVersionIds(t).indexOf(targetVersionId) === -1;
+        /* 存量跨项目关联时，本表可能出现其他项目的工作项，按工作项自身项目展示 */
+        var reqName = reqNameById(t.reqId);
+        var reqLinked = !!(t.reqId && reqName !== "无");
+        var reqCell = reqLinked
+          ? assocLinkHTML("project", t.reqId, reqName)
+          : '<span class="muted">—</span>';
         var cov = covByTask[t.id];
         var covCell = !cov || !(cov.caseTotal > 0)
           ? '<span class="tag tag-warning" title="该工作项还没有用例验证；用例可只关联需求，因此不等于需求整体未覆盖">未覆盖</span>'
@@ -3606,6 +3612,7 @@ function loadDemandTasks(layer, id, targetVersionId){
           + '<td class="t-title-cell"><div class="t-title">' + esc(t.title) + '</div>'
             + '<div class="t-sub">' + (t.estimateMinutes ? esc(fmtMinutesShort(t.estimateMinutes)) + " · " : "") + verHTML
             + (mismatch ? ' · <span class="tag ghost">未关联目标版本</span>' : '') + '</div></td>'
+          + '<td class="t-proj-cell" title="' + esc(reqLinked ? reqName : "未归属项目") + '">' + reqCell + '</td>'
           + '<td>' + typeBadgeHTML(t.itemType) + '</td>'
           + '<td>' + esc(t.owner || "—") + '</td>'
           + '<td>' + (isDone ? '<span class="tag tag-success">已完成</span>'

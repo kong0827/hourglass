@@ -2944,13 +2944,17 @@ button.case-witem:hover{border-color:var(--primary-border);color:var(--text);}
 .demand-foot-acts{display:flex;align-items:center;gap:var(--space-2);margin-left:auto;}
 .dem-evidence-tbl{table-layout:fixed;}
 .dem-evidence-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 10px;}
-.dem-evidence-tbl th:nth-child(1){width:41%;}
-.dem-evidence-tbl th:nth-child(2){width:12%;}
-.dem-evidence-tbl th:nth-child(3){width:14%;}
-.dem-evidence-tbl th:nth-child(4){width:15%;}
-.dem-evidence-tbl th:nth-child(5){width:18%;}
+.dem-evidence-tbl th:nth-child(1){width:25%;}
+.dem-evidence-tbl th:nth-child(2){width:15%;}
+.dem-evidence-tbl th:nth-child(3){width:9%;}
+.dem-evidence-tbl th:nth-child(4){width:10%;}
+.dem-evidence-tbl th:nth-child(5){width:10%;}
+.dem-evidence-tbl th:nth-child(6){width:15%;}
+.dem-evidence-tbl th:nth-child(7){width:16%;}
 .dem-evidence-tbl td{white-space:normal;}
-.dem-evidence-tbl td:nth-child(5) .tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.dem-evidence-tbl td:nth-child(6) .tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.dem-evidence-tbl td.t-proj-cell{overflow:hidden;}
+.dem-evidence-tbl td.t-proj-cell .assoc-link{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;}
 .dem-evidence-tbl td .t-sub{display:block;}
 .dem-evidence-tbl .t-title{font-weight:550;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dem-evidence-tbl .t-sub{margin-top:2px;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
