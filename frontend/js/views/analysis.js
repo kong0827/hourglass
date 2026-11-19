@@ -318,9 +318,7 @@ function applyAnalysisPeriod(v){
   state.flowDays = spec.flowDays;
   var note = $("analysisPeriodNote");
   if(note){
-    note.textContent = (v === "week" || v === "month")
-      ? spec.label + "：流程体检按 " + spec.flowDays + " 天统计；周趋势按自然周分桶，展示近 " + spec.statsWeeks + " 周作为背景"
-      : spec.label + "：周趋势近 " + spec.statsWeeks + " 周，流程体检近 " + spec.flowDays + " 天";
+    note.textContent = "趋势 " + spec.statsWeeks + " 周 · 体检 " + spec.flowDays + " 天";
   }
   syncFlowDaysOption(state.flowDays, (v === "week" || v === "month") ? spec.label : "");
   refreshAnalysisTab(false);
@@ -448,9 +446,7 @@ function renderStatsHours(c){
     }else if(scope === "all" && all === null){
       hoursNote.textContent = "服务端暂未返回全空间工时，当前回退显示我的工时（需后端支持）。";
     }else{
-      hoursNote.textContent = (scope === "all")
-        ? "「全空间」= 空间内全部成员的计时合计，用于评估协作总投入。"
-        : "「仅我」= 我在本空间的计时记录；切到「全空间」可看协作总投入。";
+      hoursNote.textContent = "";
     }
   }
 }

@@ -111,7 +111,7 @@ function renderRecentPlans(rows){
     + (top.length
       ? '<div class="rel-plan-list">' + list + '</div>'
       : '<div class="stack"><p class="hint">还没有未完成的发布计划。</p></div>')
-    + '<div class="stack" style="padding:10px 12px 12px"><p class="hint">计划按版本创建：到「版本 → 发布日程」看跨项目全量，或在版本详情页新建计划。</p>'
+    + '<div class="stack" style="padding:10px 12px 12px"><p class="hint">计划按版本创建</p>'
     + '<div><button class="btn sm" type="button" data-release-empty-back>去版本页</button></div></div>'
     + '</div></div>';
   host.querySelectorAll("[data-rel-plan]").forEach(function(b){

@@ -525,8 +525,6 @@
 .cf-errlinks button{border:0;background:none;padding:0;border-radius:var(--r-micro);font:inherit;font-size:12px;line-height:18px;color:var(--danger-fg);text-decoration:underline;cursor:pointer;}
 .cf-errlinks button:focus-visible{outline:none;box-shadow:0 0 0 2px #FFF,0 0 0 4px var(--danger);}
 .cf-foot{display:flex;align-items:center;gap:var(--space-2);}
-.cf-save-note{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);}
-.cf-save-note i{flex:none;width:6px;height:6px;border-radius:50%;background:var(--success);}
 .cf-foot-grow{flex:1 1 auto;}
 
 /* 用例编辑：验证工作项多选（先选主需求，候选限定该需求） */
@@ -1227,7 +1225,6 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
 .vl-empty{display:flex;flex-direction:column;align-items:center;gap:3px;padding:38px 16px;font-size:12px;color:var(--text-3);}
 .vl-empty b{font-size:13px;color:var(--text-2);}
 .vl-foot{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;padding:9px 14px;font-size:12px;color:var(--text-3);}
-.vl-foot-note{margin-left:auto;}
 .vl-foot-link{font-size:12px;white-space:nowrap;}
 /* 未排版本只是提示，不是待办：中性底 + 警示图标，避免抢走焦点卡的主色 */
 .vl-unbound-banner{
@@ -1274,7 +1271,6 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
   .vl-tools{width:100%;margin-left:0;}
   .vl-search{flex:1;}
   .vl-search input{width:100%;}
-  .vl-foot-note{display:none;}
   .vl-kebab,.vl-pencil{opacity:1;}
   .vf-body{flex-wrap:wrap;gap:18px;}
   .vf-kpis{order:3;width:100%;padding:0;}

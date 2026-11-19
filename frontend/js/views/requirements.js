@@ -586,7 +586,7 @@ function reqDocGroupTagsHTML(g){
     (g.writable ? "" : '<span class="rp-tag ro">只读</span>');
 }
 function reqDocEmptyBodyHTML(g){
-  return '<div class="reqdoc-cat-empty">' + ((g.writable || g.manageCat) ? "右击分组头可新建分类或文档" : "该范围暂无文档") + '</div>';
+  return '<div class="reqdoc-cat-empty">' + ((g.writable || g.manageCat) ? "暂无文档" : "该范围暂无文档") + '</div>';
 }
 /* 列表视图分类行 */
 function reqDocCatRowHTML(n, g, collapsed){
@@ -1106,7 +1106,7 @@ function renderRdViewsMenu(){
   var views = savedViewsFor("doc");
   var html = '<div class="menu-title">文档视图</div>';
   if(!views.length){
-    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的文档视图；设置搜索、项目范围或展示方式后保存。</p></div>';
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的文档视图</p></div>';
   }else{
     html += views.map(function(v){
       return '<div class="menu-row">' +
@@ -1331,7 +1331,7 @@ function renderReqDocSplit(){
   /* 选中的文档已被删除：回到占位提示 */
   if(splitDocId && !reqDocById(splitDocId)){
     splitDocId = null;
-    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title">从左侧选择文档阅读</div><div class="rrd-empty-text">右击分组头或分类可就地新建分类与文档；空间文档不挂项目</div></div>';
+    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title">从左侧选择文档阅读</div></div>';
   }
   if(!reqDocsLoaded){
     box.innerHTML = UI.skeletonRows(4);
@@ -1469,7 +1469,6 @@ function renderReqDocReader(doc){
           '</div>' +
           '<textarea id="rrdCommentInput" rows="2" placeholder="写下你的评论…"></textarea>' +
           '<div class="reqdoc-comment-actions">' +
-            '<span class="rrdc-hint">选中正文可划线评论</span>' +
             '<button class="btn sm primary" type="button" id="rrdCommentSend">发表评论</button>' +
           '</div>' +
         '</div>' +
@@ -2942,7 +2941,6 @@ function syncNewReqDocProjFromCat(){
   var proj = $("newReqDocProject");
   if(!proj) return;
   var cid = $("newReqDocCategory") ? $("newReqDocCategory").value : "";
-  var hint = $("newReqDocProjHint");
   if(cid){
     var c = docCatById(cid);
     var scope = c ? (c.reqId || "") : "";
@@ -2951,11 +2949,9 @@ function syncNewReqDocProjFromCat(){
       : '<option value="">空间级（不挂项目）</option>';
     proj.value = scope;
     proj.disabled = true;
-    if(hint) hint.textContent = "由分类带出：" + (scope ? reqDocProjectName(scope) : "空间级（不挂项目）");
   }else{
     proj.disabled = false;
     fillNewReqDocProjectOptions();
-    if(hint) hint.textContent = "未选分类：可关联有权限的项目，或留空间级（关联可选）";
   }
   syncNewReqDocPath();
 }

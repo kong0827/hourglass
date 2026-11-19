@@ -8,7 +8,6 @@ import { UI, esc, toast } from "../core/ui.js";
 import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, openTaskTable } from "./manager-shared.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
-import { fmtMinutesShort } from "../lib/format.js";
 import { labelFilterText } from "../lib/member-labels.js";
 
 var cache = null, seq = 0, reqId = "", roleTitle = "", companyName = "", versionId = "", loading = false, filterWorkspace = "", reportOptions = {};
@@ -125,7 +124,7 @@ function svgLine(points, max, cls, dashed){
 /* 纵轴取整齐上界：刻度、网格与柱 / 面共用同一标尺 */
 function axisOf(maxValue){
   var v = Math.max(1, Math.ceil(Number(maxValue) || 0));
-  var mag = 1, steps = [1, 2, 5];
+  var mag = 1, steps = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
   while(true){
     for(var i = 0; i < steps.length; i++){
       var step = steps[i] * mag;
@@ -143,10 +142,16 @@ function yGrid(max, format){
   }
   return out;
 }
-/* 分钟轴：0 显示 0，其余交给精简时长格式，避免出现 0.2h 这种刻度 */
-function axisMinutes(v){ return v ? fmtMinutesShort(v) : "0"; }
+/* 工时纵轴：先按小时取整齐上界，再换回分钟供柱 / 点共用同一标尺；
+   刻度只写整点小时（5000h），避免 6666h40m 这类长文本被视口裁切 */
+function axisHours(v){
+  var h = (Number(v) || 0) / 60;
+  if(!h) return "0";
+  return (Math.abs(h - Math.round(h)) < 0.05 ? String(Math.round(h)) : h.toFixed(1)) + "h";
+}
+function hoursMax(maxMinutes){ return axisOf((Number(maxMinutes) || 0) / 60).max * 60; }
 function burnChart(d){
-  var points = d.points || [], axis = axisOf(d.totalEstimateMinutes || 0), max = axis.max;
+  var points = d.points || [], max = hoursMax(d.totalEstimateMinutes || 0);
   var actual = points.map(function(p){ return p.remainingMinutes; });
   var ideal = points.map(function(p){ return p.idealMinutes; });
   function dots(series, cls, labelKey){
@@ -167,7 +172,7 @@ function burnChart(d){
   }
   return '<section class="manager-chart-panel" data-chart="burn"><div class="manager-panel-head"><b>燃尽图</b><span>剩余 ' + fmtHours(d.remainingMinutes) + ' / ' + fmtHours(d.totalEstimateMinutes) + '</span></div>'
     + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近14天燃尽图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/><line x1="36" y1="36" x2="36" y2="184" class="axis"/>'
-    + yGrid(max, axisMinutes)
+    + yGrid(max, axisHours)
     + svgLine(ideal, max, "ideal", true) + svgLine(actual, max, "actual", false)
     + dots(points, "ideal", "idealMinutes") + dots(points, "actual", "remainingMinutes") + lastLabel
     + '<text x="36" y="208">' + esc(points.length ? fmtDate(points[0].date) : "—") + '</text><text x="524" y="208" text-anchor="end">' + esc(points.length ? fmtDate(points[points.length - 1].date) : "—") + '</text></svg>'
@@ -176,7 +181,7 @@ function burnChart(d){
 function velocityChart(d){
   var weeks = d.weeks || [], raw = Math.max(1, d.averageMinutes || 0);
   weeks.forEach(function(w){ raw = Math.max(raw, w.completedMinutes); });
-  var max = axisOf(raw).max;
+  var max = hoursMax(raw);
   var bars = weeks.map(function(w, i){
     var h = Math.round(w.completedMinutes / max * 148), x = 64 + i * 120;
     var tip = esc(w.start) + '：' + fmtHours(w.completedMinutes) + '，' + w.completedCount + ' 项';
@@ -185,10 +190,13 @@ function velocityChart(d){
       + '<text x="' + (x + 28) + '" y="208" text-anchor="middle">' + esc(fmtDate(w.start)) + '</text>';
   }).join("");
   var avgY = 184 - Math.round((d.averageMinutes || 0) / max * 148);
+  /* 均值线在右端直接标注数值，省去图例与线来回对照（与原型一致） */
+  var avgLabelY = avgY < 50 ? avgY + 12 : avgY - 6;
   return '<section class="manager-chart-panel" data-chart="velocity"><div class="manager-panel-head"><b>速度图</b><span>近 4 周均值 ' + fmtHours(d.averageMinutes) + '</span></div>'
     + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近4周速度图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/>'
-    + yGrid(max, axisMinutes) + bars
-    + '<line x1="36" y1="' + avgY + '" x2="524" y2="' + avgY + '" class="average" stroke-dasharray="5 4"/></svg>'
+    + yGrid(max, axisHours) + bars
+    + '<line x1="36" y1="' + avgY + '" x2="524" y2="' + avgY + '" class="average" stroke-dasharray="5 4"/>'
+    + '<text x="516" y="' + avgLabelY + '" text-anchor="end" class="avg-value">均值 ' + esc(fmtHours(d.averageMinutes)) + '</text></svg>'
     + '<div class="manager-chart-legend"><span><i class="velocity-block"></i>周完成工时</span><span><i class="average-line"></i>均值</span></div></section>';
 }
 function flowPolygon(weeks, lower, upper, max, cls){
@@ -245,11 +253,15 @@ function flowChart(d){
     + '<div class="manager-chart-legend"><span><i class="done-block"></i>已完成</span>' + (hasEnded ? '<span><i class="ended-block"></i>执行结束</span>' : '') + '<span><i class="doing-block"></i>进行中</span><span><i class="backlog-block"></i>待处理</span></div></section>';
 }
 function deliveryChart(d){
+  var buckets = d.buckets || [];
+  var total = buckets.reduce(function(s, b){ return s + (Number(b.count) || 0); }, 0);
   return '<section class="manager-chart-panel" data-chart="delivery"><div class="manager-panel-head"><b>交付周期分布</b><span>P50 ' + (d.p50Days === null ? "—" : d.p50Days + " 天") + ' · P85 ' + (d.p85Days === null ? "—" : d.p85Days + " 天") + '</span></div>'
-    + '<div class="manager-delivery">' + (d.buckets || []).map(function(b){
+    + '<div class="manager-delivery">' + buckets.map(function(b){
       var tip = esc(b.label) + '：' + b.count + ' 项 · ' + b.pct + '%';
       return '<div data-chart-tip="' + tip + '" data-report-drill="delivery" data-delivery-bucket="' + esc(b.label) + '"><span>' + esc(b.label) + '</span><span class="progress"><i style="width:' + Math.min(100, b.pct) + '%"></i></span><b>' + b.count + ' 项 · ' + b.pct + '%</b></div>';
-    }).join("") + '</div><p class="manager-note">从开始日期（空则创建日期）到完成日期；平均 ' + (d.averageDays === null ? "—" : d.averageDays + " 天") + '。</p></section>';
+    }).join("")
+    + (buckets.length ? '<div class="total"><span>合计</span><span></span><b>' + total + ' 项 · 100%</b></div>' : "")
+    + '</div></section>';
 }
 function defectChart(d){
   var weeks = d.weeks || [], raw = 1;
@@ -335,17 +347,19 @@ function reportScopeChipsHTML(data){
 function reportToolbar(){
   var disabled = loading || !cache ? ' disabled' : '';
   return '<div class="manager-toolbar"><div><b>交付图表</b></div><div class="manager-actions"><button class="btn sm" type="button" data-report-csv' + disabled + '>导出 CSV</button><button class="btn sm" type="button" data-report-png' + disabled + '>导出 PNG</button>' + fullscreenButtonHTML() + '</div></div>'
-    + '<div class="manager-label-filters"><label>项目 <select id="reportProjectSelect" class="mini-select">' + projectOptions() + '</select></label>'
+    + '<div class="manager-label-filters"><span class="sv-seg-label">范围</span>'
+    + '<label>项目 <select id="reportProjectSelect" class="mini-select">' + projectOptions() + '</select></label>'
     + '<label>版本 <select id="reportVersionSelect" class="mini-select">' + versionOptions() + '</select></label>'
     + '<label>公司 <select id="reportCompanySelect" class="mini-select">' + reportLabelOptions(reportOptions.companyNames, companyName, '全部公司', '未设公司') + '</select></label>'
     + '<label>角色 <select id="reportRoleSelect" class="mini-select">' + reportLabelOptions(reportOptions.roleTitles, roleTitle, '全部角色', '未设角色') + '</select></label>'
-    + '<button class="btn sm soft" type="button" data-report-clear>' + icon("close", 13) + '清除筛选</button></div><p class="roster-note">按工作项所属项目的有效主角色或兼岗筛选；所有图表与导出由后台按同一范围重算。</p>';
+    + '<button class="btn sm soft" type="button" data-report-clear>' + icon("close", 13) + '清除筛选</button></div>';
 }
 function renderReport(){
   if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
   var focused = document.activeElement && document.activeElement.id;
+  var avgDays = (cache.delivery || {}).averageDays;
   $("reportBody").innerHTML = reportToolbar() + reportScopeChipsHTML(cache)
-    + caliberHTML('燃尽：近 14 天，剩余 = 范围内全部工作项的总预估 − 截至当日已完成工作项的实际工时（不是剩余预估）；理想线从总预估线性降到 0，窗口之前完成的工作项也会扣减，因此首日剩余可能低于理想线。范围 =「全部项目」时含已归档项目，选中单个项目时只含该项目。速度：近 4 个自然周，按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与工作项、计时数据同源。')
+    + caliberHTML('燃尽：近 14 天，剩余 = 范围内全部工作项的总预估 − 截至当日已完成工作项的实际工时（不是剩余预估）；理想线从总预估线性降到 0，窗口之前完成的工作项也会扣减，因此首日剩余可能低于理想线。范围 =「全部项目」时含已归档项目，选中单个项目时只含该项目。速度：近 4 个自然周，按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与工作项、计时数据同源。交付周期：从开始日期（空则创建日期）到完成日期；平均 ' + (avgDays == null ? "—" : avgDays + " 天") + '。角色按工作项所属项目的有效主角色或兼岗筛选；所有图表与导出由后台按同一范围重算。')
     + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + defectChart(cache.defects || {}) + '</div>';
   wireReportTooltip($("reportBody"));
   if(["reportProjectSelect","reportVersionSelect","reportCompanySelect","reportRoleSelect"].indexOf(focused) !== -1){ var field = $(focused); if(field) field.focus(); }

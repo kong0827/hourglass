@@ -103,7 +103,10 @@ try{
   const api = (method, url, body) => evaluate(
     `import("./js/core/api.js").then(({API}) => API.${method === "delete" ? "del" : method}(${JSON.stringify(url)}${body === undefined ? "" : ", " + JSON.stringify(body)}))`);
   const navigate = async url => {
-    await call("Page.navigate", { url });
+    /* 同一 URL 的 Page.navigate 是同文档跳转、不会重新加载；先 reload 保证拿到最新数据 */
+    const same = await evaluate(`location.href === ${JSON.stringify(url)}`);
+    if(same) await call("Page.reload", { ignoreCache: false });
+    else await call("Page.navigate", { url });
     await waitFor("document.readyState === 'complete'", "页面加载 " + url, 20000);
   };
 

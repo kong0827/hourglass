@@ -1133,7 +1133,7 @@ function renderDefects(){
   var statsEl = $("tcDefStats"), rowsEl = $("tcDefRows"), footEl = $("tcDefFoot");
   if(!statsEl || !rowsEl || !footEl) return;
   $("tcMeta").textContent = rt.reqList.length
-    ? (defectScopeName() + " · 未关闭缺陷收敛在这里，点击行打开工作项")
+    ? (defectScopeName() + " · 未关闭缺陷")
     : "";
   if(!rt.reqList.length || !defectScopeProjects().length){
     var hasProjects = !!rt.reqList.length;
@@ -1377,7 +1377,7 @@ function renderDefectViewsMenu(){
   var views = savedViewsFor("defect");
   var html = '<div class="menu-title">缺陷视图</div>';
   if(!views.length){
-    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的缺陷视图；选定项目或筛选条件后保存。</p></div>';
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的缺陷视图</p></div>';
   }else{
     html += views.map(function(v){
       return '<div class="menu-row">' +
@@ -2370,9 +2370,10 @@ function render(){
     if(errCount) metaAll += " · " + errCount + " 个项目加载失败";
     $("tcMeta").textContent = metaAll;
     if(!caseGroups.length){
-      $("tcList").innerHTML = UI.emptyState({
+      caseEmptyState({
         icon: "folder", title: caseAllProj ? "该项目已不可用" : "没有可用项目",
-        text: caseAllProj ? "项目可能已归档或失去查看权限；点上方「清空范围」回到全部项目。" : "项目都已归档，暂无用例可看。"
+        actionLabel: caseAllProj ? "清空范围" : "",
+        actionCmd: "clearScope"
       });
       return;
     }
@@ -2382,16 +2383,11 @@ function render(){
       var emptyTitle = searchText ? "没有匹配的用例"
         : (anyFilter ? "没有符合条件的用例"
           : (caseAllProj ? "该项目还没有测试用例" : "全部项目下还没有测试用例"));
-      $("tcList").innerHTML = UI.emptyState({
+      caseEmptyState({
         icon: anyFilter ? "filterOff" : "checklist",
         title: emptyTitle,
-        text: searchText ? "换个关键词，或点「清空筛选」再试。"
-          : (anyFilter ? "换个筛选条件，或点「清空筛选」再试。"
-            : (caseAllProj
-              ? "点上方「清空范围」看其它项目，或进入项目后新建用例。"
-              : (caseCreateTargets().length
-                ? "点右上角「新建用例」，选择目标项目后录入第一条。"
-                : "当前没有可写的项目；获得写权限后即可新建用例。")))
+        actionLabel: anyFilter ? "清空筛选" : (caseCreateTargets().length ? "新建用例" : ""),
+        actionCmd: anyFilter ? "clearFilter" : "newCase"
       });
       return;
     }
@@ -2415,10 +2411,11 @@ function render(){
   if(caseGroupBy){ renderGrouped(anyFilter); return; }
   var rows = cases;
   if(!rows.length){
-    $("tcList").innerHTML = UI.emptyState({
+    caseEmptyState({
       icon: anyFilter ? "filterOff" : "checklist",
       title: searchText ? "没有匹配的用例" : (anyFilter ? "没有符合条件的用例" : "还没有测试用例"),
-      text: searchText ? "换个关键词，或点「清空筛选」再试。" : (anyFilter ? "换个筛选条件，或点「清空筛选」再试。" : "点右上角「新建用例」录入第一条，或用「导入」从 Excel / CSV 批量导入（导入菜单里可下载模板）。")
+      actionLabel: anyFilter ? "清空筛选" : (caseCreateTargets().length ? "新建用例" : ""),
+      actionCmd: anyFilter ? "clearFilter" : "newCase"
     });
     return;
   }
@@ -2488,16 +2485,21 @@ function syncDropBanner(){
   el.className = "tc-drop-banner";
   el.innerHTML = icon("alert", 13) + '<span>当前分组维度：<b>' + esc(groupDimLabel()) + '</b>　' + esc(hint) + '</span>';
 }
+/* 空态只留标题与动作：说明文字进按钮，用户少读一行、少猜一次 */
+function caseEmptyState(opts){
+  var el = $("tcList");
+  el.innerHTML = UI.emptyState(opts);
+  UI.bindEmptyCmd(el, { newCase: openCaseCreate, clearFilter: clearCaseFilters, clearScope: clearAllScope });
+}
 /* 分组段：段头带计数与结果分布，可折叠、可段内翻页、可整组全选；零用例的段保留，便于发现覆盖缺口 */
 function renderGrouped(anyFilter){
   syncDropBanner();
   if(!caseGroupSegs.length){
-    $("tcList").innerHTML = UI.emptyState({
+    caseEmptyState({
       icon: anyFilter ? "filterOff" : "checklist",
       title: anyFilter ? "没有符合条件的用例" : "还没有可分组的内容",
-      text: caseGroupBy === "set"
-        ? "先在左侧「分组」里建一个分组并把用例加进去，再按分组查看。"
-        : (anyFilter ? "换个筛选条件，或点「清空筛选」再试。" : "点右上角「新建用例」录入第一条。")
+      actionLabel: anyFilter ? "清空筛选" : "新建用例",
+      actionCmd: anyFilter ? "clearFilter" : "newCase"
     });
     return;
   }
@@ -2993,7 +2995,7 @@ function renderTcViewsMenu(){
   var views = savedViewsFor("testcase");
   var html = '<div class="menu-title">用例视图</div>';
   if(!views.length){
-    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的用例视图；选定项目或筛选条件后保存。</p></div>';
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的用例视图</p></div>';
   }else{
     html += views.map(function(v){
       return '<div class="menu-row">' +
@@ -3194,11 +3196,12 @@ function selectAllFiltered(){
 function syncBulkBar(){
   var bar = $("tcBulkBar"), head = $("tcQueryBar");
   if(!bar || !head) return;
-  var show = tcMode === "cases" && caseHasTargets() && !$("tcCasesWrap").hidden;
-  head.hidden = !show;
-  if(!show) return;
   var writable = caseWritableLoaded();
   var n = caseSelCount();
+  /* 没有可编辑行时整条批量行不出现：零结果的「共 0 条可编辑」不如不留 */
+  var show = tcMode === "cases" && caseHasTargets() && writable.length > 0 && !$("tcCasesWrap").hidden;
+  head.hidden = !show;
+  if(!show){ bar.hidden = true; return; }
   var overview = caseScopeAll && !caseAllProj;
   var loadedSel = writable.filter(function(c){ return caseRowSelected(c, null); }).length;
   var allOn = writable.length > 0 && loadedSel === writable.length;
@@ -3221,15 +3224,12 @@ function syncBulkBar(){
       : ("共 " + writable.length + " 条可编辑"));
   var loaded = writable.length;
   var hintEl = $("tcBulkHint");
-  hintEl.textContent = overview
-    ? "概览只读：批量修改需先在左侧选中一个项目"
-    : (!loaded
-      ? "当前筛选下没有可编辑的用例"
-      : caseSelAll
-        ? (caseSelScope
-          ? "范围：「" + caseSelScope.label + "」组内全部 " + caseSelTotal() + " 条（含未加载的行）"
-          : "当前页已加载 " + loaded + " 条，其余 " + Math.max(0, n - loaded) + " 条按筛选条件匹配（未加载也生效）")
-        : "仅覆盖已加载的行");
+  /* 只留选择范围这一条状态；「勾选只作用于已加载行」进 title，不常驻 */
+  hintEl.textContent = (!overview && caseSelAll)
+    ? (caseSelScope
+      ? "范围：「" + caseSelScope.label + "」组内全部 " + caseSelTotal() + " 条"
+      : "范围：当前筛选匹配的 " + (n || caseSelTotal()) + " 条")
+    : "";
   hintEl.title = (overview || caseSelAll)
     ? hintEl.textContent
     : "勾选只作用于当前已加载的 " + loaded + " 条；要覆盖未加载的行，请用「全选筛选结果」";
@@ -5280,7 +5280,7 @@ function renderStepRows(){
         + '</span>'
         + '</div>';
     }).join("")
-    : '<p class="foot-note">还没有步骤，点下方「添加步骤」录入操作与预期结果，或在步骤里按 Ctrl+Enter 快捷插入新行。</p>';
+    : '<p class="foot-note">还没有步骤</p>';
   var count = $("caseStepCount");
   if(count) count.textContent = rows.length + " 行";
 }
@@ -7396,8 +7396,8 @@ function renderSetPanel(){
   var keep = setMatchKeep(q);
   var html = '<div class="tc-side-tools">'
     + '<span class="tc-side-title">' + icon("layers", 13) + ' 分组</span>'
-    + '<span class="tc-side-count" title="项目内用例总数；分组计数可重叠，不能相加当总数">' + ((stats && stats.total) || 0) + '</span>'
-    + (isWritable() ? '<button class="btn sm ghost" type="button" data-tc-set-new title="新建分组（多归属，删分组不删用例）">' + icon("plus", 13) + ' 新建分组</button>' : "")
+    + '<span class="tc-side-count" title="用例总数">' + ((stats && stats.total) || 0) + '</span>'
+    + (isWritable() ? '<button class="btn sm ghost" type="button" data-tc-set-new title="新建分组">' + icon("plus", 13) + ' 新建分组</button>' : "")
     + '</div>'
     + '<label class="tc-dir-search tc-set-search">' + icon("search", 13)
     + '<input type="search" id="tcSetSearch" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" value="' + esc(caseSetQuery) + '" /></label>'
@@ -7412,19 +7412,19 @@ function renderSetPanel(){
     html += setSpecialRowHTML("__none", "未加入任何分组", "inbox", caseSetNoneTotal, "只看没有加入任何可见分组的用例");
     html += '<div class="tc-set-sep" aria-hidden="true"></div>';
     var any = 0;
-    [["team", "团队共享", "进交付说明与发布证据"],
-      ["members", "指定成员可见", "不进证据"],
-      ["personal", "仅自己可见", "不进证据"]].forEach(function(b){
+    [["team", "团队共享"],
+      ["members", "指定成员可见"],
+      ["personal", "仅自己可见"]].forEach(function(b){
       var rows = [];
       bucketSetRows(b[0], rows, !!keep, keep);
       any += rows.length;
-      html += '<div class="tc-set-label">' + esc(b[1]) + ' · ' + esc(b[2]) + '（' + rows.length + '）</div>';
+      html += '<div class="tc-set-label">' + esc(b[1]) + '（' + rows.length + '）</div>';
       html += rows.map(function(r){ return setItemHTML(r.s, r.level); }).join("");
     });
     if(!any){
       html += '<p class="tc-side-empty">' + (q
         ? "没有匹配「" + esc(caseSetQuery.trim()) + "」的分组。"
-        : "还没有分组，点上方「新建分组」。") + '</p>';
+        : "还没有分组。") + '</p>';
     }
   }
   html += '</div>';
@@ -9397,24 +9397,25 @@ $("tcStats").addEventListener("click", function(e){
   loadCases();
 });
 if($("tcClearFilter")){
-  $("tcClearFilter").addEventListener("click", function(){
-    var had = caseFilterCount();
-    if(caseSearchTimer){ clearTimeout(caseSearchTimer); caseSearchTimer = null; }
-    searchText = "";
-    statusFilter = "all";
-    moduleFilter = "all";
-    caseModuleSub = false;
-    priFilter = "all";
-    ownerFilter = "all";
-    demandFilter = "all";
-    setFilter = "all";
-    bugOnly = false;
-    caseSearchWide = false;
-    if($("tcSearch")) $("tcSearch").value = "";
-    syncFilterOptions();
-    loadCases();
-    if(had) toast(caseScopeAll ? "已清空用例筛选" : "已清空用例筛选，保留当前项目", "fs");
-  });
+  $("tcClearFilter").addEventListener("click", clearCaseFilters);
+}
+function clearCaseFilters(){
+  var had = caseFilterCount();
+  if(caseSearchTimer){ clearTimeout(caseSearchTimer); caseSearchTimer = null; }
+  searchText = "";
+  statusFilter = "all";
+  moduleFilter = "all";
+  caseModuleSub = false;
+  priFilter = "all";
+  ownerFilter = "all";
+  demandFilter = "all";
+  setFilter = "all";
+  bugOnly = false;
+  caseSearchWide = false;
+  if($("tcSearch")) $("tcSearch").value = "";
+  syncFilterOptions();
+  loadCases();
+  if(had) toast(caseScopeAll ? "已清空用例筛选" : "已清空用例筛选，保留当前项目", "fs");
 }
 /* 缺陷 tab：筛选在前端派生（状态由列与回归结果计算），数据仍走任务列表 */
 if($("tcDefReq")){

@@ -154,8 +154,7 @@ function render(){
       '<span class="wc-total">' + esc(scope) + '</span>' +
     '</div></header>' +
     '<div class="cn-body">' +
-      '<div class="cn-filters">' + chipsHTML() +
-        '<span class="cn-hint">已取消不计逾期，也不进完成率分母</span></div>' +
+      '<div class="cn-filters">' + chipsHTML() + '</div>' +
       '<div class="cn-list-wrap">' + listHTML() + '</div>' +
     '</div>';
 }

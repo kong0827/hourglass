@@ -92,23 +92,29 @@ function updateBrand(){
   };
   var crumb = CRUMB_OF[activeView];
   if(crumb){
+    /* 版本页把项目名放进面包屑第三段（原型「空间 / 版本 / 资金通」），发布/交付子页仍用页名 */
+    var pageName = (activeView === "phase" && rt.phaseProjectName) ? rt.phaseProjectName : crumb.page;
     var segs = [];
     if(wsName) segs.push('<span title="' + esc(wsName) + '">' + esc(wsName) + '</span>');
     segs.push('<button type="button" class="crumb-link" data-crumb-view="' + crumb.view + '" title="返回' + esc(crumb.group) + '列表">' + esc(crumb.group) + '</button>');
-    segs.push('<span>' + esc(crumb.page) + '</span>');
+    segs.push('<span title="' + esc(pageName) + '">' + esc(pageName) + '</span>');
     brandSub.classList.add("breadcrumb");
-    brandSub.title = (wsName ? wsName + " / " : "") + crumb.group + " / " + crumb.page;
+    brandSub.title = (wsName ? wsName + " / " : "") + crumb.group + " / " + pageName;
     brandSub.innerHTML = segs.join('<span class="sep">/</span>');
     return;
   }
   var parts = [];
   if(wsName) parts.push(wsName);
-  parts.push(viewMeta.title || activeView);
+  if(!wsName) parts.push(viewMeta.title || activeView);
+  /* 面包屑固定「空间 / 当前页」两段：页面副标题不再承载说明文案 */
+  if(wsName && viewMeta.title && viewMeta.title !== wsName) parts.push(viewMeta.title);
+  /* 版本页第三段用当前项目名，与原型「空间 / 版本 / 资金通」一致 */
+  if(activeView === "phase" && rt.phaseProjectName) parts.push(rt.phaseProjectName);
   if(activeView === "board" && state.board){
     var doing = state.board.columns.doing ? state.board.columns.doing.total : 0;
-    parts.push(doing + " 项进行中 · 共 " + totalTaskCount() + " 项");
-  }else if(viewMeta.sub){
-    parts.push(viewMeta.sub);
+    var doingText = doing + " 项进行中 · 共 " + totalTaskCount() + " 项";
+    if(parts.length) parts[parts.length - 1] += " · " + doingText;
+    else parts.push(doingText);
   }
   brandSub.classList.add("breadcrumb");
   /* 每段都带 title：被省略号截断时悬停可看全文；分隔符悬停显示完整路径 */

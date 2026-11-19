@@ -513,7 +513,6 @@ function renderBulkBar(){
   var has = n > 0;
   return '<div class="br-bulk" role="toolbar" aria-label="批量人工判定">' +
     '<span>已选 <b class="sel-n">' + n + '</b> 条</span>' +
-    (has ? '<span class="foot-note">判定会记录操作人与时间，可撤销</span>' : '<span class="foot-note">勾选分支后可批量标记生命周期</span>') +
     '<span class="spacer"></span>' +
     '<button class="btn sm" type="button" data-br-bulk-decide="done"' + (has ? "" : " disabled") + '>完成</button>' +
     '<button class="btn sm" type="button" data-br-bulk-decide="canceled"' + (has ? "" : " disabled") + '>取消</button>' +
@@ -905,7 +904,6 @@ function renderBranches(){
             '<i class="br-dot ' + s.cls + '"></i>' +
             '<span class="br-group-name">' + s.name + '</span>' +
             '<span class="br-group-n">' + matched + '</span>' +
-            '<span class="br-group-hint">' + s.hint + '</span>' +
           '</div>' +
           '<div class="br-group-body">' +
             (items.length ? items.map(branchCardHTML).join("") : '<div class="br-empty">暂无</div>') +
@@ -1549,7 +1547,7 @@ function branchDecisionHTML(b, editable){
           ? '<button class="btn sm ghost" type="button" data-br-decide="" data-br-id="' + esc(b.id) + '">撤销判定</button>'
           : '') +
       '</div>'
-    : '<p class="foot-note" style="margin:0">你对该项目只有查看权限，不能做人工判定</p>';
+    : '<p class="foot-note" style="margin:0">只读</p>';
   return '<div class="br-sect"><h4>人工判定</h4><div class="br-decision">' + lines + acts + '</div></div>';
 }
 function renderBranchDrawer(b){
@@ -1605,7 +1603,7 @@ function renderBranchDrawer(b){
     '<div class="br-drawer-foot">' +
       (editable
         ? '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>'
-        : '<span class="foot-note">你对该项目只有查看权限，不能修改或删除分支</span>') +
+        : '<span class="foot-note">只读</span>') +
       '<span style="flex:1 1 auto"></span>' +
       (editable ? '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' : '') +
     '</div>';
@@ -2004,7 +2002,7 @@ function renderBranchViewsMenu(){
   var views = savedViewsFor("branch");
   var html = '<div class="menu-title">分支视图</div>';
   if(!views.length){
-    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的分支视图；选定项目或筛选条件后保存。</p></div>';
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的分支视图</p></div>';
   }else{
     html += views.map(function(v){
       return '<div class="menu-row">' +

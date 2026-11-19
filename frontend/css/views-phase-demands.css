@@ -39,6 +39,13 @@
 .pcell{display:flex;flex-direction:column;gap:2px;padding:var(--space-2) 10px;border-radius:var(--r-sm);background:var(--surface-sunken);min-width:0;}
 .pcell b{font-size:16px;font-weight:650;color:var(--text);line-height:1.3;white-space:normal;overflow:visible;word-break:break-word;}
 .pcell span{font-size:11px;color:var(--text-3);}
+/* 阶段卡副指标：文字行，弱于主格；仍可点击下钻 */
+.phase-submetrics{display:flex;align-items:center;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text-3);}
+.psub{display:inline-flex;align-items:baseline;gap:6px;padding:0;border:0;background:none;font:inherit;color:var(--text-3);}
+.psub b{font-size:12px;font-weight:650;color:var(--text);}
+button.psub{cursor:pointer;border-radius:var(--r-xs);}
+button.psub:hover b,button.psub:focus-visible b{color:var(--primary-fg);}
+button.psub:focus-visible{outline:2px solid var(--ring-focus);outline-offset:2px;}
 /* 指标格下钻（原型 pcell drillable）：按钮化但不改变格子的视觉基线，悬停才露出可点提示 */
 button.pcell.drillable{border:none;font:inherit;text-align:left;cursor:pointer;color:inherit;}
 button.pcell.drillable:hover,button.pcell.drillable:focus-visible{background:var(--surface);outline:1px solid var(--border-strong);}
@@ -340,7 +347,6 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .release-draft-banner .rdb-tx{flex:1 1 240px;}
 .release-draft-banner .rdb-acts{display:inline-flex;gap:8px;flex:none;}
 .release-draft-banner .btn{margin:0;}
-.release-guide{margin:0;font-size:13px;line-height:18px;color:var(--text-2);background:var(--surface-sunken);border-radius:var(--r-sm);padding:var(--space-2) 10px;}
 .release-readiness{margin:0;font-size:13px;line-height:18px;color:var(--text-2);background:var(--surface-sunken);border-radius:var(--r-sm);padding:var(--space-2) 10px;}
 .release-readiness.is-ready{color:var(--success-fg);background:var(--success-soft);}
 .release-readiness.is-warn{color:var(--warning-fg);background:var(--warning-soft);}
@@ -552,12 +558,13 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 /* ===== 需求池（views/demands.js） ===== */
 /* 落点以整列（状态范围）为准：五个状态各占一列，窄屏横向滚动而不是换行折叠 */
 .bkl{display:flex;align-items:stretch;gap:var(--space-3);overflow-x:auto;padding-bottom:6px;scrollbar-width:thin;}
-.bkl-col{flex:1 1 200px;display:flex;flex-direction:column;gap:var(--space-2);min-width:200px;min-height:240px;border-radius:var(--r-md);transition:background var(--dur-fast) var(--ease-out);}
+/* 五列等宽：basis 归零后按可用宽度均分，窄屏才横向滚动，避免最右列被裁 */
+.bkl-col{flex:1 1 0;display:flex;flex-direction:column;gap:var(--space-2);min-width:190px;min-height:240px;border-radius:var(--r-md);transition:background var(--dur-fast) var(--ease-out);}
 .bkl-head{display:flex;align-items:center;gap:var(--space-2);padding:2px 2px 4px;}
-.bkl-title{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--text);}
-/* 只作用于需求池列头的纯色圆点；全局 .pdot 是带 P1/P2 文字的优先级标签，不能压成 8px */
-.bkl-title .pdot{width:8px;height:8px;border-radius:var(--r-pill);flex:0 0 auto;}
-.bkl-count{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;background:var(--surface-sunken);border-radius:var(--r-pill);padding:0 8px;line-height:18px;}
+/* 列头状态徽标：淡底 + 深色字 + 圆点，颜色取列定义（与工作项列表/我的工作同形） */
+.bkl-title{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:var(--r-xs);font-size:12.5px;font-weight:600;color:var(--text);background:color-mix(in srgb,var(--c,var(--text-3)) 11%,transparent);}
+.bkl-dot{width:6px;height:6px;border-radius:var(--r-pill);flex:0 0 auto;}
+.bkl-count{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;padding:0 2px;line-height:18px;}
 .bkl-card{display:flex;flex-direction:column;gap:6px;padding:var(--space-3);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-xs);cursor:pointer;}
 .bkl-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-md);}
 .bkl-tags{display:flex;align-items:center;gap:var(--space-1);flex-wrap:wrap;}
@@ -642,7 +649,9 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .bkl-open{font-size:12px;opacity:.75;}
 .demb-stage-filter{min-width:102px;max-width:126px;height:30px;margin-left:auto;padding:3px 6px;font-size:12px;}
 .demb-stage-filter.active{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft);}
-.demb-dist{display:flex;gap:2px;width:100%;height:6px;margin:-2px 0 2px;overflow:hidden;border-radius:var(--r-pill);background:var(--surface-sunken);}
+.demb-dist-row{display:flex;align-items:center;gap:8px;}
+.demb-dist-label{flex:0 0 auto;font-size:11px;color:var(--text-3);white-space:nowrap;}
+.demb-dist{flex:1 1 auto;display:flex;gap:2px;height:6px;margin:-2px 0 2px;overflow:hidden;border-radius:var(--r-pill);background:var(--surface-sunken);}
 .demb-dist-seg{min-width:5px;height:100%;padding:0;border:0;background:var(--text-3);cursor:pointer;transition:opacity var(--dur-fast) var(--ease-out);}
 .demb-dist-seg:hover,.demb-dist-seg:focus-visible{opacity:.7;outline:2px solid var(--primary);outline-offset:2px;}
 .demb-dist-seg.dim{opacity:.22;}

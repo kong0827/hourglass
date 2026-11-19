@@ -409,7 +409,7 @@ function openDemandsForReq(reqId){
 }
 function enterDemandsView(){
   var flowMark = $("demandFlowHelp");
-  if(flowMark && !flowMark.firstChild) flowMark.innerHTML = caliberMarkHTML("demands.flow", true, "查看需求状态与流转说明");
+  if(flowMark && !flowMark.firstChild) flowMark.innerHTML = caliberMarkHTML("demands.flow", false, "查看需求状态与流转说明");
   initDemSmartBar();
   restoreDemState();
   readDemandRoute();
@@ -697,12 +697,13 @@ function demandBoardDistHTML(status){
   var total = keys.reduce(function(n, k){ return n + (Number(counts[k]) || 0); }, 0);
   if(!total) return "";
   var target = status === "done" ? "完成工作台" : "交付工作台";
-  return '<div class="demb-dist" role="group" aria-label="' + esc(status === "done" ? "已完成交付阶段" : "已排期交付阶段") + '">' + keys.map(function(k){
+  return '<div class="demb-dist-row"><span class="demb-dist-label">交付阶段</span>'
+    + '<div class="demb-dist" role="group" aria-label="' + esc(status === "done" ? "已完成交付阶段" : "已排期交付阶段") + '">' + keys.map(function(k){
     var n = Number(counts[k]) || 0;
     if(!n) return "";
     return '<button type="button" class="demb-dist-seg st-' + k + (demBoardStage !== "all" && demBoardStage !== k ? " dim" : "")
       + '" style="flex:' + n + ' 1 0" data-dem-open="' + status + '" data-dem-stage="' + k + '" title="' + esc(deliveryStageName(k)) + ' ' + n + ' 条，点击进入' + target + '" aria-label="' + esc(deliveryStageName(k)) + ' ' + n + ' 条"></button>';
-  }).join("") + '</div>';
+  }).join("") + '</div></div>';
 }
 function demBoardStageOptionsHTML(){
   return '<option value="all"' + (demBoardStage === "all" ? " selected" : "") + '>全部阶段</option>'
@@ -745,8 +746,8 @@ function render(){
         + Math.max((col.matched || 0) - items.length, 0) + ' 条）</button>'
       : "";
     return '<div class="bkl-col" data-col="' + status + '"><div class="bkl-head">'
-      + '<button class="bkl-title bkl-title-link" type="button" data-dem-open="' + status + '" title="' + esc(STATUS_HINTS[status] || "") + '">'
-      + '<span class="pdot" style="background:' + c[2] + '"></span><span>' + c[1] + '</span><span class="bkl-open" aria-hidden="true">↗</span></button>'
+      + '<button class="bkl-title bkl-title-link" type="button" data-dem-open="' + status + '" style="--c:' + c[2] + '" title="' + esc(STATUS_HINTS[status] || "") + '">'
+      + '<i class="bkl-dot" style="background:' + c[2] + '" aria-hidden="true"></i><span>' + c[1] + '</span><span class="bkl-open" aria-hidden="true">↗</span></button>'
       + (status === "plan" || status === "done" ? caliberMarkHTML("demands.stage", false, "查看交付阶段如何变化") : "")
       + '<span class="bkl-count">' + (filtered ? (col.matched || 0) + " / " + ((demandBoard.counts || {})[status] || 0) : (col.matched || 0)) + '</span></div>'
       + (status === "plan" || status === "done" ? demandBoardDistHTML(status) : "")
@@ -913,7 +914,7 @@ function cardHTML(d, opts){
   var reason = d.closeReason || (d.status === "rej" ? "rej" : (isClosedDemand(d) ? "cancel" : ""));
   var descText = demandDescText(d.description);
   return '<div class="bkl-card" data-dem-card="' + esc(d.id) + '"' + drag + '>'
-    + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
+    + '<div class="bkl-tags">'
     + catTag(d.categoryId)
     + priTagHTML(d.priority || "P2")
     + (d.status === "plan" || d.status === "done" ? deliveryStageTag(d.deliveryStage, d.deliveryStageSource) : '')
@@ -1227,7 +1228,7 @@ function demWorkCell(d, key){
   var none = '<span class="dwl-none">—</span>';
   if(key === "title"){
     return '<div class="dwl-main"><button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
-      + '<div class="dem-title-sub">' + (demCreatorName(d) ? "由 " + esc(demCreatorName(d)) + " 提交" : "提交人 —") + '</div>'
+      + (demCreatorName(d) ? '<div class="dem-title-sub">由 ' + esc(demCreatorName(d)) + ' 提交</div>' : '')
       + (d.description ? '<p class="dwl-desc">' + esc(demandDescText(d.description)) + '</p>' : '') + '</div>';
   }
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
@@ -1307,7 +1308,7 @@ function demCreatorName(d){
 }
 function demCreatorLine(d){
   var name = demCreatorName(d);
-  return '<span class="dem-title-sub">' + (name ? "由 " + esc(name) + " 提交" : "提交人 —") + '</span>';
+  return name ? '<span class="dem-title-sub">由 ' + esc(name) + ' 提交</span>' : "";
 }
 function demandCell(d, key){
   if(key === "title") return '<button class="link-title dem-link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + demCreatorLine(d) + '</button>';
@@ -1822,11 +1823,9 @@ function syncDemBoard(){
     stageSel.value = demBoardStage;
     stageSel.classList.toggle("active", demBoardStage !== "all");
   }
+  /* 计数只留在页头（demandsMeta）：这里只说作用范围，避免同屏两遍「共 N 条」 */
   var mt = demBoardBar.querySelector("[data-demb-match]");
-  if(mt){
-    var text = demBoardMatchText();
-    mt.textContent = (text ? text + " · " : "") + (rt.demandReqId ? "仅当前项目" : "全部项目");
-  }
+  if(mt) mt.textContent = rt.demandReqId ? "仅当前项目" : "全部项目";
 }
 function renderDemTabs(){
   if(!demTabsBox) return;
@@ -1840,6 +1839,9 @@ function renderDemTabs(){
       '<button class="smart-view-tab' + (on ? ' on' : '') + '" type="button" role="tab" aria-selected="' + on + '" data-dem-view="' + esc(id) + '" title="应用视图：' + esc(v.name) + '">' + esc(v.name) + '</button>' +
       '<button class="smart-view-del" type="button" data-dem-view-del="' + esc(id) + '" title="删除视图" aria-label="删除视图：' + esc(v.name) + '">' + icon("close", 11) + '</button></span>';
   }).join("");
+  /* 保存视图属于「视图」本身，跟页签同排右对齐；工具行只留筛选、显示与导出 */
+  html += '<span class="smart-view-spacer"></span>' +
+    '<button class="btn sm ghost smart-view-save" type="button" data-dem-save>＋ 保存视图</button>';
   demTabsBox.innerHTML = html;
 }
 /* 输入框里的值必须与应用状态一致：没有搜索词时清掉浏览器回填的残留 */
@@ -2085,9 +2087,6 @@ function demFilterMenuHTML(boardOnly){
   if(!priInner && !kindInner && !catInner && (boardOnly || !reqInner)){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前条件下没有可筛选的选项。</p></div>';
   }
-  if(!boardOnly && demSmart.reqs.length !== 1){
-    html += '<div class="menu-field"><p class="foot-note" style="margin:0">分类按项目隔离，选中单个项目后可筛选分类。</p></div>';
-  }
   html += '<div class="menu-foot"><button class="btn sm" type="button" data-dem-f-reset>清空筛选</button></div>';
   return html;
 }
@@ -2158,8 +2157,10 @@ function initDemSmartBar(){
   demSmartBar.innerHTML =
     '<div class="smart-view-tabs" role="tablist" aria-label="需求视图"></div>' +
     '<div class="smart-view-tools">' +
+      '<span class="sv-seg-label">筛选</span>' +
       '<input class="input dem-search" type="search" data-dem-q placeholder="搜索全部需求…" title="在当前空间需求池中搜索需求 / 描述 / 来源 / 分类 / 编号" aria-label="搜索当前空间全部需求" />' +
-      '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 分类 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
+      '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 分类 / 项目）">更多筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
+      '<span class="sv-seg-label sv-seg-end">显示</span>' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-dem-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
         '<option value="set">按项目集</option><option value="project">按项目</option><option value="kind">按类型</option></select></label>' +
@@ -2167,11 +2168,11 @@ function initDemSmartBar(){
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
         '<option value="set">按项目集</option><option value="project">按项目</option><option value="kind">按类型</option></select></label>' +
       '<label class="smart-view-control"><span>排序</span><select class="mini-select" data-dem-sort aria-label="排序方式">' +
-        '<option value="default">默认顺序（状态→优先级）</option><option value="priority">按优先级</option>' +
+        '<option value="default">默认排序</option><option value="priority">按优先级</option>' +
         '<option value="expect">按期望交付</option><option value="wsjf">按 WSJF</option><option value="created">按提交时间</option></select></label>' +
       '<span class="smart-view-spacer"></span>' +
+      '<span class="sv-seg-label sv-seg-end">操作</span>' +
       '<button class="btn sm" type="button" data-dem-export>' + icon("download", 13) + ' 导出当前视图</button>' +
-      '<button class="btn sm ghost" type="button" data-dem-save>＋ 保存视图</button>' +
     '</div>';
   page.insertBefore(demSmartBar, demandBody);
   if(demandGanttBar) page.insertBefore(demandGanttBar, demandBody);
@@ -2729,7 +2730,6 @@ function renderDemandGantt(){
       '</div>' +
     '</div>' +
     '<div class="demg-foot">' +
-      '<span class="foot-note">阶段时间取自评审日志、关联文档、工作项、用例与版本记录；无记录阶段不推算。</span>' +
       (demandHasMore
         ? '<button class="btn sm" type="button" data-dem-more="gantt">加载更多（已加载 ' +
             demands.length + ' / 共 ' + demandTotal + ' 条）</button>'
@@ -2952,28 +2952,16 @@ function openDemandDialog(d){
   fDemandTitle.classList.remove("invalid");
   demandFormTitle.textContent = d ? "编辑需求" : "提需求";
   btnSaveDemand.textContent = d ? "保存" : "提交评审";
-  /* 底部提示随模式切换：编辑态不说「新需求进入待评审」；已流转锁定态由 demandLockNote 说明，这里隐藏 */
   var footNote = $("demandFootNote");
-  if(footNote){
-    if(!d){
-      footNote.textContent = "新需求进入「待评审」；仅空间主可通过、拒绝或排期";
-      footNote.hidden = false;
-    }else if(d.status === "review"){
-      footNote.textContent = "编辑保存不改变流转状态";
-      footNote.hidden = false;
-    }else{
-      footNote.hidden = true;
-    }
-  }
+  if(footNote) footNote.hidden = true;
   btnSaveDemand.disabled = false;
   demandFormSeq++;
   syncPriSeg();
   setDemandFormLocked(!!d && d.status !== "review");
   var lockNote = $("demandLockNote");
   if(lockNote) lockNote.textContent = d && d.status === "done"
-    ? "该需求已完成，这里只更新描述、验收标准、来源、分类与 WSJF；标题与优先级在详情里直接点击修改，所属项目、版本与计划日期不再调整。"
-    : "该需求已进入流转，这里只更新描述、验收标准、来源、分类" + (canMove ? "、所属项目" : "")
-      + "与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。";
+    ? "已完成：标题与优先级在详情里改；所属项目、版本与计划日期不再调整。"
+    : "已进入流转：标题与类型锁定；优先级在列表改，日期用「调整排期」。";
   demandFormBaseline = demandFormSnapshot();
   updateDemandCheckResume();
   UI.openModal($("dlgDemand"), "input");
@@ -4164,8 +4152,6 @@ function demandJudgementSectionHTML(d){
       + (d.manualDeliveryReason ? '<p class="dem-evidence-meta">原因：' + esc(d.manualDeliveryReason) + '</p>' : '')
       + (d.deliveryStageSource === "release" ? '<p class="foot-note">已有真实生产发布，交付阶段以真实发布为准。</p>' : '')
       + '</div>';
-  }else{
-    html += '<p class="foot-note">当前由工作项、用例与发布记录自动派生；证据缺失时可人工补录。</p>';
   }
   if(d.canJudgeDelivery){
     html += '<div class="row row-gap">'
@@ -4175,8 +4161,6 @@ function demandJudgementSectionHTML(d){
         ? '<button class="btn sm" type="button" data-dem-judge-revoke>' + icon("undo", 13) + ' 撤销判定</button>'
         : '')
       + '</div>';
-  }else{
-    html += '<p class="foot-note">仅空间主、管理员或项目负责人可以维护人工判定。</p>';
   }
   html += '<ul class="dem-logs" id="demJudgementLogs"><li class="foot-note">加载中…</li></ul></div>';
   return html;
@@ -4708,7 +4692,7 @@ function openDemandModuleFact(anchor, ctx){
         return '<button class="menu-item" type="button" data-dem-fact-cat="' + esc(c.id) + '">' + esc(c.name)
           + (c.id === cur ? '<span class="k">当前</span>' : '') + '</button>';
       }).join("")
-    + (cats.length ? "" : '<p class="foot-note" style="padding:8px 10px;margin:0">该项目还没有分类，可在项目设置里添加</p>');
+    + (cats.length ? "" : '<p class="foot-note" style="padding:8px 10px;margin:0">该项目还没有分类</p>');
   UI.openPop(menu, anchor, { align:"left", width:220, onClose:function(){ menu.remove(); } });
   menu.addEventListener("click", function(e){
     var b = e.target.closest("[data-dem-fact-cat]");
@@ -4809,7 +4793,7 @@ function openDemandWatchPop(anchor, layer, id){
           : '')
         + '<div class="menu-foot">'
         + (isCreator
-          ? '<span class="foot-note">你是提交人，状态流转、内容编辑与新评论默认通知你</span>'
+          ? '<span class="foot-note">你是提交人，默认接收通知</span>'
           : '<button class="btn sm ' + (res.watching ? '' : 'primary') + '" type="button" data-dem-watch-toggle>'
             + (res.watching ? '取消关注' : '关注这个需求') + '</button>'
             + '<span class="foot-note">关注后状态流转、内容编辑、行内优先级/期望交付调整与新评论都会通知你</span>')
@@ -5023,7 +5007,7 @@ function renderDemandDetail(d, opts){
     ? '<div class="wsjf-break"><span>WSJF</span><span>业务 ' + d.wsjfBusiness + '</span><span>紧迫 ' + d.wsjfUrgency
       + '</span><span>风险 ' + d.wsjfRisk + '</span><span>工作量 ' + d.wsjfEffort
       + '</span><b>' + wsjfText(d) + '</b><span class="muted">四项都填才计分</span></div>'
-    : '<p class="foot-note" style="margin:8px 0 0">WSJF 未评分：四项都填后才计分。</p>';
+    : '<p class="foot-note" style="margin:8px 0 0">未评分</p>';
   var stageLine = d.deliveryStage
     ? '<p class="dem-evidence-line">当前交付阶段 <span class="tag dem-stage-tag st-' + esc(d.deliveryStage)
       + (d.deliveryStageSource === "manual" ? " manual" : "") + '">' + esc(deliveryStageName(d.deliveryStage))
@@ -5171,24 +5155,21 @@ function renderDemandDetail(d, opts){
     +   '<div class="drawer-pane" data-dem-pane="overview">'
     +     demandFactsHTML()
     +     (isClosedDemand(d) ? '<p class="foot-note">历史保留；' + esc((d.closeReason === "rej" || d.status === "rej") ? "可重新打开回到「待评审」。" : "可恢复至「" + restoreTargetName(d) + "」。") + '</p>' : '')
-    +     (d.status === "done" ? '<p class="foot-note">已完成由工作项全部完成与用例全部通过自动判定；交付在「交付」页签查看，完成不等于交付。</p>' : '')
     +     (d.deliveryEvidenceMissing ? '<p class="foot-note">目标版本已发布，但没有有效生产发布记录；请人工补录真实交付证据。</p>' : '')
-    +     '<p class="foot-note">需求调期、撤排与关闭不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
     +     '<section class="read-card">'
     +       '<div class="read-card-head"><h3>需求描述</h3>'
     +         (canEditText ? '<span class="dem-desc-tools">'
     +           '<input type="file" id="demDescImgFile" class="dem-comment-file" accept="image/*" multiple>'
     +           '<button class="btn sm ghost" type="button" data-dem-desc-img title="插入图片：也可以直接在描述里粘贴或拖入">'
     +             '<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.2" width="14" height="11.6" rx="2"/><circle cx="7.4" cy="8" r="1.4"/><path d="m3.6 13.4 3.8-3.4 3 2.6 2.4-2.2 3.6 3.4"/></svg>'
-    +             ' 插入图片</button>'
-    +           '<span class="foot-note">点击正文修改，可直接粘贴图片</span></span>' : '')
+    +             ' 插入图片</button></span>' : '')
     +       '</div>'
     +       '<div class="read-desc demand-copy' + (canEditText ? ' is-editable' : '') + '" id="demandDescView"'
     +         (canEditText ? ' data-dem-text="desc" tabindex="0" role="button" aria-label="需求描述，点击编辑" title="点击编辑；可直接粘贴或拖入图片；失焦或 ⌘/Ctrl+Enter 保存，Esc 取消"' : '')
     +       '>' + demandDetailHTML(d.description) + '</div>'
     +     '</section>'
     +     '<section class="read-card">'
-    +       '<div class="read-card-head"><h3>验收标准</h3><span class="foot-note">完成的前提' + (canEditText ? ' · 点击修改' : '') + '</span></div>'
+    +       '<div class="read-card-head"><h3>验收标准</h3></div>'
     +       '<div class="read-desc demand-copy' + (canEditText ? ' is-editable' : '') + '" id="demandAcceptView"'
     +         (canEditText ? ' data-dem-text="accept" tabindex="0" role="button" aria-label="验收标准，点击编辑" title="点击编辑；失焦或 ⌘/Ctrl+Enter 保存，Esc 取消"' : '')
     +       '>' + demandDetailPlain(d.acceptText) + '</div>'
@@ -5233,20 +5214,20 @@ function renderDemandDetail(d, opts){
     +   '<div class="drawer-pane" data-dem-pane="delivery" hidden>'
     +     (d.status === "done" ? '<section class="read-card">' + demandJudgementSectionHTML(d) + '</section>' : '')
     +     '<section class="read-card">'
-    +       '<div class="read-card-head"><h3>交付证据</h3><span class="foot-note">任务发布不等于业务验收</span></div>'
+    +       '<div class="read-card-head"><h3>交付证据</h3></div>'
     +       (d.deliveryStage ? stageLine : '')
     +       '<div id="demTasks"><div class="attach-empty">加载中…</div></div>'
     +     '</section>'
     +   '</div>'
     +   '<div class="drawer-pane" data-dem-pane="rel" hidden>'
     +     '<section class="read-card">'
-    +       '<div class="read-card-head"><h3>关联文档</h3>' + (writable ? '<span class="foot-note">从当前项目的文档里选择</span>' : '') + '</div>'
+    +       '<div class="read-card-head"><h3>关联文档</h3></div>'
     +       '<div class="attach-list" id="demDocs"><div class="attach-empty">加载中…</div></div>'
     +       (writable ? '<div class="dem-doc-add"><select id="demDocPick" aria-label="选择要关联的文档"></select>'
     +         '<button class="btn sm add" type="button" data-dem-doc-link>' + icon("plus", 13) + ' 关联文档</button></div>' : '')
     +     '</section>'
     +     '<section class="read-card">'
-    +       '<div class="read-card-head"><h3>附件</h3><span class="foot-note">单个 ≤10MB</span></div>'
+    +       '<div class="read-card-head"><h3>附件</h3><span class="foot-note">≤10MB</span></div>'
     +       '<div class="attach-list" id="demAtts"><div class="attach-empty">加载中…</div></div>'
     +       (writable ? '<div class="att-kit compact" style="margin-top:8px">'
     +         '<div class="att-drop" tabindex="0" role="button" aria-label="选择或拖入文件" data-dem-attdrop>'
@@ -5256,7 +5237,7 @@ function renderDemandDetail(d, opts){
     +         '</div></div>' : '')
     +     '</section>'
     +     '<section class="read-card">'
-    +       '<div class="read-card-head"><h3>计划与归属</h3><span class="foot-note">关联需求或文档会同步项目</span></div>'
+    +       '<div class="read-card-head"><h3>计划与归属</h3></div>'
     +       '<dl class="read-evidence">' + relFacts.map(function(g){
               return '<dt>' + esc(g[0]) + '</dt><dd title="' + esc(g[1]) + '">' + esc(g[1]) + '</dd>';
             }).join("") + '</dl>'
@@ -5293,14 +5274,13 @@ function renderDemandDetail(d, opts){
     +   '</div>'
     +   '<div class="drawer-pane" data-dem-pane="records" hidden>'
     +     '<section class="read-card">'
-    +       '<div class="read-card-head"><h3>流转记录</h3><span class="foot-note">状态、排期与交付操作</span></div>'
+    +       '<div class="read-card-head"><h3>流转记录</h3></div>'
     +       '<ul class="read-activity dem-logs" id="demLogs"><li class="foot-note">加载中…</li></ul>'
     +     '</section>'
     +   '</div>'
     + '</div>'
     + (demandFootActs(d) ? '<div class="drawer-foot demand-foot">'
-      + '<span class="hint" id="demandFootHint">状态由头部胶囊统一调整；标题、描述、验收与属性可直接点击修改，失焦自动保存</span>'
-      + '<span class="demand-foot-acts">' + demandFootActs(d) + '</span></div>' : '')
+            + '<span class="demand-foot-acts">' + demandFootActs(d) + '</span></div>' : '')
     + '</div>';
   document.body.appendChild(layer);
   function syncReadViews(){

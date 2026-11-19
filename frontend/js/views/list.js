@@ -15,7 +15,7 @@ import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskD
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
+import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, spanText, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -71,7 +71,7 @@ var SORT_DEFAULT_DIR = {
 };
 var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
 var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
-var COL_WIDTHS = { title:"minmax(200px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"108px", progress:"108px", project:"120px", version:"110px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
+var COL_WIDTHS = { title:"minmax(240px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
 
 function renderSmartTabs(){
   updateMobFilterSummary();
@@ -171,6 +171,7 @@ function initSmartTable(){
   smartBar.className = "smart-list-bar";
   smartBar.innerHTML = '<div class="smart-view-tabs" role="tablist" aria-label="视图"></div>' +
     '<div class="smart-view-tools">' +
+      '<span class="sv-seg-label">显示</span>' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-list-group aria-label="分组方式">' +
         groupOptionsHTML(LIST_GROUPS, smart.group) + '</select></label>' +
       '<label class="smart-view-control"><span>二级</span><select class="mini-select" data-list-subgroup aria-label="二级分组方式">' +
@@ -179,6 +180,7 @@ function initSmartTable(){
       '<span class="smart-list-sort"></span>' +
       '<button class="btn sm ghost smart-sort-dir" type="button" data-list-sortdir hidden aria-label="切换排序方向">↑</button>' +
       '<span class="smart-view-spacer"></span>' +
+      '<span class="sv-seg-label sv-seg-end">操作</span>' +
       '<button class="btn sm" type="button" data-list-export>' + icon("download", 13) + ' 导出当前视图</button>' +
       '<button class="btn sm ghost" type="button" data-list-save>＋ 保存视图</button>' +
     '</div>';
@@ -206,7 +208,7 @@ function initSmartTable(){
     if(spacer) spacer.parentNode.insertBefore(listColsBtn, spacer);
   }
   toolbar.hidden = true;
-  listSort.innerHTML = '<option value="default">默认顺序（沿用服务端）</option>' +
+  listSort.innerHTML = '<option value="default">默认排序</option>' +
     '<option value="due">按截止日期</option><option value="priority">按优先级</option>' +
     '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +
     '<option value="updated">按更新时间</option>' +
@@ -313,7 +315,8 @@ function listRequestParams(offset, limit){
 function updateListMeta(rawCount){
   var shown = currentViewRows().length;
   var hasLocalPreset = ["mine", "doing", "over"].indexOf(smart.preset) !== -1;
-  var text = "已加载 " + lastItems.length + " / 共 " + rt.listTotal + " 项";
+  /* 计数只出现一次：总数在前、已载入在后，与原型「共 428 项 · 已载入 100」同序 */
+  var text = "共 " + rt.listTotal + " 项 · 已载入 " + lastItems.length;
   if(filterOn() || hasLocalPreset) text += " · 当前视图 " + shown + " 项";
   if(smart.group !== "none") text += " · " + currentViewGroups().length + " 组";
   if(smart.hideDone) text += " · 已隐藏已完成";
@@ -379,26 +382,31 @@ function loadList(opts){
   });
 }
 function applyGrid(el){
-  var widths = listPrefs.columns("task-list").map(function(key){ return COL_WIDTHS[key] || "120px"; });
-  el.style.gridTemplateColumns = ["40px"].concat(widths, ["48px"]).join(" ");
+  var cols = listPrefs.columns("task-list");
+  var widths = cols.map(function(key){ return COL_WIDTHS[key] || "120px"; });
+  /* 行尾动作并入「更新」列（悬停时时间换成操作）：只有「更新」被隐藏时才留独立动作列 */
+  var tail = cols.indexOf("updatedAt") === -1 ? ["48px"] : [];
+  el.style.gridTemplateColumns = ["40px"].concat(widths, tail).join(" ");
 }
 /* 列头带口径提示的字段；标记必须与排序按钮平级，避免按钮嵌套按钮 */
 var LIST_HEAD_HELP = { progress:"list.progress", work:"list.work" };
 function renderListHead(){
   var labels = listPrefs.labels("task-list");
+  var cols = listPrefs.columns("task-list");
   listHead.innerHTML = '<span><input type="checkbox" class="cbx" data-list-select-all aria-label="全选当前页" /></span>' +
-    listPrefs.columns("task-list").map(function(key){
+    cols.map(function(key){
       var sortKey = HEAD_SORT_MAP[key] || key;
       var active = smart.sort === sortKey;
       var ind = active ? (smart.sortDir === "desc" ? "↓" : "↑") : "";
       var help = LIST_HEAD_HELP[key]
         ? caliberMarkHTML(LIST_HEAD_HELP[key], false, "查看「" + labels[key] + "」口径") : "";
-      return '<span' + (help ? ' class="th-help-wrap"' : "") +
+      var cls = [help ? "th-help-wrap" : "", key === "updatedAt" ? "ta-r" : ""].filter(Boolean).join(" ");
+      return '<span' + (cls ? ' class="' + cls + '"' : "") +
         ' aria-sort="' + (active ? (smart.sortDir === "desc" ? "descending" : "ascending") : "none") + '">' +
         '<button class="lh-sort' + (active ? " on" : "") + '" type="button" data-sort-col="' + esc(key) + '"' +
           ' title="按「' + esc(labels[key]) + '」排序">' + esc(labels[key]) +
           '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button>' + help + '</span>';
-    }).join("") + '<span></span>';
+    }).join("") + (cols.indexOf("updatedAt") === -1 ? '<span></span>' : "");
   applyGrid(listHead);
   syncListColumnsBtn();
 }
@@ -423,13 +431,13 @@ function taskCell(t, key, hasTypeCol){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
     var f = dueFlag(t);
     var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
-    var chip = '<span class="tag tag-cat" style="--tag-c:' + color + '">' + esc(colName(t.boardColumn)) + '</span>';
+    var chip = '<span class="tag tag-cat" style="--tag-c:' + color + '"><span class="dot" aria-hidden="true"></span>' + esc(colName(t.boardColumn)) + '</span>';
     /* 状态点开即改：可写才做成按钮，只读项目保持纯标签 */
     if(canEditTask(t)){
       chip = '<button class="tag tag-cat row-status" type="button" style="--tag-c:' + color + '"' +
         ' data-row-status="' + esc(t.id) + '" aria-haspopup="menu"' +
         ' aria-label="状态：' + esc(colName(t.boardColumn)) + '，点击修改"' +
-        ' title="点击改状态">' + esc(colName(t.boardColumn)) +
+        ' title="点击改状态"><span class="dot" aria-hidden="true"></span>' + esc(colName(t.boardColumn)) +
         '<svg class="row-status-caret" width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5 8 10.5l4-4"/></svg>' +
       '</button>';
     }
@@ -796,6 +804,26 @@ function renderListItems(items){
     appendListMore();
     return;
   }
+  /* 行尾悬停动作：完成 / 计时 / 更多；与「更新」列共用一格，时间在悬停时让位 */
+  function hoverActs(t, editable){
+    return '<span class="ha-acts">' +
+      (!isDoneTask(t) && editable
+        ? '<button class="icon-btn sm" type="button" data-mob-done="' + esc(t.id) + '" aria-label="标记完成" title="标记完成">' + icon("check", 15) + '</button>'
+        : '') +
+      '<button class="icon-btn sm" type="button" data-mob-timer="' + esc(t.id) + '" aria-label="开始或停止计时" title="开始 / 停止计时">' + icon("timer", 15) + '</button>' +
+      '<button class="icon-btn sm" type="button" data-row-menu="' + esc(t.id) + '" aria-label="更多操作" title="更多操作">' + icon("more", 15) + '</button>' +
+    '</span>';
+  }
+  function cellHTML(t, key, editable){
+    if(key === "updatedAt"){
+      /* 行尾读相对时间（与原型一致），悬停可看精确时间 */
+      var rel = t.updatedAt ? spanText(t.updatedAt, new Date()) : "";
+      var text = rel ? (rel === "刚刚" ? rel : rel + "前") : "—";
+      return '<span class="cell ha-cell">' +
+        '<span class="ha-time" title="' + esc(t.updatedAt ? fmtTs(t.updatedAt) : "无更新时间") + '">' + esc(text) + '</span>' + hoverActs(t, editable) + '</span>';
+    }
+    return taskCell(t, key, hasTypeCol);
+  }
   function rowHTML(t){
     var editable = canEditTask(t);
     /* 只保留可编辑任务的选中态：权限被收回后不能继续参与批量写操作 */
@@ -804,8 +832,9 @@ function renderListItems(items){
       '<span><input type="checkbox" class="cbx" data-row-check="' + esc(t.id) + '"' +
         (editable ? '' : ' disabled title="只读项目不可批量操作"') +
         ' aria-label="选择工作项：' + esc(t.title) + '"' + (keepSelected[t.id] ? ' checked' : '') + ' /></span>' +
-      visibleColumns.map(function(key){ return taskCell(t, key, hasTypeCol); }).join("") +
-      '<span class="cell-act"><button class="icon-btn sm" type="button" data-row-menu="' + esc(t.id) + '" aria-label="更多操作" title="更多操作">' + icon("more", 15) + '</button></span></div>';
+      visibleColumns.map(function(key){ return cellHTML(t, key, editable); }).join("") +
+      (visibleColumns.indexOf("updatedAt") === -1
+        ? '<span class="cell-act">' + hoverActs(t, editable) + '</span>' : '') + '</div>';
   }
   if(smart.group === "none"){
     listBody.innerHTML = viewRows.map(rowHTML).join("");
@@ -914,8 +943,7 @@ function openBulkPublicationDialog(){
   layer.innerHTML = '<div class="sheet xs"><div class="sheet-body"><div class="panel"><div class="panel-head"><h3>'
     + '标记 ' + ids.length + ' 项为已发布（人工）</h3>'
     + '<button class="icon-btn sm" type="button" data-bulkpub-x aria-label="关闭">' + icon("close", 14) + '</button></div>'
-    + '<div class="stack"><p class="foot-note">用于补录从其他系统迁移、没有正式发布记录的历史数据。'
-    + '只影响工作项徽标与「发布态」筛选，不写入版本发布记录，也不参与需求交付派生与统计；每项单独留痕。</p>'
+    + '<div class="stack"><p class="foot-note">只影响工作项徽标与「发布态」筛选，不写入版本发布记录，也不参与需求交付派生与统计；每项单独留痕。</p>'
     + '<label class="field"><span>生效日期</span><input class="input" type="date" id="bulkPubDate" value="' + esc(rt.TODAY_ISO) + '" max="' + esc(rt.TODAY_ISO) + '"></label>'
     + '<label class="field"><span>补录原因（必填）</span><textarea class="input" id="bulkPubNote" rows="4" maxlength="500" placeholder="例如：从旧系统迁移，原系统发布记录未同步"></textarea></label>'
     + '<div class="row row-gap"><button class="btn primary" type="button" data-bulkpub-ok>保存标记</button>'

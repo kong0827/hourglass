@@ -499,9 +499,21 @@ import { icon } from "./icons.js";
       /* text 一律转义；需要富文本的调用方用 textHtml 显式声明，只允许静态字面量 */
       (opts.textHtml ? '<p>' + opts.textHtml + '</p>' : (opts.text ? '<p>' + esc2(opts.text) + '</p>' : ""));
     if (opts.actionLabel) {
-      h += '<button class="btn ' + (opts.actionKind || "") + '" type="button" data-empty-action="1">' + esc2(opts.actionLabel) + '</button>';
+      /* actionCmd：把动作交给视图自己的处理器（不走 data-empty-action，避免被 bindRetry 当成重试） */
+      var actAttr = opts.actionCmd
+        ? ' data-empty-cmd="' + esc2(opts.actionCmd) + '"'
+        : ' data-empty-action="1"';
+      h += '<button class="btn ' + (opts.actionKind || "") + '" type="button"' + actAttr + '>' + esc2(opts.actionLabel) + '</button>';
     }
     return h + '</div>';
+  }
+  /* 空态里的命令按钮：渲染完调用一次，按 cmd 名绑到视图处理器 */
+  function bindEmptyCmd(root, handlers) {
+    if (!root || !handlers) return;
+    root.querySelectorAll("[data-empty-cmd]").forEach(function (b) {
+      var fn = handlers[b.getAttribute("data-empty-cmd")];
+      if (fn) b.addEventListener("click", fn);
+    });
   }
   function errorState(msg) {
     return '<div class="empty-state">' +
@@ -549,7 +561,7 @@ import { icon } from "./icons.js";
   function guideCard() {
     return '<div class="guide-card">' +
       '<span class="gc-ic">' + icon("star", 18) + '</span>' +
-      '<div class="gc-tx"><b>开始使用沙漏</b>先建第一条工作项，或从项目与需求池把团队任务攒起来。</div>' +
+      '<div class="gc-tx"><b>开始使用沙漏</b></div>' +
       '<div class="gc-acts">' +
       '<button class="btn sm primary" type="button" data-guide="task">新建工作项</button>' +
       '<button class="btn sm" type="button" data-guide="project">新建项目</button>' +
@@ -659,6 +671,7 @@ import { icon } from "./icons.js";
     hideTip: hideTip,
     wireTooltips: wireTooltips,
     emptyState: emptyState,
+    bindEmptyCmd: bindEmptyCmd,
     guideCard: guideCard,
     errorState: errorState,
     noPermState: noPermState,

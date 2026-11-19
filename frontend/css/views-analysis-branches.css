@@ -821,6 +821,15 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13.5px;--title-lh:1.5;--
 .mine-list .list-row .cell.muted{color:var(--text-3);}
 .mine-list .list-row .cell.ta-r{text-align:right;}
 .mine-list .list-row .cell.mine-upd{font-size:11px;}
+/* 「更新」列兼作操作位：悬停时相对时间让位给完成/计时/改期 */
+.mine-list .list-row .cell.mine-upd-cell{
+  display:flex;align-items:center;justify-content:flex-end;min-width:0;gap:2px;font-size:11px;color:var(--text-3);
+}
+.mine-upd-cell .mine-acts{display:none;}
+.mine-list .list-row:hover .mine-upd-cell .mine-upd-time,
+.mine-list .list-row:focus-within .mine-upd-cell .mine-upd-time{display:none;}
+.mine-list .list-row:hover .mine-upd-cell .mine-acts,
+.mine-list .list-row:focus-within .mine-upd-cell .mine-acts{display:flex;opacity:1;}
 .mine-list .list-row .progress.mini .bar{width:40px;background:var(--surface-active);}
 
 /* 两行：标题 + 归属/模块/标签副行，整块垂直居中 */

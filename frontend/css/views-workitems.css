@@ -17,7 +17,6 @@
 .board-toolbar-label{font-size:12px;color:var(--text-3);font-weight:600;}
 .board-toolbar-field{display:inline-flex;align-items:center;gap:6px;}
 .board-toolbar-field .mini-select{height:28px;font-size:12px;}
-.board-toolbar-hint{margin-left:2px;}
 /* 右侧一组：已取消入口 + 口径「!」，与左侧分组控件分开 */
 .board-toolbar-end{margin-left:auto;display:inline-flex;align-items:center;gap:var(--space-2);}
 /* 已取消入口按原型做成标准按钮：图标 + 文案 + 常显计数，而不是只在有数时才出现的小 chip */
@@ -192,6 +191,15 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .list-row .cell.over{color:var(--danger-fg);font-weight:500;}
 .list-row .cell.today{color:var(--warning-fg);font-weight:600;}
 .list-row .cell-act{display:flex;justify-content:flex-end;}
+/* 行尾「更新」列：时间与悬停动作共占一格，悬停/聚焦时操作接替时间 */
+.list-row .ha-cell{display:flex;align-items:center;justify-content:flex-end;min-width:0;width:100%;}
+.list-row .ha-time{font-variant-numeric:tabular-nums;color:var(--text-3);}
+.list-row .ha-acts{display:none;align-items:center;gap:2px;margin-right:-4px;}
+.list-row:hover .ha-time,.list-row:focus-within .ha-time{display:none;}
+.list-row:hover .ha-acts,.list-row:focus-within .ha-acts{display:flex;}
+.list-row .cell-act .ha-acts{display:flex;}
+.list-head > span.ta-r{display:flex;justify-content:flex-end;overflow:visible;}
+.list-head > span.ta-r .lh-sort{justify-content:flex-end;}
 .list-row .progress .bar{background:var(--surface-active);}
 /* 表格形态的列表页沿用同一进度槽底色，避免空槽深浅不一 */
 .project-table-row .progress .bar,

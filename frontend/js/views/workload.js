@@ -151,13 +151,10 @@ function workloadFiltersHTML(){
       + '</div>'
       + periodControlHTML();
   }
-  var note = viewMode === "person"
-    ? '按工作项所属项目的有效主角色或兼岗筛选；工时区间只影响工时统计，负载仍按剩余预估与截止日计算。'
-    : '按工作项所属项目的有效主角色或兼岗筛选；本周工时换周即清零，负载仍按剩余预估与截止日计算。';
-  return html + '<p class="roster-note">' + note + '</p>';
+  return html;
 }
 function workloadToolbar(){
-  return '<div class="manager-toolbar"><div><b>成员负载</b><span>按人看参与项目、在手工作项与当前状态</span></div>'
+  return '<div class="manager-toolbar"><div><b>成员负载</b></div>'
     + '<div class="manager-actions"><div class="seg mini wl-mode">'
     + '<button type="button" data-load-mode="person" aria-pressed="' + (viewMode === 'person') + '"' + (loading || !cache ? ' disabled' : '') + '>按人</button>'
     + '<button type="button" data-load-mode="week" aria-pressed="' + (viewMode === 'week') + '"' + (loading || !cache ? ' disabled' : '') + '>按周</button>'
@@ -358,6 +355,12 @@ function memberStatusTag(status){
   var meta = STATUS_META[status] || STATUS_META.ok;
   return '<span class="member-status ' + meta.cls + '">' + meta.label + '</span>';
 }
+/* 岗位与项目角色同名时不重复显示；两者不同才并列 */
+function jobTitleSpan(jobTitle, roles){
+  if(!jobTitle) return "";
+  var same = (Array.isArray(roles) ? roles : []).some(function(r){ return r === jobTitle; });
+  return same ? "" : '<span>' + esc(jobTitle) + '</span>';
+}
 function memberRoleTagsHtml(list, limit){
   var roles = Array.isArray(list) ? list : [];
   var shown = roles.slice(0, limit || 3);
@@ -401,7 +404,6 @@ function chipHTML(key, label, count){
 }
 function groupNoteHTML(){
   if(ui.group === "role") return '<p class="roster-note">按成员在空间或项目中的有效主角色分组，兼岗不重复计入。</p>';
-  if(ui.group === "project") return '<p class="roster-note">同一成员参与多个项目时会出现在多个分组；卡片内的进行中 / 逾期等计数为该项目范围，负载与合计剩余仍为成员全量口径。</p>';
   return '';
 }
 function projectScopeCounts(m, reqId){
@@ -419,7 +421,7 @@ function memberCardHTML(mv, scope){
   var logScopeAttr = ' data-member-scope="' + (period === "last" ? "last" : "week") + '"';
   return '<article class="member-card" data-member-open="' + esc(m.key) + '"' + logScopeAttr + '>'
     + '<div class="member-card-head">' + avatarHTML(m.name, "lg")
-    + '<div class="member-card-id"><b>' + esc(m.name) + '</b><div class="member-card-sub">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span>岗位：' + esc(m.jobTitle) + '</span>' : '') + '</div></div>'
+    + '<div class="member-card-id"><b>' + esc(m.name) + '</b><div class="member-card-sub">' + companyChipHTML(m.companyName) + jobTitleSpan(m.jobTitle, roles) + '</div></div>'
     + memberStatusTag(mv.status) + '</div>'
     + '<div class="member-card-roles">' + memberRoleTagsHtml(roles, 3) + '</div>'
     + '<div class="member-loadline"><span class="caliber-label">总负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</span>'
@@ -552,7 +554,7 @@ function weekTable(){
     var totalHTML = hasLogs ? '<button class="manager-cell-link" type="button" data-member-open="' + esc(m.key) + '" data-member-layer="logs" title="查看本周计时明细"><b>' + fmtHours(m.weekMinutes) + '</b></button>' : '<b>' + fmtHours(m.weekMinutes) + '</b>';
     return '<tr><td><div class="wl-week-who">' + nameHTML + '</div>' + '<span class="wl-week-company">' + esc(m.companyName || "未设公司") + '</span></td>' + cells + '<td class="num">' + totalHTML + '</td><td>' + diffHTML + '</td></tr>';
   }).join("") || '<tr><td colspan="10" class="manager-empty-cell">本周暂无计时记录</td></tr>';
-  return '<section class="manager-panel"><div class="manager-panel-head"><b>本周工时</b><span>与上周同口径对比 · 点击成员或格子打开工作台</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th>' + WEEK_DAY_NAMES.map(function(d){ return '<th class="num">' + d + '</th>'; }).join("") + '<th class="num">本周合计</th><th>上周对比</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
+  return '<section class="manager-panel"><div class="manager-panel-head"><b>本周工时</b></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th>' + WEEK_DAY_NAMES.map(function(d){ return '<th class="num">' + d + '</th>'; }).join("") + '<th class="num">本周合计</th><th>上周对比</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
 }
 
 /* ==================== 成员工作台 ==================== */
@@ -609,7 +611,7 @@ function projectsPanelHTML(mv){
       + '<td><div class="member-share"><span class="progress"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></div></td>'
       + '</tr>';
   }).join("") : '<tr><td colspan="4" class="manager-empty-cell">该成员暂无参与项目</td></tr>';
-  return '<div class="manager-panel-head"><b>参与项目</b><span>' + mv.projects.length + ' 个 · 点击行筛选下方工作项</span></div>'
+  return '<div class="manager-panel-head"><b>参与项目</b><span>' + mv.projects.length + ' 个</span></div>'
     + '<div class="tbl-wrap"><table class="manager-tbl member-drill-tbl"><thead><tr>'
     + '<th>项目 / 我的角色</th><th class="num">未完成</th><th class="num">剩余</th><th>占比</th>'
     + '</tr></thead><tbody>' + body + '</tbody></table></div>';
@@ -730,11 +732,10 @@ function memberPageHTML(mv){
     + '<button class="member-back" type="button" data-member-back>← 返回成员负载</button>'
     + '<header class="member-page-head"><div class="member-page-id">' + avatarHTML(m.name, "xl")
     + '<div><h2>' + esc(m.name) + memberStatusTag(mv.status) + '</h2>'
-    + '<div class="member-page-meta">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span>岗位：' + esc(m.jobTitle) + '</span>' : '')
+    + '<div class="member-page-meta">' + companyChipHTML(m.companyName) + jobTitleSpan(m.jobTitle, roles)
     + '<span>剩余 ' + fmtHours(m.loadRemainingMinutes) + (m.testRemainingMinutes ? '（含测试 ' + fmtHours(m.testRemainingMinutes) + '）' : '') + ' · ' + esc(periodLabel()) + ' ' + fmtHours(periodMinutes(m)) + '</span></div>'
     + '<div class="member-card-roles">' + memberRoleTagsHtml(roles, 6) + '</div></div></div>'
     + '<div class="member-page-actions"><button class="btn sm soft" type="button" data-member-export>' + icon("download", 13) + '导出该成员 CSV</button></div></header>'
-    + '<p class="roster-note">' + esc(workloadScopeText(cache)) + ' · 点击工作项打开详情</p>'
     + memberKpisHTML(mv)
     + '<div class="manager-two-col"><section class="manager-panel">' + statePanelHTML(mv) + '</section>'
     + '<section class="manager-panel">' + projectsPanelHTML(mv) + '</section></div>'
@@ -901,7 +902,7 @@ function renderWorkload(){
   if(!cache || loading || filterWorkspace !== workloadWorkspace()) return;
   if(memberUi.key){ renderMemberPage(); return; }
   var focusKey = document.activeElement && document.activeElement.dataset.workloadFilter;
-  $("workloadBody").innerHTML = workloadToolbar() + '<p class="roster-note">' + esc(workloadScopeText(cache)) + '</p>'
+  $("workloadBody").innerHTML = workloadToolbar()
     + caliberHTML('负载 =（开发剩余 + 测试剩余）÷（容量窗口工作日 × 每日容量）；测试剩余 = max(0, 测试预估 − 测试窗口内已计工时)，并入成员总负载。每日容量取成员自己的计时设置（未设置按 ' + capacityHoursLabel(cache) + '），无截止日按 5 个工作日计，窗口上限 ' + maxWorkdaysLabel(cache) + ' 个工作日（约一个月）。窗口只决定容量，与实际截止日分开看。')
     + (viewMode === 'week'
       ? weekTable()

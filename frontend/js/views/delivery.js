@@ -51,9 +51,7 @@ function openDeliveryNote(id, releaseId) {
 
 function renderPicker() {
   host.innerHTML = '<div class="dl-head"><div>'
-    + '<div class="dl-title-row"><h1>一页式交付说明</h1></div>'
-    + '<p class="dl-sub">选一个版本，把承诺范围、实际发布、回归结果、遗留缺陷与投入聚合成一份可对外提交的说明。'
-    + "数字全部只读并可点回原始记录；文字由系统草拟，你逐段确认后即可导出与分享。</p></div></div>"
+    + '<div class="dl-title-row"><h1>交付说明</h1></div></div></div>'
     + '<div id="dlPickerList">' + UI.skeletonRows(4) + "</div>";
   if (pickerRows) { paintPicker(); return; }
   API.get("/api/versions/cross-project").then(function (rows) {
@@ -166,13 +164,11 @@ function renderAll() {
   if (!data) return;
   var o = opts(), g = DD.gates(data), isLocked = DD.locked(data);
   host.innerHTML = '<div class="dl-head"><div>'
-    + '<div class="dl-title-row"><h1>一页式交付说明</h1>'
+    + '<div class="dl-title-row"><h1>交付说明</h1>'
     + '<span class="dl-chip pri">' + esc(DD.toneName(o.tone)) + "</span>"
     + '<span class="dl-chip">' + esc(data.projectName || "未归属项目") + " · " + assocLinkHTML("version", data.versionId, data.versionName || "", { req:data.projectId, plain:"" }) + "</span>"
     + (isLocked ? '<span class="dl-chip plum">' + icon("lock", 11) + "快照 " + esc(data.docNo || "") + "</span>" : "")
     + "</div>"
-    + '<p class="dl-sub">数字全部来自系统记录、只读且可点回原始记录；文字由系统草拟，逐段确认后导出。'
-    + "右侧控制区实时改变投影方式，不改变任何事实。</p>"
     + '<div class="dl-facts">'
     + "<span>" + icon("layers", 12) + "承诺 <b>" + (data.counts ? data.counts.planned || 0 : 0) + "</b> 项</span>"
     + "<span>" + icon("note", 12) + "编号 <b>" + esc(data.docNo || "未编号") + "</b></span>"
@@ -849,7 +845,7 @@ function openSource(key) {
         + '<div class="sc"><b>' + esc(x.m) + "</b><span>" + esc(x.s) + "</span></div></div>";
     }).join("") : '<div class="dl-missing">' + icon("infoCircle", 15) + "<div>没有可列出的原始记录。</div></div>")
     + "</div>"
-    + '<div class="sheet-foot"><span class="hint">口径写在数据旁边，不藏在帮助文档里</span>'
+    + '<div class="sheet-foot">'
     + '<button class="btn" type="button" data-dl-close>关闭</button>'
     + (s.view ? '<button class="btn primary" type="button" data-dl-src-goto>' + icon("extlink", 13) + "打开原始记录</button>" : "")
     + "</div>");
@@ -923,7 +919,7 @@ function paintExport(layer) {
     fitPaper(layer);
   } else if (exportFmt === "md") {
     body.innerHTML = '<pre class="dl-md-pre">' + esc(DD.markdown(data)) + "</pre>"
-      + '<p class="hint">纯文本，可直接贴进邮件、IM 或知识库；表格与清单保留结构。</p>';
+      + '<p class="hint">纯文本，可直接贴进邮件、IM 或知识库。</p>';
     hint.textContent = "同时提供「复制」与「下载 .md」";
     go.innerHTML = icon("download", 13) + " 冻结并下载 .md";
   } else {

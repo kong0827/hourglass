@@ -2108,7 +2108,7 @@ function renderGanttFilterMenu(){
     ganttFilterSection("优先级", priHTML) +
     ganttFilterSection("类型", typeHTML) +
     (verHTML ? ganttFilterSection("版本", verHTML) : "") +
-    ganttFilterSection("项目", projHTML || '<span class="foot-note">还没有项目，可到「项目」页新建</span>') +
+    ganttFilterSection("项目", projHTML || '<span class="foot-note">还没有项目</span>') +
     (catHTML ? ganttFilterSection("分类", catHTML) : "") +
     (tagHTML ? ganttFilterSection("标签", tagHTML) : "") +
     ganttFilterSection("到期", dueHTML) +
@@ -2139,7 +2139,7 @@ function renderGanttViewsMenu(){
   var views = savedViewsFor("task");
   var html = '<div class="menu-title">甘特视图</div>';
   if(!views.length){
-    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的甘特视图；调整筛选或布局后保存。</p></div>';
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的甘特视图</p></div>';
   }else{
     html += views.map(function(v){
       return '<div class="menu-row">' +

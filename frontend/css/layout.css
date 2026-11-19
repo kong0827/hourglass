@@ -204,13 +204,16 @@ body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 
 /* 顶栏统一搜索入口：打开全局搜索组件（⌘K），与看板筛选框职责分离 */
 .gs-open{
-  display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;flex:0 0 auto;
+  display:inline-flex;align-items:center;gap:8px;height:34px;width:300px;padding:0 10px;flex:0 0 auto;
   border:1px solid var(--border);border-radius:var(--r-sm);
-  background:var(--surface-sunken);color:var(--text-2);font-size:13px;font-weight:500;
+  background:var(--surface-sunken);color:var(--text-3);font-size:12.5px;font-weight:400;
+  justify-content:flex-start;
   transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out),
              border-color var(--dur-fast) var(--ease-out);
 }
-.gs-open:hover{background:var(--surface-hover);color:var(--text);}
+.gs-open > span:not(.gs-kbd){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto;}
+.gs-open .gs-kbd{margin-left:auto;}
+.gs-open:hover{background:var(--surface-hover);color:var(--text-2);}
 .gs-open > svg{color:var(--text-3);}
 .gs-open .gs-kbd{display:inline-flex;gap:2px;pointer-events:none;}
 .gs-open:focus-visible{outline:none;box-shadow:var(--ring-focus);}
@@ -297,6 +300,29 @@ body[data-view="calendar"] .filterbar{display:flex;}
 /* 弹性空白：把右侧的全屏 / 视图推到边上，清空动作留在筛选条件旁边 */
 .fb-spacer{flex:1 1 auto;min-width:0;}
 .filterbar .chip{white-space:nowrap;}
+/* 四段式工具栏：范围 ｜ 筛选 ｜（显示 / 操作在视图工具条） */
+.fb-seg-label{flex:0 0 auto;font-size:11.5px;font-weight:600;color:var(--text-3);letter-spacing:.02em;padding:0 2px 0 4px;white-space:nowrap;}
+/* 工具条分段标签（我的工作 / 版本等页面工具栏共用；列表与需求池在 smart-table.css 里有同值规则） */
+.sv-seg-label{flex:0 0 auto;font-size:11.5px;font-weight:600;color:var(--text-3);letter-spacing:.02em;padding:0 2px;white-space:nowrap;}
+.sv-seg-label.sv-seg-end{padding-left:12px;border-left:1px solid var(--border);line-height:16px;}
+.fb-sep{flex:0 0 auto;width:1px;height:20px;background:var(--border);margin:0 4px;}
+/* 维度全部隐藏（如「我的工作」）：范围段与分隔线一起收起，避免只剩一个孤立标签 */
+.filterbar.fb-no-dims > .fb-main > .fb-seg-label:first-child,
+.filterbar.fb-no-dims > .fb-main > #fgDims,
+.filterbar.fb-no-dims > .fb-main > .fb-sep{display:none;}
+/* 我的工作跨空间：空间作用域占用「范围」段（其他视图不显示） */
+.fb-space{display:none;}
+body[data-view="mine"] .fb-space{display:flex;align-items:center;}
+body[data-view="mine"] .fb-space .mini-select{font-weight:600;color:var(--text-2);}
+/* 视图内关键字过滤：从顶栏移入工具栏，全站只留一个全局搜索入口 */
+.filterbar .fb-kw{flex:0 0 auto;margin-left:2px;}
+.filterbar .fb-kw input{
+  width:190px;height:30px;padding:0 28px 0 30px;font-size:12.5px;
+  background:var(--surface);border-radius:var(--r-sm);
+}
+.filterbar .fb-kw input:focus{width:240px;background:var(--surface);}
+.filterbar .fb-kw > svg{left:9px;width:14px;height:14px;}
+.filterbar .fb-kw .gs-clear{right:5px;}
 /* 动作区跟着已选条件走，不再贴在最右侧；与条件之间用间距区分，不加分隔线 */
 .fb-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;}
 .fgroup{display:flex;align-items:center;gap:var(--space-2);min-width:0;flex:0 0 auto;}

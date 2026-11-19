@@ -167,9 +167,7 @@ function setDrawerMode(mode){
   if(cancelBtn) cancelBtn.textContent = isRead ? "关闭" : "取消";
   var hint = $("taskFormHint");
   if(hint && !rt.formDirty){
-    hint.textContent = rt.drawerReadOnly
-      ? "你对该项目只有查看权限，可查看但不能修改"
-      : (isRead ? "点标题、描述或概览事实即可改，失焦自动保存；完整字段用「编辑」" : "保存后可拖动卡片调整状态与顺序");
+    hint.textContent = rt.drawerReadOnly ? "你对该项目只有查看权限，可查看但不能修改" : "";
   }
   taskForm.classList.toggle("is-create", !rt.editingId);
   setDrawerTab("overview");
@@ -236,7 +234,7 @@ function renderReadChecklist(){
   if(bar) bar.style.width = (list.length ? Math.round(done / list.length * 100) : 0) + "%";
   if(!ul) return;
   if(!list.length){
-    ul.innerHTML = '<li class="read-empty">还没有检查项，去「执行」里添加</li>';
+    ul.innerHTML = '<li class="read-empty">还没有检查项</li>';
     return;
   }
   ul.innerHTML = list.slice(0, 6).map(function(s){
@@ -1635,7 +1633,7 @@ function syncProgFact(col){
     range.style.setProperty("--fill", prog + "%");
   }
   if(pct) pct.textContent = prog + "%";
-  if(note) note.textContent = rt.drawerReadOnly ? "只读" : "拖动调整";
+  if(note) note.textContent = rt.drawerReadOnly ? "只读" : "";
   cell.removeAttribute("role");
   cell.removeAttribute("data-fact-goto");
   cell.removeAttribute("tabindex");
@@ -1853,7 +1851,7 @@ function loadTaskReleaseRecords(task){
     }
     var recordsHTML = records.length
       ? '<h4>正式发布历史（含失败 / 测试 / 回滚）</h4>' + records.map(function(record){ return releaseSnapshotHTML(record, task.id); }).join("")
-      : '<p class="hint">未留正式发布记录' + (judgements.length ? '；下方为人工补录的历史发布事实。' : '，不反推或伪造历史。') + '</p>';
+      : '<p class="hint">未留正式发布记录</p>';
     var manualHTML = judgements.length
       ? '<h4 class="pub-manual-head">人工标记历史</h4><ul class="pub-logs">'
         + judgements.map(publicationJudgementLogHTML).join("") + '</ul>'
@@ -1879,8 +1877,7 @@ function openPublicationJudgementDialog(task){
   layer.innerHTML = '<div class="sheet xs"><div class="sheet-body"><div class="panel"><div class="panel-head"><h3>'
     + (task.manualPublished ? "修改人工发布标记" : "标记为已发布（人工）") + '</h3>'
     + '<button class="icon-btn sm" type="button" data-pub-judge-x aria-label="关闭">' + icon("close", 14) + '</button></div>'
-    + '<div class="stack"><p class="foot-note">用于补录从其他系统迁移、没有正式发布记录的历史数据。'
-    + '标记只影响工作项徽标与「发布态」筛选，不写入版本发布记录，也不参与需求交付派生与统计。</p>'
+    + '<div class="stack"><p class="foot-note">标记只影响工作项徽标与「发布态」筛选，不写入版本发布记录，也不参与需求交付派生与统计。</p>'
     + '<label class="field"><span>生效日期</span><input class="input" type="date" id="pubJudgeDate" value="' + esc(date) + '" max="' + esc(rt.TODAY_ISO) + '"></label>'
     + '<label class="field"><span>补录原因（必填）</span><textarea class="input" id="pubJudgeNote" rows="4" maxlength="500" placeholder="例如：从旧系统迁移，原系统记录已随项目归档">' + esc(task.manualJudgeReason || "") + '</textarea></label>'
     + '<div class="row row-gap"><button class="btn primary" type="button" data-pub-judge-ok>保存标记</button>'
@@ -2127,7 +2124,7 @@ function applyDrawerReadOnly(readOnly){
   syncTaskDescEditorReadOnly();
   var hint = $("taskFormHint");
   if(hint && !rt.formDirty){
-    hint.textContent = readOnly ? "你对该项目只有查看权限，可查看但不能修改" : "保存后可拖动卡片调整状态与顺序";
+    hint.textContent = readOnly ? "你对该项目只有查看权限，可查看但不能修改" : "";
   }
   syncDepControls();
 }
@@ -2159,7 +2156,7 @@ function syncCatSeg(){
   if(!segCat) return;
   var reqId = currentReqId();
   if(!reqId){
-    segCat.innerHTML = '<span class="foot-note">未挂项目，分类为「未分类」</span>';
+    segCat.innerHTML = '<span class="foot-note">未分类</span>';
     syncCatPath();
     return;
   }
@@ -2169,7 +2166,7 @@ function syncCatSeg(){
     var cfg = canEditReq(reqId)
       ? '<button class="chip" type="button" data-cat-cfg="1">去项目设置添加</button>'
       : "";
-    segCat.innerHTML = '<span class="foot-note">该项目还没有分类</span>' + cfg;
+    segCat.innerHTML = '<span class="foot-note">暂无分类</span>' + cfg;
     syncCatPath();
     return;
   }
@@ -2641,7 +2638,7 @@ function renderWatchCard(res){
         ? '<button class="watch-x" type="button" data-watch-remove="' + esc(w.userId) + '" aria-label="' + esc((self ? "取消关注" : "移除关注人") + "：" + name) + '" title="' + (self ? "取消关注" : "移除关注人") + '">' + icon("close", 11) + '</button>'
         : '') +
       '</span>';
-  }).join("") : '<span class="watch-empty">还没有人关注：关注后新评论、状态流转与回收站操作会通知到人。</span>';
+  }).join("") : '<span class="watch-empty">还没有人关注</span>';
 }
 function renderWatchStatus(res){
   renderWatchButton(res);
@@ -3650,15 +3647,14 @@ function syncProgByCol(){
     if(segProg) segProg.classList.add("disabled");
     if(progVal) progVal.textContent = pct + "%";
     if(wrap) wrap.title = "按检查项完成比自动计算";
-    if(hintEl()) hintEl().textContent = "按检查项完成比自动计算（" +
-      origSubtaskDone + "/" + origSubtaskTotal + "）；完成以「移入已完成列」为准";
+    if(hintEl()) hintEl().textContent = "按检查项完成比自动计算（" + origSubtaskDone + "/" + origSubtaskTotal + "）";
   }else{
     iProg.disabled = !!rt.drawerReadOnly;
     iProg.value = origProgress;
     if(segProg) segProg.classList.remove("disabled");
     if(progVal) progVal.textContent = (Number(origProgress) || 0) + "%";
     if(wrap) wrap.title = "";
-    if(hintEl()) hintEl().textContent = "0–100，拖到 100% 不会自动标记完成（完成以「移入已完成列」为准）";
+    if(hintEl()) hintEl().textContent = "";
   }
   syncDrawerFacts();
 }
@@ -5061,7 +5057,7 @@ function syncInlineTextAffordance(){
       taskDrawerTitle.removeAttribute("title");
     }
   }
-  var box = $("readDesc"), hint = $("readDescHint");
+  var box = $("readDesc");
   if(box){
     box.classList.toggle("is-editable", canEdit);
     if(!box.isContentEditable){
@@ -5069,7 +5065,6 @@ function syncInlineTextAffordance(){
       box.setAttribute("aria-disabled", canEdit ? "false" : "true");
     }
   }
-  if(hint) hint.hidden = !canEdit;
 }
 if(taskDrawerTitle){
   taskDrawerTitle.addEventListener("click", function(){

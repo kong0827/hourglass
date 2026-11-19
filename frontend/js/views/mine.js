@@ -616,6 +616,15 @@ function mineDueCell(t, dueCls){
     '<button class="mine-cell-ico" type="button" data-mine-cell="due" aria-haspopup="dialog"' +
       ' aria-label="修改截止日期" title="修改截止日期">' + icon("calSmall", 12) + '</button></span>';
 }
+function mineActsHTML(t, running, editable, tAllowed, isDone){
+  return '<span class="mine-acts">' +
+    ((editable && !isDone) ? '<button class="icon-btn sm" type="button" data-mine-done title="标记完成" aria-label="标记完成">' + icon("check", 14) + '</button>' : '') +
+    ((running || (editable && tAllowed)) ? '<button class="icon-btn sm' + (running ? " on" : "") + '" type="button" data-mine-timer' +
+      ' title="' + (running ? "停止计时" : "开始计时") + '"' +
+      ' aria-label="开始或停止计时">' + icon(running ? "pause" : "clock", 14) + '</button>' : '') +
+    (editable ? '<button class="icon-btn sm" type="button" data-mine-due title="改期" aria-label="改期">' + icon("calendar", 14) + '</button>' : '') +
+  '</span>';
+}
 function mineRowHTML(t, cols){
   var st = dueState(t);
   var p = progressOf(t);
@@ -626,19 +635,15 @@ function mineRowHTML(t, cols){
   var tAllowed = timerAllowed(t);
   var isDone = t.boardColumn === "done";
   var dueCls = (!t.dueDate || isDone || st.kind === "ended") ? "muted" : "";
+  var acts = {running:running, editable:editable, tAllowed:tAllowed, isDone:isDone};
+  var updShown = cols.some(function(c){ return c.k === "updatedAt"; });
   return '<div class="list-row" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
       ' tabindex="0" role="row">' +
-    mineRowCells(t, dueCls, p, cols) +
-    '<span class="mine-acts">' +
-      ((editable && !isDone) ? '<button class="icon-btn sm" type="button" data-mine-done title="标记完成" aria-label="标记完成">' + icon("check", 14) + '</button>' : '') +
-      ((running || (editable && tAllowed)) ? '<button class="icon-btn sm' + (running ? " on" : "") + '" type="button" data-mine-timer' +
-        ' title="' + (running ? "停止计时" : "开始计时") + '"' +
-        ' aria-label="开始或停止计时">' + icon(running ? "pause" : "clock", 14) + '</button>' : '') +
-      (editable ? '<button class="icon-btn sm" type="button" data-mine-due title="改期" aria-label="改期">' + icon("calendar", 14) + '</button>' : '') +
-    '</span>' +
+    mineRowCells(t, dueCls, p, cols, acts) +
+    (updShown ? "" : mineActsHTML(t, running, editable, tAllowed, isDone)) +
   '</div>';
 }
-function mineRowCells(t, dueCls, p, cols){
+function mineRowCells(t, dueCls, p, cols, acts){
   var dueVisible = cols.some(function(c){ return c.k === "dueDate"; });
   return cols.map(function(c){
     if(c.k === "title") return mineTaskCell(t, cols);
@@ -663,7 +668,10 @@ function mineRowCells(t, dueCls, p, cols){
       var rel = mineRelText(t.updatedAt);
       var upd = parseDate(t.updatedAt);
       var updTip = upd ? (fmtFull(upd) + " " + weekdayCN(upd)) : rel;
-      return '<span class="cell muted ta-r mine-upd" title="最近更新：' + esc(updTip) + '">' + esc(rel) + '</span>';
+      /* 行尾一格兼作操作位：静置读更新，悬停换成操作，避免一条空的操作列 */
+      return '<span class="cell mine-upd-cell" title="最近更新：' + esc(updTip) + '">' +
+        '<span class="mine-upd-time">' + esc(rel) + '</span>' +
+        (acts ? mineActsHTML(t, acts.running, acts.editable, acts.tAllowed, acts.isDone) : '') + '</span>';
     }
     return "";
   }).join("");
@@ -1117,14 +1125,18 @@ function renderMine(d, append){
   if(mineMeta){
     var nameOnly = mineNameOnly;
     var loaded = mineAll.length;
-    var countTxt = filtering
-      ? ("筛选出 " + items.length + " / " + loaded + " 项（已加载）")
-      : ("已加载 " + loaded + (mineTotal > loaded ? (" / " + mineTotal) : "") + " 项");
+    /* 计数只出现一次：常规态交给统计行「今天 · N 项在办」，工具条只报筛选与分组名 */
+    var countTxt = filtering ? ("筛选出 " + items.length + " / " + loaded + " 项（已加载）") : "";
     var boardHint = !testMode && mineViewMode === "board" && !isMobile() && currentMineMode() === "mine"
-      ? " · 拖动卡片可改状态" : "";
-    mineMeta.textContent = (testMode ? "待我测试 · " : "") + countTxt + " · 覆盖 " + spaces.length + " 个空间" +
-      (mineHasMore ? " · 还有更多，可继续加载" : "") + boardHint +
-      (!testMode && nameOnly > 0 ? (" · 其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
+      ? "拖动卡片可改状态" : "";
+    var groupSel = document.getElementById("mineGroup");
+    var groupTxt = (!filtering && !testMode && mineViewMode === "list" && groupSel && groupSel.value !== "none")
+      ? groupSel.options[groupSel.selectedIndex].textContent : "";
+    var spaceTxt = spaces.length > 1 ? ("覆盖 " + spaces.length + " 个空间") : "";
+    mineMeta.textContent = [testMode ? "待我测试" : "", countTxt, groupTxt, spaceTxt,
+      mineHasMore ? "还有更多，可继续加载" : "", boardHint,
+      !testMode && nameOnly > 0 ? ("其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : ""]
+      .filter(Boolean).join(" · ");
   }
   if(!mineAll.length){
     if(mineStats) mineStats.innerHTML = "";
@@ -1167,12 +1179,13 @@ function renderMine(d, append){
   var sections = mineSections(items);
   if(isMobile()){ renderMobileMine(sections); prependMineGuide(); return; }
   var cols = mineVisibleCols(mineListWidth());
+  var updShown = cols.some(function(c){ return c.k === "updatedAt"; });
   /* 表头只出现一次，分组以内嵌可折叠行区分，避免每组各带一个卡片与表头 */
   var html = '<div class="mine-groups"><div class="list-scroll mine-list">' +
     '<div class="list-head">' +
       cols.map(function(c){
         return '<span' + (c.align === "right" ? ' class="ta-r"' : '') + '>' + esc(c.label) + '</span>';
-      }).join("") + '<span class="ta-r">操作</span>' +
+      }).join("") + (updShown ? "" : '<span class="ta-r"></span>') +
     '</div><div class="list-body">';
   sections.forEach(function(s){
     if(!s.rows.length) return;
@@ -1212,7 +1225,10 @@ function renderMine(d, append){
   mineBody.innerHTML = html;
   prependMineGuide();
   var scroller = mineBody.querySelector(".mine-list");
-  if(scroller) scroller.style.setProperty("--mine-cols", cols.map(function(c){ return c.w; }).concat(MINE_OPS_W).join(" "));
+  /* 操作位并入「更新」列；只有该列被收起时才补一条独立动作列 */
+  var gridCols = cols.map(function(c){ return c.w; });
+  if(!updShown) gridCols = gridCols.concat(MINE_OPS_W);
+  if(scroller) scroller.style.setProperty("--mine-cols", gridCols.join(" "));
   mineSyncFoldBtn(sections);
 }
 /* ---- 首屏引导：已加载工作项 <3 条的新空间，把「下一步」递到手里 ---- */
@@ -1429,22 +1445,22 @@ function renderMineStats(items){
     else missingEst++;
   });
   var loadPct = Math.round(remainingMinutes / capacity * 100);
-  /* 空间筛选是前端二次过滤，服务端「共」不随它变化：筛选时只报本页累计，避免两个口径混排 */
+  /* 第一枚统计只说「今天 + 在办数」，与原型一致；空间筛选是前端二次过滤，服务端「共」不随它变化 */
   var loadedTxt = filtering
     ? ('筛选出 <b>' + items.length + '</b> 项 · 已载入 <b>' + mineAll.length + '</b>')
-    : ('已载入 <b>' + items.length + '</b> 项' + (mineTotal > mineAll.length ? ' · 共 <b>' + mineTotal + '</b>' : ''));
+    : ('今天 ' + fmtShortMD(rt.TODAY) + ' · <b>' + items.length + '</b> 项在办');
   mineStats.innerHTML =
     '<span class="mine-stat">' + loadedTxt + '</span>' +
     '<span class="mine-stat over">逾期 <b>' + over + '</b></span>' +
-    '<span class="mine-stat today">7 天内到期 <b>' + week + '</b></span>' +
-    '<span class="mine-stat blocked">被阻塞 <b>' + blocked + '</b></span>' +
+    '<span class="mine-stat">7 天内到期 <b>' + week + '</b></span>' +
+    '<span class="mine-stat">阻塞 <b>' + blocked + '</b></span>' +
     '<span class="mine-stat">未设截止 <b>' + noDue + '</b></span>' +
     '<span class="mine-stat personal' + (loadPct > 100 ? " over" : "") + '" title="已载入未完成项的剩余预估，对比 5 个工作日 40h">' +
-      '个人剩余 <b>' + fmtMinutesShort(remainingMinutes) + '</b> · <b>' + loadPct + '%</b></span>' +
+      '个人剩余 <b>' + fmtMinutesShort(remainingMinutes) + '</b> · <b>' + loadPct + '%</b>' +
+      caliberMarkHTML("mine.personalLoad", false, "查看个人负载口径") + '</span>' +
     (missingEst ? '<span class="mine-stat" title="未填预估的工作项不进入个人剩余计算">未估时 <b>' + missingEst + '</b></span>' : '') +
-    '<span class="mine-stat-hint">统计基于已载入项 · 悬停行显示快捷操作'
-      + caliberMarkHTML("mine.stats", false, "查看统计条口径")
-      + caliberMarkHTML("mine.personalLoad", false, "查看个人负载口径") + '</span>';
+    '<span class="mine-stat-hint">统计基于已载入项'
+      + caliberMarkHTML("mine.stats", false, "查看统计条口径") + '</span>';
 }
 function mineAnyGroupOpen(sections){
   if(state.mineGroup === "none") return false;

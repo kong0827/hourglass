@@ -5,6 +5,7 @@ import { $, searchInput, searchWrap } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocRead } from "../core/task-drawer.js";
+import { updateBrand } from "../core/filters.js";
 import { reloadFilteredViews } from "../core/filters-ui.js";
 import { showView } from "../core/router.js";
 import { canEditReq, projectOptionsHTML, projectRefsEnriched, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
@@ -167,7 +168,9 @@ function loadPhaseData(){
     if(phaseMeta) phaseMeta.textContent = "";
     return;
   }
-  if(phaseMeta) phaseMeta.textContent = reqNameById(rt.phaseReqId);
+  if(phaseMeta) phaseMeta.textContent = "";
+  rt.phaseProjectName = reqNameById(rt.phaseReqId) || "";
+  updateBrand();
   phaseBody.innerHTML = UI.skeletonRows(4);
   var reqId = rt.phaseReqId;
   verInline = null;
@@ -248,6 +251,8 @@ function reloadView(){
 function loadOverview(){
   var current = ++loadSeq;
   if(phaseMeta) phaseMeta.textContent = "全部项目";
+  rt.phaseProjectName = "";
+  updateBrand();
   phaseBody.innerHTML = UI.skeletonRows(5);
   API.get("/api/versions/overview").then(function(ov){
     if(current !== loadSeq || viewMode !== "overview") return;
@@ -311,7 +316,7 @@ function renderOverviewMode(){
       + '</tr>';
   }).join("");
   phaseBody.innerHTML = '<div class="panel"><div class="panel-head"><h3>跨项目投入对比</h3>'
-    + '<span class="meta-right">点击行打开项目阶段明细</span></div>'
+    + '</div>'
     + '<div style="padding:12px 0 4px">' + metricCells(kpis, null) + '</div></div>'
     + '<div class="panel" style="margin-top:12px"><div class="panel-head"><h3>项目明细</h3>'
     + '<span class="meta-right">工时口径：首版/迭代按完成工作项的自然日归组</span></div>'
@@ -332,6 +337,8 @@ function allVersionRowMap(){
 function loadAllVersions(){
   var current = ++allVersionsSeq;
   if(phaseMeta) phaseMeta.textContent = "全部版本";
+  rt.phaseProjectName = "";
+  updateBrand();
   phaseBody.innerHTML = UI.skeletonRows(4);
   return API.get("/api/versions/cross-project").then(function(rows){
     if(current !== allVersionsSeq || viewMode !== "allversions") return;
@@ -493,6 +500,8 @@ function scheduleRange(){
 function loadSchedule(){
   var seq = ++scheduleSeq;
   if(phaseMeta) phaseMeta.textContent = "全部项目";
+  rt.phaseProjectName = "";
+  updateBrand();
   phaseBody.innerHTML = UI.skeletonRows(4);
   var range = scheduleRange(), f = scheduleFilters;
   return API.get("/api/release-plans", { from:range.from, to:range.to, project:f.project, env:f.env, status:f.status }).then(function(rows){
@@ -535,7 +544,7 @@ function renderSchedule(){
       + '<td class="num">' + (r.plannedTaskCount || 0) + '</td>'
       + '</tr>';
   }).join("");
-  var empty = '<tr><td colspan="7"><p class="hint">当前筛选下没有发布计划；可放宽时间范围或状态，或到「按版本」新建独立计划。</p></td></tr>';
+  var empty = '<tr><td colspan="7"><p class="hint">当前筛选下没有发布计划</p></td></tr>';
   phaseBody.innerHTML = '<div class="panel"><div class="panel-head"><h3>跨项目发布日程</h3>'
     + '<span class="meta-right">' + rows.length + ' 份计划 · 未完成 ' + openCount + ' · 已过期 ' + overdueCount + '</span></div>'
     + '<div class="row row-gap schedule-filters">'
@@ -549,8 +558,7 @@ function renderSchedule(){
     + '</div>'
     + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr>'
     + '<th>计划时间</th><th>项目</th><th>版本</th><th>环境 · 覆盖</th><th>状态</th><th>负责人</th><th class="num">范围项数</th>'
-    + '</tr></thead><tbody>' + (body || empty) + '</tbody></table></div>'
-    + '<p class="hint" style="padding-top:10px">日程只汇总计划，不代表实际发布；点击任意一行打开该版本的完整计划、预览与历史。</p></div>';
+    + '</tr></thead><tbody>' + (body || empty) + '</tbody></table></div></div>';
 }
 function openSchedulePlan(reqId, versionId){
   if(!reqId || !versionId) return;
@@ -913,16 +921,27 @@ function phaseTimeline(firstRel){
     inner = '<button type="button" class="pseg mvp" style="width:100%" data-drill-scope="phase" data-drill-val="mvp" data-drill-metric="完成工作项" title="查看首版开发阶段的工作项明细">' + mvpLabel + '</button>';
   }
   return '<div class="panel"><div class="panel-head phase-tl-head"><h3>阶段时间轴与投入</h3>'
-    + '<span class="meta-right">' + (min ? (dateShort(min) + " ~ " + dateShort(end)) : "暂无工作项日期") + ' · 点击色块查看工作项</span></div>'
+    + '<span class="meta-right">' + (min ? (dateShort(min) + " ~ " + dateShort(end)) : "暂无工作项日期") + '</span></div>'
     + '<div class="phase-tl"><span class="tl-node">' + (min ? dateShort(min) : "—") + '<br>首版启动</span>'
     + '<div class="phase-bar">' + inner + '</div>'
     + '<span class="tl-node">' + dateShort(today) + '<br>今日</span></div></div>';
 }
 function phaseCardHTML(tagCls, tag, sub, cells, drill){
+  /* 前四个是阶段主指标，定量格；后两个（准时率 / 均耗时）降为一行文字，避免六格等权 */
+  var main = cells.slice(0, 4), extra = cells.slice(4);
+  var subRow = extra.length ? '<div class="phase-submetrics">' + extra.map(function(c){
+    var color = c[2] ? ' style="color:var(--' + c[2] + ');"' : '';
+    if(drill && c[3] !== false){
+      return '<button type="button" class="psub" data-drill-scope="' + esc(drill.scope)
+        + '" data-drill-val="' + esc(drill.val) + '" data-drill-metric="' + esc(c[1]) + '">'
+        + '<span>' + esc(c[1]) + '</span><b' + color + '>' + c[0] + '</b></button>';
+    }
+    return '<span class="psub"><span>' + esc(c[1]) + '</span><b' + color + '>' + c[0] + '</b></span>';
+  }).join("") + '</div>' : "";
   return '<div class="phase-card"><div class="phase-card-head">'
     + '<span class="tag ' + tagCls + '">' + tag + '</span>'
     + '<span class="phase-card-sub">' + esc(sub) + '</span></div>'
-    + metricCells(cells, drill) + '</div>';
+    + metricCells(main, drill) + subRow + '</div>';
 }
 function phaseCells(p, withSplit){
   var cells = [
@@ -961,8 +980,11 @@ function memberTable(){
       + '<td class="num" style="font-weight:600">' + fmtMinutesShort(total) + '</td>'
       + '<td>' + (r.post > r.mvp ? '<span class="tag tag-info">迭代为主</span>' : '<span class="tag tag-primary">首版为主</span>') + '</td></tr>';
   }).join("");
+  var mvpMin = (p.mvp && p.mvp.workMinutes) || 0;
+  var postMin = (p.post && p.post.workMinutes) || 0;
   return '<div class="panel"><div class="panel-head"><h3>按成员的阶段工时</h3>'
-    + '<span class="meta-right">自动计时按工作项完成日归入阶段 · 点击成员行查看明细</span></div>'
+    + '<span class="meta-right member-total" title="自动计时按工作项完成日归入阶段">合计 首版 ' + fmtMinutesShort(mvpMin)
+    + ' · 迭代 ' + fmtMinutesShort(postMin) + ' · 共 ' + fmtMinutesShort(mvpMin + postMin) + '</span></div>'
     + '<div class="tbl-wrap"><table class="phase-tbl member-tbl"><thead><tr><th>成员</th><th class="num">首版开发</th>'
     + '<th class="num">迭代维护</th><th class="num">合计</th><th>阶段重心</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
 }
@@ -1073,7 +1095,7 @@ function taskTable(mode){
     ? '<tr data-tbl-empty hidden><td colspan="10" class="foot-note tbl-empty">没有符合筛选条件的工作项</td></tr>'
     : "";
   return '<div class="panel"><div class="panel-head phase-tbl-head"><h3>' + head + '</h3>'
-    + '<span class="meta-right">计划起止 · 预估 / 实际 · 偏差 · 点击行打开工作项</span>' + seg + '</div>'
+    + '<span class="meta-right"></span>' + seg + '</div>'
     + tools
     + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr><th>工作项</th>'
     + (mode === "phase" ? "<th>阶段</th>" : "<th>版本</th>")
@@ -1122,9 +1144,13 @@ function applyPhaseTblFilters(){
 function renderPhaseMode(){
   var p = cache.phase;
   var firstRel = p.firstReleasedAt;
+  rt.phaseProjectName = reqNameById(rt.phaseReqId) || "";
+  updateBrand();
   if(phaseMeta){
-    phaseMeta.textContent = reqNameById(rt.phaseReqId)
-      + (firstRel ? (" · 首版上线 " + firstRel + " · 双阶段统计") : " · 未标记上线，投入全部归入首版开发");
+    /* 项目名交给面包屑；工具条只说口径，避免标题行重复三遍项目名 */
+    phaseMeta.textContent = firstRel
+      ? ("首版上线 " + firstRel + " · 双阶段统计")
+      : "未标记上线 · 投入全部归入首版开发";
   }
   var mvpCard = phaseCardHTML("tag-primary", "首版开发",
     (firstRel ? (dateShort(firstRel) + " 之前 · 上线前全部投入") : "项目启动 ~ 上线 · 全部投入"),
@@ -1536,7 +1562,7 @@ function versionListShellHTML(){
     + '</div></div>'
     + '<div class="vl-head" aria-hidden="true"><span>版本</span><span>时间</span><span>进度</span><span>最近发布</span><span></span></div>'
     + '<div data-ver-rows></div>'
-    + '<div class="vl-foot"><span class="vl-foot-note">点击版本进入详情 · 悬停字段可编辑名称与日期 · 进度按工作项自动计算</span>'
+    + '<div class="vl-foot">'
     + '<button class="link-cell vl-foot-link" type="button" data-ver-schedule-link>查看发布日程 →</button></div>'
     + '</div>';
 }
@@ -2053,8 +2079,7 @@ function rollupPanelHTML(){
         return '<button type="button" data-rollup-dim="' + d[0] + '" aria-pressed="' + (rollupUi.dim === d[0]) + '">' + d[1] + '</button>';
       }).join("") + '</span>')
     + '</div>';
-  var head = '<div class="ver-rollup-head"><div class="ver-rollup-title"><b>阶段工时汇总</b>'
-    + '<span>' + (all ? "跨版本对比：同一批工作项按版本归组，看实际与预估是否在收敛" : "向上抽象一层：这个版本一共投了多少、预计多少、窗口内与窗口外各占多少") + '</span></div>'
+  var head = '<div class="ver-rollup-head"><div class="ver-rollup-title"><b>阶段工时汇总</b></div>'
     + ctl + '</div>';
   var notes = '<details class="manager-caliber ver-rollup-caliber"><summary>口径</summary><div>'
     + '阶段不是新数据，只是同一批工作项的另一种分组：预估全部计入测试窗口外；实际工时里，测试窗口（提测 → 测试结束）内的计时计入窗口内，其余计入窗口外（含需求评审、设计、开发、运维等），所以窗口内 + 窗口外始终等于版本累计实际工时。'
@@ -2175,9 +2200,11 @@ function openRollupDrill(group, key, versionId){
 }
 
 function renderVersionMode(){
+  rt.phaseProjectName = reqNameById(rt.phaseReqId) || "";
+  updateBrand();
   if(phaseMeta){
     var c = versionListCounts();
-    phaseMeta.textContent = reqNameById(rt.phaseReqId) + " · 按版本分组 · 共 " + cache.versions.length + " 个版本"
+    phaseMeta.textContent = "按版本分组 · 共 " + cache.versions.length + " 个版本"
       + (c.planned ? " · " + c.planned + " 个计划中" : "") + (c.active ? " · " + c.active + " 个进行中" : "");
   }
   if(!cache.versions.length && !cache.tasks.length){
@@ -2218,7 +2245,7 @@ function loadRecentPlans(reqId){
       return Math.abs(ta - now) - Math.abs(tb - now);
     }).slice(0, 3);
     if(!rows.length){
-      box.innerHTML = '<p class="hint" style="padding:10px 14px">没有未完成的发布计划；点右上「新建发布计划」选一个版本制定。</p>';
+      box.innerHTML = '<p class="hint" style="padding:10px 14px">没有未完成的发布计划</p>';
       return;
     }
     box.innerHTML = '<div class="rel-plan-list">' + rows.map(function(r){
@@ -2414,7 +2441,7 @@ function releasePageSurface(host, v, returnHash){
   root.innerHTML = '<div class="page-toolbar release-page-bar">'
     + '<button class="btn sm ghost" type="button" data-release-back><span aria-hidden="true">←</span> 返回版本</button>'
     + '<span class="toolbar-meta"><b>' + esc(v.name) + '</b> · 发布工作台</span>'
-    + '<span class="toolbar-right"><span class="hint">计划只描述打算怎么发；发布记录使用不可变工作项快照</span></span>'
+    + '<span class="toolbar-right"></span>'
     + '</div><div class="release-body release-page-body" aria-live="polite"></div>';
   host.innerHTML = "";
   host.appendChild(root);
@@ -2619,7 +2646,7 @@ export function mountReleaseWorkspace(pageHost, opts){
   }
   function planVersionPicker(disabled){
     var selected = planVersionSelection(), groups = planVersionGroups();
-    if(!groups.length) return '<p class="hint">没有可管理的版本，或版本选项尚未加载；当前版本始终包含在计划中。</p>';
+    if(!groups.length) return '<p class="hint">没有可管理的版本</p>';
     var q = String(planVersionQuery || "").trim().toLowerCase(), shown = 0, total = 0;
     var html = groups.map(function(project){
       var all = project.versions || [];
@@ -3468,7 +3495,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       return;
     }
     if(!verLog.rows.length){
-      box.innerHTML = '<p class="hint">暂无操作记录；创建、编辑、开始、关闭 / 取消与范围调整都会记录在这里。</p>';
+      box.innerHTML = '<p class="hint">暂无操作记录</p>';
       return;
     }
     box.innerHTML = '<ul class="release-scope">' + verLog.rows.map(function(l){
@@ -3480,7 +3507,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     var box = layer.querySelector('[data-release-record-list]'); if(!box) return;
     var rows = records.filter(function(r){ return (!filters.result || (filters.result === "published" ? r.result === "success" && r.environment === "production" && r.operation !== "rollback" : r.result === filters.result)) && (!filters.environment || r.environment === filters.environment) && (!filters.operation || r.operation === filters.operation); });
     page = Math.max(0, Math.min(page, Math.ceil(rows.length / 10) - 1));
-    box.innerHTML = rows.slice(page * 10, page * 10 + 10).map(releaseRecordHTML).join('') || '<p class="hint">没有匹配的正式记录，不反推历史。</p>';
+    box.innerHTML = rows.slice(page * 10, page * 10 + 10).map(releaseRecordHTML).join('') || '<p class="hint">没有匹配的正式记录</p>';
     var count = layer.querySelector('[data-history-count]'); count.textContent = "第 " + (page + 1) + " 页 · " + rows.length + " 条（最多加载 200 条）";
     layer.querySelector('[data-history-prev]').disabled = busy || page === 0;
     layer.querySelector('[data-history-next]').disabled = busy || (page + 1) * 10 >= rows.length;
@@ -3541,7 +3568,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     var riskReason = c.verdict === "block" && actualDraft.result === "success"
       ? '<div class="release-risk"><label for="releaseRiskReason">未按计划发布的原因 <span class="req">*</span></label>'
         + '<textarea id="releaseRiskReason" class="textarea" data-release-inlineReason maxlength="1000" placeholder="例如：未执行的 2 条必测已人工核对，窗口内补测"' + inlineDisabled + '>' + esc(actualDraft.deviationReason) + '</textarea>'
-        + '<p class="hint">只记录为什么仍要发布；与高级区同一个字段，填写后重新预览确认。</p></div>'
+        + '<p class="hint">填写后需重新预览确认</p></div>'
       : "";
     var coverageLine = (!c.demandsTotal && !c.workItemsTotal)
       ? '本版本范围：还没有纳入版本的需求或工作项，先规划版本范围'
@@ -3636,7 +3663,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       + field("风险与回滚方案", '<textarea data-plan-risks maxlength="1000"' + disabled + '>' + esc(p.risks || "") + '</textarea>', "建议写清回滚命令、数据兼容处理和回滚后的验证步骤。")
       + field("计划状态", '<select data-plan-status' + disabled + '>' + options([["draft", "草稿"], ["ready", "就绪"], ["canceled", "取消"]].concat(p.status === "completed" ? [["completed", "已完成（只读）"]] : []), p.status || "draft") + '</select>', "只有「就绪」计划可被实际记录直接引用；就绪需要计划时间、负责人、至少 1 个工作项和目标键。草稿、取消或已完成会触发偏差校验，需要填写理由。")
       + (!locked ? field("新建 / 修改理由", '<input data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划">', "", true) + '<p class="release-error" data-plan-error role="alert"></p><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button>' : '<p class="hint">此计划只读</p>') + '</section>';
-    var actualSection = mayPublish ? '<section class="release-section"><h3>实际发布事实</h3><p class="release-guide">记录顺序：发生时间 → 执行人 → 制品与 SHA256 → 目标键 → 勾选实际交付项，然后预览并确认。</p><p class="release-readiness" data-actual-readiness></p><p class="hint">只填本次真实发生的交付。覆盖、操作、关联事件与失败原因收在高级区，异常时自动展开；失败、测试和回滚记录不等于生产生效。</p><div class="form-grid">'
+    var actualSection = mayPublish ? '<section class="release-section"><h3>实际发布事实</h3><p class="release-readiness" data-actual-readiness></p><p class="hint">只填本次真实发生的交付；失败、测试和回滚记录不等于生产生效。</p><div class="form-grid">'
         + field("本次关联计划", '<select data-release-planId' + actualDisabled + '>' + actualPlanOptions(a) + '</select>', "关联计划用于预检对比；无计划即紧急记录。环境或状态不一致的计划仍可选择，但必须填写原因。", false, planSummaryHTML(a))
         + field("实际发生时间（本地）", '<input type="datetime-local" step="60" data-release-occurredAt value="' + esc(a.occurredAt) + '"' + actualDisabled + '>', "真实发生时间，不能晚于当前时间；与计划时间不同需填写原因。", true)
         + field("实际环境", '<select data-release-environment' + actualDisabled + '>' + options(envs, a.environment) + '</select>', "真实发布环境；与计划环境不同需填写原因。")
@@ -3654,7 +3681,7 @@ export function mountReleaseWorkspace(pageHost, opts){
         + field("未按计划发布的原因", '<textarea data-release-deviationReason maxlength="1000" placeholder="例如：环境临时切换 / 客户紧急窗口 / 计划内 2 项未完成"' + actualDisabled + '>' + esc(a.deviationReason) + '</textarea>', "无计划、环境 / 覆盖 / 范围 / 时间与计划不一致、包含未完成项或发布检查有阻断项时必填；只记录事实，不改写工作项状态。")
         + field("实际说明", '<textarea data-release-notes maxlength="2000"' + actualDisabled + '>' + esc(a.notes) + '</textarea>')
         + field("失败原因（失败时必填）", '<textarea data-release-failureReason maxlength="1000" placeholder="记录失败时必填，说明失败环节与现象"' + actualDisabled + '>' + esc(a.failureReason) + '</textarea>', "实际结果为失败时必须填写失败环节与现象。", a.result === "failed") + '</details>'
-        + '<p class="release-error" data-actual-error role="alert"></p><button class="btn sm" data-release-preview type="button">预览本次范围与预检结果</button><div data-release-scope><p class="hint">尚未预览。预览会分别列出本次实际范围与计划未选入的项，两边都保留。</p></div><button class="btn primary" data-release-confirm type="button" disabled>确认记录本次事实</button></section>' : '';
+        + '<p class="release-error" data-actual-error role="alert"></p><button class="btn sm" data-release-preview type="button">预览本次范围与预检结果</button><div data-release-scope><p class="hint">尚未预览</p></div><button class="btn primary" data-release-confirm type="button" disabled>确认记录本次事实</button></section>' : '';
     var historySection = '<section class="release-section"><h3>发布历史</h3><div class="row row-gap"><select data-history-result aria-label="历史结果">' + options([["", "全部结果"], ["published", "已发布（生产成功，不含回滚）"], ["success", "全部成功（含测试 / 回滚）"], ["failed", "失败"]], filters.result) + '</select><select data-history-environment aria-label="历史环境">' + options([["", "全部环境"]].concat(envs), filters.environment) + '</select><select data-history-operation aria-label="历史操作">' + options([["", "全部操作"], ["deploy", "部署"], ["redeploy", "重部署"], ["rollback", "回滚"]], filters.operation) + '</select></div><div data-release-record-list></div><div class="row row-gap"><button class="btn sm" data-history-prev type="button">上一页</button><span class="hint" data-history-count></span><button class="btn sm" data-history-next type="button">下一页</button></div></section>';
     var versionLogSection = '<section class="release-section"><h3>版本操作记录</h3><p class="hint">创建、编辑、开始、关闭 / 取消与范围调整的留痕；与上面的正式发布记录分开，后者只记真实部署事实。</p><div data-version-log><p class="hint">加载中…</p></div></section>';
     var contentSection = '<section class="release-section"><h3>版本内容</h3><p class="hint">目标就绪日：' + esc(v.targetDate || "未设置") + '。版本内容不等于计划范围，更不等于实际发布范围。' + (versionContentLocked(v) ? '已有成功正式发布，内容范围只读；可创建新计划和独立事件。' : '') + '</p><ul class="release-scope">' + contentTasks.map(function(t){ return '<li>' + esc(t.title) + ' · ' + esc(colName(t.boardColumn)) + ' ' + taskPublicationHTML(t) + '</li>'; }).join('') + '</ul></section>';

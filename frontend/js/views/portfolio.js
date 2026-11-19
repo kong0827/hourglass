@@ -231,7 +231,7 @@ function renderPortfolio(){
     + '<button type="button" data-pf-mode="table" aria-pressed="' + (mode === "table") + '">列表</button>'
     + '</div>'
     + '<button class="btn sm" type="button" id="btnPortfolioColumns"' + (mode === "table" ? "" : " hidden") + '>显示字段</button>';
-  $("portfolioBody").innerHTML = '<div class="manager-toolbar"><div><b>全局健康度</b><span>全部项目 · 点击指标查看明细，点项目名进入项目驾驶舱</span></div>'
+  $("portfolioBody").innerHTML = '<div class="manager-toolbar"><div><b>全局健康度</b></div>'
     + '<div class="toolbar-right">' + seg + fullscreenButtonHTML()
     + '<button class="btn sm" type="button" data-portfolio-export>导出周报</button></div></div>'
     + caliberHTML('进度 = Σ工作项完成度 ÷ 工作项数；红灯 = 逾期占比 &gt;10% 且连续 7 天无完成，橙灯 = 有逾期或成员超载。分布按看板列的处理规则归类：待处理含「等待接续」列，进行中含「正常处理」的自定义列，「执行结束」列单独计数、不计未完成。统计范围含已归档项目（归档只是收起，数据与统计保留），不含你无权查看的项目；「本周」按自然周（周一起）计算。')
@@ -284,7 +284,7 @@ function openActiveProjects(){
   layer.setAttribute("aria-modal", "true");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
   layer.innerHTML = '<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
-    + '<h2>进行中项目 · ' + projects.length + '</h2><div class="desc">点击项目名进入项目驾驶舱，卡片下钻可见工作项明细</div></div>'
+    + '<h2>进行中项目 · ' + projects.length + '</h2></div>'
     + '<button class="icon-btn sm" type="button" data-kpi-projects-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
     + '<th>项目</th><th>健康度</th><th class="num">进度</th><th class="num">待处理</th><th class="num">进行中</th><th class="num">已完成</th><th class="num">逾期</th><th>成员</th>'

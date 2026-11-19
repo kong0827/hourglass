@@ -410,6 +410,13 @@ function syncDimButtons(){
       badge.parentNode.removeChild(badge);
     }
   });
+  /* 我的工作隐藏了全部维度时，改由空间作用域占据「范围」段；两样都空才整段收起 */
+  var fb = $("filterbar");
+  if(fb){
+    var anyVisible = !!dimGroup.querySelector(".fb-space")
+      || Array.prototype.some.call(dimGroup.querySelectorAll("[data-dim-open]"), function(b){ return !b.hidden; });
+    fb.classList.toggle("fb-no-dims", !anyVisible);
+  }
 }
 /* 项目维度按项目集分组：看板 meta 只给 id / name / count，层级从项目缓存补齐。
    0 计数的项目默认不铺陈，搜索时才以禁选行出现，避免整份清单被空项目拉长。 */

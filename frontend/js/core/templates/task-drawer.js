@@ -179,7 +179,6 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <button class="link-btn" type="button" id="readWatchAdd" hidden>+ 添加关注人</button>
             </div>
             <div class="watch-list" id="readWatchList"></div>
-            <p class="watch-note" id="readWatchNote">关注只决定通知与可见性：新评论、状态流转、移入回收站或恢复会通知关注人；不参与状态推进，也不提升权限。</p>
           </section>
 
           <!-- 测试交接：提测时间 / 测试负责人 / 测试时间窗；未指派时显式提示 -->
@@ -223,7 +222,6 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <section class="read-card">
             <div class="read-card-head">
               <h3>描述</h3>
-              <span class="foot-note" id="readDescHint">点击正文修改 · 失焦保存</span>
             </div>
             <div class="read-desc task-copy" id="readDesc" tabindex="0" role="button" aria-label="工作项描述，点击修改" title="点击修改描述；失焦或 Ctrl/⌘ + Enter 保存，Esc 取消"></div>
           </section>
@@ -348,13 +346,13 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
       <div class="task-detail-layout">
         <div class="task-detail-main stack">
           <section class="drawer-card">
-            <div class="drawer-card-head"><h3>内容</h3><span class="foot-note">描述与标签均为选填</span></div>
+            <div class="drawer-card-head"><h3>内容</h3></div>
             <div class="field">
               <label class="field-label">描述</label>
               <div id="iDesc" style="min-height:120px"></div>
             </div>
             <div class="field" style="margin-top:11px">
-              <div class="field-label"><label for="iTags">标签</label><span class="foot-note" style="margin-left:auto">回车或逗号添加 · 最多 8 个</span></div>
+              <div class="field-label"><label for="iTags">标签</label></div>
               <div class="tag-input-wrap" id="tagWrap">
                 <input id="iTags" type="text" maxlength="16" placeholder="添加标签…" autocomplete="off" list="tagOptions" aria-label="添加标签" />
               </div>
@@ -363,7 +361,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           </section>
 
           <section class="drawer-card">
-            <div class="drawer-card-head"><h3>计划</h3><span class="foot-note">开始留空则只在截止日出现</span></div>
+            <div class="drawer-card-head"><h3>计划</h3></div>
             <div class="date-row">
               <div class="field">
                 <label class="field-label" for="iStart">开始日期</label>
@@ -398,7 +396,6 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <input id="iEstimate" type="number" min="0" max="168" step="0.5" placeholder="例如 4" />
                   <span class="est-unit">小时</span>
                 </div>
-                <span class="hint" id="iEstimateHint">填了才能和实际计时比出你的估时系数</span>
               </div>
               <div class="field">
                 <label class="field-label" for="iTestEstimate">测试预估 <span class="foot-note">可选</span></label>
@@ -406,7 +403,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <input id="iTestEstimate" type="number" min="0" max="168" step="0.5" placeholder="例如 2" />
                   <span class="est-unit">小时</span>
                 </div>
-                <span class="hint">只计入测试负责人剩余负载；不填按 0 计</span>
+                <span class="hint">不填按 0 计</span>
               </div>
               <div class="field">
                 <div class="field-label">节点</div>
@@ -414,7 +411,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <input type="checkbox" class="cbx" id="iMilestone" />
                   <span class="toolbar-meta is-strong">里程碑（单日节点）</span>
                 </label>
-                <span class="hint">勾选后甘特图用菱形展示，不占工期</span>
+                <span class="hint">甘特图显示为菱形，不占工期</span>
               </div>
             </div>
 
@@ -425,7 +422,6 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <div class="field-label">实际投入<button class="caliber-mark" type="button" data-caliber-help="drawer.actual" aria-label="查看实际投入口径" title="查看实际投入口径">?</button></div>
                   <div class="est-actual" id="iActual">—</div>
                   <div class="work-row" style="gap:8px">
-                    <span class="hint" id="iActualHint" style="margin-right:auto">按工作时段折算的计时累计</span>
                     <button class="btn sm" type="button" id="btnActualAdd" title="手工补记一条实际工时（忘开表、加班等）">
                       <span data-icon="plus"></span>&nbsp;补记
                     </button>
@@ -437,7 +433,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                     <input id="iProg" type="range" min="0" max="100" step="5" value="0" aria-label="当前进度百分比" />
                     <span class="pv" id="progVal">0%</span>
                   </div>
-                  <span class="hint" id="progHint">0–100，拖到 100% 不会自动标记完成（完成以「移入已完成列」为准）</span>
+                  <span class="hint" id="progHint"></span>
                 </div>
               </div>
               <div class="seg mini" id="segProg" style="margin-top:8px">
@@ -469,7 +465,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <div class="est-actual" id="iTestEnd">—</div>
                 </div>
               </div>
-              <span class="hint">进入「待测试」记录提测时间；进入「测试中」记录开始测试；测试通过或退回时记录结束测试</span>
+              <span class="hint">状态进入待测试 / 测试中时自动记录，通过或退回时结束窗口</span>
             </div>
           </section>
 
@@ -579,7 +575,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
 
           <!-- 缺陷信息：仅工作项类型为缺陷时显示 -->
           <section class="drawer-card drawer-card-defect" id="fDefect" hidden>
-            <div class="drawer-card-head"><h3>缺陷信息</h3><span class="foot-note">严重度必填，其余可后补</span></div>
+            <div class="drawer-card-head"><h3>缺陷信息</h3></div>
             <div class="field" id="fSeverity">
               <div class="field-label">严重度 <span class="req">*</span></div>
               <div class="sev-grid" id="sevGrid" role="group" aria-label="严重度" tabindex="-1">
@@ -619,7 +615,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 <option value="passed">回归通过</option>
                 <option value="failed">回归失败</option>
               </select>
-              <span class="hint">进入待测试 / 测试中自动记为待回归；标记已完成自动记为回归通过，退回待处理 / 进行中自动记为回归失败</span>
+              <span class="hint">随状态流转自动更新回归结果</span>
             </div>
           </section>
 
@@ -664,7 +660,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 </div>
               </div>
               <div class="field span2">
-                <span class="hint">被阻塞的工作项在卡片上会显示橙色条纹，可在筛选栏「更多筛选 → 仅看被阻塞」里集中查看。</span>
+                <span class="hint">被阻塞的卡片显示橙色条纹，可在「更多筛选 → 仅看被阻塞」集中查看</span>
               </div>
             </div>
           </details>
@@ -769,14 +765,14 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           </section>
 
           <section class="drawer-card" id="assocEditBox">
-            <div class="drawer-card-head"><h3>关联</h3><span class="foot-note">关联需求或文档会同步项目</span></div>
+            <div class="drawer-card-head"><h3>关联</h3></div>
             <div class="field">
               <div class="field-label">
                 <label for="iVersion">计划版本</label>
                 <button type="button" class="label-help" id="iVersionHelp" aria-label="查看版本与首版/迭代的区分逻辑" title="版本与首版/迭代怎么区分"></button>
               </div>
               <select id="iVersion" multiple size="3" aria-label="计划版本（可多选）" title="按住 Cmd / Ctrl 增减选择"></select>
-              <span class="hint" id="iVersionHint">可多选；全部取消即「待规划」。计划关联不代表实际交付。</span>
+              <span class="hint" id="iVersionHint">全部取消即「待规划」；关联不代表实际交付</span>
               <span class="hint" id="iDemandTarget" aria-live="polite"></span>
             </div>
             <div class="field" id="fVersionChangeReason" hidden>

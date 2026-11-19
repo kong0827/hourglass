@@ -968,8 +968,7 @@ function modulePanel(p, m, c){
       + '<input type="color" data-module-new-color value="#8a8578" aria-label="分类颜色" />'
       + '<input type="text" data-module-new-name maxlength="12" placeholder="分类名称，最多 12 个字" aria-label="分类名称" />'
       + '<button class="btn sm primary" type="button" data-module-save>添加</button>'
-      + '<button class="btn sm ghost" type="button" data-module-cancel>取消</button>'
-      + '<span class="foot-note">名称不可与现有分类重复，新分类排在最后。</span></div></td></tr>';
+      + '<button class="btn sm ghost" type="button" data-module-cancel>取消</button></div></td></tr>';
   }
   return '<section class="manager-panel project-modules">'
     + '<div class="manager-panel-head project-modules-head"><div class="project-modules-title"><b>分类</b><span>'
@@ -980,13 +979,11 @@ function modulePanel(p, m, c){
     + 'Σ分类 + 未分类 = 项目合计；项目整体进度仍按全部工作项计算，不是分类百分比的平均。</div></details>'
     + (canWrite ? '<button class="btn sm primary" type="button" data-module-add>+ 添加分类</button>' : '')
     + '</div></div>'
-    + '<p class="project-modules-note">像项目一样看每个分类的进度、预估与实际；删除分类时，其下工作项与需求迁到目标分类。</p>'
     + '<div class="tbl-wrap"><table class="manager-tbl project-modules-tbl"><thead><tr>'
     + '<th>分类</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">窗口外</th><th class="num">窗口内</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
     + (canManage ? '<th class="num" aria-label="操作"></th>' : '') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
-    + '<p class="project-modules-foot-note"><span class="project-modules-foot-main"><i class="project-modules-foot-info" aria-hidden="true">' + icon("infoCircle", 13) + '</i>'
-    + '<span>未分类为没有分类归属的工作项，单独统计；分类合计 + 未分类 = 项目合计。项目整体进度仍按全部工作项计算，不是分类百分比的平均。</span></span>'
-    + (canManage ? "" : (canWrite ? "<span>写成员可添加分类；删除仅空间主、管理员或项目负责人可操作。</span>" : "<span>仅项目写成员可维护分类。</span>")) + '</p>'
+    + (canManage ? "" : '<p class="project-modules-foot-note"><span class="project-modules-foot-main"><i class="project-modules-foot-info" aria-hidden="true">' + icon("infoCircle", 13) + '</i>'
+      + (canWrite ? "<span>写成员可添加分类；删除仅空间主、管理员或项目负责人可操作。</span>" : "<span>仅项目写成员可维护分类。</span>") + '</span></p>')
     + '</section>';
 }
 function saveModule(){

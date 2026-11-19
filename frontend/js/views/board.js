@@ -1567,8 +1567,7 @@ function openColColorPop(anchor, colId){
       '" style="width:26px;height:26px;border-radius:8px;border:1px solid rgba(16,24,40,.12);background:' + c + '"></button>';
   });
   html += '</div><div class="row row-gap" style="margin-top:10px">' +
-    '<input type="color" value="' + esc(colColorOf(colId)) + '" data-colpick-custom aria-label="自定义颜色" />' +
-    '<span class="foot-note">自定义颜色</span></div></div>';
+    '<input type="color" value="' + esc(colColorOf(colId)) + '" data-colpick-custom aria-label="自定义颜色" /></div></div>';
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = html;

@@ -706,9 +706,7 @@ function commitmentPanel(){
     return '<div class="vd-cmp-cell"><span class="caliber-label">' + esc(r[0])
       + caliberMarkHTML(r[3], r[4], "查看「" + r[0] + "」口径")
       + '</span><b class="' + tone.trim() + '">' + esc(r[1]) + '</b><small>' + esc(r[2]) + '</small></div>';
-  }).join("") + '</div>'
-    + '<p class="foot-note">基线只快照一次' + (c.capturedAt ? "（" + esc(dateText(c.capturedAt)) + " 冻结）" : "")
-    + '；预估变更不回写基线，新增 / 移出按当前绑定与基线的差集计算。</p>';
+  }).join("") + '</div>';
   return panel("承诺基线", "", inner);
 }
 function milestonePanel(){
@@ -726,7 +724,7 @@ function milestonePanel(){
       + '<td class="num">' + esc(dateText(m.achievedAt) || "—") + '</td>'
       + '<td class="num">' + num(m.releaseCount) + '</td></tr>';
   }).join("");
-  return panel("里程碑", '<span class="meta-right">点击行看达成证据</span>',
+  return panel("里程碑", '',
     tableWrap('<th>里程碑</th><th>状态</th><th class="num">目标日</th><th class="num">达成日</th><th class="num">生产成功</th>', body));
 }
 function catName(id){
@@ -822,8 +820,6 @@ function hoursCardHTML(){
       + '<span class="mid">剩余预估 ' + hourText(remaining) + caliberMarkHTML("version.remaining", true, "查看「剩余预估」口径") + '</span>'
       + '<span>预估 ' + hourText(est) + '</span></div>'
     + '</div>'
-    + '<p class="foot-note vd-hours-note">预估按工作项合计，实际按工作项累计计时；未计时的工作项不计入实际。'
-    + '剩余预估是未完成工作项的预估之和，不扣已投入。测试窗口只是实际工时的筛选口径，收进「计时窗口」，不再单列指标。</p>'
     + '</section>';
 }
 
@@ -1298,7 +1294,7 @@ function branchPanel(){
       + '<b>' + num(b.taskCount) + ' 项</b></button>'
       + linkBtn("branch", b.branchId, b.name) + '</span>';
   }).join("");
-  return panel("分支进度", '<span class="meta-right">由工作项所挂分支推导 · 点名字看分支，点漏斗看本版本里挂它的工作项</span>',
+  return panel("分支进度", '<span class="meta-right">由工作项所挂分支推导</span>',
     '<div class="vd-branches">' + chips + '</div>');
 }
 function deliveryPanel(){
@@ -1437,7 +1433,7 @@ function scopeHTML(){
   return scopeFiltersHTML() + panel("版本工作项", meta,
     tableWrap('<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th class="num">截止</th>'
       + '<th class="num">预估</th><th class="num">实际</th><th class="num">窗口外</th><th class="num">窗口内</th>', body)
-    + '<p class="foot-note">点击行打开工作项详情抽屉；窗口内 / 外按测试窗口（提测 → 测试结束）拆分计时，窗口外含评审、设计、开发、运维等。</p>');
+    + '<p class="foot-note">窗口内 / 外按测试窗口（提测 → 测试结束）拆分计时，窗口外含评审、设计、开发、运维等。</p>');
 }
 
 /* ==================== 需求 ==================== */
@@ -1471,7 +1467,7 @@ function demandsHTML(){
   }).join("");
   return panel("已排需求", '<span class="meta-right">' + slot.rows.length + ' 项 · 目标版本指向本版本，不含已关闭</span>',
     tableWrap('<th>需求</th><th>类型</th><th>状态</th><th>优先级</th><th class="num">期望日期</th><th class="num">本版本工作项</th>', body)
-    + '<p class="foot-note">点击行打开需求详情，点漏斗把「工作项」页联动到该需求；需求按「目标版本」规划，工作项按「计划版本」归组，两者口径不同。</p>');
+    + '<p class="foot-note">需求按「目标版本」规划，工作项按「计划版本」归组。</p>');
 }
 
 /* ==================== 发布 ==================== */
@@ -1506,7 +1502,7 @@ function plansPanel(){
       + '<td class="num">' + (num(p.versionCount) > 1 ? num(p.versionCount) + " 个版本（已完成 " + num(p.releasedVersionCount) + "）" : "单版本") + '</td>'
       + '<td class="num">' + (p.plannedTaskIds || []).length + '</td></tr>';
   }).join("");
-  return panel("发布计划", '<span class="meta-right">' + slot.rows.length + ' 条 · 点击行进入发布工作区</span>',
+  return panel("发布计划", '<span class="meta-right">' + slot.rows.length + ' 条</span>',
     tableWrap('<th>计划编号</th><th>状态</th><th>环境</th><th>覆盖</th><th class="num">计划时间</th><th class="num">范围</th><th class="num">计划项</th>', body) + acts);
 }
 function recordMatches(r){
@@ -1570,8 +1566,7 @@ function logHTML(){
 function renderPicker(){
   if(!host) return;
   host.innerHTML = '<header class="vd-head"><div class="vd-head-top">' + backBtn()
-    + '<h1 class="vd-title">版本详情</h1></div>'
-    + '<div class="vd-sub"><span>选一个版本，打开它的详情页看范围、投入与发布事实。</span></div></header>'
+    + '<h1 class="vd-title">版本详情</h1></div></header>'
     + '<div class="vd-body"><div id="vdPicker">' + UI.skeletonRows(4) + '</div></div>';
   if(pickerRows){ paintPicker(); return; }
   API.get("/api/versions/cross-project").then(function(rows){

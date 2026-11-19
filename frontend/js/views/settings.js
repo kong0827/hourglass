@@ -415,7 +415,7 @@ function loadWsMemberList(){
     /* 多空间主等权：owner 之间可互相管理；最后一位空间主不可降级或移除 */
     $("btnWsLeave").hidden = isOwner && ownerCount <= 1;
     wsMemberList.innerHTML = (rt.currentWs.type === "shared"
-      ? '<div class="member-label-toolbar foot-note">默认岗位用于本空间所有项目；项目角色留空时自动沿用，已有项目覆盖不变。'
+      ? '<div class="member-label-toolbar foot-note">默认岗位沿用至各项目，项目角色可覆盖。'
         + (isManager ? ' <button class="btn sm" type="button" data-member-label-options>管理公司与角色候选</button>' : '') + '</div>' : '')
       + rt.wsMembersCache.map(function(m){
       var isSelf = rt.currentUser && m.userId === rt.currentUser.id;
@@ -527,7 +527,7 @@ function editMemberLabel(userId, kind){
       : "选择已有公司或输入新名称；请避免同一公司的不同写法。留空清除，不改变权限。",
     '<div class="field"><label for="' + inputId + '">' + (isJob ? "空间默认岗位" : "公司名称") + '</label>'
       + '<input id="' + inputId + '" type="text" list="' + inputId + 'Options" maxlength="' + max + '" autocomplete="off" value="' + esc(m[field] || "") + '" placeholder="' + (isJob ? "例如：全栈工程师 / 产品经理" : "选择或输入公司") + '">'
-      + '<datalist id="' + inputId + 'Options"></datalist><small class="foot-note">可选择候选或直接输入新的名称。</small></div>');
+      + '<datalist id="' + inputId + 'Options"></datalist></div>');
   var input = layer.querySelector("input"), err = layer.querySelector("[data-label-error]"), form = layer.querySelector("form"), busy = false;
   var combo = attachCombo(input, { chevron:true });
   loadMemberLabelOptions(wsId).then(function(options){
@@ -860,7 +860,7 @@ function renderGrantPicker(listEl, summaryEl){
   var session = grantSession;
   if(!session) return;
   if(!session.projects.length){
-    listEl.innerHTML = '<div class="foot-note">当前空间还没有项目。成员加入后可在创建项目时再分配，或稍后回来设置。</div>';
+    listEl.innerHTML = '<div class="foot-note">当前空间还没有项目</div>';
     summaryEl.textContent = "暂无项目可分配";
     return;
   }
@@ -2995,7 +2995,6 @@ function openUserSpaces(u){
         '<div class="user-spaces-summary">' +
           '<span class="tag ' + (isAdmin ? "tag-primary" : "ghost") + '">' + (isAdmin ? "平台管理员" : "普通账号") + '</span>' +
           (u.disabled ? '<span class="tag tag-danger">已停用</span>' : '') +
-          '<span class="foot-note">平台角色只决定账号与系统管理权限，不等于空间角色。</span>' +
         '</div>' +
         '<section class="user-spaces-sect"><h4>所属共享空间与角色</h4>' +
           '<div class="member-list">' + rows + '</div>' +
