@@ -55,7 +55,7 @@
 /* 已取消入口按原型做成标准按钮：图标 + 文案 + 常显计数，而不是只在有数时才出现的小 chip */
 .board-toolbar-end .btn{height:32px;padding:0 11px;font-size:13px;}
 .board-toolbar-end .btn .n{color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums;}
-#view-board .board{flex:1 1 auto;min-height:0;height:auto;}
+#view-board .board{flex:1 1 auto;min-height:0;height:auto;padding-bottom:var(--fab-safe);}
 .board-group-head{
   position:sticky;top:0;z-index:2;flex:0 0 auto;
   display:flex;align-items:center;gap:5px;width:100%;height:24px;padding:0 4px;
@@ -180,6 +180,8 @@
   flex:1 1 auto;min-height:0;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
   overflow:auto;overscroll-behavior:contain;
+  /* 底部留出悬浮助手的位置：滚到末行时操作列不被球压住 */
+  padding-bottom:var(--fab-safe);
 }
 /* 列表行高单一口径：我的工作 / 需求工作页 / 工作项列状态页三处列表形态共用，档位由 body[data-list-density] 切换 */
 body{--list-row-h:56px;}

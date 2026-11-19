@@ -374,6 +374,8 @@ body[data-view="mine"] #viewGroup{display:none;}
 .views{flex:1 1 auto;min-height:0;overflow:hidden;position:relative;}
 .view{display:none;height:100%;overflow:auto;padding:0 var(--content-pad) var(--content-pad);}
 .view.on{display:block;}
+/* 右下角悬浮助手避让：滚到末行时内容还能再上移一屏底部，最后一行操作不会被球压住 */
+.view:not(.view-flush)::after{content:"";display:block;height:var(--fab-safe);}
 .view.view-flush{padding:0;overflow:hidden;}
 
 /* ===================== 视图全屏 =====================
