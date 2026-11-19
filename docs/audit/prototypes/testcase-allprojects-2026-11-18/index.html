@@ -139,8 +139,17 @@
   .trow .tw.open{transform:rotate(90deg)}
   .trow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .trow .n{font-size:11px;color:var(--t3);font-variant-numeric:tabular-nums;flex:none}
-  .trow .pset{flex:none;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--t3);background:var(--sunken);border-radius:4px;padding:0 4px}
+  /* 项目集：一级分组标题，可折叠；项目缩进挂在竖线下 */
+  .pset-h{display:flex;align-items:center;gap:6px;width:100%;min-height:26px;padding:6px 7px 2px;border:0;border-radius:5px;background:transparent;color:var(--t3);font-size:10.5px;font-weight:700;letter-spacing:.02em;cursor:pointer;text-align:left}
+  .pset-h:hover{background:var(--hover);color:var(--t2)}
+  .pset-h .tw{width:13px;display:inline-flex;justify-content:center;flex:none;transition:transform .12s}
+  .pset-h .tw.open{transform:rotate(90deg)}
+  .pset-h .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pset-h .n{font-size:10.5px;color:var(--t3);font-variant-numeric:tabular-nums;flex:none}
+  .pset-body{margin:0 0 4px 9px;padding-left:5px;border-left:1px solid var(--line-soft)}
   .trow.grp{padding-left:23px;min-height:29px;font-size:12px}
+  .trow.grp.sub{padding-left:37px}
+  .trow.grp.sub .nm::before{content:"└ ";color:var(--t3)}
   .trow.grp .tw{width:0}
   .trow.grp.none{color:var(--t3)}
   .vtag{flex:none;font-size:9.5px;line-height:14px;border-radius:3px;padding:0 4px;background:var(--sunken);color:var(--t3)}
@@ -151,6 +160,22 @@
   .bucket{margin:8px 6px 3px;font-size:10.5px;color:var(--t3);line-height:15px}
   .side-empty{padding:18px 10px;text-align:center;color:var(--t3);font-size:12px}
   .side-foot.long{font-size:10px;line-height:15px}
+  /* 右键菜单：全部项目下按行定位维护分组 */
+  .pctx{position:fixed;z-index:60;min-width:172px;padding:5px;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-shadow:0 12px 32px rgba(16,24,40,.16);display:none}
+  .pctx.open{display:block}
+  .pctx .head{padding:5px 8px 6px;font-size:10.5px;color:var(--t3);border-bottom:1px solid var(--line-soft);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pctx button{display:flex;align-items:center;gap:7px;width:100%;height:28px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:var(--t2);font:inherit;font-size:12px;cursor:pointer;text-align:left}
+  .pctx button:hover{background:var(--hover);color:var(--t1)}
+  .pctx button.danger{color:var(--red)}
+  .pctx .note{padding:5px 8px;font-size:10.5px;color:var(--t3);line-height:15px}
+  .pctx .sep{height:1px;background:var(--line-soft);margin:4px 2px}
+  /* 分组名称弹窗（原型） */
+  .pmask{position:fixed;inset:0;z-index:70;background:rgba(16,24,40,.28);display:none;align-items:center;justify-content:center}
+  .pmask.open{display:flex}
+  .pcard{width:340px;background:var(--panel);border-radius:10px;box-shadow:0 20px 48px rgba(16,24,40,.24);padding:16px}
+  .pcard h4{margin:0 0 10px;font-size:13px;color:var(--t1)}
+  .pcard input{width:100%;height:30px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--t1);font:inherit;font-size:12.5px;padding:0 8px}
+  .pcard .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 
   /* 列表工具条 */
   .qbar{flex:none;height:38px;display:flex;align-items:center;gap:8px}
@@ -249,7 +274,7 @@
 <div class="pbar">
   <div>
     <div class="pt">用例 · 全部项目分组导航</div>
-    <div class="pd">2026-11-18 · 交互原型：左栏「项目 &gt; 分组」两级导航，段头吸顶 / 分组 chip / 行内项目标识；切「现状」对照当前行为</div>
+    <div class="pd">2026-11-18 · 交互原型：左栏「项目集 &gt; 项目 &gt; 分组」三级导航，段头吸顶 / 分组 chip / 行内项目标识；切「现状」对照当前行为</div>
   </div>
   <div class="pctl">
     <span class="pl">视图</span>
@@ -350,32 +375,46 @@
   </div>
 
   <div class="toast" id="toast"></div>
+  <div class="pctx" id="pCtx" role="menu"></div>
+  <div class="pmask" id="pMask">
+    <div class="pcard" role="dialog" aria-modal="true">
+      <h4 id="pCtxTitle">新建分组</h4>
+      <input id="pCtxName" type="text" maxlength="60" placeholder="分组名称" />
+      <div class="foot">
+        <button class="btn ghost" type="button" id="pCtxCancel">取消</button>
+        <button class="btn primary" type="button" id="pCtxOk">保存</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="notes">
   <div class="ncard">
     <h5><span class="num">1</span>这次改了什么</h5>
     <ol>
-      <li>全部项目仍在列表里按项目分段，但左栏不再整块收起：改成 <b>项目 &gt; 分组</b> 两级导航，只做浏览与跳转。</li>
+      <li>全部项目仍在列表里按项目分段，左栏不再整块收起：改成 <b>项目集 &gt; 项目 &gt; 分组</b> 三级导航，点节点只看该项目 / 分组。</li>
+      <li>项目集可折叠并给出「N 个项目 · M 条」合计；项目默认折叠，避免十几个项目的分组铺满左栏。</li>
       <li>项目段头 <b>吸顶</b>，滚动时不丢项目；段头直接列出该项目的主要分组，点 chip 即筛到「项目 + 分组」。</li>
       <li>跨项目浏览时每行带 <b>项目标识</b>：TC 编号是项目内编号，每个项目都有 TC-001、TC-066。</li>
-      <li>写操作仍要求单项目：全部项目下「新建分组」「新建用例」先选目标项目。</li>
+      <li>分组维护不再要求先切项目：<b>右键项目行</b>就地新建分组，<b>右键分组行</b>新建子分组 / 改名 / 删除，按该项目校验权限；拖拽归类仍要进入项目。</li>
     </ol>
   </div>
   <div class="ncard">
     <h5><span class="num">2</span>交互规则</h5>
     <ul>
-      <li>项目下拉选「全部项目」→ 左栏是两级树；选具体项目 → 回到现有分组面板（团队共享 / 指定成员 / 仅自己），行为不变。</li>
+      <li>项目下拉选「全部项目」→ 左栏是三级树；选具体项目 → 回到现有分组面板（团队共享 / 指定成员 / 仅自己），行为不变。</li>
       <li>点项目节点：只看该项目；点分组节点：项目 + 分组；根节点「全部项目」或范围 chip 的 × 退回。</li>
-      <li>左栏搜索会保留命中的项目节点；空项目不占位；分组计数可重叠，不做相加。</li>
+      <li>左栏搜索按项目集 / 项目 / 分组名命中，命中项临时展开；清空后恢复项目集展开、项目折叠。分组计数可重叠，不做相加。</li>
       <li>段头 chip 与左栏节点是同一范围，选中态同步；「进入项目 →」等于切到单项目模式。</li>
+      <li><b>右键项目行</b>：只看该项目 / 进入项目维护 / 在该项目新建分组；<b>右键分组行</b>：只看该分组 / 新建子分组 / 编辑分组 / 删除分组（删除只拆分组，用例回未分组）。</li>
+      <li>写入口按<b>行所属项目</b>校验：只读项目的右键菜单只剩筛选项并注明只读；「未加入任何分组」聚合行、项目集行与空白处不弹菜单。</li>
     </ul>
   </div>
   <div class="ncard">
     <h5><span class="num">3</span>边界与未做</h5>
     <ul>
       <li>不做跨项目合并分组：同名「回归 / 冒烟」很常见，合并后无法判断筛的是哪个项目。</li>
-      <li>全部项目下不开放拖拽归类、改可见范围、改名删除；这些都先进入项目。</li>
+      <li>拖拽归类与改可见范围仍只在项目内提供；全部项目下的分组写操作限于新建 / 改名 / 删除。</li>
       <li>目录仍是项目内单归属结构，全部项目下继续收在单项目；移动端左栏默认收起。</li>
       <li>原型数据为演示样例，计数与接口沿用现有口径，不是真实数据。</li>
     </ul>
@@ -455,7 +494,7 @@
       ]
     },
     {
-      id:'doc', name:'文档中心', set:'基础平台', total:17,
+      id:'doc', name:'文档中心', set:'基础平台', total:17, ro:true,
       stats:{passed:12,failed:3,blocked:1,skipped:1,untested:0},
       ungrouped:6,
       groups:[
@@ -488,7 +527,7 @@
     scope:'all',          /* 'all' | 项目 id */
     treeProject:null,     /* 全部项目下，当前收窄到的项目 */
     group:null,           /* 项目 / 全部分组下的分组 id，__none 表示未分组 */
-    open:{}, q:'', listQ:'', status:'', sel:{}
+    open:{}, popen:{}, q:'', listQ:'', status:'', sel:{}
   };
 
   /* ---------- 图标 ---------- */
@@ -664,19 +703,20 @@
     side.innerHTML = state.scope === 'all' ? treeHTML() : projectPanelHTML();
   }
 
+  function setOf(p){ return p.set || '__loose'; }
   function treeHTML(){
     var q = state.q.trim().toLowerCase();
     var html = '<div class="shead-side">'
-      + '<span class="stitle">' + I.layers + ' 分组'
-      + anno(1, '项目 > 分组两级导航：分组只做浏览与跳转，写操作先进入项目') + '</span>'
+      + '<span class="stitle">' + I.layers + ' 项目导航'
+      + anno(1, '项目集 > 项目 > 分组三级导航：点节点只看该项目/分组，右键项目或分组可就地维护分组') + '</span>'
       + '<span class="scount" title="' + DATA.length + ' 个项目 · ' + totalAll() + ' 条用例">' + DATA.length + ' 个项目</span>'
-      + '<button class="btn sm ghost dim" type="button" data-newset title="先进入项目再新建分组">'
+      + '<button class="btn sm ghost dim" type="button" data-newset title="右键目标项目或分组，就地新建分组">'
       + I.plus + ' 新建分组</button>'
       + '</div>'
       + '<label class="ssearch"><span class="sic">' + I.search + '</span>'
-      + '<input id="treeSearch" type="search" placeholder="搜索项目 / 分组…" value="' + esc(state.q) + '" autocomplete="off" /></label>'
-      + '<div class="side-hint">' + I.layers + anno(4, '新建 / 拖动 / 改名仍需单项目权限；全部项目下先进入项目')
-      + '<span>跨项目导航；写入先进入项目</span></div>'
+      + '<input id="treeSearch" type="search" placeholder="搜索项目集 / 项目 / 分组…" value="' + esc(state.q) + '" autocomplete="off" /></label>'
+      + '<div class="side-hint">' + I.layers + anno(4, '右键目标项目或分组：新建 / 子分组 / 改名 / 删除，按该项目校验权限')
+      + '<span>右键项目或分组可维护分组；新建用例先选目标项目</span></div>'
       + '<div class="side-body">';
 
     if(!q){
@@ -685,47 +725,83 @@
         + I.layers + '<span class="nm">全部项目</span><span class="n">' + totalAll() + '</span></button>';
     }
 
+    /* 项目集按演示数据里首次出现的顺序；未归入项目集固定放最后 */
+    var order = [];
+    DATA.forEach(function(p){ var n = p.set || ''; if(order.indexOf(n) < 0) order.push(n); });
+    var hasSets = order.some(function(n){ return !!n; });
+    order = order.filter(function(n){ return !!n; }).concat(order.indexOf('') >= 0 ? [''] : []);
+
     var matched = 0;
-    DATA.forEach(function(p){
-      var pm = !q || p.name.toLowerCase().indexOf(q) >= 0 || p.set.toLowerCase().indexOf(q) >= 0;
-      var gs = p.groups.filter(function(g){
-        return pm || g.name.toLowerCase().indexOf(q) >= 0;
-      });
-      var ungroupedMatch = !q || pm || '未加入任何分组'.indexOf(q) >= 0;
-      if(q && !pm && !gs.length && !(ungroupedMatch && p.ungrouped)) return;
-      matched++;
-
-      var open = !!q || state.open[p.id] !== false;
-      var pOn = state.treeProject === p.id && !state.group;
-      html += '<div class="pnode">'
-        + '<div class="trow proj' + (pOn ? ' on' : '') + '" data-proj="' + p.id + '" role="button" tabindex="0">'
-        + '<span class="tw' + (open ? ' open' : '') + '" data-tw="' + p.id + '" title="' + (open ? '折叠' : '展开') + '">' + I.chev + '</span>'
-        + '<span class="nm">' + esc(p.name) + '</span>'
-        + '<span class="pset">' + esc(p.set) + '</span>'
-        + '<span class="n">' + p.total + '</span>'
-        + '</div>';
-
-      if(open){
-        gs.forEach(function(g){
-          var on = state.treeProject === p.id && state.group === g.id;
-          html += '<div class="trow grp' + (on ? ' on' : '') + '" data-proj="' + p.id + '" data-group="' + g.id + '" role="button" tabindex="0">'
-            + '<span class="tw"></span>'
-            + '<span class="nm">' + esc(g.name) + '</span>'
-            + '<span class="vtag ' + g.vis + '">' + visName(g.vis) + '</span>'
-            + '<span class="n">' + g.count + '</span>'
-            + '</div>';
+    order.forEach(function(setName){
+      var rows = [];
+      DATA.filter(function(p){ return (p.set || '') === setName; }).forEach(function(p){
+        var pm = !q || p.name.toLowerCase().indexOf(q) >= 0 || setName.toLowerCase().indexOf(q) >= 0;
+        var gs = p.groups.filter(function(g){
+          if(pm || g.name.toLowerCase().indexOf(q) >= 0) return true;
+          var par = g.parent ? grpOf(p, g.parent) : null;
+          return !!(par && par.name.toLowerCase().indexOf(q) >= 0);
         });
-        if(p.ungrouped && ungroupedMatch){
-          var onU = state.treeProject === p.id && state.group === '__none';
-          html += '<div class="trow grp none' + (onU ? ' on' : '') + '" data-proj="' + p.id + '" data-group="__none" role="button" tabindex="0">'
-            + '<span class="tw"></span><span class="nm">未加入任何分组</span><span class="n">' + p.ungrouped + '</span></div>';
-        }
+        var ungroupedMatch = !q || pm || '未加入任何分组'.indexOf(q) >= 0;
+        if(q && !pm && !gs.length && !(ungroupedMatch && p.ungrouped)) return;
+        rows.push({p:p, gs:gs, ungroupedMatch:ungroupedMatch});
+      });
+      if(!rows.length) return;
+      matched += rows.length;
+
+      var gid = setName || '__loose';
+      var gname = setName || '未归入项目集';
+      var gOpen = !!q || state.popen[gid] !== false;
+      var gtotal = rows.reduce(function(a, r){ return a + r.p.total; }, 0);
+      if(hasSets){
+        html += '<button class="pset-h" type="button" data-pset="' + gid + '" aria-expanded="' + (gOpen ? 'true' : 'false') + '"'
+          + ' title="' + (gOpen ? '折叠 ' : '展开 ') + esc(gname) + '">'
+          + '<span class="tw' + (gOpen ? ' open' : '') + '">' + I.chev + '</span>'
+          + '<span class="nm">' + esc(gname) + '</span>'
+          + '<span class="n">' + rows.length + ' 个项目 · ' + gtotal + ' 条</span></button>';
+        if(!gOpen) return;
+        html += '<div class="pset-body">';
       }
-      html += '</div>';
+
+      rows.forEach(function(r){
+        var p = r.p, gs = r.gs;
+        var open = !!q || state.open[p.id] === true;
+        var pOn = state.treeProject === p.id && !state.group;
+        html += '<div class="pnode">'
+          + '<div class="trow proj' + (pOn ? ' on' : '') + '" data-proj="' + p.id + '" role="button" tabindex="0">'
+          + '<span class="tw' + (open ? ' open' : '') + '" data-tw="' + p.id + '" title="' + (open ? '折叠' : '展开') + '">' + I.chev + '</span>'
+          + '<span class="nm">' + esc(p.name) + '</span>'
+          + '<span class="n">' + p.total + '</span>'
+          + '</div>';
+
+        if(open){
+          function grpRow(g, sub){
+            var on = state.treeProject === p.id && state.group === g.id;
+            return '<div class="trow grp' + (sub ? ' sub' : '') + (on ? ' on' : '')
+              + '" data-proj="' + p.id + '" data-group="' + g.id + '" role="button" tabindex="0">'
+              + '<span class="tw"></span>'
+              + '<span class="nm">' + esc(g.name) + '</span>'
+              + '<span class="vtag ' + g.vis + '">' + visName(g.vis) + '</span>'
+              + '<span class="n">' + g.count + '</span>'
+              + '</div>';
+          }
+          gs.filter(function(g){ return !g.parent; }).forEach(function(g){
+            html += grpRow(g, false);
+            gs.filter(function(c){ return c.parent === g.id; }).forEach(function(c){ html += grpRow(c, true); });
+          });
+          if(p.ungrouped && r.ungroupedMatch){
+            var onU = state.treeProject === p.id && state.group === '__none';
+            html += '<div class="trow grp none' + (onU ? ' on' : '') + '" data-proj="' + p.id + '" data-group="__none" role="button" tabindex="0">'
+              + '<span class="tw"></span><span class="nm">未加入任何分组</span><span class="n">' + p.ungrouped + '</span></div>';
+          }
+        }
+        html += '</div>';
+      });
+
+      if(hasSets) html += '</div>';
     });
 
-    if(!matched) html += '<div class="side-empty">没有匹配的项目或分组</div>';
-    html += '</div><div class="side-foot">分组可多归属，计数可重叠、不能相加</div>';
+    if(!matched) html += '<div class="side-empty">没有匹配的项目集、项目或分组</div>';
+    html += '</div><div class="side-foot">右键项目或分组维护分组；计数可重叠、不能相加</div>';
     return html;
   }
 
@@ -964,6 +1040,110 @@
     toastTimer = setTimeout(function(){ el.classList.remove('on'); }, 1900);
   }
 
+  /* ---------- 右键：按行定位后就地维护分组 ---------- */
+  var ctx = {proj:'', group:''};
+  var dlg = {proj:'', group:'', parent:''};
+
+  function closeCtx(){
+    $('pCtx').classList.remove('open');
+    ctx = {proj:'', group:''};
+  }
+
+  function openCtx(x, y, pid, gid){
+    var p = proj(pid);
+    if(!p) return false;
+    var g = gid ? grpOf(p, gid) : null;
+    var ro = !!p.ro;
+    var html = '';
+    if(g){
+      var picked = state.treeProject === pid && state.group === g.id;
+      html += '<div class="head">分组：' + esc(g.name) + '</div>'
+        + '<button type="button" data-pact="pick">' + (picked ? '取消该分组筛选' : '只看该分组') + '</button>';
+      if(ro){
+        html += '<div class="note">你对该项目只读，只能查看和筛选。</div>';
+      }else{
+        html += '<button type="button" data-pact="new">' + I.plus + '新建子分组</button>'
+          + '<button type="button" data-pact="edit">编辑分组</button>'
+          + '<div class="sep"></div>'
+          + '<button type="button" class="danger" data-pact="del">删除分组</button>';
+      }
+    }else{
+      var projOnly = state.treeProject === pid && !state.group;
+      html += '<div class="head">项目：' + esc(p.name) + '</div>'
+        + '<button type="button" data-pact="pick-proj">' + (projOnly ? '取消只看该项目' : '只看该项目') + '</button>'
+        + '<button type="button" data-pact="enter-proj">' + I.arrow + '进入项目维护</button>';
+      if(ro){
+        html += '<div class="note">你对该项目只读，只能查看和筛选。</div>';
+      }else{
+        html += '<div class="sep"></div>'
+          + '<button type="button" data-pact="new-top">' + I.plus + '在该项目新建分组</button>';
+      }
+    }
+    var m = $('pCtx');
+    m.innerHTML = html;
+    m.classList.add('open');
+    var left = Math.min(x, window.innerWidth - m.offsetWidth - 8);
+    var top = Math.min(y, window.innerHeight - m.offsetHeight - 8);
+    m.style.left = Math.max(8, left) + 'px';
+    m.style.top = Math.max(8, top) + 'px';
+    ctx = {proj:pid, group:gid || ''};
+    return true;
+  }
+
+  function openGroupDlg(pid, gid, parentId){
+    var p = proj(pid);
+    if(!p) return;
+    if(p.ro){ toast('「' + p.name + '」对你只读，无法维护分组'); return; }
+    var g = gid ? grpOf(p, gid) : null;
+    var par = parentId ? grpOf(p, parentId) : null;
+    dlg = {proj:pid, group:gid || '', parent:parentId || ''};
+    $('pCtxTitle').textContent = (g ? '编辑分组 · ' + g.name
+      : (par ? '新建子分组 · ' + par.name : '新建分组')) + '（' + p.name + '）';
+    $('pCtxName').value = g ? g.name : '';
+    $('pMask').classList.add('open');
+    setTimeout(function(){ $('pCtxName').focus(); }, 0);
+  }
+
+  function closeDlg(){
+    $('pMask').classList.remove('open');
+    dlg = {proj:'', group:'', parent:''};
+  }
+
+  function saveDlg(){
+    var p = proj(dlg.proj);
+    if(!p) return closeDlg();
+    var name = $('pCtxName').value.trim();
+    if(!name){ $('pCtxName').focus(); toast('请填写分组名称'); return; }
+    var isNew = !dlg.group, isSub = !!dlg.parent;
+    if(isNew){
+      p.groups.push({id:'g' + Date.now(), name:name, vis:'team', count:0, parent:dlg.parent || ''});
+      state.open[p.id] = true;
+      state.popen[setOf(p)] = true;
+    }else{
+      grpOf(p, dlg.group).name = name;
+    }
+    closeDlg();
+    render();
+    toast(isNew
+      ? '已在「' + p.name + '」新建' + (isSub ? '子' : '') + '分组「' + name + '」（原型）'
+      : '已改名「' + name + '」（原型）');
+  }
+
+  function delGroup(pid, gid){
+    var p = proj(pid);
+    var g = p && gid ? grpOf(p, gid) : null;
+    if(!g) return;
+    var doomed = [g.id];
+    p.groups.forEach(function(x){ if(x.parent === g.id) doomed.push(x.id); });
+    p.groups = p.groups.filter(function(x){ return doomed.indexOf(x.id) < 0; });
+    var moved = 0;
+    p.cases.forEach(function(c){ if(doomed.indexOf(c.g) >= 0){ c.g = ''; moved++; } });
+    p.ungrouped = (p.ungrouped || 0) + moved;
+    if(state.group && doomed.indexOf(state.group) >= 0) state.group = null;
+    render();
+    toast('已删除分组「' + g.name + '」，' + (moved ? moved + ' 条用例回到未分组' : '用例不删') + '（原型）');
+  }
+
   /* ---------- 事件 ---------- */
   function bind(){
     $('searchIcon').innerHTML = I.search;
@@ -983,7 +1163,7 @@
         }
         resetScope(false);
         render();
-        toast(state.view === 'old' ? '现状：全部项目下左栏与分组入口整体收起' : '改版：全部项目下用「项目 > 分组」两级导航');
+        toast(state.view === 'old' ? '现状：全部项目下左栏与分组入口整体收起' : '改版：全部项目下用「项目集 > 项目 > 分组」三级导航');
       });
     });
 
@@ -1057,6 +1237,83 @@
       }
     });
 
+    /* 右键项目 / 分组行：按行定位，写入按该项目权限判 */
+    $('side').addEventListener('contextmenu', function(e){
+      if(state.scope !== 'all') return;
+      var gRow = e.target.closest('[data-group]');
+      if(gRow){
+        var gid = gRow.getAttribute('data-group');
+        if(gid === '__none'){ e.preventDefault(); toast('「未加入任何分组」是聚合行，不能改名或删除'); return; }
+        if(openCtx(e.clientX, e.clientY, gRow.getAttribute('data-proj'), gid)) e.preventDefault();
+        return;
+      }
+      var pRow = e.target.closest('[data-proj]');
+      if(pRow && openCtx(e.clientX, e.clientY, pRow.getAttribute('data-proj'), '')) e.preventDefault();
+    });
+
+    $('pCtx').addEventListener('click', function(e){
+      var b = e.target.closest('[data-pact]');
+      if(!b) return;
+      var act = b.getAttribute('data-pact');
+      var pid = ctx.proj, gid = ctx.group;
+      var p = proj(pid);
+      closeCtx();
+      if(!p) return;
+      if(act === 'pick-proj'){
+        if(state.treeProject === pid && !state.group){
+          state.treeProject = null;
+          state.group = null;
+        }else{
+          state.scope = 'all';
+          state.treeProject = pid;
+          state.group = null;
+          state.open[pid] = true;
+          state.popen[setOf(p)] = true;
+        }
+        state.status = '';
+        state.sel = {};
+        render();
+      }else if(act === 'pick'){
+        if(state.treeProject === pid && state.group === gid){
+          state.group = null;
+        }else{
+          state.treeProject = pid;
+          state.group = gid;
+          state.open[pid] = true;
+          state.popen[setOf(p)] = true;
+        }
+        state.status = '';
+        state.sel = {};
+        render();
+      }else if(act === 'enter-proj'){
+        state.scope = pid;
+        state.treeProject = null;
+        if(state.group && !grpOf(p, state.group)) state.group = null;
+        state.status = '';
+        state.sel = {};
+        render();
+        toast('已进入「' + p.name + '」，恢复单项目维护视图');
+      }else if(act === 'new-top'){
+        openGroupDlg(pid, '', '');
+      }else if(act === 'new'){
+        openGroupDlg(pid, '', gid);
+      }else if(act === 'edit'){
+        openGroupDlg(pid, gid, '');
+      }else if(act === 'del'){
+        delGroup(pid, gid);
+      }
+    });
+
+    $('pCtxCancel').addEventListener('click', closeDlg);
+    $('pCtxOk').addEventListener('click', saveDlg);
+    $('pCtxName').addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); saveDlg(); }
+    });
+    $('pMask').addEventListener('click', function(e){ if(e.target === this) closeDlg(); });
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Escape'){ closeCtx(); closeDlg(); }
+    });
+
     $('selAll').addEventListener('change', function(){
       var on = this.checked;
       document.querySelectorAll('.rowChk').forEach(function(b){
@@ -1078,11 +1335,22 @@
     document.addEventListener('click', function(e){
       var t;
 
+      if($('pCtx').classList.contains('open') && !e.target.closest('#pCtx')) closeCtx();
+
       /* 折叠箭头优先于项目行 */
       t = e.target.closest('[data-tw]');
       if(t){
         var pid = t.getAttribute('data-tw');
-        state.open[pid] = state.open[pid] === false;
+        state.open[pid] = state.open[pid] !== true;
+        renderSide();
+        return;
+      }
+
+      /* 项目集折叠：默认展开，收起后其下项目不再占版面 */
+      t = e.target.closest('[data-pset]');
+      if(t){
+        var setid = t.getAttribute('data-pset');
+        state.popen[setid] = state.popen[setid] === false;
         renderSide();
         return;
       }
@@ -1105,6 +1373,7 @@
         state.treeProject = gp;
         state.group = gid;
         state.open[gp] = true;
+        state.popen[setOf(proj(gp))] = true;
         state.status = '';
         state.sel = {};
         render();
@@ -1118,6 +1387,7 @@
         state.treeProject = pp;
         state.group = null;
         state.open[pp] = true;
+        state.popen[setOf(proj(pp))] = true;
         state.status = '';
         state.sel = {};
         render();
@@ -1188,7 +1458,8 @@
 
       t = e.target.closest('[data-newset]');
       if(t){
-        toast(state.scope === 'all' ? '先进入项目，再新建分组' : '打开「新建分组」弹窗（原型）');
+        if(state.scope === 'all') toast('右键目标项目或分组，就地新建分组');
+        else openGroupDlg(state.scope, '', '');
         return;
       }
 

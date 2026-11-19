@@ -685,8 +685,24 @@
 }
 .tc-vis-tag.personal{border-color:var(--border);background:var(--surface-sunken);color:var(--text-3);}
 
-/* 全部项目的两级树：项目行 + 其下分组；只读导航，进入项目才能写入 */
+/* 全部项目的三级树：项目集 → 项目 → 分组；只读导航，进入项目才能写入 */
 .tc-all-hint{margin:0 2px 6px;font-size:11px;line-height:1.55;color:var(--text-3);}
+/* 项目集：一级分组标题，可折叠；「N 个项目 · M 条」是本集内可见项目的合计 */
+.tc-setgrp{margin:6px 0 2px;}
+.tc-setgrp-head{
+  width:100%;display:flex;align-items:center;gap:5px;height:26px;padding:0 4px;
+  border:0;border-radius:var(--r-sm);background:none;font:inherit;color:var(--text-3);cursor:pointer;text-align:left;
+}
+.tc-setgrp-head:hover{background:var(--surface-hover);color:var(--text-2);}
+.tc-setgrp-head:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.tc-setgrp-chev{flex:0 0 auto;display:inline-flex;transition:transform var(--dur-fast) var(--ease-out);}
+.tc-setgrp-head[aria-expanded="true"] .tc-setgrp-chev{transform:rotate(90deg);}
+.tc-setgrp-name{
+  flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:11px;font-weight:700;letter-spacing:.02em;
+}
+.tc-setgrp-n{flex:0 0 auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.tc-setgrp-body{margin:0 0 4px 7px;padding-left:4px;border-left:1px solid var(--border);}
 .tc-all-proj{margin:0 0 1px;}
 .tc-all-proj + .tc-all-proj{margin-top:1px;}
 .tc-all-proj-ico{flex:0 0 auto;display:inline-flex;color:var(--text-3);}

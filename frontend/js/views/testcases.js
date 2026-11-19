@@ -9,7 +9,7 @@ import { attachEnvDict, recordEnv } from "../core/env-dict.js";
 import { icon } from "../core/icons.js";
 import { openTaskById, taskLink } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, canManageProject, catNameById, projectOptionsHTML, reqSetId, rt, setNameById, state } from "../core/state.js";
+import { canEditReq, canManageProject, catNameById, projectGroups, projectOptionsHTML, reqSetId, rt, setNameById, state } from "../core/state.js";
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
@@ -62,7 +62,9 @@ var caseAllProj = "";
 var caseAllSet = "";
 var caseAllSets = {};       /* reqId -> {list, noneTotal, loading, error}：全部项目树的分组缓存 */
 var caseAllSetSeq = 0;
-var caseAllOpen = {};       /* 项目展开态：reqId -> false 表示折叠，缺省即展开 */
+var caseAllOpen = {};       /* 项目展开态：只有显式展开才算开，缺省折叠 */
+var caseAllGrpOpen = {};    /* 项目集展开态：setId -> false 表示折叠，缺省即展开 */
+var caseSetDictDone = false; /* 项目集字典是否已尝试加载（含失败，失败按项目自带 setName 分组） */
 var caseAllQuery = "";      /* 全部项目树搜索词 */
 var caseProjTotals = {};    /* reqId -> 项目用例总数（无筛选时记录，供树与段头展示） */
 var caseSetSub = true;      /* 选中父分组时是否显示子分组用例（服务端按子树去重） */
@@ -2927,7 +2929,12 @@ function applyTcView(v){
   caseAllProj = caseScopeAll && typeof p.allProj === "string" && p.allProj
     && rt.reqList.some(function(r){ return r.id === p.allProj; }) ? p.allProj : "";
   caseAllSet = caseAllProj && typeof p.allSet === "string" ? p.allSet : "";
-  if(caseAllProj){ caseReqId = caseAllProj; }
+  if(caseAllProj){
+    caseReqId = caseAllProj;
+    caseAllOpen[caseAllProj] = true;
+    var viewSetId = reqSetId(caseAllProj);
+    if(viewSetId) caseAllGrpOpen[viewSetId] = true;
+  }
   /* 视图可能落在另一个项目上：先清掉旧项目的执行结果计数，等列表回来再填 */
   if(caseScopeAll) stats = null;
   if(UI.popOpen($("tcDirMenu"))) UI.closeAllPops();
@@ -6999,6 +7006,15 @@ function afterStructureChange(){
   loadCases();
   return sets;
 }
+/* 分组写操作后的刷新：全部项目下只作废并重取该项目的树缓存，
+   列表口径不变（不触发 caseReqId 那一套单项目刷新） */
+function afterSetOp(reqId){
+  if(!reqId) return afterStructureChange();
+  delete caseAllSets[reqId];
+  loadCaseSetsAll(false);
+  if(caseAllNarrow()) syncScopeBar();
+  return Promise.resolve();
+}
 
 /* ---------- 项目目录面板 ---------- */
 
@@ -7614,15 +7630,36 @@ function setHasKidsIn(id){
   }
   return false;
 }
-/* 搜索命中：项目名命中显示其全部分组；否则保留命中分组及其祖先链 */
+/* 项目集名与项目名一样算整项目命中：搜「运营平台」应把集内项目都带出来 */
+function allProjNameHit(p, q){
+  if(!q) return false;
+  if(String(p.name || "").toLowerCase().indexOf(q) >= 0) return true;
+  return String(p.setId ? setNameById(p.setId) : "").toLowerCase().indexOf(q) >= 0;
+}
+/* 搜索命中：项目名 / 项目集名命中显示其全部分组；否则保留命中分组及其祖先链 */
 function allProjMatches(p, q){
   if(!q) return true;
-  if(String(p.name || "").toLowerCase().indexOf(q) >= 0) return true;
+  if(allProjNameHit(p, q)) return true;
   return allSetFlat(p.id, q).length > 0;
+}
+/* 项目集字典：从项目页直接进用例页时 rt.projectSets 还没人取过，分组顺序与集名搜索都要它 */
+function ensureProjectSetDict(){
+  if(caseSetDictDone) return;
+  caseSetDictDone = true;
+  if((rt.projectSets || []).length) return;
+  refreshProjectSetDict();
+}
+function refreshProjectSetDict(){
+  caseSetDictDone = true;
+  API.get("/api/project-sets").then(function(list){
+    rt.projectSets = list || [];
+    if(caseScopeAll && caseSide === "set") renderAllSetPanel();
+  }).catch(function(){ /* 取不到就按项目自带的 setName 分组，顺序退化为按名称 */ });
 }
 function renderAllSetPanel(){
   var body = $("tcSideBody"), foot = $("tcSideFoot");
   if(!body || !caseScopeAll) return;
+  ensureProjectSetDict();
   var prev = $("tcAllSetSearch");
   var focused = !!prev && prev === document.activeElement;
   var caret = focused ? prev.selectionStart : 0;
@@ -7630,12 +7667,12 @@ function renderAllSetPanel(){
   var q = (caseAllQuery || "").trim().toLowerCase();
   var shown = projects.filter(function(p){ return allProjMatches(p, q); });
   var html = '<div class="tc-side-tools">'
-    + '<span class="tc-side-title">' + icon("layers", 13) + ' 项目 / 分组</span>'
+    + '<span class="tc-side-title">' + icon("layers", 13) + ' 项目导航</span>'
     + '<span class="tc-side-count" title="当前有 ' + projects.length + ' 个可查看项目">' + projects.length + ' 个项目</span>'
     + '</div>'
     + '<label class="tc-dir-search tc-set-search">' + icon("search", 13)
-    + '<input type="search" id="tcAllSetSearch" placeholder="搜索项目 / 分组…" aria-label="搜索项目或分组" autocomplete="off" value="' + esc(caseAllQuery) + '" /></label>'
-    + '<p class="tc-all-hint">跨项目导航；写操作先进入项目。</p>'
+    + '<input type="search" id="tcAllSetSearch" placeholder="搜索项目集 / 项目 / 分组…" aria-label="搜索项目集、项目或分组" autocomplete="off" value="' + esc(caseAllQuery) + '" /></label>'
+    + '<p class="tc-all-hint">项目集 → 项目 → 分组；右键项目或分组可维护分组，新建用例先选目标项目。</p>'
     + '<div class="tc-set-list">';
   var totalOn = caseScopeAll && !caseAllProj;
   var grand = projects.reduce(function(a, p){ var n = Number(caseProjTotals[p.id]); return a + (isNaN(n) ? 0 : n); }, 0);
@@ -7647,48 +7684,72 @@ function renderAllSetPanel(){
     + '<span class="tc-dir-n">' + grand + '</span></button></div>';
   html += '<div class="tc-set-sep" aria-hidden="true"></div>';
   if(!shown.length){
-    html += '<p class="tc-side-empty">' + (q ? "没有匹配「" + esc(caseAllQuery.trim()) + "」的项目或分组。" : "暂无可查看的项目。") + '</p>';
+    html += '<p class="tc-side-empty">' + (q ? "没有匹配「" + esc(caseAllQuery.trim()) + "」的项目集、项目或分组。" : "暂无可查看的项目。") + '</p>';
   }
-  shown.forEach(function(p){
-    var ent = caseAllEntry(p.id);
-    var projOn = allProjOn(p.id);
-    var open = caseAllOpen[p.id] !== false;
-    var total = Number(caseProjTotals[p.id]);
-    var sets = allSetFlat(p.id, q);
-    var nameHit = q && String(p.name || "").toLowerCase().indexOf(q) >= 0;
-    if(nameHit) sets = allSetFlat(p.id, "");
-    /* 在途 / 失败也要占位：分组数还没回来时项目行不能看起来像「没有分组」 */
-    var kids = ent ? (ent.loading || !!ent.error || sets.length > 0 || (ent.noneTotal || 0) > 0) : false;
-    html += '<div class="tc-all-proj">'
-      + '<div class="tc-dir-node' + (projOn ? " on" : "") + '">'
-      + (kids
-        ? '<button class="tc-dir-toggle" type="button" data-tc-all-toggle="' + esc(p.id) + '" aria-expanded="' + (open ? "true" : "false") + '" aria-label="' + (open ? "折叠 " : "展开 ") + esc(p.name) + '">' + icon("chevronRight", 12) + '</button>'
-        : '<span class="tc-dir-toggle ph"></span>')
-      + '<button class="tc-dir-pick" type="button" data-tc-all-proj-pick="' + esc(p.id) + '" aria-pressed="' + (projOn ? "true" : "false") + '" title="只看「' + esc(p.name) + '」的用例">'
-      + '<span class="tc-all-proj-ico">' + icon("folder", 13) + '</span>'
-      + '<span class="tc-dir-name">' + esc(p.name) + '</span>'
-      + '<span class="tc-dir-n">' + (isNaN(total) ? "" : total) + '</span></button></div>';
-    if(open && kids){
-      if(ent && ent.loading && !ent.loaded){
-        html += '<p class="tc-side-empty tc-all-loading">加载分组…</p>';
-      }else if(ent && ent.error){
-        html += '<p class="tc-side-empty tc-all-error">分组加载失败：' + esc(ent.error)
-          + ' <button class="btn sm ghost" type="button" data-tc-all-retry="' + esc(p.id) + '">重试</button></p>';
-      }else{
-        html += sets.map(function(r){ return allSetRowHTML(p.id, r.s, r.level); }).join("");
-        if((ent && ent.noneTotal) > 0){
-          var noneOn = allSetOn(p.id, "__none");
-          html += '<div class="tc-set-item' + (noneOn ? " on" : "") + '" data-tc-all-proj="' + esc(p.id) + '">'
-            + '<span class="tc-dir-toggle ph"></span>'
-            + '<button class="tc-set-pick" type="button" data-tc-all-none="' + esc(p.id) + '" aria-pressed="' + (noneOn ? "true" : "false") + '"'
-            + ' title="只看没有加入任何可见分组的用例">'
-            + '<span class="tc-set-ico">' + icon("inbox", 13) + '</span>'
-            + '<span class="tc-set-main"><span class="tc-set-name">未加入任何分组</span></span>'
-            + '<span class="tc-set-n">' + ent.noneTotal + '</span></button></div>';
+  /* 项目集是树的第一层：集合内项目、项目下分组；只有存在归集项目时才出现集头 */
+  var groups = projectGroups(shown);
+  var hasSets = projectGroups(projects).some(function(g){ return !!g.set; });
+  groups.forEach(function(g){
+    var gid = g.set ? g.set.id : "__loose";
+    var gname = g.set ? g.set.name : "未归入项目集";
+    var gOpen = !!q || caseAllGrpOpen[gid] !== false;
+    if(hasSets){
+      var gt = 0, gKnown = true;
+      g.rows.forEach(function(p){ var n = Number(caseProjTotals[p.id]); if(isNaN(n)) gKnown = false; else gt += n; });
+      html += '<div class="tc-setgrp">'
+        + '<button class="tc-setgrp-head" type="button" data-tc-all-setgrp-toggle="' + esc(gid) + '"'
+        + ' aria-expanded="' + (gOpen ? "true" : "false") + '" title="' + esc((gOpen ? "折叠 " : "展开 ") + gname) + '">'
+        + '<span class="tc-setgrp-chev">' + icon("chevronRight", 12) + '</span>'
+        + '<span class="tc-setgrp-name">' + esc(gname) + '</span>'
+        + '<span class="tc-setgrp-n">' + g.rows.length + ' 个项目' + (gKnown ? " · " + gt + " 条" : "") + '</span>'
+        + '</button>';
+      if(!gOpen){ html += '</div>'; return; }
+      html += '<div class="tc-setgrp-body">';
+    }
+    g.rows.forEach(function(p){
+      var ent = caseAllEntry(p.id);
+      var projOn = allProjOn(p.id);
+      /* 项目默认折叠：18 个项目全展开会把分组噪音铺满侧栏；收窄或搜索时自动展开 */
+      var open = !!q || caseAllOpen[p.id] === true;
+      var total = Number(caseProjTotals[p.id]);
+      var sets = allProjNameHit(p, q) ? allSetFlat(p.id, "") : allSetFlat(p.id, q);
+      /* 在途 / 失败也要占位：分组数还没回来时项目行不能看起来像「没有分组」 */
+      var kids = ent ? (ent.loading || !!ent.error || sets.length > 0 || (ent.noneTotal || 0) > 0) : false;
+      html += '<div class="tc-all-proj">'
+        + '<div class="tc-dir-node' + (projOn ? " on" : "") + '">'
+        + (kids
+          ? '<button class="tc-dir-toggle" type="button" data-tc-all-toggle="' + esc(p.id) + '" aria-expanded="' + (open ? "true" : "false") + '" aria-label="' + (open ? "折叠 " : "展开 ") + esc(p.name) + '">' + icon("chevronRight", 12) + '</button>'
+          : '<span class="tc-dir-toggle ph"></span>')
+        + '<button class="tc-dir-pick" type="button" data-tc-all-proj-pick="' + esc(p.id) + '" aria-pressed="' + (projOn ? "true" : "false") + '" title="只看「' + esc(p.name) + '」的用例">'
+        + '<span class="tc-all-proj-ico">' + icon("folder", 13) + '</span>'
+        + '<span class="tc-dir-name">' + esc(p.name) + '</span>'
+        + '<span class="tc-dir-n">' + (isNaN(total) ? "" : total) + '</span></button></div>';
+      if(open && kids){
+        if(ent && ent.loading && !ent.loaded){
+          html += '<p class="tc-side-empty tc-all-loading">加载分组…</p>';
+        }else if(ent && ent.error){
+          html += '<p class="tc-side-empty tc-all-error">分组加载失败：' + esc(ent.error)
+            + ' <button class="btn sm ghost" type="button" data-tc-all-retry="' + esc(p.id) + '">重试</button></p>';
+        }else{
+          html += sets.map(function(r){ return allSetRowHTML(p.id, r.s, r.level); }).join("");
+          if((ent && ent.noneTotal) > 0){
+            var noneOn = allSetOn(p.id, "__none");
+            html += '<div class="tc-set-item' + (noneOn ? " on" : "") + '" data-tc-all-proj="' + esc(p.id) + '">'
+              + '<span class="tc-dir-toggle ph"></span>'
+              + '<button class="tc-set-pick" type="button" data-tc-all-none="' + esc(p.id) + '" aria-pressed="' + (noneOn ? "true" : "false") + '"'
+              + ' title="只看没有加入任何可见分组的用例">'
+              + '<span class="tc-set-ico">' + icon("inbox", 13) + '</span>'
+              + '<span class="tc-set-main"><span class="tc-set-name">未加入任何分组</span></span>'
+              + '<span class="tc-set-n">' + ent.noneTotal + '</span></button></div>';
+          }
         }
       }
+      html += '</div>';
+    });
+    if(hasSets){
+      if(gOpen) html += '</div>';
+      html += '</div>';
     }
-    html += '</div>';
   });
   html += '</div>';
   body.innerHTML = html;
@@ -7699,8 +7760,8 @@ function renderAllSetPanel(){
   if(foot){
     foot.innerHTML = caseAllNarrow()
       ? '<button class="btn sm soft tc-all-enter" type="button" data-tc-all-enter>进入「' + esc(cut(reqNameOf(caseAllProj), 12)) + '」管理</button>'
-        + '<p class="tc-side-note">全部项目下只读：可切换范围、搜索与查看；分组维护、拖拽归类与用例写入要进入项目。</p>'
-      : '<p class="tc-side-note">点项目或分组就地查看；全部项目下只读，进入项目后可维护分组、拖拽归类与写入用例。分组计数可重叠，不能相加当总数。</p>';
+        + '<p class="tc-side-note">右键项目或分组可就地维护分组（按该项目校验权限）；拖拽归类仍要进入项目。</p>'
+      : '<p class="tc-side-note">点项目或分组就地查看；右键项目或分组可新建 / 编辑 / 删除分组，拖拽归类要进入项目。分组计数可重叠，不能相加当总数。</p>';
   }
 }
 /* 侧栏 / 范围条 / 段头共用的收窄入口 */
@@ -7712,6 +7773,9 @@ function setAllScope(proj, set){
   caseAllSet = set;
   if(proj){
     caseAllOpen[proj] = true;
+    /* 收窄后要让被选中的项目露出来：所属项目集跟着展开 */
+    var psid = reqSetId(proj);
+    if(psid) caseAllGrpOpen[psid] = true;
     /* 镜像到 caseReqId：批量改分类 / 加入计划 / 导出等单项目语义直接可用 */
     caseReqId = proj;
     if(set) caseSetOpen[set] = true;
@@ -7796,6 +7860,7 @@ function syncScopeBar(){
 /* ---------- 分组右键菜单：与文档分类树同款；只读项目只留「只看该分组」 ---------- */
 var tcSetCtxEl = null;
 var tcSetCtxTarget = "";
+var tcSetCtxReq = "";       /* 右键行所属项目：全部项目树里带着走，单项目为空 */
 
 function tcSetCtxMenu(){
   if(tcSetCtxEl) return tcSetCtxEl;
@@ -7808,13 +7873,23 @@ function tcSetCtxMenu(){
   el.addEventListener("click", function(e){
     var b = e.target.closest("[data-ctx-act]");
     if(!b) return;
-    var act = b.dataset.ctxAct, id = tcSetCtxTarget;
+    var act = b.dataset.ctxAct, id = tcSetCtxTarget, reqId = tcSetCtxReq;
     closeTcSetCtx();
-    if(act === "new") openSetDialog(null, id);
-    else if(act === "new-top") openSetDialog(null);
-    else if(act === "edit") openSetDialog(id);
-    else if(act === "del") deleteCaseSet(id);
-    else if(act === "pick") pickSetNode(id);
+    if(act === "new") openSetDialog(null, id, reqId);
+    else if(act === "new-top") openSetDialog(null, "", reqId);
+    else if(act === "edit") openSetDialog(id, "", reqId);
+    else if(act === "del") deleteCaseSet(id, reqId);
+    else if(act === "pick"){
+      if(!reqId){ pickSetNode(id); return; }
+      /* 菜单文案是「取消该分组筛选」时必须真的取消：保留项目，只退回项目口径 */
+      if(caseAllProj === reqId && caseAllSet === id) setAllScope(reqId, "");
+      else setAllScope(reqId, id);
+    }
+    else if(act === "pick-proj"){
+      if(caseAllProj === reqId && !caseAllSet) clearAllScope();
+      else setAllScope(reqId, "");
+    }
+    else if(act === "enter-proj") enterAllProject(reqId);
   });
   tcSetCtxEl = el;
   return el;
@@ -7822,16 +7897,22 @@ function tcSetCtxMenu(){
 function closeTcSetCtx(){
   if(tcSetCtxEl) tcSetCtxEl.classList.remove("open");
   tcSetCtxTarget = "";
+  tcSetCtxReq = "";
 }
-function openTcSetCtx(x, y, id){
-  var s = id ? setById(id) : null;
-  var writable = isWritable();
+function openTcSetCtx(x, y, id, reqId, projName){
+  var scoped = !!reqId;
+  var sets = scoped ? ((caseAllEntry(reqId) || {}).list || []) : caseSets;
+  var s = null;
+  for(var i = 0; id && i < sets.length; i++) if(sets[i].id === id){ s = sets[i]; break; }
+  var writable = scoped ? canEditReq(reqId) : isWritable();
   var editable = !!(s && writable && s.editable);
-  var html = '<div class="ctx-head">' + (s ? "分组：" + esc(s.name) : "分组") + '</div>';
+  var html = '<div class="ctx-head">'
+    + (s ? "分组：" + esc(s.name) : (scoped ? "项目：" + esc(projName || reqNameOf(reqId)) : "分组")) + '</div>';
   var any = false;
   if(s){
+    var picked = scoped ? allSetOn(reqId, s.id) : setFilter === s.id;
     html += '<button type="button" data-ctx-act="pick"><span class="ic">' + icon("checklist", 14) + '</span>'
-      + (setFilter === s.id ? "取消该分组筛选" : "只看该分组") + '</button>';
+      + (picked ? "取消该分组筛选" : "只看该分组") + '</button>';
     any = true;
     if(editable){
       html += '<button type="button" data-ctx-act="new"><span class="ic">' + icon("plus", 14) + '</span>新建子分组</button>'
@@ -7844,6 +7925,18 @@ function openTcSetCtx(x, y, id){
         ? (s.visibility === "members" ? "指定成员可见的分组只有创建人可以修改 / 删除。" : "个人分组只有创建人可以修改 / 删除。")
         : "你对该项目只读，只能查看和筛选分组。") + '</div>';
     }
+  }else if(scoped){
+    /* 项目行：新建顶级分组落在这个项目下；没有所属项目就不提供写入口 */
+    html += '<button type="button" data-ctx-act="pick-proj"><span class="ic">' + icon("checklist", 14) + '</span>'
+      + (allProjOn(reqId) ? "取消只看该项目" : "只看该项目") + '</button>'
+      + '<button type="button" data-ctx-act="enter-proj"><span class="ic">' + icon("chevronRight", 14) + '</span>进入项目维护</button>';
+    if(writable){
+      html += '<div class="sep"></div>'
+        + '<button type="button" data-ctx-act="new-top"><span class="ic">' + icon("plus", 14) + '</span>在该项目新建分组</button>';
+    }else{
+      html += '<div class="ctx-note">你对该项目只读，只能查看和筛选。</div>';
+    }
+    any = true;
   }else if(writable){
     html += '<button type="button" data-ctx-act="new-top"><span class="ic">' + icon("plus", 14) + '</span>新建分组</button>';
     any = true;
@@ -7851,6 +7944,7 @@ function openTcSetCtx(x, y, id){
   if(!any) return false;
   var el = tcSetCtxMenu();
   tcSetCtxTarget = s ? s.id : "";
+  tcSetCtxReq = scoped ? reqId : "";
   el.innerHTML = html;
   el.classList.add("open");
   var w = el.offsetWidth, h = el.offsetHeight, vw = window.innerWidth || 1200, vh = window.innerHeight || 800;
@@ -7865,6 +7959,9 @@ var SET_MAX_MEMBERS = 50;
 var SET_MAX_RULE_HITS = 2000;
 var SET_VIS_LABEL = { team: "团队共享", members: "指定成员可见", personal: "仅自己可见" };
 var setDialogSnap = null;   /* 编辑时的原分组：收窄可见范围与类型切换都要据此提示 */
+/* 分组写操作的所属项目：全部项目树按右键行定位；空=当前浏览项目（单项目口径） */
+var setDialogReq = "";
+var setDialogSets = null;   /* 该项目的分组清单：全部项目用树缓存，单项目用 caseSets */
 var setWhoSel = {};         /* 可见成员名单：账号ID → true */
 var setWhoOptions = [];
 var setWhoLoading = false;
@@ -7882,6 +7979,15 @@ function csVisValue(){ return csRadioValue("csVis", "team"); }
 function csKindValue(){ return csRadioValue("csKind", "manual"); }
 function setDynamic(s){ return !!s && s.kind === "dynamic"; }
 function whoSelectedIds(){ return Object.keys(setWhoSel).filter(function(k){ return setWhoSel[k]; }); }
+/* 分组写操作的项目口径：全部项目下按右键行定位，单项目下沿用 caseReqId */
+function setOpReqId(){ return setDialogReq || caseReqId; }
+function setOpSets(){ return setDialogSets || caseSets; }
+function setOpById(id){
+  var list = setOpSets();
+  for(var i = 0; i < list.length; i++) if(list[i].id === id) return list[i];
+  return null;
+}
+function setOpWritable(){ var id = setOpReqId(); return !!id && canEditReq(id); }
 function setRuleEmpty(r){
   return !r.status && !r.pri && !r.moduleId && !r.demandId && !r.owner && !r.q && !r.bugOnly && !r.regression;
 }
@@ -7928,7 +8034,7 @@ function csRuleValue(){
 }
 function csRuleQuery(rule){
   return {
-    reqId: caseReqId, status: rule.status, pri: rule.pri,
+    reqId: setOpReqId(), status: rule.status, pri: rule.pri,
     moduleId: rule.moduleId, moduleSub: rule.moduleSub ? true : null,
     demandId: rule.demandId, owner: rule.owner, bugOnly: rule.bugOnly ? true : null,
     q: rule.q, searchWide: rule.searchWide ? true : null, regression: rule.regression ? true : null,
@@ -8136,11 +8242,12 @@ function renderWhoList(){
   syncWhoRows();
 }
 function loadWhoOptions(){
-  if(!rt.currentWs || !caseReqId) return;
+  var reqId = setOpReqId();
+  if(!rt.currentWs || !reqId) return;
   setWhoLoading = true;
   setWhoError = "";
   renderWhoList();
-  loadProjectMembers(rt.currentWs.id, caseReqId).then(function(data){
+  loadProjectMembers(rt.currentWs.id, reqId).then(function(data){
     setWhoLoading = false;
     var me = (rt.currentUser || {}).id;
     setWhoOptions = ((data && data.members) || []).map(memberToOption).filter(function(o){ return o.id && o.id !== me; });
@@ -8204,22 +8311,25 @@ function syncSetDialog(){
   }
   if(kind === "dynamic") refreshRuleHits();
 }
-function openSetDialog(id, parentId){
-  if(!isWritable()){ toast("当前项目只读，无法维护分组", "warn"); return; }
-  var s = id ? setById(id) : null;
+function openSetDialog(id, parentId, reqId){
+  setDialogReq = reqId || "";
+  setDialogSets = reqId ? ((caseAllEntry(reqId) || {}).list || []) : null;
+  if(!setOpWritable()){ toast("当前项目只读，无法维护分组", "warn"); return; }
+  var s = id ? setOpById(id) : null;
   if(id && !s){ toast("分组不存在或不可见", "warn"); return; }
   if(s && !s.editable){
     toast(s.visibility === "members" ? "指定成员可见的分组只有创建人可以修改" : "个人分组只有创建人可以修改", "warn");
     return;
   }
-  var parent = !s && parentId ? setById(parentId) : null;
+  var parent = !s && parentId ? setOpById(parentId) : null;
   if(!s && parentId && !parent){ toast("父分组不存在，请刷新后重试", "warn"); return; }
   editingSetId = s ? s.id : null;
   setDialogSnap = s || null;
   setDialogParent = parent ? parent.id : "";
   setDialogParentVis = parent ? parent.visibility : "";
-  $("caseSetTitle").textContent = s ? "编辑分组 · " + s.name
-    : (parent ? "新建子分组 · " + parent.name : "新建分组");
+  $("caseSetTitle").textContent = (s ? "编辑分组 · " + s.name
+    : (parent ? "新建子分组 · " + parent.name : "新建分组"))
+    + (reqId ? "（" + reqNameOf(reqId) + "）" : "");
   $("csName").value = s ? s.name : "";
   $("csNote").value = s && s.note ? s.note : "";
   $("fSetName").classList.remove("invalid");
@@ -8255,13 +8365,14 @@ function openSetDialog(id, parentId){
   renderRuleBuilder(rule);
   setRuleHit = { n: 0, loading: false, error: "", seq: setRuleHit.seq + 1 };
   $("csInit").checked = false;
-  $("csInitN").textContent = caseTotal;
+  $("csInitN").textContent = reqId ? (Number(caseProjTotals[reqId]) || 0) : caseTotal;
   syncSetDialog();
   UI.openModal($("dlgCaseSet"), "input");
   if(kind === "dynamic") refreshRuleHits(true);
 }
 function saveCaseSet(){
   if(setSaving) return;
+  var opReq = setDialogReq;
   var name = $("csName").value.trim();
   if(!name){ $("fSetName").classList.add("invalid"); toast("请填写分组名称", "warn"); return; }
   var vis = csVisValue(), kind = csKindValue();
@@ -8283,8 +8394,8 @@ function saveCaseSet(){
     }
     body.rule = rule;
   }
-  if(!wasEdit) body.reqId = caseReqId;
-  var withInit = kind === "manual" && !wasEdit && $("csInit").checked && caseTotal > 0;
+  if(!wasEdit) body.reqId = setOpReqId();
+  var withInit = kind === "manual" && !wasEdit && !opReq && $("csInit").checked && caseTotal > 0;
   var initFilter = withInit ? caseFilterQuery() : null;
   setSaving = true;
   var parentOpen = !wasEdit && setDialogParent;
@@ -8303,6 +8414,8 @@ function saveCaseSet(){
   }).then(function(r){
     setSaving = false;
     setCaseBusy($("btnSaveCaseSet"), false);
+    setDialogReq = "";
+    setDialogSets = null;
     UI.closeModal($("dlgCaseSet"));
     var kindText = kind === "dynamic" ? "动态收录" : "手工挑选";
     if(wasEdit){
@@ -8314,9 +8427,11 @@ function saveCaseSet(){
       toast("分组「" + name + "」已创建（" + SET_VIS_LABEL[vis] + " · " + kindText + "）"
         + (n ? "，收录 " + n + " 条用例" : ""), "fs");
     }
-    afterStructureChange().then(function(){
-      if(parentOpen) caseSetOpen[parentOpen] = true;
-      renderSetPanel();
+    afterSetOp(opReq).then(function(){
+      /* 写完整段项目在树里展开：新建的分组要立刻看得见 */
+      if(opReq) caseAllOpen[opReq] = true;
+      else if(parentOpen) caseSetOpen[parentOpen] = true;
+      if(opReq) renderAllSetPanel(); else renderSetPanel();
       /* 从「加入分组」里顺手新建的分组，建完直接选中，省掉再找一次 */
       if(!wasEdit && r.id && $("dlgSetPick").classList.contains("open")){
         setPickSel = r.id;
@@ -8330,13 +8445,16 @@ function saveCaseSet(){
     toast(ex.message || "保存分组失败", "bad");
   });
 }
-function deleteCaseSet(id){
-  var s = setById(id);
+function deleteCaseSet(id, reqId){
+  var list = reqId ? ((caseAllEntry(reqId) || {}).list || []) : caseSets;
+  var s = null;
+  for(var i = 0; i < list.length; i++) if(list[i].id === id){ s = list[i]; break; }
   if(!s){ toast("分组不存在或不可见", "warn"); return; }
-  if(!isWritable()){ toast("当前项目只读，无法维护分组", "warn"); return; }
+  var writable = reqId ? canEditReq(reqId) : isWritable();
+  if(!writable){ toast("当前项目只读，无法维护分组", "warn"); return; }
   if(!s.editable){ toast("只有创建人可以删除这个分组", "warn"); return; }
   var kids = 0;
-  caseSets.forEach(function(x){ if((x.parentId || "") === id) kids++; });
+  list.forEach(function(x){ if((x.parentId || "") === id) kids++; });
   if(kids){
     toast("分组「" + s.name + "」下还有 " + kids + " 个子分组，请先移走或删除子分组", "warn");
     return;
@@ -8350,7 +8468,16 @@ function deleteCaseSet(id){
       toast("分组「" + s.name + "」已删除，用例本体保留", "fs");
       if(setFilter === id) setFilter = "all";
       if(caseSelScope && caseSelScope.dim === "set" && caseSelScope.key === id) resetCaseSel();
-      afterStructureChange();
+      if(reqId){
+        if(caseAllProj === reqId && caseAllSet === id) caseAllSet = "";
+        delete caseAllSets[reqId];
+        loadCaseSetsAll(false);
+        if(caseAllNarrow()) syncScopeBar();
+        renderAllSetPanel();
+        if(caseAllProj === reqId && !caseAllSet) loadCases();
+      }else{
+        afterStructureChange();
+      }
     }).catch(function(ex){ toast(ex.message || "删除分组失败", "bad"); });
   });
 }
@@ -9129,6 +9256,8 @@ $("tcReq").addEventListener("change", function(){
     /* 全部项目树的分组与「未分组」计数重取：离开期间可能在某个项目里改过分组 / 成员 */
     caseAllSets = {};
     caseAllSetSeq++;
+    /* 项目集名与顺序可能刚在项目页改过：进全部项目时刷新一次字典 */
+    refreshProjectSetDict();
     stats = null;
     moduleFilter = "all";
     demandFilter = "all";
@@ -9780,7 +9909,13 @@ if($("tcSidePanel")){
       if((b = e.target.closest("[data-tc-all-root]"))){ clearAllScope(); return; }
       if((b = e.target.closest("[data-tc-all-toggle]"))){
         var pid = b.dataset.tcAllToggle;
-        caseAllOpen[pid] = !(caseAllOpen[pid] !== false);
+        caseAllOpen[pid] = caseAllOpen[pid] !== true;
+        renderAllSetPanel();
+        return;
+      }
+      if((b = e.target.closest("[data-tc-all-setgrp-toggle]"))){
+        var gid = b.dataset.tcAllSetgrpToggle;
+        caseAllGrpOpen[gid] = !(caseAllGrpOpen[gid] !== false);
         renderAllSetPanel();
         return;
       }
@@ -9834,9 +9969,26 @@ if($("tcSidePanel")){
     if(e.target.id === "tcAllSetSearch"){ caseAllQuery = e.target.value; renderAllSetPanel(); return; }
     if(e.target.id === "tcSetSearch"){ caseSetQuery = e.target.value; renderSetPanel(); }
   });
-  /* 右键分组行＝对该分组新建子组 / 编辑 / 删除；右键空白处＝新建顶级分组 */
+  /* 右键分组行＝对该分组新建子组 / 编辑 / 删除；右键空白处＝新建顶级分组。
+     全部项目下按右键行定位所属项目：分组行精确到分组，项目行落在该项目下；
+     项目集头与空白处没有唯一所属项目，不提供写入口 */
   $("tcSidePanel").addEventListener("contextmenu", function(e){
-    if(caseScopeAll) return;
+    if(caseScopeAll){
+      /* 「未加入任何分组」是聚合行，不是真实分组：落回项目菜单会误导，直接不弹 */
+      if(e.target.closest("[data-tc-all-none]")){ e.preventDefault(); return; }
+      var setRow = e.target.closest("#tcSideBody .tc-all-set[data-tc-all-set-row]");
+      if(setRow){
+        if(openTcSetCtx(e.clientX, e.clientY, setRow.dataset.tcAllSetRow, setRow.dataset.tcAllProj)) e.preventDefault();
+        return;
+      }
+      var projNode = e.target.closest("#tcSideBody .tc-all-proj");
+      if(projNode){
+        var pick = projNode.querySelector("[data-tc-all-proj-pick]");
+        var pid = pick ? pick.dataset.tcAllProjPick : "";
+        if(pid && openTcSetCtx(e.clientX, e.clientY, "", pid, reqNameOf(pid))) e.preventDefault();
+      }
+      return;
+    }
     var row = e.target.closest("[data-tc-set]");
     if(row){
       if(openTcSetCtx(e.clientX, e.clientY, row.dataset.tcSet)) e.preventDefault();

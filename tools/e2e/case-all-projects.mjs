@@ -58,8 +58,9 @@ const assert = (cond, msg) => { if(!cond){ failed++; console.log("  FAIL " + msg
 const group = name => console.log("\n[" + name + "]");
 
 const MOCK = {
-  user: { id: "U1", username: "admin", displayName: "管理员", role: "admin", lastWorkspaceId: "ws1" },
-  workspace: { id: "ws1", name: "演示空间", type: "shared", myRole: "owner", memberCount: 3 },
+  seq: 0,  user: { id: "U1", username: "admin", displayName: "管理员", role: "admin", lastWorkspaceId: "ws1" },
+  /* myRole 用普通成员：项目级读写由 req.access 判定，p5 才真的是只读 */
+  workspace: { id: "ws1", name: "演示空间", type: "shared", myRole: "member", memberCount: 3 },
   projectSets: [{ id: "ps1", name: "星网数字化", sortOrder: 1 }, { id: "ps2", name: "运营平台", sortOrder: 2 }],
   projects: [
     { id: "p1", name: "客户门户重构", setId: "ps1", setName: "星网数字化", ownerUserId: "U1", access: "write" },
@@ -100,6 +101,8 @@ const BOOT = `(() => {
   const M = ${JSON.stringify(MOCK)};
   window.__MOCK__ = M;
   window.__mockUnknown = [];
+  /* 写接口留痕：右键维护分组后校验请求确实落在右键行所属项目 */
+  window.__mockWrites = [];
   /* 故障注入：设成项目 id 后，该项目的用例列表返回业务错误，用来验证段内重试 */
   window.__mockFail = "";
   const json = data => new Response(JSON.stringify({ code: 0, data }), { status: 200, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -128,7 +131,26 @@ const BOOT = `(() => {
     if(q && (c.title || "").toLowerCase().indexOf(q) < 0 && ("tc-" + c.caseNo).indexOf(q) < 0) return false;
     return true;
   });
-  const handle = (method, path, sp) => {
+  const handle = (method, path, sp, body) => {
+    const setPathId = p => (p.match(/^\\/hourglass\\/api\\/case-sets\\/([^/]+)$/) || [])[1];
+    if(method === "POST" && path === "/hourglass/api/case-sets"){
+      const s = { id: "sx" + (++M.seq), reqId: body.reqId, parentId: body.parentId || "", level: body.parentId ? 2 : 1,
+        name: body.name, visibility: body.visibility || "team", kind: body.kind || "manual",
+        caseCount: 0, subtreeCount: 0, editable: true };
+      M.sets.push(s);
+      return s;
+    }
+    if(method === "PUT" && setPathId(path)){
+      const s = M.sets.find(x => x.id === setPathId(path));
+      if(s) Object.assign(s, { name: body.name, visibility: body.visibility, kind: body.kind });
+      return s || null;
+    }
+    if(method === "DELETE" && setPathId(path)){
+      const id = setPathId(path);
+      M.sets = M.sets.filter(x => x.id !== id);
+      return { ok: true };
+    }
+    if(method === "POST" && /\\/api\\/case-sets\\/[^/]+\\/members$/.test(path)) return { added: 0, matched: 0 };
     if(method !== "GET") return undefined;
     if(path === "/hourglass/api/auth/me") return M.user;
     if(path === "/hourglass/api/workspaces") return [M.workspace];
@@ -158,9 +180,16 @@ const BOOT = `(() => {
     const u = new URL(url, location.href);
     if(u.pathname.indexOf("/api/") < 0) return window.__realFetch(url, init);
     const method = String((init && init.method) || "GET").toUpperCase();
+    let body = null;
+    if(method !== "GET"){
+      if(init && init.body){
+        try{ body = JSON.parse(init.body); }catch(e){ body = null; }
+      }
+      window.__mockWrites.push({ method, path: u.pathname, search: u.search, body });
+    }
     if(window.__mockFail && u.pathname === "/hourglass/api/test-cases" && u.searchParams.get("reqId") === window.__mockFail)
       return Promise.resolve(failJson("模拟：服务暂时不可用"));
-    const out = handle(method, u.pathname, u.searchParams);
+    const out = handle(method, u.pathname, u.searchParams, body);
     if(out === undefined){ window.__mockUnknown.push(method + " " + u.pathname + u.search); return Promise.resolve(json(null)); }
     return Promise.resolve(json(out));
   };
@@ -269,6 +298,10 @@ try{
   await waitFor(`document.querySelectorAll("#tcList .tc-group-head").length > 0`, "项目分段");
 
   group("概览");
+  await waitFor(`(() => {
+    const n = document.querySelector('[data-tc-all-setgrp-toggle="ps1"] .tc-setgrp-n');
+    return !!n && /6 条/.test(n.textContent);
+  })()`, "项目集合计就绪");
   const overview = await evaluate(`(() => {
     const body = document.getElementById("tcSideBody");
     const heads = [...document.querySelectorAll("#tcList .tc-group-head")];
@@ -277,7 +310,12 @@ try{
       title: (body.querySelector(".tc-side-title") || {}).textContent || "",
       count: (body.querySelector(".tc-side-count") || {}).textContent || "",
       projects: body.querySelectorAll(".tc-all-proj").length,
-      setRows: body.querySelectorAll(".tc-all-proj .tc-set-item").length,
+      setGroups: [...body.querySelectorAll(".tc-setgrp-name")].map(e => e.textContent.trim()),
+      setMetas: [...body.querySelectorAll(".tc-setgrp-n")].map(e => e.textContent.trim()),
+      setOpen: [...body.querySelectorAll(".tc-setgrp-head")].map(e => e.getAttribute("aria-expanded")),
+      looseHead: !!body.querySelector('[data-tc-all-setgrp-toggle="__loose"]'),
+      setlabs: [...body.querySelectorAll(".tc-all-proj")].every(n => !!n.closest(".tc-setgrp-body")),
+      projGroups: body.querySelectorAll(".tc-all-proj .tc-set-item").length,
       errors: body.querySelectorAll(".tc-all-error").length,
       heads: heads.length,
       chips: document.querySelectorAll("#tcList .tc-gchip").length,
@@ -298,8 +336,16 @@ try{
       overviewHints: document.querySelectorAll("#tcSideBody .tc-all-hint").length
     };
   })()`);
-  assert(/项目 \/ 分组/.test(overview.title), "侧栏标题显示「项目 / 分组」：" + overview.title.trim());
+  assert(/项目导航/.test(overview.title), "侧栏标题显示「项目导航」：" + overview.title.trim());
   assert(overview.projects === MOCK.projects.length, "树里项目数与可见项目一致（" + overview.projects + "/" + MOCK.projects.length + "）");
+  assert(overview.setGroups.length === 3 && overview.setGroups[0] === "星网数字化" && overview.setGroups[1] === "运营平台"
+    && overview.setGroups[2] === "未归入项目集", "项目集是第一层且按配置顺序排列（" + overview.setGroups.join(" / ") + "）");
+  assert(overview.setMetas[0] === "2 个项目 · 6 条" && overview.setMetas[1] === "2 个项目 · 5 条" && overview.setMetas[2] === "1 个项目 · 0 条",
+    "集头给出本集项目数与合计：" + overview.setMetas.join(" | "));
+  assert(overview.setOpen.every(v => v === "true"), "项目集默认展开");
+  assert(overview.looseHead === true, "有未归集项目时才出现「未归入项目集」");
+  assert(overview.setlabs === true, "项目行都嵌在项目集分组里，不再平铺");
+  assert(overview.projGroups === 0, "项目默认折叠，概念多的项目不铺满侧栏");
   assert(overview.errors === 0, "无分组加载失败");
   assert(overview.heads === 4, "有内容的项目各成一段，空项目不占版面（" + overview.heads + " 段：" + overview.headNames.join("、") + "）");
   assert(overview.projPills > 0 && overview.projPills <= overview.rows, "行内项目 pill 已标注（" + overview.projPills + "/" + overview.rows + " 行）");
@@ -316,6 +362,22 @@ try{
   assert(/全部项目/.test(overview.meta), "列表标题交代全部项目：" + overview.meta);
   await shot("01-overview-1440.png");
 
+  group("项目集折叠");
+  await click('[data-tc-all-setgrp-toggle="ps1"]');
+  const collapsed = await evaluate(`(() => {
+    const head = document.querySelector('[data-tc-all-setgrp-toggle="ps1"]');
+    return {
+      projects: document.querySelectorAll("#tcSideBody .tc-all-proj").length,
+      open: head.getAttribute("aria-expanded"),
+      body: !!head.parentNode.querySelector(".tc-setgrp-body")
+    };
+  })()`);
+  assert(collapsed.projects === 3 && collapsed.open === "false" && collapsed.body === false,
+    "折叠项目集后其下项目收起，其他集不受影响（剩 " + collapsed.projects + " 个项目）");
+  await shot("07-set-collapsed-1440.png");
+  await click('[data-tc-all-setgrp-toggle="ps1"]');
+  await waitFor(`document.querySelectorAll("#tcSideBody .tc-all-proj").length === ${MOCK.projects.length}`, "项目集展开恢复");
+
   group("树搜索");
   await setInput("#tcAllSetSearch", "zzz不存在的名字");
   const noHit = await evaluate(`({
@@ -323,8 +385,190 @@ try{
     empty: (document.querySelector("#tcSideBody .tc-side-empty") || {}).textContent || ""
   })`);
   assert(noHit.projects === 0 && /没有匹配/.test(noHit.empty), "搜索无命中时给出空态：" + noHit.empty.trim());
+  await setInput("#tcAllSetSearch", "运营");
+  await waitFor(`document.querySelectorAll("#tcSideBody .tc-all-proj").length === 2`, "按项目集名搜索");
+  const setHit = await evaluate(`({
+    names: [...document.querySelectorAll("#tcSideBody .tc-dir-name")].map(e => e.textContent.trim()),
+    sets: [...document.querySelectorAll("#tcSideBody .tc-setgrp-name")].map(e => e.textContent.trim()),
+    groups: document.querySelectorAll("#tcSideBody .tc-all-proj .tc-set-item").length
+  })`);
+  assert(setHit.names.indexOf("数据看板") >= 0 && setHit.names.indexOf("消息中心") >= 0 && setHit.names.indexOf("客户门户重构") < 0,
+    "按项目集名搜索带出集内项目：" + setHit.names.join("、"));
+  assert(setHit.sets.length === 1 && setHit.sets[0] === "运营平台", "搜索只保留命中的项目集：" + setHit.sets.join("、"));
+  assert(setHit.groups >= 1, "集名命中时项目下的分组照常展示（" + setHit.groups + " 个）");
   await setInput("#tcAllSetSearch", "");
   await waitFor(`document.querySelectorAll("#tcSideBody .tc-all-proj").length === ${MOCK.projects.length}`, "搜索清空恢复");
+  const resetTree = await evaluate(`({
+    sets: [...document.querySelectorAll(".tc-setgrp-name")].map(e => e.textContent.trim()),
+    groups: document.querySelectorAll("#tcSideBody .tc-all-proj .tc-set-item").length
+  })`);
+  assert(resetTree.sets.length === 3, "清空搜索后项目集都回来（" + resetTree.sets.join("、") + "）");
+  assert(resetTree.groups === 0, "搜索时的临时展开不残留，项目仍默认折叠");
+
+  group("项目展开与分组");
+  await click('[data-tc-all-toggle="p1"]');
+  await waitFor(`!!document.querySelector('[data-tc-all-set-pick="s1"]')`, "展开项目看分组");
+  const projOpen = await evaluate(`(() => {
+    const t = document.querySelector('[data-tc-all-toggle="p1"]');
+    return {
+      open: t.getAttribute("aria-expanded"),
+      groups: t.closest(".tc-all-proj").querySelectorAll(".tc-set-item").length,
+      none: !!t.closest(".tc-all-proj").querySelector('[data-tc-all-none="p1"]')
+    };
+  })()`);
+  assert(projOpen.open === "true" && projOpen.groups >= 3, "项目展开后显示其下分组（" + projOpen.groups + " 行）");
+  assert(projOpen.none === true, "没挂分组的用例保留「未加入任何分组」入口");
+  await shot("08-project-expanded-1440.png");
+  await click('[data-tc-all-toggle="p1"]');
+  await waitFor(`!document.querySelector('[data-tc-all-set-pick="s1"]')`, "项目折叠恢复");
+
+  group("右键就地维护分组");
+  /* 只读项目：右键只给浏览与进入，不出现新建 */
+  await evaluate(`(() => {
+    document.querySelector('[data-tc-all-proj-pick="p5"]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 320, clientY: 430 }));
+    return true;
+  })()`);
+  const roMenu = await evaluate(`(() => {
+    const el = document.getElementById("tcSetCtxMenu");
+    return {
+      open: !!el && el.classList.contains("open"),
+      acts: el ? [...el.querySelectorAll("[data-ctx-act]")].map(b => b.dataset.ctxAct) : [],
+      note: el ? ((el.querySelector(".ctx-note") || {}).textContent || "") : ""
+    };
+  })()`);
+  assert(roMenu.open && roMenu.acts.indexOf("pick-proj") >= 0 && roMenu.acts.indexOf("new-top") < 0,
+    "只读项目右键只保留查看 / 进入入口（" + roMenu.acts.join("/") + "）");
+  assert(/只读/.test(roMenu.note), "只读项目写明不能新建：" + roMenu.note.trim());
+  await evaluate(`(document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })), true)`);
+
+  /* 聚合行不是真实分组：右键不回落到项目菜单 */
+  const noneCtx = await evaluate(`(() => {
+    let n = document.querySelector('[data-tc-all-none="p1"]');
+    if(!n){
+      const t = document.querySelector('[data-tc-all-toggle="p1"]');
+      if(t && t.getAttribute("aria-expanded") === "false") t.click();
+      n = document.querySelector('[data-tc-all-none="p1"]');
+    }
+    if(!n) return { found: false };
+    n.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 320, clientY: 470 }));
+    return { found: true, open: document.getElementById("tcSetCtxMenu").classList.contains("open") };
+  })()`);
+  assert(noneCtx.found && noneCtx.open === false, "「未加入任何分组」聚合行右键不弹分组菜单：" + JSON.stringify(noneCtx));
+
+  /* 可写项目：右键项目行在该项目下新建顶级分组 */
+  await evaluate(`(() => {
+    document.querySelector('[data-tc-all-proj-pick="p3"]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 320, clientY: 500 }));
+    return true;
+  })()`);
+  const projMenu = await evaluate(`(() => {
+    const el = document.getElementById("tcSetCtxMenu");
+    return {
+      acts: [...el.querySelectorAll("[data-ctx-act]")].map(b => b.dataset.ctxAct),
+      head: (el.querySelector(".ctx-head") || {}).textContent || ""
+    };
+  })()`);
+  assert(projMenu.acts.indexOf("new-top") >= 0 && /数据看板/.test(projMenu.head),
+    "可写项目右键提供「在该项目新建分组」：" + projMenu.head.trim());
+  await click('#tcSetCtxMenu [data-ctx-act="new-top"]');
+  await waitFor(`document.getElementById("dlgCaseSet").classList.contains("open")`, "新建分组弹窗");
+  const newDlg = await evaluate(`document.getElementById("caseSetTitle").textContent`);
+  assert(newDlg.indexOf("新建分组") >= 0 && newDlg.indexOf("数据看板") >= 0, "弹窗标题写明目标项目：" + newDlg);
+  await setInput("#csName", "E2E右键新建");
+  await click("#btnSaveCaseSet");
+  await waitFor(`!document.getElementById("dlgCaseSet").classList.contains("open")`, "保存后关闭");
+  const w1 = await evaluate(`window.__mockWrites[window.__mockWrites.length - 1]`);
+  assert(w1 && w1.method === "POST" && w1.body.reqId === "p3" && w1.body.name === "E2E右键新建",
+    "新建落在右键的项目下：POST reqId=" + (w1 && w1.body && w1.body.reqId));
+  await waitFor(`!!document.querySelector('[data-tc-all-set-row="sx1"]')`, "新分组出现在树里");
+
+  /* 分组行：新建子组 / 编辑 / 删除 */
+  await evaluate(`(() => {
+    document.querySelector('[data-tc-all-set-row="sx1"] .tc-set-pick').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 380, clientY: 540 }));
+    return true;
+  })()`);
+  const grpMenu = await evaluate(`(() => {
+    const el = document.getElementById("tcSetCtxMenu");
+    return {
+      acts: [...el.querySelectorAll("[data-ctx-act]")].map(b => b.dataset.ctxAct),
+      head: (el.querySelector(".ctx-head") || {}).textContent || ""
+    };
+  })()`);
+  assert(grpMenu.acts.indexOf("new") >= 0 && grpMenu.acts.indexOf("edit") >= 0 && grpMenu.acts.indexOf("del") >= 0
+    && /E2E右键新建/.test(grpMenu.head), "分组行右键提供新建子组 / 编辑 / 删除");
+  await click('#tcSetCtxMenu [data-ctx-act="edit"]');
+  await waitFor(`document.getElementById("dlgCaseSet").classList.contains("open")`, "编辑分组弹窗");
+  const editDlg = await evaluate(`({
+    title: document.getElementById("caseSetTitle").textContent,
+    name: document.getElementById("csName").value
+  })`);
+  assert(editDlg.title.indexOf("数据看板") >= 0 && editDlg.name === "E2E右键新建",
+    "编辑弹窗加载右键项目下的分组：" + editDlg.title);
+  await setInput("#csName", "E2E右键改名");
+  await click("#btnSaveCaseSet");
+  await waitFor(`!document.getElementById("dlgCaseSet").classList.contains("open")`, "改名后关闭");
+  const w2 = await evaluate(`window.__mockWrites[window.__mockWrites.length - 1]`);
+  assert(w2 && w2.method === "PUT" && w2.body.name === "E2E右键改名", "改名走分组自身的 PUT");
+  await waitFor(`(() => {
+    const n = document.querySelector('[data-tc-all-set-row="sx1"] .tc-set-name');
+    return !!n && n.textContent.indexOf("E2E右键改名") >= 0;
+  })()`, "树里名称刷新");
+
+  /* 只看该分组：落在所属项目，而不是复用当前浏览项目 */
+  await evaluate(`(() => {
+    document.querySelector('[data-tc-all-set-row="sx1"] .tc-set-pick').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 380, clientY: 540 }));
+    return true;
+  })()`);
+  await click('#tcSetCtxMenu [data-ctx-act="pick"]');
+  await waitFor(`!!document.querySelector("[data-tc-scope-set]")`, "右键收窄到分组");
+  const scopedPick = await evaluate(`({
+    proj: (document.querySelector("[data-tc-scope-proj]") || {}).textContent || "",
+    set: (document.querySelector("[data-tc-scope-set]") || {}).textContent || ""
+  })`);
+  assert(scopedPick.proj.indexOf("数据看板") >= 0 && scopedPick.set.indexOf("E2E右键改名") >= 0,
+    "右键「只看该分组」落在所属项目：" + scopedPick.proj.trim() + " / " + scopedPick.set.trim());
+
+  /* 菜单写着取消就要真的取消：分组筛选退回项目口径，项目筛选退回全部项目 */
+  await evaluate(`(() => {
+    document.querySelector('[data-tc-all-set-row="sx1"] .tc-set-pick').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 380, clientY: 540 }));
+    return true;
+  })()`);
+  const cancelSetLabel = await evaluate(`(() => {
+    const b = document.querySelector('#tcSetCtxMenu [data-ctx-act="pick"]');
+    return b ? b.textContent.trim() : "";
+  })()`);
+  assert(/取消该分组筛选/.test(cancelSetLabel), "已筛该分组时菜单改为取消：" + cancelSetLabel);
+  await click('#tcSetCtxMenu [data-ctx-act="pick"]');
+  await waitFor(`!document.querySelector("[data-tc-scope-set]")`, "取消分组筛选");
+  const afterCancelSet = await evaluate(`({
+    proj: (document.querySelector("[data-tc-scope-proj]") || {}).textContent || "",
+    bar: !document.getElementById("tcScopeBar").hidden
+  })`);
+  assert(afterCancelSet.bar && afterCancelSet.proj.indexOf("数据看板") >= 0,
+    "取消分组筛选后仍停在所属项目：" + afterCancelSet.proj.trim());
+
+  await evaluate(`(() => {
+    document.querySelector('[data-tc-all-proj-pick="p3"]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 320, clientY: 500 }));
+    return true;
+  })()`);
+  const cancelProjLabel = await evaluate(`(() => {
+    const b = document.querySelector('#tcSetCtxMenu [data-ctx-act="pick-proj"]');
+    return b ? b.textContent.trim() : "";
+  })()`);
+  assert(/取消只看该项目/.test(cancelProjLabel), "已筛该项目时菜单改为取消：" + cancelProjLabel);
+  await click('#tcSetCtxMenu [data-ctx-act="pick-proj"]');
+  await waitFor(`document.getElementById("tcScopeBar").hidden`, "取消项目范围回到概览");
+
+  /* 删除：从树里移除，用例本体不受影响 */
+  await evaluate(`(() => {
+    document.querySelector('[data-tc-all-set-row="sx1"] .tc-set-pick').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 380, clientY: 540 }));
+    return true;
+  })()`);
+  await click('#tcSetCtxMenu [data-ctx-act="del"]');
+  await waitFor(`document.getElementById("dlgConfirm").classList.contains("open")`, "删除确认");
+  await click("#dlgConfirmOk");
+  await waitFor(`!document.querySelector('[data-tc-all-set-row="sx1"]')`, "分组已从树里移除");
+  const w3 = await evaluate(`window.__mockWrites[window.__mockWrites.length - 1]`);
+  assert(w3 && w3.method === "DELETE" && /sx1$/.test(w3.path), "删除走分组自身的 DELETE");
 
   group("收窄到项目");
   await click('[data-tc-all-proj-pick="p1"]');
@@ -361,6 +605,16 @@ try{
   assert(narrowed.aiShown === false, "AI 生成仍在进入项目后开放");
   assert(narrowed.picks > 0, "收窄后可勾选（" + narrowed.picks + " 行）");
   assert(narrowed.batchAllDisabled === false, "收窄后全选可用");
+  const treeNarrow = await evaluate(`(() => {
+    const t = document.querySelector('[data-tc-all-toggle="p1"]');
+    return {
+      setOpen: document.querySelector('[data-tc-all-setgrp-toggle="ps1"]').getAttribute("aria-expanded"),
+      projOpen: t ? t.getAttribute("aria-expanded") : "missing",
+      groupVisible: !!document.querySelector('[data-tc-all-set-pick="s1"]')
+    };
+  })()`);
+  assert(treeNarrow.setOpen === "true" && treeNarrow.projOpen === "true" && treeNarrow.groupVisible === true,
+    "收窄后所属项目集与项目自动展开，选中项在树里可见");
   await shot("02-narrowed-project-1440.png");
 
   group("收窄到分组");

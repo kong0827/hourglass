@@ -323,19 +323,23 @@ try{
   await click("#tcSortDir");
   await sleep(1000);
 
-  /* 全部项目：目录与左栏收起，分组维度固定为「按项目」且不可改 */
+  /* 全部项目：目录入口收起（目录只在单项目内），左栏改为「项目集 → 项目 → 分组」只读导航，
+     分组维度固定为「按项目」且不可改 */
   await setSelect("tcReq", "__all__");
   await sleep(1200);
   const allScope = await evaluate(`(() => ({
     dir: document.getElementById("tcDirFilter").hidden,
-    panel: document.getElementById("tcSidePanel").hidden,
+    panel: !document.getElementById("tcSidePanel").hidden,
+    treeTitle: (document.querySelector("#tcSideBody .tc-side-title")||{}).textContent || "",
+    hasTree: !!document.querySelector("#tcSideBody .tc-set-list"),
     dims: [...document.getElementById("tcGroupBy").options].map(o => o.textContent),
     dimVal: document.getElementById("tcGroupBy").value,
     dimLocked: document.getElementById("tcGroupBy").disabled,
     secs: document.querySelectorAll("#tcList .tc-group").length
   }))()`);
   assert(allScope.dir, "全部项目下目录入口收起（目录只在单项目内）");
-  assert(allScope.panel, "全部项目下左栏分组收起");
+  assert(allScope.panel && allScope.hasTree && allScope.treeTitle.indexOf("项目导航") !== -1,
+    "全部项目下左栏展示「项目集 → 项目 → 分组」导航树（" + allScope.treeTitle.trim() + "）");
   assert(allScope.dims.length === 1 && allScope.dims[0] === "按项目" && allScope.dimVal === "project",
     "全部项目下分组维度只剩「按项目」且已选中（" + allScope.dims.join("/") + "）");
   assert(allScope.dimLocked && allScope.secs > 0, "「按项目」为展示口径不可改，列表按项目分段");
