@@ -1,5 +1,5 @@
 /* 浏览器冒烟测试（可移植：Node 18+ 内置 WebSocket / fetch，无需 puppeteer）
-   覆盖：登录、12 个侧栏入口、项目驾驶舱交付卡片跳转、通知中心「查看全部消息」、
+   覆盖：登录、15 个侧栏入口、项目驾驶舱交付卡片跳转、通知中心「查看全部消息」、
    导航使用记录本机写入与设置页导出入口。
    自建数据：脚本用 API 创建唯一项目，结束时按名称确认删除；不改动其他数据。
 
@@ -175,12 +175,13 @@ async function main(){
     await waitFor(`import("./js/core/state.js").then(({rt}) => !!rt.currentUser && !!rt.currentWs && rt.reqsLoaded)`, "应用初始化", 20000);
     pass("登录 " + USER);
 
-    /* 2. 12 个侧栏入口 */
+    /* 2. 15 个侧栏入口（与全站改版 IA 一致：消息、交付说明、设置也进入侧栏） */
     const navs = [
-      ["mine", "mine"], ["review", "review"], ["demands", "demands"], ["projects", "projects"],
-      ["phase", "phase"], ["workitems", "board"], ["requirements", "requirements"],
-      ["testcases", "testcases"], ["branches", "branches"], ["insight", "analysis"],
-      ["workload", "workload"], ["risks", "risks"]
+      ["mine", "mine"], ["messages", "messages"], ["review", "review"],
+      ["demands", "demands"], ["projects", "projects"], ["phase", "phase"],
+      ["delivery", "delivery"], ["branches", "branches"], ["workitems", "board"],
+      ["requirements", "requirements"], ["testcases", "testcases"], ["insight", "analysis"],
+      ["workload", "workload"], ["risks", "risks"], ["settings", "settings"]
     ];
     const navCount = await evaluate(`document.querySelectorAll('#sideNav .nav-item[data-view]').length`);
     assert(navCount === navs.length, `侧栏入口应为 ${navs.length} 个，实际 ${navCount}`);

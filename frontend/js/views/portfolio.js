@@ -4,16 +4,16 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { showView } from "../core/router.js";
-import { dueState, dueText, rt, setNameById, setSortOf, statusBucket } from "../core/state.js";
-import { openTaskById } from "../core/task-actions.js";
+import { dueState, rt, setNameById, setSortOf, statusBucket } from "../core/state.js";
+import { loadView } from "../core/view-loader.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML, fmtShortMD, parseDate } from "../lib/format.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
-import { caliberHTML, downloadCsv, fmtHours, openTaskTable } from "./manager-shared.js";
-
+import { downloadCsv, fmtHours, openTaskTable } from "./manager-shared.js";
 var cache = null, seq = 0;
-function enterPortfolioView(){ listPrefs.load("portfolio").then(function(){ loadPortfolio(); }); }
+var pfSetId = "";   /* ""=全部项目；否则只看一个项目集，作为项目集详情页 */
+function enterPortfolioView(){ pfSetId = ""; listPrefs.load("portfolio").then(function(){ loadPortfolio(); }); }
 function loadPortfolio(opts){
   opts = opts || {};
   var body = $("portfolioBody");
@@ -44,8 +44,33 @@ function shiftDays(iso, days){
   function pad(n){ return n < 10 ? "0" + n : String(n); }
   return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
 }
+function reqById(reqId){
+  for(var i = 0; i < (rt.reqList || []).length; i++) if(rt.reqList[i].id === reqId) return rt.reqList[i];
+  return null;
+}
+/* 旧构建的 portfolio 接口不带 setId，项目列表已带；缺字段时用列表补齐 */
+function pfProjects(){
+  return ((cache && cache.projects) || []).map(function(p){
+    if(p.setId !== undefined) return p;
+    var r = reqById(p.reqId);
+    return r ? Object.assign({}, p, { setId: r.setId || null }) : p;
+  });
+}
+function pfSetProjects(){
+  var all = pfProjects();
+  return pfSetId ? all.filter(function(p){ return p.setId === pfSetId; }) : all;
+}
+function pfProjectIds(){
+  var map = {};
+  pfSetProjects().forEach(function(p){ map[p.reqId] = 1; });
+  return map;
+}
 function tasksFor(reqId, metric){
-  var rows = (cache.tasks || []).filter(function(t){ return !reqId || t.reqId === reqId; });
+  var ids = pfSetId ? pfProjectIds() : null;
+  var rows = (cache.tasks || []).filter(function(t){
+    if(reqId) return t.reqId === reqId;
+    return !ids || ids[t.reqId];
+  });
   if(metric === "backlog" || metric === "doing" || metric === "ended" || metric === "done") return rows.filter(function(t){ return statusBucket(t) === metric; });
   if(metric === "overdue") return rows.filter(function(t){ return dueState(t).kind === "over"; });
   if(metric === "blocked") return rows.filter(function(t){ return t.boardColumn !== "done" && t.blocked; });
@@ -63,8 +88,9 @@ function kpi(label, value, foot, kind, cls, delta){
 }
 /* 借卡片式报表的写法：数字旁边给一个「较上周」的方向，避免只看孤立数字看不出变好还是变差 */
 function completedBetween(fromIso, beforeIso){
-  var n = 0;
+  var n = 0, ids = pfSetId ? pfProjectIds() : null;
   (cache.tasks || []).forEach(function(t){
+    if(ids && !ids[t.reqId]) return;
     if(t.boardColumn !== "done" || !t.completedAt) return;
     var day = String(t.completedAt).substring(0, 10);
     if(day >= fromIso && day < beforeIso) n++;
@@ -75,8 +101,9 @@ function kpiDelta(cur, prev){
   var diff = cur - prev;
   if(!diff) return '<span class="manager-kpi-delta flat">与上周持平</span>';
   var up = diff > 0;
+  /* 箭头已表方向，不再叠加正负号；补「项」避免 5 与 36 被读成同一个数 */
   return '<span class="manager-kpi-delta ' + (up ? "up" : "down") + '" title="上周完成 ' + prev + ' 项">'
-    + (up ? "↑ +" : "↓ −") + Math.abs(diff) + '</span>';
+    + (up ? "↑ " : "↓ ") + Math.abs(diff) + ' 项</span>';
 }
 /* 跨项目汇总按项目集归组：与项目列表同一层级，未分组固定最后 */
 function groupedBySet(projects){
@@ -126,58 +153,59 @@ function setGroupHeadHTML(group){
     + '<span class="progress mini req-set-progress" title="集内项目按工作项数加权的完成度"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>'
     + '</div>';
 }
-/* 项目卡固定一行「下一步」：谁、做什么、何时到期。
-   借用卡片式报表的固定槽位——每张卡都直接回答同一个问题，不用逐个项目点进去找。 */
-function nextStepFor(reqId){
-  var best = null, bestDue = "";
-  (cache.tasks || []).forEach(function(t){
-    if(t.reqId !== reqId || t.boardColumn === "done" || t.boardColumn === "canceled") return;
-    var due = t.dueDate ? String(t.dueDate).substring(0, 10) : "";
-    if(!best){ best = t; bestDue = due; return; }
-    if(due && (!bestDue || due < bestDue)){ best = t; bestDue = due; return; }
-    if(!due && !bestDue && t.boardColumn === "doing" && best.boardColumn !== "doing"){ best = t; bestDue = due; }
-  });
-  return best;
+/* 项目负责人取项目列表里的负责人；portfolio 接口不带该字段，列表未加载时先留空 */
+function pfOwnerName(p){
+  var r = reqById(p.reqId);
+  if(!r || !r.ownerUserId) return "";
+  var hit = (rt.wsMembersCache || []).filter(function(m){ return m.userId === r.ownerUserId; })[0];
+  return hit ? (hit.displayName || hit.username || "") : (r.ownerName || "");
 }
-function nextStepHTML(p){
-  var t = nextStepFor(p.reqId);
-  if(!t){
-    return '<div class="manager-project-next"><span class="next-lab">下一步</span>'
-      + '<span class="next-empty">暂无未完成工作项</span></div>';
-  }
-  var s = dueState(t);
-  var dueCls = s.kind === "over" ? "over" : (s.kind === "today" || s.kind === "soon" ? "warn" : "mute");
-  var dueHTML = t.dueDate
-    ? '<span class="mini-tag ' + dueCls + '" title="' + esc(dueText(t)) + '">' + esc(fmtShortMD(parseDate(t.dueDate))) + '</span>'
-    : '<span class="mini-tag mute">未排期</span>';
-  return '<div class="manager-project-next">'
-    + '<span class="next-lab">下一步</span>'
-    + '<button class="next-title" type="button" data-open-task="' + esc(t.id) + '" title="打开工作项：' + esc(t.title) + '">' + esc(t.title) + '</button>'
-    + (t.blocked ? '<span class="mini-tag warn" title="' + esc(t.blockedReason || "被阻塞") + '">阻塞</span>' : "")
-    + '<span class="next-owner" title="负责人：' + esc(t.owner || "未指派") + '">' + avatarHTML(t.owner || "—", "sm") + dueHTML + '</span></div>';
-}
+/* 页头口径：逾期与停滞叠加算风险；无工作项的项目不画 0% 环 */
 function projectCard(p, grouped){
-  var healthName = p.health === "green" ? "正常" : "需关注";
-  var tagCls = p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning");
-  var people = (p.members || []).slice(0, 4).map(function(name){ return avatarHTML(name, "sm"); }).join("");
-  var foot = p.overloadedMembers ? '<span class="tag tag-warning">' + p.overloadedMembers + ' 人超载</span>'
-    : (p.stagnantDays >= 7 ? '<span class="manager-stale">连续 ' + p.stagnantDays + ' 天无完成</span>'
-      : '<span class="manager-stale">本周完成 ' + p.weekCompleted + ' 项 · 工时 ' + fmtHours(p.weekWorkMinutes) + '</span>');
-  return '<article class="manager-project-card">'
-    + '<div class="manager-project-head"><i class="manager-light ' + esc(p.health) + '"></i>'
+  var owner = pfOwnerName(p);
+  var empty = !Number(p.total);
+  var displayName = p.status === "done" ? "已交付" : (p.status === "hold" ? "已搁置" : (empty ? "未开始" : ""));
+  var healthName = empty ? (displayName || "未开始") : (p.health === "green" ? "正常" : (p.health === "red" ? "风险" : "需关注"));
+  var tagCls = empty ? "ghost" : (p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning"));
+  var alerts = p.status === "done"
+    ? '<div class="pf-card-alerts"><span>已交付</span><span>负载 0</span></div>'
+    : '<div class="pf-card-alerts">'
+      + (p.overdue ? '<b class="over">' + p.overdue + ' 逾期</b>' : '<span>无逾期</span>')
+      + (p.overloadedMembers ? '<span>' + p.overloadedMembers + ' 人超载</span>'
+        : (p.stagnantDays >= 7 ? '<span>停滞 ' + p.stagnantDays + ' 天</span>' : '<span>负载正常</span>'))
+      + '</div>';
+  var main = empty
+    ? '<div class="manager-project-main pf-card-main is-empty"><span class="pf-empty-ring" aria-hidden="true">' + icon("plus", 16) + '</span>'
+      + '<div class="pf-card-cap"><b>暂无工作项</b><span>建工作项后显示完成度</span></div></div>'
+    : '<div class="manager-project-main pf-card-main">'
+      + '<button type="button" class="manager-ring ' + esc(p.health) + '" style="--p:' + p.progressPct + '" data-project-drill="' + esc(p.reqId) + '" data-metric="all" title="查看该项目全部工作项" aria-label="' + esc(p.name) + ' 完成率 ' + p.progressPct + '%，查看工作项明细"></button>'
+      + '<div class="pf-card-cap"><b>' + p.progressPct + '%</b><span>整体完成</span></div>'
+      + alerts + '</div>';
+  var stats = empty ? ""
+    : '<div class="pf-card-stats">'
+      + [["doing","进行中",p.doing],["backlog","待处理",p.backlog],["blocked","阻塞",p.blocked],["done","完成",p.done]].map(function(x){
+        return '<button type="button" data-project-drill="' + esc(p.reqId) + '" data-metric="' + x[0] + '" title="查看' + x[1] + '工作项">' + esc(x[1]) + ' ' + (Number(x[2]) || 0) + '</button>';
+      }).join("") + '</div>';
+  return '<article class="manager-project-card pf-card' + (empty ? " is-empty" : "") + '">'
+    + '<div class="manager-project-head">'
     + '<button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '">' + esc(p.name) + '</button>'
-    + (!grouped && p.setId ? '<span class="tag tag-ghost" title="所属项目集">' + esc(setNameById(p.setId) || "项目集") + '</span>' : '')
-    + '<span class="tag ' + tagCls + '">' + healthName + '</span></div>'
-    + '<div class="manager-project-main"><button type="button" class="manager-ring ' + esc(p.health) + '" style="--p:' + p.progressPct + '" data-project-drill="' + esc(p.reqId) + '" data-metric="all" title="查看该项目全部工作项" aria-label="' + esc(p.name) + ' 完成率 ' + p.progressPct + '%，查看工作项明细"><b>' + p.progressPct + '%</b></button>'
-    + '<div class="manager-project-stats">'
-    + [["backlog","待处理",p.backlog],["doing","进行中",p.doing]].concat(p.ended ? [["ended","执行结束",p.ended]] : [], [["done","已完成",p.done],["overdue","逾期",p.overdue]]).map(function(x){
-      return '<button type="button" class="' + (x[0] === "overdue" && x[2] ? "over" : "") + '" data-project-drill="' + esc(p.reqId) + '" data-metric="' + x[0] + '"><span>' + x[1] + '</span><b>' + x[2] + '</b></button>';
-    }).join("") + '</div></div>'
-    + nextStepHTML(p)
-    + '<div class="manager-project-foot"><span class="manager-avatars">' + people + '</span>' + foot + '</div></article>';
+    + '<span class="tag ' + tagCls + '">' + esc(healthName) + '</span>'
+    + (!grouped && p.setId ? '<span class="tag ghost" title="所属项目集">' + esc(setNameById(p.setId) || "项目集") + '</span>' : '')
+    + (owner ? '<span class="pf-card-owner" title="项目负责人">' + esc(owner) + '</span>' : '') + '</div>'
+    + main + stats + '</article>';
 }
 function statusName(st){
   return { active:"进行中", done:"已交付", hold:"已搁置" }[st] || st || "—";
+}
+/* 健康度徽标：0 工作项不算「正常」，已搁置不与健康度混排，避免把无人推进的项目当健康 */
+function projectHealthMeta(p){
+  if(!Number(p.total)){
+    return { name: p.status === "hold" ? "已搁置" : (p.status === "done" ? "已交付" : "无工作项"), cls: "ghost" };
+  }
+  if(p.status === "hold") return { name: "已搁置", cls: "ghost" };
+  if(p.health === "green") return { name: "正常", cls: "tag-success" };
+  if(p.health === "red") return { name: "风险", cls: "tag-danger" };
+  return { name: "需关注", cls: "tag-warning" };
 }
 function pfCell(p, key){
   if(key === "name"){
@@ -185,9 +213,8 @@ function pfCell(p, key){
   }
   if(key === "status") return '<td><span class="tag ghost">' + esc(statusName(p.status)) + '</span></td>';
   if(key === "health"){
-    var healthName = p.health === "green" ? "正常" : "需关注";
-    var tagCls = p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning");
-    return '<td><span class="tag ' + tagCls + '">' + healthName + '</span></td>';
+    var hMeta = projectHealthMeta(p);
+    return '<td><span class="tag ' + hMeta.cls + '">' + esc(hMeta.name) + '</span></td>';
   }
   if(key === "progress"){
     return '<td class="num"><span class="progress mini" style="min-width:70px"><span class="bar"><i style="width:' +
@@ -206,7 +233,7 @@ function pfCell(p, key){
 }
 function projectTable(projects){
   var cols = listPrefs.columns("portfolio"), labels = listPrefs.labels("portfolio");
-  var groups = groupedBySet(projects);
+  var groups = pfSetId ? null : groupedBySet(projects);
   var body = groups
     ? groups.map(function(g){
         return '<tr class="pf-set-row"><td colspan="' + cols.length + '">' + esc(g.name) + ' · ' + g.rows.length + ' 个项目</td></tr>'
@@ -219,36 +246,64 @@ function projectTable(projects){
     + cols.map(function(key){ return '<th' + (["total","backlog","doing","done","overdue","blocked","progress","weekCompleted","weekWorkMinutes"].indexOf(key) !== -1 ? ' class="num"' : "") + '>' + esc(labels[key]) + '</th>'; }).join("")
     + '</tr></thead><tbody>' + body + '</tbody></table></div></section>';
 }
+/* 页头范围：默认看全部项目集；选中某个集后按集重算 KPI 与项目列表，等同于集详情页 */
+function pfSetOptions(){
+  var opts = '<option value="">全部项目集</option>';
+  (rt.projectSets || []).slice().sort(function(a, b){ return (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0); }).forEach(function(s){
+    opts += '<option value="' + esc(s.id) + '"' + (s.id === pfSetId ? " selected" : "") + '>' + esc(s.name) + '</option>';
+  });
+  return opts;
+}
+function scopedTasks(){
+  if(!pfSetId) return (cache.tasks || []);
+  var ids = pfProjectIds();
+  return (cache.tasks || []).filter(function(t){ return ids[t.reqId]; });
+}
 function renderPortfolio(){
-  var k = cache.kpis || {}, projects = cache.projects || [];
+  var projects = pfSetProjects();
+  var tasks = scopedTasks();
   var active = projects.filter(function(p){ return p.status === "active"; }).length;
+  var overdueN = tasks.filter(function(t){ return dueState(t).kind === "over"; }).length;
+  var undone = tasks.filter(function(t){ return t.boardColumn !== "done" && t.boardColumn !== "canceled"; }).length;
+  var weekDone = tasks.filter(function(t){
+    return t.boardColumn === "done" && t.completedAt && String(t.completedAt).substring(0, 10) >= mondayIso(cache.today);
+  }).length;
+  var byTask = cache.weekWorkByTask || {}, weekMinutes = 0;
+  tasks.forEach(function(t){ weekMinutes += Number(byTask[t.id]) || 0; });
   /* 上周完成：快照里带全部在册工作项的完成时间，前端按同一个自然周口径回算即可 */
   var weekStart = mondayIso(cache.today);
   var lastWeekDone = completedBetween(shiftDays(weekStart, -7), weekStart);
+  var attention = projects.filter(function(p){ return p.health && p.health !== "green"; }).length;
+  var setName = pfSetId ? (setNameById(pfSetId) || "项目集") : "";
   var mode = listPrefs.viewMode("portfolio");
   var seg = '<div class="seg mini">'
     + '<button type="button" data-pf-mode="card" aria-pressed="' + (mode === "card") + '">卡片</button>'
     + '<button type="button" data-pf-mode="table" aria-pressed="' + (mode === "table") + '">列表</button>'
     + '</div>'
     + '<button class="btn sm" type="button" id="btnPortfolioColumns"' + (mode === "table" ? "" : " hidden") + '>显示字段</button>';
-  $("portfolioBody").innerHTML = '<div class="manager-toolbar"><div><b>全局健康度</b></div>'
-    + '<div class="toolbar-right">' + seg + fullscreenButtonHTML()
-    + '<button class="btn sm" type="button" data-portfolio-export>导出周报</button></div></div>'
-    + caliberHTML('进度 = Σ工作项完成度 ÷ 工作项数；红灯 = 逾期占比 &gt;10% 且连续 7 天无完成，橙灯 = 有逾期或成员超载。分布按看板列的处理规则归类：待处理含「等待接续」列，进行中含「正常处理」的自定义列，「执行结束」列单独计数、不计未完成。统计范围含已归档项目（归档只是收起，数据与统计保留），不含你无权查看的项目；「本周」按自然周（周一起）计算。')
+  var sub = (projects.length ? projects.length + " 个项目 · " + (attention ? attention + " 处风险" : "全部正常") : "还没有项目") + " · 数据截至 " + fmtShortMD(parseDate(cache.today));
+  $("portfolioBody").innerHTML = '<div class="manager-toolbar pf-head"><div class="pf-head-txt">'
+    + '<span class="pf-head-title"><b>' + esc(pfSetId ? setName : "全局健康度") + '</b>' + (pfSetId ? '<span class="tag tag-primary">项目集</span>' : '') + '</span>'
+    + '<span class="pf-head-sub">' + esc(sub) + '</span></div>'
+    + '<div class="manager-actions"><select class="sel sm pf-scope" data-pf-set aria-label="选择项目集范围">' + pfSetOptions() + '</select>'
+    + '<button class="btn sm" type="button" data-portfolio-export>导出周报</button>'
+    + '<button class="btn primary sm" type="button" id="btnPfNewProject">新建项目</button>' + fullscreenButtonHTML() + '</div></div>'
     + '<div class="manager-kpis">'
-    + kpi("进行中项目", active + '<small> / ' + projects.length + '</small>', "共 " + projects.length + " 个项目", "projects")
-    + kpi("逾期工作项", k.overdueTasks || 0, "未完成工作项", "overdue", k.overdueTasks ? "danger" : "")
-    + kpi("本周完成", k.weekCompleted || 0, "按完成时间归周", "weekDone", "", kpiDelta(k.weekCompleted || 0, lastWeekDone))
-    + kpi("本周团队工时", fmtHours(k.weekWorkMinutes), "自动计时汇总", "hours") + '</div>'
+    + kpi("进行中项目", active + '<small> / ' + projects.length + '</small>', !projects.length ? "还没有项目" : (projects.length - active ? "其余 " + (projects.length - active) + " 个未开始或已完成" : "全部进行中"), "projects")
+    + kpi("逾期工作项", overdueN, undone ? "未完成工作项共 " + undone + " 项" + (undone === overdueN ? "，全部逾期" : "") : "没有未完成工作项", "overdue", overdueN ? "danger" : "")
+    + kpi("本周完成", weekDone, fmtShortMD(parseDate(weekStart)) + " → " + fmtShortMD(parseDate(shiftDays(weekStart, 6))), "weekDone", "", kpiDelta(weekDone, lastWeekDone))
+    + kpi("团队工时", fmtHours(weekMinutes), "窗口内自动计时汇总", "hours") + '</div>'
+    + '<div class="pf-viewbar">' + seg
+    + (mode === "table" ? "" : '<div class="manager-legend"><span><i class="manager-light green"></i>正常</span><span><i class="manager-light orange"></i>有逾期或超载</span><span><i class="manager-light red"></i>逾期与停滞叠加</span></div>'
+      + '<span class="pf-note">风险按「逾期 / 停滞 / 超载」三项判定，文字与颜色同时给出</span>') + '</div>'
     + (mode === "table"
       ? (projects.length ? projectTable(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"}))
-      : '<div class="manager-legend"><span><i class="manager-light green"></i>正常</span><span><i class="manager-light orange"></i>有逾期或超载</span><span><i class="manager-light red"></i>逾期与停滞叠加</span></div>'
-        + (projects.length ? cardAreaHTML(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"})));
+      : (projects.length ? cardAreaHTML(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"})));
 }
-/* 卡片视图按项目集分块：集头汇总 + 集内项目网格；没有项目集时保持原来的平铺 */
+/* 卡片视图按项目集分块：集头汇总 + 集内项目网格；选中单个集后不再套集头 */
 function cardAreaHTML(projects){
-  var groups = groupedBySet(projects);
-  if(!groups) return '<div class="manager-project-grid" id="portfolioProjects">' + projects.map(function(p){ return projectCard(p, false); }).join("") + '</div>';
+  var groups = pfSetId ? null : groupedBySet(projects);
+  if(!groups) return '<div class="manager-project-grid" id="portfolioProjects">' + projects.map(function(p){ return projectCard(p, !!pfSetId); }).join("") + '</div>';
   return '<div class="pf-set-groups">' + groups.map(function(g){
     return '<section class="pf-set-block">' + setGroupHeadHTML(g)
       + '<div class="manager-project-grid">' + g.rows.map(function(p){ return projectCard(p, true); }).join("") + '</div></section>';
@@ -256,22 +311,23 @@ function cardAreaHTML(projects){
 }
 function exportPortfolio(){
   if(!cache) return;
-  var rows = [["项目周报", cache.today], [], ["项目","状态","健康度","总工作项","待处理","进行中","执行结束","已完成","逾期","阻塞","完成率","本周完成","本周工时(分钟)","预估(分钟)","实际(分钟)","超载人数","连续无完成天数"]];
-  (cache.projects || []).forEach(function(p){
+  var projects = pfSetProjects();
+  var setName = pfSetId ? (setNameById(pfSetId) || "项目集") : "全部项目";
+  var rows = [["项目周报 · " + setName, cache.today], [], ["项目","状态","健康度","总工作项","待处理","进行中","执行结束","已完成","逾期","阻塞","完成率","本周完成","本周工时(分钟)","预估(分钟)","实际(分钟)","超载人数","连续无完成天数"]];
+  projects.forEach(function(p){
     rows.push([p.name,p.status,p.health,p.total,p.backlog,p.doing,p.ended || 0,p.done,p.overdue,p.blocked,p.progressPct + "%",p.weekCompleted,p.weekWorkMinutes,p.estimateMinutes,p.actualMinutes,p.overloadedMembers,p.stagnantDays]);
   });
-  downloadCsv("项目周报-" + cache.today + ".csv", rows);
+  downloadCsv("项目周报-" + setName + "-" + cache.today + ".csv", rows);
   toast("已导出项目周报", "fs");
 }
 /* KPI「进行中项目」下钻：列出进行中项目的进度与负载，点项目名进项目看板 */
 function openActiveProjects(){
-  var projects = (cache.projects || []).filter(function(p){ return p.status === "active"; });
+  var projects = pfSetProjects().filter(function(p){ return p.status === "active"; });
   var rows = projects.map(function(p){
-    var healthName = p.health === "green" ? "正常" : "需关注";
-    var tagCls = p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning");
+    var hMeta = projectHealthMeta(p);
     return '<tr>'
       + '<td><button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '" title="打开项目驾驶舱">' + esc(p.name) + '</button></td>'
-      + '<td><span class="tag ' + tagCls + '">' + healthName + '</span></td>'
+      + '<td><span class="tag ' + hMeta.cls + '">' + esc(hMeta.name) + '</span></td>'
       + '<td class="num">' + (p.progressPct || 0) + '%</td>'
       + '<td class="num">' + (p.backlog || 0) + '</td><td class="num">' + (p.doing || 0) + '</td><td class="num">' + (p.done || 0)
       + (p.ended ? ' <span class="muted" title="另有 ' + p.ended + ' 项在「执行结束」列">+' + p.ended + '</span>' : "") + '</td>'
@@ -310,17 +366,19 @@ function onClick(e){
     listPrefs.openColumnSettings("portfolio", renderPortfolio);
     return;
   }
+  if(e.target.closest("#btnPfNewProject")){
+    loadView("projects").then(function(m){ m.openProjectDialog(null); });
+    return;
+  }
   if(e.target.closest("[data-portfolio-export]")){ exportPortfolio(); return; }
   if(e.target.closest("[data-empty-action]")){ loadPortfolio(); return; }
-  var step = e.target.closest("[data-open-task]");
-  if(step){ openTaskById(step.dataset.openTask); return; }
   var open = e.target.closest("[data-open-project]");
   if(open){ rt.managerProjectId = open.dataset.openProject; showView("project"); return; }
   var drill = e.target.closest("[data-project-drill]");
   if(drill){
-    var p = (cache.projects || []).filter(function(x){ return x.reqId === drill.dataset.projectDrill; })[0];
+    var p = pfSetProjects().filter(function(x){ return x.reqId === drill.dataset.projectDrill; })[0];
     var metric = drill.dataset.metric;
-    var names = {all:"全部工作项",backlog:"待处理",doing:"进行中",ended:"执行结束",done:"已完成",overdue:"逾期"};
+    var names = {all:"全部工作项",backlog:"待处理",doing:"进行中",ended:"执行结束",done:"已完成",blocked:"被阻塞",overdue:"逾期"};
     openTaskTable((p ? p.name : "项目") + " · " + names[metric], tasksFor(drill.dataset.projectDrill, metric));
     return;
   }
@@ -331,15 +389,22 @@ function onClick(e){
     openActiveProjects();
   }else if(kind === "hours"){
     var byTask = cache.weekWorkByTask || {};
-    var rows = (cache.tasks || []).filter(function(t){ return byTask[t.id] > 0; }).map(function(t){
+    var rows = scopedTasks().filter(function(t){ return byTask[t.id] > 0; }).map(function(t){
       var copy = Object.assign({}, t); copy.totalMinutes = byTask[t.id]; return copy;
     });
-    openTaskTable("本周团队工时", rows, "实际列显示本周计时 · 合计 " + fmtHours((cache.kpis || {}).weekWorkMinutes));
+    var sumMin = rows.reduce(function(s, t){ return s + (Number(t.totalMinutes) || 0); }, 0);
+    openTaskTable("本周团队工时", rows, "实际列显示本周计时 · 合计 " + fmtHours(sumMin));
   }else{
     openTaskTable(kind === "overdue" ? "全部逾期工作项" : "本周完成工作项", tasksFor(null, kind));
   }
 }
 if($("portfolioBody")) $("portfolioBody").addEventListener("click", onClick);
+if($("portfolioBody")) $("portfolioBody").addEventListener("change", function(e){
+  var sel = e.target.closest("[data-pf-set]");
+  if(!sel) return;
+  pfSetId = sel.value || "";
+  if(cache) renderPortfolio();
+});
 /* 项目集与项目列表并行加载：若本页先渲染，集名 / 身份色取不到，等列表落地后再补一次 */
 window.addEventListener("ds:reqs-loaded", function(){
   if(document.body.dataset.view !== "portfolio" || !cache) return;

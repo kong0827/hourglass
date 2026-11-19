@@ -208,9 +208,11 @@ function pivotValue(t, dim){
 }
 function pivotOrder(dim){
   if(dim === "priority"){
+    /* 透视轴存的是显示名，排序要先映射回 P0–P3，否则「高」会排到「中」后面 */
+    var names = PRIORITIES.map(function(code){ return priName(code); });
     return function(a, b){
-      var ai = PRIORITIES.indexOf(a), bi = PRIORITIES.indexOf(b);
-      return (ai < 0 ? 9 : ai) - (bi < 0 ? 9 : bi);
+      var ai = names.indexOf(a), bi = names.indexOf(b);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
     };
   }
   if(dim === "column"){

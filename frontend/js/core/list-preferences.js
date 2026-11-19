@@ -25,7 +25,8 @@ var DEFS = {
     modes: ["card", "table"],
     required: "name",
     labels: { name:"项目名称", status:"状态", description:"描述", ownerName:"负责人", plannedEnd:"计划结束", taskCount:"工作项数", doneCount:"完成数", progress:"进度", docCount:"文档数", firstReleasedAt:"首版上线日", createdAt:"创建时间", updatedAt:"更新时间" },
-    defaults: ["name","status","ownerName","plannedEnd","taskCount","doneCount","progress","docCount","firstReleasedAt"]
+    /* 1440 首屏不横向滚动：默认只保留 6 列，其余列进「显示字段」按需打开 */
+    defaults: ["name","status","ownerName","plannedEnd","taskCount","progress"]
   },
   "portfolio": {
     mode: "card",

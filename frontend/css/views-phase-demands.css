@@ -225,7 +225,7 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .card-note{margin-top:6px;}
 .card-foot{margin-top:8px;}
 /* 测试交接：卡片测试条（待领取 / 测试负责人 / 已测时长） */
-.card-test{display:flex;align-items:center;gap:6px;margin-top:7px;padding-top:7px;border-top:1px dashed var(--border);font-size:11px;min-height:19px;color:var(--text-3);min-width:0;}
+.card-test{display:flex;align-items:center;gap:6px;margin-top:7px;padding-top:7px;border-top:1px dashed var(--border);font-size:11px;min-height:19px;color:var(--text-3);min-width:0;overflow:hidden;}
 .card-test .ct-lbl{flex:none;color:var(--text-3);}
 .card-test .ct-who{display:inline-flex;align-items:center;gap:var(--space-1);color:var(--text-2);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .card-test .avatar{width:17px;height:17px;font-size:var(--fs-micro);}
@@ -278,6 +278,9 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .task-published-badge+.tag{margin-left:4px;}
 .release-body{display:flex;flex-direction:column;gap:var(--space-4);}
 .release-section{display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:var(--r-md);padding:var(--space-4);background:var(--surface);min-width:0;}
+/* 计划表单很长：保存动作吸在弹层底部，不用滚到最末尾才找得到 */
+.release-save-bar{position:sticky;bottom:-1px;z-index:2;display:flex;flex-direction:column;gap:8px;margin-top:2px;padding:12px 0 2px;background:var(--surface);border-top:1px solid var(--border);}
+.release-save-acts{display:flex;justify-content:flex-end;}
 .release-section h3,.release-section h4,.release-section p{margin:0;}
 .release-section .field{display:flex;flex-direction:column;gap:6px;}
 .release-section .field>.label-row>label{font-size:12px;font-weight:600;color:var(--text-2);}
@@ -591,6 +594,13 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .bkl-card.bkl-dragging{opacity:.45;}
 /* 全部项目泳道：列内按项目分组，轻量头行只带项目名与计数 */
 .bkl-lane{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-2);border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
+/* DEM-5：选了分组维度后，列内组头只做分隔，不再套第二层卡片容器 */
+.bkl-lane.is-dim{border:0;border-radius:0;background:none;padding:0 0 4px;gap:var(--space-2);}
+.bkl-lane.is-dim + .bkl-lane.is-dim{margin-top:6px;padding-top:8px;border-top:1px dashed var(--border);}
+.bkl-lane.is-dim .bkl-lane-head{padding:0 2px 0 4px;}
+.bkl-lane.is-dim .bkl-lane-name{font-size:12px;color:var(--text-3);font-weight:600;}
+.bkl-lane.is-sub{padding-top:2px;border-top:0;}
+.bkl-lane.is-sub .bkl-lane-head{padding-left:10px;}
 .bkl-lane-head{display:flex;align-items:center;gap:var(--space-2);padding:0 2px;min-width:0;}
 .bkl-lane-name{font-size:13px;font-weight:600;color:var(--text-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .bkl-lane-count{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;flex:0 0 auto;}

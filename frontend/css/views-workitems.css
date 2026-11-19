@@ -10,6 +10,18 @@
 /* ===================== 6.3 看板 ===================== */
 /* 看板工具条：列内分组。列仍是状态，组只决定卡片在列内怎么归堆 */
 #view-board.on{display:flex;flex-direction:column;}
+/* 右侧还有列没露出时，在工具条右端给「还有 N 列」提示；点一下右翻一屏 */
+.board-more-pill{
+  display:none;align-items:center;
+  height:28px;padding:0 10px;margin-right:4px;
+  border:1px solid var(--border);border-radius:999px;
+  background:var(--surface);color:var(--text-2);
+  font:600 12px/1 var(--font-sans,inherit);font-variant-numeric:tabular-nums;
+  white-space:nowrap;cursor:pointer;
+}
+.board-more-pill.on{display:inline-flex;}
+.board-more-pill:hover{color:var(--text);border-color:var(--border-strong);}
+.board-more-pill:focus-visible{outline:none;box-shadow:var(--ring-focus);}
 .board-toolbar{
   flex:0 0 auto;display:flex;align-items:center;gap:var(--space-2);
   height:36px;padding:0 var(--content-pad);
@@ -20,7 +32,8 @@
 /* 右侧一组：已取消入口 + 口径「!」，与左侧分组控件分开 */
 .board-toolbar-end{margin-left:auto;display:inline-flex;align-items:center;gap:var(--space-2);}
 /* 显示浮层：分组、二级与已取消归档收进一个入口 */
-.board-display-menu{width:auto;min-width:264px;padding:10px 12px;}
+.board-display-menu{width:auto;min-width:300px;padding:10px 12px;left:auto;right:0;top:calc(100% + 6px);}
+.board-display-menu .mine-display-head span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .board-display-menu .gantt-more-row{gap:8px;min-height:34px;}
 .board-display-menu .gantt-more-label{flex:0 0 auto;margin-right:auto;color:var(--text-3);}
 .board-display-menu .mini-select{min-width:140px;}
@@ -53,8 +66,10 @@
   height:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;
   padding:var(--space-4) var(--content-pad) 24px;
 }
+/* 列在容器内等分：1440 下 5 列需各 ~195px 才能全部露出（侧栏展开时内容宽 ~1022）；
+   原先 216 的下限会让第 5 列被右缘裁掉。--board-col-w 只作为上限，更多列横向滚动。 */
 .board-col{
-  flex:0 0 auto;width:var(--board-col-w);height:100%;min-height:0;
+  flex:1 1 0;min-width:184px;max-width:var(--board-col-w);height:100%;min-height:0;
   display:flex;flex-direction:column;position:relative;
   background:var(--surface-sunken);border-radius:var(--r-lg);
   padding:var(--space-2);
@@ -131,7 +146,7 @@
 .col-top:hover{color:var(--primary-fg);border-color:var(--primary-border);}
 
 /* 折叠态列 */
-.board-col.collapsed{width:48px;padding:var(--space-2) 4px;align-items:center;}
+.board-col.collapsed{flex:0 0 48px;max-width:48px;padding:var(--space-2) 4px;align-items:center;}
 .board-col.collapsed .board-col-body,
 .board-col.collapsed .col-foot,
 .board-col.collapsed .col-count-btn,

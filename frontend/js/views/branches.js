@@ -20,14 +20,15 @@ var BRANCH_STATUS = [
   { id:"merging",  name:"待合并", cls:"br-st-merging",  timeKey:"mergeAt",    hint:"测过了，等合并窗口" },
   { id:"released", name:"已发布", cls:"br-st-released", timeKey:"releasedAt", hint:"已上线" }
 ];
-/* 生命周期（outcome）与开发状态（status）正交：chips 只切 outcome，看板列仍按 status */
+/* 生命周期（outcome）与开发状态（status）正交：chips 只切 outcome，看板列仍按 status。
+   hint 写清「进行中包含哪几个列」，避免把生命周期当成第四个开发状态。 */
 var BRANCH_OUTCOMES = [
-  { id:"open",     name:"进行中" },
-  { id:"done",     name:"已完成" },
-  { id:"canceled", name:"已取消" },
-  { id:"ignored",  name:"已忽略" },
-  { id:"pending",  name:"待确认" },
-  { id:"all",      name:"全部" }
+  { id:"open",     name:"进行中", hint:"含开发中、待测试、待合并：还没判定完成或关闭" },
+  { id:"done",     name:"已完成", hint:"已发布并判定完成" },
+  { id:"canceled", name:"已取消", hint:"放弃该分支，记录保留" },
+  { id:"ignored",  name:"已忽略", hint:"不纳入统计，例如非本迭代的分支" },
+  { id:"pending",  name:"待确认", hint:"自动判定有待确认项，需要人工确认" },
+  { id:"all",      name:"全部", hint:"全部生命周期" }
 ];
 var branchOutcomeFilter = "open";   /* 兼容后方：接口缺省不限，前端显式只取进行中 */
 var branchRepoFilter = "";
@@ -524,11 +525,12 @@ function renderLifecycleChips(){
   var host = $("branchLifeChips");
   if(!host) return;
   var counts = (branchBoard && branchBoard.outcomeCounts) || {};
-  host.innerHTML = BRANCH_OUTCOMES.map(function(o){
+  /* 生命周期与看板列是两个维度，label 常驻说明；chips 的 title 再展开每个口径包含哪些列 */
+  host.innerHTML = '<span class="br-life-label">生命周期</span>' + BRANCH_OUTCOMES.map(function(o){
     var n = o.id === "all" ? (counts.all || 0) : (counts[o.id] || 0);
     var on = branchOutcomeFilter === o.id;
     return '<button type="button" class="br-chip' + (o.id === "pending" ? " br-chip-pending" : "") + (on ? " on" : "") +
-      '" data-br-outcome="' + o.id + '" aria-pressed="' + on + '">' + o.name +
+      '" data-br-outcome="' + o.id + '" aria-pressed="' + on + '" title="' + esc(o.hint || o.name) + '">' + o.name +
       '<span class="n">' + n + '</span></button>';
   }).join("");
 }
@@ -2023,7 +2025,7 @@ function updateBranchGroupToggle(){
   btn.textContent = nextName;
   btn.setAttribute("data-mode", branchGroupMode);
   btn.setAttribute("title", "当前" + (branchGroupMode === "project" ? "按项目" : (branchGroupMode === "repo" ? "按仓库" : "按状态")) + "分组，点击改为" + nextName);
-  btn.classList.toggle("primary", branchGroupMode === "status");
+  /* 分组是视图切换，用中性按钮；主操作只留给「新建分支」 */
   /* 分组只在看板视图有意义 */
   btn.hidden = branchViewMode === "list";
 }
@@ -2033,7 +2035,6 @@ function updateBranchModeUI(){
     seg.querySelectorAll("[data-br-mode]").forEach(function(b){
       var on = b.dataset.brMode === branchViewMode;
       b.setAttribute("aria-pressed", on ? "true" : "false");
-      b.classList.toggle("primary", on);
     });
   }
   /* 分组：看板用切换按钮（状态↔项目），列表用下拉（不分组/状态/负责人/项目） */

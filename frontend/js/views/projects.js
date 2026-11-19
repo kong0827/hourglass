@@ -760,23 +760,36 @@ function reqPhaseHTML(r){
 function renderReqSumm(list){
   var el = $("reqSumm");
   if(!el) return;
-  if(!list.length){ el.hidden = true; el.innerHTML = ""; return; }
+  if(!list.length){
+    el.hidden = true; el.innerHTML = "";
+    if($("projNoRelBanner")) $("projNoRelBanner").hidden = true;
+    return;
+  }
   var agg = projectSetSummary(list);
   var sets = {};
   list.forEach(function(r){ if(r.setId) sets[r.setId] = 1; });
   var noRel = list.filter(function(r){ return !r.firstReleasedAt; }).length;
+  var riskN = list.filter(function(r){
+    var rk = projectRiskByReq[r.id];
+    return !!(rk && (rk.overdue || rk.blocked || rk.stagnant));
+  }).length;
+  var banner = $("projNoRelBanner");
+  if(banner){
+    banner.hidden = !noRel;
+    if(noRel) $("projNoRelText").textContent = noRel + " 个项目未标记首版，首版投入与准时完成率无法统计。";
+  }
   var stats = [
-    ["项目", String(list.length), ""],
-    ["分组", String(Object.keys(sets).length), ""],
-    ["首版投入", fmtMinutesShort(agg.mvp), ""],
-    ["迭代投入", fmtMinutesShort(agg.post), ""],
-    ["准时完成率", agg.onTimePct === null ? "—" : agg.onTimePct + "%", "按带截止日期的已完成工作项"],
-    ["未标记首版", String(noRel), "标记后投入自动拆分为首版 / 迭代"]
+    ["项目", String(list.length), "", Object.keys(sets).length + " 个分组"],
+    ["首版投入", fmtMinutesShort(agg.mvp), "", noRel ? noRel + " 个未标记首版" : "已全部标记"],
+    ["迭代投入", fmtMinutesShort(agg.post), "", "窗口内 · 近 4 周"],
+    ["准时完成率", agg.onTimePct === null ? "—" : agg.onTimePct + "%", "按带截止日期的已完成工作项", ""],
+    ["风险项目", String(riskN), "逾期 / 阻塞 / 停滞的项目数", "逾期或超载"]
   ];
   el.hidden = false;
   el.innerHTML = stats.map(function(s){
     return '<div class="stat"><div class="stat-k">' + esc(s[0]) + '</div>' +
-      '<div class="stat-v"' + (s[2] ? ' title="' + esc(s[2]) + '"' : '') + '>' + esc(s[1]) + '</div></div>';
+      '<div class="stat-v"' + (s[2] ? ' title="' + esc(s[2]) + '"' : '') + '>' + esc(s[1]) + '</div>' +
+      (s[3] ? '<div class="stat-sub">' + esc(s[3]) + '</div>' : '') + '</div>';
   }).join("");
 }
 /* 拖拽中的「移出项目集」落点：平时隐藏，开始拖动后才出现 */
@@ -808,7 +821,7 @@ function renderReqList(){
     renderProjectTable(list);
     return;
   }
-  reqListEl.className = "req-list";
+  reqListEl.className = "req-list is-cards";
   function reqItemHTML(r){
     var open = !!reqExpanded[r.id];
     var readOnly = r.access === "read";
@@ -821,6 +834,7 @@ function renderReqList(){
         '</span></button>';
     }).join("") : '<p class="foot-note" style="margin:4px 0">还没有文档。</p>';
     return '<div class="req-item' + (rt.editingReqId === r.id ? " editing" : "") +
+        (open ? " is-open" : "") +
         (r.setId ? " req-item-in-set" : "") +
         (r.containerKind ? " req-item-container" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '"' +
         projectSetColorStyleOf(r.setId) +
@@ -837,12 +851,7 @@ function renderReqList(){
         (r.containerKind ? '<span class="tag tag-ghost" title="承接版本、发布与文档的公共容器">公共</span>' : '') +
         (readOnly ? '<span class="tag tag-ghost" title="你对该项目只有查看权限">只读</span>' : '') +
         '<span class="req-acts">' +
-          '<button class="icon-btn sm" type="button" data-req-activity="' + esc(r.id) + '" title="活动轨迹" aria-label="活动轨迹">' + icon("clock", 14) + '</button>' +
-          (readOnly ? '' : '<button class="icon-btn sm" type="button" data-archive-req="' + esc(r.id) + '" title="' + (r.archivedAt ? "取消归档" : "归档项目") + '" aria-label="' + (r.archivedAt ? "取消归档" : "归档项目") + '">' + icon("inbox", 14) + '</button>') +
-          (readOnly ? '' : '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>') +
-          (rt.currentWs && rt.currentWs.myRole === "owner"
-            ? '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>'
-            : '') +
+          '<button class="icon-btn sm" type="button" data-project-more="' + esc(r.id) + '" title="更多操作" aria-label="更多操作" aria-haspopup="menu" aria-expanded="false">' + icon("more", 14) + '</button>' +
         '</span>' +
       '</div>' +
       (r.description ? '<div class="req-desc">' + esc(r.description) + '</div>' : '') +
@@ -1479,6 +1488,7 @@ if($("btnShowArchived")) $("btnShowArchived").addEventListener("click", function
   showArchived = !showArchived;
   renderReqList();
 });
+if($("btnProjNoRelGo")) $("btnProjNoRelGo").addEventListener("click", function(){ showView("phase"); });
 if($("dlgProjectX")) $("dlgProjectX").addEventListener("click", function(){ tryCloseProjectDialog(); });
 btnSaveReq.addEventListener("click", saveReq);
 btnCancelReqEdit.addEventListener("click", function(){ tryCloseProjectDialog(); });

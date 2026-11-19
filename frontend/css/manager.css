@@ -242,6 +242,18 @@
 .wl-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:44px 16px;background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--r-lg);color:var(--text-3);font-size:13px;text-align:center;}
 .wl-week-who{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;}
 .wl-week-company{display:block;margin-top:2px;font-size:12px;color:var(--text-3);}
+/* 按人视图：桌面用表格，分组视图仍用卡片 */
+.wl-tbl tbody tr[data-member-open]{cursor:pointer;}
+.wl-tbl tbody tr[data-member-open]:hover{background:var(--surface-hover);}
+.wl-tbl tbody tr[data-member-open]:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.wl-tbl td:first-child{min-width:170px;}
+.wl-tbl .wl-week-who .manager-person{padding:0;background:none;font-size:13px;font-weight:600;color:var(--text);}
+.wl-tbl .wl-week-who .manager-person:hover{background:none;color:var(--primary-fg);}
+.wl-tbl .wl-week-company{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.wl-loadcell{display:flex;flex-direction:column;gap:2px;min-width:150px;max-width:230px;}
+.wl-loadcell .foot-note{font-size:11px;line-height:16px;white-space:nowrap;}
+.wl-projcell{min-width:150px;font-size:12px;line-height:20px;color:var(--text-2);}
+.wl-projcell b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;}
 /* —— 成员工作台子页面 —— */
 .member-page{display:flex;flex-direction:column;gap:14px;min-width:0;padding-bottom:24px;}
 .member-page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap;padding:var(--space-4);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
@@ -696,3 +708,90 @@ button.manager-overload-note:hover{border-color:var(--warning);}
   .ms-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
   .ms-task-list{max-height:180px;}
 }
+/* 逾期与阻塞：三组纵向清单 + 右侧「今天先做」 */
+.risk-toolbar .risk-title{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em;}
+.risk-toolbar .risk-sub{margin-left:8px;font-size:12px;color:var(--text-3);}
+.risk-banner{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;
+  border:1px solid var(--primary-border);border-radius:var(--r-md);
+  background:var(--primary-soft);font-size:12px;color:var(--text-2);}
+.risk-banner svg{flex:0 0 auto;color:var(--primary-fg);}
+.risk-filter{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.risk-filter .mini-select{min-width:130px;}
+.risk-filter .risk-search{margin-left:auto;display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);color:var(--text-3);min-width:220px;}
+.risk-filter .risk-search input{border:0;background:none;outline:none;font:inherit;font-size:13px;color:var(--text);width:100%;}
+.risk-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start;}
+.risk-group{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);margin-bottom:12px;overflow:hidden;}
+.risk-group-head{display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+.risk-group-head b{font-size:13px;font-weight:650;}
+.risk-group-meta{font-size:12px;color:var(--text-3);}
+.risk-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+.risk-dot.overdue{background:var(--danger);}
+.risk-dot.blocked{background:var(--warning);}
+.risk-dot.stagnant{background:var(--text-3);}
+.risk-rows{display:flex;flex-direction:column;}
+.risk-row{display:grid;grid-template-columns:minmax(0,1fr) 120px 130px 150px 20px;align-items:center;gap:12px;
+  width:100%;padding:11px 14px;border:0;border-bottom:1px solid var(--border-faint, var(--border));
+  background:none;font:inherit;text-align:left;cursor:pointer;color:var(--text);}
+.risk-rows .risk-row:last-child{border-bottom:0;}
+.risk-row:hover{background:var(--surface-hover);}
+.risk-row-title{min-width:0;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.risk-row:hover .risk-row-title{color:var(--primary-fg);}
+.risk-row-proj,.risk-row-owner{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.risk-row-owner{display:inline-flex;align-items:center;gap:6px;}
+.risk-row-state{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.risk-row-state.over{color:var(--danger-fg);}
+.risk-row-state.warn{color:var(--warning-fg);}
+.risk-row-state.mute{color:var(--text-3);}
+.risk-row-chev{display:inline-flex;color:var(--text-3);}
+.risk-empty{padding:20px 14px;font-size:12px;color:var(--text-3);}
+.risk-rail{display:flex;flex-direction:column;gap:12px;}
+.risk-rail-card{padding:14px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
+.risk-rail-card h4{margin:0;font-size:13px;font-weight:650;}
+.risk-rail-sub{margin:2px 0 10px;font-size:12px;color:var(--text-3);}
+.risk-todo{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+.risk-todo li{display:flex;gap:8px;align-items:flex-start;}
+.risk-todo-n{flex:0 0 auto;width:18px;height:18px;display:grid;place-items:center;border-radius:var(--r-xs);
+  background:var(--surface-sunken);font-size:11px;font-weight:600;color:var(--text-2);}
+.risk-todo-main{min-width:0;display:flex;flex-direction:column;gap:2px;}
+.risk-todo-main button{padding:0;border:0;background:none;font:inherit;font-size:13px;font-weight:500;color:var(--text);text-align:left;cursor:pointer;}
+.risk-todo-main button:hover{color:var(--primary-fg);}
+.risk-todo-main span{font-size:11px;color:var(--text-3);}
+.risk-rail-empty{margin:0;font-size:12px;color:var(--text-3);}
+.risk-rail-note{display:flex;align-items:center;gap:6px;padding:10px 12px;border:1px solid var(--border);
+  border-radius:var(--r-md);background:var(--surface-sunken);font-size:12px;color:var(--text-3);}
+@media (max-width:1279px){
+  .risk-layout{grid-template-columns:1fr;}
+  .risk-row{grid-template-columns:minmax(0,1fr) 110px 90px 20px;}
+  .risk-row-owner{display:none;}
+}
+/* 项目集总览：页头口径 + 工具栏 + 健康卡片（无工作项不画 0% 环） */
+.pf-head{align-items:flex-start;}
+.pf-head-txt{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.pf-head-title{display:flex;align-items:center;gap:8px;}
+.pf-head-title b{font-size:18px;font-weight:700;letter-spacing:-.01em;}
+.pf-head-sub{font-size:12px;color:var(--text-3);}
+.pf-scope{min-width:150px;}
+.pf-viewbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:5px 10px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
+.pf-note{margin-left:auto;font-size:12px;color:var(--text-3);}
+.pf-card{padding:12px 14px;gap:8px;}
+.pf-card .manager-project-head{gap:8px;}
+.pf-card .manager-project-name{font-size:14px;font-weight:600;flex:0 1 auto;}
+.pf-card-owner{margin-left:auto;font-size:12px;color:var(--text-3);white-space:nowrap;}
+.pf-card-main{display:flex;align-items:center;gap:12px;min-width:0;}
+.pf-card .manager-ring{width:52px;height:52px;}
+.pf-card .manager-ring::before{inset:5px;}
+.pf-card-cap{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.pf-card-cap b{font-size:20px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums;}
+.pf-card-cap span{font-size:12px;color:var(--text-3);}
+.pf-card-alerts{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:1px;text-align:right;font-size:12px;color:var(--text-3);}
+.pf-card-alerts b{font-weight:650;}
+.pf-card-alerts .over{color:var(--danger-fg);}
+.pf-card-stats{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.pf-card-stats button{padding:0;border:0;background:none;font:inherit;font-size:12px;color:var(--text-3);cursor:pointer;}
+.pf-card-stats button:hover{color:var(--primary-fg);}
+.pf-empty-ring{width:52px;height:52px;flex:0 0 auto;display:grid;place-items:center;border-radius:50%;
+  border:1px dashed var(--border-strong);color:var(--text-3);}
+.pf-card.is-empty{border-style:dashed;background:var(--surface-2);}
+.pf-card.is-empty .pf-card-cap b{font-size:13px;font-weight:600;}

@@ -561,7 +561,7 @@
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg>
             </summary>
             <div class="menu popover board-display-menu">
-              <div class="mine-display-head">显示设置<span>工作项看板</span></div>
+              <div class="mine-display-head">显示设置<span>工作项</span></div>
               <label class="gantt-more-row"><span class="gantt-more-label">分组</span>
                 <select id="boardGroupSelect" class="mini-select" aria-label="看板列内一级分组方式"></select>
               </label>
@@ -739,6 +739,7 @@
             </label>
             <button class="btn sm ghost" type="button" id="btnTreeHideDone" aria-pressed="false">隐藏已完成</button>
             <span class="toolbar-meta" id="treeMeta">—</span>
+            <button type="button" class="label-help" id="treeHelp" aria-label="查看层级进度的计算口径" title="层级进度怎么算"></button>
             <span class="toolbar-right">
               <button class="btn sm ghost" type="button" id="btnTreeToggleAll">全部折叠</button>
             </span>
@@ -989,6 +990,11 @@
                 <button class="btn sm" type="button" id="btnProjectSetNew">新建项目集</button>
                 <button class="btn primary sm" type="button" id="btnReqNew">新建项目</button>
               </div>
+            </div>
+            <div class="proj-banner" id="projNoRelBanner" hidden>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 18 17H2Z"/><path d="M10 8v4M10 15h.01"/></svg>
+              <span id="projNoRelText"></span>
+              <button class="link-btn" type="button" id="btnProjNoRelGo">去版本页标记 →</button>
             </div>
             <div class="req-summ" id="reqSumm" hidden></div>
             <div class="req-list" id="reqList"></div>
@@ -1270,6 +1276,11 @@
         <!-- 列表页：按项目分级，可展开收起 -->
         <div class="view-page reqdoc-listpage" id="reqDocListPage">
           <div class="page-toolbar">
+            <span class="reqdoc-modes reqdoc-scope" role="tablist" aria-label="文档快筛范围">
+              <button class="rm-btn" type="button" role="tab" data-rdscope="all" aria-selected="true">全部</button>
+              <button class="rm-btn" type="button" role="tab" data-rdscope="mine" aria-selected="false">我参与的</button>
+              <button class="rm-btn" type="button" role="tab" data-rdscope="draft" aria-selected="false">草稿</button>
+            </span>
             <span class="reqdoc-filter" id="reqDocProjFilter" hidden>
               <span class="rpf-label">项目：</span><span id="reqDocProjFilterName"></span>
               <button class="rpf-clear" type="button" id="reqDocProjFilterClear" aria-label="清除项目筛选" title="清除项目筛选">&times;</button>
@@ -1308,6 +1319,8 @@
             <div class="reqdoc-reader" id="reqDocReader">
               <div class="rrd-empty">
                 <div class="rrd-empty-title">从左侧选择文档阅读</div>
+                <div class="rrd-empty-text">选中左侧文档即可阅读；也可以直接新建一篇。</div>
+                <button class="btn sm" type="button" data-rrd-new style="margin-top:12px">新建文档</button>
               </div>
             </div>
           </div>
@@ -2561,7 +2574,7 @@
               <h3>AI 周报</h3>
               <span class="meta-right" id="reviewAiMeta">用你自己的模型额度</span>
             </div>
-            <p class="set-hint" id="reviewAiHint">把这一周的完成、进行中、风险写成一份能直接发出去的周报。只读本页数据，数字按上面的统计来，不编造。</p>
+            <p class="set-hint" id="reviewAiHint">基于本页数据生成可直接发出的周报，不编造数字。</p>
             <div class="ai-report-note">
               <input id="reviewAiNote" type="text" maxlength="200" autocomplete="off"
                      placeholder="补充一句 AI 看不到的事（可留空）：周三线上排查了支付超时…" aria-label="补充说明" />
@@ -2939,8 +2952,8 @@
                 <div class="field ai-field-wide"><label for="mailFrom">发件人邮箱</label><input id="mailFrom" type="email" maxlength="254" autocomplete="off" placeholder="noreply@example.com" /></div>
               </div>
               <div class="set-actions">
-                <button class="btn" type="button" id="mailSave">保存</button>
-                <button class="btn primary" type="button" id="mailTest">保存并发送测试邮件</button>
+                <button class="btn primary" type="button" id="mailSave">保存</button>
+                <button class="btn soft" type="button" id="mailTest">保存并发送测试邮件</button>
               </div>
               <p class="me-preview" id="mailResult" hidden></p>
             </div>
@@ -3365,24 +3378,24 @@
                 <div class="field" id="fMeName">
                   <label for="meNameInput">显示名</label>
                   <input id="meNameInput" type="text" maxlength="32" autocomplete="off" placeholder="用于工作项负责人默认值" />
-                  <span class="hint">改名会同步你名下工作项的负责人文本；历史时间线保留旧记录。</span>
+                  <span class="hint">改名同步你名下工作项；历史记录保留旧文本。</span>
                 </div>
                 <div class="field" id="fMeEmail">
                   <label for="meEmail">邮箱</label>
                   <input id="meEmail" type="email" maxlength="254" autocomplete="email" placeholder="用于接收个人事件邮件，可留空" />
-                  <span class="hint">邮件通知关闭时不会发送；清除邮箱后仅保留站内通知。</span>
+                  <span class="hint">关闭邮件通知后不发送；清空后只留站内。</span>
                 </div>
                 <div class="field" id="fMeCompany">
                   <label for="meCompany">公司</label>
                   <input id="meCompany" type="text" maxlength="64" autocomplete="off" list="meCompanyOptions" placeholder="选择已有公司或输入新名称" />
                   <datalist id="meCompanyOptions"></datalist>
-                  <span class="hint">用于成员列表、负责人展示与筛选；留空表示未设置。</span>
+                  <span class="hint">用于成员列表与筛选；留空表示未设置。</span>
                 </div>
                 <div class="field" id="fMeJobTitle">
                   <label for="meJobTitle">岗位</label>
                   <input id="meJobTitle" type="text" maxlength="32" autocomplete="off" list="meJobTitleOptions" placeholder="选择已有岗位或输入新名称" />
                   <datalist id="meJobTitleOptions"></datalist>
-                  <span class="hint">本空间的默认岗位；项目角色优先，不改变任何权限。</span>
+                  <span class="hint">项目角色优先，不改变权限。</span>
                 </div>
               </div>
               <p class="set-hint" id="meOrgScope" hidden></p>
@@ -3396,7 +3409,6 @@
                 <h3>计时设置</h3>
                 <span class="meta-right">只影响之后的计时</span>
               </div>
-              <p class="set-hint">只有上班时间到下班时间之间的计时才计入工时；每天累计到上限后当天不再增加。忘停表过夜不会再多算（0 点到上班时间之间不计）。</p>
               <div class="set-grid three">
                 <div class="field">
                   <label for="meStart">上班时间</label>
@@ -3413,7 +3425,7 @@
               </div>
               <p class="me-preview" id="mePreview"></p>
               <div class="set-actions">
-                <button class="btn primary" type="button" id="meTimerSave">保存计时设置</button>
+                <button class="btn" type="button" id="meTimerSave">保存计时设置</button>
               </div>
             </div>
 
@@ -3426,7 +3438,7 @@
               <div class="notification-prefs" id="meNotificationPrefs"></div>
               <div class="set-actions">
                 <button class="btn ghost" type="button" id="meNotificationPreset" title="只保留指派、评论与@、关注与每日汇总的站内通知">仅重要事件</button>
-                <button class="btn primary" type="button" id="meNotificationSave">保存通知设置</button>
+                <button class="btn" type="button" id="meNotificationSave">保存通知设置</button>
               </div>
             </div>
 

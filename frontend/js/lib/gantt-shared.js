@@ -36,7 +36,12 @@
   /* ==================== 格式化 ==================== */
   /* 主页面口径：M月D日；分享页口径：MM-DD。两种都保留，由调用方选，避免两边显示串味 */
   function fmtMonthDay(d) { return d ? ((d.getMonth() + 1) + "月" + d.getDate() + "日") : "—"; }
-  function fmtShortMonthDay(d) { return d ? (pad2(d.getMonth() + 1) + "-" + pad2(d.getDate())) : "—"; }
+  /* 短日期统一口径：当年 MM-DD，跨年补 YYYY-，避免「9-22」和「2025-09-22」混排 */
+  function fmtShortMonthDay(d) {
+    if(!d) return "—";
+    var y = d.getFullYear(), now = new Date().getFullYear();
+    return (y === now ? "" : y + "-") + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+  }
   function fmtFullDate(d) { return d ? (d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日") : "—"; }
   function fmtDashMD(d) { return d ? (pad2(d.getMonth() + 1) + "-" + pad2(d.getDate())) : "—"; }
 

@@ -542,7 +542,8 @@ function memberVisibilityText(m){
   var projects = data.projects || [];
   var role = m.role || "member";
   if(!projects.length) return role === "member" && m.projectAccessMode === "assigned" ? "按项目分配" : "";
-  if(role !== "member") return (role === "viewer" ? "只读全部 " : "可见全部 ") + projects.length + " 个项目";
+  /* 全站统一「可见 X/N 个项目」写法：全员和成员只看差异在分子，不换句式 */
+  if(role !== "member") return (role === "viewer" ? "只读 " : "可见 ") + projects.length + "/" + projects.length + " 个项目";
   /* 缺记录按成员模式回落：按项目分配的新成员缺记录即不可见，存量成员缺记录仍可参与 */
   var raw = {};
   (data.grants || []).forEach(function(g){

@@ -127,7 +127,9 @@ function fmtTs(s){
   if(!s) return "";
   var d = new Date(s);
   if(isNaN(d.getTime())) return String(s);
-  return pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());
+  /* 当年只写 MM-DD，跨年补年份：同一列表里不比出年份时容易误读 */
+  var md = pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());
+  return d.getFullYear() === new Date().getFullYear() ? md : (d.getFullYear() + "-" + md);
 }
 /* 测试等待/已测时长：粗粒度到分钟/小时/天，宁可模糊也不给出假精确 */
 function spanText(from, to){

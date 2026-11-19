@@ -15,6 +15,7 @@ import { filterOn, progressOf, reqNameById, reqSetId, rt, setNameById, setSortOf
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { openStatusMenu } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
+import { icon } from "../core/icons.js";
 import { bindRetry } from "../core/utils.js";
 import { COLUMNS, PRIORITIES, colMeta, colName, fmtShortMD, parseDate, priName, taskVersionsText } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
@@ -34,6 +35,25 @@ var hideDone = false;
 var treeLoaded = false;
 var LEVEL_SLOTS = ["l1", "l2", "l3"];
 var LEVEL_SLOT_NAMES = { l1:"一级", l2:"二级", l3:"三级" };
+/* 工具栏 ?：父级聚合口径说明；原先这段常驻在 meta 里，和操作同级抢注意力 */
+var treeHelp = $("treeHelp"), treeHelpPop = null;
+if(treeHelp){
+  treeHelp.innerHTML = icon("helpCircle", 13);
+  treeHelp.addEventListener("click", function(){
+    if(UI.popOpen(treeHelpPop)){ UI.closeAllPops(); return; }
+    var el = document.createElement("div");
+    el.className = "menu popover type-help-pop";
+    el.innerHTML = '<div class="menu-title">层级进度怎么算</div>' +
+      '<div class="type-help-list">' +
+        '<div class="type-help-row"><span class="mini-tag">进度</span>' +
+          '<span class="type-help-desc">父级进度按已加载子项平均；子任务按合计，与列表「子任务」列同口径。</span></div>' +
+        '<div class="type-help-row"><span class="mini-tag">范围</span>' +
+          '<span class="type-help-desc">只统计当前已加载的项：滚动加载更多或折叠分组时，父级数字会随之变化。</span></div>' +
+      '</div>';
+    treeHelpPop = el;
+    UI.openPop(el, treeHelp, { align:"left", width:300, onClose:function(){ el.remove(); treeHelpPop = null; } });
+  });
+}
 
 /* ---------- 层级维度 ---------- */
 function activeLevels(){
@@ -253,8 +273,7 @@ function updateTreeMeta(){
   if(filterOn() || hideDone) text += " · 当前视图 " + countLeaves(lastTree) + " 项";
   if(nodeCount) text += " · " + nodeCount + " 个分组";
   if(hideDone) text += " · 已隐藏已完成";
-  /* 屏面上没有父级行（拍平或空结果）时，不解释父级聚合口径 */
-  if(nodeCount) text += " · 父级进度按已加载子项平均，子任务按合计";
+  /* 聚合口径放进 ? 说明，不常驻在工具栏 meta 里挤占空间 */
   treeMeta.textContent = text;
   syncExpandAllBtn();
 }

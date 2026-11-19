@@ -173,8 +173,6 @@ function plannedText(d){
 }
 function denyDemandReadOnly(){ toast("你对该项目只有查看权限", "warn"); }
 function writableReqs(){ return rt.reqList.filter(function(r){ return canEditReq(r.id); }); }
-/* 看板范围名：具体项目用项目名，全部项目模式统一展示「全部项目」 */
-function demScopeName(){ return rt.demandReqId ? reqNameById(rt.demandReqId) : "全部项目"; }
 function statusName(st){
   if(st === "rej") return "已关闭 · 评审不通过";
   if(st === "canceled" || st === "cancelled") return "已关闭 · 中途取消";
@@ -322,7 +320,6 @@ function loadDemands(opts){
   }
   var reqId = rt.demandReqId;
   var wsId = rt.currentWs && rt.currentWs.id;
-  if(demandsMeta) demandsMeta.textContent = demScopeName();
   if(!silent) demandBody.innerHTML = UI.skeletonRows(2);
   /* 「全部项目」没有版本清单可拉：卡片版本名由列表行自带，排期对话框按需求所属项目现查 */
   Promise.all([
@@ -655,7 +652,6 @@ function loadMoreDemandGantt(){
 function syncModeUI(mode){
   document.querySelectorAll("[data-dem-mode]").forEach(function(b){
     var on = b.dataset.demMode === mode;
-    b.classList.toggle("primary", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
   if(demandReq) demandReq.hidden = demWork.active || mode !== "board";
@@ -725,8 +721,8 @@ function render(){
   if(mode === "gantt"){ renderDemandGantt(); return; }
   if(mode === "table"){ renderDemandTable(); return; }
   if(demandsMeta){
-    var mt = demBoardMatchText();
-    demandsMeta.textContent = demScopeName() + (mt ? (" · " + mt) : "");
+    /* 作用范围由右侧项目下拉承担；meta 只报条数，避免同一屏出现两遍「全部项目」 */
+    demandsMeta.textContent = demBoardMatchText();
   }
   if(!demands.length && !versions.length && !demandBoard){
     demandBody.innerHTML = UI.emptyState({
@@ -757,14 +753,43 @@ function render(){
       + '</div>';
   }).join("") + '</div>';
 }
-/* 全部项目模式下按项目分泳道，泳道头即项目名，卡片不再重复；聚焦项目时直接平铺 */
+/* 全部项目模式下按项目分泳道，泳道头即项目名，卡片不再重复；聚焦项目时直接平铺。
+   选了分组维度时改用维度组头（BOARD-5），项目不再作为默认泳道。 */
 function demBoardCardsHTML(items){
   if(!items.length) return "";
-  if(rt.demandReqId) return items.map(cardHTML).join("");
+  if(demSmart.group !== "none") return demDimLanesHTML(items);
+  return items.map(cardHTML).join("");
   return demBoardLanes(items).map(function(g){
     return '<div class="bkl-lane"><div class="bkl-lane-head"><span class="bkl-lane-name">' + esc(g.label) + '</span>'
       + '<span class="bkl-lane-count">' + g.rows.length + ' 条</span></div>'
       + g.rows.map(function(d){ return cardHTML(d); }).join("") + '</div>';
+  }).join("");
+}
+function demDimLanesHTML(items){
+  var dim = demSmart.group, subDim = demSubDim();
+  var groups = [], byKey = {};
+  items.forEach(function(d){
+    var info = demGroupInfoBy(d, dim), g = byKey[info.key];
+    if(!g){ g = {key:info.key, label:info.label, rows:[], subs:[], subByKey:{}}; byKey[info.key] = g; groups.push(g); }
+    g.rows.push(d);
+    if(subDim !== "none"){
+      var si = demGroupInfoBy(d, subDim), s = g.subByKey[si.key];
+      if(!s){ s = {key:si.key, label:si.label, rows:[]}; g.subByKey[si.key] = s; g.subs.push(s); }
+      s.rows.push(d);
+    }
+  });
+  groups.sort(demGroupCompare(dim));
+  groups.forEach(function(g){ g.subs.sort(demGroupCompare(subDim)); });
+  return groups.map(function(g){
+    var body = subDim === "none"
+      ? g.rows.map(function(d){ return cardHTML(d); }).join("")
+      : g.subs.map(function(s){
+          return '<div class="bkl-lane is-dim is-sub"><div class="bkl-lane-head"><span class="bkl-lane-name">' + esc(s.label) + '</span>'
+            + '<span class="bkl-lane-count">' + s.rows.length + ' 条</span></div>'
+            + s.rows.map(function(d){ return cardHTML(d); }).join("") + '</div>';
+        }).join("");
+    return '<div class="bkl-lane is-dim"><div class="bkl-lane-head"><span class="bkl-lane-name">' + esc(g.label) + '</span>'
+      + '<span class="bkl-lane-count">' + g.rows.length + ' 条</span></div>' + body + '</div>';
   }).join("");
 }
 /* 泳道顺序跟随项目选择器（空间 sort_order），不在 reqList 的项目兜底排最后 */
@@ -922,6 +947,8 @@ function cardHTML(d, opts){
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (descText ? '<p class="bkl-desc">' + esc(descText) + '</p>' : '')
     + '<div class="bkl-tags">'
+    /* 全部项目口径下按类型归堆，卡片自己补项目，避免丢掉归属（原先是项目泳道头承担） */
+    + (!rt.demandReqId && d.reqId ? '<span class="tag ghost">' + esc(reqNameById(d.reqId) || "未归类") + '</span>' : '')
     + (demandVersionName(d) ? (d.versionId ? assocLinkHTML("version", d.versionId, demandVersionName(d), { req:d.reqId, cls:"tag ghost" }) : '<span class="tag ghost">' + esc(demandVersionName(d)) + '</span>') : '')
     + (d.expectDate ? '<span class="tag tag-info">期望 ' + esc(String(d.expectDate).substring(5, 10)) + '</span>' : '')
     + (plannedText(d) ? '<span class="tag ghost">计划 ' + esc(plannedText(d)) + '</span>' : '')
@@ -1686,8 +1713,10 @@ function demandMoveDetailHTML(pv, d, targetName){
 var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["done","已完成"],["closed","已关闭"]];
 var DEM_GROUPS = ["none","status","priority","set","project","kind"];
 var DEM_SORTS = ["default","priority","expect","wsjf","created"];
+var DEM_GROUP_LABELS = { none:"不分组", status:"按状态", priority:"按优先级", set:"按项目集", project:"按项目", kind:"按类型" };
+var DEM_SORT_LABELS = { default:"默认排序", priority:"按优先级", expect:"按期望交付", wsjf:"按 WSJF", created:"按提交时间" };
 var DEM_STATE_KEY = "ds.demandView.v1";
-var demSmart = { current:"all", preset:"all", group:"none", subgroup:"none", sort:"default", pris:[], kinds:[], cats:[], reqs:[], q:"", collapsed:{} };
+var demSmart = { current:"all", preset:"all", group:"kind", subgroup:"none", sort:"default", pris:[], kinds:[], cats:[], reqs:[], q:"", collapsed:{} };
 function normalizeDemPreset(value){
   return value === "rej" || value === "canceled" || value === "cancelled" ? "closed" : value;
 }
@@ -1823,9 +1852,7 @@ function syncDemBoard(){
     stageSel.value = demBoardStage;
     stageSel.classList.toggle("active", demBoardStage !== "all");
   }
-  /* 计数只留在页头（demandsMeta）：这里只说作用范围，避免同屏两遍「共 N 条」 */
-  var mt = demBoardBar.querySelector("[data-demb-match]");
-  if(mt) mt.textContent = rt.demandReqId ? "仅当前项目" : "全部项目";
+  /* 作用范围只在项目下拉表达，工具条里不再重复；条数由页头 meta 给 */
 }
 function renderDemTabs(){
   if(!demTabsBox) return;
@@ -1866,6 +1893,18 @@ function syncDemControls(){
     if(demSearchInput) demSearchInput.value = demSmart.q;
     var fc = demSmartBar.querySelector("[data-dem-fcount]");
     if(fc){ var n = demFilterCount(); fc.hidden = n === 0; fc.textContent = n; }
+  }
+  if(demBoardBar){
+    var bg = demBoardBar.querySelector("[data-demb-group]");
+    if(bg) bg.value = demSmart.group;
+    var bsg = demBoardBar.querySelector("[data-demb-subgroup]");
+    if(bsg){ bsg.value = demSmart.subgroup; bsg.disabled = demSmart.group === "none"; }
+    var bs = demBoardBar.querySelector("[data-demb-sort]");
+    if(bs) bs.value = demSmart.sort;
+    var echo = demBoardBar.querySelector("[data-demb-echo]");
+    if(echo) echo.textContent = DEM_GROUP_LABELS[demSmart.group] || "不分组";
+    var bfc = demBoardBar.querySelector("[data-demb-fcount]");
+    if(bfc){ var bn = demBoardFilterCount(); bfc.hidden = bn === 0; bfc.textContent = bn; }
   }
   renderDemTabs();
 }
@@ -2185,10 +2224,48 @@ function initDemSmartBar(){
     '<button class="chip ghost demb-clear" type="button" data-demb-clear hidden>清除</button>' +
     demBoardStageFilterHTML() +
     '<span class="demb-spacer"></span>' +
-    '<span class="demb-match" data-demb-match></span>';
+    '<details class="gantt-more demb-display" id="demBoardDisplay">' +
+      '<summary class="btn sm ghost mine-display-summary" title="列内分组、二级分组与排序">' +
+        icon("filter", 14) + '显示 · <span data-demb-echo>不分组</span>' + icon("caretDown", 12) +
+      '</summary>' +
+      '<div class="menu popover board-display-menu">' +
+        '<div class="mine-display-head">显示设置<span>需求池</span></div>' +
+        '<label class="gantt-more-row"><span class="gantt-more-label">分组</span><select class="mini-select" data-demb-group aria-label="列内一级分组方式">' +
+          DEM_GROUPS.map(function(g){ return '<option value="' + g + '">' + DEM_GROUP_LABELS[g] + '</option>'; }).join("") + '</select></label>' +
+        '<label class="gantt-more-row"><span class="gantt-more-label">二级</span><select class="mini-select" data-demb-subgroup aria-label="列内二级分组方式">' +
+          DEM_GROUPS.map(function(g){ return '<option value="' + g + '">' + DEM_GROUP_LABELS[g] + '</option>'; }).join("") + '</select></label>' +
+        '<label class="gantt-more-row"><span class="gantt-more-label">排序</span><select class="mini-select" data-demb-sort aria-label="列内排序方式">' +
+          DEM_SORTS.map(function(s){ return '<option value="' + s + '">' + DEM_SORT_LABELS[s] + '</option>'; }).join("") + '</select></label>' +
+        '<div class="mine-display-note">列始终是需求状态；分组只决定卡片在列内如何归堆，不改变拖拽流转。</div>' +
+      '</div>' +
+    '</details>';
   page.insertBefore(demBoardBar, demandBody);
   demBoardInput = demBoardBar.querySelector("[data-demb-q]");
   demBoardBar.addEventListener("change", function(e){
+    var g = e.target.closest("[data-demb-group]");
+    if(g){
+      if(DEM_GROUPS.indexOf(g.value) === -1) return;
+      demSmart.group = g.value;
+      if(demSmart.group === "none" || demSmart.group === demSmart.subgroup) demSmart.subgroup = "none";
+      demSmart.collapsed = {};
+      demStateChanged();
+      return;
+    }
+    var sg = e.target.closest("[data-demb-subgroup]");
+    if(sg){
+      if(DEM_GROUPS.indexOf(sg.value) === -1) return;
+      demSmart.subgroup = sg.value;
+      demSmart.collapsed = {};
+      demStateChanged();
+      return;
+    }
+    var so = e.target.closest("[data-demb-sort]");
+    if(so){
+      if(DEM_SORTS.indexOf(so.value) === -1) return;
+      demSmart.sort = so.value;
+      demStateChanged();
+      return;
+    }
     var sel = e.target.closest("[data-demb-stage]");
     if(!sel) return;
     demBoardStage = sel.value === "all" || DELIVERY_STAGES.some(function(s){ return s[0] === sel.value; }) ? sel.value : "all";
@@ -2328,9 +2405,10 @@ function renderDemandTable(){
   var rows = demViewRows(), groups = demGroups();
   var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
   if(demandsMeta){
-    var text = demandTotal ? ("全空间 · 共 " + demandTotal + " 条") : "全空间";
-    if(hasCond && demandTotal) text += " · 已加载 " + demands.length + " 条";
-    if(demSmart.group !== "none" && groups.length) text += " · " + groups.length + " 组";
+    /* 范围交给项目下拉，meta 只留条数与分组信息 */
+    var text = demandTotal ? ("共 " + demandTotal + " 条") : "";
+    if(hasCond && demandTotal) text += (text ? " · " : "") + "已加载 " + demands.length + " 条";
+    if(demSmart.group !== "none" && groups.length) text += (text ? " · " : "") + groups.length + " 组";
     demandsMeta.textContent = text;
   }
   if(!demands.length){
@@ -2655,9 +2733,10 @@ function renderDemandGantt(){
       });
   var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
   if(demandsMeta){
-    var text = demandTotal ? ("全空间 · 共 " + demandTotal + " 条") : "全空间";
-    if(hasCond && demandTotal) text += " · 已加载 " + demands.length + " 条";
-    if(demSmart.group !== "none" && groups.length) text += " · " + groups.length + " 组";
+    /* 同表格视图：作用范围交给项目下拉，meta 只留条数与分组 */
+    var text = demandTotal ? ("共 " + demandTotal + " 条") : "";
+    if(hasCond && demandTotal) text += (text ? " · " : "") + "已加载 " + demands.length + " 条";
+    if(demSmart.group !== "none" && groups.length) text += (text ? " · " : "") + groups.length + " 组";
     demandsMeta.textContent = text;
   }
   if(!demands.length){

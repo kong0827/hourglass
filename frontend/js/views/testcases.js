@@ -77,8 +77,9 @@ var caseFormModuleReq = null;
 var caseFormModulePrev = "";  /* 目录下拉的上一个值：点「＋ 新建目录…」取消后回退 */
 var caseSearchTimer = null;
 var caseReqId = null;
-/* 用例与测试计划的浏览范围：false=只看 caseReqId，true=全部项目（按项目分组） */
-var caseScopeAll = false;
+/* 用例与测试计划的浏览范围：false=只看 caseReqId，true=全部项目（按项目分组）
+   默认全部项目：与需求池 / 工作项一致，先用「全部」出概览，再收窄到项目。 */
+var caseScopeAll = true;
 var CASE_ALL_KEY = "__all__";
 var caseGroups = [];      /* 全部项目下按项目分组：{reqId,name,items,total,hasMore,error} */
 var caseFormReqId = null; /* 当前用例弹窗的所属项目：编辑取用例自身，新增取选定目标 */
@@ -2419,7 +2420,7 @@ function render(){
     });
     return;
   }
-  var html = rows.map(function(c){ return caseRowHTML(c); }).join("");
+  var html = caseTableHeadHTML() + rows.map(function(c){ return caseRowHTML(c); }).join("");
   if(caseHasMore){
     html += '<button class="btn tc-load-more" type="button" data-tc-more>加载更多（已加载 '
       + cases.length + ' / 共 ' + caseTotal + ' 条）</button>';
@@ -2549,7 +2550,7 @@ function caseSegmentHTML(s){
     }else if(!rows.length){
       inner = more.loading ? UI.skeletonRows(2) : '<p class="tc-group-empty">展开后加载本组用例</p>';
     }else{
-      inner = rows.slice(0, shown).map(function(c){ return caseRowHTML(c, s.key); }).join("");
+      inner = caseTableHeadHTML() + rows.slice(0, shown).map(function(c){ return caseRowHTML(c, s.key); }).join("");
       if(shown < rows.length || more.hasMore){
         inner += '<button class="btn tc-load-more" type="button" data-tc-seg-more="' + esc(s.key) + '"'
           + (more.loading ? " disabled" : "") + '>'
@@ -2614,7 +2615,7 @@ function caseGroupHTML(g){
     body = '<p class="tc-group-empty">' + (anyFilter ? "没有符合条件的用例"
       : (caseAllSet ? "该分组还没有用例" : "还没有测试用例")) + '</p>';
   }else{
-    body = g.items.map(function(c){ return caseRowHTML(c); }).join("");
+    body = caseTableHeadHTML() + g.items.map(function(c){ return caseRowHTML(c); }).join("");
   }
   var more = "";
   if(g.hasMore){
@@ -3370,10 +3371,8 @@ function caseModuleLabel(c){
 }
 function caseRowHTML(c, segKey){
   /* 元信息按「归属」与「执行」拆两行：第一行看出这条用例属于谁，第二行看出它怎么跑、跑到哪 */
-  var stepCount = (c.steps || []).length;
   var modLabel = caseModuleLabel(c);
-  var line1 = [], line2 = [];
-  if(modLabel) line1.push('<span class="tc-kv"><span class="tc-mod" title="' + esc(modLabel) + '">' + esc(modLabel) + '</span></span>');
+  var line1 = [], flags = [];
   if(c.demandTitle) line1.push('<span class="tc-kv"><em>需求</em>' + assocLinkHTML("demand", c.demandId, cut(c.demandTitle, 26)) + '</span>');
   if(c.tasks && c.tasks.length){
     var first = c.tasks[0];
@@ -3381,22 +3380,12 @@ function caseRowHTML(c, segKey){
     var firstLink = assocLinkHTML("task", first.taskId, firstLabel);
     line1.push('<span class="tc-kv"><em>工作项</em>' + (c.tasks.length > 1 ? firstLink + " 等 " + c.tasks.length + " 个" : firstLink) + '</span>');
   }
-  line2.push('<span class="tc-kv nw"><em>步骤</em>' + (stepCount || "无") + '</span>');
-  if(c.precondition){
-    line2.push('<span class="tc-kv"><em>前置</em><span class="tc-ell" title="' + esc(c.precondition) + '">' + esc(cut(c.precondition, 40)) + '</span></span>');
-  }
-  if(c.testData){
-    line2.push('<span class="tc-kv"><em>数据</em><span class="tc-ell" title="' + esc(c.testData) + '">' + esc(cut(c.testData, 18)) + '</span></span>');
-  }
-  if(c.latestStatus){
-    line2.push('<span class="tc-kv nw"><em>执行</em>' + esc((c.latestBy || "—") + " " + (c.latestAt ? fmtTs(c.latestAt) : "")) + '</span>');
-  }
-  if(c.latestEvidenceCount) line2.push('<span class="tc-kv nw"><em>证据</em>' + esc(c.latestEvidenceCount) + '</span>');
   var blocked = c.latestStatus === "blocked" && c.latestNote
     ? '<span class="tc-blocked" title="' + esc(c.latestNote) + '">' + icon("alert", 12) + '<span class="tc-ell">' + esc(cut(c.latestNote, 30)) + '</span></span>'
     : "";
+  if(blocked) flags.push(blocked);
   if(c.latestBugResolved && c.latestStatus === "failed"){
-    line2.push('<span class="tc-retest-flag nw">缺陷已修复 · 待复测</span>');
+    flags.push('<span class="tc-retest-flag nw">缺陷已修复 · 待复测</span>');
   }
   var w = caseWritable(c);
   var acts = "";
@@ -3436,25 +3425,41 @@ function caseRowHTML(c, segKey){
       + (segKey ? ' data-tc-pick-seg="' + esc(segKey) + '"' : "")
       + (sel ? " checked" : "") + ' aria-label="选择用例 ' + esc(c.title) + '" />'
     : "";
+  var statusTip = c.latestStatus
+    ? (STATUS_LABEL[c.latestStatus] || "") + (c.latestBy ? " · " + c.latestBy : "") + (c.latestAt ? " · " + fmtTs(c.latestAt) : "") + (c.latestNote ? "\n" + c.latestNote : "")
+    : "还没有执行记录";
   return '<div class="tc-row' + (sel ? " is-selected" : "") + (dragging ? " is-dragging" : "") + '"'
     + ' data-tc-open="' + esc(c.id) + '"'
     + (manualOrderScope() ? ' data-tc-order-row="' + esc(c.id) + '"' : "")
     + (w && !caseScopeAll ? ' draggable="true" data-tc-drag="' + esc(c.id) + '"' : "")
     + '>'
-    + pick
-    + (caseScopeAll && !caseAllProj
-      ? '<span class="tc-proj-pill" title="所属项目：' + esc(reqNameOf(c.reqId)) + '">' + esc(cut(reqNameOf(c.reqId), 8)) + '</span>'
-      : "")
+    + (pick || '<span class="tc-pick-cell" aria-hidden="true"></span>')
     + '<span class="tc-no" title="' + (caseNoText(c) ? "用例编号（项目内固定，可用于缺陷与评审引用）" : "该用例暂无编号") + '">'
     + esc(caseNoText(c)) + '</span>'
-    + statusBadgeHTML(c.latestStatus)
     + '<div class="tc-main">'
-    +   '<div class="tc-title">' + esc(c.title) + (c.priority ? ' <span class="tc-pri">' + priTagHTML(c.priority) + '</span>' : "") + '</div>'
+    +   '<div class="tc-title" title="' + esc(c.title) + '">' + esc(c.title) + '</div>'
     +   (line1.length ? '<div class="tc-meta">' + line1.join("") + '</div>' : "")
-    +   (line2.length ? '<div class="tc-meta tc-meta-2">' + line2.join("") + blocked + '</div>' : (blocked ? '<div class="tc-meta">' + blocked + '</div>' : ""))
-    +   (c.latestNote && !blocked ? '<div class="tc-note">' + esc(c.latestNote) + '</div>' : "")
+    +   (flags.length ? '<div class="tc-meta tc-meta-2">' + flags.join("") + '</div>' : "")
     + '</div>'
+    + '<span class="tc-c-mod" title="' + esc(modLabel || "未分组") + '">' + (modLabel ? esc(modLabel) : '<span class="tc-none">—</span>') + '</span>'
+    + '<span class="tc-c-pri">' + (c.priority ? priTagHTML(c.priority) : '<span class="tc-none">—</span>') + '</span>'
+    + '<span class="tc-c-res" title="' + esc(statusTip) + '">' + statusBadgeHTML(c.latestStatus) + '</span>'
+    + '<span class="tc-c-owner" title="' + esc(c.latestBy || "") + '">' + (c.latestBy ? esc(c.latestBy) : '<span class="tc-none">—</span>') + '</span>'
+    + '<span class="tc-c-time">' + (c.latestAt ? esc(fmtTs(c.latestAt).substring(0, 5)) : '<span class="tc-none">—</span>') + '</span>'
     + '<div class="tc-acts">' + acts + '</div>'
+    + '</div>';
+}
+function caseTableHeadHTML(){
+  return '<div class="tc-thead" aria-hidden="true">'
+    + '<span></span>'
+    + '<span>编号</span>'
+    + '<span>用例</span>'
+    + '<span>分组</span>'
+    + '<span>优先级</span>'
+    + '<span>最近结果</span>'
+    + '<span>执行人</span>'
+    + '<span>更新</span>'
+    + '<span class="tc-th-acts">操作</span>'
     + '</div>';
 }
 function cut(s, n){

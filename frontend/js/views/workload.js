@@ -233,6 +233,11 @@ function periodRange(key){
   return { from:monday, to:addDaysISO(monday, 6), label:"本周" };
 }
 function periodLabel(){ return periodRange(period).label; }
+/* 兼容旧后端：未返回 loadRemainingMinutes 时回退为开发剩余 + 测试剩余 */
+function loadRemainingOf(m){
+  if(m && m.loadRemainingMinutes != null) return Number(m.loadRemainingMinutes) || 0;
+  return (Number(m && m.remainingMinutes) || 0) + (Number(m && m.testRemainingMinutes) || 0);
+}
 function periodMinutes(m){
   if(period === "week") return Number(m.weekMinutes) || 0;
   if(period === "last") return Number(m.lastWeekMinutes) || 0;
@@ -346,7 +351,7 @@ function memberMatchesSearch(mv, terms){
   return terms.every(function(t){ return hay.indexOf(t) !== -1; });
 }
 function compareViews(a, b){
-  if(ui.sort === "remaining") return (Number(b.m.loadRemainingMinutes) || 0) - (Number(a.m.loadRemainingMinutes) || 0) || String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
+  if(ui.sort === "remaining") return loadRemainingOf(b.m) - loadRemainingOf(a.m) || String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
   if(ui.sort === "overdue") return b.counts.overdue - a.counts.overdue || (Number(b.m.loadPct) || 0) - (Number(a.m.loadPct) || 0);
   if(ui.sort === "name") return String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
   return (Number(b.m.loadPct) || 0) - (Number(a.m.loadPct) || 0) || String(a.m.name || "").localeCompare(String(b.m.name || ""), "zh");
@@ -425,7 +430,7 @@ function memberCardHTML(mv, scope){
     + memberStatusTag(mv.status) + '</div>'
     + '<div class="member-card-roles">' + memberRoleTagsHtml(roles, 3) + '</div>'
     + '<div class="member-loadline"><span class="caliber-label">总负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</span>'
-    + loadBarHTML(m.loadPct) + '<span' + (m.testRemainingMinutes ? ' title="' + esc('开发剩余 ' + fmtHours(m.remainingMinutes) + ' · 测试剩余 ' + fmtHours(m.testRemainingMinutes)) + '"' : '') + '>剩余 ' + fmtHours(m.loadRemainingMinutes) + ' / 容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
+    + loadBarHTML(m.loadPct) + '<span' + (m.testRemainingMinutes ? ' title="' + esc('开发剩余 ' + fmtHours(m.remainingMinutes) + ' · 测试剩余 ' + fmtHours(m.testRemainingMinutes)) + '"' : '') + '>剩余 ' + fmtHours(loadRemainingOf(m)) + ' / 容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
     + '<div class="member-card-stats">'
     + statHTML("进行中", counts.doing)
     + statHTML("待处理", counts.backlog)
@@ -457,6 +462,33 @@ function memberCardHTML(mv, scope){
 function statHTML(label, value, tone){
   return '<div class="member-stat' + (tone ? ' ' + tone : '') + '"><i>' + label + '</i><b>' + value + '</b></div>';
 }
+/* 按人视图：与原型一致用表格，负载条 + 剩余/本周已计/工作项/项目工时一屏可比 */
+function memberTableRowsHTML(views){
+  return views.map(function(mv){
+    var m = mv.m;
+    var roles = Array.isArray(m.roleTitles) ? m.roleTitles : memberRoleTitles(m);
+    var roleText = (m.jobTitle && roles.indexOf(m.jobTitle) === -1 ? [m.jobTitle].concat(roles) : roles).join(" / ") || "未设角色";
+    var proj = mv.projects.slice(0, 2).map(function(p){ return esc(p.name) + ' <b>' + fmtHours(p.remainingMinutes) + '</b>'; }).join(" · ")
+      + (mv.projects.length > 2 ? ' <span class="foot-note">+' + (mv.projects.length - 2) + '</span>' : '');
+    return '<tr data-member-open="' + esc(m.key) + '">'
+      + '<td><div class="wl-week-who"><button class="manager-person manager-cell-link" type="button" data-member-open="' + esc(m.key) + '" title="打开成员工作台">'
+      + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></button></div>'
+      + '<span class="wl-week-company">' + esc(m.companyName || "未设公司") + ' · ' + esc(roleText) + '</span></td>'
+      + '<td><div class="wl-loadcell">' + loadBarHTML(m.loadPct) + '<span class="foot-note">剩余 ' + fmtHours(loadRemainingOf(m)) + ' / 容量 ' + fmtHours(m.capacityMinutes) + '</span></div></td>'
+      + '<td class="num"><b>' + fmtHours(loadRemainingOf(m)) + '</b></td>'
+      + '<td class="num">' + fmtHours(periodMinutes(m)) + '</td>'
+      + '<td><span class="tag tag-ghost">进行中 ' + mv.counts.doing + '</span> ' + (mv.counts.overdue
+        ? '<span class="tag tag-danger">逾期 ' + mv.counts.overdue + '</span>'
+        : '<span class="tag tag-ghost">逾期 0</span>') + '</td>'
+      + '<td class="wl-projcell">' + (proj || '<span class="roster-empty">暂无参与项目</span>') + '</td>'
+    + '</tr>';
+  }).join("");
+}
+function memberTableHTML(views){
+  return '<section class="manager-panel"><div class="tbl-wrap"><table class="manager-tbl wl-tbl">'
+    + '<thead><tr><th>成员 / 岗位</th><th>负载（剩余 / 容量）</th><th class="num">剩余</th><th class="num">' + esc(periodLabel()) + '已计</th><th>工作项</th><th>项目工时</th></tr></thead>'
+    + '<tbody>' + memberTableRowsHTML(views) + '</tbody></table></div></section>';
+}
 function memberGridHTML(pairs){
   return '<div class="wl-grid">' + pairs.map(function(pair){ return memberCardHTML(pair.mv, pair.scope); }).join("") + '</div>';
 }
@@ -464,7 +496,7 @@ function groupMeta(entries){
   var over = 0, remaining = 0, tasks = 0;
   entries.forEach(function(pair){
     if(pair.mv.status === "over") over++;
-    remaining += pair.scope ? (Number(pair.mv.projects.filter(function(p){ return (p.reqId || "") === (pair.scope.reqId || ""); })[0] || {}).remainingMinutes) || 0 : (Number(pair.mv.m.loadRemainingMinutes) || 0);
+    remaining += pair.scope ? (Number(pair.mv.projects.filter(function(p){ return (p.reqId || "") === (pair.scope.reqId || ""); })[0] || {}).remainingMinutes) || 0 : loadRemainingOf(pair.mv.m);
     tasks += pair.scope ? projectScopeCounts(pair.mv.m, pair.scope.reqId).open : pair.mv.counts.open;
   });
   return { over:over, remaining:remaining, tasks:tasks };
@@ -523,7 +555,7 @@ function rosterHTML(){
       + (filtered.length > capped.length ? '<p class="roster-note">分组视图最多展示 ' + GROUP_CAP + ' 人，当前 ' + filtered.length + ' 人，请用筛选收窄范围。</p>' : '');
   }
   var shown = filtered.slice(0, ui.shown);
-  return head + memberGridHTML(shown.map(function(mv){ return { mv:mv, scope:null }; }))
+  return head + memberTableHTML(shown)
     + '<div class="wl-more">' + (filtered.length > shown.length
       ? '<button class="btn sm block" type="button" data-member-more>显示更多（已显示 ' + shown.length + ' / 共 ' + filtered.length + ' 人）</button>'
       : (filtered.length > LIST_PAGE ? '<span class="foot-note">已显示全部 ' + filtered.length + ' 人</span>' : '')) + '</div>';
@@ -568,7 +600,7 @@ function memberKpisHTML(mv){
   var m = mv.m;
   return '<div class="member-sheet-kpis">'
     + '<div class="member-sheet-kpi"><i>未完成工作项</i><b>' + (m.tasks || []).length + ' 项</b></div>'
-    + '<div class="member-sheet-kpi"><i class="caliber-label">剩余预估' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</i><b>' + fmtHours(m.loadRemainingMinutes) + '</b><span>' + (m.testRemainingMinutes ? '含测试 ' + fmtHours(m.testRemainingMinutes) + ' · ' : '') + '按 ' + (m.workdays || 0) + ' 个工作日容量计</span></div>'
+    + '<div class="member-sheet-kpi"><i class="caliber-label">剩余预估' + caliberMarkHTML("workload.remaining", false, "查看「剩余预估」口径") + '</i><b>' + fmtHours(loadRemainingOf(m)) + '</b><span>' + (m.testRemainingMinutes ? '含测试 ' + fmtHours(m.testRemainingMinutes) + ' · ' : '') + '按 ' + (m.workdays || 0) + ' 个工作日容量计</span></div>'
     + '<div class="member-sheet-kpi"><i>' + esc(periodLabel()) + '已计</i><b>' + fmtHours(periodMinutes(m)) + '</b><span>' + esc(periodHint(m)) + '</span></div>'
     + '<div class="member-sheet-kpi"><i class="caliber-label">负载' + caliberMarkHTML("workload.load", false, "查看「负载」口径") + '</i><b>' + (Number(m.loadPct) || 0) + '%</b><span>容量 ' + fmtHours(m.capacityMinutes) + (perDaySuffix(m)) + '</span></div>'
     + '</div>';
@@ -600,7 +632,7 @@ function stateTileHTML(label, value, tone){
 }
 function projectKey(reqId){ return reqId || "__none__"; }
 function projectsPanelHTML(mv){
-  var total = Number(mv.m.loadRemainingMinutes) || 0;
+  var total = loadRemainingOf(mv.m);
   var body = mv.projects.length ? mv.projects.map(function(p){
     var pct = total ? Math.round((Number(p.remainingMinutes) || 0) / total * 100) : 0;
     var roles = memberRoleTagsHtml(p.roleTitles && p.roleTitles.length ? p.roleTitles : memberRoleTitles(p), 2);
@@ -733,7 +765,7 @@ function memberPageHTML(mv){
     + '<header class="member-page-head"><div class="member-page-id">' + avatarHTML(m.name, "xl")
     + '<div><h2>' + esc(m.name) + memberStatusTag(mv.status) + '</h2>'
     + '<div class="member-page-meta">' + companyChipHTML(m.companyName) + jobTitleSpan(m.jobTitle, roles)
-    + '<span>剩余 ' + fmtHours(m.loadRemainingMinutes) + (m.testRemainingMinutes ? '（含测试 ' + fmtHours(m.testRemainingMinutes) + '）' : '') + ' · ' + esc(periodLabel()) + ' ' + fmtHours(periodMinutes(m)) + '</span></div>'
+    + '<span>剩余 ' + fmtHours(loadRemainingOf(m)) + (m.testRemainingMinutes ? '（含测试 ' + fmtHours(m.testRemainingMinutes) + '）' : '') + ' · ' + esc(periodLabel()) + ' ' + fmtHours(periodMinutes(m)) + '</span></div>'
     + '<div class="member-card-roles">' + memberRoleTagsHtml(roles, 6) + '</div></div></div>'
     + '<div class="member-page-actions"><button class="btn sm soft" type="button" data-member-export>' + icon("download", 13) + '导出该成员 CSV</button></div></header>'
     + memberKpisHTML(mv)

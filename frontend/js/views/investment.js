@@ -449,8 +449,7 @@ function overviewHTML(){
     + kpiHTML("实际工时", fmtHours(actual), "", "窗口外 " + fmtHours(dev) + " · 窗口内 " + fmtHours(test), { help:"actual" })
     + kpiHTML("测试窗口外", fmtHours(dev), "", "", { help:"dev" })
     + kpiHTML("测试窗口内", fmtHours(test), "", "", { help:"test" })
-    + '<div class="inv-kpi"><span class="inv-kl">预估工时' + caliberMarkHTML("estimate", false, "查看「预估工时」口径")
-    + caliberMarkHTML("crossPeriod", true, "查看预估跨期提醒") + '</span>'
+    + '<div class="inv-kpi"><span class="inv-kl">预估工时' + caliberMarkHTML("estimate", false, "查看「预估工时」口径") + '</span>'
     + '<div class="inv-kv">' + fmtHours(estimate) + '</div></div>'
     + kpiHTML("投入人天", days, "人天", "", { help:"days" })
     + '</div>' + composeHTML(actual, dev, test, estimate) + '</div></section>';

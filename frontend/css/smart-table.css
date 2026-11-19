@@ -104,9 +104,6 @@
 /* 阶段筛选在工具条里作用于已排期/已完成两列，不再挤在列头 */
 #view-demands .dem-board-bar .demb-stage-filter{margin-left:0;flex:0 0 auto;}
 #view-demands .demb-spacer{flex:1 1 auto;}
-#view-demands .demb-match{
-  font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;
-}
 #view-demands .demb-col-empty{padding:10px 2px;}
 /* 需求池表格分组行：与 .manager-tbl th 列头同色的问题同 list-group-row，统一改分组带 */
 #view-demands .dem-group-row{background:var(--group-band);border-bottom:1px solid var(--border);}

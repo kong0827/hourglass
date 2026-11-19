@@ -51,7 +51,7 @@ function openDeliveryNote(id, releaseId) {
 
 function renderPicker() {
   host.innerHTML = '<div class="dl-head"><div>'
-    + '<div class="dl-title-row"><h1>交付说明</h1></div></div></div>'
+    + '<div class="dl-title-row"><h2 class="dl-pick-title">选择要生成交付说明的版本</h2></div></div></div>'
     + '<div id="dlPickerList">' + UI.skeletonRows(4) + "</div>";
   if (pickerRows) { paintPicker(); return; }
   API.get("/api/versions/cross-project").then(function (rows) {
@@ -109,13 +109,14 @@ function paintPicker() {
       return '<div class="dl-modgroup"><div class="dl-modgroup-head"><span class="dl-mod">' + esc(g.name)
         + '</span><span class="cnt">' + g.list.length + " 个版本</span></div>"
         + '<div class="dl-rows">' + g.list.map(function (r) {
-          var released = r.versionStatus === "released" || !!r.latestReleaseDate;
+          /* 徽标只说版本生命周期，生产发布事实放 sub，避免「有发布记录」与「无生产发布记录」同排矛盾 */
+          var versionReleased = r.versionStatus === "released";
           var sub = [r.versionId, r.targetDate ? "目标 " + DD.dateText(r.targetDate) : "未设目标日",
-            r.latestReleaseDate ? "最近生产发布 " + DD.dateText(r.latestReleaseDate) : "无生产发布记录"].join(" · ");
+            r.latestReleaseDate ? "生产发布 " + DD.dateText(r.latestReleaseDate) : "生产发布 无"].join(" · ");
           return '<div class="dl-row body" style="grid-template-columns:96px minmax(0,1fr) 120px">'
-            + "<span>" + (released ? '<span class="dl-badge ok">有发布记录</span>' : '<span class="dl-badge warn">未确认发布</span>') + "</span>"
+            + "<span>" + (versionReleased ? '<span class="dl-badge ok">版本已发布</span>' : '<span class="dl-badge warn">版本未发布</span>') + "</span>"
             + '<span class="tt"><b>' + assocLinkHTML("version", r.versionId, r.versionName, { req:pid }) + "</b><span>" + esc(sub) + "</span></span>"
-            + '<span><button class="btn sm primary" type="button" data-dl-open="' + esc(r.versionId) + '">'
+            + '<span><button class="btn sm soft" type="button" data-dl-open="' + esc(r.versionId) + '">'
             + icon("note", 13) + "生成说明</button></span></div>";
         }).join("") + "</div></div>";
     }).join("");
@@ -163,8 +164,9 @@ function load(id, releaseId) {
 function renderAll() {
   if (!data) return;
   var o = opts(), g = DD.gates(data), isLocked = DD.locked(data);
+  /* 页面标题已在顶栏，正文不再重复 h1；这里直接给版本与口径 chip */
   host.innerHTML = '<div class="dl-head"><div>'
-    + '<div class="dl-title-row"><h1>交付说明</h1>'
+    + '<div class="dl-title-row">'
     + '<span class="dl-chip pri">' + esc(DD.toneName(o.tone)) + "</span>"
     + '<span class="dl-chip">' + esc(data.projectName || "未归属项目") + " · " + assocLinkHTML("version", data.versionId, data.versionName || "", { req:data.projectId, plain:"" }) + "</span>"
     + (isLocked ? '<span class="dl-chip plum">' + icon("lock", 11) + "快照 " + esc(data.docNo || "") + "</span>" : "")

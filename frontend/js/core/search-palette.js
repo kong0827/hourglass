@@ -1,10 +1,11 @@
 /* core/search-palette · 全局搜索（Cmd/Ctrl+K）：项目 / 分支 / 工作项 / 文档 / 需求 / 用例一次聚合 */
 
 import { API } from "./api.js";
-import { $ } from "./dom.js";
+import { $, taskDrawer } from "./dom.js";
 import { showView } from "./router.js";
 import { reqSetId, rt, setNameById } from "./state.js";
 import { openTaskById } from "./task-actions.js";
+import { tryCloseTaskDrawer } from "./task-drawer.js";
 import { UI, esc, toast } from "./ui.js";
 
 var TYPE_META = {
@@ -232,6 +233,12 @@ function setScope(){
 function open(){
   var m = $("dlgSearch");
   if(!m) return;
+  /* 抽屉和搜索都是整页浮层：先把抽屉收掉，避免搜索叠在抽屉上、关掉后不知回到哪。
+     有未保存改动时不静默丢弃，让用户先处理再搜。 */
+  if(taskDrawer && taskDrawer.classList.contains("on")){
+    if(rt.formDirty){ toast("工作项抽屉有未保存的改动，先保存或关闭再搜索", "warn"); return; }
+    tryCloseTaskDrawer();
+  }
   // 丢弃上次未触发的防抖与在途查询，避免旧结果覆盖重新打开后的「最近搜索」
   if(timer){ clearTimeout(timer); timer = null; }
   seq++;

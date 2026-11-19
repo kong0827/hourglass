@@ -433,6 +433,7 @@
 /* 生命周期 chips + 待确认队列 */
 .br-lifebar{display:flex;flex-direction:column;gap:var(--space-2);margin:0 0 12px;}
 .br-life{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.br-life-label{font-size:12px;font-weight:600;color:var(--text-3);margin-right:2px;flex:0 0 auto;}
 .br-chip{
   display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;
   border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);

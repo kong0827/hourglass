@@ -87,7 +87,7 @@ var VIEWS = {
   risks: { title:"逾期与阻塞", enter:lazyEnter("risks", "enterRisksView") },
   report: { title:"报表", enter:lazyEnter("report", "enterReportView") },
   investment: { title:"报表", enter:lazyEnter("investment", "enterInvestmentView") },
-  messages: { title:"消息", enter:lazyEnter("messages", "enterMessagesView") },
+  messages: { title:"消息中心", enter:lazyEnter("messages", "enterMessagesView") },
   settings: { title:"设置", enter:enterSettingsLazy },
   profile:  { title:"个人设置", enter:lazyEnter("profile", "enterProfileView") }
 };

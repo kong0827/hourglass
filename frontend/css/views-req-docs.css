@@ -223,7 +223,7 @@
 .markdown-body th,.markdown-body td{border:1px solid var(--border);padding:var(--space-2) 10px;vertical-align:middle;}
 .markdown-body th{background:var(--surface-sunken);font-weight:650;text-align:left;}
 .markdown-body img{max-width:100%;height:auto;border-radius:var(--r-xs);}
-.markdown-body a{color:var(--primary-fg);text-decoration:underline;}
+.markdown-body a{color:var(--primary-fg);text-decoration:underline;overflow-wrap:anywhere;word-break:break-word;}
 .markdown-body hr{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .reqdoc-demand-list{max-height:240px;overflow:auto;}
 .dem-doc-add{display:flex;gap:var(--space-2);margin-top:8px;}
@@ -460,6 +460,9 @@
 .rm-btn{border:none;background:transparent;color:var(--text-3);font-size:12px;line-height:1;padding:5px 12px;border-radius:var(--r-pill);cursor:pointer;font-family:inherit;transition:color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out);}
 .rm-btn:hover{color:var(--text);}
 .rm-btn[aria-selected="true"]{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.reqdoc-scope{flex:0 0 auto;}
+/* 列表底部：总数与维护提示，同原型「共 N 篇 · 最近更新」口径 */
+.reqdoc-listfoot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 4px 2px;color:var(--text-3);font-size:12px;}
 
 /* ---- 看板：按状态分列，拖拽卡片流转 ---- */
 .reqdoc-kanban{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);align-items:start;}

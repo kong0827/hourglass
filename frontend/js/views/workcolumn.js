@@ -357,9 +357,14 @@ function timeMetric(m){
   var est = Number(m.estimateMinutes) || 0;
   var logged = Number(m.loggedMinutes) || 0;
   var pct = est > 0 ? Math.round(logged / est * 100) : null;
+  /* 没有计时记录时不把 0% 当主值：那会被读成「消耗异常」，实际只是还没记 */
+  if(!logged){
+    return metric("工时消耗", "暂无计时",
+      (est ? "预估 " + fmtMinutesShort(est) + " · 还没记录实际工时" : "未估时 · 还没记录实际工时"), "");
+  }
   return metric("工时消耗",
     pct == null ? fmtMinutesShort(logged) : pct + "%",
-    (logged ? "已记录 " + fmtMinutesShort(logged) : "暂无计时") + (est ? " / 预估 " + fmtMinutesShort(est) : " / 未估时"),
+    "已记录 " + fmtMinutesShort(logged) + (est ? " / 预估 " + fmtMinutesShort(est) : " / 未估时"),
     pct != null && pct >= 100 ? "warn" : "");
 }
 function metricsHTML(d){
@@ -983,6 +988,14 @@ function wcCell(t, key, done, mode){
 }
 function wcListHTML(groups, d, mode, cs){
   var cols = wcCols(d, mode);
+  /* 风险 / 标签整列都没值时不出这一列：27 行空列既占宽又像加载失败。
+     只在列全空时隐藏，仍有值就保留，避免用户以为字段消失。 */
+  var rows = [];
+  groups.forEach(function(g){ rows = rows.concat(g.rows || []); });
+  cols = cols.filter(function(c){
+    if(c.key !== "risk" && c.key !== "tag") return true;
+    return rows.some(function(t){ return wcCell(t, c.key, d.done, mode) !== ""; });
+  });
   return '<div class="wc-list" style="--wc-cols:' + cols.map(function(c){ return c.w; }).join(" ") +
     ';--wc-min:' + wcListMinW(cols) + 'px"><div class="list-head">' +
     cols.map(function(c){ return wcHeadCellHTML(c, cs); }).join("") + '</div>' +

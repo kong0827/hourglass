@@ -32,14 +32,23 @@ class Cdp {
 const STEPS = [
   { k:"mine", go:"#/mine" },
   { k:"review", go:"#/review" },
-  { k:"demands-board", go:"#/demands" },
+  { k:"demands-board", go:"#/demands", click:'[data-dem-mode="board"]' },
   { k:"demands-table", go:"#/demands", click:'[data-dem-mode="table"]' },
   { k:"demands-gantt", go:"#/demands", click:'[data-dem-mode="gantt"]' },
+  { k:"demands-display", go:"#/demands", click:'[data-dem-mode="board"]', click2:'#demBoardDisplay summary' },
   { k:"projects", go:"#/projects" },
-  { k:"portfolio", go:"#/portfolio" },
+  { k:"projects-cards", go:"#/projects", click:'[data-project-mode="card"]' },
+  { k:"projects-table", go:"#/projects", click:'[data-project-mode="table"]' },
+  { k:"portfolio", go:"#/portfolio", click:'[data-pf-mode="card"]' },
+  { k:"portfolio-set", go:"#/portfolio", click:'[data-pf-mode="card"]',
+    eval:'const sel=document.querySelector("[data-pf-set]"); if(sel){ sel.value=sel.options[1].value; sel.dispatchEvent(new Event("change",{bubbles:true})); }' },
+  { k:"portfolio-set-full", go:"#/portfolio", click:'[data-pf-mode="card"]',
+    eval:'const { rt } = await import("./js/core/state.js"); const counts={}; (rt.reqList||[]).forEach(r=>{ if(r.setId) counts[r.setId]=(counts[r.setId]||0)+1; }); const best=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0]; const sel=document.querySelector("[data-pf-set]"); if(sel&&best){ sel.value=best; sel.dispatchEvent(new Event("change",{bubbles:true})); }' },
   { k:"phase", go:"#/phase" },
-  { k:"versions-detail", go:"#/phase", click:'[data-version-open], .version-card, [data-open-version]' },
+  { k:"versions-version", go:"#/phase", click:'[data-pmode="version"]' },
+  { k:"versions-detail", go:"#/phase", click:'[data-pmode="version"]', click2:'[data-ver-open]' },
   { k:"branches", go:"#/branches" },
+  { k:"delivery", go:"#/delivery" },
   { k:"board", go:"#/board" },
   { k:"list", go:"#/list" },
   { k:"tree", go:"#/tree" },
@@ -49,10 +58,15 @@ const STEPS = [
   { k:"workcolumn", go:"#/workcolumn?col=doing" },
   { k:"canceled", go:"#/canceled" },
   { k:"docs-read", go:"#/requirements" },
+  { k:"docs-open", go:"#/requirements", click:'.rs-node[data-rs-doc]' },
   { k:"docs-list", go:"#/requirements", click:'[data-rdmode="tree"]' },
+  { k:"docs-mine", go:"#/requirements", click:'[data-rdmode="tree"]', click2:'[data-rdscope="mine"]' },
+  { k:"docs-draft", go:"#/requirements", click:'[data-rdmode="tree"]', click2:'[data-rdscope="draft"]' },
   { k:"docs-kanban", go:"#/requirements", click:'[data-rdmode="kanban"]' },
   { k:"docs-feed", go:"#/requirements", click:'[data-rdmode="feed"]' },
   { k:"testcases-cases", go:"#/testcases" },
+  { k:"testcases-project", go:"#/testcases",
+    eval:'const sel=document.querySelector("#tcReq"); if(sel){ const opt=Array.from(sel.options).filter(o=>o.value && /消息中心/.test(o.textContent))[0]; if(opt){ sel.value=opt.value; sel.dispatchEvent(new Event("change",{bubbles:true})); } }' },
   { k:"testcases-defects", go:"#/testcases", click:'#subNav [data-sub-tab="defects"]' },
   { k:"testcases-plans", go:"#/testcases", click:'#subNav [data-sub-tab="plans"]' },
   { k:"testcases-coverage", go:"#/testcases", click:'#subNav [data-sub-tab="coverage"]' },
@@ -130,11 +144,20 @@ for(const s of steps){
     await evaluate(`(() => { location.hash = ${JSON.stringify(s.go)}; window.dispatchEvent(new HashChangeEvent("hashchange")); return true; })()`);
     await waitFor(`document.body.dataset.view === ${JSON.stringify(name)}`, "视图 " + name, 15000);
     await sleep(1400);
+    const clickWhen = async sel => evaluate(`new Promise(res => { const dl = Date.now() + 8000;
+      (function tick(){ const el = document.querySelector(${JSON.stringify(sel)});
+        if(el){ el.click(); res(true); return; } if(Date.now() > dl){ res(false); return; } setTimeout(tick, 200); })(); })`);
     if(s.click){
-      const ok = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(s.click)}); if(!el) return false; el.click(); return true; })()`);
+      const ok = await clickWhen(s.click);
       if(!ok) throw new Error("找不到点击目标 " + s.click);
-      await sleep(1600);
+      await sleep(1200);
     }
+    if(s.click2){
+      const ok2 = await clickWhen(s.click2);
+      if(!ok2) throw new Error("找不到点击目标 " + s.click2);
+      await sleep(600);
+    }
+    if(s.eval){ const v = await evaluate(`(async () => { ${s.eval} })()`); if(v !== undefined) console.log("eval " + s.k + " :: " + JSON.stringify(v)); await sleep(900); }
     await shot("current-" + s.k + ".png");
     report.push({ k:s.k, ok:true, errors:[...errors] });
     console.log("ok  " + s.k);

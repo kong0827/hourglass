@@ -165,6 +165,8 @@ function pctText(v){ return (v === null || v === undefined) ? "—" : ((v > 0 ? 
 function devTone(v){
   if(v === null || v === undefined) return "";
   var a = Math.abs(v);
+  /* 偏差有方向：低于预估是省了，不按风险标红；只有超预估才按幅度升级 */
+  if(v < 0) return a <= 15 ? "ok" : "";
   /* 用 -text 后缀：裸 vd-warn 是错误横幅的类，会把指标数字渲染成带边框的小方块 */
   return a <= 15 ? "ok" : (a <= 40 ? "warn-text" : "bad-text");
 }
@@ -712,7 +714,9 @@ function commitmentPanel(){
 function milestonePanel(){
   var list = st.milestones.filter(function(m){ return m.kind === "version" && m.versionId === st.id && m.status !== "canceled"; });
   if(!list.length){
-    return panel("里程碑", "", '<p class="hint">该版本没有关联里程碑。里程碑在项目驾驶舱里创建与达成。</p>');
+    /* 空态给出口：知道里程碑在驾驶舱创建，也要能一键过去 */
+    return panel("里程碑", "", '<p class="hint">该版本没有关联里程碑。里程碑在项目驾驶舱里创建与达成。</p>'
+      + '<button class="btn sm ghost" type="button" data-vd-project>去项目驾驶舱</button>');
   }
   var names = { achieved:"已达成", achieved_rolled_back:"已达成 · 已回滚", overdue:"已延期", pending:"未达成" };
   var body = list.map(function(m){
@@ -779,6 +783,9 @@ function hoursCardHTML(){
   var est = num(s.estimateMinutes) || estTotal();
   var act = num(s.workMinutes) || actTotal();
   var remaining = num(s.remainingMinutes);
+  var openItems = st.tasks.filter(function(t){ return !isDone(t); }).length;
+  /* 剩余预估按未完成项的预估相加：为 0 但还有未完成项时，实际是「这些项还没估时」 */
+  var remainingText = remaining ? hourText(remaining) : (openItems ? "未估时" : "0h");
   var estItems = st.tasks.filter(function(t){ return estOf(t) > 0; }).length;
   var actItems = st.tasks.filter(function(t){ return actOf(t) > 0; }).length;
   var unest = total - estItems;
@@ -817,7 +824,7 @@ function hoursCardHTML(){
       + '<span class="vd-burn-track" role="img" aria-label="' + esc("实际 " + hourText(act) + "，为预估 " + hourText(est) + " 的 " + burnText) + '">'
       + '<i style="width:' + Math.min(100, burn) + '%"></i></span>'
       + '<div class="vd-burn-foot"><span>已记 ' + hourText(act) + '</span>'
-      + '<span class="mid">剩余预估 ' + hourText(remaining) + caliberMarkHTML("version.remaining", true, "查看「剩余预估」口径") + '</span>'
+      + '<span class="mid">剩余预估 ' + remainingText + caliberMarkHTML("version.remaining", false, "查看「剩余预估」口径") + '</span>'
       + '<span>预估 ' + hourText(est) + '</span></div>'
     + '</div>'
     + '</section>';

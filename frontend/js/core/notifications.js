@@ -52,6 +52,8 @@ catch(e){ rt.alertTab = "notice"; }
 /* 通知筛选：全部 / 未读 / 提及（提及=有人 @ 到我） */
 try{ rt.noticeFilter = ["unread", "mention"].indexOf(localStorage.getItem("ds.noticeFilter")) >= 0 ? localStorage.getItem("ds.noticeFilter") : "all"; }
 catch(e){ rt.noticeFilter = "all"; }
+/* 消息页的类型筛选只作用于已加载列表；类型按业务域归类，避免出现空类目 */
+var msgType = "";
 function renderAlertBar(){
   var c = state.board ? state.board.counts : {over:0, today:0, soon:0};
   $("nOver").textContent = c.over;
@@ -180,27 +182,118 @@ function renderAlertPanel(){
   panel.innerHTML = alertCenterHTML();
   renderMessagesPage();
 }
-/* 消息页与右上角通知面板共用同一套结构，避免两处口径漂移 */
+/* 消息页与右上角通知面板共用同一份数据；页面是「左范围 + 按类型 + 时间流」两栏布局 */
+var MSG_TYPE_META = [
+  { key:"work", label:"工作项", types:["task_remind","task_due","task_assigned","task_watch","task_updated","manager_nudge"] },
+  { key:"doc", label:"文档", types:["doc_changed"] },
+  { key:"version", label:"发布", types:["version_released","version_deleted","branch_status"] },
+  { key:"demand", label:"需求", types:["demand_status","demand_watch"] },
+  { key:"comment", label:"评论", types:["task_comment","task_mention"] },
+  { key:"member", label:"成员与权限", types:["project_access","member_role","member_removed"] }
+];
+function msgTypeOf(type){
+  for(var i = 0; i < MSG_TYPE_META.length; i++) if(MSG_TYPE_META[i].types.indexOf(type) >= 0) return MSG_TYPE_META[i].key;
+  return "other";
+}
+function msgTypeCounts(){
+  var m = {};
+  (notifyState.items || []).forEach(function(x){ var k = msgTypeOf(x.type); m[k] = (m[k] || 0) + 1; });
+  return m;
+}
+function msgPageItems(){
+  var items = notifyState.items || [];
+  if(rt.noticeFilter === "unread") items = items.filter(function(x){ return !x.readAt; });
+  else if(rt.noticeFilter === "mention") items = items.filter(function(x){ return x.type === "task_mention"; });
+  if(msgType) items = items.filter(function(x){ return msgTypeOf(x.type) === msgType; });
+  return items;
+}
+function msgRailItem(attr, key, label, n, active){
+  return '<button class="msg-rail-item' + (active ? " on" : "") + '" type="button" ' + attr + (key ? '="' + key + '"' : "") +
+    ' aria-pressed="' + active + '"><span>' + esc(label) + '</span>' + (n ? '<span class="n">' + (n > 99 ? "99+" : n) + '</span>' : '') + '</button>';
+}
+function msgTypeChips(){
+  var counts = msgTypeCounts();
+  var html = '<button class="msg-chip' + (msgType ? "" : " on") + '" type="button" data-msg-type="" aria-pressed="' + (!msgType) + '">全部类型</button>';
+  MSG_TYPE_META.forEach(function(m){
+    var n = counts[m.key] || 0;
+    if(!n && msgType !== m.key) return;
+    html += '<button class="msg-chip' + (msgType === m.key ? " on" : "") + '" type="button" data-msg-type="' + m.key + '" aria-pressed="' + (msgType === m.key) + '">'
+      + esc(m.label) + (n ? ' <span class="n">' + n + '</span>' : '') + '</button>';
+  });
+  if(counts.other || msgType === "other"){
+    html += '<button class="msg-chip' + (msgType === "other" ? " on" : "") + '" type="button" data-msg-type="other" aria-pressed="' + (msgType === "other") + '">其他'
+      + (counts.other ? ' <span class="n">' + counts.other + '</span>' : '') + '</button>';
+  }
+  return html;
+}
+function msgPageListHTML(){
+  if(notifyState.loading && !notifyState.items.length) return UI.skeletonRows(5);
+  var items = msgPageItems();
+  if(!items.length){
+    var what = rt.noticeFilter === "mention" ? "没有 @ 到我的通知" : (rt.noticeFilter === "unread" ? "没有未读通知" : "还没有通知");
+    return '<div class="ap-empty">' + icon("checkCircle", 22) + '<div style="margin-top:6px">' + what + '</div>'
+      + '<div class="ap-empty-sub">' + (rt.noticeFilter === "all" ? "工作项到点提醒、评论与指派都会出现在这里" : "切换「全部」查看历史通知") + '</div></div>';
+  }
+  return noticeGroupsHTML(items);
+}
+function setAlertTab(next){
+  next = next === "due" ? "due" : "notice";
+  if(next === rt.alertTab) return;
+  rt.alertTab = next;
+  try{ localStorage.setItem("ds.alertTab", rt.alertTab); }catch(err){ /* 受限环境忽略 */ }
+  renderAlertPanel();
+  loadAlertPanel();
+}
 function renderMessagesPage(){
   var box = $("messagesBody");
   if(!box) return;
   var view = box.closest(".view");
   if(view && !view.classList.contains("on")) return;
-  var unread = notifyState.unread || 0;
-  var top = view ? (view.scrollTop || 0) : 0;
-  box.innerHTML =
-    /* 页面标题（顶栏）已经写明「消息 / 站内通知与截止提醒」，卡头不再重复一遍 */
-    '<div class="msg-page-head">' +
-      '<span class="spacer"></span>' +
-      '<button class="btn sm soft" type="button" data-ap-readall' + (unread > 0 ? '' : ' disabled') + '>' + icon("check", 13) + '一键全部已读</button>' +
-    '</div>' +
-    '<div class="alert-panel msg-center">' + alertCenterHTML(true) + '</div>';
-  /* 标记已读/加载更多会重建列表，恢复消息页滚动位置 */
-  if(view) view.scrollTop = top;
+  var unread = notifyState.unread || 0, mentions = notifyState.mentions || 0, total = notifyState.total || 0;
+  var isDue = rt.alertTab === "due";
+  var scopeLabel = isDue ? "截止提醒" : (rt.noticeFilter === "unread" ? "未读消息" : (rt.noticeFilter === "mention" ? "提及我的消息" : "全部消息"));
+  var counts = msgTypeCounts();
+  var typeRail = MSG_TYPE_META.filter(function(m){ return counts[m.key]; }).map(function(m){
+    return msgRailItem('data-msg-type', m.key, m.label, counts[m.key], !isDue && msgType === m.key);
+  }).join("") + (counts.other ? msgRailItem('data-msg-type', "other", "其他", counts.other, !isDue && msgType === "other") : "");
+  var dueCount = deadlineGroups.over.length + deadlineGroups.today.length + deadlineGroups.soon.length;
+  var shown = isDue ? 0 : msgPageItems().length;
+  var body = isDue
+    ? dueGroupsHTML()
+    : msgPageListHTML();
+  /* 标题与面包屑已由顶栏承担，正文只留状态行：未读数、总数与铃铛口径说明 */
+  var head = '<div class="msg-page-head">'
+    + '<div class="msg-page-txt"><span class="msg-page-sub">'
+      + (unread ? '<span class="msg-unread"><i></i>未读 ' + unread + '</span>' : '')
+      + (unread ? "提及 " + mentions + " 条" : "已全部读完，共 " + total + " 条")
+      + ' · 顶栏铃铛只显示最近 5 条，完整记录在这里</span></div>'
+    + '<div class="manager-actions"><button class="btn sm" type="button" data-msg-prefs>通知偏好</button>'
+      /* 没有未读时不摆一个永远点不动的按钮：页头已写明「已全部读完」 */
+      + (unread > 0 ? '<button class="btn sm" type="button" data-ap-readall>全部标为已读</button>' : '') + '</div></div>';
+  var mainHead = '<div class="msg-main-head"><b>' + scopeLabel + '</b>'
+    + (!isDue ? '<div class="msg-chips">' + msgTypeChips() + '</div>' : '<span class="msg-hint">逾期 / 今天到期 / 3 天内 · 点一条打开工作项</span>')
+    + (!isDue ? '<span class="msg-hint">按时间倒序 · 同任务连续消息已合并</span>' : '') + '</div>';
+  var foot = isDue ? ""
+    : '<div class="msg-foot"><span>已显示 ' + shown + ' 条' + (notifyState.hasMore ? ' · 还有更多' : '') + ' · 标记已读后立即从「未读」移除</span>'
+      + (notifyState.hasMore ? '<button class="btn sm" type="button" data-ap-more>加载更多</button>' : '') + '</div>';
+  box.innerHTML = head
+    + '<div class="msg-layout"><aside class="msg-rail">'
+    + '<div class="msg-rail-card"><div class="msg-rail-title">消息</div>'
+      + msgRailItem('data-msg-filter', "all", "全部", total, !isDue && rt.noticeFilter === "all")
+      + msgRailItem('data-msg-filter', "unread", "未读", unread, !isDue && rt.noticeFilter === "unread")
+      + msgRailItem('data-msg-filter', "mention", "提及我", mentions, !isDue && rt.noticeFilter === "mention")
+      + '</div>'
+    + '<div class="msg-rail-card"><div class="msg-rail-title">按类型</div>' + (typeRail || '<div class="msg-rail-empty">暂无分类消息</div>') + '</div>'
+    + '<div class="msg-rail-card"><div class="msg-rail-title">提醒</div>'
+      + msgRailItem('data-msg-due', "", "截止提醒", dueCount, isDue) + '</div>'
+    + '<div class="msg-rail-note">提及是未读的子集，读过之后两边同时减少。</div>'
+    + '</aside><section class="msg-pane">' + mainHead + '<div class="msg-list">' + body + '</div>' + foot + '</section></div>';
+  if(view) view.scrollTop = view.scrollTop || 0;
 }
 function enterMessagesView(){
   renderMessagesPage();
   loadUnread(true);
+  loadDeadlineGroups();
   loadAlertPanel();
 }
 /* 未读数变化时只同步页头按钮状态，避免整页重绘导致消息页滚动位置丢失 */
@@ -219,16 +312,30 @@ function handleNoticeClick(e){
     setNoticeFilter(filterBtn.dataset.apFilter);
     return;
   }
+  /* 消息页左栏：范围 / 类型 / 截止提醒 */
+  var scopeBtn = e.target.closest("[data-msg-filter]");
+  if(scopeBtn){
+    setNoticeFilter(scopeBtn.dataset.msgFilter);
+    return;
+  }
+  var typeBtn = e.target.closest("[data-msg-type]");
+  if(typeBtn){
+    msgType = typeBtn.dataset.msgType || "";
+    renderMessagesPage();
+    return;
+  }
+  if(e.target.closest("[data-msg-due]")){
+    setAlertTab("due");
+    return;
+  }
+  if(e.target.closest("[data-msg-prefs]")){
+    window.dispatchEvent(new CustomEvent("ds:route-go", {detail:{view:"profile"}}));
+    return;
+  }
   /* 顶部 tab：通知 / 截止提醒 */
   var tabBtn = e.target.closest("[data-ap-tab]");
   if(tabBtn){
-    var next = tabBtn.dataset.apTab === "due" ? "due" : "notice";
-    if(next !== rt.alertTab){
-      rt.alertTab = next;
-      try{ localStorage.setItem("ds.alertTab", rt.alertTab); }catch(err){ /* 受限环境忽略 */ }
-      renderAlertPanel();
-      loadAlertPanel();
-    }
+    setAlertTab(tabBtn.dataset.apTab);
     return;
   }
   /* 完整消息页入口：面板与消息页共用同一份数据，路由由 router 统一处理 */
@@ -300,12 +407,14 @@ function dayLabel(key){
   if(!key) return "更早";
   var d = new Date(key + "T00:00:00");
   if(isNaN(d.getTime())) return key;
+  function p(n){ return n < 10 ? "0" + n : String(n); }
+  var md = p(d.getMonth() + 1) + "-" + p(d.getDate());
   var now = new Date();
   var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   var diff = Math.round((today - d) / 86400000);
-  if(diff <= 0) return "今天";
-  if(diff === 1) return "昨天";
-  return key;
+  if(diff <= 0) return "今天 · " + md;
+  if(diff === 1) return "昨天 · " + md;
+  return d.getFullYear() === now.getFullYear() ? md : key;
 }
 function noticeListHTML(){
   if(notifyState.loading && !notifyState.items.length) return UI.skeletonRows(4);
@@ -359,6 +468,14 @@ function noticeGroupsHTML(items){
   });
   return html;
 }
+function clockOf(v){
+  var s = String(v || "").replace(" ", "T");
+  var d = new Date(s);
+  if(isNaN(d.getTime())) return "";
+  function p(n){ return n < 10 ? "0" + n : String(n); }
+  var now = new Date();
+  return d.toDateString() === now.toDateString() ? p(d.getHours()) + ":" + p(d.getMinutes()) : (p(d.getMonth() + 1) + "-" + p(d.getDate()));
+}
 function noticeItemHTML(g){
   var x = g.lead;
   var count = g.items.length;
@@ -377,11 +494,12 @@ function noticeItemHTML(g){
       '<span class="apn-title">' + esc(x.title) +
         (count > 1 ? ' <span class="apn-count">×' + count + '</span>' : "") + '</span>' +
       (x.body ? '<span class="apn-body">' + esc(x.body) + '</span>' : "") +
-      '<span class="apn-meta">' + esc(relTime(x.createdAt)) +
-        (count > 1 ? " · 共 " + count + " 条同类通知" : "") +
-        (x.workspaceName ? " · " + esc(x.workspaceName) : "") + '</span>' +
+      '<span class="apn-meta">' +
+        (count > 1 ? "共 " + count + " 条同类通知" + (x.workspaceName ? " · " : "") : "") +
+        (x.workspaceName ? esc(x.workspaceName) : "") + '</span>' +
     '</span>' +
     (x.readAt ? "" : '<i class="apn-dot"></i>') +
+    '<span class="apn-time">' + esc(clockOf(x.createdAt)) + '</span>' +
   '</button>';
 }
 function dueGroupsHTML(){

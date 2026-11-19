@@ -94,6 +94,29 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 }
 .req-item:hover{box-shadow:var(--shadow-md);}
 .req-item.editing{border-color:var(--primary);box-shadow:var(--ring-focus);}
+/* 卡片视图：按项目集分组的 3 列网格；展开详情时单卡占满整行 */
+.req-list.is-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start;}
+.req-list.is-cards>.req-set-head{grid-column:1/-1;margin-top:10px;margin-bottom:-2px;}
+.req-list.is-cards>.proj-set-drop-end{grid-column:1/-1;}
+.req-list.is-cards>.req-item{margin-left:0;padding:12px 14px;gap:6px;min-width:0;}
+.req-list.is-cards>.req-item.is-open{grid-column:1/-1;}
+.req-list.is-cards>.req-item-in-set::before,
+.req-list.is-cards>.req-item-in-set::after{display:none;}
+.req-list.is-cards .req-top{gap:4px 6px;flex-wrap:nowrap;}
+.req-list.is-cards .req-top .tag{flex:0 0 auto;font-size:11px;height:20px;padding:0 6px;}
+.req-list.is-cards .req-name{font-size:15px;flex:1 1 auto;min-width:0;}
+.req-list.is-cards .req-desc{-webkit-line-clamp:1;font-size:12px;line-height:18px;}
+.req-list.is-cards .req-meta{flex-wrap:nowrap;gap:8px;}
+.req-list.is-cards .req-meta .progress{flex:1 1 auto;width:auto;min-width:60px;}
+.req-list.is-cards .req-meta>span:not(.req-meta-k):not(.progress){white-space:nowrap;flex:0 0 auto;}
+.req-list.is-cards .req-profile{gap:4px 12px;white-space:nowrap;overflow:hidden;}
+.req-list.is-cards .req-profile-goal{display:none;}
+.req-list.is-cards .req-phase{gap:6px;flex-wrap:nowrap;}
+.req-list.is-cards .req-phase-bar{flex:1 1 56px;}
+.req-list.is-cards .req-phase-lg{font-size:11px;}
+.req-list.is-cards .req-taskbar{margin-top:0;}
+@media (max-width:1279px){.req-list.is-cards{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:900px){.req-list.is-cards{grid-template-columns:1fr;}}
 .req-top{display:flex;align-items:center;gap:var(--space-2);}
 .req-name{font-size:16px;font-weight:500;letter-spacing:-.01em;min-width:0;flex:1 1 auto;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -108,12 +131,22 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 .req-meta{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-3);flex-wrap:wrap;}
 .req-meta .progress{flex:0 0 auto;width:140px;}
 .req-meta .progress .bar{height:6px;}
-/* 项目集列表顶部汇总：项目 / 分组 / 首版与迭代投入 / 准时率 / 未标记首版 */
-.req-summ{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
-.req-summ .stat{flex:1 1 120px;min-width:110px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
+/* 项目集列表顶部汇总：项目 / 首版与迭代投入 / 准时率 / 风险项目 */
+.req-summ{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px;}
+.req-summ .stat{min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
 .req-summ .stat-k{font-size:12px;color:var(--text-3);}
 .req-summ .stat-v{font-size:20px;font-weight:650;letter-spacing:-.01em;color:var(--text);margin-top:2px;}
 .req-summ .stat-v small{font-size:11px;font-weight:500;color:var(--text-3);margin-left:4px;}
+.req-summ .stat-sub{font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media (max-width:1100px){.req-summ{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media (max-width:760px){.req-summ{grid-template-columns:repeat(2,minmax(0,1fr));}}
+/* 未标记首版提示：计数在横幅里，KPI 不再重复一个「未标记」格 */
+.proj-banner{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;
+  border:1px solid var(--warning-border);border-radius:var(--r-md);
+  background:var(--warning-soft);font-size:12px;color:var(--warning-fg);}
+.proj-banner[hidden]{display:none;}
+.proj-banner>svg{flex:0 0 auto;color:var(--warning);}
+.proj-banner .link-btn{margin-left:4px;flex:0 0 auto;}
 /* 项目卡：首版 / 迭代投入条（与版本页阶段口径一致）
    进度行是主色 + 百分比的完成度；工时行换成阶段色并带「工时」标签、条更细，
    两条上下相邻也不会被读成同一件事。 */
@@ -191,6 +224,19 @@ html[data-theme="dark"] .project-toolbar .seg button[aria-pressed="true"]{backgr
 .project-cell{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .project-name-cell{font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text);}
 .project-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:2px;}
+/* 操作列吸右：用户开了较多列时表格会横向滚动，行操作不能跟着滚出屏外。
+   吸底格用不透明底色盖住下方列，左缘加阴影提示还有内容没露出。 */
+.project-table-head > span:last-child,
+.project-table-row > .project-row-acts{
+  position:sticky;right:0;z-index:1;
+  background:var(--surface);
+  box-shadow:-8px 0 10px -8px rgba(16,24,40,.22);
+}
+.project-table-head > span:last-child{background:var(--surface-sunken);}
+.project-table-row:hover > .project-row-acts{background:var(--surface-hover);}
+.project-table-row.project-set-row > .project-row-acts{background:var(--surface);}
+html[data-theme="dark"] .project-table-head > span:last-child,
+html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0 10px -8px rgba(0,0,0,.55);}
 /* 行操作只留主按钮：新建工作项用主色浅底，其余收进「更多」 */
 .proj-act-primary{color:var(--primary-fg);background:var(--primary-soft);}
 .proj-act-primary:hover{color:var(--primary-fg);background:var(--primary-soft);border-color:var(--primary-border);}

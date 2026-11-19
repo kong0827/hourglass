@@ -145,9 +145,11 @@
 .tc-help-note{margin:0;padding:0 10px 10px;line-height:18px;}
 
 /* 文本类控件用排除法取全：裸 <input>（无 type）若不在白名单里会退回浏览器原生直角深色边框。
-   复选框 / 单选 / 滑块 / 取色 / 文件 / 按钮各自有专门样式，不并入这一套。 */
+   复选框 / 单选 / 滑块 / 取色 / 文件 / 按钮各自有专门样式，不并入这一套。
+   排除项放进 :where() 归零特异度：否则九个 :not([type]) 叠加成 (0,9,1)，
+   会压过后面的 :hover / :focus / :disabled 规则。 */
 .input,.textarea,.select,
-.field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+.field input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"])),
 .field textarea,.field select{
   width:100%;height:34px;padding:0 10px;
   background-color:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
@@ -167,6 +169,13 @@
 .input:disabled,.textarea:disabled,.select:disabled{
   background:var(--surface-sunken);color:var(--text-3);cursor:not-allowed;
 }
+/* 只读仍可选中复制，只把底色压下去，文字保持正常对比。
+   data-ds-autofill-ro 是防自动填充的临时只读，不是业务只读，不能变灰。 */
+.field input[readonly]:not([data-ds-autofill-ro]),.input[readonly]:not([data-ds-autofill-ro]){
+  background:var(--surface-sunken);cursor:default;
+}
+.field input[readonly]:not([data-ds-autofill-ro]):focus,
+.input[readonly]:not([data-ds-autofill-ro]):focus{border-color:var(--border);box-shadow:none;}
 .field .err{display:none;font-size:12px;color:var(--danger-fg);line-height:18px;}
 .field .err.on,.field.invalid .err{display:block;}
 .field.invalid input,.field.invalid textarea,.field.invalid select{border-color:var(--danger);}
@@ -3051,3 +3060,43 @@ a.att-chip-main:hover{color:var(--primary-fg);}
 .att-chip .icon-btn{flex:0 0 auto;color:var(--text-3);}
 /* 任意挂 bindFileDrop 的容器：拖入时统一高亮 */
 .is-dragover{outline:2px dashed var(--primary);outline-offset:-2px;border-radius:var(--r-sm);}
+
+/* 消息中心页：左范围/类型 + 右侧时间流（与原型两栏一致） */
+#messagesBody{padding-top:16px;}
+.msg-page-head{align-items:flex-start;justify-content:space-between;}
+.msg-page-txt{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.msg-page-title{display:flex;align-items:center;gap:8px;}
+.msg-page-title b{font-size:18px;font-weight:700;letter-spacing:-.01em;}
+.msg-unread{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;
+  border-radius:var(--r-pill);background:var(--primary-soft);color:var(--primary-fg);font-size:12px;font-weight:600;}
+.msg-unread i{width:6px;height:6px;border-radius:50%;background:var(--primary);}
+.msg-page-sub{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);}
+.msg-layout{display:grid;grid-template-columns:238px minmax(0,1fr);gap:14px;align-items:start;}
+.msg-rail{display:flex;flex-direction:column;gap:10px;}
+.msg-rail-card{padding:8px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
+.msg-rail-title{padding:4px 8px 6px;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--text-3);}
+.msg-rail-item{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:32px;
+  padding:0 8px;border:0;border-radius:var(--r-sm);background:none;font:inherit;font-size:13px;
+  color:var(--text-2);text-align:left;cursor:pointer;}
+.msg-rail-item:hover{background:var(--surface-hover);color:var(--text);}
+.msg-rail-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.msg-rail-item .n{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.msg-rail-item.on .n{color:var(--primary-fg);}
+.msg-rail-empty{padding:6px 8px;font-size:12px;color:var(--text-3);}
+.msg-rail-note{padding:2px 4px;font-size:11px;color:var(--text-3);line-height:1.5;}
+.msg-pane{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);overflow:hidden;}
+.msg-main-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--border);}
+.msg-main-head>b{font-size:13px;font-weight:650;white-space:nowrap;}
+.msg-chips{display:flex;gap:2px;flex-wrap:wrap;}
+.msg-chip{height:26px;padding:0 9px;border:1px solid transparent;border-radius:var(--r-pill);background:none;
+  font:inherit;font-size:12px;color:var(--text-2);cursor:pointer;white-space:nowrap;}
+.msg-chip:hover{background:var(--surface-hover);color:var(--text);}
+.msg-chip.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.msg-chip .n{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.msg-chip.on .n{color:var(--primary-fg);}
+.msg-hint{margin-left:auto;font-size:12px;color:var(--text-3);}
+.msg-list .apn{border-left:0;}
+.msg-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);}
+.apn-time{flex:0 0 auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;margin-top:1px;}
+@media(max-width:1100px){.msg-layout{grid-template-columns:200px minmax(0,1fr);}}

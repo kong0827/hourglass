@@ -118,6 +118,35 @@ function currentBoardGroup2(){
   if(k !== boardGroup2KeySeen){ boardGroup2KeySeen = k; boardGroup2 = readBoardGroup2(); }
   return boardGroup2;
 }
+/* BOARD-4：列等分后仍放不下时，右缘给「还有 N 列」浮标；纯提示，不改变列语义 */
+var boardMorePill = null;
+function ensureBoardMorePill(){
+  if(boardMorePill) return boardMorePill;
+  var toolbar = document.getElementById("boardToolbar");
+  if(!toolbar) return null;
+  boardMorePill = document.createElement("button");
+  boardMorePill.type = "button";
+  boardMorePill.className = "board-more-pill";
+  boardMorePill.setAttribute("aria-label", "向右查看其余看板列");
+  boardMorePill.addEventListener("click", function(){
+    board.scrollBy({ left: Math.max(240, board.clientWidth * 0.8), behavior: "smooth" });
+  });
+  toolbar.insertBefore(boardMorePill, document.getElementById("boardDisplay"));
+  return boardMorePill;
+}
+function updateBoardOverflow(){
+  var pill = ensureBoardMorePill();
+  if(!pill) return;
+  var hidden = 0;
+  if(!board.classList.contains("board-mobile")){
+    var box = board.getBoundingClientRect();
+    board.querySelectorAll(".board-col").forEach(function(col){
+      if(col.getBoundingClientRect().right > box.right + 4) hidden++;
+    });
+  }
+  pill.classList.toggle("on", hidden > 0);
+  if(hidden) pill.textContent = "还有 " + hidden + " 列 →";
+}
 function readGroupFolds(){
   try{ return JSON.parse(localStorage.getItem(boardPrefKey(BOARD_GROUP_FOLD_KEY)) || "{}") || {}; }
   catch(e){ return {}; }
@@ -469,7 +498,7 @@ function testStripHTML(t, editable){
               : '<span class="ct-wait hot">待领取</span>') +
       '<span class="ct-tag">' + esc(measured) + '</span>' +
       (t.testStartedAt
-        ? '<span class="ct-since">' + esc(fmtTs(t.testStartedAt)) + '</span>'
+        ? '<span class="ct-since" title="' + esc(fmtTs(t.testStartedAt)) + '">' + esc(fmtShortMD(parseDate(t.testStartedAt))) + '</span>'
         : (editable && !tester ? claimBtn : '')) + '</div>';
   }
   return '<div class="card-test"><span class="ct-lbl">测试</span>' +
@@ -641,6 +670,7 @@ function centerMobSegActive(seg){
 }
 window.addEventListener("resize", function(){
   syncMobSegEdges(document.querySelector(".mob-col-seg"));
+  if(activeView === "board") updateBoardOverflow();
 });
 function renderMobileBoard(opts){
   opts = opts || {};
@@ -776,12 +806,15 @@ function render(opts){
     var doneFiltered = !!effDonePub;
     /* 计数同时也是「查看全部」入口：进度只表达已加载多少，完整数据进状态工作页 */
     var allCount = cd.allTotal || cd.total || 0;
+    /* 列头只报整列条数，与列表「共 N 项」同口径；已加载多少在列尾「加载更多」里说，不在头部再报一个分数 */
     var countText = (filterOn() || doneFiltered)
       ? ((cd.matched || 0) + " / " + (cd.total || 0))
-      : (c.done ? String(cd.total || 0) : (cd.hasMore ? items.length + " / " + (cd.total || 0) : String(cd.total || 0)));
+      : String(cd.total || 0);
     var countTip = doneFiltered
       ? "已完成 · " + donePubLabel(effDonePub) + " " + (cd.matched || 0) + " 项 / 当前时间窗 " + (cd.total || 0) + " 项，点击进入工作页"
-      : "查看「" + c.name + "」全部 " + allCount + " 项" + (c.done ? "（含历史）" : "");
+      : (filterOn()
+        ? "当前筛选命中 " + (cd.matched || 0) + " 项，该列共 " + (cd.total || 0) + " 项，点击进入工作页"
+        : "查看「" + c.name + "」全部 " + allCount + " 项" + (c.done ? "（含历史）" : ""));
     var sortMode = c.done ? "manual" : colSortOf(c.id);
     /* 已完成列的发布态筛选不再常驻列头：常驻下拉会把列名挤成「已..」。
        筛选收进「列设置」菜单，生效时列设置按钮提色，计数用 matched/total 表达范围。 */
@@ -880,6 +913,7 @@ function render(opts){
   });
 
   board.scrollLeft = boardLeft;
+  updateBoardOverflow();
 
   if(state.inlineAdd && state.inlineAdd.col){
     openInlineAdd(state.inlineAdd.col, state.inlineAdd.value, false);
@@ -1350,6 +1384,7 @@ function syncCanceledBadge(){
 /* 列内滚过一屏后露出「回到顶部」；scroll 不冒泡，用捕获阶段接住 */
 board.addEventListener("scroll", function(e){
   var el = e.target;
+  if(el === board){ updateBoardOverflow(); return; }
   if(!el || !el.classList || !el.classList.contains("board-col-body")) return;
   var colEl = el.closest(".board-col");
   var btn = colEl && colEl.querySelector(".col-top");

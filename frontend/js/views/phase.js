@@ -38,8 +38,8 @@ var editingVerRevision = null, editingVerStatus = null;
 var viewMode = "phase";            /* phase | version | allversions | schedule | overview */
 /* 版本列表：筛选 / 排序 / 行内编辑互不干扰；编辑草稿只存在内存，失焦不自动提交 */
 var verListUi = { sort:"smart", q:"", riskOnly:false };
-/* 队列按状态分组：进行中 / 计划中默认展开，已发布与已关闭默认只露 3 行 */
-var verGroupUi = { open:{ released:false, closed:false, canceled:false } };
+/* 队列按状态分组：进行中 / 计划中 / 已发布默认展开，已关闭与已取消默认收 3 行 */
+var verGroupUi = { open:{ released:true, closed:false, canceled:false } };
 var verInline = null;              /* { id, field:"name"|"dates", busy } */
 var cache = null;                  /* { phase, vstats, versions, tasks } */
 var overviewCache = null;
@@ -75,12 +75,17 @@ function fmtPct(v){ return (v === null || v === undefined) ? "—" : ((v > 0 ? "
 function devCls(v){
   if(v === null || v === undefined) return "mute";
   var a = Math.abs(v);
-  return a <= 15 ? "ok" : (a <= 30 ? "warn" : "over");
+  if(a <= 15) return "ok";
+  /* 偏差有方向：低于预估是用得少，不按风险标色；只有超出预估才升级 */
+  if(v < 0) return "";
+  return a <= 30 ? "warn" : "over";
 }
 function devText(v){
   if(v === null || v === undefined) return "—";
   var a = Math.abs(v);
-  return (v > 0 ? "+" : "") + v + "% · " + (a <= 15 ? "准确" : (a <= 30 ? "偏高" : "严重偏差"));
+  if(a <= 15) return (v > 0 ? "+" : "") + v + "% · 准确";
+  if(v < 0) return v + "% · 偏低";
+  return "+" + v + "% · " + (a <= 30 ? "偏高" : "严重超支");
 }
 /* devCls 的 ok/warn/over 只是语义档位，进指标格要换算成色板 token */
 function devColor(v){
@@ -3648,7 +3653,8 @@ export function mountReleaseWorkspace(pageHost, opts){
       ? ' · 本版本已覆盖工作项 ' + releaseCheck.workItemsCovered + '/' + releaseCheck.workItemsTotal
       : '';
     var planCoverageHTML = '<span data-plan-check-coverage>' + esc(planCoverage) + '</span>';
-    var planSection = '<section class="release-section"><h3>发布计划</h3><div class="row row-gap"><select data-plan-select aria-label="选择独立发布计划"' + (pending ? ' disabled' : '') + '>' + options([["", "新独立计划"]].concat(planChoices), planId || "") + '</select>' + (mayManage ? '<button class="btn sm" data-plan-new type="button">新建独立计划</button>' : '') + '</div><p class="hint">计划 ' + esc(p.id ? (releasePlanNoText(p.planNo) || ("#" + p.id)) : "未保存") + ' · 修订 ' + esc(p.revision || "—") + ' · ' + esc(releaseStatusName(p.status)) + ' · ' + esc(releaseEnvironmentName(p.environment || "production")) + ' · ' + esc(coverageName(p.coverage || "full")) + ' · ' + esc(planWhen(p)) + (p.versionCount > 1 ? ' · ' + esc(p.versionCount) + ' 个版本（已完成 ' + esc(p.releasedVersionCount || 0) + '）' : '') + '。计划只描述打算怎么发，不改变实际交付事实；已完成计划不可修改。</p>'
+    var planSection = '<section class="release-section"><h3>发布计划</h3><div class="row row-gap"><select data-plan-select aria-label="选择独立发布计划"' + (pending ? ' disabled' : '') + '>' + options([["", "＋ 新建独立计划"]].concat(planChoices), planId || "") + '</select>' + '</div><p class="hint">计划 ' + esc(p.id ? (releasePlanNoText(p.planNo) || ("#" + p.id)) : "未保存") + ' · 修订 ' + esc(p.revision || "—") + ' · ' + esc(releaseStatusName(p.status)) + ' · ' + esc(releaseEnvironmentName(p.environment || "production")) + ' · ' + esc(coverageName(p.coverage || "full")) + ' · ' + esc(planWhen(p)) + (p.versionCount > 1 ? ' · ' + esc(p.versionCount) + ' 个版本（已完成 ' + esc(p.releasedVersionCount || 0) + '）' : '') + '。计划只描述打算怎么发，不改变实际交付事实；已完成计划不可修改。</p>'
+      + heading("基本信息", "计划发布的时间与责任人；环境与覆盖范围用于和实际记录比对偏差。")
       + '<div class="form-grid">' + field("计划发布时间（本地）", '<input type="datetime-local" step="60" data-plan-planned value="' + esc(p.plannedAt ? localMinute(p.plannedAt) : "") + '"' + disabled + '>', "计划发布的时间，使用本地时间；只用于计划与偏差对比，不代表实际发生时间。")
         + field("计划负责人", releaseOwnerControl("plan", p.ownerUserId || "", disabled), "计划的责任人，可与实际执行人不同。")
         + field("计划环境", '<select data-plan-environment' + disabled + '>' + options(envs, p.environment || "production") + '</select>', "计划面向的环境；实际环境不同会在预检中记为偏差，需要填写原因。")
@@ -3659,10 +3665,11 @@ export function mountReleaseWorkspace(pageHost, opts){
       + '<div data-plan-sync-host></div>'
       + '<div data-plan-branches-host></div>'
       + (!locked ? '<p class="release-readiness" data-plan-readiness></p>' : '')
+      + heading("说明与状态", "计划说明、风险与回滚方案；计划状态决定能否被实际记录引用。")
       + field("计划说明", '<textarea data-plan-notes maxlength="2000"' + disabled + '>' + esc(p.notes || "") + '</textarea>')
       + field("风险与回滚方案", '<textarea data-plan-risks maxlength="1000"' + disabled + '>' + esc(p.risks || "") + '</textarea>', "建议写清回滚命令、数据兼容处理和回滚后的验证步骤。")
       + field("计划状态", '<select data-plan-status' + disabled + '>' + options([["draft", "草稿"], ["ready", "就绪"], ["canceled", "取消"]].concat(p.status === "completed" ? [["completed", "已完成（只读）"]] : []), p.status || "draft") + '</select>', "只有「就绪」计划可被实际记录直接引用；就绪需要计划时间、负责人、至少 1 个工作项和目标键。草稿、取消或已完成会触发偏差校验，需要填写理由。")
-      + (!locked ? field("新建 / 修改理由", '<input data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划">', "", true) + '<p class="release-error" data-plan-error role="alert"></p><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button>' : '<p class="hint">此计划只读</p>') + '</section>';
+      + (!locked ? '<div class="release-save-bar">' + field("新建 / 修改理由", '<input data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划">', "", true) + '<p class="release-error" data-plan-error role="alert"></p><div class="release-save-acts"><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button></div></div>' : '<p class="hint">此计划只读</p>') + '</section>';
     var actualSection = mayPublish ? '<section class="release-section"><h3>实际发布事实</h3><p class="release-readiness" data-actual-readiness></p><p class="hint">只填本次真实发生的交付；失败、测试和回滚记录不等于生产生效。</p><div class="form-grid">'
         + field("本次关联计划", '<select data-release-planId' + actualDisabled + '>' + actualPlanOptions(a) + '</select>', "关联计划用于预检对比；无计划即紧急记录。环境或状态不一致的计划仍可选择，但必须填写原因。", false, planSummaryHTML(a))
         + field("实际发生时间（本地）", '<input type="datetime-local" step="60" data-release-occurredAt value="' + esc(a.occurredAt) + '"' + actualDisabled + '>', "真实发生时间，不能晚于当前时间；与计划时间不同需填写原因。", true)
