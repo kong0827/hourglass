@@ -473,6 +473,8 @@ function enterDemandsView(){
     if(activeView !== "demands" || !demands.length) return;
     if(JSON.stringify(rt.categoriesCache || []) !== catSig) render();
   });
+  /* 视图偏好返回之前先铺骨架：慢网下否则会留一整块空白等 /api/list-preferences */
+  if(demandBody && !demandBody.firstElementChild) demandBody.innerHTML = UI.skeletonRows(2);
   listPrefs.load("demand-pool").then(function(){
     if(routeMode) listPrefs.setViewModeLocal("demand-pool", routeMode);
     if(rt.reqsLoaded){
@@ -2228,7 +2230,7 @@ function exportDemCsv(){
   var name = currentDemViewName() || demPresetName(demSmart.preset) || "需求池列表";
   name = name.replace(/[\\/:*?"<>|]/g, "-");
   triggerDownload(name + "-" + rt.TODAY_ISO + ".csv", csv, "text/csv;charset=utf-8;");
-  toast("已导出当前视图 " + rows.length + " 项", "fs");
+  toast("已导出当前视图 " + rows.length + " 条", "fs");
 }
 function initDemSmartBar(){
   if(demSmartBar) return;
@@ -2426,7 +2428,7 @@ function demandMobileList(rows, groups){
             + '<button type="button" class="dem-group-toggle dem-mob-subgroup-head" data-dem-subgroup-toggle="' + esc(g.key + "/" + s.key) + '" aria-expanded="' + (!sc) + '">'
             + '<span class="dem-group-caret' + (sc ? '' : ' open') + '">▶</span>'
             + '<span class="dem-group-name">' + esc(s.label) + '</span>'
-            + '<span class="dem-group-count">' + s.rows.length + ' 项</span></button>'
+            + '<span class="dem-group-count">' + s.rows.length + ' 条</span></button>'
             + (sc ? '' : '<div class="dem-mob-cards">' + cards(s.rows) + '</div>')
             + '</section>';
         }).join("");
@@ -2435,7 +2437,7 @@ function demandMobileList(rows, groups){
         + '<button type="button" class="dem-group-toggle dem-mob-group-head" data-dem-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">'
         + '<span class="dem-group-caret' + (collapsed ? '' : ' open') + '">▶</span>'
         + '<span class="dem-group-name">' + esc(g.label) + '</span>'
-        + '<span class="dem-group-count">' + g.rows.length + ' 项</span></button>'
+        + '<span class="dem-group-count">' + g.rows.length + ' 条</span></button>'
         + inner
         + '</section>';
     }).join("");
@@ -2483,14 +2485,14 @@ function renderDemandTable(){
     return '<tr class="dem-group-row"><td colspan="' + colspan + '"><button type="button" class="dem-group-toggle" data-dem-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">' +
       '<span class="dem-group-caret' + (collapsed ? '' : ' open') + '">▶</span>' +
       '<span class="dem-group-name">' + esc(g.label) + '</span>' +
-      '<span class="dem-group-count">' + g.rows.length + ' 项</span></button></td></tr>';
+      '<span class="dem-group-count">' + g.rows.length + ' 条</span></button></td></tr>';
   }
   function subGroupHead(g, s){
     var collapsed = !!demSmart.collapsed["$sub:" + g.key + "/" + s.key];
     return '<tr class="dem-subgroup-row"><td colspan="' + colspan + '"><button type="button" class="dem-group-toggle" data-dem-subgroup-toggle="' + esc(g.key + "/" + s.key) + '" aria-expanded="' + (!collapsed) + '">' +
       '<span class="dem-group-caret' + (collapsed ? '' : ' open') + '">▶</span>' +
       '<span class="dem-group-name">' + esc(s.label) + '</span>' +
-      '<span class="dem-group-count">' + s.rows.length + ' 项</span></button></td></tr>';
+      '<span class="dem-group-count">' + s.rows.length + ' 条</span></button></td></tr>';
   }
   var body = "";
   if(demSmart.group === "none"){
@@ -2723,7 +2725,7 @@ function demgGroupHeadHTML(g){
     esc(g.key) + '" aria-expanded="' + (!collapsed) + '">' +
     '<span class="gantt-group-caret" aria-hidden="true">' + (collapsed ? "▸" : "▾") + '</span>' +
     '<span class="gantt-group-name">' + esc(g.label) + '</span>' +
-    '<span class="gantt-group-cnt">' + g.rows.length + ' 项</span>' +
+    '<span class="gantt-group-cnt">' + g.rows.length + ' 条</span>' +
   '</button></div>';
 }
 function demgSubGroupHeadHTML(g, s){
@@ -2732,7 +2734,7 @@ function demgSubGroupHeadHTML(g, s){
     esc(g.key + "/" + s.key) + '" aria-expanded="' + (!collapsed) + '">' +
     '<span class="gantt-group-caret" aria-hidden="true">' + (collapsed ? "▸" : "▾") + '</span>' +
     '<span class="gantt-group-name">' + esc(s.label) + '</span>' +
-    '<span class="gantt-group-cnt">' + s.rows.length + ' 项</span>' +
+    '<span class="gantt-group-cnt">' + s.rows.length + ' 条</span>' +
   '</button></div>';
 }
 function demgLegendHTML(){

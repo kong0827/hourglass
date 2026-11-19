@@ -1384,7 +1384,10 @@ function versionFocusHTML(){
         + '<p class="vf-desc">' + descBits.map(esc).join('<span class="vf-sep" aria-hidden="true"></span>')
           + (verRisk(v).atRisk ? '<span class="vl-risk-inline">' + esc(verRiskText(risk)) + '</span>' : '') + '</p>'
         + '<div class="vf-bar">'
-          + '<span class="vl-bar" role="img" aria-label="进度 ' + pct + '%"><i class="done" style="width:' + pct + '%"></i>'
+          /* 进度条里另有蓝色「进行中」和橙色「阻塞」段：数字只报已完成，颜色含义用 title 说清 */
+          + '<span class="vl-bar" role="img" aria-label="已完成 ' + pct + '%，进行中 ' + doingPct + '%，阻塞 ' + blockedPct + '%"'
+            + ' title="绿 = 已完成 ' + done + ' 个 · 蓝 = 进行中 ' + doing + ' 个 · 橙 = 阻塞 ' + (Number(risk.blocked) || 0) + ' 个">'
+            + '<i class="done" style="width:' + pct + '%"></i>'
           + (doingPct ? '<i class="doing" style="width:' + doingPct + '%"></i>' : '')
           + (blockedPct ? '<i class="blocked" style="width:' + blockedPct + '%"></i>' : '') + '</span>'
           + '<b>' + pct + '%</b><small>' + (total ? done + ' / ' + total + ' 工作项' : '未规划') + '</small>'
@@ -1475,7 +1478,7 @@ function versionUnboundBannerHTML(){
   return '<div class="vl-unbound-banner">'
     + '<span class="vl-ub-icon" aria-hidden="true">' + icon("alertCircle", 15) + '</span>'
     + '<span class="vl-ub-text"><b>' + taskCount + ' 个工作项</b>还没有排版本'
-      + (Number(u.doneCount) ? '，其中 ' + u.doneCount + ' 项已完成' : '') + '</span>'
+      + (Number(u.doneCount) ? '，其中 ' + u.doneCount + ' 个已完成' : '') + '</span>'
     + (canAssign ? '<button class="btn sm soft vl-ub-go" type="button" data-unbound-assign>去规划 →</button>' : '')
     + '</div>';
 }

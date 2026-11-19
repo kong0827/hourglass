@@ -325,8 +325,8 @@ function mineGroupOf(t){
 }
 var MINE_GROUPS = [
   {k:"over", label:"逾期", hint:"先处理已经拖过期的", tone:"danger"},
-  {k:"today", label:"今天", hint:"今天到期", tone:"warning"},
-  {k:"week", label:"本周", hint:"本周内到期", tone:"info"},
+  {k:"today", label:"今天到期", hint:"", tone:"warning"},
+  {k:"week", label:"本周", hint:"", tone:"info"},
   {k:"ended", label:"执行结束", hint:"所在列已结束计时，不计逾期", tone:"success"},
   {k:"later", label:"以后", hint:"本周之后或未设截止", tone:"neutral"}
 ];
