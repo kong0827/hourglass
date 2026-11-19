@@ -1066,8 +1066,9 @@ public class DemandService {
         if (!fullEdit) {
             requireQuickEditable(d);
         }
+        List<Task> linkedTasks = java.util.Collections.emptyList();
         if (targetProject != null) {
-            assertProjectMigratable(d, workspaceId, id);
+            linkedTasks = requireMigratableTasks(d, workspaceId, id);
         }
         if (!initial.getReqId().equals(d.getReqId())) {
             throw AppException.conflict("需求所属项目已变更，请刷新后重试");
@@ -1101,6 +1102,9 @@ public class DemandService {
             }
         }
         save(d);
+        if (targetProject != null && !linkedTasks.isEmpty()) {
+            moveNote += moveLinkedTasks(userId, workspaceId, linkedTasks, projectId, oldProjectName, newProjectName);
+        }
         /* 迁移与列表行内同一动作码，时间线不再出现「更新 / 变更所属项目」两种标签 */
         logChange(d, userId, targetProject != null ? "move" : "update", moveNote, null, before);
         if (targetProject != null) {
@@ -1170,8 +1174,11 @@ public class DemandService {
         }
     }
 
-    /** 项目归属决定权限、模块和统计口径：已拆工作项 / 关联文档用例 / 有目标版本或发布记录时不允许直接迁移 */
-    private void assertProjectMigratable(Demand d, String workspaceId, String id) {
+    /**
+     * 项目归属决定权限、模块和统计口径：文档 / 用例 / 发布记录仍禁止迁移；
+     * 未开工的工作项允许随需求一并迁移（见 {@link #moveLinkedTasks}），已开工的阻断并给出具体原因。
+     */
+    private List<Task> requireMigratableTasks(Demand d, String workspaceId, String id) {
         if (!"review".equals(d.getStatus()) && !"pass".equals(d.getStatus())
                 && !"plan".equals(d.getStatus())) {
             throw AppException.badRequest("只有待评审、已通过或已排期的需求可以更换所属项目");
@@ -1179,12 +1186,170 @@ public class DemandService {
         if (d.getVersionId() != null) {
             throw AppException.badRequest("需求已有目标版本，请先撤销排期再更换项目");
         }
-        if (!taskMapper.selectTasksByDemandForScope(workspaceId, id).isEmpty()
-                || docMapper.countLinksByDemand(workspaceId, id) > 0
+        if (docMapper.countLinksByDemand(workspaceId, id) > 0
                 || caseMapper.countByDemandRef(workspaceId, id) > 0
                 || !releases.selectDemandRecords(workspaceId, id).isEmpty()) {
-            throw AppException.badRequest("需求已关联工作项、文档、用例或发布记录，不能更换所属项目；请先解除关联");
+            throw AppException.badRequest("需求已关联文档、用例或发布记录，不能更换所属项目；请先解除关联");
         }
+        List<Task> linked = taskMapper.selectTasksByDemandForScope(workspaceId, id);
+        requireUnstarted(linked, workspaceId);
+        return linked;
+    }
+
+    /**
+     * 只有未开工（待处理 / 已取消）且没有执行证据的工作项能随需求换项目；
+     * 回收站里的工作项不构成执行证据，但仍会随需求一起迁移，避免恢复后跨项目悬空。
+     */
+    private void requireUnstarted(List<Task> linked, String workspaceId) {
+        java.util.Set<String> linkedIds = new java.util.HashSet<String>();
+        for (Task t : linked) {
+            linkedIds.add(t.getId());
+        }
+        Map<String, String> blockers = new LinkedHashMap<String, String>();
+        List<String> activeIds = new ArrayList<String>();
+        for (Task t : linked) {
+            if (t.getDeletedAt() != null) {
+                continue;
+            }
+            activeIds.add(t.getId());
+            if (!com.hourglass.common.Consts.COL_BACKLOG.equals(t.getBoardColumn())
+                    && !com.hourglass.common.Consts.COL_CANCELED.equals(t.getBoardColumn())) {
+                blockers.put(t.getId(), "已进入执行（当前不在待处理列）");
+            }
+            if (t.getTestRequestedAt() != null) {
+                blockers.put(t.getId(), "已提测或处于测试阶段");
+            }
+            if (t.getFoundVersionId() != null) {
+                blockers.put(t.getId(), "缺陷已记录发现版本");
+            }
+        }
+        if (!activeIds.isEmpty()) {
+            Map<String, Integer> rank = new LinkedHashMap<String, Integer>();
+            for (com.hourglass.dto.TaskMoveBlocker b : taskMapper.selectMoveBlockers(workspaceId, activeIds)) {
+                String reason = moveBlockerText(b.getReason());
+                if (reason == null) {
+                    continue;
+                }
+                int priority = moveBlockerRank(b.getReason());
+                Integer current = rank.get(b.getTaskId());
+                if (current == null || priority < current) {
+                    blockers.put(b.getTaskId(), reason);
+                    rank.put(b.getTaskId(), priority);
+                }
+            }
+        }
+        for (Task t : linked) {
+            if (!"epic".equals(t.getItemType())) {
+                continue;
+            }
+            for (String childId : taskMapper.selectEpicChildIdsForScope(workspaceId, t.getId())) {
+                if (!linkedIds.contains(childId)) {
+                    blockers.put(t.getId(), "史诗仍有其他子任务（含回收站）");
+                    break;
+                }
+            }
+        }
+        if (blockers.isEmpty()) {
+            return;
+        }
+        Task first = null;
+        for (Task t : linked) {
+            if (blockers.containsKey(t.getId())) {
+                first = t;
+                break;
+            }
+        }
+        String title = first == null || first.getTitle() == null ? "" : first.getTitle();
+        throw AppException.badRequest("工作项「" + title + "」" + blockers.get(first.getId())
+                + "，不能随需求迁移；请先处理后再更换所属项目");
+    }
+
+    /** 证据文案与优先级：版本 > 用例 > 工时 > 发布，同一工作项只报第一条 */
+    private String moveBlockerText(String reason) {
+        if (com.hourglass.dto.TaskMoveBlocker.VERSION.equals(reason)) {
+            return "已绑定版本";
+        }
+        if (com.hourglass.dto.TaskMoveBlocker.CASE.equals(reason)) {
+            return "已关联测试用例";
+        }
+        if (com.hourglass.dto.TaskMoveBlocker.TIME.equals(reason)) {
+            return "已有工时记录";
+        }
+        if (com.hourglass.dto.TaskMoveBlocker.PUBLISH.equals(reason)) {
+            return "已有发布记录或人工发布标记";
+        }
+        return null;
+    }
+
+    private int moveBlockerRank(String reason) {
+        if (com.hourglass.dto.TaskMoveBlocker.VERSION.equals(reason)) {
+            return 0;
+        }
+        if (com.hourglass.dto.TaskMoveBlocker.CASE.equals(reason)) {
+            return 1;
+        }
+        if (com.hourglass.dto.TaskMoveBlocker.TIME.equals(reason)) {
+            return 2;
+        }
+        return 3;
+    }
+
+    /**
+     * 需求迁移时把关联工作项一并挪到目标项目：按目标项目重排编号，清掉不属于目标项目的分类，
+     * 解除跨项目的 Epic 归属与文档引用；每一步都写工作项时间线。
+     */
+    private String moveLinkedTasks(String userId, String workspaceId, List<Task> linked, String targetReqId,
+                                   String oldName, String targetName) {
+        if (linked.isEmpty()) {
+            return "";
+        }
+        java.util.Set<String> moving = new java.util.HashSet<String>();
+        for (Task t : linked) {
+            moving.add(t.getId());
+        }
+        int categoryCleared = 0, epicCleared = 0, docCleared = 0;
+        for (Task t : linked) {
+            String oldNo = Nos.workItem(t.getItemNo());
+            String categoryId = Texts.trimToNull(t.getCategoryId());
+            if (categoryId != null) {
+                Category cat = categoryMapper.selectById(workspaceId, categoryId);
+                if (cat == null || !targetReqId.equals(cat.getProjectId())) {
+                    t.setCategoryId("");
+                    categoryCleared++;
+                }
+            }
+            if (t.getEpicId() != null && !moving.contains(t.getEpicId())) {
+                t.setEpicId(null);
+                epicCleared++;
+            }
+            if (t.getReqDocId() != null) {
+                /* 文档挂在源项目，跨项目引用不成立：与单条工作项换项目时「旧文档自动失效」同一语义 */
+                t.setReqDocId(null);
+                docCleared++;
+            }
+            t.setReqId(targetReqId);
+            t.setVersionCheck(null);
+            if (TaskSupport.updateWithNo(taskMapper, t) != 1) {
+                throw AppException.conflict("工作项「" + t.getTitle() + "」已被其他人修改，请刷新后重试");
+            }
+            String detail = "随需求迁移：所属项目「" + oldName + "」→「" + targetName + "」";
+            String newNo = Nos.workItem(t.getItemNo());
+            if (!newNo.isEmpty()) {
+                detail += "；编号 " + (oldNo.isEmpty() ? "未取号" : oldNo) + "→" + newNo;
+            }
+            taskAudit.log(userId, workspaceId, t.getId(), "update", Texts.cut(detail, 250));
+        }
+        StringBuilder note = new StringBuilder("；随迁 " + linked.size() + " 项工作项");
+        if (categoryCleared > 0) {
+            note.append("（").append(categoryCleared).append(" 项分类不属于目标项目，已清空）");
+        }
+        if (epicCleared > 0) {
+            note.append("（").append(epicCleared).append(" 项解除原 Epic 归属）");
+        }
+        if (docCleared > 0) {
+            note.append("（").append(docCleared).append(" 项解除原文档关联）");
+        }
+        return note.toString();
     }
 
     /** 列表行内编辑：优先级不推进状态，未关闭且仍有项目写权限即可改。 */
@@ -1282,8 +1447,8 @@ public class DemandService {
     }
 
     /**
-     * 列表行内更换所属项目：待评审 / 已通过 / 已排期且尚无执行证据的需求可迁移。
-     * 项目归属决定权限、模块和统计口径，已拆工作项 / 关联文档用例 / 有目标版本或发布记录时不允许直接迁移。
+     * 列表行内更换所属项目：待评审 / 已通过 / 已排期且未开工的需求可迁移，未开工的工作项随需求一并迁移。
+     * 文档 / 用例 / 发布记录、已绑定版本或已开工的工作项仍然阻断。
      */
     @Transactional
     public Demand move(String userId, String workspaceId, String id, DemandActionRequest body) {
@@ -1307,7 +1472,7 @@ public class DemandService {
         projectAccess.assertWriteForUpdate(workspaceId, userId, d.getReqId());
         projectAccess.assertWriteForUpdate(workspaceId, userId, targetReqId);
         requireRevision(d, body == null ? null : body.getRevision(), true);
-        assertProjectMigratable(d, workspaceId, id);
+        List<Task> linkedTasks = requireMigratableTasks(d, workspaceId, id);
         Category category = d.getCategoryId() == null ? null : categoryMapper.selectById(workspaceId, d.getCategoryId());
         boolean categoryCleared = d.getCategoryId() != null
                 && (category == null || !targetReqId.equals(category.getProjectId()));
@@ -1326,10 +1491,12 @@ public class DemandService {
             throw AppException.conflict("需求已被其他人修改，请刷新后重试");
         }
         d.setRevision(oldRevision + 1);
+        String taskNote = moveLinkedTasks(userId, workspaceId, linkedTasks, targetReqId, oldName, targetName);
         logChange(d, userId, "move", "所属项目：" + oldName + " → " + targetName
                 + (categoryCleared ? "；原分类不属于目标项目，已清空" : "")
                 + (oldNo != null && oldNo > 0
-                ? "；编号：" + Nos.demand(oldNo) + " → " + Nos.demand(d.getDemandNo()) : ""), null, before);
+                ? "；编号：" + Nos.demand(oldNo) + " → " + Nos.demand(d.getDemandNo()) : "")
+                + taskNote, null, before);
         notifyCreator(d, userId, "需求「" + d.getTitle() + "」所属项目已变更",
                 "从「" + oldName + "」移至「" + targetName + "」");
         return getVisible(workspaceId, userId, id);

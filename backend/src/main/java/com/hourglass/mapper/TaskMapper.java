@@ -197,6 +197,13 @@ public interface TaskMapper {
     List<Task> selectTasksByDemandForScope(@Param("workspaceId") String workspaceId,
                                          @Param("demandId") String demandId);
 
+    /**
+     * 需求迁移前的工作项执行证据：版本绑定 / 用例关联 / 工时 / 人工发布标记。
+     * 只查有证据的任务，返回 (taskId, reason) 行；同一任务多条时由调用方按优先级取第一条。
+     */
+    List<com.hourglass.dto.TaskMoveBlocker> selectMoveBlockers(@Param("workspaceId") String workspaceId,
+                                                              @Param("taskIds") List<String> taskIds);
+
     /** 不可变发布尝试，包括失败记录；空间覆盖/清空必须保留。 */
     List<String> selectReleaseIdsForScope(@Param("workspaceId") String workspaceId);
 

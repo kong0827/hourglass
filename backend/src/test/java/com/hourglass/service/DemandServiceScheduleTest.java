@@ -59,6 +59,7 @@ class DemandServiceScheduleTest {
             deletionTrace, numberSeq, mock(DemandWatchService.class));
     private final com.hourglass.mapper.ReleaseMapper releases = mock(com.hourglass.mapper.ReleaseMapper.class);
     private final com.hourglass.mapper.VersionTaskMapper bindings = mock(com.hourglass.mapper.VersionTaskMapper.class);
+    private final TaskAuditLogger taskAudit = mock(TaskAuditLogger.class);
     private final TaskPublicationService publications = new TaskPublicationService(tasks, releases,
             mock(com.hourglass.mapper.TaskLogMapper.class), lock, permissions, new ObjectMapper(),
             mock(com.hourglass.mapper.TaskPublicationJudgementMapper.class));
@@ -75,6 +76,7 @@ class DemandServiceScheduleTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "caseTaskMapper",
                 mock(com.hourglass.mapper.TestCaseTaskMapper.class));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "demandCommentMapper", demandComments);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "taskAudit", taskAudit);
         lenient().when(demands.selectDetail(any(), anyString()))
                 .thenAnswer(inv -> demands.selectById(inv.getArgument(1)));
         lenient().when(projects.selectByIdForUpdate(anyString(), anyString()))
@@ -1078,6 +1080,161 @@ class DemandServiceScheduleTest {
         assertEquals(400, assertThrows(AppException.class,
                 () -> service.move("U1", "W1", "D1", body)).getCode());
         verify(demands, never()).updateProject(any());
+    }
+
+    @Test
+    void moveCascadesUnstartedTasksWithRenumberAndCleanup() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        target.setName("目标项目");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(demands.updateProject(any(Demand.class))).thenReturn(1);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(9);
+        Task t1 = movableTask("T1", "C1");
+        t1.setReqDocId("DOC1");
+        Task t2 = movableTask("T2", "C2");
+        Task t3 = movableTask("T3", "");
+        t3.setEpicId("E9");
+        when(tasks.selectTasksByDemandForScope("W1", "D1"))
+                .thenReturn(java.util.Arrays.asList(t1, t2, t3));
+        when(tasks.selectMoveBlockers(eq("W1"), anyList())).thenReturn(Collections.emptyList());
+        when(tasks.selectNextItemNo("W1", "R2")).thenReturn(7, 8, 9);
+        when(tasks.update(any(Task.class))).thenReturn(1);
+        Category sourceCat = new Category();
+        sourceCat.setId("C1");
+        sourceCat.setProjectId("R1");
+        Category targetCat = new Category();
+        targetCat.setId("C2");
+        targetCat.setProjectId("R2");
+        when(categories.selectById("W1", "C1")).thenReturn(sourceCat);
+        when(categories.selectById("W1", "C2")).thenReturn(targetCat);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        service.move("U1", "W1", "D1", body);
+
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks, times(3)).update(saved.capture());
+        assertTrue(saved.getAllValues().stream().allMatch(t -> "R2".equals(t.getReqId())));
+        assertEquals(7, saved.getAllValues().get(0).getItemNo());
+        assertEquals(8, saved.getAllValues().get(1).getItemNo());
+        assertEquals(9, saved.getAllValues().get(2).getItemNo());
+        /* 分类属于源项目：清空；属于目标项目：保留 */
+        assertEquals("", saved.getAllValues().get(0).getCategoryId());
+        assertEquals("C2", saved.getAllValues().get(1).getCategoryId());
+        /* 跨项目的 Epic 归属与文档引用按单条工作项换项目同一语义解除 */
+        assertNull(saved.getAllValues().get(2).getEpicId());
+        assertNull(saved.getAllValues().get(0).getReqDocId());
+        verify(taskAudit, times(3)).log(eq("U1"), eq("W1"), anyString(), eq("update"), anyString());
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("move"), contains("随迁 3 项工作项"), eq("U1"),
+                anyString());
+    }
+
+    @Test
+    void moveRejectsStartedTaskWithSpecificReason() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        Task started = movableTask("T1", "");
+        started.setTitle("接口改造");
+        started.setBoardColumn("doing");
+        when(tasks.selectTasksByDemandForScope("W1", "D1")).thenReturn(Collections.singletonList(started));
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        AppException ex = assertThrows(AppException.class, () -> service.move("U1", "W1", "D1", body));
+
+        assertEquals(400, ex.getCode());
+        assertTrue(ex.getMessage().contains("接口改造"));
+        assertTrue(ex.getMessage().contains("已进入执行"));
+        verify(demands, never()).updateProject(any());
+    }
+
+    @Test
+    void moveRejectsTaskWithVersionBinding() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(tasks.selectTasksByDemandForScope("W1", "D1"))
+                .thenReturn(Collections.singletonList(movableTask("T1", "")));
+        com.hourglass.dto.TaskMoveBlocker blocker = new com.hourglass.dto.TaskMoveBlocker();
+        blocker.setTaskId("T1");
+        blocker.setReason(com.hourglass.dto.TaskMoveBlocker.VERSION);
+        when(tasks.selectMoveBlockers(eq("W1"), anyList())).thenReturn(Collections.singletonList(blocker));
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        AppException ex = assertThrows(AppException.class, () -> service.move("U1", "W1", "D1", body));
+
+        assertTrue(ex.getMessage().contains("已绑定版本"));
+        verify(tasks, never()).update(any(Task.class));
+    }
+
+    @Test
+    void moveMigratesTaskFromTrashWithoutBlocking() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(demands.updateProject(any(Demand.class))).thenReturn(1);
+        when(numberSeq.nextDemand("W1", "R2")).thenReturn(9);
+        Task trashed = movableTask("T1", "");
+        trashed.setBoardColumn("done");
+        trashed.setDeletedAt(LocalDateTime.of(2026, 11, 1, 9, 0));
+        when(tasks.selectTasksByDemandForScope("W1", "D1")).thenReturn(Collections.singletonList(trashed));
+        when(tasks.selectNextItemNo("W1", "R2")).thenReturn(7);
+        when(tasks.update(any(Task.class))).thenReturn(1);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        service.move("U1", "W1", "D1", body);
+
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).update(saved.capture());
+        assertEquals("R2", saved.getValue().getReqId());
+        verify(tasks, never()).selectMoveBlockers(anyString(), anyList());
+    }
+
+    @Test
+    void moveRejectsEpicThatStillHasChildrenOutsideMoveSet() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        Task epic = movableTask("E1", "");
+        epic.setItemType("epic");
+        when(tasks.selectTasksByDemandForScope("W1", "D1")).thenReturn(Collections.singletonList(epic));
+        when(tasks.selectEpicChildIdsForScope("W1", "E1")).thenReturn(Collections.singletonList("CHILD"));
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        AppException ex = assertThrows(AppException.class, () -> service.move("U1", "W1", "D1", body));
+
+        assertTrue(ex.getMessage().contains("史诗仍有其他子任务"));
+        verify(demands, never()).updateProject(any());
+    }
+
+    private Task movableTask(String id, String categoryId) {
+        Task t = new Task();
+        t.setId(id);
+        t.setWorkspaceId("W1");
+        t.setTitle("工作项" + id);
+        t.setBoardColumn("backlog");
+        t.setCategoryId(categoryId);
+        return t;
     }
 
     @Test

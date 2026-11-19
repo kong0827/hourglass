@@ -2850,7 +2850,7 @@ function openDemandDialog(d){
     reqHint.hidden = true;
     if(d && canMove){
       reqHint.hidden = false;
-      reqHint.textContent = "更换后按目标项目重排需求编号；已关联工作项、文档、用例或发布记录的需求不能迁移";
+      reqHint.textContent = "更换后按目标项目重排需求编号；未开工的工作项会一并迁移，已开工或关联文档、用例、发布记录的需求不能迁移";
     }else if(d && d.versionId){
       reqHint.hidden = false;
       reqHint.textContent = "该需求已排入版本，撤销排期后才能更换所属项目";

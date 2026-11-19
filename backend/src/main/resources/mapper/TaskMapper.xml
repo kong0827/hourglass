@@ -224,6 +224,31 @@
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} ORDER BY id FOR UPDATE
   </select>
 
+  <!-- 需求迁移前的工作项执行证据：一条 UNION 行 = 某工作项存在某类证据；优先级在 Java 侧取 -->
+  <select id="selectMoveBlockers" resultType="com.hourglass.dto.TaskMoveBlocker">
+    SELECT task_id AS taskId, 'version' AS reason FROM version_task
+    WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    UNION ALL
+    SELECT task_id AS taskId, 'version' AS reason FROM version_commitment_task
+    WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    UNION ALL
+    SELECT task_id AS taskId, 'case' AS reason FROM test_case_task
+    WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    UNION ALL
+    SELECT task_id AS taskId, 'time' AS reason FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    UNION ALL
+    SELECT id AS taskId, 'publish' AS reason FROM task
+    WHERE workspace_id = #{workspaceId}
+      AND (published_release_id IS NOT NULL OR publish_source IS NOT NULL OR published_at IS NOT NULL)
+      AND id IN
+    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
   <!-- 发布失败也是不可变历史；计划（包括空草稿）与日志不在备份恢复边界内。 -->
   <select id="selectReleaseIdsForScope" resultType="string">
     SELECT id FROM version_release WHERE workspace_id = #{workspaceId} ORDER BY id FOR UPDATE
