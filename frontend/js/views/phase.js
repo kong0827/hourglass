@@ -11,7 +11,7 @@ import { showView } from "../core/router.js";
 import { canEditReq, projectOptionsHTML, projectRefsEnriched, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { assocLinkHTML, normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, releasePlanNoText, COLUMNS, colName, dayKey, dayDiff, parseDate, fmtMinute, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso, VERSION_STATUS_META, PLAN_STATUS_META, versionStatusTagHTML, planStatusTagHTML, planStatusName } from "../lib/format.js";
+import { assocLinkHTML, normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, taskHref, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, releasePlanNoText, COLUMNS, colName, dayKey, dayDiff, parseDate, fmtMinute, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso, VERSION_STATUS_META, PLAN_STATUS_META, versionStatusTagHTML, planStatusTagHTML, planStatusName } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 import { branchMetaById, branchNameById, loadBranches, openBranchById, requestBranchStatus } from "./branches.js";
 import { openDemandDetailById, openDemandVersionBackfill } from "./demands.js";
@@ -2971,7 +2971,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       var sel = g.rows.filter(function(t){ return ids.indexOf(t.id) !== -1; }).length;
       var rows = g.rows.map(function(t){
         var allowed = prefix !== "actual" || actualDraft.operation !== "rollback" || (ref && recordTaskIds(ref).indexOf(t.id) !== -1);
-        return '<label class="version-task-row release-task-row" data-task-row data-task-id="' + esc(t.id) + '" data-task-title="' + esc(String(t.title || "").toLowerCase()) + '" data-task-state="' + (t.boardColumn === "done" ? "done" : "open") + '" data-task-published="' + (taskIsPublished(t) ? "1" : "0") + '"><input type="checkbox" data-' + prefix + '-task="' + esc(t.id) + '"' + (ids.indexOf(t.id) !== -1 ? ' checked' : '') + (disabled || !allowed ? ' disabled' : '') + '><span><span class="version-task-title"><b>' + esc(t.title) + '</b>' + taskPublicationHTML(t) + '</span><small>' + esc(colName(t.boardColumn)) + ' · 完成 ' + esc(fmtReleaseTime(t.completedAt)) + ' · 版本 ' + esc(taskVersionsText(t) || "待规划") + '</small></span></label>';
+        return '<label class="version-task-row release-task-row" data-task-row data-task-id="' + esc(t.id) + '" data-task-title="' + esc(String(t.title || "").toLowerCase()) + '" data-task-state="' + (t.boardColumn === "done" ? "done" : "open") + '" data-task-published="' + (taskIsPublished(t) ? "1" : "0") + '"><input type="checkbox" data-' + prefix + '-task="' + esc(t.id) + '"' + (ids.indexOf(t.id) !== -1 ? ' checked' : '') + (disabled || !allowed ? ' disabled' : '') + '><span><span class="version-task-title"><a class="task-picker-link" href="' + esc(taskHref(t.id)) + '" data-task-link="' + esc(t.id) + '" title="打开工作项详情；Ctrl / ⌘ 点击在新标签页打开"><b>' + esc(t.title) + '</b></a>' + taskPublicationHTML(t) + '</span><small>' + esc(colName(t.boardColumn)) + ' · 完成 ' + esc(fmtReleaseTime(t.completedAt)) + ' · 版本 ' + esc(taskVersionsText(t) || "待规划") + '</small></span></label>';
       }).join("");
       return '<section class="release-task-group' + (g.key ? "" : " is-flat") + (collapsed ? " is-collapsed" : "") + '" data-task-group="' + esc(g.key) + '">'
         + (g.key ? '<div class="release-task-group-head">'
@@ -3870,7 +3870,7 @@ export function mountReleaseWorkspace(pageHost, opts){
         + '<p class="release-error" data-actual-error role="alert"></p><div class="release-preview-row"><button class="btn sm" data-release-preview type="button">预览本次范围与预检结果</button><span class="hint">预览通过后，才能在本页右侧「就绪条件」里记录发布。</span></div><div data-release-scope><p class="hint">尚未预览</p></div></section>' + readinessCardHTML() + '</div>' : '';
     var historySection = '<section class="release-section"><h3>发布历史</h3><div class="row row-gap"><select data-history-result aria-label="历史结果">' + options([["", "全部结果"], ["published", "已发布（生产成功，不含回滚）"], ["success", "全部成功（含测试 / 回滚）"], ["failed", "失败"]], filters.result) + '</select><select data-history-environment aria-label="历史环境">' + options([["", "全部环境"]].concat(envs), filters.environment) + '</select><select data-history-operation aria-label="历史操作">' + options([["", "全部操作"], ["deploy", "部署"], ["publish", "发布"], ["redeploy", "重部署"], ["rollback", "回滚"]], filters.operation) + '</select></div><div data-release-record-list></div><div class="row row-gap"><button class="btn sm" data-history-prev type="button">上一页</button><span class="hint" data-history-count></span><button class="btn sm" data-history-next type="button">下一页</button></div></section>';
     var versionLogSection = '<section class="release-section"><h3>版本操作记录</h3><p class="hint">创建、编辑、开始、关闭 / 取消与范围调整的留痕；与上面的正式发布记录分开，后者只记真实部署事实。</p><div data-version-log><p class="hint">加载中…</p></div></section>';
-    var contentSection = '<section class="release-section"><h3>版本内容</h3><p class="hint">目标就绪日：' + esc(v.targetDate || "未设置") + '。版本内容不等于计划范围，更不等于实际发布范围。' + (versionContentLocked(v) ? '已有成功正式发布，内容范围只读；可创建新计划和独立事件。' : '') + '</p><ul class="release-scope">' + contentTasks.map(function(t){ return '<li>' + esc(t.title) + ' · ' + esc(colName(t.boardColumn)) + ' ' + taskPublicationHTML(t) + '</li>'; }).join('') + '</ul></section>';
+    var contentSection = '<section class="release-section"><h3>版本内容</h3><p class="hint">目标就绪日：' + esc(v.targetDate || "未设置") + '。版本内容不等于计划范围，更不等于实际发布范围。' + (versionContentLocked(v) ? '已有成功正式发布，内容范围只读；可创建新计划和独立事件。' : '') + '</p><ul class="release-scope">' + contentTasks.map(function(t){ return '<li><a class="snap-link" href="' + esc(taskHref(t.id)) + '" data-task-link="' + esc(t.id) + '" title="打开工作项详情；Ctrl / ⌘ 点击在新标签页打开">' + esc(t.title) + '</a> · ' + esc(colName(t.boardColumn)) + ' ' + taskPublicationHTML(t) + '</li>'; }).join('') + '</ul></section>';
     var banner = planJustSaved ? '<div class="release-next" data-release-next><span>计划已保存' + (planSavedRevision != null ? '（修订 ' + esc(planSavedRevision) + '）' : '') + '。下一步：记录本次实际发布。</span><button class="btn sm primary" type="button" data-release-goto-actual>去记录实际发布</button></div>' : '';
     dlg.body.innerHTML = '<p class="release-error" data-release-error role="alert"></p>'
       + stepsHTML()
@@ -3965,7 +3965,7 @@ export function mountReleaseWorkspace(pageHost, opts){
         function scopeTask(tid){
           var excluded = (rs.excluded || []).find(function(x){ return ((x.task || {}).id || x.taskId) === tid; });
           var t = tasks.find(function(t){ return t.id === tid; }) || (excluded || {}).task || {};
-          return '<li>' + esc(t.title || tid) + ' · ' + esc(colName(t.boardColumn || "snapshot")) + ' · 完成 ' + esc(fmtReleaseTime(t.completedAt)) + '</li>';
+          return '<li><a class="snap-link" href="' + esc(taskHref(tid)) + '" data-task-link="' + esc(tid) + '" title="打开工作项详情；Ctrl / ⌘ 点击在新标签页打开">' + esc(t.title || tid) + '</a> · ' + esc(colName(t.boardColumn || "snapshot")) + ' · 完成 ' + esc(fmtReleaseTime(t.completedAt)) + '</li>';
         }
         layer.querySelector('[data-release-scope]').innerHTML = '<h4>本次明确选择 ' + b.actualTaskIds.length + ' 项 · 计划未选入 ' + omittedIds.length + ' 项</h4><p class="hint">预检不改写实际选择；事实异常需理由。环境 ' + esc(releaseEnvironmentName(b.environment)) + ' · 目标 ' + esc(b.targetKeys.join('、')) + ' · ' + esc(fmtReleaseTime(b.occurredAt)) + '</p>'
           + '<h4>明确实际范围（selected）</h4><ul class="release-scope">' + b.actualTaskIds.map(scopeTask).join('') + '</ul>'
@@ -4427,7 +4427,7 @@ function openVersionTasks(id, fresh, preset){
       + ' data-task-published="' + (taskIsPublished(t) ? "1" : "0") + '"'
       + ' data-task-title="' + esc(String(t.title || "").toLowerCase()) + '" data-task-meta="' + esc(String(t.owner || "").toLowerCase()) + '">'
       + '<input type="checkbox" data-version-task-check="' + esc(t.id) + '"' + (selected[t.id] ? " checked" : "") + ' />'
-      + '<span class="version-task-main"><span class="version-task-title"><b>' + esc(t.title) + '</b>' + taskPublicationHTML(t) + '</span>'
+      + '<span class="version-task-main"><span class="version-task-title"><a class="task-picker-link" href="' + esc(taskHref(t.id)) + '" data-task-link="' + esc(t.id) + '" title="打开工作项详情；Ctrl / ⌘ 点击在新标签页打开"><b>' + esc(t.title) + '</b></a>' + taskPublicationHTML(t) + '</span>'
       + '<small>' + esc(meta)
       + (bound.length ? ' · 其他关联：' + esc(bound.map(function(vid){ return versionNames[vid] || vid; }).join('、')) : "") + '</small></span></label>';
   }
@@ -4646,7 +4646,7 @@ function openUnboundTasks(){
         + (t.boardColumn === "done" ? "已完成" : colName(t.boardColumn))
         + (brName ? " · 分支 " + brName : "");
       return '<label class="version-task-row"><input type="checkbox" data-unbound-check="' + esc(t.id) + '"'
-        + (selected[t.id] ? " checked" : "") + ' /><span class="version-task-main"><span class="version-task-title"><b>' + esc(t.title) + '</b>' + taskPublicationHTML(t) + '</span>'
+        + (selected[t.id] ? " checked" : "") + ' /><span class="version-task-main"><span class="version-task-title"><a class="task-picker-link" href="' + esc(taskHref(t.id)) + '" data-task-link="' + esc(t.id) + '" title="打开工作项详情；Ctrl / ⌘ 点击在新标签页打开"><b>' + esc(t.title) + '</b></a>' + taskPublicationHTML(t) + '</span>'
         + '<small>' + esc(meta) + '</small></span></label>';
     }).join("") : '<div class="tl-empty">没有匹配的工作项</div>';
   }

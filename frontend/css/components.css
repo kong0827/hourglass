@@ -96,9 +96,13 @@
 .link-btn:hover{background:var(--primary-soft);text-decoration:underline;}
 .link-btn:focus-visible{outline:none;box-shadow:var(--ring-focus);}
 /* 发布快照表格里的实体引用：看起来像普通文字，悬停才显链接 affordance，可点跳转 */
-.snap-link{display:inline;text-align:left;color:var(--text);line-height:1.45;border-radius:var(--r-xs);}
+.snap-link{display:inline;text-align:left;color:var(--text);line-height:1.45;border-radius:var(--r-xs);text-decoration:none;}
 .snap-link:hover{color:var(--primary-fg);text-decoration:underline;}
 .snap-link:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+/* 选择列表里的工作项标题也是链接：点标题开详情，勾选仍走前面的复选框 / 本行空白处 */
+a.task-picker-link{display:block;min-width:0;color:inherit;text-decoration:none;border-radius:var(--r-xs);}
+a.task-picker-link:hover b{color:var(--primary-fg);text-decoration:underline;}
+a.task-picker-link:focus-visible{outline:none;box-shadow:var(--ring-focus);}
 /* 高频视图里的关联跳转（项目/版本/分支/需求/用例/文档）：融入所在单元格文字，点状下划线提示可点，
    悬停变主色实线；与 chip 组合时不画下划线，保持标签外观。焦点环复用全局无障碍样式。 */
 .assoc-link{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;text-align:left;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;border-radius:var(--r-xs);}

@@ -605,6 +605,16 @@ document.addEventListener("click", function(e){
   if(demandId){ import("../views/demands.js").then(function(m){ m.openDemandDetailById(demandId); }).catch(function(){}); }
 });
 
+/* 工作项链接（a[data-task-link]）：href 是真的深链，可复制、右键、Ctrl / ⌘ 或中键在新标签页打开；
+   普通左键与回车仍留当前页开抽屉，不把视图跳走。 */
+document.addEventListener("click", function(e){
+  var a = e.target.closest ? e.target.closest("a[data-task-link]") : null;
+  if(!a) return;
+  if(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+  e.preventDefault();
+  openTaskById(a.getAttribute("data-task-link"));
+});
+
 /* 高频视图关联纯文本的统一接线：data-jump-* 专用属性 + 捕获阶段全局委托。
    捕获阶段先于各视图「行点击开抽屉/下钻」的冒泡委托命中，stopPropagation 防止误开抽屉或误下钻；
    跳转全部复用现成 open* 助手（懒加载模块，避免循环依赖与首屏负担）。按钮原生支持回车/空格。 */

@@ -298,12 +298,16 @@ function releaseEvidenceHTML(record){
       + '<p class="hint">分组间成员可重叠，条数不能相加当总数；指定成员 / 仅自己可见的分组不进证据。</p>' : "")
     + '</div>';
 }
+/* 工作项深链：相对 hash，不绑 origin / 部署路径，复制到地址栏或新标签页都能定位 */
+function taskHref(id){
+  return "#/board?task=" + encodeURIComponent(id);
+}
 function releaseSnapshotHTML(record, taskId){
   var items = (record.items || []).filter(function(item){ return !taskId || item.taskId === taskId; });
   var rows = items.map(function(item){
     var taskCell = esc(itemNoText(item.taskItemNo) || item.taskId || "") + '<br>' + esc(item.title || "—");
     if(!taskId && item.taskId){
-      taskCell = '<button type="button" class="snap-link" data-snap-task="' + esc(item.taskId) + '" title="打开工作项详情">' + taskCell + '</button>';
+      taskCell = '<a class="snap-link" href="' + esc(taskHref(item.taskId)) + '" data-task-link="' + esc(item.taskId) + '" title="打开工作项详情；Ctrl / ⌘ 点击在新标签页打开">' + taskCell + '</a>';
     }
     var demandCell = esc(demandNoText(item.demandNo) || item.demandId || "") + '<br>' + esc(item.demandTitle || "—");
     if(item.demandId){
@@ -528,4 +532,4 @@ function taskDescText(desc, maxLen){
   return text;
 }
 
-export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, assocLinkHTML, taskVersionLinksHTML, sameIds, selectedVersionIds, taskPublicationHTML, taskPublicationText, taskIsPublished, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, VERSION_STATUS_META, PLAN_STATUS_META, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, dayKey, duePresetDate, elapsedText, spanText, fmtElapsed, fmtFull, fmtMD, fmtMinute, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, planStatusName, planStatusTagHTML, planStatusTone, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, versionStatusName, versionStatusTagHTML, versionStatusTone, weekdayCN };
+export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, assocLinkHTML, taskVersionLinksHTML, sameIds, selectedVersionIds, taskPublicationHTML, taskPublicationText, taskIsPublished, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, taskHref, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, VERSION_STATUS_META, PLAN_STATUS_META, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, dayKey, duePresetDate, elapsedText, spanText, fmtElapsed, fmtFull, fmtMD, fmtMinute, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, planStatusName, planStatusTagHTML, planStatusTone, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, versionStatusName, versionStatusTagHTML, versionStatusTone, weekdayCN };

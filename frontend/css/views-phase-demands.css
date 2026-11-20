@@ -307,7 +307,7 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 
 /* ===== 发布工作台子页（#/release）：原来 960 弹框里的四个工作面回到页面 ===== */
 /* 横向留白交给 .view（桌面 24 / 手机 16），这里只管纵向，免得和手机底栏留白叠加 */
-.release-page{display:flex;flex-direction:column;gap:14px;padding:var(--space-3) 0 20px;max-width:1180px;margin:0 auto;width:100%;min-width:0;}
+.release-page{display:flex;flex-direction:column;gap:14px;padding:var(--space-3) 0 20px;max-width:2000px;margin:0 auto;width:100%;min-width:0;}
 .release-page-bar{padding:0 0 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 .release-page-bar .toolbar-meta b{font-weight:650;color:var(--text);}
 
@@ -451,7 +451,10 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .release-version-item:hover{border-color:var(--primary);background:var(--primary-soft);}
 .release-version-item b{font-size:14px;font-weight:600;color:var(--text);}
 .release-version-item small{font-size:12px;color:var(--text-3);}
-.release-version-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;max-height:min(38dvh,320px);overflow:auto;padding:2px;}
+.release-version-picker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;max-height:min(38dvh,320px);overflow:auto;padding:2px;}
+/* 固定列数比 auto-fit 稳定：宽屏把余量分给各项目组，不把尾格与空白甩在右侧 */
+@media (max-width:1439px){.release-version-picker{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media (max-width:1099px){.release-version-picker{grid-template-columns:repeat(2,minmax(0,1fr));}}
 /* 搜索条横跨整行并吸顶：项目组按列排布，滚动时仍能改搜索词 */
 .release-version-tools{grid-column:1/-1;position:sticky;top:-2px;z-index:3;display:flex;align-items:center;gap:10px;padding:var(--space-1) 2px 8px;background:var(--surface);}
 .release-version-tools input[type="search"]{flex:1 1 auto;min-width:0;}
