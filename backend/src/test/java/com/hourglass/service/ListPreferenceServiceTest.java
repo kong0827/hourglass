@@ -74,6 +74,15 @@ class ListPreferenceServiceTest {
     }
 
     @Test
+    void saveAcceptsDemandColumnForTaskList() {
+        ListPreferenceResponse result = service.save("U1", "W1", "task-list",
+                request("table", Arrays.asList("title", "project", "demand")));
+
+        assertEquals(Arrays.asList("title", "project", "demand"), result.getColumns());
+        verify(mapper).upsert(org.mockito.ArgumentMatchers.any(UserListPreference.class));
+    }
+
+    @Test
     void saveAcceptsEveryProjectWhitelistColumnInCardMode() {
         List<String> columns = Arrays.asList("name", "status", "description", "taskCount", "doneCount",
                 "progress", "docCount", "firstReleasedAt", "createdAt", "updatedAt");
@@ -118,13 +127,13 @@ class ListPreferenceServiceTest {
     @Test
     void rejectsTooManyColumnsBeforeWriting() {
         List<String> columns = new ArrayList<String>(Collections.singletonList("title"));
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 17; i++) {
             columns.add("extra" + i);
         }
 
         AppException error = assertBadRequest(() -> service.save("U1", "W1", "task-list", request("table", columns)));
 
-        assertTrue(error.getMessage().contains("最多 16 列"));
+        assertTrue(error.getMessage().contains("最多 17 列"));
         verify(mapper, never()).upsert(org.mockito.ArgumentMatchers.any(UserListPreference.class));
     }
 
