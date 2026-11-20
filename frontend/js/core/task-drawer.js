@@ -5,6 +5,7 @@ import { openAttPreview, previewable, kindOf } from "./att-preview.js";
 import { bindFileDrop, validateFiles, reportRejected, uploadAttachment } from "./attach-kit.js";
 import { attachCombo } from "./combo.js";
 import { attachEnvDict, recordEnv } from "./env-dict.js";
+import { shrinkImageFile, fitInsertedImage, notifyResizeHint } from "./img-fit.js";
 import { companyChipHTML, companyNameOf, companyColor } from "../lib/company.js";
 import { loadProjectMembers, peekProjectMembers, memberRoleTitles, effectiveMemberRole, taskMemberLabel } from "../lib/member-labels.js";
 import { openPeoplePicker, optionSubText } from "../lib/people-picker.js";
@@ -681,6 +682,12 @@ function ensureTaskDescEditor(){
     /* SunEditor 的上传钩子挂在实例上，创建后再赋值；写进 options 不会生效。
        粘贴图片与工具栏选图都走这里，避免默认塞 base64。 */
     taskDescEditor.onImageUploadBefore = uploadTaskDescImage;
+    taskDescEditor.onImageUpload = function(targetImg){
+      var host = $("iDesc");
+      fitInsertedImage(targetImg, host && host.parentElement
+        ? host.parentElement.querySelector(".sun-editor-editable") : null);
+      notifyResizeHint();
+    };
     taskDescEditor.onChange = function(){ if(taskDescSuppressChange) return; rt.formDirty = true; };
     syncTaskDescEditorReadOnly();
     if(pendingTaskDesc !== null){
@@ -733,27 +740,31 @@ function uploadTaskDescImage(files, info, core, uploadHandler){
   if(!f) return false;
   if(!rt.editingId){ toast("请先保存工作项，再上传描述图片", "warn"); return false; }
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return false; }
-  if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return false; }
-  var fd = new FormData();
-  fd.append("file", f);
-  var url = API.url("/api/tasks/" + encodeURIComponent(rt.editingId) + "/description-images" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
-  fetch(url, {
-    method:"POST",
-    credentials:"same-origin",
-    headers:{ "X-XSRF-TOKEN": csrfCookie() },
-    body: fd
-  }).then(function(res){
-    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
-    return res.json().catch(function(){ return null; });
-  }).then(function(json){
-    if(json && json.code === 0 && json.data && json.data.url){
-      uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
-    }else{
-      toast((json && json.message) || "图片上传失败", "bad");
-    }
-  }).catch(function(ex){
-    toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+  /* 先降采样再校验体积：超限大图缩到 1600 后多数能过 3MB，不必直接拒绝 */
+  shrinkImageFile(f).then(function(shrunk){
+    f = shrunk;
+    if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return; }
+    var fd = new FormData();
+    fd.append("file", f);
+    var url = API.url("/api/tasks/" + encodeURIComponent(rt.editingId) + "/description-images" +
+      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+    return fetch(url, {
+      method:"POST",
+      credentials:"same-origin",
+      headers:{ "X-XSRF-TOKEN": csrfCookie() },
+      body: fd
+    }).then(function(res){
+      if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+      return res.json().catch(function(){ return null; });
+    }).then(function(json){
+      if(json && json.code === 0 && json.data && json.data.url){
+        uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
+      }else{
+        toast((json && json.message) || "图片上传失败", "bad");
+      }
+    }).catch(function(ex){
+      toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+    });
   });
 }
 
@@ -5082,6 +5093,15 @@ var readDescBox = $("readDesc");
 if(readDescBox){
   readDescBox.addEventListener("click", function(e){
     if(readDescBox.isContentEditable) return;
+    var img = e.target.closest("img");
+    if(img){
+      var m = String(img.getAttribute("src") || "").match(/\/api\/attachments\/([A-Za-z0-9_-]+)\/(?:download|thumb|preview)/);
+      if(m){
+        e.preventDefault();
+        openAttPreview({ attachment: { id: m[1], filename: img.getAttribute("alt") || "描述图片" } });
+        return;
+      }
+    }
     if(e.target.closest("a")) return;
     startTaskTextEdit(readDescBox, "desc");
   });

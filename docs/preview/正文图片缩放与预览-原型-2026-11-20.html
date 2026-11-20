@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正文图片缩放与预览 · 原型 2026-11-20</title>
+<style>
+  :root{
+    --primary:#3370ff; --primary-w:rgba(51,112,255,.12); --primary-w2:rgba(51,112,255,.06);
+    --bg:#f5f6f8; --surface:#ffffff; --surface-2:#f7f8fa;
+    --text:#1f2329; --text-2:#5c6370; --text-3:#8f959e;
+    --border:#e5e6eb; --border-2:#d0d3d9;
+    --ok:#389e0d; --warn:#d48806; --bad:#cf1322;
+    --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px;
+    --shadow:0 4px 16px rgba(31,35,41,.08),0 1px 4px rgba(31,35,41,.06);
+    --shadow-lg:0 12px 40px rgba(31,35,41,.18),0 2px 8px rgba(31,35,41,.10);
+    --paper-max:720px;
+  }
+  html[data-theme="dark"]{
+    --bg:#17181c; --surface:#1e2026; --surface-2:#24262e;
+    --text:#e8eaed; --text-2:#aab0ba; --text-3:#7c828d;
+    --border:#2e313a; --border-2:#3a3e48;
+    --primary:#5b8dff; --primary-w:rgba(91,141,255,.16); --primary-w2:rgba(91,141,255,.08);
+    --shadow:0 4px 16px rgba(0,0,0,.4),0 1px 4px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 40px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font:13px/1.7 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .2s,color .2s;}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;}
+  /* ---------- 顶栏 ---------- */
+  .topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);}
+  .topbar h1{font-size:15px;font-weight:650;white-space:nowrap;}
+  .topbar .sub{color:var(--text-3);font-size:12px;white-space:nowrap;}
+  .tabs{display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:2px;}
+  .tabs button{padding:5px 14px;border-radius:var(--r-sm);font-size:12.5px;color:var(--text-2);transition:all .15s;}
+  .tabs button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08);font-weight:600;}
+  .spacer{flex:1;}
+  .btn-ghost{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:var(--r-sm);
+    border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12.5px;}
+  .btn-ghost:hover{border-color:var(--primary);color:var(--primary);}
+  .btn-primary{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:var(--r-sm);
+    background:var(--primary);color:#fff;font-size:12.5px;font-weight:600;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  /* ---------- 舞台 ---------- */
+  .stage{max-width:1180px;margin:0 auto;padding:24px 20px 80px;}
+  .view{display:none;}
+  .view.on{display:block;}
+  .view-head{margin-bottom:14px;}
+  .view-head h2{font-size:14px;font-weight:650;}
+  .view-head p{color:var(--text-3);font-size:12.5px;margin-top:2px;}
+  .hint-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;
+    font-size:11.5px;background:var(--primary-w2);color:var(--primary);border:1px solid transparent;}
+  .chip.warn{background:rgba(212,136,6,.08);color:var(--warn);}
+  /* ---------- 编辑器纸面 ---------- */
+  .editor-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+    box-shadow:var(--shadow);overflow:hidden;}
+  .editor-toolbar{display:flex;gap:4px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);
+    background:var(--surface-2);color:var(--text-2);font-size:12px;flex-wrap:wrap;}
+  .tb-btn{padding:3px 9px;border-radius:var(--r-xs);}
+  .tb-btn:hover{background:var(--primary-w2);color:var(--primary);}
+  .tb-sep{width:1px;height:14px;background:var(--border);margin:0 4px;}
+  .paper{max-width:var(--paper-max);margin:28px auto;min-height:340px;padding:0 8px;}
+  @media(max-width:800px){ .paper{margin:16px 8px;} }
+  .paper h3{font-size:16px;font-weight:650;margin-bottom:10px;}
+  .paper p{font-size:13.5px;color:var(--text);margin-bottom:12px;line-height:1.9;}
+  .paper .cap{font-size:11.5px;color:var(--text-3);text-align:center;margin-top:6px;}
+  /* ---------- 图片通用 ---------- */
+  .fig{position:relative;display:block;text-align:center;margin:4px 0 14px;}
+  .fig img{max-width:100%;height:auto;border-radius:var(--r-xs);display:block;margin:0 auto;
+    outline-offset:3px;user-select:none;-webkit-user-drag:none;}
+  /* 改造前：图片顶满、无任何提示 */
+  .legacy .fig img{width:100%!important;height:auto!important;cursor:default;}
+  .legacy .fig{border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface-2);padding:10px;}
+  /* 选中态：虚线 + 四角圆点（对齐 SunEditor 手柄观感，仅示意四角可拖） */
+  .fig.sel img{outline:1.5px dashed var(--primary);}
+  .handle{position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;border:1.5px solid var(--primary);
+    display:none;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,.15);}
+  .fig.sel .handle{display:block;}
+  .h-tl{left:-4px;top:-4px;cursor:nwse-resize;}
+  .h-tr{right:-4px;top:-4px;cursor:nesw-resize;}
+  .h-bl{left:-4px;bottom:-4px;cursor:nesw-resize;}
+  .h-br{right:-4px;bottom:-4px;cursor:nwse-resize;}
+  .h-tm{left:50%;top:-4.5px;transform:translateX(-50%);cursor:ns-resize;width:12px;height:5px;border-radius:2px;}
+  .h-bm{left:50%;bottom:-4.5px;transform:translateX(-50%);cursor:ns-resize;width:12px;height:5px;border-radius:2px;}
+  .h-lm{left:-4.5px;top:50%;transform:translateY(-50%);cursor:ew-resize;width:5px;height:12px;border-radius:2px;}
+  .h-rm{right:-4.5px;top:50%;transform:translateY(-50%);cursor:ew-resize;width:5px;height:12px;border-radius:2px;}
+  /* 浮动尺寸/预设条 */
+  .size-bar{position:absolute;left:50%;top:-38px;transform:translateX(-50%);display:none;z-index:4;
+    align-items:center;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+    box-shadow:var(--shadow);padding:3px 4px;white-space:nowrap;}
+  .fig.sel .size-bar{display:flex;}
+  .size-bar .sz{font-size:11px;color:var(--text-3);padding:0 8px 0 6px;font-variant-numeric:tabular-nums;border-right:1px solid var(--border);margin-right:2px;}
+  .size-bar button{padding:2px 8px;border-radius:var(--r-xs);font-size:11.5px;color:var(--text-2);}
+  .size-bar button:hover{background:var(--primary-w2);color:var(--primary);}
+  .size-bar button.on{background:var(--primary-w);color:var(--primary);font-weight:600;}
+  /* ---------- 阅读态 ---------- */
+  .reader-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;}
+  .reader-head{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+  .reader-head .t{font-weight:650;font-size:14px;}
+  .reader-head .meta{color:var(--text-3);font-size:12px;}
+  .reader-body{max-width:var(--paper-max);margin:0 auto;padding:28px 8px 36px;}
+  .reader-body p{font-size:13.5px;line-height:1.9;margin-bottom:14px;}
+  .reader-body .fig img{cursor:zoom-in;transition:filter .15s;}
+  .reader-body .fig img:hover{filter:brightness(.96);}
+  .zoom-tip{position:absolute;right:10px;top:10px;display:none;align-items:center;gap:5px;
+    padding:3px 9px;border-radius:999px;background:rgba(31,35,41,.62);color:#fff;font-size:11px;}
+  .reader-body .fig:hover .zoom-tip{display:inline-flex;}
+  /* ---------- 灯箱 ---------- */
+  .lightbox{position:fixed;inset:0;z-index:100;display:none;flex-direction:column;
+    background:rgba(15,17,20,.88);backdrop-filter:blur(2px);}
+  .lightbox.on{display:flex;}
+  .lb-head{display:flex;align-items:center;gap:8px;padding:12px 16px;color:#e8eaed;}
+  .lb-head .name{font-size:13px;font-weight:600;}
+  .lb-head .spacer{flex:1;}
+  .lb-tool{display:inline-flex;align-items:center;gap:2px;background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:3px;}
+  .lb-tool button{color:#e8eaed;padding:4px 10px;border-radius:var(--r-sm);font-size:12.5px;display:inline-flex;align-items:center;gap:5px;}
+  .lb-tool button:hover{background:rgba(255,255,255,.14);}
+  .lb-tool .pct{min-width:46px;text-align:center;font-variant-numeric:tabular-nums;color:#c9cdd4;font-size:12px;}
+  .lb-stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;cursor:grab;}
+  .lb-stage.drag{cursor:grabbing;}
+  .lb-stage img{max-width:82vw;max-height:76vh;border-radius:var(--r-sm);box-shadow:0 20px 60px rgba(0,0,0,.5);
+    transition:transform .12s ease-out;will-change:transform;user-select:none;-webkit-user-drag:none;}
+  .lb-foot{padding:10px 16px 16px;text-align:center;color:#9aa0aa;font-size:11.5px;}
+  /* ---------- Toast ---------- */
+  .toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(16px);z-index:200;
+    display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:var(--r-md);
+    background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-lg);
+    font-size:13px;opacity:0;pointer-events:none;transition:all .25s;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+  .toast .dot{width:8px;height:8px;border-radius:50%;background:var(--primary);flex:none;}
+  /* ---------- 说明卡片 ---------- */
+  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:16px;}
+  .note{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;}
+  .note b{display:block;font-size:12.5px;margin-bottom:4px;}
+  .note span{font-size:12px;color:var(--text-2);line-height:1.7;}
+  .note .no{color:var(--bad);font-weight:600;}
+  .note .yes{color:var(--ok);font-weight:600;}
+  /* 灯箱打开时锁定页面 */
+  body.lb-open{overflow:hidden;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>正文图片缩放与预览</h1>
+  <span class="sub">原型 · 2026-11-20</span>
+  <div class="tabs" id="viewTabs">
+    <button data-view="legacy">改造前</button>
+    <button data-view="editor" class="on">编辑态（新）</button>
+    <button data-view="reader">阅读态（新）</button>
+    <button data-view="lightbox">灯箱</button>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn-ghost" id="themeBtn">🌓 切换主题</button>
+  <button class="btn-primary" id="replayBtn">重播首次提示</button>
+</div>
+
+<div class="stage">
+
+  <!-- ================= 改造前 ================= -->
+  <section class="view legacy" data-panel="legacy">
+    <div class="view-head">
+      <h2>改造前：四张图各自的问题</h2>
+      <p>拖拽能力其实存在，但入口不可发现、尺寸不持久、粘贴大图直接撑大正文——用户感知就是“图片过大、调不了”。</p>
+      <div class="hint-row">
+        <span class="chip warn">① 手柄须先点击图片才出现，且无任何提示</span>
+        <span class="chip warn">② 插入时不写初始尺寸，大图顶满整宽</span>
+        <span class="chip warn">③ 保存时服务端清洗剥掉尺寸，拖了也白拖</span>
+        <span class="chip warn">④ 需求文档粘贴图片以 base64 直存正文</span>
+      </div>
+    </div>
+    <div class="editor-wrap">
+      <div class="editor-toolbar">
+        <span class="tb-btn">B</span><span class="tb-btn">I</span><span class="tb-btn">U</span>
+        <span class="tb-sep"></span><span class="tb-btn">🖼 图片</span>
+      </div>
+      <div class="paper">
+        <h3>登录模块改版 · 设计说明</h3>
+        <p>登录页整体按新版视觉规范调整，下图是改版后的首屏效果。注意：这张 1240 宽的截图插入后直接顶满整宽，点它也没有任何可操作提示。</p>
+        <span class="fig">
+          <img src="" alt="登录页首屏截图（1240×700）" id="legacyImg">
+          <span class="cap">插入即顶满 · 无手柄 · 无提示 · 尺寸不持久</span>
+        </span>
+        <p>继续往下写第二段正文，图片把版心撑得满满当当。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 编辑态（新） ================= -->
+  <section class="view on" data-panel="editor">
+    <div class="view-head">
+      <h2>编辑态（新）：插入自动收敛，点击出现手柄</h2>
+      <p>点一下图片试试：出现虚线选中框、四角/四边手柄、上方尺寸与预设条。拖右下角改大小，或点 100% / 75% / 50%。</p>
+      <div class="hint-row">
+        <span class="chip">插入后按容器宽自动收敛初始尺寸</span>
+        <span class="chip">首次插入弹一次提示（重播按钮在顶栏）</span>
+        <span class="chip">拖拽结果随文档保存，重开不丢</span>
+        <span class="chip">上传前长边 &gt; 1600 自动降采样</span>
+      </div>
+    </div>
+    <div class="editor-wrap">
+      <div class="editor-toolbar">
+        <span class="tb-btn">B</span><span class="tb-btn">I</span><span class="tb-btn">U</span>
+        <span class="tb-sep"></span><span class="tb-btn" style="color:var(--primary);background:var(--primary-w2);">🖼 图片</span>
+        <span class="tb-sep"></span><span style="font-size:11.5px;color:var(--text-3);">点图片 → 拖四角 · 点空白取消选中</span>
+      </div>
+      <div class="paper" id="editorPaper">
+        <h3>登录模块改版 · 设计说明</h3>
+        <p>登录页整体按新版视觉规范调整，下图是改版后的首屏效果。</p>
+        <span class="fig" id="editFig">
+          <span class="size-bar">
+            <span class="sz" id="sizeText">720 × 406</span>
+            <button data-pct="100" class="on">100%</button>
+            <button data-pct="75">75%</button>
+            <button data-pct="50">50%</button>
+          </span>
+          <img src="" alt="登录页首屏截图（1240×700 原图）" id="editImg" data-pct="100">
+          <span class="handle h-tl" data-h="tl"></span>
+          <span class="handle h-tr" data-h="tr"></span>
+          <span class="handle h-bl" data-h="bl"></span>
+          <span class="handle h-br" data-h="br"></span>
+          <span class="handle h-tm" data-h="tm"></span>
+          <span class="handle h-bm" data-h="bm"></span>
+          <span class="handle h-lm" data-h="lm"></span>
+          <span class="handle h-rm" data-h="rm"></span>
+        </span>
+        <span class="cap">原图 1240×700 · 长边未超 1600，插入时保持原尺寸；容器放不下时按容器宽 100% 收敛</span>
+        <p>维护提醒：点击图片可随时再调整，四角任意拖；双击手柄区域恢复 100%。</p>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><b>初始尺寸策略</b><span>原图宽 ≤ 编辑区宽：按原尺寸写 px；超出：写 100% 宽 + auto 高。避免“小图被放大、大图顶满版心”两种极端。</span></div>
+      <div class="note"><b>拖拽能力</b><span>沿用编辑器原生手柄：四角自由缩放、四边单轴缩放，另有 100%/75%/50% 快捷预设。</span></div>
+      <div class="note"><b>降采样</b><span>上传前长边压缩到 1600（质量 0.92），文件体积大幅下降；GIF 保持原样以保留动画。</span></div>
+    </div>
+  </section>
+
+  <!-- ================= 阅读态（新） ================= -->
+  <section class="view" data-panel="reader">
+    <div class="view-head">
+      <h2>阅读态（新）：图片可点开放大</h2>
+      <p>鼠标悬停图片出现“点击放大”提示，点击进入灯箱：支持缩放、旋转、拖动平移。评论区的缩略图维持现状，不迁移。</p>
+    </div>
+    <div class="reader-wrap">
+      <div class="reader-head">
+        <span class="t">登录模块改版 · 设计说明</span>
+        <span class="meta">需求文档 · 已发布</span>
+      </div>
+      <div class="reader-body">
+        <p>登录页整体按新版视觉规范调整，下图是改版后的首屏效果（点击可放大）。</p>
+        <span class="fig" id="readFig">
+          <img src="" alt="登录页首屏截图" id="readImg">
+          <span class="zoom-tip">🔍 点击放大</span>
+        </span>
+        <span class="cap" style="display:block;">1240×700 · 点击查看原图</span>
+        <p>正文里的图片在阅读态保留原位、保持排版节奏，需要看细节时点开灯箱即可，不再跳出页面。</p>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><b>入口提示</b><span>图片 hover 时右上浮出“点击放大”，光标切换为 zoom-in；仅站内附件图可点，套了超链接的图交给链接本身。</span></div>
+      <div class="note"><b>灯箱能力</b><span>滚轮缩放（50%–300%）、拖动平移、90° 旋转、Esc 或点遮罩关闭，复用附件预览灯箱。</span></div>
+    </div>
+  </section>
+
+  <!-- ================= 灯箱 ================= -->
+  <section class="view" data-panel="lightbox">
+    <div class="view-head">
+      <h2>灯箱：同一套附件预览组件</h2>
+      <p>缩放、旋转、平移与附件预览一致，无需新造组件。</p>
+      <div class="hint-row">
+        <button class="btn-primary" id="openLbBtn">打开灯箱演示</button>
+        <span class="chip">滚轮缩放 · 拖动平移 · 旋转 90° · Esc 关闭</span>
+      </div>
+    </div>
+    <div class="editor-wrap">
+      <div class="paper" style="text-align:center;padding-top:40px;">
+        <p style="color:var(--text-3);">点击上方按钮，或切到「阅读态」直接点图片。</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- 灯箱 -->
+<div class="lightbox" id="lightbox" aria-label="图片预览">
+  <div class="lb-head">
+    <span class="name" id="lbName">登录页首屏截图</span>
+    <span class="spacer"></span>
+    <div class="lb-tool">
+      <button id="lbOut">－</button>
+      <span class="pct" id="lbPct">100%</span>
+      <button id="lbIn">＋</button>
+      <button id="lbRotate">⟳ 旋转</button>
+      <button id="lbReset">重置</button>
+      <button id="lbClose">✕</button>
+    </div>
+  </div>
+  <div class="lb-stage" id="lbStage">
+    <img src="" alt="登录页首屏截图" id="lbImg">
+  </div>
+  <div class="lb-foot">滚轮缩放 · 拖动平移 · Esc 关闭</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span class="dot"></span><span id="toastText">图片已插入：点击图片出现手柄，拖四角可调整大小</span></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- 示例图片：内联 SVG 生成“登录页截图”观感，1240×700 ---------- */
+  function demoImg(){
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="700" viewBox="0 0 1240 700">' +
+      '<rect width="1240" height="700" fill="#eef1f6"/>' +
+      '<rect x="120" y="90" width="1000" height="520" rx="14" fill="#ffffff"/>' +
+      '<rect x="160" y="130" width="220" height="14" rx="7" fill="#c9d2e3"/>' +
+      '<rect x="160" y="160" width="360" height="10" rx="5" fill="#dde3ee"/>' +
+      '<rect x="160" y="230" width="400" height="44" rx="8" fill="#f1f4f9" stroke="#d5dceb"/>' +
+      '<rect x="160" y="292" width="400" height="44" rx="8" fill="#f1f4f9" stroke="#d5dceb"/>' +
+      '<rect x="160" y="360" width="400" height="44" rx="8" fill="#3370ff"/>' +
+      '<text x="360" y="388" font-family="sans-serif" font-size="16" fill="#ffffff" text-anchor="middle">登 录</text>' +
+      '<rect x="600" y="130" width="440" height="420" rx="12" fill="#f7f9fc" stroke="#dfe5f0"/>' +
+      '<circle cx="820" cy="300" r="90" fill="#e3ebfd"/>' +
+      '<path d="M790 265 v70 l60-35z" fill="#8faefb"/>' +
+      '<text x="820" y="455" font-family="sans-serif" font-size="14" fill="#8f959e" text-anchor="middle">产品视觉示意</text>' +
+      '</svg>';
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+  var IMG = demoImg();
+  ["legacyImg","editImg","readImg","lbImg"].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.src = IMG;
+  });
+
+  /* ---------- 视图切换 ---------- */
+  var tabs = document.getElementById("viewTabs");
+  tabs.addEventListener("click", function(e){
+    var b = e.target.closest("[data-view]");
+    if(!b) return;
+    tabs.querySelectorAll("button").forEach(function(x){ x.classList.toggle("on", x === b); });
+    document.querySelectorAll(".view").forEach(function(v){
+      v.classList.toggle("on", v.dataset.panel === b.dataset.view);
+    });
+    if(b.dataset.view !== "lightbox") closeLightbox();
+  });
+
+  /* ---------- 主题 ---------- */
+  document.getElementById("themeBtn").addEventListener("click", function(){
+    var h = document.documentElement;
+    h.dataset.theme = h.dataset.theme === "dark" ? "light" : "dark";
+  });
+
+  /* ---------- Toast ---------- */
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+  function toast(msg){
+    document.getElementById("toastText").textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 3000);
+  }
+  document.getElementById("replayBtn").addEventListener("click", function(){
+    toast("图片已插入：点击图片出现手柄，拖四角可调整大小");
+  });
+
+  /* ---------- 编辑态：选中 / 拖拽 / 预设 ---------- */
+  var fig = document.getElementById("editFig");
+  var img = document.getElementById("editImg");
+  var paper = document.getElementById("editorPaper");
+  var sizeText = document.getElementById("sizeText");
+
+  function containerWidth(){ var w = paper.clientWidth; return w >= 200 ? w : 720; }
+  function setSize(w, h, pct){
+    img.style.width = w + "px";
+    img.style.height = h + "px";
+    sizeText.textContent = Math.round(w) + " × " + Math.round(h);
+    fig.querySelectorAll("[data-pct]").forEach(function(b){
+      if(b.tagName === "BUTTON") b.classList.toggle("on", pct != null && +b.dataset.pct === pct);
+    });
+    img.dataset.pct = pct == null ? "" : String(pct);
+  }
+  function syncInitSize(){
+    var maxW = containerWidth();
+    var nw = 1240, nh = 700;
+    if(nw > maxW){
+      img.style.width = "100%";
+      img.style.height = "auto";
+      var realW = maxW, realH = Math.round(maxW * nh / nw);
+      sizeText.textContent = Math.round(realW) + " × " + realH;
+      img.dataset.pct = "100";
+    } else {
+      setSize(nw, nh, null);
+    }
+  }
+  syncInitSize();
+
+  img.addEventListener("click", function(e){
+    e.stopPropagation();
+    fig.classList.add("sel");
+  });
+  paper.addEventListener("click", function(){ fig.classList.remove("sel"); });
+  fig.addEventListener("click", function(e){
+    var p = e.target.closest("button[data-pct]");
+    if(!p) return;
+    e.stopPropagation();
+    var pct = +p.dataset.pct;
+    var maxW = containerWidth();
+    var w = maxW * pct / 100;
+    var h = Math.round(w * 700 / 1240);
+    setSize(w, h, pct);
+  });
+
+  /* 手柄拖拽：角自由缩放，边单轴；限制最小 80px、最大 2 倍容器宽 */
+  var drag = null;
+  fig.querySelectorAll(".handle").forEach(function(h){
+    h.addEventListener("mousedown", function(e){
+      e.preventDefault(); e.stopPropagation();
+      var r = img.getBoundingClientRect();
+      drag = { dir: h.dataset.h, x: e.clientX, y: e.clientY, w: r.width, h: r.height };
+      document.addEventListener("mousemove", onDrag);
+      document.addEventListener("mouseup", endDrag);
+    });
+  });
+  function onDrag(e){
+    if(!drag) return;
+    var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    var w = drag.w, h = drag.h;
+    var min = 80, max = containerWidth() * 2;
+    if(drag.dir === "br" || drag.dir === "tr" || drag.dir === "bm" || drag.dir === "rm") w = drag.w + dx;
+    if(drag.dir === "bl" || drag.dir === "tl" || drag.dir === "bm" || drag.dir === "lm") w = drag.w - dx;
+    if(drag.dir === "br" || drag.dir === "bl" || drag.dir === "bm") h = drag.h + dy;
+    if(drag.dir === "tr" || drag.dir === "tl" || drag.dir === "tm") h = drag.h - dy;
+    /* 角手柄保持等比 */
+    if(drag.dir === "br" || drag.dir === "bl" || drag.dir === "tr" || drag.dir === "tl"){
+      h = w * drag.h / drag.w;
+    }
+    w = Math.max(min, Math.min(max, w));
+    h = Math.max(min, Math.min(max, h));
+    setSize(w, h, null);
+  }
+  function endDrag(){
+    drag = null;
+    document.removeEventListener("mousemove", onDrag);
+    document.removeEventListener("mouseup", endDrag);
+  }
+
+  /* ---------- 阅读态：点图开灯箱 ---------- */
+  document.getElementById("readImg").addEventListener("click", function(){
+    tabs.querySelector('[data-view="lightbox"]').click();
+    setTimeout(openLightbox, 30);
+  });
+
+  /* ---------- 灯箱 ---------- */
+  var lb = document.getElementById("lightbox");
+  var lbImg = document.getElementById("lbImg");
+  var lbStage = document.getElementById("lbStage");
+  var lbPct = document.getElementById("lbPct");
+  var st = { scale: 1, rot: 0, tx: 0, ty: 0 };
+  function renderLb(){
+    lbImg.style.transform = "translate(" + st.tx + "px," + st.ty + "px) rotate(" + st.rot + "deg) scale(" + st.scale + ")";
+    lbPct.textContent = Math.round(st.scale * 100) + "%";
+  }
+  function openLightbox(){
+    st = { scale: 1, rot: 0, tx: 0, ty: 0 };
+    renderLb();
+    lb.classList.add("on");
+    document.body.classList.add("lb-open");
+  }
+  function closeLightbox(){
+    lb.classList.remove("on");
+    document.body.classList.remove("lb-open");
+  }
+  function setScale(s){ st.scale = Math.max(0.5, Math.min(3, s)); renderLb(); }
+  document.getElementById("lbIn").addEventListener("click", function(){ setScale(st.scale + 0.25); });
+  document.getElementById("lbOut").addEventListener("click", function(){ setScale(st.scale - 0.25); });
+  document.getElementById("lbRotate").addEventListener("click", function(){ st.rot = (st.rot + 90) % 360; renderLb(); });
+  document.getElementById("lbReset").addEventListener("click", function(){ st = { scale:1, rot:0, tx:0, ty:0 }; renderLb(); });
+  document.getElementById("lbClose").addEventListener("click", closeLightbox);
+  document.getElementById("openLbBtn").addEventListener("click", openLightbox);
+  lb.addEventListener("click", function(e){ if(e.target === lb || e.target === lbStage) closeLightbox(); });
+  lbStage.addEventListener("wheel", function(e){
+    e.preventDefault();
+    setScale(st.scale + (e.deltaY < 0 ? 0.1 : -0.1));
+  }, { passive:false });
+  var pan = null;
+  lbStage.addEventListener("mousedown", function(e){
+    if(e.target !== lbImg && e.target !== lbStage) return;
+    pan = { x: e.clientX, y: e.clientY, tx: st.tx, ty: st.ty };
+    lbStage.classList.add("drag");
+    document.addEventListener("mousemove", onPan);
+    document.addEventListener("mouseup", endPan);
+  });
+  function onPan(e){
+    if(!pan) return;
+    st.tx = pan.tx + (e.clientX - pan.x);
+    st.ty = pan.ty + (e.clientY - pan.y);
+    renderLb();
+  }
+  function endPan(){
+    pan = null;
+    lbStage.classList.remove("drag");
+    document.removeEventListener("mousemove", onPan);
+    document.removeEventListener("mouseup", endPan);
+  }
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && lb.classList.contains("on")) closeLightbox();
+  });
+
+  /* 首次进入编辑态时演示一次提示（与产品一致：每会话一次） */
+  setTimeout(function(){ toast("图片已插入：点击图片出现手柄，拖四角可调整大小"); }, 600);
+})();
+</script>
+</body>
+</html>

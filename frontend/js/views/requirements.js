@@ -4,6 +4,8 @@ import { API, csrfCookie } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { attachmentChipHTML, openAttachment, downloadUrl, bindFileDrop, uploadAttachment, validateFiles, reportRejected } from "../core/attach-kit.js";
+import { openAttPreview } from "../core/att-preview.js";
+import { shrinkImageFile, fitInsertedImage, notifyResizeHint } from "../core/img-fit.js";
 import { activeView, showView } from "../core/router.js";
 import { isMobile } from "../core/layout.js";
 import { canEditDoc, canEditReq, currentRole, projectOptionsHTML, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
@@ -208,8 +210,17 @@ function ensureEditor(){
       placeholder: "在这里写文档：目标、方案、说明…",
       charCounter: false,
       resizingBar: false,
-      showPathLabel: false
+      showPathLabel: false,
+      imageUploadSizeLimit: 3 * 1024 * 1024
     });
+    /* 上传钩子挂在实例上（写进 options 不生效）：正文图上传成附件再插 URL，
+       替换 SunEditor 默认的 base64 直存，避免图片把正文 HTML 撑爆 */
+    reqEditor.onImageUploadBefore = uploadReqDocImage;
+    reqEditor.onImageUpload = function(targetImg){
+      var page = $("reqDocEditPage");
+      fitInsertedImage(targetImg, page ? page.querySelector(".sun-editor-editable") : null);
+      notifyResizeHint();
+    };
     reqEditor.onChange = function(){
       if(reqDocSuppressChange) return;
       /* 程序化回填可能晚于抑制窗口触发 onChange：与基线一致就不算用户修改。
@@ -227,6 +238,50 @@ function ensureEditor(){
   });
   return editorPromise;
 }
+/* 正文图片在库里存站内相对路径（/api/attachments/...），部署前缀不进数据；
+   编辑器/阅读页/历史预览显示时补 appBase，保存与 Word 导出前再剥掉（与任务描述同一口径）。 */
+var DOC_IMG_REL = 'src="/api/attachments/';
+function reqDocHtmlPadImg(html){
+  if(!html || !API.base) return html;
+  return html.split(DOC_IMG_REL).join('src="' + API.base + '/api/attachments/');
+}
+function reqDocHtmlStripImg(html){
+  if(!html || !API.base) return html;
+  return html.split('src="' + API.base + '/api/attachments/').join(DOC_IMG_REL);
+}
+/* 正文图片上传：POST /api/req-docs/{id}/content-images，返回编辑器友好的 URL。
+   先降采样再校验体积，与工作项描述同一套口径。 */
+function uploadReqDocImage(files, info, core, uploadHandler){
+  if(!editingDocId){ toast("请先保存文档，再上传图片", "warn"); return false; }
+  if(reqDocReadOnly || reqDocOwnerLocked){ toast("你对该文档没有编辑权限", "warn"); return false; }
+  var f = files[0];
+  if(!f) return false;
+  shrinkImageFile(f).then(function(shrunk){
+    f = shrunk;
+    if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return; }
+    var fd = new FormData();
+    fd.append("file", f);
+    var url = API.url("/api/req-docs/" + encodeURIComponent(editingDocId) + "/content-images" +
+      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+    return fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "X-XSRF-TOKEN": csrfCookie() },
+      body: fd
+    }).then(function(res){
+      if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+      return res.json().catch(function(){ return null; });
+    }).then(function(json){
+      if(json && json.code === 0 && json.data && json.data.url){
+        uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
+      }else{
+        toast((json && json.message) || "图片上传失败", "bad");
+      }
+    }).catch(function(ex){
+      toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+    });
+  });
+}
 var reqDocsLoaded = false;
 var reqDocKeyword = "";
 /* 灌正文统一走这里：setContents 引起的 onChange 不算用户修改。
@@ -236,7 +291,7 @@ function setReqEditorContents(html){
   if(!reqEditor) return;
   reqDocSuppressChange = true;
   try{
-    reqEditor.setContents(html || "", false);
+    reqEditor.setContents(reqDocHtmlPadImg(html) || "", false);
     reqEditorBaseline = reqEditor.getContents(true);
   }finally{
     reqDocSuppressChange = false;
@@ -1629,7 +1684,7 @@ function renderReqDocReader(doc){
       try{ html = window.marked.parse(doc.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
     }else{
       /* 服务端已按白名单清洗过，这里再过一道 DOMPurify（双保险） */
-      html = doc.content || "";
+      html = reqDocHtmlPadImg(doc.content || "");
     }
     reqDocReaderFill(body, window.DOMPurify.sanitize(html));
     reqDocReaderOpenLinks(body);
@@ -4934,7 +4989,7 @@ function setEditorContent(content, format){
     var snap = format === "univer" ? parseSnapshot(content) : null;
     return mountReqUniver(snap, snap ? "" : (format === "univer" ? "" : content));
   }
-  if(format === "html" && reqEditor){ reqEditor.setContents(content); return; }
+  if(format === "html" && reqEditor){ reqEditor.setContents(reqDocHtmlPadImg(content)); return; }
   var ta = $("reqDocMdCanvas");
   if(ta){ ta.value = content; renderMarkdownPreview(); }
 }
@@ -5325,7 +5380,7 @@ function renderReqDocHistoryPreview(h, box){
     }else if(h.format === "markdown"){
       try{ html = window.marked.parse(h.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
     }else{
-      html = h.content || "";
+      html = reqDocHtmlPadImg(h.content || "");
     }
     box.innerHTML = window.DOMPurify.sanitize(html);
     var links = box.querySelectorAll("a[href]");
@@ -5832,7 +5887,7 @@ function setReqDocSaving(on){
 function currentReqDocContent(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
   if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
-  return reqEditor ? reqEditor.getContents(true) : "";
+  return reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "";
 }
 /* 409 时默认保留本地草稿；只有用户二次确认才加载服务器版本 */
 function confirmReloadReqDoc(){
@@ -6227,7 +6282,7 @@ function reqDocExportWordHTML(){
   if(isUniverDoc()){
     return Promise.resolve(reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "");
   }
-  return Promise.resolve(reqEditor ? reqEditor.getContents(true) : "");
+  return Promise.resolve(reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "");
 }
 function exportReqDocWordFrom(title, html){
   var url = API.url("/api/req-docs/export-docx" +
@@ -6491,6 +6546,16 @@ function populateReqDocSelect(keep){
   if($("reqDocReader")) $("reqDocReader").addEventListener("wheel", docWheelHandler, { passive: false });
   if($("reqDocEditPage")) $("reqDocEditPage").addEventListener("wheel", docWheelHandler, { passive: false });
   applyDocZoom();
+
+  /* 阅读正文图片点击放大：站内附件图直接开灯箱；套了链接的图不拦，交给链接本身 */
+  document.addEventListener("click", function(e){
+    var img = e.target.closest("#reqDocReaderBody img");
+    if(!img || img.closest("a")) return;
+    var m = String(img.getAttribute("src") || "").match(/\/api\/attachments\/([A-Za-z0-9_-]+)\/(?:download|thumb|preview)/);
+    if(!m) return;
+    e.preventDefault();
+    openAttPreview({ attachment: { id: m[1], filename: img.getAttribute("alt") || "文档图片" } });
+  });
 
   /* 分类树右键菜单：点菜单外 / Esc / 滚动 时关闭（菜单项点击由菜单自身委托处理，先于此处） */
   document.addEventListener("click", function(e){

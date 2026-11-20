@@ -2376,7 +2376,8 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   background:var(--surface);outline:none;}
 .read-desc.inline-edit-field:focus{box-shadow:var(--focus-ring);}
 .read-desc p{margin:0 0 6px;}
-.read-desc img{max-width:100%;height:auto;border-radius:var(--r-xs);}
+.read-desc img{max-width:100%;height:auto;border-radius:var(--r-xs);cursor:zoom-in;}
+.read-desc[contenteditable="true"] img{cursor:inherit;}
 .read-desc:empty::before{content:"暂无描述";color:var(--text-3);}
 .read-cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:var(--space-3);}
 .read-progress{height:5px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;margin:0 0 9px;}
