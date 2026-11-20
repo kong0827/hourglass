@@ -975,6 +975,9 @@
         OR EXISTS (SELECT 1 FROM requirement r
                    WHERE r.id = t.req_id AND r.workspace_id = t.workspace_id
                      AND LOCATE(LOWER(#{query.q}), LOWER(r.name)) > 0)
+        OR EXISTS (SELECT 1 FROM demand dm
+                   WHERE dm.id = t.demand_id AND dm.workspace_id = t.workspace_id
+                     AND LOCATE(LOWER(#{query.q}), LOWER(dm.title)) > 0)
         OR EXISTS (SELECT 1 FROM task_tag tt JOIN tag g ON g.id = tt.tag_id
                    WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
                      AND LOCATE(LOWER(#{query.q}), LOWER(g.name)) > 0)
@@ -1191,7 +1194,7 @@
 
   <!-- ==================== 看板 / 列表 / 日历（BE-Q-1 SQL 下推） ==================== -->
   <!--
-    与 ganttWhere 共用同一套筛选口径（q 命中标题/描述/备注/模块/项目名/标签/附件名；
+    与 ganttWhere 共用同一套筛选口径（q 命中标题/描述/备注/模块/项目名/需求名/标签/附件名；
     due/focus/blocked/noDue 与 TaskService.match 一致），已完成列再加完成时间范围。
   -->
   <sql id="doneScope">

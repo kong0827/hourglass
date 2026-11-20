@@ -15,7 +15,7 @@ import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskD
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, spanText, typeBadgeHTML, typeName } from "../lib/format.js";
+import { taskVersionsText, taskVersionLinksHTML, assocLinkHTML, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, demandNoText, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, spanText, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -66,12 +66,12 @@ var VERSION_GROUP_MAX = 500;
 var SORT_DEFAULT_DIR = {
   due:"asc", priority:"asc", estimate:"desc", actual:"desc", updated:"desc",
   title:"asc", type:"asc", column:"asc", owner:"asc", progress:"desc",
-  project:"asc", version:"asc", category:"asc", startDate:"asc", tags:"asc",
+  project:"asc", demand:"asc", version:"asc", category:"asc", startDate:"asc", tags:"asc",
   subtasks:"desc", comments:"desc"
 };
 var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
 var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
-var COL_WIDTHS = { title:"minmax(240px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
+var COL_WIDTHS = { title:"minmax(240px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", demand:"180px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
 
 function renderSmartTabs(){
   updateMobFilterSummary();
@@ -456,6 +456,12 @@ function taskCell(t, key, hasTypeCol){
     return '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span></span>';
   }
   if(key === "project") return '<span class="cell">' + assocLinkHTML("project", t.reqId, reqNameById(t.reqId)) + '</span>';
+  if(key === "demand"){
+    if(!t.demandId) return '<span class="cell muted">—</span>';
+    var dNo = demandNoText(t.demandNo), dName = t.demandTitle || "关联需求";
+    var dTip = (dNo ? dNo + " · " : "") + dName;
+    return '<span class="cell">' + assocLinkHTML("demand", t.demandId, dName, {title:"打开需求详情：" + dTip}) + '</span>';
+  }
   if(key === "version") return '<span class="cell" title="' + esc('计划版本：' + (taskVersionsText(t) || '待规划') + '；不代表实际交付。调整版本请在详情填写理由。') + '">' + taskVersionLinksHTML(t, t.reqId) + '</span>';
   if(key === "category") return '<span class="cell">' + (catTag(t.categoryId) || "—") + '</span>';
   if(key === "startDate") return '<span class="cell">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
@@ -502,6 +508,7 @@ function sortValue(t, key){
   if(key === "due") return t.dueDate || null;
   if(key === "progress") return progressOf(t);
   if(key === "project") return t.reqId ? String(reqNameById(t.reqId) || "") : "";
+  if(key === "demand") return t.demandId ? String(t.demandTitle || "") : "";
   if(key === "version") return taskVersionsText(t);
   if(key === "category") return catNameById(t.categoryId) || "";
   if(key === "startDate") return t.startDate || null;
@@ -687,6 +694,7 @@ function taskCsvValue(t, key){
   if(key === "dueDate") return t.dueDate || "";
   if(key === "progress") return progressOf(t) + "%";
   if(key === "project") return t.reqId ? reqNameById(t.reqId) : "";
+  if(key === "demand") return t.demandId ? (t.demandTitle || "") : "";
   if(key === "version") return taskVersionsText(t);
   if(key === "category") return catNameById(t.categoryId) || "";
   if(key === "startDate") return t.startDate || "";

@@ -18,6 +18,7 @@ import com.hourglass.dto.WorkColumnQuery;
 import com.hourglass.entity.Attachment;
 import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.Category;
+import com.hourglass.entity.Demand;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.SubtaskAgg;
 import com.hourglass.entity.TagTaskRow;
@@ -27,6 +28,7 @@ import com.hourglass.entity.TaskFacetRow;
 import com.hourglass.entity.TaskLog;
 import com.hourglass.entity.TimeAgg;
 import com.hourglass.mapper.AttachmentMapper;
+import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.ProjectVersionMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.SubtaskMapper;
@@ -65,6 +67,7 @@ public class TaskQueryService {
 
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
+    private final DemandMapper demandMapper;
     private final ProjectVersionMapper projectVersionMapper;
     private final TaskLogMapper logMapper;
     private final SubtaskMapper subtaskMapper;
@@ -84,9 +87,11 @@ public class TaskQueryService {
                             SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
                             AttachmentMapper attachmentMapper, WorkspaceMetaCache metaCache,
                             TaskSupport support, com.hourglass.mapper.VersionTaskMapper versionTaskMapper,
-                            ProjectAccessService projectAccess, ReleasePermissionService permissions) {
+                            ProjectAccessService projectAccess, ReleasePermissionService permissions,
+                            DemandMapper demandMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
+        this.demandMapper = demandMapper;
         this.projectVersionMapper = projectVersionMapper;
         this.logMapper = logMapper;
         this.subtaskMapper = subtaskMapper;
@@ -747,10 +752,15 @@ public class TaskQueryService {
         publications.enrichTasks(workspaceId, tasks);
         List<String> ids = new ArrayList<String>(tasks.size());
         Set<String> reqIds = new HashSet<String>();
+        Set<String> demandIds = new HashSet<String>();
         for (Task t : tasks) {
             ids.add(t.getId());
             if (t.getReqId() != null) {
                 reqIds.add(t.getReqId());
+            }
+            String demandId = Texts.trimToNull(t.getDemandId());
+            if (demandId != null) {
+                demandIds.add(demandId);
             }
         }
         Map<String, SubtaskAgg> subMap = new HashMap<String, SubtaskAgg>();
@@ -781,6 +791,16 @@ public class TaskQueryService {
         if (!reqIds.isEmpty()) {
             for (Requirement r : reqMapper.selectNamesByIds(workspaceId, new ArrayList<String>(reqIds))) {
                 reqNameMap.put(r.getId(), r.getName());
+            }
+        }
+        /* 列表「关联需求」列：按本页出现的需求 id 批量取标题与编号。
+           走空间级 selectByIds 而非按项目取：sql/106 口径保留的跨项目关联也能显示标题。 */
+        Map<String, Demand> demandMap = new HashMap<String, Demand>();
+        if (!demandIds.isEmpty()) {
+            for (Demand d : demandMapper.selectByIds(workspaceId, new ArrayList<String>(demandIds))) {
+                if (d != null && d.getId() != null) {
+                    demandMap.put(d.getId(), d);
+                }
             }
         }
         Map<String, String> catNameMap = new HashMap<String, String>();
@@ -822,9 +842,22 @@ public class TaskQueryService {
                 /* 项目名随任务下发：跨空间「我的任务」按项目分组/展示用 */
                 t.setReqName(rn);
             }
+            String demandName = null;
+            String demandId = Texts.trimToNull(t.getDemandId());
+            if (demandId != null) {
+                Demand demand = demandMap.get(demandId);
+                if (demand != null) {
+                    t.setDemandTitle(demand.getTitle());
+                    t.setDemandNo(demand.getDemandNo());
+                    demandName = demand.getTitle();
+                }
+            }
             String catName = catNameMap.get(t.getCategoryId());
             if (catName != null) {
                 extra.append(catName).append(' ');
+            }
+            if (demandName != null) {
+                extra.append(demandName).append(' ');
             }
             StringBuilder ab = attachMap.get(t.getId());
             if (ab != null) {
@@ -876,7 +909,7 @@ public class TaskQueryService {
     private boolean match(Task t, BoardQuery query, LocalDate today) {
         if (query.getQ() != null) {
             String q = query.getQ().toLowerCase(Locale.ROOT);
-            /* O-8：搜索范围从「标题/描述/备注」扩到 项目名 / 模块 / 标签 / 附件文件名（searchExtra 在 mergeTaskExtras 里拼好） */
+            /* O-8：搜索范围从「标题/描述/备注」扩到 项目名 / 模块 / 需求名 / 标签 / 附件文件名（searchExtra 在 mergeTaskExtras 里拼好） */
             if (!contains(t.getTitle(), q) && !contains(t.getDescription(), q) && !contains(t.getNote(), q)
                     && !contains(t.getSearchExtra(), q)
                     && !tagContains(t, q)) {

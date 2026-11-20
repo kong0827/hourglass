@@ -6,6 +6,7 @@ import com.hourglass.dto.MyTasksPage;
 import com.hourglass.dto.MyTasksQuery;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.AttachmentMapper;
+import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.ProjectVersionMapper;
 import com.hourglass.mapper.SubtaskMapper;
@@ -41,7 +42,7 @@ class MyTasksPaginationTest {
                 mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
                 mock(AttachmentMapper.class), metaCache, support, mock(VersionTaskMapper.class),
-                mock(ProjectAccessService.class), mock(ReleasePermissionService.class));
+                mock(ProjectAccessService.class), mock(ReleasePermissionService.class), mock(DemandMapper.class));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", mock(TaskPublicationService.class));
         return service;
     }

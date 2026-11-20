@@ -8,6 +8,7 @@ import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.AttachmentMapper;
+import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.ProjectVersionMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.SubtaskMapper;
@@ -239,7 +240,7 @@ class TaskQueryServiceReleasePermissionTest {
         TaskQueryService service = new TaskQueryService(tasks, reqs, mock(ProjectVersionMapper.class), mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
                 mock(AttachmentMapper.class), mock(WorkspaceMetaCache.class), mock(TaskSupport.class),
-                versions, access, releasePermissions);
+                versions, access, releasePermissions, mock(DemandMapper.class));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", publications);
         return service;
     }
