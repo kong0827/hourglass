@@ -1343,6 +1343,15 @@ function verFocusPlanText(v){
   var tail = d < 0 ? "已逾期 " + (-d) + " 天" : (d === 0 ? "今天到期" : "还剩 " + d + " 天");
   return "发布计划：" + dateShort(v.targetDate) + " · " + tail;
 }
+/* 进度条图例：颜色必须配文字，块色与条内分段同 token，不靠悬停标题才知道含义 */
+function verBarLegendHTML(done, doing, blocked){
+  /* 已完成的数量紧邻进度条（N / M），图例只解释段色，避免同一统计重复两遍 */
+  var items = [];
+  if(done) items.push('<span><i class="done"></i>已完成</span>');
+  if(doing) items.push('<span><i class="doing"></i>进行中 <b>' + doing + '</b></span>');
+  if(blocked) items.push('<span><i class="blocked"></i>阻塞 <b>' + blocked + '</b></span>');
+  return items.length ? '<div class="vf-legend">' + items.join('') + '</div>' : "";
+}
 function versionFocusHTML(){
   var v = verFocusVersion();
   if(!v) return "";
@@ -1384,7 +1393,7 @@ function versionFocusHTML(){
         + '<p class="vf-desc">' + descBits.map(esc).join('<span class="vf-sep" aria-hidden="true"></span>')
           + (verRisk(v).atRisk ? '<span class="vl-risk-inline">' + esc(verRiskText(risk)) + '</span>' : '') + '</p>'
         + '<div class="vf-bar">'
-          /* 进度条里另有蓝色「进行中」和橙色「阻塞」段：数字只报已完成，颜色含义用 title 说清 */
+          /* 条内蓝「进行中」、橙「阻塞」的占比另给可见图例，颜色不单独承载语义 */
           + '<span class="vl-bar" role="img" aria-label="已完成 ' + pct + '%，进行中 ' + doingPct + '%，阻塞 ' + blockedPct + '%"'
             + ' title="绿 = 已完成 ' + done + ' 个 · 蓝 = 进行中 ' + doing + ' 个 · 橙 = 阻塞 ' + (Number(risk.blocked) || 0) + ' 个">'
             + '<i class="done" style="width:' + pct + '%"></i>'
@@ -1392,6 +1401,7 @@ function versionFocusHTML(){
           + (blockedPct ? '<i class="blocked" style="width:' + blockedPct + '%"></i>' : '') + '</span>'
           + '<b>' + pct + '%</b><small>' + (total ? done + ' / ' + total + ' 工作项' : '未规划') + '</small>'
         + '</div>'
+        + (total ? verBarLegendHTML(done, doing, Number(risk.blocked) || 0) : '')
       + '</div>'
       + '<div class="vf-kpis">'
         + '<div><b>' + demands + '</b><span>已排需求</span></div>'
@@ -1439,7 +1449,11 @@ function versionRowHTML(v){
       ? '<button class="vl-cell vl-time" type="button" data-ver-inline="dates" data-ver-id="' + esc(id) + '" title="点击直接编辑计划开始与目标日期">'
         + '<b>' + esc(cycleWindow(v) || (v.targetDate ? "目标 " + dateShort(v.targetDate) : "未设周期")) + '</b>' + verDueHint(v) + '</button>'
       : '<div class="vl-time"><b>' + esc(cycleWindow(v) || (v.targetDate ? "目标 " + dateShort(v.targetDate) : "未设周期")) + '</b>' + verDueHint(v) + '</div>');
-  var progressCell = '<button class="vl-progress" type="button" data-ver-open-tab="scope" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="查看该版本的工作项明细">'
+  /* 行内条窄、放不下图例：把三段口径写进 title 与可访问名，避免只靠颜色 */
+  var barLabel = total
+    ? '已完成 ' + pct + '%（' + done + ' / ' + total + '）；进行中 ' + doing + ' 个；阻塞 ' + (Number(risk.blocked) || 0) + ' 个'
+    : '未规划工作项';
+  var progressCell = '<button class="vl-progress" type="button" data-ver-open-tab="scope" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="' + barLabel + ' · 查看工作项明细" aria-label="' + barLabel + ' · 查看工作项明细">'
     + (total
       ? '<span class="vl-bar"><i class="done" style="width:' + pct + '%"></i>' + (doingPct ? '<i class="doing" style="width:' + doingPct + '%"></i>' : '') + (blockedPct ? '<i class="blocked" style="width:' + blockedPct + '%"></i>' : '') + '</span>'
         + '<span class="vl-ptext"><b>' + pct + '%</b><small>' + done + ' / ' + total + '</small></span>'
