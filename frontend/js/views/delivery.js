@@ -188,18 +188,16 @@ function renderAll() {
     + "</div></div>"
     + '<div id="dlBanner"></div>'
     + '<div class="dl-work"><div class="dl-main">'
-    + '<div class="dl-secbar" id="dlSecbar">'
-    + '<button class="dl-secstep" type="button" data-dl-navstep="-1" aria-label="向前翻区块导航">'
-    + icon("left", 12) + "</button>"
-    + '<div class="dl-secwrap">'
+    /* 区块导航改纵向目录（原型 DEL-3）：与纸面并排，列头带 ✓/! 门禁状态，滚动高亮当前节 */
+    + '<aside class="dl-sidenav" aria-label="文档区块目录">'
+    + '<div class="dl-sidenav-head" id="dlNavHead"></div>'
     + '<nav class="dl-secnav" id="dlSecnav" aria-label="文档区块导航"></nav>'
-    + '<div class="dl-secrail" id="dlSecrail" aria-hidden="true"><i></i></div>'
-    + "</div>"
-    + '<button class="dl-secstep" type="button" data-dl-navstep="1" aria-label="向后翻区块导航">'
-    + icon("right", 12) + "</button></div>"
+    + '<div class="dl-sidenav-foot">数字来自系统记录，只读且可点回原始记录；文字由系统草拟，逐段确认后导出。</div>'
+    + "</aside>"
+    + '<div class="dl-paper-col">'
     + '<div id="dlSheetHost"></div>'
     + '<p class="dl-page-foot">按 A4 纵向排版估算页数；导出 PDF 时以打印对话框的实际分页为准。</p>'
-    + "</div>" + railHTML() + "</div>";
+    + "</div></div>" + railHTML() + "</div>";
   renderDoc();
   paintSaveState();
 }
@@ -221,7 +219,7 @@ function bannerHTML() {
     desc = "测试环境发布、失败与回滚都不构成对外交付依据；请在控制区换一条成功的生产发布记录。";
   } else if (g.pending.length) {
     kind = "warn"; ic = "edit"; title = g.pending.length + " 处对外表述待确认";
-    desc = "系统按事实草拟了这些段落，核对无误后点「确认这段」；也可以改写。全部确认后才能导出与分享。";
+    desc = "系统按事实草拟了这些段落，核对无误后点「确认这段」；也可以改写。全部确认后才能导出与分享，确认后可撤回。";
     acts = '<button class="btn sm" type="button" data-dl-act="accept-all">全部确认</button>'
       + '<button class="btn sm ghost" type="button" data-dl-act="goto-pending">逐项查看</button>';
   } else {
@@ -240,10 +238,26 @@ function bannerHTML() {
     + (acts ? '<div class="ba">' + acts + "</div>" : "") + "</div>";
 }
 
+/* 哪些区块有「对外表述」、对应哪个确认字段：目录上的 ✓/! 与正文确认按钮同一口径 */
+var NAV_CONFIRM_SECTION = { summary: "summary", change: "changes", issue: "defects", acceptance: "acceptance" };
+function navConfirmField(sectionKey) {
+  for (var f in NAV_CONFIRM_SECTION) if (NAV_CONFIRM_SECTION[f] === sectionKey) return f;
+  return "";
+}
 function secnavHTML() {
+  var pend = DD.pendingFields(data).map(function (f) { return NAV_CONFIRM_SECTION[f]; });
+  var done = data.confirmed || [];
   return DD.sectionList(data).map(function (s, i) {
-    return '<button type="button" data-dl-jump="' + s.k + '"><span class="n">' + (i < 9 ? "0" : "") + (i + 1)
-      + "</span>" + esc(s.title) + "</button>";
+    var isPend = pend.indexOf(s.k) !== -1;
+    var field = navConfirmField(s.k);
+    var mark = isPend
+      ? '<span class="sv-mark warn" aria-label="待确认">!</span>'
+      : (field && done.indexOf(field) !== -1
+        ? '<span class="sv-mark ok" aria-label="已确认">✓</span>'
+        : '<span class="sv-mark neutral" aria-hidden="true"></span>');
+    return '<button type="button" data-dl-jump="' + s.k + '"' + (isPend ? ' data-pending="1"' : "") + ">"
+      + mark + '<span class="nv">' + esc(s.title) + "</span>"
+      + '<span class="n">' + (i < 9 ? "0" : "") + (i + 1) + "</span></button>";
   }).join("");
 }
 
@@ -254,6 +268,11 @@ function renderDoc() {
   var banner = document.getElementById("dlBanner");
   if (banner) banner.innerHTML = bannerHTML();
   if (nav) nav.innerHTML = secnavHTML();
+  var navHead = document.getElementById("dlNavHead");
+  if (navHead) {
+    var secTotal = DD.sectionList(data).length, pendTotal = DD.pendingFields(data).length;
+    navHead.textContent = secTotal + " 个区块" + (pendTotal ? " · " + pendTotal + " 处待确认" : "");
+  }
   if (sheetHost) sheetHost.innerHTML = DD.sheetMarkup(data, view());
   updateMeter();
   /* 重排会把横向滚动位置清零，重新把当前节带回视野 */
@@ -318,7 +337,7 @@ function updateMeter() {
   if (s) s.textContent = String(DD.sectionList(data).length);
 }
 
-/* 滚动时标出当前区块：纸张很长，导航要能告诉读者「现在在哪一节」 */
+/* 滚动时标出当前区块：纸张很长，左侧目录要能告诉读者「现在在哪一节」 */
 var secnavCurrent = null;
 function syncSecnav() {
   var nav = document.getElementById("dlSecnav");
@@ -328,89 +347,27 @@ function syncSecnav() {
   var secs = DD.sectionList(data), current = null;
   secs.forEach(function (s) {
     var el = document.getElementById("dl-sec-" + s.k);
-    if (el && el.getBoundingClientRect().top - top <= 80) current = s.k;
+    if (el && el.getBoundingClientRect().top - top <= 88) current = s.k;
   });
   /* 末节比视口短，滚到底时它的标题仍到不了顶：不补这一条，点最后一节永远高亮在倒数第二节 */
   if (scroller && secs.length && scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4) {
     current = secs[secs.length - 1].k;
   }
+  /* 还没滚过第一节：直接高亮第一节，目录从打开就有落点 */
+  if (!current && secs.length) current = secs[0].k;
   var active = null;
   nav.querySelectorAll("[data-dl-jump]").forEach(function (b) {
     if (b.dataset.dlJump === current) { b.setAttribute("aria-current", "true"); active = b; }
     else b.removeAttribute("aria-current");
   });
-  /* 当前节被横向裁掉时把它带进视野，否则读者滚到第 10 节却看不到高亮在哪 */
+  /* 目录自身也可能超出视口：当前项被纵向裁掉时把它带进视野 */
   if (active && current !== secnavCurrent) {
-    var l = active.offsetLeft, r = l + active.offsetWidth;
-    if (l < nav.scrollLeft + 4 || r > nav.scrollLeft + nav.clientWidth - 4) {
-      nav.scrollLeft = Math.max(0, l - (nav.clientWidth - active.offsetWidth) / 2);
+    var t = active.offsetTop, btm = t + active.offsetHeight;
+    if (t < nav.scrollTop + 4 || btm > nav.scrollTop + nav.clientHeight - 4) {
+      nav.scrollTop = Math.max(0, t - (nav.clientHeight - active.offsetHeight) / 2);
     }
   }
   secnavCurrent = current;
-  syncSecnavOverflow();
-}
-
-/* 溢出线索按实际滚动位置刷新：到两端时对应箭头置灰、渐隐消失，滑块跟着走 */
-function syncSecnavOverflow() {
-  var nav = document.getElementById("dlSecnav"), bar = document.getElementById("dlSecbar");
-  var rail = document.getElementById("dlSecrail");
-  if (!nav || !bar) return;
-  var over = nav.scrollWidth - nav.clientWidth;
-  var left = nav.scrollLeft > 2, right = nav.scrollLeft < over - 2;
-  bar.dataset.overflow = over > 2 ? "1" : "0";
-  bar.dataset.moreLeft = over > 2 && left ? "1" : "0";
-  bar.dataset.moreRight = over > 2 && right ? "1" : "0";
-  bar.querySelectorAll("[data-dl-navstep]").forEach(function (b) {
-    b.disabled = Number(b.dataset.dlNavstep) < 0 ? !left : !right;
-  });
-  if (rail) {
-    var track = rail.clientWidth, thumb = secnavThumbW(nav, track);
-    var span = Math.max(1, track - thumb);
-    rail.firstChild.style.width = thumb + "px";
-    rail.firstChild.style.transform = "translateX(" + (over > 0 ? Math.round(nav.scrollLeft / over * span) : 0) + "px)";
-  }
-}
-function secnavThumbW(nav, track) {
-  return Math.max(28, Math.round(track * Math.min(1, nav.clientWidth / Math.max(1, nav.scrollWidth))));
-}
-
-/* 自绘滚动条要能拖：按住滑块 1:1 跟随指针，点轨道则翻页到该处 */
-function onSecrailDown(e) {
-  var rail = e.target.closest ? e.target.closest("#dlSecrail") : null;
-  if (!rail || e.button !== undefined && e.button !== 0) return;
-  var nav = document.getElementById("dlSecnav");
-  if (!nav) return;
-  var over = nav.scrollWidth - nav.clientWidth;
-  if (over <= 2) return;
-  e.preventDefault();
-  var track = rail.clientWidth, thumb = secnavThumbW(nav, track), span = Math.max(1, track - thumb);
-  var box = rail.getBoundingClientRect();
-  var onThumb = e.target === rail.firstChild;
-  var startX = e.clientX, startLeft = nav.scrollLeft;
-  var smooth = nav.style.scrollBehavior;
-  nav.style.scrollBehavior = "auto";
-  if (!onThumb) {
-    var want = (e.clientX - box.left - rail.clientLeft - thumb / 2) / span * over;
-    nav.scrollLeft = Math.max(0, Math.min(over, want));
-    startLeft = nav.scrollLeft;
-  }
-  rail.classList.add("drag");
-  try { rail.setPointerCapture(e.pointerId); } catch (err) { /* 老浏览器没有指针捕获，window 监听兜底 */ }
-  var move = function (ev) {
-    nav.scrollLeft = Math.max(0, Math.min(over, startLeft + (ev.clientX - startX) * (over / span)));
-  };
-  var up = function () {
-    rail.classList.remove("drag");
-    nav.style.scrollBehavior = smooth;
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    window.removeEventListener("pointercancel", up);
-    syncSecnavOverflow();
-  };
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", up);
-  window.addEventListener("pointercancel", up);
-  syncSecnavOverflow();
 }
 
 /* ==================== 控制区 ==================== */
@@ -632,18 +589,13 @@ function wire() {
   host.addEventListener("change", onChange);
   host.addEventListener("input", onInput);
   host.addEventListener("focusout", onFocusOut);
-  host.addEventListener("pointerdown", onSecrailDown);
   var scroller = document.getElementById("view-delivery");
   if (scroller) scroller.addEventListener("scroll", function () {
     if (activeView === "delivery" && data) syncSecnav();
   }, { passive: true });
   window.addEventListener("resize", function () {
-    if (activeView === "delivery" && data) { updateMeter(); syncSecnavOverflow(); }
+    if (activeView === "delivery" && data) { updateMeter(); syncSecnav(); }
   });
-  /* host 上的 scroll 不冒泡，导航条要自己监听 */
-  host.addEventListener("scroll", function (e) {
-    if (e.target && e.target.id === "dlSecnav") syncSecnavOverflow();
-  }, { passive: true, capture: true });
   window.addEventListener("ds:before-route", function () {
     if (dirty && data && !DD.locked(data)) saveNow(true);
   });
@@ -694,12 +646,6 @@ function onFocusOut(e) {
 function onClick(e) {
   var open = e.target.closest("[data-dl-open]");
   if (open) { load(open.dataset.dlOpen); return; }
-  var step = e.target.closest("[data-dl-navstep]");
-  if (step) {
-    var nav = document.getElementById("dlSecnav");
-    if (nav && !step.disabled) nav.scrollLeft += Number(step.dataset.dlNavstep) * Math.max(120, nav.clientWidth - 60);
-    return;
-  }
   var jump = e.target.closest("[data-dl-jump]");
   if (jump) {
     var sec = document.getElementById("dl-sec-" + jump.dataset.dlJump);
@@ -723,6 +669,13 @@ function onClick(e) {
   if (act === "edit-mode") { editMode = !editMode; editingField = null; harvestEditing(); renderDoc(); return; }
   if (act === "edit-one") { startEditOne(btn.dataset.dlField); return; }
   if (act === "accept") { confirmField(btn.dataset.dlKey); markDirty(); renderDoc(); return; }
+  if (act === "unconfirm") {
+    unconfirmField(btn.dataset.dlKey);
+    markDirty();
+    renderDoc();
+    toast("已撤回该段确认，导出前需要重新确认", "fs");
+    return;
+  }
   if (act === "goto-pending") {
     var target = document.getElementById("dl-sec-" + DD.pendingSection(data));
     if (target) target.scrollIntoView({ block: "start", behavior: "smooth" });

@@ -73,37 +73,30 @@ html[data-theme="dark"] .dl-export-wrap{
 
 /* ============ 工作台布局 ============ */
 .dl-work{display:grid;grid-template-columns:minmax(0,1fr) 306px;gap:var(--space-4);align-items:start;}
-.dl-main{min-width:0;}
-/* 11 节在 1440 也排不下：两端渐隐 + 翻页按钮 + 自绘滚动条。
-   macOS 的原生滚动条是悬浮式的（占位 0px、静止时不可见），所以轨道与滑块自己画，保证静止时也能看出后面还有节。 */
-.dl-secbar{position:sticky;top:0;z-index:12;display:flex;align-items:flex-start;gap:var(--space-1);padding:6px 0;margin-bottom:8px;
-  background:color-mix(in srgb,var(--bg-app) 92%,transparent);backdrop-filter:blur(8px);}
-.dl-secwrap{position:relative;flex:1;min-width:0;}
-.dl-secwrap::before,.dl-secwrap::after{content:"";position:absolute;top:0;height:30px;width:26px;z-index:1;
-  pointer-events:none;opacity:0;transition:opacity .18s var(--ease-out);}
-.dl-secwrap::before{left:0;background:linear-gradient(90deg,var(--bg-app),transparent);}
-.dl-secwrap::after{right:0;background:linear-gradient(270deg,var(--bg-app),transparent);}
-.dl-secbar[data-more-left="1"] .dl-secwrap::before,.dl-secbar[data-more-right="1"] .dl-secwrap::after{opacity:1;}
-.dl-secstep{display:none;flex:none;align-items:center;justify-content:center;width:22px;height:26px;margin-top:2px;padding:0;
-  border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);color:var(--text-3);cursor:pointer;}
-.dl-secbar[data-overflow="1"] .dl-secstep{display:inline-flex;}
-.dl-secstep:hover:not(:disabled){border-color:var(--primary-border);color:var(--primary-fg);}
-.dl-secstep:disabled{opacity:.32;cursor:default;}
-.dl-secstep:focus-visible{outline:none;box-shadow:var(--ring-focus);}
-.dl-secnav{display:flex;gap:5px;overflow-x:auto;padding:2px;scroll-behavior:smooth;scrollbar-width:none;}
-.dl-secnav::-webkit-scrollbar{height:0;}
-.dl-secrail{display:none;position:relative;height:5px;margin:3px 2px 0;border:1px solid var(--border);
-  border-radius:var(--r-pill);background:var(--surface-sunken);cursor:pointer;touch-action:none;}
-.dl-secbar[data-overflow="1"] .dl-secrail{display:block;}
-.dl-secrail i{position:absolute;top:-1px;bottom:-1px;left:0;width:30%;border-radius:var(--r-pill);
-  background:var(--border-strong);transition:background .15s var(--ease-out);}
-.dl-secrail:hover i,.dl-secrail.drag i{background:var(--primary-border);}
-.dl-secnav button{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border:1px solid var(--border);
-  border-radius:var(--r-pill);background:var(--surface);color:var(--text-3);font-size:11px;font-weight:600;white-space:nowrap;flex:none;}
-.dl-secnav button:hover{border-color:var(--primary-border);color:var(--primary-fg);}
+/* 区块导航（原型 DEL-3）：纸面左侧纵向目录卡，行内带 ✓/! 门禁状态，当前节主色底 */
+.dl-main{min-width:0;display:grid;grid-template-columns:206px minmax(0,1fr);gap:var(--space-3);align-items:start;}
+.dl-sidenav{position:sticky;top:8px;max-height:calc(100vh - var(--topbar-h) - 40px);overflow-y:auto;overscroll-behavior:contain;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:2px;}
+.dl-sidenav-head{padding:4px 8px 6px;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.dl-secnav{display:flex;flex-direction:column;gap:1px;}
+.dl-secnav button{display:flex;align-items:center;gap:7px;width:100%;min-height:30px;padding:0 8px;
+  border:0;border-radius:7px;background:transparent;color:var(--text-2);
+  font:inherit;font-size:12px;font-weight:500;text-align:left;}
+.dl-secnav button:hover{background:var(--surface-hover);color:var(--text);}
 .dl-secnav button:focus-visible{outline:none;box-shadow:var(--ring-focus);}
-.dl-secnav button[aria-current="true"]{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
-.dl-secnav .n{font-family:var(--font-mono);font-size:11px;opacity:.7;}
+.dl-secnav button[aria-current="true"]{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.dl-secnav .nv{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dl-secnav .n{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);}
+.dl-secnav button[aria-current="true"] .n{color:var(--primary-fg);opacity:.75;}
+/* 目录行首状态：✓ 已确认、! 待确认、空心点只读区块；颜色之外还有字形，不只靠颜色分辨 */
+.dl-sidenav .sv-mark{width:16px;height:16px;border-radius:50%;flex:none;display:inline-grid;place-items:center;
+  font-size:9px;font-weight:750;line-height:1;}
+.dl-sidenav .sv-mark.ok{background:var(--success-soft);color:var(--success-fg);}
+.dl-sidenav .sv-mark.warn{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
+.dl-sidenav .sv-mark.neutral{border:1px solid var(--border);background:var(--surface-sunken);}
+.dl-sidenav .sv-mark.neutral::after{content:"";width:4px;height:4px;border-radius:50%;background:var(--border-strong);}
+.dl-sidenav-foot{margin-top:6px;padding:7px 8px 3px;border-top:1px solid var(--border);font-size:10.5px;line-height:1.6;color:var(--text-3);}
+.dl-paper-col{min-width:0;}
 .dl-page-foot{margin:14px 2px 0;font-size:11px;color:var(--text-3);text-align:center;line-height:1.7;}
 
 /* ============ 常驻控制区 ============ */
@@ -472,6 +465,14 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
   .dl-acts{justify-content:flex-start;width:100%;}
   .dl-acts .btn{flex:1;min-width:calc(50% - 4px);}
   .dl-work{gap:var(--space-3);}
+  /* 窄屏目录退回横向滚动条，不再吃掉纸面宽度 */
+  .dl-main{grid-template-columns:minmax(0,1fr);}
+  .dl-sidenav{position:static;max-height:none;padding:6px;}
+  .dl-sidenav-head,.dl-sidenav-foot{display:none;}
+  .dl-secnav{flex-direction:row;overflow-x:auto;gap:5px;padding-bottom:2px;}
+  .dl-secnav button{width:auto;flex:none;min-height:26px;border:1px solid var(--border);border-radius:var(--r-pill);padding:0 10px;font-size:11px;}
+  .dl-secnav .sv-mark{width:14px;height:14px;font-size:8px;}
+  .dl-secnav .n{display:none;}
   .dl-rail-body{grid-template-columns:minmax(0,1fr);}
   .dl-doc-head{padding:var(--space-4) 16px 14px;}
   .dl-doc-title{font-size:20px;}

@@ -2454,6 +2454,21 @@
         <div class="view-page br-page">
           <div class="page-toolbar">
             <span class="toolbar-meta" id="branchMeta"></span>
+            <!-- 分组改中性下拉（原型 BR-1）：当前方式写在按钮上，展开三选一，不占主操作权重。
+                 分组与平均发布周期放工具条左端，右侧只留视图切换与保存的视图，避免首行左半边空白 -->
+            <span class="views-menu-wrap">
+              <button class="btn sm ghost" type="button" id="branchGroupToggle" data-mode="status" aria-haspopup="true" aria-expanded="false" aria-controls="branchGroupMenu" title="切换分组方式">
+                <span id="branchGroupLabel">按状态分组</span>
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
+              </button>
+              <div class="menu popover" id="branchGroupMenu" role="menu" hidden>
+                <button class="menu-item" type="button" role="menuitemradio" data-br-group="status">按状态分组</button>
+                <button class="menu-item" type="button" role="menuitemradio" data-br-group="project">按项目分组</button>
+                <button class="menu-item" type="button" role="menuitemradio" data-br-group="repo">按仓库分组</button>
+              </div>
+            </span>
+            <!-- 平均发布周期：紧邻分组下拉，不塞进左侧统计句 -->
+            <span class="toolbar-meta" id="branchCycle"></span>
             <span class="toolbar-right">
               <!-- 视图切换分段统一放标题行右侧（与需求池/项目页同位置），主操作「新建分支」保持本行最右 -->
               <span class="seg mini" id="branchModeSeg" role="group" aria-label="分支视图">
@@ -2470,7 +2485,6 @@
                   <option value="repo">按仓库分组</option>
                 </select>
               </span>
-              <button class="btn sm" type="button" id="branchGroupToggle" data-mode="status">按项目分组</button>
               <span class="views-menu-wrap">
                 <button class="btn sm ghost" type="button" id="branchViewsBtn" aria-haspopup="true" aria-expanded="false" title="分支视图：保存当前项目、状态与筛选条件">视图列表</button>
                 <div class="menu popover" id="branchViewsMenu" hidden></div>
@@ -2483,8 +2497,9 @@
                 <span data-icon="plus"></span>&nbsp;新建分支
               </button>
             </span>
-            <!-- 筛选条独占工具栏下一整行：主操作「新建分支」留在首行最右，与其他视图主操作位置一致 -->
+            <!-- 筛选条独占工具栏下一整行：范围（项目/仓库/生命周期）与筛选（状态/负责人/版本/搜索）分两段 -->
             <span class="br-filterbar" id="branchFilterBar">
+              <span class="sv-seg-label">范围</span>
               <span class="br-search">
                 <select id="branchProjectFilter" aria-label="按项目筛选">
                   <option value="">全部项目</option>
@@ -2495,6 +2510,12 @@
                   <option value="">全部仓库</option>
                 </select>
               </span>
+              <span class="br-search">
+                <select id="branchOutcomeFilter" aria-label="按生命周期筛选">
+                  <option value="open">进行中</option>
+                </select>
+              </span>
+              <span class="sv-seg-label">筛选</span>
               <span class="br-search">
                 <select id="branchStatusFilter" aria-label="按状态筛选">
                   <option value="">全部状态</option>
@@ -2521,10 +2542,7 @@
             </span>
           </div>
 
-          <div class="br-lifebar">
-            <div class="br-life" id="branchLifeChips" role="group" aria-label="分支生命周期"></div>
-            <div class="br-pending" id="branchPending" hidden></div>
-          </div>
+          <div class="br-pending" id="branchPending" hidden></div>
 
           <div class="br-repostrip" id="branchRepoStrip" hidden></div>
 

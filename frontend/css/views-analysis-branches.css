@@ -333,16 +333,17 @@
 .br-source-clear{border:0;background:transparent;color:var(--primary-fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:2px 4px;white-space:nowrap;}
 .br-source-clear:hover{color:var(--text);}
 
-/* 四列分组 */
+/* 四列分组：列本身透明（与工作项看板一致），只靠列头与卡片分栏，避免四块灰底把页面切碎 */
 .br-groups{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-3);align-items:start;}
-.br-group{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);padding:var(--space-2);}
-.br-group-head{display:flex;align-items:center;gap:7px;padding:var(--space-1) 4px 9px;min-width:0;}
-.br-group-name{font-size:13px;font-weight:650;color:var(--text);white-space:nowrap;}
+.br-group{background:transparent;border:0;border-radius:0;padding:0;min-width:0;}
+.br-group-head{display:flex;align-items:center;gap:7px;height:30px;padding:0 3px;min-width:0;}
+.br-group-name{font-size:12.5px;font-weight:650;color:var(--text-2);white-space:nowrap;}
 .br-group-n{
-  font-size:12px;color:var(--text-3);background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-pill);padding:0 6px;font-variant-numeric:tabular-nums;
+  font-size:10.5px;color:var(--text-3);background:none;border:0;padding:0;
+  font-variant-numeric:tabular-nums;
 }
-.br-group-hint{margin-left:auto;font-size:11px;color:var(--text-3);opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 列头提示紧跟在计数后（原型：代码还在写 / 等验证 / 等窗口 / 已上线），不推到右端 */
+.br-group-hint{margin-left:1px;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .br-meta-link{
   padding:0;border:0;background:none;cursor:pointer;font:inherit;color:var(--text-3);
   font-variant-numeric:tabular-nums;border-radius:var(--r-xs);
@@ -352,11 +353,12 @@
 .br-meta-link.on b{color:var(--primary-fg);}
 .br-meta-sep{margin:0 2px;color:var(--text-3);opacity:.6;}
 .br-group-body{display:flex;flex-direction:column;gap:var(--space-2);min-height:56px;}
+/* 加载更多：原型是列尾一行小字链接，不做虚线按钮占满列宽 */
 .br-load-more{
-  border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;
-  color:var(--text-3);font-size:12px;padding:7px 10px;cursor:pointer;transition:.15s;
+  align-self:flex-start;border:0;background:none;padding:2px 4px;
+  color:var(--text-3);font:inherit;font-size:11.5px;cursor:pointer;transition:color .15s;
 }
-.br-load-more:hover{background:var(--surface);color:var(--primary-fg);border-color:var(--primary-border);}
+.br-load-more:hover{color:var(--primary-fg);text-decoration:underline;}
 .br-empty{
   font-size:12px;color:var(--text-3);text-align:center;padding:var(--space-4) 0;
   border:1px dashed var(--border);border-radius:var(--r-md);
@@ -372,10 +374,11 @@
 }
 .br-groups .br-empty-full .empty-state{width:100%;max-width:640px;}
 
-/* 分支卡片 */
+/* 分支卡片：与工作项看板卡同规格（9px 圆角 / 10px 内边距 / xs 阴影 / 虚线页脚） */
 .br-card{
-  display:flex;flex-direction:column;gap:6px;padding:10px 11px;
-  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);cursor:pointer;
+  display:flex;flex-direction:column;gap:6px;padding:10px;
+  border:1px solid var(--border);border-radius:9px;background:var(--surface);cursor:pointer;
+  box-shadow:var(--shadow-xs);
   transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
 }
 .br-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-sm);}
@@ -383,7 +386,7 @@
 .br-card[draggable="true"]{cursor:grab;}
 .br-card[draggable="true"]:active{cursor:grabbing;}
 .br-card.br-dragging{opacity:.45;}
-.br-group.br-group-over{outline:2px dashed var(--primary);outline-offset:2px;}
+.br-group.br-group-over{outline:2px dashed var(--primary);outline-offset:2px;border-radius:9px;}
 .br-card-top{display:flex;align-items:center;gap:var(--space-2);min-height:21px;}
 .br-badge{
   display:inline-flex;align-items:center;gap:3px;height:21px;padding:0 7px;cursor:pointer;
@@ -396,11 +399,12 @@
 .br-badge.br-st-released{color:var(--success-fg);background:var(--success-soft);border-color:var(--success-border);}
 .br-owner{margin-left:auto;display:inline-flex;}
 .br-name{
-  font-family:var(--font-mono);font-size:13px;font-weight:500;line-height:1.35;
+  font-family:var(--font-mono);font-size:12.5px;font-weight:500;line-height:1.4;
   color:var(--text);word-break:break-all;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
-.br-target{font-family:var(--font-mono);font-size:12px;color:var(--text-3);word-break:break-all;}
-.br-note{font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.br-target{font-family:var(--font-mono);font-size:11.5px;color:var(--text-3);word-break:break-all;}
+.br-note{font-size:11.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* 分支卡「影响版本」标签行（由任务推导，一条分支可挂多个版本） */
 .br-vers{display:flex;flex-wrap:wrap;gap:var(--space-1);margin-top:4px;}
 .br-vers .tag{height:18px;padding:0 7px;font-size:12px;font-weight:500;}
@@ -417,7 +421,7 @@
 .ver-br-go{flex:0 0 auto;margin-left:-1px;color:var(--text-3);font-family:inherit;font-size:12px;line-height:1;}
 .ver-br:hover .ver-br-go{color:var(--primary-fg);}
 .ver-br-n{color:var(--text-3);font-size:11px;font-weight:600;}
-.br-card-foot{display:flex;align-items:center;gap:var(--space-2);margin-top:2px;font-size:12px;color:var(--text-3);}
+.br-card-foot{display:flex;align-items:center;gap:var(--space-2);margin-top:1px;padding-top:6px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--text-3);}
 .br-tasks{display:inline-flex;align-items:center;gap:3px;min-width:0;}
 .br-age{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap;}
 
@@ -425,27 +429,17 @@
 .br-status-menu{min-width:160px;}
 .br-status-menu .menu-item{display:flex;align-items:center;gap:var(--space-2);}
 .br-status-menu .menu-item.on{color:var(--text);font-weight:650;}
+/* 分组下拉：当前方式打勾，避免再靠「点一次换一个」的轮换来试 */
+#branchGroupMenu .menu-item.on{font-weight:650;}
+#branchGroupMenu .menu-item.on::after{content:"✓";margin-left:auto;color:var(--primary-fg);font-size:11px;}
 
 /* 新建/编辑弹窗 */
 .br-dlg{max-width:470px;}
 .br-dlg-2col{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);}
 
-/* 生命周期 chips + 待确认队列 */
-.br-lifebar{display:flex;flex-direction:column;gap:var(--space-2);margin:0 0 12px;}
-.br-life{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.br-life-label{font-size:12px;font-weight:600;color:var(--text-3);margin-right:2px;flex:0 0 auto;}
-.br-chip{
-  display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;
-  border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);
-  color:var(--text-2);font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
-}
-.br-chip:hover{border-color:var(--border-strong);color:var(--text);}
-.br-chip.on{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft);}
-.br-chip .n{font-variant-numeric:tabular-nums;color:var(--text-3);font-weight:500;}
-.br-chip.on .n{color:var(--primary-fg);}
-.br-chip.br-chip-pending.on{color:var(--warning-fg);border-color:var(--warning-border);background:var(--warning-soft);}
-.br-chip.br-chip-pending .n{color:var(--warning-fg);}
+/* 待确认队列：生命周期过滤已收进工具条下拉，这里只保留需要人工处理的横幅 */
 .br-pending{
+  margin:0 0 12px;
   border:1px solid var(--warning-border);border-radius:var(--r-md);background:var(--warning-soft);
   padding:9px 11px;display:flex;flex-direction:column;gap:var(--space-2);
 }
@@ -583,8 +577,6 @@
 @media (max-width:760px){
   .br-facts{grid-template-columns:1fr;}
   .br-dlg-2col{grid-template-columns:1fr;}
-  .br-life{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;}
-  .br-chip{flex:0 0 auto;}
   .br-repochip .nm{max-width:110px;}
   .br-pending-item{flex-wrap:wrap;}
   .br-pending-item .acts{margin-left:0;width:100%;justify-content:flex-end;}

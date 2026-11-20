@@ -377,14 +377,18 @@ import { icon } from "../core/icons.js";
   }
   function narrBar(d, field, pending, edited) {
     if (locked(d)) return chip("plum", "快照已锁定", "lock");
+    /* 只有查看权限时不能确认/改写：给原因，不要把按钮画出来却点不动 */
+    if (d.canEdit === false) return chip("plain", "只读 · 无改写权限", "lock");
     if (pending) {
       return chip("warn", "系统草拟 · 待确认") + '<span class="nb-t">核对这段对外表述</span>'
         + '<button class="btn sm soft" type="button" data-dl-act="accept" data-dl-key="' + field + '">确认这段</button>'
         + '<button class="btn sm ghost" type="button" data-dl-act="edit-one" data-dl-field="' + field + '">改写</button>';
     }
+    /* DEL-4：确认可撤回。撤回只撤销确认状态，改写内容保留，可再次确认 */
     return chip("ok", edited ? "已人工改写并确认" : "已确认", "check")
       + (edited ? '<button class="btn sm ghost" type="button" data-dl-act="restore" data-dl-field="' + field + '">恢复系统草稿</button>' : "")
-      + '<button class="btn sm ghost" type="button" data-dl-act="edit-one" data-dl-field="' + field + '">改写</button>';
+      + '<button class="btn sm ghost" type="button" data-dl-act="edit-one" data-dl-field="' + field + '">改写</button>'
+      + '<button class="btn sm ghost" type="button" data-dl-act="unconfirm" data-dl-key="' + field + '">撤回确认</button>';
   }
 
   /* ==================== 各区块 ==================== */

@@ -521,18 +521,19 @@ function renderBulkBar(){
     '<button class="btn sm ghost" type="button" data-br-bulk-decide=""' + (has ? "" : " disabled") + '>撤销判定</button>' +
   '</div>';
 }
+/* 生命周期与看板列是两个维度：原型把筛选都收进工具条，这里做成下拉，
+   选项带条数，title 展开每个口径包含哪些列，避免把生命周期当成第四个开发状态。 */
 function renderLifecycleChips(){
-  var host = $("branchLifeChips");
-  if(!host) return;
+  var sel = $("branchOutcomeFilter");
+  if(!sel) return;
   var counts = (branchBoard && branchBoard.outcomeCounts) || {};
-  /* 生命周期与看板列是两个维度，label 常驻说明；chips 的 title 再展开每个口径包含哪些列 */
-  host.innerHTML = '<span class="br-life-label">生命周期</span>' + BRANCH_OUTCOMES.map(function(o){
+  sel.innerHTML = BRANCH_OUTCOMES.map(function(o){
     var n = o.id === "all" ? (counts.all || 0) : (counts[o.id] || 0);
-    var on = branchOutcomeFilter === o.id;
-    return '<button type="button" class="br-chip' + (o.id === "pending" ? " br-chip-pending" : "") + (on ? " on" : "") +
-      '" data-br-outcome="' + o.id + '" aria-pressed="' + on + '" title="' + esc(o.hint || o.name) + '">' + o.name +
-      '<span class="n">' + n + '</span></button>';
+    return '<option value="' + o.id + '" title="' + esc(o.hint || o.name) + '">'
+      + esc(o.name) + '（' + n + '）</option>';
   }).join("");
+  sel.value = branchOutcomeFilter || "open";
+  sel.classList.toggle("is-filtered", !!branchOutcomeFilter && branchOutcomeFilter !== "open");
 }
 function renderPendingBar(){
   var host = $("branchPending");
@@ -790,32 +791,26 @@ function renderBranches(){
   var st = branchStat();
   var meta = $("branchMeta");
   var projectFilterName = branchProjectFilter ? (projectNameById(branchProjectFilter) || "") : "";
+  /* 计数只留在列头（原型 BR-2）：这里只写筛选上下文，没筛选就整行收起 */
   if(meta){
+    var extra = [];
+    if(branchProjectFilter) extra.push("项目「" + esc(projectFilterName) + "」");
+    if(branchRepoFilter) extra.push("仓库「" + esc(branchRepoFilter === "__none__" ? "未归属仓库" : branchRepoName(branchRepoFilter)) + "」");
+    if(branchOwnerFilter) extra.push("负责人「" + esc(branchOwnerFilterName()) + "」");
+    if(branchVersionFilter) extra.push("版本「" + esc(branchVersionFilterName()) + "」");
+    if(branchOutcomeFilter !== "open") extra.push("生命周期「" + esc(branchOutcomeMeta(branchOutcomeFilter).name) + "」");
+    if(branchGroupMode === "project") extra.push("按项目分组（仅统计已加载 " + branchList.length + " 条）");
+    if(branchGroupMode === "repo") extra.push("按仓库分组（仅统计已加载 " + branchList.length + " 条）");
+    if(branchViewMode === "list") extra.push("列表视图");
+    meta.innerHTML = extra.join(" · ");
+    meta.hidden = !extra.length;
+  }
+  /* 平均发布周期固定贴工具条右端，与原型同位置 */
+  var cycleEl = $("branchCycle");
+  if(cycleEl){
     var cycle = branchCycleAvg();
-    var extra = "";
-    if(branchProjectFilter) extra += " · 项目「" + esc(projectFilterName) + "」";
-    if(branchRepoFilter) extra += " · 仓库「" + esc(branchRepoFilter === "__none__" ? "未归属仓库" : branchRepoName(branchRepoFilter)) + "」";
-    if(branchOwnerFilter) extra += " · 负责人「" + esc(branchOwnerFilterName()) + "」";
-    if(branchVersionFilter) extra += " · 版本「" + esc(branchVersionFilterName()) + "」";
-    if(branchOutcomeFilter !== "open") extra += " · 生命周期「" + esc(branchOutcomeMeta(branchOutcomeFilter).name) + "」";
-    if(branchGroupMode === "project") extra += " · 按项目分组（仅统计已加载 " + branchList.length + " 条）";
-    if(branchGroupMode === "repo") extra += " · 按仓库分组（仅统计已加载 " + branchList.length + " 条）";
-    if(branchViewMode === "list") extra += " · 列表视图";
-    /* 汇总里的每一档都可点击：直接按状态筛选，和分组头的点击等价 */
-    var metaLink = function(id, html){
-      var on = !!id && branchFilter === id;
-      return '<button type="button" class="br-meta-link' + (on ? " on" : "") + '" data-br-meta="' + (id || "") +
-        '" aria-pressed="' + on + '" title="' + (id ? "只看这一档，再点一次取消" : "清除状态筛选") + '">' + html + '</button>';
-    };
-    meta.innerHTML = st.total
-      ? metaLink("", "共 <b>" + st.total + "</b> 条")
-        + '<span class="br-meta-sep">·</span>' + metaLink("dev", "开发中 <b>" + st.dev + "</b>")
-        + '<span class="br-meta-sep">·</span>' + metaLink("testing", "待测试 <b>" + st.testing + "</b>")
-        + '<span class="br-meta-sep">·</span>' + metaLink("merging", "待合并 <b>" + st.merging + "</b>")
-        + '<span class="br-meta-sep">·</span>' + metaLink("released", "已发布 <b>" + st.released + "</b>")
-        + (cycle === null ? "" : ('<span class="br-meta-sep">·</span>平均发布周期 ' + cycle + ' 天'))
-        + extra
-      : "";
+    cycleEl.textContent = cycle === null ? "" : "平均发布周期 " + cycle + " 天";
+    cycleEl.hidden = cycle === null;
   }
 
   var isList = branchViewMode === "list";
@@ -823,10 +818,9 @@ function renderBranches(){
   var listRows = isList ? filteredBranchRows() : null;
   var hasFilter = branchHasFilter();
   /* 一条分支都没有、也没加任何筛选：筛选条针对的是不存在的数据，整条收起，只留空态与新建指引 */
-  var filterBarEl = $("branchFilterBar"), filterBtnEl = $("branchFilterBtn"), lifeChipsEl = $("branchLifeChips");
+  var filterBarEl = $("branchFilterBar"), filterBtnEl = $("branchFilterBtn");
   if(filterBarEl) filterBarEl.hidden = !st.total && !hasFilter;
   if(filterBtnEl) filterBtnEl.hidden = !st.total && !hasFilter;
-  if(lifeChipsEl) lifeChipsEl.hidden = !st.total && !hasFilter;
   /* 全空时空态里已有主操作，工具栏不再重复放一个「新建分支」；有数据或筛选无结果时保留 */
   var branchNewBtn = $("branchNew");
   var canCreate = !!branchNewBtn && !roleReadOnly();
@@ -898,7 +892,7 @@ function renderBranches(){
         if(branchFilter && !on) items = [];
         var rest = Math.max(matched - items.length, 0);
         var moreHTML = (col.hasMore && rest > 0 && (!branchFilter || on))
-          ? '<button class="br-load-more" type="button" data-br-more="' + s.id + '">加载更多（还有 ' + rest + ' 条）</button>'
+          ? '<button class="br-load-more" type="button" data-br-more="' + s.id + '">还有 ' + rest + ' 条 · 加载更多</button>'
           : "";
         return '<div class="br-group" data-status="' + s.id + '">' +
           '<div class="br-group-head' + (on ? " on" : "") + '" data-br-filter="' + s.id + '" role="button" tabindex="0"' +
@@ -906,6 +900,7 @@ function renderBranches(){
             '<i class="br-dot ' + s.cls + '"></i>' +
             '<span class="br-group-name">' + s.name + '</span>' +
             '<span class="br-group-n">' + matched + '</span>' +
+            '<span class="br-group-hint">' + esc(s.hint || "") + '</span>' +
           '</div>' +
           '<div class="br-group-body">' +
             (items.length ? items.map(branchCardHTML).join("") : '<div class="br-empty">暂无</div>') +
@@ -1876,6 +1871,8 @@ function syncBranchFilterControls(){
   if(prSel) prSel.value = branchProjectFilter || "";
   var repoSel = $("branchRepoFilter");
   if(repoSel) repoSel.value = branchRepoFilter || "";
+  var ocSel = $("branchOutcomeFilter");
+  if(ocSel) ocSel.value = branchOutcomeFilter || "open";
   /* 搜索范围跟随项目筛选：选了项目就只在该项目内搜 */
   var search = $("branchSearch");
   if(search){
@@ -1890,6 +1887,7 @@ function syncBranchFilterControls(){
   UI.markFiltered(verSel, !branchVersionFilter);
   UI.markFiltered(prSel, !branchProjectFilter);
   UI.markFiltered(repoSel, !branchRepoFilter);
+  UI.markFiltered(ocSel, !branchOutcomeFilter || branchOutcomeFilter === "open");
   var clr = $("branchClearFilter");
   if(clr) clr.hidden = !branchHasClearable();
   /* 手机筛选面板默认收起：按钮上带生效条件数，收起时也知道有几项在筛 */
@@ -2019,15 +2017,22 @@ function renderBranchViewsMenu(){
 function updateBranchGroupToggle(){
   var btn = $("branchGroupToggle");
   if(!btn) return;
-  /* 三种分组轮换：状态 → 项目 → 仓库 → 状态 */
-  var next = branchGroupMode === "status" ? "project" : (branchGroupMode === "project" ? "repo" : "status");
-  var nextName = next === "project" ? "按项目分组" : (next === "repo" ? "按仓库分组" : "按状态分组");
-  btn.textContent = nextName;
+  /* 分组改中性下拉（原型 BR-1）：按钮只写当前方式，展开后三选一，不再点一次轮换一次 */
+  var name = branchGroupMode === "project" ? "按项目分组" : (branchGroupMode === "repo" ? "按仓库分组" : "按状态分组");
+  var label = $("branchGroupLabel");
+  if(label) label.textContent = name; else btn.textContent = name;
   btn.setAttribute("data-mode", branchGroupMode);
-  btn.setAttribute("title", "当前" + (branchGroupMode === "project" ? "按项目" : (branchGroupMode === "repo" ? "按仓库" : "按状态")) + "分组，点击改为" + nextName);
-  /* 分组是视图切换，用中性按钮；主操作只留给「新建分支」 */
+  btn.setAttribute("title", "当前" + name + "，点击切换分组方式");
   /* 分组只在看板视图有意义 */
   btn.hidden = branchViewMode === "list";
+  var menu = $("branchGroupMenu");
+  if(menu){
+    menu.querySelectorAll("[data-br-group]").forEach(function(it){
+      var on = it.dataset.brGroup === branchGroupMode;
+      it.classList.toggle("on", on);
+      it.setAttribute("aria-checked", on ? "true" : "false");
+    });
+  }
 }
 function updateBranchModeUI(){
   var seg = $("branchModeSeg");
@@ -2542,12 +2547,12 @@ function clearGroupOver(){
       loadBranches(true);
     });
   }
-  /* 生命周期 chips：与状态正交，切换后重拉看板/列表；深链来源视为已接管 */
-  if($("branchLifeChips")){
-    $("branchLifeChips").addEventListener("click", function(e){
-      var chip = e.target.closest("[data-br-outcome]");
-      if(!chip || chip.dataset.brOutcome === branchOutcomeFilter) return;
-      branchOutcomeFilter = chip.dataset.brOutcome;
+  /* 生命周期下拉：与状态正交，切换后重拉看板/列表；深链来源视为已接管 */
+  if($("branchOutcomeFilter")){
+    $("branchOutcomeFilter").addEventListener("change", function(e){
+      var v = e.target.value || "open";
+      if(v === branchOutcomeFilter) return;
+      branchOutcomeFilter = v;
       branchSelected = {};
       dropBranchSource();
       syncBranchFilterControls();
@@ -2622,10 +2627,19 @@ function clearGroupOver(){
       renderBranches();
     });
   }
-  if($("branchGroupToggle")){
+  if($("branchGroupToggle") && $("branchGroupMenu")){
     $("branchGroupToggle").addEventListener("click", function(){
-      branchGroupMode = branchGroupMode === "status" ? "project"
-        : (branchGroupMode === "project" ? "repo" : "status");
+      var menu = $("branchGroupMenu");
+      if(UI.popOpen(menu)){ UI.closeAllPops(); return; }
+      updateBranchGroupToggle();
+      UI.openPop(menu, $("branchGroupToggle"), { align: "left", width: 148 });
+    });
+    $("branchGroupMenu").addEventListener("click", function(e){
+      var item = e.target.closest("[data-br-group]");
+      if(!item) return;
+      UI.closeAllPops();
+      if(item.dataset.brGroup === branchGroupMode) return;
+      branchGroupMode = item.dataset.brGroup;
       updateBranchGroupToggle();
       renderBranches();
     });

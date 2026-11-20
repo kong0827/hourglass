@@ -78,7 +78,7 @@ var VIEWS = {
   requirements: { title:"文档", sub:"空间文档、分类与协作记录", enter:enterRequirementsLazy },
   dochistory: { title:"文档历史", sub:"历史版本的正文与修订", enter:enterDocHistoryLazy },
   testcases: { title:"测试", sub:"用例、计划与执行结果", enter:lazyEnter("testcases", "enterTestCasesView") },
-  branches: { title:"分支", sub:"分支与工作项的关联", enter:lazyEnter("branches", "enterBranchesView") },
+  branches: { title:"分支", sub:"分支与工作项的关联 · 阶段与停留时间来自状态变更", enter:lazyEnter("branches", "enterBranchesView") },
   review:   { title:"周回顾", sub:"本周完成、进行中与风险", enter:lazyEnter("review", "enterReviewView") },
   analysis: { title:"报表", sub:"交付与投入的统计口径", enter:lazyEnter("analysis", "enterAnalysisView") },
   portfolio: { title:"项目", sub:"项目集与项目的全局视图", enter:lazyEnter("portfolio", "enterPortfolioView") },
