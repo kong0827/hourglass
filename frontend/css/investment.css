@@ -1,6 +1,12 @@
 /* views/investment · 投入结构（年度 / 季度） */
 
-.inv-controls{display:flex;align-items:center;gap:var(--space-2) 12px;flex-wrap:wrap;margin:2px 0 14px;}
+/* 投入结构：操作进页头后只剩筛选卡，对齐原型 toolbar 的 48px / 11px 圆角 */
+#view-investment .inv-controls{
+  display:flex;align-items:center;gap:var(--space-2) 12px;flex-wrap:wrap;
+  min-height:48px;padding:7px 9px;margin:0 0 14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:11px;
+}
+#view-investment .inv-controls .manager-actions-mobile{flex:1 1 100%;}
 .inv-field{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);min-width:0;}
 .inv-field .mini-select{min-width:104px;max-width:190px;}
 .inv-seg{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;flex:0 0 auto;}
@@ -20,10 +26,10 @@
 
 .inv-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;}
 .inv-kpi{min-width:0;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
-.inv-kl{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text-3);}
+.inv-kl{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--text-3);}
 .inv-kv{margin-top:4px;font-size:var(--fs-stat);line-height:1.25;font-weight:680;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
 .inv-kv small{font-size:12px;font-weight:600;color:var(--text-3);margin-left:2px;}
-.inv-kd{margin-top:3px;font-size:11px;color:var(--text-3);line-height:1.5;white-space:normal;overflow:visible;text-overflow:clip;}
+.inv-kd{margin-top:3px;font-size:10.5px;color:var(--text-3);line-height:1.5;white-space:normal;overflow:visible;text-overflow:clip;}
 .inv-kpi.hl{background:var(--primary-soft);border-color:var(--primary-border);}
 .inv-kpi.hl .inv-kl,.inv-kpi.hl .inv-kd,.inv-kpi.hl .inv-kv{color:var(--primary-fg);}
 .inv-kpi.hl .caliber-mark{border-color:var(--primary-border);color:var(--primary-fg);background:var(--surface);}

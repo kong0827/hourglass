@@ -36,6 +36,7 @@
 <link rel="stylesheet" href="css/investment.css" />
 <link rel="stylesheet" href="css/smart-table.css" />
 <link rel="stylesheet" href="css/auth.css" />
+<link rel="stylesheet" href="css/my-work.css" />
 <link rel="stylesheet" href="css/mobile.css" />
 <link rel="stylesheet" href="css/assistant.css" />
 <link rel="stylesheet" href="css/delivery.css" />
@@ -271,7 +272,7 @@
         <button class="nav-exp" type="button" data-nav-exp="settings" aria-label="展开设置" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg></button>
         <div class="nav-sub">
           <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="space">空间</button>
-          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="members">成员与权限</button>
+          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="members">成员与角色</button>
           <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="visibility" id="navSetVisibility" hidden>项目可见范围</button>
           <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="workflow">工作流</button>
           <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="integration">通知与集成</button>
@@ -387,13 +388,15 @@
     <!-- 页面标题行：标题 + 定位副标题 + 视图切换 + 主操作（原型 pagehead） -->
     <div class="pagehead" id="pageHead">
       <div class="ph-main">
-        <h1 id="pageTitle">工作项</h1>
+        <h1 id="pageTitle"><span id="pageTitleText">工作项</span><span class="ph-pill" id="pagePill" hidden></span></h1>
         <p class="sub" id="pageSub"></p>
       </div>
       <div class="ph-acts">
-        <!-- 子导航：同一业务域内的视图切换（工作项多视图 / 项目列表与全局健康度 / 报表现有页签） -->
+        <!-- 子导航：同一业务域内的视图切换（工作项多视图 / 报表现有页签） -->
         <div class="subnav" id="subNav" role="navigation" aria-label="视图切换" hidden></div>
-        <div style="position:relative">
+        <!-- 页级操作：项目 / 项目集等页面用原型里的两个明确按钮替代通用「新建」 -->
+        <div class="ph-custom" id="pageActions" hidden></div>
+        <div id="newWrap" style="position:relative">
           <button class="btn primary" id="btnNew" type="button" aria-haspopup="true" aria-expanded="false">
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
             新建
@@ -414,7 +417,7 @@
             </button>
             <button class="menu-item" type="button" data-new="demand">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.4a4.3 4.3 0 0 0-2.5 7.8c.5.4.8.9.8 1.5v.4h3.4v-.4c0-.6.3-1.1.8-1.5A4.3 4.3 0 0 0 10 3.4Z"/><path d="M8.5 15.8h3"/></svg>
-              提需求
+              新建需求
             </button>
             <button class="menu-item" type="button" data-new="case">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3.8 5.6 1.6 1.6 2.4-2.4M3.8 12.6l1.6 1.6 2.4-2.4M10.4 6h5.8M10.4 13h5.8"/></svg>
@@ -603,90 +606,37 @@
 
       <!-- ===== 我的工作（跨空间聚合，N-3） ===== -->
       <section class="view" id="view-mine" aria-label="我的工作">
-        <div class="view-page wide">
-          <div class="page-toolbar mine-toolbar">
-            <div class="seg mini mine-mode" id="mineMode" role="group" aria-label="分派给我 / 待我测试 / 团队">
-              <button type="button" data-mine-mode="mine" aria-pressed="true">分派给我</button>
-              <button type="button" data-mine-mode="test" aria-pressed="false">待我测试</button>
-              <button type="button" data-mine-mode="team" class="mine-mode-team-tab" aria-pressed="false">团队</button>
+        <div class="view-page wide mw-page">
+          <nav class="mw-tabs" id="mineTabs" role="tablist" aria-label="我的工作页签"></nav>
+          <div class="mw-brief" id="mineBrief" aria-live="polite"></div>
+          <div class="mw-toolbar" id="mineToolbar" hidden>
+            <div class="mw-chips" id="mineChips" role="group" aria-label="范围筛选"></div>
+            <div class="mw-tools">
+              <label class="mw-search">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/></svg>
+                <input id="mineSearch" type="search" placeholder="搜索标题、项目或提交人" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="搜索我的工作">
+              </label>
+              <details class="mw-pop" id="mineFilterPop">
+                <summary>
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
+                  筛选<span class="mw-dotn" id="mineFilterCount" hidden>0</span>
+                </summary>
+                <div class="mw-popmenu" id="mineFilterMenu"></div>
+              </details>
+              <details class="mw-pop" id="mineDisplayPop">
+                <summary>
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 4.4v11.2M6 15.6 3.6 13.2M6 15.6l2.4-2.4M14 15.6V4.4M14 4.4l-2.4 2.4M14 4.4l2.4 2.4"/></svg>
+                  显示
+                </summary>
+                <div class="mw-popmenu" id="mineDisplayMenu"></div>
+              </details>
+              <button class="mw-icon-btn" type="button" id="btnMineRefresh" title="刷新" aria-label="刷新">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/></svg>
+              </button>
             </div>
-            <span class="seg mini mine-viewseg mine-hide-test" id="mineViewSeg" role="group" aria-label="列表或看板">
-              <button type="button" data-mine-view="list" aria-pressed="true">列表</button>
-              <button type="button" data-mine-view="board" aria-pressed="false">看板</button>
-            </span>
-            <span class="toolbar-meta" id="mineMeta">—</span>
-            <span class="spacer"></span>
-            <details class="gantt-more mine-display-more" id="mineMore">
-              <summary class="btn sm ghost mine-display-summary" title="分组、二级、排序与显示字段">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
-                显示 · <span id="mineDisplayEcho">按截止</span>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg>
-              </summary>
-              <div class="menu popover gantt-more-menu mine-display-menu">
-                <div class="mine-display-head">显示设置<span>我的工作</span></div>
-                <label class="gantt-more-row">
-                  <span class="gantt-more-label">分组</span>
-                  <select id="mineGroup" class="mini-select" aria-label="分组方式">
-                    <option value="due">截止时间</option>
-                    <option value="workspace">空间</option>
-                    <option value="priority">优先级</option>
-                    <option value="status">状态</option>
-                    <option value="project">项目</option>
-                    <option value="set">项目集</option>
-                    <option value="none">不分组</option>
-                  </select>
-                </label>
-                <label class="gantt-more-row">
-                  <span class="gantt-more-label">二级</span>
-                  <select id="mineSubgroup" class="mini-select" aria-label="二级分组方式">
-                    <option value="none">不分组</option>
-                    <option value="due">截止时间</option>
-                    <option value="workspace">空间</option>
-                    <option value="priority">优先级</option>
-                    <option value="status">状态</option>
-                    <option value="project">项目</option>
-                    <option value="set">项目集</option>
-                  </select>
-                </label>
-                <label class="gantt-more-row">
-                  <span class="gantt-more-label">排序</span>
-                  <select id="mineSort" class="mini-select" aria-label="排序方式">
-                    <option value="default">默认顺序</option>
-                    <option value="due">截止时间</option>
-                    <option value="priority">优先级</option>
-                    <option value="updated">更新时间</option>
-                    <option value="title">标题</option>
-                  </select>
-                </label>
-                <label class="gantt-more-row">
-                  <span class="gantt-more-label">发布</span>
-                  <select id="minePub" class="mini-select" aria-label="按发布态筛选">
-                    <option value="">全部</option>
-                    <option value="published">已发布</option>
-                    <option value="unpublished">未发布</option>
-                  </select>
-                </label>
-                <div class="gantt-more-row">
-                  <span class="gantt-more-label">密度</span>
-                  <div class="seg mini" id="mineDensity" role="group" aria-label="列表密度">
-                    <button type="button" data-list-density="standard" aria-pressed="true">标准</button>
-                    <button type="button" data-list-density="relaxed" aria-pressed="false">宽松</button>
-                  </div>
-                </div>
-                <div class="gantt-more-row">
-                  <span class="gantt-more-label">列</span>
-                  <button class="btn sm ghost mine-hide-test" type="button" id="btnMineFields">显示字段</button>
-                  <button class="btn sm ghost mine-hide-test" type="button" id="btnMineFold">折叠全部</button>
-                </div>
-                <div class="mine-display-note">分组偏好按账号 + 空间记忆；换分组只改变归堆，不改变筛选范围。</div>
-              </div>
-            </details>
-            <button class="icon-btn" type="button" id="btnMineRefresh" title="刷新" aria-label="刷新">
-              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/></svg>
-            </button>
           </div>
-          <div class="mine-stats" id="mineStats"></div>
-          <div id="mineBody"></div>
+          <div class="mw-body" id="mineBody"></div>
+          <div class="mw-note" id="mineNote" hidden></div>
         </div>
       </section>
 
@@ -982,9 +932,27 @@
       <section class="view" id="view-projects" aria-label="项目">
         <div class="proj-layout">
           <div>
+            <div class="proj-banner" id="projNoRelBanner" hidden>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 18 17H2Z"/><path d="M10 8v4M10 15h.01"/></svg>
+              <span id="projNoRelText"></span>
+              <button class="link-btn" type="button" id="btnProjNoRelGo">批量标记首版 →</button>
+              <span class="proj-banner-hint">标记后自动重算，不需要重新导入</span>
+            </div>
+            <div class="req-summ" id="reqSumm" hidden></div>
             <div class="panel-head proj-list-head">
-              <span class="proj-list-count" id="reqCount"></span>
               <div class="project-toolbar">
+                <span class="tb-group"><span class="tblabel">范围</span>
+                  <span class="seg mini" role="group" aria-label="项目范围">
+                    <button type="button" data-proj-scope="all" aria-pressed="true">全部</button>
+                    <button type="button" data-proj-scope="mine" aria-pressed="false">我负责</button>
+                  </span>
+                </span>
+                <span class="tb-divider" aria-hidden="true"></span>
+                <span class="seg mini" role="group" aria-label="分组方式">
+                  <button type="button" data-proj-group="set" aria-pressed="true">按分组</button>
+                  <button type="button" data-proj-group="flat" aria-pressed="false">平铺</button>
+                </span>
+                <span class="tb-spacer" aria-hidden="true"></span>
                 <span class="seg mini" role="group" aria-label="视图切换">
                   <button type="button" data-project-mode="card" aria-pressed="true">卡片</button>
                   <button type="button" data-project-mode="table" aria-pressed="false">表格</button>
@@ -994,17 +962,12 @@
                 <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
                 </button>
-                <span class="tb-divider" aria-hidden="true"></span>
-                <button class="btn sm" type="button" id="btnProjectSetNew">新建项目集</button>
-                <button class="btn primary sm is-dup-action" type="button" id="btnReqNew">新建项目</button>
+                <label class="global-search proj-search" title="按项目名搜索">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.6"/><path d="m13.4 13.4 3.4 3.4"/></svg>
+                  <input id="projSearch" type="search" placeholder="搜项目名" autocomplete="off" aria-label="按项目名搜索">
+                </label>
               </div>
             </div>
-            <div class="proj-banner" id="projNoRelBanner" hidden>
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 18 17H2Z"/><path d="M10 8v4M10 15h.01"/></svg>
-              <span id="projNoRelText"></span>
-              <button class="link-btn" type="button" id="btnProjNoRelGo">去版本页标记 →</button>
-            </div>
-            <div class="req-summ" id="reqSumm" hidden></div>
             <div class="req-list" id="reqList"></div>
           </div>
           <div class="modal-layer side" id="dlgProject" role="dialog" aria-modal="true" aria-labelledby="reqFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
@@ -1152,22 +1115,60 @@
             <span class="toolbar-meta" id="phaseMeta"></span>
             <button type="button" class="label-help" id="phaseHelp" aria-label="查看版本与首版/迭代的区分逻辑" title="版本与首版/迭代怎么区分"></button>
             <span class="toolbar-right">
-              <span class="sv-seg-label">范围</span>
+              <span class="sv-seg-label" id="phaseLabelRange">范围</span>
               <select id="phaseReq" class="mini-select" aria-label="选择项目"></select>
-              <div class="seg" id="phaseModeSeg">
-                <button type="button" data-pmode="phase" aria-pressed="true">按阶段</button>
-                <button type="button" data-pmode="version" aria-pressed="false">按版本</button>
-                <button type="button" data-pmode="allversions" aria-pressed="false">全部版本</button>
-                <button type="button" data-pmode="schedule" aria-pressed="false">发布日程</button>
-                <button type="button" data-pmode="overview" aria-pressed="false">全部项目</button>
+              <div class="seg" id="phaseModeSeg" role="group" aria-label="单项目口径">
+                <button type="button" data-pmode="version" aria-pressed="true">按版本</button>
+                <button type="button" data-pmode="phase" aria-pressed="false">首版 / 迭代分析</button>
+              </div>
+              <div class="scope-wrap" id="phaseScopeWrap">
+                <button class="btn sm" type="button" id="phaseScopeBtn" aria-haspopup="true" aria-expanded="false" title="跨项目的版本清单、发布日程与投入总览">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 2.8 7 3.6-7 3.6-7-3.6 7-3.6Z"/><path d="m3.4 10.2 6.6 3.4 6.6-3.4"/><path d="m3.4 13.8 6.6 3.4 6.6-3.4"/></svg>
+                  <span id="phaseScopeLabel">跨项目视图</span>
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6 8l3-3.5"/></svg>
+                </button>
+                <div class="menu scope-menu" id="phaseScopeMenu" hidden role="menu" aria-label="跨项目视图">
+                  <button class="scope-item" type="button" role="menuitem" data-pmode="allversions">
+                    <span class="si-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5h14M3 10h14M3 14.5h14"/></svg></span>
+                    <span class="si-tx"><b>全部版本</b><span>跨项目版本清单，可勾选预填新的发布计划</span></span>
+                  </button>
+                  <button class="scope-item" type="button" role="menuitem" data-pmode="schedule">
+                    <span class="si-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="14" height="12.5" rx="2"/><path d="M6.5 3v3M13.5 3v3M3 8.5h14"/></svg></span>
+                    <span class="si-tx"><b>发布日程</b><span>跨项目未完成发布计划，按计划时间排序</span></span>
+                  </button>
+                  <button class="scope-item" type="button" role="menuitem" data-pmode="overview">
+                    <span class="si-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5A2 2 0 0 1 5 4.5h3l1.5 2H15a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>
+                    <span class="si-tx"><b>全部项目</b><span>项目级的首版 / 迭代投入与风险总览</span></span>
+                  </button>
+                  <div class="scope-sep" aria-hidden="true"></div>
+                  <button class="scope-back" type="button" role="menuitem" data-scope-back>返回单项目<span id="phaseScopeBackName"></span></button>
+                </div>
               </div>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
               <span class="sv-seg-label sv-seg-end">操作</span>
-              <button class="btn sm" type="button" id="btnReleasePlan" title="查看当前项目的版本发布计划与发布记录">发布计划</button>
+              <div class="scope-wrap" id="releaseEntryWrap">
+                <button class="btn sm" type="button" id="btnReleasePlan" aria-haspopup="true" aria-expanded="false" title="查看当前项目的发布计划、实际发布与发布记录">发布计划与记录
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6 8l3-3.5"/></svg>
+                </button>
+                <div class="menu scope-menu rel-entry-menu" id="releaseEntryMenu" hidden role="menu" aria-label="发布计划与记录">
+                  <button class="scope-item" type="button" role="menuitem" data-rel-entry="plan">
+                    <span class="si-tx"><b>发布计划与工作台</b><small>计划时间、范围快照与实际发布记录</small></span>
+                  </button>
+                  <button class="scope-item" type="button" role="menuitem" data-rel-entry="history">
+                    <span class="si-tx"><b>发布记录</b><small>不可变的生产发布事实，按版本查看</small></span>
+                  </button>
+                </div>
+              </div>
               <button class="btn sm primary is-dup-action" type="button" id="btnVerNew">+ 新建版本</button>
             </span>
+          </div>
+          <div class="scope-strip" id="phaseScopeStrip" hidden>
+            <span class="tag tag-info">跨项目视图</span>
+            <b id="phaseScopeName">全部版本</b>
+            <span id="phaseScopeDesc">跨项目汇总，不改变单项目版本口径</span>
+            <button class="link" type="button" id="phaseScopeBack">返回单项目 →</button>
           </div>
           <div id="phaseBody"></div>
         </div>
@@ -1226,7 +1227,6 @@
         <div class="view-page" id="demandsPage">
           <div class="page-toolbar">
             <span class="toolbar-meta" id="demandsMeta"></span>
-            <span id="demandFlowHelp"></span>
             <span class="toolbar-right">
               <span class="sv-seg-label">视图</span>
               <div class="seg" id="demandModeSeg" role="group" aria-label="需求池视图">
@@ -1237,10 +1237,11 @@
               <select id="demandReq" class="mini-select" aria-label="选择项目"></select>
               <button class="btn sm" type="button" id="btnDemandColumns" hidden>显示字段</button>
               <button type="button" class="label-help" id="demandGanttHelp" aria-label="查看需求池甘特的计算逻辑" title="甘特怎么画" hidden></button>
+              <span id="demandFlowHelp"></span>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
-              <button class="btn sm primary is-dup-action" type="button" id="btnDemandNew">+ 提需求</button>
+              <button class="btn sm primary is-dup-action" type="button" id="btnDemandNew">+ 新建需求</button>
             </span>
           </div>
           <div class="gantt-tools demg-tools" id="demandGanttBar" hidden>
@@ -1369,12 +1370,19 @@
               <button type="button" data-doc-zoom="in" title="放大正文（Ctrl/⌘ + 滚轮）" aria-label="放大正文"><span data-icon="zoomIn"></span></button>
             </span>
             <span class="reqdoc-actions">
-              <button class="btn sm ghost ai-action" type="button" id="reqDocAiSplit" title="用 AI 把当前文档拆成工作项草稿，勾选确认后才会创建">
-                <span data-icon="ai"></span>&nbsp;AI 拆成工作项
-              </button>
-              <button class="btn sm ghost ai-action" type="button" id="reqDocAiAudit" title="用 AI 检查文档里的功能点是否都有工作项覆盖">
-                <span data-icon="ai"></span>&nbsp;AI 检查完成度
-              </button>
+              <span class="reqdoc-ai">
+                <button class="btn sm ghost ai-action" type="button" id="reqDocAiBtn" aria-haspopup="true" aria-expanded="false" title="AI 辅助：拆成工作项 / 检查完成度">
+                  <span data-icon="ai"></span>&nbsp;AI<span class="ai-caret" data-icon="caretDown"></span>
+                </button>
+                <div class="menu" id="reqDocAiMenu" hidden>
+                  <button class="menu-item" type="button" id="reqDocAiSplit" title="用 AI 把当前文档拆成工作项草稿，勾选确认后才会创建">
+                    <span data-icon="ai"></span>AI 拆成工作项
+                  </button>
+                  <button class="menu-item" type="button" id="reqDocAiAudit" title="用 AI 检查文档里的功能点是否都有工作项覆盖">
+                    <span data-icon="ai"></span>AI 检查完成度
+                  </button>
+                </div>
+              </span>
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
               </button>
@@ -1408,6 +1416,7 @@
               <span class="reqdoc-pub-chip" id="reqDocPubChip" hidden title="已发布，项目成员可查看；收回发布在「更多」菜单">
                 <span data-icon="check"></span>&nbsp;已发布
               </span>
+              <span class="reqdoc-pubnote" id="reqDocPubNote">发布后项目成员可见</span>
               <button class="btn sm soft" type="button" id="reqDocPublish" title="发布后项目成员可见（当前草稿仅你与管理员可见；发布后仍可继续编辑）">
                 <span data-icon="eye"></span>&nbsp;发布
               </button>
@@ -1825,6 +1834,14 @@
               <button type="button" data-tc-mode="plans" aria-pressed="false">测试计划</button>
               <button type="button" data-tc-mode="coverage" aria-pressed="false">覆盖矩阵</button>
               <button type="button" data-tc-mode="report" aria-pressed="false">测试报告</button>
+            </span>
+            <span class="tc-covctl" id="tcCovCtl" hidden>
+              <button class="tc-cov-chip" type="button" data-cov-filter="uncovered" aria-pressed="false" title="只看没有用例覆盖的需求">只看未覆盖</button>
+              <button class="tc-cov-chip" type="button" data-cov-filter="failed" aria-pressed="false" title="只看最近一轮有失败用例的需求">只看失败</button>
+              <span class="tc-searchwrap tc-cov-search">
+                <span class="tc-search-ic" data-icon="search" aria-hidden="true"></span>
+                <input id="tcCovSearch" type="search" class="tc-search" placeholder="搜需求标题" aria-label="按需求标题搜索覆盖矩阵" autocomplete="off" />
+              </span>
             </span>
             <span class="toolbar-meta" id="tcMeta"></span>
             <span class="toolbar-right">
@@ -2862,7 +2879,7 @@
         <div class="set-layout">
           <div class="set-tabs" id="setTabs" role="tablist" aria-label="设置分区">
             <button class="set-tab on" type="button" role="tab" aria-selected="true" data-set-tab="space">空间</button>
-            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="members">成员与权限</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="members">成员与角色</button>
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="visibility" id="setTabVisibility" hidden>项目可见范围</button>
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="workflow">工作流</button>
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="integration">通知与集成</button>
@@ -2878,10 +2895,10 @@
                 <span class="meta-right">确认你正在修改的空间</span>
               </div>
               <div class="set-overview-grid">
-                <div class="ov-cell"><b id="ovMembers">—</b><span id="ovMembersSub">成员</span></div>
-                <div class="ov-cell"><b id="ovProjects">—</b><span id="ovProjectsSub">项目</span></div>
-                <div class="ov-cell"><b id="ovOwner">—</b><span>空间主</span></div>
-                <div class="ov-cell"><b id="ovScope">—</b><span id="ovScopeSub">数据范围</span></div>
+                <div class="ov-cell"><span class="ov-k">成员</span><b id="ovMembers">—</b><span class="ov-s" id="ovMembersSub">成员</span></div>
+                <div class="ov-cell"><span class="ov-k">项目</span><b id="ovProjects">—</b><span class="ov-s" id="ovProjectsSub">项目</span></div>
+                <div class="ov-cell"><span class="ov-k">创建于</span><b id="ovCreated">—</b><span class="ov-s" id="ovCreatedSub">空间主 —</span></div>
+                <div class="ov-cell"><span class="ov-k">数据范围</span><b id="ovScope">—</b><span class="ov-s" id="ovScopeSub">数据范围</span></div>
               </div>
             </div>
 
@@ -2890,21 +2907,38 @@
                 <h3>基本信息</h3>
                 <span class="meta-right" id="wsTypeHint">加载中…</span>
               </div>
-              <div class="set-grid">
-                <div class="field">
-                  <label for="wsNameInput">空间名称</label>
-                  <input id="wsNameInput" type="text" maxlength="20" autocomplete="off" />
-                  <span class="hint">改名只影响显示；链接、编号与历史记录不变。</span>
+              <div class="set-frows">
+                <div class="frow">
+                  <div class="lb">空间名称</div>
+                  <div class="field">
+                    <input id="wsNameInput" type="text" maxlength="20" autocomplete="off" />
+                    <span class="hint">改名只影响显示；链接、编号与历史记录不变。</span>
+                  </div>
                 </div>
-                <div class="field">
-                  <label for="wsIdInput">空间标识</label>
-                  <input id="wsIdInput" type="text" readonly tabindex="-1" />
-                  <span class="hint">用于接口与数据归属，创建后固定。</span>
+                <div class="frow">
+                  <div class="lb">空间标识</div>
+                  <div class="field">
+                    <input id="wsIdInput" type="text" readonly tabindex="-1" />
+                    <span class="hint">用于接口与数据归属，创建后固定。</span>
+                  </div>
+                </div>
+                <div class="frow">
+                  <div class="lb">创建时间</div>
+                  <div class="fld dim" id="wsCreatedAt">—</div>
+                </div>
+                <div class="frow">
+                  <div class="lb">空间主</div>
+                  <div class="fld dim" id="wsOwnerRow">—</div>
                 </div>
               </div>
-              <div class="set-actions">
+              <div class="set-actions set-actions-pagehead">
                 <button class="btn primary" type="button" id="btnWsSave">保存设置</button>
                 <span class="foot-note" id="wsSaveNote">仅空间主可修改</span>
+              </div>
+              <div class="set-tablefoot">
+                <span class="tiny" id="wsFootNote">修改后点右上角「保存更改」生效 · 离开页面前会提示</span>
+                <span class="spacer"></span>
+                <button class="btn link" type="button" id="btnWsDiscardFoot" style="font-size:11.5px">放弃更改</button>
               </div>
             </div>
 
@@ -2920,51 +2954,56 @@
             </div>
 
             <div class="panel" data-set-pane="integration" id="set-notify" hidden>
-              <div class="panel-head">
-                <h3>通知推送</h3>
-                <span class="meta-right">服务端推送渠道</span>
+              <div class="setgrid-2">
+                <div class="subcard">
+                  <div class="subcard-head"><span>推送开关</span></div>
+                  <div class="swrow">
+                    <label class="sw"><input type="checkbox" id="wsNotifyInAppEnabled" /> 站内通知</label>
+                    <span class="tiny">顶栏铃铛与消息中心，关闭后仍会记录，只是不提醒</span>
+                  </div>
+                  <div class="swrow">
+                    <label class="sw"><input type="checkbox" id="wsNotifyEnabled" /> 外部推送</label>
+                    <span class="tiny">只停外部渠道，站内消息与邮件事件不受影响</span>
+                  </div>
+                  <div class="notify-status" id="notifyStatus">
+                    <span class="dotp"></span>
+                    <span id="notifyStatusText">读取中…</span>
+                  </div>
+                </div>
+                <div class="subcard">
+                  <div class="subcard-head"><span>外部渠道</span><span class="tiny">只显示当前渠道字段；切换渠道不会清空其他渠道的地址</span></div>
+                  <div class="channel-cards" id="channelCards">
+                    <button class="channel-card" type="button" data-channel="webhook">
+                      <span class="cc-t">企业微信 / 钉钉 webhook</span>
+                      <span class="cc-d">群机器人地址，报文 msgtype:text</span>
+                      <span class="cc-badge">未选中</span>
+                    </button>
+                    <button class="channel-card" type="button" data-channel="serverchan">
+                      <span class="cc-t">Server 酱</span>
+                      <span class="cc-d">sctapi.ftqq.com 的 SendKey 地址</span>
+                      <span class="cc-badge">未选中</span>
+                    </button>
+                    <button class="channel-card" type="button" data-channel="pushplus">
+                      <span class="cc-t">PushPlus</span>
+                      <span class="cc-d">统一 token 只发官方端点，地址仅作启用开关</span>
+                      <span class="cc-badge">未选中</span>
+                    </button>
+                  </div>
+                  <div class="field" style="margin-top:10px">
+                    <label for="wsWebhook" id="wsWebhookLabel">推送地址</label>
+                    <input id="wsWebhook" type="text" maxlength="255" placeholder="https://…" autocomplete="off" />
+                    <span class="err">地址与所选渠道不匹配，请检查后重试</span>
+                    <span class="hint" id="wsWebhookHint"></span>
+                  </div>
+                  <div class="field" id="fNotifyToken" hidden style="margin-top:10px">
+                    <label for="wsNotifyToken">Token（Server 酱 SendKey / PushPlus token，可选）</label>
+                    <input id="wsNotifyToken" type="text" maxlength="64" placeholder="留空则用服务端环境变量里的 token" autocomplete="off" />
+                    <span class="hint" id="wsNotifyTokenHint"></span>
+                    <label class="sw" style="margin-top:8px"><input type="checkbox" id="wsNotifyClearToken" /> 清除已保存的 Token（改用服务端环境变量）</label>
+                  </div>
+                </div>
               </div>
-              <div class="notify-status" id="notifyStatus">
-                <span class="dotp"></span>
-                <span id="notifyStatusText">读取中…</span>
-              </div>
-              <div class="channel-cards" id="channelCards">
-                <button class="channel-card" type="button" data-channel="webhook">
-                  <span class="cc-t">企业微信 / 钉钉 webhook</span>
-                  <span class="cc-d">群机器人地址，报文 msgtype:text</span>
-                  <span class="cc-badge">未选中</span>
-                </button>
-                <button class="channel-card" type="button" data-channel="serverchan">
-                  <span class="cc-t">Server 酱</span>
-                  <span class="cc-d">sctapi.ftqq.com 的 SendKey 地址</span>
-                  <span class="cc-badge">未选中</span>
-                </button>
-                <button class="channel-card" type="button" data-channel="pushplus">
-                  <span class="cc-t">PushPlus</span>
-                  <span class="cc-d">统一 token 只发官方端点，地址仅作启用开关</span>
-                  <span class="cc-badge">未选中</span>
-                </button>
-              </div>
-              <div class="blocked-row">
-                <label class="sw"><input type="checkbox" id="wsNotifyInAppEnabled" /> 站内通知</label>
-              </div>
-              <div class="blocked-row" style="margin-top:8px">
-                <label class="sw"><input type="checkbox" id="wsNotifyEnabled" /> 启用本空间的推送</label>
-                  <span class="foot-note">只停外部渠道，站内通知不受影响</span>
-              </div>
-              <div class="field" style="margin-top:14px">
-                <label for="wsWebhook" id="wsWebhookLabel">推送地址</label>
-                <input id="wsWebhook" type="text" maxlength="255" placeholder="https://…" autocomplete="off" />
-                <span class="err">地址与所选渠道不匹配，请检查后重试</span>
-                <span class="hint" id="wsWebhookHint"></span>
-              </div>
-              <div class="field" id="fNotifyToken" hidden style="margin-top:12px">
-                <label for="wsNotifyToken">Token（Server 酱 SendKey / PushPlus token，可选）</label>
-                <input id="wsNotifyToken" type="text" maxlength="64" placeholder="留空则用服务端环境变量里的 token" autocomplete="off" />
-                <span class="hint" id="wsNotifyTokenHint"></span>
-                <label class="sw" style="margin-top:8px"><input type="checkbox" id="wsNotifyClearToken" /> 清除已保存的 Token（改用服务端环境变量）</label>
-              </div>
-              <div class="set-actions">
+              <div class="set-actions set-actions-pagehead">
                 <button class="btn primary" type="button" id="btnNotifySave">保存推送配置</button>
                 <button class="btn" type="button" id="btnNotifyTest">测试推送</button>
                 <span class="foot-note" id="notifyHint">仅空间主可配置与测试</span>
@@ -3027,19 +3066,39 @@
             </div>
 
             <div class="panel" data-set-pane="members" id="set-members" hidden>
-              <div class="panel-head">
-                <h3>成员与角色</h3>
+              <span hidden id="wsMemberCount"></span>
+              <div class="set-toolbar" role="toolbar" aria-label="成员筛选">
+                <div class="tf-search">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5.2"/><path d="m12.6 12.6 3.4 3.4"/></svg>
+                  <input id="memSearch" type="search" placeholder="搜索姓名或 @登录名" autocomplete="off" aria-label="搜索成员" />
+                </div>
+                <select id="memRoleFilter" class="mini-select" aria-label="按角色筛选">
+                  <option value="">全部角色</option>
+                  <option value="owner">空间主</option>
+                  <option value="admin">管理员</option>
+                  <option value="member">成员</option>
+                  <option value="viewer">查看者</option>
+                </select>
+                <select id="memScopeFilter" class="mini-select" aria-label="按可见范围筛选">
+                  <option value="">全部可见范围</option>
+                  <option value="except">有可见范围例外</option>
+                  <option value="assigned">按项目分配</option>
+                </select>
+                <span class="spacer"></span>
+                <span id="memberTools"></span>
+                <span class="tiny" id="memFilterCount"></span>
                 <button class="perm-guide-btn" type="button" id="btnRoleGuide" title="查看各角色可执行的操作与可见菜单" aria-haspopup="dialog">角色权限说明</button>
-                <span class="meta-right" id="wsMemberCount"></span>
               </div>
-              <p class="set-hint">空间主的角色不可在这里修改；管理员只能调整成员与查看者。</p>
-              <div class="perm-guide" id="permGuide">
-                <div class="perm-guide-row"><span class="perm-chip owner">空间主</span><span>全部项目；调整所有成员（含管理员）、删除空间、配置推送</span></div>
-                <div class="perm-guide-row"><span class="perm-chip admin">管理员</span><span>全部项目；添加 / 移除成员与查看者、配置项目可见范围</span></div>
-                <div class="perm-guide-row"><span class="perm-chip member">成员</span><span>新成员只看到已分配的项目（可参与 / 只读）；早期成员默认全部，可按项目设为不可见</span></div>
-                <div class="perm-guide-row"><span class="perm-chip viewer">查看者</span><span>全部项目只读，不能修改任何数据</span></div>
+              <div class="set-legend">空间主 全部权限 · 管理员 除删除空间 · 成员 参与被授权项目 · 查看者 只读；最后一名管理员不可降级或移出。</div>
+              <div class="set-tablehead member-thead" aria-hidden="true">
+                <span>成员</span><span>角色</span><span>项目可见范围 · 只列例外</span><span>加入时间</span><span class="right">操作</span>
               </div>
               <div class="member-list" id="wsMemberList"></div>
+              <div class="set-tablefoot">
+                <span class="tiny" id="memFootText">—</span>
+                <span class="spacer"></span>
+                <button class="btn sm" type="button" id="btnCopyInviteLink">复制邀请链接</button>
+              </div>
               <p class="set-hint" id="wsMemberHint" hidden>共享空间不能直接把别人拉进来：请用下面的「邀请链接」发给对方，对方打开链接、确认后才会成为成员。</p>
               <div class="cfg-add" id="wsMemberAdd" hidden>
                 <div class="member-search-box">
@@ -3067,24 +3126,47 @@
             </div>
 
             <div class="panel" data-set-pane="visibility" id="set-access" hidden>
-              <div class="panel-head">
-                <h3>项目可见范围</h3>
-                <span class="meta-right" id="accessSummary"></span>
+              <span hidden id="accessSummary"></span>
+              <div class="set-toolbar" role="toolbar" aria-label="可见范围筛选">
+                <div class="seg mini" role="group" aria-label="成员范围">
+                  <button type="button" data-access-filter="all" aria-pressed="true">全部成员 <span id="accessAllCount">—</span></button>
+                  <button type="button" data-access-filter="except" aria-pressed="false">只看例外 <span id="accessExceptCount">—</span></button>
+                </div>
+                <span class="spacer"></span>
+                <div class="tf-search">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5.2"/><path d="m12.6 12.6 3.4 3.4"/></svg>
+                  <input id="accessSearch" type="search" placeholder="搜成员" autocomplete="off" aria-label="搜索成员" />
+                </div>
               </div>
-              <p class="set-hint">按「成员 × 项目」配置：可参与可读写；只读只能查看；不可见时该项目在项目、工作项、看板、报表中都不出现。新成员默认不参与任何项目，可用成员行的「分配项目」或邀请时先分配；早期加入的成员沿用「默认全部可参与」，只需把不该看到的项目设为不可见。空间主与管理员天然拥有全部项目，查看者为全局只读，均无需配置。</p>
               <div class="access-matrix-shell">
                 <div class="tbl-wrap access-matrix-wrap" id="projectAccessWrap">
                   <div class="foot-note">加载中…</div>
                 </div>
                 <span class="access-matrix-fade" aria-hidden="true"></span>
               </div>
+              <div class="set-tablefoot">
+                <span class="tiny">默认「参与」不参与视觉强调；只读为黄色，不可见为灰色。</span>
+                <span class="spacer"></span>
+                <span class="tiny" id="accessFootStats"></span>
+              </div>
             </div>
 
-            <div class="panel" data-set-pane="workflow" id="set-columns" hidden>
-              <div class="panel-head">
-                <h3>看板列</h3>
-                <span class="meta-right">用箭头调整顺序</span>
+            <div class="set-panelgroup" data-set-pane="workflow" id="set-workflow" hidden>
+              <div class="set-toolbar" role="toolbar" aria-label="工作流配置">
+                <div class="seg mini" role="group" aria-label="工作流分区">
+                  <button type="button" data-wf-tab="columns" aria-pressed="true">看板列 <span id="wfColumnsCount">—</span></button>
+                  <button type="button" data-wf-tab="transitions" aria-pressed="false">状态流转</button>
+                  <button type="button" data-wf-tab="priorities" aria-pressed="false">优先级 4</button>
+                  <button type="button" data-wf-tab="categories" aria-pressed="false">分类 <span id="wfCategoriesCount">—</span></button>
+                </div>
+                <span class="spacer"></span>
+                <span class="tiny">改动立即生效，已存在的记录不重算</span>
               </div>
+              <div class="panel" data-wf-pane="columns" id="set-columns">
+              <div class="colcfg-head" aria-hidden="true">
+                <span></span><span></span><span>列名</span><span>处理规则</span><span>类型</span><span class="right">顺序 / 删除</span>
+              </div>
+              <div class="cfg-list" id="colCfgList"></div>
               <div class="rule-legend" role="list" aria-label="处理规则说明">
                 <div class="rule-legend-item" role="listitem">
                   <span class="rule-dot normal" aria-hidden="true"></span>
@@ -3099,12 +3181,12 @@
                   <div class="rule-legend-txt"><b>结束计时</b><span>停止计时，也不再计算逾期</span></div>
                 </div>
               </div>
-              <p class="set-hint">前四个系统列可改名；规则变更只影响之后的计时与逾期，不改变已运行的计时；删除自定义列时，工作项移入最靠前的列。</p>
-              <p class="set-hint">「已取消」是终态，不在看板列与流转矩阵里；取消从卡片菜单或详情抽屉发起，已完成需先重开。</p>
-              <div class="colcfg-head" aria-hidden="true">
-                <span></span><span></span><span>列名</span><span>处理规则</span><span>类型</span><span class="right">顺序 / 删除</span>
+              <div class="wf-sync-cards">
+                <div class="wf-sync"><b>改动会同步到</b>看板列 · 工作项状态下拉 · 视图筛选条件 · 报表分组</div>
+                <div class="wf-sync"><b>不会重算</b>历史停留时间、已生成的发布快照与已完成记录的统计口径</div>
               </div>
-              <div class="cfg-list" id="colCfgList"></div>
+              <p class="wf-hint-note">前四个系统列可改名；规则变更只影响之后的计时与逾期，不改变已运行的计时；删除自定义列时，工作项移入最靠前的列。</p>
+              <p class="wf-hint-note">「已取消」是终态，不在看板列与流转矩阵里；取消从卡片菜单或详情抽屉发起，已完成需先重开。</p>
               <div class="cfg-add-head">添加自定义列</div>
               <div class="cfg-add">
                 <input type="color" id="colNewColor" value="#98A2B3" title="新列颜色" aria-label="新列颜色" />
@@ -3119,12 +3201,8 @@
               <p class="foot-note" id="colCfgHint" hidden>查看者只能查看看板列配置，不能添加、改名、改色或排序。</p>
             </div>
 
-            <div class="panel" data-set-pane="workflow" id="set-transitions" hidden>
-              <div class="panel-head">
-                <h3>状态流转</h3>
-                <span class="meta-right" id="colTransSummary"></span>
-              </div>
-              <p class="set-hint">点格子切换「允许 → 需填原因 → 禁止」，改动立即生效；「已完成」移出默认需填原因。</p>
+              <div class="panel" data-wf-pane="transitions" id="set-transitions" hidden>
+              <p class="set-hint">点格子切换「允许 → 需填原因 → 禁止」，改动立即生效；「已完成」移出默认需填原因。<span class="meta-right" id="colTransSummary" style="margin-left:8px"></span></p>
               <div class="trans-matrix-wrap"><div id="colTransMatrix"></div></div>
               <div class="trans-legend">
                 <span><i class="trans-dot allow"></i>允许</span>
@@ -3139,12 +3217,8 @@
               </div>
             </div>
 
-            <div class="panel" data-set-pane="workflow" id="set-priorities" hidden>
-              <div class="panel-head">
-                <h3>优先级</h3>
-                <span class="meta-right">固定四档 · 仅改显示</span>
-              </div>
-              <p class="set-hint">P0–P3 是数据档位，保持现有筛选、排序与导出口径；这里只配置各档在当前空间中的显示名和颜色。</p>
+              <div class="panel" data-wf-pane="priorities" id="set-priorities" hidden>
+              <p class="set-hint">固定四档 · 仅改显示：P0–P3 是数据档位，保持现有筛选、排序与导出口径；这里只配置各档在当前空间中的显示名和颜色。</p>
               <div class="cfg-list" id="priorityCfgList"></div>
               <div class="set-actions">
                 <button class="btn primary" type="button" id="btnPrioritySave">保存优先级</button>
@@ -3153,15 +3227,12 @@
               </div>
             </div>
 
-            <div class="panel" data-set-pane="workflow" id="set-categories" hidden>
-              <div class="panel-head">
-                <h3>分类</h3>
-                <span class="meta-right" id="wsCatCount"></span>
-              </div>
+              <div class="panel" data-wf-pane="categories" id="set-categories" hidden>
               <p class="set-hint">分类挂在项目下，用于筛选与统计。先选择项目，再添加、改名、改色或排序；项目写成员即可维护，删除分类仅空间主、管理员或项目负责人可操作，删除时其工作项与需求会迁到同项目的另一个分类。</p>
               <div class="cfg-pick">
                 <label for="wsCatProject">项目</label>
                 <select id="wsCatProject" class="mini-select" aria-label="选择要配置分类的项目"></select>
+                <span class="tiny" id="wsCatCount" style="margin-left:auto"></span>
               </div>
               <div class="cfg-list" id="wsCatList"></div>
               <div class="cfg-add">
@@ -3170,41 +3241,64 @@
                 <button class="btn sm" type="button" id="btnWsCatAdd">添加分类</button>
               </div>
               <p class="foot-note" id="wsCatHint" hidden>项目写成员可添加、改名与排序；删除分类仅空间主、管理员或项目负责人可操作。</p>
+              </div>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-data" hidden>
-              <div class="panel-head"><h3>数据</h3></div>
-              <div class="data-actions" style="margin-top:0">
-                <button class="btn" type="button" id="btnExport" title="导出任务数据：工作项、回收站、项目、子任务、标签、工时、评论、依赖/基线、文档与分支（不含附件文件与时间线）">
-                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v9.6M6.2 8.8 10 12.6 13.8 8.8M4.4 15.6h11.2"/></svg>
-                  导出任务备份
-                </button>
-                <button class="btn" type="button" id="btnImport" title="从任务备份恢复（覆盖工作项/项目/评论/依赖与基线；v6 备份还覆盖文档与分支，不含附件文件与时间线）">
-                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.6V4M6.2 8.2 10 4.4 13.8 8.2M4.4 15.6h11.2"/></svg>
-                  导入任务备份
-                </button>
-                <button class="btn" type="button" id="btnExportCsv" title="导出 CSV（Excel 可打开）">
-                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="4.2" width="13.2" height="11.6" rx="2"/><path d="M3.4 8.2h13.2M8 8.2v7.6"/></svg>
-                  导出 CSV
-                </button>
-                <button class="btn" type="button" id="btnNavTelemetryCsv" title="导出本机浏览器记录的视图进入次数与停留时长（只存本机，不上传服务端）">
-                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 15.4V4.6M4.2 15.4h11.4M7 12l3-3.6 2.4 2 3.2-4.6"/></svg>
-                  导出导航使用记录
-                </button>
+              <div class="exportgrid">
+                <div class="exp">
+                  <div class="h">交付备份 <span class="chip">推荐</span></div>
+                  <div class="d">给接手同学或迁移用：工作项、项目、工时、文档与分支。不含附件文件与时间线。</div>
+                  <div class="it">
+                    <span>完整备份</span><span class="m">JSON</span>
+                    <button class="btn sm" type="button" id="btnExport" title="导出任务数据：工作项、回收站、项目、子任务、标签、工时、评论、依赖/基线、文档与分支（不含附件文件与时间线）" style="margin-left:auto">导出</button>
+                  </div>
+                </div>
+                <div class="exp">
+                  <div class="h">分析</div>
+                  <div class="d">给 Excel / BI 用：一行一条记录，列头与页面一致，可直接透视。</div>
+                  <div class="it">
+                    <span>工作项 CSV</span><span class="m">表格</span>
+                    <button class="btn sm" type="button" id="btnExportCsv" title="导出 CSV（Excel 可打开）" style="margin-left:auto">导出</button>
+                  </div>
+                </div>
+                <div class="exp">
+                  <div class="h">诊断</div>
+                  <div class="d">排查问题与合规检查用：只读记录，不修改任何数据。</div>
+                  <div class="it">
+                    <span>导航使用记录</span><span class="m">只存本机</span>
+                    <button class="btn sm" type="button" id="btnNavTelemetryCsv" title="导出本机浏览器记录的视图进入次数与停留时长（只存本机，不上传服务端）" style="margin-left:auto">导出</button>
+                  </div>
+                </div>
+              </div>
+              <div class="card-lite">
+                <div class="subcard-head">
+                  <span>导入与恢复</span>
+                  <span class="tiny">覆盖导入会替换同名对象，不做合并</span>
+                </div>
+                <div class="import-row">
+                  <span class="fld dim">从任务备份恢复（覆盖工作项/项目/评论/依赖；v6 备份还覆盖文档与分支）</span>
+                  <button class="btn sm" type="button" id="btnImport" title="从任务备份恢复（覆盖工作项/项目/评论/依赖与基线；v6 备份还覆盖文档与分支，不含附件文件与时间线）">选择备份并导入</button>
+                  <button class="link-btn" type="button" id="btnImportHelp">先导出一份当前备份</button>
+                </div>
+              </div>
+              <div class="dangerzone">
+                <div style="flex:1">
+                  <div class="tt">清空任务数据</div>
+                  <div class="dd">删除本空间全部工作项与关联记录，保留项目、文档、成员与设置。执行前需先导出备份。</div>
+                </div>
+                <button class="btn" type="button" id="btnExportPre">先导出备份</button>
                 <button class="btn danger" type="button" id="btnReset">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/></svg>
                   <span id="resetLabel">清空任务数据</span>
                 </button>
-                <input type="file" id="fileImport" accept=".json,application/json" hidden />
               </div>
-              <p class="foot-note" style="margin-top:12px">导航使用记录只存在当前浏览器，不会上传。</p>
-              <p class="foot-note" style="margin-top:12px">备份含工作项、项目、工时、文档与分支；不含附件文件与操作时间线。</p>
-              <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
+              <input type="file" id="fileImport" accept=".json,application/json" hidden />
             </div>
 
             <div class="panel" data-set-pane="data" id="set-activity" hidden>
               <div class="panel-head">
-                <h3>活动</h3>
+                <h3>最近活动</h3>
                 <span class="meta-right" id="actCount"></span>
                 <button class="btn sm" type="button" id="actFilterBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="actFilterPop">筛选<span class="act-filter-badge" id="actFilterBadge" hidden></span></button>
                 <div class="menu act-filter-pop" id="actFilterPop" role="dialog" aria-label="筛选活动记录" hidden></div>
@@ -3222,6 +3316,12 @@
                 <button type="button" data-platform-tab="system" aria-pressed="false">系统信息</button>
                 <button type="button" data-platform-tab="audit" aria-pressed="false">审计日志</button>
               </div>
+              <div class="tf-search" id="platformSearchWrap">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5.2"/><path d="m12.6 12.6 3.4 3.4"/></svg>
+                <input id="platformSearch" type="search" placeholder="搜登录名或显示名" autocomplete="off" aria-label="搜索账号" />
+              </div>
+              <span class="spacer"></span>
+              <span class="tiny">平台设置只对平台管理员开放</span>
             </div>
 
             <div class="panel" data-set-pane="platform" data-platform-pane="system" id="set-system" hidden>
@@ -3342,15 +3442,19 @@
                           <div class="panel-head"><h3>回收站</h3><span class="meta-right">30 天自动清理</span></div>
                           <p class="set-hint">删除的工作项保留 30 天，之后自动清理；恢复后回到原看板列，彻底删除不可找回。</p>
                           <div class="trash-list" id="trashList"></div>
+                          <div class="set-tablefoot">
+                            <span class="tiny">导航使用记录只存在当前浏览器，不会上传。</span>
+                            <span class="spacer"></span>
+                            <span class="tiny" id="wsFootHint">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</span>
+                          </div>
                         </div>
             
                         <div class="panel" data-set-pane="platform" data-platform-pane="account" id="set-account" hidden>
-                          <div class="panel-head"><h3>账号管理</h3><span class="meta-right">仅平台管理员</span></div>
                           <div class="notice">
                             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 13.6V9.4"/><path d="M10 6.6h.01"/></svg>
                             <span>账号由平台管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除账号前需先清空其个人空间数据，且至少保留一名平台管理员。</span>
                           </div>
-                          <p class="set-hint" style="margin:10px 0 0">账号属于平台，空间角色属于某个空间：账号创建后不会自动加入共享空间，需要在「成员与权限」中分配角色。<button class="link-btn" type="button" id="btnAccountGotoMembers">去分配空间角色</button></p>
+                          <p class="set-hint" style="margin:10px 0 0">账号属于平台，空间角色属于某个空间：账号创建后不会自动加入共享空间，需要在「成员与角色」中分配角色。<button class="link-btn" type="button" id="btnAccountGotoMembers">去分配空间角色</button></p>
                           <div class="panel-head" style="margin-top:16px"><h3 style="font-size:14px">新建账号</h3></div>
                           <div class="user-add">
                             <input class="input" type="text" id="uNewName" maxlength="32" placeholder="登录名（字母数字._-）" aria-label="登录名" autocomplete="off" />
@@ -3711,7 +3815,7 @@
 <!-- 提需求 / 编辑需求 -->
 <div class="modal-layer side" id="dlgDemand" role="dialog" aria-modal="true" aria-labelledby="demandFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
   <div class="panel">
-    <div class="panel-head"><h3 id="demandFormTitle">提需求</h3><button class="icon-btn sm" type="button" id="dlgDemandX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+    <div class="panel-head"><h3 id="demandFormTitle">新建需求</h3><button class="icon-btn sm" type="button" id="dlgDemandX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
     <div class="stack proj-form-grid">
       <p class="foot-note span2" id="demandLockNote" hidden>已进入流转：标题与需求类型锁定；优先级在列表改，日期用「调整排期」。</p>
       <div class="field">

@@ -636,7 +636,7 @@ function openSpacePicker(anchor){
     UI.showConfirm({
       title: "切换空间",
       msg: "切换到「" + esc(target ? (target.name || target.id) : b.dataset.mobWs) +
-        "」会重新加载页面。空间专属的项目、分类、负责人条件会清空，通用筛选与「我的工作」分组会带过去；未保存的改动不会保留。",
+        "」会重新加载页面。空间专属的项目、分类、负责人条件会清空，「我的工作」的当前页签会保留；未保存的改动不会保留。",
       okText: "切换",
       cancelText: "取消"
     }).then(function(ok){

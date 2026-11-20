@@ -1,6 +1,7 @@
 /* manager.css · 管理组五视图 */
 
 #view-portfolio .view-page,#view-project .view-page,#view-report .view-page,#view-workload .view-page,#view-risks .view-page{display:flex;flex-direction:column;gap:14px;padding-top:16px;}
+#view-portfolio .view-page{padding-top:0;gap:12px;}
 .manager-toolbar{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);min-height:36px;flex-wrap:wrap;}
 .manager-toolbar>div:first-child{display:flex;align-items:center;gap:var(--space-3);min-width:0;flex-wrap:wrap;}
 .manager-toolbar b{font-size:16px;font-weight:650;}
@@ -49,10 +50,12 @@
 .manager-project-name{min-width:0;flex:1;text-align:left;font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .manager-project-name:hover{color:var(--primary-fg);}
 .manager-project-main{display:flex;align-items:center;gap:18px;}
-.manager-ring{--ring:var(--success);position:relative;width:62px;height:62px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ring) calc(var(--p)*1%),var(--surface-sunken) 0);border:0;padding:0;font:inherit;color:inherit;cursor:pointer;transition:box-shadow var(--dur-fast) var(--ease-out);}
+.manager-ring{--ring:var(--primary);position:relative;width:62px;height:62px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ring) calc(var(--p)*1%),var(--surface-sunken) 0);border:0;padding:0;font:inherit;color:inherit;cursor:pointer;transition:box-shadow var(--dur-fast) var(--ease-out);}
 .manager-ring:hover{box-shadow:0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent);}
 .manager-ring:focus-visible{outline:2px solid var(--primary);outline-offset:3px;}
-.manager-ring.orange{--ring:var(--warning);}
+/* 原型口径：常规进度主色、风险橙色、已交付才绿；旧类名保留给其他调用点 */
+.manager-ring.done{--ring:var(--success);}
+.manager-ring.warn,.manager-ring.orange{--ring:var(--warning);}
 .manager-ring.red{--ring:var(--danger);}
 .manager-ring::before{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--surface);}
 .manager-ring b{position:relative;font-size:13px;font-variant-numeric:tabular-nums;}
@@ -105,7 +108,7 @@
 .manager-epic-sub:hover{color:var(--primary-fg);text-decoration:underline;}
 .manager-epic-sub:focus-visible{outline:none;box-shadow:var(--ring-focus);border-radius:var(--r-xs);}
 .manager-tbl{width:100%;border-collapse:collapse;font-size:13px;}
-.manager-tbl th{height:36px;padding:0 10px;background:var(--surface-sunken);border-bottom:1px solid var(--head-border);color:var(--text-2);font-size:12px;font-weight:600;text-align:left;white-space:nowrap;}
+.manager-tbl th{height:34px;padding:0 10px;background:var(--tbl-head);border-bottom:1px solid var(--border);color:var(--text-3);font-size:11px;font-weight:550;text-align:left;white-space:nowrap;}
 .manager-tbl td{padding:var(--space-3) 10px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle;}
 .manager-tbl tbody tr:last-child td{border-bottom:none;}
 /* 表格内的分组行（项目集 / 下钻分组 / 驾驶舱分组）与列头同为 --surface-sunken 时层级会消失，
@@ -715,10 +718,11 @@ button.manager-overload-note:hover{border-color:var(--warning);}
   border:1px solid var(--primary-border);border-radius:var(--r-md);
   background:var(--primary-soft);font-size:12px;color:var(--text-2);}
 .risk-banner svg{flex:0 0 auto;color:var(--primary-fg);}
-.risk-filter{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.risk-filter{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;
+  min-height:48px;padding:7px 9px;background:var(--surface);border:1px solid var(--border);border-radius:11px;}
 .risk-filter .mini-select{min-width:130px;}
-.risk-filter .risk-search{margin-left:auto;display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;
-  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);color:var(--text-3);min-width:220px;}
+.risk-filter .risk-search{margin-left:auto;display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;
+  border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-3);min-width:220px;}
 .risk-filter .risk-search input{border:0;background:none;outline:none;font:inherit;font-size:13px;color:var(--text);width:100%;}
 .risk-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start;}
 .risk-group{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);margin-bottom:12px;overflow:hidden;}
@@ -766,32 +770,84 @@ button.manager-overload-note:hover{border-color:var(--warning);}
   .risk-row-owner{display:none;}
 }
 /* 项目集总览：页头口径 + 工具栏 + 健康卡片（无工作项不画 0% 环） */
-.pf-head{align-items:flex-start;}
-.pf-head-txt{display:flex;flex-direction:column;gap:3px;min-width:0;}
-.pf-head-title{display:flex;align-items:center;gap:8px;}
-.pf-head-title b{font-size:18px;font-weight:700;letter-spacing:-.01em;}
-.pf-head-sub{font-size:12px;color:var(--text-3);}
-.pf-scope{min-width:150px;}
-.pf-viewbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:5px 10px;
+/* KPI 对齐原型 .kpi：86px 高、11px 标签、22px 数值、10.5px 脚注 */
+.pf-kpis{gap:10px;}
+.pf-kpis .manager-kpi{height:86px;min-height:0;padding:11px 13px;gap:0;justify-content:center;}
+.pf-kpis .manager-kpi>span{font-size:11px;line-height:15px;color:var(--text-3);}
+.pf-kpis .manager-kpi-main{margin-top:2px;height:26px;align-items:center;}
+.pf-kpis .manager-kpi>small{margin-top:2px;}
+.pf-kpis .manager-kpi>b,.pf-kpis .manager-kpi-main>b{font-size:22px;line-height:26px;letter-spacing:-.01em;}
+.pf-kpis .manager-kpi-main>b small,.pf-kpis .manager-kpi>b small{font-size:11px;line-height:11px;vertical-align:2px;}
+.pf-kpis .manager-kpi>small{font-size:10.5px;line-height:15px;}
+.pf-kpis .manager-kpi-delta{height:16px;padding:0 6px;font-size:10.5px;}
+.pf-scope{min-width:132px;}
+.pf-viewbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:48px;padding:7px 9px;
   border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);}
-.pf-note{margin-left:auto;font-size:12px;color:var(--text-3);}
-.pf-card{padding:12px 14px;gap:8px;}
+.pf-viewbar .sel{height:30px;}
+.pf-viewbar .seg{height:30px;padding:2px;border:1px solid var(--border);border-radius:7px;}
+.pf-viewbar .seg button{height:26px;padding:0 9px;font-size:12px;border-radius:5px;}
+.pf-spacer{flex:1 1 auto;min-width:8px;}
+.pf-note{margin-left:0;font-size:10.5px;color:var(--text-3);white-space:nowrap;}
+.pf-card{padding:12px;gap:8px;}
 .pf-card .manager-project-head{gap:8px;}
-.pf-card .manager-project-name{font-size:14px;font-weight:600;flex:0 1 auto;}
-.pf-card-owner{margin-left:auto;font-size:12px;color:var(--text-3);white-space:nowrap;}
+.pf-card .manager-project-name{font-size:16px;font-weight:650;flex:0 1 auto;line-height:23px;}
+.pf-card-owner{margin-left:auto;font-size:10.5px;color:var(--text-3);white-space:nowrap;}
 .pf-card-main{display:flex;align-items:center;gap:12px;min-width:0;}
 .pf-card .manager-ring{width:52px;height:52px;}
 .pf-card .manager-ring::before{inset:5px;}
 .pf-card-cap{display:flex;flex-direction:column;gap:1px;min-width:0;}
 .pf-card-cap b{font-size:20px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums;}
-.pf-card-cap span{font-size:12px;color:var(--text-3);}
-.pf-card-alerts{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:1px;text-align:right;font-size:12px;color:var(--text-3);}
+.pf-card-cap span{font-size:10.5px;color:var(--text-3);}
+.pf-card-alerts{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:1px;text-align:right;font-size:10.5px;color:var(--text-3);}
 .pf-card-alerts b{font-weight:650;}
 .pf-card-alerts .over{color:var(--danger-fg);}
-.pf-card-stats{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-.pf-card-stats button{padding:0;border:0;background:none;font:inherit;font-size:12px;color:var(--text-3);cursor:pointer;}
+.pf-card-stats{display:flex;align-items:center;gap:12px;flex-wrap:wrap;line-height:15px;}
+.pf-card-stats button{padding:0;border:0;background:none;font:inherit;font-size:10.5px;color:var(--text-3);cursor:pointer;}
 .pf-card-stats button:hover{color:var(--primary-fg);}
 .pf-empty-ring{width:52px;height:52px;flex:0 0 auto;display:grid;place-items:center;border-radius:50%;
   border:1px dashed var(--border-strong);color:var(--text-3);}
 .pf-card.is-empty{border-style:dashed;background:var(--surface-2);}
 .pf-card.is-empty .pf-card-cap b{font-size:13px;font-weight:600;}
+
+/* —— 报表与成员负载：对齐 2026-11-19 全站原型 —— */
+/* 工具条卡片：原型 .toolbar 48px 高、11px 圆角、7×9 内边距；筛选区在卡内不再自带下边距 */
+.manager-toolbar.manager-tools-card{
+  min-height:48px;padding:7px 9px;align-items:center;flex-wrap:wrap;gap:8px 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:none;
+}
+.manager-tools-card .manager-label-filters{flex:1 1 auto;margin-bottom:0;}
+.manager-tools-card .manager-actions{margin-left:auto;}
+/* 页头按钮在手机端折叠，操作退回工具条内的这一份（桌面隐藏，避免同一动作出现两次） */
+.manager-actions-mobile{display:none;}
+@media(max-width:639.5px){
+  .manager-actions-mobile{display:flex;}
+  .manager-tools-card .manager-label-filters{margin-bottom:8px;}
+}
+
+/* 交付图表：原型 .chart 10×12 内边距、12.5px 标题、10px 说明、无阴影 */
+#view-report .manager-chart-grid{gap:10px;}
+#view-report .manager-chart-panel{padding:10px 12px 6px;border-radius:11px;box-shadow:none;}
+#view-report .manager-panel-head{margin-bottom:6px;}
+#view-report .manager-panel-head>b{font-size:12.5px;font-weight:650;}
+#view-report .manager-panel-head>span{font-size:10px;}
+#view-report .manager-chart{height:200px;}
+#view-report .manager-chart-legend{gap:12px;margin-top:6px;font-size:10.5px;}
+@media(max-width:760px){#view-report .manager-chart{height:180px;}}
+
+/* 成员负载：概览卡对齐原型 .kpi（11 / 22 / 10.5），筛选胶囊回到 12px */
+#view-workload .wl-summary-item{padding:11px 13px;gap:0;border-radius:var(--r-md);box-shadow:none;}
+#view-workload .wl-summary-item>span{font-size:11px;line-height:15px;color:var(--text-3);}
+#view-workload .wl-summary-item>b{font-size:22px;line-height:26px;letter-spacing:-.01em;margin-top:2px;}
+#view-workload .wl-summary-item>small{font-size:10.5px;line-height:15px;margin-top:2px;}
+#view-workload .wl-chip{font-size:12px;}
+/* 按人/按周与筛选同在一张工具条卡：桌面只留视图切换，手机才出现导出 */
+#view-workload .wl-tools{gap:0;}
+#view-workload .wl-tools-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+#view-workload .wl-tools-head .manager-actions{margin-left:auto;}
+#view-workload .wl-tools .manager-label-filters{margin-bottom:8px;}
+#view-workload .wl-tools .wl-filters,#view-workload .wl-tools .wl-period{margin:0 0 8px;}
+#view-workload .wl-tools .wl-filters:last-child,#view-workload .wl-tools .wl-period:last-child{margin-bottom:0;}
+
+/* 投入结构：KPI 说明按原型 11 / 10.5；筛选卡圆角在 investment.css 收敛 */
+#view-investment .inv-kl{font-size:11px;}
+#view-investment .inv-kd{font-size:10.5px;}

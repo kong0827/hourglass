@@ -85,6 +85,7 @@ function updateBrand(){
      版本详情 / 项目驾驶舱 / 发布工作台 / 交付说明 / 文档历史五个深页共用一套格式 */
   var CRUMB_OF = {
     project:    { group:"项目", view:"projects",     page:"驾驶舱" },
+    portfolio:  { group:"项目集", view:"portfolio",  page:"全部项目集" },
     version:    { group:"版本", view:"phase",        page:"详情" },
     release:    { group:"版本", view:"phase",        page:"发布工作台" },
     delivery:   { group:"版本", view:"phase",        page:"交付说明" },
@@ -92,8 +93,11 @@ function updateBrand(){
   };
   var crumb = CRUMB_OF[activeView];
   if(crumb){
-    /* 版本页把项目名放进面包屑第三段（原型「空间 / 版本 / 资金通」），发布/交付子页仍用页名 */
-    var pageName = (activeView === "phase" && rt.phaseProjectName) ? rt.phaseProjectName : crumb.page;
+    /* 版本页把项目名放进面包屑第三段（原型「空间 / 版本 / 资金通」），发布/交付子页仍用页名；
+       项目集选中某个集时第三段换成集名，与原型「空间 / 项目集 / 外接产品线」一致 */
+    var pageName = (activeView === "phase" && rt.phaseProjectName) ? rt.phaseProjectName
+      : (activeView === "portfolio" && rt.portfolioSetName) ? rt.portfolioSetName
+      : crumb.page;
     var segs = [];
     if(wsName) segs.push('<span title="' + esc(wsName) + '">' + esc(wsName) + '</span>');
     segs.push('<button type="button" class="crumb-link" data-crumb-view="' + crumb.view + '" title="返回' + esc(crumb.group) + '列表">' + esc(crumb.group) + '</button>');

@@ -22,6 +22,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,11 +60,11 @@ class MyTasksControllerPaginationTest {
         MyTaskWorkspace ws = new MyTaskWorkspace();
         ws.setId("W1");
         ws.setName("空间一");
-        when(queryService.myTasksPage(eq("U1"), eq("我"), eq(true), eq(false), any(), eq(0), eq(100)))
+        when(queryService.myTasksPage(eq("U1"), eq("我"), eq(true), eq(false), isNull(), eq(false), any(), eq(0), eq(100)))
                 .thenReturn(new MyTasksPage(Arrays.asList(t1, t2), 10,
                         Collections.singletonList(ws), 1));
 
-        ApiResult<Map<String, Object>> res = controller.myTasks(null, null, null, null, null, null,
+        ApiResult<Map<String, Object>> res = controller.myTasks(null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 null);
 
@@ -81,26 +82,26 @@ class MyTasksControllerPaginationTest {
 
     @Test
     void clampsLimitAndNegativeOffset() {
-        when(queryService.myTasksPage(eq("U1"), eq("我"), eq(true), eq(false), any(), eq(0), eq(100)))
+        when(queryService.myTasksPage(eq("U1"), eq("我"), eq(true), eq(false), isNull(), eq(false), any(), eq(0), eq(100)))
                 .thenReturn(new MyTasksPage(Collections.<Task>emptyList(), 0,
                         Collections.<MyTaskWorkspace>emptyList(), 0));
 
-        Map<String, Object> data = controller.myTasks(null, null, null, null, null, null,
+        Map<String, Object> data = controller.myTasks(null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, -3, 9999).getData();
 
         assertEquals(0, data.get("offset"));
         assertEquals(100, data.get("limit"));
         assertEquals(Boolean.FALSE, data.get("hasMore"));
-        verify(queryService).myTasksPage(eq("U1"), eq("我"), eq(true), eq(false), any(), eq(0), eq(100));
+        verify(queryService).myTasksPage(eq("U1"), eq("我"), eq(true), eq(false), isNull(), eq(false), any(), eq(0), eq(100));
     }
 
     @Test
     void lastPageHasNoMore() {
-        when(queryService.myTasksPage(eq("U1"), eq("我"), eq(true), eq(false), any(), eq(4), eq(100)))
+        when(queryService.myTasksPage(eq("U1"), eq("我"), eq(true), eq(false), isNull(), eq(false), any(), eq(4), eq(100)))
                 .thenReturn(new MyTasksPage(Collections.singletonList(task("K5")), 5,
                         Collections.<MyTaskWorkspace>emptyList(), 0));
 
-        Map<String, Object> data = controller.myTasks(null, null, null, null, null, null,
+        Map<String, Object> data = controller.myTasks(null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 4, 100).getData();
 
         assertEquals(Boolean.FALSE, data.get("hasMore"));

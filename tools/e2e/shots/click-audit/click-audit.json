@@ -1,0 +1,1092 @@
+{
+  "base": "http://127.0.0.1:8081/hourglass",
+  "time": "2026-11-20T00:13:07.035Z",
+  "total": 120,
+  "ok": 111,
+  "warn": 0,
+  "skip": 9,
+  "fail": 0,
+  "failures": [],
+  "results": [
+    {
+      "view": "global",
+      "text": "侧栏 logo",
+      "cat": "switch",
+      "why": "全局",
+      "sel": "#sideBrand",
+      "status": "ok",
+      "note": "→ mine"
+    },
+    {
+      "view": "global",
+      "text": "收起侧栏",
+      "cat": "probe",
+      "why": "全局",
+      "sel": "#btnRail",
+      "status": "ok",
+      "note": "侧栏状态切换（已还原）"
+    },
+    {
+      "view": "global",
+      "text": "空间切换菜单",
+      "cat": "open",
+      "why": "全局",
+      "sel": "#wsSwitch",
+      "status": "ok",
+      "note": "已响应"
+    },
+    {
+      "view": "global",
+      "text": "全局搜索",
+      "cat": "open",
+      "why": "全局",
+      "sel": "#btnGlobalSearch",
+      "status": "ok",
+      "note": "已响应"
+    },
+    {
+      "view": "global",
+      "text": "帮助菜单",
+      "cat": "open",
+      "why": "全局",
+      "sel": "#btnHelp",
+      "status": "ok",
+      "note": "已响应"
+    },
+    {
+      "view": "global",
+      "text": "深浅色切换",
+      "cat": "probe",
+      "why": "全局",
+      "sel": "#btnTheme",
+      "status": "ok",
+      "note": "light → dark（已还原）"
+    },
+    {
+      "view": "global",
+      "text": "通知中心",
+      "cat": "open",
+      "why": "全局",
+      "sel": "#btnAlert",
+      "status": "ok",
+      "note": "已响应"
+    },
+    {
+      "view": "global",
+      "text": "AI 助手",
+      "cat": "open",
+      "why": "全局",
+      "sel": "#aiFab",
+      "status": "ok",
+      "note": "已响应"
+    },
+    {
+      "view": "global",
+      "text": "个人设置入口",
+      "cat": "switch",
+      "why": "全局",
+      "sel": "#sideUserBtn",
+      "status": "ok",
+      "note": "已响应"
+    },
+    {
+      "view": "global",
+      "text": "设置入口",
+      "cat": "switch",
+      "why": "全局",
+      "sel": "#sideSettings",
+      "status": "ok",
+      "note": "已响应"
+    },
+    {
+      "view": "global",
+      "text": "全局搜索：输入关键字",
+      "cat": "input",
+      "why": "检索",
+      "sel": "#btnGlobalSearch",
+      "status": "ok",
+      "note": "返回 13 条/组"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 mine",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"mine\"]",
+      "status": "ok",
+      "note": "→ mine"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 messages",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"messages\"]",
+      "status": "ok",
+      "note": "→ messages"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 review",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"review\"]",
+      "status": "ok",
+      "note": "→ review"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 demands",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"demands\"]",
+      "status": "ok",
+      "note": "→ demands"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 projects",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"projects\"]",
+      "status": "ok",
+      "note": "→ projects"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 phase",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"phase\"]",
+      "status": "ok",
+      "note": "→ phase"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 delivery",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"delivery\"]",
+      "status": "ok",
+      "note": "→ delivery"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 branches",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"branches\"]",
+      "status": "ok",
+      "note": "→ branches"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 workitems",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"workitems\"]",
+      "status": "ok",
+      "note": "→ board"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 requirements",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"requirements\"]",
+      "status": "ok",
+      "note": "→ requirements"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 testcases",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"testcases\"]",
+      "status": "ok",
+      "note": "→ testcases"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 insight",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"insight\"]",
+      "status": "ok",
+      "note": "→ analysis"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 workload",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"workload\"]",
+      "status": "ok",
+      "note": "→ workload"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 risks",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"risks\"]",
+      "status": "ok",
+      "note": "→ risks"
+    },
+    {
+      "view": "global",
+      "text": "侧栏 settings",
+      "cat": "switch",
+      "why": "导航",
+      "sel": "#sideNav [data-view=\"settings\"]",
+      "status": "ok",
+      "note": "→ settings"
+    },
+    {
+      "view": "mine",
+      "text": "今天到期 1 收起",
+      "cat": "open",
+      "why": "打开 data-mineToggle",
+      "sel": "#view-mine>div.view-page\\.wide:nth-child(1)>div.mw-body:nth-child(4)>div.mine-groups:nth-child(1)>div.list-scroll\\.mine-list:nth-child(1)>div.list-body:nth-child(2)>section.mine-grp\\.has-head:nth-child(1)>div.mine-grp-h:nth-child(1)",
+      "status": "skip",
+      "note": "点击前元素已消失"
+    },
+    {
+      "view": "mine",
+      "text": "待处理",
+      "cat": "open",
+      "why": "打开 data-mineCell",
+      "sel": "#view-mine [data-mine-cell='status']",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "mine",
+      "text": "程序化报备",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-mine [data-jump-project='Xkp02S3']",
+      "status": "ok",
+      "note": "视图变化 16/2828"
+    },
+    {
+      "view": "mine",
+      "text": "改期",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-mine>div.list-scroll\\.mine-list:nth-child(1)>div.list-body:nth-child(2)>section.mine-grp\\.has-head:nth-child(1)>div.mine-grp-body:nth-child(2)>div.list-row:nth-child(1)>span.mine-acts:nth-child(6)>button.icon-btn\\.sm:nth-child(2)",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "mine",
+      "text": "标记完成",
+      "cat": "danger",
+      "why": "写操作 data-mineDone",
+      "sel": "#view-mine>div.list-scroll\\.mine-list:nth-child(1)>div.list-body:nth-child(2)>section.mine-grp\\.has-head:nth-child(1)>div.mine-grp-body:nth-child(2)>div.list-row:nth-child(1)>span.mine-acts:nth-child(6)>button.icon-btn\\.sm:nth-child(1)",
+      "status": "skip",
+      "note": "写操作，未点击（保护演示数据）"
+    },
+    {
+      "view": "portfolio",
+      "text": "新建项目",
+      "cat": "open",
+      "why": "打开 btnPfNewProject",
+      "sel": "#btnPfNewProject",
+      "status": "ok",
+      "note": "弹窗 dlgProject"
+    },
+    {
+      "view": "portfolio",
+      "text": "全屏查看",
+      "cat": "open",
+      "why": "打开 data-viewFullscreen",
+      "sel": "#view-portfolio>div.view-page\\.wide:nth-child(1)>div.manager-toolbar\\.pf-head:nth-child(1)>div.manager-actions:nth-child(2)>button.icon-btn\\.sm:nth-child(4)",
+      "status": "ok",
+      "note": "进入全屏"
+    },
+    {
+      "view": "portfolio",
+      "text": "进行中项目 22 / 25 其余 3 个未开始或已完成",
+      "cat": "open",
+      "why": "打开 data-kpi",
+      "sel": "#view-portfolio [data-kpi='projects']",
+      "status": "ok",
+      "note": "弹窗 modal-layer open"
+    },
+    {
+      "view": "portfolio",
+      "text": "显示字段",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#btnPortfolioColumns",
+      "status": "ok",
+      "note": "弹窗 modal-layer column-pref-modal open"
+    },
+    {
+      "view": "portfolio",
+      "text": "外接",
+      "cat": "open",
+      "why": "打开 data-openProject",
+      "sel": "#view-portfolio [data-open-project='Xkp02S1']",
+      "status": "ok",
+      "note": "视图变化 0/0"
+    },
+    {
+      "view": "portfolio",
+      "text": "12",
+      "cat": "open",
+      "why": "打开 data-projectDrill",
+      "sel": "#view-portfolio [data-project-drill='Xkp02S1']",
+      "status": "ok",
+      "note": "弹窗 modal-layer open"
+    },
+    {
+      "view": "portfolio",
+      "text": "1",
+      "cat": "open",
+      "why": "打开 data-projectDrill",
+      "sel": "#view-portfolio [data-project-drill='Xkp02S1']",
+      "status": "ok",
+      "note": "弹窗 modal-layer open"
+    },
+    {
+      "view": "portfolio",
+      "text": "导出周报",
+      "cat": "download",
+      "why": "导出",
+      "sel": "#view-portfolio>div.view-page\\.wide:nth-child(1)>div.manager-toolbar\\.pf-head:nth-child(1)>div.manager-actions:nth-child(2)>button.btn\\.sm:nth-child(2)",
+      "status": "ok",
+      "note": "导出已点击（下载被拦截）"
+    },
+    {
+      "view": "portfolio",
+      "text": "全部项目集 流程引擎 其他项目 [select]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#view-portfolio>div.view-page\\.wide:nth-child(1)>div.manager-toolbar\\.pf-head:nth-child(1)>div.manager-actions:nth-child(2)>select.sel\\.sm:nth-child(1)",
+      "status": "skip",
+      "note": "选项不足"
+    },
+    {
+      "view": "portfolio",
+      "text": "卡片",
+      "cat": "switch",
+      "why": "切换 data-pfMode",
+      "sel": "#view-portfolio [data-pf-mode='card']",
+      "status": "ok",
+      "note": "已保存视图偏好（非业务数据）"
+    },
+    {
+      "view": "portfolio",
+      "text": "列表",
+      "cat": "switch",
+      "why": "切换 data-pfMode",
+      "sel": "#view-portfolio [data-pf-mode='table']",
+      "status": "ok",
+      "note": "已保存视图偏好（非业务数据）"
+    },
+    {
+      "view": "list",
+      "text": "显示字段 8/16",
+      "cat": "open",
+      "why": "打开 btnListColumns",
+      "sel": "#btnListColumns",
+      "status": "ok",
+      "note": "弹窗 modal-layer column-pref-modal open"
+    },
+    {
+      "view": "list",
+      "text": "＋ 保存视图",
+      "cat": "open",
+      "why": "打开 data-listSave",
+      "sel": "#view-list>div.view-page\\.wide:nth-child(1)>div.smart-list-bar:nth-child(1)>div.smart-view-tools:nth-child(2)>button.btn\\.sm:nth-child(11)",
+      "status": "ok",
+      "note": "弹窗 dlgViewName"
+    },
+    {
+      "view": "list",
+      "text": "导出当前视图",
+      "cat": "download",
+      "why": "导出",
+      "sel": "#view-list>div.view-page\\.wide:nth-child(1)>div.smart-list-bar:nth-child(1)>div.smart-view-tools:nth-child(2)>button.btn\\.sm:nth-child(10)",
+      "status": "ok",
+      "note": "导出已点击（下载被拦截）"
+    },
+    {
+      "view": "list",
+      "text": "工作项",
+      "cat": "sort",
+      "why": "排序",
+      "sel": "#view-list [data-sort-col='title']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "list",
+      "text": "状态",
+      "cat": "sort",
+      "why": "排序",
+      "sel": "#view-list [data-sort-col='column']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "list",
+      "text": "优先级",
+      "cat": "sort",
+      "why": "排序",
+      "sel": "#view-list [data-sort-col='priority']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "list",
+      "text": "负责人",
+      "cat": "sort",
+      "why": "排序",
+      "sel": "#view-list [data-sort-col='owner']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "list",
+      "text": "截止",
+      "cat": "sort",
+      "why": "排序",
+      "sel": "#view-list [data-sort-col='dueDate']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "list",
+      "text": "项目",
+      "cat": "sort",
+      "why": "排序",
+      "sel": "#view-list [data-sort-col='project']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "list",
+      "text": "计划版本",
+      "cat": "sort",
+      "why": "排序",
+      "sel": "#view-list [data-sort-col='version']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "list",
+      "text": "更新",
+      "cat": "sort",
+      "why": "排序",
+      "sel": "#view-list [data-sort-col='updatedAt']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "list",
+      "text": "不分组 负责人 优先级 项目 项目集 状态 版本 [select]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#view-list>div.view-page\\.wide:nth-child(1)>div.smart-list-bar:nth-child(1)>div.smart-view-tools:nth-child(2)>label.smart-view-control:nth-child(2)>select.mini-select:nth-child(2)",
+      "status": "skip",
+      "note": "选项不足"
+    },
+    {
+      "view": "list",
+      "text": "不分组 负责人 优先级 项目 项目集 状态 版本 [select]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#view-list>div.view-page\\.wide:nth-child(1)>div.smart-list-bar:nth-child(1)>div.smart-view-tools:nth-child(2)>label.smart-view-control:nth-child(3)>select.mini-select:nth-child(2)",
+      "status": "skip",
+      "note": "选项不足"
+    },
+    {
+      "view": "list",
+      "text": "默认排序 按截止日期 按优先级 按预估工时 按实际工时 按更新时间 按标题 按类 [listSort]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#listSort",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "list",
+      "text": "全选当前页",
+      "cat": "checkbox",
+      "why": "开关",
+      "sel": "#view-list>div.view-page\\.wide:nth-child(1)>div.list-scroll:nth-child(4)>div.list-head:nth-child(1)>span:nth-child(1)>input.cbx:nth-child(1)",
+      "status": "skip",
+      "note": "元素不存在"
+    },
+    {
+      "view": "list",
+      "text": "全部工作项",
+      "cat": "switch",
+      "why": "切换 data-listPreset",
+      "sel": "#view-list [data-list-preset='all']",
+      "status": "ok",
+      "note": "切换生效"
+    },
+    {
+      "view": "list",
+      "text": "分派给我",
+      "cat": "switch",
+      "why": "切换 data-listPreset",
+      "sel": "#view-list [data-list-preset='mine']",
+      "status": "ok",
+      "note": "已选中/已请求"
+    },
+    {
+      "view": "list",
+      "text": "进行中",
+      "cat": "switch",
+      "why": "切换 data-listPreset",
+      "sel": "#view-list [data-list-preset='doing']",
+      "status": "ok",
+      "note": "已选中/已请求"
+    },
+    {
+      "view": "list",
+      "text": "已逾期",
+      "cat": "switch",
+      "why": "切换 data-listPreset",
+      "sel": "#view-list [data-list-preset='over']",
+      "status": "ok",
+      "note": "切换生效"
+    },
+    {
+      "view": "list",
+      "text": "隐藏已完成",
+      "cat": "switch",
+      "why": "切换 data-listHideDone",
+      "sel": "#view-list>div.view-page\\.wide:nth-child(1)>div.smart-list-bar:nth-child(1)>div.smart-view-tools:nth-child(2)>button.btn\\.sm:nth-child(4)",
+      "status": "ok",
+      "note": "切换生效"
+    },
+    {
+      "view": "calendar",
+      "text": "上个月",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#calPrev",
+      "status": "ok",
+      "note": "视图变化 44/712"
+    },
+    {
+      "view": "calendar",
+      "text": "下个月",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#calNext",
+      "status": "ok",
+      "note": "视图变化 57/2428"
+    },
+    {
+      "view": "calendar",
+      "text": "1 外接客户季度报告 亮 4 项已完成",
+      "cat": "open",
+      "why": "打开 data-calDate",
+      "sel": "#view-calendar [data-cal-date='2026-11-01']",
+      "status": "ok",
+      "note": "视图变化 46/1514"
+    },
+    {
+      "view": "calendar",
+      "text": "外接客户季度报告 亮",
+      "cat": "open",
+      "why": "打开 data-calId",
+      "sel": "#view-calendar [data-cal-id='Xkt2002']",
+      "status": "ok",
+      "note": "弹窗 taskDrawer"
+    },
+    {
+      "view": "calendar",
+      "text": "4 项已完成",
+      "cat": "open",
+      "why": "打开 data-calShowDone",
+      "sel": "#view-calendar [data-cal-show-done='2026-11-01']",
+      "status": "ok",
+      "note": "视图变化 50/2167"
+    },
+    {
+      "view": "calendar",
+      "text": "本月未排期 9",
+      "cat": "open",
+      "why": "展开",
+      "sel": "#view-calendar>div.cal-layout:nth-child(1)>div:nth-child(1)>details.unplanned-box:nth-child(3)>summary:nth-child(1)",
+      "status": "ok",
+      "note": "视图变化 50/2678"
+    },
+    {
+      "view": "calendar",
+      "text": "更多操作：出金比例流程新增和配置",
+      "cat": "open",
+      "why": "打开 data-cardMenu",
+      "sel": "#view-calendar [data-card-menu='Kmwiv4foc5wvs2h4r']",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "calendar",
+      "text": "今天",
+      "cat": "action",
+      "why": "动作 ",
+      "sel": "#calToday",
+      "status": "ok",
+      "note": "已定位今天（今日单元格在月历中）"
+    },
+    {
+      "view": "calendar",
+      "text": "+2 更多",
+      "cat": "action",
+      "why": "展开当天全部（选中日期）",
+      "sel": "#view-calendar>div.cal-layout:nth-child(1)>div:nth-child(1)>div.cal-card:nth-child(2)>div.cal-grid:nth-child(2)>div.cal-day:nth-child(22)>div.cal-tasks:nth-child(3)>button.cal-more:nth-child(4)",
+      "status": "ok",
+      "note": "动作已触发"
+    },
+    {
+      "view": "gantt",
+      "text": "全屏查看",
+      "cat": "open",
+      "why": "打开 data-viewFullscreen",
+      "sel": "#view-gantt>div.view-page\\.wide:nth-child(1)>div.page-toolbar:nth-child(1)>span.toolbar-right:nth-child(3)>button.icon-btn\\.sm:nth-child(1)",
+      "status": "ok",
+      "note": "进入全屏"
+    },
+    {
+      "view": "gantt",
+      "text": "筛选",
+      "cat": "open",
+      "why": "打开 ganttFilterBtn",
+      "sel": "#ganttFilterBtn",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "gantt",
+      "text": "视图列表",
+      "cat": "open",
+      "why": "打开 ganttViewsBtn",
+      "sel": "#ganttViewsBtn",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "gantt",
+      "text": "‹",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#ganttPrevMonth",
+      "status": "ok",
+      "note": "视图变化 0/722"
+    },
+    {
+      "view": "gantt",
+      "text": "›",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#ganttNextMonth",
+      "status": "ok",
+      "note": "视图变化 0/2123"
+    },
+    {
+      "view": "gantt",
+      "text": "更多",
+      "cat": "open",
+      "why": "展开",
+      "sel": "#view-gantt>div.view-page\\.wide:nth-child(1)>div.gantt-tools:nth-child(2)>div.gantt-tools-right:nth-child(2)>details.gantt-more:nth-child(5)>summary.btn\\.sm:nth-child(1)",
+      "status": "ok",
+      "note": "视图变化 0/2193"
+    },
+    {
+      "view": "gantt",
+      "text": "",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#ganttExportBtn",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "gantt",
+      "text": "外接客户季度报告 中 合规管理 张亮 10-12→2027-2027-02-18 估 152h ",
+      "cat": "open",
+      "why": "打开 data-ganttOpen",
+      "sel": "#view-gantt [data-gantt-open='Xkt2002']",
+      "status": "ok",
+      "note": "弹窗 taskDrawer"
+    },
+    {
+      "view": "gantt",
+      "text": "未排期 7 没有开始/截止日期 · 拖到时间轴即可排期 收起",
+      "cat": "open",
+      "why": "打开 ganttUnplannedToggle",
+      "sel": "#ganttUnplannedToggle",
+      "status": "ok",
+      "note": "视图变化 0/1798"
+    },
+    {
+      "view": "gantt",
+      "text": "中 获取出金比例流程申请基础信息 提高出金比例 · 提高出金比例 · 肖威 · 进行中",
+      "cat": "open",
+      "why": "打开 data-ganttOpen",
+      "sel": "#view-gantt [data-gantt-open='Kmwiuxbryloazwse7']",
+      "status": "ok",
+      "note": "弹窗 taskDrawer"
+    },
+    {
+      "view": "gantt",
+      "text": "不分组 负责人 优先级 项目 项目集 状态 [ganttGroup]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#ganttGroup",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "gantt",
+      "text": "行密度 [ganttDensity]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#ganttDensity",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "gantt",
+      "text": "时间轴缩放 [ganttZoom]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#ganttZoom",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "gantt",
+      "text": "时间刻度 [ganttScale]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#ganttScale",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "gantt",
+      "text": "on",
+      "cat": "checkbox",
+      "why": "开关",
+      "sel": "#ganttShowDone",
+      "status": "ok",
+      "note": "勾选可切换（已还原）"
+    },
+    {
+      "view": "gantt",
+      "text": "自动覆盖全部工作项并包含今天",
+      "cat": "switch",
+      "why": "切换 data-ganttRange",
+      "sel": "#view-gantt [data-gantt-range='auto']",
+      "status": "ok",
+      "note": "切换生效"
+    },
+    {
+      "view": "gantt",
+      "text": "按自然月查看",
+      "cat": "switch",
+      "why": "切换 data-ganttRange",
+      "sel": "#view-gantt [data-gantt-range='month']",
+      "status": "ok",
+      "note": "切换生效"
+    },
+    {
+      "view": "gantt",
+      "text": "刷新",
+      "cat": "action",
+      "why": "动作 ",
+      "sel": "#ganttRefresh",
+      "status": "ok",
+      "note": "动作已触发"
+    },
+    {
+      "view": "gantt",
+      "text": "撤销",
+      "cat": "action",
+      "why": "动作 ",
+      "sel": "#ganttUndo",
+      "status": "skip",
+      "note": "禁用"
+    },
+    {
+      "view": "gantt",
+      "text": "今天",
+      "cat": "action",
+      "why": "动作 ",
+      "sel": "#ganttToday",
+      "status": "ok",
+      "note": "时间轴已回到今天"
+    },
+    {
+      "view": "gantt",
+      "text": "",
+      "cat": "action",
+      "why": "动作 ",
+      "sel": "#ganttAnalysisBtn",
+      "status": "ok",
+      "note": "动作已触发"
+    },
+    {
+      "view": "workcolumn",
+      "text": "待处理 27",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-wc-col='backlog']",
+      "status": "ok",
+      "note": "视图变化 0/2209"
+    },
+    {
+      "view": "workcolumn",
+      "text": "进行中 19",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-wc-col='doing']",
+      "status": "ok",
+      "note": "原已展开/选中（点击保持）"
+    },
+    {
+      "view": "workcolumn",
+      "text": "待测试 12",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-wc-col='test']",
+      "status": "ok",
+      "note": "视图变化 0/1023"
+    },
+    {
+      "view": "workcolumn",
+      "text": "测试中 6",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-wc-col='testing']",
+      "status": "ok",
+      "note": "视图变化 0/702"
+    },
+    {
+      "view": "workcolumn",
+      "text": "已完成 11",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-wc-col='done']",
+      "status": "ok",
+      "note": "视图变化 0/1101"
+    },
+    {
+      "view": "workcolumn",
+      "text": "更多筛选",
+      "cat": "open",
+      "why": "打开 data-wcMore",
+      "sel": "#view-workcolumn>div:nth-child(1)>div.wc-body:nth-child(2)>div:nth-child(1)>div.wc-filters:nth-child(1)>div.wc-filter-row:nth-child(1)>button.wc-more-btn:nth-child(7)",
+      "status": "ok",
+      "note": "视图变化 0/1527"
+    },
+    {
+      "view": "workcolumn",
+      "text": "程序化报备",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-jump-project='Xkp02S3']",
+      "status": "ok",
+      "note": "视图变化 19/3074"
+    },
+    {
+      "view": "workcolumn",
+      "text": "技术平台",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-jump-project='Xkp10']",
+      "status": "ok",
+      "note": "视图变化 15/2835"
+    },
+    {
+      "view": "workcolumn",
+      "text": "提高出金比例",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-jump-project='Xkp02S6']",
+      "status": "ok",
+      "note": "视图变化 17/2897"
+    },
+    {
+      "view": "workcolumn",
+      "text": "API开放平台",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-jump-project='Xkp05']",
+      "status": "ok",
+      "note": "视图变化 17/3084"
+    },
+    {
+      "view": "workcolumn",
+      "text": "合规管理",
+      "cat": "open",
+      "why": "默认按打开类验证",
+      "sel": "#view-workcolumn [data-jump-project='Xkp02S5']",
+      "status": "ok",
+      "note": "视图变化 17/2921"
+    },
+    {
+      "view": "workcolumn",
+      "text": "优先级",
+      "cat": "sort",
+      "why": "排序 data-wc-sort",
+      "sel": "#view-workcolumn [data-wc-sort='priority']",
+      "status": "ok",
+      "note": "排序标记变化"
+    },
+    {
+      "view": "workcolumn",
+      "text": "截止 ↑",
+      "cat": "sort",
+      "why": "排序 data-wc-sort",
+      "sel": "#view-workcolumn [data-wc-sort='due']",
+      "status": "ok",
+      "note": "已是该列排序（表头不切换升/降序）"
+    },
+    {
+      "view": "workcolumn",
+      "text": "全部 已逾期 今天到期 3 天内 未设截止 [select]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#view-workcolumn [data-wc-filter='due']",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "workcolumn",
+      "text": "全部发布状态 已发布 未发布 [select]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#view-workcolumn [data-wc-filter='pubState']",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "workcolumn",
+      "text": "截止日期 优先级 更新时间 [select]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#view-workcolumn [data-wc-filter='sort']",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "workcolumn",
+      "text": "不分组 负责人 优先级 项目 项目集 [select]",
+      "cat": "select",
+      "why": "下拉",
+      "sel": "#view-workcolumn [data-wc-filter='group']",
+      "status": "ok",
+      "note": "切换后内容变化"
+    },
+    {
+      "view": "workcolumn",
+      "text": "搜索工作项",
+      "cat": "input",
+      "why": "检索",
+      "sel": "#view-workcolumn [data-wc-filter='q']",
+      "status": "ok",
+      "note": "输入会过滤/检索"
+    },
+    {
+      "view": "workcolumn",
+      "text": "看板",
+      "cat": "switch",
+      "why": "切换 data-wcBack",
+      "sel": "#view-workcolumn>div:nth-child(1)>header.wc-head:nth-child(1)>div.wc-head-top:nth-child(1)>button.wc-back:nth-child(1)",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "workcolumn",
+      "text": "项目",
+      "cat": "switch",
+      "why": "切换 data-wcDim",
+      "sel": "#view-workcolumn [data-wc-dim='reqs']",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "workcolumn",
+      "text": "负责人",
+      "cat": "switch",
+      "why": "切换 data-wcDim",
+      "sel": "#view-workcolumn [data-wc-dim='owners']",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "workcolumn",
+      "text": "优先级",
+      "cat": "switch",
+      "why": "切换 data-wcDim",
+      "sel": "#view-workcolumn [data-wc-dim='pris']",
+      "status": "ok",
+      "note": "菜单/浮层打开"
+    },
+    {
+      "view": "workcolumn",
+      "text": "卡片",
+      "cat": "switch",
+      "why": "切换 data-wcLayout",
+      "sel": "#view-workcolumn [data-wc-layout='card']",
+      "status": "ok",
+      "note": "已选中/已请求"
+    },
+    {
+      "view": "workcolumn",
+      "text": "列表",
+      "cat": "switch",
+      "why": "切换 data-wcLayout",
+      "sel": "#view-workcolumn [data-wc-layout='list']",
+      "status": "ok",
+      "note": "已选中/已请求"
+    },
+    {
+      "view": "workcolumn",
+      "text": "标准",
+      "cat": "switch",
+      "why": "切换 data-listDensity",
+      "sel": "#view-workcolumn [data-list-density='standard']",
+      "status": "ok",
+      "note": "原已选中（点击保持）"
+    },
+    {
+      "view": "workcolumn",
+      "text": "宽松",
+      "cat": "switch",
+      "why": "切换 data-listDensity",
+      "sel": "#view-workcolumn [data-list-density='relaxed']",
+      "status": "ok",
+      "note": "已选中/已请求"
+    },
+    {
+      "view": "workcolumn",
+      "text": "查看列说明",
+      "cat": "action",
+      "why": "列规则说明（悬停提示）",
+      "sel": "#view-workcolumn>div:nth-child(1)>header.wc-head:nth-child(1)>div.wc-head-top:nth-child(1)>button.icon-btn\\.sm:nth-child(4)",
+      "status": "skip",
+      "note": "点击前元素已消失"
+    },
+    {
+      "view": "workcolumn",
+      "text": "刷新当前列",
+      "cat": "action",
+      "why": "动作 wcRefresh",
+      "sel": "#view-workcolumn>div:nth-child(1)>header.wc-head:nth-child(1)>div.wc-head-top:nth-child(1)>button.icon-btn\\.sm:nth-child(7)",
+      "status": "skip",
+      "note": "点击前元素已消失"
+    }
+  ]
+}

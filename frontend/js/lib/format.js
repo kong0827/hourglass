@@ -237,7 +237,7 @@ function taskPublicationText(task){
   return "未发布";
 }
 function releaseEnvironmentName(env){ return {production:"生产", staging:"预发布", test:"测试"}[env] || env || "未记录环境"; }
-function releaseOperationName(op){ return {deploy:"部署", redeploy:"重部署", rollback:"回滚"}[op] || op || "未记录操作"; }
+function releaseOperationName(op){ return {deploy:"部署", publish:"发布", redeploy:"重部署", rollback:"回滚"}[op] || op || "未记录操作"; }
 function releasePlanTime(record){
   if(record.plannedAt) return record.plannedAt;
   var plan = record.planSnapshot;

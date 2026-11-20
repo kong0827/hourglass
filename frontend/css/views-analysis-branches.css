@@ -687,6 +687,251 @@
 .set-subtabs{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 0;}
 .set-subtabs .foot-note{margin:0;}
 
+/* ===== 设置域 11-19 原型对齐：卡式子导航 · 13px 卡头 · 工具条 / 页脚 / 表格行 ===== */
+#view-settings .set-layout{grid-template-columns:180px minmax(0,1fr);}
+#view-settings .set-tabs{
+  width:180px;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:6px;gap:1px;
+}
+#view-settings .set-tab{height:32px;padding:0 9px;border-radius:7px;font-size:12px;font-weight:500;}
+#view-settings .set-tab.on{font-weight:600;}
+#view-settings .set-panels{gap:12px;}
+#view-settings .panel{border-radius:10px;padding:14px 16px;}
+#view-settings .panel-head{margin-bottom:10px;}
+#view-settings .panel-head h3{font-size:13px;font-weight:650;letter-spacing:0;}
+#view-settings .panel-head .meta-right{font-size:11px;}
+#view-settings .set-hint{margin:0 0 12px;font-size:12px;line-height:1.6;color:var(--text-2);}
+
+/* 通用工具条：面板顶部通栏，与原型保持 44px 高和底边分隔 */
+#view-settings .set-toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;height:44px;
+  margin:-14px -16px 12px;padding:0 12px;border-bottom:1px solid var(--border);
+}
+#view-settings .set-toolbar .spacer{flex:1 1 auto;}
+#view-settings .set-toolbar .tiny{font-size:11px;color:var(--text-3);white-space:nowrap;}
+#view-settings .tf-search{
+  display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;width:220px;
+  border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-3);
+}
+#view-settings .tf-search svg{width:13px;height:13px;flex:0 0 auto;}
+#view-settings .tf-search input{
+  flex:1 1 auto;min-width:0;height:26px;border:0;background:transparent;padding:0;
+  font-size:12px;color:var(--text);outline:none;
+}
+#view-settings .tf-search:focus-within{border-color:var(--primary-border);box-shadow:0 0 0 3px var(--primary-ring, rgba(37,99,235,.12));}
+#view-settings .tf-search input::-webkit-search-cancel-button{display:none;}
+
+/* 分组容器：工作流四个分区共用一张卡和一个工具条 */
+#view-settings .set-panelgroup{
+  display:flex;flex-direction:column;background:var(--surface);
+  border:1px solid var(--border);border-radius:10px;overflow:hidden;min-width:0;
+}
+#view-settings .set-panelgroup > .set-toolbar{
+  margin:0;padding:0 12px;height:44px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+#view-settings .set-panelgroup > .panel{border:0;border-radius:0;padding:14px 16px;}
+#view-settings [data-wf-pane][hidden]{display:none;}
+
+/* 基本信息：标签左、字段右的行式布局 */
+#view-settings .set-frows{padding:0 0 2px;}
+#view-settings .frow{
+  display:grid;grid-template-columns:146px minmax(0,1fr);gap:14px;align-items:start;
+  padding:10px 0;border-bottom:1px solid #F2F4F7;
+}
+#view-settings .frow:last-child{border-bottom:0;}
+#view-settings .frow .lb{font-size:12px;font-weight:600;color:var(--text-2);padding-top:8px;}
+#view-settings .frow .hint{font-size:11px;color:var(--text-3);line-height:1.5;margin-top:4px;}
+#view-settings .fld{
+  display:flex;align-items:center;gap:6px;min-height:34px;padding:0 10px;
+  border:1px solid var(--border);border-radius:7px;background:var(--surface-sunken);
+  font-size:13px;color:var(--text-2);min-width:0;
+}
+#view-settings .fld.dim{color:var(--text-3);}
+#view-settings .frow .fld{min-height:34px;}
+
+/* 空间概况：标签 / 数字 / 说明三层 */
+#view-settings .set-overview-grid{border:0;border-radius:0;border-top:1px solid #F2F4F7;border-bottom:1px solid #F2F4F7;}
+#view-settings .ov-cell{padding:9px 14px;gap:1px;}
+#view-settings .ov-cell + .ov-cell{border-left:1px solid #F2F4F7;}
+#view-settings .ov-cell .ov-k{font-size:11px;color:var(--text-3);white-space:nowrap;}
+#view-settings .ov-cell b{font-size:19px;font-weight:700;line-height:1.3;}
+#view-settings .ov-cell .ov-s{font-size:11px;color:var(--text-3);white-space:nowrap;}
+
+/* 页脚通栏 */
+#view-settings .set-tablefoot{
+  display:flex;align-items:center;gap:8px;margin:0 -16px -14px;padding:8px 12px;
+  border-top:1px solid var(--border);background:#FBFCFD;border-radius:0 0 10px 10px;
+}
+#view-settings .set-tablefoot .spacer{flex:1 1 auto;}
+
+/* 说明条：原型成员页的一行角色口径 */
+#view-settings .set-legend{
+  margin:0 -16px;padding:7px 12px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  background:#FBFCFD;font-size:11px;line-height:1.5;color:var(--text-3);
+}
+
+/* 成员表头与行：成员 / 角色 / 可见范围例外 / 加入时间 / 操作 */
+#view-settings .member-thead{
+  display:grid;grid-template-columns:minmax(0,1.45fr) 116px minmax(0,1.25fr) 92px 128px;
+  gap:12px;align-items:center;margin:0 -16px;padding:7px 12px;
+  border-bottom:1px solid var(--border);background:#F9FAFB;
+  font-size:11px;font-weight:550;color:var(--text-3);
+}
+#view-settings .member-thead .right{text-align:right;}
+#view-settings .member-list{gap:0;margin:0 -16px;}
+#view-settings .member-row{
+  display:grid;grid-template-columns:minmax(0,1.45fr) 116px minmax(0,1.25fr) 92px 128px;
+  gap:12px;align-items:center;min-height:52px;padding:7px 12px;
+  border:0;border-bottom:1px solid #F2F4F7;border-radius:0;background:transparent;
+}
+#view-settings .member-row:last-child{border-bottom:0;}
+#view-settings .member-row:hover{background:#FCFCFD;}
+#view-settings .member-row .mini-select{min-width:0;width:auto;max-width:100%;height:26px;font-size:11.5px;justify-self:start;}
+#view-settings .member-row > .tag{justify-self:start;}
+/* 设置页成员表：操作常驻可见，不依赖 hover（原型表格直接列出操作） */
+#view-settings .member-row .acts{justify-content:flex-end;opacity:1;}
+#view-settings .member-row .member-vis{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+#view-settings .member-row .member-vis .btn.link{font-size:10.5px;color:var(--primary-fg);padding:0;height:auto;}
+#view-settings .member-vis{font-size:12px;color:var(--text-3);line-height:1.5;min-width:0;}
+#view-settings .member-vis .badge,#view-settings .member-vis .chip{font-size:10.5px;}
+#view-settings .member-joined{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+#view-settings .member-label-toolbar{margin:0 -16px 0;padding:6px 12px;border-bottom:1px solid #F2F4F7;background:transparent;}
+
+/* 可见范围矩阵：默认「可参与」弱化，只读与不可见才着色 */
+#view-settings .access-cell{
+  appearance:none;-webkit-appearance:none;border:1px solid transparent;background-color:transparent;
+  height:26px;padding:0 18px 0 6px;border-radius:6px;font-size:11.5px;color:var(--text-2);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%2398A2B3' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 4px center;background-size:10px;
+}
+#view-settings .access-cell:hover{background-color:var(--surface-hover);}
+#view-settings .access-cell:focus{outline:none;border-color:var(--primary-border);background-color:var(--surface);}
+#view-settings .access-cell.is-read{color:var(--warning-fg);font-weight:600;background-color:var(--warning-soft);}
+#view-settings .access-cell.is-none{color:var(--text-3);background-color:var(--surface-sunken);}
+#view-settings .access-matrix tbody td{padding:5px 8px;}
+#view-settings .access-matrix tbody tr:hover{background:#FCFCFD;}
+#view-settings .access-matrix .access-who{display:flex;align-items:center;gap:6px;min-width:0;}
+#view-settings .access-matrix .access-who .access-name{display:inline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#view-settings .access-matrix .access-who .tag{flex:0 0 auto;font-size:10.5px;}
+
+/* 工作流：原型为表格行，改成通栏平铺而不是一组圆角卡 */
+#view-settings .cfg-list{gap:0;margin:0 -16px;}
+#view-settings .cfg-row{
+  border:0;border-bottom:1px solid #F2F4F7;border-radius:0;background:transparent;
+  min-height:44px;padding:6px 16px;
+}
+#view-settings .cfg-row:hover{border-color:transparent;background:#FCFCFD;}
+#view-settings .cfg-row:last-child{border-bottom:1px solid #F2F4F7;}
+#view-settings .cfg-add-head{margin:12px -16px 0;padding:10px 16px 0;border-top:1px solid var(--border);}
+#view-settings .cfg-add{margin:6px -16px 0;padding:8px 16px 0;}
+#view-settings .colcfg-head{margin:0 -16px;padding:7px 16px;border-bottom:1px solid var(--border);background:#F9FAFB;}
+#view-settings .rule-legend{margin:12px 0 0;}
+#view-settings .wf-sync-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+@media (max-width:860px){#view-settings .wf-sync-cards{grid-template-columns:1fr;}}
+#view-settings .wf-sync{
+  border:1px dashed var(--border);border-radius:8px;padding:9px 10px;background:#FCFCFD;
+  font-size:11px;line-height:1.5;color:var(--text-3);
+}
+#view-settings .wf-sync b{display:block;margin-bottom:3px;font-size:11px;font-weight:650;color:var(--text-2);}
+#view-settings .wf-hint-note{margin:10px 0 0;font-size:11px;line-height:1.55;color:var(--text-3);}
+#view-settings .wf-hint-note + .wf-hint-note{margin-top:4px;}
+
+/* 通知：开关卡 + 渠道卡并排 */
+#view-settings .setgrid-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:10px;}
+@media (max-width:1100px){#view-settings .setgrid-2{grid-template-columns:1fr;}}
+#view-settings .subcard{
+  border:1px solid var(--border);border-radius:9px;background:#FBFCFD;padding:10px 12px;min-width:0;
+}
+#view-settings .subcard-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;font-weight:650;color:var(--text);}
+#view-settings .subcard-head .tiny{margin-left:auto;font-size:10.5px;color:var(--text-3);font-weight:400;text-align:right;}
+#view-settings .swrow{display:flex;flex-direction:column;gap:3px;padding:7px 0;border-top:1px solid #F2F4F7;font-size:12px;color:var(--text-2);}
+#view-settings .swrow:first-of-type{border-top:0;}
+#view-settings .swrow .sw{font-size:12px;font-weight:600;color:var(--text);}
+#view-settings .swrow .tiny{font-size:10.5px;line-height:1.5;color:var(--text-3);}
+#view-settings .channel-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+#view-settings .channel-card{padding:7px 9px;border-radius:7px;background:var(--surface);}
+#view-settings .channel-card .cc-t{font-size:11.5px;}
+#view-settings .channel-card .cc-d{font-size:10.5px;white-space:normal;line-height:1.4;}
+#view-settings .channel-card .cc-badge{font-size:10px;}
+
+/* 数据：按用途分组的导出卡 */
+#view-settings .exportgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+@media (max-width:1100px){#view-settings .exportgrid{grid-template-columns:1fr;}}
+#view-settings .exp{
+  display:flex;flex-direction:column;gap:7px;min-width:0;padding:11px 12px;
+  border:1px solid var(--border);border-radius:9px;background:var(--surface);
+}
+#view-settings .exp .h{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;}
+#view-settings .exp .d{font-size:10.5px;line-height:1.55;color:var(--text-3);}
+#view-settings .exp .it{
+  display:flex;align-items:center;gap:8px;padding:7px 0 0;border-top:1px solid #F2F4F7;
+  font-size:11.5px;color:var(--text-2);
+}
+#view-settings .exp .it .m{margin-left:auto;font-size:10.5px;color:var(--text-3);}
+#view-settings .exp .it .btn{margin-left:auto;}
+#view-settings .card-lite{border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-top:10px;background:var(--surface);}
+#view-settings .import-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+#view-settings .import-row .fld{flex:1 1 320px;font-size:11.5px;}
+#view-settings .import-row .link-btn{font-size:11.5px;}
+#view-settings .dangerzone{
+  display:flex;align-items:center;gap:10px;margin-top:10px;padding:11px 13px;
+  border:1px solid #FBD5D0;border-radius:9px;background:#FFFCFC;
+}
+#view-settings .set-danger-zone .set-actions{justify-content:flex-end;margin-top:10px;}
+#view-settings .dangerzone .tt{font-size:12.5px;font-weight:650;color:var(--danger-fg);}
+#view-settings .dangerzone .dd{margin-top:3px;font-size:10.5px;line-height:1.5;color:var(--text-3);}
+@media (max-width:860px){
+  #view-settings .dangerzone{flex-wrap:wrap;}
+  #view-settings .dangerzone > div{flex:1 1 100%;}
+}
+
+/* 设置页把主操作放到页头，面板内的同名动作行不再重复 */
+#view-settings .set-actions-pagehead{display:none;}
+
+/* 平台工具条：分段 + 搜索 */
+#view-settings #platformBar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin:0;padding:6px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);
+}
+#view-settings #platformBar .spacer{flex:1 1 auto;}
+#view-settings #platformBar .tiny{font-size:11px;color:var(--text-3);}
+#view-settings #platformBar .tf-search{height:28px;}
+
+@media (max-width:1279px){
+  #view-settings .set-tabs{width:auto;background:transparent;border:0;padding:0 0 10px;}
+}
+@media (max-width:760px){
+  #view-settings .set-toolbar{height:auto;padding:8px 12px;margin:-14px -16px 10px;gap:6px;}
+  /* 分组容器里的工具条选择器更具体，手机档位要同步放开固定高度 */
+  #view-settings .set-panelgroup > .set-toolbar{height:auto;padding:8px 12px;gap:6px;}
+  #view-settings .colcfg-head{display:none;}
+  #view-settings .colcfg-row{
+    grid-template-columns:16px 24px minmax(0,1fr) auto auto;
+    grid-template-areas:"handle color name type acts" "rule rule rule rule rule";
+    row-gap:6px;
+  }
+  #view-settings .colcfg-row > .handle{grid-area:handle;}
+  #view-settings .colcfg-row > input[type="color"]{grid-area:color;}
+  #view-settings .colcfg-row > input[type="text"]{grid-area:name;}
+  #view-settings .colcfg-row > .cfg-type{grid-area:type;}
+  #view-settings .colcfg-row > .cfg-acts{grid-area:acts;}
+  #view-settings .colcfg-row > .col-rule,
+  #view-settings .colcfg-row > .rule-fixed{grid-area:rule;width:100%;}
+  #view-settings .tf-search{width:100%;}
+  #view-settings .member-thead{display:none;}
+  #view-settings .member-row{grid-template-columns:minmax(0,1fr) 108px;grid-template-areas:"who role" "vis vis" "join acts";row-gap:4px;}
+  #view-settings .member-row > .mi{grid-area:who;}
+  #view-settings .member-row > .mini-select,#view-settings .member-row > .tag{grid-area:role;justify-self:end;}
+  #view-settings .member-vis{grid-area:vis;}
+  #view-settings .member-joined{grid-area:join;}
+  #view-settings .member-row .acts{grid-area:acts;justify-self:end;}
+  #view-settings .setgrid-2{grid-template-columns:1fr;}
+  #view-settings .subcard-head{flex-wrap:wrap;}
+  #view-settings .subcard-head .tiny{flex:1 1 100%;margin-left:0;text-align:left;}
+}
+
+
 /* 活动分区：列表占满视口剩余高度，避免面板下方留下整块空白 */
 #view-settings.set-fill.on{display:flex;flex-direction:column;}
 #view-settings.set-fill .set-layout{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;align-items:stretch;}
@@ -827,7 +1072,7 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
 .mine-list .list-row{grid-template-columns:var(--mine-cols);gap:10px;}
 .mine-list .list-head{
   height:var(--mine-head-h);padding:0 14px;
-  font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.04em;
+  font-size:11px;font-weight:550;color:var(--text-3);
   border-radius:var(--r-lg) var(--r-lg) 0 0;
 }
 .mine-list .list-head > .ta-r{text-align:right;}
@@ -850,7 +1095,7 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
 /* 两行：标题 + 归属/模块/标签副行，整块垂直居中 */
 .mine-tc-main{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:var(--title-gap);}
 .mine-tc-title{
-  font-size:var(--title-fs);font-weight:550;line-height:var(--title-lh);letter-spacing:-.01em;
+  font-size:var(--title-fs);font-weight:600;line-height:var(--title-lh);letter-spacing:-.01em;
   color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .mine-tc-sub{
@@ -866,9 +1111,9 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
 .mine-sub-ws{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-3);}
 .mine-r-cat{
   display:inline-flex;align-items:center;gap:var(--space-1);flex:0 0 auto;
-  font-size:11px;font-weight:600;color:color-mix(in srgb,var(--c) 58%,var(--text-3));
+  font-size:11px;font-weight:600;color:var(--text-3);
 }
-.mine-r-cat i{width:5px;height:5px;border-radius:50%;background:var(--c);flex:0 0 auto;}
+.mine-r-cat i{width:5px;height:5px;border-radius:50%;background:var(--text-3);flex:0 0 auto;}
 .mine-r-tag{
   flex:0 0 auto;font-size:var(--fs-micro);color:var(--text-3);background:var(--surface-sunken);
   border-radius:var(--r-micro);padding:0 var(--sub-chip-px);height:var(--sub-chip-h);line-height:var(--sub-chip-h);white-space:nowrap;
@@ -953,7 +1198,7 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
 .mine-grp-chev{width:18px;height:18px;flex:0 0 auto;display:grid;place-items:center;color:var(--text-3);}
 .mine-grp-chev svg{transform:rotate(90deg);transition:transform var(--dur-fast) var(--ease-out);}
 .mine-grp.collapsed .mine-grp-chev svg{transform:rotate(0deg);}
-.mine-grp-name{font-size:13px;font-weight:650;color:var(--text);white-space:nowrap;}
+.mine-grp-name{font-size:12.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
 .mine-grp-n{
   min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);
   display:inline-grid;place-items:center;flex:0 0 auto;
@@ -1069,7 +1314,7 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
 #view-analysis{overflow-y:auto;}
 .analysis-bar{
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  min-height:44px;margin:0 0 12px;padding:6px 9px;
+  min-height:48px;margin:0 0 12px;padding:7px 9px;
   background:var(--surface);border:1px solid var(--border);border-radius:11px;
 }
 .analysis-bar .set-tabs{border-bottom:none;margin:0;padding:0;background:none;position:static;}
@@ -1078,3 +1323,26 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
 /* 测试五模式同理：用例 / 缺陷 / 测试计划 / 覆盖矩阵 / 测试报告统一走全局子导航 */
 #view-testcases #tcModeSeg{display:none;}
 #view-analysis [data-analysis-pane][hidden]{display:none;}
+
+/* 报表四页签对齐 2026-11-19 原型：H1 已交给页头，卡片内标题回到 12.5px、说明 10px */
+#view-analysis .view-page{gap:10px;}
+#view-analysis .panel{padding:12px 14px;}
+#view-analysis .panel-head{margin-bottom:10px;}
+#view-analysis .panel-head h3{font-size:12.5px;font-weight:650;}
+#view-analysis .panel-head .meta-right{font-size:10px;}
+#view-analysis .stat{padding:11px 13px;border-radius:var(--r-md);}
+#view-analysis .stat-grid{gap:10px;}
+#view-analysis .stat .k{font-size:11px;}
+#view-analysis .stat .v small{font-size:11px;}
+#view-analysis .duo{gap:10px;}
+/* 流程体检：结论卡与列停留条按原型 12.5 / 12 收敛 */
+#view-analysis .flow-ins{padding:10px 12px;}
+#view-analysis .flow-ins .fi-t{font-size:12.5px;font-weight:650;}
+#view-analysis .flow-ins .fi-x{font-size:12px;}
+#view-analysis .flow-bar .fb-name{font-size:12.5px;}
+#view-analysis .flow-bar .fb-meta{font-size:11.5px;}
+/* 流程体检下半区按原型 1.35fr / 1fr：左列放列停留明细，右列放窄的结论列表 */
+@media(min-width:1280px){
+  #view-analysis [data-analysis-pane="flow"] .duo{grid-template-columns:1.35fr 1fr;}
+}
+.analysis-bar[hidden]{display:none;}

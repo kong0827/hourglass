@@ -76,7 +76,7 @@
   flex:1 1 auto;min-height:0;overflow-y:auto;
   display:flex;flex-direction:column;gap:0;padding:0 8px 12px;
 }
-.nav-sec{display:block;padding:10px 9px 4px;margin-top:2px;font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#98A2B3;}
+.nav-sec{display:block;padding:10px 9px 4px;margin-top:2px;font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-3);}
 .nav-sec:first-child{margin-top:0;}
 /* 长导航项截断时，hover 显示完整名称提示（JS 可动态写入 title） */
 .nav-item[title]:hover::after,.nav-item[title]:focus-visible::after{
@@ -188,6 +188,15 @@
   margin:0;font-size:var(--fs-page-title);line-height:1.2;font-weight:700;letter-spacing:-.01em;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+/* 标题 pill：项目「N 个 · M 组」、项目集「项目集」，与原型 h1 内的计数标签同尺寸 */
+.ph-pill{
+  flex:0 0 auto;display:inline-flex;align-items:center;height:20px;padding:0 7px;
+  border-radius:5px;background:var(--surface-sunken);color:var(--text-3);
+  font-size:10.5px;font-weight:600;letter-spacing:0;
+}
+.ph-pill[hidden]{display:none;}
+.ph-custom{display:flex;align-items:center;gap:6px;}
+.ph-custom[hidden]{display:none;}
 .pagehead .sub{
   margin:4px 0 0;max-width:760px;font-size:11.5px;line-height:1.4;color:var(--text-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -204,29 +213,32 @@ body[data-view="branches"] .page-toolbar,
 body[data-view="phase"] .page-toolbar,
 body[data-view="delivery"] .page-toolbar,
 body[data-view="calendar"] .page-toolbar{
-  min-height:44px;padding:6px 9px;background:var(--surface);
+  min-height:48px;padding:7px 9px;background:var(--surface);
   border:1px solid var(--border);border-radius:11px;
 }
 /* 层级：工具条接在筛选栏下方，同一张两行卡片 */
 body[data-view="tree"] #view-tree{padding-top:0;}
 body[data-view="tree"] .filterbar{border-radius:11px 11px 0 0;border-bottom-color:transparent;}
 body[data-view="tree"] #view-tree > .view-page > .page-toolbar{
-  min-height:40px;padding:4px 9px;background:var(--surface);
+  min-height:44px;padding:6px 9px;background:var(--surface);
   border:1px solid var(--border);border-radius:0 0 11px 11px;
 }
 /* 甘特：标题行与筛选行合成一张两行卡片 */
 body[data-view="gantt"] #view-gantt > .view-page > .page-toolbar{
-  min-height:44px;padding:6px 9px;background:var(--surface);
+  min-height:48px;padding:7px 9px;background:var(--surface);
   border:1px solid var(--border);border-bottom-color:transparent;border-radius:11px 11px 0 0;
 }
 body[data-view="gantt"] #view-gantt > .view-page > .gantt-tools{
   margin:-10px 0 10px;padding:6px 9px;background:var(--surface);
   border:1px solid var(--border);border-radius:0 0 11px 11px;
 }
-/* 设置、个人设置与消息页没有可新建对象，隐藏全局「新建」与手机 FAB */
+/* 设置、个人设置、消息页与周回顾没有可新建对象，隐藏全局「新建」与手机 FAB */
 body[data-view="settings"] #btnNew,
 body[data-view="profile"] #btnNew,
+body[data-view="review"] #btnNew,
 body[data-view="messages"] #btnNew{display:none !important;}
+/* 测试域：页头按原型给导入 / 新建用例 / 新建缺陷等专属按钮，通用「新建」不再出现 */
+body[data-view="testcases"] #btnNew{display:none !important;}
 /* 查看者全局只读：新建入口不展示（抽屉入口另有拦截提示） */
 body[data-ws-role="viewer"] #btnNew,
 body[data-ws-role="viewer"] #ganttNew{display:none !important;}
@@ -236,14 +248,14 @@ body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 /* ===================== 子导航：页头右侧的分段切换（原型 subtabs） ===================== */
 .subnav{
   flex:0 0 auto;display:flex;align-items:center;gap:2px;
-  height:30px;padding:3px;
+  height:34px;padding:3px;
   background:var(--surface);border:1px solid var(--border);border-radius:9px;
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
 }
 .subnav[hidden]{display:none;}
 .subnav::-webkit-scrollbar{display:none;}
 .subnav-item{
-  position:relative;flex:0 0 auto;height:24px;padding:0 10px;
+  position:relative;flex:0 0 auto;height:26px;padding:0 10px;
   font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap;
   border-radius:6px;transition:color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out);
 }

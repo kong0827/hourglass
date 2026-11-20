@@ -565,7 +565,7 @@ import { icon } from "./icons.js";
       '<div class="gc-acts">' +
       '<button class="btn sm primary" type="button" data-guide="task">新建工作项</button>' +
       '<button class="btn sm" type="button" data-guide="project">新建项目</button>' +
-      '<button class="btn sm" type="button" data-guide="demand">需求池提需求</button>' +
+      '<button class="btn sm" type="button" data-guide="demand">需求池新建需求</button>' +
       '</div></div>';
   }
 

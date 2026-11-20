@@ -86,6 +86,14 @@
 [data-layout="mobile"] .ph-main{display:none;}
 [data-layout="mobile"] .ph-acts{height:0;overflow:visible;}
 [data-layout="mobile"] .pagehead .subnav{display:none !important;}
+/* 报表 / 成员负载 / 投入结构 / 消息中心的页头操作在手机上收起，操作退回各自工具条或正文头里的那一份 */
+[data-layout="mobile"] body[data-view="report"] #pageActions,
+[data-layout="mobile"] body[data-view="workload"] #pageActions,
+[data-layout="mobile"] body[data-view="investment"] #pageActions,
+[data-layout="mobile"] body[data-view="messages"] #pageActions{display:none;}
+/* 消息页：桌面状态行在页头，正文头只在手机保留；手机上页头整体折叠 */
+[data-layout="desktop"] #messagesBody .msg-page-head,
+[data-layout="tablet"] #messagesBody .msg-page-head{display:none;}
 [data-layout="mobile"] .tb-right{flex:0 0 auto;justify-content:flex-end;gap:6px;min-width:0;}
 /* 顶栏不再放当前视图搜索框：改由按钮打开全局搜索，视图内关键词在筛选面板里 */
 [data-layout="mobile"] .topbar .global-search{display:none !important;}
@@ -114,12 +122,29 @@
 }
 [data-layout="mobile"] #btnNew svg:first-child{width:20px;height:20px;}
 [data-layout="mobile"] #btnNew svg:last-child{display:none;}
+/* 测试域：桌面页头的专属动作在手机上收成右下 FAB，只留当前页的主操作，避免压住面包屑 */
+[data-layout="mobile"] body[data-view="testcases"] #pageActions .btn:not(:last-child){
+  display:none !important;
+}
+[data-layout="mobile"] body[data-view="testcases"] #pageActions .btn:last-child{
+  position:fixed;right:16px;bottom:calc(var(--tabbar-h) + var(--safe-b) + 34px);
+  z-index:105;width:48px;height:48px;padding:0;border-radius:50%;
+  font-size:0;gap:0;justify-content:center;
+  box-shadow:var(--shadow-lg);
+}
+[data-layout="mobile"] body[data-view="testcases"] #pageActions .btn:last-child svg{width:20px;height:20px;}
 /* FAB 悬在列表右下角：有 FAB 的页面底部预留一行，末条内容不被盖住 */
 [data-layout="mobile"] body:not([data-view="board"]):not([data-view="settings"]):not([data-view="profile"]):not([data-view="messages"]) .view{
   padding-bottom:calc(var(--tabbar-space) + 56px);
 }
 [data-layout="mobile"] body[data-view="board"] .mob-board{padding-bottom:calc(var(--tabbar-space) + 56px);}
 [data-layout="mobile"] #view-calendar{padding-bottom:calc(var(--tabbar-space) + 56px);}
+/* 设置：页头主操作在手机上保留一行（不再放进零高容器），免得按钮压住页签 */
+[data-layout="mobile"] body[data-view="settings"] .pagehead{height:auto;padding:6px 0 8px;}
+[data-layout="mobile"] body[data-view="settings"] .ph-acts{height:auto;overflow:visible;}
+[data-layout="mobile"] body[data-view="settings"] #pageActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+[data-layout="mobile"] body[data-view="settings"] #pageActions[hidden]{display:none;}
+[data-layout="mobile"] body[data-view="settings"] #pageActions .btn{height:30px;padding:0 10px;font-size:12px;}
 /* #newMenu 交给 UI.openPop 按 FAB 的位置自动定位（上方/下方避让），不要再用 CSS 固定 top/bottom */
 
 /* ===================== 筛选：首屏只留一行摘要，完整条件进底部面板 ===================== */
@@ -807,6 +832,15 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .page-toolbar{gap:var(--space-2);}
 [data-layout="mobile"] .toolbar-right{margin-left:0;flex-wrap:wrap;gap:var(--space-2);}
 [data-layout="mobile"] .duo{grid-template-columns:1fr;}
+
+/* 文档：手机不需要「范围/筛选/显示/操作」段标签；搜索独占一行，减少工具条折行 */
+[data-layout="mobile"] .reqdoc-listpage .sv-seg-label{display:none;}
+[data-layout="mobile"] .reqdoc-listpage .reqdoc-search{flex:1 1 100%;}
+[data-layout="mobile"] .reqdoc-listpage .reqdoc-search input{width:100%;}
+[data-layout="mobile"] .reqdoc-pubnote{display:none;}
+/* 历史子页：手机页内返回条保留，白卡内边距收回屏幕 */
+[data-layout="mobile"] #dlgReqDocHistory .rh-body{padding:0;gap:0;}
+[data-layout="mobile"] #dlgReqDocHistory .rh-pane{border:0;border-radius:0;}
 
 /* ===================== 需求池：列表模式改卡片 ===================== */
 [data-layout="mobile"] .dem-mob-list{display:flex;flex-direction:column;gap:10px;}

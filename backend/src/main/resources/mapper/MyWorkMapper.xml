@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.MyWorkMapper">
+
+  <sql id="myDemandCols">
+    d.id, d.workspace_id, d.req_id, d.demand_no, d.title, d.description, d.source, d.item_kind, d.category_id, d.priority, d.status,
+    d.close_reason, d.close_stage, d.expect_date, d.planned_start, d.planned_end, d.revision,
+    d.accept_text, d.version_id, COALESCE(v.name, d.version_name) AS versionName, v.status AS versionStatus, d.review_note,
+    d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
+  </sql>
+
+  <!-- 项目写权限：与 TaskMapper 可领取队列同一判定（显式 write / 默认 write / 显式 none 与 read 排除） -->
+  <sql id="reviewWritableCond">
+    (
+      EXISTS (SELECT 1 FROM workspace_member wmr
+              WHERE wmr.workspace_id = d.workspace_id AND wmr.user_id = #{q.userId}
+                AND wmr.role IN ('owner', 'admin'))
+      OR EXISTS (SELECT 1 FROM workspace_member wm
+                 WHERE wm.workspace_id = d.workspace_id AND wm.user_id = #{q.userId}
+                   AND wm.role &lt;&gt; 'viewer'
+                   AND (
+                     d.req_id IS NULL
+                     OR EXISTS (SELECT 1 FROM project_member pmw
+                                WHERE pmw.workspace_id = d.workspace_id
+                                  AND pmw.project_id = d.req_id
+                                  AND pmw.user_id = #{q.userId} AND pmw.access = 'write')
+                     OR ((wm.project_access_mode IS NULL OR wm.project_access_mode &lt;&gt; 'assigned')
+                         AND NOT EXISTS (SELECT 1 FROM project_member pmr
+                                         WHERE pmr.workspace_id = d.workspace_id
+                                           AND pmr.project_id = d.req_id
+                                           AND pmr.user_id = #{q.userId}
+                                           AND pmr.access IN ('none', 'read')))
+                   ))
+    )
+  </sql>
+
+  <!-- 三种视图共用 WHERE：个人关系谓词之外，可见性 / 关键词 / 项目 / 优先级完全一致 -->
+  <sql id="myDemandWhere">
+    WHERE d.workspace_id = #{q.workspaceId}
+    <choose>
+      <when test="q.watchView">
+        <!-- 我关注的：只看关注表，不代表负责 -->
+        AND EXISTS (SELECT 1 FROM demand_watch dw
+                    WHERE dw.workspace_id = d.workspace_id AND dw.demand_id = d.id
+                      AND dw.user_id = #{q.userId})
+      </when>
+      <when test="q.reviewView">
+        <!-- 待我评审：项目写权限队列，不含本人提交（管理员同样排除） -->
+        AND d.status = 'review'
+        <if test="q.userId != null"> AND (d.created_by IS NULL OR d.created_by &lt;&gt; #{q.userId}) </if>
+        <if test="q.displayName != null and q.displayName != ''">
+          AND (d.created_by IS NULL OR d.created_by &lt;&gt; #{q.displayName})
+        </if>
+        AND <include refid="reviewWritableCond"/>
+      </when>
+      <otherwise>
+        <!-- 我发起的：created_by 兼容账号 ID 与历史显示名 -->
+        AND (
+          d.created_by = #{q.userId}
+          <if test="q.displayName != null and q.displayName != ''">
+            OR d.created_by = #{q.displayName}
+          </if>
+        )
+        <if test="q.nameOnlyCount">
+          <choose>
+            <when test="q.displayName != null and q.displayName != ''">
+              AND d.created_by = #{q.displayName}
+              <if test="q.userId != null"> AND (d.created_by IS NULL OR d.created_by &lt;&gt; #{q.userId}) </if>
+            </when>
+            <otherwise>AND 1 = 0</otherwise>
+          </choose>
+        </if>
+      </otherwise>
+    </choose>
+    <if test="q.status != null"> AND d.status = #{q.status} </if>
+    <if test="q.q != null">
+      AND (d.title LIKE CONCAT('%', #{q.q}, '%')
+           OR d.description LIKE CONCAT('%', #{q.q}, '%')
+           <if test="q.itemNo != null">OR d.demand_no = #{q.itemNo}</if>
+           OR d.source LIKE CONCAT('%', #{q.q}, '%'))
+    </if>
+    <if test="q.pris != null and q.pris.size() > 0">
+      AND d.priority IN
+      <foreach collection="q.pris" item="p" open="(" separator="," close=")">#{p}</foreach>
+    </if>
+    <if test="q.reqs != null and q.reqs.size() > 0">
+      AND d.req_id IN
+      <foreach collection="q.reqs" item="r" open="(" separator="," close=")">#{r}</foreach>
+    </if>
+    <if test="q.viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = d.workspace_id
+                        AND pm.project_id = d.req_id
+                        AND pm.user_id = #{q.viewerId}
+                        AND pm.access = 'none')
+    </if>
+    <!-- 已不在空间成员列表里的历史关注记录不再展示 -->
+    AND EXISTS (SELECT 1 FROM workspace_member wmv
+                WHERE wmv.workspace_id = d.workspace_id AND wmv.user_id = #{q.userId})
+  </sql>
+
+  <sql id="myDemandOrder">
+    <choose>
+      <when test="q.reviewView">ORDER BY d.created_at ASC, d.id</when>
+      <when test="q.sort == 'priority'">ORDER BY FIELD(d.priority, 'P0', 'P1', 'P2', 'P3'), d.updated_at DESC, d.id</when>
+      <when test="q.sort == 'expect'">ORDER BY d.expect_date IS NULL, d.expect_date, d.id</when>
+      <when test="q.sort == 'created'">ORDER BY d.created_at DESC, d.id</when>
+      <otherwise>ORDER BY d.updated_at DESC, d.id</otherwise>
+    </choose>
+  </sql>
+
+  <select id="countMyDemands" resultType="int">
+    SELECT COUNT(*) FROM demand d
+    <include refid="myDemandWhere"/>
+  </select>
+
+  <select id="selectMyDemands" resultType="Demand">
+    SELECT <include refid="myDemandCols"/> FROM demand d
+    LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
+    <include refid="myDemandWhere"/>
+    <include refid="myDemandOrder"/>
+    LIMIT #{q.limit} OFFSET #{q.offset}
+  </select>
+
+  <select id="countMyDemandStatuses" resultType="map">
+    SELECT d.status AS status, COUNT(*) AS cnt FROM demand d
+    <include refid="myDemandWhere"/>
+    GROUP BY d.status
+  </select>
+</mapper>

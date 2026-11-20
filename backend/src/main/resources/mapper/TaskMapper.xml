@@ -275,8 +275,28 @@
   <sql id="myTasksWhere">
     WHERE t.deleted_at IS NULL
       <choose>
+        <when test="watchView">
+          <!-- 我关注的：只看关注表，不混入指派关系 -->
+          AND EXISTS (SELECT 1 FROM task_watch tw
+                      WHERE tw.task_id = t.id AND tw.workspace_id = t.workspace_id AND tw.user_id = #{userId})
+        </when>
+        <when test="pendingView">
+          <!-- 待我处理：开发负责人或测试负责人的并集；同一条只计一次 -->
+          AND (
+            (t.owner_user_id = #{userId}
+             <if test="displayName != null and displayName != ''">
+               OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
+             </if>)
+            OR (t.test_owner_user_id = #{userId}
+                AND t.board_column IN ('test', 'testing'))
+          )
+        </when>
+        <when test="strictTest">
+          <!-- 我带的测试：严格只含测试负责人是我，不含可领取队列 -->
+          AND t.test_owner_user_id = #{userId} AND t.board_column IN ('test', 'testing')
+        </when>
         <when test="testScope">
-          <!-- 待我测试：已认领给我的测试列工作项 + 我能写项目里无人认领的待测试队列 -->
+          <!-- 待我测试（旧口径）：已认领给我的测试列工作项 + 我能写项目里无人认领的待测试队列 -->
           AND (
             (t.test_owner_user_id = #{userId} AND t.board_column IN ('test', 'testing'))
             OR (t.board_column = 'test' AND t.test_owner_user_id IS NULL
@@ -458,7 +478,11 @@
     LEFT JOIN workspace w ON w.id = t.workspace_id
     LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     <include refid="myTasksWhere"/>
-    ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC, t.id
+    <choose>
+      <when test="watchView">ORDER BY t.updated_at DESC, t.id</when>
+      <when test="strictTest">ORDER BY (t.test_requested_at IS NULL), t.test_requested_at, t.id</when>
+      <otherwise>ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC, t.id</otherwise>
+    </choose>
     LIMIT #{limit} OFFSET #{offset}
   </select>
 
@@ -468,7 +492,7 @@
     FROM task t
     JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
     <include refid="myTasksWhere"/>
-    <if test="nameOnly and !testScope"> AND t.owner_user_id IS NULL </if>
+    <if test="nameOnly and !testScope and !watchView and !pendingView and !strictTest"> AND t.owner_user_id IS NULL </if>
   </select>
 
   <!-- 覆盖空间：按筛选后的全量任务去重，分页不会让"覆盖 N 个空间"缩水 -->

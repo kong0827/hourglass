@@ -7,7 +7,6 @@ import { reloadFilteredViews, restoreViewState } from "./filters-ui.js";
 import { updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
 import { isMobile } from "./layout.js";
-import { currentMode } from "./mobile-rules.js";
 import { handleNoticeClick, loadAlertPanel, loadUnread, renderAlertPanel } from "./notifications.js";
 import { activeView, showView } from "./router.js";
 import { rt, state } from "./state.js";
@@ -58,9 +57,8 @@ function loadWorkspaces(meUser){
       loadView("gantt").then(function(m){ m.loadGanttPrefs(); m.syncGanttControls(); m.loadGantt(); });
     }
     if(activeView === "settings" && !rt.settingsReady) loadView("settings").then(function(m){ m.enterSettingsView(); });
-    /* 空间就绪前 mine 已经进过一次：只有确实要落团队模式才需要按角色补进一次，避免普通成员重复拉 my-tasks */
-    if(!hadWorkspace && isMobile() && activeView === "mine" &&
-        currentMode(target ? target.id : "", target && target.myRole) === "team") showView("mine");
+    /* 空间就绪前 mine 已经进过一次：页签与「团队」（移动端负责人/管理员）都依赖当前角色，就绪后补进一次 */
+    if(!hadWorkspace && activeView === "mine") showView("mine");
     return target;
   }).catch(function(){ return null; });
 }

@@ -11,10 +11,12 @@
   --surface-sunken:#F2F4F7;
   --surface-hover:#F2F4F7;
   --surface-active:#E9ECF1;
+  /* 表格列头底色：全站统一 #F9FAFB（与 2026-11-19 原型 .tbl th 一致） */
+  --tbl-head:#F9FAFB;
   --border:#E4E7EC;
   --border-strong:#D0D5DD;
   /* ---- 列表分组带 ----
-     列头用 --surface-sunken；分组行若同色，「列头 / 分组 / 数据行」三级层级会塌成两级。
+     列头用 --tbl-head；分组行若同色，「列头 / 分组 / 数据行」三级层级会塌成两级。
      分组带改用带主色倾向的浅底 + 左侧 3px 主色条，未分组一类的中性分组用灰底灰条。 */
   --group-band:#F4F8FE;
   --group-band-hover:#E9F1FE;
@@ -176,6 +178,7 @@ html[data-theme="dark"]{
   --surface-sunken:#1A222D;
   --surface-hover:#1F2937;
   --surface-active:#26313F;
+  --tbl-head:#1A222D;
   --border:#25303D;
   --border-strong:#334153;
   --group-band:#16233A;

@@ -109,6 +109,10 @@ public class SseService {
             emitter.send(SseEmitter.event().name("hello").data("ok"));
         } catch (IOException e) {
             subscribers.remove(emitter);
+        } catch (RuntimeException e) {
+            /* 客户端秒断（登录后立刻切页/刷新）时容器已把 emitter 标记为 complete，
+               send 会抛 IllegalStateException；这不是业务错误，回收连接即可 */
+            subscribers.remove(emitter);
         }
         return emitter;
     }

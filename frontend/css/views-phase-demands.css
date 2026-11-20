@@ -172,7 +172,7 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .phase-tbl-tools .btn.sm[disabled]{opacity:.5;cursor:not-allowed;}
 .phase-tbl{width:100%;border-collapse:collapse;font-size:13px;}
 .phase-tbl th,.phase-tbl td{padding:var(--space-2) 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
-.phase-tbl th{font-size:12px;color:var(--text-3);font-weight:550;}
+.phase-tbl th{height:34px;padding:0 10px;background:var(--tbl-head);font-size:11px;color:var(--text-3);font-weight:550;}
 .phase-tbl th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .phase-tbl tbody tr:last-child td{border-bottom:none;}
 .phase-tbl tbody tr[data-open-task]{cursor:pointer;}
@@ -310,8 +310,6 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .release-page{display:flex;flex-direction:column;gap:14px;padding:var(--space-3) 0 20px;max-width:1180px;margin:0 auto;width:100%;min-width:0;}
 .release-page-bar{padding:0 0 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 .release-page-bar .toolbar-meta b{font-weight:650;color:var(--text);}
-/* 页面滚动容器顶部就是工具栏，不需要弹框里那块 20px 同色遮罩 */
-.release-page .release-topbar::before{height:0;}
 
 /* 无参数进入发布工作台：跨项目「最近发布计划」列表（点行进对应版本工作台） */
 .rel-plan-list{display:flex;flex-direction:column;}
@@ -329,17 +327,55 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
   .rel-plan-row .rp-s{grid-column:2;grid-row:1;}
 }
 
-/* ===== 发布工作区：计划 / 实际 / 历史 / 内容 分区 ===== */
-.release-topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:3;padding:2px 0 8px;background:var(--surface);border-bottom:1px solid var(--border);}
-/* 滚动容器有 20px 上内边距：吸顶时补一块同色遮罩，避免内容从页签上方漏出来 */
-.release-topbar::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:20px;background:var(--surface);}
-.release-tabs{display:flex;gap:2px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;}
-.release-tabs::-webkit-scrollbar{display:none;}
-.release-tab{display:inline-flex;align-items:center;gap:6px;min-height:var(--tab-h);white-space:nowrap;border:0;background:none;padding:0 10px;font-size:13px;font-weight:550;color:var(--text-3);cursor:pointer;border-radius:var(--r-sm) var(--r-sm) 0 0;}
-.release-tab:hover{color:var(--text);background:var(--surface-hover);}
-.release-tab.is-active{color:var(--primary-fg);background:var(--primary-soft);box-shadow:inset 0 -2px 0 var(--primary);}
-.release-tab-count{font-size:11px;line-height:16px;padding:0 6px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);font-variant-numeric:tabular-nums;}
-.release-tab.is-active .release-tab-count{background:color-mix(in srgb, var(--primary) 14%, transparent);color:var(--primary-fg);}
+/* ===== 页内 3 步条：计划范围 → 实际发布 → 历史与内容（原型 REL-1） ===== */
+.rel-steps-wrap{display:flex;align-items:center;gap:10px;}
+.rel-steps{display:flex;align-items:center;flex:1 1 auto;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 14px;}
+.rel-step{display:inline-flex;align-items:center;gap:7px;min-width:0;border:0;background:none;padding:2px 0;font:inherit;color:var(--text-2);cursor:pointer;border-radius:var(--r-sm);}
+.rel-step:hover:not(:disabled){color:var(--text);}
+.rel-step:disabled{cursor:default;opacity:.55;}
+.rel-step-no{flex:0 0 auto;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-3);}
+.rel-step.is-active .rel-step-no,.rel-step.is-done .rel-step-no{background:var(--primary);border-color:var(--primary);color:#fff;}
+.rel-step-tx{font-size:12px;font-weight:600;white-space:nowrap;}
+.rel-step:not(.is-active) .rel-step-tx{color:var(--text-2);font-weight:550;}
+.rel-step-meta{font-size:11.5px;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums;}
+.rel-step-line{flex:1 1 24px;height:1px;background:var(--border);margin:0 12px;min-width:12px;}
+/* ===== 实际发布：左侧长表单 + 右侧就绪条件卡（原型 REL-2 / REL-3） ===== */
+.release-actual{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:var(--space-4);align-items:start;}
+.release-actual-main{min-width:0;}
+.release-preview-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.release-preview-row .hint{margin:0;}
+.rel-ready{position:sticky;top:12px;display:flex;flex-direction:column;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
+.rel-ready-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 13px;border-bottom:1px solid var(--border);}
+.rel-ready-head b{font-size:13px;font-weight:650;color:var(--text);}
+.rel-ready-head span{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.rel-ready-list{display:flex;flex-direction:column;gap:9px;padding:11px 13px;}
+.rel-need{display:flex;align-items:flex-start;gap:8px;min-width:0;}
+.rel-need-ic{flex:0 0 auto;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:1px solid var(--border-strong);color:var(--text-3);background:var(--surface);}
+.rel-need.is-ok .rel-need-ic{background:var(--success);border-color:var(--success);color:#fff;}
+.rel-need.is-miss .rel-need-ic{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+.rel-need-t{font-size:11.5px;line-height:18px;color:var(--text);}
+.rel-need.is-miss .rel-need-t{color:var(--warning-fg);font-weight:600;}
+.rel-need-r{font-size:11px;line-height:16px;color:var(--text-3);margin-top:1px;}
+.rel-need-go{border:0;background:none;padding:0;font:inherit;font-size:11px;color:var(--primary-fg);cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+.rel-ready-note{margin:0 13px 11px;padding:8px 10px;border-radius:var(--r-sm);background:var(--info-soft);color:var(--info-fg);font-size:11px;line-height:16px;}
+.rel-ready-foot{display:flex;align-items:center;gap:8px;padding:10px 13px;border-top:1px solid var(--border);background:var(--surface);}
+.rel-ready-foot [data-ready-foot]{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.rel-ready-foot .sp{flex:1;}
+@media (max-width:1099px){
+  .release-actual{grid-template-columns:1fr;}
+  .rel-ready{position:static;}
+}
+@media (max-width:639px){
+  .rel-steps-wrap{flex-wrap:wrap;}
+  .rel-steps{flex-wrap:wrap;gap:6px 0;padding:8px 10px;}
+  .rel-step-line{display:none;}
+  .rel-step{flex:1 1 100%;justify-content:flex-start;padding:4px 0;}
+  .rel-step-meta{margin-left:auto;}
+  .rel-ready-foot{flex-wrap:wrap;}
+  .rel-ready-foot .sp{flex:1 1 100%;}
+  .rel-ready-foot .btn{flex:1 1 0;}
+}
+/* ===== 发布工作区：计划 / 实际 / 历史与内容 分区 ===== */
 .release-panel{display:flex;flex-direction:column;gap:var(--space-4);}
 .release-panel[hidden]{display:none;}
 .release-next{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--success-border);background:var(--success-soft);color:var(--success-fg);border-radius:var(--r-md);font-size:13px;}
@@ -510,20 +546,20 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 }
 /* 发布弹窗在手机上占满全屏：表单长、字段密，半屏弹层会把「实际发布」挤到折叠线以下 */
 @media(max-width:639px){
+  /* 手机上工具栏会折行：分组小标题单独成行只会留下一个孤零零的「操作」 */
+  #view-phase .page-toolbar .sv-seg-label{font-size:11.5px;}
+  #view-phase .page-toolbar .sv-seg-end{display:none;}
+  /* 手机上没有独立全屏入口：留一个图标单独成行反而像孤立按钮 */
+  #view-phase .page-toolbar [data-view-fullscreen]{display:none;}
   .release-sheet{position:fixed;inset:0;width:100%;max-width:none;height:100dvh;max-height:100dvh;border:0;border-radius:0;margin:0;}
   .release-sheet .sheet-head{padding:var(--space-3) 14px;padding-top:calc(12px + env(safe-area-inset-top));}
   .release-sheet .sheet-body{padding:var(--space-3) 14px calc(16px + env(safe-area-inset-bottom));}
   .release-body{gap:var(--space-3);}
-  .release-topbar{flex-wrap:nowrap;}
-  .release-tabs{flex:1 1 0;}
-  .release-tab{min-height:44px;padding:0 6px;gap:var(--space-1);font-size:13px;}
-  .release-tab-count{padding:0 5px;}
   .release-sheet .btn,.release-sheet select,.release-sheet input{min-height:44px;}
   .release-sheet textarea{min-height:88px;}
   .release-page .btn,.release-page select,.release-page input{min-height:44px;}
   /* 44px 触控高度只给文本控件：勾选框被拉成竖条会看起来像按钮 */
   .release-page input[type="checkbox"],.release-sheet input[type="checkbox"]{min-height:0;width:16px;height:16px;flex:0 0 auto;}
-  .release-page .release-tab{min-height:44px;}
   .release-page textarea{min-height:88px;}
   .release-picker-tools input[type="search"]{flex:1 1 100%;}
   .release-picker-tools .btn{flex:1 1 auto;}
@@ -568,10 +604,11 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .bkl-title{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:var(--r-xs);font-size:12.5px;font-weight:600;color:var(--text);background:color-mix(in srgb,var(--c,var(--text-3)) 11%,transparent);}
 .bkl-dot{width:6px;height:6px;border-radius:var(--r-pill);flex:0 0 auto;}
 .bkl-count{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;padding:0 2px;line-height:18px;}
-.bkl-card{display:flex;flex-direction:column;gap:6px;padding:var(--space-3);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-xs);cursor:pointer;}
+.bkl-card{display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-xs);cursor:pointer;}
 .bkl-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-md);}
 .bkl-tags{display:flex;align-items:center;gap:var(--space-1);flex-wrap:wrap;}
-.bkl-tags .tag{height:20px;font-size:12px;}
+/* 卡片标签与全站 .tag、原型 .chip 同高同字号；原先 12px 比工具条里的 .tag 大一档 */
+.bkl-tags .tag{height:20px;font-size:11px;}
 .bkl-desc{margin:0;font-size:13px;line-height:19px;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .bkl-src{font-size:12px;color:var(--text-3);}
 /* 列表/卡片标题下的提交人行：只读展示，避免为它再加一列挤掉已有列宽 */
@@ -653,10 +690,29 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .bkl-more:hover{background:var(--surface);color:var(--primary-fg);border-color:var(--primary-border);}
 .dem-more-row td{padding:10px;text-align:center;}
 .dem-more-row .btn{min-width:220px;}
-.bkl-title-link{min-height:30px;padding:3px 7px;border:1px solid var(--primary-border);border-radius:var(--r-sm);background:var(--primary-soft);color:var(--primary-fg);cursor:pointer;}
-.bkl-title-link:hover{border-color:var(--primary);background:var(--primary-soft);color:var(--primary-fg);}
+/* 列头与原型 .kcol-head 一致：不套主色胶囊，让每个状态的圆点自己承担颜色；
+   点击进入工作页仍保留 hover 主色与 ↗ 提示 */
+.bkl-title-link{min-height:30px;padding:2px 4px;border:0;border-radius:var(--r-sm);background:none;color:var(--text);cursor:pointer;}
+.bkl-title-link:hover{background:var(--surface-hover);color:var(--text);}
+.bkl-title-link:focus-visible{outline:none;box-shadow:var(--ring-focus);}
 .bkl-title-link .pdot{width:8px;height:8px;padding:0;}
 .bkl-open{font-size:12px;opacity:.75;}
+/* ===== 需求池看板：按原型 p-demands 收敛列头 / 组头 / 卡片标题 ===== */
+#view-demands .bkl{gap:10px;}
+#view-demands .bkl-head{height:30px;padding:0 2px;}
+#view-demands .bkl-title-link{font-size:12px;font-weight:650;color:var(--text-2);}
+#view-demands .bkl-count{font-size:10.5px;}
+#view-demands .bkl-card .link-title{
+  font-size:13px;line-height:19px;font-weight:600;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+/* 列内组头沿用原型的浅灰胶囊带（.kggrp 22px），与卡片区分开 */
+#view-demands .bkl-lane.is-dim .bkl-lane-head{
+  height:22px;min-height:22px;padding:0 6px;
+  background:var(--bg-app);border:1px solid var(--surface-sunken);border-radius:5px;
+}
+#view-demands .bkl-lane.is-dim .bkl-lane-name{font-size:10.5px;font-weight:650;color:var(--text-3);}
+#view-demands .bkl-lane.is-dim .bkl-lane-count{font-size:10.5px;font-weight:500;color:var(--text-3);}
 .demb-stage-filter{min-width:102px;max-width:126px;height:30px;margin-left:auto;padding:3px 6px;font-size:12px;}
 .demb-stage-filter.active{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft);}
 .demb-dist-row{display:flex;align-items:center;gap:8px;}
@@ -861,3 +917,33 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .dem-ver-cell .dem-ver-name,
 .dem-ver-cell .dem-ver-plan{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .dem-ver-cell .dem-inline-trigger{max-width:100%;}
+
+/* ===== 版本页工具条：单项目口径 + 跨项目视图（11-19 IA） ===== */
+.scope-wrap{position:relative;display:inline-flex;}
+.scope-menu{right:0;top:calc(100% + 6px);width:336px;padding:6px;}
+.scope-item{display:flex;align-items:flex-start;gap:9px;width:100%;padding:8px 9px;border:0;border-radius:8px;background:none;text-align:left;color:var(--text);cursor:pointer;font:inherit;}
+.scope-item:hover,.scope-item:focus-visible{background:var(--surface-hover);}
+.scope-item[aria-current="true"]{background:var(--primary-soft);}
+.scope-item .si-ic{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:var(--surface-sunken);color:var(--text-2);}
+.scope-item[aria-current="true"] .si-ic{background:var(--surface);color:var(--primary-fg);}
+.scope-item .si-tx{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.scope-item .si-tx b{font-size:12.5px;font-weight:650;line-height:1.35;}
+.scope-item .si-tx span,
+.scope-item .si-tx small{font-size:11.5px;line-height:1.45;color:var(--text-3);}
+.rel-entry-menu{width:288px;}
+.scope-sep{height:1px;background:var(--border);margin:6px 4px;}
+.scope-back{display:flex;align-items:center;width:100%;padding:7px 9px;border:0;border-radius:7px;background:none;color:var(--primary-fg);font:inherit;font-size:12px;font-weight:600;text-align:left;cursor:pointer;}
+.scope-back:hover,.scope-back:focus-visible{background:var(--primary-soft);}
+.scope-back span{color:var(--text-3);font-weight:500;}
+.seg.is-scope{opacity:.45;pointer-events:none;}
+.scope-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border:1px solid var(--info-border);border-radius:var(--r-sm);background:var(--info-soft);color:var(--info-fg);font-size:12.5px;line-height:1.5;}
+.scope-strip b{font-weight:650;}
+.scope-strip>span:not(.tag){color:var(--text-2);}
+.scope-strip .link{margin-left:auto;border:0;background:none;color:var(--primary-fg);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;padding:0;}
+.scope-strip .link:hover{text-decoration:underline;}
+@media (max-width:700px){
+  .scope-wrap{width:100%;}
+  .scope-wrap>#phaseScopeBtn,
+  .scope-wrap>#btnReleasePlan{width:100%;justify-content:center;}
+  .scope-menu{left:0;right:auto;width:min(336px,calc(100vw - 32px));}
+}

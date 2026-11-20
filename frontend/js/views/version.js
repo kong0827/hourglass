@@ -104,14 +104,17 @@ registerHelp({
 });
 initCaliberHelp();
 
+/* 11-19 全站稿：可见页签收为 范围 / 需求 / 发布记录 / 操作记录；
+   概览（工时构成、承诺基线、里程碑、分支）保留为「更多 → 工时与构成」的深页
+   tab=overview 仍可直达，避免旧链接失效 */
 var TABS = [
-  { key:"overview", label:"概览" },
-  { key:"scope", label:"工作项" },
+  { key:"scope", label:"范围" },
   { key:"demands", label:"需求" },
-  { key:"releases", label:"发布" },
+  { key:"releases", label:"发布记录" },
   { key:"log", label:"操作记录" }
 ];
-var TAB_KEYS = TABS.map(function(t){ return t.key; });
+var TAB_KEYS = ["overview"].concat(TABS.map(function(t){ return t.key; }));
+var DEFAULT_TAB = "scope";
 var SORTS = [["default","风险优先"],["actual","实际工时"],["estimate","预估工时"],["due","截止日期"],["title","标题"]];
 var SORT_KEYS = SORTS.map(function(s){ return s[0]; });
 var STATUS_FILTERS = [["","全部状态"],["done","已完成"],["moving","进行中"],["idle","未开始"],["open","未完成"],["over","已逾期"],["pre","上线前归入"]];
@@ -135,7 +138,7 @@ var LOG_NAME = {
 
 var host = null, wired = false;
 var st = {
-  id:"", reqId:"", tab:"overview",
+  id:"", reqId:"", tab:DEFAULT_TAB,
   seq:0, loading:false, error:"",
   versions:[], version:null, stat:null, phase:null,
   tasks:[], milestones:[], cats:[], allDemands:[],
@@ -206,7 +209,7 @@ function filterQuery(){
 function routeHash(){
   var h = "#/version?id=" + encodeURIComponent(st.id);
   if(st.reqId) h += "&reqId=" + encodeURIComponent(st.reqId);
-  if(st.tab !== "overview") h += "&tab=" + encodeURIComponent(st.tab);
+  if(st.tab !== DEFAULT_TAB) h += "&tab=" + encodeURIComponent(st.tab);
   /* 筛选只在工作项页有意义：换页签不把它带进 URL，避免分享出去的链接自相矛盾 */
   if(st.tab === "scope"){
     var q = filterQuery();
@@ -219,12 +222,12 @@ function parseRoute(){
   var qi = raw.indexOf("?");
   if((qi >= 0 ? raw.substring(0, qi) : raw) !== "version") return null;
   var p = new URLSearchParams(qi >= 0 ? raw.substring(qi + 1) : "");
-  var tab = p.get("tab") || "overview";
+  var tab = p.get("tab") || DEFAULT_TAB;
   var sort = p.get("sort") || "default";
   return {
     id: p.get("id") || "",
     reqId: p.get("reqId") || "",
-    tab: TAB_KEYS.indexOf(tab) >= 0 ? tab : "overview",
+    tab: TAB_KEYS.indexOf(tab) >= 0 ? tab : DEFAULT_TAB,
     filters:{
       q: p.get("q") || "",
       status: p.get("st") || "",
@@ -252,7 +255,7 @@ function openVersionDetail(reqId, versionId, tab){
   if(!versionId){ toast("这一行没有归属版本", "warn"); return; }
   st.id = versionId;
   st.reqId = reqId || "";
-  st.tab = TAB_KEYS.indexOf(tab) >= 0 ? tab : "overview";
+  st.tab = TAB_KEYS.indexOf(tab) >= 0 ? tab : DEFAULT_TAB;
   st.filters = blankFilters();
   syncRoute(true);
   showView("version");
@@ -507,28 +510,102 @@ function syncDescToggle(){
   btn.hidden = !open && p.scrollHeight <= p.clientHeight + 1;
   btn.textContent = open ? "收起说明" : "展开说明";
 }
+/* 工具页「工时与构成」不在常规页签里，进入时补一个临时页签，避免没有选中态 */
+function navTabs(){
+  return st.tab === "overview" ? TABS.concat([{ key:"overview", label:"工时与构成" }]) : TABS;
+}
+/* 状态说明条：一行讲清「现在能做什么、记录去哪里」，替代把锁定原因藏在按钮 disabled 里 */
+function statusBannerHTML(){
+  var v = st.version || st.stat || {};
+  var text, tone = "info";
+  if(v.status === "planned"){
+    text = "当前为计划中：可以调整范围；实际发布时间与结果在发布工作台记录，不会改动计划快照。";
+  }else if(v.status === "active"){
+    text = "当前为进行中：范围仍可调整；实际发布时间与结果在发布工作台记录，不会改动计划快照。";
+  }else if(v.status === "released"){
+    text = "已正式发布：范围与计划快照只读；如需更正，请在发布工作台登记回滚或重部署，不覆盖本次事实。";
+    tone = "success";
+  }else if(v.status === "closed"){
+    text = "已关闭：不再接受编辑与新发布，工作项关联与历史保留。";
+    tone = "mute";
+  }else if(v.status === "canceled"){
+    text = "已取消：不再接受编辑与新发布，历史保留。";
+    tone = "mute";
+  }else if(contentLocked()){
+    text = "已有成功的生产发布记录，版本内容只读；如需变更范围，请走发布工作台的记录。";
+    tone = "mute";
+  }else{
+    return "";
+  }
+  return '<div class="vd-status-note is-' + tone + '">' + icon(tone === "success" ? "check" : "infoCircle", 14)
+    + '<span>' + esc(text) + '</span></div>';
+}
+/* 4 格 KPI：范围 / 完成 / 预估与实际 / 风险，回答「这版能不能按时发」 */
+function kpiStripHTML(){
+  var s = st.stat || {};
+  var total = st.tasks.length;
+  if(!total) return "";
+  var done = st.tasks.filter(isDone).length;
+  var over = st.tasks.filter(isOver).length;
+  var blocked = st.tasks.filter(function(t){ return !isDone(t) && t.blocked; }).length;
+  var est = st.tasks.reduce(function(a, t){ return a + estOf(t); }, 0);
+  var act = st.tasks.reduce(function(a, t){ return a + actOf(t); }, 0);
+  var byType = { story:0, bug:0, task:0, epic:0 };
+  st.tasks.forEach(function(t){ if(byType[t.itemType] !== undefined) byType[t.itemType]++; });
+  var pct = total ? Math.round(done * 100 / total) : 0;
+  function kpi(label, value, foot, tone, drill, tail){
+    var inner = '<span class="k">' + esc(label) + '</span>'
+      + '<b' + (tone ? ' class="vd-' + tone + '"' : '') + '>' + value + (tail ? '<small>' + tail + '</small>' : '') + '</b>'
+      + '<span class="f">' + foot + '</span>';
+    if(!drill) return '<div class="pcell vd-kpi">' + inner + '</div>';
+    return '<button type="button" class="pcell vd-kpi drillable" data-vd-drill="' + esc(drill) + '" title="在范围里查看该口径明细">' + inner + '</button>';
+  }
+  var typeFoot = "需求 " + byType.story + " · 缺陷 " + byType.bug + " · 任务 " + byType.task;
+  return '<div class="pgrid vd-kpis vd-kpis4">'
+    + kpi("范围", String(total), esc(typeFoot), "", "all", "项")
+    + kpi("完成", String(done) + '<span class="vd-kpi-of"> / ' + total + '</span>', pct + "% 已完成", "ok", "done")
+    + kpi("预估 / 实际", esc(hours(est)), "实际 " + esc(hours(act)) + " · 偏差 " + esc(pctText(s.deviationPct)), "", "deviation")
+    + kpi("风险", String(over + blocked), over + " 逾期 · " + blocked + " 阻塞", (over + blocked) ? "warn-text" : "ok", over ? "over" : null)
+    + '</div>';
+}
+function moreMenuHTML(canEdit, canPublish){
+  var items = [];
+  items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tool="plan">' + icon("calendar", 14) + '计划与历史</button>');
+  items.push('<button class="menu-item" type="button" role="menuitem" data-vd-delivery>' + icon("note", 14) + '交付说明</button>');
+  items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tab="overview">' + icon("stats", 14) + '工时与构成</button>');
+  if(canPublish) items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tool="actual">' + icon("upload", 14) + '记录实际发布</button>');
+  if(canEdit && st.version && st.version.status === "planned"){
+    items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tool="start">' + icon("play", 14) + '开始开发</button>');
+  }
+  if(canEdit){
+    items.push('<span class="menu-sec">生命周期</span>');
+    items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tool="close">' + icon("check", 14) + '关闭版本</button>');
+    items.push('<button class="menu-item danger" type="button" role="menuitem" data-vd-tool="cancel">' + icon("close", 14) + '取消版本</button>');
+    if(rt.currentWs && rt.currentWs.myRole === "owner"){
+      items.push('<button class="menu-item danger" type="button" role="menuitem" data-vd-tool="delete">' + icon("trash", 14) + '删除版本</button>');
+    }
+  }
+  return '<span class="vd-more-wrap">'
+    + '<button class="btn sm" type="button" data-vd-more aria-haspopup="true" aria-expanded="false">更多 '
+    + icon("caretDown", 12) + '</button>'
+    + '<div class="menu vd-more-menu" hidden role="menu" aria-label="更多版本操作">' + items.join("") + '</div>'
+    + '</span>';
+}
 function headHTML(){
   var v = st.version || st.stat || {};
   var actions = [];
   var canEdit = writable() && !readOnly();
-  var isPlanned = !!(st.version && st.version.status === "planned");
   var canPublish = st.version && st.version.canPublish === true;
-  /* 主按钮随状态切换（P2-14）：计划中先圈定范围 →「管理范围」为实心主按钮；
-     进行中且可发布 →「记录实际发布」为实心主按钮。同一时刻只保留一个实心按钮，避免两个 primary 打架。 */
+  /* 原型：只保留一个状态驱动的主操作 + 编辑 + 更多；低频动作全部进入更多 */
   if(canEdit){
-    if(isPlanned && !canPublish){
-      actions.push('<button class="btn sm primary" type="button" data-vd-tool="tasks">管理范围</button>');
-      actions.push('<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑版本</button>');
-    }else{
-      actions.push('<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑版本</button>');
-      actions.push('<button class="btn sm" type="button" data-vd-tool="tasks">管理范围</button>');
-    }
+    actions.push('<button class="btn sm" type="button" data-vd-tool="edit">' + icon("edit", 13) + ' 编辑</button>');
   }
+  actions.push(moreMenuHTML(canEdit, canPublish));
   if(canPublish){
     actions.push('<button class="btn sm primary" type="button" data-vd-tool="actual">记录实际发布</button>');
+  }else if(canEdit){
+    actions.push('<button class="btn sm primary" type="button" data-vd-tool="tasks">管理范围</button>');
   }
-  actions.push('<button class="btn sm ghost" type="button" data-vd-tool="plan">计划与历史</button>');
-  actions.push('<button class="btn sm ghost" type="button" data-vd-delivery>交付说明</button>');
   var lock = readOnly()
     ? '<span class="tag ghost vd-lock">' + icon("lock", 11) + (ended() ? "已终态" : "正式发布后只读") + '</span>'
     : "";
@@ -547,7 +624,9 @@ function headHTML(){
     + '</div>'
     + descHTML(v.description)
     + (actions.length ? '<div class="vd-acts">' + actions.join("") + '</div>' : "")
-    + '<nav class="vd-tabs" aria-label="版本详情分区">' + TABS.map(function(t){
+    + statusBannerHTML()
+    + (st.tab === "overview" ? "" : kpiStripHTML())
+    + '<nav class="vd-tabs" aria-label="版本详情分区">' + navTabs().map(function(t){
       var on = t.key === st.tab;
       var n = tabCount(t.key);
       return '<button class="vd-tab' + (on ? " on" : "") + '" type="button" data-vd-tab="' + t.key + '"'
@@ -588,8 +667,8 @@ function panel(title, meta, inner, cls){
   return '<section class="panel vd-panel' + (cls ? " " + cls : "") + '"><div class="panel-head"><h3>' + esc(title) + '</h3>'
     + (meta ? '<span class="meta-right">' + meta + '</span>' : "") + '</div>' + inner + '</section>';
 }
-function tableWrap(head, body){
-  return '<div class="vd-tbl-wrap"><table class="phase-tbl"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+function tableWrap(head, body, cls){
+  return '<div class="vd-tbl-wrap"><table class="phase-tbl' + (cls ? ' ' + cls : '') + '"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>';
 }
 function emptyRow(cols, text){
   return '<tr><td colspan="' + cols + '" class="foot-note tbl-empty">' + esc(text) + '</td></tr>';
@@ -1412,8 +1491,6 @@ function scopeFiltersHTML(){
 }
 function scopeHTML(){
   var rows = filteredTasks();
-  var est = rows.reduce(function(a, t){ return a + estOf(t); }, 0);
-  var act = rows.reduce(function(a, t){ return a + actOf(t); }, 0);
   var body = rows.map(function(t){
     var over = isOver(t);
     return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
@@ -1426,21 +1503,24 @@ function scopeHTML(){
           + entityChip("branch", t.branchId, branchName(t.branchId)) + '</span>'
         : "")
       + '</td>'
-      + '<td>' + typeBadgeHTML(t.itemType) + '</td>'
-      + '<td>' + esc(t.owner || "—") + '</td>'
+      + '<td>' + (typeBadgeHTML(t.itemType) || (t.itemType === "task" ? '<span class="mini-tag">任务</span>' : '')) + '</td>'
       + '<td>' + (isDone(t) ? '<span class="tag tag-success">已完成</span>'
         : '<span class="tag ' + (over ? "tag-danger" : "tag-info") + '">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
-      + '<td class="num">' + esc(dateText(t.dueDate) || "—") + (over ? ' <span class="vd-over">逾期</span>' : "") + '</td>'
-      + '<td class="num">' + hours(estOf(t)) + '</td>'
-      + '<td class="num">' + hours(actOf(t)) + '</td>'
-      + '<td class="num">' + hours(devOf(t)) + '</td>'
-      + '<td class="num">' + hours(testOf(t)) + '</td></tr>';
-  }).join("") || emptyRow(9, st.tasks.length ? "没有匹配的工作项，试试清空筛选。" : "该版本还没有工作项。");
-  var meta = '<span class="meta-right">' + rows.length + " / " + st.tasks.length + " 项 · 预估 " + hours(est) + " · 实际 " + hours(act) + '</span>';
-  return scopeFiltersHTML() + panel("版本工作项", meta,
-    tableWrap('<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th class="num">截止</th>'
-      + '<th class="num">预估</th><th class="num">实际</th><th class="num">窗口外</th><th class="num">窗口内</th>', body)
-    + '<p class="foot-note">窗口内 / 外按测试窗口（提测 → 测试结束）拆分计时，窗口外含评审、设计、开发、运维等。</p>');
+      + '<td>' + esc(t.owner || "—") + '</td>'
+      + '<td class="num">' + windowCell(t, over) + '</td></tr>';
+  }).join("") || emptyRow(5, st.tasks.length ? "没有匹配的工作项，试试清空筛选。" : "该版本还没有工作项。");
+  var meta = '<span class="meta-right">' + rows.length + " / " + st.tasks.length + " 项</span>";
+  return scopeFiltersHTML() + panel("版本范围", meta,
+    tableWrap('<th>工作项</th><th>类型</th><th>状态</th><th>负责人</th><th class="num">计划窗口</th>', body, "vd-scope-tbl")
+    + '<p class="foot-note">计划窗口 = 工作项开始 → 截止；预估 / 实际工时在「更多 → 工时与构成」查看。'
+    + (st.tasks.some(function(t){ return t._pre; }) ? ' 范围含首版上线前未绑版本的折算项，行内标注。' : '') + '</p>');
+}
+/* 计划窗口：开始 → 截止；只有一侧时如实只显示一侧，逾期单独标红 */
+function shortDate(s){ return s ? dateText(s).substring(5) : ""; }
+function windowCell(t, over){
+  var from = shortDate(t.startDate), to = shortDate(t.dueDate);
+  var txt = from && to ? from + " → " + to : (to ? "截止 " + to : (from ? from + " 起" : "—"));
+  return esc(txt) + (over ? ' <span class="vd-over">逾期</span>' : "");
 }
 
 /* ==================== 需求 ==================== */
@@ -1723,6 +1803,15 @@ function wire(){
   host.addEventListener("click", function(e){
     if(e.target.closest("[data-vd-back]")){ backToVersions(); return; }
     if(e.target.closest("[data-vd-refresh]")){ reload(); return; }
+    var moreBtn = e.target.closest("[data-vd-more]");
+    if(moreBtn){
+      var menu = host.querySelector(".vd-more-menu");
+      if(menu){
+        menu.hidden = !menu.hidden;
+        moreBtn.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+      }
+      return;
+    }
     if(e.target.closest("[data-vd-desc-toggle]")){
       var desc = host.querySelector("[data-vd-desc]");
       if(desc){
@@ -1791,6 +1880,16 @@ function wire(){
     if(task){ openTaskById(task.dataset.openTask); return; }
     /* 发布快照里的 data-snap-task / data-snap-demand 由 core/task-actions.js 全局委托，
        这里不能再接一遍：需求详情每次调用都新建弹层，接两遍会叠出两层关不掉 */
+  });
+  /* 更多菜单：点页面其他地方收起；重画后菜单随 headHTML 重建 */
+  document.addEventListener("click", function(e){
+    if(!host || activeView !== "version") return;
+    if(e.target.closest && e.target.closest(".vd-more-wrap")) return;
+    var m = host.querySelector(".vd-more-menu");
+    if(!m || m.hidden) return;
+    m.hidden = true;
+    var b = host.querySelector("[data-vd-more]");
+    if(b) b.setAttribute("aria-expanded", "false");
   });
   host.addEventListener("change", function(e){
     var sw = e.target.closest("[data-vd-switch]");

@@ -86,6 +86,10 @@ var caseFormReqId = null; /* 当前用例弹窗的所属项目：编辑取用例
 var statusFilter = "all";
 var tcMode = "cases";
 var coverageRows = [];
+/* 覆盖矩阵快筛：固定在工具条，不随数据出现（原型 COV-1） */
+var covOnlyUncovered = false;
+var covOnlyFailed = false;
+var covSearch = "";
 /* 覆盖矩阵展开态：需求 → 工作项 → 用例；数据按需加载后缓存 */
 var covExpanded = {};
 var covTaskCache = {};
@@ -1059,11 +1063,14 @@ function defectStatsHTML(){
   ].map(function(p){
     return '<span><i class="sev-dot ' + p[0] + '"></i>' + p[1] + ' <b>' + counts[p[0]] + '</b></span>';
   }).join("");
-  return '<span class="tc-stat over">未关闭 <b>' + open.length + '</b></span>'
-    + '<span class="tc-stat warn">待回归 <b>' + verify.length + '</b></span>'
-    + '<span class="tc-stat mute">本周新增 <b>' + week.length + '</b></span>'
-    + '<span class="tc-stat mute">平均修复 <b>' + avgFix + '</b></span>'
-    + '<span class="tc-def-sev">' + sev + '</span>';
+  /* 原型 testbar：标题 + 条数口径在左，严重度分布靠右，解释收进表头 ? */
+  var scopeCount = defStatus === "open" ? open.length : defects.length;
+  return '<span class="tc-def-bar-title">' + (defStatus === "open" ? "未关闭缺陷" : "缺陷") + '</span>'
+    + '<span class="tc-def-bar-sub">共 ' + scopeCount + ' 条'
+    + (defStatus === "open" ? ' · 默认不含已关闭' : (defStatus === "all" ? ' · 含已关闭' : ''))
+    + ' · 待回归 ' + verify.length + ' · 本周新增 ' + week.length + ' · 平均修复 ' + avgFix + '</span>'
+    + '<span class="tc-def-sev">' + sev + '</span>'
+    + '<span class="tc-def-bar-hint">严重度=影响范围；优先级=处理顺序</span>';
 }
 function defectRowHTML(t, no){
   var st = defectStatus(t);
@@ -1095,7 +1102,7 @@ function defectRowHTML(t, no){
     + '<div>' + sevHTML + '</div>'
     + '<div>' + priHTML + '</div>'
     + '<div class="tc-def-main">'
-    +   '<div class="tc-def-title">' + esc(t.title || "（无标题）") + '</div>'
+    +   '<div class="tc-def-title" title="' + esc(t.title || "（无标题）") + '">' + esc(t.title || "（无标题）") + '</div>'
     +   '<div class="tc-def-sub">' + projHTML + '<span class="tc-def-id">' + esc(t.id) + '</span>'
     +     '<span>' + esc(cases.length ? "测试发现" : "手工创建") + '</span>' + taskPublicationHTML(t) + '</div>'
     + '</div>'
@@ -1131,6 +1138,7 @@ function renderDefects(){
   defectOpenCount = defects.filter(defectIsOpen).length;
   defectBadgeReqId = defectScopeKey();
   paintDefectBadge();
+  syncTcPageHead();
   var statsEl = $("tcDefStats"), rowsEl = $("tcDefRows"), footEl = $("tcDefFoot");
   if(!statsEl || !rowsEl || !footEl) return;
   $("tcMeta").textContent = rt.reqList.length
@@ -1548,6 +1556,27 @@ function covTaskChildrenHTML(r){
     + '</div></div>';
   return html;
 }
+var COV_RULE = "覆盖率按「该需求至少有一条用例」计算；需求级＝用例只关联需求，工作项级＝用例已细化到具体工作项；0 表示未发生，不代表通过或失败。";
+function covMatch(r){
+  if(covSearch){
+    var q = covSearch.trim().toLowerCase();
+    if(q && (r.demandTitle || "").toLowerCase().indexOf(q) === -1) return false;
+  }
+  if(covOnlyUncovered && (!r.demandId || (r.caseTotal || 0) > 0)) return false;
+  if(covOnlyFailed && !(r.failed > 0)) return false;
+  return true;
+}
+function syncCovCtl(){
+  var box = $("tcCovCtl");
+  if(!box) return;
+  box.querySelectorAll("[data-cov-filter]").forEach(function(b){
+    var on = b.dataset.covFilter === "uncovered" ? covOnlyUncovered : covOnlyFailed;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  var input = $("tcCovSearch");
+  if(input && input.value !== covSearch) input.value = covSearch;
+}
 function renderCoverage(){
   var box = $("tcCoverage");
   if(!box) return;
@@ -1555,14 +1584,30 @@ function renderCoverage(){
   coverageRows.forEach(function(r){
     if(r.demandId){ total++; if((r.caseTotal || 0) > 0) covered++; }
   });
-  var head = '<div class="cov-summary">已覆盖需求 <b>' + covered + '</b> / ' + total +
-    (total ? '（' + Math.round(covered * 100 / total) + '%）' : '') +
-    '<span class="cov-note">覆盖率按「该需求至少有一条用例」计算；展开需求可看两种粒度：需求级＝用例只关联需求，工作项级＝用例已细化到具体工作项；0 表示未发生，不代表通过或失败</span></div>';
+  var pct = total ? Math.round(covered * 100 / total) : 0;
+  syncCovCtl();
+  var head = '<div class="cov-card-head">'
+    + '<span class="cov-card-title">覆盖矩阵</span>'
+    + '<span class="cov-card-badge">已覆盖 ' + covered + ' / ' + total + (total ? '（' + pct + '%）' : '') + '</span>'
+    + '<span class="spacer"></span>'
+    + '<button class="cov-help" type="button" data-cov-help title="查看覆盖口径">' + icon("infoCircle", 13) + ' 覆盖口径</button>'
+    + '</div>';
+  var foot = '<div class="cov-foot"><span>未关联需求的用例会单列成「未关联需求」，不会从统计里消失。</span>'
+    + '<span class="spacer"></span><button class="cov-link" type="button" data-cov-help>查看覆盖口径</button></div>';
   if(!coverageRows.length){
-    box.innerHTML = head + UI.emptyState({ icon:"checklist", title:"还没有可对照的需求或用例", text:"先录入需求池需求与测试用例，覆盖矩阵会自动汇总。" });
+    box.innerHTML = '<div class="cov-card">' + head
+      + UI.emptyState({ icon:"checklist", title:"还没有可对照的需求或用例", text:"先录入需求池需求与测试用例，覆盖矩阵会自动汇总。" })
+      + foot + '</div>';
     return;
   }
-  var rows = coverageRows.map(function(r){
+  var visibleRows = coverageRows.filter(covMatch);
+  if(!visibleRows.length){
+    box.innerHTML = '<div class="cov-card">' + head
+      + '<div class="cov-none"><p>没有符合快筛条件的需求。</p><button class="btn sm" type="button" data-cov-clear>清空快筛</button></div>'
+      + foot + '</div>';
+    return;
+  }
+  var rows = visibleRows.map(function(r){
     var rowTotal = r.caseTotal || 0;
     /* 跳过表示本次不适用，从通过率分母里剔除 */
     var base = Math.max(0, rowTotal - (r.skipped || 0));
@@ -1599,9 +1644,31 @@ function renderCoverage(){
     if(expanded) row += covTaskChildrenHTML(r);
     return row;
   }).join("");
-  box.innerHTML = head + '<div class="cov-table">' +
-    '<div class="cov-head"><span>需求</span><span>用例</span><span>通过</span><span>失败</span><span>阻塞</span><span title="本次不执行 / 不适用">跳过</span><span>未执行</span><span title="关联缺陷中未删除、未完成的数量">未关闭缺陷</span><span>通过率</span><span>覆盖</span></div>' +
-    rows + '</div>';
+  box.innerHTML = '<div class="cov-card">' + head
+    + '<div class="cov-table">'
+    + '<div class="cov-head"><span>需求</span><span>用例</span><span>通过</span><span>失败</span><span>阻塞</span><span title="本次不执行 / 不适用">跳过</span><span>未执行</span><span title="关联缺陷中未删除、未完成的数量">未关闭缺陷</span><span>通过率</span><span>覆盖</span></div>'
+    + rows + '</div>'
+    + foot + '</div>';
+}
+/* 覆盖矩阵导出：与列表同口径（当前项目范围的全部需求行，不受快筛影响） */
+function exportCoverageCsv(){
+  if(!coverageRows.length){ toast("覆盖矩阵还没有可导出的数据", "warn"); return; }
+  var rows = [["需求", "需求状态", "用例", "通过", "失败", "阻塞", "跳过", "未执行", "未关闭缺陷", "通过率", "覆盖"]];
+  coverageRows.forEach(function(r){
+    var rowTotal = r.caseTotal || 0;
+    var base = Math.max(0, rowTotal - (r.skipped || 0));
+    var pct = base ? Math.round((r.passed || 0) * 100 / base) : 0;
+    rows.push([
+      r.demandId ? (r.demandTitle || "未命名需求") : "未关联需求",
+      r.demandId ? demandStatusLabel(r.demandStatus) : "—",
+      rowTotal, r.passed || 0, r.failed || 0, r.blocked || 0, r.skipped || 0, r.untested || 0,
+      r.bugCount || 0,
+      r.demandId ? pct + "%" : "—",
+      r.demandId ? (rowTotal ? "已覆盖" : "未覆盖") : "—"
+    ]);
+  });
+  downloadCsv("覆盖矩阵-" + (tcScopeName() || "全部项目") + ".csv", rows);
+  toast("已导出覆盖矩阵 CSV", "fs");
 }
 
 /* ---------- 测试报告 ---------- */
@@ -1752,7 +1819,7 @@ function runStatsCol(title, buckets, dim){
 /* 执行流水聚合：按执行人 / 环境 / 轮次的通过率，补充「最近一轮」概览之外的过程视角；点桶下钻看流水明细 */
 function runStatsSection(rs){
   if(!rs || !rs.totalRuns) return "";
-  return '<section class="rep-section rep-runstats">'
+  return '<section class="rep-section rep-runstats" id="repRunStats">'
     + '<div class="rep-section-head"><b>执行统计</b><span>共 ' + rs.totalRuns + ' 次执行 · 按全部执行流水聚合</span></div>'
     + '<div class="rs-grid">'
     + runStatsCol("按执行人", rs.byExecutor, "executor")
@@ -1896,24 +1963,31 @@ function renderTestReport(){
   var blocked = reportData.blocked || [];
   var name = reqNameOf(caseReqId);
   var stamp = reportData.generatedAt.toLocaleString("zh-CN", { hour12: false });
-  var head = '<div class="rep-head">'
-    + '<div><h3>测试报告 · ' + esc(name) + '</h3><p class="foot-note">生成时间 ' + esc(stamp) + ' · 口径：每个用例取最近一轮执行结果</p></div>'
-    + '<div class="rep-actions">'
-    +   '<button class="btn sm" type="button" data-tc-report-csv>导出 CSV</button>'
-    +   '<button class="btn sm" type="button" data-tc-report-doc>导出 Word</button>'
-    +   '<button class="btn sm" type="button" data-tc-report-print title="打开打印对话框，在目标里选择「另存为 PDF」">导出 PDF</button>'
-    + '</div>'
+  var stampShort = reportData.generatedAt.toLocaleString("zh-CN", {
+    month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false
+  }).replace(/\//g, "-");
+  var failedWithBug = failed.filter(function(c){ return !!c.latestBugTaskId; }).length;
+  /* 原型：标题只留在页头，报告卡里先给导出范围（含截止时间），格式按钮常驻 */
+  var banner = '<div class="rep-banner">'
+    + '<span class="rep-banner-ic">' + icon("eye", 14) + '</span>'
+    + '<span>导出范围：本轮执行 <b>' + total + ' 条</b> · 跳过 ' + (s.skipped || 0) + ' 条不计入通过率 · 截止 ' + esc(stampShort) + '</span>'
+    + '<span class="spacer"></span>'
+    + '<button class="btn sm" type="button" data-tc-report-print title="打开打印对话框，在目标里选择「另存为 PDF」">PDF</button>'
+    + '<button class="btn sm" type="button" data-tc-report-doc>Word</button>'
+    + '<button class="btn sm" type="button" data-tc-report-csv>CSV</button>'
     + '</div>';
-  var tiles = '<div class="rep-tiles">'
-    + '<span class="tc-stat"><b>' + total + '</b>用例总数</span>'
-    + '<span class="tc-stat' + ((s.passed || 0) > 0 ? " ok" : " mute") + '"><b>' + (s.passed || 0) + '</b>通过 · ' + passRate + '%</span>'
-    + '<span class="tc-stat' + ((s.failed || 0) > 0 ? " over" : " mute") + '"><b>' + (s.failed || 0) + '</b>失败</span>'
-    + '<span class="tc-stat' + ((s.blocked || 0) > 0 ? " warn" : " mute") + '"><b>' + (s.blocked || 0) + '</b>阻塞</span>'
-    + '<span class="tc-stat' + ((s.skipped || 0) > 0 ? "" : " mute") + '" title="本次不执行 / 不适用，不计入通过率"><b>' + (s.skipped || 0) + '</b>跳过</span>'
-    + '<span class="tc-stat mute"><b>' + (s.untested || 0) + '</b>未执行</span>'
-    + '<span class="tc-stat"><b>' + cov.pct + '%</b>需求覆盖（' + cov.covered + '/' + cov.total + '）</span>'
+  function kpiHTML(cls, key, sub, val, foot){
+    return '<div class="rep-kpi' + (cls ? " " + cls : "") + '">'
+      + '<div class="k">' + key + (sub ? '<span class="k-sub">' + sub + '</span>' : '') + '</div>'
+      + '<div class="v">' + val + '</div><div class="f">' + foot + '</div></div>';
+  }
+  var kpis = '<div class="rep-kpis">'
+    + kpiHTML("good", "通过率", "按本轮", passRate + '<small>%</small>', (s.passed || 0) + ' / ' + rateBase + ' · 排除跳过')
+    + kpiHTML((s.failed || 0) ? "bad" : "", "失败", "", (s.failed || 0), "已转缺陷 " + failedWithBug)
+    + kpiHTML((s.blocked || 0) ? "warn" : "", "阻塞", "", (s.blocked || 0), "等待环境与权限")
+    + kpiHTML("", "覆盖率", "全部需求", cov.pct + '<small>%</small>', cov.covered + ' / ' + cov.total + ' 条需求有至少 1 条用例')
     + '</div>';
-  var failBlock = '<section class="rep-section"><div class="rep-section-head"><b>失败用例</b><span>'
+  var failBlock = '<section class="rep-section" id="repFailed"><div class="rep-section-head"><b>失败用例</b><span>'
     + (reportData.failedTotal || 0) + ' 条</span></div>'
     + (failed.length
       ? failed.map(function(c){ return reportCaseRow(c, "fail"); }).join("")
@@ -1922,14 +1996,14 @@ function renderTestReport(){
       ? '<p class="foot-note">部分失败用例加载失败，当前展示 ' + failed.length + ' 条。</p>' : '')
     + '</section>';
   var blockBlock = blocked.length
-    ? '<section class="rep-section"><div class="rep-section-head"><b>阻塞用例</b><span>'
+    ? '<section class="rep-section" id="repBlocked"><div class="rep-section-head"><b>阻塞用例</b><span>'
       + (reportData.blockedTotal || 0) + ' 条</span></div>'
       + blocked.map(function(c){ return reportCaseRow(c, "block"); }).join("")
       + '</section>'
     : "";
   var covBlock = '';
   if(cov.total){
-    covBlock = '<section class="rep-section"><div class="rep-section-head"><b>需求覆盖</b><span>'
+    covBlock = '<section class="rep-section" id="repCoverage"><div class="rep-section-head"><b>需求覆盖</b><span>'
       + cov.covered + ' / ' + cov.total + '（' + cov.pct + '%）</span></div>'
       + '<div class="rep-cov">' + reportData.coverage.filter(function(r){ return r.demandId; }).map(function(r){
         var ok = (r.caseTotal || 0) > 0;
@@ -1940,8 +2014,20 @@ function renderTestReport(){
       }).join("") + '</div>'
       + '<p class="foot-note">0 表示未发生，不代表通过或失败。</p></section>';
   }
-  box.innerHTML = head + tiles + runStatsSection(reportData.runStats) + failBlock + blockBlock + covBlock
-    + '<p class="foot-note">证据附件在执行历史中随执行记录保存；CSV / Word 直接下载，PDF 走浏览器打印（目标选「另存为 PDF」），均基于当前项目与最近一轮结果。</p>';
+  var runHTML = runStatsSection(reportData.runStats);
+  var navItems = [];
+  if(runHTML) navItems.push({ id:"repRunStats", label:"执行统计", n:(reportData.runStats.totalRuns || 0) + " 次" });
+  navItems.push({ id:"repFailed", label:"失败用例", n:(reportData.failedTotal || 0) + " 条" });
+  if(blockBlock) navItems.push({ id:"repBlocked", label:"阻塞用例", n:(reportData.blockedTotal || 0) + " 条" });
+  if(covBlock) navItems.push({ id:"repCoverage", label:"需求覆盖", n:cov.pct + "%" });
+  var nav = '<aside class="repnav"><div class="rh">' + icon("list", 13) + ' 章节导航</div>'
+    + navItems.map(function(it){
+        return '<a href="#' + it.id + '" data-rep-nav="' + it.id + '"><span>' + it.label + '</span><span class="n">' + it.n + '</span></a>';
+      }).join("")
+    + '</aside>';
+  box.innerHTML = banner + '<div class="repwrap"><div class="repcol">' + kpis + runHTML + failBlock + blockBlock + covBlock
+    + '<p class="foot-note">证据附件在执行历史中随执行记录保存；CSV / Word 直接下载，PDF 走浏览器打印（目标选「另存为 PDF」），均基于当前项目与最近一轮结果。</p></div>'
+    + nav + '</div>';
 }
 /* 执行统计三维桶：CSV / Word 导出共用，口径同报告内聚合（全部执行流水，跳过不计入通过率分母） */
 function reportStatsDims(){
@@ -2326,7 +2412,7 @@ function render(){
     $("tcCoverage").hidden = false;
     $("tcReport").hidden = true;
     $("tcPlans").hidden = true;
-    $("tcMeta").textContent = caseReqId ? "需求 × 用例 × 缺陷" : "";
+    $("tcMeta").textContent = "覆盖口径：需求至少 1 条用例";
     return;
   }
   if(tcMode === "report"){
@@ -2334,7 +2420,8 @@ function render(){
     $("tcCoverage").hidden = true;
     $("tcReport").hidden = false;
     $("tcPlans").hidden = true;
-    $("tcMeta").textContent = caseReqId ? "最近一轮执行结果汇总" : "";
+    /* 报告页的标题与口径都在页头 / 导出 banner，工具条不再重复一句 */
+    $("tcMeta").textContent = "";
     return;
   }
   $("tcCasesWrap").hidden = false;
@@ -2853,6 +2940,7 @@ function renderStats(){
       + (it[2] ? '<i class="tc-dot ' + it[2] + '"></i>' : "") + it[1] + ' <b>' + n + '</b></button>';
   }).join("")
     + '<span class="tc-stat-info" role="img" aria-label="' + info + '" title="' + info + '">' + icon("infoCircle", 13) + '</span>';
+  syncTcPageHead();
 }
 
 /* ---------- 用例保存视图（scope=testcase：项目 / 执行结果 / 筛选 / 展示方式） ---------- */
@@ -3043,6 +3131,92 @@ function syncTcDomain(){
   cur.textContent = name;
   cur.title = setName ? (setName + " › " + name) : name;
 }
+/* ---------- 页头：按模式补原型标题、范围副标题与专属按钮 ---------- */
+function tcScopeName(){
+  if(tcMode === "defects") return defectScopeName();
+  if(caseScopeAll) return caseAllProj ? reqNameOf(caseAllProj) : "全部项目";
+  return caseReqId ? reqNameOf(caseReqId) : "全部项目";
+}
+function paintTcTabCount(){
+  function set(tab, n){
+    var btn = document.querySelector('#subNav [data-sub-tab="' + tab + '"]');
+    if(!btn) return;
+    var el = btn.querySelector(".tc-tabcount");
+    if(!n){
+      if(el) el.hidden = true;
+      return;
+    }
+    if(!el){
+      el = document.createElement("span");
+      el.className = "tc-tabcount";
+      btn.appendChild(el);
+    }
+    el.hidden = false;
+    el.textContent = n;
+  }
+  set("cases", tcCaseCount());
+  set("defects", defectOpenCount || 0);
+  set("plans", (plans && plans.length) || 0);
+}
+/* 单项目看项目全量；全部项目概览下 stats 为空，退回跨项目合计（与列表头「共 N 条」同源） */
+function tcCaseCount(){
+  if(caseScopeAll && !caseAllProj) return Number(caseTotal) || 0;
+  return Number(stats && stats.total) || 0;
+}
+function syncTcPageHead(){
+  if(document.body.dataset.view !== "testcases") return;
+  var titles = { cases:"测试 · 用例", defects:"测试 · 缺陷", plans:"测试 · 计划", coverage:"覆盖矩阵", report:"测试报告" };
+  var scope = tcScopeName() || "全部项目";
+  var phTitle = $("pageTitleText"), phSub = $("pageSub"), pill = $("pagePill"), acts = $("pageActions");
+  if(phTitle) phTitle.textContent = titles[tcMode] || "测试";
+  var sub = "";
+  if(tcMode === "cases"){
+    sub = scope + " · 用例库 " + tcCaseCount() + " 条";
+  }else if(tcMode === "defects"){
+    sub = scope + " · 默认只看未关闭；关闭的缺陷需显式切到「已关闭」。";
+  }else if(tcMode === "plans"){
+    sub = scope + " · 圈选用例 → 批量执行 → 完成留痕";
+  }else if(tcMode === "coverage"){
+    sub = scope + " · 需求 × 用例 × 缺陷";
+  }else{
+    sub = scope + " · 最近一轮执行结果汇总";
+  }
+  if(phSub) phSub.textContent = sub;
+  if(pill){
+    var showPill = tcMode === "defects" && defectOpenCount > 0;
+    var pillText = showPill ? ("未关闭 " + defectOpenCount) : "";
+    /* 报告页把项目名收进标题范围 chip，与原型「测试报告 + 2.4 回归·第2轮」同构 */
+    if(tcMode === "report" && caseReqId){ showPill = true; pillText = reqNameOf(caseReqId); }
+    pill.hidden = !showPill;
+    pill.textContent = pillText;
+  }
+  if(acts){
+    var html = "";
+    if(tcMode === "cases"){
+      if(isWritable() && ((!caseScopeAll) || !!caseAllProj)){
+        html += '<button class="btn" type="button" data-tc-head="import">' + icon("download", 14) + ' 导入</button>';
+      }
+      if(caseCreateTargets().length){
+        html += '<button class="btn primary" type="button" data-tc-head="case-new">' + icon("plus", 14) + ' 新建用例</button>';
+      }
+    }else if(tcMode === "defects"){
+      html += '<button class="btn ghost" type="button" data-tc-head="def-reset">恢复默认</button>';
+      if(defectCreateTargets().length){
+        html += '<button class="btn primary" type="button" data-tc-head="def-new">' + icon("plus", 14) + ' 新建缺陷</button>';
+      }
+    }else if(tcMode === "plans"){
+      html += '<button class="btn primary" type="button" data-tc-head="plan-new">' + icon("plus", 14) + ' 新建计划</button>';
+    }else if(tcMode === "coverage"){
+      html += '<button class="btn" type="button" data-tc-head="cov-export">' + icon("download", 14) + ' 导出 CSV</button>';
+    }else if(tcMode === "report"){
+      html += '<button class="btn" type="button" data-tc-head="report-note">' + icon("infoCircle", 14) + ' 口径说明</button>'
+        + '<button class="btn primary" type="button" data-tc-head="report-export">' + icon("download", 14) + ' 导出报告</button>';
+    }
+    acts.innerHTML = html;
+    acts.hidden = !html;
+  }
+  paintTcTabCount();
+}
 function setTcMode(mode){
   if(mode !== "cases" && mode !== "defects" && mode !== "plans" && mode !== "coverage" && mode !== "report") return;
   if(mode === tcMode){ syncModeUI(); return; }
@@ -3068,6 +3242,8 @@ function syncModeUI(){
     view.classList.toggle("rep-mode", rep);
     view.classList.toggle("plans-mode", plan);
     view.classList.toggle("def-mode", def);
+    /* 单项目口径：用例表按原型收成「工具头 + 平铺表」的一张卡；全部项目概览仍按项目分段 */
+    view.classList.toggle("tc-single", !caseScopeAll || !!caseAllProj);
   }
   document.querySelectorAll("#tcModeSeg [data-tc-mode]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
@@ -3084,6 +3260,8 @@ function syncModeUI(){
   var defBar = $("tcDefectBar");
   syncCaseBars();
   if(defBar) defBar.hidden = !def;
+  var covCtl = $("tcCovCtl");
+  if(covCtl) covCtl.hidden = !cov;
   /* 缺陷页用自己的项目范围；隐藏公共项目下拉，避免同页两个项目控件 */
   var reqSel = $("tcReq");
   if(reqSel) reqSel.style.display = def ? "none" : "";
@@ -3127,6 +3305,7 @@ function syncModeUI(){
     b.setAttribute("aria-pressed", on ? "true" : "false");
     b.classList.toggle("on", on);
   });
+  syncTcPageHead();
 }
 /* ---------- 批量维护：勾选、全选与批量设置 ---------- */
 
@@ -4075,14 +4254,14 @@ function openNewDialog(targetReqId){
   UI.openModal($("dlgCase"), "#cTitle");
 }
 /* 全部项目下新建用例必须先落到一个可写项目：只有一个目标就直接开，多个目标用菜单选 */
-function openCaseCreate(){
+function openCaseCreate(anchor){
   var targets = caseCreateTargets();
   if(!targets.length){
     toast(caseScopeAll ? "全部项目里没有可写项目，无法新建用例" : "当前项目只读，无法新建用例", "warn");
     return;
   }
   if(targets.length === 1){ openNewDialog(targets[0]); return; }
-  var btn = $("btnCaseNew");
+  var btn = anchor && anchor.nodeType === 1 ? anchor : $("btnCaseNew");
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = '<div class="menu-title">新建用例到</div>'
@@ -6187,6 +6366,7 @@ function renderPlans(){
             : "当前没有可写的项目；获得写权限后即可新建计划。"
         });
       if(planHasFilter()) wirePlanFilterEmpty();
+      syncTcPageHead();
       return;
     }
     box.innerHTML = projects.filter(function(p){
@@ -6203,6 +6383,7 @@ function renderPlans(){
         + '<span class="tc-group-bar" aria-hidden="true"></span></div>'
         + '<div class="tc-group-rows">' + body + '</div></section>';
     }).join("");
+    syncTcPageHead();
     return;
   }
   if(!list.length){
@@ -6213,9 +6394,11 @@ function renderPlans(){
         : "测试计划按项目收纳；你在该项目只有查看权限。"
     });
     if(planHasFilter()) wirePlanFilterEmpty();
+    syncTcPageHead();
     return;
   }
   box.innerHTML = list.map(planRowHTML).join("");
+  syncTcPageHead();
 }
 
 /* ---------- 计划变更记录 ---------- */
@@ -6591,12 +6774,12 @@ function openPlanDialog(id, targetReqId){
   }).catch(function(){ /* 版本下拉失败不阻塞：保留当前关联 */ });
 }
 /* 全部项目下新建计划先选项目；只有一个可写项目时直接开弹窗 */
-function openPlanCreate(){
+function openPlanCreate(anchor){
   if(caseScopeAll){
     var targets = caseScopeVisibleProjects().filter(function(r){ return canEditReq(r.id); });
     if(!targets.length){ toast("全部项目里没有可写项目，无法新建测试计划", "warn"); return; }
     if(targets.length === 1){ openPlanDialog(null, targets[0].id); return; }
-    var btn = $("btnPlanNew");
+    var btn = anchor && anchor.nodeType === 1 ? anchor : $("btnPlanNew");
     var el = document.createElement("div");
     el.className = "menu";
     el.innerHTML = '<div class="menu-title">新建测试计划到</div>'
@@ -9482,14 +9665,14 @@ if($("tcDefViewsBtn") && defViewsMenuEl){
   });
 }
 /* 全部项目范围下写操作必须先落到一个具体项目，不能让缺陷静默建到第一个项目 */
-function openDefectCreate(){
+function openDefectCreate(anchor){
   var targets = defectCreateTargets();
   if(!targets.length){ toast("当前范围没有可写项目", "warn"); return; }
   if(targets.length === 1){
     openTaskDrawer("backlog", null, { reqId: targets[0], itemType: "bug" });
     return;
   }
-  var btn = $("btnDefectNew");
+  var btn = anchor && anchor.nodeType === 1 ? anchor : $("btnDefectNew");
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = '<div class="menu-title">新建缺陷到</div>'
@@ -9506,6 +9689,46 @@ function openDefectCreate(){
   });
   UI.openPop(el, btn, { align: "right", width: 240, onClose: function(){ el.remove(); } });
 }
+/* 页头专属按钮：与原型 pagehead 的导入 / 新建 / 恢复默认 / 导出报告一一对应 */
+if($("pageActions")) $("pageActions").addEventListener("click", function(e){
+  var b = e.target.closest("[data-tc-head]");
+  if(!b) return;
+  var kind = b.getAttribute("data-tc-head");
+  if(kind === "import"){
+    renderImportMenu();
+    UI.openPop($("tcImportMenu"), b, { align:"right", width:268 });
+  }else if(kind === "case-new"){
+    openCaseCreate(b);
+  }else if(kind === "def-reset"){
+    var reset = $("tcDefReset");
+    if(reset) reset.click();
+  }else if(kind === "def-new"){
+    openDefectCreate(b);
+  }else if(kind === "plan-new"){
+    openPlanCreate(b);
+  }else if(kind === "cov-export"){
+    exportCoverageCsv();
+  }else if(kind === "report-note"){
+    toast("口径：每个用例取最近一轮执行结果；通过率剔除跳过，按本轮执行条数计算。", "info");
+  }else if(kind === "report-export"){
+    var el = document.createElement("div");
+    el.className = "menu";
+    el.innerHTML = '<div class="menu-title">导出报告</div>'
+      + '<button class="menu-item" type="button" data-rep-export="csv">导出 CSV</button>'
+      + '<button class="menu-item" type="button" data-rep-export="doc">导出 Word</button>'
+      + '<button class="menu-item" type="button" data-rep-export="pdf">导出 PDF</button>';
+    el.addEventListener("click", function(ev){
+      var item = ev.target.closest("[data-rep-export]");
+      if(!item) return;
+      var fmt = item.getAttribute("data-rep-export");
+      UI.closeAllPops();
+      if(fmt === "csv") exportTestReport();
+      else if(fmt === "doc") exportTestReportDoc();
+      else printTestReport();
+    });
+    UI.openPop(el, b, { align:"right", width:196, onClose:function(){ el.remove(); } });
+  }
+});
 $("btnDefectNew").addEventListener("click", openDefectCreate);
 $("tcDefRows").addEventListener("click", function(e){
   var more = e.target.closest("[data-tc-def-more]");
@@ -10706,14 +10929,41 @@ if($("tcCoverage")){
     if(retry){ e.stopPropagation(); loadCoverageTasks(retry.dataset.covRetry); return; }
     var chip = e.target.closest("[data-cov-case]");
     if(chip){ e.stopPropagation(); openReportCase(chip.dataset.covCase); return; }
+    if(e.target.closest("[data-cov-clear]")){
+      covOnlyUncovered = false; covOnlyFailed = false; covSearch = "";
+      renderCoverage(); return;
+    }
+    if(e.target.closest("[data-cov-help]")){ toast(COV_RULE, "info"); return; }
     var row = e.target.closest("[data-cov-demand]");
     if(row) openDemandDetailById(row.dataset.covDemand);
   });
   $("tcCoverage").addEventListener("keydown", covRowKeyActivate);
 }
+if($("tcCovCtl")){
+  $("tcCovCtl").addEventListener("click", function(e){
+    var b = e.target.closest("[data-cov-filter]");
+    if(!b) return;
+    if(b.dataset.covFilter === "uncovered") covOnlyUncovered = !covOnlyUncovered;
+    else covOnlyFailed = !covOnlyFailed;
+    renderCoverage();
+  });
+  if($("tcCovSearch")){
+    $("tcCovSearch").addEventListener("input", function(){
+      covSearch = this.value || "";
+      renderCoverage();
+    });
+  }
+}
 /* 测试报告：导出 / 打印 / 跳转 */
 if($("tcReport")){
   $("tcReport").addEventListener("click", function(e){
+    var navLink = e.target.closest("[data-rep-nav]");
+    if(navLink){
+      e.preventDefault();
+      var target = $(navLink.dataset.repNav);
+      if(target) target.scrollIntoView({ block:"start", behavior:"smooth" });
+      return;
+    }
     if(e.target.closest("[data-tc-report-csv]")){ exportTestReport(); return; }
     if(e.target.closest("[data-tc-report-doc]")){ exportTestReportDoc(); return; }
     if(e.target.closest("[data-tc-report-print]")){ printTestReport(); return; }

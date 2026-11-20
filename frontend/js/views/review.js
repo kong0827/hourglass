@@ -408,12 +408,14 @@ function renderReview(d){
   var s = d.stats;
   var overN = (d.counts && d.counts.over) || 0;
   /* 个人回顾：所有卡片都只算我负责的工作项；「逾期」明细在「逾期与阻塞」，这里只报数不跳转 */
+  /* 0 值不带状态色：没有完成项时按期率的分母为 0，0% 不是「预警」而是「还没数据」 */
+  var doingN = (d.progressTasks || []).length;
   var stats = [
     {k:"完成", v:s.done, u:"项", cls:"", drill:"done"},
-    {k:"按期率", v:s.onTimeRate, u:"%", cls:(s.onTimeRate < 60 ? "warn" : "good"), drill:"rate", help:"review.onTime"},
+    {k:"按期率", v:s.onTimeRate, u:"%", cls:(!s.done ? "" : (s.onTimeRate < 60 ? "warn" : "good")), drill:"rate", help:"review.onTime"},
     {k:"延期", v:s.late, u:"项", cls:(s.late > 0 ? "warn" : ""), drill:"late"},
     {k:"逾期", v:overN, u:"项", cls:(overN > 0 ? "bad" : "")},
-    {k:"进行中", v:(d.progressTasks || []).length, u:"项", cls:"info", drill:"doing"}
+    {k:"进行中", v:doingN, u:"项", cls:(doingN > 0 ? "info" : ""), drill:"doing"}
   ];
   $("statGrid").innerHTML = stats.map(function(x){
     var inner = '<div class="k">' + x.k + '</div><div class="v">' + x.v + '<small>' + x.u + '</small></div>';
@@ -433,7 +435,8 @@ function renderReview(d){
     var weekWord = d.weekOffset === 0 ? "本周" : (d.weekOffset === -1 ? "上周" : "该周期");
     if($("reviewHoursScope")) $("reviewHoursScope").textContent = weekWord + " · 我的";
     (function(){
-      var x = {k:weekWord + "·我的", v:fmtMinutesShort(w.mineWeek || 0), min:(w.mineWeek || 0), scope:"mine"};
+      /* 周期与范围已写在面板右上（#reviewHoursScope），卡内只标指标名，避免同一口径出现两遍 */
+      var x = {k:"计时", v:fmtMinutesShort(w.mineWeek || 0), min:(w.mineWeek || 0), scope:"mine"};
       var inner = '<div class="k">' + x.k + '</div><div class="v">' + x.v + '</div>';
       /* 该周期没有计时时点开必然是空表，不做入口 */
       reviewHoursEl.innerHTML = !x.min

@@ -1,6 +1,6 @@
 /* views/release · 发布计划工作台子页（#/release?id=&reqId=&tab=）
-   原来 960 居中弹框里的计划 / 实际 / 历史 / 内容四个工作面搬到这里：
-   页签和版本都在 URL 里，刷新、分享、后退都回到同一页签；关闭回到版本页。
+   工作台按原型收为三步：计划范围 / 实际发布 / 历史与内容；旧的 tab=content 归到最后一步。
+   步骤和版本都在 URL 里，刷新、分享、后退都回到同一步；关闭回到版本页。
    工作区本身仍由 phase.js 的同一份代码挂载，校验、留痕、幂等都没有第二套。 */
 
 import { API } from "../core/api.js";
@@ -18,6 +18,8 @@ function parseRoute(){
   if((qi >= 0 ? raw.substring(0, qi) : raw) !== "release") return null;
   var p = new URLSearchParams(qi >= 0 ? raw.substring(qi + 1) : "");
   var tab = p.get("tab") || "plan";
+  /* 旧链接的 tab=content 并入「历史与内容」步骤 */
+  if(tab === "content") tab = "history";
   return {
     id: p.get("id") || "",
     reqId: p.get("reqId") || "",
@@ -106,8 +108,8 @@ function renderRecentPlans(rows){
       + '<span class="rp-s">' + esc(planStatusText(r.status)) + '</span>'
       + '</button>';
   }).join("");
-  host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>最近发布计划</h3>'
-    + '<span class="meta-right">' + rows.length + ' 份未完成</span></div>'
+  host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>发布工作台</h3>'
+    + '<span class="meta-right">最近发布计划 · ' + rows.length + ' 份未完成</span></div>'
     + (top.length
       ? '<div class="rel-plan-list">' + list + '</div>'
       : '<div class="stack"><p class="hint">还没有未完成的发布计划。</p></div>')

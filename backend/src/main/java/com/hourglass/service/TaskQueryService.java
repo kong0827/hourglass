@@ -126,11 +126,22 @@ public class TaskQueryService {
 
     public MyTasksPage myTasksPage(String userId, String displayName, boolean openOnly, boolean testScope,
                                    BoardQuery query, int offset, int limit) {
+        return myTasksPage(userId, displayName, openOnly, testScope, null, false, query, offset, limit);
+    }
+
+    /**
+     * 个人工作台：view=dev / test / watch / pending。
+     * strictTest=true 时测试队列只含测试负责人是我，不含可领取项。
+     */
+    public MyTasksPage myTasksPage(String userId, String displayName, boolean openOnly, boolean testScope,
+                                   String view, boolean strictTest, BoardQuery query, int offset, int limit) {
         MyTasksQuery pageQuery = new MyTasksQuery();
         pageQuery.setUserId(userId);
         pageQuery.setDisplayName(displayName);
         pageQuery.setOpenOnly(openOnly);
         pageQuery.setTestScope(testScope);
+        pageQuery.setView(view);
+        pageQuery.setStrictTest(strictTest);
         pageQuery.setQ(Texts.trimToNull(query.getQ()));
         pageQuery.setTestOwners(query.getTestOwners());
         pageQuery.setPris(query.getPris());
@@ -177,6 +188,18 @@ public class TaskQueryService {
         pageQuery.setNameOnly(true);
         int nameOnly = taskMapper.countMyTasks(pageQuery);
         return new MyTasksPage(list, total, taskMapper.selectMyTaskWorkspaces(pageQuery), nameOnly);
+    }
+
+    /** 个人工作台计数：与列表共用 myTasksWhere，不加载明细。 */
+    public int countMyWork(String userId, String displayName, String view, boolean strictTest, boolean openOnly) {
+        MyTasksQuery query = new MyTasksQuery();
+        query.setUserId(userId);
+        query.setDisplayName(displayName);
+        query.setOpenOnly(openOnly);
+        query.setView(view);
+        query.setStrictTest(strictTest);
+        query.setTestScope("test".equals(view));
+        return taskMapper.countMyTasks(query);
     }
 
     /* ==================== 查询 ==================== */

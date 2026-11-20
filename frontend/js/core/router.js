@@ -60,7 +60,7 @@ function enterSettingsLazy(isCurrent){
   });
 }
 var VIEWS = {
-  mine:     { title:"我的工作", sub:"分派给我与参与中的工作项，按截止时间排列", enter:enterMineView },
+  mine:     { title:"我的工作", sub:"我负责的开发、我带的测试、我发起的与关注的事项", enter:enterMineView },
   board:    { title:"工作项", sub:"按状态分列，拖拽卡片流转", enter:null },
   workcolumn: { title:"工作项", sub:"单列聚焦，逐条推进状态", enter:lazyEnter("workcolumn", "enterWorkColumn") },
   canceled: { title:"工作项", sub:"已取消的终态工作项归档", enter:lazyEnter("canceled", "enterCanceledView") },
@@ -72,7 +72,7 @@ var VIEWS = {
   projects: { title:"项目", sub:"项目集下的项目与全局健康度", enter:lazyEnter("projects", "enterProjectsView") },
   phase:    { title:"版本", sub:"版本计划、工作项范围与交付情况", enter:lazyEnter("phase", "enterPhaseView") },
   version:  { title:"版本详情", sub:"计划与实际、工时构成与发布记录", enter:lazyEnter("version", "enterVersionView") },
-  release:  { title:"发布计划", sub:"跨版本的发布窗口与执行记录", enter:lazyEnter("release", "enterReleaseView") },
+  release:  { title:"发布工作台", sub:"发布计划、实际发布与历史记录", enter:lazyEnter("release", "enterReleaseView") },
   delivery: { title:"交付说明", sub:"面向使用方的变更说明", enter:lazyEnter("delivery", "enterDeliveryView") },
   demands:  { title:"需求池", sub:"未进入版本的需求与来源", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"空间文档、分类与协作记录", enter:enterRequirementsLazy },
@@ -80,13 +80,13 @@ var VIEWS = {
   testcases: { title:"测试", sub:"用例、计划与执行结果", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"分支与工作项的关联 · 阶段与停留时间来自状态变更", enter:lazyEnter("branches", "enterBranchesView") },
   review:   { title:"周回顾", sub:"本周完成、进行中与风险", enter:lazyEnter("review", "enterReviewView") },
-  analysis: { title:"报表", sub:"交付与投入的统计口径", enter:lazyEnter("analysis", "enterAnalysisView") },
-  portfolio: { title:"项目", sub:"项目集与项目的全局视图", enter:lazyEnter("portfolio", "enterPortfolioView") },
+  analysis: { title:"趋势与分布", sub:"交付与投入的统计口径 · 趋势按周聚合", enter:lazyEnter("analysis", "enterAnalysisView") },
+  portfolio: { title:"项目集", sub:"项目集与项目的全局视图", enter:lazyEnter("portfolio", "enterPortfolioView") },
   project: { title:"项目驾驶舱", sub:"项目范围、排期与风险一览", enter:lazyEnter("project", "enterProjectView") },
-  workload: { title:"成员负载", sub:"成员在计划窗口内外的工时", enter:lazyEnter("workload", "enterWorkloadView") },
+  workload: { title:"成员负载", sub:"负载按剩余预估 · 工时按时间范围", enter:lazyEnter("workload", "enterWorkloadView") },
   risks: { title:"逾期与阻塞", sub:"需要关注的工作项与原因", enter:lazyEnter("risks", "enterRisksView") },
-  report: { title:"报表", sub:"交付与投入的统计口径", enter:lazyEnter("report", "enterReportView") },
-  investment: { title:"报表", sub:"交付与投入的统计口径", enter:lazyEnter("investment", "enterInvestmentView") },
+  report: { title:"交付图表", sub:"近 14 天燃尽 · 近 4 周速度 · 近 8 周流与缺陷", enter:lazyEnter("report", "enterReportView") },
+  investment: { title:"投入结构", sub:"预估与实际分开口径", enter:lazyEnter("investment", "enterInvestmentView") },
   messages: { title:"消息中心", sub:"通知与 @ 提醒", enter:lazyEnter("messages", "enterMessagesView") },
   settings: { title:"设置", sub:"空间配置、成员与可见范围", enter:enterSettingsLazy },
   profile:  { title:"个人设置", sub:"账号、计时与密码", enter:lazyEnter("profile", "enterProfileView") }
@@ -117,16 +117,12 @@ var SUBNAV = {
     { view:"calendar", label:"日历", title:"按日期铺开，格子可新建" },
     { view:"gantt", label:"甘特", title:"依赖、里程碑与基线" }
   ],
-  projects: [
-    { view:"projects", label:"项目列表", title:"全部项目与新建入口" },
-    { view:"portfolio", label:"全局健康度", title:"一屏看全部项目：健康度、逾期与本周投入" }
-  ],
   testcases: [
     { view:"testcases", tab:"cases", label:"用例", title:"用例库：录入、筛选与标记执行结果" },
     { view:"testcases", tab:"defects", label:"缺陷", title:"按缺陷收敛质量问题：默认未关闭，按严重度排序" },
-    { view:"testcases", tab:"plans", label:"测试计划", title:"从用例库圈选一批，按版本留痕" },
-    { view:"testcases", tab:"coverage", label:"覆盖矩阵", title:"按需求看用例覆盖与通过率" },
-    { view:"testcases", tab:"report", label:"测试报告", title:"当前项目通过率、失败清单与覆盖汇总" }
+    { view:"testcases", tab:"plans", label:"计划", title:"从用例库圈选一批，按版本留痕" },
+    { view:"testcases", tab:"coverage", label:"覆盖", title:"按需求看用例覆盖与通过率" },
+    { view:"testcases", tab:"report", label:"报告", title:"当前项目通过率、失败清单与覆盖汇总" }
   ],
   insight: [
     { view:"analysis", tab:"stats", label:"趋势与分布", title:"新增与完成趋势、工时分布" },
@@ -289,9 +285,16 @@ function showView(name){
   });
   restoreScroll(name);
   if(viewTitle) viewTitle.textContent = VIEWS[name].title;
-  var phTitle = $("pageTitle"), phSub = $("pageSub");
-  if(phTitle) phTitle.textContent = VIEWS[name].title;
+  var phTitleText = $("pageTitleText"), phSub = $("pageSub");
+  if(phTitleText) phTitleText.textContent = VIEWS[name].title;
   if(phSub) phSub.textContent = VIEWS[name].sub || "";
+  /* 页级覆盖先清空：项目 / 项目集等页面进入后再按原型补标题 pill 与专属按钮 */
+  var phPill = $("pagePill");
+  if(phPill){ phPill.hidden = true; phPill.textContent = ""; }
+  var phActs = $("pageActions");
+  if(phActs){ phActs.hidden = true; phActs.innerHTML = ""; }
+  var newWrap = $("newWrap");
+  if(newWrap) newWrap.hidden = false;
   document.title = VIEWS[name].title + " · 沙漏";
   syncDocTitle();
   updateBrand();

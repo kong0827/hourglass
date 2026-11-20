@@ -131,7 +131,7 @@ var effectiveMode = null, drillSort = "default", drillOnlyRisk = false, drillIni
 /* 页面标题承载项目名：面包屑只表示所在位置（项目 / 驾驶舱） */
 function setPageTitle(text){
   if(viewTitle) viewTitle.textContent = text;
-  var ph = $("pageTitle");
+  var ph = $("pageTitleText") || $("pageTitle");
   if(ph) ph.textContent = text;
   document.title = text + " · 沙漏";
 }

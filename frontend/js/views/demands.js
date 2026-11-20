@@ -459,6 +459,7 @@ function enterDemandsView(){
   /* ?view= 只覆盖本次会话，在 listPrefs.load 之后应用，免得被服务端偏好盖回去 */
   var routeMode = readDemandViewParam();
   syncDemControls();
+  syncDemandsPageHead();
   /* 浏览器可能无视 autocomplete，把上次搜索词直接写回输入框；以 demSmart.q 为准清理 */
   [0, 300, 1000, 2000, 4000].forEach(function(ms){ setTimeout(reconcileDemSearchInputs, ms); });
   loadViews().then(renderDemTabs);
@@ -761,17 +762,18 @@ function demBoardStageFilterHTML(){
 function render(){
   var mode = listPrefs.viewMode("demand-pool");
   syncModeUI(mode);
+  syncDemandsPageHead();
   if(demWork.active){ renderDemandWorkpage(); return; }
   if(mode === "gantt"){ renderDemandGantt(); return; }
   if(mode === "table"){ renderDemandTable(); return; }
   if(demandsMeta){
-    /* 作用范围由右侧项目下拉承担；meta 只报条数，避免同一屏出现两遍「全部项目」 */
-    demandsMeta.textContent = demBoardMatchText();
+    /* 条数只放页头胶囊；这里不再重复「共 N 条」 */
+    demandsMeta.textContent = "";
   }
   if(!demands.length && !versions.length && !demandBoard){
     demandBody.innerHTML = UI.emptyState({
       icon:"inbox", title:"需求池还是空的",
-      text:"点右上角「提需求」录入第一条；评审通过后排期到版本。"
+      text:"点右上角「新建需求」录入第一条；评审通过后排期到版本。"
     });
     return;
   }
@@ -1874,11 +1876,55 @@ function demBoardFilterCount(){
 function demBoardHasCond(){
   return demBoardFilterCount() > 0 || !!demSmart.q;
 }
-function demBoardMatchText(){
-  var matched = demandBoard && demandBoard.counts ? (demandBoard.counts.all || 0) : 0;
-  var total = demandBoard && typeof demandBoard.totalAll === "number" ? demandBoard.totalAll : matched;
-  if(demBoardHasCond()) return "匹配 " + matched + " / " + total;
-  return matched ? "共 " + matched + " 条" : "";
+/* 页头按原型 p-demands 收敛：计数进 H1 胶囊（全页只一处），副标题写定位，
+   主操作固定为「导出 + 新建需求」；工作页有自己的标题与返回，不叠加页头动作 */
+function syncDemandsPageHead(){
+  if(activeView !== "demands") return;
+  var pill = $("pagePill");
+  var total = demandBoard ? Number(demandBoard.totalAll || 0) : Number(demandTotal || 0);
+  var matched = demandBoard && demandBoard.counts ? Number(demandBoard.counts.all || 0) : total;
+  if(pill){
+    if(!demWork.active && total){
+      pill.hidden = false;
+      pill.textContent = (demBoardHasCond() || demandServerFiltered) && matched !== total
+        ? "匹配 " + matched + " / " + total
+        : total + " 条";
+    }else{
+      pill.hidden = true;
+      pill.textContent = "";
+    }
+  }
+  var sub = $("pageSub");
+  if(sub){
+    sub.textContent = ((rt.currentWs && rt.currentWs.name) ? rt.currentWs.name + " / " : "") + "需求池";
+  }
+  var acts = $("pageActions");
+  if(acts){
+    /* 手机档位 pagehead 折叠为零高，页级按钮会从标题下方溢出被工具条裁切；
+       创建入口继续走右下 FAB（#btnNew），与全站手机口径一致 */
+    if(demWork.active || isMobile()){
+      acts.hidden = true;
+      acts.innerHTML = "";
+      acts.__demActs = "";
+    }else{
+      var mode = listPrefs.viewMode("demand-pool");
+      /* 看板聚焦到只读项目时不显示新建；列表/甘特为全空间，只要有一个可写项目即可 */
+      var canNew = writableReqs().length > 0
+        && (mode !== "board" || (!rt.demandReqId || canEditReq(rt.demandReqId)));
+      var html = '<button class="btn" type="button" data-dem-head-export>' + icon("download", 14) + '导出</button>'
+        + (canNew ? '<button class="btn primary" type="button" data-dem-head-new>' + icon("plus", 15) + '新建需求</button>' : "");
+      /* 路由切走会清空 innerHTML 但保留 dataset：这里用 firstChild 兜底重写 */
+      if(acts.__demActs !== html || !acts.firstChild){
+        acts.__demActs = html;
+        acts.innerHTML = html;
+      }
+      acts.hidden = false;
+    }
+  }
+  var nw = $("newWrap");
+  /* 看板/列表/甘特桌面用页头「新建需求」；手机保留右下 FAB；
+     工作页没有页级动作，桌面继续挂通用「新建」菜单，避免整页没有创建入口 */
+  if(nw) nw.hidden = !isMobile() && !demWork.active;
 }
 function syncDemBoard(){
   if(!demBoardBar) return;
@@ -2256,8 +2302,6 @@ function initDemSmartBar(){
         '<option value="default">默认排序</option><option value="priority">按优先级</option>' +
         '<option value="expect">按期望交付</option><option value="wsjf">按 WSJF</option><option value="created">按提交时间</option></select></label>' +
       '<span class="smart-view-spacer"></span>' +
-      '<span class="sv-seg-label sv-seg-end">操作</span>' +
-      '<button class="btn sm" type="button" data-dem-export>' + icon("download", 13) + ' 导出当前视图</button>' +
     '</div>';
   page.insertBefore(demSmartBar, demandBody);
   if(demandGanttBar) page.insertBefore(demandGanttBar, demandBody);
@@ -2451,17 +2495,14 @@ function renderDemandTable(){
   var rows = demViewRows(), groups = demGroups();
   var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
   if(demandsMeta){
-    /* 范围交给项目下拉，meta 只留条数与分组信息 */
-    var text = demandTotal ? ("共 " + demandTotal + " 条") : "";
-    if(hasCond && demandTotal) text += (text ? " · " : "") + "已加载 " + demands.length + " 条";
-    if(demSmart.group !== "none" && groups.length) text += (text ? " · " : "") + groups.length + " 组";
-    demandsMeta.textContent = text;
+    /* 条数统一由页头胶囊承担；工具条不再重复 */
+    demandsMeta.textContent = "";
   }
   if(!demands.length){
     demandBody.innerHTML = UI.emptyState({
       icon: hasCond ? "filterOff" : "inbox",
       title: hasCond ? "没有符合当前视图条件的需求" : "需求池还是空的",
-      text: hasCond ? "切换视图，或调整、清空筛选条件后重试。" : "点右上角「提需求」录入第一条；评审通过后排期到版本。"
+      text: hasCond ? "切换视图，或调整、清空筛选条件后重试。" : "点右上角「新建需求」录入第一条；评审通过后排期到版本。"
     });
     if(hasCond) bindRetry(demandBody, function(){ activateDemPreset("all"); });
     return;
@@ -2779,11 +2820,8 @@ function renderDemandGantt(){
       });
   var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
   if(demandsMeta){
-    /* 同表格视图：作用范围交给项目下拉，meta 只留条数与分组 */
-    var text = demandTotal ? ("共 " + demandTotal + " 条") : "";
-    if(hasCond && demandTotal) text += (text ? " · " : "") + "已加载 " + demands.length + " 条";
-    if(demSmart.group !== "none" && groups.length) text += (text ? " · " : "") + groups.length + " 组";
-    demandsMeta.textContent = text;
+    /* 同表格视图：条数由页头胶囊承担 */
+    demandsMeta.textContent = "";
   }
   if(!demands.length){
     demGantt.range = null;
@@ -2791,7 +2829,7 @@ function renderDemandGantt(){
       icon: hasCond ? "filterOff" : "calendar",
       title: hasCond ? "没有符合当前视图条件的需求" : "需求池还是空的",
       text: hasCond ? "切换视图，或调整、清空筛选条件后重试。"
-        : "点右上角「提需求」录入第一条；评审通过后排期到版本。"
+        : "点右上角「新建需求」录入第一条；评审通过后排期到版本。"
     });
     if(hasCond) bindRetry(demandBody, function(){ activateDemPreset("all"); });
     syncDemGanttControls();
@@ -3075,7 +3113,7 @@ function openDemandDialog(d){
   dWsjfE.value = d && d.wsjfEffort != null ? d.wsjfEffort : "";
   syncWsjfLive();
   fDemandTitle.classList.remove("invalid");
-  demandFormTitle.textContent = d ? "编辑需求" : "提需求";
+  demandFormTitle.textContent = d ? "编辑需求" : "新建需求";
   btnSaveDemand.textContent = d ? "保存" : "提交评审";
   var footNote = $("demandFootNote");
   if(footNote) footNote.hidden = true;
@@ -5899,6 +5937,14 @@ if(demandReq) demandReq.addEventListener("change", function(){
 if($("btnDemandNew")) $("btnDemandNew").addEventListener("click", function(){
   if(!rt.reqList.length){ toast("先在「项目」里创建项目", "warn"); return; }
   openDemandDialog(null);
+});
+/* 需求池页头专属动作（与项目页共用 #pageActions，按各自 data-* 分发） */
+if($("pageActions")) $("pageActions").addEventListener("click", function(e){
+  if(e.target.closest("[data-dem-head-export]")){ exportDemCsv(); return; }
+  if(e.target.closest("[data-dem-head-new]")){
+    if(!rt.reqList.length){ toast("先在「项目」里创建项目", "warn"); return; }
+    openDemandDialog(null);
+  }
 });
 if($("dlgDemandX")) $("dlgDemandX").addEventListener("click", function(){ tryCloseDemandDialog(); });
 if($("dlgDemand")) UI.setModalCloseGuard($("dlgDemand"), function(){ tryCloseDemandDialog(); });

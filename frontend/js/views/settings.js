@@ -204,7 +204,7 @@ function openRoleGuide(){
   ].join("");
 
   var settingsRows = [
-    roleGuideRow(["空间 / 成员与权限 / 工作流 / 通知与集成 / 数据与审计", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见"]),
+    roleGuideRow(["空间 / 成员与角色 / 工作流 / 通知与集成 / 数据与审计", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见"]),
     roleGuideRow(["项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["平台（账号管理 / 系统信息 / 审计日志）", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"]),
     roleGuideRow(["通知与集成 → SMTP 邮件配置 / 团队 AI", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"])
@@ -258,6 +258,10 @@ function updateWsOverview(){
   var members = rt.wsMembersCache || [];
   var roles = {owner:0, admin:0, member:0, viewer:0};
   members.forEach(function(m){ var r = m.role || "member"; if(roles[r] != null) roles[r]++; });
+  var owner = null;
+  for(var i = 0; i < members.length; i++) if(members[i].role === "owner"){ owner = members[i]; break; }
+  var selfOwner = rt.currentUser && ws.myRole === "owner" ? rt.currentUser : null;
+  var ownerName = owner ? owner.displayName : (selfOwner ? (selfOwner.displayName || selfOwner.username) : "—");
   var memberEl = $("ovMembers");
   if(memberEl){
     var count = isPersonal ? (members.length || 1) : (ws.memberCount || members.length || 0);
@@ -267,7 +271,8 @@ function updateWsOverview(){
     if(roles.admin) parts.push(roles.admin + " 管理员");
     if(roles.member) parts.push(roles.member + " 成员");
     if(roles.viewer) parts.push(roles.viewer + " 查看者");
-    $("ovMembersSub").textContent = parts.length ? parts.join(" · ") : "成员";
+    var msub = $("ovMembersSub");
+    if(msub) msub.textContent = parts.length ? parts.join(" · ") : "成员";
   }
   var projEl = $("ovProjects");
   if(projEl){
@@ -282,19 +287,116 @@ function updateWsOverview(){
       $("ovProjectsSub").textContent = "项目";
     }
   }
-  var ownerEl = $("ovOwner");
-  if(ownerEl){
-    var owner = null;
-    for(var i = 0; i < members.length; i++) if(members[i].role === "owner"){ owner = members[i]; break; }
-    var self = rt.currentUser && ws.myRole === "owner" ? rt.currentUser : null;
-    ownerEl.textContent = owner ? owner.displayName : (self ? (self.displayName || self.username) : "—");
+  var createdEl = $("ovCreated");
+  if(createdEl){
+    createdEl.textContent = ws.createdAt ? String(ws.createdAt).slice(0, 10) : "—";
+    var csub = $("ovCreatedSub");
+    if(csub) csub.textContent = "空间主 " + ownerName;
   }
   var scopeEl = $("ovScope");
   if(scopeEl){
     scopeEl.textContent = isPersonal ? "个人空间" : "共享空间";
     $("ovScopeSub").textContent = isPersonal ? "仅自己可见" : "成员按项目授权可见";
   }
+  var createdRow = $("wsCreatedAt");
+  if(createdRow) createdRow.textContent = ws.createdAt ? String(ws.createdAt).slice(0, 10) : "—";
+  var ownerRow = $("wsOwnerRow");
+  if(ownerRow) ownerRow.textContent = ownerName + (owner || selfOwner ? " · 空间主" : "");
 }
+function syncSettingsPageHead(){
+  if(document.body.dataset.view !== "settings" || !rt.currentWs) return;
+  var tab = settingsTab;
+  var isOwner = rt.currentWs.myRole === "owner";
+  var isManager = isOwner || rt.currentWs.myRole === "admin";
+  var titles = {
+    space: "空间", members: "成员与角色", visibility: "项目可见范围", workflow: "工作流",
+    integration: "通知与集成", data: "数据与审计", platform: "平台"
+  };
+  var subs = {
+    space: "设置 · 仅空间主与管理员可修改名称与推送目标。",
+    members: "设置 · 新成员默认不参与任何项目，加入后按需授权。",
+    visibility: "设置 · 空间主与管理员默认可见全部项目，只需配置成员例外。",
+    workflow: "设置 · 这里只配置规则；卡片放到哪一列仍在工作项里操作。",
+    integration: "设置 · 站内通知始终可用；外部渠道失败不会影响站内消息。",
+    data: "设置 · 导出按用途分组；导入与清空属于破坏性操作，单独放在下方。",
+    platform: "设置 · 平台设置只对平台管理员开放。"
+  };
+  var phTitle = $("pageTitleText"), phSub = $("pageSub"), pill = $("pagePill"), acts = $("pageActions");
+  if(phTitle) phTitle.textContent = titles[tab] || "设置";
+  if(phSub) phSub.textContent = subs[tab] || "设置";
+  if(pill){
+    var pillText = "";
+    if(tab === "members" && rt.currentWs.type !== "personal"){
+      pillText = ((rt.currentWs.memberCount || (rt.wsMembersCache || []).length) || 0) + " 人";
+    }
+    pill.hidden = !pillText;
+    pill.textContent = pillText;
+  }
+  var html = "";
+  if(tab === "space"){
+    html = '<button class="btn" type="button" data-set-act="discard">放弃更改</button>'
+      + '<button class="btn primary" type="button" data-set-act="save-space"' + (isOwner ? "" : " disabled") + '>保存更改</button>';
+  }else if(tab === "members"){
+    html = (isManager ? '<button class="btn" type="button" data-set-act="export-members">导出名单</button>' : "")
+      + (isManager ? '<button class="btn primary" type="button" data-set-act="invite">' + icon("plus", 14) + '邀请成员</button>' : "");
+  }else if(tab === "integration"){
+    html = '<button class="btn" type="button" data-set-act="notify-test" title="' + (isOwner ? "只走外部渠道，验证地址是否可达" : "仅空间主可测试推送") + '"' + (isOwner ? "" : " disabled") + '>发送测试推送</button>'
+      + '<button class="btn primary" type="button" data-set-act="notify-save"' + (isOwner ? "" : " disabled") + ' title="' + (isOwner ? "" : "仅空间主可修改") + '">保存设置</button>';
+  }else if(tab === "data"){
+    html = '<button class="btn primary" type="button" data-set-act="export-all"' + (isOwner ? "" : " disabled") + '>'
+      + icon("download", 14) + '导出完整备份</button>';
+  }
+  if(acts){
+    if(acts.dataset.setActs !== html){
+      acts.dataset.setActs = html;
+      acts.innerHTML = html;
+    }
+    acts.hidden = !html;
+  }
+}
+function discardSettingsChanges(){
+  if(!rt.currentWs) return;
+  if(wsNameInput) wsNameInput.value = rt.currentWs.name || "";
+  if(wsWebhook) wsWebhook.value = rt.currentWs.notifyWebhook || "";
+  loadNotifyStatus();
+  toast("已放弃未保存的更改", "fs");
+}
+function csvField(v){
+  var s = v == null ? "" : String(v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function exportMemberCsv(){
+  var list = rt.wsMembersCache || [];
+  var rows = [["显示名", "登录名", "空间角色", "公司", "岗位", "加入时间"]];
+  list.forEach(function(m){
+    rows.push([
+      m.displayName || "", m.username || "", roleLabel(m.role || "member"),
+      m.companyName || "", m.jobTitle || "",
+      m.createdAt ? String(m.createdAt).slice(0, 10) : ""
+    ]);
+  });
+  var text = "\uFEFF" + rows.map(function(r){ return r.map(csvField).join(","); }).join("\r\n");
+  triggerDownload("成员名单-" + new Date().toISOString().slice(0, 10) + ".csv", text, "text/csv;charset=utf-8");
+  toast("已导出 " + list.length + " 名成员", "fs");
+}
+$("pageActions") && $("pageActions").addEventListener("click", function(e){
+  var b = e.target.closest("[data-set-act]");
+  if(!b || document.body.dataset.view !== "settings") return;
+  var act = b.dataset.setAct;
+  if(act === "save-space" && $("btnWsSave")) $("btnWsSave").click();
+  else if(act === "discard") discardSettingsChanges();
+  else if(act === "export-members") exportMemberCsv();
+  else if(act === "invite") openInviteCreate();
+  else if(act === "notify-test" && $("btnNotifyTest")) $("btnNotifyTest").click();
+  else if(act === "notify-save" && $("btnNotifySave")) $("btnNotifySave").click();
+  else if(act === "export-all" && $("btnExport")) $("btnExport").click();
+});
+var btnWsDiscardFoot = $("btnWsDiscardFoot");
+if(btnWsDiscardFoot) btnWsDiscardFoot.addEventListener("click", discardSettingsChanges);
+var btnExportPre = $("btnExportPre");
+if(btnExportPre) btnExportPre.addEventListener("click", function(){ if($("btnExport")) $("btnExport").click(); });
+var btnImportHelp = $("btnImportHelp");
+if(btnImportHelp) btnImportHelp.addEventListener("click", function(){ if($("btnExport")) $("btnExport").click(); });
 function enterSettingsView(){
   if(!rt.currentWs || !wsNameInput) return;
   rt.settingsReady = true;
@@ -306,7 +408,7 @@ function enterSettingsView(){
   if(btnRoleGuide) btnRoleGuide.hidden = isPersonal;
   $("wsTypeHint").textContent = isPersonal
     ? "个人空间 · 仅自己可见"
-    : ("共享空间 · " + (isOwner ? "你是空间主" : "你是" + roleLabel(myRole)) + "（" + (rt.currentWs.memberCount || 0) + " 人）");
+    : "修改后立即对全部成员生效";
   wsNameInput.value = rt.currentWs.name;
   wsNameInput.disabled = isPersonal || !isOwner;
   wsWebhook.value = rt.currentWs.notifyWebhook || "";
@@ -372,10 +474,31 @@ function enterSettingsView(){
   loadActivity();
   initSetTabs();
   initPlatformTabs();
+  initWorkflowTabs();
   setSettingsTab(settingsTab);
 }
 var settingsTab = "space";
 var platformTab = "account";
+var wfTab = "columns";
+function setWorkflowTab(tab){
+  if(["columns", "transitions", "priorities", "categories"].indexOf(tab) < 0) tab = "columns";
+  wfTab = tab;
+  document.querySelectorAll("#view-settings [data-wf-pane]").forEach(function(p){
+    p.hidden = p.dataset.wfPane !== tab;
+  });
+  document.querySelectorAll("#set-workflow [data-wf-tab]").forEach(function(b){
+    b.setAttribute("aria-pressed", b.dataset.wfTab === tab ? "true" : "false");
+  });
+}
+function initWorkflowTabs(){
+  var bar = $("set-workflow");
+  if(!bar || bar.__wfWired) return;
+  bar.__wfWired = true;
+  bar.addEventListener("click", function(e){
+    var b = e.target.closest("[data-wf-tab]");
+    if(b) setWorkflowTab(b.dataset.wfTab);
+  });
+}
 function setSettingsTab(tab){
   var prevTab = settingsTab;
   var isAdmin = !!(rt.currentUser && rt.currentUser.role === "admin");
@@ -412,6 +535,8 @@ function setSettingsTab(tab){
   if(tab === "visibility" && isManager && !isPersonal) loadProjectAccess();
   if(tab === "integration" && isAdmin){ loadMailSettings(); loadTeamAiSettings(); }
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
+  if(tab === "workflow") setWorkflowTab(wfTab);
+  syncSettingsPageHead();
   try{ window.dispatchEvent(new CustomEvent("ds:settings-tab", {detail:tab})); }catch(e){ /* 非浏览器环境 */ }
 }
 function initSetTabs(){
@@ -446,6 +571,8 @@ function setPlatformTab(tab){
     var on = b.dataset.platformTab === tab;
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
+  var searchWrap = $("platformSearchWrap");
+  if(searchWrap) searchWrap.hidden = tab !== "account";
   if(!(rt.currentUser && rt.currentUser.role === "admin")) return;
   if(tab === "account") enterUsersView();
   else if(tab === "system") loadSystemInfo();
@@ -459,6 +586,126 @@ function refreshPlatformTab(){
   else if(platformTab === "system") loadSystemInfo();
   else loadAudit(auditState.page || 1);
 }
+var memFilter = { q:"", role:"", scope:"" };
+function memberJoinedText(m){
+  if(!m || !m.createdAt) return "—";
+  return String(m.createdAt).slice(0, 10);
+}
+/* 相对默认「参与」的例外：只读 / 不可见；按项目分配的成员把显式「参与」也算例外 */
+function memberExceptionInfo(m){
+  var data = rt.projectAccessCache;
+  var role = m.role || "member";
+  if(role !== "member") return { read:0, none:0, total:(data && data.projects ? data.projects.length : 0), exceptions:0, assigned:false };
+  var projects = data && data.projects ? data.projects : [];
+  var raw = {};
+  ((data && data.grants) || []).forEach(function(g){
+    if(g && g.userId === m.userId && g.projectId) raw[g.projectId] = g.access;
+  });
+  var read = 0, none = 0, write = 0;
+  projects.forEach(function(p){
+    var v = effectiveGrant(raw[p.id], m);
+    if(v === "read") read++;
+    else if(v === "none") none++;
+    else write++;
+  });
+  var assigned = m.projectAccessMode === "assigned";
+  return {
+    read:read, none:none, write:write, total:projects.length, assigned:assigned,
+    exceptions: read + (assigned ? write : none)
+  };
+}
+function memberVisibilityCell(m){
+  var role = m.role || "member";
+  if(role === "owner") return '<span class="member-vis">全部（空间主）</span>';
+  if(role === "admin") return '<span class="member-vis">全部（默认可见）</span>';
+  if(role === "viewer") return '<span class="member-vis">全部项目 · 只读</span>';
+  var info = memberExceptionInfo(m);
+  if(!info.total) return '<span class="member-vis" title="' + (info.assigned ? "新成员按项目分配" : "默认全部可见") + '">' + (info.assigned ? "尚未分配项目" : "—") + '</span>';
+  if(!info.read && !info.none && !(info.assigned && info.write)) return '<span class="member-vis" title="默认全部 ' + info.total + ' 个项目可参与">—</span>';
+  var html = [];
+  if(info.read) html.push('<span class="badge blocked">只读 ' + info.read + '</span>');
+  if(info.none) html.push('<span class="chip">不可见 ' + info.none + '</span>');
+  if(info.assigned && info.write) html.push('<span class="chip">可参与 ' + info.write + '</span>');
+  html.push('<button class="btn link" type="button" data-open-access="' + esc(m.userId) + '">调整</button>');
+  return '<span class="member-vis">' + html.join(" ") + '</span>';
+}
+function renderMemberRows(){
+  if(!wsMemberList || !rt.currentWs) return;
+  var myRole = rt.currentWs.myRole;
+  var isOwner = myRole === "owner";
+  var isManager = isOwner || myRole === "admin";
+  var ownerCount = rt.wsMembersCache.reduce(function(n, m){ return n + (m.role === "owner" ? 1 : 0); }, 0);
+  var q = (memFilter.q || "").trim().toLowerCase();
+  var rows = rt.wsMembersCache.filter(function(m){
+    var role = m.role || "member";
+    if(memFilter.role && role !== memFilter.role) return false;
+    if(memFilter.scope === "except"){
+      if(role !== "member" && role !== "viewer") return false;
+      if(role === "viewer") return false;
+      if(memberExceptionInfo(m).exceptions <= 0) return false;
+    }
+    if(memFilter.scope === "assigned" && m.projectAccessMode !== "assigned") return false;
+    if(!q) return true;
+    return [m.displayName, m.username, m.companyName, m.jobTitle].some(function(v){
+      return (v || "").toLowerCase().indexOf(q) !== -1;
+    });
+  });
+  var exceptions = rt.wsMembersCache.filter(function(m){ return (m.role || "member") === "member" && memberExceptionInfo(m).exceptions > 0; }).length;
+  $("memFilterCount").textContent = rows.length === rt.wsMembersCache.length ? "" : ("筛选后 " + rows.length + " 人");
+  var foot = $("memFootText");
+  if(foot){
+    foot.textContent = "共 " + rt.wsMembersCache.length + " 名成员 · " + ownerCount + " 名空间主 · " + exceptions + " 人存在可见范围例外";
+  }
+  if(rt.currentWs.type === "shared"){
+    var tools = $("memberTools");
+    if(tools) tools.innerHTML = isManager ? '<button class="btn sm" type="button" data-member-label-options>管理公司与角色候选</button>' : "";
+  }
+  if(!rows.length){
+    wsMemberList.innerHTML = '<div class="foot-note" style="padding:14px 12px">没有符合条件的成员。</div>';
+    return;
+  }
+  wsMemberList.innerHTML = rows.map(function(m){
+    var isSelf = rt.currentUser && m.userId === rt.currentUser.id;
+    var role = m.role || "member";
+    var isTargetOwner = role === "owner";
+    var canManageRow = isOwner
+      ? (!isSelf || !isTargetOwner || ownerCount > 1)
+      : (isManager && role !== "admin" && !isTargetOwner);
+    var canRemove = isSelf
+      ? (!isTargetOwner || ownerCount > 1)
+      : (canManageRow && (!isTargetOwner || ownerCount > 1));
+    var roleCell = canManageRow
+      ? '<select class="mini-select" data-member-role aria-label="空间角色" title="调整空间角色">' +
+          roleOptions(role, isOwner) + '</select>'
+      : '<span class="tag ' + (role === "owner" ? "tag-primary" : "tag-ghost") + '">' +
+          roleLabel(role) + '</span>';
+    var company = "";
+    if(rt.currentWs.type === "shared"){
+      company = isManager ? companyEditChipHTML(m.companyName, m.userId) : companyChipHTML(m.companyName);
+    }
+    var job = "";
+    if(rt.currentWs.type === "shared"){
+      job = isManager ? '<button class="org-chip editable" type="button" data-member-job-title="' + esc(m.userId) + '" title="设置空间默认岗位（项目可覆盖，不改变权限）">岗位 · ' + esc(m.jobTitle || "未设置") + '</button>'
+        : '<span class="org-chip">岗位 · ' + esc(m.jobTitle || "未设置") + '</span>';
+    }
+    var assignBtn = (canManageRow && role === "member")
+      ? '<button class="btn sm" type="button" data-assign-projects="' + esc(m.userId) + '">分配项目</button>'
+      : '';
+    var removeBtn = canRemove
+      ? '<button class="btn sm danger" type="button" data-mid-del="' + esc(m.userId) + '">' +
+          (isSelf ? "退出" : "移除") + '</button>'
+      : '';
+    return '<div class="member-row" data-mid="' + esc(m.userId) + '">' +
+      '<span class="mi"><span class="nm">' + avatarHTML(m.displayName, "sm") +
+        '<span class="nm-text">' + esc(m.displayName) + '</span>' + company + job + '</span>' +
+        '<span class="sub">@' + esc(m.username || "") + '</span></span>' +
+      roleCell +
+      memberVisibilityCell(m) +
+      '<span class="member-joined">' + esc(memberJoinedText(m)) + '</span>' +
+      '<span class="acts">' + assignBtn + removeBtn + '</span>' +
+    '</div>';
+  }).join("");
+}
 function loadWsMemberList(){
   wsMemberList.innerHTML = UI.skeletonRows(2);
   var rawWsId = rt.currentWs.id;
@@ -467,59 +714,12 @@ function loadWsMemberList(){
   var isOwner = myRole === "owner";
   var isManager = isOwner || myRole === "admin";
   var render = function(){
-    $("wsMemberCount").textContent = "共 " + rt.wsMembersCache.length + " 人";
+    if($("wsMemberCount")) $("wsMemberCount").textContent = "共 " + rt.wsMembersCache.length + " 人";
     updateWsOverview();
     var ownerCount = rt.wsMembersCache.reduce(function(n, m){ return n + (m.role === "owner" ? 1 : 0); }, 0);
     /* 多空间主等权：owner 之间可互相管理；最后一位空间主不可降级或移除 */
     $("btnWsLeave").hidden = isOwner && ownerCount <= 1;
-    wsMemberList.innerHTML = (rt.currentWs.type === "shared"
-      ? '<div class="member-label-toolbar foot-note">默认岗位沿用至各项目，项目角色可覆盖。'
-        + (isManager ? ' <button class="btn sm" type="button" data-member-label-options>管理公司与角色候选</button>' : '') + '</div>' : '')
-      + rt.wsMembersCache.map(function(m){
-      var isSelf = rt.currentUser && m.userId === rt.currentUser.id;
-      var role = m.role || "member";
-      var isTargetOwner = role === "owner";
-      /* 空间主之间可互相调整；管理员只能处理成员与查看者；自己是最后一位空间主时不提供降级 */
-      var canManageRow = isOwner
-        ? (!isSelf || !isTargetOwner || ownerCount > 1)
-        : (isManager && role !== "admin" && !isTargetOwner);
-      var canRemove = isSelf
-        ? (!isTargetOwner || ownerCount > 1)
-        : (canManageRow && (!isTargetOwner || ownerCount > 1));
-      var roleCell = canManageRow
-        ? '<select class="mini-select" data-member-role aria-label="空间角色" title="调整空间角色">' +
-            roleOptions(role, isOwner) + '</select>'
-        : '<span class="tag ' + (role === "owner" ? "tag-primary" : "tag-ghost") + '">' +
-            roleLabel(role) + '</span>';
-      var sub = "@" + esc(m.username);
-      var vis = memberVisibilityText(m);
-      if(vis) sub += ' · ' + vis;
-      var company = "";
-      if(rt.currentWs.type === "shared"){
-        company = isManager
-          ? companyEditChipHTML(m.companyName, m.userId)
-          : companyChipHTML(m.companyName);
-      }
-      var job = "";
-      if(rt.currentWs.type === "shared"){
-        job = isManager ? '<button class="org-chip editable" type="button" data-member-job-title="' + esc(m.userId) + '" title="设置空间默认岗位（项目可覆盖，不改变权限）">岗位 · ' + esc(m.jobTitle || "未设置") + '</button>'
-          : '<span class="org-chip">岗位 · ' + esc(m.jobTitle || "未设置") + '</span>';
-      }
-      var assignBtn = (canManageRow && role === "member")
-        ? '<button class="btn sm" type="button" data-assign-projects="' + esc(m.userId) + '">分配项目</button>'
-        : '';
-      var removeBtn = canRemove
-        ? '<button class="btn sm danger" type="button" data-mid-del="' + esc(m.userId) + '">' +
-            (isSelf ? "退出" : "移除") + '</button>'
-        : '';
-      return '<div class="member-row" data-mid="' + esc(m.userId) + '">' +
-        avatarHTML(m.displayName, "lg") +
-        '<span class="mi"><span class="nm"><span class="nm-text">' + esc(m.displayName) + '</span>' + company + job + '</span>' +
-          '<span class="sub">' + sub + '</span></span>' +
-        roleCell +
-        ((assignBtn || removeBtn) ? '<span class="acts">' + assignBtn + removeBtn + '</span>' : '') +
-      '</div>';
-    }).join("");
+    renderMemberRows();
   };
   API.get("/api/workspaces/" + wsId + "/members").then(function(list){
     /* 请求期间切换了空间：丢弃旧空间的结果，避免覆盖新空间的成员列表 */
@@ -536,6 +736,28 @@ function loadWsMemberList(){
     wsMemberList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
   });
 }
+function bindMemberFilters(){
+  var s = $("memSearch"), r = $("memRoleFilter"), v = $("memScopeFilter");
+  if(s){
+    s.addEventListener("input", function(){ memFilter.q = s.value; renderMemberRows(); });
+    s.addEventListener("search", function(){ memFilter.q = s.value; renderMemberRows(); });
+  }
+  if(r) r.addEventListener("change", function(){ memFilter.role = r.value; renderMemberRows(); });
+  if(v) v.addEventListener("change", function(){ memFilter.scope = v.value; renderMemberRows(); });
+  var copy = $("btnCopyInviteLink");
+  if(copy) copy.addEventListener("click", function(){
+    var id = $("inviteBox");
+    if(id) id.scrollIntoView({block:"nearest"});
+    var gen = $("btnInviteGen");
+    if(gen) gen.focus();
+  });
+  /* 工具条在成员列表之外：#memberTools 里的按钮不会被 wsMemberList 的点击委托收到 */
+  var tools = $("memberTools");
+  if(tools) tools.addEventListener("click", function(e){
+    if(e.target.closest("[data-member-label-options]")) openMemberLabelOptions();
+  });
+}
+bindMemberFilters();
 function memberVisibilityText(m){
   var data = rt.projectAccessCache;
   if(!data || !rt.currentWs || data.wsId !== rt.currentWs.id) return "";
@@ -799,6 +1021,18 @@ function loadProjectAccess(){
     box.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
   });
 }
+/* 可见范围筛选：全部成员 / 只看例外；例外=与成员默认口径不同的单元格 */
+var accessFilter = "all";
+var accessQuery = "";
+function memberHasAccessException(m){
+  return (m.role || "member") === "member" && memberExceptionInfo(m).exceptions > 0;
+}
+function renderAccessCounts(){
+  var members = (rt.projectAccessCache && rt.projectAccessCache.members) || [];
+  var all = $("accessAllCount"), except = $("accessExceptCount");
+  if(all) all.textContent = members.length;
+  if(except) except.textContent = members.filter(memberHasAccessException).length;
+}
 function renderProjectAccess(){
   var box = $("projectAccessWrap");
   var data = rt.projectAccessCache;
@@ -808,6 +1042,7 @@ function renderProjectAccess(){
   var grants = data.grants || [];
   var summary = $("accessSummary");
   if(summary) summary.textContent = members.length + " 位成员 · " + projects.length + " 个项目";
+  renderAccessCounts();
   if(!projects.length){
     box.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目", text:"先在项目中创建项目，再回来配置成员的可见范围。"
@@ -819,10 +1054,19 @@ function renderProjectAccess(){
   grants.forEach(function(g){
     if(g && g.userId && g.projectId) grantMap[accessKey(g.userId, g.projectId)] = g.access;
   });
-  var head = '<thead><tr><th class="access-sticky">成员</th><th>角色</th>' +
+  var q = (accessQuery || "").trim().toLowerCase();
+  var rows = members.filter(function(m){
+    if(accessFilter === "except" && !memberHasAccessException(m)) return false;
+    if(!q) return true;
+    return [m.displayName, m.username].some(function(v){
+      return (v || "").toLowerCase().indexOf(q) !== -1;
+    });
+  });
+  var head = '<thead><tr><th class="access-sticky">成员 / 项目</th>' +
     projects.map(function(p){ return '<th title="' + esc(p.name) + '">' + esc(p.name) + '</th>'; }).join("") +
     '</tr></thead>';
-  var body = members.map(function(m){
+  var readTotal = 0, noneTotal = 0;
+  var body = rows.length ? rows.map(function(m){
     var role = m.role || "member";
     var cells;
     if(isPrivilegedRole(role)){
@@ -832,20 +1076,54 @@ function renderProjectAccess(){
     }else{
       cells = projects.map(function(p){
         var value = effectiveGrant(grantMap[accessKey(m.userId, p.id)], m);
-        return '<td><select class="mini-select access-select" data-access-user="' + esc(m.userId) +
+        if(value === "read") readTotal++;
+        else if(value === "none") noneTotal++;
+        var cls = value === "read" ? " is-read" : (value === "none" ? " is-none" : "");
+        return '<td><select class="access-cell' + cls + '" data-access-user="' + esc(m.userId) +
           '" data-access-project="' + esc(p.id) + '" aria-label="' + esc(m.displayName + " · " + p.name) + '">' +
           accessOptions(value) + '</select></td>';
       }).join("");
     }
     return '<tr data-access-mid="' + esc(m.userId) + '">' +
-      '<td class="access-sticky"><span class="access-name">' + esc(m.displayName || m.username || m.userId) + '</span>' +
+      '<td class="access-sticky"><span class="access-who"><span class="access-name">' + esc(m.displayName || m.username || m.userId) + '</span>' +
+        '<span class="tag ' + (role === "owner" ? "tag-primary" : "tag-ghost") + '">' + roleLabel(role) + '</span></span>' +
         '<span class="access-sub">@' + esc(m.username || "") + '</span></td>' +
-      '<td><span class="tag ' + (role === "owner" ? "tag-primary" : "tag-ghost") + '">' + roleLabel(role) + '</span></td>' +
       cells + '</tr>';
-  }).join("");
+  }).join("")
+    : '<tr><td class="access-all" colspan="' + (projects.length + 1) + '">没有符合条件的成员。</td></tr>';
+  var foot = $("accessFootStats");
+  if(foot) foot.textContent = readTotal + " 处只读 · " + noneTotal + " 处不可见 · 修改后立即生效";
   box.innerHTML = '<table class="manager-tbl access-matrix">' + head + '<tbody>' + body + '</tbody></table>';
   syncAccessFade();
 }
+function syncAccessFilterButtons(){
+  document.querySelectorAll("#set-access [data-access-filter]").forEach(function(b){
+    b.setAttribute("aria-pressed", b.dataset.accessFilter === accessFilter ? "true" : "false");
+  });
+}
+function setAccessFilter(next){
+  accessFilter = next === "except" ? "except" : "all";
+  syncAccessFilterButtons();
+  if(rt.projectAccessCache) renderProjectAccess();
+}
+/* 成员表「调整」：跳到可见范围页，只看例外并定位到该成员 */
+function openAccessForMember(userId){
+  var m = (rt.wsMembersCache || []).filter(function(x){ return x.userId === userId; })[0];
+  accessFilter = "except";
+  accessQuery = m ? (m.displayName || m.username || "") : "";
+  var input = $("accessSearch");
+  if(input) input.value = accessQuery;
+  syncAccessFilterButtons();
+  setSettingsTab("visibility");
+}
+$("set-access") && $("set-access").addEventListener("click", function(e){
+  var b = e.target.closest("[data-access-filter]");
+  if(b) setAccessFilter(b.dataset.accessFilter);
+});
+$("accessSearch") && $("accessSearch").addEventListener("input", function(){
+  accessQuery = $("accessSearch").value || "";
+  if(rt.projectAccessCache) renderProjectAccess();
+});
 /* 矩阵宽于面板时右侧渐隐，提示还能横向滚动；滚到底收起 */
 function syncAccessFade(){
   var shell = document.querySelector(".access-matrix-shell");
@@ -1172,6 +1450,7 @@ function renderColCfg(){
       '</span>' +
     '</div>';
   }).join("");
+  if($("wfColumnsCount")) $("wfColumnsCount").textContent = rt.colDefsCache.length + 1;
   var done = rt.doneColDef || { id:"done", name:"已完成", color:"#5f7a4a" };
   colCfgList.innerHTML = rows +
     '<div class="cfg-row colcfg-row is-done" data-col-id="done">' +
@@ -1442,6 +1721,7 @@ function renderWsCatCfg(){
   var readOnly = !canWrite;
   var canDel = !!wsCatProjectId() && canManageProject(wsCatProjectId(), wsCatProjectOwner());
   if($("wsCatCount")) $("wsCatCount").textContent = wsCatCache.length ? "共 " + wsCatCache.length + " 个" : "";
+  if($("wfCategoriesCount")) $("wfCategoriesCount").textContent = wsCatCache.length;
   if(!wsCatCache.length){
     if(wsCatProjectId()) wsCatList.innerHTML = UI.colEmpty("该项目还没有分类，用下方输入框添加第一个");
   }
@@ -2709,6 +2989,11 @@ wsMemberList.addEventListener("click", function(e){
     openMemberGrants(assign.dataset.assignProjects);
     return;
   }
+  var accessAdjust = e.target.closest("[data-open-access]");
+  if(accessAdjust){
+    openAccessForMember(accessAdjust.dataset.openAccess);
+    return;
+  }
   var del = e.target.closest("[data-mid-del]");
   if(!del) return;
   var uid = del.dataset.midDel;
@@ -3071,7 +3356,7 @@ function openUserSpaces(u){
           '<p class="foot-note">仅显示你有权进入的共享空间；每个账号另有仅本人可见的个人空间。</p>' +
         '</section>' +
         '<section class="user-spaces-sect"><h4>在哪里调整</h4>' +
-          '<p class="set-hint">空间角色：设置 → 成员与权限（由该空间主/管理员调整）。平台管理员身份：账号管理 → 编辑。</p>' +
+          '<p class="set-hint">空间角色：设置 → 成员与角色（由该空间主/管理员调整）。平台管理员身份：账号管理 → 编辑。</p>' +
         '</section>' +
       '</div>' +
     '</div>';
@@ -3081,11 +3366,26 @@ function openUserSpaces(u){
 }
 var userCache = [];
 var userAdminCount = 0;
+var userQuery = "";
+$("platformSearch") && $("platformSearch").addEventListener("input", function(){
+  userQuery = $("platformSearch").value || "";
+  if(userCache.length) renderUsers(userCache);
+});
 function renderUsers(list){
   userCache = list || [];
   userAdminCount = userCache.filter(function(u){ return u.role === "admin"; }).length;
   if(!userCache.length){
     userListEl.innerHTML = '<div class="foot-note" style="padding:12px 14px">暂无账号</div>';
+    return;
+  }
+  var q = (userQuery || "").trim().toLowerCase();
+  var rows = q ? userCache.filter(function(u){
+    return [u.displayName, u.username, u.email].some(function(v){
+      return (v || "").toLowerCase().indexOf(q) !== -1;
+    });
+  }) : userCache;
+  if(!rows.length){
+    userListEl.innerHTML = '<div class="foot-note" style="padding:12px 14px">没有匹配「' + esc(userQuery.trim()) + '」的账号</div>';
     return;
   }
   userListEl.innerHTML =
@@ -3097,7 +3397,7 @@ function renderUsers(list){
         '<th scope="col">所属空间</th>' +
         '<th scope="col" class="user-th-acts">操作</th>' +
       '</tr></thead><tbody>' +
-      userCache.map(function(u){
+      rows.map(function(u){
         var isMe = rt.currentUser && u.id === rt.currentUser.id;
         return '<tr data-user-id="' + esc(u.id) + '">' +
           '<td><div class="user-acct">' + avatarHTML(u.displayName, "xl") +
@@ -3200,7 +3500,7 @@ function openUserEdit(u){
   $("dlgUserRole").disabled = lastAdmin;
   $("dlgUserRoleHint").textContent = lastAdmin
     ? "最后一名平台管理员不能降级为普通账号；如需调整，请先把其他账号设为平台管理员。"
-    : "普通账号只能管理自己的数据与参与的空间；平台管理员另可管理全部账号与系统设置。空间内的角色在「成员与权限」中分配。";
+    : "普通账号只能管理自己的数据与参与的空间；平台管理员另可管理全部账号与系统设置。空间内的角色在「成员与角色」中分配。";
   $("fDlgUserName").classList.remove("invalid");
   $("fDlgUserEmail").classList.remove("invalid");
   UI.openModal($("dlgUserEdit"));

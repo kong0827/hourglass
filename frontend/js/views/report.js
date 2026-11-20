@@ -77,6 +77,7 @@ function wireReportTooltip(el){
   });
 }
 function enterReportView(){
+  syncReportPageHead();
   /* 项目列表只用于筛选下拉，不参与接口查询：与报表请求并行，回来后再补一次工具栏 */
   if(rt.reqsLoaded){ loadReport(); return; }
   loadReport();
@@ -94,12 +95,12 @@ function loadReport(opts){
   /* 项目删除或隐藏后退回全部；异步响应必须仍属于原空间与最新请求。 */
   if(reqId && rt.reqsLoaded && !rt.reqList.some(function(r){ return r.id === reqId && (!r.workspaceId || r.workspaceId === ws); })) reqId = "";
   scope = { reqId:reqId || null, roleTitle:roleTitle || null, companyName:companyName || null, versionId:versionId || null };
-  loading = true; hideReportTip();
+  loading = true; hideReportTip(); syncReportPageHead();
   body.innerHTML = reportToolbar() + UI.skeletonCards(4); body.setAttribute("aria-busy","true");
   return API.get("/api/manager/reports", scope).then(function(data){
     if(current !== seq || ws !== reportWorkspace()) return null;
     cache = Object.assign({}, data, { scope:data.scope || scope }); reportOptions = data.filterOptions || {}; loading = false;
-    body.setAttribute("aria-busy","false"); renderReport(); return cache;
+    body.setAttribute("aria-busy","false"); syncReportPageHead(); renderReport(); return cache;
   }).catch(function(ex){
     if(current !== seq || ws !== reportWorkspace()) return null;
     var status = ex && ex.code;
@@ -108,7 +109,7 @@ function loadReport(opts){
       toast("所选项目已不可访问，已切换为全部项目", "warn");
       return loadReport(opts);
     }
-    cache = null; loading = false; body.setAttribute("aria-busy","false");
+    cache = null; loading = false; body.setAttribute("aria-busy","false"); syncReportPageHead();
     body.innerHTML = reportToolbar() + UI.errorState(ex.message || "加载失败，请重试"); return null;
   });
 }
@@ -344,15 +345,35 @@ function reportScopeChipsHTML(data){
     return '<span class="report-scope-chip"><b>' + esc(c[0]) + '</b>' + esc(c[1]) + '</span>';
   }).join("") + '</div>';
 }
+function reportPageActionsHTML(){
+  var disabled = loading || !cache ? ' disabled' : '';
+  return '<button class="btn" type="button" data-report-csv' + disabled + '>' + icon("download", 14) + '导出 CSV</button>'
+    + '<button class="btn" type="button" data-report-png' + disabled + '>导出 PNG</button>'
+    + fullscreenButtonHTML();
+}
+/* 页头按原型：H1=交付图表，导出与全屏在标题行右端；手机页头折叠时退回工具条按钮 */
+function syncReportPageHead(){
+  if(document.body.dataset.view !== "report") return;
+  var title = $("pageTitleText"), sub = $("pageSub"), acts = $("pageActions"), nw = $("newWrap");
+  if(title) title.textContent = "交付图表";
+  if(sub) sub.textContent = "近 14 天燃尽 · 近 4 周速度 · 近 8 周流与缺陷";
+  if(acts){ acts.innerHTML = reportPageActionsHTML(); acts.hidden = false; }
+  if(nw) nw.hidden = true;
+  document.title = "交付图表 · 沙漏";
+}
 function reportToolbar(){
   var disabled = loading || !cache ? ' disabled' : '';
-  return '<div class="manager-toolbar"><div><b>交付图表</b></div><div class="manager-actions"><button class="btn sm" type="button" data-report-csv' + disabled + '>导出 CSV</button><button class="btn sm" type="button" data-report-png' + disabled + '>导出 PNG</button>' + fullscreenButtonHTML() + '</div></div>'
-    + '<div class="manager-label-filters"><span class="sv-seg-label">范围</span>'
+  return '<div class="manager-toolbar manager-tools-card">'
+    + '<div class="manager-label-filters report-filters"><span class="sv-seg-label">范围</span>'
     + '<label>项目 <select id="reportProjectSelect" class="mini-select">' + projectOptions() + '</select></label>'
     + '<label>版本 <select id="reportVersionSelect" class="mini-select">' + versionOptions() + '</select></label>'
     + '<label>公司 <select id="reportCompanySelect" class="mini-select">' + reportLabelOptions(reportOptions.companyNames, companyName, '全部公司', '未设公司') + '</select></label>'
     + '<label>角色 <select id="reportRoleSelect" class="mini-select">' + reportLabelOptions(reportOptions.roleTitles, roleTitle, '全部角色', '未设角色') + '</select></label>'
-    + '<button class="btn sm soft" type="button" data-report-clear>' + icon("close", 13) + '清除筛选</button></div>';
+    + '<button class="btn sm soft" type="button" data-report-clear>' + icon("close", 13) + '清除筛选</button></div>'
+    + '<div class="manager-actions manager-actions-mobile">'
+    + '<button class="btn sm" type="button" data-report-csv' + disabled + '>导出 CSV</button>'
+    + '<button class="btn sm" type="button" data-report-png' + disabled + '>导出 PNG</button>'
+    + fullscreenButtonHTML() + '</div></div>';
 }
 function renderReport(){
   if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
@@ -456,6 +477,11 @@ function onReportDrill(el){
       {chart: "defects", weekStart: weekStart, state: defectState});
   }
 }
+if($("pageActions")) $("pageActions").addEventListener("click", function(e){
+  if(document.body.dataset.view !== "report") return;
+  if(e.target.closest("[data-report-csv]")) exportCsv();
+  else if(e.target.closest("[data-report-png]")) exportPng();
+});
 if($("reportBody")){
   $("reportBody").addEventListener("click",function(e){
     var drill = e.target.closest("[data-report-drill]");

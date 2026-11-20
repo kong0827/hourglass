@@ -189,7 +189,7 @@ var MSG_TYPE_META = [
   { key:"version", label:"发布", types:["version_released","version_deleted","branch_status"] },
   { key:"demand", label:"需求", types:["demand_status","demand_watch"] },
   { key:"comment", label:"评论", types:["task_comment","task_mention"] },
-  { key:"member", label:"成员与权限", types:["project_access","member_role","member_removed"] }
+  { key:"member", label:"成员与角色", types:["project_access","member_role","member_removed"] }
 ];
 function msgTypeOf(type){
   for(var i = 0; i < MSG_TYPE_META.length; i++) if(MSG_TYPE_META[i].types.indexOf(type) >= 0) return MSG_TYPE_META[i].key;
@@ -244,11 +244,38 @@ function setAlertTab(next){
   renderAlertPanel();
   loadAlertPanel();
 }
+/* 消息页的标题、未读数与页级操作交给页头（原型 p-messages）；
+   正文里的 .msg-page-head 只在手机保留一份，桌面由 CSS 隐藏，避免同一状态出现两次 */
+function syncMessagesPageHead(){
+  if(document.body.dataset.view !== "messages") return;
+  var titleEl = $("pageTitleText"), sub = $("pageSub"), pill = $("pagePill");
+  var acts = $("pageActions"), nw = $("newWrap");
+  var unread = notifyState.unread || 0, mentions = notifyState.mentions || 0, total = notifyState.total || 0;
+  var ws = (rt.currentWs && rt.currentWs.name) || "";
+  if(titleEl) titleEl.textContent = "消息中心";
+  if(sub){
+    sub.textContent = (ws ? ws + " / " : "") + (unread
+      ? ("未读 " + unread + " 中包含提及 " + mentions + " · 顶栏铃铛只显示最近 5 条，完整记录在这里")
+      : ("已全部读完，共 " + total + " 条 · 顶栏铃铛只显示最近 5 条，完整记录在这里"));
+  }
+  if(pill){
+    pill.hidden = !unread;
+    pill.textContent = unread ? ("未读 " + (unread > 99 ? "99+" : unread)) : "";
+  }
+  if(acts){
+    acts.innerHTML = '<button class="btn" type="button" data-msg-prefs>通知偏好</button>'
+      + (unread > 0 ? '<button class="btn" type="button" data-ap-readall>' + icon("check", 14) + ' 全部标为已读</button>' : "");
+    acts.hidden = false;
+  }
+  if(nw) nw.hidden = true;
+  document.title = "消息中心 · 沙漏";
+}
 function renderMessagesPage(){
   var box = $("messagesBody");
   if(!box) return;
   var view = box.closest(".view");
   if(view && !view.classList.contains("on")) return;
+  syncMessagesPageHead();
   var unread = notifyState.unread || 0, mentions = notifyState.mentions || 0, total = notifyState.total || 0;
   var isDue = rt.alertTab === "due";
   var scopeLabel = isDue ? "截止提醒" : (rt.noticeFilter === "unread" ? "未读消息" : (rt.noticeFilter === "mention" ? "提及我的消息" : "全部消息"));
@@ -298,8 +325,9 @@ function enterMessagesView(){
 }
 /* 未读数变化时只同步页头按钮状态，避免整页重绘导致消息页滚动位置丢失 */
 function syncMessagesReadAllButton(){
-  var btn = document.querySelector("#messagesBody [data-ap-readall]");
-  if(btn) btn.disabled = (notifyState.unread || 0) <= 0;
+  var btns = document.querySelectorAll("#messagesBody [data-ap-readall], #pageActions [data-ap-readall]");
+  btns.forEach(function(btn){ btn.disabled = (notifyState.unread || 0) <= 0; });
+  syncMessagesPageHead();
 }
 function handleNoticeClick(e){
   if(e.target.closest("[data-ap-more]")){
@@ -576,7 +604,13 @@ function loadNoticeList(opts){
 /* 切换「全部 / 未读 / 提及」：清空旧列表并重新按服务端筛选拉取 */
 function setNoticeFilter(f){
   if(f !== "unread" && f !== "mention") f = "all";
-  if(f === rt.noticeFilter) return;
+  /* 从「截止提醒」右栏点回消息范围时要真的离开提醒模式，否则左栏高亮和右侧内容对不上 */
+  var leaveDue = rt.alertTab !== "notice";
+  if(leaveDue){
+    rt.alertTab = "notice";
+    try{ localStorage.setItem("ds.alertTab", "notice"); }catch(e){ /* 受限环境忽略 */ }
+  }
+  if(f === rt.noticeFilter && !leaveDue) return;
   rt.noticeFilter = f;
   try{ localStorage.setItem("ds.noticeFilter", f); }catch(e){ /* 受限环境忽略 */ }
   notifyState.items = [];

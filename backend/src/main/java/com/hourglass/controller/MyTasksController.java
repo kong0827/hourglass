@@ -42,6 +42,7 @@ public class MyTasksController {
     @GetMapping("/api/my-tasks")
     public ApiResult<Map<String, Object>> myTasks(@RequestParam(required = false) String scope,
                                                   @RequestParam(required = false) String view,
+                                                  @RequestParam(required = false) Boolean strict,
                                                   @RequestParam(required = false) String q,
                                                   @RequestParam(required = false) String testOwners,
                                                   @RequestParam(required = false) String pris,
@@ -66,8 +67,13 @@ public class MyTasksController {
         String userId = CurrentUser.id();
         AppUser me = userMapper.selectById(userId);
         String displayName = me == null ? null : Texts.trimToNull(me.getDisplayName());
-        boolean openOnly = !"all".equals(scope);
+        String normalizedView = "dev".equals(view) ? null : view;
+        boolean watchView = "watch".equals(view);
+        boolean pendingView = "pending".equals(view);
         boolean testScope = "test".equals(view);
+        boolean strictTest = testScope && Boolean.TRUE.equals(strict);
+        /* 关注列表要看全状态；待我处理与开发/测试默认只看未完成 */
+        boolean openOnly = !"all".equals(scope) && !watchView;
 
         /* IA-3：接入与看板相同的筛选参数（负责人维度天然固定为"我"） */
         com.hourglass.dto.BoardQuery query = com.hourglass.dto.BoardQuery.from(
@@ -82,7 +88,8 @@ public class MyTasksController {
         int off = offset == null ? 0 : Math.max(0, offset);
         int lim = limit == null ? DEFAULT_LIMIT
                 : Math.max(1, Math.min(TaskQueryService.MY_TASKS_MAX_LIMIT, limit));
-        MyTasksPage page = taskService.myTasksPage(userId, displayName, openOnly, testScope, query, off, lim);
+        MyTasksPage page = taskService.myTasksPage(userId, displayName, openOnly, testScope,
+                normalizedView, strictTest, query, off, lim);
         int loaded = off + page.getItems().size();
         /* 空页时不能继续 hasMore=true：COUNT 与列表之间被删会导致客户端 offset 不前进 */
         boolean hasMore = !page.getItems().isEmpty() && loaded < page.getTotal();

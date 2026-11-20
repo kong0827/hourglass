@@ -127,6 +127,7 @@ function loadInvestment(opts){
     memberUserIds:(filters.memberUserIds && filters.memberUserIds.length) ? filters.memberUserIds : null
   };
   loading = true;
+  syncInvestmentPageHead();
   if(!opts.silent || !cache){
     body.innerHTML = toolbarHTML() + UI.skeletonCards(4);
     body.setAttribute("aria-busy", "true");
@@ -138,6 +139,7 @@ function loadInvestment(opts){
     loading = false;
     body.setAttribute("aria-busy", "false");
     renderInvestment();
+    syncInvestmentPageHead();
     return cache;
   }).catch(function(ex){
     if(current !== seq || ws !== investmentWorkspace()) return null;
@@ -155,11 +157,13 @@ function loadInvestment(opts){
     }else{
       toast(ex && ex.message ? ex.message : "加载失败，请重试", "bad");
     }
+    syncInvestmentPageHead();
     return null;
   });
 }
 
 function enterInvestmentView(){
+  syncInvestmentPageHead();
   /* 项目列表只用于筛选下拉：与投入数据并行，不阻塞首屏 */
   if(rt.reqsLoaded){ loadInvestment(); return; }
   loadInvestment();
@@ -317,16 +321,33 @@ function labelOptions(values, selected, allText, unsetText){
       return '<option value="' + esc(v) + '"' + (v === selected ? ' selected' : '') + '>' + esc(v) + '</option>';
     }).join("");
 }
+function investmentPageActionsHTML(){
+  var hasData = !!cache && !loading;
+  return '<button class="btn primary" type="button" data-inv-ai' + (hasData ? '' : ' disabled') + '>✦ AI 总结</button>'
+    + '<button class="btn" type="button" data-inv-export' + (hasData ? '' : ' disabled') + '>导出报告 ▾</button>'
+    + '<button class="btn" type="button" data-inv-csv' + (hasData ? '' : ' disabled') + '>' + icon("download", 14) + '导出 CSV</button>'
+    + fullscreenButtonHTML();
+}
+/* 页头按原型：H1=投入结构，AI 总结 / 导出在标题行右端；
+   手机页头折叠时退回工具条（.manager-actions-mobile）里的同一组按钮 */
+function syncInvestmentPageHead(){
+  if(document.body.dataset.view !== "investment") return;
+  var title = $("pageTitleText"), sub = $("pageSub"), acts = $("pageActions"), nw = $("newWrap");
+  if(title) title.textContent = "投入结构";
+  if(sub) sub.textContent = "预估与实际分开口径";
+  if(acts){ acts.innerHTML = investmentPageActionsHTML(); acts.hidden = false; }
+  if(nw) nw.hidden = true;
+  document.title = "投入结构 · 沙漏";
+}
 function toolbarHTML(){
   var hasData = !!cache;
   var memberCount = (filters.memberUserIds || []).length;
-  return '<div class="manager-toolbar"><div><b>投入结构</b></div>'
-    + '<div class="manager-actions">'
+  return '<div class="inv-controls">'
+    + '<div class="manager-actions manager-actions-mobile">'
     + '<button class="btn sm primary" type="button" data-inv-ai' + (hasData ? '' : ' disabled') + '>✦ AI 总结</button>'
     + '<button class="btn sm" type="button" data-inv-export' + (hasData ? '' : ' disabled') + '>导出报告 ▾</button>'
     + '<button class="btn sm" type="button" data-inv-csv' + (hasData ? '' : ' disabled') + '>导出 CSV</button>'
-    + fullscreenButtonHTML() + '</div></div>'
-    + '<div class="inv-controls">'
+    + fullscreenButtonHTML() + '</div>'
     + '<span class="inv-seg" role="group" aria-label="周期类型">'
     + '<button type="button" data-inv-mode="quarter" class="' + (state.mode === "quarter" ? "on" : "") + '" aria-pressed="' + (state.mode === "quarter") + '">季度</button>'
     + '<button type="button" data-inv-mode="year" class="' + (state.mode === "year" ? "on" : "") + '" aria-pressed="' + (state.mode === "year") + '">年度</button>'
@@ -1301,6 +1322,12 @@ function onInvestmentKeydown(e){
   e.preventDefault();
   openDrill(pivotRows[Number(row.dataset.invRow)]);
 }
+
+/* 页头的 AI 总结 / 导出走同一套处理；手机页头折叠时只剩工具条那份 */
+if($("pageActions")) $("pageActions").addEventListener("click", function(e){
+  if(document.body.dataset.view !== "investment") return;
+  onInvestmentClick(e);
+});
 
 if($("investmentBody")){
   $("investmentBody").addEventListener("click", onInvestmentClick);

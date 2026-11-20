@@ -98,7 +98,7 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
       </button>
     </div>
     <div class="sheet-body">
-      <div class="grant-tip">邀请链接可被多人使用，同样的项目权限会应用到每位通过该链接加入的人。加入后仍可在「成员与权限」中调整。</div>
+      <div class="grant-tip">邀请链接可被多人使用，同样的项目权限会应用到每位通过该链接加入的人。加入后仍可在「成员与角色」中调整。</div>
       <div class="grant-list" id="inviteGrantList"><div class="foot-note">加载中…</div></div>
       <div class="grant-summary" id="inviteGrantSummary"></div>
     </div>

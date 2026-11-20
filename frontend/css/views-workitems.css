@@ -85,28 +85,30 @@ body[data-view="board"] .filterbar{border-radius:11px 11px 0 0;border-bottom-col
 .board-col{
   flex:1 1 0;min-width:184px;max-width:var(--board-col-w);height:100%;min-height:0;
   display:flex;flex-direction:column;position:relative;
-  background:var(--surface-sunken);border-radius:var(--r-lg);
-  padding:var(--space-2);
+  background:transparent;border-radius:var(--r-lg);
+  padding:0;
   transition:background var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
 }
 .board-col.drop-active{background:var(--primary-soft);box-shadow:inset 0 0 0 1px var(--primary-border);}
+/* 折叠列只剩一条窄轨，需要底色才看得出可点区域 */
+.board-col.collapsed{background:var(--surface-sunken);}
 .board-col-head{
-  flex:0 0 auto;display:flex;align-items:center;gap:var(--space-2);height:36px;padding:0 6px;
+  flex:0 0 auto;display:flex;align-items:center;gap:var(--space-2);height:32px;padding:0 4px;
 }
 .col-dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;}
 .col-name{
   flex:0 1 auto;min-width:0;
-  font-size:13px;font-weight:650;color:var(--text);letter-spacing:-.01em;
+  font-size:12.5px;font-weight:650;color:var(--text-2);letter-spacing:-.01em;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;
 }
 .col-name-edit{
-  width:100%;height:24px;padding:0 6px;font-size:13px;font-weight:650;
+  width:100%;height:24px;padding:0 6px;font-size:12.5px;font-weight:650;
   border:1px solid var(--primary);border-radius:var(--r-xs);background:var(--surface);color:var(--text);
 }
 .col-count-btn{
   flex:0 0 auto;min-width:26px;height:20px;padding:0 6px;border-radius:var(--r-pill);
   border:1px solid transparent;background:transparent;
-  color:var(--text-3);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;
+  color:var(--text-3);font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;
   font-family:inherit;line-height:1;
   transition:color var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);
 }
@@ -127,6 +129,13 @@ body[data-view="board"] .filterbar{border-radius:11px 11px 0 0;border-bottom-col
   flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
   display:flex;flex-direction:column;gap:var(--space-2);padding:2px 0 8px;min-height:60px;
 }
+/* 卡片对齐原型 kcard：9px 圆角、10px 内边距、轻投影；标题与列表行同字号，避免看板比列表大一档 */
+.board-col .card{
+  border-radius:9px;padding:10px 10px 10px 13px;box-shadow:var(--shadow-xs);
+}
+.board-col .card::before{border-radius:9px 0 0 9px;}
+.board-col .card-title{font-size:12.5px;line-height:19px;}
+.board-col .card-desc{font-size:12px;line-height:18px;}
 .board-col-body.loading-more::after{
   content:"加载中…";display:block;text-align:center;padding:10px 0 2px;
   color:var(--text-3);font-size:12px;
@@ -196,7 +205,7 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
   align-items:center;gap:var(--space-2);
 }
 .list-head{
-  height:34px;padding:0 12px;background:#F9FAFB;
+  height:34px;padding:0 12px;background:var(--tbl-head);
   border-bottom:1px solid var(--border);
   font-size:11px;font-weight:550;color:var(--text-3);
   position:sticky;top:0;z-index:5;
@@ -249,7 +258,7 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 /* ===================== 6.4.1 树形大纲 ===================== */
 /* 行结构复用 .list-row 的单元格样式（.lr-t / .cell / .progress），树形只补缩进与节点样式 */
 .tree-head,.tree-row{gap:var(--space-2)}
-.tree-head{display:grid;align-items:center;height:34px;padding:0 12px;background:#F9FAFB;border-bottom:1px solid var(--border);font-size:11px;font-weight:550;color:var(--text-3);position:sticky;top:0;z-index:5}
+.tree-head{display:grid;align-items:center;height:34px;padding:0 12px;background:var(--tbl-head);border-bottom:1px solid var(--border);font-size:11px;font-weight:550;color:var(--text-3);position:sticky;top:0;z-index:5}
 .tree-head>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 列表的 .lr-task 是纵向双行布局（标题+副行），树形里缩进与节点徽标要与标题同行：强制横向 */
 .tree-row .lr-task{flex-direction:row;align-items:center;gap:var(--space-2);min-width:0}
@@ -292,7 +301,6 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 #view-chain .view-page{display:flex;flex-direction:column;height:100%}
 #view-chain .chain-picker-btn{max-width:320px}
 #view-chain .chain-picker-btn #btnChainPickText{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-#view-chain #chainDir button.on{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft)}
 #view-chain .chain-scroll{flex:1;overflow:auto;margin-top:12px}
 .chain-body{max-width:760px}
 .ch-sec{margin-bottom:4px}

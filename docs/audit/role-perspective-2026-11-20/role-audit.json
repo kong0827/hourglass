@@ -1,0 +1,847 @@
+{
+  "base": "http://127.0.0.1:8081/hourglass",
+  "ws": "SXk01",
+  "roles": {
+    "admin": {
+      "wsName": "运营研发中心",
+      "wsKind": "共享 · 10 人 · 管理员",
+      "role": "admin",
+      "user": "admin",
+      "nav": [
+        "我的工作",
+        "消息中心",
+        "周回顾",
+        "需求池",
+        "项目",
+        "版本",
+        "交付说明",
+        "分支",
+        "工作项",
+        "文档",
+        "测试",
+        "报表",
+        "成员负载",
+        "逾期与阻塞",
+        "设置"
+      ],
+      "subs": [],
+      "tabs": [
+        "待我处理30",
+        "我发起的4",
+        "我关注的0"
+      ],
+      "sections": [
+        "待我评审的需求",
+        "我带的测试",
+        "我负责的开发"
+      ],
+      "setTabs": [],
+      "viewTitle": "我的工作",
+      "brandSub": "运营研发中心/我的工作",
+      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 12:42 更新",
+      "newBtnVisible": true,
+      "newBtnText": "新建",
+      "readOnlyMarks": 0,
+      "bodyRole": "admin",
+      "projCount": 0,
+      "projRows": [],
+      "shots": [
+        "docs/audit/role-perspective-2026-11-20/shots/1440-admin-mine.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-admin-projects.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-admin-settings.png",
+        "docs/audit/role-perspective-2026-11-20/shots/390-admin-mine.png"
+      ],
+      "projects": {
+        "total": 24,
+        "rows": [
+          {
+            "name": "外接",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "主机托管",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "程序化报备",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "流程引擎基础功能",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "合规管理",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "提高出金比例",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "中金所套保额度申请",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "流程引擎-公共",
+            "tags": [
+              "公共",
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "资金通",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "风控与合规",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "报表服务",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "API开放平台",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "消息中心",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "AI知识库",
+            "tags": [
+              "已搁置"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "小程序平台化",
+            "tags": [
+              "已搁置"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "技术平台",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "沙漏",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261118153058",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119131625",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119133228",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119135221",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119174357",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119175639",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119224905",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          }
+        ],
+        "empty": "",
+        "primaryBtns": []
+      },
+      "settings": {
+        "tabs": [
+          "空间",
+          "成员与角色",
+          "项目可见范围",
+          "工作流",
+          "通知与集成",
+          "数据与审计",
+          "平台"
+        ],
+        "disabledCount": 0,
+        "hint": "基于本页数据生成可直接发出的周报，不编造数字。",
+        "roleGuide": false
+      },
+      "mobile": {
+        "tabs": [
+          "待我处理30",
+          "我发起的4",
+          "我关注的0",
+          "团队"
+        ],
+        "fab": "",
+        "bodyWidth": 390,
+        "innerWidth": 390
+      },
+      "mode": "real"
+    },
+    "member": {
+      "wsName": "运营研发中心",
+      "wsKind": "共享 · 10 人",
+      "role": "member",
+      "user": "admin",
+      "nav": [
+        "我的工作",
+        "消息中心",
+        "周回顾",
+        "需求池",
+        "项目",
+        "版本",
+        "交付说明",
+        "分支",
+        "工作项",
+        "文档",
+        "测试",
+        "报表",
+        "成员负载",
+        "逾期与阻塞",
+        "设置"
+      ],
+      "subs": [],
+      "tabs": [
+        "待我处理30",
+        "我发起的4",
+        "我关注的0"
+      ],
+      "sections": [
+        "我负责的开发",
+        "我带的测试",
+        "待我评审的需求"
+      ],
+      "setTabs": [],
+      "viewTitle": "我的工作",
+      "brandSub": "运营研发中心/我的工作",
+      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 12:42 更新",
+      "newBtnVisible": true,
+      "newBtnText": "新建",
+      "readOnlyMarks": 0,
+      "bodyRole": "member",
+      "projCount": 0,
+      "projRows": [],
+      "shots": [
+        "docs/audit/role-perspective-2026-11-20/shots/1440-member-mine.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-member-projects.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-member-settings.png",
+        "docs/audit/role-perspective-2026-11-20/shots/390-member-mine.png"
+      ],
+      "projects": {
+        "total": 24,
+        "rows": [
+          {
+            "name": "外接",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "主机托管",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "程序化报备",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "流程引擎基础功能",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "合规管理",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "提高出金比例",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "中金所套保额度申请",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "流程引擎-公共",
+            "tags": [
+              "公共",
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "资金通",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "风控与合规",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "报表服务",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "API开放平台",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "消息中心",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "AI知识库",
+            "tags": [
+              "已搁置"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "小程序平台化",
+            "tags": [
+              "已搁置"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "技术平台",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "沙漏",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261118153058",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119131625",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119133228",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119135221",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119174357",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119175639",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119224905",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          }
+        ],
+        "empty": "",
+        "primaryBtns": []
+      },
+      "settings": {
+        "tabs": [
+          "空间",
+          "成员与角色",
+          "工作流",
+          "通知与集成",
+          "数据与审计",
+          "平台"
+        ],
+        "disabledCount": 0,
+        "hint": "基于本页数据生成可直接发出的周报，不编造数字。",
+        "roleGuide": false
+      },
+      "mobile": {
+        "tabs": [
+          "待我处理30",
+          "我发起的4",
+          "我关注的0"
+        ],
+        "fab": "",
+        "bodyWidth": 390,
+        "innerWidth": 390
+      },
+      "mode": "simulated"
+    },
+    "viewer": {
+      "wsName": "运营研发中心",
+      "wsKind": "共享 · 10 人 · 查看者（只读）",
+      "role": "viewer",
+      "user": "admin",
+      "nav": [
+        "我的工作",
+        "消息中心",
+        "周回顾",
+        "需求池",
+        "项目",
+        "版本",
+        "交付说明",
+        "分支",
+        "工作项",
+        "文档",
+        "测试",
+        "报表",
+        "成员负载",
+        "逾期与阻塞",
+        "设置"
+      ],
+      "subs": [],
+      "tabs": [
+        "待我处理30",
+        "我发起的4",
+        "我关注的0"
+      ],
+      "sections": [
+        "我负责的开发",
+        "我带的测试",
+        "待我评审的需求"
+      ],
+      "setTabs": [],
+      "viewTitle": "我的工作",
+      "brandSub": "运营研发中心/我的工作",
+      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 12:42 更新",
+      "newBtnVisible": false,
+      "newBtnText": "新建",
+      "readOnlyMarks": 1,
+      "bodyRole": "viewer",
+      "projCount": 0,
+      "projRows": [],
+      "shots": [
+        "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-mine.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-projects.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-settings.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-board.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-test.png",
+        "docs/audit/role-perspective-2026-11-20/shots/390-viewer-mine.png"
+      ],
+      "projects": {
+        "total": 24,
+        "rows": [
+          {
+            "name": "外接",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "主机托管",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "程序化报备",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "流程引擎基础功能",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "合规管理",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "提高出金比例",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "中金所套保额度申请",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "流程引擎-公共",
+            "tags": [
+              "公共",
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "资金通",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "风控与合规",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "报表服务",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "API开放平台",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "消息中心",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "AI知识库",
+            "tags": [
+              "已搁置"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "小程序平台化",
+            "tags": [
+              "已搁置"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "技术平台",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "沙漏",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261118153058",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119131625",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119133228",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119135221",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119174357",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119175639",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261119224905",
+            "tags": [
+              "进行中"
+            ],
+            "hasNew": true,
+            "more": true
+          }
+        ],
+        "empty": "",
+        "primaryBtns": []
+      },
+      "settings": {
+        "tabs": [
+          "空间",
+          "成员与角色",
+          "工作流",
+          "通知与集成",
+          "数据与审计",
+          "平台"
+        ],
+        "disabledCount": 0,
+        "hint": "基于本页数据生成可直接发出的周报，不编造数字。",
+        "roleGuide": false
+      },
+      "viewerAttempt": {
+        "newVisible": false,
+        "newDisplay": "none",
+        "colAddVisible": 5,
+        "cardAddVisible": 5,
+        "inlineInputVisible": false,
+        "toast": ""
+      },
+      "viewerTest": {
+        "caseNew": [],
+        "defNew": [],
+        "planNew": [
+          "新建计划"
+        ]
+      },
+      "mobile": {
+        "tabs": [
+          "待我处理30",
+          "我发起的4",
+          "我关注的0"
+        ],
+        "fab": "",
+        "bodyWidth": 390,
+        "innerWidth": 390
+      },
+      "mode": "simulated"
+    }
+  }
+}

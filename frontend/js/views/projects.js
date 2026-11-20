@@ -45,6 +45,8 @@ var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
     psPlanStart = $("psPlanStart"), psPlanEnd = $("psPlanEnd"), psStatus = $("psStatus"),
     btnSaveProjectSet = $("btnSaveProjectSet"), projectSetFormTitle = $("projectSetFormTitle");
 var showArchived = false;
+/* 列表范围 / 分组 / 搜索：与原型 toolbar 一一对应，只影响列表，不改项目数据 */
+var projScope = "all", projGroupMode = "set", projKeyword = "";
 /* 项目集折叠：只影响本项目列表的展示，不影响筛选与统计 */
 var setCollapsed = {};
 try{ setCollapsed = JSON.parse(localStorage.getItem("hg.setCollapsed") || "{}") || {}; }catch(e){ setCollapsed = {}; }
@@ -75,10 +77,50 @@ function loadReleasePolicy(reqId){
   });
 }
 function visibleReqs(){
-  return rt.reqList.filter(function(r){ return showArchived || !r.archivedAt; });
+  var kw = String(projKeyword || "").trim().toLowerCase();
+  var me = rt.currentUser && rt.currentUser.id;
+  return rt.reqList.filter(function(r){
+    if(!showArchived && r.archivedAt) return false;
+    if(projScope === "mine" && (!me || r.ownerUserId !== me)) return false;
+    if(kw && String(r.name || "").toLowerCase().indexOf(kw) === -1) return false;
+    return true;
+  });
 }
 function archivedCount(){
   return rt.reqList.filter(function(r){ return !!r.archivedAt; }).length;
+}
+/* 页头范围：标题右边给出「N 个 · M 组」，与原型保持一致；
+   项目集 / 项目入口落在页头右侧，工具栏只保留筛选与视图切换 */
+function groupCountOf(list){
+  var seen = {}, n = 0, loose = false;
+  list.forEach(function(r){
+    if(!r.setId){ loose = true; return; }
+    if(!seen[r.setId]){ seen[r.setId] = 1; n++; }
+  });
+  return n + (loose ? 1 : 0);
+}
+function syncProjectsPageHead(list){
+  var t = $("pageTitleText");
+  if(t) t.textContent = "项目";
+  var pill = $("pagePill");
+  if(pill){
+    pill.hidden = false;
+    pill.textContent = list.length + " 个 · " + groupCountOf(list) + " 组";
+  }
+  var sub = $("pageSub");
+  if(sub) sub.textContent = ((rt.currentWs && rt.currentWs.name) ? rt.currentWs.name + " / " : "") + "项目";
+  var acts = $("pageActions");
+  if(acts){
+    var html = (canManageSets() ? '<button class="btn" type="button" data-proj-new-set>新建项目集</button>' : "")
+      + '<button class="btn primary" type="button" data-proj-new>' + icon("plus", 14) + '新建项目</button>';
+    if(acts.dataset.projActs !== html){
+      acts.dataset.projActs = html;
+      acts.innerHTML = html;
+    }
+    acts.hidden = false;
+  }
+  var nw = $("newWrap");
+  if(nw) nw.hidden = true;
 }
 function projectSortValue(r, key){
   if(key === "name" || key === "description") return r[key] || null;
@@ -462,7 +504,8 @@ function sortSetRows(rows){
   });
 }
 function groupedProjects(list){
-  if(!(rt.projectSets || []).length){
+  /* 平铺：保持同一份卡片结构，只是不插入项目集表头 */
+  if(projGroupMode === "flat" || !(rt.projectSets || []).length){
     return [{ set:null, rows:list, ungrouped:true, header:false }];
   }
   var buckets = {};
@@ -766,9 +809,8 @@ function renderReqSumm(list){
     return;
   }
   var agg = projectSetSummary(list);
-  var sets = {};
-  list.forEach(function(r){ if(r.setId) sets[r.setId] = 1; });
   var noRel = list.filter(function(r){ return !r.firstReleasedAt; }).length;
+  var releasedN = list.length - noRel;
   var riskN = list.filter(function(r){
     var rk = projectRiskByReq[r.id];
     return !!(rk && (rk.overdue || rk.blocked || rk.stagnant));
@@ -776,20 +818,28 @@ function renderReqSumm(list){
   var banner = $("projNoRelBanner");
   if(banner){
     banner.hidden = !noRel;
-    if(noRel) $("projNoRelText").textContent = noRel + " 个项目未标记首版，首版投入与准时完成率无法统计。";
+    if(noRel) $("projNoRelText").innerHTML = "<b>" + noRel + " 个项目未标记首版</b>，导致首版投入与准时率无法统计。";
   }
-  var stats = [
-    ["项目", String(list.length), "", Object.keys(sets).length + " 个分组"],
-    ["首版投入", fmtMinutesShort(agg.mvp), "", noRel ? noRel + " 个未标记首版" : "已全部标记"],
-    ["迭代投入", fmtMinutesShort(agg.post), "", "窗口内 · 近 4 周"],
-    ["准时完成率", agg.onTimePct === null ? "—" : agg.onTimePct + "%", "按带截止日期的已完成工作项", ""],
-    ["风险项目", String(riskN), "逾期 / 阻塞 / 停滞的项目数", "逾期或超载"]
+  /* 首版未标齐就不给一个看似完整的投入数：写清原因并就地给出口；
+     准时率还需要足够的已交付版本才有统计意义，不足 3 个同样留空 */
+  var mvpValue = noRel ? "—" : fmtMinutesShort(agg.mvp);
+  var mvpFoot = noRel
+    ? noRel + ' 个未标记首版 · <button class="link-btn" type="button" data-proj-mark-mvp>去标记</button>'
+    : "已全部标记";
+  var onTimeValue = (noRel || releasedN < 3 || agg.onTimePct === null) ? "—" : agg.onTimePct + "%";
+  var onTimeFoot = (noRel || releasedN < 3) ? "需至少 3 个已交付版本" : "按带截止日期的已完成工作项";
+  var cells = [
+    { k:"项目", v:esc(String(list.length)), foot:esc(groupCountOf(list) + " 个分组") },
+    { k:"首版投入", v:esc(mvpValue), cls:noRel ? "is-zero" : "", foot:mvpFoot },
+    { k:"迭代投入", v:esc(fmtMinutesShort(agg.post)), foot:"窗口内 · 近 4 周" },
+    { k:"准时完成率", v:esc(onTimeValue), cls:onTimeValue === "—" ? "is-zero" : "", foot:onTimeFoot },
+    { k:"风险项目", v:esc(String(riskN)), cls:riskN ? "is-warn" : "", foot:"逾期或超载", title:"逾期 / 阻塞 / 停滞的项目数" }
   ];
   el.hidden = false;
-  el.innerHTML = stats.map(function(s){
-    return '<div class="stat"><div class="stat-k">' + esc(s[0]) + '</div>' +
-      '<div class="stat-v"' + (s[2] ? ' title="' + esc(s[2]) + '"' : '') + '>' + esc(s[1]) + '</div>' +
-      (s[3] ? '<div class="stat-sub">' + esc(s[3]) + '</div>' : '') + '</div>';
+  el.innerHTML = cells.map(function(s){
+    return '<div class="stat"><div class="stat-k">' + esc(s.k) + '</div>' +
+      '<div class="stat-v' + (s.cls ? " " + s.cls : "") + '"' + (s.title ? ' title="' + esc(s.title) + '"' : '') + '>' + s.v + '</div>' +
+      '<div class="stat-sub">' + s.foot + '</div></div>';
   }).join("");
 }
 /* 拖拽中的「移出项目集」落点：平时隐藏，开始拖动后才出现 */
@@ -802,19 +852,30 @@ function renderReqList(){
   var list = sortedProjects(visibleReqs());
   var countEl = $("reqCount");
   if(countEl) countEl.textContent = list.length ? "共 " + list.length + " 个" : "";
+  syncProjectsPageHead(list);
   renderReqSumm(list);
   syncArchivedToggle();
   document.querySelectorAll("[data-project-mode]").forEach(function(b){
     var on = b.dataset.projectMode === listPrefs.viewMode("project-list");
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
+  document.querySelectorAll("[data-proj-scope]").forEach(function(b){
+    b.setAttribute("aria-pressed", b.dataset.projScope === projScope ? "true" : "false");
+  });
+  document.querySelectorAll("[data-proj-group]").forEach(function(b){
+    b.setAttribute("aria-pressed", b.dataset.projGroup === projGroupMode ? "true" : "false");
+  });
+  var searchEl = $("projSearch");
+  if(searchEl && document.activeElement !== searchEl) searchEl.value = projKeyword;
   if($("btnProjectColumns")) $("btnProjectColumns").hidden = listPrefs.viewMode("project-list") !== "table";
   if(!list.length){
     reqListEl.className = "req-list";
-    reqListEl.innerHTML = (showArchived || !archivedCount()) ? emptyProjectsState() : UI.emptyState({
-      icon:"folder", title:"全部项目已归档",
-      text:"点上方「显示已归档」查看或恢复已归档项目。"
-    });
+    reqListEl.innerHTML = (projKeyword.trim() || projScope === "mine")
+      ? UI.emptyState({ icon:"search", title:"没有匹配的项目", text:"换个关键词，或把范围切回「全部」。" })
+      : (showArchived || !archivedCount()) ? emptyProjectsState() : UI.emptyState({
+        icon:"folder", title:"全部项目已归档",
+        text:"点上方「显示已归档」查看或恢复已归档项目。"
+      });
     return;
   }
   if(listPrefs.viewMode("project-list") === "table"){
@@ -822,6 +883,8 @@ function renderReqList(){
     return;
   }
   reqListEl.className = "req-list is-cards";
+  /* 卡片对齐原型：名称 / 状态、计划与负责人、进度条、计数与百分比四行；
+     描述、工时构成、新建工作项等低频内容收进展开区，避免每张卡都把列表撑高 */
   function reqItemHTML(r){
     var open = !!reqExpanded[r.id];
     var readOnly = r.access === "read";
@@ -833,16 +896,20 @@ function renderReqList(){
           (Number(d.taskCount) ? (" · " + Number(d.doneCount || 0) + "/" + Number(d.taskCount) + " 工作项") : "") +
         '</span></button>';
     }).join("") : '<p class="foot-note" style="margin:4px 0">还没有文档。</p>';
+    var rk = projectRiskByReq[r.id] || {};
+    var overdue = Number(rk.overdue) || 0;
+    var pct = Math.max(0, Math.min(100, Number(r.progressPct) || 0));
+    var total = Number(r.taskCount) || 0, done = Number(r.doneCount) || 0;
+    var range = planRange(r), owner = ownerLabelOf(r);
+    var barColor = r.status === "done" ? "var(--success)" : (overdue ? "var(--warning)" : "");
     return '<div class="req-item' + (rt.editingReqId === r.id ? " editing" : "") +
         (open ? " is-open" : "") +
+        (!total ? " is-empty" : "") +
         (r.setId ? " req-item-in-set" : "") +
         (r.containerKind ? " req-item-container" : "") + '" data-req-id="' + esc(r.id) + '" data-set-id="' + esc(r.setId || "") + '"' +
         projectSetColorStyleOf(r.setId) +
         (r.containerKind ? ' title="拆分后的公共容器：承接版本、发布与文档"' : '') + '>' +
       '<div class="req-top">' +
-        (reorderEnabled() ? reqDragHTML(r.id) : "") +
-        '<button class="icon-btn sm req-expand-btn' + (open ? " on" : "") + '" type="button" data-req-expand="' + esc(r.id) + '" aria-expanded="' + open + '" title="展开项目详情">' +
-          icon("chevronRight", 14) + '</button>' +
         '<button class="req-name req-name-btn" type="button" data-req-cockpit="' + esc(r.id) + '" title="打开项目驾驶舱">' + esc(r.name) + '</button>' +
         '<span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' +
           reqStatusName(r.status) + '</span>' +
@@ -851,34 +918,45 @@ function renderReqList(){
         (r.containerKind ? '<span class="tag tag-ghost" title="承接版本、发布与文档的公共容器">公共</span>' : '') +
         (readOnly ? '<span class="tag tag-ghost" title="你对该项目只有查看权限">只读</span>' : '') +
         '<span class="req-acts">' +
+          (reorderEnabled() ? reqDragHTML(r.id) : "") +
+          '<button class="icon-btn sm req-expand-btn' + (open ? " on" : "") + '" type="button" data-req-expand="' + esc(r.id) + '" aria-expanded="' + open + '" title="展开项目详情">' +
+            icon("chevronRight", 14) + '</button>' +
           '<button class="icon-btn sm" type="button" data-project-more="' + esc(r.id) + '" title="更多操作" aria-label="更多操作" aria-haspopup="menu" aria-expanded="false">' + icon("more", 14) + '</button>' +
         '</span>' +
       '</div>' +
-      (r.description ? '<div class="req-desc">' + esc(r.description) + '</div>' : '') +
-      '<div class="req-meta">' +
-        '<span class="req-meta-k">进度</span>' +
-        '<span class="progress" style="width:140px"><span class="bar"><i style="width:' + r.progressPct +
-          '%;background:' + (r.status === "done" ? "var(--success)" : "var(--primary)") + '"></i></span></span>' +
-        '<span style="font-weight:600;color:var(--text-2)">' + r.progressPct + '%</span>' +
-        caliberMarkHTML("projects.progress", false, "查看「项目进度」口径") +
-        '<span>' + r.taskCount + ' 工作项 · ' + r.doneCount + ' 完成' +
-          (Number(r.docCount) ? (' · ' + r.docCount + ' 文档') : '') + '</span>' +
+      '<div class="pf-meta-line" title="计划起止 · 项目负责人">' +
+        '<span>' + esc(range || "未排期") + '</span><span aria-hidden="true">·</span><span>负责人 ' + esc(owner || "—") + '</span>' +
       '</div>' +
-      reqPhaseHTML(r) +
-      (function(){
-        var bits = [];
-        if(r.ownerUserId) bits.push('<span class="req-profile-item"><i class="req-profile-label">负责人</i>' + esc(ownerLabelOf(r)) + '</span>');
-        var range = planRange(r);
-        if(range) bits.push('<span class="req-profile-item"><i class="req-profile-label">计划</i>' + esc(range) + '</span>');
-        if(r.objective) bits.push('<span class="req-profile-item req-profile-goal" title="' + esc(r.objective) + '"><i class="req-profile-label">目标</i>' + esc(r.objective) + '</span>');
-        return bits.length ? '<div class="req-profile">' + bits.join("") + '</div>' : '';
-      })() +
-      (readOnly ? '' : '<div class="req-taskbar">' +
-        '<button class="req-quick-trigger" type="button" data-req-quick="' + esc(r.id) + '">＋ 新建工作项</button>' +
-        '<input type="text" maxlength="60" data-req-new-input="' + esc(r.id) + '"' +
-          ' placeholder="在此项目下新建工作项，回车确认" aria-label="在项目 ' + esc(r.name) + ' 下新建工作项" />' +
-      '</div>') +
+      '<div class="pf-prog" role="img" aria-label="完成度 ' + pct + '%"><i style="width:' + pct + '%' + (barColor ? ";background:" + barColor : "") + '"></i></div>' +
+      '<div class="pf-foot"><span>' + done + ' / ' + total + ' 工作项</span>' +
+        (overdue ? '<span class="pf-pct over" title="该项目未完成工作项中已逾期 ' + overdue + ' 项">' + overdue + ' 项逾期</span>'
+          : '<span class="pf-pct">' + pct + '%</span>') + '</div>' +
       (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
+        '<section class="req-expand-section pf-expand-summary">' +
+          (r.description ? '<div class="req-desc">' + esc(r.description) + '</div>' : '') +
+          '<div class="req-meta">' +
+            '<span class="req-meta-k">进度</span>' +
+            '<span class="progress" style="width:140px"><span class="bar"><i style="width:' + pct +
+              '%;background:' + (r.status === "done" ? "var(--success)" : "var(--primary)") + '"></i></span></span>' +
+            '<span style="font-weight:600;color:var(--text-2)">' + pct + '%</span>' +
+            caliberMarkHTML("projects.progress", false, "查看「项目进度」口径") +
+            '<span>' + total + ' 工作项 · ' + done + ' 完成' +
+              (Number(r.docCount) ? (' · ' + r.docCount + ' 文档') : '') + '</span>' +
+          '</div>' +
+          reqPhaseHTML(r) +
+          (function(){
+            var bits = [];
+            if(r.ownerUserId) bits.push('<span class="req-profile-item"><i class="req-profile-label">负责人</i>' + esc(ownerLabelOf(r)) + '</span>');
+            if(range) bits.push('<span class="req-profile-item"><i class="req-profile-label">计划</i>' + esc(range) + '</span>');
+            if(r.objective) bits.push('<span class="req-profile-item req-profile-goal" title="' + esc(r.objective) + '"><i class="req-profile-label">目标</i>' + esc(r.objective) + '</span>');
+            return bits.length ? '<div class="req-profile">' + bits.join("") + '</div>' : '';
+          })() +
+          (readOnly ? '' : '<div class="req-taskbar">' +
+            '<button class="req-quick-trigger" type="button" data-req-quick="' + esc(r.id) + '">＋ 新建工作项</button>' +
+            '<input type="text" maxlength="60" data-req-new-input="' + esc(r.id) + '"' +
+              ' placeholder="在此项目下新建工作项，回车确认" aria-label="在项目 ' + esc(r.name) + ' 下新建工作项" />' +
+          '</div>') +
+        '</section>' +
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>文档</span>' +
             (readOnly ? '' : '<button class="btn sm add" type="button" data-doc-new="' + esc(r.id) + '">+ 新建文档</button>') + '</div>' +
@@ -1032,6 +1110,7 @@ function enterProjectsView(){
   loadProjectTemplates();
   syncProjectSetOptions();
   if(btnProjectSetNew) btnProjectSetNew.hidden = !canManageSets();
+  syncProjectsPageHead(visibleReqs());
   loadProjectSets();
   if(rt.reqsLoaded) renderReqList();
   else reqListEl.innerHTML = UI.skeletonRows(3);
@@ -1460,6 +1539,33 @@ function openProjectDialog(id){
 }
 if($("btnReqNew")) $("btnReqNew").addEventListener("click", function(){ openProjectDialog(null); });
 if(btnProjectSetNew) btnProjectSetNew.addEventListener("click", function(){ openProjectSetDialog(null); });
+/* 页头两个动作由 router 统一清空，委托在容器上，切页后仍能接管 */
+if($("pageActions")) $("pageActions").addEventListener("click", function(e){
+  if(e.target.closest("[data-proj-new]")){ openProjectDialog(null); return; }
+  if(e.target.closest("[data-proj-new-set]")){ openProjectSetDialog(null); }
+});
+/* 工具栏：范围 / 分组 / 搜索只改列表视图，不触发服务端请求 */
+var projToolbar = document.querySelector("#view-projects .project-toolbar");
+if(projToolbar){
+  projToolbar.addEventListener("click", function(e){
+    var scope = e.target.closest("[data-proj-scope]");
+    if(scope){
+      if(projScope !== scope.dataset.projScope){ projScope = scope.dataset.projScope; renderReqList(); }
+      return;
+    }
+    var group = e.target.closest("[data-proj-group]");
+    if(group){
+      if(projGroupMode !== group.dataset.projGroup){ projGroupMode = group.dataset.projGroup; renderReqList(); }
+    }
+  });
+}
+if($("projSearch")) $("projSearch").addEventListener("input", function(){
+  projKeyword = this.value || "";
+  renderReqList();
+});
+if($("reqSumm")) $("reqSumm").addEventListener("click", function(e){
+  if(e.target.closest("[data-proj-mark-mvp]")) showView("phase");
+});
 if(btnSaveProjectSet) btnSaveProjectSet.addEventListener("click", saveProjectSet);
 if($("dlgProjectSetX")) $("dlgProjectSetX").addEventListener("click", closeProjectSetDialog);
 if($("psCancel")) $("psCancel").addEventListener("click", closeProjectSetDialog);

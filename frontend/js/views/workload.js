@@ -97,6 +97,7 @@ function workloadWorkspace(){ return rt.currentWs && rt.currentWs.id || ""; }
 function enterWorkloadView(){
   memberUi.key = routeMemberKey();
   memberUi.openedHere = false;
+  syncWorkloadPageHead();
   if(rt.reqsLoaded) loadWorkload(); else loadReqs().then(loadWorkload);
 }
 ["ds:project-roles-changed","ds:member-company-changed","ds:member-job-title-changed","ds:member-label-options-changed","ds:member-roster-changed"].forEach(function(name){
@@ -153,13 +154,30 @@ function workloadFiltersHTML(){
   }
   return html;
 }
+function workloadPageActionsHTML(){
+  var disabled = loading || !cache ? ' disabled' : '';
+  return '<button class="btn" type="button" data-load-export' + disabled + '>' + icon("download", 14) + '导出 CSV</button>'
+    + fullscreenButtonHTML();
+}
+/* 页头按原型：H1=成员负载，导出与全屏在标题行右端；手机页头折叠时退回工具条按钮 */
+function syncWorkloadPageHead(){
+  if(document.body.dataset.view !== "workload") return;
+  var title = $("pageTitleText"), sub = $("pageSub"), acts = $("pageActions"), nw = $("newWrap");
+  if(title) title.textContent = "成员负载";
+  if(sub) sub.textContent = "负载按剩余预估 · 工时按时间范围";
+  if(acts){ acts.innerHTML = workloadPageActionsHTML(); acts.hidden = false; }
+  if(nw) nw.hidden = true;
+  document.title = "成员负载 · 沙漏";
+}
 function workloadToolbar(){
   /* 页头 h1 已经是「成员负载」：面板里不再重复一次同名标题 */
-  return '<div class="manager-toolbar"><div class="manager-actions"><div class="seg mini wl-mode">'
-    + '<button type="button" data-load-mode="person" aria-pressed="' + (viewMode === 'person') + '"' + (loading || !cache ? ' disabled' : '') + '>按人</button>'
-    + '<button type="button" data-load-mode="week" aria-pressed="' + (viewMode === 'week') + '"' + (loading || !cache ? ' disabled' : '') + '>按周</button>'
-    + '</div><button class="btn sm" type="button" data-load-export' + (loading || !cache ? ' disabled' : '') + '>' + icon("download", 13) + ' 导出当前范围 CSV</button>'
-    + fullscreenButtonHTML() + '</div></div>' + workloadFiltersHTML();
+  var disabled = loading || !cache ? ' disabled' : '';
+  return '<div class="manager-toolbar manager-tools-card wl-tools"><div class="wl-tools-head"><div class="seg mini wl-mode">'
+    + '<button type="button" data-load-mode="person" aria-pressed="' + (viewMode === 'person') + '"' + disabled + '>按人</button>'
+    + '<button type="button" data-load-mode="week" aria-pressed="' + (viewMode === 'week') + '"' + disabled + '>按周</button>'
+    + '</div><div class="manager-actions manager-actions-mobile">'
+    + '<button class="btn sm" type="button" data-load-export' + disabled + '>' + icon("download", 13) + ' 导出当前范围 CSV</button>'
+    + fullscreenButtonHTML() + '</div></div>' + workloadFiltersHTML() + '</div>';
 }
 function loadWorkload(opts){
   opts = opts || {};
@@ -174,13 +192,13 @@ function loadWorkload(opts){
   var current = ++seq, scope = Object.assign({}, workloadFilter), range = periodRange(period);
   var params = { reqId:scope.reqId || null, roleTitle:scope.roleTitle || null, companyName:scope.companyName || null };
   if(period === "days30" || period === "month"){ params.from = range.from; params.to = range.to; }
-  loading = true;
+  loading = true; syncWorkloadPageHead();
   body.innerHTML = workloadToolbar() + UI.skeletonRows(5);
   body.setAttribute("aria-busy","true");
   return API.get("/api/manager/workload", params).then(function(data){
     if(current !== seq || ws !== workloadWorkspace()) return null;
     cache = Object.assign({}, data, { scope:data.scope || scope }); workloadOptions = data.filterOptions || {}; loading = false;
-    body.setAttribute("aria-busy","false");
+    body.setAttribute("aria-busy","false"); syncWorkloadPageHead();
     if(memberUi.key && !memberByKey(memberUi.key)){
       memberUi.key = ""; syncMemberHash("", false);
     }
@@ -190,7 +208,7 @@ function loadWorkload(opts){
     if(scope.reqId && (ex.code === 403 || ex.code === 404)){
       workloadFilter.reqId = ""; toast("所选项目已不可访问，已切换为全部项目", "warn"); return loadWorkload(opts);
     }
-    cache = null; loading = false; body.setAttribute("aria-busy","false");
+    cache = null; loading = false; body.setAttribute("aria-busy","false"); syncWorkloadPageHead();
     body.innerHTML = workloadToolbar() + UI.errorState(ex.message || "加载失败，请重试"); return null;
   });
 }
@@ -1050,6 +1068,12 @@ if($("workloadBody")) $("workloadBody").addEventListener("keydown", function(e){
   if(!target || e.target !== target) return;
   e.preventDefault();
   target.click();
+});
+
+/* 页头的导出按钮与工具条里的是同一动作；手机页头折叠时只剩工具条那份 */
+if($("pageActions")) $("pageActions").addEventListener("click", function(e){
+  if(document.body.dataset.view !== "workload") return;
+  if(e.target.closest("[data-load-export]")) exportWorkloadScope();
 });
 
 window.addEventListener("hashchange", function(){

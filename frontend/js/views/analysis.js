@@ -250,6 +250,21 @@ function initAnalysisTabs(){
     period.addEventListener("change", function(){ applyAnalysisPeriod(period.value); });
   }
 }
+/* 报表三个页签共用 #view-analysis：页头标题随页签走，与原型「每屏一个 H1」一致；
+   新建入口对报表无意义，桌面与 FAB 一并隐藏。 */
+function syncAnalysisPageHead(tab){
+  if(document.body.dataset.view !== "analysis") return;
+  var meta = {
+    stats: { title:"趋势与分布", sub:"交付与投入的统计口径 · 趋势按周聚合" },
+    completions: { title:"完成记录", sub:"工作项移入「已完成」时归档 · 自 2026-11 起按月" },
+    flow: { title:"流程体检", sub:"列停留与回退按近 90 天计算" }
+  }[tab] || { title:"趋势与分布", sub:"交付与投入的统计口径 · 趋势按周聚合" };
+  var title = $("pageTitleText"), sub = $("pageSub"), nw = $("newWrap");
+  if(title) title.textContent = meta.title;
+  if(sub) sub.textContent = meta.sub;
+  if(nw) nw.hidden = true;
+  document.title = meta.title + " · 沙漏";
+}
 function setAnalysisTab(tab, opts){
   if(tab !== "completions" && tab !== "flow") tab = "stats";
   rt.analysisTab = tab;
@@ -267,6 +282,10 @@ function setAnalysisTab(tab, opts){
   document.querySelectorAll("#view-analysis [data-analysis-pane]").forEach(function(p){
     p.hidden = p.dataset.analysisPane !== tab;
   });
+  /* 完成记录按月归档，周期选择对它没有作用：本页不显示这条工具条，避免出现无效控件 */
+  var bar = document.querySelector("#view-analysis .analysis-bar");
+  if(bar) bar.hidden = tab === "completions";
+  syncAnalysisPageHead(tab);
   if(!opts || !opts.noLoad) refreshAnalysisTab(!!(opts && opts.silent));
 }
 function refreshAnalysisTab(silent){

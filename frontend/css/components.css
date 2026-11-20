@@ -3066,7 +3066,7 @@ a.att-chip-main:hover{color:var(--primary-fg);}
 /* 任意挂 bindFileDrop 的容器：拖入时统一高亮 */
 .is-dragover{outline:2px dashed var(--primary);outline-offset:-2px;border-radius:var(--r-sm);}
 
-/* 消息中心页：左范围/类型 + 右侧时间流（与原型两栏一致） */
+/* 消息中心页：左范围/类型 + 右侧时间流（与原型 p-messages 两栏一致） */
 #messagesBody{padding-top:16px;}
 .msg-page-head{align-items:flex-start;justify-content:space-between;}
 .msg-page-txt{display:flex;flex-direction:column;gap:3px;min-width:0;}
@@ -3076,35 +3076,54 @@ a.att-chip-main:hover{color:var(--primary-fg);}
   border-radius:var(--r-pill);background:var(--primary-soft);color:var(--primary-fg);font-size:12px;font-weight:600;}
 .msg-unread i{width:6px;height:6px;border-radius:50%;background:var(--primary);}
 .msg-page-sub{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);}
-.msg-layout{display:grid;grid-template-columns:238px minmax(0,1fr);gap:14px;align-items:start;}
+/* 左栏 190 + 10，与原型 .msgwrap 同宽；三张卡片保留站点移动端的横排分组 */
+.msg-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:10px;align-items:start;}
 .msg-rail{display:flex;flex-direction:column;gap:10px;}
-.msg-rail-card{padding:8px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
-.msg-rail-title{padding:4px 8px 6px;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--text-3);}
-.msg-rail-item{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:32px;
-  padding:0 8px;border:0;border-radius:var(--r-sm);background:none;font:inherit;font-size:13px;
+.msg-rail-card{padding:6px;border:1px solid var(--border);border-radius:11px;background:var(--surface);}
+.msg-rail-title{padding:8px 8px 3px;font-size:10px;font-weight:600;color:var(--text-3);}
+.msg-rail-item{display:flex;align-items:center;justify-content:space-between;gap:7px;width:100%;height:29px;
+  padding:0 8px;border:0;border-radius:6px;background:none;font:inherit;font-size:12px;
   color:var(--text-2);text-align:left;cursor:pointer;}
-.msg-rail-item:hover{background:var(--surface-hover);color:var(--text);}
+.msg-rail-item:hover{background:var(--surface-sunken);color:var(--text);}
 .msg-rail-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
-.msg-rail-item .n{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.msg-rail-item .n{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .msg-rail-item.on .n{color:var(--primary-fg);}
-.msg-rail-empty{padding:6px 8px;font-size:12px;color:var(--text-3);}
-.msg-rail-note{padding:2px 4px;font-size:11px;color:var(--text-3);line-height:1.5;}
-.msg-pane{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);overflow:hidden;}
-.msg-main-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--border);}
+.msg-rail-empty{padding:6px 8px;font-size:11.5px;color:var(--text-3);}
+.msg-rail-note{padding:2px 4px;font-size:10.5px;color:var(--text-3);line-height:1.5;}
+.msg-pane{border:1px solid var(--border);border-radius:11px;background:var(--surface);overflow:hidden;}
+/* 卡头 46：标题 13/650 + 类型快筛 27/r6，与原型 .card-head / .qchip 同规格 */
+.msg-main-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;row-gap:6px;
+  min-height:46px;padding:0 14px;border-bottom:1px solid var(--border);}
 .msg-main-head>b{font-size:13px;font-weight:650;white-space:nowrap;}
-.msg-chips{display:flex;gap:2px;flex-wrap:wrap;}
-.msg-chip{height:26px;padding:0 9px;border:1px solid transparent;border-radius:var(--r-pill);background:none;
+.msg-chips{display:flex;gap:1px;flex-wrap:wrap;}
+.msg-chip{height:27px;padding:0 9px;border:1px solid transparent;border-radius:6px;background:none;
   font:inherit;font-size:12px;color:var(--text-2);cursor:pointer;white-space:nowrap;}
-.msg-chip:hover{background:var(--surface-hover);color:var(--text);}
+.msg-chip:hover{background:var(--surface-sunken);color:var(--text);}
 .msg-chip.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
 .msg-chip .n{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .msg-chip.on .n{color:var(--primary-fg);}
-.msg-hint{margin-left:auto;font-size:12px;color:var(--text-3);}
+.msg-hint{margin-left:auto;font-size:10.5px;color:var(--text-3);}
 .msg-list .apn{border-left:0;}
+/* 消息页的行密度按原型 .msgrow：11/14、类型块 24 方角、正文 12.5、上下文与时间 10.5 */
+.msg-list .apn{padding:11px 14px;gap:10px;}
+.msg-list .apn-ic{width:24px;height:24px;border-radius:6px;background:var(--surface-sunken);
+  color:var(--text-3);font-size:10px;font-weight:700;}
+.msg-list .apn-title{font-size:12.5px;color:var(--text-2);}
+.msg-list .apn.unread .apn-title{font-weight:600;color:var(--text);}
+.msg-list .apn-body,.msg-list .apn-meta,.msg-list .apn-time{font-size:10.5px;}
+.msg-list .apn-time{text-align:right;margin-top:2px;}
+/* 原型只用未读圆点标识，不给整行铺底色；类型块读与未读都是中性底 */
+.msg-list .apn.unread{background:none;border-left-color:transparent;}
+.msg-list .apn.unread:hover{background:var(--surface-hover);filter:none;}
+.msg-list .apn.unread .apn-ic{background:var(--surface-sunken);color:var(--text-3);}
+.msg-list .apn-dot{width:5px;height:5px;margin-top:8px;}
+/* 日期分隔条：原型 .daybar 28/#F9FAFB/10.5 */
+.msg-list .ap-day{display:flex;align-items:center;height:28px;padding:0 14px;background:var(--tbl-head);
+  border-bottom:1px solid var(--surface-sunken);font-size:10.5px;font-weight:600;color:var(--text-3);}
 .msg-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:10px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);}
+  padding:10px 14px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-3);}
 .apn-time{flex:0 0 auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;margin-top:1px;}
-@media(max-width:1100px){.msg-layout{grid-template-columns:200px minmax(0,1fr);}}
+@media(max-width:1100px){.msg-layout{grid-template-columns:176px minmax(0,1fr);}}
 /* 手机：左栏横排成筛选条，正文占满宽度，避免消息正文被挤成一两个字一行 */
 @media(max-width:700px){
   .msg-layout{grid-template-columns:minmax(0,1fr);}
@@ -3112,4 +3131,6 @@ a.att-chip-main:hover{color:var(--primary-fg);}
   .msg-rail::-webkit-scrollbar{display:none;}
   .msg-rail-card{flex:1 0 168px;min-width:168px;}
   .msg-rail-note{display:none;}
+  /* 手机卡头只留标题与类型快筛，口径说明让位给内容 */
+  .msg-hint{display:none;}
 }

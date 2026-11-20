@@ -32,6 +32,7 @@ var SHELL = [
   "css/manager.css",
   "css/investment.css",
   "css/smart-table.css",
+  "css/my-work.css",
   "css/mobile.css",
   "css/assistant.css",
   "css/delivery.css",

@@ -11,4 +11,13 @@ if(body && !body.__wired){
   body.__wired = true;
   body.addEventListener("click", handleNoticeClick);
 }
+/* 页头的「通知偏好 / 全部标为已读」与正文是同一份动作；手机页头折叠时只留正文那一份 */
+var acts = $("pageActions");
+if(acts && !acts.__msgWired){
+  acts.__msgWired = true;
+  acts.addEventListener("click", function(e){
+    if(document.body.dataset.view !== "messages") return;
+    handleNoticeClick(e);
+  });
+}
 export { enterMessages as enterMessagesView };

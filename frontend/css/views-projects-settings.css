@@ -4,7 +4,7 @@
    载入顺序即原文件顺序，勿调整 index.html / app.css / sw.js 中的先后。
    ========================================================================== */
 /* ===================== 6.6 项目 ===================== */
-.proj-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:var(--space-4);align-items:start;padding-top:16px;}
+.proj-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:var(--space-4);align-items:start;padding-top:0;}
 @media (max-width:1279px){.proj-layout{grid-template-columns:1fr;}}
 .req-list{display:flex;flex-direction:column;gap:var(--space-3);}
 /* 项目集分组头：层级比项目更高——名称更大更重、带文件夹标识；
@@ -95,16 +95,27 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 .req-item:hover{box-shadow:var(--shadow-md);}
 .req-item.editing{border-color:var(--primary);box-shadow:var(--ring-focus);}
 /* 卡片视图：按项目集分组的 3 列网格；展开详情时单卡占满整行 */
-.req-list.is-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start;}
-.req-list.is-cards>.req-set-head{grid-column:1/-1;margin-top:10px;margin-bottom:-2px;}
+.req-list.is-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:start;}
+.req-list.is-cards>.req-set-head{grid-column:1/-1;min-height:0;margin:0;padding:0 2px 3px;gap:6px 8px;}
+.req-list.is-cards>.req-set-head .req-set-title{font-size:12px;}
+.req-list.is-cards>.req-set-head .req-set-title b{font-weight:650;}
+.req-list.is-cards>.req-set-head .req-set-meta{font-size:10.5px;}
+.req-list.is-cards>.req-set-head .req-set-progress{width:84px;}
 .req-list.is-cards>.proj-set-drop-end{grid-column:1/-1;}
-.req-list.is-cards>.req-item{margin-left:0;padding:12px 14px;gap:6px;min-width:0;}
+.req-list.is-cards>.req-item{margin-left:0;padding:11px 12px;gap:7px;min-width:0;min-height:108px;}
 .req-list.is-cards>.req-item.is-open{grid-column:1/-1;}
 .req-list.is-cards>.req-item-in-set::before,
 .req-list.is-cards>.req-item-in-set::after{display:none;}
 .req-list.is-cards .req-top{gap:4px 6px;flex-wrap:nowrap;}
 .req-list.is-cards .req-top .tag{flex:0 0 auto;font-size:11px;height:20px;padding:0 6px;}
-.req-list.is-cards .req-name{font-size:15px;flex:1 1 auto;min-width:0;}
+.req-list.is-cards .req-name{font-size:13px;font-weight:650;flex:0 1 auto;min-width:0;line-height:18.5px;}
+.req-list.is-cards .req-name.req-name-btn{font-size:13px;font-weight:650;line-height:18.5px;}
+.req-list.is-cards .req-acts{margin-left:auto;}
+/* 拖拽手柄悬停才出现，静态卡片保持原型「名称 + 状态 + 更多」的简洁 */
+.req-list.is-cards .req-item .req-drag{opacity:0;transition:opacity var(--dur-fast);}
+.req-list.is-cards .req-item:hover .req-drag,
+.req-list.is-cards .req-item:focus-within .req-drag{opacity:1;}
+@media (hover:none){.req-list.is-cards .req-item .req-drag{opacity:1;}}
 .req-list.is-cards .req-desc{-webkit-line-clamp:1;font-size:12px;line-height:18px;}
 .req-list.is-cards .req-meta{flex-wrap:nowrap;gap:8px;}
 .req-list.is-cards .req-meta .progress{flex:1 1 auto;width:auto;min-width:60px;}
@@ -115,6 +126,26 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 .req-list.is-cards .req-phase-bar{flex:1 1 56px;}
 .req-list.is-cards .req-phase-lg{font-size:11px;}
 .req-list.is-cards .req-taskbar{margin-top:0;}
+/* 卡片四行对齐原型：计划 · 负责人 / 4px 进度条 / 计数与百分比 */
+.pf-meta-line{display:flex;align-items:center;gap:5px;min-width:0;font-size:10.5px;line-height:15px;color:var(--text-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pf-prog{height:4px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;}
+.pf-prog>i{display:block;height:100%;border-radius:inherit;background:var(--primary);}
+.pf-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;line-height:15px;color:var(--text-3);}
+.pf-foot .pf-pct{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;}
+.pf-foot .pf-pct.over{color:var(--danger-fg);font-weight:650;}
+.req-item.is-empty{border-style:dashed;background:var(--surface-sunken);}
+.req-item.is-empty .pf-prog{background:var(--border);}
+.pf-expand-summary{gap:8px;}
+/* 展开卡里进度/工时条按固定宽度展示，不随整行拉伸 */
+.req-list.is-cards>.req-item.is-open .pf-expand-summary .req-meta .progress{flex:0 0 160px;width:160px;}
+.req-list.is-cards>.req-item.is-open .pf-expand-summary .req-phase-bar{flex:0 0 160px;}
+/* 窄屏：提示条换行，右对齐的长说明让位给「批量标记」入口 */
+@media (max-width:760px){
+  .proj-banner{flex-wrap:wrap;row-gap:4px;}
+  .proj-banner .proj-banner-hint{display:none;}
+  .proj-banner .link-btn{margin-left:0;}
+}
 @media (max-width:1279px){.req-list.is-cards{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media (max-width:900px){.req-list.is-cards{grid-template-columns:1fr;}}
 .req-top{display:flex;align-items:center;gap:var(--space-2);}
@@ -131,22 +162,29 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 .req-meta{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-3);flex-wrap:wrap;}
 .req-meta .progress{flex:0 0 auto;width:140px;}
 .req-meta .progress .bar{height:6px;}
-/* 项目集列表顶部汇总：项目 / 首版与迭代投入 / 准时率 / 风险项目 */
+/* 项目集列表顶部汇总：项目 / 首版与迭代投入 / 准时率 / 风险项目
+   尺寸对齐原型 .kpi：86px 高、11px 标签、22px 数值、10.5px 脚注 */
 .req-summ{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px;}
-.req-summ .stat{min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
-.req-summ .stat-k{font-size:12px;color:var(--text-3);}
-.req-summ .stat-v{font-size:20px;font-weight:650;letter-spacing:-.01em;color:var(--text);margin-top:2px;}
-.req-summ .stat-v small{font-size:11px;font-weight:500;color:var(--text-3);margin-left:4px;}
-.req-summ .stat-sub{font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.req-summ .stat{min-width:0;height:86px;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:0;
+  padding:11px 13px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);}
+.req-summ .stat-k{font-size:11px;line-height:1.35;color:var(--text-3);}
+.req-summ .stat-v{font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.01em;color:var(--text);margin-top:2px;}
+.req-summ .stat-v.is-zero{color:var(--text-3);}
+.req-summ .stat-v.is-warn{color:var(--warning-fg);}
+.req-summ .stat-v small{font-size:11px;font-weight:600;color:var(--text-3);margin-left:3px;}
+.req-summ .stat-sub{font-size:10.5px;line-height:15px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.req-summ .stat-sub .link-btn{font-size:10.5px;font-weight:500;}
 @media (max-width:1100px){.req-summ{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media (max-width:760px){.req-summ{grid-template-columns:repeat(2,minmax(0,1fr));}}
 /* 未标记首版提示：计数在横幅里，KPI 不再重复一个「未标记」格 */
-.proj-banner{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;
-  border:1px solid var(--warning-border);border-radius:var(--r-md);
-  background:var(--warning-soft);font-size:12px;color:var(--warning-fg);}
+.proj-banner{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 11px;
+  border:1px solid var(--warning-border);border-radius:var(--r-md);line-height:18px;
+  background:var(--warning-soft);font-size:11.5px;color:var(--warning-fg);}
 .proj-banner[hidden]{display:none;}
+.proj-banner b{font-weight:650;}
 .proj-banner>svg{flex:0 0 auto;color:var(--warning);}
 .proj-banner .link-btn{margin-left:4px;flex:0 0 auto;}
+.proj-banner .proj-banner-hint{margin-left:auto;flex:0 0 auto;font-size:10.5px;opacity:.85;}
 /* 项目卡：首版 / 迭代投入条（与版本页阶段口径一致）
    进度行是主色 + 百分比的完成度；工时行换成阶段色并带「工时」标签、条更细，
    两条上下相邻也不会被读成同一件事。 */
@@ -199,15 +237,21 @@ body.proj-drag-project .proj-set-drop-end{display:flex;}
 body.proj-reordering{cursor:grabbing;}
 .proj-form{position:sticky;top:16px;}
 .proj-form .panel-head{margin-bottom:14px;}
-/* 项目列表工具条：单行卡片，计数在左、视图与创建控件在右 */
+/* 项目列表工具条：单行卡片，范围与分组在左、搜索与视图控件在右（对齐原型 toolbar） */
 .proj-list-head{
   display:flex;align-items:center;gap:8px;flex-wrap:nowrap;
   height:48px;margin:0 0 10px;padding:0 9px;
   background:var(--surface);border:1px solid var(--border);border-radius:11px;
 }
 .proj-list-count{font-size:11.5px;font-weight:500;color:var(--text-3);white-space:nowrap;}
-.project-toolbar{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;}
-.project-toolbar .seg{height:30px;padding:2px;border:1px solid var(--border);border-radius:7px;}
+.project-toolbar{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;}
+.project-toolbar .tb-group{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;}
+.project-toolbar .tblabel{font-size:11.5px;color:var(--text-3);white-space:nowrap;}
+.project-toolbar .tb-spacer{flex:1 1 auto;min-width:8px;}
+.project-toolbar .proj-search{flex:0 0 auto;}
+.project-toolbar .proj-search input{width:180px;height:30px;font-size:12px;}
+.project-toolbar .proj-search input:focus{width:220px;}
+.project-toolbar .seg{height:30px;padding:2px;border:1px solid var(--border);border-radius:7px;flex:0 0 auto;}
 .project-toolbar .seg button{height:26px;padding:0 9px;font-size:12px;border-radius:5px;}
 html[data-theme="dark"] .project-toolbar .seg button[aria-pressed="true"]{background:var(--surface-active);box-shadow:var(--shadow-xs),inset 0 0 0 1px var(--border-strong);}
 .project-toolbar .icon-btn{border:1px solid var(--border);background:var(--surface);border-radius:var(--r-xs);}
@@ -309,6 +353,19 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .summary-panel p{margin:0;font-size:14px;line-height:22px;color:var(--text-2);}
 .summary-panel b{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;}
 .summary-panel .up{color:var(--danger-fg);font-weight:700;}
+/* 周回顾：工具条、面板与统计卡收到与报表一致的小号密度（原型无独立 section，按全站壳层对齐） */
+#view-review .page-toolbar .toolbar-title{font-size:13px;font-weight:650;letter-spacing:0;}
+#view-review .panel{padding:12px 14px;}
+#view-review .panel-head{margin-bottom:10px;}
+#view-review .panel-head h3{font-size:12.5px;font-weight:650;letter-spacing:0;}
+#view-review .panel-head .meta-right{font-size:10.5px;}
+#view-review .stat{padding:11px 13px;border-radius:var(--r-md);}
+#view-review .stat-grid{gap:10px;}
+#view-review .stat .k{font-size:11px;}
+#view-review .stat .v small{font-size:11px;}
+#view-review .summary-panel{padding:14px 16px 14px 19px;}
+#view-review .summary-panel .sh{font-size:12.5px;margin-bottom:4px;}
+#view-review .summary-panel p{font-size:13px;line-height:21px;}
 
 /* ===== 回顾页 · AI 周报 ===== */
 /* 正文是纯文本：white-space:pre-wrap 保住模型的换行，不再解析整段 Markdown；
@@ -724,7 +781,7 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .user-table th,.user-table td{
   padding:9px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle;
 }
-.user-table th{height:38px;background:var(--surface-sunken);font-size:12px;font-weight:650;color:var(--text-2);white-space:nowrap;}
+.user-table th{height:34px;padding:0 14px;background:var(--tbl-head);font-size:11px;font-weight:550;color:var(--text-3);white-space:nowrap;}
 .user-table th:nth-child(1){width:28%;}
 .user-table th:nth-child(2){width:20%;}
 .user-table th:nth-child(3){width:12%;}

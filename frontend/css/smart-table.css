@@ -101,8 +101,8 @@ body[data-view="list"] .filterbar{border-radius:11px 11px 0 0;border-bottom-colo
 .pivot-x{color:var(--text-3);font-size:12px;}
 .pivot-tbl td:first-child{white-space:nowrap;}
 .pivot-tbl tbody tr:last-child{background:var(--surface-sunken);}
-/* 需求池列表：搜索框 + 表格内分组行 */
-#view-demands .dem-search{min-width:150px;max-width:200px;padding:5px 10px;font-size:13px;}
+/* 需求池列表：搜索框与同排筛选控件同高 */
+#view-demands .dem-search{min-width:150px;max-width:200px;height:30px;padding:0 10px;font-size:12.5px;}
 /* 需求池：页内工具条与看板/列表工具条合成一张两行卡片（与「我的工作」同构） */
 #view-demands .page-toolbar{
   min-height:48px;margin:0;padding:0 9px;gap:8px;
@@ -113,18 +113,20 @@ body[data-view="list"] .filterbar{border-radius:11px 11px 0 0;border-bottom-colo
 /* 需求池看板：紧凑搜索/筛选条，范围固定为当前项目 */
 #view-demands .dem-board-bar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  margin:-12px 0 10px;padding:6px 9px;min-height:44px;
+  margin:-12px 0 10px;padding:7px 9px;min-height:48px;
   background:var(--surface);border:1px solid var(--border);
   border-radius:0 0 11px 11px;
 }
 #view-demands .demb-search{
-  flex:1 1 260px;min-width:180px;max-width:420px;
-  padding:5px 10px;font-size:13px;
+  flex:1 1 260px;min-width:180px;max-width:420px;height:30px;
+  padding:0 10px;font-size:12.5px;
 }
 #view-demands .demb-clear{min-height:28px;}
-/* 需求池甘特：工具条与页内工具条同属一张卡片 */
+/* 显示菜单触发器与同排 .chip/.mini-select 同高；原先 28px 比筛选片矮 2px */
+#view-demands .demb-display>summary{height:30px;font-size:12px;}
+/* 需求池甘特：工具条与页内工具条同属一张卡片，高度对齐原型 48 */
 #view-demands .demg-tools{
-  margin:-12px 0 10px;padding:6px 9px;gap:8px 12px;
+  margin:-12px 0 10px;padding:7px 9px;min-height:48px;gap:8px 12px;
   background:var(--surface);border:1px solid var(--border);
   border-radius:0 0 11px 11px;
 }
