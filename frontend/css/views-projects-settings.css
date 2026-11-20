@@ -33,7 +33,7 @@ html[data-theme="dark"] .req-set-head.proj-set-head{--set-ink:color-mix(in srgb,
 .risk-chip.blocked{color:var(--warning-fg);background:var(--warning-soft);border-color:var(--warning-border);}
 .risk-chip.stagnant{color:var(--text-2);background:var(--surface-sunken);border-color:var(--border);}
 .req-set-risk:hover .risk-chip{filter:brightness(.96);}
-.project-set-row .req-set-risk{padding-left:35px;}
+.project-set-row .req-set-risk{padding-left:0;}
 .req-set-acts{display:flex;align-items:center;gap:2px;}
 .req-set-head.is-ungrouped .req-set-title{color:var(--text-2);}
 .req-set-toggle svg{transition:transform var(--dur-fast) var(--ease-out);}
@@ -71,11 +71,13 @@ html[data-theme="dark"] .project-table-row.has-set{--set-ink:color-mix(in srgb, 
    避免 8 种底色与「进行中」的蓝、逾期阻塞的橙红抢语义。 */
 .project-table-row.project-set-row{
   --set-ink:var(--set, var(--border-strong));
+  /* 集行两行内容 49px，上下各留 8px；不随项目行 56px 的零内边距贴边 */
+  padding:8px 14px;min-height:64px;
   background:var(--surface);
   box-shadow:inset 3px 0 0 0 var(--set-ink);
 }
 html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(in srgb, var(--set, var(--border-strong)) 62%, #fff);}
-.project-set-row .set-name-cell{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;}
+.project-set-row .set-name-cell{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;}
 .project-set-row .set-name-line{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;}
 .project-set-row .set-name-line .req-set-title{min-width:0;font-size:16px;}
 .project-set-row .req-set-title b{font-weight:700;}

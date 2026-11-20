@@ -554,15 +554,16 @@ function projectSetNameCell(group, agg){
   var set = group.set;
   var key = set ? set.id : "__un";
   var collapsed = !!setCollapsed[key];
+  /* 两行：标题行带风险 chip，副行只放集信息；三行竖排会把 56px 行撑满、上下没有留白 */
   return '<span class="project-name-wrap set-name-cell">' +
     '<span class="set-name-line">' +
       '<button class="icon-btn sm req-set-toggle' + (collapsed ? "" : " on") + '" type="button" data-set-toggle="' + esc(key) + '" aria-expanded="' + (!collapsed) + '" title="' + (collapsed ? "展开" : "收起") + '">' + icon("chevronRight", 14) + '</button>' +
       '<span class="req-set-title"><span class="req-set-ico" aria-hidden="true">' + icon("folder", 14) + '</span><b>' + (set ? esc(set.name) : "未分组") + '</b></span>' +
+      riskStripHTML(agg.risk) +
     '</span>' +
     '<span class="req-set-meta">' + group.rows.length + ' 个项目'
       + (agg.mvp + agg.post ? ' · 首版 ' + fmtMinutesShort(agg.mvp) + ' · 迭代 ' + fmtMinutesShort(agg.post) : '')
       + '</span>' +
-    riskStripHTML(agg.risk) +
   '</span>';
 }
 function projectSetCell(group, key, agg){
