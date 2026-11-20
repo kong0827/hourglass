@@ -2375,10 +2375,29 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   border:1px solid var(--primary-border);border-radius:var(--r-sm);
   background:var(--surface);outline:none;}
 .read-desc.inline-edit-field:focus{box-shadow:var(--focus-ring);}
+/* 描述就地编辑：无工具栏的内联富文本，外壳与表单编辑器同款边框/焦点态 */
+.read-desc-edit{min-height:80px;}
+.drawer .sun-editor.inline-desc-editor{border-color:var(--primary-border);}
+.drawer .sun-editor.inline-desc-editor:focus-within{border-color:var(--primary);box-shadow:var(--focus-ring);}
+.drawer .sun-editor.inline-desc-editor .se-toolbar{display:none;}
+.drawer .sun-editor.inline-desc-editor .se-wrapper-inner{padding:var(--space-2) 10px;font-size:13px;line-height:1.65;}
+.drawer .sun-editor.inline-desc-editor .se-wrapper .se-placeholder{padding-top:var(--space-2);padding-left:10px;font-size:13px;}
 .read-desc p{margin:0 0 6px;}
 .read-desc img{max-width:100%;height:auto;border-radius:var(--r-xs);cursor:zoom-in;}
 .read-desc[contenteditable="true"] img{cursor:inherit;}
 .read-desc:empty::before{content:"暂无描述";color:var(--text-3);}
+/* 需求弹窗描述：图文混排输入区，外观与同栏 textarea 一致 */
+.demand-desc-input{min-height:76px;max-height:260px;overflow:auto;margin:0;padding:7px 10px;
+  font-size:13px;line-height:1.65;color:var(--text);cursor:text;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.demand-desc-input:hover{background:var(--surface);}
+.demand-desc-input:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus-ring);}
+.demand-desc-input:empty::before,.demand-desc-input.is-empty::before{content:attr(data-placeholder);color:var(--text-3);}
+.demand-desc-input p{margin:0 0 6px;}
+.demand-desc-input p:last-child{margin-bottom:0;}
+.demand-desc-input img{display:inline-block;max-width:100%;max-height:300px;height:auto;
+  border:1px solid var(--border);border-radius:var(--r-sm);object-fit:contain;vertical-align:bottom;}
+.demand-desc-input img[data-dem-pending-img]{opacity:.75;outline:1px dashed var(--border-strong);outline-offset:2px;}
 .read-cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:var(--space-3);}
 .read-progress{height:5px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;margin:0 0 9px;}
 .read-progress i{display:block;height:100%;width:0;background:var(--primary);border-radius:inherit;}

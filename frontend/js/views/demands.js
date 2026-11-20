@@ -2977,10 +2977,14 @@ function syncDemandCatOptions(reqId, selectedId, fallbackFirst){
 }
 /* 弹窗一次打开对应一个序号：关掉 A 再打开 B 后，A 迟到的保存响应不能关闭/改写 B */
 var demandFormSeq = 0, demandFormBaseline = null;
+/* 新建时暂存在正文里的图片：提交建单拿到 id 后再上传并回填 att: 标记 */
+var demandFormImgs = [];
 function demandFormSnapshot(){
-  return JSON.stringify([dReq.value, dTitle.value, dDesc.value, dAccept.value, dSource.value, dKind.value,
+  return JSON.stringify([dReq.value, dTitle.value, demandSerializeRichText(dDesc), dAccept.value, dSource.value, dKind.value,
     dCategory.value, dExpect.value, formPri, dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value,
-    demandWatchPick.map(function(w){ return w.userId; })]);
+    demandWatchPick.map(function(w){ return w.userId; }),
+    /* 新建时图片先本地预览：只加图不打字也算改动，关闭时要提示 */
+    demandFormImgs.map(function(x){ return x.name; })]);
 }
 function demandFormDirty(){
   return !!demandFormBaseline && demandFormSnapshot() !== demandFormBaseline;
@@ -3030,6 +3034,13 @@ function syncDemandWatchPicker(){
   });
 }
 function resetDemandWatchPick(){ demandWatchPick = []; renderDemandWatchChips(); }
+/* 清掉新建时暂存的图片：释放本地预览，避免关掉弹窗后内存里留着整张图 */
+function resetDemandFormImgs(){
+  demandFormImgs.forEach(function(item){
+    if(item.url) try{ URL.revokeObjectURL(item.url); }catch(e){ /* noop */ }
+  });
+  demandFormImgs = [];
+}
 function closeDemandDialog(){
   demandFormSeq++;
   demandFormBaseline = null;
@@ -3037,6 +3048,7 @@ function closeDemandDialog(){
   editingDemandStatus = null;
   editingDemandReqId = null;
   btnSaveDemand.disabled = false;
+  resetDemandFormImgs();
   UI.closeModal($("dlgDemand"));
 }
 /* X、Esc、遮罩与路由切换都走这里，避免误关闭丢失填写内容 */
@@ -3082,7 +3094,10 @@ function openDemandDialog(d){
     }
   }
   dTitle.value = d ? d.title : "";
-  dDesc.value = d ? (d.description || "") : "";
+  resetDemandFormImgs();
+  /* 描述是图文混排：库里存 ![文件名](att:ID) 标记，弹窗里还原成图片 */
+  dDesc.innerHTML = d && d.description ? demandDetailHTML(d.description) : "";
+  dDesc.classList.toggle("is-empty", !demandSerializeRichText(dDesc) && !dDesc.querySelector("img"));
   dAccept.value = d ? (d.acceptText || "") : "";
   /* 来源联想：候选来自当前已加载需求的来源原值，只提示不代入 */
   var dlSource = $("dlDemandSource");
@@ -3157,10 +3172,16 @@ function saveDemand(){
     if(isNaN(v)) v = min;
     return Math.max(min, Math.min(10, v));
   }
+  var descText = demandSerializeRichText(dDesc);
+  if(demandFormDescLength() > 2000){
+    toast("需求描述不能超过 2000 字（图片标记也计入）", "warn");
+    try{ dDesc.focus(); }catch(e){ /* noop */ }
+    return;
+  }
   var body = {
     reqId: dReq.value,
     title: title,
-    description: dDesc.value.trim() || null,
+    description: descText || null,
     acceptText: dAccept.value.trim() || null,
     source: dSource.value.trim() || null,
     itemKind: dKind.value,
@@ -3194,26 +3215,47 @@ function doSaveDemand(body){
     if(seq === demandFormSeq) btnSaveDemand.disabled = false;
     toast(ex && ex.message ? ex.message : "保存失败", "bad");
   };
+  /* 新建时描述里的图片只是本地预览：建单拿到 id 后逐张补传，再把 att: 标记回写进描述。
+     上传或回写失败不撤销已建的需求，提示去详情补图即可 */
+  var settleImgs = function(created){
+    if(wasEdit || !demandFormImgs.length) return Promise.resolve("");
+    var id = created && created.id;
+    if(!id) return Promise.resolve("图片未能上传，请到详情里重新插入");
+    return flushDemandFormImgs(id).then(function(r){
+      if(!r || !r.ok) return "图片未能上传，请到详情里重新插入";
+      var desc = demandSerializeRichText(dDesc);
+      if(desc === (body.description || "")) return "";
+      body.description = desc || null;
+      if(created.revision != null) body.revision = created.revision;
+      return API.put("/api/demands/" + encodeURIComponent(id), body)
+        .then(function(){ return ""; }, function(){
+          return "需求已建单，但描述里的图片标记未写入，请到详情里重新插入";
+        });
+    });
+  };
   var save = function(){
     var p = editingDemandId
       ? API.put("/api/demands/" + encodeURIComponent(editingDemandId), body)
       : API.post("/api/demands", body);
-    return p.then(function(){
-      toast(!wasEdit ? "已提交评审「" + title + "」"
-        : moved ? "已移至「" + reqNameById(body.reqId) + "」并保存"
-        : "已更新需求「" + title + "」", "fs");
-      /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
-      if(seq === demandFormSeq){
-        closeDemandDialog();
-        if(wasEdit) closeDemandDetailIfOpen();
-        /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围。
-           编辑迁移则保持原筛选，让这条需求从当前列表里消失即可 */
-        if(!wasEdit && rt.demandReqId && body.reqId !== rt.demandReqId){
-          rt.demandReqId = body.reqId;
-          if(demandReq) demandReq.value = body.reqId;
+    return p.then(function(created){
+      return settleImgs(created).then(function(warn){
+        if(warn) toast(warn, "warn");
+        toast(!wasEdit ? "已提交评审「" + title + "」"
+          : moved ? "已移至「" + reqNameById(body.reqId) + "」并保存"
+          : "已更新需求「" + title + "」", "fs");
+        /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
+        if(seq === demandFormSeq){
+          closeDemandDialog();
+          if(wasEdit) closeDemandDetailIfOpen();
+          /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围。
+             编辑迁移则保持原筛选，让这条需求从当前列表里消失即可 */
+          if(!wasEdit && rt.demandReqId && body.reqId !== rt.demandReqId){
+            rt.demandReqId = body.reqId;
+            if(demandReq) demandReq.value = body.reqId;
+          }
         }
-      }
-      loadDemands();
+        loadDemands();
+      });
     }).catch(fail);
   };
   /* 换了项目先走两道确认；取消时恢复保存按钮，表单内容保持原样 */
@@ -4618,6 +4660,121 @@ function demandSerializeRichText(el){
   for(var i = 0; i < el.childNodes.length; i++) walk(el.childNodes[i]);
   return out.replace(/[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").replace(/^\s+|\s+$/g, "");
 }
+/* ---------- 弹窗描述里的图片 ----------
+   编辑已有需求：粘贴 / 拖入即上传成附件，正文按光标插入 att: 标记；
+   新建需求：先插本地预览占位，提交建单拿到 id 后逐张上传、回填标记，再 PUT 一次描述。 */
+function demandDialogOpen(){
+  var dlg = $("dlgDemand");
+  return !!(dlg && dlg.classList.contains("open"));
+}
+function demandFormDescFocusAtEnd(){
+  try{ dDesc.focus(); }catch(e){ /* noop */ }
+  try{
+    var range = document.createRange();
+    range.selectNodeContents(dDesc);
+    range.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }catch(e){ /* noop */ }
+}
+function insertDemandFormImg(node){
+  if(!node || !dDesc) return;
+  var sel = window.getSelection(), range = null;
+  if(sel && sel.rangeCount){
+    var r = sel.getRangeAt(0);
+    if(dDesc.contains(r.startContainer) && dDesc.contains(r.endContainer)) range = r;
+  }
+  if(range){
+    range.deleteContents();
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }else{
+    dDesc.appendChild(node);
+  }
+}
+function demandFormDescImages(files){
+  if(!dDesc || !demandDialogOpen()) return;
+  /* 描述里只嵌入图片；其它文件属于「关联-附件」，避免在正文里留下无法显示的文件标记 */
+  var imgs = (files || []).filter(function(f){
+    return /^image\//.test(f.type || "") || /\.(jpe?g|png|gif|webp)$/i.test(f.name || "");
+  });
+  if(imgs.length < (files || []).length) toast("描述只支持插入图片；其它文件请放到需求的「关联 - 附件」", "warn");
+  if(!imgs.length) return;
+  var res = validateFiles(imgs, 0);
+  reportRejected(res.rejected);
+  if(!res.ok.length) return;
+  demandFormDescFocusAtEnd();
+  if(editingDemandId){
+    /* 已有需求：立即上传；串行插入，保证正文里的顺序与粘贴顺序一致 */
+    var chain = Promise.resolve();
+    res.ok.forEach(function(f){
+      chain = chain.then(function(){
+        if(!demandDialogOpen() || !editingDemandId) return;
+        var id = editingDemandId;
+        return uploadAttachment("/api/demands/" + encodeURIComponent(id) + "/attachments", f)
+          .then(function(att){
+            if(!att || !demandDialogOpen() || editingDemandId !== id) return;
+            var box = document.createElement("div");
+            box.innerHTML = demandInlineImgHTML(att.id, att.filename);
+            insertDemandFormImg(box.firstElementChild);
+          }, function(ex){
+            toast((ex && ex.message) || "图片上传失败", "bad");
+          });
+      });
+    });
+    return;
+  }
+  res.ok.forEach(function(f){
+    var url = URL.createObjectURL(f);
+    var img = document.createElement("img");
+    img.className = "dem-inline-img";
+    img.setAttribute("data-dem-pending-img", demandFormImgs.length);
+    img.setAttribute("src", url);
+    img.setAttribute("alt", f.name || "图片");
+    img.setAttribute("title", "提交后自动上传");
+    demandFormImgs.push({ file: f, name: f.name || "图片", url: url, node: img });
+    insertDemandFormImg(img);
+  });
+}
+/* 建单后把暂存图片补传，成功后把预览占位换成正式 att: 图片 */
+function flushDemandFormImgs(demandId){
+  var list = demandFormImgs.slice();
+  var ok = 0, failed = 0;
+  var chain = Promise.resolve();
+  list.forEach(function(item){
+    chain = chain.then(function(){
+      return uploadAttachment("/api/demands/" + encodeURIComponent(demandId) + "/attachments", item.file)
+        .then(function(att){
+          if(!att){ failed++; return; }
+          ok++;
+          if(item.node && item.node.isConnected){
+            item.node.setAttribute("data-dem-inline-img", att.id);
+            item.node.removeAttribute("data-dem-pending-img");
+            item.node.setAttribute("data-dem-inline-name", att.filename || item.name);
+            item.node.setAttribute("src", attUrl(att.id));
+            item.node.setAttribute("alt", att.filename || item.name);
+            item.node.setAttribute("title", "点击查看大图");
+          }
+          if(item.url) try{ URL.revokeObjectURL(item.url); }catch(e){ /* noop */ }
+        }, function(){ failed++; });
+    });
+  });
+  return chain.then(function(){
+    return { ok: ok, failed: failed };
+  });
+}
+/* 新建时图片还没上传：按标记长度预占位，避免建单后 PUT 才被 2000 字上限拦下 */
+function demandFormDescLength(){
+  var n = demandSerializeRichText(dDesc).length;
+  demandFormImgs.forEach(function(item){
+    n += demandDescImgToken({ id: "0123456789012345678901234567890123456789", filename: item.name }).length + 2;
+  });
+  return n;
+}
 /* ---------- 需求详情就地编辑 ----------
    文案（标题/描述/验收）点开即改，失焦或 ⌘/Ctrl+Enter 保存、Esc 还原；
    属性（优先级/期望交付/目标版本/分类/来源）点开弹层选择后直接保存。
@@ -6004,6 +6161,16 @@ if($("dlgDemand")) $("dlgDemand").addEventListener("click", function(e){
   }
 });
 if(dTitle) dTitle.addEventListener("input", function(){ fDemandTitle.classList.remove("invalid"); });
+/* 描述区支持粘贴 / 拖入图片：编辑已有需求立即上传，新建需求先本地预览等建单后补传 */
+if(dDesc){
+  bindFileDrop(dDesc, demandFormDescImages, { paste: true, pasteTarget: dDesc });
+  /* 浏览器清空 contenteditable 后会留一个 <br>，:empty 不再命中，占位文案要自己切 */
+  var syncDescEmpty = function(){
+    dDesc.classList.toggle("is-empty", !demandSerializeRichText(dDesc) && !dDesc.querySelector("img"));
+  };
+  dDesc.addEventListener("input", syncDescEmpty);
+  dDesc.addEventListener("keyup", syncDescEmpty);
+}
 if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){
   var b = e.target.closest("[data-dpri]");
   if(!b) return;
