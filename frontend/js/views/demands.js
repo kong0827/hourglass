@@ -30,7 +30,7 @@ import { loadReqs } from "./board.js";
 var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("demandBody"),
     demandGanttBar = $("demandGanttBar"), demandGanttHelp = $("demandGanttHelp"), demandsPage = $("demandsPage"),
     dReq = $("dReq"), dTitle = $("dTitle"), dDesc = $("dDesc"), dAccept = $("dAccept"),
-    dSource = $("dSource"), dKind = $("dKind"), dCategory = $("dCategory"), dExpect = $("dExpect"),
+    dSource = $("dSource"), dKind = $("dKind"), dCategory = $("dCategory"), dExpect = $("dExpect"), dReviewer = $("dReviewer"),
     dWsjfB = $("dWsjfB"), dWsjfU = $("dWsjfU"), dWsjfR = $("dWsjfR"), dWsjfE = $("dWsjfE"),
     fDemandTitle = $("fDemandTitle"), btnSaveDemand = $("btnSaveDemand"), demandFormTitle = $("demandFormTitle"),
     dpVersion = $("dpVersion"), dpNote = $("dpNote"), fDemandPlanVer = $("fDemandPlanVer"), btnDoPlan = $("btnDoPlan"),
@@ -165,6 +165,11 @@ function isOwner(){ return !!(rt.currentWs && rt.currentWs.myRole === "owner"); 
 function canWriteDemand(d){ return !!d && canEditReq(d.reqId); }
 /* 评审流转与服务端一致，按所属项目写权限；删除仍仅空间主，排期另按 canSchedule */
 function canReviewDemand(d){ return canWriteDemand(d); }
+/* 可认领 = 待评审 + 未指派 + 我可写 + 非本人提交；服务端还会做同一组校验 */
+function canClaimDemandReview(d){
+  return !!d && d.status === "review" && !d.reviewerUserId && canReviewDemand(d) &&
+    (!rt.currentUser || d.createdBy !== rt.currentUser.id);
+}
 function canScheduleDemand(d){ return !!d && d.canSchedule === true; }
 function denySchedule(){ toast("仅空间主、管理员或可写项目负责人可管理需求排期", "warn"); }
 function plannedText(d){
@@ -859,9 +864,13 @@ function demBoardLaneLabel(key){
   return key === "__none" ? "未归类" : (reqNameById(key) || "未命名项目");
 }
 /* 行内只保留当前状态的主操作，其余动作收进“更多”，删除仍走危险色与确认 */
-function demandMenuItems(d){
+function demandMenuItems(d, opts){
   if(!d) return [];
   var out = [];
+  /* 详情页桌面不显示底栏，认领放在「更多」里；列表行已有直连按钮，不再重复 */
+  if(opts && opts.detail && canClaimDemandReview(d)){
+    out.push({ act: "claim", label: "认领评审" });
+  }
   if(canWriteDemand(d) && d.status === "review" && canReviewDemand(d)){
     out.push({ act: "rej", label: "评审不通过" });
   }
@@ -889,6 +898,9 @@ function demandActs(d, opts){
   /* 列表行里主按钮只保留页头「提需求」一个；行内动作降为主色浅底，避免整屏都是主色 */
   var cls = (opts && opts.subtle) ? "btn sm soft" : "btn sm primary";
   var acts = "";
+  if(canClaimDemandReview(d)){
+    acts += '<button class="btn sm soft" type="button" data-dem-claim="' + esc(d.id) + '" title="认领后由你评审，不会自动通过">认领评审</button>';
+  }
   if(canReviewDemand(d)){
     if(d.status === "review"){
       acts += '<button class="' + cls + '" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
@@ -1379,10 +1391,15 @@ function statusTag(st){
 function demCreatorName(d){
   return d && d.createdByName ? String(d.createdByName) : "";
 }
+function demReviewerName(d){
+  return d && d.reviewerName ? String(d.reviewerName) : "";
+}
 function demCreatorLine(d){
   var name = demCreatorName(d);
   return name ? '<span class="dem-title-sub">由 ' + esc(name) + ' 提交</span>' : "";
 }
+/* 空值占位统一淡一档：与工作项列表的 .cell.muted 同色，扫读时能看出「没填」而不是「是短横线」 */
+function demEmptyCell(){ return '<span class="muted">—</span>'; }
 function demandCell(d, key){
   if(key === "title") return '<button class="link-title dem-link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + demCreatorLine(d) + '</button>';
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
@@ -1392,10 +1409,11 @@ function demandCell(d, key){
   if(key === "project") return demProjectCell(d);
   if(key === "version") return demVersionCell(d);
   if(key === "expectDate") return demExpectCell(d);
-  if(key === "wsjf") return d.wsjfScore === null || d.wsjfScore === undefined ? "—" : (Math.round(d.wsjfScore * 10) / 10);
+  if(key === "wsjf") return d.wsjfScore === null || d.wsjfScore === undefined ? demEmptyCell() : (Math.round(d.wsjfScore * 10) / 10);
   if(key === "source") return demSourceCell(d);
+  if(key === "reviewer") return demReviewerName(d) ? esc(demReviewerName(d)) : '<span class="dim">未指派</span>';
   if(key === "createdAt") return esc(fmtTs(d.createdAt) || "—");
-  return "—";
+  return demEmptyCell();
 }
 
 /* ---------- 列表行内编辑：优先级 / 状态 / 所属项目 / 期望交付 / 目标版本 / 分类 / 来源 ----------
@@ -1445,23 +1463,24 @@ function demStatusCell(d){
   return demInlineTrigger("status", d, statusTag(d.status), "修改状态");
 }
 function demProjectCell(d){
-  if(!demInlineProjectEditable(d)) return esc(reqNameById(d.reqId) || "—");
+  var projName = reqNameById(d.reqId);
+  if(!demInlineProjectEditable(d)) return projName ? esc(projName) : demEmptyCell();
   return demInlineTrigger("project", d,
     '<span class="dem-inline-txt">' + esc(reqNameById(d.reqId) || "—") + '</span>', "更换所属项目");
 }
 function demExpectCell(d){
   var text = d.expectDate ? String(d.expectDate).substring(0, 10) : "";
   /* 已完成不再调整交付承诺，期望日期保持只读 */
-  if(!demInlineWritable(d) || d.status === "done") return esc(text || "—");
+  if(!demInlineWritable(d) || d.status === "done") return text ? esc(text) : demEmptyCell();
   return demInlineTrigger("expectDate", d,
     '<span class="dem-inline-date-t' + (text ? "" : " is-empty") + '">' + esc(text || "待评估") + '</span>',
     "修改期望交付");
 }
 /* 分类候选按需求所属项目过滤；缓存未加载时保留原值，避免一次保存把分类悄悄改掉 */
 function demCategoryCell(d){
-  if(!demInlineWritable(d)) return catTag(d.categoryId) || "—";
+  if(!demInlineWritable(d)) return catTag(d.categoryId) || demEmptyCell();
   var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === d.reqId; });
-  if(!cats.length) return catTag(d.categoryId) || "—";
+  if(!cats.length) return catTag(d.categoryId) || demEmptyCell();
   return demInlineTrigger("category", d,
     catTag(d.categoryId) || '<span class="dem-inline-date-t is-empty">未分类</span>', "修改分类");
 }
@@ -1475,7 +1494,7 @@ function demInlineTrigger(kind, d, inner, title, extraCls){
 /* 来源是纯文本，点单元格就地编辑：回车或失焦保存，Esc 取消，不做弹层 */
 function demSourceCell(d){
   var text = d.source || "";
-  if(!demInlineWritable(d)) return esc(text || "—");
+  if(!demInlineWritable(d)) return text ? esc(text) : demEmptyCell();
   return '<button class="dem-inline-text' + (text ? "" : " is-empty") + '" type="button" data-dem-source-btn="' +
     esc(d.id) + '" title="点击修改来源" aria-label="来源：' + esc(text || "未填写") + '">' + esc(text || "未填写") + '</button>';
 }
@@ -1520,12 +1539,13 @@ function startDemSourceEdit(btn){
 }
 function demVersionCell(d){
   /* 版本名与计划区间都按单行省略：列宽固定，日期串按连字符折断会读不出区间 */
-  var name = esc(demandVersionName(d) || "—");
+  var verName = demandVersionName(d);
+  var name = esc(verName || "—");
   var planned = plannedText(d);
   var note = planned ? '<span class="foot-note dem-ver-plan" title="计划 ' + esc(planned) + '">计划 ' + esc(planned) + '</span>' : '';
   var head = demInlineVersionEditable(d)
-    ? demInlineTrigger("version", d, '<span class="dem-inline-txt">' + esc(demandVersionName(d) || "未指定") + '</span>', "调整目标版本")
-    : '<span class="dem-ver-name" title="' + name + '">' + name + '</span>';
+    ? demInlineTrigger("version", d, '<span class="dem-inline-txt' + (verName ? "" : " is-empty") + '">' + esc(verName || "未指定") + '</span>', "调整目标版本")
+    : '<span class="dem-ver-name' + (verName ? "" : " muted") + '" title="' + name + '">' + name + '</span>';
   return '<span class="dem-ver-cell">' + head + note + '</span>';
 }
 /* 点开才出现选项：菜单项统一带「当前」标记，选中即保存；需要原因或版本的仍交给原弹窗 */
@@ -2980,7 +3000,7 @@ var demandFormSeq = 0, demandFormBaseline = null;
 function demandFormSnapshot(){
   return JSON.stringify([dReq.value, dTitle.value, dDesc.value, dAccept.value, dSource.value, dKind.value,
     dCategory.value, dExpect.value, formPri, dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value,
-    demandWatchPick.map(function(w){ return w.userId; })]);
+    dReviewer ? dReviewer.value : "", demandWatchPick.map(function(w){ return w.userId; })]);
 }
 function demandFormDirty(){
   return !!demandFormBaseline && demandFormSnapshot() !== demandFormBaseline;
@@ -3030,6 +3050,28 @@ function syncDemandWatchPicker(){
   });
 }
 function resetDemandWatchPick(){ demandWatchPick = []; renderDemandWatchChips(); }
+/* 评审人候选：项目花名册里可写的人；查看者与只读成员不能通过/拒绝需求，不列入 */
+function syncDemandReviewerSelect(selectedId){
+  if(!dReviewer) return;
+  var projectId = dReq.value;
+  var keep = selectedId !== undefined ? selectedId : dReviewer.value;
+  if(!projectId || !rt.currentWs){ dReviewer.innerHTML = '<option value="">先选项目</option>'; return; }
+  dReviewer.innerHTML = '<option value="">加载成员…</option>';
+  loadProjectMembers(rt.currentWs.id, projectId).then(function(roster){
+    if(!dReviewer.isConnected || dReq.value !== projectId) return;
+    var me = rt.currentUser && rt.currentUser.id;
+    var opts = ((roster && roster.members) || []).filter(function(m){
+      return m && m.userId && m.userId !== me && m.access !== "read";
+    });
+    dReviewer.innerHTML = '<option value="">未指派 · 项目可写成员都可以认领</option>' + opts.map(function(m){
+      return '<option value="' + esc(m.userId) + '">' + esc(m.displayName || m.username || m.userId) + '</option>';
+    }).join("");
+    if(keep && opts.some(function(m){ return m.userId === keep; })) dReviewer.value = keep;
+    else dReviewer.value = "";
+  }).catch(function(){
+    if(dReviewer.isConnected) dReviewer.innerHTML = '<option value="">成员加载失败</option>';
+  });
+}
 function closeDemandDialog(){
   demandFormSeq++;
   demandFormBaseline = null;
@@ -3105,6 +3147,9 @@ function openDemandDialog(d){
   if(watchField) watchField.hidden = !!d;
   if(watchSec) watchSec.hidden = !!d;
   if(!d) syncDemandWatchPicker();
+  /* 评审人：新建与待评审编辑可指派；已进入流转后由流转动作决定，表单不再改 */
+  if(dReviewer) dReviewer.disabled = !!d && d.status !== "review";
+  syncDemandReviewerSelect(d ? (d.reviewerUserId || "") : "");
   dExpect.value = d ? (d.expectDate || "") : "";
   formPri = d ? (d.priority || "P2") : "P2";
   dWsjfB.value = d && d.wsjfBusiness != null ? d.wsjfBusiness : "";
@@ -3132,7 +3177,7 @@ function openDemandDialog(d){
 /* 已进入流转的需求只放开说明类字段；标题与类型锁住而不是提交后静默丢弃。
    优先级与期望交付服务端 PUT 同样不落库，改它们要走列表行内或详情事实条的专用端点。 */
 function setDemandFormLocked(locked){
-  [dTitle, dKind, dExpect].forEach(function(el){ if(el) el.disabled = locked; });
+  [dTitle, dKind, dExpect, dReviewer].forEach(function(el){ if(el) el.disabled = locked; });
   var seg = $("segDemandPri");
   if(seg){
     seg.classList.toggle("disabled", locked);
@@ -3177,6 +3222,10 @@ function saveDemand(){
   };
   /* 名单只在创建时提交；编辑走详情浮层，避免保存时覆盖别人刚调整的名单 */
   if(!editingDemandId) body.watcherIds = demandWatchPick.map(function(w){ return w.userId; });
+  /* 评审人只在新建或待评审整单编辑时提交；其他状态服务端也不会改 */
+  if(!editingDemandId || editingDemandStatus === "review"){
+    body.reviewerUserId = dReviewer ? (dReviewer.value || null) : null;
+  }
   /* 只在新建或待评审编辑时体检；已经流转的需求编辑描述时不打断保存 */
   var checkable = !editingDemandId || editingDemandStatus === "review";
   if(checkable && !demandCheckOff()){
@@ -3378,6 +3427,23 @@ function deleteDemand(id){
 
 /* ---------- 状态流转 ---------- */
 
+function claimDemandReview(id, btn){
+  var d = findDemand(id);
+  if(!d) return;
+  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
+  if(btn) btn.disabled = true;
+  API.post("/api/demands/" + encodeURIComponent(id) + "/claim-review", {}).then(function(){
+    toast("已认领「" + d.title + "」，由你评审", "fs");
+    var wasOpen = !!demandDetailLayer;
+    closeDemandDetailIfOpen();
+    loadDemands();
+    if(wasOpen) showDemandDetail(id);
+  }).catch(function(ex){
+    if(btn) btn.disabled = false;
+    toast(ex.message || "认领失败", "bad");
+    if(ex.code === 409){ closeDemandDetailIfOpen(); loadDemands(); }
+  });
+}
 function passDemand(id){
   var d = findDemand(id);
   if(!d) return;
@@ -4427,7 +4493,7 @@ function revokeJudgement(id){
 /* 流转记录存的是后端事件码，直接展示会露出 pass/rej 这类英文，统一翻成人话 */
 var DEM_LOG_ACTIONS = {
   create:"新建需求", update:"编辑需求", priority:"调整优先级", expect:"调整期望交付",
-  version:"调整目标版本", move:"变更所属项目", pass:"评审通过", rej:"评审不通过",
+  version:"调整目标版本", move:"变更所属项目", claim:"认领评审", pass:"评审通过", rej:"评审不通过",
   plan:"排期", replan:"调期", unpass:"撤回评审", unplan:"撤销排期",
   cancel:"取消需求", restore:"恢复需求", reopen:"重新打开",
   complete:"自动完成", auto_reopen:"自动退回已排期",
@@ -4461,6 +4527,9 @@ function demandStatusLabel(d){
 }
 function demandFootActs(d){
   var acts = "";
+  if(canClaimDemandReview(d)){
+    acts += '<button class="btn sm" type="button" data-dem-claim="' + esc(d.id) + '" title="认领后由你评审，不会自动通过">认领评审</button>';
+  }
   if(canReviewDemand(d) && d.status === "review"){
     /* 卡内主操作降为浅蓝底：实心蓝只留给页头 CTA，避免满屏蓝块 */
     acts += '<button class="btn sm" type="button" data-dem-rej="' + esc(d.id) + '">不通过</button>'
@@ -4530,7 +4599,9 @@ function openDemandStatusMenu(anchor, d){
   });
 }
 function openDemandDetailMore(anchor, d){
-  var items = demandMenuItems(d).filter(function(it){ return it.act === "edit" || it.act === "del"; });
+  var items = demandMenuItems(d, { detail:true }).filter(function(it){
+    return it.act === "edit" || it.act === "del" || it.act === "claim";
+  });
   if(!items.length) return;
   var menu = document.createElement("div");
   menu.className = "menu";
@@ -4549,6 +4620,8 @@ function openDemandDetailMore(anchor, d){
       setTimeout(function(){ openDemandDialog(d); }, 40);
     }else if(b.dataset.demDetailMore === "del"){
       deleteDemand(d.id);
+    }else if(b.dataset.demDetailMore === "claim"){
+      claimDemandReview(d.id);
     }
   });
 }
@@ -5198,7 +5271,9 @@ function renderDemandDetail(d, opts){
       ["source", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 11.2 5 4.6h10l1.6 6.6v4.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M3.6 11.4h3.6l.9 1.7h3.8l.9-1.7h3.6"/></svg>',
         "来源", d.source || "未填写", true],
       ["creator", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.6" r="2.8"/><path d="M4.4 16.2a5.6 5.6 0 0 1 11.2 0"/></svg>',
-        "提交人", demCreatorName(d) || "—", false]
+        "提交人", demCreatorName(d) || "—", false],
+      ["reviewer", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.6" r="2.8"/><path d="M4.4 16.2a5.6 5.6 0 0 1 11.2 0"/><path d="m12.4 15.2 1.3 1.3 2.4-2.5"/></svg>',
+        "评审人", demReviewerName(d) || "未指派", false]
     ];
     if(isClosedDemand(d)){
       metaItems.push(["close", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.6"/><path d="M5.4 14.6 14.6 5.4"/></svg>',
@@ -5680,6 +5755,7 @@ function renderDemandDetail(d, opts){
     var moreBtn = e.target.closest("[data-dem-detail-more-btn]");
     if(moreBtn){ openDemandDetailMore(moreBtn, d); return; }
     /* 状态动作的子层叠在详情之上：取消回到详情，成功后由动作关闭详情 */
+    var cl = e.target.closest("[data-dem-claim]"); if(cl){ claimDemandReview(cl.dataset.demClaim, cl); return; }
     var p = e.target.closest("[data-dem-pass]"); if(p){ passDemand(p.dataset.demPass); return; }
     var r = e.target.closest("[data-dem-rej]"); if(r){ rejectDemand(r.dataset.demRej); return; }
     var pl = e.target.closest("[data-dem-plan]"); if(pl){ openPlanDialog(pl.dataset.demPlan); return; }
@@ -5973,6 +6049,8 @@ if(dReq) dReq.addEventListener("change", function(){
   if(editingDemandId){
     /* 编辑态换项目：原分类属于旧项目，直接回到「未分类」，由用户按新项目重选 */
     syncDemandCatOptions(dReq.value, "", false);
+    /* 评审人同样按新项目重选，旧项目的人可能对新项目没有写权限 */
+    syncDemandReviewerSelect("");
     return;
   }
   /* 换项目后原分类不再可选，回落到新项目第一个分类或「未分类」 */
@@ -5980,6 +6058,7 @@ if(dReq) dReq.addEventListener("change", function(){
   /* 提醒人候选取自项目花名册：换项目后旧选择可能已不可见，直接清空重选 */
   resetDemandWatchPick();
   syncDemandWatchPicker();
+  syncDemandReviewerSelect("");
 });
 if($("dlgDemand")) $("dlgDemand").addEventListener("click", function(e){
   var rm = e.target.closest("[data-dem-form-watch-remove]");
@@ -6150,6 +6229,8 @@ if(demandBody) demandBody.addEventListener("click", function(e){
   if(restore){ restoreDemand(restore.dataset.demRestore); return; }
   var mb = e.target.closest("[data-dem-menu-btn]");
   if(mb){ openDemandRowMenu(mb, findDemand(mb.dataset.demMenuBtn)); return; }
+  var cl = e.target.closest("[data-dem-claim]");
+  if(cl){ claimDemandReview(cl.dataset.demClaim, cl); return; }
   var p = e.target.closest("[data-dem-pass]");
   if(p){ passDemand(p.dataset.demPass); return; }
   var r = e.target.closest("[data-dem-rej]");

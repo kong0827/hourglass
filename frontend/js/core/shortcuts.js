@@ -4,7 +4,7 @@ import { API } from "./api.js";
 import { $, board, btnSaveTask, iReq, searchInput, taskDrawer, taskForm } from "./dom.js";
 import { activeView, showView } from "./router.js";
 import { toggleRail } from "./shell.js";
-import { calState, canEditTask, rt, state, taskById } from "./state.js";
+import { calState, canCreateNow, canEditTask, rt, state, taskById } from "./state.js";
 import { loadRunningTimer, openDuePopover, toggleTaskDone } from "./task-actions.js";
 import { deleteTask, openTaskDrawer, tryCloseTaskDrawer } from "./task-drawer.js";
 import { guard, serverDecision } from "./transitions.js";
@@ -263,6 +263,7 @@ document.addEventListener("keydown", function(e){
   /* N：新建任务。看板内落在列内快速录入；其它视图就在当前视图打开抽屉并预填上下文 */
   if(!mod && !e.altKey && (e.key === "n" || e.key === "N")){
     e.preventDefault();
+    if(!canCreateNow()){ toast("当前没有可写的项目，无法新建工作项；请联系空间主或管理员分配项目", "warn"); return; }
     if(activeView === "board"){
       var colId = "backlog";
       if(card){
@@ -298,6 +299,7 @@ document.addEventListener("keydown", function(e){
   /* C：新建任务抽屉 */
   if(!mod && !e.altKey && (e.key === "c" || e.key === "C")){
     e.preventDefault();
+    if(!canCreateNow()){ toast("当前没有可写的项目，无法新建工作项；请联系空间主或管理员分配项目", "warn"); return; }
     openTaskDrawer("backlog");
     return;
   }

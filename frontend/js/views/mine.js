@@ -7,7 +7,7 @@ import { btnMineRefresh, mineBody, mineBrief, mineChips, mineDisplayMenu, mineDi
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { loadPrioritySpaces } from "../core/priorities.js";
-import { dueState, progressOf, rt, statusBucket } from "../core/state.js";
+import { canCreateNow, canEditReq, dueState, progressOf, rt, roleReadOnly, statusBucket } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc, toast, toastAction } from "../core/ui.js";
@@ -56,6 +56,11 @@ var DEMAND_META = {
   rej: { label: "未通过", tone: "gray" },
   canceled: { label: "已取消", tone: "gray" }
 };
+var PLAN_META = {
+  draft: { label: "草稿", tone: "gray" },
+  running: { label: "执行中", tone: "orange" },
+  done: { label: "已完成", tone: "green" }
+};
 var DEMAND_CHIPS = [
   { key: "all", label: "全部" },
   { key: "review", label: "评审中" },
@@ -76,9 +81,15 @@ var PENDING_DEFS = {
     head: ["工作项", "测试进度", "状态", "提测", "截止"], grid: "mw-g-test",
     empty: "目前没有待你测试的工作项", go: "board", unit: "项"
   },
+  plan: {
+    title: "待我执行的测试计划", icon: "checklist", tint: "green",
+    desc: "执行人是你、尚未完成的测试计划；打开后圈选用例并批量记录结果",
+    head: ["测试计划", "项目", "进度", "截止", "状态"], grid: "mw-g-plan",
+    empty: "目前没有指派给你的测试计划", go: "testcases", unit: "个"
+  },
   review: {
     title: "待我评审的需求", icon: "review", tint: "amber",
-    desc: "你有项目写权限且尚未评审；不含你本人提交的需求",
+    desc: "指派给你的优先；未指派的按项目写权限进入公共队列；不含你本人提交的需求",
     head: ["需求", "提交人", "优先级", "期望上线", "提交"], grid: "mw-g-review",
     empty: "目前没有待你评审的需求", go: "demands", unit: "项"
   }
@@ -108,7 +119,7 @@ function enc(v) { return encodeURIComponent(v == null ? "" : v); }
 function page0() { return { items: [], offset: 0, hasMore: false, total: 0 }; }
 function freshSrc() {
   return {
-    pending: { tasks: page0(), review: page0() },
+    pending: { tasks: page0(), review: page0(), plans: page0() },
     created: { items: [], offset: 0, hasMore: false, total: 0, statusCounts: null },
     watched: { tasks: page0(), demands: page0() }
   };
@@ -150,7 +161,8 @@ var mw = {
 function myId() { return (rt.currentUser && rt.currentUser.id) || ""; }
 function myName() { return (rt.currentUser && (rt.currentUser.displayName || rt.currentUser.username)) || ""; }
 function myRole() { return (rt.currentWs && rt.currentWs.myRole) || ""; }
-function canTeam() { return isMobile() && (myRole() === "owner" || myRole() === "admin"); }
+/* 团队页签：空间主 / 管理员（桌面与移动同一入口，数据同一接口） */
+function canTeam() { return myRole() === "owner" || myRole() === "admin"; }
 function myMember() {
   var id = myId(), list = rt.wsMembersCache || [];
   for (var i = 0; i < list.length; i++) if (list[i].userId === id) return list[i];
@@ -170,9 +182,9 @@ function identityText() {
 }
 function sectionOrder() {
   var title = roleTitle();
-  if (myRole() === "owner" || myRole() === "admin" || /产品|需求|经理|负责人/.test(title)) return ["review", "test", "dev"];
-  if (/测试/.test(title)) return ["test", "dev", "review"];
-  return ["dev", "test", "review"];
+  if (myRole() === "owner" || myRole() === "admin" || /产品|需求|经理|负责人/.test(title)) return ["review", "plan", "test", "dev"];
+  if (/测试/.test(title)) return ["plan", "test", "dev", "review"];
+  return ["plan", "dev", "test", "review"];
 }
 function reviewAllowed() { return !mw.counts || mw.counts.reviewAvailable !== false; }
 function num(v) { return Number(v) || 0; }
@@ -182,9 +194,9 @@ function tabCount(key) {
   var server, loaded;
   if (key === "pending") {
     var p = mw.counts.pending || {};
-    server = num(p.tasks) + num(p.review);
+    server = num(p.tasks) + num(p.review) + num(p.plans);
     var all = pendingData();
-    loaded = all.dev.length + all.test.length + all.review.length;
+    loaded = all.dev.length + all.test.length + all.review.length + all.plan.length;
   } else if (key === "created") {
     server = num(mw.counts.created);
     loaded = createdData().length;
@@ -273,9 +285,43 @@ function demandRow(d) {
     updatedTs: tsOf(d.updatedAt), updatedRaw: d.updatedAt || "",
     requested: "", requestedRaw: "",
     progress: 0, testDone: 0, testTotal: 0,
-    submitter: d.createdByName || d.createdBy || "", expect: d.expectDate || "",
+    submitter: d.createdByName || d.createdBy || "", reviewer: d.reviewerName || "", expect: d.expectDate || "",
+    canClaim: st === "review" && !d.reviewerUserId && canEditReq(d.reqId) &&
+      (!rt.currentUser || d.createdBy !== rt.currentUser.id),
     createdTs: tsOf(d.createdAt), createdRaw: d.createdAt || "",
     viewRole: "", raw: d
+  };
+}
+
+function planDueInfo(end) {
+  if (!end) return { kind: "none", n: 0 };
+  var d = parseDate(end);
+  if (!d) return { kind: "none", n: 0 };
+  var n = dayDiff(d, rt.TODAY);
+  if (n < 0) return { kind: "overdue", n: -n };
+  if (n === 0) return { kind: "today", n: 0 };
+  var dow = (rt.TODAY.getDay() + 6) % 7;
+  var weekEnd = addDays(rt.TODAY, 6 - dow);
+  return d <= weekEnd ? { kind: "week", n: 0 } : { kind: "later", n: 0 };
+}
+/* 测试计划行：执行人的「待我执行」队列，字段与 /api/my-work/test-plans 对齐 */
+function planRowModel(p) {
+  var meta = PLAN_META[p.status] || { label: p.status || "—", tone: "gray" };
+  var due = planDueInfo(p.plannedEnd);
+  var nowWs = rt.currentWs || {};
+  return {
+    kind: "plan", type: "plan", id: p.id, reqId: p.reqId || "", wsId: nowWs.id || "", wsName: nowWs.name || "",
+    title: p.name || "未命名计划", project: p.reqName || reqNameOf(p.reqId), version: p.versionName || "",
+    pri: "", blocked: false, col: "",
+    dueKind: due.kind, dueN: due.n, dueDate: p.plannedEnd || "",
+    updatedTs: tsOf(p.createdAt), updatedRaw: p.createdAt || "",
+    requested: "", requestedRaw: "",
+    progress: p.caseCount ? Math.round(num(p.executedCount) * 100 / p.caseCount) : 0,
+    testDone: num(p.executedCount), testTotal: num(p.caseCount),
+    caseCount: num(p.caseCount), executedCount: num(p.executedCount),
+    status: p.status || "", statusLabel: meta.label, tone: meta.tone,
+    submitter: "", expect: "", createdTs: 0, createdRaw: "",
+    viewRole: "", raw: p
   };
 }
 
@@ -331,6 +377,9 @@ function fetchDemands(view, offset) {
   if (view === "created" && createdStatus()) p.status = createdStatus();
   return API.get("/api/my-demands", p);
 }
+function fetchTestPlans(offset) {
+  return API.get("/api/my-work/test-plans", { offset: offset, limit: PAGE });
+}
 function mergePage(prev, res, append) {
   var items = append ? (prev.items || []).concat((res && res.items) || []) : ((res && res.items) || []);
   return {
@@ -344,6 +393,7 @@ function applySource(tab, key, res, append) {
   var src = mw.src;
   if (tab === "pending") {
     if (key === "tasks") src.pending.tasks = mergePage(src.pending.tasks, res, append);
+    else if (key === "plans") src.pending.plans = mergePage(src.pending.plans, res, append);
     else src.pending.review = mergePage(src.pending.review, res, append);
     return;
   }
@@ -358,7 +408,7 @@ function applySource(tab, key, res, append) {
   }
 }
 function resetTabSource(tab) {
-  if (tab === "pending") mw.src.pending = { tasks: page0(), review: page0() };
+  if (tab === "pending") mw.src.pending = { tasks: page0(), review: page0(), plans: page0() };
   else if (tab === "created") mw.src.created = { items: [], offset: 0, hasMore: false, total: 0, statusCounts: mw.src.created.statusCounts };
   else if (tab === "watched") mw.src.watched = { tasks: page0(), demands: page0() };
 }
@@ -398,11 +448,15 @@ function loadTab(tab, opts) {
   if (tab === "pending") {
     var tOff = append ? mw.src.pending.tasks.offset : 0;
     var rOff = append ? mw.src.pending.review.offset : 0;
+    var pOff = append ? mw.src.pending.plans.offset : 0;
     if (!append || mw.src.pending.tasks.hasMore) {
       jobs.push(fetchTasks("pending", "open", tOff).then(function (res) {
         if (res && res.spaces) spaces = res.spaces;
         return { key: "tasks", res: res };
       }));
+    }
+    if (!append || mw.src.pending.plans.hasMore) {
+      jobs.push(fetchTestPlans(pOff).then(function (res) { return { key: "plans", res: res }; }));
     }
     if (reviewAllowed() && (!append || mw.src.pending.review.hasMore)) {
       jobs.push(fetchDemands("review", rOff).then(function (res) { return { key: "review", res: res }; }));
@@ -538,6 +592,7 @@ function titleCell(r, view) {
   } else {
     if (r.project) bits.push(esc(r.project));
     if (r.version) bits.push('<span class="vtag">' + esc(r.version) + '</span>');
+    if (r.kind === "demand" && r.reviewer) bits.push('评审人 ' + esc(r.reviewer));
   }
   if (!bits.length) bits.push('<span class="mw-muted">未归属项目</span>');
   return '<div class="mw-tcell"><div class="mw-ttl" title="' + esc(r.title) + '">' + esc(r.title) + '</div>' +
@@ -562,7 +617,7 @@ function priCell(r) {
   return '<span class="mw-pri ' + r.pri.toLowerCase() + '" title="' + esc(PRI_LABEL[r.pri] || r.pri) + '"><i></i>' + esc(r.pri) + '</span>';
 }
 function dueCell(r) {
-  if (r.kind !== "task") return '<span class="mw-muted">—</span>';
+  if (r.kind === "demand") return '<span class="mw-muted">—</span>';
   if (r.dueKind === "none") return '<span class="mw-muted">未设</span>';
   if (r.dueKind === "overdue") return '<span class="mw-due over">' + icon("alert", 11) + '逾期 ' + r.dueN + ' 天</span>';
   if (r.dueKind === "today") return '<span class="mw-due today">今天</span>';
@@ -605,8 +660,9 @@ function updatedCell(r) {
 /* ---------------- 行 ---------------- */
 
 function rowAttrs(r, view) {
+  var what = r.kind === "task" ? "工作项" : (r.kind === "plan" ? "测试计划" : "需求");
   return ' role="button" tabindex="0" data-open="' + r.kind + '" data-id="' + esc(r.id) + '" data-ws="' + esc(r.wsId) +
-    '" data-title="' + esc(r.title) + '" aria-label="打开' + (r.kind === "task" ? "工作项" : "需求") + '：' + esc(r.title) + '"';
+    '" data-req="' + esc(r.reqId || "") + '" data-title="' + esc(r.title) + '" aria-label="打开' + what + '：' + esc(r.title) + '"';
 }
 function devRow(r) {
   return '<div class="mw-row mw-g-dev"' + rowAttrs(r, "pending") + '>' + titleCell(r) + '<div>' + statusCell(r) +
@@ -616,9 +672,25 @@ function testRow(r) {
   return '<div class="mw-row mw-g-test"' + rowAttrs(r, "pending") + '>' + titleCell(r) + '<div>' + progCell(r) +
     '</div><div>' + statusCell(r) + '</div><div>' + requestedCell(r) + '</div><div>' + dueCell(r) + '</div></div>';
 }
+function planProgCell(r) {
+  var p = Math.max(0, Math.min(100, num(r.progress)));
+  return '<span class="mw-prog"><span class="mw-bar' + (r.dueKind === "overdue" ? " warn" : "") + '">' +
+    '<span style="width:' + p + '%"></span></span>' + p + '%</span>';
+}
+function planRow(r) {
+  return '<div class="mw-row mw-g-plan"' + rowAttrs(r, "pending") + '>' + titleCell(r) +
+    '<div>' + (r.project ? esc(r.project) : '<span class="mw-muted">—</span>') + '</div>' +
+    '<div>' + planProgCell(r) + '</div><div>' + dueCell(r) + '</div><div>' + statusCell(r) + '</div></div>';
+}
 function reviewRow(r) {
+  /* 未指派的需求给一个就地认领入口：认领只写入评审人，不会顺带通过 */
+  var submit = submitCell(r);
+  if (!r.reviewer && r.canClaim) {
+    submit = '<div class="mw-cell-claim"><span>' + submit + '</span>' +
+      '<button class="mw-link" type="button" data-claim-review="' + esc(r.id) + '" title="认领后由你评审，不会自动通过">认领评审</button></div>';
+  }
   return '<div class="mw-row mw-g-review"' + rowAttrs(r, "pending") + '>' + titleCell(r) + '<div>' + submitterCell(r) +
-    '</div><div>' + priCell(r) + '</div><div>' + expectCell(r) + '</div><div>' + submitCell(r) + '</div></div>';
+    '</div><div>' + priCell(r) + '</div><div>' + expectCell(r) + '</div><div>' + submit + '</div></div>';
 }
 function createdRow(r) {
   return '<div class="mw-row mw-g-demand"' + rowAttrs(r, "created") + '>' + titleCell(r) + '<div>' + statusCell(r) +
@@ -683,7 +755,8 @@ function pendingData() {
     (rel === "test" ? test : dev).push(taskRow(t, rel));
   });
   var review = (mw.src.pending.review.items || []).map(function (d) { return demandRow(d); });
-  return { dev: dev, test: test, review: review };
+  var plan = (mw.src.pending.plans.items || []).map(function (p) { return planRowModel(p); });
+  return { dev: dev, test: test, review: review, plan: plan };
 }
 function createdData() {
   return (mw.src.created.items || []).map(function (d) { return demandRow(d); });
@@ -695,11 +768,16 @@ function watchedData() {
 }
 function pendingHTML() {
   var data = pendingData();
-  var order = sectionOrder().filter(function (k) { return k !== "review" || reviewAllowed(); });
+  var order = sectionOrder().filter(function (k) {
+    if (k === "review") return reviewAllowed();
+    /* 没有被指派的计划就不出现这一块，避免给所有人多加一张空卡片 */
+    if (k === "plan" && !data.plan.length && !num(mw.counts && mw.counts.pending && mw.counts.pending.plans)) return false;
+    return true;
+  });
   var html = "";
   order.forEach(function (key) {
     var def = PENDING_DEFS[key];
-    var fn = key === "dev" ? devRow : key === "test" ? testRow : reviewRow;
+    var fn = key === "dev" ? devRow : key === "test" ? testRow : key === "plan" ? planRow : reviewRow;
     html += sectionHTML(key, def, data[key], fn, "pending");
   });
   return html;
@@ -741,8 +819,8 @@ function watchedHTML() {
 function moreLine(tab) {
   var loaded = 0, total = 0;
   if (tab === "pending") {
-    loaded = mw.src.pending.tasks.items.length + mw.src.pending.review.items.length;
-    total = mw.src.pending.tasks.total + mw.src.pending.review.total;
+    loaded = mw.src.pending.tasks.items.length + mw.src.pending.review.items.length + mw.src.pending.plans.items.length;
+    total = mw.src.pending.tasks.total + mw.src.pending.review.total + mw.src.pending.plans.total;
   } else if (tab === "created") {
     loaded = mw.src.created.items.length;
     total = mw.src.created.total;
@@ -769,7 +847,7 @@ function briefHTML() {
   var tab = currentTab();
   if (tab === "pending") {
     var data = pendingData();
-    var items = data.dev.concat(data.test, data.review);
+    var items = data.dev.concat(data.test, data.plan, data.review);
     var total = mw.counts ? tabCount("pending") : items.length;
     if (!total && !items.length) {
       return '<span class="mw-txt"><strong>今天没有需要你处理的事项</strong><span> · 可以去「我发起的」看看进展，或从关注列表挑一件推进。</span></span>' + metaHTML();
@@ -826,7 +904,7 @@ function briefHTML() {
 function briefTone() {
   if (currentTab() !== "pending") return "";
   var data = pendingData();
-  var risk = data.dev.concat(data.test, data.review).some(function (r) { return r.dueKind === "overdue" || r.blocked; });
+  var risk = data.dev.concat(data.test, data.plan, data.review).some(function (r) { return r.dueKind === "overdue" || r.blocked; });
   return risk ? " warn" : "";
 }
 function countLabel(tab) {
@@ -846,7 +924,7 @@ function renderTabs() {
 function chipsFor(tab) {
   if (tab === "pending") {
     var all = pendingData();
-    var rows = all.dev.concat(all.test, all.review).filter(rowPassBase);
+    var rows = all.dev.concat(all.test, all.plan, all.review).filter(rowPassBase);
     return [
       { key: "all", label: "全部", n: rows.length },
       { key: "overdue", label: "逾期", n: rows.filter(function (r) { return r.dueKind === "overdue"; }).length },
@@ -965,7 +1043,7 @@ function resetTabData(tab) {
   mw.loading[tab] = true;
 }
 function tabHasData(tab) {
-  if (tab === "pending") return !!(mw.src.pending.tasks.items.length || mw.src.pending.review.items.length);
+  if (tab === "pending") return !!(mw.src.pending.tasks.items.length || mw.src.pending.review.items.length || mw.src.pending.plans.items.length);
   if (tab === "created") return !!mw.src.created.items.length;
   if (tab === "watched") return !!(mw.src.watched.tasks.items.length || mw.src.watched.demands.items.length);
   return false;
@@ -973,7 +1051,7 @@ function tabHasData(tab) {
 function tabRawEmpty(tab) {
   if (tabHasData(tab)) return false;
   if (mw.counts) return num(tabCount(tab)) === 0;
-  if (tab === "pending") return !mw.src.pending.tasks.total && !mw.src.pending.review.total && !tabHasData(tab);
+  if (tab === "pending") return !mw.src.pending.tasks.total && !mw.src.pending.review.total && !mw.src.pending.plans.total && !tabHasData(tab);
   if (tab === "created") return !mw.src.created.total && !tabHasData(tab);
   if (tab === "watched") return !mw.src.watched.tasks.total && !mw.src.watched.demands.total && !tabHasData(tab);
   return true;
@@ -1008,16 +1086,27 @@ function filterEmptyHTML() {
 }
 function emptyHTML() {
   var tab = currentTab();
+  var canNew = canCreateNow();
   var conf = {
     pending: {
       t: "本周还没有待处理事项",
-      d: "没有被指派给你的工作项，也没有待你测试或评审的事项。加入项目或被指派后，这里会自动汇总。",
-      a: [["新建工作项", "primary", "task"], ["去需求池看看", "", "demands"]]
+      d: canNew
+        ? "没有被指派给你的工作项，也没有待你测试或评审的事项。加入项目或被指派后，这里会自动汇总。"
+        : (roleReadOnly()
+          ? "查看者只读：这里只汇总指派给你的事项；当前空间还没有与你相关的工作项或待评审需求。"
+          : "你还没有被分配可写项目。空间主或管理员分配项目后，指派给你的工作项会汇总到这里。"),
+      a: canNew
+        ? [["新建工作项", "primary", "task"], ["去需求池看看", "", "demands"]]
+        : [["去项目页看看", "primary", "projects"], ["去需求池看看", "", "demands"]]
     },
     created: {
       t: "你还没有发起过需求",
-      d: "提交需求后，评审、排期与完成进展都会在这里更新，不需要再去需求池逐个查找。",
-      a: [["提一个需求", "primary", "demand"], ["去需求池看看", "", "demands"]]
+      d: canNew
+        ? "提交需求后，评审、排期与完成进展都会在这里更新，不需要再去需求池逐个查找。"
+        : "需求需要落在可写项目里；获得项目写权限后，才能发起需求并在这里跟踪进展。",
+      a: canNew
+        ? [["提一个需求", "primary", "demand"], ["去需求池看看", "", "demands"]]
+        : [["去需求池看看", "primary", "demands"], ["去项目页看看", "", "projects"]]
     },
     watched: {
       t: "你还没有关注任何事项",
@@ -1037,7 +1126,7 @@ function emptyHTML() {
 function noteText() {
   var tab = currentTab();
   var bits = [];
-  if (tab === "pending") bits.push("页签计数来自服务端；逾期、今天到期与阻塞按已载入明细统计，继续加载会更新结论。工作项可跨空间，评审需求限定当前空间。");
+  if (tab === "pending") bits.push("页签计数来自服务端；逾期、今天到期与阻塞按已载入明细统计，继续加载会更新结论。「待我执行」只列执行人是你、尚未完成的测试计划。工作项与测试计划可跨空间，评审需求限定当前空间。");
   else if (tab === "created") bits.push("页签计数来自服务端；状态 chips 由服务端统计，搜索与优先级筛选只作用于已载入需求。需求按当前空间统计。");
   else bits.push("关注只接收提醒，不代表负责；列表只读，取消关注不会删除对象。工作项可跨空间，需求限定当前空间。");
   bits.push("每类先载入 " + PAGE + " 条，继续加载会追加；搜索与筛选只作用于已载入内容。");
@@ -1266,7 +1355,7 @@ function teamBody(d, range) {
       }).join("") + '</div>' : UI.emptyState({ icon: "inbox", title: "该区间还没有成员计时", compact: true })) + '</section>';
   }
   html += '</div><div class="mw-note">' + icon("infoCircle", 12) +
-    '<span>团队页签仅在移动端对负责人 / 管理员显示；统计范围独立一行。数据按所选区间统计。</span></div>';
+    '<span>团队页签对空间主 / 管理员开放；统计范围独立一行，数据按所选区间统计。</span></div>';
   return html;
 }
 function loadTeam(opts) {
@@ -1314,8 +1403,18 @@ function wsNameById(id) {
   for (var i = 0; i < rt.allWorkspaces.length; i++) if (rt.allWorkspaces[i].id === id) return rt.allWorkspaces[i].name;
   return "该空间";
 }
-function openRow(kind, id, ws, title) {
+function openRow(kind, id, ws, reqId, title) {
   if (!id) return;
+  if (kind === "plan") {
+    /* 计划在测试视图里按项目打开：先切项目与页签，再落路由 */
+    import("../core/view-loader.js").then(function (m) {
+      return m.loadView("testcases").then(function (mod) {
+        mod.openPlanInProject(reqId, id);
+        goView("testcases");
+      });
+    }).catch(function () { toast("测试计划打开失败", "bad"); });
+    return;
+  }
   if (kind === "demand") {
     import("./demands.js").then(function (m) { m.openDemandDetailById(id); }).catch(function () {
       toast("需求详情打开失败", "bad");
@@ -1358,6 +1457,17 @@ function unwatch(kind, id, ws, title, btn) {
   }).catch(function (ex) {
     if (btn) btn.disabled = false;
     toast(ex.message || "取消关注失败", "bad");
+  });
+}
+function claimReview(id, btn) {
+  if (roleReadOnly()) { toast("当前空间或项目为只读，无法认领评审", "warn"); return; }
+  if (btn) btn.disabled = true;
+  API.post("/api/demands/" + enc(id) + "/claim-review", {}).then(function () {
+    toast("已认领，需求进入你的评审队列", "fs");
+    loadMine({ silent: true });
+  }).catch(function (ex) {
+    if (btn) btn.disabled = false;
+    toast(ex.message || "认领失败", "bad");
   });
 }
 function openClaimable() {
@@ -1587,6 +1697,12 @@ function initEvents() {
   });
   if (!mineBody) return;
   mineBody.addEventListener("click", function (e) {
+    var claimReviewBtn = e.target.closest("[data-claim-review]");
+    if (claimReviewBtn) {
+      e.stopPropagation();
+      claimReview(claimReviewBtn.dataset.claimReview, claimReviewBtn);
+      return;
+    }
     var unw = e.target.closest("[data-unwatch]");
     if (unw) {
       e.stopPropagation();
@@ -1594,7 +1710,7 @@ function initEvents() {
       return;
     }
     var opener = e.target.closest("[data-open]");
-    if (opener) { openRow(opener.dataset.open, opener.dataset.id, opener.dataset.ws, opener.dataset.title || ""); return; }
+    if (opener) { openRow(opener.dataset.open, opener.dataset.id, opener.dataset.ws, opener.dataset.req || "", opener.dataset.title || ""); return; }
     var exp = e.target.closest("[data-expand]");
     if (exp) {
       var key = exp.dataset.expand;
@@ -1618,6 +1734,7 @@ function initEvents() {
     if (go) { goView(go.dataset.go); return; }
     var neo = e.target.closest("[data-empty-new]");
     if (neo) {
+      if (!canCreateNow()) { toast("当前没有可写项目，无法新建；请联系空间主或管理员分配", "warn"); return; }
       if (neo.dataset.emptyNew === "task") openTaskDrawer("backlog");
       else newDemand();
       return;
@@ -1660,6 +1777,8 @@ function initEvents() {
   });
   mineBody.addEventListener("keydown", function (e) {
     if (e.key !== "Enter" && e.key !== " ") return;
+    var claimKey = e.target.closest("[data-claim-review]");
+    if (claimKey) { e.preventDefault(); claimKey.click(); return; }
     var el = e.target.closest("[data-open],[data-team-task]");
     if (!el) return;
     e.preventDefault();

@@ -19,10 +19,10 @@
   <insert id="insert">
     INSERT INTO test_plan
       (id, workspace_id, req_id, name, version_id, planned_start, planned_end, status, note,
-       created_by, created_by_user_id)
+       created_by, created_by_user_id, executor_user_id)
     VALUES
       (#{id}, #{workspaceId}, #{reqId}, #{name}, #{versionId}, #{plannedStart}, #{plannedEnd}, #{status}, #{note},
-       #{createdBy}, #{createdByUserId})
+       #{createdBy}, #{createdByUserId}, #{executorUserId})
   </insert>
 
   <update id="update">
@@ -32,7 +32,8 @@
         version_id = #{versionId},
         planned_start = #{plannedStart},
         planned_end = #{plannedEnd},
-        note = #{note}
+        note = #{note},
+        executor_user_id = #{executorUserId}
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
@@ -41,9 +42,10 @@
   </select>
 
   <select id="selectViewByReq" resultType="com.hourglass.dto.TestPlanView">
-    SELECT p.*, v.name AS version_name, <include refid="agg"/>
+    SELECT p.*, v.name AS version_name, em.display_name AS executor_name, <include refid="agg"/>
     FROM test_plan p
     LEFT JOIN project_version v ON v.id = p.version_id AND v.workspace_id = p.workspace_id
+    LEFT JOIN workspace_member em ON em.workspace_id = p.workspace_id AND em.user_id = p.executor_user_id
     WHERE p.workspace_id = #{workspaceId} AND p.req_id = #{reqId}
     ORDER BY (p.status = 'done'), p.created_at DESC, p.id DESC
     LIMIT #{limit} OFFSET #{offset}
@@ -63,9 +65,10 @@
   </select>
 
   <select id="selectViewById" resultType="com.hourglass.dto.TestPlanView">
-    SELECT p.*, v.name AS version_name, <include refid="agg"/>
+    SELECT p.*, v.name AS version_name, em.display_name AS executor_name, <include refid="agg"/>
     FROM test_plan p
     LEFT JOIN project_version v ON v.id = p.version_id AND v.workspace_id = p.workspace_id
+    LEFT JOIN workspace_member em ON em.workspace_id = p.workspace_id AND em.user_id = p.executor_user_id
     WHERE p.id = #{id}
   </select>
 

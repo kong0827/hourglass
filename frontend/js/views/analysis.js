@@ -134,12 +134,12 @@ function renderCompletions(rows, month){
         (r.description ? '<span class="comp-d">' + esc(taskDescText(r.description, 120)) + "</span>" : "") + "</td>" +
       "<td>" + assocLinkHTML("project", r.reqId, r.reqName, {plain:'<span class="comp-dim">—</span>'}) + "</td>" +
       "<td>" + compDocCell(r) + "</td>" +
-      "<td>" + esc(r.owner || "—") + "</td>" +
+      "<td>" + (r.owner ? esc(r.owner) : '<span class="comp-dim">—</span>') + "</td>" +
       "<td>" + (r.category ? catTagByName(r.category) : '<span class="comp-dim">—</span>') + "</td>" +
       '<td>' + priTagHTML(r.priority) + '</td>' +
-      '<td class="nowrap" title="工作项开始日期">' + esc(r.startDate || "—") + "</td>" +
-      '<td class="nowrap" title="工作项完成时间">' + esc(fmtMinute(r.completedAt) || "—") + "</td>" +
-      '<td class="nowrap"><b>' + (fmtMinutesShort(r.totalMinutes) || "—") + "</b></td>" +
+      '<td class="nowrap" title="工作项开始日期">' + (r.startDate ? esc(r.startDate) : '<span class="comp-dim">—</span>') + "</td>" +
+      '<td class="nowrap" title="工作项完成时间">' + (fmtMinute(r.completedAt) ? esc(fmtMinute(r.completedAt)) : '<span class="comp-dim">—</span>') + "</td>" +
+      '<td class="nowrap">' + (Number(r.totalMinutes) > 0 ? "<b>" + fmtMinutesShort(r.totalMinutes) + "</b>" : '<span class="comp-dim">—</span>') + "</td>" +
       "<td>" + compTestOwnerCell(r) + "</td>" +
       "<td>" + compTestWindowCell(r) + "</td>" +
     "</tr>";

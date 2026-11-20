@@ -9,7 +9,7 @@ import { icon } from "./icons.js";
 import { isMobile } from "./layout.js";
 import { handleNoticeClick, loadAlertPanel, loadUnread, renderAlertPanel } from "./notifications.js";
 import { activeView, showView } from "./router.js";
-import { rt, state } from "./state.js";
+import { rt, state, roleReadOnly } from "./state.js";
 import { openTaskDrawer, refreshOwnerSelect, syncCatSeg } from "./task-drawer.js";
 import { UI, esc, toast } from "./ui.js";
 import { avatarColor, avatarColorIndex, initial } from "../lib/format.js";
@@ -64,6 +64,8 @@ function loadWorkspaces(meUser){
 }
 function applyWsRoleGating(){
   document.body.dataset.wsRole = (rt.currentWs && rt.currentWs.myRole) || "";
+  var banner = $("readonlyBanner");
+  if(banner) banner.hidden = !(rt.currentWs && rt.currentWs.myRole === "viewer");
   var owner = !rt.currentWs || rt.currentWs.myRole === "owner";
   [["btnExport","导出任务备份"],["btnImport","导入任务备份"],["btnReset","清空任务数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
     var b = $(pair[0]);
@@ -227,6 +229,8 @@ $("newMenu").addEventListener("click", function(e){
   var b = e.target.closest("[data-new]");
   if(!b) return;
   UI.closeAllPops();
+  /* 查看者只读：菜单已由角色门隐藏，这里再兜底一次，避免脚本或旧缓存把入口带出来 */
+  if(roleReadOnly()){ toast("你是该空间的查看者，不能新建对象", "warn"); return; }
   var kind = b.dataset.new;
   if(kind === "task"){ openTaskDrawer("backlog"); return; }
   if(kind === "ai"){ toggleAssistant(); return; }

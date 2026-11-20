@@ -788,20 +788,19 @@ class DemandServiceScheduleTest {
     }
 
     @Test
-    void controllerKeepsOwnerReviewAndDelegatesSchedulePermissionToService() throws Exception {
+    void controllerDelegatesReviewAndScheduleToServiceAndKeepsDeleteOwnerOnly() throws Exception {
         Class<?> controller = com.hourglass.controller.DemandController.class;
-        for (String action : new String[] {"plan", "replan", "unplan", "cancel", "restore"}) {
-            assertFalse(controller.getDeclaredMethod(action, String.class, DemandActionRequest.class,
-                    com.hourglass.config.WorkspaceCtx.class)
-                    .isAnnotationPresent(com.hourglass.common.RequireRole.class));
+        /* 评审流转与「待我评审」队列同口径：项目写权限由服务端校验，不加空间角色注解 */
+        for (String action : new String[] {"claimReview", "pass", "reject", "unpass", "reopen",
+                "plan", "replan", "unplan", "cancel", "restore"}) {
+            java.lang.reflect.Method method = action.equals("claimReview")
+                    ? controller.getDeclaredMethod(action, String.class, com.hourglass.config.WorkspaceCtx.class)
+                    : controller.getDeclaredMethod(action, String.class, DemandActionRequest.class,
+                            com.hourglass.config.WorkspaceCtx.class);
+            assertFalse(method.isAnnotationPresent(com.hourglass.common.RequireRole.class), action);
         }
         assertTrue(controller.getDeclaredMethod("delete", String.class, com.hourglass.config.WorkspaceCtx.class)
                 .isAnnotationPresent(com.hourglass.common.RequireRole.class));
-        for (String action : new String[] {"pass", "reject", "unpass", "reopen"}) {
-            assertTrue(controller.getDeclaredMethod(action, String.class, DemandActionRequest.class,
-                    com.hourglass.config.WorkspaceCtx.class)
-                    .isAnnotationPresent(com.hourglass.common.RequireRole.class));
-        }
     }
 
     @Test

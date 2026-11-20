@@ -307,7 +307,7 @@
                     OR EXISTS (SELECT 1 FROM project_member pmw
                                WHERE pmw.workspace_id = t.workspace_id
                                  AND pmw.project_id = t.req_id
-                                 AND pmw.user_id = #{userId} AND pmw.access = 'write')
+                                 AND pmw.user_id = #{userId} AND pmw.access IN ('write', 'test'))
                     OR ((m.project_access_mode IS NULL OR m.project_access_mode &lt;&gt; 'assigned')
                         AND NOT EXISTS (SELECT 1 FROM project_member pmr
                                         WHERE pmr.workspace_id = t.workspace_id

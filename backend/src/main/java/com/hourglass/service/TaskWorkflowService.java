@@ -376,7 +376,8 @@ public class TaskWorkflowService {
     public Map<String, Object> claimTest(String userId, String workspaceId, String id) {
         Task task = lockActiveTask(workspaceId, id);
         projectAccess.assertViewTask(workspaceId, userId, task);
-        projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
+        /* 认领测试负责人属于测试链路：项目「可测试」即可，不要求工作项写权限 */
+        projectAccess.assertTestForUpdate(workspaceId, userId, task.getReqId());
         if (!Consts.COL_TESTING.equals(task.getBoardColumn())) {
             throw AppException.badRequest("只有「测试中」的工作项可以认领测试负责人");
         }

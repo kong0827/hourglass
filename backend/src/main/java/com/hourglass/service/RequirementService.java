@@ -196,7 +196,9 @@ public class RequirementService {
             p.setFirstReleasedAt(r.getFirstReleasedAt());
             p.setCreatedAt(r.getCreatedAt());
             p.setUpdatedAt(r.getUpdatedAt());
-            p.setAccess(!globalRead && !ProjectAccessService.ACCESS_READ.equals(grants.get(r.getId()))
+            /* 只有「未配置」或显式 write 才算可写；read/test 都是只读工作项 */
+            String access = grants.get(r.getId());
+            p.setAccess(!globalRead && (access == null || ProjectAccessService.ACCESS_WRITE.equals(access))
                     ? "write" : "read");
 
             com.hourglass.dto.ReqTaskAggRow agg = aggByReq.get(r.getId());
@@ -237,6 +239,10 @@ public class RequirementService {
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
         applyProfile(workspaceId, r, req);
+        /* 未指定负责人时创建者即为项目负责人，建完即可管理本项目，不用再找管理员改一次 */
+        if (r.getOwnerUserId() == null) {
+            r.setOwnerUserId(userId);
+        }
         r.setSetId(projectSetService.normalizeSetId(workspaceId, req.getSetId()));
         r.setSortOrder(reqMapper.selectMaxSortOrder(workspaceId) + 1);
         reqMapper.insert(r);
@@ -272,7 +278,8 @@ public class RequirementService {
         if (old == null || !workspaceId.equals(old.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
-        projectAccess.assertWrite(workspaceId, userId, id);
+        /* 项目资料属于项目级管理：空间管理员或本项目的负责人；普通参与者仍可改工作项 */
+        projectAccess.assertManageProject(workspaceId, userId, id, old.getOwnerUserId());
         Requirement r = new Requirement();
         r.setId(id);
         r.setWorkspaceId(workspaceId);
@@ -316,7 +323,7 @@ public class RequirementService {
         if (old == null || !workspaceId.equals(old.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
-        projectAccess.assertWrite(workspaceId, userId, id);
+        projectAccess.assertManageProject(workspaceId, userId, id, old.getOwnerUserId());
         String newSetId = projectSetService.normalizeSetId(workspaceId, rawSetId);
         if (!java.util.Objects.equals(old.getSetId(), newSetId)) {
             reqMapper.updateSetId(workspaceId, id, newSetId);
@@ -388,7 +395,7 @@ public class RequirementService {
         if (old == null || !workspaceId.equals(old.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
-        projectAccess.assertWrite(workspaceId, userId, id);
+        projectAccess.assertManageProject(workspaceId, userId, id, old.getOwnerUserId());
         reqMapper.setArchived(workspaceId, id, archived);
         workActivityService.recordCurrent(workspaceId, WorkActivityService.PROJECT, id, "archive",
                 archived ? "归档了项目" : "取消归档");

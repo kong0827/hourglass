@@ -204,7 +204,8 @@ class TaskWorkflowServiceTestFlowTest {
         LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
         assertEquals(now, task.getTestStartedAt());
         assertEquals(now, task.getTestRequestedAt());
-        verify(projectAccess).assertWriteForUpdate("w1", "u1", null);
+        /* 认领测试负责人属于测试链路：项目「可测试」即可，不要求工作项写权限 */
+        verify(projectAccess).assertTestForUpdate("w1", "u1", null);
         verify(audit).log("u1", "w1", "t1", "update", "认领测试负责人，开始测试");
     }
 

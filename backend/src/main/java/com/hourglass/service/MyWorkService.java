@@ -77,11 +77,15 @@ public class MyWorkService {
         int watchedDemands = myWorkMapper.countMyDemands(demandQuery(workspaceId, userId, displayName, "watch"));
         int reviewCount = myWorkMapper.countMyDemands(demandQuery(workspaceId, userId, displayName, "review"));
 
+        /* 待我执行：测试计划执行人是我、未完成；只算当前空间 */
+        int planCount = myWorkMapper.countMyTestPlans(workspaceId, userId);
+
         Map<String, Object> pending = new LinkedHashMap<String, Object>();
         pending.put("tasks", pendingTasks);
         pending.put("dev", devCount);
         pending.put("test", testCount);
         pending.put("review", reviewCount);
+        pending.put("plans", planCount);
 
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("pending", pending);
@@ -92,6 +96,24 @@ public class MyWorkService {
         res.put("claimable", claimable);
         res.put("reviewAvailable", reviewAvailable(workspaceId, userId));
         res.put("matchedByNameOnly", createdNameOnly);
+        res.put("updatedAt", LocalDateTime.now().format(TIME_FORMAT));
+        return res;
+    }
+
+    /** 待我执行：指派给我的测试计划分页（未完成、项目可见且未归档） */
+    public Map<String, Object> testPlans(String workspaceId, String userId, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, limit));
+        int total = myWorkMapper.countMyTestPlans(workspaceId, userId);
+        List<com.hourglass.dto.MyTestPlanRow> items = total <= safeOffset
+                ? new ArrayList<com.hourglass.dto.MyTestPlanRow>()
+                : myWorkMapper.selectMyTestPlans(workspaceId, userId, safeOffset, safeLimit);
+        Map<String, Object> res = new LinkedHashMap<String, Object>();
+        res.put("items", items);
+        res.put("total", total);
+        res.put("offset", safeOffset);
+        res.put("limit", safeLimit);
+        res.put("hasMore", safeOffset + items.size() < total);
         res.put("updatedAt", LocalDateTime.now().format(TIME_FORMAT));
         return res;
     }
@@ -253,6 +275,9 @@ public class MyWorkService {
             if (Texts.trimToNull(d.getCreatedBy()) != null) {
                 ids.add(d.getCreatedBy());
             }
+            if (Texts.trimToNull(d.getReviewerUserId()) != null) {
+                ids.add(d.getReviewerUserId());
+            }
         }
         if (ids.isEmpty()) {
             return;
@@ -266,6 +291,8 @@ public class MyWorkService {
         for (Demand d : items) {
             String name = names.get(d.getCreatedBy());
             d.setCreatedByName(name == null ? null : Texts.cut(name, 32));
+            String reviewer = names.get(d.getReviewerUserId());
+            d.setReviewerName(reviewer == null ? null : Texts.cut(reviewer, 32));
         }
     }
 }

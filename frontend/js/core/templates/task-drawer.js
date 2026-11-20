@@ -312,6 +312,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         <div class="ctx-item">
           <label class="ctx-label" for="iReq">所属项目 <span class="auto" id="autoProject" hidden>自动</span></label>
           <select id="iReq" title="工作项可暂不归属项目；需求文档、测试用例与测试计划必须归属项目"></select>
+          <span class="hint" id="iReqHint" hidden></span>
         </div>
         <div class="ctx-item">
           <label class="ctx-label" for="iOwner">负责人</label>

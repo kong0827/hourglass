@@ -23,6 +23,8 @@ public class TestPlan {
     private String note;
     private String createdBy;
     private String createdByUserId;
+    /** 执行人账号ID（空=未指派，不进「待我执行」） */
+    private String executorUserId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

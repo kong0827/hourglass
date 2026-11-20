@@ -361,8 +361,8 @@ function projectAccess(reqId){
   if(reqId){
     var map = rt.currentWs && rt.currentWs.projectAccess;
     if(map && map[reqId]){
-      /* none 的项目本应被列表过滤；万一漏到前端也按只读处理，不能按可写放行 */
-      return map[reqId] === "read" || map[reqId] === "none" ? "read" : "write";
+      /* 只有 write 才是可写；read/none/test 都只读工作项（test 只放开测试链路） */
+      return map[reqId] === "write" ? "write" : "read";
     }
     for(var i = 0; i < rt.reqList.length; i++){
       if(rt.reqList[i].id === reqId && rt.reqList[i].access === "read") return "read";
@@ -372,6 +372,23 @@ function projectAccess(reqId){
 }
 function canEditReq(reqId){
   return projectAccess(reqId) === "write";
+}
+/**
+ * 全局新建门：当前角色此刻能否新建任何对象。
+ * 查看者永远 false；空间主/管理员 true；成员需要至少一个可写项目。
+ * 用于隐藏「永远不会成功」的创建入口，而不是让用户点了才 403。
+ */
+function canCreateNow(){
+  if(roleReadOnly()) return false;
+  var role = currentRole();
+  if(role === "owner" || role === "admin") return true;
+  var map = rt.currentWs && rt.currentWs.projectAccess;
+  if(map && typeof map === "object"){
+    for(var k in map){ if(map[k] === "write") return true; }
+    return false;
+  }
+  /* 旧响应没有 projectAccess 时不做隐藏，避免误伤可写成员 */
+  return true;
 }
 /** 项目设置类操作（分类维护等）：空间主/管理员，或项目负责人；仍需具备项目写权限 */
 function canManageProject(reqId, ownerUserId){
@@ -394,6 +411,20 @@ function canEditTask(t){
   return projectAccess(t.reqId) === "write";
 }
 /**
+ * 测试链路门（测试计划 / 执行用例 / 转缺陷 / 认领测试）：
+ * 查看者恒 false；owner/admin 全量；成员需项目 write 或 test。
+ * 与后端 canTest 同口径：test 只放开测试，不改工作项。
+ */
+function canTestProject(reqId){
+  if(roleReadOnly()) return false;
+  var role = currentRole();
+  if(role === "owner" || role === "admin") return true;
+  if(!reqId) return true;
+  var map = rt.currentWs && rt.currentWs.projectAccess;
+  if(map && map[reqId]) return map[reqId] === "write" || map[reqId] === "test";
+  return projectAccess(reqId) === "write";
+}
+/**
  * 文档改删（A 创建人保护）：项目/空间可写 + （负责人本人 或 空间主/管理员 或 无负责人回退）。
  * 与后端 assertDocMutate 同口径。排序拖动 / 新建子文档仍用 canEditReq（组织/新增，不改父文档）。
  */
@@ -408,4 +439,4 @@ function canEditDoc(d){
   return !!(me && String(owner) === String(me));
 }
 
-export { calState, canEditDoc, canEditReq, canEditTask, canManageProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, projectGroupLabel, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, reqSetId, roleReadOnly, safeColor, selectedFilterCount, setNameById, setSortOf, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canCreateNow, canEditDoc, canEditReq, canEditTask, canManageProject, canTestProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, projectGroupLabel, projectGroups, projectOptionsHTML, projectRefsEnriched, reqNameById, reqSetId, roleReadOnly, safeColor, selectedFilterCount, setNameById, setSortOf, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

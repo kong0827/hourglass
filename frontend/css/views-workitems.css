@@ -238,6 +238,13 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 .list-row .lr-tags{display:flex;align-items:center;gap:var(--space-1);flex-wrap:wrap;}
 .list-row .cell{font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 空值占位「—」比正文再淡一档：否则和真实值同色，扫读时分不清哪些列没填 */
+.list-row .cell.muted{color:var(--text-3);}
+/* 行内的到期/类型提醒跟标题旁的徽标同一档（11/17），不跟随 .mini-tag 的全局 12 号，
+   避免比 11.5 的状态标签更抢眼；列表、层级、状态工作列三种行共用同一规格 */
+.list-row .cell .mini-tag,.tree-row .cell .mini-tag,.wc-row .cell .mini-tag{
+  font-size:11px;padding:1px 6px;line-height:17px;margin-left:4px;vertical-align:middle;
+}
 .list-row .cell.over{color:var(--danger-fg);font-weight:500;}
 .list-row .cell.today{color:var(--warning-fg);font-weight:600;}
 .list-row .cell-act{display:flex;justify-content:flex-end;}

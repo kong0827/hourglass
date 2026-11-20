@@ -471,7 +471,8 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 .tc-c-time{color:var(--text-3);font-variant-numeric:tabular-nums;}
 .tc-c-owner{color:var(--text-2);}
 .tc-none{color:var(--text-3);}
-.tc-title{font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 与单条用例页、列表视图统一：行标题 12.5/600，不再单独用 13 号 */
+.tc-title{font-size:12.5px;font-weight:600;letter-spacing:-.01em;line-height:18px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tc-pri{margin-left:6px;font-weight:700;}
 .tc-pri .pdot{font-size:12px;font-weight:600;}
 /* 元信息两行键值：第一行是归属（模块 / 需求 / 工作项），第二行是执行口径（步骤 / 前置 / 执行人） */
@@ -1368,7 +1369,7 @@ button.col-name:focus-visible{outline:none;border-radius:var(--r-xs);box-shadow:
 .vl-name{min-width:0;display:flex;flex-direction:column;gap:2px;}
 .vl-name-row{display:flex;align-items:center;gap:var(--space-1);min-width:0;}
 .vl-name-link{
-  min-width:0;border:0;background:transparent;padding:0;font:inherit;font-weight:600;font-size:13px;
+  min-width:0;border:0;background:transparent;padding:0;font:inherit;font-weight:600;font-size:12.5px;
   color:var(--text);text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .vl-name-link:hover{color:var(--primary-fg);}

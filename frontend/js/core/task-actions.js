@@ -5,7 +5,7 @@ import { $ } from "./dom.js";
 import { icon } from "./icons.js";
 import { activeView, showView } from "./router.js";
 import { taskPayloadWith } from "./shortcuts.js";
-import { state, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
+import { state, canCreateNow, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { deleteTask, openTaskDrawer } from "./task-drawer.js";
 import { openDateAt } from "./date-picker.js";
 import { guard, loadRules, ruleFor, serverDecision } from "./transitions.js";
@@ -68,6 +68,7 @@ function handleDeepLink(){
   /* 助手「新建工作项」入口：#/board?new=1 直接打开新建抽屉 */
   if(hashParam("new") === "1"){
     stripHashParam("new");
+    if(!canCreateNow()){ toast("当前没有可写的项目，无法新建工作项；请联系空间主或管理员分配项目", "warn"); return; }
     if(activeView === "board"){ openTaskDrawer("backlog"); return; }
     showView("board").then(function(){ openTaskDrawer("backlog"); });
   }

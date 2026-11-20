@@ -33,9 +33,12 @@ public class UserNotificationPreferenceService {
     public static final String DEMAND_WATCH = "demand_watch";
     /** 每日站内汇总开关（只影响 task_due 汇总，不影响任务级提醒） */
     public static final String DAILY_DIGEST = "daily_digest";
+    /** 测试计划指派：执行人变更后进入「我的工作 → 待我执行」 */
+    public static final String TEST_PLAN_ASSIGNED = "test_plan_assigned";
 
     public static final List<String> EVENT_TYPES = Collections.unmodifiableList(Arrays.asList(
-            TASK_ASSIGNED, TASK_COMMENT, TASK_WATCH, TASK_UPDATED, DEMAND_STATUS, DEMAND_WATCH, DAILY_DIGEST));
+            TASK_ASSIGNED, TASK_COMMENT, TASK_WATCH, TASK_UPDATED, DEMAND_STATUS, DEMAND_WATCH,
+            TEST_PLAN_ASSIGNED, DAILY_DIGEST));
     private static final Set<String> EVENT_SET = Collections.unmodifiableSet(new HashSet<String>(EVENT_TYPES));
 
     private final UserNotificationPreferenceMapper mapper;

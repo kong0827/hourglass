@@ -313,6 +313,8 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .dem-inline-menu.dem-inline-pri{max-width:110px;}
 .dem-inline-date-t{font-variant-numeric:tabular-nums;}
 .dem-inline-date-t.is-empty{color:var(--text-3);font-weight:500;}
+/* 「未指定 / 未分类」这类空值占位与列表的 muted 同色，别用正文色假装有值 */
+.dem-inline-txt.is-empty{color:var(--text-3);font-weight:500;}
 /* 来源这类纯文本字段：点单元格就地编辑；只读态像普通文字，悬停/聚焦才显形 */
 .dem-inline-text{
   display:inline-block;max-width:170px;padding:2px 6px;margin:-2px -6px;

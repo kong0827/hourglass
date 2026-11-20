@@ -21,6 +21,9 @@ public class TestPlanView {
     private String status;
     private String note;
     private String createdBy;
+    /** 执行人账号ID与显示名（空=未指派） */
+    private String executorUserId;
+    private String executorName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

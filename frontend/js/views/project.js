@@ -263,6 +263,21 @@ function rosterRoleSelect(m, canEdit){
     : '<span class="tag tag-ghost">' + esc(effective || "未设角色") + '</span>')
     + '<small class="roster-role-source">' + esc(source === "project" ? "本项目覆盖 · " + effective : (source === "workspace" ? "空间默认 · " + effective : "未设岗位（空间与项目均未设置）")) + '</small>';
 }
+/** 项目权限：管理者可就地调整（空间主/管理员及其本人行固定展示，避免把自己降级后失去入口） */
+function rosterAccessCell(m, canManage){
+  var label = m.access === "read" ? "只读" : (m.access === "test" ? "可测试" : "可参与");
+  var privileged = m.source === "空间主" || m.source === "空间管理员";
+  var self = rt.currentUser && String(m.userId) === String(rt.currentUser.id);
+  if(!canManage || privileged || self){
+    var tone = m.access === "test" ? "test" : (m.access === "read" ? "read" : "write");
+    return '<span class="roster-access ' + tone + '">' + label + '</span>';
+  }
+  var options = [["write", "可参与"], ["test", "可测试"], ["read", "只读"], ["none", "不可见"]]
+    .map(function(o){ return '<option value="' + o[0] + '"' + (m.access === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("");
+  return '<select class="mini-select roster-access-select" data-roster-access="' + esc(m.userId)
+    + '" aria-label="' + esc((m.displayName || m.username || m.userId) + "在本项目的权限") + '"'
+    + (rosterBusy() ? " disabled" : "") + '>' + options + '</select>';
+}
 function rosterBusy(){ return rosterWrites.has(rosterCache.key); }
 function filteredRoster(){ return (rosterCache.data && rosterCache.data.members || []).filter(function(m){ return matchesMemberLabels(m, rosterUi); }); }
 function rosterContext(){
@@ -315,7 +330,7 @@ function paintRoster(){
       + '<td data-label="本项目主角色">' + rosterRoleSelect(m, canEdit) + '</td>'
       + '<td data-label="兼岗"><div class="manager-member-labels">' + secondary.map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("")
       + (canEdit ? '<button class="btn sm ' + (secondary.length ? "ghost" : "add") + '" type="button" data-roster-secondary="' + esc(m.userId) + '" aria-label="编辑' + esc(name) + '的兼岗"' + disabled + '>' + (secondary.length ? "编辑兼岗" : "+ 添加兼岗") + '</button>' : (!secondary.length ? '<span class="roster-empty">无兼岗</span>' : '')) + '</div></td>'
-      + '<td data-label="项目权限"><span class="roster-access ' + (m.access === "read" ? "read" : "write") + '">' + (m.access === "read" ? "只读" : "可参与") + '</span></td>'
+      + '<td data-label="项目权限">' + rosterAccessCell(m, !!rosterCache.data.canManageAccess) + '</td>'
       + '<td data-label="可见来源"><span class="roster-source">' + esc(m.source || "") + '</span></td></tr>';
   }).join("") || '<tr><td colspan="' + (canEdit ? 8 : 7) + '" class="manager-empty-cell">' + (all.length ? '没有匹配的成员，请清除筛选' : '当前没有可见的项目成员') + '</td></tr>';
 }
@@ -366,6 +381,17 @@ function saveRosterRole(sel){
       announceRosterChange(ctx, title ? "已设置项目主角色「" + title + "」" : "已沿用空间默认岗位，兼岗保持不变");
     });
   }).catch(function(ex){ toast(ex.message || "角色设置失败，请重试", "bad"); }).finally(function(){ finishRosterWrite(ctx); });
+}
+function saveRosterAccess(sel){
+  var m = rosterMember(sel.dataset.rosterAccess), ctx = rosterContext(), value = sel.value;
+  if(!m || !startRosterWrite(ctx)) return;
+  API.put("/api/workspaces/" + encodeURIComponent(ctx.workspaceId) + "/project-access",
+    { userId:m.userId, projectId:ctx.projectId, access:value }).then(function(){
+      rosterWrites.delete(ctx.key);
+      announceRosterChange(ctx, "已调整 " + (m.displayName || m.userId) + " 在本项目的权限");
+    }).catch(function(ex){
+      toast(ex.message || "权限调整失败，请重试", "bad");
+    }).finally(function(){ finishRosterWrite(ctx); });
 }
 function saveRosterSecondary(id){
   var m = rosterMember(id), ctx = rosterContext();
@@ -2245,6 +2271,8 @@ function onChange(e){
   if(pcFilterSel){ setProjectContentFilter(pcFilterSel.dataset.pcFilter, pcFilterSel.value); return; }
   var roleSel = e.target.closest("[data-roster-role]");
   if(roleSel){ saveRosterRole(roleSel); return; }
+  var accessSel = e.target.closest("[data-roster-access]");
+  if(accessSel){ saveRosterAccess(accessSel); return; }
   var check = e.target.closest("[data-roster-check]"), all = e.target.closest("[data-roster-all]");
   if((check || all) && rosterContext() && !rosterBusy()){
     if(check){ if(check.checked) rosterUi.selected.add(check.dataset.rosterCheck); else rosterUi.selected.delete(check.dataset.rosterCheck); }

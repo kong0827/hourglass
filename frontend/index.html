@@ -440,6 +440,12 @@
       </div>
     </div>
 
+    <!-- 查看者常驻只读说明：写入口统一隐藏后，仍需一处解释「为什么没有按钮」 -->
+    <div class="readonly-banner" id="readonlyBanner" role="status" hidden>
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 10S5.2 4.8 10 4.8 17.6 10 17.6 10 14.8 15.2 10 15.2 2.4 10 2.4 10Z"/><circle cx="10" cy="10" r="2.2"/></svg>
+      <span><b>只读空间</b>：你是该空间的查看者，可以浏览、搜索与导出，不能新建、编辑或拖动工作项。需要写权限请联系空间主或管理员。</span>
+    </div>
+
     <div class="narrow-hint">
       <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M10 6.2v4.2"/><path d="M10 13.6h.01"/><circle cx="10" cy="10" r="7.6"/></svg>
       建议窗口宽度 ≥ 1280px 以获得完整布局
@@ -2423,6 +2429,10 @@
                   <label for="pVersion">关联版本 <small class="tc-optional">选填</small></label>
                   <select id="pVersion"></select>
                 </div>
+                <div class="field" style="flex:1 1 50%">
+                  <label for="pExecutor">执行人 <small class="tc-optional">选填</small></label>
+                  <select id="pExecutor"></select>
+                </div>
               </div>
               <div class="row row-gap">
                 <div class="field" style="flex:1 1 50%">
@@ -3837,6 +3847,11 @@
         <textarea id="dAccept" maxlength="2000" placeholder="做到什么程度算完成…"></textarea>
       </div>
       <div class="form-sec span2" id="fDemandWatchSec">通知</div>
+      <div class="field span2" id="fDemandReviewer">
+        <label for="dReviewer">评审人 <small class="tc-optional">选填</small></label>
+        <select id="dReviewer"><option value="">未指派 · 项目可写成员都可以认领</option></select>
+        <span class="hint">指派后优先出现在对方「我的工作 → 待我评审」；不指派则进入项目可写成员的公共队列。</span>
+      </div>
       <div class="field span2" id="fDemandWatch">
         <label>提醒人 <small class="tc-optional">选填</small></label>
         <div class="dem-watch-edit" data-dem-form-watch>

@@ -46,13 +46,18 @@ public class TestPlanService {
     private final AuditService auditService;
     /** 计划用例行带出验证的工作项，供需求范围与覆盖追溯 */
     private final com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
+    /** 执行人必须是空间成员且对该项目可测试 */
+    private final com.hourglass.mapper.WorkspaceMemberMapper memberMapper;
+    private final NotificationEventService notificationEvents;
 
     public TestPlanService(TestPlanMapper planMapper, TestPlanCaseMapper planCaseMapper,
                            TestCaseMapper caseMapper, TestCaseService caseService,
                            ProjectAccessService projectAccess,
                            com.hourglass.mapper.ProjectVersionMapper versionMapper,
                            AuditService auditService,
-                           com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper) {
+                           com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper,
+                           com.hourglass.mapper.WorkspaceMemberMapper memberMapper,
+                           NotificationEventService notificationEvents) {
         this.planMapper = planMapper;
         this.planCaseMapper = planCaseMapper;
         this.caseMapper = caseMapper;
@@ -61,6 +66,8 @@ public class TestPlanService {
         this.versionMapper = versionMapper;
         this.auditService = auditService;
         this.caseTaskMapper = caseTaskMapper;
+        this.memberMapper = memberMapper;
+        this.notificationEvents = notificationEvents;
     }
 
     /* ---------- 查询 ---------- */
@@ -140,7 +147,8 @@ public class TestPlanService {
 
     @Transactional
     public TestPlanView create(String userId, String workspaceId, TestPlanSaveRequest req) {
-        projectAccess.assertWrite(workspaceId, userId, req.getReqId());
+        /* 测试链路走「可测试」：项目测试人员无需工作项写权限即可建计划与执行 */
+        projectAccess.assertTest(workspaceId, userId, req.getReqId());
         checkDates(req);
         TestPlan p = new TestPlan();
         p.setId(Ids.gen("TP"));
@@ -153,18 +161,22 @@ public class TestPlanService {
         /* 新计划一律从草稿开始：running / done 只能走 setStatus（done 需先圈选用例） */
         p.setStatus("draft");
         p.setNote(Texts.trimToNull(req.getNote()));
+        p.setExecutorUserId(checkExecutor(workspaceId, req.getReqId(), req.getExecutorUserId()));
         p.setCreatedBy(CurrentUser.get().getDisplayName());
         p.setCreatedByUserId(userId);
         planMapper.insert(p);
         auditService.recordCurrent(workspaceId, "test_plan_create", "test_plan", p.getId(), p.getName(), true,
-                "新建测试计划「" + p.getName() + "」（草稿）", null);
+                "新建测试计划「" + p.getName() + "」（草稿）"
+                        + (p.getExecutorUserId() == null ? "" : "，执行人：" + executorName(workspaceId, p.getExecutorUserId())),
+                null);
+        notifyExecutor(p, null, userId);
         return planMapper.selectViewById(p.getId());
     }
 
     @Transactional
     public TestPlanView update(String userId, String workspaceId, String id, TestPlanSaveRequest req) {
         TestPlan p = requirePlan(workspaceId, id);
-        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        projectAccess.assertTest(workspaceId, userId, p.getReqId());
         assertEditable(p);
         /* 计划圈选的用例都属于原项目：所属项目不可改，否则计划与用例跨项目错位 */
         if (req.getReqId() != null && !req.getReqId().equals(p.getReqId())) {
@@ -175,6 +187,7 @@ public class TestPlanService {
         String oldVersionId = p.getVersionId();
         java.time.LocalDate oldStart = p.getPlannedStart();
         java.time.LocalDate oldEnd = p.getPlannedEnd();
+        String oldExecutor = p.getExecutorUserId();
         String oldNote = p.getNote();
         p.setName(Texts.cut(req.getName().trim(), 100));
         String keepVersion = Texts.trimToNull(req.getVersionId());
@@ -186,6 +199,7 @@ public class TestPlanService {
         p.setPlannedStart(req.getPlannedStart());
         p.setPlannedEnd(req.getPlannedEnd());
         p.setNote(Texts.trimToNull(req.getNote()));
+        p.setExecutorUserId(checkExecutor(workspaceId, p.getReqId(), req.getExecutorUserId()));
         planMapper.update(p);
         StringBuilder planDetail = new StringBuilder(java.util.Objects.equals(oldName, p.getName())
                 ? "编辑测试计划「" + p.getName() + "」"
@@ -202,8 +216,13 @@ public class TestPlanService {
         if (!java.util.Objects.equals(oldNote, p.getNote())) {
             planDetail.append("，修改备注");
         }
+        if (!java.util.Objects.equals(oldExecutor, p.getExecutorUserId())) {
+            planDetail.append("，执行人 ").append(oldExecutor == null ? "未指派" : executorName(workspaceId, oldExecutor))
+                    .append(" → ").append(p.getExecutorUserId() == null ? "未指派" : executorName(workspaceId, p.getExecutorUserId()));
+        }
         auditService.recordCurrent(workspaceId, "test_plan_update", "test_plan", id, p.getName(), true,
                 planDetail.toString(), null);
+        notifyExecutor(p, oldExecutor, userId);
         return planMapper.selectViewById(id);
     }
 
@@ -239,7 +258,7 @@ public class TestPlanService {
             throw AppException.badRequest("计划状态不合法");
         }
         TestPlan p = requirePlan(workspaceId, id);
-        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        projectAccess.assertTest(workspaceId, userId, p.getReqId());
         if ("done".equals(status)) {
             TestPlanView v = planMapper.selectViewById(id);
             if (v == null || v.getCaseCount() == 0) {
@@ -258,6 +277,7 @@ public class TestPlanService {
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
         TestPlan p = requirePlan(workspaceId, id);
+        /* 删除不可逆，仍要求项目写权限；可测试只放开创建/编辑/执行 */
         projectAccess.assertWrite(workspaceId, userId, p.getReqId());
         planCaseMapper.deleteByPlan(id);
         planMapper.deleteById(workspaceId, id);
@@ -271,7 +291,7 @@ public class TestPlanService {
     @Transactional
     public int addCases(String userId, String workspaceId, String planId, PlanBatchRequest req) {
         TestPlan p = requirePlan(workspaceId, planId);
-        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        projectAccess.assertTest(workspaceId, userId, p.getReqId());
         assertEditable(p);
         Set<String> exists = new HashSet<String>(planCaseMapper.selectCaseIds(planId));
         boolean required = Boolean.TRUE.equals(req.getRequired());
@@ -309,7 +329,7 @@ public class TestPlanService {
     public Map<String, Object> addCasesByFilter(String userId, String workspaceId, String planId,
                                                 com.hourglass.dto.PlanFilterRequest req) {
         TestPlan p = requirePlan(workspaceId, planId);
-        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        projectAccess.assertTest(workspaceId, userId, p.getReqId());
         assertEditable(p);
         if (req.getFilter() == null) {
             throw AppException.badRequest("按筛选加入时必须带上筛选条件");
@@ -357,7 +377,7 @@ public class TestPlanService {
     @Transactional
     public void removeCase(String userId, String workspaceId, String planId, String caseId) {
         TestPlan p = requirePlan(workspaceId, planId);
-        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        projectAccess.assertTest(workspaceId, userId, p.getReqId());
         assertEditable(p);
         planCaseMapper.deleteByPlanAndCase(planId, caseId);
         auditService.recordCurrent(workspaceId, "test_plan_cases_remove", "test_plan", planId, p.getName(), true,
@@ -368,7 +388,7 @@ public class TestPlanService {
     @Transactional
     public void setRequired(String userId, String workspaceId, String planId, String caseId, boolean required) {
         TestPlan p = requirePlan(workspaceId, planId);
-        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        projectAccess.assertTest(workspaceId, userId, p.getReqId());
         assertEditable(p);
         if (planCaseMapper.selectByPlanAndCase(planId, caseId) == null) {
             throw AppException.notFound("用例不在该计划中：" + caseId);
@@ -395,7 +415,7 @@ public class TestPlanService {
             throw AppException.badRequest("执行结果不合法");
         }
         TestPlan p = requirePlan(workspaceId, planId);
-        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        projectAccess.assertTest(workspaceId, userId, p.getReqId());
         assertEditable(p);
         Set<String> inPlan = new HashSet<String>(planCaseMapper.selectCaseIds(planId));
         CaseRunRequest runReq = new CaseRunRequest();
@@ -436,6 +456,45 @@ public class TestPlanService {
             return "阻塞";
         }
         return "跳过";
+    }
+
+    /* ---------- 执行人 ---------- */
+
+    /** 执行人必须在本空间且对该项目可测试；空值表示不指派 */
+    private String checkExecutor(String workspaceId, String reqId, String rawExecutorId) {
+        String executorId = Texts.trimToNull(rawExecutorId);
+        if (executorId == null) {
+            return null;
+        }
+        com.hourglass.entity.WorkspaceMember member = memberMapper.selectMember(workspaceId, executorId);
+        if (member == null) {
+            throw AppException.badRequest("执行人不是当前空间成员");
+        }
+        if (!projectAccess.canTest(workspaceId, executorId, reqId)) {
+            throw AppException.badRequest("执行人对该项目没有测试权限，请先在项目中授予「可测试」");
+        }
+        return executorId;
+    }
+
+    private String executorName(String workspaceId, String userId) {
+        com.hourglass.entity.WorkspaceMember m = memberMapper.selectMember(workspaceId, userId);
+        if (m != null && Texts.trimToNull(m.getDisplayName()) != null) {
+            return m.getDisplayName();
+        }
+        return userId;
+    }
+
+    /** 执行人变更（且不是操作者本人）时通知；未指派或未变化不打扰 */
+    private void notifyExecutor(TestPlan plan, String oldExecutorId, String operatorId) {
+        String executor = plan.getExecutorUserId();
+        if (executor == null || executor.equals(oldExecutorId) || executor.equals(operatorId)) {
+            return;
+        }
+        notificationEvents.notifyLinked(executor, plan.getWorkspaceId(),
+                UserNotificationPreferenceService.TEST_PLAN_ASSIGNED,
+                "测试计划指派：「" + plan.getName() + "」",
+                "你被指派为测试计划「" + plan.getName() + "」的执行人，可在「我的工作 → 待我执行」开始执行。",
+                "test_plan", plan.getId(), plan.getReqId());
     }
 
     /* ---------- 内部 ---------- */

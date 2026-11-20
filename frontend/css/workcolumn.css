@@ -224,7 +224,8 @@
 .wc-row .cell{min-width:0;font-size:12px;}
 .wc-row .wcl-title{display:flex;flex-direction:column;gap:2px;white-space:normal;}
 .wc-row .wcl-t,.wc-row .wcl-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.wc-row .wcl-t{font-size:13px;line-height:19px;color:var(--text);}
+/* 主标题与「列表 / 层级 / 我的工作」同一档：12.5/600，别再用 13/400 的正文规格 */
+.wc-row .wcl-t{font-size:12.5px;line-height:18px;font-weight:600;letter-spacing:-.01em;color:var(--text);}
 .wc-row .wcl-sub{font-size:12px;line-height:16px;color:var(--text-3);}
 .wc-row .wcl-who{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;}
 .wc-row .wcl-who > span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;}

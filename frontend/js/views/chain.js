@@ -9,7 +9,7 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
-import { progressOf, rt } from "../core/state.js";
+import { canCreateNow, progressOf, rt } from "../core/state.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
@@ -206,8 +206,8 @@ function renderChain(){
   if(!t){
     chainBody.innerHTML = '<div style="padding:8px">' + UI.emptyState({
       icon:"inbox", title:"没有可选的工作项",
-      textHtml:"新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。",
-      actionLabel:"新建工作项", compact:true
+      textHtml: canCreateNow() ? "新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。" : "当前空间或项目没有可写范围，新建入口已隐藏；请联系空间主或管理员分配项目。",
+      actionLabel: canCreateNow() ? "新建工作项" : "", compact:true
     }) + '</div>';
     return;
   }

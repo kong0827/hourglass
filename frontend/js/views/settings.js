@@ -166,6 +166,11 @@ function roleGuideTable(head, body){
     head.map(function(c, i){ return '<th' + (i ? ' class="perm-cell"' : '') + ">" + c + "</th>"; }).join("") +
     "</tr></thead><tbody>" + body + "</tbody></table></div>";
 }
+/* 角色说明里的菜单数从导航配置生成，避免侧栏增减后说明漂移 */
+function sideNavMenuCount(){
+  var n = document.querySelectorAll("#sideNav .nav-item:not(.mob-more)").length;
+  return n || 15;
+}
 function openRoleGuide(){
   var roleRows = [
     roleGuideGroup("数据范围"),
@@ -195,8 +200,8 @@ function openRoleGuide(){
   ].join("");
 
   var menuRows = [
-    roleGuideRow(["我的工作、周回顾", "可见", "可见", "可见", "可见"]),
-    roleGuideRow(["需求池、项目（含全局健康度）、版本、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["我的工作、消息中心、周回顾", "可见", "可见", "可见", "可见"]),
+    roleGuideRow(["需求池、项目（含全局健康度）、版本、交付说明、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["工作项（看板/列表/日历/甘特）、测试、分支", "可见", "可见", "可见（不可见项目的工作项不出现）", "可见"]),
     roleGuideRow(["报表（趋势与分布/完成记录/流程体检/交付图表/投入结构）", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["成员负载、逾期与阻塞", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
@@ -231,7 +236,7 @@ function openRoleGuide(){
         '</section>' +
         '<section class="perm-sect"><h4>可访问菜单</h4>' +
           roleGuideTable(["菜单", "空间主", "管理员", "成员", "查看者"], menuRows) +
-          '<p class="perm-note">当前版本不按角色隐藏侧栏菜单：四种空间角色看到同一套 12 个菜单，差异体现在页面内按钮和数据范围。查看者可见全部菜单，但所有写操作都会被拒绝；成员可见全部菜单，但「不可见」项目的工作项、文档和报表数据会被过滤。</p>' +
+          '<p class="perm-note">当前版本不按角色隐藏侧栏菜单：四种空间角色看到同一套 ' + sideNavMenuCount() + ' 个菜单，差异体现在页面内按钮和数据范围。查看者可见全部菜单，但所有写入口统一隐藏（不是点了才拒绝）；成员可见全部菜单，但「不可见」项目的工作项、文档和报表数据会被过滤。</p>' +
         '</section>' +
         '<section class="perm-sect"><h4>设置内入口差异</h4>' +
           roleGuideTable(["入口", "空间主", "管理员", "成员", "查看者"], settingsRows) +
@@ -334,8 +339,11 @@ function syncSettingsPageHead(){
   }
   var html = "";
   if(tab === "space"){
-    html = '<button class="btn" type="button" data-set-act="discard">放弃更改</button>'
-      + '<button class="btn primary" type="button" data-set-act="save-space"' + (isOwner ? "" : " disabled") + '>保存更改</button>';
+    /* 查看者只读：没有可保存的草稿，页脚不再给「放弃 / 保存更改」 */
+    html = roleReadOnly()
+      ? '<span class="foot-note">你是该空间的查看者，空间配置只读。</span>'
+      : '<button class="btn" type="button" data-set-act="discard">放弃更改</button>'
+        + '<button class="btn primary" type="button" data-set-act="save-space"' + (isOwner ? "" : " disabled") + '>保存更改</button>';
   }else if(tab === "members"){
     html = (isManager ? '<button class="btn" type="button" data-set-act="export-members">导出名单</button>' : "")
       + (isManager ? '<button class="btn primary" type="button" data-set-act="invite">' + icon("plus", 14) + '邀请成员</button>' : "");
@@ -413,7 +421,13 @@ function enterSettingsView(){
   wsNameInput.disabled = isPersonal || !isOwner;
   wsWebhook.value = rt.currentWs.notifyWebhook || "";
   $("btnWsSave").disabled = !isOwner;
+  $("btnWsSave").hidden = !isOwner;
   $("wsSaveNote").textContent = isOwner ? "改动立即生效" : "仅空间主可修改名称与推送";
+  /* 脚注与「放弃更改」只对能保存的空间主有意义；查看者明确只读 */
+  if($("wsFootNote")) $("wsFootNote").textContent = isOwner
+    ? "修改后点右上角「保存更改」生效 · 离开页面前会提示"
+    : (roleReadOnly() ? "查看者只读：空间配置不可修改。" : "空间配置仅空间主可修改，你可以查看但无法保存。");
+  if($("btnWsDiscardFoot")) $("btnWsDiscardFoot").hidden = !isOwner;
   /* O-1：通知推送面板按角色门控，并读取真实生效状态 */
   var canNotify = isOwner;
   ["wsNotifyInAppEnabled","wsNotifyEnabled","wsWebhook","wsNotifyToken","wsNotifyClearToken"].forEach(function(id){
@@ -595,23 +609,25 @@ function memberJoinedText(m){
 function memberExceptionInfo(m){
   var data = rt.projectAccessCache;
   var role = m.role || "member";
-  if(role !== "member") return { read:0, none:0, total:(data && data.projects ? data.projects.length : 0), exceptions:0, assigned:false };
+  if(role !== "member") return { read:0, none:0, write:0, test:0, total:(data && data.projects ? data.projects.length : 0), exceptions:0, assigned:false };
   var projects = data && data.projects ? data.projects : [];
   var raw = {};
   ((data && data.grants) || []).forEach(function(g){
     if(g && g.userId === m.userId && g.projectId) raw[g.projectId] = g.access;
   });
-  var read = 0, none = 0, write = 0;
+  var read = 0, none = 0, write = 0, test = 0;
   projects.forEach(function(p){
     var v = effectiveGrant(raw[p.id], m);
     if(v === "read") read++;
     else if(v === "none") none++;
+    else if(v === "test") test++;
     else write++;
   });
   var assigned = m.projectAccessMode === "assigned";
   return {
-    read:read, none:none, write:write, total:projects.length, assigned:assigned,
-    exceptions: read + (assigned ? write : none)
+    read:read, none:none, write:write, test:test, total:projects.length, assigned:assigned,
+    /* 与默认值不同的都算例外：非分配成员默认 write，分配成员默认 none */
+    exceptions: read + test + (assigned ? write : none)
   };
 }
 function memberVisibilityCell(m){
@@ -621,9 +637,10 @@ function memberVisibilityCell(m){
   if(role === "viewer") return '<span class="member-vis">全部项目 · 只读</span>';
   var info = memberExceptionInfo(m);
   if(!info.total) return '<span class="member-vis" title="' + (info.assigned ? "新成员按项目分配" : "默认全部可见") + '">' + (info.assigned ? "尚未分配项目" : "—") + '</span>';
-  if(!info.read && !info.none && !(info.assigned && info.write)) return '<span class="member-vis" title="默认全部 ' + info.total + ' 个项目可参与">—</span>';
+  if(!info.read && !info.none && !info.test && !(info.assigned && info.write)) return '<span class="member-vis" title="默认全部 ' + info.total + ' 个项目可参与">—</span>';
   var html = [];
   if(info.read) html.push('<span class="badge blocked">只读 ' + info.read + '</span>');
+  if(info.test) html.push('<span class="chip">可测试 ' + info.test + '</span>');
   if(info.none) html.push('<span class="chip">不可见 ' + info.none + '</span>');
   if(info.assigned && info.write) html.push('<span class="chip">可参与 ' + info.write + '</span>');
   html.push('<button class="btn link" type="button" data-open-access="' + esc(m.userId) + '">调整</button>');
@@ -972,16 +989,18 @@ wsMemberList.addEventListener("change", function(e){
 /* ---------- 项目可见范围矩阵 ---------- */
 var ACCESS_OPTIONS = [
   { value:"write", label:"可参与" },
+  { value:"test", label:"可测试" },
   { value:"read", label:"只读" },
   { value:"none", label:"不可见" }
 ];
 /* 矩阵只写显式值；历史 pm/dev/qa 与空值都按「可参与」理解（与后端默认参与口径一致） */
 function normalizeAccess(value){
-  return (value === "read" || value === "none" || value === "write") ? value : "write";
+  return (value === "read" || value === "none" || value === "write" || value === "test") ? value : "write";
 }
 function accessLabel(value){
   if(value === "none") return "不可见";
   if(value === "read") return "只读";
+  if(value === "test") return "可测试";
   return "可参与";
 }
 /* 新成员按项目分配时缺记录即不可见；存量成员缺记录仍是默认参与 */
@@ -990,7 +1009,7 @@ function defaultGrantFor(member){
 }
 /* 显式 write/read/none 优先；缺记录与历史 pm/dev/qa 按成员模式回落（与后端 effectiveAccess 一致） */
 function effectiveGrant(raw, member){
-  return (raw === "write" || raw === "read" || raw === "none") ? raw : defaultGrantFor(member);
+  return (raw === "write" || raw === "test" || raw === "read" || raw === "none") ? raw : defaultGrantFor(member);
 }
 function accessOptions(selected){
   return ACCESS_OPTIONS.map(function(o){
@@ -1065,7 +1084,7 @@ function renderProjectAccess(){
   var head = '<thead><tr><th class="access-sticky">成员 / 项目</th>' +
     projects.map(function(p){ return '<th title="' + esc(p.name) + '">' + esc(p.name) + '</th>'; }).join("") +
     '</tr></thead>';
-  var readTotal = 0, noneTotal = 0;
+  var readTotal = 0, noneTotal = 0, testTotal = 0;
   var body = rows.length ? rows.map(function(m){
     var role = m.role || "member";
     var cells;
@@ -1078,7 +1097,8 @@ function renderProjectAccess(){
         var value = effectiveGrant(grantMap[accessKey(m.userId, p.id)], m);
         if(value === "read") readTotal++;
         else if(value === "none") noneTotal++;
-        var cls = value === "read" ? " is-read" : (value === "none" ? " is-none" : "");
+        else if(value === "test") testTotal++;
+        var cls = value === "read" ? " is-read" : (value === "none" ? " is-none" : (value === "test" ? " is-test" : ""));
         return '<td><select class="access-cell' + cls + '" data-access-user="' + esc(m.userId) +
           '" data-access-project="' + esc(p.id) + '" aria-label="' + esc(m.displayName + " · " + p.name) + '">' +
           accessOptions(value) + '</select></td>';
@@ -1092,7 +1112,7 @@ function renderProjectAccess(){
   }).join("")
     : '<tr><td class="access-all" colspan="' + (projects.length + 1) + '">没有符合条件的成员。</td></tr>';
   var foot = $("accessFootStats");
-  if(foot) foot.textContent = readTotal + " 处只读 · " + noneTotal + " 处不可见 · 修改后立即生效";
+  if(foot) foot.textContent = readTotal + " 处只读 · " + testTotal + " 处可测试 · " + noneTotal + " 处不可见 · 修改后立即生效";
   box.innerHTML = '<table class="manager-tbl access-matrix">' + head + '<tbody>' + body + '</tbody></table>';
   syncAccessFade();
 }
@@ -1190,19 +1210,20 @@ function grantButtons(value){
   }).join("");
 }
 function countGrants(session){
-  var write = 0, read = 0;
+  var write = 0, read = 0, test = 0;
   session.projects.forEach(function(p){
     if(session.draft[p.id] === "write") write++;
+    else if(session.draft[p.id] === "test") test++;
     else if(session.draft[p.id] === "read") read++;
   });
-  return { write: write, read: read };
+  return { write: write, read: read, test: test };
 }
 function updateGrantSummary(summaryEl){
   var session = grantSession;
   if(!session || !summaryEl) return;
   var c = countGrants(session);
-  summaryEl.textContent = "可见 " + (c.write + c.read) + "/" + session.projects.length + " 个项目" +
-    " · 可参与 " + c.write + " · 只读 " + c.read;
+  summaryEl.textContent = "可见 " + (c.write + c.test + c.read) + "/" + session.projects.length + " 个项目" +
+    " · 可参与 " + c.write + (c.test ? " · 可测试 " + c.test : "") + " · 只读 " + c.read;
 }
 function renderGrantPicker(listEl, summaryEl){
   var session = grantSession;

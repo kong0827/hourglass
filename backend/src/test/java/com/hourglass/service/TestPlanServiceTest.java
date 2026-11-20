@@ -48,7 +48,9 @@ class TestPlanServiceTest {
     private final AuditService auditService = mock(AuditService.class);
     private final TestPlanService service =
             new TestPlanService(plans, planCases, cases, caseService, access, versions, auditService,
-                    mock(com.hourglass.mapper.TestCaseTaskMapper.class));
+                    mock(com.hourglass.mapper.TestCaseTaskMapper.class),
+                    mock(com.hourglass.mapper.WorkspaceMemberMapper.class),
+                    mock(NotificationEventService.class));
 
     @BeforeEach
     void setUp() {

@@ -1,5 +1,5 @@
 {
-  "base": "http://127.0.0.1:8081/hourglass",
+  "base": "http://127.0.0.1:8104/hourglass",
   "ws": "SXk01",
   "roles": {
     "admin": {
@@ -28,7 +28,8 @@
       "tabs": [
         "待我处理30",
         "我发起的4",
-        "我关注的0"
+        "我关注的0",
+        "团队"
       ],
       "sections": [
         "待我评审的需求",
@@ -38,218 +39,277 @@
       "setTabs": [],
       "viewTitle": "我的工作",
       "brandSub": "运营研发中心/我的工作",
-      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 12:42 更新",
+      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 17:50 更新",
       "newBtnVisible": true,
       "newBtnText": "新建",
+      "reviewRows": 4,
+      "reviewClaimBtns": 4,
+      "reviewClaimText": "认领评审",
+      "planRows": 0,
+      "banner": "",
       "readOnlyMarks": 0,
       "bodyRole": "admin",
       "projCount": 0,
       "projRows": [],
       "shots": [
         "docs/audit/role-perspective-2026-11-20/shots/1440-admin-mine.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-admin-team.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-admin-demand-detail-claim.png",
         "docs/audit/role-perspective-2026-11-20/shots/1440-admin-projects.png",
         "docs/audit/role-perspective-2026-11-20/shots/1440-admin-settings.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-admin-role-guide.png",
         "docs/audit/role-perspective-2026-11-20/shots/390-admin-mine.png"
       ],
+      "teamView": {
+        "exists": false,
+        "visible": false,
+        "cards": 0,
+        "text": ""
+      },
+      "adminDemandClaim": {
+        "open": true,
+        "moreBtn": true,
+        "moreOpened": true,
+        "claimVisible": true,
+        "claimText": "认领评审",
+        "reviewer": "评审人 未指派 文档 暂无 附件 暂无",
+        "moreClicked": true
+      },
       "projects": {
-        "total": 24,
+        "total": 25,
         "rows": [
           {
             "name": "外接",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "主机托管",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "程序化报备",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "流程引擎基础功能",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "合规管理",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "提高出金比例",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "中金所套保额度申请",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "流程引擎-公共",
             "tags": [
-              "公共",
-              "进行中"
+              "进行中",
+              "首版 06/15",
+              "公共"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "资金通",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "风控与合规",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "报表服务",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "API开放平台",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "消息中心",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "AI知识库",
             "tags": [
-              "已搁置"
+              "已搁置",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "小程序平台化",
             "tags": [
-              "已搁置"
+              "已搁置",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "技术平台",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "沙漏",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261118153058",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119131625",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119133228",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119135221",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119174357",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119175639",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119224905",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261120052356",
+            "tags": [
+              "进行中",
+              "未标记首版"
+            ],
+            "hasNew": false,
             "more": true
           }
         ],
         "empty": "",
-        "primaryBtns": []
+        "primaryBtns": [
+          "新建项目集",
+          "新建项目"
+        ]
       },
       "settings": {
         "tabs": [
@@ -263,7 +323,16 @@
         ],
         "disabledCount": 0,
         "hint": "基于本页数据生成可直接发出的周报，不编造数字。",
+        "footer": "放弃更改保存更改",
+        "footerHidden": false,
         "roleGuide": false
+      },
+      "roleGuide": {
+        "note": [
+          "当前版本不按角色隐藏侧栏菜单：四种空间角色看到同一套 15 个菜单，差异体现在页面内按钮和数据范围。查看者可见全部菜单，但所有写入口统一隐藏（不是点了才拒绝）；成员可见全部菜单，但「不可见」项目的工作项、文档和报表数据会被过滤。",
+          "「平台管理员」是账号级身份，与空间角色无关：它额外可见「设置 → 平台 → 账号管理」和「通知与集成 → SMTP 邮件配置 / 团队 AI」，但不会自动获得任何空间的角色。以上为界面展示口径，最终以后端校验为准。"
+        ],
+        "rows": 34
       },
       "mobile": {
         "tabs": [
@@ -314,218 +383,487 @@
       "setTabs": [],
       "viewTitle": "我的工作",
       "brandSub": "运营研发中心/我的工作",
-      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 12:42 更新",
+      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 17:50 更新",
       "newBtnVisible": true,
       "newBtnText": "新建",
+      "reviewRows": 4,
+      "reviewClaimBtns": 4,
+      "reviewClaimText": "认领评审",
+      "planRows": 0,
+      "banner": "",
       "readOnlyMarks": 0,
       "bodyRole": "member",
-      "projCount": 0,
-      "projRows": [],
+      "projCount": 25,
+      "projRows": [
+        {
+          "name": "外接",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "主机托管",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "程序化报备",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "流程引擎基础功能",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "合规管理",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "提高出金比例",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "中金所套保额度申请",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "流程引擎-公共",
+          "tags": [
+            "进行中",
+            "首版 06/15",
+            "公共"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "资金通",
+          "tags": [
+            "进行中",
+            "首版 10/22"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "风控与合规",
+          "tags": [
+            "进行中",
+            "首版 10/22"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "报表服务",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "API开放平台",
+          "tags": [
+            "进行中",
+            "首版 10/22"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "消息中心",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "AI知识库",
+          "tags": [
+            "已搁置",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "小程序平台化",
+          "tags": [
+            "已搁置",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "技术平台",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "沙漏",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 孔祥劲"
+        },
+        {
+          "name": "E2E 冒烟 20261118153058",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119131625",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119133228",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119135221",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119174357",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119175639",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119224905",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261120052356",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        }
+      ],
       "shots": [
         "docs/audit/role-perspective-2026-11-20/shots/1440-member-mine.png",
         "docs/audit/role-perspective-2026-11-20/shots/1440-member-projects.png",
         "docs/audit/role-perspective-2026-11-20/shots/1440-member-settings.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-member-role-guide.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-member-noproject-drawer.png",
         "docs/audit/role-perspective-2026-11-20/shots/390-member-mine.png"
       ],
       "projects": {
-        "total": 24,
+        "total": 25,
         "rows": [
           {
             "name": "外接",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "主机托管",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "程序化报备",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "流程引擎基础功能",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "合规管理",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "提高出金比例",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "中金所套保额度申请",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "流程引擎-公共",
             "tags": [
-              "公共",
-              "进行中"
+              "进行中",
+              "首版 06/15",
+              "公共"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "资金通",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "风控与合规",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "报表服务",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "API开放平台",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "消息中心",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "AI知识库",
             "tags": [
-              "已搁置"
+              "已搁置",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "小程序平台化",
             "tags": [
-              "已搁置"
+              "已搁置",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "技术平台",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "沙漏",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261118153058",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119131625",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119133228",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119135221",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119174357",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119175639",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119224905",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261120052356",
+            "tags": [
+              "进行中",
+              "未标记首版"
+            ],
+            "hasNew": false,
             "more": true
           }
         ],
         "empty": "",
-        "primaryBtns": []
+        "primaryBtns": [
+          "新建项目"
+        ]
       },
       "settings": {
         "tabs": [
@@ -538,7 +876,25 @@
         ],
         "disabledCount": 0,
         "hint": "基于本页数据生成可直接发出的周报，不编造数字。",
+        "footer": "",
+        "footerHidden": false,
         "roleGuide": false
+      },
+      "roleGuide": {
+        "note": [
+          "当前版本不按角色隐藏侧栏菜单：四种空间角色看到同一套 15 个菜单，差异体现在页面内按钮和数据范围。查看者可见全部菜单，但所有写入口统一隐藏（不是点了才拒绝）；成员可见全部菜单，但「不可见」项目的工作项、文档和报表数据会被过滤。",
+          "「平台管理员」是账号级身份，与空间角色无关：它额外可见「设置 → 平台 → 账号管理」和「通知与集成 → SMTP 邮件配置 / 团队 AI」，但不会自动获得任何空间的角色。以上为界面展示口径，最终以后端校验为准。"
+        ],
+        "rows": 34
+      },
+      "memberNoProject": {
+        "optionText": "（不属于任何项目）",
+        "hasHint": true,
+        "reqLen": 0,
+        "reqsLoaded": true,
+        "drawerOn": true,
+        "hint": "你还没有被分配到项目：这份工作项不会出现在任何项目看板与项目统计中。建议先联系空间主或管理员分配项目。",
+        "hintVisible": true
       },
       "mobile": {
         "tabs": [
@@ -588,215 +944,481 @@
       "setTabs": [],
       "viewTitle": "我的工作",
       "brandSub": "运营研发中心/我的工作",
-      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 12:42 更新",
+      "mineBrief": "30 项待处理 · 1 项今天到期；建议先处理「主机托管-借用场景字段调整」。按角色排序 · 11-20 17:51 更新",
       "newBtnVisible": false,
       "newBtnText": "新建",
-      "readOnlyMarks": 1,
+      "reviewRows": 4,
+      "reviewClaimBtns": 0,
+      "reviewClaimText": "",
+      "planRows": 0,
+      "banner": "只读空间：你是该空间的查看者，可以浏览、搜索与导出，不能新建、编辑或拖动工作项。需要写权限请联系空间主或管理员。",
+      "readOnlyMarks": 2,
       "bodyRole": "viewer",
-      "projCount": 0,
-      "projRows": [],
+      "projCount": 25,
+      "projRows": [
+        {
+          "name": "外接",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "主机托管",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "程序化报备",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "流程引擎基础功能",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "合规管理",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "提高出金比例",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "中金所套保额度申请",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "流程引擎-公共",
+          "tags": [
+            "进行中",
+            "首版 06/15",
+            "公共"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "资金通",
+          "tags": [
+            "进行中",
+            "首版 10/22"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "风控与合规",
+          "tags": [
+            "进行中",
+            "首版 10/22"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "报表服务",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "API开放平台",
+          "tags": [
+            "进行中",
+            "首版 10/22"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "消息中心",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "AI知识库",
+          "tags": [
+            "已搁置",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "小程序平台化",
+          "tags": [
+            "已搁置",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "技术平台",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "沙漏",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 孔祥劲"
+        },
+        {
+          "name": "E2E 冒烟 20261118153058",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119131625",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119133228",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119135221",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119174357",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119175639",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261119224905",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        },
+        {
+          "name": "E2E 冒烟 20261120052356",
+          "tags": [
+            "进行中",
+            "未标记首版"
+          ],
+          "hasNew": false,
+          "owner": "负责人 —"
+        }
+      ],
       "shots": [
         "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-mine.png",
         "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-projects.png",
         "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-settings.png",
+        "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-role-guide.png",
         "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-board.png",
         "docs/audit/role-perspective-2026-11-20/shots/1440-viewer-test.png",
         "docs/audit/role-perspective-2026-11-20/shots/390-viewer-mine.png"
       ],
       "projects": {
-        "total": 24,
+        "total": 25,
         "rows": [
           {
             "name": "外接",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "主机托管",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "程序化报备",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "流程引擎基础功能",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "合规管理",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "提高出金比例",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "中金所套保额度申请",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "流程引擎-公共",
             "tags": [
-              "公共",
-              "进行中"
+              "进行中",
+              "首版 06/15",
+              "公共"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "资金通",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "风控与合规",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "报表服务",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "API开放平台",
             "tags": [
-              "进行中"
+              "进行中",
+              "首版 10/22"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "消息中心",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "AI知识库",
             "tags": [
-              "已搁置"
+              "已搁置",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "小程序平台化",
             "tags": [
-              "已搁置"
+              "已搁置",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "技术平台",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "沙漏",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261118153058",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119131625",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119133228",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119135221",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119174357",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119175639",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
             "more": true
           },
           {
             "name": "E2E 冒烟 20261119224905",
             "tags": [
-              "进行中"
+              "进行中",
+              "未标记首版"
             ],
-            "hasNew": true,
+            "hasNew": false,
+            "more": true
+          },
+          {
+            "name": "E2E 冒烟 20261120052356",
+            "tags": [
+              "进行中",
+              "未标记首版"
+            ],
+            "hasNew": false,
             "more": true
           }
         ],
@@ -814,22 +1436,29 @@
         ],
         "disabledCount": 0,
         "hint": "基于本页数据生成可直接发出的周报，不编造数字。",
+        "footer": "你是该空间的查看者，空间配置只读。",
+        "footerHidden": false,
         "roleGuide": false
+      },
+      "roleGuide": {
+        "note": [
+          "当前版本不按角色隐藏侧栏菜单：四种空间角色看到同一套 15 个菜单，差异体现在页面内按钮和数据范围。查看者可见全部菜单，但所有写入口统一隐藏（不是点了才拒绝）；成员可见全部菜单，但「不可见」项目的工作项、文档和报表数据会被过滤。",
+          "「平台管理员」是账号级身份，与空间角色无关：它额外可见「设置 → 平台 → 账号管理」和「通知与集成 → SMTP 邮件配置 / 团队 AI」，但不会自动获得任何空间的角色。以上为界面展示口径，最终以后端校验为准。"
+        ],
+        "rows": 34
       },
       "viewerAttempt": {
         "newVisible": false,
         "newDisplay": "none",
-        "colAddVisible": 5,
-        "cardAddVisible": 5,
+        "colAddVisible": 0,
+        "cardAddVisible": 0,
         "inlineInputVisible": false,
         "toast": ""
       },
       "viewerTest": {
         "caseNew": [],
         "defNew": [],
-        "planNew": [
-          "新建计划"
-        ]
+        "planNew": []
       },
       "mobile": {
         "tabs": [

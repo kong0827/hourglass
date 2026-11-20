@@ -30,4 +30,8 @@ public class TestPlanSaveRequest {
 
     @Size(max = 500, message = "说明最多 500 字")
     private String note;
+
+    /** 执行人账号ID；空表示不指派（不进任何人的「待我执行」） */
+    @Size(max = 32)
+    private String executorUserId;
 }

@@ -242,6 +242,17 @@ body[data-view="testcases"] #btnNew{display:none !important;}
 /* 查看者全局只读：新建入口不展示（抽屉入口另有拦截提示） */
 body[data-ws-role="viewer"] #btnNew,
 body[data-ws-role="viewer"] #ganttNew{display:none !important;}
+/* 只读横幅：常驻在页头下方，解释写入口为何隐藏；不占操作位 */
+.readonly-banner{
+  display:flex;align-items:center;gap:8px;
+  margin:0 0 10px;padding:8px 12px;
+  border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface-sunken);color:var(--text-2);
+  font-size:12px;line-height:1.5;
+}
+.readonly-banner[hidden]{display:none;}
+.readonly-banner svg{flex:0 0 auto;color:var(--text-3);}
+.readonly-banner b{color:var(--text);font-weight:600;}
 /* 页内重复的创建主按钮：统一由页头「新建」承接，保留节点供脚本绑定 */
 .is-dup-action{display:none !important;}
 

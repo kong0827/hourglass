@@ -92,6 +92,13 @@ public interface DemandMapper {
 
     int update(Demand demand);
 
+    /**
+     * 认领评审：只写评审人与 revision，条件同时限定「待评审 + 未指派」，
+     * 并发认领只有一人成功；返回 0 表示状态或评审人已变化。
+     */
+    int claimReviewer(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                      @Param("userId") String userId);
+
     /** 仅更换所属项目与模块，避免把整行字段一起写回；仍按 revision 做 CAS。 */
     int updateProject(Demand demand);
 

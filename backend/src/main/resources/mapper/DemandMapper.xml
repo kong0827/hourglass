@@ -6,14 +6,14 @@
     id, workspace_id, req_id, demand_no, title, description, source, item_kind, category_id, priority, status, close_reason, close_stage,
     expect_date, planned_start, planned_end, revision,
     accept_text, version_id, version_name, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort,
-    created_by, created_at, updated_at
+    created_by, reviewer_user_id, created_at, updated_at
   </sql>
 
   <sql id="pageCols">
     d.id, d.workspace_id, d.req_id, d.demand_no, d.title, d.description, d.source, d.item_kind, d.category_id, d.priority, d.status,
     d.close_reason, d.close_stage, d.expect_date, d.planned_start, d.planned_end, d.revision,
     d.accept_text, d.version_id, COALESCE(v.name, d.version_name) AS versionName, v.status AS versionStatus, d.review_note,
-    d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
+    d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.reviewer_user_id, d.created_at, d.updated_at
   </sql>
 
   <!-- 真实发布证据优先；没有真实发布时才采用人工“已交付”的生效日期。 -->
@@ -464,16 +464,26 @@
   <insert id="insert">
     INSERT INTO demand (id, workspace_id, req_id, demand_no, title, description, source, item_kind, category_id, priority, status,
                         expect_date, planned_start, planned_end, revision, accept_text, version_id, version_name, review_note,
-                        wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort, created_by,
+                        wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort, created_by, reviewer_user_id,
                         created_at, updated_at)
     VALUES (#{id}, #{workspaceId}, #{reqId}, #{demandNo}, #{title}, #{description}, #{source}, #{itemKind}, #{categoryId}, #{priority}, #{status},
             #{expectDate}, #{plannedStart}, #{plannedEnd}, #{revision}, #{acceptText}, #{versionId},
             <!-- 与 update 同口径：version_name 只是拆分迁移的历史快照，绑了在册版本就不落名 -->
             CASE WHEN #{versionId} IS NULL THEN #{versionName} ELSE NULL END, #{reviewNote},
-            #{wsjfBusiness}, #{wsjfUrgency}, #{wsjfRisk}, #{wsjfEffort}, #{createdBy},
+            #{wsjfBusiness}, #{wsjfUrgency}, #{wsjfRisk}, #{wsjfEffort}, #{createdBy}, #{reviewerUserId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
+  <!-- 认领评审：只改评审人与 revision；状态和“未指派”同一 WHERE，并发下只有一人能成功 -->
+  <update id="claimReviewer">
+    UPDATE demand SET
+      reviewer_user_id = #{userId},
+      revision = revision + 1,
+      updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+      AND status = 'review'
+      AND reviewer_user_id IS NULL
+  </update>
 
   <update id="update">
     UPDATE demand SET
@@ -502,6 +512,7 @@
       wsjf_urgency = #{wsjfUrgency},
       wsjf_risk = #{wsjfRisk},
       wsjf_effort = #{wsjfEffort},
+      reviewer_user_id = #{reviewerUserId},
       updated_at = NOW()
     WHERE id = #{id} AND workspace_id = #{workspaceId} AND revision = #{revision}
   </update>

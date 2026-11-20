@@ -10,7 +10,7 @@ import { activeView } from "../core/router.js";
 import { GROUP_IDS, groupOptionsHTML } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
-import { canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, setSortOf, setNameById, state, tagChip } from "../core/state.js";
+import { canCreateNow, canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, setSortOf, setNameById, state, tagChip } from "../core/state.js";
 import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
@@ -429,8 +429,6 @@ function taskCell(t, key, hasTypeCol){
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
-    var f = dueFlag(t);
-    var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
     var chip = '<span class="tag tag-cat" style="--tag-c:' + color + '"><span class="dot" aria-hidden="true"></span>' + esc(colName(t.boardColumn)) + '</span>';
     /* 状态点开即改：可写才做成按钮，只读项目保持纯标签 */
     if(canEditTask(t)){
@@ -441,30 +439,38 @@ function taskCell(t, key, hasTypeCol){
         '<svg class="row-status-caret" width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5 8 10.5l4-4"/></svg>' +
       '</button>';
     }
-    return '<span class="cell">' + chip + flagHTML + '</span>';
+    /* 到期提醒跟着截止日期走：状态列只有 96px，徽标留在状态格里会被截成省略号 */
+    return '<span class="cell">' + chip + '</span>';
   }
   if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
-  if(key === "owner") return '<span class="cell" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
+  if(key === "owner") return '<span class="cell' + (t.owner ? "" : " muted") + '" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
   if(key === "dueDate"){
     if(!t.dueDate) return '<span class="cell muted">—</span>';
-    return '<span class="cell" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + '</span>';
+    var dueKind = dueState(t).kind;
+    var dueCls = dueKind === "over" ? " over" : (dueKind === "today" ? " today" : "");
+    var df = dueFlag(t);
+    var dfHTML = df ? '<span class="mini-tag ' + (df.kind === "over" ? "over" : (df.kind === "today" ? "warn" : "")) + '">' + esc(df.text) + '</span>' : "";
+    return '<span class="cell' + dueCls + '" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + dfHTML + '</span>';
   }
   if(key === "progress"){
     var p = progressOf(t);
     /* 未开始且进度为 0 时不画空进度条，与「我的工作」保持一致 */
-    if(p <= 0 && t.boardColumn !== "doing") return '<span class="cell">—</span>';
+    if(p <= 0 && t.boardColumn !== "doing") return '<span class="cell muted">—</span>';
     return '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span></span>';
   }
   if(key === "project") return '<span class="cell">' + assocLinkHTML("project", t.reqId, reqNameById(t.reqId)) + '</span>';
   if(key === "version") return '<span class="cell" title="' + esc('计划版本：' + (taskVersionsText(t) || '待规划') + '；不代表实际交付。调整版本请在详情填写理由。') + '">' + taskVersionLinksHTML(t, t.reqId) + '</span>';
-  if(key === "category") return '<span class="cell">' + (catTag(t.categoryId) || "—") + '</span>';
-  if(key === "startDate") return '<span class="cell">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
-  if(key === "tags") return '<span class="cell lr-tags">' + ((t.tags || []).map(tagChip).join("") || "—") + '</span>';
-  if(key === "subtasks") return '<span class="cell">' + (Number(t.subtaskTotal) ? (Number(t.subtaskDone || 0) + "/" + Number(t.subtaskTotal)) : "—") + '</span>';
-  if(key === "work") return '<span class="cell">' + esc(minutesText(t.totalMinutes)) + '</span>';
+  if(key === "category"){
+    var cat = catTag(t.categoryId);
+    return '<span class="cell' + (cat ? "" : " muted") + '">' + (cat || "—") + '</span>';
+  }
+  if(key === "startDate") return '<span class="cell' + (t.startDate ? "" : " muted") + '">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
+  if(key === "tags") return '<span class="cell lr-tags' + ((t.tags || []).length ? "" : " muted") + '">' + ((t.tags || []).map(tagChip).join("") || "—") + '</span>';
+  if(key === "subtasks") return '<span class="cell' + (Number(t.subtaskTotal) ? "" : " muted") + '">' + (Number(t.subtaskTotal) ? (Number(t.subtaskDone || 0) + "/" + Number(t.subtaskTotal)) : "—") + '</span>';
+  if(key === "work") return '<span class="cell' + (Number(t.totalMinutes) ? "" : " muted") + '">' + esc(minutesText(t.totalMinutes)) + '</span>';
   if(key === "comments") return '<span class="cell">' + (Number(t.commentCount) || 0) + '</span>';
-  if(key === "updatedAt") return '<span class="cell">' + (t.updatedAt ? esc(fmtTs(t.updatedAt)) : "—") + '</span>';
-  return '<span class="cell">—</span>';
+  if(key === "updatedAt") return '<span class="cell' + (t.updatedAt ? "" : " muted") + '">' + (t.updatedAt ? esc(fmtTs(t.updatedAt)) : "—") + '</span>';
+  return '<span class="cell muted">—</span>';
 }
 function mineMatches(t){
   var u = rt.currentUser;
@@ -787,8 +793,10 @@ function renderListItems(items){
     var hasConditions = filterOn() || smart.preset !== "all" || smart.hideDone;
     listBody.innerHTML = '<div style="padding:8px">' + (hasConditions
       ? UI.emptyState({ icon:"filterOff", title:"没有符合当前视图条件的工作项", text:"切换视图，或调整、清空筛选条件后重试。", actionLabel:"查看全部工作项", compact:true })
-      : UI.emptyState({ icon:"inbox", title:"这里还没有工作项", textHtml:"新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建工作项", compact:true })) + '</div>';
-    bindRetry(listBody, function(){ if(hasConditions) activatePreset("all"); else openTaskDrawer("backlog"); });
+      : (canCreateNow()
+        ? UI.emptyState({ icon:"inbox", title:"这里还没有工作项", textHtml:"新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建工作项", compact:true })
+        : UI.emptyState({ icon:"inbox", title:"这里还没有工作项", text:"当前空间还没有工作项。你是查看者或没有可写项目，只能浏览。", compact:true }))) + '</div>';
+    bindRetry(listBody, function(){ if(hasConditions) activatePreset("all"); else if(canCreateNow()) openTaskDrawer("backlog"); });
     syncListSelectionUI();
     appendListMore();
     return;

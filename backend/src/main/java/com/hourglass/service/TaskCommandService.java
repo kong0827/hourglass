@@ -147,7 +147,12 @@ public class TaskCommandService {
         applyTestOwner(workspaceId, t, req, null);
         assertDemandProjectUnchanged(workspaceId, t.getDemandId(), demandProject);
         validateNewDemandLink(workspaceId, null, t);
-        projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
+        /* 项目测试人员可直接提缺陷（bug），普通工作项仍需写权限 */
+        if ("bug".equals(t.getItemType())) {
+            projectAccess.assertTestForUpdate(workspaceId, userId, t.getReqId());
+        } else {
+            projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
+        }
         applyDefectFields(workspaceId, t, req, null);
         t.setRecurType(Texts.trimToNull(req.getRecurType()));
         t.setRemindSent(Boolean.FALSE);

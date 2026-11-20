@@ -2242,9 +2242,29 @@ function populateReqSelect(keepId){
   if(!iReq) return;
   var cur = keepId !== undefined ? keepId : iReq.value;
   var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === cur; });
-  iReq.innerHTML = '<option value="">（无项目）</option>' + projectOptionsHTML(list, cur);
+  var shared = !!(rt.currentWs && rt.currentWs.type !== "personal");
+  /* 项目列表还没回来时不要误判成「没有项目」 */
+  var noProject = shared && rt.reqsLoaded !== false && list.length === 0;
+  /* 共享空间没有任何可见项目时，把「无项目」写清楚：这份工作项不会进入项目看板与统计 */
+  iReq.innerHTML = '<option value="">' + (noProject ? "（不属于任何项目）" : "（无项目）") + '</option>' + projectOptionsHTML(list, cur);
   if(cur && rt.reqList.some(function(r){ return r.id === cur; })) iReq.value = cur;
   else iReq.value = "";
+  var hint = $("iReqHint");
+  if(hint){
+    if(!noProject){
+      hint.hidden = true;
+      hint.textContent = "";
+    }else if(roleReadOnly()){
+      hint.hidden = false;
+      hint.textContent = "查看者只读：工作项归属由项目成员维护。";
+    }else if(rt.currentWs.myRole === "member"){
+      hint.hidden = false;
+      hint.textContent = "你还没有被分配到项目：这份工作项不会出现在任何项目看板与项目统计中。建议先联系空间主或管理员分配项目。";
+    }else{
+      hint.hidden = false;
+      hint.textContent = "空间还没有项目：可以先到项目页创建；不归属项目的工作项只在全局列表出现。";
+    }
+  }
   /* 项目下拉重建时值可能被收回（如项目已删）：记下来，避免把这次程序化变化当成用户换项目 */
   lastReqValue = iReq.value;
 }

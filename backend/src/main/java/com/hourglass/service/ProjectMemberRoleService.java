@@ -111,6 +111,8 @@ public class ProjectMemberRoleService {
         ProjectMemberRoleOverview overview = new ProjectMemberRoleOverview();
         overview.setMembers(views);
         overview.setCanEditRole(canEdit);
+        overview.setCanManageAccess(projectAccess.canManageProject(
+                workspaceId, viewerId, project.getId(), project.getOwnerUserId()));
         return overview;
     }
 
@@ -209,7 +211,7 @@ public class ProjectMemberRoleService {
         requireSameWorkspace(workspaceId, project);
         projectAccess.assertView(workspaceId, userId, project.getId());
         if (!canEditRole(workspaceId, project, userId)) {
-            throw new AppException(403, "仅空间主、空间管理员或项目负责人可标注项目角色");
+            throw new AppException(403, "仅空间主、空间管理员或对该项目可写的负责人可标注项目角色");
         }
     }
 
@@ -283,14 +285,12 @@ public class ProjectMemberRoleService {
                 + "；兼岗=" + row.getSecondaryRoleTitles();
     }
 
-    /** 标签写权限：空间主/管理员，或该项目的负责人；查看者不能写。 */
+    /**
+     * 标签写权限：空间主/管理员，或「项目负责人且对该项目可写」；查看者不能写。
+     * 与项目资料/归档/成员授权同一口径：负责人被降为只读后，角色标签也转为只读。
+     */
     public boolean canEditRole(String workspaceId, Requirement project, String userId) {
-        String role = projectAccess.roleOf(workspaceId, userId);
-        if (role == null || ProjectAccessService.isViewer(role)) {
-            return false;
-        }
-        return ProjectAccessService.isPrivileged(role)
-                || (project.getOwnerUserId() != null && project.getOwnerUserId().equals(userId));
+        return projectAccess.canManageProject(workspaceId, userId, project.getId(), project.getOwnerUserId());
     }
 
     /** 来源解释的是“为什么能看到”，不是权限值本身。 */

@@ -23,4 +23,12 @@ public interface MyWorkMapper {
 
     /** 状态 chip 计数：调用方把 status 置空，只看其它条件 */
     List<Map<String, Object>> countMyDemandStatuses(@Param("q") MyDemandQuery query);
+
+    /** 待我执行：指派给我、未完成、项目可见且未归档的测试计划 */
+    int countMyTestPlans(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
+
+    List<com.hourglass.dto.MyTestPlanRow> selectMyTestPlans(@Param("workspaceId") String workspaceId,
+                                                            @Param("userId") String userId,
+                                                            @Param("offset") int offset,
+                                                            @Param("limit") int limit);
 }

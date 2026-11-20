@@ -808,6 +808,7 @@
 #view-settings .access-cell:hover{background-color:var(--surface-hover);}
 #view-settings .access-cell:focus{outline:none;border-color:var(--primary-border);background-color:var(--surface);}
 #view-settings .access-cell.is-read{color:var(--warning-fg);font-weight:600;background-color:var(--warning-soft);}
+#view-settings .access-cell.is-test{color:var(--info-fg);font-weight:600;background-color:var(--info-soft);}
 #view-settings .access-cell.is-none{color:var(--text-3);background-color:var(--surface-sunken);}
 #view-settings .access-matrix tbody td{padding:5px 8px;}
 #view-settings .access-matrix tbody tr:hover{background:#FCFCFD;}

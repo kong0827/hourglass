@@ -144,6 +144,9 @@ try {
       const tabs = [...document.querySelectorAll("#mineTabs .mw-tab")].filter(visible).map(text);
       const sections = [...document.querySelectorAll("#mineBody .mw-sec .mw-stitle")].filter(visible).map(text);
       const setTabs = [...document.querySelectorAll("#setTabs .set-tab")].filter(visible).map(text);
+      const reviewRows = [...document.querySelectorAll("#mineBody .mw-row.mw-g-review")].filter(visible);
+      const reviewClaimBtns = [...document.querySelectorAll("#mineBody [data-claim-review]")].filter(visible);
+      const planRows = [...document.querySelectorAll("#mineBody .mw-row.mw-g-plan")].filter(visible);
       const projects = [...document.querySelectorAll(".req-item[data-req-id]")];
       const projRows = projects.slice(0, 40).map(r => ({
         name: text(r.querySelector(".req-name")),
@@ -163,6 +166,11 @@ try {
         mineBrief: text(document.getElementById("mineBrief")),
         newBtnVisible: visible(newBtn),
         newBtnText: text(newBtn),
+        reviewRows: reviewRows.length,
+        reviewClaimBtns: reviewClaimBtns.length,
+        reviewClaimText: reviewClaimBtns.length ? text(reviewClaimBtns[0]) : "",
+        planRows: planRows.length,
+        banner: (() => { const b = document.getElementById("readonlyBanner"); return b && visible(b) ? text(b) : ""; })(),
         readOnlyMarks: (document.body.innerText.match(/只读/g) || []).length,
         bodyRole: document.body.dataset.wsRole || "",
         projCount: projects.length,
@@ -186,6 +194,9 @@ try {
         document.body.dataset.wsRole = ${JSON.stringify(r.role)};
         const kind = document.getElementById("wsKind");
         if (kind) kind.textContent = "共享 · " + (rt.currentWs.memberCount || 1) + " 人" + (${JSON.stringify(r.role)} === "viewer" ? " · 查看者（只读）" : "");
+        /* 前端角色门（layout.css 的 body[data-ws-role] 与只读横幅）不会因改 rt 自动重跑，这里手动同步 */
+        const banner = document.getElementById("readonlyBanner");
+        if (banner) banner.hidden = ${JSON.stringify(r.role)} !== "viewer";
         return true;
       })()`);
     }
@@ -194,6 +205,74 @@ try {
     const data = await collect(r);
     data.shots = [];
     data.shots.push(await shot(`1440-${r.key}-mine`));
+
+    /* 团队页签：桌面端也应存在（负责人 / 管理员） */
+    if (r.key === "admin") {
+      await evaluate(`(() => {
+        const b = [...document.querySelectorAll("#mineTabs .mw-tab")].find(x => x.textContent.indexOf("团队") >= 0);
+        if (b) b.click(); return !!b;
+      })()`);
+      await sleep(1600);
+      data.teamView = await evaluate(`(() => {
+        const panel = document.querySelector("#mineBody .team-panel");
+        const vis = el => !!(el && !el.hidden && el.offsetParent !== null);
+        return {
+          exists: !!panel,
+          visible: vis(panel),
+          cards: [...document.querySelectorAll("#mineBody .team-card")].filter(vis).length,
+          text: panel ? (panel.innerText || "").replace(/\\s+/g, " ").slice(0, 300) : ""
+        };
+      })()`);
+      data.shots.push(await shot(`1440-${r.key}-team`));
+
+      /* 需求详情：未指派评审的需求应就地出现「认领评审」 */
+      await view("mine");
+      await sleep(600);
+      await evaluate(`(() => {
+        const b = [...document.querySelectorAll("#mineTabs .mw-tab")].find(x => x.textContent.indexOf("待我处理") >= 0);
+        if (b) b.click(); return !!b;
+      })()`);
+      await sleep(1200);
+      const opened = await evaluate(`(() => {
+        const row = [...document.querySelectorAll("#mineBody .mw-row.mw-g-review[data-open]")].find(x => x.offsetParent !== null);
+        if (!row) return false;
+        row.click(); return true;
+      })()`);
+      if (opened) {
+        await sleep(1300);
+        /* 桌面详情不放底栏，认领评审在「更多」菜单里；显式打开菜单再断言 */
+        const moreOpened = await evaluate(`(() => {
+          const more = document.querySelector(".demand-detail [data-dem-detail-more-btn]");
+          if (more) more.click();
+          return !!more;
+        })()`);
+        await sleep(400);
+        data.adminDemandClaim = await evaluate(`(() => {
+          const visible = el => !!(el && !el.hidden && el.offsetParent !== null);
+          const layer = document.querySelector(".demand-detail");
+          const item = document.querySelector("[data-dem-detail-more='claim']");
+          const facts = document.getElementById("demandFacts");
+          const reviewer = facts ? (facts.innerText.match(/评审人[\\s\\S]{0,40}/) || [""])[0] : "";
+          return {
+            open: !!layer,
+            moreBtn: !!document.querySelector(".demand-detail [data-dem-detail-more-btn]"),
+            moreOpened: !!item,
+            claimVisible: visible(item),
+            claimText: item ? (item.textContent || "").trim() : "",
+            reviewer: reviewer.replace(/\\s+/g, " ").trim()
+          };
+        })()`);
+        data.adminDemandClaim.moreClicked = moreOpened;
+        data.shots.push(await shot(`1440-${r.key}-demand-detail-claim`));
+        await evaluate(`(() => {
+          const menu = document.querySelector("[data-dem-detail-more='claim']");
+          if (menu && menu.closest(".menu")) menu.closest(".menu").remove();
+          const x = document.querySelector("[data-dem-x]"); if (x) x.click();
+          return true;
+        })()`);
+        await sleep(500);
+      }
+    }
 
     /* 项目页 */
     await view("projects");
@@ -211,7 +290,7 @@ try {
           more: !!x.querySelector("[data-project-more]")
         })),
         empty: (document.body.innerText.match(/暂无可见项目|还没有项目|你还没有被分配/)||[])[0] || "",
-        primaryBtns: [...document.querySelectorAll(".page-head .btn.primary, .view-head .btn.primary, .pf-head .btn.primary")].filter(visible).map(b => b.textContent.trim())
+        primaryBtns: [...document.querySelectorAll("#pageActions .btn, #btnNew")].filter(visible).map(b => b.textContent.trim())
       };
     })()`);
     data.projects = proj;
@@ -226,10 +305,31 @@ try {
       const tabs = [...document.querySelectorAll("#setTabs .set-tab")].filter(visible).map(text);
       const disabled = [...document.querySelectorAll("#setPanel input, #setPanel textarea, #setPanel select, #setPanel button")].filter(x => x.disabled).length;
       const hint = text(document.querySelector(".set-hint"));
-      return { tabs, disabledCount: disabled, hint, roleGuide: !!document.querySelector("[data-role-guide]") };
+      const acts = document.getElementById("pageActions");
+      return { tabs, disabledCount: disabled, hint, footer: text(acts), footerHidden: !!(acts && acts.hidden), roleGuide: !!document.querySelector("[data-role-guide]") };
     })()`);
     data.settings = settings;
     data.shots.push(await shot(`1440-${r.key}-settings`));
+
+    /* 角色权限说明：菜单数应从导航配置生成，避免说明漂移 */
+    const guideOpened = await evaluate(`(() => {
+      const b = document.getElementById("btnRoleGuide");
+      if (!b) return false;
+      b.click(); return true;
+    })()`);
+    if (guideOpened) {
+      await sleep(500);
+      data.roleGuide = await evaluate(`(() => {
+        const layer = document.querySelector('.modal-layer[aria-label="角色权限说明"]');
+        if (!layer) return null;
+        const note = [...layer.querySelectorAll(".perm-note")].map(x => (x.textContent || "").replace(/\\s+/g, " ").trim());
+        const rows = layer.querySelectorAll(".perm-matrix tbody tr").length;
+        return { note, rows };
+      })()`);
+      data.shots.push(await shot(`1440-${r.key}-role-guide`));
+      await evaluate(`(() => { const c = document.querySelector("[data-role-guide-close]"); if (c) c.click(); return true; })()`);
+      await sleep(300);
+    }
 
     /* 查看者：记录可见写入口；全局新建若被隐藏就不再用脚本强点，避免把不可达路径当证据 */
     if (r.key === "viewer") {
@@ -255,7 +355,7 @@ try {
       data.viewerAttempt = attempt;
       data.shots.push(await shot(`1440-${r.key}-board`));
 
-      /* 查看者：测试页的页头写入口（先切到计划页签，计划按钮不依赖可写项目判断） */
+      /* 查看者：测试页的页头写入口（先切到计划页签，三个新建按钮都应隐身） */
       await view("testcases");
       await sleep(1200);
       await evaluate(`(() => { const b = document.querySelector('[data-tc-mode="plans"]'); if (b) b.click(); return true; })()`);
@@ -273,10 +373,63 @@ try {
       data.shots.push(await shot(`1440-${r.key}-test`));
     }
 
+    /* 新成员（无可见项目）：任务抽屉的项目归属说明 */
+    if (r.key === "member") {
+      await view("board");
+      await sleep(800);
+      await evaluate(`(async () => {
+        const { rt } = await import("./js/core/state.js");
+        window.__origReqList = rt.reqList;
+        rt.reqList = [];
+        rt.reqsLoaded = true;
+        const b = document.getElementById("btnNew");
+        if (b) b.click();
+        return true;
+      })()`);
+      await sleep(300);
+      await evaluate(`(() => {
+        const item = document.querySelector('#newMenu [data-new="task"]');
+        if (item) item.click();
+        return !!item;
+      })()`);
+      await sleep(900);
+      data.memberNoProject = await evaluate(`(async () => {
+        const visible = el => !!(el && !el.hidden && el.offsetParent !== null);
+        const { rt } = await import("./js/core/state.js");
+        const sel = document.getElementById("iReq");
+        const hint = document.getElementById("iReqHint");
+        return {
+          optionText: sel && sel.options[0] ? sel.options[0].textContent : "",
+          hasHint: !!hint,
+          reqLen: (rt.reqList || []).length,
+          reqsLoaded: rt.reqsLoaded,
+          drawerOn: !!(document.getElementById("taskDrawer") && document.getElementById("taskDrawer").classList.contains("on")),
+          hint: hint ? (hint.textContent || "").replace(/\\s+/g, " ").trim() : "",
+          hintVisible: visible(hint)
+        };
+      })()`);
+      data.shots.push(await shot(`1440-${r.key}-noproject-drawer`));
+      await evaluate(`(async () => {
+        const close = document.getElementById("btnCloseTask");
+        if (close) close.click();
+        const { rt } = await import("./js/core/state.js");
+        if (window.__origReqList) rt.reqList = window.__origReqList;
+        rt.reqsLoaded = true;
+        return true;
+      })()`);
+      await sleep(600);
+    }
+
     /* 390 手机档：我的工作 */
     await call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
     await view("mine");
-    await sleep(1000);
+    await sleep(400);
+    /* 上一步可能停在团队页签：手机档截图统一回到「待我处理」 */
+    await evaluate(`(() => {
+      const b = [...document.querySelectorAll("#mineTabs .mw-tab")].find(x => x.textContent.indexOf("待我处理") >= 0);
+      if (b) b.click(); return !!b;
+    })()`);
+    await sleep(800);
     const mobile = await evaluate(`(async () => {
       const visible = el => !!(el && !el.hidden && el.offsetParent !== null);
       const text = el => (el ? (el.textContent || "").replace(/\\s+/g, " ").trim() : "");
@@ -298,7 +451,10 @@ try {
     console.log("  项目数：" + data.projects.total + "，空态：" + (data.projects.empty || "无"));
     console.log("  设置页签：" + settings.tabs.join(" / "));
     console.log("  390 页签：" + mobile.tabs.join(" / ") + "，横向：" + mobile.bodyWidth + "/" + mobile.innerWidth);
+    console.log("  待我评审：" + data.reviewRows + " 行，认领按钮 " + data.reviewClaimBtns + " 个；待我执行：" + data.planRows + " 行");
+    if (data.adminDemandClaim) console.log("  需求详情认领：", JSON.stringify(data.adminDemandClaim));
     if (data.viewerAttempt) console.log("  查看者新建：", JSON.stringify(data.viewerAttempt));
+    if (data.memberNoProject) console.log("  无项目抽屉：", JSON.stringify(data.memberNoProject));
   }
 
   fs.writeFileSync(path.join(OUT, "role-audit.json"), JSON.stringify(result, null, 2));

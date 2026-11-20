@@ -7,7 +7,7 @@ import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, projectGroups, reqNameById, reqSetId, rt, selectedFilterCount, setNameById, state, taskById, taskCacheExtra } from "../core/state.js";
+import { canCreateNow, canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, projectGroups, reqNameById, reqSetId, rt, selectedFilterCount, setNameById, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -1901,8 +1901,12 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
       action = "清除筛选"; actionKind = "clear";
     }else{
       title = "还没有工作项";
-      text = "新建工作项并填上开始或截止日期，就会按时间出现在甘特图里。";
-      action = "新建工作项"; actionKind = "new";
+      if(canCreateNow()){
+        text = "新建工作项并填上开始或截止日期，就会按时间出现在甘特图里。";
+        action = "新建工作项"; actionKind = "new";
+      }else{
+        text = "当前空间还没有工作项。你是查看者或没有可写项目，只能浏览。";
+      }
     }
   }else{
     title = "还没有排期工作项";
@@ -2828,6 +2832,7 @@ if(ganttScroll){
     var date = ganttDayAtClientX(e.clientX, e.clientY, true);
     if(!date) return;
     e.preventDefault();
+    if(!canCreateNow()){ toast("当前没有可写的项目，无法新建工作项；请联系空间主或管理员分配项目", "warn"); return; }
     openTaskDrawer("backlog", null, { startDate: iso(date), dueDate: iso(date) });
   });
   ganttScroll.addEventListener("pointerdown", onGanttPointerDown);

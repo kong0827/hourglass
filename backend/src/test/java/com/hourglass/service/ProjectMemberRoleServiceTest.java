@@ -63,6 +63,9 @@ class ProjectMemberRoleServiceTest {
         service = new ProjectMemberRoleService(memberMapper, projectMemberMapper, roleMapper, access,
                 projects, mock(com.hourglass.mapper.WorkspaceMemberLabelOptionMapper.class), labelLogs);
         when(access.roleOf(WS, OWNER)).thenReturn("owner");
+        /* 标签写权限与项目治理同口径：负责人需可管理，管理员天然可管理 */
+        when(access.canManageProject(WS, OWNER, P, OWNER)).thenReturn(true);
+        when(access.canManageProject(WS, ADMIN, P, OWNER)).thenReturn(true);
 
         project = new Requirement();
         project.setId(P);
@@ -134,6 +137,17 @@ class ProjectMemberRoleServiceTest {
 
         AppException ex = assertThrows(AppException.class,
                 () -> service.saveRole(WS, project, ADMIN, "前端", PLAIN));
+        assertEquals(403, ex.getCode());
+        verify(roleMapper, never()).upsert(any(ProjectMemberRole.class));
+    }
+
+    @Test
+    void readOnlyOwnerCannotSaveRole() {
+        when(access.roleOf(WS, OWNER)).thenReturn("member");
+        when(access.canManageProject(WS, OWNER, P, OWNER)).thenReturn(false);
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.saveRole(WS, project, OWNER, "前端", PLAIN));
         assertEquals(403, ex.getCode());
         verify(roleMapper, never()).upsert(any(ProjectMemberRole.class));
     }
@@ -345,6 +359,8 @@ class ProjectMemberRoleServiceTest {
         when(memberMapper.selectMember(WS, ADMIN)).thenReturn(member(ADMIN, "member", "assigned"));
         assertThrows(AppException.class, () -> service.saveRoles(WS, project, Arrays.asList(PLAIN, ADMIN), "开发", null, OWNER));
         when(access.roleOf(WS, ADMIN)).thenReturn("member");
+        /* 标签写权限与项目治理同口径：不是管理员、也不是可写负责人时仍应拒绝 */
+        when(access.canManageProject(WS, ADMIN, P, OWNER)).thenReturn(false);
         assertThrows(AppException.class, () -> service.saveRoles(WS, project, Collections.singletonList(PLAIN), "开发", null, ADMIN));
         verify(roleMapper, never()).upsert(any());
     }

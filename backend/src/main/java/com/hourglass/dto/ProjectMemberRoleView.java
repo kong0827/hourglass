@@ -20,7 +20,7 @@ public class ProjectMemberRoleView {
     /** project / workspace / unset */
     private String roleSource;
     private java.util.List<String> secondaryRoleTitles = java.util.Collections.emptyList();
-    /** write / read */
+    /** write / test / read */
     private String access;
     /** 项目负责人 / 空间主 / 空间管理员 / 空间默认参与 / 项目授权 */
     private String source;

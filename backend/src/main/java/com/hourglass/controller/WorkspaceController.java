@@ -303,7 +303,6 @@ public class WorkspaceController {
                                              HttpServletRequest request) {
         String me = CurrentUser.id();
         Workspace ws = workspaceService.requireMember(me, id);
-        projectAccessService.requireManage(id, me);
         requireSharedWorkspace(ws, "项目可见范围");
         if (req == null || req.getUserId() == null || req.getProjectId() == null) {
             throw AppException.badRequest("请选择成员和项目");
@@ -327,6 +326,8 @@ public class WorkspaceController {
         if (project == null || !id.equals(project.getWorkspaceId())) {
             throw AppException.notFound("项目不存在或不属于当前空间：" + req.getProjectId());
         }
+        /* 单元格授权按项目级管理校验：项目负责人可调整自己项目的成员，管理员仍可调整全部 */
+        projectAccessService.assertManageProject(id, me, project.getId(), project.getOwnerUserId());
         String previous = projectAccessService.effectiveAccess(id, req.getProjectId(), target);
         String access = projectAccessService.saveGrant(id, req.getUserId(), req.getProjectId(), req.getAccess());
         String effective = ProjectAccessService.effectiveOf(access, target);
@@ -391,8 +392,9 @@ public class WorkspaceController {
             if (!value.isEmpty()
                     && !ProjectAccessService.ACCESS_NONE.equals(value)
                     && !ProjectAccessService.ACCESS_READ.equals(value)
-                    && !ProjectAccessService.ACCESS_WRITE.equals(value)) {
-                throw AppException.badRequest("项目权限只能是可参与 / 只读 / 不可见");
+                    && !ProjectAccessService.ACCESS_WRITE.equals(value)
+                    && !ProjectAccessService.ACCESS_TEST.equals(value)) {
+                throw AppException.badRequest("项目权限只能是可参与 / 可测试 / 只读 / 不可见");
             }
             Requirement project = requirementMapper.selectById(projectId);
             if (project == null || !id.equals(project.getWorkspaceId())) {
@@ -462,6 +464,9 @@ public class WorkspaceController {
         }
         if (ProjectAccessService.ACCESS_WRITE.equals(access)) {
             return "可参与";
+        }
+        if (ProjectAccessService.ACCESS_TEST.equals(access)) {
+            return "可测试";
         }
         return "默认参与（可查看、可编辑）";
     }

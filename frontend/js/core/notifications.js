@@ -20,6 +20,7 @@ var NOTIFY_ICON = {
   daily_digest: "clock",
   demand_status: "list",
   demand_watch: "eye",
+  test_plan_assigned: "check",
   doc_changed: "projects",
   branch_status: "branch",
   version_released: "tag",
@@ -188,6 +189,7 @@ var MSG_TYPE_META = [
   { key:"doc", label:"文档", types:["doc_changed"] },
   { key:"version", label:"发布", types:["version_released","version_deleted","branch_status"] },
   { key:"demand", label:"需求", types:["demand_status","demand_watch"] },
+  { key:"test", label:"测试", types:["test_plan_assigned"] },
   { key:"comment", label:"评论", types:["task_comment","task_mention"] },
   { key:"member", label:"成员与角色", types:["project_access","member_role","member_removed"] }
 ];

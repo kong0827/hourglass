@@ -604,7 +604,9 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .roster-empty{font-size:12px;color:var(--text-3);}
 .roster-access{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;font-weight:600;white-space:nowrap;}
 .roster-access.write{background:var(--success-soft);color:var(--success-fg);}
+.roster-access.test{background:var(--info-soft);color:var(--info-fg);}
 .roster-access.read{background:var(--surface-sunken);color:var(--text-2);}
+.roster-access-select{max-width:120px;}
 .roster-source{font-size:12px;color:var(--text-3);white-space:nowrap;}
 .roster-tbl td{vertical-align:middle;}
 @media(max-width:900px){.roster-tbl{min-width:640px;}}

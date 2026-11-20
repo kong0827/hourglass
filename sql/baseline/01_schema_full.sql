@@ -272,11 +272,13 @@ CREATE TABLE `demand` (
   `wsjf_risk` tinyint unsigned DEFAULT NULL COMMENT 'WSJF·风险降低/机会 0-10',
   `wsjf_effort` tinyint unsigned DEFAULT NULL COMMENT 'WSJF·工作量 0-10（分母，需 ≥1）',
   `created_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '提交人账号ID',
+  `reviewer_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '评审人账号ID（空=未指派，进入公共可认领队列）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_demand_no` (`workspace_id`,`req_id`,`demand_no`),
   KEY `idx_ws_status` (`workspace_id`,`status`),
+  KEY `idx_ws_reviewer` (`workspace_id`,`reviewer_user_id`,`status`),
   KEY `idx_ws_req` (`workspace_id`,`req_id`),
   KEY `idx_ws_category_id` (`workspace_id`,`category_id`),
   KEY `idx_version` (`version_id`)
@@ -1290,11 +1292,13 @@ CREATE TABLE `test_plan` (
   `note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '说明/范围',
   `created_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人显示名',
   `created_by_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人账号ID',
+  `executor_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行人账号ID（空=未指派，不进「待我执行」）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_ws_req` (`workspace_id`,`req_id`),
-  KEY `idx_ws_status` (`workspace_id`,`status`)
+  KEY `idx_ws_status` (`workspace_id`,`status`),
+  KEY `idx_ws_executor` (`workspace_id`,`executor_user_id`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试计划（项目下的回归/迭代容器）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `test_plan_case`;
