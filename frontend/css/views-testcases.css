@@ -113,7 +113,7 @@
 .view.tc-single .tc-listhead{min-height:44px;margin:0;padding:0 12px;border-radius:10px 10px 0 0;border-bottom:0;box-shadow:none;}
 .view.tc-single .tc-list{gap:0;border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px;background:var(--surface);overflow:hidden;}
 #tcQueryBar[hidden] + .tc-list{border-top:1px solid var(--border);border-radius:10px;}
-.view.tc-single .tc-thead{height:34px;padding:0 12px;background:#F9FAFB;border-bottom:1px solid var(--border);font-size:11px;font-weight:550;letter-spacing:.01em;}
+.view.tc-single .tc-thead{height:34px;padding:0 12px;background:#F9FAFB;border-bottom:1px solid var(--border);border-left:0;border-right:0;font-size:11px;font-weight:550;letter-spacing:.01em;}
 .view.tc-single .tc-row{min-height:44px;padding:4px 12px;border:0;border-bottom:1px solid #F2F4F7;border-radius:0;background:var(--surface);box-shadow:none;}
 .view.tc-single .tc-row:last-child{border-bottom:0;}
 .view.tc-single .tc-row:hover{background:var(--surface-hover);border-color:transparent;box-shadow:none;}
@@ -121,10 +121,14 @@
 .view.tc-single .tc-title{font-size:12.5px;line-height:18px;}
 .view.tc-single .tc-meta{font-size:10.5px;line-height:14px;margin-top:1px;gap:7px;}
 .view.tc-single .tc-meta em{font-size:10px;}
-/* 原型表里没有行内操作列：悬停或键盘进入时再出现，列表保持干净的表格阅读节奏 */
-.view.tc-single .tc-acts{opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
-.view.tc-single .tc-row:hover .tc-acts,
-.view.tc-single .tc-row:focus-within .tc-acts{opacity:1;}
+/* 原型表里没有行内操作列：悬停或键盘进入时再出现，列表保持干净的表格阅读节奏。
+   操作列固定 130px（不再按行内按钮撑宽），动作按钮浮在行右端，不参与列宽计算 */
+.view.tc-single .tc-row:not(.plan-case),.view.tc-single .tc-thead{grid-template-columns:18px 50px minmax(0,1fr) 96px 66px 84px 76px 46px 130px;}
+.view.tc-single .tc-row:not(.plan-case){position:relative;}
+.view.tc-single .tc-row:not(.plan-case) .tc-acts{position:absolute;right:12px;top:50%;transform:translateY(-50%);padding:2px 0 2px 40px;border-radius:var(--r-sm);background:linear-gradient(90deg,rgba(255,255,255,0),var(--surface) 34px);opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+.view.tc-single .tc-row:not(.plan-case):hover .tc-acts,
+.view.tc-single .tc-row:not(.plan-case):focus-within .tc-acts{opacity:1;background:linear-gradient(90deg,rgba(255,255,255,0),var(--surface-hover) 34px);}
+.view.tc-single .tc-row:not(.plan-case).is-selected .tc-acts{background:var(--primary-soft);}
 @media (hover:none){
   .view.tc-single .tc-acts{opacity:1;}
 }
@@ -374,10 +378,14 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 .tc-def-sev{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-3);}
 .tc-def-sev span{display:inline-flex;align-items:center;gap:var(--space-1);}
 .tc-def-sev b{color:var(--text-2);font-weight:600;font-variant-numeric:tabular-nums;}
+/* 图例圆点与行内徽标同色：阻断实心深红、严重浅红底对应的红、一般橙、轻微灰 */
 .tc-def-sev .sev-dot{width:6px;height:6px;border-radius:50%;background:var(--border-strong);display:inline-block;}
-.tc-def-sev .sev-dot.blocker{background:var(--danger);}
-.tc-def-sev .sev-dot.critical{background:var(--danger-border);}
+.tc-def-sev .sev-dot.blocker{background:var(--danger-solid);}
+.tc-def-sev .sev-dot.critical{background:var(--danger);}
 .tc-def-sev .sev-dot.major{background:var(--warning);}
+.tc-def-sev .sev-dot.minor{background:var(--text-3);}
+/* 未定用空心点：与「轻微」的实心灰区分开，也不挤占严重度色阶 */
+.tc-def-sev .sev-dot.none{background:transparent;box-shadow:inset 0 0 0 1px var(--text-3);}
 .tc-def-card{border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden;box-shadow:none;}
 #tcDefStats:not(:empty) + .tc-def-card{border-top:0;border-radius:0 0 10px 10px;}
 .tc-def-head,.tc-def-row{display:grid;grid-template-columns:30px 64px 58px minmax(240px,1fr) 84px 120px 100px 150px 78px;gap:10px;align-items:center;padding:6px 14px;}
@@ -444,8 +452,10 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
   .tc-defbar .mini-select{flex:1 1 calc(50% - 4px);min-width:0;}
 }
 /* 表格行：按原型列头对齐（编号 / 用例 / 分组 / 优先级 / 最近结果 / 执行人 / 更新 / 操作） */
-.tc-row,.tc-thead{display:grid;grid-template-columns:18px 50px minmax(0,1fr) 96px 66px 84px 76px 46px minmax(130px,auto);align-items:center;gap:8px;}
-.tc-thead{padding:4px 12px 6px;color:var(--text-3);font-size:11px;font-weight:600;letter-spacing:.02em;border-bottom:1px solid var(--border);}
+/* 操作列宽度由脚本统一测量（--tc-acts-w）：每行是独立 grid，写 auto 会被行内按钮撑成不同宽度，
+   表头与行、行与行之间就错位；表头补左右 1px 透明边框，抵消行的边框让内容区同宽 */
+.tc-row,.tc-thead{display:grid;grid-template-columns:18px 50px minmax(0,1fr) 96px 66px 84px 76px 46px var(--tc-acts-w, 130px);align-items:center;gap:8px;}
+.tc-thead{padding:4px 12px 6px;color:var(--text-3);font-size:11px;font-weight:600;letter-spacing:.02em;border-bottom:1px solid var(--border);border-left:1px solid transparent;border-right:1px solid transparent;}
 .tc-thead .tc-th-acts{text-align:right;}
 .tc-row{padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);cursor:pointer;}
 .tc-row.is-selected{border-color:var(--primary-border);background:var(--primary-soft);}
@@ -642,7 +652,8 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 .case-task-option-meta{font-size:12px;color:var(--text-3);}
 .case-task-hint{margin-top:4px;}
 @media (max-width:1180px){
-  .tc-row,.tc-thead{grid-template-columns:18px 48px minmax(0,1fr) 84px 80px minmax(96px,auto);}
+  .tc-row,.tc-thead{grid-template-columns:18px 48px minmax(0,1fr) 84px 80px var(--tc-acts-w, 96px);}
+  .view.tc-single .tc-row:not(.plan-case),.view.tc-single .tc-thead{grid-template-columns:18px 48px minmax(0,1fr) 84px 80px 130px;}
   .tc-c-mod,.tc-c-pri,.tc-c-time{display:none;}
   .tc-thead > :nth-child(4),.tc-thead > :nth-child(5),.tc-thead > :nth-child(8){display:none;}
   .tc-acts{justify-content:flex-end;}
@@ -650,10 +661,13 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 /* 手机：执行人让位给标题；行内只留「更多」入口，执行动作进详情 */
 @media (max-width:620px){
   .tc-row,.tc-thead{grid-template-columns:18px 44px minmax(0,1fr) 64px;gap:6px;}
+  .view.tc-single .tc-row:not(.plan-case),.view.tc-single .tc-thead{grid-template-columns:18px 44px minmax(0,1fr) 64px;}
   .tc-c-owner,.tc-thead > :nth-child(7){display:none;}
   .tc-acts,.tc-thead > :nth-child(9){display:none !important;}
   .tc-thead{padding:4px 10px 6px;font-size:10.5px;}
   .tc-row{padding:6px 10px;}
+  /* 手机布局下行内边距由 mobile.css 收到 12px，表头跟着走，否则两边的首列差 2px */
+  [data-layout="mobile"] .tc-thead{padding:4px 12px 6px;gap:8px;}
 }
 
 /* ---------------- 列表头内的展示工具：排序 / 分组 / 页宽 ---------------- */

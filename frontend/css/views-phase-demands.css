@@ -208,8 +208,9 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .mini-tag.type-story::before,.mini-tag.type-bug::before,.mini-tag.type-epic::before{
   content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto;
 }
-/* 缺陷严重度：与类型徽标并排，颜色按阻断/严重/一般/轻微递减 */
-.mini-tag.sev-blocker{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border);}
+/* 缺陷严重度：与类型徽标并排，颜色按阻断/严重/一般/轻微递减。
+   阻断用实心深红、严重用浅红底，避免两级同色分不出；图例圆点与选择器同口径 */
+.mini-tag.sev-blocker{background:var(--danger-solid);color:#fff;border:1px solid var(--danger-solid);}
 .mini-tag.sev-critical{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border);}
 .mini-tag.sev-major{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
 .mini-tag.sev-minor{background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border);}

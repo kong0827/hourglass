@@ -1056,11 +1056,12 @@ function defectStatsHTML(){
   var avgFix = fixDays.length
     ? (fixDays.reduce(function(a, b){ return a + b; }, 0) / fixDays.length).toFixed(1) + " 天"
     : "—";
-  var counts = { blocker: 0, critical: 0, major: 0, minor: 0 };
-  open.forEach(function(t){ if(counts[t.severity] !== undefined) counts[t.severity]++; });
-  var sev = [
-    ["blocker", "阻断"], ["critical", "严重"], ["major", "一般"], ["minor", "轻微"]
-  ].map(function(p){
+  var counts = { blocker: 0, critical: 0, major: 0, minor: 0, none: 0 };
+  /* 未定也计数：图例各项要能加回「共 X 条」，否则会少一条对不上账 */
+  open.forEach(function(t){ if(counts[t.severity] !== undefined) counts[t.severity]++; else counts.none++; });
+  var sevList = [["blocker", "阻断"], ["critical", "严重"], ["major", "一般"], ["minor", "轻微"]];
+  if(counts.none) sevList.push(["none", "未定"]);
+  var sev = sevList.map(function(p){
     return '<span><i class="sev-dot ' + p[0] + '"></i>' + p[1] + ' <b>' + counts[p[0]] + '</b></span>';
   }).join("");
   /* 原型 testbar：标题 + 条数口径在左，严重度分布靠右，解释收进表头 ? */
@@ -2480,6 +2481,7 @@ function render(){
       return;
     }
     $("tcList").innerHTML = visibleGroups.map(caseGroupHTML).join("");
+    syncTcColumnWidth();
     return;
   }
   /* 计数只留一处：工具条「显示 X / 共 Y」；chips 条不再重复总数 */
@@ -2513,6 +2515,7 @@ function render(){
       + cases.length + ' / 共 ' + caseTotal + ' 条）</button>';
   }
   $("tcList").innerHTML = html;
+  syncTcColumnWidth();
 }
 function groupDimLabel(){
   for(var i = 0; i < CASE_GROUP_DIMS.length; i++){
@@ -2592,6 +2595,7 @@ function renderGrouped(anyFilter){
     return;
   }
   $("tcList").innerHTML = caseGroupSegs.map(caseSegmentHTML).join("");
+  syncTcColumnWidth();
 }
 function segmentBarHTML(s){
   var t = s.total || 1;
@@ -3579,9 +3583,11 @@ function caseRowHTML(c, segKey){
   if(c.latestBugTaskId){
     /* 关联缺陷已修复关闭、最新执行仍失败：提示「待复测」，点击回到缺陷确认后重测 */
     var retest = c.latestBugResolved && c.latestStatus === "failed";
+    /* 列窄，标签只留语义：缺陷标题进 tooltip，否则四个动作会把操作列撑到标题列没地方 */
     acts += '<button class="btn sm ghost' + (retest ? " tc-retest" : "") + '" type="button" data-tc-bug="' + esc(c.id) + '" title="'
-      + (retest ? "关联缺陷已修复关闭，点击打开缺陷并复测确认" : "打开关联缺陷") + '">'
-      + (retest ? icon("refresh", 13) + ' 待复测 · ' : '缺陷 · ') + esc(cut(c.latestBugTaskTitle || c.latestBugTaskId, 10)) + '</button>';
+      + (retest ? "关联缺陷已修复关闭，点击打开缺陷并复测确认：" : "打开关联缺陷：")
+      + esc(c.latestBugTaskTitle || c.latestBugTaskId) + '">'
+      + (retest ? icon("refresh", 13) + ' 待复测' : icon("alert", 13) + ' 缺陷') + '</button>';
   }else if(w && c.latestStatus === "failed"){
     acts += '<button class="btn sm ghost danger" type="button" data-tc-defect="' + esc(c.id) + '">转缺陷</button>';
   }
@@ -3627,6 +3633,31 @@ function caseRowHTML(c, segKey){
     + '<span class="tc-c-time">' + (c.latestAt ? esc(fmtTs(c.latestAt).substring(0, 5)) : '<span class="tc-none">—</span>') + '</span>'
     + '<div class="tc-acts">' + acts + '</div>'
     + '</div>';
+}
+/* 每行都是独立 grid：操作列写 auto 时各行按自己的按钮宽度算，表头与数据行会互相错位。
+   渲染后量一次最宽的操作区，表头与所有行共用同一个列宽（--tc-acts-w），列就固定对齐。 */
+function tcActsWidth(scope){
+  var acts = scope.querySelectorAll(".tc-acts"), w = 0;
+  for(var i = 0; i < acts.length; i++){
+    var el = acts[i], prev = el.style.width;
+    /* 操作区当前被列宽压着，直接量拿到的是列宽；临时按内容撑开量完还原 */
+    el.style.width = "max-content";
+    var box = el.getBoundingClientRect().width;
+    el.style.width = prev;
+    if(box > w) w = box;
+  }
+  return w;
+}
+function syncTcColumnWidth(){
+  var list = $("tcList");
+  if(!list) return;
+  /* 按项目分段的列表每段是一张独立的表，各段自己量：不能因为某条用例带缺陷就压窄所有项目的标题列 */
+  var scopes = list.querySelectorAll(".tc-group-rows, .tc-seg-body");
+  var targets = scopes.length ? scopes : [list];
+  for(var i = 0; i < targets.length; i++){
+    var w = tcActsWidth(targets[i]);
+    if(w) targets[i].style.setProperty("--tc-acts-w", Math.ceil(w) + "px");
+  }
 }
 function caseTableHeadHTML(){
   return '<div class="tc-thead" aria-hidden="true">'

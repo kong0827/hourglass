@@ -285,9 +285,11 @@ html[data-theme="dark"] .dl-export-wrap{
 .dl-def .dl-def-id{font-style:normal;font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--text-3);margin-left:6px;}
 .dl-def .p{width:34px;height:18px;border-radius:var(--r-xs);display:grid;place-items:center;font-size:var(--fs-micro);font-weight:750;flex:none;
   background:var(--surface-active);color:var(--text-2);border:1px solid var(--border);}
-.dl-def .p.blocker{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border);}
-.dl-def .p.critical{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
-.dl-def .p.major{background:var(--info-soft);color:var(--info-fg);border-color:var(--info-border);}
+/* 与缺陷列表同一套严重度色阶：阻断实心深红、严重浅红、一般橙、轻微灰 */
+.dl-def .p.blocker{background:var(--danger-solid);color:#fff;border-color:var(--danger-solid);}
+.dl-def .p.critical{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border);}
+.dl-def .p.major{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
+.dl-def .p.minor{background:var(--surface-sunken);color:var(--text-2);border-color:var(--border);}
 .dl-def .grow{flex:1;}
 .dl-def b{font-family:var(--font-mono);font-weight:700;}
 .dl-def.total{border-top:1px solid var(--border);padding-top:7px;}

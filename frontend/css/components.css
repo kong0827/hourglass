@@ -1218,7 +1218,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .sev i{width:6px;height:6px;border-radius:50%;background:var(--sc);}
 .sev:hover{border-color:var(--border-strong);}
 .sev[aria-pressed="true"]{background:var(--s-soft);border-color:var(--s-border);color:var(--s-fg);}
-.sev[data-sev="blocker"]{--sc:var(--danger);--s-soft:var(--danger-soft);--s-border:var(--danger-border);--s-fg:var(--danger-fg);}
+/* 与缺陷徽标同口径：阻断实心深红（选中时圆点转白），严重浅红底 */
+.sev[data-sev="blocker"]{--sc:var(--danger-solid);--s-soft:var(--danger-solid);--s-border:var(--danger-solid);--s-fg:#fff;}
+.sev[data-sev="blocker"][aria-pressed="true"] i{background:currentColor;}
 .sev[data-sev="critical"]{--sc:var(--danger);--s-soft:var(--danger-soft);--s-border:var(--danger-border);--s-fg:var(--danger-fg);}
 .sev[data-sev="major"]{--sc:var(--warning);--s-soft:var(--warning-soft);--s-border:var(--warning-border);--s-fg:var(--warning-fg);}
 .sev[data-sev="minor"]{--sc:var(--p3);--s-soft:var(--p3-soft);--s-border:var(--border);--s-fg:var(--p3-fg);}
