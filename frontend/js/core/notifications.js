@@ -369,8 +369,12 @@ function togglePlanWatch(btn){
   btn.disabled = true;
   (watching ? API.del(url) : API.post(url)).then(function(rs){
     notifyState.watch[planId] = !!(rs && rs.watching);
-    btn.disabled = false;
-    btn.textContent = notifyState.watch[planId] ? "已关注" : "关注";
+    /* 同一计划的预处理通知可能有多条，状态要一起回填 */
+    document.querySelectorAll("[data-apn-watch]").forEach(function(b){
+      if(b.getAttribute("data-apn-watch") !== planId) return;
+      b.disabled = false;
+      b.textContent = notifyState.watch[planId] ? "已关注" : "关注";
+    });
     toast(notifyState.watch[planId] ? "已关注该发布计划，改期、范围变化和发布日会提醒你" : "已取消关注", "fs");
   }).catch(function(ex){
     btn.disabled = false;
