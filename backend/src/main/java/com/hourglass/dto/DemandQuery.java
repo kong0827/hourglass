@@ -24,6 +24,11 @@ public class DemandQuery {
     /** high/dueSoon/risk */
     private String focus;
     private String q;
+    /** 负责人账号ID：评审人优先，未评审时回落创建人 */
+    private String owner;
+    /** 期望交付日期区间（全局搜索的日期维度） */
+    private java.time.LocalDate expectFrom;
+    private java.time.LocalDate expectTo;
     private List<String> pris = new ArrayList<String>();
     private List<String> kinds = new ArrayList<String>();
     /** 模块名列表（空串表示未指定模块） */

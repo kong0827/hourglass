@@ -851,6 +851,44 @@ public class DemandService {
         return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
+    /**
+     * 需求详情的阶段工时：产品 / 设计、开发、测试三段的预估与实际。
+     * 测试窗口内的计时先归测试；需求类工作项的剩余计时归产品 / 设计，任务与缺陷的剩余归开发，
+     * 三段互不重叠、合计等于实际。史诗只做分组，不产生工时。只读，权限同需求详情。
+     */
+    public com.hourglass.dto.DemandHoursView hours(String workspaceId, String userId, String id) {
+        Demand d = requireDemand(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        com.hourglass.dto.DemandHoursView view = new com.hourglass.dto.DemandHoursView();
+        for (Task t : taskMapper.selectHoursByDemand(workspaceId, id)) {
+            if ("epic".equals(t.getItemType())) {
+                continue;
+            }
+            long estimate = Math.max(0, t.getEstimateMinutes() == null ? 0 : t.getEstimateMinutes());
+            long testEstimate = Math.max(0, t.getTestEstimateMinutes() == null ? 0 : t.getTestEstimateMinutes());
+            long total = Math.max(0, t.getTotalMinutes() == null ? 0 : t.getTotalMinutes());
+            long test = Math.min(total, Math.max(0, t.getTestMinutes() == null ? 0 : t.getTestMinutes()));
+            long rest = Math.max(0, total - test);
+
+            view.setTaskCount(view.getTaskCount() + 1);
+            if (estimate + testEstimate > 0) {
+                view.setEstimatedCount(view.getEstimatedCount() + 1);
+            } else {
+                view.setUnestimatedCount(view.getUnestimatedCount() + 1);
+            }
+            view.setTestEstimateMinutes(view.getTestEstimateMinutes() + testEstimate);
+            view.setTestActualMinutes(view.getTestActualMinutes() + test);
+            if ("story".equals(t.getItemType())) {
+                view.setProductEstimateMinutes(view.getProductEstimateMinutes() + estimate);
+                view.setProductActualMinutes(view.getProductActualMinutes() + rest);
+            } else {
+                view.setDevEstimateMinutes(view.getDevEstimateMinutes() + estimate);
+                view.setDevActualMinutes(view.getDevActualMinutes() + rest);
+            }
+        }
+        return view;
+    }
+
     /** 排期后二次确认的候选：需求名下、尚未绑定目标版本的工作项；只读，权限同需求详情。 */
     public com.hourglass.dto.PageResult<Task> versionTaskCandidates(String workspaceId, String userId, String id,
                                                                      String versionIdRaw, int offset, int limit) {

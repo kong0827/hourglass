@@ -258,6 +258,13 @@ public class DemandController {
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
+    /** 需求详情「工时」：按产品 / 设计、开发、测试三段的预估与实际（只读）。 */
+    @GetMapping("/api/demands/{id}/hours")
+    public ApiResult<com.hourglass.dto.DemandHoursView> hours(@PathVariable String id,
+                                                              @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.hours(ctx.getWsId(), ctx.getUserId(), id));
+    }
+
     /** 排期带入候选：需求名下尚未绑定目标版本的工作项，供二次确认弹窗展示。 */
     @GetMapping("/api/demands/{id}/version-task-candidates")
     public ApiResult<com.hourglass.dto.PageResult<Task>> versionTaskCandidates(

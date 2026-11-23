@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.CatchupMapper">
+
+  <select id="selectSession" resultType="CatchupSession">
+    SELECT id, workspace_id, user_id, week_start, status, started_at, submitted_at, undone_at,
+           elapsed_seconds, no_other_risk, review_json, created_at, updated_at
+    FROM catchup_session
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId} AND week_start = #{weekStart}
+  </select>
+
+  <select id="lockSession" resultType="CatchupSession">
+    SELECT id, workspace_id, user_id, week_start, status, started_at, submitted_at, undone_at,
+           elapsed_seconds, no_other_risk, review_json, created_at, updated_at
+    FROM catchup_session
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId} AND week_start = #{weekStart}
+    FOR UPDATE
+  </select>
+
+  <insert id="insertSession">
+    INSERT INTO catchup_session (id, workspace_id, user_id, week_start, status, no_other_risk)
+    VALUES (#{id}, #{workspaceId}, #{userId}, #{weekStart}, #{status}, #{noOtherRisk})
+  </insert>
+
+  <update id="updateSession">
+    UPDATE catchup_session
+    SET status = #{status},
+        started_at = #{startedAt},
+        submitted_at = #{submittedAt},
+        undone_at = #{undoneAt},
+        elapsed_seconds = #{elapsedSeconds},
+        no_other_risk = #{noOtherRisk},
+        review_json = #{reviewJson}
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <!-- 项目级隐藏（project_member.access=none）对普通成员生效；owner/admin/viewer 的 viewerId 为空不分页过滤 -->
+  <sql id="visibleTaskProject">
+    <if test="viewerId != null">
+      AND (t.req_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM project_member pm
+        WHERE pm.workspace_id = t.workspace_id
+          AND pm.project_id = t.req_id
+          AND pm.user_id = #{viewerId}
+          AND pm.access = 'none'))
+    </if>
+  </sql>
+
+  <select id="selectMyTasksForWeek" resultType="com.hourglass.dto.CatchupTaskRow">
+    SELECT t.id AS task_id, t.title, t.item_type, t.item_no, t.board_column,
+           t.req_id, r.name AS req_name, t.due_date, t.completed_at, t.created_at, t.updated_at,
+           t.is_blocked AS blocked, t.blocked_reason, t.owner_user_id
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId}
+      AND t.deleted_at IS NULL
+      AND (
+        t.owner_user_id = #{userId}
+        <if test="displayName != null">
+          OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
+        </if>
+        OR EXISTS (
+          SELECT 1 FROM time_log tl
+          WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id
+            AND tl.user_id = #{userId}
+            AND tl.started_at &gt;= #{from} AND tl.started_at &lt; #{to})
+      )
+      AND (
+        (t.completed_at &gt;= #{from} AND t.completed_at &lt; #{to})
+        OR (t.updated_at &gt;= #{from} AND t.updated_at &lt; #{to})
+        OR (t.created_at &gt;= #{from} AND t.created_at &lt; #{to})
+        OR EXISTS (
+          SELECT 1 FROM time_log tl
+          WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id
+            AND tl.user_id = #{userId}
+            AND tl.started_at &gt;= #{from} AND tl.started_at &lt; #{to})
+      )
+      <include refid="visibleTaskProject"/>
+    ORDER BY (t.completed_at IS NULL), t.completed_at DESC, t.updated_at DESC
+    LIMIT 80
+  </select>
+
+  <select id="selectMyTimeByTask" resultType="com.hourglass.dto.CatchupTimeSum">
+    SELECT task_id, SUM(minutes) AS minutes, COUNT(*) AS cnt, MAX(ended_at) AS last_at
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+      AND ended_at IS NOT NULL
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+    GROUP BY task_id
+  </select>
+
+  <select id="selectMyTimeGrid" resultType="com.hourglass.dto.CatchupTimeCell">
+    SELECT t.req_id, r.name AS req_name, DATE(tl.started_at) AS day, SUM(tl.minutes) AS minutes
+    FROM time_log tl
+    LEFT JOIN task t ON t.id = tl.task_id AND t.workspace_id = tl.workspace_id
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE tl.workspace_id = #{workspaceId} AND tl.user_id = #{userId}
+      AND tl.ended_at IS NOT NULL
+      AND tl.started_at &gt;= #{from} AND tl.started_at &lt; #{to}
+      <if test="viewerId != null">
+        AND (t.req_id IS NULL OR NOT EXISTS (
+          SELECT 1 FROM project_member pm
+          WHERE pm.workspace_id = t.workspace_id
+            AND pm.project_id = t.req_id
+            AND pm.user_id = #{viewerId}
+            AND pm.access = 'none'))
+      </if>
+    GROUP BY t.req_id, r.name, DATE(tl.started_at)
+  </select>
+
+  <select id="countMyTimeRecords" resultType="int">
+    SELECT COUNT(*) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+      AND ended_at IS NOT NULL
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+  </select>
+
+  <select id="selectMyDonePlans" resultType="com.hourglass.dto.CatchupPlanRow">
+    SELECT p.id AS plan_id, p.name, p.req_id, r.name AS req_name, p.status, p.updated_at,
+           (SELECT COUNT(*) FROM test_plan_case pc
+            WHERE pc.plan_id = p.id
+              AND pc.executed_by_user_id = #{userId}
+              AND pc.executed_at &gt;= #{from} AND pc.executed_at &lt; #{to}) AS executed_count
+    FROM test_plan p
+    LEFT JOIN requirement r ON r.id = p.req_id AND r.workspace_id = p.workspace_id
+    WHERE p.workspace_id = #{workspaceId}
+      AND p.executor_user_id = #{userId}
+      AND p.status = 'done'
+      AND p.updated_at &gt;= #{from} AND p.updated_at &lt; #{to}
+      <if test="viewerId != null">
+        AND NOT EXISTS (
+          SELECT 1 FROM project_member pm
+          WHERE pm.workspace_id = p.workspace_id
+            AND pm.project_id = p.req_id
+            AND pm.user_id = #{viewerId}
+            AND pm.access = 'none')
+      </if>
+    ORDER BY p.updated_at DESC
+    LIMIT 20
+  </select>
+
+  <select id="selectDecisions" resultType="CatchupDecision">
+    SELECT id, session_id, draft_key, kind, action, answer, title, payload_json, created_at, updated_at
+    FROM catchup_decision
+    WHERE session_id = #{sessionId}
+  </select>
+
+  <insert id="upsertDecision">
+    INSERT INTO catchup_decision (session_id, draft_key, kind, action, answer, title, payload_json)
+    VALUES (#{sessionId}, #{draftKey}, #{kind}, #{action}, #{answer}, #{title}, #{payloadJson})
+    ON DUPLICATE KEY UPDATE
+      kind = VALUES(kind),
+      action = VALUES(action),
+      answer = VALUES(answer),
+      title = VALUES(title),
+      payload_json = VALUES(payload_json),
+      updated_at = CURRENT_TIMESTAMP
+  </insert>
+
+  <delete id="deleteDecisions">
+    DELETE FROM catchup_decision WHERE session_id = #{sessionId}
+  </delete>
+
+  <delete id="deleteDecision">
+    DELETE FROM catchup_decision WHERE session_id = #{sessionId} AND draft_key = #{draftKey}
+  </delete>
+
+  <select id="selectAllocs" resultType="CatchupTimeAlloc">
+    SELECT id, session_id, row_key, day, req_id, minutes, created_at
+    FROM catchup_time_alloc
+    WHERE session_id = #{sessionId}
+  </select>
+
+  <delete id="deleteAllocs">
+    DELETE FROM catchup_time_alloc WHERE session_id = #{sessionId}
+  </delete>
+
+  <insert id="insertAlloc" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    INSERT INTO catchup_time_alloc (session_id, row_key, day, req_id, minutes)
+    VALUES (#{sessionId}, #{rowKey}, #{day}, #{reqId}, #{minutes})
+  </insert>
+
+  <insert id="insertTaskLog" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    INSERT INTO task_log (task_id, workspace_id, actor_id, action, detail, change_data)
+    VALUES (#{taskId}, #{workspaceId}, #{actorId}, #{action}, #{detail}, #{changeData})
+  </insert>
+
+  <delete id="deleteTaskLog">
+    DELETE FROM task_log WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <update id="updateTaskBlocked">
+    UPDATE task
+    SET is_blocked = #{blocked}, blocked_reason = #{reason}
+    WHERE workspace_id = #{workspaceId} AND id = #{taskId}
+  </update>
+
+  <insert id="insertWrite" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    INSERT INTO catchup_write (session_id, write_type, ref_id, prev_json)
+    VALUES (#{sessionId}, #{writeType}, #{refId}, #{prevJson})
+  </insert>
+
+  <select id="selectWrites" resultType="CatchupWrite">
+    SELECT id, session_id, write_type, ref_id, prev_json, created_at
+    FROM catchup_write
+    WHERE session_id = #{sessionId}
+    ORDER BY id
+  </select>
+
+  <delete id="deleteWrites">
+    DELETE FROM catchup_write WHERE session_id = #{sessionId}
+  </delete>
+
+  <select id="selectTaskReqId" resultType="string">
+    SELECT req_id FROM task
+    WHERE workspace_id = #{workspaceId} AND id = #{taskId}
+  </select>
+
+  <!-- 只承接已提交会话留下的项：撤销时承接已被删除，避免回滚后仍然挂到下周 -->
+  <select id="selectCarryForWeek" resultType="CatchupCarry">
+    SELECT c.id, c.from_session_id, c.to_week_start, c.task_id, c.item_no, c.title,
+           c.project_name, c.type_label, c.status_label, c.minutes, c.reason, c.created_at
+    FROM catchup_carry c
+    JOIN catchup_session s ON s.id = c.from_session_id
+    JOIN task t ON t.id = c.task_id AND t.workspace_id = s.workspace_id AND t.deleted_at IS NULL
+    WHERE s.workspace_id = #{workspaceId}
+      AND s.user_id = #{userId}
+      AND s.status = 'submitted'
+      AND c.to_week_start = #{toWeekStart}
+      <include refid="visibleTaskProject"/>
+  </select>
+
+  <insert id="insertCarry" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    INSERT INTO catchup_carry (from_session_id, to_week_start, task_id, item_no, title,
+                               project_name, type_label, status_label, minutes, reason)
+    VALUES (#{fromSessionId}, #{toWeekStart}, #{taskId}, #{itemNo}, #{title},
+            #{projectName}, #{typeLabel}, #{statusLabel}, #{minutes}, #{reason})
+  </insert>
+
+  <delete id="deleteCarryBySession">
+    DELETE FROM catchup_carry WHERE from_session_id = #{sessionId}
+  </delete>
+
+  <delete id="deleteCarryBefore">
+    DELETE c FROM catchup_carry c
+    JOIN catchup_session s ON s.id = c.from_session_id
+    WHERE s.workspace_id = #{workspaceId}
+      AND s.user_id = #{userId}
+      AND c.to_week_start &lt; #{beforeWeek}
+  </delete>
+
+</mapper>

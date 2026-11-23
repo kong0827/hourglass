@@ -606,6 +606,20 @@
     ORDER BY (board_column = 'done'), sort_order, id
   </select>
 
+  <!-- 需求阶段工时：逐工作项取类型、预估与累计计时，测试窗口内的分钟单独列出。
+       窗口口径与 TimeLogMapper.sumStageByTaskByWorkspace 一致（自然日粒度）。 -->
+  <select id="selectHoursByDemand" resultType="Task">
+    SELECT t.id, t.item_type AS itemType, t.estimate_minutes, t.test_estimate_minutes,
+           COALESCE(SUM(tl.minutes), 0) AS total_minutes,
+           COALESCE(SUM(CASE WHEN t.test_started_at IS NOT NULL AND t.test_finished_at IS NOT NULL
+                             AND DATE(tl.started_at) BETWEEN DATE(t.test_started_at) AND DATE(t.test_finished_at)
+                            THEN tl.minutes ELSE 0 END), 0) AS test_minutes
+    FROM task t
+    LEFT JOIN time_log tl ON tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL
+    WHERE t.workspace_id = #{workspaceId} AND t.demand_id = #{demandId} AND t.deleted_at IS NULL
+    GROUP BY t.id, t.item_type, t.estimate_minutes, t.test_estimate_minutes
+  </select>
+
   <update id="clearOwnerUser">
     UPDATE task SET owner_user_id = NULL WHERE owner_user_id = #{userId}
   </update>
@@ -988,7 +1002,8 @@
       <foreach collection="query.owners" item="o" separator=" OR ">
         <choose>
           <when test="o == '__none'">(t.owner IS NULL OR t.owner = '')</when>
-          <otherwise>t.owner = #{o}</otherwise>
+          <!-- 负责人条件既接受显示名也接受账号ID：全局搜索按账号筛，列表仍按显示名 -->
+          <otherwise>(t.owner = #{o} OR t.owner_user_id = #{o})</otherwise>
         </choose>
       </foreach>
       )
@@ -1707,6 +1722,31 @@
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_id IS NOT NULL
       AND board_column &lt;&gt; 'canceled'
     GROUP BY req_id
+  </select>
+  <!-- 逾期提醒规则：该规则只负责「逾期达到阈值」的升级提醒，日常汇总仍由 09:00 汇总覆盖 -->
+  <select id="selectAutomationOverdue" resultType="Task">
+    SELECT t.id, t.workspace_id, t.req_id, t.title, t.owner, t.owner_user_id, t.board_column,
+           t.due_date, t.priority, t.item_type AS itemType
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled'
+      AND t.due_date IS NOT NULL AND t.due_date &lt;= #{threshold}
+    ORDER BY t.due_date, t.id
+  </select>
+
+  <!-- 个人周报：未完成项全量（用于统计逾期/进行中/下周到期）+ 本周完成项，标题高亮由服务层截取 -->
+  <select id="selectWeeklyReportTasks" resultType="Task">
+    SELECT t.id, t.req_id, t.title, t.board_column, t.due_date, t.completed_at, t.item_type AS itemType, t.priority
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND (t.owner_user_id = #{userId}
+        <if test="displayName != null and displayName != ''">
+          OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
+        </if>)
+      AND t.board_column &lt;&gt; 'canceled'
+      AND (t.board_column &lt;&gt; 'done' OR (t.completed_at &gt;= #{from} AND t.completed_at &lt; #{to}))
+    ORDER BY (t.board_column = 'done'), t.due_date, t.id
+    LIMIT #{limit}
   </select>
 
 </mapper>
