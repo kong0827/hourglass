@@ -138,6 +138,12 @@ import { icon } from "./icons.js";
   }
   function openModal(m, focusSel) {
     if (!m) return;
+    /* 静态弹窗写在某个 .view 里时只在该视图激活时可见。从别的视图打开（版本详情 → 编辑版本、
+       项目列表 → 新建文档）会挂在 display:none 的视图下，表现为「点了没反应」；打开时挪到 body。 */
+    var ownerView = m.closest ? m.closest(".view") : null;
+    if (ownerView && !ownerView.classList.contains("on") && m.parentNode !== document.body) {
+      document.body.appendChild(m);
+    }
     /* 静态弹窗的按钮接线可能在覆盖层注入前就跑过一次：开弹窗时补接，见 wire() */
     wire();
     /* 所有弹窗共用同一套：焦点陷阱、遮罩关闭、焦点恢复；不再依赖手工在白名单里登记 */
