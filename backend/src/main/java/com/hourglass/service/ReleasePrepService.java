@@ -233,8 +233,7 @@ public class ReleasePrepService {
         String planLabel = planLabel(ctx);
         String title = "发布准备 · " + planLabel + countdownSuffix(ctx.plan.getPlannedAt());
         /* 事实句固定第一行；第二行按收件人给准备进度，补充说明顺延到可展开的第三行 */
-        String baseBody = fmtTime(ctx.plan.getPlannedAt()) + " " + environmentName(ctx.plan.getEnvironment())
-                + "发布；请确认你负责的工作项。点开逐项确认。";
+        String facts = fmtTime(ctx.plan.getPlannedAt()) + " " + environmentName(ctx.plan.getEnvironment()) + "发布";
         Map<String, OwnerPrepCounts> counts = ownerPrepCounts(states);
         /* 跨项目计划不固化项目：req_id 为空才不会被首个项目的可见性整条隐藏（sql/122） */
         String refReqId = planReqId(ctx.versions);
@@ -277,7 +276,7 @@ public class ReleasePrepService {
             if (channels.contains("in_app")
                     && preferences.inAppEnabled(target, UserNotificationPreferenceService.RELEASE_PREP)) {
                 inApp.pushImmediate(target, workspaceId, UserNotificationPreferenceService.RELEASE_PREP,
-                        title, personalBody(baseBody, counts.get(target), note), null, "release_plan", planId);
+                        title, personalBody(facts, counts.get(target), note), null, "release_plan", planId);
                 prepMapper.markRecipientInApp(push.getId(), target);
                 inAppCount++;
             }
@@ -286,7 +285,7 @@ public class ReleasePrepService {
                 /* 只有真的写入 outbox 才标记「已发邮件」：SMTP 未启用或写库失败时不能虚增人数 */
                 if (user != null && Texts.trimToNull(user.getEmail()) != null
                         && mail.enqueue(user.getEmail(), title,
-                        personalBody(baseBody, counts.get(target), note)
+                        personalBody(facts, counts.get(target), note)
                                 + deepLinkSuffix(refReqId, planId, ctx.versions, true),
                         UserNotificationPreferenceService.RELEASE_PREP, planId)) {
                     prepMapper.markRecipientEmail(push.getId(), target);
@@ -298,7 +297,7 @@ public class ReleasePrepService {
         String groupSkipped = null;
         if (channels.contains("group")) {
             try {
-                String groupText = title + "\n" + baseBody
+                String groupText = title + "\n" + facts + "；请确认你负责的工作项。点开逐项确认。"
                         + (note == null ? "" : "\n补充说明：" + note)
                         + deepLinkSuffix(refReqId, planId, ctx.versions, false);
                 groupSent = groupPush.sendGroupEvent(workspaceId, groupText);
@@ -673,7 +672,7 @@ public class ReleasePrepService {
                 /* 计划可能跨项目：落一个接收人可见的项目 req_id，项目被隐藏后通知才会一起隐藏 */
                 String reqId = visibleReqId(workspaceId, target, ctx.versions);
                 String personal = eventType == UserNotificationPreferenceService.RELEASE_PREP
-                        ? personalBody(body, counts.get(target), null) : body;
+                        ? milestoneBody(body, counts.get(target)) : body;
                 delivered = notifications.notifyLinked(target, workspaceId, eventType, title, personal,
                         "release_plan", planId, reqId,
                         deepLinkSuffix(reqId, planId, ctx.versions, prepLink));
@@ -1173,22 +1172,31 @@ public class ReleasePrepService {
         return res;
     }
 
-    /** 站内/邮件正文第二行；群消息没有具体收件人，不调用这里。 */
-    private String personalBody(String baseBody, OwnerPrepCounts counts, String note) {
+    /** 负责人的准备进度句；非负责人不调用。 */
+    private String progressLine(OwnerPrepCounts counts) {
+        List<String> parts = new ArrayList<String>();
+        if (counts.unfinished > 0) parts.add(counts.unfinished + " 未完成");
+        if (counts.risk > 0) parts.add(counts.risk + " 有风险");
+        if (counts.unconfirmed > 0) parts.add(counts.unconfirmed + " 待确认");
+        return parts.isEmpty()
+                ? "你负责的 " + counts.total + " 项已全部确认。"
+                : "你负责 " + counts.total + " 项：" + String.join("、", parts) + "。";
+    }
+
+    /** 站内/邮件正文：事实句在前，第二行按收件人给准备进度；群消息没有具体收件人，不调用这里。 */
+    private String personalBody(String facts, OwnerPrepCounts counts, String note) {
         String line;
         if (counts == null || counts.total == 0) {
-            line = "你没有负责本计划的工作项，请知悉发布安排。";
+            line = facts + "；请知悉本次发布安排。\n你没有负责本计划的工作项，可点开查看计划范围。";
         } else {
-            List<String> parts = new ArrayList<String>();
-            if (counts.unfinished > 0) parts.add(counts.unfinished + " 未完成");
-            if (counts.risk > 0) parts.add(counts.risk + " 有风险");
-            if (counts.unconfirmed > 0) parts.add(counts.unconfirmed + " 待确认");
-            line = parts.isEmpty()
-                    ? "你负责的 " + counts.total + " 项已全部确认。"
-                    : "你负责 " + counts.total + " 项：" + String.join("、", parts) + "。";
+            line = facts + "；请确认你负责的工作项。点开逐项确认。\n" + progressLine(counts);
         }
-        String body = baseBody + "\n" + line;
-        return note == null ? body : body + "\n补充说明：" + note;
+        return note == null ? line : line + "\n补充说明：" + note;
+    }
+
+    /** 里程碑提醒只在负责人既有准备进度时补第二行，关注者保持一句提醒。 */
+    private String milestoneBody(String lead, OwnerPrepCounts counts) {
+        return counts == null || counts.total == 0 ? lead : lead + "\n" + progressLine(counts);
     }
 
     private Map<String, Object> countdown(LocalDateTime plannedAt) {
