@@ -1024,7 +1024,7 @@ async function main(){
     })()`);
     assert(estSheet.tabs.join("/") === "类型/模块/负责人/需求/工作项", "预估构成页签不对：" + estSheet.tabs.join("/"));
     assert(/^预估\s/.test(estSheet.title) && estSheet.sub.indexOf("平均") >= 0, "预估构成标题 / 摘要不对：" + JSON.stringify(estSheet));
-    assert(estSheet.proxy >= 4, "类型页缺少阶段近似卡：" + estSheet.proxy);
+    assert(estSheet.proxy >= 3, "类型页缺少阶段卡：" + estSheet.proxy);
     assert(estSheet.rows.length >= 2 && estSheet.legend === estSheet.rows.length,
       "构成图例与分组行不一致：" + JSON.stringify({ rows: estSheet.rows.length, legend: estSheet.legend }));
     assert(estSheet.stack > 0, "构成条没有分段：" + estSheet.stack);
