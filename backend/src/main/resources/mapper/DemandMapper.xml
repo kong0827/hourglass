@@ -272,6 +272,11 @@
       AND d.expect_date IS NOT NULL AND d.expect_date &lt;= DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)
     </if>
     <if test="q.focus == 'risk'"> AND (<include refid="deliveryRiskExpr"/>) </if>
+    <if test="q.owner != null">
+      AND (d.reviewer_user_id = #{q.owner} OR d.created_by = #{q.owner})
+    </if>
+    <if test="q.expectFrom != null"> AND d.expect_date &gt;= #{q.expectFrom} </if>
+    <if test="q.expectTo != null"> AND d.expect_date &lt;= #{q.expectTo} </if>
     <if test="q.q != null">
       AND (d.title LIKE CONCAT('%', #{q.q}, '%')
            OR d.description LIKE CONCAT('%', #{q.q}, '%')
