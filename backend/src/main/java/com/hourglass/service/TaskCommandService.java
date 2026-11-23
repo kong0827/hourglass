@@ -79,6 +79,9 @@ public class TaskCommandService {
     private final DemandCompletionService demandCompletion;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
+    /** 工作项创建即进入处理态时，用于触发版本状态同步规则 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     public TaskCommandService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper,
                               CategoryMapper categoryMapper, UserMapper userMapper,
@@ -213,7 +216,20 @@ public class TaskCommandService {
         if (t.getDemandId() != null) {
             demandCompletion.refreshCompletion(workspaceId, t.getDemandId());
         }
+        publishProgress(userId, workspaceId, t);
         return savedTaskResponse(userId, workspaceId, id);
+    }
+
+    private void publishProgress(String userId, String workspaceId, Task task) {
+        if (eventPublisher == null) {
+            return;
+        }
+        try {
+            eventPublisher.publishEvent(new TaskProgressedEvent(workspaceId, userId,
+                    task.getId(), task.getReqId(), task.getBoardColumn()));
+        } catch (Exception e) {
+            log.warn("工作项进度事件发布失败：task={}", task.getId(), e);
+        }
     }
 
     @Transactional

@@ -157,8 +157,8 @@ public class TaskCommentService {
 
         List<String> mentioned = mentionTargets(text, structuredMentionIds, workspaceId, userId);
         for (String mentionedUserId : mentioned) {
-            notificationEvents.notify(mentionedUserId, workspaceId,
-                    UserNotificationPreferenceService.TASK_COMMENT,
+            /* 提及单独用 task_mention：偏好仍走评论开关，但「提及我」筛选和计数要能命中。 */
+            notificationEvents.notifyMention(mentionedUserId, workspaceId,
                     "「" + t.getTitle() + "」提到了你",
                     author + "：" + Texts.cut(text, PREVIEW_LEN), taskId, t.getReqId());
         }

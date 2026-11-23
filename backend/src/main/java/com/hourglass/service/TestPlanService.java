@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -200,7 +201,11 @@ public class TestPlanService {
         p.setPlannedEnd(req.getPlannedEnd());
         p.setNote(Texts.trimToNull(req.getNote()));
         p.setExecutorUserId(checkExecutor(workspaceId, p.getReqId(), req.getExecutorUserId()));
-        planMapper.update(p);
+        /* 可选乐观锁：带上打开编辑时的 updatedAt 时，已被他人改过就拒绝覆盖 */
+        p.setUpdatedAt(req.getUpdatedAt());
+        if (planMapper.update(p) != 1) {
+            throw new AppException(409, "测试计划已被其他人修改，请刷新后重试");
+        }
         StringBuilder planDetail = new StringBuilder(java.util.Objects.equals(oldName, p.getName())
                 ? "编辑测试计划「" + p.getName() + "」"
                 : "编辑测试计划「" + oldName + "」→「" + p.getName() + "」");
@@ -251,9 +256,9 @@ public class TestPlanService {
         return id;
     }
 
-    /** 状态流转：done 前必须已圈选用例；done 后禁止再改内容（快照口径） */
+    /** 状态流转：done 前必须已圈选用例；done 后禁止再改内容（快照口径）。回退到未完成必须说明原因并留痕 */
     @Transactional
-    public TestPlanView setStatus(String userId, String workspaceId, String id, String status) {
+    public TestPlanView setStatus(String userId, String workspaceId, String id, String status, String reason) {
         if (!status.matches("^(draft|running|done)$")) {
             throw AppException.badRequest("计划状态不合法");
         }
@@ -266,10 +271,19 @@ public class TestPlanService {
             }
         }
         String oldStatus = p.getStatus();
+        String rollbackReason = null;
+        if ("done".equals(oldStatus) && !"done".equals(status)) {
+            rollbackReason = Texts.trimToNull(reason);
+            if (rollbackReason == null) {
+                throw AppException.badRequest("从已完成回退到未完成必须填写原因");
+            }
+            rollbackReason = Texts.cut(rollbackReason, 200);
+        }
         planMapper.updateStatus(id, status);
         if (!status.equals(oldStatus)) {
             auditService.recordCurrent(workspaceId, "test_plan_status", "test_plan", id, p.getName(), true,
-                    "测试计划「" + p.getName() + "」状态：" + oldStatus + " → " + status, null);
+                    "测试计划「" + p.getName() + "」状态：" + oldStatus + " → " + status
+                            + (rollbackReason == null ? "" : "；回退原因：" + rollbackReason), null);
         }
         return planMapper.selectViewById(id);
     }
@@ -418,12 +432,14 @@ public class TestPlanService {
         projectAccess.assertTest(workspaceId, userId, p.getReqId());
         assertEditable(p);
         Set<String> inPlan = new HashSet<String>(planCaseMapper.selectCaseIds(planId));
+        /* 同一 ID 重复提交只执行一次：否则会追加多条 run、重复计数并写进审计 */
+        Set<String> seen = new LinkedHashSet<String>();
         CaseRunRequest runReq = new CaseRunRequest();
         runReq.setStatus(req.getStatus());
         runReq.setNote(req.getNote());
         int done = 0;
         for (String caseId : req.getCaseIds()) {
-            if (caseId == null || !inPlan.contains(caseId)) {
+            if (caseId == null || !seen.add(caseId) || !inPlan.contains(caseId)) {
                 continue;
             }
             caseService.run(userId, workspaceId, caseId, runReq, planId);

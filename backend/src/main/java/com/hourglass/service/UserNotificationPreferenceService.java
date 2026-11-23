@@ -35,10 +35,14 @@ public class UserNotificationPreferenceService {
     public static final String DAILY_DIGEST = "daily_digest";
     /** 测试计划指派：执行人变更后进入「我的工作 → 待我执行」 */
     public static final String TEST_PLAN_ASSIGNED = "test_plan_assigned";
+    /** 发布准备：负责人收到推送、T-7/T-3/T-1 待确认汇总 */
+    public static final String RELEASE_PREP = "release_prep";
+    /** 我关注的发布计划：改期、范围变化、进入就绪与 T-0 发布日 */
+    public static final String RELEASE_WATCH = "release_watch";
 
     public static final List<String> EVENT_TYPES = Collections.unmodifiableList(Arrays.asList(
             TASK_ASSIGNED, TASK_COMMENT, TASK_WATCH, TASK_UPDATED, DEMAND_STATUS, DEMAND_WATCH,
-            TEST_PLAN_ASSIGNED, DAILY_DIGEST));
+            TEST_PLAN_ASSIGNED, RELEASE_PREP, RELEASE_WATCH, DAILY_DIGEST));
     private static final Set<String> EVENT_SET = Collections.unmodifiableSet(new HashSet<String>(EVENT_TYPES));
 
     private final UserNotificationPreferenceMapper mapper;

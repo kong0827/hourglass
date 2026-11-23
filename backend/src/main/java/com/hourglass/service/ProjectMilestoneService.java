@@ -102,12 +102,13 @@ public class ProjectMilestoneService {
                     }
                 }
             }
+            int linkCount = KIND_TASKS.equals(milestone.getKind()) && links != null ? links.size() : 0;
             List<VersionRelease> records = Collections.emptyList();
             if (KIND_VERSION.equals(milestone.getKind()) && milestone.getVersionId() != null) {
                 records = releasesByVersion.computeIfAbsent(milestone.getVersionId(),
                         key -> releaseMapper.selectRecords(workspaceId, key));
             }
-            out.add(toView(milestone, linked, versionById.get(milestone.getVersionId()), records, users));
+            out.add(toView(milestone, linked, linkCount, versionById.get(milestone.getVersionId()), records, users));
         }
         return out;
     }
@@ -157,6 +158,7 @@ public class ProjectMilestoneService {
         projectAccess.assertView(workspaceId, userId, milestone.getReqId());
         Requirement req = requireProject(workspaceId, milestone.getReqId());
         List<Task> tasks = Collections.emptyList();
+        int linkCount = 0;
         if (KIND_TASKS.equals(milestone.getKind())) {
             Set<String> wanted = new HashSet<String>();
             for (MilestoneTaskLink link : milestoneMapper.selectTaskLinksByReq(workspaceId, milestone.getReqId())) {
@@ -164,6 +166,7 @@ public class ProjectMilestoneService {
                     wanted.add(link.getTaskId());
                 }
             }
+            linkCount = wanted.size();
             tasks = new ArrayList<Task>();
             for (Task task : taskMapper.selectByReq(workspaceId, milestone.getReqId())) {
                 if (wanted.contains(task.getId())) {
@@ -176,7 +179,7 @@ public class ProjectMilestoneService {
                 ? Collections.<VersionRelease>emptyList()
                 : releaseMapper.selectRecords(workspaceId, version.getId());
         Map<String, AppUser> users = usersOf(Collections.singletonList(milestone), req);
-        MilestoneView view = toView(milestone, tasks, version, records, users);
+        MilestoneView view = toView(milestone, tasks, linkCount, version, records, users);
         view.setLogs(logs(workspaceId, milestone.getId(), users));
         return view;
     }
@@ -483,7 +486,7 @@ public class ProjectMilestoneService {
                 ? user.getUsername() : user.getDisplayName();
     }
 
-    private MilestoneView toView(ProjectMilestone m, List<Task> tasks, ProjectVersion version,
+    private MilestoneView toView(ProjectMilestone m, List<Task> tasks, int linkCount, ProjectVersion version,
                                  List<VersionRelease> records, Map<String, AppUser> users) {
         MilestoneView view = new MilestoneView();
         view.setId(m.getId());
@@ -517,8 +520,11 @@ public class ProjectMilestoneService {
                 done++;
             }
         }
-        view.setTaskCount(tasks.size());
+        int missing = Math.max(0, linkCount - tasks.size());
+        /* 分母按关联条数：关联工作项被删除或移出项目时证据不全，不能靠「剩下的都完成」自动达成 */
+        view.setTaskCount(linkCount);
         view.setDoneTaskCount(done);
+        view.setMissingTaskCount(missing);
 
         LocalDateTime achievedAt = null;
         String source = null;
@@ -531,7 +537,7 @@ public class ProjectMilestoneService {
             achievedAt = m.getAchievedAt();
             source = achievedAt == null ? null : KIND_MANUAL;
         } else if (KIND_TASKS.equals(m.getKind())) {
-            if (!tasks.isEmpty() && done == tasks.size()) {
+            if (linkCount > 0 && missing == 0 && done == linkCount) {
                 source = KIND_TASKS;
                 for (Task task : tasks) {
                     if (task.getCompletedAt() != null
@@ -607,6 +613,8 @@ public class ProjectMilestoneService {
         view.setRolledBack(rolledBack);
         if (achievedAt != null) {
             view.setStatus(rolledBack ? "achieved_rolled_back" : "achieved");
+        } else if (KIND_TASKS.equals(m.getKind()) && missing > 0) {
+            view.setStatus("evidence_missing");
         } else if (m.getTargetDate() != null && m.getTargetDate().isBefore(LocalDate.now())) {
             view.setStatus("overdue");
         } else {

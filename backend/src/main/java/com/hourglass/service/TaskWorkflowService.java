@@ -66,6 +66,9 @@ public class TaskWorkflowService {
     private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
+    /** 自动开始版本等规则只作为事务提交后的旁路动作，不参与工作项主流程。 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     public TaskWorkflowService(TaskMapper taskMapper, TaskLogMapper logMapper, SubtaskMapper subtaskMapper,
                                TaskSupport support, TimeLogService timeLogService,
@@ -349,6 +352,7 @@ public class TaskWorkflowService {
             if (Consts.COL_TEST.equals(to) || Consts.COL_TESTING.equals(to)) {
                 notifyTestOwner(workspaceId, userId, task, to);
             }
+            publishProgress(userId, workspaceId, task);
         }
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         if (returnTask) {
@@ -716,6 +720,21 @@ public class TaskWorkflowService {
         audit.log(userId, workspaceId, task.getId(), "move", detail, from, task.getBoardColumn());
         /* 拖拽是独立动作，负责人在此即时通知；抽屉改列由编辑入口合并成一条，这里只发关注者 */
         notifyColumnMove(workspaceId, userId, task, detail, false);
+        publishProgress(userId, workspaceId, task);
+    }
+
+    private void publishProgress(String userId, String workspaceId, Task task) {
+        if (eventPublisher == null) {
+            return;
+        }
+        try {
+            eventPublisher.publishEvent(new TaskProgressedEvent(workspaceId, userId,
+                    task.getId(), task.getReqId(), task.getBoardColumn()));
+        } catch (Exception e) {
+            // 规则是旁路增强：发布事件失败不能影响已提交的工作项流转
+            org.slf4j.LoggerFactory.getLogger(TaskWorkflowService.class)
+                    .warn("工作项进度事件发布失败：task={}", task.getId(), e);
+        }
     }
 
     /**

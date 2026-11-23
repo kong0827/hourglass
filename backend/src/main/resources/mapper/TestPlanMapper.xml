@@ -33,8 +33,10 @@
         planned_start = #{plannedStart},
         planned_end = #{plannedEnd},
         note = #{note},
-        executor_user_id = #{executorUserId}
+        executor_user_id = #{executorUserId},
+        updated_at = NOW()
     WHERE id = #{id} AND workspace_id = #{workspaceId}
+    <if test="updatedAt != null">AND updated_at = #{updatedAt}</if>
   </update>
 
   <select id="selectById" resultType="com.hourglass.entity.TestPlan">
@@ -42,10 +44,10 @@
   </select>
 
   <select id="selectViewByReq" resultType="com.hourglass.dto.TestPlanView">
-    SELECT p.*, v.name AS version_name, em.display_name AS executor_name, <include refid="agg"/>
+    SELECT p.*, v.name AS version_name, u.display_name AS executor_name, <include refid="agg"/>
     FROM test_plan p
     LEFT JOIN project_version v ON v.id = p.version_id AND v.workspace_id = p.workspace_id
-    LEFT JOIN workspace_member em ON em.workspace_id = p.workspace_id AND em.user_id = p.executor_user_id
+    LEFT JOIN app_user u ON u.id = p.executor_user_id
     WHERE p.workspace_id = #{workspaceId} AND p.req_id = #{reqId}
     ORDER BY (p.status = 'done'), p.created_at DESC, p.id DESC
     LIMIT #{limit} OFFSET #{offset}
@@ -53,6 +55,23 @@
 
   <select id="countByReq" resultType="int">
     SELECT COUNT(*) FROM test_plan WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+
+  <select id="selectViewByVersion" resultType="com.hourglass.dto.TestPlanView">
+    SELECT p.*, v.name AS version_name, u.display_name AS executor_name, <include refid="agg"/>
+    FROM test_plan p
+    LEFT JOIN project_version v ON v.id = p.version_id AND v.workspace_id = p.workspace_id
+    LEFT JOIN app_user u ON u.id = p.executor_user_id
+    WHERE p.workspace_id = #{workspaceId} AND p.version_id = #{versionId}
+    ORDER BY (p.status = 'done'), p.created_at DESC, p.id DESC
+  </select>
+
+  <select id="selectDefectIdsByVersion" resultType="java.lang.String">
+    SELECT DISTINCT r.bug_task_id FROM test_case_run r
+    JOIN test_plan p ON p.id = r.plan_id AND p.workspace_id = r.workspace_id
+    JOIN test_plan_case pc ON pc.plan_id = r.plan_id AND pc.case_id = r.case_id
+    JOIN task bt ON bt.id = r.bug_task_id AND bt.workspace_id = r.workspace_id AND bt.deleted_at IS NULL
+    WHERE p.workspace_id = #{workspaceId} AND p.version_id = #{versionId} AND r.bug_task_id IS NOT NULL
   </select>
 
   <select id="countByVersion" resultType="int">
@@ -65,10 +84,10 @@
   </select>
 
   <select id="selectViewById" resultType="com.hourglass.dto.TestPlanView">
-    SELECT p.*, v.name AS version_name, em.display_name AS executor_name, <include refid="agg"/>
+    SELECT p.*, v.name AS version_name, u.display_name AS executor_name, <include refid="agg"/>
     FROM test_plan p
     LEFT JOIN project_version v ON v.id = p.version_id AND v.workspace_id = p.workspace_id
-    LEFT JOIN workspace_member em ON em.workspace_id = p.workspace_id AND em.user_id = p.executor_user_id
+    LEFT JOIN app_user u ON u.id = p.executor_user_id
     WHERE p.id = #{id}
   </select>
 

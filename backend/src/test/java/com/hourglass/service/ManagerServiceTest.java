@@ -557,6 +557,8 @@ class ManagerServiceTest {
         fresh.setOwnerUserId("U1");
         Task recent = openTask("T2", "R1", Consts.COL_BACKLOG, 60);
         recent.setOwnerUserId("U1");
+        Task broken = openTask("T3", "R1", Consts.COL_BACKLOG, 60);
+        broken.setOwnerUserId("U1");
         WorkspaceMember member = new WorkspaceMember();
         member.setUserId("U1");
         member.setDisplayName("Alice");
@@ -564,21 +566,54 @@ class ManagerServiceTest {
         when(access.canManage(WORKSPACE, "M1")).thenReturn(true);
         when(access.hiddenProjectIds(WORKSPACE, "M1")).thenReturn(Collections.<String>emptySet());
         when(access.canViewTask(eq(WORKSPACE), eq("U1"), any(Task.class))).thenReturn(true);
-        ManagerService service = service(Arrays.asList(fresh, recent), Collections.<Requirement>emptyList(),
+        ManagerService service = service(Arrays.asList(fresh, recent, broken), Collections.<Requirement>emptyList(),
                 Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(),
                 Collections.singletonList(member), access);
-        when(notificationService.push(eq("U1"), eq(WORKSPACE), eq("manager_nudge"), any(), any(), eq("T1"))).thenReturn(true);
-        when(notificationService.push(eq("U1"), eq(WORKSPACE), eq("manager_nudge"), any(), any(), eq("T2"))).thenReturn(false);
+        when(notificationService.pushResult(eq("U1"), eq(WORKSPACE), eq("manager_nudge"), any(), any(), eq("T1")))
+                .thenReturn(AppNotificationService.PushResult.INSERTED);
+        when(notificationService.pushResult(eq("U1"), eq(WORKSPACE), eq("manager_nudge"), any(), any(), eq("T2")))
+                .thenReturn(AppNotificationService.PushResult.DEDUPED);
+        when(notificationService.pushResult(eq("U1"), eq(WORKSPACE), eq("manager_nudge"), any(), any(), eq("T3")))
+                .thenReturn(AppNotificationService.PushResult.FAILED);
 
-        Map<String, Object> result = service.nudges(WORKSPACE, "M1", Arrays.asList("T1", "T2"));
+        Map<String, Object> result = service.nudges(WORKSPACE, "M1", Arrays.asList("T1", "T2", "T3"));
         assertEquals(1, result.get("sent"), "6 小时去重命中的不计入已发送");
         assertEquals(1, result.get("deduped"));
+        assertEquals(1, result.get("failed"), "写入失败既不算发送也不算去重");
         assertEquals(0, result.get("skipped"));
         verify(auditService).recordCurrent(eq(WORKSPACE), eq("manager_nudge"), eq("workspace"), eq(WORKSPACE),
                 isNull(), eq(true), contains("催办 1 个工作项：T1"), isNull());
         verify(taskAuditLogger).log(eq("M1"), eq(WORKSPACE), eq("T1"), eq("nudge"),
                 contains("被管理员催办"));
         verify(taskAuditLogger, never()).log(any(), any(), eq("T2"), any(), any());
+    }
+
+    @Test
+    void nudgeBatchSkipsInvalidTaskInsteadOfAborting() {
+        Task fresh = openTask("T1", "R1", Consts.COL_BACKLOG, 60);
+        fresh.setOwnerUserId("U1");
+        WorkspaceMember member = new WorkspaceMember();
+        member.setUserId("U1");
+        member.setDisplayName("Alice");
+        ProjectAccessService access = mock(ProjectAccessService.class);
+        when(access.canManage(WORKSPACE, "M1")).thenReturn(true);
+        when(access.hiddenProjectIds(WORKSPACE, "M1")).thenReturn(Collections.<String>emptySet());
+        when(access.canViewTask(eq(WORKSPACE), eq("U1"), any(Task.class))).thenReturn(true);
+        ManagerService service = service(Collections.singletonList(fresh), Collections.<Requirement>emptyList(),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(),
+                Collections.singletonList(member), access);
+        when(notificationService.pushResult(eq("U1"), eq(WORKSPACE), eq("manager_nudge"), any(), any(), eq("T1")))
+                .thenReturn(AppNotificationService.PushResult.INSERTED);
+
+        /* 不存在的 ID 只计入 skipped，批量里其余任务照常催办 */
+        Map<String, Object> result = service.nudges(WORKSPACE, "M1", Arrays.asList("T1", "MISSING"));
+        assertEquals(1, result.get("sent"));
+        assertEquals(1, result.get("skipped"));
+        assertEquals(0, result.get("failed"));
+        verify(auditService).recordCurrent(eq(WORKSPACE), eq("manager_nudge"), eq("workspace"), eq(WORKSPACE),
+                isNull(), eq(true), contains("催办 1 个工作项：T1"), isNull());
+        verify(taskAuditLogger).log(eq("M1"), eq(WORKSPACE), eq("T1"), eq("nudge"),
+                contains("被管理员催办"));
     }
 
     @Test

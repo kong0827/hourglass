@@ -298,18 +298,30 @@ public class NotificationService {
             /* 再按任务隔离一次：单条任务的数据异常不应影响同空间其它任务的提醒 */
             try {
                 /* BUG-12：站内与外部各看各的开关；站内默认开启，关外部不会停站内 */
-                boolean inApp = inAppEnabled && notifyTaskRemindInApp(ws, t, memberByName, workspaceOwners);
+                RemindDelivery inApp = inAppEnabled
+                        ? notifyTaskRemindInApp(ws, t, memberByName, workspaceOwners)
+                        : new RemindDelivery(0, 0);
                 if (hook != null) {
                     // 配了外部渠道：异步发送，成功后才闭环；失败/丢弃时留在 6 小时窗口内重试
                     scheduleRemindSend(ws, t, hook);
-                } else if (inApp) {
-                    // 没配外部渠道：应用内送达即闭环，并在应用日志里说明"为什么没发群消息"
+                } else if (inApp.delivered > 0) {
+                    // 没配外部渠道：应用内确实写入（或 6 小时内已发过）才闭环
                     taskMapper.markRemindSent(t.getId());
-                    log.info("提醒已通过站内通知送达（task={}，空间 {} 未启用外部推送）", t.getId(), ws.getId());
-                } else {
-                    // 外部未配置且站内关闭：标记已处理，避免永久重试；只写应用日志，不污染任务时间线
+                    log.info("提醒已通过站内通知送达 {} 人（task={}，空间 {} 未启用外部推送）",
+                            inApp.delivered, t.getId(), ws.getId());
+                } else if (!inAppEnabled) {
+                    // 外部未配置且站内关闭：标记已处理，避免永久重试
                     taskMapper.markRemindSent(t.getId());
                     log.debug("提醒未送达：外部推送与站内通知均已关闭（task={}，空间 {}）", t.getId(), ws.getId());
+                } else if (inApp.reachable == 0) {
+                    /* 负责人已退出空间或项目不可见：没有可收件人，标记终态避免每 5 分钟重试，但日志必须如实 */
+                    taskMapper.markRemindSent(t.getId());
+                    log.warn("提醒未送达：没有可接收的成员（负责人已退出空间或项目不可见），标记已处理（task={}，空间 {}）",
+                            t.getId(), ws.getId());
+                } else {
+                    /* 有可达收件人但写入失败：保留提醒，下一轮扫描重试 */
+                    log.warn("提醒写入失败，保留重试（task={}，空间 {}，可达 {} 人）",
+                            t.getId(), ws.getId(), inApp.reachable);
                 }
             } catch (Exception e) {
                 log.warn("单条任务提醒处理失败（task={}），已跳过", t.getId(), e);
@@ -358,12 +370,23 @@ public class NotificationService {
         }
     }
 
+    /** 一次站内提醒的结果：可达人数用于区分「无人可收」与「写入失败」，delivered 含 6 小时内已发过的人。 */
+    private static final class RemindDelivery {
+        final int reachable;
+        final int delivered;
+
+        RemindDelivery(int reachable, int delivered) {
+            this.reachable = reachable;
+            this.delivered = delivered;
+        }
+    }
+
     /** N-1：任务级提醒写入应用内通知，投递给负责人本人（可选带上全部空间主） */
-    private boolean notifyTaskRemindInApp(Workspace ws, Task t, Map<String, String> memberByName,
-                                          List<String> workspaceOwners) {
+    private RemindDelivery notifyTaskRemindInApp(Workspace ws, Task t, Map<String, String> memberByName,
+                                                 List<String> workspaceOwners) {
         Set<String> targets = resolveRecipients(ws, t, memberByName, workspaceOwners);
         if (targets.isEmpty()) {
-            return false;
+            return new RemindDelivery(0, 0);
         }
         String title = "任务提醒：" + t.getTitle();
         StringBuilder body = new StringBuilder();
@@ -374,12 +397,20 @@ public class NotificationService {
         if (t.getBlockedReason() != null) {
             body.append(" · 卡点：").append(Texts.cut(t.getBlockedReason(), 60));
         }
+        int reachable = 0;
+        int delivered = 0;
         for (String uid : targets) {
-            if (canReceiveInApp(ws, uid, t)) {
-                appNotificationService.push(uid, ws.getId(), "task_remind", title, body.toString(), t.getId());
+            if (!canReceiveInApp(ws, uid, t)) {
+                continue;
+            }
+            reachable++;
+            /* 去重命中说明 6 小时内已经提醒过本人，算已送达；写入失败则保留待重试 */
+            if (appNotificationService.pushResult(uid, ws.getId(), "task_remind", title, body.toString(), t.getId())
+                    != AppNotificationService.PushResult.FAILED) {
+                delivered++;
             }
         }
-        return true;
+        return new RemindDelivery(reachable, delivered);
     }
 
     /** 站内提醒不越过项目可见范围；校验异常按不可见处理，避免整轮扫描中断 */
@@ -540,15 +571,14 @@ public class NotificationService {
         }
 
         /* BUG-12：站内汇总只受站内开关控制，外部汇总只受推送开关控制 */
-        int inApp = withInApp && effectiveInAppEnabled(ws) ? pushDigestInApp(ws, over, todayDue) : 0;
-        res.put("inApp", inApp);
+        DigestDelivery inApp = withInApp && effectiveInAppEnabled(ws)
+                ? pushDigestInApp(ws, over, todayDue) : DigestDelivery.NONE;
+        res.put("inApp", inApp.inserted);
 
         String hook = effectiveEnabled(ws) ? effectiveHook(ws) : null;
         if (hook == null) {
             res.put("sent", false);
-            res.put("reason", inApp > 0
-                    ? "该空间未启用外部推送，已通过站内通知送达 " + inApp + " 人"
-                    : "外部推送与站内通知均不可用（检查「通知推送」开关与地址）");
+            res.put("reason", digestNoHookReason(ws, withInApp, inApp));
             return res;
         }
 
@@ -565,11 +595,51 @@ public class NotificationService {
         return res;
     }
 
+    /** 一次站内汇总的结果：inserted 为真正写入，deduped 为 6 小时内已发过，failed 为写库失败。 */
+    private static final class DigestDelivery {
+        static final DigestDelivery NONE = new DigestDelivery(0, 0, 0, 0);
+
+        final int inserted;
+        final int deduped;
+        final int failed;
+        final int skippedPreferences;
+
+        DigestDelivery(int inserted, int deduped, int failed, int skippedPreferences) {
+            this.inserted = inserted;
+            this.deduped = deduped;
+            this.failed = failed;
+            this.skippedPreferences = skippedPreferences;
+        }
+    }
+
+    /** 没有外部渠道时如实说明站内结果，不能把「没配置渠道」「没人可发」「写入失败」混成一句。 */
+    private String digestNoHookReason(Workspace ws, boolean withInApp, DigestDelivery inApp) {
+        if (!withInApp) {
+            return "当前操作只走外部渠道，且该空间未启用外部推送";
+        }
+        if (!effectiveInAppEnabled(ws)) {
+            return "外部推送与站内通知均已关闭（检查「通知推送」开关与地址）";
+        }
+        if (inApp.inserted > 0) {
+            return "该空间未启用外部推送，已通过站内通知送达 " + inApp.inserted + " 人";
+        }
+        if (inApp.deduped > 0) {
+            return "6 小时内已发过今日汇总，未重复写入站内通知";
+        }
+        if (inApp.failed > 0) {
+            return "站内汇总写入失败 " + inApp.failed + " 人（详见服务端日志），可稍后重试";
+        }
+        if (inApp.skippedPreferences > 0) {
+            return "可汇总的负责人都关闭了「每日汇总」，本次未发送";
+        }
+        return "没有需要汇总的负责人（任务未指派或负责人已不在空间）";
+    }
+
     /**
-     * R-3：把当日汇总按负责人分组写入应用内通知，返回实际送达的人数。
+     * R-3：把当日汇总按负责人分组写入应用内通知。
      * 归属判定与任务级提醒一致：优先 owner_user_id，历史行回落显示名匹配空间成员。
      */
-    private int pushDigestInApp(Workspace ws, List<Task> over, List<Task> todayDue) {
+    private DigestDelivery pushDigestInApp(Workspace ws, List<Task> over, List<Task> todayDue) {
         Map<String, List<Task>> byUser = new LinkedHashMap<String, List<Task>>();
         Map<String, String> memberByName = memberNameMap(ws.getId());
         for (Task t : over) {
@@ -579,9 +649,13 @@ public class NotificationService {
             addDigestTarget(byUser, memberByName, ws, t);
         }
         LocalDate today = LocalDate.now();
-        int sent = 0;
+        int inserted = 0;
+        int deduped = 0;
+        int failed = 0;
+        int skippedPreferences = 0;
         for (Map.Entry<String, List<Task>> e : byUser.entrySet()) {
             if (!preferenceService.inAppEnabled(e.getKey(), UserNotificationPreferenceService.DAILY_DIGEST)) {
+                skippedPreferences++;
                 continue;
             }
             int overN = 0;
@@ -605,11 +679,18 @@ public class NotificationService {
             if (todayN > 0) {
                 body.append("今天到期 ").append(todayN).append(" 项");
             }
-            appNotificationService.push(e.getKey(), ws.getId(), "task_due",
-                    "今日任务汇总", body.toString(), null);
-            sent++;
+            /* 只把真正写入的通知算送达：6 小时去重命中与写库失败都不应虚增人数 */
+            AppNotificationService.PushResult result = appNotificationService.pushResult(e.getKey(), ws.getId(),
+                    "task_due", "今日任务汇总", body.toString(), null);
+            if (result == AppNotificationService.PushResult.INSERTED) {
+                inserted++;
+            } else if (result == AppNotificationService.PushResult.DEDUPED) {
+                deduped++;
+            } else {
+                failed++;
+            }
         }
-        return sent;
+        return new DigestDelivery(inserted, deduped, failed, skippedPreferences);
     }
 
     private void addDigestTarget(Map<String, List<Task>> byUser, Map<String, String> memberByName,
@@ -708,11 +789,32 @@ public class NotificationService {
 
     /* ==================== 发送 ==================== */
 
+    /**
+     * 业务事件（发布准备等）发到空间配置的外部群机器人。
+     * 与任务提醒不同：不写任务提醒的「上次推送」状态，避免覆盖设置页的提醒结果；
+     * 返回 false 表示未启用外部推送或发送失败，由调用方如实提示。
+     */
+    public boolean sendGroupEvent(String workspaceId, String content) {
+        Workspace ws = Texts.trimToNull(workspaceId) == null ? null : workspaceMapper.selectById(workspaceId);
+        if (ws == null || !effectiveEnabled(ws)) {
+            return false;
+        }
+        String hook = effectiveHook(ws);
+        if (hook == null) {
+            return false;
+        }
+        return sendContent(ws, content, hook, false);
+    }
+
     /** 按渠道组装报文并发送，返回是否成功；同时回写"上次推送"状态（O-1 可视化依据） */
     private boolean sendContent(Workspace ws, String content, String hookRaw) {
+        return sendContent(ws, content, hookRaw, true);
+    }
+
+    private boolean sendContent(Workspace ws, String content, String hookRaw, boolean writeResult) {
         String hook = Texts.trimToNull(hookRaw);
         if (hook == null) {
-            recordResult(ws, "failed:未配置推送地址");
+            if (writeResult) recordResult(ws, "failed:未配置推送地址");
             return false;
         }
         String channel = effectiveChannel(ws);
@@ -723,7 +825,7 @@ public class NotificationService {
             String err = Webhooks.check(hook);
             if (err != null) {
                 log.warn("推送地址被拒绝（{}），空间 {}", err, ws.getId());
-                recordResult(ws, "failed:" + Texts.cut(err, 120));
+                if (writeResult) recordResult(ws, "failed:" + Texts.cut(err, 120));
                 return false;
             }
         }
@@ -742,7 +844,7 @@ public class NotificationService {
             String tk = effectiveToken(ws);
             if (tk == null) {
                 log.warn("pushplus 渠道未配置 token（空间与全局都为空）");
-                recordResult(ws, "failed:未配置 PushPlus token");
+                if (writeResult) recordResult(ws, "failed:未配置 PushPlus token");
                 return false;
             }
             payload.put("token", tk);
@@ -761,16 +863,16 @@ public class NotificationService {
                 // 未解析出渠道成功码（HTML 错误页/空响应/跳转页等）一律视为失败：提醒会保留待重试，不误标已发送
                 log.warn("推送结果无法确认为成功（空间 {}，渠道 {}）：{}", ws.getId(), channel,
                         Texts.cut(resp == null ? "<空响应>" : resp, 200));
-                recordResult(ws, "failed:渠道未返回明确成功码");
+                if (writeResult) recordResult(ws, "failed:渠道未返回明确成功码");
                 return false;
             }
             log.info("推送发送成功：空间={} 渠道={} 目标={}", ws.getId(), channel, safeHost(hook));
-            recordResult(ws, "success");
+            if (writeResult) recordResult(ws, "success");
             return true;
         } catch (Exception e) {
             log.warn("推送请求失败（空间 {}，渠道 {}）：{}", ws.getId(), channel, safeError(e));
             /* 异常文本可能带完整 webhook（serverchan 的 URL 里就有 token），回写到设置页前先脱敏 */
-            recordResult(ws, "failed:" + Texts.cut(safeError(e), 120));
+            if (writeResult) recordResult(ws, "failed:" + Texts.cut(safeError(e), 120));
             return false;
         }
     }

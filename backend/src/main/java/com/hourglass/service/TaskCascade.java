@@ -65,10 +65,11 @@ public class TaskCascade {
             "task_publication_judgement"));
 
     /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失；
-        req_doc_comment / demand_comment 保留评论正文，只解除「转为工作项」引用） */
+        req_doc_comment / demand_comment 保留评论正文，只解除「转为工作项」引用；
+        version_release_plan_task_check 跟随发布计划保留准备确认证据，计划删除时随外键级联清理） */
     public static final List<String> PRESERVED_TASK_REF_TABLES = Collections.unmodifiableList(Arrays.asList(
-            "task_completion_record", "version_release_item", "version_release_plan_task", "req_doc_comment",
-            "demand_comment"));
+            "task_completion_record", "version_release_item", "version_release_plan_task",
+            "version_release_plan_task_check", "req_doc_comment", "demand_comment"));
 
     /** 空间清空/覆盖导入不能删除或遗留的交付数据；存在任意行即拒绝重建。 */
     public static final List<String> PRESERVED_WORKSPACE_DELIVERY_TABLES = Collections.unmodifiableList(Arrays.asList(
@@ -474,6 +475,7 @@ public class TaskCascade {
         devBranchMapper.deleteLogsByWorkspace(workspaceId);
         devBranchMapper.deleteByWorkspace(workspaceId);
         versionMapper.deleteByWorkspace(workspaceId);
+        deliveryNoteMapper.deleteShareVisitsByWorkspace(workspaceId);
         deliveryNoteMapper.deleteSharesByWorkspace(workspaceId);
         deliveryNoteMapper.deleteSnapshotsByWorkspace(workspaceId);
         deliveryNoteMapper.deleteByWorkspace(workspaceId);
@@ -530,7 +532,8 @@ public class TaskCascade {
         /* 版本必须在需求池之后删：需求池通过 version_id 指向版本 */
         if (clearVersions) {
             versionMapper.deleteByWorkspace(workspaceId);
-            deliveryNoteMapper.deleteSharesByWorkspace(workspaceId);
+            deliveryNoteMapper.deleteShareVisitsByWorkspace(workspaceId);
+        deliveryNoteMapper.deleteSharesByWorkspace(workspaceId);
             deliveryNoteMapper.deleteSnapshotsByWorkspace(workspaceId);
             deliveryNoteMapper.deleteByWorkspace(workspaceId);
         }

@@ -47,6 +47,8 @@ public class NotificationCenterController {
            mentions 为未读提及数——页签上的数字必须能被读完归零，才不会被读成待办量 */
         res.put("total", notificationService.total(userId, wsId));
         res.put("mentions", notificationService.mentions(userId, wsId));
+        /* 类型计数按当前筛选全量统计：前端不再只数已加载的一页 */
+        res.put("typeCounts", notificationService.typeCounts(userId, wsId, filter));
         return ApiResult.ok(res);
     }
 

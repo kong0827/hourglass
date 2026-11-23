@@ -38,15 +38,17 @@ public class MyWorkService {
     private final ProjectAccessService projectAccess;
     private final WorkspaceMemberMapper memberMapper;
     private final UserMapper userMapper;
+    private final ReleasePrepService releasePrep;
 
     public MyWorkService(TaskQueryService taskQuery, MyWorkMapper myWorkMapper,
                          ProjectAccessService projectAccess, WorkspaceMemberMapper memberMapper,
-                         UserMapper userMapper) {
+                         UserMapper userMapper, ReleasePrepService releasePrep) {
         this.taskQuery = taskQuery;
         this.myWorkMapper = myWorkMapper;
         this.projectAccess = projectAccess;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
+        this.releasePrep = releasePrep;
     }
 
     /**
@@ -75,6 +77,7 @@ public class MyWorkService {
             createdNameOnly = myWorkMapper.countMyDemands(nameOnly);
         }
         int watchedDemands = myWorkMapper.countMyDemands(demandQuery(workspaceId, userId, displayName, "watch"));
+        int watchedPlans = releasePrep.countMyWatchedPlans(workspaceId, userId);
         int reviewCount = myWorkMapper.countMyDemands(demandQuery(workspaceId, userId, displayName, "review"));
 
         /* 待我执行：测试计划执行人是我、未完成；只算当前空间 */
@@ -90,9 +93,10 @@ public class MyWorkService {
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("pending", pending);
         res.put("created", createdCount);
-        res.put("watched", watchedTasks + watchedDemands);
+        res.put("watched", watchedTasks + watchedDemands + watchedPlans);
         res.put("watchedTasks", watchedTasks);
         res.put("watchedDemands", watchedDemands);
+        res.put("watchedPlans", watchedPlans);
         res.put("claimable", claimable);
         res.put("reviewAvailable", reviewAvailable(workspaceId, userId));
         res.put("matchedByNameOnly", createdNameOnly);

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ReportSubscriptionMapper">
+
+  <sql id="cols">
+    id, workspace_id, user_id, report_type, enabled, channels, weekday, send_hour,
+    last_sent_at, created_at, updated_at
+  </sql>
+
+  <select id="selectByUser" resultType="ReportSubscription">
+    SELECT <include refid="cols"/> FROM report_subscription
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+    ORDER BY report_type
+  </select>
+
+  <select id="selectOne" resultType="ReportSubscription">
+    SELECT <include refid="cols"/> FROM report_subscription
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId} AND report_type = #{reportType}
+  </select>
+
+  <select id="selectEnabledByType" resultType="ReportSubscription">
+    SELECT <include refid="cols"/> FROM report_subscription
+    WHERE report_type = #{reportType} AND enabled = 1
+    ORDER BY workspace_id, user_id
+  </select>
+
+  <select id="selectEnabledForWorkspace" resultType="ReportSubscription">
+    SELECT <include refid="cols"/> FROM report_subscription
+    WHERE workspace_id = #{workspaceId} AND report_type = #{reportType} AND enabled = 1
+    ORDER BY user_id
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO report_subscription (id, workspace_id, user_id, report_type, enabled, channels, weekday, send_hour)
+    VALUES (#{id}, #{workspaceId}, #{userId}, #{reportType}, #{enabled}, #{channels}, #{weekday}, #{sendHour})
+    ON DUPLICATE KEY UPDATE
+      enabled = VALUES(enabled),
+      channels = VALUES(channels),
+      weekday = VALUES(weekday),
+      send_hour = VALUES(send_hour),
+      updated_at = NOW()
+  </insert>
+
+  <update id="touchLastSent">
+    UPDATE report_subscription SET last_sent_at = #{sentAt} WHERE id = #{id}
+  </update>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM report_subscription WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByWorkspaceUser">
+    DELETE FROM report_subscription WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </delete>
+</mapper>

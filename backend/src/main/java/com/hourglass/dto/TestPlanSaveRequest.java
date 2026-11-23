@@ -6,6 +6,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /** 新建 / 保存测试计划 */
 @Data
@@ -34,4 +35,7 @@ public class TestPlanSaveRequest {
     /** 执行人账号ID；空表示不指派（不进任何人的「待我执行」） */
     @Size(max = 32)
     private String executorUserId;
+
+    /** 编辑时带上打开弹窗时的 updatedAt：已被他人修改则返回 409；新建或不传时不做并发校验 */
+    private LocalDateTime updatedAt;
 }

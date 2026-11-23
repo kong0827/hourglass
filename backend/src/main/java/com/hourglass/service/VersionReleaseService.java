@@ -102,6 +102,12 @@ public class VersionReleaseService {
     private final CaseSetService caseSetService;
     /** 发布证据变化后重新判定受影响需求的完成状态（成功生产发布 / 回滚） */
     private final DemandCompletionService demandCompletion;
+    /** 发布计划关注者通知：改期 / 范围变化 / 进入就绪 */
+    private final ReleasePrepService releasePrep;
+    /** 发布通知规则开关；关闭后仍记录发布事实，只是不打扰负责人 */
+    private final AutomationSettingsService automation;
+    /** 版本报告订阅：成功生产发布后按订阅人发送 */
+    private final ReportService reports;
 
     public VersionReleaseService(ReleaseMapper mapper, ProjectVersionMapper versionMapper,
                                  RequirementMapper reqMapper, DemandMapper demandMapper, UserMapper userMapper,
@@ -119,7 +125,10 @@ public class VersionReleaseService {
                                  WorkActivityService workActivityService,
                                  com.hourglass.mapper.TaskLogMapper taskLogMapper,
                                  CaseSetService caseSetService,
-                                 DemandCompletionService demandCompletion) {
+                                 DemandCompletionService demandCompletion,
+                                 ReleasePrepService releasePrep,
+                                 AutomationSettingsService automation,
+                                 ReportService reports) {
         this.mapper = mapper;
         this.versionMapper = versionMapper;
         this.reqMapper = reqMapper;
@@ -143,6 +152,9 @@ public class VersionReleaseService {
         this.taskLogMapper = taskLogMapper;
         this.caseSetService = caseSetService;
         this.demandCompletion = demandCompletion;
+        this.releasePrep = releasePrep;
+        this.automation = automation;
+        this.reports = reports;
         this.notificationTx = new TransactionTemplate(transactionManager);
         this.notificationTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -636,6 +648,8 @@ public class VersionReleaseService {
             old.setPlannedTaskIds(mapper.selectPlannedTaskIdsForUpdate(workspaceId, old.getId()));
             if (!Objects.equals(old.getRevision(), request.getRevision()) || "completed".equals(old.getStatus()))
                 throw new AppException(409, "计划已变化或已完成，请新建计划而非覆盖");
+            /* 通知关注者前需要旧范围的版本 ID；hydrate 只补展示字段，不影响写入 */
+            hydratePlan(workspaceId, old);
         }
         List<String> requestedVersions = request.getVersionIds() == null || request.getVersionIds().isEmpty()
                 ? Collections.emptyList() : identities(request.getVersionIds(), 32, "计划版本");
@@ -694,10 +708,19 @@ public class VersionReleaseService {
                 throw new AppException(409, "计划版本写入冲突");
         }
         for (String id : ids) if (mapper.insertPlanTask(workspaceId, next.getId(), id) != 1) throw new AppException(409, "计划范围写入冲突");
+        if (old != null && !Objects.equals(old.getPlannedAt(), next.getPlannedAt())) {
+            releasePrep.resetMilestones(workspaceId, next.getId());
+        }
         VersionReleasePlan saved = mapper.selectPlanForUpdate(workspaceId, next.getId());
         saved.setPlannedTaskIds(mapper.selectPlannedTaskIdsForUpdate(workspaceId, saved.getId()));
         hydratePlan(workspaceId, saved);
         for (String id : versionIds) log(userId, workspaceId, id, "release_plan", reason, old, saved);
+        /* 关注者只收「计划发生了什么」；发送失败不影响保存结果 */
+        try {
+            releasePrep.notifyPlanChanged(userId, workspaceId, old, saved);
+        } catch (Exception e) {
+            log.warn("发布计划关注通知失败（不影响保存）：workspace={} plan={}", workspaceId, saved.getId(), e);
+        }
         return saved;
     }
 
@@ -855,15 +878,22 @@ public class VersionReleaseService {
             item.setReason(request.getDeviationReason() != null ? request.getDeviationReason() : Objects.toString(failure, "本次实际范围未选择"));
             insertItem(record, item);
         }
-        /* 多版本计划只有全部包含版本都完成成功的生产部署/重部署才收口；测试、预发、回滚与部分成功不完成计划。 */
+        /* 多版本计划只有全部包含版本都完成成功的生产部署/重部署才收口；测试、预发、回滚与部分成功不完成计划。
+           已取消的计划保持取消：发布事实照常记录，只补一条「已取消计划发生发布」提醒，不把状态改回完成。 */
         if (success && c.plan != null && "production".equals(record.getEnvironment())
                 && !"rollback".equals(request.getOperation())) {
             int total = mapper.countPlanVersions(workspaceId, c.plan.getId());
             /* 没有版本关联行的历史计划按单版本处理，本次成功记录即视为全部完成。 */
             int released = total == 0 ? 1 : mapper.countPlanVersionsReleased(workspaceId, c.plan.getId());
-            if (released >= Math.max(total, 1)
-                    && mapper.completePlan(workspaceId, c.plan.getId(), c.plan.getRevision()) != 1)
-                throw new AppException(409, "计划状态写入冲突");
+            if (released >= Math.max(total, 1)) {
+                String planStatus = c.plan.getStatus();
+                if ("canceled".equals(planStatus)) {
+                    releasePrep.notifyCanceledPlanReleased(userId, workspaceId, c.plan);
+                } else if (!"completed".equals(planStatus)
+                        && mapper.completePlan(workspaceId, c.plan.getId(), c.plan.getRevision()) != 1) {
+                    throw new AppException(409, "计划状态写入冲突");
+                }
+            }
         }
         log(userId, workspaceId, versionId, "rollback".equals(request.getOperation()) ? "release_rollback" : success ? "release_success" : "release_failed",
                 request.getDeviationReason() != null ? request.getDeviationReason() : success ? request.getNotes() : failure, null, record);
@@ -882,8 +912,14 @@ public class VersionReleaseService {
             }
             demandCompletion.refreshCompletion(workspaceId, affected);
         }
-        if (success && "production".equals(record.getEnvironment()) && !"rollback".equals(record.getOperation()))
-            scheduleNotifications(workspaceId, userId, version, counts);
+        if (success && "production".equals(record.getEnvironment()) && !"rollback".equals(record.getOperation())) {
+            /* 规则关闭只影响打扰，不影响发布事实与需求判定 */
+            if (automation == null || automation.enabled(workspaceId, AutomationSettingsService.RELEASE_NOTIFY))
+                scheduleNotifications(workspaceId, userId, version, counts);
+            if (reports != null)
+                reports.scheduleVersionReport(workspaceId, record.getVersionId(), record.getVersionName(),
+                        record.getProjectName(), record.getReqId(), record.getPublishedCount());
+        }
         VersionRelease saved = mapper.selectByKeyForUpdate(workspaceId, versionId, request.getIdempotencyKey());
         saved.setItems(mapper.selectItemsForUpdate(workspaceId, saved.getId()));
         return saved;
@@ -1150,10 +1186,21 @@ public class VersionReleaseService {
             if (!c.omitted.isEmpty()) c.warnings.add("部分计划任务未包含在本次实际交付");
         }
         if ("production".equals(r.getEnvironment()) && !"rollback".equals(r.getOperation())) {
+            Set<String> targets = new HashSet<String>(r.getTargetKeys());
             for (VersionRelease prior : mapper.selectRecordsForUpdate(workspaceId, version.getId())) {
-                if ("success".equals(prior.getResult()) && "production".equals(prior.getEnvironment()) && !"rollback".equals(prior.getOperation())
-                        && (!Objects.equals(prior.getArtifactDigest(), r.getArtifactDigest()) || !Objects.equals(prior.getArtifactRef(), r.getArtifactRef())))
+                if (!"success".equals(prior.getResult()) || !"production".equals(prior.getEnvironment())
+                        || "rollback".equals(prior.getOperation())) continue;
+                if (!Objects.equals(prior.getArtifactDigest(), r.getArtifactDigest()) || !Objects.equals(prior.getArtifactRef(), r.getArtifactRef()))
                     throw new AppException(409, "已有成功生产事件的产物不可更换，补丁请使用新版本");
+                /* 同一计划、同一产物、同一目标集合的「部署」不是新事实：重复提交会虚增发布次数。
+                   重新部署用 redeploy，回滚后恢复也用 redeploy，均不受此限。 */
+                if ("deploy".equals(r.getOperation()) && Objects.equals(prior.getPlanId(), r.getPlanId())
+                        && new HashSet<String>(prior.getTargetKeys()).equals(targets)) {
+                    Integer releaseNo = mapper.selectReleaseNo(workspaceId, prior.getId());
+                    throw new AppException(409, "已有相同的成功生产事件"
+                            + (releaseNo == null ? "" : "（记录 REL-" + (releaseNo < 100 ? (releaseNo < 10 ? "00" : "0") : "") + releaseNo + "）")
+                            + "，请勿重复记录；如需重新部署请使用「重部署」");
+                }
             }
         }
         List<Task> tokenTasks = new ArrayList<Task>(c.scope);
@@ -1264,7 +1311,8 @@ public class VersionReleaseService {
         Map<String, Integer> recipients = new LinkedHashMap<String, Integer>(counts);
         Runnable send = () -> notificationTx.execute(status -> {
             for (Map.Entry<String, Integer> count : recipients.entrySet()) {
-                notifications.notifyLinked(count.getKey(), workspaceId, UserNotificationPreferenceService.DEMAND_STATUS,
+                notifications.notifyLinkedAs(count.getKey(), workspaceId, UserNotificationPreferenceService.DEMAND_STATUS,
+                        "version_released",
                         "版本「" + versionName + "」已发布", "你负责的 " + count.getValue() + " 项任务已确认随该版本发布",
                         "version", versionId, projectId);
             }

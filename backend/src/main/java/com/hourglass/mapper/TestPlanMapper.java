@@ -23,6 +23,14 @@ public interface TestPlanMapper {
 
     int countByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 某版本下的全部计划：交付说明按版本下推，避免先截断项目近期计划再筛版本 */
+    List<TestPlanView> selectViewByVersion(@Param("workspaceId") String workspaceId,
+                                           @Param("versionId") String versionId);
+
+    /** 某版本下各计划转出的缺陷 ID（已去重，排除回收站）：跨计划同一缺陷只计一次 */
+    List<String> selectDefectIdsByVersion(@Param("workspaceId") String workspaceId,
+                                          @Param("versionId") String versionId);
+
     /** 关联到某版本的测试计划数：发布检查据此区分「版本未关联计划」与「计划没有用例」 */
     int countByVersion(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
 

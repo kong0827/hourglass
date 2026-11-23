@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.AutomationRunMapper">
+
+  <insert id="insertIgnore">
+    INSERT IGNORE INTO automation_run (workspace_id, rule_key, target_key, run_date, status, message)
+    VALUES (#{workspaceId}, #{ruleKey}, #{targetKey}, #{runDate}, #{status}, #{message})
+  </insert>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM automation_run WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteClaim">
+    DELETE FROM automation_run
+    WHERE workspace_id = #{workspaceId} AND rule_key = #{ruleKey}
+      AND target_key = #{targetKey} AND run_date = #{runDate} AND status = 'sent'
+  </delete>
+</mapper>

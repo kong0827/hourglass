@@ -40,11 +40,14 @@ class VersionReleaseServiceTest {
     private final TaskLogMapper taskLogs = mock(TaskLogMapper.class);
     private final DemandCompletionService demandCompletion = mock(DemandCompletionService.class);
     private final DemandMapper demands = mock(DemandMapper.class);
+    private final ReleasePrepService releasePrep = mock(ReleasePrepService.class);
+    private final AutomationSettingsService automation = mock(AutomationSettingsService.class);
+    private final ReportService reports = mock(ReportService.class);
     private final VersionReleaseService service = new VersionReleaseService(mapper, versions, reqMapper,
             demands, users, versionTasks, members, locks, permissions, access,
             mock(TaskPublicationService.class), notifications, json, tx, numberSeq,
             planCases, caseTasks, cases, testPlans, audits, workActivities, taskLogs,
-            mock(CaseSetService.class), demandCompletion);
+            mock(CaseSetService.class), demandCompletion, releasePrep, automation, reports);
     private final Map<String, VersionReleasePlan> plans = new HashMap<String, VersionReleasePlan>();
     private final Map<String, VersionRelease> records = new HashMap<String, VersionRelease>();
     private final Map<String, List<VersionReleaseItem>> items = new HashMap<String, List<VersionReleaseItem>>();
@@ -60,6 +63,7 @@ class VersionReleaseServiceTest {
     @BeforeEach void setup() {
         TransactionSynchronizationManager.initSynchronization();
         TransactionSynchronizationManager.setActualTransactionActive(true);
+        when(automation.enabled(anyString(), anyString())).thenReturn(true);
         version = new ProjectVersion(); version.setId("V"); version.setWorkspaceId("W"); version.setReqId("P");
         version.setName("1.0"); version.setRevision(0L); version.setStatus("active");
         versionObjects.put("V", version);
@@ -198,6 +202,16 @@ class VersionReleaseServiceTest {
         assertEquals("1.0-legacy", item.getTargetVersionName());
         assertNull(saved.getDeviationReason(), "存量跨项目关联不应产生警告");
     }
+    @Test void releaseNotificationRuleOffStillRecordsReleaseButSkipsOwners() {
+        when(automation.enabled("W", AutomationSettingsService.RELEASE_NOTIFY)).thenReturn(false);
+        VersionRelease saved = confirm(request(plan("production"), "rule-off"));
+        assertNotNull(saved);
+
+        TransactionSynchronizationManager.getSynchronizations().forEach(s -> s.afterCommit());
+
+        verifyNoInteractions(notifications);
+        verify(reports).scheduleVersionReport(eq("W"), eq("V"), eq("1.0"), eq("Project"), eq("P"), any());
+    }
     @Test void subsetIsExplicitAndOmittedPlanTaskGetsImmutableSnapshot() {
         ReleaseConfirmRequest r = request(plan("production"), "one"); r.setActualTaskIds(Collections.singletonList("T1")); r.setDeviationReason("Only first batch deployed");
         VersionRelease saved = confirm(r);
@@ -210,7 +224,8 @@ class VersionReleaseServiceTest {
         assertEquals(TIME.toLocalDateTime(), saved.getOccurredAt()); assertTrue(saved.getRecordedAt().isAfter(saved.getOccurredAt()));
         verifyNoInteractions(notifications); assertEquals(1, TransactionSynchronizationManager.getSynchronizations().size());
         TransactionSynchronizationManager.getSynchronizations().forEach(s -> s.afterCommit());
-        verify(notifications).notifyLinked(anyString(), eq("W"), anyString(), anyString(), anyString(), anyString(), eq("V"), eq("P"));
+        verify(notifications).notifyLinkedAs(anyString(), eq("W"), anyString(), eq("version_released"),
+                anyString(), anyString(), anyString(), eq("V"), eq("P"));
         verify(versions, never()).update(any());
         verify(versions, never()).touchRevision(anyString(), anyString());
     }
@@ -388,7 +403,27 @@ class VersionReleaseServiceTest {
         code(422, () -> service.confirm("U", "W", "V", r));
         r.setDeviationReason("Deployment happened despite cancellation");
         assertEquals("success", confirm(r).getResult());
-        assertEquals("completed", canceled.getStatus());
+        /* 取消是人的决定：发布事实照常记录，但计划不能因此变成已完成 */
+        assertEquals("canceled", canceled.getStatus());
+        verify(mapper, never()).completePlan(anyString(), anyString(), anyLong());
+        verify(releasePrep).notifyCanceledPlanReleased("U", "W", canceled);
+    }
+
+    @Test void duplicateProductionDeployOfSameArtifactAndTargetsIsRejected() {
+        VersionReleasePlan plan = multiVersionPlan();
+        VersionRelease first = confirmVersion(plan, "V", "dup-first", "production", "T1");
+        when(mapper.selectReleaseNo("W", first.getId())).thenReturn(7);
+        clearInvocations(mapper);
+
+        ReleaseConfirmRequest duplicate = request(plan, "dup-second");
+        AppException error = assertThrows(AppException.class, () -> service.preview("U", "W", "V", duplicate));
+        assertEquals(409, error.getCode());
+        assertTrue(error.getMessage().contains("REL-007"), error.getMessage());
+        verify(mapper, never()).insertRecord(any());
+
+        /* 目标范围不同才是新的发布事实 */
+        duplicate.setTargetKeys(Collections.singletonList("a"));
+        preview(duplicate);
     }
 
     @Test void readyPlanUpdateRequiresExplicitIdentityRevisionAndReason() {
@@ -400,6 +435,23 @@ class VersionReleaseServiceTest {
         assertEquals(saved.getId(), changed.getId()); assertEquals(1L, changed.getRevision());
         assertEquals(Collections.singletonList("T1"), changed.getPlannedTaskIds());
         code(409, () -> service.savePlan("U", "W", "V", update));
+    }
+
+    @Test void reschedulingReadyPlanResetsMilestoneHistory() {
+        VersionReleasePlan saved = plan("production");
+        ReleasePlanRequest same = planRequest("production");
+        same.setId(saved.getId()); same.setRevision(saved.getRevision());
+        same.setReason("Keep date"); same.setPlannedTaskIds(Arrays.asList("T1", "T2"));
+        same.setPlannedAt(saved.getPlannedAt());
+        VersionReleasePlan kept = service.savePlan("U", "W", "V", same);
+        verify(releasePrep, never()).resetMilestones(anyString(), anyString());
+
+        ReleasePlanRequest moved = planRequest("production");
+        moved.setId(kept.getId()); moved.setRevision(kept.getRevision());
+        moved.setReason("Move date"); moved.setPlannedTaskIds(Arrays.asList("T1", "T2"));
+        moved.setPlannedAt(kept.getPlannedAt().plusDays(2));
+        service.savePlan("U", "W", "V", moved);
+        verify(releasePrep).resetMilestones("W", kept.getId());
     }
 
     @Test void preciseOffsetsNormalizeToUtcAndTaskLimitIsEnforced() {
