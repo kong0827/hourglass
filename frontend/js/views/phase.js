@@ -16,6 +16,8 @@ import { loadReqs } from "./board.js";
 import { branchMetaById, branchNameById, loadBranches, openBranchById, requestBranchStatus } from "./branches.js";
 import { openDemandDetailById, openDemandVersionBackfill } from "./demands.js";
 import { openMilestoneDetail } from "../lib/milestone-ui.js";
+import { STAGE_META, stageActualOf, summarizeStages } from "../lib/stage-hours.js";
+import { stagePanelHTML, stageRowHTML, stageDrillRows, stageHoursText, openStageDrill } from "../lib/stage-panel.js";
 import { openPeoplePicker, peopleFieldHTML, memberToOption } from "../lib/people-picker.js";
 
 /* datetime-local 按分钟记录：秒级差异既不可读，也会让未改动的计划被误判为有草稿 */
@@ -1272,6 +1274,53 @@ function mergedVersionRow(s){
   Object.keys(s).forEach(function(k){ if(s[k] !== undefined) out[k] = s[k]; });
   return out;
 }
+/* ---------- 阶段投入（列表页头与行内构成） ---------- */
+function stageCatName(id){
+  var cats = (rollupUi && rollupUi.cats) || [];
+  for(var i = 0; i < cats.length; i++) if(cats[i].id === id) return cats[i].name;
+  return "未分类";
+}
+function versionStageOf(id){ return summarizeStages(rollupVersionTasks(id)); }
+function versionStageTotals(rows){
+  var all = [];
+  (rows || []).forEach(function(v){ all = all.concat(rollupVersionTasks(v.id)); });
+  return summarizeStages(all);
+}
+function versionStageSummaryHTML(rows){
+  var s = versionStageTotals(rows);
+  return stagePanelHTML({
+    stage:s, mode:"actual", toggle:false, table:false, zeroNote:false,
+    title:"阶段投入 · 当前筛选范围", badge:"全部版本",
+    sub:(rows || []).length + " 个版本 · 累计 " + stageHoursText(s.actTotal) + " · 史诗不计入 · 跨版本合计会重复计",
+    scope:"当前筛选的 " + (rows || []).length + " 个版本",
+    note:"跨版本合计用于横向比较投入结构，不用于核算项目总成本；项目口径见项目驾驶舱。",
+    denomLabel:"版本累计实际工时"
+  });
+}
+function openPhaseStageDrill(el){
+  var key = el && el.dataset ? el.dataset.stageDrill : "";
+  if(!key) return;
+  var ver = el.dataset.stageVer || "";
+  var tasks, scope;
+  if(ver === "__unbound__"){
+    tasks = rollupVersionTasks("");
+    scope = "未绑定版本";
+  }else if(ver){
+    tasks = rollupVersionTasks(ver);
+    var hit = findVersion(ver);
+    scope = "版本 · " + ((hit && hit.name) || ver);
+  }else{
+    var rows = versionListRows();
+    tasks = [];
+    rows.forEach(function(v){ tasks = tasks.concat(rollupVersionTasks(v.id)); });
+    scope = "当前筛选的 " + rows.length + " 个版本";
+  }
+  openStageDrill({
+    scopeLabel:scope,
+    stageKey:key,
+    rows:stageDrillRows(tasks, { catName:stageCatName })
+  });
+}
 /* 列表风险口径（与原型一致）：有未完成的阻塞工作项，或未结束且目标日期已过。
    已发布版本不再因目标日期过期而算风险，只保留阻塞提示 */
 function verRisk(v){
@@ -1429,7 +1478,7 @@ function versionFocusHTML(){
   var dotCls = v.status === "active" ? "info" : (v.status === "released" ? "success" : "");
   var acts;
   if(flags.canPublish){
-    acts = '<button class="btn sm primary" type="button" data-ver-release="' + esc(id) + '">记录实际发布</button>';
+    acts = '<button class="btn sm" type="button" data-ver-release="' + esc(id) + '">记录实际发布</button>';
   }else if(flags.editable){
     acts = '<button class="btn sm primary" type="button" data-ver-tasks="' + esc(id) + '">排入工作项</button>'
       + '<button class="btn sm" type="button" data-ver-edit="' + esc(id) + '">设置目标日期</button>';
@@ -1521,6 +1570,7 @@ function versionRowHTML(v){
         + '<span class="vl-ptext"><b>' + pct + '%</b><small>' + done + ' / ' + total + '</small></span>'
       : '<span class="vl-bar empty"></span><span class="vl-ptext"><b>未规划</b><small>0 项</small></span>')
     + '</button>';
+  var stageCell = stageRowHTML(versionStageOf(id), { versionId:id, scope:"版本 · " + v.name });
   var relCell = '<button type="button" class="vl-cell vl-rel" data-ver-open-tab="releases" data-ver-id="' + esc(id) + '" data-ver-req="' + esc(req) + '" title="查看发布计划与实际发布记录">' + esc(verLatestReleaseText(v)) + '</button>';
   var quick;
   if(flags.editable && v.status === "planned"){
@@ -1539,6 +1589,7 @@ function versionRowHTML(v){
     + nameCell
     + timeCell
     + progressCell
+    + stageCell
     + relCell
     + acts
     + '</div>';
@@ -1624,6 +1675,8 @@ function paintVersionList(){
   if(riskBox) riskBox.checked = !!verListUi.riskOnly;
   var rowsBox = box.querySelector("[data-ver-rows]");
   if(rowsBox) rowsBox.innerHTML = versionGroupsHTML();
+  var stageBox = box.querySelector("[data-ver-stage]");
+  if(stageBox) stageBox.innerHTML = versionStageSummaryHTML(rows);
   var count = box.querySelector("[data-ver-count]");
   if(count){
     var other = focus ? rows.filter(function(v){ return v.id !== focus.id; }) : rows;
@@ -1644,7 +1697,8 @@ function versionListShellHTML(){
     + '<option value="name"' + (verListUi.sort === "name" ? " selected" : "") + '>名称</option>'
     + '</select></label>'
     + '</div></div>'
-    + '<div class="vl-head" aria-hidden="true"><span>版本</span><span>时间</span><span>进度</span><span>最近发布</span><span></span></div>'
+    + '<div class="vl-stage-sum" data-ver-stage>' + versionStageSummaryHTML(versionListRows()) + '</div>'
+    + '<div class="vl-head" aria-hidden="true"><span>版本</span><span>时间</span><span>进度</span><span class="vl-stage-head">阶段构成 · 点色块下钻</span><span>最近发布</span><span></span></div>'
     + '<div data-ver-rows></div>'
     + '<div class="vl-foot">'
     + '<button class="link-cell vl-foot-link" type="button" data-ver-schedule-link>查看发布日程 →</button></div>'
@@ -1821,7 +1875,7 @@ function versionMilestoneHTML(v){
     return x.kind === "version" && x.versionId === v.id && x.status !== "canceled";
   })[0];
   if(!m) return "";
-  var status = { achieved:"已达成", achieved_rolled_back:"已达成 · 已回滚", overdue:"已延期", pending:"未达成" }[m.status] || m.status;
+  var status = { achieved:"已达成", achieved_rolled_back:"已达成 · 已回滚", evidence_missing:"证据缺失", overdue:"已延期", pending:"未达成" }[m.status] || m.status;
   var parts = ["里程碑 " + status];
   if(m.achievedAt){
     parts.push(dateShort(m.achievedAt) + " 达成");
@@ -1895,7 +1949,7 @@ function versionCardHTML(v){
   acts += '<button class="btn sm" type="button" data-ver-detail="' + esc(v.id) + '" title="查看计划与发布历史">计划与历史</button>';
   acts += '<button class="btn sm ghost" type="button" data-ver-note="' + esc(v.id) + '">' + (st === "released" ? '发布说明' : '当前规划说明') + '</button>';
   acts += '<button class="btn sm ghost" type="button" data-ver-delivery="' + esc(v.id) + '" title="把承诺范围、实际发布、回归结果与遗留问题聚合成一份可对外提交的说明">交付说明</button>';
-  if(permissions.canPublish === true) acts += '<button class="btn sm primary" type="button" data-ver-release="' + esc(v.id) + '">记录实际发布</button>';
+  if(permissions.canPublish === true) acts += '<button class="btn sm" type="button" data-ver-release="' + esc(v.id) + '">记录实际发布</button>';
   var contentLocked = versionContentLocked(permissions) || versionContentLocked(v);
   var ended = versionEnded(permissions) || versionEnded(v);
   if(contentLocked) acts += '<span class="tag tag-neutral">正式发布后内容只读</span>';
@@ -1978,7 +2032,8 @@ function rollupVersionTasks(versionId){
   });
 }
 function rollupSummary(tasks){
-  var s = { items:tasks.length, est:0, act:0, dev:0, test:0, done:0 };
+  var s = { items:tasks.length, est:0, act:0, dev:0, test:0, done:0,
+    stage:summarizeStages(tasks) };
   tasks.forEach(function(t){
     s.est += rollupEst(t);
     s.act += rollupActual(t);
@@ -2007,18 +2062,23 @@ function rollupDemandName(id){
 /* 分组行：结构统一，阶段行只有窗口内 / 外带工时，完成/未开始只计条目 */
 function rollupRows(tasks, dim){
   if(dim === "stage"){
-    var dev = tasks.filter(function(t){ return rollupDev(t) > 0; });
-    var test = tasks.filter(function(t){ return rollupTest(t) > 0; });
+    var stage = summarizeStages(tasks);
+    var counts = { product:0, dev:0, test:0 };
+    tasks.forEach(function(t){
+      var a = stageActualOf(t);
+      if(a.product > 0) counts.product++;
+      if(a.dev > 0) counts.dev++;
+      if(a.test > 0) counts.test++;
+    });
     var done = tasks.filter(function(t){ return t.boardColumn === "done"; });
     var idle = tasks.filter(function(t){ return t.boardColumn !== "done" && rollupActual(t) === 0; });
-    return [
-      { key:"dev", name:"测试窗口外", note:"预估 + 窗口外计时", color:"var(--info)", items:dev.length,
-        est:rollupSummary(tasks).est, act:dev.reduce(function(a, t){ return a + rollupDev(t); }, 0), dev:null, test:null },
-      { key:"test", name:"测试窗口内", note:"窗口内计时", color:"var(--primary)", items:test.length,
-        est:0, act:test.reduce(function(a, t){ return a + rollupTest(t); }, 0), dev:null, test:null },
+    return STAGE_META.map(function(m){
+      return { key:m.key, name:m.name, note:m.note, color:m.color, items:counts[m.key],
+        est:stage.est[m.key], act:stage.act[m.key], dev:null, test:null };
+    }).concat([
       { key:"done", name:"完成", note:"看板已完成，只计条目", color:"var(--success)", items:done.length, est:null, act:null },
       { key:"idle", name:"未开始", note:"未完成且还没有已记工时", color:"var(--text-3)", items:idle.length, est:null, act:null }
-    ];
+    ]);
   }
   var groups = {}, order = [];
   tasks.forEach(function(t){
@@ -2060,11 +2120,11 @@ function rollupKpisHTML(s){
   /* 卡片与表格行同一套下钻：卡片只是「不分组」的快捷入口，点开仍落到工作项明细 */
   var cells = [
     [s.items, "工作项", "已完成 " + s.done, "kpi", "items", "全部工作项"],
-    [rollupH(s.est), "预估工时", "全部计入窗口外行", "kpi", "est", "有预估的工作项"],
-    [rollupH(s.act), "实际工时", s.act ? "窗口外 + 窗口内" : "尚未计时", "kpi", "act", "有实际工时的工作项"],
-    [rollupH(s.dev), "测试窗口外", "含评审、设计、开发、运维等", "stage", "dev", "测试窗口外的工作项"],
-    [rollupH(s.test), "测试窗口内", "提测 → 测试结束的计时", "stage", "test", "测试窗口内的工作项"],
-    [s.done + " / " + s.items, "已完成", "只计条目", "stage", "done", "已完成的工作项"]
+    [rollupH(s.stage.estTotal), "预估工时", "预计 + 测试预估", "kpi", "est", "有预估的工作项"],
+    [rollupH(s.act), "实际工时", s.act ? "产品 + 开发 + 测试" : "尚未计时", "kpi", "act", "有实际工时的工作项"],
+    [rollupH(s.stage.act.product), "产品 / 设计", "需求类工作项的计时", "stage", "product", "产品 / 设计阶段的工作项"],
+    [rollupH(s.stage.act.dev), "开发", "任务 / 缺陷在测试窗口外", "stage", "dev", "开发阶段的工作项"],
+    [rollupH(s.stage.act.test), "测试", "测试窗口内计时", "stage", "test", "测试阶段的工作项"]
   ];
   return '<div class="pgrid roll-kpis">' + cells.map(function(c){
     return '<button type="button" class="pcell drillable" data-rollup-group="' + c[3] + '" data-rollup-key="' + c[4] + '" title="下钻：' + esc(c[5]) + '">'
@@ -2072,13 +2132,25 @@ function rollupKpisHTML(s){
   }).join("") + '</div>';
 }
 function rollupSplitHTML(s){
-  if(!s.act) return '<p class="foot-note roll-split-empty">还没有已结束的计时，窗口内 / 外拆分要等第一条计时产生。</p>';
-  var dw = Math.round(s.dev * 100 / s.act), tw = 100 - dw;
-  return '<div class="roll-split" role="img" aria-label="实际工时中窗口外 ' + dw + '%，窗口内 ' + tw + '%">'
-    + '<i class="dev" style="width:' + dw + '%"></i><i class="test" style="width:' + tw + '%"></i></div>'
+  if(!s.act) return '<p class="foot-note roll-split-empty">还没有已结束的计时，产品 / 开发 / 测试拆分要等第一条计时产生。</p>';
+  var parts = STAGE_META.map(function(m){
+    return { key:m.key, name:m.name, color:m.color, act:s.stage.act[m.key],
+      pct:Math.round((s.stage.act[m.key] || 0) * 100 / s.act) };
+  });
+  /* 三段取整后可能差 1%：把差额落在最后一段，保证读屏文案与条宽一致 */
+  var sum = parts.reduce(function(a, p){ return a + p.pct; }, 0);
+  if(parts.length) parts[parts.length - 1].pct += 100 - sum;
+  return '<div class="roll-split" role="img" aria-label="实际工时中' + parts.map(function(p){
+      return p.name + ' ' + p.pct + '%';
+    }).join('，') + '">'
+    + parts.map(function(p){
+      return p.act > 0 ? '<i class="' + p.key + '" style="width:' + p.pct + '%;background:' + p.color + '"></i>' : '';
+    }).join('') + '</div>'
     + '<div class="roll-split-legend">'
-    + '<button type="button" data-rollup-group="stage" data-rollup-key="dev" title="下钻：测试窗口外的工作项"><i class="dev"></i>窗口外 ' + rollupH(s.dev) + '（' + dw + '%）</button>'
-    + '<button type="button" data-rollup-group="stage" data-rollup-key="test" title="下钻：测试窗口内的工作项"><i class="test"></i>窗口内 ' + rollupH(s.test) + '（' + tw + '%）</button></div>';
+    + parts.map(function(p){
+      return '<button type="button" data-rollup-group="stage" data-rollup-key="' + p.key + '" title="下钻：' + esc(p.name) + '阶段的工作项">'
+        + '<i class="' + p.key + '" style="background:' + p.color + '"></i>' + esc(p.name) + ' ' + rollupH(p.act) + '（' + p.pct + '%）</button>';
+    }).join('') + '</div>';
 }
 function rollupDeltaHTML(act, est){
   if(est === null || est === undefined || !est) return '<td class="num muted">—</td>';
@@ -2111,7 +2183,7 @@ function rollupPivotHTML(tasks, s){
       + '</tr>';
   }).join("");
   var total = '<tr class="roll-total"><td colspan="' + (stage ? 2 : 1) + '"><b>合计</b></td>'
-    + '<td class="num">' + s.items + '</td><td class="num">' + rollupH(s.est) + '</td><td class="num">' + rollupH(s.act) + '</td>'
+    + '<td class="num">' + s.items + '</td><td class="num">' + rollupH(stage ? s.stage.estTotal : s.est) + '</td><td class="num">' + rollupH(s.act) + '</td>'
     + (stage ? '' : '<td class="num">' + rollupH(s.dev) + '</td><td class="num">' + rollupH(s.test) + '</td>')
     + '<td class="num">' + rollupPct(s.act, s.act) + '</td>'
     + (stage ? '' : '<td class="num">' + rollupPct(s.est, s.est) + '</td>')
@@ -2120,36 +2192,79 @@ function rollupPivotHTML(tasks, s){
 }
 /* 跨版本默认只露 6 行：先给结论，需要时再展开全量 */
 var ROLLUP_ALL_ROWS = 6;
-function rollupAllVersionsHTML(){
-  var versions = cache.vstats.versions || [];
-  var rows = versions.map(function(v){
-    return '<tr class="roll-row" tabindex="0" data-rollup-group="version" data-rollup-ver="' + esc(v.id) + '" title="下钻该版本的工作项">'
-      + '<td>' + assocLinkHTML("version", v.id, v.name, {req:rt.phaseReqId}) + '</td><td>' + versionStatusTag(v.status) + '</td>'
-      + '<td class="num">' + (v.doneCount || 0) + ' / ' + (v.taskCount || 0) + '</td>'
-      + '<td class="num">' + rollupH(v.estimateMinutes) + '</td><td class="num">' + rollupH(v.workMinutes) + '</td>'
-      + '<td class="num">' + rollupH(v.devMinutes) + '</td><td class="num">' + rollupH(v.testMinutes) + '</td>'
-      + rollupDeltaHTML(v.workMinutes || 0, v.estimateMinutes) + '</tr>';
+function crossDeltaText(act, est){
+  if(!est) return "—";
+  var d = Math.round((Number(act) - Number(est)) * 100 / Number(est));
+  return (d > 0 ? "+" : "") + d + "%";
+}
+function crossVersionRows(){
+  var out = ((cache.vstats && cache.vstats.versions) || []).map(function(v){
+    return { id:v.id, name:v.name, status:v.status, done:v.doneCount || 0, total:v.taskCount || 0,
+      stage:summarizeStages(rollupVersionTasks(v.id)), unbound:false };
   });
-  var u = cache.vstats.unbound || {};
+  var u = (cache.vstats && cache.vstats.unbound) || {};
   if(Number(u.taskCount)){
-    rows.push('<tr class="roll-row" tabindex="0" data-rollup-group="version" data-rollup-ver="" title="下钻未绑定版本的工作项">'
-      + '<td><span class="tag ghost">待规划</span></td><td class="muted">未绑定版本</td>'
-      + '<td class="num">' + (u.doneCount || 0) + ' / ' + u.taskCount + '</td>'
-      + '<td class="num">' + rollupH(u.estimateMinutes) + '</td><td class="num">' + rollupH(u.workMinutes) + '</td>'
-      + '<td class="num">' + rollupH(u.devMinutes) + '</td><td class="num">' + rollupH(u.testMinutes) + '</td>'
-      + '<td class="num muted">—</td></tr>');
+    out.push({ id:"", name:"未绑定版本", status:"", done:u.doneCount || 0, total:Number(u.taskCount),
+      stage:summarizeStages(rollupVersionTasks("")), unbound:true });
   }
+  return out;
+}
+function rollupAllVersionsHTML(){
+  var data = crossVersionRows();
+  var rows = data.map(function(v){
+    var s = v.stage;
+    var verAttr = v.unbound ? "__unbound__" : v.id;
+    var cells = STAGE_META.map(function(m){
+      var x = s.act[m.key];
+      return '<td class="num"><button class="cell-drill' + (x ? "" : " zero") + '" type="button"'
+        + ' data-stage-drill="' + m.key + '" data-stage-ver="' + esc(verAttr) + '"'
+        + ' data-stage-scope="' + esc((v.unbound ? "未绑定版本" : "版本 · " + v.name) + " · " + m.name) + '"'
+        + ' title="下钻：' + esc((v.unbound ? "未绑定版本" : v.name) + " · " + m.name) + '">'
+        + (x ? esc(stageHoursText(x)) : "—") + '</button></td>';
+    }).join("");
+    return '<tr class="roll-row" tabindex="0" data-rollup-group="version" data-rollup-ver="' + esc(v.id) + '" title="下钻该版本的工作项">'
+      + '<td>' + (v.unbound
+        ? '<span class="tag ghost">待规划</span>'
+        : assocLinkHTML("version", v.id, v.name, {req:rt.phaseReqId})) + '</td>'
+      + '<td>' + (v.unbound ? '<span class="muted">未绑定版本</span>' : versionStatusTag(v.status)) + '</td>'
+      + '<td class="num">' + v.done + ' / ' + v.total + '</td>'
+      + '<td class="num">' + (s.estTotal ? esc(stageHoursText(s.estTotal)) : "—") + '</td>'
+      + '<td class="num">' + (s.actTotal ? esc(stageHoursText(s.actTotal)) : "—") + '</td>'
+      + cells
+      + (v.unbound ? '<td class="num muted">—</td>' : rollupDeltaHTML(s.actTotal, s.estTotal)) + '</tr>';
+  });
+  var cards = data.map(function(v){
+    var s = v.stage;
+    var verAttr = v.unbound ? "__unbound__" : v.id;
+    var segs = STAGE_META.map(function(m){
+      var x = s.act[m.key];
+      return '<button class="cc-stage' + (x ? "" : " zero") + '" type="button"'
+        + (x ? ' data-stage-drill="' + m.key + '" data-stage-ver="' + esc(verAttr) + '" data-stage-scope="' + esc((v.unbound ? "未绑定版本" : "版本 · " + v.name) + " · " + m.name) + '"' : " disabled")
+        + '><i style="background:' + m.color + '"></i><span>' + (m.key === "product" ? "产品" : esc(m.name)) + '</span>'
+        + '<b>' + (x ? esc(stageHoursText(x)) : "—") + '</b></button>';
+    }).join("");
+    return '<article class="cross-card"><div class="cc-head">'
+      + (v.unbound ? '<span class="tag ghost">待规划</span><b>未绑定版本</b>' : assocLinkHTML("version", v.id, v.name, {req:rt.phaseReqId}))
+      + (v.unbound ? "" : versionStatusTag(v.status))
+      + '<b class="cc-dev' + (v.unbound || !s.estTotal ? " muted" : (s.actTotal > s.estTotal ? " over" : "")) + '">'
+      + (v.unbound ? "—" : crossDeltaText(s.actTotal, s.estTotal)) + '</b></div>'
+      + '<div class="cc-meta">' + v.done + ' / ' + v.total + ' 已完成 · 预估 ' + esc(stageHoursText(s.estTotal))
+      + ' · 实际 ' + esc(stageHoursText(s.actTotal)) + '</div>'
+      + '<div class="cc-stages">' + segs + '</div></article>';
+  });
   var shown = rollupUi.more ? rows : rows.slice(0, ROLLUP_ALL_ROWS);
-  var table = '<div class="tbl-wrap"><table class="phase-tbl roll-tbl"><thead><tr>'
+  var shownCards = rollupUi.more ? cards : cards.slice(0, ROLLUP_ALL_ROWS);
+  var table = '<div class="tbl-wrap cross-table"><table class="phase-tbl roll-tbl"><thead><tr>'
     + '<th>版本</th><th>状态</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际</th>'
-    + '<th class="num">窗口外</th><th class="num">窗口内</th><th class="num">偏差</th>'
-    + '</tr></thead><tbody>' + (shown.join("") || '<tr><td colspan="8" class="tbl-empty foot-note">还没有版本</td></tr>') + '</tbody></table></div>';
+    + '<th class="num">产品 / 设计</th><th class="num">开发</th><th class="num">测试</th><th class="num">偏差</th>'
+    + '</tr></thead><tbody>' + (shown.join("") || '<tr><td colspan="9" class="tbl-empty foot-note">还没有版本</td></tr>') + '</tbody></table></div>';
   var more = rows.length > ROLLUP_ALL_ROWS
     ? '<button class="link ver-rollup-more" type="button" data-rollup-more>'
       + (rollupUi.more ? '收起，只看最近 ' + ROLLUP_ALL_ROWS + ' 行' : '展开全部 ' + rows.length + ' 行')
       + icon(rollupUi.more ? "chevronUp" : "chevronRight", 12) + '</button>'
     : "";
-  return table + '<div class="ver-rollup-foot"><span>版本之间只比较总量与拆分，不做逐项对齐；一个工作项绑定多个版本时会在多个版本里各计一次，跨版本合计不等于项目合计。</span>' + more + '</div>';
+  return table + '<div class="cross-cards">' + shownCards.join("") + '</div>'
+    + '<div class="ver-rollup-foot"><span>版本之间只比较总量与拆分，不做逐项对齐；一个工作项绑定多个版本时会在多个版本里各计一次，跨版本合计不等于项目合计。</span>' + more + '</div>';
 }
 function rollupPanelHTML(){
   var versions = cache.versions || [];
@@ -2166,10 +2281,11 @@ function rollupPanelHTML(){
   var head = '<div class="ver-rollup-head"><div class="ver-rollup-title"><b>阶段工时汇总</b></div>'
     + ctl + '</div>';
   var notes = '<details class="manager-caliber ver-rollup-caliber"><summary>口径</summary><div>'
-    + '阶段不是新数据，只是同一批工作项的另一种分组：预估全部计入测试窗口外；实际工时里，测试窗口（提测 → 测试结束）内的计时计入窗口内，其余计入窗口外（含需求评审、设计、开发、运维等），所以窗口内 + 窗口外始终等于版本累计实际工时。'
-    + '实际占比以版本累计实际为分母，预估占比以版本累计预估为分母，两个分母不同，不能互相比大小；阶段表只有实际占比。'
-    + '评审 / 排期属于需求池阶段、不产生工作项工时，这里不重复统计；发布以版本卡的发布证据为准。'
-    + '阶段表里的完成 / 未开始只计条目，不与工时相加。点任意行下钻到工作项，再点行打开详情。'
+    + '阶段不是新数据，只是同一批工作项的另一种拆分：测试有真实数据，测试窗口（提测 → 测试结束）内的计时先归「测试」；剩下的计时按工作项类型拆，需求类（需求）归「产品 / 设计」，任务 / 缺陷归「开发」。三段互不重叠，合计始终等于版本累计实际工时。'
+    + '产品 / 设计是近似口径：它统计的是需求类工作项上的全部非测试计时，产品评审、分析和跟进都应记在这条需求上；没有产品参与的需求类工作项会计 0，不做摊派。'
+    + '测试窗口按自然日判断，提测当天、测试结束当天的计时可能被整段划入窗口；窗口外的任务 / 缺陷计时里也包含设计、运维等非开发工作。'
+    + '预估按字段拆：产品 / 设计取需求类预计耗时，开发取任务 / 缺陷预计耗时，测试取测试预估；没填预估的工作项不会按 0 计入偏差。史诗只做分组，不计工时。'
+    + '实际占比以版本累计实际为分母，阶段表只有实际占比；完成 / 未开始只计条目。点任意行下钻到工作项，再点行打开详情。'
     + '工作项按「计划版本」归组，需求按「目标版本」规划；首版上线前未绑版本的工作项在统计中归入最早已发布版本（不代表实际交付），其余未绑工作项归「未绑定版本」。'
     + '偏差 =（实际 − 预估）÷ 预估，±15% 内为准确。</div></details>';
   var body;
@@ -2180,7 +2296,8 @@ function rollupPanelHTML(){
     var s = rollupSummary(tasks);
     var table = '<div class="tbl-wrap"><table class="phase-tbl roll-tbl">' + rollupPivotHTML(tasks, s) + '</table></div>';
     var foot = '<div class="ver-rollup-foot"><span>' + esc(v.name) + ' · ' + tasks.length + ' 个工作项 · 预估 ' + rollupH(s.est)
-      + ' · 实际 ' + rollupH(s.act) + ' = 窗口外 ' + rollupH(s.dev) + ' + 窗口内 ' + rollupH(s.test) + '</span></div>';
+      + ' · 实际 ' + rollupH(s.act) + ' = 产品 / 设计 ' + rollupH(s.stage.act.product)
+      + ' + 开发 ' + rollupH(s.stage.act.dev) + ' + 测试 ' + rollupH(s.stage.act.test) + '</span></div>';
     body = rollupKpisHTML(s) + rollupSplitHTML(s) + table + foot;
   }
   return '<section class="ver-rollup" data-rollup>' + head + notes + body + '</section>';
@@ -2219,13 +2336,12 @@ function rollupRowTasks(group, key, versionId){
   var name;
   if(group === "kpi"){
     name = { items:"全部工作项", est:"有预估的工作项", act:"有实际工时的工作项" }[key] || "工作项";
-    if(key === "est") tasks = tasks.filter(function(t){ return rollupEst(t) > 0; });
+    if(key === "est") tasks = tasks.filter(function(t){ return rollupEst(t) > 0 || Number(t.testEstimateMinutes) > 0; });
     if(key === "act") tasks = tasks.filter(function(t){ return rollupActual(t) > 0; });
   }else if(group === "stage"){
-    name = { dev:"测试窗口外", test:"测试窗口内", done:"完成", idle:"未开始" }[key] || "阶段";
+    name = { product:"产品 / 设计", dev:"开发", test:"测试", done:"完成", idle:"未开始" }[key] || "阶段";
     tasks = tasks.filter(function(t){
-      if(key === "dev") return rollupDev(t) > 0;
-      if(key === "test") return rollupTest(t) > 0;
+      if(key === "product" || key === "dev" || key === "test") return stageActualOf(t)[key] > 0;
       if(key === "done") return t.boardColumn === "done";
       return t.boardColumn !== "done" && rollupActual(t) === 0;
     });
@@ -2258,8 +2374,11 @@ function openRollupDrill(group, key, versionId){
       + '<td>' + (t.boardColumn === "done" ? '<span class="tag tag-success">已完成</span>' : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
       + '<td class="num">' + (rollupEst(t) ? fmtMinutesShort(rollupEst(t)) : "—") + '</td>'
       + '<td class="num">' + (rollupActual(t) ? fmtMinutesShort(rollupActual(t)) : "—") + '</td>'
-      + '<td class="num">' + (rollupDev(t) ? fmtMinutesShort(rollupDev(t)) : "—") + '</td>'
-      + '<td class="num">' + (rollupTest(t) ? fmtMinutesShort(rollupTest(t)) : "—") + '</td></tr>';
+      + (function(a){
+        return '<td class="num">' + (a.product ? fmtMinutesShort(a.product) : "—") + '</td>'
+          + '<td class="num">' + (a.dev ? fmtMinutesShort(a.dev) : "—") + '</td>'
+          + '<td class="num">' + (a.test ? fmtMinutesShort(a.test) : "—") + '</td></tr>';
+      })(stageActualOf(t));
   }).join("") || '<tr><td colspan="8" class="foot-note tbl-empty">该分组下暂无工作项</td></tr>';
   var layer = document.createElement("div");
   layer.className = "modal-layer";
@@ -2269,10 +2388,11 @@ function openRollupDrill(group, key, versionId){
   layer.innerHTML = '<div class="sheet wide"><div class="sheet-head"><div style="flex:1;min-width:0">'
     + '<h2>' + esc(drillTitle) + '</h2>'
     + '<div class="desc">共 ' + tasks.length + ' 项 · 预估 ' + rollupH(s.est) + ' · 实际 ' + rollupH(s.act)
-    + '（窗口外 ' + rollupH(s.dev) + ' / 窗口内 ' + rollupH(s.test) + '）· 点击工作项行打开详情</div></div>'
+    + '（产品 / 设计 ' + rollupH(s.stage.act.product) + ' / 开发 ' + rollupH(s.stage.act.dev)
+    + ' / 测试 ' + rollupH(s.stage.act.test) + '）· 点击工作项行打开详情</div></div>'
     + '<button class="icon-btn sm" type="button" data-drill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
-    + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th class="num">预估</th><th class="num">实际</th><th class="num">窗口外</th><th class="num">窗口内</th>'
+    + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th class="num">预估</th><th class="num">实际</th><th class="num">产品 / 设计</th><th class="num">开发</th><th class="num">测试</th>'
     + '</tr></thead><tbody>' + body + '</tbody></table></div></div></div>';
   document.body.appendChild(layer);
   layer.addEventListener("click", function(e){
@@ -2523,13 +2643,14 @@ function releasePageSurface(host, v, returnHash){
   root.innerHTML = '<div class="page-toolbar release-page-bar">'
     + '<button class="btn sm ghost" type="button" data-release-back><span aria-hidden="true">←</span> 返回版本</button>'
     + '<span class="toolbar-meta"><b>' + esc(v.name) + '</b> · 发布工作台</span>'
-    + '<span class="toolbar-right"><button class="btn sm ghost" type="button" data-release-view-version>查看版本</button><button class="btn sm ghost" type="button" data-release-history-entry>发布历史</button></span>'
+    + '<span class="toolbar-right"><span class="release-watch-slot" data-release-watch-slot></span><button class="btn sm ghost" type="button" data-release-view-version>查看版本</button><button class="btn sm ghost" type="button" data-release-history-entry>发布历史</button></span>'
     + '</div><div class="release-body release-page-body" aria-live="polite"></div>';
   host.innerHTML = "";
   host.appendChild(root);
   var surface = {
     layer: root,
     body: root.querySelector(".release-page-body"),
+    watchSlot: root.querySelector("[data-release-watch-slot]"),
     isPage: true,
     current: function(){ return document.body.dataset.view === "release"; },
     /* 从版本详情下钻进来就回那一页；从版本列表 / 日程进来回版本页（日程的 onClose 会重拉列表） */
@@ -2629,7 +2750,7 @@ export function mountReleaseWorkspace(pageHost, opts){
   }
   dlg.destroy = cleanup;
   var storageKey = "hourglass:release-pending:" + JSON.stringify([wsId, userId, id]);
-  var plans = [], planId = null, records = [], tasks = [], members = [], preview = null, previewContext = null;
+  var plans = [], planId = opts.planId || null, records = [], tasks = [], members = [], preview = null, previewContext = null;
   var busy = false, loadSeq = 0, previewSeq = 0, mayManage = false, mayPublish = false;
   var planOptions = null, planScopeVersionIds = null, planVersionQuery = "", planTaskPoolCache = {}, planTaskFetchKey = "", planTaskErrorKey = "", planTaskSeq = 0;
   var presetPlanVersionIds = opts.presetVersionIds && opts.presetVersionIds.length ? normalizedIds(opts.presetVersionIds) : null;
@@ -2639,6 +2760,11 @@ export function mountReleaseWorkspace(pageHost, opts){
   var verLog = {id:null, rows:[], error:""}, verLogSeq = 0;
   /* 发布检查：只读汇总本版本测试计划，随关联计划变化重新拉取；结论同时冻结进正式记录 */
   var releaseCheck = null, checkSeq = 0, checkLoading = false;
+  /* 发布准备：只做提醒与核对，不改变工作项状态；按当前计划懒加载，独立于计划表单 */
+  var prepState = { planId:"", loading:false, data:null, error:"", seq:0 };
+  var watchState = { planId:"", loading:false, loaded:false, watching:false, count:0, seq:0 };
+  /* 通知深链 #/release?prep=me：数据就绪后只自动打开一次，之后切换计划不再弹 */
+  var openPrepOnMount = opts.prep === "me";
   /* 计划 / 实际 / 历史与内容 三个步骤：与原型页内步骤条一致；旧链接的 tab=content 归到历史与内容 */
   var activeTab = ["plan", "actual", "history", "content"].indexOf(opts.tab) >= 0 ? (opts.tab === "content" ? "history" : opts.tab) : (entry === "actual" ? "actual" : "plan");
   var syncingFromHash = false;
@@ -3814,6 +3940,664 @@ export function mountReleaseWorkspace(pageHost, opts){
       return m.openCaseInProject(projectId, caseId);
     }).catch(function(ex){ toast(ex.message || "打开用例失败", "bad"); });
   }
+  /* ==================== 发布准备与关注 ==================== */
+  function prepCountdownText(c){
+    if(!c || c.daysLeft == null) return "时间未定";
+    if(c.daysLeft === 0) return "今天发布";
+    if(c.daysLeft > 0) return c.daysLeft + " 天后发布";
+    return "已过 " + (-c.daysLeft) + " 天";
+  }
+  function prepPct(n, total){ return total > 0 ? Math.round(Number(n || 0) * 100 / total) : 0; }
+  function prepBarHTML(d){
+    var total = Number(d.totalTasks) || 0;
+    var seg = function(n, cls){ return Number(n) > 0 ? '<span class="' + cls + '" style="width:' + prepPct(n, total) + '%"></span>' : ""; };
+    return '<div class="prep-bar" aria-hidden="true">' + seg(d.confirmedCount, "seg-ok") + seg(d.riskCount, "seg-risk")
+      + seg(d.unconfirmedCount, "seg-pending") + seg(d.unassignedCount, "seg-none") + '</div>';
+  }
+  function prepStatusTag(d){
+    if(d.countdown && d.countdown.overdue) return '<span class="tag tag-danger">已过发布日</span>';
+    if(d.plan && d.plan.status === "completed") return '<span class="tag">已完成</span>';
+    if(d.plan && d.plan.status === "canceled") return '<span class="tag">已取消</span>';
+    if(d.plan && d.plan.status === "draft") return '<span class="tag">未就绪</span>';
+    return '<span class="tag tag-warning">进行中</span>';
+  }
+  function prepChannels(v){
+    if(!v) return [];
+    if(Array.isArray(v)) return v.slice();
+    try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){ return String(v).indexOf("group") >= 0 ? ["group"] : []; }
+  }
+  function prepChannelNames(v){
+    var map = {in_app:"站内", email:"邮件", group:"企业微信群"};
+    return prepChannels(v).map(function(c){ return map[c] || c; });
+  }
+  function prepScopeLabel(scope){
+    return scope === "owners" ? "仅负责人" : scope === "custom" ? "指定成员" : "全部项目成员";
+  }
+  function prepGroupText(p){
+    if(prepChannels(p && p.channels).indexOf("group") < 0) return "";
+    if(p.groupSent === true) return "群已发送";
+    if(p.groupSent === false) return "群未发送" + (p.groupError ? "（" + p.groupError + "）" : "");
+    return "群结果未记录";
+  }
+  function prepPushSummary(p){
+    if(!p) return "";
+    var parts = ["涉及 " + (Number(p.recipientCount) || 0) + " 人"];
+    var chs = prepChannels(p.channels);
+    if(chs.indexOf("in_app") >= 0) parts.push("站内 " + (Number(p.inAppCount) || 0) + " 人");
+    if(chs.indexOf("email") >= 0) parts.push("邮件入队 " + (Number(p.emailCount) || 0) + " 人");
+    parts.push("回执 " + (Number(p.ackedCount) || 0) + " 人");
+    var g = prepGroupText(p);
+    if(g) parts.push(g);
+    return parts.join(" · ");
+  }
+  function prepCardHTML(d){
+    var total = Number(d.totalTasks) || 0;
+    var plan = d.plan || {};
+    var latest = d.latestPush;
+    var head = '<div class="prep-card-head"><div><h3>发布准备</h3><p class="hint">负责人确认进度，只做发布前提醒，不改变工作项状态；未完成数仅作参考。</p></div>'
+      + '<div class="prep-card-acts">' + prepStatusTag(d)
+      + '<button class="btn sm ghost" type="button" data-prep-me>我的准备</button>'
+      + (d.canManage && Number(d.unconfirmedCount) > 0
+        ? '<button class="btn sm" type="button" data-prep-notify data-only="1">' + icon("bell", 14) + ' 通知未确认 ' + esc(d.unconfirmedOwnerCount != null ? d.unconfirmedOwnerCount : d.unconfirmedCount) + ' 人</button>' : '')
+      + '</div></div>';
+    if(!total){
+      return '<section class="release-section prep-card">' + head
+        + '<p class="hint">这个计划里还没有工作项。先在上方「这次计划发布哪些工作项」里勾选，再通知负责人确认。</p></section>';
+    }
+    var body = '<div class="prep-summary"><div class="prep-big"><div class="n">' + esc(d.confirmedCount) + '<small> / ' + esc(total) + ' 已确认</small></div>'
+      + '<div class="l">' + (Number(d.riskCount) ? '另有 ' + esc(d.riskCount) + ' 项有风险' : '暂无风险项') + '</div></div>'
+      + '<div>' + prepBarHTML(d) + '<div class="prep-metrics">'
+      + '<span class="metric ok"><i></i>已确认 <b>' + esc(d.confirmedCount) + '</b></span>'
+      + '<span class="metric risk"><i></i>有风险 <b>' + esc(d.riskCount) + '</b></span>'
+      + '<span class="metric pending"><i></i>未确认 <b>' + esc(d.unconfirmedCount) + '</b></span>'
+      + '<span class="metric none"><i></i>未指派 <b>' + esc(d.unassignedCount) + '</b></span>'
+      + '</div></div></div>'
+      + '<div class="prep-meta"><span>关注 <b>' + esc(d.watcherCount || 0) + '</b> 人' + (d.watching ? ' · 你已关注' : '') + '</span>'
+      + (latest
+        ? '<span>最近推送 <b>' + esc(fmtReleaseTime(latest.createdAt)) + '</b> · ' + esc(prepPushSummary(latest)) + '</span>'
+          + '<button class="link" type="button" data-prep-history>推送记录</button>'
+        : '<span>还没有推送过提醒</span>')
+      + '<span class="spacer"></span><span>倒计时 <b>' + esc(prepCountdownText(d.countdown)) + '</b></span></div>'
+      + '<div class="prep-table-wrap"><table class="tbl prep-owner-table"><thead><tr><th>负责人</th><th class="num">工作项</th><th class="num">已确认</th><th class="num">有风险</th><th class="num">未确认</th><th>最近确认</th><th></th></tr></thead><tbody>';
+    (d.owners || []).forEach(function(o){
+      if(o.userId == null){
+        body += '<tr class="is-unassigned"><td><span class="prep-owner"><b>未指派</b><small>需要先指定负责人</small></span></td>'
+          + '<td class="num"><b>' + esc(o.total || 0) + '</b></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>—</td><td></td></tr>';
+        return;
+      }
+      body += '<tr><td><span class="prep-owner"><b>' + esc(o.name || "—") + '</b>'
+        + (plan.ownerUserId === o.userId ? '<span class="tag">计划负责人</span>' : '')
+        + '<small>' + esc(o.projectNames || "—") + '</small></span></td>'
+        + '<td class="num"><b>' + esc(o.total || 0) + '</b>' + (Number(o.unfinished) ? '<small>' + esc(o.unfinished) + ' 未完成</small>' : '') + '</td>'
+        + '<td class="num ' + (Number(o.confirmed) ? 'is-ok' : '') + '">' + esc(o.confirmed || 0) + '</td>'
+        + '<td class="num ' + (Number(o.risk) ? 'is-risk' : '') + '">' + esc(o.risk || 0) + '</td>'
+        + '<td class="num">' + esc(o.pending || 0) + '</td>'
+        + '<td><span class="muted">' + esc(o.lastCheckedAt ? fmtReleaseTime(o.lastCheckedAt) : "—") + '</span></td>'
+        + '<td class="num">' + (d.canManage && Number(o.pending) > 0
+          ? '<button class="link" type="button" data-prep-remind="' + esc(o.userId) + '">提醒</button>' : '') + '</td></tr>';
+    });
+    body += '</tbody></table></div>'
+      + '<div class="prep-notes"><div><b>推送范围</b><span>只覆盖对计划项目可见的成员；同一人负责多项时只收一条汇总。</span></div>'
+      + '<div><b>确认何时失效</b><span>计划范围变化或发布时间提前，会要求负责人重新确认；只改备注不重来。</span></div>'
+      + '<div><b>关注</b><span>关注后接收改期、范围 / 版本变化、进入就绪与发布日提醒；关注不代表负责。</span></div></div>';
+    return '<section class="release-section prep-card">' + head + body + '</section>';
+  }
+  function renderPrep(){
+    var host = layer.querySelector("[data-release-prep-host]");
+    if(!host) return;
+    var p = selectedPlan();
+    if(!p || !p.id){ host.innerHTML = ""; return; }
+    if(prepState.planId !== p.id || (prepState.loading && !prepState.data)){
+      host.innerHTML = '<section class="release-section prep-card"><p class="hint">加载发布准备…</p></section>';
+      return;
+    }
+    if(prepState.error){
+      host.innerHTML = '<section class="release-section prep-card"><div class="prep-card-head"><div><h3>发布准备</h3><p class="release-error" role="alert">准备信息加载失败：' + esc(prepState.error) + '</p></div><button class="btn sm" type="button" data-prep-retry>重试</button></div></section>';
+      return;
+    }
+    host.innerHTML = prepState.data ? prepCardHTML(prepState.data) : "";
+    UI.wireTooltips(host);
+  }
+  function loadPrep(){
+    var p = selectedPlan(), pid = p && p.id || "";
+    prepState.planId = pid; prepState.error = ""; prepState.data = null;
+    if(!pid){ prepState.loading = false; renderPrep(); syncWatch(); return; }
+    var seq = ++prepState.seq;
+    prepState.loading = true; renderPrep(); syncWatch(true);
+    API.get("/api/release-plans/" + encodeURIComponent(pid) + "/prep").then(function(rs){
+      if(!current() || seq !== prepState.seq || prepState.planId !== pid) return;
+      prepState.loading = false; prepState.data = rs || null; renderPrep();
+      if(rs){
+        watchState.planId = pid; watchState.loaded = true;
+        watchState.watching = !!rs.watching; watchState.count = Number(rs.watcherCount) || 0;
+        renderWatch();
+      }
+      if(openPrepOnMount){ openPrepOnMount = false; openMyPrep(); }
+    }).catch(function(ex){
+      if(!current() || seq !== prepState.seq) return;
+      prepState.loading = false; prepState.error = ex.message || "网络异常"; renderPrep();
+    });
+  }
+  function renderWatch(){
+    var slot = dlg.watchSlot || layer.querySelector("[data-release-watch-slot]");
+    if(!slot) return;
+    var p = selectedPlan();
+    if(!p || !p.id || busy || pending || storageError){ slot.innerHTML = ""; return; }
+    if(watchState.loading && !watchState.loaded){
+      slot.innerHTML = '<button class="btn sm ghost" type="button" disabled>关注状态…</button>';
+      return;
+    }
+    var label = watchState.watching ? "已关注" : "关注此计划";
+    slot.innerHTML = '<button class="btn sm ghost release-watch-btn" type="button" data-release-watch-toggle'
+      + ' aria-pressed="' + watchState.watching + '" title="关注后，计划改期、范围变化和临近发布会通知你">'
+      + icon("star", 14) + ' ' + esc(label)
+      + (watchState.count ? ' <span class="muted">' + esc(watchState.count) + '</span>' : '') + '</button>';
+  }
+  function syncWatch(force){
+    var p = selectedPlan(), pid = p && p.id || "";
+    if(!pid || busy || pending || storageError){ watchState.planId = pid; watchState.loading = false; renderWatch(); return; }
+    if(!force && watchState.planId === pid && watchState.loaded){ renderWatch(); return; }
+    if(watchState.loading && watchState.planId === pid) return;
+    watchState.planId = pid; watchState.loading = true; renderWatch();
+    var seq = ++watchState.seq;
+    API.get("/api/release-plans/" + encodeURIComponent(pid) + "/watch").then(function(rs){
+      if(!current() || seq !== watchState.seq || watchState.planId !== pid) return;
+      watchState.loading = false; watchState.loaded = true;
+      watchState.watching = !!(rs && rs.watching); watchState.count = Number(rs && rs.count) || 0;
+      renderWatch();
+    }).catch(function(){ if(current() && seq === watchState.seq){ watchState.loading = false; renderWatch(); } });
+  }
+  function toggleWatch(){
+    var p = selectedPlan();
+    if(!p || !p.id) return Promise.resolve();
+    var pid = p.id, on = watchState.watching;
+    watchState.loading = true; renderWatch();
+    var req = on
+      ? API.del("/api/release-plans/" + encodeURIComponent(pid) + "/watch")
+      : API.post("/api/release-plans/" + encodeURIComponent(pid) + "/watch");
+    return req.then(function(rs){
+      if(!current()) return;
+      watchState.loading = false; watchState.loaded = true;
+      watchState.watching = !!(rs && rs.watching); watchState.count = Number(rs && rs.count) || 0;
+      if(prepState.data){ prepState.data.watching = watchState.watching; prepState.data.watcherCount = watchState.count; }
+      renderWatch(); renderPrep();
+      toast(watchState.watching ? "已关注此发布计划，改期与范围变化会提醒你" : "已取消关注此发布计划", "fs");
+    }).catch(function(ex){
+      if(current()){ watchState.loading = false; renderWatch(); toast(ex.message || (on ? "取消关注失败" : "关注失败"), "bad"); }
+    });
+  }
+  /* 通知成员弹窗：范围 / 只发未确认 / 指定成员 / 渠道 / 预览 */
+  function openPrepNotify(opts){
+    opts = opts || {};
+    var plan = selectedPlan();
+    if(!plan || !plan.id) return;
+    if(!mayManage){ toast("仅空间主、管理员或项目负责人可发送发布准备提醒", "warn"); return; }
+    var pid = plan.id;
+    var st = { scope:"all", only:!!opts.only, channels:{in_app:true,email:true,group:false}, q:"", note:"", all:[], owners:[], sel:{}, loading:true, error:"", sending:false, sent:null, emailAvailable:true };
+    if(opts.ownerId){ st.scope = "custom"; st.sel[opts.ownerId] = true; }
+    if(opts.userIds && opts.userIds.length){
+      st.scope = "custom";
+      opts.userIds.forEach(function(id){ if(id) st.sel[id] = true; });
+    }
+    var layer = document.createElement("div");
+    layer.className = "modal-layer";
+    layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-label", "通知成员");
+    layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+    document.body.appendChild(layer);
+    UI.openModal(layer);
+    function listOf(scope){
+      if(scope === "owners") return st.owners;
+      return st.all;
+    }
+    function pendingCount(){
+      if(st.scope === "custom"){
+        return st.all.filter(function(it){ return st.sel[it.userId] && Number(it.unconfirmedCount) > 0; }).length;
+      }
+      return listOf(st.scope).filter(function(it){ return Number(it.unconfirmedCount) > 0; }).length;
+    }
+    function selectedItems(){
+      var items = st.scope === "custom"
+        ? st.all.filter(function(it){ return st.sel[it.userId]; })
+        : listOf(st.scope);
+      return st.only ? items.filter(function(it){ return Number(it.unconfirmedCount) > 0; }) : items;
+    }
+    function sendCount(){ return selectedItems().length; }
+    function reachCounts(){
+      var items = selectedItems(), inApp = 0, email = 0;
+      items.forEach(function(it){
+        if(it.inAppEnabled) inApp++;
+        /* 空间未启用 SMTP 时，有邮箱也不等于「邮件可达」 */
+        if(st.emailAvailable !== false && it.emailEnabled && it.hasEmail) email++;
+      });
+      return { total: items.length, inApp: inApp, email: email };
+    }
+    function sentText(sent){
+      var chs = sent.channels || [];
+      var text = "涉及 " + (Number(sent.recipientCount) || 0) + " 人";
+      if(chs.indexOf("in_app") >= 0) text += "；站内 " + (Number(sent.inAppCount) || 0) + " 人";
+      if(chs.indexOf("email") >= 0) text += "；邮件入队 " + (Number(sent.emailCount) || 0) + " 人";
+      if(chs.indexOf("group") >= 0){
+        if(sent.groupSent === true) text += "；企业微信群已发送";
+        else if(sent.groupSent === false) text += "；企业微信群未发送" + (sent.groupError ? "（" + sent.groupError + "）" : "");
+        else text += "；企业微信群结果未记录";
+      }
+      return text;
+    }
+    function memberRowsHTML(){
+      var q = st.q.toLowerCase();
+      var rows = st.all.filter(function(it){ return !q || String(it.name || "").toLowerCase().indexOf(q) !== -1; });
+      if(!rows.length) return '<p class="hint">没有匹配的成员。</p>';
+      return rows.map(function(it){
+        var reach = (it.inAppEnabled ? "站内" : "站内未开") + " · "
+          + (st.emailAvailable === false ? "邮件未启用"
+            : it.emailEnabled && it.hasEmail ? "邮件" : it.hasEmail ? "邮件未开" : "无邮箱");
+        return '<label class="prep-member-row"><input type="checkbox" data-prep-pick="' + esc(it.userId) + '"' + (st.sel[it.userId] ? " checked" : "") + '>'
+          + '<span class="nm">' + esc(it.name || "—") + (it.isOwner ? ' <span class="tag">负责人</span>' : '') + '</span>'
+          + '<span class="mt">' + (Number(it.taskCount) ? '负责 ' + esc(it.taskCount) + ' 项' : '未负责计划内工作项')
+          + (Number(it.unconfirmedCount) ? ' · 未确认 ' + esc(it.unconfirmedCount) : ' · 已确认') + '</span>'
+          + '<span class="meta">' + reach + '</span></label>';
+      }).join("");
+    }
+    function renderPush(){
+      var n = sendCount();
+      var body = '<div class="sheet prep-push-sheet"><div class="sheet-head"><div style="flex:1;min-width:0"><h2>通知成员</h2>'
+        + '<p class="desc">' + esc(planLabel(plan)) + ' · ' + esc(prepCountdownText({daysLeft: countdownDays(plan.plannedAt)})) + '</p></div>'
+        + '<button class="icon-btn sm" type="button" data-prep-push-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+        + '<div class="sheet-body prep-push-body">';
+      if(st.loading){
+        body += UI.skeletonRows(3);
+      }else{
+        body += '<div class="field-label">推送范围</div><div class="seg prep-push-scope">'
+          + '<button type="button" data-prep-scope="all" aria-pressed="' + (st.scope === "all") + '">全部项目成员 <span class="n">' + esc(st.all.length) + '</span></button>'
+          + '<button type="button" data-prep-scope="owners" aria-pressed="' + (st.scope === "owners") + '">仅负责人 <span class="n">' + esc(st.owners.length) + '</span></button>'
+          + '<button type="button" data-prep-scope="custom" aria-pressed="' + (st.scope === "custom") + '">指定成员 <span class="n">' + esc(Object.keys(st.sel).length) + '</span></button></div>'
+          + '<p class="hint">' + esc(st.scope === "all"
+            ? "覆盖 " + st.all.length + " 名对计划项目可见的成员；无项目权限的成员不会收到。同一人负责多项时只收一条汇总。"
+            : st.scope === "owners"
+              ? "只通知计划内工作项的负责人；未指派工作项没有收件人，会在准备区单独标出。"
+              : "手动选择需要知会的人，不要求是工作项负责人；只读成员可以收到并查看，但不能确认。") + '</p>'
+          + '<label class="prep-check-line"><input type="checkbox" data-prep-only' + (st.only ? " checked" : "") + '> 只发给尚未确认的人 <b>' + esc(pendingCount()) + '</b> 人 <span class="sub-note">避免重复打扰</span></label>';
+        if(st.scope === "custom"){
+          body += '<div class="prep-pick"><div class="prep-pick-tools"><input type="search" class="input" data-prep-search placeholder="搜索成员" value="' + esc(st.q) + '" aria-label="搜索成员">'
+            + '<button class="btn sm" type="button" data-prep-pick-all>全选可见</button><button class="btn sm" type="button" data-prep-pick-clear>清空</button></div>'
+            + '<div class="prep-member-list">' + memberRowsHTML() + '</div></div>';
+        }
+        body += '<div class="field-label">推送方式</div>'
+          + '<label class="prep-check-line"><input type="checkbox" data-prep-ch="in_app"' + (st.channels.in_app ? " checked" : "") + '> 站内通知 <span class="sub-note">默认</span></label>'
+          + '<label class="prep-check-line"><input type="checkbox" data-prep-ch="email"' + (st.channels.email ? " checked" : "") + (st.emailAvailable === false ? " disabled" : "") + '> 邮件 <span class="sub-note">' + (st.emailAvailable === false ? "空间未启用 SMTP，暂不可用" : "按个人偏好，仅已开启邮件的人收到") + '</span></label>'
+          + '<label class="prep-check-line"><input type="checkbox" data-prep-ch="group"' + (st.channels.group ? " checked" : "") + '> 企业微信群 <span class="sub-note">只发到空间配置的群，不能按人送达</span></label>'
+          + '<div class="field-label">发送内容</div>'
+          + '<div class="prep-note-field"><input class="input" type="text" data-prep-push-note maxlength="200" value="' + esc(st.note) + '" placeholder="补充说明（选填，200 字以内；站内、邮件、群消息都会带上）" aria-label="补充说明"><span class="prep-note-count" data-prep-push-note-count>' + st.note.length + '/200</span></div>'
+          + '<div class="prep-push-preview"><span class="pp-icon">备</span><div>'
+          + '<div class="pp-title">发布准备 · ' + esc(planLabel(plan)) + '</div>'
+          + '<div class="pp-body">' + esc(fmtMinute(plan.plannedAt) || "未定时间") + ' ' + esc(releaseEnvironmentName(plan.environment)) + '发布；请确认你负责的工作项。点开逐项确认。</div>'
+          + '<div class="pp-note"' + (st.note ? "" : " hidden") + ' data-prep-push-note-preview>补充说明：' + esc(st.note) + '</div>'
+          + '<div class="pp-act">查看并确认 →</div></div></div>'
+          + '<p class="side-note">同一人负责多项时只收一条汇总；同一批次重复点击不会重复发送。计划范围或时间提前会要求重新确认。</p>';
+        if(st.error) body += '<p class="release-error" role="alert">' + esc(st.error) + '</p>';
+        if(st.sent){
+          var sentTxt = sentText(st.sent);
+          body += st.sent.duplicate
+            ? '<div class="prep-send-result is-dup">' + icon("bell", 15) + '<span>刚刚已推送过，本次未重复发送。' + esc(sentTxt) + '。</span></div>'
+            : '<div class="prep-send-result">' + icon("checkCircle", 15) + '<span>' + esc(sentTxt) + '。</span></div>';
+        }
+      }
+      var rc = reachCounts();
+      var reach = rc.total
+        ? '涉及 <b>' + esc(rc.total) + '</b> 人 · 站内可达 <b>' + esc(rc.inApp) + '</b> 人 · 邮件可达 <b>' + esc(rc.email) + '</b> 人'
+          + (st.channels.group ? ' · 企业微信群 1 条' : '')
+        : '没有可推送成员';
+      body += '</div><div class="sheet-foot prep-push-foot"><span>' + reach + '</span><div class="acts">'
+        + '<button class="btn" type="button" data-prep-push-close>' + (st.sent ? "完成" : "取消") + '</button>'
+        + (!st.sent ? '<button class="btn primary" type="button" data-prep-send' + (!st.loading && n > 0 && !st.sending ? "" : " disabled") + '>' + (st.sending ? "推送中…" : n > 0 ? "推送提醒" : "暂无可推送成员") + '</button>' : '')
+        + '</div></div></div>';
+      layer.innerHTML = body;
+      var search = layer.querySelector("[data-prep-search]");
+      if(search && st.focusSearch){ try{ search.focus(); search.setSelectionRange(st.q.length, st.q.length); }catch(e){ /* noop */ } st.focusSearch = false; }
+    }
+    function loadRecipients(){
+      st.loading = true; renderPush();
+      Promise.all([
+        API.get("/api/release-plans/" + encodeURIComponent(pid) + "/prep/recipients", { scope:"all" }),
+        API.get("/api/release-plans/" + encodeURIComponent(pid) + "/prep/recipients", { scope:"owners" })
+      ]).then(function(rs){
+        st.all = (rs[0] && rs[0].items) || []; st.owners = (rs[1] && rs[1].items) || [];
+        /* 两个接口返回同一空间的开关状态；以任一明确 false 为准 */
+        st.emailAvailable = !(rs[0] && rs[0].emailAvailable === false) && !(rs[1] && rs[1].emailAvailable === false);
+        if(!st.emailAvailable) st.channels.email = false;
+        st.loading = false; renderPush();
+      }).catch(function(ex){
+        st.loading = false; st.error = ex.message || "成员列表加载失败"; renderPush();
+      });
+    }
+    function send(){
+      if(st.sending || sendCount() <= 0) return;
+      var channels = Object.keys(st.channels).filter(function(k){ return st.channels[k]; });
+      if(!channels.length){ st.error = "请至少选择一个通知渠道"; renderPush(); return; }
+      st.sending = true; st.error = ""; renderPush();
+      API.post("/api/release-plans/" + encodeURIComponent(pid) + "/prep/notify", {
+        scope: st.scope,
+        onlyUnconfirmed: st.only,
+        userIds: st.scope === "custom" ? Object.keys(st.sel) : null,
+        channels: channels,
+        note: st.note || null
+      }).then(function(rs){
+        st.sending = false; st.sent = rs || {}; renderPush();
+        toast(rs && rs.duplicate ? "刚刚已推送过，本次未重复发送" : "发布准备已推送", "fs"); loadPrep();
+      }).catch(function(ex){
+        st.sending = false; st.error = ex.message || "推送失败，请重试"; renderPush();
+      });
+    }
+    layer.addEventListener("click", function(e){
+      if(e.target.closest("[data-prep-push-close]")){ UI.closeModal(layer); return; }
+      var scopeBtn = e.target.closest("[data-prep-scope]");
+      if(scopeBtn){ st.scope = scopeBtn.getAttribute("data-prep-scope"); st.error = ""; st.sent = null; renderPush(); return; }
+      if(e.target.closest("[data-prep-pick-all]")){ st.all.forEach(function(it){ st.sel[it.userId] = true; }); renderPush(); return; }
+      if(e.target.closest("[data-prep-pick-clear]")){ st.sel = {}; renderPush(); return; }
+      if(e.target.closest("[data-prep-send]")){ send(); return; }
+    });
+    layer.addEventListener("input", function(e){
+      if(e.target.matches("[data-prep-search]")){ st.q = e.target.value; st.focusSearch = true; renderPush(); return; }
+      if(e.target.matches("[data-prep-push-note]")){
+        st.note = e.target.value.slice(0, 200);
+        var counter = layer.querySelector("[data-prep-push-note-count]");
+        if(counter) counter.textContent = st.note.length + "/200";
+        var pv = layer.querySelector("[data-prep-push-note-preview]");
+        if(pv){ pv.textContent = "补充说明：" + st.note; pv.hidden = !st.note; }
+      }
+    });
+    layer.addEventListener("change", function(e){
+      if(e.target.matches("[data-prep-only]")){ st.only = e.target.checked; renderPush(); return; }
+      if(e.target.matches("[data-prep-pick]")){ st.sel[e.target.getAttribute("data-prep-pick")] = e.target.checked; renderPush(); return; }
+      if(e.target.matches("[data-prep-ch]")){ st.channels[e.target.getAttribute("data-prep-ch")] = e.target.checked; renderPush(); }
+    });
+    loadRecipients();
+  }
+  /* 推送记录：最近批次、渠道结果与未回执名单 */
+  function openPushHistory(){
+    var plan = selectedPlan();
+    if(!plan || !plan.id){ toast("请先选择发布计划", "warn"); return; }
+    var pid = plan.id;
+    var hist = { loading:true, error:"", items:[], open:{}, detail:{}, loadingDetail:{}, detailError:{} };
+    var layer = document.createElement("div");
+    layer.className = "modal-layer prep-hist-layer";
+    layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-label", "推送记录");
+    layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+    document.body.appendChild(layer);
+    UI.openModal(layer);
+    function personRows(push, d){
+      var chs = prepChannels(push.channels);
+      return (d.items || []).map(function(it){
+        var sent = [];
+        if(chs.indexOf("in_app") >= 0) sent.push(it.inAppAt ? "站内已送" : "站内未送");
+        if(chs.indexOf("email") >= 0) sent.push(it.emailAt ? "邮件已入队" : "邮件未入队");
+        return '<div class="prep-hist-person' + (it.ackedAt ? ' is-acked' : '') + '">'
+          + '<span class="nm">' + esc(it.name || it.userId || "—") + '</span>'
+          + '<span class="meta">' + (it.ackedAt ? '已回执 ' + esc(fmtReleaseTime(it.ackedAt)) : '未回执')
+          + (sent.length ? ' · ' + sent.join(" · ") : '') + '</span></div>';
+      }).join("");
+    }
+    function detailHTML(push){
+      var id = push.pushId;
+      if(hist.loadingDetail[id]) return '<p class="hint">加载回执明细…</p>';
+      if(hist.detailError[id]) return '<p class="release-error" role="alert">回执明细加载失败：' + esc(hist.detailError[id]) + '</p>'
+        + '<button class="link" type="button" data-hist-detail-retry="' + esc(id) + '">重试</button>';
+      var d = hist.detail[id];
+      if(!d) return "";
+      var head = '<div class="prep-hist-people-head"><span>已回执 <b>' + esc(d.ackedCount || 0) + '</b> / ' + esc(d.total || 0)
+        + ' · 未回执 <b>' + esc(d.unackedCount || 0) + '</b></span>'
+        + (mayManage && Number(d.unackedCount) > 0
+          ? '<button class="btn sm" type="button" data-hist-remind="' + esc(id) + '">提醒未回执 ' + esc(d.unackedCount) + ' 人</button>' : '')
+        + '</div>';
+      return head + '<div class="prep-hist-people-list">' + personRows(push, d) + '</div>';
+    }
+    function cardHTML(p){
+      var id = p.pushId, isOpen = !!hist.open[id];
+      return '<article class="prep-hist">'
+        + '<div class="prep-hist-head"><div><b>' + esc(fmtReleaseTime(p.createdAt)) + '</b>'
+        + '<span>' + esc(p.senderName || "—") + ' · ' + esc(prepScopeLabel(p.scope))
+        + (p.onlyUnconfirmed ? ' · 只发未确认' : '') + '</span></div>'
+        + '<div class="prep-hist-meta">' + esc(prepChannelNames(p.channels).join(" / ")) + '</div></div>'
+        + '<div class="prep-hist-sum">' + esc(prepPushSummary(p)) + '</div>'
+        + (p.note ? '<p class="prep-hist-note">补充说明：' + esc(p.note) + '</p>' : '')
+        + '<div class="prep-hist-acts"><button class="link" type="button" data-hist-toggle="' + esc(id) + '">'
+        + (isOpen ? "收起回执" : "查看回执") + '</button></div>'
+        + '<div class="prep-hist-people"' + (isOpen ? "" : " hidden") + ' data-hist-people="' + esc(id) + '">'
+        + (isOpen ? detailHTML(p) : "") + '</div></article>';
+    }
+    function render(){
+      var body;
+      if(hist.loading) body = UI.skeletonRows(4);
+      else if(hist.error) body = '<p class="release-error" role="alert">推送记录加载失败：' + esc(hist.error) + '</p>'
+        + '<button class="btn sm" type="button" data-hist-retry>重试</button>';
+      else if(!hist.items.length) body = '<p class="hint">还没有推送过提醒。</p>';
+      else body = hist.items.map(cardHTML).join("");
+      layer.innerHTML = '<div class="sheet prep-hist-sheet"><div class="sheet-head">'
+        + '<div style="flex:1;min-width:0"><h2>推送记录</h2><p class="desc">' + esc(planLabel(plan)) + ' · 最近 ' + (hist.items.length || 0) + ' 次</p></div>'
+        + '<button class="icon-btn sm" type="button" data-hist-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+        + '<div class="sheet-body prep-hist-body">' + body + '</div></div>';
+    }
+    function openDetail(id, cb){
+      hist.open[id] = true;
+      if(hist.detail[id]){ render(); if(cb) cb(); return; }
+      if(hist.loadingDetail[id]) return;
+      hist.loadingDetail[id] = true; hist.detailError[id] = ""; render();
+      API.get("/api/release-plans/" + encodeURIComponent(pid) + "/prep/pushes/" + encodeURIComponent(id) + "/recipients").then(function(rs){
+        hist.loadingDetail[id] = false; hist.detail[id] = rs || { items:[] }; render(); if(cb) cb();
+      }).catch(function(ex){
+        hist.loadingDetail[id] = false; hist.detailError[id] = ex.message || "网络异常"; render();
+      });
+    }
+    function remind(id){
+      var d = hist.detail[id];
+      if(!d){ openDetail(id, function(){ remind(id); }); return; }
+      var ids = (d.items || []).filter(function(it){ return !it.ackedAt; }).map(function(it){ return it.userId; });
+      if(!ids.length){ toast("这批推送已全部回执", "fs"); return; }
+      UI.closeModal(layer);
+      setTimeout(function(){ openPrepNotify({ userIds: ids }); }, 0);
+    }
+    function load(){
+      hist.loading = true; hist.error = ""; render();
+      API.get("/api/release-plans/" + encodeURIComponent(pid) + "/prep/pushes", { limit: 20 }).then(function(rs){
+        hist.loading = false; hist.items = (rs && rs.items) || []; render();
+      }).catch(function(ex){
+        hist.loading = false; hist.error = ex.message || "网络异常"; render();
+      });
+    }
+    layer.addEventListener("click", function(e){
+      if(e.target.closest("[data-hist-close]")){ UI.closeModal(layer); return; }
+      if(e.target.closest("[data-hist-retry]")){ load(); return; }
+      var detailRetry = e.target.closest("[data-hist-detail-retry]");
+      if(detailRetry){
+        var rid = detailRetry.getAttribute("data-hist-detail-retry");
+        delete hist.detail[rid]; hist.detailError[rid] = ""; openDetail(rid);
+        return;
+      }
+      var toggle = e.target.closest("[data-hist-toggle]");
+      if(toggle){
+        var id = toggle.getAttribute("data-hist-toggle");
+        if(hist.open[id]){ hist.open[id] = false; render(); }
+        else openDetail(id);
+        return;
+      }
+      var rb = e.target.closest("[data-hist-remind]");
+      if(rb){ remind(rb.getAttribute("data-hist-remind")); return; }
+    });
+    load();
+  }
+  function countdownDays(value){
+    if(!value) return null;
+    var d = new Date(String(value).replace(" ", "T"));
+    if(isNaN(d.getTime())) return null;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return Math.round((target.getTime() - today.getTime()) / 86400000);
+  }
+  /* 我的发布准备：通知深链落地，只显示自己负责的工作项与我的回执 */
+  function openMyPrep(){
+    var plan = selectedPlan();
+    if(!plan || !plan.id){ toast("请先选择发布计划", "warn"); return; }
+    var pid = plan.id;
+    var st = { loading:true, error:"", saveError:"", data:null, filter:"all", editing:"", note:"", saving:"" };
+    var layer = document.createElement("div");
+    layer.className = "modal-layer prep-me-layer";
+    layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-label", "我的发布准备");
+    layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+    document.body.appendChild(layer);
+    UI.openModal(layer);
+    function items(){ return (st.data && st.data.items) || []; }
+    function counts(){
+      var list = items(), c = { all:list.length, pending:0, risk:0, ok:0 };
+      list.forEach(function(it){ if(it.checkState === "ok") c.ok++; else if(it.checkState === "risk") c.risk++; else c.pending++; });
+      return c;
+    }
+    function rowHTML(it){
+      var state = it.checkState === "ok" ? "ok" : it.checkState === "risk" ? "risk" : "pending";
+      var cls = "prep-row" + (state === "ok" ? " is-ok" : state === "risk" ? " is-risk" : "");
+      var ic = state === "ok" ? "checkCircle" : state === "risk" ? "alert" : "clock";
+      var stateTag = it.stale ? '<span class="tag tag-warning">范围已变化</span>'
+        : state === "ok" ? '<span class="tag tag-success">已确认</span>'
+        : state === "risk" ? '<span class="tag tag-warning">有风险</span>' : '<span class="tag">待确认</span>';
+      var note = st.editing === it.id
+        ? '<div class="prep-risk-editor"><textarea class="textarea" data-prep-note maxlength="500" placeholder="说明风险、依赖或降级方案">' + esc(st.note || it.checkNote || "") + '</textarea>'
+          + '<div class="prep-risk-acts"><button class="btn sm" type="button" data-prep-risk-cancel="' + esc(it.id) + '">取消</button>'
+          + '<button class="btn sm primary" type="button" data-prep-risk-save="' + esc(it.id) + '"' + (st.saving ? " disabled" : "") + '>保存风险</button></div></div>'
+        : (it.checkNote ? '<div class="pr-note"><b>风险：</b>' + esc(it.checkNote) + '</div>' : '');
+      return '<article class="' + cls + '"><span class="pr-ic">' + icon(ic, 16) + '</span><div class="pr-main">'
+        + '<div class="pr-title"><span class="prep-pri p' + esc(String(it.priority || "P2").slice(1)) + '">' + esc(it.priority || "P2") + '</span>'
+        + '<a class="snap-link" href="' + esc(taskHref(it.id)) + '" data-task-link="' + esc(it.id) + '">' + esc(it.title || it.id) + '</a>'
+        + (it.itemType === "bug" ? '<span class="tag tag-danger">缺陷</span>' : '')
+        + '<span class="tag">' + esc(colName(it.boardColumn || "todo")) + '</span>' + stateTag + '</div>'
+        + '<div class="pr-meta"><span>' + esc(it.projectName || "") + '</span><span>截止 ' + esc(it.dueDate ? fmtReleaseTime(it.dueDate).slice(0, 10) : "—") + '</span>'
+        + (it.completedAt ? '<span>完成 ' + esc(fmtReleaseTime(it.completedAt)) + '</span>' : '') + '</div>' + note
+        + '</div><div class="pr-act">'
+        + '<button class="btn sm ghost" type="button" data-prep-open-task="' + esc(it.id) + '">打开工作项</button>'
+        + '<button class="btn sm" type="button" data-prep-risk="' + esc(it.id) + '">' + (state === "risk" ? "更新说明" : "有风险") + '</button>'
+        + (state !== "ok" ? '<button class="btn sm primary" type="button" data-prep-confirm="' + esc(it.id) + '"' + (st.saving ? " disabled" : "") + '>确认</button>' : '')
+        + (state !== "pending" ? '<button class="btn sm ghost" type="button" data-prep-undo="' + esc(it.id) + '"' + (st.saving ? " disabled" : "") + '>撤销</button>' : '')
+        + '</div></article>';
+    }
+    function renderMe(){
+      var planInfo = (st.data && st.data.plan) || plan;
+      var c = counts();
+      var shown = items().filter(function(it){
+        if(st.filter === "all") return true;
+        if(st.filter === "pending") return !it.checkState;
+        return it.checkState === st.filter;
+      });
+      var receipt = st.data && st.data.receipt;
+      var acked = receipt && receipt.ackedAt;
+      var receiptNote = receipt && receipt.note ? '<span class="pn">补充说明：' + esc(receipt.note) + '</span>' : '';
+      var total = items().length;
+      var hero = total ? '<div class="prep-me-hero"><div class="prep-me-cd"><b>' + esc(prepCountdownText(st.data && st.data.countdown)) + '</b><span>' + esc(fmtReleaseTime(planInfo.plannedAt)) + '</span></div>'
+        + '<div class="prep-me-prog"><div class="lbl"><span>我的准备</span><b>' + esc((st.data && st.data.checkedMine) || 0) + ' / ' + esc(total) + ' 已确认</b></div>'
+        + '<div class="prep-bar">'
+        + (c.ok ? '<span class="seg-ok" style="width:' + prepPct(c.ok, total) + '%"></span>' : '')
+        + (c.risk ? '<span class="seg-risk" style="width:' + prepPct(c.risk, total) + '%"></span>' : '')
+        + (c.pending ? '<span class="seg-pending" style="width:' + prepPct(c.pending, total) + '%"></span>' : '')
+        + '</div><div class="hint">' + esc((st.data && st.data.riskMine) || 0) + ' 项有风险 · ' + esc((st.data && st.data.pendingMine) || 0) + ' 项未确认</div></div>'
+        + '<button class="btn sm" type="button" data-prep-watch>' + icon("star", 14) + ' ' + ((st.data && st.data.watching) ? "已关注" : "关注此计划") + '</button></div>' : '';
+      var ack = "";
+      if(receipt && !acked){
+        ack = '<div class="prep-ack"><span class="aic">' + icon("bell", 15) + '</span><div><b>这条推送待回执</b>' + receiptNote + '<span>回执只表示收到本次提醒，不影响已完成的逐项确认。</span></div><button class="btn sm primary" type="button" data-prep-ack>确认已收到</button></div>';
+      }else if(acked){
+        ack = '<div class="prep-ack is-done"><span class="aic">' + icon("checkCircle", 15) + '</span><div><b>本次推送已回执</b>' + receiptNote + '<span>' + esc(fmtReleaseTime(acked)) + '</span></div></div>';
+      }
+      var chips = total ? '<div class="prep-me-chips">'
+        + '<button class="chip" type="button" aria-pressed="' + (st.filter === "all") + '" data-prep-filter="all">全部 ' + c.all + '</button>'
+        + '<button class="chip" type="button" aria-pressed="' + (st.filter === "pending") + '" data-prep-filter="pending">待确认 ' + c.pending + '</button>'
+        + '<button class="chip" type="button" aria-pressed="' + (st.filter === "risk") + '" data-prep-filter="risk">有风险 ' + c.risk + '</button>'
+        + '<button class="chip" type="button" aria-pressed="' + (st.filter === "ok") + '" data-prep-filter="ok">已确认 ' + c.ok + '</button></div>' : '';
+      var list = total
+        ? (shown.length ? shown.map(rowHTML).join("") : '<div class="prep-me-empty">当前筛选下没有工作项。</div>')
+        : '<div class="prep-me-empty"><b>这个计划里没有需要你确认的工作项</b><span>你不在计划范围的工作项负责人名单里；计划新增范围或把你加为负责人后会出现在这里。</span><button class="btn sm" type="button" data-prep-close>查看计划范围</button></div>';
+      var aside = total ? '<aside class="prep-me-aside"><div class="prep-side-card"><h4>本次发布</h4>'
+        + '<div class="kv"><span>计划时间</span><b>' + esc(fmtReleaseTime(planInfo.plannedAt)) + '</b></div>'
+        + '<div class="kv"><span>环境 / 覆盖</span><b>' + esc(releaseEnvironmentName(planInfo.environment)) + ' · ' + esc(coverageName(planInfo.coverage)) + '</b></div>'
+        + '<div class="kv"><span>计划负责人</span><b>' + esc(planInfo.ownerName || "—") + '</b></div>'
+        + '<div class="kv"><span>范围</span><b>' + esc((planInfo.projectNames || "—") + (planInfo.versionNames ? " · " + planInfo.versionNames : "")) + '</b></div></div>'
+        + '<div class="prep-side-card"><h4>确认口径</h4><p class="hint">确认只表示我已核对该工作项的状态、版本与风险，不改变工作项状态，也不构成发布证据。</p></div></aside>' : '';
+      var body = '<div class="sheet prep-me-sheet"><div class="sheet-head"><div style="flex:1;min-width:0"><h2>我的发布准备</h2>'
+        + '<p class="desc">' + esc(planLabel(planInfo)) + ' · ' + esc(prepCountdownText(st.data && st.data.countdown)) + '</p></div>'
+        + '<button class="icon-btn sm" type="button" data-prep-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+        + '<div class="sheet-body prep-me-body">';
+      if(st.loading) body += UI.skeletonRows(4);
+      else if(st.error) body += '<p class="release-error" role="alert">准备信息加载失败：' + esc(st.error) + '</p><button class="btn sm" type="button" data-prep-reload>重试</button>';
+      else{
+        if(st.saveError) body += '<p class="release-error" role="alert">' + esc(st.saveError) + '</p>';
+        body += hero + ack + '<div class="prep-me-layout"><section class="prep-me-list"><div class="prep-me-list-head"><h3>我负责的工作项</h3><span class="n">' + esc(total) + '</span>' + chips + '</div>' + list + '</section>' + aside + '</div>';
+      }
+      body += '</div></div>';
+      layer.innerHTML = body;
+    }
+    function reload(){
+      st.loading = true; st.error = ""; st.saveError = ""; renderMe();
+      API.get("/api/release-plans/" + encodeURIComponent(pid) + "/prep/me").then(function(rs){
+        st.loading = false; st.data = rs || null; renderMe();
+        if(rs){ watchState.planId = pid; watchState.loaded = true; watchState.watching = !!rs.watching; watchState.count = Number(rs.watcherCount) || 0; renderWatch(); }
+      }).catch(function(ex){ st.loading = false; st.error = ex.message || "网络异常"; renderMe(); });
+    }
+    function saveCheck(taskId, state, note){
+      if(st.saving) return;
+      st.saving = taskId; st.saveError = ""; renderMe();
+      API.post("/api/release-plans/" + encodeURIComponent(pid) + "/prep/items/" + encodeURIComponent(taskId) + "/check", {
+        state: state, note: note || null, expectedScopeToken: st.data ? st.data.scopeToken : null
+      }).then(function(rs){
+        st.saving = ""; st.editing = ""; st.note = "";
+        st.data = rs.me || st.data;
+        if(rs.summary){ prepState.data = rs.summary; renderPrep(); }
+        renderMe();
+      }).catch(function(ex){
+        st.saving = "";
+        st.saveError = ex.message || "保存失败，请重试";
+        renderMe();
+        if(ex.code === 409) reload();
+      });
+    }
+    function undo(taskId){
+      if(st.saving) return;
+      st.saving = taskId; st.saveError = ""; renderMe();
+      API.del("/api/release-plans/" + encodeURIComponent(pid) + "/prep/items/" + encodeURIComponent(taskId) + "/check").then(function(rs){
+        st.saving = ""; st.data = rs.me || st.data;
+        if(rs.summary){ prepState.data = rs.summary; renderPrep(); }
+        renderMe();
+      }).catch(function(ex){ st.saving = ""; st.saveError = ex.message || "撤销失败"; renderMe(); });
+    }
+    layer.addEventListener("click", function(e){
+      if(e.target.closest("[data-prep-close]")){ UI.closeModal(layer); return; }
+      if(e.target.closest("[data-prep-reload]")){ reload(); return; }
+      var f = e.target.closest("[data-prep-filter]");
+      if(f){ st.filter = f.getAttribute("data-prep-filter"); renderMe(); return; }
+      var confirm = e.target.closest("[data-prep-confirm]");
+      if(confirm){ saveCheck(confirm.getAttribute("data-prep-confirm"), "ok", ""); return; }
+      var risk = e.target.closest("[data-prep-risk]");
+      if(risk){
+        var tid = risk.getAttribute("data-prep-risk");
+        var item = items().filter(function(x){ return x.id === tid; })[0] || {};
+        st.editing = tid; st.note = item.checkNote || ""; renderMe(); return;
+      }
+      if(e.target.closest("[data-prep-risk-cancel]")){ st.editing = ""; st.note = ""; renderMe(); return; }
+      var riskSave = e.target.closest("[data-prep-risk-save]");
+      if(riskSave){ var noteEl = layer.querySelector("[data-prep-note]"); saveCheck(riskSave.getAttribute("data-prep-risk-save"), "risk", noteEl ? noteEl.value : ""); return; }
+      var undoBtn = e.target.closest("[data-prep-undo]");
+      if(undoBtn){ undo(undoBtn.getAttribute("data-prep-undo")); return; }
+      if(e.target.closest("[data-prep-ack]")){
+        st.saveError = "";
+        API.post("/api/release-plans/" + encodeURIComponent(pid) + "/prep/me/receipt").then(function(rs){
+          if(st.data) st.data.receipt = rs.receipt || st.data.receipt;
+          renderMe(); toast("已回执本次发布准备", "fs");
+        }).catch(function(ex){ st.saveError = ex.message || "回执失败"; renderMe(); });
+        return;
+      }
+      if(e.target.closest("[data-prep-watch]")){
+        toggleWatch().then(function(){ if(st.data){ st.data.watching = watchState.watching; st.data.watcherCount = watchState.count; } renderMe(); });
+        return;
+      }
+      var open = e.target.closest("[data-prep-open-task]");
+      if(open){ openTaskById(open.getAttribute("data-prep-open-task")); return; }
+    });
+    reload();
+  }
   function render(){
     if(releasePickerRef && UI.popOpen(releasePickerRef.el)){ releasePickerRef.close(); }
     releasePickerRef = null;
@@ -3833,6 +4617,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       : '';
     var planCoverageHTML = '<span data-plan-check-coverage>' + esc(planCoverage) + '</span>';
     var planSection = '<section class="release-section"><h3>发布计划</h3><div class="row row-gap"><select data-plan-select aria-label="选择独立发布计划"' + (pending ? ' disabled' : '') + '>' + options([["", "＋ 新建独立计划"]].concat(planChoices), planId || "") + '</select>' + '</div><p class="hint">计划 ' + esc(p.id ? (releasePlanNoText(p.planNo) || ("#" + p.id)) : "未保存") + ' · 修订 ' + esc(p.revision || "—") + ' · ' + esc(releaseStatusName(p.status)) + ' · ' + esc(releaseEnvironmentName(p.environment || "production")) + ' · ' + esc(coverageName(p.coverage || "full")) + ' · ' + esc(planWhen(p)) + (p.versionCount > 1 ? ' · ' + esc(p.versionCount) + ' 个版本（已完成 ' + esc(p.releasedVersionCount || 0) + '）' : '') + '。计划只描述打算怎么发，不改变实际交付事实；已完成计划不可修改。</p>'
+      + '<div data-release-prep-host></div>'
       + heading("基本信息", "计划发布的时间与责任人；环境与覆盖范围用于和实际记录比对偏差。")
       + '<div class="form-grid">' + field("计划发布时间（本地）", '<input type="datetime-local" step="60" data-plan-planned value="' + esc(p.plannedAt ? localMinute(p.plannedAt) : "") + '"' + disabled + '>', "计划发布的时间，使用本地时间；只用于计划与偏差对比，不代表实际发生时间。")
         + field("计划负责人", releaseOwnerControl("plan", p.ownerUserId || "", disabled), "计划的责任人，可与实际执行人不同。")
@@ -3880,7 +4665,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       + '<div class="release-panel" id="release-panel-plan" data-release-panel="plan"' + (activeTab === "plan" ? '' : ' hidden') + '>' + planSection + '</div>'
       + (mayPublish ? '<div class="release-panel" id="release-panel-actual" data-release-panel="actual"' + (activeTab === "actual" ? '' : ' hidden') + '>' + actualSection + '</div>' : '')
       + '<div class="release-panel" id="release-panel-history" data-release-panel="history"' + (activeTab === "history" ? '' : ' hidden') + '>' + historySection + versionLogSection + contentSection + '</div>';
-    renderHistory(); renderVersionLog(); renderCheck(); syncControls(); syncAdvanced(); updateChecklists(); refreshPlanBranches(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
+    renderHistory(); renderVersionLog(); renderCheck(); renderPrep(); syncWatch(); syncControls(); syncAdvanced(); updateChecklists(); refreshPlanBranches(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
     if(restoreScroll != null){ dlg.scrollTo(restoreScroll); restoreScroll = null; }
     if(entryFocus){ entryFocus = false; focusActual(); }
     if(mayManage && activeTab === "plan") ensurePlanTaskPool();
@@ -3915,7 +4700,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       /* 刷新 / 重新加载时重新拉版本操作记录，避免展示过期列表 */
       verLog = {id:null, rows:[], error:""}; verLogSeq++;
       /* 工具栏在释放容器外：重画 body 前必须先解禁，否则「刷新 / 返回版本」会一直停在被禁用状态 */
-      setBusy(false); render(); loadCheck();
+      setBusy(false); render(); loadCheck(); loadPrep();
     }).catch(function(ex){
       if(!current() || seq !== loadSeq) return;
       setBusy(false); retryAllowed = false;
@@ -4060,7 +4845,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     if(pending || storageError) return;
     if(e.target.matches('[data-plan-select]')){
       var sel = e.target, nextPlan = sel.value;
-      confirmDiscardPlan(function(){ readActual(); planId = nextPlan; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planTaskFetchKey = ""; planTaskErrorKey = ""; invalidatePreview(); render(); }, function(){ sel.value = planId || ""; });
+      confirmDiscardPlan(function(){ readActual(); planId = nextPlan; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planTaskFetchKey = ""; planTaskErrorKey = ""; prepState.planId = ""; prepState.data = null; watchState.planId = ""; watchState.loaded = false; invalidatePreview(); render(); loadPrep(); }, function(){ sel.value = planId || ""; });
       return;
     }
     if(e.target.matches('[data-plan-version]')){
@@ -4143,6 +4928,14 @@ export function mountReleaseWorkspace(pageHost, opts){
     }
     if(e.target.closest('[data-plan-sync-close]')){ var syncHost = layer.querySelector("[data-plan-sync-host]"); if(syncHost) syncHost.innerHTML = ""; return; }
     if(busy || !current()) return;
+    if(e.target.closest('[data-release-watch-toggle]')){ toggleWatch(); return; }
+    if(e.target.closest('[data-prep-retry]')){ loadPrep(); return; }
+    if(e.target.closest('[data-prep-me]')){ openMyPrep(); return; }
+    if(e.target.closest('[data-prep-history]')){ openPushHistory(); return; }
+    var prepNotify = e.target.closest('[data-prep-notify]');
+    if(prepNotify){ openPrepNotify({only:prepNotify.hasAttribute("data-only")}); return; }
+    var prepRemind = e.target.closest('[data-prep-remind]');
+    if(prepRemind){ openPrepNotify({ownerId:prepRemind.getAttribute("data-prep-remind")}); return; }
     /* 放大态下点浮层以外的地方即收起；点浮层内部的空白不算「外部」 */
     var openPrefix = pickerState.plan.expanded ? "plan" : pickerState.actual.expanded ? "actual" : "";
     if(openPrefix){
@@ -4230,7 +5023,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       dismissPlanDraftBanner();
       return;
     }
-    if(e.target.closest('[data-plan-new]')){ if(mayManage) confirmDiscardPlan(function(){ readActual(); planId = ""; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planTaskFetchKey = ""; planTaskErrorKey = ""; invalidatePreview(); render(); }); return; }
+    if(e.target.closest('[data-plan-new]')){ if(mayManage) confirmDiscardPlan(function(){ readActual(); planId = ""; planJustSaved = false; planScopeVersionIds = null; planVersionQuery = ""; planTaskFetchKey = ""; planTaskErrorKey = ""; prepState.planId = ""; prepState.data = null; watchState.planId = ""; watchState.loaded = false; invalidatePreview(); render(); }); return; }
     if(e.target.closest('[data-release-preview]')){ runPreview(); return; }
     if(e.target.closest('[data-release-save]')){
       var p = selectedPlan(); if(!mayManage || (p && p.status === "completed")) return;
@@ -5039,6 +5832,9 @@ if($("dlgVersionX")) $("dlgVersionX").addEventListener("click", function(){ UI.c
 if(btnSaveVer) btnSaveVer.addEventListener("click", saveVersion);
 if(vName) vName.addEventListener("input", function(){ fVerName.classList.remove("invalid"); });
 if(phaseBody) phaseBody.addEventListener("click", function(e){
+  /* 阶段构成色块 / 图例 / 跨版本阶段单元格：都长在可点击的版本行里，先于行级跳转处理 */
+  var stageHit = e.target.closest("[data-stage-drill]");
+  if(stageHit){ openPhaseStageDrill(stageHit); return; }
   /* 列表工具栏 / 分组折叠 / 内联编辑：这些控件都长在可点击的版本行里，必须先于行级下钻处理 */
   var grp = e.target.closest("[data-ver-group]");
   if(grp){
@@ -5228,6 +6024,8 @@ if(phaseBody) phaseBody.addEventListener("keydown", function(e){
     return;
   }
   if(e.key !== "Enter" && e.key !== " ") return;
+  var stageRow = e.target.closest ? e.target.closest("tr[data-stage-drill]") : null;
+  if(stageRow && stageRow === e.target){ e.preventDefault(); openPhaseStageDrill(stageRow); return; }
   var verRow = e.target.closest ? e.target.closest("[data-ver-row]") : null;
   if(verRow && verRow === e.target){
     e.preventDefault();

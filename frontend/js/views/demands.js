@@ -4,7 +4,7 @@ import { API } from "../core/api.js";
 import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
 import { loadCategories } from "../core/app.js";
 import { openAttPreview, previewable, kindOf } from "../core/att-preview.js";
-import { bindFileDrop, uploadAttachment, validateFiles, reportRejected, openAttachment, ACCEPT } from "../core/attach-kit.js";
+import { bindFileDrop, createAttachKit, uploadAttachment, validateFiles, reportRejected, openAttachment, ACCEPT } from "../core/attach-kit.js";
 import { $ } from "../core/dom.js";
 import { openDateAt } from "../core/date-picker.js";
 import { loadViews, pruneUnknownCats, savedViewsFor } from "../core/filters-ui.js";
@@ -22,6 +22,7 @@ import { UI, esc, toast, copyToClipboard } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { PRIORITIES, assocLinkHTML, taskDescText, taskVersionIds, taskVersionLinksHTML, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML, demandNoText } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
+import { STAGE_META } from "../lib/stage-hours.js";
 import { triggerDownload } from "../lib/download.js";
 import { registerHelp, caliberMarkHTML, initCaliberHelp } from "../lib/caliber-help.js";
 import { loadProjectMembers } from "../lib/member-labels.js";
@@ -2996,11 +2997,15 @@ function syncDemandCatOptions(reqId, selectedId, fallbackFirst){
   return val;
 }
 /* 弹窗一次打开对应一个序号：关掉 A 再打开 B 后，A 迟到的保存响应不能关闭/改写 B */
-var demandFormSeq = 0, demandFormBaseline = null;
+var demandFormSeq = 0, demandFormBaseline = null, demandAttKit = null;
+function demandFormAttFiles(){
+  return demandAttKit ? demandAttKit.files() : [];
+}
 function demandFormSnapshot(){
-  return JSON.stringify([dReq.value, dTitle.value, dDesc.value, dAccept.value, dSource.value, dKind.value,
+  return JSON.stringify([dReq.value, dTitle.value, demandSerializeRichText(dDesc), dAccept.value, dSource.value, dKind.value,
     dCategory.value, dExpect.value, formPri, dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value,
-    dReviewer ? dReviewer.value : "", demandWatchPick.map(function(w){ return w.userId; })]);
+    dReviewer ? dReviewer.value : "", demandWatchPick.map(function(w){ return w.userId; }),
+    demandFormAttFiles().map(function(f){ return f.name + ":" + f.size; })]);
 }
 function demandFormDirty(){
   return !!demandFormBaseline && demandFormSnapshot() !== demandFormBaseline;
@@ -3075,6 +3080,8 @@ function syncDemandReviewerSelect(selectedId){
 function closeDemandDialog(){
   demandFormSeq++;
   demandFormBaseline = null;
+  demandClearPendingImages();
+  if(demandAttKit) demandAttKit.clear();
   editingDemandId = null;
   editingDemandStatus = null;
   editingDemandReqId = null;
@@ -3124,7 +3131,15 @@ function openDemandDialog(d){
     }
   }
   dTitle.value = d ? d.title : "";
-  dDesc.value = d ? (d.description || "") : "";
+  demandClearPendingImages();
+  /* 附件只在新建时在这里收集；编辑态的已有附件在详情「关联」页维护 */
+  if(demandAttKit) demandAttKit.clear();
+  var attField = $("fDemandAtts");
+  if(attField) attField.hidden = !!d;
+  dDesc.innerHTML = d ? demandDetailHTML(d.description, false) : "";
+  demandWrapInlineImages(dDesc);
+  demandBindInlineImageResize(dDesc);
+  demandUpdateDescCount();
   dAccept.value = d ? (d.acceptText || "") : "";
   /* 来源联想：候选来自当前已加载需求的来源原值，只提示不代入 */
   var dlSource = $("dlDemandSource");
@@ -3194,6 +3209,12 @@ function saveDemand(){
     return;
   }
   if(!canEditReq(dReq.value)){ denyDemandReadOnly(); return; }
+  var descText = demandSerializeRichText(dDesc);
+  if(demandDescText(descText).length > DEM_DESC_MAX){
+    toast("需求描述最多 " + DEM_DESC_MAX + " 字，请精简后再提交", "warn");
+    try{ dDesc.focus(); }catch(e){ /* noop */ }
+    return;
+  }
   /* WSJF 可选：留空发 null，服务端只在四项都填时才计分 */
   function wsNum(el, min){
     var raw = String(el.value == null ? "" : el.value).trim();
@@ -3205,7 +3226,7 @@ function saveDemand(){
   var body = {
     reqId: dReq.value,
     title: title,
-    description: dDesc.value.trim() || null,
+    description: descText || null,
     acceptText: dAccept.value.trim() || null,
     source: dSource.value.trim() || null,
     itemKind: dKind.value,
@@ -3243,27 +3264,91 @@ function doSaveDemand(body){
     if(seq === demandFormSeq) btnSaveDemand.disabled = false;
     toast(ex && ex.message ? ex.message : "保存失败", "bad");
   };
-  var save = function(){
-    var p = editingDemandId
-      ? API.put("/api/demands/" + encodeURIComponent(editingDemandId), body)
-      : API.post("/api/demands", body);
-    return p.then(function(){
-      toast(!wasEdit ? "已提交评审「" + title + "」"
-        : moved ? "已移至「" + reqNameById(body.reqId) + "」并保存"
-        : "已更新需求「" + title + "」", "fs");
-      /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
-      if(seq === demandFormSeq){
-        closeDemandDialog();
-        if(wasEdit) closeDemandDetailIfOpen();
-        /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围。
-           编辑迁移则保持原筛选，让这条需求从当前列表里消失即可 */
-        if(!wasEdit && rt.demandReqId && body.reqId !== rt.demandReqId){
-          rt.demandReqId = body.reqId;
-          if(demandReq) demandReq.value = body.reqId;
-        }
+  /* 描述里的图片和表单附件此时都还只是本地文件：保存时再逐个上传成需求附件 */
+  var pending = demandCommitPendingImages();
+  if(pending.length && String(body.description || "").indexOf("(pending:") === -1) pending = [];
+  var editId = editingDemandId;
+  var attFiles = demandFormAttFiles();
+  var done = function(attText){
+    toast((!wasEdit ? "已提交评审「" + title + "」"
+      : moved ? "已移至「" + reqNameById(body.reqId) + "」并保存"
+      : "已更新需求「" + title + "」") + (attText ? "，" + attText : ""), "fs");
+    /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
+    if(seq === demandFormSeq){
+      closeDemandDialog();
+      if(wasEdit) closeDemandDetailIfOpen();
+      /* 聚焦项目时跳到新建需求所在项目；「全部项目」本来就能看到，不切范围。
+         编辑迁移则保持原筛选，让这条需求从当前列表里消失即可 */
+      if(!wasEdit && rt.demandReqId && body.reqId !== rt.demandReqId){
+        rt.demandReqId = body.reqId;
+        if(demandReq) demandReq.value = body.reqId;
       }
-      loadDemands();
-    }).catch(fail);
+    }
+    loadDemands();
+  };
+  /* 附件接口要求需求已存在，所以统一在写库成功后再传；返回追加到成功提示的文案 */
+  var attach = function(demandId){
+    if(!attFiles.length || !demandId) return Promise.resolve("");
+    var path = "/api/demands/" + encodeURIComponent(demandId) + "/attachments";
+    var ok = 0, failed = 0;
+    var chain = Promise.resolve();
+    attFiles.forEach(function(f){
+      chain = chain.then(function(){
+        return uploadAttachment(path, f).then(function(){ ok++; }, function(){ failed++; });
+      });
+    });
+    return chain.then(function(){
+      if(failed) toast("附件上传：" + ok + " 个成功，" + failed + " 个失败", "warn");
+      return ok ? (ok > 1 ? "附件已上传 " + ok + " 个" : "附件已上传") : "";
+    });
+  };
+  var attachThenDone = function(demandId){
+    return attach(demandId).then(function(attText){ done(attText); });
+  };
+  var attachMissing = function(){
+    if(attFiles.length) toast("需求已保存，但附件没有上传，请打开需求在「关联 - 附件」里补传", "warn");
+    done();
+  };
+  var write = function(){
+    return editId
+      ? API.put("/api/demands/" + encodeURIComponent(editId), body)
+      : API.post("/api/demands", body);
+  };
+  var save = function(){
+    /* 编辑态已有 ID：先传图再把 pending 键换成 att 键，一次性保存 */
+    if(wasEdit && pending.length){
+      return demandUploadPendingImages(editId, pending).then(function(r){
+        body.description = demandReplacePendingTokens(body.description, r.mapping) || null;
+        demandReportImageUpload(Object.keys(r.mapping).length, r.failed);
+        return write().then(function(){ return attachThenDone(editId); });
+      });
+    }
+    if(!pending.length){
+      return write().then(function(created){
+        var targetId = wasEdit ? editId : (created && created.id);
+        if(!targetId) return attachMissing();
+        return attachThenDone(targetId);
+      });
+    }
+    /* 新建态附件接口要求需求已存在：先按无图文案建单，上传后把图片片段补回描述再保存一次 */
+    var withTokens = String(body.description || "");
+    body.description = demandDescText(withTokens) || null;
+    return write().then(function(created){
+      if(!created || !created.id) return attachMissing();
+      return demandUploadPendingImages(created.id, pending).then(function(r){
+        demandReportImageUpload(Object.keys(r.mapping).length, r.failed);
+        var finalText = demandReplacePendingTokens(withTokens, r.mapping);
+        if(!finalText || finalText === (body.description || "")) return attachThenDone(created.id);
+        body.description = finalText;
+        body.revision = created.revision;
+        return API.put("/api/demands/" + encodeURIComponent(created.id), body).then(function(){
+          return attachThenDone(created.id);
+        }, function(){
+          toast("需求已创建、图片已上传，但描述回写失败，请打开需求后再保存一次", "warn");
+          return attachThenDone(created.id);
+        });
+      });
+    });
   };
   /* 换了项目先走两道确认；取消时恢复保存按钮，表单内容保持原样 */
   var gate = moved
@@ -3304,7 +3389,8 @@ function runDemandCheck(body){
   API.post("/api/demands/quality-check", {
     reqId: body.reqId,
     title: body.title,
-    description: body.description,
+    /* 体检只读文案：内嵌图片的标记片段（含未上传的 pending）不计入描述内容 */
+    description: body.description ? demandDescText(body.description) : null,
     acceptText: body.acceptText,
     priority: body.priority,
     expectDate: body.expectDate,
@@ -3959,6 +4045,88 @@ function loadDemandTasks(layer, id, targetVersionId){
     if(box) box.innerHTML = '<div class="attach-empty">关联工作项加载失败</div>';
     if(overview) overview.innerHTML = '<li class="read-empty">关联工作项加载失败</li>';
   });
+}
+/* 需求工时：只读展示产品 / 设计、开发、测试三段。
+   口径与版本页阶段工时一致：测试窗口内先归测试，需求类剩余归产品，任务 / 缺陷剩余归开发。 */
+function demHoursValue(m){
+  var n = Number(m) || 0;
+  return n > 0 ? fmtMinutesShort(n) : "—";
+}
+function demHoursPct(part, total){
+  if(!total) return "—";
+  return Math.round((Number(part) || 0) * 100 / total) + "%";
+}
+function demHoursDelta(act, est){
+  if(!est) return "—";
+  var d = Math.round((act - est) * 100 / est);
+  return (d > 0 ? "+" : "") + d + "%";
+}
+function demHoursDeltaTone(act, est){
+  if(!est) return "";
+  var d = (act - est) * 100 / est;
+  if(d < 0) return Math.abs(d) <= 15 ? "ok" : "";
+  return Math.abs(d) <= 15 ? "ok" : (Math.abs(d) <= 40 ? "warn-text" : "bad-text");
+}
+function loadDemandHours(layer, id){
+  var box = layer.querySelector("#demandHoursBody");
+  var meta = layer.querySelector("#demandHoursMeta");
+  if(!box) return;
+  API.get("/api/demands/" + encodeURIComponent(id) + "/hours").then(function(h){
+    if(!layer.isConnected || !box.isConnected) return;
+    h = h || {};
+    var count = Number(h.taskCount) || 0;
+    var est = Number(h.estimateMinutes) || 0;
+    var act = Number(h.actualMinutes) || 0;
+    if(meta) meta.textContent = count ? count + " 个工作项 · " + (h.estimatedCount || 0) + " 项已估" : "";
+    if(!count){
+      box.innerHTML = '<p class="read-empty">还没有关联工作项；拆分后才能统计阶段工时。</p>';
+      return;
+    }
+    var delta = demHoursDelta(act, est), tone = demHoursDeltaTone(act, est);
+    var kpis = '<div class="dem-hours-kpis">'
+      + '<div class="dem-hours-kpi"><span>预计</span><b>' + demHoursValue(est) + '</b></div>'
+      + '<div class="dem-hours-kpi"><span>实际</span><b>' + demHoursValue(act) + '</b></div>'
+      + '<div class="dem-hours-kpi"><span>偏差</span><b class="' + tone + '">' + delta + '</b></div>'
+      + '</div>';
+    var bar = '';
+    if(act > 0){
+      bar = '<div class="dem-hours-bar" role="img" aria-label="' + esc(STAGE_META.map(function(m){
+        return m.name + " " + demHoursValue(h[m.key + "ActualMinutes"]) + " " + demHoursPct(h[m.key + "ActualMinutes"], act);
+      }).join("，")) + '">'
+        + STAGE_META.map(function(m){
+          var w = Math.round((Number(h[m.key + "ActualMinutes"]) || 0) * 10000 / act) / 100;
+          return w > 0 ? '<i style="width:' + w + '%;background:' + m.color + '"></i>' : "";
+        }).join("") + '</div>';
+    }
+    var rows = STAGE_META.map(function(m){
+      var se = Number(h[m.key + "EstimateMinutes"]) || 0;
+      var sa = Number(h[m.key + "ActualMinutes"]) || 0;
+      return '<tr>'
+        + '<td><span class="dem-hours-name"><i style="background:' + m.color + '"></i>' + esc(m.name)
+        + '<small>' + esc(m.note) + '</small></span></td>'
+        + '<td class="num">' + demHoursValue(se) + '</td>'
+        + '<td class="num"><b>' + demHoursValue(sa) + '</b></td>'
+        + '<td class="num">' + demHoursPct(sa, act) + '</td>'
+        + '<td class="num ' + demHoursDeltaTone(sa, se) + '">' + demHoursDelta(sa, se) + '</td></tr>';
+    }).join("");
+    var table = '<div class="tbl-wrap"><table class="dem-hours-tbl"><thead><tr>'
+      + '<th>阶段</th><th class="num">预计</th><th class="num">实际</th><th class="num">实际占比</th><th class="num">偏差</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var notes = [];
+    if(!act) notes.push("还没有已结束的计时，拆分要等第一条计时产生。");
+    if(Number(h.unestimatedCount))
+      notes.push(h.unestimatedCount + " 项没有预估，未按 0 计入偏差；补齐预计后偏差才完整。");
+    notes.push("产品 / 设计按需求类工作项的计时近似；测试按「提测 → 测试结束」的自然日窗口；史诗只做分组，不计入工时。");
+    box.innerHTML = kpis + bar + table + '<p class="foot-note">' + notes.map(esc).join(" ") + '</p>';
+  }).catch(function(){
+    if(!layer.isConnected || !box.isConnected) return;
+    box.innerHTML = '<p class="read-empty">工时加载失败</p>';
+  });
+}
+/* 需求详情里工作项数量或计时变化后，交付表与工时卡一起刷新 */
+function refreshDemandWork(layer, id, versionId){
+  loadDemandTasks(layer, id, versionId);
+  loadDemandHours(layer, id);
 }
 /* 概览属性条「文档/附件」计数：0 显示暂无（与工作项附件一致），未加载显示 … */
 function demandRelCountHTML(kind, n){
@@ -4630,33 +4798,54 @@ function demandDetailPlain(text){
   return value ? esc(value) : '<span class="muted">未填写</span>';
 }
 /* ---------- 需求描述内嵌图片 ----------
-   描述仍按纯文本存库，图片以 ![文件名](att:附件ID) 片段夹在文字里：
-   库里没有 HTML，导出/搜索/纯文本消费者拿到的仍是文字；展示时替换成图片，摘要时剥掉片段。 */
-var DEM_DESC_IMG_RE = /!\[([^\]\n]{0,80})\]\(att:([A-Za-z0-9_-]+)\)/g;
+   描述仍按纯文本存库，图片以 ![文件名](att:附件ID) 片段夹在文字里，可追加 |宽度：
+   库里没有 HTML，导出/搜索/纯文本消费者拿到的仍是文字；展示时替换成图片，摘要时剥掉片段。
+   新建表单尚未上传的图片先用 pending:临时键 占位，保存时上传成功后替换成 att 键。 */
+var DEM_DESC_IMG_RE = /!\[([^\]\n]{0,80})\]\(att:([A-Za-z0-9_-]+)(?:\|(\d{1,4}))?\)/g;
+var DEM_DESC_PENDING_RE = /!\[([^\]\n]{0,80})\]\(pending:([A-Za-z0-9_-]+)(?:\|(\d{1,4}))?\)/g;
+var DEM_DESC_MAX = 2000;
+var DEM_INLINE_MIN_W = 80;
+var DEM_INLINE_MAX_W = 1600;
+
+function demandInlineWidth(width){
+  var n = parseInt(width, 10);
+  if(!n || n < DEM_INLINE_MIN_W) return 0;
+  return Math.min(DEM_INLINE_MAX_W, n);
+}
 function demandDescText(text){
   return String(text == null ? "" : text)
     .replace(DEM_DESC_IMG_RE, "")
+    .replace(DEM_DESC_PENDING_RE, "")
     .replace(/[ \t]+$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^\s+|\s+$/g, "");
 }
-function demandDescImgToken(att){
+function demandDescImgToken(att, width){
   var name = String((att && att.filename) || "图片").replace(/[\[\]\r\n]/g, "").slice(0, 80);
-  return "![" + (name || "图片") + "](att:" + att.id + ")";
+  var w = demandInlineWidth(width);
+  return "![" + (name || "图片") + "](att:" + att.id + (w ? "|" + w : "") + ")";
 }
-function demandInlineImgHTML(id, name){
+function demandDescPendingToken(name, key, width){
+  var clean = String(name || "图片").replace(/[\[\]\r\n]/g, "").slice(0, 80) || "图片";
+  var w = demandInlineWidth(width);
+  return "![" + clean + "](pending:" + key + (w ? "|" + w : "") + ")";
+}
+function demandInlineImgHTML(id, name, width){
+  var w = demandInlineWidth(width);
   return '<img class="dem-inline-img" data-dem-inline-img="' + esc(id) + '"'
+    + (w ? ' data-dem-inline-w="' + w + '" style="width:' + w + 'px"' : "")
     + ' data-dem-inline-name="' + esc(name || "图片") + '"'
     + ' src="' + attUrl(id) + '" alt="' + esc(name || "图片") + '" title="点击查看大图">';
 }
-function demandDetailHTML(text){
+/* 描述渲染：blank=false 时空内容返回空串（编辑器用），否则给只读态「未填写」占位 */
+function demandDetailHTML(text, blank){
   var value = text == null ? "" : String(text);
-  if(!value) return '<span class="muted">未填写</span>';
+  if(!value) return blank === false ? "" : '<span class="muted">未填写</span>';
   var out = "", last = 0, m;
   DEM_DESC_IMG_RE.lastIndex = 0;
   while((m = DEM_DESC_IMG_RE.exec(value))){
     out += esc(value.slice(last, m.index));
-    out += demandInlineImgHTML(m[2], m[1]);
+    out += demandInlineImgHTML(m[2], m[1], m[3]);
     last = m.index + m[0].length;
   }
   out += esc(value.slice(last));
@@ -4671,6 +4860,8 @@ function demandSerializeRichText(el){
       return;
     }
     if(node.nodeType !== 1) return;
+    /* 缩放/移除控件是编辑辅助，不能写进描述 */
+    if(node.hasAttribute && node.hasAttribute("data-dem-ui")) return;
     var tag = node.tagName.toLowerCase();
     /* 只读态的「未填写」是占位，不是正文：图片晚到、DOM 已退回读态时不能把它写进描述 */
     if(node.classList && node.classList.contains("muted")) return;
@@ -4678,9 +4869,13 @@ function demandSerializeRichText(el){
       out += "\n";
       return;
     }
-    var imgId = node.getAttribute ? node.getAttribute("data-dem-inline-img") : null;
-    if(tag === "img" && imgId){
-      out += demandDescImgToken({ id: imgId, filename: node.getAttribute("data-dem-inline-name") });
+    if(tag === "img"){
+      var imgId = node.getAttribute("data-dem-inline-img");
+      var pend = node.getAttribute("data-dem-inline-pending");
+      var w = node.getAttribute("data-dem-inline-w");
+      var nm = node.getAttribute("data-dem-inline-name") || node.getAttribute("alt");
+      if(imgId) out += demandDescImgToken({ id: imgId, filename: nm }, w);
+      else if(pend) out += demandDescPendingToken(nm, pend, w);
       return;
     }
     var block = tag === "div" || tag === "p";
@@ -4690,6 +4885,246 @@ function demandSerializeRichText(el){
   }
   for(var i = 0; i < el.childNodes.length; i++) walk(el.childNodes[i]);
   return out.replace(/[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").replace(/^\s+|\s+$/g, "");
+}
+/* ---------- 描述图片缩放（编辑态） ----------
+   选中图片后出现右下角手柄：拖动按宽度等比缩放（高度自动），左右方向键微调；
+   宽度写进描述标记，只读态按保存的宽度渲染。新建表单里待上传的图片走同一套交互。 */
+var demandDescPending = [], demandDescPendingSeq = 0;
+
+function demandBuildInlineFigure(img){
+  var fig = document.createElement("span");
+  fig.className = "dem-inline-fig";
+  fig.setAttribute("data-dem-fig", "");
+  if(img.parentNode) img.parentNode.insertBefore(fig, img);
+  fig.appendChild(img);
+  var size = document.createElement("span");
+  size.className = "dem-inline-size";
+  size.setAttribute("data-dem-ui", "");
+  var del = document.createElement("button");
+  del.type = "button";
+  del.className = "dem-inline-del";
+  del.setAttribute("data-dem-ui", "");
+  del.setAttribute("data-dem-img-del", "");
+  del.setAttribute("aria-label", "移除图片");
+  del.title = "移除图片";
+  del.textContent = "×";
+  var handle = document.createElement("button");
+  handle.type = "button";
+  handle.className = "dem-inline-resize";
+  handle.setAttribute("data-dem-ui", "");
+  handle.setAttribute("data-dem-img-resize", "");
+  handle.setAttribute("aria-label", "调整图片大小，左右方向键微调");
+  handle.title = "拖动调整大小；左右方向键微调";
+  handle.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14h8V6"/><path d="M10 10l4 4"/></svg>';
+  fig.appendChild(size);
+  fig.appendChild(del);
+  fig.appendChild(handle);
+  demandSyncInlineFigureSize(img);
+  return fig;
+}
+function demandEnsureInlineFigure(img){
+  var fig = img.closest ? img.closest("[data-dem-fig]") : null;
+  return fig || demandBuildInlineFigure(img);
+}
+function demandWrapInlineImages(host){
+  if(!host) return;
+  host.querySelectorAll("img.dem-inline-img").forEach(demandEnsureInlineFigure);
+}
+function demandSyncInlineFigureSize(img){
+  var fig = img.closest ? img.closest("[data-dem-fig]") : null;
+  var size = fig && fig.querySelector(".dem-inline-size");
+  if(!size) return;
+  var w = demandInlineWidth(img.getAttribute("data-dem-inline-w"));
+  size.textContent = w ? w + "px" : "原始";
+}
+function demandSetInlineImgWidth(img, width){
+  var w = demandInlineWidth(width);
+  if(w){
+    img.setAttribute("data-dem-inline-w", String(w));
+    img.style.width = w + "px";
+  }else{
+    img.removeAttribute("data-dem-inline-w");
+    img.style.removeProperty("width");
+  }
+  img.style.height = "auto";
+  demandSyncInlineFigureSize(img);
+}
+function demandSelectInlineFigure(host, fig){
+  host.querySelectorAll("[data-dem-fig].is-selected").forEach(function(f){
+    if(f !== fig) f.classList.remove("is-selected");
+  });
+  if(fig) fig.classList.add("is-selected");
+}
+function demandRemoveInlineFigure(host, fig){
+  var img = fig && fig.querySelector("img");
+  var key = img && img.getAttribute("data-dem-inline-pending");
+  if(key){
+    for(var i = 0; i < demandDescPending.length; i++){
+      if(demandDescPending[i].key === key){
+        try{ URL.revokeObjectURL(demandDescPending[i].url); }catch(e){ /* noop */ }
+        demandDescPending.splice(i, 1);
+        break;
+      }
+    }
+  }
+  if(fig) fig.remove();
+  if(host){ try{ host.focus(); }catch(e){ /* noop */ } }
+}
+function demandBindInlineImageResize(host){
+  if(!host || host.__demImgUi) return;
+  host.__demImgUi = true;
+  host.addEventListener("click", function(e){
+    var fig = e.target.closest ? e.target.closest("[data-dem-fig]") : null;
+    if(e.target.closest && e.target.closest("[data-dem-img-del]")){
+      e.preventDefault(); e.stopPropagation();
+      demandRemoveInlineFigure(host, fig);
+      return;
+    }
+    if(e.target.closest && e.target.closest("[data-dem-img-resize]")) return;
+    if(fig){
+      /* 图片块不是文本节点：点选只用于缩放，不抢光标 */
+      e.preventDefault();
+      demandSelectInlineFigure(host, fig);
+      return;
+    }
+    demandSelectInlineFigure(host, null);
+  });
+  host.addEventListener("pointerdown", function(e){
+    var handle = e.target.closest ? e.target.closest("[data-dem-img-resize]") : null;
+    if(!handle) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var fig = handle.closest("[data-dem-fig]");
+    var img = fig && fig.querySelector("img");
+    if(!img) return;
+    demandSelectInlineFigure(host, fig);
+    var startX = e.clientX, startW = img.getBoundingClientRect().width;
+    var maxW = Math.max(DEM_INLINE_MIN_W, (host.clientWidth || 640) - 10);
+    function move(ev){
+      demandSetInlineImgWidth(img, Math.max(DEM_INLINE_MIN_W, Math.min(maxW, startW + ev.clientX - startX)));
+    }
+    function up(){
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      try{ host.focus(); }catch(err){ /* noop */ }
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  });
+  host.addEventListener("keydown", function(e){
+    var handle = e.target.closest ? e.target.closest("[data-dem-img-resize]") : null;
+    if(!handle || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+    e.preventDefault();
+    var img = handle.closest("[data-dem-fig]").querySelector("img");
+    if(!img) return;
+    var cur = Math.round(img.getBoundingClientRect().width) || demandInlineWidth(img.getAttribute("data-dem-inline-w")) || 320;
+    var maxW = Math.max(DEM_INLINE_MIN_W, (host.clientWidth || 640) - 10);
+    demandSetInlineImgWidth(img, Math.max(DEM_INLINE_MIN_W, Math.min(maxW, cur + (e.key === "ArrowRight" ? 16 : -16))));
+  });
+}
+/* 上传前把 DOM 里的 pending 临时键对齐到待上传队列：删除过的图片不再上传 */
+function demandCommitPendingImages(){
+  var alive = {};
+  dDesc.querySelectorAll("[data-dem-inline-pending]").forEach(function(img){
+    alive[img.getAttribute("data-dem-inline-pending")] = 1;
+  });
+  demandDescPending = demandDescPending.filter(function(it){
+    if(alive[it.key]) return true;
+    try{ URL.revokeObjectURL(it.url); }catch(e){ /* noop */ }
+    return false;
+  });
+  return demandDescPending.slice();
+}
+function demandClearPendingImages(){
+  demandDescPending.forEach(function(it){
+    try{ URL.revokeObjectURL(it.url); }catch(e){ /* noop */ }
+  });
+  demandDescPending = [];
+}
+/* 新建/编辑表单：还没有需求 ID，先以 objectURL 占位插进编辑器，提交时再统一上传 */
+function demandUpdateDescCount(){
+  var el = $("dDescCount");
+  if(!el || !dDesc) return 0;
+  var n = demandDescText(demandSerializeRichText(dDesc)).length;
+  el.textContent = n + "/" + DEM_DESC_MAX;
+  el.classList.toggle("is-over", n > DEM_DESC_MAX);
+  return n;
+}
+function demandInsertFormFigures(files){
+  if(!dDesc) return;
+  var imgs = (files || []).filter(function(f){
+    return /^image\//.test(f.type || "") || /\.(jpe?g|png|gif|webp)$/i.test(f.name || "");
+  });
+  if(imgs.length < (files || []).length){
+    toast("描述只支持图片；其它文件请放到下方「附件」", "warn");
+  }
+  if(!imgs.length) return;
+  var res = validateFiles(imgs, demandDescPending.length);
+  reportRejected(res.rejected);
+  if(!res.ok.length) return;
+  /* 粘贴/拖入时保留光标位置；点按钮时选区不在编辑器里，统一追加到末尾 */
+  var sel = window.getSelection();
+  var range = null;
+  if(sel && sel.rangeCount){
+    var r = sel.getRangeAt(0);
+    if(dDesc.contains(r.startContainer) && dDesc.contains(r.endContainer)) range = r;
+  }
+  res.ok.forEach(function(f){
+    var key = "p" + (++demandDescPendingSeq);
+    var url = "";
+    try{ url = URL.createObjectURL(f); }catch(e){ /* 无预览图也不影响上传 */ }
+    demandDescPending.push({ key:key, file:f, url:url });
+    var img = document.createElement("img");
+    img.className = "dem-inline-img";
+    img.setAttribute("data-dem-inline-pending", key);
+    img.setAttribute("data-dem-inline-name", f.name || "图片");
+    if(url) img.setAttribute("src", url);
+    img.setAttribute("alt", f.name || "图片");
+    img.title = "提交后上传；拖动右下角可缩放";
+    var fig = demandEnsureInlineFigure(img);
+    if(range){
+      range.deleteContents();
+      range.insertNode(fig);
+      range.setStartAfter(fig);
+      range.collapse(true);
+    }else{
+      dDesc.appendChild(fig);
+    }
+  });
+  if(range){
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }else{
+    demandFocusEnd(dDesc);
+  }
+  demandUpdateDescCount();
+}
+/* 把描述里的 pending:临时键 换成上传后的 att:附件ID，宽度原样保留 */
+function demandReplacePendingTokens(text, mapping){
+  return String(text || "").replace(DEM_DESC_PENDING_RE, function(all, name, key, width){
+    var att = mapping[key];
+    return att ? demandDescImgToken(att, width) : "";
+  });
+}
+function demandUploadPendingImages(demandId, pending){
+  var mapping = {}, failed = 0;
+  var chain = Promise.resolve();
+  pending.forEach(function(it){
+    chain = chain.then(function(){
+      return uploadAttachment("/api/demands/" + encodeURIComponent(demandId) + "/attachments", it.file)
+        .then(function(att){ if(att && att.id) mapping[it.key] = att; else failed++; },
+              function(){ failed++; });
+    });
+  });
+  return chain.then(function(){
+    demandClearPendingImages();
+    return { mapping: mapping, failed: failed };
+  });
+}
+function demandReportImageUpload(okCount, failed){
+  if(failed) toast("图片上传：" + okCount + " 张成功，" + failed + " 张失败", "warn");
 }
 /* ---------- 需求详情就地编辑 ----------
    文案（标题/描述/验收）点开即改，失焦或 ⌘/Ctrl+Enter 保存、Esc 还原；
@@ -4804,8 +5239,15 @@ function demandStartTextEdit(el, ctx, field){
   if(isClosedDemand(ctx.d)){ toast("已关闭的需求不能直接编辑", "warn"); return; }
   if(field === "title" && ctx.d.status !== "review") return;
   /* 描述带内嵌图片：编辑态直接把图片还原成 <img>，失焦后再序列化回标记片段 */
-  if(field === "desc" && demandFieldValue(ctx.d, "desc")) el.innerHTML = demandDetailHTML(ctx.d.description);
-  else el.textContent = demandFieldValue(ctx.d, field);
+  if(field === "desc"){
+    var descVal = demandFieldValue(ctx.d, "desc");
+    if(descVal) el.innerHTML = demandDetailHTML(descVal);
+    else el.textContent = "";
+    demandWrapInlineImages(el);
+    demandBindInlineImageResize(el);
+  }else{
+    el.textContent = demandFieldValue(ctx.d, field);
+  }
   el.setAttribute("contenteditable", "true");
   el.setAttribute("role", "textbox");
   el.setAttribute("aria-multiline", field === "title" || field === "source" ? "false" : "true");
@@ -5203,7 +5645,7 @@ function applyDemandAiSplit(){
     if(r.skipped) msg += "，跳过 " + r.skipped + " 个已有的同名项";
     msg += aiApplyFailText(r.failed, "个");
     toast(msg, r.failed && r.failed.length ? "warn" : "fs");
-    loadDemandTasks(ctx.layer, ctx.demand.id, ctx.demand.versionId);
+    refreshDemandWork(ctx.layer, ctx.demand.id, ctx.demand.versionId);
   }).catch(function(ex){
     btn.disabled = false;
     toast(aiErrMsg(ex && ex.message), "bad");
@@ -5398,7 +5840,7 @@ function renderDemandDetail(d, opts){
     +       '<div class="read-card-head"><h3>需求描述</h3>'
     +         (canEditText ? '<span class="dem-desc-tools">'
     +           '<input type="file" id="demDescImgFile" class="dem-comment-file" accept="image/*" multiple>'
-    +           '<button class="btn sm ghost" type="button" data-dem-desc-img title="插入图片：也可以直接在描述里粘贴或拖入">'
+    +           '<button class="btn sm ghost" type="button" data-dem-desc-img title="插入图片：也可以直接在描述里粘贴或拖入；选中图片后拖动右下角调整大小">'
     +             '<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.2" width="14" height="11.6" rx="2"/><circle cx="7.4" cy="8" r="1.4"/><path d="m3.6 13.4 3.8-3.4 3 2.6 2.4-2.2 3.6 3.4"/></svg>'
     +             ' 插入图片</button></span>' : '')
     +       '</div>'
@@ -5422,6 +5864,11 @@ function renderDemandDetail(d, opts){
     +         '</span>'
     +         '<button class="link-btn" type="button" data-demand-goto="delivery">查看交付证据</button></div>'
     +       '<ul class="read-activity demand-overview-tasks" id="demandOverviewTasks"><li class="read-empty">加载关联工作项…</li></ul>'
+    +     '</section>'
+    +     '<section class="read-card">'
+    +       '<div class="read-card-head"><h3>工时</h3><span class="read-cnt" id="demandHoursMeta"></span>'
+    +         '<button class="link-btn" type="button" data-demand-goto="delivery">按工作项查看</button></div>'
+    +       '<div class="dem-hours" id="demandHoursBody"><p class="read-empty">加载中…</p></div>'
     +     '</section>'
     +     '<section class="read-card">'
     +       '<div class="read-card-head"><h3>最近记录</h3><button class="link-btn" type="button" data-demand-goto="records">查看全部</button></div>'
@@ -5580,6 +6027,8 @@ function renderDemandDetail(d, opts){
           img.setAttribute("src", attUrl(att.id));
           img.setAttribute("alt", att.filename || "图片");
           img.setAttribute("title", "点击查看大图");
+          /* 包一层缩放框：插入后即可拖动右下角调整大小 */
+          var fig = demandEnsureInlineFigure(img);
           var sel = window.getSelection();
           var range = null;
           /* 只在仍处于编辑态时按光标插入；已失焦就追加到末尾，避免把选区抢回旧输入框 */
@@ -5589,13 +6038,13 @@ function renderDemandDetail(d, opts){
           }
           if(range){
             range.deleteContents();
-            range.insertNode(img);
-            range.setStartAfter(img);
+            range.insertNode(fig);
+            range.setStartAfter(fig);
             range.collapse(true);
             sel.removeAllRanges();
             sel.addRange(range);
           }else{
-            descEl.appendChild(img);
+            descEl.appendChild(fig);
           }
           inserted++;
         }, function(){ failed++; });
@@ -5619,6 +6068,8 @@ function renderDemandDetail(d, opts){
   layer.addEventListener("focusout", function(e){
     var textEl = e.target && e.target.closest ? e.target.closest("[data-dem-text]") : null;
     if(!textEl || !textEl.isContentEditable) return;
+    /* 缩放手柄/移除按钮在编辑框内部，焦点落到它们身上不算离开正文 */
+    if(e.relatedTarget && textEl.contains(e.relatedTarget)) return;
     demandFinishTextEdit(textEl, detailCtx, textEl.dataset.demText, true);
   });
   layer.addEventListener("keydown", function(e){
@@ -5776,7 +6227,7 @@ function renderDemandDetail(d, opts){
         reqId: d.reqId, demandId: d.id, versionIds: d.status === "plan" && d.versionId ? [d.versionId] : [],
         startDate: d.plannedStart, dueDate: d.plannedEnd || d.expectDate,
         categoryId: d.categoryId || null,
-        onClose: function(){ loadDemandTasks(layer, id, d.versionId); }
+        onClose: function(){ refreshDemandWork(layer, id, d.versionId); }
       });
       return;
     }
@@ -5815,7 +6266,7 @@ function renderDemandDetail(d, opts){
     }
     var ot = e.target.closest("[data-open-task]");
     if(ot){
-      openTaskById(ot.dataset.openTask, { onClose: function(){ loadDemandTasks(layer, id, d.versionId); } });
+      openTaskById(ot.dataset.openTask, { onClose: function(){ refreshDemandWork(layer, id, d.versionId); } });
       return;
     }
     var pv = e.target.closest("[data-att-prev]");
@@ -5957,7 +6408,7 @@ function renderDemandDetail(d, opts){
   }
   UI.openModal(layer, "[data-dem-x]");
   if(opts && opts.tab && layer.querySelector('[data-dem-tab="' + opts.tab + '"]')) setDemandTab(opts.tab);
-  loadDemandTasks(layer, id, d.versionId);
+  refreshDemandWork(layer, id, d.versionId);
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
   loadDemandJudgements(layer, id);
@@ -6083,6 +6534,28 @@ if($("dlgDemand")) $("dlgDemand").addEventListener("click", function(e){
   }
 });
 if(dTitle) dTitle.addEventListener("input", function(){ fDemandTitle.classList.remove("invalid"); });
+/* 描述：可粘贴/拖入图片；图片选中后可拖动右下角等比缩放，宽度写进描述标记 */
+if(dDesc){
+  demandBindInlineImageResize(dDesc);
+  bindFileDrop($("fDemandDesc") || dDesc, demandInsertFormFigures, { paste:true, pasteTarget:dDesc });
+  dDesc.addEventListener("input", demandUpdateDescCount);
+}
+/* 表单附件：只收集待传文件，提交成功后再挂到需求上 */
+if($("fDemandAttsMount")){
+  demandAttKit = createAttachKit({
+    mount: $("fDemandAttsMount"),
+    compact: true,
+    label: "点击选择附件"
+  });
+}
+if($("dDescImgBtn") && $("dDescImgFile")){
+  $("dDescImgBtn").addEventListener("click", function(){ $("dDescImgFile").click(); });
+  $("dDescImgFile").addEventListener("change", function(){
+    var input = $("dDescImgFile");
+    if(input.files && input.files.length) demandInsertFormFigures(Array.prototype.slice.call(input.files));
+    input.value = "";
+  });
+}
 if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){
   var b = e.target.closest("[data-dpri]");
   if(!b) return;

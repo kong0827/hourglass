@@ -250,20 +250,15 @@ function initAnalysisTabs(){
     period.addEventListener("change", function(){ applyAnalysisPeriod(period.value); });
   }
 }
-/* 报表三个页签共用 #view-analysis：页头标题随页签走，与原型「每屏一个 H1」一致；
+/* 统计 / 完成记录 / 流程体检 是「运营概览」的页内页签：页头标题固定为运营概览；
    新建入口对报表无意义，桌面与 FAB 一并隐藏。 */
-function syncAnalysisPageHead(tab){
+function syncAnalysisPageHead(){
   if(document.body.dataset.view !== "analysis") return;
-  var meta = {
-    stats: { title:"趋势与分布", sub:"交付与投入的统计口径 · 趋势按周聚合" },
-    completions: { title:"完成记录", sub:"工作项移入「已完成」时归档 · 自 2026-11 起按月" },
-    flow: { title:"流程体检", sub:"列停留与回退按近 90 天计算" }
-  }[tab] || { title:"趋势与分布", sub:"交付与投入的统计口径 · 趋势按周聚合" };
   var title = $("pageTitleText"), sub = $("pageSub"), nw = $("newWrap");
-  if(title) title.textContent = meta.title;
-  if(sub) sub.textContent = meta.sub;
+  if(title) title.textContent = "运营概览";
+  if(sub) sub.textContent = "统计、完成记录与流程体检";
   if(nw) nw.hidden = true;
-  document.title = meta.title + " · 沙漏";
+  document.title = "运营概览 · 沙漏";
 }
 function setAnalysisTab(tab, opts){
   if(tab !== "completions" && tab !== "flow") tab = "stats";
@@ -273,18 +268,14 @@ function setAnalysisTab(tab, opts){
     b.classList.toggle("on", on);
     b.setAttribute("aria-selected", on ? "true" : "false");
   });
-  /* 全局子导航与页内页签同源：从旧 hash 或周期切换回来时保持高亮一致 */
-  document.querySelectorAll("#subNav [data-sub-tab]").forEach(function(b){
-    var on = b.dataset.subTab === tab;
-    b.classList.toggle("on", on);
-    if(on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
-  });
   document.querySelectorAll("#view-analysis [data-analysis-pane]").forEach(function(p){
     p.hidden = p.dataset.analysisPane !== tab;
   });
-  /* 完成记录按月归档，周期选择对它没有作用：本页不显示这条工具条，避免出现无效控件 */
-  var bar = document.querySelector("#view-analysis .analysis-bar");
-  if(bar) bar.hidden = tab === "completions";
+  /* 完成记录按月归档，周期选择对它没有作用：只收起周期控件，页签本身要一直可见 */
+  var periodWrap = document.querySelector("#view-analysis .analysis-bar > label");
+  if(periodWrap) periodWrap.hidden = tab === "completions";
+  var periodNote = $("analysisPeriodNote");
+  if(periodNote) periodNote.hidden = tab === "completions";
   syncAnalysisPageHead(tab);
   if(!opts || !opts.noLoad) refreshAnalysisTab(!!(opts && opts.silent));
 }
@@ -440,12 +431,13 @@ function renderStatsHours(c){
   var base = (scope === "all") ? (all === null ? mine : all) : mine;
   var week = (scope === "all") ? (allWeek === null ? mineWeek : allWeek) : mineWeek;
   var doneCount = c.done || 0;
-  /* 0 分钟不是缺失值：直接显示 0m，避免三张卡同时出现「—」像加载失败 */
-  var hoursValue = function(m){ return m ? fmtMinutesShort(m) : "0m"; };
+  /* 0 分钟不是缺失值，也不带单位（「0m」像有数据）；不足 1 小时统一写「<1h」，与小时口径同轨 */
+  var hoursValue = function(m){ return m ? (m < 60 ? "<1h" : fmtMinutesShort(m)) : "0"; };
+  var avgMinutes = (doneCount && base) ? Math.round(base / doneCount) : 0;
   var cards = [
     {k:"累计工时", v:hoursValue(base), drill:"total"},
     {k:"本周工时", v:hoursValue(week), drill:"week"},
-    {k:"平均每项", v:(doneCount && base) ? fmtMinutesShort(Math.round(base / doneCount)) : "—"}
+    {k:"平均每项", v:avgMinutes ? (avgMinutes < 60 ? "<1h" : fmtMinutesShort(avgMinutes)) : "—"}
   ];
   statsHoursEl.innerHTML = cards.map(function(x){
     var tag = x.drill ? "button" : "div";

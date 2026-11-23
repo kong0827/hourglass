@@ -5,7 +5,7 @@ import { $, viewTitle } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
-import { setReturnOrigin } from "../core/router.js";
+import { activeView, setReturnOrigin } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { canEditReq, canManageProject, catNameById, dueState, projectOptionsHTML, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -15,8 +15,11 @@ import { PRIORITIES, assocLinkHTML, avatarHTML, demandNoText, fmtMinutesShort, i
 import { companyChipHTML } from "../lib/company.js";
 import { DEFAULT_ROLE_TITLES, loadMemberLabelOptions, effectiveMemberRole, memberRoleTitles, labelFilterOption, labelFilterText } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
+import { gitEnabled } from "./branches.js";
 import { milestoneEvidence, milestoneKindName, milestoneStatusTag, openMilestoneDetail } from "../lib/milestone-ui.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
+import { stagePanelHTML, stageDrillRows, openStageDrill } from "../lib/stage-panel.js";
+import { summarizeStages } from "../lib/stage-hours.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } from "./manager-shared.js";
 
 registerHelp({
@@ -135,8 +138,15 @@ function setPageTitle(text){
   if(ph) ph.textContent = text;
   document.title = text + " · 沙漏";
 }
+/* 未接入 Git 的空间不露出分支入口 */
+var gitOn = false;
 function enterProjectView(){
   effectiveMode = null;
+  gitEnabled().then(function(on){
+    if(on === gitOn) return;
+    gitOn = on;
+    if(activeView === "project" && cache) renderProject();
+  });
   listPrefs.load(VIEW_KEY).then(function(){
     if(rt.reqsLoaded) loadProject();
     else loadReqs().then(loadProject);
@@ -187,6 +197,40 @@ function loadProject(opts){
     if(current !== seq || wsId !== workspaceId() || selected.id !== rt.managerProjectId) return;
     cache = data; renderProject();
   }).catch(function(ex){ if(current === seq && wsId === workspaceId() && selected.id === rt.managerProjectId) body.innerHTML = UI.errorState(ex.message); });
+}
+/* ---------- 阶段投入：与版本页同一份口径，只换范围 ---------- */
+var stageMode = "actual";
+function projectStageList(){
+  return (cache && cache.tasks ? cache.tasks : []).filter(function(t){ return t.itemType !== "epic"; });
+}
+function projectStagePanelHTML(){
+  var list = projectStageList();
+  var s = summarizeStages(list);
+  var name = (cache && cache.project && cache.project.name) || "";
+  return stagePanelHTML({
+    stage:s, mode:stageMode, title:"阶段投入",
+    sub:"全部工作项 " + s.items + " 项 · " + s.timed + " 项有计时 · 史诗不计入",
+    scope:"项目 · " + name,
+    denomLabel:"本项目实际工时"
+  });
+}
+function repaintProjectStage(){
+  var box = document.getElementById("projectStagePanel");
+  if(!box) return;
+  box.innerHTML = projectStagePanelHTML();
+}
+function openProjectStageDrill(el){
+  var key = el && el.dataset ? el.dataset.stageDrill : "";
+  if(!key) return;
+  var list = projectStageList();
+  var rows = stageDrillRows(list, {
+    catName:function(id){ return catNameById(id) || "未分类"; }
+  });
+  openStageDrill({
+    scopeLabel:"项目 · " + ((cache && cache.project && cache.project.name) || ""),
+    stageKey:key,
+    rows:rows
+  });
 }
 function metric(label, value, foot, kind, help){
   var mark = help ? caliberMarkHTML(help.key, !!help.warn, "查看「" + label + "」口径") : "";
@@ -471,7 +515,7 @@ function projectMemberTasks(key){
 function exportProjectMembers(){
   if(!cache) return;
   var rows = [["项目成员负载", cache.project.name], ["公司", memberFilter.companyName === "__unset__" ? "未设公司" : labelFilterText(memberFilter.companyName) || "全部公司", "角色", memberFilter.roleTitle === "__unset__" ? "未设角色" : labelFilterText(memberFilter.roleTitle) || "全部角色"], [],
-    ["成员","公司","空间默认岗位","项目有效角色（主+兼岗）","未完成工作项","剩余预估(小时)","测试剩余(小时)","本周已计(小时)","负载"]];
+    ["成员","公司","空间默认岗位","项目有效角色（主+兼岗）","未完成工作项","待完成预估(小时)","测试待完成(小时)","本周已计(小时)","负载"]];
   var members = filteredProjectMembers();
   members.forEach(function(m){ rows.push([m.name,m.companyName || "未设公司",m.jobTitle || "",memberRoleTitles(m).join(" / "),m.taskCount,hoursNum(m.remainingMinutes),hoursNum(m.testRemainingMinutes),hoursNum(m.actualWeekMinutes),m.loadPct + "%"]); });
   rows.push([], ["成员","工作项","状态","截止","预估(小时)","实际(小时)"]);
@@ -573,6 +617,7 @@ function deliveryPanel(p){
     + card("docs", "文档", valueOf("docs"), footOf("docs", "加载中", "加载失败") || "需求 / 方案文档")
     + card("tests", "测试用例", valueOf("cases"), casesFoot())
     + card("versions", "版本", valueOf("versions"), footOf("versions", "加载中", "加载失败") || "首版 / 迭代")
+    + (gitOn ? card("branches", "分支", valueOf("branches"), footOf("branches", "加载中", "加载失败") || "代码分支 · 进行中") : "")
     + '</div></section>';
 }
 /* ---------- 项目里程碑：状态由版本发布证据 / 工作项状态 / 人工确认推导 ---------- */
@@ -905,7 +950,6 @@ function moduleRisk(row){
   var tags = [];
   if(row.overdue) tags.push('<span class="mini-tag over">逾期 ' + row.overdue + '</span>');
   if(row.blocked) tags.push('<span class="mini-tag warn">阻塞 ' + row.blocked + '</span>');
-  if(!tags.length && row.total && row.done === row.total) tags.push('<span class="mini-tag ok">已完成</span>');
   return tags.length ? tags.join("") : "—";
 }
 function moduleTasksOf(id){
@@ -1005,7 +1049,7 @@ function modulePanel(p, m, c){
     + '<details class="manager-caliber project-modules-caliber"><summary>口径</summary><div>'
     + '分类指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；窗口内 / 外按测试窗口（提测 → 测试结束）内的计时拆分，窗口外含评审、设计、开发、运维等全部其余计时，窗口内 + 外 = 实际工时；偏差只取已完成且填了预估的工作项。'
     + 'Σ分类 + 未分类 = 项目合计；项目整体进度仍按全部工作项计算，不是分类百分比的平均。</div></details>'
-    + (canWrite ? '<button class="btn sm primary" type="button" data-module-add>+ 添加分类</button>' : '')
+    + (canWrite ? '<button class="btn sm" type="button" data-module-add>+ 添加分类</button>' : '')
     + '</div></div>'
     + '<div class="tbl-wrap"><table class="manager-tbl project-modules-tbl"><thead><tr>'
     + '<th>分类</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">窗口外</th><th class="num">窗口内</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
@@ -1039,9 +1083,15 @@ function deleteModule(id){
     loadProject({ silent:true });
   }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
 }
-function loadProjectDelivery(p){  if(!p || !p.id || deliveryCache[p.id]) return;
-  deliveryCache[p.id] = {};
+function loadProjectDelivery(p){
+  if(!p || !p.id) return;
   var id = p.id;
+  var cached = deliveryCache[id];
+  /* 分支入口依赖 Git 探测：结果晚到时只补分支计数，其余资源已缓存就不再重拉 */
+  var needBranch = gitOn && (!cached || cached.branches === undefined);
+  if(cached && !needBranch) return;
+  var first = !cached;
+  if(first) deliveryCache[id] = {};
   function paint(){
     var box = document.querySelector('[data-project-open="docs"]');
     if(!box || rt.managerProjectId !== id || currentMode() !== "board") return;
@@ -1063,6 +1113,11 @@ function loadProjectDelivery(p){  if(!p || !p.id || deliveryCache[p.id]) return;
       verBtn.querySelector("b").textContent = data.versions;
       verBtn.querySelector("small").textContent = "首版 / 迭代";
     }
+    var brBtn = panel.querySelector('[data-project-open="branches"]');
+    if(brBtn && data.branches !== null && data.branches !== undefined){
+      brBtn.querySelector("b").textContent = data.branches;
+      brBtn.querySelector("small").textContent = "代码分支 · 进行中";
+    }
   }
   function fail(kind, ex){
     deliveryCache[id] = deliveryCache[id] || {};
@@ -1072,6 +1127,14 @@ function loadProjectDelivery(p){  if(!p || !p.id || deliveryCache[p.id]) return;
     var btn = panel.querySelector('[data-project-open="' + (kind === "cases" ? "tests" : kind) + '"]');
     if(btn){ btn.querySelector("b").textContent = "—"; btn.querySelector("small").textContent = ex.message || "加载失败"; }
   }
+  if(needBranch){
+    API.get("/api/branches/board", { project: id, outcome: "open", limit: 1 }).then(function(board){
+      var counts = (board && board.counts) || {};
+      deliveryCache[id].branches = counts.all || 0;
+      paint();
+    }).catch(function(ex){ fail("branches", ex); });
+  }
+  if(!first) return;
   API.getAllPages("/api/req-docs", {}).then(function(rows){
     var n = rows.filter(function(d){ return d.reqId === id; }).length;
     deliveryCache[id].docs = n; paint();
@@ -1788,6 +1851,7 @@ function renderProject(){
     + metric("预估工时合计", fmtHours(m.estimateMinutes), "剩余 " + fmtHours(m.remainingMinutes), "estimate", {key:"project.estimate"})
     + metric("实际投入", fmtHours(m.actualMinutes), "窗口外 " + fmtHours(m.devMinutes) + " · 窗口内 " + fmtHours(m.testMinutes), "actual", {key:"project.actual"})
     + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance", {key:"project.variance", warn:true}) + '</div>'
+    + '<div id="projectStagePanel">' + projectStagePanelHTML() + '</div>'
     + modulePanel(p, m, c)
     + projectContentPanel()
     + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>工作项分布</b><span>' + total + ' 个工作项</span></div>'
@@ -1807,7 +1871,7 @@ function renderProject(){
   var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>（开发剩余 + 测试剩余）÷（容量窗口工作日 × 各成员每日容量，未设置按 ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
     + memberLabelFilters(cache.members || [], memberFilter, "project-member")
     + '<p class="roster-note">角色匹配本项目有效主角色或兼岗；下钻与导出使用相同成员范围。</p><button class="btn sm" type="button" data-project-member-export>导出当前成员负载</button>'
-    + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
+    + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">待完成预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
     + memberRows(filteredProjectMembers()) + '</tbody></table></div></section>';
   /* 四个分区改为顺序分组：分组标题即原先的页内 Tab，导航只保留侧栏 + 二级导航两层 */
   $("projectBody").innerHTML = toolbar + overview + epicsPanel + membersPanel + rosterPanel();
@@ -2069,6 +2133,10 @@ function metricTasks(kind){
   return rows;
 }
 function onClick(e){
+  var stageModeBtn = e.target.closest("[data-stage-mode]");
+  if(stageModeBtn){ stageMode = stageModeBtn.dataset.stageMode; repaintProjectStage(); return; }
+  var stageDrill = e.target.closest("[data-stage-drill]");
+  if(stageDrill){ openProjectStageDrill(stageDrill); return; }
   var switchBtn = e.target.closest("#btnProjectSwitch");
   if(switchBtn){ openProjectSwitch(switchBtn); return; }
   if(e.target.closest("[data-empty-action]")){ loadProject(); return; }
@@ -2112,6 +2180,12 @@ function onClick(e){
           if(mod && mod.setReqDocProjectFilter) mod.setReqDocProjectFilter(pid);
           go("requirements");
         });
+      }
+      if(kind === "branches"){
+        var h = "#/branches?project=" + encodeURIComponent(pid);
+        try{ history.pushState(null, "", h); }catch(e){ try{ window.location.hash = h; }catch(e2){ /* noop */ } }
+        go("branches");
+        return;
       }
       return m.loadView("testcases").then(function(mod){
         if(mod && mod.setTcProject) mod.setTcProject(pid);
@@ -2297,6 +2371,8 @@ function onKeydown(e){
     return;
   }
   if(e.key !== "Enter" && e.key !== " ") return;
+  var stageRow = e.target.closest ? e.target.closest("tr[data-stage-drill]") : null;
+  if(stageRow && stageRow === e.target){ e.preventDefault(); openProjectStageDrill(stageRow); return; }
   var row = e.target.closest ? e.target.closest("tr[data-open-task]") : null;
   if(row && row === e.target){ e.preventDefault(); openTaskById(row.dataset.openTask); return; }
   var memberRow = e.target.closest ? e.target.closest("tr[data-member-key]") : null;

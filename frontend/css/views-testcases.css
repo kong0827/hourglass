@@ -20,6 +20,7 @@
 .tc-filter-toggle{display:none;}
 /* 筛选面板收起时，按钮上仍显示生效条件数 */
 .tc-filter-toggle .n{min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);background:var(--primary);color:var(--primary-fg);font-size:11px;line-height:16px;text-align:center;font-variant-numeric:tabular-nums;}
+.tc-def-toggle{display:none;}
 .tc-stats{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px;}
 .tc-stat{display:inline-flex;align-items:baseline;gap:6px;padding:6px 12px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--border);font-size:12px;color:var(--text-2);}
 .tc-stat b{font-size:16px;font-weight:650;color:var(--text);}
@@ -119,8 +120,8 @@
 .view.tc-single .tc-row:hover{background:var(--surface-hover);border-color:transparent;box-shadow:none;}
 .view.tc-single .tc-row.is-selected{background:var(--primary-soft);box-shadow:inset 0 0 0 1px var(--primary-border);}
 .view.tc-single .tc-title{font-size:12.5px;line-height:18px;}
-.view.tc-single .tc-meta{font-size:10.5px;line-height:14px;margin-top:1px;gap:7px;}
-.view.tc-single .tc-meta em{font-size:10px;}
+.view.tc-single .tc-meta{font-size:11px;line-height:14px;margin-top:1px;gap:7px;}
+.view.tc-single .tc-meta em{font-size:11px;}
 /* 原型表里没有行内操作列：悬停或键盘进入时再出现，列表保持干净的表格阅读节奏。
    操作列固定 130px（不再按行内按钮撑宽），动作按钮浮在行右端，不参与列宽计算 */
 .view.tc-single .tc-row:not(.plan-case),.view.tc-single .tc-thead{grid-template-columns:18px 50px minmax(0,1fr) 96px 66px 84px 76px 46px 130px;}
@@ -302,7 +303,7 @@
 /* 需求名与其余列一同垂直居中：状态挂在名称下方，整块在行内居中 */
 .cov-name{display:flex;flex-direction:column;justify-content:center;gap:1px;min-width:0;}
 .cov-name b{font-size:12.5px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.cov-name small{font-size:10.5px;color:var(--text-3);}
+.cov-name small{font-size:11px;color:var(--text-3);}
 .cov-pass{color:var(--success-fg);}
 .cov-fail{color:var(--danger-fg);}
 .cov-block{color:var(--warning-fg);}
@@ -353,13 +354,19 @@
 /* 缺陷 tab：一条缺陷一行，默认未关闭、按严重度排序 */
 #tcModeSeg button{display:inline-flex;align-items:center;gap:5px;}
 /* 原型 subtabs 的计数是中性小字，不用红色药丸抢占注意 */
-.tc-tabcount{display:inline-flex;align-items:center;justify-content:center;min-width:0;height:auto;padding:0;border:0;background:none;color:#98A2B3;font-size:10px;font-weight:500;font-variant-numeric:tabular-nums;}
+.tc-tabcount{display:inline-flex;align-items:center;justify-content:center;min-width:0;height:auto;padding:0;border:0;background:none;color:#98A2B3;font-size:11px;font-weight:500;font-variant-numeric:tabular-nums;}
 .subnav-item.on .tc-tabcount{color:var(--primary-fg);}
 .subnav-item .tc-tabcount{margin-left:4px;}
 .tc-tabcount[hidden]{display:none;}
 .tc-defbar{margin:0 0 10px;padding:0;}
 .tc-defbar .tc-search{flex:1 1 180px;width:auto;min-width:150px;}
 .tc-defbar #tcDefReq{max-width:180px;}
+/* 常用筛选（项目/状态/负责人/优先级）常驻，其余收进「更多筛选」；手机端整个筛选区收进开关 */
+.tc-def-more{display:inline-flex;align-items:center;gap:5px;}
+.tc-def-more .n{min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);background:var(--primary);color:var(--primary-fg);font-size:11px;line-height:16px;text-align:center;font-variant-numeric:tabular-nums;}
+.tc-defbar.is-expanded .tc-def-more{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.tc-defbar .def-more-only{display:none;}
+.tc-defbar.is-expanded .def-more-only{display:inline-flex;}
 /* 计划页只保留搜索与状态：项目范围在公共 tcReq，与用例/矩阵/报告同一位置 */
 .tc-planbar{margin:0 0 10px;padding:0;}
 .tc-planbar .tc-search{flex:1 1 220px;width:auto;min-width:160px;}
@@ -392,9 +399,9 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 .tc-def-no{text-align:right;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .tc-def-pri{display:inline-flex;align-items:center;min-width:0;}
 .tc-def-pri .pdot{font-size:12px;white-space:nowrap;}
-.tc-def-head{height:34px;padding:0 14px;background:#F9FAFB;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:.01em;color:var(--text-3);font-weight:550;}
+.tc-def-head{height:34px;padding:0 14px;background:var(--tbl-head);border-bottom:1px solid var(--border);font-size:11px;letter-spacing:.01em;color:var(--text-3);font-weight:550;}
 .tc-def-head .ta-r{text-align:right;}
-.tc-def-row{min-height:48px;border-bottom:1px solid #F2F4F7;cursor:pointer;}
+.tc-def-row{min-height:48px;border-bottom:1px solid var(--border);cursor:pointer;}
 .tc-def-row:last-child{border-bottom:none;}
 .tc-def-row:hover{background:var(--surface-hover);}
 .tc-def-row:focus-visible{outline:2px solid var(--primary-border);outline-offset:-2px;}
@@ -402,7 +409,7 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 /* 两行行高与「我的工作」同源：8 + 标题 18.6 + 6 + 副行 20 + 8 + 1 ≈ 62px */
 .tc-def-main{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px;}
 .tc-def-title{font-size:12.5px;font-weight:550;line-height:18px;color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.tc-def-sub{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10.5px;line-height:14px;min-height:14px;color:var(--text-3);}
+.tc-def-sub{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:11px;line-height:14px;min-height:14px;color:var(--text-3);}
 .tc-def-proj{display:inline-flex;align-items:center;max-width:150px;height:18px;padding:0 6px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface-sunken);color:var(--text-2);font-size:var(--fs-micro);font-weight:600;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none;}
 .tc-def-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--text-3);}
 .tc-def-st{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface-sunken);font-size:11px;font-weight:600;color:var(--text-2);white-space:nowrap;}
@@ -665,7 +672,7 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
   .view.tc-single .tc-row:not(.plan-case),.view.tc-single .tc-thead{grid-template-columns:18px 44px minmax(0,1fr) 64px;}
   .tc-c-owner,.tc-thead > :nth-child(7){display:none;}
   .tc-acts,.tc-thead > :nth-child(9){display:none !important;}
-  .tc-thead{padding:4px 10px 6px;font-size:10.5px;}
+  .tc-thead{padding:4px 10px 6px;font-size:11px;}
   .tc-row{padding:6px 10px;}
   /* 手机布局下行内边距由 mobile.css 收到 12px，表头跟着走，否则两边的首列差 2px */
   [data-layout="mobile"] .tc-thead{padding:4px 12px 6px;gap:8px;}
@@ -1074,7 +1081,7 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 .rep-kpi{display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:86px;padding:10px 14px;
   border:1px solid var(--border);border-radius:10px;background:var(--surface);}
 .rep-kpi .k{display:flex;align-items:baseline;gap:6px;font-size:11px;font-weight:600;color:var(--text-3);}
-.rep-kpi .k-sub{font-size:10.5px;font-weight:500;color:var(--text-3);}
+.rep-kpi .k-sub{font-size:11px;font-weight:500;color:var(--text-3);}
 .rep-kpi .v{font-size:22px;font-weight:650;line-height:1.15;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 .rep-kpi .v small{font-size:12px;font-weight:600;color:var(--text-3);margin-left:1px;}
 .rep-kpi .f{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
@@ -1358,7 +1365,7 @@ button.col-name:focus-visible{outline:none;border-radius:var(--r-xs);box-shadow:
 .vl-search input::placeholder{color:var(--text-3);}
 .vl-sort{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);white-space:nowrap;}
 .vl-head,.vl-row{
-  display:grid;grid-template-columns:minmax(220px,1.7fr) 160px minmax(150px,1.2fr) 128px 136px;
+  display:grid;grid-template-columns:minmax(220px,1.7fr) 160px minmax(150px,1.2fr) 200px 128px 136px;
   column-gap:var(--space-4);align-items:center;padding:10px 14px;
 }
 .vl-head{font-size:11px;font-weight:600;color:var(--text-3);background:var(--surface-sunken);border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
@@ -1446,17 +1453,24 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
 .ver-row-menu .menu-title{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 @media (max-width:1180px){
-  .vl-head,.vl-row{grid-template-columns:minmax(190px,1.6fr) 150px minmax(140px,1.1fr) 118px 126px;column-gap:10px;}
+  .vl-head,.vl-row{grid-template-columns:minmax(190px,1.6fr) 150px minmax(140px,1.1fr) 140px 118px 126px;column-gap:10px;}
+  .vstage-txt{display:none;}
+}
+/* 1100 以下阶段列整列收起，版本详情仍保留完整拆分 */
+@media (min-width:981px) and (max-width:1099px){
+  .vl-head,.vl-row{grid-template-columns:minmax(190px,1.6fr) 150px minmax(140px,1.1fr) 118px 126px;}
+  .vstage,.vl-stage-head{display:none;}
 }
 @media (max-width:980px){
   .vl-head{display:none;}
   .vl-row{
-    grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name name" "time rel" "prog acts";
+    grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name name" "time rel" "prog acts" "stage stage";
     row-gap:7px;padding:var(--space-3) 14px;
   }
   .vl-name{grid-area:name;}
   .vl-time{grid-area:time;}
   .vl-progress{grid-area:prog;}
+  .vstage{grid-area:stage;}
   .vl-rel{grid-area:rel;justify-self:end;}
   .vl-acts{grid-area:acts;justify-self:end;}
   .vl-toolbar{align-items:stretch;flex-direction:column;}
@@ -1469,7 +1483,7 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
   .vf-kpis{order:3;width:100%;padding:0;}
 }
 @media (max-width:700px){
-  .vl-row{grid-template-areas:"name name" "time time" "prog prog" "rel acts";}
+  .vl-row{grid-template-areas:"name name" "time time" "prog prog" "stage stage" "rel acts";}
   .vl-rel{justify-self:start;}
   .vl-date-edit .vl-input{width:104px;}
   .vl-tools .vl-sort{display:none;}

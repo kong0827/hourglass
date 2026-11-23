@@ -635,9 +635,59 @@ function syncTemplateHint(){
   if(hit && hit.docs && hit.docs.length) parts.push("文档：" + hit.docs.join(" / "));
   if(hit && hit.modules && hit.modules.length) parts.push("测试分类：" + hit.modules.join(" / "));
   if(hit && hit.versionName) parts.push("默认版本：" + hit.versionName);
+  if(hit && hit.sampleCount) parts.push("示例工作项：" + hit.sampleCount + " 条（可改名或删除）");
   rTemplateHint.textContent = parts.length
     ? "将补充 " + parts.join("；") + "。只补缺失项，不覆盖已有内容。"
     : (hit && hit.description) || "只创建项目本身，后续按需补充";
+}
+/* 场景模板建完后给一张 10 分钟路线：先看板，再落到交付说明，最后分享留痕。
+   不替用户判断业务，只把「下一步点哪里」递到手里。 */
+function showSampleOnboarding(project, code){
+  var tpl = (projectTemplates || []).filter(function(t){ return t.code === code; })[0];
+  if(!project || !tpl || !tpl.sampleCount) return;
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.innerHTML = '<div class="sheet md">'
+    + '<div class="sheet-head"><div style="flex:1 1 auto;min-width:0"><h2>10 分钟上手 · ' + esc(project.name || "") + '</h2>'
+    + '<div class="desc">已按「' + esc(tpl.name) + '」模板创建：' + tpl.sampleCount + ' 条示例工作项、'
+    + ((tpl.docs || []).length ? (tpl.docs || []).length + ' 份文档、' : '') + '1 个版本。</div></div>'
+    + '<button class="icon-btn sm" type="button" data-onb-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + '<div class="sheet-body"><ol class="onb-steps">'
+    + '<li><b>看板走一遍</b><span>打开看板，把一条卡片拖到下一列，熟悉状态流转与版本范围。</span></li>'
+    + '<li><b>生成第一份交付说明</b><span>打开交付说明，切到「管理版」，逐段确认后导出 PDF。事实由系统汇总，不用手写。</span></li>'
+    + '<li><b>分享并留痕</b><span>导出后生成只读链接，可设访问密码、域名白名单与水印，打开记录会留痕。</span></li>'
+    + '</ol><p class="foot-note">示例工作项都带「示例工作项」描述，可随时改名、归档或删除，不影响后续真实数据。</p></div>'
+    + '<div class="sheet-foot"><button class="btn" type="button" data-onb-close>稍后再说</button>'
+    + '<button class="btn" type="button" data-onb-board>打开看板</button>'
+    + '<button class="btn primary" type="button" data-onb-delivery>打开交付说明</button></div></div>';
+  layer.__uiOnClose = function(){ setTimeout(function(){ if(layer.parentNode) layer.parentNode.removeChild(layer); }, 0); };
+  document.body.appendChild(layer);
+  UI.openModal(layer);
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-onb-close]")){ UI.closeModal(layer); return; }
+    if(e.target.closest("[data-onb-board]")){ UI.closeModal(layer); showView("board"); return; }
+    if(e.target.closest("[data-onb-delivery]")){
+      var btn = e.target.closest("[data-onb-delivery]");
+      btn.disabled = true;
+      btn.textContent = "打开中…";
+      API.get("/api/versions", { reqId: project.id }).then(function(rows){
+        var v = (rows || [])[0];
+        if(!v) throw new Error("示例版本还没生成，请稍后在版本页查看");
+        return import("../core/view-loader.js").then(function(m){
+          return m.loadView("delivery").then(function(mod){
+            UI.closeModal(layer);
+            mod.openDeliveryNote(v.id, "");
+          });
+        });
+      }).catch(function(ex){
+        btn.disabled = false;
+        btn.textContent = "打开交付说明";
+        toast(ex.message || "打开交付说明失败", "bad");
+      });
+    }
+  });
 }
 function syncTemplateField(){
   if(!fReqTemplate) return;
@@ -1158,7 +1208,7 @@ function saveReq(){
   var seq = projectFormSeq;
   var p = editing ? API.put("/api/reqs/" + encodeURIComponent(rt.editingReqId), body) : API.post("/api/reqs", body);
   btnSaveReq.disabled = true;
-  p.then(function(){
+  p.then(function(created){
     toast(editing ? ("已更新项目「" + name + "」") : ("已新建项目「" + name + "」"), "fs");
     if(seq === projectFormSeq) resetReqForm();
     /* 新建项目后端会预置默认分类，分类字典要立即刷新，否则任务抽屉/筛选举不到 */
@@ -1166,6 +1216,7 @@ function saveReq(){
     loadReqs().then(function(){
       renderReqList();
       loadBoard({silent:true});
+      if(!editing) showSampleOnboarding(created, body.template);
     });
   }).catch(function(ex){
     if(seq === projectFormSeq) btnSaveReq.disabled = false;

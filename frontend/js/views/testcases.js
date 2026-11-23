@@ -1030,6 +1030,23 @@ function syncDefectFilters(){
   UI.markFiltered($("tcDefPub"), defPub === "all");
   UI.markFiltered($("tcDefCat"), defCat === "all");
   UI.markFiltered($("tcDefTag"), defTag === "all");
+  var activeN = (defReqId ? 1 : 0) + (defSeverity !== "all" ? 1 : 0) + (defPriority !== "all" ? 1 : 0)
+    + (defStatus !== "open" ? 1 : 0) + (defOwner !== "all" ? 1 : 0) + (defVersion !== "all" ? 1 : 0)
+    + (defPub !== "all" ? 1 : 0) + (defCat !== "all" ? 1 : 0) + (defTag !== "all" ? 1 : 0)
+    + (defSearch ? 1 : 0);
+  var badge = $("tcDefFilterCount");
+  if(badge){
+    badge.hidden = !activeN;
+    badge.textContent = activeN;
+  }
+  var hiddenN = (defSeverity !== "all" ? 1 : 0) + (defVersion !== "all" ? 1 : 0)
+    + (defPub !== "all" ? 1 : 0) + (defCat !== "all" ? 1 : 0) + (defTag !== "all" ? 1 : 0);
+  var moreBadge = $("tcDefMoreCount");
+  if(moreBadge){
+    moreBadge.hidden = !hiddenN;
+    moreBadge.textContent = hiddenN;
+  }
+  UI.markFiltered($("tcDefMoreBtn"), hiddenN > 0);
 }
 function filteredDefects(){
   var list = defects.filter(function(t){ return defectMatches(t, null); });
@@ -3110,8 +3127,10 @@ function syncTcSubnav(){
   if(document.body.dataset.view !== "testcases") return;
   var el = document.getElementById("subNav");
   if(!el) return;
+  /* 覆盖 / 报告是「测试计划」下的页签，全局导航仍停在测试计划 */
+  var tab = (tcMode === "coverage" || tcMode === "report") ? "plans" : tcMode;
   el.querySelectorAll("[data-sub-tab]").forEach(function(b){
-    var on = b.dataset.subTab === tcMode;
+    var on = b.dataset.subTab === tab;
     b.classList.toggle("on", on);
     if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
   });
@@ -3122,9 +3141,22 @@ function tcDomainScopeId(){
   if(tcMode === "defects") return defReqId || "";
   return caseScopeAll ? (caseAllProj || "") : (caseReqId || "");
 }
+/* 手机项目域里的「分支」子页：未接入 Git 时不露出 */
+var tcGit = null;
+function syncTcDomainBranches(){
+  var btn = document.querySelector('#tcDomain [data-tc-domain="branches"]');
+  if(!btn) return;
+  if(tcGit !== null){ btn.hidden = !tcGit; return; }
+  import("./branches.js").then(function(m){ return m.gitEnabled(); }).then(function(on){
+    tcGit = !!on;
+    var b = document.querySelector('#tcDomain [data-tc-domain="branches"]');
+    if(b) b.hidden = !tcGit;
+  }).catch(function(){ tcGit = false; });
+}
 function syncTcDomain(){
   var cur = $("tcCrumbProj");
   if(!cur) return;
+  syncTcDomainBranches();
   var name = tcMode === "defects" ? defectScopeName()
     : (caseScopeAll ? (caseAllProj ? reqNameOf(caseAllProj) : "全部项目") : (caseReqId ? reqNameOf(caseReqId) : "全部项目"));
   /* 项目集引入后，面包屑补一级「项目集」：项目归属不再只靠选项目时的分组猜 */
@@ -3174,7 +3206,7 @@ function tcCaseCount(){
 }
 function syncTcPageHead(){
   if(document.body.dataset.view !== "testcases") return;
-  var titles = { cases:"测试 · 用例", defects:"测试 · 缺陷", plans:"测试 · 计划", coverage:"覆盖矩阵", report:"测试报告" };
+  var titles = { cases:"测试 · 用例", defects:"测试 · 缺陷", plans:"测试 · 计划", coverage:"测试 · 覆盖矩阵", report:"测试 · 测试报告" };
   var scope = tcScopeName() || "全部项目";
   var phTitle = $("pageTitleText"), phSub = $("pageSub"), pill = $("pagePill"), acts = $("pageActions");
   if(phTitle) phTitle.textContent = titles[tcMode] || "测试";
@@ -3209,7 +3241,6 @@ function syncTcPageHead(){
         html += '<button class="btn primary" type="button" data-tc-head="case-new">' + icon("plus", 14) + ' 新建用例</button>';
       }
     }else if(tcMode === "defects"){
-      html += '<button class="btn ghost" type="button" data-tc-head="def-reset">恢复默认</button>';
       if(defectCreateTargets().length){
         html += '<button class="btn primary" type="button" data-tc-head="def-new">' + icon("plus", 14) + ' 新建缺陷</button>';
       }
@@ -3259,6 +3290,25 @@ function syncModeUI(){
   document.querySelectorAll("#tcModeSeg [data-tc-mode]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
   });
+  /* 覆盖 / 报告已收进「测试计划」：进入这三者才显示计划内的第二排页签 */
+  var planTabs = $("tcPlanTabs");
+  if(planTabs){
+    planTabs.hidden = !(plan || cov || rep);
+    planTabs.querySelectorAll("[data-tc-mode]").forEach(function(b){
+      b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
+    });
+  }
+  document.querySelectorAll("#tcDomain [data-tc-mode]").forEach(function(b){
+    var on = b.dataset.tcMode === tcMode;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+  var domCases = document.querySelector('#tcDomain [data-tc-domain="testcases"]');
+  if(domCases){
+    var casesOn = tcMode === "cases";
+    domCases.classList.toggle("on", casesOn);
+    if(casesOn) domCases.setAttribute("aria-current","page"); else domCases.removeAttribute("aria-current");
+  }
   syncTcSubnav();
   syncTcDomain();
   syncQueryBar();
@@ -6192,6 +6242,7 @@ var planPendingOpen = null;   /* 跨视图跳转（交付说明）待打开的�
 var planSel = {};             /* 详情页批量执行勾选：caseId -> true */
 var planBatchStatus = "passed";
 var editingPlanId = null;
+var editingPlanUpdatedAt = null; /* 编辑计划的乐观锁基线：保存时回传，服务端发现已被他人修改返回 409 */
 var planFormReqId = null;     /* 当前计划弹窗的所属项目：编辑取计划自身，新增取选定目标 */
 var planSaving = false;
 var planDialogSeq = 0;
@@ -6761,11 +6812,34 @@ function togglePlanRequired(caseId, required){
     .then(function(){ delete planReqBusy[caseId]; });
 }
 function planStatusTo(status){
-  API.put("/api/test-plans/" + encodeURIComponent(planDetail.plan.id) + "/status?status=" + encodeURIComponent(status), {})
-  .then(function(){
-    toast(status === "done" ? "计划已完成并留痕" : (status === "running" ? "计划已开始执行" : "计划已回到草稿"), "fs");
-    openPlanDetail(planDetail.plan.id);
-  }).catch(function(ex){ toast(ex.message || "状态更新失败", "bad"); });
+  var p = planDetail && planDetail.plan;
+  if(!p) return;
+  var done = status === "done";
+  var label = done ? "计划已完成并留痕" : (status === "running" ? "计划已开始执行" : "计划已回到草稿");
+  var send = function(reason){
+    API.put("/api/test-plans/" + encodeURIComponent(p.id) + "/status?status=" + encodeURIComponent(status)
+      + (reason ? "&reason=" + encodeURIComponent(reason) : ""), {})
+    .then(function(){
+      toast(label, "fs");
+      openPlanDetail(p.id);
+    }).catch(function(ex){ toast(ex.message || "状态更新失败", "bad"); });
+  };
+  /* 已完成是快照：回退到草稿/执行中必须说明原因，服务端同样强校验并写审计 */
+  if(p.status === "done" && !done){
+    UI.showPrompt({
+      title: "重新打开已完成计划",
+      desc: "已完成计划的内容已冻结。回退后可以继续圈选用例与执行，本次回退会写入审计。",
+      label: "回退原因",
+      placeholder: "例如：发现必测用例漏跑，需要补充执行",
+      maxLength: 200,
+      okText: "确认回退"
+    }).then(function(reason){
+      if(reason == null) return;
+      send(reason);
+    });
+    return;
+  }
+  send(null);
 }
 function exportPlanCsv(){
   var d = planDetail;
@@ -6787,6 +6861,7 @@ function openPlanDialog(id, targetReqId){
   editingPlanId = id || null;
   var p = null;
   if(id) for(var i = 0; i < plans.length; i++) if(plans[i].id === id) p = plans[i];
+  editingPlanUpdatedAt = p && p.updatedAt ? p.updatedAt : null;
   planFormReqId = p && p.reqId ? p.reqId : (targetReqId || caseReqId || null);
   if(!planFormReqId){ toast("先选择项目，再新建测试计划", "warn"); return; }
   if(!canTestProject(planFormReqId)){ toast("你对该项目没有测试权限，无法编辑测试计划", "warn"); return; }
@@ -6874,6 +6949,7 @@ function savePlan(){
     note: $("pNote").value.trim() || null,
     executorUserId: $("pExecutor") ? ($("pExecutor").value || null) : null
   };
+  if(editingPlanId && editingPlanUpdatedAt) body.updatedAt = editingPlanUpdatedAt;
   planSaving = true;
   setCaseBusy($("btnSavePlan"), true, "保存中…");
   var call = editingPlanId
@@ -7004,7 +7080,9 @@ function doPlanPick(){
     pickingPlan = false;
     setCaseBusy($("btnDoPlanPick"), false);
     UI.closeModal($("dlgPlanPick"));
-    toast("已加入 " + (added || 0) + " 条用例" + (ids.length - (added || 0) ? "（重复的已跳过）" : ""), "fs");
+    var n = added || 0;
+    toast(n ? ("已加入 " + n + " 条用例" + (ids.length > n ? "（重复的已跳过）" : ""))
+            : ("没有新增：选中的 " + ids.length + " 条都已在计划中"), n ? "fs" : "warn");
     openPlanDetail(planDetail.plan.id);
   }).catch(function(ex){
     pickingPlan = false;
@@ -8754,7 +8832,7 @@ function joinSet(setId, selection, count){
   return API.post("/api/case-sets/" + encodeURIComponent(setId) + "/members", selection).then(function(r){
     var added = (r && r.added) || 0, already = (r && r.already) || 0, matched = (r && r.matched) || count;
     if(!added){
-      toast("没有新增：命中的 " + matched + " 条都已在分组「" + label + "」内", "fs");
+      toast("没有新增：命中的 " + matched + " 条都已在分组「" + label + "」内", "warn");
       return;
     }
     var ids = (r && r.addedIds) || [];
@@ -9472,7 +9550,8 @@ function doPbfAdd(){
     if(required) msg += "，标记为发布必测";
     if(out.set) msg += "；同时创建团队共享动态分组「" + dynName + "」（收录 " + ((out.set.caseCount || 0)) + " 条）";
     var pid = out.pid, reqId = caseReqId;
-    UI.toastAction(msg, "查看计划", function(){ openPlanInProject(reqId, pid); }, "fs");
+    /* 0 条新增不是成功：与「重复跳过」保持同一提示色，避免把空操作说成已完成 */
+    UI.toastAction(msg, "查看计划", function(){ openPlanInProject(reqId, pid); }, (r.added || 0) ? "fs" : "warn");
     if(out.setError) toast("用例已加入计划，但动态分组「" + dynName + "」创建失败：" + out.setError, "warn");
     clearCaseSel();
     if(out.set) afterStructureChange();
@@ -9535,6 +9614,8 @@ $("tcReq").addEventListener("change", function(){
 });
 if($("tcDomain")){
   $("tcDomain").addEventListener("click", function(e){
+    var m = e.target.closest("[data-tc-mode]");
+    if(m){ setTcMode(m.dataset.tcMode); return; }
     var b = e.target.closest("[data-tc-domain]");
     if(!b) return;
     var to = b.dataset.tcDomain;
@@ -9552,6 +9633,13 @@ if($("tcDomain")){
       reloadFilteredViews();
       return;
     }
+    if(to === "branches"){
+      /* 分支只作为项目上下文入口：带上当前项目，未接入 Git 时这个入口本身是隐藏的 */
+      var h = "#/branches" + (reqId ? "?project=" + encodeURIComponent(reqId) : "");
+      try{ history.pushState(null, "", h); }catch(e){ try{ window.location.hash = h; }catch(e2){ /* noop */ } }
+      showView("branches");
+      return;
+    }
     showView(to);
   });
 }
@@ -9560,6 +9648,13 @@ $("tcModeSeg").addEventListener("click", function(e){
   if(!b) return;
   setTcMode(b.dataset.tcMode);
 });
+if($("tcPlanTabs")){
+  $("tcPlanTabs").addEventListener("click", function(e){
+    var b = e.target.closest("[data-tc-mode]");
+    if(!b) return;
+    setTcMode(b.dataset.tcMode);
+  });
+}
 ["tcPri", "tcOwner"].forEach(function(id){
   $(id).addEventListener("change", function(){
     priFilter = $("tcPri").value;
@@ -9700,6 +9795,15 @@ $("tcDefSearch").addEventListener("input", function(){
   });
 });
 $("tcDefReset").addEventListener("click", resetDefectFilters);
+function toggleDefectFilters(){
+  var open = $("tcDefectBar").classList.toggle("is-expanded");
+  ["tcDefFilterBtn", "tcDefMoreBtn"].forEach(function(id){
+    var b = $(id);
+    if(b) b.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+}
+if($("tcDefFilterBtn")) $("tcDefFilterBtn").addEventListener("click", toggleDefectFilters);
+if($("tcDefMoreBtn")) $("tcDefMoreBtn").addEventListener("click", toggleDefectFilters);
 if($("tcDefViewsBtn") && defViewsMenuEl){
   $("tcDefViewsBtn").addEventListener("click", function(){
     if(UI.popOpen(defViewsMenuEl)){ UI.closeAllPops(); return; }
@@ -9759,9 +9863,6 @@ if($("pageActions")) $("pageActions").addEventListener("click", function(e){
     UI.openPop($("tcImportMenu"), b, { align:"right", width:268 });
   }else if(kind === "case-new"){
     openCaseCreate(b);
-  }else if(kind === "def-reset"){
-    var reset = $("tcDefReset");
-    if(reset) reset.click();
   }else if(kind === "def-new"){
     openDefectCreate(b);
   }else if(kind === "plan-new"){

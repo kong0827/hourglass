@@ -3,7 +3,7 @@
 import { API } from "../core/api.js";
 import { $, doneCountEl, pendingCount, pendingList, progCountEl, reviewHoursEl, reviewPendingBox } from "../core/dom.js";
 import { icon } from "../core/icons.js";
-import { catNameById, catTag, progressOf, projectOptionsHTML, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { catNameById, catTag, currentRole, progressOf, projectOptionsHTML, reqNameById, rt, state, tagChip } from "../core/state.js";
 import { activeView, showView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
@@ -12,6 +12,7 @@ import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, dayKey, fmtMD, fmtMi
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { loadReqs, pending } from "./board.js";
 import { openLogTable, openTaskTable } from "./manager-shared.js";
+import { currentTeamReportText, renderTeamError, renderTeamLoading, renderTeamReview, teamHasEvents } from "./review-team.js";
 import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
 
 registerHelp({
@@ -34,12 +35,94 @@ var REVIEW_REQ_KEY = "ds.reviewReq";
 var reviewReqId = (function(){
   try{ return localStorage.getItem(REVIEW_REQ_KEY) || ""; }catch(e){ return ""; }
 })();
+/* 回顾范围：团队看全空间，我只看自己负责的工作项；团队口径仅空间负责人/管理员可用 */
+var REVIEW_SCOPE_KEY = "ds.reviewScope";
+var REVIEW_ROLE_KEY = "ds.reviewRole";
+var reviewRole = (function(){
+  try{
+    var v = localStorage.getItem(REVIEW_ROLE_KEY) || "all";
+    return ["all","dev","test","pm","design","lead"].indexOf(v) >= 0 ? v : "all";
+  }catch(e){ return "all"; }
+})();
+var reviewScope = (function(){
+  try{ return localStorage.getItem(REVIEW_SCOPE_KEY) === "me" ? "me" : "team"; }catch(e){ return "team"; }
+})();
+var lastTeamData = null;
+var reviewCopyBlocked = "";
+function setReviewCopyable(ok, reason){
+  reviewCopyBlocked = ok ? "" : (reason || "当前没有可复制的回顾");
+  var b = $("btnCopy");
+  if(!b) return;
+  b.disabled = !ok;
+  if(ok) b.removeAttribute("title");
+  else b.title = reviewCopyBlocked;
+}
+function canReviewTeam(){
+  var role = currentRole();
+  return role === "owner" || role === "admin";
+}
 function reviewParams(off){
-  /* 个人口径：周回顾只算「我负责的工作项」，由服务端按负责人收敛 */
-  var p = { mine:1 };
+  var p = {};
+  if(reviewScope === "team" && canReviewTeam()){
+    p.scope = "team";
+    if(reviewRole && reviewRole !== "all") p.role = reviewRole;
+  }else{
+    /* 个人口径：周回顾只算「我负责的工作项」，由服务端按负责人收敛 */
+    p.mine = 1;
+  }
   if(off !== undefined && off !== null) p.weekOffset = off;
   if(reviewReqId) p.reqId = reviewReqId;
   return p;
+}
+function applyWeekHeader(d){
+  $("reviewTitle").textContent = reviewTitle(d.weekOffset) + (d.reqName ? " · " + d.reqName : "");
+  $("weekLabel").textContent = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
+  $("weekPrev").disabled = d.weekOffset <= -52;
+  $("weekNext").disabled = d.weekOffset >= 0;
+}
+function applyReviewScopeUI(){
+  var team = reviewScope === "team" && canReviewTeam();
+  if(reviewScope === "team" && !team) reviewScope = "me";
+  var seg = $("reviewScopeSeg");
+  if(seg){
+    seg.hidden = !canReviewTeam();
+    seg.querySelectorAll("[data-review-scope]").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.reviewScope === reviewScope));
+    });
+  }
+  var roleWrap = $("reviewRoleWrap");
+  if(roleWrap) roleWrap.hidden = !team;
+  var note = $("reviewScopeNote");
+  if(note){
+    note.hidden = false;
+    note.textContent = team ? "事件与快照分开统计 · 周界按空间时区" : "只看我负责的工作项";
+  }
+  var tv = $("reviewTeamView"), pv = $("reviewPersonalView");
+  if(tv) tv.hidden = !team;
+  if(pv) pv.hidden = team;
+  var copyBtn = $("btnCopy");
+  if(copyBtn && copyBtn.parentNode) copyBtn.parentNode.hidden = false;
+  var plain = document.querySelector('#copyMenu [data-copy="plain"]');
+  if(plain) plain.textContent = team ? "复制团队周报（纯文本）" : "复制总结（纯文本）";
+  var aiItem = $("copyAiItem");
+  if(aiItem) aiItem.hidden = team;
+}
+function setReviewScope(scope){
+  scope = scope === "team" ? "team" : "me";
+  if(scope === "team" && !canReviewTeam()) return;
+  if(scope === reviewScope){ applyReviewScopeUI(); return; }
+  /* 切换范围保留当前周：先按旧范围取正在看的那一周 */
+  var keepWeek = rt.reviewTarget;
+  if(keepWeek === null){
+    keepWeek = isTeamScope()
+      ? (lastTeamData ? lastTeamData.weekOffset : null)
+      : (state.reviewData ? state.reviewData.weekOffset : null);
+  }
+  reviewScope = scope;
+  try{ localStorage.setItem(REVIEW_SCOPE_KEY, scope); }catch(e){ /* 受限环境忽略 */ }
+  rt.reviewTarget = null;
+  applyReviewScopeUI();
+  fetchReview(keepWeek);
 }
 function renderReviewReqOptions(){
   var sel = $("reviewReq");
@@ -58,7 +141,12 @@ function renderReviewReqOptions(){
   }
   sel.value = reviewReqId;
 }
+function isTeamScope(){
+  return reviewScope === "team" && canReviewTeam();
+}
 function setReviewLoading(){
+  setReviewCopyable(false, "正在加载周回顾");
+  if(isTeamScope()){ renderTeamLoading(); return; }
   $("summaryText").innerHTML = "加载中…";
   $("statGrid").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
     '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
@@ -69,21 +157,37 @@ function setReviewLoading(){
   $("doneList").innerHTML = UI.skeletonRows(4);
 }
 function fetchReview(weekOffset){
+  var team = isTeamScope();
   setReviewLoading();
   var seq = ++rt.reviewSeq;
   rt.reviewTarget = weekOffset === undefined ? null : weekOffset;
   API.get("/api/review", reviewParams(weekOffset)).then(function(d){
     if(seq !== rt.reviewSeq) return;
-    state.reviewData = d;
     rt.reviewTarget = d.weekOffset;
-    renderReview(d);
+    if(team){
+      lastTeamData = d;
+      applyWeekHeader(d);
+      renderTeamReview(d);
+      setReviewCopyable(teamHasEvents(d), "该周没有可复制的团队事件");
+    }else{
+      state.reviewData = d;
+      renderReview(d);
+      setReviewCopyable(true);
+    }
   }).catch(function(ex){
     if(seq !== rt.reviewSeq) return;
+    if(team){
+      renderTeamError((ex && ex.message) || "网络异常");
+      setReviewCopyable(false, "团队回顾加载失败，恢复后可复制");
+      return;
+    }
     rt.reviewTarget = null;
     setPageError(ex, ["summaryText","progList","reqDist","doneList"], function(){ enterReviewView(); });
+    setReviewCopyable(false, "周回顾加载失败，恢复后可复制");
   });
 }
 function enterReviewView(){
+  applyReviewScopeUI();
   renderReviewReqOptions();
   loadReqs().then(function(){
     if(activeView !== "review") return;
@@ -95,23 +199,52 @@ function enterReviewView(){
   fetchReview(null);
 }
 function navWeek(delta){
-  var base = rt.reviewTarget !== null ? rt.reviewTarget : (state.reviewData ? state.reviewData.weekOffset : -1);
-  var off = base + delta;
+  var team = isTeamScope();
+  var base = rt.reviewTarget !== null ? rt.reviewTarget
+    : (team ? (lastTeamData ? lastTeamData.weekOffset : -1)
+            : (state.reviewData ? state.reviewData.weekOffset : -1));
+  var off = Math.max(-52, Math.min(0, base + delta));
+  if(off === base) return;
   /* 先记下目标周：响应回来前连点，以目标周为基准继续翻，不会两次都落在同一周 */
   rt.reviewTarget = off;
   setReviewLoading();
   var seq = ++rt.reviewSeq;
   API.get("/api/review", reviewParams(off)).then(function(d){
     if(seq !== rt.reviewSeq) return;
-    state.reviewData = d;
     rt.reviewTarget = d.weekOffset;
-    renderReview(d);
+    if(team){
+      lastTeamData = d;
+      applyWeekHeader(d);
+      renderTeamReview(d);
+      setReviewCopyable(teamHasEvents(d), "该周没有可复制的团队事件");
+    }else{
+      state.reviewData = d;
+      renderReview(d);
+      setReviewCopyable(true);
+    }
   }).catch(function(ex){
     if(seq !== rt.reviewSeq) return;
-    rt.reviewTarget = state.reviewData ? state.reviewData.weekOffset : null;
-    /* 骨架屏已覆盖内容：有上一周数据就恢复，否则给可重试的错误态 */
-    if(state.reviewData) renderReview(state.reviewData);
-    else setPageError(ex, ["summaryText","progList","reqDist","doneList"], function(){ enterReviewView(); });
+    if(team){
+      rt.reviewTarget = lastTeamData ? lastTeamData.weekOffset : null;
+      if(lastTeamData){
+        applyWeekHeader(lastTeamData);
+        renderTeamReview(lastTeamData);
+        setReviewCopyable(teamHasEvents(lastTeamData), "该周没有可复制的团队事件");
+      }else{
+        renderTeamError((ex && ex.message) || "网络异常");
+        setReviewCopyable(false, "团队回顾加载失败，恢复后可复制");
+      }
+    }else{
+      rt.reviewTarget = state.reviewData ? state.reviewData.weekOffset : null;
+      /* 骨架屏已覆盖内容：有上一周数据就恢复，否则给可重试的错误态 */
+      if(state.reviewData){
+        renderReview(state.reviewData);
+        setReviewCopyable(true);
+      }else{
+        setPageError(ex, ["summaryText","progList","reqDist","doneList"], function(){ enterReviewView(); });
+        setReviewCopyable(false, "周回顾加载失败，恢复后可复制");
+      }
+    }
     toast("加载失败：" + (ex.message || "网络异常"), "bad");
   });
 }
@@ -402,8 +535,10 @@ function distHTML(list, colorOf, valueOf, attrsOf){
 function renderReview(d){
   $("reviewTitle").textContent = reviewTitle(d.weekOffset) + (d.reqName ? " · " + d.reqName : "");
   $("weekLabel").textContent = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
+  $("weekPrev").disabled = d.weekOffset <= -52;
   $("weekNext").disabled = d.weekOffset >= 0;
-  $("summaryText").innerHTML = buildSummary(d);
+  /* 折叠态用两行截断；连续 <br> 折叠成单行、且结尾不留 <br>，否则 clamp 的省略号会单独占一行 */
+  $("summaryText").innerHTML = buildSummary(d).replace(/(<br\s*\/?>)+$/, "").replace(/(?:<br\s*\/?>){2,}/g, "<br>");
 
   var s = d.stats;
   var overN = (d.counts && d.counts.over) || 0;
@@ -517,7 +652,34 @@ $("weekNext").addEventListener("click", function(){
   navWeek(1);
 });
 if($("reviewReq")) $("reviewReq").addEventListener("change", changeReviewReq);
+if($("reviewScopeSeg")) $("reviewScopeSeg").addEventListener("click", function(e){
+  var b = e.target.closest("[data-review-scope]");
+  if(b) setReviewScope(b.dataset.reviewScope);
+});
+if($("reviewRole")){
+  $("reviewRole").value = reviewRole;
+  $("reviewRole").addEventListener("change", function(){
+    reviewRole = $("reviewRole").value || "all";
+    try{ localStorage.setItem(REVIEW_ROLE_KEY, reviewRole); }catch(e){ /* 受限环境忽略 */ }
+    /* 角色只筛选成员/质量/文档明细，团队汇总由服务端保持不变；重新取数避免前端拼口径 */
+    fetchReview(rt.reviewTarget);
+  });
+}
+/* 团队视图里的「看我的回顾 / 重试 / 刷新」由本控制器统一取数 */
+window.addEventListener("ds:review-scope", function(e){
+  if(e.detail && e.detail.scope) setReviewScope(e.detail.scope);
+});
+window.addEventListener("ds:review-refresh", function(){
+  if(activeView === "review") fetchReview(rt.reviewTarget);
+});
 function copyReviewPlain(){
+  if(reviewCopyBlocked){ toast(reviewCopyBlocked, "warn"); return; }
+  if(isTeamScope()){
+    var teamText = currentTeamReportText();
+    if(!teamText){ toast("团队周报还没加载完成", "warn"); return; }
+    copyToClipboard(teamText, "已复制团队周报", "复制失败，请手动选择文本");
+    return;
+  }
   var d = state.reviewData;
   if(!d){ toast("回顾还没加载完成", "warn"); return; }
   var progTasks = d.progressTasks || [];

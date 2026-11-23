@@ -3060,6 +3060,29 @@ if(ganttExportMenu){
 if(ganttClearFilterEl) ganttClearFilterEl.addEventListener("click", function(){ clearFilters(); });
 if($("ganttToday")) $("ganttToday").addEventListener("click", ganttGoToday);
 if($("ganttRefresh")) $("ganttRefresh").addEventListener("click", function(){ loadGantt(); });
+if($("ganttMobileToList")) $("ganttMobileToList").addEventListener("click", function(){ showView("list"); });
+if($("ganttHelpBtn")){
+  var helpPanel = $("ganttHelpPanel");
+  var helpBtn = $("ganttHelpBtn");
+  helpBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    var open = helpPanel.hidden;
+    helpPanel.hidden = !open;
+    helpBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.addEventListener("click", function(e){
+    if(helpPanel.hidden) return;
+    if(helpPanel.contains(e.target) || helpBtn.contains(e.target)) return;
+    helpPanel.hidden = true;
+    helpBtn.setAttribute("aria-expanded", "false");
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && !helpPanel.hidden){
+      helpPanel.hidden = true;
+      helpBtn.setAttribute("aria-expanded", "false");
+    }
+  });
+}
 if(ganttAnalysisBtn){
   ganttAnalysisBtn.addEventListener("click", function(){
     if(UI.popOpen(ganttAnalysisMenu)){ UI.closeAllPops(); return; }

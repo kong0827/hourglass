@@ -101,7 +101,7 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 .req-list.is-cards>.req-set-head{grid-column:1/-1;min-height:0;margin:0;padding:0 2px 3px;gap:6px 8px;}
 .req-list.is-cards>.req-set-head .req-set-title{font-size:12px;}
 .req-list.is-cards>.req-set-head .req-set-title b{font-weight:650;}
-.req-list.is-cards>.req-set-head .req-set-meta{font-size:10.5px;}
+.req-list.is-cards>.req-set-head .req-set-meta{font-size:11px;}
 .req-list.is-cards>.req-set-head .req-set-progress{width:84px;}
 .req-list.is-cards>.proj-set-drop-end{grid-column:1/-1;}
 .req-list.is-cards>.req-item{margin-left:0;padding:11px 12px;gap:7px;min-width:0;min-height:108px;}
@@ -129,11 +129,11 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 .req-list.is-cards .req-phase-lg{font-size:11px;}
 .req-list.is-cards .req-taskbar{margin-top:0;}
 /* 卡片四行对齐原型：计划 · 负责人 / 4px 进度条 / 计数与百分比 */
-.pf-meta-line{display:flex;align-items:center;gap:5px;min-width:0;font-size:10.5px;line-height:15px;color:var(--text-3);
+.pf-meta-line{display:flex;align-items:center;gap:5px;min-width:0;font-size:11px;line-height:15px;color:var(--text-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pf-prog{height:4px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;}
 .pf-prog>i{display:block;height:100%;border-radius:inherit;background:var(--primary);}
-.pf-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;line-height:15px;color:var(--text-3);}
+.pf-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;line-height:15px;color:var(--text-3);}
 .pf-foot .pf-pct{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;}
 .pf-foot .pf-pct.over{color:var(--danger-fg);font-weight:650;}
 .req-item.is-empty{border-style:dashed;background:var(--surface-sunken);}
@@ -174,8 +174,8 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 .req-summ .stat-v.is-zero{color:var(--text-3);}
 .req-summ .stat-v.is-warn{color:var(--warning-fg);}
 .req-summ .stat-v small{font-size:11px;font-weight:600;color:var(--text-3);margin-left:3px;}
-.req-summ .stat-sub{font-size:10.5px;line-height:15px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.req-summ .stat-sub .link-btn{font-size:10.5px;font-weight:500;}
+.req-summ .stat-sub{font-size:11px;line-height:15px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.req-summ .stat-sub .link-btn{font-size:11px;font-weight:500;}
 @media (max-width:1100px){.req-summ{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media (max-width:760px){.req-summ{grid-template-columns:repeat(2,minmax(0,1fr));}}
 /* 未标记首版提示：计数在横幅里，KPI 不再重复一个「未标记」格 */
@@ -186,7 +186,7 @@ html[data-theme="dark"] .project-table-row.project-set-row{--set-ink:color-mix(i
 .proj-banner b{font-weight:650;}
 .proj-banner>svg{flex:0 0 auto;color:var(--warning);}
 .proj-banner .link-btn{margin-left:4px;flex:0 0 auto;}
-.proj-banner .proj-banner-hint{margin-left:auto;flex:0 0 auto;font-size:10.5px;opacity:.85;}
+.proj-banner .proj-banner-hint{margin-left:auto;flex:0 0 auto;font-size:11px;opacity:.85;}
 /* 项目卡：首版 / 迭代投入条（与版本页阶段口径一致）
    进度行是主色 + 百分比的完成度；工时行换成阶段色并带「工时」标签、条更细，
    两条上下相邻也不会被读成同一件事。 */
@@ -362,7 +362,7 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 #view-review .panel{padding:12px 14px;}
 #view-review .panel-head{margin-bottom:10px;}
 #view-review .panel-head h3{font-size:12.5px;font-weight:650;letter-spacing:0;}
-#view-review .panel-head .meta-right{font-size:10.5px;}
+#view-review .panel-head .meta-right{font-size:11px;}
 #view-review .stat{padding:11px 13px;border-radius:var(--r-md);}
 #view-review .stat-grid{gap:10px;}
 #view-review .stat .k{font-size:11px;}
@@ -870,3 +870,11 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
   flex:1 1 240px;min-width:0;font-family:var(--font-mono);font-size:12px;color:var(--text-2);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+
+/* 样例项目 10 分钟上手：三步路线，数字与操作都在项目视图里就位 */
+.onb-steps{margin:0 0 var(--space-3);padding:0;list-style:none;counter-reset:onb;display:flex;flex-direction:column;gap:10px;}
+.onb-steps li{position:relative;padding:10px 12px 10px 42px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
+.onb-steps li::before{counter-increment:onb;content:counter(onb);position:absolute;left:12px;top:11px;width:20px;height:20px;
+  border-radius:50%;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary-fg);font-size:11px;font-weight:750;}
+.onb-steps li b{display:block;font-size:13px;font-weight:680;margin-bottom:2px;}
+.onb-steps li span{display:block;font-size:12px;color:var(--text-3);line-height:1.65;}

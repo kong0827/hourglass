@@ -1042,21 +1042,23 @@ function bulkMoveTo(column){
     if(pass.force) body.force = true;
     var retried = false;
     function fail(ex){
+      /* 每次请求失败先归还占用：重试的 send() 会重新占用，不能留两次计数 */
+      UI.syncBusy(false);
       if(retried){
-        UI.syncBusy(false);
         toast("批量移动失败：" + (ex.message || "网络异常"), "bad");
         return;
       }
       retried = true;
       serverDecision(wsId, items, column, ex).then(function(retry){
         if(!retry){
-          UI.syncBusy(false);
           if(ex.code !== 422 && ex.code !== 412) toast("批量移动失败：" + (ex.message || "网络异常"), "bad");
           return;
         }
         body.reason = retry.reason;
         body.force = retry.force;
         send();
+      }).catch(function(decisionError){
+        toast("批量移动失败：" + (decisionError.message || "网络异常"), "bad");
       });
     }
     function send(){

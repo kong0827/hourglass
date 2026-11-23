@@ -29,6 +29,7 @@
 <link rel="stylesheet" href="css/views-analysis-branches.css" />
 <link rel="stylesheet" href="css/views-phase-demands.css" />
 <link rel="stylesheet" href="css/views-testcases.css" />
+<link rel="stylesheet" href="css/stage-hours.css" />
 <link rel="stylesheet" href="css/workcolumn.css" />
 <link rel="stylesheet" href="css/version.css" />
 <link rel="stylesheet" href="css/gantt.css" />
@@ -39,7 +40,11 @@
 <link rel="stylesheet" href="css/my-work.css" />
 <link rel="stylesheet" href="css/mobile.css" />
 <link rel="stylesheet" href="css/assistant.css" />
+<link rel="stylesheet" href="css/ornament.css" />
+<link rel="stylesheet" href="css/sand-say.css" />
 <link rel="stylesheet" href="css/delivery.css" />
+<link rel="stylesheet" href="css/views-review.css" />
+<link rel="stylesheet" href="css/catchup.css" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#2563EB" />
 <link rel="apple-touch-icon" href="icons/icon-1024.png" />
@@ -153,11 +158,6 @@
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.8 12.4 8l5.6.5-4.2 3.7 1.2 5.5L10 14.9l-5 2.8 1.2-5.5L2 8.5 7.6 8Z"/></svg>
         <span class="nl">我的工作</span>
       </button>
-      <button class="nav-item" type="button" data-view="messages" title="消息中心">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.6a5.2 5.2 0 0 0-5.2 5.2c0 3.6-1.4 4.8-1.4 4.8h13.2s-1.4-1.2-1.4-4.8A5.2 5.2 0 0 0 10 2.6Z"/><path d="M8.2 15.4a1.9 1.9 0 0 0 3.6 0"/></svg>
-        <span class="nl">消息中心</span>
-        <span class="nav-cnt" id="navMsgCount" hidden></span>
-      </button>
       <button class="nav-item" type="button" data-view="review" title="周回顾">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.3 9 12.5l4.4-4.7"/></svg>
         <span class="nl">周回顾</span>
@@ -190,16 +190,12 @@
           <button class="nav-sub-item" type="button" data-view="release">发布工作台</button>
         </div>
       </div>
+
+      <span class="nav-sec">交付</span>
       <button class="nav-item" type="button" data-view="delivery" title="交付说明">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="m6.8 10.2 2.2 2.2 4.4-4.7"/></svg>
         <span class="nl">交付说明</span>
       </button>
-      <button class="nav-item" type="button" data-view="branches" id="navBranches" title="分支">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.6" cy="4.4" r="1.9"/><circle cx="5.6" cy="15.6" r="1.9"/><circle cx="14.4" cy="6.6" r="1.9"/><path d="M5.6 6.3v7.4"/><path d="M14.4 8.5c0 3.4-2.2 5.4-5.2 5.4H5.6"/></svg>
-        <span class="nl">分支</span>
-      </button>
-
-      <span class="nav-sec">交付</span>
       <div class="nav-group" data-nav-group="workitems">
         <button class="nav-item" type="button" data-view="workitems" title="工作项">
           <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/></svg>
@@ -209,10 +205,11 @@
         <div class="nav-sub">
           <button class="nav-sub-item" type="button" data-view="board">看板</button>
           <button class="nav-sub-item" type="button" data-view="list">列表</button>
-          <button class="nav-sub-item" type="button" data-view="tree">层级</button>
-          <button class="nav-sub-item" type="button" data-view="chain">影响链</button>
           <button class="nav-sub-item" type="button" data-view="calendar">日历</button>
           <button class="nav-sub-item" type="button" data-view="gantt">甘特</button>
+          <span class="nav-sub-sec">分析</span>
+          <button class="nav-sub-item" type="button" data-view="tree">层级</button>
+          <button class="nav-sub-item" type="button" data-view="chain">影响链</button>
         </div>
       </div>
       <div class="nav-group" data-nav-group="requirements">
@@ -234,51 +231,29 @@
         <button class="nav-exp" type="button" data-nav-exp="testcases" aria-label="展开测试" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg></button>
         <div class="nav-sub">
           <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="cases">用例</button>
-          <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="defects">缺陷</button>
           <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="plans">测试计划</button>
-          <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="coverage">覆盖</button>
-          <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="report">测试报告</button>
+          <button class="nav-sub-item" type="button" data-view="testcases" data-sub-tab="defects">缺陷</button>
         </div>
       </div>
 
-      <span class="nav-sec">洞察</span>
+      <span class="nav-sec">分析</span>
       <div class="nav-group" data-nav-group="insight">
-        <button class="nav-item" type="button" data-view="insight" title="报表">
+        <button class="nav-item" type="button" data-view="insight" title="洞察">
           <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 15.6 7.4 9l3.4 3 5.6-8.4"/><path d="M2.6 17.4h14.8"/><circle cx="9.6" cy="12.6" r="1.1"/><circle cx="17" cy="4.2" r="1.1"/></svg>
-          <span class="nl">报表</span>
+          <span class="nl">洞察</span>
         </button>
-        <button class="nav-exp" type="button" data-nav-exp="insight" aria-label="展开报表" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg></button>
+        <button class="nav-exp" type="button" data-nav-exp="insight" aria-label="展开洞察" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg></button>
         <div class="nav-sub">
-          <button class="nav-sub-item" type="button" data-view="analysis" data-sub-tab="stats">统计概览</button>
-          <button class="nav-sub-item" type="button" data-view="analysis" data-sub-tab="completions">完成记录</button>
-          <button class="nav-sub-item" type="button" data-view="analysis" data-sub-tab="flow">流程体检</button>
-          <button class="nav-sub-item" type="button" data-view="report">交付报告</button>
-          <button class="nav-sub-item" type="button" data-view="investment">投入结构</button>
+          <button class="nav-sub-item" type="button" data-view="analysis" data-sub-alias="report">报表</button>
+          <button class="nav-sub-item" type="button" data-view="investment">投入</button>
+          <button class="nav-sub-item" type="button" data-view="workload" data-sub-alias="risks">风险与负载</button>
         </div>
       </div>
-      <button class="nav-item" type="button" data-view="workload" title="成员负载">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="3"/><path d="M2.8 17c.5-3 2-4.5 4.2-4.5s3.7 1.5 4.2 4.5M13 5.2a3 3 0 0 1 0 5.6M14 12.7c2 .4 3 1.8 3.3 4.3"/></svg>
-        <span class="nl">成员负载</span>
-      </button>
-      <button class="nav-item" type="button" data-view="risks" title="逾期与阻塞">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 18 17H2Z"/><path d="M10 8v4M10 15h.01"/></svg>
-        <span class="nl">逾期与阻塞</span>
-      </button>
       <div class="nav-group" data-nav-group="settings">
         <button class="nav-item" type="button" data-view="settings" title="设置">
           <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/></svg>
           <span class="nl">设置</span>
         </button>
-        <button class="nav-exp" type="button" data-nav-exp="settings" aria-label="展开设置" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg></button>
-        <div class="nav-sub">
-          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="space">空间</button>
-          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="members">成员与角色</button>
-          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="visibility" id="navSetVisibility" hidden>项目可见范围</button>
-          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="workflow">工作流</button>
-          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="integration">通知与集成</button>
-          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="data">数据与审计</button>
-          <button class="nav-sub-item" type="button" data-view="settings" data-set-nav="platform" id="navSetPlatform" hidden>平台</button>
-        </div>
       </div>
 
       <button class="nav-item mob-more" type="button" id="mobMore" aria-haspopup="true" aria-expanded="false" title="更多视图">
@@ -287,14 +262,18 @@
       </button>
       </nav>
 
+    <div class="side-ornament" id="sideOrnament" aria-hidden="true"></div>
+
+    <div class="ss-bubble" id="sandBubble" aria-hidden="true" hidden>
+      <div class="ss-bh">沙漏说<span class="ss-btag" id="sandBubbleChip" hidden></span></div>
+      <p id="sandBubbleText"></p>
+      <div class="ss-bf"><span>个人设置 → 外观</span><span class="ss-dot" aria-hidden="true"></span><span>可关</span></div>
+    </div>
+
     <div class="side-foot">
       <button class="side-user" id="sideUserBtn" type="button" title="个人设置（账号 / 计时 / 密码）">
         <span class="avatar" id="sideUserAv" style="--a:#475467">·</span>
         <span class="side-user-n" id="sideUserName">…</span>
-      </button>
-      <button class="side-logout" id="sideSettings" type="button" title="设置" aria-label="设置">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/></svg>
-        <span class="nl">设置</span>
       </button>
       <button class="side-logout" id="btnLogout" type="button" title="退出登录" aria-label="退出登录">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.2 3.4H5.6a2 2 0 0 0-2 2v9.2a2 2 0 0 0 2 2h2.6"/><path d="M12.6 6.4 16.2 10l-3.6 3.6M16 10H8.4"/></svg>
@@ -614,7 +593,9 @@
       <section class="view" id="view-mine" aria-label="我的工作">
         <div class="view-page wide mw-page">
           <nav class="mw-tabs" id="mineTabs" role="tablist" aria-label="我的工作页签"></nav>
+          <div class="mw-catchup" id="mineCatchup" hidden></div>
           <div class="mw-brief" id="mineBrief" aria-live="polite"></div>
+          <div class="ss-line" id="mineSays" hidden></div>
           <div class="mw-toolbar" id="mineToolbar" hidden>
             <div class="mw-chips" id="mineChips" role="group" aria-label="范围筛选"></div>
             <div class="mw-tools">
@@ -644,6 +625,11 @@
           <div class="mw-body" id="mineBody"></div>
           <div class="mw-note" id="mineNote" hidden></div>
         </div>
+      </section>
+
+      <!-- ===== 周五补记（我的工作的子页，不占一级入口） ===== -->
+      <section class="view" id="view-catchup" aria-label="周五补记">
+        <div class="view-page wide cu-page" id="catchupBody"></div>
       </section>
 
       <!-- ===== 列表 ===== -->
@@ -903,6 +889,10 @@
           </section>
           <div class="menu popover" id="ganttDepMenu" hidden style="left:0;top:0"></div>
           <div class="gantt-notice" id="ganttNotice" hidden></div>
+          <div class="gantt-mobile-hint">
+            <span>手机屏幕较窄，任务名与日期可能被截断；建议在桌面查看完整排期。</span>
+            <button class="btn xs" type="button" id="ganttMobileToList">看列表</button>
+          </div>
           <div class="gantt-split" id="ganttSplit">
             <div class="gantt-stage" id="ganttStage">
               <div class="gantt-scroll" id="ganttScroll"></div>
@@ -913,7 +903,16 @@
                 <span class="gl-item"><i style="background:var(--success)"></i>已完成</span>
                 <span class="gl-item"><i class="ms"></i>里程碑</span>
                 <span class="gl-item"><i class="dep"></i>等待依赖</span>
-                <span class="gantt-legend-hint">拖动改期 · 拖两端调起止 · Ctrl 点选后批量拖动 · 拖条尾圆点连依赖 · 双击空白新建 · Ctrl+Z 撤销 · Esc 取消</span>
+                <button class="gantt-help-btn" type="button" id="ganttHelpBtn" aria-expanded="false" aria-controls="ganttHelpPanel" title="操作说明：改期、连依赖、撤销与快捷键">?</button>
+                <div class="gantt-help-panel" id="ganttHelpPanel" hidden>
+                  <b>怎么操作</b>
+                  <ul>
+                    <li>拖动条本身改期；拖两端调整起止日期。</li>
+                    <li>按住 Ctrl 点选多条后可批量拖动。</li>
+                    <li>拖条尾圆点连到另一条，建立依赖。</li>
+                    <li>双击空白处新建工作项；Ctrl+Z 撤销，Esc 取消。</li>
+                  </ul>
+                </div>
               </div>
             </div>
             <div class="gantt-split-bar" id="ganttSplitBar" role="separator" tabindex="0" hidden
@@ -1297,13 +1296,13 @@
             <span class="reqdoc-modes reqdoc-scope" role="tablist" aria-label="文档快筛范围">
               <button class="rm-btn" type="button" role="tab" data-rdscope="all" aria-selected="true">全部</button>
               <button class="rm-btn" type="button" role="tab" data-rdscope="mine" aria-selected="false">我参与的</button>
-              <button class="rm-btn" type="button" role="tab" data-rdscope="draft" aria-selected="false">草稿</button>
             </span>
             <span class="reqdoc-filter" id="reqDocProjFilter" hidden>
               <span class="rpf-label">项目：</span><span id="reqDocProjFilterName"></span>
               <button class="rpf-clear" type="button" id="reqDocProjFilterClear" aria-label="清除项目筛选" title="清除项目筛选">&times;</button>
             </span>
             <span class="sv-seg-label">筛选</span>
+            <button class="chip" type="button" id="reqDocDraftChip" aria-pressed="false" title="只看草稿：尚未发布的文档"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>草稿</button>
             <span class="reqdoc-search">
               <input type="search" id="reqDocSearch" placeholder="搜索全部文档…" title="在全部项目（或当前筛选的项目）文档中搜索标题与正文" aria-label="搜索全部文档的标题与正文">
             </span>
@@ -1338,8 +1337,8 @@
             <div class="reqdoc-split-tree" id="reqDocSplitTree"></div>
             <div class="reqdoc-reader" id="reqDocReader">
               <div class="rrd-empty">
-                <div class="rrd-empty-title">从左侧选择文档阅读</div>
-                <div class="rrd-empty-text">选中左侧文档即可阅读；也可以直接新建一篇。</div>
+                <div class="rrd-empty-title"><span class="desk-only">从左侧选择文档阅读</span><span class="mob-inline">从上方目录选择文档</span></div>
+                <div class="rrd-empty-text"><span class="desk-only">选中左侧文档即可阅读；也可以直接新建一篇。</span><span class="mob-inline">点上方目录里的文档即可阅读；也可以直接新建一篇。</span></div>
                 <button class="btn sm" type="button" data-rrd-new style="margin-top:12px">新建文档</button>
               </div>
             </div>
@@ -1830,10 +1829,16 @@
               <button type="button" data-tc-domain="project">概览</button>
               <button type="button" data-tc-domain="board">工作项</button>
               <button type="button" class="on" aria-current="page" data-tc-domain="testcases">测试用例</button>
+              <button type="button" data-tc-mode="defects">缺陷</button>
               <button type="button" data-tc-domain="branches">分支</button>
             </div>
           </nav>
           <div class="page-toolbar">
+            <span class="seg mini" id="tcPlanTabs" role="group" aria-label="测试计划视图" hidden>
+              <button type="button" data-tc-mode="plans" aria-pressed="true">计划</button>
+              <button type="button" data-tc-mode="coverage" aria-pressed="false">覆盖</button>
+              <button type="button" data-tc-mode="report" aria-pressed="false">报告</button>
+            </span>
             <span class="seg mini" id="tcModeSeg" role="group" aria-label="测试视图">
               <button type="button" data-tc-mode="cases" aria-pressed="true">用例</button>
               <button type="button" data-tc-mode="defects" aria-pressed="false">缺陷<span class="tc-tabcount" id="tcDefectCount" hidden></span></button>
@@ -1915,6 +1920,7 @@
             </div>
           </div>
           <div class="tc-filterbar tc-defbar" id="tcDefectBar" hidden>
+            <button class="btn sm tc-def-toggle" type="button" id="tcDefFilterBtn" aria-expanded="false" aria-controls="tcDefectBar"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>筛选<span class="n" id="tcDefFilterCount" hidden>0</span></button>
             <select id="tcDefReq" class="mini-select" aria-label="按项目筛选缺陷"></select>
             <select id="tcDefStatus" class="mini-select" aria-label="按修复状态筛选缺陷">
               <option value="open">状态：未关闭</option>
@@ -1926,17 +1932,18 @@
             </select>
             <select id="tcDefOwner" class="mini-select" aria-label="按负责人筛选缺陷"></select>
             <select id="tcDefPriority" class="mini-select" aria-label="按优先级筛选缺陷"></select>
-            <select id="tcDefSeverity" class="mini-select" aria-label="按严重度筛选缺陷">
+            <button class="btn sm ghost tc-def-more" type="button" id="tcDefMoreBtn" aria-expanded="false" aria-controls="tcDefectBar">更多筛选<span class="n" id="tcDefMoreCount" hidden>0</span></button>
+            <select id="tcDefSeverity" class="mini-select def-more-only" aria-label="按严重度筛选缺陷">
               <option value="all">严重度：全部</option>
               <option value="blocker">阻断</option>
               <option value="critical">严重</option>
               <option value="major">一般</option>
               <option value="minor">轻微</option>
             </select>
-            <select id="tcDefVersion" class="mini-select" aria-label="按发现版本筛选缺陷"></select>
-            <select id="tcDefPub" class="mini-select" aria-label="按发布状态筛选缺陷"></select>
-            <select id="tcDefCat" class="mini-select" aria-label="按分类筛选缺陷"></select>
-            <select id="tcDefTag" class="mini-select" aria-label="按标签筛选缺陷"></select>
+            <select id="tcDefVersion" class="mini-select def-more-only" aria-label="按发现版本筛选缺陷"></select>
+            <select id="tcDefPub" class="mini-select def-more-only" aria-label="按发布状态筛选缺陷"></select>
+            <select id="tcDefCat" class="mini-select def-more-only" aria-label="按分类筛选缺陷"></select>
+            <select id="tcDefTag" class="mini-select def-more-only" aria-label="按标签筛选缺陷"></select>
             <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索本项目缺陷…" title="在所选项目内搜索缺陷 / 编号 / 用例 / 分类 / 标签" aria-label="在所选项目内搜索缺陷" />
             <button class="btn sm soft" type="button" id="tcDefReset" title="恢复默认：全部项目 · 未关闭，并清除严重度、优先级、负责人、发现版本、分类、标签与搜索"><span data-icon="refresh"></span>&nbsp;恢复默认</button>
             <span class="views-menu-wrap">
@@ -2585,12 +2592,28 @@
           <div class="page-toolbar">
             <span class="toolbar-title" id="reviewTitle">上周回顾</span>
             <span class="toolbar-right">
+              <span class="seg" id="reviewScopeSeg" role="group" aria-label="回顾范围" hidden>
+                <button type="button" data-review-scope="team" aria-pressed="true">团队</button>
+                <button type="button" data-review-scope="me" aria-pressed="false">我</button>
+              </span>
               <label class="row row-gap" style="gap:6px">
                 <span class="toolbar-meta is-strong">项目</span>
                 <select class="mini-select" id="reviewReq" aria-label="回顾范围：全部项目或单个项目" title="按项目查看周回顾">
                   <option value="">全部项目</option>
                 </select>
               </label>
+              <label class="row row-gap" style="gap:6px" id="reviewRoleWrap" hidden>
+                <span class="toolbar-meta is-strong">角色</span>
+                <select class="mini-select" id="reviewRole" aria-label="成员角色筛选" title="只筛选成员明细，不改变团队汇总">
+                  <option value="all">全部角色</option>
+                  <option value="dev">开发</option>
+                  <option value="test">测试</option>
+                  <option value="pm">产品</option>
+                  <option value="design">设计</option>
+                  <option value="lead">负责人</option>
+                </select>
+              </label>
+              <span class="toolbar-meta" id="reviewScopeNote" hidden></span>
               <span class="row row-gap" style="gap:4px">
                 <button class="icon-btn sm" type="button" id="weekPrev" aria-label="上一周">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3 4.6 7l4 4"/></svg>
@@ -2617,6 +2640,10 @@
             </span>
           </div>
 
+          <!-- 团队视图：由 review-team.js 整体渲染（结论条 / 统计矩阵 / 完成·发布 / 质量 / 文档 / 成员 / 项目·风险） -->
+          <div id="reviewTeamView" class="rv-root"></div>
+
+          <div id="reviewPersonalView">
           <div class="summary-panel collapsed" id="summaryPanel">
             <div class="sh" role="button" tabindex="0" id="summaryToggle" aria-expanded="false">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.6 9.9 6l4.8.4-3.6 3.1 1.1 4.7L8 11.7l-4.2 2.5 1.1-4.7L1.3 6.4 6.1 6 8 1.6Z"/></svg>
@@ -2693,13 +2720,19 @@
             <div class="panel-head"><h3>本周完成</h3><span class="meta-right" id="doneCount"></span></div>
             <div class="done-list" id="doneList"></div>
           </div>
+          </div><!-- /reviewPersonalView -->
         </div>
       </section>
 
-      <section class="view" id="view-analysis" aria-label="报表">
+      <section class="view" id="view-analysis" aria-label="运营概览">
+        <nav class="aux-tabs" aria-label="报表视图">
+          <button class="aux-tab" type="button" data-go-view="analysis" aria-pressed="true">运营概览</button>
+          <button class="aux-tab" type="button" data-go-view="report" aria-pressed="false">交付图表</button>
+          <button class="aux-tab" type="button" data-go-view="investment" aria-pressed="false">投入结构</button>
+        </nav>
         <div class="analysis-bar">
-          <div class="set-tabs" id="analysisTabs" role="tablist" aria-label="报表视图">
-            <button class="set-tab on" type="button" role="tab" aria-selected="true" data-analysis-tab="stats">趋势与分布</button>
+          <div class="set-tabs" id="analysisTabs" role="tablist" aria-label="运营概览视图">
+            <button class="set-tab on" type="button" role="tab" aria-selected="true" data-analysis-tab="stats">统计概览</button>
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-analysis-tab="completions">完成记录</button>
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-analysis-tab="flow">流程体检</button>
           </div>
@@ -2859,23 +2892,40 @@
         <div class="view-page wide manager-page" id="projectBody"></div>
       </section>
 
-      <!-- ===== 管理：成员负载 ===== -->
+      <!-- ===== 洞察：风险与负载（成员负载 / 逾期与阻塞） ===== -->
       <section class="view" id="view-workload" aria-label="成员负载">
+        <nav class="aux-tabs" aria-label="风险与负载视图">
+          <button class="aux-tab" type="button" data-go-view="workload" aria-pressed="true">成员负载</button>
+          <button class="aux-tab" type="button" data-go-view="risks" aria-pressed="false">逾期与阻塞</button>
+        </nav>
         <div class="view-page wide manager-page" id="workloadBody"></div>
       </section>
 
-      <!-- ===== 管理：逾期与阻塞 ===== -->
       <section class="view" id="view-risks" aria-label="逾期与阻塞">
+        <nav class="aux-tabs" aria-label="风险与负载视图">
+          <button class="aux-tab" type="button" data-go-view="workload" aria-pressed="false">成员负载</button>
+          <button class="aux-tab" type="button" data-go-view="risks" aria-pressed="true">逾期与阻塞</button>
+        </nav>
         <div class="view-page wide manager-page" id="risksBody"></div>
       </section>
 
       <!-- ===== 洞察：交付图表（报表页的子导航） ===== -->
       <section class="view" id="view-report" aria-label="交付图表">
+        <nav class="aux-tabs" aria-label="报表视图">
+          <button class="aux-tab" type="button" data-go-view="analysis" aria-pressed="false">运营概览</button>
+          <button class="aux-tab" type="button" data-go-view="report" aria-pressed="true">交付图表</button>
+          <button class="aux-tab" type="button" data-go-view="investment" aria-pressed="false">投入结构</button>
+        </nav>
         <div class="view-page wide manager-page" id="reportBody"></div>
       </section>
 
       <!-- ===== 洞察：投入结构（报表页的子导航） ===== -->
       <section class="view" id="view-investment" aria-label="投入结构">
+        <nav class="aux-tabs" aria-label="报表视图">
+          <button class="aux-tab" type="button" data-go-view="analysis" aria-pressed="false">运营概览</button>
+          <button class="aux-tab" type="button" data-go-view="report" aria-pressed="false">交付图表</button>
+          <button class="aux-tab" type="button" data-go-view="investment" aria-pressed="true">投入结构</button>
+        </nav>
         <div class="view-page wide manager-page" id="investmentBody"></div>
       </section>
 
@@ -3017,6 +3067,88 @@
                 <button class="btn primary" type="button" id="btnNotifySave">保存推送配置</button>
                 <button class="btn" type="button" id="btnNotifyTest">测试推送</button>
                 <span class="foot-note" id="notifyHint">仅空间主可配置与测试</span>
+              </div>
+            </div>
+
+            <div class="panel" data-set-pane="integration" id="set-automation" hidden>
+              <div class="panel-head">
+                <h3>自动化规则</h3>
+                <span class="meta-right" id="automationRuleHint">读取中…</span>
+              </div>
+              <p class="set-hint">三条内置规则默认开启。关闭只停止自动提醒或同步，不影响已经记录的事实。</p>
+              <div class="auto-rules" id="automationRules"></div>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="btnAutomationSave">保存规则</button>
+                <span class="foot-note" id="automationState"></span>
+              </div>
+            </div>
+
+            <div class="panel" data-set-pane="integration" id="set-reports" hidden>
+              <div class="panel-head">
+                <h3>定时报告</h3>
+                <span class="meta-right">只发给我自己</span>
+              </div>
+              <p class="set-hint">周报按你设定的时间汇总本周完成与逾期；版本报告在成功生产发布后发送。渠道可选站内、邮件或两者。</p>
+              <div class="setgrid-2">
+                <div class="subcard">
+                  <div class="subcard-head"><span>个人周报</span><span class="tiny" id="weeklyLastSent">还没发送过</span></div>
+                  <div class="swrow">
+                    <label class="sw"><input type="checkbox" id="reportWeeklyEnabled" /> 启用周报</label>
+                    <span class="tiny">每周固定时间汇总「本周完成 / 进行中 / 逾期」</span>
+                  </div>
+                  <div class="set-grid">
+                    <div class="field">
+                      <label for="reportWeeklyWeekday">发送星期</label>
+                      <select id="reportWeeklyWeekday">
+                        <option value="1">周一</option><option value="2">周二</option><option value="3">周三</option>
+                        <option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="reportWeeklyHour">发送时间</label>
+                      <select id="reportWeeklyHour"></select>
+                    </div>
+                    <div class="field ai-field-wide">
+                      <label for="reportWeeklyChannels">渠道</label>
+                      <select id="reportWeeklyChannels">
+                        <option value="inapp">站内通知</option>
+                        <option value="email">邮件</option>
+                        <option value="both">站内 + 邮件</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="set-actions">
+                    <button class="btn soft" type="button" data-report-send="weekly">立即发我一份</button>
+                  </div>
+                </div>
+                <div class="subcard">
+                  <div class="subcard-head"><span>版本报告</span><span class="tiny" id="versionLastSent">还没发送过</span></div>
+                  <div class="swrow">
+                    <label class="sw"><input type="checkbox" id="reportVersionEnabled" /> 启用版本报告</label>
+                    <span class="tiny">版本成功生产发布后发送范围、完成与工时概况</span>
+                  </div>
+                  <div class="set-grid">
+                    <div class="field ai-field-wide">
+                      <label for="reportVersionChannels">渠道</label>
+                      <select id="reportVersionChannels">
+                        <option value="inapp">站内通知</option>
+                        <option value="email">邮件</option>
+                        <option value="both">站内 + 邮件</option>
+                      </select>
+                    </div>
+                    <div class="field ai-field-wide">
+                      <label for="reportVersionPick">预览哪一份</label>
+                      <select id="reportVersionPick"><option value="">选择版本</option></select>
+                    </div>
+                  </div>
+                  <div class="set-actions">
+                    <button class="btn soft" type="button" data-report-send="version">立即发我一份</button>
+                  </div>
+                </div>
+              </div>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="btnReportSave">保存订阅</button>
+                <span class="foot-note" id="reportState"></span>
               </div>
             </div>
 
@@ -3283,6 +3415,16 @@
               </div>
               <div class="card-lite">
                 <div class="subcard-head">
+                  <span>Excel / CSV 迁移导入</span>
+                  <span class="tiny">先预检再写入，失败行可下载修正</span>
+                </div>
+                <div class="import-row">
+                  <span class="fld dim">批量导入工作项、需求、测试用例与工时；字段可映射到表格列，单次最多 1000 行。</span>
+                  <button class="btn sm" type="button" id="btnGridImport" title="从 Excel / CSV 导入工作项、需求、测试用例或工时：先下载模板，预检通过后写入，失败行可下载修正后重导">导入 Excel / CSV</button>
+                </div>
+              </div>
+              <div class="card-lite">
+                <div class="subcard-head">
                   <span>导入与恢复</span>
                   <span class="tiny">覆盖导入会替换同名对象，不做合并</span>
                 </div>
@@ -3491,6 +3633,7 @@
             <a href="#me-basic">基本信息</a>
             <a href="#me-timer">计时设置</a>
             <a href="#me-notify">消息通知</a>
+            <a href="#me-appearance">外观</a>
             <a href="#me-ai">AI 设置</a>
             <a href="#me-pwd">修改密码</a>
           </nav>
@@ -3587,6 +3730,78 @@
               <div class="set-actions">
                 <button class="btn ghost" type="button" id="meNotificationPreset" title="只保留指派、评论与@、关注与每日汇总的站内通知">仅重要事件</button>
                 <button class="btn" type="button" id="meNotificationSave">保存通知设置</button>
+              </div>
+            </div>
+
+            <div class="panel" id="me-appearance">
+              <div class="panel-head">
+                <h3>外观</h3>
+                <span class="meta-right">只影响你的界面 · 保存在本机</span>
+              </div>
+              <p class="set-hint">左侧导航底部的小沙漏只是装饰，不占空间数据。可以关掉，也可以换一个形态；开关和选择只保存在这台设备的浏览器里，换设备或清缓存后回到默认。「沙漏说」是沙漏旁的一句话，可在下方单独关闭。</p>
+              <div class="ai-assist-row">
+                <span class="ai-assist-ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 3.2h8.8M5.6 16.8h8.8"/><path d="M6.4 3.2c0 3.4 3.6 4.2 3.6 6.8s-3.6 3.4-3.6 6.8"/><path d="M13.6 3.2c0 3.4-3.6 4.2-3.6 6.8s3.6 3.4 3.6 6.8"/></svg></span>
+                <div class="ai-assist-txt">
+                  <div class="ai-assist-title">显示侧栏摆件</div>
+                  <div class="ai-assist-sub">在左侧导航底部显示沙漏动画。侧栏导航需要滚动、窗口过矮或移动端时自动隐藏，不挤占导航。</div>
+                </div>
+                <label class="sw" title="开启后在左侧导航底部显示沙漏摆件">
+                  <input type="checkbox" id="meOrnOn" role="switch" aria-label="显示侧栏摆件" />
+                </label>
+              </div>
+              <div class="orn-pick">
+                <div class="orn-pick-head">
+                  <b id="meOrnPickLabel">形态</b>
+                  <span>选中后立即生效</span>
+                </div>
+                <div class="orn-grid" id="meOrnGrid" role="radiogroup" aria-labelledby="meOrnPickLabel"></div>
+                <p class="orn-reason" id="meOrnReason" hidden>摆件已关闭；打开上面的开关后才能切换形态。</p>
+              </div>
+              <div class="set-actions">
+                <button class="btn ghost" type="button" id="meOrnReset">恢复默认</button>
+                <span class="foot-note">默认显示「经典流淌」。系统开启「减少动态效果」时会停在静态一帧。</span>
+              </div>
+
+              <div class="ss-sec" id="me-sandsay">
+                <div class="ss-sec-head">
+                  <h4>沙漏说</h4>
+                  <span>按时段问候 · 只在本机计算</span>
+                </div>
+                <p class="set-hint">在「我的工作」页头和侧栏沙漏的悬停气泡里显示一句话，顺带告诉你离下班、离下个假期还有多久。不写业务数据，也不发通知。</p>
+                <div class="ai-assist-row">
+                  <span class="ai-assist-ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 3.2h7.2M6.4 16.8h7.2"/><path d="M7 3.2c0 3 2.6 3.6 3 6.2.4-2.6 3-3.2 3-6.2"/><path d="M7 16.8c0-3 2.6-3.6 3-6.2.4 2.6 3 3.2 3 6.2"/><path d="M10 10.6v2.1" stroke-dasharray="1 1.4"/></svg></span>
+                  <div class="ai-assist-txt">
+                    <div class="ai-assist-title">显示沙漏说</div>
+                    <div class="ai-assist-sub">关闭后页头问候和悬停气泡都不出现；侧栏摆件本身不受影响。</div>
+                  </div>
+                  <label class="sw" title="开启后显示沙漏说">
+                    <input type="checkbox" id="meSsOn" role="switch" aria-label="显示沙漏说" />
+                  </label>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-lb">我的下班时间<small>留空则不显示下班倒计时</small></div>
+                  <div class="ss-ctl">
+                    <input class="ss-time" type="time" id="meSsOff" step="60" aria-label="我的下班时间" />
+                    <span class="ss-time-hint">只在本机计算</span>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-lb">出现方式<small>页头一行只在「我的工作」显示</small></div>
+                  <div class="ss-ctl">
+                    <div class="seg mini" id="meSsMode" role="group" aria-label="沙漏说出现方式">
+                      <button type="button" data-ssmode="always" aria-pressed="true">常驻显示</button>
+                      <button type="button" data-ssmode="hover" aria-pressed="false">只在悬停</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="ss-row">
+                  <div class="ss-lb">预览<small>当前时间段的效果</small></div>
+                  <div class="ss-ctl"><div class="ss-preview" id="meSsPreview" aria-live="polite"></div></div>
+                </div>
+                <div class="set-actions">
+                  <button class="btn ghost" type="button" id="meSsReset">恢复默认</button>
+                  <span class="foot-note">默认开启、18:00 下班、常驻显示。节假日表按年维护，没有当年数据时只说「距周末」；周末与调休按本地日历计算。</span>
+                </div>
               </div>
             </div>
 
@@ -3839,12 +4054,28 @@
         <span class="err">请填写需求标题</span>
       </div>
       <div class="field">
-        <label for="dDesc">需求描述</label>
-        <textarea id="dDesc" maxlength="2000" placeholder="背景、场景、要解决什么问题…"></textarea>
+        <label id="dDescLabel">需求描述</label>
+        <div class="desc-editor" id="fDemandDesc">
+          <div class="desc-editor-bar">
+            <input type="file" id="dDescImgFile" class="dem-comment-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple />
+            <button class="btn sm ghost" type="button" id="dDescImgBtn" title="插入图片：也可以直接粘贴或拖入">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.2" width="14" height="11.6" rx="2"/><circle cx="7.4" cy="8" r="1.4"/><path d="m3.6 13.4 3.8-3.4 3 2.6 2.4-2.2 3.6 3.4"/></svg>
+              插入图片
+            </button>
+            <span class="desc-count" id="dDescCount" aria-live="polite">0/2000</span>
+            <span class="foot-note">可粘贴/拖入截图；最多 2000 字，选中图片后可拖动右下角缩放</span>
+          </div>
+          <div class="desc-input" id="dDesc" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="dDescLabel" data-placeholder="背景、场景、要解决什么问题…"></div>
+        </div>
       </div>
       <div class="field">
         <label for="dAccept">验收标准</label>
         <textarea id="dAccept" maxlength="2000" placeholder="做到什么程度算完成…"></textarea>
+      </div>
+      <div class="field span2" id="fDemandAtts">
+        <label>附件 <small class="tc-optional">选填</small></label>
+        <div id="fDemandAttsMount"></div>
+        <span class="hint">提交时随需求一起上传；想让图片直接显示在描述里，用上方「插入图片」。</span>
       </div>
       <div class="form-sec span2" id="fDemandWatchSec">通知</div>
       <div class="field span2" id="fDemandReviewer">
@@ -4077,11 +4308,6 @@
     <button class="tab" type="button" data-tab="projects" aria-label="项目">
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 6.4a1.8 1.8 0 0 1 1.8-1.8h3.2l1.6 1.9h6a1.8 1.8 0 0 1 1.8 1.8v6.9a1.8 1.8 0 0 1-1.8 1.8H4.6a1.8 1.8 0 0 1-1.8-1.8Z"/></svg>
       <span>项目</span>
-    </button>
-    <button class="tab" type="button" data-tab="messages" aria-label="消息">
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.7 4.7 0 0 1 4.7 4.7v3l1.1 2.2H4.2l1.1-2.2v-3A4.7 4.7 0 0 1 10 3.2Z"/><path d="M8.1 16.1a2.1 2.1 0 0 0 3.8 0"/></svg>
-      <span>消息</span>
-      <i class="tab-dot" id="tabMsgDot" hidden></i>
     </button>
     <button class="tab" type="button" data-tab="me" aria-label="我的">
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="3.1"/><path d="M3.9 16.5c.6-3.2 2.6-4.9 6.1-4.9s5.5 1.7 6.1 4.9"/></svg>

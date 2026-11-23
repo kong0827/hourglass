@@ -518,7 +518,7 @@
 .rs-proj-head .rp-caret{display:grid;place-items:center;color:var(--text-3);transition:transform var(--dur-fast) var(--ease-out);}
 .rs-proj.collapsed .rs-proj-head .rp-caret{transform:rotate(-90deg);}
 .rs-proj-head .rp-name{font-size:11.5px;font-weight:650;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.rs-proj-head .rp-count{margin-left:auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.rs-proj-head .rp-count{margin-left:auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .rs-proj.collapsed .rs-proj-body{display:none;}
 .rs-proj-body{display:flex;flex-direction:column;padding:0 0 4px 10px;}
 .rs-node{position:relative;display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px 6px 10px;border:none;background:transparent;border-radius:var(--r-xs);cursor:pointer;font-family:inherit;text-align:left;}
@@ -577,7 +577,7 @@
 .rs-cat .rs-caret.collapsed svg{transform:rotate(-90deg);}
 .rs-folder{flex:none;display:grid;place-items:center;color:var(--text-3);}
 .rs-cat .rs-title{font-weight:600;color:var(--text-2);}
-.rs-kids{flex:none;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.rs-kids{flex:none;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .rs-cat.rd-depth1{padding-left:23px;}
 .rs-cat.rd-depth2{padding-left:39px;}
 .rs-cat.rd-depth3{padding-left:55px;}
@@ -937,7 +937,7 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
   display:flex;flex-direction:column;min-height:0;background:var(--surface);overflow:hidden;}
 #dlgReqDocHistory .rh-vlist-head{display:flex;align-items:center;justify-content:space-between;padding:11px 14px 9px;flex:none;}
 #dlgReqDocHistory .rh-vlist-head span{font-size:12px;font-weight:650;letter-spacing:0;text-transform:none;color:var(--text-2);}
-#dlgReqDocHistory .rh-vlist-head em{font-style:normal;font-size:10.5px;color:var(--text-3);}
+#dlgReqDocHistory .rh-vlist-head em{font-style:normal;font-size:11px;color:var(--text-3);}
 #dlgReqDocHistory .rh-vscroll{flex:1;overflow:auto;padding:0 6px 10px;display:flex;flex-direction:column;gap:2px;}
 /* 版本行与原型 .veritem 同构：一行内「版本 + 最近标记 + 保存人·时间」 */
 #dlgReqDocHistory .rh-vrow{width:100%;display:flex;align-items:center;gap:6px;text-align:left;
@@ -945,10 +945,10 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 #dlgReqDocHistory .rh-vrow:hover{background:var(--surface-hover);}
 #dlgReqDocHistory .rh-vrow.active{background:var(--primary-soft);border-color:var(--primary-border);}
 #dlgReqDocHistory .rh-vno{font-size:11.5px;font-weight:650;color:var(--primary-fg);white-space:nowrap;}
-#dlgReqDocHistory .rh-vchip{font-size:10px;font-weight:650;line-height:15px;padding:0 4px;border-radius:var(--r-micro);
+#dlgReqDocHistory .rh-vchip{font-size:11px;font-weight:650;line-height:15px;padding:0 4px;border-radius:var(--r-micro);
   background:var(--surface-active);color:var(--text-2);white-space:nowrap;}
 #dlgReqDocHistory .rh-vrow.active .rh-vchip{background:var(--surface);color:var(--primary-fg);}
-#dlgReqDocHistory .rh-vby{margin-left:auto;font-size:10.5px;line-height:15px;color:var(--text-3);font-variant-numeric:tabular-nums;
+#dlgReqDocHistory .rh-vby{margin-left:auto;font-size:11px;line-height:15px;color:var(--text-3);font-variant-numeric:tabular-nums;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
 #dlgReqDocHistory .rh-vrow.active .rh-vby{color:var(--primary-fg);}
 #dlgReqDocHistory .rh-vlist-foot{flex:none;border-top:1px solid var(--border);padding:9px 13px;font-size:11px;line-height:1.55;color:var(--text-3);}

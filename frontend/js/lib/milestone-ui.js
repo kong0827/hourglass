@@ -8,6 +8,7 @@ var KIND_NAMES = { version: "版本发布后", tasks: "工作项完成后", manu
 var STATUS_META = {
   achieved: { label: "已达成", cls: "tag-success" },
   achieved_rolled_back: { label: "已达成 · 已回滚", cls: "tag-warning" },
+  evidence_missing: { label: "证据缺失", cls: "tag-warning" },
   overdue: { label: "已延期", cls: "tag-danger" },
   canceled: { label: "已取消", cls: "tag-neutral" },
   pending: { label: "未达成", cls: "ghost" }
@@ -28,7 +29,9 @@ export function milestoneEvidence(m){
     return text;
   }
   if(m.kind === "tasks"){
-    return "关联工作项 " + (m.doneTaskCount || 0) + " / " + (m.taskCount || 0) + " 完成";
+    var ev = "关联工作项 " + (m.doneTaskCount || 0) + " / " + (m.taskCount || 0) + " 完成";
+    if(m.missingTaskCount > 0) ev += " · 缺失 " + m.missingTaskCount + " 项证据（关联工作项已删除或移出项目）";
+    return ev;
   }
   if(m.achievedAt){
     return "人工确认于 " + fmtTs(m.achievedAt) + (m.confirmedByName ? " · " + m.confirmedByName : "");
@@ -78,7 +81,7 @@ function detailHTML(m, canWrite){
     if(m.kind === "manual" && m.status !== "achieved" && m.status !== "achieved_rolled_back"){
       acts += '<button class="btn sm primary" type="button" data-ms-act="achieve">标记达成</button>';
     }
-    if(m.status === "pending" || m.status === "overdue"){
+    if(m.status === "pending" || m.status === "overdue" || m.status === "evidence_missing"){
       acts += '<button class="btn sm ghost" type="button" data-ms-act="reschedule">改期</button>';
       acts += '<button class="btn sm ghost danger" type="button" data-ms-act="cancel">取消</button>';
     }

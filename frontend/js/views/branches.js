@@ -196,6 +196,10 @@ function loadRepos(force){
     return branchRepoCache;
   });
 }
+/* 空间是否接入了 Git：分支只作为项目 / 版本里的上下文入口出现，未接入时不露出 */
+function gitEnabled(){
+  return loadRepos().then(function(list){ return !!(list && list.length); });
+}
 function loadBranches(force){
   if(branchesLoaded && !force && branchBoard) return Promise.resolve(branchList);
   /* 筛选/搜索连续触发时只认最后一次请求，避免慢响应把新筛选结果盖回旧的 */
@@ -258,6 +262,23 @@ function applyBranchDeepLink(){
   if(!status || !branchStatusMeta(status) || !branchStatusMeta(status).hint){
     /* 侧栏等普通入口：不沿用上一次深链强加的来源条与状态筛选 */
     if(branchSource){ branchSource = null; branchFilter = ""; }
+    /* 项目驾驶舱 / 版本详情进入：带 project / version 做上下文筛选，其余筛选清空一次 */
+    var project = hashParam("project"), version = hashParam("version");
+    if(project || version){
+      var changed = branchProjectFilter !== (project || "") || branchVersionFilter !== (version || "");
+      branchProjectFilter = project || "";
+      branchVersionFilter = version || "";
+      branchRepoFilter = "";
+      branchOwnerFilter = "";
+      if($("branchProjectFilter")) $("branchProjectFilter").value = branchProjectFilter;
+      if($("branchVersionFilter")) $("branchVersionFilter").value = branchVersionFilter;
+      if($("branchRepoFilter")) $("branchRepoFilter").value = "";
+      if($("branchOwnerFilter")) $("branchOwnerFilter").value = "";
+      var box = $("branchSearch");
+      if(box) box.value = "";
+      syncBranchFilterControls();
+      return changed;
+    }
     return false;
   }
   branchSource = { from: from === "accept" || from === "merge" ? from : "link", status: status };
@@ -2702,4 +2723,4 @@ function ensureBranchOptions(keep, projectId){
 function openBranchById(id){
   openBranchDrawer(id);
 }
-export { branchMetaById, branchNameById, branchesLoaded, ensureBranchOptions, enterBranchesView, loadBranches, openBranchById, populateBranchSelect, renderBranches, requestBranchStatus };
+export { branchMetaById, branchNameById, branchesLoaded, ensureBranchOptions, enterBranchesView, gitEnabled, loadBranches, openBranchById, populateBranchSelect, renderBranches, requestBranchStatus };

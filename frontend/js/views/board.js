@@ -1293,15 +1293,24 @@ function endDrag(){
   });
 }
 /* 卡片上的「开始测试」：移入测试中并由后端自动认领给当前用户 */
-function claimTest(id){
+var claimBusy = {};
+function claimTest(id, btn){
   var task = taskById(id);
-  if(!task) return;
+  if(!task || claimBusy[id]) return;
+  claimBusy[id] = true;
+  if(btn) btn.disabled = true;
+  function release(){
+    delete claimBusy[id];
+    if(btn) btn.disabled = false;
+  }
   function done(res){
+    release();
     var tester = (res.task && res.task.testOwner) || "我";
     toast("已认领测试负责人：" + tester + "，开始测试", "fs");
     loadBoard({silent:true});
   }
   function fail(ex){
+    release();
     toast("认领失败：" + (ex.message || "网络异常"), "bad");
     loadBoard({silent:true});
   }
@@ -1313,7 +1322,7 @@ function claimTest(id){
   var wsId = rt.currentWs && rt.currentWs.id;
   var items = [{ from: task.boardColumn, title: task.title }];
   guard(wsId, items, "testing").then(function(pass){
-    if(!pass) return;
+    if(!pass){ release(); return; }
     var body = { column: "testing" };
     if(pass.reason) body.reason = pass.reason;
     if(pass.force) body.force = true;
@@ -1466,7 +1475,7 @@ board.addEventListener("click", function(e){
   var tmr = e.target.closest("[data-timer-toggle]");
   if(tmr){ toggleTaskTimer(tmr.dataset.timerToggle); return; }
   var claim = e.target.closest("[data-test-claim]");
-  if(claim){ claimTest(claim.dataset.testClaim); return; }
+  if(claim){ claimTest(claim.dataset.testClaim, claim); return; }
   var tick = e.target.closest("[data-done-toggle]");
   if(tick){ toggleTaskDone(tick.dataset.doneToggle); return; }
   var ed = e.target.closest("[data-edit]");

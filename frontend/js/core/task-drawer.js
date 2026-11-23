@@ -5841,13 +5841,16 @@ if(workLogList){
 
 /* 状态只有一个入口：头部胶囊。读态下改列立即生效，和看板拖拽走同一套流转规则。
    presetReason：调用方已收集过原因（测试退回），不再二次弹窗。 */
+var drawerMoveBusy = {};
 function moveDrawerTask(toCol, presetReason){
   var id = rt.editingId;
   if(!id || !toCol) return;
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var t = taskById(id) || taskCacheExtra[id] || {};
   var from = t.boardColumn || (iCol && iCol.value);
-  if(from === toCol) return;
+  if(from === toCol || drawerMoveBusy[id]) return;
+  drawerMoveBusy[id] = true;
+  function releaseMove(){ delete drawerMoveBusy[id]; }
   var items = [{ from: from, title: t.title || (iTitle && iTitle.value) || "" }];
   var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
   var retried = false;
@@ -5883,6 +5886,7 @@ function moveDrawerTask(toCol, presetReason){
     refreshAssociationViews();
     /* 我的工作列表不随看板自动刷新：抽屉里的移列/认领要显式通知它 */
     window.dispatchEvent(new CustomEvent("ds:refresh-mine"));
+    releaseMove();
   }
   function send(dec){
     var body = { column: toCol };
@@ -5891,25 +5895,35 @@ function moveDrawerTask(toCol, presetReason){
     return API.post("/api/tasks/" + encodeURIComponent(id) + "/move", body).then(done);
   }
   function fail(ex){
-    if(retried){ toast(ex.message || "移动失败", "bad"); return; }
+    if(retried){ toast(ex.message || "移动失败", "bad"); releaseMove(); return; }
     retried = true;
     serverDecision(wsId, items, toCol, ex).then(function(retry){
-      if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "移动失败", "bad"); return; }
-      send(retry).catch(function(e){ toast(e.message || "移动失败", "bad"); });
-    });
+      if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "移动失败", "bad"); releaseMove(); return; }
+      send(retry).catch(function(e){ toast(e.message || "移动失败", "bad"); releaseMove(); });
+    }).catch(releaseMove);
   }
   guard(wsId, items, toCol, { reason: presetReason || null }).then(function(pass){
-    if(!pass) return;
+    if(!pass){ releaseMove(); return; }
     send(pass).catch(fail);
-  });
+  }).catch(releaseMove);
 }
 /* 测试中尚未认领（批量移入等）时一键承接：补测试负责人与开始时间 */
+var claimTestBusy = {};
 function claimDrawerTest(){
   var id = rt.editingId;
-  if(!id) return;
+  if(!id || claimTestBusy[id]) return;
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var t = taskCacheExtra[id] || taskById(id) || {};
   if((iCol && iCol.value) === "test"){ moveDrawerTask("testing"); return; }
+  claimTestBusy[id] = true;
+  var claimBtn = $("readTestClaim");
+  if(claimBtn) claimBtn.disabled = true;
+  function releaseClaim(){
+    delete claimTestBusy[id];
+    var b = $("readTestClaim");
+    /* 按钮是抽屉共用元素：切到另一个仍在认领的任务时保持禁用 */
+    if(b) b.disabled = !!claimTestBusy[rt.editingId];
+  }
   API.post("/api/tasks/" + encodeURIComponent(id) + "/test-claim", {}).then(function(res){
     var nt = res && res.task;
     if(nt && taskCacheExtra[id]) Object.assign(taskCacheExtra[id], nt);
@@ -5928,7 +5942,9 @@ function claimDrawerTest(){
     refreshChainIfOpen();
     refreshAssociationViews();
     window.dispatchEvent(new CustomEvent("ds:refresh-mine"));
+    releaseClaim();
   }).catch(function(ex){
+    releaseClaim();
     toast("认领失败：" + (ex.message || "网络异常"), "bad");
   });
 }
@@ -6088,7 +6104,7 @@ function buildOwnerPickerCfg(anchor){
     options:st.pending || st.error ? [] : ownerPickerOptions(true),
     currentId:cur.id, currentName:cur.name, unavailable:cur.unavailable,
     allowClear:true, clearLabel:"未分配",
-    foot:"负责人只有一个：按谁推进到完成来选，不按岗位选；产品、运维同样可以做负责人。负载按本项目剩余预估 ÷ 可用工作日估算。",
+    foot:"负责人只有一个：按谁推进到完成来选，不按岗位选；产品、运维同样可以做负责人。负载按本项目待完成预估 ÷ 可用工作日估算。",
     loading:st.pending, error:st.error ? (st.error.message || "网络异常") : "",
     onRetry:function(){ ensureProjectRoles(currentProjectId(), true); refreshOwnerPicker(); },
     onPick:function(o){

@@ -4,10 +4,12 @@
    浮层优先出现在输入框上方，上方空间不足时翻到下方，并始终限制在视口内。 */
 
 import { avatarHTML } from "../lib/format.js";
+import { companyColor, companyNameOf } from "../lib/company.js";
+import { effectiveMemberRole } from "../lib/member-labels.js";
 import { esc } from "./ui.js";
 
 var MAX_ITEMS = 50;
-var MAX_HEIGHT = 240;
+var MAX_HEIGHT = 280;
 var RETRY_MS = 30000;
 var GAP = 6;
 var MIN_WIDTH = 260;
@@ -32,6 +34,15 @@ function hasMentionToken(text, name){
 /* 中文没有词边界，"请@张三" 是自然写法；只有 ASCII 字母/数字/下划线前的 @ 视为邮箱 */
 function startBlocked(ch){
   return !!ch && /[A-Za-z0-9_]/.test(ch);
+}
+/* 候选副行：公司 · 岗位，与成员选择浮层同口径；缺省也占位，避免同名成员难以区分 */
+function memberOrg(m){
+  var company = companyNameOf(m);
+  var role = effectiveMemberRole(m);
+  return {
+    hasCompany: !!company,
+    text: (company || "未标注公司") + " · " + (role || "未设岗位")
+  };
 }
 
 /**
@@ -209,9 +220,14 @@ export function createMentionPicker(input, opts){
       return;
     }
     layer.innerHTML = items.map(function(m, i){
+      var org = memberOrg(m);
       return '<button type="button" class="cm-item' + (i === index ? " on" : "") + '" data-mp-idx="' + i + '" role="option" aria-selected="' + (i === index) + '">' +
         avatarHTML(m.displayName, "sm") +
-        '<span class="cm-name ellipsis">' + esc(m.displayName) + '</span>' +
+        '<span class="cm-main">' +
+          '<span class="cm-name ellipsis">' + esc(m.displayName) + '</span>' +
+          '<span class="cm-sub ellipsis"><i' + (org.hasCompany ? ' style="background:' + companyColor(companyNameOf(m)) + '"' : '') + '></i>'
+            + esc(org.text) + '</span>' +
+        '</span>' +
         (m.username ? '<span class="cm-user">@' + esc(m.username) + '</span>' : '') +
       '</button>';
     }).join("");
@@ -273,7 +289,8 @@ export function createMentionPicker(input, opts){
       if(!m || !m.userId || !m.displayName) return false;
       if(self && m.userId === self) return false;
       return (m.displayName || "").toLowerCase().indexOf(q) >= 0
-        || (m.username || "").toLowerCase().indexOf(q) >= 0;
+        || (m.username || "").toLowerCase().indexOf(q) >= 0
+        || memberOrg(m).text.toLowerCase().indexOf(q) >= 0;
     }).slice(0, MAX_ITEMS);
     var nt = "";
     if(loadState !== "ready"){

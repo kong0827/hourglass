@@ -9,6 +9,7 @@ import { navTelemetryCsv } from "../core/nav-telemetry.js";
 import { routeNotificationLink } from "../core/notifications.js";
 import { openTaskById } from "../core/task-actions.js";
 import { saveViewState } from "../core/filters-ui.js";
+import { openImportDialog } from "../core/import-wizard.js";
 import { icon } from "../core/icons.js";
 import { loadPriorities } from "../core/priorities.js";
 import { canEditReq, canManageProject, catTag, projectOptionsHTML, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
@@ -547,6 +548,7 @@ function setSettingsTab(tab){
   /* 切换页签时清掉成员搜索残留：避免上一次选中的账号在下一次打开时仍留在输入框里 */
   if(prevTab !== tab && (prevTab === "members" || tab === "members")) resetMemberPicker();
   if(tab === "visibility" && isManager && !isPersonal) loadProjectAccess();
+  if(tab === "integration") loadAutomation();
   if(tab === "integration" && isAdmin){ loadMailSettings(); loadTeamAiSettings(); }
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
   if(tab === "workflow") setWorkflowTab(wfTab);
@@ -1946,6 +1948,142 @@ function loadNotifyStatus(){
     if(notifyStatusText) notifyStatusText.textContent = "无法读取推送状态（该接口需要后端支持）";
   });
 }
+
+/* ---------------------------------------------------------- 自动化与定时报告 */
+var automationData = null;
+var versionOptionsLoaded = false;
+var WEEKDAY_LABEL = { 1:"周一", 2:"周二", 3:"周三", 4:"周四", 5:"周五", 6:"周六", 7:"周日" };
+function initReportHourOptions(){
+  var sel = $("reportWeeklyHour");
+  if(!sel || sel.options.length) return;
+  var html = "";
+  for(var h = 0; h < 24; h++) html += '<option value="' + h + '">' + pad2(h) + ":00</option>";
+  sel.innerHTML = html;
+}
+function loadAutomation(){
+  if(!$("set-automation")) return;
+  initReportHourOptions();
+  $("automationRules").innerHTML = UI.skeletonRows(3);
+  API.get("/api/automation").then(function(d){
+    automationData = d || {};
+    renderAutomationRules();
+    fillReports();
+  }).catch(function(ex){
+    automationData = null;
+    $("automationRules").innerHTML = UI.errorState(ex.message);
+    bindRetry($("automationRules"), function(){ loadAutomation(); });
+    $("automationRuleHint").textContent = "无法读取";
+  });
+}
+function renderAutomationRules(){
+  var box = $("automationRules");
+  if(!box) return;
+  var can = !!(automationData && automationData.canManageRules);
+  var rules = (automationData && automationData.rules) || [];
+  box.innerHTML = rules.map(function(r){
+    var html = '<div class="auto-rule" data-rule="' + esc(r.key) + '">'
+      + '<label class="sw"><input type="checkbox" data-auto-enabled' + (r.enabled ? " checked" : "") + (can ? "" : " disabled") + " /> " + esc(r.name) + "</label>"
+      + '<span class="tiny">' + esc(r.description) + "</span>";
+    if(r.configurableDays){
+      html += '<div class="auto-days"><div class="field"><label for="autoDays">逾期天数</label>'
+        + '<input id="autoDays" type="number" min="1" max="30" value="' + esc(r.days == null ? 3 : r.days) + '"' + (can ? "" : " disabled") + " /></div></div>";
+    }
+    if(r.lastRunAt){
+      html += '<span class="auto-last">上次执行：' + esc(fmtTs(r.lastRunAt)) + (r.lastStatus ? " · " + esc(r.lastStatus) : "") + "</span>";
+    }
+    return html + "</div>";
+  }).join("");
+  $("automationRuleHint").textContent = can ? "空间主或管理员可修改" : "只有空间主或管理员可修改，当前为只读";
+  $("btnAutomationSave").disabled = !can;
+}
+function fillReports(){
+  var r = (automationData && automationData.reports) || {};
+  var weekly = r.weekly || {}, version = r.version || {};
+  $("reportWeeklyEnabled").checked = !!weekly.enabled;
+  $("reportWeeklyWeekday").value = String(weekly.weekday == null ? 5 : weekly.weekday);
+  $("reportWeeklyHour").value = String(weekly.sendHour == null ? 17 : weekly.sendHour);
+  $("reportWeeklyChannels").value = weekly.channels || "inapp";
+  $("weeklyLastSent").textContent = weekly.lastSentAt ? "上次发送：" + fmtTs(weekly.lastSentAt) : "还没发送过";
+  $("reportVersionEnabled").checked = !!version.enabled;
+  $("reportVersionChannels").value = version.channels || "inapp";
+  $("versionLastSent").textContent = version.lastSentAt ? "上次发送：" + fmtTs(version.lastSentAt) : "还没发送过";
+  $("reportState").textContent = r.mailEnabled === false ? "SMTP 邮件未启用，选邮件渠道只会收到站内通知" : "";
+}
+function ensureVersionOptions(){
+  var sel = $("reportVersionPick");
+  if(!sel || versionOptionsLoaded) return Promise.resolve();
+  return API.get("/api/versions/cross-project").then(function(list){
+    versionOptionsLoaded = true;
+    var opts = ['<option value="">选择版本</option>'];
+    (list || []).forEach(function(v){
+      if(!v.versionId || v.versionStatus === "canceled") return;
+      var label = (v.projectName ? v.projectName + " · " : "") + (v.versionName || v.versionId);
+      opts.push('<option value="' + esc(v.versionId) + '">' + esc(label) + "</option>");
+    });
+    sel.innerHTML = opts.join("");
+  }).catch(function(){
+    versionOptionsLoaded = false;
+  });
+}
+function saveReportSubscriptions(){
+  var weekly = {
+    enabled: $("reportWeeklyEnabled").checked,
+    channels: $("reportWeeklyChannels").value,
+    weekday: Number($("reportWeeklyWeekday").value),
+    sendHour: Number($("reportWeeklyHour").value)
+  };
+  var version = { enabled: $("reportVersionEnabled").checked, channels: $("reportVersionChannels").value };
+  Promise.all([
+    API.put("/api/automation/reports/weekly", weekly),
+    API.put("/api/automation/reports/version", version)
+  ]).then(function(){
+    loadAutomation();
+    toast("报告订阅已保存", "fs");
+  }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
+}
+$("btnAutomationSave") && $("btnAutomationSave").addEventListener("click", function(){
+  var rules = {};
+  document.querySelectorAll('#automationRules [data-rule]').forEach(function(el){
+    var cb = el.querySelector("[data-auto-enabled]");
+    if(cb) rules[el.dataset.rule] = cb.checked;
+  });
+  var body = { rules: rules };
+  var daysEl = document.querySelector('#automationRules [data-rule="overdue_reminder"] #autoDays');
+  if(daysEl) body.overdueDays = Number(daysEl.value);
+  $("automationState").textContent = "保存中…";
+  API.put("/api/automation/rules", body).then(function(d){
+    automationData = automationData || {};
+    automationData.rules = (d && d.rules) || automationData.rules;
+    renderAutomationRules();
+    $("automationState").textContent = "已保存";
+    toast("自动化规则已保存", "fs");
+  }).catch(function(ex){
+    $("automationState").textContent = "";
+    toast(ex.message || "保存失败", "bad");
+  });
+});
+$("btnReportSave") && $("btnReportSave").addEventListener("click", saveReportSubscriptions);
+document.querySelectorAll("[data-report-send]").forEach(function(btn){
+  btn.addEventListener("click", function(){
+    var type = btn.dataset.reportSend;
+    if(type === "version"){
+      var vid = $("reportVersionPick").value;
+      if(!vid){ toast("先选择一个版本再发送", "warn"); ensureVersionOptions(); return; }
+      btn.disabled = true;
+      API.post("/api/automation/reports/version/send?versionId=" + encodeURIComponent(vid)).then(function(d){
+        toast((d && d.message) || "已发送", d && d.sent ? "fs" : "warn");
+      }).catch(function(ex){ toast(ex.message || "发送失败", "bad"); }).then(function(){ btn.disabled = false; });
+      return;
+    }
+    btn.disabled = true;
+    API.post("/api/automation/reports/weekly/send").then(function(d){
+      toast((d && d.message) || "已发送", d && d.sent ? "fs" : "warn");
+      loadAutomation();
+    }).catch(function(ex){ toast(ex.message || "发送失败", "bad"); }).then(function(){ btn.disabled = false; });
+  });
+});
+$("reportVersionPick") && $("reportVersionPick").addEventListener("focus", ensureVersionOptions);
+
 function fillNotifyForm(d){
   d = d || {};
   if($("wsNotifyEnabled")) $("wsNotifyEnabled").checked = !!d.enabled;
@@ -2755,13 +2893,15 @@ function renderSystemInfo(d){
     ["存储目录", storage.path],
     ["磁盘可用", storage.diskUsableBytes == null ? null : fmtBytes(storage.diskUsableBytes) + " / " + fmtBytes(storage.diskTotalBytes)]
   ]), dbOk ? "" : "sys-warn"));
-  cards.push(sysCard("邮件投递", { text: mail.enabled ? "已启用" : "未启用", tone: mail.enabled ? "tag-success" : "tag-ghost" }, sysKv([
+  var mailUnknown = Number(mail.unknown) || 0;
+  var mailRows = [
     ["已发送", mail.sent || 0],
     ["等待重试", mail.pending || 0],
-    ["最终失败", mail.failed || 0],
-    ["最近一封", mail.lastSentAt || mail.lastAt],
-    ["最近错误", mail.lastError]
-  ]), mail.failed > 0 ? "sys-warn" : ""));
+    ["最终失败", mail.failed || 0]
+  ];
+  if(mailUnknown > 0) mailRows.push(["疑似已发出", mailUnknown + " 封 · 结果未回写，可能已送达，勿盲目重复补发"]);
+  mailRows.push(["最近一封", mail.lastSentAt || mail.lastAt], ["最近错误", mail.lastError]);
+  cards.push(sysCard("邮件投递", { text: mail.enabled ? "已启用" : "未启用", tone: mail.enabled ? "tag-success" : "tag-ghost" }, sysKv(mailRows), mail.failed > 0 || mailUnknown > 0 ? "sys-warn" : ""));
   var hookState = hook.configured ? (hook.enabled === false ? "已配置 · 关闭" : "已配置") : "未配置";
   cards.push(sysCard("外部推送（当前空间）", { text: hook.workspaceName || "未知空间", tone: "tag-ghost" }, sysKv([
     ["状态", hookState],
@@ -3113,6 +3253,14 @@ $("btnExport").addEventListener("click", function(){
   }).catch(function(ex){ toast("导出失败：" + (ex.message || "网络异常"), "bad"); });
 });
 $("btnImport").addEventListener("click", function(){ $("fileImport").click(); });
+if($("btnGridImport")) $("btnGridImport").addEventListener("click", function(){
+  openImportDialog("task", {
+    onDone: function(){
+      loadBoard({animate:true});
+      loadReqs();
+    }
+  });
+});
 $("fileImport").addEventListener("change", function(e){
   var f = e.target.files && e.target.files[0];
   e.target.value = "";

@@ -23,12 +23,16 @@ function parseRoute(){
   return {
     id: p.get("id") || "",
     reqId: p.get("reqId") || "",
+    plan: p.get("plan") || "",
+    prep: p.get("prep") || "",
     tab: TAB_KEYS.indexOf(tab) >= 0 ? tab : "plan"
   };
 }
 function routeHash(r){
   var h = "#/release?id=" + encodeURIComponent(r.id);
   if(r.reqId) h += "&reqId=" + encodeURIComponent(r.reqId);
+  if(r.plan) h += "&plan=" + encodeURIComponent(r.plan);
+  if(r.prep) h += "&prep=" + encodeURIComponent(r.prep);
   if(r.tab && r.tab !== "plan") h += "&tab=" + r.tab;
   return h;
 }
@@ -36,14 +40,14 @@ function routeHash(r){
 function syncTabHash(tab){
   var r = parseRoute();
   if(!r || !r.id) return;
-  var h = routeHash({ id:r.id, reqId:r.reqId, tab:tab });
+  var h = routeHash({ id:r.id, reqId:r.reqId, plan:r.plan, tab:tab });
   if(window.location.hash === h) return;
   try{ history.pushState(null, "", h); }
   catch(e){ window.location.hash = h; }
 }
 
 export function openReleasePage(opts){
-  var r = { id: opts.id, reqId: opts.reqId || "", tab: opts.tab || "plan" };
+  var r = { id: opts.id, reqId: opts.reqId || "", plan: opts.planId || "", prep: opts.prep || "", tab: opts.tab || "plan" };
   try{ history.pushState(null, "", routeHash(r)); }
   catch(e){ window.location.hash = routeHash(r); }
   showView("release");
@@ -53,13 +57,23 @@ function destroy(){
   if(handle && handle.destroy) handle.destroy();
   handle = null;
 }
+function goPhase(mode){
+  var h = "#/phase" + (mode ? "?pmode=" + mode : "");
+  try{ history.pushState(null, "", h); }
+  catch(e){ window.location.hash = h; }
+  showView("phase");
+}
 function emptyState(msg){
   destroy();
-  host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>发布工作台</h3></div>'
+  host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>没有可打开的发布计划</h3></div>'
     + '<div class="stack"><p class="hint">' + esc(msg) + '</p>'
-    + '<div><button class="btn sm" type="button" data-release-empty-back>返回版本</button></div></div></div></div>';
+    + '<div class="rel-empty-acts"><button class="btn sm primary" type="button" data-release-empty-back>去版本页创建计划</button>'
+    + '<button class="btn sm" type="button" data-release-empty-all>查看全部版本</button></div>'
+    + '<p class="foot-note">历史发布记录按版本归档：在版本页打开某个已发布版本的「发布记录」查看。</p></div></div></div>';
   var btn = host.querySelector("[data-release-empty-back]");
   if(btn) btn.addEventListener("click", function(){ showView("phase"); });
+  var all = host.querySelector("[data-release-empty-all]");
+  if(all) all.addEventListener("click", function(){ goPhase("allversions"); });
 }
 
 /* #/release 无参数：不再是死胡同卡，列出跨项目最近的未完成发布计划，点任意一条进对应工作台 */
@@ -108,13 +122,14 @@ function renderRecentPlans(rows){
       + '<span class="rp-s">' + esc(planStatusText(r.status)) + '</span>'
       + '</button>';
   }).join("");
-  host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>发布工作台</h3>'
-    + '<span class="meta-right">最近发布计划 · ' + rows.length + ' 份未完成</span></div>'
+  host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>最近未完成的发布计划</h3>'
+    + '<span class="meta-right">' + rows.length + ' 份未完成</span></div>'
     + (top.length
       ? '<div class="rel-plan-list">' + list + '</div>'
       : '<div class="stack"><p class="hint">还没有未完成的发布计划。</p></div>')
-    + '<div class="stack" style="padding:10px 12px 12px"><p class="hint">计划按版本创建</p>'
-    + '<div><button class="btn sm" type="button" data-release-empty-back>去版本页</button></div></div>'
+    + '<div class="stack" style="padding:10px 12px 12px"><p class="hint">发布计划按版本创建；历史发布记录在该版本的「发布记录」里。</p>'
+    + '<div class="rel-empty-acts"><button class="btn sm" type="button" data-release-empty-back>去版本页创建计划</button>'
+    + '<button class="btn sm ghost" type="button" data-release-empty-all>查看全部版本</button></div></div>'
     + '</div></div>';
   host.querySelectorAll("[data-rel-plan]").forEach(function(b){
     b.addEventListener("click", function(){
@@ -123,6 +138,8 @@ function renderRecentPlans(rows){
   });
   var back = host.querySelector("[data-release-empty-back]");
   if(back) back.addEventListener("click", function(){ showView("phase"); });
+  var all = host.querySelector("[data-release-empty-all]");
+  if(all) all.addEventListener("click", function(){ goPhase("allversions"); });
 }
 
 function mount(route, version, intent){
@@ -132,6 +149,8 @@ function mount(route, version, intent){
   handle = mountReleaseWorkspace(host, {
     id: route.id,
     tab: route.tab,
+    planId: (intent && intent.planId) || route.plan || "",
+    prep: (intent && intent.prep) || route.prep || "",
     entry: intent ? intent.entry : (route.tab === "actual" ? "actual" : "plan"),
     version: version,
     onClose: intent ? intent.onClose : null,

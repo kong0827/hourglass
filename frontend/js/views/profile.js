@@ -8,6 +8,8 @@ import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { showView } from "../core/router.js";
 import { rt } from "../core/state.js";
+import { mountSandSaySettings } from "../core/sand-say.js";
+import { mountOrnamentSettings } from "../core/side-ornament.js";
 import { loadRunningTimer } from "../core/task-actions.js";
 import { loadView } from "../core/view-loader.js";
 import { refreshOwnerSelect } from "../core/task-drawer.js";
@@ -52,6 +54,8 @@ function enterProfileView(){
   ["meOldPwd","meNewPwd","meAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.value = ""; });
   ["fMeNewPwd","fMeAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.classList.remove("invalid"); });
   wireMeAnchor();
+  mountOrnamentSettings();
+  mountSandSaySettings();
   updateMePreview();
   /* AI 配置每次进页面都重新拉：可能在别的设备上改过 */
   loadAiConfig();
@@ -168,18 +172,20 @@ var NOTIFY_EVENTS = {
   demand_status: ["需求与版本动态", "我提交的需求、负责的文档与分支状态变化，或所在版本发布/删除"],
   demand_watch: ["我关注的需求", "关注的需求状态流转、内容编辑、行内优先级/期望交付调整或新评论"],
   test_plan_assigned: ["测试计划指派", "被指派为测试计划的执行人，或执行人变更为我"],
+  release_prep: ["发布准备提醒", "向负责的发布计划工作项推送准备确认、临近发布里程碑提醒"],
+  release_watch: ["我关注的发布计划", "关注的计划改期、范围或版本变化、进入就绪与发布日提醒"],
   daily_digest: ["每日工作项汇总", "每天 09:00 汇总我负责的逾期/今日到期工作项（仅站内）"]
 };
 /* 展示分组：同一类打扰放在一起，用户能就近判断要不要全关 */
 var NOTIFY_GROUPS = [
   { title: "工作项", types: ["task_assigned", "task_comment", "task_watch", "task_updated"] },
-  { title: "需求与版本", types: ["demand_status", "demand_watch"] },
+  { title: "需求与版本", types: ["demand_status", "demand_watch", "release_prep", "release_watch"] },
   { title: "测试", types: ["test_plan_assigned"] },
   { title: "每日汇总", types: ["daily_digest"] }
 ];
 /* 仅重要事件：直接指向我的（指派/评论@/关注）与低频日报保留，广播类关闭，邮件全关 */
 var NOTIFY_PRESET = {
-  inApp: ["task_assigned", "task_comment", "task_watch", "demand_watch", "test_plan_assigned", "daily_digest"],
+  inApp: ["task_assigned", "task_comment", "task_watch", "demand_watch", "test_plan_assigned", "release_prep", "release_watch", "daily_digest"],
   email: []
 };
 function applyNotifyPreset(){

@@ -323,7 +323,7 @@ function labelOptions(values, selected, allText, unsetText){
 }
 function investmentPageActionsHTML(){
   var hasData = !!cache && !loading;
-  return '<button class="btn primary" type="button" data-inv-ai' + (hasData ? '' : ' disabled') + '>✦ AI 总结</button>'
+  return '<button class="btn soft" type="button" data-inv-ai' + (hasData ? '' : ' disabled') + '>✦ AI 总结</button>'
     + '<button class="btn" type="button" data-inv-export' + (hasData ? '' : ' disabled') + '>导出报告 ▾</button>'
     + '<button class="btn" type="button" data-inv-csv' + (hasData ? '' : ' disabled') + '>' + icon("download", 14) + '导出 CSV</button>'
     + fullscreenButtonHTML();
@@ -344,7 +344,7 @@ function toolbarHTML(){
   var memberCount = (filters.memberUserIds || []).length;
   return '<div class="inv-controls">'
     + '<div class="manager-actions manager-actions-mobile">'
-    + '<button class="btn sm primary" type="button" data-inv-ai' + (hasData ? '' : ' disabled') + '>✦ AI 总结</button>'
+    + '<button class="btn sm soft" type="button" data-inv-ai' + (hasData ? '' : ' disabled') + '>✦ AI 总结</button>'
     + '<button class="btn sm" type="button" data-inv-export' + (hasData ? '' : ' disabled') + '>导出报告 ▾</button>'
     + '<button class="btn sm" type="button" data-inv-csv' + (hasData ? '' : ' disabled') + '>导出 CSV</button>'
     + fullscreenButtonHTML() + '</div>'

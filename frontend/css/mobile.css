@@ -20,6 +20,8 @@
 [data-layout="mobile"] .view{
   padding: 0 16px var(--tabbar-space);
 }
+/* 手机收起页头子导航，共用一级入口的两个视图改用页内页签切换 */
+[data-layout="mobile"] .aux-tabs{display:flex;margin:10px 0 12px;}
 [data-layout="mobile"] .view.view-flush{padding:0;overflow:auto;}
 [data-layout="mobile"] .view-page{
   padding:0;
@@ -133,6 +135,16 @@
   box-shadow:var(--shadow-lg);
 }
 [data-layout="mobile"] body[data-view="testcases"] #pageActions .btn:last-child svg{width:20px;height:20px;}
+/* 列表页底部给 FAB 留安全区：滚到末尾时最后一条的状态徽标不被「+」压住 */
+[data-layout="mobile"] body[data-view="testcases"] .view{padding-bottom:calc(var(--tabbar-space) + 56px);}
+/* 触控热区：视觉尺寸不变，图标按钮与小按钮的点击区补到约 44px；工具条主按钮抬到 36px */
+[data-layout="mobile"] .icon-btn,
+[data-layout="mobile"] .btn.xs{position:relative;}
+[data-layout="mobile"] .icon-btn::after,
+[data-layout="mobile"] .btn.xs::after{content:"";position:absolute;left:-7px;right:-7px;top:-7px;bottom:-7px;}
+[data-layout="mobile"] .page-toolbar .btn.sm,
+[data-layout="mobile"] .gantt-tools .btn.sm,
+[data-layout="mobile"] .tc-actionbar .btn.sm{height:36px;}
 /* FAB 悬在列表右下角：有 FAB 的页面底部预留一行，末条内容不被盖住 */
 [data-layout="mobile"] body:not([data-view="board"]):not([data-view="settings"]):not([data-view="profile"]):not([data-view="messages"]) .view{
   padding-bottom:calc(var(--tabbar-space) + 56px);
@@ -140,7 +152,7 @@
 [data-layout="mobile"] body[data-view="board"] .mob-board{padding-bottom:calc(var(--tabbar-space) + 56px);}
 [data-layout="mobile"] #view-calendar{padding-bottom:calc(var(--tabbar-space) + 56px);}
 /* 设置：页头主操作在手机上保留一行（不再放进零高容器），免得按钮压住页签 */
-[data-layout="mobile"] body[data-view="settings"] .pagehead{height:auto;padding:6px 0 8px;}
+[data-layout="mobile"] body[data-view="settings"] .pagehead{height:auto;padding:6px 16px 8px;}
 [data-layout="mobile"] body[data-view="settings"] .ph-acts{height:auto;overflow:visible;}
 [data-layout="mobile"] body[data-view="settings"] #pageActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
 [data-layout="mobile"] body[data-view="settings"] #pageActions[hidden]{display:none;}
@@ -882,10 +894,10 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-domain-tabs{display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;}
 [data-layout="mobile"] .tc-domain-tabs::-webkit-scrollbar{display:none;}
 [data-layout="mobile"] .tc-domain-tabs button{
-  flex:0 0 auto;height:28px;padding:0 11px;
+  flex:0 0 auto;height:40px;padding:0 13px;
   border:1px solid var(--border);border-radius:var(--r-pill);
   background:var(--surface);color:var(--text-2);
-  font-size:12px;font-weight:600;
+  font-size:13px;font-weight:600;
 }
 [data-layout="mobile"] .tc-domain-tabs button.on{
   background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);
@@ -919,12 +931,17 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] #tcStats{gap:6px;padding:0;}
 [data-layout="mobile"] #tcStats .tc-stat{flex:1 1 calc(33.333% - 4px);justify-content:center;height:30px;}
 [data-layout="mobile"] #tcStats .tc-stat-info{display:none;}
-/* 缺陷 tab 的筛选项直接平铺：没有「筛选」开关，默认全部可见；搜索与重置同行，四个下拉两行 */
+/* 缺陷 tab：默认只留「筛选 + 搜索」，下拉收进开关；展开后两列平铺 */
 [data-layout="mobile"] .tc-defbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 8px;padding:0;}
-[data-layout="mobile"] .tc-defbar .tc-search{flex:1 1 100%;width:100%;min-width:0;height:34px;font-size:16px;}
-[data-layout="mobile"] .tc-defbar .mini-select{flex:1 1 calc(50% - 32px);width:auto;max-width:none;min-width:0;height:34px;font-size:16px;}
+[data-layout="mobile"] .tc-def-toggle{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;height:40px;padding:0 12px;font-size:13px;}
+[data-layout="mobile"] .tc-def-more{display:none;}
+[data-layout="mobile"] .tc-def-toggle .n{min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);background:var(--primary);color:var(--primary-fg);font-size:11px;line-height:16px;text-align:center;font-variant-numeric:tabular-nums;}
+[data-layout="mobile"] .tc-defbar .tc-search{flex:1 1 120px;width:auto;min-width:0;height:34px;font-size:16px;}
+[data-layout="mobile"] .tc-defbar .mini-select{display:none;flex:1 1 calc(50% - 4px);width:auto;max-width:none;min-width:0;height:36px;font-size:16px;}
+[data-layout="mobile"] .tc-defbar.is-expanded .mini-select{display:block;}
 [data-layout="mobile"] .tc-defbar #tcDefReq{max-width:none;}
-[data-layout="mobile"] .tc-defbar #tcDefReset{flex:0 0 auto;align-self:center;height:34px;padding:0 8px;}
+[data-layout="mobile"] .tc-defbar #tcDefReset{display:none;flex:0 0 auto;align-self:center;height:34px;padding:0 8px;}
+[data-layout="mobile"] .tc-defbar.is-expanded #tcDefReset{display:inline-flex;}
 /* 计划筛选与缺陷一致：直接平铺，不并入「筛选」折叠面板 */
 [data-layout="mobile"] .tc-filterbar.tc-planbar{display:flex;flex:1 1 100%;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 8px;padding:0;}
 [data-layout="mobile"] .tc-planbar .tc-search{flex:1 1 100%;width:100%;min-width:0;height:34px;font-size:16px;}
@@ -971,6 +988,21 @@ body.mob-sheet-open{overflow:hidden;}
 /* 甘特图允许表格内横向滚动；页面本身不滚 */
 [data-layout="mobile"] .gantt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;}
 [data-layout="mobile"] .gantt-grid{min-width:max-content;}
+/* 手机工具条与提示占高更多，锁视口高度会把图例挤出画布压到未排期面板上：
+   改为整页滚动，画布给固定高度，未排期区按内容展开、内部滚动 */
+[data-layout="mobile"] .gantt-page{height:auto;min-height:0;}
+[data-layout="mobile"] .gantt-split,
+[data-layout="mobile"] .gantt-stage{flex:0 0 auto;min-height:0;}
+[data-layout="mobile"] .gantt-scroll{flex:0 0 auto;height:44vh;min-height:220px;}
+[data-layout="mobile"] #ganttUnplannedBox{height:auto;max-height:42vh;}
+[data-layout="mobile"] .gantt-split-bar{display:none;}
+[data-layout="mobile"] .gantt-mobile-hint{
+  display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:8px 10px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);
+  font-size:12px;line-height:1.5;color:var(--text-3);
+}
+[data-layout="mobile"] .gantt-mobile-hint span{flex:1 1 auto;min-width:0;}
+[data-layout="mobile"] .gantt-mobile-hint .btn{flex:0 0 auto;min-height:32px;}
 [data-layout="mobile"] .access-matrix{overflow-x:auto;}
 [data-layout="mobile"] .tbl-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
 
@@ -1038,6 +1070,11 @@ html[data-theme="dark"] [data-layout="mobile"] .tabbar-pill{box-shadow:var(--sha
 /* ===================== 我的（个人设置）快捷入口 ===================== */
 .mob-only{display:none !important;}
 [data-layout="mobile"] .mob-only{display:block !important;}
+/* 文案随布局改方向（如「左侧目录」在手机上实际在上方） */
+.desk-only{display:inline;}
+.mob-inline{display:none;}
+[data-layout="mobile"] .desk-only{display:none !important;}
+[data-layout="mobile"] .mob-inline{display:inline !important;}
 [data-layout="mobile"] #view-profile .set-layout{display:block;}
 [data-layout="mobile"] .mob-me-actions{
   display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);

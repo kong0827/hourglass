@@ -299,6 +299,27 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
       <span class="palette-scope" id="paletteScope">仅当前空间</span>
       <kbd>Esc</kbd>
     </div>
+    <div class="palette-filters" id="paletteFilters" aria-label="搜索范围">
+      <select id="pfType" aria-label="内容类型">
+        <option value="">全部类型</option>
+        <option value="project">项目</option>
+        <option value="task">工作项</option>
+        <option value="doc">文档</option>
+        <option value="demand">需求</option>
+        <option value="case">用例</option>
+      </select>
+      <select id="pfProject" aria-label="项目范围"><option value="">全部项目</option></select>
+      <select id="pfVersion" aria-label="版本范围" disabled><option value="">全部版本</option></select>
+      <select id="pfStatus" aria-label="状态" disabled><option value="">全部状态</option></select>
+      <select id="pfOwner" aria-label="负责人"><option value="">全部负责人</option></select>
+      <span class="pf-dates">
+        <input id="pfFrom" type="date" aria-label="起始日期" title="起始日期" />
+        <span aria-hidden="true">–</span>
+        <input id="pfTo" type="date" aria-label="结束日期" title="结束日期" />
+      </span>
+      <button class="pf-btn" type="button" id="pfClear" hidden>清除</button>
+      <button class="pf-btn" type="button" id="pfSave">保存搜索</button>
+    </div>
     <div class="palette-results" id="paletteResults" role="listbox" aria-label="搜索结果"></div>
     <div class="palette-foot">
       <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span>

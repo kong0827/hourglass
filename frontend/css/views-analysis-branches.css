@@ -339,11 +339,11 @@
 .br-group-head{display:flex;align-items:center;gap:7px;height:30px;padding:0 3px;min-width:0;}
 .br-group-name{font-size:12.5px;font-weight:650;color:var(--text-2);white-space:nowrap;}
 .br-group-n{
-  font-size:10.5px;color:var(--text-3);background:none;border:0;padding:0;
+  font-size:11px;color:var(--text-3);background:none;border:0;padding:0;
   font-variant-numeric:tabular-nums;
 }
 /* 列头提示紧跟在计数后（原型：代码还在写 / 等验证 / 等窗口 / 已上线），不推到右端 */
-.br-group-hint{margin-left:1px;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.br-group-hint{margin-left:1px;font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .br-meta-link{
   padding:0;border:0;background:none;cursor:pointer;font:inherit;color:var(--text-3);
   font-variant-numeric:tabular-nums;border-radius:var(--r-xs);
@@ -792,9 +792,9 @@
 /* 设置页成员表：操作常驻可见，不依赖 hover（原型表格直接列出操作） */
 #view-settings .member-row .acts{justify-content:flex-end;opacity:1;}
 #view-settings .member-row .member-vis{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-#view-settings .member-row .member-vis .btn.link{font-size:10.5px;color:var(--primary-fg);padding:0;height:auto;}
+#view-settings .member-row .member-vis .btn.link{font-size:11px;color:var(--primary-fg);padding:0;height:auto;}
 #view-settings .member-vis{font-size:12px;color:var(--text-3);line-height:1.5;min-width:0;}
-#view-settings .member-vis .badge,#view-settings .member-vis .chip{font-size:10.5px;}
+#view-settings .member-vis .badge,#view-settings .member-vis .chip{font-size:11px;}
 #view-settings .member-joined{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 #view-settings .member-label-toolbar{margin:0 -16px 0;padding:6px 12px;border-bottom:1px solid #F2F4F7;background:transparent;}
 
@@ -814,7 +814,7 @@
 #view-settings .access-matrix tbody tr:hover{background:#FCFCFD;}
 #view-settings .access-matrix .access-who{display:flex;align-items:center;gap:6px;min-width:0;}
 #view-settings .access-matrix .access-who .access-name{display:inline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#view-settings .access-matrix .access-who .tag{flex:0 0 auto;font-size:10.5px;}
+#view-settings .access-matrix .access-who .tag{flex:0 0 auto;font-size:11px;}
 
 /* 工作流：原型为表格行，改成通栏平铺而不是一组圆角卡 */
 #view-settings .cfg-list{gap:0;margin:0 -16px;}
@@ -845,16 +845,32 @@
   border:1px solid var(--border);border-radius:9px;background:#FBFCFD;padding:10px 12px;min-width:0;
 }
 #view-settings .subcard-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;font-weight:650;color:var(--text);}
-#view-settings .subcard-head .tiny{margin-left:auto;font-size:10.5px;color:var(--text-3);font-weight:400;text-align:right;}
+#view-settings .subcard-head .tiny{margin-left:auto;font-size:11px;color:var(--text-3);font-weight:400;text-align:right;}
 #view-settings .swrow{display:flex;flex-direction:column;gap:3px;padding:7px 0;border-top:1px solid #F2F4F7;font-size:12px;color:var(--text-2);}
 #view-settings .swrow:first-of-type{border-top:0;}
 #view-settings .swrow .sw{font-size:12px;font-weight:600;color:var(--text);}
-#view-settings .swrow .tiny{font-size:10.5px;line-height:1.5;color:var(--text-3);}
+#view-settings .swrow .tiny{font-size:11px;line-height:1.5;color:var(--text-3);}
 #view-settings .channel-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
 #view-settings .channel-card{padding:7px 9px;border-radius:7px;background:var(--surface);}
 #view-settings .channel-card .cc-t{font-size:11.5px;}
-#view-settings .channel-card .cc-d{font-size:10.5px;white-space:normal;line-height:1.4;}
-#view-settings .channel-card .cc-badge{font-size:10px;}
+#view-settings .channel-card .cc-d{font-size:11px;white-space:normal;line-height:1.4;}
+#view-settings .channel-card .cc-badge{font-size:11px;}
+
+/* 通知与集成：自动化规则列表 */
+#view-settings .auto-rules{display:flex;flex-direction:column;gap:8px;}
+#view-settings .auto-rule{
+  display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:4px 14px;align-items:start;
+  border:1px solid var(--border);border-radius:9px;background:#FBFCFD;padding:10px 12px;
+}
+#view-settings .auto-rule .sw{font-size:12.5px;font-weight:650;color:var(--text);}
+#view-settings .auto-rule .tiny{font-size:11px;line-height:1.55;color:var(--text-3);}
+#view-settings .auto-rule .auto-days{grid-column:2;grid-row:1 / span 2;align-self:center;}
+#view-settings .auto-rule .auto-days .field{margin:0;}
+#view-settings .auto-rule .auto-last{grid-column:1;font-size:11px;color:var(--text-3);}
+@media (max-width:1100px){
+  #view-settings .auto-rule{grid-template-columns:minmax(0,1fr);}
+  #view-settings .auto-rule .auto-days{grid-column:1;grid-row:auto;}
+}
 
 /* 数据：按用途分组的导出卡 */
 #view-settings .exportgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
@@ -864,12 +880,12 @@
   border:1px solid var(--border);border-radius:9px;background:var(--surface);
 }
 #view-settings .exp .h{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;}
-#view-settings .exp .d{font-size:10.5px;line-height:1.55;color:var(--text-3);}
+#view-settings .exp .d{font-size:11px;line-height:1.55;color:var(--text-3);}
 #view-settings .exp .it{
   display:flex;align-items:center;gap:8px;padding:7px 0 0;border-top:1px solid #F2F4F7;
   font-size:11.5px;color:var(--text-2);
 }
-#view-settings .exp .it .m{margin-left:auto;font-size:10.5px;color:var(--text-3);}
+#view-settings .exp .it .m{margin-left:auto;font-size:11px;color:var(--text-3);}
 #view-settings .exp .it .btn{margin-left:auto;}
 #view-settings .card-lite{border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-top:10px;background:var(--surface);}
 #view-settings .import-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -881,7 +897,7 @@
 }
 #view-settings .set-danger-zone .set-actions{justify-content:flex-end;margin-top:10px;}
 #view-settings .dangerzone .tt{font-size:12.5px;font-weight:650;color:var(--danger-fg);}
-#view-settings .dangerzone .dd{margin-top:3px;font-size:10.5px;line-height:1.5;color:var(--text-3);}
+#view-settings .dangerzone .dd{margin-top:3px;font-size:11px;line-height:1.5;color:var(--text-3);}
 @media (max-width:860px){
   #view-settings .dangerzone{flex-wrap:wrap;}
   #view-settings .dangerzone > div{flex:1 1 100%;}
@@ -975,7 +991,7 @@ body[data-view="mine"] .filterbar{border-radius:11px 11px 0 0;border-bottom-colo
   background:var(--surface);border:1px solid var(--border);border-top:1px solid var(--border);
   border-radius:0 0 11px 11px;
 }
-.mine-toolbar .sv-seg-label{font-size:10.5px;font-weight:600;color:#98A2B3;}
+.mine-toolbar .sv-seg-label{font-size:11px;font-weight:600;color:#98A2B3;}
 .mine-toolbar .toolbar-meta{font-size:11.5px;color:var(--text-3);}
 
 /* 统计胶囊：沿用缺陷列表 */
@@ -1319,9 +1335,9 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
   background:var(--surface);border:1px solid var(--border);border-radius:11px;
 }
 .analysis-bar .set-tabs{border-bottom:none;margin:0;padding:0;background:none;position:static;}
-/* 报表的三个页签已提升到全局子导航，页内不再重复一行（周期选择仍留在本行） */
-.analysis-bar #analysisTabs{display:none;}
-/* 测试五模式同理：用例 / 缺陷 / 测试计划 / 覆盖矩阵 / 测试报告统一走全局子导航 */
+/* 运营概览的统计 / 完成记录 / 流程体检留在页内：页头三个入口是运营概览 / 交付图表 / 投入结构 */
+.analysis-bar #analysisTabs{display:inline-flex;}
+/* 测试页头三个入口是用例 / 测试计划 / 缺陷；覆盖矩阵与测试报告收进「测试计划」页内 */
 #view-testcases #tcModeSeg{display:none;}
 #view-analysis [data-analysis-pane][hidden]{display:none;}
 
@@ -1330,7 +1346,7 @@ body[data-list-density="relaxed"] .mine-list{--title-fs:13px;--title-lh:1.5;--su
 #view-analysis .panel{padding:12px 14px;}
 #view-analysis .panel-head{margin-bottom:10px;}
 #view-analysis .panel-head h3{font-size:12.5px;font-weight:650;}
-#view-analysis .panel-head .meta-right{font-size:10px;}
+#view-analysis .panel-head .meta-right{font-size:11px;}
 #view-analysis .stat{padding:11px 13px;border-radius:var(--r-md);}
 #view-analysis .stat-grid{gap:10px;}
 #view-analysis .stat .k{font-size:11px;}

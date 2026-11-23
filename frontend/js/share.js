@@ -324,14 +324,18 @@ import { parseSnapshot, snapshotToHtml } from "./core/univer-doc-io.js";
 
   /* 交付说明分享：kind=delivery。只渲染冻结快照，没有任何写入口；
      数字仍可点开看口径与来源记录，但不给跳原始记录的入口——接收人没有账号。 */
-  var dlNote = null, dlShare = null, dlLayer = null;
+  var dlNote = null, dlShare = null, dlLayer = null, dlToken = "", dlUnlockPwd = "";
   function bootDelivery(token) {
-    fetch(API.base + "/api/share/delivery?token=" + encodeURIComponent(token), { credentials: "omit" })
+    dlToken = token;
+    dlUnlockPwd = "";
+    fetch(API.base + "/api/share/delivery?token=" + encodeURIComponent(token)
+      + (document.referrer ? "&from=" + encodeURIComponent(document.referrer) : ""), { credentials: "omit" })
       .then(function (r) { return r.text(); })
       .then(function (txt) { return JSON.parse(txt); })
       .then(function (j) {
         if (!j || j.code !== 0) throw new Error((j && j.message) || "链接无效或已过期");
-        renderDelivery(j.data);
+        if (j.data && j.data.passwordRequired) renderDeliveryGate(j.data);
+        else renderDelivery(j.data);
       })
       .catch(function (ex) {
         showShareError({
@@ -341,12 +345,85 @@ import { parseSnapshot, snapshotToHtml } from "./core/univer-doc-io.js";
         });
       });
   }
+  /* 设置了访问密码：先给一张只含编号与说明的壳，校验通过后才取正文 */
+  function renderDeliveryGate(shell) {
+    dlShare = shell;
+    dlNote = null;
+    $("view-gantt").classList.remove("on");
+    $("view-delivery-share").classList.add("on");
+    document.title = "需要访问密码 · 沙漏";
+    $("deliveryShareBody").innerHTML =
+      '<div class="dl-share-gate"><div class="dl-share-gate-card">'
+      + '<span class="dl-mark">' + DD.mark + "</span>"
+      + '<h1>这份交付说明受密码保护</h1>'
+      + '<p>' + esc([shell.workspaceName, shell.docNo, shell.title].filter(Boolean).join(" · ")) + "</p>"
+      + '<form id="dlGateForm"><input class="input" type="password" id="dlGatePwd" maxlength="32" autocomplete="current-password"'
+      + ' placeholder="请输入访问密码" aria-label="访问密码">'
+      + '<button class="btn primary" type="submit">打开说明</button></form>'
+      + '<div class="dl-share-gate-msg" id="dlGateMsg" role="alert"></div>'
+      + '<p class="dl-share-gate-foot">密码由分享者单独告知；连续失败可向分享者确认。</p>'
+      + "</div></div>"
+      + watermarkHTML(shell.watermarkText);
+    var form = $("dlGateForm");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var pwd = $("dlGatePwd").value || "";
+      var msg = $("dlGateMsg");
+      var btn = form.querySelector("button");
+      msg.textContent = "";
+      if (!pwd.trim()) { msg.textContent = "请输入访问密码"; return; }
+      btn.disabled = true;
+      btn.textContent = "校验中…";
+      fetch(API.base + "/api/share/delivery/unlock", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: dlToken, password: pwd, from: document.referrer || "" })
+      }).then(function (r) { return r.text(); }).then(function (txt) {
+        var j = JSON.parse(txt);
+        if (!j || j.code !== 0) throw new Error((j && j.message) || "访问密码不正确");
+        dlUnlockPwd = pwd;
+        renderDelivery(j.data);
+      }).catch(function (ex) {
+        btn.disabled = false;
+        btn.textContent = "打开说明";
+        msg.textContent = ex.message || "访问密码不正确";
+        var input = $("dlGatePwd");
+        if (input) { input.focus(); input.select(); }
+      });
+    });
+    var input = $("dlGatePwd");
+    if (input) input.focus();
+  }
+  function watermarkHTML(text) {
+    var t = String(text || "").trim().slice(0, 60);
+    if (!t) return "";
+    var spans = "";
+    for (var i = 0; i < 30; i++) spans += "<span>" + esc(t) + "</span>";
+    return '<div class="dl-share-wm" aria-hidden="true">' + spans + "</div>";
+  }
+  /* 下载留痕：只记录，失败不打扰接收人；密码保护的分享要带上解锁密码，否则后端拒记 */
+  function logShareDownload() {
+    if (!dlToken) return;
+    try {
+      fetch(API.base + "/api/share/delivery/visit", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: dlToken,
+          action: "download",
+          password: dlUnlockPwd,
+          from: document.referrer || ""
+        })
+      }).catch(function () { /* 留痕失败不影响文件 */ });
+    } catch (e) { /* 老浏览器忽略 */ }
+  }
   function renderDelivery(d) {
     dlShare = d;
     dlNote = d.note || {};
     /* 接收人直接 Ctrl+P 也要印出同一份纸张；甘特分享页 dlNote 为空，不接管打印 */
     registerDeliveryPrintSource(function () {
-      return dlNote ? DD.sheetMarkup(dlNote, { readonly: true, clean: true, a4: true }) : null;
+      return dlNote ? watermarkHTML(dlShare && dlShare.watermarkText)
+        + DD.sheetMarkup(dlNote, { readonly: true, clean: true, a4: true }) : null;
     });
     $("view-gantt").classList.remove("on");
     $("view-delivery-share").classList.add("on");
@@ -368,11 +445,14 @@ import { parseSnapshot, snapshotToHtml } from "./core/univer-doc-io.js";
       + (d.contentHash ? " · 内容校验值 " + esc(String(d.contentHash).slice(0, 16)) : "")
       + " · 只读链接，不含内部备注"
       + (d.allowDownload ? " · 可在浏览器打印对话框里选「存为 PDF」" : " · 分享者未开放下载")
-      + "</div>";
+      + "</div>"
+      + watermarkHTML(d.watermarkText);
     $("dlShareSources").addEventListener("click", function () { openDeliverySources(); });
     var pdf = $("dlSharePdf");
     if (pdf) pdf.addEventListener("click", function () {
-      printDeliveryPaper(DD.sheetMarkup(dlNote, { readonly: true, clean: true, a4: true }));
+      logShareDownload();
+      printDeliveryPaper(watermarkHTML(d.watermarkText)
+        + DD.sheetMarkup(dlNote, { readonly: true, clean: true, a4: true }));
     });
     $("deliveryShareBody").addEventListener("click", function (e) {
       var m = e.target.closest('[data-dl-act="source"]');
