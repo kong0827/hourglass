@@ -12,7 +12,14 @@ public class DeliveryShareResponse {
     private String docNo;
     private String token;
     private Boolean allowDownload;
+    private Boolean passwordRequired;
+    /** 域名白名单（原样回显，便于分享者确认） */
+    private String allowedDomains;
+    private String watermarkText;
     private Integer viewCount;
+    /** 近 7 天成功打开次数 */
+    private Integer visits7d;
+    private LocalDateTime lastViewedAt;
     private LocalDateTime createdAt;
     private LocalDateTime expiresAt;
 }

@@ -43,7 +43,7 @@ class SearchServiceDraftVisibilityTest {
 
         service.search(WS, USER, "结算", 5);
 
-        verify(docs).searchVisible(WS, USER, USER, false, "结算", 5);
+        verify(docs).searchFiltered(WS, USER, USER, false, "结算", null, null, null, null, null, 5);
     }
 
     @Test
@@ -54,7 +54,7 @@ class SearchServiceDraftVisibilityTest {
 
         service.search(WS, USER, "结算", 5);
 
-        verify(docs).searchVisible(WS, null, USER, true, "结算", 5);
+        verify(docs).searchFiltered(WS, null, USER, true, "结算", null, null, null, null, null, 5);
     }
 
     @Test
@@ -67,7 +67,8 @@ class SearchServiceDraftVisibilityTest {
         hit.setId("C1");
         hit.setCaseNo(12);
         hit.setExtra("结算");
-        when(cases.searchVisible(WS, USER, "TC-012", 12, 5)).thenReturn(Collections.singletonList(hit));
+        when(cases.searchFiltered(WS, USER, "TC-012", 12, null, null, null, null, null, 5))
+                .thenReturn(Collections.singletonList(hit));
 
         List<SearchHit> hits = service.search(WS, USER, "TC-012", 5);
 
@@ -78,8 +79,9 @@ class SearchServiceDraftVisibilityTest {
         when(reqs.list(WS, USER)).thenReturn(Collections.emptyList());
         when(tasks.list(eq(WS), eq(USER), any(), eq("updated"), eq(0), anyInt())).thenReturn(new TaskListResponse());
         when(demands.page(eq(WS), eq(USER), any())).thenReturn(new DemandPage());
-        when(docs.searchVisible(anyString(), any(), anyString(), anyBoolean(), anyString(), anyInt()))
-                .thenReturn(Collections.emptyList());
-        when(cases.searchVisible(anyString(), any(), anyString(), any(), anyInt())).thenReturn(Collections.emptyList());
+        when(docs.searchFiltered(anyString(), any(), anyString(), anyBoolean(), anyString(),
+                any(), any(), any(), any(), any(), anyInt())).thenReturn(Collections.emptyList());
+        when(cases.searchFiltered(anyString(), any(), anyString(), any(), any(),
+                any(), any(), any(), any(), anyInt())).thenReturn(Collections.emptyList());
     }
 }

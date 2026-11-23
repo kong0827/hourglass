@@ -18,6 +18,7 @@ import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Category;
 import com.hourglass.entity.DeliveryNote;
 import com.hourglass.entity.DeliveryNoteShare;
+import com.hourglass.entity.DeliveryNoteShareVisit;
 import com.hourglass.entity.DeliveryNoteSnapshot;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
@@ -73,6 +74,12 @@ import java.util.Set;
 public class DeliveryNoteService {
 
     private static final int SHARE_DAYS = 30;
+    private static final int SHARE_PASSWORD_MIN = 6;
+    private static final int SHARE_PASSWORD_MAX = 32;
+    /** 同一分享链接在窗口内连续输错密码达到该次数即暂时锁定。 */
+    private static final int UNLOCK_MAX_FAILURES = 5;
+    private static final int UNLOCK_LOCK_MINUTES = 15;
+    private static final String UNLOCK_FAILED_ACTION = "unlock_fail";
     private static final int MAX_NARRATIVE = 4000;
     private static final DateTimeFormatter DOC_DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final List<String> TONES = Arrays.asList("customer", "manager", "internal");
@@ -95,6 +102,8 @@ public class DeliveryNoteService {
     private final ObjectMapper json;
     /** 团队共享用例分组：与测试报告同源的质量证据，个人 / 指定成员分组不进 */
     private final CaseSetService caseSetService;
+    /** 分享访问密码：只存 BCrypt 哈希 */
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     public DeliveryNoteService(ProjectVersionMapper versionMapper, RequirementMapper reqMapper,
                                TaskMapper taskMapper, VersionTaskMapper versionTaskMapper,
@@ -103,7 +112,8 @@ public class DeliveryNoteService {
                                TimeLogMapper timeLogMapper, CategoryMapper categoryMapper,
                                UserMapper userMapper, WorkspaceMapper workspaceMapper,
                                DeliveryNoteMapper noteMapper, ProjectAccessService projectAccess,
-                               ObjectMapper json, CaseSetService caseSetService) {
+                               ObjectMapper json, CaseSetService caseSetService,
+                               org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         this.versionMapper = versionMapper;
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
@@ -120,6 +130,7 @@ public class DeliveryNoteService {
         this.projectAccess = projectAccess;
         this.json = json;
         this.caseSetService = caseSetService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     /* ==================== 聚合 ==================== */
@@ -642,12 +653,8 @@ public class DeliveryNoteService {
     }
 
     private void fillQuality(DeliveryNoteResponse r, String workspaceId, String reqId, String versionId) {
-        List<TestPlanView> plans = new ArrayList<TestPlanView>();
-        for (TestPlanView p : testPlanMapper.selectViewByReq(workspaceId, reqId, 0, 500)) {
-            if (versionId.equals(p.getVersionId())) {
-                plans.add(p);
-            }
-        }
+        /* 按版本下推：先取项目最近 500 个计划再筛版本，会把较早版本的计划截掉 */
+        List<TestPlanView> plans = testPlanMapper.selectViewByVersion(workspaceId, versionId);
         DeliveryNoteResponse.Quality q = new DeliveryNoteResponse.Quality();
         q.setPlanCount(plans.size());
         int cases = 0;
@@ -656,7 +663,6 @@ public class DeliveryNoteService {
         int failed = 0;
         int blocked = 0;
         int skipped = 0;
-        int defects = 0;
         for (TestPlanView p : plans) {
             cases += p.getCaseCount();
             executed += p.getExecutedCount();
@@ -664,8 +670,10 @@ public class DeliveryNoteService {
             failed += p.getFailedCount();
             blocked += p.getBlockedCount();
             skipped += p.getSkippedCount();
-            defects += p.getDefectCount();
         }
+        /* 同一缺陷可能被多个同版本计划转出：按缺陷 ID 去重，不累加计划级计数 */
+        List<String> defectIds = testPlanMapper.selectDefectIdsByVersion(workspaceId, versionId);
+        int defects = defectIds == null ? 0 : defectIds.size();
         q.setCaseCount(cases);
         q.setExecutedCount(executed);
         q.setPassedCount(passed);
@@ -1486,7 +1494,8 @@ public class DeliveryNoteService {
 
     @Transactional
     public DeliveryShareResponse createShare(String workspaceId, String userId, String snapshotId,
-                                             Boolean allowDownload, Integer days) {
+                                             Boolean allowDownload, Integer days,
+                                             String password, String allowedDomains, String watermarkText) {
         DeliveryNoteSnapshot snapshot = requireSnapshot(workspaceId, snapshotId);
         projectAccess.assertWrite(workspaceId, userId, snapshot.getReqId());
         if ("internal".equals(snapshot.getTone())) {
@@ -1499,6 +1508,20 @@ public class DeliveryNoteService {
         share.setAllowDownload(allowDownload == null || allowDownload);
         int effectiveDays = days == null ? SHARE_DAYS : Math.max(1, Math.min(365, days));
         share.setExpiresAt(LocalDateTime.now().plusDays(effectiveDays));
+        String pwd = Texts.trimToNull(password);
+        String domains = normalizeDomains(allowedDomains);
+        /* 来源域名取自浏览器上报的 Referer，可被伪造，只能防误传；要限制访问必须同时设密码 */
+        if (domains != null && pwd == null) {
+            throw AppException.badRequest("设置域名白名单时必须同时设置访问密码：来源域名可被伪造，不能单独作为访问控制");
+        }
+        if (pwd != null) {
+            if (pwd.length() < SHARE_PASSWORD_MIN || pwd.length() > SHARE_PASSWORD_MAX) {
+                throw AppException.badRequest("访问密码需为 " + SHARE_PASSWORD_MIN + " ~ " + SHARE_PASSWORD_MAX + " 位");
+            }
+            share.setPasswordHash(passwordEncoder.encode(pwd));
+        }
+        share.setAllowedDomains(domains);
+        share.setWatermarkText(cutText(watermarkText, 60));
         noteMapper.upsertShare(share);
         return shareView(snapshot, noteMapper.selectShareBySnapshot(workspaceId, snapshotId));
     }
@@ -1510,9 +1533,83 @@ public class DeliveryNoteService {
         noteMapper.deleteShare(workspaceId, snapshotId);
     }
 
+    /** 分享访问明细（最近 100 条），仅项目可写成员可看 */
+    public List<DeliveryNoteShareVisit> shareVisits(String workspaceId, String userId, String snapshotId) {
+        DeliveryNoteSnapshot snapshot = requireSnapshot(workspaceId, snapshotId);
+        projectAccess.assertView(workspaceId, userId, snapshot.getReqId());
+        return noteMapper.selectShareVisits(workspaceId, snapshotId, 100);
+    }
+
     /** 公开只读：按 token 取冻结载荷，无效或过期一律 404，不泄露空间与版本是否存在 */
-    @Transactional
     public PublicDeliveryNote publicShare(String token) {
+        return publicShare(token, null, null, null);
+    }
+
+    @Transactional
+    public PublicDeliveryNote publicShare(String token, String ip, String userAgent, String referer) {
+        DeliveryNoteShare share = requireShare(token);
+        DeliveryNoteSnapshot snapshot = validSnapshot(share);
+        enforceDomain(share, referer);
+        if (Texts.trimToNull(share.getPasswordHash()) != null) {
+            PublicDeliveryNote out = shareShell(share, snapshot);
+            out.setPasswordRequired(true);
+            return out;
+        }
+        return deliver(share, snapshot, "view", ip, userAgent, referer);
+    }
+
+    /**
+     * 输入访问密码后返回正文；密码错误不透露正文是否存在。
+     * 不包事务：输错密码要先把失败记录落库再抛错，否则回滚会抹掉计数，限流失效。
+     */
+    public PublicDeliveryNote unlock(String token, String password, String ip, String userAgent, String referer) {
+        DeliveryNoteShare share = requireShare(token);
+        DeliveryNoteSnapshot snapshot = validSnapshot(share);
+        enforceDomain(share, referer);
+        String hash = Texts.trimToNull(share.getPasswordHash());
+        if (hash != null) {
+            /* 窗口内失败次数达到上限即暂时锁定，防止 4 位短密码被暴力枚举 */
+            int failures = noteMapper.countShareAttempts(share.getToken(), UNLOCK_FAILED_ACTION,
+                    LocalDateTime.now().minusMinutes(UNLOCK_LOCK_MINUTES));
+            if (failures >= UNLOCK_MAX_FAILURES) {
+                throw new AppException(429, "密码错误次数过多，请 " + UNLOCK_LOCK_MINUTES + " 分钟后再试");
+            }
+            if (Texts.trimToNull(password) == null || !passwordEncoder.matches(password, hash)) {
+                recordVisit(share, UNLOCK_FAILED_ACTION, ip, userAgent, referer);
+                throw new AppException(403, "访问密码不正确");
+            }
+        }
+        return deliver(share, snapshot, "unlock", ip, userAgent, referer);
+    }
+
+    /**
+     * 接收人点下载时留痕；未开放下载则忽略，受密码保护的分享要带上解锁用的密码。
+     * 不包事务：密码错误要和 unlock 共用失败计数，先落库再抛错，否则会回滚掉计数、留下枚举通道。
+     */
+    public void logShareDownload(String token, String password, String ip, String userAgent, String referer) {
+        DeliveryNoteShare share = requireShare(token);
+        validSnapshot(share);
+        enforceDomain(share, referer);
+        String hash = Texts.trimToNull(share.getPasswordHash());
+        if (hash != null) {
+            int failures = noteMapper.countShareAttempts(share.getToken(), UNLOCK_FAILED_ACTION,
+                    LocalDateTime.now().minusMinutes(UNLOCK_LOCK_MINUTES));
+            if (failures >= UNLOCK_MAX_FAILURES) {
+                throw new AppException(429, "密码错误次数过多，请 " + UNLOCK_LOCK_MINUTES + " 分钟后再试");
+            }
+            if (Texts.trimToNull(password) == null || !passwordEncoder.matches(password, hash)) {
+                /* 没解锁就上报下载会污染访问明细，按密码错误处理，不回显正文是否存在 */
+                recordVisit(share, UNLOCK_FAILED_ACTION, ip, userAgent, referer);
+                throw new AppException(403, "访问密码不正确");
+            }
+        }
+        if (share.getAllowDownload() == null || !share.getAllowDownload()) {
+            throw new AppException(403, "分享者未开放下载");
+        }
+        recordVisit(share, "download", ip, userAgent, referer);
+    }
+
+    private DeliveryNoteShare requireShare(String token) {
         if (Texts.trimToNull(token) == null) {
             throw AppException.notFound("分享链接无效或已过期");
         }
@@ -1520,17 +1617,19 @@ public class DeliveryNoteService {
         if (share == null || expired(share)) {
             throw AppException.notFound("分享链接无效或已过期");
         }
+        return share;
+    }
+
+    private DeliveryNoteSnapshot validSnapshot(DeliveryNoteShare share) {
         DeliveryNoteSnapshot snapshot = noteMapper.selectSnapshotById(share.getSnapshotId());
         if (snapshot == null || !snapshot.getWorkspaceId().equals(share.getWorkspaceId())
                 || "internal".equals(snapshot.getTone())) {
             throw AppException.notFound("分享链接无效或已过期");
         }
-        DeliveryNoteResponse payload = frozen(snapshot);
-        /* 双保险：即使历史快照里残留内部字段，公开出口再剥一次 */
-        stripForTone(payload, snapshot.getTone());
-        payload.setCanShare(false);
-        payload.setRevision(null);
-        payload.setRevisions(new ArrayList<DeliveryNoteResponse.RevisionRow>());
+        return snapshot;
+    }
+
+    private PublicDeliveryNote shareShell(DeliveryNoteShare share, DeliveryNoteSnapshot snapshot) {
         Workspace ws = workspaceMapper.selectById(share.getWorkspaceId());
         PublicDeliveryNote out = new PublicDeliveryNote();
         out.setWorkspaceName(ws == null ? null : ws.getName());
@@ -1541,9 +1640,129 @@ public class DeliveryNoteService {
         out.setCreatedAt(snapshot.getCreatedAt());
         out.setExpiresAt(share.getExpiresAt());
         out.setAllowDownload(share.getAllowDownload());
+        out.setWatermarkText(share.getWatermarkText());
+        return out;
+    }
+
+    private PublicDeliveryNote deliver(DeliveryNoteShare share, DeliveryNoteSnapshot snapshot, String action,
+                                       String ip, String userAgent, String referer) {
+        DeliveryNoteResponse payload = frozen(snapshot);
+        /* 双保险：即使历史快照里残留内部字段，公开出口再剥一次 */
+        stripForTone(payload, snapshot.getTone());
+        payload.setCanShare(false);
+        payload.setRevision(null);
+        payload.setRevisions(new ArrayList<DeliveryNoteResponse.RevisionRow>());
+        PublicDeliveryNote out = shareShell(share, snapshot);
+        out.setPasswordRequired(false);
         out.setNote(payload);
         noteMapper.increaseViewCount(share.getWorkspaceId(), share.getSnapshotId());
+        recordVisit(share, action, ip, userAgent, referer);
         return out;
+    }
+
+    private void recordVisit(DeliveryNoteShare share, String action, String ip, String userAgent, String referer) {
+        DeliveryNoteShareVisit visit = new DeliveryNoteShareVisit();
+        visit.setId(Ids.gen("SV"));
+        visit.setWorkspaceId(share.getWorkspaceId());
+        visit.setSnapshotId(share.getSnapshotId());
+        visit.setShareToken(share.getToken());
+        visit.setAction(action);
+        visit.setIp(cutText(ip, 64));
+        visit.setUserAgent(cutText(userAgent, 255));
+        visit.setReferer(cutText(referer, 255));
+        visit.setDomain(cutText(hostOf(referer), 100));
+        noteMapper.insertShareVisit(visit);
+    }
+
+    private static void enforceDomain(DeliveryNoteShare share, String referer) {
+        String list = Texts.trimToNull(share.getAllowedDomains());
+        if (list == null) {
+            return;
+        }
+        /* 已设密码时域名只作提示，不再拦截：Referer 可能缺失或被伪造，真正边界是密码 */
+        if (Texts.trimToNull(share.getPasswordHash()) != null) {
+            return;
+        }
+        String host = hostOf(referer);
+        if (host == null) {
+            throw new AppException(403, "该链接仅限指定域名访问，请从允许的站点打开");
+        }
+        String[] items = list.split("[,;\\s]+");
+        for (String item : items) {
+            String domain = normalizeDomain(item);
+            if (domain.isEmpty()) {
+                continue;
+            }
+            if (host.equals(domain) || host.endsWith("." + domain)) {
+                return;
+            }
+        }
+        throw new AppException(403, "当前来源域名不在允许列表内");
+    }
+
+    private static String normalizeDomains(String raw) {
+        String value = Texts.trimToNull(raw);
+        if (value == null) {
+            return null;
+        }
+        StringBuilder out = new StringBuilder();
+        for (String item : value.split("[,;\\s]+")) {
+            String domain = normalizeDomain(item);
+            if (domain.isEmpty()) {
+                continue;
+            }
+            if (out.length() > 0) {
+                out.append(',');
+            }
+            if (out.length() + domain.length() > 480) {
+                break;
+            }
+            out.append(domain);
+        }
+        return out.length() == 0 ? null : out.toString();
+    }
+
+    private static String normalizeDomain(String raw) {
+        String v = raw == null ? "" : raw.trim().toLowerCase(java.util.Locale.ROOT);
+        if (v.startsWith("http://")) {
+            v = v.substring(7);
+        } else if (v.startsWith("https://")) {
+            v = v.substring(8);
+        }
+        int slash = v.indexOf('/');
+        if (slash >= 0) {
+            v = v.substring(0, slash);
+        }
+        int colon = v.indexOf(':');
+        if (colon >= 0) {
+            v = v.substring(0, colon);
+        }
+        if (v.startsWith("*.")) {
+            v = v.substring(2);
+        }
+        return v;
+    }
+
+    private static String hostOf(String referer) {
+        String value = Texts.trimToNull(referer);
+        if (value == null) {
+            return null;
+        }
+        try {
+            java.net.URI uri = new java.net.URI(value);
+            String host = uri.getHost();
+            return host == null ? null : host.toLowerCase(java.util.Locale.ROOT);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String cutText(String value, int max) {
+        String v = Texts.trimToNull(value);
+        if (v == null) {
+            return null;
+        }
+        return v.length() <= max ? v : v.substring(0, max);
     }
 
     private DeliveryShareResponse shareView(DeliveryNoteSnapshot snapshot, DeliveryNoteShare share) {
@@ -1552,9 +1771,16 @@ public class DeliveryNoteService {
         out.setDocNo(snapshot.getDocNo());
         out.setToken(share.getToken());
         out.setAllowDownload(share.getAllowDownload());
+        out.setPasswordRequired(Texts.trimToNull(share.getPasswordHash()) != null);
+        out.setAllowedDomains(share.getAllowedDomains());
+        out.setWatermarkText(share.getWatermarkText());
         out.setViewCount(share.getViewCount());
         out.setCreatedAt(share.getCreatedAt());
         out.setExpiresAt(share.getExpiresAt());
+        out.setVisits7d(noteMapper.countShareVisitsSince(share.getWorkspaceId(), snapshot.getId(),
+                LocalDateTime.now().minusDays(7)));
+        List<DeliveryNoteShareVisit> recent = noteMapper.selectShareVisits(share.getWorkspaceId(), snapshot.getId(), 1);
+        out.setLastViewedAt(recent.isEmpty() ? null : recent.get(0).getCreatedAt());
         return out;
     }
 

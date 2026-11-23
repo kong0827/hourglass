@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-18: full schema after migrations 01-110 (80 tables；107/108 为数据回填不改结构)。
+-- Updated 2026-11-23: full schema after migrations 01-123 (94 tables；107/108 为数据回填、110/116/117/118/122 为列变更，均不改表数；123 新增周五补记承接表)。
 --
--- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70、71-89 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、71 富文本描述、74 用例编号、76 需求人工交付判定、77 测试负责人、78 版本终态、79 承诺基线、80 项目里程碑、81 交付说明、82 工作项编号、83 发布条目编号、84 需求编号、85 发布计划编号、86 快照需求编号、87 编号序列、88 用例-工作项追溯、89 发布测试检查策略、93 模块目录层级与用例集、94 文档分类树与空间级文档、95 团队共享 AI 配置、96 动态分组与指定成员可见、97 子任务排序、98 项目多仓库 Git 只读同步、99 文档可见范围、100 用例目录合并与嵌套分组、101 文档分类默认可见范围、102 工作项历史发布人工标记、103 需求池评论、104 需求关注人、105 需求已完成主状态、106 项目集与项目拆分、109 工作项终态已取消、110 评论正文放宽 2000 字、113 需求评审人、114 测试计划执行人、115 发布准备与计划关注、116 推送补充说明、117 企业微信群发送结果、118 保存视图参数放宽、119 交付说明分享补强、120 周五补记、121 轻量自动化与定时报告、123 周五补记未处理项承接）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -68,6 +68,7 @@ CREATE TABLE `app_notification` (
   `ref_task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联任务ID（点击直达）',
   `ref_kind` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联对象类型：demand/doc/branch/version/project/workspace',
   `ref_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联对象 ID（非任务通知深链）',
+  `req_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '通知对应业务对象所属项目ID（空=不按项目过滤）',
   `read_at` datetime DEFAULT NULL COMMENT '已读时间，空=未读',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '产生时间',
   PRIMARY KEY (`id`),
@@ -75,7 +76,8 @@ CREATE TABLE `app_notification` (
   KEY `idx_user_ws` (`user_id`,`workspace_id`,`id`),
   KEY `idx_ws_ref` (`workspace_id`,`ref_task_id`),
   KEY `idx_user_ref_type` (`user_id`,`ref_task_id`,`type`,`created_at`),
-  KEY `idx_user_ref` (`user_id`,`ref_kind`,`ref_id`)
+  KEY `idx_user_ref` (`user_id`,`ref_kind`,`ref_id`),
+  KEY `idx_user_ws_req` (`user_id`,`workspace_id`,`req_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='应用内通知';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `app_user`;
@@ -920,7 +922,7 @@ CREATE TABLE `saved_view` (
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属用户ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `name` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '视图名称',
-  `params` varchar(600) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '筛选参数 JSON',
+  `params` varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '筛选参数 JSON',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_user_ws` (`user_id`,`workspace_id`)
@@ -1500,6 +1502,78 @@ CREATE TABLE `version_release_plan` (
   KEY `idx_plan_workspace` (`workspace_id`,`status`),
   CONSTRAINT `fk_plan_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `version_release_plan_watch`;
+CREATE TABLE `version_release_plan_watch` (
+  `workspace_id` varchar(32) NOT NULL COMMENT '归属空间ID',
+  `plan_id` varchar(32) NOT NULL COMMENT '发布计划ID',
+  `user_id` varchar(32) NOT NULL COMMENT '关注人账号ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关注时间',
+  PRIMARY KEY (`plan_id`, `user_id`),
+  KEY `idx_rpw_user` (`user_id`, `workspace_id`),
+  KEY `idx_rpw_plan` (`workspace_id`, `plan_id`),
+  CONSTRAINT `fk_rpw_plan` FOREIGN KEY (`plan_id`, `workspace_id`)
+    REFERENCES `version_release_plan` (`id`, `workspace_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布计划关注人';
+DROP TABLE IF EXISTS `version_release_plan_push`;
+CREATE TABLE `version_release_plan_push` (
+  `id` varchar(32) NOT NULL,
+  `workspace_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) NOT NULL,
+  `scope` varchar(16) NOT NULL COMMENT 'all / owners / custom',
+  `sender_id` varchar(32) NOT NULL,
+  `only_unconfirmed` tinyint(1) NOT NULL DEFAULT '0',
+  `channels` json NOT NULL,
+  `note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '发送时的补充说明（选填，最多200字）',
+  `recipient_count` int NOT NULL DEFAULT '0',
+  `group_sent` tinyint(1) DEFAULT NULL COMMENT '企业微信群是否发送成功：1成功 / 0失败 / NULL未选群或历史未记录',
+  `group_error` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '企业微信群未发送原因（最多200字）',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_rpp_plan` (`workspace_id`, `plan_id`, `created_at`),
+  CONSTRAINT `fk_rpp_plan` FOREIGN KEY (`plan_id`, `workspace_id`)
+    REFERENCES `version_release_plan` (`id`, `workspace_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布准备推送批次';
+DROP TABLE IF EXISTS `version_release_plan_push_recipient`;
+CREATE TABLE `version_release_plan_push_recipient` (
+  `push_id` varchar(32) NOT NULL,
+  `workspace_id` varchar(32) NOT NULL,
+  `user_id` varchar(32) NOT NULL,
+  `in_app_at` datetime DEFAULT NULL,
+  `email_at` datetime DEFAULT NULL,
+  `acked_at` datetime DEFAULT NULL COMMENT '回执时间；回执只表示收到本次提醒',
+  PRIMARY KEY (`push_id`, `user_id`),
+  KEY `idx_rppr_user` (`workspace_id`, `user_id`, `acked_at`),
+  CONSTRAINT `fk_rppr_push` FOREIGN KEY (`push_id`)
+    REFERENCES `version_release_plan_push` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布准备推送收件人与回执';
+DROP TABLE IF EXISTS `version_release_plan_task_check`;
+CREATE TABLE `version_release_plan_task_check` (
+  `workspace_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) NOT NULL,
+  `task_id` varchar(32) NOT NULL,
+  `user_id` varchar(32) NOT NULL COMMENT '工作项负责人',
+  `state` varchar(8) NOT NULL COMMENT 'ok / risk',
+  `note` varchar(500) DEFAULT NULL COMMENT '风险说明',
+  `scope_token` varchar(64) DEFAULT NULL COMMENT '确认时的计划范围 token',
+  `planned_at_snapshot` datetime DEFAULT NULL COMMENT '确认时的计划时间，用于判断时间提前',
+  `checked_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`plan_id`, `task_id`, `user_id`),
+  KEY `idx_rptc_user` (`workspace_id`, `user_id`, `checked_at`),
+  CONSTRAINT `fk_rptc_plan` FOREIGN KEY (`plan_id`, `workspace_id`)
+    REFERENCES `version_release_plan` (`id`, `workspace_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布准备逐项确认';
+DROP TABLE IF EXISTS `version_release_plan_milestone`;
+CREATE TABLE `version_release_plan_milestone` (
+  `workspace_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) NOT NULL,
+  `user_id` varchar(32) NOT NULL,
+  `milestone` varchar(8) NOT NULL COMMENT 'T-7 / T-3 / T-1 / T-0',
+  `sent_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_rpm_plan_user_milestone` (`plan_id`, `user_id`, `milestone`),
+  KEY `idx_rpm_plan` (`workspace_id`, `plan_id`),
+  CONSTRAINT `fk_rpm_plan` FOREIGN KEY (`plan_id`, `workspace_id`)
+    REFERENCES `version_release_plan` (`id`, `workspace_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布准备里程碑发送记录';
 DROP TABLE IF EXISTS `version_release_plan_version`;
 CREATE TABLE `version_release_plan_version` (
   `workspace_id` varchar(32) NOT NULL,
@@ -1652,12 +1726,151 @@ CREATE TABLE `delivery_note_share` (
   `snapshot_id` varchar(32) NOT NULL,
   `token` varchar(32) NOT NULL,
   `allow_download` tinyint(1) NOT NULL DEFAULT '1' COMMENT '接收人是否可下载 PDF',
+  `password_hash` varchar(100) DEFAULT NULL COMMENT '访问密码（BCrypt）',
+  `allowed_domains` varchar(500) DEFAULT NULL COMMENT '域名白名单，逗号分隔；空=不限制',
+  `watermark_text` varchar(100) DEFAULT NULL COMMENT '接收人页水印文字',
   `view_count` int NOT NULL DEFAULT '0',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `expires_at` datetime DEFAULT NULL COMMENT '空=长期有效',
   PRIMARY KEY (`workspace_id`,`snapshot_id`),
   UNIQUE KEY `uk_token` (`token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交付说明快照只读分享';
+DROP TABLE IF EXISTS `delivery_note_share_visit`;
+CREATE TABLE `delivery_note_share_visit` (
+  `id` varchar(32) NOT NULL COMMENT '访问记录ID',
+  `workspace_id` varchar(32) NOT NULL,
+  `snapshot_id` varchar(32) NOT NULL,
+  `share_token` varchar(64) NOT NULL,
+  `action` varchar(16) NOT NULL DEFAULT 'view' COMMENT 'view=打开 unlock=密码通过 download=下载',
+  `ip` varchar(64) DEFAULT NULL,
+  `user_agent` varchar(255) DEFAULT NULL,
+  `referer` varchar(255) DEFAULT NULL,
+  `domain` varchar(100) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_dnsv_snapshot` (`workspace_id`,`snapshot_id`,`created_at`),
+  KEY `idx_dnsv_token` (`share_token`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交付说明分享访问明细';
+DROP TABLE IF EXISTS `catchup_session`;
+CREATE TABLE `catchup_session` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '会话ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '补记人',
+  `week_start` date NOT NULL COMMENT '本周周一（自然日）',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft' COMMENT 'draft 草稿 / submitted 已提交 / skipped 本周跳过',
+  `started_at` datetime DEFAULT NULL COMMENT '开始补记时间（计时起点）',
+  `submitted_at` datetime DEFAULT NULL COMMENT '提交时间（撤销窗口起点）',
+  `undone_at` datetime DEFAULT NULL COMMENT '最近一次撤销时间',
+  `elapsed_seconds` int NOT NULL DEFAULT '0' COMMENT '本次补记用时（秒，提交时结算）',
+  `no_other_risk` tinyint(1) NOT NULL DEFAULT '0' COMMENT '已确认本周无其他已知风险',
+  `review_json` text COMMENT '提交时的周回顾快照',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_catchup_week` (`workspace_id`,`user_id`,`week_start`),
+  KEY `idx_catchup_user_week` (`user_id`,`week_start`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='周五补记会话';
+DROP TABLE IF EXISTS `catchup_decision`;
+CREATE TABLE `catchup_decision` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '会话ID（catchup_session.id）',
+  `draft_key` varchar(96) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '草稿键：task:<id> / risk:<kind>:<id>',
+  `kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'work 工作项 / risk 风险',
+  `action` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'accept/skip/merge/edit/answer/confirm/record/ignore/unblock/link',
+  `answer` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '低置信回答或编辑后的状态',
+  `title` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '编辑后的标题快照',
+  `payload_json` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '附加说明（备注等）',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_catchup_decision` (`session_id`,`draft_key`),
+  KEY `idx_catchup_decision_session` (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='周五补记逐条决策';
+DROP TABLE IF EXISTS `catchup_time_alloc`;
+CREATE TABLE `catchup_time_alloc` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '会话ID',
+  `row_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属行：req:<项目ID> / unassigned',
+  `day` date NOT NULL COMMENT '归属自然日',
+  `req_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '项目ID；空=内部/其他',
+  `minutes` int NOT NULL DEFAULT '0' COMMENT '归属分钟数',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_catchup_alloc` (`session_id`,`row_key`,`day`),
+  KEY `idx_catchup_alloc_session` (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='周五补记工时归属';
+DROP TABLE IF EXISTS `catchup_write`;
+CREATE TABLE `catchup_write` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '会话ID',
+  `write_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'task_log 时间线 / blocked 阻塞字段 / time_alloc 工时归属',
+  `ref_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '写入对象ID（task_log.id / task.id / catchup_time_alloc.id）',
+  `prev_json` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '写前快照（撤销用）',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_catchup_write_session` (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='周五补记可撤销写入台账';
+DROP TABLE IF EXISTS `catchup_carry`;
+CREATE TABLE `catchup_carry` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `from_session_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '产生承接的本周会话',
+  `to_week_start` date NOT NULL COMMENT '承接到的周一',
+  `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_no` int DEFAULT NULL,
+  `title` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `project_name` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `type_label` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status_label` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `minutes` int NOT NULL DEFAULT '0' COMMENT '快照时的本周计时，仅用于展示',
+  `reason` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'pending / skipped',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_carry_session_task` (`from_session_id`,`task_id`),
+  KEY `idx_carry_week` (`to_week_start`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='周五补记未处理项承接';
+DROP TABLE IF EXISTS `workspace_automation`;
+CREATE TABLE `workspace_automation` (
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
+  `rule_key` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '规则键：overdue_reminder/release_notify/status_sync',
+  `enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '是否启用',
+  `config_json` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '规则参数（如逾期天数）',
+  `last_run_at` datetime DEFAULT NULL COMMENT '最近一次执行时间',
+  `last_status` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近一次执行结果摘要',
+  `updated_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最后修改人',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`workspace_id`,`rule_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间级自动化规则';
+DROP TABLE IF EXISTS `automation_run`;
+CREATE TABLE `automation_run` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
+  `rule_key` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '规则键',
+  `target_key` varchar(96) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '去重对象键，如 owner:<userId>',
+  `run_date` date NOT NULL COMMENT '执行自然日',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'sent' COMMENT 'sent/skipped',
+  `message` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行说明',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_automation_run` (`workspace_id`,`rule_key`,`target_key`,`run_date`),
+  KEY `idx_automation_run_date` (`workspace_id`,`rule_key`,`run_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='自动化规则去重与执行记录';
+DROP TABLE IF EXISTS `report_subscription`;
+CREATE TABLE `report_subscription` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '订阅ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
+  `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '订阅人',
+  `report_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'weekly 周报 / version 版本报告',
+  `enabled` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否订阅',
+  `channels` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'inapp' COMMENT 'inapp/email/both',
+  `weekday` tinyint NOT NULL DEFAULT '5' COMMENT '周报发送星期：1=周一…7=周日',
+  `send_hour` tinyint NOT NULL DEFAULT '17' COMMENT '周报发送小时（0-23）',
+  `last_sent_at` datetime DEFAULT NULL COMMENT '最近一次发送时间',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_report_subscription` (`workspace_id`,`user_id`,`report_type`),
+  KEY `idx_report_subscription_type` (`report_type`,`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='定时周报/版本报告订阅';
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

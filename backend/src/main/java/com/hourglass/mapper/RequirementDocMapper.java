@@ -42,6 +42,22 @@ public interface RequirementDocMapper {
                                                     @Param("keyword") String keyword,
                                                     @Param("limit") int limit);
 
+    /**
+     * 全局搜索（带范围）：在 searchVisible 的可见口径上叠加项目 / 状态 / 负责人 / 更新日期区间。
+     * keyword 为空时只按范围返回，日期按 updated_at 的自然日比较。
+     */
+    List<com.hourglass.dto.SearchHit> searchFiltered(@Param("workspaceId") String workspaceId,
+                                                     @Param("viewerId") String viewerId,
+                                                     @Param("userId") String userId,
+                                                     @Param("seeAllDrafts") boolean seeAllDrafts,
+                                                     @Param("keyword") String keyword,
+                                                     @Param("reqId") String reqId,
+                                                     @Param("status") String status,
+                                                     @Param("owner") String owner,
+                                                     @Param("from") String from,
+                                                     @Param("to") String to,
+                                                     @Param("limit") int limit);
+
     /** 账号删除后清理文档负责人引用 */
     int clearOwnerUser(@Param("userId") String userId);
 

@@ -15,4 +15,6 @@ public class ProjectTemplateView {
     private List<String> docs;
     private List<String> modules;
     private String versionName;
+    /** 样例模板会预置的工作项数量，0 表示只建骨架不写示例数据 */
+    private Integer sampleCount = 0;
 }

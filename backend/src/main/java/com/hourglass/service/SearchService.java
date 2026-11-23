@@ -7,6 +7,7 @@ import com.hourglass.dto.DemandPage;
 import com.hourglass.dto.DemandQuery;
 import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.SearchHit;
+import com.hourglass.dto.SearchQuery;
 import com.hourglass.dto.TaskListResponse;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.Task;
@@ -14,6 +15,7 @@ import com.hourglass.mapper.RequirementDocMapper;
 import com.hourglass.mapper.TestCaseMapper;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -50,12 +52,24 @@ public class SearchService {
     }
 
     public List<SearchHit> search(String workspaceId, String userId, String rawQuery, int limit) {
-        String q = Texts.trimToNull(rawQuery);
-        if (q == null) {
+        SearchQuery query = new SearchQuery();
+        query.setQ(rawQuery);
+        query.setLimit(limit);
+        return search(workspaceId, userId, query);
+    }
+
+    /**
+     * 带范围的全局搜索：关键词可以为空，只给项目 / 版本 / 类型 / 状态 / 负责人 / 日期也行。
+     * 每个实体只应用自己支持的维度，不支持的维度直接忽略。
+     */
+    public List<SearchHit> search(String workspaceId, String userId, SearchQuery raw) {
+        SearchQuery query = normalize(raw);
+        String q = Texts.trimToNull(query.getQ());
+        if (q == null && !query.hasScope()) {
             return Collections.emptyList();
         }
-        int per = Math.max(1, Math.min(limit, 10));
-        String needle = q.toLowerCase();
+        int per = Math.max(1, Math.min(query.getLimit(), 10));
+        String needle = q == null ? null : q.toLowerCase();
         List<SearchHit> hits = new ArrayList<SearchHit>();
 
         List<ReqProgress> projects = requirementService.list(workspaceId, userId);
@@ -63,79 +77,201 @@ public class SearchService {
         for (ReqProgress p : projects) {
             projectNames.put(p.getId(), p.getName());
         }
-        for (ReqProgress p : projects) {
-            if (hits.size() >= per) {
-                break;
-            }
-            if (contains(p.getName(), needle) || contains(p.getDescription(), needle) || contains(p.getObjective(), needle)) {
-                SearchHit h = new SearchHit();
-                h.setType("project");
-                h.setId(p.getId());
-                h.setTitle(p.getName());
-                h.setStatus(p.getStatus());
-                h.setExtra(p.getArchivedAt() == null ? "项目" : "项目 · 已归档");
-                h.setUpdatedAt(p.getUpdatedAt());
-                hits.add(h);
-            }
+        if (wants(query, "project")) {
+            hits.addAll(projectHits(projects, query, needle, per));
         }
 
-        BoardQuery tq = new BoardQuery();
-        tq.setQ(q);
-        TaskListResponse tasks = taskQueryService.list(workspaceId, userId, tq, "updated", 0, per);
-        for (Task t : tasks.getItems()) {
-            SearchHit h = new SearchHit();
-            h.setType("task");
-            h.setId(t.getId());
-            h.setTitle(t.getTitle());
-            h.setReqId(t.getReqId());
-            h.setReqName(projectNames.get(t.getReqId()));
-            h.setStatus(t.getBoardColumn());
-            h.setExtra(taskExtra(t));
-            h.setUpdatedAt(t.getUpdatedAt());
-            hits.add(h);
+        if (wants(query, "task")) {
+            BoardQuery tq = new BoardQuery();
+            tq.setQ(q);
+            if (query.getReqId() != null) tq.getReqs().add(query.getReqId());
+            if (query.getVersionId() != null) tq.getVersions().add(query.getVersionId());
+            if (query.getStatus() != null) tq.getColumns().add(query.getStatus());
+            if (query.getOwner() != null) tq.getOwners().add(query.getOwner());
+            tq.setDueFrom(parseDate(query.getFrom()));
+            tq.setDueTo(parseDate(query.getTo()));
+            TaskListResponse tasks = taskQueryService.list(workspaceId, userId, tq, "updated", 0, per);
+            for (Task t : tasks.getItems()) {
+                SearchHit h = new SearchHit();
+                h.setType("task");
+                h.setId(t.getId());
+                h.setTitle(t.getTitle());
+                h.setReqId(t.getReqId());
+                h.setReqName(projectNames.get(t.getReqId()));
+                h.setStatus(t.getBoardColumn());
+                h.setExtra(taskExtra(t));
+                h.setUpdatedAt(t.getUpdatedAt());
+                hits.add(h);
+            }
         }
 
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         /* 文档草稿的可见口径与文档列表一致：仅作者本人与空间 owner/admin 能搜到 */
         boolean seeAllDrafts = ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId));
-        List<SearchHit> docHits = docMapper.searchVisible(workspaceId, viewerId, userId, seeAllDrafts, q, per);
-        for (SearchHit h : docHits) {
-            h.setSnippet(snippetAround(h.getSnippet(), q));
-        }
-        hits.addAll(docHits);
-
-        DemandQuery dq = new DemandQuery();
-        dq.setQ(q);
-        dq.setOffset(0);
-        dq.setLimit(per);
-        DemandPage demands = demandService.page(workspaceId, userId, dq);
-        for (Demand d : demands.getItems()) {
-            SearchHit h = new SearchHit();
-            h.setType("demand");
-            h.setId(d.getId());
-            h.setTitle(d.getTitle());
-            h.setReqId(d.getReqId());
-            h.setReqName(projectNames.get(d.getReqId()));
-            h.setStatus(d.getStatus());
-            h.setExtra(d.getItemKind());
-            h.setUpdatedAt(d.getUpdatedAt());
-            hits.add(h);
+        if (wants(query, "doc")) {
+            List<SearchHit> docHits = docMapper.searchFiltered(workspaceId, viewerId, userId, seeAllDrafts,
+                    q, query.getReqId(), query.getStatus(), query.getOwner(),
+                    query.getFrom(), query.getTo(), per);
+            for (SearchHit h : docHits) {
+                h.setSnippet(snippetAround(h.getSnippet(), q));
+            }
+            hits.addAll(docHits);
         }
 
-        List<SearchHit> caseHits = caseMapper.searchVisible(workspaceId, viewerId, q, Nos.parseCase(q), per);
-        for (SearchHit h : caseHits) {
-            h.setExtra(caseExtra(h));
+        if (wants(query, "demand")) {
+            DemandQuery dq = new DemandQuery();
+            dq.setQ(q);
+            dq.setReqId(query.getReqId());
+            dq.setVersionId(query.getVersionId());
+            dq.setStatus(query.getStatus());
+            dq.setOwner(query.getOwner());
+            dq.setExpectFrom(parseDate(query.getFrom()));
+            dq.setExpectTo(parseDate(query.getTo()));
+            dq.setOffset(0);
+            dq.setLimit(per);
+            DemandPage demands = demandService.page(workspaceId, userId, dq);
+            for (Demand d : demands.getItems()) {
+                SearchHit h = new SearchHit();
+                h.setType("demand");
+                h.setId(d.getId());
+                h.setTitle(d.getTitle());
+                h.setReqId(d.getReqId());
+                h.setReqName(projectNames.get(d.getReqId()));
+                h.setStatus(d.getStatus());
+                h.setExtra(d.getItemKind());
+                h.setUpdatedAt(d.getUpdatedAt());
+                hits.add(h);
+            }
         }
-        hits.addAll(caseHits);
+
+        if (wants(query, "case")) {
+            String caseStatus = "untested".equals(query.getStatus()) ? "__untested" : query.getStatus();
+            List<SearchHit> caseHits = caseMapper.searchFiltered(workspaceId, viewerId, q, Nos.parseCase(q),
+                    query.getReqId(), caseStatus, query.getOwner(), query.getFrom(), query.getTo(), per);
+            for (SearchHit h : caseHits) {
+                h.setExtra(caseExtra(h));
+            }
+            hits.addAll(caseHits);
+        }
 
         Collections.sort(hits, new Comparator<SearchHit>() {
             @Override
             public int compare(SearchHit a, SearchHit b) {
                 int byType = typeOrder(a.getType()) - typeOrder(b.getType());
-                return byType != 0 ? byType : 0;
+                if (byType != 0) {
+                    return byType;
+                }
+                /* 同类内按更新时间倒序，最近动过的先出现 */
+                if (a.getUpdatedAt() == null && b.getUpdatedAt() == null) return 0;
+                if (a.getUpdatedAt() == null) return 1;
+                if (b.getUpdatedAt() == null) return -1;
+                return b.getUpdatedAt().compareTo(a.getUpdatedAt());
             }
         });
         return hits;
+    }
+
+    /** 类型为空表示「全部」；指定类型后只查该类，避免无关查询。 */
+    private static boolean wants(SearchQuery query, String type) {
+        return query.getType() == null || type.equals(query.getType());
+    }
+
+    private static SearchQuery normalize(SearchQuery raw) {
+        SearchQuery q = new SearchQuery();
+        if (raw != null) {
+            q.setQ(Texts.trimToNull(raw.getQ()));
+            q.setType(oneOf(raw.getType(), "project", "task", "doc", "demand", "case"));
+            q.setReqId(Texts.trimToNull(raw.getReqId()));
+            q.setVersionId(Texts.trimToNull(raw.getVersionId()));
+            q.setStatus(Texts.trimToNull(raw.getStatus()));
+            q.setOwner(Texts.trimToNull(raw.getOwner()));
+            q.setFrom(Texts.trimToNull(raw.getFrom()));
+            q.setTo(Texts.trimToNull(raw.getTo()));
+            q.setLimit(raw.getLimit());
+        }
+        /* 起止填反时按同一维度对调，避免得到空结果却看不出原因 */
+        if (q.getFrom() != null && q.getTo() != null && q.getFrom().compareTo(q.getTo()) > 0) {
+            String tmp = q.getFrom();
+            q.setFrom(q.getTo());
+            q.setTo(tmp);
+        }
+        return q;
+    }
+
+    private static String oneOf(String value, String... allowed) {
+        String v = Texts.trimToNull(value);
+        if (v == null) {
+            return null;
+        }
+        for (String item : allowed) {
+            if (item.equals(v)) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private static LocalDate parseDate(String value) {
+        String v = Texts.trimToNull(value);
+        if (v == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(v);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static List<SearchHit> projectHits(List<ReqProgress> projects, SearchQuery query,
+                                               String needle, int per) {
+        List<SearchHit> out = new ArrayList<SearchHit>();
+        LocalDate from = parseDate(query.getFrom());
+        LocalDate to = parseDate(query.getTo());
+        for (ReqProgress p : projects) {
+            if (out.size() >= per) {
+                break;
+            }
+            if (needle != null && !contains(p.getName(), needle) && !contains(p.getDescription(), needle)
+                    && !contains(p.getObjective(), needle)) {
+                continue;
+            }
+            if (query.getReqId() != null && !query.getReqId().equals(p.getId())) {
+                continue;
+            }
+            if (query.getStatus() != null && !query.getStatus().equals(p.getStatus())) {
+                continue;
+            }
+            if (query.getOwner() != null && !query.getOwner().equals(p.getOwnerUserId())
+                    && !query.getOwner().equals(p.getOwnerName())) {
+                continue;
+            }
+            if (!within(p.getPlannedEnd(), from, to)) {
+                continue;
+            }
+            SearchHit h = new SearchHit();
+            h.setType("project");
+            h.setId(p.getId());
+            h.setTitle(p.getName());
+            h.setStatus(p.getStatus());
+            h.setExtra(p.getArchivedAt() == null ? "项目" : "项目 · 已归档");
+            h.setUpdatedAt(p.getUpdatedAt());
+            out.add(h);
+        }
+        return out;
+    }
+
+    private static boolean within(LocalDate value, LocalDate from, LocalDate to) {
+        if (from == null && to == null) {
+            return true;
+        }
+        if (value == null) {
+            return false;
+        }
+        if (from != null && value.isBefore(from)) {
+            return false;
+        }
+        return to == null || !value.isAfter(to);
     }
 
     /** 按编号搜到时要能看出命中理由：编号排在负责人前；未取号保持原样 */
@@ -174,6 +310,9 @@ public class SearchService {
     private static String snippetAround(String brief, String q) {
         if (brief == null || brief.isEmpty()) {
             return null;
+        }
+        if (q == null) {
+            return brief.length() <= 80 ? brief : brief.substring(0, 80) + "…";
         }
         String lower = brief.toLowerCase();
         int idx = lower.indexOf(q.toLowerCase());

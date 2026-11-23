@@ -10,7 +10,7 @@
 mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 ```
 
-基线包含当前全部 80 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑、交付说明、编号序列、用例—工作项追溯、用例目录层级 / 自定义分组（动态收录与指定成员可见）、文档分类树与空间级文档、子任务排序与团队共享 AI 配置、Git 仓库只读同步与分支别名、文档可见范围、工作项历史发布人工标记、需求池评论与需求提醒人、需求已完成主状态、项目集与项目拆分映射）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
+基线包含当前全部 94 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑、交付说明、编号序列、用例—工作项追溯、用例目录层级 / 自定义分组（动态收录与指定成员可见）、文档分类树与空间级文档、子任务排序与团队共享 AI 配置、Git 仓库只读同步与分支别名、文档可见范围、工作项历史发布人工标记、需求池评论与需求提醒人、需求已完成主状态、项目集与项目拆分映射、需求评审人、测试计划执行人、发布准备与发布计划关注、交付说明分享访问明细、周五补记与未处理项承接、轻量自动化与定时报告订阅）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
 
 ## 2. 已有库升级
 
@@ -73,6 +73,28 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 `109_task_canceled.sql` 为工作项新增终态「已取消」。
 
 `112_task_test_estimate.sql` 给 `task` 增加 `test_estimate_minutes`（测试预估，分钟，空=没估过）：成员负载的测试剩余 = max(0, 测试预估 − 测试窗口内已计工时)，只对测试负责人身份下的「待测试 / 测试中」项累加并并入该成员总负载；整体预估的含义与开发剩余不变，两者各自独立。只增可空列，不回填历史数据，执行后表数量不变。
+
+`113_demand_reviewer.sql` 给 `demand` 增加可空列 `reviewer_user_id`（需求评审人）：指派后「待我评审」优先展示，空值仍进入公共可认领队列。只增可空列，不改状态机、不回填，执行后表数量不变。
+
+`114_test_plan_executor.sql` 给 `test_plan` 增加可空列 `executor_user_id`（测试计划执行人）：空值不进入任何人的「待我执行」。只增可空列，不改执行记录，执行后表数量不变。
+
+`115_release_prep.sql` 新增发布准备的 5 张表：`version_release_plan_watch`（计划关注人）、`version_release_plan_push`（推送批次）、`version_release_plan_push_recipient`（收件人与回执）、`version_release_plan_task_check`（逐项确认 / 风险）、`version_release_plan_milestone`（T-7 / T-3 / T-1 / T-0 发送记录）。关注独立于 `task_watch` / `demand_watch`，只在「我的工作 → 我的关注」统一展示；逐项确认不外键到计划任务行，计划保存删除重建时不会跟着丢。只建表，不回填；115–121 与 123 依次新增发布准备 5 表、交付说明访问明细 1 表、周五补记 4 表、自动化与报告订阅 3 表、周五补记承接 1 表，完整基线为 94 张表。
+
+`116_release_prep_note.sql` 给 `version_release_plan_push` 增加 `note`（发送时选填的补充说明，最多 200 字）。说明随批次持久化，追加在固定事实句之后进入站内 / 邮件 / 群消息，不替换计划名、发布时间、行动句与深链；说明不同、收件人集合不同都视为新批次。依赖 115 先执行；只增可空列，执行后表数量不变。
+
+`117_release_prep_push_group_result.sql` 给 `version_release_plan_push` 增加 `group_sent` / `group_error`，记录企业微信群这一批是否发送成功及失败原因；`NULL` 表示未选群渠道或历史批次未记录。群消息按空间群发送、不能按人回执，这两个字段只用于计划页和推送记录展示。依赖 115 先执行；只增可空列，不回填，执行后表数量不变。
+
+`118_saved_view_params_length.sql` 把 `saved_view.params` 放宽到 `varchar(600)`，让保存视图能存下多条筛选组合；不新增表、不回填。
+
+`119_delivery_share_hardening.sql` 给交付说明分享加 `password_hash`（BCrypt 访问密码）、`allowed_domains`（域名白名单）与 `watermark_text`（接收页 / 打印水印），并新建 `delivery_note_share_visit` 记录每次打开、密码通过与下载的时间、IP、来源域名与 UA；只加列与建表，执行后 86 张表。
+
+`120_catchup.sql` 新增周五补记 4 张表：`catchup_session`（按人按周的会话与计时）、`catchup_decision`（逐条确认 / 跳过 / 合并 / 编辑）、`catchup_time_alloc`（按项目与自然日的工时归属）、`catchup_write`（提交后 5 分钟内可撤销的写入台账）。补记只追加确认记录与工时，不自动改工作项状态；执行后 90 张表。
+
+`121_automation_reports.sql` 新增 3 张表：`workspace_automation`（空间级三条内置规则开关与参数）、`automation_run`（同一空间 + 规则 + 对象 + 自然日去重并留最近结果）、`report_subscription`（个人周报 / 版本报告订阅的渠道、星期、小时与最近发送时间）。只建表、不改存量数据；执行后 93 张表。
+
+`122_app_notification_req_id.sql` 给 `app_notification` 增加可空列 `req_id` 与索引 `idx_user_ws_req`：非任务通知写入时固化所属项目，列表、未读数与类型计数统一按它过滤项目可见性，项目被设为「不可见」后需求/文档等历史通知同步隐藏（`project_access` 权限调整告知除外，始终保留）。无法唯一归属一个项目的通知（如跨项目发布计划）保持空值、继续可见；历史行按 `ref_kind` 关联需求/文档/计划/分支/版本回填，关联不到的不误伤。脚本可重复执行，执行后表数量不变。
+
+`123_catchup_carry.sql` 新增 `catchup_carry`：提交周五补记时把「未处理 / 跳过」的工作项快照到下周（`from_session_id` + `task_id` 唯一），下周草稿据此继续列出；撤销提交时按会话删除。只建表、不回填业务数据；执行后 94 张表。
 
 `110_task_comment_content_length.sql` 只把 `task_comment.content` 从 `VARCHAR(500)` 放宽到 `VARCHAR(2000)`，让工作项评论能贴下错误日志与会议结论；不新增字段、不回填、不改权限与通知口径。后端截断上限与抽屉输入框 `maxlength` 同步为 2000。脚本按 `information_schema` 判断当前长度，已达标即跳过，可重复执行；执行后表数量不变。
 

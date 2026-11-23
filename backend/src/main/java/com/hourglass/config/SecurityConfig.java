@@ -44,8 +44,10 @@ public class SecurityConfig {
                 .antMatchers("/api/health").permitAll()
                 // 邀请链接：访客可查看邀请信息（join 加入需登录，走下方 authenticated）
                 .antMatchers(HttpMethod.GET, "/api/invite/**").permitAll()
-                // 甘特图只读分享：凭 token 访问，不需要登录（只读、无写接口）
+                // 甘特图 / 交付说明只读分享：凭 token 访问，不需要登录（只读，无业务写接口）
                 .antMatchers(HttpMethod.GET, "/api/share/**").permitAll()
+                // 交付说明密码解锁与下载留痕：同样凭 token，不碰账号数据
+                .antMatchers(HttpMethod.POST, "/api/share/**").permitAll()
                 .antMatchers("/api/admin/**").hasRole("ADMIN")
                 .antMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
@@ -98,7 +100,8 @@ public class SecurityConfig {
                 })
                 .accessDeniedHandler((req, res, ex) -> writeJson(res, 200, "{\"code\":403,\"message\":\"没有权限执行该操作\"}"))
             .and()
-            .csrf().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse());
+            .csrf().ignoringAntMatchers("/api/share/**")
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse());
         return http.build();
     }
 

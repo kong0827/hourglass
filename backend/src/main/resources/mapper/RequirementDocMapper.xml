@@ -62,6 +62,44 @@
     LIMIT #{limit}
   </select>
 
+  <!-- 带范围的全局搜索：可见口径与 searchVisible 完全一致，只额外叠加范围条件。
+       keyword 为空时按范围返回；日期用自然日，to 当天也算命中。 -->
+  <select id="searchFiltered" resultType="com.hourglass.dto.SearchHit">
+    SELECT 'doc' AS type, d.id, d.title, d.req_id AS reqId, r.name AS reqName,
+           d.status, d.doc_type AS extra,
+           CASE WHEN d.format = 'univer' THEN d.content_brief
+                WHEN #{keyword} IS NOT NULL AND LOCATE(LOWER(#{keyword}), LOWER(d.content_brief)) > 0
+                THEN d.content_brief ELSE d.content END AS snippet,
+           d.updated_at AS updatedAt
+    FROM requirement_doc d
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    WHERE d.workspace_id = #{workspaceId}
+      <if test="keyword != null and keyword != ''">
+        <include refid="keywordWhere"/>
+      </if>
+      <if test="reqId != null and reqId != ''"> AND d.req_id = #{reqId} </if>
+      <if test="status != null and status != ''"> AND d.status = #{status} </if>
+      <if test="owner != null and owner != ''">
+        AND (d.owner_user_id = #{owner} OR d.owner = #{owner})
+      </if>
+      <if test="from != null and from != ''"> AND d.updated_at &gt;= #{from} </if>
+      <if test="to != null and to != ''"> AND d.updated_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY) </if>
+      <if test="!seeAllDrafts">
+        <!-- 草稿（published_at 为空）只对作者本人可见；口径同 RequirementDocService.canSeeDraft -->
+        AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
+      </if>
+      <if test="viewerId != null">
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+                        WHERE pm.workspace_id = d.workspace_id
+                          AND pm.project_id = d.req_id
+                          AND pm.user_id = #{viewerId}
+                          AND pm.access = 'none')
+      </if>
+      <include refid="visibilityWhere"/>
+    ORDER BY d.updated_at DESC
+    LIMIT #{limit}
+  </select>
+
   <sql id="listWhere">
     d.workspace_id = #{workspaceId}
     <if test="reqId != null and reqId != ''">

@@ -14,6 +14,6 @@ public class SavedViewRequest {
 
     /** 筛选参数 JSON 字符串（含甘特图等视图的布局参数） */
     @NotBlank(message = "视图参数不能为空")
-    @Size(max = 1200, message = "视图参数过长")
+    @Size(max = 1900, message = "视图参数过长")
     private String params;
 }

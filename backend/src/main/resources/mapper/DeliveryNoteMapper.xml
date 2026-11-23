@@ -69,20 +69,26 @@
   </delete>
 
   <select id="selectShareBySnapshot" resultType="DeliveryNoteShare">
-    SELECT workspace_id, snapshot_id, token, allow_download, view_count, created_at, expires_at
+    SELECT workspace_id, snapshot_id, token, allow_download, password_hash, allowed_domains,
+           watermark_text, view_count, created_at, expires_at
     FROM delivery_note_share WHERE workspace_id = #{workspaceId} AND snapshot_id = #{snapshotId}
   </select>
 
   <select id="selectShareByToken" resultType="DeliveryNoteShare">
-    SELECT workspace_id, snapshot_id, token, allow_download, view_count, created_at, expires_at
+    SELECT workspace_id, snapshot_id, token, allow_download, password_hash, allowed_domains,
+           watermark_text, view_count, created_at, expires_at
     FROM delivery_note_share WHERE token = #{token}
   </select>
 
   <insert id="upsertShare">
-    INSERT INTO delivery_note_share (workspace_id, snapshot_id, token, allow_download, expires_at)
-    VALUES (#{workspaceId}, #{snapshotId}, #{token}, #{allowDownload}, #{expiresAt})
+    INSERT INTO delivery_note_share (workspace_id, snapshot_id, token, allow_download, password_hash,
+      allowed_domains, watermark_text, expires_at)
+    VALUES (#{workspaceId}, #{snapshotId}, #{token}, #{allowDownload}, #{passwordHash},
+      #{allowedDomains}, #{watermarkText}, #{expiresAt})
     ON DUPLICATE KEY UPDATE token = VALUES(token), allow_download = VALUES(allow_download),
-      expires_at = VALUES(expires_at), created_at = CURRENT_TIMESTAMP
+      password_hash = VALUES(password_hash), allowed_domains = VALUES(allowed_domains),
+      watermark_text = VALUES(watermark_text), expires_at = VALUES(expires_at),
+      created_at = CURRENT_TIMESTAMP
   </insert>
 
   <delete id="deleteShare">
@@ -93,6 +99,35 @@
     UPDATE delivery_note_share SET view_count = view_count + 1
     WHERE workspace_id = #{workspaceId} AND snapshot_id = #{snapshotId}
   </update>
+
+  <insert id="insertShareVisit">
+    INSERT INTO delivery_note_share_visit (id, workspace_id, snapshot_id, share_token, action,
+      ip, user_agent, referer, domain)
+    VALUES (#{id}, #{workspaceId}, #{snapshotId}, #{shareToken}, #{action},
+      #{ip}, #{userAgent}, #{referer}, #{domain})
+  </insert>
+
+  <select id="selectShareVisits" resultType="DeliveryNoteShareVisit">
+    SELECT id, workspace_id, snapshot_id, share_token, action, ip, user_agent, referer, domain, created_at
+    FROM delivery_note_share_visit
+    WHERE workspace_id = #{workspaceId} AND snapshot_id = #{snapshotId}
+    ORDER BY created_at DESC, id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="countShareVisitsSince" resultType="int">
+    SELECT COUNT(*) FROM delivery_note_share_visit
+    WHERE workspace_id = #{workspaceId} AND snapshot_id = #{snapshotId} AND created_at &gt;= #{since}
+  </select>
+
+  <select id="countShareAttempts" resultType="int">
+    SELECT COUNT(*) FROM delivery_note_share_visit
+    WHERE share_token = #{token} AND action = #{action} AND created_at &gt;= #{since}
+  </select>
+
+  <delete id="deleteShareVisitsByWorkspace">
+    DELETE FROM delivery_note_share_visit WHERE workspace_id = #{workspaceId}
+  </delete>
 
   <delete id="deleteSharesByWorkspace">
     DELETE FROM delivery_note_share WHERE workspace_id = #{workspaceId}
