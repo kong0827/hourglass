@@ -1014,7 +1014,6 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] #tcSelFiltered{flex:1 1 100%;justify-content:center;}
 [data-layout="mobile"] .tc-bulkbar{flex:1 1 100%;margin-left:0;}
 [data-layout="mobile"] .tc-bulk-acts{flex:1 1 100%;}
-[data-layout="mobile"] .tc-menu{top:auto;bottom:32px;}
 [data-layout="mobile"] .tc-seg-head{gap:6px;padding:var(--space-2);}
 [data-layout="mobile"] .tc-seg-name{flex:1 1 auto;max-width:100%;}
 [data-layout="mobile"] .tc-seg-bar{flex:1 1 60px;}

@@ -3586,15 +3586,11 @@ function caseRowHTML(c, segKey){
     acts += '<button class="btn sm ghost danger" type="button" data-tc-defect="' + esc(c.id) + '">转缺陷</button>';
   }
   if(w){
-    /* 编辑 / 删除收进常显的 ⋯ 菜单：不再依赖 hover，触屏也能发现 */
+    /* 编辑 / 删除收进常显的 ⋯ 菜单：不再依赖 hover，触屏也能发现。
+       菜单由 openCaseRowMenu 挂到 body 上定位：列表卡片有 overflow:hidden，留在行内会被裁掉 */
     acts += '<span class="tc-menu-wrap">'
       + '<button class="icon-btn sm" type="button" data-tc-menu="' + esc(c.id) + '" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作" title="更多操作">'
-      + icon("more", 15) + '</button>'
-      + '<div class="tc-menu" role="menu" data-tc-menu-panel="' + esc(c.id) + '" hidden>'
-      + '<button type="button" role="menuitem" data-tc-edit="' + esc(c.id) + '">' + icon("edit", 13) + ' 编辑用例</button>'
-      + '<div class="tc-menu-sep" role="none"></div>'
-      + '<button type="button" role="menuitem" class="danger" data-tc-del="' + esc(c.id) + '">' + icon("trash", 13) + ' 删除用例</button>'
-      + '</div></span>';
+      + icon("more", 15) + '</button></span>';
   }
   var sel = caseRowSelected(c, segKey);
   var dragging = !!(caseDrag && (caseDrag.anchor === c.id || caseRowSelected(c, segKey)));
@@ -4261,7 +4257,17 @@ function openCaseCreate(anchor){
     return;
   }
   if(targets.length === 1){ openNewDialog(targets[0]); return; }
-  var btn = anchor && anchor.nodeType === 1 ? anchor : $("btnCaseNew");
+  /* 工具栏「新建用例」按原型让位给页头「新建」而隐藏；跨视图创建（?new=1）进来时没有
+     点击锚点，不能再拿隐藏按钮定位（getBoundingClientRect 全零会掉到左上角）。
+     依次找真的渲染出来的锚点，最后才退回隐藏按钮保证浮层仍能打开 */
+  var btn = anchor && anchor.nodeType === 1 && anchor.getClientRects().length ? anchor : null;
+  if(!btn){
+    ["pageActions [data-tc-head='case-new']", "pageActions", "tcReq", "btnCaseNew"].some(function(sel){
+      var c = $(sel);
+      if(c && c.getClientRects().length){ btn = c; return true; }
+      return false;
+    });
+  }
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = '<div class="menu-title">新建用例到</div>'
@@ -10037,16 +10043,7 @@ $("tcList").addEventListener("click", function(e){
   var segHead = e.target.closest("[data-tc-seg]");
   if(segHead && !e.target.closest("button")){ toggleSegment(segHead.dataset.tcSeg); return; }
   var menuBtn = e.target.closest("[data-tc-menu]");
-  if(menuBtn){
-    var panel = menuBtn.parentNode.querySelector("[data-tc-menu-panel]");
-    var willOpen = !!(panel && panel.hidden);
-    closeCaseRowMenus();
-    if(willOpen){
-      panel.hidden = false;
-      menuBtn.setAttribute("aria-expanded", "true");
-    }
-    return;
-  }
+  if(menuBtn){ openCaseRowMenu(menuBtn); return; }
   var pick = e.target.closest("[data-tc-pick]");
   if(pick){ toggleCaseSel(pick.dataset.tcPick, pick.checked, pick.dataset.tcPickSeg || null); return; }
   var more = e.target.closest("[data-tc-more]");
@@ -10064,29 +10061,28 @@ $("tcList").addEventListener("click", function(e){
     else toast("未找到关联缺陷，可能已被删除", "warn");
     return;
   }
-  var edit = e.target.closest("[data-tc-edit]");
-  if(edit){ openEditDialog(edit.dataset.tcEdit); return; }
-  var del = e.target.closest("[data-tc-del]");
-  if(del){ removeCase(del.dataset.tcDel); return; }
   var open = e.target.closest("[data-tc-open]");
   if(open && !e.target.closest(".tc-acts")) openCaseDetail(open.dataset.tcOpen);
 });
-/* 行内 ⋯ 菜单：一次只开一个，点外部或按 Esc 收起 */
-function closeCaseRowMenus(except){
-  Array.prototype.forEach.call(document.querySelectorAll("[data-tc-menu-panel]"), function(p){
-    if(p === except) return;
-    p.hidden = true;
-    var b = p.parentNode.querySelector("[data-tc-menu]");
-    if(b) b.setAttribute("aria-expanded", "false");
+/* 行内 ⋯ 菜单：挂到 body 上定位，列表卡片的 overflow:hidden 不会再把它裁成一条边；
+   翻转、滚动重定位、Esc 与点外关闭都由 UI.openPop 负责 */
+function openCaseRowMenu(anchor){
+  var id = anchor.dataset.tcMenu;
+  var el = document.createElement("div");
+  el.className = "tc-menu";
+  el.setAttribute("role", "menu");
+  el.innerHTML = '<button type="button" role="menuitem" data-tc-edit="' + esc(id) + '">' + icon("edit", 13) + ' 编辑用例</button>'
+    + '<div class="tc-menu-sep" role="none"></div>'
+    + '<button type="button" role="menuitem" class="danger" data-tc-del="' + esc(id) + '">' + icon("trash", 13) + ' 删除用例</button>';
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-tc-edit],[data-tc-del]");
+    if(!b) return;
+    UI.closeAllPops();
+    if(b.hasAttribute("data-tc-edit")) openEditDialog(b.dataset.tcEdit);
+    else removeCase(b.dataset.tcDel);
   });
+  UI.openPop(el, anchor, { align: "right", onClose: function(){ el.remove(); } });
 }
-document.addEventListener("click", function(e){
-  if(e.target.closest("[data-tc-menu]")) return;
-  closeCaseRowMenus();
-});
-document.addEventListener("keydown", function(e){
-  if(e.key === "Escape") closeCaseRowMenus();
-});
 $("tcBulkAll").addEventListener("change", function(){
   var all = caseWritableLoaded();
   if(this.checked){
