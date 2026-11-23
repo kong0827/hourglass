@@ -9,27 +9,47 @@
       (#{recipient}, #{subject}, #{body}, #{eventType}, #{referenceId}, 'pending', 0, NOW())
   </insert>
 
+  <!-- sending 是发送中的抢占标记：下次扫描只回收超时未落库的行，避免多实例重复发送 -->
   <select id="selectDue" resultType="MailDelivery">
     SELECT id, recipient, subject, body, event_type, reference_id, status,
            attempts, next_attempt_at, last_error, created_at, sent_at
     FROM mail_delivery
-    WHERE status = 'pending' AND attempts &lt; 3 AND next_attempt_at &lt;= #{now}
+    WHERE status IN ('pending', 'sending') AND attempts &lt; 3 AND next_attempt_at &lt;= #{now}
     ORDER BY id
     LIMIT #{limit}
   </select>
 
-  <update id="markSent">
+  <!-- 抢占成功才发送：并发扫描时只有一个实例能把同一行改成 sending -->
+  <update id="claim">
     UPDATE mail_delivery
-    SET status = 'sent', attempts = attempts + 1, sent_at = #{sentAt}, last_error = NULL
-    WHERE id = #{id} AND status = 'pending'
+    SET status = 'sending', attempts = attempts + 1, next_attempt_at = #{claimUntil}
+    WHERE id = #{id} AND status IN ('pending', 'sending') AND attempts &lt; 3
+      AND next_attempt_at &lt;= #{now}
   </update>
 
-  <!-- next_attempt_at 是 NOT NULL：重试耗尽时传 null，落库保留上次时间，失败行的状态已由 status 表达。 -->
+  <!-- unknown 是租约到期后的「疑似已发出」终态：实际发送进程若晚一步回写成功，
+       仍允许把 unknown 纠正为 sent；unknown 不会被再次扫描，不存在重复发送。 -->
+  <update id="markSent">
+    UPDATE mail_delivery
+    SET status = 'sent', sent_at = #{sentAt}, last_error = NULL
+    WHERE id = #{id} AND status IN ('sending', 'unknown')
+  </update>
+
+  <!-- 最后一次抢占后进程退出：行停在 sending 且 attempts 已到上限，再也不会被扫描到。
+       租约到期后收口为 unknown 而不是 failed：结果可能已经发出，标成失败会引导人工重发。 -->
+  <update id="failExpiredSending">
+    UPDATE mail_delivery
+    SET status = 'unknown', last_error = COALESCE(last_error, #{message})
+    WHERE status = 'sending' AND attempts &gt;= #{maxAttempts} AND next_attempt_at &lt;= #{now}
+  </update>
+
+  <!-- next_attempt_at 是 NOT NULL：重试耗尽时传 null，落库保留上次时间，失败行的状态已由 status 表达。
+       原发送进程未退出但确定失败时，可把已被收口为 unknown 的行纠正回 failed。 -->
   <update id="markAttemptFailed">
     UPDATE mail_delivery
     SET status = #{status}, attempts = #{attempts}, next_attempt_at = COALESCE(#{nextAttemptAt}, next_attempt_at),
         last_error = #{lastError}
-    WHERE id = #{id} AND status = 'pending'
+    WHERE id = #{id} AND status IN ('sending', 'unknown')
   </update>
   <delete id="deleteByReferenceIds">
     DELETE FROM mail_delivery WHERE reference_id IN

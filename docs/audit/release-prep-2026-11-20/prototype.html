@@ -246,9 +246,15 @@
   .member-row .nm{font-weight:550;line-height:1.25}
   .member-row .mt{font-size:10.5px;color:var(--text-3);line-height:1.25}
   .member-row .meta{margin-left:auto;font-size:10.5px;color:var(--text-3);white-space:nowrap}
+  .note-field{display:flex;align-items:center;gap:8px}
+  .note-field input{flex:1 1 auto;min-width:0;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font:inherit;font-size:12px;color:var(--text)}
+  .note-field input:focus{outline:0;border-color:var(--primary-border);box-shadow:0 0 0 3px var(--primary-soft)}
+  .note-field input::placeholder{color:var(--text-3)}
+  .note-count{flex:0 0 auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
   .push-preview{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--surface-sunken);display:flex;gap:10px}
   .pp-icon{width:30px;height:30px;border-radius:8px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;flex:0 0 auto;font-size:12px;font-weight:700}
   .pp-title{font-size:12.5px;font-weight:650}
+  .pp-note{font-size:11.5px;font-weight:600;color:var(--text);line-height:1.55;margin-top:3px}
   .pp-body{font-size:11.5px;color:var(--text-2);line-height:1.55;margin-top:2px}
   .pp-act{margin-top:8px}
   .pp-link{font-size:11.5px;color:var(--primary-fg);font-weight:600}
@@ -259,6 +265,26 @@
   .send-result{display:none;padding:10px 20px;background:var(--success-soft);border-top:1px solid var(--success-border);font-size:11.5px;color:var(--success-fg)}
   .send-result.on{display:flex;align-items:center;gap:8px}
   .send-result .link{margin-left:auto;color:var(--success-fg)}
+
+  /* ---------- 推送记录 ---------- */
+  .hist-modal{width:min(760px,100%)}
+  .hist-body{overflow:auto;max-height:64vh;padding:4px 20px 18px}
+  .hist-card{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;background:var(--surface)}
+  .hist-head{display:flex;justify-content:space-between;gap:12px}
+  .hist-head b{font-size:12.5px}
+  .hist-head span{display:block;font-size:10.5px;color:var(--text-3);margin-top:2px}
+  .hist-meta{font-size:10.5px;color:var(--text-3);white-space:nowrap}
+  .hist-sum{font-size:11.5px;color:var(--text-2);margin-top:8px}
+  .hist-note{font-size:11.5px;color:var(--text);background:var(--surface-sunken);border-left:3px solid var(--primary-border);border-radius:0 6px 6px 0;padding:7px 10px;margin:8px 0 0}
+  .hist-toggle{margin-top:8px}
+  .hist-people{border-top:1px dashed var(--border);margin-top:10px;padding-top:10px}
+  .hist-people-head{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-2)}
+  .hist-people-head .btn{margin-left:auto}
+  .hist-person{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:11.5px}
+  .hist-person:last-child{border-bottom:0}
+  .hist-person .nm{font-weight:550}
+  .hist-person .meta{font-size:10.5px;color:var(--text-3)}
+  .hist-person.acked .meta{color:var(--success-fg)}
 
   /* ---------- 通知面板 ---------- */
   .notice-panel{position:fixed;top:54px;right:16px;width:400px;max-height:calc(100vh - 76px);background:var(--surface);
@@ -366,6 +392,23 @@
   .watch-card .bar span{height:100%}
   .watch-card .foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .watch-card .foot .link{margin-left:auto}
+  /* 通用关注：工作项 / 缺陷 / 需求 / 发布计划共用一张列表，类型只做筛选与标识 */
+  .watch-list{margin-top:14px}
+  .watch-list .wt-head,.watch-list .wt-row{display:grid;grid-template-columns:76px minmax(0,1fr) 96px 130px 96px 72px;gap:10px;align-items:center;padding:0 14px}
+  .watch-list .wt-head{height:34px;background:var(--surface-sunken);border:1px solid var(--border);border-bottom:0;border-radius:var(--r-lg) var(--r-lg) 0 0;font-size:11px;font-weight:550;color:var(--text-3)}
+  .watch-list .wt-row{min-height:46px;background:var(--surface);border:1px solid var(--border);border-top:0;font-size:12px;color:var(--text-2)}
+  .watch-list .wt-row:last-child{border-radius:0 0 var(--r-lg) var(--r-lg)}
+  .watch-list .wt-row:hover{background:var(--surface-hover)}
+  .watch-list .wt-row .tt{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .watch-list .wt-row .tt small{font-weight:400;color:var(--text-3);margin-left:6px}
+  .watch-list .wt-row .meta{color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .watch-list .wt-row .act{text-align:right}
+  .watch-list .wt-row .act button{border:0;background:transparent;color:var(--text-3);font-size:11.5px;cursor:pointer;padding:4px}
+  .watch-list .wt-row .act button:hover{color:var(--danger-fg)}
+  .type-tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;font-size:11px;font-weight:600;background:var(--surface-sunken);color:var(--text-2)}
+  .type-tag.bug{background:var(--danger-soft);color:var(--danger-fg)}
+  .type-tag.demand{background:var(--success-soft);color:var(--success-fg)}
+  .type-tag.plan{background:var(--plum-soft);color:var(--plum-fg)}
   .p2-note{display:flex;align-items:flex-start;gap:8px;padding:11px 13px;margin-top:14px;border-radius:var(--r-md);
     background:var(--plum-soft);border:1px solid var(--plum-border);font-size:11.5px;color:var(--plum-fg);line-height:1.55}
 
@@ -573,7 +616,7 @@
             </div>
           </div>
           <div class="phead-act">
-            <button class="btn" id="watchPlanBtn"><svg class="ico ico-sm"><use href="#i-star"/></svg> 关注此计划</button>
+            <button class="btn" id="watchPlanBtn" title="关注后，计划改期、范围变化和临近发布会通知你"><svg class="ico ico-sm"><use href="#i-star"/></svg> 关注此计划 <span class="muted" style="font-weight:500">12</span></button>
             <button class="btn primary" data-open-push><svg class="ico ico-sm"><use href="#i-send"/></svg> 通知成员</button>
           </div>
         </div>
@@ -631,8 +674,8 @@
             <span>推送范围 <b>全部项目成员</b>（3 个项目 · 38 人）</span>
             <button class="link" data-open-push>修改范围</button>
             <span class="spacer"></span>
-            <span>最近推送 <b>今天 09:00</b> · 站内 38 人 · 邮件 12 人</span>
-            <button class="link muted">推送记录</button>
+            <span>最近推送 <b>今天 09:00</b> · 涉及 38 人 · 站内 34 人 · 邮件 12 人 · 回执 6 人 · 企业微信群已发送</span>
+            <button class="link muted" data-open-history>推送记录</button>
           </div>
           <div class="tbl-wrap">
             <table class="tbl">
@@ -732,8 +775,8 @@
           <div class="card info-card">
             <span class="ic"><svg class="ico"><use href="#i-eye"/></svg></span>
             <h3>关注</h3>
-            <p>12 人关注了本计划。关注后接收变更、临近发布与确认进度，不影响工作项关注。</p>
-            <div class="foot"><span class="av-stack"><span class="av a1">林</span><span class="av a2">陈</span><span class="av a3">周</span><span class="av a5">孙</span></span><span class="tag plum">P2 低优先级</span></div>
+            <p>12 人关注了本计划。关注后接收改期、范围变化、进入就绪与 T-0 发布日提醒；与工作项、缺陷、需求关注互不影响。</p>
+            <div class="foot"><span class="av-stack"><span class="av a1">林</span><span class="av a2">陈</span><span class="av a3">周</span><span class="av a5">孙</span></span><span class="tag">汇总在「我的工作 → 我的关注」</span></div>
           </div>
         </div>
       </section>
@@ -753,7 +796,7 @@
             </div>
           </div>
           <div class="phead-act">
-            <button class="btn" id="watchBtn"><svg class="ico ico-sm"><use href="#i-star"/></svg> 关注此计划</button>
+            <button class="btn" id="watchBtn"><svg class="ico ico-sm"><use href="#i-star"/></svg> 关注此计划 <span class="muted" style="font-weight:500">12</span></button>
             <button class="btn primary" id="openPlanBtn">查看计划范围</button>
           </div>
         </div>
@@ -773,7 +816,7 @@
             <div class="hint" id="myHint">1 项有风险 · 2 项未确认 · 3 项已回应</div>
           </div>
           <div class="hero-act">
-            <button class="btn" data-go="watch">我关注的发布</button>
+            <button class="btn" data-go="watch">我的关注</button>
           </div>
         </div>
 
@@ -911,17 +954,46 @@
       <section class="scene" data-scene="watch">
         <div class="phead">
           <div>
-            <div class="eyebrow">版本 / 我关注的发布</div>
-            <h1 class="h1">我关注的发布 <span class="tag plum" style="vertical-align:3px">P2 · 低优先级</span></h1>
-            <div class="sub"><span>关注后，计划变更、临近发布与负责人确认进度会出现在这里。</span></div>
+            <div class="eyebrow">我的工作 / 我的关注</div>
+            <h1 class="h1">我的关注</h1>
+            <div class="sub"><span>工作项、缺陷、需求与发布计划的关注都汇总在这里；关注只接收变更提醒，不代表你负责。</span></div>
           </div>
         </div>
         <div class="tabs" role="tablist">
-          <button class="tab" role="tab" aria-selected="true">全部 <span class="muted">2</span></button>
-          <button class="tab" role="tab" aria-selected="false">即将发布</button>
-          <button class="tab" role="tab" aria-selected="false">有风险</button>
+          <button class="tab" role="tab" aria-selected="true">全部 <span class="muted">5</span></button>
+          <button class="tab" role="tab" aria-selected="false">工作项 <span class="muted">1</span></button>
+          <button class="tab" role="tab" aria-selected="false">缺陷 <span class="muted">1</span></button>
+          <button class="tab" role="tab" aria-selected="false">需求 <span class="muted">1</span></button>
+          <button class="tab" role="tab" aria-selected="false">发布计划 <span class="muted">2</span></button>
         </div>
-        <div class="watch-grid" id="watchGrid">
+        <div class="watch-list" role="table" aria-label="我关注的工作项、缺陷与需求">
+          <div class="wt-head" role="row"><span>类型</span><span>事项</span><span>状态</span><span>所属</span><span>最近更新</span><span style="text-align:right">操作</span></div>
+          <div class="wt-row" role="row">
+            <span><span class="type-tag">工作项</span></span>
+            <span class="tt">支付回调重试补偿 <small>DM-128</small></span>
+            <span><span class="tag blue">进行中</span></span>
+            <span class="meta">交易中台 · V2.3.1</span>
+            <span class="meta">今天 10:24</span>
+            <span class="act"><button type="button">取消关注</button></span>
+          </div>
+          <div class="wt-row" role="row">
+            <span><span class="type-tag bug">缺陷</span></span>
+            <span class="tt">重复回调导致库存扣减两次 <small>BUG-207</small></span>
+            <span><span class="tag orange">待修复</span></span>
+            <span class="meta">交易中台 · V2.3.1</span>
+            <span class="meta">今天 09:48</span>
+            <span class="act"><button type="button">取消关注</button></span>
+          </div>
+          <div class="wt-row" role="row">
+            <span><span class="type-tag demand">需求</span></span>
+            <span class="tt">支付网关接口改造 <small>R-318</small></span>
+            <span><span class="tag green">已排期</span></span>
+            <span class="meta">交易中台</span>
+            <span class="meta">昨天 18:40</span>
+            <span class="act"><button type="button">取消关注</button></span>
+          </div>
+        </div>
+        <div class="watch-grid" id="watchGrid" aria-label="我关注的发布计划">
           <article class="card watch-card">
             <div class="top">
               <div>
@@ -931,7 +1003,7 @@
               <div class="cd"><b>5</b><span>天后</span></div>
             </div>
             <div class="bar"><span class="seg-ok" style="width:40%"></span><span class="seg-risk" style="width:10%"></span><span class="seg-pending" style="width:45%"></span><span class="seg-none" style="width:5%"></span></div>
-            <div class="foot"><span class="tag orange">2 项有风险</span><span class="tag">8 / 20 已确认</span><button class="link" data-go="prep">查看我的准备</button></div>
+            <div class="foot"><span class="tag orange">2 项有风险</span><span class="tag">8 / 20 已确认</span><button class="link" data-go="prep">查看我的准备</button><button class="link" type="button">取消关注</button></div>
           </article>
           <article class="card watch-card">
             <div class="top">
@@ -942,16 +1014,16 @@
               <div class="cd"><b>12</b><span>天后</span></div>
             </div>
             <div class="bar"><span class="seg-ok" style="width:62%"></span><span class="seg-risk" style="width:0"></span><span class="seg-pending" style="width:38%"></span></div>
-            <div class="foot"><span class="tag green">节奏健康</span><span class="tag">3 / 8 已确认</span><button class="link" data-go="plan">查看计划</button></div>
+            <div class="foot"><span class="tag green">节奏健康</span><span class="tag">3 / 8 已确认</span><button class="link" data-go="plan">查看计划</button><button class="link" type="button">取消关注</button></div>
           </article>
         </div>
         <div class="empty" id="watchEmpty" hidden>
           <span class="eic"><svg class="ico"><use href="#i-star"/></svg></span>
-          <h3>还没有关注的发布</h3>
-          <p>在发布计划里点「关注此计划」，临近发布、计划变更和负责人确认进度会汇总在这里。</p>
-          <button class="btn" data-go="plan">去版本页看看</button>
+          <h3>还没有关注的事项</h3>
+          <p>在工作项、缺陷、需求或发布计划里点「关注」，变更提醒会汇总在这里。</p>
+          <button class="btn" data-go="plan">去发布计划看看</button>
         </div>
-        <div class="p2-note"><svg class="ico ico-sm"><use href="#i-flag"/></svg><span><b>低优先级说明：</b>首版只做关注入口与列表，不新增消息偏好，也不并入任务/需求关注，避免三个关注口径混在一起。</span></div>
+        <div class="p2-note"><svg class="ico ico-sm"><use href="#i-star"/></svg><span><b>通用关注：</b>工作项与缺陷共用同一份关注名单，需求与发布计划各自独立；取消关注只停止提醒，不影响你负责或参与的身份。关注计划后，改期、范围变化、进入就绪和 T-0 发布日会通知你。</span></div>
       </section>
     </main>
   </div>
@@ -987,14 +1059,14 @@
           <button class="btn sm" id="pickClear">清空</button>
         </div>
         <div class="member-list" id="memberList">
-          <label class="member-row" data-member="lin" data-unconfirmed="1"><input type="checkbox" checked><span class="av a1">林</span><span><span class="nm">林夏</span><span class="mt">交易中台 · 计划负责人</span></span><span class="meta">负责 5 项 · 未确认 1</span></label>
-          <label class="member-row" data-member="chen" data-unconfirmed="2"><input type="checkbox" checked><span class="av a2">陈</span><span><span class="nm">陈默</span><span class="mt">交易中台 · 负责人</span></span><span class="meta">负责 4 项 · 未确认 2</span></label>
-          <label class="member-row" data-member="zhou" data-unconfirmed="1"><input type="checkbox" checked><span class="av a3">周</span><span><span class="nm">周雨</span><span class="mt">风控服务 · 负责人</span></span><span class="meta">负责 3 项 · 未确认 1</span></label>
-          <label class="member-row" data-member="zhao" data-unconfirmed="3"><input type="checkbox"><span class="av a4">赵</span><span><span class="nm">赵启</span><span class="mt">结算平台 · 负责人</span></span><span class="meta">负责 3 项 · 未确认 3</span></label>
-          <label class="member-row" data-member="sun" data-unconfirmed="1"><input type="checkbox" checked><span class="av a5">孙</span><span><span class="nm">孙岚</span><span class="mt">交易中台 · 测试负责人</span></span><span class="meta">负责 3 项 · 未确认 1</span></label>
-          <label class="member-row" data-member="wang" data-unconfirmed="1"><input type="checkbox" checked><span class="av a6">王</span><span><span class="nm">王晓</span><span class="mt">结算平台 · 负责人</span></span><span class="meta">负责 1 项 · 未确认 1</span></label>
-          <label class="member-row" data-member="li" data-unconfirmed="0"><input type="checkbox"><span class="av a7">李</span><span><span class="nm">李然</span><span class="mt">风控服务 · 测试</span></span><span class="meta">负责 0 项 · 已确认</span></label>
-          <label class="member-row" data-member="gu" data-unconfirmed="0"><input type="checkbox"><span class="av a8">顾</span><span><span class="nm">顾清</span><span class="mt">结算平台 · 只读</span></span><span class="meta">负责 0 项 · 只读</span></label>
+          <label class="member-row" data-member="lin" data-unconfirmed="1"><input type="checkbox" checked><span class="av a1">林</span><span><span class="nm">林夏</span><span class="mt">交易中台 · 计划负责人</span></span><span class="meta">负责 5 项 · 未确认 1 · 站内 · 邮件</span></label>
+          <label class="member-row" data-member="chen" data-unconfirmed="2"><input type="checkbox" checked><span class="av a2">陈</span><span><span class="nm">陈默</span><span class="mt">交易中台 · 负责人</span></span><span class="meta">负责 4 项 · 未确认 2 · 站内 · 邮件</span></label>
+          <label class="member-row" data-member="zhou" data-unconfirmed="1"><input type="checkbox" checked><span class="av a3">周</span><span><span class="nm">周雨</span><span class="mt">风控服务 · 负责人</span></span><span class="meta">负责 3 项 · 未确认 1 · 站内 · 邮件未开</span></label>
+          <label class="member-row" data-member="zhao" data-unconfirmed="3"><input type="checkbox"><span class="av a4">赵</span><span><span class="nm">赵启</span><span class="mt">结算平台 · 负责人</span></span><span class="meta">负责 3 项 · 未确认 3 · 站内 · 邮件</span></label>
+          <label class="member-row" data-member="sun" data-unconfirmed="1"><input type="checkbox" checked><span class="av a5">孙</span><span><span class="nm">孙岚</span><span class="mt">交易中台 · 测试负责人</span></span><span class="meta">负责 3 项 · 未确认 1 · 站内 · 邮件未开</span></label>
+          <label class="member-row" data-member="wang" data-unconfirmed="1"><input type="checkbox" checked><span class="av a6">王</span><span><span class="nm">王晓</span><span class="mt">结算平台 · 负责人</span></span><span class="meta">负责 1 项 · 未确认 1 · 站内 · 邮件</span></label>
+          <label class="member-row" data-member="li" data-unconfirmed="0"><input type="checkbox"><span class="av a7">李</span><span><span class="nm">李然</span><span class="mt">风控服务 · 测试</span></span><span class="meta">负责 0 项 · 无需确认 · 站内 · 邮件</span></label>
+          <label class="member-row" data-member="gu" data-unconfirmed="0"><input type="checkbox"><span class="av a8">顾</span><span><span class="nm">顾清</span><span class="mt">结算平台 · 只读</span></span><span class="meta">无需确认 · 站内 · 邮件</span></label>
         </div>
       </div>
 
@@ -1004,23 +1076,65 @@
       <label class="check-line"><input type="checkbox" id="chGroup"> 企业微信群 <span class="sub-note">只发到空间配置的群，不能按人送达</span></label>
 
       <div class="field-label">发送内容</div>
+      <div class="note-field">
+        <input id="pushNote" type="text" maxlength="200" placeholder="补充说明（选填，200 字以内；站内、邮件、群消息都会带上）" aria-label="补充说明">
+        <span class="note-count" id="pushNoteCount">0/200</span>
+      </div>
       <div class="push-preview">
         <span class="pp-icon">备</span>
         <div>
           <div class="pp-title">发布准备 · PL-012 <span class="tag orange" style="height:18px">5 天后</span></div>
-          <div class="pp-body">11-25 20:00 生产发布；你负责 4 项：2 项未完成、1 项有风险、1 项待确认。点开逐项确认。</div>
+          <div class="pp-body">11-25 20:00 生产发布；请确认你负责的工作项。点开逐项确认。</div>
+          <div class="pp-note" id="pushNotePreview" hidden></div>
           <div class="pp-act"><span class="pp-link">查看并确认 →</span></div>
         </div>
       </div>
-      <p class="side-note">同一人负责多项时只收一条汇总；同一批次重复点击不会重复发送。计划范围或时间提前会要求重新确认。</p>
+      <p class="side-note">同一人负责多项时只收一条汇总；同一批次 30 秒内重复点击会提示「刚刚已推送过，本次未重复发送」。计划范围或时间提前会要求重新确认。</p>
     </div>
-    <div class="send-result" id="sendResult"><svg class="ico ico-sm"><use href="#i-check"/></svg><span>已推送 <b>38</b> 人；站内通知已送达，邮件按个人偏好投递。</span><button class="link">查看推送记录</button></div>
+    <div class="send-result" id="sendResult"><svg class="ico ico-sm"><use href="#i-check"/></svg><span>涉及 <b>38</b> 人；站内 34 人；邮件 12 人；企业微信群已发送。</span><button class="link" data-open-history>查看推送记录</button></div>
     <div class="modal-foot">
-      <span class="send-count">将通知 <b id="sendCount">38</b> 人</span>
+      <span class="send-count" id="reachCount">涉及 <b id="sendCount">38</b> 人 · 站内可达 <b id="reachInApp">34</b> 人 · 邮件可达 <b id="reachMail">12</b> 人<span id="reachGroup"></span></span>
       <div class="acts">
         <button class="btn" id="pushCancel">取消</button>
-        <button class="btn primary" id="sendBtn">推送 38 人</button>
+        <button class="btn primary" id="sendBtn">推送提醒</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 推送记录 ================= -->
+<div class="scrim" id="histScrim" aria-hidden="true">
+  <div class="modal hist-modal" role="dialog" aria-modal="true" aria-labelledby="histTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="histTitle">推送记录</h3>
+        <p>PL-012 · 11-25 生产发布 · 最近 3 次</p>
+      </div>
+      <button class="x" id="histClose" aria-label="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body hist-body">
+      <article class="hist-card">
+        <div class="hist-head"><div><b>今天 09:00</b><span>林夏 · 指定成员 · 只发未确认</span></div><div class="hist-meta">站内 / 邮件</div></div>
+        <div class="hist-sum">涉及 3 人 · 站内 3 人 · 邮件 2 人 · 回执 0 人</div>
+        <p class="hist-note">补充说明：请提前备份数据库，本次涉及表结构变更。</p>
+        <div class="hist-toggle"><button class="link" type="button">收起回执</button></div>
+        <div class="hist-people">
+          <div class="hist-people-head"><span>已回执 <b>0</b> / 3 · 未回执 <b>3</b></span><button class="btn sm" type="button">提醒未回执 3 人</button></div>
+          <div class="hist-person"><span class="nm">赵启</span><span class="meta">未回执 · 站内已送 · 邮件已送</span></div>
+          <div class="hist-person"><span class="nm">孙岚</span><span class="meta">未回执 · 站内已送 · 邮件未送</span></div>
+          <div class="hist-person"><span class="nm">王晓</span><span class="meta">未回执 · 站内已送 · 邮件未送</span></div>
+        </div>
+      </article>
+      <article class="hist-card">
+        <div class="hist-head"><div><b>今天 08:40</b><span>林夏 · 仅负责人</span></div><div class="hist-meta">站内 / 企业微信群</div></div>
+        <div class="hist-sum">涉及 6 人 · 站内 6 人 · 回执 4 人 · 群未发送（该空间未启用外部推送）</div>
+        <div class="hist-toggle"><button class="link" type="button">查看回执</button></div>
+      </article>
+      <article class="hist-card">
+        <div class="hist-head"><div><b>昨天 18:10</b><span>林夏 · 全部项目成员</span></div><div class="hist-meta">站内</div></div>
+        <div class="hist-sum">涉及 38 人 · 站内 34 人 · 回执 21 人</div>
+        <div class="hist-toggle"><button class="link" type="button">查看回执</button></div>
+      </article>
     </div>
   </div>
 </div>
@@ -1079,6 +1193,7 @@
   var crumb = document.getElementById('crumb');
   var noticePanel = document.getElementById('noticePanel');
   var pushScrim = document.getElementById('pushScrim');
+  var histScrim = document.getElementById('histScrim');
   var toastEl = document.getElementById('toast');
   var toastTimer = null;
 
@@ -1099,12 +1214,12 @@
     scenes.forEach(function(s){ s.classList.toggle('on', s.dataset.scene === name); });
     if(name === 'plan') setCrumb('<b>运营研发中心</b> <span>/</span> <b>版本</b> <span>/</span> <b>PL-012</b>');
     if(name === 'prep') setCrumb('<b>运营研发中心</b> <span>/</span> <b>版本</b> <span>/</span> <b>PL-012</b> <span>/</span> <b>我的准备</b>');
-    if(name === 'watch') setCrumb('<b>运营研发中心</b> <span>/</span> <b>版本</b> <span>/</span> <b>我关注的发布</b>');
+    if(name === 'watch') setCrumb('<b>运营研发中心</b> <span>/</span> <b>我的工作</b> <span>/</span> <b>我的关注</b>');
     document.querySelectorAll('.nav-item').forEach(function(n){ n.removeAttribute('aria-current'); });
     var navKey = (name === 'prep' || name === 'watch') ? 'mine' : 'versions';
     var nav = document.querySelector('[data-nav="' + navKey + '"]');
     if(nav) nav.setAttribute('aria-current','page');
-    document.title = (name === 'prep' ? '我的发布准备' : name === 'watch' ? '我关注的发布' : 'PL-012 · 发布准备') + ' · 沙漏原型';
+    document.title = (name === 'prep' ? '我的发布准备' : name === 'watch' ? '我的关注' : 'PL-012 · 发布准备') + ' · 沙漏原型';
     noticePanel.classList.toggle('on', name === 'notice');
   }
 
@@ -1118,6 +1233,16 @@
     pushScrim.setAttribute('aria-hidden','true');
     document.body.style.overflow = '';
   }
+  function openHistory(){
+    histScrim.classList.add('on');
+    histScrim.setAttribute('aria-hidden','false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeHistory(){
+    histScrim.classList.remove('on');
+    histScrim.setAttribute('aria-hidden','true');
+    document.body.style.overflow = '';
+  }
   function openNotice(){
     noticePanel.classList.add('on');
   }
@@ -1127,6 +1252,7 @@
 
   showScene(scene);
   if(qs.get('modal') === 'push' || scene === 'push') openPush();
+  if(qs.get('modal') === 'history') openHistory();
   if(scene === 'notice') openNotice();
   if(state !== 'default') applyState(state);
 
@@ -1158,7 +1284,7 @@
   document.querySelectorAll('[data-go]').forEach(function(b){
     b.addEventListener('click', function(){
       var target = b.getAttribute('data-go');
-      closeNotice(); closePush();
+      closeNotice(); closePush(); closeHistory();
       showScene(target);
       window.scrollTo({top:0, behavior:'smooth'});
     });
@@ -1175,7 +1301,24 @@
   pushScrim.addEventListener('click', function(e){ if(e.target === pushScrim) closePush(); });
   document.getElementById('pushClose').addEventListener('click', closePush);
   document.getElementById('pushCancel').addEventListener('click', closePush);
-  document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ closePush(); closeNotice(); } });
+  histScrim.addEventListener('click', function(e){ if(e.target === histScrim) closeHistory(); });
+  document.getElementById('histClose').addEventListener('click', closeHistory);
+  document.querySelectorAll('[data-open-history]').forEach(function(b){
+    b.addEventListener('click', function(e){ e.preventDefault(); openHistory(); });
+  });
+  /* 未回执提醒：预选「指定成员」并只勾选未回执的人 */
+  document.querySelectorAll('#histScrim .hist-people-head .btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      closeHistory();
+      setScope('pick');
+      document.querySelectorAll('#memberList input').forEach(function(cb, i){ cb.checked = i < 3; });
+      selected = 3;
+      document.getElementById('onlyUnconfirmed').checked = false;
+      resetPushState();
+      openPush();
+    });
+  });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ closePush(); closeHistory(); closeNotice(); } });
   document.querySelectorAll('[data-open-push]').forEach(function(b){
     b.addEventListener('click', function(){
       setScope('all');
@@ -1214,9 +1357,12 @@
     var n = only ? scopeUnconfirmed() : scopeBase();
     document.getElementById('onlyCount').textContent = String(only ? scopeUnconfirmed() : 9);
     document.getElementById('sendCount').textContent = String(n);
+    document.getElementById('reachInApp').textContent = String(n);
+    document.getElementById('reachMail').textContent = String(Math.floor(n * 0.32));
+    document.getElementById('reachGroup').textContent = document.getElementById('chGroup').checked ? ' · 企业微信群 1 条' : '';
     var send = document.getElementById('sendBtn');
     send.disabled = n === 0 && !sent;
-    send.textContent = sent ? '完成' : (n === 0 ? '暂无可推送成员' : '推送 ' + n + ' 人');
+    send.textContent = sent ? '完成' : (n === 0 ? '暂无可推送成员' : '推送提醒');
     document.getElementById('nPick').textContent = String(document.querySelectorAll('#memberList input:checked').length);
     document.getElementById('pickBox').hidden = scope !== 'pick';
     var desc = document.getElementById('scopeDesc');
@@ -1256,25 +1402,42 @@
       r.hidden = q && r.textContent.toLowerCase().indexOf(q) < 0;
     });
   });
+  document.getElementById('pushNote').addEventListener('input', function(){
+    var v = this.value.slice(0, 200);
+    if(v !== this.value) this.value = v;
+    document.getElementById('pushNoteCount').textContent = v.length + '/200';
+    var pv = document.getElementById('pushNotePreview');
+    pv.textContent = '补充说明：' + v;
+    pv.hidden = !v;
+  });
   document.getElementById('sendBtn').addEventListener('click', function(){
     if(sent){ closePush(); return; }
-    var n = document.getElementById('sendCount').textContent;
-    if(Number(n) === 0) return;
-    var parts = [];
-    if(document.getElementById('chInApp').checked) parts.push('站内已送达');
-    if(document.getElementById('chMail').checked) parts.push('邮件按个人偏好投递');
-    if(document.getElementById('chGroup').checked) parts.push('群消息已发送');
+    var n = Number(document.getElementById('sendCount').textContent);
+    if(!n) return;
+    var parts = ['涉及 <b>' + n + '</b> 人'];
+    if(document.getElementById('chInApp').checked) parts.push('站内 <b>' + n + '</b> 人');
+    if(document.getElementById('chMail').checked) parts.push('邮件 <b>' + document.getElementById('reachMail').textContent + '</b> 人');
+    if(document.getElementById('chGroup').checked) parts.push('企业微信群已发送');
     var res = document.getElementById('sendResult');
     res.classList.add('on');
-    res.querySelector('span').innerHTML = '已推送 <b>' + n + '</b> 人；' + (parts.length ? parts.join('，') : '已记录推送') + '。';
+    res.querySelector('span').innerHTML = parts.join('；') + '。';
     sent = true;
     this.textContent = '完成';
-    toast('已推送 ' + n + ' 人');
+    toast('发布准备已推送');
+  });
+  ['chInApp','chMail','chGroup'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', refreshCounts);
   });
   function resetPushState(){
     sent = false;
     document.getElementById('sendResult').classList.remove('on');
     document.getElementById('sendBtn').disabled = false;
+    var noteEl = document.getElementById('pushNote');
+    var pv = document.getElementById('pushNotePreview');
+    if(noteEl) noteEl.value = '';
+    if(pv){ pv.textContent = ''; pv.hidden = true; }
+    var cnt = document.getElementById('pushNoteCount');
+    if(cnt) cnt.textContent = '0/200';
     refreshCounts();
   }
   refreshCounts();
@@ -1305,7 +1468,7 @@
     btn.dataset.watched = '1';
     btn.innerHTML = '<svg class="ico ico-sm"><use href="#i-check"/></svg> 已关注';
     btn.classList.add('ghost');
-    toast('已关注 PL-012；变更和临近发布会出现在「我关注的发布」');
+    toast('已关注 PL-012；变更和临近发布会出现在「我的工作 → 我的关注」');
   }
   var watchPlanBtn = document.getElementById('watchPlanBtn');
   var watchBtn = document.getElementById('watchBtn');

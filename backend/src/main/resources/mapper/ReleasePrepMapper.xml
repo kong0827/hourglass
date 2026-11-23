@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ReleasePrepMapper">
+
+  <!-- target_keys 是 JSON 列且需要自有 TypeHandler，这里不取；本模块只用范围 token、时间与状态。 -->
+  <select id="selectPlan" resultType="VersionReleasePlan">
+    SELECT p.id, p.workspace_id, p.version_id, p.plan_no, p.planned_at, p.owner_user_id,
+           p.notes, p.risks, p.status, p.revision, p.scope_token, p.environment, p.coverage,
+           p.created_at, p.updated_at,
+           NULL AS versionIds, NULL AS versions
+    FROM version_release_plan p
+    WHERE p.workspace_id = #{workspaceId} AND p.id = #{planId}
+  </select>
+
+  <!-- 推送去重前锁定计划行，避免并发点击各写一批 -->
+  <select id="lockPlan" resultType="string">
+    SELECT id FROM version_release_plan
+    WHERE workspace_id = #{workspaceId} AND id = #{planId}
+    FOR UPDATE
+  </select>
+
+  <!-- 计划内工作项：计划任务表保存时删除重建，因此这里始终按当前范围取 -->
+  <select id="selectPlanTaskRows" resultType="com.hourglass.dto.ReleasePrepTaskRow">
+    SELECT t.id, t.title, t.item_type AS itemType, t.board_column AS boardColumn,
+           t.priority, t.owner_user_id AS ownerUserId,
+           COALESCE(u.display_name, t.owner) AS ownerName,
+           t.req_id AS projectId, r.name AS projectName,
+           t.due_date AS dueDate, t.completed_at AS completedAt
+    FROM version_release_plan_task pt
+    INNER JOIN task t ON t.id = pt.task_id AND t.workspace_id = pt.workspace_id
+    LEFT JOIN app_user u ON u.id = t.owner_user_id
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE pt.workspace_id = #{workspaceId} AND pt.plan_id = #{planId} AND t.deleted_at IS NULL
+    ORDER BY r.name, t.item_no, t.id
+  </select>
+
+  <select id="selectChecks" resultType="ReleasePlanTaskCheck">
+    SELECT * FROM version_release_plan_task_check
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </select>
+
+  <insert id="upsertCheck">
+    INSERT INTO version_release_plan_task_check
+      (workspace_id, plan_id, task_id, user_id, state, note, scope_token, planned_at_snapshot, checked_at)
+    VALUES
+      (#{workspaceId}, #{planId}, #{taskId}, #{userId}, #{state}, #{note}, #{scopeToken},
+       #{plannedAtSnapshot}, CURRENT_TIMESTAMP)
+    ON DUPLICATE KEY UPDATE
+      state = VALUES(state), note = VALUES(note), scope_token = VALUES(scope_token),
+      planned_at_snapshot = VALUES(planned_at_snapshot), checked_at = CURRENT_TIMESTAMP
+  </insert>
+
+  <delete id="deleteCheck">
+    DELETE FROM version_release_plan_task_check
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+      AND task_id = #{taskId} AND user_id = #{userId}
+  </delete>
+
+  <insert id="insertPush">
+    INSERT INTO version_release_plan_push
+      (id, workspace_id, plan_id, scope, sender_id, only_unconfirmed, channels, note, recipient_count,
+       group_sent, group_error)
+    VALUES
+      (#{id}, #{workspaceId}, #{planId}, #{scope}, #{senderId},
+       COALESCE(#{onlyUnconfirmed}, 0), #{channels}, #{note}, COALESCE(#{recipientCount}, 0),
+       #{groupSent}, #{groupError})
+  </insert>
+
+  <update id="updatePushGroupResult">
+    UPDATE version_release_plan_push
+    SET group_sent = #{groupSent}, group_error = #{groupError}
+    WHERE id = #{pushId}
+  </update>
+
+  <insert id="insertPushRecipient">
+    INSERT IGNORE INTO version_release_plan_push_recipient (push_id, workspace_id, user_id)
+    VALUES (#{pushId}, #{workspaceId}, #{userId})
+  </insert>
+
+  <update id="markRecipientInApp">
+    UPDATE version_release_plan_push_recipient SET in_app_at = CURRENT_TIMESTAMP
+    WHERE push_id = #{pushId} AND user_id = #{userId}
+  </update>
+
+  <update id="markRecipientEmail">
+    UPDATE version_release_plan_push_recipient SET email_at = CURRENT_TIMESTAMP
+    WHERE push_id = #{pushId} AND user_id = #{userId}
+  </update>
+
+  <!-- 回执只认最近一次推送：同一计划历史上多次提醒，不把旧批次当成已回执 -->
+  <update id="ackPushRecipient">
+    UPDATE version_release_plan_push_recipient r
+    INNER JOIN version_release_plan_push p ON p.id = r.push_id
+    SET r.acked_at = CURRENT_TIMESTAMP
+    WHERE p.workspace_id = #{workspaceId} AND p.plan_id = #{planId}
+      AND r.user_id = #{userId} AND r.acked_at IS NULL
+      AND p.id = (SELECT id FROM (
+        SELECT p2.id FROM version_release_plan_push p2
+        WHERE p2.workspace_id = #{workspaceId} AND p2.plan_id = #{planId}
+        ORDER BY p2.created_at DESC, p2.id DESC LIMIT 1
+      ) latest)
+  </update>
+
+  <select id="selectMyReceipt" resultType="map">
+    SELECT r.push_id AS pushId, r.in_app_at AS inAppAt, r.email_at AS emailAt, r.acked_at AS ackedAt,
+           p.created_at AS pushAt, p.scope AS scope, p.note AS note
+    FROM version_release_plan_push_recipient r
+    INNER JOIN version_release_plan_push p ON p.id = r.push_id
+    WHERE p.workspace_id = #{workspaceId} AND p.plan_id = #{planId} AND r.user_id = #{userId}
+    ORDER BY p.created_at DESC, p.id DESC
+    LIMIT 1
+  </select>
+
+  <sql id="pushSelectColumns">
+    SELECT p.id, p.workspace_id, p.plan_id, p.scope, p.sender_id, p.only_unconfirmed,
+           CAST(p.channels AS CHAR) AS channels, p.note, p.recipient_count,
+           p.group_sent AS groupSent, p.group_error AS groupError, p.created_at,
+           u.display_name AS senderName,
+           (SELECT COUNT(*) FROM version_release_plan_push_recipient r
+             WHERE r.push_id = p.id AND r.in_app_at IS NOT NULL) AS inAppCount,
+           (SELECT COUNT(*) FROM version_release_plan_push_recipient r
+             WHERE r.push_id = p.id AND r.email_at IS NOT NULL) AS emailCount,
+           (SELECT COUNT(*) FROM version_release_plan_push_recipient r
+             WHERE r.push_id = p.id AND r.acked_at IS NOT NULL) AS ackedCount
+    FROM version_release_plan_push p
+    LEFT JOIN app_user u ON u.id = p.sender_id
+  </sql>
+
+  <select id="selectLatestPush" resultType="ReleasePlanPush">
+    <include refid="pushSelectColumns"/>
+    WHERE p.workspace_id = #{workspaceId} AND p.plan_id = #{planId}
+    ORDER BY p.created_at DESC, p.id DESC
+    LIMIT 1
+  </select>
+
+  <select id="selectPushes" resultType="ReleasePlanPush">
+    <include refid="pushSelectColumns"/>
+    WHERE p.workspace_id = #{workspaceId} AND p.plan_id = #{planId}
+    ORDER BY p.created_at DESC, p.id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectPushById" resultType="ReleasePlanPush">
+    <include refid="pushSelectColumns"/>
+    WHERE p.workspace_id = #{workspaceId} AND p.plan_id = #{planId} AND p.id = #{pushId}
+  </select>
+
+  <select id="selectPushRecipientRows" resultType="map">
+    SELECT r.user_id AS userId, COALESCE(u.display_name, r.user_id) AS name,
+           r.in_app_at AS inAppAt, r.email_at AS emailAt, r.acked_at AS ackedAt
+    FROM version_release_plan_push_recipient r
+    LEFT JOIN app_user u ON u.id = r.user_id
+    WHERE r.push_id = #{pushId}
+    ORDER BY (r.acked_at IS NULL) DESC, u.display_name, r.user_id
+  </select>
+
+  <select id="selectPushRecipients" resultType="string">
+    SELECT user_id FROM version_release_plan_push_recipient WHERE push_id = #{pushId}
+  </select>
+
+  <select id="countWatchers" resultType="int">
+    SELECT COUNT(*) FROM version_release_plan_watch
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </select>
+
+  <select id="countMyWatch" resultType="int">
+    SELECT COUNT(*) FROM version_release_plan_watch
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId} AND user_id = #{userId}
+  </select>
+
+  <insert id="insertWatchIgnore">
+    INSERT IGNORE INTO version_release_plan_watch (workspace_id, plan_id, user_id)
+    VALUES (#{workspaceId}, #{planId}, #{userId})
+  </insert>
+
+  <delete id="deleteWatch">
+    DELETE FROM version_release_plan_watch
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId} AND user_id = #{userId}
+  </delete>
+
+  <select id="selectWatcherIds" resultType="string">
+    SELECT user_id FROM version_release_plan_watch
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </select>
+
+  <select id="countMyWatchedPlans" resultType="int">
+    SELECT COUNT(DISTINCT p.id)
+    FROM version_release_plan_watch w
+    INNER JOIN version_release_plan p ON p.id = w.plan_id AND p.workspace_id = w.workspace_id
+    WHERE w.workspace_id = #{workspaceId} AND w.user_id = #{userId}
+    <if test="viewerId != null">
+      AND EXISTS (
+        SELECT 1 FROM version_release_plan_version x
+        INNER JOIN project_version v ON v.workspace_id = x.workspace_id AND v.id = x.version_id
+        WHERE x.workspace_id = w.workspace_id AND x.plan_id = w.plan_id
+          AND NOT EXISTS (SELECT 1 FROM project_member pm
+            WHERE pm.workspace_id = x.workspace_id AND pm.project_id = v.req_id
+              AND pm.user_id = #{viewerId} AND pm.access = 'none')
+      )
+    </if>
+  </select>
+
+  <select id="selectMyWatchedPlans" resultType="com.hourglass.dto.ReleasePlanWatchRow">
+    SELECT p.id, p.plan_no AS planNo,
+           MIN(pv.version_id) AS versionId, MIN(pv.req_id) AS reqId,
+           p.planned_at AS plannedAt, p.status, p.owner_user_id AS ownerUserId,
+           u.display_name AS ownerName, p.environment, p.coverage,
+           GROUP_CONCAT(DISTINCT r.name ORDER BY r.name SEPARATOR '、') AS projectNames,
+           GROUP_CONCAT(DISTINCT v.name ORDER BY v.name SEPARATOR '、') AS versionNames,
+           COUNT(DISTINCT pv.version_id) AS versionCount,
+           p.updated_at AS updatedAt, w.created_at AS watchedAt
+    FROM version_release_plan_watch w
+    INNER JOIN version_release_plan p ON p.id = w.plan_id AND p.workspace_id = w.workspace_id
+    LEFT JOIN version_release_plan_version pv ON pv.plan_id = p.id AND pv.workspace_id = p.workspace_id
+    LEFT JOIN requirement r ON r.id = pv.req_id AND r.workspace_id = p.workspace_id
+    LEFT JOIN project_version v ON v.id = pv.version_id AND v.workspace_id = p.workspace_id
+    LEFT JOIN app_user u ON u.id = p.owner_user_id
+    WHERE w.workspace_id = #{workspaceId} AND w.user_id = #{userId}
+    <if test="viewerId != null">
+      AND EXISTS (
+        SELECT 1 FROM version_release_plan_version x
+        INNER JOIN project_version vx ON vx.workspace_id = x.workspace_id AND vx.id = x.version_id
+        WHERE x.workspace_id = w.workspace_id AND x.plan_id = w.plan_id
+          AND NOT EXISTS (SELECT 1 FROM project_member pm
+            WHERE pm.workspace_id = x.workspace_id AND pm.project_id = vx.req_id
+              AND pm.user_id = #{viewerId} AND pm.access = 'none')
+      )
+    </if>
+    GROUP BY p.id, p.plan_no, p.planned_at, p.status, p.owner_user_id, u.display_name,
+             p.environment, p.coverage, p.updated_at, w.created_at
+    ORDER BY p.planned_at IS NULL, p.planned_at, p.updated_at DESC, p.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="selectPlansForMilestone" resultType="map">
+    SELECT p.id AS planId, p.workspace_id AS workspaceId, p.plan_no AS planNo,
+           p.planned_at AS plannedAt, p.owner_user_id AS ownerUserId, p.environment, p.coverage,
+           p.scope_token AS scopeToken, p.status
+    FROM version_release_plan p
+    WHERE p.status = 'ready' AND p.planned_at &gt;= #{dateFrom} AND p.planned_at &lt; #{dateTo}
+  </select>
+
+  <insert id="insertMilestoneIgnore">
+    INSERT IGNORE INTO version_release_plan_milestone (workspace_id, plan_id, user_id, milestone)
+    VALUES (#{workspaceId}, #{planId}, #{userId}, #{milestone})
+  </insert>
+
+  <delete id="deleteMilestone">
+    DELETE FROM version_release_plan_milestone
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+      AND user_id = #{userId} AND milestone = #{milestone}
+  </delete>
+
+  <delete id="deleteMilestones">
+    DELETE FROM version_release_plan_milestone
+    WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </delete>
+
+  <select id="countTaskOwnerUnconfirmed" resultType="int">
+    SELECT COUNT(*)
+    FROM version_release_plan_task pt
+    INNER JOIN task t ON t.id = pt.task_id AND t.workspace_id = pt.workspace_id
+    LEFT JOIN version_release_plan_task_check c
+      ON c.workspace_id = pt.workspace_id AND c.plan_id = pt.plan_id
+     AND c.task_id = pt.task_id AND c.user_id = #{userId}
+    WHERE pt.workspace_id = #{workspaceId} AND pt.plan_id = #{planId}
+      AND t.deleted_at IS NULL AND t.owner_user_id = #{userId}
+      AND (c.state IS NULL OR c.scope_token &lt;&gt; #{scopeToken}
+           OR (c.planned_at_snapshot IS NOT NULL AND #{plannedAt} IS NOT NULL
+               AND c.planned_at_snapshot &gt; #{plannedAt}))
+  </select>
+
+</mapper>
