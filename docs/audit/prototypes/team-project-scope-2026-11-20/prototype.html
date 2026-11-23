@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙漏 · 团队页签项目视角原型</title>
+<style>
+:root{
+  --bg-app:#F7F8FA;--surface:#FFF;--surface-sunken:#F2F4F7;--surface-hover:#F2F4F7;
+  --border:#E4E7EC;--border-strong:#D0D5DD;
+  --text:#101828;--text-2:#475467;--text-3:#667085;
+  --primary:#2563EB;--primary-hover:#1D4ED8;--primary-soft:#EFF4FF;--primary-border:#BFD3FE;--primary-fg:#1D4ED8;
+  --success:#12B76A;--success-soft:#ECFDF3;--success-fg:#067647;
+  --warning:#F79009;--warning-soft:#FFFAEB;--warning-fg:#B54708;
+  --danger:#F04438;--danger-soft:#FEF3F2;--danger-fg:#B42318;
+  --info:#2E90FA;--info-soft:#EFF8FF;--info-fg:#175CD3;
+  --plum:#7A5AF8;--plum-soft:#F4F3FF;--plum-fg:#5B3FD1;
+  --r-micro:4px;--r-xs:6px;--r-md:10px;--r-lg:11px;--r-xl:16px;--r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+  --dur-fast:120ms;--ease-out:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg-app);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.shell{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh}
+/* ---------- 侧栏 ---------- */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:14px 10px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;align-items:center;gap:8px;padding:2px 10px 14px;font-weight:700;font-size:15px}
+.brand i{width:26px;height:26px;border-radius:7px;background:var(--primary);display:grid;place-items:center;color:#fff;font-style:normal;font-size:13px}
+.space-chip{margin:0 4px 10px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);display:flex;gap:8px;align-items:center;font-size:12px;background:var(--surface)}
+.space-chip b{display:block;font-size:12.5px;font-weight:600}
+.space-chip span{color:var(--text-3);font-size:11px}
+.nav-label{font-size:10.5px;color:var(--text-3);padding:12px 12px 4px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:var(--r-xs);font-size:13px;color:var(--text-2);cursor:default}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+.nav-item .dot{width:14px;text-align:center;opacity:.65}
+.side-foot{margin-top:auto;padding:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:12px}
+.avatar{width:24px;height:24px;border-radius:50%;background:#101828;color:#fff;display:grid;place-items:center;font-size:11px}
+/* ---------- 顶栏与内容 ---------- */
+.main{min-width:0}
+.topbar{height:48px;display:flex;align-items:center;gap:12px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12px;color:var(--text-3)}
+.topbar .crumb b{color:var(--text);font-weight:600}
+.topbar .right{margin-left:auto;display:flex;gap:14px;align-items:center}
+.topbar .ic{width:26px;height:26px;border-radius:var(--r-xs);display:grid;place-items:center;color:var(--text-2)}
+.content{padding:20px 28px 40px;max-width:1320px}
+.page-head{display:flex;align-items:flex-start;gap:12px}
+.page-head h1{margin:0;font-size:22px;line-height:1.2;letter-spacing:-.01em}
+.page-head p{margin:6px 0 0;font-size:12.5px;color:var(--text-3)}
+.page-head .actions{margin-left:auto;display:flex;gap:8px}
+.btn{height:32px;padding:0 12px;border-radius:var(--r-xs);border:1px solid var(--border-strong);background:var(--surface);font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-hover)}
+/* 页签 */
+.tabs{display:flex;gap:26px;margin-top:18px;border-bottom:1px solid var(--border)}
+.tab{position:relative;padding:0 2px 11px;font-size:13.5px;color:var(--text-2);background:none;border:0;cursor:pointer;display:flex;align-items:center;gap:6px}
+.tab b{font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-3);font-size:12px}
+.tab.on{color:var(--primary-fg);font-weight:700}
+.tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--primary)}
+.tab.on b{color:var(--primary-fg)}
+/* 结论条 */
+.brief{margin-top:14px;display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--r-md);background:var(--primary-soft);border:1px solid var(--primary-border);font-size:13px;color:var(--text-2)}
+.brief .bi{width:22px;height:22px;border-radius:6px;background:#fff;display:grid;place-items:center;color:var(--primary);font-size:12px}
+.brief b{color:var(--text);font-weight:600}
+.brief .meta{margin-left:auto;font-size:11px;color:var(--text-3);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.live{width:6px;height:6px;border-radius:50%;background:var(--success)}
+/* ---------- 团队面板 ---------- */
+.team-panel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.scopebar{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);flex-wrap:wrap}
+.scope-lab{font-size:12px;color:var(--text-3);padding-left:4px;white-space:nowrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+.chip{height:28px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--text-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.chip:hover{background:var(--surface-hover)}
+.chip.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600}
+.chip .n{font-variant-numeric:tabular-nums;color:var(--text-3);font-size:11px}
+.chip.on .n{color:var(--primary-fg)}
+.scope-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.seg{display:inline-flex;background:var(--surface-sunken);border-radius:var(--r-xs);padding:2px;gap:2px}
+.seg button{height:28px;padding:0 11px;border:0;border-radius:5px;background:transparent;color:var(--text-2);font-size:12px;cursor:pointer;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow-xs)}
+.range-dates{font-size:11px;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums}
+/* hero */
+.team-hero{grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:18px 20px 14px;box-shadow:var(--shadow-xs)}
+.th-main{display:flex;align-items:flex-end;gap:12px;position:relative;padding-bottom:10px}
+.th-main::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;border-radius:var(--r-pill);background:var(--surface-sunken)}
+.th-main::before{content:"";position:absolute;left:0;bottom:0;height:4px;z-index:1;width:var(--done-rate,0%);border-radius:var(--r-pill);background:var(--primary)}
+.th-main b{font-size:34px;line-height:1;font-weight:750;letter-spacing:-.02em;color:var(--primary)}
+.th-main .lab{font-size:12px;font-weight:600;color:var(--text-2);padding-bottom:3px;display:flex;align-items:center;gap:5px}
+.q{width:14px;height:14px;border-radius:50%;border:1px solid var(--border-strong);color:var(--text-3);font-size:9.5px;display:inline-grid;place-items:center;cursor:help}
+.th-main em{margin-left:auto;font-style:normal;font-size:12px;font-weight:700;padding:3px 8px;border-radius:var(--r-pill);background:var(--success-soft);color:var(--success-fg)}
+.th-main em.down{background:var(--danger-soft);color:var(--danger-fg)}
+.th-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.th-grid>div,.th-grid>button{display:flex;flex-direction:column;gap:2px;align-items:flex-start;border:0;background:none;padding:0;text-align:left;cursor:pointer;font:inherit}
+.th-grid b{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.th-grid span{font-size:11px;color:var(--text-3)}
+.th-grid .danger b{color:var(--danger-fg)}
+.th-grid .warn b{color:var(--warning-fg)}
+.th-note{margin-top:10px;font-size:11px;line-height:1.5;color:var(--text-3)}
+.team-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--shadow-xs);min-width:0}
+.team-card.wide{grid-column:1/-1}
+.tc-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.tc-head h3{margin:0;font-size:14px;font-weight:700}
+.foot-note{margin-left:auto;font-size:11px;color:var(--text-3)}
+.team-pending{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.team-pending button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 6px;border:0;border-radius:var(--r-lg);background:var(--surface-sunken);cursor:pointer}
+.team-pending button:hover{background:var(--surface-hover)}
+.team-pending b{font-size:20px;font-weight:750;font-variant-numeric:tabular-nums}
+.team-pending span{font-size:11px;color:var(--text-3)}
+.team-risks{display:flex;flex-direction:column;gap:2px}
+.team-risk{display:flex;align-items:flex-start;gap:9px;padding:8px;border-radius:var(--r-md);cursor:default}
+.team-risk:hover{background:var(--surface-hover)}
+.tr-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;margin-top:6px;background:var(--warning)}
+.team-risk.high .tr-dot{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+.tr-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.tr-main b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr-main span{font-size:12px;color:var(--text-3);line-height:1.45}
+.tr-proj{display:inline-block;font-size:10.5px;color:var(--text-2);background:var(--surface-sunken);border-radius:4px;padding:1px 6px;margin-right:6px;vertical-align:1px}
+.tr-days{flex:0 0 auto;font-size:11px;font-weight:700;color:var(--danger-fg);background:var(--danger-soft);border-radius:var(--r-pill);padding:2px 7px}
+.wait-list{margin-top:12px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:1px}
+.wait-cap{font-size:11px;color:var(--text-3);margin-bottom:3px}
+.wait-line{display:flex;align-items:center;gap:6px;padding:5px 4px;border-radius:var(--r-xs);font-size:12px;min-width:0}
+.wait-line b{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.wait-line .wait-days{margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:700;color:var(--danger-fg)}
+.team-load{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 24px}
+.tl-row{display:grid;grid-template-columns:minmax(0,1fr) 52px;align-items:center;column-gap:10px;row-gap:5px;border:0;background:none;padding:6px 0;text-align:left;cursor:default;font:inherit;width:100%}
+.tl-top{display:flex;align-items:center;gap:8px;min-width:0;grid-column:1/-1}
+.tl-top b{font-size:13px;font-weight:500}
+.tl-top span{margin-left:auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.tl-bar{height:7px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden}
+.tl-bar i{display:block;height:100%;border-radius:var(--r-pill);background:var(--info)}
+.tl-bar i.near{background:var(--warning)}
+.tl-bar i.over{background:var(--danger)}
+.tl-pct{text-align:right;font-size:12px;font-weight:700;color:var(--info-fg);font-variant-numeric:tabular-nums}
+.tl-pct.near{color:var(--warning-fg)}
+.tl-pct.over{color:var(--danger-fg)}
+.mw-note{display:flex;gap:6px;align-items:flex-start;margin-top:14px;font-size:11px;line-height:1.6;color:var(--text-3)}
+.mw-note i{font-style:normal;color:var(--text-3);border:1px solid var(--border-strong);border-radius:50%;width:13px;height:13px;display:inline-grid;place-items:center;font-size:9px;flex:0 0 auto;margin-top:1px}
+/* 空 / 错 */
+.bigstate{margin-top:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:46px 24px;text-align:center}
+.bigstate .ico{width:40px;height:40px;border-radius:50%;background:var(--surface-sunken);display:grid;place-items:center;margin:0 auto 12px;font-size:17px;color:var(--text-3)}
+.bigstate h3{margin:0 0 6px;font-size:15px}
+.bigstate p{margin:0;font-size:12.5px;color:var(--text-3);line-height:1.6}
+.bigstate .acts{margin-top:16px;display:flex;gap:8px;justify-content:center}
+/* ---------- 移动 ---------- */
+.appbar,.bottomnav,.fab{display:none}
+@media (max-width:860px){
+  .shell{display:block}
+  .sidebar{display:none}
+  .topbar{display:none}
+  .content{padding:0 0 90px}
+  .appbar{display:flex;align-items:center;justify-content:space-between;height:56px;padding:0 18px;background:var(--surface);position:sticky;top:0;z-index:20;font-size:19px;font-weight:700}
+  .appbar .ic{width:32px;display:grid;place-items:center;color:var(--text-2);font-size:16px}
+  .mobile-head{display:block;background:var(--surface);padding:0 18px}
+  .content>.inner-head{display:none}
+  .tabs{margin:0;border-bottom:1px solid var(--border);overflow-x:auto;gap:22px;padding:0 18px;background:var(--surface)}
+  .tab{padding:13px 0;white-space:nowrap}
+  .brief{margin:12px 14px 0;flex-wrap:wrap}
+  .brief .meta{width:100%;margin-left:34px}
+  .team-panel{grid-template-columns:1fr;padding:0 14px}
+  .scopebar{flex-direction:column;align-items:stretch;gap:8px;padding:8px}
+  .scope-lab{padding:2px 2px 0}
+  .chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+  .chip{height:36px}
+  .scope-right{flex-direction:column;align-items:stretch;gap:6px}
+  .seg{width:100%}
+  .seg button{flex:1;height:40px}
+  .range-dates{text-align:center;padding:2px 0 4px}
+  .team-hero{padding:16px 16px 12px}
+  .th-main b{font-size:32px}
+  .team-load{grid-template-columns:1fr}
+  .bottomnav{display:flex;position:fixed;left:0;right:0;bottom:0;height:64px;background:var(--surface);border-top:1px solid var(--border);z-index:30;justify-content:space-around;align-items:center;font-size:10.5px;color:var(--text-3)}
+  .bottomnav div{display:flex;flex-direction:column;align-items:center;gap:3px;width:64px}
+  .bottomnav div.on{color:var(--primary-fg);font-weight:700}
+  .bottomnav div i{font-style:normal;font-size:17px}
+  .fab{display:grid;position:fixed;right:18px;bottom:84px;width:52px;height:52px;border-radius:50%;background:var(--primary);color:#fff;place-items:center;font-size:24px;box-shadow:var(--shadow-lg);z-index:31}
+  .protoctl{left:10px;right:10px;bottom:72px;max-width:none}
+}
+/* ---------- 原型控制 ---------- */
+.protoctl{position:fixed;right:14px;bottom:14px;z-index:50;background:#101828;color:#fff;border-radius:10px;padding:8px 10px;font-size:11px;display:flex;flex-direction:column;gap:6px;opacity:.94;box-shadow:var(--shadow-lg);max-width:420px}
+.protoctl .row{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.protoctl .row>span{color:#98A2B3;margin-right:2px}
+.protoctl button{border:1px solid #344054;background:#1D2939;color:#D0D5DD;border-radius:5px;padding:2px 7px;font-size:11px;cursor:pointer}
+.protoctl button.on{background:#2563EB;border-color:#2563EB;color:#fff}
+.protoctl .demo{color:#FDB022;font-size:10px}
+.hidectl .protoctl{display:none}
+.hidebrief .brief{display:none}
+body.nofixed .bottomnav,body.nofixed .fab{display:none!important}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><i>沙</i>沙漏</div>
+    <div class="space-chip"><span style="width:22px;height:22px;border-radius:50%;background:var(--surface-sunken);display:grid;place-items:center;font-size:10px;color:var(--text-2)">运</span><div><b>运营研发中心</b><span>共享 · 16 人 · 管理员</span></div></div>
+    <div class="nav-label">我的</div>
+    <div class="nav-item on"><span class="dot">◆</span>我的工作</div>
+    <div class="nav-item"><span class="dot">◷</span>消息中心</div>
+    <div class="nav-label">规划</div>
+    <div class="nav-item"><span class="dot">▣</span>需求池</div>
+    <div class="nav-item"><span class="dot">▤</span>项目</div>
+    <div class="nav-item"><span class="dot">◈</span>版本</div>
+    <div class="nav-item"><span class="dot">⑂</span>分支</div>
+    <div class="nav-label">交付</div>
+    <div class="nav-item"><span class="dot">☰</span>工作项</div>
+    <div class="nav-item"><span class="dot">▧</span>测试</div>
+    <div class="nav-label">洞察</div>
+    <div class="nav-item"><span class="dot">∿</span>报表</div>
+    <div class="nav-item"><span class="dot">⚙</span>设置</div>
+    <div class="side-foot"><span class="avatar">管</span><span>陈昊</span><span style="margin-left:auto;color:var(--text-3)">⇥</span></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">运营研发中心 / <b>我的工作</b></span>
+      <span class="right"><span class="ic">⌕</span><span class="ic">?</span><span class="ic">◷</span><span class="ic">◔</span></span>
+    </div>
+
+    <div class="appbar"><span>我的工作</span><span style="display:flex;gap:14px"><span class="ic">⌕</span><span class="ic">☰</span><span class="ic">◔</span></span></div>
+
+    <div class="content">
+      <div class="inner-head page-head" style="padding-top:6px">
+        <div>
+          <h1>我的工作</h1>
+          <p id="subtitle">团队统计 · 按项目维度查看进度、风险与成员负载</p>
+        </div>
+        <div class="actions"><span class="btn primary">＋ 新建</span></div>
+      </div>
+
+      <nav class="tabs" id="tabs">
+        <button class="tab">待我处理 <b>12</b></button>
+        <button class="tab">我发起的 <b>4</b></button>
+        <button class="tab">我关注的 <b>2</b></button>
+        <button class="tab on">团队</button>
+      </nav>
+
+      <div class="brief" id="brief">
+        <span class="bi">◉</span>
+        <span class="txt"><b id="briefStrong">本周团队</b> · 完成率 <span id="briefRate">57%</span> · 计划 <span id="briefPlan">21</span> 项。</span>
+        <span class="meta"><span class="live"></span><span id="briefMeta">2026-11-16 ~ 2026-11-22 · 11-20 09:53 更新</span></span>
+      </div>
+
+      <div id="panelWrap"></div>
+
+      <div class="mw-note"><i>i</i><span id="noteText">团队页签对空间主 / 管理员、项目负责人开放。项目负责人只能选自己负责的项目；完成率与工时按所选区间统计，逾期、阻塞与待处理是当前快照。</span></div>
+    </div>
+
+    <div class="bottomnav">
+      <div class="on"><i>☑</i><span>我的工作</span></div>
+      <div><i>☰</i><span>工作项</span></div>
+      <div><i>▤</i><span>项目</span></div>
+      <div><i>◔</i><span>消息</span></div>
+      <div><i>◯</i><span>我的</span></div>
+    </div>
+    <div class="fab">＋</div>
+  </main>
+</div>
+
+<div class="protoctl" id="ctl">
+  <div class="row"><span>角色</span>
+    <button data-role="admin">空间管理员</button>
+    <button data-role="pm" class="on">项目负责人</button>
+  </div>
+  <div class="row"><span>区间</span>
+    <button data-range="week" class="on">本周</button>
+    <button data-range="month">本月</button>
+    <button data-range="d30">近 30 天</button>
+  </div>
+  <div class="row"><span>状态</span>
+    <button data-state="data" class="on">正常</button>
+    <button data-state="empty">空</button>
+    <button data-state="error">错误</button>
+  </div>
+  <div class="row demo">示例数据 · 原型交互：切换角色 / 区间 / 项目 chips</div>
+</div>
+
+<script>
+/* 示例数据：每周/月/30天的完成与计划按项目拆分；逾期、阻塞、待处理是快照，不随区间变化 */
+var PROJECTS=[
+  {id:"pay",name:"支付网关",owned:true, overdue:2,blocked:1,review:3,accept:1,merge:0,week:[5,9],month:[19,28],d30:[27,40],
+   members:[["陈昊",2100],["张伟",1560],["李娜",900],["王芳",2400]]},
+  {id:"trade",name:"交易服务",owned:true,overdue:1,blocked:0,review:2,accept:2,merge:1,week:[4,7],month:[15,22],d30:[22,31],
+   members:[["陈昊",1200],["孙琪",1800],["周敏",600]]},
+  {id:"mobile",name:"移动端",owned:true,overdue:1,blocked:0,review:1,accept:1,merge:1,week:[3,5],month:[11,16],d30:[16,23],
+   members:[["赵磊",1500],["周敏",900]]},
+  {id:"risk",name:"风控中台",owned:false,overdue:1,blocked:0,review:1,accept:0,merge:0,week:[2,4],month:[8,12],d30:[11,17],
+   members:[["李娜",1200],["孙琪",600]]},
+  {id:"data",name:"数据平台",owned:false,overdue:0,blocked:0,review:0,accept:0,merge:0,week:[1,2],month:[5,8],d30:[7,11],
+   members:[["张伟",600],["王芳",300]]}
+];
+var RISKS=[
+  {p:"pay",title:"查询客户归属部门信息",owner:"陈昊",reason:"逾期 4 天",days:4,high:true},
+  {p:"trade",title:"支付回调幂等重试",owner:"孙琪",reason:"逾期 2 天 · 阻塞 1 天",days:2,high:true},
+  {p:"mobile",title:"首页骨架屏闪烁",owner:"赵磊",reason:"被阻塞 3 天",days:3,high:false},
+  {p:"risk",title:"规则引擎灰度回滚",owner:"李娜",reason:"逾期 1 天",days:1,high:false},
+  {p:"data",title:"报表导出超时",owner:"张伟",reason:"停滞 5 天",days:5,high:false}
+];
+var WAITS=[
+  {p:"pay",type:"待评审",title:"退款规则改造评审",days:6},
+  {p:"trade",type:"待验收",title:"订单补单流程验收",days:4},
+  {p:"pay",type:"待验收",title:"商户资质校验",days:3},
+  {p:"mobile",type:"待合并",title:"登录改版分支合入",days:3},
+  {p:"pay",type:"待评审",title:"分账规则补充说明",days:2},
+  {p:"trade",type:"待合并",title:"对账差异告警修复",days:2}
+];
+var RANGE={week:{label:"本周",from:"2026-11-16",to:"2026-11-22",workdays:5},
+           month:{label:"本月",from:"2026-11-01",to:"2026-11-30",workdays:21},
+           d30:{label:"近 30 天",from:"2026-10-22",to:"2026-11-20",workdays:22}};
+var state={role:"pm",range:"week",projects:"all",status:"data"};
+
+function visibleProjects(){
+  return PROJECTS.filter(function(p){ return state.role==="admin" || p.owned; });
+}
+function selectedProjects(){
+  var vis=visibleProjects();
+  if(state.projects==="all") return vis;
+  return vis.filter(function(p){ return state.projects.indexOf(p.id)>=0; });
+}
+function agg(){
+  var ps=selectedProjects(),r=state.range,i;
+  var o={done:0,plan:0,overdue:0,blocked:0,review:0,accept:0,merge:0};
+  for(i=0;i<ps.length;i++){
+    var p=ps[i];
+    o.done+=p[r][0];o.plan+=p[r][1];
+    o.overdue+=p.overdue;o.blocked+=p.blocked;o.review+=p.review;o.accept+=p.accept;o.merge+=p.merge;
+  }
+  o.rate=o.plan?Math.round(o.done*100/o.plan):0;
+  return o;
+}
+function membersOf(){
+  var ps=selectedProjects(),map={},order=[];
+  ps.forEach(function(p){p.members.forEach(function(m){
+    if(!map[m[0]]){map[m[0]]=0;order.push(m[0]);}
+    map[m[0]]+=m[1];
+  });});
+  order.sort(function(a,b){return map[b]-map[a];});
+  return order.map(function(n){
+    var cap=480*RANGE[state.range].workdays;
+    return {name:n,actual:map[n],pct:cap?Math.round(map[n]*100/cap):0};
+  });
+}
+function hm(min){var h=Math.floor(min/60),m=min%60;return m?h+"h"+m+"m":h+"h";}
+
+function chipsHTML(){
+  var ps=visibleProjects(),out='<div class="chips">';
+  out+='<button class="chip'+(state.projects==="all"?" on":"")+'" data-all="1">'+
+       (state.role==="pm"?"我负责的 "+ps.length+" 个项目":"全部 "+ps.length+" 个项目")+'</button>';
+  ps.forEach(function(p){
+    var on=state.projects!=="all"&&state.projects.indexOf(p.id)>=0;
+    out+='<button class="chip'+(on?" on":"")+'" data-proj="'+p.id+'">'+p.name+'</button>';
+  });
+  return out+'</div>';
+}
+function scopeHTML(){
+  var r=RANGE[state.range];
+  return '<div class="scopebar"><span class="scope-lab">项目范围</span>'+chipsHTML()+
+    '<span class="scope-right"><span class="seg">'+
+    ['week','month','d30'].map(function(k){
+      return '<button data-range="'+k+'" aria-pressed="'+(state.range===k)+'">'+RANGE[k].label+'</button>';
+    }).join('')+'</span><span class="range-dates">'+r.from+' ~ '+r.to+'</span></span></div>';
+}
+function panelHTML(){
+  var a=agg(),r=RANGE[state.range];
+  var deltaByRange={week:.48,month:.12,d30:-.07};
+  var delta=Math.round(deltaByRange[state.range]*100);
+  var html='<div class="team-panel">'+scopeHTML();
+
+  html+='<section class="team-hero"><div class="th-main" style="--done-rate:'+a.rate+'%">'+
+        '<b>'+a.rate+'%</b><span class="lab">'+r.label+'完成率 <span class="q" title="区间内完成数 ÷ 计划数">?</span></span>'+
+        '<em class="'+(delta>=0?"up":"down")+'">'+(delta>=0?"↑ +"+delta:"↓ "+Math.abs(delta))+'%</em></div>'+
+        '<div class="th-grid"><div><b>'+a.done+'/'+a.plan+'</b><span>完成 / 计划</span></div>'+
+        '<button class="danger"><b>'+a.overdue+'</b><span>已逾期</span></button>'+
+        '<button class="warn"><b>'+a.blocked+'</b><span>被阻塞</span></button></div>'+
+        '<div class="th-note">完成率与工时按「'+r.label+'」统计；逾期、阻塞与待处理是当前快照，不随区间变化。'+
+        (state.role==="pm"?'仅统计你负责的项目。':'')+'</div></section>';
+
+  html+='<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">截止此刻</span></div>'+
+        '<div class="team-pending"><button><b>'+a.review+'</b><span>待评审</span></button>'+
+        '<button><b>'+a.accept+'</b><span>待验收</span></button>'+
+        '<button><b>'+a.merge+'</b><span>待合并</span></button></div>';
+
+  var ids=selectedProjects().map(function(p){return p.id;});
+  var pnames={};PROJECTS.forEach(function(p){pnames[p.id]=p.name;});
+  var waits=WAITS.filter(function(x){return ids.indexOf(x.p)>=0;})
+                 .sort(function(x,y){return y.days-x.days;}).slice(0,3);
+  if(waits.length){
+    html+='<div class="wait-list"><span class="wait-cap">最久等待</span>'+waits.map(function(x){
+      return '<div class="wait-line"><span class="tr-proj">'+pnames[x.p]+'</span><b>'+x.type+' · '+x.title+'</b>'+
+        '<span class="wait-days">'+x.days+' 天</span></div>';
+    }).join('')+'</div>';
+  }
+  html+='</section>';
+
+  var risks=RISKS.filter(function(x){return ids.indexOf(x.p)>=0;}).slice(0,4);
+  var names=pnames;
+  html+='<section class="team-card"><div class="tc-head"><h3>风险工作项</h3><span class="foot-note">'+
+        (risks.length?risks.length+" 项":"0 项")+' · 截止此刻</span></div>';
+  if(risks.length){
+    html+='<div class="team-risks">'+risks.map(function(x){
+      return '<div class="team-risk '+(x.high?"high":"")+'"><i class="tr-dot"></i><div class="tr-main">'+
+        '<b>'+x.title+'</b><span><span class="tr-proj">'+names[x.p]+'</span>'+x.owner+' · '+x.reason+'</span></div>'+
+        '<span class="tr-days">'+x.days+' 天</span></div>';
+    }).join('')+'</div>';
+  }else{
+    html+='<div style="padding:18px 8px;text-align:center;font-size:12.5px;color:var(--text-3)">此刻没有风险工作项</div>';
+  }
+  html+='</section>';
+
+  var ms=membersOf();
+  html+='<section class="team-card wide"><div class="tc-head"><h3>成员负载</h3>'+
+        '<span class="foot-note">'+ms.length+' 名成员 · '+r.label+'计时 / '+r.workdays+' 个工作日容量</span></div>';
+  if(ms.length){
+    html+='<div class="team-load">'+ms.map(function(m){
+      var cls=m.pct>100?"over":(m.pct>=90?"near":"");
+      return '<button class="tl-row"><div class="tl-top"><b>'+m.name+'</b><span>'+hm(m.actual)+' / '+hm(480*RANGE[state.range].workdays)+'</span></div>'+
+        '<div class="tl-bar"><i class="'+cls+'" style="width:'+Math.min(m.pct,100)+'%"></i></div>'+
+        '<span class="tl-pct '+cls+'">'+m.pct+'%</span></button>';
+    }).join('')+'</div>';
+  }else{
+    html+='<div style="padding:18px 8px;text-align:center;font-size:12.5px;color:var(--text-3)">所选项目在该区间还没有成员计时</div>';
+  }
+  html+='</section></div>';
+  return html;
+}
+function emptyHTML(){
+  return '<div class="bigstate"><div class="ico">◔</div><h3>'+RANGE[state.range].label+'所选项目还没有数据</h3>'+
+    '<p>统计会在成员开始记录工作项、需求进入评审后生成。<br>可以切换项目范围或区间再试。</p>'+
+    '<div class="acts"><span class="btn">切换区间</span><span class="btn">查看工作项列表</span></div></div>';
+}
+function errorHTML(){
+  return '<div class="bigstate"><div class="ico">!</div><h3>团队数据加载失败</h3>'+
+    '<p>请求 /api/mobile/team-overview 返回 500（示例）。<br>个人页签不受影响，可重试或稍后再看。</p>'+
+    '<div class="acts"><span class="btn primary">重试</span><span class="btn">查看服务状态</span></div></div>';
+}
+function render(){
+  var a=agg(),r=RANGE[state.range];
+  var pm=state.role==="pm";
+  document.getElementById("briefStrong").textContent=r.label+"团队";
+  document.getElementById("briefRate").textContent=a.rate+"%";
+  document.getElementById("briefPlan").textContent=a.plan;
+  document.getElementById("briefMeta").textContent=r.from+" ~ "+r.to+" · 11-20 09:53 更新";
+  document.getElementById("subtitle").textContent=pm
+    ?"团队统计 · 仅统计你负责的 "+visibleProjects().length+" 个项目"
+    :"团队统计 · 按项目维度查看进度、风险与成员负载";
+  document.getElementById("noteText").textContent=pm
+    ?"团队页签对空间主 / 管理员、项目负责人开放；你只能查看自己负责的项目。完成率与工时按所选区间统计，逾期、阻塞与待处理是当前快照。"
+    :"团队页签对空间主 / 管理员、项目负责人开放。完成率与工时按所选区间统计，逾期、阻塞与待处理是当前快照；选中多个项目时合并计算。";
+  var wrap=document.getElementById("panelWrap");
+  /* 空 / 错态下不展示结论条，避免和「没有数据」互相打脸 */
+  document.getElementById("brief").style.display = state.status==="data" ? "" : "none";
+  if(state.status==="error"){wrap.innerHTML='<div class="team-panel">'+scopeHTML()+'</div>'+errorHTML();}
+  else if(state.status==="empty"){wrap.innerHTML='<div class="team-panel">'+scopeHTML()+'</div>'+emptyHTML();}
+  else{wrap.innerHTML=panelHTML();}
+  /* 控制条高亮 */
+  document.querySelectorAll("#ctl [data-role]").forEach(function(b){b.classList.toggle("on",b.dataset.role===state.role);});
+  document.querySelectorAll("#ctl [data-range]").forEach(function(b){b.classList.toggle("on",b.dataset.range===state.range);});
+  document.querySelectorAll("#ctl [data-state]").forEach(function(b){b.classList.toggle("on",b.dataset.state===state.status);});
+}
+document.addEventListener("click",function(e){
+  var t=e.target.closest("[data-role],[data-range],[data-state],[data-proj],[data-all]");
+  if(!t) return;
+  if(t.dataset.role){state.role=t.dataset.role;state.projects="all";}
+  else if(t.dataset.range){state.range=t.dataset.range;}
+  else if(t.dataset.state){state.status=t.dataset.state;}
+  else if(t.dataset.all){state.projects="all";}
+  else if(t.dataset.proj){
+    var id=t.dataset.proj;
+    if(state.projects==="all") state.projects=[id];
+    else{
+      var i=state.projects.indexOf(id);
+      if(i>=0){state.projects.splice(i,1);if(!state.projects.length)state.projects="all";}
+      else state.projects.push(id);
+    }
+  }
+  if(state.role==="pm"){
+    var own=visibleProjects().map(function(p){return p.id;});
+    if(state.projects!=="all"){
+      state.projects=state.projects.filter(function(x){return own.indexOf(x)>=0;});
+      if(!state.projects.length)state.projects="all";
+    }
+  }
+  render();
+});
+/* URL 预置：?role=pm&range=week&clean=1 */
+(function(){
+  var q=new URLSearchParams(location.search);
+  if(q.get("role"))state.role=q.get("role");
+  if(q.get("range"))state.range=q.get("range");
+  if(q.get("state"))state.status=q.get("state");
+  if(q.get("projects"))state.projects=q.get("projects").split(",");
+  if(q.get("clean")==="1")document.body.classList.add("hidectl");
+  if(q.get("shot")==="1")document.body.classList.add("nofixed");
+})();
+render();
+</script>
+</body>
+</html>

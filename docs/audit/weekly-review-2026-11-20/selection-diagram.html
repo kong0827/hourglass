@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>周回顾 · 测试与角色选型图</title>
+<style>
+  html,body{margin:0;padding:0;background:#F7F8FA}
+  #xx{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --tbl-head:#F9FAFB;
+    --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+    --r-md:10px; --r-lg:11px; --r-pill:999px;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    width:1680px; box-sizing:border-box; padding:36px 40px 30px; color:var(--text);
+    background:var(--bg-app); -webkit-font-smoothing:antialiased;
+  }
+  #xx *{box-sizing:border-box}
+  #xx .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:30px;margin-bottom:22px}
+  #xx .eyebrow{font-size:12px;letter-spacing:.08em;color:var(--text-3);font-weight:600;text-transform:uppercase}
+  #xx h1{margin:7px 0 8px;font-size:27px;line-height:1.25;font-weight:650;letter-spacing:-.01em}
+  #xx .sub{margin:0;font-size:13.5px;line-height:1.7;color:var(--text-2);max-width:940px}
+  #xx .sub b{color:var(--text);font-weight:600}
+  #xx .counts{display:flex;gap:10px;flex-shrink:0;padding-top:4px}
+  #xx .cnt{min-width:104px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:0 1px 2px rgba(16,24,40,.05)}
+  #xx .cnt b{display:block;font-size:21px;line-height:1.2;font-variant-numeric:tabular-nums}
+  #xx .cnt span{display:block;font-size:10.5px;color:var(--text-3);margin-top:2px;white-space:nowrap}
+
+  #xx .table{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 1px 2px rgba(16,24,40,.05);overflow:hidden}
+  #xx .thead,#xx .row{display:grid;grid-template-columns:46px 218px minmax(0,1fr) 318px 336px;gap:20px;align-items:start}
+  #xx .thead{padding:10px 22px;background:var(--tbl-head);border-bottom:1px solid var(--border);font-size:10.5px;font-weight:600;color:var(--text-3);letter-spacing:.04em}
+  #xx .row{padding:18px 22px;border-top:1px solid #F2F4F7}
+  #xx .row:first-of-type{border-top:0}
+  #xx .idx{width:26px;height:26px;border-radius:50%;background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:11.5px;font-weight:650;display:grid;place-items:center;font-variant-numeric:tabular-nums;margin-top:1px}
+  #xx .q b{display:block;font-size:14px;font-weight:600;line-height:1.45}
+  #xx .q span{display:block;margin-top:5px;font-size:11.5px;line-height:1.55;color:var(--text-3)}
+  #xx .cands{display:flex;flex-wrap:wrap;gap:6px;padding-top:1px}
+  #xx .chip{display:inline-flex;align-items:center;gap:4px;height:23px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:11px;color:var(--text-3);white-space:nowrap}
+  #xx .chip .m{font-size:10px;line-height:1}
+  #xx .chip.no{color:#98A2B3;border-color:#EAECF0;background:#FCFCFD;text-decoration:line-through;text-decoration-color:#D0D5DD}
+  #xx .chip.mid{color:var(--text-2);border-color:var(--border);background:var(--surface-sunken)}
+  #xx .chip.yes{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft);font-weight:600;text-decoration:none}
+  #xx .cands .legendline{flex-basis:100%;margin-top:2px;font-size:10px;color:#98A2B3}
+  #xx .pick{position:relative;padding:9px 12px 9px 14px;background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:8px;font-size:12px;line-height:1.65;color:var(--text);font-weight:500}
+  #xx .pick:before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--primary)}
+  #xx .pick em{font-style:normal;display:block;font-size:10px;letter-spacing:.06em;color:var(--primary-fg);font-weight:650;margin-bottom:3px}
+  #xx .why{font-size:11.5px;line-height:1.6;color:var(--text-2)}
+  #xx .why p{margin:0;display:flex;gap:7px}
+  #xx .why p + p{margin-top:6px}
+  #xx .why .tag{flex:0 0 auto;display:inline-block;height:17px;line-height:17px;padding:0 5px;border-radius:4px;font-size:9.5px;font-weight:600;margin-top:1px}
+  #xx .why .t1{background:var(--success-soft);color:var(--success-fg)}
+  #xx .why .t2{background:var(--warning-soft);color:var(--warning-fg)}
+
+  #xx .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:14px}
+  #xx .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 1px 2px rgba(16,24,40,.05)}
+  #xx .card-h{display:flex;align-items:center;gap:9px;padding:12px 16px;border-bottom:1px solid var(--border)}
+  #xx .card-h h2{margin:0;font-size:12.5px;font-weight:650}
+  #xx .card-h .hint{margin-left:auto;font-size:10.5px;color:var(--text-3)}
+  #xx .card-h .dot{width:7px;height:7px;border-radius:50%;background:var(--primary)}
+  #xx .card-b{padding:12px 16px 14px}
+  #xx .map{display:flex;flex-direction:column;gap:7px}
+  #xx .map-row{display:grid;grid-template-columns:132px minmax(0,1fr);gap:10px;align-items:baseline;padding:6px 0;border-top:1px dashed #EAECF0}
+  #xx .map-row:first-child{border-top:0;padding-top:0}
+  #xx .map-k{font-size:11.5px;font-weight:600;color:var(--text)}
+  #xx .map-k span{display:block;font-weight:400;color:var(--text-3);font-size:10px;margin-top:1px}
+  #xx .map-v{font-family:"SFMono-Regular",Consolas,Menlo,monospace;font-size:10.5px;line-height:1.6;color:var(--text-2);background:var(--surface-sunken);border-radius:5px;padding:4px 7px;word-break:break-all}
+  #xx .map-v b{color:var(--primary-fg);font-weight:600}
+  #xx .note{margin-top:9px;font-size:10.5px;line-height:1.55;color:var(--text-3)}
+  #xx .scope{display:flex;flex-direction:column;gap:10px}
+  #xx .sc{display:flex;gap:9px;padding:9px 11px;border:1px solid var(--border);border-radius:8px}
+  #xx .sc.on{background:var(--success-soft);border-color:var(--success-border)}
+  #xx .sc.off{background:#FCFCFD;border-color:#EAECF0}
+  #xx .sc .mark{flex:0 0 auto;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;margin-top:1px}
+  #xx .sc.on .mark{background:var(--success);color:#fff}
+  #xx .sc.off .mark{background:var(--surface-sunken);color:var(--text-3)}
+  #xx .sc b{display:block;font-size:11.5px;font-weight:600;margin-bottom:2px}
+  #xx .sc p{margin:0;font-size:10.5px;line-height:1.55;color:var(--text-2)}
+  #xx .sc p em{font-style:normal;color:var(--text-3)}
+  #xx .foot{margin-top:14px;display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--text-3)}
+  #xx .foot .sep{color:#D0D5DD}
+</style>
+</head>
+<body>
+<div id="xx">
+  <div class="hd">
+    <div>
+      <div class="eyebrow">周回顾 · 设计选型 · 2026-11-20</div>
+      <h1>测试与角色：五个选型，和它们各自放弃的东西</h1>
+      <p class="sub"><b>需求主状态没有测试阶段</b>——测试发生在工作项（待测试 / 测试中）与用例执行；<b>角色是成员属性</b>，不是需求属性。下面五个决定，回答「测试放在哪、量什么、算给谁、怎么筛、缺了怎么显示」。</p>
+    </div>
+    <div class="counts">
+      <div class="cnt"><b>5</b><span>选型决定</span></div>
+      <div class="cnt"><b>17</b><span>否决 / 降级方向</span></div>
+      <div class="cnt"><b>0</b><span>张新表</span></div>
+    </div>
+  </div>
+
+  <div class="table">
+    <div class="thead">
+      <div>#</div><div>选型问题</div><div>候选（划线 = 否决，灰 = 降级）</div><div>采用</div><div>依据 / 代价</div>
+    </div>
+
+    <div class="row">
+      <div class="idx">01</div>
+      <div class="q"><b>测试信息放在哪一层？</b><span>约束：需求已有 5 个互斥主状态，不再加「测试中 / 已测试」。</span></div>
+      <div class="cands">
+        <span class="chip no"><span class="m">✕</span>需求状态加「测试中」</span>
+        <span class="chip mid"><span class="m">△</span>只给成员表加一列</span>
+        <span class="chip yes"><span class="m">✓</span>独立「测试与质量」卡</span>
+        <span class="chip yes"><span class="m">✓</span>成员表「测试」列</span>
+        <span class="chip no"><span class="m">✕</span>只外链测试报告</span>
+        <span class="legendline">一条是聚合（团队），一条是落人（成员），两者互补。</span>
+      </div>
+      <div class="pick"><em>采用</em>团队页独立卡片 + 成员表测试列；抽屉给参与者一块「测试贡献」。</div>
+      <div class="why">
+        <p><span class="tag t1">依据</span><span>测试不是需求生命周期的一步，塞进主状态会让「完成」与「发布」的判定重新定义。</span></p>
+        <p><span class="tag t2">代价</span><span>团队页多约一屏；测试卡与需求流转需要各自口径说明。</span></p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="idx">02</div>
+      <div class="q"><b>测试指标选哪几个？</b><span>约束：必须能按周重算，并且能落到人。</span></div>
+      <div class="cands">
+        <span class="chip no"><span class="m">✕</span>用例总数（存量）</span>
+        <span class="chip yes"><span class="m">✓</span>执行用例</span>
+        <span class="chip yes"><span class="m">✓</span>通过率</span>
+        <span class="chip no"><span class="m">✕</span>用例覆盖率</span>
+        <span class="chip no"><span class="m">✕</span>自动化率</span>
+        <span class="chip yes"><span class="m">✓</span>发现缺陷</span>
+        <span class="chip yes"><span class="m">✓</span>待回归</span>
+        <span class="chip mid"><span class="m">△</span>缺陷密度</span>
+        <span class="legendline">覆盖率缺代码范围、自动化缺标记、密度缺代码量——本期不编造。</span>
+      </div>
+      <div class="pick"><em>采用</em>执行 128 条 · 通过率 82% · 发现缺陷 9 · 待回归 6；辅以测试工时、计划进度、缺陷 P0–P2 分布。</div>
+      <div class="why">
+        <p><span class="tag t1">依据</span><span>四个数覆盖「做了多少、做得怎么样、找出什么、还剩什么」，且都能按人分组。</span></p>
+        <p><span class="tag t2">代价</span><span>覆盖率类指标留白；对外解释时需说明「没有数据」不是「零覆盖」。</span></p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="idx">03</div>
+      <div class="q"><b>通过率的分母是什么？</b><span>约束：跳过与阻塞大量存在，不能和失败混为一谈。</span></div>
+      <div class="cands">
+        <span class="chip no"><span class="m">✕</span>通过 ÷ 全部用例</span>
+        <span class="chip no"><span class="m">✕</span>通过 ÷（通过 + 失败）</span>
+        <span class="chip yes"><span class="m">✓</span>通过 ÷（通过 + 失败 + 阻塞）</span>
+        <span class="legendline">跳过 = 主动不测；阻塞 = 环境 / 依赖问题，两者都不代表质量。</span>
+      </div>
+      <div class="pick"><em>采用</em>105 ÷（105 + 14 + 9）= 82%；跳过 6 条单列，不进分母。</div>
+      <div class="why">
+        <p><span class="tag t1">依据</span><span>与用例执行页的「最近结果」一致，避免同一空间两个通过率。</span></p>
+        <p><span class="tag t2">代价</span><span>与部分竞品（含跳过）口径不同，脚注必须写清。</span></p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="idx">04</div>
+      <div class="q"><b>测试贡献记给谁？</b><span>约束：产品与负责人也在执行用例，不能只算专职测试。</span></div>
+      <div class="cands">
+        <span class="chip no"><span class="m">✕</span>只统计专职测试</span>
+        <span class="chip no"><span class="m">✕</span>按主职能分池统计</span>
+        <span class="chip yes"><span class="m">✓</span>按执行记录 + 主职能标签</span>
+        <span class="chip no"><span class="m">✕</span>兼岗按比例分摊</span>
+        <span class="legendline">比例分摊需要排期数据，当前没有。</span>
+      </div>
+      <div class="pick"><em>采用</em>执行记录归人；主职能用于角色筛选与个人指标集。李婷（产品）、张启明（负责人）本周共 42 条照常计入。</div>
+      <div class="why">
+        <p><span class="tag t1">依据</span><span>谁执行谁负责；兼测试的人不该在成员表里消失。</span></p>
+        <p><span class="tag t2">代价</span><span>需要维护成员主职能；缺失时回退「未设置」，不猜。</span></p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="idx">05</div>
+      <div class="q"><b>角色怎么进入视图？</b><span>约束：团队总量是空间事实，不该随「看谁」变化。</span></div>
+      <div class="cands">
+        <span class="chip no"><span class="m">✕</span>每人一页回顾</span>
+        <span class="chip no"><span class="m">✕</span>按角色拆成四张卡</span>
+        <span class="chip yes"><span class="m">✓</span>顶部「角色」筛选</span>
+        <span class="chip no"><span class="m">✕</span>汇总随角色重算</span>
+        <span class="legendline">个人视图不显示该筛选；测试卡成员与成员表一起收敛。</span>
+      </div>
+      <div class="pick"><em>采用</em>角色只筛成员工作量与测试参与成员；人数、容量、合计同步重算，团队汇总与测试 4 格不变。</div>
+      <div class="why">
+        <p><span class="tag t1">依据</span><span>筛选回答「这类人这周怎么样」，不改变「团队这周怎么样」。</span></p>
+        <p><span class="tag t2">代价</span><span>会出现「8 人汇总 / 1 人明细」，靠一行提示与 — 规则消歧。</span></p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="idx">06</div>
+      <div class="q"><b>不参与测试怎么显示？</b><span>约束：「没参与」与「参与了但 0 条」语义不同。</span></div>
+      <div class="cands">
+        <span class="chip no"><span class="m">✕</span>显示 0</span>
+        <span class="chip no"><span class="m">✕</span>显示空白</span>
+        <span class="chip yes"><span class="m">✓</span>显示「—」</span>
+        <span class="legendline">空白会被读成加载失败或列缺失。</span>
+      </div>
+      <div class="pick"><em>采用</em>成员测试列与测试合计都用「—」；筛选后无测试参与时，测试卡显示「该角色本周没有执行用例」。</div>
+      <div class="why">
+        <p><span class="tag t1">依据</span><span>与全站「0 值中性、缺失用 —」一致，避免把不参与误读为没干活。</span></p>
+        <p><span class="tag t2">代价</span><span>需要脚注解释，且导出 CSV 时要写空值而非 0。</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <section class="card">
+      <div class="card-h"><span class="dot"></span><h2>指标 → 数据表</h2><span class="hint">全部聚合查询 · 不改表，只加索引</span></div>
+      <div class="card-b">
+        <div class="map">
+          <div class="map-row">
+            <div class="map-k">执行用例 / 通过率<span>逐条执行记录</span></div>
+            <div class="map-v"><b>test_case_run</b>(status, executed_by_user_id, created_at)</div>
+          </div>
+          <div class="map-row">
+            <div class="map-k">待回归<span>当前快照</span></div>
+            <div class="map-v"><b>test_case</b>(latest_status='failed')</div>
+          </div>
+          <div class="map-row">
+            <div class="map-k">发现缺陷 / 遗留缺陷<span>按缺陷任务去重</span></div>
+            <div class="map-v"><b>test_case_run</b>.bug_task_id → <b>task</b>(item_type='bug')</div>
+          </div>
+          <div class="map-row">
+            <div class="map-k">测试工时<span>本周登记</span></div>
+            <div class="map-v"><b>time_log</b> × <b>task</b>(board_column='testing')</div>
+          </div>
+          <div class="map-row">
+            <div class="map-k">计划进度<span>回归 / 冒烟</span></div>
+            <div class="map-v"><b>test_plan</b> + <b>test_plan_case</b>(result, required)</div>
+          </div>
+        </div>
+        <p class="note">成员测试列 = 该人执行记录数 / 由失败转出的缺陷数；个人测试卡复用同一组查询，只按 user_id 过滤。<br>索引：test_case_run(workspace_id, created_at)、test_case(workspace_id, latest_status)、task(workspace_id, item_type, completed_at)。</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><span class="dot"></span><h2>角色筛选的作用域</h2><span class="hint">只改明细，不改事实</span></div>
+      <div class="card-b scope">
+        <div class="sc on">
+          <span class="mark">✓</span>
+          <div><b>作用：成员工作量 · 测试参与成员</b><p>行、人数、容量、完成 / 开始 / 在手 / 工时 / 逾期 / 阻塞 / 测试合计同步重算。</p></div>
+        </div>
+        <div class="sc off">
+          <span class="mark">–</span>
+          <div><b>不作用：团队汇总</b><p>需求流转、发布、交付概览、测试 4 格、项目推进保持空间总量。<em>汇总看事实，明细看人。</em></p></div>
+        </div>
+        <div class="sc off">
+          <span class="mark">–</span>
+          <div><b>不作用：个人视图</b><p>切到「我」时隐藏角色筛选；个人测试卡按本人主职能换指标，不跟筛选变化。</p></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="foot">
+    <span>原型：docs/audit/weekly-review-2026-11-20/prototype.html</span><span class="sep">·</span>
+    <span>规格：设计说明.md §3.1 / §3.2 / §6 / §7</span><span class="sep">·</span>
+    <span>图中数字为合成示例（周 11-09—11-15），上线前用真实空间复核</span><span class="sep">·</span>
+    <span>2026-11-20 · v1</span>
+  </div>
+</div>
+</body>
+</html>
