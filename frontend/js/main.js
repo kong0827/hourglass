@@ -60,9 +60,10 @@ function boot(){
   UI.wireTooltips(document);
 
   var deepTaskId = hashParam("task");   // 必须在任何 hash 改写之前抓取（O-3）
-  var deepNewTask = hashParam("new") === "1";   // 助手「新建工作项」入口
   /* 空 hash 固定落「我的工作」；有 hash 说明是刷新、收藏或分享链接，尊重原视图 */
   var startView = viewFromHash();
+  /* 助手「新建工作项」入口只认看板；其他视图的 ?new=1 属于全局「新建」菜单的跨视图创建参数 */
+  var deepNewTask = startView === "board" && hashParam("new") === "1";
   /* 工作页深链带 query：空 hash 才落默认视图，带参数时保留原 hash */
   var startHash = String(window.location.hash || "");
   var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands" || startView === "version" || startView === "release" || startView === "requirements" || startView === "dochistory")

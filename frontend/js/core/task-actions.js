@@ -65,11 +65,12 @@ function handleDeepLink(){
     openTaskById(id);
     return;
   }
-  /* 助手「新建工作项」入口：#/board?new=1 直接打开新建抽屉 */
-  if(hashParam("new") === "1"){
+  /* 助手「新建工作项」入口只属于看板：#/board?new=1 直接打开新建抽屉。
+     其他视图的 ?new=1 是全局「新建」菜单的跨视图创建参数（版本 / 需求 / 用例 / 文档 / 分支），
+     由目标视图进入时自行消费；这里抢先把参数清掉会把「新建版本」等误开成新建任务 */
+  if(activeView === "board" && hashParam("new") === "1"){
     stripHashParam("new");
-    if(activeView === "board"){ openTaskDrawer("backlog"); return; }
-    showView("board").then(function(){ openTaskDrawer("backlog"); });
+    openTaskDrawer("backlog");
   }
 }
 function openDuePopover(anchor, taskId){
