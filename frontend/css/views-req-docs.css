@@ -234,6 +234,7 @@
 .markdown-body th,.markdown-body td{border:1px solid var(--border);padding:var(--space-2) 10px;vertical-align:middle;}
 .markdown-body th{background:var(--surface-sunken);font-weight:650;text-align:left;}
 .markdown-body img{max-width:100%;height:auto;border-radius:var(--r-xs);}
+#reqDocReaderBody img{cursor:zoom-in;}
 .markdown-body a{color:var(--primary-fg);text-decoration:underline;overflow-wrap:anywhere;word-break:break-word;}
 .markdown-body hr{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .reqdoc-demand-list{max-height:240px;overflow:auto;}

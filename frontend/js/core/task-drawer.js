@@ -5,6 +5,7 @@ import { openAttPreview, previewable, kindOf } from "./att-preview.js";
 import { bindFileDrop, validateFiles, reportRejected, uploadAttachment } from "./attach-kit.js";
 import { attachCombo } from "./combo.js";
 import { attachEnvDict, recordEnv } from "./env-dict.js";
+import { shrinkImageFile, fitInsertedImage, notifyResizeHint } from "./img-fit.js";
 import { companyChipHTML, companyNameOf, companyColor } from "../lib/company.js";
 import { loadProjectMembers, peekProjectMembers, memberRoleTitles, effectiveMemberRole, taskMemberLabel } from "../lib/member-labels.js";
 import { openPeoplePicker, optionSubText } from "../lib/people-picker.js";
@@ -142,6 +143,8 @@ function setDrawerTab(name){
 }
 function setDrawerMode(mode){
   if(mode === "read" && !rt.editingId) mode = "edit";
+  /* 切到编辑态前先收起描述内联编辑器，避免两个描述编辑器同时在 DOM 里 */
+  if(mode === "edit" && inlineDesc) endInlineDescEdit(true);
   drawerMode = mode;
   var isRead = mode === "read";
   if(rt.editingId) showTaskErrors([]);
@@ -222,7 +225,7 @@ function demandNameNow(){
 }
 function renderReadDesc(){
   var box = $("readDesc");
-  if(!box || box.isContentEditable) return;
+  if(!box || box.isContentEditable || inlineDesc) return;
   var html = readTask().description || "";
   box.innerHTML = html ? (isHtml(html) ? descHtmlForEditor(html) : plainTextToHtml(html)) : "";
 }
@@ -681,6 +684,12 @@ function ensureTaskDescEditor(){
     /* SunEditor 的上传钩子挂在实例上，创建后再赋值；写进 options 不会生效。
        粘贴图片与工具栏选图都走这里，避免默认塞 base64。 */
     taskDescEditor.onImageUploadBefore = uploadTaskDescImage;
+    taskDescEditor.onImageUpload = function(targetImg){
+      var host = $("iDesc");
+      fitInsertedImage(targetImg, host && host.parentElement
+        ? host.parentElement.querySelector(".sun-editor-editable") : null);
+      notifyResizeHint();
+    };
     taskDescEditor.onChange = function(){ if(taskDescSuppressChange) return; rt.formDirty = true; };
     syncTaskDescEditorReadOnly();
     if(pendingTaskDesc !== null){
@@ -733,27 +742,31 @@ function uploadTaskDescImage(files, info, core, uploadHandler){
   if(!f) return false;
   if(!rt.editingId){ toast("请先保存工作项，再上传描述图片", "warn"); return false; }
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return false; }
-  if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return false; }
-  var fd = new FormData();
-  fd.append("file", f);
-  var url = API.url("/api/tasks/" + encodeURIComponent(rt.editingId) + "/description-images" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
-  fetch(url, {
-    method:"POST",
-    credentials:"same-origin",
-    headers:{ "X-XSRF-TOKEN": csrfCookie() },
-    body: fd
-  }).then(function(res){
-    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
-    return res.json().catch(function(){ return null; });
-  }).then(function(json){
-    if(json && json.code === 0 && json.data && json.data.url){
-      uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
-    }else{
-      toast((json && json.message) || "图片上传失败", "bad");
-    }
-  }).catch(function(ex){
-    toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+  /* 先降采样再校验体积：超限大图缩到 1600 后多数能过 3MB，不必直接拒绝 */
+  shrinkImageFile(f).then(function(shrunk){
+    f = shrunk;
+    if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return; }
+    var fd = new FormData();
+    fd.append("file", f);
+    var url = API.url("/api/tasks/" + encodeURIComponent(rt.editingId) + "/description-images" +
+      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+    return fetch(url, {
+      method:"POST",
+      credentials:"same-origin",
+      headers:{ "X-XSRF-TOKEN": csrfCookie() },
+      body: fd
+    }).then(function(res){
+      if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+      return res.json().catch(function(){ return null; });
+    }).then(function(json){
+      if(json && json.code === 0 && json.data && json.data.url){
+        uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
+      }else{
+        toast((json && json.message) || "图片上传失败", "bad");
+      }
+    }).catch(function(ex){
+      toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+    });
   });
 }
 
@@ -2097,6 +2110,7 @@ function applyDrawerReadOnly(readOnly){
     descEl.tabIndex = readOnly ? -1 : 0;
     descEl.setAttribute("aria-disabled", readOnly ? "true" : "false");
     if(readOnly && descEl.isContentEditable) finishTaskTextEdit(descEl, "desc", false);
+    if(readOnly && inlineDesc) endInlineDescEdit(false);
   }
   if(readOnly && taskDrawerTitle && taskDrawerTitle.isContentEditable) finishTaskTextEdit(taskDrawerTitle, "title", false);
   syncInlineTextAffordance();
@@ -2742,6 +2756,7 @@ function openTaskDrawer(colId, task, defaults){
     });
     return;
   }
+  if(inlineDesc) endInlineDescEdit(false);
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
   /* 从外部（搜索、看板、通知）打开时重置返回栈；抽屉内的关联跳转与「返回」会保住它 */
@@ -3712,6 +3727,7 @@ function tryCloseTaskDrawer(){
 }
 function forceCloseTaskDrawer(opts){
   opts = opts || {};
+  if(inlineDesc) endInlineDescEdit(false);
   var closingId = lastCommentDraftId || rt.editingId;
   if(opts.discardCommentDraft) discardCommentDraft(closingId);
   else stashCommentDraft(closingId);
@@ -5006,6 +5022,152 @@ function restoreTaskTextAttrs(el, field){
     el.title = "点击修改描述；失焦或 Ctrl/⌘ + Enter 保存，Esc 取消";
   }
 }
+/* ==================== 描述就地编辑：内联富文本 ====================
+   读态点描述进入一个无工具栏的 SunEditor：粘贴/拖入图片直接上传、点图片出拖角手柄，
+   与「编辑」态的描述编辑器同一套能力；失焦或 Ctrl/⌘ + Enter 保存，Esc 还原。
+   保存仍走「保存并继续」整单提交，抽屉不关、页签与滚动位置保留。 */
+var inlineDesc = null;
+function inlineDescBox(){
+  if(!inlineDesc || !inlineDesc.host) return null;
+  var box = inlineDesc.host.nextElementSibling;
+  return box && box.classList.contains("sun-editor") ? box : null;
+}
+function inlineDescEditable(){
+  var box = inlineDescBox();
+  return box ? box.querySelector(".sun-editor-editable") : null;
+}
+function startInlineDescEdit(el){
+  if(!el || inlineDesc) return;
+  var host = document.createElement("div");
+  host.className = "read-desc-edit";
+  host.style.minHeight = "80px";
+  el.hidden = true;
+  el.parentElement.insertBefore(host, el.nextSibling);
+  var st = inlineDesc = { el: el, host: host, box: null, ed: null, before: el.innerHTML || "" };
+  loadSunEditorLib().then(function(){
+    if(inlineDesc !== st || !host.isConnected){ return; }
+    var ed = SUNEDITOR.create(host, {
+      width: "100%",
+      height: "auto",
+      minHeight: "80px",
+      placeholder: "点击输入描述，可直接粘贴或拖入图片…",
+      buttonList: [],
+      mode: "classic",
+      resizingBar: false,
+      showPathLabel: false,
+      charCounter: false,
+      imageUploadSizeLimit: 3 * 1024 * 1024
+    });
+    if(inlineDesc !== st){ try{ ed.destroy(); }catch(e){} return; }
+    st.ed = ed;
+    st.box = inlineDescBox();
+    var box = st.box;
+    if(box) box.classList.add("inline-desc-editor");
+    /* SunEditor 的上传钩子挂在实例上；粘贴与工具栏选图都走这里，避免默认塞 base64 */
+    ed.onImageUploadBefore = uploadTaskDescImage;
+    ed.onImageUpload = function(targetImg){
+      fitInsertedImage(targetImg, inlineDescEditable());
+      notifyResizeHint();
+    };
+    ed.setContents(descHtmlForEditor(st.before), false);
+    var area = inlineDescEditable();
+    if(!area){ endInlineDescEdit(false); return; }
+    area.addEventListener("focusout", function(){
+      /* 点图片手柄时 SunEditor 已拦截 mousedown，不会走到这里；
+         其余失焦要等一拍，确认焦点没有落在编辑器外壳里（滚动 / 缩放条）再收尾 */
+      setTimeout(function(){
+        if(inlineDesc !== st) return;
+        var active = document.activeElement;
+        if(box && active && box.contains(active)) return;
+        endInlineDescEdit(true);
+      }, 0);
+    });
+    if(box) box.addEventListener("keydown", function(e){
+      if(inlineDesc !== st) return;
+      if(e.key === "Escape"){
+        e.preventDefault(); e.stopPropagation();
+        endInlineDescEdit(false);
+      }else if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){
+        e.preventDefault(); e.stopPropagation();
+        endInlineDescEdit(true);
+      }
+    }, true);
+    try{ area.focus(); }catch(e){ /* noop */ }
+    caretToEnd(area);
+  }).catch(function(){
+    if(inlineDesc === st) endInlineDescEdit(false);
+    toast("富文本编辑器加载失败，请检查网络后重试", "warn");
+  });
+}
+/* 内联编辑的改动判定：比较文字与图片序列，而不是 HTML 原样。
+   SunEditor 读回来的内容会补 se-component / origin-size 等包裹属性，
+   直接比字符串会把「点开描述又点走」误判成改动，白白提交一次并推高 revision。
+   图片尺寸只在与打开时都有明确值时比较：老数据没写过 data-size 的，视作没动。 */
+function descContentSignature(html){
+  var box = document.createElement("div");
+  box.innerHTML = descHtmlForSave(html || "");
+  var out = [];
+  (function walk(node){
+    if(node.nodeType === 3){ out.push(node.nodeValue.replace(/\u00a0/g, " ")); return; }
+    if(node.nodeType !== 1) return;
+    var tag = node.tagName.toLowerCase();
+    if(tag === "img"){ out.push("\u0002img|" + (node.getAttribute("src") || "")); return; }
+    if(tag === "br"){ out.push("\n"); return; }
+    if(tag === "p" || tag === "div") out.push("\n");
+    for(var i = 0; i < node.childNodes.length; i++) walk(node.childNodes[i]);
+    if(tag === "p" || tag === "div") out.push("\n");
+  })(box);
+  return out.join("").replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
+}
+function descImagesResized(beforeHtml, afterHtml){
+  var before = document.createElement("div"), after = document.createElement("div");
+  before.innerHTML = beforeHtml || "";
+  after.innerHTML = afterHtml || "";
+  var a = before.querySelectorAll("img"), b = after.querySelectorAll("img");
+  for(var i = 0; i < b.length; i++){
+    var x = a[i], y = b[i];
+    if(!x) return true;
+    if(descSizeOf(x) && descSizeOf(y) && descSizeOf(x) !== descSizeOf(y)) return true;
+  }
+  return false;
+}
+function descSizeOf(img){
+  var size = img.getAttribute("data-size");
+  if(!size){
+    var w = img.style && img.style.width, h = img.style && img.style.height;
+    size = w || h ? (w || "") + "," + (h || "") : "";
+  }
+  return size;
+}
+/* 收起内联编辑器。save=false 时按打开前的 HTML 还原，不写库 */
+function endInlineDescEdit(save){
+  var st = inlineDesc;
+  if(!st) return;
+  inlineDesc = null;
+  var val = "";
+  if(st.ed){
+    try{ val = descHtmlForSave(st.ed.getContents(true)); }catch(e){ val = ""; }
+    try{ st.ed.destroy(); }catch(e){ /* noop */ }
+  }
+  if(st.box && st.box.parentElement) st.box.parentElement.removeChild(st.box);
+  if(st.host && st.host.parentElement) st.host.parentElement.removeChild(st.host);
+  st.el.hidden = false;
+  if(descHtmlBlank(val)) val = "";
+  var beforeSave = descHtmlForSave(st.before || "");
+  if(descHtmlBlank(beforeSave)) beforeSave = "";
+  var changed = save && (descContentSignature(val) !== descContentSignature(beforeSave)
+    || descImagesResized(beforeSave, val));
+  if(!changed){
+    renderReadDesc();
+    rt.formDirty = formFieldsDirty();
+    syncDrawerDirty();
+    return;
+  }
+  /* 先回填再提交：读态不能停在旧的描述上等接口 */
+  st.el.innerHTML = val ? descHtmlForEditor(val) : "";
+  setTaskDescContent(val);
+  factSave("描述已保存");
+}
 function startTaskTextEdit(el, field){
   if(!el) return;
   if(!taskInlineWritable()){
@@ -5013,6 +5175,7 @@ function startTaskTextEdit(el, field){
     if(rt.editingId) enterDrawerEdit(field === "desc" ? { focus: "desc" } : undefined);
     return;
   }
+  if(field === "desc"){ startInlineDescEdit(el); return; }
   if(inlineText && inlineText.el !== el) finishTaskTextEdit(inlineText.el, inlineText.field, true);
   if(el.isContentEditable) return;
   inlineText = { el: el, field: field, before: field === "title" ? (iTitle.value || "") : el.innerHTML };
@@ -5102,6 +5265,15 @@ var readDescBox = $("readDesc");
 if(readDescBox){
   readDescBox.addEventListener("click", function(e){
     if(readDescBox.isContentEditable) return;
+    var img = e.target.closest("img");
+    if(img){
+      var m = String(img.getAttribute("src") || "").match(/\/api\/attachments\/([A-Za-z0-9_-]+)\/(?:download|thumb|preview)/);
+      if(m){
+        e.preventDefault();
+        openAttPreview({ attachment: { id: m[1], filename: img.getAttribute("alt") || "描述图片" } });
+        return;
+      }
+    }
     if(e.target.closest("a")) return;
     startTaskTextEdit(readDescBox, "desc");
   });

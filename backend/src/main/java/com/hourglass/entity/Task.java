@@ -130,7 +130,7 @@ public class Task {
     /** 「我的任务」用：当前用户对该任务的可写性 write/read（非表字段，跨空间批量填充） */
     private String access;
     /**
-     * 扩展检索文本（非表字段，O-8）：项目名 + 附件文件名拼接，让全局搜索能命中它们。
+     * 扩展检索文本（非表字段，O-8）：项目名 + 模块名 + 需求名 + 附件文件名拼接，让搜索能命中它们。
      * 不落库，只在查询时由 mergeTaskExtras 填充。
      */
     private String searchExtra;
@@ -154,8 +154,11 @@ public class Task {
     /** 关联需求池需求ID（sql/24，demand 表；基于需求创建任务时写入） */
     private String demandId;
 
-    /** 关联需求标题（非表字段，版本成员选择器按需求分组时读取） */
+    /** 关联需求标题（非表字段，列表展示与版本成员选择器按需求分组时读取） */
     private String demandTitle;
+
+    /** 关联需求编号（非表字段，与 demandTitle 一起批量回填；null=存量尚未取号） */
+    private Integer demandNo;
 
     /** Planning memberships, batch-enriched from version_task; not publication authority. */
     private List<String> versionIds = new ArrayList<String>();

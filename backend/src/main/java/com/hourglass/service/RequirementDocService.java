@@ -44,6 +44,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 需求（项目下的需求文档）。
@@ -83,8 +85,9 @@ public class RequirementDocService {
             /* 表格：放行结构 + 单元格合并；style 已由 :all 放行，具体属性由 filterStyles 逐个过滤 */
             .addAttributes("td", "colspan", "rowspan")
             .addAttributes("th", "colspan", "rowspan", "scope")
-            /* 图片：允许 http(s) 外链与 data URL（粘贴的截图就是 data URL），具体白名单见 filterImages */
-            .addAttributes("img", "src", "alt")
+            /* 图片：允许 http(s) 外链与 data URL（粘贴的截图就是 data URL），具体白名单见 filterImages；
+               data-size 是 SunEditor 拖拽缩放写入的尺寸记录，需放行才能在 filterImages 里转成 style */
+            .addAttributes("img", "src", "alt", "data-size")
             .addProtocols("img", "src", "http", "https", "data")
             /* class 表达对齐/缩进，style 表达颜色，两者都无害、由下面逐个属性过滤 */
             .addAttributes(":all", "class", "style")
@@ -963,6 +966,10 @@ public class RequirementDocService {
         return out;
     }
 
+    /** 站内附件图 src（相对路径）：Cleaner 的 src 协议白名单只放行 http/https/data，会把它剥掉，须先摘出 */
+    private static final Pattern ATT_IMG_SRC =
+            Pattern.compile("src=(\"|')(/api/attachments/[A-Za-z0-9_-]+/(?:download|thumb|preview))\\1");
+
     /**
      * HTML 白名单清洗。返回 null 表示"清洗后没有实质内容"（空段落之类）。
      */
@@ -971,6 +978,17 @@ public class RequirementDocService {
             return null;
         }
         String src = html.length() > CONTENT_MAX ? html.substring(0, CONTENT_MAX) : html;
+        /* 站内附件图先摘出来换成可通过白名单的占位 data URI，清洗完再还原成原相对路径 */
+        List<String> attSrcs = new ArrayList<String>();
+        Matcher am = ATT_IMG_SRC.matcher(src);
+        StringBuffer held = new StringBuffer();
+        while (am.find()) {
+            attSrcs.add(am.group(2));
+            am.appendReplacement(held, Matcher.quoteReplacement(
+                    "src=\"data:image/png;base64,holdatt" + attSrcs.size() + "x\""));
+        }
+        am.appendTail(held);
+        src = held.toString();
         Document dirty = Jsoup.parseBodyFragment(src);
         dirty.outputSettings().prettyPrint(false);
         Document clean = new org.jsoup.safety.Cleaner(SAFELIST).clean(dirty);
@@ -978,12 +996,16 @@ public class RequirementDocService {
         filterStyles(clean.body());
         filterImages(clean.body());
         String out = clean.body().html();
+        for (int i = 0; i < attSrcs.size(); i++) {
+            out = out.replace("data:image/png;base64,holdatt" + (i + 1) + "x", attSrcs.get(i));
+        }
         if (out == null || out.trim().isEmpty()) {
             return null;
         }
-        /* 只有空标签（<p><br></p> 之类）也视为空 */
+        /* 只有空标签（<p><br></p> 之类）也视为空；纯图片文档（无文字）不算空 */
         String text = clean.body().text();
-        return (text == null || text.trim().isEmpty()) && out.indexOf("<hr") < 0 ? null : out;
+        return (text == null || text.trim().isEmpty()) && out.indexOf("<hr") < 0 && out.indexOf("<img") < 0
+                ? null : out;
     }
 
     /**
@@ -1238,12 +1260,34 @@ public class RequirementDocService {
                 continue;
             }
             String alt = img.attr("alt");
+            String dataSize = img.attr("data-size");
             img.clearAttributes();
             img.attr("src", src);
             if (!alt.isEmpty()) {
                 img.attr("alt", alt);
             }
+            applyImgSize(img, dataSize);
         }
+    }
+
+    /**
+     * SunEditor 拖拽缩放把尺寸写进 data-size（如 "758px,426px" 或 "100%,auto"），
+     * 这里转成行内 style 让缩放结果在保存重开后仍然生效；格式不合法就不写。
+     */
+    private static void applyImgSize(org.jsoup.nodes.Element img, String dataSize) {
+        if (dataSize == null || dataSize.isEmpty()) {
+            return;
+        }
+        String[] parts = dataSize.split(",");
+        if (parts.length < 2) {
+            return;
+        }
+        String w = parts[0].trim();
+        String h = parts[1].trim();
+        if (!w.matches("\\d+(\\.\\d+)?(px|%)") || !h.matches("auto|\\d+(\\.\\d+)?px")) {
+            return;
+        }
+        img.attr("style", "width:" + w + ";height:" + h + ";");
     }
 
     /** 文档负责人不是操作者时才通知，避免自己改自己的文档还收到站内信 */

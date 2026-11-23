@@ -14,12 +14,14 @@ import com.hourglass.dto.ReqDocShareResponse;
 import com.hourglass.dto.ReqDocStatusRequest;
 import com.hourglass.dto.ReqDocView;
 import com.hourglass.dto.ReqDocVisibilityRequest;
+import com.hourglass.entity.Attachment;
 import com.hourglass.entity.ReqDocShare;
 import com.hourglass.entity.RequirementDoc;
 import com.hourglass.entity.RequirementDocHistory;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkActivity;
 import com.hourglass.entity.Workspace;
+import com.hourglass.service.AttachmentService;
 import com.hourglass.service.HtmlDocxService;
 import com.hourglass.service.RequirementDocService;
 import com.hourglass.service.WorkspaceService;
@@ -42,8 +44,12 @@ import javax.validation.Valid;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 需求（项目下的需求文档）。
@@ -52,15 +58,23 @@ import java.util.Map;
 @RestController
 public class RequirementDocController {
 
+    /** 导出前把正文里的站内附件图 src（相对路径）转成 data URI；HtmlDocxService 只认 data: 图片 */
+    private static final Pattern ATT_IMG_SRC =
+            Pattern.compile("src=\"(/api/attachments/([A-Za-z0-9_-]+)/download)\"");
+    /** 单图内联上限：超过则保持原 src，导出时按 [alt] 占位 */
+    private static final long EXPORT_IMG_MAX_BYTES = 20L * 1024 * 1024;
+
     private final RequirementDocService docService;
     private final WorkspaceService workspaceService;
     private final HtmlDocxService htmlDocxService;
+    private final AttachmentService attachmentService;
 
     public RequirementDocController(RequirementDocService docService, WorkspaceService workspaceService,
-                                    HtmlDocxService htmlDocxService) {
+                                    HtmlDocxService htmlDocxService, AttachmentService attachmentService) {
         this.docService = docService;
         this.workspaceService = workspaceService;
         this.htmlDocxService = htmlDocxService;
+        this.attachmentService = attachmentService;
     }
 
     /** 需求列表（含所属项目名、关联任务数、正文摘要），不含完整正文；keyword 按标题/正文模糊搜索 */
@@ -189,12 +203,13 @@ public class RequirementDocController {
     @PostMapping("/api/req-docs/export-docx")
     public ResponseEntity<byte[]> exportDocx(@RequestBody Map<String, String> body,
                                              @RequestParam(required = false) String workspace) {
-        workspaceService.resolve(CurrentUser.id(), workspace);
+        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         String html = body == null ? null : body.get("html");
         if (html != null && html.length() > 12_000_000) {
             throw AppException.badRequest("文档正文过大，暂不支持导出 Word");
         }
         String clean = RequirementDocService.sanitize(html);
+        clean = inlineDocImages(clean, ws.getId(), CurrentUser.id());
         byte[] bytes = htmlDocxService.toDocx(clean == null ? "" : clean);
         String title = body == null ? null : body.get("title");
         String name = docxFileName(title);
@@ -214,6 +229,62 @@ public class RequirementDocController {
             base = base.substring(0, 80);
         }
         return (base.isEmpty() ? "文档" : base) + ".docx";
+    }
+
+    /**
+     * 站内附件图内联：src 转 data URI（按当前用户/空间校验可见性，只认站内附件 id，无外链抓取）。
+     * 单图超限或读取失败时保持原 src，导出按 [alt] 占位，不阻断整篇。
+     */
+    private String inlineDocImages(String html, String workspaceId, String userId) {
+        if (html == null || html.indexOf("/api/attachments/") < 0) {
+            return html;
+        }
+        Matcher m = ATT_IMG_SRC.matcher(html);
+        StringBuffer out = new StringBuffer();
+        while (m.find()) {
+            String replacement = m.group(0);
+            try {
+                Attachment a = attachmentService.getVisible(workspaceId, userId, m.group(2));
+                File f = attachmentService.fileOf(a);
+                if (f != null && f.isFile() && f.length() > 0 && f.length() <= EXPORT_IMG_MAX_BYTES) {
+                    byte[] bytes = Files.readAllBytes(f.toPath());
+                    String mime = a.getContentType() == null || a.getContentType().isEmpty()
+                            ? mimeOfFilename(a.getFilename()) : a.getContentType();
+                    if (mime != null && mime.startsWith("image/")) {
+                        replacement = "src=\"data:" + mime + ";base64,"
+                                + Base64.getEncoder().encodeToString(bytes) + "\"";
+                    }
+                }
+            } catch (Exception ignored) {
+                /* 单张失败保持原 src，不阻断导出 */
+            }
+            m.appendReplacement(out, Matcher.quoteReplacement(replacement));
+        }
+        m.appendTail(out);
+        return out.toString();
+    }
+
+    private String mimeOfFilename(String filename) {
+        if (filename == null) {
+            return null;
+        }
+        String s = filename.toLowerCase();
+        if (s.endsWith(".jpg") || s.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (s.endsWith(".png")) {
+            return "image/png";
+        }
+        if (s.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (s.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (s.endsWith(".bmp")) {
+            return "image/bmp";
+        }
+        return null;
     }
 
     @PutMapping("/api/req-docs/{id}")

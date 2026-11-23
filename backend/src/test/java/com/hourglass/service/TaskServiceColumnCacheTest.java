@@ -7,6 +7,7 @@ import com.hourglass.mapper.BoardColumnMapper;
 import com.hourglass.mapper.AttachmentMapper;
 import com.hourglass.mapper.CategoryMapper;
 import com.hourglass.mapper.ColumnTransitionMapper;
+import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.DevBranchMapper;
 import com.hourglass.mapper.RequirementDocMapper;
 import com.hourglass.mapper.RequirementMapper;
@@ -55,7 +56,7 @@ class TaskServiceColumnCacheTest {
                 mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
                 mock(AttachmentMapper.class), metaCache, support, mock(VersionTaskMapper.class),
-                mock(ProjectAccessService.class), mock(ReleasePermissionService.class));
+                mock(ProjectAccessService.class), mock(ReleasePermissionService.class), mock(DemandMapper.class));
 
         assertEquals("待处理", support.columnName(WS, "C1"));
         assertEquals("进行中", support.columnName(WS, "C2"));

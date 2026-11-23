@@ -9,7 +9,7 @@ var DEFS = {
     mode: "table",
     modes: ["table"],
     required: "title",
-    labels: { title:"工作项", type:"类型", column:"状态", priority:"优先级", owner:"负责人", dueDate:"截止", progress:"进度", project:"项目", version:"计划版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新" },
+    labels: { title:"工作项", type:"类型", column:"状态", priority:"优先级", owner:"负责人", dueDate:"截止", progress:"进度", project:"项目", demand:"关联需求", version:"计划版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新" },
     /* 默认 8 列对齐四原则原型的整行视野：类型并入标题、进度按需打开，更新时间收进行尾 */
     defaults: ["title","column","priority","owner","dueDate","project","version","updatedAt"]
   },
