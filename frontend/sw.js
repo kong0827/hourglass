@@ -7,7 +7,7 @@
    1) 发布时 tools/stamp-sw.js 按 SHELL 内容哈希改写 CACHE_NAME，前端一改 sw.js 就变；
    2) 页面每次打开主动 registration.update()，不等浏览器最多约 24 小时的自动检查；
    3) 安装与后台回源一律 cache:"no-cache"，不吃 HTTP 缓存里的旧副本。 */
-var CACHE_NAME = "hourglass-shell-v287";
+var CACHE_NAME = "hourglass-shell-v288";
 var SHELL = [
   "./",
   "index.html",
@@ -23,6 +23,7 @@ var SHELL = [
   "css/views-projects-settings.css",
   "css/views-drawer-blocks.css",
   "css/views-req-docs.css",
+  "css/views-review.css",
   "css/views-analysis-branches.css",
   "css/views-phase-demands.css",
   "css/views-testcases.css",
@@ -33,9 +34,13 @@ var SHELL = [
   "css/investment.css",
   "css/smart-table.css",
   "css/my-work.css",
+  "css/catchup.css",
   "css/mobile.css",
   "css/assistant.css",
+  "css/ornament.css",
+  "css/sand-say.css",
   "css/delivery.css",
+  "css/stage-hours.css",
   "css/share.css",
   "css/auth.css",
   "js/core/ai-progress.js",
@@ -57,6 +62,7 @@ var SHELL = [
   "js/core/fullscreen.js",
   "js/core/group-dims.js",
   "js/core/icons.js",
+  "js/core/import-wizard.js",
   "js/core/layout.js",
   "js/core/list-density.js",
   "js/core/list-preferences.js",
@@ -72,6 +78,9 @@ var SHELL = [
   "js/core/search-palette.js",
   "js/core/shell.js",
   "js/core/sheet-viewer.js",
+  "js/core/side-ornament.js",
+  "js/core/holidays.js",
+  "js/core/sand-say.js",
   "js/core/shortcuts.js",
   "js/core/state.js",
   "js/core/task-actions.js",
@@ -94,6 +103,8 @@ var SHELL = [
   "js/lib/people-picker.js",
   "js/lib/milestone-ui.js",
   "js/lib/gantt-shared.js",
+  "js/lib/stage-hours.js",
+  "js/lib/stage-panel.js",
   "js/lib/text-diff.js",
   "js/main.js",
   "js/share.js",
@@ -102,6 +113,7 @@ var SHELL = [
   "js/views/branches.js",
   "js/views/calendar.js",
   "js/views/canceled.js",
+  "js/views/catchup.js",
   "js/views/chain.js",
   "js/views/demands.js",
   "js/views/delivery.js",
@@ -120,6 +132,7 @@ var SHELL = [
   "js/views/investment.js",
   "js/views/requirements.js",
   "js/views/review.js",
+  "js/views/review-team.js",
   "js/views/risks.js",
   "js/views/settings.js",
   "js/views/testcases.js",
