@@ -276,7 +276,7 @@ public class ReleasePrepService {
             if (channels.contains("in_app")
                     && preferences.inAppEnabled(target, UserNotificationPreferenceService.RELEASE_PREP)) {
                 inApp.pushImmediate(target, workspaceId, UserNotificationPreferenceService.RELEASE_PREP,
-                        title, personalBody(facts, counts.get(target), note), null, "release_plan", planId);
+                        title, personalBody(facts, counts.get(target), note, false), null, "release_plan", planId);
                 prepMapper.markRecipientInApp(push.getId(), target);
                 inAppCount++;
             }
@@ -285,7 +285,7 @@ public class ReleasePrepService {
                 /* 只有真的写入 outbox 才标记「已发邮件」：SMTP 未启用或写库失败时不能虚增人数 */
                 if (user != null && Texts.trimToNull(user.getEmail()) != null
                         && mail.enqueue(user.getEmail(), title,
-                        personalBody(facts, counts.get(target), note)
+                        personalBody(facts, counts.get(target), note, true)
                                 + deepLinkSuffix(refReqId, planId, ctx.versions, true),
                         UserNotificationPreferenceService.RELEASE_PREP, planId)) {
                     prepMapper.markRecipientEmail(push.getId(), target);
@@ -1183,15 +1183,22 @@ public class ReleasePrepService {
                 : "你负责 " + counts.total + " 项：" + String.join("、", parts) + "。";
     }
 
-    /** 站内/邮件正文：事实句在前，第二行按收件人给准备进度；群消息没有具体收件人，不调用这里。 */
-    private String personalBody(String facts, OwnerPrepCounts counts, String note) {
-        String line;
+    /**
+     * 站内/邮件正文：事实句 + 按人准备进度。
+     * 站内只有两行可见，事实句必须短到一行；邮件没有这个限制，可补行动句。
+     */
+    private String personalBody(String facts, OwnerPrepCounts counts, String note, boolean mail) {
+        String progress;
+        String action;
         if (counts == null || counts.total == 0) {
-            line = facts + "；请知悉本次发布安排。\n你没有负责本计划的工作项，可点开查看计划范围。";
+            progress = "你没有负责本计划的工作项，可点开查看计划范围。";
+            action = "请知悉本次发布安排。";
         } else {
-            line = facts + "；请确认你负责的工作项。点开逐项确认。\n" + progressLine(counts);
+            progress = progressLine(counts);
+            action = "请确认你负责的工作项。";
         }
-        return note == null ? line : line + "\n补充说明：" + note;
+        String text = mail ? facts + "；" + action + "\n" + progress : facts + "\n" + progress;
+        return note == null ? text : text + "\n补充说明：" + note;
     }
 
     /** 里程碑提醒只在负责人既有准备进度时补第二行，关注者保持一句提醒。 */
