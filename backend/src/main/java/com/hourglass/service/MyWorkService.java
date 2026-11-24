@@ -66,6 +66,8 @@ public class MyWorkService {
         int claimableBase = taskQuery.countMyWork(userId, displayName, "test", false, true);
         int claimable = Math.max(0, claimableBase - testCount);
         int watchedTasks = taskQuery.countMyWork(userId, displayName, "watch", false, false);
+        /* 我发起的工作项：跨空间，与 /api/my-tasks?view=created 同一口径 */
+        int createdTasks = taskQuery.countMyWork(userId, displayName, "created", false, false);
 
         /* 需求限定当前空间 */
         MyDemandQuery created = demandQuery(workspaceId, userId, displayName, "created");
@@ -93,6 +95,7 @@ public class MyWorkService {
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("pending", pending);
         res.put("created", createdCount);
+        res.put("createdTasks", createdTasks);
         res.put("watched", watchedTasks + watchedDemands + watchedPlans);
         res.put("watchedTasks", watchedTasks);
         res.put("watchedDemands", watchedDemands);

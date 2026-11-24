@@ -47,7 +47,7 @@ This chain can also be read as the team's "project memory": plans, completions a
 
 ### My
 
-- **My Work**: a role-based workbench with tabs "To handle / Created by me / Watching". "To handle" groups my development items, tests I lead, test plans I execute and demands awaiting my review; review claims, cross-workspace work items and batched loading are supported; space owners and admins also get a "Team" tab for this week's delivery. Test plans and review demands are current-workspace only
+- **My Work**: a role-based workbench with tabs "To handle / Created by me / Watching". "To handle" groups my development items, tests I lead, test plans I execute and demands awaiting my review; review claims, cross-workspace work items and batched loading are supported; "Created by me" covers demands I submitted and work items I created (work items span workspaces and include completed and canceled ones); space owners and admins also get a "Team" tab for this week's delivery. Test plans and review demands are current-workspace only
 - **Messages**: a full in-app notification page backed by the same data as the bell, with favorites, deep links and mark-all-read
 - **Weekly Retrospective**: automatically summarizes the week's completed, pending-confirmation, and in-progress work; optional AI-drafted weekly report
 

@@ -41,7 +41,7 @@ public class MyTasksQuery {
     private boolean nameOnly;
     /** true=「待我测试」口径（我负责测试 + 我能写项目里无人认领的待测试） */
     private boolean testScope;
-    /** 个人工作台视图：dev / test / watch / pending；null 表示沿用旧口径 */
+    /** 个人工作台视图：dev / test / watch / pending / created；null 表示沿用旧口径 */
     private String view;
     /** 只算测试负责人是我，不含可领取队列 */
     private boolean strictTest;
@@ -49,6 +49,8 @@ public class MyTasksQuery {
     private boolean watchView;
     /** view=pending：开发负责人或测试负责人的并集（去重） */
     private boolean pendingView;
+    /** view=created：创建人是我（task.created_by_user_id） */
+    private boolean createdView;
     private int offset;
     private int limit = 100;
 
@@ -268,6 +270,7 @@ public class MyTasksQuery {
         this.view = view;
         this.watchView = "watch".equals(view);
         this.pendingView = "pending".equals(view);
+        this.createdView = "created".equals(view);
     }
 
     public boolean isStrictTest() {
@@ -284,6 +287,10 @@ public class MyTasksQuery {
 
     public boolean isPendingView() {
         return pendingView;
+    }
+
+    public boolean isCreatedView() {
+        return createdView;
     }
 
     public int getOffset() {

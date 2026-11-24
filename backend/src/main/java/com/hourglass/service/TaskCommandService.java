@@ -146,6 +146,8 @@ public class TaskCommandService {
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
+        /* 创建人只在这里写：后续编辑、转派、流转都不改（sql/124） */
+        t.setCreatedByUserId(Texts.trimToNull(userId));
         applyRequest(userId, workspaceId, t, req, null, null, null);
         applyTestOwner(workspaceId, t, req, null);
         assertDemandProjectUnchanged(workspaceId, t.getDemandId(), demandProject);

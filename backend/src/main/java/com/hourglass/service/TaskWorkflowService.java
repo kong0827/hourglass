@@ -813,6 +813,8 @@ public class TaskWorkflowService {
         nt.setOwner(doneTask.getOwner());
         /* N-2 / N-1：下一次循环任务继承身份绑定与提醒对象 */
         nt.setOwnerUserId(doneTask.getOwnerUserId());
+        /* 循环派生仍算原创建人发起的：完成的人可能是临时代办 */
+        nt.setCreatedByUserId(doneTask.getCreatedByUserId());
         nt.setRemindTarget(doneTask.getRemindTarget());
         nt.setCategoryId(doneTask.getCategoryId());
         nt.setBoardColumn(firstCol);

@@ -135,8 +135,9 @@ public class TaskQueryService {
     }
 
     /**
-     * 个人工作台：view=dev / test / watch / pending。
-     * strictTest=true 时测试队列只含测试负责人是我，不含可领取项。
+     * 个人工作台：view=dev / test / watch / pending / created。
+     * strictTest=true 时测试队列只含测试负责人是我，不含可领取项；
+     * created 取创建人是我，跨空间且不过滤终态。
      */
     public MyTasksPage myTasksPage(String userId, String displayName, boolean openOnly, boolean testScope,
                                    String view, boolean strictTest, BoardQuery query, int offset, int limit) {
@@ -189,9 +190,13 @@ public class TaskQueryService {
         }
         /* 跨空间收件箱：逐条下发 write/read，前端据此收敛完成/计时/改期等入口 */
         projectAccess.markWritable(userId, list);
-        /* 仅按显示名匹配的条数：同一 WHERE 再叠加 owner_user_id IS NULL，覆盖全量而非本页 */
-        pageQuery.setNameOnly(true);
-        int nameOnly = taskMapper.countMyTasks(pageQuery);
+        /* 仅按显示名匹配的条数：同一 WHERE 再叠加 owner_user_id IS NULL，覆盖全量而非本页。
+           创建人口径没有「仅显示名」概念，不做第二次 COUNT。 */
+        int nameOnly = 0;
+        if (!"created".equals(view)) {
+            pageQuery.setNameOnly(true);
+            nameOnly = taskMapper.countMyTasks(pageQuery);
+        }
         return new MyTasksPage(list, total, taskMapper.selectMyTaskWorkspaces(pageQuery), nameOnly);
     }
 

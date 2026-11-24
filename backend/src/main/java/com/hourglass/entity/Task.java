@@ -100,6 +100,8 @@ public class Task {
     /* ---- 2026-10-16 评估报告改造新增（见 sql/03_report_2026-10-16.sql） ---- */
     /** 负责人账号ID（N-2 身份绑定）；为空时业务回落 owner 显示名文本 */
     private String ownerUserId;
+    /** 创建人账号ID（sql/124）；建单时写入当前账号，历史数据由 task_log 回填 */
+    private String createdByUserId;
     /** 提醒谁（N-1）：owner / owner+admin */
     private String remindTarget;
     /** 是否被阻塞（N-4 卡点） */

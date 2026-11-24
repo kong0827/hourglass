@@ -28,7 +28,7 @@ public class MyWorkController {
         this.myWorkService = myWorkService;
     }
 
-    /** 页签徽标：待我处理（工作项并集 + 待评审）/ 我发起的 / 我关注的 */
+    /** 页签徽标：待我处理（工作项并集 + 待评审）/ 我发起的（需求 + 工作项）/ 我关注的 */
     @GetMapping("/api/my-work/counts")
     public ApiResult<Map<String, Object>> counts(@CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(myWorkService.counts(ctx.getWsId(), ctx.getUserId()));

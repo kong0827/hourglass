@@ -67,13 +67,6 @@ var RELEASE_META = {
   completed: { label: "已完成", tone: "green" },
   canceled: { label: "已取消", tone: "gray" }
 };
-var DEMAND_CHIPS = [
-  { key: "all", label: "全部" },
-  { key: "review", label: "评审中" },
-  { key: "pass", label: "已通过" },
-  { key: "plan", label: "已排期" },
-  { key: "done", label: "已完成" }
-];
 var PENDING_DEFS = {
   dev: {
     title: "我负责的开发", icon: "board", tint: "blue",
@@ -101,9 +94,9 @@ var PENDING_DEFS = {
   }
 };
 var CREATED_DEF = {
-  title: "我发起的需求", icon: "demand", tint: "green",
-  desc: "按最近更新排序；状态含评审、排期与完成",
-  head: ["需求", "状态", "优先级", "期望上线", "最近更新"], grid: "mw-g-demand",
+  title: "我发起的事项", icon: "demand", tint: "green",
+  desc: "需求按最近更新排序，含评审、排期与完成；工作项按看板状态与截止日期跟踪",
+  head: ["事项", "状态", "优先级", "期望 / 截止", "最近更新"], grid: "mw-g-demand",
   go: "demands", unit: "个"
 };
 var WATCH_DEF = {
@@ -126,7 +119,7 @@ function page0() { return { items: [], offset: 0, hasMore: false, total: 0 }; }
 function freshSrc() {
   return {
     pending: { tasks: page0(), review: page0(), plans: page0() },
-    created: { items: [], offset: 0, hasMore: false, total: 0, statusCounts: null },
+    created: { demands: page0(), tasks: page0(), statusCounts: null },
     watched: { tasks: page0(), demands: page0(), plans: page0() }
   };
 }
@@ -205,7 +198,7 @@ function tabCount(key) {
     var all = pendingData();
     loaded = all.dev.length + all.test.length + all.review.length + all.plan.length;
   } else if (key === "created") {
-    server = num(mw.counts.created);
+    server = num(mw.counts.created) + num(mw.counts.createdTasks);
     loaded = createdData().length;
   } else {
     server = num(mw.counts.watched);
@@ -399,13 +392,12 @@ function autoPick() {
 function fetchTasks(view, scope, offset) {
   return API.getGlobal("/api/my-tasks", { view: view, scope: scope, offset: offset, limit: PAGE });
 }
-function createdStatus() {
-  return mw.chip.created === "all" ? "" : mw.chip.created;
-}
 function fetchDemands(view, offset) {
-  var p = { view: view, offset: offset, limit: PAGE };
-  if (view === "created" && createdStatus()) p.status = createdStatus();
-  return API.get("/api/my-demands", p);
+  return API.get("/api/my-demands", { view: view, offset: offset, limit: PAGE });
+}
+/* 我发起的工作项：跨空间，含已完成与已取消（scope=all） */
+function fetchCreatedTasks(offset) {
+  return fetchTasks("created", "all", offset);
 }
 function fetchTestPlans(offset) {
   return API.get("/api/my-work/test-plans", { offset: offset, limit: PAGE });
@@ -431,8 +423,11 @@ function applySource(tab, key, res, append) {
     return;
   }
   if (tab === "created") {
-    src.created = mergePage(src.created, res, append);
-    if (res && res.statusCounts) src.created.statusCounts = res.statusCounts;
+    if (key === "createdTasks") src.created.tasks = mergePage(src.created.tasks, res, append);
+    else {
+      src.created.demands = mergePage(src.created.demands, res, append);
+      if (res && res.statusCounts) src.created.statusCounts = res.statusCounts;
+    }
     return;
   }
   if (tab === "watched") {
@@ -443,12 +438,12 @@ function applySource(tab, key, res, append) {
 }
 function resetTabSource(tab) {
   if (tab === "pending") mw.src.pending = { tasks: page0(), review: page0(), plans: page0() };
-  else if (tab === "created") mw.src.created = { items: [], offset: 0, hasMore: false, total: 0, statusCounts: mw.src.created.statusCounts };
+  else if (tab === "created") mw.src.created = { demands: page0(), tasks: page0(), statusCounts: mw.src.created.statusCounts };
   else if (tab === "watched") mw.src.watched = { tasks: page0(), demands: page0(), plans: page0() };
 }
 function allDemandItems() {
   return (mw.src.pending.review.items || [])
-    .concat(mw.src.created.items || [])
+    .concat(mw.src.created.demands.items || [])
     .concat(mw.src.watched.demands.items || []);
 }
 function ensureReqNames() {
@@ -494,9 +489,13 @@ function loadTab(tab, opts) {
       jobs.push({ key: "review", run: function () { return fetchDemands("review", rOff); } });
     }
   } else if (tab === "created") {
-    var cOff = append ? mw.src.created.offset : 0;
-    if (!append || mw.src.created.hasMore) {
-      jobs.push({ key: "created", run: function () { return fetchDemands("created", cOff); } });
+    var cdOff = append ? mw.src.created.demands.offset : 0;
+    var ctOff = append ? mw.src.created.tasks.offset : 0;
+    if (!append || mw.src.created.demands.hasMore) {
+      jobs.push({ key: "created", run: function () { return fetchDemands("created", cdOff); } });
+    }
+    if (!append || mw.src.created.tasks.hasMore) {
+      jobs.push({ key: "createdTasks", run: function () { return fetchCreatedTasks(ctOff); } });
     }
   } else if (tab === "watched") {
     var wtOff = append ? mw.src.watched.tasks.offset : 0;
@@ -530,7 +529,7 @@ function runJobs(tab, jobs, append, seq) {
   var spaces = [];
   var tracked = jobs.map(function (j) {
     var p = j.run();
-    if (j.key === "tasks") p = p.then(function (res) {
+    if (j.key === "tasks" || j.key === "createdTasks") p = p.then(function (res) {
       if (res && res.spaces) spaces = spaces.concat(res.spaces);
       return res;
     });
@@ -618,6 +617,9 @@ function rowPass(r) {
       if (chip === "demand" && r.kind !== "demand") return false;
       if (chip === "release" && r.kind !== "release") return false;
       if (chip === "today" && !isTodayTs(r.updatedRaw)) return false;
+    } else if (tab === "created") {
+      if (chip === "demand" && r.kind !== "demand") return false;
+      if (chip === "task" && r.kind !== "task") return false;
     }
   }
   return true;
@@ -634,8 +636,10 @@ function sortRows(rows) {
     });
   } else if (key === "expect") {
     arr.sort(function (a, b) {
-      var x = a.expect ? parseDate(a.expect).getTime() : Infinity;
-      var y = b.expect ? parseDate(b.expect).getTime() : Infinity;
+      /* 需求看期望上线，工作项看截止日期：合并列表按「最近的时间节点」排，未定的排最后 */
+      var xv = a.expect || a.dueDate, yv = b.expect || b.dueDate;
+      var x = xv ? parseDate(xv).getTime() : Infinity;
+      var y = yv ? parseDate(yv).getTime() : Infinity;
       return x - y || byTitle(a, b);
     });
   } else if (key === "due" && tab === "pending") {
@@ -679,9 +683,11 @@ function titleCell(r, view) {
       if (r.version) bits.push('<span class="vtag">' + esc(r.version) + '</span>');
     }
   } else {
+    if (view === "created") bits.push(typeTag(r));
     if (r.project) bits.push(esc(r.project));
     if (r.version) bits.push('<span class="vtag">' + esc(r.version) + '</span>');
     if (r.kind === "demand" && r.reviewer) bits.push('评审人 ' + esc(r.reviewer));
+    if (view === "created" && r.kind === "task" && r.submitter) bits.push('负责人 ' + esc(r.submitter));
   }
   if (!bits.length) bits.push('<span class="mw-muted">未归属项目</span>');
   return '<div class="mw-tcell"><div class="mw-ttl" title="' + esc(r.title) + '">' + esc(r.title) + '</div>' +
@@ -736,6 +742,10 @@ function expectCell(r) {
   if (!r.expect) return '<span class="mw-muted">未定</span>';
   return esc(fmtShortMD(parseDate(r.expect)));
 }
+/* 合并列表第 4 列：需求是期望上线，工作项是截止日期 */
+function nodeCell(r) {
+  return r.kind === "demand" ? expectCell(r) : dueCell(r);
+}
 function submitCell(r) {
   if (!r.createdTs) return '<span class="mw-muted">—</span>';
   var wait = Math.max(0, dayDiff(rt.TODAY, new Date(r.createdTs)));
@@ -786,8 +796,8 @@ function reviewRow(r) {
     '</div><div>' + priCell(r) + '</div><div>' + expectCell(r) + '</div><div>' + submit + '</div></div>';
 }
 function createdRow(r) {
-  return '<div class="mw-row mw-g-demand"' + rowAttrs(r, "created") + '>' + titleCell(r) + '<div>' + statusCell(r) +
-    '</div><div>' + priCell(r) + '</div><div>' + expectCell(r) + '</div><div>' + updatedCell(r) + '</div></div>';
+  return '<div class="mw-row mw-g-demand"' + rowAttrs(r, "created") + '>' + titleCell(r, "created") + '<div>' + statusCell(r) +
+    '</div><div>' + priCell(r) + '</div><div>' + nodeCell(r) + '</div><div>' + updatedCell(r) + '</div></div>';
 }
 function watchedRow(r) {
   var upd = '<div class="mw-cell-upd"><span>' + updatedCell(r) + '</span>' +
@@ -852,7 +862,9 @@ function pendingData() {
   return { dev: dev, test: test, review: review, plan: plan };
 }
 function createdData() {
-  return (mw.src.created.items || []).map(function (d) { return demandRow(d); });
+  var demands = (mw.src.created.demands.items || []).map(function (d) { return demandRow(d); });
+  var tasks = (mw.src.created.tasks.items || []).map(function (t) { return taskRow(t, "dev"); });
+  return demands.concat(tasks);
 }
 function watchedData() {
   var tasks = (mw.src.watched.tasks.items || []).map(function (t) { return taskRow(t, "watch"); });
@@ -916,8 +928,8 @@ function moreLine(tab) {
     loaded = mw.src.pending.tasks.items.length + mw.src.pending.review.items.length + mw.src.pending.plans.items.length;
     total = mw.src.pending.tasks.total + mw.src.pending.review.total + mw.src.pending.plans.total;
   } else if (tab === "created") {
-    loaded = mw.src.created.items.length;
-    total = mw.src.created.total;
+    loaded = mw.src.created.demands.items.length + mw.src.created.tasks.items.length;
+    total = mw.src.created.demands.total + mw.src.created.tasks.total;
   } else if (tab === "watched") {
     loaded = mw.src.watched.tasks.items.length + mw.src.watched.demands.items.length
       + mw.src.watched.plans.items.length;
@@ -970,19 +982,26 @@ function briefHTML() {
   }
   if (tab === "created") {
     var rows = createdData();
-    var createdTotal = Math.max(mw.counts ? num(mw.counts.created) : 0, rows.length);
+    var demandTotal = mw.counts ? num(mw.counts.created) : 0;
+    var taskTotal = mw.counts ? num(mw.counts.createdTasks) : 0;
+    var createdTotal = Math.max(demandTotal + taskTotal, rows.length);
     if (!createdTotal && !rows.length) {
-      return '<span class="mw-txt"><strong>你还没有发起过需求</strong> · 提交后可在这里跟踪评审与排期。</span>' + metaHTML();
+      return '<span class="mw-txt"><strong>你还没有发起过事项</strong> · 提交需求或创建工作项后可在这里跟踪进展。</span>' + metaHTML();
     }
     var sc = mw.src.created.statusCounts || {};
-    var bits = [];
-    if (sc.review) bits.push(sc.review + " 个评审中");
-    if (sc.pass) bits.push(sc.pass + " 个已通过");
-    if (sc.plan) bits.push(sc.plan + " 个已排期");
-    if (sc.done) bits.push(sc.done + " 个已完成");
-    var waiting = rows.filter(function (r) { return r.status === "review"; })[0];
-    return '<span class="mw-bic">' + icon("demand", 15) + '</span><span class="mw-txt"><strong>' + createdTotal + ' 个需求</strong> · ' +
-      esc(bits.join("，") || "还没有进入评审与排期的需求") + (waiting ? '；「' + esc(waiting.title) + '」正在等待评审。' : '。') + '</span>' + metaHTML();
+    var parts = [];
+    if (demandTotal) {
+      var st = [];
+      if (sc.review) st.push(sc.review + " 评审中");
+      if (sc.pass) st.push(sc.pass + " 已通过");
+      if (sc.plan) st.push(sc.plan + " 已排期");
+      if (sc.done) st.push(sc.done + " 已完成");
+      parts.push(demandTotal + " 个需求" + (st.length ? "（" + st.join("、") + "）" : ""));
+    }
+    if (taskTotal) parts.push(taskTotal + " 个工作项");
+    var waiting = rows.filter(function (r) { return r.kind === "demand" && r.status === "review"; })[0];
+    return '<span class="mw-bic">' + icon("demand", 15) + '</span><span class="mw-txt"><strong>' + createdTotal + ' 个事项</strong> · ' +
+      esc(parts.join("、") || "提交后会在这里跟踪") + (waiting ? '；「' + esc(waiting.title) + '」正在等待评审。' : '。') + '</span>' + metaHTML();
   }
   var wrows = watchedData();
   var tasks = Math.max(mw.counts ? num(mw.counts.watchedTasks) : 0, (mw.src.watched.tasks.items || []).length);
@@ -1030,10 +1049,19 @@ function chipsFor(tab) {
     ];
   }
   if (tab === "created") {
-    var sc = mw.src.created.statusCounts || {};
-    return DEMAND_CHIPS.map(function (c) {
-      return { key: c.key, label: c.label, n: c.key === "all" ? num(sc.all) : num(sc[c.key]) };
-    });
+    if (!mw.counts) {
+      var crows = createdData().filter(rowPassBase);
+      return [
+        { key: "all", label: "全部", n: crows.length },
+        { key: "demand", label: "需求", n: crows.filter(function (r) { return r.kind === "demand"; }).length },
+        { key: "task", label: "工作项", n: crows.filter(function (r) { return r.kind === "task"; }).length }
+      ];
+    }
+    return [
+      { key: "all", label: "全部", n: num(mw.counts.created) + num(mw.counts.createdTasks) },
+      { key: "demand", label: "需求", n: num(mw.counts.created) },
+      { key: "task", label: "工作项", n: num(mw.counts.createdTasks) }
+    ];
   }
   var w = watchedData().filter(rowPassBase);
   return [
@@ -1065,7 +1093,7 @@ function sortOptions(tab) {
     return [
       { key: "updated", label: "最近更新" },
       { key: "priority", label: "优先级" },
-      { key: "expect", label: "期望上线" }
+      { key: "expect", label: "期望 / 截止" }
     ];
   }
   if (tab === "watched") {
@@ -1243,7 +1271,7 @@ function resetTabData(tab) {
 }
 function tabHasData(tab) {
   if (tab === "pending") return !!(mw.src.pending.tasks.items.length || mw.src.pending.review.items.length || mw.src.pending.plans.items.length);
-  if (tab === "created") return !!mw.src.created.items.length;
+  if (tab === "created") return !!(mw.src.created.demands.items.length || mw.src.created.tasks.items.length);
   if (tab === "watched") return !!(mw.src.watched.tasks.items.length || mw.src.watched.demands.items.length || mw.src.watched.plans.items.length);
   return false;
 }
@@ -1251,7 +1279,7 @@ function tabRawEmpty(tab) {
   if (tabHasData(tab)) return false;
   if (mw.counts) return num(tabCount(tab)) === 0;
   if (tab === "pending") return !mw.src.pending.tasks.total && !mw.src.pending.review.total && !mw.src.pending.plans.total && !tabHasData(tab);
-  if (tab === "created") return !mw.src.created.total && !tabHasData(tab);
+  if (tab === "created") return !mw.src.created.demands.total && !mw.src.created.tasks.total && !tabHasData(tab);
   if (tab === "watched") return !mw.src.watched.tasks.total && !mw.src.watched.demands.total && !mw.src.watched.plans.total && !tabHasData(tab);
   return true;
 }
@@ -1299,12 +1327,12 @@ function emptyHTML() {
         : [["去项目页看看", "primary", "projects"], ["去需求池看看", "", "demands"]]
     },
     created: {
-      t: "你还没有发起过需求",
+      t: "你还没有发起过事项",
       d: canNew
-        ? "提交需求后，评审、排期与完成进展都会在这里更新，不需要再去需求池逐个查找。"
-        : "需求需要落在可写项目里；获得项目写权限后，才能发起需求并在这里跟踪进展。",
+        ? "提交需求或创建工作项后，评审、排期与完成进展都会在这里更新，不需要再去列表里逐个查找。"
+        : "需求和工作项都需要落在可写项目里；获得项目写权限后，才能在这里跟踪进展。",
       a: canNew
-        ? [["提一个需求", "primary", "demand"], ["去需求池看看", "", "demands"]]
+        ? [["新建工作项", "primary", "task"], ["提一个需求", "", "demand"], ["去需求池看看", "", "demands"]]
         : [["去需求池看看", "primary", "demands"], ["去项目页看看", "", "projects"]]
     },
     watched: {
@@ -1326,7 +1354,7 @@ function noteText() {
   var tab = currentTab();
   var bits = [];
   if (tab === "pending") bits.push("页签计数来自服务端；逾期、今天到期与阻塞按已载入明细统计，继续加载会更新结论。「待我执行」只列执行人是你、尚未完成的测试计划。工作项与测试计划可跨空间，评审需求限定当前空间。");
-  else if (tab === "created") bits.push("页签计数来自服务端；状态 chips 由服务端统计，搜索与优先级筛选只作用于已载入需求。需求按当前空间统计。");
+  else if (tab === "created") bits.push("页签计数来自服务端；需求按当前空间统计，工作项跨空间（含已完成与已取消）。类型 chips 与页签计数同源，搜索与优先级筛选只作用于已载入内容。");
   else bits.push("关注只接收提醒，不代表负责；列表只读，取消关注不会删除对象。工作项可跨空间，需求与发布计划限定当前空间。");
   bits.push("每类先载入 " + PAGE + " 条，继续加载会追加；搜索与筛选只作用于已载入内容。");
   if (tab === "created" && mw.counts && num(mw.counts.matchedByNameOnly) > 0) {
@@ -1338,7 +1366,7 @@ function noteText() {
 function partialHTML(tab) {
   var info = mw.partialErr[tab];
   if (!info) return "";
-  var LABELS = { tasks: "工作项", review: "待我评审", plans: "测试计划", release: "关注的发布计划", created: "我发起的需求", demands: "关注的需求" };
+  var LABELS = { tasks: "工作项", review: "待我评审", plans: "测试计划", release: "关注的发布计划", created: "我发起的需求", createdTasks: "我发起的工作项", demands: "关注的需求" };
   var names = info.keys.map(function (k) { return LABELS[k] || k; }).join("、");
   return '<div class="mw-partial"><span class="mw-partial-ico">' + icon("alertCircle", 14) + '</span>' +
     '<span>' + esc(names) + '加载失败：' + esc(info.msg || "网络异常") + '；其余内容已正常显示。</span>' +
@@ -1375,7 +1403,7 @@ function syncPageHead() {
   var tail;
   if (st === "error") tail = "数据加载失败";
   else if (st === "empty") {
-    tail = currentTab() === "created" ? "还没有发起过需求" : currentTab() === "watched" ? "还没有关注任何事项" : currentTab() === "team" ? "本周团队交付概览" : "本周没有待处理事项";
+    tail = currentTab() === "created" ? "还没有发起过事项" : currentTab() === "watched" ? "还没有关注任何事项" : currentTab() === "team" ? "本周团队交付概览" : "本周没有待处理事项";
   } else if (currentTab() === "team") {
     tail = "团队交付概览";
   } else if (currentTab() === "pending") {
@@ -1389,7 +1417,7 @@ function syncPageHead() {
     if (today) b.push(today + " 项今天到期");
     tail = b.join(" · ");
   } else if (currentTab() === "created") {
-    tail = num(tabCount("created")) + " 个我发起的需求";
+    tail = num(tabCount("created")) + " 个我发起的事项";
   } else {
     tail = num(tabCount("watched")) + " 条关注";
   }
@@ -1817,15 +1845,6 @@ function setChip(key) {
   mw.chip[tab] = key || "all";
   mw.expand = {};
   closeMinePops();
-  if (tab === "created") {
-    mw.src.created.items = [];
-    mw.src.created.offset = 0;
-    mw.src.created.hasMore = false;
-    mw.src.created.total = 0;
-    render();
-    loadTab("created", {});
-    return;
-  }
   render();
 }
 function clearFilters() {
@@ -1835,7 +1854,6 @@ function clearFilters() {
   mw.chip[currentTab()] = "all";
   if (mineSearch) mineSearch.value = "";
   render();
-  if (currentTab() === "created") loadTab("created", {});
 }
 function closeMinePops() {
   if (mineFilterPop) mineFilterPop.open = false;
