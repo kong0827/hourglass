@@ -293,32 +293,47 @@ function ornamentSVG(key){
 var slot = null;
 var renderedKey = "";
 
+/* 「摆上摆件后导航会不会溢出」才是唯一判据：窗口矮但导航放得下时照常显示。
+   旧实现拿 nav.lastElementChild 量内容高度，而桌面端最后一项是 display:none 的
+   .mob-more（高度 0），永远量不出溢出；只剩 CSS 的 max-height 媒体查询在硬撑，
+   于是开关打开、窗口一矮摆件整块消失。这里临时显示槽位后直接比 scrollHeight。 */
 function navIsTight(){
   var nav = document.querySelector(".side-nav");
   if(!nav) return false;
   if(document.documentElement.getAttribute("data-layout") === "mobile") return true;
+  var wasHidden = slot.hidden;
   slot.hidden = false;
-  var band = slot.getBoundingClientRect().height;
-  slot.hidden = true;
-  if(!band){ slot.hidden = false; return false; }
-  var padBottom = parseFloat(getComputedStyle(nav).paddingBottom) || 0;
-  var last = nav.lastElementChild;
-  if(!last){ slot.hidden = false; return false; }
-  var need = last.getBoundingClientRect().bottom - nav.getBoundingClientRect().top + nav.scrollTop + padBottom;
-  var tight = need > nav.clientHeight - band - 2;
-  slot.hidden = false;
+  var tight = nav.scrollHeight > nav.clientHeight + 2;
+  slot.hidden = wasHidden;
   return tight;
+}
+
+function syncReason(){
+  var reason = $("meOrnReason");
+  if(!reason) return;
+  if(!orn.on){
+    reason.hidden = false;
+    reason.textContent = "摆件已关闭；打开上面的开关后才能切换形态。";
+    return;
+  }
+  if(slot && slot.hidden){
+    reason.hidden = false;
+    reason.textContent = "当前窗口较矮或侧栏导航已需要滚动，摆件暂时让位；窗口调高或收起展开的导航后会重新出现。";
+    return;
+  }
+  reason.hidden = true;
 }
 
 function renderSlot(force){
   slot = slot || $("sideOrnament");
   if(!slot) return;
-  if(!orn.on){ slot.hidden = true; return; }
+  if(!orn.on){ slot.hidden = true; syncReason(); return; }
   if(force || renderedKey !== orn.pick){
     slot.innerHTML = ornamentSVG(orn.pick);
     renderedKey = orn.pick;
   }
   slot.hidden = navIsTight();
+  syncReason();
 }
 
 function scheduleSync(){
@@ -370,8 +385,7 @@ function syncSettings(){
     b.disabled = !orn.on;
   });
   grid.setAttribute("aria-disabled", orn.on ? "false" : "true");
-  var reason = $("meOrnReason");
-  if(reason) reason.hidden = orn.on;
+  syncReason();
 }
 
 export function mountOrnamentSettings(){

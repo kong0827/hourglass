@@ -1,8 +1,9 @@
 /* core/ornament · 侧栏 72px 装饰摆件（经典 + 6 个形态）与「个人设置 → 外观」选择器
    约束：
    1. 只做装饰：pointer-events:none、aria-hidden，不承载进度或入口；
-   2. 导航够高才出现：导航溢出时由 side-ornament.js 隐藏，不挤导航；
-   3. 收起态 34px、移动端与矮窗口不显示；
+   2. 导航够高才出现：由 side-ornament.js 按「放上摆件后导航是否溢出」决定，
+      不按窗口高度一刀切（否则开关打开、窗口一矮摆件就消失，看起来像没生效）；
+   3. 收起态 34px、移动端不显示；
    4. 系统减少动效时停在静态帧（tokens.css 已把动画压到 0.001ms）。 */
 
 /* ---------- 侧栏槽位 ---------- */
@@ -10,7 +11,6 @@
 .side-ornament[hidden]{display:none;}
 .side-ornament > svg{display:block;width:72px;height:72px;overflow:visible;}
 @media (max-height:899px){.side-ornament{height:64px;}.side-ornament > svg{width:56px;height:56px;}}
-@media (max-height:779px){.side-ornament{display:none;}}
 body.side-rail .side-ornament{height:56px;}
 body.side-rail .side-ornament > svg{width:34px;height:34px;}
 [data-layout="mobile"] .side-ornament{display:none;}

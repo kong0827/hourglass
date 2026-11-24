@@ -50,7 +50,8 @@ try{
   const call = (m, p) => send(m, p, sessionId);
   for(const d of ["Page", "Runtime", "Network"]) await call(`${d}.enable`);
   try{ await call("Network.setBypassServiceWorker", { bypass:true }); }catch(e){}
-  await call("Emulation.setDeviceMetricsOverride", { width:1440, height:1000, deviceScaleFactor:1, mobile:false, screenWidth:1440, screenHeight:1000 });
+  const viewport = (w, h) => call("Emulation.setDeviceMetricsOverride", { width:w, height:h, deviceScaleFactor:1, mobile:false, screenWidth:w, screenHeight:h });
+  await viewport(1440, 1000);
 
   const evaluate = async expr => {
     const res = await call("Runtime.evaluate", { expression:expr, awaitPromise:true, returnByValue:true, userGesture:true });
@@ -75,6 +76,7 @@ try{
       disabled:cols.length?cols[0].disabled:null,
       on:document.getElementById("meOrnOn").checked,
       reason:!document.getElementById("meOrnReason").hidden,
+      reasonText:document.getElementById("meOrnReason").textContent.trim(),
       pref:localStorage.getItem(${JSON.stringify(PICK_KEY)})
     };
   })()`);
@@ -125,6 +127,20 @@ try{
   await sleep(350);
   s = await snapshot();
   check(s.cls === "hg" && s.pref === '{"on":true,"pick":"classic"}', "恢复默认回到经典");
+
+  /* 矮窗口回归：以前 max-height:779px 直接 display:none，开关却还是开着的 */
+  await viewport(1440, 760);
+  await sleep(400);
+  s = await snapshot();
+  check(s.hidden === false && s.cls === "hg", "窗口高 760 仍显示摆件");
+  await viewport(1440, 640);
+  await sleep(400);
+  s = await snapshot();
+  check(s.hidden === true && s.reason === true && /让位/.test(s.reasonText), "导航放不下时让位并说明原因");
+  await viewport(1440, 1000);
+  await sleep(400);
+  s = await snapshot();
+  check(s.hidden === false && s.reason === false, "窗口调高后摆件恢复、说明收起");
 
   const runtimeErrors = errors.filter(e => !/Failed to load resource/.test(e));
   check(runtimeErrors.length === 0, "无脚本异常" + (runtimeErrors.length ? "：" + runtimeErrors[0] : ""));
