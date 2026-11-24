@@ -693,10 +693,11 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .ms-detail-meta{display:grid;gap:var(--space-2);margin:0 0 12px;}
 .ms-detail-meta>div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;font-size:13px;}
 .ms-detail-meta dt{color:var(--text-3);}
-.ms-detail-meta dd{margin:0;color:var(--text-1);overflow-wrap:anywhere;}
+.ms-detail-meta dd{margin:0;color:var(--text-1);overflow-wrap:anywhere;white-space:pre-line;}
 .ms-detail-acts{margin-bottom:10px;}
 .ms-action-form{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);margin-bottom:12px;}
 .ms-action-form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--text-2);}
+.ms-action-form textarea{min-height:56px;}
 .ms-log-box{border-top:1px solid var(--border);padding-top:10px;}
 .ms-log-box>b{font-size:13px;}
 .ms-logs{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;}

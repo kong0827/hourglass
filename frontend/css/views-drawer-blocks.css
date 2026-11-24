@@ -92,6 +92,7 @@
   background:var(--surface);border:2px solid var(--primary);}
 .tl-time{display:block;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;margin-bottom:1px;}
 .tl-detail{font-size:13px;color:var(--text-2);line-height:19px;}
+.tl-reason{white-space:pre-line;}
 .tl-empty{font-size:13px;color:var(--text-3);padding:var(--space-1) 0;}
 
 /* 实体变更记录：用例编辑框与计划详情底部，复用 .timeline 的行式时间线 */

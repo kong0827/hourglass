@@ -3810,7 +3810,7 @@ export function mountReleaseWorkspace(pageHost, opts){
     }
     box.innerHTML = '<ul class="release-scope">' + verLog.rows.map(function(l){
       return '<li>' + esc(fmtReleaseTime(l.createdAt)) + ' · ' + esc(VERSION_LOG_NAME[l.action] || l.action) +
-        ' · ' + esc(l.actorName || "系统") + (l.reason ? ' · 理由：' + esc(l.reason) : '') + '</li>';
+        ' · ' + esc(l.actorName || "系统") + (l.reason ? ' · 理由：<span class="ver-log-reason">' + esc(l.reason) + '</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }
   function renderHistory(){
@@ -4659,7 +4659,7 @@ export function mountReleaseWorkspace(pageHost, opts){
       + field("计划说明", '<textarea data-plan-notes maxlength="2000"' + disabled + '>' + esc(p.notes || "") + '</textarea>')
       + field("风险与回滚方案", '<textarea data-plan-risks maxlength="1000"' + disabled + '>' + esc(p.risks || "") + '</textarea>', "建议写清回滚命令、数据兼容处理和回滚后的验证步骤。")
       + field("计划状态", '<select data-plan-status' + disabled + '>' + options([["draft", "草稿"], ["ready", "就绪"], ["canceled", "取消"]].concat(p.status === "completed" ? [["completed", "已完成（只读）"]] : []), p.status || "draft") + '</select>', "只有「就绪」计划可被实际记录直接引用；就绪需要计划时间、负责人、至少 1 个工作项和目标键。草稿、取消或已完成会触发偏差校验，需要填写理由。")
-      + (!locked ? '<div class="release-save-bar">' + field("新建 / 修改理由", '<input data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划">', "", true) + '<p class="release-error" data-plan-error role="alert"></p><div class="release-save-acts"><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button></div></div>' : '<p class="hint">此计划只读</p>') + '</section>';
+      + (!locked ? '<div class="release-save-bar">' + field("新建 / 修改理由", '<textarea class="textarea" rows="2" data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划"></textarea>', "", true) + '<p class="release-error" data-plan-error role="alert"></p><div class="release-save-acts"><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button></div></div>' : '<p class="hint">此计划只读</p>') + '</section>';
     var actualSection = mayPublish ? '<div class="release-actual"><section class="release-section release-actual-main"><h3>实际发布事实</h3><p class="hint">只填本次真实发生的交付；失败、测试和回滚记录不等于生产生效。</p><div class="form-grid">'
         + field("本次关联计划", '<select data-release-planId' + actualDisabled + '>' + actualPlanOptions(a) + '</select>', "关联计划用于预检对比；无计划即紧急记录。环境或状态不一致的计划仍可选择，但必须填写原因。", false, planSummaryHTML(a))
         + field("实际发生时间（本地）", '<input type="datetime-local" step="60" data-release-occurredAt value="' + esc(a.occurredAt) + '"' + actualDisabled + '>', "真实发生时间，不能晚于当前时间；与计划时间不同需填写原因。", true)

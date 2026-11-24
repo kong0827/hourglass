@@ -399,7 +399,7 @@ body[data-view="version"] #pageHead{display:none;}
 .vd-log-body{display:flex;align-items:baseline;gap:var(--space-2);flex-wrap:wrap;min-width:0;}
 .vd-log-body > b{font-weight:600;color:var(--text);}
 .vd-log-actor{color:var(--text-2);}
-.vd-log-reason{color:var(--text-3);word-break:break-word;}
+.vd-log-reason{color:var(--text-3);word-break:break-word;white-space:pre-line;}
 
 /* ---------- 版本选择器（无 id 深链） ---------- */
 .vd-pick-list{display:flex;flex-direction:column;gap:6px;}

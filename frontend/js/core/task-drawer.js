@@ -2565,7 +2565,7 @@ function renderTimeline(logs){
     if(change){
       var before = change.before || {}, after = change.after || {};
       if(l.action === "version_change") extra += '<br>计划版本：' + esc(taskVersionsText(before) || "待规划") + ' → ' + esc(taskVersionsText(after) || "待规划");
-      if(change.reason) extra += '<br>理由：' + esc(change.reason);
+      if(change.reason) extra += '<br>理由：<span class="tl-reason">' + esc(change.reason) + '</span>';
     }
     return '<div class="tl-item"><span class="tl-time">' + esc(fmtTs(l.createdAt)) + '</span>' +
       '<span class="tl-detail">' + actor + esc(txt) + extra + '</span></div>';

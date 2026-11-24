@@ -304,6 +304,7 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .release-record .phase-tbl{min-width:800px;}
 .release-scope,.release-history{margin:0;padding-left:20px;font-size:13px;line-height:1.8;}
 .release-scope{max-height:260px;overflow:auto;}
+.ver-log-reason{white-space:pre-line;}
 .release-history p{margin:0 0 8px;}
 .task-published-badge{font-size:11px;vertical-align:middle;white-space:nowrap;}
 

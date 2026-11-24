@@ -229,7 +229,7 @@ public class ProjectMilestoneService {
             throw new AppException(409, "里程碑已被其他人修改，请刷新后重试");
         }
         log(workspaceId, id, "reschedule",
-                milestone.getTargetDate() + " → " + request.getTargetDate() + " · " + reason, userId);
+                milestone.getTargetDate() + " → " + request.getTargetDate() + " · " + inline(reason), userId);
         return detail(workspaceId, id, userId);
     }
 
@@ -249,7 +249,7 @@ public class ProjectMilestoneService {
         if (milestoneMapper.cancel(workspaceId, id, reason, milestone.getRevision()) != 1) {
             throw new AppException(409, "里程碑已被其他人修改，请刷新后重试");
         }
-        log(workspaceId, id, "cancel", "取消里程碑 · " + reason, userId);
+        log(workspaceId, id, "cancel", "取消里程碑 · " + inline(reason), userId);
         return detail(workspaceId, id, userId);
     }
 
@@ -270,7 +270,7 @@ public class ProjectMilestoneService {
             throw new AppException(409, "里程碑已被其他人修改，请刷新后重试");
         }
         log(workspaceId, id, "achieve",
-                "确认达成" + (note == null ? "" : " · " + note), userId);
+                "确认达成" + (note == null ? "" : " · " + inline(note)), userId);
         return detail(workspaceId, id, userId);
     }
 
@@ -291,7 +291,7 @@ public class ProjectMilestoneService {
             throw new AppException(409, "里程碑已被其他人修改，请刷新后重试");
         }
         log(workspaceId, id, "revoke",
-                "撤销达成" + (reason == null ? "" : " · " + reason), userId);
+                "撤销达成" + (reason == null ? "" : " · " + inline(reason)), userId);
         return detail(workspaceId, id, userId);
     }
 
@@ -423,6 +423,11 @@ public class ProjectMilestoneService {
             throw AppException.badRequest(message);
         }
         return Texts.cut(reason, 500);
+    }
+
+    /** 动态是一行句子；原因/说明里的换行折叠成「；」，字段本身仍保留原文。 */
+    private static String inline(String value) {
+        return value == null ? null : value.replaceAll("\\s*[\\r\\n]+\\s*", "；");
     }
 
     private Map<String, AppUser> usersOf(List<ProjectMilestone> milestones, Requirement req) {

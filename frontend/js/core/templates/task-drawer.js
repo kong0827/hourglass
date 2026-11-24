@@ -778,7 +778,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             </div>
             <div class="field" id="fVersionChangeReason" hidden>
               <label class="field-label" for="iVersionChangeReason">版本调整理由 <span class="req">*</span></label>
-              <input id="iVersionChangeReason" type="text" maxlength="500" placeholder="说明顺延、解除计划或偏离需求目标的原因" />
+              <textarea id="iVersionChangeReason" class="textarea" rows="2" maxlength="500" placeholder="说明顺延、解除计划或偏离需求目标的原因"></textarea>
             </div>
             <div class="field">
               <div class="field-label">

@@ -972,7 +972,12 @@ public class VersionReleaseService {
         change.put("reason", reason);
         mapper.insertTaskChangeLog(workspaceId, task.getId(), userId,
                 Texts.cut("计划交付版本：" + Objects.toString(task.getVersionNames(), "无") + " → "
-                        + Objects.toString(versionName, "无") + "；" + reason, 255), encode(change));
+                        + Objects.toString(versionName, "无") + "；" + inline(reason), 255), encode(change));
+    }
+
+    /** 工作项动态是单行摘要；理由里的换行折叠成「；」，change_data 里仍留原文。 */
+    private static String inline(String value) {
+        return value == null ? null : value.replaceAll("\\s*[\\r\\n]+\\s*", "；");
     }
 
     /**
