@@ -75,6 +75,17 @@ public class NotificationEventService {
     }
 
     /**
+     * 邮件与站内分别给文案：站内保持一句短消息（列表只显示两行），
+     * 邮件可带上操作人、工作项快照等详情。mailTitle/mailBody 传 null 时沿用站内文案。
+     */
+    public void notifyWithMail(String recipientUserId, String workspaceId, String eventType,
+                               String title, String body, String referenceId, String targetReqId,
+                               String mailTitle, String mailBody) {
+        deliver(recipientUserId, workspaceId, eventType, eventType, title, body,
+                referenceId, null, null, targetReqId, true, null, mailTitle, mailBody);
+    }
+
+    /**
      * 投递 @ 提及通知：站内类型为 {@link #MENTION_TYPE}，偏好与邮件链接仍按评论事件处理。
      * 这样「提及我」筛选能命中，同时不新增一个需要用户单独配置的偏好项。
      */
@@ -103,7 +114,7 @@ public class NotificationEventService {
                                 String title, String body, String refKind, String refId,
                                 String targetReqId, String mailSuffix) {
         return deliver(recipientUserId, workspaceId, eventType, eventType, title, body,
-                null, refKind, refId, targetReqId, true, mailSuffix).ok;
+                null, refKind, refId, targetReqId, true, mailSuffix, null, null).ok;
     }
 
     /** 事件偏好与通知中心类型分开：如版本发布沿用「需求与版本动态」偏好，但按「发布」分类展示。 */
@@ -134,7 +145,7 @@ public class NotificationEventService {
                                  String notificationType, String title, String body,
                                  String refKind, String refId, boolean allowInApp) {
         return deliver(recipientUserId, workspaceId, eventType, notificationType, title, body,
-                null, refKind, refId, null, allowInApp).delivered;
+                null, refKind, refId, null, allowInApp, null, null, null).delivered;
     }
 
     /**
@@ -159,17 +170,20 @@ public class NotificationEventService {
                                     String title, String body, String refTaskId, String refKind, String refId,
                                     String targetReqId, boolean allowInApp) {
         return deliver(recipientUserId, workspaceId, eventType, notificationType, title, body,
-                refTaskId, refKind, refId, targetReqId, allowInApp, null);
+                refTaskId, refKind, refId, targetReqId, allowInApp, null, null, null);
     }
 
     /**
      * @param eventType        决定个人偏好与邮件链接规则
      * @param notificationType 实际写入站内通知中心的类型（通常与 eventType 相同）
      * @param allowInApp       是否允许写站内通知；false 时仅按个人偏好投递邮件
+     * @param mailTitle        邮件标题；null 时沿用站内标题
+     * @param mailBody         邮件正文；null 时沿用站内正文
      */
     private DeliveryOutcome deliver(String recipientUserId, String workspaceId, String eventType, String notificationType,
                                     String title, String body, String refTaskId, String refKind, String refId,
-                                    String targetReqId, boolean allowInApp, String mailSuffix) {
+                                    String targetReqId, boolean allowInApp, String mailSuffix,
+                                    String mailTitle, String mailBody) {
         if (recipientUserId == null) {
             return DeliveryOutcome.NOTHING;
         }
@@ -209,7 +223,9 @@ public class NotificationEventService {
             }
         }
         if (Boolean.TRUE.equals(preference.getEmail())) {
-            if (enqueueMail(recipientUserId, eventType, title, body, refTaskId, mailSuffix)) {
+            if (enqueueMail(recipientUserId, eventType,
+                    mailTitle != null ? mailTitle : title,
+                    mailBody != null ? mailBody : body, refTaskId, mailSuffix)) {
                 delivered = true;
             } else {
                 ok = false;

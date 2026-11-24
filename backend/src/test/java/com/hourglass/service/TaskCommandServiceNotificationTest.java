@@ -18,6 +18,8 @@ import com.hourglass.mapper.VersionTaskMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,6 +27,7 @@ import java.util.Collections;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -66,11 +69,18 @@ class TaskCommandServiceNotificationTest {
         when(users.selectById("U2")).thenReturn(owner);
         when(members.selectMember("W1", "U2")).thenReturn(mock(WorkspaceMember.class));
         when(tasks.selectById(anyString())).thenReturn(oldTask("U2"));
+        when(support.columnName("W1", "backlog")).thenReturn("待处理");
 
         service.create("U1", "W1", req);
 
-        verify(events).notify(eq("U2"), eq("W1"), eq(UserNotificationPreferenceService.TASK_ASSIGNED),
-                eq("新任务指派：new title"), anyString(), anyString(), isNull());
+        org.mockito.ArgumentCaptor<String> body = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(events).notifyWithMail(eq("U2"), eq("W1"), eq(UserNotificationPreferenceService.TASK_ASSIGNED),
+                eq("新任务指派：new title"), anyString(), anyString(), isNull(),
+                contains("给你指派了工作项：new title"), body.capture());
+        /* 新建时创建人就是操作人，不再重复「创建：」一行 */
+        org.junit.jupiter.api.Assertions.assertTrue(body.getValue().contains("标题：new title"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.getValue().contains("类型：任务　优先级：P2　状态：待处理"));
+        org.junit.jupiter.api.Assertions.assertFalse(body.getValue().contains("创建："));
     }
 
     @Test
@@ -82,9 +92,45 @@ class TaskCommandServiceNotificationTest {
 
         service.update("U3", "W1", "K1", req);
 
-        verify(events).notify(eq("U2"), eq("W1"), eq(UserNotificationPreferenceService.TASK_ASSIGNED),
-                anyString(), anyString(), eq("K1"), isNull());
+        verify(events).notifyWithMail(eq("U2"), eq("W1"), eq(UserNotificationPreferenceService.TASK_ASSIGNED),
+                eq("任务负责人变更：new title"), anyString(), eq("K1"), isNull(),
+                contains("转派给你"), contains("把工作项转派给你"));
         verifyNoMoreInteractions(events);
+    }
+
+    @Test
+    void transferMailCarriesActorSnapshotAndCreator() {
+        Task old = oldTask("U1");
+        old.setItemNo(24);
+        old.setCreatedByUserId("U9");
+        old.setCreatedAt(LocalDateTime.of(2026, 11, 19, 14, 32));
+        TaskSaveRequest req = request("U2");
+        req.setPriority("P0");
+        req.setDueDate(LocalDate.of(2026, 11, 24));
+        req.setDescription("<p>支付回调 <b>30 秒</b>无响应</p>");
+        prepareUpdate(old, req);
+        when(members.selectMember("W1", "U2")).thenReturn(mock(WorkspaceMember.class));
+        when(support.columnName("W1", "backlog")).thenReturn("待处理");
+        when(users.selectById("U3")).thenReturn(user("U3", "王五"));
+        when(users.selectById("U9")).thenReturn(user("U9", "李四"));
+
+        service.update("U3", "W1", "K1", req);
+
+        org.mockito.ArgumentCaptor<String> subject = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<String> body = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(events).notifyWithMail(eq("U2"), eq("W1"), eq(UserNotificationPreferenceService.TASK_ASSIGNED),
+                eq("任务负责人变更：new title"), eq("任务「new title」已指派给你"), eq("K1"), isNull(),
+                subject.capture(), body.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("王五 把「new title」转派给你", subject.getValue());
+        String text = body.getValue();
+        org.junit.jupiter.api.Assertions.assertTrue(text.startsWith("王五 把工作项转派给你："));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("项目：未归属项目"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("标题：new title"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("编号：WI-024"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("类型：任务　优先级：P0　状态：待处理"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("截止：2026-11-24"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("创建：李四 · 2026-11-19 14:32"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("描述：支付回调 30 秒无响应"));
     }
 
     @Test
@@ -184,6 +230,13 @@ class TaskCommandServiceNotificationTest {
         when(users.selectById(req.getOwnerUserId())).thenReturn(owner);
         when(audit.diffParts(eq("W1"), eq(old), any(Task.class), anyList(), any()))
                 .thenReturn(new ArrayList<String>(Arrays.asList("标题", "截止日期")));
+    }
+
+    private AppUser user(String id, String name) {
+        AppUser u = new AppUser();
+        u.setId(id);
+        u.setDisplayName(name);
+        return u;
     }
 
     private TaskSaveRequest request(String ownerId) {

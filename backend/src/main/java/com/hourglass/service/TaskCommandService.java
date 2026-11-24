@@ -210,9 +210,12 @@ public class TaskCommandService {
         log.info("创建工作项：id={} 项目={} 列={} 标题={}", id, t.getReqId(), t.getBoardColumn(),
                 Texts.cut(t.getTitle(), 60));
         if (t.getOwnerUserId() != null && !t.getOwnerUserId().equals(userId)) {
-            notificationEvents.notify(t.getOwnerUserId(), workspaceId,
+            String actor = actorDisplayName(userId);
+            notificationEvents.notifyWithMail(t.getOwnerUserId(), workspaceId,
                     UserNotificationPreferenceService.TASK_ASSIGNED,
-                    "新任务指派：" + t.getTitle(), "任务「" + t.getTitle() + "」已指派给你", id, t.getReqId());
+                    "新任务指派：" + t.getTitle(), "任务「" + t.getTitle() + "」已指派给你", id, t.getReqId(),
+                    actor + " 给你指派了工作项：" + t.getTitle(),
+                    assignedMailBody(workspaceId, actor, t, "指派", null, null));
         }
         notifyTestOwner(userId, workspaceId, t, "测试任务：");
         if (t.getDemandId() != null) {
@@ -403,9 +406,13 @@ public class TaskCommandService {
         boolean ownerChanged = !Objects.equals(old.getOwnerUserId(), t.getOwnerUserId());
         if (ownerChanged && t.getOwnerUserId() != null && !t.getOwnerUserId().equals(userId)) {
             // 同一次保存即使还改了标题、日期等，也只合并为一条负责人变更通知。
-            notificationEvents.notify(t.getOwnerUserId(), workspaceId,
+            String actor = actorDisplayName(userId);
+            notificationEvents.notifyWithMail(t.getOwnerUserId(), workspaceId,
                     UserNotificationPreferenceService.TASK_ASSIGNED,
-                    "任务负责人变更：" + t.getTitle(), "任务「" + t.getTitle() + "」已指派给你", id, t.getReqId());
+                    "任务负责人变更：" + t.getTitle(), "任务「" + t.getTitle() + "」已指派给你", id, t.getReqId(),
+                    actor + " 把「" + t.getTitle() + "」转派给你",
+                    assignedMailBody(workspaceId, actor, t, "转派",
+                            creatorDisplayName(old.getCreatedByUserId()), old.getCreatedAt()));
         } else if (!ownerChanged && (columnChanged || !changes.isEmpty()) && t.getOwnerUserId() != null
                 && !t.getOwnerUserId().equals(userId)) {
             // 同一次保存即使还改了标题、日期等，也只合并为一条通知（改列与字段变更同样合并）。
@@ -999,5 +1006,85 @@ public class TaskCommandService {
             return false;
         }
         return a.truncatedTo(ChronoUnit.MINUTES).equals(b.truncatedTo(ChronoUnit.MINUTES));
+    }
+
+    /** 邮件里的操作人：账号没有显示名时也不能写成空串，给中性称呼 */
+    private String actorDisplayName(String userId) {
+        AppUser u = userId == null ? null : userMapper.selectById(userId);
+        String name = u == null ? null : Texts.trimToNull(u.getDisplayName());
+        return name == null ? "同事" : name;
+    }
+
+    private String creatorDisplayName(String creatorUserId) {
+        String uid = Texts.trimToNull(creatorUserId);
+        if (uid == null) {
+            return "未记录";
+        }
+        AppUser u = userMapper.selectById(uid);
+        String name = u == null ? null : Texts.trimToNull(u.getDisplayName());
+        return name == null ? "未记录" : name;
+    }
+
+    /**
+     * 指派 / 转派邮件正文：邮件里给出操作人与工作项快照，收件人不必点开就知道是什么事。
+     * 站内通知仍用一句话，列表只有两行，放不下快照。
+     */
+    private String assignedMailBody(String workspaceId, String actorName, Task t, String verb,
+                                    String creatorName, LocalDateTime createdAt) {
+        StringBuilder sb = new StringBuilder(actorName)
+                .append(" 把工作项").append(verb).append("给你：\n")
+                .append("\n项目：").append(projectName(workspaceId, t.getReqId()))
+                .append("\n标题：").append(t.getTitle());
+        String no = Nos.workItem(t.getItemNo());
+        if (!no.isEmpty()) {
+            sb.append("\n编号：").append(no);
+        }
+        String column = Texts.trimToNull(support.columnName(workspaceId, t.getBoardColumn()));
+        if (column == null) {
+            column = t.getBoardColumn();
+        }
+        sb.append("\n类型：").append(itemTypeName(t.getItemType()))
+                .append("　优先级：").append(t.getPriority() == null ? "未设置" : t.getPriority())
+                .append("　状态：").append(column == null ? "—" : column);
+        if (t.getDueDate() != null) {
+            sb.append("\n截止：").append(t.getDueDate());
+        }
+        if (creatorName != null) {
+            sb.append("\n创建：").append(creatorName);
+            if (createdAt != null) {
+                sb.append(" · ").append(createdAt.format(
+                        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+            }
+        }
+        String desc = HtmlSanitizer.toPlainText(t.getDescription());
+        if (!desc.isEmpty()) {
+            sb.append("\n描述：").append(Texts.cut(desc, 200));
+        }
+        String blockedReason = Texts.trimToNull(t.getBlockedReason());
+        if (blockedReason != null) {
+            sb.append("\n卡点：").append(Texts.cut(blockedReason, 80));
+        }
+        return sb.toString();
+    }
+
+    private String projectName(String workspaceId, String reqId) {
+        if (reqId == null) {
+            return "未归属项目";
+        }
+        Requirement r = reqMapper.selectById(reqId);
+        return r == null || !workspaceId.equals(r.getWorkspaceId()) ? "未归属项目" : r.getName();
+    }
+
+    private static String itemTypeName(String type) {
+        if ("epic".equals(type)) {
+            return "史诗";
+        }
+        if ("bug".equals(type)) {
+            return "缺陷";
+        }
+        if ("story".equals(type)) {
+            return "需求";
+        }
+        return "任务";
     }
 }

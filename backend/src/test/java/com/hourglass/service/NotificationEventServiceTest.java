@@ -140,6 +140,30 @@ class NotificationEventServiceTest {
     }
 
     @Test
+    void mailOverrideKeepsInAppShortAndEnrichesEmail() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "mailBaseUrl", "https://host/hourglass");
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_ASSIGNED))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_ASSIGNED, true, true));
+        AppUser user = new AppUser();
+        user.setEmail("u1@example.com");
+        when(users.selectById("U1")).thenReturn(user);
+
+        service.notifyWithMail("U1", "W1", UserNotificationPreferenceService.TASK_ASSIGNED,
+                "任务负责人变更：修复登录超时", "任务「修复登录超时」已指派给你", "K1", null,
+                "王五 把「修复登录超时」转派给你",
+                "王五 把工作项转派给你：\n\n标题：修复登录超时");
+
+        /* 站内保持一句话，邮件换成带详情的新文案，深链仍追加在邮件末尾 */
+        verify(inApp).pushImmediate("U1", "W1", UserNotificationPreferenceService.TASK_ASSIGNED,
+                "任务负责人变更：修复登录超时", "任务「修复登录超时」已指派给你", "K1", null, null, null);
+        verify(deliveries).enqueue("u1@example.com", "王五 把「修复登录超时」转派给你",
+                "王五 把工作项转派给你：\n\n标题：修复登录超时\n\n打开任务：https://host/hourglass/#/board?task=K1",
+                UserNotificationPreferenceService.TASK_ASSIGNED, "K1");
+    }
+
+    @Test
     void emailWithoutBaseUrlKeepsPlainBody() {
         when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
         when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
