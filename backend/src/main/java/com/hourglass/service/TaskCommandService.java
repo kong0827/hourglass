@@ -1040,9 +1040,7 @@ public class TaskCommandService {
         if (column == null) {
             column = t.getBoardColumn();
         }
-        sb.append("\n\n类型：").append(itemTypeName(t.getItemType()))
-                .append("　优先级：").append(t.getPriority() == null ? "未设置" : t.getPriority())
-                .append("　状态：").append(column == null ? "—" : column);
+        sb.append("\n\n状态：").append(column == null ? "—" : column);
         if (creatorName != null) {
             sb.append("\n\n创建：").append(creatorName);
             if (createdAt != null) {
@@ -1071,18 +1069,5 @@ public class TaskCommandService {
         }
         Requirement r = reqMapper.selectById(reqId);
         return r == null || !workspaceId.equals(r.getWorkspaceId()) ? "未归属项目" : r.getName();
-    }
-
-    private static String itemTypeName(String type) {
-        if ("epic".equals(type)) {
-            return "史诗";
-        }
-        if ("bug".equals(type)) {
-            return "缺陷";
-        }
-        if ("story".equals(type)) {
-            return "需求";
-        }
-        return "任务";
     }
 }

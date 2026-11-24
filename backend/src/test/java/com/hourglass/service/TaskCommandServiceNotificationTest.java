@@ -79,7 +79,7 @@ class TaskCommandServiceNotificationTest {
                 contains("给你指派了工作项：new title"), body.capture());
         /* 新建时创建人就是操作人，不再重复「创建：」一行 */
         org.junit.jupiter.api.Assertions.assertTrue(body.getValue().contains("标题：new title"));
-        org.junit.jupiter.api.Assertions.assertTrue(body.getValue().contains("类型：任务　优先级：P2　状态：待处理"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.getValue().contains("状态：待处理"));
         org.junit.jupiter.api.Assertions.assertFalse(body.getValue().contains("创建："));
     }
 
@@ -125,12 +125,14 @@ class TaskCommandServiceNotificationTest {
         org.junit.jupiter.api.Assertions.assertEquals("王五 把工作项转派给你：\n"
                 + "\n项目：未归属项目\n"
                 + "\n标题：new title\n"
-                + "\n类型：任务　优先级：P0　状态：待处理\n"
+                + "\n状态：待处理\n"
                 + "\n创建：李四 · 2026-11-19 14:32\n"
                 + "\n描述：支付回调 30 秒无响应", body.getValue());
-        /* 编号、截止不属于邮件必要信息 */
+        /* 编号、截止、类型、优先级不属于邮件必要信息 */
         org.junit.jupiter.api.Assertions.assertFalse(body.getValue().contains("编号："));
         org.junit.jupiter.api.Assertions.assertFalse(body.getValue().contains("截止："));
+        org.junit.jupiter.api.Assertions.assertFalse(body.getValue().contains("类型："));
+        org.junit.jupiter.api.Assertions.assertFalse(body.getValue().contains("优先级："));
     }
 
     @Test
