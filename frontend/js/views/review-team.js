@@ -13,6 +13,7 @@ var detailKey = "";
 var detailCache = {};
 var detailLoading = false;
 var detailError = "";
+var detailTrigger = null;
 var memberFilter = "all";
 
 var DETAIL_LABEL = {
@@ -63,15 +64,16 @@ function deltaEm(n) {
 }
 
 function statBig(key, value, unit, sub, extraEm) {
-  return '<button class="rv-stat-big" type="button" data-rvd="' + key + '" aria-expanded="' + (detailKey === key) +
-    '" aria-controls="rvDetailRow">' +
+  return '<button class="rv-stat-big" type="button" data-rvd="' + key + '" aria-haspopup="dialog" aria-expanded="' +
+    (detailKey === key) + '" aria-controls="rvDetailDrawer">' +
     '<span class="rv-big">' + value + (unit || "") + (extraEm || "") + "</span></button>" +
     (sub ? '<span class="rv-sub">' + sub + "</span>" : "");
 }
 
 function statPair(key, value, label, cls) {
   return '<button class="rv-stat-sub' + (cls ? " " + cls : "") + '" type="button" data-rvd="' + key +
-    '" aria-expanded="' + (detailKey === key) + '" aria-controls="rvDetailRow"><b>' + value + "</b> " + label + "</button>";
+    '" aria-haspopup="dialog" aria-expanded="' + (detailKey === key) + '" aria-controls="rvDetailDrawer"><b>' +
+    value + "</b> " + label + "</button>";
 }
 
 /* 近 4 周迷你折线：不引图表库，按数值在同一画布里取相对高度。 */
@@ -173,11 +175,6 @@ function statTableHTML(d) {
     "<td>" + statPair("doc-draft", doc.draftBacklog, '<span class="muted">草稿积压</span>') +
       '<span class="rv-sub">超过 7 天未发布</span></td></tr>';
 
-  var detailRow = "";
-  if (detailKey) {
-    detailRow = '<tr class="rv-detail" id="rvDetailRow"><td colspan="5">' + detailHTML() + "</td></tr>";
-  }
-
   var daily = p.daily || [];
   var max = 1;
   for (var i = 0; i < daily.length; i++) if (daily[i] > max) max = daily[i];
@@ -199,7 +196,7 @@ function statTableHTML(d) {
     '<div class="rv-scroll"><table class="rv-tbl rv-stat-tbl">' +
       '<colgroup><col style="width:118"><col style="width:200"><col style="width:310"><col style="width:250"><col></colgroup>' +
       "<thead><tr><th>对象</th><th>本周新增</th><th>本周流转</th><th>本周完成</th><th>本周退出 / 异常</th></tr></thead>" +
-      "<tbody>" + demRow + workRow + testRow + docRow + detailRow + "</tbody></table></div>" +
+      "<tbody>" + demRow + workRow + testRow + docRow + "</tbody></table></div>" +
     '<div class="rv-stat-foot">' +
       '<div class="rv-foot-days"><div class="rv-days-head"><b>完成节奏</b><span>按完成时间 · 周末 0</span></div>' +
         '<div class="rv-days" aria-label="本周每日完成工作项数">' + bars + "</div></div>" +
@@ -211,13 +208,13 @@ function statTableHTML(d) {
       "<span>完成按期率 <b>" + (p.onTimeRate || 0) + "%</b></span>" +
       "<span>测试计划达成 <b>" + (p.testPlanDone || 0) + " / " + (p.testPlanTotal || 0) + "</b></span>" +
       '<span class="rv-due">到期兑现 <b>' +
-        '<button type="button" class="rv-due-n" data-rvd="due-ontime" aria-expanded="' +
-          (detailKey === "due-ontime") + '" aria-controls="rvDetailRow" title="截止日在本周且按时完成的工作项">' + (p.dueOnTime || 0) + "</button>" +
+        '<button type="button" class="rv-due-n" data-rvd="due-ontime" aria-haspopup="dialog" aria-expanded="' +
+          (detailKey === "due-ontime") + '" aria-controls="rvDetailDrawer" title="截止日在本周且按时完成的工作项">' + (p.dueOnTime || 0) + "</button>" +
         " / " + (p.dueTotal || 0) + "</b>" +
-        '<span class="rv-due-sub">延期 <button type="button" class="rv-due-n" data-rvd="due-late" aria-expanded="' +
-          (detailKey === "due-late") + '" aria-controls="rvDetailRow" title="已完成但晚于截止日">' + (p.dueLate || 0) + "</button>" +
-          " · 未完成 <button type=\"button\" class=\"rv-due-n\" data-rvd=\"due-open\" aria-expanded=\"" +
-          (detailKey === "due-open") + '" aria-controls="rvDetailRow" title="截止日在本周，当前仍未完成">' + (p.dueOpen || 0) + "</button></span></span>" +
+        '<span class="rv-due-sub">延期 <button type="button" class="rv-due-n" data-rvd="due-late" aria-haspopup="dialog" aria-expanded="' +
+          (detailKey === "due-late") + '" aria-controls="rvDetailDrawer" title="已完成但晚于截止日">' + (p.dueLate || 0) + "</button>" +
+          " · 未完成 <button type=\"button\" class=\"rv-due-n\" data-rvd=\"due-open\" aria-haspopup=\"dialog\" aria-expanded=\"" +
+          (detailKey === "due-open") + '" aria-controls="rvDetailDrawer" title="截止日在本周，当前仍未完成">' + (p.dueOpen || 0) + "</button></span></span>" +
     "</div>" +
     '<div class="rv-pool"><span class="rv-pool-title">当前快照</span>' +
       "<span>需求池：待评审 <b>" + (pool.demandReview || 0) + "</b> · 已通过 <b>" + (pool.demandPass || 0) +
@@ -227,30 +224,28 @@ function statTableHTML(d) {
         " / 待处理 " + (pool.taskBacklog || 0) + "</span>" +
       '<span class="rv-pool-note">截至 ' + esc(String(d.asOf || "").slice(5, 16).replace("T", " ")) + " · 不随周切换</span>" +
     "</div>" +
-    '<p class="rv-footnote">' + icon("infoCircle", 12) + "<span>每行是一种对象，行与行不合计：需求、工作项、用例、文档的数量含义不同。带虚线下划线的数字可点击，就地展开明细，再点收起。新增按创建时间；流转按状态变更日志；完成按进入已完成列且未取消；发布只计成功 + 生产 + 非回滚的全量发布。工作项流转按事件计次，成员表按项去重，两者不相等。缺陷新增 / 修复与测试卡同源，不重复计算；待回归、草稿积压是当前快照，不随周切换。到期兑现按截止日落在本周的工作项回看：按期 = 完成日不晚于截止日；未完成是当前时点仍未完成。近 4 周趋势与矩阵同口径，最后一位是当前查看周期。</span></p>" +
+    '<p class="rv-footnote">' + icon("infoCircle", 12) + "<span>每行是一种对象，行与行不合计：需求、工作项、用例、文档的数量含义不同。带虚线下划线的数字可点击，右侧抽屉查看明细，Esc 或右上角关闭。新增按创建时间；流转按状态变更日志；完成按进入已完成列且未取消；发布只计成功 + 生产 + 非回滚的全量发布。工作项流转按事件计次，成员表按项去重，两者不相等。缺陷新增 / 修复与测试卡同源，不重复计算；待回归、草稿积压是当前快照，不随周切换。到期兑现按截止日落在本周的工作项回看：按期 = 完成日不晚于截止日；未完成是当前时点仍未完成。近 4 周趋势与矩阵同口径，最后一位是当前查看周期。</span></p>" +
     "</section>";
 }
 
 function detailHTML() {
-  var title = DETAIL_LABEL[detailKey] || detailKey;
-  var head = '<div class="rv-sd-head"><div class="rv-sd-title"><b>' + esc(title) + "</b><span>" +
-    esc((teamData && teamData.label) || "") + " · " + esc((teamData && teamData.weekStart) || "") + " — " +
-    esc((teamData && teamData.weekEnd) || "") + "</span></div>" +
-    '<div class="rv-sd-actions"><button class="rv-sd-close" type="button" data-rvd-close>收起</button></div></div>';
+  var d = teamData || {};
+  var meta = '<p class="rv-sd-meta">' + esc(d.label || "") + " · " + esc(d.weekStart || "") + " — " +
+    esc(d.weekEnd || "") + "</p>";
   if (detailLoading) {
-    return '<div class="rv-sd">' + head + '<div class="rv-sd-loading">' + UI.skeletonRows(3) + "</div></div>";
+    return meta + '<div class="rv-sd-loading">' + UI.skeletonRows(6) + "</div>";
   }
   if (detailError) {
-    return '<div class="rv-sd">' + head + '<p class="rv-sd-note">明细加载失败：' + esc(detailError) + "。" +
-      '<button class="rv-sd-close" type="button" data-rvd-retry>重试</button></p></div>';
+    return meta + '<p class="rv-sd-note">明细加载失败：' + esc(detailError) + "。" +
+      '<button class="rv-sd-retry" type="button" data-rvd-retry>重试</button></p>';
   }
   var page = detailCache[detailCacheKey()];
   if (!page) {
-    return '<div class="rv-sd">' + head + '<p class="rv-sd-note">正在加载…</p></div>';
+    return meta + '<p class="rv-sd-note">正在加载…</p>';
   }
   var items = page.items || [];
   if (!items.length) {
-    return '<div class="rv-sd">' + head + '<p class="rv-sd-note">该口径下本周暂无记录。</p></div>';
+    return meta + '<p class="rv-sd-note">该口径下本周暂无记录。</p>';
   }
   var list = items.map(function (item) {
     var clickable = item.kind === "task" || item.kind === "demand";
@@ -263,7 +258,57 @@ function detailHTML() {
   var more = page.total > items.length
     ? '<p class="rv-sd-note">仅显示前 ' + items.length + " 项，共 " + page.total + " 项。</p>"
     : "";
-  return '<div class="rv-sd">' + head + '<ul class="rv-sd-list">' + list + "</ul>" + more + "</div>";
+  return meta + '<ul class="rv-sd-list">' + list + "</ul>" + more;
+}
+
+function detailDrawerEl() {
+  return $("rvDetailDrawer");
+}
+
+function syncDetailAria() {
+  document.querySelectorAll("#reviewTeamView [data-rvd]").forEach(function (b) {
+    b.setAttribute("aria-expanded", String(!!detailKey && b.dataset.rvd === detailKey));
+  });
+}
+
+function renderDetailBody() {
+  var body = $("rvDetailBody");
+  if (body) body.innerHTML = detailHTML();
+}
+
+function openDetailDrawer(key, trigger) {
+  var drawer = detailDrawerEl();
+  if (!drawer) return;
+  detailKey = key;
+  detailTrigger = trigger || null;
+  detailError = "";
+  detailLoading = !detailCache[detailCacheKey()];
+  var title = $("rvDetailTitle");
+  if (title) title.textContent = DETAIL_LABEL[key] || key;
+  renderDetailBody();
+  syncDetailAria();
+  drawer.classList.add("on");
+  var close = $("rvDetailClose");
+  if (close) setTimeout(function () { try { close.focus({ preventScroll: true }); } catch (e) { /* noop */ } }, 40);
+  if (detailLoading) fetchDetail();
+}
+
+function closeDetailDrawer(restoreFocus) {
+  var drawer = detailDrawerEl();
+  if (!drawer || !drawer.classList.contains("on")) {
+    detailKey = "";
+    return;
+  }
+  drawer.classList.remove("on");
+  detailKey = "";
+  detailLoading = false;
+  detailError = "";
+  syncDetailAria();
+  var back = detailTrigger;
+  detailTrigger = null;
+  if (restoreFocus !== false && back && document.contains(back)) {
+    try { back.focus({ preventScroll: true }); } catch (e) { /* noop */ }
+  }
 }
 
 function typeClass(item) {
@@ -645,6 +690,7 @@ function emptyHTML(d) {
 }
 
 function renderTeamReview(d) {
+  closeDetailDrawer(false);
   teamData = d;
   detailKey = "";
   detailError = "";
@@ -664,6 +710,7 @@ function renderTeamReview(d) {
 }
 
 function renderTeamLoading() {
+  closeDetailDrawer(false);
   var el = $("reviewTeamView");
   if (!el) return;
   el.innerHTML = '<div class="rv-card"><div class="rv-loading">' + UI.skeletonRows(6) + "</div></div>" +
@@ -671,6 +718,7 @@ function renderTeamLoading() {
 }
 
 function renderTeamError(msg, retry) {
+  closeDetailDrawer(false);
   var el = $("reviewTeamView");
   if (!el) return;
   el.innerHTML = '<div class="rv-bigstate err">' +
@@ -682,29 +730,12 @@ function renderTeamError(msg, retry) {
     '<button class="btn" type="button" data-rv-scope="me">看我的回顾</button></div></div>';
 }
 
-function refreshStatsCard() {
-  var card = $("rvStatsCard");
-  if (!card || !teamData) return;
-  var holder = document.createElement("div");
-  holder.innerHTML = statTableHTML(teamData);
-  var next = holder.firstChild;
-  card.parentNode.replaceChild(next, card);
-}
-
-function toggleDetail(key) {
-  if (detailKey === key) {
-    detailKey = "";
-    detailLoading = false;
-    detailError = "";
-    refreshStatsCard();
+function toggleDetail(key, trigger) {
+  if (detailKey === key && detailDrawerEl() && detailDrawerEl().classList.contains("on")) {
+    closeDetailDrawer(true);
     return;
   }
-  detailKey = key;
-  detailError = "";
-  detailLoading = !detailCache[detailCacheKey()];
-  refreshStatsCard();
-  if (!detailLoading) return;
-  fetchDetail();
+  openDetailDrawer(key, trigger);
 }
 
 function fetchDetail() {
@@ -713,7 +744,7 @@ function fetchDetail() {
   var key = detailKey;
   detailLoading = true;
   detailError = "";
-  refreshStatsCard();
+  renderDetailBody();
   API.get("/api/review/team/detail", {
     weekOffset: d.weekOffset,
     reqId: d.reqId || null,
@@ -723,12 +754,12 @@ function fetchDetail() {
     if (detailKey !== key) return;
     detailCache[detailCacheKey()] = page;
     detailLoading = false;
-    refreshStatsCard();
+    renderDetailBody();
   }).catch(function (ex) {
     if (detailKey !== key) return;
     detailLoading = false;
     detailError = (ex && ex.message) || "网络异常";
-    refreshStatsCard();
+    renderDetailBody();
   });
 }
 
@@ -787,14 +818,7 @@ function openItem(kind, id) {
 var teamEl = $("reviewTeamView");
 if (teamEl) teamEl.addEventListener("click", function (e) {
   var b = e.target.closest("[data-rvd]");
-  if (b) { toggleDetail(b.dataset.rvd); return; }
-  if (e.target.closest("[data-rvd-close]")) {
-    detailKey = "";
-    detailError = "";
-    refreshStatsCard();
-    return;
-  }
-  if (e.target.closest("[data-rvd-retry]")) { fetchDetail(); return; }
+  if (b) { toggleDetail(b.dataset.rvd, b); return; }
   var item = e.target.closest("[data-rv-id]");
   if (item) { openItem(item.dataset.rvKind, item.dataset.rvId); return; }
   var goBtn = e.target.closest("[data-rv-go]");
@@ -810,6 +834,39 @@ if (teamEl) teamEl.addEventListener("click", function (e) {
   }
   var chip = e.target.closest("[data-rv-mfilter]");
   if (chip) { setMemberFilter(chip.dataset.rvMfilter); return; }
+});
+
+/* 明细抽屉：关闭 / 重试 / 条目跳转都在抽屉内处理，页面只负责打开 */
+(function wireDetailDrawer() {
+  var host = detailDrawerEl();
+  if (!host) return;
+  host.addEventListener("click", function (e) {
+    if (e.target.closest("[data-rvd-retry]")) { if (detailKey) fetchDetail(); return; }
+    var item = e.target.closest("[data-rv-id]");
+    if (item) { openItem(item.dataset.rvKind, item.dataset.rvId); return; }
+    if (e.target.closest("[data-rvd-close]")) { closeDetailDrawer(true); return; }
+  });
+  var scrim = $("rvDetailScrim");
+  if (scrim) scrim.addEventListener("click", function () { closeDetailDrawer(true); });
+  var closeBtn = $("rvDetailClose");
+  if (closeBtn) closeBtn.addEventListener("click", function () { closeDetailDrawer(true); });
+})();
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape" || e.__dsEscHandled) return;
+  var drawer = detailDrawerEl();
+  if (!drawer || !drawer.classList.contains("on")) return;
+  /* 弹窗或工作项抽屉压在明细之上时，交给上层逐层关闭 */
+  if (UI.anyDialogOpen()) return;
+  var td = document.getElementById("taskDrawer");
+  if (td && td.classList.contains("on") &&
+      (parseInt(td.style.zIndex, 10) || 0) >= (parseInt(drawer.style.zIndex, 10) || 0)) return;
+  e.__dsEscHandled = true;
+  closeDetailDrawer(true);
+});
+/* 离开周回顾页时收起抽屉，别残留在别的页面上 */
+window.addEventListener("ds:view-change", function (e) {
+  var view = e && e.detail && e.detail.view;
+  if (view !== "review") closeDetailDrawer(false);
 });
 
 /* 团队周报纯文本：与页面数字同源，供「复制」直接发给团队或上级。 */
@@ -858,4 +915,4 @@ function currentTeamReportText() {
   return teamData ? teamReportText(teamData) : "";
 }
 
-export { renderTeamReview, renderTeamLoading, renderTeamError, applyMemberFilter, teamHasEvents, teamReportText, currentTeamReportText };
+export { renderTeamReview, renderTeamLoading, renderTeamError, applyMemberFilter, teamHasEvents, teamReportText, currentTeamReportText, closeDetailDrawer };

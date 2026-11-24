@@ -215,6 +215,20 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
   </div>
 </div>
 
+<!-- 周回顾统计下钻抽屉：点统计数字看明细，页面不位移 -->
+<div class="drawer-layer" id="rvDetailDrawer" role="dialog" aria-modal="true" aria-labelledby="rvDetailTitle">
+  <div class="drawer-scrim" id="rvDetailScrim"></div>
+  <div class="drawer rv-drawer">
+    <div class="drawer-head">
+      <h2 id="rvDetailTitle">明细</h2>
+      <button class="icon-btn" type="button" id="rvDetailClose" aria-label="关闭明细">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="rvDetailBody"></div>
+  </div>
+</div>
+
 <!-- 统一危险确认框 -->
 <div class="modal-layer" id="dlgConfirm" role="dialog" aria-modal="true" aria-labelledby="dlgConfirmTitle">
   <div class="sheet xs confirm-sheet">

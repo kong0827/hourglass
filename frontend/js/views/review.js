@@ -12,7 +12,7 @@ import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, dayKey, fmtMD, fmtMi
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { loadReqs, pending } from "./board.js";
 import { openLogTable, openTaskTable } from "./manager-shared.js";
-import { currentTeamReportText, renderTeamError, renderTeamLoading, renderTeamReview, teamHasEvents } from "./review-team.js";
+import { closeDetailDrawer, currentTeamReportText, renderTeamError, renderTeamLoading, renderTeamReview, teamHasEvents } from "./review-team.js";
 import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
 
 registerHelp({
@@ -100,6 +100,8 @@ function applyReviewScopeUI(){
   var tv = $("reviewTeamView"), pv = $("reviewPersonalView");
   if(tv) tv.hidden = !team;
   if(pv) pv.hidden = team;
+  /* 团队视图收起时，统计明细抽屉不能留在个人视图上 */
+  if(!team) closeDetailDrawer(false);
   var copyBtn = $("btnCopy");
   if(copyBtn && copyBtn.parentNode) copyBtn.parentNode.hidden = false;
   var plain = document.querySelector('#copyMenu [data-copy="plain"]');

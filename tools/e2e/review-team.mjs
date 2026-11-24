@@ -210,34 +210,38 @@ try {
   await sleep(350);
   await shot("team-risk-1440");
 
-  /* 到期兑现可下钻 */
+  /* 到期兑现可下钻（右侧抽屉） */
   await evaluate(`(() => { document.querySelector('#reviewTeamView [data-rvd="due-late"]').click(); return true; })()`);
-  await waitFor("document.querySelector('#reviewTeamView .rv-detail .rv-sd-list, #reviewTeamView .rv-detail .rv-sd-note')", "到期明细", 12000);
+  await waitFor("document.querySelector('#rvDetailDrawer.on #rvDetailBody .rv-sd-list, #rvDetailDrawer.on #rvDetailBody .rv-sd-note')", "到期明细", 12000);
   const dueDetail = await evaluate(`(() => {
-    const d = document.querySelector("#reviewTeamView .rv-detail");
+    const d = document.querySelector("#rvDetailDrawer.on");
     return { text: d ? d.textContent.trim().slice(0, 90) : "", on: !!document.querySelector('#reviewTeamView [data-rvd="due-late"][aria-expanded="true"]'),
-      controls: !!document.querySelector('#reviewTeamView [data-rvd="due-late"][aria-controls="rvDetailRow"]') && !!document.getElementById("rvDetailRow") };
+      controls: !!document.querySelector('#reviewTeamView [data-rvd="due-late"][aria-controls="rvDetailDrawer"]') && !!document.getElementById("rvDetailDrawer"),
+      title: (document.getElementById("rvDetailTitle") || {}).textContent || "" };
   })()`);
-  assert(dueDetail.on, "到期兑现「延期」可展开明细：" + dueDetail.text);
-  assert(dueDetail.controls, "明细按钮 aria-controls 指向展开行");
-  await evaluate(`(() => { const b = document.querySelector("#reviewTeamView [data-rvd-close]"); if (b) b.click(); return true; })()`);
-  await waitFor("!document.querySelector('#reviewTeamView .rv-detail')", "到期明细收起", 8000);
+  assert(dueDetail.on && dueDetail.title.indexOf("延期") >= 0, "到期兑现「延期」打开明细抽屉：" + dueDetail.text);
+  assert(dueDetail.controls, "明细按钮 aria-controls 指向抽屉");
+  await evaluate(`(() => { document.getElementById("rvDetailClose").click(); return true; })()`);
+  await waitFor("!document.getElementById('rvDetailDrawer').classList.contains('on')", "到期明细收起", 8000);
 
   if (api.dueOnTime > 0) {
     await evaluate(`(() => { document.querySelector('#reviewTeamView [data-rvd="due-ontime"]').click(); return true; })()`);
-    await waitFor("document.querySelectorAll('#reviewTeamView .rv-detail .rv-sd-list li').length > 0", "按期明细", 12000);
+    await waitFor("document.querySelectorAll('#rvDetailDrawer.on #rvDetailBody .rv-sd-list li').length > 0", "按期明细", 12000);
     const onTimeDetail = await evaluate(`(() => ({
-      items: document.querySelectorAll("#reviewTeamView .rv-detail .rv-sd-list li").length
+      items: document.querySelectorAll("#rvDetailDrawer.on #rvDetailBody .rv-sd-list li").length
     }))()`);
     assert(onTimeDetail.items === Math.min(20, api.dueOnTime), "按期明细条数与兑现计数一致：" + onTimeDetail.items + "/" + api.dueOnTime);
-    await evaluate(`(() => { const b = document.querySelector("#reviewTeamView [data-rvd-close]"); if (b) b.click(); return true; })()`);
-    await waitFor("!document.querySelector('#reviewTeamView .rv-detail')", "按期明细收起", 8000);
+    await evaluate(`(() => { document.getElementById("rvDetailScrim").click(); return true; })()`);
+    await waitFor("!document.getElementById('rvDetailDrawer').classList.contains('on')", "按期明细收起", 8000);
   }
 
   /* 下周到期列表点开真实工作项 */
+  /* 先聚焦再点：脚本 click 不移动焦点，抽屉会把上一个焦点元素记成 opener，
+     关闭后 160ms 的 opener.focus() 会把页面滚过去（真实鼠标点击不会有这个问题）。 */
   const nextOpen = await evaluate(`(() => {
     const b = document.querySelector("#reviewTeamView .rv-next-item");
     if (!b) return false;
+    b.focus();
     b.click();
     return true;
   })()`);
@@ -247,9 +251,14 @@ try {
     assert(drawerOn === true, "下周到期条目打开工作项抽屉");
     await evaluate(`(() => { const b = document.getElementById("btnCloseTask"); if (b) b.click(); return true; })()`);
     await waitFor("(() => { const d = document.getElementById('taskDrawer'); return !d || !d.classList.contains('on'); })()", "关闭抽屉", 8000);
+    await sleep(300);
   }
 
-  /* 统计矩阵子项就地展开明细 */
+  /* 统计矩阵子项打开右侧明细抽屉：页面本身不位移 */
+  const beforeOpen = await evaluate(`(() => {
+    const el = document.getElementById("rvStatsCard");
+    return el ? Math.round(el.getBoundingClientRect().top) : null;
+  })()`);
   const bigOpen = await evaluate(`(() => {
     const b = document.querySelector('#reviewTeamView [data-rvd="wi-created"]');
     if (!b) return false;
@@ -257,17 +266,23 @@ try {
     return true;
   })()`);
   assert(bigOpen, "工作项「本周新增」可点击");
-  await waitFor("document.querySelector('#reviewTeamView .rv-detail .rv-sd-list, #reviewTeamView .rv-detail .rv-sd-note')", "明细展开", 15000);
+  await waitFor("document.querySelector('#rvDetailDrawer.on #rvDetailBody .rv-sd-list, #rvDetailDrawer.on #rvDetailBody .rv-sd-note')", "明细打开", 15000);
   const detail = await evaluate(`(() => {
-    const d = document.querySelector("#reviewTeamView .rv-detail");
-    return { text: d ? d.textContent.trim().slice(0, 140) : "", items: d ? d.querySelectorAll(".rv-sd-list li").length : 0,
-             expanded: document.querySelector('#reviewTeamView [data-rvd="wi-created"]').getAttribute("aria-expanded") };
+    const d = document.getElementById("rvDetailDrawer");
+    const card = document.getElementById("rvStatsCard");
+    return { text: d ? d.textContent.trim().slice(0, 140) : "", items: d ? d.querySelectorAll("#rvDetailBody .rv-sd-list li").length : 0,
+             expanded: document.querySelector('#reviewTeamView [data-rvd="wi-created"]').getAttribute("aria-expanded"),
+             title: (document.getElementById("rvDetailTitle") || {}).textContent || "",
+             cardTop: card ? Math.round(card.getBoundingClientRect().top) : null,
+             drawerW: d ? Math.round(d.getBoundingClientRect().width) : 0 };
   })()`);
-  assert(detail.items > 0 && detail.expanded === "true", "明细就地展开：" + detail.items + " 条 · " + detail.text.slice(0, 50) + "…");
+  assert(detail.items > 0 && detail.expanded === "true", "明细在右侧抽屉打开：" + detail.items + " 条 · " + detail.text.slice(0, 40) + "…");
+  assert(detail.title.indexOf("本周新增") >= 0, "抽屉标题按口径命名：" + detail.title);
+  assert(detail.cardTop === beforeOpen, "打开明细不推挤页面（统计卡 top " + beforeOpen + " → " + detail.cardTop + "）");
   await shot("team-detail-1440");
-  /* 明细项点开真实工作项抽屉 */
+  /* 明细项点开真实工作项抽屉：工作项抽屉叠在明细抽屉之上，关闭后回到明细 */
   const opened = await evaluate(`(() => {
-    const li = document.querySelector("#reviewTeamView .rv-sd-list li.clickable");
+    const li = document.querySelector("#rvDetailBody .rv-sd-list li.clickable");
     if (!li) return false;
     li.click();
     return true;
@@ -278,10 +293,18 @@ try {
     pass("明细项打开工作项抽屉");
     await evaluate(`(() => { const b = document.getElementById("btnCloseTask"); if (b) b.click(); return true; })()`);
     await waitFor("(() => { const d = document.getElementById('taskDrawer'); return !d || !d.classList.contains('on'); })()", "关闭抽屉", 8000);
+    const back = await evaluate("document.getElementById('rvDetailDrawer').classList.contains('on')");
+    assert(back === true, "关闭工作项抽屉后明细抽屉仍在");
   }
-  await evaluate(`(() => { const b = document.querySelector("#reviewTeamView [data-rvd-close]"); if (b) b.click(); return true; })()`);
-  await waitFor("!document.querySelector('#reviewTeamView .rv-detail')", "明细收起", 8000);
-  pass("明细可收起");
+  await evaluate(`(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true; })()`);
+  await waitFor("!document.getElementById('rvDetailDrawer').classList.contains('on')", "Esc 收起明细", 8000);
+  pass("Esc 可收起明细");
+  const afterClose = await evaluate(`(() => {
+    const el = document.getElementById("rvStatsCard");
+    return { top: el ? Math.round(el.getBoundingClientRect().top) : null,
+             expanded: document.querySelector('#reviewTeamView [data-rvd="wi-created"]').getAttribute("aria-expanded") };
+  })()`);
+  assert(afterClose.top === beforeOpen && afterClose.expanded === "false", "收起后页面位置与按钮状态复原");
 
   /* 角色筛选：开发 */
   await evaluate(`(() => {
@@ -307,8 +330,12 @@ try {
   assert(roleFoot.load && !roleFoot.pct, "角色筛选时成员表脚注不冒充全团队负载");
   await shot("team-role-1440");
 
-  /* 切到「我」 */
+  /* 切到「我」：团队明细抽屉不得残留在个人视图上 */
+  await evaluate(`(() => { document.querySelector('#reviewTeamView [data-rvd="wi-created"]').click(); return true; })()`);
+  await waitFor("document.getElementById('rvDetailDrawer').classList.contains('on')", "切范围前打开明细", 10000);
   await evaluate(`(() => { document.querySelector('#reviewScopeSeg [data-review-scope="me"]').click(); return true; })()`);
+  await waitFor("!document.getElementById('rvDetailDrawer').classList.contains('on')", "切到我的回顾收起明细", 8000);
+  pass("切换团队 / 我 时收起明细抽屉");
   await waitFor("document.getElementById('reviewPersonalView').hidden === false && document.getElementById('reviewTeamView').hidden === true", "切到我的回顾", 15000);
   await waitFor("document.querySelectorAll('#statGrid .stat').length >= 4", "个人统计卡", 20000);
   const me = await evaluate(`(() => ({

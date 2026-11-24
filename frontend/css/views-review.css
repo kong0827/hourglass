@@ -120,16 +120,15 @@
 .rv-stat-big .rv-big{display:inline-block;border-bottom:1px dashed var(--border-strong);padding-bottom:1px}
 .rv-stat-big:hover .rv-big{color:var(--primary);border-bottom-color:currentColor}
 .rv-stat-big[aria-expanded="true"] .rv-big{color:var(--primary);border-bottom-color:currentColor}
-.rv-stat-tbl tr.rv-detail{background:var(--surface-sunken)}
-.rv-stat-tbl tr.rv-detail>td{padding:0;border-bottom:1px solid var(--border);border-top:1px dashed var(--border)}
-.rv-sd{padding:11px 16px 13px}
-.rv-sd-head{display:flex;align-items:flex-start;gap:12px}
-.rv-sd-title b{font-size:12.5px;font-weight:650;color:var(--text)}
-.rv-sd-title span{display:block;font-size:10.5px;color:var(--text-3);line-height:1.5;margin-top:1px}
-.rv-sd-actions{margin-left:auto;display:flex;align-items:center;gap:12px;flex:0 0 auto}
-.rv-sd-close{border:0;background:none;padding:0;font-size:11px;color:var(--text-3);cursor:pointer;font-family:inherit}
-.rv-sd-close:hover{color:var(--text)}
-.rv-sd-list{list-style:none;margin:7px 0 0;padding:0}
+
+/* 明细抽屉：点数字右侧打开，页面不位移 */
+.rv-drawer{width:560px}
+.rv-sd-meta{margin:0 0 8px;font-size:11px;color:var(--text-3);line-height:1.5}
+.rv-sd-retry{
+  margin-left:8px;border:0;background:none;padding:0;font:inherit;font-size:10.5px;
+  color:var(--primary-fg);cursor:pointer;text-decoration:underline;
+}
+.rv-sd-list{list-style:none;margin:0;padding:0}
 .rv-sd-list li{
   display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;
   padding:7px 0;border-top:1px solid var(--border);
@@ -472,11 +471,6 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
   .rv-stat-tbl td:nth-child(5)::before{content:"退出 / 异常"}
   .rv-stat-tbl .rv-big{font-size:20px}
   .rv-stat-tbl .rv-pair{margin-right:8px}
-  .rv-stat-tbl tr.rv-detail{display:block;padding:0;border-top:0}
-  .rv-stat-tbl tr.rv-detail>td{display:block;grid-column:1/-1;padding:0}
-  .rv-sd{padding:10px 12px 12px}
-  .rv-sd-head{flex-wrap:wrap;gap:6px 12px}
-  .rv-sd-actions{width:100%;margin-left:0;justify-content:flex-end}
   .rv-sd-list li{grid-template-columns:auto minmax(0,1fr);gap:5px 8px;padding:8px 0}
   .rv-sd-list time{grid-column:2;margin-top:-1px}
   .rv-sd-main b,.rv-sd-main span{white-space:normal}
