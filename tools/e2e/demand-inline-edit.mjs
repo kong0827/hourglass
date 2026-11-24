@@ -39,6 +39,8 @@ class Cdp {
       this.errors.push("console.error: " + msg.params.args.map(a => a.value || a.description || "").join(" "));
     }else if(msg.method === "Log.entryAdded" && msg.params.entry.level === "error"){
       this.errors.push("log: " + msg.params.entry.text);
+    }else if(msg.method === "Network.responseReceived" && msg.params.response.status >= 500){
+      this.errors.push("http " + msg.params.response.status + " " + msg.params.response.url);
     }
   }
   send(method, params = {}, sessionId){
@@ -81,7 +83,7 @@ try{
   const target = await cdp.send("Target.createTarget", { url: "about:blank" });
   const attached = await cdp.send("Target.attachToTarget", { targetId: target.targetId, flatten: true });
   const sessionId = attached.sessionId;
-  for(const d of ["Page", "Runtime", "Log"]) await cdp.send(`${d}.enable`, {}, sessionId);
+  for(const d of ["Page", "Runtime", "Log", "Network"]) await cdp.send(`${d}.enable`, {}, sessionId);
   const call = (m, p) => cdp.send(m, p, sessionId);
   const evaluate = async expr => {
     const res = await call("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true, userGesture: true });
@@ -113,6 +115,7 @@ try{
       reqId: d.reqId, title: d.title, description: d.description, acceptText: d.acceptText,
       source: d.source, itemKind: d.itemKind, categoryId: d.categoryId, priority: d.priority,
       expectDate: d.expectDate, plannedStart: d.plannedStart, plannedEnd: d.plannedEnd,
+      reviewerUserId: d.reviewerUserId || null,
       revision: d.revision, wsjfBusiness: d.wsjfBusiness, wsjfUrgency: d.wsjfUrgency,
       wsjfRisk: d.wsjfRisk, wsjfEffort: d.wsjfEffort
     };
@@ -603,6 +606,112 @@ try{
     }
   }
 
+  /* 5b. 详情概览：待评审可点改需求类型与评审人；进入流转的不可点 */
+  const metaTarget = await evaluate(`(async () => {
+    const { API } = await import("./js/core/api.js");
+    const { canEditReq } = await import("./js/core/state.js");
+    const page = await API.get("/api/demands/page", { offset: 0, limit: 100, status: "review" });
+    const d = (page.items || []).find(x => x.status === "review" && canEditReq(x.reqId));
+    return d ? { id: d.id, kind: d.itemKind || "其他", reviewer: d.reviewerUserId || null } : null;
+  })()`);
+  if(!metaTarget){
+    skip("当前空间没有待评审需求，无法验证类型/评审人点改");
+  }else{
+    await evaluate(`import("./js/views/demands.js").then(m => m.openDemandDetailById(${JSON.stringify(metaTarget.id)})).then(() => true)`);
+    await waitFor(`!!document.querySelector(".modal-layer.open.demand-detail #demandFacts")`, "待评审需求详情打开", 20000);
+    const rows = await evaluate(`({
+      type: !!document.querySelector(".modal-layer.open.demand-detail #demandFacts [data-dem-fact='type']"),
+      reviewer: !!document.querySelector(".modal-layer.open.demand-detail #demandFacts [data-dem-fact='reviewer']")
+    })`);
+    if(!rows.type){
+      const diag = await evaluate(`(async () => {
+        const r = await fetch("api/demands/${metaTarget.id}"); const j = await r.json(); const d = j.data || j;
+        const { rt, canEditReq } = await import("./js/core/state.js");
+        return { status: d.status, reqId: d.reqId, canWrite: canEditReq(d.reqId), role: rt.currentWs && rt.currentWs.myRole };
+      })()`);
+      skip("当前账号对这条待评审需求无写权限，类型/评审人保持只读（" + JSON.stringify(diag) + "）");
+    }else{
+      assert(rows.type && rows.reviewer, "待评审概览的需求类型与评审人都可点改");
+      /* 类型：点开列四档，选一个不同的值直接落库 */
+      await evaluate(`(() => { window.__writes = [];
+        document.querySelector(".modal-layer.open.demand-detail #demandFacts [data-dem-fact='type']").click();
+        return true; })()`);
+      const kindMenu = await waitFor(`(() => {
+        const items = [...document.querySelectorAll(".menu [data-dem-fact-kind]")];
+        return items.length ? { n: items.length, cur: items.some(i => !!i.querySelector(".k")) } : null;
+      })()`, "需求类型菜单");
+      assert(kindMenu.n === 4 && kindMenu.cur, "需求类型菜单列出四档并标出当前值");
+      const nextKind = await evaluate(`(() => {
+        const b = [...document.querySelectorAll(".menu [data-dem-fact-kind]")].find(i => !/当前/.test(i.textContent));
+        if(!b) return null;
+        b.click();
+        return b.dataset.demFactKind;
+      })()`);
+      if(!nextKind){
+        skip("需求类型没有其他候选");
+      }else{
+        await waitFor(`window.__writes.some(w => w.method === "PUT")`, "类型 PUT 发出");
+        await sleep(1200);
+        const kindAfter = await evaluate(`(async () => {
+          const r = await fetch("api/demands/${metaTarget.id}"); const j = await r.json(); const d = j.data || j;
+          const row = document.querySelector(".modal-layer.open.demand-detail #demandFacts [data-dem-fact='type'] .rf-v");
+          return { server: d.itemKind, view: row ? row.textContent.trim() : null, reviewer: d.reviewerUserId || null };
+        })()`);
+        assert(kindAfter.server === nextKind, `需求类型已落库（${metaTarget.kind} → ${kindAfter.server}）`);
+        assert(kindAfter.view === nextKind, "详情概览停在新的需求类型");
+        assert(kindAfter.reviewer === metaTarget.reviewer, "改类型没有把评审人清掉");
+        pendingRestores.push({ id: metaTarget.id, patch: { itemKind: metaTarget.kind } });
+      }
+      /* 评审人：候选来自项目可写成员，选「未指派」或第一个候选 */
+      const revBefore = await evaluate(`(async () => {
+        const r = await fetch("api/demands/${metaTarget.id}"); const j = await r.json(); const d = j.data || j;
+        return d.reviewerUserId || null;
+      })()`);
+      await evaluate(`(() => { window.__writes = [];
+        document.querySelector(".modal-layer.open.demand-detail #demandFacts [data-dem-fact='reviewer']").click();
+        return true; })()`);
+      const revMenu = await waitFor(`(() => {
+        const items = [...document.querySelectorAll(".menu [data-dem-fact-rev]")];
+        return items.length ? { n: items.length } : null;
+      })()`, "评审人菜单");
+      assert(revMenu.n >= 1, `评审人菜单加载候选（${revMenu.n} 项）`);
+      const revPick = await evaluate(`(() => {
+        const items = [...document.querySelectorAll(".menu [data-dem-fact-rev]")];
+        const cur = ${JSON.stringify(revBefore || "")};
+        const hit = items.find(i => (i.dataset.demFactRev || "") !== cur);
+        if(!hit) return null;
+        hit.click();
+        return { id: hit.dataset.demFactRev || "" };
+      })()`);
+      if(!revPick){
+        skip("评审人没有其他候选（未指派已是唯一选项）");
+        await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); true`);
+      }else{
+        const revFired = await waitFor(`window.__writes.some(w => w.method === "PUT")`, "评审人 PUT 发出").then(() => true).catch(() => false);
+        if(!revFired){
+          skip("评审人选择后没有发出 PUT（当前值可能就是选中项）");
+          await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); true`);
+        }else{
+          await sleep(1200);
+          const revAfter = await evaluate(`(async () => {
+            const r = await fetch("api/demands/${metaTarget.id}"); const j = await r.json(); const d = j.data || j;
+            const row = document.querySelector(".modal-layer.open.demand-detail #demandFacts [data-dem-fact='reviewer'] .rf-v");
+            return { server: d.reviewerUserId || null, view: row ? row.textContent.trim() : null, kind: d.itemKind };
+          })()`);
+          assert(revAfter.server === (revPick.id || null), `评审人已落库（${revBefore || "未指派"} → ${revAfter.server || "未指派"}）`);
+          assert(revPick.id ? (!!revAfter.view && revAfter.view !== "未指派") : revAfter.view === "未指派",
+            "详情概览的评审人显示保存后的值");
+          assert(revAfter.kind === (nextKind || metaTarget.kind), "改评审人没有把需求类型改回去");
+          pendingRestores.push({ id: metaTarget.id, patch: { reviewerUserId: revBefore } });
+        }
+      }
+      await shot("dem-inline-07-detail-meta.png");
+      await evaluate(`(() => { const x = document.querySelector(".modal-layer.open.demand-detail [data-dem-x]"); if(x) x.click(); return true; })()`);
+      await waitFor(`!document.querySelector(".modal-layer.open.demand-detail")`, "详情抽屉关闭");
+    }
+    await evaluate(`(() => { const x = document.querySelector(".modal-layer.open.demand-detail [data-dem-x]"); if(x) x.click(); return true; })()`);
+  }
+
   /* 6. 已加载深度：翻到第二页后改一个字段，列表不塌回第一页。
         演示数据每个空间都不足一页，这里临时补种到超过一页，验证完立即硬删除还原。 */
   let seedIds = [];
@@ -696,6 +805,7 @@ try{
         return true;
       })()`);
       await sleep(400);
+      await waitFor(`!!document.querySelector(".modal-layer.open.demand-detail #demandFacts .rf-v.inline-edit-field")`, "390px 来源进入编辑", 4000).catch(() => null);
       const m390 = await evaluate(`(() => {
         const el = document.querySelector(".modal-layer.open.demand-detail #demandFacts .rf-v.inline-edit-field");
         if(!el) return { el: false };

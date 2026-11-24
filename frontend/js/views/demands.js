@@ -58,6 +58,8 @@ var DELIVERY_STAGES = [
   ["delivered", "已交付"]
 ];
 var CLOSE_REASONS = { rej:"评审不通过", cancel:"中途取消", dup:"重复需求" };
+/* 与新建表单、AI 拆单同一套类型枚举；类型只在待评审可改，之后由流转锁定 */
+var DEMAND_ITEM_KINDS = ["新功能", "体验优化", "缺陷", "其他"];
 var CLOSE_STAGES = { review:"待评审", pass:"已通过", plan:"已排期", done:"已完成" };
 /* 页面级「!」：状态与流转、交付阶段派生边界，口径与 DemandService / DemandMapper 一致 */
 var DEMAND_FLOW_HELP = {
@@ -5128,7 +5130,8 @@ function demandReportImageUpload(okCount, failed){
 }
 /* ---------- 需求详情就地编辑 ----------
    文案（标题/描述/验收）点开即改，失焦或 ⌘/Ctrl+Enter 保存、Esc 还原；
-   属性（优先级/期望交付/目标版本/分类/来源）点开弹层选择后直接保存。
+   属性（优先级/期望交付/目标版本/分类/来源）点开弹层选择后直接保存；
+   类型与评审人只在待评审点开弹层，进入流转后由状态动作决定。
    保存后只刷新当前详情，不再关闭重开；同一详情内的写操作串行，避免 revision 互相覆盖。 */
 function demandSaveQueued(layer, work){
   var prev = layer.__demSaveQueue || Promise.resolve();
@@ -5155,6 +5158,8 @@ function demandSaveBody(d){
     expectDate: d.expectDate || null,
     plannedStart: d.plannedStart || null,
     plannedEnd: d.plannedEnd || null,
+    /* 整单 PUT 在待评审会整组覆盖字段：带回当前评审人，避免改分类/来源时把人清掉 */
+    reviewerUserId: d.reviewerUserId || null,
     revision: d.revision,
     wsjfBusiness: d.wsjfBusiness == null ? null : d.wsjfBusiness,
     wsjfUrgency: d.wsjfUrgency == null ? null : d.wsjfUrgency,
@@ -5384,6 +5389,73 @@ function openDemandModuleFact(anchor, ctx){
   var first = menu.querySelector(".menu-item");
   if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
 }
+function openDemandTypeFact(anchor, ctx){
+  var cur = ctx.d.itemKind || "其他";
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "168px";
+  menu.innerHTML = '<div class="menu-title">需求类型</div>' + DEMAND_ITEM_KINDS.map(function(k){
+    return '<button class="menu-item" type="button" data-dem-fact-kind="' + esc(k) + '">' + esc(k)
+      + (k === cur ? '<span class="k">当前</span>' : '') + '</button>';
+  }).join("");
+  UI.openPop(menu, anchor, { align:"left", width:190, onClose:function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dem-fact-kind]");
+    if(!b) return;
+    UI.closeAllPops();
+    var next = b.dataset.demFactKind;
+    if(next === cur) return;
+    demandPutField(ctx, { itemKind:next }, "需求类型已改为「" + next + "」");
+  });
+  var first = menu.querySelector(".menu-item");
+  if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
+}
+/* 评审人候选与新建/编辑表单同口径：项目花名册里可写的人，排除自己和只读成员 */
+function openDemandReviewerFact(anchor, ctx){
+  var cur = ctx.d.reviewerUserId || "";
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "220px";
+  menu.innerHTML = '<div class="menu-title">评审人</div><p class="foot-note" style="padding:8px 10px;margin:0">加载成员…</p>';
+  UI.openPop(menu, anchor, { align:"left", width:240, onClose:function(){ menu.remove(); } });
+  loadProjectMembers(rt.currentWs.id, ctx.d.reqId).then(function(roster){
+    if(!menu.isConnected) return;
+    var me = rt.currentUser && rt.currentUser.id;
+    var opts = ((roster && roster.members) || []).filter(function(m){
+      return m && m.userId && m.userId !== me && m.access !== "read";
+    });
+    var names = {};
+    opts.forEach(function(m){ names[m.userId] = m.displayName || m.username || m.userId; });
+    /* 当前评审人可能已不在可写名单（换项目或降权），仍保留一行，避免看起来像被清空 */
+    if(cur && !names[cur]){
+      names[cur] = demReviewerName(ctx.d) || cur;
+      opts = [{ userId:cur }].concat(opts);
+    }
+    menu.innerHTML = '<div class="menu-title">评审人</div>'
+      + '<button class="menu-item" type="button" data-dem-fact-rev="">未指派'
+      + (!cur ? '<span class="k">当前</span>' : '') + '</button>'
+      + opts.map(function(m){
+          return '<button class="menu-item" type="button" data-dem-fact-rev="' + esc(m.userId) + '">' + esc(names[m.userId])
+            + (m.userId === cur ? '<span class="k">当前</span>' : '') + '</button>';
+        }).join("")
+      + (opts.length ? "" : '<p class="foot-note" style="padding:8px 10px;margin:0">项目里没有其他可写成员可指派</p>');
+    menu.onclick = function(e){
+      var b = e.target.closest("[data-dem-fact-rev]");
+      if(!b) return;
+      UI.closeAllPops();
+      var next = b.dataset.demFactRev || "";
+      if(next === cur) return;
+      demandPutField(ctx, { reviewerUserId:next || null },
+        next ? ("评审人已指派给「" + names[next] + "」") : "已改为未指派，项目可写成员可以认领");
+    };
+    var first = menu.querySelector(".menu-item");
+    if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
+  }).catch(function(){
+    if(menu.isConnected){
+      menu.innerHTML = '<div class="menu-title">评审人</div><p class="foot-note" style="padding:8px 10px;margin:0">成员加载失败，请稍后重试</p>';
+    }
+  });
+}
 function openDemandFactEditor(kind, anchor, ctx){
   if(!ctx || !ctx.d) return;
   if(!canWriteDemand(ctx.d)){ denyDemandReadOnly(); return; }
@@ -5397,6 +5469,14 @@ function openDemandFactEditor(kind, anchor, ctx){
     }, function(work){ return demandSaveQueued(ctx.layer, work); });
   }
   if(kind === "module") return openDemandModuleFact(anchor, ctx);
+  if(kind === "type" || kind === "reviewer"){
+    /* 类型与评审人只在待评审开放；进入流转后由状态动作决定，和整单编辑表单同一口径 */
+    if(ctx.d.status !== "review"){
+      toast("已进入流转，" + (kind === "type" ? "需求类型" : "评审人") + "由流转动作决定，不能再直接改", "warn");
+      return;
+    }
+    return kind === "type" ? openDemandTypeFact(anchor, ctx) : openDemandReviewerFact(anchor, ctx);
+  }
   /* 来源是纯文本，与标题/描述一样就地编辑，不再弹输入框 */
   if(kind === "source"){
     var textEl = anchor ? anchor.querySelector('[data-dem-text="source"]') : null;
@@ -5705,9 +5785,10 @@ function renderDemandDetail(d, opts){
       : d.deliveredAt
         ? { label:"已发布", sub:String(d.deliveredAt).substring(0, 10), cls:" is-done" }
         : { label:"未发布", sub:"以发布记录为准", cls:"" };
+    var reviewMetaEdit = canEditText && d.status === "review";
     var metaItems = [
       ["type", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>',
-        "需求类型", d.itemKind || "其他", false],
+        "需求类型", d.itemKind || "其他", reviewMetaEdit],
       ["module", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="3.2" y="11" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="11" width="5.8" height="5.8" rx="1.3"/></svg>',
         "分类", catNameById(d.categoryId) || "未分类", true],
       ["source", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 11.2 5 4.6h10l1.6 6.6v4.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M3.6 11.4h3.6l.9 1.7h3.8l.9-1.7h3.6"/></svg>',
@@ -5715,7 +5796,7 @@ function renderDemandDetail(d, opts){
       ["creator", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.6" r="2.8"/><path d="M4.4 16.2a5.6 5.6 0 0 1 11.2 0"/></svg>',
         "提交人", demCreatorName(d) || "—", false],
       ["reviewer", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.6" r="2.8"/><path d="M4.4 16.2a5.6 5.6 0 0 1 11.2 0"/><path d="m12.4 15.2 1.3 1.3 2.4-2.5"/></svg>',
-        "评审人", demReviewerName(d) || "未指派", false]
+        "评审人", demReviewerName(d) || "未指派", reviewMetaEdit]
     ];
     if(isClosedDemand(d)){
       metaItems.push(["close", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.6"/><path d="M5.4 14.6 14.6 5.4"/></svg>',
