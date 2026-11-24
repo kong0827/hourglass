@@ -114,7 +114,10 @@ const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "
   /* 这些也是 router 里的懒加载视图，必须各自包一层作用域：delivery 顶层有 function $(sel,root)
      （querySelector 版），平铺会覆盖 core/dom 的 $(id)（getElementById 版），整包按 id 取元素全变 null；
      investment 顶层的 state / cache 也会与别的平铺模块重名。真实 ESM 各文件独立作用域，没有这个问题。 */
-  "delivery", "investment", "workcolumn", "canceled", "tree", "chain"];
+  "delivery", "investment", "workcolumn", "canceled", "tree", "chain",
+  /* 周五补记顶层有 function bodyEl()，与 core/sheet-viewer 的 var bodyEl 同名；
+     团队周回顾顶层有 render 等通用名。真实 ESM 各自独立作用域，平铺会互相覆盖 */
+  "catchup", "review-team"];
 const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js"; })
   .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js",
     /* view-loader 的 const cache 与 transitions.js 的 var cache 同名：

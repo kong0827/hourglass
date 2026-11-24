@@ -2898,11 +2898,23 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
 .msg-page-head p{margin:2px 0 0;font-size:12px;color:var(--text-3);}
 .msg-page-head .spacer{flex:1 1 auto;}
 
-/* 通知项 */
+/* 通知项：外层承担整条底色与分隔，内层按钮负责跳转，动作按钮独立成行避免嵌套交互 */
 .apn{
-  display:flex;align-items:flex-start;gap:9px;width:100%;padding:9px 14px 9px 12px;
-  text-align:left;border-left:2px solid transparent;
+  display:block;width:100%;text-align:left;border-left:2px solid transparent;
 }
+.apn-hit{
+  display:flex;align-items:flex-start;gap:9px;width:100%;padding:9px 14px 9px 12px;
+  text-align:left;
+}
+.apn-hit:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.apn-acts{display:flex;justify-content:flex-end;gap:6px;padding:0 14px 8px 41px;}
+.apn-act{
+  padding:2px 8px;border:1px solid var(--border);border-radius:var(--r-pill);
+  background:var(--surface);color:var(--text-2);font-size:12px;line-height:18px;
+}
+.apn-act:hover{color:var(--text);border-color:var(--primary-border);}
+.apn-act:disabled{opacity:.55;cursor:default;}
+.apn.is-expanded .apn-body{display:block;-webkit-line-clamp:unset;overflow:visible;}
 .apn:hover{background:var(--surface-hover);}
 .apn.unread{background:var(--primary-soft);border-left-color:var(--primary);}
 .apn.unread:hover{background:var(--primary-soft);filter:brightness(.985);}
@@ -2920,7 +2932,7 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   background:var(--surface-sunken);color:var(--text-3);font-size:11px;font-weight:600;vertical-align:1px;
 }
 .apn-body{
-  font-size:12px;color:var(--text-3);line-height:1.5;
+  font-size:12px;color:var(--text-3);line-height:1.5;white-space:pre-line;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
 .apn-meta{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
@@ -3520,9 +3532,29 @@ button.dep-title:focus-visible{outline:none;box-shadow:var(--ring-focus);border-
   border:1px solid var(--primary-border);border-radius:var(--r-sm);
   background:var(--surface);outline:none;}
 .read-desc.inline-edit-field:focus{box-shadow:var(--focus-ring);}
+/* 描述就地编辑：无工具栏的内联富文本，外壳与表单编辑器同款边框/焦点态 */
+.read-desc-edit{min-height:80px;}
+.drawer .sun-editor.inline-desc-editor{border-color:var(--primary-border);}
+.drawer .sun-editor.inline-desc-editor:focus-within{border-color:var(--primary);box-shadow:var(--focus-ring);}
+.drawer .sun-editor.inline-desc-editor .se-toolbar{display:none;}
+.drawer .sun-editor.inline-desc-editor .se-wrapper-inner{padding:var(--space-2) 10px;font-size:13px;line-height:1.65;}
+.drawer .sun-editor.inline-desc-editor .se-wrapper .se-placeholder{padding-top:var(--space-2);padding-left:10px;font-size:13px;}
 .read-desc p{margin:0 0 6px;}
-.read-desc img{max-width:100%;height:auto;border-radius:var(--r-xs);}
+.read-desc img{max-width:100%;height:auto;border-radius:var(--r-xs);cursor:zoom-in;}
+.read-desc[contenteditable="true"] img{cursor:inherit;}
 .read-desc:empty::before{content:"暂无描述";color:var(--text-3);}
+/* 需求弹窗描述：图文混排输入区，外观与同栏 textarea 一致 */
+.demand-desc-input{min-height:76px;max-height:260px;overflow:auto;margin:0;padding:7px 10px;
+  font-size:13px;line-height:1.65;color:var(--text);cursor:text;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.demand-desc-input:hover{background:var(--surface);}
+.demand-desc-input:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus-ring);}
+.demand-desc-input:empty::before,.demand-desc-input.is-empty::before{content:attr(data-placeholder);color:var(--text-3);}
+.demand-desc-input p{margin:0 0 6px;}
+.demand-desc-input p:last-child{margin-bottom:0;}
+.demand-desc-input img{display:inline-block;max-width:100%;max-height:300px;height:auto;
+  border:1px solid var(--border);border-radius:var(--r-sm);object-fit:contain;vertical-align:bottom;}
+.demand-desc-input img[data-dem-pending-img]{opacity:.75;outline:1px dashed var(--border-strong);outline-offset:2px;}
 .read-cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:var(--space-3);}
 .read-progress{height:5px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;margin:0 0 9px;}
 .read-progress i{display:block;height:100%;width:0;background:var(--primary);border-radius:inherit;}
@@ -4303,7 +4335,8 @@ a.att-chip-main:hover{color:var(--primary-fg);}
 .msg-hint{margin-left:auto;font-size:11px;color:var(--text-3);}
 .msg-list .apn{border-left:0;}
 /* 消息页的行密度按原型 .msgrow：11/14、类型块 24 方角、正文 12.5、上下文与时间 10.5 */
-.msg-list .apn{padding:11px 14px;gap:10px;}
+.msg-list .apn-hit{padding:11px 14px;gap:10px;}
+.msg-list .apn-acts{padding:0 14px 10px 48px;}
 .msg-list .apn-ic{width:24px;height:24px;border-radius:6px;background:var(--surface-sunken);
   color:var(--text-3);font-size:11px;font-weight:700;}
 .msg-list .apn-title{font-size:12.5px;color:var(--text-2);}
@@ -4641,6 +4674,22 @@ body[data-list-density="relaxed"]{--list-row-h:62px;}
 }
 .list-row .cell.over{color:var(--danger-fg);font-weight:500;}
 .list-row .cell.today{color:var(--warning-fg);font-weight:600;}
+/* 行内直接修：优先级 / 负责人 / 截止读态与普通单元格一致，悬停或聚焦才露出可点线索。
+   列表、层级、列状态工作页与缺陷行共用；工作页的按钮嵌在 .cell 里，所以不要求按钮自身带 .cell */
+.list-row .row-inline-edit{
+  display:inline-flex;align-items:center;gap:3px;min-width:0;max-width:100%;
+  padding:0 3px;margin:0 -3px;border:1px solid transparent;border-radius:var(--r-xs);
+  background:transparent;font:inherit;color:inherit;font-weight:inherit;text-align:left;cursor:pointer;
+}
+.list-row .row-inline-edit > .row-inline-edit-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.list-row .row-inline-edit > svg{flex:0 0 auto;color:var(--text-3);opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+.list-row .row-inline-edit:hover,
+.list-row .row-inline-edit:focus-visible,
+.list-row .row-inline-edit[aria-expanded="true"]{border-color:var(--border);background:var(--surface);}
+.list-row .row-inline-edit:hover > svg,
+.list-row .row-inline-edit:focus-visible > svg,
+.list-row .row-inline-edit[aria-expanded="true"] > svg{opacity:.75;}
+.list-row .row-inline-edit:focus-visible{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
 .list-row .cell-act{display:flex;justify-content:flex-end;}
 /* 行尾「更新」列：时间与悬停动作共占一格，悬停/聚焦时操作接替时间 */
 .list-row .ha-cell{display:flex;align-items:center;justify-content:flex-end;min-width:0;width:100%;}
@@ -5793,6 +5842,7 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
   background:var(--surface);border:2px solid var(--primary);}
 .tl-time{display:block;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;margin-bottom:1px;}
 .tl-detail{font-size:13px;color:var(--text-2);line-height:19px;}
+.tl-reason{white-space:pre-line;}
 .tl-empty{font-size:13px;color:var(--text-3);padding:var(--space-1) 0;}
 
 /* 实体变更记录：用例编辑框与计划详情底部，复用 .timeline 的行式时间线 */
@@ -6409,6 +6459,7 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .markdown-body th,.markdown-body td{border:1px solid var(--border);padding:var(--space-2) 10px;vertical-align:middle;}
 .markdown-body th{background:var(--surface-sunken);font-weight:650;text-align:left;}
 .markdown-body img{max-width:100%;height:auto;border-radius:var(--r-xs);}
+#reqDocReaderBody img{cursor:zoom-in;}
 .markdown-body a{color:var(--primary-fg);text-decoration:underline;overflow-wrap:anywhere;word-break:break-word;}
 .markdown-body hr{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .reqdoc-demand-list{max-height:240px;overflow:auto;}
@@ -8926,6 +8977,7 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .release-record .phase-tbl{min-width:800px;}
 .release-scope,.release-history{margin:0;padding-left:20px;font-size:13px;line-height:1.8;}
 .release-scope{max-height:260px;overflow:auto;}
+.ver-log-reason{white-space:pre-line;}
 .release-history p{margin:0 0 8px;}
 .task-published-badge{font-size:11px;vertical-align:middle;white-space:nowrap;}
 
@@ -10180,6 +10232,21 @@ body[data-view="testcases"] #btnPlanNew{display:none !important;}
 .tc-def-owner{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);min-width:0;}
 .tc-def-owner .avatar{width:20px;height:20px;font-size:var(--fs-micro);flex:none;}
 .tc-def-owner > span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* 缺陷行内直改：读态与普通单元格一致，悬停 / 聚焦才露箭头；状态按看板列流转 */
+.tc-def-inline{
+  display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;
+  padding:0 3px;margin:0 -3px;border:1px solid transparent;border-radius:var(--r-xs);
+  background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer;
+}
+.tc-def-inline > svg{flex:none;color:var(--text-3);opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+.tc-def-inline:hover,.tc-def-inline:focus-visible,.tc-def-inline[aria-expanded="true"]{border-color:var(--border);background:var(--surface);}
+.tc-def-inline:hover > svg,.tc-def-inline:focus-visible > svg,.tc-def-inline[aria-expanded="true"] > svg{opacity:.75;}
+.tc-def-inline:focus-visible{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+.tc-def-owner-btn{display:flex;align-items:center;gap:6px;}
+.tc-def-owner-btn .avatar{width:20px;height:20px;font-size:var(--fs-micro);flex:none;}
+.tc-def-owner-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tc-def-stbtn .tc-def-st{margin:0;}
+.tc-def-inline .pdot{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tc-def-ver{display:inline-block;max-width:100%;padding:1px 6px;border-radius:var(--r-xs);background:var(--surface-sunken);border:1px solid var(--border);font-size:11px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .tc-def-case-wrap{display:inline-flex;align-items:center;gap:var(--space-1);max-width:100%;min-width:0;}
 .tc-def-case{
@@ -11735,6 +11802,11 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
 .wc-row .wcl-sub{font-size:12px;line-height:16px;color:var(--text-3);}
 .wc-row .wcl-who{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;}
 .wc-row .wcl-who > span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;}
+/* 行内直改：负责人内容带头像，按钮内仍按一格排；空值占位跟随列表的淡色口径 */
+.wc-row .row-inline-edit{max-width:100%;}
+.wc-row .row-inline-edit > .row-inline-edit-t{display:inline-flex;align-items:center;gap:5px;}
+.wc-row .row-inline-edit .avatar{flex:none;}
+.wc-row .row-inline-edit.muted{color:var(--text-3);}
 .wc-row .wcl-risk > .tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;}
 /* 日期与数值列右对齐，和「我的工作」的 ta-r 口径一致 */
 .wc-list .list-head .ta-r,.wc-row .cell.ta-r{text-align:right;}
@@ -12287,7 +12359,7 @@ body[data-view="version"] #pageHead{display:none;}
 .vd-log-body{display:flex;align-items:baseline;gap:var(--space-2);flex-wrap:wrap;min-width:0;}
 .vd-log-body > b{font-weight:600;color:var(--text);}
 .vd-log-actor{color:var(--text-2);}
-.vd-log-reason{color:var(--text-3);word-break:break-word;}
+.vd-log-reason{color:var(--text-3);word-break:break-word;white-space:pre-line;}
 
 /* ---------- 版本选择器（无 id 深链） ---------- */
 .vd-pick-list{display:flex;flex-direction:column;gap:6px;}
@@ -13663,10 +13735,11 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .ms-detail-meta{display:grid;gap:var(--space-2);margin:0 0 12px;}
 .ms-detail-meta>div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;font-size:13px;}
 .ms-detail-meta dt{color:var(--text-3);}
-.ms-detail-meta dd{margin:0;color:var(--text-1);overflow-wrap:anywhere;}
+.ms-detail-meta dd{margin:0;color:var(--text-1);overflow-wrap:anywhere;white-space:pre-line;}
 .ms-detail-acts{margin-bottom:10px;}
 .ms-action-form{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);margin-bottom:12px;}
 .ms-action-form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--text-2);}
+.ms-action-form textarea{min-height:56px;}
 .ms-log-box{border-top:1px solid var(--border);padding-top:10px;}
 .ms-log-box>b{font-size:13px;}
 .ms-logs{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;}
@@ -14456,6 +14529,25 @@ body[data-view="mine"] #pageHead.mw-empty .ph-acts{display:none !important;}
 }
 .mw-sdesc::before{content:"·";margin-right:7px;color:var(--border-strong);}
 .mw-sact{margin-left:auto;display:flex;align-items:center;gap:10px;flex:0 0 auto;}
+/* 分区折叠：图标 + 标题即开关，caret 跟在其后；收起后只留标题行，次要操作一并隐藏 */
+.mw-sfold{
+  position:relative;
+  display:inline-flex;align-items:center;gap:9px;min-width:0;padding:0;
+  border:0;border-radius:var(--r-xs);background:none;color:inherit;font:inherit;
+  text-align:left;cursor:pointer;
+}
+/* 点按区域撑到 44 高（视觉仍是 26 的图标行），避免手机上要精准点标题 */
+.mw-sfold::after{content:"";position:absolute;left:-4px;right:-4px;top:-9px;bottom:-9px;}
+.mw-sfold:hover .mw-stitle{color:var(--primary-fg);}
+.mw-sfold:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.mw-sfold .mw-stitle{overflow:hidden;text-overflow:ellipsis;}
+.mw-chev{
+  display:inline-flex;flex:0 0 auto;color:var(--text-3);
+  transition:transform var(--dur-fast) var(--ease-out);
+}
+.mw-sfold[aria-expanded="true"] .mw-chev{transform:rotate(90deg);}
+.mw-sec.is-folded .mw-sbody{display:none;}
+.mw-sec.is-folded .mw-sact{display:none;}
 .mw-link{
   background:none;border:0;padding:0;color:var(--primary-fg);
   font:inherit;font-size:12px;cursor:pointer;
@@ -16235,8 +16327,9 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
 /* core/ornament · 侧栏 72px 装饰摆件（经典 + 6 个形态）与「个人设置 → 外观」选择器
    约束：
    1. 只做装饰：pointer-events:none、aria-hidden，不承载进度或入口；
-   2. 导航够高才出现：导航溢出时由 side-ornament.js 隐藏，不挤导航；
-   3. 收起态 34px、移动端与矮窗口不显示；
+   2. 导航够高才出现：由 side-ornament.js 按「放上摆件后导航是否溢出」决定，
+      不按窗口高度一刀切（否则开关打开、窗口一矮摆件就消失，看起来像没生效）；
+   3. 收起态 34px、移动端不显示；
    4. 系统减少动效时停在静态帧（tokens.css 已把动画压到 0.001ms）。 */
 
 /* ---------- 侧栏槽位 ---------- */
@@ -16244,7 +16337,6 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
 .side-ornament[hidden]{display:none;}
 .side-ornament > svg{display:block;width:72px;height:72px;overflow:visible;}
 @media (max-height:899px){.side-ornament{height:64px;}.side-ornament > svg{width:56px;height:56px;}}
-@media (max-height:779px){.side-ornament{display:none;}}
 body.side-rail .side-ornament{height:56px;}
 body.side-rail .side-ornament > svg{width:34px;height:34px;}
 [data-layout="mobile"] .side-ornament{display:none;}
@@ -17511,16 +17603,15 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
 .rv-stat-big .rv-big{display:inline-block;border-bottom:1px dashed var(--border-strong);padding-bottom:1px}
 .rv-stat-big:hover .rv-big{color:var(--primary);border-bottom-color:currentColor}
 .rv-stat-big[aria-expanded="true"] .rv-big{color:var(--primary);border-bottom-color:currentColor}
-.rv-stat-tbl tr.rv-detail{background:var(--surface-sunken)}
-.rv-stat-tbl tr.rv-detail>td{padding:0;border-bottom:1px solid var(--border);border-top:1px dashed var(--border)}
-.rv-sd{padding:11px 16px 13px}
-.rv-sd-head{display:flex;align-items:flex-start;gap:12px}
-.rv-sd-title b{font-size:12.5px;font-weight:650;color:var(--text)}
-.rv-sd-title span{display:block;font-size:10.5px;color:var(--text-3);line-height:1.5;margin-top:1px}
-.rv-sd-actions{margin-left:auto;display:flex;align-items:center;gap:12px;flex:0 0 auto}
-.rv-sd-close{border:0;background:none;padding:0;font-size:11px;color:var(--text-3);cursor:pointer;font-family:inherit}
-.rv-sd-close:hover{color:var(--text)}
-.rv-sd-list{list-style:none;margin:7px 0 0;padding:0}
+
+/* 明细抽屉：点数字右侧打开，页面不位移 */
+.rv-drawer{width:560px}
+.rv-sd-meta{margin:0 0 8px;font-size:11px;color:var(--text-3);line-height:1.5}
+.rv-sd-retry{
+  margin-left:8px;border:0;background:none;padding:0;font:inherit;font-size:10.5px;
+  color:var(--primary-fg);cursor:pointer;text-decoration:underline;
+}
+.rv-sd-list{list-style:none;margin:0;padding:0}
 .rv-sd-list li{
   display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;
   padding:7px 0;border-top:1px solid var(--border);
@@ -17863,11 +17954,6 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
   .rv-stat-tbl td:nth-child(5)::before{content:"退出 / 异常"}
   .rv-stat-tbl .rv-big{font-size:20px}
   .rv-stat-tbl .rv-pair{margin-right:8px}
-  .rv-stat-tbl tr.rv-detail{display:block;padding:0;border-top:0}
-  .rv-stat-tbl tr.rv-detail>td{display:block;grid-column:1/-1;padding:0}
-  .rv-sd{padding:10px 12px 12px}
-  .rv-sd-head{flex-wrap:wrap;gap:6px 12px}
-  .rv-sd-actions{width:100%;margin-left:0;justify-content:flex-end}
   .rv-sd-list li{grid-template-columns:auto minmax(0,1fr);gap:5px 8px;padding:8px 0}
   .rv-sd-list time{grid-column:2;margin-top:-1px}
   .rv-sd-main b,.rv-sd-main span{white-space:normal}
@@ -18271,6 +18357,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
 
 
 
+
 <!-- modulepreload:end -->
 </head>
 <body data-preview="1" data-view="board">
@@ -18426,7 +18513,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
       </button>
       </nav>
 
-    <div class="side-ornament" id="sideOrnament" aria-hidden="true"></div>
+    <div class="side-ornament" id="sideOrnament" aria-hidden="true" hidden></div>
 
     <div class="ss-bubble" id="sandBubble" aria-hidden="true" hidden>
       <div class="ss-bh">沙漏说<span class="ss-btag" id="sandBubbleChip" hidden></span></div>
@@ -24791,7 +24878,7 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
             </div>
             <div class="field" id="fVersionChangeReason" hidden>
               <label class="field-label" for="iVersionChangeReason">版本调整理由 <span class="req">*</span></label>
-              <input id="iVersionChangeReason" type="text" maxlength="500" placeholder="说明顺延、解除计划或偏离需求目标的原因" />
+              <textarea id="iVersionChangeReason" class="textarea" rows="2" maxlength="500" placeholder="说明顺延、解除计划或偏离需求目标的原因"></textarea>
             </div>
             <div class="field">
               <div class="field-label">
@@ -25131,6 +25218,20 @@ var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ==================== --
       </button>
     </div>
     <div class="drawer-body" id="brDrawerBody"></div>
+  </div>
+</div>
+
+<!-- 周回顾统计下钻抽屉：点统计数字看明细，页面不位移 -->
+<div class="drawer-layer" id="rvDetailDrawer" role="dialog" aria-modal="true" aria-labelledby="rvDetailTitle">
+  <div class="drawer-scrim" id="rvDetailScrim"></div>
+  <div class="drawer rv-drawer">
+    <div class="drawer-head">
+      <h2 id="rvDetailTitle">明细</h2>
+      <button class="icon-btn" type="button" id="rvDetailClose" aria-label="关闭明细">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="rvDetailBody"></div>
   </div>
 </div>
 
@@ -28902,6 +29003,88 @@ function attachEnvDict(input){
   return attachCombo(input, { chevron: true });
 }
 
+/* ---- core/img-fit.js ---- */
+/* core/img-fit · 正文图片的尺寸治理：上传前降采样、插入后收敛初始尺寸、首次插入提示可缩放。
+   工作项描述与需求文档编辑器共用同一口径。
+   时序注意：SunEditor 在 img load 时才定尺寸，onImageUpload 回调里 img 还没加载完
+   （offsetWidth=0），直接写尺寸会被编辑器自己的加载逻辑改写，必须挂 load 事件之后再写。 */
+
+/* 长边上限：2K/4K 截图缩到 1600 仍可读，PNG 重编码后一般 <1MB */
+var MAX_EDGE = 1600;
+
+/** 大图降采样：长边超过 MAX_EDGE 时等比重编码，返回 File（失败或无需缩放时原样返回）。
+    gif 直接跳过，避免丢动画。 */
+function shrinkImageFile(file){
+  if(!file || !/^image\//.test(file.type || "") || /gif$/i.test(file.type || "")){
+    return Promise.resolve(file);
+  }
+  return new Promise(function(resolve){
+    var url = URL.createObjectURL(file);
+    var im = new Image();
+    im.onload = function(){
+      URL.revokeObjectURL(url);
+      try{
+        var nw = im.naturalWidth, nh = im.naturalHeight;
+        if(!nw || !nh || Math.max(nw, nh) <= MAX_EDGE){ resolve(file); return; }
+        var scale = MAX_EDGE / Math.max(nw, nh);
+        var c = document.createElement("canvas");
+        c.width = Math.round(nw * scale);
+        c.height = Math.round(nh * scale);
+        c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+        var mime = file.type;
+        var quality = mime === "image/png" ? undefined : 0.92;
+        c.toBlob(function(blob){
+          /* 重编码反而更大（常见于照片被存成 png）时保留原图 */
+          if(!blob || blob.size >= file.size){ resolve(file); return; }
+          try{
+            resolve(new File([blob], file.name, { type: mime, lastModified: file.lastModified }));
+          }catch(e){ resolve(file); }
+        }, mime, quality);
+      }catch(e){ resolve(file); }
+    };
+    im.onerror = function(){
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    im.src = url;
+  });
+}
+
+/** 插入后收敛初始显示尺寸：原图不超编辑区宽用原尺寸；超出则 100%+auto（随容器缩放、不失真）。
+    同时写 data-size 与拖拽后编辑器自己写的格式一致，保存/重开都能还原。 */
+function fitInsertedImage(img, editable){
+  if(!img || img.tagName !== "IMG") return;
+  var done = false;
+  var fit = function(){
+    if(done) return;
+    done = true;
+    var nw = img.naturalWidth, nh = img.naturalHeight;
+    if(!nw || !nh) return;
+    var host = img.parentElement || editable;
+    var maxW = (host && host.clientWidth) || (editable && editable.clientWidth) || 0;
+    if(!maxW) return;
+    if(nw > maxW){
+      img.style.width = "100%";
+      img.style.height = "auto";
+      img.setAttribute("data-size", "100%,auto");
+    }else{
+      img.style.width = nw + "px";
+      img.style.height = nh + "px";
+      img.setAttribute("data-size", nw + "px," + nh + "px");
+    }
+  };
+  if(img.complete && img.naturalWidth) fit();
+  else img.addEventListener("load", fit, { once: true });
+}
+
+var hintShown = false;
+/** 首次插入正文图片时提示一次：手柄要点击图片才出现，不提示基本没人发现 */
+function notifyResizeHint(){
+  if(hintShown) return;
+  hintShown = true;
+  toast("图片已插入：点击图片出现手柄，拖四角可调整大小");
+}
+
 /* ---- lib/company.js ---- */
 /* lib/company · 公司展示标签：自由文本 + 确定性配色，不参与鉴权 */
 var esc = esc2;
@@ -30373,7 +30556,7 @@ var DEFS = {
     mode: "table",
     modes: ["table"],
     required: "title",
-    labels: { title:"工作项", type:"类型", column:"状态", priority:"优先级", owner:"负责人", dueDate:"截止", progress:"进度", project:"项目", version:"计划版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新" },
+    labels: { title:"工作项", type:"类型", column:"状态", priority:"优先级", owner:"负责人", dueDate:"截止", progress:"进度", project:"项目", demand:"关联需求", version:"计划版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新" },
     /* 默认 8 列对齐四原则原型的整行视野：类型并入标题、进度按需打开，更新时间收进行尾 */
     defaults: ["title","column","priority","owner","dueDate","project","version","updatedAt"]
   },
@@ -30799,12 +30982,12 @@ var VERSION_GROUP_MAX = 500;
 var SORT_DEFAULT_DIR = {
   due:"asc", priority:"asc", estimate:"desc", actual:"desc", updated:"desc",
   title:"asc", type:"asc", column:"asc", owner:"asc", progress:"desc",
-  project:"asc", version:"asc", category:"asc", startDate:"asc", tags:"asc",
+  project:"asc", demand:"asc", version:"asc", category:"asc", startDate:"asc", tags:"asc",
   subtasks:"desc", comments:"desc"
 };
 var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
 var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
-var COL_WIDTHS = { title:"minmax(240px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
+var COL_WIDTHS = { title:"minmax(240px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"104px", progress:"108px", project:"132px", demand:"180px", version:"112px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"168px" };
 
 function renderSmartTabs(){
   updateMobFilterSummary();
@@ -31156,7 +31339,7 @@ function minutesText(value){
   if(!n) return "—";
   return n < 60 ? (n + " 分钟") : ((Math.round(n / 60 * 10) / 10) + " 小时");
 }
-function taskCell(t, key, hasTypeCol){
+function taskCell(t, key, hasTypeCol, rowEdit){
   if(key === "title") return '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title)
     + taskPublicationHTML(t) + '</span></span>';
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
@@ -31175,14 +31358,44 @@ function taskCell(t, key, hasTypeCol){
     /* 到期提醒跟着截止日期走：状态列只有 96px，徽标留在状态格里会被截成省略号 */
     return '<span class="cell">' + chip + '</span>';
   }
-  if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
-  if(key === "owner") return '<span class="cell' + (t.owner ? "" : " muted") + '" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
+  if(key === "priority"){
+    var priInner = t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority);
+    /* 行内直改：可写项目点开优先级菜单，读态与普通单元格一致 */
+    if(rowEdit && canEditTask(t)){
+      return '<button class="cell row-inline-edit" type="button" data-row-pri="' + esc(t.id) + '"' +
+        ' aria-haspopup="menu" aria-expanded="false" aria-label="优先级：' + esc(priName(t.priority)) + '，点击修改"' +
+        ' title="点击改优先级"><span class="row-inline-edit-t">' + priInner + '</span>' + icon("caretDown", 11) + '</button>';
+    }
+    return '<span>' + priInner + '</span>';
+  }
+  if(key === "owner"){
+    var ownerCls = "cell" + (t.owner ? "" : " muted");
+    if(rowEdit && canEditTask(t)){
+      return '<button class="' + ownerCls + ' row-inline-edit" type="button" data-row-owner="' + esc(t.id) + '"' +
+        ' data-member-task="' + esc(t.id) + '" aria-haspopup="menu" aria-expanded="false"' +
+        ' aria-label="负责人：' + esc(t.owner || "未指派") + '，点击修改" title="点击改负责人">' +
+        '<span class="row-inline-edit-t">' + esc(t.owner || "—") + '</span>' + icon("caretDown", 11) + '</button>';
+    }
+    return '<span class="' + ownerCls + '" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
+  }
   if(key === "dueDate"){
-    if(!t.dueDate) return '<span class="cell muted">—</span>';
+    if(!t.dueDate){
+      if(rowEdit && canEditTask(t)){
+        return '<button class="cell muted row-inline-edit" type="button" data-row-due="' + esc(t.id) + '"' +
+          ' aria-haspopup="menu" aria-expanded="false" aria-label="截止日期：未设置，点击修改"' +
+          ' title="点击设置截止日期"><span class="row-inline-edit-t">—</span>' + icon("caretDown", 11) + '</button>';
+      }
+      return '<span class="cell muted">—</span>';
+    }
     var dueKind = dueState(t).kind;
     var dueCls = dueKind === "over" ? " over" : (dueKind === "today" ? " today" : "");
     var df = dueFlag(t);
     var dfHTML = df ? '<span class="mini-tag ' + (df.kind === "over" ? "over" : (df.kind === "today" ? "warn" : "")) + '">' + esc(df.text) + '</span>' : "";
+    if(rowEdit && canEditTask(t)){
+      return '<button class="cell' + dueCls + ' row-inline-edit" type="button" data-row-due="' + esc(t.id) + '"' +
+        ' aria-haspopup="menu" aria-expanded="false" aria-label="截止日期：' + esc(t.dueDate) + '，点击修改"' +
+        ' title="点击改截止日期"><span class="row-inline-edit-t">' + esc(dueDateMD(t)) + dfHTML + '</span>' + icon("caretDown", 11) + '</button>';
+    }
     return '<span class="cell' + dueCls + '" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + dfHTML + '</span>';
   }
   if(key === "progress"){
@@ -31192,6 +31405,12 @@ function taskCell(t, key, hasTypeCol){
     return '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span></span>';
   }
   if(key === "project") return '<span class="cell">' + assocLinkHTML("project", t.reqId, reqNameById(t.reqId)) + '</span>';
+  if(key === "demand"){
+    if(!t.demandId) return '<span class="cell muted">—</span>';
+    var dNo = demandNoText(t.demandNo), dName = t.demandTitle || "关联需求";
+    var dTip = (dNo ? dNo + " · " : "") + dName;
+    return '<span class="cell">' + assocLinkHTML("demand", t.demandId, dName, {title:"打开需求详情：" + dTip}) + '</span>';
+  }
   if(key === "version") return '<span class="cell" title="' + esc('计划版本：' + (taskVersionsText(t) || '待规划') + '；不代表实际交付。调整版本请在详情填写理由。') + '">' + taskVersionLinksHTML(t, t.reqId) + '</span>';
   if(key === "category"){
     var cat = catTag(t.categoryId);
@@ -31241,6 +31460,7 @@ function sortValue(t, key){
   if(key === "due") return t.dueDate || null;
   if(key === "progress") return progressOf(t);
   if(key === "project") return t.reqId ? String(reqNameById(t.reqId) || "") : "";
+  if(key === "demand") return t.demandId ? String(t.demandTitle || "") : "";
   if(key === "version") return taskVersionsText(t);
   if(key === "category") return catNameById(t.categoryId) || "";
   if(key === "startDate") return t.startDate || null;
@@ -31426,6 +31646,7 @@ function taskCsvValue(t, key){
   if(key === "dueDate") return t.dueDate || "";
   if(key === "progress") return progressOf(t) + "%";
   if(key === "project") return t.reqId ? reqNameById(t.reqId) : "";
+  if(key === "demand") return t.demandId ? (t.demandTitle || "") : "";
   if(key === "version") return taskVersionsText(t);
   if(key === "category") return catNameById(t.categoryId) || "";
   if(key === "startDate") return t.startDate || "";
@@ -31563,7 +31784,7 @@ function renderListItems(items){
       return '<span class="cell ha-cell">' +
         '<span class="ha-time" title="' + esc(t.updatedAt ? fmtTs(t.updatedAt) : "无更新时间") + '">' + esc(text) + '</span>' + hoverActs(t, editable) + '</span>';
     }
-    return taskCell(t, key, hasTypeCol);
+    return taskCell(t, key, hasTypeCol, editable);
   }
   function rowHTML(t){
     var editable = canEditTask(t);
@@ -31933,6 +32154,12 @@ listBody.addEventListener("click", function(e){
   if(mobTimer){ toggleTaskTimer(mobTimer.dataset.mobTimer); return; }
   var menuBtn = e.target.closest("[data-row-menu]");
   if(menuBtn){ openRowMenu(menuBtn, menuBtn.dataset.rowMenu); return; }
+  var priBtn = e.target.closest("[data-row-pri]");
+  if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+  var ownerBtn = e.target.closest("[data-row-owner]");
+  if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
+  var dueBtn = e.target.closest("[data-row-due]");
+  if(dueBtn){ openDuePopover(dueBtn, dueBtn.dataset.rowDue); return; }
   var statusBtn = e.target.closest("[data-row-status]");
   if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
   var row = e.target.closest("[data-list-id]");
@@ -32120,6 +32347,7 @@ window.addEventListener("ds:running-timer", function(){
 
 
 
+
 var copyToClipboard = copyText; var esc = esc2;
 
 
@@ -32247,6 +32475,8 @@ function setDrawerTab(name){
 }
 function setDrawerMode(mode){
   if(mode === "read" && !rt.editingId) mode = "edit";
+  /* 切到编辑态前先收起描述内联编辑器，避免两个描述编辑器同时在 DOM 里 */
+  if(mode === "edit" && inlineDesc) endInlineDescEdit(true);
   drawerMode = mode;
   var isRead = mode === "read";
   if(rt.editingId) showTaskErrors([]);
@@ -32327,7 +32557,7 @@ function demandNameNow(){
 }
 function renderReadDesc(){
   var box = $("readDesc");
-  if(!box || box.isContentEditable) return;
+  if(!box || box.isContentEditable || inlineDesc) return;
   var html = readTask().description || "";
   box.innerHTML = html ? (isHtml(html) ? descHtmlForEditor(html) : plainTextToHtml(html)) : "";
 }
@@ -32786,6 +33016,12 @@ function ensureTaskDescEditor(){
     /* SunEditor 的上传钩子挂在实例上，创建后再赋值；写进 options 不会生效。
        粘贴图片与工具栏选图都走这里，避免默认塞 base64。 */
     taskDescEditor.onImageUploadBefore = uploadTaskDescImage;
+    taskDescEditor.onImageUpload = function(targetImg){
+      var host = $("iDesc");
+      fitInsertedImage(targetImg, host && host.parentElement
+        ? host.parentElement.querySelector(".sun-editor-editable") : null);
+      notifyResizeHint();
+    };
     taskDescEditor.onChange = function(){ if(taskDescSuppressChange) return; rt.formDirty = true; };
     syncTaskDescEditorReadOnly();
     if(pendingTaskDesc !== null){
@@ -32838,27 +33074,31 @@ function uploadTaskDescImage(files, info, core, uploadHandler){
   if(!f) return false;
   if(!rt.editingId){ toast("请先保存工作项，再上传描述图片", "warn"); return false; }
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return false; }
-  if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return false; }
-  var fd = new FormData();
-  fd.append("file", f);
-  var url = API.url("/api/tasks/" + encodeURIComponent(rt.editingId) + "/description-images" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
-  fetch(url, {
-    method:"POST",
-    credentials:"same-origin",
-    headers:{ "X-XSRF-TOKEN": csrfCookie() },
-    body: fd
-  }).then(function(res){
-    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
-    return res.json().catch(function(){ return null; });
-  }).then(function(json){
-    if(json && json.code === 0 && json.data && json.data.url){
-      uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
-    }else{
-      toast((json && json.message) || "图片上传失败", "bad");
-    }
-  }).catch(function(ex){
-    toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+  /* 先降采样再校验体积：超限大图缩到 1600 后多数能过 3MB，不必直接拒绝 */
+  shrinkImageFile(f).then(function(shrunk){
+    f = shrunk;
+    if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return; }
+    var fd = new FormData();
+    fd.append("file", f);
+    var url = API.url("/api/tasks/" + encodeURIComponent(rt.editingId) + "/description-images" +
+      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+    return fetch(url, {
+      method:"POST",
+      credentials:"same-origin",
+      headers:{ "X-XSRF-TOKEN": csrfCookie() },
+      body: fd
+    }).then(function(res){
+      if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+      return res.json().catch(function(){ return null; });
+    }).then(function(json){
+      if(json && json.code === 0 && json.data && json.data.url){
+        uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
+      }else{
+        toast((json && json.message) || "图片上传失败", "bad");
+      }
+    }).catch(function(ex){
+      toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+    });
   });
 }
 
@@ -34202,6 +34442,7 @@ function applyDrawerReadOnly(readOnly){
     descEl.tabIndex = readOnly ? -1 : 0;
     descEl.setAttribute("aria-disabled", readOnly ? "true" : "false");
     if(readOnly && descEl.isContentEditable) finishTaskTextEdit(descEl, "desc", false);
+    if(readOnly && inlineDesc) endInlineDescEdit(false);
   }
   if(readOnly && taskDrawerTitle && taskDrawerTitle.isContentEditable) finishTaskTextEdit(taskDrawerTitle, "title", false);
   syncInlineTextAffordance();
@@ -34656,7 +34897,7 @@ function renderTimeline(logs){
     if(change){
       var before = change.before || {}, after = change.after || {};
       if(l.action === "version_change") extra += '<br>计划版本：' + esc(taskVersionsText(before) || "待规划") + ' → ' + esc(taskVersionsText(after) || "待规划");
-      if(change.reason) extra += '<br>理由：' + esc(change.reason);
+      if(change.reason) extra += '<br>理由：<span class="tl-reason">' + esc(change.reason) + '</span>';
     }
     return '<div class="tl-item"><span class="tl-time">' + esc(fmtTs(l.createdAt)) + '</span>' +
       '<span class="tl-detail">' + actor + esc(txt) + extra + '</span></div>';
@@ -34847,6 +35088,7 @@ function openTaskDrawer(colId, task, defaults){
     });
     return;
   }
+  if(inlineDesc) endInlineDescEdit(false);
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
   /* 从外部（搜索、看板、通知）打开时重置返回栈；抽屉内的关联跳转与「返回」会保住它 */
@@ -35817,6 +36059,7 @@ function tryCloseTaskDrawer(){
 }
 function forceCloseTaskDrawer(opts){
   opts = opts || {};
+  if(inlineDesc) endInlineDescEdit(false);
   var closingId = lastCommentDraftId || rt.editingId;
   if(opts.discardCommentDraft) discardCommentDraft(closingId);
   else stashCommentDraft(closingId);
@@ -37111,6 +37354,152 @@ function restoreTaskTextAttrs(el, field){
     el.title = "点击修改描述；失焦或 Ctrl/⌘ + Enter 保存，Esc 取消";
   }
 }
+/* ==================== 描述就地编辑：内联富文本 ====================
+   读态点描述进入一个无工具栏的 SunEditor：粘贴/拖入图片直接上传、点图片出拖角手柄，
+   与「编辑」态的描述编辑器同一套能力；失焦或 Ctrl/⌘ + Enter 保存，Esc 还原。
+   保存仍走「保存并继续」整单提交，抽屉不关、页签与滚动位置保留。 */
+var inlineDesc = null;
+function inlineDescBox(){
+  if(!inlineDesc || !inlineDesc.host) return null;
+  var box = inlineDesc.host.nextElementSibling;
+  return box && box.classList.contains("sun-editor") ? box : null;
+}
+function inlineDescEditable(){
+  var box = inlineDescBox();
+  return box ? box.querySelector(".sun-editor-editable") : null;
+}
+function startInlineDescEdit(el){
+  if(!el || inlineDesc) return;
+  var host = document.createElement("div");
+  host.className = "read-desc-edit";
+  host.style.minHeight = "80px";
+  el.hidden = true;
+  el.parentElement.insertBefore(host, el.nextSibling);
+  var st = inlineDesc = { el: el, host: host, box: null, ed: null, before: el.innerHTML || "" };
+  loadSunEditorLib().then(function(){
+    if(inlineDesc !== st || !host.isConnected){ return; }
+    var ed = SUNEDITOR.create(host, {
+      width: "100%",
+      height: "auto",
+      minHeight: "80px",
+      placeholder: "点击输入描述，可直接粘贴或拖入图片…",
+      buttonList: [],
+      mode: "classic",
+      resizingBar: false,
+      showPathLabel: false,
+      charCounter: false,
+      imageUploadSizeLimit: 3 * 1024 * 1024
+    });
+    if(inlineDesc !== st){ try{ ed.destroy(); }catch(e){} return; }
+    st.ed = ed;
+    st.box = inlineDescBox();
+    var box = st.box;
+    if(box) box.classList.add("inline-desc-editor");
+    /* SunEditor 的上传钩子挂在实例上；粘贴与工具栏选图都走这里，避免默认塞 base64 */
+    ed.onImageUploadBefore = uploadTaskDescImage;
+    ed.onImageUpload = function(targetImg){
+      fitInsertedImage(targetImg, inlineDescEditable());
+      notifyResizeHint();
+    };
+    ed.setContents(descHtmlForEditor(st.before), false);
+    var area = inlineDescEditable();
+    if(!area){ endInlineDescEdit(false); return; }
+    area.addEventListener("focusout", function(){
+      /* 点图片手柄时 SunEditor 已拦截 mousedown，不会走到这里；
+         其余失焦要等一拍，确认焦点没有落在编辑器外壳里（滚动 / 缩放条）再收尾 */
+      setTimeout(function(){
+        if(inlineDesc !== st) return;
+        var active = document.activeElement;
+        if(box && active && box.contains(active)) return;
+        endInlineDescEdit(true);
+      }, 0);
+    });
+    if(box) box.addEventListener("keydown", function(e){
+      if(inlineDesc !== st) return;
+      if(e.key === "Escape"){
+        e.preventDefault(); e.stopPropagation();
+        endInlineDescEdit(false);
+      }else if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){
+        e.preventDefault(); e.stopPropagation();
+        endInlineDescEdit(true);
+      }
+    }, true);
+    try{ area.focus(); }catch(e){ /* noop */ }
+    caretToEnd(area);
+  }).catch(function(){
+    if(inlineDesc === st) endInlineDescEdit(false);
+    toast("富文本编辑器加载失败，请检查网络后重试", "warn");
+  });
+}
+/* 内联编辑的改动判定：比较文字与图片序列，而不是 HTML 原样。
+   SunEditor 读回来的内容会补 se-component / origin-size 等包裹属性，
+   直接比字符串会把「点开描述又点走」误判成改动，白白提交一次并推高 revision。
+   图片尺寸只在与打开时都有明确值时比较：老数据没写过 data-size 的，视作没动。 */
+function descContentSignature(html){
+  var box = document.createElement("div");
+  box.innerHTML = descHtmlForSave(html || "");
+  var out = [];
+  (function walk(node){
+    if(node.nodeType === 3){ out.push(node.nodeValue.replace(/\u00a0/g, " ")); return; }
+    if(node.nodeType !== 1) return;
+    var tag = node.tagName.toLowerCase();
+    if(tag === "img"){ out.push("\u0002img|" + (node.getAttribute("src") || "")); return; }
+    if(tag === "br"){ out.push("\n"); return; }
+    if(tag === "p" || tag === "div") out.push("\n");
+    for(var i = 0; i < node.childNodes.length; i++) walk(node.childNodes[i]);
+    if(tag === "p" || tag === "div") out.push("\n");
+  })(box);
+  return out.join("").replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
+}
+function descImagesResized(beforeHtml, afterHtml){
+  var before = document.createElement("div"), after = document.createElement("div");
+  before.innerHTML = beforeHtml || "";
+  after.innerHTML = afterHtml || "";
+  var a = before.querySelectorAll("img"), b = after.querySelectorAll("img");
+  for(var i = 0; i < b.length; i++){
+    var x = a[i], y = b[i];
+    if(!x) return true;
+    if(descSizeOf(x) && descSizeOf(y) && descSizeOf(x) !== descSizeOf(y)) return true;
+  }
+  return false;
+}
+function descSizeOf(img){
+  var size = img.getAttribute("data-size");
+  if(!size){
+    var w = img.style && img.style.width, h = img.style && img.style.height;
+    size = w || h ? (w || "") + "," + (h || "") : "";
+  }
+  return size;
+}
+/* 收起内联编辑器。save=false 时按打开前的 HTML 还原，不写库 */
+function endInlineDescEdit(save){
+  var st = inlineDesc;
+  if(!st) return;
+  inlineDesc = null;
+  var val = "";
+  if(st.ed){
+    try{ val = descHtmlForSave(st.ed.getContents(true)); }catch(e){ val = ""; }
+    try{ st.ed.destroy(); }catch(e){ /* noop */ }
+  }
+  if(st.box && st.box.parentElement) st.box.parentElement.removeChild(st.box);
+  if(st.host && st.host.parentElement) st.host.parentElement.removeChild(st.host);
+  st.el.hidden = false;
+  if(descHtmlBlank(val)) val = "";
+  var beforeSave = descHtmlForSave(st.before || "");
+  if(descHtmlBlank(beforeSave)) beforeSave = "";
+  var changed = save && (descContentSignature(val) !== descContentSignature(beforeSave)
+    || descImagesResized(beforeSave, val));
+  if(!changed){
+    renderReadDesc();
+    rt.formDirty = formFieldsDirty();
+    syncDrawerDirty();
+    return;
+  }
+  /* 先回填再提交：读态不能停在旧的描述上等接口 */
+  st.el.innerHTML = val ? descHtmlForEditor(val) : "";
+  setTaskDescContent(val);
+  factSave("描述已保存");
+}
 function startTaskTextEdit(el, field){
   if(!el) return;
   if(!taskInlineWritable()){
@@ -37118,6 +37507,7 @@ function startTaskTextEdit(el, field){
     if(rt.editingId) enterDrawerEdit(field === "desc" ? { focus: "desc" } : undefined);
     return;
   }
+  if(field === "desc"){ startInlineDescEdit(el); return; }
   if(inlineText && inlineText.el !== el) finishTaskTextEdit(inlineText.el, inlineText.field, true);
   if(el.isContentEditable) return;
   inlineText = { el: el, field: field, before: field === "title" ? (iTitle.value || "") : el.innerHTML };
@@ -37207,6 +37597,15 @@ var readDescBox = $("readDesc");
 if(readDescBox){
   readDescBox.addEventListener("click", function(e){
     if(readDescBox.isContentEditable) return;
+    var img = e.target.closest("img");
+    if(img){
+      var m = String(img.getAttribute("src") || "").match(/\/api\/attachments\/([A-Za-z0-9_-]+)\/(?:download|thumb|preview)/);
+      if(m){
+        e.preventDefault();
+        openAttPreview({ attachment: { id: m[1], filename: img.getAttribute("alt") || "描述图片" } });
+        return;
+      }
+    }
     if(e.target.closest("a")) return;
     startTaskTextEdit(readDescBox, "desc");
   });
@@ -40129,7 +40528,14 @@ function taskPayloadWith(t, patch){
     blocked: !!t.blocked,
     blockedReason: t.blockedReason || null,
     blockedByTaskId: t.blockedByTaskId || null,
-    tags: t.tags || []
+    tags: t.tags || [],
+    /* 缺陷元数据：后端按 itemType=bug 校验严重度，不带上就无法行内直改缺陷行 */
+    itemType: t.itemType || "task",
+    severity: t.severity || null,
+    environment: t.environment || null,
+    reproduceSteps: t.reproduceSteps || null,
+    foundVersionId: t.foundVersionId || null,
+    regressionStatus: t.regressionStatus || null
   };
   for(var k in patch) if(Object.prototype.hasOwnProperty.call(patch, k)) p[k] = patch[k];
   return p;
@@ -40410,6 +40816,7 @@ var copyToClipboard = copyText; var esc = esc2;
 
 
 
+
 function taskLink(id){
   return window.location.origin + window.location.pathname + "#/board?task=" + encodeURIComponent(id);
 }
@@ -40468,7 +40875,7 @@ function handleDeepLink(){
   }
 }
 function openDuePopover(anchor, taskId){
-  var t = taskById(taskId);
+  var t = findTask(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var el = document.createElement("div");
@@ -40504,25 +40911,24 @@ function openDuePopover(anchor, taskId){
 }
 var dueSeqByTask = {};
 function setTaskDue(taskId, dueDate){
-  var t = taskById(taskId);
+  var t = findTask(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var seq = (dueSeqByTask[taskId] || 0) + 1;
   dueSeqByTask[taskId] = seq;
   var before = t.dueDate || null;
-  t.dueDate = dueDate;                                  // 乐观更新
-  if(state.board && activeView === "board") render({animate:false});
+  patchTaskMirrors(t, {dueDate: dueDate});            // 乐观更新
+  repaintTaskPatch();
   API.put("/api/tasks/" + encodeURIComponent(taskId), taskPayloadWith(t, {dueDate: dueDate})).then(function(){
     if(dueSeqByTask[taskId] !== seq) return;
     toast(dueDate ? ("已改期至 " + fmtFull(parseDate(dueDate))) : "已清除截止日期", dueDate ? "fs" : "warn");
-    loadBoard({silent:true});
-    refreshListIfOpen();
+    refreshAfterTaskPatch(taskId);
     refreshCalendarIfOpen();
     refreshGanttIfOpen();
   }).catch(function(ex){
     if(dueSeqByTask[taskId] !== seq) return;
-    t.dueDate = before;                                  // 失败回滚
-    if(state.board && activeView === "board") render({animate:false});
+    patchTaskMirrors(t, {dueDate: before});            // 失败回滚
+    repaintTaskPatch();
     toast(ex.message || "改期失败", "bad");
   });
 }
@@ -40700,7 +41106,7 @@ function moveTaskToColumn(t, to){
 }
 /** 状态 chip 的列菜单：只列出可去的列，当前列打勾且不可点 */
 function openStatusMenu(anchor, taskId){
-  var t = taskById(taskId) || rt.listCache[taskId];
+  var t = findTask(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
@@ -40734,6 +41140,143 @@ function openStatusMenu(anchor, taskId){
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
   /* 规则首次读取是异步的：先按默认规则开菜单，拿到矩阵后原地补上「需原因 / 受限」 */
   loadRules(wsId).then(function(){ if(el.isConnected) paintMenu(); }).catch(function(){});
+}
+/* ===== 列表行内直接修：优先级 / 负责人 =====
+   与需求池行内编辑同口径：读态是单元格文字，点开菜单，选中即保存。
+   改列仍走 openStatusMenu（含流转规则），改期仍走 openDuePopover。 */
+/* 看板、列表、详情缓存可能持有同一工作项的不同对象，乐观更新要一起改 */
+function patchTaskMirrors(t, patch){
+  var seen = [];
+  [t, taskById(t.id), rt.listCache[t.id], taskCacheExtra[t.id]].forEach(function(m){
+    if(!m || seen.indexOf(m) >= 0) return;
+    seen.push(m);
+    for(var k in patch){
+      if(Object.prototype.hasOwnProperty.call(patch, k)) m[k] = patch[k];
+    }
+  });
+}
+function repaintTaskPatch(){
+  if(state.board && activeView === "board") render({animate:false});
+  repaintListRows();
+}
+/* 行内改完统一收口：层级视图重新聚合，列状态工作页 / 缺陷 Tab / 我的工作靠 ds:task-saved 重取 */
+function refreshAfterTaskPatch(taskId){
+  loadBoard({silent:true});
+  refreshListIfOpen();
+  var treeMod = viewModule("tree");
+  if(treeMod && treeMod.refreshTreeIfOpen) treeMod.refreshTreeIfOpen();
+  window.dispatchEvent(new CustomEvent("ds:task-saved", { detail:{ id:taskId, created:false } }));
+}
+var priSeqByTask = {};
+function setTaskPriority(taskId, priority){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if((t.priority || "P2") === priority) return;
+  var seq = (priSeqByTask[taskId] || 0) + 1;
+  priSeqByTask[taskId] = seq;
+  var before = t.priority || null;
+  patchTaskMirrors(t, {priority: priority});
+  repaintTaskPatch();
+  API.put("/api/tasks/" + encodeURIComponent(taskId), taskPayloadWith(t, {priority: priority})).then(function(){
+    if(priSeqByTask[taskId] !== seq) return;
+    toast("优先级已改为 " + priName(priority), "fs");
+    refreshAfterTaskPatch(taskId);
+  }).catch(function(ex){
+    if(priSeqByTask[taskId] !== seq) return;
+    patchTaskMirrors(t, {priority: before});
+    repaintTaskPatch();
+    toast(ex.message || "改优先级失败", "bad");
+  });
+}
+function openPriorityMenu(anchor, taskId){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var cur = t.priority || "P2";
+  var el = document.createElement("div");
+  el.className = "menu";
+  el.style.minWidth = "196px";
+  el.innerHTML = '<div class="menu-title">改为优先级</div>' + PRIORITIES.map(function(p){
+    return '<button class="menu-item" type="button" data-pri="' + p + '">' +
+      priTagHTML(p) + (p === cur ? '<span class="k">当前</span>' : '') + '</button>';
+  }).join("");
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-pri]");
+    if(!b) return;
+    UI.closeAllPops();
+    setTaskPriority(taskId, b.dataset.pri);
+  });
+  UI.openPop(el, anchor, {align:"left", width:210, onClose: function(){ el.remove(); }});
+  var first = el.querySelector(".menu-item");
+  if(first){ try{ first.focus({preventScroll:true}); }catch(err){} }
+}
+/* 候选与批量改负责人同一口径：项目花名册 ∩ 空间可指派成员；花名册先回源再出菜单 */
+function ownerCandidatesFor(t, wsId){
+  var pid = t.reqId;
+  if(!pid || !wsId) return Promise.resolve(ownerOptions(pid));
+  return loadProjectMembers(wsId, pid, true).then(function(data){
+    var byId = {};
+    ((data && data.members) || []).forEach(function(m){ byId[m.userId] = m; });
+    return ownerOptions(pid).filter(function(o){ return !!byId[o.id]; }).map(function(o){
+      var m = byId[o.id];
+      return { id:o.id, name:o.name, company:m.companyName || o.company, role:memberRoleTitles(m).join(" / ") || o.role };
+    });
+  });
+}
+var ownerSeqByTask = {};
+function setTaskOwner(taskId, name, userId){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var before = {owner: t.owner || null, ownerUserId: t.ownerUserId || null};
+  if((before.owner || "") === (name || "") && String(before.ownerUserId || "") === String(userId || "")) return;
+  var seq = (ownerSeqByTask[taskId] || 0) + 1;
+  ownerSeqByTask[taskId] = seq;
+  var patch = {owner: name || null, ownerUserId: userId || null};
+  patchTaskMirrors(t, patch);
+  repaintTaskPatch();
+  API.put("/api/tasks/" + encodeURIComponent(taskId), taskPayloadWith(t, patch)).then(function(){
+    if(ownerSeqByTask[taskId] !== seq) return;
+    toast(name ? ("负责人已改为「" + name + "」") : "已清除负责人", "fs");
+    refreshAfterTaskPatch(taskId);
+  }).catch(function(ex){
+    if(ownerSeqByTask[taskId] !== seq) return;
+    patchTaskMirrors(t, before);
+    repaintTaskPatch();
+    toast(ex.message || "改负责人失败", "bad");
+  });
+}
+function openOwnerMenu(anchor, taskId){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
+  var el = document.createElement("div"), disposed = false;
+  el.className = "menu";
+  el.innerHTML = '<div class="menu-title" role="status">正在加载可指派成员…</div>';
+  function paint(options){
+    if(disposed) return;
+    var curId = t.ownerUserId ? String(t.ownerUserId) : "";
+    el.innerHTML = '<div class="menu-title">改为负责人</div>' + (options.length ? options.map(function(o){
+      var on = curId ? String(o.id) === curId : (!!t.owner && t.owner === o.name);
+      var label = o.name + " · " + (o.role || "未设角色") + " · " + (o.company || "未标注公司");
+      return '<button class="menu-item" type="button" data-owner-set="' + esc(o.id) + '" data-name="' + esc(o.name) + '" title="' + esc(label) + '">' +
+        avatarHTML(o.name, "sm") + '<span style="white-space:normal">' + esc(label) + '</span>' +
+        (on ? '<span class="k">当前</span>' : '') + '</button>';
+    }).join("") : '<div class="menu-note">当前项目没有可指派成员</div>');
+  }
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-owner-set]");
+    if(!b) return;
+    UI.closeAllPops();
+    setTaskOwner(taskId, b.dataset.name, b.dataset.ownerSet);
+  });
+  UI.openPop(el, anchor, {align:"left", width:Math.min(360, window.innerWidth - 16), onClose: function(){ disposed = true; el.remove(); }});
+  ownerCandidatesFor(t, wsId).then(paint).catch(function(ex){
+    if(disposed) return;
+    el.innerHTML = '<div class="menu-title" role="alert">' + esc(ex.message || "成员加载失败，请重试") + '</div>';
+  });
 }
 function toggleTaskDone(taskId){
   var t = taskById(taskId);
@@ -42496,6 +43039,7 @@ initCaliberHelp();
 
 var PAGE = 100;
 var STORE_TAB = "ds.mineTab";
+var STORE_FOLD = "ds.mineSecFold.v1";
 var HANDOFF_KEY = "ds.wsHandoff.v1";
 var PRI_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
 var PRI_LABEL = { P0: "紧急", P1: "高", P2: "中", P3: "低" };
@@ -42524,13 +43068,6 @@ var RELEASE_META = {
   completed: { label: "已完成", tone: "green" },
   canceled: { label: "已取消", tone: "gray" }
 };
-var DEMAND_CHIPS = [
-  { key: "all", label: "全部" },
-  { key: "review", label: "评审中" },
-  { key: "pass", label: "已通过" },
-  { key: "plan", label: "已排期" },
-  { key: "done", label: "已完成" }
-];
 var PENDING_DEFS = {
   dev: {
     title: "我负责的开发", icon: "board", tint: "blue",
@@ -42558,9 +43095,9 @@ var PENDING_DEFS = {
   }
 };
 var CREATED_DEF = {
-  title: "我发起的需求", icon: "demand", tint: "green",
-  desc: "按最近更新排序；状态含评审、排期与完成",
-  head: ["需求", "状态", "优先级", "期望上线", "最近更新"], grid: "mw-g-demand",
+  title: "我发起的事项", icon: "demand", tint: "green",
+  desc: "需求按最近更新排序，含评审、排期与完成；工作项按看板状态与截止日期跟踪",
+  head: ["事项", "状态", "优先级", "期望 / 截止", "最近更新"], grid: "mw-g-demand",
   go: "demands", unit: "个"
 };
 var WATCH_DEF = {
@@ -42578,12 +43115,18 @@ function safeGet(key) {
 function safeSet(key, value) {
   try { localStorage.setItem(key, value); } catch (e) { /* 受限环境忽略 */ }
 }
+function loadFold() {
+  try {
+    var o = JSON.parse(safeGet(STORE_FOLD) || "{}");
+    return o && typeof o === "object" ? o : {};
+  } catch (e) { return {}; }
+}
 function enc(v) { return encodeURIComponent(v == null ? "" : v); }
 function page0() { return { items: [], offset: 0, hasMore: false, total: 0 }; }
 function freshSrc() {
   return {
     pending: { tasks: page0(), review: page0(), plans: page0() },
-    created: { items: [], offset: 0, hasMore: false, total: 0, statusCounts: null },
+    created: { demands: page0(), tasks: page0(), statusCounts: null },
     watched: { tasks: page0(), demands: page0(), plans: page0() }
   };
 }
@@ -42608,6 +43151,7 @@ var mw = {
   blocked: false,
   sort: { pending: "due", created: "updated", watched: "updated" },
   expand: {},
+  fold: loadFold(),
   src: freshSrc(),
   loading: { pending: false, created: false, watched: false },
   err: { pending: null, created: null, watched: null },
@@ -42662,7 +43206,7 @@ function tabCount(key) {
     var all = pendingData();
     loaded = all.dev.length + all.test.length + all.review.length + all.plan.length;
   } else if (key === "created") {
-    server = num(mw.counts.created);
+    server = num(mw.counts.created) + num(mw.counts.createdTasks);
     loaded = createdData().length;
   } else {
     server = num(mw.counts.watched);
@@ -42856,13 +43400,12 @@ function autoPick() {
 function fetchTasks(view, scope, offset) {
   return API.getGlobal("/api/my-tasks", { view: view, scope: scope, offset: offset, limit: PAGE });
 }
-function createdStatus() {
-  return mw.chip.created === "all" ? "" : mw.chip.created;
-}
 function fetchDemands(view, offset) {
-  var p = { view: view, offset: offset, limit: PAGE };
-  if (view === "created" && createdStatus()) p.status = createdStatus();
-  return API.get("/api/my-demands", p);
+  return API.get("/api/my-demands", { view: view, offset: offset, limit: PAGE });
+}
+/* 我发起的工作项：跨空间，含已完成与已取消（scope=all） */
+function fetchCreatedTasks(offset) {
+  return fetchTasks("created", "all", offset);
 }
 function fetchTestPlans(offset) {
   return API.get("/api/my-work/test-plans", { offset: offset, limit: PAGE });
@@ -42888,8 +43431,11 @@ function applySource(tab, key, res, append) {
     return;
   }
   if (tab === "created") {
-    src.created = mergePage(src.created, res, append);
-    if (res && res.statusCounts) src.created.statusCounts = res.statusCounts;
+    if (key === "createdTasks") src.created.tasks = mergePage(src.created.tasks, res, append);
+    else {
+      src.created.demands = mergePage(src.created.demands, res, append);
+      if (res && res.statusCounts) src.created.statusCounts = res.statusCounts;
+    }
     return;
   }
   if (tab === "watched") {
@@ -42900,12 +43446,12 @@ function applySource(tab, key, res, append) {
 }
 function resetTabSource(tab) {
   if (tab === "pending") mw.src.pending = { tasks: page0(), review: page0(), plans: page0() };
-  else if (tab === "created") mw.src.created = { items: [], offset: 0, hasMore: false, total: 0, statusCounts: mw.src.created.statusCounts };
+  else if (tab === "created") mw.src.created = { demands: page0(), tasks: page0(), statusCounts: mw.src.created.statusCounts };
   else if (tab === "watched") mw.src.watched = { tasks: page0(), demands: page0(), plans: page0() };
 }
 function allDemandItems() {
   return (mw.src.pending.review.items || [])
-    .concat(mw.src.created.items || [])
+    .concat(mw.src.created.demands.items || [])
     .concat(mw.src.watched.demands.items || []);
 }
 function ensureReqNames() {
@@ -42951,9 +43497,13 @@ function loadTab(tab, opts) {
       jobs.push({ key: "review", run: function () { return fetchDemands("review", rOff); } });
     }
   } else if (tab === "created") {
-    var cOff = append ? mw.src.created.offset : 0;
-    if (!append || mw.src.created.hasMore) {
-      jobs.push({ key: "created", run: function () { return fetchDemands("created", cOff); } });
+    var cdOff = append ? mw.src.created.demands.offset : 0;
+    var ctOff = append ? mw.src.created.tasks.offset : 0;
+    if (!append || mw.src.created.demands.hasMore) {
+      jobs.push({ key: "created", run: function () { return fetchDemands("created", cdOff); } });
+    }
+    if (!append || mw.src.created.tasks.hasMore) {
+      jobs.push({ key: "createdTasks", run: function () { return fetchCreatedTasks(ctOff); } });
     }
   } else if (tab === "watched") {
     var wtOff = append ? mw.src.watched.tasks.offset : 0;
@@ -42987,7 +43537,7 @@ function runJobs(tab, jobs, append, seq) {
   var spaces = [];
   var tracked = jobs.map(function (j) {
     var p = j.run();
-    if (j.key === "tasks") p = p.then(function (res) {
+    if (j.key === "tasks" || j.key === "createdTasks") p = p.then(function (res) {
       if (res && res.spaces) spaces = spaces.concat(res.spaces);
       return res;
     });
@@ -43075,6 +43625,9 @@ function rowPass(r) {
       if (chip === "demand" && r.kind !== "demand") return false;
       if (chip === "release" && r.kind !== "release") return false;
       if (chip === "today" && !isTodayTs(r.updatedRaw)) return false;
+    } else if (tab === "created") {
+      if (chip === "demand" && r.kind !== "demand") return false;
+      if (chip === "task" && r.kind !== "task") return false;
     }
   }
   return true;
@@ -43091,8 +43644,10 @@ function sortRows(rows) {
     });
   } else if (key === "expect") {
     arr.sort(function (a, b) {
-      var x = a.expect ? parseDate(a.expect).getTime() : Infinity;
-      var y = b.expect ? parseDate(b.expect).getTime() : Infinity;
+      /* 需求看期望上线，工作项看截止日期：合并列表按「最近的时间节点」排，未定的排最后 */
+      var xv = a.expect || a.dueDate, yv = b.expect || b.dueDate;
+      var x = xv ? parseDate(xv).getTime() : Infinity;
+      var y = yv ? parseDate(yv).getTime() : Infinity;
       return x - y || byTitle(a, b);
     });
   } else if (key === "due" && tab === "pending") {
@@ -43136,9 +43691,11 @@ function titleCell(r, view) {
       if (r.version) bits.push('<span class="vtag">' + esc(r.version) + '</span>');
     }
   } else {
+    if (view === "created") bits.push(typeTag(r));
     if (r.project) bits.push(esc(r.project));
     if (r.version) bits.push('<span class="vtag">' + esc(r.version) + '</span>');
     if (r.kind === "demand" && r.reviewer) bits.push('评审人 ' + esc(r.reviewer));
+    if (view === "created" && r.kind === "task" && r.submitter) bits.push('负责人 ' + esc(r.submitter));
   }
   if (!bits.length) bits.push('<span class="mw-muted">未归属项目</span>');
   return '<div class="mw-tcell"><div class="mw-ttl" title="' + esc(r.title) + '">' + esc(r.title) + '</div>' +
@@ -43193,6 +43750,10 @@ function expectCell(r) {
   if (!r.expect) return '<span class="mw-muted">未定</span>';
   return esc(fmtShortMD(parseDate(r.expect)));
 }
+/* 合并列表第 4 列：需求是期望上线，工作项是截止日期 */
+function nodeCell(r) {
+  return r.kind === "demand" ? expectCell(r) : dueCell(r);
+}
 function submitCell(r) {
   if (!r.createdTs) return '<span class="mw-muted">—</span>';
   var wait = Math.max(0, dayDiff(rt.TODAY, new Date(r.createdTs)));
@@ -43243,8 +43804,8 @@ function reviewRow(r) {
     '</div><div>' + priCell(r) + '</div><div>' + expectCell(r) + '</div><div>' + submit + '</div></div>';
 }
 function createdRow(r) {
-  return '<div class="mw-row mw-g-demand"' + rowAttrs(r, "created") + '>' + titleCell(r) + '<div>' + statusCell(r) +
-    '</div><div>' + priCell(r) + '</div><div>' + expectCell(r) + '</div><div>' + updatedCell(r) + '</div></div>';
+  return '<div class="mw-row mw-g-demand"' + rowAttrs(r, "created") + '>' + titleCell(r, "created") + '<div>' + statusCell(r) +
+    '</div><div>' + priCell(r) + '</div><div>' + nodeCell(r) + '</div><div>' + updatedCell(r) + '</div></div>';
 }
 function watchedRow(r) {
   var upd = '<div class="mw-cell-upd"><span>' + updatedCell(r) + '</span>' +
@@ -43263,14 +43824,30 @@ function claimHTML() {
     '<span>另有 <b>' + mw.claimable + '</b> 个未指派测试可领取 · 不计入你的待处理</span>' +
     '<button class="mw-link" type="button" data-claim title="打开当前空间的可领取测试列表">去领取 ' + icon("chevronRight", 12) + '</button></div>';
 }
+/* 分区头：图标 + 标题是折叠开关；数量、口径与次要操作留在按钮外，收起时次要操作一并隐藏 */
+function secHeadHTML(key, def, countText, act) {
+  var folded = !!mw.fold[key];
+  return '<div class="mw-shead">' +
+    '<button class="mw-sfold" type="button" data-fold="' + key + '" aria-expanded="' + (folded ? "false" : "true") +
+    '" aria-controls="mw-body-' + key + '" aria-label="' + (folded ? "展开" : "收起") + "「" + esc(def.title) + "」" +
+    '" title="' + (folded ? "展开本分区" : "收起本分区") + '">' +
+    '<span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
+    '<span class="mw-stitle">' + esc(def.title) + '</span>' +
+    '<span class="mw-chev">' + icon("chevronRight", 12) + '</span></button>' +
+    '<span class="mw-scount">' + esc(countText) + '</span>' +
+    '<span class="mw-sdesc">' + esc(def.desc) + '</span>' +
+    '<span class="mw-sact">' + (act || "") + '</span></div>';
+}
+function secOpen(key, def, countText, act) {
+  return '<section class="mw-sec' + (mw.fold[key] ? " is-folded" : "") + '">' + secHeadHTML(key, def, countText, act) +
+    '<div class="mw-sbody" id="mw-body-' + key + '">';
+}
 function emptySection(key, def) {
-  var html = '<section class="mw-sec"><div class="mw-shead"><span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
-    '<span class="mw-stitle">' + esc(def.title) + '</span><span class="mw-scount">0 ' + esc(def.unit || "项") + '</span>' +
-    '<span class="mw-sdesc">' + esc(def.desc) + '</span></div>' +
+  var html = secOpen(key, def, "0 " + (def.unit || "项")) +
     '<div class="mw-sempty">' + icon("inbox", 14) + '<span>' + esc(def.empty) + '</span>' +
     '<button class="mw-link" type="button" data-go="' + def.go + '">去看看 ' + icon("chevronRight", 12) + '</button></div>';
   if (key === "test" && mw.claimable > 0) html += claimHTML();
-  return html + '</section>';
+  return html + '</div></section>';
 }
 function sectionHTML(key, def, rows, rowFn, view) {
   var filtered = sortRows(rows.filter(rowPass));
@@ -43282,18 +43859,17 @@ function sectionHTML(key, def, rows, rowFn, view) {
   var expanded = !!mw.expand[key];
   var shown = expanded ? filtered : filtered.slice(0, 4);
   var countText = filtered.length + " " + (def.unit || "项") + (filtered.length !== rows.length ? " / 共 " + rows.length : "");
-  var html = '<section class="mw-sec"><div class="mw-shead"><span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
-    '<span class="mw-stitle">' + esc(def.title) + '</span><span class="mw-scount">' + esc(countText) + '</span>' +
-    '<span class="mw-sdesc">' + esc(def.desc) + '</span><span class="mw-sact">';
+  var act = "";
   if (filtered.length > 4) {
-    html += '<button class="mw-link" type="button" data-expand="' + key + '">' +
+    act = '<button class="mw-link" type="button" data-expand="' + key + '">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
-  html += '</span></div><div class="mw-thead ' + def.grid + '">' +
+  var html = secOpen(key, def, countText, act) +
+    '<div class="mw-thead ' + def.grid + '">' +
     def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>';
   html += shown.map(rowFn).join("");
   if (key === "test" && mw.claimable > 0) html += claimHTML();
-  return html + '</section>';
+  return html + '</div></section>';
 }
 
 /* ---------------- 页签数据 ---------------- */
@@ -43309,7 +43885,9 @@ function pendingData() {
   return { dev: dev, test: test, review: review, plan: plan };
 }
 function createdData() {
-  return (mw.src.created.items || []).map(function (d) { return demandRow(d); });
+  var demands = (mw.src.created.demands.items || []).map(function (d) { return demandRow(d); });
+  var tasks = (mw.src.created.tasks.items || []).map(function (t) { return taskRow(t, "dev"); });
+  return demands.concat(tasks);
 }
 function watchedData() {
   var tasks = (mw.src.watched.tasks.items || []).map(function (t) { return taskRow(t, "watch"); });
@@ -43339,16 +43917,15 @@ function createdHTML() {
   if (!filtered.length) return "";
   var expanded = !!mw.expand.created;
   var shown = expanded ? filtered : filtered.slice(0, 4);
-  var html = '<section class="mw-sec"><div class="mw-shead"><span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
-    '<span class="mw-stitle">' + esc(def.title) + '</span><span class="mw-scount">' + filtered.length + ' 个</span>' +
-    '<span class="mw-sdesc">' + esc(def.desc) + '</span><span class="mw-sact">';
+  var act = "";
   if (filtered.length > 4) {
-    html += '<button class="mw-link" type="button" data-expand="created">' +
+    act = '<button class="mw-link" type="button" data-expand="created">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
-  html += '</span></div><div class="mw-thead ' + def.grid + '">' +
-    def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>';
-  return html + shown.map(createdRow).join("") + '</section>';
+  return secOpen("created", def, filtered.length + " 个", act) +
+    '<div class="mw-thead ' + def.grid + '">' +
+    def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>' +
+    shown.map(createdRow).join("") + '</div></section>';
 }
 function watchedHTML() {
   var def = WATCH_DEF;
@@ -43356,16 +43933,15 @@ function watchedHTML() {
   if (!filtered.length) return "";
   var expanded = !!mw.expand.watched;
   var shown = expanded ? filtered : filtered.slice(0, 4);
-  var html = '<section class="mw-sec"><div class="mw-shead"><span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
-    '<span class="mw-stitle">' + esc(def.title) + '</span><span class="mw-scount">' + filtered.length + ' 条</span>' +
-    '<span class="mw-sdesc">' + esc(def.desc) + '</span><span class="mw-sact">';
+  var act = "";
   if (filtered.length > 4) {
-    html += '<button class="mw-link" type="button" data-expand="watched">' +
+    act = '<button class="mw-link" type="button" data-expand="watched">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
-  html += '</span></div><div class="mw-thead ' + def.grid + '">' +
-    def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>';
-  return html + shown.map(watchedRow).join("") + '</section>';
+  return secOpen("watched", def, filtered.length + " 条", act) +
+    '<div class="mw-thead ' + def.grid + '">' +
+    def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>' +
+    shown.map(watchedRow).join("") + '</div></section>';
 }
 function moreLine(tab) {
   var loaded = 0, total = 0;
@@ -43373,8 +43949,8 @@ function moreLine(tab) {
     loaded = mw.src.pending.tasks.items.length + mw.src.pending.review.items.length + mw.src.pending.plans.items.length;
     total = mw.src.pending.tasks.total + mw.src.pending.review.total + mw.src.pending.plans.total;
   } else if (tab === "created") {
-    loaded = mw.src.created.items.length;
-    total = mw.src.created.total;
+    loaded = mw.src.created.demands.items.length + mw.src.created.tasks.items.length;
+    total = mw.src.created.demands.total + mw.src.created.tasks.total;
   } else if (tab === "watched") {
     loaded = mw.src.watched.tasks.items.length + mw.src.watched.demands.items.length
       + mw.src.watched.plans.items.length;
@@ -43427,19 +44003,26 @@ function briefHTML() {
   }
   if (tab === "created") {
     var rows = createdData();
-    var createdTotal = Math.max(mw.counts ? num(mw.counts.created) : 0, rows.length);
+    var demandTotal = mw.counts ? num(mw.counts.created) : 0;
+    var taskTotal = mw.counts ? num(mw.counts.createdTasks) : 0;
+    var createdTotal = Math.max(demandTotal + taskTotal, rows.length);
     if (!createdTotal && !rows.length) {
-      return '<span class="mw-txt"><strong>你还没有发起过需求</strong> · 提交后可在这里跟踪评审与排期。</span>' + metaHTML();
+      return '<span class="mw-txt"><strong>你还没有发起过事项</strong> · 提交需求或创建工作项后可在这里跟踪进展。</span>' + metaHTML();
     }
     var sc = mw.src.created.statusCounts || {};
-    var bits = [];
-    if (sc.review) bits.push(sc.review + " 个评审中");
-    if (sc.pass) bits.push(sc.pass + " 个已通过");
-    if (sc.plan) bits.push(sc.plan + " 个已排期");
-    if (sc.done) bits.push(sc.done + " 个已完成");
-    var waiting = rows.filter(function (r) { return r.status === "review"; })[0];
-    return '<span class="mw-bic">' + icon("demand", 15) + '</span><span class="mw-txt"><strong>' + createdTotal + ' 个需求</strong> · ' +
-      esc(bits.join("，") || "还没有进入评审与排期的需求") + (waiting ? '；「' + esc(waiting.title) + '」正在等待评审。' : '。') + '</span>' + metaHTML();
+    var parts = [];
+    if (demandTotal) {
+      var st = [];
+      if (sc.review) st.push(sc.review + " 评审中");
+      if (sc.pass) st.push(sc.pass + " 已通过");
+      if (sc.plan) st.push(sc.plan + " 已排期");
+      if (sc.done) st.push(sc.done + " 已完成");
+      parts.push(demandTotal + " 个需求" + (st.length ? "（" + st.join("、") + "）" : ""));
+    }
+    if (taskTotal) parts.push(taskTotal + " 个工作项");
+    var waiting = rows.filter(function (r) { return r.kind === "demand" && r.status === "review"; })[0];
+    return '<span class="mw-bic">' + icon("demand", 15) + '</span><span class="mw-txt"><strong>' + createdTotal + ' 个事项</strong> · ' +
+      esc(parts.join("、") || "提交后会在这里跟踪") + (waiting ? '；「' + esc(waiting.title) + '」正在等待评审。' : '。') + '</span>' + metaHTML();
   }
   var wrows = watchedData();
   var tasks = Math.max(mw.counts ? num(mw.counts.watchedTasks) : 0, (mw.src.watched.tasks.items || []).length);
@@ -43487,10 +44070,19 @@ function chipsFor(tab) {
     ];
   }
   if (tab === "created") {
-    var sc = mw.src.created.statusCounts || {};
-    return DEMAND_CHIPS.map(function (c) {
-      return { key: c.key, label: c.label, n: c.key === "all" ? num(sc.all) : num(sc[c.key]) };
-    });
+    if (!mw.counts) {
+      var crows = createdData().filter(rowPassBase);
+      return [
+        { key: "all", label: "全部", n: crows.length },
+        { key: "demand", label: "需求", n: crows.filter(function (r) { return r.kind === "demand"; }).length },
+        { key: "task", label: "工作项", n: crows.filter(function (r) { return r.kind === "task"; }).length }
+      ];
+    }
+    return [
+      { key: "all", label: "全部", n: num(mw.counts.created) + num(mw.counts.createdTasks) },
+      { key: "demand", label: "需求", n: num(mw.counts.created) },
+      { key: "task", label: "工作项", n: num(mw.counts.createdTasks) }
+    ];
   }
   var w = watchedData().filter(rowPassBase);
   return [
@@ -43522,7 +44114,7 @@ function sortOptions(tab) {
     return [
       { key: "updated", label: "最近更新" },
       { key: "priority", label: "优先级" },
-      { key: "expect", label: "期望上线" }
+      { key: "expect", label: "期望 / 截止" }
     ];
   }
   if (tab === "watched") {
@@ -43700,7 +44292,7 @@ function resetTabData(tab) {
 }
 function tabHasData(tab) {
   if (tab === "pending") return !!(mw.src.pending.tasks.items.length || mw.src.pending.review.items.length || mw.src.pending.plans.items.length);
-  if (tab === "created") return !!mw.src.created.items.length;
+  if (tab === "created") return !!(mw.src.created.demands.items.length || mw.src.created.tasks.items.length);
   if (tab === "watched") return !!(mw.src.watched.tasks.items.length || mw.src.watched.demands.items.length || mw.src.watched.plans.items.length);
   return false;
 }
@@ -43708,7 +44300,7 @@ function tabRawEmpty(tab) {
   if (tabHasData(tab)) return false;
   if (mw.counts) return num(tabCount(tab)) === 0;
   if (tab === "pending") return !mw.src.pending.tasks.total && !mw.src.pending.review.total && !mw.src.pending.plans.total && !tabHasData(tab);
-  if (tab === "created") return !mw.src.created.total && !tabHasData(tab);
+  if (tab === "created") return !mw.src.created.demands.total && !mw.src.created.tasks.total && !tabHasData(tab);
   if (tab === "watched") return !mw.src.watched.tasks.total && !mw.src.watched.demands.total && !mw.src.watched.plans.total && !tabHasData(tab);
   return true;
 }
@@ -43756,12 +44348,12 @@ function emptyHTML() {
         : [["去项目页看看", "primary", "projects"], ["去需求池看看", "", "demands"]]
     },
     created: {
-      t: "你还没有发起过需求",
+      t: "你还没有发起过事项",
       d: canNew
-        ? "提交需求后，评审、排期与完成进展都会在这里更新，不需要再去需求池逐个查找。"
-        : "需求需要落在可写项目里；获得项目写权限后，才能发起需求并在这里跟踪进展。",
+        ? "提交需求或创建工作项后，评审、排期与完成进展都会在这里更新，不需要再去列表里逐个查找。"
+        : "需求和工作项都需要落在可写项目里；获得项目写权限后，才能在这里跟踪进展。",
       a: canNew
-        ? [["提一个需求", "primary", "demand"], ["去需求池看看", "", "demands"]]
+        ? [["新建工作项", "primary", "task"], ["提一个需求", "", "demand"], ["去需求池看看", "", "demands"]]
         : [["去需求池看看", "primary", "demands"], ["去项目页看看", "", "projects"]]
     },
     watched: {
@@ -43783,7 +44375,7 @@ function noteText() {
   var tab = currentTab();
   var bits = [];
   if (tab === "pending") bits.push("页签计数来自服务端；逾期、今天到期与阻塞按已载入明细统计，继续加载会更新结论。「待我执行」只列执行人是你、尚未完成的测试计划。工作项与测试计划可跨空间，评审需求限定当前空间。");
-  else if (tab === "created") bits.push("页签计数来自服务端；状态 chips 由服务端统计，搜索与优先级筛选只作用于已载入需求。需求按当前空间统计。");
+  else if (tab === "created") bits.push("页签计数来自服务端；需求按当前空间统计，工作项跨空间（含已完成与已取消）。类型 chips 与页签计数同源，搜索与优先级筛选只作用于已载入内容。");
   else bits.push("关注只接收提醒，不代表负责；列表只读，取消关注不会删除对象。工作项可跨空间，需求与发布计划限定当前空间。");
   bits.push("每类先载入 " + PAGE + " 条，继续加载会追加；搜索与筛选只作用于已载入内容。");
   if (tab === "created" && mw.counts && num(mw.counts.matchedByNameOnly) > 0) {
@@ -43795,7 +44387,7 @@ function noteText() {
 function partialHTML(tab) {
   var info = mw.partialErr[tab];
   if (!info) return "";
-  var LABELS = { tasks: "工作项", review: "待我评审", plans: "测试计划", release: "关注的发布计划", created: "我发起的需求", demands: "关注的需求" };
+  var LABELS = { tasks: "工作项", review: "待我评审", plans: "测试计划", release: "关注的发布计划", created: "我发起的需求", createdTasks: "我发起的工作项", demands: "关注的需求" };
   var names = info.keys.map(function (k) { return LABELS[k] || k; }).join("、");
   return '<div class="mw-partial"><span class="mw-partial-ico">' + icon("alertCircle", 14) + '</span>' +
     '<span>' + esc(names) + '加载失败：' + esc(info.msg || "网络异常") + '；其余内容已正常显示。</span>' +
@@ -43832,7 +44424,7 @@ function syncPageHead() {
   var tail;
   if (st === "error") tail = "数据加载失败";
   else if (st === "empty") {
-    tail = currentTab() === "created" ? "还没有发起过需求" : currentTab() === "watched" ? "还没有关注任何事项" : currentTab() === "team" ? "本周团队交付概览" : "本周没有待处理事项";
+    tail = currentTab() === "created" ? "还没有发起过事项" : currentTab() === "watched" ? "还没有关注任何事项" : currentTab() === "team" ? "本周团队交付概览" : "本周没有待处理事项";
   } else if (currentTab() === "team") {
     tail = "团队交付概览";
   } else if (currentTab() === "pending") {
@@ -43846,7 +44438,7 @@ function syncPageHead() {
     if (today) b.push(today + " 项今天到期");
     tail = b.join(" · ");
   } else if (currentTab() === "created") {
-    tail = num(tabCount("created")) + " 个我发起的需求";
+    tail = num(tabCount("created")) + " 个我发起的事项";
   } else {
     tail = num(tabCount("watched")) + " 条关注";
   }
@@ -44274,15 +44866,6 @@ function setChip(key) {
   mw.chip[tab] = key || "all";
   mw.expand = {};
   closeMinePops();
-  if (tab === "created") {
-    mw.src.created.items = [];
-    mw.src.created.offset = 0;
-    mw.src.created.hasMore = false;
-    mw.src.created.total = 0;
-    render();
-    loadTab("created", {});
-    return;
-  }
   render();
 }
 function clearFilters() {
@@ -44292,7 +44875,6 @@ function clearFilters() {
   mw.chip[currentTab()] = "all";
   if (mineSearch) mineSearch.value = "";
   render();
-  if (currentTab() === "created") loadTab("created", {});
 }
 function closeMinePops() {
   if (mineFilterPop) mineFilterPop.open = false;
@@ -44403,6 +44985,17 @@ function initEvents() {
     }
     var opener = e.target.closest("[data-open]");
     if (opener) { openRow(opener.dataset.open, opener.dataset.id, opener.dataset.ws, opener.dataset.req || "", opener.dataset.title || "", opener.dataset.version || ""); return; }
+    var fold = e.target.closest("[data-fold]");
+    if (fold) {
+      var fk = fold.dataset.fold;
+      var keepFocus = fold.matches(":focus-visible");
+      mw.fold[fk] = !mw.fold[fk];
+      safeSet(STORE_FOLD, JSON.stringify(mw.fold));
+      render();
+      var again = mineBody.querySelector('[data-fold="' + fk + '"]');
+      if (again && keepFocus) again.focus({ preventScroll: true });
+      return;
+    }
     var exp = e.target.closest("[data-expand]");
     if (exp) {
       var key = exp.dataset.expand;
@@ -44600,7 +45193,10 @@ function isMentionNotice(x){
     || (x.type === "task_comment" && /」提到了你$/.test(String(x.title || ""))));
 }
 /* typeCounts 是服务端按当前筛选返回的类型全量计数：列表只加载一页，不能拿 items 回算 */
-var notifyState = {unread:0, total:0, mentions:0, items:[], loading:false, hasMore:false, typeCounts:null};
+var notifyState = {unread:0, total:0, mentions:0, items:[], loading:false, hasMore:false, typeCounts:null,
+  expanded:{}, watch:{}};
+/* 正文最多两行：报告与发布准备需要看全时给「展开」，不改变其他类型的紧凑列表 */
+var EXPANDABLE_TYPES = { weekly_report:1, version_report:1, release_prep:1 };
 var noticeMutationSeq = 0, unreadReqSeq = 0, noticeListReqSeq = 0;
 function invalidateNotifications(){
   noticeMutationSeq++;
@@ -44911,9 +45507,48 @@ function syncMessagesReadAllButton(){
   btns.forEach(function(btn){ btn.disabled = (notifyState.unread || 0) <= 0; });
   syncMessagesPageHead();
 }
+function togglePlanWatch(btn){
+  var planId = btn.getAttribute("data-apn-watch");
+  if(!planId || btn.disabled) return;
+  var watching = notifyState.watch[planId] === true;
+  var url = "/api/release-plans/" + encodeURIComponent(planId) + "/watch";
+  btn.disabled = true;
+  (watching ? API.del(url) : API.post(url)).then(function(rs){
+    notifyState.watch[planId] = !!(rs && rs.watching);
+    /* 同一计划的预处理通知可能有多条，状态要一起回填 */
+    document.querySelectorAll("[data-apn-watch]").forEach(function(b){
+      if(b.getAttribute("data-apn-watch") !== planId) return;
+      b.disabled = false;
+      b.textContent = notifyState.watch[planId] ? "已关注" : "关注";
+    });
+    toast(notifyState.watch[planId] ? "已关注该发布计划，改期、范围变化和发布日会提醒你" : "已取消关注", "fs");
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "关注操作失败，请重试", "bad");
+  });
+}
 function handleNoticeClick(e){
   if(e.target.closest("[data-ap-more]")){
     loadNoticeList({more:true});
+    return;
+  }
+  /* 条目动作：展开正文 / 关注计划，都不触发整行跳转 */
+  var expandBtn = e.target.closest("[data-apn-expand]");
+  if(expandBtn){
+    var row = expandBtn.closest("[data-apn-row]");
+    var open = row ? !row.classList.contains("is-expanded") : true;
+    if(row){
+      row.classList.toggle("is-expanded", open);
+      var nid = row.getAttribute("data-apn-row");
+      if(nid) notifyState.expanded[nid] = open;
+    }
+    expandBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    expandBtn.textContent = open ? "收起" : "展开";
+    return;
+  }
+  var watchBtn = e.target.closest("[data-apn-watch]");
+  if(watchBtn){
+    togglePlanWatch(watchBtn);
     return;
   }
   /* 通知筛选：全部 / 未读 / 提及 */
@@ -45103,7 +45738,26 @@ function noticeItemHTML(g){
   var x = g.lead;
   var count = g.items.length;
   var ids = g.items.map(function(n){ return n.id; }).join(",");
-  return '<button class="apn' + (x.readAt ? "" : " unread") + '" type="button"' +
+  var expanded = !!notifyState.expanded[x.id];
+  var meta = [];
+  if(count > 1) meta.push("共 " + count + " 条同类通知");
+  if(x.type === "release_prep" && x.refOwnerName) meta.push("计划负责人 " + x.refOwnerName);
+  if(x.workspaceName) meta.push(x.workspaceName);
+  /* 动作与整行点击分离：动作按钮不能嵌在跳转按钮里，否则键盘与读屏会把两个操作混成一个 */
+  var acts = "";
+  if(EXPANDABLE_TYPES[x.type]){
+    acts += '<button class="apn-act" type="button" data-apn-expand aria-expanded="' + (expanded ? "true" : "false") + '">'
+      + (expanded ? "收起" : "展开") + '</button>';
+  }
+  var watchable = x.type === "release_prep" && x.refKind === "release_plan" && x.refId
+    && rt.currentWs && x.workspaceId === rt.currentWs.id;
+  var watching = watchable ? notifyState.watch[x.refId] : undefined;
+  if(watchable && watching !== undefined){
+    acts += '<button class="apn-act" type="button" data-apn-watch="' + esc(x.refId) + '">'
+      + (watching ? "已关注" : "关注") + '</button>';
+  }
+  return '<div class="apn' + (x.readAt ? "" : " unread") + (expanded ? " is-expanded" : "") + '" data-apn-row="' + esc(x.id) + '">' +
+    '<button class="apn-hit" type="button"' +
     ' data-apn="' + esc(x.id) + '" data-apn-ids="' + esc(ids) + '"' +
     (isTaskRef(x.type) && x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
     /* 「已被移出空间」不带深链：历史数据里的 workspace 链接指向已无权进入的空间 */
@@ -45115,14 +45769,15 @@ function noticeItemHTML(g){
     '<span class="apn-main">' +
       '<span class="apn-title">' + esc(x.title) +
         (count > 1 ? ' <span class="apn-count">×' + count + '</span>' : "") + '</span>' +
-      (x.body ? '<span class="apn-body">' + esc(x.body) + '</span>' : "") +
-      '<span class="apn-meta">' +
-        (count > 1 ? "共 " + count + " 条同类通知" + (x.workspaceName ? " · " : "") : "") +
-        (x.workspaceName ? esc(x.workspaceName) : "") + '</span>' +
+      /* 正文由后端按纯文本拼行；空行在只显示两行的列表里会白占一行，先折成单换行 */
+      (x.body ? '<span class="apn-body">' + esc(String(x.body).replace(/\n{2,}/g, "\n")) + '</span>' : "") +
+      (meta.length ? '<span class="apn-meta">' + esc(meta.join(" · ")) + '</span>' : "") +
     '</span>' +
     (x.readAt ? "" : '<i class="apn-dot"></i>') +
     '<span class="apn-time">' + esc(clockOf(x.createdAt)) + '</span>' +
-  '</button>';
+    '</button>' +
+    (acts ? '<div class="apn-acts">' + acts + '</div>' : "") +
+  '</div>';
 }
 function dueGroupsHTML(){
   var g = deadlineGroups;
@@ -45174,6 +45829,7 @@ function loadNoticeList(opts){
     if(d && typeof d.total === "number") notifyState.total = d.total; /* 服务端仍返回总量，前端不展示（见 noticeFilterHTML） */
     if(d && typeof d.mentions === "number") notifyState.mentions = d.mentions; /* 口径：未读的 @ 我的通知数 */
     notifyState.typeCounts = d && d.typeCounts ? d.typeCounts : null; /* 服务端全量类型计数，切换筛选后随本次响应更新 */
+    loadWatchStates();
     renderBellBadge();
     updateBellTitle();
     renderAlertPanel();
@@ -45204,6 +45860,35 @@ function setNoticeFilter(f){
   notifyState.loading = true;
   renderAlertPanel();
   loadNoticeList();
+}
+/* 发布准备条目的「关注」需要知道当前是否已关注；只在当前空间取一次，切空间后按新空间重新取 */
+function loadWatchStates(){
+  if(!rt.currentWs || !rt.currentWs.id) return;
+  var ids = [];
+  notifyState.items.forEach(function(x){
+    if(x.type !== "release_prep" || x.refKind !== "release_plan" || !x.refId) return;
+    if(x.workspaceId !== rt.currentWs.id) return;
+    if(Object.prototype.hasOwnProperty.call(notifyState.watch, x.refId)) return;
+    notifyState.watch[x.refId] = null;
+    ids.push(x.refId);
+  });
+  if(!ids.length) return;
+  Promise.all(ids.map(function(id){
+    return API.get("/api/release-plans/" + encodeURIComponent(id) + "/watch").then(function(rs){
+      notifyState.watch[id] = !!(rs && rs.watching);
+    }).catch(function(){
+      delete notifyState.watch[id];
+    });
+  })).then(function(){
+    /* 就地回填状态，避免整块重绘把打开中的面板滚动位置打回顶部 */
+    document.querySelectorAll("[data-apn-watch]").forEach(function(btn){
+      var id = btn.getAttribute("data-apn-watch");
+      if(ids.indexOf(id) < 0) return;
+      var st = notifyState.watch[id];
+      if(st === undefined) return;
+      btn.textContent = st ? "已关注" : "关注";
+    });
+  });
 }
 function loadDeadlineGroups(){
   function fetchGroup(due){
@@ -53395,32 +54080,47 @@ function ornamentSVG(key){
 var slot = null;
 var renderedKey = "";
 
+/* 「摆上摆件后导航会不会溢出」才是唯一判据：窗口矮但导航放得下时照常显示。
+   旧实现拿 nav.lastElementChild 量内容高度，而桌面端最后一项是 display:none 的
+   .mob-more（高度 0），永远量不出溢出；只剩 CSS 的 max-height 媒体查询在硬撑，
+   于是开关打开、窗口一矮摆件整块消失。这里临时显示槽位后直接比 scrollHeight。 */
 function navIsTight(){
   var nav = document.querySelector(".side-nav");
   if(!nav) return false;
   if(document.documentElement.getAttribute("data-layout") === "mobile") return true;
+  var wasHidden = slot.hidden;
   slot.hidden = false;
-  var band = slot.getBoundingClientRect().height;
-  slot.hidden = true;
-  if(!band){ slot.hidden = false; return false; }
-  var padBottom = parseFloat(getComputedStyle(nav).paddingBottom) || 0;
-  var last = nav.lastElementChild;
-  if(!last){ slot.hidden = false; return false; }
-  var need = last.getBoundingClientRect().bottom - nav.getBoundingClientRect().top + nav.scrollTop + padBottom;
-  var tight = need > nav.clientHeight - band - 2;
-  slot.hidden = false;
+  var tight = nav.scrollHeight > nav.clientHeight + 2;
+  slot.hidden = wasHidden;
   return tight;
+}
+
+function syncReason(){
+  var reason = $("meOrnReason");
+  if(!reason) return;
+  if(!orn.on){
+    reason.hidden = false;
+    reason.textContent = "摆件已关闭；打开上面的开关后才能切换形态。";
+    return;
+  }
+  if(slot && slot.hidden){
+    reason.hidden = false;
+    reason.textContent = "当前窗口较矮或侧栏导航已需要滚动，摆件暂时让位；窗口调高或收起展开的导航后会重新出现。";
+    return;
+  }
+  reason.hidden = true;
 }
 
 function renderSlot(force){
   slot = slot || $("sideOrnament");
   if(!slot) return;
-  if(!orn.on){ slot.hidden = true; return; }
+  if(!orn.on){ slot.hidden = true; syncReason(); return; }
   if(force || renderedKey !== orn.pick){
     slot.innerHTML = ornamentSVG(orn.pick);
     renderedKey = orn.pick;
   }
   slot.hidden = navIsTight();
+  syncReason();
 }
 
 function scheduleSync(){
@@ -53472,8 +54172,7 @@ function syncSettings(){
     b.disabled = !orn.on;
   });
   grid.setAttribute("aria-disabled", orn.on ? "false" : "true");
-  var reason = $("meOrnReason");
-  if(reason) reason.hidden = orn.on;
+  syncReason();
 }
 
 function mountOrnamentSettings(){
@@ -55088,12 +55787,12 @@ function formHTML(act, m){
   var rev = '<input type="hidden" name="msAct" value="' + esc(act) + '">';
   if(act === "achieve"){
     return '<div class="ms-action-form">' + rev + '<p class="foot-note">负责人：' + esc(m.ownerName || "—") + ' · 日期：' + esc(fmtTs(new Date().toISOString())) + '</p>'
-      + '<label>说明（可选）<input class="input" data-ms-field="note" maxlength="500" placeholder="例如：客户验收通过"></label>'
+      + '<label>说明（可选）<textarea class="textarea" data-ms-field="note" maxlength="500" rows="2" placeholder="例如：客户验收通过"></textarea></label>'
       + '<div class="phase-acts"><button class="btn sm primary" type="button" data-ms-submit="achieve">确认达成</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
   if(act === "revoke"){
-    return '<div class="ms-action-form">' + rev + '<label>撤销原因（可选）<input class="input" data-ms-field="reason" maxlength="500"></label>'
+    return '<div class="ms-action-form">' + rev + '<label>撤销原因（可选）<textarea class="textarea" data-ms-field="reason" maxlength="500" rows="2"></textarea></label>'
       + '<div class="phase-acts"><button class="btn sm ghost danger" type="button" data-ms-submit="revoke">确认撤销</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
@@ -55103,11 +55802,11 @@ function formHTML(act, m){
     return '<div class="ms-action-form">' + rev
       + '<p class="foot-note">' + esc(m.targetDate || "未设置") + ' → 新日期（默认顺延 7 天）</p>'
       + '<label>新目标日期<input class="input" type="date" data-ms-field="targetDate" value="' + esc(next) + '"></label>'
-      + '<label>改期原因<input class="input" data-ms-field="reason" maxlength="500" placeholder="必填"></label>'
+      + '<label>改期原因<textarea class="textarea" data-ms-field="reason" maxlength="500" rows="2" placeholder="必填"></textarea></label>'
       + '<div class="phase-acts"><button class="btn sm primary" type="button" data-ms-submit="reschedule">确认改期</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
-  return '<div class="ms-action-form">' + rev + '<label>取消原因<input class="input" data-ms-field="reason" maxlength="500" placeholder="必填"></label>'
+  return '<div class="ms-action-form">' + rev + '<label>取消原因<textarea class="textarea" data-ms-field="reason" maxlength="500" rows="2" placeholder="必填"></textarea></label>'
     + '<p class="foot-note">取消后保留历史与原因，不计入达成统计。</p>'
     + '<div class="phase-acts"><button class="btn sm ghost danger" type="button" data-ms-submit="cancel">确认取消</button>'
     + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
@@ -59173,6 +59872,8 @@ var DELIVERY_STAGES = [
   ["delivered", "已交付"]
 ];
 var CLOSE_REASONS = { rej:"评审不通过", cancel:"中途取消", dup:"重复需求" };
+/* 与新建表单、AI 拆单同一套类型枚举；类型只在待评审可改，之后由流转锁定 */
+var DEMAND_ITEM_KINDS = ["新功能", "体验优化", "缺陷", "其他"];
 var CLOSE_STAGES = { review:"待评审", pass:"已通过", plan:"已排期", done:"已完成" };
 /* 页面级「!」：状态与流转、交付阶段派生边界，口径与 DemandService / DemandMapper 一致 */
 var DEMAND_FLOW_HELP = {
@@ -64243,7 +64944,8 @@ function demandReportImageUpload(okCount, failed){
 }
 /* ---------- 需求详情就地编辑 ----------
    文案（标题/描述/验收）点开即改，失焦或 ⌘/Ctrl+Enter 保存、Esc 还原；
-   属性（优先级/期望交付/目标版本/分类/来源）点开弹层选择后直接保存。
+   属性（优先级/期望交付/目标版本/分类/来源）点开弹层选择后直接保存；
+   类型与评审人只在待评审点开弹层，进入流转后由状态动作决定。
    保存后只刷新当前详情，不再关闭重开；同一详情内的写操作串行，避免 revision 互相覆盖。 */
 function demandSaveQueued(layer, work){
   var prev = layer.__demSaveQueue || Promise.resolve();
@@ -64270,6 +64972,8 @@ function demandSaveBody(d){
     expectDate: d.expectDate || null,
     plannedStart: d.plannedStart || null,
     plannedEnd: d.plannedEnd || null,
+    /* 整单 PUT 在待评审会整组覆盖字段：带回当前评审人，避免改分类/来源时把人清掉 */
+    reviewerUserId: d.reviewerUserId || null,
     revision: d.revision,
     wsjfBusiness: d.wsjfBusiness == null ? null : d.wsjfBusiness,
     wsjfUrgency: d.wsjfUrgency == null ? null : d.wsjfUrgency,
@@ -64499,6 +65203,73 @@ function openDemandModuleFact(anchor, ctx){
   var first = menu.querySelector(".menu-item");
   if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
 }
+function openDemandTypeFact(anchor, ctx){
+  var cur = ctx.d.itemKind || "其他";
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "168px";
+  menu.innerHTML = '<div class="menu-title">需求类型</div>' + DEMAND_ITEM_KINDS.map(function(k){
+    return '<button class="menu-item" type="button" data-dem-fact-kind="' + esc(k) + '">' + esc(k)
+      + (k === cur ? '<span class="k">当前</span>' : '') + '</button>';
+  }).join("");
+  UI.openPop(menu, anchor, { align:"left", width:190, onClose:function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dem-fact-kind]");
+    if(!b) return;
+    UI.closeAllPops();
+    var next = b.dataset.demFactKind;
+    if(next === cur) return;
+    demandPutField(ctx, { itemKind:next }, "需求类型已改为「" + next + "」");
+  });
+  var first = menu.querySelector(".menu-item");
+  if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
+}
+/* 评审人候选与新建/编辑表单同口径：项目花名册里可写的人，排除自己和只读成员 */
+function openDemandReviewerFact(anchor, ctx){
+  var cur = ctx.d.reviewerUserId || "";
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "220px";
+  menu.innerHTML = '<div class="menu-title">评审人</div><p class="foot-note" style="padding:8px 10px;margin:0">加载成员…</p>';
+  UI.openPop(menu, anchor, { align:"left", width:240, onClose:function(){ menu.remove(); } });
+  loadProjectMembers(rt.currentWs.id, ctx.d.reqId).then(function(roster){
+    if(!menu.isConnected) return;
+    var me = rt.currentUser && rt.currentUser.id;
+    var opts = ((roster && roster.members) || []).filter(function(m){
+      return m && m.userId && m.userId !== me && m.access !== "read";
+    });
+    var names = {};
+    opts.forEach(function(m){ names[m.userId] = m.displayName || m.username || m.userId; });
+    /* 当前评审人可能已不在可写名单（换项目或降权），仍保留一行，避免看起来像被清空 */
+    if(cur && !names[cur]){
+      names[cur] = demReviewerName(ctx.d) || cur;
+      opts = [{ userId:cur }].concat(opts);
+    }
+    menu.innerHTML = '<div class="menu-title">评审人</div>'
+      + '<button class="menu-item" type="button" data-dem-fact-rev="">未指派'
+      + (!cur ? '<span class="k">当前</span>' : '') + '</button>'
+      + opts.map(function(m){
+          return '<button class="menu-item" type="button" data-dem-fact-rev="' + esc(m.userId) + '">' + esc(names[m.userId])
+            + (m.userId === cur ? '<span class="k">当前</span>' : '') + '</button>';
+        }).join("")
+      + (opts.length ? "" : '<p class="foot-note" style="padding:8px 10px;margin:0">项目里没有其他可写成员可指派</p>');
+    menu.onclick = function(e){
+      var b = e.target.closest("[data-dem-fact-rev]");
+      if(!b) return;
+      UI.closeAllPops();
+      var next = b.dataset.demFactRev || "";
+      if(next === cur) return;
+      demandPutField(ctx, { reviewerUserId:next || null },
+        next ? ("评审人已指派给「" + names[next] + "」") : "已改为未指派，项目可写成员可以认领");
+    };
+    var first = menu.querySelector(".menu-item");
+    if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
+  }).catch(function(){
+    if(menu.isConnected){
+      menu.innerHTML = '<div class="menu-title">评审人</div><p class="foot-note" style="padding:8px 10px;margin:0">成员加载失败，请稍后重试</p>';
+    }
+  });
+}
 function openDemandFactEditor(kind, anchor, ctx){
   if(!ctx || !ctx.d) return;
   if(!canWriteDemand(ctx.d)){ denyDemandReadOnly(); return; }
@@ -64512,6 +65283,14 @@ function openDemandFactEditor(kind, anchor, ctx){
     }, function(work){ return demandSaveQueued(ctx.layer, work); });
   }
   if(kind === "module") return openDemandModuleFact(anchor, ctx);
+  if(kind === "type" || kind === "reviewer"){
+    /* 类型与评审人只在待评审开放；进入流转后由状态动作决定，和整单编辑表单同一口径 */
+    if(ctx.d.status !== "review"){
+      toast("已进入流转，" + (kind === "type" ? "需求类型" : "评审人") + "由流转动作决定，不能再直接改", "warn");
+      return;
+    }
+    return kind === "type" ? openDemandTypeFact(anchor, ctx) : openDemandReviewerFact(anchor, ctx);
+  }
   /* 来源是纯文本，与标题/描述一样就地编辑，不再弹输入框 */
   if(kind === "source"){
     var textEl = anchor ? anchor.querySelector('[data-dem-text="source"]') : null;
@@ -64820,9 +65599,10 @@ function renderDemandDetail(d, opts){
       : d.deliveredAt
         ? { label:"已发布", sub:String(d.deliveredAt).substring(0, 10), cls:" is-done" }
         : { label:"未发布", sub:"以发布记录为准", cls:"" };
+    var reviewMetaEdit = canEditText && d.status === "review";
     var metaItems = [
       ["type", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>',
-        "需求类型", d.itemKind || "其他", false],
+        "需求类型", d.itemKind || "其他", reviewMetaEdit],
       ["module", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="3.2" width="5.8" height="5.8" rx="1.3"/><rect x="3.2" y="11" width="5.8" height="5.8" rx="1.3"/><rect x="11" y="11" width="5.8" height="5.8" rx="1.3"/></svg>',
         "分类", catNameById(d.categoryId) || "未分类", true],
       ["source", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 11.2 5 4.6h10l1.6 6.6v4.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M3.6 11.4h3.6l.9 1.7h3.8l.9-1.7h3.6"/></svg>',
@@ -64830,7 +65610,7 @@ function renderDemandDetail(d, opts){
       ["creator", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.6" r="2.8"/><path d="M4.4 16.2a5.6 5.6 0 0 1 11.2 0"/></svg>',
         "提交人", demCreatorName(d) || "—", false],
       ["reviewer", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.6" r="2.8"/><path d="M4.4 16.2a5.6 5.6 0 0 1 11.2 0"/><path d="m12.4 15.2 1.3 1.3 2.4-2.5"/></svg>',
-        "评审人", demReviewerName(d) || "未指派", false]
+        "评审人", demReviewerName(d) || "未指派", reviewMetaEdit]
     ];
     if(isClosedDemand(d)){
       metaItems.push(["close", '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.6"/><path d="M5.4 14.6 14.6 5.4"/></svg>',
@@ -66124,6 +66904,8 @@ __NS["views/requirements.js"] = (function(){
 
 
 
+
+
 var esc = esc2;
 var aiErrMsg = aiErrorText;
 var activityUI = __NS["core/activity-ui.js"];
@@ -66322,8 +67104,17 @@ function ensureEditor(){
       placeholder: "在这里写文档：目标、方案、说明…",
       charCounter: false,
       resizingBar: false,
-      showPathLabel: false
+      showPathLabel: false,
+      imageUploadSizeLimit: 3 * 1024 * 1024
     });
+    /* 上传钩子挂在实例上（写进 options 不生效）：正文图上传成附件再插 URL，
+       替换 SunEditor 默认的 base64 直存，避免图片把正文 HTML 撑爆 */
+    reqEditor.onImageUploadBefore = uploadReqDocImage;
+    reqEditor.onImageUpload = function(targetImg){
+      var page = $("reqDocEditPage");
+      fitInsertedImage(targetImg, page ? page.querySelector(".sun-editor-editable") : null);
+      notifyResizeHint();
+    };
     reqEditor.onChange = function(){
       if(reqDocSuppressChange) return;
       /* 程序化回填可能晚于抑制窗口触发 onChange：与基线一致就不算用户修改。
@@ -66341,6 +67132,50 @@ function ensureEditor(){
   });
   return editorPromise;
 }
+/* 正文图片在库里存站内相对路径（/api/attachments/...），部署前缀不进数据；
+   编辑器/阅读页/历史预览显示时补 appBase，保存与 Word 导出前再剥掉（与任务描述同一口径）。 */
+var DOC_IMG_REL = 'src="/api/attachments/';
+function reqDocHtmlPadImg(html){
+  if(!html || !API.base) return html;
+  return html.split(DOC_IMG_REL).join('src="' + API.base + '/api/attachments/');
+}
+function reqDocHtmlStripImg(html){
+  if(!html || !API.base) return html;
+  return html.split('src="' + API.base + '/api/attachments/').join(DOC_IMG_REL);
+}
+/* 正文图片上传：POST /api/req-docs/{id}/content-images，返回编辑器友好的 URL。
+   先降采样再校验体积，与工作项描述同一套口径。 */
+function uploadReqDocImage(files, info, core, uploadHandler){
+  if(!editingDocId){ toast("请先保存文档，再上传图片", "warn"); return false; }
+  if(reqDocReadOnly || reqDocOwnerLocked){ toast("你对该文档没有编辑权限", "warn"); return false; }
+  var f = files[0];
+  if(!f) return false;
+  shrinkImageFile(f).then(function(shrunk){
+    f = shrunk;
+    if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return; }
+    var fd = new FormData();
+    fd.append("file", f);
+    var url = API.url("/api/req-docs/" + encodeURIComponent(editingDocId) + "/content-images" +
+      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+    return fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "X-XSRF-TOKEN": csrfCookie() },
+      body: fd
+    }).then(function(res){
+      if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+      return res.json().catch(function(){ return null; });
+    }).then(function(json){
+      if(json && json.code === 0 && json.data && json.data.url){
+        uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
+      }else{
+        toast((json && json.message) || "图片上传失败", "bad");
+      }
+    }).catch(function(ex){
+      toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+    });
+  });
+}
 var reqDocsLoaded = false;
 var reqDocKeyword = "";
 /* 灌正文统一走这里：setContents 引起的 onChange 不算用户修改。
@@ -66350,7 +67185,7 @@ function setReqEditorContents(html){
   if(!reqEditor) return;
   reqDocSuppressChange = true;
   try{
-    reqEditor.setContents(html || "", false);
+    reqEditor.setContents(reqDocHtmlPadImg(html) || "", false);
     reqEditorBaseline = reqEditor.getContents(true);
   }finally{
     reqDocSuppressChange = false;
@@ -67746,7 +68581,7 @@ function renderReqDocReader(doc){
       try{ html = window.marked.parse(doc.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
     }else{
       /* 服务端已按白名单清洗过，这里再过一道 DOMPurify（双保险） */
-      html = doc.content || "";
+      html = reqDocHtmlPadImg(doc.content || "");
     }
     reqDocReaderFill(body, window.DOMPurify.sanitize(html));
     reqDocReaderOpenLinks(body);
@@ -71051,7 +71886,7 @@ function setEditorContent(content, format){
     var snap = format === "univer" ? parseSnapshot(content) : null;
     return mountReqUniver(snap, snap ? "" : (format === "univer" ? "" : content));
   }
-  if(format === "html" && reqEditor){ reqEditor.setContents(content); return; }
+  if(format === "html" && reqEditor){ reqEditor.setContents(reqDocHtmlPadImg(content)); return; }
   var ta = $("reqDocMdCanvas");
   if(ta){ ta.value = content; renderMarkdownPreview(); }
 }
@@ -71442,7 +72277,7 @@ function renderReqDocHistoryPreview(h, box){
     }else if(h.format === "markdown"){
       try{ html = window.marked.parse(h.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
     }else{
-      html = h.content || "";
+      html = reqDocHtmlPadImg(h.content || "");
     }
     box.innerHTML = window.DOMPurify.sanitize(html);
     var links = box.querySelectorAll("a[href]");
@@ -71949,7 +72784,7 @@ function setReqDocSaving(on){
 function currentReqDocContent(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
   if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
-  return reqEditor ? reqEditor.getContents(true) : "";
+  return reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "";
 }
 /* 409 时默认保留本地草稿；只有用户二次确认才加载服务器版本 */
 function confirmReloadReqDoc(){
@@ -72344,7 +73179,7 @@ function reqDocExportWordHTML(){
   if(isUniverDoc()){
     return Promise.resolve(reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "");
   }
-  return Promise.resolve(reqEditor ? reqEditor.getContents(true) : "");
+  return Promise.resolve(reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "");
 }
 function exportReqDocWordFrom(title, html){
   var url = API.url("/api/req-docs/export-docx" +
@@ -72608,6 +73443,16 @@ function populateReqDocSelect(keep){
   if($("reqDocReader")) $("reqDocReader").addEventListener("wheel", docWheelHandler, { passive: false });
   if($("reqDocEditPage")) $("reqDocEditPage").addEventListener("wheel", docWheelHandler, { passive: false });
   applyDocZoom();
+
+  /* 阅读正文图片点击放大：站内附件图直接开灯箱；套了链接的图不拦，交给链接本身 */
+  document.addEventListener("click", function(e){
+    var img = e.target.closest("#reqDocReaderBody img");
+    if(!img || img.closest("a")) return;
+    var m = String(img.getAttribute("src") || "").match(/\/api\/attachments\/([A-Za-z0-9_-]+)\/(?:download|thumb|preview)/);
+    if(!m) return;
+    e.preventDefault();
+    openAttPreview({ attachment: { id: m[1], filename: img.getAttribute("alt") || "文档图片" } });
+  });
 
   /* 分类树右键菜单：点菜单外 / Esc / 滚动 时关闭（菜单项点击由菜单自身委托处理，先于此处） */
   document.addEventListener("click", function(e){
@@ -73410,6 +74255,7 @@ function notifyReqDocChanged(docId, actor){
 return {aiBtnBusy: aiBtnBusy, aiErrMsg: aiErrMsg, aiUsageText: aiUsageText, ensureReqDocOptions: ensureReqDocOptions, enterDocHistoryView: enterDocHistoryView, enterRequirementsView: enterRequirementsView, isReqDocEditing: isReqDocEditing, loadReqDocs: loadReqDocs, notifyReqDocChanged: notifyReqDocChanged, openNewReqDocDialog: openNewReqDocDialog, openReqDocAndJump: openReqDocAndJump, openReqDocInNewTab: openReqDocInNewTab, populateReqDocSelect: populateReqDocSelect, refreshDocHistoryFromHash: refreshDocHistoryFromHash, refreshReqDocListIfOpen: refreshReqDocListIfOpen, refreshReqDocTasksIfOpen: refreshReqDocTasksIfOpen, reqDocDirty: reqDocDirty, reqDocList: reqDocList, reqDocNameById: reqDocNameById, reqDocStatusLabel: reqDocStatusLabel, reqDocsError: reqDocsError, reqDocsLoaded: reqDocsLoaded, setReqDocProjectFilter: setReqDocProjectFilter, tryCloseReqDocEditor: tryCloseReqDocEditor};
 })();
 /* ---- views/review-team.js ---- */
+__NS["views/review-team.js"] = (function(){
 /* views/review-team · 团队周回顾（按原型 weekly-review-2026-11-20 实施） */
 
 
@@ -73423,6 +74269,7 @@ var detailKey = "";
 var detailCache = {};
 var detailLoading = false;
 var detailError = "";
+var detailTrigger = null;
 var memberFilter = "all";
 
 var DETAIL_LABEL = {
@@ -73473,15 +74320,16 @@ function deltaEm(n) {
 }
 
 function statBig(key, value, unit, sub, extraEm) {
-  return '<button class="rv-stat-big" type="button" data-rvd="' + key + '" aria-expanded="' + (detailKey === key) +
-    '" aria-controls="rvDetailRow">' +
+  return '<button class="rv-stat-big" type="button" data-rvd="' + key + '" aria-haspopup="dialog" aria-expanded="' +
+    (detailKey === key) + '" aria-controls="rvDetailDrawer">' +
     '<span class="rv-big">' + value + (unit || "") + (extraEm || "") + "</span></button>" +
     (sub ? '<span class="rv-sub">' + sub + "</span>" : "");
 }
 
 function statPair(key, value, label, cls) {
   return '<button class="rv-stat-sub' + (cls ? " " + cls : "") + '" type="button" data-rvd="' + key +
-    '" aria-expanded="' + (detailKey === key) + '" aria-controls="rvDetailRow"><b>' + value + "</b> " + label + "</button>";
+    '" aria-haspopup="dialog" aria-expanded="' + (detailKey === key) + '" aria-controls="rvDetailDrawer"><b>' +
+    value + "</b> " + label + "</button>";
 }
 
 /* 近 4 周迷你折线：不引图表库，按数值在同一画布里取相对高度。 */
@@ -73583,11 +74431,6 @@ function statTableHTML(d) {
     "<td>" + statPair("doc-draft", doc.draftBacklog, '<span class="muted">草稿积压</span>') +
       '<span class="rv-sub">超过 7 天未发布</span></td></tr>';
 
-  var detailRow = "";
-  if (detailKey) {
-    detailRow = '<tr class="rv-detail" id="rvDetailRow"><td colspan="5">' + detailHTML() + "</td></tr>";
-  }
-
   var daily = p.daily || [];
   var max = 1;
   for (var i = 0; i < daily.length; i++) if (daily[i] > max) max = daily[i];
@@ -73609,7 +74452,7 @@ function statTableHTML(d) {
     '<div class="rv-scroll"><table class="rv-tbl rv-stat-tbl">' +
       '<colgroup><col style="width:118"><col style="width:200"><col style="width:310"><col style="width:250"><col></colgroup>' +
       "<thead><tr><th>对象</th><th>本周新增</th><th>本周流转</th><th>本周完成</th><th>本周退出 / 异常</th></tr></thead>" +
-      "<tbody>" + demRow + workRow + testRow + docRow + detailRow + "</tbody></table></div>" +
+      "<tbody>" + demRow + workRow + testRow + docRow + "</tbody></table></div>" +
     '<div class="rv-stat-foot">' +
       '<div class="rv-foot-days"><div class="rv-days-head"><b>完成节奏</b><span>按完成时间 · 周末 0</span></div>' +
         '<div class="rv-days" aria-label="本周每日完成工作项数">' + bars + "</div></div>" +
@@ -73621,13 +74464,13 @@ function statTableHTML(d) {
       "<span>完成按期率 <b>" + (p.onTimeRate || 0) + "%</b></span>" +
       "<span>测试计划达成 <b>" + (p.testPlanDone || 0) + " / " + (p.testPlanTotal || 0) + "</b></span>" +
       '<span class="rv-due">到期兑现 <b>' +
-        '<button type="button" class="rv-due-n" data-rvd="due-ontime" aria-expanded="' +
-          (detailKey === "due-ontime") + '" aria-controls="rvDetailRow" title="截止日在本周且按时完成的工作项">' + (p.dueOnTime || 0) + "</button>" +
+        '<button type="button" class="rv-due-n" data-rvd="due-ontime" aria-haspopup="dialog" aria-expanded="' +
+          (detailKey === "due-ontime") + '" aria-controls="rvDetailDrawer" title="截止日在本周且按时完成的工作项">' + (p.dueOnTime || 0) + "</button>" +
         " / " + (p.dueTotal || 0) + "</b>" +
-        '<span class="rv-due-sub">延期 <button type="button" class="rv-due-n" data-rvd="due-late" aria-expanded="' +
-          (detailKey === "due-late") + '" aria-controls="rvDetailRow" title="已完成但晚于截止日">' + (p.dueLate || 0) + "</button>" +
-          " · 未完成 <button type=\"button\" class=\"rv-due-n\" data-rvd=\"due-open\" aria-expanded=\"" +
-          (detailKey === "due-open") + '" aria-controls="rvDetailRow" title="截止日在本周，当前仍未完成">' + (p.dueOpen || 0) + "</button></span></span>" +
+        '<span class="rv-due-sub">延期 <button type="button" class="rv-due-n" data-rvd="due-late" aria-haspopup="dialog" aria-expanded="' +
+          (detailKey === "due-late") + '" aria-controls="rvDetailDrawer" title="已完成但晚于截止日">' + (p.dueLate || 0) + "</button>" +
+          " · 未完成 <button type=\"button\" class=\"rv-due-n\" data-rvd=\"due-open\" aria-haspopup=\"dialog\" aria-expanded=\"" +
+          (detailKey === "due-open") + '" aria-controls="rvDetailDrawer" title="截止日在本周，当前仍未完成">' + (p.dueOpen || 0) + "</button></span></span>" +
     "</div>" +
     '<div class="rv-pool"><span class="rv-pool-title">当前快照</span>' +
       "<span>需求池：待评审 <b>" + (pool.demandReview || 0) + "</b> · 已通过 <b>" + (pool.demandPass || 0) +
@@ -73637,30 +74480,28 @@ function statTableHTML(d) {
         " / 待处理 " + (pool.taskBacklog || 0) + "</span>" +
       '<span class="rv-pool-note">截至 ' + esc(String(d.asOf || "").slice(5, 16).replace("T", " ")) + " · 不随周切换</span>" +
     "</div>" +
-    '<p class="rv-footnote">' + icon("infoCircle", 12) + "<span>每行是一种对象，行与行不合计：需求、工作项、用例、文档的数量含义不同。带虚线下划线的数字可点击，就地展开明细，再点收起。新增按创建时间；流转按状态变更日志；完成按进入已完成列且未取消；发布只计成功 + 生产 + 非回滚的全量发布。工作项流转按事件计次，成员表按项去重，两者不相等。缺陷新增 / 修复与测试卡同源，不重复计算；待回归、草稿积压是当前快照，不随周切换。到期兑现按截止日落在本周的工作项回看：按期 = 完成日不晚于截止日；未完成是当前时点仍未完成。近 4 周趋势与矩阵同口径，最后一位是当前查看周期。</span></p>" +
+    '<p class="rv-footnote">' + icon("infoCircle", 12) + "<span>每行是一种对象，行与行不合计：需求、工作项、用例、文档的数量含义不同。带虚线下划线的数字可点击，右侧抽屉查看明细，Esc 或右上角关闭。新增按创建时间；流转按状态变更日志；完成按进入已完成列且未取消；发布只计成功 + 生产 + 非回滚的全量发布。工作项流转按事件计次，成员表按项去重，两者不相等。缺陷新增 / 修复与测试卡同源，不重复计算；待回归、草稿积压是当前快照，不随周切换。到期兑现按截止日落在本周的工作项回看：按期 = 完成日不晚于截止日；未完成是当前时点仍未完成。近 4 周趋势与矩阵同口径，最后一位是当前查看周期。</span></p>" +
     "</section>";
 }
 
 function detailHTML() {
-  var title = DETAIL_LABEL[detailKey] || detailKey;
-  var head = '<div class="rv-sd-head"><div class="rv-sd-title"><b>' + esc(title) + "</b><span>" +
-    esc((teamData && teamData.label) || "") + " · " + esc((teamData && teamData.weekStart) || "") + " — " +
-    esc((teamData && teamData.weekEnd) || "") + "</span></div>" +
-    '<div class="rv-sd-actions"><button class="rv-sd-close" type="button" data-rvd-close>收起</button></div></div>';
+  var d = teamData || {};
+  var meta = '<p class="rv-sd-meta">' + esc(d.label || "") + " · " + esc(d.weekStart || "") + " — " +
+    esc(d.weekEnd || "") + "</p>";
   if (detailLoading) {
-    return '<div class="rv-sd">' + head + '<div class="rv-sd-loading">' + UI.skeletonRows(3) + "</div></div>";
+    return meta + '<div class="rv-sd-loading">' + UI.skeletonRows(6) + "</div>";
   }
   if (detailError) {
-    return '<div class="rv-sd">' + head + '<p class="rv-sd-note">明细加载失败：' + esc(detailError) + "。" +
-      '<button class="rv-sd-close" type="button" data-rvd-retry>重试</button></p></div>';
+    return meta + '<p class="rv-sd-note">明细加载失败：' + esc(detailError) + "。" +
+      '<button class="rv-sd-retry" type="button" data-rvd-retry>重试</button></p>';
   }
   var page = detailCache[detailCacheKey()];
   if (!page) {
-    return '<div class="rv-sd">' + head + '<p class="rv-sd-note">正在加载…</p></div>';
+    return meta + '<p class="rv-sd-note">正在加载…</p>';
   }
   var items = page.items || [];
   if (!items.length) {
-    return '<div class="rv-sd">' + head + '<p class="rv-sd-note">该口径下本周暂无记录。</p></div>';
+    return meta + '<p class="rv-sd-note">该口径下本周暂无记录。</p>';
   }
   var list = items.map(function (item) {
     var clickable = item.kind === "task" || item.kind === "demand";
@@ -73673,7 +74514,57 @@ function detailHTML() {
   var more = page.total > items.length
     ? '<p class="rv-sd-note">仅显示前 ' + items.length + " 项，共 " + page.total + " 项。</p>"
     : "";
-  return '<div class="rv-sd">' + head + '<ul class="rv-sd-list">' + list + "</ul>" + more + "</div>";
+  return meta + '<ul class="rv-sd-list">' + list + "</ul>" + more;
+}
+
+function detailDrawerEl() {
+  return $("rvDetailDrawer");
+}
+
+function syncDetailAria() {
+  document.querySelectorAll("#reviewTeamView [data-rvd]").forEach(function (b) {
+    b.setAttribute("aria-expanded", String(!!detailKey && b.dataset.rvd === detailKey));
+  });
+}
+
+function renderDetailBody() {
+  var body = $("rvDetailBody");
+  if (body) body.innerHTML = detailHTML();
+}
+
+function openDetailDrawer(key, trigger) {
+  var drawer = detailDrawerEl();
+  if (!drawer) return;
+  detailKey = key;
+  detailTrigger = trigger || null;
+  detailError = "";
+  detailLoading = !detailCache[detailCacheKey()];
+  var title = $("rvDetailTitle");
+  if (title) title.textContent = DETAIL_LABEL[key] || key;
+  renderDetailBody();
+  syncDetailAria();
+  drawer.classList.add("on");
+  var close = $("rvDetailClose");
+  if (close) setTimeout(function () { try { close.focus({ preventScroll: true }); } catch (e) { /* noop */ } }, 40);
+  if (detailLoading) fetchDetail();
+}
+
+function closeDetailDrawer(restoreFocus) {
+  var drawer = detailDrawerEl();
+  if (!drawer || !drawer.classList.contains("on")) {
+    detailKey = "";
+    return;
+  }
+  drawer.classList.remove("on");
+  detailKey = "";
+  detailLoading = false;
+  detailError = "";
+  syncDetailAria();
+  var back = detailTrigger;
+  detailTrigger = null;
+  if (restoreFocus !== false && back && document.contains(back)) {
+    try { back.focus({ preventScroll: true }); } catch (e) { /* noop */ }
+  }
 }
 
 function typeClass(item) {
@@ -74055,6 +74946,7 @@ function emptyHTML(d) {
 }
 
 function renderTeamReview(d) {
+  closeDetailDrawer(false);
   teamData = d;
   detailKey = "";
   detailError = "";
@@ -74074,6 +74966,7 @@ function renderTeamReview(d) {
 }
 
 function renderTeamLoading() {
+  closeDetailDrawer(false);
   var el = $("reviewTeamView");
   if (!el) return;
   el.innerHTML = '<div class="rv-card"><div class="rv-loading">' + UI.skeletonRows(6) + "</div></div>" +
@@ -74081,6 +74974,7 @@ function renderTeamLoading() {
 }
 
 function renderTeamError(msg, retry) {
+  closeDetailDrawer(false);
   var el = $("reviewTeamView");
   if (!el) return;
   el.innerHTML = '<div class="rv-bigstate err">' +
@@ -74092,29 +74986,12 @@ function renderTeamError(msg, retry) {
     '<button class="btn" type="button" data-rv-scope="me">看我的回顾</button></div></div>';
 }
 
-function refreshStatsCard() {
-  var card = $("rvStatsCard");
-  if (!card || !teamData) return;
-  var holder = document.createElement("div");
-  holder.innerHTML = statTableHTML(teamData);
-  var next = holder.firstChild;
-  card.parentNode.replaceChild(next, card);
-}
-
-function toggleDetail(key) {
-  if (detailKey === key) {
-    detailKey = "";
-    detailLoading = false;
-    detailError = "";
-    refreshStatsCard();
+function toggleDetail(key, trigger) {
+  if (detailKey === key && detailDrawerEl() && detailDrawerEl().classList.contains("on")) {
+    closeDetailDrawer(true);
     return;
   }
-  detailKey = key;
-  detailError = "";
-  detailLoading = !detailCache[detailCacheKey()];
-  refreshStatsCard();
-  if (!detailLoading) return;
-  fetchDetail();
+  openDetailDrawer(key, trigger);
 }
 
 function fetchDetail() {
@@ -74123,7 +75000,7 @@ function fetchDetail() {
   var key = detailKey;
   detailLoading = true;
   detailError = "";
-  refreshStatsCard();
+  renderDetailBody();
   API.get("/api/review/team/detail", {
     weekOffset: d.weekOffset,
     reqId: d.reqId || null,
@@ -74133,12 +75010,12 @@ function fetchDetail() {
     if (detailKey !== key) return;
     detailCache[detailCacheKey()] = page;
     detailLoading = false;
-    refreshStatsCard();
+    renderDetailBody();
   }).catch(function (ex) {
     if (detailKey !== key) return;
     detailLoading = false;
     detailError = (ex && ex.message) || "网络异常";
-    refreshStatsCard();
+    renderDetailBody();
   });
 }
 
@@ -74197,14 +75074,7 @@ function openItem(kind, id) {
 var teamEl = $("reviewTeamView");
 if (teamEl) teamEl.addEventListener("click", function (e) {
   var b = e.target.closest("[data-rvd]");
-  if (b) { toggleDetail(b.dataset.rvd); return; }
-  if (e.target.closest("[data-rvd-close]")) {
-    detailKey = "";
-    detailError = "";
-    refreshStatsCard();
-    return;
-  }
-  if (e.target.closest("[data-rvd-retry]")) { fetchDetail(); return; }
+  if (b) { toggleDetail(b.dataset.rvd, b); return; }
   var item = e.target.closest("[data-rv-id]");
   if (item) { openItem(item.dataset.rvKind, item.dataset.rvId); return; }
   var goBtn = e.target.closest("[data-rv-go]");
@@ -74220,6 +75090,39 @@ if (teamEl) teamEl.addEventListener("click", function (e) {
   }
   var chip = e.target.closest("[data-rv-mfilter]");
   if (chip) { setMemberFilter(chip.dataset.rvMfilter); return; }
+});
+
+/* 明细抽屉：关闭 / 重试 / 条目跳转都在抽屉内处理，页面只负责打开 */
+(function wireDetailDrawer() {
+  var host = detailDrawerEl();
+  if (!host) return;
+  host.addEventListener("click", function (e) {
+    if (e.target.closest("[data-rvd-retry]")) { if (detailKey) fetchDetail(); return; }
+    var item = e.target.closest("[data-rv-id]");
+    if (item) { openItem(item.dataset.rvKind, item.dataset.rvId); return; }
+    if (e.target.closest("[data-rvd-close]")) { closeDetailDrawer(true); return; }
+  });
+  var scrim = $("rvDetailScrim");
+  if (scrim) scrim.addEventListener("click", function () { closeDetailDrawer(true); });
+  var closeBtn = $("rvDetailClose");
+  if (closeBtn) closeBtn.addEventListener("click", function () { closeDetailDrawer(true); });
+})();
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape" || e.__dsEscHandled) return;
+  var drawer = detailDrawerEl();
+  if (!drawer || !drawer.classList.contains("on")) return;
+  /* 弹窗或工作项抽屉压在明细之上时，交给上层逐层关闭 */
+  if (UI.anyDialogOpen()) return;
+  var td = document.getElementById("taskDrawer");
+  if (td && td.classList.contains("on") &&
+      (parseInt(td.style.zIndex, 10) || 0) >= (parseInt(drawer.style.zIndex, 10) || 0)) return;
+  e.__dsEscHandled = true;
+  closeDetailDrawer(true);
+});
+/* 离开周回顾页时收起抽屉，别残留在别的页面上 */
+window.addEventListener("ds:view-change", function (e) {
+  var view = e && e.detail && e.detail.view;
+  if (view !== "review") closeDetailDrawer(false);
 });
 
 /* 团队周报纯文本：与页面数字同源，供「复制」直接发给团队或上级。 */
@@ -74268,6 +75171,8 @@ function currentTeamReportText() {
   return teamData ? teamReportText(teamData) : "";
 }
 
+return {renderTeamReview: renderTeamReview, renderTeamLoading: renderTeamLoading, renderTeamError: renderTeamError, applyMemberFilter: applyMemberFilter, teamHasEvents: teamHasEvents, teamReportText: teamReportText, currentTeamReportText: currentTeamReportText, closeDetailDrawer: closeDetailDrawer};
+})();
 /* ---- views/review.js ---- */
 __NS["views/review.js"] = (function(){
 /* views/review · 周回顾与 AI 周报 */
@@ -74283,7 +75188,7 @@ var copyToClipboard = copyText; var esc = esc2;
 
 
 var { openLogTable, openTaskTable } = __NS["views/manager-shared.js"];
-
+var { closeDetailDrawer, currentTeamReportText, renderTeamError, renderTeamLoading, renderTeamReview, teamHasEvents } = __NS["views/review-team.js"];
 var { aiBtnBusy, aiErrMsg, aiUsageText } = __NS["views/requirements.js"];
 registerHelp({
   "review.onTime": {
@@ -74370,6 +75275,8 @@ function applyReviewScopeUI(){
   var tv = $("reviewTeamView"), pv = $("reviewPersonalView");
   if(tv) tv.hidden = !team;
   if(pv) pv.hidden = team;
+  /* 团队视图收起时，统计明细抽屉不能留在个人视图上 */
+  if(!team) closeDetailDrawer(false);
   var copyBtn = $("btnCopy");
   if(copyBtn && copyBtn.parentNode) copyBtn.parentNode.hidden = false;
   var plain = document.querySelector('#copyMenu [data-copy="plain"]');
@@ -78930,6 +79837,7 @@ function refreshCanceledIfOpen(){
 return {enterCanceledView: enterCanceledView, refreshFromHash: refreshFromHash, refreshCanceledIfOpen: refreshCanceledIfOpen};
 })();
 /* ---- views/catchup.js ---- */
+__NS["views/catchup.js"] = (function(){
 /* views/catchup · 周五补记：本周痕迹逐条确认、工时归属、风险确认与提交撤销
    数据与写入口径见 backend CatchupService；本页只写「确认记录 / 工时归属」，
    唯一会改工作项的是风险卡片的「解除阻塞」，提交后 5 分钟内可撤销。 */
@@ -79985,6 +80893,8 @@ function bindEvents() {
 
 bindEvents();
 
+return {enterCatchupView: enterCatchupView};
+})();
 /* ---- views/chain.js ---- */
 __NS["views/chain.js"] = (function(){
 /* views/chain · 依赖影响链视图：选定中心工作项，沿前置(fromTaskId)/后继(toTaskId)依赖双向展开成链路，
@@ -86751,7 +87661,7 @@ function mountReleaseWorkspace(pageHost, opts){
     }
     box.innerHTML = '<ul class="release-scope">' + verLog.rows.map(function(l){
       return '<li>' + esc(fmtReleaseTime(l.createdAt)) + ' · ' + esc(VERSION_LOG_NAME[l.action] || l.action) +
-        ' · ' + esc(l.actorName || "系统") + (l.reason ? ' · 理由：' + esc(l.reason) : '') + '</li>';
+        ' · ' + esc(l.actorName || "系统") + (l.reason ? ' · 理由：<span class="ver-log-reason">' + esc(l.reason) + '</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }
   function renderHistory(){
@@ -87124,6 +88034,31 @@ function mountReleaseWorkspace(pageHost, opts){
       }
       return text;
     }
+    /* 通知标题只用计划编号 + 版本名，与后端 planLabel 同口径（不含时间/状态/环境） */
+    function pushTitleLabel(item){
+      var names = String((item && item.versionNames) || "").split(/\s*\/\s*|[,，、]/).map(function(s){ return s.trim(); }).filter(Boolean);
+      if(!names.length && item && Array.isArray(item.versions)){
+        names = item.versions.map(function(v){ return v && v.versionName; }).filter(Boolean);
+      }
+      return "发布准备 · " + planRef(item) + (names.length ? " · " + names.join("、") : "");
+    }
+    /* 与后端标题同口径：今天发布 / N 天后 / 已过 N 天 */
+    function pushCountdownSuffix(plannedAt){
+      var days = countdownDays(plannedAt);
+      if(days == null) return "";
+      if(days === 0) return " · 今天发布";
+      return days > 0 ? " · " + days + " 天后" : " · 已过 " + (-days) + " 天";
+    }
+    /* 预览取首位收件人的真实准备进度；站内正文是「事实行 + 进度行」两行 */
+    function pushSampleProgress(){
+      var sample = selectedItems()[0] || (st.owners && st.owners[0]) || null;
+      var total = sample ? Number(sample.taskCount) || 0 : 0;
+      if(!total) return "你没有负责本计划的工作项，可点开查看计划范围。";
+      var pending = Number(sample.unconfirmedCount) || 0;
+      return pending
+        ? "你负责 " + total + " 项：" + pending + " 待确认。"
+        : "你负责的 " + total + " 项已全部确认。";
+    }
     function memberRowsHTML(){
       var q = st.q.toLowerCase();
       var rows = st.all.filter(function(it){ return !q || String(it.name || "").toLowerCase().indexOf(q) !== -1; });
@@ -87170,8 +88105,9 @@ function mountReleaseWorkspace(pageHost, opts){
           + '<div class="field-label">发送内容</div>'
           + '<div class="prep-note-field"><input class="input" type="text" data-prep-push-note maxlength="200" value="' + esc(st.note) + '" placeholder="补充说明（选填，200 字以内；站内、邮件、群消息都会带上）" aria-label="补充说明"><span class="prep-note-count" data-prep-push-note-count>' + st.note.length + '/200</span></div>'
           + '<div class="prep-push-preview"><span class="pp-icon">备</span><div>'
-          + '<div class="pp-title">发布准备 · ' + esc(planLabel(plan)) + '</div>'
-          + '<div class="pp-body">' + esc(fmtReleaseTime(plan.plannedAt)) + ' ' + esc(releaseEnvironmentName(plan.environment)) + ' 发布；请确认你负责的工作项。点开逐项确认。</div>'
+          + '<div class="pp-title">' + esc(pushTitleLabel(plan)) + esc(pushCountdownSuffix(plan.plannedAt)) + '</div>'
+          + '<div class="pp-body">' + esc(fmtMinute(plan.plannedAt) || "未定时间") + ' ' + esc(releaseEnvironmentName(plan.environment)) + '发布<br>'
+          + esc(pushSampleProgress()) + '</div>'
           + '<div class="pp-note"' + (st.note ? "" : " hidden") + ' data-prep-push-note-preview>补充说明：' + esc(st.note) + '</div>'
           + '<div class="pp-act">查看并确认 →</div></div></div>'
           + '<p class="side-note">同一人负责多项时只收一条汇总；同一批次重复点击不会重复发送。计划范围或时间提前会要求重新确认。</p>';
@@ -87574,7 +88510,7 @@ function mountReleaseWorkspace(pageHost, opts){
       + field("计划说明", '<textarea data-plan-notes maxlength="2000"' + disabled + '>' + esc(p.notes || "") + '</textarea>')
       + field("风险与回滚方案", '<textarea data-plan-risks maxlength="1000"' + disabled + '>' + esc(p.risks || "") + '</textarea>', "建议写清回滚命令、数据兼容处理和回滚后的验证步骤。")
       + field("计划状态", '<select data-plan-status' + disabled + '>' + options([["draft", "草稿"], ["ready", "就绪"], ["canceled", "取消"]].concat(p.status === "completed" ? [["completed", "已完成（只读）"]] : []), p.status || "draft") + '</select>', "只有「就绪」计划可被实际记录直接引用；就绪需要计划时间、负责人、至少 1 个工作项和目标键。草稿、取消或已完成会触发偏差校验，需要填写理由。")
-      + (!locked ? '<div class="release-save-bar">' + field("新建 / 修改理由", '<input data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划">', "", true) + '<p class="release-error" data-plan-error role="alert"></p><div class="release-save-acts"><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button></div></div>' : '<p class="hint">此计划只读</p>') + '</section>';
+      + (!locked ? '<div class="release-save-bar">' + field("新建 / 修改理由", '<textarea class="textarea" rows="2" data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划"></textarea>', "", true) + '<p class="release-error" data-plan-error role="alert"></p><div class="release-save-acts"><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button></div></div>' : '<p class="hint">此计划只读</p>') + '</section>';
     var actualSection = mayPublish ? '<div class="release-actual"><section class="release-section release-actual-main"><h3>实际发布事实</h3><p class="hint">只填本次真实发生的交付；失败、测试和回滚记录不等于生产生效。</p><div class="form-grid">'
         + field("本次关联计划", '<select data-release-planId' + actualDisabled + '>' + actualPlanOptions(a) + '</select>', "关联计划用于预检对比；无计划即紧急记录。环境或状态不一致的计划仍可选择，但必须填写原因。", false, planSummaryHTML(a))
         + field("实际发生时间（本地）", '<input type="datetime-local" step="60" data-release-occurredAt value="' + esc(a.occurredAt) + '"' + actualDisabled + '>', "真实发生时间，不能晚于当前时间；与计划时间不同需填写原因。", true)
@@ -100629,6 +101565,24 @@ function defectRowHTML(t, no){
   var priHTML = t.priority
     ? '<span class="tc-def-pri" title="优先级：' + esc(priName(t.priority)) + '">' + priTagHTML(t.priority) + '</span>'
     : '<span class="tc-def-none">—</span>';
+  var statusHTML = defectStatusHTML(st);
+  /* 行内直改：与工作项列表同口径；状态按看板列流转，回归字段仍由服务端随列维护 */
+  if(canEditTask(t)){
+    var caret = icon("caretDown", 11);
+    statusHTML = '<button class="tc-def-inline tc-def-stbtn" type="button" data-row-status="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="状态：' + esc(DEFECT_STATUSES[st].label) + '，点击修改"' +
+      ' title="点击改状态（按看板列流转）">' + statusHTML + caret + '</button>';
+    priHTML = '<button class="tc-def-inline" type="button" data-row-pri="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="优先级：' + esc(priName(t.priority || "P2")) + '，点击修改"' +
+      ' title="点击改优先级">' + priHTML + caret + '</button>';
+    ownerHTML = '<button class="tc-def-inline tc-def-owner-btn" type="button" data-row-owner="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="负责人：' + esc(t.owner || "未指派") + '，点击修改"' +
+      ' title="点击改负责人">' +
+      (t.owner
+        ? avatarHTML(t.owner) + '<span class="tc-def-owner-name">' + esc(t.owner) + '</span>'
+        : '<span class="tc-def-none">未指派</span>') +
+      caret + '</button>';
+  }
   var projHTML = defReqId ? ""
     : '<span class="tc-def-proj" title="' + esc(defectProjectName(t.reqId)) + '">'
       + esc(cut(defectProjectName(t.reqId), 18)) + '</span>';
@@ -100641,7 +101595,7 @@ function defectRowHTML(t, no){
     +   '<div class="tc-def-sub">' + projHTML + '<span class="tc-def-id">' + esc(t.id) + '</span>'
     +     '<span>' + esc(cases.length ? "测试发现" : "手工创建") + '</span>' + taskPublicationHTML(t) + '</div>'
     + '</div>'
-    + '<div>' + defectStatusHTML(st) + '</div>'
+    + '<div>' + statusHTML + '</div>'
     + '<div>' + ownerHTML + '</div>'
     + '<div>' + verHTML + '</div>'
     + '<div>' + caseHTML + '</div>'
@@ -100758,6 +101712,10 @@ function applyDefectLinks(links){
     (defectLinks[l.bugTaskId] || (defectLinks[l.bugTaskId] = [])).push(l);
   });
 }
+/* 行内菜单按 id 回查任务：缺陷行对象登记进共享缓存，改完由 ds:task-saved 重取 */
+function rememberDefects(rows){
+  (rows || []).forEach(function(t){ if(t && t.id) taskCacheExtra[t.id] = t; });
+}
 /**
  * opts.badgeOnly：只在非缺陷页刷新 Tab 角标，不拉关联用例和版本，避免首屏多打两轮请求。
  */
@@ -100791,6 +101749,7 @@ function loadDefects(opts){
     return tasksP.then(function(rows){
       if(seq !== defectSeq || defectScopeKey() !== key) return false;
       defects = (rows || []).filter(function(t){ return t && (!t.itemType || t.itemType === "bug"); });
+      rememberDefects(defects);
       defectOpenCount = defects.filter(defectIsOpen).length;
       defectBadgeReqId = key;
       paintDefectBadge();
@@ -100800,6 +101759,7 @@ function loadDefects(opts){
   return Promise.all([tasksP, defectVersionsFor(scopeIds)]).then(function(rs){
     if(seq !== defectSeq || defectScopeKey() !== key) return false;
     defects = (rs[0] || []).filter(function(t){ return t && (!t.itemType || t.itemType === "bug"); });
+    rememberDefects(defects);
     defectVersions = rs[1] || [];
     /* 只给真的有缺陷的项目拉关联用例；全部项目下避免为无缺陷项目多发请求 */
     var linkIds = scopeIds;
@@ -109416,12 +110376,19 @@ $("tcDefRows").addEventListener("click", function(e){
     openCaseInProject(caseChip.dataset.tcDefCaseReq, caseChip.dataset.tcDefCase);
     return;
   }
+  var statusBtn = e.target.closest("[data-row-status]");
+  if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
+  var priBtn = e.target.closest("[data-row-pri]");
+  if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+  var ownerBtn = e.target.closest("[data-row-owner]");
+  if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
   var row = e.target.closest("[data-tc-defect]");
   if(row) openDefectDrawer(row.dataset.tcDefect);
 });
 $("tcDefRows").addEventListener("keydown", function(e){
   if(e.key !== "Enter" && e.key !== " ") return;
-  if(e.target.closest("[data-tc-def-case]")) return;
+  /* 行内菜单按钮走原生键盘激活，不再触发整行开抽屉 */
+  if(e.target.closest("button,a,input,select,textarea")) return;
   var row = e.target.closest("[data-tc-defect]");
   if(!row) return;
   e.preventDefault();
@@ -111000,7 +111967,7 @@ function leafRowHTML(t, depth, row){
   var titleCell = taskCell(t, "title", hasTypeCol).replace('<span class="lr-task">', '<span class="lr-task">' + indentHTML(depth, row));
   return '<div class="tree-row list-row" data-tree-id="' + esc(t.id) + '" tabindex="0" role="treeitem" aria-level="' + (depth + 1) + '">' +
     '<span><span class="tree-caret leaf" aria-hidden="true">▸</span></span>' +
-    cols.map(function(key){ return key === "title" ? titleCell : taskCell(t, key, hasTypeCol); }).join("") +
+    cols.map(function(key){ return key === "title" ? titleCell : taskCell(t, key, hasTypeCol, true); }).join("") +
     '<span class="cell-act"></span></div>';
 }
 function rowsHTML(children, depth){
@@ -111036,7 +112003,7 @@ function leafRowMobileHTML(t, depth, row){
     '<span class="tree-caret leaf" aria-hidden="true">▸</span>' +
     '<span class="tmr-title">' + esc(t.title) + '</span>' +
     '<span class="tmr-meta">' +
-      taskCell(t, "column") + taskCell(t, "priority") + taskCell(t, "dueDate") +
+      taskCell(t, "column") + taskCell(t, "priority", false, true) + taskCell(t, "dueDate", false, true) +
       '<span class="tmr-prog">' + progressMiniHTML(progressOf(t)) + '</span>' +
     '</span></div>';
 }
@@ -111273,6 +112240,12 @@ treeBody.addEventListener("click", function(e){
   }
   var statusBtn = e.target.closest("[data-row-status]");
   if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
+  var priBtn = e.target.closest("[data-row-pri]");
+  if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+  var ownerBtn = e.target.closest("[data-row-owner]");
+  if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
+  var dueBtn = e.target.closest("[data-row-due]");
+  if(dueBtn){ openDuePopover(dueBtn, dueBtn.dataset.rowDue); return; }
   var row = e.target.closest("[data-tree-id]");
   if(!row) return;
   var t = rt.listCache[row.dataset.treeId];
@@ -113601,6 +114574,8 @@ function load(reset, quiet){
     if(!reset && prevMetrics) data.metrics = prevMetrics;
     st.error = "";
     var items = data.items || [];
+    /* 行内菜单按 id 回查任务：把本页对象登记进共享缓存，改完靠 ds:task-saved 重拉 */
+    items.forEach(function(t){ if(t && t.id) taskCacheExtra[t.id] = t; });
     if(reset){
       st.rows = items;
     }else{
@@ -114290,21 +115265,49 @@ function wcSubHTML(t, mode){
   }
   return parts.join(" · ");
 }
+/* 行内直改触发器：读态与普通单元格一致，悬停 / 聚焦才露箭头；状态由页面列固定，不在此处改 */
+function wcInlineHTML(attr, t, inner, label, title, extra){
+  return '<button class="row-inline-edit' + (extra ? " " + extra : "") + '" type="button" data-' + attr + '="' + esc(t.id) + '"' +
+    ' aria-haspopup="menu" aria-expanded="false" aria-label="' + esc(label) + '" title="' + esc(title) + '">' +
+    '<span class="row-inline-edit-t">' + inner + '</span>' + icon("caretDown", 11) + '</button>';
+}
 function wcCell(t, key, done, mode){
   /* 无值就留白，不用「—」占位 */
   var none = "";
+  var editable = canEditTask(t);
   if(key === "title"){
     var sub = wcSubHTML(t, mode), pub = taskPublicationHTML(t);
     return '<span class="wcl-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
       (sub || pub ? '<span class="wcl-sub">' + sub + (pub ? (sub ? " " : "") + pub : "") + '</span>' : '');
   }
   if(key === "type") return typeBadgeHTML(t.itemType) || '<span class="mini-tag mute">' + esc(typeName(t.itemType)) + '</span>';
-  if(key === "priority") return priTagHTML(t.priority || "P2");
-  if(key === "owner") return '<span class="wcl-who" title="负责人：' + esc(t.owner || "未分配") + '">' +
-    avatarHTML(t.owner || "未分配") + '<span>' + esc(t.owner || "未分配") + '</span></span>';
+  if(key === "priority"){
+    var pri = priTagHTML(t.priority || "P2");
+    return editable
+      ? wcInlineHTML("row-pri", t, pri, "优先级：" + priName(t.priority || "P2") + "，点击修改", "点击改优先级")
+      : pri;
+  }
+  if(key === "owner"){
+    var ownerInner = t.owner
+      ? avatarHTML(t.owner) + '<span>' + esc(t.owner) + '</span>'
+      : '<span class="muted">未分配</span>';
+    return editable
+      ? wcInlineHTML("row-owner", t, ownerInner, "负责人：" + (t.owner || "未分配") + "，点击修改", "点击改负责人", "wcl-inline-owner")
+      : '<span class="wcl-who" title="负责人：' + esc(t.owner || "未分配") + '">' +
+        avatarHTML(t.owner || "未分配") + '<span>' + esc(t.owner || "未分配") + '</span></span>';
+  }
   if(key === "due"){
-    if(done || !t.dueDate) return none;
-    return '<span class="' + dueMetaClass(dueState(t).kind) + '">' + esc(dueText(t)) + '</span>';
+    if(done) return none;
+    if(t.dueDate){
+      var dueInner = esc(dueText(t));
+      return editable
+        ? wcInlineHTML("row-due", t, dueInner, "截止日期：" + esc(t.dueDate) + "，点击修改", "点击改截止日期")
+        : '<span class="' + dueMetaClass(dueState(t).kind) + '">' + dueInner + '</span>';
+    }
+    /* 未设截止：可写时给一个淡占位，免得「能改」只存在于知道的人脑子里 */
+    return editable
+      ? wcInlineHTML("row-due", t, "—", "截止日期：未设置，点击修改", "点击设置截止日期", "muted")
+      : none;
   }
   if(key === "completed") return t.completedAt ? esc(fmtShortMD(parseDate(t.completedAt))) : none;
   if(key === "cycle"){
@@ -114680,6 +115683,12 @@ if(bodyEl){
     }
     var layout = e.target.closest("[data-wc-layout]");
     if(layout){ setWcLayout(layout.dataset.wcLayout); return; }
+    var priBtn = e.target.closest("[data-row-pri]");
+    if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+    var ownerBtn = e.target.closest("[data-row-owner]");
+    if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
+    var dueBtn = e.target.closest("[data-row-due]");
+    if(dueBtn){ openDuePopover(dueBtn, dueBtn.dataset.rowDue); return; }
     var card = e.target.closest("[data-wc-task]");
     if(card){ openTaskById(card.dataset.wcTask); return; }
   });
@@ -115932,8 +116941,10 @@ window.__HG_MODULES__["workcolumn"] = __NS["views/workcolumn.js"];
 window.__HG_MODULES__["canceled"] = __NS["views/canceled.js"];
 window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
+window.__HG_MODULES__["catchup"] = __NS["views/catchup.js"];
+window.__HG_MODULES__["review-team"] = __NS["views/review-team.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-23 23:10</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-24 08:20</span></div>
 </body>
 </html>
