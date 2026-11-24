@@ -334,7 +334,14 @@ function taskPayloadWith(t, patch){
     blocked: !!t.blocked,
     blockedReason: t.blockedReason || null,
     blockedByTaskId: t.blockedByTaskId || null,
-    tags: t.tags || []
+    tags: t.tags || [],
+    /* 缺陷元数据：后端按 itemType=bug 校验严重度，不带上就无法行内直改缺陷行 */
+    itemType: t.itemType || "task",
+    severity: t.severity || null,
+    environment: t.environment || null,
+    reproduceSteps: t.reproduceSteps || null,
+    foundVersionId: t.foundVersionId || null,
+    regressionStatus: t.regressionStatus || null
   };
   for(var k in patch) if(Object.prototype.hasOwnProperty.call(patch, k)) p[k] = patch[k];
   return p;
