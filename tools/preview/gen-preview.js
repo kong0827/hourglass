@@ -117,7 +117,7 @@ const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "
   "delivery", "investment", "workcolumn", "canceled", "tree", "chain",
   /* 周五补记顶层有 function bodyEl()，与 core/sheet-viewer 的 var bodyEl 同名；
      团队周回顾顶层有 render 等通用名。真实 ESM 各自独立作用域，平铺会互相覆盖 */
-  "catchup", "review-team"];
+  "catchup", "review-team", "mine"];
 const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js"; })
   .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js",
     /* view-loader 的 const cache 与 transitions.js 的 var cache 同名：
@@ -128,7 +128,11 @@ const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js
     "core/fullscreen.js",
     /* assistant 顶层 var boot=null / history=[] / open 等：作为 main 的依赖先于 main 求值，
        会把 main.js 的 function boot 覆盖成 null，DOMContentLoaded 监听拿到 null，整站不启动 */
-    "core/assistant.js"]));
+    "core/assistant.js",
+    /* 沙漏说顶层 function render 会覆盖 views/mine.js 的 render（平铺后后者先求值、前者
+       函数声明仍然生效），holidays 的 HOLIDAYS 与通用函数名也会被后续模块遮住；
+       两者都在既有平铺模块运行时被调用，必须各自包一层 */
+    "core/sand-say.js", "core/holidays.js"]));
 
 /** 收集模块的导出表：外部名 → 本地标识符（export { open as openSearchPalette }） */
 function collectExports(code) {

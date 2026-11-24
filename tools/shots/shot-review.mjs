@@ -70,7 +70,7 @@ const ready = `(() => {
 
 async function fresh(width, height) {
   ab(['close', '--all'])
-  ab(['set', 'viewport', String(width), String(height)])
+  ab(['set', 'viewport', String(width), String(height), '2'])
   ab(['open', PREVIEW])
   await sleep(600)
   js('localStorage.clear()')

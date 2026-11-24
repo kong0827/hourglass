@@ -23087,6 +23087,32 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
       canPublish: false, canManageReleasePlan: true, branches: [], description: "" }
   ];
 
+  var releasePlans = [
+    { id: "P1", planNo: "PL-2026-0012", reqId: "R1", versionIds: ["V1"], versionCount: 1, releasedVersionCount: 0,
+      plannedAt: shift(3) + "T20:00:00", status: "ready", environment: "production", coverage: "full",
+      plannedTaskIds: ["K1", "K2", "K7", "K8", "K9", "K11"], plannedDemandIds: ["D1"], revision: 3 }
+  ];
+  var releaseRecords = [
+    { id: "RR1", releaseNo: "REL-0011", reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: "P1",
+      environment: "production", operation: "deploy", result: "success",
+      occurredAt: ts(-6, 20, 10), publishedOn: shift(-6), recordedAt: ts(-6, 20, 12), planPlannedAt: ts(-6, 20, 0),
+      targetKeys: ["app-web", "gateway"], coverage: "full", artifactRef: "hourglass-web@1.2.0",
+      artifactDigest: "9f2c41d7e0b85a36c1d0f4b7a2e8c9d1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3",
+      recordedByName: "我", executorName: "陈工", notes: "按计划窗口发布，回滚脚本已演练。",
+      items: [
+        { taskId: "K1", taskItemNo: "WI-101", title: "重构权限校验中间件", demandId: "D1", demandNo: "REQ-021", demandTitle: "权限中台统一鉴权",
+          ownerName: "我", completedAt: ts(-7, 18, 0), disposition: "已发布" },
+        { taskId: "K2", taskItemNo: "WI-102", title: "导出 CSV 补工时列", demandId: "D1", demandNo: "REQ-021", demandTitle: "权限中台统一鉴权",
+          ownerName: "我", completedAt: ts(-8, 16, 30), disposition: "已发布" }
+      ] },
+    { id: "RR2", releaseNo: "REL-0010", reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: null,
+      environment: "staging", operation: "deploy", result: "failed",
+      occurredAt: ts(-9, 15, 20), publishedOn: shift(-9), recordedAt: ts(-9, 15, 26),
+      targetKeys: ["staging"], coverage: "partial", artifactRef: "hourglass-web@1.2.0-rc3",
+      failureReason: "网关配置未同步，验证环境登录 502", recordedByName: "陈工", executorName: "陈工",
+      items: [] }
+  ];
+
   var routes = {
     /* 演示用：当前登录者是「普通用户」，同时是共享空间「团队空间」的空间主
        —— 设置页应只给邀请链接，不给"按登录名直接加人" */
@@ -23113,8 +23139,10 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
       items: [
         { id: "R1", name: "流程引擎", status: "active", setId: null, containerKind: null, firstReleasedAt: "2026-06-15",
           progressPct: 62, taskCount: 4, doneCount: 2, mvpWorkMinutes: 960, postWorkMinutes: 240, onTimePct: 50, owner: "我" },
-        { id: "R2", name: "结算改造", status: "active", setId: null, containerKind: null, firstReleasedAt: null,
-          progressPct: 20, taskCount: 2, doneCount: 0, mvpWorkMinutes: 120, postWorkMinutes: 0, onTimePct: null, owner: "我" }
+        { id: "R2", name: "结算改造", status: "active", setId: null, containerKind: null, firstReleasedAt: "2026-07-18",
+          progressPct: 20, taskCount: 2, doneCount: 0, mvpWorkMinutes: 120, postWorkMinutes: 0, onTimePct: null, owner: "我" },
+        { id: "R3", name: "风控规则引擎", status: "active", setId: null, containerKind: null, firstReleasedAt: "2026-09-02",
+          progressPct: 48, taskCount: 3, doneCount: 1, mvpWorkMinutes: 720, postWorkMinutes: 180, onTimePct: 100, owner: "陈工" }
       ],
       total: 2, hasMore: false
     },
@@ -23730,9 +23758,16 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
       var dpM = /[?&]reqId=([^&]*)/.exec(u);
       var dpReq = dpM ? decodeURIComponent(dpM[1]) : "";
       var demoDemands = [
-        { id: "D1", title: "权限中台统一鉴权", status: "plan", reqId: "R1", versionStatus: "planned" },
-        { id: "D2", title: "结算对账异常治理", status: "review", reqId: "R2", versionStatus: "" },
-        { id: "D3", title: "导出能力增强", status: "pass", reqId: "R1", versionStatus: "" }
+        { id: "D1", title: "权限中台统一鉴权", status: "plan", reqId: "R1", versionStatus: "planned",
+          itemKind: "新功能", priority: "P1", wsjfScore: 6.4, expectDate: "2026-12-05",
+          versionId: "V1", versionName: "1.2 权限改造", plannedStart: "2026-11-14", plannedEnd: "2026-11-27",
+          source: "客户反馈", createdAt: "2026-11-10 10:20" },
+        { id: "D2", title: "结算对账异常治理", status: "review", reqId: "R2", versionStatus: "",
+          itemKind: "体验优化", priority: "P0", wsjfScore: 8.1, expectDate: "2026-11-28",
+          source: "线上问题", createdAt: "2026-11-18 14:05" },
+        { id: "D3", title: "导出能力增强", status: "pass", reqId: "R1", versionStatus: "",
+          itemKind: "新功能", priority: "P2", wsjfScore: 3.2, expectDate: "2026-12-12",
+          source: "内部规划", createdAt: "2026-11-16 09:40" }
       ];
       var dpRows = demoDemands.filter(function (d) { return !dpReq || d.reqId === dpReq; });
       data = { items: dpRows, total: dpRows.length, hasMore: false };
@@ -23867,6 +23902,20 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
       var vqM = /[?&]reqId=([^&]*)/.exec(u);
       var vqReq = vqM ? decodeURIComponent(vqM[1]) : "";
       data = previewVersions.filter(function (v) { return !vqReq || v.reqId === vqReq; });
+    } else if (/^\/api\/versions\/[A-Za-z0-9_-]+\/release-plans$/.test(clean)) {
+      var rpVid = clean.split("/")[3];
+      data = releasePlans.filter(function (p) { return (p.versionIds || []).indexOf(rpVid) >= 0; });
+    } else if (/^\/api\/versions\/[A-Za-z0-9_-]+\/release-records$/.test(clean)) {
+      var rrVid = clean.split("/")[3];
+      data = releaseRecords.filter(function (r) { return r.versionId === rrVid; });
+    } else if (clean === "/api/release-plans" && method === "GET") {
+      data = releasePlans;
+    } else if (clean === "/api/release-plan-options") {
+      data = { projects: ["R1", "R2"].map(function (rid) {
+        return { id: rid, name: rid === "R1" ? "流程引擎" : "结算改造",
+          versions: previewVersions.filter(function (v) { return v.reqId === rid; })
+            .map(function (v) { return { id: v.id, name: v.name, status: v.status, targetDate: v.targetDate }; }) };
+      }) };
     } else if (clean === "/api/versions/stats" && method === "GET") {
       var vsM = /[?&]reqId=([^&]*)/.exec(u);
       var vsReq = vsM ? decodeURIComponent(vsM[1]) : "";
@@ -43000,6 +43049,7 @@ function openLogTable(title, logs, description, opts){
 return {caliberHTML: caliberHTML, daysBetween: daysBetween, downloadCsv: downloadCsv, fmtDate: fmtDate, fmtHours: fmtHours, loadBarHTML: loadBarHTML, openLogTable: openLogTable, openTaskTable: openTaskTable, taskStatusName: taskStatusName};
 })();
 /* ---- views/mine.js ---- */
+__NS["views/mine.js"] = (function(){
 /* views/mine · 我的工作（多角色个人工作台）
    页签：待我处理 / 我发起的 / 我关注的（移动端负责人 / 管理员另有「团队」）
    口径见 docs/audit/my-work-redesign-2026-11-20/设计说明.md */
@@ -45145,6 +45195,8 @@ document.addEventListener("visibilitychange", function () {
 initEvents();
 render();
 
+return {askSwitchWorkspace: askSwitchWorkspace, clearWorkspaceHandoff: clearWorkspaceHandoff, enterMineView: enterMineView, loadMine: loadMine, restoreWorkspaceHandoff: restoreWorkspaceHandoff, saveWorkspaceHandoff: saveWorkspaceHandoff, wsNameById: wsNameById};
+})();
 /* ---- core/notifications.js ---- */
 /* core/notifications · 通知中心与到期提醒 */
 
@@ -45153,7 +45205,7 @@ render();
 
 
 var esc = esc2;
-
+var { askSwitchWorkspace, wsNameById } = __NS["views/mine.js"];
 
 var NOTIFY_ICON = {
   task_remind: "clock",
@@ -46091,7 +46143,7 @@ var { toggleAssistant } = __NS["core/assistant.js"];
 var esc = esc2;
 
 
-
+var { askSwitchWorkspace, restoreWorkspaceHandoff, wsNameById } = __NS["views/mine.js"];
 var { loadView } = __NS["core/view-loader.js"];
 var wsMenuEl = $("wsMenu"), wsListEl = $("wsList"), wsSwitchBtn = $("wsSwitch");
 function loadWorkspaces(meUser){
@@ -48065,7 +48117,7 @@ var esc = esc2;
 
 var { loadView, viewModule } = __NS["core/view-loader.js"];
 
-
+var { loadMine } = __NS["views/mine.js"];
 
 function metaCount(list, name){
   if(!list) return 0;
@@ -50293,7 +50345,7 @@ var { loadView, viewModule } = __NS["core/view-loader.js"];
 
 
 
-
+var { enterMineView } = __NS["views/mine.js"];
 var activeView = "board";
 /* 低频视图：第一次进入时才拉取模块（视图代码已按 views/*.js 拆分） */
 var settingsTabPending = null;
@@ -52065,7 +52117,7 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
   /* 侧栏摆件是纯装饰：首屏之后再挂，不占关键路径 */
   import("./core/side-ornament.js").then(function(m){ m.initSideOrnament(); }).catch(function(){});
   /* 沙漏说同样在本机计算、纯展示：失败也不影响主流程 */
-  import("./core/sand-say.js").then(function(m){ m.initSandSay(); }).catch(function(){});
+  Promise.resolve(__NS["core/sand-say.js"]).then(function(m){ m.initSandSay(); }).catch(function(){});
   loadBoard({animate:true}).then(function(){
     /* O-3：深链任务；跨空间时（从「我的任务」切过来）用 sessionStorage 接力 */
     var pendingTask = deepTaskId;
@@ -52550,6 +52602,7 @@ async function openDocView(opts){
 }
 
 /* ---- core/holidays.js ---- */
+__NS["core/holidays.js"] = (function(){
 /* core/holidays · 法定节假日与调休上班日（按年维护）
  *
  * 来源：国务院办公厅《关于2026年部分节假日安排的通知》（2025-11-04）、
@@ -52606,6 +52659,8 @@ function nextHoliday(dateStr){
   return null;
 }
 
+return {HOLIDAYS: HOLIDAYS, MAKEUP_WORKDAYS: MAKEUP_WORKDAYS, COVERED_YEARS: COVERED_YEARS, holidayOn: holidayOn, isMakeupWorkday: isMakeupWorkday, nextHoliday: nextHoliday};
+})();
 /* ---- core/import-wizard.js ---- */
 /* core/import-wizard · Excel / CSV 迁移导入：模板 → 字段映射 → 预检 → 写入 → 失败行回执 */
 
@@ -52981,6 +53036,7 @@ function openImportDialog(kind, opts) {
 }
 
 /* ---- core/sand-say.js ---- */
+__NS["core/sand-say.js"] = (function(){
 /* core/sand-say · 沙漏说：按时段问候、下班倒计时、假日倒计时
  *
  * 三处落点：我的工作页头一行、侧栏摆件悬停气泡、个人设置·外观。
@@ -52988,7 +53044,7 @@ function openImportDialog(kind, opts) {
  * 节假日表见 holidays.js：没有数据覆盖的年份不猜，自动回退到「距周末」。
  */
 
-
+var { holidayOn, isMakeupWorkday, nextHoliday } = __NS["core/holidays.js"];
 var PREF_KEY = "ds.sandSay.v1";
 var DEFAULT_OFF = "18:00";
 var DAY_MS = 86400000;
@@ -53310,6 +53366,8 @@ function initSandSay(){
   });
 }
 
+return {isoDate: isoDate, computeSay: computeSay, readPref: readPref, render: render, mountSandSaySettings: mountSandSaySettings, initSandSay: initSandSay};
+})();
 /* ---- core/sheet-viewer.js ---- */
 /* core/sheet-viewer · 任务附件 xlsx 在线预览/编辑（Univer 渲染 + SheetJS 互转，vendor 懒加载） */
 
@@ -90416,7 +90474,7 @@ var { isAssistantEnabled, setAssistantEnabled } = __NS["core/assistant.js"];
 
 
 
-
+var { mountSandSaySettings } = __NS["core/sand-say.js"];
 
 
 var { loadView } = __NS["core/view-loader.js"];
@@ -90425,7 +90483,7 @@ var esc = esc2;
 
 
 
-
+var { saveWorkspaceHandoff, clearWorkspaceHandoff } = __NS["views/mine.js"];
 var meReadyCbs = [];function afterMeReady(fn){
   if(rt.currentUser){ fn(); return; }
   meReadyCbs.push(fn);
@@ -116943,8 +117001,9 @@ window.__HG_MODULES__["tree"] = __NS["views/tree.js"];
 window.__HG_MODULES__["chain"] = __NS["views/chain.js"];
 window.__HG_MODULES__["catchup"] = __NS["views/catchup.js"];
 window.__HG_MODULES__["review-team"] = __NS["views/review-team.js"];
+window.__HG_MODULES__["mine"] = __NS["views/mine.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-24 08:20</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-24 08:57</span></div>
 </body>
 </html>

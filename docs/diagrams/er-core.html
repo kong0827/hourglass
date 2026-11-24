@@ -47,6 +47,8 @@
     .er-head { text-align: center; margin-bottom: 24px; }
     .er-head h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.4px; }
     .er-head p { font-size: 14.5px; color: var(--text-2); margin-top: 8px; }
+    .er-head p.er-scope { font-size: 12.5px; line-height: 1.7; max-width: 980px; margin: 12px auto 0; color: var(--text-3); }
+    .er-head p.er-scope code { font-size: 11.5px; }
 
     .er-grid { display: grid; grid-template-columns: 1.16fr 1.1fr 1.24fr; gap: 18px; align-items: start; }
     .er-col { min-width: 0; }
@@ -127,6 +129,7 @@
   <div class="er-head">
     <h1>沙漏 · 核心 ER 图</h1>
     <p>94 张表中的核心 25 张 · 实线为外键关联，⊸ 为快照 / 派生关系</p>
+    <p class="er-scope">范围说明：只画协作主链路。评审人（<code>demand.reviewer_user_id</code>）、测试计划执行人（<code>test_plan.executor_user_id</code>）、发布准备的关注 / 推送 / 逐项确认五表、周五补记四表与未处理承接、自动化规则与报告订阅三表、任务创建人（<code>task.created_by_user_id</code>）等 113–124 增量未在图中展开，字段与表结构见<a href="../管理员指南.md">管理员指南</a>与 SQL 脚本。</p>
   </div>
 
   <div class="er-grid">

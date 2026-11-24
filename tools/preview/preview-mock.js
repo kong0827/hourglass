@@ -511,6 +511,32 @@
       canPublish: false, canManageReleasePlan: true, branches: [], description: "" }
   ];
 
+  var releasePlans = [
+    { id: "P1", planNo: "PL-2026-0012", reqId: "R1", versionIds: ["V1"], versionCount: 1, releasedVersionCount: 0,
+      plannedAt: shift(3) + "T20:00:00", status: "ready", environment: "production", coverage: "full",
+      plannedTaskIds: ["K1", "K2", "K7", "K8", "K9", "K11"], plannedDemandIds: ["D1"], revision: 3 }
+  ];
+  var releaseRecords = [
+    { id: "RR1", releaseNo: "REL-0011", reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: "P1",
+      environment: "production", operation: "deploy", result: "success",
+      occurredAt: ts(-6, 20, 10), publishedOn: shift(-6), recordedAt: ts(-6, 20, 12), planPlannedAt: ts(-6, 20, 0),
+      targetKeys: ["app-web", "gateway"], coverage: "full", artifactRef: "hourglass-web@1.2.0",
+      artifactDigest: "9f2c41d7e0b85a36c1d0f4b7a2e8c9d1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3",
+      recordedByName: "我", executorName: "陈工", notes: "按计划窗口发布，回滚脚本已演练。",
+      items: [
+        { taskId: "K1", taskItemNo: "WI-101", title: "重构权限校验中间件", demandId: "D1", demandNo: "REQ-021", demandTitle: "权限中台统一鉴权",
+          ownerName: "我", completedAt: ts(-7, 18, 0), disposition: "已发布" },
+        { taskId: "K2", taskItemNo: "WI-102", title: "导出 CSV 补工时列", demandId: "D1", demandNo: "REQ-021", demandTitle: "权限中台统一鉴权",
+          ownerName: "我", completedAt: ts(-8, 16, 30), disposition: "已发布" }
+      ] },
+    { id: "RR2", releaseNo: "REL-0010", reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: null,
+      environment: "staging", operation: "deploy", result: "failed",
+      occurredAt: ts(-9, 15, 20), publishedOn: shift(-9), recordedAt: ts(-9, 15, 26),
+      targetKeys: ["staging"], coverage: "partial", artifactRef: "hourglass-web@1.2.0-rc3",
+      failureReason: "网关配置未同步，验证环境登录 502", recordedByName: "陈工", executorName: "陈工",
+      items: [] }
+  ];
+
   var routes = {
     /* 演示用：当前登录者是「普通用户」，同时是共享空间「团队空间」的空间主
        —— 设置页应只给邀请链接，不给"按登录名直接加人" */
@@ -537,8 +563,10 @@
       items: [
         { id: "R1", name: "流程引擎", status: "active", setId: null, containerKind: null, firstReleasedAt: "2026-06-15",
           progressPct: 62, taskCount: 4, doneCount: 2, mvpWorkMinutes: 960, postWorkMinutes: 240, onTimePct: 50, owner: "我" },
-        { id: "R2", name: "结算改造", status: "active", setId: null, containerKind: null, firstReleasedAt: null,
-          progressPct: 20, taskCount: 2, doneCount: 0, mvpWorkMinutes: 120, postWorkMinutes: 0, onTimePct: null, owner: "我" }
+        { id: "R2", name: "结算改造", status: "active", setId: null, containerKind: null, firstReleasedAt: "2026-07-18",
+          progressPct: 20, taskCount: 2, doneCount: 0, mvpWorkMinutes: 120, postWorkMinutes: 0, onTimePct: null, owner: "我" },
+        { id: "R3", name: "风控规则引擎", status: "active", setId: null, containerKind: null, firstReleasedAt: "2026-09-02",
+          progressPct: 48, taskCount: 3, doneCount: 1, mvpWorkMinutes: 720, postWorkMinutes: 180, onTimePct: 100, owner: "陈工" }
       ],
       total: 2, hasMore: false
     },
@@ -1154,9 +1182,16 @@
       var dpM = /[?&]reqId=([^&]*)/.exec(u);
       var dpReq = dpM ? decodeURIComponent(dpM[1]) : "";
       var demoDemands = [
-        { id: "D1", title: "权限中台统一鉴权", status: "plan", reqId: "R1", versionStatus: "planned" },
-        { id: "D2", title: "结算对账异常治理", status: "review", reqId: "R2", versionStatus: "" },
-        { id: "D3", title: "导出能力增强", status: "pass", reqId: "R1", versionStatus: "" }
+        { id: "D1", title: "权限中台统一鉴权", status: "plan", reqId: "R1", versionStatus: "planned",
+          itemKind: "新功能", priority: "P1", wsjfScore: 6.4, expectDate: "2026-12-05",
+          versionId: "V1", versionName: "1.2 权限改造", plannedStart: "2026-11-14", plannedEnd: "2026-11-27",
+          source: "客户反馈", createdAt: "2026-11-10 10:20" },
+        { id: "D2", title: "结算对账异常治理", status: "review", reqId: "R2", versionStatus: "",
+          itemKind: "体验优化", priority: "P0", wsjfScore: 8.1, expectDate: "2026-11-28",
+          source: "线上问题", createdAt: "2026-11-18 14:05" },
+        { id: "D3", title: "导出能力增强", status: "pass", reqId: "R1", versionStatus: "",
+          itemKind: "新功能", priority: "P2", wsjfScore: 3.2, expectDate: "2026-12-12",
+          source: "内部规划", createdAt: "2026-11-16 09:40" }
       ];
       var dpRows = demoDemands.filter(function (d) { return !dpReq || d.reqId === dpReq; });
       data = { items: dpRows, total: dpRows.length, hasMore: false };
@@ -1291,6 +1326,20 @@
       var vqM = /[?&]reqId=([^&]*)/.exec(u);
       var vqReq = vqM ? decodeURIComponent(vqM[1]) : "";
       data = previewVersions.filter(function (v) { return !vqReq || v.reqId === vqReq; });
+    } else if (/^\/api\/versions\/[A-Za-z0-9_-]+\/release-plans$/.test(clean)) {
+      var rpVid = clean.split("/")[3];
+      data = releasePlans.filter(function (p) { return (p.versionIds || []).indexOf(rpVid) >= 0; });
+    } else if (/^\/api\/versions\/[A-Za-z0-9_-]+\/release-records$/.test(clean)) {
+      var rrVid = clean.split("/")[3];
+      data = releaseRecords.filter(function (r) { return r.versionId === rrVid; });
+    } else if (clean === "/api/release-plans" && method === "GET") {
+      data = releasePlans;
+    } else if (clean === "/api/release-plan-options") {
+      data = { projects: ["R1", "R2"].map(function (rid) {
+        return { id: rid, name: rid === "R1" ? "流程引擎" : "结算改造",
+          versions: previewVersions.filter(function (v) { return v.reqId === rid; })
+            .map(function (v) { return { id: v.id, name: v.name, status: v.status, targetDate: v.targetDate }; }) };
+      }) };
     } else if (clean === "/api/versions/stats" && method === "GET") {
       var vsM = /[?&]reqId=([^&]*)/.exec(u);
       var vsReq = vsM ? decodeURIComponent(vsM[1]) : "";
