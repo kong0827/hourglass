@@ -39,6 +39,7 @@ initCaliberHelp();
 
 var PAGE = 100;
 var STORE_TAB = "ds.mineTab";
+var STORE_FOLD = "ds.mineSecFold.v1";
 var HANDOFF_KEY = "ds.wsHandoff.v1";
 var PRI_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
 var PRI_LABEL = { P0: "紧急", P1: "高", P2: "中", P3: "低" };
@@ -114,6 +115,12 @@ function safeGet(key) {
 function safeSet(key, value) {
   try { localStorage.setItem(key, value); } catch (e) { /* 受限环境忽略 */ }
 }
+function loadFold() {
+  try {
+    var o = JSON.parse(safeGet(STORE_FOLD) || "{}");
+    return o && typeof o === "object" ? o : {};
+  } catch (e) { return {}; }
+}
 function enc(v) { return encodeURIComponent(v == null ? "" : v); }
 function page0() { return { items: [], offset: 0, hasMore: false, total: 0 }; }
 function freshSrc() {
@@ -144,6 +151,7 @@ var mw = {
   blocked: false,
   sort: { pending: "due", created: "updated", watched: "updated" },
   expand: {},
+  fold: loadFold(),
   src: freshSrc(),
   loading: { pending: false, created: false, watched: false },
   err: { pending: null, created: null, watched: null },
@@ -816,14 +824,30 @@ function claimHTML() {
     '<span>另有 <b>' + mw.claimable + '</b> 个未指派测试可领取 · 不计入你的待处理</span>' +
     '<button class="mw-link" type="button" data-claim title="打开当前空间的可领取测试列表">去领取 ' + icon("chevronRight", 12) + '</button></div>';
 }
+/* 分区头：图标 + 标题是折叠开关；数量、口径与次要操作留在按钮外，收起时次要操作一并隐藏 */
+function secHeadHTML(key, def, countText, act) {
+  var folded = !!mw.fold[key];
+  return '<div class="mw-shead">' +
+    '<button class="mw-sfold" type="button" data-fold="' + key + '" aria-expanded="' + (folded ? "false" : "true") +
+    '" aria-controls="mw-body-' + key + '" aria-label="' + (folded ? "展开" : "收起") + "「" + esc(def.title) + "」" +
+    '" title="' + (folded ? "展开本分区" : "收起本分区") + '">' +
+    '<span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
+    '<span class="mw-stitle">' + esc(def.title) + '</span>' +
+    '<span class="mw-chev">' + icon("chevronRight", 12) + '</span></button>' +
+    '<span class="mw-scount">' + esc(countText) + '</span>' +
+    '<span class="mw-sdesc">' + esc(def.desc) + '</span>' +
+    '<span class="mw-sact">' + (act || "") + '</span></div>';
+}
+function secOpen(key, def, countText, act) {
+  return '<section class="mw-sec' + (mw.fold[key] ? " is-folded" : "") + '">' + secHeadHTML(key, def, countText, act) +
+    '<div class="mw-sbody" id="mw-body-' + key + '">';
+}
 function emptySection(key, def) {
-  var html = '<section class="mw-sec"><div class="mw-shead"><span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
-    '<span class="mw-stitle">' + esc(def.title) + '</span><span class="mw-scount">0 ' + esc(def.unit || "项") + '</span>' +
-    '<span class="mw-sdesc">' + esc(def.desc) + '</span></div>' +
+  var html = secOpen(key, def, "0 " + (def.unit || "项")) +
     '<div class="mw-sempty">' + icon("inbox", 14) + '<span>' + esc(def.empty) + '</span>' +
     '<button class="mw-link" type="button" data-go="' + def.go + '">去看看 ' + icon("chevronRight", 12) + '</button></div>';
   if (key === "test" && mw.claimable > 0) html += claimHTML();
-  return html + '</section>';
+  return html + '</div></section>';
 }
 function sectionHTML(key, def, rows, rowFn, view) {
   var filtered = sortRows(rows.filter(rowPass));
@@ -835,18 +859,17 @@ function sectionHTML(key, def, rows, rowFn, view) {
   var expanded = !!mw.expand[key];
   var shown = expanded ? filtered : filtered.slice(0, 4);
   var countText = filtered.length + " " + (def.unit || "项") + (filtered.length !== rows.length ? " / 共 " + rows.length : "");
-  var html = '<section class="mw-sec"><div class="mw-shead"><span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
-    '<span class="mw-stitle">' + esc(def.title) + '</span><span class="mw-scount">' + esc(countText) + '</span>' +
-    '<span class="mw-sdesc">' + esc(def.desc) + '</span><span class="mw-sact">';
+  var act = "";
   if (filtered.length > 4) {
-    html += '<button class="mw-link" type="button" data-expand="' + key + '">' +
+    act = '<button class="mw-link" type="button" data-expand="' + key + '">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
-  html += '</span></div><div class="mw-thead ' + def.grid + '">' +
+  var html = secOpen(key, def, countText, act) +
+    '<div class="mw-thead ' + def.grid + '">' +
     def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>';
   html += shown.map(rowFn).join("");
   if (key === "test" && mw.claimable > 0) html += claimHTML();
-  return html + '</section>';
+  return html + '</div></section>';
 }
 
 /* ---------------- 页签数据 ---------------- */
@@ -894,16 +917,15 @@ function createdHTML() {
   if (!filtered.length) return "";
   var expanded = !!mw.expand.created;
   var shown = expanded ? filtered : filtered.slice(0, 4);
-  var html = '<section class="mw-sec"><div class="mw-shead"><span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
-    '<span class="mw-stitle">' + esc(def.title) + '</span><span class="mw-scount">' + filtered.length + ' 个</span>' +
-    '<span class="mw-sdesc">' + esc(def.desc) + '</span><span class="mw-sact">';
+  var act = "";
   if (filtered.length > 4) {
-    html += '<button class="mw-link" type="button" data-expand="created">' +
+    act = '<button class="mw-link" type="button" data-expand="created">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
-  html += '</span></div><div class="mw-thead ' + def.grid + '">' +
-    def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>';
-  return html + shown.map(createdRow).join("") + '</section>';
+  return secOpen("created", def, filtered.length + " 个", act) +
+    '<div class="mw-thead ' + def.grid + '">' +
+    def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>' +
+    shown.map(createdRow).join("") + '</div></section>';
 }
 function watchedHTML() {
   var def = WATCH_DEF;
@@ -911,16 +933,15 @@ function watchedHTML() {
   if (!filtered.length) return "";
   var expanded = !!mw.expand.watched;
   var shown = expanded ? filtered : filtered.slice(0, 4);
-  var html = '<section class="mw-sec"><div class="mw-shead"><span class="mw-sicon mw-tint-' + def.tint + '">' + icon(def.icon, 14) + '</span>' +
-    '<span class="mw-stitle">' + esc(def.title) + '</span><span class="mw-scount">' + filtered.length + ' 条</span>' +
-    '<span class="mw-sdesc">' + esc(def.desc) + '</span><span class="mw-sact">';
+  var act = "";
   if (filtered.length > 4) {
-    html += '<button class="mw-link" type="button" data-expand="watched">' +
+    act = '<button class="mw-link" type="button" data-expand="watched">' +
       (expanded ? "收起" : "查看全部 " + filtered.length) + ' ' + icon("chevronRight", 12) + '</button>';
   }
-  html += '</span></div><div class="mw-thead ' + def.grid + '">' +
-    def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>';
-  return html + shown.map(watchedRow).join("") + '</section>';
+  return secOpen("watched", def, filtered.length + " 条", act) +
+    '<div class="mw-thead ' + def.grid + '">' +
+    def.head.map(function (h) { return '<span>' + esc(h) + '</span>'; }).join("") + '</div>' +
+    shown.map(watchedRow).join("") + '</div></section>';
 }
 function moreLine(tab) {
   var loaded = 0, total = 0;
@@ -1964,6 +1985,17 @@ function initEvents() {
     }
     var opener = e.target.closest("[data-open]");
     if (opener) { openRow(opener.dataset.open, opener.dataset.id, opener.dataset.ws, opener.dataset.req || "", opener.dataset.title || "", opener.dataset.version || ""); return; }
+    var fold = e.target.closest("[data-fold]");
+    if (fold) {
+      var fk = fold.dataset.fold;
+      var keepFocus = fold.matches(":focus-visible");
+      mw.fold[fk] = !mw.fold[fk];
+      safeSet(STORE_FOLD, JSON.stringify(mw.fold));
+      render();
+      var again = mineBody.querySelector('[data-fold="' + fk + '"]');
+      if (again && keepFocus) again.focus({ preventScroll: true });
+      return;
+    }
     var exp = e.target.closest("[data-expand]");
     if (exp) {
       var key = exp.dataset.expand;

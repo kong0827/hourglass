@@ -141,6 +141,25 @@ body[data-view="mine"] #pageHead.mw-empty .ph-acts{display:none !important;}
 }
 .mw-sdesc::before{content:"·";margin-right:7px;color:var(--border-strong);}
 .mw-sact{margin-left:auto;display:flex;align-items:center;gap:10px;flex:0 0 auto;}
+/* 分区折叠：图标 + 标题即开关，caret 跟在其后；收起后只留标题行，次要操作一并隐藏 */
+.mw-sfold{
+  position:relative;
+  display:inline-flex;align-items:center;gap:9px;min-width:0;padding:0;
+  border:0;border-radius:var(--r-xs);background:none;color:inherit;font:inherit;
+  text-align:left;cursor:pointer;
+}
+/* 点按区域撑到 44 高（视觉仍是 26 的图标行），避免手机上要精准点标题 */
+.mw-sfold::after{content:"";position:absolute;left:-4px;right:-4px;top:-9px;bottom:-9px;}
+.mw-sfold:hover .mw-stitle{color:var(--primary-fg);}
+.mw-sfold:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.mw-sfold .mw-stitle{overflow:hidden;text-overflow:ellipsis;}
+.mw-chev{
+  display:inline-flex;flex:0 0 auto;color:var(--text-3);
+  transition:transform var(--dur-fast) var(--ease-out);
+}
+.mw-sfold[aria-expanded="true"] .mw-chev{transform:rotate(90deg);}
+.mw-sec.is-folded .mw-sbody{display:none;}
+.mw-sec.is-folded .mw-sact{display:none;}
 .mw-link{
   background:none;border:0;padding:0;color:var(--primary-fg);
   font:inherit;font-size:12px;cursor:pointer;
