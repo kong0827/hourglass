@@ -125,11 +125,12 @@ class TaskCommandServiceNotificationTest {
         org.junit.jupiter.api.Assertions.assertEquals("王五 把工作项转派给你：\n"
                 + "\n项目：未归属项目\n"
                 + "\n标题：new title\n"
-                + "\n编号：WI-024\n"
-                + "类型：任务　优先级：P0　状态：待处理\n"
-                + "截止：2026-11-24\n"
-                + "创建：李四 · 2026-11-19 14:32\n"
-                + "描述：支付回调 30 秒无响应", body.getValue());
+                + "\n类型：任务　优先级：P0　状态：待处理\n"
+                + "\n创建：李四 · 2026-11-19 14:32\n"
+                + "\n描述：支付回调 30 秒无响应", body.getValue());
+        /* 编号、截止不属于邮件必要信息 */
+        org.junit.jupiter.api.Assertions.assertFalse(body.getValue().contains("编号："));
+        org.junit.jupiter.api.Assertions.assertFalse(body.getValue().contains("截止："));
     }
 
     @Test

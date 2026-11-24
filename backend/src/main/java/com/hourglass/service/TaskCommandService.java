@@ -1031,26 +1031,20 @@ public class TaskCommandService {
      */
     private String assignedMailBody(String workspaceId, String actorName, Task t, String verb,
                                     String creatorName, LocalDateTime createdAt) {
+        /* 每条信息之间空一行，邮件里不挤成一块；编号/截止等非必要信息不进邮件 */
         StringBuilder sb = new StringBuilder(actorName)
-                .append(" 把工作项").append(verb).append("给你：\n")
-                .append("\n项目：").append(projectName(workspaceId, t.getReqId())).append("\n")
-                .append("\n标题：").append(t.getTitle()).append("\n");
-        String no = Nos.workItem(t.getItemNo());
-        if (!no.isEmpty()) {
-            sb.append("\n编号：").append(no);
-        }
+                .append(" 把工作项").append(verb).append("给你：")
+                .append("\n\n项目：").append(projectName(workspaceId, t.getReqId()))
+                .append("\n\n标题：").append(t.getTitle());
         String column = Texts.trimToNull(support.columnName(workspaceId, t.getBoardColumn()));
         if (column == null) {
             column = t.getBoardColumn();
         }
-        sb.append("\n类型：").append(itemTypeName(t.getItemType()))
+        sb.append("\n\n类型：").append(itemTypeName(t.getItemType()))
                 .append("　优先级：").append(t.getPriority() == null ? "未设置" : t.getPriority())
                 .append("　状态：").append(column == null ? "—" : column);
-        if (t.getDueDate() != null) {
-            sb.append("\n截止：").append(t.getDueDate());
-        }
         if (creatorName != null) {
-            sb.append("\n创建：").append(creatorName);
+            sb.append("\n\n创建：").append(creatorName);
             if (createdAt != null) {
                 sb.append(" · ").append(createdAt.format(
                         java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
@@ -1059,14 +1053,14 @@ public class TaskCommandService {
         /* 邮件只给一句摘要，避免几百字的描述整段搬进收件箱 */
         String desc = HtmlSanitizer.toPlainText(t.getDescription());
         if (!desc.isEmpty()) {
-            sb.append("\n描述：").append(Texts.cut(desc, 60));
+            sb.append("\n\n描述：").append(Texts.cut(desc, 60));
             if (desc.length() > 60) {
                 sb.append("…");
             }
         }
         String blockedReason = Texts.trimToNull(t.getBlockedReason());
         if (blockedReason != null) {
-            sb.append("\n卡点：").append(Texts.cut(blockedReason, 80));
+            sb.append("\n\n卡点：").append(Texts.cut(blockedReason, 80));
         }
         return sb.toString();
     }
