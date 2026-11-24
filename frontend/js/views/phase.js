@@ -4183,6 +4183,31 @@ export function mountReleaseWorkspace(pageHost, opts){
       }
       return text;
     }
+    /* 通知标题只用计划编号 + 版本名，与后端 planLabel 同口径（不含时间/状态/环境） */
+    function pushTitleLabel(item){
+      var names = String((item && item.versionNames) || "").split(/\s*\/\s*|[,，、]/).map(function(s){ return s.trim(); }).filter(Boolean);
+      if(!names.length && item && Array.isArray(item.versions)){
+        names = item.versions.map(function(v){ return v && v.versionName; }).filter(Boolean);
+      }
+      return "发布准备 · " + planRef(item) + (names.length ? " · " + names.join("、") : "");
+    }
+    /* 与后端标题同口径：今天发布 / N 天后 / 已过 N 天 */
+    function pushCountdownSuffix(plannedAt){
+      var days = countdownDays(plannedAt);
+      if(days == null) return "";
+      if(days === 0) return " · 今天发布";
+      return days > 0 ? " · " + days + " 天后" : " · 已过 " + (-days) + " 天";
+    }
+    /* 预览取首位收件人的真实准备进度；站内正文是「事实行 + 进度行」两行 */
+    function pushSampleProgress(){
+      var sample = selectedItems()[0] || (st.owners && st.owners[0]) || null;
+      var total = sample ? Number(sample.taskCount) || 0 : 0;
+      if(!total) return "你没有负责本计划的工作项，可点开查看计划范围。";
+      var pending = Number(sample.unconfirmedCount) || 0;
+      return pending
+        ? "你负责 " + total + " 项：" + pending + " 待确认。"
+        : "你负责的 " + total + " 项已全部确认。";
+    }
     function memberRowsHTML(){
       var q = st.q.toLowerCase();
       var rows = st.all.filter(function(it){ return !q || String(it.name || "").toLowerCase().indexOf(q) !== -1; });
@@ -4229,8 +4254,9 @@ export function mountReleaseWorkspace(pageHost, opts){
           + '<div class="field-label">发送内容</div>'
           + '<div class="prep-note-field"><input class="input" type="text" data-prep-push-note maxlength="200" value="' + esc(st.note) + '" placeholder="补充说明（选填，200 字以内；站内、邮件、群消息都会带上）" aria-label="补充说明"><span class="prep-note-count" data-prep-push-note-count>' + st.note.length + '/200</span></div>'
           + '<div class="prep-push-preview"><span class="pp-icon">备</span><div>'
-          + '<div class="pp-title">发布准备 · ' + esc(planLabel(plan)) + '</div>'
-          + '<div class="pp-body">' + esc(fmtMinute(plan.plannedAt) || "未定时间") + ' ' + esc(releaseEnvironmentName(plan.environment)) + '发布；请确认你负责的工作项。点开逐项确认。</div>'
+          + '<div class="pp-title">' + esc(pushTitleLabel(plan)) + esc(pushCountdownSuffix(plan.plannedAt)) + '</div>'
+          + '<div class="pp-body">' + esc(fmtMinute(plan.plannedAt) || "未定时间") + ' ' + esc(releaseEnvironmentName(plan.environment)) + '发布<br>'
+          + esc(pushSampleProgress()) + '</div>'
           + '<div class="pp-note"' + (st.note ? "" : " hidden") + ' data-prep-push-note-preview>补充说明：' + esc(st.note) + '</div>'
           + '<div class="pp-act">查看并确认 →</div></div></div>'
           + '<p class="side-note">同一人负责多项时只收一条汇总；同一批次重复点击不会重复发送。计划范围或时间提前会要求重新确认。</p>';

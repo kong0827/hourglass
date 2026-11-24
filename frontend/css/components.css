@@ -3215,7 +3215,8 @@ a.att-chip-main:hover{color:var(--primary-fg);}
 .msg-hint{margin-left:auto;font-size:11px;color:var(--text-3);}
 .msg-list .apn{border-left:0;}
 /* 消息页的行密度按原型 .msgrow：11/14、类型块 24 方角、正文 12.5、上下文与时间 10.5 */
-.msg-list .apn{padding:11px 14px;gap:10px;}
+.msg-list .apn-hit{padding:11px 14px;gap:10px;}
+.msg-list .apn-acts{padding:0 14px 10px 48px;}
 .msg-list .apn-ic{width:24px;height:24px;border-radius:6px;background:var(--surface-sunken);
   color:var(--text-3);font-size:11px;font-weight:700;}
 .msg-list .apn-title{font-size:12.5px;color:var(--text-2);}
