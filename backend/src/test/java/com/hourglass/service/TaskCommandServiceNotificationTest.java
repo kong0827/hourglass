@@ -122,15 +122,37 @@ class TaskCommandServiceNotificationTest {
                 eq("任务负责人变更：new title"), eq("任务「new title」已指派给你"), eq("K1"), isNull(),
                 subject.capture(), body.capture());
         org.junit.jupiter.api.Assertions.assertEquals("王五 把「new title」转派给你", subject.getValue());
+        org.junit.jupiter.api.Assertions.assertEquals("王五 把工作项转派给你：\n"
+                + "\n项目：未归属项目\n"
+                + "\n标题：new title\n"
+                + "\n编号：WI-024\n"
+                + "类型：任务　优先级：P0　状态：待处理\n"
+                + "截止：2026-11-24\n"
+                + "创建：李四 · 2026-11-19 14:32\n"
+                + "描述：支付回调 30 秒无响应", body.getValue());
+    }
+
+    @Test
+    void transferMailShortensLongDescription() {
+        StringBuilder longDesc = new StringBuilder();
+        for (int i = 0; i < 100; i++) {
+            longDesc.append('a');
+        }
+        Task old = oldTask("U1");
+        TaskSaveRequest req = request("U2");
+        req.setDescription("<p>" + longDesc + "</p>");
+        prepareUpdate(old, req);
+        when(members.selectMember("W1", "U2")).thenReturn(mock(WorkspaceMember.class));
+        when(users.selectById("U3")).thenReturn(user("U3", "王五"));
+
+        service.update("U3", "W1", "K1", req);
+
+        org.mockito.ArgumentCaptor<String> body = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(events).notifyWithMail(eq("U2"), eq("W1"), eq(UserNotificationPreferenceService.TASK_ASSIGNED),
+                anyString(), anyString(), eq("K1"), isNull(), anyString(), body.capture());
         String text = body.getValue();
-        org.junit.jupiter.api.Assertions.assertTrue(text.startsWith("王五 把工作项转派给你："));
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("项目：未归属项目"));
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("标题：new title"));
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("编号：WI-024"));
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("类型：任务　优先级：P0　状态：待处理"));
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("截止：2026-11-24"));
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("创建：李四 · 2026-11-19 14:32"));
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("描述：支付回调 30 秒无响应"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("描述：" + longDesc.substring(0, 60) + "…"));
+        org.junit.jupiter.api.Assertions.assertFalse(text.contains(longDesc.substring(0, 61)));
     }
 
     @Test

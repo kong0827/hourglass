@@ -1033,8 +1033,8 @@ public class TaskCommandService {
                                     String creatorName, LocalDateTime createdAt) {
         StringBuilder sb = new StringBuilder(actorName)
                 .append(" 把工作项").append(verb).append("给你：\n")
-                .append("\n项目：").append(projectName(workspaceId, t.getReqId()))
-                .append("\n标题：").append(t.getTitle());
+                .append("\n项目：").append(projectName(workspaceId, t.getReqId())).append("\n")
+                .append("\n标题：").append(t.getTitle()).append("\n");
         String no = Nos.workItem(t.getItemNo());
         if (!no.isEmpty()) {
             sb.append("\n编号：").append(no);
@@ -1056,9 +1056,13 @@ public class TaskCommandService {
                         java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
             }
         }
+        /* 邮件只给一句摘要，避免几百字的描述整段搬进收件箱 */
         String desc = HtmlSanitizer.toPlainText(t.getDescription());
         if (!desc.isEmpty()) {
-            sb.append("\n描述：").append(Texts.cut(desc, 200));
+            sb.append("\n描述：").append(Texts.cut(desc, 60));
+            if (desc.length() > 60) {
+                sb.append("…");
+            }
         }
         String blockedReason = Texts.trimToNull(t.getBlockedReason());
         if (blockedReason != null) {
