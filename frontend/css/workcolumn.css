@@ -229,6 +229,11 @@
 .wc-row .wcl-sub{font-size:12px;line-height:16px;color:var(--text-3);}
 .wc-row .wcl-who{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;}
 .wc-row .wcl-who > span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;}
+/* 行内直改：负责人内容带头像，按钮内仍按一格排；空值占位跟随列表的淡色口径 */
+.wc-row .row-inline-edit{max-width:100%;}
+.wc-row .row-inline-edit > .row-inline-edit-t{display:inline-flex;align-items:center;gap:5px;}
+.wc-row .row-inline-edit .avatar{flex:none;}
+.wc-row .row-inline-edit.muted{color:var(--text-3);}
 .wc-row .wcl-risk > .tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;}
 /* 日期与数值列右对齐，和「我的工作」的 ta-r 口径一致 */
 .wc-list .list-head .ta-r,.wc-row .cell.ta-r{text-align:right;}

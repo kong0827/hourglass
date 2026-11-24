@@ -11,7 +11,7 @@ import { GROUP_IDS, groupOptionsHTML } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { canCreateNow, canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, setSortOf, setNameById, state, tagChip } from "../core/state.js";
-import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
+import { moveTaskToColumn, openDuePopover, openOwnerMenu, openPriorityMenu, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
@@ -423,7 +423,7 @@ function minutesText(value){
   if(!n) return "—";
   return n < 60 ? (n + " 分钟") : ((Math.round(n / 60 * 10) / 10) + " 小时");
 }
-function taskCell(t, key, hasTypeCol){
+function taskCell(t, key, hasTypeCol, rowEdit){
   if(key === "title") return '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title)
     + taskPublicationHTML(t) + '</span></span>';
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
@@ -442,14 +442,44 @@ function taskCell(t, key, hasTypeCol){
     /* 到期提醒跟着截止日期走：状态列只有 96px，徽标留在状态格里会被截成省略号 */
     return '<span class="cell">' + chip + '</span>';
   }
-  if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
-  if(key === "owner") return '<span class="cell' + (t.owner ? "" : " muted") + '" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
+  if(key === "priority"){
+    var priInner = t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority);
+    /* 行内直改：可写项目点开优先级菜单，读态与普通单元格一致 */
+    if(rowEdit && canEditTask(t)){
+      return '<button class="cell row-inline-edit" type="button" data-row-pri="' + esc(t.id) + '"' +
+        ' aria-haspopup="menu" aria-expanded="false" aria-label="优先级：' + esc(priName(t.priority)) + '，点击修改"' +
+        ' title="点击改优先级"><span class="row-inline-edit-t">' + priInner + '</span>' + icon("caretDown", 11) + '</button>';
+    }
+    return '<span>' + priInner + '</span>';
+  }
+  if(key === "owner"){
+    var ownerCls = "cell" + (t.owner ? "" : " muted");
+    if(rowEdit && canEditTask(t)){
+      return '<button class="' + ownerCls + ' row-inline-edit" type="button" data-row-owner="' + esc(t.id) + '"' +
+        ' data-member-task="' + esc(t.id) + '" aria-haspopup="menu" aria-expanded="false"' +
+        ' aria-label="负责人：' + esc(t.owner || "未指派") + '，点击修改" title="点击改负责人">' +
+        '<span class="row-inline-edit-t">' + esc(t.owner || "—") + '</span>' + icon("caretDown", 11) + '</button>';
+    }
+    return '<span class="' + ownerCls + '" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
+  }
   if(key === "dueDate"){
-    if(!t.dueDate) return '<span class="cell muted">—</span>';
+    if(!t.dueDate){
+      if(rowEdit && canEditTask(t)){
+        return '<button class="cell muted row-inline-edit" type="button" data-row-due="' + esc(t.id) + '"' +
+          ' aria-haspopup="menu" aria-expanded="false" aria-label="截止日期：未设置，点击修改"' +
+          ' title="点击设置截止日期"><span class="row-inline-edit-t">—</span>' + icon("caretDown", 11) + '</button>';
+      }
+      return '<span class="cell muted">—</span>';
+    }
     var dueKind = dueState(t).kind;
     var dueCls = dueKind === "over" ? " over" : (dueKind === "today" ? " today" : "");
     var df = dueFlag(t);
     var dfHTML = df ? '<span class="mini-tag ' + (df.kind === "over" ? "over" : (df.kind === "today" ? "warn" : "")) + '">' + esc(df.text) + '</span>' : "";
+    if(rowEdit && canEditTask(t)){
+      return '<button class="cell' + dueCls + ' row-inline-edit" type="button" data-row-due="' + esc(t.id) + '"' +
+        ' aria-haspopup="menu" aria-expanded="false" aria-label="截止日期：' + esc(t.dueDate) + '，点击修改"' +
+        ' title="点击改截止日期"><span class="row-inline-edit-t">' + esc(dueDateMD(t)) + dfHTML + '</span>' + icon("caretDown", 11) + '</button>';
+    }
     return '<span class="cell' + dueCls + '" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + dfHTML + '</span>';
   }
   if(key === "progress"){
@@ -838,7 +868,7 @@ function renderListItems(items){
       return '<span class="cell ha-cell">' +
         '<span class="ha-time" title="' + esc(t.updatedAt ? fmtTs(t.updatedAt) : "无更新时间") + '">' + esc(text) + '</span>' + hoverActs(t, editable) + '</span>';
     }
-    return taskCell(t, key, hasTypeCol);
+    return taskCell(t, key, hasTypeCol, editable);
   }
   function rowHTML(t){
     var editable = canEditTask(t);
@@ -1208,6 +1238,12 @@ listBody.addEventListener("click", function(e){
   if(mobTimer){ toggleTaskTimer(mobTimer.dataset.mobTimer); return; }
   var menuBtn = e.target.closest("[data-row-menu]");
   if(menuBtn){ openRowMenu(menuBtn, menuBtn.dataset.rowMenu); return; }
+  var priBtn = e.target.closest("[data-row-pri]");
+  if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+  var ownerBtn = e.target.closest("[data-row-owner]");
+  if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
+  var dueBtn = e.target.closest("[data-row-due]");
+  if(dueBtn){ openDuePopover(dueBtn, dueBtn.dataset.rowDue); return; }
   var statusBtn = e.target.closest("[data-row-status]");
   if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
   var row = e.target.closest("[data-list-id]");

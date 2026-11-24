@@ -7,9 +7,9 @@ import { createAttachKit, bindFileDrop, uploadAttachment, openAttachment, attach
 import { $ } from "../core/dom.js";
 import { attachEnvDict, recordEnv } from "../core/env-dict.js";
 import { icon } from "../core/icons.js";
-import { openTaskById, taskLink } from "../core/task-actions.js";
+import { openOwnerMenu, openPriorityMenu, openStatusMenu, openTaskById, taskLink } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, canManageProject, canTestProject, catNameById, projectGroups, projectOptionsHTML, reqSetId, rt, setNameById, state } from "../core/state.js";
+import { canEditReq, canEditTask, canManageProject, canTestProject, catNameById, projectGroups, projectOptionsHTML, reqSetId, rt, setNameById, state, taskCacheExtra } from "../core/state.js";
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
@@ -1117,6 +1117,24 @@ function defectRowHTML(t, no){
   var priHTML = t.priority
     ? '<span class="tc-def-pri" title="优先级：' + esc(priName(t.priority)) + '">' + priTagHTML(t.priority) + '</span>'
     : '<span class="tc-def-none">—</span>';
+  var statusHTML = defectStatusHTML(st);
+  /* 行内直改：与工作项列表同口径；状态按看板列流转，回归字段仍由服务端随列维护 */
+  if(canEditTask(t)){
+    var caret = icon("caretDown", 11);
+    statusHTML = '<button class="tc-def-inline tc-def-stbtn" type="button" data-row-status="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="状态：' + esc(DEFECT_STATUSES[st].label) + '，点击修改"' +
+      ' title="点击改状态（按看板列流转）">' + statusHTML + caret + '</button>';
+    priHTML = '<button class="tc-def-inline" type="button" data-row-pri="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="优先级：' + esc(priName(t.priority || "P2")) + '，点击修改"' +
+      ' title="点击改优先级">' + priHTML + caret + '</button>';
+    ownerHTML = '<button class="tc-def-inline tc-def-owner-btn" type="button" data-row-owner="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="负责人：' + esc(t.owner || "未指派") + '，点击修改"' +
+      ' title="点击改负责人">' +
+      (t.owner
+        ? avatarHTML(t.owner) + '<span class="tc-def-owner-name">' + esc(t.owner) + '</span>'
+        : '<span class="tc-def-none">未指派</span>') +
+      caret + '</button>';
+  }
   var projHTML = defReqId ? ""
     : '<span class="tc-def-proj" title="' + esc(defectProjectName(t.reqId)) + '">'
       + esc(cut(defectProjectName(t.reqId), 18)) + '</span>';
@@ -1129,7 +1147,7 @@ function defectRowHTML(t, no){
     +   '<div class="tc-def-sub">' + projHTML + '<span class="tc-def-id">' + esc(t.id) + '</span>'
     +     '<span>' + esc(cases.length ? "测试发现" : "手工创建") + '</span>' + taskPublicationHTML(t) + '</div>'
     + '</div>'
-    + '<div>' + defectStatusHTML(st) + '</div>'
+    + '<div>' + statusHTML + '</div>'
     + '<div>' + ownerHTML + '</div>'
     + '<div>' + verHTML + '</div>'
     + '<div>' + caseHTML + '</div>'
@@ -1246,6 +1264,10 @@ function applyDefectLinks(links){
     (defectLinks[l.bugTaskId] || (defectLinks[l.bugTaskId] = [])).push(l);
   });
 }
+/* 行内菜单按 id 回查任务：缺陷行对象登记进共享缓存，改完由 ds:task-saved 重取 */
+function rememberDefects(rows){
+  (rows || []).forEach(function(t){ if(t && t.id) taskCacheExtra[t.id] = t; });
+}
 /**
  * opts.badgeOnly：只在非缺陷页刷新 Tab 角标，不拉关联用例和版本，避免首屏多打两轮请求。
  */
@@ -1279,6 +1301,7 @@ function loadDefects(opts){
     return tasksP.then(function(rows){
       if(seq !== defectSeq || defectScopeKey() !== key) return false;
       defects = (rows || []).filter(function(t){ return t && (!t.itemType || t.itemType === "bug"); });
+      rememberDefects(defects);
       defectOpenCount = defects.filter(defectIsOpen).length;
       defectBadgeReqId = key;
       paintDefectBadge();
@@ -1288,6 +1311,7 @@ function loadDefects(opts){
   return Promise.all([tasksP, defectVersionsFor(scopeIds)]).then(function(rs){
     if(seq !== defectSeq || defectScopeKey() !== key) return false;
     defects = (rs[0] || []).filter(function(t){ return t && (!t.itemType || t.itemType === "bug"); });
+    rememberDefects(defects);
     defectVersions = rs[1] || [];
     /* 只给真的有缺陷的项目拉关联用例；全部项目下避免为无缺陷项目多发请求 */
     var linkIds = scopeIds;
@@ -9904,12 +9928,19 @@ $("tcDefRows").addEventListener("click", function(e){
     openCaseInProject(caseChip.dataset.tcDefCaseReq, caseChip.dataset.tcDefCase);
     return;
   }
+  var statusBtn = e.target.closest("[data-row-status]");
+  if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
+  var priBtn = e.target.closest("[data-row-pri]");
+  if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+  var ownerBtn = e.target.closest("[data-row-owner]");
+  if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
   var row = e.target.closest("[data-tc-defect]");
   if(row) openDefectDrawer(row.dataset.tcDefect);
 });
 $("tcDefRows").addEventListener("keydown", function(e){
   if(e.key !== "Enter" && e.key !== " ") return;
-  if(e.target.closest("[data-tc-def-case]")) return;
+  /* 行内菜单按钮走原生键盘激活，不再触发整行开抽屉 */
+  if(e.target.closest("button,a,input,select,textarea")) return;
   var row = e.target.closest("[data-tc-defect]");
   if(!row) return;
   e.preventDefault();
