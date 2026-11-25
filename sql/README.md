@@ -84,7 +84,7 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `117_release_prep_push_group_result.sql` 给 `version_release_plan_push` 增加 `group_sent` / `group_error`，记录企业微信群这一批是否发送成功及失败原因；`NULL` 表示未选群渠道或历史批次未记录。群消息按空间群发送、不能按人回执，这两个字段只用于计划页和推送记录展示。依赖 115 先执行；只增可空列，不回填，执行后表数量不变。
 
-`118_saved_view_params_length.sql` 把 `saved_view.params` 放宽到 `varchar(600)`，让保存视图能存下多条筛选组合；不新增表、不回填。
+`118_saved_view_params_length.sql` 把 `saved_view.params` 放宽到 `varchar(2000)`，让保存视图能存下多条筛选组合；不新增表、不回填。
 
 `119_delivery_share_hardening.sql` 给交付说明分享加 `password_hash`（BCrypt 访问密码）、`allowed_domains`（域名白名单）与 `watermark_text`（接收页 / 打印水印），并新建 `delivery_note_share_visit` 记录每次打开、密码通过与下载的时间、IP、来源域名与 UA；只加列与建表，执行后 86 张表。
 
