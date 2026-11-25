@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
+import com.hourglass.common.Mentions;
 import com.hourglass.common.Texts;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -22,6 +23,8 @@ import com.hourglass.entity.RequirementDocHistory;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkActivity;
 import com.hourglass.entity.Workspace;
+import com.hourglass.entity.WorkspaceMember;
+import com.hourglass.mapper.AppNotificationMapper;
 import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.ReqDocShareMapper;
 import com.hourglass.mapper.RequirementDocCommentMapper;
@@ -31,8 +34,11 @@ import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMapper;
+import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
@@ -42,10 +48,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,6 +67,8 @@ import java.util.regex.Pattern;
  */
 @Service
 public class RequirementDocService {
+
+    private static final Logger log = LoggerFactory.getLogger(RequirementDocService.class);
 
     /** 正文上限：粘贴截图会以 base64 内联，200KB 会把图片截断，放宽到 12MB（列是 MEDIUMTEXT，上限 16MB） */
     private static final int CONTENT_MAX = 12_000_000;
@@ -83,6 +93,9 @@ public class RequirementDocService {
 
     /** 摘要长度 */
     private static final int EXCERPT_MAX = 80;
+
+    /** 表格 @ 解析文本上限：20MB 快照里绝大多数是样式与结构，文本不会接近这个量级 */
+    private static final int MENTION_TEXT_MAX = 2_000_000;
 
     /**
      * 允许的标签与属性：
@@ -144,6 +157,11 @@ public class RequirementDocService {
     /** 分类校验：仅在文档显式带 categoryId 时 consulted，单测手动构造时为 null 不影响无分类路径 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DocCategoryService docCategories;
+    /** 表格 @提及：单测手动构造时为 null，此时跳过通知，不影响正文保存 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private WorkspaceMemberMapper memberMapper;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AppNotificationMapper notificationMapper;
 
     public RequirementDocService(RequirementDocMapper docMapper, RequirementDocHistoryMapper historyMapper,
                                  RequirementDocCommentMapper commentMapper,
@@ -438,6 +456,7 @@ public class RequirementDocService {
             }
             workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId,
                     "update", "更新了正文");
+            notifySheetMentions(userId, d, oldSheetContent, d.getSheetContent(), false);
         }
         recordChange(userId, workspaceId, id, "状态", oldStatus, d.getStatus());
         if (!java.util.Objects.equals(oldOwner, d.getOwner())
@@ -814,7 +833,12 @@ public class RequirementDocService {
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
                 published ? "发布了文档「" + d.getTitle() + "」" + visible
                         : "收回了文档「" + d.getTitle() + "」的发布，转为草稿");
-        return withMembers(docMapper.selectById(id));
+        RequirementDoc fresh = docMapper.selectById(id);
+        if (published && fresh != null) {
+            /* 草稿期间 @ 的人看不到文档，发布时补投一次；已被通知过的人按 ref 去重 */
+            notifySheetMentions(userId, fresh, null, fresh.getSheetContent(), true);
+        }
+        return withMembers(fresh);
     }
 
     /* ---------------- 只读分享 ---------------- */
@@ -1343,6 +1367,144 @@ public class RequirementDocService {
         /* 文档 ID 不是任务 ID：写 refKind/refId，通知中心按文档打开 */
         notificationEvents.notifyLinked(owner, d.getWorkspaceId(), UserNotificationPreferenceService.DEMAND_STATUS,
                 title, body, "doc", d.getId(), d.getReqId());
+    }
+
+    /**
+     * 表格内 @ 提及通知：只在文档已发布时投递（草稿期收件人打不开文档）。
+     * 保存时只通知相对旧快照新增的人，发布时全量补投按 ref 去重，避免重复打扰。
+     */
+    private void notifySheetMentions(String actorId, RequirementDoc doc, String oldSheet,
+                                     String newSheet, boolean publishing) {
+        if (doc == null || !"sheet".equals(doc.getFormat()) || memberMapper == null) {
+            return;
+        }
+        if (!publishing && doc.getPublishedAt() == null) {
+            return;
+        }
+        if (!hasMentionMark(newSheet)) {
+            return;
+        }
+        List<WorkspaceMember> members;
+        try {
+            members = memberMapper.selectByWorkspace(doc.getWorkspaceId());
+        } catch (Exception e) {
+            log.warn("表格 @提及解析失败（不影响保存）：workspace={}", doc.getWorkspaceId(), e);
+            return;
+        }
+        List<String> mentioned = Mentions.mentionedUserIds(normalizeMentions(sheetMentionText(newSheet)), members);
+        if (mentioned.isEmpty()) {
+            return;
+        }
+        Set<String> oldIds = Collections.emptySet();
+        if (!publishing && hasMentionMark(oldSheet)) {
+            oldIds = new HashSet<String>(
+                    Mentions.mentionedUserIds(normalizeMentions(sheetMentionText(oldSheet)), members));
+        }
+        Set<String> visibleMembers = VIS_MEMBERS.equals(Texts.trimToNull(doc.getVisibility()))
+                ? new HashSet<String>(docMapper.selectVisibilityMemberIds(doc.getId()))
+                : Collections.<String>emptySet();
+        String suffix = notificationEvents.docLinkSuffix(doc.getId());
+        try {
+            for (String uid : mentioned) {
+                if (uid == null || uid.equals(actorId) || oldIds.contains(uid)) {
+                    continue;
+                }
+                if (!canSeePublished(doc.getVisibility(), doc.getOwnerUserId(), uid,
+                        visibleMembers.contains(uid))) {
+                    continue;
+                }
+                if (publishing && notificationMapper != null
+                        && notificationMapper.countSheetMentionByRef(uid, "doc", doc.getId()) > 0) {
+                    continue;
+                }
+                notificationEvents.notifyLinkedAs(uid, doc.getWorkspaceId(),
+                        UserNotificationPreferenceService.DOC_MENTION,
+                        UserNotificationPreferenceService.TASK_COMMENT,
+                        "文档「" + doc.getTitle() + "」提到了你",
+                        "文档「" + doc.getTitle() + "」的表格中 @ 了你，请打开查看",
+                        "doc", doc.getId(), doc.getReqId(), suffix);
+            }
+        } catch (Exception e) {
+            log.warn("表格 @提及通知投递失败（不影响保存）：doc={}", doc.getId(), e);
+        }
+    }
+
+    /** 中文输入法常打出全角 ＠：与前端插入口径一致，解析前统一成半角 */
+    private static String normalizeMentions(String text) {
+        return text == null || text.indexOf('＠') < 0 ? text : text.replace('＠', '@');
+    }
+
+    private static boolean hasMentionMark(String sheet) {
+        return sheet != null && (sheet.indexOf('@') >= 0 || sheet.indexOf('＠') >= 0);
+    }
+
+    /**
+     * 从表格快照抽取 @ 解析用文本（流式，不为 20MB JSON 建整棵树）。
+     * 只取单元格文本 v 与富文本 dataStream，单元格之间补空格，避免跨格拼出并不存在的名字。
+     */
+    public static String sheetMentionText(String content) {
+        if (content == null || content.isEmpty()) {
+            return "";
+        }
+        int depth = 0;
+        int sheetsDepth = 0, sheetDepth = 0, cellDataDepth = 0, rowDepth = 0;
+        boolean pendingCellText = false;
+        StringBuilder text = new StringBuilder();
+        try (JsonParser p = JSON.getFactory().createParser(content)) {
+            JsonToken token;
+            while ((token = p.nextToken()) != null) {
+                if (token == JsonToken.START_OBJECT || token == JsonToken.START_ARRAY) {
+                    depth++;
+                    if (sheetsDepth == 0 && depth == 2 && token == JsonToken.START_OBJECT
+                            && "sheets".equals(p.getCurrentName())) {
+                        sheetsDepth = depth;
+                    } else if (sheetsDepth > 0 && depth == sheetsDepth + 1 && token == JsonToken.START_OBJECT) {
+                        sheetDepth = depth;
+                        cellDataDepth = 0;
+                        rowDepth = 0;
+                    } else if (sheetDepth > 0 && depth == sheetDepth + 1
+                            && token == JsonToken.START_OBJECT && "cellData".equals(p.getCurrentName())) {
+                        cellDataDepth = depth;
+                    } else if (cellDataDepth > 0 && depth == cellDataDepth + 1 && token == JsonToken.START_OBJECT) {
+                        rowDepth = depth;
+                    }
+                } else if (token == JsonToken.END_OBJECT || token == JsonToken.END_ARRAY) {
+                    if (depth == rowDepth) {
+                        rowDepth = 0;
+                        pendingCellText = false;
+                    }
+                    if (depth == cellDataDepth) {
+                        cellDataDepth = 0;
+                    }
+                    if (depth == sheetDepth) {
+                        sheetDepth = 0;
+                    }
+                    if (depth == sheetsDepth) {
+                        sheetsDepth = 0;
+                    }
+                    depth--;
+                } else if (token == JsonToken.VALUE_STRING && rowDepth > 0 && depth > rowDepth) {
+                    String name = p.getCurrentName();
+                    if ("v".equals(name) || "dataStream".equals(name)) {
+                        String value = p.getText();
+                        if (value != null && !value.isEmpty()) {
+                            if (text.length() >= MENTION_TEXT_MAX) {
+                                break;
+                            }
+                            if (pendingCellText) {
+                                text.append(' ');
+                            }
+                            text.append(value);
+                            pendingCellText = true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            /* 结构异常时已解析部分仍可命中个别 @，保持宽容 */
+            return text.toString();
+        }
+        return text.toString();
     }
 
     private List<String> apply(RequirementDoc d, String reqId, ReqDocSaveRequest req, String userId) {

@@ -121,7 +121,16 @@ public class NotificationEventService {
     public void notifyLinkedAs(String recipientUserId, String workspaceId, String eventType,
                                String notificationType, String title, String body,
                                String refKind, String refId, String targetReqId) {
-        deliver(recipientUserId, workspaceId, eventType, notificationType, title, body, null, refKind, refId, targetReqId);
+        notifyLinkedAs(recipientUserId, workspaceId, eventType, notificationType, title, body,
+                refKind, refId, targetReqId, null);
+    }
+
+    /** @param mailSuffix 只追加到邮件正文的深链文本；未配置 base-url 时调用方应传 null */
+    public void notifyLinkedAs(String recipientUserId, String workspaceId, String eventType,
+                               String notificationType, String title, String body,
+                               String refKind, String refId, String targetReqId, String mailSuffix) {
+        deliver(recipientUserId, workspaceId, eventType, notificationType, title, body,
+                null, refKind, refId, targetReqId, true, mailSuffix, null, null);
     }
 
     /**
@@ -306,6 +315,19 @@ public class NotificationEventService {
             base = base + "/";
         }
         return body + "\n\n打开任务：" + base + "#/board?task=" + referenceId;
+    }
+
+    /** 文档类事件的邮件深链（站内正文不显示）；未配置 base-url 或无文档 ID 时返回 null */
+    public String docLinkSuffix(String docId) {
+        String id = Texts.trimToNull(docId);
+        String base = Texts.trimToNull(mailBaseUrl);
+        if (id == null || base == null) {
+            return null;
+        }
+        if (!base.endsWith("/")) {
+            base = base + "/";
+        }
+        return "\n\n打开文档：" + base + "#/requirements?doc=" + id;
     }
 
     /** 投递结局：ok=过程无错（沿用旧布尔语义），delivered=确实写出至少一个渠道。 */

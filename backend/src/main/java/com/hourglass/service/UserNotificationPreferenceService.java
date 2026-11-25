@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** 个人事件偏好。缺省：站内开启、邮件关闭。 */
+/** 个人事件偏好。缺省：站内开启、邮件关闭（被点名的文档 @ 提及例外，邮件默认开启）。 */
 @Service
 public class UserNotificationPreferenceService {
 
@@ -39,11 +39,16 @@ public class UserNotificationPreferenceService {
     public static final String RELEASE_PREP = "release_prep";
     /** 我关注的发布计划：改期、范围变化、进入就绪与 T-0 发布日 */
     public static final String RELEASE_WATCH = "release_watch";
+    /** 文档 @ 提及：需求文档（含表格）正文里被 @；邮件默认开启，因为被点名通常需要尽快知道 */
+    public static final String DOC_MENTION = "doc_mention";
 
     public static final List<String> EVENT_TYPES = Collections.unmodifiableList(Arrays.asList(
             TASK_ASSIGNED, TASK_COMMENT, TASK_WATCH, TASK_UPDATED, DEMAND_STATUS, DEMAND_WATCH,
-            TEST_PLAN_ASSIGNED, RELEASE_PREP, RELEASE_WATCH, DAILY_DIGEST));
+            TEST_PLAN_ASSIGNED, RELEASE_PREP, RELEASE_WATCH, DAILY_DIGEST, DOC_MENTION));
     private static final Set<String> EVENT_SET = Collections.unmodifiableSet(new HashSet<String>(EVENT_TYPES));
+    /** 邮件默认开启的事件（其余事件缺省只开站内）；用户显式保存过偏好后以其选择为准 */
+    private static final Set<String> EMAIL_DEFAULT_ON =
+            Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(DOC_MENTION)));
 
     private final UserNotificationPreferenceMapper mapper;
 
@@ -61,7 +66,7 @@ public class UserNotificationPreferenceService {
             UserNotificationPreference p = saved.get(eventType);
             result.add(new NotificationPreferenceItem(eventType,
                     p == null || p.getInAppEnabled() == null || Boolean.TRUE.equals(p.getInAppEnabled()),
-                    p != null && Boolean.TRUE.equals(p.getEmailEnabled())));
+                    emailEnabled(p, eventType)));
         }
         return result;
     }
@@ -89,7 +94,14 @@ public class UserNotificationPreferenceService {
         UserNotificationPreference p = mapper.selectOne(userId, eventType);
         return new NotificationPreferenceItem(eventType,
                 p == null || p.getInAppEnabled() == null || Boolean.TRUE.equals(p.getInAppEnabled()),
-                p != null && Boolean.TRUE.equals(p.getEmailEnabled()));
+                emailEnabled(p, eventType));
+    }
+
+    private static boolean emailEnabled(UserNotificationPreference p, String eventType) {
+        if (p == null) {
+            return EMAIL_DEFAULT_ON.contains(eventType);
+        }
+        return Boolean.TRUE.equals(p.getEmailEnabled());
     }
 
     /** 读不到偏好时按开启处理：汇总属于低频增强，不应因一次读失败静默丢失 */

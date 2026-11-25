@@ -156,6 +156,13 @@
       AND ref_task_id IS NULL AND type = #{type} AND created_at &gt;= #{since}
   </select>
 
+  <!-- 表格 @ 提及去重：同一收件人对同一文档已收到过表格提及提醒即视为已通知（跨保存/重新发布） -->
+  <select id="countSheetMentionByRef" resultType="int">
+    SELECT COUNT(*) FROM app_notification
+    WHERE user_id = #{userId} AND ref_kind = #{refKind} AND ref_id = #{refId}
+      AND type = 'task_comment' AND body LIKE '%表格中 @ 了你%'
+  </select>
+
   <delete id="deleteByTaskIds">
     DELETE FROM app_notification WHERE workspace_id = #{workspaceId} AND ref_task_id IN
     <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>

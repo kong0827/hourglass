@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -25,7 +24,7 @@ class UserNotificationPreferenceServiceTest {
     private final UserNotificationPreferenceService service = new UserNotificationPreferenceService(mapper);
 
     @Test
-    void missingRowsReturnFourDefaults() {
+    void missingRowsReturnDefaultsWithDocMentionEmailOn() {
         when(mapper.selectByUser("U1")).thenReturn(Collections.emptyList());
 
         List<NotificationPreferenceItem> result = service.list("U1");
@@ -34,7 +33,8 @@ class UserNotificationPreferenceServiceTest {
         for (int i = 0; i < result.size(); i++) {
             assertEquals(UserNotificationPreferenceService.EVENT_TYPES.get(i), result.get(i).getEventType());
             assertTrue(result.get(i).getInApp());
-            assertFalse(result.get(i).getEmail());
+            boolean emailDefaultOn = UserNotificationPreferenceService.DOC_MENTION.equals(result.get(i).getEventType());
+            assertEquals(emailDefaultOn, result.get(i).getEmail());
         }
     }
 

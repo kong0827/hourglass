@@ -55,6 +55,7 @@ var SHELL = [
   "js/core/doc-editor.js",
   "js/core/univer-doc-io.js",
   "js/core/sheet-editor.js",
+  "js/core/sheet-mention.js",
   "js/core/xlsx-fidelity.js",
   "js/core/dom.js",
   "js/core/env-dict.js",

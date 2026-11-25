@@ -385,6 +385,16 @@ function mountReqSheet(snapshot){
     onDirty: function(){
       markReqDocDirty();
       scheduleDraftSave();
+    },
+    /* 单元格内 @ 候选：未保存的新文档还没有 id，拿不到可见成员，退化为手输 */
+    mention: {
+      canOpen: function(){ return !reqDocReadOnly && !reqDocOwnerLocked && !!editingDocId; },
+      excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+      loadMembers: function(){
+        var docId = editingDocId;
+        if(!docId) return Promise.reject(new Error("文档尚未保存"));
+        return API.get("/api/req-docs/" + encodeURIComponent(docId) + "/mention-candidates");
+      }
     }
   }).then(function(view){
     if(seq !== reqSheetSeq){

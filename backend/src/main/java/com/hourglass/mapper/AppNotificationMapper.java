@@ -45,6 +45,10 @@ public interface AppNotificationMapper {
     int countRecentNoRef(@Param("workspaceId") String workspaceId, @Param("userId") String userId,
                          @Param("type") String type, @Param("since") java.time.LocalDateTime since);
 
+    /** 表格 @ 提及是否已通知过（按 ref_kind/ref_id 去重，供重新发布时避免重复提醒） */
+    int countSheetMentionByRef(@Param("userId") String userId, @Param("refKind") String refKind,
+                               @Param("refId") String refId);
+
     int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);

@@ -167,6 +167,7 @@ if($("meJobTitle")) meJobTitleCombo = attachCombo($("meJobTitle"), {chevron:true
 var NOTIFY_EVENTS = {
   task_assigned: ["工作项指派", "工作项创建或负责人变更后指派给我"],
   task_comment: ["评论与@", "我负责的工作项有新评论，或评论中被 @ 提及"],
+  doc_mention: ["文档@提及", "需求文档（含表格）正文中 @ 我时通知，邮件默认开启"],
   task_watch: ["我关注的工作项", "关注的工作项有新评论、列流转、移入回收站或恢复"],
   task_updated: ["工作项变更与提醒", "我负责的工作项字段变更、移列、移入回收站或恢复"],
   demand_status: ["需求与版本动态", "我提交的需求、负责的文档与分支状态变化，或所在版本发布/删除"],
@@ -179,13 +180,13 @@ var NOTIFY_EVENTS = {
 /* 展示分组：同一类打扰放在一起，用户能就近判断要不要全关 */
 var NOTIFY_GROUPS = [
   { title: "工作项", types: ["task_assigned", "task_comment", "task_watch", "task_updated"] },
-  { title: "需求与版本", types: ["demand_status", "demand_watch", "release_prep", "release_watch"] },
+  { title: "需求与版本", types: ["demand_status", "demand_watch", "release_prep", "release_watch", "doc_mention"] },
   { title: "测试", types: ["test_plan_assigned"] },
   { title: "每日汇总", types: ["daily_digest"] }
 ];
 /* 仅重要事件：直接指向我的（指派/评论@/关注）与低频日报保留，广播类关闭，邮件全关 */
 var NOTIFY_PRESET = {
-  inApp: ["task_assigned", "task_comment", "task_watch", "demand_watch", "test_plan_assigned", "release_prep", "release_watch", "daily_digest"],
+  inApp: ["task_assigned", "task_comment", "doc_mention", "task_watch", "demand_watch", "test_plan_assigned", "release_prep", "release_watch", "daily_digest"],
   email: []
 };
 function applyNotifyPreset(){

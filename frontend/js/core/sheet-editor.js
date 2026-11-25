@@ -2,6 +2,7 @@
 
 import { API } from "./api.js";
 import { esc } from "./ui.js";
+import { createSheetMention } from "./sheet-mention.js";
 
 var VENDOR_BASE = API.url("/vendor/univer/");
 
@@ -228,7 +229,8 @@ export function parseCellRef(ref){
 
 /**
  * 在 container 内挂载一个 Univer 工作簿视图。
- * opts: { container, snapshot, readOnly, onDirty }
+ * opts: { container, snapshot, readOnly, onDirty, mention }
+ * mention（可选，仅编辑态）: { canOpen, excludeUserId, loadMembers } —— 单元格内 @提及候选
  * 返回 handle：getSnapshot/getText/setReadOnly/dispose
  */
 export async function openSheetView(opts){
@@ -263,6 +265,26 @@ export async function openSheetView(opts){
       if(/selection|Selection|cursor|Cursor|focus|Focus|scroll|Scroll|activate|Activate|hover|Hover/.test(id)) return;
       opts.onDirty();
     });
+  }
+
+  var mention = null;
+  if(!opts.readOnly && opts.mention){
+    try{
+      mention = createSheetMention({
+        container: container,
+        /* 1.3.0 的 Univer 实例只暴露 __getInjector()，没有公开 getInjector() */
+        getInjector: function(){
+          try{
+            if(typeof univer.__getInjector === "function") return univer.__getInjector();
+            if(typeof univer.getInjector === "function") return univer.getInjector();
+            return api && api._injector ? api._injector : null;
+          }catch(e){ return null; }
+        },
+        canOpen: opts.mention.canOpen,
+        excludeUserId: opts.mention.excludeUserId,
+        loadMembers: opts.mention.loadMembers
+      });
+    }catch(ex){ mention = null; }
   }
 
   var disposed = false;
@@ -302,6 +324,8 @@ export async function openSheetView(opts){
     dispose: function(){
       if(disposed) return;
       disposed = true;
+      if(mention){ try{ mention.dispose(); }catch(e){ /* 忽略 */ } }
+      mention = null;
       if(dirtySub){
         if(typeof dirtySub === "function"){ try{ dirtySub(); }catch(e){ /* 忽略 */ } }
         else if(typeof dirtySub.dispose === "function"){ try{ dirtySub.dispose(); }catch(e){ /* 忽略 */ } }
