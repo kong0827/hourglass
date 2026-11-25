@@ -140,12 +140,16 @@ function registerPlugin(univer, pkg, cls){
   univer.registerPlugin(pkg[cls]);
 }
 
-function createUniver(hostId){
+function createUniver(hostId, opts){
   var U = window.UniverCore;
   var univer = new U.Univer({ locale: U.LocaleType.ZH_CN, locales: localePack() });
   univer.registerPlugin(window.UniverEngineRender.UniverRenderEnginePlugin);
   univer.registerPlugin(window.UniverEngineFormula.UniverFormulaEnginePlugin);
-  univer.registerPlugin(window.UniverUi.UniverUIPlugin, { container: hostId });
+  /* 只读阅读态不渲染头部（工具条/公式栏）：样式里给 header 加 display:none
+     会把表格画布压成 0 高，网格一片空白 */
+  var uiConfig = { container: hostId };
+  if(opts && opts.readOnly) uiConfig.header = false;
+  univer.registerPlugin(window.UniverUi.UniverUIPlugin, uiConfig);
   univer.registerPlugin(window.UniverDocs.UniverDocsPlugin);
   univer.registerPlugin(window.UniverDocsUi.UniverDocsUIPlugin);
   univer.registerPlugin(window.UniverSheets.UniverSheetsPlugin);
@@ -245,7 +249,7 @@ export async function openSheetView(opts){
   var host = container.firstChild;
   host.id = hostId;
 
-  var univer = createUniver(hostId);
+  var univer = createUniver(hostId, opts);
   var wb = null;
   try{
     var api = window.UniverCoreFacade.FUniver.newAPI(univer);

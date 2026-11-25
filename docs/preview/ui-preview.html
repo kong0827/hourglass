@@ -6432,6 +6432,9 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 @media (prefers-reduced-motion: reduce){.reqdoc-univerwrap.is-loading::before{animation:none}}
 
 /* ---------------- 表格文档：Univer 工作簿 ---------------- */
+/* 电子表格要横铺：不套文档的 1480 阅读栏宽，也不留「表格没有大纲」的空栏 */
+.reqdoc-editpage.is-sheet{max-width:none;}
+.reqdoc-editpage.is-sheet .reqdoc-toc{display:none;}
 .reqdoc-sheetwrap{
   position:relative;flex:1;min-width:0;height:calc(100vh - 236px);min-height:520px;
   border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;
@@ -6442,8 +6445,7 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
   background-size:400% 100%;animation:reqdoc-skel 1.2s ease infinite;z-index:1;
 }
 .univer-sheet-host{position:absolute;inset:0;}
-/* 只读：1.3.0 的表格菜单/工具条在 <header> 里（Tailwind 工具类无法按类名命中） */
-.univer-sheet-readonly header{display:none;}
+/* 只读时头部由 Univer UI 配置（header:false）不渲染；不要用 display:none 藏 header，网格画布会被压成 0 高 */
 /* 阅读页：表格自动撑满正文区，不再套文档缩放的 CSS zoom（会错位画布指针） */
 #reqDocReaderBody.rrd-sheet{
   zoom:1;width:100%;padding:0;overflow:hidden;position:relative;
@@ -6620,6 +6622,8 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .reqdoc-comment-user{font-size:13px;font-weight:650;color:var(--text);}
 .reqdoc-comment-time{font-size:12px;color:var(--text-3);}
 .reqdoc-comment-quote{padding:6px 8px;border-left:3px solid var(--primary);background:var(--surface-hover);font-size:12px;color:var(--text-2);margin:2px 0;border-radius:0 4px 4px 0;word-break:break-word;}
+.reqdoc-comment-quote.is-cellref{cursor:pointer;color:var(--primary-fg);background:var(--primary-soft);}
+.reqdoc-comment-quote.is-cellref:hover{color:var(--primary-hover);text-decoration:underline;}
 .reqdoc-comment-body{font-size:13px;line-height:1.65;color:var(--text);word-break:break-word;white-space:pre-wrap;}
 .reqdoc-comment-actions-r{display:flex;justify-content:flex-end;gap:6px;}
 .reqdoc-comment-replies{margin-left:16px;padding-left:10px;border-left:2px solid var(--border);display:flex;flex-direction:column;gap:6px;margin-top:6px;}
@@ -53894,10 +53898,409 @@ function initSandSay(){
 
 return {isoDate: isoDate, computeSay: computeSay, readPref: readPref, render: render, mountSandSaySettings: mountSandSaySettings, initSandSay: initSandSay};
 })();
+/* ---- core/sheet-mention.js ---- */
+/* core/sheet-mention · 表格单元格内 @提及候选
+   单元格编辑器是 Univer 隐藏的 contenteditable（id __editor_ + 内部 docs 单元），
+   光标定位容器以 fixed 定位贴住插入点，候选浮层按该容器坐标摆放。
+   候选列表与评论 @ 同口径；写入单元格走 InsertTextCommand 替换 [@, 光标) 区间。 */
+
+
+
+var esc = esc2;
+var DOC_UNIT_ID = "__INTERNAL_EDITOR__DOCS_NORMAL";
+var INPUT_ID = "__editor_" + DOC_UNIT_ID;
+var CARET_HOST_ID = "univer-doc-selection-container-" + DOC_UNIT_ID;
+var MAX_ITEMS = 8;
+var MAX_HEIGHT = 260;
+var MIN_WIDTH = 260;
+var MAX_WIDTH = 380;
+var GAP = 6;
+var RETRY_MS = 30000;
+/* 同一时刻只开一个候选框：页面里可能同时存在编辑态与预览态表格 */
+var active = null;
+
+function memberOrg(m){
+  var company = companyNameOf(m);
+  var role = effectiveMemberRole(m);
+  return {
+    hasCompany: !!company,
+    text: (company || "未标注公司") + " · " + (role || "未设岗位")
+  };
+}
+
+/**
+ * @param {Object} opts
+ *   container            表格宿主元素
+ *   getInjector()        返回 Univer 根 injector
+ *   canOpen()            返回 false 时不弹候选（只读 / 未在编辑文档）
+ *   excludeUserId        字符串或函数：候选里排除自己
+ *   loadMembers()        返回成员数组的 Promise
+ * 返回 { dispose } ；Univer 版本不支持时返回 null（退化为手输完整名字）
+ */
+function createSheetMention(opts){
+  opts = opts || {};
+  var container = opts.container;
+  if(!container) return null;
+  if(!(window.UniverDocsUi && window.UniverDocsUi.IEditorService
+      && window.UniverDocs && window.UniverDocs.InsertTextCommand
+      && window.UniverCore && window.UniverCore.ICommandService)){
+    return null;
+  }
+
+  var layer = null;
+  var opened = false;
+  var items = [];
+  var index = 0;
+  var start = 0;
+  var end = 0;
+  var notice = "";
+  var members = [];
+  var loadState = "idle";
+  var loading = false;
+  var failedAt = 0;
+  var composing = false;
+  var timer = 0;
+  var frame = 0;
+
+  function selfId(){
+    var v = opts.excludeUserId;
+    return typeof v === "function" ? (v() || "") : (v || "");
+  }
+
+  function inputEl(){
+    /* 同一页面可能同时挂多个 Univer 实例：按宿主元素限定，避免命中外层/另一份视图 */
+    var el = container.querySelector('[id="' + INPUT_ID + '"]');
+    return el && container.contains(el) ? el : null;
+  }
+
+  function isOurs(node){
+    var el = inputEl();
+    if(!el || !node) return false;
+    return node === el || (node.nodeType === 1 && el.contains(node));
+  }
+
+  function editor(){
+    try{
+      var inj = opts.getInjector && opts.getInjector();
+      if(!inj) return null;
+      return inj.get(window.UniverDocsUi.IEditorService).getEditor(DOC_UNIT_ID) || null;
+    }catch(e){ return null; }
+  }
+
+  function cellText(){
+    var ed = editor();
+    if(!ed) return null;
+    var data = ed.getDocumentData();
+    var text = data && data.body && typeof data.body.dataStream === "string" ? data.body.dataStream : "";
+    var caret = ed.getCursorPosition();
+    if(caret == null || caret < 0 || caret > text.length) return null;
+    return { ed: ed, text: text, caret: caret };
+  }
+
+  function loadMembers(){
+    if(!opts.loadMembers || loading) return;
+    if(loadState === "ready") return;
+    if(loadState === "error" && failedAt && Date.now() - failedAt < RETRY_MS) return;
+    loading = true;
+    loadState = "loading";
+    var p;
+    try{
+      p = opts.loadMembers();
+    }catch(e){
+      p = Promise.reject(e);
+    }
+    Promise.resolve(p).then(function(list){
+      loading = false;
+      failedAt = 0;
+      loadState = "ready";
+      members = list || [];
+      if(opened || isOurs(document.activeElement)) detect();
+    }, function(){
+      loading = false;
+      failedAt = Date.now();
+      loadState = "error";
+      if(opened) detect();
+    });
+  }
+
+  function ensureLayer(){
+    if(layer) return layer;
+    layer = document.createElement("div");
+    layer.className = "mention-pop";
+    layer.setAttribute("role", "listbox");
+    layer.hidden = true;
+    /* 按下时不抢焦点，否则单元格编辑器会失焦、选区被清掉 */
+    layer.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    layer.addEventListener("click", function(e){
+      if(e.target.closest("[data-mp-retry]")){ loadState = "idle"; failedAt = 0; loadMembers(); return; }
+      var b = e.target.closest("[data-mp-idx]");
+      if(b) pick(Number(b.dataset.mpIdx));
+    });
+    document.body.appendChild(layer);
+    return layer;
+  }
+
+  function caretRect(){
+    var host = document.getElementById(CARET_HOST_ID);
+    var r = host ? host.getBoundingClientRect() : null;
+    if(r && (r.left || r.top || r.width > 1 || r.height > 1)) return r;
+    var inp = inputEl();
+    r = inp ? inp.getBoundingClientRect() : null;
+    if(r && (r.left || r.top)) return r;
+    return container.getBoundingClientRect();
+  }
+
+  function place(){
+    if(!opened || !layer) return;
+    var r = caretRect();
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var width = Math.round(Math.min(Math.max(r.width, MIN_WIDTH), MAX_WIDTH, vw - 16));
+    var above = r.top - GAP - 8;
+    var below = vh - r.bottom - GAP - 8;
+    var openAbove = above >= 160 || above >= below;
+    var space = Math.max(openAbove ? above : below, 96);
+    /* 视口边缘兜底：下方空间极小（移动端键盘弹起）时不要把浮层顶出屏幕 */
+    var visible = Math.max(openAbove ? r.top - GAP : vh - r.bottom - GAP, 0);
+    layer.style.width = width + "px";
+    layer.style.left = Math.round(Math.max(8, Math.min(r.left, vw - width - 8))) + "px";
+    layer.style.maxHeight = Math.round(Math.min(MAX_HEIGHT, space, visible)) + "px";
+    if(openAbove){
+      layer.style.top = "auto";
+      layer.style.bottom = Math.round(vh - r.top + GAP) + "px";
+    }else{
+      layer.style.bottom = "auto";
+      layer.style.top = Math.round(r.bottom + GAP) + "px";
+    }
+  }
+
+  function onViewportChange(){
+    if(frame) return;
+    frame = requestAnimationFrame(function(){
+      frame = 0;
+      place();
+    });
+  }
+
+  function close(){
+    opened = false;
+    items = [];
+    index = 0;
+    notice = "";
+    if(layer) layer.hidden = true;
+    if(active === api) active = null;
+    window.removeEventListener("scroll", onViewportChange, true);
+    window.removeEventListener("resize", onViewportChange);
+  }
+
+  function render(){
+    ensureLayer();
+    layer.hidden = !opened;
+    if(!opened) return;
+    if(!items.length){
+      layer.innerHTML = '<div class="cm-empty"' +
+        (loadState === "error" ? ' data-mp-retry="1" role="button" tabindex="0"' : '') +
+        '>' + esc(notice || "") + '</div>';
+      place();
+      return;
+    }
+    layer.innerHTML = items.map(function(m, i){
+      var org = memberOrg(m);
+      return '<button type="button" class="cm-item' + (i === index ? " on" : "") + '" data-mp-idx="' + i + '" role="option" aria-selected="' + (i === index) + '">' +
+        avatarHTML(m.displayName, "sm") +
+        '<span class="cm-main">' +
+          '<span class="cm-name ellipsis">' + esc(m.displayName) + '</span>' +
+          '<span class="cm-sub ellipsis"><i' + (org.hasCompany ? ' style="background:' + companyColor(companyNameOf(m)) + '"' : '') + '></i>'
+            + esc(org.text) + '</span>' +
+        '</span>' +
+        (m.username ? '<span class="cm-user">@' + esc(m.username) + '</span>' : '') +
+      '</button>';
+    }).join("");
+    place();
+    var on = layer.querySelector(".cm-item.on");
+    if(on && on.scrollIntoView) on.scrollIntoView({ block: "nearest" });
+  }
+
+  function open(nextItems, st, en, nt){
+    if(active && active !== api) active.close();
+    active = api;
+    opened = true;
+    items = nextItems || [];
+    index = 0;
+    start = st;
+    end = en;
+    notice = nt || "";
+    render();
+    window.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("resize", onViewportChange);
+  }
+
+  /* 与后端 Mentions 同口径：ASCII 字母/数字/下划线视为名字的延续，中文没有词边界 */
+  function detect(){
+    timer = 0;
+    if(!opts.canOpen || !opts.canOpen() || !opts.loadMembers){ close(); return; }
+    var cur = cellText();
+    if(!cur){ close(); return; }
+    var before = cur.text.slice(0, cur.caret);
+    var at = before.lastIndexOf("@");
+    if(at < 0) at = before.lastIndexOf("＠");
+    if(at < 0){ close(); return; }
+    if(/[A-Za-z0-9_]/.test(before.charAt(at - 1))){ close(); return; }
+    var query = before.slice(at + 1);
+    if(/[\s\u3000]/.test(query) || query.length > 20){ close(); return; }
+    loadMembers();
+    var self = selfId();
+    var q = query.toLowerCase();
+    var list = members.filter(function(m){
+      if(!m || !m.userId || !m.displayName) return false;
+      if(self && m.userId === self) return false;
+      return (m.displayName || "").toLowerCase().indexOf(q) >= 0
+        || (m.username || "").toLowerCase().indexOf(q) >= 0;
+    }).slice(0, MAX_ITEMS);
+    var nt = "";
+    if(loadState !== "ready"){
+      nt = loadState === "error" ? "成员加载失败，点击重试" : "正在加载成员…";
+    }
+    if(!list.length && !nt){ close(); return; }
+    open(list, at, cur.caret, nt);
+  }
+
+  function schedule(){
+    if(timer) return;
+    timer = setTimeout(detect, 0);
+  }
+
+  function pick(i){
+    var m = items[i];
+    if(!m) return;
+    var cur = cellText();
+    if(!cur){ close(); return; }
+    /* 候选打开后可能继续打字：按当前光标重算替换区间，仍以 @ 起点为界 */
+    var token = cur.text.charAt(start);
+    var query = cur.text.slice(start + 1, cur.caret);
+    if((token !== "@" && token !== "＠") || cur.caret <= start || /[\s\u3000]/.test(query)){
+      close();
+      return;
+    }
+    end = cur.caret;
+    var insert = "@" + m.displayName + " ";
+    var ok = false;
+    try{
+      var inj = opts.getInjector && opts.getInjector();
+      var cmd = inj && inj.get(window.UniverCore.ICommandService);
+      ok = cmd && cmd.syncExecuteCommand(window.UniverDocs.InsertTextCommand.id, {
+        unitId: DOC_UNIT_ID,
+        segmentId: "",
+        range: { startOffset: start, endOffset: end, collapsed: false },
+        body: { dataStream: insert, textRuns: [] },
+        debounce: false
+      });
+    }catch(e){ ok = false; }
+    close();
+    if(!ok) return;
+    try{
+      var caret = start + insert.length;
+      cur.ed.setSelectionRanges([{ startOffset: caret, endOffset: caret }], true);
+      cur.ed.focus();
+    }catch(e){ /* 选区校正失败不影响已插入的文字 */ }
+  }
+
+  function move(step){
+    var n = items.length;
+    if(!n) return;
+    index = (index + step + n) % n;
+    render();
+  }
+
+  function onKeydown(e){
+    if(e.isComposing || e.keyCode === 229){
+      composing = true;
+      return;
+    }
+    if(!opened) return;
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    if(!isOurs(e.target)) return;
+    if(e.key === "ArrowDown"){ e.preventDefault(); e.stopPropagation(); move(1); return; }
+    if(e.key === "ArrowUp"){ e.preventDefault(); e.stopPropagation(); move(-1); return; }
+    if((e.key === "Enter" || e.key === "Tab") && items.length){
+      e.preventDefault();
+      e.stopPropagation();
+      pick(index);
+      return;
+    }
+    if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); close(); }
+  }
+
+  function onKeyup(e){
+    if(e.isComposing || e.keyCode === 229) return;
+    if(!isOurs(e.target)) return;
+    if(e.key === "ArrowUp" || e.key === "ArrowDown") return;
+    schedule();
+  }
+
+  function onInput(e){
+    if(e.isComposing || composing) return;
+    if(!isOurs(e.target)) return;
+    schedule();
+  }
+
+  function onFocusin(e){
+    if(!isOurs(e.target)) return;
+    schedule();
+  }
+
+  function onFocusout(e){
+    if(!isOurs(e.target)) return;
+    composing = false;
+    setTimeout(function(){
+      if(opened && !isOurs(document.activeElement)) close();
+    }, 0);
+  }
+
+  function onCompositionStart(){ composing = true; }
+  function onCompositionEnd(e){
+    composing = false;
+    if(!isOurs(e.target)) return;
+    schedule();
+  }
+
+  /* 捕获阶段挂在 document：单元格编辑器的 keydown 监听在隐藏输入上，
+     先于它拦截方向键 / 回车 / Esc，避免候选打开时把光标或换行交给编辑器 */
+  document.addEventListener("keydown", onKeydown, true);
+  document.addEventListener("keyup", onKeyup, true);
+  document.addEventListener("input", onInput, true);
+  document.addEventListener("focusin", onFocusin, true);
+  document.addEventListener("focusout", onFocusout, true);
+  document.addEventListener("compositionstart", onCompositionStart, true);
+  document.addEventListener("compositionend", onCompositionEnd, true);
+
+  var api = {
+    close: close,
+    dispose: function(){
+      close();
+      if(timer){
+        clearTimeout(timer);
+        timer = 0;
+      }
+      document.removeEventListener("keydown", onKeydown, true);
+      document.removeEventListener("keyup", onKeyup, true);
+      document.removeEventListener("input", onInput, true);
+      document.removeEventListener("focusin", onFocusin, true);
+      document.removeEventListener("focusout", onFocusout, true);
+      document.removeEventListener("compositionstart", onCompositionStart, true);
+      document.removeEventListener("compositionend", onCompositionEnd, true);
+      if(layer && layer.parentNode) layer.parentNode.removeChild(layer);
+      layer = null;
+    }
+  };
+  return api;
+}
+
 /* ---- core/sheet-editor.js ---- */
 /* core/sheet-editor · Univer 电子表格文档编辑器/阅读器（vendor 懒加载，含筛选/排序/条件格式/数据校验/超链接/查找替换） */
 
 var esc = esc2;
+
 var VENDOR_BASE = API.url("/vendor/univer/");
 
 var CSS_FILES = [
@@ -54034,12 +54437,16 @@ function registerPlugin(univer, pkg, cls){
   univer.registerPlugin(pkg[cls]);
 }
 
-function createUniver(hostId){
+function createUniver(hostId, opts){
   var U = window.UniverCore;
   var univer = new U.Univer({ locale: U.LocaleType.ZH_CN, locales: localePack() });
   univer.registerPlugin(window.UniverEngineRender.UniverRenderEnginePlugin);
   univer.registerPlugin(window.UniverEngineFormula.UniverFormulaEnginePlugin);
-  univer.registerPlugin(window.UniverUi.UniverUIPlugin, { container: hostId });
+  /* 只读阅读态不渲染头部（工具条/公式栏）：样式里给 header 加 display:none
+     会把表格画布压成 0 高，网格一片空白 */
+  var uiConfig = { container: hostId };
+  if(opts && opts.readOnly) uiConfig.header = false;
+  univer.registerPlugin(window.UniverUi.UniverUIPlugin, uiConfig);
   univer.registerPlugin(window.UniverDocs.UniverDocsPlugin);
   univer.registerPlugin(window.UniverDocsUi.UniverDocsUIPlugin);
   univer.registerPlugin(window.UniverSheets.UniverSheetsPlugin);
@@ -54079,9 +54486,52 @@ function setWorkbookMode(wb, readOnly){
   return readOnly ? perm.setReadOnly() : perm.setEditable();
 }
 
+/* ---------- 单元格引用（评论/批注锚点）：Sheet1!B3 / 'My Sheet'!B3:C5 ---------- */
+
+function colToName(idx){
+  var s = "";
+  var n = idx + 1;
+  while(n > 0){
+    var m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+function rangeToA1(range){
+  var a = colToName(range.startColumn) + (range.startRow + 1);
+  var b = colToName(range.endColumn) + (range.endRow + 1);
+  return a === b ? a : a + ":" + b;
+}
+
+/* 表名含空白或特殊字符时按 Excel 规则加单引号，否则引用串解析会歧义 */
+function quoteSheetName(name){
+  var s = String(name || "");
+  return /^[A-Za-z0-9_\u4e00-\u9fa5.]+$/.test(s) ? s : "'" + s.replace(/'/g, "''") + "'";
+}
+
+/**
+ * 解析单元格引用。返回 { sheetName, a1 }；不是单元格引用时返回 null。
+ * 供评论侧判断「这条引用能不能定位到单元格」，不依赖 Univer 实例。
+ */
+function parseCellRef(ref){
+  var s = String(ref || "").trim();
+  var bang = s.lastIndexOf("!");
+  if(bang <= 0) return null;
+  var sheetName = s.slice(0, bang).trim();
+  var a1 = s.slice(bang + 1).trim();
+  if(sheetName.charAt(0) === "'" && sheetName.charAt(sheetName.length - 1) === "'"){
+    sheetName = sheetName.slice(1, -1).replace(/''/g, "'");
+  }
+  if(!/^[A-Za-z]+[0-9]+(:[A-Za-z]+[0-9]+)?$/.test(a1)) return null;
+  return { sheetName: sheetName, a1: a1 };
+}
+
 /**
  * 在 container 内挂载一个 Univer 工作簿视图。
- * opts: { container, snapshot, readOnly, onDirty }
+ * opts: { container, snapshot, readOnly, onDirty, mention }
+ * mention（可选，仅编辑态）: { canOpen, excludeUserId, loadMembers } —— 单元格内 @提及候选
  * 返回 handle：getSnapshot/getText/setReadOnly/dispose
  */
 async function openSheetView(opts){
@@ -54096,7 +54546,7 @@ async function openSheetView(opts){
   var host = container.firstChild;
   host.id = hostId;
 
-  var univer = createUniver(hostId);
+  var univer = createUniver(hostId, opts);
   var wb = null;
   try{
     var api = window.UniverCoreFacade.FUniver.newAPI(univer);
@@ -54118,10 +54568,56 @@ async function openSheetView(opts){
     });
   }
 
+  var mention = null;
+  if(!opts.readOnly && opts.mention){
+    try{
+      mention = createSheetMention({
+        container: container,
+        /* 1.3.0 的 Univer 实例只暴露 __getInjector()，没有公开 getInjector() */
+        getInjector: function(){
+          try{
+            if(typeof univer.__getInjector === "function") return univer.__getInjector();
+            if(typeof univer.getInjector === "function") return univer.getInjector();
+            return api && api._injector ? api._injector : null;
+          }catch(e){ return null; }
+        },
+        canOpen: opts.mention.canOpen,
+        excludeUserId: opts.mention.excludeUserId,
+        loadMembers: opts.mention.loadMembers
+      });
+    }catch(ex){ mention = null; }
+  }
+
   var disposed = false;
   return {
     getSnapshot: function(){ return wb.save(); },
     getText: function(){ return sheetSnapshotText(wb.save()); },
+    /* 当前选区引用：Sheet1!B3 或 Sheet1!B3:C5；无选区/异常时返回 null */
+    getSelectionRef: function(){
+      try{
+        var ws = wb.getActiveSheet();
+        if(!ws) return null;
+        var sel = typeof ws.getSelection === "function" ? ws.getSelection() : null;
+        var range = sel && typeof sel.getActiveRange === "function" ? sel.getActiveRange() : null;
+        if(!range) return null;
+        return quoteSheetName(ws.getSheetName()) + "!" + rangeToA1(range.getRange());
+      }catch(ex){ return null; }
+    },
+    /* 按引用定位：切到目标工作表、选中区域并滚动到可见位置 */
+    selectRef: function(ref){
+      var parsed = parseCellRef(ref);
+      if(!parsed) return false;
+      try{
+        var ws = parsed.sheetName && typeof wb.getSheetByName === "function" ? wb.getSheetByName(parsed.sheetName) : wb.getActiveSheet();
+        if(!ws) return false;
+        if(typeof ws.activate === "function") ws.activate();
+        var range = ws.getRange(parsed.a1);
+        if(!range) return false;
+        range.activate();
+        if(typeof ws.scrollToCell === "function") ws.scrollToCell(range.getRow(), range.getColumn());
+        return true;
+      }catch(ex){ return false; }
+    },
     setReadOnly: function(on){
       host.classList.toggle("univer-sheet-readonly", !!on);
       return setWorkbookMode(wb, !!on);
@@ -54129,6 +54625,8 @@ async function openSheetView(opts){
     dispose: function(){
       if(disposed) return;
       disposed = true;
+      if(mention){ try{ mention.dispose(); }catch(e){ /* 忽略 */ } }
+      mention = null;
       if(dirtySub){
         if(typeof dirtySub === "function"){ try{ dirtySub(); }catch(e){ /* 忽略 */ } }
         else if(typeof dirtySub.dispose === "function"){ try{ dirtySub.dispose(); }catch(e){ /* 忽略 */ } }
@@ -68305,6 +68803,7 @@ function disposeReqSheet(){
 /* 阅读视图也挂了一个 Univer 工作簿：换文档/离开阅读时先销毁 */
 var reqSheetReaderView = null;
 function disposeReqSheetReader(){
+  hideRrdCellBubble();
   if(reqSheetReaderView){
     try{ reqSheetReaderView.dispose(); }catch(e){ /* 已销毁 */ }
     reqSheetReaderView = null;
@@ -68319,6 +68818,8 @@ function mountReqSheet(snapshot){
   }
   var box = $("reqDocSheetBody");
   if(!box) return Promise.resolve(null);
+  /* 切到表格时清掉上一篇文档的文本选区，避免「引用选中」带上旧内容 */
+  reqDocLatestSel = null;
   setReqDocHydrating(true);
   return openSheetView({
     container: box,
@@ -68327,6 +68828,16 @@ function mountReqSheet(snapshot){
     onDirty: function(){
       markReqDocDirty();
       scheduleDraftSave();
+    },
+    /* 单元格内 @ 候选：未保存的新文档还没有 id，拿不到可见成员，退化为手输 */
+    mention: {
+      canOpen: function(){ return !reqDocReadOnly && !reqDocOwnerLocked && !!editingDocId; },
+      excludeUserId: function(){ return rt.currentUser && rt.currentUser.id; },
+      loadMembers: function(){
+        var docId = editingDocId;
+        if(!docId) return Promise.reject(new Error("文档尚未保存"));
+        return API.get("/api/req-docs/" + encodeURIComponent(docId) + "/mention-candidates");
+      }
     }
   }).then(function(view){
     if(seq !== reqSheetSeq){
@@ -69093,6 +69604,9 @@ var rrdQuote = null;
 var rrdSelText = "";
 var rrdFlashCommentId = null;
 var rrdSelBubble = null;
+/* 表格阅读：选中单元格后弹出的「批注」气泡，引用串形如 Sheet1!B3:C5 */
+var rrdCellBubble = null;
+var rrdCellRef = "";
 /* 两处文档评论框各自的 @ 候选：编辑页一个、阅读侧栏一个（侧栏会随渲染重建） */
 var reqDocCommentMention = null;
 var rrdMentionPicker = null;
@@ -69679,6 +70193,8 @@ function renderReqDocReader(doc){
   rrdFlashCommentId = null;
   setRrdQuote(null);
   hideRrdSelBubble();
+  hideRrdCellBubble();
+  var rrdActTip = doc.format === "sheet" ? "选中单元格可批注" : "选中正文可划线";
   box.classList.remove("with-comments");
   box.innerHTML =
     '<div class="rrd-main">' +
@@ -69692,7 +70208,7 @@ function renderReqDocReader(doc){
           '<button class="btn sm ghost ibtn" type="button" data-rrd-wide aria-pressed="false" data-tip="宽屏阅读（收起左侧文档树）" aria-label="宽屏阅读">' + icon("expand", 15) + '</button>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
           (canMut ? '<button class="btn sm ghost ibtn" type="button" data-rrd-rename="' + esc(doc.id) + '" data-tip="重命名文档" aria-label="重命名文档">' + icon("edit", 15) + '</button>' : '') +
-          '<button class="btn sm ghost ibtn" type="button" data-rrd-comments="' + esc(doc.id) + '" id="rrdCommentsBtn" data-tip="评论 · 选中正文可划线" aria-label="评论">' + icon("comment", 15) + '<span class="rrd-cnt" id="rrdCommentsBadge" hidden></span></button>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-comments="' + esc(doc.id) + '" id="rrdCommentsBtn" data-tip="评论 · ' + rrdActTip + '" aria-label="评论">' + icon("comment", 15) + '<span class="rrd-cnt" id="rrdCommentsBadge" hidden></span></button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-perm="' + esc(doc.id) + '" data-tip="权限说明（只读）" aria-label="权限说明">' + icon("shield", 15) + '</button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canMut ? "1" : "0") + '" data-tip="历史版本" aria-label="历史版本">' + icon("clock", 15) + '</button>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
@@ -69741,6 +70257,8 @@ function renderReqDocReader(doc){
   if(doc.format === "sheet"){
     /* 表格阅读：只读挂载 Univer 工作簿，保留合并/样式/列宽 */
     body.classList.add("rrd-sheet");
+    /* vendor 是懒加载的（约 50 个脚本）：首次打开先给加载态，别让正文区空白几秒 */
+    body.innerHTML = '<div class="rrd-empty">表格加载中…</div>';
     var sheetSnap = parseSheetSnapshot(doc.sheetContent);
     openSheetView({
       container: body,
@@ -69749,6 +70267,7 @@ function renderReqDocReader(doc){
     }).then(function(view){
       if(splitDocId !== id){ view.dispose(); return; }
       reqSheetReaderView = view;
+      bindRrdSheetCellComment(body);
     }).catch(function(ex){
       if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "表格加载失败");
     });
@@ -70511,7 +71030,8 @@ function loadRrdCommentCount(docId){
     }
     var btn = $("rrdCommentsBtn");
     if(btn){
-      var tip = n ? "评论（" + n + " 条）· 选中正文可划线" : "评论 · 选中正文可划线";
+      var act = rrdDocDetail && rrdDocDetail.format === "sheet" ? "选中单元格可批注" : "选中正文可划线";
+      var tip = n ? "评论（" + n + " 条）· " + act : "评论 · " + act;
       btn.setAttribute("data-tip", tip);
       btn.setAttribute("aria-label", n ? "评论（" + n + " 条）" : "评论");
     }
@@ -70528,7 +71048,8 @@ function loadRrdComments(){
     var title = $("rrdCommentsTitle");
     if(title) title.textContent = rrdComments.length ? "评论（" + rrdComments.length + "）" : "评论";
     if(!rrdComments.length){
-      list.innerHTML = UI.colEmpty("还没有评论", "inbox", "选中正文即可划线评论");
+      var emptyHint = rrdDocDetail && rrdDocDetail.format === "sheet" ? "点击单元格后选择「批注」即可添加单元格批注" : "选中正文即可划线评论";
+      list.innerHTML = UI.colEmpty("还没有评论", "inbox", emptyHint);
     }else{
       list.innerHTML = rrdComments.map(function(c){
         return '<div class="reqdoc-comment-item" data-rrd-comment-id="' + esc(c.id) + '">'
@@ -70536,7 +71057,7 @@ function loadRrdComments(){
           +   '<span class="reqdoc-comment-user">' + esc(c.userName || "—") + '</span>'
           +   '<span class="reqdoc-comment-time">' + esc(fmtTs(c.createdAt) || "—") + '</span>'
           + '</div>'
-          + (c.quoteText ? '<div class="reqdoc-comment-quote">' + esc(c.quoteText) + '</div>' : '')
+          + (c.quoteText ? docQuoteHTML(c.quoteText, rrdDocDetail && rrdDocDetail.format === "sheet") : '')
           + '<div class="reqdoc-comment-body">' + esc(c.content) + '</div>'
           + (c.deletable ? '<div class="reqdoc-comment-actions-r"><button class="btn sm danger" type="button" data-rrd-del-comment="' + esc(c.id) + '">删除</button></div>' : '')
           + '</div>';
@@ -70678,6 +71199,75 @@ function maybeShowRrdSelBubble(){
   if(top < 8) top = rect.bottom + 8;
   b.style.left = left + "px";
   b.style.top = top + "px";
+}
+
+/* ---------- 表格阅读：单元格引用批注 ---------- */
+
+/* 表格是 canvas，没有文本选区；改为捕获单元格选区，气泡把 Sheet1!B3 存进 quoteText */
+function bindRrdSheetCellComment(body){
+  if(!body || body.dataset.rrdSheetBound) return;
+  body.dataset.rrdSheetBound = "1";
+  body.addEventListener("mouseup", function(e){
+    if(!rrdCanComment || !rrdDocDetail || rrdDocDetail.format !== "sheet") return;
+    /* 只响应单元格画布上的点击；工具栏/工作表标签的 mouseup 不弹批注 */
+    if(!e.target || e.target.tagName !== "CANVAS") return;
+    var x = e.clientX, y = e.clientY;
+    /* 等 Univer 处理完本次点击再读选区，避免拿到上一格的坐标 */
+    setTimeout(function(){
+      if(splitDocId !== rrdCommentsDocId) return;
+      var view = reqSheetReaderView;
+      var ref = view && typeof view.getSelectionRef === "function" ? view.getSelectionRef() : null;
+      if(!ref) return;
+      showRrdCellBubble(ref, x, y);
+    }, 0);
+  });
+  body.addEventListener("wheel", hideRrdCellBubble, { passive: true });
+}
+function ensureRrdCellBubble(){
+  if(rrdCellBubble) return rrdCellBubble;
+  var b = document.createElement("button");
+  b.type = "button";
+  b.id = "rrdCellBubble";
+  b.className = "rrd-sel-bubble";
+  b.addEventListener("mousedown", function(e){ e.preventDefault(); });
+  b.addEventListener("click", function(){
+    if(!rrdCellRef || !rrdCanComment) return;
+    toggleRrdComments(true, "comments");
+    setRrdQuote(rrdCellRef);
+    hideRrdCellBubble();
+    var ta = $("rrdCommentInput");
+    if(ta) ta.focus();
+  });
+  document.body.appendChild(b);
+  rrdCellBubble = b;
+  return b;
+}
+function showRrdCellBubble(ref, x, y){
+  rrdCellRef = ref;
+  var b = ensureRrdCellBubble();
+  var a1 = ref.slice(ref.lastIndexOf("!") + 1);
+  b.textContent = "批注 " + a1;
+  b.title = "对 " + ref + " 添加单元格批注";
+  b.style.display = "block";
+  var left = Math.max(8, Math.min(window.innerWidth - b.offsetWidth - 8, x + 12));
+  var top = y - b.offsetHeight - 10;
+  if(top < 8) top = y + 14;
+  b.style.left = left + "px";
+  b.style.top = top + "px";
+}
+function hideRrdCellBubble(){
+  if(rrdCellBubble) rrdCellBubble.style.display = "none";
+  rrdCellRef = "";
+}
+/* 只有形如 Sheet1!B3 / 'My Sheet'!B3:C5 的引用才可定位，避免旧评论里的普通文本被当成坐标 */
+function looksLikeCellRef(q){
+  return /^(?:'(?:[^']|'')*'|[^!]+)![A-Za-z]+[0-9]+(?::[A-Za-z]+[0-9]+)?$/.test(String(q || "").trim());
+}
+function docQuoteHTML(q, isSheet){
+  var cellRef = !!isSheet && looksLikeCellRef(q);
+  return '<div class="reqdoc-comment-quote' + (cellRef ? ' is-cellref' : '') + '"'
+    + (cellRef ? ' title="点击定位到 ' + esc(q) + '"' : '')
+    + '>' + esc(q) + '</div>';
 }
 
 /* ---------- 阅读树拖拽排序 ---------- */
@@ -72739,6 +73329,11 @@ function setDocFormatUI(format){
   var md = format === "markdown";
   var univer = format === "univer";
   var sheet = format === "sheet";
+  /* 表格：编辑页按整宽排版并收起空大纲（样式见 .reqdoc-editpage.is-sheet） */
+  var page = $("reqDocEditPage");
+  if(page) page.classList.toggle("is-sheet", sheet);
+  var tocBtn = $("reqDocTocToggle");
+  if(tocBtn) tocBtn.hidden = sheet;
   showEl($("reqDocRichBody"), !md && !univer && !sheet);
   showEl($("reqDocMdBody"), md);
   showEl($("reqDocUniverBody"), univer);
@@ -72758,6 +73353,11 @@ function setDocFormatUI(format){
     exp.title = md ? "导出为 Markdown 文件" : (sheet ? "导出为 Excel 文件（保留样式）" : "导出为 HTML 文件");
     exp.innerHTML = icon("download", 16)
       + (sheet ? "导出 Excel（.xlsx）" : (md ? "导出 Markdown" : "导出 HTML"));
+  }
+  var quoteBtn = $("reqDocCommentQuoteBtn");
+  if(quoteBtn){
+    quoteBtn.title = sheet ? "先在表格中选中单元格，再点这里引用为批注上下文" : "先在正文中选中内容，再点这里引用为批注上下文";
+    quoteBtn.innerHTML = icon("quote", 13) + "&nbsp;" + (sheet ? "引用单元格" : "引用选中");
   }
 }
 function fillMarkdownEditor(doc){
@@ -72914,6 +73514,12 @@ var reqDocLatestSel = null;
 var reqDocReplyTo = null;
 /* 点击按钮会收走选区，所以先把正文内的最近一次选区存下来再取用 */
 function rememberReqDocSelection(){
+  /* 表格没有文本选区：记录当前单元格引用，供「引用选中」写成可定位的批注 */
+  if(isSheetDoc()){
+    var current = reqSheetView && typeof reqSheetView.getSelectionRef === "function" ? reqSheetView.getSelectionRef() : null;
+    if(current) reqDocLatestSel = current;
+    return;
+  }
   var sel = window.getSelection();
   if(!sel || !sel.rangeCount) return;
   var page = $("reqDocEditPage");
@@ -72931,9 +73537,12 @@ function setReqDocCommentQuote(text){
   if(txt) txt.textContent = reqDocCommentQuote || "";
 }
 function quoteReqDocSelection(){
-  if(!reqDocLatestSel){ toast("先在正文中选中要引用的内容，再点「引用选中」", "warn"); return; }
+  if(!reqDocLatestSel){
+    toast(isSheetDoc() ? "先在表格中选中单元格，再点「引用选中」" : "先在正文中选中要引用的内容，再点「引用选中」", "warn");
+    return;
+  }
   setReqDocCommentQuote(reqDocLatestSel);
-  toast("已引用选中内容", "fs");
+  toast(isSheetDoc() ? "已引用单元格 " + reqDocLatestSel : "已引用选中内容", "fs");
 }
 
 function loadReqDocComments(docId){
@@ -72986,7 +73595,7 @@ function renderCommentItem(c, isReply){
     +   resolvedBadge + taskLink
     +   '<span class="reqdoc-comment-time">' + esc(fmtTs(c.createdAt) || "—") + '</span>'
     + '</div>'
-    + (c.quoteText ? '<div class="reqdoc-comment-quote">' + esc(c.quoteText) + '</div>' : '')
+    + (c.quoteText ? docQuoteHTML(c.quoteText, isSheetDoc()) : '')
     + '<div class="reqdoc-comment-body">' + esc(c.content) + '</div>'
     + actions
     + '</div>';
@@ -75093,6 +75702,16 @@ function populateReqDocSelect(keep){
       if(mk){
         rrdFlashCommentId = mk.dataset.rrdHlComment;
         toggleRrdComments(true, "comments");
+        return;
+      }
+      /* 表格评论的引用是单元格地址：点一下定位到对应单元格 */
+      var cq = e.target.closest(".reqdoc-comment-quote.is-cellref");
+      if(cq){
+        var cellRef = (cq.textContent || "").trim();
+        if(reqSheetReaderView && typeof reqSheetReaderView.selectRef === "function"){
+          if(!reqSheetReaderView.selectRef(cellRef)) toast("该单元格引用已失效，可能工作表或区域已被删除", "warn");
+        }
+        hideRrdCellBubble();
       }
     });
     /* 划选正文后弹出「划线评论」气泡；延迟到 mouseup 之后等选区稳定 */
@@ -75102,8 +75721,12 @@ function populateReqDocSelect(keep){
     });
     document.addEventListener("mousedown", function(e){
       if(rrdSelBubble && !rrdSelBubble.contains(e.target)) hideRrdSelBubble();
+      if(rrdCellBubble && !rrdCellBubble.contains(e.target)) hideRrdCellBubble();
     });
-    document.addEventListener("scroll", hideRrdSelBubble, true);
+    document.addEventListener("scroll", function(){ hideRrdSelBubble(); hideRrdCellBubble(); }, true);
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape") hideRrdCellBubble();
+    });
   }
   /* 动态：点条目打开对应文档 */
   var fd = $("reqDocFeed");
@@ -75419,6 +76042,15 @@ function populateReqDocSelect(keep){
   }
   if($("reqDocCommentList")){
     $("reqDocCommentList").addEventListener("click", function(e){
+      /* 表格评论的单元格引用：点一下把编辑器定位到对应单元格 */
+      var cq = e.target.closest(".reqdoc-comment-quote.is-cellref");
+      if(cq && isSheetDoc()){
+        var cellRef = (cq.textContent || "").trim();
+        if(reqSheetView && typeof reqSheetView.selectRef === "function"){
+          if(!reqSheetView.selectRef(cellRef)) toast("该单元格引用已失效，可能工作表或区域已被删除", "warn");
+        }
+        return;
+      }
       var btn = e.target.closest("[data-del-comment]");
       if(btn){
         var item = btn.closest("[data-comment-id]");
@@ -91973,6 +92605,7 @@ if($("meJobTitle")) meJobTitleCombo = attachCombo($("meJobTitle"), {chevron:true
 var NOTIFY_EVENTS = {
   task_assigned: ["工作项指派", "工作项创建或负责人变更后指派给我"],
   task_comment: ["评论与@", "我负责的工作项有新评论，或评论中被 @ 提及"],
+  doc_mention: ["文档@提及", "需求文档（含表格）正文中 @ 我时通知，邮件默认开启"],
   task_watch: ["我关注的工作项", "关注的工作项有新评论、列流转、移入回收站或恢复"],
   task_updated: ["工作项变更与提醒", "我负责的工作项字段变更、移列、移入回收站或恢复"],
   demand_status: ["需求与版本动态", "我提交的需求、负责的文档与分支状态变化，或所在版本发布/删除"],
@@ -91985,13 +92618,13 @@ var NOTIFY_EVENTS = {
 /* 展示分组：同一类打扰放在一起，用户能就近判断要不要全关 */
 var NOTIFY_GROUPS = [
   { title: "工作项", types: ["task_assigned", "task_comment", "task_watch", "task_updated"] },
-  { title: "需求与版本", types: ["demand_status", "demand_watch", "release_prep", "release_watch"] },
+  { title: "需求与版本", types: ["demand_status", "demand_watch", "release_prep", "release_watch", "doc_mention"] },
   { title: "测试", types: ["test_plan_assigned"] },
   { title: "每日汇总", types: ["daily_digest"] }
 ];
 /* 仅重要事件：直接指向我的（指派/评论@/关注）与低频日报保留，广播类关闭，邮件全关 */
 var NOTIFY_PRESET = {
-  inApp: ["task_assigned", "task_comment", "task_watch", "demand_watch", "test_plan_assigned", "release_prep", "release_watch", "daily_digest"],
+  inApp: ["task_assigned", "task_comment", "doc_mention", "task_watch", "demand_watch", "test_plan_assigned", "release_prep", "release_watch", "daily_digest"],
   email: []
 };
 function applyNotifyPreset(){
@@ -118370,6 +119003,6 @@ window.__HG_MODULES__["review-team"] = __NS["views/review-team.js"];
 window.__HG_MODULES__["mine"] = __NS["views/mine.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-25 05:19</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-25 07:48</span></div>
 </body>
 </html>

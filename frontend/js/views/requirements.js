@@ -1814,6 +1814,8 @@ function renderReqDocReader(doc){
   if(doc.format === "sheet"){
     /* 表格阅读：只读挂载 Univer 工作簿，保留合并/样式/列宽 */
     body.classList.add("rrd-sheet");
+    /* vendor 是懒加载的（约 50 个脚本）：首次打开先给加载态，别让正文区空白几秒 */
+    body.innerHTML = '<div class="rrd-empty">表格加载中…</div>';
     var sheetSnap = parseSheetSnapshot(doc.sheetContent);
     openSheetView({
       container: body,

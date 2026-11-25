@@ -219,8 +219,7 @@
   background-size:400% 100%;animation:reqdoc-skel 1.2s ease infinite;z-index:1;
 }
 .univer-sheet-host{position:absolute;inset:0;}
-/* 只读：1.3.0 的表格菜单/工具条在 <header> 里（Tailwind 工具类无法按类名命中） */
-.univer-sheet-readonly header{display:none;}
+/* 只读时头部由 Univer UI 配置（header:false）不渲染；不要用 display:none 藏 header，网格画布会被压成 0 高 */
 /* 阅读页：表格自动撑满正文区，不再套文档缩放的 CSS zoom（会错位画布指针） */
 #reqDocReaderBody.rrd-sheet{
   zoom:1;width:100%;padding:0;overflow:hidden;position:relative;
