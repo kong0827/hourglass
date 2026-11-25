@@ -7,6 +7,7 @@
 
 import { $ } from "./dom.js";
 import { holidayOn, isMakeupWorkday, nextHoliday } from "./holidays.js";
+import { ornamentPrefOn } from "./side-ornament.js";
 
 var PREF_KEY = "ds.sandSay.v1";
 var DEFAULT_OFF = "18:00";
@@ -37,7 +38,7 @@ function parseHM(v){
 function dayPhase(mins){
   if(mins < 10 * 60) return { phase:"early", quote:"来得早，沙还没开始漏", mood:"flow" };
   if(mins < 11 * 60 + 30) return { phase:"morning", quote:"上午的沙，流得最快", mood:"flow" };
-  if(mins < 13 * 60 + 30) return { phase:"noon", quote:"快到饭点了，先放下", mood:"slow" };
+  if(mins < 13 * 60) return { phase:"noon", quote:"快到饭点了，先放下", mood:"slow" };
   if(mins < 18 * 60 + 30) return { phase:"afternoon", quote:"下午的沙，流得最慢", mood:"slow" };
   if(mins < 21 * 60) return { phase:"evening", quote:"", mood:"dim" };
   if(mins < 23 * 60) return { phase:"late", quote:"这么晚了，还在工作", mood:"dim" };
@@ -269,6 +270,9 @@ function syncSettings(){
   });
   var seg = $("meSsMode");
   if(seg) seg.setAttribute("aria-disabled", pref.on ? "false" : "true");
+  /* 「只在悬停」的落点是侧栏摆件：摆件关着时这条选择不会出现在任何位置，直接说明 */
+  var note = $("meSsOrnNote");
+  if(note) note.hidden = !(pref.on && pref.mode === "hover" && !ornamentPrefOn());
   updatePreview(computeSay(new Date(), pref));
 }
 function updatePreview(st){
@@ -304,6 +308,7 @@ export function mountSandSaySettings(){
       });
     }
     window.addEventListener("sandsay:change", syncSettings);
+    window.addEventListener("ornament:change", syncSettings);
   }
   syncSettings();
 }

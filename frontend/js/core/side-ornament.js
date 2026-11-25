@@ -1,7 +1,7 @@
 /* core/side-ornament · 侧栏 72px 装饰摆件
  *
  * 纯装饰，不是控件：容器 aria-hidden + pointer-events:none，不带进度、不带入口。
- * 个人偏好只存本机（ds.ornament.v1），不写空间配置、不走接口。
+ * 个人偏好只存本机（ds.ornament.v1），默认关闭；只有手动打开过才显示。不写空间配置、不走接口。
  * 形态：经典流淌 + 弹跳 / 水母 / 蜗牛 / 奔跑 / 潮汐 / 喷嚏。
  * 导航一旦需要滚动就让位（不挤导航）；矮窗口、收起态、移动端由 ornament.css 处理。
  */
@@ -24,11 +24,11 @@ var ORN_OPTIONS = [
 var orn = readPref();
 
 function readPref(){
-  var next = { on:true, pick:"classic" };
+  var next = { on:false, pick:"classic" };
   try{
     var raw = JSON.parse(localStorage.getItem(PREF_KEY) || "null");
     if(raw && typeof raw === "object"){
-      next.on = raw.on !== false;
+      next.on = raw.on === true;
       if(raw.pick) next.pick = raw.pick;
     }
   }catch(e){ /* 受限环境 / 坏数据：回落默认 */ }
@@ -345,6 +345,9 @@ function scheduleSync(){
   });
 }
 
+/* 摆件开关状态：供「沙漏说」判断「只在悬停」还有没有落点 */
+export function ornamentPrefOn(){ return orn.on; }
+
 export function initSideOrnament(){
   slot = $("sideOrnament");
   if(!slot) return;
@@ -419,7 +422,7 @@ export function mountOrnamentSettings(){
     });
     sw.addEventListener("change", function(){ setOrnamentPref({ on:sw.checked }); });
     var reset = $("meOrnReset");
-    if(reset) reset.addEventListener("click", function(){ setOrnamentPref({ on:true, pick:"classic" }); });
+    if(reset) reset.addEventListener("click", function(){ setOrnamentPref({ on:false, pick:"classic" }); });
     window.addEventListener("ornament:change", syncSettings);
   }
   syncSettings();

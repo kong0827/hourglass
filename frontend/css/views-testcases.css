@@ -1443,7 +1443,7 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
 .vl-foot-link{font-size:12px;white-space:nowrap;}
 /* 未排版本只是提示，不是待办：中性底 + 警示图标，避免抢走焦点卡的主色 */
 .vl-unbound-banner{
-  display:flex;align-items:center;gap:9px;margin-bottom:10px;padding:9px 13px;
+  display:flex;align-items:center;gap:9px;margin:10px 0;padding:9px 13px;
   border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);
   font-size:12px;color:var(--text-2);
 }

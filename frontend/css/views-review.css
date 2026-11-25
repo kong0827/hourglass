@@ -3,6 +3,15 @@
    团队卡片沿用原型 weekly-review-2026-11-20 的结构与令牌，类名统一 rv- 前缀
    ========================================================================== */
 
+/* 个人回顾：分区之间沿用团队视图的 12px 节奏（全局 .panel + .panel 为 0） */
+#reviewPersonalView{display:flex;flex-direction:column;gap:12px}
+
+/* 表格首尾列与卡片内边距对齐（卡片头 / 脚注均为 16px），避免首列贴住圆角边框 */
+.rv-tbl th:first-child,
+.rv-tbl td:first-child{padding-left:16px}
+.rv-tbl th:last-child,
+.rv-tbl td:last-child{padding-right:16px}
+
 /* -------------------- 范围条 -------------------- */
 .rv-scope-note{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;

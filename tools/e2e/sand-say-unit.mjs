@@ -31,6 +31,8 @@ globalThis.localStorage = {
 const holidaysSrc = fs.readFileSync(path.join(ROOT, "holidays.js"), "utf8");
 const saySrc = fs.readFileSync(path.join(ROOT, "sand-say.js"), "utf8")
   .replace(/import \{\s*\$[^}]*\} from "\.\/dom\.js";/, "var $ = function(){ return null; };")
+  /* 外观设置里的落点提示要读摆件开关；模型单测不加载 side-ornament，固定返回关闭 */
+  .replace(/import \{\s*ornamentPrefOn\s*\} from "\.\/side-ornament\.js";/, "var ornamentPrefOn = function(){ return false; };")
   .replace(/from "\.\/holidays\.js"/, 'from "./holidays.mjs"');
 
 fs.writeFileSync(path.join(TMP, "holidays.mjs"), holidaysSrc);
@@ -75,6 +77,13 @@ run("午休前", dt(2026, 11, 23, 11, 48), { offWork: "18:00" }, (st, n) => {
   eq(st.phase, "noon", n + " phase");
   eq(st.quote, "快到饭点了，先放下", n + " quote");
   eq(st.mood, "slow", n + " mood");
+});
+run("午休最后一分钟", dt(2026, 11, 23, 12, 59), { offWork: "18:00" }, (st, n) => {
+  eq(st.phase, "noon", n + " phase");
+});
+run("一点整进下午", dt(2026, 11, 23, 13, 0), { offWork: "18:00" }, (st, n) => {
+  eq(st.phase, "afternoon", n + " phase");
+  eq(st.quote, "下午的沙，流得最慢", n + " quote");
 });
 run("下午", dt(2026, 11, 23, 15, 20), { offWork: "18:00" }, (st, n) => {
   eq(st.phase, "afternoon", n + " phase");

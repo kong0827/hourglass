@@ -132,7 +132,11 @@ const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js
     /* 沙漏说顶层 function render 会覆盖 views/mine.js 的 render（平铺后后者先求值、前者
        函数声明仍然生效），holidays 的 HOLIDAYS 与通用函数名也会被后续模块遮住；
        两者都在既有平铺模块运行时被调用，必须各自包一层 */
-    "core/sand-say.js", "core/holidays.js"]));
+    "core/sand-say.js", "core/holidays.js",
+    /* 侧栏摆件顶层 function defs 与 lib/caliber-help 的同名函数撞车：平铺后口径说明的版本
+       覆盖摆件版，外观面板渲染 7 个形态时直接抛「defs is not a function」，面板空白。
+       真实 ESM 各文件独立作用域，没有这个问题 */
+    "core/side-ornament.js"]));
 
 /** 收集模块的导出表：外部名 → 本地标识符（export { open as openSearchPalette }） */
 function collectExports(code) {

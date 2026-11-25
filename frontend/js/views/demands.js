@@ -4200,8 +4200,9 @@ function loadDemandDocs(layer, id, reqId, writable){
     linked.forEach(function(doc){ linkedIds[doc.id] = true; });
     box.innerHTML = linked.length ? linked.map(function(doc){
       var md = doc.format === "markdown";
+      var iconText = md ? "MD" : (doc.format === "sheet" ? "XLS" : "HTML");
       return '<div class="attach-item dem-doc-item">'
-        + '<span class="att-icon">' + (md ? "MD" : "HTML") + '</span>'
+        + '<span class="att-icon">' + iconText + '</span>'
         + '<span class="att-name"><button class="link-cell" type="button" data-dem-doc-open="' + esc(doc.id) + '">' + esc(doc.title) + '</button></span>'
         + '<span class="att-size">' + esc(docTypeName(doc.docType)) + '</span>'
         + '<span class="att-acts">' + (writable

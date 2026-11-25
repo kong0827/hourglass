@@ -4,9 +4,11 @@
    工作区本身仍由 phase.js 的同一份代码挂载，校验、留痕、幂等都没有第二套。 */
 
 import { API } from "../core/api.js";
+import { icon } from "../core/icons.js";
 import { showView } from "../core/router.js";
 import { rt } from "../core/state.js";
 import { UI, esc } from "../core/ui.js";
+import { planStatusTagHTML } from "../lib/format.js";
 import { mountReleaseWorkspace, takeReleaseIntent } from "./phase.js";
 
 var TAB_KEYS = ["plan", "actual", "history", "content"];
@@ -95,8 +97,15 @@ function fmtPlanTime(iso){
   function p(n){ return (n < 10 ? "0" : "") + n; }
   return (d.getMonth() + 1) + "月" + d.getDate() + "日 " + p(d.getHours()) + ":" + p(d.getMinutes());
 }
-function planStatusText(st){
-  return { ready:"就绪", completed:"已完成", canceled:"已取消", draft:"草稿" }[st] || st || "—";
+/* 后端的项目/版本是「 / 」串：最多展示两枚，其余收进 +N，完整列表放 title */
+function planNamesHTML(text){
+  var list = String(text || "").split(" / ").map(function(s){ return s.trim(); }).filter(Boolean);
+  if(!list.length) return '<span class="release-chip is-empty">—</span>';
+  var shown = list.slice(0, 2), rest = list.length - shown.length;
+  return '<span class="release-chips">'
+    + shown.map(function(n){ return '<span class="release-chip" title="' + esc(n) + '">' + esc(n) + '</span>'; }).join("")
+    + (rest > 0 ? '<span class="release-chip is-more" title="' + esc(list.slice(shown.length).join("、")) + '">+' + rest + '</span>' : "")
+    + '</span>';
 }
 function renderRecentPlans(rows){
   var now = Date.now();
@@ -113,27 +122,47 @@ function renderRecentPlans(rows){
   var list = top.map(function(r){
     var late = r.plannedAt && new Date(r.plannedAt).getTime() < now;
     var go = !!(r.versionId && r.reqId);
-    return '<button class="rel-plan-row" type="button"'
-      + (go ? ' data-rel-plan="' + esc(r.versionId) + '" data-rel-req="' + esc(r.reqId) + '"' : ' disabled')
-      + ' title="' + (go ? "打开该版本的发布工作台" : "该计划缺少版本关联，请到发布日程查看") + '">'
-      + '<span class="rp-t">' + esc(fmtPlanTime(r.plannedAt)) + (late ? ' <span class="tag tag-warning">已过期</span>' : '') + '</span>'
-      + '<span class="rp-p" title="' + esc(r.projectNames || r.projectName || "") + '">' + esc(r.projectNames || r.projectName || "—") + '</span>'
-      + '<span class="rp-v" title="' + esc(r.versionNames || r.versionName || "") + '">' + esc(r.versionNames || r.versionName || "—") + '</span>'
-      + '<span class="rp-s">' + esc(planStatusText(r.status)) + '</span>'
-      + '</button>';
+    var inner = '<span class="rp-t">' + esc(fmtPlanTime(r.plannedAt))
+      + (late ? ' <span class="tag tag-warning">已过期</span>' : '') + '</span>'
+      + '<span class="rp-p">' + planNamesHTML(r.projectNames || r.projectName) + '</span>'
+      + '<span class="rp-v">' + planNamesHTML(r.versionNames || r.versionName) + '</span>'
+      + '<span class="rp-s">' + planStatusTagHTML(r.status) + '</span>'
+      + '<span class="rp-go">' + (go ? '进入' + icon("right", 12) : '缺少版本关联') + '</span>';
+    if(!go) return '<div class="rel-plan-row is-disabled" title="该计划缺少版本关联，请到发布日程查看">' + inner + '</div>';
+    /* 整行进的是主版本的发布工作台，但要把当前这一行的计划一起带过去：
+       同一版本下可能有多份计划，不带的话打开的是默认计划，看起来像点错了行 */
+    var verName = r.versionName || r.versionId;
+    var title = Number(r.versionCount) > 1
+      ? "该计划含 " + r.versionCount + " 个版本，从「" + verName + "」进入发布工作台"
+      : "打开「" + verName + "」的发布工作台";
+    var hash = "#/release?id=" + encodeURIComponent(r.versionId) + "&reqId=" + encodeURIComponent(r.reqId)
+      + (r.id ? "&plan=" + encodeURIComponent(r.id) : "");
+    return '<a class="rel-plan-row" data-rel-plan="' + esc(r.versionId) + '" data-rel-req="' + esc(r.reqId) + '"'
+      + (r.id ? ' data-rel-plan-id="' + esc(r.id) + '"' : '')
+      + ' href="' + esc(hash) + '"'
+      + ' title="' + esc(title) + '">' + inner + '</a>';
   }).join("");
+  var countText = rows.length > top.length
+    ? "共 " + rows.length + " 份未完成 · 列出最近 " + top.length + " 份"
+    : rows.length + " 份未完成";
   host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>最近未完成的发布计划</h3>'
-    + '<span class="meta-right">' + rows.length + ' 份未完成</span></div>'
+    + '<span class="meta-right">' + countText + '</span></div>'
     + (top.length
-      ? '<div class="rel-plan-list">' + list + '</div>'
-      : '<div class="stack"><p class="hint">还没有未完成的发布计划。</p></div>')
-    + '<div class="stack" style="padding:10px 12px 12px"><p class="hint">发布计划按版本创建；历史发布记录在该版本的「发布记录」里。</p>'
+      ? '<div class="rel-plan-head" aria-hidden="true"><span>计划时间</span><span>项目</span><span>版本</span><span>状态</span><span class="rp-go">操作</span></div>'
+        + '<div class="rel-plan-list">' + list + '</div>'
+      : '<p class="hint">还没有未完成的发布计划。</p>')
+    + '<div class="rel-plan-foot"><p class="hint">发布计划按版本创建；历史发布记录在该版本的「发布记录」里。</p>'
     + '<div class="rel-empty-acts"><button class="btn sm" type="button" data-release-empty-back>去版本页创建计划</button>'
     + '<button class="btn sm ghost" type="button" data-release-empty-all>查看全部版本</button></div></div>'
     + '</div></div>';
   host.querySelectorAll("[data-rel-plan]").forEach(function(b){
-    b.addEventListener("click", function(){
-      openReleasePage({ id: b.getAttribute("data-rel-plan"), reqId: b.getAttribute("data-rel-req") });
+    b.addEventListener("click", function(e){
+      /* 保留 href 交给浏览器：右键 / 中键 / Ctrl(Cmd)+左键 仍能新标签页打开；
+         只有普通左键（含键盘 Enter，button 为 0）走站内切换，避免整页刷新 */
+      if(e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      openReleasePage({ id: b.getAttribute("data-rel-plan"), reqId: b.getAttribute("data-rel-req"),
+        planId: b.getAttribute("data-rel-plan-id") });
     });
   });
   var back = host.querySelector("[data-release-empty-back]");

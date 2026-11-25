@@ -96,12 +96,19 @@ try{
   await waitFor(`import("./js/core/state.js").then(function(s){return !!s.rt.currentUser && !!s.rt.reqsLoaded;})`, "清偏好后初始化", 25000);
 
   let s = await snapshot();
-  check(s.slot && s.hidden === false, "侧栏摆件默认显示");
-  check(s.cls === "hg", "默认渲染经典沙漏");
+  check(s.slot && s.hidden === true && s.on === false, "清掉偏好后默认关闭（槽位隐藏）");
+  check(s.cls === null, "默认关闭时不渲染形态");
+  check(s.reason === true, "默认关闭时给出说明");
 
   await evaluate(`import("./js/core/router.js").then(function(m){ m.showView("profile"); })`);
   await waitFor("document.querySelectorAll('#meOrnGrid [data-orn]').length===7", "外观面板");
   check(true, "个人设置出现「外观」7 个形态");
+
+  await evaluate(`document.getElementById('meOrnOn').click(); true`);
+  await sleep(350);
+  s = await snapshot();
+  check(s.on === true && s.hidden === false, "打开开关后摆件显示");
+  check(s.cls === "hg", "打开后渲染经典沙漏");
 
   await evaluate(`document.querySelector('#meOrnGrid [data-orn=jelly]').click(); true`);
   await sleep(350);
@@ -126,7 +133,11 @@ try{
   await evaluate(`document.getElementById('meOrnReset').click(); true`);
   await sleep(350);
   s = await snapshot();
-  check(s.cls === "hg" && s.pref === '{"on":true,"pick":"classic"}', "恢复默认回到经典");
+  check(s.on === false && s.hidden === true, "恢复默认回到关闭");
+  check(s.pref === '{"on":false,"pick":"classic"}', "恢复默认偏好：" + s.pref);
+
+  await evaluate(`document.getElementById('meOrnOn').click(); true`);
+  await sleep(350);
 
   /* 矮窗口回归：以前 max-height:779px 直接 display:none，开关却还是开着的 */
   await viewport(1440, 760);

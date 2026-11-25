@@ -119,11 +119,19 @@ body.ss-on .side-ornament{pointer-events:auto;}
   background:var(--surface-sunken);font-size:11.5px;color:var(--text-3);
 }
 .ss-preview:empty::after{content:"（当前没有可显示的一句话）";color:var(--text-3);}
+/* 「只在悬停」在摆件关闭时没有落点：在选择下方就地说明，不额外占一行标签 */
+.ss-orn-note{
+  margin:8px 0 0 166px;padding:7px 10px;
+  border:1px solid var(--warning-border);border-radius:var(--r-sm);
+  background:var(--warning-soft);color:var(--warning-fg);
+  font-size:12px;line-height:1.6;
+}
 
 @media (max-width:720px){
   .ss-line{flex-wrap:wrap;gap:6px;}
   .ss-row{flex-direction:column;align-items:flex-start;gap:6px;}
   .ss-row .ss-lb{width:auto;flex:none;}
+  .ss-orn-note{margin-left:0;}
 }
 
 @media (prefers-reduced-motion:reduce){

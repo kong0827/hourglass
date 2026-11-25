@@ -635,6 +635,7 @@ body[data-view="messages"] #btnNew{display:none !important;}
 body[data-view="testcases"] #btnNew{display:none !important;}
 /* 查看者全局只读：新建入口不展示（抽屉入口另有拦截提示） */
 body[data-ws-role="viewer"] #btnNew,
+body[data-ws-role="viewer"] #btnVerNew,
 body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 /* 只读横幅：常驻在页头下方，解释写入口为何隐藏；不占操作位 */
 .readonly-banner{
@@ -6430,6 +6431,26 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 }
 @media (prefers-reduced-motion: reduce){.reqdoc-univerwrap.is-loading::before{animation:none}}
 
+/* ---------------- 表格文档：Univer 工作簿 ---------------- */
+.reqdoc-sheetwrap{
+  position:relative;flex:1;min-width:0;height:calc(100vh - 236px);min-height:520px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;
+}
+.reqdoc-sheetwrap.is-loading::after{
+  content:"";position:absolute;left:14px;right:14px;top:14px;height:360px;border-radius:var(--r-sm);
+  background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 37%,var(--surface-2) 63%);
+  background-size:400% 100%;animation:reqdoc-skel 1.2s ease infinite;z-index:1;
+}
+.univer-sheet-host{position:absolute;inset:0;}
+/* 只读：1.3.0 的表格菜单/工具条在 <header> 里（Tailwind 工具类无法按类名命中） */
+.univer-sheet-readonly header{display:none;}
+/* 阅读页：表格自动撑满正文区，不再套文档缩放的 CSS zoom（会错位画布指针） */
+#reqDocReaderBody.rrd-sheet{
+  zoom:1;width:100%;padding:0;overflow:hidden;position:relative;
+  height:calc(100vh - 300px);min-height:460px;
+}
+@media (prefers-reduced-motion: reduce){.reqdoc-sheetwrap.is-loading::after{animation:none}}
+
 /* Markdown 预览排版：跟 HTML 正文的阅读节奏保持一致 */
 .markdown-body{font-size:14px;line-height:1.85;color:var(--text);word-wrap:break-word;}
 .markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4{
@@ -6766,8 +6787,11 @@ html[data-theme="dark"] .project-table-row > .project-row-acts{box-shadow:-8px 0
 .rs-drag:active{cursor:grabbing;}
 .rs-node.dragging{opacity:.5;background:var(--primary-soft);}
 .rs-drop-line{height:2px;border-radius:1px;background:var(--primary);margin:1px 0;pointer-events:none;}
-/* 拖拽目标高亮：套在行/节点上=拖入该文档下；套在项目标题上=拖回项目根级 */
+/* 拖拽目标高亮：套在行/节点上=拖入该文档下；套在分类行=拖进该目录；套在项目标题上=拖回项目根级
+   分类行自带 :hover 底色且规则在后面，这里补 :hover 组合，拖动时不被悬停底色盖掉 */
 .reqdoc-row.drop-into,.rs-node.drop-into,
+.reqdoc-cat.drop-into,.rs-cat.drop-into,
+.reqdoc-cat.drop-into:hover,.rs-cat.drop-into:hover,
 .reqdoc-proj-head.drop-into,.rs-proj-head.drop-into{
   background:var(--primary-soft);
   box-shadow:inset 0 0 0 1.5px var(--primary);
@@ -8987,21 +9011,40 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .release-page-bar{padding:0 0 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 .release-page-bar .toolbar-meta b{font-weight:650;color:var(--text);}
 
-/* 无参数进入发布工作台：跨项目「最近发布计划」列表（点行进对应版本工作台） */
+/* 无参数进入发布工作台：跨项目「最近发布计划」列表（整行可点，进对应版本工作台）
+   用表头 + 行分隔线立住「列表」观感；行尾常驻「进入 ›」说明整行可点，而不是靠悬停才发现 */
+.rel-plan-head,.rel-plan-row{display:grid;grid-template-columns:158px minmax(140px,1.1fr) minmax(140px,1fr) 84px 92px;gap:12px;align-items:center;}
+.rel-plan-head{height:34px;padding:0 10px;border-bottom:1px solid var(--border);border-radius:var(--r-sm) var(--r-sm) 0 0;background:var(--tbl-head);font-size:11px;font-weight:550;color:var(--text-3);}
+.rel-plan-head .rp-go{justify-self:end;}
 .rel-plan-list{display:flex;flex-direction:column;}
-.rel-plan-row{display:grid;grid-template-columns:140px minmax(0,1fr) minmax(0,1fr) 64px;gap:12px;align-items:center;width:100%;text-align:left;padding:11px 14px;border:0;border-bottom:1px solid var(--border);background:none;cursor:pointer;font:inherit;color:var(--text);}
-.rel-plan-row:last-child{border-bottom:0;}
-.rel-plan-row:hover:not(:disabled){background:var(--primary-soft);}
-.rel-plan-row:disabled{cursor:default;opacity:.6;}
-.rel-plan-row .rp-t{font-variant-numeric:tabular-nums;white-space:nowrap;}
-.rel-plan-row .rp-p,.rel-plan-row .rp-v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2);font-size:13px;}
-.rel-plan-row .rp-s{justify-self:end;}
+.rel-plan-row{padding:11px 10px;border-bottom:1px solid var(--border);font:inherit;color:var(--text);text-decoration:none;}
+a.rel-plan-row{cursor:pointer;transition:background .12s ease;}
+a.rel-plan-row:hover{background:var(--primary-soft);}
+a.rel-plan-row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.rel-plan-row.is-disabled{cursor:default;opacity:.6;}
+.rel-plan-row .rp-t{display:flex;align-items:center;gap:4px;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.rel-plan-row .rp-p,.rel-plan-row .rp-v{min-width:0;overflow:hidden;}
+.rel-plan-row .rp-p .release-chip:not(.is-more):not(.is-empty){background:var(--primary-soft);border-color:transparent;color:var(--primary-fg);font-weight:550;}
+.rel-plan-row .release-chips{max-width:100%;min-width:0;}
+.rel-plan-row .release-chip{flex:0 1 auto;min-width:0;max-width:100%;}
+.rel-plan-row .rp-s{justify-self:start;}
+.rel-plan-row .rp-go{justify-self:end;display:inline-flex;align-items:center;gap:2px;font-size:12px;font-weight:550;color:var(--primary-fg);white-space:nowrap;}
+.rel-plan-row .rp-go svg{flex:0 0 auto;transition:transform .12s ease;}
+a.rel-plan-row:hover .rp-go svg{transform:translateX(2px);}
+.rel-plan-row.is-disabled .rp-go{color:var(--text-3);font-weight:500;}
+.rel-plan-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:14px;}
+.rel-plan-foot .hint{flex:1 1 260px;margin:0;}
 .rel-empty-acts{display:flex;flex-wrap:wrap;gap:8px;}
+.rel-plan-foot .rel-empty-acts{margin-left:auto;}
 @media (max-width:639px){
-  .rel-plan-row{grid-template-columns:1fr auto;grid-auto-rows:auto;gap:4px 10px;padding:12px 14px;}
-  .rel-plan-row .rp-p{grid-column:1;grid-row:2;}
+  .rel-plan-head{display:none;}
+  .rel-plan-row{grid-template-columns:minmax(0,1fr) auto;grid-auto-rows:auto;gap:6px 10px;padding:12px 10px;}
+  .rel-plan-row .rp-s{grid-column:2;grid-row:1;justify-self:end;}
+  .rel-plan-row .rp-p{grid-column:1 / -1;grid-row:2;}
   .rel-plan-row .rp-v{grid-column:1;grid-row:3;}
-  .rel-plan-row .rp-s{grid-column:2;grid-row:1;}
+  .rel-plan-row .rp-go{grid-column:2;grid-row:3;justify-self:end;}
+  .rel-plan-foot .hint{flex-basis:100%;}
+  .rel-plan-foot .rel-empty-acts{margin-left:0;}
 }
 
 /* ===== 页内 3 步条：计划范围 → 实际发布 → 历史与内容（原型 REL-1） ===== */
@@ -11253,7 +11296,7 @@ button.vl-rel:hover{color:var(--primary-fg);text-decoration:underline;text-under
 .vl-foot-link{font-size:12px;white-space:nowrap;}
 /* 未排版本只是提示，不是待办：中性底 + 警示图标，避免抢走焦点卡的主色 */
 .vl-unbound-banner{
-  display:flex;align-items:center;gap:9px;margin-bottom:10px;padding:9px 13px;
+  display:flex;align-items:center;gap:9px;margin:10px 0;padding:9px 13px;
   border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);
   font-size:12px;color:var(--text-2);
 }
@@ -15939,7 +15982,6 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] #tcSelFiltered{flex:1 1 100%;justify-content:center;}
 [data-layout="mobile"] .tc-bulkbar{flex:1 1 100%;margin-left:0;}
 [data-layout="mobile"] .tc-bulk-acts{flex:1 1 100%;}
-[data-layout="mobile"] .tc-menu{top:auto;bottom:32px;}
 [data-layout="mobile"] .tc-seg-head{gap:6px;padding:var(--space-2);}
 [data-layout="mobile"] .tc-seg-name{flex:1 1 auto;max-width:100%;}
 [data-layout="mobile"] .tc-seg-bar{flex:1 1 60px;}
@@ -16887,11 +16929,19 @@ body.ss-on .side-ornament{pointer-events:auto;}
   background:var(--surface-sunken);font-size:11.5px;color:var(--text-3);
 }
 .ss-preview:empty::after{content:"（当前没有可显示的一句话）";color:var(--text-3);}
+/* 「只在悬停」在摆件关闭时没有落点：在选择下方就地说明，不额外占一行标签 */
+.ss-orn-note{
+  margin:8px 0 0 166px;padding:7px 10px;
+  border:1px solid var(--warning-border);border-radius:var(--r-sm);
+  background:var(--warning-soft);color:var(--warning-fg);
+  font-size:12px;line-height:1.6;
+}
 
 @media (max-width:720px){
   .ss-line{flex-wrap:wrap;gap:6px;}
   .ss-row{flex-direction:column;align-items:flex-start;gap:6px;}
   .ss-row .ss-lb{width:auto;flex:none;}
+  .ss-orn-note{margin-left:0;}
 }
 
 @media (prefers-reduced-motion:reduce){
@@ -17485,6 +17535,15 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
    views-review.css · 周回顾（团队 / 我）
    团队卡片沿用原型 weekly-review-2026-11-20 的结构与令牌，类名统一 rv- 前缀
    ========================================================================== */
+
+/* 个人回顾：分区之间沿用团队视图的 12px 节奏（全局 .panel + .panel 为 0） */
+#reviewPersonalView{display:flex;flex-direction:column;gap:12px}
+
+/* 表格首尾列与卡片内边距对齐（卡片头 / 脚注均为 16px），避免首列贴住圆角边框 */
+.rv-tbl th:first-child,
+.rv-tbl td:first-child{padding-left:16px}
+.rv-tbl th:last-child,
+.rv-tbl td:last-child{padding-right:16px}
 
 /* -------------------- 范围条 -------------------- */
 .rv-scope-note{
@@ -19417,7 +19476,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
                   </button>
                 </div>
               </div>
-              <button class="btn sm primary is-dup-action" type="button" id="btnVerNew">+ 新建版本</button>
+              <button class="btn sm primary" type="button" id="btnVerNew">+ 新建版本</button>
             </span>
           </div>
           <div class="scope-strip" id="phaseScopeStrip" hidden>
@@ -19678,7 +19737,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
               </button>
               <button class="btn sm primary" type="button" id="reqDocSave">保存</button>
             </span>
-            <input type="file" id="reqDocImportFile" hidden accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
+            <input type="file" id="reqDocImportFile" hidden accept=".docx,.doc,.md,.markdown,.txt,.html,.htm,.xlsx">
           </div>
 
           <div class="reqdoc-editwrap">
@@ -19687,6 +19746,8 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
             </div>
             <!-- 在线文档正文：Univer 挂载点（工具栏/画布由编辑器自己渲染） -->
             <div class="reqdoc-univerwrap" id="reqDocUniverBody" hidden></div>
+            <!-- 表格正文：Univer 工作簿挂载点（电子表格） -->
+            <div class="reqdoc-sheetwrap" id="reqDocSheetBody" hidden></div>
             <!-- Markdown 正文：源码 / 分屏 / 预览三种视图，预览在浏览器本地渲染 -->
             <div class="reqdoc-mdwrap" id="reqDocMdBody" hidden>
               <div class="reqdoc-mdtoolbar">
@@ -19830,6 +19891,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
                     <select id="newReqDocFormat">
                       <option value="markdown">Markdown（默认，可导入导出）</option>
                       <option value="univer">富文本</option>
+                      <option value="sheet">表格（Excel）</option>
                     </select>
                   </label>
                 </div>
@@ -19844,8 +19906,8 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
                 <div class="nd-src-body" id="newReqDocFileBody" hidden>
                   <label class="doc-pick">
                     <span>选择文件</span>
-                    <input id="newReqDocFile" type="file" accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
-                    <small>支持 Word / Markdown / TXT / HTML，导入前可预览</small>
+                    <input id="newReqDocFile" type="file" accept=".docx,.doc,.md,.markdown,.txt,.html,.htm,.xlsx">
+                    <small>支持 Word / Markdown / TXT / HTML / Excel(.xlsx)，导入前可预览</small>
                   </label>
                   <div class="doc-import-inline" id="newReqDocPreview" hidden>
                     <div class="doc-import-inline-bar">
@@ -21989,7 +22051,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
                 <h3>外观</h3>
                 <span class="meta-right">只影响你的界面 · 保存在本机</span>
               </div>
-              <p class="set-hint">左侧导航底部的小沙漏只是装饰，不占空间数据。可以关掉，也可以换一个形态；开关和选择只保存在这台设备的浏览器里，换设备或清缓存后回到默认。「沙漏说」是沙漏旁的一句话，可在下方单独关闭。</p>
+              <p class="set-hint">左侧导航底部的小沙漏只是装饰，不占空间数据，默认关闭；需要时打开开关，也可以换一个形态。开关和选择只保存在这台设备的浏览器里，换设备或清缓存后回到默认。「沙漏说」是沙漏旁的一句话，可在下方单独关闭。</p>
               <div class="ai-assist-row">
                 <span class="ai-assist-ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 3.2h8.8M5.6 16.8h8.8"/><path d="M6.4 3.2c0 3.4 3.6 4.2 3.6 6.8s-3.6 3.4-3.6 6.8"/><path d="M13.6 3.2c0 3.4-3.6 4.2-3.6 6.8s3.6 3.4 3.6 6.8"/></svg></span>
                 <div class="ai-assist-txt">
@@ -22010,7 +22072,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
               </div>
               <div class="set-actions">
                 <button class="btn ghost" type="button" id="meOrnReset">恢复默认</button>
-                <span class="foot-note">默认显示「经典流淌」。系统开启「减少动态效果」时会停在静态一帧。</span>
+                <span class="foot-note">默认关闭；打开后显示「经典流淌」。系统开启「减少动态效果」时会停在静态一帧。</span>
               </div>
 
               <div class="ss-sec" id="me-sandsay">
@@ -22045,6 +22107,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
                     </div>
                   </div>
                 </div>
+                <p class="ss-orn-note" id="meSsOrnNote" hidden>侧栏摆件已关闭，「只在悬停」不会出现在任何位置。打开上方的「显示侧栏摆件」，或改用「常驻显示」。</p>
                 <div class="ss-row">
                   <div class="ss-lb">预览<small>当前时间段的效果</small></div>
                   <div class="ss-ctl"><div class="ss-preview" id="meSsPreview" aria-live="polite"></div></div>
@@ -23088,12 +23151,26 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
   ];
 
   var releasePlans = [
-    { id: "P1", planNo: "PL-2026-0012", reqId: "R1", versionIds: ["V1"], versionCount: 1, releasedVersionCount: 0,
+    { id: "P1", planNo: 12, reqId: "R1", versionId: "V1", versionIds: ["V1"], versionCount: 1, releasedVersionCount: 0,
+      projectNames: "流程引擎", versionNames: "1.2 权限改造",
       plannedAt: shift(3) + "T20:00:00", status: "ready", environment: "production", coverage: "full",
-      plannedTaskIds: ["K1", "K2", "K7", "K8", "K9", "K11"], plannedDemandIds: ["D1"], revision: 3 }
+      plannedTaskIds: ["K1", "K2", "K7", "K8", "K9", "K11"], plannedDemandIds: ["D1"], revision: 3 },
+    { id: "P2", planNo: 13, reqId: "R2", versionId: "V7", versionCount: 1, releasedVersionCount: 0,
+      projectNames: "结算改造", versionNames: "2.0 结算升级",
+      plannedAt: shift(-1) + "T09:30:00", status: "ready", environment: "production", coverage: "partial",
+      plannedTaskIds: [], plannedDemandIds: [], revision: 1 },
+    { id: "P3", planNo: 14, reqId: "R1", versionId: "V2", versionCount: 1, releasedVersionCount: 0,
+      projectNames: "流程引擎", versionNames: "1.3 权限收官",
+      plannedAt: shift(10) + "T14:00:00", status: "draft", environment: "staging", coverage: "unknown",
+      plannedTaskIds: [], plannedDemandIds: [], revision: 0 },
+    /* 多版本计划的样例：芯片收成「2 枚 + N」，行仍只从主版本进入 */
+    { id: "P4", planNo: 15, reqId: "R1", versionId: "V1", versionIds: ["V1", "V2", "V7"], versionCount: 3, releasedVersionCount: 0,
+      projectNames: "流程引擎 / 结算改造", versionNames: "1.2 权限改造 / 1.3 权限收官 / 2.0 结算升级",
+      plannedAt: shift(21) + "T10:00:00", status: "draft", environment: "production", coverage: "unknown",
+      plannedTaskIds: [], plannedDemandIds: [], revision: 0 }
   ];
   var releaseRecords = [
-    { id: "RR1", releaseNo: "REL-0011", reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: "P1",
+    { id: "RR1", releaseNo: 11, reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: "P1",
       environment: "production", operation: "deploy", result: "success",
       occurredAt: ts(-6, 20, 10), publishedOn: shift(-6), recordedAt: ts(-6, 20, 12), planPlannedAt: ts(-6, 20, 0),
       targetKeys: ["app-web", "gateway"], coverage: "full", artifactRef: "hourglass-web@1.2.0",
@@ -23105,7 +23182,7 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
         { taskId: "K2", taskItemNo: "WI-102", title: "导出 CSV 补工时列", demandId: "D1", demandNo: "REQ-021", demandTitle: "权限中台统一鉴权",
           ownerName: "我", completedAt: ts(-8, 16, 30), disposition: "已发布" }
       ] },
-    { id: "RR2", releaseNo: "REL-0010", reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: null,
+    { id: "RR2", releaseNo: 10, reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: null,
       environment: "staging", operation: "deploy", result: "failed",
       occurredAt: ts(-9, 15, 20), publishedOn: shift(-9), recordedAt: ts(-9, 15, 26),
       targetKeys: ["staging"], coverage: "partial", artifactRef: "hourglass-web@1.2.0-rc3",
@@ -23779,6 +23856,10 @@ details[open] .rv-rel-chev{transform:rotate(180deg)}
         return { id: b.id, name: b.name, status: b.status, targetBranch: b.targetBranch, reqId: i === 2 ? "R2" : "R1" };
       }).filter(function (b) { return !bpoProject || b.reqId === bpoProject; });
       data = { items: bpoRows, total: bpoRows.length, hasMore: false };
+    } else if (clean === "/api/release-plan-tasks") {
+      /* 多版本计划的候选池：生产返回工作项数组，前端直接 forEach；
+         回空对象会抛 "source.forEach is not a function"，计划页签整块空白 */
+      data = tasks;
     } else if (clean === "/api/manager/workload") {
       data = mockWorkload(u);
     } else if (/^\/api\/projects\/[A-Za-z0-9_-]+\/release-policy$/.test(clean)) {
@@ -26171,6 +26252,12 @@ function saveMode(wsId, mode){
   }
   function openModal(m, focusSel) {
     if (!m) return;
+    /* 静态弹窗写在某个 .view 里时只在该视图激活时可见。从别的视图打开（版本详情 → 编辑版本、
+       项目列表 → 新建文档）会挂在 display:none 的视图下，表现为「点了没反应」；打开时挪到 body。 */
+    var ownerView = m.closest ? m.closest(".view") : null;
+    if (ownerView && !ownerView.classList.contains("on") && m.parentNode !== document.body) {
+      document.body.appendChild(m);
+    }
     /* 静态弹窗的按钮接线可能在覆盖层注入前就跑过一次：开弹窗时补接，见 wire() */
     wire();
     /* 所有弹窗共用同一套：焦点陷阱、遮罩关闭、焦点恢复；不再依赖手工在白名单里登记 */
@@ -40915,12 +41002,13 @@ function handleDeepLink(){
     openTaskById(id);
     return;
   }
-  /* 助手「新建工作项」入口：#/board?new=1 直接打开新建抽屉 */
-  if(hashParam("new") === "1"){
+  /* 助手「新建工作项」入口只属于看板：#/board?new=1 直接打开新建抽屉。
+     其他视图的 ?new=1 是全局「新建」菜单的跨视图创建参数（版本 / 需求 / 用例 / 文档 / 分支），
+     由目标视图进入时自行消费；这里抢先把参数清掉会把「新建版本」等误开成新建任务 */
+  if(activeView === "board" && hashParam("new") === "1"){
     stripHashParam("new");
     if(!canCreateNow()){ toast("当前没有可写的项目，无法新建工作项；请联系空间主或管理员分配项目", "warn"); return; }
-    if(activeView === "board"){ openTaskDrawer("backlog"); return; }
-    showView("board").then(function(){ openTaskDrawer("backlog"); });
+    openTaskDrawer("backlog");
   }
 }
 function openDuePopover(anchor, taskId){
@@ -52063,9 +52151,10 @@ function boot(){
   UI.wireTooltips(document);
 
   var deepTaskId = hashParam("task");   // 必须在任何 hash 改写之前抓取（O-3）
-  var deepNewTask = hashParam("new") === "1";   // 助手「新建工作项」入口
   /* 空 hash 固定落「我的工作」；有 hash 说明是刷新、收藏或分享链接，尊重原视图 */
   var startView = viewFromHash();
+  /* 助手「新建工作项」入口只认看板；其他视图的 ?new=1 属于全局「新建」菜单的跨视图创建参数 */
+  var deepNewTask = startView === "board" && hashParam("new") === "1";
   /* 工作页深链带 query：空 hash 才落默认视图，带参数时保留原 hash */
   var startHash = String(window.location.hash || "");
   var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands" || startView === "version" || startView === "release" || startView === "requirements" || startView === "dochistory" || startView === "phase")
@@ -52115,7 +52204,7 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
   showBoardSkeleton();
   initAssistant();
   /* 侧栏摆件是纯装饰：首屏之后再挂，不占关键路径 */
-  import("./core/side-ornament.js").then(function(m){ m.initSideOrnament(); }).catch(function(){});
+  Promise.resolve(__NS["core/side-ornament.js"]).then(function(m){ m.initSideOrnament(); }).catch(function(){});
   /* 沙漏说同样在本机计算、纯展示：失败也不影响主流程 */
   Promise.resolve(__NS["core/sand-say.js"]).then(function(m){ m.initSandSay(); }).catch(function(){});
   loadBoard({animate:true}).then(function(){
@@ -53035,6 +53124,438 @@ function openImportDialog(kind, opts) {
   UI.openModal(layer, "#impPick");
 }
 
+/* ---- core/side-ornament.js ---- */
+__NS["core/side-ornament.js"] = (function(){
+/* core/side-ornament · 侧栏 72px 装饰摆件
+ *
+ * 纯装饰，不是控件：容器 aria-hidden + pointer-events:none，不带进度、不带入口。
+ * 个人偏好只存本机（ds.ornament.v1），默认关闭；只有手动打开过才显示。不写空间配置、不走接口。
+ * 形态：经典流淌 + 弹跳 / 水母 / 蜗牛 / 奔跑 / 潮汐 / 喷嚏。
+ * 导航一旦需要滚动就让位（不挤导航）；矮窗口、收起态、移动端由 ornament.css 处理。
+ */
+
+var PREF_KEY = "ds.ornament.v1";
+var seq = 0;
+
+var ORN_OPTIONS = [
+  { key:"classic", name:"经典流淌", dur:"默认 · 14s 换沙" },
+  { key:"hop", name:"弹跳小沙漏", dur:"2.6s / 跳" },
+  { key:"jelly", name:"沙漏水母", dur:"5.2s / 漂" },
+  { key:"snail", name:"沙漏蜗牛", dur:"3.2s / 步" },
+  { key:"run", name:"奔跑的沙漏", dur:"0.6s / 步" },
+  { key:"tide", name:"潮汐沙漏", dur:"6.4s / 涨落" },
+  { key:"sneeze", name:"打喷嚏的沙漏", dur:"5.2s / 次" }
+];
+
+var orn = readPref();
+
+function readPref(){
+  var next = { on:false, pick:"classic" };
+  try{
+    var raw = JSON.parse(localStorage.getItem(PREF_KEY) || "null");
+    if(raw && typeof raw === "object"){
+      next.on = raw.on === true;
+      if(raw.pick) next.pick = raw.pick;
+    }
+  }catch(e){ /* 受限环境 / 坏数据：回落默认 */ }
+  if(!ORN_OPTIONS.some(function(o){ return o.key === next.pick; })) next.pick = "classic";
+  return next;
+}
+function savePref(){
+  try{ localStorage.setItem(PREF_KEY, JSON.stringify(orn)); }catch(e){ /* 忽略 */ }
+}
+
+function setOrnamentPref(patch){
+  var next = { on:patch && patch.on !== undefined ? !!patch.on : orn.on,
+               pick:patch && patch.pick || orn.pick };
+  if(!ORN_OPTIONS.some(function(o){ return o.key === next.pick; })) next.pick = "classic";
+  orn = next;
+  savePref();
+  renderSlot(true);
+  syncSettings();
+  window.dispatchEvent(new CustomEvent("ornament:change", { detail:{ on:orn.on, pick:orn.pick } }));
+}
+
+/* ==================== SVG 构造 ==================== */
+function uid(){ seq++; return "orn" + seq; }
+
+var TOP = "M2 4C3.53 10.6 9.64 20.8 18.04 31C19.9 33.1 20.7 34 21.1 34L24.9 34C25.3 34 25.9 33.1 27.96 31C36.36 20.8 42.47 10.6 44 4Z";
+var BOT = "M2 64C3.53 57.4 9.64 47.2 18.04 37C19.9 34.9 20.7 34 21.1 34L24.9 34C25.3 34 25.9 34.9 27.96 37C36.36 47.2 42.47 57.4 44 64Z";
+var WL = "M2 4C3.53 10.6 9.64 20.8 18.04 31C19.9 33.1 20.7 34 21.1 34C20.7 34 19.9 34.9 18.04 37C9.64 47.2 3.53 57.4 2 64";
+var WR = "M44 4C42.47 10.6 36.36 20.8 27.96 31C25.9 33.1 25.3 34 24.9 34C25.3 34 25.9 34.9 27.96 37C36.36 47.2 42.47 57.4 44 64";
+
+function hourglassSVG(){
+  var id = uid();
+  var t = id + "t", b = id + "b", sg = id + "s", gf = id + "f", gs = id + "g";
+  return "<svg class=\"hg\" viewBox=\"0 0 46 68\" aria-hidden=\"true\" focusable=\"false\" style=\"--hg-sg:url(#" + sg + ")\">" +
+    "<defs>" +
+      "<clipPath id=\"" + t + "\"><path d=\"" + TOP + "\"/></clipPath>" +
+      "<clipPath id=\"" + b + "\"><path d=\"" + BOT + "\"/></clipPath>" +
+      "<linearGradient id=\"" + sg + "\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"hg-sf\" offset=\"0\"/><stop class=\"hg-ss\" offset=\"1\"/></linearGradient>" +
+      "<linearGradient id=\"" + gf + "\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"hg-fa\" offset=\"0\"/><stop class=\"hg-fb\" offset=\"1\"/></linearGradient>" +
+      "<linearGradient id=\"" + gs + "\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"hg-aa\" offset=\"0\"/><stop class=\"hg-bb\" offset=\"1\"/></linearGradient>" +
+    "</defs>" +
+    "<ellipse class=\"hg-shadow\" cx=\"23\" cy=\"67\" rx=\"16.4\" ry=\".95\"/>" +
+    "<g class=\"hg-body\">" +
+      "<path class=\"hg-fill\" d=\"" + TOP + "\" fill=\"url(#" + gf + ")\"/>" +
+      "<path class=\"hg-fill\" d=\"" + BOT + "\" fill=\"url(#" + gf + ")\"/>" +
+      "<g clip-path=\"url(#" + t + ")\"><g class=\"hg-level\">" +
+        "<path class=\"hg-sand\" d=\"M0 16.2Q23 21.2 46 16.2V34H0Z\"/>" +
+        "<path class=\"hg-surface\" d=\"M5 16Q23 21.2 41 16\"/>" +
+      "</g></g>" +
+      "<g clip-path=\"url(#" + b + ")\"><path class=\"hg-pile\" d=\"M3.4 64C12.5 58.4 17.6 52.4 23.6 52.4C29.6 52.4 33.5 58.4 42.6 64Z\"/></g>" +
+      "<path class=\"hg-stream-soft\" d=\"M23 36V51.6\"/><path class=\"hg-stream\" d=\"M23 36V51.6\"/>" +
+      "<circle class=\"hg-grain g1\" cx=\"23\" cy=\"39\" r=\".78\"/>" +
+      "<circle class=\"hg-grain g2\" cx=\"22.1\" cy=\"42.6\" r=\".56\"/>" +
+      "<circle class=\"hg-grain g3\" cx=\"23.6\" cy=\"44.4\" r=\".44\"/>" +
+      "<circle class=\"hg-grain g4\" cx=\"22.7\" cy=\"47.2\" r=\".5\"/>" +
+      "<path class=\"hg-gloss\" d=\"M6.4 9.4C6.8 16 9.4 27 12.6 30.2\"/>" +
+      "<path class=\"hg-gloss2\" d=\"M39.6 10C39.2 15.4 37.2 26 34.6 29.2\"/>" +
+      "<path class=\"hg-glass\" d=\"" + WL + "\" stroke=\"url(#" + gs + ")\"/>" +
+      "<path class=\"hg-glass\" d=\"" + WR + "\" stroke=\"url(#" + gs + ")\"/>" +
+      "<ellipse class=\"hg-rim\" cx=\"23\" cy=\"4\" rx=\"21\" ry=\"2.4\"/>" +
+      "<ellipse class=\"hg-rim\" cx=\"23\" cy=\"64\" rx=\"21\" ry=\"2.4\"/>" +
+      "<g class=\"hg-face\">" +
+        "<ellipse class=\"hg-blush\" cx=\"15.2\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/>" +
+        "<ellipse class=\"hg-blush\" cx=\"30.8\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/>" +
+        "<circle class=\"hg-eye\" cx=\"18\" cy=\"10.9\" r=\"1.72\"/>" +
+        "<circle class=\"hg-eye\" cx=\"28\" cy=\"10.9\" r=\"1.72\"/>" +
+        "<circle class=\"hg-eye-hi\" cx=\"17.4\" cy=\"10.3\" r=\".45\"/>" +
+        "<circle class=\"hg-eye-hi\" cx=\"27.4\" cy=\"10.3\" r=\".45\"/>" +
+        "<path class=\"hg-mouth\" d=\"M21 13.9Q23 15.6 25 13.9\"/>" +
+      "</g>" +
+    "</g>" +
+  "</svg>";
+}
+
+function defs(id){
+  return "<defs>" +
+   "<clipPath id=\"" + id + "t\"><path d=\"" + TOP + "\"/></clipPath>" +
+   "<clipPath id=\"" + id + "b\"><path d=\"" + BOT + "\"/></clipPath>" +
+   "<linearGradient id=\"" + id + "s\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"s1\" offset=\"0\"/><stop class=\"s2\" offset=\"1\"/></linearGradient>" +
+   "<linearGradient id=\"" + id + "g\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"g1\" offset=\"0\"/><stop class=\"g2\" offset=\"1\"/></linearGradient>" +
+   "<linearGradient id=\"" + id + "f\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"f1\" offset=\"0\"/><stop class=\"f2\" offset=\"1\"/></linearGradient>" +
+  "</defs>";
+}
+
+function faceMark(){
+  return "<g class=\"face\">" +
+    "<ellipse class=\"blush\" cx=\"15.2\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/><ellipse class=\"blush\" cx=\"30.8\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/>" +
+    "<circle class=\"eye\" cx=\"18\" cy=\"10.9\" r=\"1.72\"/><circle class=\"eye\" cx=\"28\" cy=\"10.9\" r=\"1.72\"/>" +
+    "<circle class=\"eye-hi\" cx=\"17.4\" cy=\"10.3\" r=\".45\"/><circle class=\"eye-hi\" cx=\"27.4\" cy=\"10.3\" r=\".45\"/>" +
+    "<path class=\"mouth\" d=\"M21 13.9Q23 15.6 25 13.9\"/>" +
+  "</g>";
+}
+
+function glassBody(id, opt){
+  opt = opt || {};
+  var top = opt.top || ("<g clip-path=\"url(#" + id + "t)\"><path class=\"sand\" d=\"M0 16.2Q23 21.2 46 16.2V34H0Z\"/>" +
+    "<path class=\"surface\" d=\"M5 16Q23 21.2 41 16\"/></g>");
+  var bot = opt.bot || ("<g clip-path=\"url(#" + id + "b)\"><path class=\"pile\" d=\"M3.4 64C12.5 58.4 17.6 52.4 23.6 52.4C29.6 52.4 33.5 58.4 42.6 64Z\"/></g>");
+  return "<path d=\"" + TOP + "\" fill=\"url(#" + id + "f)\"/><path d=\"" + BOT + "\" fill=\"url(#" + id + "f)\"/>" + top + bot +
+   (opt.stream === false ? "" : ("<path class=\"stream-soft\" d=\"M23 36V51.6\"/><path class=\"stream\" d=\"M23 36V51.6\"/>" +
+    "<circle class=\"grain\" cx=\"23\" cy=\"39\" r=\".78\"/><circle class=\"grain g2\" cx=\"22.1\" cy=\"42.6\" r=\".56\"/>" +
+    "<circle class=\"grain g3\" cx=\"23.6\" cy=\"45.4\" r=\".44\"/><circle class=\"grain g4\" cx=\"22.7\" cy=\"48.2\" r=\".5\"/>")) +
+   "<path class=\"gloss\" d=\"M6.4 9.4C6.8 16 9.4 27 12.6 30.2\"/><path class=\"gloss2\" d=\"M39.6 10C39.2 15.4 37.2 26 34.6 29.2\"/>" +
+   "<path class=\"glass\" d=\"" + WL + "\" stroke=\"url(#" + id + "g)\"/><path class=\"glass\" d=\"" + WR + "\" stroke=\"url(#" + id + "g)\"/>" +
+   "<ellipse class=\"rim\" cx=\"23\" cy=\"4\" rx=\"21\" ry=\"2.4\"/><ellipse class=\"rim\" cx=\"23\" cy=\"64\" rx=\"21\" ry=\"2.4\"/>";
+}
+
+function buildHop(id){
+  var d = defs(id);
+  var splash = [[4.2,65.8,-7,-2.2,1],[2.2,66.6,-8.6,-.8,.8],[14,67.2,-3.4,1.2,.9],[23,67.6,0,2,.8],
+    [32,67.2,3.4,1.2,.9],[43.8,66.6,8.6,-.8,.8],[41.8,65.8,7,-2.2,1]].map(function(s){
+    return "<circle class=\"sp\" cx=\"" + s[0] + "\" cy=\"" + s[1] + "\" r=\"" + s[4] + "\" style=\"--dx:" + s[2] + "px;--dy:" + s[3] + "px\"/>";
+  }).join("");
+  var inner = "<ellipse class=\"shadow hopSh\" cx=\"23\" cy=\"67\" rx=\"15\" ry=\"1.6\"/>" +
+    "<g class=\"hopBody\">" + glassBody(id) + faceMark() + "</g>" + splash;
+  return "<svg class=\"art a1\" viewBox=\"-4 0 54 72\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + d + inner + "</svg>";
+}
+
+function buildJelly(id){
+  var bell = "M10 26C10 11.4 18.6 3.2 30 3.2C41.4 3.2 50 11.4 50 26Q45.4 29 41.6 26Q38.2 29 33.8 26Q30.2 28.6 26.8 26Q22.4 29 18.2 26Q14.4 29 10 26Z";
+  var inner =
+  "<defs>" +
+   "<linearGradient id=\"" + id + "bell\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#E6F8FD\" stop-opacity=\".86\"/><stop offset=\"1\" stop-color=\"#8FD3E9\" stop-opacity=\".5\"/></linearGradient>" +
+   "<linearGradient id=\"" + id + "s\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"s1\" offset=\"0\"/><stop class=\"s2\" offset=\"1\"/></linearGradient>" +
+   "<clipPath id=\"" + id + "c\"><path d=\"" + bell + "\"/></clipPath>" +
+  "</defs>" +
+  "<g class=\"drift\"><g class=\"bellPulse\">" +
+    "<path class=\"bell\" fill=\"url(#" + id + "bell)\" d=\"" + bell + "\"/>" +
+    "<g clip-path=\"url(#" + id + "c)\"><path class=\"bellSand\" d=\"M6 17.2Q30 22.4 54 17.2V31H6Z\"/><path class=\"surface\" d=\"M10 17.2Q30 22.4 50 17.2\"/></g>" +
+    "<path class=\"bellHi\" d=\"M13.4 19.6C14 13.4 18.4 8.8 23.8 7.8\"/>" +
+    "<g class=\"t\" style=\"transform-origin:21px 27px\"><path class=\"tent-soft\" d=\"M21 26.4C19 33.4 23.4 37.6 20.6 43.6C18.6 48.2 21.4 51.4 20 56.2\"/><path class=\"tent\" d=\"M21 26.4C19 33.4 23.4 37.6 20.6 43.6C18.6 48.2 21.4 51.4 20 56.2\"/></g>" +
+    "<g class=\"t t2\" style=\"transform-origin:30px 27.4\"><path class=\"tent-soft\" d=\"M30 27.4C32.4 34.4 28 38.8 31 44.6C33.4 49 30.2 52.2 31.4 57.4\"/><path class=\"tent\" d=\"M30 27.4C32.4 34.4 28 38.8 31 44.6C33.4 49 30.2 52.2 31.4 57.4\"/></g>" +
+    "<g class=\"t t3\" style=\"transform-origin:39px 26.6\"><path class=\"tent-soft\" d=\"M39 26.6C41.4 33 37.2 37.4 40.2 43C42.4 47.4 39.6 50.6 40.8 55\"/><path class=\"tent\" d=\"M39 26.6C41.4 33 37.2 37.4 40.2 43C42.4 47.4 39.6 50.6 40.8 55\"/></g>" +
+    "<path class=\"stream-soft\" d=\"M30 24V31\"/><path class=\"stream\" d=\"M30 24V31\"/>" +
+    "<circle class=\"eye\" cx=\"24.9\" cy=\"13\" r=\"1.8\"/><circle class=\"eye\" cx=\"35.1\" cy=\"13\" r=\"1.8\"/>" +
+    "<circle class=\"eye-hi\" cx=\"24.3\" cy=\"12.4\" r=\".48\"/><circle class=\"eye-hi\" cx=\"34.5\" cy=\"12.4\" r=\".48\"/>" +
+    "<ellipse class=\"blush\" cx=\"22.4\" cy=\"15.7\" rx=\"1.7\" ry=\".8\"/><ellipse class=\"blush\" cx=\"37.6\" cy=\"15.7\" rx=\"1.7\" ry=\".8\"/>" +
+    "<path class=\"mouth\" d=\"M27.8 16.2Q30 18.2 32.2 16.2\"/>" +
+    "<circle class=\"grain\" cx=\"20.6\" cy=\"39.6\" r=\".7\"/><circle class=\"grain g2\" cx=\"31\" cy=\"41\" r=\".6\"/><circle class=\"grain g3\" cx=\"40.2\" cy=\"38.8\" r=\".65\"/>" +
+  "</g></g>";
+  return "<svg class=\"art a2\" viewBox=\"-2 -1 64 62\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + inner + "</svg>";
+}
+
+function spiral(cx, cy, turns, rmax, rmin){
+  var d = "";
+  for(var i = 0; i <= 120; i++){
+    var t = i / 120, a = -Math.PI / 2 + t * turns * 2 * Math.PI, r = rmax * (1 - t) + rmin * t;
+    d += (i ? "L" : "M") + (cx + Math.cos(a) * r).toFixed(2) + " " + (cy + Math.sin(a) * r).toFixed(2);
+  }
+  return d;
+}
+
+function buildSnail(id){
+  var inner =
+  "<defs>" +
+   "<linearGradient id=\"" + id + "shellG\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop class=\"s1\" offset=\"0\"/><stop class=\"s2\" offset=\"1\"/></linearGradient>" +
+   "<linearGradient id=\"" + id + "s\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"s1\" offset=\"0\"/><stop class=\"s2\" offset=\"1\"/></linearGradient>" +
+  "</defs>" +
+  "<g class=\"trail\">" +
+    "<circle class=\"trailDot\" cx=\"49\" cy=\"54.5\" r=\"1.2\"/>" +
+    "<circle class=\"trailDot\" cx=\"55\" cy=\"55\" r=\"1\" style=\"animation-delay:-.6s\"/>" +
+    "<circle class=\"trailDot\" cx=\"45.5\" cy=\"55.2\" r=\".9\" style=\"animation-delay:-1.2s\"/>" +
+    "<circle class=\"trailDot\" cx=\"52\" cy=\"54.2\" r=\".8\" style=\"animation-delay:-1.8s\"/>" +
+  "</g>" +
+  "<g class=\"snailMove\">" +
+    "<path class=\"body\" d=\"M8 50.5C7 44.6 9.4 38.4 14.6 33.8C17.6 31 21.4 29.6 24.6 31.4C28.8 33.8 32.6 37 35.6 41C37.6 43.6 38.6 46.6 38.6 49.6C35.4 52 30.6 53 26.4 52.4C20.4 51.8 13.4 51.8 8 50.5Z\"/>" +
+    "<path class=\"body\" d=\"M11.6 33.8C9.4 30.4 10 25.4 13.6 22.8C17 20.4 21.6 22 23.2 25.8C24.8 29.6 23.2 33.4 19.6 34.6C16.8 35.6 13.4 35.4 11.6 33.8Z\"/>" +
+    "<g class=\"shell\">" +
+      "<circle cx=\"37.4\" cy=\"36.2\" r=\"14.2\" fill=\"url(#" + id + "shellG)\"/>" +
+      "<path class=\"shellHi\" d=\"M29.4 27.6C24.6 31 23 37.6 26 42.6\"/>" +
+      "<path class=\"spiral\" d=\"" + spiral(38, 36.6, 2.45, 12.6, 1.4) + "\"/>" +
+      "<circle class=\"shellRim\" cx=\"37.4\" cy=\"36.2\" r=\"14.2\"/>" +
+      "<path class=\"miniSoft\" d=\"M37.4 36.6V44.4\"/><path class=\"miniStream\" d=\"M37.4 36.6V44.4\"/>" +
+      "<circle class=\"grain\" cx=\"37.4\" cy=\"39.2\" r=\".6\"/><circle class=\"grain g2\" cx=\"37.4\" cy=\"42\" r=\".5\"/>" +
+    "</g>" +
+    "<g class=\"stalk\" style=\"transform-origin:15px 24px\"><path d=\"M14.6 23.6C13.6 19.8 13 17.2 12.6 15.4\" fill=\"none\" stroke=\"var(--bodyLine)\" stroke-width=\"1.5\" stroke-linecap=\"round\"/></g>" +
+    "<g class=\"stalk r\" style=\"transform-origin:20px 24px\"><path d=\"M20 23.8C20.6 20 21.4 17.6 22 15.6\" fill=\"none\" stroke=\"var(--bodyLine)\" stroke-width=\"1.5\" stroke-linecap=\"round\"/></g>" +
+    "<circle cx=\"12.5\" cy=\"14.4\" r=\"2.5\" fill=\"var(--eyeHi)\" stroke=\"var(--rim)\" stroke-width=\".7\"/>" +
+    "<circle cx=\"22.1\" cy=\"14.6\" r=\"2.5\" fill=\"var(--eyeHi)\" stroke=\"var(--rim)\" stroke-width=\".7\"/>" +
+    "<circle cx=\"12.9\" cy=\"14.6\" r=\"1.05\" fill=\"var(--eye)\"/><circle cx=\"22.5\" cy=\"14.8\" r=\"1.05\" fill=\"var(--eye)\"/>" +
+    "<circle class=\"eye\" cx=\"14.4\" cy=\"26.6\" r=\"1.35\"/><circle class=\"eye\" cx=\"19.6\" cy=\"26.8\" r=\"1.35\"/>" +
+    "<path class=\"mouth\" d=\"M15.6 29.8Q17 31.4 18.4 29.8\" stroke-width=\".95\"/>" +
+  "</g>";
+  return "<svg class=\"art a3\" viewBox=\"0 2 62 58\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + inner + "</svg>";
+}
+
+function buildRun(id){
+  var d = defs(id);
+  var inner = "<ellipse class=\"shadow runSh\" cx=\"23\" cy=\"70\" rx=\"14\" ry=\"1.5\"/>" +
+   "<g class=\"speeds\"><path class=\"speed\" d=\"M2 20H-4\"/><path class=\"speed s2\" d=\"M3 31.5H-2.5\"/><path class=\"speed s3\" d=\"M2.5 44H-3.5\"/></g>" +
+   "<g class=\"runRig\">" + glassBody(id) + faceMark() +
+     "<ellipse class=\"foot\" cx=\"14.2\" cy=\"67.8\" rx=\"3.5\" ry=\"1.8\"/>" +
+     "<ellipse class=\"foot b\" cx=\"31.8\" cy=\"67.8\" rx=\"3.5\" ry=\"1.8\"/>" +
+   "</g>" +
+   "<circle class=\"dust\" cx=\"6.5\" cy=\"69.4\" r=\"1.1\"/><circle class=\"dust d2\" cx=\"10\" cy=\"70.4\" r=\".8\"/>";
+  return "<svg class=\"art a4\" viewBox=\"-7 0 60 74\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + d + inner + "</svg>";
+}
+
+function buildTide(id){
+  var d = defs(id);
+  var top = "<g clip-path=\"url(#" + id + "t)\"><g class=\"tideTop\">" +
+    "<path class=\"sand\" d=\"M0 8.6Q23 13.8 46 8.6V34H0Z\"/><path class=\"surface\" d=\"M4 8.8Q23 14 42 8.8\"/></g></g>";
+  var bot = "<g clip-path=\"url(#" + id + "b)\"><g class=\"tideBot\">" +
+    "<path class=\"pile\" d=\"M3.4 64C12.5 58.4 17.6 52.4 23.6 52.4C29.6 52.4 33.5 58.4 42.6 64Z\"/></g></g>";
+  var up = [0,1,2,3,4].map(function(i){
+    return "<circle class=\"rise r" + (i + 1) + "\" cx=\"" + (22.4 + (i % 3) * .5) + "\" cy=\"" + (50 - i * .4) + "\" r=\"" + (i % 2 ? .55 : .7) + "\"/>";
+  }).join("");
+  var down = [0,1,2,3,4].map(function(i){
+    return "<circle class=\"rise r" + ((i + 2) % 5 + 1) + "\" cx=\"" + (23.2 + (i % 3) * .45) + "\" cy=\"" + (34.6 + i * .4) + "\" r=\"" + (i % 2 ? .55 : .7) + "\"/>";
+  }).join("");
+  var spark = "<g class=\"spark\"><path d=\"M8 12l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7z\"/></g>" +
+    "<g class=\"spark k2\"><path d=\"M38 20l.6 1.8 1.8.6-1.8.6-.6 1.8-.6-1.8-1.8-.6 1.8-.6z\"/></g>" +
+    "<g class=\"spark k3\"><path d=\"M11 41l.5 1.6 1.6.5-1.6.5-.5 1.6-.5-1.6-1.6-.5 1.6-.5z\"/></g>";
+  var inner = "<ellipse class=\"shadow\" cx=\"23\" cy=\"67\" rx=\"15\" ry=\"1.6\"/>" +
+    "<g>" + glassBody(id, { top:top, bot:bot, stream:false }) +
+      "<ellipse class=\"glow\" cx=\"23\" cy=\"4\" rx=\"21\" ry=\"2.4\"/>" +
+      "<ellipse class=\"glow\" cx=\"23\" cy=\"64\" rx=\"21\" ry=\"2.4\"/>" +
+      "<path class=\"stream-soft\" d=\"M23 36V51.6\"/><path class=\"stream\" d=\"M23 36V51.6\"/>" +
+      "<g class=\"up\">" + up + "</g><g class=\"down\">" + down + "</g>" +
+      faceMark() + spark +
+    "</g>";
+  return "<svg class=\"art a5\" viewBox=\"-6 -3 58 75\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + d + inner + "</svg>";
+}
+
+function buildSneeze(id){
+  var d = defs(id);
+  var burst = [];
+  for(var i = 0; i < 12; i++){
+    var a = (i / 12) * Math.PI * 2 + 0.35, r = 18 + (i % 3) * 4;
+    burst.push("<circle class=\"burst\" cx=\"23\" cy=\"40\" r=\"" + (i % 3 ? .7 : 1) + "\" fill=\"var(--sand2)\" " +
+      "style=\"--dx:" + (Math.cos(a) * r).toFixed(1) + "px;--dy:" + (Math.sin(a) * r * 0.85).toFixed(1) + "px\"/>");
+  }
+  var puffs = [[6,22,-6,-4],[40,24,7,-5],[8,55,-5,3],[39,56,6,4]].map(function(p){
+    return "<path class=\"puff\" d=\"M" + p[0] + " " + p[1] + "h3.2\" style=\"--px:" + p[2] + "px;--py:" + p[3] + "px\"/>";
+  }).join("");
+  var face = "<g class=\"face\">" +
+    "<ellipse class=\"blush\" cx=\"15.2\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/><ellipse class=\"blush\" cx=\"30.8\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/>" +
+    "<circle class=\"eye\" cx=\"18\" cy=\"10.9\" r=\"1.72\"/><circle class=\"eye\" cx=\"28\" cy=\"10.9\" r=\"1.72\"/>" +
+    "<circle class=\"eye-hi\" cx=\"17.4\" cy=\"10.3\" r=\".45\"/><circle class=\"eye-hi\" cx=\"27.4\" cy=\"10.3\" r=\".45\"/>" +
+    "<path class=\"eyeHappy\" d=\"M16.2 11.4Q18.2 9.4 20.2 11.4\"/><path class=\"eyeHappy\" d=\"M25.8 11.4Q27.8 9.4 29.8 11.4\"/>" +
+    "<path class=\"mSmile mouth\" d=\"M21 13.9Q23 15.6 25 13.9\"/>" +
+    "<ellipse class=\"mO\" cx=\"23\" cy=\"14.9\" rx=\"1\" ry=\"1.2\"/>" +
+    "<ellipse class=\"mBig\" cx=\"23\" cy=\"15.2\" rx=\"2.1\" ry=\"1.8\"/>" +
+    "<path class=\"mWavy\" d=\"M20.6 15Q22.2 13.9 23.6 15Q25 16.1 26.4 15\"/>" +
+    "<path class=\"dizzy\" d=\"M16.3 9.5L19 12.2\"/><path class=\"dizzy\" d=\"M19 9.5L16.3 12.2\"/>" +
+    "<path class=\"dizzy\" d=\"M27 9.5L29.7 12.2\"/><path class=\"dizzy\" d=\"M29.7 9.5L27 12.2\"/>" +
+  "</g>";
+  var inner = "<ellipse class=\"shadow sneezeSh\" cx=\"23\" cy=\"67\" rx=\"15\" ry=\"1.6\"/>" +
+    "<g class=\"sneezeBody\">" + glassBody(id) + face + "</g>" +
+    "<g class=\"burstWrap\">" + burst.join("") + "</g>" + puffs;
+  return "<svg class=\"art a6\" viewBox=\"-8 0 62 73\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + d + inner + "</svg>";
+}
+
+var BUILDERS = { hop:buildHop, jelly:buildJelly, snail:buildSnail, run:buildRun, tide:buildTide, sneeze:buildSneeze };
+
+function ornamentSVG(key){
+  if(key === "classic") return hourglassSVG();
+  var build = BUILDERS[key];
+  return build ? build(uid()) : hourglassSVG();
+}
+
+/* ==================== 侧栏槽位 ==================== */
+var slot = null;
+var renderedKey = "";
+
+/* 「摆上摆件后导航会不会溢出」才是唯一判据：窗口矮但导航放得下时照常显示。
+   旧实现拿 nav.lastElementChild 量内容高度，而桌面端最后一项是 display:none 的
+   .mob-more（高度 0），永远量不出溢出；只剩 CSS 的 max-height 媒体查询在硬撑，
+   于是开关打开、窗口一矮摆件整块消失。这里临时显示槽位后直接比 scrollHeight。 */
+function navIsTight(){
+  var nav = document.querySelector(".side-nav");
+  if(!nav) return false;
+  if(document.documentElement.getAttribute("data-layout") === "mobile") return true;
+  var wasHidden = slot.hidden;
+  slot.hidden = false;
+  var tight = nav.scrollHeight > nav.clientHeight + 2;
+  slot.hidden = wasHidden;
+  return tight;
+}
+
+function syncReason(){
+  var reason = $("meOrnReason");
+  if(!reason) return;
+  if(!orn.on){
+    reason.hidden = false;
+    reason.textContent = "摆件已关闭；打开上面的开关后才能切换形态。";
+    return;
+  }
+  if(slot && slot.hidden){
+    reason.hidden = false;
+    reason.textContent = "当前窗口较矮或侧栏导航已需要滚动，摆件暂时让位；窗口调高或收起展开的导航后会重新出现。";
+    return;
+  }
+  reason.hidden = true;
+}
+
+function renderSlot(force){
+  slot = slot || $("sideOrnament");
+  if(!slot) return;
+  if(!orn.on){ slot.hidden = true; syncReason(); return; }
+  if(force || renderedKey !== orn.pick){
+    slot.innerHTML = ornamentSVG(orn.pick);
+    renderedKey = orn.pick;
+  }
+  slot.hidden = navIsTight();
+  syncReason();
+}
+
+function scheduleSync(){
+  if(scheduleSync.queued) return;
+  scheduleSync.queued = true;
+  requestAnimationFrame(function(){
+    scheduleSync.queued = false;
+    renderSlot(false);
+  });
+}
+
+/* 摆件开关状态：供「沙漏说」判断「只在悬停」还有没有落点 */
+function ornamentPrefOn(){ return orn.on; }
+
+function initSideOrnament(){
+  slot = $("sideOrnament");
+  if(!slot) return;
+  if(slot.__wired) return;
+  slot.__wired = true;
+  renderSlot(true);
+  window.addEventListener("resize", scheduleSync, { passive:true });
+  var nav = document.querySelector(".side-nav");
+  if(nav){
+    nav.addEventListener("click", scheduleSync);
+    nav.addEventListener("keydown", scheduleSync);
+    if(window.ResizeObserver) new ResizeObserver(scheduleSync).observe(nav);
+  }
+  document.addEventListener("visibilitychange", function(){
+    document.body.classList.toggle("tab-hidden", document.hidden);
+  });
+  window.addEventListener("ornament:change", scheduleSync);
+  window.addEventListener("storage", function(e){
+    if(e.key !== PREF_KEY) return;
+    orn = readPref();
+    renderSlot(true);
+    syncSettings();
+  });
+}
+
+/* ==================== 个人设置 · 外观 ==================== */
+var TICK = "<svg viewBox=\"0 0 10 10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 5.2 4.2 7.4 8 3\"/></svg>";
+
+function syncSettings(){
+  var grid = $("meOrnGrid");
+  var sw = $("meOrnOn");
+  if(!grid || !sw) return;
+  sw.checked = orn.on;
+  grid.querySelectorAll("[data-orn]").forEach(function(b){
+    var on = b.getAttribute("data-orn") === orn.pick;
+    b.setAttribute("aria-checked", on ? "true" : "false");
+    b.tabIndex = on ? 0 : -1;
+    b.disabled = !orn.on;
+  });
+  grid.setAttribute("aria-disabled", orn.on ? "false" : "true");
+  syncReason();
+}
+
+function mountOrnamentSettings(){
+  var grid = $("meOrnGrid");
+  var sw = $("meOrnOn");
+  if(!grid || !sw) return;
+  if(!grid.__wired){
+    grid.__wired = true;
+    grid.innerHTML = ORN_OPTIONS.map(function(o){
+      return "<button class=\"orn-opt\" type=\"button\" role=\"radio\" data-orn=\"" + o.key + "\" aria-checked=\"false\">" +
+        "<span class=\"orn-pv\">" + ornamentSVG(o.key) + "</span>" +
+        "<span class=\"orn-t\"><b>" + o.name + "</b><em>" + o.dur + "</em></span>" +
+        "<span class=\"orn-tick\" aria-hidden=\"true\">" + TICK + "</span>" +
+      "</button>";
+    }).join("");
+    grid.addEventListener("click", function(e){
+      var b = e.target.closest("[data-orn]");
+      if(!b || b.disabled) return;
+      setOrnamentPref({ pick:b.getAttribute("data-orn") });
+    });
+    grid.addEventListener("keydown", function(e){
+      if(["ArrowRight","ArrowDown","ArrowLeft","ArrowUp"].indexOf(e.key) < 0) return;
+      var list = [].slice.call(grid.querySelectorAll("[data-orn]:not(:disabled)"));
+      var i = list.indexOf(document.activeElement);
+      if(i < 0) return;
+      e.preventDefault();
+      var next = (e.key === "ArrowRight" || e.key === "ArrowDown")
+        ? (i + 1) % list.length : (i - 1 + list.length) % list.length;
+      list[next].focus();
+      list[next].click();
+    });
+    sw.addEventListener("change", function(){ setOrnamentPref({ on:sw.checked }); });
+    var reset = $("meOrnReset");
+    if(reset) reset.addEventListener("click", function(){ setOrnamentPref({ on:false, pick:"classic" }); });
+    window.addEventListener("ornament:change", syncSettings);
+  }
+  syncSettings();
+}
+
+return {ornamentPrefOn: ornamentPrefOn, initSideOrnament: initSideOrnament, mountOrnamentSettings: mountOrnamentSettings};
+})();
 /* ---- core/sand-say.js ---- */
 __NS["core/sand-say.js"] = (function(){
 /* core/sand-say · 沙漏说：按时段问候、下班倒计时、假日倒计时
@@ -53045,6 +53566,7 @@ __NS["core/sand-say.js"] = (function(){
  */
 
 var { holidayOn, isMakeupWorkday, nextHoliday } = __NS["core/holidays.js"];
+var { ornamentPrefOn } = __NS["core/side-ornament.js"];
 var PREF_KEY = "ds.sandSay.v1";
 var DEFAULT_OFF = "18:00";
 var DAY_MS = 86400000;
@@ -53074,7 +53596,7 @@ function parseHM(v){
 function dayPhase(mins){
   if(mins < 10 * 60) return { phase:"early", quote:"来得早，沙还没开始漏", mood:"flow" };
   if(mins < 11 * 60 + 30) return { phase:"morning", quote:"上午的沙，流得最快", mood:"flow" };
-  if(mins < 13 * 60 + 30) return { phase:"noon", quote:"快到饭点了，先放下", mood:"slow" };
+  if(mins < 13 * 60) return { phase:"noon", quote:"快到饭点了，先放下", mood:"slow" };
   if(mins < 18 * 60 + 30) return { phase:"afternoon", quote:"下午的沙，流得最慢", mood:"slow" };
   if(mins < 21 * 60) return { phase:"evening", quote:"", mood:"dim" };
   if(mins < 23 * 60) return { phase:"late", quote:"这么晚了，还在工作", mood:"dim" };
@@ -53306,6 +53828,9 @@ function syncSettings(){
   });
   var seg = $("meSsMode");
   if(seg) seg.setAttribute("aria-disabled", pref.on ? "false" : "true");
+  /* 「只在悬停」的落点是侧栏摆件：摆件关着时这条选择不会出现在任何位置，直接说明 */
+  var note = $("meSsOrnNote");
+  if(note) note.hidden = !(pref.on && pref.mode === "hover" && !ornamentPrefOn());
   updatePreview(computeSay(new Date(), pref));
 }
 function updatePreview(st){
@@ -53341,6 +53866,7 @@ function mountSandSaySettings(){
       });
     }
     window.addEventListener("sandsay:change", syncSettings);
+    window.addEventListener("ornament:change", syncSettings);
   }
   syncSettings();
 }
@@ -53368,6 +53894,351 @@ function initSandSay(){
 
 return {isoDate: isoDate, computeSay: computeSay, readPref: readPref, render: render, mountSandSaySettings: mountSandSaySettings, initSandSay: initSandSay};
 })();
+/* ---- core/sheet-editor.js ---- */
+/* core/sheet-editor · Univer 电子表格文档编辑器/阅读器（vendor 懒加载，含筛选/排序/条件格式/数据校验/超链接/查找替换） */
+
+var esc = esc2;
+var VENDOR_BASE = API.url("/vendor/univer/");
+
+var CSS_FILES = [
+  "css/design.css", "css/ui.css", "css/docs-ui.css",
+  "css/sheets-ui.css", "css/sheets-formula-ui.css", "css/sheets-numfmt-ui.css",
+  "css/sheets-filter-ui.css", "css/sheets-sort-ui.css",
+  "css/sheets-conditional-formatting-ui.css", "css/sheets-data-validation-ui.css",
+  "css/sheets-hyper-link-ui.css"
+];
+
+/* 依赖顺序与官方 UMD 示例一致；ok 用来判断上一个模块是否已由文档编辑器/附件预览加载过 */
+var SCRIPTS = [
+  ["react.min.js", function(){ return !!window.React; }],
+  ["react-dom.min.js", function(){ return !!window.ReactDOM; }],
+  ["rxjs.umd.min.js", function(){ return !!window.rxjs; }],
+  ["redi.js", function(){ return !!window["@wendellhu/redi"]; }],
+  ["redi-react.js", function(){ return !!window["@wendellhu/redi/react-bindings"]; }],
+  ["themes.js", function(){ return !!window.UniverThemes; }],
+  ["protocol.js", function(){ return !!window.UniverProtocol; }],
+  ["core.js", function(){ return !!window.UniverCore; }],
+  ["network.js", function(){ return !!window.UniverNetwork; }],
+  ["rpc.js", function(){ return !!window.UniverRpc; }],
+  ["design.js", function(){ return !!window.UniverDesign; }],
+  ["engine-render.js", function(){ return !!window.UniverEngineRender; }],
+  ["engine-formula.js", function(){ return !!window.UniverEngineFormula; }],
+  ["drawing.js", function(){ return !!window.UniverDrawing; }],
+  ["telemetry.js", function(){ return !!window.UniverTelemetry; }],
+  ["ui.js", function(){ return !!window.UniverUi; }],
+  ["docs.js", function(){ return !!window.UniverDocs; }],
+  ["docs-ui.js", function(){ return !!window.UniverDocsUi; }],
+  ["sheets.js", function(){ return !!window.UniverSheets; }],
+  ["sheets-ui.js", function(){ return !!window.UniverSheetsUi; }],
+  ["sheets-formula.js", function(){ return !!window.UniverSheetsFormula; }],
+  ["sheets-formula-ui.js", function(){ return !!window.UniverSheetsFormulaUi; }],
+  ["sheets-numfmt.js", function(){ return !!window.UniverSheetsNumfmt; }],
+  ["sheets-numfmt-ui.js", function(){ return !!window.UniverSheetsNumfmtUi; }],
+  ["sheets-filter.js", function(){ return !!window.UniverSheetsFilter; }],
+  ["sheets-filter-ui.js", function(){ return !!window.UniverSheetsFilterUi; }],
+  ["sheets-sort.js", function(){ return !!window.UniverSheetsSort; }],
+  ["sheets-sort-ui.js", function(){ return !!window.UniverSheetsSortUi; }],
+  ["sheets-conditional-formatting.js", function(){ return !!window.UniverSheetsConditionalFormatting; }],
+  ["sheets-conditional-formatting-ui.js", function(){ return !!window.UniverSheetsConditionalFormattingUi; }],
+  ["data-validation.js", function(){ return !!window.UniverDataValidation; }],
+  ["sheets-data-validation.js", function(){ return !!window.UniverSheetsDataValidation; }],
+  ["sheets-data-validation-ui.js", function(){ return !!window.UniverSheetsDataValidationUi; }],
+  ["sheets-hyper-link.js", function(){ return !!window.UniverSheetsHyperLink; }],
+  ["sheets-hyper-link-ui.js", function(){ return !!window.UniverSheetsHyperLinkUi; }],
+  ["find-replace.js", function(){ return !!window.UniverFindReplace; }],
+  ["sheets-find-replace.js", function(){ return !!window.UniverSheetsFindReplace; }],
+  ["facade/core.js", function(){ return !!(window.UniverCoreFacade && window.UniverCoreFacade.FUniver); }],
+  ["facade/engine-formula.js", function(){ return !!window.UniverEngineFormulaFacade; }],
+  /* 这四个包只扩展已有的 facade，没有独立全局名：用 sheets-ui facade 判断是否已由附件预览加载过 */
+  ["facade/ui.js", function(){ return !!window.UniverSheetsUiFacade; }],
+  ["facade/docs.js", function(){ return !!window.UniverDocsFacade; }],
+  ["facade/docs-ui.js", function(){ return !!(window.UniverDocsFacade && window.UniverDocsUi); }],
+  ["facade/sheets.js", function(){ return !!window.UniverSheetsFacade; }],
+  ["facade/sheets-ui.js", function(){ return !!window.UniverSheetsUiFacade; }],
+  ["facade/sheets-formula.js", function(){ return !!window.UniverSheetsUiFacade; }],
+  ["facade/sheets-numfmt.js", function(){ return !!window.UniverSheetsUiFacade; }],
+  ["locale/design.js", function(){ return !!window.UniverDesignZhCN; }],
+  ["locale/ui.js", function(){ return !!window.UniverUiZhCN; }],
+  ["locale/sheets.js", function(){ return !!window.UniverSheetsZhCN; }],
+  ["locale/sheets-ui.js", function(){ return !!window.UniverSheetsUiZhCN; }],
+  ["locale/docs-ui.js", function(){ return !!window.UniverDocsUiZhCN; }],
+  ["locale/sheets-formula-ui.js", function(){ return !!window.UniverSheetsFormulaUiZhCN; }],
+  ["locale/sheets-numfmt-ui.js", function(){ return !!window.UniverSheetsNumfmtUiZhCN; }],
+  ["locale/sheets-filter.js", function(){ return !!window.UniverSheetsFilterZhCN; }],
+  ["locale/sheets-filter-ui.js", function(){ return !!window.UniverSheetsFilterUiZhCN; }],
+  ["locale/sheets-sort-ui.js", function(){ return !!window.UniverSheetsSortUiZhCN; }],
+  ["locale/sheets-conditional-formatting.js", function(){ return !!window.UniverSheetsConditionalFormattingZhCN; }],
+  ["locale/sheets-conditional-formatting-ui.js", function(){ return !!window.UniverSheetsConditionalFormattingUiZhCN; }],
+  ["locale/data-validation.js", function(){ return !!window.UniverDataValidationZhCN; }],
+  ["locale/sheets-data-validation.js", function(){ return !!window.UniverSheetsDataValidationZhCN; }],
+  ["locale/sheets-data-validation-ui.js", function(){ return !!window.UniverSheetsDataValidationUiZhCN; }],
+  ["locale/sheets-hyper-link.js", function(){ return !!window.UniverSheetsHyperLinkZhCN; }],
+  ["locale/sheets-hyper-link-ui.js", function(){ return !!window.UniverSheetsHyperLinkUiZhCN; }],
+  ["locale/find-replace.js", function(){ return !!window.UniverFindReplaceZhCN; }]
+];
+
+var vendorPromise = null;
+var hostSeq = 0;
+
+function loadTag(tag, url){
+  return new Promise(function(resolve, reject){
+    var el = document.createElement(tag);
+    if(tag === "link"){ el.rel = "stylesheet"; el.href = url; }
+    else el.src = url;
+    el.onload = function(){ resolve(); };
+    el.onerror = function(){ reject(new Error("加载失败：" + url)); };
+    document.head.appendChild(el);
+  });
+}
+
+function ensureVendor(){
+  if(vendorPromise) return vendorPromise;
+  var chain = Promise.resolve();
+  CSS_FILES.forEach(function(f){ chain = chain.then(function(){ return loadTag("link", VENDOR_BASE + f); }); });
+  SCRIPTS.forEach(function(item){
+    chain = chain.then(function(){
+      if(item[1]()) return null;
+      return loadTag("script", VENDOR_BASE + item[0]).then(function(){
+        /* React 18 UMD 不暴露 jsx/jsxs，Univer UMD 需要，用 createElement 桥接 */
+        if(window.React && !window.React.jsx){
+          window.React.jsx = function(type, props, key){
+            return React.createElement(type, key === undefined ? props : Object.assign({}, props, { key: key }));
+          };
+          window.React.jsxs = window.React.jsx;
+        }
+      });
+    });
+  });
+  vendorPromise = chain.catch(function(ex){ vendorPromise = null; throw ex; });
+  return vendorPromise;
+}
+
+function localePack(){
+  var U = window.UniverCore;
+  var packs = [
+    window.UniverDesignZhCN, window.UniverUiZhCN, window.UniverSheetsZhCN, window.UniverSheetsUiZhCN,
+    window.UniverDocsUiZhCN, window.UniverSheetsFormulaUiZhCN, window.UniverSheetsNumfmtUiZhCN,
+    window.UniverSheetsFilterZhCN, window.UniverSheetsFilterUiZhCN, window.UniverSheetsSortUiZhCN,
+    window.UniverSheetsConditionalFormattingZhCN, window.UniverSheetsConditionalFormattingUiZhCN,
+    window.UniverDataValidationZhCN, window.UniverSheetsDataValidationZhCN,
+    window.UniverSheetsDataValidationUiZhCN, window.UniverSheetsHyperLinkZhCN,
+    window.UniverSheetsHyperLinkUiZhCN, window.UniverFindReplaceZhCN
+  ].filter(Boolean);
+  var zh = {};
+  zh[U.LocaleType.ZH_CN] = U.mergeLocales.apply(U, packs);
+  return zh;
+}
+
+function registerPlugin(univer, pkg, cls){
+  if(!pkg || !pkg[cls]) return;
+  univer.registerPlugin(pkg[cls]);
+}
+
+function createUniver(hostId){
+  var U = window.UniverCore;
+  var univer = new U.Univer({ locale: U.LocaleType.ZH_CN, locales: localePack() });
+  univer.registerPlugin(window.UniverEngineRender.UniverRenderEnginePlugin);
+  univer.registerPlugin(window.UniverEngineFormula.UniverFormulaEnginePlugin);
+  univer.registerPlugin(window.UniverUi.UniverUIPlugin, { container: hostId });
+  univer.registerPlugin(window.UniverDocs.UniverDocsPlugin);
+  univer.registerPlugin(window.UniverDocsUi.UniverDocsUIPlugin);
+  univer.registerPlugin(window.UniverSheets.UniverSheetsPlugin);
+  univer.registerPlugin(window.UniverSheetsUi.UniverSheetsUIPlugin);
+  univer.registerPlugin(window.UniverSheetsFormula.UniverSheetsFormulaPlugin, {
+    initialFormulaComputing: window.UniverSheetsFormula.CalculationMode.FORCED
+  });
+  univer.registerPlugin(window.UniverSheetsFormulaUi.UniverSheetsFormulaUIPlugin);
+  univer.registerPlugin(window.UniverSheetsNumfmt.UniverSheetsNumfmtPlugin);
+  univer.registerPlugin(window.UniverSheetsNumfmtUi.UniverSheetsNumfmtUIPlugin);
+  /* 筛选 → 排序 → 条件格式 → 数据校验 → 超链接 → 查找替换，UI 包必须跟在对应功能包后面 */
+  registerPlugin(univer, window.UniverSheetsFilter, "UniverSheetsFilterPlugin");
+  registerPlugin(univer, window.UniverSheetsFilterUi, "UniverSheetsFilterUIPlugin");
+  registerPlugin(univer, window.UniverSheetsSort, "UniverSheetsSortPlugin");
+  registerPlugin(univer, window.UniverSheetsSortUi, "UniverSheetsSortUIPlugin");
+  registerPlugin(univer, window.UniverSheetsConditionalFormatting, "UniverSheetsConditionalFormattingPlugin");
+  registerPlugin(univer, window.UniverSheetsConditionalFormattingUi, "UniverSheetsConditionalFormattingUIPlugin");
+  registerPlugin(univer, window.UniverDataValidation, "UniverDataValidationPlugin");
+  registerPlugin(univer, window.UniverSheetsDataValidation, "UniverSheetsDataValidationPlugin");
+  registerPlugin(univer, window.UniverSheetsDataValidationUi, "UniverSheetsDataValidationUIPlugin");
+  registerPlugin(univer, window.UniverSheetsHyperLink, "UniverSheetsHyperLinkPlugin");
+  registerPlugin(univer, window.UniverSheetsHyperLinkUi, "UniverSheetsHyperLinkUIPlugin");
+  registerPlugin(univer, window.UniverFindReplace, "UniverFindReplacePlugin");
+  registerPlugin(univer, window.UniverSheetsFindReplace, "UniverSheetsFindReplacePlugin");
+  return univer;
+}
+
+/* 1.3.0 的 FWorkbook 没有 setReadOnly，只读走工作簿权限（viewer / editor） */
+function setWorkbookMode(wb, readOnly){
+  if(typeof wb.setReadOnly === "function" && typeof wb.setEditable === "function"){
+    return readOnly ? wb.setReadOnly() : wb.setEditable();
+  }
+  var perm = typeof wb.getWorkbookPermission === "function" ? wb.getWorkbookPermission() : null;
+  if(!perm || typeof perm.setReadOnly !== "function"){
+    throw new Error("当前表格版本不支持只读模式");
+  }
+  return readOnly ? perm.setReadOnly() : perm.setEditable();
+}
+
+/**
+ * 在 container 内挂载一个 Univer 工作簿视图。
+ * opts: { container, snapshot, readOnly, onDirty }
+ * 返回 handle：getSnapshot/getText/setReadOnly/dispose
+ */
+async function openSheetView(opts){
+  await ensureVendor();
+  var U = window.UniverCore;
+  var container = opts.container;
+  if(!container) throw new Error("缺少表格容器");
+  /* 必须用独立 id：若复用容器自身 id，Univer 的 getElementById 会命中外层容器，
+     直接把外层 innerHTML 清空，内层 .univer-sheet-host 包装（含只读类）会被销毁 */
+  var hostId = "univerSheetHost" + (++hostSeq);
+  container.innerHTML = '<div class="univer-sheet-host' + (opts.readOnly ? " univer-sheet-readonly" : "") + '"></div>';
+  var host = container.firstChild;
+  host.id = hostId;
+
+  var univer = createUniver(hostId);
+  var wb = null;
+  try{
+    var api = window.UniverCoreFacade.FUniver.newAPI(univer);
+    api.createWorkbook(opts.snapshot);
+    wb = api.getActiveWorkbook();
+    if(!wb) throw new Error("表格初始化失败");
+    if(opts.readOnly) await setWorkbookMode(wb, true);
+  }catch(ex){
+    try{ univer.dispose(); }catch(e){ /* 忽略 */ }
+    throw ex;
+  }
+
+  var dirtySub = null;
+  if(!opts.readOnly && typeof opts.onDirty === "function" && typeof univer.onCommandExecuted === "function"){
+    dirtySub = univer.onCommandExecuted(function(command){
+      var id = command && command.id ? String(command.id) : "";
+      if(/selection|Selection|cursor|Cursor|focus|Focus|scroll|Scroll|activate|Activate|hover|Hover/.test(id)) return;
+      opts.onDirty();
+    });
+  }
+
+  var disposed = false;
+  return {
+    getSnapshot: function(){ return wb.save(); },
+    getText: function(){ return sheetSnapshotText(wb.save()); },
+    setReadOnly: function(on){
+      host.classList.toggle("univer-sheet-readonly", !!on);
+      return setWorkbookMode(wb, !!on);
+    },
+    dispose: function(){
+      if(disposed) return;
+      disposed = true;
+      if(dirtySub){
+        if(typeof dirtySub === "function"){ try{ dirtySub(); }catch(e){ /* 忽略 */ } }
+        else if(typeof dirtySub.dispose === "function"){ try{ dirtySub.dispose(); }catch(e){ /* 忽略 */ } }
+      }
+      try{ univer.dispose(); }catch(e){ /* 忽略 */ }
+      container.innerHTML = "";
+    }
+  };
+}
+
+/* ---------- 快照 → 纯文本（字数、复制、历史对比共用） ---------- */
+
+function cellTextOf(cell){
+  if(!cell) return "";
+  if(cell.p && cell.p.body && typeof cell.p.body.dataStream === "string") return cell.p.body.dataStream;
+  if(cell.v === undefined || cell.v === null) return "";
+  if(typeof cell.v === "boolean") return cell.v ? "TRUE" : "FALSE";
+  return String(cell.v);
+}
+
+function sheetSnapshotText(snapshot){
+  if(!snapshot) return "";
+  var out = [];
+  (snapshot.sheetOrder || []).forEach(function(sheetId){
+    var ss = (snapshot.sheets || {})[sheetId];
+    if(!ss) return;
+    out.push(ss.name || "");
+    var cellData = ss.cellData || {};
+    Object.keys(cellData).forEach(function(rKey){
+      var row = cellData[rKey] || {};
+      var line = [];
+      Object.keys(row).sort(function(a, b){ return a - b; }).forEach(function(cKey){
+        var text = cellTextOf(row[cKey]);
+        if(text !== "") line.push(text);
+      });
+      if(line.length) out.push(line.join("\t"));
+    });
+  });
+  return out.join("\n");
+}
+
+/* ---------- 快照 → 简单 HTML 表格（打印、Word 导出、历史预览） ---------- */
+
+function styleOfCell(snapshot, cell){
+  if(!cell || !cell.s) return null;
+  if(typeof cell.s === "object") return cell.s;
+  return (snapshot.styles || {})[cell.s] || null;
+}
+
+function sheetSnapshotToHtml(snapshot){
+  if(!snapshot) return "";
+  var parts = [];
+  (snapshot.sheetOrder || []).forEach(function(sheetId){
+    var ss = (snapshot.sheets || {})[sheetId];
+    if(!ss) return;
+    if(ss.hidden === 2) return;
+    var cellData = ss.cellData || {};
+    var covered = {}, spans = {};
+    (ss.mergeData || []).forEach(function(range){
+      if(!range) return;
+      var sr = range.startRow, sc = range.startColumn, er = range.endRow, ec = range.endColumn;
+      for(var r = sr; r <= er; r++){
+        for(var c = sc; c <= ec; c++){
+          if(r === sr && c === sc) continue;
+          covered[r + "," + c] = true;
+        }
+      }
+      spans[sr + "," + sc] = { rows: er - sr + 1, cols: ec - sc + 1 };
+    });
+    var rowKeys = Object.keys(cellData).map(Number);
+    var maxRow = rowKeys.length ? Math.max.apply(null, rowKeys) : -1;
+    var maxCol = -1;
+    rowKeys.forEach(function(r){
+      Object.keys(cellData[r] || {}).forEach(function(c){ maxCol = Math.max(maxCol, +c); });
+    });
+    var html = ['<table class="sheet-doc-table"><caption>' + esc(ss.name || "") + '</caption>'];
+    for(var r = 0; r <= maxRow; r++){
+      html.push("<tr>");
+      for(var c = 0; c <= maxCol; c++){
+        if(covered[r + "," + c]) continue;
+        var cell = (cellData[r] || {})[c];
+        var style = styleOfCell(snapshot, cell);
+        var attrs = "";
+        var span = spans[r + "," + c];
+        if(span){
+          if(span.rows > 1) attrs += ' rowspan="' + span.rows + '"';
+          if(span.cols > 1) attrs += ' colspan="' + span.cols + '"';
+        }
+        var css = [];
+        if(style){
+          if(style.bg && style.bg.rgb) css.push("background:" + style.bg.rgb);
+          if(style.cl && style.cl.rgb) css.push("color:" + style.cl.rgb);
+          if(style.bl) css.push("font-weight:700");
+          if(style.it) css.push("font-style:italic");
+          if(style.fs) css.push("font-size:" + style.fs + "px");
+          if(style.ht === 2) css.push("text-align:center");
+          else if(style.ht === 3) css.push("text-align:right");
+          else if(style.ht === 1) css.push("text-align:left");
+        }
+        if(css.length) attrs += ' style="' + css.join(";") + '"';
+        html.push("<td" + attrs + ">" + esc(cellTextOf(cell)) + "</td>");
+      }
+      html.push("</tr>");
+    }
+    html.push("</table>");
+    parts.push(html.join(""));
+  });
+  return parts.join("");
+}
+
 /* ---- core/sheet-viewer.js ---- */
 /* core/sheet-viewer · 任务附件 xlsx 在线预览/编辑（Univer 渲染 + SheetJS 互转，vendor 懒加载） */
 
@@ -53844,432 +54715,6 @@ function saveCurrent(){
   });
 }
 
-/* ---- core/side-ornament.js ---- */
-/* core/side-ornament · 侧栏 72px 装饰摆件
- *
- * 纯装饰，不是控件：容器 aria-hidden + pointer-events:none，不带进度、不带入口。
- * 个人偏好只存本机（ds.ornament.v1），不写空间配置、不走接口。
- * 形态：经典流淌 + 弹跳 / 水母 / 蜗牛 / 奔跑 / 潮汐 / 喷嚏。
- * 导航一旦需要滚动就让位（不挤导航）；矮窗口、收起态、移动端由 ornament.css 处理。
- */
-
-var PREF_KEY = "ds.ornament.v1";
-var seq = 0;
-
-var ORN_OPTIONS = [
-  { key:"classic", name:"经典流淌", dur:"默认 · 14s 换沙" },
-  { key:"hop", name:"弹跳小沙漏", dur:"2.6s / 跳" },
-  { key:"jelly", name:"沙漏水母", dur:"5.2s / 漂" },
-  { key:"snail", name:"沙漏蜗牛", dur:"3.2s / 步" },
-  { key:"run", name:"奔跑的沙漏", dur:"0.6s / 步" },
-  { key:"tide", name:"潮汐沙漏", dur:"6.4s / 涨落" },
-  { key:"sneeze", name:"打喷嚏的沙漏", dur:"5.2s / 次" }
-];
-
-var orn = readPref();
-
-function readPref(){
-  var next = { on:true, pick:"classic" };
-  try{
-    var raw = JSON.parse(localStorage.getItem(PREF_KEY) || "null");
-    if(raw && typeof raw === "object"){
-      next.on = raw.on !== false;
-      if(raw.pick) next.pick = raw.pick;
-    }
-  }catch(e){ /* 受限环境 / 坏数据：回落默认 */ }
-  if(!ORN_OPTIONS.some(function(o){ return o.key === next.pick; })) next.pick = "classic";
-  return next;
-}
-function savePref(){
-  try{ localStorage.setItem(PREF_KEY, JSON.stringify(orn)); }catch(e){ /* 忽略 */ }
-}
-
-function setOrnamentPref(patch){
-  var next = { on:patch && patch.on !== undefined ? !!patch.on : orn.on,
-               pick:patch && patch.pick || orn.pick };
-  if(!ORN_OPTIONS.some(function(o){ return o.key === next.pick; })) next.pick = "classic";
-  orn = next;
-  savePref();
-  renderSlot(true);
-  syncSettings();
-  window.dispatchEvent(new CustomEvent("ornament:change", { detail:{ on:orn.on, pick:orn.pick } }));
-}
-
-/* ==================== SVG 构造 ==================== */
-function uid(){ seq++; return "orn" + seq; }
-
-var TOP = "M2 4C3.53 10.6 9.64 20.8 18.04 31C19.9 33.1 20.7 34 21.1 34L24.9 34C25.3 34 25.9 33.1 27.96 31C36.36 20.8 42.47 10.6 44 4Z";
-var BOT = "M2 64C3.53 57.4 9.64 47.2 18.04 37C19.9 34.9 20.7 34 21.1 34L24.9 34C25.3 34 25.9 34.9 27.96 37C36.36 47.2 42.47 57.4 44 64Z";
-var WL = "M2 4C3.53 10.6 9.64 20.8 18.04 31C19.9 33.1 20.7 34 21.1 34C20.7 34 19.9 34.9 18.04 37C9.64 47.2 3.53 57.4 2 64";
-var WR = "M44 4C42.47 10.6 36.36 20.8 27.96 31C25.9 33.1 25.3 34 24.9 34C25.3 34 25.9 34.9 27.96 37C36.36 47.2 42.47 57.4 44 64";
-
-function hourglassSVG(){
-  var id = uid();
-  var t = id + "t", b = id + "b", sg = id + "s", gf = id + "f", gs = id + "g";
-  return "<svg class=\"hg\" viewBox=\"0 0 46 68\" aria-hidden=\"true\" focusable=\"false\" style=\"--hg-sg:url(#" + sg + ")\">" +
-    "<defs>" +
-      "<clipPath id=\"" + t + "\"><path d=\"" + TOP + "\"/></clipPath>" +
-      "<clipPath id=\"" + b + "\"><path d=\"" + BOT + "\"/></clipPath>" +
-      "<linearGradient id=\"" + sg + "\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"hg-sf\" offset=\"0\"/><stop class=\"hg-ss\" offset=\"1\"/></linearGradient>" +
-      "<linearGradient id=\"" + gf + "\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"hg-fa\" offset=\"0\"/><stop class=\"hg-fb\" offset=\"1\"/></linearGradient>" +
-      "<linearGradient id=\"" + gs + "\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"hg-aa\" offset=\"0\"/><stop class=\"hg-bb\" offset=\"1\"/></linearGradient>" +
-    "</defs>" +
-    "<ellipse class=\"hg-shadow\" cx=\"23\" cy=\"67\" rx=\"16.4\" ry=\".95\"/>" +
-    "<g class=\"hg-body\">" +
-      "<path class=\"hg-fill\" d=\"" + TOP + "\" fill=\"url(#" + gf + ")\"/>" +
-      "<path class=\"hg-fill\" d=\"" + BOT + "\" fill=\"url(#" + gf + ")\"/>" +
-      "<g clip-path=\"url(#" + t + ")\"><g class=\"hg-level\">" +
-        "<path class=\"hg-sand\" d=\"M0 16.2Q23 21.2 46 16.2V34H0Z\"/>" +
-        "<path class=\"hg-surface\" d=\"M5 16Q23 21.2 41 16\"/>" +
-      "</g></g>" +
-      "<g clip-path=\"url(#" + b + ")\"><path class=\"hg-pile\" d=\"M3.4 64C12.5 58.4 17.6 52.4 23.6 52.4C29.6 52.4 33.5 58.4 42.6 64Z\"/></g>" +
-      "<path class=\"hg-stream-soft\" d=\"M23 36V51.6\"/><path class=\"hg-stream\" d=\"M23 36V51.6\"/>" +
-      "<circle class=\"hg-grain g1\" cx=\"23\" cy=\"39\" r=\".78\"/>" +
-      "<circle class=\"hg-grain g2\" cx=\"22.1\" cy=\"42.6\" r=\".56\"/>" +
-      "<circle class=\"hg-grain g3\" cx=\"23.6\" cy=\"44.4\" r=\".44\"/>" +
-      "<circle class=\"hg-grain g4\" cx=\"22.7\" cy=\"47.2\" r=\".5\"/>" +
-      "<path class=\"hg-gloss\" d=\"M6.4 9.4C6.8 16 9.4 27 12.6 30.2\"/>" +
-      "<path class=\"hg-gloss2\" d=\"M39.6 10C39.2 15.4 37.2 26 34.6 29.2\"/>" +
-      "<path class=\"hg-glass\" d=\"" + WL + "\" stroke=\"url(#" + gs + ")\"/>" +
-      "<path class=\"hg-glass\" d=\"" + WR + "\" stroke=\"url(#" + gs + ")\"/>" +
-      "<ellipse class=\"hg-rim\" cx=\"23\" cy=\"4\" rx=\"21\" ry=\"2.4\"/>" +
-      "<ellipse class=\"hg-rim\" cx=\"23\" cy=\"64\" rx=\"21\" ry=\"2.4\"/>" +
-      "<g class=\"hg-face\">" +
-        "<ellipse class=\"hg-blush\" cx=\"15.2\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/>" +
-        "<ellipse class=\"hg-blush\" cx=\"30.8\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/>" +
-        "<circle class=\"hg-eye\" cx=\"18\" cy=\"10.9\" r=\"1.72\"/>" +
-        "<circle class=\"hg-eye\" cx=\"28\" cy=\"10.9\" r=\"1.72\"/>" +
-        "<circle class=\"hg-eye-hi\" cx=\"17.4\" cy=\"10.3\" r=\".45\"/>" +
-        "<circle class=\"hg-eye-hi\" cx=\"27.4\" cy=\"10.3\" r=\".45\"/>" +
-        "<path class=\"hg-mouth\" d=\"M21 13.9Q23 15.6 25 13.9\"/>" +
-      "</g>" +
-    "</g>" +
-  "</svg>";
-}
-
-function defs(id){
-  return "<defs>" +
-   "<clipPath id=\"" + id + "t\"><path d=\"" + TOP + "\"/></clipPath>" +
-   "<clipPath id=\"" + id + "b\"><path d=\"" + BOT + "\"/></clipPath>" +
-   "<linearGradient id=\"" + id + "s\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"s1\" offset=\"0\"/><stop class=\"s2\" offset=\"1\"/></linearGradient>" +
-   "<linearGradient id=\"" + id + "g\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"g1\" offset=\"0\"/><stop class=\"g2\" offset=\"1\"/></linearGradient>" +
-   "<linearGradient id=\"" + id + "f\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"f1\" offset=\"0\"/><stop class=\"f2\" offset=\"1\"/></linearGradient>" +
-  "</defs>";
-}
-
-function faceMark(){
-  return "<g class=\"face\">" +
-    "<ellipse class=\"blush\" cx=\"15.2\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/><ellipse class=\"blush\" cx=\"30.8\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/>" +
-    "<circle class=\"eye\" cx=\"18\" cy=\"10.9\" r=\"1.72\"/><circle class=\"eye\" cx=\"28\" cy=\"10.9\" r=\"1.72\"/>" +
-    "<circle class=\"eye-hi\" cx=\"17.4\" cy=\"10.3\" r=\".45\"/><circle class=\"eye-hi\" cx=\"27.4\" cy=\"10.3\" r=\".45\"/>" +
-    "<path class=\"mouth\" d=\"M21 13.9Q23 15.6 25 13.9\"/>" +
-  "</g>";
-}
-
-function glassBody(id, opt){
-  opt = opt || {};
-  var top = opt.top || ("<g clip-path=\"url(#" + id + "t)\"><path class=\"sand\" d=\"M0 16.2Q23 21.2 46 16.2V34H0Z\"/>" +
-    "<path class=\"surface\" d=\"M5 16Q23 21.2 41 16\"/></g>");
-  var bot = opt.bot || ("<g clip-path=\"url(#" + id + "b)\"><path class=\"pile\" d=\"M3.4 64C12.5 58.4 17.6 52.4 23.6 52.4C29.6 52.4 33.5 58.4 42.6 64Z\"/></g>");
-  return "<path d=\"" + TOP + "\" fill=\"url(#" + id + "f)\"/><path d=\"" + BOT + "\" fill=\"url(#" + id + "f)\"/>" + top + bot +
-   (opt.stream === false ? "" : ("<path class=\"stream-soft\" d=\"M23 36V51.6\"/><path class=\"stream\" d=\"M23 36V51.6\"/>" +
-    "<circle class=\"grain\" cx=\"23\" cy=\"39\" r=\".78\"/><circle class=\"grain g2\" cx=\"22.1\" cy=\"42.6\" r=\".56\"/>" +
-    "<circle class=\"grain g3\" cx=\"23.6\" cy=\"45.4\" r=\".44\"/><circle class=\"grain g4\" cx=\"22.7\" cy=\"48.2\" r=\".5\"/>")) +
-   "<path class=\"gloss\" d=\"M6.4 9.4C6.8 16 9.4 27 12.6 30.2\"/><path class=\"gloss2\" d=\"M39.6 10C39.2 15.4 37.2 26 34.6 29.2\"/>" +
-   "<path class=\"glass\" d=\"" + WL + "\" stroke=\"url(#" + id + "g)\"/><path class=\"glass\" d=\"" + WR + "\" stroke=\"url(#" + id + "g)\"/>" +
-   "<ellipse class=\"rim\" cx=\"23\" cy=\"4\" rx=\"21\" ry=\"2.4\"/><ellipse class=\"rim\" cx=\"23\" cy=\"64\" rx=\"21\" ry=\"2.4\"/>";
-}
-
-function buildHop(id){
-  var d = defs(id);
-  var splash = [[4.2,65.8,-7,-2.2,1],[2.2,66.6,-8.6,-.8,.8],[14,67.2,-3.4,1.2,.9],[23,67.6,0,2,.8],
-    [32,67.2,3.4,1.2,.9],[43.8,66.6,8.6,-.8,.8],[41.8,65.8,7,-2.2,1]].map(function(s){
-    return "<circle class=\"sp\" cx=\"" + s[0] + "\" cy=\"" + s[1] + "\" r=\"" + s[4] + "\" style=\"--dx:" + s[2] + "px;--dy:" + s[3] + "px\"/>";
-  }).join("");
-  var inner = "<ellipse class=\"shadow hopSh\" cx=\"23\" cy=\"67\" rx=\"15\" ry=\"1.6\"/>" +
-    "<g class=\"hopBody\">" + glassBody(id) + faceMark() + "</g>" + splash;
-  return "<svg class=\"art a1\" viewBox=\"-4 0 54 72\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + d + inner + "</svg>";
-}
-
-function buildJelly(id){
-  var bell = "M10 26C10 11.4 18.6 3.2 30 3.2C41.4 3.2 50 11.4 50 26Q45.4 29 41.6 26Q38.2 29 33.8 26Q30.2 28.6 26.8 26Q22.4 29 18.2 26Q14.4 29 10 26Z";
-  var inner =
-  "<defs>" +
-   "<linearGradient id=\"" + id + "bell\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#E6F8FD\" stop-opacity=\".86\"/><stop offset=\"1\" stop-color=\"#8FD3E9\" stop-opacity=\".5\"/></linearGradient>" +
-   "<linearGradient id=\"" + id + "s\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"s1\" offset=\"0\"/><stop class=\"s2\" offset=\"1\"/></linearGradient>" +
-   "<clipPath id=\"" + id + "c\"><path d=\"" + bell + "\"/></clipPath>" +
-  "</defs>" +
-  "<g class=\"drift\"><g class=\"bellPulse\">" +
-    "<path class=\"bell\" fill=\"url(#" + id + "bell)\" d=\"" + bell + "\"/>" +
-    "<g clip-path=\"url(#" + id + "c)\"><path class=\"bellSand\" d=\"M6 17.2Q30 22.4 54 17.2V31H6Z\"/><path class=\"surface\" d=\"M10 17.2Q30 22.4 50 17.2\"/></g>" +
-    "<path class=\"bellHi\" d=\"M13.4 19.6C14 13.4 18.4 8.8 23.8 7.8\"/>" +
-    "<g class=\"t\" style=\"transform-origin:21px 27px\"><path class=\"tent-soft\" d=\"M21 26.4C19 33.4 23.4 37.6 20.6 43.6C18.6 48.2 21.4 51.4 20 56.2\"/><path class=\"tent\" d=\"M21 26.4C19 33.4 23.4 37.6 20.6 43.6C18.6 48.2 21.4 51.4 20 56.2\"/></g>" +
-    "<g class=\"t t2\" style=\"transform-origin:30px 27.4\"><path class=\"tent-soft\" d=\"M30 27.4C32.4 34.4 28 38.8 31 44.6C33.4 49 30.2 52.2 31.4 57.4\"/><path class=\"tent\" d=\"M30 27.4C32.4 34.4 28 38.8 31 44.6C33.4 49 30.2 52.2 31.4 57.4\"/></g>" +
-    "<g class=\"t t3\" style=\"transform-origin:39px 26.6\"><path class=\"tent-soft\" d=\"M39 26.6C41.4 33 37.2 37.4 40.2 43C42.4 47.4 39.6 50.6 40.8 55\"/><path class=\"tent\" d=\"M39 26.6C41.4 33 37.2 37.4 40.2 43C42.4 47.4 39.6 50.6 40.8 55\"/></g>" +
-    "<path class=\"stream-soft\" d=\"M30 24V31\"/><path class=\"stream\" d=\"M30 24V31\"/>" +
-    "<circle class=\"eye\" cx=\"24.9\" cy=\"13\" r=\"1.8\"/><circle class=\"eye\" cx=\"35.1\" cy=\"13\" r=\"1.8\"/>" +
-    "<circle class=\"eye-hi\" cx=\"24.3\" cy=\"12.4\" r=\".48\"/><circle class=\"eye-hi\" cx=\"34.5\" cy=\"12.4\" r=\".48\"/>" +
-    "<ellipse class=\"blush\" cx=\"22.4\" cy=\"15.7\" rx=\"1.7\" ry=\".8\"/><ellipse class=\"blush\" cx=\"37.6\" cy=\"15.7\" rx=\"1.7\" ry=\".8\"/>" +
-    "<path class=\"mouth\" d=\"M27.8 16.2Q30 18.2 32.2 16.2\"/>" +
-    "<circle class=\"grain\" cx=\"20.6\" cy=\"39.6\" r=\".7\"/><circle class=\"grain g2\" cx=\"31\" cy=\"41\" r=\".6\"/><circle class=\"grain g3\" cx=\"40.2\" cy=\"38.8\" r=\".65\"/>" +
-  "</g></g>";
-  return "<svg class=\"art a2\" viewBox=\"-2 -1 64 62\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + inner + "</svg>";
-}
-
-function spiral(cx, cy, turns, rmax, rmin){
-  var d = "";
-  for(var i = 0; i <= 120; i++){
-    var t = i / 120, a = -Math.PI / 2 + t * turns * 2 * Math.PI, r = rmax * (1 - t) + rmin * t;
-    d += (i ? "L" : "M") + (cx + Math.cos(a) * r).toFixed(2) + " " + (cy + Math.sin(a) * r).toFixed(2);
-  }
-  return d;
-}
-
-function buildSnail(id){
-  var inner =
-  "<defs>" +
-   "<linearGradient id=\"" + id + "shellG\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop class=\"s1\" offset=\"0\"/><stop class=\"s2\" offset=\"1\"/></linearGradient>" +
-   "<linearGradient id=\"" + id + "s\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop class=\"s1\" offset=\"0\"/><stop class=\"s2\" offset=\"1\"/></linearGradient>" +
-  "</defs>" +
-  "<g class=\"trail\">" +
-    "<circle class=\"trailDot\" cx=\"49\" cy=\"54.5\" r=\"1.2\"/>" +
-    "<circle class=\"trailDot\" cx=\"55\" cy=\"55\" r=\"1\" style=\"animation-delay:-.6s\"/>" +
-    "<circle class=\"trailDot\" cx=\"45.5\" cy=\"55.2\" r=\".9\" style=\"animation-delay:-1.2s\"/>" +
-    "<circle class=\"trailDot\" cx=\"52\" cy=\"54.2\" r=\".8\" style=\"animation-delay:-1.8s\"/>" +
-  "</g>" +
-  "<g class=\"snailMove\">" +
-    "<path class=\"body\" d=\"M8 50.5C7 44.6 9.4 38.4 14.6 33.8C17.6 31 21.4 29.6 24.6 31.4C28.8 33.8 32.6 37 35.6 41C37.6 43.6 38.6 46.6 38.6 49.6C35.4 52 30.6 53 26.4 52.4C20.4 51.8 13.4 51.8 8 50.5Z\"/>" +
-    "<path class=\"body\" d=\"M11.6 33.8C9.4 30.4 10 25.4 13.6 22.8C17 20.4 21.6 22 23.2 25.8C24.8 29.6 23.2 33.4 19.6 34.6C16.8 35.6 13.4 35.4 11.6 33.8Z\"/>" +
-    "<g class=\"shell\">" +
-      "<circle cx=\"37.4\" cy=\"36.2\" r=\"14.2\" fill=\"url(#" + id + "shellG)\"/>" +
-      "<path class=\"shellHi\" d=\"M29.4 27.6C24.6 31 23 37.6 26 42.6\"/>" +
-      "<path class=\"spiral\" d=\"" + spiral(38, 36.6, 2.45, 12.6, 1.4) + "\"/>" +
-      "<circle class=\"shellRim\" cx=\"37.4\" cy=\"36.2\" r=\"14.2\"/>" +
-      "<path class=\"miniSoft\" d=\"M37.4 36.6V44.4\"/><path class=\"miniStream\" d=\"M37.4 36.6V44.4\"/>" +
-      "<circle class=\"grain\" cx=\"37.4\" cy=\"39.2\" r=\".6\"/><circle class=\"grain g2\" cx=\"37.4\" cy=\"42\" r=\".5\"/>" +
-    "</g>" +
-    "<g class=\"stalk\" style=\"transform-origin:15px 24px\"><path d=\"M14.6 23.6C13.6 19.8 13 17.2 12.6 15.4\" fill=\"none\" stroke=\"var(--bodyLine)\" stroke-width=\"1.5\" stroke-linecap=\"round\"/></g>" +
-    "<g class=\"stalk r\" style=\"transform-origin:20px 24px\"><path d=\"M20 23.8C20.6 20 21.4 17.6 22 15.6\" fill=\"none\" stroke=\"var(--bodyLine)\" stroke-width=\"1.5\" stroke-linecap=\"round\"/></g>" +
-    "<circle cx=\"12.5\" cy=\"14.4\" r=\"2.5\" fill=\"var(--eyeHi)\" stroke=\"var(--rim)\" stroke-width=\".7\"/>" +
-    "<circle cx=\"22.1\" cy=\"14.6\" r=\"2.5\" fill=\"var(--eyeHi)\" stroke=\"var(--rim)\" stroke-width=\".7\"/>" +
-    "<circle cx=\"12.9\" cy=\"14.6\" r=\"1.05\" fill=\"var(--eye)\"/><circle cx=\"22.5\" cy=\"14.8\" r=\"1.05\" fill=\"var(--eye)\"/>" +
-    "<circle class=\"eye\" cx=\"14.4\" cy=\"26.6\" r=\"1.35\"/><circle class=\"eye\" cx=\"19.6\" cy=\"26.8\" r=\"1.35\"/>" +
-    "<path class=\"mouth\" d=\"M15.6 29.8Q17 31.4 18.4 29.8\" stroke-width=\".95\"/>" +
-  "</g>";
-  return "<svg class=\"art a3\" viewBox=\"0 2 62 58\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + inner + "</svg>";
-}
-
-function buildRun(id){
-  var d = defs(id);
-  var inner = "<ellipse class=\"shadow runSh\" cx=\"23\" cy=\"70\" rx=\"14\" ry=\"1.5\"/>" +
-   "<g class=\"speeds\"><path class=\"speed\" d=\"M2 20H-4\"/><path class=\"speed s2\" d=\"M3 31.5H-2.5\"/><path class=\"speed s3\" d=\"M2.5 44H-3.5\"/></g>" +
-   "<g class=\"runRig\">" + glassBody(id) + faceMark() +
-     "<ellipse class=\"foot\" cx=\"14.2\" cy=\"67.8\" rx=\"3.5\" ry=\"1.8\"/>" +
-     "<ellipse class=\"foot b\" cx=\"31.8\" cy=\"67.8\" rx=\"3.5\" ry=\"1.8\"/>" +
-   "</g>" +
-   "<circle class=\"dust\" cx=\"6.5\" cy=\"69.4\" r=\"1.1\"/><circle class=\"dust d2\" cx=\"10\" cy=\"70.4\" r=\".8\"/>";
-  return "<svg class=\"art a4\" viewBox=\"-7 0 60 74\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + d + inner + "</svg>";
-}
-
-function buildTide(id){
-  var d = defs(id);
-  var top = "<g clip-path=\"url(#" + id + "t)\"><g class=\"tideTop\">" +
-    "<path class=\"sand\" d=\"M0 8.6Q23 13.8 46 8.6V34H0Z\"/><path class=\"surface\" d=\"M4 8.8Q23 14 42 8.8\"/></g></g>";
-  var bot = "<g clip-path=\"url(#" + id + "b)\"><g class=\"tideBot\">" +
-    "<path class=\"pile\" d=\"M3.4 64C12.5 58.4 17.6 52.4 23.6 52.4C29.6 52.4 33.5 58.4 42.6 64Z\"/></g></g>";
-  var up = [0,1,2,3,4].map(function(i){
-    return "<circle class=\"rise r" + (i + 1) + "\" cx=\"" + (22.4 + (i % 3) * .5) + "\" cy=\"" + (50 - i * .4) + "\" r=\"" + (i % 2 ? .55 : .7) + "\"/>";
-  }).join("");
-  var down = [0,1,2,3,4].map(function(i){
-    return "<circle class=\"rise r" + ((i + 2) % 5 + 1) + "\" cx=\"" + (23.2 + (i % 3) * .45) + "\" cy=\"" + (34.6 + i * .4) + "\" r=\"" + (i % 2 ? .55 : .7) + "\"/>";
-  }).join("");
-  var spark = "<g class=\"spark\"><path d=\"M8 12l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7z\"/></g>" +
-    "<g class=\"spark k2\"><path d=\"M38 20l.6 1.8 1.8.6-1.8.6-.6 1.8-.6-1.8-1.8-.6 1.8-.6z\"/></g>" +
-    "<g class=\"spark k3\"><path d=\"M11 41l.5 1.6 1.6.5-1.6.5-.5 1.6-.5-1.6-1.6-.5 1.6-.5z\"/></g>";
-  var inner = "<ellipse class=\"shadow\" cx=\"23\" cy=\"67\" rx=\"15\" ry=\"1.6\"/>" +
-    "<g>" + glassBody(id, { top:top, bot:bot, stream:false }) +
-      "<ellipse class=\"glow\" cx=\"23\" cy=\"4\" rx=\"21\" ry=\"2.4\"/>" +
-      "<ellipse class=\"glow\" cx=\"23\" cy=\"64\" rx=\"21\" ry=\"2.4\"/>" +
-      "<path class=\"stream-soft\" d=\"M23 36V51.6\"/><path class=\"stream\" d=\"M23 36V51.6\"/>" +
-      "<g class=\"up\">" + up + "</g><g class=\"down\">" + down + "</g>" +
-      faceMark() + spark +
-    "</g>";
-  return "<svg class=\"art a5\" viewBox=\"-6 -3 58 75\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + d + inner + "</svg>";
-}
-
-function buildSneeze(id){
-  var d = defs(id);
-  var burst = [];
-  for(var i = 0; i < 12; i++){
-    var a = (i / 12) * Math.PI * 2 + 0.35, r = 18 + (i % 3) * 4;
-    burst.push("<circle class=\"burst\" cx=\"23\" cy=\"40\" r=\"" + (i % 3 ? .7 : 1) + "\" fill=\"var(--sand2)\" " +
-      "style=\"--dx:" + (Math.cos(a) * r).toFixed(1) + "px;--dy:" + (Math.sin(a) * r * 0.85).toFixed(1) + "px\"/>");
-  }
-  var puffs = [[6,22,-6,-4],[40,24,7,-5],[8,55,-5,3],[39,56,6,4]].map(function(p){
-    return "<path class=\"puff\" d=\"M" + p[0] + " " + p[1] + "h3.2\" style=\"--px:" + p[2] + "px;--py:" + p[3] + "px\"/>";
-  }).join("");
-  var face = "<g class=\"face\">" +
-    "<ellipse class=\"blush\" cx=\"15.2\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/><ellipse class=\"blush\" cx=\"30.8\" cy=\"13.2\" rx=\"1.9\" ry=\".9\"/>" +
-    "<circle class=\"eye\" cx=\"18\" cy=\"10.9\" r=\"1.72\"/><circle class=\"eye\" cx=\"28\" cy=\"10.9\" r=\"1.72\"/>" +
-    "<circle class=\"eye-hi\" cx=\"17.4\" cy=\"10.3\" r=\".45\"/><circle class=\"eye-hi\" cx=\"27.4\" cy=\"10.3\" r=\".45\"/>" +
-    "<path class=\"eyeHappy\" d=\"M16.2 11.4Q18.2 9.4 20.2 11.4\"/><path class=\"eyeHappy\" d=\"M25.8 11.4Q27.8 9.4 29.8 11.4\"/>" +
-    "<path class=\"mSmile mouth\" d=\"M21 13.9Q23 15.6 25 13.9\"/>" +
-    "<ellipse class=\"mO\" cx=\"23\" cy=\"14.9\" rx=\"1\" ry=\"1.2\"/>" +
-    "<ellipse class=\"mBig\" cx=\"23\" cy=\"15.2\" rx=\"2.1\" ry=\"1.8\"/>" +
-    "<path class=\"mWavy\" d=\"M20.6 15Q22.2 13.9 23.6 15Q25 16.1 26.4 15\"/>" +
-    "<path class=\"dizzy\" d=\"M16.3 9.5L19 12.2\"/><path class=\"dizzy\" d=\"M19 9.5L16.3 12.2\"/>" +
-    "<path class=\"dizzy\" d=\"M27 9.5L29.7 12.2\"/><path class=\"dizzy\" d=\"M29.7 9.5L27 12.2\"/>" +
-  "</g>";
-  var inner = "<ellipse class=\"shadow sneezeSh\" cx=\"23\" cy=\"67\" rx=\"15\" ry=\"1.6\"/>" +
-    "<g class=\"sneezeBody\">" + glassBody(id) + face + "</g>" +
-    "<g class=\"burstWrap\">" + burst.join("") + "</g>" + puffs;
-  return "<svg class=\"art a6\" viewBox=\"-8 0 62 73\" aria-hidden=\"true\" style=\"--sg:url(#" + id + "s)\">" + d + inner + "</svg>";
-}
-
-var BUILDERS = { hop:buildHop, jelly:buildJelly, snail:buildSnail, run:buildRun, tide:buildTide, sneeze:buildSneeze };
-
-function ornamentSVG(key){
-  if(key === "classic") return hourglassSVG();
-  var build = BUILDERS[key];
-  return build ? build(uid()) : hourglassSVG();
-}
-
-/* ==================== 侧栏槽位 ==================== */
-var slot = null;
-var renderedKey = "";
-
-/* 「摆上摆件后导航会不会溢出」才是唯一判据：窗口矮但导航放得下时照常显示。
-   旧实现拿 nav.lastElementChild 量内容高度，而桌面端最后一项是 display:none 的
-   .mob-more（高度 0），永远量不出溢出；只剩 CSS 的 max-height 媒体查询在硬撑，
-   于是开关打开、窗口一矮摆件整块消失。这里临时显示槽位后直接比 scrollHeight。 */
-function navIsTight(){
-  var nav = document.querySelector(".side-nav");
-  if(!nav) return false;
-  if(document.documentElement.getAttribute("data-layout") === "mobile") return true;
-  var wasHidden = slot.hidden;
-  slot.hidden = false;
-  var tight = nav.scrollHeight > nav.clientHeight + 2;
-  slot.hidden = wasHidden;
-  return tight;
-}
-
-function syncReason(){
-  var reason = $("meOrnReason");
-  if(!reason) return;
-  if(!orn.on){
-    reason.hidden = false;
-    reason.textContent = "摆件已关闭；打开上面的开关后才能切换形态。";
-    return;
-  }
-  if(slot && slot.hidden){
-    reason.hidden = false;
-    reason.textContent = "当前窗口较矮或侧栏导航已需要滚动，摆件暂时让位；窗口调高或收起展开的导航后会重新出现。";
-    return;
-  }
-  reason.hidden = true;
-}
-
-function renderSlot(force){
-  slot = slot || $("sideOrnament");
-  if(!slot) return;
-  if(!orn.on){ slot.hidden = true; syncReason(); return; }
-  if(force || renderedKey !== orn.pick){
-    slot.innerHTML = ornamentSVG(orn.pick);
-    renderedKey = orn.pick;
-  }
-  slot.hidden = navIsTight();
-  syncReason();
-}
-
-function scheduleSync(){
-  if(scheduleSync.queued) return;
-  scheduleSync.queued = true;
-  requestAnimationFrame(function(){
-    scheduleSync.queued = false;
-    renderSlot(false);
-  });
-}
-
-function initSideOrnament(){
-  slot = $("sideOrnament");
-  if(!slot) return;
-  if(slot.__wired) return;
-  slot.__wired = true;
-  renderSlot(true);
-  window.addEventListener("resize", scheduleSync, { passive:true });
-  var nav = document.querySelector(".side-nav");
-  if(nav){
-    nav.addEventListener("click", scheduleSync);
-    nav.addEventListener("keydown", scheduleSync);
-    if(window.ResizeObserver) new ResizeObserver(scheduleSync).observe(nav);
-  }
-  document.addEventListener("visibilitychange", function(){
-    document.body.classList.toggle("tab-hidden", document.hidden);
-  });
-  window.addEventListener("ornament:change", scheduleSync);
-  window.addEventListener("storage", function(e){
-    if(e.key !== PREF_KEY) return;
-    orn = readPref();
-    renderSlot(true);
-    syncSettings();
-  });
-}
-
-/* ==================== 个人设置 · 外观 ==================== */
-var TICK = "<svg viewBox=\"0 0 10 10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 5.2 4.2 7.4 8 3\"/></svg>";
-
-function syncSettings(){
-  var grid = $("meOrnGrid");
-  var sw = $("meOrnOn");
-  if(!grid || !sw) return;
-  sw.checked = orn.on;
-  grid.querySelectorAll("[data-orn]").forEach(function(b){
-    var on = b.getAttribute("data-orn") === orn.pick;
-    b.setAttribute("aria-checked", on ? "true" : "false");
-    b.tabIndex = on ? 0 : -1;
-    b.disabled = !orn.on;
-  });
-  grid.setAttribute("aria-disabled", orn.on ? "false" : "true");
-  syncReason();
-}
-
-function mountOrnamentSettings(){
-  var grid = $("meOrnGrid");
-  var sw = $("meOrnOn");
-  if(!grid || !sw) return;
-  if(!grid.__wired){
-    grid.__wired = true;
-    grid.innerHTML = ORN_OPTIONS.map(function(o){
-      return "<button class=\"orn-opt\" type=\"button\" role=\"radio\" data-orn=\"" + o.key + "\" aria-checked=\"false\">" +
-        "<span class=\"orn-pv\">" + ornamentSVG(o.key) + "</span>" +
-        "<span class=\"orn-t\"><b>" + o.name + "</b><em>" + o.dur + "</em></span>" +
-        "<span class=\"orn-tick\" aria-hidden=\"true\">" + TICK + "</span>" +
-      "</button>";
-    }).join("");
-    grid.addEventListener("click", function(e){
-      var b = e.target.closest("[data-orn]");
-      if(!b || b.disabled) return;
-      setOrnamentPref({ pick:b.getAttribute("data-orn") });
-    });
-    grid.addEventListener("keydown", function(e){
-      if(["ArrowRight","ArrowDown","ArrowLeft","ArrowUp"].indexOf(e.key) < 0) return;
-      var list = [].slice.call(grid.querySelectorAll("[data-orn]:not(:disabled)"));
-      var i = list.indexOf(document.activeElement);
-      if(i < 0) return;
-      e.preventDefault();
-      var next = (e.key === "ArrowRight" || e.key === "ArrowDown")
-        ? (i + 1) % list.length : (i - 1 + list.length) % list.length;
-      list[next].focus();
-      list[next].click();
-    });
-    sw.addEventListener("change", function(){ setOrnamentPref({ on:sw.checked }); });
-    var reset = $("meOrnReset");
-    if(reset) reset.addEventListener("click", function(){ setOrnamentPref({ on:true, pick:"classic" }); });
-    window.addEventListener("ornament:change", syncSettings);
-  }
-  syncSettings();
-}
-
 /* ---- core/univer-doc-io.js ---- */
 /* core/univer-doc-io · Univer 文档快照与 HTML / 纯文本互转（调用前需 core/doc-editor.js 的 ensureVendor 已就绪） */
 
@@ -54392,6 +54837,548 @@ function parseSnapshot(content){
   }catch(e){
     return null;
   }
+}
+
+/* ---- core/xlsx-fidelity.js ---- */
+/* core/xlsx-fidelity · ExcelJS ⇄ Univer 表格快照互转。
+   目标：导入导出保留单元格样式、合并、列宽行高、冻结与公式；图表/图片/数据透视不保留。 */
+
+var VENDOR_URL = API.url("/vendor/exceljs/exceljs.min.js");
+var MAX_CELLS = 100000;
+var MAX_SHEETS = 20;
+var MAX_ROWS = 20000;
+var MAX_COLS = 300;
+/* 快照 appVersion 必须与本仓 vendor/univer 的 UMD 版本一致，否则 Univer 迁移链会错位 */
+var APP_VERSION = "1.3.0";
+var DEFAULT_COL_W = 88;
+var DEFAULT_ROW_H = 24;
+
+/* ExcelJS 的边框样式名 → Univer BorderStyleTypes（1=thin … 13=thick） */
+var BORDER_STYLE = {
+  thin: 1, hair: 2, dotted: 3, dashed: 4, dashDot: 5, dashDotDot: 6,
+  double: 7, medium: 8, mediumDashed: 9, mediumDashDot: 10,
+  mediumDashDotDot: 11, slantDashDot: 12, thick: 13
+};
+var H_ALIGN = { left: 1, center: 2, right: 3, justify: 4, fill: 5, distributed: 6 };
+var V_ALIGN = { top: 1, middle: 2, bottom: 3 };
+var DECORATION = { single: 12, double: 10 }; /* TextDecoration.SINGLE / DOUBLE */
+
+var excelPromise = null;
+
+function ensureExcelJs(){
+  if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if(excelPromise) return excelPromise;
+  excelPromise = new Promise(function(resolve, reject){
+    var el = document.createElement("script");
+    el.src = VENDOR_URL;
+    el.onload = function(){
+      window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error("ExcelJS 未就绪"));
+    };
+    el.onerror = function(){ reject(new Error("表格导入组件加载失败")); };
+    document.head.appendChild(el);
+  }).catch(function(ex){ excelPromise = null; throw ex; });
+  return excelPromise;
+}
+
+/* ---------- 基础换算 ---------- */
+
+/** ExcelJS 用 ARGB（含 theme 索引）；Univer 只认 #RRGGBB */
+function cssColor(color){
+  if(!color) return null;
+  var argb = color.argb;
+  if(typeof argb !== "string" || !/^[0-9a-fA-F]{6,8}$/.test(argb)) return null;
+  if(argb.length === 8 && parseInt(argb.slice(0, 2), 16) === 0) return null;
+  return "#" + argb.slice(-6);
+}
+
+function ptToPx(pt){
+  return Math.round((Number(pt) || 0) * 96 / 72);
+}
+function pxToPt(px){
+  return Math.round((Number(px) || 0) * 72 / 96 * 100) / 100;
+}
+/** Excel 列宽按字符数，Univer 用像素；Calibri 11 下 1 字符约 7px + 5px 内边距 */
+function charsToPx(chars){
+  return Math.round((Number(chars) || 0) * 7 + 5);
+}
+function pxToChars(px){
+  return Math.max(2, Math.round(((Number(px) || 0) - 5) / 7 * 100) / 100);
+}
+
+/** Excel 日期序列号（1900 日期系统，含 1900-02-29 的历史偏差） */
+function dateToSerial(date){
+  var ms = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(),
+    date.getHours(), date.getMinutes(), date.getSeconds());
+  return (ms - Date.UTC(1899, 11, 30)) / 86400000;
+}
+
+function colToNum(text){
+  var n = 0;
+  for(var i = 0; i < text.length; i++) n = n * 26 + (text.charCodeAt(i) - 64);
+  return n;
+}
+
+/** ExcelJS 的合并地址形如 "A1:B2"（可能带 Sheet 前缀）→ Univer IRange（0-based） */
+function parseMergeRange(text){
+  var m = String(text || "").match(/([A-Z]+)(\d+):([A-Z]+)(\d+)\s*$/i);
+  if(!m) return null;
+  var r1 = Number(m[2]) - 1, c1 = colToNum(m[1].toUpperCase()) - 1;
+  var r2 = Number(m[4]) - 1, c2 = colToNum(m[3].toUpperCase()) - 1;
+  return { startRow: Math.min(r1, r2), startColumn: Math.min(c1, c2),
+    endRow: Math.max(r1, r2), endColumn: Math.max(c1, c2) };
+}
+
+/* ---------- 样式池：同样的样式只存一份，单元格里存 id ---------- */
+
+function StyleBook(){
+  this.byKey = {};
+  this.byId = {};
+  this.seq = 0;
+}
+StyleBook.prototype.add = function(style){
+  if(!style || !Object.keys(style).length) return null;
+  var key = JSON.stringify(style);
+  if(this.byKey[key]) return this.byKey[key];
+  var id = "s" + (++this.seq);
+  this.byKey[key] = id;
+  this.byId[id] = style;
+  return id;
+};
+
+/* ---------- ExcelJS → Univer ---------- */
+
+function borderOf(style, key){
+  var b = style && style.border && style.border[key];
+  if(!b || !b.style) return null;
+  var type = BORDER_STYLE[b.style];
+  if(!type) return null;
+  var color = cssColor(b.color);
+  return { s: type, cl: { rgb: color || "#000000" } };
+}
+
+function styleOf(cell){
+  var st = cell.style || {};
+  var out = {};
+  var font = st.font;
+  if(font){
+    if(font.name) out.ff = font.name;
+    if(font.size) out.fs = font.size;
+    if(font.bold) out.bl = 1;
+    if(font.italic) out.it = 1;
+    var fc = cssColor(font.color);
+    if(fc) out.cl = { rgb: fc };
+    if(font.strike) out.st = { s: 1, t: DECORATION.single };
+    if(font.underline){
+      var ulType = /double/i.test(String(font.underline)) ? DECORATION.double : DECORATION.single;
+      out.ul = { s: 1, t: ulType };
+    }
+    if(font.vertAlign === "superscript") out.va = 3;
+    else if(font.vertAlign === "subscript") out.va = 2;
+  }
+  var fill = st.fill;
+  if(fill && fill.type === "pattern" && fill.pattern === "solid"){
+    var bg = cssColor(fill.fgColor);
+    if(bg) out.bg = { rgb: bg };
+  } else if(fill && fill.type === "gradient" && fill.stops && fill.stops.length){
+    /* Univer 单元格底色不支持渐变，取首个色标近似 */
+    var g = cssColor(fill.stops[0].color);
+    if(g) out.bg = { rgb: g };
+  }
+  var al = st.alignment;
+  if(al){
+    if(H_ALIGN[al.horizontal]) out.ht = H_ALIGN[al.horizontal];
+    if(V_ALIGN[al.vertical]) out.vt = V_ALIGN[al.vertical];
+    if(al.wrapText) out.tb = 3; /* WrapStrategy.WRAP */
+    if(al.shrinkToFit) out.stf = 1;
+    var rot = al.textRotation;
+    if(typeof rot === "number" && rot){
+      if(rot === 255) out.tr = { a: 0, v: 1 };
+      else if(rot <= 90) out.tr = { a: rot };
+      else out.tr = { a: 180 - rot }; /* OOXML 90~180 表示顺时针，换算回 -90~0 */
+    }
+  }
+  var top = borderOf(st, "top"), bottom = borderOf(st, "bottom");
+  var left = borderOf(st, "left"), right = borderOf(st, "right");
+  if(top || bottom || left || right){
+    out.bd = {};
+    if(top) out.bd.t = { s: top.s, cl: top.cl };
+    if(bottom) out.bd.b = { s: bottom.s, cl: bottom.cl };
+    if(left) out.bd.l = { s: left.s, cl: left.cl };
+    if(right) out.bd.r = { s: right.s, cl: right.cl };
+  }
+  if(st.numFmt) out.n = { pattern: st.numFmt };
+  return Object.keys(out).length ? out : null;
+}
+
+function richTextPlain(value){
+  var parts = value && value.richText;
+  if(!parts || !parts.length) return null;
+  var text = "";
+  parts.forEach(function(part){ text += part.text == null ? "" : String(part.text); });
+  return text;
+}
+
+/** ExcelJS 单元格值 → Univer ICellData 的取值部分（v/f/custom） */
+function valueOf(cell){
+  var type = cell.type;
+  var VT = window.ExcelJS.ValueType;
+  var value = cell.value;
+  if(value === null || value === undefined || type === VT.Merge) return null;
+  if(value instanceof Date || type === VT.Date){
+    return { v: dateToSerial(value) };
+  }
+  if(type === VT.Number) return { v: value };
+  if(type === VT.Boolean) return { v: !!value };
+  if(type === VT.String || type === VT.SharedString) return { v: String(value) };
+  if(type === VT.Error) return { v: value.error || "#ERROR" };
+  if(type === VT.Formula || (value && value.formula)){
+    var result = value.result;
+    if(result instanceof Date) result = dateToSerial(result);
+    else if(result && typeof result === "object" && result.error) result = result.error;
+    var out = { f: "=" + String(value.formula || "").replace(/^=/, "") };
+    if(result !== undefined && result !== null) out.v = result;
+    return out;
+  }
+  if(value && value.richText) return { v: richTextPlain(value) };
+  if(value && value.hyperlink){
+    /* 保留链接地址，导出时可还原；单元格内不渲染成可点击样式（Univer 1.5 需富文本文档结构） */
+    return { v: value.text == null ? value.hyperlink : String(value.text),
+      custom: { hgLink: String(value.hyperlink) } };
+  }
+  if(typeof value === "string" || typeof value === "number" || typeof value === "boolean"){
+    return { v: value };
+  }
+  return null;
+}
+
+/**
+ * ExcelJS Buffer → Univer 工作簿快照。
+ * opts: { filename, locale }；超出单元格/行列上限直接抛错，避免静默截断丢数据。
+ */
+async function excelToSnapshot(buffer, opts){
+  var E = await ensureExcelJs();
+  opts = opts || {};
+  var wb = new E.Workbook();
+  await wb.xlsx.load(buffer);
+  var sheets = wb.worksheets || [];
+  if(!sheets.length) throw new Error("Excel 里没有工作表");
+  if(sheets.length > MAX_SHEETS) throw new Error("工作表超过 " + MAX_SHEETS + " 个，请拆分后再导入");
+
+  var book = new StyleBook();
+  var snapshot = {
+    id: "wb-" + Date.now().toString(36),
+    name: opts.filename || "表格",
+    appVersion: APP_VERSION,
+    locale: opts.locale || "zhCN",
+    styles: {},
+    sheetOrder: [],
+    sheets: {}
+  };
+  var totalCells = 0;
+
+  sheets.forEach(function(ws, idx){
+    var id = "sh" + (idx + 1);
+    var cellData = {};
+    var mergeData = [];
+    var rowData = {};
+    var columnData = {};
+    var maxRow = 0, maxCol = 0;
+
+    ws.eachRow({ includeEmpty: true }, function(row, rowNumber){
+      if(rowNumber > MAX_ROWS) throw new Error("「" + ws.name + "」超过 " + MAX_ROWS + " 行上限");
+      row.eachCell({ includeEmpty: true }, function(cell, colNumber){
+        if(colNumber > MAX_COLS) throw new Error("「" + ws.name + "」超过 " + MAX_COLS + " 列上限");
+        var isDate = cell.type === E.ValueType.Date || cell.value instanceof Date;
+        var style = styleOf(cell);
+        var value = valueOf(cell);
+        if(!style && !value) return;
+        totalCells++;
+        if(totalCells > MAX_CELLS) throw new Error("单元格超过 " + MAX_CELLS + " 个上限，请拆分后再导入");
+        if(isDate && (!style || !style.n)){
+          style = style || {};
+          style.n = { pattern: "yyyy-mm-dd" }; /* 有值无格式的日期默认按日显示，避免显示成 45xxx */
+        }
+        var cellOut = value || {};
+        if(style) cellOut.s = book.add(style);
+        (cellData[rowNumber - 1] || (cellData[rowNumber - 1] = {}))[colNumber - 1] = cellOut;
+        if(rowNumber > maxRow) maxRow = rowNumber;
+        if(colNumber > maxCol) maxCol = colNumber;
+      });
+      if(row.height || row.hidden){
+        rowData[rowNumber - 1] = {
+          h: row.height ? ptToPx(row.height) : undefined,
+          hd: row.hidden ? 1 : undefined
+        };
+      }
+    });
+
+    (ws.model.merges || []).forEach(function(text){
+      var range = parseMergeRange(text);
+      if(!range) return;
+      if(range.endRow >= MAX_ROWS || range.endColumn >= MAX_COLS){
+        throw new Error("「" + ws.name + "」合并区域超出 " + MAX_ROWS + " 行 / " + MAX_COLS + " 列上限");
+      }
+      mergeData.push(range);
+      if(range.endRow + 1 > maxRow) maxRow = range.endRow + 1;
+      if(range.endColumn + 1 > maxCol) maxCol = range.endColumn + 1;
+    });
+
+    for(var c = 1; c <= maxCol; c++){
+      var col = ws.getColumn(c);
+      if(col.width === undefined && !col.hidden) continue;
+      columnData[c - 1] = {
+        w: col.width === undefined ? undefined : charsToPx(col.width),
+        hd: col.hidden ? 1 : undefined
+      };
+    }
+
+    var freeze = { xSplit: 0, ySplit: 0, startRow: 0, startColumn: 0 };
+    var view = (ws.views || [])[0];
+    if(view && view.state === "frozen"){
+      /* ExcelJS 对未冻结的方向可能给 -1 / undefined，Univer 侧按 0 处理 */
+      freeze.xSplit = Math.max(0, Number(view.xSplit) || 0);
+      freeze.ySplit = Math.max(0, Number(view.ySplit) || 0);
+      freeze.startRow = freeze.ySplit;
+      freeze.startColumn = freeze.xSplit;
+    }
+
+    snapshot.sheetOrder.push(id);
+    snapshot.sheets[id] = {
+      id: id,
+      name: String(ws.name || ("Sheet" + (idx + 1))).slice(0, 31),
+      tabColor: cssColor(ws.properties && ws.properties.tabColor) || "",
+      hidden: ws.state === "hidden" ? 1 : (ws.state === "veryHidden" ? 2 : 0),
+      freeze: freeze,
+      rowCount: Math.max(maxRow + 11, 100),
+      columnCount: Math.max(maxCol + 6, 30),
+      zoomRatio: 1,
+      scrollTop: 0,
+      scrollLeft: 0,
+      defaultColumnWidth: ws.properties && ws.properties.defaultColWidth
+        ? charsToPx(ws.properties.defaultColWidth) : DEFAULT_COL_W,
+      defaultRowHeight: ws.properties && ws.properties.defaultRowHeight
+        ? ptToPx(ws.properties.defaultRowHeight) : DEFAULT_ROW_H,
+      mergeData: mergeData,
+      cellData: cellData,
+      rowData: rowData,
+      columnData: columnData,
+      rowHeader: { width: 46 },
+      columnHeader: { height: 24 },
+      showGridlines: 1,
+      rightToLeft: 0
+    };
+  });
+
+  snapshot.styles = book.byId;
+  return snapshot;
+}
+
+/** 空工作簿快照（新建表格文档用） */
+function blankSnapshot(opts){
+  opts = opts || {};
+  var id = "sh1";
+  return {
+    id: "wb-" + Date.now().toString(36),
+    name: opts.filename || "表格",
+    appVersion: APP_VERSION,
+    locale: opts.locale || "zhCN",
+    styles: {},
+    sheetOrder: [id],
+    sheets: (function(){
+      var sheets = {};
+      sheets[id] = {
+        id: id,
+        name: "Sheet1",
+        tabColor: "",
+        hidden: 0,
+        freeze: { xSplit: 0, ySplit: 0, startRow: 0, startColumn: 0 },
+        rowCount: 100,
+        columnCount: 30,
+        zoomRatio: 1,
+        scrollTop: 0,
+        scrollLeft: 0,
+        defaultColumnWidth: DEFAULT_COL_W,
+        defaultRowHeight: DEFAULT_ROW_H,
+        mergeData: [],
+        cellData: {},
+        rowData: {},
+        columnData: {},
+        rowHeader: { width: 46 },
+        columnHeader: { height: 24 },
+        showGridlines: 1,
+        rightToLeft: 0
+      };
+      return sheets;
+    })()
+  };
+}
+
+/* ---------- Univer → ExcelJS ---------- */
+
+function styleById(styles, cell){
+  if(!cell || !cell.s) return null;
+  if(typeof cell.s === "object") return cell.s;
+  return styles[cell.s] || null;
+}
+
+function excelBorderOf(bd, key, style){
+  var side = bd && bd[key];
+  if(!side || !side.s) return null;
+  var name = null;
+  Object.keys(BORDER_STYLE).forEach(function(k){
+    if(BORDER_STYLE[k] === side.s && !name) name = k;
+  });
+  if(!name) return null;
+  return { style: name, color: { argb: "FF" + (side.cl && side.cl.rgb
+    ? side.cl.rgb.replace("#", "").toUpperCase() : "000000") } };
+}
+
+function excelStyleOf(style){
+  if(!style) return null;
+  var out = {};
+  var font = {};
+  if(style.ff) font.name = style.ff;
+  if(style.fs) font.size = style.fs;
+  if(style.bl) font.bold = true;
+  if(style.it) font.italic = true;
+  if(style.cl && style.cl.rgb) font.color = { argb: "FF" + style.cl.rgb.replace("#", "").toUpperCase() };
+  if(style.st && style.st.s) font.strike = true;
+  if(style.ul && style.ul.s){
+    font.underline = style.ul.t === DECORATION.double ? "double" : "single";
+  }
+  if(style.va === 3) font.vertAlign = "superscript";
+  else if(style.va === 2) font.vertAlign = "subscript";
+  if(Object.keys(font).length) out.font = font;
+
+  if(style.bg && style.bg.rgb){
+    out.fill = { type: "pattern", pattern: "solid",
+      fgColor: { argb: "FF" + style.bg.rgb.replace("#", "").toUpperCase() } };
+  }
+  var align = {};
+  var h = { 1: "left", 2: "center", 3: "right", 4: "justify", 5: "fill", 6: "distributed" }[style.ht];
+  var v = { 1: "top", 2: "middle", 3: "bottom" }[style.vt];
+  if(h) align.horizontal = h;
+  if(v) align.vertical = v;
+  if(style.tb === 3) align.wrapText = true;
+  if(style.stf) align.shrinkToFit = true;
+  if(style.tr && style.tr.a){
+    align.textRotation = style.tr.v ? 255 : (style.tr.a < 0 ? 180 + style.tr.a : style.tr.a);
+  }
+  if(Object.keys(align).length) out.alignment = align;
+
+  var border = {};
+  var top = excelBorderOf(style.bd, "t"), bottom = excelBorderOf(style.bd, "b");
+  var left = excelBorderOf(style.bd, "l"), right = excelBorderOf(style.bd, "r");
+  if(top) border.top = top;
+  if(bottom) border.bottom = bottom;
+  if(left) border.left = left;
+  if(right) border.right = right;
+  if(Object.keys(border).length) out.border = border;
+
+  if(style.n && style.n.pattern) out.numFmt = style.n.pattern;
+  return Object.keys(out).length ? out : null;
+}
+
+function plainTextOf(cell){
+  if(!cell) return null;
+  if(cell.p && cell.p.body && typeof cell.p.body.dataStream === "string"){
+    return cell.p.body.dataStream.replace(/[\r\n]+$/, "");
+  }
+  return null;
+}
+
+function linkOf(cell){
+  var ranges = cell && cell.p && cell.p.body && cell.p.body.customRanges;
+  if(!ranges || !ranges.length) return null;
+  for(var i = 0; i < ranges.length; i++){
+    if(ranges[i] && ranges[i].properties && ranges[i].properties.url){
+      return ranges[i].properties.url;
+    }
+  }
+  return null;
+}
+
+function excelValueOf(cell, style){
+  if(!cell) return null;
+  if(cell.f){
+    var result = cell.v;
+    if(result === undefined || result === null) result = undefined;
+    return { formula: String(cell.f).replace(/^=/, ""), result: result };
+  }
+  var text = plainTextOf(cell);
+  if(text !== null){
+    var url = linkOf(cell);
+    return url ? { text: text, hyperlink: url } : text;
+  }
+  if(cell.custom && cell.custom.hgLink){
+    return { text: cell.v == null ? "" : String(cell.v), hyperlink: String(cell.custom.hgLink) };
+  }
+  if(cell.v === undefined) return null;
+  return cell.v;
+}
+
+/** Univer 快照 → ExcelJS 工作簿字节（xlsx） */
+async function snapshotToExcel(snapshot){
+  var E = await ensureExcelJs();
+  var wb = new E.Workbook();
+  var styles = snapshot.styles || {};
+  (snapshot.sheetOrder || []).forEach(function(sheetId){
+    var ss = (snapshot.sheets || {})[sheetId];
+    if(!ss) return;
+    var ws = wb.addWorksheet(String(ss.name || "Sheet").slice(0, 31) || "Sheet", {
+      properties: {
+        tabColor: ss.tabColor ? { argb: "FF" + ss.tabColor.replace("#", "").toUpperCase() } : undefined,
+        defaultRowHeight: ss.defaultRowHeight ? pxToPt(ss.defaultRowHeight) : undefined,
+        defaultColWidth: ss.defaultColumnWidth ? pxToChars(ss.defaultColumnWidth) : undefined
+      },
+      state: ss.hidden === 2 ? "veryHidden" : (ss.hidden ? "hidden" : "visible")
+    });
+
+    var freeze = ss.freeze || {};
+    if(freeze.xSplit || freeze.ySplit){
+      ws.views = [{ state: "frozen", xSplit: freeze.xSplit || 0, ySplit: freeze.ySplit || 0 }];
+    }
+
+    var columnData = ss.columnData || {};
+    Object.keys(columnData).forEach(function(key){
+      var meta = columnData[key] || {};
+      var col = ws.getColumn(Number(key) + 1);
+      if(meta.w) col.width = pxToChars(meta.w);
+      if(meta.hd) col.hidden = true;
+    });
+
+    var rowData = ss.rowData || {};
+    Object.keys(rowData).forEach(function(key){
+      var meta = rowData[key] || {};
+      var row = ws.getRow(Number(key) + 1);
+      if(meta.h) row.height = pxToPt(meta.h);
+      if(meta.hd) row.hidden = true;
+    });
+
+    var cellData = ss.cellData || {};
+    Object.keys(cellData).forEach(function(rKey){
+      var row = cellData[rKey] || {};
+      Object.keys(row).forEach(function(cKey){
+        var cell = row[cKey];
+        if(!cell) return;
+        var style = styleById(styles, cell);
+        var target = ws.getCell(Number(rKey) + 1, Number(cKey) + 1);
+        var value = excelValueOf(cell, style);
+        if(value !== null) target.value = value;
+        var excelStyle = excelStyleOf(style);
+        if(excelStyle) target.style = excelStyle;
+      });
+    });
+
+    (ss.mergeData || []).forEach(function(range){
+      if(!range) return;
+      try{
+        ws.mergeCells(range.startRow + 1, range.startColumn + 1,
+          range.endRow + 1, range.endColumn + 1);
+      }catch(e){ /* 重叠合并等脏数据跳过，保证其余内容可导出 */ }
+    });
+  });
+  return wb.xlsx.writeBuffer();
 }
 
 /* ---- lib/delivery-doc.js ---- */
@@ -56314,6 +57301,7 @@ function openStageDrill(opts){
 /* 文档文本差异：行级 LCS + 行内词级差异；纯函数，无第三方依赖。
    行级 DP 先裁掉公共前后缀，只对中间区域计算；超大文档/差异过大时降级为整段替换。 */
 
+
 var MAX_LINES = 5000;
 var MAX_CELLS = 4000000;
 var MAX_TOKEN_CELLS = 360000;
@@ -56459,6 +57447,11 @@ function docLines(doc){
   if(doc.format === "univer"){
     var snap = parseSnapshot(doc.content);
     return splitLines(snap ? snapshotToText(snap) : "");
+  }
+  if(doc.format === "sheet"){
+    var wb = null;
+    try{ wb = JSON.parse(doc.content || ""); }catch(e){ wb = null; }
+    return splitLines(wb ? sheetSnapshotText(wb) : "");
   }
   return htmlToLines(doc.content);
 }
@@ -64072,8 +65065,9 @@ function loadDemandDocs(layer, id, reqId, writable){
     linked.forEach(function(doc){ linkedIds[doc.id] = true; });
     box.innerHTML = linked.length ? linked.map(function(doc){
       var md = doc.format === "markdown";
+      var iconText = md ? "MD" : (doc.format === "sheet" ? "XLS" : "HTML");
       return '<div class="attach-item dem-doc-item">'
-        + '<span class="att-icon">' + (md ? "MD" : "HTML") + '</span>'
+        + '<span class="att-icon">' + iconText + '</span>'
         + '<span class="att-name"><button class="link-cell" type="button" data-dem-doc-open="' + esc(doc.id) + '">' + esc(doc.title) + '</button></span>'
         + '<span class="att-size">' + esc(docTypeName(doc.docType)) + '</span>'
         + '<span class="att-acts">' + (writable
@@ -66976,6 +67970,8 @@ var activityUI = __NS["core/activity-ui.js"];
 var { openDemandDetailById } = __NS["views/demands.js"];
 
 
+
+
 var reqDocList = [];
 var reqDocDirty = false;
 var reqDocSaving = false;
@@ -66993,6 +67989,9 @@ var reqEditor = null;
 /* 在线文档视图（Univer）：与 SunEditor 互斥，同一时刻只挂载一个 */
 var reqUniverView = null;
 var reqUniverSeq = 0;
+/* 表格视图（Univer 工作簿）：同样与另外两个编辑器互斥 */
+var reqSheetView = null;
+var reqSheetSeq = 0;
 var reqCollapsed = {};
 var reqDocCollapsedDocs = {};
 /* 文档分类树（独立分类表 doc_category）：扁平缓存 + 分类折叠态 + 最近一次构建的分组模型（右键菜单按 id 查节点用） */
@@ -67049,6 +68048,9 @@ function applyReqDocReadOnly(on){
   if(reqUniverView){
     try{ reqUniverView.setReadOnly(on); }catch(e){ /* 视图切换中 */ }
   }
+  if(reqSheetView){
+    try{ reqSheetView.setReadOnly(on); }catch(e){ /* 视图切换中 */ }
+  }
   var saved = $("reqDocSaved");
   if(on && saved) saved.textContent = reqDocOwnerLocked ? "只读 · 仅文档负责人或空间管理员可编辑" : "只读 · 你对该项目只有查看权限";
 }
@@ -67084,16 +68086,44 @@ function isMarkdownDoc(){
 function isUniverDoc(){
   return editingMeta.format === "univer";
 }
+/* 表格（Univer 工作簿快照）：正文存 sheetContent，编辑/阅读走 core/sheet-editor */
+function isSheetDoc(){
+  return editingMeta.format === "sheet";
+}
+function docFormatLabel(format){
+  if(format === "markdown") return "Markdown";
+  if(format === "univer") return "富文本";
+  if(format === "sheet") return "表格";
+  return "HTML";
+}
 /* 服务端 format 归一化：未知格式一律按旧富文本（html）处理，避免历史脏数据打不开 */
 function docFormatOf(format){
   if(format === "markdown") return "markdown";
   if(format === "univer") return "univer";
+  if(format === "sheet") return "sheet";
   return "html";
 }
-/* 列表里的格式小标：Markdown 不标（默认），在线文档与旧 HTML 分开标 */
+/* 详情接口把表格正文放在 sheetContent，其余格式读 content */
+function docBodyOf(doc){
+  if(!doc) return "";
+  return docFormatOf(doc.format) === "sheet" ? (doc.sheetContent || "") : (doc.content || "");
+}
+/** 表格快照 JSON 解析：结构不对按空表处理，避免一份脏数据把编辑页卡死 */
+function parseSheetSnapshot(content){
+  if(!content) return null;
+  if(typeof content === "object") return content.sheets ? content : null;
+  try{
+    var parsed = JSON.parse(content);
+    return parsed && parsed.sheets && parsed.sheetOrder ? parsed : null;
+  }catch(e){
+    return null;
+  }
+}
+/* 列表里的格式小标：Markdown 不标（默认），其余格式各标一个 */
 function fmtChipHTML(format){
   if(format === "markdown") return "";
   if(format === "univer") return '<span class="rs-fmt-html" title="在线文档">在线</span>';
+  if(format === "sheet") return '<span class="rs-fmt-html" title="表格">表格</span>';
   return '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
 }
 function showEl(el, on){
@@ -67250,7 +68280,7 @@ function setReqEditorContents(html){
   }
 }
 function setReqDocHydrating(on){
-  var body = isUniverDoc() ? $("reqDocUniverBody") : $("reqDocRichBody");
+  var body = isUniverDoc() ? $("reqDocUniverBody") : (isSheetDoc() ? $("reqDocSheetBody") : $("reqDocRichBody"));
   if(body) body.classList.toggle("is-loading", !!on);
   if($("reqDocSaved") && on){
     $("reqDocSaved").classList.remove("is-saved", "is-dirty");
@@ -67264,6 +68294,60 @@ function disposeReqUniver(){
     try{ reqUniverView.dispose(); }catch(e){ /* 已销毁 */ }
     reqUniverView = null;
   }
+}
+function disposeReqSheet(){
+  reqSheetSeq++;
+  if(reqSheetView){
+    try{ reqSheetView.dispose(); }catch(e){ /* 已销毁 */ }
+    reqSheetView = null;
+  }
+}
+/* 阅读视图也挂了一个 Univer 工作簿：换文档/离开阅读时先销毁 */
+var reqSheetReaderView = null;
+function disposeReqSheetReader(){
+  if(reqSheetReaderView){
+    try{ reqSheetReaderView.dispose(); }catch(e){ /* 已销毁 */ }
+    reqSheetReaderView = null;
+  }
+}
+/* 挂载表格：有快照直接用；新建或旧数据为空时挂一张空白表 */
+function mountReqSheet(snapshot){
+  var seq = ++reqSheetSeq;
+  if(reqSheetView){
+    try{ reqSheetView.dispose(); }catch(e){ /* 已销毁 */ }
+    reqSheetView = null;
+  }
+  var box = $("reqDocSheetBody");
+  if(!box) return Promise.resolve(null);
+  setReqDocHydrating(true);
+  return openSheetView({
+    container: box,
+    snapshot: snapshot || blankSnapshot({ filename: editingMeta.title || "表格" }),
+    readOnly: reqDocReadOnly || reqDocOwnerLocked,
+    onDirty: function(){
+      markReqDocDirty();
+      scheduleDraftSave();
+    }
+  }).then(function(view){
+    if(seq !== reqSheetSeq){
+      try{ view.dispose(); }catch(e){ /* 已销毁 */ }
+      return null;
+    }
+    reqSheetView = view;
+    setReqDocHydrating(false);
+    reqDocDirty = false;
+    refreshReqDocSavedText();
+    updateReqDocCount();
+    applyReqDocReadOnly(reqDocReadOnly || reqDocOwnerLocked);
+    return view;
+  }).catch(function(ex){
+    if(seq === reqSheetSeq){
+      setReqDocHydrating(false);
+      refreshReqDocSavedText();
+      toast(ex.message || "表格编辑器加载失败", "bad");
+    }
+    return null;
+  });
 }
 /* 挂载在线文档：有快照直接用；没有快照时按 html 现场转换（旧 html 正文 / 导入文件） */
 function mountReqUniver(snapshot, html){
@@ -67412,12 +68496,27 @@ function reqDocKidsOf(parentId, reqId){
   });
   return out.sort(reqDocSort);
 }
-/* 拖拽移动计划：返回要提交给 /api/req-docs/reorder 的 items（含新父级与整组重排的 sortOrder） */
-function reqDocPlanMove(srcId, targetId, zone){
+/* 某分类下的顶层文档（parentId 为空），拖进目录时按它们重排；带父级的文档不在此调整 */
+function reqDocCatTopDocs(catId, reqId){
+  return reqDocList.filter(function(d){
+    if((d.reqId || "") !== (reqId || "")) return false;
+    if((d.categoryId || "") !== (catId || "")) return false;
+    return !d.parentId;
+  }).sort(reqDocSort);
+}
+/* 拖拽移动计划：返回要提交给 /api/req-docs/reorder 的 items（含新父级/分类与整组重排的 sortOrder）
+   zone：before/after/into/root 只在文档与项目头之间生效；into-cat 表示拖进分类目录，清空上级文档。
+   分类桶内跟着源文档一起显示的子树（同分类）一并改分类，避免移动后子文档被留在旧目录成为孤儿。 */
+function reqDocPlanMove(srcId, targetId, zone, catId){
   var src = reqDocById(srcId);
   if(!src) return null;
-  var newParentId, kids;
-  if(zone === "into"){
+  var newParentId, newCatId, kids;
+  if(zone === "into-cat"){
+    if(!catId) return null;
+    newParentId = null;
+    newCatId = catId;
+    kids = reqDocCatTopDocs(catId, src.reqId);
+  }else if(zone === "into"){
     var t = reqDocById(targetId);
     if(!t) return null;
     newParentId = t.id;
@@ -67444,7 +68543,17 @@ function reqDocPlanMove(srcId, targetId, zone){
   kids.splice(idx, 0, src);
   var items = [];
   for(var j = 0; j < kids.length; j++){
-    items.push({ id: kids[j].id, sortOrder: j * 10, parentId: newParentId });
+    var it = { id: kids[j].id, sortOrder: j * 10, parentId: newParentId };
+    if(zone === "into-cat" && kids[j].id === srcId) it.categoryId = newCatId;
+    items.push(it);
+  }
+  if(zone === "into-cat"){
+    var desc = reqDocDescendants(srcId);
+    var srcCat = src.categoryId || "";
+    reqDocList.forEach(function(d){
+      if(!desc[d.id] || (d.categoryId || "") !== srcCat) return;
+      items.push({ id: d.id, sortOrder: d.sortOrder || 0, parentId: d.parentId || null, categoryId: newCatId });
+    });
   }
   return items;
 }
@@ -68014,6 +69123,7 @@ function renderReqDocMode(){
   syncReqDocFilterUI();
   syncReqDocScopeUI();
   syncReqDocLoadError();
+  if(reqDocMode !== "read") disposeReqSheetReader();
   if(reqDocMode === "kanban") renderReqDocKanban();
   else if(reqDocMode === "read") renderReqDocSplit();
   else if(reqDocMode === "feed") renderReqDocFeed();
@@ -68438,6 +69548,7 @@ function renderReqDocSplit(){
   /* 选中的文档已被删除：回到占位提示 */
   if(splitDocId && !reqDocById(splitDocId)){
     splitDocId = null;
+    disposeReqSheetReader();
     if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title"><span class="desk-only">从左侧选择文档阅读</span><span class="mob-inline">从上方目录选择文档</span></div>'
       + '<div class="rrd-empty-text">原文档已删除；可以再选一篇，或新建一篇。</div>'
       + '<button class="btn sm" type="button" data-rrd-new style="margin-top:12px">新建文档</button></div>';
@@ -68547,6 +69658,7 @@ function reqDocReaderFill(body, cleanHtml){
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
+  disposeReqSheetReader();
   rrdDocDetail = doc;
   var pubBadge = doc.publishedAt == null
     ? '<span class="rr-draft">草稿</span>'
@@ -68626,6 +69738,22 @@ function renderReqDocReader(doc){
   renderReqDocCrumb($("rrdCrumb"), doc.id);
   var body = $("reqDocReaderBody");
   var id = doc.id;
+  if(doc.format === "sheet"){
+    /* 表格阅读：只读挂载 Univer 工作簿，保留合并/样式/列宽 */
+    body.classList.add("rrd-sheet");
+    var sheetSnap = parseSheetSnapshot(doc.sheetContent);
+    openSheetView({
+      container: body,
+      snapshot: sheetSnap || blankSnapshot({ filename: doc.title || "表格" }),
+      readOnly: true
+    }).then(function(view){
+      if(splitDocId !== id){ view.dispose(); return; }
+      reqSheetReaderView = view;
+    }).catch(function(ex){
+      if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "表格加载失败");
+    });
+    return;
+  }
   var prep = doc.format === "univer"
     ? Promise.all([loadMarkdownLib(), ensureVendor()])
     : loadMarkdownLib();
@@ -68739,7 +69867,12 @@ function reqDocApplySortItems(items){
     if(!list) return;
     items.forEach(function(it){
       for(var i = 0; i < list.length; i++){
-        if(list[i].id === it.id){ list[i].sortOrder = it.sortOrder; list[i].parentId = it.parentId; break; }
+        if(list[i].id === it.id){
+          list[i].sortOrder = it.sortOrder;
+          list[i].parentId = it.parentId;
+          if(it.categoryId !== undefined) list[i].categoryId = it.categoryId;
+          break;
+        }
       }
     });
   });
@@ -69577,14 +70710,18 @@ function reqDocDragOnDropLine(e){
   return e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2;
 }
 function rsHitInfo(e){
-  /* 返回 {node, zone}：zone = before（上 30% 插到它前面）/ into（中间，成为它的子文档）/ after（下 30% 插到它后面） */
+  /* 返回 {node, zone}：分类行 = into-cat（拖进该目录）；文档行按纵向 30% 分
+     before（插到它前面）/ into（成为它的子文档）/ after（插到它后面） */
   var st = $("reqDocSplitTree");
   if(!st) return null;
   var y = e.clientY;
-  var nodes = Array.from(st.querySelectorAll(".rs-node")).filter(function(n){ return n !== rsDragSource; });
+  var nodes = Array.from(st.querySelectorAll(".rs-cat, .rs-node")).filter(function(n){ return n !== rsDragSource; });
   for(var i = 0; i < nodes.length; i++){
     var r = nodes[i].getBoundingClientRect();
     if(y < r.top || y > r.bottom) continue;
+    if(nodes[i].classList.contains("rs-cat")){
+      return { node: nodes[i], zone: "into-cat", catId: nodes[i].dataset.rsCat };
+    }
     var rel = (y - r.top) / Math.max(r.height, 1);
     return { node: nodes[i], zone: rel < 0.3 ? "before" : (rel > 0.7 ? "after" : "into") };
   }
@@ -69601,9 +70738,13 @@ function rsProjRootHit(e){
   if(key !== (rsDragSource.dataset.rsReqid || "")) return null;
   return head;
 }
-function rsCanDrop(targetNode){
+function rsCanDrop(targetNode, zone){
   if(!rsDragSource || !targetNode) return false;
   if(targetNode === rsDragSource) return false;
+  /* 分类行落点：只校验同项目/同空间，文档可归入任意目录 */
+  if(zone === "into-cat"){
+    return (targetNode.dataset.rsCatReqid || "") === (rsDragSource.dataset.rsReqid || "");
+  }
   if(targetNode.dataset.rsReqid !== rsDragSource.dataset.rsReqid) return false;
   /* 跨项目禁止；目标在自己子树内（含“插到后代旁边”）会成环，也禁止。同项目内跨层级/跨目录允许 */
   var desc = reqDocDescendants(rsDragSource.dataset.rsDoc);
@@ -69627,23 +70768,38 @@ function rsCommitReorder(){
   }
   var before = reqDocById(srcId);
   var oldParentId = before ? (before.parentId || null) : null;
-  var items = reqDocPlanMove(srcId, target.docId, target.zone);
+  /* 分类要在本地回填前记下：before 是列表里的同一对象，回填后 categoryId 已经是新值 */
+  var oldCategoryId = before ? (before.categoryId || "") : "";
+  var items = reqDocPlanMove(srcId, target.docId, target.zone, target.catId);
   if(!items){ renderReqDocSplit(); return; }
   var changed = false;
   for(var i = 0; i < items.length; i++){
     var d = reqDocById(items[i].id);
-    if(d && ((d.sortOrder || 0) !== items[i].sortOrder || (d.parentId || null) !== (items[i].parentId || null))){
+    if(d && ((d.sortOrder || 0) !== items[i].sortOrder
+      || (d.parentId || null) !== (items[i].parentId || null)
+      || (items[i].categoryId !== undefined && (d.categoryId || "") !== (items[i].categoryId || "")))){
       changed = true;
       break;
     }
   }
   if(!changed){ renderReqDocSplit(); return; }
   API.post("/api/req-docs/reorder", { items: items }).then(function(){
-    /* 本地同步 sortOrder/parentId，避免重新拉取前顺序回跳 */
+    /* 本地同步 sortOrder/parentId/categoryId，避免重新拉取前顺序回跳 */
     reqDocApplySortItems(items);
-    /* 拖进某个文档下时顺手展开它，让移动结果可见 */
+    /* 拖进某个文档/分类下时顺手展开它，让移动结果可见 */
     if(target.zone === "into" && target.docId) delete reqDocCollapsedDocs[target.docId];
+    if(target.zone === "into-cat" && target.catId) delete reqDocCollapsedCats[target.catId];
     renderReqDocSplit();
+    if(target.zone === "into-cat"){
+      if(oldCategoryId !== (target.catId || "")){
+        var tc = docCatById(target.catId);
+        toast("已移入「" + (tc ? tc.name : "分类") + "」", "fs");
+      }else{
+        var placed = reqDocById(srcId);
+        toast(placed && (placed.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
+      }
+      return;
+    }
     var after = reqDocById(srcId);
     toast(after && (after.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
   }).catch(function(ex){
@@ -69706,15 +70862,21 @@ function initReqDocSplitDrag(){
     var line = ensureRsDropLine();
     reqDocDragClearDropHighlight(st);
     var target = null;
-    if(hit && rsCanDrop(hit.node)){
-      target = { zone: hit.zone, docId: hit.node.dataset.rsDoc };
-      if(hit.zone === "into"){
+    if(hit && rsCanDrop(hit.node, hit.zone)){
+      if(hit.zone === "into-cat"){
+        target = { zone: "into-cat", catId: hit.catId };
         removeRsDropLine();
         hit.node.classList.add("drop-into");
       }else{
-        var container = hit.node.parentNode;
-        if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
-        else container.insertBefore(line, hit.node);
+        target = { zone: hit.zone, docId: hit.node.dataset.rsDoc };
+        if(hit.zone === "into"){
+          removeRsDropLine();
+          hit.node.classList.add("drop-into");
+        }else{
+          var container = hit.node.parentNode;
+          if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
+          else container.insertBefore(line, hit.node);
+        }
       }
     }else if(!hit){
       var projHead = rsProjRootHit(e);
@@ -69756,14 +70918,17 @@ var rrDroppedInside = false;
    所以在 mousedown 时记住是否按在手柄上 */
 var rrHandlePressed = false;
 function rrHitInfo(e){
-  /* 返回 {node, zone}：zone = before / into / after（与阅读树一致） */
+  /* 返回 {node, zone}：分类行 = into-cat（拖进该目录）；文档行 = before / into / after */
   var tree = $("reqDocTree");
   if(!tree) return null;
   var y = e.clientY;
-  var rows = Array.from(tree.querySelectorAll(".reqdoc-row")).filter(function(n){ return n !== rrDragSource; });
+  var rows = Array.from(tree.querySelectorAll(".reqdoc-cat, .reqdoc-row")).filter(function(n){ return n !== rrDragSource; });
   for(var i = 0; i < rows.length; i++){
     var r = rows[i].getBoundingClientRect();
     if(y < r.top || y > r.bottom) continue;
+    if(rows[i].classList.contains("reqdoc-cat")){
+      return { node: rows[i], zone: "into-cat", catId: rows[i].dataset.cat };
+    }
     var rel = (y - r.top) / Math.max(r.height, 1);
     return { node: rows[i], zone: rel < 0.3 ? "before" : (rel > 0.7 ? "after" : "into") };
   }
@@ -69779,9 +70944,13 @@ function rrProjRootHit(e){
   if(key !== (rrDragSource.dataset.rrReqid || "")) return null;
   return head;
 }
-function rrCanDrop(targetNode){
+function rrCanDrop(targetNode, zone){
   if(!rrDragSource || !targetNode) return false;
   if(targetNode === rrDragSource) return false;
+  /* 分类行落点：只校验同项目/同空间，文档可归入任意目录 */
+  if(zone === "into-cat"){
+    return (targetNode.dataset.catReqid || "") === (rrDragSource.dataset.rrReqid || "");
+  }
   if(targetNode.dataset.rrReqid !== rrDragSource.dataset.rrReqid) return false;
   /* 跨项目禁止；目标在自己子树内会成环，也禁止。同项目内跨目录/跨层级允许 */
   var desc = reqDocDescendants(rrDragSource.dataset.reqdoc);
@@ -69804,12 +70973,16 @@ function rrCommitReorder(){
   }
   var before = reqDocById(srcId);
   var oldParentId = before ? (before.parentId || null) : null;
-  var items = reqDocPlanMove(srcId, target.docId, target.zone);
+  /* 分类要在本地回填前记下：before 是列表里的同一对象，回填后 categoryId 已经是新值 */
+  var oldCategoryId = before ? (before.categoryId || "") : "";
+  var items = reqDocPlanMove(srcId, target.docId, target.zone, target.catId);
   if(!items){ renderReqDocTree(); return; }
   var changed = false;
   for(var i = 0; i < items.length; i++){
     var d = reqDocById(items[i].id);
-    if(d && ((d.sortOrder || 0) !== items[i].sortOrder || (d.parentId || null) !== (items[i].parentId || null))){
+    if(d && ((d.sortOrder || 0) !== items[i].sortOrder
+      || (d.parentId || null) !== (items[i].parentId || null)
+      || (items[i].categoryId !== undefined && (d.categoryId || "") !== (items[i].categoryId || "")))){
       changed = true;
       break;
     }
@@ -69818,7 +70991,18 @@ function rrCommitReorder(){
   API.post("/api/req-docs/reorder", { items: items }).then(function(){
     reqDocApplySortItems(items);
     if(target.zone === "into" && target.docId) delete reqDocCollapsedDocs[target.docId];
+    if(target.zone === "into-cat" && target.catId) delete reqDocCollapsedCats[target.catId];
     renderReqDocTree();
+    if(target.zone === "into-cat"){
+      if(oldCategoryId !== (target.catId || "")){
+        var tc = docCatById(target.catId);
+        toast("已移入「" + (tc ? tc.name : "分类") + "」", "fs");
+      }else{
+        var placed = reqDocById(srcId);
+        toast(placed && (placed.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
+      }
+      return;
+    }
     var after = reqDocById(srcId);
     toast(after && (after.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
   }).catch(function(ex){
@@ -69873,15 +71057,21 @@ function initReqDocTreeDrag(){
     var line = ensureRsDropLine();
     reqDocDragClearDropHighlight(tree);
     var target = null;
-    if(hit && rrCanDrop(hit.node)){
-      target = { zone: hit.zone, docId: hit.node.dataset.reqdoc };
-      if(hit.zone === "into"){
+    if(hit && rrCanDrop(hit.node, hit.zone)){
+      if(hit.zone === "into-cat"){
+        target = { zone: "into-cat", catId: hit.catId };
         removeRsDropLine();
         hit.node.classList.add("drop-into");
       }else{
-        var container = hit.node.parentNode;
-        if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
-        else container.insertBefore(line, hit.node);
+        target = { zone: hit.zone, docId: hit.node.dataset.reqdoc };
+        if(hit.zone === "into"){
+          removeRsDropLine();
+          hit.node.classList.add("drop-into");
+        }else{
+          var container = hit.node.parentNode;
+          if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
+          else container.insertBefore(line, hit.node);
+        }
       }
     }else if(!hit){
       var projHead = rrProjRootHit(e);
@@ -70208,11 +71398,19 @@ function syncReqDocCatDefaultHint(){
   var cid = $("reqDocCategory") ? $("reqDocCategory").value : "";
   var c = cid ? docCatById(cid) : null;
   var v = c ? docVisOf(c) : "team";
-  if(!c || v === "team"){ el.hidden = true; el.textContent = ""; return; }
-  var n = c.memberCount || 0;
+  var parts = [];
+  /* 分类改了但还没保存：明确提示保存动作，避免以为选中即生效 */
+  if((cid || "") !== (editingMeta.categoryId || "")){
+    parts.push(cid ? "点「保存」后移入分类「" + (c ? c.name : "所选分类") + "」" : "点「保存」后移出当前分类");
+  }
+  if(c && v !== "team"){
+    var n = c.memberCount || 0;
+    parts.push("该分类默认" + (v === "personal" ? "「仅自己」" : "「指定 " + n + " 人」")
+      + "；保存文档不会自动改变本文档当前的可见范围");
+  }
+  if(!parts.length){ el.hidden = true; el.textContent = ""; return; }
   el.hidden = false;
-  el.textContent = "该分类默认" + (v === "personal" ? "「仅自己」" : "「指定 " + n + " 人」")
-    + "；保存文档不会自动改变本文档当前的可见范围";
+  el.textContent = parts.join("；");
 }
 function openNewReqDocDialog(reqId, opts){
   var sel = $("newReqDocProject");
@@ -70395,14 +71593,30 @@ function applyDocTemplateToNewDoc(){
   if(tpl.format && $("newReqDocFormat")) $("newReqDocFormat").value = tpl.format === "html" ? "univer" : tpl.format;
   syncNewReqDocMoreSum();
 }
-/* 按扩展名判断导入形态：word / markdown / html */
+/* 按扩展名判断导入形态：word / markdown / html / excel */
 function reqDocFileKind(name){
   var m = /\.([^.]+)$/.exec(String(name || ""));
   var ext = m ? m[1].toLowerCase() : "";
   if(ext === "docx" || ext === "doc") return "word";
   if(ext === "md" || ext === "markdown" || ext === "txt") return "markdown";
   if(ext === "html" || ext === "htm") return "html";
+  if(ext === "xlsx") return "excel";
   return null;
+}
+var REQ_DOC_FILE_MAX = 10 * 1024 * 1024;
+var REQ_SHEET_FILE_MAX = 20 * 1024 * 1024;
+var REQ_DOC_FILE_HINT = "暂不支持该文件格式，请上传 Word、Markdown、TXT、HTML 或 Excel(.xlsx) 文件";
+function readArrayBuffer(file){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(){ resolve(reader.result); };
+    reader.onerror = function(){ reject(new Error("读取文件失败")); };
+    reader.readAsArrayBuffer(file);
+  });
+}
+function excelFileToSnapshot(file){
+  return ensureExcelJs().then(function(){ return readArrayBuffer(file); })
+    .then(function(buf){ return excelToSnapshot(buf, { filename: file.name.replace(/\.[^.]+$/, "") }); });
 }
 function reqDocFileExt(name){
   var m = /\.([^.]+)$/.exec(String(name || ""));
@@ -70414,7 +71628,9 @@ function docPreviewDocument(inner){
     + 'body{margin:0;padding:16px 20px;font:14px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:#1f2329;background:#fff;word-break:break-word;}'
     + 'img{max-width:100%;height:auto;}'
     + 'table{border-collapse:collapse;width:100%;margin:10px 0;}'
+    + 'caption{text-align:left;font-weight:600;font-size:13px;color:#646a73;padding:2px 0 6px;}'
     + 'td,th{border:1px solid #dcdfe6;padding:6px 8px;font-size:13px;vertical-align:top;}'
+    + 'td{white-space:pre-wrap;}'
     + 'th{background:#f5f7fa;text-align:left;}'
     + 'pre{background:#f6f8fa;padding:10px 12px;border-radius:6px;overflow:auto;white-space:pre-wrap;}'
     + 'h1,h2,h3,h4,h5,h6{margin:14px 0 8px;line-height:1.4;}'
@@ -70473,7 +71689,16 @@ function parseNewReqDocFile(file){
   newReqDocParsed = null;
   if($("newReqDocPreview")) $("newReqDocPreview").hidden = true;
   if(!kind){
-    return Promise.reject(new Error("暂不支持该文件格式，请上传 Word、Markdown、TXT 或 HTML 文件"));
+    return Promise.reject(new Error(REQ_DOC_FILE_HINT));
+  }
+  if(kind === "excel"){
+    return excelFileToSnapshot(file).then(function(snap){
+      if(stale()) return;
+      var sheets = (snap.sheetOrder || []).length;
+      newReqDocParsed = { file: file, kind: kind, content: JSON.stringify(snap), format: "sheet" };
+      showNewReqDocPreview(file.name + " · Excel · " + sheets + " 个工作表（导入后保留样式与公式）",
+        sheetSnapshotToHtml(snap));
+    });
   }
   if(kind === "word"){
     return fetchWordImport(file).then(function(data){
@@ -70608,9 +71833,13 @@ function submitNewReqDoc(keepList){
   var isTemplate = sourceKind === "template";
   var file = isFile && $("newReqDocFile") ? $("newReqDocFile").files[0] : null;
   if(isFile && !file){ toast("请选择要上传的文件", "warn"); return; }
-  if(file && file.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
+  var fileLimit = file && reqDocFileKind(file.name) === "excel" ? REQ_SHEET_FILE_MAX : REQ_DOC_FILE_MAX;
+  if(file && file.size > fileLimit){
+    toast("文件超过 " + Math.round(fileLimit / 1024 / 1024) + "MB，请拆分后再导入", "warn");
+    return;
+  }
   var kind = file ? reqDocFileKind(file.name) : null;
-  if(isFile && !kind){ toast("暂不支持该文件格式，请上传 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
+  if(isFile && !kind){ toast(REQ_DOC_FILE_HINT, "warn"); return; }
   if(!title && file) title = file.name.replace(/\.[^.]+$/, "");
   if(!title){
     showNewReqDocError(true);
@@ -70693,8 +71922,7 @@ function finishNewReqDocImport(doc, fileName, format){
   closeNewReqDocDialog();
   loadReqDocs(true);
   openReqDocEditor(doc.id);
-  toast("已导入「" + fileName + "」为" + (format === "markdown" ? " Markdown" : "富文本")
-    + "，可直接在线编辑", "fs");
+  toast("已导入「" + fileName + "」为" + docFormatLabel(format) + "，可直接在线编辑", "fs");
 }
 function openReqDocEditor(id){
   var seq = ++reqDocOpenSeq;
@@ -70749,6 +71977,7 @@ function openReqDocEditor(id){
 function closeReqDocEditor(){
   setReqDocHydrating(false);
   disposeReqUniver();
+  disposeReqSheet();
   if($("reqDocEditPage")) $("reqDocEditPage").hidden = true;
   if($("reqDocListPage")) $("reqDocListPage").hidden = false;
   editingDocId = null;
@@ -71509,21 +72738,27 @@ function setMdMode(mode){
 function setDocFormatUI(format){
   var md = format === "markdown";
   var univer = format === "univer";
-  showEl($("reqDocRichBody"), !md && !univer);
+  var sheet = format === "sheet";
+  showEl($("reqDocRichBody"), !md && !univer && !sheet);
   showEl($("reqDocMdBody"), md);
   showEl($("reqDocUniverBody"), univer);
+  showEl($("reqDocSheetBody"), sheet);
   var badge = $("reqDocFormat");
   if(badge){
     showEl(badge, true);
-    badge.textContent = md ? "Markdown" : "富文本";
-    badge.className = "reqdoc-fmt " + (md ? "md" : "html");
+    badge.textContent = md ? "Markdown" : (sheet ? "表格" : "富文本");
+    badge.className = "reqdoc-fmt " + (md ? "md" : (sheet ? "sheet" : "html"));
   }
   /* 正文缩放按钮只作用于 DOM 排版；Univer 画布自带缩放，套 CSS zoom 会错位指针坐标 */
   var zoom = document.querySelector("#reqDocEditPage .doc-zoom");
-  if(zoom) zoom.hidden = univer;
+  if(zoom) zoom.hidden = univer || sheet;
   var imp = $("reqDocImport"), exp = $("reqDocExport");
-  if(imp) imp.title = "导入 Word / Markdown / TXT / HTML 文件";
-  if(exp) exp.title = md ? "导出为 Markdown 文件" : "导出为 HTML 文件";
+  if(imp) imp.title = sheet ? "导入 Excel（.xlsx）替换当前表格" : "导入 Word / Markdown / TXT / HTML / Excel 文件";
+  if(exp){
+    exp.title = md ? "导出为 Markdown 文件" : (sheet ? "导出为 Excel 文件（保留样式）" : "导出为 HTML 文件");
+    exp.innerHTML = icon("download", 16)
+      + (sheet ? "导出 Excel（.xlsx）" : (md ? "导出 Markdown" : "导出 HTML"));
+  }
 }
 function fillMarkdownEditor(doc){
   if($("reqDocMdCanvas")) $("reqDocMdCanvas").value = doc.content || "";
@@ -71555,24 +72790,41 @@ function fillReqDocEditor(doc, opts){
   fillDocTypeSelect("reqDocType", editingMeta.docType);
   fillDocParentSelect(doc);
   fillReqDocCategorySelect(doc);
+  /* 分类还没加载过（深链/直接进编辑页）：先按空下拉打开，拿到目录后重填，避免只能选「无分类」 */
+  if(!docCategoriesLoaded){
+    loadDocCategories().then(function(){
+      if(editingDocId !== id) return;
+      fillReqDocCategorySelect(reqDocById(id) || doc);
+      applyReqDocReadOnly(reqDocReadOnly || reqDocOwnerLocked);
+    });
+  }
   if(isMarkdownDoc()){
     disposeReqUniver();
+    disposeReqSheet();
     reqEditorBaseline = null;
     fillMarkdownEditor(doc);
   }else if(isUniverDoc()){
+    disposeReqSheet();
     reqEditorBaseline = null;
     /* keepBody：刚保存完且正文未变，重挂会丢光标与滚动位置 */
     if(!keepBody){
       var snap = parseSnapshot(doc.content);
       mountReqUniver(snap, snap ? "" : (doc.content || ""));
     }
+  }else if(isSheetDoc()){
+    disposeReqUniver();
+    reqEditorBaseline = null;
+    /* 表格保存后同样保留当前视图，避免滚动位置与选区丢失 */
+    if(!keepBody) mountReqSheet(parseSheetSnapshot(doc.sheetContent));
   }else if(reqEditor){
     disposeReqUniver();
+    disposeReqSheet();
     setReqEditorContents(doc.content);
     updateReqDocCount();
     rebuildToc();
   }else{
     disposeReqUniver();
+    disposeReqSheet();
     /* 首次打开：编辑器按需下载，下载完再灌正文（期间用户切走就丢弃结果） */
     setReqDocHydrating(true);
     ensureEditor().then(function(ed){
@@ -71620,6 +72872,7 @@ function markReqDocDirty(){
 function reqDocPlainText(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
   if(isUniverDoc()) return reqUniverView ? snapshotToText(reqUniverView.getSnapshot()) : "";
+  if(isSheetDoc()) return reqSheetView ? sheetSnapshotText(reqSheetView.getSnapshot()) : "";
   return reqEditor ? reqEditor.getText() : "";
 }
 function updateReqDocCount(){
@@ -71860,6 +73113,8 @@ function printReqDoc(){
     bodyHtml = preview ? preview.innerHTML : "";
   }else if(isUniverDoc()){
     bodyHtml = reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "";
+  }else if(isSheetDoc()){
+    bodyHtml = reqSheetView ? sheetSnapshotToHtml(reqSheetView.getSnapshot()) : "";
   }else{
     bodyHtml = reqEditor ? reqEditor.getContents() : "";
   }
@@ -71934,11 +73189,15 @@ function clearDraftOnSave(docId){
 }
 function getEditorContent(){
   if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
+  if(isSheetDoc()) return reqSheetView ? JSON.stringify(reqSheetView.getSnapshot()) : "";
   if(editingMeta.format === "html" && reqEditor) return reqEditor.getContents();
   var ta = $("reqDocMdCanvas");
   return ta ? ta.value : "";
 }
 function setEditorContent(content, format){
+  if(isSheetDoc()){
+    return mountReqSheet(format === "sheet" ? parseSheetSnapshot(content) : null);
+  }
   if(isUniverDoc()){
     /* 草稿恢复：快照 JSON 直接重挂；旧格式草稿按 html 重新转换 */
     var snap = format === "univer" ? parseSnapshot(content) : null;
@@ -71984,7 +73243,7 @@ function reqDocHistoryCurrentDoc(){
   return {
     key: "current",
     title: reqDocHistoryCurrent.title,
-    content: reqDocHistoryCurrent.content,
+    content: docBodyOf(reqDocHistoryCurrent),
     format: reqDocHistoryCurrent.format,
     versionNo: reqDocHistoryCurrentNo,
     savedBy: reqDocHistoryCurrent.owner || "",
@@ -72006,7 +73265,7 @@ function reqDocHistoryDoc(key){
       id: h.id,
       versionNo: h.versionNo,
       title: h.title,
-      content: h.content,
+      content: h.format === "sheet" ? (h.sheetContent || "") : h.content,
       format: h.format,
       savedBy: h.savedBy,
       createdAt: h.createdAt
@@ -72323,6 +73582,13 @@ function renderReqDocHistoryList(){
 }
 function renderReqDocHistoryPreview(h, box){
   if(!box) return;
+  if(h.format === "sheet"){
+    var sheetSnap = parseSheetSnapshot(h.content);
+    box.innerHTML = sheetSnap
+      ? window.DOMPurify.sanitize(sheetSnapshotToHtml(sheetSnap))
+      : '<div class="rh-empty">表格正文为空或无法解析</div>';
+    return;
+  }
   var prep = h.format === "univer"
     ? Promise.all([loadMarkdownLib(), ensureVendor()])
     : loadMarkdownLib();
@@ -72679,6 +73945,11 @@ function reqTocRoot(){
 function collectToc(){
   var root = reqTocRoot();
   var items = [];
+  if(isSheetDoc()){
+    /* 表格没有标题层级，大纲区留空提示，不按单元格内容生成 */
+    tocItems = [];
+    return;
+  }
   if(isUniverDoc()){
     var heads = reqUniverView ? snapshotHeadings(reqUniverView.getSnapshot()) : [];
     heads.forEach(function(h, i){
@@ -72715,7 +73986,9 @@ function renderToc(){
   var body = $("reqDocTocBody");
   if(!body) return;
   if(!tocItems.length){
-    body.innerHTML = '<div class="rt-empty">正文里用标题样式写几段（一级/二级标题），这里会自动生成大纲。</div>';
+    body.innerHTML = '<div class="rt-empty">'
+      + (isSheetDoc() ? "表格文档没有大纲。" : "正文里用标题样式写几段（一级/二级标题），这里会自动生成大纲。")
+      + '</div>';
     return;
   }
   /* 折叠：父项收起时，它的所有后代一起隐藏 */
@@ -72842,6 +74115,7 @@ function setReqDocSaving(on){
 function currentReqDocContent(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
   if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
+  if(isSheetDoc()) return reqSheetView ? JSON.stringify(reqSheetView.getSnapshot()) : "";
   return reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "";
 }
 /* 409 时默认保留本地草稿；只有用户二次确认才加载服务器版本 */
@@ -72873,19 +74147,26 @@ function saveReqDoc(opts){
     toast("正文编辑器还在加载，请稍候再保存", "warn");
     return Promise.resolve(null);
   }
-  if(!md && !isUniverDoc() && !reqEditor){
+  if(!md && isSheetDoc() && !reqSheetView){
+    toast("表格编辑器还在加载，请稍候再保存", "warn");
+    return Promise.resolve(null);
+  }
+  if(!md && !isUniverDoc() && !isSheetDoc() && !reqEditor){
     toast("正文编辑器还在加载，请稍候再保存", "warn");
     return Promise.resolve(null);
   }
   var parentId = $("reqDocParent") ? $("reqDocParent").value : "";
-  var categoryId = $("reqDocCategory") ? $("reqDocCategory").value : (editingMeta.categoryId || "");
+  /* 下拉不可用时（分类还没加载 / 只读）不要拿它的空值覆盖：否则一次保存会把文档原分类清掉 */
+  var catSelForSave = $("reqDocCategory");
+  var categoryId = catSelForSave && !catSelForSave.disabled
+    ? catSelForSave.value : (editingMeta.categoryId || "");
   var content = currentReqDocContent();
   var body = {
     reqId: reqId || null,
     title: title,
     content: content,
     status: editingMeta.status || "draft",
-    format: md ? "markdown" : (isUniverDoc() ? "univer" : "html"),
+    format: md ? "markdown" : (isUniverDoc() ? "univer" : (isSheetDoc() ? "sheet" : "html")),
     docType: $("reqDocType").value,
     parentId: parentId || null,
     categoryId: categoryId || "",
@@ -72908,6 +74189,7 @@ function saveReqDoc(opts){
     /* 分类/归属可能随保存变化：即便用户还在输入（不走 fillReqDocEditor），元数据也要对齐服务器返回值 */
     editingMeta.categoryId = doc.categoryId || "";
     editingMeta.reqId = doc.reqId || "";
+    syncReqDocCatDefaultHint();
     /* 保存请求发出后用户继续输入：保留当前正文，只把基线推进到刚保存的版本 */
     if(currentReqDocContent() !== content){
       if($("reqDocSaved")){
@@ -72918,7 +74200,7 @@ function saveReqDoc(opts){
     }else{
       reqDocDirty = false;
       clearDraftOnSave(doc.id);
-      fillReqDocEditor(doc, { keepBody: isUniverDoc() });
+      fillReqDocEditor(doc, { keepBody: isUniverDoc() || isSheetDoc() });
     }
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
     refreshReqDocPublishBtn();
@@ -72975,7 +74257,7 @@ function importReqDoc(){
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var input = $("reqDocImportFile");
   if(input){
-    input.accept = ".docx,.doc,.md,.markdown,.txt,.html,.htm";
+    input.accept = isSheetDoc() ? ".xlsx" : ".docx,.doc,.md,.markdown,.txt,.html,.htm,.xlsx";
     input.click();
   }
 }
@@ -72998,11 +74280,25 @@ function onReqDocImportFile(e){
   input.value = "";
   if(!f) return;
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
-  if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
   var kind = reqDocFileKind(f.name);
-  if(!kind){ toast("暂不支持该文件格式，请导入 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
+  if(!kind){ toast(REQ_DOC_FILE_HINT, "warn"); return; }
+  var limit = kind === "excel" ? REQ_SHEET_FILE_MAX : REQ_DOC_FILE_MAX;
+  if(f.size > limit){ toast("文件超过 " + Math.round(limit / 1024 / 1024) + "MB，请拆分后再导入", "warn"); return; }
+  if(kind === "excel"){
+    toast("正在解析 Excel…", "info");
+    excelFileToSnapshot(f).then(function(snap){
+      openDocImportPreview(f, sheetSnapshotToHtml(snap),
+        "Excel · " + (snap.sheetOrder || []).length + " 个工作表",
+        function(){ applyImportedSheet(f.name, snap); });
+    }).catch(function(ex){ toast(ex.message || "Excel 解析失败", "bad"); });
+    return;
+  }
   if(isUniverDoc()){
     importUniverFile(f, kind);
+    return;
+  }
+  if(isSheetDoc()){
+    toast("表格文档只能导入 Excel 文件（.xlsx）；文本请新建文档后导入", "warn");
     return;
   }
   if(kind === "word"){
@@ -73081,6 +74377,18 @@ function importUniverHtml(name, html){
     markReqDocDirty();
     updateReqDocCount();
     toast("已导入「" + name + "」，可直接编辑，记得保存", "fs");
+  });
+}
+/* 导入 Excel：正文切到表格格式并挂载新快照（原正文会随保存被替换） */
+function applyImportedSheet(name, snap){
+  disposeReqUniver();
+  editingMeta.format = "sheet";
+  setDocFormatUI("sheet");
+  return mountReqSheet(snap).then(function(view){
+    if(!view) return;
+    markReqDocDirty();
+    updateReqDocCount();
+    toast("已导入「" + name + "」为表格，可直接编辑，记得保存", "fs");
   });
 }
 /* 导入文本类文件：按文件类型切换文档格式，正文直接进入可编辑状态 */
@@ -73166,7 +74474,23 @@ function applyImportedHtml(name, html){
     }).catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
   }
 }
+function exportSheetXlsx(snapshot, title){
+  var name = (title || "表格").replace(/[\\/:*?"<>|]/g, "_") + ".xlsx";
+  toast("正在生成 Excel…", "info");
+  return snapshotToExcel(snapshot).then(function(bytes){
+    downloadBlob(name, new Blob([bytes],
+      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    toast("已导出 " + name, "fs");
+  }).catch(function(ex){
+    toast(ex.message || "导出 Excel 失败", "bad");
+  });
+}
 function exportReqDoc(){
+  if(isSheetDoc()){
+    if(!reqSheetView){ toast("表格还在加载，请稍候再导出", "warn"); return; }
+    exportSheetXlsx(reqSheetView.getSnapshot(), editingMeta.title || "表格");
+    return;
+  }
   var md = isMarkdownDoc();
   var univer = isUniverDoc();
   var text = md ? ($("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "")
@@ -73191,6 +74515,12 @@ function exportReqDocFromReader(docId){
   var seq = ++readerExportSeq;
   API.get("/api/req-docs/" + encodeURIComponent(docId)).then(function(full){
     if(seq !== readerExportSeq) return;
+    if(full.format === "sheet"){
+      var snap = parseSheetSnapshot(full.sheetContent);
+      if(!snap){ toast("表格正文为空，没有可导出的内容", "warn"); return; }
+      exportSheetXlsx(snap, full.title || "表格");
+      return;
+    }
     var md = full.format === "markdown";
     var toHtml = full.format === "univer"
       ? ensureVendor().then(function(){
@@ -73237,6 +74567,9 @@ function reqDocExportWordHTML(){
   if(isUniverDoc()){
     return Promise.resolve(reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "");
   }
+  if(isSheetDoc()){
+    return Promise.resolve(reqSheetView ? sheetSnapshotToHtml(reqSheetView.getSnapshot()) : "");
+  }
   return Promise.resolve(reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "");
 }
 function exportReqDocWordFrom(title, html){
@@ -73282,6 +74615,9 @@ function exportReqDocWordFromReader(docId){
         var snap = parseSnapshot(full.content);
         return snap ? snapshotToHtml(snap) : "";
       });
+    }else if(full.format === "sheet"){
+      var sheetSnap = parseSheetSnapshot(full.sheetContent);
+      htmlPromise = Promise.resolve(sheetSnap ? sheetSnapshotToHtml(sheetSnap) : "");
     }
     return htmlPromise.then(function(html){
       return exportReqDocWordFrom(full.title || "文档", html);
@@ -73860,7 +75196,12 @@ function populateReqDocSelect(keep){
   if($("newReqDocFile")) $("newReqDocFile").addEventListener("change", function(){
     var f = this.files && this.files[0];
     if(!f){ resetNewReqDocPreview(); return; }
-    if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); resetNewReqDocPreview(); return; }
+    var limit = reqDocFileKind(f.name) === "excel" ? REQ_SHEET_FILE_MAX : REQ_DOC_FILE_MAX;
+    if(f.size > limit){
+      toast("文件超过 " + Math.round(limit / 1024 / 1024) + "MB，请拆分后再导入", "warn");
+      resetNewReqDocPreview();
+      return;
+    }
     if(!($("newReqDocTitle").value || "").trim()){
       $("newReqDocTitle").value = f.name.replace(/\.[^.]+$/, "");
       syncNewReqDocTitleCount();
@@ -90475,7 +91816,7 @@ var { isAssistantEnabled, setAssistantEnabled } = __NS["core/assistant.js"];
 
 
 var { mountSandSaySettings } = __NS["core/sand-say.js"];
-
+var { mountOrnamentSettings } = __NS["core/side-ornament.js"];
 
 var { loadView } = __NS["core/view-loader.js"];
 
@@ -95587,7 +96928,9 @@ __NS["views/release.js"] = (function(){
 
 
 
+
 var esc = esc2;
+
 var { mountReleaseWorkspace, takeReleaseIntent } = __NS["views/phase.js"];
 var TAB_KEYS = ["plan", "actual", "history", "content"];
 var host = null, handle = null;
@@ -95675,8 +97018,15 @@ function fmtPlanTime(iso){
   function p(n){ return (n < 10 ? "0" : "") + n; }
   return (d.getMonth() + 1) + "月" + d.getDate() + "日 " + p(d.getHours()) + ":" + p(d.getMinutes());
 }
-function planStatusText(st){
-  return { ready:"就绪", completed:"已完成", canceled:"已取消", draft:"草稿" }[st] || st || "—";
+/* 后端的项目/版本是「 / 」串：最多展示两枚，其余收进 +N，完整列表放 title */
+function planNamesHTML(text){
+  var list = String(text || "").split(" / ").map(function(s){ return s.trim(); }).filter(Boolean);
+  if(!list.length) return '<span class="release-chip is-empty">—</span>';
+  var shown = list.slice(0, 2), rest = list.length - shown.length;
+  return '<span class="release-chips">'
+    + shown.map(function(n){ return '<span class="release-chip" title="' + esc(n) + '">' + esc(n) + '</span>'; }).join("")
+    + (rest > 0 ? '<span class="release-chip is-more" title="' + esc(list.slice(shown.length).join("、")) + '">+' + rest + '</span>' : "")
+    + '</span>';
 }
 function renderRecentPlans(rows){
   var now = Date.now();
@@ -95693,27 +97043,47 @@ function renderRecentPlans(rows){
   var list = top.map(function(r){
     var late = r.plannedAt && new Date(r.plannedAt).getTime() < now;
     var go = !!(r.versionId && r.reqId);
-    return '<button class="rel-plan-row" type="button"'
-      + (go ? ' data-rel-plan="' + esc(r.versionId) + '" data-rel-req="' + esc(r.reqId) + '"' : ' disabled')
-      + ' title="' + (go ? "打开该版本的发布工作台" : "该计划缺少版本关联，请到发布日程查看") + '">'
-      + '<span class="rp-t">' + esc(fmtPlanTime(r.plannedAt)) + (late ? ' <span class="tag tag-warning">已过期</span>' : '') + '</span>'
-      + '<span class="rp-p" title="' + esc(r.projectNames || r.projectName || "") + '">' + esc(r.projectNames || r.projectName || "—") + '</span>'
-      + '<span class="rp-v" title="' + esc(r.versionNames || r.versionName || "") + '">' + esc(r.versionNames || r.versionName || "—") + '</span>'
-      + '<span class="rp-s">' + esc(planStatusText(r.status)) + '</span>'
-      + '</button>';
+    var inner = '<span class="rp-t">' + esc(fmtPlanTime(r.plannedAt))
+      + (late ? ' <span class="tag tag-warning">已过期</span>' : '') + '</span>'
+      + '<span class="rp-p">' + planNamesHTML(r.projectNames || r.projectName) + '</span>'
+      + '<span class="rp-v">' + planNamesHTML(r.versionNames || r.versionName) + '</span>'
+      + '<span class="rp-s">' + planStatusTagHTML(r.status) + '</span>'
+      + '<span class="rp-go">' + (go ? '进入' + icon("right", 12) : '缺少版本关联') + '</span>';
+    if(!go) return '<div class="rel-plan-row is-disabled" title="该计划缺少版本关联，请到发布日程查看">' + inner + '</div>';
+    /* 整行进的是主版本的发布工作台，但要把当前这一行的计划一起带过去：
+       同一版本下可能有多份计划，不带的话打开的是默认计划，看起来像点错了行 */
+    var verName = r.versionName || r.versionId;
+    var title = Number(r.versionCount) > 1
+      ? "该计划含 " + r.versionCount + " 个版本，从「" + verName + "」进入发布工作台"
+      : "打开「" + verName + "」的发布工作台";
+    var hash = "#/release?id=" + encodeURIComponent(r.versionId) + "&reqId=" + encodeURIComponent(r.reqId)
+      + (r.id ? "&plan=" + encodeURIComponent(r.id) : "");
+    return '<a class="rel-plan-row" data-rel-plan="' + esc(r.versionId) + '" data-rel-req="' + esc(r.reqId) + '"'
+      + (r.id ? ' data-rel-plan-id="' + esc(r.id) + '"' : '')
+      + ' href="' + esc(hash) + '"'
+      + ' title="' + esc(title) + '">' + inner + '</a>';
   }).join("");
+  var countText = rows.length > top.length
+    ? "共 " + rows.length + " 份未完成 · 列出最近 " + top.length + " 份"
+    : rows.length + " 份未完成";
   host.innerHTML = '<div class="release-page"><div class="panel"><div class="panel-head"><h3>最近未完成的发布计划</h3>'
-    + '<span class="meta-right">' + rows.length + ' 份未完成</span></div>'
+    + '<span class="meta-right">' + countText + '</span></div>'
     + (top.length
-      ? '<div class="rel-plan-list">' + list + '</div>'
-      : '<div class="stack"><p class="hint">还没有未完成的发布计划。</p></div>')
-    + '<div class="stack" style="padding:10px 12px 12px"><p class="hint">发布计划按版本创建；历史发布记录在该版本的「发布记录」里。</p>'
+      ? '<div class="rel-plan-head" aria-hidden="true"><span>计划时间</span><span>项目</span><span>版本</span><span>状态</span><span class="rp-go">操作</span></div>'
+        + '<div class="rel-plan-list">' + list + '</div>'
+      : '<p class="hint">还没有未完成的发布计划。</p>')
+    + '<div class="rel-plan-foot"><p class="hint">发布计划按版本创建；历史发布记录在该版本的「发布记录」里。</p>'
     + '<div class="rel-empty-acts"><button class="btn sm" type="button" data-release-empty-back>去版本页创建计划</button>'
     + '<button class="btn sm ghost" type="button" data-release-empty-all>查看全部版本</button></div></div>'
     + '</div></div>';
   host.querySelectorAll("[data-rel-plan]").forEach(function(b){
-    b.addEventListener("click", function(){
-      openReleasePage({ id: b.getAttribute("data-rel-plan"), reqId: b.getAttribute("data-rel-req") });
+    b.addEventListener("click", function(e){
+      /* 保留 href 交给浏览器：右键 / 中键 / Ctrl(Cmd)+左键 仍能新标签页打开；
+         只有普通左键（含键盘 Enter，button 为 0）走站内切换，避免整页刷新 */
+      if(e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      openReleasePage({ id: b.getAttribute("data-rel-plan"), reqId: b.getAttribute("data-rel-req"),
+        planId: b.getAttribute("data-rel-plan-id") });
     });
   });
   var back = host.querySelector("[data-release-empty-back]");
@@ -104179,15 +105549,11 @@ function caseRowHTML(c, segKey){
     acts += '<button class="btn sm ghost danger" type="button" data-tc-defect="' + esc(c.id) + '">转缺陷</button>';
   }
   if(w){
-    /* 编辑 / 删除收进常显的 ⋯ 菜单：不再依赖 hover，触屏也能发现 */
+    /* 编辑 / 删除收进常显的 ⋯ 菜单：不再依赖 hover，触屏也能发现。
+       菜单由 openCaseRowMenu 挂到 body 上定位：列表卡片有 overflow:hidden，留在行内会被裁掉 */
     acts += '<span class="tc-menu-wrap">'
       + '<button class="icon-btn sm" type="button" data-tc-menu="' + esc(c.id) + '" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作" title="更多操作">'
-      + icon("more", 15) + '</button>'
-      + '<div class="tc-menu" role="menu" data-tc-menu-panel="' + esc(c.id) + '" hidden>'
-      + '<button type="button" role="menuitem" data-tc-edit="' + esc(c.id) + '">' + icon("edit", 13) + ' 编辑用例</button>'
-      + '<div class="tc-menu-sep" role="none"></div>'
-      + '<button type="button" role="menuitem" class="danger" data-tc-del="' + esc(c.id) + '">' + icon("trash", 13) + ' 删除用例</button>'
-      + '</div></span>';
+      + icon("more", 15) + '</button></span>';
   }
   var sel = caseRowSelected(c, segKey);
   var dragging = !!(caseDrag && (caseDrag.anchor === c.id || caseRowSelected(c, segKey)));
@@ -104879,7 +106245,17 @@ function openCaseCreate(anchor){
     return;
   }
   if(targets.length === 1){ openNewDialog(targets[0]); return; }
-  var btn = anchor && anchor.nodeType === 1 ? anchor : $("btnCaseNew");
+  /* 工具栏「新建用例」按原型让位给页头「新建」而隐藏；跨视图创建（?new=1）进来时没有
+     点击锚点，不能再拿隐藏按钮定位（getBoundingClientRect 全零会掉到左上角）。
+     依次找真的渲染出来的锚点，最后才退回隐藏按钮保证浮层仍能打开 */
+  var btn = anchor && anchor.nodeType === 1 && anchor.getClientRects().length ? anchor : null;
+  if(!btn){
+    ["pageActions [data-tc-head='case-new']", "pageActions", "tcReq", "btnCaseNew"].some(function(sel){
+      var c = $(sel);
+      if(c && c.getClientRects().length){ btn = c; return true; }
+      return false;
+    });
+  }
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = '<div class="menu-title">新建用例到</div>'
@@ -110735,16 +112111,7 @@ $("tcList").addEventListener("click", function(e){
   var segHead = e.target.closest("[data-tc-seg]");
   if(segHead && !e.target.closest("button")){ toggleSegment(segHead.dataset.tcSeg); return; }
   var menuBtn = e.target.closest("[data-tc-menu]");
-  if(menuBtn){
-    var panel = menuBtn.parentNode.querySelector("[data-tc-menu-panel]");
-    var willOpen = !!(panel && panel.hidden);
-    closeCaseRowMenus();
-    if(willOpen){
-      panel.hidden = false;
-      menuBtn.setAttribute("aria-expanded", "true");
-    }
-    return;
-  }
+  if(menuBtn){ openCaseRowMenu(menuBtn); return; }
   var pick = e.target.closest("[data-tc-pick]");
   if(pick){ toggleCaseSel(pick.dataset.tcPick, pick.checked, pick.dataset.tcPickSeg || null); return; }
   var more = e.target.closest("[data-tc-more]");
@@ -110762,29 +112129,28 @@ $("tcList").addEventListener("click", function(e){
     else toast("未找到关联缺陷，可能已被删除", "warn");
     return;
   }
-  var edit = e.target.closest("[data-tc-edit]");
-  if(edit){ openEditDialog(edit.dataset.tcEdit); return; }
-  var del = e.target.closest("[data-tc-del]");
-  if(del){ removeCase(del.dataset.tcDel); return; }
   var open = e.target.closest("[data-tc-open]");
   if(open && !e.target.closest(".tc-acts")) openCaseDetail(open.dataset.tcOpen);
 });
-/* 行内 ⋯ 菜单：一次只开一个，点外部或按 Esc 收起 */
-function closeCaseRowMenus(except){
-  Array.prototype.forEach.call(document.querySelectorAll("[data-tc-menu-panel]"), function(p){
-    if(p === except) return;
-    p.hidden = true;
-    var b = p.parentNode.querySelector("[data-tc-menu]");
-    if(b) b.setAttribute("aria-expanded", "false");
+/* 行内 ⋯ 菜单：挂到 body 上定位，列表卡片的 overflow:hidden 不会再把它裁成一条边；
+   翻转、滚动重定位、Esc 与点外关闭都由 UI.openPop 负责 */
+function openCaseRowMenu(anchor){
+  var id = anchor.dataset.tcMenu;
+  var el = document.createElement("div");
+  el.className = "tc-menu";
+  el.setAttribute("role", "menu");
+  el.innerHTML = '<button type="button" role="menuitem" data-tc-edit="' + esc(id) + '">' + icon("edit", 13) + ' 编辑用例</button>'
+    + '<div class="tc-menu-sep" role="none"></div>'
+    + '<button type="button" role="menuitem" class="danger" data-tc-del="' + esc(id) + '">' + icon("trash", 13) + ' 删除用例</button>';
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-tc-edit],[data-tc-del]");
+    if(!b) return;
+    UI.closeAllPops();
+    if(b.hasAttribute("data-tc-edit")) openEditDialog(b.dataset.tcEdit);
+    else removeCase(b.dataset.tcDel);
   });
+  UI.openPop(el, anchor, { align: "right", onClose: function(){ el.remove(); } });
 }
-document.addEventListener("click", function(e){
-  if(e.target.closest("[data-tc-menu]")) return;
-  closeCaseRowMenus();
-});
-document.addEventListener("keydown", function(e){
-  if(e.key === "Escape") closeCaseRowMenus();
-});
 $("tcBulkAll").addEventListener("change", function(){
   var all = caseWritableLoaded();
   if(this.checked){
@@ -117004,6 +118370,6 @@ window.__HG_MODULES__["review-team"] = __NS["views/review-team.js"];
 window.__HG_MODULES__["mine"] = __NS["views/mine.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-24 08:57</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-25 05:19</span></div>
 </body>
 </html>

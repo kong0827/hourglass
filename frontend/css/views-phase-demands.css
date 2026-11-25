@@ -314,21 +314,40 @@ button.pseg.post:focus-visible{outline-color:var(--primary);}
 .release-page-bar{padding:0 0 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 .release-page-bar .toolbar-meta b{font-weight:650;color:var(--text);}
 
-/* 无参数进入发布工作台：跨项目「最近发布计划」列表（点行进对应版本工作台） */
+/* 无参数进入发布工作台：跨项目「最近发布计划」列表（整行可点，进对应版本工作台）
+   用表头 + 行分隔线立住「列表」观感；行尾常驻「进入 ›」说明整行可点，而不是靠悬停才发现 */
+.rel-plan-head,.rel-plan-row{display:grid;grid-template-columns:158px minmax(140px,1.1fr) minmax(140px,1fr) 84px 92px;gap:12px;align-items:center;}
+.rel-plan-head{height:34px;padding:0 10px;border-bottom:1px solid var(--border);border-radius:var(--r-sm) var(--r-sm) 0 0;background:var(--tbl-head);font-size:11px;font-weight:550;color:var(--text-3);}
+.rel-plan-head .rp-go{justify-self:end;}
 .rel-plan-list{display:flex;flex-direction:column;}
-.rel-plan-row{display:grid;grid-template-columns:140px minmax(0,1fr) minmax(0,1fr) 64px;gap:12px;align-items:center;width:100%;text-align:left;padding:11px 14px;border:0;border-bottom:1px solid var(--border);background:none;cursor:pointer;font:inherit;color:var(--text);}
-.rel-plan-row:last-child{border-bottom:0;}
-.rel-plan-row:hover:not(:disabled){background:var(--primary-soft);}
-.rel-plan-row:disabled{cursor:default;opacity:.6;}
-.rel-plan-row .rp-t{font-variant-numeric:tabular-nums;white-space:nowrap;}
-.rel-plan-row .rp-p,.rel-plan-row .rp-v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2);font-size:13px;}
-.rel-plan-row .rp-s{justify-self:end;}
+.rel-plan-row{padding:11px 10px;border-bottom:1px solid var(--border);font:inherit;color:var(--text);text-decoration:none;}
+a.rel-plan-row{cursor:pointer;transition:background .12s ease;}
+a.rel-plan-row:hover{background:var(--primary-soft);}
+a.rel-plan-row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.rel-plan-row.is-disabled{cursor:default;opacity:.6;}
+.rel-plan-row .rp-t{display:flex;align-items:center;gap:4px;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.rel-plan-row .rp-p,.rel-plan-row .rp-v{min-width:0;overflow:hidden;}
+.rel-plan-row .rp-p .release-chip:not(.is-more):not(.is-empty){background:var(--primary-soft);border-color:transparent;color:var(--primary-fg);font-weight:550;}
+.rel-plan-row .release-chips{max-width:100%;min-width:0;}
+.rel-plan-row .release-chip{flex:0 1 auto;min-width:0;max-width:100%;}
+.rel-plan-row .rp-s{justify-self:start;}
+.rel-plan-row .rp-go{justify-self:end;display:inline-flex;align-items:center;gap:2px;font-size:12px;font-weight:550;color:var(--primary-fg);white-space:nowrap;}
+.rel-plan-row .rp-go svg{flex:0 0 auto;transition:transform .12s ease;}
+a.rel-plan-row:hover .rp-go svg{transform:translateX(2px);}
+.rel-plan-row.is-disabled .rp-go{color:var(--text-3);font-weight:500;}
+.rel-plan-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:14px;}
+.rel-plan-foot .hint{flex:1 1 260px;margin:0;}
 .rel-empty-acts{display:flex;flex-wrap:wrap;gap:8px;}
+.rel-plan-foot .rel-empty-acts{margin-left:auto;}
 @media (max-width:639px){
-  .rel-plan-row{grid-template-columns:1fr auto;grid-auto-rows:auto;gap:4px 10px;padding:12px 14px;}
-  .rel-plan-row .rp-p{grid-column:1;grid-row:2;}
+  .rel-plan-head{display:none;}
+  .rel-plan-row{grid-template-columns:minmax(0,1fr) auto;grid-auto-rows:auto;gap:6px 10px;padding:12px 10px;}
+  .rel-plan-row .rp-s{grid-column:2;grid-row:1;justify-self:end;}
+  .rel-plan-row .rp-p{grid-column:1 / -1;grid-row:2;}
   .rel-plan-row .rp-v{grid-column:1;grid-row:3;}
-  .rel-plan-row .rp-s{grid-column:2;grid-row:1;}
+  .rel-plan-row .rp-go{grid-column:2;grid-row:3;justify-self:end;}
+  .rel-plan-foot .hint{flex-basis:100%;}
+  .rel-plan-foot .rel-empty-acts{margin-left:0;}
 }
 
 /* ===== 页内 3 步条：计划范围 → 实际发布 → 历史与内容（原型 REL-1） ===== */

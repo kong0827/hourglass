@@ -209,9 +209,14 @@ try{
   await call("Page.reload");
   await waitFor("document.readyState==='complete' && window.__ssReady===true", "清偏好后初始化");
 
+  /* 摆件默认关闭；沙漏说的悬停气泡挂在摆件上，这里显式打开后再验气泡与情绪 */
+  await evaluate(`localStorage.setItem("ds.ornament.v1", '{"on":true,"pick":"classic"}'); true`);
+  await call("Page.reload");
+  await waitFor("document.readyState==='complete' && window.__ssReady===true", "打开摆件后初始化");
+
   /* ---------- 默认 15:20 ---------- */
   let s = await snap();
-  check(s.slotHidden === false, "侧栏摆件在 harness 中可见（默认 1440×1000）");
+  check(s.slotHidden === false, "打开摆件后侧栏摆件可见（默认 1440×1000）");
   check(s.ornCls === "hg", "摆件仍是经典沙漏");
   check(s.ssOn === true, "默认开启沙漏说（body.ss-on）");
   check(s.lineHidden === false, "页头一行默认显示");

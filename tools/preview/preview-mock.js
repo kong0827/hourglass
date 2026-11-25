@@ -512,12 +512,26 @@
   ];
 
   var releasePlans = [
-    { id: "P1", planNo: "PL-2026-0012", reqId: "R1", versionIds: ["V1"], versionCount: 1, releasedVersionCount: 0,
+    { id: "P1", planNo: 12, reqId: "R1", versionId: "V1", versionIds: ["V1"], versionCount: 1, releasedVersionCount: 0,
+      projectNames: "流程引擎", versionNames: "1.2 权限改造",
       plannedAt: shift(3) + "T20:00:00", status: "ready", environment: "production", coverage: "full",
-      plannedTaskIds: ["K1", "K2", "K7", "K8", "K9", "K11"], plannedDemandIds: ["D1"], revision: 3 }
+      plannedTaskIds: ["K1", "K2", "K7", "K8", "K9", "K11"], plannedDemandIds: ["D1"], revision: 3 },
+    { id: "P2", planNo: 13, reqId: "R2", versionId: "V7", versionCount: 1, releasedVersionCount: 0,
+      projectNames: "结算改造", versionNames: "2.0 结算升级",
+      plannedAt: shift(-1) + "T09:30:00", status: "ready", environment: "production", coverage: "partial",
+      plannedTaskIds: [], plannedDemandIds: [], revision: 1 },
+    { id: "P3", planNo: 14, reqId: "R1", versionId: "V2", versionCount: 1, releasedVersionCount: 0,
+      projectNames: "流程引擎", versionNames: "1.3 权限收官",
+      plannedAt: shift(10) + "T14:00:00", status: "draft", environment: "staging", coverage: "unknown",
+      plannedTaskIds: [], plannedDemandIds: [], revision: 0 },
+    /* 多版本计划的样例：芯片收成「2 枚 + N」，行仍只从主版本进入 */
+    { id: "P4", planNo: 15, reqId: "R1", versionId: "V1", versionIds: ["V1", "V2", "V7"], versionCount: 3, releasedVersionCount: 0,
+      projectNames: "流程引擎 / 结算改造", versionNames: "1.2 权限改造 / 1.3 权限收官 / 2.0 结算升级",
+      plannedAt: shift(21) + "T10:00:00", status: "draft", environment: "production", coverage: "unknown",
+      plannedTaskIds: [], plannedDemandIds: [], revision: 0 }
   ];
   var releaseRecords = [
-    { id: "RR1", releaseNo: "REL-0011", reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: "P1",
+    { id: "RR1", releaseNo: 11, reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: "P1",
       environment: "production", operation: "deploy", result: "success",
       occurredAt: ts(-6, 20, 10), publishedOn: shift(-6), recordedAt: ts(-6, 20, 12), planPlannedAt: ts(-6, 20, 0),
       targetKeys: ["app-web", "gateway"], coverage: "full", artifactRef: "hourglass-web@1.2.0",
@@ -529,7 +543,7 @@
         { taskId: "K2", taskItemNo: "WI-102", title: "导出 CSV 补工时列", demandId: "D1", demandNo: "REQ-021", demandTitle: "权限中台统一鉴权",
           ownerName: "我", completedAt: ts(-8, 16, 30), disposition: "已发布" }
       ] },
-    { id: "RR2", releaseNo: "REL-0010", reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: null,
+    { id: "RR2", releaseNo: 10, reqId: "R1", versionId: "V1", versionName: "1.2 权限改造", planId: null,
       environment: "staging", operation: "deploy", result: "failed",
       occurredAt: ts(-9, 15, 20), publishedOn: shift(-9), recordedAt: ts(-9, 15, 26),
       targetKeys: ["staging"], coverage: "partial", artifactRef: "hourglass-web@1.2.0-rc3",
@@ -1203,6 +1217,10 @@
         return { id: b.id, name: b.name, status: b.status, targetBranch: b.targetBranch, reqId: i === 2 ? "R2" : "R1" };
       }).filter(function (b) { return !bpoProject || b.reqId === bpoProject; });
       data = { items: bpoRows, total: bpoRows.length, hasMore: false };
+    } else if (clean === "/api/release-plan-tasks") {
+      /* 多版本计划的候选池：生产返回工作项数组，前端直接 forEach；
+         回空对象会抛 "source.forEach is not a function"，计划页签整块空白 */
+      data = tasks;
     } else if (clean === "/api/manager/workload") {
       data = mockWorkload(u);
     } else if (/^\/api\/projects\/[A-Za-z0-9_-]+\/release-policy$/.test(clean)) {
