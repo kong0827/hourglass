@@ -206,6 +206,9 @@
 @media (prefers-reduced-motion: reduce){.reqdoc-univerwrap.is-loading::before{animation:none}}
 
 /* ---------------- 表格文档：Univer 工作簿 ---------------- */
+/* 电子表格要横铺：不套文档的 1480 阅读栏宽，也不留「表格没有大纲」的空栏 */
+.reqdoc-editpage.is-sheet{max-width:none;}
+.reqdoc-editpage.is-sheet .reqdoc-toc{display:none;}
 .reqdoc-sheetwrap{
   position:relative;flex:1;min-width:0;height:calc(100vh - 236px);min-height:520px;
   border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;

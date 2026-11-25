@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>表格文档编辑页 · 整宽取值原型（2026-11-25）</title>
+<style>
+/* ========== 设计令牌（对齐 frontend/css/tokens.css） ========== */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+  --surface-hover:#F2F4F7; --surface-active:#E9ECF1; --tbl-head:#F9FAFB;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085; --text-inverse:#FFFFFF;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-active:#1E40AF;
+  --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318;
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:11px; --r-pill:999px;
+  --dur-fast:120ms; --ease-out:cubic-bezier(.2,.8,.2,1);
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",
+              "PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+}
+html[data-theme="dark"]{
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D;
+  --surface-hover:#1F2937; --surface-active:#26313F; --tbl-head:#1A222D;
+  --border:#25303D; --border-strong:#334153;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798; --text-inverse:#0D1219;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-active:#3B76DE;
+  --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-fg:#FDA29B;
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--bg-app);color:var(--text);font-family:var(--font-sans);font-size:13px;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;}
+button:focus-visible,summary:focus-visible,select:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+
+/* ========== 原型控制条 ========== */
+.proto-bar{
+  flex:0 0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:9px 16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:30;
+}
+.pb-main{min-width:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+.pb-main h1{margin:0;font-size:14px;font-weight:650;letter-spacing:-.01em;}
+.pb-main .sub{font-size:11.5px;color:var(--text-3);}
+.pb-ctrl{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;}
+.seg button{
+  border:0;background:transparent;height:26px;padding:0 11px;font-size:12px;
+  color:var(--text-2);cursor:pointer;transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+}
+.seg button + button{border-left:1px solid var(--border);}
+.seg button:hover{background:var(--surface-hover);color:var(--text);}
+.seg button.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.readout{
+  font-size:12px;color:var(--text-2);background:var(--surface-sunken);border-radius:var(--r-pill);
+  padding:4px 10px;white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.readout b{color:var(--text);font-weight:650;}
+.readout .delta{color:var(--success-fg);font-weight:600;}
+.readout .muted{color:var(--text-3);}
+.pb-tip{font-size:11.5px;color:var(--text-3);flex:1 1 100%;margin:-4px 0 0;}
+
+/* 改动数据（可折叠） */
+details.data{flex:0 0 auto;background:var(--surface);border-bottom:1px solid var(--border);}
+details.data summary{
+  cursor:pointer;padding:6px 16px;font-size:12px;color:var(--text-3);list-style:none;
+  display:flex;align-items:center;gap:6px;
+}
+details.data summary::-webkit-details-marker{display:none;}
+details.data summary::before{content:"▸";transition:transform var(--dur-fast) var(--ease-out);}
+details.data[open] summary::before{transform:rotate(90deg);}
+details.data summary:hover{color:var(--text);}
+.data-body{padding:0 16px 14px;}
+table.cmp{border-collapse:collapse;width:100%;max-width:820px;font-size:12px;}
+.cmp th,.cmp td{border:1px solid var(--border);padding:5px 9px;text-align:left;}
+.cmp th{background:var(--surface-sunken);font-weight:600;color:var(--text-2);}
+.cmp td.before{background:var(--danger-soft);color:var(--danger-fg);font-variant-numeric:tabular-nums;}
+.cmp td.after{background:var(--success-soft);color:var(--success-fg);font-variant-numeric:tabular-nums;}
+.cmp td.up{color:var(--success-fg);font-weight:650;font-variant-numeric:tabular-nums;}
+.data-note{margin:8px 0 0;font-size:11.5px;line-height:1.65;color:var(--text-3);max-width:820px;}
+
+/* ========== 应用外壳（复刻 layout.css 骨架） ========== */
+.app{flex:1;min-height:0;display:flex;overflow:hidden;background:var(--bg-app);}
+.sidebar{
+  width:216px;flex:0 0 216px;min-height:0;display:flex;flex-direction:column;
+  background:var(--surface);border-right:1px solid var(--border);padding:8px 0;
+}
+.brand{display:flex;align-items:center;gap:8px;padding:6px 14px 12px;font-weight:700;}
+.brand .mark{
+  width:22px;height:22px;border-radius:var(--r-xs);border:1px solid var(--border);
+  display:grid;place-items:center;color:var(--primary);font-size:12px;
+}
+.ws{padding:0 10px 10px;}
+.ws-card{
+  display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--r-sm);
+  background:var(--surface-sunken);font-size:12px;color:var(--text-2);
+}
+.ws-card .ava{
+  width:20px;height:20px;border-radius:50%;background:var(--text-3);color:#fff;
+  display:grid;place-items:center;font-size:10px;flex:0 0 auto;
+}
+.nav{flex:1;min-height:0;overflow:auto;padding:2px 8px;}
+.nav .grp{font-size:10.5px;color:var(--text-3);padding:10px 10px 4px;letter-spacing:.04em;}
+.nav a{
+  display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:var(--r-xs);
+  color:var(--text-2);font-size:12.5px;text-decoration:none;
+}
+.nav a:hover{background:var(--surface-hover);color:var(--text);}
+.nav a.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.nav .dot{width:13px;height:13px;border-radius:4px;border:1px solid currentColor;opacity:.55;flex:0 0 auto;}
+
+.main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;}
+.topbar{
+  height:46px;flex:0 0 46px;display:flex;align-items:center;gap:10px;
+  padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);
+}
+.crumbs{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);min-width:0;}
+.crumbs b{color:var(--text-2);font-weight:600;}
+.crumbs .sep{color:var(--border-strong);}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:6px;}
+.ibtn-x{
+  width:28px;height:28px;border:0;background:transparent;border-radius:var(--r-xs);
+  color:var(--text-2);cursor:pointer;display:grid;place-items:center;font-size:13px;
+}
+.ibtn-x:hover{background:var(--surface-hover);color:var(--text);}
+.avatar{
+  width:24px;height:24px;border-radius:50%;background:var(--primary-soft);color:var(--primary-fg);
+  display:grid;place-items:center;font-size:11px;font-weight:600;
+}
+.pagehead{flex:0 0 auto;padding:14px 20px 0;display:flex;align-items:flex-start;gap:12px;}
+.pagehead h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em;line-height:1.2;}
+.pagehead .sub{margin:4px 0 0;font-size:11.5px;color:var(--text-3);}
+.view{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px 20px 20px;overflow:auto;}
+
+/* ========== 编辑页 ========== */
+.editpage{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;margin:0 auto;padding:0 20px;}
+/* 改前：沿用文档阅读栏宽；改后：表格文档不设上限（对齐 .reqdoc-editpage.is-sheet） */
+.app[data-mode="before"] .editpage{max-width:1480px;}
+.editbar{display:flex;align-items:center;gap:10px;padding:0 0 10px;flex-wrap:wrap;}
+.back{
+  width:26px;height:26px;border:0;background:transparent;border-radius:var(--r-xs);
+  color:var(--text-2);cursor:pointer;display:grid;place-items:center;font-size:15px;
+}
+.back:hover{background:var(--surface-hover);color:var(--text);}
+.crumb{font-size:12px;color:var(--text-3);white-space:nowrap;}
+.fmt{
+  font-size:11px;font-weight:650;line-height:18px;padding:0 7px;border-radius:var(--r-pill);
+  background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-3);white-space:nowrap;
+}
+.parent{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-3);white-space:nowrap;}
+.parent select{
+  height:26px;padding:0 20px 0 8px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);font-size:12px;color:var(--text-2);font-family:inherit;
+}
+.saved{font-size:12px;color:var(--text-3);display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.saved::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--success);}
+.acts{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.btn{
+  height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:600;
+  cursor:pointer;display:inline-flex;align-items:center;gap:5px;
+  transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+}
+.btn:hover{background:var(--surface-hover);color:var(--text);}
+.btn.ghost{border-color:transparent;background:transparent;}
+.btn.ghost:hover{background:var(--surface-hover);}
+.btn.soft{background:var(--surface-sunken);}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff;}
+.btn[disabled]{opacity:.6;cursor:default;pointer-events:none;}
+.btn.demo-hit{background:var(--surface-active);color:var(--text);border-color:var(--border);}
+.pubnote{font-size:11.5px;color:var(--text-3);white-space:nowrap;}
+/* 表格文档没有大纲：改后隐藏入口，改前保留（点开只有空提示） */
+.app[data-mode="after"] .tocBtn{display:none;}
+
+.editwrap{flex:1;min-height:0;display:flex;align-items:stretch;gap:18px;}
+
+/* ========== 表格画布（复刻 Univer 工作簿外壳） ========== */
+.sheetwrap{
+  flex:1;min-width:0;min-height:380px;display:flex;flex-direction:column;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;
+}
+.ribbon{flex:0 0 auto;border-bottom:1px solid var(--border);}
+.ribbon-tabs{display:flex;justify-content:center;gap:2px;padding:4px 10px 0;}
+.rtab{
+  border:0;background:transparent;color:var(--text-2);font-size:12.5px;
+  padding:6px 12px;border-radius:var(--r-xs) var(--r-xs) 0 0;cursor:pointer;position:relative;
+}
+.rtab:hover{background:var(--surface-hover);color:var(--text);}
+.rtab.on{color:var(--primary-fg);font-weight:600;}
+.rtab.on::after{
+  content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;
+  background:var(--primary);border-radius:2px 2px 0 0;
+}
+.ribbon-tools{display:flex;align-items:center;gap:4px;padding:5px 10px 6px;overflow:hidden;}
+.rtool{
+  min-width:26px;height:26px;padding:0 5px;border:0;background:transparent;border-radius:5px;
+  color:var(--text-2);font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+}
+.rtool:hover{background:var(--surface-hover);color:var(--text);}
+.rtool.on{background:var(--primary-soft);color:var(--primary-fg);}
+.rtool b{font-weight:700;}
+.rtool i{font-family:Georgia,serif;}
+.rsel{
+  height:26px;border:1px solid transparent;background:transparent;border-radius:5px;
+  font-size:12.5px;color:var(--text-2);padding:0 4px;font-family:inherit;cursor:pointer;
+}
+.rsel:hover{background:var(--surface-hover);border-color:var(--border);}
+.rsep{width:1px;height:18px;background:var(--border);margin:0 5px;flex:0 0 auto;}
+.caret{font-size:9px;color:var(--text-3);margin-left:2px;}
+
+/* 公式栏 */
+.fbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:5px 8px;
+  border-bottom:1px solid var(--border);background:var(--surface-sunken);
+}
+.namebox{
+  width:76px;height:24px;border:1px solid var(--border);border-radius:5px;background:var(--surface);
+  display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-2);
+  font-variant-numeric:tabular-nums;
+}
+.fbtns{display:flex;gap:2px;color:var(--text-3);font-size:12px;}
+.fx{font-style:italic;font-family:Georgia,serif;padding:0 5px;color:var(--text-3);}
+.finput{
+  flex:1;min-width:0;height:24px;border:1px solid var(--border);border-radius:5px;background:var(--surface);
+  display:flex;align-items:center;padding:0 8px;font-size:12px;color:var(--text-3);
+}
+
+/* 网格 */
+.grid{flex:1;min-height:0;overflow:auto;background:var(--surface);}
+table.sheet{border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12px;color:var(--text);}
+table.sheet th,table.sheet td{
+  border-right:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:0;height:26px;overflow:hidden;
+}
+table.sheet thead th{
+  height:24px;background:var(--tbl-head);color:var(--text-3);font-weight:500;text-align:center;
+  position:sticky;top:0;z-index:2;
+}
+table.sheet .rh{
+  width:46px;min-width:46px;max-width:46px;background:var(--tbl-head);
+  color:var(--text-3);font-weight:500;text-align:center;
+}
+table.sheet tbody th{position:sticky;left:0;z-index:1;}
+table.sheet td{cursor:cell;}
+table.sheet td:hover{background:var(--surface-hover);}
+table.sheet td.sel{outline:2px solid var(--primary);outline-offset:-2px;background:var(--surface);}
+table.sheet th.colsel,table.sheet th.rowsel{background:var(--primary-soft);color:var(--primary-fg);}
+
+/* 底部工作表栏 */
+.sfoot{
+  flex:0 0 auto;height:34px;display:flex;align-items:center;gap:6px;padding:0 8px;
+  border-top:1px solid var(--border);background:var(--surface);
+}
+.stab{height:24px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text-2);font-size:12px;cursor:pointer;}
+.stab:hover{background:var(--surface-hover);}
+.stab.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.sfoot .spacer{flex:1;}
+.zoomctl{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:12px;}
+.zoomctl button{
+  width:20px;height:20px;border:0;background:transparent;border-radius:4px;
+  color:var(--text-2);cursor:pointer;font-size:13px;line-height:1;
+}
+.zoomctl button:hover{background:var(--surface-hover);}
+.zoomtrack{width:64px;height:3px;border-radius:2px;background:var(--border);position:relative;}
+.zoomtrack::after{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:100%;
+  background:var(--primary);border-radius:2px;
+}
+
+/* ========== 大纲（改前才出现） ========== */
+.toc{flex:0 0 196px;width:196px;padding:2px 2px 24px;position:relative;}
+.app[data-mode="after"] .toc{display:none;}
+.toc-head{display:flex;align-items:center;gap:8px;padding:2px 8px 10px;font-size:13px;font-weight:700;color:var(--text-2);}
+.toc-head .fold{
+  margin-left:auto;width:22px;height:22px;border:0;background:transparent;border-radius:var(--r-xs);
+  color:var(--text-3);cursor:pointer;font-size:13px;
+}
+.toc-head .fold:hover{background:var(--surface-hover);color:var(--text);}
+.toc-body{padding-left:9px;position:relative;}
+.toc-body::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:1px;background:var(--border);}
+.toc-empty{padding:6px 10px;font-size:12px;line-height:1.6;color:var(--text-3);}
+.waste{
+  position:absolute;right:2px;top:34px;font-size:10.5px;font-weight:650;white-space:nowrap;
+  color:var(--warning-fg);background:var(--warning-soft);border:1px dashed var(--warning-border);
+  border-radius:5px;padding:1px 6px;
+}
+
+/* 移动端只保证可看：收起侧栏与空大纲 */
+@media (max-width:900px){
+  .sidebar{display:none;}
+  .view{padding:10px 12px 16px;}
+  .editpage{padding:0 12px;}
+  .toc{display:none;}
+  .pagehead{padding:12px 12px 0;}
+}
+</style>
+</head>
+<body>
+
+<!-- ========== 控制条 ========== -->
+<header class="proto-bar">
+  <div class="pb-main">
+    <h1>表格文档编辑页 · 整宽取值</h1>
+    <span class="sub">对照 Excel / 飞书表格：网格横铺；1480 阅读栏宽只留给文字类文档</span>
+  </div>
+  <div class="pb-ctrl">
+    <span class="readout" id="readout">表格区 <b>—</b></span>
+    <span class="seg" id="cmpSeg" role="group" aria-label="改前改后对照">
+      <button type="button" data-mode="before" aria-pressed="false">改前</button>
+      <button type="button" data-mode="after" aria-pressed="true" class="on">改后</button>
+    </span>
+    <span class="seg" id="themeSeg" role="group" aria-label="主题切换">
+      <button type="button" data-theme="light" aria-pressed="true" class="on">浅色</button>
+      <button type="button" data-theme="dark" aria-pressed="false">深色</button>
+    </span>
+  </div>
+  <p class="pb-tip">把浏览器窗口拉宽再切「改前 / 改后」：窗口越宽，取消 1480 上限带来的差距越大；点单元格可看选中态。</p>
+</header>
+
+<details class="data">
+  <summary>改动数据与依据</summary>
+  <div class="data-body">
+    <table class="cmp">
+      <thead>
+        <tr><th style="width:120px">视口宽</th><th>改前表格区</th><th>改后表格区</th><th>变化</th><th>原因</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1440</td><td class="before">912px</td><td class="after">1126px</td><td class="up">+23.5%</td><td>去掉 196px 空大纲 + 18px 间距</td></tr>
+        <tr><td>1920</td><td class="before">1226px</td><td class="after">1606px</td><td class="up">+31.0%</td><td>取消 1480 上限，同时去掉空大纲</td></tr>
+        <tr><td>2560</td><td class="before">1226px</td><td class="after">2246px</td><td class="up">+83.2%</td><td>上限解除后随窗口继续增长</td></tr>
+      </tbody>
+    </table>
+    <p class="data-note">
+      三处改动：① 表格编辑页不再套文档的 <code>max-width:1480px</code>；② 表格按设计不生成大纲，196px 的空栏与「大纲」按钮一并收起；③ 文字 / Markdown / 富文本文档的阅读栏宽保持不变。<br>
+      数据为无头 Chrome 加载真实 <code>tokens / layout / views-req-docs.css</code> 的骨架实测（含 18px 滚动条）；原型里的读数按当前窗口实时计算。阅读视图（左树 + 正文）未改，那里已有「宽屏阅读」按钮。
+    </p>
+  </div>
+</details>
+
+<!-- ========== 应用外壳 ========== -->
+<div class="app" id="app" data-mode="after">
+  <aside class="sidebar">
+    <div class="brand"><span class="mark">漏</span>沙漏</div>
+    <div class="ws"><div class="ws-card"><span class="ava">私</span>个人空间</div></div>
+    <nav class="nav">
+      <div class="grp">工作</div>
+      <a href="#" onclick="return false"><span class="dot"></span>工作台</a>
+      <a href="#" onclick="return false"><span class="dot"></span>我的工作</a>
+      <a href="#" onclick="return false"><span class="dot"></span>需求池</a>
+      <a href="#" onclick="return false"><span class="dot"></span>项目</a>
+      <a href="#" onclick="return false"><span class="dot"></span>版本与交付</a>
+      <div class="grp">协作</div>
+      <a href="#" class="on" onclick="return false"><span class="dot"></span>文档</a>
+      <a href="#" onclick="return false"><span class="dot"></span>测试用例</a>
+      <a href="#" onclick="return false"><span class="dot"></span>报表</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span>私</span><span class="sep">/</span><b>机构服务平台一期</b></div>
+      <div class="tb-right">
+        <button class="ibtn-x" type="button" title="搜索">⌕</button>
+        <button class="ibtn-x" type="button" title="通知">◔</button>
+        <span class="avatar">孔</span>
+      </div>
+    </header>
+
+    <div class="pagehead">
+      <div>
+        <h1>测试</h1>
+        <p class="sub">机构服务平台一期 · admin · 上次编辑 11-25 14:07</p>
+      </div>
+    </div>
+
+    <div class="view">
+      <div class="editpage" id="editpage">
+        <div class="editbar">
+          <button class="back" type="button" title="返回文档列表">‹</button>
+          <span class="crumb">机构服务平台一期 / 测试</span>
+          <span class="fmt">表格</span>
+          <label class="parent"><span>分类</span><select><option>无分类</option></select></label>
+          <label class="parent"><span>类型</span><select><option>需求文档</option></select></label>
+          <label class="parent"><span>上级</span><select><option>需求文档</option></select></label>
+          <span class="saved">最后保存 11-25 14:07</span>
+          <span class="acts">
+            <button class="btn ghost" type="button" data-demo>AI <span class="caret">▾</span></button>
+            <button class="btn ghost tocBtn" type="button" data-demo>大纲</button>
+            <button class="btn ghost" type="button" data-demo>分享</button>
+            <button class="btn ghost" type="button" data-demo title="更多操作">⋯</button>
+            <span class="pubnote">发布后项目成员可见</span>
+            <button class="btn soft" type="button" data-demo>发布</button>
+            <button class="btn primary" type="button" id="saveBtn">保存</button>
+          </span>
+        </div>
+
+        <div class="editwrap">
+          <div class="sheetwrap" id="sheetbody">
+            <div class="ribbon">
+              <div class="ribbon-tabs" role="tablist" aria-label="表格菜单">
+                <button class="rtab on" type="button" role="tab" aria-selected="true">开始</button>
+                <button class="rtab" type="button" role="tab" aria-selected="false">插入</button>
+                <button class="rtab" type="button" role="tab" aria-selected="false">公式</button>
+                <button class="rtab" type="button" role="tab" aria-selected="false">数据</button>
+                <button class="rtab" type="button" role="tab" aria-selected="false">视图</button>
+              </div>
+              <div class="ribbon-tools">
+                <button class="rtool" type="button" title="撤销">↶</button>
+                <button class="rtool" type="button" title="重做">↷</button>
+                <span class="rsep"></span>
+                <button class="rtool" type="button" title="格式刷">刷</button>
+                <button class="rtool" type="button" title="粘贴">粘贴<span class="caret">▾</span></button>
+                <span class="rsep"></span>
+                <select class="rsel" aria-label="字体"><option>Arial</option><option>微软雅黑</option></select>
+                <select class="rsel" aria-label="字号"><option>11</option><option>12</option><option>14</option></select>
+                <span class="rsep"></span>
+                <button class="rtool" type="button" data-toggle title="加粗" aria-pressed="false"><b>B</b></button>
+                <button class="rtool" type="button" data-toggle title="斜体" aria-pressed="false"><i>I</i></button>
+                <button class="rtool" type="button" data-toggle title="下划线" aria-pressed="false">U</button>
+                <button class="rtool" type="button" data-toggle title="删除线" aria-pressed="false">S</button>
+                <span class="rsep"></span>
+                <button class="rtool" type="button" title="文字颜色">A<span class="caret">▾</span></button>
+                <button class="rtool" type="button" title="填充色">▣</button>
+                <button class="rtool" type="button" title="边框">▦</button>
+                <span class="rsep"></span>
+                <button class="rtool" type="button" title="左对齐">≡</button>
+                <button class="rtool" type="button" title="垂直对齐">⇕</button>
+                <button class="rtool" type="button" title="自动换行">↵</button>
+                <button class="rtool" type="button" title="合并单元格">⊞</button>
+                <span class="rsep"></span>
+                <button class="rtool" type="button" title="更多">⋯</button>
+              </div>
+            </div>
+
+            <div class="fbar">
+              <div class="namebox" id="namebox">B1</div>
+              <div class="fbtns"><span>×</span><span>✓</span></div>
+              <span class="fx">fx</span>
+              <div class="finput" id="finput">在此输入内容</div>
+            </div>
+
+            <div class="grid" id="grid" aria-label="工作表网格"></div>
+
+            <div class="sfoot">
+              <button class="stab" type="button" title="新建工作表">＋</button>
+              <button class="stab on" type="button">Sheet1</button>
+              <span class="spacer"></span>
+              <span class="zoomctl">
+                <button type="button" title="适应窗口">⛶</button>
+                <button type="button" title="缩小">−</button>
+                <span class="zoomtrack"></span>
+                <button type="button" title="放大">＋</button>
+                <span style="min-width:38px;text-align:right">100%</span>
+              </span>
+            </div>
+          </div>
+
+          <aside class="toc" aria-label="文档大纲">
+            <div class="toc-head">
+              <span>大纲</span>
+              <button class="fold" type="button" title="收起大纲">»</button>
+            </div>
+            <div class="toc-body">
+              <div class="toc-empty">表格文档没有大纲。</div>
+            </div>
+            <span class="waste">空占位 · 196px + 18px</span>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var app = document.getElementById("app");
+  var sheet = document.getElementById("sheetbody");
+  var grid = document.getElementById("grid");
+  var readout = document.getElementById("readout");
+  var namebox = document.getElementById("namebox");
+
+  /* 与 views-req-docs.css 一致的常量，只用于算出「改前」同窗口下的对照值 */
+  var DOC_MAX = 1480, PAD = 20, TOC_W = 196, GAP = 18, ROW_HEAD = 46, COL_W = 76;
+  var mode = "after";
+  var sel = { r: 0, c: 1 };
+  var cols = 0, rows = 0;
+
+  function colName(i){
+    var s = "";
+    var n = i + 1;
+    while(n > 0){
+      var m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - 1) / 26);
+    }
+    return s;
+  }
+
+  function buildGrid(){
+    /* 按画布实际宽高铺满，行列都随窗口增减，避免内部滚动条干扰宽度读数 */
+    var n = Math.max(6, Math.floor((grid.clientWidth - ROW_HEAD) / COL_W));
+    var rn = Math.max(10, Math.floor((grid.clientHeight - 24) / 26));
+    if(n === cols && rn === rows) return;
+    cols = n;
+    rows = rn;
+    if(sel.r >= rows) sel.r = rows - 1;
+    if(sel.c >= cols) sel.c = cols - 1;
+    var html = '<table class="sheet" style="width:' + (ROW_HEAD + n * COL_W) + 'px"><colgroup><col style="width:' + ROW_HEAD + 'px">';
+    for(var i = 0; i < n; i++) html += '<col style="width:' + COL_W + 'px">';
+    html += '</colgroup><thead><tr><th class="rh"></th>';
+    for(i = 0; i < n; i++) html += '<th data-col="' + i + '">' + colName(i) + '</th>';
+    html += '</tr></thead><tbody>';
+    for(var r = 0; r < rows; r++){
+      html += '<tr><th class="rh" data-row="' + r + '">' + (r + 1) + '</th>';
+      for(var c = 0; c < n; c++) html += '<td data-r="' + r + '" data-c="' + c + '"></td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    grid.innerHTML = html;
+    paintSelection();
+  }
+
+  function paintSelection(){
+    grid.querySelectorAll(".sel,.colsel,.rowsel").forEach(function(el){
+      el.classList.remove("sel", "colsel", "rowsel");
+    });
+    var td = grid.querySelector('td[data-r="' + sel.r + '"][data-c="' + sel.c + '"]');
+    if(td) td.classList.add("sel");
+    var ch = grid.querySelector('thead th[data-col="' + sel.c + '"]');
+    if(ch) ch.classList.add("colsel");
+    var rh = grid.querySelector('tbody th[data-row="' + sel.r + '"]');
+    if(rh) rh.classList.add("rowsel");
+    namebox.textContent = colName(sel.c) + (sel.r + 1);
+  }
+
+  function beforeWidth(){
+    var mainW = document.querySelector(".main").clientWidth;
+    var inner = Math.min(DOC_MAX, mainW - PAD * 2) - PAD * 2;
+    return Math.max(240, inner - GAP - TOC_W);
+  }
+
+  function updateReadout(){
+    var w = Math.round(sheet.getBoundingClientRect().width);
+    var before = Math.round(beforeWidth());
+    var beforeCols = Math.max(6, Math.floor((before - 2 - ROW_HEAD) / COL_W));
+    if(mode === "after"){
+      var dw = Math.max(0, w - before);
+      var dc = Math.max(0, cols - beforeCols);
+      readout.innerHTML = "表格区 <b>" + w + "px</b> · " + cols + " 列可见"
+        + '<span class="delta"> +' + dw + "px／+" + dc + " 列</span>";
+    }else{
+      readout.innerHTML = "表格区 <b>" + w + "px</b> · " + cols + ' 列可见 <span class="muted">（改前）</span>';
+    }
+  }
+
+  function refresh(){
+    buildGrid();
+    paintSelection();
+    updateReadout();
+  }
+
+  /* 选中单元格：更新选中框、行列高亮与名称框 */
+  grid.addEventListener("click", function(e){
+    var td = e.target.closest("td[data-r]");
+    var th = e.target.closest("thead th[data-col]");
+    if(td){ sel.r = +td.getAttribute("data-r"); sel.c = +td.getAttribute("data-c"); }
+    else if(th){ sel.c = +th.getAttribute("data-col"); }
+    else return;
+    paintSelection();
+  });
+
+  /* 改前 / 改后 */
+  document.getElementById("cmpSeg").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-mode]");
+    if(!b || b.getAttribute("data-mode") === mode) return;
+    mode = b.getAttribute("data-mode");
+    app.setAttribute("data-mode", mode);
+    this.querySelectorAll("button").forEach(function(x){
+      var on = x === b;
+      x.classList.toggle("on", on);
+      x.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    cols = 0; rows = 0;
+    refresh();
+  });
+
+  /* 主题 */
+  document.getElementById("themeSeg").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-theme]");
+    if(!b) return;
+    if(b.getAttribute("data-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    else document.documentElement.removeAttribute("data-theme");
+    this.querySelectorAll("button").forEach(function(x){
+      var on = x === b;
+      x.classList.toggle("on", on);
+      x.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  });
+
+  /* 表格菜单页签与工具栏开关 */
+  document.querySelector(".ribbon-tabs").addEventListener("click", function(e){
+    var b = e.target.closest(".rtab");
+    if(!b) return;
+    this.querySelectorAll(".rtab").forEach(function(x){
+      var on = x === b;
+      x.classList.toggle("on", on);
+      x.setAttribute("aria-selected", on ? "true" : "false");
+    });
+  });
+  document.querySelector(".ribbon-tools").addEventListener("click", function(e){
+    var b = e.target.closest(".rtool[data-toggle]");
+    if(!b) return;
+    var on = !b.classList.contains("on");
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+
+  /* 保存按钮回执：只演示控件态，不做真实保存 */
+  var saveBtn = document.getElementById("saveBtn");
+  var saveTimer = null;
+  saveBtn.addEventListener("click", function(){
+    var label = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = "保存中…";
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function(){
+      saveBtn.disabled = false;
+      saveBtn.textContent = label;
+    }, 700);
+  });
+
+  /* 其他动作只给按钮回执（不动文案，避免把「AI ▾」里的箭头冲掉） */
+  document.addEventListener("click", function(e){
+    var d = e.target.closest("[data-demo]");
+    if(!d) return;
+    d.classList.add("demo-hit");
+    setTimeout(function(){ d.classList.remove("demo-hit"); }, 450);
+  });
+
+  /* 尺寸变化：窗口宽度或折叠数据面板都会改变网格可用宽度 */
+  var rzTimer = null;
+  function onResize(){
+    clearTimeout(rzTimer);
+    rzTimer = setTimeout(refresh, 80);
+  }
+  if(window.ResizeObserver){
+    new ResizeObserver(onResize).observe(sheet);
+  }
+  window.addEventListener("resize", onResize);
+  document.querySelector("details.data").addEventListener("toggle", onResize);
+
+  refresh();
+
+  /* 便于分享某一状态：?mode=before&theme=dark */
+  var q = new URLSearchParams(location.search);
+  if(q.get("mode") === "before") document.querySelector('#cmpSeg button[data-mode="before"]').click();
+  if(q.get("theme") === "dark") document.querySelector('#themeSeg button[data-theme="dark"]').click();
+})();
+</script>
+</body>
+</html>

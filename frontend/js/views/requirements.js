@@ -4884,6 +4884,11 @@ function setDocFormatUI(format){
   var md = format === "markdown";
   var univer = format === "univer";
   var sheet = format === "sheet";
+  /* 表格：编辑页按整宽排版并收起空大纲（样式见 .reqdoc-editpage.is-sheet） */
+  var page = $("reqDocEditPage");
+  if(page) page.classList.toggle("is-sheet", sheet);
+  var tocBtn = $("reqDocTocToggle");
+  if(tocBtn) tocBtn.hidden = sheet;
   showEl($("reqDocRichBody"), !md && !univer && !sheet);
   showEl($("reqDocMdBody"), md);
   showEl($("reqDocUniverBody"), univer);
