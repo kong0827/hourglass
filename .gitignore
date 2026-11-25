@@ -23,6 +23,10 @@ deploy/.last-deploy.stamp
 deploy/.pending-deploy.stamp
 deploy/dist/
 
+# 本地临时产物（构建整树副本 / 排查脚本）
+.build-tmp*/
+tools/tmp/
+
 # ===================== 内部资料（不对外发布）=====================
 # 以下内容的正本已移出仓库，存放在 ~/Documents/沙漏/内部资料/；
 # 这里的规则是兜底，防止同类文件被重新创建后误提交进公开仓库。
