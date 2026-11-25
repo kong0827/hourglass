@@ -24,6 +24,8 @@ import { loadReqs, render } from "./board.js";
 import { openDemandDetailById } from "./demands.js";
 import { ensureVendor, openDocView } from "../core/doc-editor.js";
 import { htmlToSnapshot, parseSnapshot, snapshotHeadings, snapshotToHtml, snapshotToText } from "../core/univer-doc-io.js";
+import { openSheetView, sheetSnapshotText, sheetSnapshotToHtml } from "../core/sheet-editor.js";
+import { blankSnapshot, excelToSnapshot, ensureExcelJs, snapshotToExcel } from "../core/xlsx-fidelity.js";
 
 var reqDocList = [];
 var reqDocDirty = false;
@@ -42,6 +44,9 @@ var reqEditor = null;
 /* 在线文档视图（Univer）：与 SunEditor 互斥，同一时刻只挂载一个 */
 var reqUniverView = null;
 var reqUniverSeq = 0;
+/* 表格视图（Univer 工作簿）：同样与另外两个编辑器互斥 */
+var reqSheetView = null;
+var reqSheetSeq = 0;
 var reqCollapsed = {};
 var reqDocCollapsedDocs = {};
 /* 文档分类树（独立分类表 doc_category）：扁平缓存 + 分类折叠态 + 最近一次构建的分组模型（右键菜单按 id 查节点用） */
@@ -98,6 +103,9 @@ function applyReqDocReadOnly(on){
   if(reqUniverView){
     try{ reqUniverView.setReadOnly(on); }catch(e){ /* 视图切换中 */ }
   }
+  if(reqSheetView){
+    try{ reqSheetView.setReadOnly(on); }catch(e){ /* 视图切换中 */ }
+  }
   var saved = $("reqDocSaved");
   if(on && saved) saved.textContent = reqDocOwnerLocked ? "只读 · 仅文档负责人或空间管理员可编辑" : "只读 · 你对该项目只有查看权限";
 }
@@ -133,16 +141,44 @@ function isMarkdownDoc(){
 function isUniverDoc(){
   return editingMeta.format === "univer";
 }
+/* 表格（Univer 工作簿快照）：正文存 sheetContent，编辑/阅读走 core/sheet-editor */
+function isSheetDoc(){
+  return editingMeta.format === "sheet";
+}
+function docFormatLabel(format){
+  if(format === "markdown") return "Markdown";
+  if(format === "univer") return "富文本";
+  if(format === "sheet") return "表格";
+  return "HTML";
+}
 /* 服务端 format 归一化：未知格式一律按旧富文本（html）处理，避免历史脏数据打不开 */
 function docFormatOf(format){
   if(format === "markdown") return "markdown";
   if(format === "univer") return "univer";
+  if(format === "sheet") return "sheet";
   return "html";
 }
-/* 列表里的格式小标：Markdown 不标（默认），在线文档与旧 HTML 分开标 */
+/* 详情接口把表格正文放在 sheetContent，其余格式读 content */
+function docBodyOf(doc){
+  if(!doc) return "";
+  return docFormatOf(doc.format) === "sheet" ? (doc.sheetContent || "") : (doc.content || "");
+}
+/** 表格快照 JSON 解析：结构不对按空表处理，避免一份脏数据把编辑页卡死 */
+function parseSheetSnapshot(content){
+  if(!content) return null;
+  if(typeof content === "object") return content.sheets ? content : null;
+  try{
+    var parsed = JSON.parse(content);
+    return parsed && parsed.sheets && parsed.sheetOrder ? parsed : null;
+  }catch(e){
+    return null;
+  }
+}
+/* 列表里的格式小标：Markdown 不标（默认），其余格式各标一个 */
 function fmtChipHTML(format){
   if(format === "markdown") return "";
   if(format === "univer") return '<span class="rs-fmt-html" title="在线文档">在线</span>';
+  if(format === "sheet") return '<span class="rs-fmt-html" title="表格">表格</span>';
   return '<span class="rs-fmt-html" title="HTML 文档">HTML</span>';
 }
 function showEl(el, on){
@@ -299,7 +335,7 @@ function setReqEditorContents(html){
   }
 }
 function setReqDocHydrating(on){
-  var body = isUniverDoc() ? $("reqDocUniverBody") : $("reqDocRichBody");
+  var body = isUniverDoc() ? $("reqDocUniverBody") : (isSheetDoc() ? $("reqDocSheetBody") : $("reqDocRichBody"));
   if(body) body.classList.toggle("is-loading", !!on);
   if($("reqDocSaved") && on){
     $("reqDocSaved").classList.remove("is-saved", "is-dirty");
@@ -313,6 +349,63 @@ function disposeReqUniver(){
     try{ reqUniverView.dispose(); }catch(e){ /* 已销毁 */ }
     reqUniverView = null;
   }
+}
+function disposeReqSheet(){
+  reqSheetSeq++;
+  if(reqSheetView){
+    try{ reqSheetView.dispose(); }catch(e){ /* 已销毁 */ }
+    reqSheetView = null;
+  }
+}
+/* 阅读视图也挂了一个 Univer 工作簿：换文档/离开阅读时先销毁 */
+var reqSheetReaderView = null;
+function disposeReqSheetReader(){
+  hideRrdCellBubble();
+  if(reqSheetReaderView){
+    try{ reqSheetReaderView.dispose(); }catch(e){ /* 已销毁 */ }
+    reqSheetReaderView = null;
+  }
+}
+/* 挂载表格：有快照直接用；新建或旧数据为空时挂一张空白表 */
+function mountReqSheet(snapshot){
+  var seq = ++reqSheetSeq;
+  if(reqSheetView){
+    try{ reqSheetView.dispose(); }catch(e){ /* 已销毁 */ }
+    reqSheetView = null;
+  }
+  var box = $("reqDocSheetBody");
+  if(!box) return Promise.resolve(null);
+  /* 切到表格时清掉上一篇文档的文本选区，避免「引用选中」带上旧内容 */
+  reqDocLatestSel = null;
+  setReqDocHydrating(true);
+  return openSheetView({
+    container: box,
+    snapshot: snapshot || blankSnapshot({ filename: editingMeta.title || "表格" }),
+    readOnly: reqDocReadOnly || reqDocOwnerLocked,
+    onDirty: function(){
+      markReqDocDirty();
+      scheduleDraftSave();
+    }
+  }).then(function(view){
+    if(seq !== reqSheetSeq){
+      try{ view.dispose(); }catch(e){ /* 已销毁 */ }
+      return null;
+    }
+    reqSheetView = view;
+    setReqDocHydrating(false);
+    reqDocDirty = false;
+    refreshReqDocSavedText();
+    updateReqDocCount();
+    applyReqDocReadOnly(reqDocReadOnly || reqDocOwnerLocked);
+    return view;
+  }).catch(function(ex){
+    if(seq === reqSheetSeq){
+      setReqDocHydrating(false);
+      refreshReqDocSavedText();
+      toast(ex.message || "表格编辑器加载失败", "bad");
+    }
+    return null;
+  });
 }
 /* 挂载在线文档：有快照直接用；没有快照时按 html 现场转换（旧 html 正文 / 导入文件） */
 function mountReqUniver(snapshot, html){
@@ -1058,6 +1151,9 @@ var rrdQuote = null;
 var rrdSelText = "";
 var rrdFlashCommentId = null;
 var rrdSelBubble = null;
+/* 表格阅读：选中单元格后弹出的「批注」气泡，引用串形如 Sheet1!B3:C5 */
+var rrdCellBubble = null;
+var rrdCellRef = "";
 /* 两处文档评论框各自的 @ 候选：编辑页一个、阅读侧栏一个（侧栏会随渲染重建） */
 var reqDocCommentMention = null;
 var rrdMentionPicker = null;
@@ -1088,6 +1184,7 @@ function renderReqDocMode(){
   syncReqDocFilterUI();
   syncReqDocScopeUI();
   syncReqDocLoadError();
+  if(reqDocMode !== "read") disposeReqSheetReader();
   if(reqDocMode === "kanban") renderReqDocKanban();
   else if(reqDocMode === "read") renderReqDocSplit();
   else if(reqDocMode === "feed") renderReqDocFeed();
@@ -1512,6 +1609,7 @@ function renderReqDocSplit(){
   /* 选中的文档已被删除：回到占位提示 */
   if(splitDocId && !reqDocById(splitDocId)){
     splitDocId = null;
+    disposeReqSheetReader();
     if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title"><span class="desk-only">从左侧选择文档阅读</span><span class="mob-inline">从上方目录选择文档</span></div>'
       + '<div class="rrd-empty-text">原文档已删除；可以再选一篇，或新建一篇。</div>'
       + '<button class="btn sm" type="button" data-rrd-new style="margin-top:12px">新建文档</button></div>';
@@ -1621,6 +1719,7 @@ function reqDocReaderFill(body, cleanHtml){
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
+  disposeReqSheetReader();
   rrdDocDetail = doc;
   var pubBadge = doc.publishedAt == null
     ? '<span class="rr-draft">草稿</span>'
@@ -1641,6 +1740,8 @@ function renderReqDocReader(doc){
   rrdFlashCommentId = null;
   setRrdQuote(null);
   hideRrdSelBubble();
+  hideRrdCellBubble();
+  var rrdActTip = doc.format === "sheet" ? "选中单元格可批注" : "选中正文可划线";
   box.classList.remove("with-comments");
   box.innerHTML =
     '<div class="rrd-main">' +
@@ -1654,7 +1755,7 @@ function renderReqDocReader(doc){
           '<button class="btn sm ghost ibtn" type="button" data-rrd-wide aria-pressed="false" data-tip="宽屏阅读（收起左侧文档树）" aria-label="宽屏阅读">' + icon("expand", 15) + '</button>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
           (canMut ? '<button class="btn sm ghost ibtn" type="button" data-rrd-rename="' + esc(doc.id) + '" data-tip="重命名文档" aria-label="重命名文档">' + icon("edit", 15) + '</button>' : '') +
-          '<button class="btn sm ghost ibtn" type="button" data-rrd-comments="' + esc(doc.id) + '" id="rrdCommentsBtn" data-tip="评论 · 选中正文可划线" aria-label="评论">' + icon("comment", 15) + '<span class="rrd-cnt" id="rrdCommentsBadge" hidden></span></button>' +
+          '<button class="btn sm ghost ibtn" type="button" data-rrd-comments="' + esc(doc.id) + '" id="rrdCommentsBtn" data-tip="评论 · ' + rrdActTip + '" aria-label="评论">' + icon("comment", 15) + '<span class="rrd-cnt" id="rrdCommentsBadge" hidden></span></button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-perm="' + esc(doc.id) + '" data-tip="权限说明（只读）" aria-label="权限说明">' + icon("shield", 15) + '</button>' +
           '<button class="btn sm ghost ibtn" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canMut ? "1" : "0") + '" data-tip="历史版本" aria-label="历史版本">' + icon("clock", 15) + '</button>' +
           '<span class="vdiv" aria-hidden="true"></span>' +
@@ -1700,6 +1801,23 @@ function renderReqDocReader(doc){
   renderReqDocCrumb($("rrdCrumb"), doc.id);
   var body = $("reqDocReaderBody");
   var id = doc.id;
+  if(doc.format === "sheet"){
+    /* 表格阅读：只读挂载 Univer 工作簿，保留合并/样式/列宽 */
+    body.classList.add("rrd-sheet");
+    var sheetSnap = parseSheetSnapshot(doc.sheetContent);
+    openSheetView({
+      container: body,
+      snapshot: sheetSnap || blankSnapshot({ filename: doc.title || "表格" }),
+      readOnly: true
+    }).then(function(view){
+      if(splitDocId !== id){ view.dispose(); return; }
+      reqSheetReaderView = view;
+      bindRrdSheetCellComment(body);
+    }).catch(function(ex){
+      if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "表格加载失败");
+    });
+    return;
+  }
   var prep = doc.format === "univer"
     ? Promise.all([loadMarkdownLib(), ensureVendor()])
     : loadMarkdownLib();
@@ -2457,7 +2575,8 @@ function loadRrdCommentCount(docId){
     }
     var btn = $("rrdCommentsBtn");
     if(btn){
-      var tip = n ? "评论（" + n + " 条）· 选中正文可划线" : "评论 · 选中正文可划线";
+      var act = rrdDocDetail && rrdDocDetail.format === "sheet" ? "选中单元格可批注" : "选中正文可划线";
+      var tip = n ? "评论（" + n + " 条）· " + act : "评论 · " + act;
       btn.setAttribute("data-tip", tip);
       btn.setAttribute("aria-label", n ? "评论（" + n + " 条）" : "评论");
     }
@@ -2474,7 +2593,8 @@ function loadRrdComments(){
     var title = $("rrdCommentsTitle");
     if(title) title.textContent = rrdComments.length ? "评论（" + rrdComments.length + "）" : "评论";
     if(!rrdComments.length){
-      list.innerHTML = UI.colEmpty("还没有评论", "inbox", "选中正文即可划线评论");
+      var emptyHint = rrdDocDetail && rrdDocDetail.format === "sheet" ? "点击单元格后选择「批注」即可添加单元格批注" : "选中正文即可划线评论";
+      list.innerHTML = UI.colEmpty("还没有评论", "inbox", emptyHint);
     }else{
       list.innerHTML = rrdComments.map(function(c){
         return '<div class="reqdoc-comment-item" data-rrd-comment-id="' + esc(c.id) + '">'
@@ -2482,7 +2602,7 @@ function loadRrdComments(){
           +   '<span class="reqdoc-comment-user">' + esc(c.userName || "—") + '</span>'
           +   '<span class="reqdoc-comment-time">' + esc(fmtTs(c.createdAt) || "—") + '</span>'
           + '</div>'
-          + (c.quoteText ? '<div class="reqdoc-comment-quote">' + esc(c.quoteText) + '</div>' : '')
+          + (c.quoteText ? docQuoteHTML(c.quoteText, rrdDocDetail && rrdDocDetail.format === "sheet") : '')
           + '<div class="reqdoc-comment-body">' + esc(c.content) + '</div>'
           + (c.deletable ? '<div class="reqdoc-comment-actions-r"><button class="btn sm danger" type="button" data-rrd-del-comment="' + esc(c.id) + '">删除</button></div>' : '')
           + '</div>';
@@ -2624,6 +2744,75 @@ function maybeShowRrdSelBubble(){
   if(top < 8) top = rect.bottom + 8;
   b.style.left = left + "px";
   b.style.top = top + "px";
+}
+
+/* ---------- 表格阅读：单元格引用批注 ---------- */
+
+/* 表格是 canvas，没有文本选区；改为捕获单元格选区，气泡把 Sheet1!B3 存进 quoteText */
+function bindRrdSheetCellComment(body){
+  if(!body || body.dataset.rrdSheetBound) return;
+  body.dataset.rrdSheetBound = "1";
+  body.addEventListener("mouseup", function(e){
+    if(!rrdCanComment || !rrdDocDetail || rrdDocDetail.format !== "sheet") return;
+    /* 只响应单元格画布上的点击；工具栏/工作表标签的 mouseup 不弹批注 */
+    if(!e.target || e.target.tagName !== "CANVAS") return;
+    var x = e.clientX, y = e.clientY;
+    /* 等 Univer 处理完本次点击再读选区，避免拿到上一格的坐标 */
+    setTimeout(function(){
+      if(splitDocId !== rrdCommentsDocId) return;
+      var view = reqSheetReaderView;
+      var ref = view && typeof view.getSelectionRef === "function" ? view.getSelectionRef() : null;
+      if(!ref) return;
+      showRrdCellBubble(ref, x, y);
+    }, 0);
+  });
+  body.addEventListener("wheel", hideRrdCellBubble, { passive: true });
+}
+function ensureRrdCellBubble(){
+  if(rrdCellBubble) return rrdCellBubble;
+  var b = document.createElement("button");
+  b.type = "button";
+  b.id = "rrdCellBubble";
+  b.className = "rrd-sel-bubble";
+  b.addEventListener("mousedown", function(e){ e.preventDefault(); });
+  b.addEventListener("click", function(){
+    if(!rrdCellRef || !rrdCanComment) return;
+    toggleRrdComments(true, "comments");
+    setRrdQuote(rrdCellRef);
+    hideRrdCellBubble();
+    var ta = $("rrdCommentInput");
+    if(ta) ta.focus();
+  });
+  document.body.appendChild(b);
+  rrdCellBubble = b;
+  return b;
+}
+function showRrdCellBubble(ref, x, y){
+  rrdCellRef = ref;
+  var b = ensureRrdCellBubble();
+  var a1 = ref.slice(ref.lastIndexOf("!") + 1);
+  b.textContent = "批注 " + a1;
+  b.title = "对 " + ref + " 添加单元格批注";
+  b.style.display = "block";
+  var left = Math.max(8, Math.min(window.innerWidth - b.offsetWidth - 8, x + 12));
+  var top = y - b.offsetHeight - 10;
+  if(top < 8) top = y + 14;
+  b.style.left = left + "px";
+  b.style.top = top + "px";
+}
+function hideRrdCellBubble(){
+  if(rrdCellBubble) rrdCellBubble.style.display = "none";
+  rrdCellRef = "";
+}
+/* 只有形如 Sheet1!B3 / 'My Sheet'!B3:C5 的引用才可定位，避免旧评论里的普通文本被当成坐标 */
+function looksLikeCellRef(q){
+  return /^(?:'(?:[^']|'')*'|[^!]+)![A-Za-z]+[0-9]+(?::[A-Za-z]+[0-9]+)?$/.test(String(q || "").trim());
+}
+function docQuoteHTML(q, isSheet){
+  var cellRef = !!isSheet && looksLikeCellRef(q);
+  return '<div class="reqdoc-comment-quote' + (cellRef ? ' is-cellref' : '') + '"'
+    + (cellRef ? ' title="点击定位到 ' + esc(q) + '"' : '')
+    + '>' + esc(q) + '</div>';
 }
 
 /* ---------- 阅读树拖拽排序 ---------- */
@@ -3539,14 +3728,30 @@ function applyDocTemplateToNewDoc(){
   if(tpl.format && $("newReqDocFormat")) $("newReqDocFormat").value = tpl.format === "html" ? "univer" : tpl.format;
   syncNewReqDocMoreSum();
 }
-/* 按扩展名判断导入形态：word / markdown / html */
+/* 按扩展名判断导入形态：word / markdown / html / excel */
 function reqDocFileKind(name){
   var m = /\.([^.]+)$/.exec(String(name || ""));
   var ext = m ? m[1].toLowerCase() : "";
   if(ext === "docx" || ext === "doc") return "word";
   if(ext === "md" || ext === "markdown" || ext === "txt") return "markdown";
   if(ext === "html" || ext === "htm") return "html";
+  if(ext === "xlsx") return "excel";
   return null;
+}
+var REQ_DOC_FILE_MAX = 10 * 1024 * 1024;
+var REQ_SHEET_FILE_MAX = 20 * 1024 * 1024;
+var REQ_DOC_FILE_HINT = "暂不支持该文件格式，请上传 Word、Markdown、TXT、HTML 或 Excel(.xlsx) 文件";
+function readArrayBuffer(file){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(){ resolve(reader.result); };
+    reader.onerror = function(){ reject(new Error("读取文件失败")); };
+    reader.readAsArrayBuffer(file);
+  });
+}
+function excelFileToSnapshot(file){
+  return ensureExcelJs().then(function(){ return readArrayBuffer(file); })
+    .then(function(buf){ return excelToSnapshot(buf, { filename: file.name.replace(/\.[^.]+$/, "") }); });
 }
 function reqDocFileExt(name){
   var m = /\.([^.]+)$/.exec(String(name || ""));
@@ -3558,7 +3763,9 @@ function docPreviewDocument(inner){
     + 'body{margin:0;padding:16px 20px;font:14px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:#1f2329;background:#fff;word-break:break-word;}'
     + 'img{max-width:100%;height:auto;}'
     + 'table{border-collapse:collapse;width:100%;margin:10px 0;}'
+    + 'caption{text-align:left;font-weight:600;font-size:13px;color:#646a73;padding:2px 0 6px;}'
     + 'td,th{border:1px solid #dcdfe6;padding:6px 8px;font-size:13px;vertical-align:top;}'
+    + 'td{white-space:pre-wrap;}'
     + 'th{background:#f5f7fa;text-align:left;}'
     + 'pre{background:#f6f8fa;padding:10px 12px;border-radius:6px;overflow:auto;white-space:pre-wrap;}'
     + 'h1,h2,h3,h4,h5,h6{margin:14px 0 8px;line-height:1.4;}'
@@ -3617,7 +3824,16 @@ function parseNewReqDocFile(file){
   newReqDocParsed = null;
   if($("newReqDocPreview")) $("newReqDocPreview").hidden = true;
   if(!kind){
-    return Promise.reject(new Error("暂不支持该文件格式，请上传 Word、Markdown、TXT 或 HTML 文件"));
+    return Promise.reject(new Error(REQ_DOC_FILE_HINT));
+  }
+  if(kind === "excel"){
+    return excelFileToSnapshot(file).then(function(snap){
+      if(stale()) return;
+      var sheets = (snap.sheetOrder || []).length;
+      newReqDocParsed = { file: file, kind: kind, content: JSON.stringify(snap), format: "sheet" };
+      showNewReqDocPreview(file.name + " · Excel · " + sheets + " 个工作表（导入后保留样式与公式）",
+        sheetSnapshotToHtml(snap));
+    });
   }
   if(kind === "word"){
     return fetchWordImport(file).then(function(data){
@@ -3752,9 +3968,13 @@ function submitNewReqDoc(keepList){
   var isTemplate = sourceKind === "template";
   var file = isFile && $("newReqDocFile") ? $("newReqDocFile").files[0] : null;
   if(isFile && !file){ toast("请选择要上传的文件", "warn"); return; }
-  if(file && file.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
+  var fileLimit = file && reqDocFileKind(file.name) === "excel" ? REQ_SHEET_FILE_MAX : REQ_DOC_FILE_MAX;
+  if(file && file.size > fileLimit){
+    toast("文件超过 " + Math.round(fileLimit / 1024 / 1024) + "MB，请拆分后再导入", "warn");
+    return;
+  }
   var kind = file ? reqDocFileKind(file.name) : null;
-  if(isFile && !kind){ toast("暂不支持该文件格式，请上传 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
+  if(isFile && !kind){ toast(REQ_DOC_FILE_HINT, "warn"); return; }
   if(!title && file) title = file.name.replace(/\.[^.]+$/, "");
   if(!title){
     showNewReqDocError(true);
@@ -3837,8 +4057,7 @@ function finishNewReqDocImport(doc, fileName, format){
   closeNewReqDocDialog();
   loadReqDocs(true);
   openReqDocEditor(doc.id);
-  toast("已导入「" + fileName + "」为" + (format === "markdown" ? " Markdown" : "富文本")
-    + "，可直接在线编辑", "fs");
+  toast("已导入「" + fileName + "」为" + docFormatLabel(format) + "，可直接在线编辑", "fs");
 }
 function openReqDocEditor(id){
   var seq = ++reqDocOpenSeq;
@@ -3893,6 +4112,7 @@ function openReqDocEditor(id){
 function closeReqDocEditor(){
   setReqDocHydrating(false);
   disposeReqUniver();
+  disposeReqSheet();
   if($("reqDocEditPage")) $("reqDocEditPage").hidden = true;
   if($("reqDocListPage")) $("reqDocListPage").hidden = false;
   editingDocId = null;
@@ -4653,21 +4873,32 @@ function setMdMode(mode){
 function setDocFormatUI(format){
   var md = format === "markdown";
   var univer = format === "univer";
-  showEl($("reqDocRichBody"), !md && !univer);
+  var sheet = format === "sheet";
+  showEl($("reqDocRichBody"), !md && !univer && !sheet);
   showEl($("reqDocMdBody"), md);
   showEl($("reqDocUniverBody"), univer);
+  showEl($("reqDocSheetBody"), sheet);
   var badge = $("reqDocFormat");
   if(badge){
     showEl(badge, true);
-    badge.textContent = md ? "Markdown" : "富文本";
-    badge.className = "reqdoc-fmt " + (md ? "md" : "html");
+    badge.textContent = md ? "Markdown" : (sheet ? "表格" : "富文本");
+    badge.className = "reqdoc-fmt " + (md ? "md" : (sheet ? "sheet" : "html"));
   }
   /* 正文缩放按钮只作用于 DOM 排版；Univer 画布自带缩放，套 CSS zoom 会错位指针坐标 */
   var zoom = document.querySelector("#reqDocEditPage .doc-zoom");
-  if(zoom) zoom.hidden = univer;
+  if(zoom) zoom.hidden = univer || sheet;
   var imp = $("reqDocImport"), exp = $("reqDocExport");
-  if(imp) imp.title = "导入 Word / Markdown / TXT / HTML 文件";
-  if(exp) exp.title = md ? "导出为 Markdown 文件" : "导出为 HTML 文件";
+  if(imp) imp.title = sheet ? "导入 Excel（.xlsx）替换当前表格" : "导入 Word / Markdown / TXT / HTML / Excel 文件";
+  if(exp){
+    exp.title = md ? "导出为 Markdown 文件" : (sheet ? "导出为 Excel 文件（保留样式）" : "导出为 HTML 文件");
+    exp.innerHTML = icon("download", 16)
+      + (sheet ? "导出 Excel（.xlsx）" : (md ? "导出 Markdown" : "导出 HTML"));
+  }
+  var quoteBtn = $("reqDocCommentQuoteBtn");
+  if(quoteBtn){
+    quoteBtn.title = sheet ? "先在表格中选中单元格，再点这里引用为批注上下文" : "先在正文中选中内容，再点这里引用为批注上下文";
+    quoteBtn.innerHTML = icon("quote", 13) + "&nbsp;" + (sheet ? "引用单元格" : "引用选中");
+  }
 }
 function fillMarkdownEditor(doc){
   if($("reqDocMdCanvas")) $("reqDocMdCanvas").value = doc.content || "";
@@ -4709,22 +4940,31 @@ function fillReqDocEditor(doc, opts){
   }
   if(isMarkdownDoc()){
     disposeReqUniver();
+    disposeReqSheet();
     reqEditorBaseline = null;
     fillMarkdownEditor(doc);
   }else if(isUniverDoc()){
+    disposeReqSheet();
     reqEditorBaseline = null;
     /* keepBody：刚保存完且正文未变，重挂会丢光标与滚动位置 */
     if(!keepBody){
       var snap = parseSnapshot(doc.content);
       mountReqUniver(snap, snap ? "" : (doc.content || ""));
     }
+  }else if(isSheetDoc()){
+    disposeReqUniver();
+    reqEditorBaseline = null;
+    /* 表格保存后同样保留当前视图，避免滚动位置与选区丢失 */
+    if(!keepBody) mountReqSheet(parseSheetSnapshot(doc.sheetContent));
   }else if(reqEditor){
     disposeReqUniver();
+    disposeReqSheet();
     setReqEditorContents(doc.content);
     updateReqDocCount();
     rebuildToc();
   }else{
     disposeReqUniver();
+    disposeReqSheet();
     /* 首次打开：编辑器按需下载，下载完再灌正文（期间用户切走就丢弃结果） */
     setReqDocHydrating(true);
     ensureEditor().then(function(ed){
@@ -4772,6 +5012,7 @@ function markReqDocDirty(){
 function reqDocPlainText(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
   if(isUniverDoc()) return reqUniverView ? snapshotToText(reqUniverView.getSnapshot()) : "";
+  if(isSheetDoc()) return reqSheetView ? sheetSnapshotText(reqSheetView.getSnapshot()) : "";
   return reqEditor ? reqEditor.getText() : "";
 }
 function updateReqDocCount(){
@@ -4813,6 +5054,12 @@ var reqDocLatestSel = null;
 var reqDocReplyTo = null;
 /* 点击按钮会收走选区，所以先把正文内的最近一次选区存下来再取用 */
 function rememberReqDocSelection(){
+  /* 表格没有文本选区：记录当前单元格引用，供「引用选中」写成可定位的批注 */
+  if(isSheetDoc()){
+    var current = reqSheetView && typeof reqSheetView.getSelectionRef === "function" ? reqSheetView.getSelectionRef() : null;
+    if(current) reqDocLatestSel = current;
+    return;
+  }
   var sel = window.getSelection();
   if(!sel || !sel.rangeCount) return;
   var page = $("reqDocEditPage");
@@ -4830,9 +5077,12 @@ function setReqDocCommentQuote(text){
   if(txt) txt.textContent = reqDocCommentQuote || "";
 }
 function quoteReqDocSelection(){
-  if(!reqDocLatestSel){ toast("先在正文中选中要引用的内容，再点「引用选中」", "warn"); return; }
+  if(!reqDocLatestSel){
+    toast(isSheetDoc() ? "先在表格中选中单元格，再点「引用选中」" : "先在正文中选中要引用的内容，再点「引用选中」", "warn");
+    return;
+  }
   setReqDocCommentQuote(reqDocLatestSel);
-  toast("已引用选中内容", "fs");
+  toast(isSheetDoc() ? "已引用单元格 " + reqDocLatestSel : "已引用选中内容", "fs");
 }
 
 function loadReqDocComments(docId){
@@ -4885,7 +5135,7 @@ function renderCommentItem(c, isReply){
     +   resolvedBadge + taskLink
     +   '<span class="reqdoc-comment-time">' + esc(fmtTs(c.createdAt) || "—") + '</span>'
     + '</div>'
-    + (c.quoteText ? '<div class="reqdoc-comment-quote">' + esc(c.quoteText) + '</div>' : '')
+    + (c.quoteText ? docQuoteHTML(c.quoteText, isSheetDoc()) : '')
     + '<div class="reqdoc-comment-body">' + esc(c.content) + '</div>'
     + actions
     + '</div>';
@@ -5012,6 +5262,8 @@ function printReqDoc(){
     bodyHtml = preview ? preview.innerHTML : "";
   }else if(isUniverDoc()){
     bodyHtml = reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "";
+  }else if(isSheetDoc()){
+    bodyHtml = reqSheetView ? sheetSnapshotToHtml(reqSheetView.getSnapshot()) : "";
   }else{
     bodyHtml = reqEditor ? reqEditor.getContents() : "";
   }
@@ -5086,11 +5338,15 @@ function clearDraftOnSave(docId){
 }
 function getEditorContent(){
   if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
+  if(isSheetDoc()) return reqSheetView ? JSON.stringify(reqSheetView.getSnapshot()) : "";
   if(editingMeta.format === "html" && reqEditor) return reqEditor.getContents();
   var ta = $("reqDocMdCanvas");
   return ta ? ta.value : "";
 }
 function setEditorContent(content, format){
+  if(isSheetDoc()){
+    return mountReqSheet(format === "sheet" ? parseSheetSnapshot(content) : null);
+  }
   if(isUniverDoc()){
     /* 草稿恢复：快照 JSON 直接重挂；旧格式草稿按 html 重新转换 */
     var snap = format === "univer" ? parseSnapshot(content) : null;
@@ -5136,7 +5392,7 @@ function reqDocHistoryCurrentDoc(){
   return {
     key: "current",
     title: reqDocHistoryCurrent.title,
-    content: reqDocHistoryCurrent.content,
+    content: docBodyOf(reqDocHistoryCurrent),
     format: reqDocHistoryCurrent.format,
     versionNo: reqDocHistoryCurrentNo,
     savedBy: reqDocHistoryCurrent.owner || "",
@@ -5158,7 +5414,7 @@ function reqDocHistoryDoc(key){
       id: h.id,
       versionNo: h.versionNo,
       title: h.title,
-      content: h.content,
+      content: h.format === "sheet" ? (h.sheetContent || "") : h.content,
       format: h.format,
       savedBy: h.savedBy,
       createdAt: h.createdAt
@@ -5475,6 +5731,13 @@ function renderReqDocHistoryList(){
 }
 function renderReqDocHistoryPreview(h, box){
   if(!box) return;
+  if(h.format === "sheet"){
+    var sheetSnap = parseSheetSnapshot(h.content);
+    box.innerHTML = sheetSnap
+      ? window.DOMPurify.sanitize(sheetSnapshotToHtml(sheetSnap))
+      : '<div class="rh-empty">表格正文为空或无法解析</div>';
+    return;
+  }
   var prep = h.format === "univer"
     ? Promise.all([loadMarkdownLib(), ensureVendor()])
     : loadMarkdownLib();
@@ -5831,6 +6094,11 @@ function reqTocRoot(){
 function collectToc(){
   var root = reqTocRoot();
   var items = [];
+  if(isSheetDoc()){
+    /* 表格没有标题层级，大纲区留空提示，不按单元格内容生成 */
+    tocItems = [];
+    return;
+  }
   if(isUniverDoc()){
     var heads = reqUniverView ? snapshotHeadings(reqUniverView.getSnapshot()) : [];
     heads.forEach(function(h, i){
@@ -5867,7 +6135,9 @@ function renderToc(){
   var body = $("reqDocTocBody");
   if(!body) return;
   if(!tocItems.length){
-    body.innerHTML = '<div class="rt-empty">正文里用标题样式写几段（一级/二级标题），这里会自动生成大纲。</div>';
+    body.innerHTML = '<div class="rt-empty">'
+      + (isSheetDoc() ? "表格文档没有大纲。" : "正文里用标题样式写几段（一级/二级标题），这里会自动生成大纲。")
+      + '</div>';
     return;
   }
   /* 折叠：父项收起时，它的所有后代一起隐藏 */
@@ -5994,6 +6264,7 @@ function setReqDocSaving(on){
 function currentReqDocContent(){
   if(isMarkdownDoc()) return $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
   if(isUniverDoc()) return reqUniverView ? JSON.stringify(reqUniverView.getSnapshot()) : "";
+  if(isSheetDoc()) return reqSheetView ? JSON.stringify(reqSheetView.getSnapshot()) : "";
   return reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "";
 }
 /* 409 时默认保留本地草稿；只有用户二次确认才加载服务器版本 */
@@ -6025,7 +6296,11 @@ function saveReqDoc(opts){
     toast("正文编辑器还在加载，请稍候再保存", "warn");
     return Promise.resolve(null);
   }
-  if(!md && !isUniverDoc() && !reqEditor){
+  if(!md && isSheetDoc() && !reqSheetView){
+    toast("表格编辑器还在加载，请稍候再保存", "warn");
+    return Promise.resolve(null);
+  }
+  if(!md && !isUniverDoc() && !isSheetDoc() && !reqEditor){
     toast("正文编辑器还在加载，请稍候再保存", "warn");
     return Promise.resolve(null);
   }
@@ -6040,7 +6315,7 @@ function saveReqDoc(opts){
     title: title,
     content: content,
     status: editingMeta.status || "draft",
-    format: md ? "markdown" : (isUniverDoc() ? "univer" : "html"),
+    format: md ? "markdown" : (isUniverDoc() ? "univer" : (isSheetDoc() ? "sheet" : "html")),
     docType: $("reqDocType").value,
     parentId: parentId || null,
     categoryId: categoryId || "",
@@ -6074,7 +6349,7 @@ function saveReqDoc(opts){
     }else{
       reqDocDirty = false;
       clearDraftOnSave(doc.id);
-      fillReqDocEditor(doc, { keepBody: isUniverDoc() });
+      fillReqDocEditor(doc, { keepBody: isUniverDoc() || isSheetDoc() });
     }
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名文档");
     refreshReqDocPublishBtn();
@@ -6131,7 +6406,7 @@ function importReqDoc(){
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var input = $("reqDocImportFile");
   if(input){
-    input.accept = ".docx,.doc,.md,.markdown,.txt,.html,.htm";
+    input.accept = isSheetDoc() ? ".xlsx" : ".docx,.doc,.md,.markdown,.txt,.html,.htm,.xlsx";
     input.click();
   }
 }
@@ -6154,11 +6429,25 @@ function onReqDocImportFile(e){
   input.value = "";
   if(!f) return;
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
-  if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
   var kind = reqDocFileKind(f.name);
-  if(!kind){ toast("暂不支持该文件格式，请导入 Word、Markdown、TXT 或 HTML 文件", "warn"); return; }
+  if(!kind){ toast(REQ_DOC_FILE_HINT, "warn"); return; }
+  var limit = kind === "excel" ? REQ_SHEET_FILE_MAX : REQ_DOC_FILE_MAX;
+  if(f.size > limit){ toast("文件超过 " + Math.round(limit / 1024 / 1024) + "MB，请拆分后再导入", "warn"); return; }
+  if(kind === "excel"){
+    toast("正在解析 Excel…", "info");
+    excelFileToSnapshot(f).then(function(snap){
+      openDocImportPreview(f, sheetSnapshotToHtml(snap),
+        "Excel · " + (snap.sheetOrder || []).length + " 个工作表",
+        function(){ applyImportedSheet(f.name, snap); });
+    }).catch(function(ex){ toast(ex.message || "Excel 解析失败", "bad"); });
+    return;
+  }
   if(isUniverDoc()){
     importUniverFile(f, kind);
+    return;
+  }
+  if(isSheetDoc()){
+    toast("表格文档只能导入 Excel 文件（.xlsx）；文本请新建文档后导入", "warn");
     return;
   }
   if(kind === "word"){
@@ -6237,6 +6526,18 @@ function importUniverHtml(name, html){
     markReqDocDirty();
     updateReqDocCount();
     toast("已导入「" + name + "」，可直接编辑，记得保存", "fs");
+  });
+}
+/* 导入 Excel：正文切到表格格式并挂载新快照（原正文会随保存被替换） */
+function applyImportedSheet(name, snap){
+  disposeReqUniver();
+  editingMeta.format = "sheet";
+  setDocFormatUI("sheet");
+  return mountReqSheet(snap).then(function(view){
+    if(!view) return;
+    markReqDocDirty();
+    updateReqDocCount();
+    toast("已导入「" + name + "」为表格，可直接编辑，记得保存", "fs");
   });
 }
 /* 导入文本类文件：按文件类型切换文档格式，正文直接进入可编辑状态 */
@@ -6322,7 +6623,23 @@ function applyImportedHtml(name, html){
     }).catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
   }
 }
+function exportSheetXlsx(snapshot, title){
+  var name = (title || "表格").replace(/[\\/:*?"<>|]/g, "_") + ".xlsx";
+  toast("正在生成 Excel…", "info");
+  return snapshotToExcel(snapshot).then(function(bytes){
+    downloadBlob(name, new Blob([bytes],
+      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    toast("已导出 " + name, "fs");
+  }).catch(function(ex){
+    toast(ex.message || "导出 Excel 失败", "bad");
+  });
+}
 function exportReqDoc(){
+  if(isSheetDoc()){
+    if(!reqSheetView){ toast("表格还在加载，请稍候再导出", "warn"); return; }
+    exportSheetXlsx(reqSheetView.getSnapshot(), editingMeta.title || "表格");
+    return;
+  }
   var md = isMarkdownDoc();
   var univer = isUniverDoc();
   var text = md ? ($("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "")
@@ -6347,6 +6664,12 @@ function exportReqDocFromReader(docId){
   var seq = ++readerExportSeq;
   API.get("/api/req-docs/" + encodeURIComponent(docId)).then(function(full){
     if(seq !== readerExportSeq) return;
+    if(full.format === "sheet"){
+      var snap = parseSheetSnapshot(full.sheetContent);
+      if(!snap){ toast("表格正文为空，没有可导出的内容", "warn"); return; }
+      exportSheetXlsx(snap, full.title || "表格");
+      return;
+    }
     var md = full.format === "markdown";
     var toHtml = full.format === "univer"
       ? ensureVendor().then(function(){
@@ -6393,6 +6716,9 @@ function reqDocExportWordHTML(){
   if(isUniverDoc()){
     return Promise.resolve(reqUniverView ? snapshotToHtml(reqUniverView.getSnapshot()) : "");
   }
+  if(isSheetDoc()){
+    return Promise.resolve(reqSheetView ? sheetSnapshotToHtml(reqSheetView.getSnapshot()) : "");
+  }
   return Promise.resolve(reqEditor ? reqDocHtmlStripImg(reqEditor.getContents(true)) : "");
 }
 function exportReqDocWordFrom(title, html){
@@ -6438,6 +6764,9 @@ function exportReqDocWordFromReader(docId){
         var snap = parseSnapshot(full.content);
         return snap ? snapshotToHtml(snap) : "";
       });
+    }else if(full.format === "sheet"){
+      var sheetSnap = parseSheetSnapshot(full.sheetContent);
+      htmlPromise = Promise.resolve(sheetSnap ? sheetSnapshotToHtml(sheetSnap) : "");
     }
     return htmlPromise.then(function(html){
       return exportReqDocWordFrom(full.title || "文档", html);
@@ -6913,6 +7242,16 @@ function populateReqDocSelect(keep){
       if(mk){
         rrdFlashCommentId = mk.dataset.rrdHlComment;
         toggleRrdComments(true, "comments");
+        return;
+      }
+      /* 表格评论的引用是单元格地址：点一下定位到对应单元格 */
+      var cq = e.target.closest(".reqdoc-comment-quote.is-cellref");
+      if(cq){
+        var cellRef = (cq.textContent || "").trim();
+        if(reqSheetReaderView && typeof reqSheetReaderView.selectRef === "function"){
+          if(!reqSheetReaderView.selectRef(cellRef)) toast("该单元格引用已失效，可能工作表或区域已被删除", "warn");
+        }
+        hideRrdCellBubble();
       }
     });
     /* 划选正文后弹出「划线评论」气泡；延迟到 mouseup 之后等选区稳定 */
@@ -6922,8 +7261,12 @@ function populateReqDocSelect(keep){
     });
     document.addEventListener("mousedown", function(e){
       if(rrdSelBubble && !rrdSelBubble.contains(e.target)) hideRrdSelBubble();
+      if(rrdCellBubble && !rrdCellBubble.contains(e.target)) hideRrdCellBubble();
     });
-    document.addEventListener("scroll", hideRrdSelBubble, true);
+    document.addEventListener("scroll", function(){ hideRrdSelBubble(); hideRrdCellBubble(); }, true);
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape") hideRrdCellBubble();
+    });
   }
   /* 动态：点条目打开对应文档 */
   var fd = $("reqDocFeed");
@@ -7016,7 +7359,12 @@ function populateReqDocSelect(keep){
   if($("newReqDocFile")) $("newReqDocFile").addEventListener("change", function(){
     var f = this.files && this.files[0];
     if(!f){ resetNewReqDocPreview(); return; }
-    if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); resetNewReqDocPreview(); return; }
+    var limit = reqDocFileKind(f.name) === "excel" ? REQ_SHEET_FILE_MAX : REQ_DOC_FILE_MAX;
+    if(f.size > limit){
+      toast("文件超过 " + Math.round(limit / 1024 / 1024) + "MB，请拆分后再导入", "warn");
+      resetNewReqDocPreview();
+      return;
+    }
     if(!($("newReqDocTitle").value || "").trim()){
       $("newReqDocTitle").value = f.name.replace(/\.[^.]+$/, "");
       syncNewReqDocTitleCount();
@@ -7234,6 +7582,15 @@ function populateReqDocSelect(keep){
   }
   if($("reqDocCommentList")){
     $("reqDocCommentList").addEventListener("click", function(e){
+      /* 表格评论的单元格引用：点一下把编辑器定位到对应单元格 */
+      var cq = e.target.closest(".reqdoc-comment-quote.is-cellref");
+      if(cq && isSheetDoc()){
+        var cellRef = (cq.textContent || "").trim();
+        if(reqSheetView && typeof reqSheetView.selectRef === "function"){
+          if(!reqSheetView.selectRef(cellRef)) toast("该单元格引用已失效，可能工作表或区域已被删除", "warn");
+        }
+        return;
+      }
       var btn = e.target.closest("[data-del-comment]");
       if(btn){
         var item = btn.closest("[data-comment-id]");

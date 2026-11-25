@@ -5,6 +5,7 @@ import { DD } from "./lib/delivery-doc.js";
 import { printDeliveryPaper, registerDeliveryPrintSource } from "./lib/download.js";
 import { ensureVendor } from "./core/doc-editor.js";
 import { parseSnapshot, snapshotToHtml } from "./core/univer-doc-io.js";
+import { openSheetView } from "./core/sheet-editor.js";
 
   var LABEL_W = 260, ROW_H = 50, GROUP_H = 0, HEAD_H = 54;
   var state = {
@@ -298,6 +299,20 @@ import { parseSnapshot, snapshotToHtml } from "./core/univer-doc-io.js";
       " · 只读链接，仅含文档正文";
     var body = $("docShareBody");
     body.innerHTML = '<div class="share-empty">加载正文…</div>';
+    if (d.format === "sheet") {
+      /* 表格分享：只读挂载 Univer 工作簿（不再是纯 HTML 表格，保留合并与样式） */
+      var wb = null;
+      try { wb = JSON.parse(d.content || ""); } catch (e) { wb = null; }
+      if (!wb || !wb.sheets) {
+        body.innerHTML = '<div class="share-error">表格正文为空或无法解析</div>';
+        return;
+      }
+      body.classList.add("share-sheet");
+      openSheetView({ container: body, snapshot: wb, readOnly: true }).catch(function (ex) {
+        body.innerHTML = '<div class="share-error">' + esc(ex.message || "表格渲染失败") + '</div>';
+      });
+      return;
+    }
     var prep = d.format === "univer"
       ? Promise.all([loadMdLib(), ensureVendor()])
       : loadMdLib();

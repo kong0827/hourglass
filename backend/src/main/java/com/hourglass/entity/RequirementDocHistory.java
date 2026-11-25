@@ -15,6 +15,8 @@ public class RequirementDocHistory {
     private Integer versionNo;
     private String title;
     private String content;
+    /** 表格正文快照（Univer 工作簿 JSON）；format=sheet 时使用 */
+    private String sheetContent;
     private String format;
     /** 保存人显示名 */
     private String savedBy;

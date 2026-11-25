@@ -327,7 +327,7 @@ public class BackupExportService {
             bd.setParentId(d.getParentId());
             bd.setTitle(d.getTitle());
             bd.setDocType(DocumentType.parseOrOther(d.getDocType()).getCode());
-            bd.setContent(d.getContent());
+            bd.setContent("sheet".equals(d.getFormat()) ? d.getSheetContent() : d.getContent());
             bd.setFormat(d.getFormat() == null ? "html" : d.getFormat());
             bd.setStatus(d.getStatus());
             bd.setPublishedAt(d.getPublishedAt() == null ? null : d.getPublishedAt().format(ISO_TS));

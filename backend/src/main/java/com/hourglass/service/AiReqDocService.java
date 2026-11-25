@@ -389,6 +389,11 @@ public class AiReqDocService {
                 return "";
             }
         }
+        if ("sheet".equals(doc.getFormat())) {
+            /* 表格没有可编辑的线性正文，给模型一份工作表名与首批文字即可 */
+            String excerpt = RequirementDocService.excerptOfSheet(doc.getSheetContent());
+            return excerpt == null ? "" : excerpt;
+        }
         return htmlToText(content);
     }
 

@@ -1428,7 +1428,7 @@
               </button>
               <button class="btn sm primary" type="button" id="reqDocSave">保存</button>
             </span>
-            <input type="file" id="reqDocImportFile" hidden accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
+            <input type="file" id="reqDocImportFile" hidden accept=".docx,.doc,.md,.markdown,.txt,.html,.htm,.xlsx">
           </div>
 
           <div class="reqdoc-editwrap">
@@ -1437,6 +1437,8 @@
             </div>
             <!-- 在线文档正文：Univer 挂载点（工具栏/画布由编辑器自己渲染） -->
             <div class="reqdoc-univerwrap" id="reqDocUniverBody" hidden></div>
+            <!-- 表格正文：Univer 工作簿挂载点（电子表格） -->
+            <div class="reqdoc-sheetwrap" id="reqDocSheetBody" hidden></div>
             <!-- Markdown 正文：源码 / 分屏 / 预览三种视图，预览在浏览器本地渲染 -->
             <div class="reqdoc-mdwrap" id="reqDocMdBody" hidden>
               <div class="reqdoc-mdtoolbar">
@@ -1580,6 +1582,7 @@
                     <select id="newReqDocFormat">
                       <option value="markdown">Markdown（默认，可导入导出）</option>
                       <option value="univer">富文本</option>
+                      <option value="sheet">表格（Excel）</option>
                     </select>
                   </label>
                 </div>
@@ -1594,8 +1597,8 @@
                 <div class="nd-src-body" id="newReqDocFileBody" hidden>
                   <label class="doc-pick">
                     <span>选择文件</span>
-                    <input id="newReqDocFile" type="file" accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
-                    <small>支持 Word / Markdown / TXT / HTML，导入前可预览</small>
+                    <input id="newReqDocFile" type="file" accept=".docx,.doc,.md,.markdown,.txt,.html,.htm,.xlsx">
+                    <small>支持 Word / Markdown / TXT / HTML / Excel(.xlsx)，导入前可预览</small>
                   </label>
                   <div class="doc-import-inline" id="newReqDocPreview" hidden>
                     <div class="doc-import-inline-bar">

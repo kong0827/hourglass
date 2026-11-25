@@ -8,9 +8,9 @@
 
   <insert id="insert">
     INSERT INTO requirement_doc_history
-      (id, doc_id, workspace_id, version_no, title, content, format, saved_by, saved_by_user_id, created_at)
+      (id, doc_id, workspace_id, version_no, title, content, sheet_content, format, saved_by, saved_by_user_id, created_at)
     VALUES
-      (#{id}, #{docId}, #{workspaceId}, #{versionNo}, #{title}, #{content}, #{format},
+      (#{id}, #{docId}, #{workspaceId}, #{versionNo}, #{title}, #{content}, #{sheetContent}, #{format},
        #{savedBy}, #{savedByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -27,7 +27,7 @@
   </select>
 
   <select id="selectById" resultType="com.hourglass.entity.RequirementDocHistory">
-    SELECT <include refid="listCols"/>, content
+    SELECT <include refid="listCols"/>, content, sheet_content
     FROM requirement_doc_history WHERE id = #{id}
   </select>
 

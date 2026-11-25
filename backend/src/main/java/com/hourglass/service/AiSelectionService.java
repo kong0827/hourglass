@@ -229,6 +229,19 @@ public class AiSelectionService {
             + "6. 最多 5 个；依赖用 dependsOnIndex 指向前置草稿下标，无依赖填 -1。\n"
             + "只输出 JSON，不要任何解释文字。";
 
+    private static String formatLabel(String format) {
+        if ("markdown".equals(format)) {
+            return "Markdown";
+        }
+        if ("univer".equals(format)) {
+            return "在线文档";
+        }
+        if ("sheet".equals(format)) {
+            return "表格";
+        }
+        return "富文本";
+    }
+
     private String buildSelectionPrompt(RequirementDoc doc, AiSelectionRequest req, String selection, String action) {
         StringBuilder u = new StringBuilder();
         u.append("文档标题：").append(doc.getTitle()).append("\n");
@@ -236,7 +249,7 @@ public class AiSelectionService {
         if (notEmpty(req.getSection())) {
             u.append("所在小节：").append(req.getSection().trim()).append("\n");
         }
-        u.append("原文格式：").append("markdown".equals(doc.getFormat()) ? "Markdown" : "富文本").append("\n");
+        u.append("原文格式：").append(formatLabel(doc.getFormat())).append("\n");
         if (notEmpty(req.getBefore())) {
             u.append("\n选区前文（只用于理解语境，不要改写它）：\n").append(clip(req.getBefore(), 400)).append("\n");
         }

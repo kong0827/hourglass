@@ -19,9 +19,11 @@ public class RequirementDoc {
     private String title;
     /** 分类代码，见 DocumentType */
     private String docType;
-    /** 正文：html 为清洗后的 HTML；markdown 为原始 Markdown 文本 */
+    /** 正文：html 为清洗后的 HTML；markdown 为原始 Markdown 文本；sheet 格式时为 NULL */
     private String content;
-    /** 正文格式：html / markdown */
+    /** 表格正文：Univer 工作簿快照 JSON；仅 format=sheet 时使用，其余格式为 NULL */
+    private String sheetContent;
+    /** 正文格式：html / markdown / univer / sheet */
     private String format;
     /** 同级排序（小的在前） */
     private Integer sortOrder;

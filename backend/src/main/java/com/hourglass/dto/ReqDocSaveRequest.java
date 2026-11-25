@@ -31,11 +31,11 @@ public class ReqDocSaveRequest {
     @Size(max = 32, message = "上级文档不合法")
     private String parentId;
 
-    /** 正文：html 会做白名单清洗；markdown 原样保存；univer 为在线文档快照 JSON（校验结构后原样保存） */
+    /** 正文：html 会做白名单清洗；markdown 原样保存；univer / sheet 为在线文档快照 JSON（校验结构后原样保存） */
     private String content;
 
-    /** html / markdown / univer；新建时为空按 markdown 处理 */
-    @Pattern(regexp = "^(html|markdown|univer)?$", message = "正文格式不合法")
+    /** html / markdown / univer / sheet；新建时为空按 markdown 处理 */
+    @Pattern(regexp = "^(html|markdown|univer|sheet)?$", message = "正文格式不合法")
     private String format;
 
     /** draft / active / done，空则按 draft */

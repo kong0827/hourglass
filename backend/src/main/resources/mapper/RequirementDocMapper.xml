@@ -3,7 +3,7 @@
 <mapper namespace="com.hourglass.mapper.RequirementDocMapper">
 
   <sql id="cols">
-    id, workspace_id, req_id, parent_id, category_id, title, doc_type, content, format, content_brief, status, published_at,
+    id, workspace_id, req_id, parent_id, category_id, title, doc_type, content, sheet_content, format, content_brief, status, published_at,
     visibility, sort_order, owner, owner_user_id, created_at, updated_at
   </sql>
 
@@ -38,7 +38,7 @@
            d.status, d.doc_type AS extra,
            <!-- brief 未命中时回退正文：服务端 snippetAround 再围绕关键词截 ±30 字窗口。
                 在线文档正文是快照 JSON，回退会露出 JSON 片段，因此始终用 brief。 -->
-           CASE WHEN d.format = 'univer' THEN d.content_brief
+           CASE WHEN d.format IN ('univer', 'sheet') THEN d.content_brief
                 WHEN LOCATE(LOWER(#{keyword}), LOWER(d.content_brief)) > 0
                 THEN d.content_brief ELSE d.content END AS snippet,
            d.updated_at AS updatedAt
@@ -67,7 +67,7 @@
   <select id="searchFiltered" resultType="com.hourglass.dto.SearchHit">
     SELECT 'doc' AS type, d.id, d.title, d.req_id AS reqId, r.name AS reqName,
            d.status, d.doc_type AS extra,
-           CASE WHEN d.format = 'univer' THEN d.content_brief
+           CASE WHEN d.format IN ('univer', 'sheet') THEN d.content_brief
                 WHEN #{keyword} IS NOT NULL AND LOCATE(LOWER(#{keyword}), LOWER(d.content_brief)) > 0
                 THEN d.content_brief ELSE d.content END AS snippet,
            d.updated_at AS updatedAt
@@ -176,9 +176,9 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO requirement_doc (id, workspace_id, req_id, parent_id, category_id, title, doc_type, content, format, content_brief,
+    INSERT INTO requirement_doc (id, workspace_id, req_id, parent_id, category_id, title, doc_type, content, sheet_content, format, content_brief,
                                  status, published_at, visibility, sort_order, owner, owner_user_id, created_at, updated_at)
-    VALUES (#{id}, #{workspaceId}, #{reqId}, #{parentId}, #{categoryId}, #{title}, #{docType}, #{content}, #{format}, #{contentBrief},
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{parentId}, #{categoryId}, #{title}, #{docType}, #{content}, #{sheetContent}, #{format}, #{contentBrief},
             #{status}, #{publishedAt}, #{visibility}, COALESCE(#{sortOrder}, 0), #{owner}, #{ownerUserId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -191,6 +191,7 @@
       title         = #{doc.title},
       doc_type      = #{doc.docType},
       content       = #{doc.content},
+      sheet_content = #{doc.sheetContent},
       format        = #{doc.format},
       content_brief = #{doc.contentBrief},
       status        = #{doc.status},

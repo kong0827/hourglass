@@ -1,6 +1,7 @@
 /* 文档文本差异：行级 LCS + 行内词级差异；纯函数，无第三方依赖。
    行级 DP 先裁掉公共前后缀，只对中间区域计算；超大文档/差异过大时降级为整段替换。 */
 import { parseSnapshot, snapshotToText } from "../core/univer-doc-io.js";
+import { sheetSnapshotText } from "../core/sheet-editor.js";
 
 var MAX_LINES = 5000;
 var MAX_CELLS = 4000000;
@@ -147,6 +148,11 @@ function docLines(doc){
   if(doc.format === "univer"){
     var snap = parseSnapshot(doc.content);
     return splitLines(snap ? snapshotToText(snap) : "");
+  }
+  if(doc.format === "sheet"){
+    var wb = null;
+    try{ wb = JSON.parse(doc.content || ""); }catch(e){ wb = null; }
+    return splitLines(wb ? sheetSnapshotText(wb) : "");
   }
   return htmlToLines(doc.content);
 }

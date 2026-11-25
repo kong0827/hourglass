@@ -615,7 +615,7 @@ public class BackupService {
                 } else {
                     id = original;
                 }
-                String format = oneOf(bd.getFormat(), new String[]{"html", "markdown", "univer"}, "html");
+                String format = oneOf(bd.getFormat(), new String[]{"html", "markdown", "univer", "sheet"}, "html");
                 RequirementDoc doc = new RequirementDoc();
                 doc.setId(id);
                 doc.setWorkspaceId(workspaceId);
@@ -623,8 +623,18 @@ public class BackupService {
                 doc.setTitle(Texts.cut(title0, 100));
                 doc.setDocType(DocumentType.parseOrOther(bd.getDocType()).getCode());
                 doc.setFormat(format);
-                doc.setContent(RequirementDocService.contentOf(format, bd.getContent()));
-                doc.setContentBrief(RequirementDocService.briefOf(format, doc.getContent()));
+                if ("sheet".equals(format)) {
+                    /* 表格正文在备份里同样放在 content 字段，导入时校验后落 sheet_content */
+                    RequirementDocService.SheetStats stats =
+                            RequirementDocService.inspectSheetSnapshot(bd.getContent());
+                    doc.setSheetContent(stats.content);
+                    doc.setContent(null);
+                    doc.setContentBrief(stats.excerpt);
+                } else {
+                    doc.setSheetContent(null);
+                    doc.setContent(RequirementDocService.contentOf(format, bd.getContent()));
+                    doc.setContentBrief(RequirementDocService.briefOf(format, doc.getContent()));
+                }
                 doc.setStatus(oneOf(bd.getStatus(), new String[]{"draft", "active", "done"}, "draft"));
                 /* 旧备份没有可见范围：按团队共享回填，保持升级前行为；成员按现存账号过滤 */
                 String visibility = oneOf(bd.getVisibility(),

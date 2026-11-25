@@ -51,6 +51,11 @@ body.share-error-mode .app{display:none;}
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
   padding:var(--space-5) 24px 32px;min-height:120px;
 }
+/* 表格分享：整页宽画布，避免 860px 容器把表格挤成窄条 */
+.share-doc.share-sheet{max-width:none;padding:0;height:calc(100vh - 190px);min-height:480px;position:relative;overflow:hidden;}
+.share-doc .univer-sheet-host{position:absolute;inset:0;}
+/* 分享页只读：隐藏表格菜单/工具条（结构在 <header> 内） */
+.share-sheet .univer-sheet-readonly header{display:none;}
 .share-doc.markdown-body{font-size:14px;line-height:1.85;color:var(--text);word-wrap:break-word;}
 .share-doc h1,.share-doc h2,.share-doc h3,.share-doc h4{margin:24px 0 10px;font-weight:700;line-height:1.35;}
 .share-doc h1{font-size:var(--fs-display);}

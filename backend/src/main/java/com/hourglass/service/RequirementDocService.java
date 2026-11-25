@@ -3,6 +3,8 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hourglass.dto.ReqDocReorderRequest;
@@ -60,6 +62,14 @@ public class RequirementDocService {
 
     /** 正文上限：粘贴截图会以 base64 内联，200KB 会把图片截断，放宽到 12MB（列是 MEDIUMTEXT，上限 16MB） */
     private static final int CONTENT_MAX = 12_000_000;
+
+    /** 表格正文（Univer 工作簿快照）上限：按 UTF-8 字节计，与前端约定的 20MB 一致（列为 LONGTEXT） */
+    private static final int SHEET_MAX_BYTES = 20 * 1024 * 1024;
+    /** 单文档表格规模上限：与新建入口的 5–10 万单元格口径一致 */
+    private static final int SHEET_MAX_CELLS = 100_000;
+    private static final int SHEET_MAX_SHEETS = 20;
+    private static final int SHEET_MAX_ROWS = 20_000;
+    private static final int SHEET_MAX_COLS = 300;
 
     /** 每篇文档保留的历史快照版数上限 */
     private static final int HISTORY_KEEP = 20;
@@ -393,6 +403,7 @@ public class RequirementDocService {
         String oldTitle = d.getTitle();
         DocumentType oldDocType = DocumentType.parseOrOther(d.getDocType());
         String oldContent = d.getContent();
+        String oldSheetContent = d.getSheetContent();
         String oldFormat = d.getFormat();
         String oldStatus = d.getStatus();
         String oldOwner = d.getOwner();
@@ -418,10 +429,12 @@ public class RequirementDocService {
         recordChange(userId, workspaceId, id, "标题", oldTitle, d.getTitle());
         recordChange(userId, workspaceId, id, "分类", oldDocType.getLabel(),
                 DocumentType.parseOrOther(d.getDocType()).getLabel());
-        if (!java.util.Objects.equals(oldContent, d.getContent())) {
+        boolean bodyChanged = !java.util.Objects.equals(oldContent, d.getContent())
+                || !java.util.Objects.equals(oldSheetContent, d.getSheetContent());
+        if (bodyChanged) {
             /* 快照的是修改前正文：历史版本用来恢复旧内容，不能存成修改后的新版本 */
-            if (Texts.trimToNull(oldContent) != null) {
-                snapshot(userId, d, oldTitle, oldContent, oldFormat);
+            if (Texts.trimToNull(oldContent) != null || Texts.trimToNull(oldSheetContent) != null) {
+                snapshot(userId, d, oldTitle, oldContent, oldSheetContent, oldFormat);
             }
             workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId,
                     "update", "更新了正文");
@@ -455,7 +468,7 @@ public class RequirementDocService {
             docMapper.reparentChildren(workspaceId, d.getId(), oldParentId);
         }
         boolean changed = !Objects.equals(oldTitle, d.getTitle())
-                || !Objects.equals(oldContent, d.getContent())
+                || bodyChanged
                 || !Objects.equals(oldStatus, d.getStatus())
                 || oldDocType != DocumentType.parseOrOther(d.getDocType())
                 || !Objects.equals(oldReqId, d.getReqId())
@@ -765,8 +778,10 @@ public class RequirementDocService {
         snapshot(userId, d);
         d.setTitle(h.getTitle());
         d.setContent(h.getContent());
+        d.setSheetContent(h.getSheetContent());
         d.setFormat(h.getFormat());
-        d.setContentBrief(briefOf(d.getFormat(), d.getContent()));
+        d.setContentBrief(briefOf(d.getFormat(),
+                "sheet".equals(d.getFormat()) ? d.getSheetContent() : d.getContent()));
         docMapper.update(d, null);
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId,
                 "restore", "恢复到第 " + h.getVersionNo() + " 版（" + h.getTitle() + "）");
@@ -878,7 +893,7 @@ public class RequirementDocService {
         resp.setTitle(d.getTitle());
         resp.setDocType(d.getDocType());
         resp.setFormat(d.getFormat());
-        resp.setContent(d.getContent());
+        resp.setContent("sheet".equals(d.getFormat()) ? d.getSheetContent() : d.getContent());
         resp.setStatus(d.getStatus());
         resp.setOwner(d.getOwner());
         resp.setUpdatedAt(d.getUpdatedAt());
@@ -888,11 +903,12 @@ public class RequirementDocService {
 
     /** 把当前正文留一版快照（恢复历史版本前调用） */
     private void snapshot(String userId, RequirementDoc d) {
-        snapshot(userId, d, d.getTitle(), d.getContent(), d.getFormat());
+        snapshot(userId, d, d.getTitle(), d.getContent(), d.getSheetContent(), d.getFormat());
     }
 
     /** 保存指定正文快照，并把每文档保留版数截断到 HISTORY_KEEP */
-    private void snapshot(String userId, RequirementDoc d, String title, String content, String format) {
+    private void snapshot(String userId, RequirementDoc d, String title, String content,
+                          String sheetContent, String format) {
         RequirementDocHistory h = new RequirementDocHistory();
         h.setId(Ids.gen("DH"));
         h.setDocId(d.getId());
@@ -900,6 +916,7 @@ public class RequirementDocService {
         h.setVersionNo(historyMapper.maxVersionNo(d.getId()) + 1);
         h.setTitle(title);
         h.setContent(content);
+        h.setSheetContent(sheetContent);
         h.setFormat(format);
         AppUser me = userMapper.selectById(userId);
         h.setSavedBy(me == null ? null : Texts.cut(me.getDisplayName(), 32));
@@ -1355,12 +1372,21 @@ public class RequirementDocService {
             format = d.getFormat() == null ? "markdown" : d.getFormat();
         }
         d.setFormat(format);
-        d.setContent(contentOf(format, req.getContent()));
+        if ("sheet".equals(format)) {
+            /* 表格正文是工作簿快照 JSON，单独落 sheet_content；content 留空避免污染 ngram 全文索引 */
+            SheetStats stats = inspectSheetSnapshot(req.getContent());
+            d.setSheetContent(stats.content);
+            d.setContent(null);
+            d.setContentBrief(stats.excerpt);
+        } else {
+            d.setSheetContent(null);
+            d.setContent(contentOf(format, req.getContent()));
+            /* 列表摘要随正文同步维护：列表接口不再读 MEDIUMTEXT */
+            d.setContentBrief(briefOf(format, d.getContent()));
+        }
         if (d.getSortOrder() == null) {
             d.setSortOrder(0);
         }
-        /* 列表摘要随正文同步维护：列表接口不再读 MEDIUMTEXT */
-        d.setContentBrief(briefOf(format, d.getContent()));
         String status = Texts.trimToNull(req.getStatus());
         if (status == null) {
             status = "draft";
@@ -1533,8 +1559,12 @@ public class RequirementDocService {
         }
     }
 
-    /** 按格式落库正文：Markdown 原样保存，Univer 快照校验结构后原样保存，HTML 走白名单清洗 */
+    /** 按格式落库正文：Markdown 原样保存，Univer / 表格快照校验结构后原样保存，HTML 走白名单清洗 */
     public static String contentOf(String format, String content) {
+        if ("sheet".equals(format)) {
+            /* 表格正文由 inspectSheetSnapshot 校验后写入 sheet_content，不允许塞进 content */
+            return null;
+        }
         if ("markdown".equals(format)) {
             if (content == null || content.trim().isEmpty()) {
                 return null;
@@ -1576,13 +1606,16 @@ public class RequirementDocService {
         }
     }
 
-    /** 列表摘要按格式分派：Markdown 去标记、Univer 取快照文本、HTML 抽文本 */
+    /** 列表摘要按格式分派：Markdown 去标记、Univer 取快照文本、表格取工作表名与首批文字、HTML 抽文本 */
     public static String briefOf(String format, String content) {
         if ("markdown".equals(format)) {
             return excerptOfMarkdown(content);
         }
         if ("univer".equals(format)) {
             return excerptOfUniver(content);
+        }
+        if ("sheet".equals(format)) {
+            return excerptOfSheet(content);
         }
         return excerptOf(content);
     }
@@ -1606,6 +1639,125 @@ public class RequirementDocService {
             /* 列表/摘要不能因为一份脏数据整体失败 */
             return null;
         }
+    }
+
+    /** 表格正文的摘要（恢复历史/备份导入等容错路径用；脏数据返回 null 不阻断操作） */
+    public static String excerptOfSheet(String content) {
+        try {
+            return inspectSheetSnapshot(content).excerpt;
+        } catch (AppException e) {
+            return null;
+        }
+    }
+
+    /** 表格快照校验结果：content 为归一后的正文（空白→null），excerpt 为列表摘要 */
+    public static final class SheetStats {
+        public final String content;
+        public final String excerpt;
+        SheetStats(String content, String excerpt) {
+            this.content = content;
+            this.excerpt = excerpt;
+        }
+    }
+
+    /**
+     * 校验 Univer 工作簿快照并统计规模（流式解析，避免 20MB JSON 建整棵树把 320MB 堆打爆）。
+     * 上限：20MB（UTF-8 字节）、10 万单元格、20 个工作表、单表 2 万行 × 300 列。
+     * 返回归一后的正文与摘要；结构不合法或超限直接拒绝。
+     */
+    public static SheetStats inspectSheetSnapshot(String content) {
+        if (content == null || content.trim().isEmpty()) {
+            return new SheetStats(null, null);
+        }
+        if (content.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > SHEET_MAX_BYTES) {
+            throw AppException.badRequest("表格超过 20MB 上限，请精简内容或拆分后再保存");
+        }
+        int depth = 0;
+        int sheetsDepth = 0, sheetDepth = 0, cellDataDepth = 0, rowDepth = 0;
+        int sheetCount = 0;
+        long cellCount = 0;
+        boolean rootObject = false;
+        StringBuilder text = new StringBuilder();
+        try (JsonParser p = JSON.getFactory().createParser(content)) {
+            JsonToken token;
+            while ((token = p.nextToken()) != null) {
+                if (token == JsonToken.START_OBJECT || token == JsonToken.START_ARRAY) {
+                    depth++;
+                    if (depth == 1 && token == JsonToken.START_OBJECT) {
+                        rootObject = true;
+                    } else if (sheetsDepth == 0 && depth == 2 && token == JsonToken.START_OBJECT
+                            && "sheets".equals(p.getCurrentName())) {
+                        sheetsDepth = depth;
+                    } else if (sheetsDepth > 0 && depth == sheetsDepth + 1 && token == JsonToken.START_OBJECT) {
+                        sheetCount++;
+                        if (sheetCount > SHEET_MAX_SHEETS) {
+                            throw AppException.badRequest("工作表超过 " + SHEET_MAX_SHEETS + " 个上限，请拆分后再保存");
+                        }
+                        sheetDepth = depth;
+                        cellDataDepth = 0;
+                        rowDepth = 0;
+                    } else if (sheetDepth > 0 && depth == sheetDepth + 1
+                            && token == JsonToken.START_OBJECT && "cellData".equals(p.getCurrentName())) {
+                        cellDataDepth = depth;
+                    } else if (cellDataDepth > 0 && depth == cellDataDepth + 1 && token == JsonToken.START_OBJECT) {
+                        rowDepth = depth;
+                    }
+                } else if (token == JsonToken.END_OBJECT || token == JsonToken.END_ARRAY) {
+                    if (depth == rowDepth) rowDepth = 0;
+                    if (depth == cellDataDepth) cellDataDepth = 0;
+                    if (depth == sheetDepth) sheetDepth = 0;
+                    if (depth == sheetsDepth) sheetsDepth = 0;
+                    depth--;
+                } else if (token == JsonToken.FIELD_NAME) {
+                    if (rowDepth > 0 && depth == rowDepth) {
+                        cellCount++;
+                        if (cellCount > SHEET_MAX_CELLS) {
+                            throw AppException.badRequest("表格超过 " + SHEET_MAX_CELLS
+                                    + " 个单元格上限，请拆分后再保存");
+                        }
+                    }
+                } else if (token == JsonToken.VALUE_NUMBER_INT && sheetDepth > 0 && depth == sheetDepth) {
+                    String name = p.getCurrentName();
+                    if ("rowCount".equals(name) && p.getIntValue() > SHEET_MAX_ROWS) {
+                        throw AppException.badRequest("工作表超过 " + SHEET_MAX_ROWS + " 行上限");
+                    }
+                    if ("columnCount".equals(name) && p.getIntValue() > SHEET_MAX_COLS) {
+                        throw AppException.badRequest("工作表超过 " + SHEET_MAX_COLS + " 列上限");
+                    }
+                } else if (token == JsonToken.VALUE_STRING) {
+                    String name = p.getCurrentName();
+                    if (sheetDepth > 0 && depth == sheetDepth && "name".equals(name)) {
+                        appendExcerpt(text, p.getText());
+                    } else if (rowDepth > 0 && depth == rowDepth + 1 && "v".equals(name)) {
+                        appendExcerpt(text, p.getText());
+                    }
+                }
+            }
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            throw AppException.badRequest("表格正文格式不合法");
+        }
+        if (!rootObject || sheetCount == 0) {
+            throw AppException.badRequest("表格正文格式不合法");
+        }
+        String excerpt = text.length() == 0 ? null
+                : (text.length() <= EXCERPT_MAX ? text.toString() : text.substring(0, EXCERPT_MAX) + "…");
+        return new SheetStats(content, excerpt);
+    }
+
+    private static void appendExcerpt(StringBuilder text, String raw) {
+        if (text.length() >= EXCERPT_MAX * 4 || raw == null) {
+            return;
+        }
+        String value = raw.replaceAll("\\s+", " ").trim();
+        if (value.isEmpty()) {
+            return;
+        }
+        if (text.length() > 0) {
+            text.append(' ');
+        }
+        text.append(value);
     }
 
     /** 归属项目解析：空 = 空间级文档（返回 null，写权限走 assertWrite 对 null 项目的「非查看者」口径）；非空须是本空间项目。 */
