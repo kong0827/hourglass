@@ -540,12 +540,15 @@ public class RequirementDocService {
         // 先按 id 查出文档，校验可见性（他人草稿按不存在处理）、写权限与项目一致性
         java.util.Map<String, RequirementDoc> docs = new java.util.HashMap<String, RequirementDoc>();
         String commonReqId = null;
+        boolean firstDoc = true;
         for (ReqDocReorderRequest.Item item : req.getItems()) {
             RequirementDoc d = getVisible(workspaceId, userId, item.getId());
             projectAccess.assertWrite(workspaceId, userId, d.getReqId());
-            if (commonReqId == null) {
+            /* 空间级文档 reqId 为空：用 firstDoc 判首条，不能用 commonReqId == null 做哨兵 */
+            if (firstDoc) {
                 commonReqId = d.getReqId();
-            } else if (!commonReqId.equals(d.getReqId())) {
+                firstDoc = false;
+            } else if (!java.util.Objects.equals(commonReqId, d.getReqId())) {
                 throw AppException.badRequest("只能对同一项目下的文档排序");
             }
             docs.put(d.getId(), d);
@@ -567,7 +570,7 @@ public class RequirementDocService {
                                 projectAccess.roleOf(workspaceId, userId))) {
                     throw AppException.badRequest("父文档不存在：" + newParentId);
                 }
-                if (!commonReqId.equals(parent.getReqId())) {
+                if (!java.util.Objects.equals(commonReqId, parent.getReqId())) {
                     throw AppException.badRequest("父文档必须属于同一项目");
                 }
                 if (formsCycle(item.getId(), finalParent, docs)) {
@@ -575,15 +578,39 @@ public class RequirementDocService {
                 }
             }
         }
+        // 分类改动：给了才校验（空串=移出分类），必须与文档归属范围一致；先整体校验再落库
+        java.util.Map<String, String> finalCategory = new java.util.HashMap<String, String>();
+        for (ReqDocReorderRequest.Item item : req.getItems()) {
+            if (item.getCategoryId() == null) {
+                continue;
+            }
+            RequirementDoc d = docs.get(item.getId());
+            finalCategory.put(item.getId(), resolveCategory(d, d.getReqId(), item.getCategoryId()));
+        }
         // 落库
         for (ReqDocReorderRequest.Item item : req.getItems()) {
+            boolean catSet = finalCategory.containsKey(item.getId());
             docMapper.updateSortOrder(workspaceId, item.getId(),
-                    item.getSortOrder() == null ? 0 : item.getSortOrder(), finalParent.get(item.getId()));
+                    item.getSortOrder() == null ? 0 : item.getSortOrder(), finalParent.get(item.getId()),
+                    catSet ? finalCategory.get(item.getId()) : null, catSet);
         }
-        // 记录一条活动：用第一个文档的标题代表这次排序操作
+        // 记录一条活动：优先取这次真正改变了层级/分类的文档，纯排序时退回第一条
         RequirementDoc first = docs.get(req.getItems().get(0).getId());
-        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, first.getId(), userId,
-                "update", "调整了文档「" + first.getTitle() + "」的顺序/层级");
+        RequirementDoc moved = null;
+        for (ReqDocReorderRequest.Item item : req.getItems()) {
+            RequirementDoc d = docs.get(item.getId());
+            boolean parentChanged = !java.util.Objects.equals(
+                    finalParent.get(item.getId()), Texts.trimToNull(d.getParentId()));
+            boolean categoryChanged = finalCategory.containsKey(item.getId())
+                    && !java.util.Objects.equals(finalCategory.get(item.getId()), d.getCategoryId());
+            if (parentChanged || categoryChanged) {
+                moved = d;
+                break;
+            }
+        }
+        RequirementDoc target = moved != null ? moved : first;
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, target.getId(), userId,
+                "update", "调整了文档「" + target.getTitle() + "」的顺序/层级/分类");
     }
 
     /** 沿最终父级链（本批调整优先，其余取库内现值）向上走，回到自身即成环；链过深也按成环拒绝 */

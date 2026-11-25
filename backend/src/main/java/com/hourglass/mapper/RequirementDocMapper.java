@@ -89,11 +89,13 @@ public interface RequirementDocMapper {
                     @Param("id") String id,
                     @Param("title") String title);
 
-    /** 阅读/树拖拽排序：只动 sort_order 与 parent_id，不触碰正文与乐观锁 */
+    /** 阅读/树拖拽排序：只动 sort_order / parent_id / category_id，不触碰正文与乐观锁；categorySet=false 时不动分类 */
     int updateSortOrder(@Param("workspaceId") String workspaceId,
                         @Param("id") String id,
                         @Param("sortOrder") Integer sortOrder,
-                        @Param("parentId") String parentId);
+                        @Param("parentId") String parentId,
+                        @Param("categoryId") String categoryId,
+                        @Param("categorySet") boolean categorySet);
 
     int delete(@Param("id") String id);
 

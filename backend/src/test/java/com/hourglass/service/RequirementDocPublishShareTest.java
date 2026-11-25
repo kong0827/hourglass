@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -266,7 +267,7 @@ class RequirementDocPublishShareTest {
         AppException ex = assertThrows(AppException.class,
                 () -> service.reorder(OTHER, WS, reorderOf(DOC_ID, null)));
         assertEquals(404, ex.getCode());
-        verify(docs, never()).updateSortOrder(anyString(), anyString(), any(), any());
+        verify(docs, never()).updateSortOrder(anyString(), anyString(), any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -278,7 +279,7 @@ class RequirementDocPublishShareTest {
         when(docs.selectById("D2")).thenReturn(hiddenParent);
 
         assertThrows(AppException.class, () -> service.reorder(OTHER, WS, reorderOf(DOC_ID, "D2")));
-        verify(docs, never()).updateSortOrder(anyString(), anyString(), any(), any());
+        verify(docs, never()).updateSortOrder(anyString(), anyString(), any(), any(), any(), anyBoolean());
     }
 
     /* ---------------- 公开只读 ---------------- */

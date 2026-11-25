@@ -28,5 +28,8 @@ public class ReqDocReorderRequest {
 
         /** 新的父文档 ID，空表示提升到根级 */
         private String parentId;
+
+        /** 目标分类 ID：省略/null 表示不改分类，空串表示移出分类。拖进分类目录时随排序一起提交 */
+        private String categoryId;
     }
 }

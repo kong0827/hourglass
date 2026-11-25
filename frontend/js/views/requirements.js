@@ -461,12 +461,27 @@ function reqDocKidsOf(parentId, reqId){
   });
   return out.sort(reqDocSort);
 }
-/* 拖拽移动计划：返回要提交给 /api/req-docs/reorder 的 items（含新父级与整组重排的 sortOrder） */
-function reqDocPlanMove(srcId, targetId, zone){
+/* 某分类下的顶层文档（parentId 为空），拖进目录时按它们重排；带父级的文档不在此调整 */
+function reqDocCatTopDocs(catId, reqId){
+  return reqDocList.filter(function(d){
+    if((d.reqId || "") !== (reqId || "")) return false;
+    if((d.categoryId || "") !== (catId || "")) return false;
+    return !d.parentId;
+  }).sort(reqDocSort);
+}
+/* 拖拽移动计划：返回要提交给 /api/req-docs/reorder 的 items（含新父级/分类与整组重排的 sortOrder）
+   zone：before/after/into/root 只在文档与项目头之间生效；into-cat 表示拖进分类目录，清空上级文档。
+   分类桶内跟着源文档一起显示的子树（同分类）一并改分类，避免移动后子文档被留在旧目录成为孤儿。 */
+function reqDocPlanMove(srcId, targetId, zone, catId){
   var src = reqDocById(srcId);
   if(!src) return null;
-  var newParentId, kids;
-  if(zone === "into"){
+  var newParentId, newCatId, kids;
+  if(zone === "into-cat"){
+    if(!catId) return null;
+    newParentId = null;
+    newCatId = catId;
+    kids = reqDocCatTopDocs(catId, src.reqId);
+  }else if(zone === "into"){
     var t = reqDocById(targetId);
     if(!t) return null;
     newParentId = t.id;
@@ -493,7 +508,17 @@ function reqDocPlanMove(srcId, targetId, zone){
   kids.splice(idx, 0, src);
   var items = [];
   for(var j = 0; j < kids.length; j++){
-    items.push({ id: kids[j].id, sortOrder: j * 10, parentId: newParentId });
+    var it = { id: kids[j].id, sortOrder: j * 10, parentId: newParentId };
+    if(zone === "into-cat" && kids[j].id === srcId) it.categoryId = newCatId;
+    items.push(it);
+  }
+  if(zone === "into-cat"){
+    var desc = reqDocDescendants(srcId);
+    var srcCat = src.categoryId || "";
+    reqDocList.forEach(function(d){
+      if(!desc[d.id] || (d.categoryId || "") !== srcCat) return;
+      items.push({ id: d.id, sortOrder: d.sortOrder || 0, parentId: d.parentId || null, categoryId: newCatId });
+    });
   }
   return items;
 }
@@ -1788,7 +1813,12 @@ function reqDocApplySortItems(items){
     if(!list) return;
     items.forEach(function(it){
       for(var i = 0; i < list.length; i++){
-        if(list[i].id === it.id){ list[i].sortOrder = it.sortOrder; list[i].parentId = it.parentId; break; }
+        if(list[i].id === it.id){
+          list[i].sortOrder = it.sortOrder;
+          list[i].parentId = it.parentId;
+          if(it.categoryId !== undefined) list[i].categoryId = it.categoryId;
+          break;
+        }
       }
     });
   });
@@ -2626,14 +2656,18 @@ function reqDocDragOnDropLine(e){
   return e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2;
 }
 function rsHitInfo(e){
-  /* 返回 {node, zone}：zone = before（上 30% 插到它前面）/ into（中间，成为它的子文档）/ after（下 30% 插到它后面） */
+  /* 返回 {node, zone}：分类行 = into-cat（拖进该目录）；文档行按纵向 30% 分
+     before（插到它前面）/ into（成为它的子文档）/ after（插到它后面） */
   var st = $("reqDocSplitTree");
   if(!st) return null;
   var y = e.clientY;
-  var nodes = Array.from(st.querySelectorAll(".rs-node")).filter(function(n){ return n !== rsDragSource; });
+  var nodes = Array.from(st.querySelectorAll(".rs-cat, .rs-node")).filter(function(n){ return n !== rsDragSource; });
   for(var i = 0; i < nodes.length; i++){
     var r = nodes[i].getBoundingClientRect();
     if(y < r.top || y > r.bottom) continue;
+    if(nodes[i].classList.contains("rs-cat")){
+      return { node: nodes[i], zone: "into-cat", catId: nodes[i].dataset.rsCat };
+    }
     var rel = (y - r.top) / Math.max(r.height, 1);
     return { node: nodes[i], zone: rel < 0.3 ? "before" : (rel > 0.7 ? "after" : "into") };
   }
@@ -2650,9 +2684,13 @@ function rsProjRootHit(e){
   if(key !== (rsDragSource.dataset.rsReqid || "")) return null;
   return head;
 }
-function rsCanDrop(targetNode){
+function rsCanDrop(targetNode, zone){
   if(!rsDragSource || !targetNode) return false;
   if(targetNode === rsDragSource) return false;
+  /* 分类行落点：只校验同项目/同空间，文档可归入任意目录 */
+  if(zone === "into-cat"){
+    return (targetNode.dataset.rsCatReqid || "") === (rsDragSource.dataset.rsReqid || "");
+  }
   if(targetNode.dataset.rsReqid !== rsDragSource.dataset.rsReqid) return false;
   /* 跨项目禁止；目标在自己子树内（含“插到后代旁边”）会成环，也禁止。同项目内跨层级/跨目录允许 */
   var desc = reqDocDescendants(rsDragSource.dataset.rsDoc);
@@ -2676,23 +2714,38 @@ function rsCommitReorder(){
   }
   var before = reqDocById(srcId);
   var oldParentId = before ? (before.parentId || null) : null;
-  var items = reqDocPlanMove(srcId, target.docId, target.zone);
+  /* 分类要在本地回填前记下：before 是列表里的同一对象，回填后 categoryId 已经是新值 */
+  var oldCategoryId = before ? (before.categoryId || "") : "";
+  var items = reqDocPlanMove(srcId, target.docId, target.zone, target.catId);
   if(!items){ renderReqDocSplit(); return; }
   var changed = false;
   for(var i = 0; i < items.length; i++){
     var d = reqDocById(items[i].id);
-    if(d && ((d.sortOrder || 0) !== items[i].sortOrder || (d.parentId || null) !== (items[i].parentId || null))){
+    if(d && ((d.sortOrder || 0) !== items[i].sortOrder
+      || (d.parentId || null) !== (items[i].parentId || null)
+      || (items[i].categoryId !== undefined && (d.categoryId || "") !== (items[i].categoryId || "")))){
       changed = true;
       break;
     }
   }
   if(!changed){ renderReqDocSplit(); return; }
   API.post("/api/req-docs/reorder", { items: items }).then(function(){
-    /* 本地同步 sortOrder/parentId，避免重新拉取前顺序回跳 */
+    /* 本地同步 sortOrder/parentId/categoryId，避免重新拉取前顺序回跳 */
     reqDocApplySortItems(items);
-    /* 拖进某个文档下时顺手展开它，让移动结果可见 */
+    /* 拖进某个文档/分类下时顺手展开它，让移动结果可见 */
     if(target.zone === "into" && target.docId) delete reqDocCollapsedDocs[target.docId];
+    if(target.zone === "into-cat" && target.catId) delete reqDocCollapsedCats[target.catId];
     renderReqDocSplit();
+    if(target.zone === "into-cat"){
+      if(oldCategoryId !== (target.catId || "")){
+        var tc = docCatById(target.catId);
+        toast("已移入「" + (tc ? tc.name : "分类") + "」", "fs");
+      }else{
+        var placed = reqDocById(srcId);
+        toast(placed && (placed.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
+      }
+      return;
+    }
     var after = reqDocById(srcId);
     toast(after && (after.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
   }).catch(function(ex){
@@ -2755,15 +2808,21 @@ function initReqDocSplitDrag(){
     var line = ensureRsDropLine();
     reqDocDragClearDropHighlight(st);
     var target = null;
-    if(hit && rsCanDrop(hit.node)){
-      target = { zone: hit.zone, docId: hit.node.dataset.rsDoc };
-      if(hit.zone === "into"){
+    if(hit && rsCanDrop(hit.node, hit.zone)){
+      if(hit.zone === "into-cat"){
+        target = { zone: "into-cat", catId: hit.catId };
         removeRsDropLine();
         hit.node.classList.add("drop-into");
       }else{
-        var container = hit.node.parentNode;
-        if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
-        else container.insertBefore(line, hit.node);
+        target = { zone: hit.zone, docId: hit.node.dataset.rsDoc };
+        if(hit.zone === "into"){
+          removeRsDropLine();
+          hit.node.classList.add("drop-into");
+        }else{
+          var container = hit.node.parentNode;
+          if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
+          else container.insertBefore(line, hit.node);
+        }
       }
     }else if(!hit){
       var projHead = rsProjRootHit(e);
@@ -2805,14 +2864,17 @@ var rrDroppedInside = false;
    所以在 mousedown 时记住是否按在手柄上 */
 var rrHandlePressed = false;
 function rrHitInfo(e){
-  /* 返回 {node, zone}：zone = before / into / after（与阅读树一致） */
+  /* 返回 {node, zone}：分类行 = into-cat（拖进该目录）；文档行 = before / into / after */
   var tree = $("reqDocTree");
   if(!tree) return null;
   var y = e.clientY;
-  var rows = Array.from(tree.querySelectorAll(".reqdoc-row")).filter(function(n){ return n !== rrDragSource; });
+  var rows = Array.from(tree.querySelectorAll(".reqdoc-cat, .reqdoc-row")).filter(function(n){ return n !== rrDragSource; });
   for(var i = 0; i < rows.length; i++){
     var r = rows[i].getBoundingClientRect();
     if(y < r.top || y > r.bottom) continue;
+    if(rows[i].classList.contains("reqdoc-cat")){
+      return { node: rows[i], zone: "into-cat", catId: rows[i].dataset.cat };
+    }
     var rel = (y - r.top) / Math.max(r.height, 1);
     return { node: rows[i], zone: rel < 0.3 ? "before" : (rel > 0.7 ? "after" : "into") };
   }
@@ -2828,9 +2890,13 @@ function rrProjRootHit(e){
   if(key !== (rrDragSource.dataset.rrReqid || "")) return null;
   return head;
 }
-function rrCanDrop(targetNode){
+function rrCanDrop(targetNode, zone){
   if(!rrDragSource || !targetNode) return false;
   if(targetNode === rrDragSource) return false;
+  /* 分类行落点：只校验同项目/同空间，文档可归入任意目录 */
+  if(zone === "into-cat"){
+    return (targetNode.dataset.catReqid || "") === (rrDragSource.dataset.rrReqid || "");
+  }
   if(targetNode.dataset.rrReqid !== rrDragSource.dataset.rrReqid) return false;
   /* 跨项目禁止；目标在自己子树内会成环，也禁止。同项目内跨目录/跨层级允许 */
   var desc = reqDocDescendants(rrDragSource.dataset.reqdoc);
@@ -2853,12 +2919,16 @@ function rrCommitReorder(){
   }
   var before = reqDocById(srcId);
   var oldParentId = before ? (before.parentId || null) : null;
-  var items = reqDocPlanMove(srcId, target.docId, target.zone);
+  /* 分类要在本地回填前记下：before 是列表里的同一对象，回填后 categoryId 已经是新值 */
+  var oldCategoryId = before ? (before.categoryId || "") : "";
+  var items = reqDocPlanMove(srcId, target.docId, target.zone, target.catId);
   if(!items){ renderReqDocTree(); return; }
   var changed = false;
   for(var i = 0; i < items.length; i++){
     var d = reqDocById(items[i].id);
-    if(d && ((d.sortOrder || 0) !== items[i].sortOrder || (d.parentId || null) !== (items[i].parentId || null))){
+    if(d && ((d.sortOrder || 0) !== items[i].sortOrder
+      || (d.parentId || null) !== (items[i].parentId || null)
+      || (items[i].categoryId !== undefined && (d.categoryId || "") !== (items[i].categoryId || "")))){
       changed = true;
       break;
     }
@@ -2867,7 +2937,18 @@ function rrCommitReorder(){
   API.post("/api/req-docs/reorder", { items: items }).then(function(){
     reqDocApplySortItems(items);
     if(target.zone === "into" && target.docId) delete reqDocCollapsedDocs[target.docId];
+    if(target.zone === "into-cat" && target.catId) delete reqDocCollapsedCats[target.catId];
     renderReqDocTree();
+    if(target.zone === "into-cat"){
+      if(oldCategoryId !== (target.catId || "")){
+        var tc = docCatById(target.catId);
+        toast("已移入「" + (tc ? tc.name : "分类") + "」", "fs");
+      }else{
+        var placed = reqDocById(srcId);
+        toast(placed && (placed.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
+      }
+      return;
+    }
     var after = reqDocById(srcId);
     toast(after && (after.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
   }).catch(function(ex){
@@ -2922,15 +3003,21 @@ function initReqDocTreeDrag(){
     var line = ensureRsDropLine();
     reqDocDragClearDropHighlight(tree);
     var target = null;
-    if(hit && rrCanDrop(hit.node)){
-      target = { zone: hit.zone, docId: hit.node.dataset.reqdoc };
-      if(hit.zone === "into"){
+    if(hit && rrCanDrop(hit.node, hit.zone)){
+      if(hit.zone === "into-cat"){
+        target = { zone: "into-cat", catId: hit.catId };
         removeRsDropLine();
         hit.node.classList.add("drop-into");
       }else{
-        var container = hit.node.parentNode;
-        if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
-        else container.insertBefore(line, hit.node);
+        target = { zone: hit.zone, docId: hit.node.dataset.reqdoc };
+        if(hit.zone === "into"){
+          removeRsDropLine();
+          hit.node.classList.add("drop-into");
+        }else{
+          var container = hit.node.parentNode;
+          if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
+          else container.insertBefore(line, hit.node);
+        }
       }
     }else if(!hit){
       var projHead = rrProjRootHit(e);
@@ -3257,11 +3344,19 @@ function syncReqDocCatDefaultHint(){
   var cid = $("reqDocCategory") ? $("reqDocCategory").value : "";
   var c = cid ? docCatById(cid) : null;
   var v = c ? docVisOf(c) : "team";
-  if(!c || v === "team"){ el.hidden = true; el.textContent = ""; return; }
-  var n = c.memberCount || 0;
+  var parts = [];
+  /* 分类改了但还没保存：明确提示保存动作，避免以为选中即生效 */
+  if((cid || "") !== (editingMeta.categoryId || "")){
+    parts.push(cid ? "点「保存」后移入分类「" + (c ? c.name : "所选分类") + "」" : "点「保存」后移出当前分类");
+  }
+  if(c && v !== "team"){
+    var n = c.memberCount || 0;
+    parts.push("该分类默认" + (v === "personal" ? "「仅自己」" : "「指定 " + n + " 人」")
+      + "；保存文档不会自动改变本文档当前的可见范围");
+  }
+  if(!parts.length){ el.hidden = true; el.textContent = ""; return; }
   el.hidden = false;
-  el.textContent = "该分类默认" + (v === "personal" ? "「仅自己」" : "「指定 " + n + " 人」")
-    + "；保存文档不会自动改变本文档当前的可见范围";
+  el.textContent = parts.join("；");
 }
 function openNewReqDocDialog(reqId, opts){
   var sel = $("newReqDocProject");
@@ -4604,6 +4699,14 @@ function fillReqDocEditor(doc, opts){
   fillDocTypeSelect("reqDocType", editingMeta.docType);
   fillDocParentSelect(doc);
   fillReqDocCategorySelect(doc);
+  /* 分类还没加载过（深链/直接进编辑页）：先按空下拉打开，拿到目录后重填，避免只能选「无分类」 */
+  if(!docCategoriesLoaded){
+    loadDocCategories().then(function(){
+      if(editingDocId !== id) return;
+      fillReqDocCategorySelect(reqDocById(id) || doc);
+      applyReqDocReadOnly(reqDocReadOnly || reqDocOwnerLocked);
+    });
+  }
   if(isMarkdownDoc()){
     disposeReqUniver();
     reqEditorBaseline = null;
@@ -5927,7 +6030,10 @@ function saveReqDoc(opts){
     return Promise.resolve(null);
   }
   var parentId = $("reqDocParent") ? $("reqDocParent").value : "";
-  var categoryId = $("reqDocCategory") ? $("reqDocCategory").value : (editingMeta.categoryId || "");
+  /* 下拉不可用时（分类还没加载 / 只读）不要拿它的空值覆盖：否则一次保存会把文档原分类清掉 */
+  var catSelForSave = $("reqDocCategory");
+  var categoryId = catSelForSave && !catSelForSave.disabled
+    ? catSelForSave.value : (editingMeta.categoryId || "");
   var content = currentReqDocContent();
   var body = {
     reqId: reqId || null,
@@ -5957,6 +6063,7 @@ function saveReqDoc(opts){
     /* 分类/归属可能随保存变化：即便用户还在输入（不走 fillReqDocEditor），元数据也要对齐服务器返回值 */
     editingMeta.categoryId = doc.categoryId || "";
     editingMeta.reqId = doc.reqId || "";
+    syncReqDocCatDefaultHint();
     /* 保存请求发出后用户继续输入：保留当前正文，只把基线推进到刚保存的版本 */
     if(currentReqDocContent() !== content){
       if($("reqDocSaved")){

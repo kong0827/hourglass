@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -145,7 +146,7 @@ class WorkActivityRecordingTest {
         com.hourglass.dto.ReqDocReorderRequest req = new com.hourglass.dto.ReqDocReorderRequest();
         req.setItems(Arrays.asList(item("A", "B"), item("B", "A")));
         assertThrows(AppException.class, () -> docService.reorder(USER, WS, req));
-        verify(docMapper, never()).updateSortOrder(anyString(), anyString(), any(), any());
+        verify(docMapper, never()).updateSortOrder(anyString(), anyString(), any(), any(), any(), anyBoolean());
 
         /* 与库内既有链成环：C 现挂在 A 下，再把 A 挂到 C 下 */
         doc("C", "A");
@@ -155,8 +156,74 @@ class WorkActivityRecordingTest {
         /* 正常移动仍可落库 */
         req.setItems(Arrays.asList(item("B", "A"), item("C", null)));
         docService.reorder(USER, WS, req);
-        verify(docMapper).updateSortOrder(WS, "B", 0, "A");
-        verify(docMapper).updateSortOrder(WS, "C", 0, null);
+        verify(docMapper).updateSortOrder(WS, "B", 0, "A", null, false);
+        verify(docMapper).updateSortOrder(WS, "C", 0, null, null, false);
+    }
+
+    @Test
+    void reorderIntoCategoryWritesCategoryForMovedDoc() {
+        DocCategoryService cats = mock(DocCategoryService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(docService, "docCategories", cats);
+        com.hourglass.entity.DocCategory cat = new com.hourglass.entity.DocCategory();
+        cat.setId("C1");
+        cat.setWorkspaceId(WS);
+        cat.setReqId("R1");
+        when(cats.findForDoc(WS, "C1")).thenReturn(cat);
+        doc("A", null);
+        doc("B", "A");
+
+        com.hourglass.dto.ReqDocReorderRequest req = new com.hourglass.dto.ReqDocReorderRequest();
+        com.hourglass.dto.ReqDocReorderRequest.Item item = item("A", null);
+        item.setCategoryId("C1");
+        /* 同分类的子文档跟着一起改分类，父子关系保持不变 */
+        com.hourglass.dto.ReqDocReorderRequest.Item child = item("B", "A");
+        child.setSortOrder(10);
+        child.setCategoryId("C1");
+        req.setItems(Arrays.asList(item, child));
+
+        docService.reorder(USER, WS, req);
+
+        verify(docMapper).updateSortOrder(WS, "A", 0, null, "C1", true);
+        verify(docMapper).updateSortOrder(WS, "B", 10, "A", "C1", true);
+        /* 审计落在真正移动的文档上，而不是分类里排在前面的其它文档 */
+        verify(workActivityService).record(WS, WorkActivityService.REQUIREMENT_DOC, "A", USER,
+                "update", "调整了文档「文档A」的顺序/层级/分类");
+    }
+
+    @Test
+    void reorderSpaceLevelDocsWithoutProjectIdDoesNotFail() {
+        RequirementDoc s1 = doc("S1", null);
+        s1.setReqId(null);
+        RequirementDoc s2 = doc("S2", null);
+        s2.setReqId(null);
+
+        com.hourglass.dto.ReqDocReorderRequest req = new com.hourglass.dto.ReqDocReorderRequest();
+        req.setItems(Arrays.asList(item("S1", null), item("S2", null)));
+        docService.reorder(USER, WS, req);
+
+        verify(docMapper).updateSortOrder(WS, "S1", 0, null, null, false);
+        verify(docMapper).updateSortOrder(WS, "S2", 0, null, null, false);
+    }
+
+    @Test
+    void reorderRejectsCategoryFromAnotherScope() {
+        DocCategoryService cats = mock(DocCategoryService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(docService, "docCategories", cats);
+        com.hourglass.entity.DocCategory cat = new com.hourglass.entity.DocCategory();
+        cat.setId("C9");
+        cat.setWorkspaceId(WS);
+        cat.setReqId("R2");
+        when(cats.findForDoc(WS, "C9")).thenReturn(cat);
+        doc("A", null);
+
+        com.hourglass.dto.ReqDocReorderRequest req = new com.hourglass.dto.ReqDocReorderRequest();
+        com.hourglass.dto.ReqDocReorderRequest.Item item = item("A", null);
+        item.setCategoryId("C9");
+        req.setItems(Collections.singletonList(item));
+
+        AppException ex = assertThrows(AppException.class, () -> docService.reorder(USER, WS, req));
+        assertEquals(400, ex.getCode());
+        verify(docMapper, never()).updateSortOrder(anyString(), anyString(), any(), any(), any(), anyBoolean());
     }
 
     @Test

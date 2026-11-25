@@ -155,7 +155,7 @@ class RequirementDocCreatorProtectionTest {
 
         assertDoesNotThrow(() -> service.reorder(OTHER, WS, reorderOf(DOC_ID, null)));
 
-        verify(docs).updateSortOrder(WS, DOC_ID, 1, null);
+        verify(docs).updateSortOrder(WS, DOC_ID, 1, null, null, false);
         /* 排序只校验项目可写，绝不咨询创建人/管理员身份 */
         verify(access, never()).canManage(anyString(), anyString());
     }

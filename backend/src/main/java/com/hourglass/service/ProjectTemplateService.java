@@ -265,7 +265,7 @@ public class ProjectTemplateService {
             req.setStatus("draft");
             com.hourglass.entity.RequirementDoc doc = docService.create(userId, workspaceId, req);
             /* 模板文档按定义顺序排列，避免同一秒创建时顺序随机 */
-            docMapper.updateSortOrder(workspaceId, doc.getId(), i, null);
+            docMapper.updateSortOrder(workspaceId, doc.getId(), i, null, null, false);
         }
     }
 
