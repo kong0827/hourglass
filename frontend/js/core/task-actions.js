@@ -5,13 +5,14 @@ import { $ } from "./dom.js";
 import { icon } from "./icons.js";
 import { activeView, showView } from "./router.js";
 import { taskPayloadWith } from "./shortcuts.js";
-import { state, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
-import { deleteTask, openTaskDrawer } from "./task-drawer.js";
+import { state, canCreateNow, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
+import { deleteTask, openTaskDrawer, ownerOptions } from "./task-drawer.js";
 import { openDateAt } from "./date-picker.js";
 import { guard, loadRules, ruleFor, serverDecision } from "./transitions.js";
 import { viewModule } from "./view-loader.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMinutesShort, parseDate } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, avatarHTML, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMinutesShort, parseDate, PRIORITIES, priName, priTagHTML } from "../lib/format.js";
+import { loadProjectMembers, memberRoleTitles } from "../lib/member-labels.js";
 import { loadBoard, loadReqs, render } from "../views/board.js";
 import { refreshCalendarIfOpen, refreshGanttIfOpen, renderCalendar } from "../views/calendar.js";
 import { loadList, refreshListIfOpen, repaintListRows } from "../views/list.js";
@@ -70,11 +71,12 @@ function handleDeepLink(){
      由目标视图进入时自行消费；这里抢先把参数清掉会把「新建版本」等误开成新建任务 */
   if(activeView === "board" && hashParam("new") === "1"){
     stripHashParam("new");
+    if(!canCreateNow()){ toast("当前没有可写的项目，无法新建工作项；请联系空间主或管理员分配项目", "warn"); return; }
     openTaskDrawer("backlog");
   }
 }
 function openDuePopover(anchor, taskId){
-  var t = taskById(taskId);
+  var t = findTask(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var el = document.createElement("div");
@@ -110,25 +112,24 @@ function openDuePopover(anchor, taskId){
 }
 var dueSeqByTask = {};
 function setTaskDue(taskId, dueDate){
-  var t = taskById(taskId);
+  var t = findTask(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var seq = (dueSeqByTask[taskId] || 0) + 1;
   dueSeqByTask[taskId] = seq;
   var before = t.dueDate || null;
-  t.dueDate = dueDate;                                  // 乐观更新
-  if(state.board && activeView === "board") render({animate:false});
+  patchTaskMirrors(t, {dueDate: dueDate});            // 乐观更新
+  repaintTaskPatch();
   API.put("/api/tasks/" + encodeURIComponent(taskId), taskPayloadWith(t, {dueDate: dueDate})).then(function(){
     if(dueSeqByTask[taskId] !== seq) return;
     toast(dueDate ? ("已改期至 " + fmtFull(parseDate(dueDate))) : "已清除截止日期", dueDate ? "fs" : "warn");
-    loadBoard({silent:true});
-    refreshListIfOpen();
+    refreshAfterTaskPatch(taskId);
     refreshCalendarIfOpen();
     refreshGanttIfOpen();
   }).catch(function(ex){
     if(dueSeqByTask[taskId] !== seq) return;
-    t.dueDate = before;                                  // 失败回滚
-    if(state.board && activeView === "board") render({animate:false});
+    patchTaskMirrors(t, {dueDate: before});            // 失败回滚
+    repaintTaskPatch();
     toast(ex.message || "改期失败", "bad");
   });
 }
@@ -306,7 +307,7 @@ function moveTaskToColumn(t, to){
 }
 /** 状态 chip 的列菜单：只列出可去的列，当前列打勾且不可点 */
 function openStatusMenu(anchor, taskId){
-  var t = taskById(taskId) || rt.listCache[taskId];
+  var t = findTask(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
@@ -340,6 +341,143 @@ function openStatusMenu(anchor, taskId){
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
   /* 规则首次读取是异步的：先按默认规则开菜单，拿到矩阵后原地补上「需原因 / 受限」 */
   loadRules(wsId).then(function(){ if(el.isConnected) paintMenu(); }).catch(function(){});
+}
+/* ===== 列表行内直接修：优先级 / 负责人 =====
+   与需求池行内编辑同口径：读态是单元格文字，点开菜单，选中即保存。
+   改列仍走 openStatusMenu（含流转规则），改期仍走 openDuePopover。 */
+/* 看板、列表、详情缓存可能持有同一工作项的不同对象，乐观更新要一起改 */
+function patchTaskMirrors(t, patch){
+  var seen = [];
+  [t, taskById(t.id), rt.listCache[t.id], taskCacheExtra[t.id]].forEach(function(m){
+    if(!m || seen.indexOf(m) >= 0) return;
+    seen.push(m);
+    for(var k in patch){
+      if(Object.prototype.hasOwnProperty.call(patch, k)) m[k] = patch[k];
+    }
+  });
+}
+function repaintTaskPatch(){
+  if(state.board && activeView === "board") render({animate:false});
+  repaintListRows();
+}
+/* 行内改完统一收口：层级视图重新聚合，列状态工作页 / 缺陷 Tab / 我的工作靠 ds:task-saved 重取 */
+function refreshAfterTaskPatch(taskId){
+  loadBoard({silent:true});
+  refreshListIfOpen();
+  var treeMod = viewModule("tree");
+  if(treeMod && treeMod.refreshTreeIfOpen) treeMod.refreshTreeIfOpen();
+  window.dispatchEvent(new CustomEvent("ds:task-saved", { detail:{ id:taskId, created:false } }));
+}
+var priSeqByTask = {};
+function setTaskPriority(taskId, priority){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  if((t.priority || "P2") === priority) return;
+  var seq = (priSeqByTask[taskId] || 0) + 1;
+  priSeqByTask[taskId] = seq;
+  var before = t.priority || null;
+  patchTaskMirrors(t, {priority: priority});
+  repaintTaskPatch();
+  API.put("/api/tasks/" + encodeURIComponent(taskId), taskPayloadWith(t, {priority: priority})).then(function(){
+    if(priSeqByTask[taskId] !== seq) return;
+    toast("优先级已改为 " + priName(priority), "fs");
+    refreshAfterTaskPatch(taskId);
+  }).catch(function(ex){
+    if(priSeqByTask[taskId] !== seq) return;
+    patchTaskMirrors(t, {priority: before});
+    repaintTaskPatch();
+    toast(ex.message || "改优先级失败", "bad");
+  });
+}
+function openPriorityMenu(anchor, taskId){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var cur = t.priority || "P2";
+  var el = document.createElement("div");
+  el.className = "menu";
+  el.style.minWidth = "196px";
+  el.innerHTML = '<div class="menu-title">改为优先级</div>' + PRIORITIES.map(function(p){
+    return '<button class="menu-item" type="button" data-pri="' + p + '">' +
+      priTagHTML(p) + (p === cur ? '<span class="k">当前</span>' : '') + '</button>';
+  }).join("");
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-pri]");
+    if(!b) return;
+    UI.closeAllPops();
+    setTaskPriority(taskId, b.dataset.pri);
+  });
+  UI.openPop(el, anchor, {align:"left", width:210, onClose: function(){ el.remove(); }});
+  var first = el.querySelector(".menu-item");
+  if(first){ try{ first.focus({preventScroll:true}); }catch(err){} }
+}
+/* 候选与批量改负责人同一口径：项目花名册 ∩ 空间可指派成员；花名册先回源再出菜单 */
+function ownerCandidatesFor(t, wsId){
+  var pid = t.reqId;
+  if(!pid || !wsId) return Promise.resolve(ownerOptions(pid));
+  return loadProjectMembers(wsId, pid, true).then(function(data){
+    var byId = {};
+    ((data && data.members) || []).forEach(function(m){ byId[m.userId] = m; });
+    return ownerOptions(pid).filter(function(o){ return !!byId[o.id]; }).map(function(o){
+      var m = byId[o.id];
+      return { id:o.id, name:o.name, company:m.companyName || o.company, role:memberRoleTitles(m).join(" / ") || o.role };
+    });
+  });
+}
+var ownerSeqByTask = {};
+function setTaskOwner(taskId, name, userId){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var before = {owner: t.owner || null, ownerUserId: t.ownerUserId || null};
+  if((before.owner || "") === (name || "") && String(before.ownerUserId || "") === String(userId || "")) return;
+  var seq = (ownerSeqByTask[taskId] || 0) + 1;
+  ownerSeqByTask[taskId] = seq;
+  var patch = {owner: name || null, ownerUserId: userId || null};
+  patchTaskMirrors(t, patch);
+  repaintTaskPatch();
+  API.put("/api/tasks/" + encodeURIComponent(taskId), taskPayloadWith(t, patch)).then(function(){
+    if(ownerSeqByTask[taskId] !== seq) return;
+    toast(name ? ("负责人已改为「" + name + "」") : "已清除负责人", "fs");
+    refreshAfterTaskPatch(taskId);
+  }).catch(function(ex){
+    if(ownerSeqByTask[taskId] !== seq) return;
+    patchTaskMirrors(t, before);
+    repaintTaskPatch();
+    toast(ex.message || "改负责人失败", "bad");
+  });
+}
+function openOwnerMenu(anchor, taskId){
+  var t = findTask(taskId);
+  if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
+  var el = document.createElement("div"), disposed = false;
+  el.className = "menu";
+  el.innerHTML = '<div class="menu-title" role="status">正在加载可指派成员…</div>';
+  function paint(options){
+    if(disposed) return;
+    var curId = t.ownerUserId ? String(t.ownerUserId) : "";
+    el.innerHTML = '<div class="menu-title">改为负责人</div>' + (options.length ? options.map(function(o){
+      var on = curId ? String(o.id) === curId : (!!t.owner && t.owner === o.name);
+      var label = o.name + " · " + (o.role || "未设角色") + " · " + (o.company || "未标注公司");
+      return '<button class="menu-item" type="button" data-owner-set="' + esc(o.id) + '" data-name="' + esc(o.name) + '" title="' + esc(label) + '">' +
+        avatarHTML(o.name, "sm") + '<span style="white-space:normal">' + esc(label) + '</span>' +
+        (on ? '<span class="k">当前</span>' : '') + '</button>';
+    }).join("") : '<div class="menu-note">当前项目没有可指派成员</div>');
+  }
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-owner-set]");
+    if(!b) return;
+    UI.closeAllPops();
+    setTaskOwner(taskId, b.dataset.name, b.dataset.ownerSet);
+  });
+  UI.openPop(el, anchor, {align:"left", width:Math.min(360, window.innerWidth - 16), onClose: function(){ disposed = true; el.remove(); }});
+  ownerCandidatesFor(t, wsId).then(paint).catch(function(ex){
+    if(disposed) return;
+    el.innerHTML = '<div class="menu-title" role="alert">' + esc(ex.message || "成员加载失败，请重试") + '</div>';
+  });
 }
 function toggleTaskDone(taskId){
   var t = taskById(taskId);
@@ -651,4 +789,4 @@ document.addEventListener("click", function(e){
   e.stopPropagation();
 }, true);
 
-export { handleDeepLink, hashParam, loadRunningTimer, moveTaskToColumn, openCancelDialog, openCardMenu, openDuePopover, openStatusMenu, openTaskById, restoreCanceled, taskLink, toggleTaskDone, toggleTaskTimer };
+export { handleDeepLink, hashParam, loadRunningTimer, moveTaskToColumn, openCancelDialog, openCardMenu, openDuePopover, openOwnerMenu, openPriorityMenu, openStatusMenu, openTaskById, restoreCanceled, setTaskOwner, setTaskPriority, taskLink, toggleTaskDone, toggleTaskTimer };

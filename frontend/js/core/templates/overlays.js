@@ -215,6 +215,20 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
   </div>
 </div>
 
+<!-- 周回顾统计下钻抽屉：点统计数字看明细，页面不位移 -->
+<div class="drawer-layer" id="rvDetailDrawer" role="dialog" aria-modal="true" aria-labelledby="rvDetailTitle">
+  <div class="drawer-scrim" id="rvDetailScrim"></div>
+  <div class="drawer rv-drawer">
+    <div class="drawer-head">
+      <h2 id="rvDetailTitle">明细</h2>
+      <button class="icon-btn" type="button" id="rvDetailClose" aria-label="关闭明细">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="rvDetailBody"></div>
+  </div>
+</div>
+
 <!-- 统一危险确认框 -->
 <div class="modal-layer" id="dlgConfirm" role="dialog" aria-modal="true" aria-labelledby="dlgConfirmTitle">
   <div class="sheet xs confirm-sheet">
@@ -298,6 +312,27 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
       <input id="paletteInput" type="search" name="global-search" placeholder="搜索项目、工作项、文档、需求、用例或编号" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" aria-label="全局搜索：支持 WI-001、TC-001 等编号" />
       <span class="palette-scope" id="paletteScope">仅当前空间</span>
       <kbd>Esc</kbd>
+    </div>
+    <div class="palette-filters" id="paletteFilters" aria-label="搜索范围">
+      <select id="pfType" aria-label="内容类型">
+        <option value="">全部类型</option>
+        <option value="project">项目</option>
+        <option value="task">工作项</option>
+        <option value="doc">文档</option>
+        <option value="demand">需求</option>
+        <option value="case">用例</option>
+      </select>
+      <select id="pfProject" aria-label="项目范围"><option value="">全部项目</option></select>
+      <select id="pfVersion" aria-label="版本范围" disabled><option value="">全部版本</option></select>
+      <select id="pfStatus" aria-label="状态" disabled><option value="">全部状态</option></select>
+      <select id="pfOwner" aria-label="负责人"><option value="">全部负责人</option></select>
+      <span class="pf-dates">
+        <input id="pfFrom" type="date" aria-label="起始日期" title="起始日期" />
+        <span aria-hidden="true">–</span>
+        <input id="pfTo" type="date" aria-label="结束日期" title="结束日期" />
+      </span>
+      <button class="pf-btn" type="button" id="pfClear" hidden>清除</button>
+      <button class="pf-btn" type="button" id="pfSave">保存搜索</button>
     </div>
     <div class="palette-results" id="paletteResults" role="listbox" aria-label="搜索结果"></div>
     <div class="palette-foot">

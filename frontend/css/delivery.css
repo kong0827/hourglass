@@ -86,16 +86,16 @@ html[data-theme="dark"] .dl-export-wrap{
 .dl-secnav button:focus-visible{outline:none;box-shadow:var(--ring-focus);}
 .dl-secnav button[aria-current="true"]{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
 .dl-secnav .nv{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.dl-secnav .n{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);}
+.dl-secnav .n{font-family:var(--font-mono);font-size:11px;color:var(--text-3);}
 .dl-secnav button[aria-current="true"] .n{color:var(--primary-fg);opacity:.75;}
 /* 目录行首状态：✓ 已确认、! 待确认、空心点只读区块；颜色之外还有字形，不只靠颜色分辨 */
 .dl-sidenav .sv-mark{width:16px;height:16px;border-radius:50%;flex:none;display:inline-grid;place-items:center;
-  font-size:9px;font-weight:750;line-height:1;}
+  font-size:11px;font-weight:750;line-height:1;}
 .dl-sidenav .sv-mark.ok{background:var(--success-soft);color:var(--success-fg);}
 .dl-sidenav .sv-mark.warn{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
 .dl-sidenav .sv-mark.neutral{border:1px solid var(--border);background:var(--surface-sunken);}
 .dl-sidenav .sv-mark.neutral::after{content:"";width:4px;height:4px;border-radius:50%;background:var(--border-strong);}
-.dl-sidenav-foot{margin-top:6px;padding:7px 8px 3px;border-top:1px solid var(--border);font-size:10.5px;line-height:1.6;color:var(--text-3);}
+.dl-sidenav-foot{margin-top:6px;padding:7px 8px 3px;border-top:1px solid var(--border);font-size:11px;line-height:1.6;color:var(--text-3);}
 .dl-paper-col{min-width:0;}
 .dl-page-foot{margin:14px 2px 0;font-size:11px;color:var(--text-3);text-align:center;line-height:1.7;}
 
@@ -285,9 +285,11 @@ html[data-theme="dark"] .dl-export-wrap{
 .dl-def .dl-def-id{font-style:normal;font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--text-3);margin-left:6px;}
 .dl-def .p{width:34px;height:18px;border-radius:var(--r-xs);display:grid;place-items:center;font-size:var(--fs-micro);font-weight:750;flex:none;
   background:var(--surface-active);color:var(--text-2);border:1px solid var(--border);}
-.dl-def .p.blocker{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border);}
-.dl-def .p.critical{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
-.dl-def .p.major{background:var(--info-soft);color:var(--info-fg);border-color:var(--info-border);}
+/* 与缺陷列表同一套严重度色阶：阻断实心深红、严重浅红、一般橙、轻微灰 */
+.dl-def .p.blocker{background:var(--danger-solid);color:#fff;border-color:var(--danger-solid);}
+.dl-def .p.critical{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border);}
+.dl-def .p.major{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
+.dl-def .p.minor{background:var(--surface-sunken);color:var(--text-2);border-color:var(--border);}
 .dl-def .grow{flex:1;}
 .dl-def b{font-family:var(--font-mono);font-weight:700;}
 .dl-def.total{border-top:1px solid var(--border);padding-top:7px;}
@@ -441,6 +443,16 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
 .dl-snap b{font-family:var(--font-mono);font-size:12px;display:block;}
 .dl-snap span{color:var(--text-3);font-size:11px;display:block;margin-top:2px;}
 
+/* 分享访问明细：五列等宽，窄屏横向滚动而不挤成一列 */
+.dl-visit-row{display:grid;grid-template-columns:132px 84px 132px minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:center;
+  padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;min-width:620px;}
+.dl-visit-row.head{font-size:11px;color:var(--text-3);font-weight:650;letter-spacing:.03em;background:var(--surface-sunken);
+  border-radius:var(--r-sm) var(--r-sm) 0 0;position:sticky;top:0;z-index:1;}
+.dl-visit-row:last-child{border-bottom:0;}
+.dl-visit-row .mono{font-family:var(--font-mono);font-size:11px;color:var(--text-2);}
+.dl-visit-row .ua{color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dl-dlg .sheet-body #dlVisitBody{min-width:0;overflow-x:auto;}
+
 /* ============ 接收人只读页 ============ */
 .dl-share-root{max-width:900px;margin:0 auto;padding:14px 0 40px;}
 .dl-share-top{display:flex;align-items:center;gap:10px;padding:var(--space-3) 16px;margin-bottom:14px;background:var(--surface);
@@ -451,6 +463,28 @@ body:not([data-layout="mobile"]):has(.dl-dlg.open) .toast-layer{right:auto;left:
 .dl-share-top .grow{flex:1;}
 .dl-share-foot{margin-top:14px;padding:var(--space-3) 16px;border:1px solid var(--border);border-radius:var(--r-lg);
   background:var(--surface);font-size:11px;color:var(--text-3);line-height:1.8;}
+
+/* 访问密码：只给壳，不给正文；错误就地提示，不跳错误页 */
+.dl-share-gate{min-height:70vh;display:grid;place-items:center;padding:24px 0;}
+.dl-share-gate-card{width:min(420px,100%);padding:26px 24px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-lg);text-align:center;}
+.dl-share-gate-card .dl-mark{width:34px;height:34px;border-radius:var(--r-sm);display:inline-grid;place-items:center;
+  background:var(--primary);color:#fff;margin-bottom:12px;}
+.dl-share-gate-card h1{font-size:17px;font-weight:700;margin:0 0 6px;}
+.dl-share-gate-card p{font-size:12px;color:var(--text-3);margin:0 0 16px;line-height:1.7;}
+.dl-share-gate-card form{display:flex;flex-direction:column;gap:10px;}
+.dl-share-gate-card .input{text-align:center;}
+.dl-share-gate-msg{min-height:18px;margin-top:8px;font-size:12px;color:var(--danger-fg);}
+.dl-share-gate-foot{font-size:11px;color:var(--text-3);margin:2px 0 0;}
+
+/* 水印：整页平铺、不可选中、不挡点击；打印时由纸张宿主内的同一层重复到每页 */
+.dl-share-wm{position:fixed;inset:0;z-index:5;pointer-events:none;user-select:none;overflow:hidden;
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-content:space-between;gap:56px 12px;padding:40px 8px;
+  transform:rotate(-18deg) scale(1.25);transform-origin:center;opacity:.12;}
+.dl-share-wm span{font-size:15px;font-weight:650;color:var(--text-1);white-space:nowrap;text-align:center;letter-spacing:.06em;}
+@media print{
+  #dlPrintHost .dl-share-wm{position:fixed;inset:0;opacity:.1;transform:rotate(-18deg) scale(1.2);}
+}
 
 /* ============ 窄屏 ============ */
 @media (max-width:1180px){

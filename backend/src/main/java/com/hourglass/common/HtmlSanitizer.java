@@ -68,6 +68,14 @@ public final class HtmlSanitizer {
         return (text == null || text.trim().isEmpty()) && !hasImage ? null : out;
     }
 
+    /** 富文本转纯文本（邮件等纯文本渠道用）：去掉标签与图片，只保留文字。 */
+    public static String toPlainText(String html) {
+        if (html == null || html.trim().isEmpty()) {
+            return "";
+        }
+        return Jsoup.parse(html).text().trim();
+    }
+
     private static void filterStyles(org.jsoup.nodes.Element body) {
         for (org.jsoup.nodes.Element el : body.select("[style]")) {
             StringBuilder sb = new StringBuilder();

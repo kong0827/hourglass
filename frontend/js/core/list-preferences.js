@@ -46,7 +46,7 @@ var DEFS = {
     mode: "board",
     modes: ["board", "table", "gantt"],
     required: "title",
-    labels: { title:"需求", kind:"类型", category:"分类", priority:"优先级", status:"状态", project:"项目", version:"目标版本", expectDate:"期望交付", wsjf:"WSJF", source:"来源", createdAt:"提交时间" },
+    labels: { title:"需求", kind:"类型", category:"分类", priority:"优先级", status:"状态", project:"项目", version:"目标版本", expectDate:"期望交付", wsjf:"WSJF", source:"来源", reviewer:"评审人", createdAt:"提交时间" },
     defaults: ["title","kind","priority","status","project","version","expectDate","wsjf"]
   }
 };

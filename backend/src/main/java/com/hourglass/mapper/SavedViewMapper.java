@@ -13,9 +13,11 @@ public interface SavedViewMapper {
 
     SavedView selectById(String id);
 
+    /** 同名覆盖只在同一 scope 内生效：任务视图与搜索视图可以同名并存 */
     SavedView selectByName(@Param("userId") String userId,
                            @Param("workspaceId") String workspaceId,
-                           @Param("name") String name);
+                           @Param("name") String name,
+                           @Param("scope") String scope);
 
     int insert(SavedView view);
 

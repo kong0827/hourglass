@@ -96,14 +96,15 @@ public class TestPlanController {
         return ApiResult.ok(planService.update(userId, ws.getId(), id, req));
     }
 
-    /** 状态流转：draft/running/done */
+    /** 状态流转：draft/running/done；从已完成回退到未完成必须带 reason */
     @PutMapping("/api/test-plans/{id}/status")
     public ApiResult<TestPlanView> setStatus(@PathVariable String id,
                                              @RequestParam String status,
+                                             @RequestParam(required = false) String reason,
                                              @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(planService.setStatus(userId, ws.getId(), id, status));
+        return ApiResult.ok(planService.setStatus(userId, ws.getId(), id, status, reason));
     }
 
     @DeleteMapping("/api/test-plans/{id}")

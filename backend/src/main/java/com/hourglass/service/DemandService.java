@@ -851,6 +851,44 @@ public class DemandService {
         return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
+    /**
+     * 需求详情的阶段工时：产品 / 设计、开发、测试三段的预估与实际。
+     * 测试窗口内的计时先归测试；需求类工作项的剩余计时归产品 / 设计，任务与缺陷的剩余归开发，
+     * 三段互不重叠、合计等于实际。史诗只做分组，不产生工时。只读，权限同需求详情。
+     */
+    public com.hourglass.dto.DemandHoursView hours(String workspaceId, String userId, String id) {
+        Demand d = requireDemand(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        com.hourglass.dto.DemandHoursView view = new com.hourglass.dto.DemandHoursView();
+        for (Task t : taskMapper.selectHoursByDemand(workspaceId, id)) {
+            if ("epic".equals(t.getItemType())) {
+                continue;
+            }
+            long estimate = Math.max(0, t.getEstimateMinutes() == null ? 0 : t.getEstimateMinutes());
+            long testEstimate = Math.max(0, t.getTestEstimateMinutes() == null ? 0 : t.getTestEstimateMinutes());
+            long total = Math.max(0, t.getTotalMinutes() == null ? 0 : t.getTotalMinutes());
+            long test = Math.min(total, Math.max(0, t.getTestMinutes() == null ? 0 : t.getTestMinutes()));
+            long rest = Math.max(0, total - test);
+
+            view.setTaskCount(view.getTaskCount() + 1);
+            if (estimate + testEstimate > 0) {
+                view.setEstimatedCount(view.getEstimatedCount() + 1);
+            } else {
+                view.setUnestimatedCount(view.getUnestimatedCount() + 1);
+            }
+            view.setTestEstimateMinutes(view.getTestEstimateMinutes() + testEstimate);
+            view.setTestActualMinutes(view.getTestActualMinutes() + test);
+            if ("story".equals(t.getItemType())) {
+                view.setProductEstimateMinutes(view.getProductEstimateMinutes() + estimate);
+                view.setProductActualMinutes(view.getProductActualMinutes() + rest);
+            } else {
+                view.setDevEstimateMinutes(view.getDevEstimateMinutes() + estimate);
+                view.setDevActualMinutes(view.getDevActualMinutes() + rest);
+            }
+        }
+        return view;
+    }
+
     /** 排期后二次确认的候选：需求名下、尚未绑定目标版本的工作项；只读，权限同需求详情。 */
     public com.hourglass.dto.PageResult<Task> versionTaskCandidates(String workspaceId, String userId, String id,
                                                                      String versionIdRaw, int offset, int limit) {
@@ -1013,6 +1051,12 @@ public class DemandService {
         insertWithNo(d);
         logChange(d, userId, "create", null, null, null);
         demandWatch.addWatchers(d, userId, req.getWatcherIds());
+        if (d.getReviewerUserId() != null && !d.getReviewerUserId().equals(userId)) {
+            notificationEvents.notifyLinked(d.getReviewerUserId(), workspaceId,
+                    UserNotificationPreferenceService.DEMAND_STATUS,
+                    "需求「" + d.getTitle() + "」指派你评审",
+                    "请到「我的工作 → 待我评审」处理", "demand", d.getId(), d.getReqId());
+        }
         return getVisible(workspaceId, userId, d.getId());
     }
 
@@ -1082,6 +1126,7 @@ public class DemandService {
             throw AppException.conflict("需求所属项目已变更，请刷新后重试");
         }
         Map<String, Object> before = snapshot(d);
+        String oldReviewer = d.getReviewerUserId();
         String moveNote = null, oldProjectName = null, newProjectName = null;
         if (targetProject != null) {
             oldProjectName = projectName(d.getReqId());
@@ -1111,6 +1156,14 @@ public class DemandService {
             }
         }
         save(d);
+        /* 评审人是新增能力：只在创建 / 待评审整单编辑时变更，换人时定向通知 */
+        if (fullEdit && !java.util.Objects.equals(oldReviewer, d.getReviewerUserId())
+                && d.getReviewerUserId() != null && !d.getReviewerUserId().equals(userId)) {
+            notificationEvents.notifyLinked(d.getReviewerUserId(), workspaceId,
+                    UserNotificationPreferenceService.DEMAND_STATUS,
+                    "需求「" + d.getTitle() + "」指派你评审",
+                    "请到「我的工作 → 待我评审」处理", "demand", d.getId(), d.getReqId());
+        }
         if (targetProject != null) {
             moveNote += moveLinkedTasks(userId, workspaceId, id, linkedTasks, projectId,
                     oldProjectName, newProjectName);
@@ -1702,6 +1755,40 @@ public class DemandService {
         return getVisible(workspaceId, userId, id);
     }
 
+    /**
+     * 认领评审：把「待评审且未指派」的需求写成本人评审。
+     * 不走整单 update，避免这次操作顺带覆盖 description/reviewNote 等字段；
+     * 状态与“未指派”都放进 SQL 条件，并发认领只有一人成功，其余按冲突提示刷新。
+     */
+    @Transactional
+    public Demand claimReview(String userId, String workspaceId, String id) {
+        Demand d = requireDemand(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        if (!"review".equals(d.getStatus())) {
+            throw AppException.badRequest("只有待评审的需求可以认领，当前状态：" + statusName(d.getStatus()));
+        }
+        if (userId.equals(d.getCreatedBy())) {
+            throw AppException.badRequest("不能认领自己提交的需求");
+        }
+        if (d.getReviewerUserId() != null) {
+            /* 重复认领按成功返回，避免用户双击后看到“已有人认领”的假冲突 */
+            if (d.getReviewerUserId().equals(userId)) {
+                return getVisible(workspaceId, userId, id);
+            }
+            throw AppException.conflict("该需求已有评审人，请刷新后重试");
+        }
+        Map<String, Object> before = snapshot(d);
+        if (demandMapper.claimReviewer(workspaceId, id, userId) != 1) {
+            throw AppException.conflict("需求状态或评审人已变化，请刷新后重试");
+        }
+        Demand claimed = requireDemand(workspaceId, id);
+        logChange(claimed, userId, "claim", "认领评审", null, before);
+        notifyCreator(claimed, userId, "需求「" + claimed.getTitle() + "」已有评审人",
+                "评审人已认领，需求继续停留在待评审；你可在需求详情查看进度");
+        return getVisible(workspaceId, userId, id);
+    }
+
     /** 首次排期只变更需求目标，不修改关联任务的日期或版本。 */
     @Transactional
     public Demand plan(String userId, String workspaceId, String id, DemandActionRequest body) {
@@ -2010,6 +2097,7 @@ public class DemandService {
         data.put("status", d.getStatus());
         data.put("closeReason", d.getCloseReason());
         data.put("closeStage", d.getCloseStage());
+        data.put("reviewerUserId", d.getReviewerUserId());
         data.put("revision", d.getRevision());
         return data;
     }
@@ -2054,7 +2142,27 @@ public class DemandService {
         d.setWsjfUrgency(req.getWsjfUrgency());
         d.setWsjfRisk(req.getWsjfRisk());
         d.setWsjfEffort(req.getWsjfEffort());
+        d.setReviewerUserId(validReviewerId(d.getWorkspaceId(), d.getReqId(), req.getReviewerUserId()));
         fillWsjf(d);
+    }
+
+    /** 评审人必须对项目可见且不是查看者；空值表示未指派，继续走公共可认领队列 */
+    private String validReviewerId(String workspaceId, String projectId, String raw) {
+        String reviewerId = Texts.trimToNull(raw);
+        if (reviewerId == null) {
+            return null;
+        }
+        String role = projectAccess.roleOf(workspaceId, reviewerId);
+        if (role == null) {
+            throw AppException.badRequest("评审人不是该空间成员");
+        }
+        if ("viewer".equals(role)) {
+            throw AppException.badRequest("查看者不能作为评审人");
+        }
+        if (!projectAccess.canWrite(workspaceId, reviewerId, projectId)) {
+            throw AppException.badRequest("评审人需要该项目的写权限，否则无法通过或拒绝需求");
+        }
+        return reviewerId;
     }
 
     /** 已进入流转时的内容补录：只动说明与分类字段，标题、项目、类型、优先级和日期保持原值 */
@@ -2169,6 +2277,9 @@ public class DemandService {
             if (Texts.trimToNull(d.getCreatedBy()) != null) {
                 ids.add(d.getCreatedBy());
             }
+            if (Texts.trimToNull(d.getReviewerUserId()) != null) {
+                ids.add(d.getReviewerUserId());
+            }
         }
         if (ids.isEmpty() || userMapper == null) {
             return;
@@ -2182,6 +2293,8 @@ public class DemandService {
         for (Demand d : items) {
             String name = names.get(d.getCreatedBy());
             d.setCreatedByName(name == null ? null : Texts.cut(name, 32));
+            String reviewer = names.get(d.getReviewerUserId());
+            d.setReviewerName(reviewer == null ? null : Texts.cut(reviewer, 32));
         }
     }
 

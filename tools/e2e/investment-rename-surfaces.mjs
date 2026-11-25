@@ -167,18 +167,31 @@ try{
     const body = document.getElementById("phaseBody");
     return !!body && !body.querySelector(".skeleton") && body.textContent.trim().length > 0;
   })()`, "阶段视图渲染", 25000);
-  await click('[data-pmode="version"]');
-  await waitFor(`!!document.querySelector('[data-pmode="version"][aria-pressed="true"]')`, "切到按版本模式", 15000);
+  await click('[data-pmode="phase"]');
+  await waitFor(`!!document.querySelector('[data-pmode="phase"][aria-pressed="true"]')`, "切到首版 / 迭代分析", 15000);
+  /* 阶段表只在选定单个版本时出现（默认是全部版本对比）；挑第一个具体版本 */
+  const pickedVer = await waitFor(`(() => {
+    const sel = document.querySelector("[data-rollup] select[data-rollup-ver]");
+    if(!sel) return false;
+    const opt = [...sel.options].filter(o => o.value && o.value !== "__all")[0];
+    if(!opt) return false;
+    sel.value = opt.value;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    return { value: opt.value, label: opt.textContent.trim() };
+  })()`, "选定汇总版本", 15000);
   const rollup = await waitFor(`(() => {
     const sec = document.querySelector("[data-rollup]");
     if(!sec || !sec.querySelector("tbody tr[data-rollup-group]")) return false;
     const ths = [...sec.querySelectorAll("thead th")].map(th => th.textContent.trim());
+    if(ths.indexOf("阶段") !== 0) return false;
     return { ths, text: sec.textContent };
   })()`, "阶段工时汇总", 20000);
-  /* 阶段分组时两行本身就是测试窗口外 / 内，表头不再重复这两列；切到「模块」维度才出现拆分列 */
+  pass("阶段工时汇总选中版本：" + pickedVer.label);
+  /* 阶段分组时三行本身就是产品 / 设计、开发、测试，表头不再重复这三列；切到「模块」维度才出现窗口拆分列 */
   assert(rollup.ths.indexOf("阶段") === 0, "阶段分组表头首列为「阶段」：" + rollup.ths.join(" / "));
-  assert(rollup.text.indexOf("测试窗口外") !== -1 && rollup.text.indexOf("测试窗口内") !== -1, "阶段行命名为测试窗口外 / 测试窗口内");
-  assert(/含需求评审、设计、开发、运维等/.test(rollup.text), "汇总口径说明窗口内含评审设计等");
+  assert(rollup.text.indexOf("产品 / 设计") !== -1 && rollup.text.indexOf("开发") !== -1 && rollup.text.indexOf("测试") !== -1,
+    "阶段行命名为产品 / 设计、开发、测试");
+  assert(/测试窗口（提测 → 测试结束）/.test(rollup.text), "汇总口径说明测试取窗口内");
   await click('[data-rollup-dim="module"]');
   const modHead = await waitFor(`(() => {
     const sec = document.querySelector("[data-rollup]");
@@ -195,38 +208,55 @@ try{
     const aria = (sec.querySelector(".roll-split") || {}).getAttribute ? sec.querySelector(".roll-split").getAttribute("aria-label") : "";
     return { aria: aria || "", legend: (sec.querySelector(".roll-split-legend") || {}).textContent || "" };
   })()`);
-  assert(/实际工时中窗口外/.test(split.aria) && split.aria.indexOf("窗口内") !== -1, "拆分条读屏文案为窗口外 / 窗口内：" + split.aria);
+  assert(/实际工时中产品 \/ 设计/.test(split.aria) && split.aria.indexOf("开发") !== -1 && split.aria.indexOf("测试") !== -1,
+    "拆分条读屏文案为产品 / 设计、开发、测试：" + split.aria);
   await scrollTo(`document.querySelector("[data-rollup]")`);
   await sleep(400);
   await shot("phase-rollup-1440.png");
 
   group("版本详情工时分布");
+  /* 版本卡只在「按版本」列表；先切回再取第一张卡 */
+  await click('[data-pmode="version"]');
+  await waitFor(`!!document.querySelector('[data-ver-open]')`, "版本卡渲染", 15000);
   const verPick = await evaluate(`(() => {
     const btn = [...document.querySelectorAll("[data-ver-open]")].filter(b => b.getAttribute("data-ver-open"))[0];
     return btn ? { id: btn.getAttribute("data-ver-open"), req: btn.getAttribute("data-ver-req") || "" } : null;
   })()`);
   assert(!!verPick, "找到一个可打开的版本（" + (verPick ? verPick.id : "无") + "）");
-  await evaluate(`import("./js/views/version.js").then(m => m.openVersionDetail(${JSON.stringify(verPick.req)}, ${JSON.stringify(verPick.id)}))`);
-  const hoursPanel = await waitFor(`(() => {
-    const ps = [...document.querySelectorAll(".vd-panel")].filter(p => /工时分布/.test((p.querySelector("h3") || {}).textContent || ""));
-    const p = ps[0];
-    if(!p) return false;
-    return { text: p.textContent, foot: (p.querySelector(".foot-note") || {}).textContent || "",
-      ths: [...p.querySelectorAll("thead th")].map(th => th.textContent.trim()) };
-  })()`, "工时分布", 20000);
-  assert(/窗口外 [\d.]+h \/ 窗口内/.test(hoursPanel.foot), "工时分布合计脚注改为窗口外 / 窗口内：" + hoursPanel.foot.substring(0, 60));
-  /* 默认按模块分组，切到「计时窗口」才能看到测试窗口内 / 外两行 */
-  await click('[data-vd-roll="stage"]');
+  /* 版本卡上的「版本详情」按钮可能不带 data-ver-req，从版本行或当前项目补 */
+  const projId = verPick && verPick.req ? verPick.req : await evaluate(`(() => {
+    const row = document.querySelector('[data-ver-row="${verPick.id}"]');
+    return (row && row.getAttribute("data-ver-req")) || import("./js/core/state.js").then(({rt}) => rt.phaseReqId || "");
+  })()`);
+  console.log("  version req = " + JSON.stringify(projId));
+  await evaluate(`import("./js/views/version.js").then(m => m.openVersionDetail(${JSON.stringify(projId)}, ${JSON.stringify(verPick.id)}, "overview"))`);
+  await sleep(800);
+  const hoursCard = await waitFor(`(() => {
+    const p = document.querySelector(".vd-panel.vd-hours-card");
+    return p ? { text: p.textContent } : false;
+  })()`, "工时卡", 20000);
+  assert(/工时/.test(hoursCard.text), "版本详情概览出现工时卡");
+  /* 工时构成收进弹层：实际 → 类型 Tab 里看阶段卡 */
+  await click('[data-vd-hours="actual"]');
+  await waitFor(`!!document.querySelector(".vd-h-sheet")`, "工时构成弹层", 15000);
+  await click('[data-vd-htab="type"]');
+  const stageCards = await waitFor(`(() => {
+    const cards = [...document.querySelectorAll(".vd-h-sheet .vd-h-proxy-card")];
+    if(cards.length < 3) return false;
+    return { n: cards.length, text: document.querySelector(".vd-h-sheet").textContent };
+  })()`, "阶段卡", 15000);
+  assert(stageCards.n === 3, "实际工时构成按类型 Tab 出现三张阶段卡：" + stageCards.n);
+  assert(/按阶段看投入/.test(stageCards.text) && /产品 \/ 设计/.test(stageCards.text) && /开发/.test(stageCards.text) && /测试/.test(stageCards.text),
+    "阶段卡命名为产品 / 设计、开发、测试");
+  assert(/类型是工作项分类，不是阶段/.test(stageCards.text), "类型 Tab 说明类型不是阶段");
+  await click('[data-vd-htab="window"]');
   const stageRows = await waitFor(`(() => {
-    const ps = [...document.querySelectorAll(".vd-panel")].filter(p => /工时分布/.test((p.querySelector("h3") || {}).textContent || ""));
-    const rows = ps.length ? [...ps[0].querySelectorAll(".vd-dist-row")].map(r => r.textContent.trim()) : [];
-    return rows.length && /测试窗口外/.test(rows.join(" ")) ? rows : false;
-  })()`, "计时窗口分组", 15000).catch(() => []);
+    const stages = [...document.querySelectorAll(".vd-h-sheet .vd-h-stage")].map(s => s.textContent.trim());
+    return stages.length ? stages : false;
+  })()`, "计时窗口分组", 15000);
   assert(stageRows.some(t => t.indexOf("测试窗口外") === 0) && stageRows.some(t => t.indexOf("测试窗口内") === 0),
-    "工时分布切到「计时窗口」后出现测试窗口外 / 测试窗口内：" + stageRows.map(t => t.substring(0, 20)).join(" | "));
-  assert(!stageRows.some(t => /^开发/.test(t) || /^测试(?!窗口)/.test(t)), "计时窗口分组不再用「开发 / 测试」旧名");
-  await scrollTo(`[...document.querySelectorAll(".vd-panel")].filter(p => /工时分布/.test((p.querySelector("h3") || {}).textContent || ""))[0]`);
-  await sleep(500);
+    "计时窗口分组出现测试窗口外 / 测试窗口内：" + stageRows.map(t => t.substring(0, 20)).join(" | "));
+  await sleep(400);
   await shot("version-hours-1440.png");
 
   group("收尾");

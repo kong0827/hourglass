@@ -77,6 +77,11 @@ function setFilterValue(key, value){
   reloadFilteredViews();
 }
 function boardParams(extra){ return filterParams(extra); }
+function routeHasId(){
+  var h = (location.hash || "").replace(/^#\/?/, "");
+  var qi = h.indexOf("?");
+  return qi >= 0 && /(^|&)id=/.test(h.slice(qi + 1));
+}
 function updateBrand(){
   if(!brandSub) return;
   var wsName = rt.currentWs ? rt.currentWs.name : "";
@@ -97,6 +102,7 @@ function updateBrand(){
        项目集选中某个集时第三段换成集名，与原型「空间 / 项目集 / 外接产品线」一致 */
     var pageName = (activeView === "phase" && rt.phaseProjectName) ? rt.phaseProjectName
       : (activeView === "portfolio" && rt.portfolioSetName) ? rt.portfolioSetName
+      : (activeView === "version" && !routeHasId()) ? "选择版本"
       : crumb.page;
     var segs = [];
     if(wsName) segs.push('<span title="' + esc(wsName) + '">' + esc(wsName) + '</span>');

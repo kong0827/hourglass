@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WorkspaceAutomationMapper">
+
+  <select id="selectByWorkspace" resultType="WorkspaceAutomation">
+    SELECT workspace_id, rule_key, enabled, config_json, last_run_at, last_status, updated_by, updated_at
+    FROM workspace_automation
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY rule_key
+  </select>
+
+  <select id="selectOne" resultType="WorkspaceAutomation">
+    SELECT workspace_id, rule_key, enabled, config_json, last_run_at, last_status, updated_by, updated_at
+    FROM workspace_automation
+    WHERE workspace_id = #{workspaceId} AND rule_key = #{ruleKey}
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO workspace_automation (workspace_id, rule_key, enabled, config_json, updated_by)
+    VALUES (#{workspaceId}, #{ruleKey}, #{enabled}, #{configJson}, #{updatedBy})
+    ON DUPLICATE KEY UPDATE
+      enabled = VALUES(enabled),
+      config_json = COALESCE(VALUES(config_json), config_json),
+      updated_by = VALUES(updated_by),
+      updated_at = NOW()
+  </insert>
+
+  <!-- 规则默认开启且可能尚无配置行：记录执行结果时一并补行，否则设置页永远看不到「最近执行结果」 -->
+  <insert id="touchRun">
+    INSERT INTO workspace_automation (workspace_id, rule_key, enabled, last_run_at, last_status)
+    VALUES (#{workspaceId}, #{ruleKey}, 1, NOW(), #{status})
+    ON DUPLICATE KEY UPDATE
+      last_run_at = NOW(),
+      last_status = VALUES(last_status)
+  </insert>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM workspace_automation WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

@@ -42,6 +42,8 @@ class MemberLabelTransactionTest {
         ProjectAccessService access = mock(ProjectAccessService.class);
         when(access.roleOf("W1", "owner")).thenReturn("owner");
         when(access.canView(eq("W1"), anyString(), anyString())).thenReturn(true);
+        /* 角色标签写权限与项目治理同口径：空间主/管理员或可写负责人 */
+        when(access.canManageProject(eq("W1"), eq("owner"), eq("P1"), isNull())).thenReturn(true);
         List<WorkspaceMember> roster = new ArrayList<WorkspaceMember>();
         for (String id : Arrays.asList("U1", "U2")) {
             WorkspaceMember member = new WorkspaceMember(); member.setUserId(id); member.setRole("member");

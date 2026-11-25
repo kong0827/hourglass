@@ -37,7 +37,7 @@ public class SavedViewService {
     public SavedView create(String userId, String workspaceId, SavedViewRequest req) {
         String name = req.getName().trim();
         String params = normalizeParams(req.getParams());
-        SavedView existing = savedViewMapper.selectByName(userId, workspaceId, name);
+        SavedView existing = savedViewMapper.selectByName(userId, workspaceId, name, scopeOf(params));
         if (existing != null) {
             /* 同名保存只更新当前用户、当前空间下的参数，ID 与归属字段均不可变。 */
             savedViewMapper.updateParams(existing.getId(), userId, workspaceId, params);
@@ -78,8 +78,8 @@ public class SavedViewService {
         }
         ObjectNode out = JSON.createObjectNode();
         /* scope 区分：任务视图（不存该字段）、需求池（demand）、文档（doc）、测试用例（testcase）、
-           缺陷（defect）、分支（branch） */
-        copyEnum(root, out, "scope", "demand", "doc", "testcase", "defect", "branch");
+           缺陷（defect）、分支（branch）、全局搜索（search） */
+        copyEnum(root, out, "scope", "demand", "doc", "testcase", "defect", "branch", "search");
         String scope = root.path("scope").isTextual() ? root.get("scope").asText() : "";
         copyString(root, out, "q", 200);
         copyString(root, out, "due", 16);
@@ -206,11 +206,33 @@ public class SavedViewService {
             copyEnum(root, out, "group", "status", "project");
             copyEnum(root, out, "listGroup", "none", "status", "owner", "project");
         }
+        /* 全局搜索视图：只存搜索面板的六个范围，不混入任务筛选字段 */
+        if ("search".equals(scope)) {
+            copyString(root, out, "reqId", 32);
+            copyString(root, out, "versionId", 32);
+            copyEnum(root, out, "type", "project", "task", "doc", "demand", "case");
+            /* 状态取值跨实体（看板列 / 文档 / 需求 / 用例），这里只做长度约束 */
+            copyString(root, out, "status", 32);
+            copyString(root, out, "owner", 80);
+            copyDate(root, out, "from");
+            copyDate(root, out, "to");
+        }
         String json = out.toString();
-        if (json.length() > 1200) {
+        /* 与 sql/118 放宽后的列宽保持一致：搜索视图多一个维度也不会被截断 */
+        if (json.length() > 1900) {
             throw AppException.badRequest("视图参数过长");
         }
         return json;
+    }
+
+    private static String scopeOf(String params) {
+        try {
+            JsonNode root = JSON.readTree(params);
+            String scope = root == null ? "" : root.path("scope").asText("");
+            return scope.isEmpty() ? "task" : scope;
+        } catch (Exception e) {
+            return "task";
+        }
     }
 
     private void copyString(JsonNode root, ObjectNode out, String key, int maxLen) {

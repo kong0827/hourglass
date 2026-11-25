@@ -338,6 +338,10 @@ public interface TaskMapper {
     List<Task> selectByDemandPage(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
                                   @Param("offset") int offset, @Param("limit") int limit);
 
+    /** 需求阶段工时：按工作项返回类型、预估与累计/测试窗口内计时 */
+    List<Task> selectHoursByDemand(@Param("workspaceId") String workspaceId,
+                                   @Param("demandId") String demandId);
+
     int countActiveByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
 
     int countByWorkspace(@Param("workspaceId") String workspaceId);
@@ -481,4 +485,16 @@ public interface TaskMapper {
 
     /** 项目进度：一次 GROUP BY 汇总各项目的任务数 / 完成数 / 进度和 */
     List<com.hourglass.dto.ReqTaskAggRow> countByReq(@Param("workspaceId") String workspaceId);
+
+    /** 逾期提醒规则：截止日不晚于阈值、仍未完成的工作项 */
+    List<Task> selectAutomationOverdue(@Param("workspaceId") String workspaceId,
+                                       @Param("threshold") LocalDate threshold);
+
+    /** 个人周报：我负责的未完成工作项 + 本周内完成的工作项（一次取回由服务层汇总） */
+    List<Task> selectWeeklyReportTasks(@Param("workspaceId") String workspaceId,
+                                       @Param("userId") String userId,
+                                       @Param("displayName") String displayName,
+                                       @Param("from") LocalDateTime from,
+                                       @Param("to") LocalDateTime to,
+                                       @Param("limit") int limit);
 }

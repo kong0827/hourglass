@@ -443,7 +443,7 @@ class TaskCascadeTest {
                 "project_milestone_task", "test_case_task", "task_publication_judgement"),
                 TaskCascade.TASK_CHILD_TABLES);
         assertEquals(Arrays.asList("task_completion_record", "version_release_item", "version_release_plan_task",
-                        "req_doc_comment", "demand_comment"),
+                        "version_release_plan_task_check", "req_doc_comment", "demand_comment"),
                 TaskCascade.PRESERVED_TASK_REF_TABLES);
         assertEquals(Arrays.asList("version_release", "version_release_item", "version_release_plan", "version_release_plan_version", "version_release_plan_task", "version_log"),
                 TaskCascade.PRESERVED_WORKSPACE_DELIVERY_TABLES);

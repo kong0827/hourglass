@@ -40,7 +40,11 @@ import javax.validation.Valid;
 import java.util.List;
 import java.util.Map;
 
-/** 需求池：评审流转（通过/拒绝/撤回/重开）空间主与管理员均可，删除仅空间主；计划动作由服务端管理权限校验，空间成员校验不变。 */
+/**
+ * 需求池：评审流转（认领/通过/拒绝/撤回/重开）与「待我评审」队列同口径，
+ * 所属项目可写的成员与负责人均可执行，服务端按项目写权限校验；
+ * 删除仅空间主；计划动作由服务端管理权限校验，空间成员校验不变。
+ */
 @RestController
 public class DemandController {
 
@@ -254,6 +258,13 @@ public class DemandController {
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
+    /** 需求详情「工时」：按产品 / 设计、开发、测试三段的预估与实际（只读）。 */
+    @GetMapping("/api/demands/{id}/hours")
+    public ApiResult<com.hourglass.dto.DemandHoursView> hours(@PathVariable String id,
+                                                              @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.hours(ctx.getWsId(), ctx.getUserId(), id));
+    }
+
     /** 排期带入候选：需求名下尚未绑定目标版本的工作项，供二次确认弹窗展示。 */
     @GetMapping("/api/demands/{id}/version-task-candidates")
     public ApiResult<com.hourglass.dto.PageResult<Task>> versionTaskCandidates(
@@ -381,7 +392,13 @@ public class DemandController {
         return ApiResult.ok(demandService.move(CurrentUser.id(), ctx.getWsId(), id, body));
     }
 
-    @RequireRole(RequireRole.ADMIN)
+    @PostMapping("/api/demands/{id}/claim-review")
+    public ApiResult<Demand> claimReview(@PathVariable String id,
+                                         @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.claimReview(CurrentUser.id(), ctx.getWsId(), id));
+    }
+
+    /* 评审流转与「待我评审」队列同口径：所属项目可写的成员/负责人均可执行，服务端校验项目写权限 */
     @PostMapping("/api/demands/{id}/pass")
     public ApiResult<Demand> pass(@PathVariable String id,
                                   @Valid @RequestBody(required = false) DemandActionRequest body,
@@ -389,7 +406,6 @@ public class DemandController {
         return ApiResult.ok(demandService.pass(CurrentUser.id(), ctx.getWsId(), id, body));
     }
 
-    @RequireRole(RequireRole.ADMIN)
     @PostMapping("/api/demands/{id}/rej")
     public ApiResult<Demand> reject(@PathVariable String id,
                                     @Valid @RequestBody(required = false) DemandActionRequest body,
@@ -425,7 +441,6 @@ public class DemandController {
         return ApiResult.ok(demandService.restore(CurrentUser.id(), ctx.getWsId(), id, body));
     }
 
-    @RequireRole(RequireRole.ADMIN)
     @PostMapping("/api/demands/{id}/unpass")
     public ApiResult<Demand> unpass(@PathVariable String id,
                                     @Valid @RequestBody(required = false) DemandActionRequest body,
@@ -440,7 +455,6 @@ public class DemandController {
         return ApiResult.ok(demandService.unplan(CurrentUser.id(), ctx.getWsId(), id, body));
     }
 
-    @RequireRole(RequireRole.ADMIN)
     @PostMapping("/api/demands/{id}/reopen")
     public ApiResult<Demand> reopen(@PathVariable String id,
                                     @Valid @RequestBody(required = false) DemandActionRequest body,

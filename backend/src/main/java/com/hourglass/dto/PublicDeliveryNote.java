@@ -16,5 +16,9 @@ public class PublicDeliveryNote {
     private LocalDateTime createdAt;
     private LocalDateTime expiresAt;
     private Boolean allowDownload;
+    /** true 时正文不下发，接收人需先输入访问密码 */
+    private Boolean passwordRequired;
+    /** 接收人页与打印时的水印文字 */
+    private String watermarkText;
     private DeliveryNoteResponse note;
 }

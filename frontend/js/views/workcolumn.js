@@ -4,9 +4,9 @@ import { API } from "../core/api.js";
 import { loadCategories } from "../core/app.js";
 import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
-import { catNameById, dueMetaClass, dueState, dueText, reqNameById, reqSetId, rt, setNameById, state, tagChip } from "../core/state.js";
+import { canEditTask, catNameById, dueMetaClass, dueState, dueText, reqNameById, reqSetId, rt, setNameById, state, tagChip, taskCacheExtra } from "../core/state.js";
 import { groupDimName, groupOptionsHTML } from "../core/group-dims.js";
-import { openTaskById } from "../core/task-actions.js";
+import { openDuePopover, openOwnerMenu, openPriorityMenu, openTaskById } from "../core/task-actions.js";
 import { ownerOptions } from "../core/task-drawer.js";
 import { isMobile } from "../core/layout.js";
 import { listDensitySegHTML } from "../core/list-density.js";
@@ -264,6 +264,8 @@ function load(reset, quiet){
     if(!reset && prevMetrics) data.metrics = prevMetrics;
     st.error = "";
     var items = data.items || [];
+    /* 行内菜单按 id 回查任务：把本页对象登记进共享缓存，改完靠 ds:task-saved 重拉 */
+    items.forEach(function(t){ if(t && t.id) taskCacheExtra[t.id] = t; });
     if(reset){
       st.rows = items;
     }else{
@@ -953,21 +955,49 @@ function wcSubHTML(t, mode){
   }
   return parts.join(" · ");
 }
+/* 行内直改触发器：读态与普通单元格一致，悬停 / 聚焦才露箭头；状态由页面列固定，不在此处改 */
+function wcInlineHTML(attr, t, inner, label, title, extra){
+  return '<button class="row-inline-edit' + (extra ? " " + extra : "") + '" type="button" data-' + attr + '="' + esc(t.id) + '"' +
+    ' aria-haspopup="menu" aria-expanded="false" aria-label="' + esc(label) + '" title="' + esc(title) + '">' +
+    '<span class="row-inline-edit-t">' + inner + '</span>' + icon("caretDown", 11) + '</button>';
+}
 function wcCell(t, key, done, mode){
   /* 无值就留白，不用「—」占位 */
   var none = "";
+  var editable = canEditTask(t);
   if(key === "title"){
     var sub = wcSubHTML(t, mode), pub = taskPublicationHTML(t);
     return '<span class="wcl-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
       (sub || pub ? '<span class="wcl-sub">' + sub + (pub ? (sub ? " " : "") + pub : "") + '</span>' : '');
   }
   if(key === "type") return typeBadgeHTML(t.itemType) || '<span class="mini-tag mute">' + esc(typeName(t.itemType)) + '</span>';
-  if(key === "priority") return priTagHTML(t.priority || "P2");
-  if(key === "owner") return '<span class="wcl-who" title="负责人：' + esc(t.owner || "未分配") + '">' +
-    avatarHTML(t.owner || "未分配") + '<span>' + esc(t.owner || "未分配") + '</span></span>';
+  if(key === "priority"){
+    var pri = priTagHTML(t.priority || "P2");
+    return editable
+      ? wcInlineHTML("row-pri", t, pri, "优先级：" + priName(t.priority || "P2") + "，点击修改", "点击改优先级")
+      : pri;
+  }
+  if(key === "owner"){
+    var ownerInner = t.owner
+      ? avatarHTML(t.owner) + '<span>' + esc(t.owner) + '</span>'
+      : '<span class="muted">未分配</span>';
+    return editable
+      ? wcInlineHTML("row-owner", t, ownerInner, "负责人：" + (t.owner || "未分配") + "，点击修改", "点击改负责人", "wcl-inline-owner")
+      : '<span class="wcl-who" title="负责人：' + esc(t.owner || "未分配") + '">' +
+        avatarHTML(t.owner || "未分配") + '<span>' + esc(t.owner || "未分配") + '</span></span>';
+  }
   if(key === "due"){
-    if(done || !t.dueDate) return none;
-    return '<span class="' + dueMetaClass(dueState(t).kind) + '">' + esc(dueText(t)) + '</span>';
+    if(done) return none;
+    if(t.dueDate){
+      var dueInner = esc(dueText(t));
+      return editable
+        ? wcInlineHTML("row-due", t, dueInner, "截止日期：" + esc(t.dueDate) + "，点击修改", "点击改截止日期")
+        : '<span class="' + dueMetaClass(dueState(t).kind) + '">' + dueInner + '</span>';
+    }
+    /* 未设截止：可写时给一个淡占位，免得「能改」只存在于知道的人脑子里 */
+    return editable
+      ? wcInlineHTML("row-due", t, "—", "截止日期：未设置，点击修改", "点击设置截止日期", "muted")
+      : none;
   }
   if(key === "completed") return t.completedAt ? esc(fmtShortMD(parseDate(t.completedAt))) : none;
   if(key === "cycle"){
@@ -1343,6 +1373,12 @@ if(bodyEl){
     }
     var layout = e.target.closest("[data-wc-layout]");
     if(layout){ setWcLayout(layout.dataset.wcLayout); return; }
+    var priBtn = e.target.closest("[data-row-pri]");
+    if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+    var ownerBtn = e.target.closest("[data-row-owner]");
+    if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
+    var dueBtn = e.target.closest("[data-row-due]");
+    if(dueBtn){ openDuePopover(dueBtn, dueBtn.dataset.rowDue); return; }
     var card = e.target.closest("[data-wc-task]");
     if(card){ openTaskById(card.dataset.wcTask); return; }
   });

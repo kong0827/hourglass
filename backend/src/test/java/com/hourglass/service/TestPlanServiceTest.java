@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,13 +49,16 @@ class TestPlanServiceTest {
     private final AuditService auditService = mock(AuditService.class);
     private final TestPlanService service =
             new TestPlanService(plans, planCases, cases, caseService, access, versions, auditService,
-                    mock(com.hourglass.mapper.TestCaseTaskMapper.class));
+                    mock(com.hourglass.mapper.TestCaseTaskMapper.class),
+                    mock(com.hourglass.mapper.WorkspaceMemberMapper.class),
+                    mock(NotificationEventService.class));
 
     @BeforeEach
     void setUp() {
         LoginUser user = new LoginUser(USER, "u1", "x", "测试同学", "user");
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+        when(plans.update(any(TestPlan.class))).thenReturn(1);
     }
 
     @AfterEach
@@ -122,6 +126,21 @@ class TestPlanServiceTest {
     }
 
     @Test
+    void batchRunRunsEachCaseOnceWhenIdsAreRepeated() {
+        when(plans.selectById(PLAN)).thenReturn(plan("running"));
+        when(planCases.selectCaseIds(PLAN)).thenReturn(new ArrayList<String>(Arrays.asList("C1", "C2")));
+
+        PlanBatchRequest req = new PlanBatchRequest();
+        req.setCaseIds(Arrays.asList("C1", "C1", "C2", "C1"));
+        req.setStatus("passed");
+
+        assertEquals(2, service.batchRun(USER, WS, PLAN, req), "重复 ID 只执行一次，不重复计数");
+        verify(caseService, times(1)).run(eq(USER), eq(WS), eq("C1"), any(com.hourglass.dto.CaseRunRequest.class), eq(PLAN));
+        verify(caseService, times(1)).run(eq(USER), eq(WS), eq("C2"), any(com.hourglass.dto.CaseRunRequest.class), eq(PLAN));
+        verify(planCases).updateResult(PLAN, "C1", "passed", null, "测试同学", USER);
+    }
+
+    @Test
     void batchRunRejectsInvalidStatusAndNothingSelected() {
         when(plans.selectById(PLAN)).thenReturn(plan("running"));
         when(planCases.selectCaseIds(PLAN)).thenReturn(new ArrayList<String>(Arrays.asList("C1")));
@@ -160,17 +179,17 @@ class TestPlanServiceTest {
         TestPlanView empty = new TestPlanView();
         empty.setCaseCount(0);
         when(plans.selectViewById(PLAN)).thenReturn(empty);
-        assertThrows(AppException.class, () -> service.setStatus(USER, WS, PLAN, "done"));
+        assertThrows(AppException.class, () -> service.setStatus(USER, WS, PLAN, "done", null));
 
         TestPlanView full = new TestPlanView();
         full.setCaseCount(3);
         when(plans.selectViewById(PLAN)).thenReturn(full);
-        service.setStatus(USER, WS, PLAN, "done");
+        service.setStatus(USER, WS, PLAN, "done", null);
         verify(plans).updateStatus(PLAN, "done");
         verify(auditService).recordCurrent(eq(WS), eq("test_plan_status"), eq("test_plan"), eq(PLAN),
                 any(), eq(true), contains("running → done"), isNull());
 
-        assertThrows(AppException.class, () -> service.setStatus(USER, WS, PLAN, "archived"));
+        assertThrows(AppException.class, () -> service.setStatus(USER, WS, PLAN, "archived", null));
 
         /* done 之后计划是快照：update 也必须拒绝 */
         when(plans.selectById(PLAN)).thenReturn(plan("done"));
@@ -178,6 +197,39 @@ class TestPlanServiceTest {
         save.setReqId(REQ);
         save.setName("改名");
         assertThrows(AppException.class, () -> service.update(USER, WS, PLAN, save));
+    }
+
+    @Test
+    void reopeningDonePlanRequiresReasonAndWritesItToAudit() {
+        when(plans.selectById(PLAN)).thenReturn(plan("done"));
+
+        AppException error = assertThrows(AppException.class,
+                () -> service.setStatus(USER, WS, PLAN, "running", "  "));
+        assertEquals(400, error.getCode());
+        verify(plans, never()).updateStatus(any(String.class), any(String.class));
+
+        service.setStatus(USER, WS, PLAN, "running", "发现必测用例漏跑，需要补测");
+        verify(plans).updateStatus(PLAN, "running");
+        verify(auditService).recordCurrent(eq(WS), eq("test_plan_status"), eq("test_plan"), eq(PLAN),
+                any(), eq(true), contains("回退原因：发现必测用例漏跑，需要补测"), isNull());
+    }
+
+    @Test
+    void updateRejectsStaleUpdatedAtWithConflict() {
+        when(plans.selectById(PLAN)).thenReturn(plan("running"));
+        when(plans.update(any(TestPlan.class))).thenReturn(0);
+
+        TestPlanSaveRequest save = new TestPlanSaveRequest();
+        save.setReqId(REQ);
+        save.setName("改名");
+        save.setUpdatedAt(java.time.LocalDateTime.of(2026, 11, 20, 9, 0));
+
+        AppException error = assertThrows(AppException.class, () -> service.update(USER, WS, PLAN, save));
+
+        assertEquals(409, error.getCode());
+        org.mockito.ArgumentCaptor<TestPlan> saved = org.mockito.ArgumentCaptor.forClass(TestPlan.class);
+        verify(plans).update(saved.capture());
+        assertEquals(java.time.LocalDateTime.of(2026, 11, 20, 9, 0), saved.getValue().getUpdatedAt());
     }
 
     @Test

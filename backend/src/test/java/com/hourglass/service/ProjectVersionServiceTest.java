@@ -322,8 +322,47 @@ class ProjectVersionServiceTest {
     }
 
     @Test
-    void startRejectsReleasedVersion() {
-        ProjectVersion released = version("V1", "R1");
+    void progressedTaskAutoStartsBoundPlannedVersion() {
+        ProjectVersion planned = version("V1", "R1");
+        planned.setStatus("planned");
+        planned.setStartDate(null);
+        mockVersion(planned);
+        when(versionTasks.selectVersionIdsByTask(WS, "T1")).thenReturn(Collections.singletonList("V1"));
+
+        service.onTaskProgressed(new TaskProgressedEvent(WS, USER, "T1", "R1", "doing"));
+
+        assertEquals("active", planned.getStatus());
+        assertNotNull(planned.getStartDate());
+        verify(versions).update(planned);
+    }
+
+    @Test
+    void backlogAndDoneColumnsDoNotAutoStartVersion() {
+        ProjectVersion planned = version("V1", "R1");
+        planned.setStatus("planned");
+        mockVersion(planned);
+        when(versionTasks.selectVersionIdsByTask(WS, "T1")).thenReturn(Collections.singletonList("V1"));
+
+        service.onTaskProgressed(new TaskProgressedEvent(WS, USER, "T1", "R1", "backlog"));
+        service.onTaskProgressed(new TaskProgressedEvent(WS, USER, "T1", "R1", "done"));
+
+        verify(versions, never()).update(any(ProjectVersion.class));
+    }
+
+    @Test
+    void autoStartKeepsActiveVersionUntouched() {
+        ProjectVersion active = version("V1", "R1");
+        active.setStatus("active");
+        mockVersion(active);
+        when(versionTasks.selectVersionIdsByTask(WS, "T1")).thenReturn(Collections.singletonList("V1"));
+
+        service.onTaskProgressed(new TaskProgressedEvent(WS, USER, "T1", "R1", "testing"));
+
+        verify(versions, never()).update(any(ProjectVersion.class));
+    }
+
+    @Test
+    void startRejectsReleasedVersion() {        ProjectVersion released = version("V1", "R1");
         released.setStatus("released");
         mockVersion(released);
 

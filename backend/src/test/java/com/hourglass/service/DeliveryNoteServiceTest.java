@@ -12,6 +12,7 @@ import com.hourglass.dto.TestPlanView;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.DeliveryNote;
 import com.hourglass.entity.DeliveryNoteShare;
+import com.hourglass.entity.DeliveryNoteShareVisit;
 import com.hourglass.entity.DeliveryNoteSnapshot;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
@@ -80,7 +81,7 @@ class DeliveryNoteServiceTest {
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
     private final DeliveryNoteService service = new DeliveryNoteService(versions, reqs, tasks, versionTasks,
             demands, releases, commitments, testPlans, timeLogs, categories, users, workspaces, notes, access, json,
-            mock(CaseSetService.class));
+            mock(CaseSetService.class), new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder());
 
     private ProjectVersion version;
 
@@ -355,7 +356,7 @@ class DeliveryNoteServiceTest {
         plan.setFailedCount(2);
         plan.setBlockedCount(2);
         plan.setSkippedCount(2);
-        when(testPlans.selectViewByReq(eq(WS), eq(REQ), anyInt(), anyInt()))
+        when(testPlans.selectViewByVersion(eq(WS), eq(VER)))
                 .thenReturn(new ArrayList<TestPlanView>(Collections.singletonList(plan)));
 
         DeliveryNoteResponse.Quality q = service.aggregate(WS, USER, VER, null).getQuality();
@@ -364,6 +365,49 @@ class DeliveryNoteServiceTest {
         assertEquals(83.3, q.getCoveragePct(), 0.001);
         assertEquals(2, q.getUnexecutedCount());
         assertEquals(Boolean.FALSE, q.getMissing());
+    }
+
+    @Test
+    void qualityQueriesPlansByVersionInsteadOfTruncatingProjectPlans() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        TestPlanView plan = new TestPlanView();
+        plan.setId("TP1");
+        plan.setVersionId(VER);
+        plan.setCaseCount(1);
+        when(testPlans.selectViewByVersion(eq(WS), eq(VER)))
+                .thenReturn(new ArrayList<TestPlanView>(Collections.singletonList(plan)));
+
+        DeliveryNoteResponse.Quality q = service.aggregate(WS, USER, VER, null).getQuality();
+
+        assertEquals(1, q.getPlanCount());
+        verify(testPlans).selectViewByVersion(eq(WS), eq(VER));
+        verify(testPlans, never()).selectViewByReq(anyString(), anyString(), anyInt(), anyInt());
+    }
+
+    @Test
+    void sameDefectTurnedByTwoPlansCountsOnce() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        TestPlanView a = new TestPlanView();
+        a.setId("TP1");
+        a.setVersionId(VER);
+        a.setCaseCount(3);
+        a.setDefectCount(2);
+        TestPlanView b = new TestPlanView();
+        b.setId("TP2");
+        b.setVersionId(VER);
+        b.setCaseCount(2);
+        b.setDefectCount(2);
+        when(testPlans.selectViewByVersion(eq(WS), eq(VER)))
+                .thenReturn(new ArrayList<TestPlanView>(Arrays.asList(a, b)));
+        when(testPlans.selectDefectIdsByVersion(eq(WS), eq(VER)))
+                .thenReturn(Arrays.asList("BUG1", "BUG2"));
+
+        DeliveryNoteResponse.Quality q = service.aggregate(WS, USER, VER, null).getQuality();
+
+        assertEquals(2, q.getDefectCount(), "同一缺陷被两个计划转出只计一次");
+        assertEquals(5, q.getCaseCount(), "用例执行量仍按计划累加，同一用例在多个计划中各自算一次执行");
     }
 
     @Test
@@ -378,7 +422,7 @@ class DeliveryNoteServiceTest {
         plan.setCaseCount(4);
         plan.setExecutedCount(4);
         plan.setSkippedCount(4);
-        when(testPlans.selectViewByReq(eq(WS), eq(REQ), anyInt(), anyInt()))
+        when(testPlans.selectViewByVersion(eq(WS), eq(VER)))
                 .thenReturn(new ArrayList<TestPlanView>(Collections.singletonList(plan)));
 
         DeliveryNoteResponse r = service.aggregate(WS, USER, VER, null);
@@ -618,7 +662,7 @@ class DeliveryNoteServiceTest {
         plan.setCaseCount(4);
         plan.setExecutedCount(4);
         plan.setPassedCount(4);
-        when(testPlans.selectViewByReq(eq(WS), eq(REQ), anyInt(), anyInt()))
+        when(testPlans.selectViewByVersion(eq(WS), eq(VER)))
                 .thenReturn(new ArrayList<TestPlanView>(Collections.singletonList(plan)));
 
         DeliveryNoteResponse.Acceptance a = service.aggregate(WS, USER, VER, null).getAcceptance();
@@ -816,7 +860,7 @@ class DeliveryNoteServiceTest {
         note("internal", 0L);
         DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
 
-        AppException ex = assertThrows(AppException.class, () -> service.createShare(WS, USER, saved.getId(), true, 30));
+        AppException ex = assertThrows(AppException.class, () -> service.createShare(WS, USER, saved.getId(), true, 30, null, null, null));
 
         assertEquals(422, ex.getCode());
         assertTrue(ex.getMessage().contains("内部版"));
@@ -892,7 +936,7 @@ class DeliveryNoteServiceTest {
             return s;
         });
 
-        DeliveryShareResponse out = service.createShare(WS, USER, saved.getId(), null, 9999);
+        DeliveryShareResponse out = service.createShare(WS, USER, saved.getId(), null, 9999, null, null, null);
 
         ArgumentCaptor<DeliveryNoteShare> cap = ArgumentCaptor.forClass(DeliveryNoteShare.class);
         verify(notes).upsertShare(cap.capture());
@@ -900,6 +944,220 @@ class DeliveryNoteServiceTest {
         assertTrue(cap.getValue().getExpiresAt().isAfter(LocalDateTime.now().plusDays(364)));
         assertTrue(cap.getValue().getExpiresAt().isBefore(LocalDateTime.now().plusDays(366)));
         assertNotNull(out.getToken());
+    }
+
+
+    @Test
+    void shareCanBeProtectedByPasswordWatermarkAndDomainAllowlist() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        final DeliveryNoteShare[] stored = new DeliveryNoteShare[1];
+        when(notes.upsertShare(any(DeliveryNoteShare.class))).thenAnswer(inv -> {
+            stored[0] = inv.getArgument(0);
+            return 1;
+        });
+        when(notes.selectShareBySnapshot(WS, saved.getId())).thenAnswer(inv -> stored[0]);
+
+        DeliveryShareResponse out = service.createShare(WS, USER, saved.getId(), true, 30,
+                "s3cret", "*.Example.com, https://partner.com/path", "  内部资料  ");
+
+        assertTrue(out.getPasswordRequired());
+        assertEquals("内部资料", out.getWatermarkText());
+        assertEquals("example.com,partner.com", stored[0].getAllowedDomains());
+        assertTrue(stored[0].getPasswordHash().startsWith("$2"));
+        assertEquals(400, assertThrows(AppException.class, () -> service.createShare(WS, USER, saved.getId(),
+                true, 30, "123", null, null)).getCode());
+        /* 域名可被伪造，单独设域名没有访问控制意义：必须同时设密码 */
+        assertEquals(400, assertThrows(AppException.class, () -> service.createShare(WS, USER, saved.getId(),
+                true, 30, null, "example.com", null)).getCode());
+    }
+
+    @Test
+    void unlockLocksAfterRepeatedWrongPasswords() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        DeliveryNoteShare s = share(saved.getId(), LocalDateTime.now().plusDays(7));
+        s.setPasswordHash(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("s3cret"));
+
+        when(notes.countShareAttempts(eq(s.getToken()), eq("unlock_fail"), any(LocalDateTime.class)))
+                .thenReturn(4, 5);
+
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.unlock(s.getToken(), "nope", "1.2.3.4", "UA", null)).getCode());
+        ArgumentCaptor<DeliveryNoteShareVisit> cap = ArgumentCaptor.forClass(DeliveryNoteShareVisit.class);
+        verify(notes).insertShareVisit(cap.capture());
+        assertEquals("unlock_fail", cap.getValue().getAction(), "输错密码要留痕，供限流与审计");
+
+        assertEquals(429, assertThrows(AppException.class,
+                () -> service.unlock(s.getToken(), "s3cret", "1.2.3.4", "UA", null)).getCode(),
+                "达到上限后正确密码也暂时拒绝");
+        verify(notes, never()).increaseViewCount(anyString(), anyString());
+    }
+
+    @Test
+    void downloadPasswordProbesShareTheUnlockLockout() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        DeliveryNoteShare s = share(saved.getId(), LocalDateTime.now().plusDays(7));
+        s.setPasswordHash(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("s3cret"));
+
+        when(notes.countShareAttempts(eq(s.getToken()), eq("unlock_fail"), any(LocalDateTime.class)))
+                .thenReturn(4, 5);
+
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.logShareDownload(s.getToken(), "nope", "1.2.3.4", "UA", null)).getCode());
+        assertEquals(429, assertThrows(AppException.class,
+                () -> service.logShareDownload(s.getToken(), "s3cret", "1.2.3.4", "UA", null)).getCode(),
+                "下载接口试密码同样要计入锁定，达到上限后正确密码也暂时拒绝");
+        ArgumentCaptor<DeliveryNoteShareVisit> cap = ArgumentCaptor.forClass(DeliveryNoteShareVisit.class);
+        verify(notes).insertShareVisit(cap.capture());
+        assertEquals("unlock_fail", cap.getValue().getAction());
+    }
+
+    @Test
+    void domainAllowlistIsSoftWhenPasswordIsSet() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        DeliveryNoteShare s = share(saved.getId(), LocalDateTime.now().plusDays(7));
+        s.setAllowedDomains("example.com");
+        s.setPasswordHash(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("s3cret"));
+
+        /* Referer 可能缺失或被伪造：设了密码就以密码为准，不按来源域名拦人 */
+        PublicDeliveryNote out = service.unlock(s.getToken(), "s3cret", "1.2.3.4", "UA", null);
+        assertFalse(out.getPasswordRequired());
+        assertNotNull(out.getNote());
+    }
+
+    @Test
+    void passwordProtectedShareWithholdsContentUntilUnlocked() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        DeliveryNoteShare s = share(saved.getId(), LocalDateTime.now().plusDays(7));
+        s.setPasswordHash(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("s3cret"));
+        s.setWatermarkText("客户甲");
+
+        PublicDeliveryNote shell = service.publicShare(s.getToken());
+
+        assertTrue(shell.getPasswordRequired());
+        assertNull(shell.getNote());
+        assertEquals("客户甲", shell.getWatermarkText(), "密码壳也要带水印，避免截壳规避");
+        verify(notes, never()).increaseViewCount(anyString(), anyString());
+
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.unlock(s.getToken(), "nope", null, null, null)).getCode());
+        verify(notes, never()).increaseViewCount(anyString(), anyString());
+
+        PublicDeliveryNote out = service.unlock(s.getToken(), "s3cret", "1.2.3.4", "UA", "https://a.com/x");
+
+        assertFalse(out.getPasswordRequired());
+        assertEquals("customer", out.getTone());
+        assertNotNull(out.getNote());
+        verify(notes).increaseViewCount(WS, saved.getId());
+    }
+
+    @Test
+    void domainAllowlistRejectsUnknownOrMissingReferers() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        DeliveryNoteShare s = share(saved.getId(), LocalDateTime.now().plusDays(7));
+        s.setAllowedDomains("example.com,partner.com");
+
+        assertEquals("该链接仅限指定域名访问，请从允许的站点打开", assertThrows(AppException.class,
+                () -> service.publicShare(s.getToken(), null, null, null)).getMessage());
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.publicShare(s.getToken(), null, null, "https://evil.com/x")).getCode());
+        PublicDeliveryNote ok = service.publicShare(s.getToken(), "1.1.1.1", "UA", "https://app.partner.com/doc");
+        assertNotNull(ok.getNote());
+    }
+
+    @Test
+    void visitsAreAuditedAndDownloadRespectsTheSwitch() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        DeliveryNoteShare s = share(saved.getId(), LocalDateTime.now().plusDays(7));
+        DeliveryNoteShareVisit row = new DeliveryNoteShareVisit();
+        row.setId("SV1");
+        row.setAction("view");
+        when(notes.selectShareVisits(WS, saved.getId(), 100)).thenReturn(Collections.singletonList(row));
+
+        assertEquals(1, service.shareVisits(WS, USER, saved.getId()).size());
+
+        service.logShareDownload(s.getToken(), null, "1.2.3.4", "Mozilla", "https://a.example.com/doc");
+        ArgumentCaptor<DeliveryNoteShareVisit> cap = ArgumentCaptor.forClass(DeliveryNoteShareVisit.class);
+        verify(notes).insertShareVisit(cap.capture());
+        assertEquals("download", cap.getValue().getAction());
+        assertEquals("a.example.com", cap.getValue().getDomain());
+        assertEquals("1.2.3.4", cap.getValue().getIp());
+
+        s.setAllowDownload(false);
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.logShareDownload(s.getToken(), null, null, null, null)).getCode());
+    }
+
+    @Test
+    void downloadAuditRequiresTheUnlockPasswordWhenShareIsProtected() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        DeliveryNoteShare s = share(saved.getId(), LocalDateTime.now().plusDays(7));
+        s.setPasswordHash(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("s3cret"));
+
+        /* 没解锁就用 token 上报下载会污染访问明细：缺密码与错密码都拒绝 */
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.logShareDownload(s.getToken(), null, "1.2.3.4", "UA", null)).getCode());
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.logShareDownload(s.getToken(), "nope", "1.2.3.4", "UA", null)).getCode());
+        /* 失败要与 unlock 共用计数，不能留下「用下载接口试密码」的旁路 */
+        ArgumentCaptor<DeliveryNoteShareVisit> failed = ArgumentCaptor.forClass(DeliveryNoteShareVisit.class);
+        verify(notes, times(2)).insertShareVisit(failed.capture());
+        assertTrue(failed.getAllValues().stream().allMatch(v -> "unlock_fail".equals(v.getAction())));
+
+        clearInvocations(notes);
+        service.logShareDownload(s.getToken(), "s3cret", "1.2.3.4", "UA", null);
+        ArgumentCaptor<DeliveryNoteShareVisit> cap = ArgumentCaptor.forClass(DeliveryNoteShareVisit.class);
+        verify(notes).insertShareVisit(cap.capture());
+        assertEquals("download", cap.getValue().getAction());
+    }
+
+    @Test
+    void downloadAuditHonorsDomainAllowlistWhenShareHasNoPassword() {
+        records(production());
+        projectTasks(task("T1", "结算周期自定义", Consts.COL_DONE));
+        publishedItems(item("T1", "published"));
+        note("customer", 0L);
+        DeliveryNoteSnapshot saved = captureSnapshotAfterCreate();
+        DeliveryNoteShare s = share(saved.getId(), LocalDateTime.now().plusDays(7));
+        s.setAllowedDomains("example.com");
+
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.logShareDownload(s.getToken(), null, "1.2.3.4", "UA", "https://evil.com/x")).getCode());
+        verify(notes, never()).insertShareVisit(any());
+
+        service.logShareDownload(s.getToken(), null, "1.2.3.4", "UA", "https://app.example.com/x");
+        verify(notes).insertShareVisit(any(DeliveryNoteShareVisit.class));
     }
 
     @Test

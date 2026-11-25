@@ -265,7 +265,7 @@
   </update>
   <update id="completePlan">
     UPDATE version_release_plan SET status = 'completed', revision = revision + 1, updated_at = NOW()
-    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision} AND status IN ('ready','draft','canceled')
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision} AND status IN ('ready','draft')
   </update>
   <select id="selectByKey" resultMap="record">
     SELECT * FROM version_release WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}

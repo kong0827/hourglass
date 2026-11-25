@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>周回顾 · 测试结果圆形图</title>
+<style>
+  html,body{margin:0;padding:0;background:#F7F8FA}
+  #dn{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --tbl-head:#F9FAFB;
+    --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318;
+    --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-fg:#5B3FD1;
+    --r-md:10px; --r-lg:12px;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    width:1680px; box-sizing:border-box; padding:36px 40px 32px; color:var(--text); background:var(--bg-app);
+    -webkit-font-smoothing:antialiased;
+  }
+  #dn *{box-sizing:border-box}
+  #dn .hd{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;margin-bottom:20px}
+  #dn .eyebrow{font-size:12px;letter-spacing:.08em;color:var(--text-3);font-weight:600;text-transform:uppercase}
+  #dn h1{margin:7px 0 8px;font-size:27px;line-height:1.25;font-weight:650;letter-spacing:-.01em}
+  #dn .sub{margin:0;font-size:13.5px;line-height:1.7;color:var(--text-2);max-width:1000px}
+  #dn .sub b{color:var(--text);font-weight:600}
+  #dn .stamp{flex:0 0 auto;font-size:10.5px;color:var(--text-3);padding:7px 11px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+
+  #dn .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 1px 2px rgba(16,24,40,.05)}
+  #dn .grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);}
+  #dn .pane{padding:24px 28px 26px;min-width:0}
+  #dn .pane + .pane{border-left:1px solid var(--border)}
+  #dn .ph{display:flex;align-items:baseline;gap:9px;margin-bottom:16px}
+  #dn .ph h2{margin:0;font-size:13.5px;font-weight:650}
+  #dn .ph span{font-size:10.5px;color:var(--text-3)}
+  #dn .body{display:flex;align-items:center;gap:30px}
+  #dn .donut{position:relative;flex:0 0 auto;border-radius:50%}
+  #dn .donut:after{content:"";position:absolute;border-radius:50%;background:var(--surface)}
+  #dn .donut .core{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:2}
+  #dn .core b{font-size:34px;line-height:1.1;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  #dn .core b i{font-style:normal;font-size:17px;font-weight:600;color:var(--text-2);margin-left:1px}
+  #dn .core span{font-size:11px;color:var(--text-3);margin-top:5px}
+  #dn .core em{font-style:normal;font-size:10.5px;color:var(--text-2);margin-top:2px;font-variant-numeric:tabular-nums}
+  #dn .big{width:272px;height:272px;background:conic-gradient(from -90deg,
+      #12B76A 0deg 293deg, #fff 293deg 295.2deg,
+      #F04438 295.2deg 332.6deg, #fff 332.6deg 334.8deg,
+      #F79009 334.8deg 357.8deg, #fff 357.8deg 360deg)}
+  #dn .big:after{inset:34px}
+  #dn .small{width:210px;height:210px;background:conic-gradient(from -90deg,
+      #2563EB 0deg 240deg, #fff 240deg 241.9deg,
+      #7A5AF8 241.9deg 307.5deg, #fff 307.5deg 309.4deg,
+      #F79009 309.4deg 358.1deg, #fff 358.1deg 360deg)}
+  #dn .small:after{inset:28px}
+  #dn .small .core b{font-size:27px}
+  #dn .small .core b i{font-size:14px}
+
+  #dn .legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:11px}
+  #dn .lg{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 0;border-top:1px solid #F2F4F7}
+  #dn .lg:first-child{border-top:0;padding-top:0}
+  #dn .lg .sw{width:9px;height:9px;border-radius:2px;background:var(--border-strong)}
+  #dn .lg .nm{font-size:11.5px;color:var(--text-2);min-width:0}
+  #dn .lg .nm b{display:block;font-size:12px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #dn .lg .nm span{display:block;font-size:10px;color:var(--text-3);margin-top:1px}
+  #dn .lg .vv{text-align:right;font-variant-numeric:tabular-nums}
+  #dn .lg .vv b{display:block;font-size:13px;font-weight:650;line-height:1.35}
+  #dn .lg .vv span{display:block;font-size:10px;color:var(--text-3);margin-top:1px}
+  #dn .lg.pass .sw{background:var(--success)} #dn .lg.fail .sw{background:var(--danger)}
+  #dn .lg.block .sw{background:var(--warning)} #dn .lg.skip .sw{background:var(--border-strong)}
+  #dn .lg.a .sw{background:var(--primary)} #dn .lg.b .sw{background:var(--plum)} #dn .lg.c .sw{background:var(--warning)}
+  #dn .lg.skip .vv b{color:var(--text-3);font-weight:600}
+
+  #dn .tip{display:flex;gap:8px;margin-top:16px;padding:10px 12px;background:var(--surface-sunken);border-radius:8px;font-size:10.5px;line-height:1.6;color:var(--text-2)}
+  #dn .tip b{color:var(--text);font-weight:600}
+  #dn .tip .ic{flex:0 0 auto;width:15px;height:15px;border-radius:50%;background:var(--primary-soft);color:var(--primary-fg);font-size:10px;font-weight:700;display:grid;place-items:center;margin-top:1px}
+
+  #dn .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+  #dn .note{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:13px 15px;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+  #dn .note b{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:650;margin-bottom:4px}
+  #dn .note b .n{width:17px;height:17px;border-radius:50%;background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:9.5px;font-weight:650;display:grid;place-items:center}
+  #dn .note p{margin:0;font-size:10.5px;line-height:1.6;color:var(--text-2)}
+
+  #dn .foot{margin-top:14px;display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--text-3)}
+  #dn .foot .sep{color:#D0D5DD}
+</style>
+</head>
+<body>
+<div id="dn">
+  <div class="hd">
+    <div>
+      <div class="eyebrow">周回顾 · 图表样张 · 2026-11-20</div>
+      <h1>测试结果：两个圆形图</h1>
+      <p class="sub">左：执行结果构成，环内是 128 条已执行用例，<b>跳过 6 条不计入环</b>。右：执行量落到人，标注各自角色。数字与原型「测试与质量」卡一致。</p>
+    </div>
+    <div class="stamp">示例数据 · 周 11-09 — 11-15</div>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <section class="pane">
+        <div class="ph"><h2>执行结果构成</h2><span>通过率 = 通过 ÷（通过 + 失败 + 阻塞）</span></div>
+        <div class="body">
+          <div class="donut big" role="img" aria-label="通过 105 条占 82%，失败 14 条占 11%，阻塞 9 条占 7%">
+            <div class="core"><b>82<i>%</i></b><span>通过率</span><em>105 / 128 执行</em></div>
+          </div>
+          <div class="legend">
+            <div class="lg pass"><span class="sw"></span><div class="nm"><b>通过</b><span>结果符合预期</span></div><div class="vv"><b>105</b><span>82%</span></div></div>
+            <div class="lg fail"><span class="sw"></span><div class="nm"><b>失败</b><span>转出缺陷 9 个 · 待回归 6 条</span></div><div class="vv"><b>14</b><span>11%</span></div></div>
+            <div class="lg block"><span class="sw"></span><div class="nm"><b>阻塞</b><span>环境 / 依赖问题，不算质量</span></div><div class="vv"><b>9</b><span>7%</span></div></div>
+            <div class="lg skip"><span class="sw"></span><div class="nm"><b>跳过</b><span>不在环内，也不进分母</span></div><div class="vv"><b>6</b><span>不计入</span></div></div>
+          </div>
+        </div>
+        <div class="tip"><span class="ic">i</span><span>环上三段合计 128 条；<b>跳过</b>单列，避免把「主动不测」算成失败。鼠标悬停可分片高亮（原型未接）。</span></div>
+      </section>
+
+      <section class="pane">
+        <div class="ph"><h2>执行量 · 按人</h2><span>3 人参与 · 测试与质量卡成员</span></div>
+        <div class="body">
+          <div class="donut small" role="img" aria-label="周媛 86 条，李婷 24 条，张启明 18 条">
+            <div class="core"><b>128<i>条</i></b><span>3 人执行</span><em>发现缺陷 9</em></div>
+          </div>
+          <div class="legend">
+            <div class="lg a"><span class="sw"></span><div class="nm"><b>周媛</b><span>测试 · 客户门户</span></div><div class="vv"><b>86</b><span>67% · 缺陷 6</span></div></div>
+            <div class="lg b"><span class="sw"></span><div class="nm"><b>李婷</b><span>产品 · 兼测试</span></div><div class="vv"><b>24</b><span>19% · 缺陷 2</span></div></div>
+            <div class="lg c"><span class="sw"></span><div class="nm"><b>张启明</b><span>负责人 · 兼测试</span></div><div class="vv"><b>18</b><span>14% · 缺陷 1</span></div></div>
+            <div class="lg skip"><span class="sw"></span><div class="nm"><b>开发 4 人 · 设计 1 人</b><span>本周没有执行用例</span></div><div class="vv"><b>—</b><span>不参与</span></div></div>
+          </div>
+        </div>
+        <div class="tip"><span class="ic">i</span><span>扇形大小按执行条数；<b>兼测试</b>的产品与负责人照常计入，不做角色折算。</span></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><b><span class="n">1</span>看构成用圆环</b><p>82% 一眼可读，可替代测试卡里的横向比例条；环心放主语与分母，不再重复图例。</p></div>
+    <div class="note"><b><span class="n">2</span>比大小仍用数字</b><p>周媛 86 与张启明 18 的扇形差 4.8 倍，肉眼不如条形精确；成员表保留「86 / 6」数字列。</p></div>
+    <div class="note"><b><span class="n">3</span>不与需求完成率混用</b><p>圆环只表示用例执行结果，需求完成与发布另有口径；两个百分比不互相推导。</p></div>
+  </div>
+
+  <div class="foot">
+    <span>原型：docs/audit/weekly-review-2026-11-20/prototype.html</span><span class="sep">·</span>
+    <span>口径：设计说明.md §3.2 执行用例 / 通过率 / 发现缺陷</span><span class="sep">·</span>
+    <span>合成示例数据，上线前用真实空间复核</span><span class="sep">·</span>
+    <span>2026-11-20 · v1</span>
+  </div>
+</div>
+</body>
+</html>

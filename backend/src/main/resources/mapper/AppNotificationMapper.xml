@@ -25,6 +25,29 @@
         )
     )
     <!--
+      需求/文档/分支/版本/项目类通知不是按 ref_task_id 关联：按写入时固化的 req_id 过滤。
+      历史行由迁移脚本按 ref_kind 回填；ref_id 无法唯一归属一个项目（如跨项目发布计划）时保持可见。
+      project_access 是权限调整本身的系统告知：它解释「为什么看不到该项目」，
+      若随项目一起隐藏，调用方再调用 notifySystem 也失去了意义，所以始终保留。
+      两种「不可见」都要隐藏：显式 access='none'；或成员按项目分配（assigned）而该项目没有授权记录。
+    -->
+    AND (
+      n.type = 'project_access'
+      OR NOT EXISTS (
+        SELECT 1
+        FROM workspace_member wmr
+        LEFT JOIN project_member pmr
+          ON pmr.workspace_id = n.workspace_id
+         AND pmr.project_id = n.req_id
+         AND pmr.user_id = n.user_id
+        WHERE wmr.workspace_id = n.workspace_id
+          AND wmr.user_id = n.user_id
+          AND wmr.role NOT IN ('owner', 'admin', 'viewer')
+          AND (pmr.access = 'none'
+               OR (pmr.access IS NULL AND wmr.project_access_mode = 'assigned'))
+      )
+    )
+    <!--
       接收人已被移出（或已退出）的空间：该空间的历史通知都指向已无权访问的内容，
       列表/未读数一并隐藏；只保留「你已被移出空间」这条系统通知本身作为告知。
     -->
@@ -34,15 +57,28 @@
     ))
   </sql>
 
+  <!--
+    @ 提及：新数据写 task_mention；历史合并期的提及曾写 task_comment，标题固定以「…」提到了你 结尾。
+    两种都要进入「提及我」筛选与未读计数，否则老通知会凭空消失。
+  -->
+  <sql id="mentionFilter">
+    AND (n.type = 'task_mention' OR (n.type = 'task_comment' AND n.title LIKE '%」提到了你'))
+  </sql>
+
   <select id="selectByUser" resultType="AppNotification">
     SELECT n.id, n.user_id, n.workspace_id, n.type, n.title, n.body, n.ref_task_id, n.ref_kind, n.ref_id,
-           n.read_at, n.created_at, w.name AS workspace_name
+           n.req_id, n.read_at, n.created_at, w.name AS workspace_name,
+           ro.display_name AS ref_owner_name
     FROM app_notification n
     LEFT JOIN workspace w ON w.id = n.workspace_id
+    <!-- 发布准备条目要显示计划负责人；只在 ref_kind 匹配时关联，不影响其他类型 -->
+    LEFT JOIN version_release_plan vrp
+      ON n.ref_kind = 'release_plan' AND vrp.workspace_id = n.workspace_id AND vrp.id = n.ref_id
+    LEFT JOIN app_user ro ON ro.id = vrp.owner_user_id
     WHERE n.user_id = #{userId}
       <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
       <if test="filter == 'unread'"> AND n.read_at IS NULL </if>
-      <if test="filter == 'mention'"> AND n.type = 'task_mention' </if>
+      <if test="filter == 'mention'"><include refid="mentionFilter"/></if>
       <include refid="receiverProjectVisibility"/>
     ORDER BY n.created_at DESC, n.id DESC
     LIMIT #{limit} OFFSET #{offset}
@@ -53,7 +89,7 @@
     WHERE n.user_id = #{userId}
       <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
       <if test="filter == 'unread'"> AND n.read_at IS NULL </if>
-      <if test="filter == 'mention'"> AND n.type = 'task_mention' </if>
+      <if test="filter == 'mention'"><include refid="mentionFilter"/></if>
       <include refid="receiverProjectVisibility"/>
   </select>
 
@@ -74,14 +110,27 @@
   <!-- 提及计数只算未读：筛选页签上的数字要能被「读完归零」，否则和「全部」一样只是历史库存 -->
   <select id="countMentions" resultType="int">
     SELECT COUNT(*) FROM app_notification n
-    WHERE n.user_id = #{userId} AND n.type = 'task_mention' AND n.read_at IS NULL
+    WHERE n.user_id = #{userId} AND n.read_at IS NULL
+      <include refid="mentionFilter"/>
       <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
       <include refid="receiverProjectVisibility"/>
   </select>
 
+  <!-- 按类型统计当前筛选下的全量条数：前端类型筛选不再基于已加载的一页回算 -->
+  <select id="countByType" resultType="java.util.LinkedHashMap">
+    SELECT n.type AS type, COUNT(*) AS cnt
+    FROM app_notification n
+    WHERE n.user_id = #{userId}
+      <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
+      <if test="filter == 'unread'"> AND n.read_at IS NULL </if>
+      <if test="filter == 'mention'"><include refid="mentionFilter"/></if>
+      <include refid="receiverProjectVisibility"/>
+    GROUP BY n.type
+  </select>
+
   <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-    INSERT INTO app_notification (user_id, workspace_id, type, title, body, ref_task_id, ref_kind, ref_id)
-    VALUES (#{userId}, #{workspaceId}, #{type}, #{title}, #{body}, #{refTaskId}, #{refKind}, #{refId})
+    INSERT INTO app_notification (user_id, workspace_id, type, title, body, ref_task_id, ref_kind, ref_id, req_id)
+    VALUES (#{userId}, #{workspaceId}, #{type}, #{title}, #{body}, #{refTaskId}, #{refKind}, #{refId}, #{reqId})
   </insert>
 
   <update id="markRead">

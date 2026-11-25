@@ -155,6 +155,21 @@ public interface TestCaseMapper {
                                                     @Param("caseNo") Integer caseNo,
                                                     @Param("limit") int limit);
 
+    /**
+     * 全局搜索（带范围）：在 searchVisible 的可见口径上叠加项目 / 执行结果 / 执行人 / 更新日期区间。
+     * q 为空时只按范围返回；status=__untested 表示尚未执行。
+     */
+    List<com.hourglass.dto.SearchHit> searchFiltered(@Param("workspaceId") String workspaceId,
+                                                     @Param("viewerId") String viewerId,
+                                                     @Param("q") String q,
+                                                     @Param("caseNo") Integer caseNo,
+                                                     @Param("reqId") String reqId,
+                                                     @Param("status") String status,
+                                                     @Param("owner") String owner,
+                                                     @Param("from") String from,
+                                                     @Param("to") String to,
+                                                     @Param("limit") int limit);
+
     int deleteByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     /** 空间级清理：删除/清空空间与覆盖导入共用 */

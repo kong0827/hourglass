@@ -6,10 +6,10 @@ import { boardParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
-import { calState, dueState, dueText, rt, state, taskById, taskCacheExtra } from "../core/state.js";
+import { calState, canCreateNow, dueState, dueText, rt, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { openTaskDrawer, resetFormBaseline, syncDateBounds } from "../core/task-drawer.js";
-import { UI, esc } from "../core/ui.js";
+import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { addDays, dayKey, fmtMD, iso, pad2, parseDate, priColor, rgbaOf, weekdayCN } from "../lib/format.js";
 import { cardHTML, loadBoard } from "./board.js";
@@ -151,7 +151,7 @@ function renderMobileCalendar(){
         '<span class="cwd-dn">' + day.getDate() + '</span>' +
         '<span class="cwd-dw">' + weekdayCN(day) + '</span>' +
         '<span class="cwd-n">' + (list.length ? list.length + " 项" : "无工作项") + '</span>' +
-        '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' + icon("plus", 12) + '</button>' +
+        (canCreateNow() ? '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' + icon("plus", 12) + '</button>' : '') +
       '</div>' +
       (rows ? '<div class="cwd-tasks">' + rows + '</div>' : '') +
     '</section>';
@@ -227,8 +227,8 @@ function renderCalendar(){
         '" title="展开当天已完成的工作项">' + (doneItems.length === 1 ? "1 项已完成" : doneItems.length + " 项已完成") + '</button>';
     }
     html += '<div class="' + cls + '" data-cal-date="' + dateIso + '" role="button" tabindex="0" aria-label="' + dateIso + '">' +
-      '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' +
-        icon("plus", 12) + '</button>' +
+      (canCreateNow() ? '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' +
+        icon("plus", 12) + '</button>' : '') +
       '<span class="cal-dn">' + day + '</span>' +
       '<div class="cal-tasks">' + chips + '</div>' +
     '</div>';
@@ -238,6 +238,7 @@ function renderCalendar(){
   loadUnplanned();
 }
 function openNewTaskOnDate(dateIso){
+  if(!canCreateNow()){ toast("当前没有可写的项目，无法新建工作项；请联系空间主或管理员分配项目", "warn"); return; }
   openTaskDrawer("backlog");
   iDue.value = dateIso;
   syncDateBounds();

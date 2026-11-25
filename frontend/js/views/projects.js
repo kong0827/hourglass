@@ -112,7 +112,7 @@ function syncProjectsPageHead(list){
   var acts = $("pageActions");
   if(acts){
     var html = (canManageSets() ? '<button class="btn" type="button" data-proj-new-set>新建项目集</button>' : "")
-      + '<button class="btn primary" type="button" data-proj-new>' + icon("plus", 14) + '新建项目</button>';
+      + (roleReadOnly() ? '' : '<button class="btn primary" type="button" data-proj-new>' + icon("plus", 14) + '新建项目</button>');
     if(acts.dataset.projActs !== html){
       acts.dataset.projActs = html;
       acts.innerHTML = html;
@@ -566,32 +566,34 @@ function projectSetNameCell(group, agg){
       + '</span>' +
   '</span>';
 }
+/* 空值占位淡一档，与工作项列表 / 需求池的「—」同一颜色 */
+function projEmpty(){ return '<span class="muted">—</span>'; }
 function projectSetCell(group, key, agg){
   var set = group.set;
   if(key === "name") return projectSetNameCell(group, agg);
-  if(key === "description") return '<span class="project-cell" title="' + esc((set && set.description) || "") + '">' + esc((set && set.description) || "—") + '</span>';
+  if(key === "description") return '<span class="project-cell" title="' + esc((set && set.description) || "") + '">' + ((set && set.description) ? esc(set.description) : projEmpty()) + '</span>';
   if(key === "status"){
     return set
       ? '<span><span class="tag tag-' + (set.status === "done" ? "success" : (set.status === "hold" ? "ghost" : "info")) + '">' + esc(reqStatusName(set.status || "active")) + '</span></span>'
-      : '<span class="project-cell">—</span>';
+      : '<span class="project-cell">' + projEmpty() + '</span>';
   }
   if(key === "ownerName"){
     var owner = setOwnerLabel(set);
-    return '<span class="project-cell" title="' + esc(owner || "集负责人只用于展示，不据此获得维护权") + '">' + esc(owner || "—") + '</span>';
+    return '<span class="project-cell" title="' + esc(owner || "集负责人只用于展示，不据此获得维护权") + '">' + (owner ? esc(owner) : projEmpty()) + '</span>';
   }
   if(key === "plannedEnd"){
     var ps = set && set.plannedStart ? String(set.plannedStart).slice(0, 10) : "";
     var pe = set && set.plannedEnd ? String(set.plannedEnd).slice(0, 10) : "";
     var range = (ps || pe) ? (ps || "未定") + " → " + (pe || "未定") : "";
-    return '<span class="project-cell"' + (range ? ' title="集计划 ' + esc(range) + '"' : '') + '>' + esc(pe || "—") + '</span>';
+    return '<span class="project-cell"' + (range ? ' title="集计划 ' + esc(range) + '"' : '') + '>' + (pe ? esc(pe) : projEmpty()) + '</span>';
   }
   if(key === "taskCount") return '<span class="project-cell">' + agg.tasks + '</span>';
   if(key === "doneCount") return '<span class="project-cell">' + agg.done + '</span>';
   if(key === "progress") return '<span class="progress mini" title="集内项目按工作项数加权的完成度"><span class="bar"><i style="width:' + agg.pct + '%"></i></span><span class="pv">' + agg.pct + '%</span></span>';
   if(key === "docCount") return '<span class="project-cell" title="集内项目文档合计">' + agg.docs + '</span>';
-  if(key === "firstReleasedAt") return '<span class="project-cell" title="' + (agg.firstReleasedAt ? "集内项目最早的首版上线日" : "集内项目都还没有首版上线") + '">' + esc(agg.firstReleasedAt || "—") + '</span>';
-  if(key === "createdAt" || key === "updatedAt") return '<span class="project-cell">' + (set && set[key] ? esc(fmtTs(set[key])) : "—") + '</span>';
-  return '<span class="project-cell">—</span>';
+  if(key === "firstReleasedAt") return '<span class="project-cell" title="' + (agg.firstReleasedAt ? "集内项目最早的首版上线日" : "集内项目都还没有首版上线") + '">' + (agg.firstReleasedAt ? esc(agg.firstReleasedAt) : projEmpty()) + '</span>';
+  if(key === "createdAt" || key === "updatedAt") return '<span class="project-cell">' + (set && set[key] ? esc(fmtTs(set[key])) : projEmpty()) + '</span>';
+  return '<span class="project-cell">' + projEmpty() + '</span>';
 }
 function projectSetActions(group){
   var set = group.set;
@@ -633,9 +635,59 @@ function syncTemplateHint(){
   if(hit && hit.docs && hit.docs.length) parts.push("文档：" + hit.docs.join(" / "));
   if(hit && hit.modules && hit.modules.length) parts.push("测试分类：" + hit.modules.join(" / "));
   if(hit && hit.versionName) parts.push("默认版本：" + hit.versionName);
+  if(hit && hit.sampleCount) parts.push("示例工作项：" + hit.sampleCount + " 条（可改名或删除）");
   rTemplateHint.textContent = parts.length
     ? "将补充 " + parts.join("；") + "。只补缺失项，不覆盖已有内容。"
     : (hit && hit.description) || "只创建项目本身，后续按需补充";
+}
+/* 场景模板建完后给一张 10 分钟路线：先看板，再落到交付说明，最后分享留痕。
+   不替用户判断业务，只把「下一步点哪里」递到手里。 */
+function showSampleOnboarding(project, code){
+  var tpl = (projectTemplates || []).filter(function(t){ return t.code === code; })[0];
+  if(!project || !tpl || !tpl.sampleCount) return;
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.innerHTML = '<div class="sheet md">'
+    + '<div class="sheet-head"><div style="flex:1 1 auto;min-width:0"><h2>10 分钟上手 · ' + esc(project.name || "") + '</h2>'
+    + '<div class="desc">已按「' + esc(tpl.name) + '」模板创建：' + tpl.sampleCount + ' 条示例工作项、'
+    + ((tpl.docs || []).length ? (tpl.docs || []).length + ' 份文档、' : '') + '1 个版本。</div></div>'
+    + '<button class="icon-btn sm" type="button" data-onb-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + '<div class="sheet-body"><ol class="onb-steps">'
+    + '<li><b>看板走一遍</b><span>打开看板，把一条卡片拖到下一列，熟悉状态流转与版本范围。</span></li>'
+    + '<li><b>生成第一份交付说明</b><span>打开交付说明，切到「管理版」，逐段确认后导出 PDF。事实由系统汇总，不用手写。</span></li>'
+    + '<li><b>分享并留痕</b><span>导出后生成只读链接，可设访问密码、域名白名单与水印，打开记录会留痕。</span></li>'
+    + '</ol><p class="foot-note">示例工作项都带「示例工作项」描述，可随时改名、归档或删除，不影响后续真实数据。</p></div>'
+    + '<div class="sheet-foot"><button class="btn" type="button" data-onb-close>稍后再说</button>'
+    + '<button class="btn" type="button" data-onb-board>打开看板</button>'
+    + '<button class="btn primary" type="button" data-onb-delivery>打开交付说明</button></div></div>';
+  layer.__uiOnClose = function(){ setTimeout(function(){ if(layer.parentNode) layer.parentNode.removeChild(layer); }, 0); };
+  document.body.appendChild(layer);
+  UI.openModal(layer);
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-onb-close]")){ UI.closeModal(layer); return; }
+    if(e.target.closest("[data-onb-board]")){ UI.closeModal(layer); showView("board"); return; }
+    if(e.target.closest("[data-onb-delivery]")){
+      var btn = e.target.closest("[data-onb-delivery]");
+      btn.disabled = true;
+      btn.textContent = "打开中…";
+      API.get("/api/versions", { reqId: project.id }).then(function(rows){
+        var v = (rows || [])[0];
+        if(!v) throw new Error("示例版本还没生成，请稍后在版本页查看");
+        return import("../core/view-loader.js").then(function(m){
+          return m.loadView("delivery").then(function(mod){
+            UI.closeModal(layer);
+            mod.openDeliveryNote(v.id, "");
+          });
+        });
+      }).catch(function(ex){
+        btn.disabled = false;
+        btn.textContent = "打开交付说明";
+        toast(ex.message || "打开交付说明失败", "bad");
+      });
+    }
+  });
 }
 function syncTemplateField(){
   if(!fReqTemplate) return;
@@ -994,16 +1046,16 @@ function projectCell(r, key){
     return '<span class="project-name-wrap">' + (reorderEnabled() ? reqDragHTML(r.id) : "") + nameHTML + '</span>';
   }
   if(key === "status") return '<span><span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' + esc(reqStatusName(r.status)) + '</span></span>';
-  if(key === "description") return '<span class="project-cell" title="' + esc(r.description || "") + '">' + esc(r.description || "—") + '</span>';
-  if(key === "ownerName") return '<span class="project-cell" title="' + esc(ownerLabelOf(r) || "") + '">' + esc(ownerLabelOf(r) || "—") + '</span>';
-  if(key === "plannedEnd") return '<span class="project-cell">' + (r.plannedEnd ? esc(String(r.plannedEnd).slice(0, 10)) : "—") + '</span>';
+  if(key === "description") return '<span class="project-cell" title="' + esc(r.description || "") + '">' + (r.description ? esc(r.description) : projEmpty()) + '</span>';
+  if(key === "ownerName") return '<span class="project-cell" title="' + esc(ownerLabelOf(r) || "") + '">' + (ownerLabelOf(r) ? esc(ownerLabelOf(r)) : projEmpty()) + '</span>';
+  if(key === "plannedEnd") return '<span class="project-cell">' + (r.plannedEnd ? esc(String(r.plannedEnd).slice(0, 10)) : projEmpty()) + '</span>';
   if(key === "taskCount") return '<span class="project-cell">' + (Number(r.taskCount) || 0) + '</span>';
   if(key === "doneCount") return '<span class="project-cell">' + (Number(r.doneCount) || 0) + '</span>';
   if(key === "progress") return '<span class="progress mini" title="工作项完成度：已完成记 100%，其余取记录进度"><span class="bar"><i style="width:' + Math.max(0, Math.min(100, Number(r.progressPct) || 0)) + '%"></i></span><span class="pv">' + (Number(r.progressPct) || 0) + '%</span></span>';
   if(key === "docCount") return '<span class="project-cell">' + (Number(r.docCount) || 0) + '</span>';
-  if(key === "firstReleasedAt") return '<span class="project-cell">' + (r.firstReleasedAt ? esc(String(r.firstReleasedAt).slice(0, 10)) : "—") + '</span>';
-  if(key === "createdAt" || key === "updatedAt") return '<span class="project-cell">' + (r[key] ? esc(fmtTs(r[key])) : "—") + '</span>';
-  return '<span class="project-cell">—</span>';
+  if(key === "firstReleasedAt") return '<span class="project-cell">' + (r.firstReleasedAt ? esc(String(r.firstReleasedAt).slice(0, 10)) : projEmpty()) + '</span>';
+  if(key === "createdAt" || key === "updatedAt") return '<span class="project-cell">' + (r[key] ? esc(fmtTs(r[key])) : projEmpty()) + '</span>';
+  return '<span class="project-cell">' + projEmpty() + '</span>';
 }
 /* 行操作只留三个入口：新建工作项（主）、在看板中查看、更多。
    其余动作收进「更多」菜单并带文字，避免一排图标需要逐个悬停才知道作用。 */
@@ -1026,6 +1078,8 @@ function openProjectRowMenu(anchor, reqId){
   var r = rt.reqList.filter(function(x){ return x.id === reqId; })[0];
   if(!r || !anchor) return;
   var readOnly = r.access === "read", isOwner = rt.currentWs && rt.currentWs.myRole === "owner";
+  /* 编辑资料/归档是项目级管理：空间管理员或本项目负责人，普通参与者只在项目内干活 */
+  var canManage = canManageProject(reqId, r.ownerUserId);
   var menu = document.createElement("div");
   menu.className = "menu proj-row-menu";
   menu.setAttribute("role", "menu");
@@ -1037,8 +1091,8 @@ function openProjectRowMenu(anchor, reqId){
     readOnly ? '' : '<button class="menu-item" type="button" role="menuitem" data-proj-act="doc-new">' + icon("projects", 14) + '新建文档</button>',
     '<button class="menu-item" type="button" role="menuitem" data-proj-act="activity">' + icon("clock", 14) + '活动轨迹</button>',
     '<div class="menu-sep"></div>',
-    readOnly ? '' : '<button class="menu-item" type="button" role="menuitem" data-proj-act="archive">' + icon("inbox", 14) + (r.archivedAt ? "取消归档" : "归档项目") + '</button>',
-    readOnly ? '' : '<button class="menu-item" type="button" role="menuitem" data-proj-act="edit">' + icon("edit", 14) + '编辑项目</button>',
+    canManage ? '<button class="menu-item" type="button" role="menuitem" data-proj-act="archive">' + icon("inbox", 14) + (r.archivedAt ? "取消归档" : "归档项目") + '</button>' : '',
+    canManage ? '<button class="menu-item" type="button" role="menuitem" data-proj-act="edit">' + icon("edit", 14) + '编辑项目</button>' : '',
     isOwner ? '<button class="menu-item danger" type="button" role="menuitem" data-proj-act="delete">' + icon("trash", 14) + '删除项目</button>' : ''
   ].join("");
   menu.addEventListener("click", function(e){
@@ -1060,7 +1114,7 @@ function openProjectRowMenu(anchor, reqId){
     }
     if(act === "archive"){ toggleArchive(reqId); return; }
     if(act === "edit"){
-      if(!canEditReq(reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+      if(!canManageProject(reqId, r.ownerUserId)){ toast("只有项目负责人或空间管理员可以编辑项目", "warn"); return; }
       openProjectDialog(reqId); return;
     }
     if(act === "delete") deleteReq(reqId);
@@ -1154,7 +1208,7 @@ function saveReq(){
   var seq = projectFormSeq;
   var p = editing ? API.put("/api/reqs/" + encodeURIComponent(rt.editingReqId), body) : API.post("/api/reqs", body);
   btnSaveReq.disabled = true;
-  p.then(function(){
+  p.then(function(created){
     toast(editing ? ("已更新项目「" + name + "」") : ("已新建项目「" + name + "」"), "fs");
     if(seq === projectFormSeq) resetReqForm();
     /* 新建项目后端会预置默认分类，分类字典要立即刷新，否则任务抽屉/筛选举不到 */
@@ -1162,6 +1216,7 @@ function saveReq(){
     loadReqs().then(function(){
       renderReqList();
       loadBoard({silent:true});
+      if(!editing) showSampleOnboarding(created, body.template);
     });
   }).catch(function(ex){
     if(seq === projectFormSeq) btnSaveReq.disabled = false;
@@ -1174,6 +1229,7 @@ function toggleArchive(id){
   var r = null;
   for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === id) r = rt.reqList[i];
   if(!r) return;
+  if(!canManageProject(id, r.ownerUserId)){ toast("只有项目负责人或空间管理员可以归档项目", "warn"); return; }
   var archiving = !r.archivedAt;
   function apply(){
     API.put("/api/reqs/" + encodeURIComponent(id) + "/archive?archived=" + archiving).then(function(){
@@ -1707,7 +1763,8 @@ reqListEl.addEventListener("click", function(e){
   if(taskRetry){ loadProjectTasks(taskRetry.dataset.projectTaskRetry, true).catch(function(){}); return; }
   var ed = e.target.closest("[data-edit-req]");
   if(ed){
-    if(!canEditReq(ed.dataset.editReq)){ toast("你对该项目只有查看权限", "warn"); return; }
+    var editRow = rt.reqList.filter(function(r){ return r.id === ed.dataset.editReq; })[0];
+    if(!canManageProject(ed.dataset.editReq, editRow && editRow.ownerUserId)){ toast("只有项目负责人或空间管理员可以编辑项目", "warn"); return; }
     openProjectDialog(ed.dataset.editReq);
     return;
   }

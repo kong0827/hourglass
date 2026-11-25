@@ -22,6 +22,11 @@ public interface AppNotificationMapper {
 
     int countAll(@Param("userId") String userId, @Param("workspaceId") String workspaceId);
 
+    /** 当前筛选下的按类型全量计数（投影 type / cnt），供消息中心类型筛选使用 */
+    List<java.util.Map<String, Object>> countByType(@Param("userId") String userId,
+                                                    @Param("workspaceId") String workspaceId,
+                                                    @Param("filter") String filter);
+
     /** 未读的 @ 提及数（read_at IS NULL），供通知筛选页签计数；「提及」视图本身仍含已读 */
     int countMentions(@Param("userId") String userId, @Param("workspaceId") String workspaceId);
 

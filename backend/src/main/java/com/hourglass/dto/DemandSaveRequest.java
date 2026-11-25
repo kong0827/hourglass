@@ -70,4 +70,8 @@ public class DemandSaveRequest {
     /** 创建时预置的提醒人：只在创建生效，编辑不改名单；提交人与重复项自动忽略 */
     @Size(max = 20, message = "提醒人最多 20 人")
     private List<String> watcherIds;
+
+    /** 评审人账号ID：可空；必须能查看该项目。只在创建/待评审整单编辑时生效 */
+    @Size(max = 32, message = "评审人ID不合法")
+    private String reviewerUserId;
 }

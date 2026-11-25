@@ -489,6 +489,42 @@
     LIMIT #{limit}
   </select>
 
+  <!-- 带范围的全局搜索：可见口径与 searchVisible 一致，额外叠加项目 / 执行结果 / 执行人 / 日期 -->
+  <select id="searchFiltered" resultType="com.hourglass.dto.SearchHit">
+    SELECT 'case' AS type, c.id, c.title, c.req_id AS reqId, r.name AS reqName,
+           c.latest_status AS status, c.module AS extra, c.case_no AS caseNo, c.updated_at AS updatedAt
+    FROM test_case c
+    LEFT JOIN requirement r ON r.id = c.req_id AND r.workspace_id = c.workspace_id
+    WHERE c.workspace_id = #{workspaceId}
+      <if test="q != null and q != ''">
+        AND (
+          LOCATE(LOWER(#{q}), LOWER(c.title)) > 0
+          OR LOCATE(LOWER(#{q}), LOWER(c.module)) > 0
+          OR LOCATE(LOWER(#{q}), LOWER(c.precondition)) > 0
+          <if test="caseNo != null"> OR c.case_no = #{caseNo} </if>
+        )
+      </if>
+      <if test="reqId != null and reqId != ''"> AND c.req_id = #{reqId} </if>
+      <choose>
+        <when test="status == '__untested'"> AND c.latest_status IS NULL </when>
+        <when test="status != null and status != ''"> AND c.latest_status = #{status} </when>
+      </choose>
+      <if test="owner != null and owner != ''">
+        AND (c.latest_by_user_id = #{owner} OR c.latest_by = #{owner})
+      </if>
+      <if test="from != null and from != ''"> AND c.updated_at &gt;= #{from} </if>
+      <if test="to != null and to != ''"> AND c.updated_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY) </if>
+      <if test="viewerId != null">
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+                        WHERE pm.workspace_id = c.workspace_id
+                          AND pm.project_id = c.req_id
+                          AND pm.user_id = #{viewerId}
+                          AND pm.access = 'none')
+      </if>
+    ORDER BY c.updated_at DESC
+    LIMIT #{limit}
+  </select>
+
   <select id="selectOwners" resultType="string">
     SELECT DISTINCT latest_by FROM test_case
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}

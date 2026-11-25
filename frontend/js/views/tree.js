@@ -11,9 +11,9 @@ import { groupOptionsHTML, groupDimName } from "../core/group-dims.js";
 import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
 import * as listPrefs from "../core/list-preferences.js";
-import { filterOn, progressOf, reqNameById, reqSetId, rt, setNameById, setSortOf, state } from "../core/state.js";
+import { canCreateNow, filterOn, progressOf, reqNameById, reqSetId, rt, setNameById, setSortOf, state } from "../core/state.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { openStatusMenu } from "../core/task-actions.js";
+import { openDuePopover, openOwnerMenu, openPriorityMenu, openStatusMenu } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { icon } from "../core/icons.js";
 import { bindRetry } from "../core/utils.js";
@@ -220,7 +220,7 @@ function leafRowHTML(t, depth, row){
   var titleCell = taskCell(t, "title", hasTypeCol).replace('<span class="lr-task">', '<span class="lr-task">' + indentHTML(depth, row));
   return '<div class="tree-row list-row" data-tree-id="' + esc(t.id) + '" tabindex="0" role="treeitem" aria-level="' + (depth + 1) + '">' +
     '<span><span class="tree-caret leaf" aria-hidden="true">▸</span></span>' +
-    cols.map(function(key){ return key === "title" ? titleCell : taskCell(t, key, hasTypeCol); }).join("") +
+    cols.map(function(key){ return key === "title" ? titleCell : taskCell(t, key, hasTypeCol, true); }).join("") +
     '<span class="cell-act"></span></div>';
 }
 function rowsHTML(children, depth){
@@ -256,7 +256,7 @@ function leafRowMobileHTML(t, depth, row){
     '<span class="tree-caret leaf" aria-hidden="true">▸</span>' +
     '<span class="tmr-title">' + esc(t.title) + '</span>' +
     '<span class="tmr-meta">' +
-      taskCell(t, "column") + taskCell(t, "priority") + taskCell(t, "dueDate") +
+      taskCell(t, "column") + taskCell(t, "priority", false, true) + taskCell(t, "dueDate", false, true) +
       '<span class="tmr-prog">' + progressMiniHTML(progressOf(t)) + '</span>' +
     '</span></div>';
 }
@@ -316,9 +316,11 @@ function renderTreeItems(){
     treeBody.removeAttribute("role");
     treeBody.innerHTML = '<div style="padding:8px">' + (hasConditions
       ? UI.emptyState({ icon:"filterOff", title:"没有符合当前视图条件的工作项", text:"切换视图，或调整、清空筛选条件后重试。", actionLabel:"查看全部工作项", compact:true })
-      : UI.emptyState({ icon:"inbox", title:"这里还没有工作项", textHtml:"新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建工作项", compact:true })) + '</div>';
+      : UI.emptyState({ icon:"inbox", title:"这里还没有工作项",
+          textHtml: canCreateNow() ? "新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。" : "当前空间或项目没有可写范围，新建入口已隐藏；请联系空间主或管理员分配项目。",
+          actionLabel: canCreateNow() ? "新建工作项" : "", compact:true })) + '</div>';
     bindRetry(treeBody, function(){
-      if(!hasConditions){ openTaskDrawer("backlog"); return; }
+      if(!hasConditions){ if(!canCreateNow()){ toast("当前没有可写的项目，无法新建工作项；请联系空间主或管理员分配项目", "warn"); return; } openTaskDrawer("backlog"); return; }
       hideDone = false; syncHideDoneBtn();
       /* 「查看全部工作项」= 回到无筛选结果：点筛选栏的清空按钮，与它同一口径（清空全部条件、联动全部视图刷新） */
       if(filterOn()) $("btnClearFilter").click();
@@ -491,6 +493,12 @@ treeBody.addEventListener("click", function(e){
   }
   var statusBtn = e.target.closest("[data-row-status]");
   if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
+  var priBtn = e.target.closest("[data-row-pri]");
+  if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+  var ownerBtn = e.target.closest("[data-row-owner]");
+  if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
+  var dueBtn = e.target.closest("[data-row-due]");
+  if(dueBtn){ openDuePopover(dueBtn, dueBtn.dataset.rowDue); return; }
   var row = e.target.closest("[data-tree-id]");
   if(!row) return;
   var t = rt.listCache[row.dataset.treeId];

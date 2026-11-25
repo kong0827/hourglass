@@ -4,7 +4,7 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { showView } from "../core/router.js";
-import { dueState, rt, setNameById, setSortOf, statusBucket } from "../core/state.js";
+import { dueState, roleReadOnly, rt, setNameById, setSortOf, statusBucket } from "../core/state.js";
 import { loadView } from "../core/view-loader.js";
 import { updateBrand } from "../core/filters.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -286,7 +286,7 @@ function syncPortfolioPageHead(projectCount, attention){
   if(acts){
     var html = (pfSetId ? '<button class="btn" type="button" data-pf-all>查看全部项目</button>' : "")
       + '<button class="btn" type="button" data-portfolio-export>导出周报</button>'
-      + '<button class="btn primary" type="button" data-pf-new>新建项目</button>';
+      + (roleReadOnly() ? '' : '<button class="btn primary" type="button" data-pf-new>新建项目</button>');
     if(acts.dataset.pfActs !== html){
       acts.dataset.pfActs = html;
       acts.innerHTML = html;

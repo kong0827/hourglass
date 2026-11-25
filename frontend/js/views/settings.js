@@ -9,6 +9,7 @@ import { navTelemetryCsv } from "../core/nav-telemetry.js";
 import { routeNotificationLink } from "../core/notifications.js";
 import { openTaskById } from "../core/task-actions.js";
 import { saveViewState } from "../core/filters-ui.js";
+import { openImportDialog } from "../core/import-wizard.js";
 import { icon } from "../core/icons.js";
 import { loadPriorities } from "../core/priorities.js";
 import { canEditReq, canManageProject, catTag, projectOptionsHTML, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
@@ -166,6 +167,11 @@ function roleGuideTable(head, body){
     head.map(function(c, i){ return '<th' + (i ? ' class="perm-cell"' : '') + ">" + c + "</th>"; }).join("") +
     "</tr></thead><tbody>" + body + "</tbody></table></div>";
 }
+/* 角色说明里的菜单数从导航配置生成，避免侧栏增减后说明漂移 */
+function sideNavMenuCount(){
+  var n = document.querySelectorAll("#sideNav .nav-item:not(.mob-more)").length;
+  return n || 15;
+}
 function openRoleGuide(){
   var roleRows = [
     roleGuideGroup("数据范围"),
@@ -195,8 +201,8 @@ function openRoleGuide(){
   ].join("");
 
   var menuRows = [
-    roleGuideRow(["我的工作、周回顾", "可见", "可见", "可见", "可见"]),
-    roleGuideRow(["需求池、项目（含全局健康度）、版本、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["我的工作、消息中心、周回顾", "可见", "可见", "可见", "可见"]),
+    roleGuideRow(["需求池、项目（含全局健康度）、版本、交付说明、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["工作项（看板/列表/日历/甘特）、测试、分支", "可见", "可见", "可见（不可见项目的工作项不出现）", "可见"]),
     roleGuideRow(["报表（趋势与分布/完成记录/流程体检/交付图表/投入结构）", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["成员负载、逾期与阻塞", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
@@ -231,7 +237,7 @@ function openRoleGuide(){
         '</section>' +
         '<section class="perm-sect"><h4>可访问菜单</h4>' +
           roleGuideTable(["菜单", "空间主", "管理员", "成员", "查看者"], menuRows) +
-          '<p class="perm-note">当前版本不按角色隐藏侧栏菜单：四种空间角色看到同一套 12 个菜单，差异体现在页面内按钮和数据范围。查看者可见全部菜单，但所有写操作都会被拒绝；成员可见全部菜单，但「不可见」项目的工作项、文档和报表数据会被过滤。</p>' +
+          '<p class="perm-note">当前版本不按角色隐藏侧栏菜单：四种空间角色看到同一套 ' + sideNavMenuCount() + ' 个菜单，差异体现在页面内按钮和数据范围。查看者可见全部菜单，但所有写入口统一隐藏（不是点了才拒绝）；成员可见全部菜单，但「不可见」项目的工作项、文档和报表数据会被过滤。</p>' +
         '</section>' +
         '<section class="perm-sect"><h4>设置内入口差异</h4>' +
           roleGuideTable(["入口", "空间主", "管理员", "成员", "查看者"], settingsRows) +
@@ -334,8 +340,11 @@ function syncSettingsPageHead(){
   }
   var html = "";
   if(tab === "space"){
-    html = '<button class="btn" type="button" data-set-act="discard">放弃更改</button>'
-      + '<button class="btn primary" type="button" data-set-act="save-space"' + (isOwner ? "" : " disabled") + '>保存更改</button>';
+    /* 查看者只读：没有可保存的草稿，页脚不再给「放弃 / 保存更改」 */
+    html = roleReadOnly()
+      ? '<span class="foot-note">你是该空间的查看者，空间配置只读。</span>'
+      : '<button class="btn" type="button" data-set-act="discard">放弃更改</button>'
+        + '<button class="btn primary" type="button" data-set-act="save-space"' + (isOwner ? "" : " disabled") + '>保存更改</button>';
   }else if(tab === "members"){
     html = (isManager ? '<button class="btn" type="button" data-set-act="export-members">导出名单</button>' : "")
       + (isManager ? '<button class="btn primary" type="button" data-set-act="invite">' + icon("plus", 14) + '邀请成员</button>' : "");
@@ -413,7 +422,13 @@ function enterSettingsView(){
   wsNameInput.disabled = isPersonal || !isOwner;
   wsWebhook.value = rt.currentWs.notifyWebhook || "";
   $("btnWsSave").disabled = !isOwner;
+  $("btnWsSave").hidden = !isOwner;
   $("wsSaveNote").textContent = isOwner ? "改动立即生效" : "仅空间主可修改名称与推送";
+  /* 脚注与「放弃更改」只对能保存的空间主有意义；查看者明确只读 */
+  if($("wsFootNote")) $("wsFootNote").textContent = isOwner
+    ? "修改后点右上角「保存更改」生效 · 离开页面前会提示"
+    : (roleReadOnly() ? "查看者只读：空间配置不可修改。" : "空间配置仅空间主可修改，你可以查看但无法保存。");
+  if($("btnWsDiscardFoot")) $("btnWsDiscardFoot").hidden = !isOwner;
   /* O-1：通知推送面板按角色门控，并读取真实生效状态 */
   var canNotify = isOwner;
   ["wsNotifyInAppEnabled","wsNotifyEnabled","wsWebhook","wsNotifyToken","wsNotifyClearToken"].forEach(function(id){
@@ -533,6 +548,7 @@ function setSettingsTab(tab){
   /* 切换页签时清掉成员搜索残留：避免上一次选中的账号在下一次打开时仍留在输入框里 */
   if(prevTab !== tab && (prevTab === "members" || tab === "members")) resetMemberPicker();
   if(tab === "visibility" && isManager && !isPersonal) loadProjectAccess();
+  if(tab === "integration") loadAutomation();
   if(tab === "integration" && isAdmin){ loadMailSettings(); loadTeamAiSettings(); }
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
   if(tab === "workflow") setWorkflowTab(wfTab);
@@ -595,23 +611,25 @@ function memberJoinedText(m){
 function memberExceptionInfo(m){
   var data = rt.projectAccessCache;
   var role = m.role || "member";
-  if(role !== "member") return { read:0, none:0, total:(data && data.projects ? data.projects.length : 0), exceptions:0, assigned:false };
+  if(role !== "member") return { read:0, none:0, write:0, test:0, total:(data && data.projects ? data.projects.length : 0), exceptions:0, assigned:false };
   var projects = data && data.projects ? data.projects : [];
   var raw = {};
   ((data && data.grants) || []).forEach(function(g){
     if(g && g.userId === m.userId && g.projectId) raw[g.projectId] = g.access;
   });
-  var read = 0, none = 0, write = 0;
+  var read = 0, none = 0, write = 0, test = 0;
   projects.forEach(function(p){
     var v = effectiveGrant(raw[p.id], m);
     if(v === "read") read++;
     else if(v === "none") none++;
+    else if(v === "test") test++;
     else write++;
   });
   var assigned = m.projectAccessMode === "assigned";
   return {
-    read:read, none:none, write:write, total:projects.length, assigned:assigned,
-    exceptions: read + (assigned ? write : none)
+    read:read, none:none, write:write, test:test, total:projects.length, assigned:assigned,
+    /* 与默认值不同的都算例外：非分配成员默认 write，分配成员默认 none */
+    exceptions: read + test + (assigned ? write : none)
   };
 }
 function memberVisibilityCell(m){
@@ -621,9 +639,10 @@ function memberVisibilityCell(m){
   if(role === "viewer") return '<span class="member-vis">全部项目 · 只读</span>';
   var info = memberExceptionInfo(m);
   if(!info.total) return '<span class="member-vis" title="' + (info.assigned ? "新成员按项目分配" : "默认全部可见") + '">' + (info.assigned ? "尚未分配项目" : "—") + '</span>';
-  if(!info.read && !info.none && !(info.assigned && info.write)) return '<span class="member-vis" title="默认全部 ' + info.total + ' 个项目可参与">—</span>';
+  if(!info.read && !info.none && !info.test && !(info.assigned && info.write)) return '<span class="member-vis" title="默认全部 ' + info.total + ' 个项目可参与">—</span>';
   var html = [];
   if(info.read) html.push('<span class="badge blocked">只读 ' + info.read + '</span>');
+  if(info.test) html.push('<span class="chip">可测试 ' + info.test + '</span>');
   if(info.none) html.push('<span class="chip">不可见 ' + info.none + '</span>');
   if(info.assigned && info.write) html.push('<span class="chip">可参与 ' + info.write + '</span>');
   html.push('<button class="btn link" type="button" data-open-access="' + esc(m.userId) + '">调整</button>');
@@ -972,16 +991,18 @@ wsMemberList.addEventListener("change", function(e){
 /* ---------- 项目可见范围矩阵 ---------- */
 var ACCESS_OPTIONS = [
   { value:"write", label:"可参与" },
+  { value:"test", label:"可测试" },
   { value:"read", label:"只读" },
   { value:"none", label:"不可见" }
 ];
 /* 矩阵只写显式值；历史 pm/dev/qa 与空值都按「可参与」理解（与后端默认参与口径一致） */
 function normalizeAccess(value){
-  return (value === "read" || value === "none" || value === "write") ? value : "write";
+  return (value === "read" || value === "none" || value === "write" || value === "test") ? value : "write";
 }
 function accessLabel(value){
   if(value === "none") return "不可见";
   if(value === "read") return "只读";
+  if(value === "test") return "可测试";
   return "可参与";
 }
 /* 新成员按项目分配时缺记录即不可见；存量成员缺记录仍是默认参与 */
@@ -990,7 +1011,7 @@ function defaultGrantFor(member){
 }
 /* 显式 write/read/none 优先；缺记录与历史 pm/dev/qa 按成员模式回落（与后端 effectiveAccess 一致） */
 function effectiveGrant(raw, member){
-  return (raw === "write" || raw === "read" || raw === "none") ? raw : defaultGrantFor(member);
+  return (raw === "write" || raw === "test" || raw === "read" || raw === "none") ? raw : defaultGrantFor(member);
 }
 function accessOptions(selected){
   return ACCESS_OPTIONS.map(function(o){
@@ -1065,7 +1086,7 @@ function renderProjectAccess(){
   var head = '<thead><tr><th class="access-sticky">成员 / 项目</th>' +
     projects.map(function(p){ return '<th title="' + esc(p.name) + '">' + esc(p.name) + '</th>'; }).join("") +
     '</tr></thead>';
-  var readTotal = 0, noneTotal = 0;
+  var readTotal = 0, noneTotal = 0, testTotal = 0;
   var body = rows.length ? rows.map(function(m){
     var role = m.role || "member";
     var cells;
@@ -1078,7 +1099,8 @@ function renderProjectAccess(){
         var value = effectiveGrant(grantMap[accessKey(m.userId, p.id)], m);
         if(value === "read") readTotal++;
         else if(value === "none") noneTotal++;
-        var cls = value === "read" ? " is-read" : (value === "none" ? " is-none" : "");
+        else if(value === "test") testTotal++;
+        var cls = value === "read" ? " is-read" : (value === "none" ? " is-none" : (value === "test" ? " is-test" : ""));
         return '<td><select class="access-cell' + cls + '" data-access-user="' + esc(m.userId) +
           '" data-access-project="' + esc(p.id) + '" aria-label="' + esc(m.displayName + " · " + p.name) + '">' +
           accessOptions(value) + '</select></td>';
@@ -1092,7 +1114,7 @@ function renderProjectAccess(){
   }).join("")
     : '<tr><td class="access-all" colspan="' + (projects.length + 1) + '">没有符合条件的成员。</td></tr>';
   var foot = $("accessFootStats");
-  if(foot) foot.textContent = readTotal + " 处只读 · " + noneTotal + " 处不可见 · 修改后立即生效";
+  if(foot) foot.textContent = readTotal + " 处只读 · " + testTotal + " 处可测试 · " + noneTotal + " 处不可见 · 修改后立即生效";
   box.innerHTML = '<table class="manager-tbl access-matrix">' + head + '<tbody>' + body + '</tbody></table>';
   syncAccessFade();
 }
@@ -1190,19 +1212,20 @@ function grantButtons(value){
   }).join("");
 }
 function countGrants(session){
-  var write = 0, read = 0;
+  var write = 0, read = 0, test = 0;
   session.projects.forEach(function(p){
     if(session.draft[p.id] === "write") write++;
+    else if(session.draft[p.id] === "test") test++;
     else if(session.draft[p.id] === "read") read++;
   });
-  return { write: write, read: read };
+  return { write: write, read: read, test: test };
 }
 function updateGrantSummary(summaryEl){
   var session = grantSession;
   if(!session || !summaryEl) return;
   var c = countGrants(session);
-  summaryEl.textContent = "可见 " + (c.write + c.read) + "/" + session.projects.length + " 个项目" +
-    " · 可参与 " + c.write + " · 只读 " + c.read;
+  summaryEl.textContent = "可见 " + (c.write + c.test + c.read) + "/" + session.projects.length + " 个项目" +
+    " · 可参与 " + c.write + (c.test ? " · 可测试 " + c.test : "") + " · 只读 " + c.read;
 }
 function renderGrantPicker(listEl, summaryEl){
   var session = grantSession;
@@ -1925,6 +1948,142 @@ function loadNotifyStatus(){
     if(notifyStatusText) notifyStatusText.textContent = "无法读取推送状态（该接口需要后端支持）";
   });
 }
+
+/* ---------------------------------------------------------- 自动化与定时报告 */
+var automationData = null;
+var versionOptionsLoaded = false;
+var WEEKDAY_LABEL = { 1:"周一", 2:"周二", 3:"周三", 4:"周四", 5:"周五", 6:"周六", 7:"周日" };
+function initReportHourOptions(){
+  var sel = $("reportWeeklyHour");
+  if(!sel || sel.options.length) return;
+  var html = "";
+  for(var h = 0; h < 24; h++) html += '<option value="' + h + '">' + pad2(h) + ":00</option>";
+  sel.innerHTML = html;
+}
+function loadAutomation(){
+  if(!$("set-automation")) return;
+  initReportHourOptions();
+  $("automationRules").innerHTML = UI.skeletonRows(3);
+  API.get("/api/automation").then(function(d){
+    automationData = d || {};
+    renderAutomationRules();
+    fillReports();
+  }).catch(function(ex){
+    automationData = null;
+    $("automationRules").innerHTML = UI.errorState(ex.message);
+    bindRetry($("automationRules"), function(){ loadAutomation(); });
+    $("automationRuleHint").textContent = "无法读取";
+  });
+}
+function renderAutomationRules(){
+  var box = $("automationRules");
+  if(!box) return;
+  var can = !!(automationData && automationData.canManageRules);
+  var rules = (automationData && automationData.rules) || [];
+  box.innerHTML = rules.map(function(r){
+    var html = '<div class="auto-rule" data-rule="' + esc(r.key) + '">'
+      + '<label class="sw"><input type="checkbox" data-auto-enabled' + (r.enabled ? " checked" : "") + (can ? "" : " disabled") + " /> " + esc(r.name) + "</label>"
+      + '<span class="tiny">' + esc(r.description) + "</span>";
+    if(r.configurableDays){
+      html += '<div class="auto-days"><div class="field"><label for="autoDays">逾期天数</label>'
+        + '<input id="autoDays" type="number" min="1" max="30" value="' + esc(r.days == null ? 3 : r.days) + '"' + (can ? "" : " disabled") + " /></div></div>";
+    }
+    if(r.lastRunAt){
+      html += '<span class="auto-last">上次执行：' + esc(fmtTs(r.lastRunAt)) + (r.lastStatus ? " · " + esc(r.lastStatus) : "") + "</span>";
+    }
+    return html + "</div>";
+  }).join("");
+  $("automationRuleHint").textContent = can ? "空间主或管理员可修改" : "只有空间主或管理员可修改，当前为只读";
+  $("btnAutomationSave").disabled = !can;
+}
+function fillReports(){
+  var r = (automationData && automationData.reports) || {};
+  var weekly = r.weekly || {}, version = r.version || {};
+  $("reportWeeklyEnabled").checked = !!weekly.enabled;
+  $("reportWeeklyWeekday").value = String(weekly.weekday == null ? 5 : weekly.weekday);
+  $("reportWeeklyHour").value = String(weekly.sendHour == null ? 17 : weekly.sendHour);
+  $("reportWeeklyChannels").value = weekly.channels || "inapp";
+  $("weeklyLastSent").textContent = weekly.lastSentAt ? "上次发送：" + fmtTs(weekly.lastSentAt) : "还没发送过";
+  $("reportVersionEnabled").checked = !!version.enabled;
+  $("reportVersionChannels").value = version.channels || "inapp";
+  $("versionLastSent").textContent = version.lastSentAt ? "上次发送：" + fmtTs(version.lastSentAt) : "还没发送过";
+  $("reportState").textContent = r.mailEnabled === false ? "SMTP 邮件未启用，选邮件渠道只会收到站内通知" : "";
+}
+function ensureVersionOptions(){
+  var sel = $("reportVersionPick");
+  if(!sel || versionOptionsLoaded) return Promise.resolve();
+  return API.get("/api/versions/cross-project").then(function(list){
+    versionOptionsLoaded = true;
+    var opts = ['<option value="">选择版本</option>'];
+    (list || []).forEach(function(v){
+      if(!v.versionId || v.versionStatus === "canceled") return;
+      var label = (v.projectName ? v.projectName + " · " : "") + (v.versionName || v.versionId);
+      opts.push('<option value="' + esc(v.versionId) + '">' + esc(label) + "</option>");
+    });
+    sel.innerHTML = opts.join("");
+  }).catch(function(){
+    versionOptionsLoaded = false;
+  });
+}
+function saveReportSubscriptions(){
+  var weekly = {
+    enabled: $("reportWeeklyEnabled").checked,
+    channels: $("reportWeeklyChannels").value,
+    weekday: Number($("reportWeeklyWeekday").value),
+    sendHour: Number($("reportWeeklyHour").value)
+  };
+  var version = { enabled: $("reportVersionEnabled").checked, channels: $("reportVersionChannels").value };
+  Promise.all([
+    API.put("/api/automation/reports/weekly", weekly),
+    API.put("/api/automation/reports/version", version)
+  ]).then(function(){
+    loadAutomation();
+    toast("报告订阅已保存", "fs");
+  }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
+}
+$("btnAutomationSave") && $("btnAutomationSave").addEventListener("click", function(){
+  var rules = {};
+  document.querySelectorAll('#automationRules [data-rule]').forEach(function(el){
+    var cb = el.querySelector("[data-auto-enabled]");
+    if(cb) rules[el.dataset.rule] = cb.checked;
+  });
+  var body = { rules: rules };
+  var daysEl = document.querySelector('#automationRules [data-rule="overdue_reminder"] #autoDays');
+  if(daysEl) body.overdueDays = Number(daysEl.value);
+  $("automationState").textContent = "保存中…";
+  API.put("/api/automation/rules", body).then(function(d){
+    automationData = automationData || {};
+    automationData.rules = (d && d.rules) || automationData.rules;
+    renderAutomationRules();
+    $("automationState").textContent = "已保存";
+    toast("自动化规则已保存", "fs");
+  }).catch(function(ex){
+    $("automationState").textContent = "";
+    toast(ex.message || "保存失败", "bad");
+  });
+});
+$("btnReportSave") && $("btnReportSave").addEventListener("click", saveReportSubscriptions);
+document.querySelectorAll("[data-report-send]").forEach(function(btn){
+  btn.addEventListener("click", function(){
+    var type = btn.dataset.reportSend;
+    if(type === "version"){
+      var vid = $("reportVersionPick").value;
+      if(!vid){ toast("先选择一个版本再发送", "warn"); ensureVersionOptions(); return; }
+      btn.disabled = true;
+      API.post("/api/automation/reports/version/send?versionId=" + encodeURIComponent(vid)).then(function(d){
+        toast((d && d.message) || "已发送", d && d.sent ? "fs" : "warn");
+      }).catch(function(ex){ toast(ex.message || "发送失败", "bad"); }).then(function(){ btn.disabled = false; });
+      return;
+    }
+    btn.disabled = true;
+    API.post("/api/automation/reports/weekly/send").then(function(d){
+      toast((d && d.message) || "已发送", d && d.sent ? "fs" : "warn");
+      loadAutomation();
+    }).catch(function(ex){ toast(ex.message || "发送失败", "bad"); }).then(function(){ btn.disabled = false; });
+  });
+});
+$("reportVersionPick") && $("reportVersionPick").addEventListener("focus", ensureVersionOptions);
+
 function fillNotifyForm(d){
   d = d || {};
   if($("wsNotifyEnabled")) $("wsNotifyEnabled").checked = !!d.enabled;
@@ -2734,13 +2893,15 @@ function renderSystemInfo(d){
     ["存储目录", storage.path],
     ["磁盘可用", storage.diskUsableBytes == null ? null : fmtBytes(storage.diskUsableBytes) + " / " + fmtBytes(storage.diskTotalBytes)]
   ]), dbOk ? "" : "sys-warn"));
-  cards.push(sysCard("邮件投递", { text: mail.enabled ? "已启用" : "未启用", tone: mail.enabled ? "tag-success" : "tag-ghost" }, sysKv([
+  var mailUnknown = Number(mail.unknown) || 0;
+  var mailRows = [
     ["已发送", mail.sent || 0],
     ["等待重试", mail.pending || 0],
-    ["最终失败", mail.failed || 0],
-    ["最近一封", mail.lastSentAt || mail.lastAt],
-    ["最近错误", mail.lastError]
-  ]), mail.failed > 0 ? "sys-warn" : ""));
+    ["最终失败", mail.failed || 0]
+  ];
+  if(mailUnknown > 0) mailRows.push(["疑似已发出", mailUnknown + " 封 · 结果未回写，可能已送达，勿盲目重复补发"]);
+  mailRows.push(["最近一封", mail.lastSentAt || mail.lastAt], ["最近错误", mail.lastError]);
+  cards.push(sysCard("邮件投递", { text: mail.enabled ? "已启用" : "未启用", tone: mail.enabled ? "tag-success" : "tag-ghost" }, sysKv(mailRows), mail.failed > 0 || mailUnknown > 0 ? "sys-warn" : ""));
   var hookState = hook.configured ? (hook.enabled === false ? "已配置 · 关闭" : "已配置") : "未配置";
   cards.push(sysCard("外部推送（当前空间）", { text: hook.workspaceName || "未知空间", tone: "tag-ghost" }, sysKv([
     ["状态", hookState],
@@ -3092,6 +3253,14 @@ $("btnExport").addEventListener("click", function(){
   }).catch(function(ex){ toast("导出失败：" + (ex.message || "网络异常"), "bad"); });
 });
 $("btnImport").addEventListener("click", function(){ $("fileImport").click(); });
+if($("btnGridImport")) $("btnGridImport").addEventListener("click", function(){
+  openImportDialog("task", {
+    onDone: function(){
+      loadBoard({animate:true});
+      loadReqs();
+    }
+  });
+});
 $("fileImport").addEventListener("change", function(e){
   var f = e.target.files && e.target.files[0];
   e.target.value = "";

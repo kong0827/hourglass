@@ -107,6 +107,19 @@ class MyTasksControllerPaginationTest {
         assertEquals(Boolean.FALSE, data.get("hasMore"));
     }
 
+    @Test
+    void createdViewIgnoresOpenScope() {
+        when(queryService.myTasksPage(eq("U1"), eq("我"), eq(false), eq(false), eq("created"), eq(false), any(), eq(0), eq(100)))
+                .thenReturn(new MyTasksPage(Collections.<Task>emptyList(), 0,
+                        Collections.<MyTaskWorkspace>emptyList(), 0));
+
+        controller.myTasks("open", "created", null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+        /* 我发起的要含已完成与已取消，scope=open 不能把终态裁掉 */
+        verify(queryService).myTasksPage(eq("U1"), eq("我"), eq(false), eq(false), eq("created"), eq(false), any(), eq(0), eq(100));
+    }
+
     private static Task task(String id) {
         Task t = new Task();
         t.setId(id);

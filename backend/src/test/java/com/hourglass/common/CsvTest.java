@@ -47,4 +47,13 @@ class CsvTest {
         assertTrue(Csv.parse(null).isEmpty());
         assertTrue(Csv.parse("").isEmpty());
     }
+
+    @Test
+    void neutralizesSpreadsheetFormulas() {
+        assertEquals("'=1+1", Csv.cell("=1+1"));
+        assertEquals("'+cmd", Csv.cell("+cmd"));
+        assertEquals("'-2", Csv.cell("-2"));
+        assertEquals("'@SUM(A1)", Csv.cell("@SUM(A1)"));
+        assertEquals("普通文本", Csv.cell("普通文本"), "普通文本不加前缀");
+    }
 }

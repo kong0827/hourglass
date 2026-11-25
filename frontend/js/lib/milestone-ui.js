@@ -8,6 +8,7 @@ var KIND_NAMES = { version: "版本发布后", tasks: "工作项完成后", manu
 var STATUS_META = {
   achieved: { label: "已达成", cls: "tag-success" },
   achieved_rolled_back: { label: "已达成 · 已回滚", cls: "tag-warning" },
+  evidence_missing: { label: "证据缺失", cls: "tag-warning" },
   overdue: { label: "已延期", cls: "tag-danger" },
   canceled: { label: "已取消", cls: "tag-neutral" },
   pending: { label: "未达成", cls: "ghost" }
@@ -28,7 +29,9 @@ export function milestoneEvidence(m){
     return text;
   }
   if(m.kind === "tasks"){
-    return "关联工作项 " + (m.doneTaskCount || 0) + " / " + (m.taskCount || 0) + " 完成";
+    var ev = "关联工作项 " + (m.doneTaskCount || 0) + " / " + (m.taskCount || 0) + " 完成";
+    if(m.missingTaskCount > 0) ev += " · 缺失 " + m.missingTaskCount + " 项证据（关联工作项已删除或移出项目）";
+    return ev;
   }
   if(m.achievedAt){
     return "人工确认于 " + fmtTs(m.achievedAt) + (m.confirmedByName ? " · " + m.confirmedByName : "");
@@ -78,7 +81,7 @@ function detailHTML(m, canWrite){
     if(m.kind === "manual" && m.status !== "achieved" && m.status !== "achieved_rolled_back"){
       acts += '<button class="btn sm primary" type="button" data-ms-act="achieve">标记达成</button>';
     }
-    if(m.status === "pending" || m.status === "overdue"){
+    if(m.status === "pending" || m.status === "overdue" || m.status === "evidence_missing"){
       acts += '<button class="btn sm ghost" type="button" data-ms-act="reschedule">改期</button>';
       acts += '<button class="btn sm ghost danger" type="button" data-ms-act="cancel">取消</button>';
     }
@@ -101,12 +104,12 @@ function formHTML(act, m){
   var rev = '<input type="hidden" name="msAct" value="' + esc(act) + '">';
   if(act === "achieve"){
     return '<div class="ms-action-form">' + rev + '<p class="foot-note">负责人：' + esc(m.ownerName || "—") + ' · 日期：' + esc(fmtTs(new Date().toISOString())) + '</p>'
-      + '<label>说明（可选）<input class="input" data-ms-field="note" maxlength="500" placeholder="例如：客户验收通过"></label>'
+      + '<label>说明（可选）<textarea class="textarea" data-ms-field="note" maxlength="500" rows="2" placeholder="例如：客户验收通过"></textarea></label>'
       + '<div class="phase-acts"><button class="btn sm primary" type="button" data-ms-submit="achieve">确认达成</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
   if(act === "revoke"){
-    return '<div class="ms-action-form">' + rev + '<label>撤销原因（可选）<input class="input" data-ms-field="reason" maxlength="500"></label>'
+    return '<div class="ms-action-form">' + rev + '<label>撤销原因（可选）<textarea class="textarea" data-ms-field="reason" maxlength="500" rows="2"></textarea></label>'
       + '<div class="phase-acts"><button class="btn sm ghost danger" type="button" data-ms-submit="revoke">确认撤销</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
@@ -116,11 +119,11 @@ function formHTML(act, m){
     return '<div class="ms-action-form">' + rev
       + '<p class="foot-note">' + esc(m.targetDate || "未设置") + ' → 新日期（默认顺延 7 天）</p>'
       + '<label>新目标日期<input class="input" type="date" data-ms-field="targetDate" value="' + esc(next) + '"></label>'
-      + '<label>改期原因<input class="input" data-ms-field="reason" maxlength="500" placeholder="必填"></label>'
+      + '<label>改期原因<textarea class="textarea" data-ms-field="reason" maxlength="500" rows="2" placeholder="必填"></textarea></label>'
       + '<div class="phase-acts"><button class="btn sm primary" type="button" data-ms-submit="reschedule">确认改期</button>'
       + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';
   }
-  return '<div class="ms-action-form">' + rev + '<label>取消原因<input class="input" data-ms-field="reason" maxlength="500" placeholder="必填"></label>'
+  return '<div class="ms-action-form">' + rev + '<label>取消原因<textarea class="textarea" data-ms-field="reason" maxlength="500" rows="2" placeholder="必填"></textarea></label>'
     + '<p class="foot-note">取消后保留历史与原因，不计入达成统计。</p>'
     + '<div class="phase-acts"><button class="btn sm ghost danger" type="button" data-ms-submit="cancel">确认取消</button>'
     + '<button class="btn sm ghost" type="button" data-ms-act="">取消</button></div></div>';

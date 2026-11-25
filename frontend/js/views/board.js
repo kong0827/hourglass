@@ -10,7 +10,7 @@ import { isMobile } from "../core/layout.js";
 import { renderAlertBar } from "../core/notifications.js";
 import { activeView, showView } from "../core/router.js";
 import { loadPriorities } from "../core/priorities.js";
-import { canEditReq, canEditTask, catNameById, catTag, dueFlag, dueMetaClass, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, safeColor, setNameById, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
+import { canCreateNow, canEditReq, canEditTask, catNameById, catTag, dueFlag, dueMetaClass, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, safeColor, setNameById, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
 import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
@@ -649,6 +649,8 @@ function cardHTML(t, idx){
   '</article>';
 }
 function cardAddHTML(colId){
+  /* 查看者或没有任何可写项目：不渲染创建入口，避免点了才被后端拒绝 */
+  if(!canCreateNow()) return "";
   return '<button class="card-add" type="button" data-add="' + esc(colId) + '" aria-label="在「' + esc(colName(colId)) + '」新建工作项">' +
     icon("plus", 13) + ' 添加工作项</button>';
 }
@@ -687,14 +689,17 @@ function renderMobileBoard(opts){
 
   board.classList.add("board-mobile");
   if(totalTaskCount() === 0 && !filterOn()){
+    var canNewMob = canCreateNow();
     board.innerHTML = '<div class="mob-board">' +
       UI.emptyState({
         icon:"board",
         title:"看板还是空的",
-        text:"点击右下角「新建」创建第一个工作项，数据会实时同步到其他端。",
-        actionLabel:"新建第一项工作项"
+        text: canNewMob
+          ? "点击右下角「新建」创建第一个工作项，数据会实时同步到其他端。"
+          : "当前空间还没有工作项。你是查看者或没有可写项目，只能浏览。",
+        actionLabel: canNewMob ? "新建第一项工作项" : ""
       }) + '</div>';
-    bindRetry(board, function(){ openTaskDrawer("backlog"); });
+    if(canNewMob) bindRetry(board, function(){ openTaskDrawer("backlog"); });
     renderAlertBar(); renderFilterChips();
     return;
   }
@@ -716,7 +721,7 @@ function renderMobileBoard(opts){
     var mobFiltered = filterOn() || (active === "done" && !!boardDonePub);
     var emptyTitle = mobFiltered ? "无匹配工作项" : "这一列还没有工作项";
     var emptyDesc = mobFiltered ? "调整筛选条件后再看" : "从下面新建，或把别的列拖过来";
-    listHTML = UI.emptyState({ icon:"inbox", title:emptyTitle, text:emptyDesc, actionLabel:"新建工作项", compact:true });
+    listHTML = UI.emptyState({ icon:"inbox", title:emptyTitle, text:emptyDesc, actionLabel: canCreateNow() ? "新建工作项" : "", compact:true });
   }else{
     listHTML = items.map(function(t){ return cardHTML(t, 0); }).join("");
   }
@@ -781,14 +786,17 @@ function render(opts){
   var movedId = opts.movedId || null;
 
   if(totalTaskCount() === 0 && !filterOn()){
+    var canNew = canCreateNow();
     board.innerHTML = '<div style="flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:70vh;width:100%">' +
       UI.emptyState({
         icon:"board",
         title:"看板还是空的",
-        textHtml:"新建一个工作项，或用快捷键 <b>N</b> 快速录入。<br>数据保存在服务器，多端实时同步。",
-        actionLabel:"新建第一项工作项"
+        textHtml: canNew
+          ? "新建一个工作项，或用快捷键 <b>N</b> 快速录入。<br>数据保存在服务器，多端实时同步。"
+          : "当前空间还没有工作项。你是查看者或没有可写项目，只能浏览；需要写权限请联系空间主或管理员。",
+        actionLabel: canNew ? "新建第一项工作项" : ""
       }) + '</div>';
-    bindRetry(board, function(){ openTaskDrawer("backlog"); });
+    if(canNew) bindRetry(board, function(){ openTaskDrawer("backlog"); });
     renderAlertBar(); renderFilterChips();
     return;
   }
@@ -828,8 +836,9 @@ function render(opts){
         (c.done ? ' data-col-range="all"' : '') +
         ' title="' + esc(countTip) + '" aria-label="' + esc(countTip) + '">' + esc(countText) + '</button>' +
       '<span class="sp"></span>' +
-      /* 列头只留「+」与「⋯」：排序、折叠、发布态筛选取值都收进列设置菜单 */
-      '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新建工作项" aria-label="在「' + esc(c.name) + '」新建工作项">' + icon("plus", 14) + '</button>' +
+      /* 列头只留「+」与「⋯」：排序、折叠、发布态筛选取值都收进列设置菜单；
+         没有写权限时不渲染「+」，只读列仍保留设置菜单 */
+      (canCreateNow() ? '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新建工作项" aria-label="在「' + esc(c.name) + '」新建工作项">' + icon("plus", 14) + '</button>' : '') +
       '<button class="icon-btn sm' + (doneFiltered ? " on" : "") + '" type="button" data-col-menu="' + esc(c.id) + '" title="' + (doneFiltered ? "「" + esc(c.name) + "」列设置 · 发布态：" + donePubLabel(effDonePub) : "「" + esc(c.name) + "」列设置") + '" aria-label="「" + esc(c.name) + "」列设置" aria-haspopup="menu" aria-expanded="false">' + icon("more", 14) + '</button>' +
     '</div>';
 
@@ -969,6 +978,7 @@ function bindBoardGuide(){
 }
 bindBoardGuide();
 function openInlineAdd(colId, preset, focusIt){
+  if(!canCreateNow()){ toast("你是该空间的查看者，不能新建工作项", "warn"); return; }
   /* 手机单列模式没有 .board-col 容器，直接开抽屉，复用同一套新建表单 */
   if(isMobile()){ state.inlineAdd = null; openTaskDrawer(colId); return; }
   var col = board.querySelector('.board-col[data-col="' + colId + '"]');
@@ -1283,15 +1293,24 @@ function endDrag(){
   });
 }
 /* 卡片上的「开始测试」：移入测试中并由后端自动认领给当前用户 */
-function claimTest(id){
+var claimBusy = {};
+function claimTest(id, btn){
   var task = taskById(id);
-  if(!task) return;
+  if(!task || claimBusy[id]) return;
+  claimBusy[id] = true;
+  if(btn) btn.disabled = true;
+  function release(){
+    delete claimBusy[id];
+    if(btn) btn.disabled = false;
+  }
   function done(res){
+    release();
     var tester = (res.task && res.task.testOwner) || "我";
     toast("已认领测试负责人：" + tester + "，开始测试", "fs");
     loadBoard({silent:true});
   }
   function fail(ex){
+    release();
     toast("认领失败：" + (ex.message || "网络异常"), "bad");
     loadBoard({silent:true});
   }
@@ -1303,7 +1322,7 @@ function claimTest(id){
   var wsId = rt.currentWs && rt.currentWs.id;
   var items = [{ from: task.boardColumn, title: task.title }];
   guard(wsId, items, "testing").then(function(pass){
-    if(!pass) return;
+    if(!pass){ release(); return; }
     var body = { column: "testing" };
     if(pass.reason) body.reason = pass.reason;
     if(pass.force) body.force = true;
@@ -1428,9 +1447,15 @@ board.addEventListener("click", function(e){
     return;
   }
   var colAdd = e.target.closest("[data-col-add]");
-  if(colAdd){ state.inlineAdd = {col: colAdd.dataset.colAdd, value: ""}; openInlineAdd(colAdd.dataset.colAdd, ""); return; }
+  if(colAdd){
+    if(!canCreateNow()){ toast("你是该空间的查看者，不能新建工作项", "warn"); return; }
+    state.inlineAdd = {col: colAdd.dataset.colAdd, value: ""}; openInlineAdd(colAdd.dataset.colAdd, ""); return;
+  }
   var add = e.target.closest("[data-add]");
-  if(add){ state.inlineAdd = {col: add.dataset.add, value: ""}; openInlineAdd(add.dataset.add, ""); return; }
+  if(add){
+    if(!canCreateNow()){ toast("你是该空间的查看者，不能新建工作项", "warn"); return; }
+    state.inlineAdd = {col: add.dataset.add, value: ""}; openInlineAdd(add.dataset.add, ""); return;
+  }
   var colorDot = e.target.closest("[data-col-color]");
   if(colorDot){ openColColorPop(colorDot, colorDot.dataset.colColor); return; }
   var colMenuBtn = e.target.closest("[data-col-menu]");
@@ -1450,7 +1475,7 @@ board.addEventListener("click", function(e){
   var tmr = e.target.closest("[data-timer-toggle]");
   if(tmr){ toggleTaskTimer(tmr.dataset.timerToggle); return; }
   var claim = e.target.closest("[data-test-claim]");
-  if(claim){ claimTest(claim.dataset.testClaim); return; }
+  if(claim){ claimTest(claim.dataset.testClaim, claim); return; }
   var tick = e.target.closest("[data-done-toggle]");
   if(tick){ toggleTaskDone(tick.dataset.doneToggle); return; }
   var ed = e.target.closest("[data-edit]");

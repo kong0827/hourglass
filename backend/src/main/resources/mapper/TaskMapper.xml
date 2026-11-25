@@ -280,6 +280,10 @@
           AND EXISTS (SELECT 1 FROM task_watch tw
                       WHERE tw.task_id = t.id AND tw.workspace_id = t.workspace_id AND tw.user_id = #{userId})
         </when>
+        <when test="createdView">
+          <!-- 我发起的：创建人是我；历史任务没有创建日志时该列为空，不做推断 -->
+          AND t.created_by_user_id = #{userId}
+        </when>
         <when test="pendingView">
           <!-- 待我处理：开发负责人或测试负责人的并集；同一条只计一次 -->
           AND (
@@ -307,7 +311,7 @@
                     OR EXISTS (SELECT 1 FROM project_member pmw
                                WHERE pmw.workspace_id = t.workspace_id
                                  AND pmw.project_id = t.req_id
-                                 AND pmw.user_id = #{userId} AND pmw.access = 'write')
+                                 AND pmw.user_id = #{userId} AND pmw.access IN ('write', 'test'))
                     OR ((m.project_access_mode IS NULL OR m.project_access_mode &lt;&gt; 'assigned')
                         AND NOT EXISTS (SELECT 1 FROM project_member pmr
                                         WHERE pmr.workspace_id = t.workspace_id
@@ -350,9 +354,10 @@
       </if>
       <if test="completion == 'open'"> AND t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled' </if>
       <if test="completion == 'done'"> AND t.board_column = 'done' </if>
-      <!-- 终态默认不进「我的工作」；当前 UI 只走看板「已取消」入口，这里保留 completion=canceled 供接口显式查询 -->
+      <!-- 终态默认不进「我的工作」；当前 UI 只走看板「已取消」入口，这里保留 completion=canceled 供接口显式查询。
+           我发起的要留痕：取消掉的工作项也计入，否则创建人看不到自己撤掉的那条。 -->
       <if test="completion == 'canceled'"> AND t.board_column = 'canceled' </if>
-      <if test="completion != 'canceled'"> AND t.board_column &lt;&gt; 'canceled' </if>
+      <if test="completion != 'canceled' and !createdView"> AND t.board_column &lt;&gt; 'canceled' </if>
       <if test="q != null">
         <!-- 口径与 ganttWhere 一致：标题/描述/备注/模块 + 项目名 + 标签名 + 附件名 + 工作项编号 -->
         AND (t.title LIKE CONCAT('%', #{q}, '%')
@@ -466,7 +471,7 @@
        workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。
        分页：ORDER BY 末尾带 t.id 兜底，保证同一 updated_at 下分页边界稳定。 -->
   <select id="selectMyTasks" resultType="Task">
-    SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category_id,
+    SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.created_by_user_id, t.category_id,
            t.board_column, t.item_type, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
            t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at,
            t.test_owner_user_id, t.test_owner, t.test_requested_at, t.test_started_at, t.test_finished_at,
@@ -479,7 +484,7 @@
     LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     <include refid="myTasksWhere"/>
     <choose>
-      <when test="watchView">ORDER BY t.updated_at DESC, t.id</when>
+      <when test="watchView or createdView">ORDER BY t.updated_at DESC, t.id</when>
       <when test="strictTest">ORDER BY (t.test_requested_at IS NULL), t.test_requested_at, t.id</when>
       <otherwise>ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC, t.id</otherwise>
     </choose>
@@ -492,7 +497,7 @@
     FROM task t
     JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
     <include refid="myTasksWhere"/>
-    <if test="nameOnly and !testScope and !watchView and !pendingView and !strictTest"> AND t.owner_user_id IS NULL </if>
+    <if test="nameOnly and !testScope and !watchView and !pendingView and !strictTest and !createdView"> AND t.owner_user_id IS NULL </if>
   </select>
 
   <!-- 覆盖空间：按筛选后的全量任务去重，分页不会让"覆盖 N 个空间"缩水 -->
@@ -506,13 +511,13 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
+    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, created_by_user_id, category_id, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, test_estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       canceled_at, cancel_reason, cancel_from,
                       test_owner_user_id, test_owner, test_requested_at, test_started_at, test_finished_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, item_no, epic_id, demand_id,
                       severity, environment, reproduce_steps, found_version_id, regression_status, created_at)
-    VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{categoryId},
+    VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{createdByUserId}, #{categoryId},
             #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{testEstimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
             #{note}, #{completedAt}, #{canceledAt}, #{cancelReason}, #{cancelFrom}, #{testOwnerUserId}, #{testOwner}, #{testRequestedAt}, #{testStartedAt}, #{testFinishedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{itemNo}, #{epicId}, #{demandId},
             #{severity}, #{environment}, #{reproduceSteps}, #{foundVersionId}, #{regressionStatus},
@@ -604,6 +609,20 @@
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND deleted_at IS NULL
     ORDER BY (board_column = 'done'), sort_order, id
+  </select>
+
+  <!-- 需求阶段工时：逐工作项取类型、预估与累计计时，测试窗口内的分钟单独列出。
+       窗口口径与 TimeLogMapper.sumStageByTaskByWorkspace 一致（自然日粒度）。 -->
+  <select id="selectHoursByDemand" resultType="Task">
+    SELECT t.id, t.item_type AS itemType, t.estimate_minutes, t.test_estimate_minutes,
+           COALESCE(SUM(tl.minutes), 0) AS total_minutes,
+           COALESCE(SUM(CASE WHEN t.test_started_at IS NOT NULL AND t.test_finished_at IS NOT NULL
+                             AND DATE(tl.started_at) BETWEEN DATE(t.test_started_at) AND DATE(t.test_finished_at)
+                            THEN tl.minutes ELSE 0 END), 0) AS test_minutes
+    FROM task t
+    LEFT JOIN time_log tl ON tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL
+    WHERE t.workspace_id = #{workspaceId} AND t.demand_id = #{demandId} AND t.deleted_at IS NULL
+    GROUP BY t.id, t.item_type, t.estimate_minutes, t.test_estimate_minutes
   </select>
 
   <update id="clearOwnerUser">
@@ -991,7 +1010,8 @@
       <foreach collection="query.owners" item="o" separator=" OR ">
         <choose>
           <when test="o == '__none'">(t.owner IS NULL OR t.owner = '')</when>
-          <otherwise>t.owner = #{o}</otherwise>
+          <!-- 负责人条件既接受显示名也接受账号ID：全局搜索按账号筛，列表仍按显示名 -->
+          <otherwise>(t.owner = #{o} OR t.owner_user_id = #{o})</otherwise>
         </choose>
       </foreach>
       )
@@ -1710,6 +1730,31 @@
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_id IS NOT NULL
       AND board_column &lt;&gt; 'canceled'
     GROUP BY req_id
+  </select>
+  <!-- 逾期提醒规则：该规则只负责「逾期达到阈值」的升级提醒，日常汇总仍由 09:00 汇总覆盖 -->
+  <select id="selectAutomationOverdue" resultType="Task">
+    SELECT t.id, t.workspace_id, t.req_id, t.title, t.owner, t.owner_user_id, t.board_column,
+           t.due_date, t.priority, t.item_type AS itemType
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'canceled'
+      AND t.due_date IS NOT NULL AND t.due_date &lt;= #{threshold}
+    ORDER BY t.due_date, t.id
+  </select>
+
+  <!-- 个人周报：未完成项全量（用于统计逾期/进行中/下周到期）+ 本周完成项，标题高亮由服务层截取 -->
+  <select id="selectWeeklyReportTasks" resultType="Task">
+    SELECT t.id, t.req_id, t.title, t.board_column, t.due_date, t.completed_at, t.item_type AS itemType, t.priority
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND (t.owner_user_id = #{userId}
+        <if test="displayName != null and displayName != ''">
+          OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
+        </if>)
+      AND t.board_column &lt;&gt; 'canceled'
+      AND (t.board_column &lt;&gt; 'done' OR (t.completed_at &gt;= #{from} AND t.completed_at &lt; #{to}))
+    ORDER BY (t.board_column = 'done'), t.due_date, t.id
+    LIMIT #{limit}
   </select>
 
 </mapper>

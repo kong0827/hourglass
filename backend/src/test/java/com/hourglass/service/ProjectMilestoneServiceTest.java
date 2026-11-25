@@ -145,6 +145,26 @@ class ProjectMilestoneServiceTest {
     }
 
     @Test
+    void missingLinkedTaskBlocksAutoAchievementAndReportsEvidenceGap() {
+        ProjectMilestone milestone = milestone("M1", "tasks");
+        when(reqs.selectById(REQ)).thenReturn(requirement());
+        when(versions.selectByReq(WS, REQ)).thenReturn(Collections.<ProjectVersion>emptyList());
+        when(milestones.selectByReq(WS, REQ)).thenReturn(Collections.singletonList(milestone));
+        when(milestones.selectTaskLinksByReq(WS, REQ)).thenReturn(Arrays.asList(link("M1", "T1"), link("M1", "T2")));
+        Task done = task("T1", Consts.COL_DONE);
+        done.setCompletedAt(LocalDate.of(2026, 11, 5).atStartOfDay());
+        when(tasks.selectByReq(WS, REQ)).thenReturn(Collections.singletonList(done));
+
+        MilestoneView view = service.list(WS, REQ, USER).get(0);
+
+        assertEquals("evidence_missing", view.getStatus(), "关联工作项缺失时不能靠剩下的都完成来自动达成");
+        assertNull(view.getAchievedAt());
+        assertEquals(2, view.getTaskCount(), "分母按关联条数，不按已解析的工作项数");
+        assertEquals(1, view.getDoneTaskCount());
+        assertEquals(1, view.getMissingTaskCount());
+    }
+
+    @Test
     void automaticMilestonesCannotBeMarkedManually() {
         ProjectMilestone milestone = milestone("M1", "version");
         when(milestones.selectById(WS, "M1")).thenReturn(milestone);

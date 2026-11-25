@@ -28,10 +28,19 @@ public class MyWorkController {
         this.myWorkService = myWorkService;
     }
 
-    /** 页签徽标：待我处理（工作项并集 + 待评审）/ 我发起的 / 我关注的 */
+    /** 页签徽标：待我处理（工作项并集 + 待评审）/ 我发起的（需求 + 工作项）/ 我关注的 */
     @GetMapping("/api/my-work/counts")
     public ApiResult<Map<String, Object>> counts(@CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(myWorkService.counts(ctx.getWsId(), ctx.getUserId()));
+    }
+
+    /** 待我执行：指派给我、未完成的测试计划 */
+    @GetMapping("/api/my-work/test-plans")
+    public ApiResult<Map<String, Object>> testPlans(@RequestParam(required = false) Integer offset,
+                                                    @RequestParam(required = false) Integer limit,
+                                                    @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(myWorkService.testPlans(ctx.getWsId(), ctx.getUserId(),
+                offset == null ? 0 : offset, limit == null ? 20 : limit));
     }
 
     /** 我发起的 / 我关注的 / 待我评审：分页、关键词、优先级与项目筛选 */

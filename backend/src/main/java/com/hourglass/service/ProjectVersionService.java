@@ -48,6 +48,9 @@ public class ProjectVersionService {
     private TaskPublicationService publications;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskAuditLogger taskAudit;
+    /** 状态同步规则：工作项开始处理后自动开始版本；测试环境可缺省（按开启处理）。 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AutomationSettingsService automation;
 
     public ProjectVersionService(ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper,
                                  TaskMapper taskMapper, RequirementMapper reqMapper,
@@ -255,6 +258,48 @@ public class ProjectVersionService {
             releaseService.log(userId, workspaceId, id, "version_start", null, null, version);
         }
         return getForUpdate(workspaceId, id);
+    }
+
+    /**
+     * 状态同步：工作项开始处理（离开待处理列）后，若它绑定的版本仍是「计划中」，
+     * 自动开始版本。放在提交后执行，自动开始失败不回滚工作项流转；权限仍按版本所属项目校验。
+     */
+    @org.springframework.transaction.event.TransactionalEventListener(
+            phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void onTaskProgressed(TaskProgressedEvent event) {
+        if (event == null || event.getTaskId() == null) {
+            return;
+        }
+        String column = event.getBoardColumn();
+        if (column == null || com.hourglass.common.Consts.COL_BACKLOG.equals(column)
+                || com.hourglass.common.Consts.COL_DONE.equals(column)
+                || com.hourglass.common.Consts.COL_CANCELED.equals(column)) {
+            return;
+        }
+        if (automation != null
+                && !automation.enabled(event.getWorkspaceId(), AutomationSettingsService.STATUS_SYNC)) {
+            return;
+        }
+        List<String> versionIds;
+        try {
+            versionIds = versionTaskMapper.selectVersionIdsByTask(event.getWorkspaceId(), event.getTaskId());
+        } catch (Exception e) {
+            return;
+        }
+        for (String versionId : versionIds) {
+            ProjectVersion version = versionMapper.selectById(versionId);
+            if (version == null || !"planned".equals(version.getStatus())) {
+                continue;
+            }
+            try {
+                start(event.getUserId(), event.getWorkspaceId(), versionId);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(ProjectVersionService.class)
+                        .debug("状态同步：版本 {} 未能自动开始（工作项 {}）：{}",
+                                versionId, event.getTaskId(), e.getMessage());
+            }
+        }
     }
 
     /**

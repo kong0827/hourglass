@@ -19,6 +19,8 @@ public interface VersionTaskMapper {
     /** 承诺基线快照来源：版本当前绑定的工作项与预估 */
     List<Task> selectCommitmentTasks(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<String> selectVersionIdsByTask(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    /** 版本报告：版本当前绑定的未取消工作项及完成/预估/实际工时 */
+    List<Task> selectReportTasks(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<TaskVersionBinding> selectVersionRowsByTaskIds(@Param("workspaceId") String workspaceId,
                                                        @Param("taskIds") List<String> taskIds);
     List<TaskVersionBinding> selectBindingsByWorkspace(@Param("workspaceId") String workspaceId);

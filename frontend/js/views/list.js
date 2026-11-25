@@ -10,8 +10,8 @@ import { activeView } from "../core/router.js";
 import { GROUP_IDS, groupOptionsHTML } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
-import { canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, setSortOf, setNameById, state, tagChip } from "../core/state.js";
-import { moveTaskToColumn, openDuePopover, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
+import { canCreateNow, canEditTask, canManageProject, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, reqSetId, rt, setSortOf, setNameById, state, tagChip } from "../core/state.js";
+import { moveTaskToColumn, openDuePopover, openOwnerMenu, openPriorityMenu, openStatusMenu, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
@@ -423,14 +423,12 @@ function minutesText(value){
   if(!n) return "—";
   return n < 60 ? (n + " 分钟") : ((Math.round(n / 60 * 10) / 10) + " 小时");
 }
-function taskCell(t, key, hasTypeCol){
+function taskCell(t, key, hasTypeCol, rowEdit){
   if(key === "title") return '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title)
     + taskPublicationHTML(t) + '</span></span>';
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
-    var f = dueFlag(t);
-    var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
     var chip = '<span class="tag tag-cat" style="--tag-c:' + color + '"><span class="dot" aria-hidden="true"></span>' + esc(colName(t.boardColumn)) + '</span>';
     /* 状态点开即改：可写才做成按钮，只读项目保持纯标签 */
     if(canEditTask(t)){
@@ -441,18 +439,53 @@ function taskCell(t, key, hasTypeCol){
         '<svg class="row-status-caret" width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5 8 10.5l4-4"/></svg>' +
       '</button>';
     }
-    return '<span class="cell">' + chip + flagHTML + '</span>';
+    /* 到期提醒跟着截止日期走：状态列只有 96px，徽标留在状态格里会被截成省略号 */
+    return '<span class="cell">' + chip + '</span>';
   }
-  if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
-  if(key === "owner") return '<span class="cell" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
+  if(key === "priority"){
+    var priInner = t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority);
+    /* 行内直改：可写项目点开优先级菜单，读态与普通单元格一致 */
+    if(rowEdit && canEditTask(t)){
+      return '<button class="cell row-inline-edit" type="button" data-row-pri="' + esc(t.id) + '"' +
+        ' aria-haspopup="menu" aria-expanded="false" aria-label="优先级：' + esc(priName(t.priority)) + '，点击修改"' +
+        ' title="点击改优先级"><span class="row-inline-edit-t">' + priInner + '</span>' + icon("caretDown", 11) + '</button>';
+    }
+    return '<span>' + priInner + '</span>';
+  }
+  if(key === "owner"){
+    var ownerCls = "cell" + (t.owner ? "" : " muted");
+    if(rowEdit && canEditTask(t)){
+      return '<button class="' + ownerCls + ' row-inline-edit" type="button" data-row-owner="' + esc(t.id) + '"' +
+        ' data-member-task="' + esc(t.id) + '" aria-haspopup="menu" aria-expanded="false"' +
+        ' aria-label="负责人：' + esc(t.owner || "未指派") + '，点击修改" title="点击改负责人">' +
+        '<span class="row-inline-edit-t">' + esc(t.owner || "—") + '</span>' + icon("caretDown", 11) + '</button>';
+    }
+    return '<span class="' + ownerCls + '" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
+  }
   if(key === "dueDate"){
-    if(!t.dueDate) return '<span class="cell muted">—</span>';
-    return '<span class="cell" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + '</span>';
+    if(!t.dueDate){
+      if(rowEdit && canEditTask(t)){
+        return '<button class="cell muted row-inline-edit" type="button" data-row-due="' + esc(t.id) + '"' +
+          ' aria-haspopup="menu" aria-expanded="false" aria-label="截止日期：未设置，点击修改"' +
+          ' title="点击设置截止日期"><span class="row-inline-edit-t">—</span>' + icon("caretDown", 11) + '</button>';
+      }
+      return '<span class="cell muted">—</span>';
+    }
+    var dueKind = dueState(t).kind;
+    var dueCls = dueKind === "over" ? " over" : (dueKind === "today" ? " today" : "");
+    var df = dueFlag(t);
+    var dfHTML = df ? '<span class="mini-tag ' + (df.kind === "over" ? "over" : (df.kind === "today" ? "warn" : "")) + '">' + esc(df.text) + '</span>' : "";
+    if(rowEdit && canEditTask(t)){
+      return '<button class="cell' + dueCls + ' row-inline-edit" type="button" data-row-due="' + esc(t.id) + '"' +
+        ' aria-haspopup="menu" aria-expanded="false" aria-label="截止日期：' + esc(t.dueDate) + '，点击修改"' +
+        ' title="点击改截止日期"><span class="row-inline-edit-t">' + esc(dueDateMD(t)) + dfHTML + '</span>' + icon("caretDown", 11) + '</button>';
+    }
+    return '<span class="cell' + dueCls + '" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + dfHTML + '</span>';
   }
   if(key === "progress"){
     var p = progressOf(t);
     /* 未开始且进度为 0 时不画空进度条，与「我的工作」保持一致 */
-    if(p <= 0 && t.boardColumn !== "doing") return '<span class="cell">—</span>';
+    if(p <= 0 && t.boardColumn !== "doing") return '<span class="cell muted">—</span>';
     return '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span></span>';
   }
   if(key === "project") return '<span class="cell">' + assocLinkHTML("project", t.reqId, reqNameById(t.reqId)) + '</span>';
@@ -463,14 +496,17 @@ function taskCell(t, key, hasTypeCol){
     return '<span class="cell">' + assocLinkHTML("demand", t.demandId, dName, {title:"打开需求详情：" + dTip}) + '</span>';
   }
   if(key === "version") return '<span class="cell" title="' + esc('计划版本：' + (taskVersionsText(t) || '待规划') + '；不代表实际交付。调整版本请在详情填写理由。') + '">' + taskVersionLinksHTML(t, t.reqId) + '</span>';
-  if(key === "category") return '<span class="cell">' + (catTag(t.categoryId) || "—") + '</span>';
-  if(key === "startDate") return '<span class="cell">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
-  if(key === "tags") return '<span class="cell lr-tags">' + ((t.tags || []).map(tagChip).join("") || "—") + '</span>';
-  if(key === "subtasks") return '<span class="cell">' + (Number(t.subtaskTotal) ? (Number(t.subtaskDone || 0) + "/" + Number(t.subtaskTotal)) : "—") + '</span>';
-  if(key === "work") return '<span class="cell">' + esc(minutesText(t.totalMinutes)) + '</span>';
+  if(key === "category"){
+    var cat = catTag(t.categoryId);
+    return '<span class="cell' + (cat ? "" : " muted") + '">' + (cat || "—") + '</span>';
+  }
+  if(key === "startDate") return '<span class="cell' + (t.startDate ? "" : " muted") + '">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
+  if(key === "tags") return '<span class="cell lr-tags' + ((t.tags || []).length ? "" : " muted") + '">' + ((t.tags || []).map(tagChip).join("") || "—") + '</span>';
+  if(key === "subtasks") return '<span class="cell' + (Number(t.subtaskTotal) ? "" : " muted") + '">' + (Number(t.subtaskTotal) ? (Number(t.subtaskDone || 0) + "/" + Number(t.subtaskTotal)) : "—") + '</span>';
+  if(key === "work") return '<span class="cell' + (Number(t.totalMinutes) ? "" : " muted") + '">' + esc(minutesText(t.totalMinutes)) + '</span>';
   if(key === "comments") return '<span class="cell">' + (Number(t.commentCount) || 0) + '</span>';
-  if(key === "updatedAt") return '<span class="cell">' + (t.updatedAt ? esc(fmtTs(t.updatedAt)) : "—") + '</span>';
-  return '<span class="cell">—</span>';
+  if(key === "updatedAt") return '<span class="cell' + (t.updatedAt ? "" : " muted") + '">' + (t.updatedAt ? esc(fmtTs(t.updatedAt)) : "—") + '</span>';
+  return '<span class="cell muted">—</span>';
 }
 function mineMatches(t){
   var u = rt.currentUser;
@@ -795,8 +831,10 @@ function renderListItems(items){
     var hasConditions = filterOn() || smart.preset !== "all" || smart.hideDone;
     listBody.innerHTML = '<div style="padding:8px">' + (hasConditions
       ? UI.emptyState({ icon:"filterOff", title:"没有符合当前视图条件的工作项", text:"切换视图，或调整、清空筛选条件后重试。", actionLabel:"查看全部工作项", compact:true })
-      : UI.emptyState({ icon:"inbox", title:"这里还没有工作项", textHtml:"新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建工作项", compact:true })) + '</div>';
-    bindRetry(listBody, function(){ if(hasConditions) activatePreset("all"); else openTaskDrawer("backlog"); });
+      : (canCreateNow()
+        ? UI.emptyState({ icon:"inbox", title:"这里还没有工作项", textHtml:"新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建工作项", compact:true })
+        : UI.emptyState({ icon:"inbox", title:"这里还没有工作项", text:"当前空间还没有工作项。你是查看者或没有可写项目，只能浏览。", compact:true }))) + '</div>';
+    bindRetry(listBody, function(){ if(hasConditions) activatePreset("all"); else if(canCreateNow()) openTaskDrawer("backlog"); });
     syncListSelectionUI();
     appendListMore();
     return;
@@ -830,7 +868,7 @@ function renderListItems(items){
       return '<span class="cell ha-cell">' +
         '<span class="ha-time" title="' + esc(t.updatedAt ? fmtTs(t.updatedAt) : "无更新时间") + '">' + esc(text) + '</span>' + hoverActs(t, editable) + '</span>';
     }
-    return taskCell(t, key, hasTypeCol);
+    return taskCell(t, key, hasTypeCol, editable);
   }
   function rowHTML(t){
     var editable = canEditTask(t);
@@ -1042,21 +1080,23 @@ function bulkMoveTo(column){
     if(pass.force) body.force = true;
     var retried = false;
     function fail(ex){
+      /* 每次请求失败先归还占用：重试的 send() 会重新占用，不能留两次计数 */
+      UI.syncBusy(false);
       if(retried){
-        UI.syncBusy(false);
         toast("批量移动失败：" + (ex.message || "网络异常"), "bad");
         return;
       }
       retried = true;
       serverDecision(wsId, items, column, ex).then(function(retry){
         if(!retry){
-          UI.syncBusy(false);
           if(ex.code !== 422 && ex.code !== 412) toast("批量移动失败：" + (ex.message || "网络异常"), "bad");
           return;
         }
         body.reason = retry.reason;
         body.force = retry.force;
         send();
+      }).catch(function(decisionError){
+        toast("批量移动失败：" + (decisionError.message || "网络异常"), "bad");
       });
     }
     function send(){
@@ -1198,6 +1238,12 @@ listBody.addEventListener("click", function(e){
   if(mobTimer){ toggleTaskTimer(mobTimer.dataset.mobTimer); return; }
   var menuBtn = e.target.closest("[data-row-menu]");
   if(menuBtn){ openRowMenu(menuBtn, menuBtn.dataset.rowMenu); return; }
+  var priBtn = e.target.closest("[data-row-pri]");
+  if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+  var ownerBtn = e.target.closest("[data-row-owner]");
+  if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
+  var dueBtn = e.target.closest("[data-row-due]");
+  if(dueBtn){ openDuePopover(dueBtn, dueBtn.dataset.rowDue); return; }
   var statusBtn = e.target.closest("[data-row-status]");
   if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
   var row = e.target.closest("[data-list-id]");

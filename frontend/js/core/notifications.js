@@ -20,14 +20,19 @@ var NOTIFY_ICON = {
   daily_digest: "clock",
   demand_status: "list",
   demand_watch: "eye",
+  test_plan_assigned: "check",
   doc_changed: "projects",
   branch_status: "branch",
   version_released: "tag",
   version_deleted: "trash",
+  release_prep: "bell",
+  release_watch: "star",
   project_access: "shield",
   member_role: "user",
   member_removed: "users",
-  manager_nudge: "alert"
+  manager_nudge: "alert",
+  weekly_report: "calendar",
+  version_report: "stats"
 };
 /* 只有任务类通知的 refTaskId 才是任务 ID；需求/文档/分支等走 refKind + refId */
 var TASK_REF_TYPES = {
@@ -36,7 +41,16 @@ var TASK_REF_TYPES = {
   manager_nudge: 1
 };
 function isTaskRef(type){ return !!TASK_REF_TYPES[type]; }
-var notifyState = {unread:0, total:0, mentions:0, items:[], loading:false, hasMore:false};
+/* 新提及写 task_mention；历史合并期的提及曾写 task_comment，标题固定以「…」提到了你 结尾 */
+function isMentionNotice(x){
+  return !!x && (x.type === "task_mention"
+    || (x.type === "task_comment" && /」提到了你$/.test(String(x.title || ""))));
+}
+/* typeCounts 是服务端按当前筛选返回的类型全量计数：列表只加载一页，不能拿 items 回算 */
+var notifyState = {unread:0, total:0, mentions:0, items:[], loading:false, hasMore:false, typeCounts:null,
+  expanded:{}, watch:{}};
+/* 正文最多两行：报告与发布准备需要看全时给「展开」，不改变其他类型的紧凑列表 */
+var EXPANDABLE_TYPES = { weekly_report:1, version_report:1, release_prep:1 };
 var noticeMutationSeq = 0, unreadReqSeq = 0, noticeListReqSeq = 0;
 function invalidateNotifications(){
   noticeMutationSeq++;
@@ -87,13 +101,6 @@ function renderBellBadge(){
   if(dot){
     dot.hidden = n <= 0;
     dot.textContent = n > 99 ? "99+" : n;
-  }
-  var tabDot = document.getElementById("tabMsgDot");
-  if(tabDot) tabDot.hidden = n <= 0;
-  var navCnt = document.getElementById("navMsgCount");
-  if(navCnt){
-    navCnt.hidden = n <= 0;
-    navCnt.textContent = n > 99 ? "99+" : n;
   }
   syncDocTitle();
 }
@@ -166,7 +173,7 @@ function alertCenterHTML(isPage){
 
   var foot = "";
   /* 面板是浮层，需要一条去完整消息页的出口；消息页自身不再重复显示 */
-  if(!isPage && document.body.dataset.view !== "messages") foot += '<button class="btn sm" type="button" data-ap-all>查看全部消息</button>';
+  if(!isPage && document.body.dataset.view !== "messages") foot += '<button class="btn sm" type="button" data-ap-all title="打开消息中心，与这个面板同一份数据">查看全部</button>';
   if(rt.alertTab === "notice"){
     /* 消息页把「一键已读」放到页头常驻；浮层面板仍放在底部，按未读数显隐 */
     if(!isPage && unread > 0) foot += '<button class="btn sm soft" type="button" data-ap-readall>' + icon("check", 13) + '全部标为已读</button>';
@@ -186,8 +193,10 @@ function renderAlertPanel(){
 var MSG_TYPE_META = [
   { key:"work", label:"工作项", types:["task_remind","task_due","task_assigned","task_watch","task_updated","manager_nudge"] },
   { key:"doc", label:"文档", types:["doc_changed"] },
-  { key:"version", label:"发布", types:["version_released","version_deleted","branch_status"] },
+  { key:"version", label:"发布", types:["version_released","version_deleted","branch_status","release_prep","release_watch"] },
   { key:"demand", label:"需求", types:["demand_status","demand_watch"] },
+  { key:"test", label:"测试", types:["test_plan_assigned"] },
+  { key:"report", label:"报告", types:["weekly_report","version_report"] },
   { key:"comment", label:"评论", types:["task_comment","task_mention"] },
   { key:"member", label:"成员与角色", types:["project_access","member_role","member_removed"] }
 ];
@@ -195,15 +204,38 @@ function msgTypeOf(type){
   for(var i = 0; i < MSG_TYPE_META.length; i++) if(MSG_TYPE_META[i].types.indexOf(type) >= 0) return MSG_TYPE_META[i].key;
   return "other";
 }
-function msgTypeCounts(){
-  var m = {};
-  (notifyState.items || []).forEach(function(x){ var k = msgTypeOf(x.type); m[k] = (m[k] || 0) + 1; });
-  return m;
-}
-function msgPageItems(){
+/* 当前「全部 / 未读 / 提及」筛选下的本地条目；类型筛选由调用方另加 */
+function msgFilteredItems(){
   var items = notifyState.items || [];
   if(rt.noticeFilter === "unread") items = items.filter(function(x){ return !x.readAt; });
-  else if(rt.noticeFilter === "mention") items = items.filter(function(x){ return x.type === "task_mention"; });
+  else if(rt.noticeFilter === "mention") items = items.filter(isMentionNotice);
+  return items;
+}
+function msgTypeCounts(){
+  var m = {};
+  var raw = notifyState.typeCounts;
+  if(raw && typeof raw === "object"){
+    Object.keys(raw).forEach(function(t){
+      var k = msgTypeOf(t);
+      m[k] = (m[k] || 0) + (Number(raw[t]) || 0);
+    });
+    return m;
+  }
+  /* 旧服务端没有 typeCounts 时退回本地计数，保证类型按钮仍可用 */
+  msgFilteredItems().forEach(function(x){ var k = msgTypeOf(x.type); m[k] = (m[k] || 0) + 1; });
+  return m;
+}
+/* 服务端类型计数只在重新拉列表时刷新；未读筛选下本地标已读后同步扣减，避免页签数字大于列表 */
+function dropUnreadTypeCounts(types){
+  if(rt.noticeFilter !== "unread" || !notifyState.typeCounts) return;
+  types.forEach(function(t){
+    var n = Number(notifyState.typeCounts[t]) || 0;
+    if(n <= 1) delete notifyState.typeCounts[t];
+    else notifyState.typeCounts[t] = n - 1;
+  });
+}
+function msgPageItems(){
+  var items = msgFilteredItems();
   if(msgType) items = items.filter(function(x){ return msgTypeOf(x.type) === msgType; });
   return items;
 }
@@ -211,18 +243,22 @@ function msgRailItem(attr, key, label, n, active){
   return '<button class="msg-rail-item' + (active ? " on" : "") + '" type="button" ' + attr + (key ? '="' + key + '"' : "") +
     ' aria-pressed="' + active + '"><span>' + esc(label) + '</span>' + (n ? '<span class="n">' + (n > 99 ? "99+" : n) + '</span>' : '') + '</button>';
 }
+function msgTypeCountSpan(n){
+  return n ? ' <span class="n">' + (n > 99 ? "99+" : n) + '</span>' : '';
+}
 function msgTypeChips(){
   var counts = msgTypeCounts();
   var html = '<button class="msg-chip' + (msgType ? "" : " on") + '" type="button" data-msg-type="" aria-pressed="' + (!msgType) + '">全部类型</button>';
   MSG_TYPE_META.forEach(function(m){
     var n = counts[m.key] || 0;
     if(!n && msgType !== m.key) return;
-    /* 类型计数留在左栏一处，顶部只看类型名，避免同一数字出现两遍 */
+    /* 页签是否出现由服务端全量计数决定：历史消息没加载到也要保留入口；计数随当前筛选变化 */
     html += '<button class="msg-chip' + (msgType === m.key ? " on" : "") + '" type="button" data-msg-type="' + m.key + '" aria-pressed="' + (msgType === m.key) + '">'
-      + esc(m.label) + '</button>';
+      + esc(m.label) + msgTypeCountSpan(n) + '</button>';
   });
   if(counts.other || msgType === "other"){
-    html += '<button class="msg-chip' + (msgType === "other" ? " on" : "") + '" type="button" data-msg-type="other" aria-pressed="' + (msgType === "other") + '">其他</button>';
+    html += '<button class="msg-chip' + (msgType === "other" ? " on" : "") + '" type="button" data-msg-type="other" aria-pressed="' + (msgType === "other") + '">'
+      + '其他' + msgTypeCountSpan(counts.other || 0) + '</button>';
   }
   return html;
 }
@@ -279,10 +315,7 @@ function renderMessagesPage(){
   var unread = notifyState.unread || 0, mentions = notifyState.mentions || 0, total = notifyState.total || 0;
   var isDue = rt.alertTab === "due";
   var scopeLabel = isDue ? "截止提醒" : (rt.noticeFilter === "unread" ? "未读消息" : (rt.noticeFilter === "mention" ? "提及我的消息" : "全部消息"));
-  var counts = msgTypeCounts();
-  var typeRail = MSG_TYPE_META.filter(function(m){ return counts[m.key]; }).map(function(m){
-    return msgRailItem('data-msg-type', m.key, m.label, counts[m.key], !isDue && msgType === m.key);
-  }).join("") + (counts.other ? msgRailItem('data-msg-type', "other", "其他", counts.other, !isDue && msgType === "other") : "");
+  /* 类型筛选只在正文顶部一处：左栏再放一份同名按钮会让用户不确定哪处生效 */
   var dueCount = deadlineGroups.over.length + deadlineGroups.today.length + deadlineGroups.soon.length;
   var shown = isDue ? 0 : msgPageItems().length;
   var body = isDue
@@ -310,7 +343,6 @@ function renderMessagesPage(){
       + msgRailItem('data-msg-filter', "unread", "未读", unread, !isDue && rt.noticeFilter === "unread")
       + msgRailItem('data-msg-filter', "mention", "提及我", mentions, !isDue && rt.noticeFilter === "mention")
       + '</div>'
-    + '<div class="msg-rail-card"><div class="msg-rail-title">按类型</div>' + (typeRail || '<div class="msg-rail-empty">暂无分类消息</div>') + '</div>'
     + '<div class="msg-rail-card"><div class="msg-rail-title">提醒</div>'
       + msgRailItem('data-msg-due', "", "截止提醒", dueCount, isDue) + '</div>'
     + '<div class="msg-rail-note">提及是未读的子集，读过之后两边同时减少。</div>'
@@ -329,9 +361,48 @@ function syncMessagesReadAllButton(){
   btns.forEach(function(btn){ btn.disabled = (notifyState.unread || 0) <= 0; });
   syncMessagesPageHead();
 }
+function togglePlanWatch(btn){
+  var planId = btn.getAttribute("data-apn-watch");
+  if(!planId || btn.disabled) return;
+  var watching = notifyState.watch[planId] === true;
+  var url = "/api/release-plans/" + encodeURIComponent(planId) + "/watch";
+  btn.disabled = true;
+  (watching ? API.del(url) : API.post(url)).then(function(rs){
+    notifyState.watch[planId] = !!(rs && rs.watching);
+    /* 同一计划的预处理通知可能有多条，状态要一起回填 */
+    document.querySelectorAll("[data-apn-watch]").forEach(function(b){
+      if(b.getAttribute("data-apn-watch") !== planId) return;
+      b.disabled = false;
+      b.textContent = notifyState.watch[planId] ? "已关注" : "关注";
+    });
+    toast(notifyState.watch[planId] ? "已关注该发布计划，改期、范围变化和发布日会提醒你" : "已取消关注", "fs");
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "关注操作失败，请重试", "bad");
+  });
+}
 function handleNoticeClick(e){
   if(e.target.closest("[data-ap-more]")){
     loadNoticeList({more:true});
+    return;
+  }
+  /* 条目动作：展开正文 / 关注计划，都不触发整行跳转 */
+  var expandBtn = e.target.closest("[data-apn-expand]");
+  if(expandBtn){
+    var row = expandBtn.closest("[data-apn-row]");
+    var open = row ? !row.classList.contains("is-expanded") : true;
+    if(row){
+      row.classList.toggle("is-expanded", open);
+      var nid = row.getAttribute("data-apn-row");
+      if(nid) notifyState.expanded[nid] = open;
+    }
+    expandBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    expandBtn.textContent = open ? "收起" : "展开";
+    return;
+  }
+  var watchBtn = e.target.closest("[data-apn-watch]");
+  if(watchBtn){
+    togglePlanWatch(watchBtn);
     return;
   }
   /* 通知筛选：全部 / 未读 / 提及 */
@@ -379,6 +450,8 @@ function handleNoticeClick(e){
       notifyState.items.forEach(function(x){ if(!x.readAt) x.readAt = new Date().toISOString(); });
       notifyState.unread = 0;
       notifyState.mentions = 0;
+      /* 未读筛选下类型计数归零；其他筛选仍含已读，计数不变 */
+      if(rt.noticeFilter === "unread") notifyState.typeCounts = {};
       renderBellBadge(); updateBellTitle(); renderAlertPanel();
       loadAlertPanel();
       loadUnread(true);
@@ -451,9 +524,7 @@ function noticeListHTML(){
       '<div style="margin-top:6px">还没有通知</div>' +
       '<div class="ap-empty-sub">工作项到点提醒、评论与指派都会出现在这里</div></div>';
   }
-  var items = notifyState.items;
-  if(rt.noticeFilter === "unread") items = items.filter(function(x){ return !x.readAt; });
-  else if(rt.noticeFilter === "mention") items = items.filter(function(x){ return x.type === "task_mention"; });
+  var items = msgFilteredItems();
   if(!items.length){
     return '<div class="ap-empty">' + icon("checkCircle", 22) +
       '<div style="margin-top:6px">' + (rt.noticeFilter === "mention" ? "没有 @ 到我的通知" : "没有未读通知") + '</div>' +
@@ -510,6 +581,8 @@ var NOTIFY_CHAR = {
   task_assigned:"派", task_watch:"关", task_updated:"改", manager_nudge:"催",
   doc_changed:"文", demand_status:"需", demand_watch:"需",
   version_released:"发", version_deleted:"发", branch_status:"支",
+  release_prep:"备", release_watch:"关",
+  weekly_report:"报", version_report:"报",
   project_access:"权", member_role:"人", member_removed:"人"
 };
 function notifyChar(type){
@@ -519,7 +592,26 @@ function noticeItemHTML(g){
   var x = g.lead;
   var count = g.items.length;
   var ids = g.items.map(function(n){ return n.id; }).join(",");
-  return '<button class="apn' + (x.readAt ? "" : " unread") + '" type="button"' +
+  var expanded = !!notifyState.expanded[x.id];
+  var meta = [];
+  if(count > 1) meta.push("共 " + count + " 条同类通知");
+  if(x.type === "release_prep" && x.refOwnerName) meta.push("计划负责人 " + x.refOwnerName);
+  if(x.workspaceName) meta.push(x.workspaceName);
+  /* 动作与整行点击分离：动作按钮不能嵌在跳转按钮里，否则键盘与读屏会把两个操作混成一个 */
+  var acts = "";
+  if(EXPANDABLE_TYPES[x.type]){
+    acts += '<button class="apn-act" type="button" data-apn-expand aria-expanded="' + (expanded ? "true" : "false") + '">'
+      + (expanded ? "收起" : "展开") + '</button>';
+  }
+  var watchable = x.type === "release_prep" && x.refKind === "release_plan" && x.refId
+    && rt.currentWs && x.workspaceId === rt.currentWs.id;
+  var watching = watchable ? notifyState.watch[x.refId] : undefined;
+  if(watchable && watching !== undefined){
+    acts += '<button class="apn-act" type="button" data-apn-watch="' + esc(x.refId) + '">'
+      + (watching ? "已关注" : "关注") + '</button>';
+  }
+  return '<div class="apn' + (x.readAt ? "" : " unread") + (expanded ? " is-expanded" : "") + '" data-apn-row="' + esc(x.id) + '">' +
+    '<button class="apn-hit" type="button"' +
     ' data-apn="' + esc(x.id) + '" data-apn-ids="' + esc(ids) + '"' +
     (isTaskRef(x.type) && x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
     /* 「已被移出空间」不带深链：历史数据里的 workspace 链接指向已无权进入的空间 */
@@ -531,14 +623,15 @@ function noticeItemHTML(g){
     '<span class="apn-main">' +
       '<span class="apn-title">' + esc(x.title) +
         (count > 1 ? ' <span class="apn-count">×' + count + '</span>' : "") + '</span>' +
-      (x.body ? '<span class="apn-body">' + esc(x.body) + '</span>' : "") +
-      '<span class="apn-meta">' +
-        (count > 1 ? "共 " + count + " 条同类通知" + (x.workspaceName ? " · " : "") : "") +
-        (x.workspaceName ? esc(x.workspaceName) : "") + '</span>' +
+      /* 正文由后端按纯文本拼行；空行在只显示两行的列表里会白占一行，先折成单换行 */
+      (x.body ? '<span class="apn-body">' + esc(String(x.body).replace(/\n{2,}/g, "\n")) + '</span>' : "") +
+      (meta.length ? '<span class="apn-meta">' + esc(meta.join(" · ")) + '</span>' : "") +
     '</span>' +
     (x.readAt ? "" : '<i class="apn-dot"></i>') +
     '<span class="apn-time">' + esc(clockOf(x.createdAt)) + '</span>' +
-  '</button>';
+    '</button>' +
+    (acts ? '<div class="apn-acts">' + acts + '</div>' : "") +
+  '</div>';
 }
 function dueGroupsHTML(){
   var g = deadlineGroups;
@@ -589,6 +682,8 @@ function loadNoticeList(opts){
     if(d && typeof d.unread === "number") notifyState.unread = d.unread;
     if(d && typeof d.total === "number") notifyState.total = d.total; /* 服务端仍返回总量，前端不展示（见 noticeFilterHTML） */
     if(d && typeof d.mentions === "number") notifyState.mentions = d.mentions; /* 口径：未读的 @ 我的通知数 */
+    notifyState.typeCounts = d && d.typeCounts ? d.typeCounts : null; /* 服务端全量类型计数，切换筛选后随本次响应更新 */
+    loadWatchStates();
     renderBellBadge();
     updateBellTitle();
     renderAlertPanel();
@@ -598,6 +693,7 @@ function loadNoticeList(opts){
     if(append){ renderAlertPanel(); return; }
     notifyState.items = [];
     notifyState.hasMore = false;
+    notifyState.typeCounts = null;
     renderAlertPanel();
   });
 }
@@ -614,9 +710,39 @@ function setNoticeFilter(f){
   rt.noticeFilter = f;
   try{ localStorage.setItem("ds.noticeFilter", f); }catch(e){ /* 受限环境忽略 */ }
   notifyState.items = [];
+  notifyState.typeCounts = null;
   notifyState.loading = true;
   renderAlertPanel();
   loadNoticeList();
+}
+/* 发布准备条目的「关注」需要知道当前是否已关注；只在当前空间取一次，切空间后按新空间重新取 */
+function loadWatchStates(){
+  if(!rt.currentWs || !rt.currentWs.id) return;
+  var ids = [];
+  notifyState.items.forEach(function(x){
+    if(x.type !== "release_prep" || x.refKind !== "release_plan" || !x.refId) return;
+    if(x.workspaceId !== rt.currentWs.id) return;
+    if(Object.prototype.hasOwnProperty.call(notifyState.watch, x.refId)) return;
+    notifyState.watch[x.refId] = null;
+    ids.push(x.refId);
+  });
+  if(!ids.length) return;
+  Promise.all(ids.map(function(id){
+    return API.get("/api/release-plans/" + encodeURIComponent(id) + "/watch").then(function(rs){
+      notifyState.watch[id] = !!(rs && rs.watching);
+    }).catch(function(){
+      delete notifyState.watch[id];
+    });
+  })).then(function(){
+    /* 就地回填状态，避免整块重绘把打开中的面板滚动位置打回顶部 */
+    document.querySelectorAll("[data-apn-watch]").forEach(function(btn){
+      var id = btn.getAttribute("data-apn-watch");
+      if(ids.indexOf(id) < 0) return;
+      var st = notifyState.watch[id];
+      if(st === undefined) return;
+      btn.textContent = st ? "已关注" : "关注";
+    });
+  });
 }
 function loadDeadlineGroups(){
   function fetchGroup(due){
@@ -703,12 +829,33 @@ function routeNotificationLink(kind, refId, type){
     go("phase", function(m){ if(m.showReleaseNote) m.showReleaseNote(refId); });
     return true;
   }
+  if(kind === "release_plan"){
+    /* 通知只带计划 ID：先用准备汇总换出首个版本与项目，再落发布工作台 */
+    API.get("/api/release-plans/" + encodeURIComponent(refId) + "/prep").then(function(rs){
+      var plan = (rs && rs.plan) || {};
+      if(!plan.versionId){
+        toast("该计划缺少版本关联，请到发布日程查看", "warn");
+        return;
+      }
+      return import("../views/release.js").then(function(m){
+        m.openReleasePage({
+          id: plan.versionId,
+          reqId: plan.reqId || "",
+          tab: "plan",
+          planId: refId,
+          prep: type === "release_prep" ? "me" : ""
+        });
+      });
+    }).catch(function(ex){ toast(ex.message || "无法打开发布计划，请稍后重试", "warn"); });
+    return true;
+  }
   if(kind === "project"){
     rt.managerProjectId = refId;
     go("project");
     return true;
   }
   if(kind === "workspace"){ go("settings"); return true; }
+  if(kind === "mywork"){ go("mine"); return true; }
   return false;
 }
 function openFromNotification(ds){
@@ -718,7 +865,7 @@ function openFromNotification(ds){
   var wsId = ds.apnWs || "";
   var ids = String(ds.apnIds || ds.apn || "").split(",").map(Number).filter(function(n){ return n > 0; });
   var item = null;
-  var marked = 0;
+  var marked = 0, markedMentions = 0, markedTypes = [];
   /* 聚合条目一次标掉组内全部通知，避免点开任务后还剩一串未读 */
   ids.forEach(function(nid){
     for(var i = 0; i < notifyState.items.length; i++){
@@ -728,6 +875,8 @@ function openFromNotification(ds){
       if(!n.readAt){
         n.readAt = new Date().toISOString();
         marked++;
+        if(isMentionNotice(n)) markedMentions++;
+        markedTypes.push(n.type);
         API.postGlobal("/api/notifications/" + nid + "/read").catch(function(){ /* 已读失败不阻断打开 */ });
       }
       break;
@@ -735,7 +884,10 @@ function openFromNotification(ds){
   });
   if(marked > 0){
     invalidateNotifications();
+    dropUnreadTypeCounts(markedTypes);
     notifyState.unread = Math.max(0, notifyState.unread - marked);
+    /* 「提及我」只数未读提及：点开一条就同步扣减，不等下次轮询 */
+    if(markedMentions > 0) notifyState.mentions = Math.max(0, notifyState.mentions - markedMentions);
     renderBellBadge();
     updateBellTitle();
     renderAlertPanel();

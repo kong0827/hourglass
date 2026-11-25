@@ -14,9 +14,12 @@ public final class Csv {
     private Csv() {
     }
 
-    /** 单元格转义：null 视为空串 */
+    /** 单元格转义：null 视为空串；以公式字符开头的值前加单引号，避免 Excel 当成公式执行 */
     public static String cell(Object value) {
         String v = value == null ? "" : String.valueOf(value);
+        if (!v.isEmpty() && "=+-@\t\r".indexOf(v.charAt(0)) >= 0) {
+            v = "'" + v;
+        }
         if (v.indexOf(',') >= 0 || v.indexOf('"') >= 0 || v.indexOf('\n') >= 0 || v.indexOf('\r') >= 0) {
             return "\"" + v.replace("\"", "\"\"") + "\"";
         }

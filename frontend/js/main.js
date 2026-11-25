@@ -66,7 +66,7 @@ function boot(){
   var deepNewTask = startView === "board" && hashParam("new") === "1";
   /* 工作页深链带 query：空 hash 才落默认视图，带参数时保留原 hash */
   var startHash = String(window.location.hash || "");
-  var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands" || startView === "version" || startView === "release" || startView === "requirements" || startView === "dochistory")
+  var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands" || startView === "version" || startView === "release" || startView === "requirements" || startView === "dochistory" || startView === "phase")
     && startHash.indexOf("#/" + startView + "?") === 0;
   if(!keepHash){
     try{ history.replaceState(null, "", "#/" + startView); }
@@ -112,6 +112,10 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
   showView(startView);
   showBoardSkeleton();
   initAssistant();
+  /* 侧栏摆件是纯装饰：首屏之后再挂，不占关键路径 */
+  import("./core/side-ornament.js").then(function(m){ m.initSideOrnament(); }).catch(function(){});
+  /* 沙漏说同样在本机计算、纯展示：失败也不影响主流程 */
+  import("./core/sand-say.js").then(function(m){ m.initSandSay(); }).catch(function(){});
   loadBoard({animate:true}).then(function(){
     /* O-3：深链任务；跨空间时（从「我的任务」切过来）用 sessionStorage 接力 */
     var pendingTask = deepTaskId;

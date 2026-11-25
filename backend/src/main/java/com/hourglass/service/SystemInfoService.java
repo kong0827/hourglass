@@ -111,19 +111,23 @@ public class SystemInfoService {
             // 配置读取失败按未启用展示
         }
         mail.put("enabled", enabled);
-        long pending = 0, sent = 0, failed = 0;
+        long pending = 0, sent = 0, failed = 0, unknown = 0;
         try {
             List<Map<String, Object>> rows = jdbc.queryForList(
                     "SELECT status, COUNT(*) AS c FROM mail_delivery GROUP BY status");
             for (Map<String, Object> row : rows) {
                 String status = String.valueOf(row.get("status"));
                 long c = ((Number) row.get("c")).longValue();
-                if ("pending".equals(status)) {
-                    pending = c;
+                /* sending 是发送中的抢占态，对使用者仍算「待发」；按行累加以兼容两种状态并存 */
+                if ("pending".equals(status) || "sending".equals(status)) {
+                    pending += c;
                 } else if ("sent".equals(status)) {
                     sent = c;
                 } else if ("failed".equals(status)) {
                     failed = c;
+                } else if ("unknown".equals(status)) {
+                    /* 租约到期仍未回写：可能已发出，单独计数，提示不要盲目补发 */
+                    unknown = c;
                 }
             }
         } catch (Exception ignored) {
@@ -132,6 +136,7 @@ public class SystemInfoService {
         mail.put("pending", pending);
         mail.put("sent", sent);
         mail.put("failed", failed);
+        mail.put("unknown", unknown);
         try {
             Map<String, Object> last = jdbc.queryForMap(
                     "SELECT status, created_at, sent_at, last_error FROM mail_delivery ORDER BY id DESC LIMIT 1");

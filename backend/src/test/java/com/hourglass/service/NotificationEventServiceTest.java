@@ -25,7 +25,9 @@ class NotificationEventServiceTest {
     private final WorkspaceMemberMapper members = mock(WorkspaceMemberMapper.class);
     private final MailDeliveryService deliveries = mock(MailDeliveryService.class);
     private final ProjectAccessService projectAccess = mock(ProjectAccessService.class);
-    private final NotificationEventService service = new NotificationEventService(preferences, inApp, users, members, deliveries, projectAccess);
+    private final com.hourglass.mapper.WorkspaceMapper workspaces = mock(com.hourglass.mapper.WorkspaceMapper.class);
+    private final NotificationEventService service = new NotificationEventService(preferences, inApp, users, members,
+            deliveries, projectAccess, workspaces);
 
     @Test
     void preferenceControlsBothChannels() {
@@ -41,9 +43,30 @@ class NotificationEventServiceTest {
                 "assigned", "body", "K1");
 
         verify(inApp).pushImmediate("U1", "W1", UserNotificationPreferenceService.TASK_ASSIGNED,
-                "assigned", "body", "K1", null, null);
+                "assigned", "body", "K1", null, null, null);
         verify(deliveries).enqueue("u1@example.com", "assigned", "body",
                 UserNotificationPreferenceService.TASK_ASSIGNED, "K1");
+    }
+
+    @Test
+    void workspaceInAppSwitchOffKeepsEmailButSkipsNotificationCenter() {
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_UPDATED))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_UPDATED, true, true));
+        AppUser user = new AppUser();
+        user.setEmail("u1@example.com");
+        when(users.selectById("U1")).thenReturn(user);
+        com.hourglass.entity.Workspace ws = new com.hourglass.entity.Workspace();
+        ws.setNotifyInAppEnabled(Boolean.FALSE);
+        when(workspaces.selectById("W1")).thenReturn(ws);
+
+        service.notify("U1", "W1", UserNotificationPreferenceService.TASK_UPDATED,
+                "updated", "body", "K1");
+
+        verify(deliveries).enqueue("u1@example.com", "updated", "body",
+                UserNotificationPreferenceService.TASK_UPDATED, "K1");
+        verifyNoInteractions(inApp);
     }
 
     @Test
@@ -117,6 +140,30 @@ class NotificationEventServiceTest {
     }
 
     @Test
+    void mailOverrideKeepsInAppShortAndEnrichesEmail() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "mailBaseUrl", "https://host/hourglass");
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_ASSIGNED))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_ASSIGNED, true, true));
+        AppUser user = new AppUser();
+        user.setEmail("u1@example.com");
+        when(users.selectById("U1")).thenReturn(user);
+
+        service.notifyWithMail("U1", "W1", UserNotificationPreferenceService.TASK_ASSIGNED,
+                "任务负责人变更：修复登录超时", "任务「修复登录超时」已指派给你", "K1", null,
+                "王五 把「修复登录超时」转派给你",
+                "王五 把工作项转派给你：\n\n标题：修复登录超时");
+
+        /* 站内保持一句话，邮件换成带详情的新文案，深链仍追加在邮件末尾 */
+        verify(inApp).pushImmediate("U1", "W1", UserNotificationPreferenceService.TASK_ASSIGNED,
+                "任务负责人变更：修复登录超时", "任务「修复登录超时」已指派给你", "K1", null, null, null);
+        verify(deliveries).enqueue("u1@example.com", "王五 把「修复登录超时」转派给你",
+                "王五 把工作项转派给你：\n\n标题：修复登录超时\n\n打开任务：https://host/hourglass/#/board?task=K1",
+                UserNotificationPreferenceService.TASK_ASSIGNED, "K1");
+    }
+
+    @Test
     void emailWithoutBaseUrlKeepsPlainBody() {
         when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
         when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
@@ -131,6 +178,21 @@ class NotificationEventServiceTest {
 
         verify(deliveries).enqueue("u1@example.com", "comment", "body",
                 UserNotificationPreferenceService.TASK_COMMENT, "K1");
+    }
+
+    @Test
+    void mentionUsesCommentPreferenceButWritesMentionType() {
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView("W1", "U1", "R1")).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_COMMENT))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_COMMENT, true, false));
+
+        service.notifyMention("U1", "W1", "「Task」提到了你", "body", "K1", "R1");
+
+        /* 偏好仍读评论开关，站内类型写成 task_mention，供「提及我」筛选命中 */
+        verify(inApp).pushImmediate("U1", "W1", NotificationEventService.MENTION_TYPE,
+                "「Task」提到了你", "body", "K1", null, null, "R1");
+        verify(deliveries, never()).enqueue(anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test

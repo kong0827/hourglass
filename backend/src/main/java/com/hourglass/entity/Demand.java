@@ -60,6 +60,10 @@ public class Demand {
     private String createdBy;
     /** 提交人显示名（非表字段，列表/详情读取时按 createdBy 回填；查不到时保持 null，前端显示“—”） */
     private String createdByName;
+    /** 评审人账号ID（空=未指派，进入公共可认领队列） */
+    private String reviewerUserId;
+    /** 评审人显示名（非表字段，按 reviewerUserId 回填；查不到时保持 null，前端显示“未指派”） */
+    private String reviewerName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

@@ -70,10 +70,11 @@ public class MyTasksController {
         String normalizedView = "dev".equals(view) ? null : view;
         boolean watchView = "watch".equals(view);
         boolean pendingView = "pending".equals(view);
+        boolean createdView = "created".equals(view);
         boolean testScope = "test".equals(view);
         boolean strictTest = testScope && Boolean.TRUE.equals(strict);
-        /* 关注列表要看全状态；待我处理与开发/测试默认只看未完成 */
-        boolean openOnly = !"all".equals(scope) && !watchView;
+        /* 关注列表要看全状态；待我处理与开发/测试默认只看未完成；我发起的含已完成与已取消 */
+        boolean openOnly = !"all".equals(scope) && !watchView && !createdView;
 
         /* IA-3：接入与看板相同的筛选参数（负责人维度天然固定为"我"） */
         com.hourglass.dto.BoardQuery query = com.hourglass.dto.BoardQuery.from(

@@ -35,6 +35,7 @@ var reqDocPendingView = null;
 var reqDocReqFilter = null;
 /* 文档快筛范围：all 全部 / mine 我参与（负责人是我）/ draft 草稿 */
 var reqDocScope = "all";
+var reqDocDraftOnly = false;
 /* setContents 会触发 SunEditor 的 onChange：灌正文期间先压住，避免刚打开就显示「有未保存的修改」 */
 var reqDocSuppressChange = false;
 var reqEditor = null;
@@ -1152,8 +1153,8 @@ function reqDocEmptyHTML(){
   if(kw) return UI.emptyState({ icon:"inbox", compact:true, title:"没有找到匹配的文档", text:"换个关键词，或清空搜索看看全部文档。" });
   if(reqDocsError) return UI.emptyState({ icon:"alertCircle", compact:true, title:"暂时无法加载文档", text:"请点上方的「重试」重新加载。" });
   if(reqDocReqFilter) return UI.emptyState({ icon:"folder", compact:true, title:"这个项目还没有文档", text:"点右上角「新建文档」并选择该项目即可创建。" });
+  if(reqDocDraftOnly) return UI.emptyState({ icon:"projects", compact:true, title:"没有草稿", text:"已发布的文档不在草稿范围内；点「草稿」取消筛选。" });
   if(reqDocScope === "mine") return UI.emptyState({ icon:"user", compact:true, title:"没有你负责的文档", text:"切回「全部」看看空间内其他文档。" });
-  if(reqDocScope === "draft") return UI.emptyState({ icon:"projects", compact:true, title:"没有草稿", text:"已发布的文档不在草稿范围内。" });
   return UI.emptyState({ icon:"inbox", compact:true, title:"还没有文档", text:"点右上角「新建文档」，先选项目再填文档名称。" });
 }
 function reqDocFilterName(id){
@@ -1183,15 +1184,18 @@ function syncReqDocScopeUI(){
   for(var i = 0; i < btns.length; i++){
     btns[i].setAttribute("aria-selected", btns[i].dataset.rdscope === reqDocScope ? "true" : "false");
   }
+  var draftChip = $("reqDocDraftChip");
+  if(draftChip) draftChip.setAttribute("aria-pressed", reqDocDraftOnly ? "true" : "false");
 }
 function reqDocVisibleRows(){
   var rows = reqDocSearchList || reqDocList;
   if(reqDocReqFilter){
     rows = rows.filter(function(d){ return d.reqId === reqDocReqFilter; });
   }
-  if(reqDocScope === "draft"){
+  if(reqDocDraftOnly){
     rows = rows.filter(function(d){ return d.publishedAt == null; });
-  }else if(reqDocScope === "mine"){
+  }
+  if(reqDocScope === "mine"){
     var me = rt.currentUser || {};
     rows = rows.filter(function(d){
       return (me.id != null && d.ownerUserId != null && String(d.ownerUserId) === String(me.id))
@@ -1483,7 +1487,7 @@ function renderReqDocSplit(){
   /* 选中的文档已被删除：回到占位提示 */
   if(splitDocId && !reqDocById(splitDocId)){
     splitDocId = null;
-    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title">从左侧选择文档阅读</div>'
+    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title"><span class="desk-only">从左侧选择文档阅读</span><span class="mob-inline">从上方目录选择文档</span></div>'
       + '<div class="rrd-empty-text">原文档已删除；可以再选一篇，或新建一篇。</div>'
       + '<button class="btn sm" type="button" data-rrd-new style="margin-top:12px">新建文档</button></div>';
   }
@@ -6615,7 +6619,7 @@ function populateReqDocSelect(keep){
       btn.addEventListener("click", function(){ setReqDocMode(btn.dataset.rdmode); });
     })(rdModeBtns[mi]);
   }
-  /* 文档快筛：全部 / 我参与的 / 草稿 */
+  /* 文档快筛：全部 / 我参与的；「草稿」属于状态筛选，与搜索同段 */
   var rdScopeBtns = document.querySelectorAll("#reqDocListPage [data-rdscope]");
   for(var si = 0; si < rdScopeBtns.length; si++){
     (function(btn){
@@ -6627,6 +6631,11 @@ function populateReqDocSelect(keep){
       });
     })(rdScopeBtns[si]);
   }
+  if($("reqDocDraftChip")) $("reqDocDraftChip").addEventListener("click", function(){
+    reqDocDraftOnly = !reqDocDraftOnly;
+    syncReqDocScopeUI();
+    renderReqDocMode();
+  });
   /* 文档视图：保存/应用搜索、项目范围与展示方式的组合 */
   var rdViewsBtn = $("rdViewsBtn");
   if(rdViewsBtn && rdViewsMenuEl){

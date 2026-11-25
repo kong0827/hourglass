@@ -5,8 +5,10 @@ import com.hourglass.common.CurrentWorkspace;
 import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.DeliveryNoteResponse;
 import com.hourglass.dto.DeliveryNoteSaveRequest;
+import com.hourglass.dto.DeliveryShareRequest;
 import com.hourglass.dto.DeliveryShareResponse;
 import com.hourglass.dto.PublicDeliveryNote;
+import com.hourglass.entity.DeliveryNoteShareVisit;
 import com.hourglass.service.AuditService;
 import com.hourglass.service.DeliveryNoteService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,7 +20,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
+
 import java.util.List;
+import java.util.Map;
 
 /**
  * 一页式交付说明：版本级只读聚合 + 薄人工层 + 不可变快照 + 只读分享。
@@ -84,15 +89,37 @@ public class DeliveryNoteController {
         return ApiResult.ok(notes.shareInfo(ctx.getWsId(), ctx.getUserId(), snapshotId));
     }
 
+    /** 参数优先取请求体（密码不进 URL）；查询参数保留给旧页面缓存兼容。 */
     @PostMapping("/api/delivery-notes/{snapshotId}/share")
     public ApiResult<DeliveryShareResponse> createShare(@PathVariable String snapshotId,
+                                                        @RequestBody(required = false) DeliveryShareRequest body,
                                                         @RequestParam(required = false) Boolean allowDownload,
                                                         @RequestParam(required = false) Integer days,
+                                                        @RequestParam(required = false) String password,
+                                                        @RequestParam(required = false) String domains,
+                                                        @RequestParam(required = false) String watermark,
                                                         @CurrentWorkspace WorkspaceCtx ctx) {
-        DeliveryShareResponse resp = notes.createShare(ctx.getWsId(), ctx.getUserId(), snapshotId, allowDownload, days);
+        DeliveryShareResponse resp = notes.createShare(ctx.getWsId(), ctx.getUserId(), snapshotId,
+                pick(body == null ? null : body.getAllowDownload(), allowDownload),
+                pick(body == null ? null : body.getDays(), days),
+                pick(body == null ? null : body.getPassword(), password),
+                pick(body == null ? null : body.getDomains(), domains),
+                pick(body == null ? null : body.getWatermark(), watermark));
         audit.recordCurrent(ctx.getWsId(), "delivery_note_share_create", "delivery_note_snapshot", snapshotId,
-                resp.getDocNo(), true, "生成交付说明只读分享链接（有效至 " + resp.getExpiresAt() + "）", null);
+                resp.getDocNo(), true, "生成交付说明只读分享链接（有效至 " + resp.getExpiresAt()
+                        + (resp.getPasswordRequired() ? "，需访问密码" : "")
+                        + (resp.getWatermarkText() != null ? "，带水印" : "") + "）", null);
         return ApiResult.ok(resp);
+    }
+
+    private static <T> T pick(T fromBody, T fromQuery) {
+        return fromBody != null ? fromBody : fromQuery;
+    }
+
+    @GetMapping("/api/delivery-notes/{snapshotId}/share/visits")
+    public ApiResult<List<DeliveryNoteShareVisit>> shareVisits(@PathVariable String snapshotId,
+                                                               @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(notes.shareVisits(ctx.getWsId(), ctx.getUserId(), snapshotId));
     }
 
     @DeleteMapping("/api/delivery-notes/{snapshotId}/share")
@@ -105,7 +132,56 @@ public class DeliveryNoteController {
 
     /** 公开只读：不需要登录 */
     @GetMapping("/api/share/delivery")
-    public ApiResult<PublicDeliveryNote> publicShare(@RequestParam(required = false) String token) {
-        return ApiResult.ok(notes.publicShare(token));
+    public ApiResult<PublicDeliveryNote> publicShare(@RequestParam(required = false) String token,
+                                                     @RequestParam(required = false) String from,
+                                                     HttpServletRequest request) {
+        return ApiResult.ok(notes.publicShare(token, clientIp(request),
+                request.getHeader("User-Agent"), sourceOf(request, from)));
+    }
+
+    /** 有访问密码时，接收人先校验密码再取正文 */
+    @PostMapping("/api/share/delivery/unlock")
+    public ApiResult<PublicDeliveryNote> unlock(@RequestBody Map<String, String> body,
+                                                HttpServletRequest request) {
+        return ApiResult.ok(notes.unlock(body == null ? null : body.get("token"),
+                body == null ? null : body.get("password"),
+                clientIp(request), request.getHeader("User-Agent"),
+                sourceOf(request, body == null ? null : body.get("from"))));
+    }
+
+    /** 接收人下载留痕（仅记录，不返回正文）；受密码保护的分享需带上解锁密码 */
+    @PostMapping("/api/share/delivery/visit")
+    public ApiResult<Void> visit(@RequestBody(required = false) Map<String, String> body,
+                                 @RequestParam(required = false) String token,
+                                 @RequestParam(required = false) String action,
+                                 @RequestParam(required = false) String from,
+                                 @RequestParam(required = false) String password,
+                                 HttpServletRequest request) {
+        String act = pick(action, body == null ? null : body.get("action"));
+        if ("download".equals(act)) {
+            notes.logShareDownload(pick(token, body == null ? null : body.get("token")),
+                    pick(password, body == null ? null : body.get("password")),
+                    clientIp(request), request.getHeader("User-Agent"),
+                    sourceOf(request, pick(from, body == null ? null : body.get("from"))));
+        }
+        return ApiResult.ok();
+    }
+
+    /* 分享页自己的请求 Referer 是本服务域名，判断域名白名单要用接收人真正的来路：
+       前端把 document.referrer 作为 from 传上来，缺失时再退回请求头 */
+    private static String sourceOf(HttpServletRequest request, String explicit) {
+        if (explicit != null && !explicit.trim().isEmpty()) {
+            return explicit.trim();
+        }
+        return request.getHeader("Referer");
+    }
+
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.trim().isEmpty()) {
+            int comma = forwarded.indexOf(',');
+            return comma >= 0 ? forwarded.substring(0, comma).trim() : forwarded.trim();
+        }
+        return request.getRemoteAddr();
     }
 }

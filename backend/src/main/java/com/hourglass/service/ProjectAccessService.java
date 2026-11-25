@@ -31,6 +31,8 @@ public class ProjectAccessService {
     public static final String ACCESS_NONE = "none";
     public static final String ACCESS_READ = "read";
     public static final String ACCESS_WRITE = "write";
+    /** 项目级测试能力：可建/执行测试计划、认领测试、执行用例与转缺陷，但不能改工作项与项目资料 */
+    public static final String ACCESS_TEST = "test";
     public static final String ACCESS_PM = "pm";
     public static final String ACCESS_DEV = "dev";
     public static final String ACCESS_QA = "qa";
@@ -51,6 +53,7 @@ public class ProjectAccessService {
         ACCESS_VALUES.add(ACCESS_NONE);
         ACCESS_VALUES.add(ACCESS_READ);
         ACCESS_VALUES.add(ACCESS_WRITE);
+        ACCESS_VALUES.add(ACCESS_TEST);
     }
 
     private final ProjectMemberMapper projectMemberMapper;
@@ -191,8 +194,89 @@ public class ProjectAccessService {
         }
     }
 
+    /**
+     * 测试能力：owner/admin 全量；viewer 全局只读；
+     * member 需项目级 write 或 test —— test 只放开测试链路，不改工作项与项目资料。
+     */
+    public boolean canTest(String workspaceId, String userId, String projectId) {
+        if (userId == null) {
+            return true;
+        }
+        WorkspaceMember member = memberMapper.selectMember(workspaceId, userId);
+        if (member == null) {
+            return false;
+        }
+        String role = member.getRole();
+        if (projectId == null) {
+            return !isViewer(role);
+        }
+        if (isViewer(role)) {
+            return false;
+        }
+        if (isPrivileged(role)) {
+            return true;
+        }
+        String access = effectiveAccess(workspaceId, projectId, member);
+        return ACCESS_WRITE.equals(access) || ACCESS_TEST.equals(access);
+    }
+
+    public void assertTest(String workspaceId, String userId, String projectId) {
+        if (projectId == null) {
+            if (isViewer(roleOf(workspaceId, userId))) {
+                throw new AppException(403, "你在此空间是查看者，只能查看不能修改");
+            }
+            return;
+        }
+        if (!canView(workspaceId, userId, projectId)) {
+            throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
+        }
+        if (!canTest(workspaceId, userId, projectId)) {
+            throw new AppException(403, "你对该项目没有测试权限");
+        }
+    }
+
+    /**
+     * 项目负责人（项目级管理）：改项目资料、归档、调整项目成员授权。
+     * owner/admin 天然是管理者；普通成员需要「是本项目负责人」且对该项目可写。
+     */
+    public boolean canManageProject(String workspaceId, String userId, String projectId, String ownerUserId) {
+        if (userId == null || projectId == null) {
+            return false;
+        }
+        if (!canView(workspaceId, userId, projectId)) {
+            return false;
+        }
+        String role = roleOf(workspaceId, userId);
+        if (isViewer(role)) {
+            return false;
+        }
+        if (isPrivileged(role)) {
+            return true;
+        }
+        return userId.equals(ownerUserId) && canWrite(workspaceId, userId, projectId);
+    }
+
+    public void assertManageProject(String workspaceId, String userId, String projectId, String ownerUserId) {
+        if (!canView(workspaceId, userId, projectId)) {
+            throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
+        }
+        if (!canManageProject(workspaceId, userId, projectId, ownerUserId)) {
+            throw new AppException(403, "只有项目负责人或空间管理员可以修改项目");
+        }
+    }
+
     /** Delivery writes only: caller must hold project/task scope locks before this current read. */
     private Map<String, Object> writableSnapshotForUpdate(String workspaceId, String userId, String projectId) {
+        return writableSnapshotForUpdate(workspaceId, userId, projectId, false);
+    }
+
+    /** Delivery test writes: same scope locks, but write/test both qualify. */
+    public void assertTestForUpdate(String workspaceId, String userId, String projectId) {
+        writableSnapshotForUpdate(workspaceId, userId, projectId, true);
+    }
+
+    private Map<String, Object> writableSnapshotForUpdate(String workspaceId, String userId, String projectId,
+                                                          boolean allowTest) {
         Map<String, Object> snapshot = memberMapper.selectDeliveryAccessForUpdate(workspaceId, userId, projectId);
         if (snapshot == null || snapshot.get("role") == null) {
             throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
@@ -213,8 +297,13 @@ public class ProjectAccessService {
                     && snapshot.get("access") == null) {
                 throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
             }
-            if (ACCESS_READ.equals(snapshot.get("access"))) {
+            Object access = snapshot.get("access");
+            if (ACCESS_READ.equals(access)) {
                 throw new AppException(403, "你对该项目只有查看权限");
+            }
+            /* 测试权限只放开测试链路；普通写仍视为只读 */
+            if (!allowTest && ACCESS_TEST.equals(access)) {
+                throw new AppException(403, "你对该项目只有测试权限，不能修改工作项");
             }
         }
         return snapshot;
@@ -306,7 +395,8 @@ public class ProjectAccessService {
                     /* assigned 成员缺记录即不可见；存量 all 成员缺记录默认可参与 */
                     writable = !isAssigned(member);
                 } else {
-                    writable = !ACCESS_READ.equals(access) && !ACCESS_NONE.equals(access);
+                    /* read/test 都只读工作项；test 只放开测试链路 */
+                    writable = ACCESS_WRITE.equals(access);
                 }
             }
             t.setAccess(writable ? "write" : "read");

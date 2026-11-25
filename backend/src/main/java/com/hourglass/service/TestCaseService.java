@@ -818,7 +818,7 @@ public class TestCaseService {
     public Attachment uploadEvidence(String userId, String workspaceId, String caseId,
                                      String runId, org.springframework.web.multipart.MultipartFile file) {
         TestCase c = get(workspaceId, caseId);
-        projectAccess.assertWrite(workspaceId, userId, c.getReqId());
+        projectAccess.assertTest(workspaceId, userId, c.getReqId());
         TestCaseRun run = runMapper.selectById(runId);
         if (run == null || !workspaceId.equals(run.getWorkspaceId())
                 || !caseId.equals(run.getCaseId())) {
@@ -1394,7 +1394,7 @@ public class TestCaseService {
     @Transactional
     public TestCaseRun run(String userId, String workspaceId, String id, CaseRunRequest req, String planId) {
         TestCase c = get(workspaceId, id);
-        projectAccess.assertWrite(workspaceId, userId, c.getReqId());
+        projectAccess.assertTest(workspaceId, userId, c.getReqId());
         String executorId = userId;
         String executorName = CurrentUser.get().getDisplayName();
         String proxy = Texts.trimToNull(req.getExecutedByUserId());
@@ -1437,7 +1437,7 @@ public class TestCaseService {
     @Transactional
     public Task fileDefect(String userId, String workspaceId, String id, CaseDefectRequest req) {
         TestCase c = get(workspaceId, id);
-        projectAccess.assertWrite(workspaceId, userId, c.getReqId());
+        projectAccess.assertTest(workspaceId, userId, c.getReqId());
         if (!CaseMeta.STATUS_FAILED.equals(c.getLatestStatus())) {
             throw AppException.badRequest("只有执行失败的用例才能转缺陷");
         }

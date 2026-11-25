@@ -1,0 +1,938 @@
+[
+  {
+    "route": "#/mine",
+    "tab": null,
+    "view": "mine",
+    "title": "我的工作",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "重试",
+      "保存"
+    ],
+    "btnCount": 54,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 3,
+    "emptyState": false,
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "error": null
+  },
+  {
+    "route": "#/board",
+    "tab": null,
+    "view": "board",
+    "title": "工作项",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 157,
+    "truncations": 2,
+    "truncSample": [
+      {
+        "cls": "card-desc",
+        "w": 197,
+        "sw": 454,
+        "t": "https://page.weixin.qq.com/sma"
+      },
+      {
+        "cls": "col-foot-note",
+        "w": 90,
+        "sw": 163,
+        "t": "本周完成 11 项 · 仅显示前 6 条"
+      }
+    ],
+    "tinyText": 2,
+    "emptyState": false,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/workcolumn",
+    "tab": null,
+    "view": "workcolumn",
+    "title": "工作项",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 81,
+    "truncations": 2,
+    "truncSample": [
+      {
+        "cls": "wcl-t",
+        "w": 453,
+        "sw": 718,
+        "t": "东证流程管理系统，流程中心-信息系统外部接入审批，填写表单页"
+      },
+      {
+        "cls": "wcl-t",
+        "w": 453,
+        "sw": 729,
+        "t": "在东证流程管理系统，流程中心-主机托管审批，填写表单页面，有"
+      }
+    ],
+    "tinyText": 2,
+    "emptyState": false,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/canceled",
+    "tab": null,
+    "view": "canceled",
+    "title": "工作项",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 58,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/list",
+    "tab": null,
+    "view": "list",
+    "title": "工作项",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 106,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/tree",
+    "tab": null,
+    "view": "tree",
+    "title": "工作项",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 88,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/chain",
+    "tab": null,
+    "view": "chain",
+    "title": "工作项",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 60,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 3,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/calendar",
+    "tab": null,
+    "view": "calendar",
+    "title": "工作项",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 207,
+    "truncations": 68,
+    "truncSample": [
+      {
+        "cls": "cal-t",
+        "w": 73,
+        "sw": 96,
+        "t": "外接客户季度报告"
+      },
+      {
+        "cls": "cal-t",
+        "w": 72,
+        "sw": 96,
+        "t": "外接客户季度报告"
+      },
+      {
+        "cls": "cal-t",
+        "w": 72,
+        "sw": 96,
+        "t": "外接客户季度报告"
+      },
+      {
+        "cls": "cal-t",
+        "w": 72,
+        "sw": 96,
+        "t": "外接客户季度报告"
+      },
+      {
+        "cls": "cal-t",
+        "w": 72,
+        "sw": 96,
+        "t": "外接客户季度报告"
+      },
+      {
+        "cls": "cal-t",
+        "w": 72,
+        "sw": 96,
+        "t": "外接客户季度报告"
+      },
+      {
+        "cls": "cal-t",
+        "w": 72,
+        "sw": 96,
+        "t": "外接客户季度报告"
+      },
+      {
+        "cls": "cal-t",
+        "w": 73,
+        "sw": 96,
+        "t": "外接客户季度报告"
+      }
+    ],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/gantt",
+    "tab": null,
+    "view": "gantt",
+    "title": "工作项",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 88,
+    "truncations": 3,
+    "truncSample": [
+      {
+        "cls": "gantt-bar-label",
+        "w": 99,
+        "sw": 144,
+        "t": "OpenObserve 日志平台部署"
+      },
+      {
+        "cls": "gantt-title",
+        "w": 255,
+        "sw": 286,
+        "t": "主机托管配置是否闲置为“否”时自动更新机房地址"
+      },
+      {
+        "cls": "gantt-unplanned-t",
+        "w": 328,
+        "sw": 770,
+        "t": "执行一条用例之后，列表的数据会回到最顶部，连续执行的话需要频"
+      }
+    ],
+    "tinyText": 12,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/projects",
+    "tab": null,
+    "view": "projects",
+    "title": "项目",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建项目",
+      "保存"
+    ],
+    "btnCount": 126,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 55,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/portfolio",
+    "tab": null,
+    "view": "portfolio",
+    "title": "项目集",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建项目",
+      "保存"
+    ],
+    "btnCount": 114,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 74,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/project",
+    "tab": null,
+    "view": "project",
+    "title": "资金通",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "+ 添加分类",
+      "保存"
+    ],
+    "btnCount": 68,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/phase",
+    "tab": null,
+    "view": "phase",
+    "title": "版本",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "记录实际发布",
+      "保存"
+    ],
+    "btnCount": 70,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/version",
+    "tab": null,
+    "view": "version",
+    "title": "版本详情",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 63,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/release",
+    "tab": null,
+    "view": "release",
+    "title": "发布工作台",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 51,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/delivery",
+    "tab": null,
+    "view": "delivery",
+    "title": "交付说明",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 74,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/demands",
+    "tab": null,
+    "view": "demands",
+    "title": "需求池",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建需求",
+      "保存"
+    ],
+    "btnCount": 99,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 17,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/requirements",
+    "tab": null,
+    "view": "requirements",
+    "title": "文档",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建文档",
+      "保存"
+    ],
+    "btnCount": 67,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 7,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/dochistory",
+    "tab": null,
+    "consoleErrors": [],
+    "error": "timeout view dochistory false"
+  },
+  {
+    "route": "#/testcases",
+    "tab": null,
+    "view": "testcases",
+    "title": "测试",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建用例",
+      "保存"
+    ],
+    "btnCount": 123,
+    "truncations": 22,
+    "truncSample": [
+      {
+        "cls": "tc-title",
+        "w": 155,
+        "sw": 201,
+        "t": "E2E 批次5 2026-11-20T03-34-58"
+      },
+      {
+        "cls": "tc-title",
+        "w": 221,
+        "sw": 371,
+        "t": "验证菜单权限勾选业务类型配置修改，对应角色的用户可查看该按钮"
+      },
+      {
+        "cls": "assoc-link",
+        "w": 72,
+        "sw": 140,
+        "t": "掌厅业务未通过等3类通知"
+      },
+      {
+        "cls": "assoc-link",
+        "w": 77,
+        "sw": 155,
+        "t": "WI-003 掌厅未通过消息推送"
+      },
+      {
+        "cls": "tc-title",
+        "w": 221,
+        "sw": 371,
+        "t": "验证菜单权限勾选业务类型配置新增，对应角色的用户可查看该按钮"
+      },
+      {
+        "cls": "assoc-link",
+        "w": 72,
+        "sw": 140,
+        "t": "掌厅业务未通过等3类通知"
+      },
+      {
+        "cls": "assoc-link",
+        "w": 77,
+        "sw": 155,
+        "t": "WI-003 掌厅未通过消息推送"
+      },
+      {
+        "cls": "tc-title",
+        "w": 221,
+        "sw": 334,
+        "t": "验证菜单权限勾选接收人删除，对应角色的用户可查看该按钮"
+      }
+    ],
+    "tinyText": 4,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/branches",
+    "tab": null,
+    "view": "branches",
+    "title": "分支",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "保存"
+    ],
+    "btnCount": 72,
+    "truncations": 1,
+    "truncSample": [
+      {
+        "cls": "br-note",
+        "w": 263,
+        "sw": 276,
+        "t": "主机托管交换机或路由器关联操作系统等字段逻辑调整"
+      }
+    ],
+    "tinyText": 7,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/review",
+    "tab": null,
+    "view": "review",
+    "title": "周回顾",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 59,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 4,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/analysis",
+    "tab": null,
+    "view": "analysis",
+    "title": "趋势与分布",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 70,
+    "truncations": 2,
+    "truncSample": [
+      {
+        "cls": "lb",
+        "w": 120,
+        "sw": 169,
+        "t": "流程引擎 › 流程引擎基础功能"
+      },
+      {
+        "cls": "lb",
+        "w": 120,
+        "sw": 138,
+        "t": "其他项目 › API开放平台"
+      }
+    ],
+    "tinyText": 18,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/workload",
+    "tab": null,
+    "view": "workload",
+    "title": "成员负载",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 69,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 6,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/risks",
+    "tab": null,
+    "view": "risks",
+    "title": "逾期与阻塞",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建",
+      "催办逾期 5",
+      "保存"
+    ],
+    "btnCount": 63,
+    "truncations": 1,
+    "truncSample": [
+      {
+        "cls": "risk-row-state warn",
+        "w": 150,
+        "sw": 168,
+        "t": "等待客户数据权限迁移至本系统"
+      }
+    ],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/report",
+    "tab": null,
+    "view": "report",
+    "title": "交付图表",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 57,
+    "truncations": 8,
+    "truncSample": [
+      {
+        "cls": "[object SVGAnimatedString]",
+        "w": 16,
+        "sw": 27,
+        "t": "1250h"
+      },
+      {
+        "cls": "[object SVGAnimatedString]",
+        "w": 16,
+        "sw": 28,
+        "t": "2500h"
+      },
+      {
+        "cls": "[object SVGAnimatedString]",
+        "w": 16,
+        "sw": 28,
+        "t": "3750h"
+      },
+      {
+        "cls": "[object SVGAnimatedString]",
+        "w": 16,
+        "sw": 29,
+        "t": "5000h"
+      },
+      {
+        "cls": "[object SVGAnimatedString]",
+        "w": 16,
+        "sw": 21,
+        "t": "125h"
+      },
+      {
+        "cls": "[object SVGAnimatedString]",
+        "w": 16,
+        "sw": 23,
+        "t": "250h"
+      },
+      {
+        "cls": "[object SVGAnimatedString]",
+        "w": 16,
+        "sw": 22,
+        "t": "375h"
+      },
+      {
+        "cls": "[object SVGAnimatedString]",
+        "w": 16,
+        "sw": 23,
+        "t": "500h"
+      }
+    ],
+    "tinyText": 33,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/investment",
+    "tab": null,
+    "view": "investment",
+    "title": "投入结构",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "✦ AI 总结",
+      "保存"
+    ],
+    "btnCount": 80,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 4,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/messages",
+    "tab": null,
+    "view": "messages",
+    "title": "消息中心",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 63,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 26,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/settings",
+    "tab": null,
+    "view": "settings",
+    "title": "设置",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存更改",
+      "保存"
+    ],
+    "btnCount": 58,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/profile",
+    "tab": null,
+    "view": "profile",
+    "title": "个人设置",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存基本信息",
+      "保存"
+    ],
+    "btnCount": 50,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 2,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/testcases",
+    "tab": "defects",
+    "view": "testcases",
+    "title": "测试",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建缺陷",
+      "保存"
+    ],
+    "btnCount": 59,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 5,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/testcases",
+    "tab": "plans",
+    "view": "testcases",
+    "title": "测试",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "新建计划",
+      "保存"
+    ],
+    "btnCount": 56,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 4,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/testcases",
+    "tab": "coverage",
+    "view": "testcases",
+    "title": "测试",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 62,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 6,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/testcases",
+    "tab": "report",
+    "view": "testcases",
+    "title": "测试",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "导出报告",
+      "保存"
+    ],
+    "btnCount": 60,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 7,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/analysis",
+    "tab": "completions",
+    "view": "analysis",
+    "title": "趋势与分布",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 74,
+    "truncations": 16,
+    "truncSample": [
+      {
+        "cls": "assoc-link",
+        "w": 79,
+        "sw": 104,
+        "t": "流程引擎基础功能"
+      },
+      {
+        "cls": "tag-txt",
+        "w": 67,
+        "sw": 88,
+        "t": "流程引擎基础功能"
+      },
+      {
+        "cls": "comp-sub",
+        "w": 178,
+        "sw": 206,
+        "t": "提测 11-17 10:09 · 历时 4天10小时9分"
+      },
+      {
+        "cls": "comp-t comp-link",
+        "w": 178,
+        "sw": 234,
+        "t": "柜台更新逻辑补充平台表名字覆盖配置表"
+      },
+      {
+        "cls": "comp-d",
+        "w": 178,
+        "sw": 658,
+        "t": "次席柜台配置更新时，根据柜台系统id判断，若配置信息已存在，"
+      },
+      {
+        "cls": "comp-t comp-link",
+        "w": 178,
+        "sw": 331,
+        "t": "资金通管理端-操作员账号支持发送账号信息至短信和邮箱"
+      },
+      {
+        "cls": "comp-d",
+        "w": 178,
+        "sw": 696,
+        "t": "开设账号和重置密码以后支持将账号与初始密码发送至邮箱或短信 "
+      },
+      {
+        "cls": "comp-t comp-link",
+        "w": 178,
+        "sw": 227,
+        "t": "资金通客户端-客户端登录页面样式优化"
+      }
+    ],
+    "tinyText": 3,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  },
+  {
+    "route": "#/analysis",
+    "tab": "flow",
+    "view": "analysis",
+    "title": "趋势与分布",
+    "overflowX": 0,
+    "scrollH": 900,
+    "primaryBtns": [
+      "保存"
+    ],
+    "btnCount": 54,
+    "truncations": 0,
+    "truncSample": [],
+    "tinyText": 3,
+    "emptyState": true,
+    "consoleErrors": [],
+    "error": null
+  }
+]

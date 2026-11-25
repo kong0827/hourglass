@@ -734,7 +734,7 @@ async function main(){
       { name:"通知中心", sel:"#btnAlert", cat:"open" },
       { name:"AI 助手", sel:"#aiFab", cat:"open" },
       { name:"个人设置入口", sel:"#sideUserBtn", cat:"switch" },
-      { name:"设置入口", sel:"#sideSettings", cat:"switch" }
+      { name:"设置入口", sel:'#sideNav .nav-item[data-view="settings"]', cat:"switch" }
     ];
     log("\n== 全局顶栏 / 侧栏 ==");
     for(const g of globalTests){

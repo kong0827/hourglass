@@ -23,6 +23,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -77,6 +79,24 @@ class MyTasksPaginationTest {
         assertEquals(5, page.getTotal());
         assertEquals(0, page.getItems().size());
         verify(taskMapper, never()).selectMyTasks(any(MyTasksQuery.class));
+    }
+
+    @Test
+    void createdViewKeepsFlagOnQuery() {
+        when(taskMapper.countMyTasks(any(MyTasksQuery.class))).thenReturn(2, 0);
+        when(taskMapper.selectMyTasks(any(MyTasksQuery.class))).thenReturn(Collections.<Task>emptyList());
+        when(taskMapper.selectMyTaskWorkspaces(any(MyTasksQuery.class)))
+                .thenReturn(Collections.<MyTaskWorkspace>emptyList());
+
+        service().myTasksPage("U1", "我", false, false, "created", false, new BoardQuery(), 0, 20);
+
+        ArgumentCaptor<MyTasksQuery> captor = ArgumentCaptor.forClass(MyTasksQuery.class);
+        verify(taskMapper).selectMyTasks(captor.capture());
+        assertEquals("created", captor.getValue().getView());
+        assertTrue(captor.getValue().isCreatedView());
+        assertFalse(captor.getValue().isOpenOnly());
+        /* 创建人口径不叠加「仅显示名」条件，省掉第二次 COUNT */
+        verify(taskMapper, times(1)).countMyTasks(any(MyTasksQuery.class));
     }
 
     @Test

@@ -33,12 +33,36 @@ function base() { return "/api/versions/" + encodeURIComponent(versionId) + "/de
 
 /* ==================== 入口 ==================== */
 
+/* 深链：#/delivery?versionId=…&releaseId=…，刷新与转发都能落回同一份说明 */
+function hashParams() {
+  var raw = String(location.hash || "");
+  var q = raw.indexOf("?");
+  var out = {};
+  if (q < 0) return out;
+  raw.substring(q + 1).split("&").forEach(function (p) {
+    if (!p) return;
+    var i = p.indexOf("=");
+    try {
+      out[decodeURIComponent(i < 0 ? p : p.substring(0, i))] = i < 0 ? "" : decodeURIComponent(p.substring(i + 1));
+    } catch (e) { /* 非法转义直接跳过 */ }
+  });
+  return out;
+}
+function setDeliveryHash(id, releaseId, replace) {
+  var h = id ? "#/delivery?versionId=" + encodeURIComponent(id)
+    + (releaseId ? "&releaseId=" + encodeURIComponent(releaseId) : "") : "#/delivery";
+  if (location.hash === h) return;
+  try { replace ? history.replaceState(null, "", h) : history.pushState(null, "", h); }
+  catch (e) { try { location.hash = h; } catch (e2) { /* 受限环境忽略 */ } }
+}
+
 function enterDeliveryView() {
   host = document.getElementById("deliveryBody");
   if (!host) return;
   wire();
-  var want = rt.deliveryVersionId || versionId;
-  if (want) { load(want); return; }
+  var hp = hashParams();
+  var want = hp.versionId || rt.deliveryVersionId || versionId;
+  if (want) { load(want, hp.releaseId || ""); return; }
   renderPicker();
 }
 /* 从版本卡 / 发布记录进入：带上版本（可选带上发布记录）直接落到工作台 */
@@ -46,7 +70,15 @@ function openDeliveryNote(id, releaseId) {
   rt.deliveryVersionId = id;
   rt.deliveryReleaseId = releaseId || "";
   versionId = null;
+  setDeliveryHash(id, releaseId || "", false);
   showView("delivery");
+}
+/* 浏览器前进/后退落在另一个版本：跟着 hash 重新聚合，不整页重进 */
+function refreshFromHash() {
+  if (!host || activeView !== "delivery") return;
+  var hp = hashParams();
+  if (hp.versionId && hp.versionId !== versionId) { load(hp.versionId, hp.releaseId || ""); return; }
+  if (!hp.versionId && versionId) { data = null; versionId = null; rt.deliveryVersionId = ""; renderPicker(); }
 }
 
 function renderPicker() {
@@ -147,6 +179,7 @@ function load(id, releaseId) {
   host.innerHTML = UI.skeletonRows(6);
   var want = releaseId || rt.deliveryReleaseId || "";
   rt.deliveryReleaseId = "";
+  setDeliveryHash(id, want, true);
   return API.get(base(), want ? { releaseId: want } : null).then(function (resp) {
     if (current !== loadSeq || activeView !== "delivery") return;
     data = resp;
@@ -661,7 +694,7 @@ function onClick(e) {
   if (act === "density") { applyOption("density", btn.dataset.dlVal); return; }
   if (act === "evidence") { applyOption("evidence", Number(btn.dataset.dlVal)); return; }
   if (act === "evidence-level") { applyOption("evidence", Number(btn.dataset.dlLv)); return; }
-  if (act === "pick") { data = null; versionId = null; rt.deliveryVersionId = ""; renderPicker(); return; }
+  if (act === "pick") { data = null; versionId = null; rt.deliveryVersionId = ""; setDeliveryHash("", "", true); renderPicker(); return; }
   if (act === "save") { saveNow(false); return; }
   if (act === "reset") { resetOptions(); return; }
   if (act === "lean") { leanOptions(); return; }
@@ -1026,7 +1059,7 @@ function openShare(snapshotId, docNo) {
     + '<div class="sheet-foot"><span class="hint">接收人无需登录；内部复盘版永不分享</span>'
     + '<button class="btn" type="button" data-dl-close>关闭</button></div>', "sm");
   var state = { snapshotId: sid, docNo: docNo || (sid && sid === data.snapshotId ? data.docNo : ""),
-    info: null, days: 30, allowDownload: true };
+    info: null, days: 30, allowDownload: true, password: "", domains: "", watermark: "" };
   function paint() {
     var body = layer.querySelector("#dlShareBody");
     if (!body) return;
@@ -1039,15 +1072,30 @@ function openShare(snapshotId, docNo) {
         + '<div class="dl-kvs"><div class="dl-kvbox"><span>编号</span><strong>' + esc(info.docNo || "") + "</strong></div>"
         + '<div class="dl-kvbox"><span>有效至</span><strong>' + esc(DD.timeText(info.expiresAt)) + "</strong></div>"
         + '<div class="dl-kvbox"><span>访问次数</span><strong>' + (info.viewCount || 0) + "</strong></div>"
+        + '<div class="dl-kvbox"><span>近 7 天打开</span><strong>' + (info.visits7d || 0) + "</strong></div>"
+        + '<div class="dl-kvbox"><span>最近打开</span><strong>' + esc(info.lastViewedAt ? DD.timeText(info.lastViewedAt) : "—") + "</strong></div>"
+        + '<div class="dl-kvbox"><span>访问密码</span><strong>' + (info.passwordRequired ? "已设置" : "无") + "</strong></div>"
+        + '<div class="dl-kvbox"><span>水印</span><strong>' + esc(info.watermarkText || "无") + "</strong></div>"
         + '<div class="dl-kvbox"><span>允许下载</span><strong>' + (info.allowDownload ? "是" : "否") + "</strong></div></div>"
+        + (info.allowedDomains ? '<div class="dl-caliber">来源域名提示（非访问控制，来源域名可被伪造）：' + esc(info.allowedDomains) + "</div>" : "")
         + '<div class="dl-narr-bar">'
         + '<button class="btn sm" type="button" data-dl-share-open>' + icon("extlink", 13) + "预览接收人页</button>"
+        + '<button class="btn sm" type="button" data-dl-share-visits>' + icon("clock", 13) + "访问明细</button>"
         + '<button class="btn sm danger" type="button" data-dl-share-revoke>' + icon("close", 13) + "停止分享</button></div>"
         : '<div class="dl-rfield"><span class="rl">有效期</span>'
         + '<select class="select" data-dl-share-days aria-label="有效期">'
         + [7, 30, 90].map(function (d) { return '<option value="' + d + '"' + (state.days === d ? " selected" : "") + ">" + d + " 天</option>"; }).join("")
         + "</select></div>"
         + switchRow("allowDownload", "允许接收人下载 PDF", "关掉只能在线查看", state.allowDownload, false)
+        + '<div class="dl-rfield"><span class="rl">访问密码</span>'
+        + '<input class="input" type="text" data-dl-share-pwd maxlength="32" autocomplete="new-password"'
+        + ' placeholder="留空表示无需密码（6–32 位）" value="' + esc(state.password) + '" aria-label="访问密码"></div>'
+        + '<div class="dl-rfield"><span class="rl">来源域名提示</span>'
+        + '<input class="input" type="text" data-dl-share-domains maxlength="480"'
+        + ' placeholder="example.com, partner.com（需同时设密码；留空不限制）" value="' + esc(state.domains) + '" aria-label="来源域名提示"></div>'
+        + '<div class="dl-rfield"><span class="rl">水印文字</span>'
+        + '<input class="input" type="text" data-dl-share-wm maxlength="60"'
+        + ' placeholder="如：客户名称 / 内部资料（留空不加水印）" value="' + esc(state.watermark) + '" aria-label="水印文字"></div>'
         + '<div class="dl-caliber">'
         + (state.snapshotId ? "将分享快照 " + esc(state.docNo || String(state.snapshotId).slice(0, 10)) + "。"
           : "尚未冻结快照：点下方按钮会先保存草稿并冻结一份不可变快照，再生成链接。")
@@ -1058,6 +1106,12 @@ function openShare(snapshotId, docNo) {
     if (e.target.dataset.dlShareDays !== undefined) state.days = Number(e.target.value);
     if (e.target.dataset.dlOpt === "allowDownload") state.allowDownload = e.target.checked;
   });
+  /* 三个附加项都以文本输入，change 只在失焦时来：边输边记，避免生成时拿到旧值 */
+  layer.addEventListener("input", function (e) {
+    if (e.target.dataset.dlSharePwd !== undefined) state.password = e.target.value;
+    else if (e.target.dataset.dlShareDomains !== undefined) state.domains = e.target.value;
+    else if (e.target.dataset.dlShareWm !== undefined) state.watermark = e.target.value;
+  });
   layer.addEventListener("click", function (e) {
     if (e.target.closest("[data-dl-share-copy]")) {
       copyToClipboard(shareURL(state.info.token), "链接已复制", "复制失败，请手动选择链接");
@@ -1067,6 +1121,7 @@ function openShare(snapshotId, docNo) {
       window.open(shareURL(state.info.token), "_blank", "noopener");
       return;
     }
+    if (e.target.closest("[data-dl-share-visits]")) { openShareVisits(state.snapshotId, state.docNo || state.info.docNo); return; }
     if (e.target.closest("[data-dl-share-revoke]")) {
       UI.showConfirm({
         title: "停止分享", okText: "停止分享",
@@ -1084,14 +1139,22 @@ function openShare(snapshotId, docNo) {
     }
     if (e.target.closest("[data-dl-share-gen]")) {
       if (busyAction) return;
+      var pwd = String(state.password || "").trim();
+      if (pwd && (pwd.length < 6 || pwd.length > 32)) { toast("访问密码需 6–32 位", "warn"); return; }
+      if (!pwd && String(state.domains || "").trim()) { toast("设置来源域名时必须同时设置访问密码", "warn"); return; }
       busyAction = true;
       var btn = layer.querySelector("[data-dl-share-gen]");
       if (btn) { btn.disabled = true; btn.textContent = "生成中…"; }
       var ready = state.snapshotId ? Promise.resolve(null)
         : freezeForExport().then(function (resp) { state.snapshotId = resp.snapshotId; return resp; });
       ready.then(function () {
-        return API.post("/api/delivery-notes/" + encodeURIComponent(state.snapshotId) + "/share?allowDownload="
-          + (state.allowDownload ? "true" : "false") + "&days=" + state.days, {});
+        return API.post("/api/delivery-notes/" + encodeURIComponent(state.snapshotId) + "/share", {
+          allowDownload: !!state.allowDownload,
+          days: state.days,
+          password: pwd,
+          domains: String(state.domains || "").trim(),
+          watermark: String(state.watermark || "").trim()
+        });
       }).then(function (info) {
         state.info = info;
         toast("只读链接已生成", "fs");
@@ -1110,6 +1173,47 @@ function openShare(snapshotId, docNo) {
     }).catch(function () { paint(); });
   } else { paint(); }
 }
+/* 访问明细：只给编制方看，记录 IP / 来源域名 / 动作，便于判断链接是否被转发到白名单之外 */
+function openShareVisits(snapshotId, docNo) {
+  if (!snapshotId) return;
+  var layer = modal(modalHead("分享访问明细", "最近 100 次打开与下载；来源域名取自浏览器的 Referer，可能为空。")
+    + '<div class="sheet-body" id="dlVisitBody">' + UI.skeletonRows(4) + "</div>"
+    + '<div class="sheet-foot"><span class="hint">' + esc(docNo || "") + "</span>"
+    + '<button class="btn" type="button" data-dl-close>关闭</button></div>', "wide");
+  API.get("/api/delivery-notes/" + encodeURIComponent(snapshotId) + "/share/visits").then(function (rows) {
+    var body = layer.querySelector("#dlVisitBody");
+    if (!body) return;
+    if (!rows || !rows.length) {
+      body.innerHTML = UI.emptyState({ icon: "clock", title: "还没有访问记录", text: "接收人打开链接或下载 PDF 后会在这里留痕。" });
+      return;
+    }
+    body.innerHTML = '<div class="dl-visit-row head"><span>时间</span><span>动作</span><span>IP</span><span>来源域名</span><span>浏览器</span></div>'
+      + rows.map(function (x) {
+        return '<div class="dl-visit-row"><span>' + esc(DD.timeText(x.createdAt)) + "</span>"
+          + '<span>' + esc(visitActionName(x.action)) + "</span>"
+          + '<span class="mono">' + esc(x.ip || "—") + "</span>"
+          + '<span>' + esc(x.domain || "—") + "</span>"
+          + '<span class="ua" title="' + esc(x.userAgent || "") + '">' + esc(shortUA(x.userAgent)) + "</span></div>";
+      }).join("");
+  }).catch(function (ex) {
+    var body = layer.querySelector("#dlVisitBody");
+    if (body) body.innerHTML = UI.errorState(ex.message || "访问明细加载失败");
+  });
+}
+function visitActionName(a) {
+  if (a === "unlock") return "密码打开";
+  if (a === "unlock_fail") return "密码错误";
+  if (a === "download") return "下载 PDF";
+  return "打开";
+}
+function shortUA(ua) {
+  var s = String(ua || "");
+  if (!s) return "—";
+  var os = /iPhone|iPad/.test(s) ? "iOS" : /Android/.test(s) ? "Android" : /Mac OS X/.test(s) ? "macOS" : /Windows/.test(s) ? "Windows" : "";
+  var br = /Edg\//.test(s) ? "Edge" : /Chrome\//.test(s) ? "Chrome" : /Safari\//.test(s) ? "Safari" : /Firefox\//.test(s) ? "Firefox" : "";
+  return [os, br].filter(Boolean).join(" · ") || s.slice(0, 32);
+}
+
 function refreshRevisions() {
   if (!versionId) return;
   API.get(base() + "/snapshots").then(function (rows) {
@@ -1117,4 +1221,4 @@ function refreshRevisions() {
   }).catch(function () { /* 修订记录只是附录，失败不打扰 */ });
 }
 
-export { enterDeliveryView, openDeliveryNote };
+export { enterDeliveryView, openDeliveryNote, refreshFromHash };

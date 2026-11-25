@@ -1,0 +1,132 @@
+/* core/sand-say · 「沙漏说」：我的工作页头一行、侧栏摆件悬停气泡、个人设置预览
+   约束：
+   1. 只做装饰与问候，不承载入口、不写业务数据、不发通知；
+   2. 偏好只存本机（ds.sandSay.v1），关闭后页头与气泡都不出现；
+   3. 摆件默认 pointer-events:none，只有开启沙漏说后才允许悬停；
+   4. 系统减少动效时不做位移动画（tokens.css 已把时长压到 0.001ms）。 */
+
+/* ---------- 我的工作 · 页头一行 ---------- */
+.ss-line{
+  display:flex;align-items:center;gap:8px;flex:0 0 auto;
+  margin-top:8px;min-height:20px;
+  font-size:11.5px;line-height:1.5;color:var(--text-3);
+}
+.ss-line[hidden]{display:none !important;}
+.ss-line svg,.ss-preview svg{width:13px;height:13px;flex:0 0 auto;}
+.ss-line .ss-ic,.ss-preview .ss-ic{color:#98A2B3;display:inline-flex;flex:0 0 auto;}
+.ss-line .ss-tm,.ss-preview .ss-tm{
+  color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.ss-line .ss-qt,.ss-preview .ss-qt{color:var(--text-2);min-width:0;}
+.ss-line .ss-sep{
+  width:3px;height:3px;border-radius:50%;background:#D0D5DD;flex:0 0 auto;
+}
+
+/* ---------- 小标签（距假期 / 下班倒计时） ---------- */
+.ss-chip{
+  height:20px;display:inline-flex;align-items:center;gap:4px;padding:0 7px;
+  border:1px solid var(--border);border-radius:5px;
+  background:var(--surface-sunken);font-size:11px;color:var(--text-2);
+  white-space:nowrap;flex:0 0 auto;
+}
+.ss-chip svg{width:11px;height:11px;}
+.ss-chip.hot{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600;}
+.ss-chip.fest{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);font-weight:600;}
+
+/* 深夜时段整体降一点存在感（子元素各自带色，用透明度统一压） */
+body.ss-night .ss-line{opacity:.78;}
+
+/* ---------- 侧栏摆件悬停气泡 ---------- */
+.ss-bubble{
+  position:absolute;left:calc(100% + 6px);bottom:8px;z-index:40;
+  width:238px;padding:10px 12px 11px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-lg);
+  opacity:0;transform:translateX(-3px);pointer-events:none;
+  transition:opacity .16s,transform .16s;
+}
+.ss-bubble[hidden]{display:none !important;}
+.ss-bubble.show{opacity:1;transform:none;}
+.ss-bubble::before{
+  content:"";position:absolute;left:-5px;bottom:22px;width:9px;height:9px;
+  background:var(--surface);border-left:1px solid var(--border);border-bottom:1px solid var(--border);
+  transform:rotate(45deg);
+}
+.ss-bh{
+  display:flex;align-items:center;gap:6px;margin-bottom:4px;
+  font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--text-3);
+}
+.ss-btag{
+  padding:0 5px;border-radius:4px;line-height:15px;font-size:9.5px;font-weight:600;letter-spacing:0;
+  color:var(--primary-fg);background:var(--primary-soft);border:1px solid var(--primary-border);
+}
+.ss-btag[hidden]{display:none !important;}
+.ss-btag.hot{color:var(--primary-fg);background:var(--primary-soft);border-color:var(--primary-border);}
+.ss-btag.fest{color:var(--warning-fg);background:var(--warning-soft);border-color:var(--warning-border);}
+.ss-bubble p{margin:0;font-size:12px;line-height:1.55;color:var(--text);}
+.ss-bf{
+  display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:6px;
+  border-top:1px solid var(--border);
+  font-size:10.5px;color:var(--text-3);
+}
+.ss-bf .ss-dot{width:3px;height:3px;border-radius:50%;background:#C3CAD5;}
+
+/* 开启后才允许悬停；摆件仍不带点击入口，点击只是固定/收起气泡 */
+body.ss-on .side-ornament{pointer-events:auto;}
+[data-layout="mobile"] .ss-bubble{display:none !important;}
+
+/* ---------- 摆件情绪 ---------- */
+.side-ornament > svg{
+  transition:transform .55s cubic-bezier(.2,.8,.2,1),opacity var(--dur-slow) var(--ease-out);
+}
+.side-ornament.ss-flip > svg{transform:rotate(180deg);}
+.side-ornament.ss-sleep > svg{opacity:.72;transform:translateY(1.5px) rotate(-6deg);}
+.side-ornament.ss-sleep .hg{--orn-cycle:24s;}
+.side-ornament.ss-sleep .hg-grain,
+.side-ornament.ss-sleep .grain,
+.side-ornament.ss-sleep .dust,
+.side-ornament.ss-sleep .sp,
+.side-ornament.ss-sleep .speed{display:none;}
+.side-ornament.ss-dim > svg{opacity:.8;}
+/* 周末让整个沙漏停住，不只是粒子 */
+.side-ornament.ss-pause svg *{animation-play-state:paused;}
+.side-ornament.ss-slow .hg{--orn-cycle:26s;}
+.side-ornament.ss-slow .hg-grain,
+.side-ornament.ss-slow .grain{animation-duration:3.2s;}
+
+/* ---------- 个人设置 · 外观 → 沙漏说 ---------- */
+.ss-sec{margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+.ss-sec-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.ss-sec-head h4{margin:0;font-size:13px;font-weight:650;color:var(--text);}
+.ss-sec-head span{font-size:11.5px;color:var(--text-3);}
+.ss-row{display:flex;align-items:center;gap:16px;padding:11px 0;border-top:1px solid var(--border);margin-top:10px;}
+.ai-assist-row + .ss-row{border-top:0;margin-top:8px;padding-top:2px;}
+.ss-row .ss-lb{width:150px;flex:0 0 150px;font-size:12px;font-weight:500;color:var(--text-2);}
+.ss-row .ss-lb small{display:block;margin-top:1px;font-size:10.5px;font-weight:400;color:var(--text-3);}
+.ss-row .ss-ctl{flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ss-time{
+  width:110px;height:32px;padding:0 9px;
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);color:var(--text);
+  font-size:12px;font-weight:500;font-family:inherit;font-variant-numeric:tabular-nums;
+}
+.ss-time:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+.ss-time:disabled{background:var(--surface-sunken);color:var(--text-3);}
+.ss-time-hint{font-size:11px;color:var(--text-3);}
+.ss-preview{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 10px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);
+  background:var(--surface-sunken);font-size:11.5px;color:var(--text-3);
+}
+.ss-preview:empty::after{content:"（当前没有可显示的一句话）";color:var(--text-3);}
+
+@media (max-width:720px){
+  .ss-line{flex-wrap:wrap;gap:6px;}
+  .ss-row{flex-direction:column;align-items:flex-start;gap:6px;}
+  .ss-row .ss-lb{width:auto;flex:none;}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .side-ornament > svg{transition:none;}
+  .ss-bubble{transition:none;}
+}

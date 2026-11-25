@@ -312,6 +312,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         <div class="ctx-item">
           <label class="ctx-label" for="iReq">所属项目 <span class="auto" id="autoProject" hidden>自动</span></label>
           <select id="iReq" title="工作项可暂不归属项目；需求文档、测试用例与测试计划必须归属项目"></select>
+          <span class="hint" id="iReqHint" hidden></span>
         </div>
         <div class="ctx-item">
           <label class="ctx-label" for="iOwner">负责人</label>
@@ -777,7 +778,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             </div>
             <div class="field" id="fVersionChangeReason" hidden>
               <label class="field-label" for="iVersionChangeReason">版本调整理由 <span class="req">*</span></label>
-              <input id="iVersionChangeReason" type="text" maxlength="500" placeholder="说明顺延、解除计划或偏离需求目标的原因" />
+              <textarea id="iVersionChangeReason" class="textarea" rows="2" maxlength="500" placeholder="说明顺延、解除计划或偏离需求目标的原因"></textarea>
             </div>
             <div class="field">
               <div class="field-label">

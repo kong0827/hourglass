@@ -1276,18 +1276,22 @@ public class ManagerService {
             tasksById.put(task.getId(), task);
         }
         List<Task> selected = new ArrayList<Task>();
+        int invalid = 0;
         for (String taskId : uniqueIds) {
             Task task = tasksById.get(taskId);
+            /* 风险页是快照：单条已完成、已取消或已不可见，不应让整批催办全部失败 */
             if (task == null) {
-                throw AppException.badRequest("任务不存在或不属于当前空间：" + taskId);
+                invalid++;
+                continue;
             }
-            if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn())) {
-                throw AppException.badRequest("不能催办已取消的工作项：" + taskId);
-            }
-            if (isDone(task)) {
-                throw AppException.badRequest("只能催办未完成任务：" + taskId);
+            if (com.hourglass.common.Consts.COL_CANCELED.equals(task.getBoardColumn()) || isDone(task)) {
+                invalid++;
+                continue;
             }
             selected.add(task);
+        }
+        if (selected.isEmpty()) {
+            throw AppException.badRequest("没有可催办的任务（已取消、已完成、不可见或不属于当前空间）");
         }
 
         List<WorkspaceMember> members = emptyIfNull(memberMapper.selectByWorkspace(workspaceId));
@@ -1295,8 +1299,9 @@ public class ManagerService {
         Map<String, String> userIdsByName = userIdsByName(members);
         LocalDate today = today();
         int sent = 0;
-        int skipped = 0;
+        int skipped = invalid;
         int deduped = 0;
+        int failed = 0;
         List<Task> nudged = new ArrayList<Task>();
         for (Task task : selected) {
             String ownerUserId = null;
@@ -1315,22 +1320,27 @@ public class ManagerService {
                 skipped++;
                 continue;
             }
-            /* 同一任务 6 小时内已催办过会被去重：不计入「已发送」，单独返回，避免提示虚高 */
-            if (notificationService.push(ownerUserId, workspaceId, "manager_nudge",
-                    "管理催办：" + safe(task.getTitle()), nudgeBody(task, today), task.getId())) {
+            /* 同一任务 6 小时内已催办过会被去重；写入失败必须单独计数，不能伪装成去重 */
+            AppNotificationService.PushResult result = notificationService.pushResult(ownerUserId, workspaceId,
+                    "manager_nudge", "管理催办：" + safe(task.getTitle()), nudgeBody(task, today), task.getId());
+            if (result == AppNotificationService.PushResult.INSERTED) {
                 sent++;
                 nudged.add(task);
-            } else {
+            } else if (result == AppNotificationService.PushResult.DEDUPED) {
                 deduped++;
+            } else {
+                failed++;
+                log.warn("催办通知写入失败（workspace={} task={} user={}）", workspaceId, task.getId(), ownerUserId);
             }
         }
 
-        recordNudges(workspaceId, userId, nudged, today, skipped, deduped);
+        recordNudges(workspaceId, userId, nudged, today, skipped, deduped, failed);
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("sent", sent);
         result.put("skipped", skipped);
         result.put("deduped", deduped);
+        result.put("failed", failed);
         return result;
     }
 
@@ -1339,7 +1349,7 @@ public class ManagerService {
      * 通知已发出后日志失败不能反过来让请求报错，因此逐条降级告警。
      */
     private void recordNudges(String workspaceId, String userId, List<Task> nudged, LocalDate today,
-                              int skipped, int deduped) {
+                              int skipped, int deduped, int failed) {
         if (nudged.isEmpty()) {
             return;
         }
@@ -1353,10 +1363,13 @@ public class ManagerService {
             detail.append(" 等 ").append(nudged.size()).append(" 个");
         }
         if (skipped > 0) {
-            detail.append("（跳过 ").append(skipped).append("：未指派或不可见）");
+            detail.append("（跳过 ").append(skipped).append("：未指派、不可见、已取消或已完成）");
         }
         if (deduped > 0) {
             detail.append("（6 小时内已催办，去重 ").append(deduped).append("）");
+        }
+        if (failed > 0) {
+            detail.append("（写入失败 ").append(failed).append("，请检查通知服务）");
         }
         auditService.recordCurrent(workspaceId, "manager_nudge", "workspace", workspaceId, null,
                 true, detail.toString(), null);
@@ -2925,6 +2938,7 @@ public class ManagerService {
         item.put("reqName", reqName == null ? UNCATEGORIZED_NAME : reqName);
         item.put("progress", task.getProgress());
         item.put("estimateMinutes", task.getEstimateMinutes());
+        item.put("testEstimateMinutes", task.getTestEstimateMinutes());
         int taskActual = actual(task);
         int taskTest = Math.min(taskActual, Math.max(0, minutes(task.getTestMinutes())));
         item.put("totalMinutes", taskActual);

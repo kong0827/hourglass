@@ -2,6 +2,7 @@ package com.hourglass.mapper;
 
 import com.hourglass.entity.DeliveryNote;
 import com.hourglass.entity.DeliveryNoteShare;
+import com.hourglass.entity.DeliveryNoteShareVisit;
 import com.hourglass.entity.DeliveryNoteSnapshot;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -44,6 +45,22 @@ public interface DeliveryNoteMapper {
     int deleteShare(@Param("workspaceId") String workspaceId, @Param("snapshotId") String snapshotId);
 
     int increaseViewCount(@Param("workspaceId") String workspaceId, @Param("snapshotId") String snapshotId);
+
+    int insertShareVisit(DeliveryNoteShareVisit visit);
+
+    List<DeliveryNoteShareVisit> selectShareVisits(@Param("workspaceId") String workspaceId,
+                                                   @Param("snapshotId") String snapshotId,
+                                                   @Param("limit") int limit);
+
+    int countShareVisitsSince(@Param("workspaceId") String workspaceId,
+                              @Param("snapshotId") String snapshotId,
+                              @Param("since") java.time.LocalDateTime since);
+
+    /** 按链接与动作统计窗口内的访问记录，用于密码失败限流。 */
+    int countShareAttempts(@Param("token") String token, @Param("action") String action,
+                           @Param("since") java.time.LocalDateTime since);
+
+    int deleteShareVisitsByWorkspace(@Param("workspaceId") String workspaceId);
 
     int deleteSharesByWorkspace(@Param("workspaceId") String workspaceId);
 }

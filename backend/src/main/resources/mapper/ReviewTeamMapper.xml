@@ -1,0 +1,1230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ReviewTeamMapper">
+
+  <!-- 项目范围只做等值过滤；团队口径已要求空间主 / 管理员，不再叠加项目可见范围 -->
+  <sql id="demandReq">
+    <if test="reqId != null">AND d.req_id = #{reqId}</if>
+  </sql>
+  <sql id="taskReq">
+    <if test="reqId != null">AND t.req_id = #{reqId}</if>
+  </sql>
+  <sql id="docReq">
+    <if test="reqId != null">AND d.req_id = #{reqId}</if>
+  </sql>
+
+  <sql id="releaseValid">
+    r.result = 'success' AND r.environment = 'production'
+    AND r.operation &lt;&gt; 'rollback' AND r.coverage = 'full'
+  </sql>
+
+  <!-- 发布项被更晚的回滚撤销时不计发布证据（与交付判定同向） -->
+  <sql id="releaseNotRolledBack">
+    AND NOT EXISTS (
+      SELECT 1 FROM version_release rr
+      JOIN version_release_item ri
+        ON ri.workspace_id = rr.workspace_id AND ri.release_id = rr.id
+      WHERE rr.workspace_id = r.workspace_id AND rr.result = 'success'
+        AND rr.environment = 'production' AND rr.operation = 'rollback'
+        AND rr.related_release_id = r.id AND rr.occurred_at &gt; r.occurred_at
+        AND ri.task_id = i.task_id)
+  </sql>
+
+  <select id="countDemandCreated" resultType="int">
+    SELECT COUNT(*) FROM demand d
+    WHERE d.workspace_id = #{workspaceId} AND d.created_at &gt;= #{from} AND d.created_at &lt; #{before}
+    <include refid="demandReq"/>
+  </select>
+
+  <select id="demandActionCounts" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT l.action AS `key`, COUNT(DISTINCT l.demand_id) AS count
+    FROM demand_log l
+    JOIN demand d ON d.id = l.demand_id AND d.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId} AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND l.action IN ('pass', 'plan', 'complete')
+    <include refid="demandReq"/>
+    GROUP BY l.action
+  </select>
+
+  <select id="countDemandClosed" resultType="int">
+    SELECT COUNT(DISTINCT l.demand_id)
+    FROM demand_log l
+    JOIN demand d ON d.id = l.demand_id AND d.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId} AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND (l.action = 'rej'
+        OR (l.action = 'cancel'
+            AND JSON_UNQUOTE(JSON_EXTRACT(l.change_data, '$.after.closeReason')) = 'dup'))
+    <include refid="demandReq"/>
+  </select>
+
+  <select id="countDemandCancelled" resultType="int">
+    SELECT COUNT(DISTINCT l.demand_id)
+    FROM demand_log l
+    JOIN demand d ON d.id = l.demand_id AND d.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId} AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND l.action = 'cancel'
+      AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(l.change_data, '$.after.closeReason')), 'cancel') = 'cancel'
+    <include refid="demandReq"/>
+  </select>
+
+  <select id="countReleaseDemands" resultType="int">
+    SELECT COUNT(DISTINCT i.demand_id)
+    FROM version_release r
+    JOIN version_release_item i ON i.release_id = r.id AND i.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId} AND <include refid="releaseValid"/>
+      AND r.occurred_at &gt;= #{from} AND r.occurred_at &lt; #{before}
+      AND i.disposition = 'published' AND i.demand_id IS NOT NULL
+    <if test="reqId != null">AND r.req_id = #{reqId}</if>
+    <include refid="releaseNotRolledBack"/>
+  </select>
+
+  <select id="countReleases" resultType="int">
+    SELECT COUNT(*) FROM version_release r
+    WHERE r.workspace_id = #{workspaceId} AND <include refid="releaseValid"/>
+      AND r.occurred_at &gt;= #{from} AND r.occurred_at &lt; #{before}
+    <if test="reqId != null">AND r.req_id = #{reqId}</if>
+  </select>
+
+  <select id="taskCreatedByType" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.item_type AS `key`, COUNT(*) AS count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.created_at &gt;= #{from} AND t.created_at &lt; #{before}
+    <include refid="taskReq"/>
+    GROUP BY t.item_type
+  </select>
+
+  <select id="taskDoneByType" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.item_type AS `key`, COUNT(*) AS count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+      AND t.canceled_at IS NULL
+    <include refid="taskReq"/>
+    GROUP BY t.item_type
+  </select>
+
+  <select id="countTaskCancelled" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.canceled_at &gt;= #{from} AND t.canceled_at &lt; #{before}
+      AND t.completed_at IS NULL
+    <include refid="taskReq"/>
+  </select>
+
+  <!-- 流转按生命周期取数：进入处理中=首次离开待处理；提测/进入测试中=测试时间戳，
+       不依赖看板列 id（空间可自定义列，固定写 doing/test/testing 会漏数或错数） -->
+  <sql id="enteredDoingIds">
+    SELECT l.task_id
+    FROM task_log l
+    JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId} AND l.action = 'move'
+      AND l.from_column = 'backlog' AND l.to_column NOT IN ('done', 'canceled')
+      AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND t.deleted_at IS NULL
+    <include refid="taskReq"/>
+  </sql>
+
+  <sql id="testRequestedIds">
+    SELECT t.id
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.test_requested_at &gt;= #{from} AND t.test_requested_at &lt; #{before}
+    <include refid="taskReq"/>
+  </sql>
+
+  <sql id="enteredTestingIds">
+    SELECT t.id
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.test_started_at &gt;= #{from} AND t.test_started_at &lt; #{before}
+    <include refid="taskReq"/>
+  </sql>
+
+  <select id="transitionCounts" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT 'doing' AS `key`, COUNT(DISTINCT task_id) AS count FROM (<include refid="enteredDoingIds"/>) d
+    UNION ALL
+    SELECT 'test' AS `key`, COUNT(*) AS count FROM (<include refid="testRequestedIds"/>) tr
+    UNION ALL
+    SELECT 'testing' AS `key`, COUNT(*) AS count FROM (<include refid="enteredTestingIds"/>) te
+  </select>
+
+  <select id="countTransitionItems" resultType="int">
+    SELECT COUNT(DISTINCT task_id) FROM (
+      <include refid="enteredDoingIds"/>
+      UNION
+      <include refid="testRequestedIds"/>
+      UNION
+      <include refid="enteredTestingIds"/>
+    ) x
+  </select>
+
+  <select id="testRunCounts" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT r.status AS `key`, COUNT(*) AS count
+    FROM test_case_run r
+    JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId}
+      AND r.created_at &gt;= #{from} AND r.created_at &lt; #{before}
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+    GROUP BY r.status
+  </select>
+
+  <select id="countNewCases" resultType="int">
+    SELECT COUNT(*) FROM test_case c
+    WHERE c.workspace_id = #{workspaceId}
+      AND c.created_at &gt;= #{from} AND c.created_at &lt; #{before}
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+  </select>
+
+  <select id="countNewDefects" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.item_type = 'bug'
+      AND t.created_at &gt;= #{from} AND t.created_at &lt; #{before}
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="countPendingRetest" resultType="int">
+    SELECT COUNT(*) FROM test_case c
+    WHERE c.workspace_id = #{workspaceId} AND c.latest_status = 'failed'
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+  </select>
+
+  <select id="countDocsCreated" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc d
+    WHERE d.workspace_id = #{workspaceId}
+      AND d.created_at &gt;= #{from} AND d.created_at &lt; #{before}
+    <include refid="docReq"/>
+  </select>
+
+  <select id="countDocUpdates" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc_history h
+    JOIN requirement_doc d ON d.id = h.doc_id AND d.workspace_id = h.workspace_id
+    WHERE h.workspace_id = #{workspaceId}
+      AND h.created_at &gt;= #{from} AND h.created_at &lt; #{before}
+    <include refid="docReq"/>
+  </select>
+
+  <select id="countDocsPublished" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc d
+    WHERE d.workspace_id = #{workspaceId}
+      AND d.published_at &gt;= #{from} AND d.published_at &lt; #{before}
+    <include refid="docReq"/>
+  </select>
+
+  <select id="countDraftBacklog" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc d
+    WHERE d.workspace_id = #{workspaceId} AND d.status = 'draft'
+      AND d.updated_at &lt; #{before}
+    <include refid="docReq"/>
+  </select>
+
+  <select id="oldestDraft" resultType="java.time.LocalDateTime">
+    SELECT MIN(d.updated_at) FROM requirement_doc d
+    WHERE d.workspace_id = #{workspaceId} AND d.status = 'draft'
+      AND d.updated_at &lt; #{before}
+    <include refid="docReq"/>
+  </select>
+
+  <select id="docsByType" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT x.`key`, SUM(x.cnt) AS count FROM (
+      SELECT d.doc_type AS `key`, COUNT(*) AS cnt
+      FROM requirement_doc d
+      WHERE d.workspace_id = #{workspaceId}
+        AND d.created_at &gt;= #{from} AND d.created_at &lt; #{before}
+      <include refid="docReq"/>
+      GROUP BY d.doc_type
+      UNION ALL
+      SELECT d.doc_type AS `key`, COUNT(*) AS cnt
+      FROM requirement_doc_history h
+      JOIN requirement_doc d ON d.id = h.doc_id AND d.workspace_id = h.workspace_id
+      WHERE h.workspace_id = #{workspaceId}
+        AND h.created_at &gt;= #{from} AND h.created_at &lt; #{before}
+      <include refid="docReq"/>
+      GROUP BY d.doc_type
+    ) x
+    GROUP BY x.`key`
+    ORDER BY count DESC
+  </select>
+
+  <select id="demandsByStatus" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT d.status AS `key`, COUNT(*) AS count
+    FROM demand d
+    WHERE d.workspace_id = #{workspaceId}
+    <include refid="demandReq"/>
+    GROUP BY d.status
+  </select>
+
+  <!-- 在手快照按生命周期归并为 待处理 / 进行中 / 待测试 / 测试中；
+       自定义列（如「待测试」「测试中」改名的列）按列名兜底，其余一律算进行中 -->
+  <select id="tasksByColumn" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT CASE
+             WHEN t.board_column = 'backlog' THEN 'backlog'
+             WHEN t.board_column = 'test' OR bc.name = '待测试' THEN 'test'
+             WHEN t.board_column = 'testing' OR bc.name = '测试中' THEN 'testing'
+             WHEN t.test_finished_at IS NULL AND t.test_started_at IS NOT NULL THEN 'testing'
+             WHEN t.test_finished_at IS NULL AND t.test_requested_at IS NOT NULL THEN 'test'
+             ELSE 'doing'
+           END AS `key`, COUNT(*) AS count
+    FROM task t
+    LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+    <include refid="taskReq"/>
+    GROUP BY CASE
+             WHEN t.board_column = 'backlog' THEN 'backlog'
+             WHEN t.board_column = 'test' OR bc.name = '待测试' THEN 'test'
+             WHEN t.board_column = 'testing' OR bc.name = '测试中' THEN 'testing'
+             WHEN t.test_finished_at IS NULL AND t.test_started_at IS NOT NULL THEN 'testing'
+             WHEN t.test_finished_at IS NULL AND t.test_requested_at IS NOT NULL THEN 'test'
+             ELSE 'doing'
+           END
+  </select>
+
+  <select id="dailyCompleted" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT DATE_FORMAT(t.completed_at, '%Y-%m-%d') AS `key`, COUNT(*) AS count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+      AND t.canceled_at IS NULL
+    <include refid="taskReq"/>
+    GROUP BY DATE_FORMAT(t.completed_at, '%Y-%m-%d')
+  </select>
+
+  <select id="sumWeekMinutes" resultType="int">
+    SELECT COALESCE(SUM(l.minutes), 0)
+    FROM time_log l
+    JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.started_at &gt;= #{from} AND l.started_at &lt; #{before}
+      AND t.deleted_at IS NULL
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="countTomorrowDue" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+      AND t.due_date &gt;= #{from} AND t.due_date &lt;= #{to}
+    <include refid="taskReq"/>
+  </select>
+
+  <!-- 本周到期：截止日落在周期内的工作项，按当前完成时间判断按期 / 延期 / 仍未完成 -->
+  <select id="dueOutcome" resultType="com.hourglass.dto.ReviewTeamDueRow">
+    SELECT COUNT(*) AS total,
+           COALESCE(SUM(CASE WHEN t.completed_at IS NOT NULL
+                              AND DATE(t.completed_at) &lt;= t.due_date THEN 1 ELSE 0 END), 0) AS onTime,
+           COALESCE(SUM(CASE WHEN t.completed_at IS NOT NULL
+                              AND DATE(t.completed_at) &gt; t.due_date THEN 1 ELSE 0 END), 0) AS late,
+           COALESCE(SUM(CASE WHEN t.completed_at IS NULL THEN 1 ELSE 0 END), 0) AS openCount
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.canceled_at IS NULL
+      AND t.due_date &gt;= #{from} AND t.due_date &lt;= #{to}
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="dueItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+           r.name AS projectName, t.owner AS person,
+           CAST(t.due_date AS DATETIME) AS at,
+           <choose>
+             <when test="state == 'late'">CONCAT('延期 ', DATEDIFF(DATE(t.completed_at), t.due_date), ' 天完成')</when>
+             <when test="state == 'open'">CONCAT('截止日在本周 · ', CASE t.board_column
+               WHEN 'backlog' THEN '待处理' WHEN 'doing' THEN '进行中'
+               WHEN 'test' THEN '待测试' WHEN 'testing' THEN '测试中'
+               ELSE t.board_column END)</when>
+             <otherwise>CONCAT('按期完成', CASE WHEN DATE(t.completed_at) &lt; t.due_date
+               THEN CONCAT(' · 提前 ', DATEDIFF(t.due_date, DATE(t.completed_at)), ' 天') ELSE '' END)</otherwise>
+           </choose> AS extra
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.canceled_at IS NULL
+      AND t.due_date &gt;= #{from} AND t.due_date &lt;= #{to}
+      <choose>
+        <when test="state == 'late'">AND t.completed_at IS NOT NULL AND DATE(t.completed_at) &gt; t.due_date</when>
+        <when test="state == 'open'">AND t.completed_at IS NULL</when>
+        <otherwise>AND t.completed_at IS NOT NULL AND DATE(t.completed_at) &lt;= t.due_date</otherwise>
+      </choose>
+    <include refid="taskReq"/>
+    ORDER BY t.due_date, t.priority, BINARY t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="nextDueItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+           r.name AS projectName, t.owner AS person,
+           CAST(t.due_date AS DATETIME) AS at,
+           CASE t.board_column
+             WHEN 'backlog' THEN '待处理' WHEN 'doing' THEN '进行中'
+             WHEN 'test' THEN '待测试' WHEN 'testing' THEN '测试中'
+             ELSE t.board_column END AS extra
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+      AND t.due_date &gt;= #{from} AND t.due_date &lt;= #{to}
+    <include refid="taskReq"/>
+    ORDER BY t.due_date, t.priority, BINARY t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="countNextMilestones" resultType="int">
+    SELECT COUNT(*) FROM project_milestone m
+    WHERE m.workspace_id = #{workspaceId}
+      AND m.canceled_at IS NULL AND m.achieved_at IS NULL
+      AND m.target_date &gt;= #{from} AND m.target_date &lt;= #{to}
+    <if test="reqId != null">AND m.req_id = #{reqId}</if>
+  </select>
+
+  <select id="countP0Open" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled') AND t.priority = 'P0'
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="countReleaseOverdue" resultType="int">
+    SELECT COUNT(*) FROM version_release_plan p
+    WHERE p.workspace_id = #{workspaceId}
+      AND p.status = 'ready' AND p.planned_at IS NOT NULL AND p.planned_at &lt; #{now}
+    <if test="reqId != null">AND EXISTS (
+      SELECT 1 FROM version_release_plan_version pv
+      WHERE pv.workspace_id = p.workspace_id AND pv.plan_id = p.id AND pv.req_id = #{reqId})
+    </if>
+  </select>
+
+  <select id="countTestPlanOverdue" resultType="int">
+    SELECT COUNT(*) FROM test_plan p
+    WHERE p.workspace_id = #{workspaceId}
+      AND p.status = 'running' AND p.planned_end IS NOT NULL AND p.planned_end &lt; #{today}
+    <if test="reqId != null">AND p.req_id = #{reqId}</if>
+  </select>
+
+  <select id="countStale" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+      AND t.updated_at &lt; #{staleBefore}
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="releasesInWeek" resultType="com.hourglass.dto.ReviewTeamReleaseRow">
+    SELECT r.id,
+           r.project_name AS projectName,
+           r.version_name AS versionName,
+           r.occurred_at AS at,
+           r.executor_name AS executor,
+           (SELECT COUNT(DISTINCT i.demand_id) FROM version_release_item i
+             WHERE i.workspace_id = r.workspace_id AND i.release_id = r.id
+               AND i.disposition = 'published' AND i.demand_id IS NOT NULL) AS demands,
+           (SELECT COUNT(*) FROM version_release_item i
+             WHERE i.workspace_id = r.workspace_id AND i.release_id = r.id
+               AND i.disposition = 'published') AS tasks,
+           r.notes AS note
+    FROM version_release r
+    WHERE r.workspace_id = #{workspaceId} AND <include refid="releaseValid"/>
+      AND r.occurred_at &gt;= #{from} AND r.occurred_at &lt; #{before}
+    <if test="reqId != null">AND r.req_id = #{reqId}</if>
+    ORDER BY r.occurred_at DESC
+    LIMIT 20
+  </select>
+
+  <select id="releasePlansInWeek" resultType="com.hourglass.dto.ReviewTeamPlanRow">
+    SELECT p.id,
+           CONCAT('发布计划 ', COALESCE(CONCAT('PL-', LPAD(p.plan_no, 3, '0')), '')) AS name,
+           p.status,
+           v.name AS versionName,
+           p.planned_at AS plannedAt
+    FROM version_release_plan p
+    LEFT JOIN project_version v ON v.id = p.version_id AND v.workspace_id = p.workspace_id
+    WHERE p.workspace_id = #{workspaceId}
+      AND p.planned_at &gt;= #{from} AND p.planned_at &lt; #{before}
+    <if test="reqId != null">AND EXISTS (
+      SELECT 1 FROM version_release_plan_version pv
+      WHERE pv.workspace_id = p.workspace_id AND pv.plan_id = p.id AND pv.req_id = #{reqId})
+    </if>
+    ORDER BY p.planned_at DESC
+  </select>
+
+  <select id="testPlansInWeek" resultType="com.hourglass.dto.ReviewTeamPlanRow">
+    SELECT p.id, p.name, p.status, DATE_FORMAT(p.planned_end, '%Y-%m-%d') AS plannedEnd,
+           COUNT(c.case_id) AS total,
+           COALESCE(SUM(CASE WHEN c.result = 'passed' THEN 1 ELSE 0 END), 0) AS passed
+    FROM test_plan p
+    LEFT JOIN test_plan_case c ON c.plan_id = p.id
+    WHERE p.workspace_id = #{workspaceId}
+      AND p.planned_end IS NOT NULL AND p.planned_end &gt;= #{from} AND p.planned_end &lt;= #{to}
+    <if test="reqId != null">AND p.req_id = #{reqId}</if>
+    GROUP BY p.id, p.name, p.status, p.planned_end
+    ORDER BY p.planned_end DESC
+  </select>
+
+  <select id="completionRows" resultType="com.hourglass.dto.ReviewTeamCompletionRow">
+    SELECT t.id AS taskId,
+           t.title,
+           t.item_type AS type,
+           r.name AS projectName,
+           dd.title AS demandTitle,
+           t.completed_at AS at,
+           t.due_date AS dueDate,
+           COALESCE((SELECT SUM(tl.minutes) FROM time_log tl
+                      WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id), 0) AS minutes,
+           CASE WHEN cr.first_started_at IS NULL THEN 0
+                ELSE GREATEST(0, DATEDIFF(t.completed_at, cr.first_started_at)) END AS durationDays,
+           CASE WHEN t.due_date IS NULL THEN NULL
+                WHEN DATE(t.completed_at) &lt;= t.due_date THEN 1 ELSE 0 END AS onTime,
+           CASE WHEN EXISTS (
+             SELECT 1 FROM version_release_item i
+             JOIN version_release rr ON rr.id = i.release_id AND rr.workspace_id = i.workspace_id
+             WHERE i.workspace_id = t.workspace_id AND i.task_id = t.id
+               AND i.disposition = 'published'
+               AND rr.result = 'success' AND rr.environment = 'production'
+               AND rr.operation &lt;&gt; 'rollback' AND rr.coverage = 'full'
+               AND rr.occurred_at &gt;= #{from} AND rr.occurred_at &lt; #{before}
+           ) THEN 1 ELSE 0 END AS released
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    LEFT JOIN demand dd ON dd.id = t.demand_id AND dd.workspace_id = t.workspace_id
+    LEFT JOIN task_completion_record cr
+      ON cr.workspace_id = t.workspace_id AND cr.task_id = t.id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+      AND t.canceled_at IS NULL
+    <include refid="taskReq"/>
+    ORDER BY t.completed_at DESC, BINARY t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="completionTiming" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT COUNT(*) AS count,
+           COALESCE(SUM(CASE WHEN DATE(t.completed_at) &lt;= t.due_date THEN 1 ELSE 0 END), 0) AS value
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+      AND t.canceled_at IS NULL AND t.due_date IS NOT NULL
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="countCompletedReleased" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+      AND t.canceled_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM version_release_item i
+        JOIN version_release rr ON rr.id = i.release_id AND rr.workspace_id = i.workspace_id
+        WHERE i.workspace_id = t.workspace_id AND i.task_id = t.id
+          AND i.disposition = 'published'
+          AND rr.result = 'success' AND rr.environment = 'production'
+          AND rr.operation &lt;&gt; 'rollback' AND rr.coverage = 'full'
+          AND rr.occurred_at &gt;= #{from} AND rr.occurred_at &lt; #{before})
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="countRollbackReleases" resultType="int">
+    SELECT COUNT(*) FROM version_release r
+    WHERE r.workspace_id = #{workspaceId} AND r.result = 'success'
+      AND r.environment = 'production' AND r.operation = 'rollback'
+      AND r.occurred_at &gt;= #{from} AND r.occurred_at &lt; #{before}
+    <if test="reqId != null">AND r.req_id = #{reqId}</if>
+  </select>
+
+  <select id="testPlanStatusCounts" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT p.status AS `key`, COUNT(*) AS count
+    FROM test_plan p
+    WHERE p.workspace_id = #{workspaceId}
+      AND p.planned_end IS NOT NULL AND p.planned_end &gt;= #{from} AND p.planned_end &lt;= #{to}
+    <if test="reqId != null">AND p.req_id = #{reqId}</if>
+    GROUP BY p.status
+  </select>
+
+  <select id="countTestParticipants" resultType="int">
+    SELECT COUNT(DISTINCT r.executed_by_user_id)
+    FROM test_case_run r
+    JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId}
+      AND r.created_at &gt;= #{from} AND r.created_at &lt; #{before}
+      AND r.executed_by_user_id IS NOT NULL
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+  </select>
+
+  <!-- 待发布：测试已结束（通过/退回）但仍未完成的工作项；自定义列同样适用 -->
+  <select id="countPendingReleaseTasks" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+      AND t.test_finished_at IS NOT NULL
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="releaseOverdueByProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT pv.req_id AS projectId, COUNT(*) AS count
+    FROM version_release_plan p
+    JOIN version_release_plan_version pv
+      ON pv.workspace_id = p.workspace_id AND pv.plan_id = p.id
+    WHERE p.workspace_id = #{workspaceId}
+      AND p.status = 'ready' AND p.planned_at IS NOT NULL AND p.planned_at &lt; #{now}
+    GROUP BY pv.req_id
+  </select>
+
+  <select id="demandOpenByProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT d.req_id AS projectId, COUNT(*) AS count
+    FROM demand d
+    WHERE d.workspace_id = #{workspaceId} AND d.status IN ('review', 'pass')
+    GROUP BY d.req_id
+  </select>
+
+  <!-- ==================== 成员维度 ==================== -->
+
+  <select id="taskCreatedByActor" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT l.actor_id AS userId,
+           COALESCE(u.display_name, u.username, l.actor_id) AS name,
+           COUNT(DISTINCT l.task_id) AS count
+    FROM task_log l
+    JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    LEFT JOIN app_user u ON u.id = l.actor_id
+    WHERE l.workspace_id = #{workspaceId} AND l.action = 'create'
+      AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND t.deleted_at IS NULL
+    <include refid="taskReq"/>
+    GROUP BY l.actor_id, u.display_name, u.username
+  </select>
+
+  <select id="taskStartedByOwner" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT x.owner_user_id AS userId, COUNT(DISTINCT x.task_id) AS count FROM (
+      SELECT t.owner_user_id, l.task_id
+      FROM task_log l
+      JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+      WHERE l.workspace_id = #{workspaceId} AND l.action = 'move'
+        AND l.from_column = 'backlog' AND l.to_column NOT IN ('done', 'canceled')
+        AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+        AND t.deleted_at IS NULL AND t.owner_user_id IS NOT NULL
+      <include refid="taskReq"/>
+      UNION ALL
+      SELECT t.owner_user_id, t.id
+      FROM task t
+      WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+        AND t.test_requested_at &gt;= #{from} AND t.test_requested_at &lt; #{before}
+        AND t.owner_user_id IS NOT NULL
+      <include refid="taskReq"/>
+      UNION ALL
+      SELECT t.owner_user_id, t.id
+      FROM task t
+      WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+        AND t.test_started_at &gt;= #{from} AND t.test_started_at &lt; #{before}
+        AND t.owner_user_id IS NOT NULL
+      <include refid="taskReq"/>
+    ) x
+    GROUP BY x.owner_user_id
+  </select>
+
+  <select id="taskDoneByOwner" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.owner_user_id AS userId, COUNT(*) AS count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+      AND t.canceled_at IS NULL AND t.owner_user_id IS NOT NULL
+    <include refid="taskReq"/>
+    GROUP BY t.owner_user_id
+  </select>
+
+  <select id="taskOpenByOwner" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.owner_user_id AS userId, COUNT(*) AS count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+      AND t.owner_user_id IS NOT NULL
+    <include refid="taskReq"/>
+    GROUP BY t.owner_user_id
+  </select>
+
+  <select id="overdueByOwner" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.owner_user_id AS userId, COUNT(*) AS count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+      AND t.due_date IS NOT NULL AND t.due_date &lt; #{today}
+      AND t.owner_user_id IS NOT NULL
+    <include refid="taskReq"/>
+    GROUP BY t.owner_user_id
+  </select>
+
+  <select id="blockedByOwner" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.owner_user_id AS userId, COUNT(*) AS count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled') AND t.is_blocked = 1
+      AND t.owner_user_id IS NOT NULL
+    <include refid="taskReq"/>
+    GROUP BY t.owner_user_id
+  </select>
+
+  <select id="countOverdueTasks" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+      AND t.due_date IS NOT NULL AND t.due_date &lt; #{today}
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="countBlockedTasks" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled') AND t.is_blocked = 1
+    <include refid="taskReq"/>
+  </select>
+
+  <select id="minutesByUser" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT l.user_id AS userId, COALESCE(SUM(l.minutes), 0) AS count
+    FROM time_log l
+    JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.started_at &gt;= #{from} AND l.started_at &lt; #{before}
+      AND t.deleted_at IS NULL
+    <include refid="taskReq"/>
+    GROUP BY l.user_id
+  </select>
+
+  <select id="minutesByUserProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT l.user_id AS userId, t.req_id AS projectId, r.name AS projectName,
+           COALESCE(SUM(l.minutes), 0) AS count
+    FROM time_log l
+    JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.started_at &gt;= #{from} AND l.started_at &lt; #{before}
+      AND t.deleted_at IS NULL
+    <include refid="taskReq"/>
+    GROUP BY l.user_id, t.req_id, r.name
+  </select>
+
+  <select id="docsCreatedByUser" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT d.owner_user_id AS userId, COUNT(*) AS count
+    FROM requirement_doc d
+    WHERE d.workspace_id = #{workspaceId}
+      AND d.created_at &gt;= #{from} AND d.created_at &lt; #{before}
+      AND d.owner_user_id IS NOT NULL
+    <include refid="docReq"/>
+    GROUP BY d.owner_user_id
+  </select>
+
+  <select id="docUpdatesByUser" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT h.saved_by_user_id AS userId, COUNT(*) AS count
+    FROM requirement_doc_history h
+    JOIN requirement_doc d ON d.id = h.doc_id AND d.workspace_id = h.workspace_id
+    WHERE h.workspace_id = #{workspaceId}
+      AND h.created_at &gt;= #{from} AND h.created_at &lt; #{before}
+      AND h.saved_by_user_id IS NOT NULL
+    <include refid="docReq"/>
+    GROUP BY h.saved_by_user_id
+  </select>
+
+  <select id="testRunsByUser" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT r.executed_by_user_id AS userId, COUNT(*) AS count
+    FROM test_case_run r
+    JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId}
+      AND r.created_at &gt;= #{from} AND r.created_at &lt; #{before}
+      AND r.executed_by_user_id IS NOT NULL
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+    GROUP BY r.executed_by_user_id
+  </select>
+
+  <select id="testPassedByUser" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT r.executed_by_user_id AS userId, COUNT(*) AS count
+    FROM test_case_run r
+    JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId} AND r.status = 'passed'
+      AND r.created_at &gt;= #{from} AND r.created_at &lt; #{before}
+      AND r.executed_by_user_id IS NOT NULL
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+    GROUP BY r.executed_by_user_id
+  </select>
+
+  <select id="newCasesByUser" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT c.created_by_user_id AS userId, COUNT(*) AS count
+    FROM test_case c
+    WHERE c.workspace_id = #{workspaceId}
+      AND c.created_at &gt;= #{from} AND c.created_at &lt; #{before}
+      AND c.created_by_user_id IS NOT NULL
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+    GROUP BY c.created_by_user_id
+  </select>
+
+  <select id="defectsByUser" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT l.actor_id AS userId, COUNT(DISTINCT l.task_id) AS count
+    FROM task_log l
+    JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId} AND l.action = 'create'
+      AND t.item_type = 'bug'
+      AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND t.deleted_at IS NULL AND l.actor_id IS NOT NULL
+    <include refid="taskReq"/>
+    GROUP BY l.actor_id
+  </select>
+
+  <select id="defectsByPriority" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.priority AS `key`, COUNT(*) AS count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.item_type = 'bug'
+      AND t.created_at &gt;= #{from} AND t.created_at &lt; #{before}
+    <include refid="taskReq"/>
+    GROUP BY t.priority
+  </select>
+
+  <select id="sumTestMinutes" resultType="int">
+    SELECT COALESCE(SUM(l.minutes), 0)
+    FROM time_log l
+    JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.started_at &gt;= #{from} AND l.started_at &lt; #{before}
+      AND t.deleted_at IS NULL
+      AND (t.test_requested_at IS NOT NULL OR t.test_started_at IS NOT NULL
+           OR t.test_finished_at IS NOT NULL OR t.item_type = 'bug')
+    <include refid="taskReq"/>
+  </select>
+
+  <!-- 无记录成员判定：把未在工作项 / 文档 / 工时 / 测试里体现的动作也算进活动 -->
+  <select id="demandActionsByOperator" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT l.operator AS userId, COUNT(*) AS count
+    FROM demand_log l
+    JOIN demand d ON d.id = l.demand_id AND d.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND l.operator IS NOT NULL
+    <include refid="demandReq"/>
+    GROUP BY l.operator
+  </select>
+
+  <select id="taskCommentsByAuthor" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT c.author_id AS userId, COUNT(*) AS count
+    FROM task_comment c
+    JOIN task t ON t.id = c.task_id AND t.workspace_id = c.workspace_id
+    WHERE c.workspace_id = #{workspaceId}
+      AND c.created_at &gt;= #{from} AND c.created_at &lt; #{before}
+      AND c.author_id IS NOT NULL AND t.deleted_at IS NULL
+    <include refid="taskReq"/>
+    GROUP BY c.author_id
+  </select>
+
+  <select id="demandCommentsByAuthor" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT c.user_id AS userId, COUNT(*) AS count
+    FROM demand_comment c
+    JOIN demand d ON d.id = c.demand_id AND d.workspace_id = c.workspace_id
+    WHERE c.workspace_id = #{workspaceId}
+      AND c.created_at &gt;= #{from} AND c.created_at &lt; #{before}
+    <include refid="demandReq"/>
+    GROUP BY c.user_id
+  </select>
+
+  <select id="releaseExecutionsByUser" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT r.executor_user_id AS userId, COUNT(*) AS count
+    FROM version_release r
+    WHERE r.workspace_id = #{workspaceId}
+      AND r.occurred_at &gt;= #{from} AND r.occurred_at &lt; #{before}
+    <if test="reqId != null">AND r.req_id = #{reqId}</if>
+    GROUP BY r.executor_user_id
+  </select>
+
+  <!-- ==================== 项目维度 ==================== -->
+
+  <select id="demandActionsByProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT d.req_id AS projectId, r.name AS projectName, l.action AS `key`,
+           COUNT(DISTINCT l.demand_id) AS count
+    FROM demand_log l
+    JOIN demand d ON d.id = l.demand_id AND d.workspace_id = l.workspace_id
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND l.action IN ('pass', 'plan', 'complete')
+    GROUP BY d.req_id, r.name, l.action
+  </select>
+
+  <select id="demandCreatedByProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT d.req_id AS projectId, r.name AS projectName, COUNT(*) AS count
+    FROM demand d
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    WHERE d.workspace_id = #{workspaceId}
+      AND d.created_at &gt;= #{from} AND d.created_at &lt; #{before}
+    GROUP BY d.req_id, r.name
+  </select>
+
+  <select id="releasedDemandsByProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT r.req_id AS projectId, r.project_name AS projectName,
+           COUNT(DISTINCT i.demand_id) AS count
+    FROM version_release r
+    JOIN version_release_item i ON i.release_id = r.id AND i.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId} AND <include refid="releaseValid"/>
+      AND r.occurred_at &gt;= #{from} AND r.occurred_at &lt; #{before}
+      AND i.disposition = 'published' AND i.demand_id IS NOT NULL
+    <include refid="releaseNotRolledBack"/>
+    GROUP BY r.req_id, r.project_name
+  </select>
+
+  <select id="tasksCreatedByProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.req_id AS projectId, r.name AS projectName, COUNT(*) AS count
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.created_at &gt;= #{from} AND t.created_at &lt; #{before}
+    GROUP BY t.req_id, r.name
+  </select>
+
+  <select id="tasksDoneByProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.req_id AS projectId, r.name AS projectName, COUNT(*) AS count
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+      AND t.canceled_at IS NULL
+    GROUP BY t.req_id, r.name
+  </select>
+
+  <select id="minutesByProject" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT t.req_id AS projectId, r.name AS projectName, COALESCE(SUM(l.minutes), 0) AS count
+    FROM time_log l
+    JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.started_at &gt;= #{from} AND l.started_at &lt; #{before}
+      AND t.deleted_at IS NULL
+    GROUP BY t.req_id, r.name
+  </select>
+
+  <select id="projectNames" resultType="com.hourglass.dto.ReviewTeamAggRow">
+    SELECT r.id AS projectId, r.name AS projectName, 0 AS count
+    FROM requirement r
+    WHERE r.workspace_id = #{workspaceId} AND r.archived_at IS NULL
+    ORDER BY r.sort_order, r.id
+  </select>
+
+  <!-- ==================== 风险样本 ==================== -->
+
+  <select id="overdueSamples" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+           r.name AS projectName, t.owner AS person,
+           CAST(t.due_date AS DATETIME) AS at,
+           CONCAT('逾期 ', DATEDIFF(#{today}, t.due_date), ' 天') AS extra
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled')
+      AND t.due_date IS NOT NULL AND t.due_date &lt; #{today}
+    <include refid="taskReq"/>
+    ORDER BY t.due_date, t.priority, t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="blockedSamples" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+           r.name AS projectName, t.owner AS person,
+           t.updated_at AS at, COALESCE(t.blocked_reason, '已阻塞') AS extra
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('done', 'canceled') AND t.is_blocked = 1
+    <include refid="taskReq"/>
+    ORDER BY t.updated_at, t.priority, t.id
+    LIMIT #{limit}
+  </select>
+
+  <!-- ==================== 明细下钻 ==================== -->
+
+  <select id="demandCreatedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'demand' AS kind, d.item_kind AS type, d.title,
+           r.name AS projectName,
+           COALESCE(u.display_name, u.username, d.created_by) AS person,
+           d.created_at AS at, d.status AS extra
+    FROM demand d
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    LEFT JOIN app_user u ON u.id = d.created_by
+    WHERE d.workspace_id = #{workspaceId}
+      AND d.created_at &gt;= #{from} AND d.created_at &lt; #{before}
+    <include refid="demandReq"/>
+    ORDER BY d.created_at DESC, BINARY d.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="demandLogItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'demand' AS kind, d.item_kind AS type, d.title,
+           r.name AS projectName,
+           COALESCE(u.display_name, u.username, l.operator) AS person,
+           l.created_at AS at, COALESCE(l.note, '') AS extra
+    FROM demand_log l
+    JOIN demand d ON d.id = l.demand_id AND d.workspace_id = l.workspace_id
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    LEFT JOIN app_user u ON u.id = l.operator
+    WHERE l.workspace_id = #{workspaceId} AND l.action = #{action}
+      AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND l.id = (SELECT MIN(l2.id) FROM demand_log l2
+                  WHERE l2.workspace_id = l.workspace_id AND l2.demand_id = l.demand_id
+                    AND l2.action = l.action
+                    AND l2.created_at &gt;= #{from} AND l2.created_at &lt; #{before})
+    <include refid="demandReq"/>
+    ORDER BY l.created_at DESC, l.id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="demandClosedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'demand' AS kind, d.item_kind AS type, d.title,
+           r.name AS projectName,
+           COALESCE(u.display_name, u.username, l.operator) AS person,
+           l.created_at AS at,
+           CASE WHEN l.action = 'rej' THEN '评审不通过'
+                WHEN JSON_UNQUOTE(JSON_EXTRACT(l.change_data, '$.after.closeReason')) = 'dup' THEN '重复需求'
+                ELSE '关闭' END AS extra
+    FROM demand_log l
+    JOIN demand d ON d.id = l.demand_id AND d.workspace_id = l.workspace_id
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    LEFT JOIN app_user u ON u.id = l.operator
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND (l.action = 'rej'
+        OR (l.action = 'cancel'
+            AND JSON_UNQUOTE(JSON_EXTRACT(l.change_data, '$.after.closeReason')) = 'dup'))
+      AND l.id = (SELECT MIN(l2.id) FROM demand_log l2
+                  WHERE l2.workspace_id = l.workspace_id AND l2.demand_id = l.demand_id
+                    AND l2.created_at &gt;= #{from} AND l2.created_at &lt; #{before}
+                    AND (l2.action = 'rej'
+                      OR (l2.action = 'cancel'
+                          AND JSON_UNQUOTE(JSON_EXTRACT(l2.change_data, '$.after.closeReason')) = 'dup')))
+    <include refid="demandReq"/>
+    ORDER BY l.created_at DESC, l.id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="demandCancelledItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'demand' AS kind, d.item_kind AS type, d.title,
+           r.name AS projectName,
+           COALESCE(u.display_name, u.username, l.operator) AS person,
+           l.created_at AS at, COALESCE(l.note, '中途取消') AS extra
+    FROM demand_log l
+    JOIN demand d ON d.id = l.demand_id AND d.workspace_id = l.workspace_id
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    LEFT JOIN app_user u ON u.id = l.operator
+    WHERE l.workspace_id = #{workspaceId} AND l.action = 'cancel'
+      AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(l.change_data, '$.after.closeReason')), 'cancel') = 'cancel'
+      AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+      AND l.id = (SELECT MIN(l2.id) FROM demand_log l2
+                  WHERE l2.workspace_id = l.workspace_id AND l2.demand_id = l.demand_id
+                    AND l2.created_at &gt;= #{from} AND l2.created_at &lt; #{before}
+                    AND l2.action = 'cancel'
+                    AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(l2.change_data, '$.after.closeReason')), 'cancel') = 'cancel')
+    <include refid="demandReq"/>
+    ORDER BY l.created_at DESC, l.id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="demandReleasedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'demand' AS kind, d.item_kind AS type, d.title,
+           r.project_name AS projectName, d.source AS person,
+           MAX(r.occurred_at) AS at,
+           CONCAT('发布 ', COUNT(DISTINCT r.id), ' 次') AS extra
+    FROM version_release r
+    JOIN version_release_item i ON i.release_id = r.id AND i.workspace_id = r.workspace_id
+    JOIN demand d ON d.id = i.demand_id AND d.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId} AND <include refid="releaseValid"/>
+      AND r.occurred_at &gt;= #{from} AND r.occurred_at &lt; #{before}
+      AND i.disposition = 'published' AND i.demand_id IS NOT NULL
+    <if test="reqId != null">AND r.req_id = #{reqId}</if>
+    <include refid="releaseNotRolledBack"/>
+    GROUP BY d.id, d.item_kind, d.title, d.source, r.project_name
+    ORDER BY at DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="taskCreatedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+           r.name AS projectName, t.owner AS person,
+           t.created_at AS at, COALESCE(t.board_column, '') AS extra
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.created_at &gt;= #{from} AND t.created_at &lt; #{before}
+    <include refid="taskReq"/>
+    ORDER BY t.created_at DESC, BINARY t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="taskTransitionItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    <choose>
+      <when test="toColumn == 'test'">
+        SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+               r.name AS projectName, t.owner AS person,
+               t.test_requested_at AS at, '提测' AS extra
+        FROM task t
+        LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+        WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+          AND t.test_requested_at &gt;= #{from} AND t.test_requested_at &lt; #{before}
+        <include refid="taskReq"/>
+        ORDER BY t.test_requested_at DESC, BINARY t.id
+        LIMIT #{limit}
+      </when>
+      <when test="toColumn == 'testing'">
+        SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+               r.name AS projectName, t.owner AS person,
+               t.test_started_at AS at, '开始测试' AS extra
+        FROM task t
+        LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+        WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+          AND t.test_started_at &gt;= #{from} AND t.test_started_at &lt; #{before}
+        <include refid="taskReq"/>
+        ORDER BY t.test_started_at DESC, BINARY t.id
+        LIMIT #{limit}
+      </when>
+      <otherwise>
+        SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+               r.name AS projectName,
+               COALESCE(u.display_name, u.username, l.actor_id) AS person,
+               l.created_at AS at,
+               CONCAT(COALESCE(l.from_column, '—'), ' → ', l.to_column) AS extra
+        FROM task_log l
+        JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+        LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+        LEFT JOIN app_user u ON u.id = l.actor_id
+        WHERE l.workspace_id = #{workspaceId} AND l.action = 'move'
+          AND l.from_column = 'backlog' AND l.to_column NOT IN ('done', 'canceled')
+          AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before}
+          AND l.id = (SELECT MIN(l2.id) FROM task_log l2
+                      WHERE l2.workspace_id = l.workspace_id AND l2.task_id = l.task_id
+                        AND l2.action = 'move' AND l2.from_column = 'backlog'
+                        AND l2.to_column NOT IN ('done', 'canceled')
+                        AND l2.created_at &gt;= #{from} AND l2.created_at &lt; #{before})
+          AND t.deleted_at IS NULL
+        <include refid="taskReq"/>
+        ORDER BY l.created_at DESC
+        LIMIT #{limit}
+      </otherwise>
+    </choose>
+  </select>
+
+  <select id="taskCompletedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+           r.name AS projectName, t.owner AS person,
+           t.completed_at AS at,
+           CASE WHEN t.due_date IS NULL THEN '无截止日期'
+                WHEN DATE(t.completed_at) &lt;= t.due_date THEN '按期'
+                ELSE CONCAT('延期 ', DATEDIFF(t.completed_at, t.due_date), ' 天') END AS extra,
+           COALESCE((SELECT SUM(tl.minutes) FROM time_log tl
+                      WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id), 0) AS number
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+      AND t.canceled_at IS NULL
+    <if test="itemType != null">AND t.item_type = #{itemType}</if>
+    <include refid="taskReq"/>
+    ORDER BY t.completed_at DESC, BINARY t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="taskCancelledItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT t.id, 'task' AS kind, t.item_type AS type, t.title,
+           r.name AS projectName, t.owner AS person,
+           t.canceled_at AS at, COALESCE(t.cancel_reason, '取消') AS extra
+    FROM task t
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.canceled_at &gt;= #{from} AND t.canceled_at &lt; #{before}
+      AND t.completed_at IS NULL
+    <include refid="taskReq"/>
+    ORDER BY t.canceled_at DESC, BINARY t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="caseCreatedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT c.id, 'case' AS kind, 'case' AS type, c.title,
+           r.name AS projectName, COALESCE(c.created_by, '未记录') AS person,
+           c.created_at AS at, COALESCE(c.module, '') AS extra
+    FROM test_case c
+    LEFT JOIN requirement r ON r.id = c.req_id AND r.workspace_id = c.workspace_id
+    WHERE c.workspace_id = #{workspaceId}
+      AND c.created_at &gt;= #{from} AND c.created_at &lt; #{before}
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+    ORDER BY c.created_at DESC, BINARY c.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="caseRunItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT c.id, 'case' AS kind, r.status AS type, c.title,
+           p.name AS projectName, COALESCE(r.executed_by, '未记录') AS person,
+           r.created_at AS at, COALESCE(r.note, '') AS extra
+    FROM test_case_run r
+    JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+    LEFT JOIN requirement p ON p.id = c.req_id AND p.workspace_id = c.workspace_id
+    WHERE r.workspace_id = #{workspaceId} AND r.status = #{status}
+      AND r.created_at &gt;= #{from} AND r.created_at &lt; #{before}
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+    ORDER BY r.created_at DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="pendingRetestItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT c.id, 'case' AS kind, 'failed' AS type, c.title,
+           r.name AS projectName, COALESCE(c.latest_by, '未记录') AS person,
+           c.latest_at AS at, COALESCE(c.latest_note, '') AS extra
+    FROM test_case c
+    LEFT JOIN requirement r ON r.id = c.req_id AND r.workspace_id = c.workspace_id
+    WHERE c.workspace_id = #{workspaceId} AND c.latest_status = 'failed'
+    <if test="reqId != null">AND c.req_id = #{reqId}</if>
+    ORDER BY c.latest_at DESC, BINARY c.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="docCreatedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'doc' AS kind, d.doc_type AS type, d.title,
+           r.name AS projectName, COALESCE(d.owner, '未记录') AS person,
+           d.created_at AS at, d.status AS extra
+    FROM requirement_doc d
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    WHERE d.workspace_id = #{workspaceId}
+      AND d.created_at &gt;= #{from} AND d.created_at &lt; #{before}
+    <include refid="docReq"/>
+    ORDER BY d.created_at DESC, BINARY d.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="docUpdatedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'doc' AS kind, d.doc_type AS type, d.title,
+           r.name AS projectName, COALESCE(h.saved_by, '未记录') AS person,
+           h.created_at AS at, CONCAT('v', h.version_no) AS extra
+    FROM requirement_doc_history h
+    JOIN requirement_doc d ON d.id = h.doc_id AND d.workspace_id = h.workspace_id
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    WHERE h.workspace_id = #{workspaceId}
+      AND h.created_at &gt;= #{from} AND h.created_at &lt; #{before}
+    <include refid="docReq"/>
+    ORDER BY h.created_at DESC, h.id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="docPublishedItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'doc' AS kind, d.doc_type AS type, d.title,
+           r.name AS projectName, COALESCE(d.owner, '未记录') AS person,
+           d.published_at AS at, d.status AS extra
+    FROM requirement_doc d
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    WHERE d.workspace_id = #{workspaceId}
+      AND d.published_at &gt;= #{from} AND d.published_at &lt; #{before}
+    <include refid="docReq"/>
+    ORDER BY d.published_at DESC, BINARY d.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="draftItems" resultType="com.hourglass.dto.ReviewTeamDetailRow">
+    SELECT d.id, 'doc' AS kind, d.doc_type AS type, d.title,
+           r.name AS projectName, COALESCE(d.owner, '未记录') AS person,
+           d.updated_at AS at, '草稿' AS extra
+    FROM requirement_doc d
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    WHERE d.workspace_id = #{workspaceId} AND d.status = 'draft'
+      AND d.updated_at &lt; #{before}
+    <include refid="docReq"/>
+    ORDER BY d.updated_at, BINARY d.id
+    LIMIT #{limit}
+  </select>
+
+</mapper>

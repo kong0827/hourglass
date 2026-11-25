@@ -8,7 +8,8 @@ import { API } from "../core/api.js";
 import { searchInput, searchWrap } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { reloadFilteredViews } from "../core/filters-ui.js";
-import { activeView, showView } from "../core/router.js";
+import { updateBrand } from "../core/filters.js";
+import { activeView, setReturnOrigin, showView } from "../core/router.js";
 import { canEditReq, dueState, reqNameById, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -16,12 +17,14 @@ import { bindRetry } from "../core/utils.js";
 import { loadView } from "../core/view-loader.js";
 import { caliberMarkHTML, initCaliberHelp, registerHelp } from "../lib/caliber-help.js";
 import { openMilestoneDetail } from "../lib/milestone-ui.js";
+import { summarizeStages } from "../lib/stage-hours.js";
+import { stagePanelHTML, stageDrillRows, openStageDrill } from "../lib/stage-panel.js";
 import {
   colName, dayKey, demandNoText, fmtMinutesShort, fmtReleaseTime, itemNoText,
   releaseEnvironmentName, releasePlanNoText, releaseSnapshotHTML, taskPublicationHTML, taskVersionIds, typeBadgeHTML,
   VERSION_STATUS_META, PLAN_STATUS_META, versionStatusTagHTML, planStatusTone
 } from "../lib/format.js";
-import { openBranchById } from "./branches.js";
+import { gitEnabled, openBranchById } from "./branches.js";
 
 registerHelp({
   "version.actual": {
@@ -261,22 +264,40 @@ function openVersionDetail(reqId, versionId, tab){
   showView("version");
 }
 
+var gitOn = false;
 function enterVersionView(){
   host = document.getElementById("versionBody");
   if(!host) return;
   wire();
+  /* 未接入 Git 的空间不露出分支入口；探测结果回来后补画一次页头 */
+  gitEnabled().then(function(on){
+    if(on === gitOn) return;
+    gitOn = on;
+    if(activeView === "version") renderAll();
+  });
   var route = parseRoute();
   if(!route || !route.id){
     st.seq++;
     st.id = ""; st.reqId = ""; st.version = null; st.stat = null;
-    setTitle("版本详情");
+    setPageHeading("选择版本", "跨项目选择要查看的版本");
+    updateBrand();
     renderPicker();
     return;
   }
   adopt(route);
   load();
 }
+function setPageHeading(title, sub){
+  ["pageTitleText", "viewTitle"].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.textContent = title;
+  });
+  var subEl = document.getElementById("pageSub");
+  if(subEl && sub) subEl.textContent = sub;
+  setTitle(title);
+}
 function adopt(route){
+  setPageHeading("版本详情", "计划与实际、工时构成与发布记录");
   var changed = route.id !== st.id || route.reqId !== st.reqId;
   st.id = route.id;
   st.reqId = route.reqId;
@@ -431,6 +452,16 @@ function sideArrived(key){
   /* 需求清单还负责给工作项行的关联 chip 供名字，所以它到位时工作项页也要重画 */
   if(st.tab === SIDE_TAB[key] || (key === "demands" && st.tab === "scope")) renderAll();
 }
+/* 分支只在本版本上下文里看：带 project / version，进入后不再暴露全空间分支入口 */
+function openVersionBranches(){
+  var qs = [];
+  if(st.reqId) qs.push("project=" + encodeURIComponent(st.reqId));
+  if(st.id) qs.push("version=" + encodeURIComponent(st.id));
+  var h = "#/branches" + (qs.length ? "?" + qs.join("&") : "");
+  try{ history.pushState(null, "", h); }catch(e){ try{ window.location.hash = h; }catch(e2){ /* noop */ } }
+  setReturnOrigin({ view:"version", label:"版本 " + versionName() });
+  showView("branches");
+}
 function reload(){
   closeHoursSheet();
   if(!st.id){ renderPicker(); return; }
@@ -572,6 +603,8 @@ function moreMenuHTML(canEdit, canPublish){
   var items = [];
   items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tool="plan">' + icon("calendar", 14) + '计划与历史</button>');
   items.push('<button class="menu-item" type="button" role="menuitem" data-vd-delivery>' + icon("note", 14) + '交付说明</button>');
+  /* 分支不作为一级入口：接入 Git 后，在版本上下文里看该版本的分支 */
+  if(gitOn) items.push('<button class="menu-item" type="button" role="menuitem" data-vd-branches>' + icon("branch", 14) + '本版本分支</button>');
   items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tab="overview">' + icon("stats", 14) + '工时与构成</button>');
   if(canPublish) items.push('<button class="menu-item" type="button" role="menuitem" data-vd-tool="actual">' + icon("upload", 14) + '记录实际发布</button>');
   if(canEdit && st.version && st.version.status === "planned"){
@@ -730,6 +763,7 @@ function overviewHTML(){
       : "");
   return kpis
     + hoursCardHTML()
+    + '<div data-vd-stage-wrap>' + stageInlineHTML() + '</div>'
     + progressPanel()
     + commitmentPanel()
     + milestonePanel()
@@ -797,9 +831,11 @@ function milestonePanel(){
     return panel("里程碑", "", '<p class="hint">该版本没有关联里程碑。里程碑在项目驾驶舱里创建与达成。</p>'
       + '<button class="btn sm ghost" type="button" data-vd-project>去项目驾驶舱</button>');
   }
-  var names = { achieved:"已达成", achieved_rolled_back:"已达成 · 已回滚", overdue:"已延期", pending:"未达成" };
+  var names = { achieved:"已达成", achieved_rolled_back:"已达成 · 已回滚", evidence_missing:"证据缺失", overdue:"已延期", pending:"未达成" };
   var body = list.map(function(m){
-    var tone = m.status === "achieved" ? "tag-success" : m.status === "overdue" ? "tag-danger" : "ghost";
+    var tone = m.status === "achieved" ? "tag-success"
+      : m.status === "overdue" ? "tag-danger"
+      : (m.status === "evidence_missing" || m.status === "achieved_rolled_back") ? "tag-warning" : "ghost";
     return '<tr data-vd-milestone="' + esc(m.id) + '" tabindex="0" title="查看里程碑详情与达成证据">'
       + '<td>' + esc(m.name || "里程碑") + '</td>'
       + '<td><span class="tag ' + tone + '">' + esc(names[m.status] || m.status) + '</span></td>'
@@ -854,6 +890,34 @@ function avgDoneText(){
 function hourTagHTML(type){
   var p = TYPE_PROXY[type] || TYPE_PROXY.other;
   return '<span class="vd-h-tag ' + esc(type || "other") + '">' + esc(p.label) + '</span>';
+}
+
+/* 阶段投入：三段口径与项目页、版本列表同源（lib/stage-hours），这里只做本版本的内联面板。
+   工时弹层不再重复一套阶段卡，改为指向这里，保证「阶段」只有一个出处。 */
+var stageMode = "actual";
+function stageInlineHTML(){
+  var s = summarizeStages(st.tasks);
+  return stagePanelHTML({
+    stage:s,
+    mode:stageMode,
+    title:"阶段投入",
+    sub:"本版本 " + s.items + " 个工作项 · " + s.timed + " 项有计时 · 史诗不计入",
+    scope:"版本 · " + versionName(),
+    versionId:st.id,
+    badge:"本版本",
+    denomLabel:"本版本实际工时"
+  });
+}
+function repaintStagePanel(){
+  var box = host && host.querySelector("[data-vd-stage-wrap]");
+  if(box) box.innerHTML = stageInlineHTML();
+}
+function openVersionStageDrill(el){
+  openStageDrill({
+    scopeLabel:"版本 · " + versionName(),
+    stageKey:el.getAttribute("data-stage-drill"),
+    rows:stageDrillRows(st.tasks, { catName:function(id){ return catName(id); } })
+  });
 }
 
 function hoursCardHTML(){
@@ -989,28 +1053,14 @@ function hoursLegendHTML(rows, total, valueKey, kind){
       + '<span class="muted">' + hourPctText(v, total) + '</span></button>';
   }).join("") + '</div>';
 }
-function hoursProxyHTML(mode){
-  var rows = hourGroupRows("type", mode);
-  var map = {};
-  rows.forEach(function(r){ map[r.key] = r; });
-  var keys = ["story","task","bug"].concat(map.epic ? ["epic"] : []);
-  var total = rows.reduce(function(a, r){ return a + (mode === "estimate" ? r.est : r.act); }, 0);
-  var cards = keys.map(function(k){
-    var r = map[k] || { key:k, est:0, act:0, items:0, estItems:0 };
-    var v = mode === "estimate" ? r.est : r.act;
-    var meta = mode === "estimate"
-      ? r.items + " 项 · 占 " + hourPctText(v, total)
-      : r.items + " 项 · 预估 " + hourText(r.est);
-    return '<div class="vd-h-proxy-card">'
-      + '<div class="vd-h-proxy-type"><i style="background:' + TYPE_PROXY[k].color + '"></i>' + esc(TYPE_PROXY[k].label) + '</div>'
-      + '<div class="vd-h-proxy-map">≈ <b>' + esc(TYPE_PROXY[k].proxy) + '</b></div>'
-      + '<b>' + hourText(v) + '</b><small>' + esc(meta) + '</small></div>';
-  }).join("");
-  return '<div class="vd-h-proxy-head"><b>按类型近似看阶段</b><span>现有字段 · 不需要新增</span></div>'
-    + '<div class="vd-h-proxy-grid">' + cards + '</div>';
+/* 阶段拆分只在概览页内联面板出现一次：弹层类型页改为指向它，不再自带一套卡片。 */
+function stageJumpHTML(){
+  return '<div class="vd-h-stage-jump">' + icon("layers", 14)
+    + '<span><b>阶段拆分在概览页「阶段投入」。</b>产品 / 设计、开发、测试三段与下钻明细放在版本概览，这里不重复。</span>'
+    + '<button class="btn sm" type="button" data-vd-goto-stage>去阶段投入</button></div>';
 }
 function hoursExtraHead(kind, mode){
-  if(kind === "type") return "近似阶段";
+  if(kind === "type") return "阶段参考";
   if(mode === "actual" && kind === "owner") return "名下预估";
   if(mode === "actual") return "预估";
   return "实际";
@@ -1026,8 +1076,8 @@ function hoursExtraTotal(kind, mode){
 function hoursNoticeHTML(kind, mode, rows, total){
   if(kind === "type"){
     return '<div class="vd-h-notice info">' + icon("info", 13)
-      + '<span><b>类型是现有数据里最接近阶段的观察口径。</b>需求 ≈ 设计 / 分析，任务 ≈ 开发，缺陷 ≈ 测试 / 修复。'
-      + '一个工作项仍可能跨多个阶段，因此它是代理口径，不是真实阶段工时。</span></div>';
+      + '<span><b>类型是工作项分类，不是阶段。</b>阶段投入按「测试窗口 + 工作项类型」拆成产品 / 设计、开发、测试，'
+      + '见概览页的「阶段投入」；下表按需求 / 任务 / 缺陷 / 史诗看投入结构，史诗不计入阶段投入。</span></div>';
   }
   if(kind === "demand" && mode === "estimate"){
     var un = rows.filter(function(r){ return r.key === UNLINKED_DEMAND; })[0];
@@ -1067,7 +1117,7 @@ function hoursGroupHTML(kind, mode){
     + '<td class="num vd-h-hide">' + hoursExtraTotal(kind, mode) + '</td></tr>';
   var foot;
   if(kind === "type"){
-    foot = "类型来自工作项；近似阶段只用于快速判断投入结构，不作为阶段工时。占比保留一位小数。";
+    foot = "类型来自工作项；阶段投入见概览页，按测试窗口与工作项类型拆分。占比保留一位小数。";
   }else if(kind === "demand"){
     foot = "需求来自工作项关联，需求名与工作项名不一定一致；已关闭需求仍保留在构成里。未关联的工作项也计入合计。";
   }else if(kind === "cat"){
@@ -1084,7 +1134,7 @@ function hoursGroupHTML(kind, mode){
       + '<span>实际 / 预估 <b>' + (estT ? hourPctText(actT, estT) : "—") + '</b></span></div>'
     : "";
   return hoursNoticeHTML(kind, mode, rows, total)
-    + (kind === "type" ? hoursProxyHTML(mode) : "")
+    + (kind === "type" ? stageJumpHTML() : "")
     + hoursStackHTML(rows, total, valueKey, mode === "estimate" ? "预估构成" : "实际构成")
     + hoursLegendHTML(rows, total, valueKey, kind)
     + '<div class="vd-h-tablewrap"><table class="vd-h-table"><thead><tr>'
@@ -1261,6 +1311,17 @@ function renderHoursSheet(){
 function closeHoursSheet(){
   if(hourSheet && hourSheet.layer) UI.closeModal(hourSheet.layer);
 }
+/* 弹层里的「去阶段投入」：带上当前口径，关掉弹层回到概览页内联面板 */
+function gotoStagePanel(){
+  stageMode = (hourSheet && hourSheet.mode) || stageMode;
+  closeHoursSheet();
+  repaintStagePanel();
+  var wrap = host && host.querySelector("[data-vd-stage-wrap]");
+  if(!wrap) return;
+  wrap.scrollIntoView({ behavior:"smooth", block:"start" });
+  var first = wrap.querySelector("[data-stage-drill]");
+  if(first) first.focus({ preventScroll:true });
+}
 function openHoursSheet(mode, tab){
   if(mode !== "estimate" && mode !== "actual") return;
   closeHoursSheet();
@@ -1283,6 +1344,7 @@ function openHoursSheet(mode, tab){
   layer.__uiOnClose = function(){ if(hourSheet === hs) hourSheet = null; layer.remove(); };
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-vd-hclose]")){ UI.closeModal(layer); return; }
+    if(e.target.closest("[data-vd-goto-stage]")){ gotoStagePanel(); return; }
     var tabBtn = e.target.closest("[data-vd-htab]");
     if(tabBtn){ hs.tab = tabBtn.getAttribute("data-vd-htab"); hs.filter = null; renderHoursSheet(); return; }
     if(e.target.closest("[data-vd-hclear]")){ hs.filter = null; renderHoursSheet(); return; }
@@ -1653,7 +1715,7 @@ function logHTML(){
 function renderPicker(){
   if(!host) return;
   host.innerHTML = '<header class="vd-head"><div class="vd-head-top">' + backBtn()
-    + '<h1 class="vd-title">版本详情</h1></div></header>'
+    + '<h1 class="vd-title">选择版本</h1></div></header>'
     + '<div class="vd-body"><div id="vdPicker">' + UI.skeletonRows(4) + '</div></div>';
   if(pickerRows){ paintPicker(); return; }
   API.get("/api/versions/cross-project").then(function(rows){
@@ -1803,6 +1865,10 @@ function wire(){
   host.addEventListener("click", function(e){
     if(e.target.closest("[data-vd-back]")){ backToVersions(); return; }
     if(e.target.closest("[data-vd-refresh]")){ reload(); return; }
+    var stageModeBtn = e.target.closest("[data-stage-mode]");
+    if(stageModeBtn){ stageMode = stageModeBtn.getAttribute("data-stage-mode"); repaintStagePanel(); return; }
+    var stageHit = e.target.closest("[data-stage-drill]");
+    if(stageHit){ openVersionStageDrill(stageHit); return; }
     var moreBtn = e.target.closest("[data-vd-more]");
     if(moreBtn){
       var menu = host.querySelector(".vd-more-menu");
@@ -1840,6 +1906,7 @@ function wire(){
     var tool = e.target.closest("[data-vd-tool]");
     if(tool){ runTool(tool.dataset.vdTool); return; }
     if(e.target.closest("[data-vd-delivery]")){ openDelivery(); return; }
+    if(e.target.closest("[data-vd-branches]")){ openVersionBranches(); return; }
     if(e.target.closest("[data-vd-board]")){ jumpBoard(); return; }
     if(e.target.closest("[data-vd-filter-reset]")){
       st.filters = blankFilters();
@@ -1919,7 +1986,7 @@ function wire(){
   });
   host.addEventListener("keydown", function(e){
     if(e.key !== "Enter" && e.key !== " ") return;
-    var row = e.target.closest ? e.target.closest("tr[data-open-task], tr[data-vd-demand], tr[data-vd-milestone], tr[data-vd-tool]") : null;
+    var row = e.target.closest ? e.target.closest("tr[data-open-task], tr[data-vd-demand], tr[data-vd-milestone], tr[data-vd-tool], tr[data-stage-drill]") : null;
     if(row && row === e.target){ e.preventDefault(); row.click(); }
   });
 }

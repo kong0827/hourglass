@@ -1,0 +1,1790 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>周回顾 · 团队与个人 · 原型 2026-11-21 v3</title>
+<style>
+  :root{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --border:#E4E7EC;
+    --text:#101828; --text-2:#475467; --text-3:#667085; --primary:#2563EB;
+    --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-fg:#B54708; --warning-border:#FEDF89;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-fg:#B42318; --danger-border:#FDA29B;
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:11px; --r-pill:999px;
+    --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+    --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+    --sidebar-w:216px; --topbar-h:46px;
+    --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  }
+</style>
+<link rel="stylesheet" href="../../../frontend/css/tokens.css">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg-app);color:var(--text);font-family:var(--font-sans);font-size:13px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit}
+  a{color:inherit;text-decoration:none}
+  [hidden]{display:none !important}
+  .ico{width:16px;height:16px;flex:0 0 auto;display:block}
+  .ico-sm{width:13px;height:13px}
+  .app{display:flex;min-height:100vh}
+
+  /* ---------------- 壳层 ---------------- */
+  .sidebar{width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);
+    position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:8px 10px 10px;overflow:hidden}
+  .brand{display:flex;align-items:center;gap:9px;height:42px;padding:0 6px;font-weight:650;font-size:14.5px;letter-spacing:.02em}
+  .brand-mark{width:28px;height:28px;border-radius:9px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+  .brand-tag{margin-left:auto;font-size:9px;font-weight:600;letter-spacing:.08em;color:var(--text-3);text-transform:uppercase}
+  .space-pick{display:flex;align-items:center;gap:8px;height:38px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-sm);margin:5px 0 9px;background:var(--surface)}
+  .space-pick .savatar{width:22px;height:22px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-size:10.5px;font-weight:650}
+  .space-pick .sname{font-size:12.5px;font-weight:600;line-height:1.25}
+  .space-pick .smeta{font-size:10px;color:var(--text-3);line-height:1.25}
+  .space-pick .ico{width:12px;height:12px;color:var(--text-3);margin-left:auto}
+  .nav{overflow:auto;flex:1;scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+  .nav-cap{font-size:10.5px;color:var(--text-3);padding:11px 8px 4px;letter-spacing:.04em;font-weight:600}
+  .nav-item{display:flex;align-items:center;gap:9px;height:31px;padding:0 8px;border-radius:7px;color:var(--text-2);font-size:12.5px;font-weight:500}
+  .nav-item .ico{width:15px;height:15px;color:var(--text-3)}
+  .nav-item:hover{background:var(--surface-hover)}
+  .nav-item.active{background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+  .nav-item.active .ico{color:var(--primary)}
+  .nav-new{margin-left:auto;height:15px;padding:0 4px;border-radius:3px;background:var(--success-soft);color:var(--success-fg);font-size:9px;font-weight:600;display:inline-flex;align-items:center}
+  .side-user{display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding:10px 6px 2px;margin-top:8px;font-size:12px;color:var(--text-2)}
+  .side-user .pav{width:24px;height:24px;font-size:10px}
+  .side-user .role{margin-left:auto;font-size:10px;color:var(--text-3)}
+  .pav{width:26px;height:26px;border-radius:50%;background:var(--primary-soft);color:var(--primary-fg);display:inline-grid;place-items:center;font-size:11px;font-weight:650;flex:0 0 auto}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .topbar{height:var(--topbar-h);flex:0 0 var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 14px;
+    background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
+  .crumb{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .crumb b{color:var(--text-2);font-weight:500}
+  .tb-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .tb-search{display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-xs);color:var(--text-3);font-size:11.5px}
+  .tb-search kbd{font-family:var(--font-sans);font-size:10px;border:1px solid var(--border);border-radius:4px;padding:0 3px;color:var(--text-3)}
+  .tb-btn{width:28px;height:28px;border:0;background:transparent;border-radius:var(--r-xs);display:grid;place-items:center;color:var(--text-3);cursor:pointer;position:relative}
+  .tb-btn:hover{background:var(--surface-hover);color:var(--text-2)}
+  .tb-btn.dot::after{content:"";position:absolute;top:5px;right:5px;width:5px;height:5px;border-radius:50%;background:var(--danger);border:1px solid #fff}
+
+  /* ---------------- 页面骨架 ---------------- */
+  .content{width:100%;max-width:1200px;margin:0 auto;padding:18px 24px 44px}
+  .phead{display:flex;align-items:flex-start;gap:16px}
+  .h1{font-size:var(--fs-page-title,19px);font-weight:650;letter-spacing:-.01em;margin:0;line-height:1.35;display:flex;align-items:center;gap:9px}
+  .proto-badge{display:inline-flex;align-items:center;height:18px;padding:0 6px;border:1px dashed var(--border-strong);border-radius:4px;color:var(--text-3);font-size:9.5px;font-weight:500;letter-spacing:.02em}
+  .sub{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:5px;color:var(--text-3);font-size:12px}
+  .sub b{color:var(--text-2);font-weight:550}
+  .subdot{color:var(--border-strong)}
+  .phead-act{margin-left:auto;display:flex;align-items:center;gap:8px;padding-top:2px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 11px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn:hover{background:var(--surface-hover);color:var(--text)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn .ico{width:14px;height:14px}
+  .icon-btn{width:30px;height:30px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);display:inline-grid;place-items:center;color:var(--text-3);cursor:pointer}
+  .icon-btn:hover{background:var(--surface-hover);color:var(--text-2)}
+  .icon-btn:disabled{opacity:.45;cursor:not-allowed}
+  .link{border:0;background:none;padding:0;color:var(--primary-fg);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+  .link:hover{text-decoration:underline}
+  .link .ico{width:12px;height:12px}
+
+  /* 范围 / 周 / 项目 */
+  .scopebar{display:flex;align-items:center;gap:10px;margin-top:12px;padding:7px 9px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);flex-wrap:wrap}
+  .seg{display:inline-flex;align-items:center;padding:2px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px}
+  .seg button{height:28px;padding:0 14px;border:0;border-radius:6px;background:transparent;color:var(--text-3);font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+  .seg button:hover{color:var(--text-2)}
+  .seg button[aria-selected=true]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow-xs)}
+  .seg .ico{width:13px;height:13px}
+  .weeknav{display:flex;align-items:center;gap:7px;padding-left:4px}
+  .weeknav .wk{display:flex;flex-direction:column;line-height:1.25;min-width:150px}
+  .weeknav .wk b{font-size:12.5px;font-weight:600;color:var(--text)}
+  .weeknav .wk span{font-size:10.5px;color:var(--text-3)}
+  .sel{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);margin-left:4px}
+  .mini-select{height:30px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);color:var(--text-2);font-size:12px;padding:0 24px 0 8px;appearance:none;background-image:var(--select-chevron);background-repeat:no-repeat;background-position:right 6px center;cursor:pointer}
+  .scopebar-right{margin-left:auto;font-size:10.5px;color:var(--text-3);white-space:nowrap}
+
+  /* 结论条 */
+  .brief{display:flex;align-items:center;gap:10px;margin-top:12px;padding:9px 13px;background:var(--primary-soft);
+    border:1px solid var(--primary-border);border-radius:var(--r-md);color:var(--text-2);font-size:12.5px;line-height:1.5}
+  .brief .bic{width:24px;height:24px;border-radius:50%;background:var(--surface);color:var(--primary-fg);display:grid;place-items:center;flex:0 0 auto}
+  .brief .bic .ico{width:14px;height:14px}
+  .brief .txt{min-width:0}
+  .brief strong{color:var(--text);font-weight:600}
+  .brief-meta{margin-left:auto;color:var(--text-3);font-size:10.5px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .brief-meta .sep{color:var(--border-strong)}
+  .brief.warn{background:var(--warning-soft);border-color:var(--warning-border)}
+  .brief.warn .bic{color:var(--warning-fg)}
+  .brief.err{background:var(--danger-soft);border-color:var(--danger-border)}
+  .brief.err .bic{color:var(--danger-fg)}
+
+  /* 卡片 */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);margin-top:12px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 16px;border-bottom:1px solid var(--border)}
+  .card-head h2{font-size:13.5px;font-weight:650;margin:0;white-space:nowrap}
+  .hint{font-size:11px;color:var(--text-3);white-space:nowrap}
+  .hint::before{content:"·";margin:0 6px;color:var(--border-strong)}
+  .card-act{margin-left:auto;display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  .chips{display:flex;align-items:center;gap:5px}
+  .chip{height:26px;padding:0 9px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);color:var(--text-2);font-size:11px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;cursor:pointer}
+  .chip:hover{background:var(--surface-hover)}
+  .chip b{font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .chip[aria-pressed=true]{background:var(--primary);border-color:var(--primary);color:#fff}
+  .chip[aria-pressed=true] b{color:rgba(255,255,255,.82)}
+  .footnote{display:flex;gap:6px;margin:11px 16px 13px;font-size:10.5px;color:var(--text-3);line-height:1.5}
+  .footnote .ico{width:12px;height:12px;margin-top:1px}
+  .grid2{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:12px;align-items:start}
+  .grid2.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+
+  /* 需求流转 */
+  .flow{display:flex;align-items:stretch;gap:10px;padding:14px 16px 4px}
+  .flow-main{display:flex;align-items:center;gap:4px;flex:1;min-width:0}
+  .fnode{flex:1;min-width:0;text-align:left;background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--primary);border-radius:10px;padding:9px 11px 10px;cursor:pointer;position:relative;transition:box-shadow .15s,border-color .15s}
+  .fnode:hover{border-color:var(--primary-border);box-shadow:var(--shadow-sm)}
+  .fnode.green{border-top-color:var(--success)}
+  .fnode.green:hover{border-color:var(--success-border)}
+  .fnode .fl{font-size:11.5px;color:var(--text-2);display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .fnode .fl .ico{width:11px;height:11px;color:var(--text-3)}
+  .fnode .fn{display:block;font-size:26px;font-weight:650;line-height:1.12;margin-top:2px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .fnode .fd{font-size:10.5px;color:var(--text-3);white-space:nowrap}
+  .fnode .fd .up{color:var(--success-fg)}
+  .fnode .fd .down{color:var(--text-3)}
+  .fnode .fh{display:block;font-size:10.5px;color:var(--text-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .farrow{width:18px;flex:0 0 18px;color:var(--border-strong);display:grid;place-items:center}
+  .farrow .ico{width:16px;height:16px}
+  .flow-exit{width:148px;flex:0 0 148px;display:flex;flex-direction:column;gap:6px;justify-content:center;border-left:1px dashed var(--border);padding-left:10px}
+  .exit-cap{font-size:10.5px;color:var(--text-3);margin-bottom:1px}
+  .exit-node{text-align:left;border:1px solid var(--border);border-radius:9px;padding:6px 10px;background:#FAFBFC;cursor:pointer}
+  .exit-node:hover{border-color:var(--border-strong);background:var(--surface)}
+  .exit-node b{font-size:15px;font-weight:650;display:inline-block;min-width:18px;font-variant-numeric:tabular-nums}
+  .exit-node span{display:block;font-size:10.5px;color:var(--text-3);line-height:1.35}
+  .pool{display:flex;align-items:center;gap:14px;margin:6px 16px 0;padding:8px 12px;background:var(--surface-sunken);border-radius:8px;font-size:11.5px;color:var(--text-2);flex-wrap:wrap}
+  .pool-title{font-size:10.5px;color:var(--text-3);font-weight:600}
+  .pool b{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums;margin-left:3px}
+  .pool-note{margin-left:auto;font-size:10.5px;color:var(--text-3)}
+
+  /* 发布 */
+  .rel-list{display:flex;flex-direction:column}
+  details.rel{border-top:1px solid var(--border);padding:0 16px}
+  details.rel:first-child{border-top:0}
+  details.rel summary{display:grid;grid-template-columns:minmax(0,1.4fr) auto auto auto 16px;align-items:center;gap:9px;height:52px;cursor:pointer;list-style:none}
+  details.rel summary::-webkit-details-marker{display:none}
+  details.rel summary:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+  .rel-ver{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rel-ver b{font-weight:650}
+  .rel-time{font-size:11.5px;color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .rel-exec{font-size:11px;color:var(--text-3);white-space:nowrap}
+  .rel-chev{width:14px;height:14px;color:var(--text-3);transition:transform .15s}
+  details[open] .rel-chev{transform:rotate(180deg)}
+  .rel-body{padding:0 0 12px}
+  .rel-stat{font-size:11.5px;color:var(--text-3);margin-bottom:7px}
+  .rel-stat b{color:var(--text-2);font-weight:600;font-variant-numeric:tabular-nums}
+  .rel-stat .sep{margin:0 6px;color:var(--border-strong)}
+  .rel-items{display:flex;flex-wrap:wrap;gap:6px}
+  .rel-items span{font-size:11px;padding:3px 7px;border-radius:4px;background:var(--surface-sunken);color:var(--text-2)}
+  .tag{display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 6px;border-radius:4px;font-size:10.5px;font-weight:500;white-space:nowrap;background:var(--surface-sunken);color:var(--text-2)}
+  .tag::before{content:"";width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.85}
+  .tag.plain::before{display:none}
+  .tag.ok{background:var(--success-soft);color:var(--success-fg)}
+  .tag.warn{background:var(--warning-soft);color:var(--warning-fg)}
+  .tag.bad{background:var(--danger-soft);color:var(--danger-fg)}
+  .tag.blue{background:var(--primary-soft);color:var(--primary-fg)}
+  .tag.plum{background:var(--plum-soft);color:var(--plum-fg)}
+
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);margin:12px 16px 0;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .kpis>div{padding:10px 12px;border-left:1px solid var(--border);min-width:0}
+  .kpis>div:first-child{border-left:0}
+  .kpis b{display:block;font-size:22px;font-weight:650;line-height:1.18;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap}
+  .kpis span{font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .kpis em{font-style:normal;font-size:10px;color:var(--text-3);margin-left:2px}
+  .days-head{display:flex;align-items:center;justify-content:space-between;margin:13px 16px 0;font-size:11px;color:var(--text-3)}
+  .days-head b{font-size:11px;font-weight:600;color:var(--text-2)}
+  .days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:6px 16px 0}
+  .day{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+  .day .dc{font-size:10px;color:var(--text-3);font-variant-numeric:tabular-nums;line-height:1}
+  .day .dw{height:47px;width:100%;display:flex;align-items:flex-end;justify-content:center}
+  .day .db{width:100%;max-width:24px;background:#BFD3FA;border-radius:4px 4px 2px 2px;min-height:2px}
+  .day .db.zero{background:var(--surface-sunken)}
+  .day .dl{font-size:10px;color:var(--text-3);line-height:1.2}
+  .mini-stats{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 16px 0;font-size:11.5px;color:var(--text-2)}
+  .mini-stats b{font-variant-numeric:tabular-nums;color:var(--text)}
+  .mini-stats .bad b{color:var(--danger-fg)}
+  .mini-stats .sep{color:var(--border-strong)}
+
+  /* 测试与质量 */
+  .qgrid{display:grid;grid-template-columns:1.1fr .9fr;border-top:1px solid var(--border)}
+  .qcol{padding:12px 16px;min-width:0}
+  .qcol+.qcol{border-left:1px solid var(--border)}
+  .qkpis{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .qkpis.six{grid-template-columns:repeat(6,1fr);margin:12px 16px 0}
+  .qkpis>div{padding:9px 11px;border-left:1px solid var(--border);min-width:0}
+  .qkpis>div:first-child{border-left:0}
+  .qkpis b{display:block;font-size:20px;font-weight:650;line-height:1.25;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .qkpis span{font-size:10px;color:var(--text-3);white-space:nowrap}
+  .qbar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-sunken);margin-top:12px}
+  .qbar i{display:block;height:100%}
+  .qbar .pass{background:#12B76A}
+  .qbar .fail{background:#F04438}
+  .qbar .blocked{background:#F79009}
+  .qlegend{display:flex;gap:14px;margin-top:7px;font-size:10.5px;color:var(--text-3);flex-wrap:wrap}
+  .qlegend b{color:var(--text-2);font-weight:600;font-variant-numeric:tabular-nums}
+  .qplan-row{display:grid;grid-template-columns:minmax(0,1fr) 84px 44px;gap:8px;align-items:center;padding:7px 0;border-top:1px solid #F2F4F7}
+  .qplan-row:first-child{border-top:0;padding-top:0}
+  .qpn{font-size:12px;color:var(--text);font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qpb{height:6px;border-radius:3px;background:#EAECF0;overflow:hidden}
+  .qpb i{display:block;height:100%;background:var(--primary);border-radius:3px}
+  .qpp{font-size:11px;color:var(--text-2);text-align:right;font-variant-numeric:tabular-nums}
+  .qmem{display:flex;flex-direction:column;gap:5px;margin-top:10px;padding-top:9px;border-top:1px solid #F2F4F7}
+  .qmem-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:8px;font-size:11.5px;color:var(--text-2);align-items:center}
+  .qmem-row b{color:var(--text);font-weight:600}
+  .qmem-empty{margin:8px 0 0;font-size:11.5px;color:var(--text-3)}
+  .dtest{margin-top:10px;padding:8px 10px;background:var(--surface-sunken);border-radius:7px;font-size:11px;color:var(--text-2);line-height:1.65}
+  .dtest b{color:var(--text);font-weight:600}
+  .tstat{font-size:11.5px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tstat b{color:var(--text);font-weight:600}
+
+  /* 双流转（需求 / 工作项） */
+  .flow-stack{padding:12px 16px 2px}
+  .flow-row{display:flex;align-items:stretch;gap:10px;min-width:0}
+  .flow-row+.flow-row{border-top:1px dashed var(--border);margin-top:8px;padding-top:10px}
+  .flow-side{width:56px;flex:0 0 56px;display:flex;flex-direction:column;justify-content:center;gap:1px}
+  .flow-side b{font-size:12.5px;font-weight:650;color:var(--text)}
+  .flow-side span{font-size:9.5px;color:var(--text-3);line-height:1.35}
+  .type-strip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 16px 0;font-size:10.5px;color:var(--text-3)}
+  .type-strip .tl{font-weight:600;color:var(--text-2)}
+  .type-chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-2);font-size:10.5px}
+  .type-chip b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* 完成构成 */
+  .stackbar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-sunken);margin:12px 16px 0}
+  .stackbar i{display:block;height:100%}
+  .stackbar .s1{background:var(--primary)}
+  .stackbar .s2{background:var(--plum)}
+  .stackbar .s3{background:var(--danger)}
+  .stack-legend{display:flex;gap:14px;margin:7px 16px 0;font-size:10.5px;color:var(--text-3);flex-wrap:wrap}
+  .stack-legend b{color:var(--text-2);font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* 发布计划达成 */
+  .plan-kpis{display:grid;grid-template-columns:repeat(4,1fr);margin:12px 16px 4px;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .plan-kpis>div{padding:8px 10px;border-left:1px solid var(--border);min-width:0}
+  .plan-kpis>div:first-child{border-left:0}
+  .plan-kpis b{display:block;font-size:18px;font-weight:650;line-height:1.25;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .plan-kpis span{font-size:10px;color:var(--text-3);white-space:nowrap}
+
+  /* 经手 */
+  .hand{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap;margin:10px 16px 0;padding:8px 11px;background:#FAFBFC;border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-3)}
+  .hand .hl{font-weight:600;color:var(--text-2)}
+  .hand b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+  .dhand{margin-top:10px;padding:8px 10px;background:var(--surface-sunken);border-radius:7px;font-size:11px;color:var(--text-2);line-height:1.7}
+  .dhand b{color:var(--text);font-weight:600}
+
+  /* 表格 */
+  .tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  .tbl th{height:34px;background:var(--tbl-head,#F9FAFB);border-bottom:1px solid var(--border);font-size:11px;font-weight:550;color:var(--text-3);text-align:left;padding:0 10px;white-space:nowrap}
+  .tbl td{height:46px;border-bottom:1px solid #F2F4F7;padding:0 10px;color:var(--text-2);font-size:13px;vertical-align:middle}
+  .tbl tbody tr:last-child td{border-bottom:0}
+  .tbl tfoot td{background:#FAFBFC;border-top:1px solid var(--border);border-bottom:0;height:40px;font-weight:600;color:var(--text);font-size:12px}
+  .tbl .num{text-align:right}
+  .tbl .th-sub{font-size:9.5px;color:var(--text-3);font-weight:400;display:block;line-height:1.2}
+  .member-tbl tbody tr{cursor:pointer}
+  .member-tbl tbody tr:hover{background:#FAFBFC}
+  .member-tbl tbody tr:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+  .who{display:flex;align-items:center;gap:8px;min-width:0}
+  .who>span:last-child{display:flex;flex-direction:column;min-width:0}
+  .av{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;font-size:10.5px;font-weight:650;color:#fff;flex:0 0 auto}
+  .av1{background:var(--avatar-1,#4762AE)} .av2{background:var(--avatar-2,#1F5D43)} .av3{background:var(--avatar-3,#8E522F)} .av4{background:var(--avatar-4,#91413B)}
+  .av5{background:var(--avatar-5,#6F60B0)} .av6{background:var(--avatar-6,#235953)} .av7{background:var(--avatar-7,#843965)} .av8{background:var(--avatar-8,#465468)}
+  .who .wn{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .who .wr{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .load{display:flex;align-items:center;gap:6px;min-width:108px}
+  .load .lb{width:52px;height:4px;background:#EAECF0;border-radius:2px;overflow:hidden;flex:0 0 52px}
+  .load .lb i{display:block;height:100%;background:var(--primary);border-radius:2px}
+  .load .pct{font-size:11px;color:var(--text-2);white-space:nowrap}
+  .load.over .lb i{background:var(--danger)}
+  .load.over .pct{color:var(--danger-fg);font-weight:600}
+  .load.near .lb i{background:var(--warning)}
+  .load.near .pct{color:var(--warning-fg);font-weight:600}
+  .load.none .pct{color:var(--warning-fg)}
+  .load.none .lb i{width:0 !important}
+  .danger-n{color:var(--danger-fg);font-weight:600}
+  .warn-n{color:var(--warning-fg);font-weight:600}
+  .muted{color:var(--text-3)}
+  .chev{width:13px;height:13px;color:var(--text-3)}
+  tr[hidden]{display:none}
+  .tbl-note{display:flex;align-items:center;gap:6px;padding:0 16px 12px;font-size:10.5px;color:var(--text-3)}
+  .tbl-note .ico{width:12px;height:12px}
+
+  /* 项目表 */
+  .proj-name{font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:7px}
+  .proj-code{font-size:9.5px;font-weight:600;color:var(--text-3);background:var(--surface-sunken);border-radius:3px;padding:1px 4px}
+  .flow-mini{font-size:11.5px;color:var(--text-2);white-space:nowrap}
+  .flow-mini b{font-size:12.5px;color:var(--text);font-weight:600;margin-right:2px}
+  .flow-mini .l{color:var(--text-3);margin:0 4px 0 0}
+  .flow-mini .sep{color:var(--border-strong);margin:0 5px}
+
+  /* 风险 */
+  .risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 16px 4px}
+  .risk{text-align:left;border:1px solid var(--border);border-left:3px solid var(--border-strong);border-radius:8px;padding:8px 10px;background:var(--surface);cursor:pointer;min-width:0}
+  .risk:hover{background:#FAFBFC}
+  .risk b{font-size:19px;font-weight:650;margin-right:5px;font-variant-numeric:tabular-nums}
+  .risk .rl{font-size:11.5px;color:var(--text-2);white-space:nowrap}
+  .risk small{display:block;font-size:10.5px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .risk.danger{border-left-color:var(--danger)}
+  .risk.danger b{color:var(--danger-fg)}
+  .risk.warn{border-left-color:var(--warning)}
+  .risk.warn b{color:var(--warning-fg)}
+  .next{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;margin:8px 16px 0;padding:8px 11px;background:#FAFBFC;border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-2)}
+  .next .nt{font-size:10.5px;color:var(--text-3);font-weight:600}
+  .next b{font-size:12.5px;color:var(--text);font-variant-numeric:tabular-nums}
+
+  /* 个人视图 */
+  .me-kpis{display:grid;grid-template-columns:repeat(6,1fr);margin:12px 16px 0;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .me-kpis>div{padding:11px 13px;border-left:1px solid var(--border);min-width:0}
+  .me-kpis>div:first-child{border-left:0}
+  .me-kpis .kl{font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .me-kpis .kl .ico{width:11px;height:11px}
+  .me-kpis b{display:block;font-size:22px;font-weight:650;line-height:1.2;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .me-kpis b small{font-size:10.5px;font-weight:500;color:var(--text-3);margin-left:2px}
+  .me-kpis .kn{font-size:10px;color:var(--text-3);white-space:nowrap}
+  .me-kpis .snap{background:#FAFBFC}
+  .snap-tag{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;background:var(--surface-sunken);color:var(--text-3);font-size:9px;font-weight:500}
+  .item-list{display:flex;flex-direction:column}
+  .item{display:grid;grid-template-columns:18px minmax(0,1fr) auto auto auto auto;gap:9px;align-items:center;padding:9px 16px;border-top:1px solid #F2F4F7;min-width:0}
+  .item:first-child{border-top:0}
+  .item:hover{background:#FAFBFC}
+  .item .ic{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--success-soft);color:var(--success-fg);flex:0 0 auto}
+  .item .ic .ico{width:11px;height:11px}
+  .item .dot{width:7px;height:7px;border-radius:50%;background:var(--primary);margin-left:5px;flex:0 0 auto}
+  .item .dot.test{background:var(--plum)}
+  .item .dot.todo{background:var(--border-strong)}
+  .item .im{min-width:0}
+  .item .im b{display:block;font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .im span{display:block;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .im .ty{display:inline-block;margin-right:5px;padding:0 4px;height:14px;line-height:14px;border-radius:3px;background:var(--surface-sunken);color:var(--text-3);font-size:9px;font-style:normal;vertical-align:1px}
+  .item .h{font-size:11px;color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .item .d{font-size:10.5px;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .item .prog{width:56px;height:4px;background:#EAECF0;border-radius:2px;overflow:hidden;flex:0 0 auto}
+  .item .prog i{display:block;height:100%;background:var(--primary)}
+  .item.open{grid-template-columns:8px minmax(0,1fr) auto auto}
+  .item .date-warn{color:var(--danger-fg);font-weight:600}
+  .list-foot{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-top:1px solid var(--border);background:#FAFBFC;font-size:11px;color:var(--text-3)}
+  .subhead{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 4px;font-size:11px;color:var(--text-3);font-weight:600}
+  .subhead span{font-weight:400}
+  .dist{padding:0 16px}
+  .dist-row{display:grid;grid-template-columns:88px minmax(0,1fr) 48px;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--text-2)}
+  .dist-row .dbar{height:6px;border-radius:3px;background:var(--primary-soft);overflow:hidden}
+  .dist-row .dbar i{display:block;height:100%;background:var(--primary);border-radius:3px}
+  .dist-row .dv{text-align:right;font-variant-numeric:tabular-nums;color:var(--text-2)}
+  .demand-list{display:flex;flex-direction:column}
+  .demand{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:9px 16px;border-top:1px solid #F2F4F7}
+  .demand:first-child{border-top:0}
+  .demand:hover{background:#FAFBFC}
+  .demand .dm{min-width:0}
+  .demand .dm b{display:block;font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .demand .dm span{display:block;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .demand .dd{font-size:10.5px;color:var(--text-3);white-space:nowrap}
+
+  /* 空 / 错 */
+  .bigstate{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    padding:52px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-top:12px;box-shadow:var(--shadow-xs)}
+  .bigstate .bico{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-3);margin-bottom:12px}
+  .bigstate .bico .ico{width:20px;height:20px}
+  .bigstate h3{margin:0;font-size:14px;font-weight:600}
+  .bigstate p{margin:6px 0 0;font-size:12px;color:var(--text-3);max-width:460px;line-height:1.6}
+  .bigstate .bact{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:center}
+  .bigstate.err .bico{background:var(--danger-soft);color:var(--danger-fg)}
+  .bigstate .err-meta{margin-top:10px;font-size:10.5px;color:var(--text-3);font-family:var(--font-mono)}
+
+  /* 抽屉 */
+  .drawer-overlay{position:fixed;inset:0;background:rgba(16,24,40,.32);z-index:200;display:flex;justify-content:flex-end}
+  .drawer{width:560px;max-width:94vw;height:100%;background:var(--surface);box-shadow:var(--shadow-xl);display:flex;flex-direction:column}
+  .dhead{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);flex:0 0 auto}
+  .dhead .av{width:34px;height:34px;font-size:13px}
+  .dhead h3{margin:0;font-size:15px;font-weight:650;line-height:1.25}
+  .dhead p{margin:1px 0 0;font-size:11px;color:var(--text-3)}
+  .dhead .icon-btn{margin-left:auto}
+  .dbody{overflow:auto;padding:14px 16px 20px;flex:1}
+  .dweek{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-2);margin-bottom:10px}
+  .dkpis{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .dkpis>div{padding:8px 9px;border-left:1px solid var(--border);min-width:0}
+  .dkpis>div:first-child{border-left:0}
+  .dkpis b{display:block;font-size:19px;font-weight:650;line-height:1.2;font-variant-numeric:tabular-nums}
+  .dkpis span{font-size:9.5px;color:var(--text-3);white-space:nowrap}
+  .callout{margin-top:10px;padding:9px 11px;border-radius:8px;background:var(--primary-soft);border:1px solid var(--primary-border);font-size:11.5px;color:var(--text-2);line-height:1.5}
+  .callout.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+  .callout.danger{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg)}
+  .dsec{display:flex;align-items:center;gap:8px;margin:16px 0 2px;font-size:12px;font-weight:600;color:var(--text)}
+  .dsec span{font-size:10.5px;font-weight:400;color:var(--text-3)}
+  .dproj{margin-top:10px;font-size:11px;color:var(--text-3)}
+  .dfoot{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface)}
+  .dfoot .btn.primary{margin-left:auto}
+  .dnote{margin-top:12px;font-size:10.5px;color:var(--text-3);line-height:1.5}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#101828;color:#fff;font-size:12px;padding:9px 14px;border-radius:8px;box-shadow:var(--shadow-lg);z-index:400;max-width:80vw}
+  .page-foot{display:flex;align-items:center;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-3);flex-wrap:wrap}
+  .page-foot .ico{width:12px;height:12px}
+
+  /* 本周统计矩阵 */
+  .stat-tbl{table-layout:fixed}
+  .stat-tbl th{padding-top:10px;padding-bottom:8px}
+  .stat-tbl td{height:auto;padding:13px 10px;vertical-align:top;line-height:1.45;border-bottom:1px solid #F2F4F7}
+  .stat-tbl tbody tr:last-child td{border-bottom:0}
+  .stat-tbl .obj b{display:block;font-size:13.5px;font-weight:650;color:var(--text)}
+  .stat-tbl .obj span{display:block;font-size:10px;color:var(--text-3);line-height:1.4;margin-top:1px}
+  .stat-tbl .big{display:block;font-size:23px;font-weight:650;line-height:1.15;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap}
+  .stat-tbl .big em{font-style:normal;font-size:10.5px;font-weight:500;color:var(--text-3);margin-left:5px;letter-spacing:0}
+  .stat-tbl .big em.up{color:var(--success-fg)}
+  .stat-tbl .big em.down{color:var(--text-3)}
+  .stat-tbl .sub{display:block;font-size:10.5px;color:var(--text-3);margin:2px 0 5px;line-height:1.5}
+  .stat-tbl .pair{display:inline-flex;align-items:baseline;gap:4px;font-size:11px;color:var(--text-2);margin:0 12px 2px 0;white-space:nowrap}
+  .stat-tbl .pair b{font-size:13.5px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums}
+  .stat-tbl .pair.ok b{color:var(--success-fg)}
+  .stat-tbl .pair.warn b{color:var(--warning-fg)}
+  .stat-tbl .pair .muted{font-size:10px;color:var(--text-3)}
+  .stat-sub{border:0;background:none;padding:0;font:inherit;color:var(--text-2);cursor:pointer;border-bottom:1px dashed var(--border-strong);border-radius:0;text-align:left}
+  .stat-sub:hover{color:var(--primary);border-bottom-color:currentColor}
+  .stat-sub::after{content:"";width:4px;height:4px;border-right:1.2px solid currentColor;border-bottom:1.2px solid currentColor;transform:rotate(45deg);margin-left:5px;opacity:.45;transition:transform .15s}
+  .stat-sub[aria-expanded=true]{color:var(--primary);border-bottom-color:currentColor}
+  .stat-sub[aria-expanded=true]::after{transform:rotate(-135deg);opacity:.9}
+  .stat-big{border:0;background:none;padding:0;display:block;text-align:left;cursor:pointer}
+  .stat-big .big{display:inline-block;border-bottom:1px dashed var(--border-strong);padding-bottom:1px}
+  .stat-big:hover .big{color:var(--primary);border-bottom-color:currentColor}
+  .stat-big[aria-expanded=true] .big{color:var(--primary);border-bottom-color:currentColor}
+  .stat-tbl tr.stat-detail{background:var(--surface-sunken)}
+  .stat-tbl tr.stat-detail>td{padding:0;border-bottom:1px solid var(--border);border-top:1px dashed var(--border)}
+  .sd{padding:11px 16px 13px}
+  .sd-head{display:flex;align-items:flex-start;gap:12px}
+  .sd-title{min-width:0}
+  .sd-title b{font-size:12.5px;font-weight:650;color:var(--text)}
+  .sd-title span{display:block;font-size:10.5px;color:var(--text-3);line-height:1.5;margin-top:1px}
+  .sd-actions{margin-left:auto;display:flex;align-items:center;gap:12px;flex:0 0 auto}
+  .sd-close{border:0;background:none;padding:0;font-size:11px;color:var(--text-3);cursor:pointer}
+  .sd-close:hover{color:var(--text)}
+  .sd-list{list-style:none;margin:7px 0 0;padding:0}
+  .sd-list li{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);cursor:pointer}
+  .sd-list li:first-child{border-top:0}
+  .sd-list li:hover .sd-main b{color:var(--primary-fg)}
+  .sd-ty{font-size:9.5px;line-height:1;padding:3px 5px;border-radius:4px;text-align:center;background:var(--surface);border:1px solid var(--border);color:var(--text-2);white-space:nowrap}
+  .sd-ty.dem{background:var(--surface-sunken);border-color:var(--border-strong);color:var(--text-2)}
+  .sd-ty.story{background:var(--plum-soft);border-color:var(--plum-border);color:var(--plum-fg)}
+  .sd-ty.task{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+  .sd-ty.bug{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg)}
+  .sd-ty.doc{background:var(--success-soft);border-color:#C7EED7;color:var(--success-fg)}
+  .sd-ty.case{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+  .sd-main{min-width:0}
+  .sd-main b{display:block;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sd-main span{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sd-list time{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .sd-note{margin:7px 0 0;font-size:10.5px;color:var(--text-3)}
+  .stat-foot{margin:4px 16px 0;padding-top:10px;border-top:1px dashed var(--border)}
+  .stat-foot .days{margin-left:0;margin-right:0}
+  .stat-mini{display:flex;align-items:center;flex-wrap:wrap;gap:6px 18px;margin:12px 16px 0;font-size:11px;color:var(--text-3)}
+  .stat-mini b{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums;margin-left:3px}
+  .stat-mini em{font-style:normal;font-size:10px;color:var(--text-3);margin-left:2px}
+  .queue{display:grid;grid-template-columns:repeat(4,1fr);margin:12px 16px 0;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .queue>div{padding:10px 12px;border-left:1px solid var(--border);min-width:0}
+  .queue>div:first-child{border-left:0}
+  .queue b{display:block;font-size:20px;font-weight:650;line-height:1.2;font-variant-numeric:tabular-nums}
+  .queue span{font-size:10.5px;color:var(--text-3);white-space:nowrap}
+
+  @media (max-width:1100px){
+    .content{padding:16px 16px 36px}
+    .grid2{grid-template-columns:1fr}
+    .scopebar-right{display:none}
+    .flow-row{flex-direction:column;gap:8px}
+    .flow-side{width:auto;flex:auto;flex-direction:row;align-items:center;gap:8px}
+    .flow-main{flex-wrap:wrap}
+    .fnode{flex:1 1 30%}
+    .flow-exit{width:auto;flex:auto;flex-direction:row;border-left:0;border-top:1px dashed var(--border);padding:8px 0 0}
+    .exit-node{flex:1}
+    .me-kpis{grid-template-columns:repeat(3,1fr)}
+    .me-kpis>div:nth-child(4){border-left:0}
+  }
+  @media (max-width:720px){
+    .sidebar{display:none}
+    .topbar{height:48px;flex-basis:48px;padding:0 12px}
+    .tb-search{display:none}
+    .content{padding:14px 12px 30px}
+    .h1{font-size:18px}
+    .phead{gap:10px;flex-wrap:wrap}
+    .phead-act{width:100%;margin-left:0}
+    .phead-act .btn{flex:1}
+    .brief{align-items:flex-start;flex-wrap:wrap}
+    .brief .txt{flex:1 1 200px}
+    .brief-meta{margin-left:0;flex-basis:100%;padding-left:34px}
+    .card-head{flex-wrap:wrap;min-height:44px;padding:8px 12px;gap:2px 8px}
+    .card-head .hint{flex-basis:100%;order:3;white-space:normal;line-height:1.5}
+    .card-head .hint::before{content:none}
+    .card-act{margin-left:auto}
+    .flow-main{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .farrow{display:none}
+    .fnode{flex:auto}
+    .kpis{grid-template-columns:1fr 1fr}
+    .kpis>div:nth-child(3){border-left:0;border-top:1px solid var(--border)}
+    .kpis>div:nth-child(4){border-top:1px solid var(--border)}
+    .me-kpis{grid-template-columns:1fr 1fr}
+    .me-kpis>div:nth-child(odd){border-left:0}
+    .me-kpis>div:nth-child(4){border-left:1px solid var(--border)}
+    .me-kpis>div:nth-child(n+3){border-top:1px solid var(--border)}
+    .member-tbl{table-layout:auto}
+    .member-tbl col{width:auto!important}
+    .member-tbl th:nth-child(2),.member-tbl td:nth-child(2),
+    .member-tbl th:nth-child(3),.member-tbl td:nth-child(3),
+    .member-tbl th:nth-child(5),.member-tbl td:nth-child(5),
+    .member-tbl th:nth-child(9),.member-tbl td:nth-child(9),
+    .member-tbl th:nth-child(10),.member-tbl td:nth-child(10),
+    .member-tbl th:nth-child(11),.member-tbl td:nth-child(11),
+    .member-tbl th:nth-child(12),.member-tbl td:nth-child(12){display:none}
+    .member-tbl .load .lb{width:40px}
+    .stat-tbl thead{display:none}
+    .stat-tbl,.stat-tbl tbody{display:block}
+    .stat-tbl tr{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:11px 12px;border-top:1px solid var(--border)}
+    .stat-tbl tr:first-child{border-top:0}
+    .stat-tbl td{display:block;padding:0;border:0}
+    .stat-tbl td:first-child{grid-column:1/-1}
+    .stat-tbl td:not(:first-child)::before{display:block;font-size:9.5px;color:var(--text-3);margin-bottom:1px}
+    .stat-tbl td:nth-child(2)::before{content:"新增"}
+    .stat-tbl td:nth-child(3)::before{content:"流转"}
+    .stat-tbl td:nth-child(4)::before{content:"完成"}
+    .stat-tbl td:nth-child(5)::before{content:"退出 / 异常"}
+    .stat-tbl .big{font-size:20px}
+    .stat-tbl .pair{margin-right:8px}
+    .stat-tbl tr.stat-detail{display:block;padding:0;border-top:0}
+    .stat-tbl tr.stat-detail>td{display:block;grid-column:1/-1;padding:0}
+    .sd{padding:10px 12px 12px}
+    .sd-head{flex-wrap:wrap;gap:6px 12px}
+    .sd-actions{width:100%;margin-left:0;justify-content:flex-end}
+    .sd-list li{grid-template-columns:auto minmax(0,1fr);gap:5px 8px;padding:8px 0}
+    .sd-list time{grid-column:2;margin-top:-1px}
+    .sd-main b,.sd-main span{white-space:normal}
+    .queue{grid-template-columns:1fr 1fr}
+    .queue>div:nth-child(3){border-left:0;border-top:1px solid var(--border)}
+    .queue>div:nth-child(4){border-top:1px solid var(--border)}
+    .qgrid{grid-template-columns:1fr}
+    .qcol+.qcol{border-left:0;border-top:1px solid var(--border)}
+    .qkpis,.qkpis.six{grid-template-columns:1fr 1fr;margin:10px 16px 0}
+    .qkpis>div:nth-child(3),.qkpis>div:nth-child(5){border-left:0;border-top:1px solid var(--border)}
+    .qkpis>div:nth-child(4),.qkpis>div:nth-child(6){border-top:1px solid var(--border)}
+    .plan-kpis{grid-template-columns:1fr 1fr}
+    .plan-kpis>div:nth-child(3){border-left:0;border-top:1px solid var(--border)}
+    .plan-kpis>div:nth-child(4){border-top:1px solid var(--border)}
+    .hand{gap:4px 12px}
+    .proj-tbl{table-layout:auto}
+    .proj-tbl col{width:auto!important}
+    .proj-tbl th:nth-child(3),.proj-tbl td:nth-child(3),
+    .proj-tbl th:nth-child(4),.proj-tbl td:nth-child(4){display:none}
+    .tbl th,.tbl td{padding-left:7px;padding-right:7px}
+    .drawer{width:100%;max-width:100vw}
+    .risk-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 侧栏 -->
+  <aside class="sidebar" aria-label="主导航">
+    <div class="brand"><span class="brand-mark">沙</span><span>沙漏</span><span class="brand-tag">Hourglass</span></div>
+    <div class="space-pick">
+      <span class="savatar">运</span>
+      <div><div class="sname">运营研发中心</div><div class="smeta">空间 · 8 位成员</div></div>
+      <svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg>
+    </div>
+    <nav class="nav">
+      <div class="nav-cap">工作</div>
+      <a class="nav-item" href="#">
+        <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="13" rx="2.4"/><path d="M6.4 2.8v3M13.6 2.8v3M3 8h14"/><path d="m7 12 1.6 1.6L11.8 10"/></svg>
+        <span>我的工作</span>
+      </a>
+      <a class="nav-item active" aria-current="page" href="#">
+        <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 15.6 7.4 9l3.4 3 5.6-8.4"/><path d="M2.6 17.4h14.8"/></svg>
+        <span>周回顾</span><span class="nav-new">新</span>
+      </a>
+      <div class="nav-cap">项目</div>
+      <a class="nav-item" href="#">
+        <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 6.2h14.4M4.4 6.2V15a1.6 1.6 0 0 0 1.6 1.6h8a1.6 1.6 0 0 0 1.6-1.6V6.2"/><path d="M7 6.2V4.6A1.6 1.6 0 0 1 8.6 3h2.8a1.6 1.6 0 0 1 1.6 1.6v1.6"/></svg>
+        <span>项目与版本</span>
+      </a>
+      <a class="nav-item" href="#">
+        <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="3"/><path d="M2.8 17c.5-3 2-4.5 4.2-4.5s3.7 1.5 4.2 4.5M13 5.2a3 3 0 0 1 0 5.6M14 12.7c2 .4 3 1.8 3.3 4.3"/></svg>
+        <span>成员负载</span>
+      </a>
+      <div class="nav-cap">洞察</div>
+      <a class="nav-item" href="#">
+        <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1.2"/><rect x="11" y="3" width="6" height="6" rx="1.2"/><rect x="3" y="11" width="6" height="6" rx="1.2"/><rect x="11" y="11" width="6" height="6" rx="1.2"/></svg>
+        <span>报表</span>
+      </a>
+    </nav>
+    <div class="side-user"><span class="pav">张</span><span>张启明</span><span class="role">负责人</span></div>
+  </aside>
+
+  <div class="main">
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <div class="crumb">运营研发中心 <span>/</span> <b>周回顾</b></div>
+      <div class="tb-right">
+        <div class="tb-search"><svg class="ico ico-sm" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="5.2"/><path d="m13 13 3.4 3.4"/></svg>搜索 <kbd>⌘K</kbd></div>
+        <button class="tb-btn dot" type="button" data-toast="通知中心（原型未接）" aria-label="通知">
+          <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 8.2a4.6 4.6 0 0 1 9.2 0c0 3.2 1.2 4.4 1.6 4.8H3.8c.4-.4 1.6-1.6 1.6-4.8Z"/><path d="M8 15.2a2.1 2.1 0 0 0 4 0"/></svg>
+        </button>
+        <span class="pav">张</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- 页头 -->
+      <div class="phead">
+        <div>
+          <h1>周回顾 <span class="proto-badge">原型 · 示例数据</span></h1>
+          <div class="sub">运营研发中心 <span class="subdot">·</span> 团队与个人的一周变化 <span class="subdot">·</span> 数据更新于 11-20 09:20</div>
+        </div>
+        <div class="phead-act">
+          <button class="btn" type="button" data-toast="导出 CSV（原型未接接口）">
+            <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v9M6.6 8.6 10 12l3.4-3.4"/><path d="M3.4 15.6h13.2"/></svg>
+            导出
+          </button>
+          <button class="btn primary" type="button" data-toast="已复制周报摘要（示例数据）">
+            <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
+            复制周报
+          </button>
+        </div>
+      </div>
+
+      <!-- 范围 / 周 / 项目 -->
+      <div class="scopebar">
+        <div class="seg" role="tablist" aria-label="回顾范围">
+          <button type="button" role="tab" data-scope="team" aria-selected="true">
+            <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="3"/><path d="M2.8 17c.5-3 2-4.5 4.2-4.5s3.7 1.5 4.2 4.5M13 5.2a3 3 0 0 1 0 5.6M14 12.7c2 .4 3 1.8 3.3 4.3"/></svg>
+            团队
+          </button>
+          <button type="button" role="tab" data-scope="me" aria-selected="false">
+            <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.4" r="3.2"/><path d="M4.4 17c.6-3.3 2.6-5 5.6-5s5 1.7 5.6 5"/></svg>
+            我
+          </button>
+        </div>
+        <div class="weeknav">
+          <button class="icon-btn" type="button" aria-label="上一周" data-toast="上一周：11-02 — 11-08（原型仅演示上周）">
+            <svg class="ico ico-sm" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3 4.6 7l4 4"/></svg>
+          </button>
+          <div class="wk"><b id="weekLabel">上周 · 11-09 — 11-15</b><span>完整自然周 · 周一至周日</span></div>
+          <button class="icon-btn" type="button" aria-label="下一周" disabled>
+            <svg class="ico ico-sm" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3l4 4-4 4"/></svg>
+          </button>
+        </div>
+        <label class="sel">项目
+          <select class="mini-select" aria-label="项目范围">
+            <option>全部项目</option>
+            <option>客户门户</option>
+            <option>订单中心</option>
+            <option>数据看板</option>
+            <option>移动端 App</option>
+          </select>
+        </label>
+        <label class="sel" id="roleWrap">角色
+          <select class="mini-select" id="roleSel" aria-label="成员角色">
+            <option value="all">全部角色</option>
+            <option value="dev">开发</option>
+            <option value="test">测试</option>
+            <option value="pm">产品</option>
+            <option value="design">设计</option>
+            <option value="lead">负责人</option>
+          </select>
+        </label>
+        <span class="scopebar-right">周界按空间时区 · 事件与快照分开统计</span>
+      </div>
+
+      <!-- 结论条：团队 -->
+      <div class="brief" id="briefTeam">
+        <span class="bic"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.8 12 8l5.2.4-4 3.4 1.2 5-4.4-2.7-4.4 2.7 1.2-5-4-3.4L7.9 8 10 2.8Z"/></svg></span>
+        <span class="txt"><strong>上周团队新增 38 个工作项（故事 14 / 任务 15 / 缺陷 9），流转 41 次涉及 31 项，完成 23 个（故事 8 / 任务 8 / 缺陷 7）；需求新增 12、完成 9、发布覆盖 6。</strong> 登记 186.5h，执行用例 128 条、通过率 82%，新增用例 14、修复缺陷 7；文档新增 7、更新 12、发布 5。2 人超载，5 项逾期，1 个发布计划超期。</span>
+        <span class="brief-meta">较前一周 <span class="sep">·</span> 完成 +2 <span class="sep">·</span> 工时 -6.2h</span>
+      </div>
+      <!-- 结论条：个人 -->
+      <div class="brief" id="briefMe" hidden>
+        <span class="bic"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6.4" r="3.2"/><path d="M4.4 17c.6-3.3 2.6-5 5.6-5s5 1.7 5.6 5"/></svg></span>
+        <span class="txt"><strong>上周你完成 4 项（故事 2 / 任务 2）、推进 2 项；此刻手上还有 6 项，其中 2 项本周到期。</strong> 登记 18.0h，评审 5 个需求；新增用例 2、复测 2 条、更新文档 3 次。</span>
+        <span class="brief-meta">张启明 <span class="sep">·</span> 负责人</span>
+      </div>
+
+      <!-- ==================== 团队视图 ==================== -->
+      <div id="teamView">
+        <!-- 本周统计 -->
+        <section class="card" aria-labelledby="statTitle" id="statCard">
+          <div class="card-head">
+            <h2 id="statTitle">本周统计</h2>
+            <span class="hint">11-09 — 11-15 · 新增 / 流转 / 完成，一行一类对象</span>
+            <div class="card-act"><button class="link" type="button" data-toast="导出本周事件明细（原型未接）">导出明细
+              <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+            </button></div>
+          </div>
+          <table class="tbl stat-tbl">
+            <colgroup><col style="width:118"><col style="width:200"><col style="width:310"><col style="width:250"><col></colgroup>
+            <thead><tr><th>对象</th><th>本周新增</th><th>本周流转</th><th>本周完成</th><th>本周退出 / 异常</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="obj"><b>需求</b><span>需求池</span></td>
+                <td><button class="stat-big" type="button" data-detail="dem-created" aria-expanded="false"><span class="big">12 <em class="up">+3</em></span></button><span class="sub">较前一周 · 本周创建</span></td>
+                <td>
+                  <button class="pair stat-sub" type="button" data-detail="dem-passed" aria-expanded="false"><b>8</b> 评审通过</button><button class="pair stat-sub" type="button" data-detail="dem-planned" aria-expanded="false"><b>7</b> 开始排期</button>
+                  <span class="sub">从待评审到已排期；开始不含调期</span>
+                </td>
+                <td>
+                  <button class="pair ok stat-sub" type="button" data-detail="dem-completed" aria-expanded="false"><b>9</b> 完成</button><button class="pair ok stat-sub" type="button" data-detail="dem-released" aria-expanded="false"><b>6</b> 发布覆盖</button>
+                  <span class="sub">完成由证据判定 · 发布 2 次</span>
+                </td>
+                <td>
+                  <button class="pair stat-sub" type="button" data-detail="dem-closed" aria-expanded="false">关闭 <b>2</b></button><button class="pair stat-sub" type="button" data-detail="dem-cancelled" aria-expanded="false">取消 <b>1</b></button>
+                  <span class="sub">关闭含评审不通过与重复</span>
+                </td>
+              </tr>
+              <tr>
+                <td class="obj"><b>工作项</b><span>故事 / 任务 / 缺陷</span></td>
+                <td><button class="stat-big" type="button" data-detail="wi-created" aria-expanded="false"><span class="big">38 <em class="up">+6</em></span></button><span class="sub">故事 14 · 任务 15 · 缺陷 9</span></td>
+                <td>
+                  <span class="big">41 <em>次</em></span>
+                  <button class="pair stat-sub" type="button" data-detail="wi-doing" aria-expanded="false"><b>22</b> 进入处理中</button><button class="pair stat-sub" type="button" data-detail="wi-test" aria-expanded="false"><b>11</b> 提测</button><button class="pair stat-sub" type="button" data-detail="wi-testing" aria-expanded="false"><b>8</b> 进入测试中</button>
+                  <span class="sub">涉及 31 项 · 同一项可连续流转，成员表按项去重</span>
+                </td>
+                <td><button class="stat-big" type="button" data-detail="wi-done" aria-expanded="false"><span class="big">23 <em class="up">+2</em></span></button><span class="sub">故事 8 · 任务 8 · 缺陷 7</span></td>
+                <td><button class="pair stat-sub" type="button" data-detail="wi-cancelled" aria-expanded="false">取消 <b>3</b></button><span class="sub">本周进入已取消</span></td>
+              </tr>
+              <tr>
+                <td class="obj"><b>测试</b><span>用例与缺陷</span></td>
+                <td><button class="stat-big" type="button" data-detail="test-cases" aria-expanded="false"><span class="big">14 <em class="up">+2</em></span></button><span class="sub">新增用例 · 周媛 9 / 李婷 3 / 张启明 2</span><span class="sub">新增缺陷 9 · 失败转出 6 / 手工 3</span></td>
+                <td>
+                  <span class="big">128 <em>条</em></span>
+                  <button class="pair stat-sub" type="button" data-detail="test-passed" aria-expanded="false"><b>105</b> 通过</button><button class="pair warn stat-sub" type="button" data-detail="test-failed" aria-expanded="false"><b>14</b> 失败</button><button class="pair warn stat-sub" type="button" data-detail="test-blocked" aria-expanded="false"><b>9</b> 阻塞</button>
+                  <span class="sub">执行记录 · 3 人参与 · 团队数 = 成员列之和</span>
+                </td>
+                <td><span class="big">82<em>%</em></span><span class="sub">通过率 = 通过 ÷（通过 + 失败 + 阻塞）</span><button class="pair ok stat-sub" type="button" data-detail="test-fixed" aria-expanded="false"><b>7</b> 修复关闭</button></td>
+                <td><button class="pair stat-sub" type="button" data-detail="test-retest" aria-expanded="false">待回归 <b>6</b> <span class="muted">快照</span></button><button class="pair stat-sub" type="button" data-detail="test-skipped" aria-expanded="false">跳过 <b>6</b></button><span class="sub">跳过不计入通过率</span></td>
+              </tr>
+              <tr>
+                <td class="obj"><b>文档</b><span>需求文档</span></td>
+                <td><button class="stat-big" type="button" data-detail="doc-created" aria-expanded="false"><span class="big">7 <em class="up">+2</em></span></button><span class="sub">覆盖 4 个项目</span></td>
+                <td><button class="stat-big" type="button" data-detail="doc-updated" aria-expanded="false"><span class="big">12 <em>次</em></span></button><span class="sub">正文产生新版本</span></td>
+                <td><button class="stat-big" type="button" data-detail="doc-published" aria-expanded="false"><span class="big">5 <em>篇</em></span></button><span class="sub">本周首次发布</span></td>
+                <td><button class="pair stat-sub" type="button" data-detail="doc-draft" aria-expanded="false">草稿积压 <b>3</b> <span class="muted">快照</span></button><span class="sub">超过 7 天未发布</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="stat-foot">
+            <div class="days-head" style="margin-left:0;margin-right:0"><b>完成节奏</b><span>按完成时间 · 周末 0</span></div>
+            <div class="days" aria-label="本周每日完成工作项数">
+              <div class="day"><span class="dc">4</span><span class="dw"><i class="db" style="height:32px"></i></span><span class="dl">一</span></div>
+              <div class="day"><span class="dc">6</span><span class="dw"><i class="db" style="height:47px"></i></span><span class="dl">二</span></div>
+              <div class="day"><span class="dc">3</span><span class="dw"><i class="db" style="height:24px"></i></span><span class="dl">三</span></div>
+              <div class="day"><span class="dc">5</span><span class="dw"><i class="db" style="height:39px"></i></span><span class="dl">四</span></div>
+              <div class="day"><span class="dc">5</span><span class="dw"><i class="db" style="height:39px"></i></span><span class="dl">五</span></div>
+              <div class="day"><span class="dc">0</span><span class="dw"><i class="db zero" style="height:2px"></i></span><span class="dl">六</span></div>
+              <div class="day"><span class="dc">0</span><span class="dw"><i class="db zero" style="height:2px"></i></span><span class="dl">日</span></div>
+            </div>
+          </div>
+          <div class="stat-mini">
+            <span>登记工时 <b>186.5h</b><em>-6.2h</em></span>
+            <span>容量利用 <b>58%</b></span>
+            <span>按期率 <b>87%</b></span>
+            <span>测试计划达成 <b>2 / 3</b></span>
+          </div>
+          <div class="pool">
+            <span class="pool-title">当前快照</span>
+            <span>需求池：待评审 <b>14</b> · 已通过 <b>5</b> · 已排期 <b>22</b> · 待发布 <b>9</b></span>
+            <span>工作项在手 <b>46</b>：进行中 19 / 待测试 11 / 测试中 8 / 待处理 8</span>
+            <span class="pool-note">截至 11-20 09:20 · 不随周切换</span>
+          </div>
+          <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>每行是一种对象，行与行不合计：需求、工作项、用例、文档的数量含义不同。带虚线下划线的数字可点击，就地展开明细，再点收起。新增按创建时间；流转按状态变更日志；完成按进入已完成列且未取消；发布只计成功 + 生产 + 非回滚的全量发布。工作项流转 41 次涉及 31 项——同一项本周可连续进入多个列，成员表按 31 项去重，两者不相等。缺陷新增 9、修复关闭 7 与测试卡同源，不重复计算；待回归、草稿积压是当前快照，不随周切换。</span></p>
+        </section>
+
+        <!-- 完成明细 + 发布 -->
+        <div class="grid2">
+          <section class="card" aria-labelledby="compTitle" id="compCard">
+            <div class="card-head">
+              <h2 id="compTitle">本周完成</h2>
+              <span class="hint">23 项 · 故事 8 / 任务 8 / 缺陷 7</span>
+              <div class="card-act"><button class="link" type="button" data-toast="查看全部 23 项完成记录（原型未接）">全部完成项
+                <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+              </button></div>
+            </div>
+            <div class="item-list">
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>对账导出优化</b><span><i class="ty">故事</i>客户门户 · 陈昊</span></div>
+                <span class="h">12.5h</span><span class="d">11-14</span><span class="tag ok">按期</span><span class="tag blue">已发布</span></div>
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>优惠券叠加</b><span><i class="ty">故事</i>订单中心 · 陈昊</span></div>
+                <span class="h">12.5h</span><span class="d">11-13</span><span class="tag ok">按期</span><span class="tag blue">已发布</span></div>
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>客户标签筛选组件</b><span><i class="ty">任务</i>客户门户 · 王一帆</span></div>
+                <span class="h">6.5h</span><span class="d">11-12</span><span class="tag warn">延期 1 天</span></div>
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>2.4.0 回归用例执行</b><span><i class="ty">任务</i>客户门户 · 周媛</span></div>
+                <span class="h">14.0h</span><span class="d">11-14</span><span class="tag ok">按期</span></div>
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>订单中心 1.8.2 热修</b><span><i class="ty">缺陷</i>订单中心 · 林可</span></div>
+                <span class="h">4.5h</span><span class="d">11-13</span><span class="tag ok">按期</span></div>
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>登录态偶发失效修复</b><span><i class="ty">缺陷</i>客户门户 · 王一帆</span></div>
+                <span class="h">3.0h</span><span class="d">11-11</span><span class="tag ok">按期</span></div>
+            </div>
+            <div class="list-foot"><span>另有 17 项：故事 6 · 任务 6 · 缺陷 5</span><button class="link" type="button" data-toast="查看全部 23 项（原型未接）">查看全部 23 项 →</button></div>
+            <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>「已发布」表示该项所属需求被本周成功 + 生产发布覆盖，共 2 次发布、6 个需求；其余完成项尚未发布。完成 ≠ 发布，完成也不等于交付。工时是登记值，完成耗时另算。</span></p>
+          </section>
+
+          <section class="card" aria-labelledby="releaseTitle">
+            <div class="card-head">
+              <h2 id="releaseTitle">本周发布</h2>
+              <span class="hint">2 次生产发布 · 覆盖 6 个需求</span>
+              <div class="card-act"><button class="link" type="button" data-toast="打开全部发布记录（原型未接）">全部记录
+                <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+              </button></div>
+            </div>
+            <div class="plan-kpis">
+              <div><b>3</b><span>本周发布计划</span></div>
+              <div><b>2</b><span>已完成 · 成功发布</span></div>
+              <div><b class="warn-n">1</b><span>就绪待发 · 超期 1</span></div>
+              <div><b>0</b><span>回滚</span></div>
+            </div>
+            <div class="rel-list">
+              <details class="rel" open>
+                <summary>
+                  <span class="rel-ver">客户门户 <b>2.4.0</b></span>
+                  <span class="tag ok">生产 · 成功</span>
+                  <span class="rel-time">11-14 18:30</span>
+                  <span class="rel-exec">陈昊</span>
+                  <svg class="ico rel-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg>
+                </summary>
+                <div class="rel-body">
+                  <div class="rel-stat"><b>4</b> 个需求 <span class="sep">·</span> <b>15</b> 个工作项 <span class="sep">·</span> 交付说明 DS-20261114-01</div>
+                  <div class="rel-items"><span>对账导出优化</span><span>批量开票</span><span>客户标签</span><span>登录态续期</span></div>
+                </div>
+              </details>
+              <details class="rel" open>
+                <summary>
+                  <span class="rel-ver">订单中心 <b>1.8.2</b></span>
+                  <span class="tag ok">生产 · 成功</span>
+                  <span class="rel-time">11-13 10:20</span>
+                  <span class="rel-exec">林可</span>
+                  <svg class="ico rel-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l3-3.5"/></svg>
+                </summary>
+                <div class="rel-body">
+                  <div class="rel-stat"><b>2</b> 个需求 <span class="sep">·</span> <b>8</b> 个工作项 <span class="sep">·</span> 交付说明 DS-20261113-01</div>
+                  <div class="rel-items"><span>优惠券叠加</span><span>订单导出字段</span></div>
+                </div>
+              </details>
+            </div>
+            <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>只统计成功 + 生产 + 非回滚的全量发布；预发验证、失败重试不计入。计划达成按「计划内已完成 ÷ 本周计划数」计；数据看板 1.8.3 计划 11-14 发布，截至今天仍未发布，计 1 个超期。</span></p>
+          </section>
+        </div>
+
+        <!-- 测试与质量 -->
+        <section class="card" aria-labelledby="qualityTitle" id="qualityCard">
+          <div class="card-head">
+            <h2 id="qualityTitle">测试与质量</h2>
+            <span class="hint">测试工时 42.0h · 3 人参与 · 1 个计划超期</span>
+            <div class="card-act"><button class="link" type="button" data-toast="打开测试报告（原型未接）">测试报告
+              <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+            </button></div>
+          </div>
+          <div class="qkpis six">
+            <div><b>128</b><span>执行用例</span></div>
+            <div><b>82%</b><span>通过率</span></div>
+            <div><b>14</b><span>新增用例</span></div>
+            <div><b>9</b><span>发现缺陷</span></div>
+            <div><b>7</b><span>修复关闭</span></div>
+            <div><b>6</b><span>待回归</span></div>
+          </div>
+          <div class="qbar" role="img" aria-label="执行结果：通过 105、失败 14、阻塞 9">
+            <i class="pass" style="width:82%"></i><i class="fail" style="width:11%"></i><i class="blocked" style="width:7%"></i>
+          </div>
+          <div class="qlegend">
+            <span>通过 <b>105</b></span><span>失败 <b>14</b></span><span>阻塞 <b>9</b></span><span>跳过 <b>6</b> · 不计入通过率</span>
+          </div>
+          <div class="qgrid">
+            <div class="qcol">
+              <div class="subhead">测试计划 <span>3 个 · 本周开展 2 个 · 超期 1</span></div>
+              <div class="qplan-row">
+                <div><div class="qpn">客户门户 2.4.1 回归</div><span class="qpp" style="display:block;text-align:left;font-size:10px;color:var(--warning-fg)">执行中 · 截止 11-18 · 超期 2 天</span></div>
+                <span class="qpb" aria-label="进度 68%"><i style="width:68%"></i></span><span class="qpp">68%</span>
+              </div>
+              <div class="qplan-row">
+                <div><div class="qpn">订单中心 1.8.3 冒烟</div><span class="qpp" style="display:block;text-align:left;font-size:10px;color:var(--text-3)">已完成 · 11-13 · 24/24</span></div>
+                <span class="qpb" aria-label="进度 100%"><i style="width:100%"></i></span><span class="qpp">100%</span>
+              </div>
+              <div class="qplan-row">
+                <div><div class="qpn">移动端 2.0 预演</div><span class="qpp" style="display:block;text-align:left;font-size:10px;color:var(--text-3)">已完成 · 11-15 · 18/18</span></div>
+                <span class="qpb" aria-label="进度 100%"><i style="width:100%"></i></span><span class="qpp">100%</span>
+              </div>
+              <div class="qlegend" style="margin-top:10px">
+                <span>缺陷 P0 <b>1</b></span><span>P1 <b>3</b></span><span>P2 <b>5</b></span><span>跳过 <b>6</b> 单列</span>
+              </div>
+            </div>
+            <div class="qcol">
+              <div class="subhead">按人 <span>执行 / 通过率 / 新增 / 缺陷</span></div>
+              <div class="qmem" id="qmem">
+                <div class="qmem-row" data-role="test"><b>周媛</b><span>测试 · 客户门户</span><span class="tstat">86 执行 · 84% · 新 9 · 缺陷 6</span></div>
+                <div class="qmem-row" data-role="pm"><b>李婷</b><span>产品 · 兼测试</span><span class="tstat">24 执行 · 83% · 新 3 · 缺陷 2</span></div>
+                <div class="qmem-row" data-role="lead"><b>张启明</b><span>负责人 · 兼测试</span><span class="tstat">18 执行 · 72% · 新 2 · 缺陷 1</span></div>
+                <p class="qmem-empty" id="qmemEmpty" hidden>该角色本周没有执行用例，团队用例数不变。</p>
+              </div>
+              <div class="qlegend" style="margin-top:8px">
+                <span>新增用例合计 <b>14</b></span><span>执行 <b>128</b></span><span>3 人参与</span>
+              </div>
+            </div>
+          </div>
+          <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>需求主状态没有测试阶段：测试发生在工作项（待测试 / 测试中）与用例执行，因此单独成卡。执行、新增用例、发现 / 修复缺陷是本周事件；待回归是当前快照。通过率 = 通过 ÷（通过 + 失败 + 阻塞），跳过不计。缺陷按 item_type=bug 新建 / 关闭统计，修复关闭 7 已包含在工作项完成 23 内。计划「超期」= 已过计划结束日且未完成；SQL 92 前的存量用例没有创建人，按人记为「未记录」，不计入新增。</span></p>
+        </section>
+
+        <!-- 文档与知识 -->
+        <section class="card" aria-labelledby="docTitle" id="docCard">
+          <div class="card-head">
+            <h2 id="docTitle">文档与知识</h2>
+            <span class="hint">4 个项目 · 12 个需求有文档动作 · 2 人未写</span>
+            <div class="card-act"><button class="link" type="button" data-toast="打开文档中心（原型未接）">文档中心
+              <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+            </button></div>
+          </div>
+          <div class="kpis">
+            <div><b>7</b><span>新增 <em>+2</em></span></div>
+            <div><b>12</b><span>更新</span></div>
+            <div><b>5</b><span>发布</span></div>
+            <div><b>3</b><span>草稿积压 <em>最早 11-04</em></span></div>
+          </div>
+          <div class="qgrid">
+            <div class="qcol">
+              <div class="subhead">按类型 <span>新增 + 更新 19 次</span></div>
+              <div class="dist">
+                <div class="dist-row"><span>产品需求</span><span class="dbar"><i style="width:100%"></i></span><span class="dv">7</span></div>
+                <div class="dist-row"><span>技术方案</span><span class="dbar"><i style="width:71%"></i></span><span class="dv">5</span></div>
+                <div class="dist-row"><span>测试记录</span><span class="dbar"><i style="width:57%"></i></span><span class="dv">4</span></div>
+                <div class="dist-row"><span>会议纪要</span><span class="dbar"><i style="width:43%"></i></span><span class="dv">3</span></div>
+              </div>
+            </div>
+            <div class="qcol">
+              <div class="subhead">贡献成员 <span>19 次 · 6 人</span></div>
+              <div class="qmem" id="docMem">
+                <div class="qmem-row" data-role="dev"><b>王一帆</b><span>前端 · 客户门户</span><span class="tstat">6 次 · 新 2 / 更 4</span></div>
+                <div class="qmem-row" data-role="pm"><b>李婷</b><span>产品 · 兼测试</span><span class="tstat">4 次 · 新 2 / 更 2</span></div>
+                <div class="qmem-row" data-role="lead"><b>张启明</b><span>负责人 · 兼测试</span><span class="tstat">3 次 · 新 1 / 更 2</span></div>
+                <div class="qmem-row" data-role="test"><b>周媛</b><span>测试 · 客户门户</span><span class="tstat">3 次 · 新 1 / 更 2</span></div>
+                <div class="qmem-row" data-role="dev"><b>林可</b><span>后端 · 数据看板</span><span class="tstat">2 次 · 新 1 / 更 1</span></div>
+                <div class="qmem-row" data-role="dev"><b>陈昊</b><span>后端 · 订单中心</span><span class="tstat">1 次 · 新 0 / 更 1</span></div>
+                <p class="qmem-empty" id="docEmpty" hidden>该角色本周没有文档动作，团队文档数不变。</p>
+              </div>
+              <div class="qlegend"><span>未写文档：孙悦、赵子墨</span><span>新增 <b>7</b> · 更新 <b>12</b></span></div>
+            </div>
+          </div>
+          <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>文档指文档中心的需求文档。新增按 created_at，更新按正文产生新版本（历史快照），发布按 published_at；老文档的发布时间在升级时回填为创建时间，首周「发布」可能偏低。按人归属：新增记负责人，更新记保存人；未记录不等于 0。草稿积压 = 超过 7 天仍未发布。</span></p>
+        </section>
+
+        <!-- 成员工作量 -->
+        <section class="card" aria-labelledby="memberTitle">
+          <div class="card-head">
+            <h2 id="memberTitle">成员工作量</h2>
+            <span class="hint" id="memberHint">8 人 · 新增 38 · 完成 23 · 登记 186.5h / 容量 320h</span>
+            <div class="card-act chips" role="group" aria-label="成员筛选">
+              <button class="chip" type="button" data-mfilter="all" aria-pressed="true">全部 <b>8</b></button>
+              <button class="chip" type="button" data-mfilter="over">超载 <b>2</b></button>
+              <button class="chip" type="button" data-mfilter="none">未登记 <b>2</b></button>
+            </div>
+          </div>
+          <table class="tbl member-tbl">
+            <colgroup><col style="width:176"><col style="width:48"><col style="width:48"><col style="width:48"><col style="width:48"><col style="width:76"><col style="width:118"><col style="width:42"><col style="width:42"><col style="width:84"><col style="width:48"><col style="width:22"></colgroup>
+            <thead>
+              <tr>
+                <th>成员</th>
+                <th class="num" title="本周创建的工作项，按创建人归属">新增</th>
+                <th class="num" title="本周首次进入处理中 / 待测试 / 测试中，按项去重">推进</th>
+                <th class="num">完成</th>
+                <th class="num" title="当前快照，不随周切换">在手</th>
+                <th class="num">登记工时</th><th>负载</th><th class="num">逾期</th><th class="num">阻塞</th>
+                <th class="num" title="执行用例 / 发现缺陷；— 表示本周没有测试参与">测试</th>
+                <th class="num" title="本周新增或更新文档的次数">文档</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-member="王一帆" data-load="over" data-role="dev" tabindex="0" title="打开王一帆的周回顾">
+                <td><span class="who"><span class="av av1">王</span><span><span class="wn">王一帆</span><span class="wr">前端 · 客户门户</span></span></span></td>
+                <td class="num">8</td><td class="num">7</td><td class="num">5</td><td class="num">8</td><td class="num">46.0h</td>
+                <td><span class="load over"><span class="lb"><i style="width:100%"></i></span><span class="pct">115%</span></span></td>
+                <td class="num danger-n">1</td><td class="num">0</td><td class="num muted">—</td><td class="num">6</td>
+                <td><svg class="ico chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 8 6l-3.5 3"/></svg></td>
+              </tr>
+              <tr data-member="陈昊" data-load="over" data-role="dev" tabindex="0" title="打开陈昊的周回顾">
+                <td><span class="who"><span class="av av2">陈</span><span><span class="wn">陈昊</span><span class="wr">后端 · 订单中心</span></span></span></td>
+                <td class="num">6</td><td class="num">6</td><td class="num">3</td><td class="num">9</td><td class="num">41.0h</td>
+                <td><span class="load over"><span class="lb"><i style="width:100%"></i></span><span class="pct">103%</span></span></td>
+                <td class="num danger-n">2</td><td class="num danger-n">1</td><td class="num muted">—</td><td class="num">1</td>
+                <td><svg class="ico chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 8 6l-3.5 3"/></svg></td>
+              </tr>
+              <tr data-member="周媛" data-load="near" data-role="test" tabindex="0" title="打开周媛的周回顾">
+                <td><span class="who"><span class="av av3">周</span><span><span class="wn">周媛</span><span class="wr">测试 · 客户门户</span></span></span></td>
+                <td class="num">4</td><td class="num">5</td><td class="num">2</td><td class="num">5</td><td class="num">38.0h</td>
+                <td><span class="load near"><span class="lb"><i style="width:95%"></i></span><span class="pct">95%</span></span></td>
+                <td class="num danger-n">1</td><td class="num danger-n">1</td><td class="num">86 / 6</td><td class="num">3</td>
+                <td><svg class="ico chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 8 6l-3.5 3"/></svg></td>
+              </tr>
+              <tr data-member="李婷" data-load="normal" data-role="pm" tabindex="0" title="打开李婷的周回顾">
+                <td><span class="who"><span class="av av4">李</span><span><span class="wn">李婷</span><span class="wr">产品 · 兼测试</span></span></span></td>
+                <td class="num">6</td><td class="num">4</td><td class="num">3</td><td class="num">7</td><td class="num">34.0h</td>
+                <td><span class="load"><span class="lb"><i style="width:85%"></i></span><span class="pct">85%</span></span></td>
+                <td class="num danger-n">1</td><td class="num">0</td><td class="num">24 / 2</td><td class="num">4</td>
+                <td><svg class="ico chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 8 6l-3.5 3"/></svg></td>
+              </tr>
+              <tr data-member="张启明" data-load="normal" data-role="lead" tabindex="0" title="打开张启明的周回顾">
+                <td><span class="who"><span class="av av5">张</span><span><span class="wn">张启明</span><span class="wr">负责人 · 兼测试</span></span></span></td>
+                <td class="num">3</td><td class="num">2</td><td class="num">4</td><td class="num">6</td><td class="num">18.0h</td>
+                <td><span class="load"><span class="lb"><i style="width:45%"></i></span><span class="pct">45%</span></span></td>
+                <td class="num">0</td><td class="num">0</td><td class="num">18 / 1</td><td class="num">3</td>
+                <td><svg class="ico chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 8 6l-3.5 3"/></svg></td>
+              </tr>
+              <tr data-member="林可" data-load="normal" data-role="dev" tabindex="0" title="打开林可的周回顾">
+                <td><span class="who"><span class="av av6">林</span><span><span class="wn">林可</span><span class="wr">后端 · 数据看板</span></span></span></td>
+                <td class="num">5</td><td class="num">2</td><td class="num">3</td><td class="num">4</td><td class="num">9.5h</td>
+                <td><span class="load"><span class="lb"><i style="width:24%"></i></span><span class="pct">24%</span></span></td>
+                <td class="num">0</td><td class="num">0</td><td class="num muted">—</td><td class="num">2</td>
+                <td><svg class="ico chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 8 6l-3.5 3"/></svg></td>
+              </tr>
+              <tr data-member="孙悦" data-load="none" data-role="dev" tabindex="0" title="打开孙悦的周回顾">
+                <td><span class="who"><span class="av av7">孙</span><span><span class="wn">孙悦</span><span class="wr">前端 · 移动端</span></span></span></td>
+                <td class="num">4</td><td class="num">3</td><td class="num">2</td><td class="num">4</td><td class="num">0h</td>
+                <td><span class="load none"><span class="lb"><i style="width:0%"></i></span><span class="pct">未登记</span></span></td>
+                <td class="num">0</td><td class="num">0</td><td class="num muted">—</td><td class="num">0</td>
+                <td><svg class="ico chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 8 6l-3.5 3"/></svg></td>
+              </tr>
+              <tr data-member="赵子墨" data-load="none" data-role="design" tabindex="0" title="打开赵子墨的周回顾">
+                <td><span class="who"><span class="av av8">赵</span><span><span class="wn">赵子墨</span><span class="wr">设计 · 客户门户</span></span></span></td>
+                <td class="num">2</td><td class="num">2</td><td class="num">1</td><td class="num">3</td><td class="num">0h</td>
+                <td><span class="load none"><span class="lb"><i style="width:0%"></i></span><span class="pct">未登记</span></span></td>
+                <td class="num">0</td><td class="num">0</td><td class="num muted">—</td><td class="num">0</td>
+                <td><svg class="ico chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 8 6l-3.5 3"/></svg></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr><td>合计</td><td class="num" id="tfNew">38</td><td class="num" id="tfStart">31</td><td class="num" id="tfDone">23</td><td class="num" id="tfOpen">46</td><td class="num" id="tfHours">186.5h</td><td><span class="load" id="tfLoad"><span class="lb"><i style="width:58%"></i></span><span class="pct">58%</span></span></td><td class="num danger-n" id="tfOver">5</td><td class="num danger-n" id="tfBlock">2</td><td class="num" id="tfTest">128 / 9</td><td class="num" id="tfDocs">19</td><td></td></tr>
+            </tfoot>
+          </table>
+          <p class="tbl-note"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>新增 = 本周创建的工作项，按创建人归属；推进 = 本周首次进入处理中 / 待测试 / 测试中，按项去重（合计 31）；完成 = 进入已完成列。在手、负载、逾期、阻塞是当前快照。文档 = 本周新增或更新的次数，与文档卡同源。负载 = 本周登记工时 ÷ 容量（5 个工作日 × 8h）；0h 且本周有完成标为「未登记」，不等于空闲。测试列「—」表示本周不参与测试。角色与负载筛选只改成员明细，团队汇总在卡片上方。</span></p>
+        </section>
+
+        <!-- 项目 + 关注 -->
+        <div class="grid2">
+          <section class="card" aria-labelledby="projTitle">
+            <div class="card-head"><h2 id="projTitle">项目推进</h2><span class="hint">按项目汇总本周事件</span>
+              <div class="card-act"><button class="link" type="button" data-toast="打开项目列表（原型未接）">全部项目
+                <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+              </button></div>
+            </div>
+            <table class="tbl proj-tbl">
+              <colgroup><col style="width:160"><col style="width:196"><col style="width:118"><col style="width:78"><col></colgroup>
+              <thead><tr><th>项目</th><th>需求 <span class="th-sub">新增 / 开始 / 完成 / 发布</span></th><th>工作项 <span class="th-sub">新增 / 完成</span></th><th class="num">登记工时</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="proj-name">客户门户 <span class="proj-code">KH</span></span></td>
+                  <td><span class="flow-mini"><b>5</b><span class="l">新</span><span class="sep">·</span><b>3</b><span class="l">始</span><span class="sep">·</span><b>4</b><span class="l">完</span><span class="sep">·</span><b>4</b><span class="l">发</span></span></td>
+                  <td><span class="flow-mini"><b>12</b><span class="l">新</span><span class="sep">·</span><b>9</b><span class="l">完</span></span></td><td class="num">78.0h</td><td><span class="tag ok">2.4.0 已发布</span></td>
+                </tr>
+                <tr>
+                  <td><span class="proj-name">订单中心 <span class="proj-code">DD</span></span></td>
+                  <td><span class="flow-mini"><b>3</b><span class="l">新</span><span class="sep">·</span><b>2</b><span class="l">始</span><span class="sep">·</span><b>3</b><span class="l">完</span><span class="sep">·</span><b>2</b><span class="l">发</span></span></td>
+                  <td><span class="flow-mini"><b>10</b><span class="l">新</span><span class="sep">·</span><b>7</b><span class="l">完</span></span></td><td class="num">52.0h</td><td><span class="tag ok">1.8.2 已发布</span></td>
+                </tr>
+                <tr>
+                  <td><span class="proj-name">数据看板 <span class="proj-code">DB</span></span></td>
+                  <td><span class="flow-mini"><b>3</b><span class="l">新</span><span class="sep">·</span><b>1</b><span class="l">始</span><span class="sep">·</span><b>2</b><span class="l">完</span><span class="sep">·</span><b>0</b><span class="l">发</span></span></td>
+                  <td><span class="flow-mini"><b>11</b><span class="l">新</span><span class="sep">·</span><b>5</b><span class="l">完</span></span></td><td class="num">41.0h</td><td><span class="tag warn">1.8.3 发布超期</span></td>
+                </tr>
+                <tr>
+                  <td><span class="proj-name">移动端 App <span class="proj-code">APP</span></span></td>
+                  <td><span class="flow-mini"><b>1</b><span class="l">新</span><span class="sep">·</span><b>1</b><span class="l">始</span><span class="sep">·</span><b>0</b><span class="l">完</span><span class="sep">·</span><b>0</b><span class="l">发</span></span></td>
+                  <td><span class="flow-mini"><b>5</b><span class="l">新</span><span class="sep">·</span><b>2</b><span class="l">完</span></span></td><td class="num">15.5h</td><td><span class="tag">3 项未排期</span></td>
+                </tr>
+              </tbody>
+              <tfoot><tr><td>合计</td><td><span class="flow-mini"><b>12</b><span class="l">新</span><span class="sep">·</span><b>7</b><span class="l">始</span><span class="sep">·</span><b>9</b><span class="l">完</span><span class="sep">·</span><b>6</b><span class="l">发</span></span></td><td><span class="flow-mini"><b>38</b><span class="l">新</span><span class="sep">·</span><b>23</b><span class="l">完</span></span></td><td class="num">186.5h</td><td></td></tr></tfoot>
+            </table>
+          <p class="tbl-note"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>需求按所属项目归属；工作项新增按创建时的所属项目，完成按完成时的所属项目；工时按工作项所属项目。一个需求跨项目拆分时分别计入。</span></p>
+          </section>
+
+          <section class="card" aria-labelledby="riskTitle">
+            <div class="card-head"><h2 id="riskTitle">需要关注</h2><span class="hint">截至今天 09:20</span></div>
+            <div class="risk-grid">
+              <button class="risk danger" type="button" data-toast="逾期 5 项：打开逾期与阻塞（原型未接）"><b>5</b><span class="rl">逾期未处理</span><small>优惠券叠加 · 逾期 4 天</small></button>
+              <button class="risk warn" type="button" data-toast="阻塞 2 项：打开逾期与阻塞（原型未接）"><b>2</b><span class="rl">阻塞</span><small>对账导出 · 等财务确认 3 天</small></button>
+              <button class="risk warn" type="button" data-toast="超载 2 人：王一帆 115% · 陈昊 103%"><b>2</b><span class="rl">负载超 100%</span><small>王一帆 115% · 陈昊 103%</small></button>
+              <button class="risk" type="button" data-toast="未登记 2 人：孙悦、赵子墨本周有完成"><b>2</b><span class="rl">工时未登记</span><small>孙悦、赵子墨本周有完成</small></button>
+            </div>
+            <div class="next">
+              <span class="nt">下周关注</span>
+              <span>下周到期 <b>12</b></span>
+              <span>P0 在手 <b>3</b></span>
+              <span>发布超期 <b>1</b></span>
+              <span>测试计划超期 <b>1</b></span>
+              <span>7 天无进展 <b>4</b></span>
+            </div>
+            <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>「7 天无进展」= 7 天内无状态变更、无评论、无登记工时；只提示去确认，不自动判定为风险。</span></p>
+          </section>
+        </div>
+      </div>
+
+      <!-- ==================== 个人视图 ==================== -->
+      <div id="meView" hidden>
+        <section class="card" aria-labelledby="meTitle">
+          <div class="card-head"><h2 id="meTitle">我的一周</h2><span class="hint">张启明 · 负责人</span></div>
+          <div class="me-kpis">
+            <div><span class="kl">本周完成</span><b>4<small>项</small></b><span class="kn">含 1 项延期完成</span></div>
+            <div><span class="kl">本周推进</span><b>2<small>项</small></b><span class="kn">首次进入处理列</span></div>
+            <div class="snap"><span class="kl">此刻在手 <span class="snap-tag">快照</span></span><b>6<small>项</small></b><span class="kn">2 项本周到期</span></div>
+            <div><span class="kl">登记工时</span><b>18.0<small>h</small></b><span class="kn">计时 + 补记</span></div>
+            <div><span class="kl">按期率</span><b>75<small>%</small></b><span class="kn">3 / 4 项按期</span></div>
+            <div><span class="kl">评审需求</span><b>5<small>个</small></b><span class="kn">通过 3 · 待评审 1</span></div>
+          </div>
+          <div class="hand">
+            <span class="hl">本周经手</span>
+            <span>新增用例 <b>2</b></span>
+            <span>复测 <b>2</b> 条</span>
+            <span>审阅报告 <b>1</b> 份</span>
+            <span>更新文档 <b>3</b> 次 · 新 1 / 更 2</span>
+            <span>评审需求 <b>5</b> 个</span>
+            <span>发布审核 <b>1</b> 次</span>
+          </div>
+          <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>完成、推进、工时、经手事项是本周事件；在手是此刻快照。完成耗时与登记工时是两回事，列表里分开显示。经手不并入完成：复测、评审、写文档都不改变工作项状态。</span></p>
+        </section>
+
+        <div class="grid2">
+          <section class="card" aria-labelledby="meDoneTitle">
+            <div class="card-head"><h2 id="meDoneTitle">本周完成</h2><span class="hint">4 项 · 登记 16.0h</span>
+              <div class="card-act"><button class="link" type="button" data-toast="查看完成记录（原型未接）">完成记录
+                <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+              </button></div>
+            </div>
+            <div class="item-list">
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>2.4.0 发布检查清单</b><span><i class="ty">任务</i>客户门户 · 需求「对账导出优化」</span></div>
+                <span class="h">3.5h · 3 天</span><span class="d">11-12</span><span class="tag ok">按期</span></div>
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>订单中心优惠券规则评审</b><span><i class="ty">任务</i>订单中心 · 需求「优惠券叠加」</span></div>
+                <span class="h">2.0h · 2 天</span><span class="d">11-13</span><span class="tag warn">延期 1 天</span></div>
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>数据看板权限模型梳理</b><span><i class="ty">故事</i>数据看板 · 需求「报表权限」</span></div>
+                <span class="h">4.0h · 4 天</span><span class="d">11-14</span><span class="tag ok">按期</span></div>
+              <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+                <div class="im"><b>移动端 2.0 版本范围确认</b><span><i class="ty">故事</i>移动端 App · 需求「首页改版」</span></div>
+                <span class="h">6.5h · 5 天</span><span class="d">11-15</span><span class="tag ok">按期</span><span class="tag blue">已发布</span></div>
+            </div>
+            <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>「3.5h」是登记工时；「3 天」是从首次动工到完成的工作日跨度，两者不互相换算。</span></p>
+          </section>
+
+          <section class="card" aria-labelledby="meStartTitle">
+            <div class="card-head"><h2 id="meStartTitle">本周推进</h2><span class="hint">2 项 · 仍在进行中</span></div>
+            <div class="item-list">
+              <div class="item"><span class="dot"></span>
+                <div class="im"><b>客户门户 2.4.1 回归范围</b><span>客户门户 · 需求「对账导出优化」</span></div>
+                <span class="prog" aria-label="进度 40%"><i style="width:40%"></i></span><span class="d">40%</span><span class="tag warn">11-18 到期</span></div>
+              <div class="item"><span class="dot"></span>
+                <div class="im"><b>数据看板指标口径统一</b><span>数据看板 · 需求「报表权限」</span></div>
+                <span class="prog" aria-label="进度 20%"><i style="width:20%"></i></span><span class="d">20%</span><span class="tag">11-20 到期</span></div>
+            </div>
+            <div class="subhead">其他进行中 <span>1 项 · 早期开始</span></div>
+            <div class="item-list">
+              <div class="item"><span class="dot"></span>
+                <div class="im"><b>客户门户 2.4.1 回归执行</b><span>客户门户 · 2 项用例待复测</span></div>
+                <span class="h">2.0h</span><span class="d">11-17 更新</span><span class="tag warn">阻塞</span></div>
+            </div>
+            <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>「推进」= 本周首次进入进行中 / 待测试 / 测试中列；创建但未动工的不算。</span></p>
+          </section>
+        </div>
+
+        <div class="grid2">
+          <section class="card" aria-labelledby="meOpenTitle">
+            <div class="card-head"><h2 id="meOpenTitle">此刻在手</h2><span class="hint">6 项 · 进行中 2 / 待测试 1 / 待处理 3</span></div>
+            <div class="item-list">
+              <div class="item"><span class="dot"></span>
+                <div class="im"><b>客户门户 2.4.1 回归范围</b><span>客户门户 · 进行中 · 负责人 我</span></div>
+                <span class="h">已登记 1.5h</span><span class="d date-warn">11-18 已逾期</span><span class="tag warn">进行中</span></div>
+              <div class="item"><span class="dot"></span>
+                <div class="im"><b>数据看板指标口径统一</b><span>数据看板 · 进行中 · 负责人 我</span></div>
+                <span class="h">已登记 0.5h</span><span class="d">11-20 到期</span><span class="tag warn">进行中</span></div>
+              <div class="item"><span class="dot test"></span>
+                <div class="im"><b>批量开票验收</b><span>客户门户 · 待测试 · 测试负责人 周媛</span></div>
+                <span class="h">—</span><span class="d">11-21 到期</span><span class="tag plum">待测试</span></div>
+              <div class="item"><span class="dot todo"></span>
+                <div class="im"><b>移动端 2.0 立项</b><span>移动端 App · 待处理 · 无截止日期</span></div>
+                <span class="h">—</span><span class="d">11-25 计划</span><span class="tag">待处理</span></div>
+            </div>
+            <div class="list-foot"><span>还有 2 项待处理 · 其中 1 项 P1</span><button class="link" type="button" data-toast="查看全部 6 项（原型未接）">查看全部 6 项 →</button></div>
+          </section>
+
+          <section class="card" aria-labelledby="meHoursTitle">
+            <div class="card-head"><h2 id="meHoursTitle">工时去向</h2><span class="hint">本周 18.0h</span></div>
+            <div class="days-head"><b>每日登记</b><span>计时 + 手工补记</span></div>
+            <div class="days" aria-label="本周每日登记工时">
+              <div class="day"><span class="dc">2.5</span><span class="dw"><i class="db" style="height:26px"></i></span><span class="dl">一</span></div>
+              <div class="day"><span class="dc">4.0</span><span class="dw"><i class="db" style="height:41px"></i></span><span class="dl">二</span></div>
+              <div class="day"><span class="dc">3.5</span><span class="dw"><i class="db" style="height:36px"></i></span><span class="dl">三</span></div>
+              <div class="day"><span class="dc">4.5</span><span class="dw"><i class="db" style="height:46px"></i></span><span class="dl">四</span></div>
+              <div class="day"><span class="dc">3.5</span><span class="dw"><i class="db" style="height:36px"></i></span><span class="dl">五</span></div>
+              <div class="day"><span class="dc">0</span><span class="dw"><i class="db zero" style="height:2px"></i></span><span class="dl">六</span></div>
+              <div class="day"><span class="dc">0</span><span class="dw"><i class="db zero" style="height:2px"></i></span><span class="dl">日</span></div>
+            </div>
+            <div class="subhead">按项目 <span>4 个</span></div>
+            <div class="dist">
+              <div class="dist-row"><span>客户门户</span><span class="dbar"><i style="width:100%"></i></span><span class="dv">7.5h</span></div>
+              <div class="dist-row"><span>数据看板</span><span class="dbar"><i style="width:60%"></i></span><span class="dv">4.5h</span></div>
+              <div class="dist-row"><span>订单中心</span><span class="dbar"><i style="width:47%"></i></span><span class="dv">3.5h</span></div>
+              <div class="dist-row"><span>移动端 App</span><span class="dbar"><i style="width:33%"></i></span><span class="dv">2.5h</span></div>
+            </div>
+            <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>登记工时 = 计时器 + 手工补记，只反映被记录的时间；未登记不等于没投入。</span></p>
+          </section>
+        </div>
+
+        <section class="card" aria-labelledby="meTestTitle">
+          <div class="card-head"><h2 id="meTestTitle">测试与质量 · 我的角色</h2><span class="hint">负责人 · 指标随角色换</span>
+            <div class="card-act"><button class="link" type="button" data-toast="打开测试报告（原型未接）">测试报告
+              <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+            </button></div>
+          </div>
+          <div style="padding:12px 16px 0">
+            <div class="qkpis">
+              <div><b>2</b><span>复测完成</span></div>
+              <div><b>1</b><span>审阅报告</span></div>
+              <div><b>1</b><span>发布审核</span></div>
+              <div><b>2</b><span>遗留缺陷</span></div>
+            </div>
+          </div>
+          <div class="item-list">
+            <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+              <div class="im"><b>客户门户 2.4.1 回归复测</b><span>2 条用例 · 需求「对账导出优化」</span></div>
+              <span class="h">1.0h</span><span class="d">11-14</span><span class="tag ok">已通过</span></div>
+            <div class="item"><span class="dot test"></span>
+              <div class="im"><b>订单中心 1.8.3 冒烟报告</b><span>执行人 周媛 · 24/24 通过</span></div>
+              <span class="h">—</span><span class="d">11-13</span><span class="tag blue">已审阅</span></div>
+            <div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>
+              <div class="im"><b>客户门户 2.4.0 生产发布</b><span>覆盖需求 2 个 · 回滚 0</span></div>
+              <span class="h">—</span><span class="d">11-12</span><span class="tag ok">成功</span></div>
+          </div>
+          <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>同一位置按角色换指标：开发看提测与修复缺陷，测试看执行量 / 发现缺陷 / 待回归，产品看验收与关单，负责人看复测、发布与遗留缺陷。数据源与团队测试卡一致，只做个人过滤。</span></p>
+        </section>
+
+        <div class="grid2 even">
+          <section class="card" aria-labelledby="meCreatedTitle">
+            <div class="card-head"><h2 id="meCreatedTitle">我发起的需求</h2><span class="hint">2 个 · 本周有变化</span></div>
+            <div class="demand-list">
+              <div class="demand"><div class="dm"><b>客户门户 2.4.1 发布范围</b><span>客户门户 · 11-11 提交</span></div><span class="tag blue">已排期</span><span class="dd">11-18 排期</span></div>
+              <div class="demand"><div class="dm"><b>数据看板指标口径统一</b><span>数据看板 · 11-13 提交</span></div><span class="tag">评审中</span><span class="dd">等待 2 天</span></div>
+            </div>
+            <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>按创建人归属；只显示当前空间内、你可见的需求。</span></p>
+          </section>
+
+          <section class="card" aria-labelledby="meReviewTitle">
+            <div class="card-head"><h2 id="meReviewTitle">我评审的需求</h2><span class="hint">5 个 · 本周</span></div>
+            <div class="demand-list">
+              <div class="demand"><div class="dm"><b>优惠券叠加</b><span>订单中心 · 提交人 李婷</span></div><span class="tag ok">已通过</span><span class="dd">11-13</span></div>
+              <div class="demand"><div class="dm"><b>批量开票</b><span>客户门户 · 提交人 李婷</span></div><span class="tag ok">已通过</span><span class="dd">11-12</span></div>
+              <div class="demand"><div class="dm"><b>客户标签</b><span>客户门户 · 提交人 赵子墨</span></div><span class="tag ok">已通过</span><span class="dd">11-12</span></div>
+              <div class="demand"><div class="dm"><b>报表权限</b><span>数据看板 · 提交人 林可</span></div><span class="tag warn">待评审</span><span class="dd">等待 3 天</span></div>
+            </div>
+            <div class="list-foot"><span>另有 1 个评审不通过 · 移动端首页改版</span><button class="link" type="button" data-toast="打开全部评审需求（原型未接）">查看全部 5 个 →</button></div>
+          </section>
+        </div>
+
+        <section class="card" aria-labelledby="meDocTitle" id="meDocCard">
+          <div class="card-head"><h2 id="meDocTitle">我的文档</h2><span class="hint">3 次 · 新增 1 / 更新 2</span>
+            <div class="card-act"><button class="link" type="button" data-toast="打开文档中心（原型未接）">文档中心
+              <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>
+            </button></div>
+          </div>
+          <div class="demand-list">
+            <div class="demand"><div class="dm"><b>客户门户 2.4.1 发布范围说明</b><span>产品需求 · 客户门户 · 随 2.4.0 发布</span></div><span class="tag ok">已发布</span><span class="dd">更新 11-14</span></div>
+            <div class="demand"><div class="dm"><b>数据看板指标口径</b><span>技术方案 · 数据看板 · 待评审</span></div><span class="tag warn">草稿 8 天</span><span class="dd">更新 11-13</span></div>
+            <div class="demand"><div class="dm"><b>移动端 2.0 立项纪要</b><span>会议纪要 · 移动端 App · 已同步给项目组</span></div><span class="tag ok">已发布</span><span class="dd">新建 11-10</span></div>
+          </div>
+          <p class="footnote"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg><span>只列你作为负责人或保存人产生过动作的文档；新增记负责人、更新记保存人。同一篇被他人改过会分别计入各自次数，所以人次数可能大于文档篇数。草稿积压口径与团队卡一致。</span></p>
+        </section>
+      </div>
+
+      <!-- 空态 / 错误态 -->
+      <div id="stateEmpty" hidden>
+        <div class="bigstate">
+          <span class="bico"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15.6h14M5 15.6V8.4h10v7.2M7.2 8.4V5.6h5.6v2.8"/><path d="M8 11.2h4"/></svg></span>
+          <h3>上周团队没有可汇总的交付记录</h3>
+          <p>新增工作项、状态流转、进入已完成列、成功生产发布或文档新建 / 更新后，会自动出现在这里。当前周没有事件，不代表团队没有在工作。</p>
+          <div class="bact"><button class="btn primary" type="button" data-toast="打开工作项列表（原型未接）">查看工作项列表</button><button class="btn" type="button" data-toast="刷新周回顾（原型未接）">刷新</button></div>
+        </div>
+      </div>
+      <div id="stateError" hidden>
+        <div class="bigstate err">
+          <span class="bico"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 18 17H2Z"/><path d="M10 8v4M10 15h.01"/></svg></span>
+          <h3>团队周回顾加载失败</h3>
+          <p>数据没有返回，页面不会把失败显示成 0 或空。其他页面不受影响，可重试或先看个人回顾。</p>
+          <div class="err-meta">GET /api/review/weekly · 502 · 上次成功 11-19 18:40</div>
+          <div class="bact"><button class="btn primary" type="button" data-toast="重试（原型未接）">重试</button><button class="btn" type="button" data-scope="me">看我的回顾</button></div>
+        </div>
+      </div>
+
+      <div class="page-foot">
+        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.2v3.2M8 5.5h.01"/></svg>
+        <span>原型 · 合成示例数据，不代表线上账号真实数量；周界 11-09 — 11-15；所有数字用于验证信息架构与口径。</span>
+        <span style="margin-left:auto">2026-11-21 · v3</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 成员抽屉 -->
+<div class="drawer-overlay" id="overlay" hidden>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerName">
+    <header class="dhead">
+      <span class="av av1" id="drawerAvatar">王</span>
+      <div><h3 id="drawerName">王一帆</h3><p id="drawerRole">前端 · 客户门户</p></div>
+      <button class="icon-btn" type="button" id="drawerClose" aria-label="关闭">
+        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+      </button>
+    </header>
+    <div class="dbody">
+      <div class="dweek">上周 · 11-09 — 11-15 <span class="tag warn" id="drawerLoadTag">负载 115%</span></div>
+      <div class="dkpis">
+        <div><b id="dkCreated">8</b><span>新增</span></div>
+        <div><b id="dkDone">5</b><span>完成</span></div>
+        <div><b id="dkStart">7</b><span>推进</span></div>
+        <div><b id="dkOpen">8</b><span>在手</span></div>
+        <div><b id="dkHours">46.0h</b><span>登记工时</span></div>
+        <div><b id="dkLoad">115%</b><span>负载</span></div>
+      </div>
+      <div class="callout" id="drawerCallout">负载 115%，超过容量约 6h；建议把 1 项待处理移出本周。</div>
+      <div class="dproj" id="drawerProjects">客户门户 26h · 订单中心 12h · 数据看板 8h</div>
+      <div class="dhand" id="drawerHand"></div>
+      <div class="dtest" id="drawerTest" hidden></div>
+      <div class="dsec">本周完成 <span id="drawerDoneCount">5 项</span></div>
+      <div class="item-list" id="drawerDone"></div>
+      <div class="dsec">此刻在手 <span id="drawerOpenCount">8 项</span></div>
+      <div class="item-list" id="drawerOpen"></div>
+      <p class="dnote">成员明细只读；负载 = 本周登记工时 ÷ 容量（5 个工作日 × 8h）。工时未登记时，负载无法判断。</p>
+    </div>
+    <footer class="dfoot">
+      <button class="btn" type="button" data-toast="打开该成员全部工作项（原型未接）">查看全部工作项</button>
+      <button class="btn primary" type="button" id="drawerDoneBtn">关闭</button>
+    </footer>
+  </aside>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+  var $ = function(s, r){ return (r || document).querySelector(s); };
+  var $$ = function(s, r){ return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var toastEl = $("#toast"), toastTimer = null;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.hidden = true; }, 2400);
+  }
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  /* 统计矩阵展开明细：每项 [类型样式, 类型文字, 标题, 项目 / 负责人 / 变更, 时间] */
+  var DETAILS = {
+    "dem-created": {label:"本周新增", count:12, unit:"个需求", hint:"本周创建的需求；较前一周 +3",
+      items:[["dem","需求","客户标签筛选","客户门户 · 李婷","11-10 10:12"],["dem","需求","报表订阅推送","数据看板 · 李婷","11-10 14:30"],["dem","需求","批量开票优化","客户门户 · 李婷","11-11 09:20"],["dem","需求","对账误差提示","订单中心 · 李婷","11-12 11:05"],["dem","需求","移动端首页改版","移动端 App · 李婷","11-13 15:40"],["dem","需求","权限模型梳理","数据看板 · 李婷","11-14 10:18"]]},
+    "dem-passed": {label:"评审通过", count:8, unit:"个需求", hint:"本周进入「已通过」；按需求去重",
+      items:[["dem","需求","客户标签筛选","客户门户 · 李婷","11-10 14:20"],["dem","需求","报表订阅推送","数据看板 · 李婷","11-11 09:40"],["dem","需求","对账误差提示","订单中心 · 李婷","11-12 16:05"],["dem","需求","移动端首页改版","移动端 App · 李婷","11-13 10:12"],["dem","需求","批量开票优化","客户门户 · 李婷","11-14 15:30"],["dem","需求","权限模型梳理","数据看板 · 李婷","11-14 17:02"]]},
+    "dem-planned": {label:"开始排期", count:7, unit:"个需求", hint:"本周首次进入排期；调期不计",
+      items:[["dem","需求","客户标签筛选","客户门户 · 计划 2.4.1","11-11"],["dem","需求","报表订阅推送","数据看板 · 计划 1.8.4","11-12"],["dem","需求","批量开票优化","客户门户 · 计划 2.4.1","11-12"],["dem","需求","对账误差提示","订单中心 · 计划 1.8.3","11-13"],["dem","需求","移动端首页改版","移动端 App · 计划 2.0","11-14"],["dem","需求","权限模型梳理","数据看板 · 计划 1.8.4","11-15"],["dem","需求","客户标签同步","客户门户 · 计划 2.4.2","11-15"]]},
+    "dem-completed": {label:"完成", count:9, unit:"个需求", hint:"完成由证据判定；自动退回不回滚已计事件",
+      items:[["dem","需求","客户标签筛选","客户门户 · 用例 12 / 发布 2.4.0","11-13"],["dem","需求","对账导出优化","客户门户 · 用例 18 / 发布 2.4.0","11-14"],["dem","需求","批量开票优化","客户门户 · 发布 2.4.0","11-13"],["dem","需求","优惠券叠加","订单中心 · 用例 14 / 热修 1.8.2","11-13"],["dem","需求","订单导出字段","订单中心 · 用例 9","11-12"],["dem","需求","指标口径统一","数据看板 · 人工判定","11-15"]]},
+    "dem-released": {label:"发布覆盖", count:6, unit:"个需求", hint:"成功 + 生产 + 非回滚 + 全量发布覆盖",
+      items:[["dem","需求","对账导出优化","客户门户 · 2.4.0 · 陈昊","11-14 18:30"],["dem","需求","客户标签筛选","客户门户 · 2.4.0 · 陈昊","11-14 18:30"],["dem","需求","批量开票优化","客户门户 · 2.4.0 · 陈昊","11-14 18:30"],["dem","需求","登录态续期","客户门户 · 2.4.0 · 陈昊","11-14 18:30"],["dem","需求","优惠券叠加","订单中心 · 1.8.2 · 张启明","11-13 20:15"],["dem","需求","支付回调幂等","订单中心 · 1.8.2 · 张启明","11-13 20:15"]]},
+    "dem-closed": {label:"关闭", count:2, unit:"个需求", hint:"评审不通过或按重复关闭",
+      items:[["dem","需求","导出模板自定义","客户门户 · 重复（并入对账导出优化）","11-11"],["dem","需求","订单批量退款","订单中心 · 评审不通过","11-12"]]},
+    "dem-cancelled": {label:"取消", count:1, unit:"个需求", hint:"本周中途取消",
+      items:[["dem","需求","消息中心改版","移动端 App · 范围调整","11-14"]]},
+
+    "wi-created": {label:"本周新增", count:38, unit:"个工作项", hint:"故事 14 · 任务 15 · 缺陷 9；已删除不计",
+      items:[["story","故事","客户门户 2.4.0 登录态续期","客户门户 · 王一帆","11-10"],["task","任务","对账导出接口","客户门户 · 陈昊","11-10"],["bug","缺陷","优惠券叠加金额错位","订单中心 · 陈昊","11-11"],["story","故事","数据看板指标口径统一","数据看板 · 陈昊","11-12"],["task","任务","报表权限前端路由","数据看板 · 林可","11-13"],["task","任务","首页改版联调","移动端 App · 赵子墨","11-14"]]},
+    "wi-doing": {label:"进入处理中", count:22, unit:"个工作项", hint:"本周首次从待处理 / 待测试 / 测试中进入进行中",
+      items:[["story","故事","客户门户 2.4.0 登录态续期","客户门户 · 陈昊 · 待处理 → 进行中","11-11 10:24"],["task","任务","对账导出接口","客户门户 · 陈昊 · 待处理 → 进行中","11-11 11:05"],["task","任务","优惠券叠加前端校验","订单中心 · 王一帆 · 待测试 → 进行中","11-12 09:18"],["story","故事","数据看板指标口径统一","数据看板 · 陈昊 · 待处理 → 进行中","11-12 14:40"],["task","任务","报表权限前端路由","数据看板 · 林可 · 待处理 → 进行中","11-13 10:02"],["bug","缺陷","优惠券叠加金额错位","订单中心 · 陈昊 · 待测试 → 进行中","11-13 16:25"],["task","任务","首页改版联调","移动端 App · 赵子墨 · 待处理 → 进行中","11-14 11:10"],["story","故事","移动端 2.0 范围确认","移动端 App · 张启明 · 待处理 → 进行中","11-14 15:36"]]},
+    "wi-test": {label:"提测", count:11, unit:"个工作项", hint:"本周首次进入待测试列；提测 ≠ 开始测试",
+      items:[["story","故事","客户门户 2.4.1 回归","客户门户 · 周媛 · 进行中 → 待测试","11-13 18:10"],["task","任务","报表权限后端","数据看板 · 陈昊 · 进行中 → 待测试","11-13 19:25"],["task","任务","批量开票兼容性","客户门户 · 李婷 · 进行中 → 待测试","11-14 09:50"],["bug","缺陷","登录态过期跳转","客户门户 · 王一帆 · 进行中 → 待测试","11-14 11:15"],["task","任务","订单中心 1.8.3 联调","订单中心 · 张启明 · 进行中 → 待测试","11-14 15:00"],["story","故事","数据看板权限模型","数据看板 · 林可 · 进行中 → 待测试","11-14 17:40"]]},
+    "wi-testing": {label:"进入测试中", count:8, unit:"个工作项", hint:"本周首次由测试负责人进入测试中列",
+      items:[["story","故事","客户门户 2.4.1 回归","客户门户 · 周媛 · 待测试 → 测试中","11-14 10:05"],["task","任务","报表权限后端","数据看板 · 周媛 · 待测试 → 测试中","11-14 11:20"],["task","任务","批量开票兼容性","客户门户 · 李婷 · 待测试 → 测试中","11-14 14:30"],["task","任务","订单中心 1.8.3 联调","订单中心 · 李婷 · 待测试 → 测试中","11-15 09:15"],["bug","缺陷","登录态过期跳转","客户门户 · 周媛 · 待测试 → 测试中","11-15 10:40"],["story","故事","数据看板权限模型","数据看板 · 周媛 · 待测试 → 测试中","11-15 11:30"]]},
+    "wi-done": {label:"本周完成", count:23, unit:"个工作项", hint:"故事 8 · 任务 8 · 缺陷 7；未取消",
+      items:[["story","故事","对账导出优化","客户门户 · 陈昊 · 12.5h","11-14"],["story","故事","优惠券叠加","订单中心 · 陈昊 · 12.5h","11-13"],["task","任务","客户标签筛选组件","客户门户 · 王一帆 · 6.5h","11-12"],["task","任务","2.4.0 回归用例执行","客户门户 · 周媛 · 14.0h","11-14"],["bug","缺陷","订单中心 1.8.2 热修","订单中心 · 张启明 · 4.5h","11-13"],["bug","缺陷","登录态失败率修复","客户门户 · 王一帆 · 3.0h","11-11"]]},
+    "wi-cancelled": {label:"取消", count:3, unit:"个工作项", hint:"本周进入已取消",
+      items:[["task","任务","导出模板自定义","客户门户 · 重复","11-11"],["task","任务","订单批量退款","订单中心 · 范围调整","11-12"],["task","任务","消息中心改版","移动端 App · 范围调整","11-14"]]},
+
+    "test-cases": {label:"新增用例", count:14, unit:"条用例", hint:"周媛 9 · 李婷 3 · 张启明 2；SQL 92 前的存量不归人",
+      items:[["case","用例","登录态续期-过期自动跳转","客户门户 · 周媛","11-10"],["case","用例","登录态续期-多端互踢","客户门户 · 周媛","11-10"],["case","用例","优惠券叠加-多券并行","订单中心 · 周媛","11-11"],["case","用例","批量开票-字段校验","客户门户 · 李婷","11-12"],["case","用例","报表权限-按角色过滤","数据看板 · 李婷","11-13"],["case","用例","移动端首页-首屏加载","移动端 App · 张启明","11-14"]]},
+    "test-passed": {label:"执行通过", count:105, unit:"条记录", hint:"本周执行记录中通过；团队数 = 成员列之和",
+      items:[["case","用例","登录态续期-过期自动跳转","客户门户 · 周媛 · 通过","11-14 10:20"],["case","用例","优惠券叠加-多券并行","订单中心 · 周媛 · 通过","11-13 16:40"],["case","用例","批量开票-字段校验","客户门户 · 李婷 · 通过","11-14 11:05"],["case","用例","报表权限-按角色过滤","数据看板 · 李婷 · 通过","11-14 15:30"],["case","用例","移动端首页-首屏加载","移动端 App · 张启明 · 通过","11-15 09:40"],["case","用例","订单详情-金额精度","订单中心 · 周媛 · 通过","11-15 11:20"]]},
+    "test-failed": {label:"执行失败", count:14, unit:"条记录", hint:"失败记录；由失败转出的缺陷本周新增 6 个",
+      items:[["case","用例","登录态续期-多端互踢","客户门户 · 周媛 · 失败","11-14"],["case","用例","报表导出-大文件","客户门户 · 李婷 · 失败","11-13"],["case","用例","优惠券叠加-跨店","订单中心 · 周媛 · 失败","11-13"],["case","用例","批量开票-历史数据","客户门户 · 李婷 · 失败","11-15"],["case","用例","移动端首页-弱网","移动端 App · 张启明 · 失败","11-14"],["case","用例","订单列表-分页边界","订单中心 · 周媛 · 失败","11-15"]]},
+    "test-blocked": {label:"执行阻塞", count:9, unit:"条记录", hint:"阻塞不计入通过率分母",
+      items:[["case","用例","对账导出-大文件","客户门户 · 李婷 · 等财务确认","11-13"],["case","用例","支付回调-超时重试","订单中心 · 周媛 · 等联调环境","11-14"],["case","用例","报表权限-跨项目","数据看板 · 李婷 · 等权限配置","11-14"],["case","用例","移动端更新-灰度","移动端 App · 张启明 · 等发布窗口","11-15"],["case","用例","发票-红冲","订单中心 · 周媛 · 等接口","11-15"]]},
+    "test-fixed": {label:"修复关闭", count:7, unit:"个缺陷", hint:"本周完成的缺陷工作项，与工作项完成的缺陷同批",
+      items:[["bug","缺陷","优惠券叠加金额错位","订单中心 · 陈昊","11-13"],["bug","缺陷","登录态过期未跳转","客户门户 · 王一帆","11-14"],["bug","缺陷","报表导出缺列","数据看板 · 陈昊","11-14"],["bug","缺陷","批量开票金额精度","客户门户 · 王一帆","11-15"],["bug","缺陷","订单列表分页重复","订单中心 · 陈昊","11-15"],["bug","缺陷","移动端首页白屏","移动端 App · 赵子墨","11-15"],["bug","缺陷","优惠券并发核销","订单中心 · 陈昊","11-15"]]},
+    "test-retest": {label:"待回归", count:6, unit:"条用例", hint:"当前快照：最近一次执行仍为失败，不随周切换",
+      items:[["case","用例","优惠券叠加-多券并行","订单中心 · 周媛 · 待复测","11-20"],["case","用例","登录态续期-多端互踢","客户门户 · 周媛 · 待复测","11-20"],["case","用例","报表导出-大文件","客户门户 · 李婷 · 待复测","11-20"],["case","用例","移动端首页-弱网","移动端 App · 张启明 · 待复测","11-20"],["case","用例","订单列表-分页边界","订单中心 · 周媛 · 待复测","11-20"],["case","用例","发票-红冲","订单中心 · 李婷 · 待复测","11-20"]]},
+    "test-skipped": {label:"跳过", count:6, unit:"条记录", hint:"本次跳过，不计入通过率",
+      items:[["case","用例","支付回调-超时重试","订单中心 · 环境未就绪","11-14"],["case","用例","报表权限-跨项目","数据看板 · 权限未配置","11-14"],["case","用例","移动端更新-灰度","移动端 App · 发布窗口未到","11-15"],["case","用例","发票-红冲","订单中心 · 接口未联调","11-15"],["case","用例","订单详情-金额精度","订单中心 · 数据未造","11-15"],["case","用例","客户标签-批量导入","客户门户 · 范围调整","11-15"]]},
+
+    "doc-created": {label:"文档新增", count:7, unit:"篇文档", hint:"本周新建文档；覆盖 4 个项目",
+      items:[["doc","文档","客户门户 2.4.1 产品需求","产品需求 · 李婷","11-10"],["doc","文档","订单中心 1.8.3 对账误差提示","产品需求 · 李婷","11-12"],["doc","文档","数据看板权限模型","技术方案 · 张启明","11-12"],["doc","文档","客户门户 2.4.0 回归测试记录","测试记录 · 周媛","11-14"],["doc","文档","移动端 2.0 范围说明","产品需求 · 李婷","11-14"],["doc","文档","周会纪要 11-13","会议纪要 · 孙悦","11-13"],["doc","文档","客户标签使用说明","产品需求 · 李婷","11-15"]]},
+    "doc-updated": {label:"文档更新", count:12, unit:"次更新", hint:"本周正文产生新版本；同一篇多次保存按次计",
+      items:[["doc","文档","客户门户 2.4.0 产品需求","产品需求 · 王一帆","11-11"],["doc","文档","优惠券叠加技术方案","技术方案 · 陈昊","11-12"],["doc","文档","客户门户 2.4.1 回归测试记录","测试记录 · 周媛","11-14"],["doc","文档","数据看板指标口径","技术方案 · 张启明","11-13"],["doc","文档","移动端 2.0 范围说明","产品需求 · 李婷","11-15"],["doc","文档","周会纪要 11-13","会议纪要 · 孙悦","11-15"]]},
+    "doc-published": {label:"文档发布", count:5, unit:"篇文档", hint:"本周首次发布；升级回填的 published_at 可能偏低",
+      items:[["doc","文档","客户门户 2.4.0 产品需求","产品需求 · 陈昊","11-14"],["doc","文档","客户门户 2.4.0 回归测试记录","测试记录 · 周媛","11-14"],["doc","文档","订单中心 1.8.2 热修记录","技术方案 · 张启明","11-13"],["doc","文档","数据看板指标口径","技术方案 · 张启明","11-15"],["doc","文档","移动端 2.0 范围说明","产品需求 · 李婷","11-15"]]},
+    "doc-draft": {label:"草稿积压", count:3, unit:"篇文档", hint:"当前快照：草稿超过 7 天未发布",
+      items:[["doc","文档","订单中心 1.9 路线图","产品需求 · 李婷 · 最后更新 11-02","快照"],["doc","文档","客户门户 3.0 构想","产品需求 · 孙悦 · 最后更新 10-30","快照"],["doc","文档","数据看板 2.0 指标树","技术方案 · 张启明 · 最后更新 11-05","快照"]]}
+  };
+
+  /* 合成成员明细：仅用于原型，数字与表格一致 */
+  var MEMBERS = {
+    "王一帆": {
+      role:"前端 · 客户门户", created:8, done:5, started:7, open:8, hours:"46.0h", load:115,
+      projects:"客户门户 26h · 订单中心 12h · 数据看板 8h",
+      hand:"完成 5 项 · 修复缺陷 1 个 · 文档 6 次（新 2 / 更 4） · 评审 2 个需求",
+      note:"负载 115%，超过容量约 6h；建议把 1 项待处理移出本周。",
+      doneList:[
+        ["对账导出前端联调","客户门户 · 对账导出优化","9.5h","11-14","ok","按期"],
+        ["批量开票弹窗改造","客户门户 · 批量开票","7.0h","11-13","ok","按期"],
+        ["客户标签筛选组件","客户门户 · 客户标签","6.5h","11-12","warn","延期 1 天"],
+        ["登录态续期前端适配","客户门户 · 登录态续期","5.0h","11-11","ok","按期"]
+      ],
+      openList:[
+        ["优惠券叠加前端校验","订单中心 · 进行中","11-18 已逾期","warn","进行中"],
+        ["报表权限前端路由","数据看板 · 进行中","11-20 到期","warn","进行中"],
+        ["客户门户 2.4.1 回归","客户门户 · 待测试","11-21 到期","plum","待测试"],
+        ["首页改版联调","移动端 App · 待处理","11-25 计划","","待处理"]
+      ]
+    },
+    "陈昊": {
+      role:"后端 · 订单中心", created:6, done:3, started:6, open:9, hours:"41.0h", load:103,
+      projects:"订单中心 24h · 客户门户 11h · 数据看板 6h",
+      hand:"完成 3 项 · 修复缺陷 2 个 · 文档 1 次（新 0 / 更 1） · 代码评审 3 次",
+      note:"负载 103%，2 项逾期；先确认对账导出是否被财务确认阻塞。",
+      doneList:[
+        ["优惠券叠加后端规则","订单中心 · 优惠券叠加","12.5h","11-14","ok","按期"],
+        ["订单导出字段扩展","订单中心 · 订单导出字段","8.0h","11-12","ok","按期"],
+        ["支付回调幂等","订单中心 · 支付稳定性","6.0h","11-11","warn","延期 1 天"]
+      ],
+      openList:[
+        ["对账导出接口","客户门户 · 进行中","11-18 已逾期","warn","进行中"],
+        ["支付回调重试","订单中心 · 进行中","11-19 已逾期","warn","进行中"],
+        ["报表权限后端","数据看板 · 待测试","11-20 到期","plum","待测试"],
+        ["客户标签同步","客户门户 · 待处理","11-24 计划","","待处理"]
+      ]
+    },
+    "周媛": {
+      role:"测试 · 客户门户", created:4, done:2, started:5, open:5, hours:"38.0h", load:95,
+      test:"<b>执行 86 条用例</b> · 发现 <b>6 个缺陷</b> · 通过率 84%<br>客户门户 2.4.1 回归执行中（68%），2 条待复测",
+      projects:"客户门户 22h · 订单中心 10h · 数据看板 6h",
+      hand:"完成 2 项 · 新增用例 9 条 · 执行 86 条 · 待回归 2 条 · 文档 3 次",
+      note:"接近容量，1 项阻塞；确认安全评审时间后再排回归。",
+      doneList:[
+        ["2.4.0 回归用例执行","客户门户 · 对账导出优化","14.0h","11-14","ok","按期"],
+        ["优惠券叠加冒烟","订单中心 · 优惠券叠加","6.0h","11-13","warn","延期 1 天"]
+      ],
+      openList:[
+        ["2.4.1 回归用例设计","客户门户 · 进行中","11-18 已逾期","warn","进行中"],
+        ["数据看板权限用例","数据看板 · 进行中","11-20 到期","warn","进行中"],
+        ["批量开票兼容性","客户门户 · 待处理","11-22 计划","","待处理"]
+      ]
+    },
+    "李婷": {
+      role:"产品 · 兼测试", created:6, done:3, started:4, open:7, hours:"34.0h", load:85,
+      test:"<b>验收 24 条用例</b> · 发现 <b>2 个缺陷</b> · 通过率 83%<br>关单前验收；负责人不在时补位回归",
+      projects:"客户门户 18h · 订单中心 9h · 移动端 7h",
+      hand:"完成 3 项 · 新增用例 3 条 · 文档 4 次（新 2 / 更 2） · 评审 3 个需求",
+      note:"负载正常；1 项逾期需今天确认，避免影响 2.4.1 范围。",
+      doneList:[
+        ["对账导出需求验收","客户门户 · 对账导出优化","4.5h","11-14","ok","按期"],
+        ["客户标签评审","客户门户 · 客户标签","3.0h","11-12","ok","按期"],
+        ["优惠券叠加范围确认","订单中心 · 优惠券叠加","2.5h","11-11","warn","延期 1 天"]
+      ],
+      openList:[
+        ["批量开票 PRD 补充","客户门户 · 进行中","11-18 已逾期","warn","进行中"],
+        ["移动端首页改版评审","移动端 App · 进行中","11-20 到期","warn","进行中"],
+        ["数据看板指标口径","数据看板 · 待处理","11-24 计划","","待处理"]
+      ]
+    },
+    "张启明": {
+      role:"负责人 · 兼测试", created:3, done:4, started:2, open:6, hours:"18.0h", load:45,
+      test:"<b>复测 18 条用例</b> · 发现 <b>1 个缺陷</b> · 审阅 2 份测试报告<br>2.4.0 生产发布已通过，遗留缺陷 2 个",
+      projects:"客户门户 7.5h · 数据看板 4.5h · 订单中心 3.5h · 移动端 2.5h",
+      hand:"完成 4 项 · 复测 2 条 · 审阅 1 份报告 · 文档 3 次（新 1 / 更 2） · 评审 5 个需求",
+      note:"负载正常；本周评审 5 个需求，其中 1 个待评审已等 3 天。",
+      doneList:[
+        ["2.4.0 发布检查清单","客户门户 · 对账导出优化","3.5h","11-12","ok","按期"],
+        ["订单中心优惠券规则评审","订单中心 · 优惠券叠加","2.0h","11-13","warn","延期 1 天"],
+        ["数据看板权限模型梳理","数据看板 · 报表权限","4.0h","11-14","ok","按期"],
+        ["移动端 2.0 版本范围确认","移动端 App · 首页改版","6.5h","11-15","ok","按期"]
+      ],
+      openList:[
+        ["客户门户 2.4.1 回归范围","客户门户 · 进行中","11-18 已逾期","warn","进行中"],
+        ["数据看板指标口径统一","数据看板 · 进行中","11-20 到期","warn","进行中"],
+        ["移动端 2.0 立项","移动端 App · 待处理","11-25 计划","","待处理"]
+      ]
+    },
+    "林可": {
+      role:"后端 · 数据看板", created:5, done:3, started:2, open:4, hours:"9.5h", load:24,
+      projects:"订单中心 4.5h · 数据看板 3.0h · 客户门户 2.0h",
+      hand:"完成 3 项 · 修复缺陷 3 个 · 文档 2 次（新 1 / 更 1） · 代码评审 2 次",
+      note:"负载较低；可承接 2.4.1 的指标接口，减轻后端积压。",
+      doneList:[
+        ["订单中心 1.8.2 热修","订单中心 · 订单导出字段","4.5h","11-13","ok","按期"],
+        ["报表权限后端","数据看板 · 报表权限","3.0h","11-14","ok","按期"],
+        ["指标接口缓存","数据看板 · 指标口径","2.0h","11-12","ok","按期"]
+      ],
+      openList:[
+        ["指标口径接口","数据看板 · 进行中","11-20 到期","warn","进行中"],
+        ["移动端埋点","移动端 App · 待处理","11-25 计划","","待处理"],
+        ["数据看板导出","数据看板 · 待处理","11-27 计划","","待处理"]
+      ]
+    },
+    "孙悦": {
+      role:"前端 · 移动端", created:4, done:2, started:3, open:4, hours:"0h", load:0,
+      projects:"未登记工时",
+      hand:"完成 2 项 · 修复缺陷 1 个 · 文档 0 次 · 工时未登记",
+      note:"本周有 2 项完成但未登记工时；负载无法判断，提醒补登。",
+      doneList:[
+        ["客户标签前端","客户门户 · 客户标签","未登记","11-12","ok","按期"],
+        ["登录态续期样式","客户门户 · 登录态续期","未登记","11-11","ok","按期"]
+      ],
+      openList:[
+        ["首页改版组件","移动端 App · 进行中","11-20 到期","warn","进行中"],
+        ["客户门户响应式修复","客户门户 · 待测试","11-21 到期","plum","待测试"],
+        ["批量开票样式","客户门户 · 待处理","11-24 计划","","待处理"]
+      ]
+    },
+    "赵子墨": {
+      role:"设计 · 客户门户", created:2, done:1, started:2, open:3, hours:"0h", load:0,
+      projects:"未登记工时",
+      hand:"完成 1 项 · 文档 0 次 · 工时未登记",
+      note:"本周有 1 项完成但未登记工时；负载无法判断，提醒补登。",
+      doneList:[
+        ["客户门户空态设计","客户门户 · 客户标签","未登记","11-13","ok","按期"]
+      ],
+      openList:[
+        ["移动端首页视觉稿","移动端 App · 进行中","11-20 到期","warn","进行中"],
+        ["数据看板图表规范","数据看板 · 待处理","11-25 计划","","待处理"],
+        ["客户标签图标","客户门户 · 待处理","11-26 计划","","待处理"]
+      ]
+    }
+  };
+
+  var overlay = $("#overlay");
+  function renderDrawer(name){
+    var m = MEMBERS[name];
+    if(!m) return;
+    $("#drawerName").textContent = name;
+    $("#drawerRole").textContent = m.role;
+    $("#drawerAvatar").textContent = name.slice(0,1);
+    $("#dkCreated").textContent = m.created;
+    $("#dkDone").textContent = m.done;
+    $("#dkStart").textContent = m.started;
+    $("#dkOpen").textContent = m.open;
+    $("#dkHours").textContent = m.hours;
+    $("#dkLoad").textContent = m.load ? m.load + "%" : "未登记";
+    $("#drawerProjects").textContent = m.projects;
+    var dh = $("#drawerHand");
+    dh.hidden = !m.hand;
+    dh.innerHTML = m.hand ? "<b>本周经手</b> " + esc(m.hand) : "";
+    var dt = $("#drawerTest");
+    dt.hidden = !m.test;
+    if(m.test){ dt.innerHTML = '<b>测试贡献</b><br>' + m.test; }
+    $("#drawerLoadTag").textContent = m.load ? "负载 " + m.load + "%" : "工时未登记";
+    $("#drawerLoadTag").className = "tag " + (m.load > 100 ? "bad" : (m.load ? "" : "warn"));
+    var co = $("#drawerCallout");
+    co.textContent = m.note;
+    co.className = "callout " + (m.load > 100 ? "danger" : (m.load === 0 || m.load >= 90 ? "warn" : ""));
+    $("#drawerDoneCount").textContent = m.done + " 项";
+    $("#drawerOpenCount").textContent = m.open + " 项";
+    $("#drawerDone").innerHTML = m.doneList.map(function(it){
+      return '<div class="item"><span class="ic"><svg class="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.2 2.2 4.8-5"/></svg></span>' +
+        '<div class="im"><b>' + esc(it[0]) + '</b><span>' + esc(it[1]) + '</span></div>' +
+        '<span class="h">' + esc(it[2]) + '</span><span class="d">' + esc(it[3]) + '</span><span class="tag ' + it[4] + '">' + esc(it[5]) + '</span></div>';
+    }).join("");
+    $("#drawerOpen").innerHTML = m.openList.map(function(it){
+      return '<div class="item open"><span class="dot"></span>' +
+        '<div class="im"><b>' + esc(it[0]) + '</b><span>' + esc(it[1]) + '</span></div>' +
+        '<span class="d">' + esc(it[2]) + '</span><span class="tag ' + it[3] + '">' + esc(it[4]) + '</span></div>';
+    }).join("");
+  }
+  function openDrawer(name){
+    renderDrawer(name);
+    overlay.hidden = false;
+    document.body.style.overflow = "hidden";
+    $("#drawerClose").focus();
+  }
+  function closeDrawer(){
+    overlay.hidden = true;
+    document.body.style.overflow = "";
+  }
+  $$(".member-tbl tbody tr").forEach(function(row){
+    row.addEventListener("click", function(){ openDrawer(row.dataset.member); });
+    row.addEventListener("keydown", function(e){
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openDrawer(row.dataset.member); }
+    });
+  });
+  $("#drawerClose").addEventListener("click", closeDrawer);
+  $("#drawerDoneBtn").addEventListener("click", closeDrawer);
+  overlay.addEventListener("click", function(e){ if(e.target === overlay) closeDrawer(); });
+  document.addEventListener("keydown", function(e){
+    if(e.key !== "Escape") return;
+    if(!overlay.hidden) closeDrawer();
+    else if(detailKey) closeStatDetail();
+  });
+
+  /* 统计矩阵：展开子项明细，同一时间只开一条 */
+  var statSubs = $$(".stat-sub, .stat-big");
+  var detailRow = null, detailKey = null;
+  function closeStatDetail(){
+    if(detailRow && detailRow.parentNode) detailRow.parentNode.removeChild(detailRow);
+    detailRow = null; detailKey = null;
+    statSubs.forEach(function(b){ b.setAttribute("aria-expanded", "false"); });
+  }
+  function openStatDetail(btn){
+    var key = btn.dataset.detail, d = DETAILS[key];
+    if(!d) return;
+    if(detailKey === key){ closeStatDetail(); return; }
+    closeStatDetail();
+    var tr = btn.closest("tr");
+    var shown = d.items.length, more = shown < d.count;
+    var row = document.createElement("tr");
+    row.className = "stat-detail";
+    row.id = "stat-detail-" + key;
+    row.innerHTML = '<td colspan="5"><div class="sd" role="region" aria-label="' + esc(d.label) + '明细">' +
+      '<div class="sd-head"><div class="sd-title"><b>' + esc(d.label) + ' · ' + d.count + ' ' + esc(d.unit) + '</b><span>' + esc(d.hint) + '</span></div>' +
+      '<div class="sd-actions">' + (more ? '<button class="link" type="button" data-detail-more>查看全部 ' + d.count + ' ' + esc(d.unit) + ' →</button>' : '') +
+      '<button class="sd-close" type="button">收起</button></div></div>' +
+      '<ul class="sd-list">' + d.items.map(function(it){
+        return '<li><span class="sd-ty ' + it[0] + '">' + esc(it[1]) + '</span><div class="sd-main"><b>' + esc(it[2]) + '</b><span>' + esc(it[3]) + '</span></div><time>' + esc(it[4]) + '</time></li>';
+      }).join("") + '</ul>' +
+      '<p class="sd-note">' + (more ? "示例明细，显示前 " + shown + " 项 / 共 " + d.count + " " + esc(d.unit) : "共 " + d.count + " " + esc(d.unit) + "，已全部显示") + " · 点击条目打开详情（原型未接）</p></div></td>";
+    tr.parentNode.insertBefore(row, tr.nextSibling);
+    btn.setAttribute("aria-expanded", "true");
+    btn.setAttribute("aria-controls", row.id);
+    detailRow = row; detailKey = key;
+    var moreBtn = row.querySelector("[data-detail-more]");
+    if(moreBtn) moreBtn.addEventListener("click", function(){ toast("打开全部 " + d.count + " " + d.unit + "（原型未接）"); });
+    row.querySelector(".sd-close").addEventListener("click", closeStatDetail);
+    row.addEventListener("click", function(e){
+      if(e.target.closest(".sd-actions")) return;
+      var li = e.target.closest("li");
+      if(li) toast("打开「" + li.querySelector(".sd-main b").textContent + "」详情（原型未接）");
+    });
+  }
+  statSubs.forEach(function(btn){
+    btn.addEventListener("click", function(){ openStatDetail(btn); });
+  });
+
+  /* 范围切换 */
+  var teamView = $("#teamView"), meView = $("#meView");
+  var briefTeam = $("#briefTeam"), briefMe = $("#briefMe");
+  var stateEmpty = $("#stateEmpty"), stateError = $("#stateError");
+  function showScope(scope){
+    closeStatDetail();
+    $$(".scopebar [role=tab]").forEach(function(b){ b.setAttribute("aria-selected", String(b.dataset.scope === scope)); });
+    teamView.hidden = scope !== "team";
+    meView.hidden = scope !== "me";
+    stateEmpty.hidden = true;
+    stateError.hidden = true;
+    briefTeam.hidden = scope !== "team";
+    briefMe.hidden = scope !== "me";
+    $("#roleWrap").hidden = scope !== "team";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  $$(".scopebar [data-scope], #stateError [data-scope]").forEach(function(b){
+    b.addEventListener("click", function(){ showScope(b.dataset.scope); });
+  });
+
+  /* 成员筛选：负载 chip × 角色，只影响成员明细，不改团队汇总 */
+  var rows = $$(".member-tbl tbody tr");
+  var mfilter = "all";
+  function toNum(t){ var n = parseFloat(String(t).replace(/[^\d.]/g, "")); return isNaN(n) ? 0 : n; }
+  function updateMemberTable(){
+    var role = $("#roleSel").value;
+    var shown = rows.filter(function(r){
+      var loadOk = mfilter === "all" || r.dataset.load === mfilter;
+      var roleOk = role === "all" || r.dataset.role === role;
+      return loadOk && roleOk;
+    });
+    rows.forEach(function(r){ r.hidden = shown.indexOf(r) < 0; });
+    var t = { created:0, started:0, done:0, open:0, hours:0, over:0, block:0, cases:0, defects:0, docs:0 };
+    shown.forEach(function(r){
+      var c = r.children;
+      t.created += toNum(c[1].textContent);
+      t.started += toNum(c[2].textContent);
+      t.done += toNum(c[3].textContent);
+      t.open += toNum(c[4].textContent);
+      t.hours += toNum(c[5].textContent);
+      t.over += toNum(c[7].textContent);
+      t.block += toNum(c[8].textContent);
+      var q = c[9].textContent.split("/");
+      if(q.length === 2){ t.cases += toNum(q[0]); t.defects += toNum(q[1]); }
+      t.docs += toNum(c[10].textContent);
+    });
+    $("#tfNew").textContent = t.created;
+    $("#tfDone").textContent = t.done;
+    $("#tfStart").textContent = t.started;
+    $("#tfOpen").textContent = t.open;
+    $("#tfHours").textContent = (Math.round(t.hours * 10) / 10) + "h";
+    $("#tfOver").textContent = t.over;
+    $("#tfBlock").textContent = t.block;
+    $("#tfTest").textContent = (t.cases || t.defects) ? t.cases + " / " + t.defects : "—";
+    $("#tfDocs").textContent = t.docs;
+    var cap = shown.length * 40;
+    var pct = cap ? Math.round(t.hours / cap * 100) : 0;
+    $("#tfLoad .lb i").style.width = Math.min(100, pct) + "%";
+    $("#tfLoad .pct").textContent = cap ? pct + "%" : "—";
+    $("#memberHint").textContent = shown.length + " 人 · 新增 " + t.created + " · 完成 " + t.done + " · 登记 " + (Math.round(t.hours * 10) / 10) + "h / 容量 " + cap + "h";
+    var overN = rows.filter(function(r){ return r.dataset.load === "over" && (role === "all" || r.dataset.role === role); }).length;
+    var noneN = rows.filter(function(r){ return r.dataset.load === "none" && (role === "all" || r.dataset.role === role); }).length;
+    var allN = rows.filter(function(r){ return role === "all" || r.dataset.role === role; }).length;
+    $('[data-mfilter="all"] b').textContent = allN;
+    $('[data-mfilter="over"] b').textContent = overN;
+    $('[data-mfilter="none"] b').textContent = noneN;
+    var qrows = $$("#qmem .qmem-row");
+    qrows.forEach(function(r){ r.hidden = role !== "all" && r.dataset.role !== role; });
+    $("#qmemEmpty").hidden = qrows.some(function(r){ return !r.hidden; });
+    var drows = $$("#docMem .qmem-row");
+    drows.forEach(function(r){ r.hidden = role !== "all" && r.dataset.role !== role; });
+    $("#docEmpty").hidden = drows.some(function(r){ return !r.hidden; });
+  }
+  $$("[data-mfilter]").forEach(function(chip){
+    chip.addEventListener("click", function(){
+      $$("[data-mfilter]").forEach(function(c){ c.setAttribute("aria-pressed", String(c === chip)); });
+      mfilter = chip.dataset.mfilter;
+      updateMemberTable();
+    });
+  });
+  $("#roleSel").addEventListener("change", updateMemberTable);
+
+  /* 轻交互 */
+  $$("[data-toast]").forEach(function(el){
+    el.addEventListener("click", function(e){
+      if(e.target.closest("a[href]") && el.tagName !== "BUTTON") e.preventDefault();
+      toast(el.dataset.toast);
+    });
+  });
+
+  /* hash：便于截图与深链 */
+  var hash = (location.hash || "").replace("#", "");
+  if(hash === "me"){ showScope("me"); }
+  else if(hash === "empty"){
+    showScope("team"); teamView.hidden = true; stateEmpty.hidden = false; briefTeam.hidden = true;
+    $$(".phead-act .btn").forEach(function(b){ b.disabled = true; b.title = "本周没有可汇总的记录"; });
+  }
+  else if(hash === "error"){
+    showScope("team"); teamView.hidden = true; stateError.hidden = false; briefTeam.hidden = true;
+    $$(".phead-act .btn").forEach(function(b){ b.disabled = true; b.title = "数据未返回，暂不可导出"; });
+  }
+  else if(hash === "member"){ showScope("team"); setTimeout(function(){ openDrawer("王一帆"); }, 80); }
+  else { showScope("team"); }
+})();
+</script>
+</body>
+</html>

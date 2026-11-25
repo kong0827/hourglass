@@ -66,6 +66,9 @@ public class TaskWorkflowService {
     private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
+    /** 自动开始版本等规则只作为事务提交后的旁路动作，不参与工作项主流程。 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     public TaskWorkflowService(TaskMapper taskMapper, TaskLogMapper logMapper, SubtaskMapper subtaskMapper,
                                TaskSupport support, TimeLogService timeLogService,
@@ -349,6 +352,7 @@ public class TaskWorkflowService {
             if (Consts.COL_TEST.equals(to) || Consts.COL_TESTING.equals(to)) {
                 notifyTestOwner(workspaceId, userId, task, to);
             }
+            publishProgress(userId, workspaceId, task);
         }
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         if (returnTask) {
@@ -376,7 +380,8 @@ public class TaskWorkflowService {
     public Map<String, Object> claimTest(String userId, String workspaceId, String id) {
         Task task = lockActiveTask(workspaceId, id);
         projectAccess.assertViewTask(workspaceId, userId, task);
-        projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
+        /* 认领测试负责人属于测试链路：项目「可测试」即可，不要求工作项写权限 */
+        projectAccess.assertTestForUpdate(workspaceId, userId, task.getReqId());
         if (!Consts.COL_TESTING.equals(task.getBoardColumn())) {
             throw AppException.badRequest("只有「测试中」的工作项可以认领测试负责人");
         }
@@ -715,6 +720,21 @@ public class TaskWorkflowService {
         audit.log(userId, workspaceId, task.getId(), "move", detail, from, task.getBoardColumn());
         /* 拖拽是独立动作，负责人在此即时通知；抽屉改列由编辑入口合并成一条，这里只发关注者 */
         notifyColumnMove(workspaceId, userId, task, detail, false);
+        publishProgress(userId, workspaceId, task);
+    }
+
+    private void publishProgress(String userId, String workspaceId, Task task) {
+        if (eventPublisher == null) {
+            return;
+        }
+        try {
+            eventPublisher.publishEvent(new TaskProgressedEvent(workspaceId, userId,
+                    task.getId(), task.getReqId(), task.getBoardColumn()));
+        } catch (Exception e) {
+            // 规则是旁路增强：发布事件失败不能影响已提交的工作项流转
+            org.slf4j.LoggerFactory.getLogger(TaskWorkflowService.class)
+                    .warn("工作项进度事件发布失败：task={}", task.getId(), e);
+        }
     }
 
     /**
@@ -793,6 +813,8 @@ public class TaskWorkflowService {
         nt.setOwner(doneTask.getOwner());
         /* N-2 / N-1：下一次循环任务继承身份绑定与提醒对象 */
         nt.setOwnerUserId(doneTask.getOwnerUserId());
+        /* 循环派生仍算原创建人发起的：完成的人可能是临时代办 */
+        nt.setCreatedByUserId(doneTask.getCreatedByUserId());
         nt.setRemindTarget(doneTask.getRemindTarget());
         nt.setCategoryId(doneTask.getCategoryId());
         nt.setBoardColumn(firstCol);

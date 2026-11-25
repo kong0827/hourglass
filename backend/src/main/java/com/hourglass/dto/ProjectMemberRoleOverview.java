@@ -10,4 +10,6 @@ public class ProjectMemberRoleOverview {
 
     private List<ProjectMemberRoleView> members;
     private boolean canEditRole;
+    /** 项目负责人/空间管理员可为成员调整本项目的可见与测试权限 */
+    private boolean canManageAccess;
 }

@@ -218,12 +218,14 @@ try{
     search: !!document.getElementById("dlPickerQuery")
   }))()`);
   assert(picker.rows > 0 && picker.search, `选版器列出 ${picker.rows} 个版本 / ${picker.groups} 个项目，含搜索`);
+  /* 演示数据换批后版本名会变：取第一行的名字当关键词，保证既能命中又不是全量 */
+  const searchTerm = await evaluate(`(document.querySelector("#dlPickerList .dl-row .tt b") || {}).textContent.trim()`);
   await evaluate(`(() => {
     const el = document.getElementById("dlPickerQuery");
-    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value").set.call(el, "商家结算");
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value").set.call(el, ${JSON.stringify("SEARCH_TERM")});
     el.dispatchEvent(new Event("input", { bubbles: true }));
     return true;
-  })()`);
+  })()`.replace("SEARCH_TERM", searchTerm));
   await sleep(400);
   const filtered = await evaluate(`document.querySelectorAll("#dlPickerList [data-dl-open]").length`);
   assert(filtered > 0 && filtered < picker.rows, `搜索过滤生效（${picker.rows} → ${filtered}）`);

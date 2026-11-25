@@ -7,9 +7,9 @@ import { createAttachKit, bindFileDrop, uploadAttachment, openAttachment, attach
 import { $ } from "../core/dom.js";
 import { attachEnvDict, recordEnv } from "../core/env-dict.js";
 import { icon } from "../core/icons.js";
-import { openTaskById, taskLink } from "../core/task-actions.js";
+import { openOwnerMenu, openPriorityMenu, openStatusMenu, openTaskById, taskLink } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, canManageProject, catNameById, projectGroups, projectOptionsHTML, reqSetId, rt, setNameById, state } from "../core/state.js";
+import { canEditReq, canEditTask, canManageProject, canTestProject, catNameById, projectGroups, projectOptionsHTML, reqSetId, rt, setNameById, state, taskCacheExtra } from "../core/state.js";
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
@@ -306,6 +306,11 @@ function defectCreateTargets(){
       ? [defReqId] : [];
   }
   return scope.filter(function(r){ return canEditReq(r.id); }).map(function(r){ return r.id; });
+}
+/* 测试计划的新建目标：可写或可测试的项目都能建计划（执行人按计划单独指派） */
+function planCreateTargets(){
+  if(caseScopeAll) return caseScopeVisibleProjects().filter(function(r){ return canTestProject(r.id); });
+  return caseReqId && canTestProject(caseReqId) ? [caseReqId] : [];
 }
 function syncDefectProjectSel(){
   var sel = $("tcDefReq");
@@ -1025,6 +1030,23 @@ function syncDefectFilters(){
   UI.markFiltered($("tcDefPub"), defPub === "all");
   UI.markFiltered($("tcDefCat"), defCat === "all");
   UI.markFiltered($("tcDefTag"), defTag === "all");
+  var activeN = (defReqId ? 1 : 0) + (defSeverity !== "all" ? 1 : 0) + (defPriority !== "all" ? 1 : 0)
+    + (defStatus !== "open" ? 1 : 0) + (defOwner !== "all" ? 1 : 0) + (defVersion !== "all" ? 1 : 0)
+    + (defPub !== "all" ? 1 : 0) + (defCat !== "all" ? 1 : 0) + (defTag !== "all" ? 1 : 0)
+    + (defSearch ? 1 : 0);
+  var badge = $("tcDefFilterCount");
+  if(badge){
+    badge.hidden = !activeN;
+    badge.textContent = activeN;
+  }
+  var hiddenN = (defSeverity !== "all" ? 1 : 0) + (defVersion !== "all" ? 1 : 0)
+    + (defPub !== "all" ? 1 : 0) + (defCat !== "all" ? 1 : 0) + (defTag !== "all" ? 1 : 0);
+  var moreBadge = $("tcDefMoreCount");
+  if(moreBadge){
+    moreBadge.hidden = !hiddenN;
+    moreBadge.textContent = hiddenN;
+  }
+  UI.markFiltered($("tcDefMoreBtn"), hiddenN > 0);
 }
 function filteredDefects(){
   var list = defects.filter(function(t){ return defectMatches(t, null); });
@@ -1056,11 +1078,12 @@ function defectStatsHTML(){
   var avgFix = fixDays.length
     ? (fixDays.reduce(function(a, b){ return a + b; }, 0) / fixDays.length).toFixed(1) + " 天"
     : "—";
-  var counts = { blocker: 0, critical: 0, major: 0, minor: 0 };
-  open.forEach(function(t){ if(counts[t.severity] !== undefined) counts[t.severity]++; });
-  var sev = [
-    ["blocker", "阻断"], ["critical", "严重"], ["major", "一般"], ["minor", "轻微"]
-  ].map(function(p){
+  var counts = { blocker: 0, critical: 0, major: 0, minor: 0, none: 0 };
+  /* 未定也计数：图例各项要能加回「共 X 条」，否则会少一条对不上账 */
+  open.forEach(function(t){ if(counts[t.severity] !== undefined) counts[t.severity]++; else counts.none++; });
+  var sevList = [["blocker", "阻断"], ["critical", "严重"], ["major", "一般"], ["minor", "轻微"]];
+  if(counts.none) sevList.push(["none", "未定"]);
+  var sev = sevList.map(function(p){
     return '<span><i class="sev-dot ' + p[0] + '"></i>' + p[1] + ' <b>' + counts[p[0]] + '</b></span>';
   }).join("");
   /* 原型 testbar：标题 + 条数口径在左，严重度分布靠右，解释收进表头 ? */
@@ -1094,6 +1117,24 @@ function defectRowHTML(t, no){
   var priHTML = t.priority
     ? '<span class="tc-def-pri" title="优先级：' + esc(priName(t.priority)) + '">' + priTagHTML(t.priority) + '</span>'
     : '<span class="tc-def-none">—</span>';
+  var statusHTML = defectStatusHTML(st);
+  /* 行内直改：与工作项列表同口径；状态按看板列流转，回归字段仍由服务端随列维护 */
+  if(canEditTask(t)){
+    var caret = icon("caretDown", 11);
+    statusHTML = '<button class="tc-def-inline tc-def-stbtn" type="button" data-row-status="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="状态：' + esc(DEFECT_STATUSES[st].label) + '，点击修改"' +
+      ' title="点击改状态（按看板列流转）">' + statusHTML + caret + '</button>';
+    priHTML = '<button class="tc-def-inline" type="button" data-row-pri="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="优先级：' + esc(priName(t.priority || "P2")) + '，点击修改"' +
+      ' title="点击改优先级">' + priHTML + caret + '</button>';
+    ownerHTML = '<button class="tc-def-inline tc-def-owner-btn" type="button" data-row-owner="' + esc(t.id) + '"' +
+      ' aria-haspopup="menu" aria-expanded="false" aria-label="负责人：' + esc(t.owner || "未指派") + '，点击修改"' +
+      ' title="点击改负责人">' +
+      (t.owner
+        ? avatarHTML(t.owner) + '<span class="tc-def-owner-name">' + esc(t.owner) + '</span>'
+        : '<span class="tc-def-none">未指派</span>') +
+      caret + '</button>';
+  }
   var projHTML = defReqId ? ""
     : '<span class="tc-def-proj" title="' + esc(defectProjectName(t.reqId)) + '">'
       + esc(cut(defectProjectName(t.reqId), 18)) + '</span>';
@@ -1106,7 +1147,7 @@ function defectRowHTML(t, no){
     +   '<div class="tc-def-sub">' + projHTML + '<span class="tc-def-id">' + esc(t.id) + '</span>'
     +     '<span>' + esc(cases.length ? "测试发现" : "手工创建") + '</span>' + taskPublicationHTML(t) + '</div>'
     + '</div>'
-    + '<div>' + defectStatusHTML(st) + '</div>'
+    + '<div>' + statusHTML + '</div>'
     + '<div>' + ownerHTML + '</div>'
     + '<div>' + verHTML + '</div>'
     + '<div>' + caseHTML + '</div>'
@@ -1223,6 +1264,10 @@ function applyDefectLinks(links){
     (defectLinks[l.bugTaskId] || (defectLinks[l.bugTaskId] = [])).push(l);
   });
 }
+/* 行内菜单按 id 回查任务：缺陷行对象登记进共享缓存，改完由 ds:task-saved 重取 */
+function rememberDefects(rows){
+  (rows || []).forEach(function(t){ if(t && t.id) taskCacheExtra[t.id] = t; });
+}
 /**
  * opts.badgeOnly：只在非缺陷页刷新 Tab 角标，不拉关联用例和版本，避免首屏多打两轮请求。
  */
@@ -1256,6 +1301,7 @@ function loadDefects(opts){
     return tasksP.then(function(rows){
       if(seq !== defectSeq || defectScopeKey() !== key) return false;
       defects = (rows || []).filter(function(t){ return t && (!t.itemType || t.itemType === "bug"); });
+      rememberDefects(defects);
       defectOpenCount = defects.filter(defectIsOpen).length;
       defectBadgeReqId = key;
       paintDefectBadge();
@@ -1265,6 +1311,7 @@ function loadDefects(opts){
   return Promise.all([tasksP, defectVersionsFor(scopeIds)]).then(function(rs){
     if(seq !== defectSeq || defectScopeKey() !== key) return false;
     defects = (rs[0] || []).filter(function(t){ return t && (!t.itemType || t.itemType === "bug"); });
+    rememberDefects(defects);
     defectVersions = rs[1] || [];
     /* 只给真的有缺陷的项目拉关联用例；全部项目下避免为无缺陷项目多发请求 */
     var linkIds = scopeIds;
@@ -2480,6 +2527,7 @@ function render(){
       return;
     }
     $("tcList").innerHTML = visibleGroups.map(caseGroupHTML).join("");
+    syncTcColumnWidth();
     return;
   }
   /* 计数只留一处：工具条「显示 X / 共 Y」；chips 条不再重复总数 */
@@ -2513,6 +2561,7 @@ function render(){
       + cases.length + ' / 共 ' + caseTotal + ' 条）</button>';
   }
   $("tcList").innerHTML = html;
+  syncTcColumnWidth();
 }
 function groupDimLabel(){
   for(var i = 0; i < CASE_GROUP_DIMS.length; i++){
@@ -2592,6 +2641,7 @@ function renderGrouped(anyFilter){
     return;
   }
   $("tcList").innerHTML = caseGroupSegs.map(caseSegmentHTML).join("");
+  syncTcColumnWidth();
 }
 function segmentBarHTML(s){
   var t = s.total || 1;
@@ -3101,8 +3151,10 @@ function syncTcSubnav(){
   if(document.body.dataset.view !== "testcases") return;
   var el = document.getElementById("subNav");
   if(!el) return;
+  /* 覆盖 / 报告是「测试计划」下的页签，全局导航仍停在测试计划 */
+  var tab = (tcMode === "coverage" || tcMode === "report") ? "plans" : tcMode;
   el.querySelectorAll("[data-sub-tab]").forEach(function(b){
-    var on = b.dataset.subTab === tcMode;
+    var on = b.dataset.subTab === tab;
     b.classList.toggle("on", on);
     if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
   });
@@ -3113,9 +3165,22 @@ function tcDomainScopeId(){
   if(tcMode === "defects") return defReqId || "";
   return caseScopeAll ? (caseAllProj || "") : (caseReqId || "");
 }
+/* 手机项目域里的「分支」子页：未接入 Git 时不露出 */
+var tcGit = null;
+function syncTcDomainBranches(){
+  var btn = document.querySelector('#tcDomain [data-tc-domain="branches"]');
+  if(!btn) return;
+  if(tcGit !== null){ btn.hidden = !tcGit; return; }
+  import("./branches.js").then(function(m){ return m.gitEnabled(); }).then(function(on){
+    tcGit = !!on;
+    var b = document.querySelector('#tcDomain [data-tc-domain="branches"]');
+    if(b) b.hidden = !tcGit;
+  }).catch(function(){ tcGit = false; });
+}
 function syncTcDomain(){
   var cur = $("tcCrumbProj");
   if(!cur) return;
+  syncTcDomainBranches();
   var name = tcMode === "defects" ? defectScopeName()
     : (caseScopeAll ? (caseAllProj ? reqNameOf(caseAllProj) : "全部项目") : (caseReqId ? reqNameOf(caseReqId) : "全部项目"));
   /* 项目集引入后，面包屑补一级「项目集」：项目归属不再只靠选项目时的分组猜 */
@@ -3165,7 +3230,7 @@ function tcCaseCount(){
 }
 function syncTcPageHead(){
   if(document.body.dataset.view !== "testcases") return;
-  var titles = { cases:"测试 · 用例", defects:"测试 · 缺陷", plans:"测试 · 计划", coverage:"覆盖矩阵", report:"测试报告" };
+  var titles = { cases:"测试 · 用例", defects:"测试 · 缺陷", plans:"测试 · 计划", coverage:"测试 · 覆盖矩阵", report:"测试 · 测试报告" };
   var scope = tcScopeName() || "全部项目";
   var phTitle = $("pageTitleText"), phSub = $("pageSub"), pill = $("pagePill"), acts = $("pageActions");
   if(phTitle) phTitle.textContent = titles[tcMode] || "测试";
@@ -3200,12 +3265,13 @@ function syncTcPageHead(){
         html += '<button class="btn primary" type="button" data-tc-head="case-new">' + icon("plus", 14) + ' 新建用例</button>';
       }
     }else if(tcMode === "defects"){
-      html += '<button class="btn ghost" type="button" data-tc-head="def-reset">恢复默认</button>';
       if(defectCreateTargets().length){
         html += '<button class="btn primary" type="button" data-tc-head="def-new">' + icon("plus", 14) + ' 新建缺陷</button>';
       }
     }else if(tcMode === "plans"){
-      html += '<button class="btn primary" type="button" data-tc-head="plan-new">' + icon("plus", 14) + ' 新建计划</button>';
+      if(planCreateTargets().length){
+        html += '<button class="btn primary" type="button" data-tc-head="plan-new">' + icon("plus", 14) + ' 新建计划</button>';
+      }
     }else if(tcMode === "coverage"){
       html += '<button class="btn" type="button" data-tc-head="cov-export">' + icon("download", 14) + ' 导出 CSV</button>';
     }else if(tcMode === "report"){
@@ -3248,6 +3314,25 @@ function syncModeUI(){
   document.querySelectorAll("#tcModeSeg [data-tc-mode]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
   });
+  /* 覆盖 / 报告已收进「测试计划」：进入这三者才显示计划内的第二排页签 */
+  var planTabs = $("tcPlanTabs");
+  if(planTabs){
+    planTabs.hidden = !(plan || cov || rep);
+    planTabs.querySelectorAll("[data-tc-mode]").forEach(function(b){
+      b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
+    });
+  }
+  document.querySelectorAll("#tcDomain [data-tc-mode]").forEach(function(b){
+    var on = b.dataset.tcMode === tcMode;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+  var domCases = document.querySelector('#tcDomain [data-tc-domain="testcases"]');
+  if(domCases){
+    var casesOn = tcMode === "cases";
+    domCases.classList.toggle("on", casesOn);
+    if(casesOn) domCases.setAttribute("aria-current","page"); else domCases.removeAttribute("aria-current");
+  }
   syncTcSubnav();
   syncTcDomain();
   syncQueryBar();
@@ -3579,9 +3664,11 @@ function caseRowHTML(c, segKey){
   if(c.latestBugTaskId){
     /* 关联缺陷已修复关闭、最新执行仍失败：提示「待复测」，点击回到缺陷确认后重测 */
     var retest = c.latestBugResolved && c.latestStatus === "failed";
+    /* 列窄，标签只留语义：缺陷标题进 tooltip，否则四个动作会把操作列撑到标题列没地方 */
     acts += '<button class="btn sm ghost' + (retest ? " tc-retest" : "") + '" type="button" data-tc-bug="' + esc(c.id) + '" title="'
-      + (retest ? "关联缺陷已修复关闭，点击打开缺陷并复测确认" : "打开关联缺陷") + '">'
-      + (retest ? icon("refresh", 13) + ' 待复测 · ' : '缺陷 · ') + esc(cut(c.latestBugTaskTitle || c.latestBugTaskId, 10)) + '</button>';
+      + (retest ? "关联缺陷已修复关闭，点击打开缺陷并复测确认：" : "打开关联缺陷：")
+      + esc(c.latestBugTaskTitle || c.latestBugTaskId) + '">'
+      + (retest ? icon("refresh", 13) + ' 待复测' : icon("alert", 13) + ' 缺陷') + '</button>';
   }else if(w && c.latestStatus === "failed"){
     acts += '<button class="btn sm ghost danger" type="button" data-tc-defect="' + esc(c.id) + '">转缺陷</button>';
   }
@@ -3623,6 +3710,31 @@ function caseRowHTML(c, segKey){
     + '<span class="tc-c-time">' + (c.latestAt ? esc(fmtTs(c.latestAt).substring(0, 5)) : '<span class="tc-none">—</span>') + '</span>'
     + '<div class="tc-acts">' + acts + '</div>'
     + '</div>';
+}
+/* 每行都是独立 grid：操作列写 auto 时各行按自己的按钮宽度算，表头与数据行会互相错位。
+   渲染后量一次最宽的操作区，表头与所有行共用同一个列宽（--tc-acts-w），列就固定对齐。 */
+function tcActsWidth(scope){
+  var acts = scope.querySelectorAll(".tc-acts"), w = 0;
+  for(var i = 0; i < acts.length; i++){
+    var el = acts[i], prev = el.style.width;
+    /* 操作区当前被列宽压着，直接量拿到的是列宽；临时按内容撑开量完还原 */
+    el.style.width = "max-content";
+    var box = el.getBoundingClientRect().width;
+    el.style.width = prev;
+    if(box > w) w = box;
+  }
+  return w;
+}
+function syncTcColumnWidth(){
+  var list = $("tcList");
+  if(!list) return;
+  /* 按项目分段的列表每段是一张独立的表，各段自己量：不能因为某条用例带缺陷就压窄所有项目的标题列 */
+  var scopes = list.querySelectorAll(".tc-group-rows, .tc-seg-body");
+  var targets = scopes.length ? scopes : [list];
+  for(var i = 0; i < targets.length; i++){
+    var w = tcActsWidth(targets[i]);
+    if(w) targets[i].style.setProperty("--tc-acts-w", Math.ceil(w) + "px");
+  }
 }
 function caseTableHeadHTML(){
   return '<div class="tc-thead" aria-hidden="true">'
@@ -4510,7 +4622,7 @@ function caseDemandCell(c, writable){
     + '<button type="button" class="case-jump" data-case-jump="demand" title="打开需求详情" aria-label="打开需求详情">'
     + icon("extlink", 12) + '</button>';
 }
-function caseDetailOverview(c, writable){
+function caseDetailOverview(c, writable, testable){
   var tasks = c.tasks || [];
   var keys = '<div class="case-keyrow">'
     + caseKeyCard("优先级", casePriText(c.priority), { act: writable ? "priority" : "", hint: "priority" })
@@ -4524,7 +4636,7 @@ function caseDetailOverview(c, writable){
     var bug = c.latestBugTaskId
       ? '<button class="btn sm ghost" type="button" data-case-bug="' + esc(c.latestBugTaskId) + '">缺陷 · '
         + esc(cut(c.latestBugTaskTitle || c.latestBugTaskId, 18)) + '</button>'
-      : (writable && c.latestStatus !== "passed"
+      : ((testable || writable) && c.latestStatus !== "passed"
         ? '<button class="btn sm ghost" type="button" data-case-defect>转缺陷</button>' : '');
     last = '<section class="case-read-block"><h4>最近一次执行'
       + '<button class="btn sm ghost" type="button" data-case-tab="runs">全部记录</button></h4>'
@@ -4637,6 +4749,8 @@ function renderCaseDetail(){
   var box = $("caseDetailView");
   if(!c || !box){ if(box) box.innerHTML = ""; return; }
   var writable = caseWritable(c);
+  /* 执行与转缺陷属于测试链路：项目「可测试」即可，不必改工作项 */
+  var testable = canTestProject(c.reqId || caseReqId);
   var prevBody = box.querySelector(".case-detail-body");
   var keepTop = prevBody ? prevBody.scrollTop : 0;
   function restoreScroll(){
@@ -4667,17 +4781,17 @@ function renderCaseDetail(){
     ["runs", "执行历史", counts.runs],
     ["defects", "缺陷", counts.defects]
   ];
-  var pane = caseDetailTab === "runs" ? caseDetailRunsHTML(c, writable)
+  var pane = caseDetailTab === "runs" ? caseDetailRunsHTML(c, testable)
     : caseDetailTab === "defects" ? caseDetailDefectsHTML()
-      : caseDetailOverview(c, writable);
+      : caseDetailOverview(c, writable, testable);
   box.innerHTML = '<div class="case-detail-head"><div class="case-detail-headline">'
     + '<div class="case-detail-titleline">' + statusBadgeHTML(c.latestStatus)
     + '<h2' + (writable ? ' class="case-title-edit" data-case-title-edit tabindex="0" title="点击修改标题" role="button"' : '') + '>'
     + esc(c.title || "未命名用例") + '</h2></div>'
     + '<p class="case-detail-meta">' + caseDetailMetaText(c) + '</p></div>'
     + '<div class="case-detail-acts">'
-    + (writable ? '<button class="btn sm" type="button" data-case-run>记录执行</button>'
-      + '<button class="btn sm primary" type="button" data-case-edit>编辑</button>' : '')
+    + (testable ? '<button class="btn sm" type="button" data-case-run>记录执行</button>' : '')
+    + (writable ? '<button class="btn sm primary" type="button" data-case-edit>编辑</button>' : '')
     + '<button class="icon-btn sm" type="button" data-case-close aria-label="关闭">' + icon("close", 15) + '</button>'
     + '</div></div>'
     + '<div class="case-detail-tabs" role="tablist">' + tabs.map(function(t){
@@ -5924,7 +6038,7 @@ function applyAiCases(){
 
 function openRunDialog(id){
   var c = caseById(id);
-  if(!caseWritable(c)){ toast("当前项目只读，无法记录执行结果", "warn"); return; }
+  if(!c || !canTestProject(c.reqId || caseReqId)){ toast("你对该项目没有测试权限，无法记录执行结果", "warn"); return; }
   runningCaseId = id;
   runStatus = "passed";
   runRoundNo = 0;
@@ -6077,7 +6191,7 @@ function doRun(){
 
 function openDefectDialog(id){
   var c = caseById(id);
-  if(!caseWritable(c)){ toast("当前项目只读，无法新建缺陷", "warn"); return; }
+  if(!c || !canTestProject(c.reqId || caseReqId)){ toast("你对该项目没有测试权限，无法新建缺陷", "warn"); return; }
   defectCaseId = id;
   $("caseDefectDesc").textContent = "「" + (c ? c.title : "") + "」将生成一条缺陷工作项：执行步骤、失败备注、执行人与环境自动写入描述。";
   $("defectSeverity").value = "";
@@ -6158,6 +6272,7 @@ var planPendingOpen = null;   /* 跨视图跳转（交付说明）待打开的�
 var planSel = {};             /* 详情页批量执行勾选：caseId -> true */
 var planBatchStatus = "passed";
 var editingPlanId = null;
+var editingPlanUpdatedAt = null; /* 编辑计划的乐观锁基线：保存时回传，服务端发现已被他人修改返回 409 */
 var planFormReqId = null;     /* 当前计划弹窗的所属项目：编辑取计划自身，新增取选定目标 */
 var planSaving = false;
 var planDialogSeq = 0;
@@ -6325,17 +6440,21 @@ function planRowHTML(p){
   if(p.versionName) meta.push("版本：" + p.versionName);
   if(p.plannedStart || p.plannedEnd) meta.push((p.plannedStart || "—") + " → " + (p.plannedEnd || "—"));
   meta.push("用例 " + (p.caseCount || 0) + " · 已执行 " + (p.executedCount || 0));
+  if(p.executorName) meta.push("执行人：" + p.executorName);
   if(p.createdBy) meta.push(p.createdBy + " · " + (fmtTs(p.createdAt) || ""));
-  /* 全部项目下每行可能来自不同项目，写权限必须按计划自身项目判断 */
-  var w = canEditReq(p.reqId);
+  /* 全部项目下每行可能来自不同项目：编辑/执行按「可测试」，删除按「可写」（不可逆） */
+  var w = canTestProject(p.reqId);
+  var canDel = canEditReq(p.reqId);
   var acts = '<button class="btn sm" type="button" data-plan-open="' + esc(p.id) + '">打开</button>';
-  if(w){
+  if(w || canDel){
     /* 已完成计划是快照：update 服务端同样拒绝，这里不再提供编辑入口 */
     acts += '<span class="tc-secondary">'
-      + (p.status !== "done"
+      + (w && p.status !== "done"
           ? '<button class="btn sm ghost" type="button" data-plan-edit="' + esc(p.id) + '">' + icon("edit", 13) + ' 编辑</button>'
           : "")
-      + '<button class="icon-btn sm" type="button" data-plan-del="' + esc(p.id) + '" aria-label="删除计划">' + icon("trash", 14) + '</button>'
+      + (canDel
+          ? '<button class="icon-btn sm" type="button" data-plan-del="' + esc(p.id) + '" aria-label="删除计划">' + icon("trash", 14) + '</button>'
+          : "")
       + '</span>';
   }
   return '<div class="tc-row plan-row" data-plan-open="' + esc(p.id) + '">'
@@ -6367,9 +6486,9 @@ function renderPlans(){
         ? planFilterEmptyHTML()
         : UI.emptyState({
           icon: "checklist", title: "全部项目下还没有测试计划",
-          text: caseScopeVisibleProjects().some(function(p){ return canEditReq(p.id); })
+          text: caseScopeVisibleProjects().some(function(p){ return canTestProject(p.id); })
             ? "点右上角「新建计划」，选择目标项目后创建；计划按项目收纳，全部项目只做汇总浏览。"
-            : "当前没有可写的项目；获得写权限后即可新建计划。"
+            : "当前没有可测试的项目；获得「可测试」权限后即可新建计划。"
         });
       if(planHasFilter()) wirePlanFilterEmpty();
       syncTcPageHead();
@@ -6395,9 +6514,9 @@ function renderPlans(){
   if(!list.length){
     box.innerHTML = planHasFilter() ? planFilterEmptyHTML() : UI.emptyState({
       icon: "checklist", title: "还没有测试计划",
-      text: isWritable()
+      text: canTestProject(caseReqId)
         ? "点右上角「新建计划」：圈选一批用例，批量记录结果，完成即留痕。"
-        : "测试计划按项目收纳；你在该项目只有查看权限。"
+        : "测试计划按项目收纳；你在该项目没有测试权限。"
     });
     if(planHasFilter()) wirePlanFilterEmpty();
     syncTcPageHead();
@@ -6517,7 +6636,7 @@ function renderPlanDetail(){
   }
   var cs = d.cases || [];
   var done = p.status === "done";
-  var w = canEditReq(p.reqId);
+  var w = canTestProject(p.reqId);
   var editable = w && !done;
   var untested = (p.caseCount || 0) - (p.executedCount || 0);
   var selCount = 0;
@@ -6525,6 +6644,7 @@ function renderPlanDetail(){
   var meta = [];
   if(p.versionName) meta.push("版本：" + assocLinkHTML("version", p.versionId, p.versionName, {req:p.reqId}));
   if(p.plannedStart || p.plannedEnd) meta.push(esc("计划 " + (p.plannedStart || "—") + " → " + (p.plannedEnd || "—")));
+  if(p.executorName) meta.push(esc("执行人 " + p.executorName));
   if(p.createdBy) meta.push(esc(p.createdBy + " 创建"));
   var head = '<div class="plan-head">'
     + '<button class="btn sm ghost" type="button" data-plan-back>' + icon("left", 13) + ' 返回</button>'
@@ -6722,11 +6842,34 @@ function togglePlanRequired(caseId, required){
     .then(function(){ delete planReqBusy[caseId]; });
 }
 function planStatusTo(status){
-  API.put("/api/test-plans/" + encodeURIComponent(planDetail.plan.id) + "/status?status=" + encodeURIComponent(status), {})
-  .then(function(){
-    toast(status === "done" ? "计划已完成并留痕" : (status === "running" ? "计划已开始执行" : "计划已回到草稿"), "fs");
-    openPlanDetail(planDetail.plan.id);
-  }).catch(function(ex){ toast(ex.message || "状态更新失败", "bad"); });
+  var p = planDetail && planDetail.plan;
+  if(!p) return;
+  var done = status === "done";
+  var label = done ? "计划已完成并留痕" : (status === "running" ? "计划已开始执行" : "计划已回到草稿");
+  var send = function(reason){
+    API.put("/api/test-plans/" + encodeURIComponent(p.id) + "/status?status=" + encodeURIComponent(status)
+      + (reason ? "&reason=" + encodeURIComponent(reason) : ""), {})
+    .then(function(){
+      toast(label, "fs");
+      openPlanDetail(p.id);
+    }).catch(function(ex){ toast(ex.message || "状态更新失败", "bad"); });
+  };
+  /* 已完成是快照：回退到草稿/执行中必须说明原因，服务端同样强校验并写审计 */
+  if(p.status === "done" && !done){
+    UI.showPrompt({
+      title: "重新打开已完成计划",
+      desc: "已完成计划的内容已冻结。回退后可以继续圈选用例与执行，本次回退会写入审计。",
+      label: "回退原因",
+      placeholder: "例如：发现必测用例漏跑，需要补充执行",
+      maxLength: 200,
+      okText: "确认回退"
+    }).then(function(reason){
+      if(reason == null) return;
+      send(reason);
+    });
+    return;
+  }
+  send(null);
 }
 function exportPlanCsv(){
   var d = planDetail;
@@ -6748,9 +6891,10 @@ function openPlanDialog(id, targetReqId){
   editingPlanId = id || null;
   var p = null;
   if(id) for(var i = 0; i < plans.length; i++) if(plans[i].id === id) p = plans[i];
+  editingPlanUpdatedAt = p && p.updatedAt ? p.updatedAt : null;
   planFormReqId = p && p.reqId ? p.reqId : (targetReqId || caseReqId || null);
   if(!planFormReqId){ toast("先选择项目，再新建测试计划", "warn"); return; }
-  if(!canEditReq(planFormReqId)){ toast("当前项目只读，无法编辑测试计划", "warn"); return; }
+  if(!canTestProject(planFormReqId)){ toast("你对该项目没有测试权限，无法编辑测试计划", "warn"); return; }
   $("planFormTitle").textContent = (p ? "编辑测试计划" : "新建测试计划")
     + (caseScopeAll ? " · " + reqNameOf(planFormReqId) : "");
   $("pName").value = p ? p.name : "";
@@ -6758,6 +6902,7 @@ function openPlanDialog(id, targetReqId){
   $("pStart").value = p && p.plannedStart ? p.plannedStart : "";
   $("pEnd").value = p && p.plannedEnd ? p.plannedEnd : "";
   $("pNote").value = p && p.note ? p.note : "";
+  fillPlanExecutor(p ? p.executorUserId : null);
   /* 编辑时先放入当前关联版本：版本列表未回来（或加载失败）就保存，也不会把关联清成 null */
   var keepVersion = p && p.versionId ? p.versionId : "";
   $("pVersion").innerHTML = '<option value="">不关联版本</option>' +
@@ -6779,11 +6924,24 @@ function openPlanDialog(id, targetReqId){
     $("pVersion").value = cur;
   }).catch(function(){ /* 版本下拉失败不阻塞：保留当前关联 */ });
 }
-/* 全部项目下新建计划先选项目；只有一个可写项目时直接开弹窗 */
+/* 计划执行人：空间成员（非查看者）；服务端再校验该项目是否可测试 */
+function fillPlanExecutor(current){
+  var sel = $("pExecutor");
+  if(!sel) return;
+  var me = rt.currentUser || {};
+  var members = (rt.wsMembersCache || []).filter(function(m){ return (m.role || "member") !== "viewer"; });
+  var opts = '<option value="">未指派（不进「待我执行」）</option>' + members.map(function(m){
+    return '<option value="' + esc(m.userId) + '">' + esc(m.displayName || m.username || m.userId)
+      + (m.userId === me.id ? "（我）" : "") + '</option>';
+  }).join("");
+  sel.innerHTML = opts;
+  sel.value = current || "";
+}
+/* 全部项目下新建计划先选项目；只有一个可测试项目时直接开弹窗 */
 function openPlanCreate(anchor){
   if(caseScopeAll){
-    var targets = caseScopeVisibleProjects().filter(function(r){ return canEditReq(r.id); });
-    if(!targets.length){ toast("全部项目里没有可写项目，无法新建测试计划", "warn"); return; }
+    var targets = caseScopeVisibleProjects().filter(function(r){ return canTestProject(r.id); });
+    if(!targets.length){ toast("全部项目里没有可测试项目，无法新建测试计划", "warn"); return; }
     if(targets.length === 1){ openPlanDialog(null, targets[0].id); return; }
     var btn = anchor && anchor.nodeType === 1 ? anchor : $("btnPlanNew");
     var el = document.createElement("div");
@@ -6804,12 +6962,12 @@ function openPlanCreate(anchor){
     return;
   }
   if(!caseReqId){ toast("先在上方选择一个项目，再新建测试计划", "warn"); if($("tcReq")) $("tcReq").focus(); return; }
-  if(!isWritable()){ toast("当前项目只读，无法新建测试计划", "warn"); return; }
+  if(!canTestProject(caseReqId)){ toast("你对该项目没有测试权限，无法新建测试计划", "warn"); return; }
   openPlanDialog(null, caseReqId);
 }
 function savePlan(){
   if(planSaving) return;
-  if(!planFormReqId || !canEditReq(planFormReqId)){ toast("当前项目只读，无法保存测试计划", "warn"); return; }
+  if(!planFormReqId || !canTestProject(planFormReqId)){ toast("你对该项目没有测试权限，无法保存测试计划", "warn"); return; }
   var name = $("pName").value.trim();
   if(!name){ $("fPlanName").classList.add("invalid"); toast("请填写计划名称", "warn"); return; }
   var body = {
@@ -6818,8 +6976,10 @@ function savePlan(){
     versionId: $("pVersion").value || null,
     plannedStart: $("pStart").value || null,
     plannedEnd: $("pEnd").value || null,
-    note: $("pNote").value.trim() || null
+    note: $("pNote").value.trim() || null,
+    executorUserId: $("pExecutor") ? ($("pExecutor").value || null) : null
   };
+  if(editingPlanId && editingPlanUpdatedAt) body.updatedAt = editingPlanUpdatedAt;
   planSaving = true;
   setCaseBusy($("btnSavePlan"), true, "保存中…");
   var call = editingPlanId
@@ -6950,7 +7110,9 @@ function doPlanPick(){
     pickingPlan = false;
     setCaseBusy($("btnDoPlanPick"), false);
     UI.closeModal($("dlgPlanPick"));
-    toast("已加入 " + (added || 0) + " 条用例" + (ids.length - (added || 0) ? "（重复的已跳过）" : ""), "fs");
+    var n = added || 0;
+    toast(n ? ("已加入 " + n + " 条用例" + (ids.length > n ? "（重复的已跳过）" : ""))
+            : ("没有新增：选中的 " + ids.length + " 条都已在计划中"), n ? "fs" : "warn");
     openPlanDetail(planDetail.plan.id);
   }).catch(function(ex){
     pickingPlan = false;
@@ -8700,7 +8862,7 @@ function joinSet(setId, selection, count){
   return API.post("/api/case-sets/" + encodeURIComponent(setId) + "/members", selection).then(function(r){
     var added = (r && r.added) || 0, already = (r && r.already) || 0, matched = (r && r.matched) || count;
     if(!added){
-      toast("没有新增：命中的 " + matched + " 条都已在分组「" + label + "」内", "fs");
+      toast("没有新增：命中的 " + matched + " 条都已在分组「" + label + "」内", "warn");
       return;
     }
     var ids = (r && r.addedIds) || [];
@@ -9131,7 +9293,7 @@ var PBF_STATUS = { draft: "草稿", running: "执行中", done: "已完成" };
 function openPlanByFilter(){
   if(caseScopeAll && !caseAllProj){ toast("先在左侧选中一个项目，再加入测试计划", "warn"); return; }
   if(!caseAllEffectiveReq()){ toast("先选择一个项目，再加入测试计划", "warn"); return; }
-  if(!canEditReq(caseAllEffectiveReq())){ toast("当前项目只读，无法圈选用例", "warn"); return; }
+  if(!canTestProject(caseAllEffectiveReq())){ toast("你对该项目没有测试权限，无法圈选用例", "warn"); return; }
   var sel = caseHasSel();
   pbf.byFilter = !sel || caseSelAll;
   pbf.filter = pbf.byFilter ? (sel ? caseSelectionFilter() : caseFilterQuery()) : null;
@@ -9418,7 +9580,8 @@ function doPbfAdd(){
     if(required) msg += "，标记为发布必测";
     if(out.set) msg += "；同时创建团队共享动态分组「" + dynName + "」（收录 " + ((out.set.caseCount || 0)) + " 条）";
     var pid = out.pid, reqId = caseReqId;
-    UI.toastAction(msg, "查看计划", function(){ openPlanInProject(reqId, pid); }, "fs");
+    /* 0 条新增不是成功：与「重复跳过」保持同一提示色，避免把空操作说成已完成 */
+    UI.toastAction(msg, "查看计划", function(){ openPlanInProject(reqId, pid); }, (r.added || 0) ? "fs" : "warn");
     if(out.setError) toast("用例已加入计划，但动态分组「" + dynName + "」创建失败：" + out.setError, "warn");
     clearCaseSel();
     if(out.set) afterStructureChange();
@@ -9481,6 +9644,8 @@ $("tcReq").addEventListener("change", function(){
 });
 if($("tcDomain")){
   $("tcDomain").addEventListener("click", function(e){
+    var m = e.target.closest("[data-tc-mode]");
+    if(m){ setTcMode(m.dataset.tcMode); return; }
     var b = e.target.closest("[data-tc-domain]");
     if(!b) return;
     var to = b.dataset.tcDomain;
@@ -9498,6 +9663,13 @@ if($("tcDomain")){
       reloadFilteredViews();
       return;
     }
+    if(to === "branches"){
+      /* 分支只作为项目上下文入口：带上当前项目，未接入 Git 时这个入口本身是隐藏的 */
+      var h = "#/branches" + (reqId ? "?project=" + encodeURIComponent(reqId) : "");
+      try{ history.pushState(null, "", h); }catch(e){ try{ window.location.hash = h; }catch(e2){ /* noop */ } }
+      showView("branches");
+      return;
+    }
     showView(to);
   });
 }
@@ -9506,6 +9678,13 @@ $("tcModeSeg").addEventListener("click", function(e){
   if(!b) return;
   setTcMode(b.dataset.tcMode);
 });
+if($("tcPlanTabs")){
+  $("tcPlanTabs").addEventListener("click", function(e){
+    var b = e.target.closest("[data-tc-mode]");
+    if(!b) return;
+    setTcMode(b.dataset.tcMode);
+  });
+}
 ["tcPri", "tcOwner"].forEach(function(id){
   $(id).addEventListener("change", function(){
     priFilter = $("tcPri").value;
@@ -9646,6 +9825,15 @@ $("tcDefSearch").addEventListener("input", function(){
   });
 });
 $("tcDefReset").addEventListener("click", resetDefectFilters);
+function toggleDefectFilters(){
+  var open = $("tcDefectBar").classList.toggle("is-expanded");
+  ["tcDefFilterBtn", "tcDefMoreBtn"].forEach(function(id){
+    var b = $(id);
+    if(b) b.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+}
+if($("tcDefFilterBtn")) $("tcDefFilterBtn").addEventListener("click", toggleDefectFilters);
+if($("tcDefMoreBtn")) $("tcDefMoreBtn").addEventListener("click", toggleDefectFilters);
 if($("tcDefViewsBtn") && defViewsMenuEl){
   $("tcDefViewsBtn").addEventListener("click", function(){
     if(UI.popOpen(defViewsMenuEl)){ UI.closeAllPops(); return; }
@@ -9705,9 +9893,6 @@ if($("pageActions")) $("pageActions").addEventListener("click", function(e){
     UI.openPop($("tcImportMenu"), b, { align:"right", width:268 });
   }else if(kind === "case-new"){
     openCaseCreate(b);
-  }else if(kind === "def-reset"){
-    var reset = $("tcDefReset");
-    if(reset) reset.click();
   }else if(kind === "def-new"){
     openDefectCreate(b);
   }else if(kind === "plan-new"){
@@ -9749,12 +9934,19 @@ $("tcDefRows").addEventListener("click", function(e){
     openCaseInProject(caseChip.dataset.tcDefCaseReq, caseChip.dataset.tcDefCase);
     return;
   }
+  var statusBtn = e.target.closest("[data-row-status]");
+  if(statusBtn){ openStatusMenu(statusBtn, statusBtn.dataset.rowStatus); return; }
+  var priBtn = e.target.closest("[data-row-pri]");
+  if(priBtn){ openPriorityMenu(priBtn, priBtn.dataset.rowPri); return; }
+  var ownerBtn = e.target.closest("[data-row-owner]");
+  if(ownerBtn){ openOwnerMenu(ownerBtn, ownerBtn.dataset.rowOwner); return; }
   var row = e.target.closest("[data-tc-defect]");
   if(row) openDefectDrawer(row.dataset.tcDefect);
 });
 $("tcDefRows").addEventListener("keydown", function(e){
   if(e.key !== "Enter" && e.key !== " ") return;
-  if(e.target.closest("[data-tc-def-case]")) return;
+  /* 行内菜单按钮走原生键盘激活，不再触发整行开抽屉 */
+  if(e.target.closest("button,a,input,select,textarea")) return;
   var row = e.target.closest("[data-tc-defect]");
   if(!row) return;
   e.preventDefault();
